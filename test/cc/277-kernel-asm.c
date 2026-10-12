@@ -2,7 +2,8 @@
  * input tied to an output by name (csum_ipv6_magic's "[sum]"), the ALU over a word in
  * memory (csum_partial's adcq), a symbol's word read by its address (a uniprocessor
  * percpu read), lar over a selector, an "i" only __builtin_constant_p makes constant past
- * an inlined body, and an __int128 passed and taken in registers. held to gcc. */
+ * an inlined body, an __int128 passed and taken in registers and swapped by cmpxchg16b (slub's
+ * freelist), and a file-scope asm that names registers bare. held to gcc. */
 #include <stdio.h>
 
 #if defined(__x86_64__)
@@ -44,6 +45,16 @@ static inline __attribute__((always_inline)) int tbit(long nr, const unsigned lo
 static __attribute__((noinline)) unsigned __int128 wide(unsigned __int128 a, long k, unsigned __int128 b) {
   return a + b * k;
 }
+static int cx16(unsigned __int128 *p, unsigned __int128 o, unsigned __int128 n) {
+  unsigned long lo = (unsigned long)o, hi = (unsigned long)(o >> 64);
+  unsigned char e;
+  asm volatile("lock cmpxchg16b %[ptr]\n\tsete %[e]"
+               : [e] "=q"(e), [ptr] "+m"(*p), "+a"(lo), "+d"(hi)
+               : "b"((unsigned long)n), "c"((unsigned long)(n >> 64)) : "memory", "cc");
+  return e;
+}
+asm(".pushsection .text\n.globl fs_twice\nfs_twice:\n\tleaq (%rdi,%rdi), %rax\n\tret\n.popsection");
+extern long fs_twice(long);
 #else
 static long percpu(void) { return 41; }
 static unsigned long csum(const unsigned long *p, unsigned long seed) {
@@ -53,6 +64,7 @@ static unsigned long csum(const unsigned long *p, unsigned long seed) {
 static int bare(void) { return 1; }
 static unsigned ss_rights(void) { return 0x80; }
 static int tbit(long nr, const unsigned long *a) { return (a[nr / 64] >> (nr % 64)) & 1; }
+static long fs_twice(long x) { return 2 * x; }
 #endif
 
 int main(void) {
@@ -66,10 +78,15 @@ int main(void) {
 #if defined(__x86_64__)
   unsigned __int128 x = wide(((unsigned __int128)3 << 64) | 7, n, 9);
   printf("%lu %lu\n", (unsigned long)(x >> 64), (unsigned long)x);
-  r += (int)(x >> 64) + (int)x;
+  static unsigned __int128 slot __attribute__((aligned(16)));
+  slot = x;
+  int ok = cx16(&slot, x, 77) + 2 * cx16(&slot, x, 5);
+  printf("%lu %lu %d\n", (unsigned long)(x >> 64), (unsigned long)slot, ok);
+  r += (int)(x >> 64) + (int)x + (int)slot + ok;
 #else
-  printf("3 52\n");
-  r += 55;
+  printf("3 52\n3 77 1\n");
+  r += 55 + 77 + 1;
 #endif
+  r += fs_twice(4);
   return r & 255;
 }

@@ -169,7 +169,8 @@
                    (verr ((15 0) 4 4)) (verw ((15 0) 5 4)) (sldt ((15 0) 0 4)) (str ((15 0) 1 4))
                    (lldt ((15 0) 2 4)) (push ((255) 6 4)) (pop ((143) 0 4))
                    (prefetchw ((15 13) 1 4)) (prefetchnta ((15 24) 0 4)) (prefetcht0 ((15 24) 1 4))
-                   (prefetcht1 ((15 24) 2 4)) (prefetcht2 ((15 24) 3 4))))
+                   (prefetcht1 ((15 24) 2 4)) (prefetcht2 ((15 24) 3 4))
+                   (cmpxchg8b ((15 199) 1 4)) (cmpxchg16b ((15 199) 1 8))))   ; rdx:rax against the memory, rcx:rbx in
    ;; ..and over a register -> (prefix opcode digit width), width 0 the register's own
    gx-rdig (gtab '((sldt (() (15 0) 0 0)) (str (() (15 0) 1 0)) (lldt (() (15 0) 2 4))
                    (verr (() (15 0) 4 4)) (verw (() (15 0) 5 4))

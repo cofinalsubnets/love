@@ -2092,7 +2092,7 @@
                      (go (i + 1) (acc + string (tmpl i)))))
               (go (i + 1) (acc + string (tmpl i)))))
        (go 0 ""))
-   (pasm ps ts)
+   (pasm ps ts st)
     (: r >ts
        (t1 l) (two? l && asmqual? <l ? (t1 >l) l)
        r0 (want (t1 r) "(")
@@ -2145,9 +2145,9 @@
                                r9 (want <>s4 ")")
                                semi (two? r9 && peekp r9 ";")      ; the rest may be empty: a file can end here
                                nms (map opnm <s1 + map opnm <s2 + <s4)
-                               ; a basic asm (no `:`) spells its registers bare: every % is literal
+                               ; a statement's basic asm (no `:`) spells its registers bare: every % is literal
                                tm (? (anynm? nms) (asmnm <tr nms)
-                                     !(peekp <>tr ":") (join "%%" (split "%" <tr))
+                                     (st && !(peekp <>tr ":")) (join "%%" (split "%" <tr))
                                      <tr)
                                (semi ?
                                   [['asm tm (map opbare <s1) (map (e \ opbare (optie <s1 e)) <s2) <s3 <s4] >r9]))))))))))
@@ -2156,7 +2156,7 @@
    ; included, which gen hands to holo's gas-top. operands have nothing to bind to out here
    ; -> (('tasm tmpl) rest) | ()
    (ptasm ps ts)
-    (pasm ps ts @ r
+    (pasm ps ts () @ r
        (atom? r ? ()
           (<r @ ('asm t () () () ()) [['tasm t] <>r]
                 (blame >ts "a file-scope asm takes no operands"))))
@@ -2311,7 +2311,7 @@
                              (two? rest ? [['case v] rest]))))))
              (tkw? t 'default)
               (want >ts ":" @ rest (two? rest ? ['(dflt) rest]))
-             (asmid? t) (pasm ps ts)     ; before the call/label fallthroughs: asm( is a statement
+             (asmid? t) (pasm ps ts 1)     ; before the call/label fallthroughs: asm( is a statement
              (tp? t "{") (pblock ps ts)
              (tp? t ";") ['(nop) >ts]
              ; a label: id ':' (a ternary's id is followed by '?', never ':')

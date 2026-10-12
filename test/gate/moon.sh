@@ -95,6 +95,32 @@ moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "big" {print $3}')" = 28 ] || fail "int big[7]'s symbol does not carry its 28 bytes"
 readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost its section"
 echo "mooncc: -mno-sse variadics, sized data symbols and a block static's section ok"
+# what the kernel leaves only dead code to call must not be named at all: a stub over a struct
+# it never reads (pmd_is_huge(pmd_t)), a test absorbing its unknown part (dax_mapping's
+# `host && (flags & 0)`), a call under __builtin_expect, and a flag cleared by `&= 0`
+cat > "$ho/.dead.c" <<'DEAD'
+struct inode { unsigned i_flags; }; struct as { struct inode *host; };
+typedef struct { unsigned long pmd; } pmd_t;
+extern void dax_del(void); extern void huge(void); extern void zdev(void); extern void ia32(void);
+static inline int dax_mapping(struct as *m) { return m->host && (m->host->i_flags & 0); }
+static inline int pmd_is_huge(pmd_t p) { return 0; }
+static inline int zone_device(const struct as *f) { return 0; }
+int f(struct as *m, pmd_t *p, char *a, char *b) {
+  int r = 0;
+  _Bool ia = (a != b);
+  ia &= (0 || 0);
+  if (ia) ia32();
+  if (dax_mapping(m)) { dax_del(); goto out; }
+  if (pmd_is_huge(*p)) huge();
+  if (__builtin_expect(!!(zone_device(m)), 0)) { zdev(); return 1; }
+  r = 2;
+out:
+  return r;
+}
+DEAD
+moonrun -c "$ho/.dead.c" -o "$ho/.dead.o" || fail "mooncc: the dead-call program"
+! grep -qa 'dax_del\|huge\|zdev\|ia32' "$ho/.dead.o" || fail "a call only dead code makes is still named in the object"
+echo "mooncc: dead stubs, absorbed tests and a cleared flag name nothing ok"
 
 # an asm's other-section words leave with its home: a BUG_ON a late fold proves false loses its brk
 # and label, and its __bug_table row must go too, or the object names a label it never lays

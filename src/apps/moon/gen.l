@@ -8605,8 +8605,11 @@
        (dbl? ty) (ty = 'double && fsel? g)              ; a double binds and returns in the float file
        (pok ps n) (!(two? ps) ? (n <= 6)
                      (<><ps @ pty                               ; a d128 param would bind only its lo word -- a real call takes it
-                        (flo? pty && !(dbl? pty) || stru? pty || arr? pty || d128? pty ? ()
+                        (flo? pty && !(dbl? pty) || d128? pty ? ()
+                           ; a struct the body never names binds nothing (the kernel's pmd_is_huge(pmd_t) stubs)
+                           (stru? pty || arr? pty) && ment? <<ps <>>>f ? ()
                            (pok >ps (n + 1)))))
+       (ment? nm x) (? !(two? x) () (x @ ('var v) (v = nm) (ment? nm <x || ment? nm >x)))
        (? !(two? sig) ()
           (flo? rt && !(dbl? rt) || stru? rt) ()
           (sig 2) ()                            ; variadic stays a real call
@@ -8816,7 +8819,9 @@
                               ax (two? a && <a = 'addr && two? <>a && <<>a = 'var ? <><>a)
                               ; (a block static's address costs no frame: it binds as any arg)
                               tx (string? ax && !(sdn ax) ? (peep tys ax 'no) 'no)
-                              (? (ty9 = <>p && !(tak <>a) && !(wrs? <p bd))
+                              (? ; a struct param here is one the body never names: only the arg's effects stay
+                                 (stru? <>p || arr? <>p) (bind >ps >as (pure? a ? pre (pre + [['expr a]])))
+                                 (ty9 = <>p && !(tak <>a) && !(wrs? <p bd))
                                   (pin m <p <>a, bind >ps >as pre)
                                  (tx != 'no)
                                   (<>p = ['ptr tx] && !(wrs? <p bd) && aonly <p bd ?
@@ -9140,13 +9145,30 @@
    ; a __builtin_constant_p whose operand does not fold yet: an inline body's param, decided
    ; once the caller's constants have reached it
    (bcpopen? w64 x) (? (atom? x) () (<x = 'bcp) !(cint? (cfold w64 <>x)) (bcpopen? w64 <x || bcpopen? w64 >x))
+   ; a test settled whatever its unknown parts hold: `e & 0`, `e * 0`, `e && 0` and `e || 1` over a
+   ; pure e (dax_mapping's `host && (i_flags & S_DAX)` where S_DAX is 0) -> its value | ()
+   (zpure? x) (? !(two? x) 1 (elem <x '(call callr sys asn rmw post sexpr clit asm)) () (zpure? <x && zpure? >x))
+   (zfold w64 x)
+    (cfold w64 x @ v
+       (? (cint? v) v
+          !(two? x) ()
+          (x @ ('bin . op . a . b . _)
+                (elem op '(& *) ? (: va (zfold w64 a) vb (zfold w64 b) (? (va = 0 && zpure? b) 0 (vb = 0 && zpure? a) 0 ())) ())
+               ('land . a . b . _)
+                (: va (zfold w64 a) vb (zfold w64 b) (? (va = 0) 0 (vb = 0 && zpure? a) 0 (cint? va && cint? vb) 1 ()))
+               ('lor . a . b . _)
+                (: va (zfold w64 a) vb (zfold w64 b)
+                   (? (cint? va && va != 0) 1 (cint? vb && vb != 0 && zpure? a) 1 (va = 0 && vb = 0) 0 ()))
+               ('un . 'not . a . _) (zfold w64 a @ va (cint? va ? (va = 0 ? 1 0) ()))
+               ('cast . t . a . _) (zfold w64 a @ va (cint? va ? (cfold w64 ['cast t ['num va]]) ()))
+               ())))
    (dprune w64 ty x)
     (atom? x ? x
        (x @ ('cond c a b)
-             (: v (bcpopen? w64 c ? () (cfold w64 c)) t (? (!(cint? v) || lbl? a || lbl? b) () (ty a = ty b) (ty a) ())
+             (: v (bcpopen? w64 c ? () (zfold w64 c)) t (? (!(cint? v) || lbl? a || lbl? b) () (ty a = ty b) (ty a) ())
                 (!t ? (map (dprune w64 ty) x) ['cast t (dprune w64 ty (v != 0 ? a b))]))
             ('if c th el)
-             ((bcpopen? w64 c ? () (cfold w64 c)) @ v
+             ((bcpopen? w64 c ? () (zfold w64 c)) @ v
                 (!(cint? v) || lbl? th || lbl? el ? (map (dprune w64 ty) x)
                    (: s (v != 0 ? th el) (two? s ? (dprune w64 ty s) '(nop)))))
             (map (dprune w64 ty) x)))
@@ -9215,6 +9237,49 @@
                 (re s env)))
        env0 (foldl (a2 \ p \ (fresh <p, [<p <p] . a2)) () <>>f)
        [<f <>f <>>f (rs (f 3) env0)])
+   ; the calls that return twice: what lives across one lives in memory, not in what a pass assumed
+   twicefns '("setjmp" "_setjmp" "__setjmp" "sigsetjmp" "__sigsetjmp" "savectx" "vfork" "getcontext" "__builtin_setjmp")
+   ; -- straight-line propagation: in a block, past `x = K` -- or an op= whose answer is K whatever x
+   ; held (the kernel's `ia32_fxstate &= IS_ENABLED(..)`) -- x reads as K up to its next write or the
+   ; next label. a scalar local whose address is never taken; not across a call that returns twice --
+   (lprop g f)
+    (: w64 !(ilp32? g)
+       tak {} tys {}
+       (cen x) (? !(two? x) 0
+                  (x @ ('addr ('var nm)) (pin tak nm 1, 0)
+                       ('decl ps) (foldl (_ \ p \ (pin tys <p <>p, cen >>p)) 0 ps)
+                       (cen <x, cen >x)))
+       _ (cen (f 3))
+       (tw? x) (? !(two? x) () (x @ ('call . ('var n) . _) (elem n twicefns) (tw? <x || tw? >x)))
+       (ok? nm) (!(tak nm) && elem (peep tys nm ()) '(bool char schar cchar uchar short ushort int uint long ulong))
+       ; the names a statement writes (an asm's outputs among them), and whether it holds a label
+       (wrs x acc) (? !(two? x) acc
+                      (x @ (('asn || 'post) . ('var v) . _) (wrs >>x (v . acc))
+                           ('rmw . _ . ('var v) . _) (wrs >>>x (v . acc))
+                           ('asm . _) (foldl (a \ o \ <>o @ ('var v) (v . a) a) acc (x 2))
+                           (wrs >x (wrs <x acc))))
+       (lab? x) (? !(two? x) () (elem <x '(lbl case dflt)) 1 (lab? <x || lab? >x))
+       (sub env x) (? !(two? x) x (x @ ('var v) (assoc v env @ e (two? e ? <>e x)) (map (sub env) x)))
+       (vsub nm k x) (? !(two? x) x (x = ['var nm]) ['num k] (map (vsub nm k) x))
+       ; x's value past `x = rhs`: one constant whatever x held, in x's own type
+       (val nm rhs) (: ty (tys nm)
+                       (at k) (cfold w64 ['cast ty (vsub nm k rhs)])
+                       a (at 0)
+                       (cint? a && a = at 1 && a = at (0 - 1) ? (cnum g ['cast ty ['num a]] @ cv (two? cv ? ['cast ty ['num <cv]])) ()))
+       (blk items env)
+        (!(two? items) ? ()
+           (: it <items
+              e0 (lab? it ? () env)
+              ws (wrs it ())
+              e1 (filter (e \ nelem <e ws) e0)
+              it2 (inner (sub e1 it))
+              e2 (it2 @ ('expr . ('asn . ('var v) . rhs . _) . _) (ok? v ? (val v rhs @ k (two? k ? ([v k] . e1) e1)) e1)
+                        ('decl ps) (foldl (a \ p \ (two? >>p && ok? <p ? (val <p <>>p @ k (two? k ? ([<p k] . a) a)) a)) e1 ps)
+                        e1)
+              (it2 . blk >items e2)))
+       ; a nested block starts over: the entry it is reached by need not be the one above it
+       (inner x) (? !(two? x) x (<x = 'blk) ['blk (blk <>x ())] (map inner x))
+       (tw? (f 3) ? f ([<f <>f <>>f (inner (f 3))] + >>>>f)))
    ; -- AST constant propagation: a scalar local declared once from a folding initializer, never
    ; written or &-taken, shadowing nothing, reads as its cast literal and its decl drops. runs to a fixpoint --
    (kprop g f)
@@ -9330,9 +9395,9 @@
     (: w64 !(ilp32? g)
        (has? x) (? (atom? x) () (<x = 'bcp) 1 (has? <x || has? >x))
        (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
-       (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) f))
+       (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) (dprune w64 (e \ ()) f)))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (bcpfin g (: k1 (kprop g (phome g (respell (oalign g (ainl g f))))) (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
+    (: f (bcpfin g (: k1 (kprop g (lprop g (phome g (respell (oalign g (ainl g f)))))) (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
        ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
        ; arrived; a name such a probe could not resolve is no refusal's cause
        _ (pin g 'undecl ())
@@ -9355,7 +9420,7 @@
                           ((<x == 'call) && (<>x @ ('var n) (elem n twice) ()))
                            (pins g 'hasasm 1 'twice 1, lt >x (lt <x acc))
                           (lt >x (lt <x acc)))
-            twice '("setjmp" "_setjmp" "__setjmp" "sigsetjmp" "__sigsetjmp" "savectx" "vfork" "getcontext" "__builtin_setjmp")
+            twice twicefns
             (pin g 'ltaken (rev (lt (f 3) ()))))
        vzf (: (dscan prs a2)
                (atom? prs ? a2
