@@ -857,7 +857,8 @@ carried:
   is used: a `__COUNTER__` in it is one number throughout, which is `__UNIQUE_ID`
 - `-fshort-wchar`; `-fmacro-prefix-map=OLD=NEW` and `-ffile-prefix-map` (`__FILE__` spelled
   with the last matching map; there is no debug info for its other half); `-ffixed-x18`, true of
-  a64 already (x16..x18 are never allocated) and refused on any other target or register
+  a64 already (x16..x18 are never allocated; the 281 tinyconfig units that compile name x18 in no
+  instruction) and refused on any other target or register
 - `__builtin_assume_aligned`, `__builtin_extract_return_addr`, `__builtin_parity{,l,ll}`,
   `__builtin_{add,sub,mul}_overflow_p` (the third operand evaluated, as gcc does; test/cc/268)
 - `__builtin_alloca`, as moonlibc's `alloca` (gnulib's C_ALLOCA): the block lives at least as
@@ -987,7 +988,7 @@ away and 8 an asm's local label, so the link fails. every defconfig object also 
 accepted and WRONG, found by probing the flags mooncc takes in silence:
 
 - the frame record (fixed since: linux on arm64, below).
-- x18 is allocated, and `-ffixed-x18` ignored.
+- x18 allocated, `-ffixed-x18` ignored (wrong as filed: x16..x18 are never allocated; linux on arm64, below).
 - `-fshort-wchar` is ignored: `wchar_t` stays 4 bytes.
 - `-fmacro-prefix-map` is ignored: `__FILE__` keeps the build path, which reaches the image.
 - `__attribute__((used))` does not keep an unreferenced static.
@@ -1299,9 +1300,8 @@ Still open on this side (g-21's probes):
 
 - in asm text: `madd` has no row; `orr xN, xzr, #imm` and `ldr xzr, [..]` refuse (`badreg`);
   `str x0, [x0, #-8]!`, a writeback onto the register stored, lays a word where llvm-mc refuses
-  it as unpredictable. No census unit has reached them.
-- **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
-  kernel's shadow call stack owns.
+  it as unpredictable. `ldr xzr` stops two tinyconfig units (`arch_counter_enforce_ordering`,
+  barrier.h), the rest no census unit reaches.
 - under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
