@@ -845,6 +845,8 @@
     (dbty e = 'double && (ffoldw !(ilp32? g) e @ v (dfin? v ? (mkflo g v) ())))
    ; result -> f0 as a double. t32: an unsigned word rides the U-converter, a pair source cvtlld
    (asflo g r) (? (flo? (vty r)) (vfs r)
+                  ; an integer literal converts here, exactly, not at run time
+                  (kli? g r @ k (charm? k)) (rfree g (vreg r), vfs (mkflo g (0.0 + kli? g r)))
                   (gcplx? (vty r))                  ; complex -> real reads re (C's implicit conversion)
                    (tor0 g r + (cxb (vty r) = 'float ?
                                 '((ldss f0 r0 0) (cvtss2sd f0 f0))
@@ -853,6 +855,14 @@
                   (ilp32? g && usg? (vty r)) (tor0 g r + '((cvtui2sd f0 r0)))
                   (vty r = 'ulong) (tor0 g r + ul2d)
                   (tor0 g r + '((cvtsi2sd f0 r0))))
+   ; r as an integer literal a double holds exactly: one li, or a li and its neg -> k | ()
+   (kli? g r) (: fs (vfs r) R (vreg r)
+                 k (? (abl? g 'kflo || gcplx? (vty r) || (llt? (vty r) && ilp32? g)) ()
+                      (fs @ [('li R2 k9)] (R2 = R ? k9)
+                            [('li R2 k9) ('neg R3)] (R2 = R && R3 = R && charm? k9 ? (0 - k9))
+                            ()))
+                 (charm? k && (usg? (vty r) ? (0 <= k) 1) &&
+                  k < 9007199254740992 && 0 - 9007199254740992 < k ? k))
    (asint g r) (flo? (vty r) ? (vfs r + '((cvttsd2si r0 f0))) (tor0 g r))        ; result -> r0 as an int
    ; the mirror of ul2d: cvttsd2si is signed, so a double at or above 2^63 subtracts 2^63 first
    ; (exact: its ulp is >= 2^11), converts, and xors the bit back. negative/NaN/out of range stay UB
