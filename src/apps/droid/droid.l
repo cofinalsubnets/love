@@ -31,7 +31,7 @@
              (i32 _) (: v (foldl (\ v i (v | (see s << (8 * i)))) 0 ^4) (? (v >= 2147483648) (v - 4294967296) v))
              b (i32 0) c (i32 0)
              [k a b c])))
-   (face-frame s w h fb) (say s ("F" + wrle w 2 + wrle h 2), say s fb, flush s)
+   (face-frame s w h fb) (say s ("F" + wrle w 2 + wrle h 2 + wrle 0 2 + wrle h 2), say s fb, flush s)
 
    ; --- the binary manifest (android's axml) ---
    ; an element is [tag attrs kids], an attribute [android? name kind value], kind 'int 'hex
@@ -41,7 +41,7 @@
    ax-rid {"label" 0x01010001 "name" 0x01010003 "hasCode" 0x0101000c "debuggable" 0x0101000f
            "exported" 0x01010010 "configChanges" 0x0101001f "value" 0x01010024
            "minSdkVersion" 0x0101020c "versionCode" 0x0101021b "versionName" 0x0101021c
-           "targetSdkVersion" 0x01010270 "extractNativeLibs" 0x010104ea}
+           "windowSoftInputMode" 0x0101022b "targetSdkVersion" 0x01010270 "extractNativeLibs" 0x010104ea}
    (ap-cat f l) (cats (map f l))
    (ax-chunk ty hs body) (wrle ty 2 + wrle hs 2 + wrle (8 + #body) 4 + body)
    (ax-u16 s) (ap-cat (c \ wrle c 2) (chars s))
@@ -78,7 +78,8 @@
        ["application" [[1 "label" 'str label] [1 "hasCode" 'bool 0] [1 "debuggable" 'bool 1]
                       [1 "extractNativeLibs" 'bool 1]]
          [["activity" [[1 "name" 'str "android.app.NativeActivity"] [1 "exported" 'bool 1]
-                      [1 "configChanges" 'hex 0x4a0]]                  ; orientation keyboardHidden screenSize
+                      [1 "configChanges" 'hex 0x4a0]                   ; orientation keyboardHidden screenSize
+                     [1 "windowSoftInputMode" 'hex 0x10]]             ; adjustResize: the keyboard shrinks the content
             [["meta-data" [[1 "name" 'str "android.app.lib_name"] [1 "value" 'str "bridge"]] ()]
              ["intent-filter" ()
                [["action" [[1 "name" 'str "android.intent.action.MAIN"]] ()]
@@ -138,7 +139,7 @@
        _ (string? c ? 0 (udie 1 "apk: this love carries no src/apps/droid/bridge.c"))
        src (tmp + "/bridge.c") so (tmp + "/libbridge.so")
        (uwrite src c,
-        (? ((cite 'moon 'moon-run) ["-t" "a64" "-shared" "-landroid" "-llog" "-ldl" "-lc" "-o" so src] != 0)
+        (? ((cite 'moon 'moon-run) ["-t" "a64" "-shared" "-landroid" "-llog" "-laaudio" "-ldl" "-lc" "-o" so src] != 0)
            (udie 1 "apk: the bridge does not compile")
            (uread so @ r (? (two? r) <>r (udie 1 "apk: no bridge laid"))))))
 
