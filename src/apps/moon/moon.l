@@ -204,7 +204,7 @@
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
      + (tgt = 'x64 ? () '("__STDC_NO_COMPLEX__=1"))
-     + (elem tgt '(x64 a64) ? () '("__STDC_NO_VLA__=1")))
+     + (elem tgt '(x64 a64 i386 i386m16) ? () '("__STDC_NO_VLA__=1")))
    ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) -- the
    ; <stdint>/<limits>/<float.h> family a library config reads instead of probing. one table
    ; forked on the word width (+ the wchar fork), every value gcc's own spelling on that
@@ -838,15 +838,15 @@
    ; identity is the carried source, and a disk home serves iff its slice hashes to the
    ; stamped id (a laid seed tree does; an edited dev tree does not, and falls through to the
    ; compile).
-   ; the refusal is the target's, not the kernel's. one archive per ISA, all three cut
+   ; the refusal is the target's, not the kernel's. one archive per ISA, all four cut
    ; under -os linux, and that pin does not reach the bytes: impl.h parts the kernels at run
    ; time on __love_osv, and os.c, the only member with an OS predefine in it, sits under
-   ; #ifndef LvOsTranslate. riscv is where that stops -- no translation tables, so os.c reads
+   ; #ifndef LvOsTranslate. riscv and i386 are where that stops -- no translation tables, so os.c reads
    ; -os and only linux has an answer; the BSDs there owe a compile, which refuses by #error.
    (rtcarried home tgt os)
     (? (os = 'none) ()                                     ; freestanding owes no runtime
-       (tgt = 'rv64 && elem os '(freebsd netbsd)) ()
-       (elem tgt '(x64 a64 rv64) && string tgt @ nm
+       (elem tgt '(rv64 i386) && elem os '(freebsd netbsd)) ()
+       (elem tgt '(x64 a64 rv64 i386) && string tgt @ nm
           (!(string? nm) ? ()
              (runtime-gz nm @ z
                 (!(string? z) ? ()

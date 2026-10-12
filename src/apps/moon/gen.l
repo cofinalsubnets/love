@@ -7316,7 +7316,7 @@
                  (gvarr? ty)
                   (? (two? init)
                       (nolane g "a variable-length array cannot take an initializer")
-                     !(elem (gtgt g) '(x64 a64 rv64))
+                     !(elem (gtgt g) '(x64 a64 rv64 i386 i386m16))
                       (nolane g ("no lane for a variable-length array" + ontgt g))
                      (vone ps env2 acc p ty))
                  (: span (aup (tsz g ty) 8)
@@ -8436,18 +8436,22 @@
           (: tv (foldl (t \ e2 \ pin t (cfit g (vty c) <e2) <>e2) {} cases)
              labs (foldl (l \ e2 \ elem <>e2 l ? l (<>e2 . l)) [dflt] cases)
              tl (nlab g ".J")
-             rI (wr? g cr9 ? cr9 (ralloc g))
+             (lay rI rT)
+              (pin g 'jtabs ([tl (catall (map (i \ [['fix 4 'rel32 (peep tv (lo + i) dflt) 0]]) ^span))] . g 'jtabs),
+               (lo = 0 ? (rpeq? g rI cr9 ? () [['mov rI cr9]])
+                  [['sub rI cr9 lo]]) +
+               [['cmp rI (span - 1)] ['br 'above dflt] ['la rT tl]
+                ['leax rT rT rI 4 4] ['ld4 rI rT -4] ['add rT rT rI]
+                ['jmpt rT tl labs]])
+             ; i386 has no pool: ecx and edx are free at the dispatch, which nothing else is live across
+             (? (ia32? g) (rpeq? g cr9 'r2 ? 'no (lay 'r1 'r2))
+             (: rI (wr? g cr9 ? cr9 (ralloc g))
              (!rI ? 'no
                 (ralloc g @ rT
                    (!rT ? (rpeq? g rI cr9 ? () (rfree g rI), 'no)
-                      (pin g 'jtabs ([tl (catall (map (i \ [['fix 4 'rel32 (peep tv (lo + i) dflt) 0]]) ^span))] . g 'jtabs),
-                       rfree g rT,
+                      (rfree g rT,
                        rpeq? g rI cr9 ? () (rfree g rI),
-                       (lo = 0 ? (rpeq? g rI cr9 ? () [['mov rI cr9]])
-                          [['sub rI cr9 lo]]) +
-                       [['cmp rI (span - 1)] ['br 'above dflt] ['la rT tl]
-                        ['leax rT rT rI 4 4] ['ld4 rI rT -4] ['add rT rT rI]
-                        ['jmpt rT tl labs]])))))))
+                       lay rI rT)))))))))
    ; a block's items, each decl extending env -> (forms env) | 'bad: a block takes the forms (cgitems), a
    ; statement expression's leading statements the env too. reached through the g tablet, as cgitems is:
    ; a direct cgexpr edge would close the cycle into cgstmt
