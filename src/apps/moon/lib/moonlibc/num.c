@@ -1,6 +1,7 @@
 /* src/apps/moon/lib/moonlibc/num.c -- strtol/strtod, and the stdio odds and ends the
  * HEADERS promised (sscanf, ferror, popen). */
 #include "impl.h"
+#include <inttypes.h>
 
 /* ---- strtol / strtod: the reader's number path. SATURATION INCLUDED (the
  * kernel corpus runs them; the naive
@@ -10,11 +11,18 @@ static int __digval(int c) {
   if (c >= 97 && c <= 122) return c - 87;
   if (c >= 65 && c <= 90) return c - 55;
   return 99; }
-long strtol(char const *s, char **endptr, int base) {
+/* the walk under every strto* integer: white space, a sign, the base's prefix, then digits
+ * accumulated UNSIGNED up to the magnitude mx (so LONG_MIN's is reachable without signed
+ * overflow on the way). OVERFLOW SATURATES -- it does not wrap. the standard says so, and
+ * every strtol we sit beside (glibc, musl, newlib) does it; a wrapping accumulator reads one
+ * source text as two numbers depending on which libc the binary carried. *over says it
+ * saturated, *neg that a minus led; the answer is the magnitude, mx when over. */
+static unsigned long long __strtom(char const *s, char **endptr, int base, unsigned long long mx,
+                                   unsigned long long mxneg, int *neg, int *over) {
   char const *p = s;
-  int sign = 1;
+  *neg = 0; *over = 0;
   while (*p == 32 || (*p >= 9 && *p <= 13)) p++;
-  if (*p == '-') { sign = -1; p++; }
+  if (*p == '-') { *neg = 1; p++; }
   else if (*p == '+') p++;
   if (*p == '0') {
     ++p;
@@ -25,25 +33,36 @@ long strtol(char const *s, char **endptr, int base) {
     else if (base == 0) { base = 8; --p; }
     else --p; }
   else if (!base) base = 10;
+  if (endptr) *endptr = (char *) s;
   if (base < 2 || base > 36) return 0;
-  /* OVERFLOW SATURATES -- it does not wrap. the standard says so, and every
-   * strtol we sit beside (glibc, musl, newlib) does it; the accumulator used to
-   * wrap, which is how ONE source text came to read as two different numbers
-   * depending on which libc the binary carried. saturating also leaves the
-   * caller a signal (the limit value, and ERANGE) where wrapping leaves a
-   * plausible lie. the accumulation runs UNSIGNED so LONG_MIN's magnitude is
-   * reachable without signed overflow on the way. */
-  unsigned long lim = sign < 0 ? (unsigned long) LONG_MAX + 1UL : (unsigned long) LONG_MAX,
-                cut = lim / (unsigned long) base, cutd = lim % (unsigned long) base, rc = 0;
-  int any = 0, over = 0;
+  unsigned long long lim = *neg ? mxneg : mx, b = (unsigned long long) base,
+                     cut = lim / b, cutd = lim % b, rc = 0;
+  int any = 0;
   for (int d; (d = __digval(*p)) < base; p++) {
     any = 1;
-    if (over || rc > cut || (rc == cut && (unsigned long) d > cutd)) over = 1;
-    else rc = rc * (unsigned long) base + (unsigned long) d; }
+    if (*over || rc > cut || (rc == cut && (unsigned long long) d > cutd)) *over = 1;
+    else rc = rc * b + (unsigned long long) d; }
   if (endptr) *endptr = (char *) (any ? p : s);
   if (!any) return 0;
-  if (over) { errno = ERANGE; return sign < 0 ? LONG_MIN : LONG_MAX; }
-  return (long) (sign < 0 ? 0UL - rc : rc); }
+  if (*over) { errno = ERANGE; return lim; }
+  return rc; }
+/* signed: the minus reaches one further, and a saturated answer keeps its sign */
+static long long __strtoi(char const *s, char **endptr, int base, unsigned long long mx) {
+  int neg, over;
+  unsigned long long m = __strtom(s, endptr, base, mx, mx + 1, &neg, &over);
+  return (long long) (neg ? 0ULL - m : m); }
+/* unsigned: the ONE wrap the standard does ask for -- a leading minus negates the
+ * magnitude modulo the width rather than refusing; a saturated answer is the max */
+static unsigned long long __strtou(char const *s, char **endptr, int base, unsigned long long mx) {
+  int neg, over;
+  unsigned long long m = __strtom(s, endptr, base, mx, mx, &neg, &over);
+  return over || !neg ? m : (0ULL - m) & mx; }
+long strtol(char const *s, char **endptr, int base) { return (long) __strtoi(s, endptr, base, LONG_MAX); }
+long long strtoll(char const *s, char **endptr, int base) { return __strtoi(s, endptr, base, LLONG_MAX); }
+intmax_t strtoimax(char const *s, char **endptr, int base) { return __strtoi(s, endptr, base, LLONG_MAX); }
+unsigned long strtoul(char const *s, char **endptr, int base) { return (unsigned long) __strtou(s, endptr, base, ULONG_MAX); }
+unsigned long long strtoull(char const *s, char **endptr, int base) { return __strtou(s, endptr, base, ULLONG_MAX); }
+uintmax_t strtoumax(char const *s, char **endptr, int base) { return __strtou(s, endptr, base, ULLONG_MAX); }
 double atof(char const *s) { return strtod(s, 0); }
 /* the libc math faces over the lm floor (lm.c's seven transcendentals ride
  * m_am.o in every ladder link); the rest are exact derivations. tan and the
@@ -69,7 +88,7 @@ double cosh(double x) { double e = lm_exp(x); return (e + 1.0 / e) / 2.0; }
 double tanh(double x) { double e = lm_exp(2.0 * x); return (e - 1.0) / (e + 1.0); }
 double fabs(double x) { return x <= 0 ? 0.0 - x : x; }
 static double __trunc9(double x) {                 /* |x| < 2^52 assumed */
-  double t = (double) (long) x;
+  double t = (double) (long long) x;
   return t; }
 double floor(double x) {
   if (x != x || x >= 9007199254740992.0 || x <= -9007199254740992.0) return x;
@@ -107,7 +126,7 @@ float powf(float x, float y) { return (float) pow(x, y); }
 float fmodf(float x, float y) { return (float) fmod(x, y); }
 /* frexp/ldexp: exact exponent surgery on the IEEE bits (no math floor needed) */
 double frexp(double x, int *e) {
-  union { double d; unsigned long u; } b;
+  union { double d; unsigned long long u; } b;
   b.d = x;
   int ex = (int) ((b.u >> 52) & 2047);
   *e = 0;
@@ -116,11 +135,11 @@ double frexp(double x, int *e) {
     b.d = x * 18446744073709551616.0;
     ex = (int) ((b.u >> 52) & 2047) - 64; }
   *e = ex - 1022;
-  b.u = (b.u & 0x800ffffffffffffful) | 0x3fe0000000000000ul;
+  b.u = (b.u & 0x800fffffffffffffull) | 0x3fe0000000000000ull;
   return b.d; }
 static double __e2d(int n) {                       /* 2^n for normal n */
-  union { double d; unsigned long u; } b;
-  b.u = ((unsigned long) (n + 1023)) << 52;
+  union { double d; unsigned long long u; } b;
+  b.u = ((unsigned long long) (n + 1023)) << 52;
   return b.d; }
 double ldexp(double x, int n) {                    /* x * 2^n, clamped through the rim in steps */
   if (n > 1023) { x *= __e2d(1023); n -= 1023;
@@ -148,20 +167,20 @@ double lm_strtod(char const *, char **);
 static char const *__strtospecial(char const *p, double *v) {
   int neg = *p == '-';
   if (*p == '-' || *p == '+') p++;
-  unsigned long bits;
+  unsigned long long bits;
   if ((p[0] | 32) == 'i' && (p[1] | 32) == 'n' && (p[2] | 32) == 'f') {
     p += 3;
     if ((p[0] | 32) == 'i' && (p[1] | 32) == 'n' && (p[2] | 32) == 'i' && (p[3] | 32) == 't' && (p[4] | 32) == 'y') p += 5;
-    bits = 0x7ff0000000000000UL; }
+    bits = 0x7ff0000000000000ULL; }
   else if ((p[0] | 32) == 'n' && (p[1] | 32) == 'a' && (p[2] | 32) == 'n') {
     p += 3;
     if (*p == '(') {
       char const *q = p + 1;
       while ((*q | 32) >= 'a' && (*q | 32) <= 'z' || (*q >= '0' && *q <= '9') || *q == '_') q++;
       if (*q == ')') p = q + 1; }
-    bits = 0x7ff8000000000000UL; }
+    bits = 0x7ff8000000000000ULL; }
   else return 0;
-  if (neg) bits |= 0x8000000000000000UL;
+  if (neg) bits |= 0x8000000000000000ULL;
   memcpy(v, &bits, sizeof *v);
   return p; }
 double strtod(char const *s, char **end) {
@@ -174,36 +193,6 @@ double strtod(char const *s, char **end) {
   if (e == p) { if (end) *end = (char *) s; return 0.0; }   /* no conversion: the ORIGINAL s */
   if (end) *end = e;
   return v; }
-/* the unsigned twin: strtol's digit walk, saturating at ULONG_MAX the same way,
- * with the ONE wrap the standard does ask for -- a leading minus negates the
- * magnitude modulo 2^64 rather than refusing. */
-static unsigned long __strtoux(char const *s, char **endptr, int base) {
-  char const *p = s;
-  int neg = 0;
-  while (*p == 32 || (*p >= 9 && *p <= 13)) p++;
-  if (*p == '-') { neg = 1; p++; } else if (*p == '+') p++;
-  if (*p == '0') {
-    ++p;
-    if ((base == 0 || base == 16) && (*p == 'x' || *p == 'X')) { base = 16; ++p; if (__digval(*p) >= base) p -= 2; }
-    else if (base == 0) { base = 8; --p; }
-    else --p; }
-  else if (!base) base = 10;
-  if (base < 2 || base > 36) return 0;
-  unsigned long cut = ULONG_MAX / (unsigned long) base, cutd = ULONG_MAX % (unsigned long) base, rc = 0;
-  int any = 0, over = 0;
-  for (int d; (d = __digval(*p)) < base; p++) {
-    any = 1;
-    if (over || rc > cut || (rc == cut && (unsigned long) d > cutd)) over = 1;
-    else rc = rc * (unsigned long) base + (unsigned long) d; }
-  if (endptr) *endptr = (char *) (any ? p : s);
-  if (!any) return 0;
-  if (over) { errno = ERANGE; return ULONG_MAX; }
-  return neg ? 0UL - rc : rc; }
-long strtoll(char const *s, char **endptr, int base) { return strtol(s, endptr, base); }
-unsigned long strtoul(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
-unsigned long strtoull(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
-unsigned long strtoumax(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
-
 /* qsort: shellsort (Ciura-ish 3x gaps would be nicer, but n/2 halving is small
  * and tar's arrays are short). in-place byte swap of size-sz elements. */
 void qsort(void *base, size_t n, size_t sz, int (*cmp)(void const *, void const *)) {

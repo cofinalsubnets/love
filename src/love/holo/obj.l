@@ -21,9 +21,11 @@
    ; ... and a64. field relocs here patch bits of an instruction word, not a
    ; whole field -- the placeholder bytes carry the base opcode (the fixup's aux).
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
+   ra-abs32  258                                    ; R_AARCH64_ABS32           S + A in four bytes (the image header's `.long sym`)
    ra-jump26 282                                    ; R_AARCH64_JUMP26          (S+A-P)>>2 into b's imm26
    ra-call26 283                                    ; R_AARCH64_CALL26          ... into bl's imm26
    ra-condbr19 280                                  ; R_AARCH64_CONDBR19        ... into b.cond's or cbz's imm19
+   ra-ldlo19 273                                    ; R_AARCH64_LD_PREL_LO19    ... into a literal load's imm19
    ra-tstbr14 279                                   ; R_AARCH64_TSTBR14         ... into tbz's imm14
    ra-ldst {'lo12s1 278 'lo12s2 284 'lo12s4 285 'lo12s8 286 'lo12s16 299}   ; R_AARCH64_LDST{8..128}_ABS_LO12_NC
    ra-prel64 260                                    ; R_AARCH64_PREL64          S + A - P in eight bytes (the jump table's key)
@@ -143,6 +145,9 @@
    r-386-32 1                                       ; R_386_32    S + A
    r-386-pc32 2                                     ; R_386_PC32  S + A - P
    r-386-pc16 21                                    ; R_386_PC16  S + A - P in two bytes (a 16-bit jump)
+   r-386-16 20                                      ; R_386_16    S + A in two bytes (a 16-bit segment's address)
+   r-386-8 22                                       ; R_386_8     S + A in one byte
+   r-386-pc8 23                                     ; R_386_PC8   S + A - P in one byte
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
    r-thm-jump24 30                                  ; R_ARM_THM_JUMP24 same math      (a thumb2 B.W tail-jump)
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
@@ -157,7 +162,7 @@
        be (peep backends target ())
        x86 (i386? target)
        tb (x86 ? 0 1)                                ; the thumb bit a func symbol's value carries
-       rset (x86 ? '(rel32 rel8 rel16) '(b bcc bl))  ; internal branches are pc-relative -> resolve in place
+       rset (x86 ? '(rel32 rel8 rel16 pc8) '(b bcc bl))  ; internal branches are pc-relative -> resolve in place
        wkset (o-names wknames)
        nsec #secs
        _ (0 >= nsec ? (scare 'obj-no-sections target))
@@ -202,7 +207,7 @@
        ; sentinels) branches across one, where rel's in-field addend has no more room for
        ; the offset than movw16's. the fixup would bind symbol 0 -- `link-undef ""`.
        locfns (o-locs (\ si lbl (sec-exec? si && !(o-has? fnset lbl)))
-                      (x86 ? '(rel32 rel16) '(movw16 movt16 abs32 b bcc bl)))
+                      (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 abs32 b bcc bl)))
        locdat (o-locs (\ si lbl (!(sec-exec? si) && !(o-has? gset lbl)))
                       '(movw16 movt16))
        locs (locfns + locdat)
@@ -230,7 +235,10 @@
        (bakeabs bytes rs)
         (: (go rs bs) (!(two? rs) ? bs
                          (<rs @ r
-                            (go >rs (<>r !== 'abs32 ? bs (a32loc <>>r <>>>r @ sl (o-put32 bs <r <>sl))))))
+                            (go >rs (? (<>r == 'abs32) (a32loc <>>r <>>>r @ sl (o-put32 bs <r <>sl))
+                                       (<>r == 'abs16) (a32loc <>>r <>>>r @ sl (o-putbs bs <r (le16 <>sl)))
+                                       (<>r == 'abs8) (a32loc <>>r <>>>r @ sl (o-putbs bs <r [(<>sl & 255)]))
+                                       bs))))
            (go rs bytes))
        ; ..and the same for a section-bound movw16/movt16, whose addend rides the imm16
        ; scatter (patch-with does the scatter; the linker adds S on top).
@@ -247,6 +255,7 @@
                          (<rs @ r
                             (go >rs (? (<>r == 'rel32) (o-put32 bs <r (<>>>r - 4))
                                        (<>r == 'rel16) (o-putbs bs <r (le16 (<>>>r - 2)))
+                                       (<>r == 'pc8) (o-putbs bs <r [((<>>>r - 1) & 255)])
                                        bs))))
            (go rs bytes))
        lbytes (map (l \ (ln-rl l @ rs (bakepc (bakemw (bakeabs (ln-bs l) rs) rs) rs))) lanes)
@@ -293,9 +302,12 @@
         (catall (map (\ [off k lbl aux _]
           (k @ 'rel32 (o-rel32 off (fnsym lbl) r-386-pc32)
                'rel16 (o-rel32 off (fnsym lbl) r-386-pc16)
+               'pc8 (o-rel32 off (fnsym lbl) r-386-pc8)
                'bl (o-rel32 off (fnsym lbl) r-thm-call)
                'b  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
                'abs32 (a32loc lbl aux @ sl (o-rel32 off <sl (x86 ? r-386-32 r-arm-abs32)))
+               'abs16 (a32loc lbl aux @ sl (o-rel32 off <sl r-386-16))
+               'abs8 (a32loc lbl aux @ sl (o-rel32 off <sl r-386-8))
                ('movw16 || 'movt16)
                 (mwloc lbl @ sl
                    (o-rel32 off <sl $ k == 'movw16 ? r-thm-movw r-thm-movt))
@@ -379,9 +391,10 @@
      [".bss"    8 3 (o-dalign 8 bssforms) bssforms]
      ["love_nifs" 1 3 8 nifforms]
      [".love.image"  1 3 16 imgforms]]
-   ; a named section a compiler emits: progbits on the widest grain its globals ask for,
+   ; a named section a compiler emits: progbits on the widest grain its globals ask for and no
+   ; wider -- objects' pieces tile one array (the kernel's .videocards), so a pad between is a hole --
    ; allocated, writable unless ro says every global in it is const and reloc-free.
-   (objsec-named nm forms ro) [nm 1 (ro ? 2 3) (o-dalign 8 forms) forms]
+   (objsec-named nm forms ro) [nm 1 (ro ? 2 3) (o-dalign 1 forms) forms]
    ; ..and the code twin, for a function that named its own section (love.c's data
    ; sentinels). flags 6 = alloc|execinstr, which also picks objsecs' internal-resolve lane.
    ; the grain is the caller's: a run of one-fn sections at grain N tiles at N, which is how
@@ -445,7 +458,7 @@
    ; -- the general object: a list of sections, each (name type flags align forms). one
    ; section is one lay, which is what a section boundary means -- a branch inside resolves
    ; in place, a reference across becomes a relocation. shf_execinstr (flags & 4) picks the
-   ; internal-resolve lane and the relaxer. a NOBITS section (type 8) still lays its forms,
+   ; relaxer and the internal-resolve lane, which a64's branches take in any section. a NOBITS section (type 8) still lays its forms,
    ; where its labels and its size come from, but writes no file bytes. --
    (objsecs target0 secs funcnames globnames wknames locnames)
     (: target (arch-nom target0)
@@ -454,7 +467,8 @@
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds. riscv's are pure byte deltas (auipc is byte
        ; pc-relative, no page math), so intra-.text la/call/jmp all resolve inside the .o.
-       rset (? a64 '(b26 b19 b14) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
+       rset (? a64 '(b26 b19 b14 ld19) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
+       drset (a64 ? rset ())                    ; a branch in a data section resolves there too (proc.S's "a")
        machine (peep elf-machines target 0)
        ; the backend must be registered, not merely named: a frontend bakes holo with the
        ; native backend only, and a cross target joins the cat at runtime. unregistered,
@@ -481,7 +495,7 @@
                            (lit? r ? (r fm be 0 {} wkset)
                               (scare 'holo-bake-stale 'laylax)))   ; assemble each section at org 0
                         (lay (o-dal fm) be 0 () {}))
-                   w (o-walk be <p >p wkset (exec? s ? 1) rset)
+                   w (o-walk be <p >p wkset 1 (exec? s ? rset drset))
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
        (ln i) (lanes i)
@@ -557,7 +571,7 @@
                  ; offset a &arr[i] / &s.field baked into the field.
                  'abs64 (o-rela off si rabs (sa + aux))
                  ; ..and its 4-byte twin, the PVH note's 32-bit entry
-                 'abs32 (o-rela off si r-32 (sa + aux))
+                 'abs32 (o-rela off si (a64 ? ra-abs32 r-32) (sa + aux))
                  ; ..and a data word measured from its own start, eight bytes (the field is 8 wide)
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; x64: the field is measured from its own end, so every addend carries
@@ -583,6 +597,7 @@
                  'b26 (o-rela off si (aux = 2483027968 ? ra-call26 ra-jump26) sa)   ; 0x94000000 = bl
                  'b19 (o-rela off si ra-condbr19 sa)
                  'b14 (o-rela off si ra-tstbr14 sa)
+                 'ld19 (o-rela off si ra-ldlo19 (sa + afix-ad aux))
                  ; riscv: a 'pcrel pair (CALL_PLT) or a wide branch's 'j21 (JAL), both S+a-p
                  'pcrel (o-rela off si rr-call sa)
                  'j21 (o-rela off si rr-jal sa)

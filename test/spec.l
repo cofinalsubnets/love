@@ -224,7 +224,7 @@
 ; --- string answers a string --- the one total coercion. four kinds the nif spells itself: a
 ; charm is its byte (not its digits -- (string 10) is a newline), a nom its spelling, a charlist
 ; its bytes, a cask a copy; () is the empty charlist. everything else -- gem, twin, big, tray,
-; tablet, port, lambda -- goes through `show`, seal-hook 7, so a string is the only value that
+; tablet, port, lambda -- goes through `show`, seal-hook 4, so a string is the only value that
 ; comes back identical. unsealed (prel's own run, before post.l) the hook is identity.
 (: (str? x) (string? (string x))
    (test

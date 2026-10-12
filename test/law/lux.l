@@ -463,6 +463,40 @@
       !(xauth-parse b "9")                                                       ; no entry -> ()
       !(xauth-parse "" "0")))
 
+; --- a client's own window: the display number, and its requests byte-exact into a jug ---
+(test ("0" = x-dispnum "") ("0" = x-dispnum ":") ("7" = x-dispnum ":7")
+      ("12" = x-dispnum ":12.0"))
+(: j (jug 0) _ (x-window j 9 1 640 400 131075) b (slurp j)                      ; CreateWindow: back pixel + event mask
+   (test (#b = 40) (b 0 = 1) (b 2 = 10) (b 4 = 9) (b 8 = 1) (u16 b 16 = 640) (u16 b 18 = 400)
+         (u32 b 28 = 2050) (u32 b 32 = 0) (u32 b 36 = 131075)))
+(: j (jug 0) _ (x-title j 9 "doom") b (slurp j)                                  ; ChangeProperty WM_NAME, padded
+   (test (#b = 28) (b 0 = 18) (u16 b 2 = 7) (u32 b 8 = 39) (u32 b 20 = 4) ("doom" = snip b 24 28)))
+(: j (jug 0) fb (cask (2000 * 40 * 4))
+   _ (x-putrows j 9 10 24 fb 2000 0 40) b (slurp j)                              ; 8000-byte rows: bands of 32, then 8
+   (test (#b = 24 + 32 * 8000 + 24 + 8 * 8000)
+         (b 0 = 72) (u16 b 2 = 6 + 32 * 8000 // 4) (u16 b 14 = 32) (u16 b 18 = 0)
+         (b (24 + 32 * 8000) = 72) (u16 b (24 + 32 * 8000 + 14) = 8) (u16 b (24 + 32 * 8000 + 18) = 32)))
+
+; --- a window's events off recorded X event bytes: keys by place, text by keysym ---
+(: (ev c d x y st w32)                                                           ; one 32-byte event, decoded as x-next would
+    (: j (jug 0)
+       _ (x-w8 j c, x-w8 j d, x-w16 j 7, x-w32 j 1, x-w32 j 2, x-w32 j w32, x-w32 j 0,   ; data[0] at 12
+          x-w16 j x, x-w16 j y, x-w16 j x, x-w16 j y, x-w16 j st, x-w8 j 1, x-w8 j 0)    ; w h at 20, x y at 24
+       (slurp j @ b (x-decode (map b ^32))))                                      ; as x-next reads it: a list of bytes
+   km (pin (pin (tablet 4) 38 [97 65]) 21 [61 43]) dl 77
+   (key c kc st) (x-events (ev c kc 0 0 st 0) km dl)
+   (test (x-set1 9 = 1) (x-set1 38 = 30) (x-set1 94 = 86) (x-set1 96 = 88)              ; esc, a, the 102nd key, f12
+         (x-set1 111 = 328) (x-set1 105 = 285) (x-set1 133 = 347) !(x-set1 255)          ; up, right ctrl, left meta, none
+         (key 2 38 0 = [['down 30] ['text "a"]]) (key 2 38 1 = [['down 30] ['text "A"]])
+         (key 2 38 2 = [['down 30] ['text "A"]]) (key 2 21 2 = [['down 13] ['text "="]])  ; caps lock shifts letters only
+         (key 3 38 1 = [['up 30]]) (key 2 38 4 = [['down 30]]) (key 2 38 8 = [['down 30]]) ; a release, ctrl, alt: no text
+         (key 2 111 0 = [['down 328]]) (key 2 255 0 = ())
+         (x-events (ev 4 3 10 20 0 0) km dl = [['press 3 10 20]])
+         (x-events (ev 5 1 65535 2 0 0) km dl = [['release 1 -1 2]])                     ; off the window's left edge
+         (x-events (ev 6 0 5 6 0 0) km dl = [['move 5 6]]) (x-events (ev 22 0 640 400 0 0) km dl = [['size 640 400]])
+         (x-events (ev 33 32 0 0 0 dl) km dl = [['close]]) (x-events (ev 33 32 0 0 0 5) km dl = ())
+         (x-events (ev 17 0 0 0 0 0) km dl = [['close]]) (x-events (ev 12 0 0 0 0 0) km dl = ())))
+
 ; --- the rung-8 wire encodings, byte-exact into a jug ---
 (: j (jug 0) _ (x-borderpix j 5 77) b (slurp j)                                  ; cwa cwborderPixel
    (test (#b = 16) (b 0 = 2) (b 4 = 5) (b 8 = 8) (b 12 = 77)))

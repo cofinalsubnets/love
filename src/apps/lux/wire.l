@@ -6,11 +6,13 @@
 ;
 ; The screen record `(x-setup s)` returns: (root wpx hpx minkc maxkc idbase).
 ; The event record `(x-next s)` returns: (code detail window state) -- enough for
-; MapRequest/DestroyNotify/ConfigureRequest/MapNotify/KeyPress; () at EOF.
+; MapRequest/DestroyNotify/ConfigureRequest/MapNotify/KeyPress; () at EOF. x-events
+; reads one as a window's events, the records a program with a window of its own takes.
 ;
 ; module 'xwire: every name below is exported, and a file that speaks X says
 ; (borrow 'xwire) -- lux's own (ewmh, manage, config, lux) and the doom driver
-; (src/apps/doom.l), which is why this is a module and not a leak.
+; (src/apps/doom.l), which is why this is a module and not a leak. a client with a window
+; of its own (doom, pier) opens with x-open and lays it with x-window and the requests after.
 (module '(xwire
   x-w8 x-w16 x-w32 x-flush x-r8 x-r16 x-r32 x-skip
   x-rstr x-pad4 x-wname x-rbytes u16 u32 evq x-reply
@@ -21,7 +23,9 @@
   x-grabbtn x-replay x-allow-async x-grabptr x-ungrabptr x-querytree x-attrs x-manageable?
   x-redirect x-keymap x-grab x-ungrabkeys x-color x-borderpix x-bgpix x-clear x-cursor xauth-parse
   xauth-cookie x-decode x-next ev-code ev-detail ev-window ev-state ev-raw
-  i16 x-queryext x-randr-init x-monitors x-warp x-queryptr)
+  i16 x-queryext x-randr-init x-monitors x-warp x-queryptr
+  x-dispnum x-authfile x-open x-window x-gc x-title x-protocols x-autorepeat x-putrows x-keysyms
+  x-sym x-text x-set1 x-events)
 (borrow 'posix)
 (borrow 'bytes)
 (:
@@ -314,6 +318,102 @@
     (open path "r" @ p
        (hot? p ? (slurp p @ b (close p, xauth-parse b disp))))
 
+   ; --- a client of our own: DISPLAY -> the unix socket and the screen, the cookie off
+   ;     XAUTHORITY or ~/.Xauthority. [s sc], or a nom: 'no-display, 'refused ---
+   (x-dispnum d) (#d < 2 ? "0"
+                    (: b (snip d 1 #d)
+                       (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))
+                       (go 0)))
+   (x-authfile _) (getenv "XAUTHORITY" @ v (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
+   (x-open disp)
+    (: dn (x-dispnum (string? disp ? disp ""))
+       s (x-connect ("/tmp/.X11-unix/X" + dn))
+       (? !(hot? s) 'no-display
+          (x-setup s (xauth-cookie (x-authfile 0) dn) @ sc
+             (two? sc ? [s sc] (close s, 'refused)))))
+
+   ; --- a window of ours: CreateWindow at the parent's depth and visual, a black back
+   ;     pixel and the events in mask; a GC; a title; the delete protocol ---
+   (x-window s win parent w h mask)
+    (x-w8 s 1, x-w8 s 0, x-w16 s 10, x-w32 s win, x-w32 s parent,
+     x-w16 s 0, x-w16 s 0, x-w16 s w, x-w16 s h, x-w16 s 0, x-w16 s 1, x-w32 s 0,
+     x-w32 s 2050, x-w32 s 0, x-w32 s mask)
+   (x-gc s gc win) (x-w8 s 55, x-w8 s 0, x-w16 s 4, x-w32 s gc, x-w32 s win, x-w32 s 0)
+   (x-title s win t)                                                             ; ChangeProperty WM_NAME STRING
+    (#t @ n
+       (x-w8 s 18, x-w8 s 0, x-w16 s (6 + (n + x-pad4 n) // 4), x-w32 s win,
+        x-w32 s 39, x-w32 s 31, x-w8 s 8, x-w8 s 0, x-w16 s 0, x-w32 s n, x-wpad s t))
+   (x-protocols s win)                                                           ; WM_PROTOCOLS = [WM_DELETE_WINDOW]; answers the atom
+    (: pr (x-intern s "WM_PROTOCOLS") dl (x-intern s "WM_DELETE_WINDOW")
+       ((x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s win, x-w32 s pr, x-w32 s 4,
+         x-w8 s 32, x-w8 s 0, x-w16 s 0, x-w32 s 1, x-w32 s dl),
+        dl))
+   ; a held key, by default, is a release and a press every 40 ms after the server's delay,
+   ; which reads as the key going up. XKB's detectable autorepeat turns a held key into
+   ; presses only: QueryExtension for the opcode, XkbUseExtension, then PerClientFlags
+   ; (UseCoreKbd, change and value both the DetectableAutoRepeat bit). a server without
+   ; XKB answers no opcode, and the keys stay as they were
+   (x-autorepeat s)
+    (: n #"XKEYBOARD"
+       _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) // 4), x-w16 s n, x-w16 s 0, x-wpad s "XKEYBOARD", x-flush s)
+       hdr (x-reply s)
+       op (<hdr = 1 ? (hdr 9) 0)
+       (op < 1 ? 0
+          (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w16 s 1, x-w16 s 0, x-flush s,
+           x-reply s,
+           x-w8 s op, x-w8 s 21, x-w16 s 7, x-w16 s 256, x-w16 s 0, x-w32 s 1, x-w32 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s,
+           x-reply s,
+           1)))
+   ; PutImage of pixel rows y..y+n of fb, w pixels wide at 32 bpp. a request's length is 16
+   ; bits of words, so a band holds at most 262112 bytes whatever the width: a wide window
+   ; makes fat rows, and one request past the limit reads as opcodes to the server
+   (x-putrows s win gc depth fb w y n)
+    (: rb (w * 4)
+       band (262112 // rb @ v (v < 1 ? 1 (min 64 v)))
+       (go y left) (left < 1 ? (x-flush s)
+                      (: k (min band left) bytes (k * rb)
+                         ((x-w8 s 72, x-w8 s 2, x-w16 s (6 + bytes // 4), x-w32 s win, x-w32 s gc,
+                           x-w16 s w, x-w16 s k, x-w16 s 0, x-w16 s y, x-w8 s 0, x-w8 s depth, x-w16 s 0),
+                          x-flush s,
+                          say s (snip fb (y * rb) (y * rb + bytes)),
+                          go (y + k) (left - k))))
+       (go y n))
+   ; keycode -> [sym shifted-sym], the whole table once (GetKeyboardMapping)
+   (x-keysyms s mink maxk)
+    (: nkc (maxk - mink + 1)
+       _ (x-w8 s 101, x-w8 s 0, x-w16 s 2, x-w8 s mink, x-w8 s nkc, x-w16 s 0, x-flush s)
+       hdr (x-reply s)
+       kpc (<hdr = 1 ? (hdr 1) 0)
+       km (tablet 256)
+       (go k) (k < nkc && 0 < kpc ?                                                ; an error reply carries no table
+                 (: s0 (x-r32 s) s1 (1 < kpc ? (x-r32 s) 0)
+                    (x-skip s (4 * max 0 (kpc - 2)),
+                     pin km (mink + k) [s0 s1],
+                     go (k + 1)))
+                 km)
+       (go 0))
+   ; a KeyPress's keysym: shift (or caps lock, on a letter) takes the second column; 0 for none
+   (x-sym km kc st)
+    (peep km kc () @ p
+       (? !(two? p) 0
+          (: lower <p upper <>p
+             letter (97 <= lower <= 122)
+             (st & 1 != 0 || letter && st & 2 != 0 ? (0 < upper ? upper lower) lower))))
+   ; a keysym as the text it types: latin-1 and unicode keysyms as utf-8, "" for the rest
+   ; and for any key under ctrl or alt
+   (x-text sym st)
+    (? (st & 12 != 0) ""
+       (32 <= sym <= 126) (string sym)
+       (160 <= sym <= 255) (utf8 sym)
+       (16777216 <= sym <= 17891327) (utf8 (sym - 16777216))
+       "")
+   ; a keycode -> the key's place as a PS/2 set-1 code, the one inle's tap answers. less 8
+   ; it is linux's code, which is set 1's own up to the keypad and F11 F12; the extended
+   ; keys wear 0xe0 folded onto 0x100. () for a key set 1 has no code for
+   x-set1-ext {96 284 97 285 98 309 99 311 100 312 102 327 103 328 104 329 105 331 106 333
+               107 335 108 336 109 337 110 338 111 339 125 347 126 348 127 349}
+   (x-set1 kc) (kc - 8 @ e (? (0 < e < 84 || 86 <= e <= 88) e (peep x-set1-ext e ())))
+
    ; --- the event decoder: one 32-byte event -> (code detail window state) | ()
    ;     code 0 = X error (window is garbage). window at byte 8, state at byte 28,
    ;     detail (keycode) at byte 1 -- enough for every event the wm handles. ---
@@ -327,5 +427,19 @@
                (b0 = 1 ? (x-skip s (4 * u32 pkt 4), x-next s)                    ; an orphaned reply (its wait ended on an error): drain + skip
                 (x-decode pkt)))))))
    (ev-code e) <e  (ev-detail e) <>e  (ev-window e) (e 2)  (ev-state e) (e 3)
-   (ev-raw e) (e 4))                                                        ; the 32 raw bytes (ConfigureRequest reads its geometry here)
+   (ev-raw e) (e 4)
+   ; --- a window's events, as every backend answers them: [down key] [up key] [text s]
+   ;     [press b x y] [release b x y] [move x y] [size w h] [close]. a key is its set-1
+   ;     code; a KeyPress is a down and the text it types. km is x-keysyms', dl the
+   ;     WM_DELETE_WINDOW atom. an X event -> a list of them, () for one that says none ---
+   (x-events e km dl)
+    (: c (ev-code e) kc (ev-detail e) st (ev-state e) raw (ev-raw e)
+       (? (c = 2 || c = 3)
+            (: k (x-set1 kc) t (c = 2 ? (x-text (x-sym km kc st) st) "")
+               ((charm? k ? [[(c = 2 ? 'down 'up) k]] ()) + (0 < #t ? [['text t]] ())))
+          (c = 4 || c = 5) [[(c = 4 ? 'press 'release) kc (i16 raw 24) (i16 raw 26)]]
+          (c = 6) [['move (i16 raw 24) (i16 raw 26)]]
+          (c = 22) [['size (u16 raw 20) (u16 raw 22)]]
+          (c = 17 || (c = 33 && u32 raw 12 = dl)) [['close]]
+          ())))                                                        ; the 32 raw bytes (ConfigureRequest reads its geometry here)
 ) ; module xwire

@@ -173,19 +173,9 @@
       !(open? d nx ny) (note g w-concrete)
       (pins p 'x nx 'y ny)))
  ; ..and the rats wander, a step a turn to a bare cell beside them
- (garage-stir g) (: d (g 'd) sb (g 'sb) p (g 'p)
-   (taken? x y) (x = p 'x && y = p 'y || any (m \ m 'x = x && m 'y = y) (g 'ms))
-   (stir m) (: nx (m 'x + roll sb 3 - 1) ny (m 'y + roll sb 3 - 1)
-               (? (open? d nx ny && !(taken? nx ny)) (pins m 'x nx 'y ny)))
-   (each (g 'ms) stir))
- (garage-turn g k) (:
-   _ (pins g 'msg "" 'tn (1 + g 'tn))
-   sg (g 'sign)
-   ((? sg (pin g 'sign ())
-       (g 'over) ()
-       (two? k) (garage-stride g k, garage-stir g)
-       ()),
-    g))
+ (garage-stir g) (: d (g 'd) p (g 'p)
+   (rove-wander (g 'ms) (g 'sb) (m \ 1) (x \ y \ open? d x y && !(x = p 'x && y = p 'y))))
+ (garage-turn g k) (rove-turn g k (g \ k \ pin g 'sign ()) (g \ k \ (garage-stride g k, garage-stir g)))
 
  ; --- the frame: concrete, the floor's stains, the lines, the wrecks, the rats ------
  (ramp-pen rp v) (cite 'slop 'slop-ramp-pen rp 3.0 v)
@@ -292,16 +282,9 @@
    ; the wait is the song: fed up to the lead, and a rest when the card wants nothing
    (feed _) (song-fill hn (song-lead-of (pace! pace)) (_ \ (garage-song-feed sng)))
    (idle _) (? !sng (rest 30) (feed ()) 0 (rest 5))
-   (turn k) (k = 27 && g 'sign ? (pin g 'sign ())
-               (k @ (113 || 27 || -7) (pin g 'over 'fled)
-                (garage-turn g (rove-key g k))))
-   (loop last t0) (g 'over ? ()
-                     (: _ (say out (garage-frame g), flush out)
-                        k (key-wait t0 last (g 'sign ? sign-gap repeat-gap) idle)
-                        (turn k,
-                         loop k (clock 0))))
+   (press k) (rove-press g k 'fled (g \ pin g 'sign ()) garage-turn)
    _ (say out (esc + "[2J"))
-   _ (loop 0 0)
+   _ (rove-loop g garage-frame idle press)
    _ (hn ? (flush hn, close hn))
    ; west along the bed: the shaft takes the stage as it stands and gives it back here
    next (cite 'shaft 'shaft-walk)

@@ -128,6 +128,7 @@ static short const os_nr[][3] = {
   {NR_nanosleep,     NR_fb_nanosleep,   430},
   {NR_getpid,        NR_fb_getpid,       20},
   {NR_socket,        NR_fb_socket,      394},
+  {NR_socketpair,    NR_fb_socketpair,  135},
   {NR_connect,       NR_fb_connect,      98},
   {NR_accept,        NR_fb_accept,       30},
   {NR_sendto,        NR_fb_sendto,      133},

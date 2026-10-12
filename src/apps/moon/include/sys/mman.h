@@ -22,7 +22,7 @@ int madvise(void*, long, int);
 #define MS_SYNC       4
 int msync(void*, unsigned long, int);
 int mincore(void*, unsigned long, unsigned char*);
-void *mmap(void*, long, int, int, int, long);
+void *mmap(void*, long, int, int, int, off_t);
 int munmap(void*, long);
 int mprotect(void*, long, int);
 #define MREMAP_MAYMOVE 1

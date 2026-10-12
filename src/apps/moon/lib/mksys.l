@@ -6,7 +6,7 @@
 ;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip, [8] the signal
 ;                            mask (love.c's fault barrier is sigsetjmp(env,1): the mask is load-bearing)
 ;   __love_sigret              the sa_restorer tail (rt_sigreturn) moonlibc's sigaction installs
-; (mksys-x64 dst), (mksys-a64 dst), (mksys-rv64 dst) all seed mksys-as, which picks the arch's IR
+; (mksys-x64 dst), (mksys-a64 dst), (mksys-rv64 dst), (mksys-i386 dst) all seed mksys-as, which picks the arch's IR
 ; table. the x64 object serves linux and freebsd: cf cleared before the insn and a carry answer
 ; parked below linux's band as -(errno+4096), so impl.h's __love_call reads one law; the sigprocmask
 ; leaves branch on __love_osv between rt_sigprocmask 14 and sigprocmask 340.
@@ -18,6 +18,7 @@
 (: (mksys-x64 dst) (mksys-as 'x64 dst)
    (mksys-a64 dst) (mksys-as 'a64 dst)
    (mksys-rv64 dst) (mksys-as 'rv64 dst)
+   (mksys-i386 dst) (mksys-as 'i386 dst)
    (mksys-freebsd dst) (mksys-as 'x64 dst)   ; one object serves both kernels
    (mksys-as arch dst) (write-bytes dst (mksys-bytes arch))
    ; the netbsd/aarch64 dispatch table. That kernel takes the syscall number
@@ -207,6 +208,109 @@
          (li r6 -1)
          (li r0 1)                   ; exit
          (sys))
+
+         (arch = 'i386)
+         ; the i386 lane, linux alone: cdecl args on the stack, the kernel's in
+         ; ebx ecx edx esi edi ebp through int 0x80. registers r0..r6 = eax ecx
+         ; edx ebx ebp esi edi. the jmp_buf: [0] ebx [4] esi [8] edi [12] ebp
+         ; [16] esp [20] eip, the 8-byte mask at [32].
+         '(
+         (label __love_sys)
+         (push r4) (push r6) (push r5) (push r3)
+         (ld r0 sp 20)               ; eax <- n
+         (ld r3 sp 24)               ; ebx <- a
+         (ld r1 sp 28)               ; ecx <- b
+         (ld r2 sp 32)               ; edx <- c
+         (ld r5 sp 36)               ; esi <- d
+         (ld r6 sp 40)               ; edi <- e
+         (ld r4 sp 44)               ; ebp <- f
+         (sys)
+         (pop r3) (pop r5) (pop r6) (pop r4)
+         (ret)
+
+         (label __sigsetjmp)
+         (ld r1 sp 4)                ; ecx <- buf
+         (st r1 0 r3)
+         (st r1 4 r5)
+         (st r1 8 r6)
+         (st r1 12 r4)
+         (lea r0 sp 4)               ; the caller's esp once we return
+         (st r1 16 r0)
+         (ld r0 sp 0)
+         (st r1 20 r0)
+         (push r3) (push r5)
+         (lea r2 r1 32)              ; edx = oldset
+         (li r3 0)                   ; ebx = SIG_BLOCK
+         (li r1 0)                   ; ecx = NULL (read only)
+         (li r5 8)                   ; esi = sigsetsize
+         (li r0 175)                 ; rt_sigprocmask
+         (sys)
+         (pop r5) (pop r3)
+         (li r0 0)
+         (ret)
+
+         (label siglongjmp)
+         (ld r6 sp 4)                ; edi <- buf, through the kernel
+         (ld r4 sp 8)                ; ebp <- val
+         (li r3 2)                   ; ebx = SIG_SETMASK
+         (lea r1 r6 32)              ; ecx = the saved mask
+         (li r2 0)
+         (li r5 8)
+         (li r0 175)
+         (sys)
+         (mov r0 r4)
+         (ld r3 r6 0)
+         (ld r5 r6 4)
+         (ld r4 r6 12)
+         (ld sp r6 16)
+         (ld r1 r6 20)
+         (ld r6 r6 8)                ; edi, last, off itself
+         (cmp r0 0)
+         (br ne lj-live)
+         (li r0 1)
+         (label lj-live)
+         (jmpr r1)
+
+         (label __love_sigret)
+         (li r0 173)                 ; rt_sigreturn
+         (sys)
+
+         ; -- __love_clone(flags, sp, ptid, ctid, tls): i386's clone orders
+         ;    (flags sp ptid tls ctid). the child wakes on sp, where its caller laid
+         ;    [fn arg sel]: it loads gs with sel (the tls entry clone set) and calls fn(arg)
+         (label __love_clone)
+         (push r4) (push r6) (push r5) (push r3)
+         (ld r3 sp 20)
+         (ld r1 sp 24)
+         (ld r2 sp 28)
+         (ld r6 sp 32)
+         (ld r5 sp 36)
+         (li r0 120)                 ; clone
+         (sys)
+         (cmp r0 0)
+         (br ne clone-out)
+         (ld r0 sp 8)
+         (raw (142 232))             ; mov gs, eax
+         (ld r0 sp 0)
+         (ld r1 sp 4)
+         (push r1)
+         (callr r0)
+         (li r3 0)
+         (li r0 1)                   ; exit
+         (sys)
+         (label clone-out)
+         (pop r3) (pop r5) (pop r6) (pop r4)
+         (ret)
+
+         ; -- __love_tp: the word at gs:0, or 0 while gs holds no selector (the first thread)
+         (label __love_tp)
+         (li r0 0)
+         (raw (102 140 232))         ; mov ax, gs
+         (cmp r0 0)
+         (br eq tp-none)
+         (raw (101 161 0 0 0 0))     ; mov eax, gs:[0]
+         (label tp-none)
+         (ret))
 
          (arch = 'a64)
          ; one expression: the written leaves ++ the generated netbsd table.
@@ -624,6 +728,8 @@
                   (arch = 'a64)
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
                     "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp")
+                  (arch = 'i386)
+                  '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp")
                   '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp"))
                () () () () () () ())))
 ) ; module 'moon

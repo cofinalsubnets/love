@@ -166,3 +166,32 @@
  ; the cells move and the key stays findable: a probe rehashes, so a hash that read
  ; the pointers would lose its own entry at the first collection
  (0 = oa-churn 80) (2 = peep oa-t oa-k1 0) (dig oa-k1 = dig oa-k2))
+
+; --- a cell that is not a plain number -- a tray, a ratio, a text -- takes the whole op, so an
+; object tray of trays is arithmetic all the way down, broadcast as a numeric tray's is
+(: oa-tt   @(@(1 2) @(3 4))
+   oa-deep @(@(@(1 2) @(3 4)) @(@(5 6) @(7 8))))
+(test
+ (aall ((oa-tt + 1) = @(@(2 3) @(4 5))))
+ (aall ((oa-tt + oa-tt) = @(@(2 4) @(6 8))))
+ (aall ((2 * oa-tt) = @(@(2 4) @(6 8))))
+ (aall ((oa-tt * @(10 100)) = @(@(10 20) @(300 400))))   ; cell by cell: @(1 2) * 10, @(3 4) * 100
+ (aall ((oa-tt < 3) = @(@(1 1) @(0 0))))                 ; a comparison answers a mask per cell
+ (aall ((oa-deep + 1) = @(@(@(2 3) @(4 5)) @(@(6 7) @(8 9)))))
+ (2 = peep (@(1 (1 /// 3)) + 1) 0 0)                     ; a ratio cell takes its own +
+ ((4 /// 3) = peep (@(1 (1 /// 3)) + 1) 1 0)
+ ("ac" = peep (@("a" 'b) + @("c" "d")) 0 0)              ; ..and a text cell its own
+ (0 = (oa-tt + @(1 2 3)))                                ; shapes apart: no answer, a 0
+ ; `/` answers per cell as the scalar does, whatever sits beside it: exact where it divides
+ ((100 2) / 2 = peep (@((100 2) 3) / 2) 0 0)
+ (1.5 = peep (@((100 2) 3) / 2) 1 0)
+ (1.5 = peep (@((1 /// 3) 3) / 2) 1 0)
+ (1 / 0 = peep (@((100 2) 1) / 0) 1 0)
+ ; by 0, as the scalar: // an infinity, % the numerator, a big as a small
+ (7 // 0 = peep (@((100 2) 7) // 0) 0 0)
+ (7 // 0 = peep (@((100 2) 7) // 0) 1 0)
+ (aall ((@((100 2) 7) % 0) = @((100 2) 7)))
+ (7 // 0 = peep (@(1 7) // 0) 1 0)                       ; an int tray goes float for it
+ (-7 // 0 = peep (@(1 -7) // @(2 0)) 1 0)
+ (aall ((@(7 9) // @(2 3)) = @(3 3)))                    ; ..and stays int when no divisor is 0
+ (!(gem? (peep (@(7 9) // 2) 0 0))))

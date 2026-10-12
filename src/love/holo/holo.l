@@ -33,7 +33,7 @@
 ;   (adds d a b) (subs d a b)                  ; like add/sub but set flags -- pair with (br vs/vc ..)
 ;   (mulo d a b t lbl)                         ; d <- a*b (low 64); branch to lbl on signed overflow; t a scratch (clobbered)
 ;   (set cond d)                               ; d <- (cond holds) ? 1 : 0, from the last cmp's flags
-;   (call label) (callr d) (ret) (sys)         ; callr: indirect call through register d; sys = syscall/svc
+;   (call label) (callr d) (callm b o) (ret) (sys)  ; callr: through register d, callm: through memory; sys = syscall/svc
 ;   (la d label)           ; d <- the label's address (pc-relative; data via (label)+(raw ..))
 ;   (nop) (trap)
 ;   -- sse2 double lane (x86-64 only; the float glaze): xmm registers f0..f15 --
@@ -102,7 +102,7 @@
    (fix-l x)  (x 3)
    (fix-a x)  (x 4)
    ;; an a64 address fix's aux: the word below bit 32, a signed 32-bit addend above it
-   a64-afix '(adrp21 addlo12 lo12s1 lo12s2 lo12s4 lo12s8 lo12s16)
+   a64-afix '(adrp21 addlo12 lo12s1 lo12s2 lo12s4 lo12s8 lo12s16 ld19)
    (afix-w aux) (aux & 4294967295)
    (afix-ad aux) ((aux >> 32) @ h (h >= 2147483648 ? (h - 4294967296) h))
    ;; a byte is 1; a fixup is its field width; a STRING is a blob -- those bytes verbatim,
@@ -171,9 +171,9 @@
              'tbr 3                          ; ..and tbz/tbnz: (tbr word reg label), the bit in the word
              'afix 4                         ; ..and gas's address fixes: (afix kind word label addend)
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
-             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'call 1 'raw 1 'lapool 1
+             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1
              'li 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2
-             'la 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'clz 2
+             'la 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2   ; a64's three-register twins
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2

@@ -147,6 +147,56 @@ moonrun "$ho/.jl.c" -o "$ho/.jl" || fail "mooncc a spliced jump label"
 "$ho/.jl" || fail "a spliced jump label's table or target is wrong (exit $?)"
 $cc_g -O2 -o "$ho/.jlg" "$ho/.jl.c" && { "$ho/.jlg" || fail "gcc -O2 disagrees on the jump-label law (exit $?)"; }
 
+# ------------------------------------------- setjmp: a volatile local changed after it keeps its value
+# the second return restores callee-saved registers, not memory, so a fn that calls setjmp keeps
+# none (C11 7.13.2.1). exit = the count of checks that held; gcc is the oracle
+cat > "$ho/.sj.c" <<'CEOF'
+#include <setjmp.h>
+
+static jmp_buf jb;
+static jmp_buf jb2;
+
+static void bounce(int v) { longjmp(jb, v); }
+static void bounce2(int v) { longjmp(jb2, v); }
+
+static int here(void) {
+  volatile int hops = 0;
+  if (setjmp(jb) == 0) { hops++; longjmp(jb, 1); }
+  return hops == 1;
+}
+
+static int callee(void) {
+  volatile int n = 10;
+  volatile unsigned long acc = 0;
+  int r = setjmp(jb);
+  acc += (unsigned long)r;
+  if (r < 3) { n++; bounce(r + 1); }
+  return n == 13 && acc == 6;
+}
+
+static int other(void) {
+  volatile int hops = 0;
+  volatile long big = 1;
+  if (setjmp(jb2) == 0) { hops = 7; big <<= 20; bounce2(2); }
+  return hops == 7 && big == 1L << 20;
+}
+
+/* many live names around the call: more than the registers that survive it */
+static int crowd(int k) {
+  volatile int a = k, b = k + 1, c = k + 2, d = k + 3, e = k + 4, f = k + 5, g = k + 6;
+  if (setjmp(jb) == 0) { a += 10; b += 10; c += 10; d += 10; e += 10; f += 10; g += 10; bounce(1); }
+  return a + b + c + d + e + f + g == 7 * k + 21 + 70;
+}
+
+int main(void) {
+  return here() + callee() + other() + crowd(5);
+}
+CEOF
+moonrun "$ho/.sj.c" -o "$ho/.sj" || fail "mooncc the setjmp law"
+"$ho/.sj"; st=$?
+[ $st -eq 4 ] || fail "a volatile local across setjmp lost its value ($st of 4 held)"
+$cc_g -O2 -o "$ho/.sjg" "$ho/.sj.c" && { "$ho/.sjg"; [ $? -eq 4 ] || fail "gcc -O2 disagrees on the setjmp law"; }
+
 # ------------------------------------------- -std=: the dialect rail (struct labels)
 # THE ORACLE IS THE LABEL-FREE TWIN. A struct label is not C -- gcc cannot compile the
 # labelled source at all -- so the differential is against the SAME struct with the labels
@@ -462,6 +512,33 @@ moonrun -c -t a64 -o "$ho/.tbz.o" "$ho/.tbz.s" > /dev/null 2>&1 && fail "a tbz p
 printf '\t.globl f\nf:\ttbz x0, #3, ext\n\tret\n' > "$ho/.tbz.s"
 moonrun -c -t a64 -o "$ho/.tbz.o" "$ho/.tbz.s" > /dev/null 2>&1 || fail "a tbz to an outside label did not assemble"
 readelf -rW "$ho/.tbz.o" 2>/dev/null | grep -q "R_AARCH64_TSTBR14.*ext" || fail "a tbz to an outside label laid no TSTBR14"
+# a branch inside a section without x resolves in place, as llvm-mc lays it (proc.S's .idmap.text, "a")
+printf '\t.pushsection .idmap.text, "a"\n1:\tnop\n\tcbnz w1, 1b\n\tb.ne 1b\n\ttbz w1, #1, 1b\n\tb 1b\n\t.popsection\n' > "$ho/.dbr.s"
+moonrun -c -t a64 -o "$ho/.dbr.o" "$ho/.dbr.s" > /dev/null 2>&1 || fail "branches in a data section did not assemble"
+readelf -rW "$ho/.dbr.o" 2>/dev/null | grep -q R_AARCH64 && fail "a branch inside a data section laid a relocation"
+readelf -x .idmap.text "$ho/.dbr.o" 2>/dev/null | grep -q "1f2003d5 e1ffff35 c1ffff54 a1ff0f36" \
+  || fail "branches inside a data section were not resolved in place"
+# .incbin lays a file's bytes, whole or a skip and count of them, found through -I as gas finds
+# it; a `//` inside a string is no comment (vdso-wrap.S's vdso.so)
+mkdir -p "$ho/.incd" && printf 'ABCDEFGHIJ' > "$ho/.incd/.inc.bin"
+printf '\t.section .rodata\n\t.incbin ".inc.bin"\n\t.incbin ".inc.bin", 2, 3\n\t.ascii "a//b"\n' > "$ho/.inc.S"
+moonrun -c -t a64 -I "$ho/.incd" -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 || fail "an .incbin did not assemble"
+readelf -x .rodata "$ho/.inc.o" 2>/dev/null | grep -q "41424344 45464748 494a4344 45612f2f" \
+  || fail "an .incbin's bytes were not laid as llvm-mc lays them"
+moonrun -c -t a64 -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 && fail "an .incbin of a file nowhere on the path was laid"
+
+# an asm's .weak binds weak, through an alias chain: a strong C definition elsewhere wins the
+# link, and alone the weak one is taken (memcpy.S's memmove)
+printf '__asm__(".text\\n.weak pick\\n.weak __pick\\n.set pick, __pick\\n.globl __pick\\n.set __pick, opick\\nopick: mov $1, %%eax\\n ret\\n");\nint pick(void);\nint main(void){ return pick(); }\n' > "$ho/.wka.c"
+printf 'int pick(void){ return 2; }\n' > "$ho/.wkb.c"
+moonrun -c -o "$ho/.wka.o" "$ho/.wka.c" > /dev/null 2>&1 && moonrun -c -o "$ho/.wkb.o" "$ho/.wkb.c" > /dev/null 2>&1 \
+  || fail "an asm .weak alias chain did not compile"
+moonrun -o "$ho/.wk" "$ho/.wka.o" "$ho/.wkb.o" > /dev/null 2>&1 || fail "a strong definition beside an asm .weak did not link"
+"$ho/.wk"; a=$?
+[ $a -eq 2 ] || fail "an asm .weak beat a strong definition (got $a want 2)"
+moonrun -o "$ho/.wk" "$ho/.wka.o" > /dev/null 2>&1 || fail "an asm .weak alone did not link"
+"$ho/.wk"; a=$?
+[ $a -eq 1 ] || fail "an asm .weak alone was not taken (got $a want 1)"
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the

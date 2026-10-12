@@ -55,7 +55,7 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
  * lays x64 and arm64). Where it is absent netbsd's sigaction refuses BY NAME
  * rather than register a trampoline that is not there; freebsd on the same arch
  * is unaffected. */
-#if !defined(__riscv) && !defined(__wasm__)   /* wasm's one kernel is the page's loader */
+#if !defined(__riscv) && !defined(__wasm__) && !defined(__i386__)   /* wasm's one kernel is the page's loader; i386 is linux's alone */
 # define LvOsTranslate 1        /* os.c's tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
@@ -118,6 +118,7 @@ struct _IO_FILE {
 #define NR_fb_sendfile      393   /* another signature (rung 3) */
 #define NR_fb_pselect6      522   /* pselect; the 6th arg is a plain sigset* (rung 3) */
 #define NR_fb_socket         97
+#define NR_fb_socketpair    135
 #define NR_fb_connect        98
 #define NR_fb_accept         30
 #define NR_fb_sendto        133
@@ -259,6 +260,7 @@ struct _IO_FILE {
 #define NR_sendfile        71
 #define NR_pselect6        72
 #define NR_socket         198
+#define NR_socketpair     199
 #define NR_bind           200
 #define NR_getsockname    204
 #define NR_getpeername    205
@@ -293,6 +295,114 @@ struct _IO_FILE {
 #define NR_fstatfs         44
 #define NR_memfd_create   279
 #define NR_execveat       281
+#elif defined(__i386__)
+/* i386: x64's names at i386's numbers. time_t and off_t are 64-bit here, so a call
+ * whose i386 twin takes them narrow rides its *64 / *_time64 cousin (named beside it);
+ * the calls that change shape -- lseek, nanosleep, fstat, statfs, mmap's page offset --
+ * are spelled by their members, and arch_prctl has no i386 twin */
+#define NR_read             3
+#define NR_write            4
+#define NR_close            6
+#define NR_mmap           192   /* mmap2 */
+#define NR_mprotect       125
+#define NR_munmap          91
+#define NR_mremap         163
+#define NR_madvise        219
+#define NR_msync          144
+#define NR_copy_file_range 377
+#define NR_mincore        218
+#define NR_rt_sigaction   174
+#define NR_rt_sigprocmask 175
+#define NR_ioctl           54
+#define NR_pread64        180
+#define NR_pwrite64       181
+#define NR_getpid          20
+#define NR_uname          122
+#define NR_sysinfo        116
+#define NR_setuid         213   /* setuid32 */
+#define NR_setgid         214   /* setgid32 */
+#define NR_setgroups      206   /* setgroups32 */
+#define NR_setresuid      208   /* setresuid32 */
+#define NR_sigaltstack    186
+#define NR_setresgid      210   /* setresgid32 */
+#define NR_geteuid        201   /* geteuid32 */
+#define NR_sendfile       239   /* sendfile64 */
+#define NR_pselect6       413   /* pselect6_time64 */
+#define NR_socket         359
+#define NR_socketpair     360
+#define NR_connect        362
+#define NR_accept         364   /* accept4 */
+#define NR_sendto         369
+#define NR_getsockname    367
+#define NR_getpeername    368
+#define NR_recvfrom       371
+#define NR_sendmsg        370
+#define NR_recvmsg        372
+#define NR_shutdown       373
+#define NR_bind           361
+#define NR_listen         363
+#define NR_getsockopt     365
+#define NR_setsockopt     366
+#define NR_clone          120
+#define NR_execve          11
+#define NR_execveat       358
+#define NR_wait4          114
+#define NR_getrusage       77
+#define NR_getrlimit      191   /* ugetrlimit */
+#define NR_setrlimit       75
+#define NR_getpriority     96
+#define NR_setpriority     97
+#define NR_statx          383
+#define NR_kill            37
+#define NR_fcntl          221   /* fcntl64 */
+#define NR_fsync          118
+#define NR_fdatasync      148
+#define NR_fchown         207   /* fchown32 */
+#define NR_ftruncate      194   /* ftruncate64 */
+#define NR_getcwd         183
+#define NR_chdir           12
+#define NR_chroot          61
+#define NR_fchmod          94
+#define NR_umask           60
+#define NR_getuid         199   /* getuid32 */
+#define NR_getgid         200   /* getgid32 */
+#define NR_setpgid         57
+#define NR_setsid          66
+#define NR_getpgid        132
+#define NR_sync            36
+#define NR_mount           21
+#define NR_reboot          88
+#define NR_umount2         52
+#define NR_getdents64     220
+#define NR_clock_gettime  403   /* clock_gettime64 */
+#define NR_exit_group     252
+#define NR_exit             1
+#define NR_futex          422   /* futex_time64 */
+#define NR_sched_yield    158
+#define NR_openat         295
+#define NR_mkdirat        296
+#define NR_mknodat        297
+#define NR_fchownat       298
+#define NR_faccessat      307
+#define NR_unlinkat       301
+#define NR_renameat       302
+#define NR_renameat2      353
+#define NR_linkat         303
+#define NR_symlinkat      304
+#define NR_readlinkat     305
+#define NR_fchmodat       306
+#define NR_ppoll          414   /* ppoll_time64 */
+#define NR_unshare        310
+#define NR_utimensat      412   /* utimensat_time64 */
+#define NR_signalfd4      327
+#define NR_dup3           330
+#define NR_pipe2          331
+#define NR_memfd_create   356
+#define NR__llseek        140
+#define NR_clock_nanosleep 407   /* clock_nanosleep_time64 */
+#define NR_statfs64       268
+#define NR_fstatfs64      269
+#define NR_set_thread_area 243
 #else
 #define NR_read             0
 #define NR_write            1
@@ -326,6 +436,7 @@ struct _IO_FILE {
 #define NR_sendfile        40
 #define NR_pselect6       270
 #define NR_socket          41
+#define NR_socketpair      53
 #define NR_connect         42
 #define NR_accept          43
 #define NR_sendto          44
@@ -458,14 +569,23 @@ static long __love_call(long n, long a, long b, long c, long d, long e, long f) 
     n = __love_nrfb(n);
     if (n < 0) return -38; }                          /* ENOSYS, canonically */
   long r = __love_sys(n, a, b, c, d, e, f);
+#ifdef LvOsTranslate                                     /* a parked answer, BSD's; on i386 a high address reads negative */
   if (r < -4096L) r = -__love_errfb(-r - 4096);
+#endif
   if (r == -14 && __love_efault()) {                     /* EFAULT, and the address woke: again */
     r = __love_sys(n, a, b, c, d, e, f);
-    if (r < -4096L) r = -__love_errfb(-r - 4096); }
+#ifdef LvOsTranslate
+    if (r < -4096L) r = -__love_errfb(-r - 4096);
+#endif
+  }
   return r; }
 static long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
   long r = __love_sys(n, a, b, c, d, e, f);
+#ifdef LvOsTranslate
   return r < -4096L ? -__love_errfb(-r - 4096) : r; }
+#else
+  return r; }
+#endif
 #ifdef LvOsTranslate
 static long __love_fb7(long n, long a, long b, long c, long d, long e, long f, long g) {
   long r = __love_sys7(n, a, b, c, d, e, f, g);
@@ -494,13 +614,33 @@ typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in
 #define __MDirect ((__mhdr *) 1)   /* in an allocated block's `next': a mapping of its own, pages fresh from the kernel */
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
 struct __sctx { char *p; size_t n, at; };
-struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long mask; };
+struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long long mask; };
 /* `ent` is the freebsd repack slot: getdirentries' record is another shape,
  * so readdir translates the current one here and hands this out instead. */
 struct __dirstream { int fd; int pos; int len; struct dirent ent; char buf[4096]; };
 
 /* ---- freebsd's kernel shapes, the twins a member's freebsd branch fills and
  * translates (stable/14; the canonical faces live in the public headers). ---- */
+/* linux's statx buffer, the same on every arch: birth.c reads stx_btime, and i386's
+ * stat trio reads the rest (fstat.c) */
+#define STATX_BASIC_STATS      2047
+#define STATX_BTIME            2048
+#define AT_STATX_SYNC_AS_STAT     0
+struct __lx_stxts { long long tv_sec; unsigned int tv_nsec, __r; };
+struct __lx_statx {
+  unsigned int stx_mask, stx_blksize;
+  unsigned long long stx_attributes;
+  unsigned int stx_nlink, stx_uid, stx_gid;
+  unsigned short stx_mode, __p0;
+  unsigned long long stx_ino, stx_size, stx_blocks, stx_attributes_mask;
+  struct __lx_stxts stx_atime, stx_btime, stx_ctime, stx_mtime;
+  unsigned int stx_rdev_major, stx_rdev_minor, stx_dev_major, stx_dev_minor;
+  unsigned long long __rest[14];      /* mnt id, dio -- unread here */
+};
+_Static_assert(sizeof(struct __lx_statx) == 256, "statx buffer is the kernel's 256");
+#ifdef __i386__
+int __love_statx(int dirfd, char const *p, int fl, struct stat *st);   /* fstat.c's, the stat trio's floor */
+#endif
 struct __fb_stat {                    /* ino64, 224 bytes; mode is 16-BIT */
   unsigned long st_dev;
   unsigned long st_ino;
@@ -607,7 +747,7 @@ extern long __love_nbp202(long, long, long, long, long, long);
 #define FfAlt  4
 #define FfPlus 8
 #define FfSpc  16
-#define BdB 1000000000UL
+#define BdB 1000000000ULL
 #define BdI 36                        /* integer limbs: 324 digits >= 309 */
 #define BdF 121                       /* fraction limbs: 1089 digits >= 1074 */
 #define BdN (BdI + BdF)
@@ -630,7 +770,7 @@ extern char **environ;
 extern char const *__love_progname;
 
 /* helpers a sibling member calls or passes as a pointer: one definition, named here. */
-void __fmtnum(void (*put)(void *, int), void *ctx, unsigned long v, unsigned base,
+void __fmtnum(void (*put)(void *, int), void *ctx, unsigned long long v, unsigned base,
               int neg, int prec, int width, int fl, int up);
 int __fmtsgn(int neg, int fl);
 void __pad(void (*put)(void *, int), void *ctx, int n, int ch);
@@ -647,8 +787,8 @@ extern FILE __stdf[3];
 extern unsigned char __obuf[8192];
 /* threads (proc/pthread.c): the process's thread state lives in mem/free.c (see there).
  * sys.o's clone leaf starts the child on its own stack, calling sp[0](sp[1]); __love_tp (a64,
- * rv64) reads the thread pointer clone set to the thread's record */
-struct __love_mt { int threads, lock, klock; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128]; };   /* klock guards the keys: their destructors, which are taken, and the first thread's values */
+ * rv64, i386) reads the thread pointer clone set to the thread's record */
+struct __love_mt { int threads, lock, klock, tls; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128]; };   /* klock guards the keys: their destructors, which are taken, and the first thread's values; tls is i386's GDT entry, 0 before the first thread */
 extern struct __love_mt __love_mt;
 long __love_clone(long flags, void *sp, int *ptid, int *ctid, void *tls);
 void *__love_tp(void);

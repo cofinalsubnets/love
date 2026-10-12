@@ -743,7 +743,7 @@
                  (vexpat st pat @ cp
                     (two? cp ?
                        (0 < #pat ? (pins st 'pat <>cp 'pattx pat 'patw ()),
-                        [1 (recomp <>cp) rep (vexhas? (snip s k n) 103)]))))))))
+                        [1 <>cp rep (vexhas? (snip s k n) 103)]))))))))
    (vexsubs st m rep a b g?)                       ; ((row text)..) for the rows that change
     (: (go r acc) (b < r ? (rev acc)
                      (usub m rep (st 'lines r) g? @ res

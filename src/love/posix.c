@@ -26,6 +26,7 @@
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
 #include <fnmatch.h>    // fnmatch (glob's pattern law)
+#include <regex.h>      // regcomp regexec (re's engine)
 #include <sys/mman.h>       // madvise (the spawn guard)
 #include <sys/resource.h>   // getrusage, RUSAGE_SELF/CHILDREN (the cpu clocks)
 #include <time.h>           // clock_gettime, for love_clock
@@ -997,6 +998,63 @@ static love_inline word host_fnmatch(struct g *g, word p, word t) {
  return putcharm(a && b && !fnmatch(a, b, 0)); }
 LvmWord2(fnmatch)
 
+// (regcomp p fl) -> (b n): p's program b, a string to keep, and its group count | -e, regcomp's
+// error e. moonlibc's program is one block that holds no pointer, so b is a copy of it; another
+// libc's b is fl and p, compiled again at each regexec
+static love_inline struct g *host_regcomp(struct g *g) {
+ char const *p = str_c(g->sp[0]);
+ word f = g->sp[1];
+ if (!p || !charmp(f) || getcharm(f) & ~255) return g->sp[0] = badarg(g), g;
+ regex_t re;
+ int rc = regcomp(&re, p, (int) getcharm(f));
+ if (rc) return g->sp[0] = putcharm(-rc), g;
+#ifdef REG_UTF8
+ uintptr_t z = re.re_size;
+#else
+ uintptr_t z = strlen(p) + 1;
+#endif
+ if (ok(g = have(g, str_width(z) + 2 * Width(struct chain)))) {
+  struct str *b = ini_str((struct str*) bump(g, str_width(z)), z);
+#ifdef REG_UTF8
+  memcpy(b->bytes, re.re_prog, z);
+#else
+  b->bytes[0] = (char) getcharm(f), memcpy(b->bytes + 1, txt(g->sp[0]), z - 1);
+#endif
+  word l = word(ini_chain((struct chain*) bump(g, Width(struct chain)), putcharm((intptr_t) re.re_nsub), ZeroPoint));
+  g->sp[0] = word(ini_chain((struct chain*) bump(g, Width(struct chain)), word(b), l)); }
+ regfree(&re);
+ return g; }
+static lvm(lvm_regcomp) {
+ LvmCallp(g, 1, host_regcomp) }
+
+// (regexec b s i ef) -> the leftmost-longest match in s at or after i, as (so eo ..) for it and
+// its groups to the last of the first nine that took part, -1 for one that did not | () | -e.
+// ef: regexec's flags; what lies before i is still the text
+static love_inline struct g *host_regexec(struct g *g) {
+ word b = g->sp[0], s = g->sp[1], i = g->sp[2], e = g->sp[3];
+ if (!strp(b) || !len(b) || !strp(s) || !charmp(i) || !charmp(e) || getcharm(i) < 0 || getcharm(i) > (intptr_t) len(s))
+  return g->sp[0] = badarg(g), g;
+ regmatch_t m[10] = {{(regoff_t) getcharm(i), (regoff_t) len(s)}};
+ int ef = (int) getcharm(e) | REG_STARTEND, rc, k = 10;
+#ifdef REG_UTF8
+ regex_t re = {0, txt(b), len(b)};
+ rc = regexec(&re, txt(s), 10, m, ef);
+#else
+ regex_t re;
+ rc = regcomp(&re, txt(b) + 1, (unsigned char) txt(b)[0]);
+ if (!rc) rc = regexec(&re, txt(s), 10, m, ef), regfree(&re);
+#endif
+ if (rc) return g->sp[0] = rc == REG_NOMATCH ? ZeroPoint : putcharm(-rc), g;
+ while (k > 1 && m[k - 1].rm_so < 0) k--;
+ if (!ok(g = have(g, 2 * (uintptr_t) k * Width(struct chain)))) return g;
+ word l = ZeroPoint;
+ for (int j = 2 * k; j--;)
+  l = word(ini_chain((struct chain*) bump(g, Width(struct chain)),
+                     putcharm(j & 1 ? m[j / 2].rm_eo : m[j / 2].rm_so), l));
+ return g->sp[0] = l, g; }
+static lvm(lvm_regexec) {
+ LvmCallp(g, 3, host_regexec) }
+
 // (setenv name val) -> () | a nom | 'badarg misuse; a non-string val unsets the name.
 // (environ _)       -> the environment as a list of "name=value" strings (the raw POSIX
 //                      shape -- split at the first '=' in love; no order promised).
@@ -1079,6 +1137,8 @@ LvDef("sigign?", sigignp, 1, "posix");
 LvDef("wait", waitpid, 1, NULL);
 LvDef("chdir", chdir, 1, "posix");
 LvDef("fnmatch", fnmatch, 2, "posix");
+LvDef("regcomp", regcomp, 2, "posix");
+LvDef("regexec", regexec, 4, "posix");
 LvDef("cwd", cwd, 1, "posix");
 LvDef("selfpath", selfpath, 1, "posix");
 LvDef("uname", posix_uname, 1, "posix");

@@ -51,12 +51,15 @@ static struct {
 // (key) drain, g holds the modifier flags, `raw` arms the scancode tap (r/rh/rt) beside it.
 // the history's scroll is only asked for here (peer, snap) and done where the console paints.
 // a paste streams through the same queue (pasting, its bracket, the byte before), and a
-// pointer's press anchors a selection (anchor, the ticks it came at, clicks in a row).
+// pointer's press anchors a selection (anchor, the ticks it came at, clicks in a row; at,
+// the cell it was last over). a window holding the paper (kpaper) takes the pointer whole on
+// a ring of its own (pq/pqh/pqt) and hears the paper's size change (sw, sh).
 static struct { uint8_t g, q[64], qh, qt; uint16_t lost;
                 uint8_t raw, r[64], rh, rt;
                 int16_t peer; uint8_t snap;          // shift+pgup/pgdn asks, a key snaps back
                 uint8_t pasting, pbr, pprev, clicks;
-                intptr_t anchor; uint64_t tp; } kkb;
+                intptr_t anchor; uint64_t tp; uint32_t at;
+                uint8_t hold, pqh, pqt; uint16_t pq[16][4], sw, sh; } kkb;
 // enqueue one input byte; the COM1 serial RX ap (k_uart) feeds the same queue. an interrupt
 // cannot wait, so the ring is bounded: a drop is counted (serial_flush says how many fell)
 // and the count saturates rather than wrapping.
@@ -159,14 +162,24 @@ void k_paste_end(void) {
 // a selection's text to a seat that can carry it out (a page's clipboard); metal has none
 __attribute__((weak)) void k_copy_out(uint8_t const *s, uintptr_t n) { (void) s, (void) n; }
 
-// a pointer at a console cell: how 0 a press, 1 a release, 2 a move; b the button (0 1 2, 64
-// 65 the wheel, 3 none held) with modifiers 4 shift 8 meta 16 ctrl. a program that asked for
-// the mouse gets its report (cb_mouse); else, or with shift, the left button selects -- a
-// second or third press in quick succession on the same cell takes the word or the line --
-// and the release carries the text out, and the wheel scrolls the history, or on the
-// alternate screen sends three arrows
-void k_pointer(uint32_t how, uint32_t b, uint32_t row, uint32_t col) {
-  if (!kcb || row >= kcb->rows || col >= kcb->cols) return;
+// a pointer at a pixel of the paper: how 0 a press, 1 a release, 2 a move; b the button (0 1
+// 2, 64 65 the wheel, 3 none held) with modifiers 4 shift 8 meta 16 ctrl. a window holding the
+// paper takes it as it is; else it lands on the console cell under it, a move once a cell. a
+// program that asked for the mouse gets its report (cb_mouse); else, or with shift, the left
+// button selects -- a second or third press in quick succession on the same cell takes the
+// word or the line -- and the release carries the text out, and the wheel scrolls the
+// history, or on the alternate screen sends three arrows
+void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x) {
+  if (kkb.hold) {
+    uint8_t const n = (kkb.pqt + 1) & 15;
+    uint16_t *const p = kkb.pq[kkb.pqt];
+    if (n != kkb.pqh) p[0] = (uint16_t) how, p[1] = (uint16_t) b, p[2] = (uint16_t) x, p[3] = (uint16_t) y, kkb.pqt = n;
+    return; }
+  if (!kcb || !kfb.scale) return;
+  uint32_t const row = y / (kface.h * kfb.scale), col = x / (kface.w * kfb.scale), at = row << 16 | col;
+  if (how == 2 && at == kkb.at) return;
+  kkb.at = at;
+  if (row >= kcb->rows || col >= kcb->cols) return;
   uint32_t const btn = b & ~28u;
   if (!(b & 4) && kcb->flag & cb_mice) {
     uint8_t o[cb_mousen];
@@ -218,7 +231,7 @@ static void serial_flush(int fd) {
     do d[i++] = (char) ('0' + v % 10); while ((v /= 10));
     while (i) serial_putc1(1, d[--i]);
     for (char const *s = " bytes\n"; *s; s++) serial_putc1(1, *s); }
-  fbdraw(); }
+  if (!kkb.hold) fbdraw(); }
 
 // the boot rows stay static: the console is how the kernel says an allocation failed, so it
 // cannot need one. err carries its own fd, so out can ride a pipe while a scare stays here.
@@ -327,6 +340,11 @@ bool k_ready(int fd, int events) {
  struct k_source *s = k_source(fd);
  return s && s->ready && s->ready(fd); }
 
+// a read on fd would wait: a row that can say it is not ready says so. a file always reads
+bool k_fd_blocks(int fd) {
+ struct k_source *s = k_source(fd);
+ return s && s->ready && !s->ready(fd); }
+
 // multi-source wait; ms=0 is infinite, and every answer is recorded in `revents` so the
 // scheduler skips re-asking. a seat with no timer interrupt (wasm) catches kticks up here.
 __attribute__((weak)) void k_tick_sync(void) { }
@@ -334,7 +352,7 @@ __attribute__((weak)) void k_tick_sync(void) { }
 // parked: the console takes a frame before the machine stops, or an idle screen would hold
 // one half of the cursor blink (fbdraw's phase is kticks & 64) for as long as it sat.
 static void k_park(void) {
-  fbdraw();
+  if (!kkb.hold) fbdraw();
   k_horn_poll();
   k_wait(); }
 
@@ -515,6 +533,8 @@ __attribute__((weak)) void k_lift_ask(unsigned char const *p, uintptr_t n) { (vo
 static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
 // and the boot line, the one row that answers what this machine was asked to run.
 static char const k_pcmd[] = "proc/cmdline";
+// and the heap image the door handed in, read-only, for a process to wake from
+static char const k_pimg[] = "proc/image";
 // /dev/{null,zero}: neither holds bytes -- null is the source table's empty slot, zero that
 // slot with a read door. the entries below exist only so stat and dents can see them.
 static char const k_dnull[] = "dev/null", k_dzero[] = "dev/zero";
@@ -577,11 +597,13 @@ static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pi
 static bool k_fs_init(void) {
   if (k_fs.ents) return true;
   if (!k_fs.bakes && !vfs_untar(&k_fs, k_tree, srctree, srctree_len, rootfs, rootfs_len)) return false;
-  int xn = k_fs.extra ? 0 : k_baked(NULL, 0);
+  int bn = k_fs.extra ? 0 : k_baked(NULL, 0), xn = bn + (!k_fs.extra && kboot.image_len);
   if (xn > 0) {
     struct vfs_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
-    k_fs.extra = xr, k_fs.extra_n = k_baked(xr, xn); }
+    int m = bn ? k_baked(xr, bn) : 0;
+    if (kboot.image_len) xr[m++] = (struct vfs_file) { k_pimg, kboot.image, kboot.image_len, 0 };
+    k_fs.extra = xr, k_fs.extra_n = m; }
   // the rows past the baked ones, each laid empty and owned; one with `to` is a link, its
   // target heap because k_ent_gc frees it, and a strdup that refuses leaves a plain directory
   static struct { char const *path, *to; uintptr_t mode; bool dir; } const rows[] = {
@@ -1495,22 +1517,6 @@ static lvm(lvm_kexec) {
   Sp[1] = k_lvm_kexec(Sp[0], Sp[1]);
   love_musttail return Nextp(1, 1); }
 
-// the bake door: the heap as image bytes, written whole to one ramfs file
-static void k_bake(struct g *g, char const *path) {
-  uintptr_t n = 0;
-  struct image_bad bad = {0};
-  void *b = image_save(g, &n, &bad);
-  int fd = b ? k_fs_open(path, strlen(path), 'w') : -1;
-  long w = fd < 0 ? -1 : k_fd_write(fd, b, (long) n);
-  if (fd >= 0) k_fd_close(fd);
-  if (w == (long) n) kputs("; inle -- baked\n");
-  else {                                          // the codec's step and its offending words
-    kputs("; inle -- bake refused: why "); kputn((uintptr_t) bad.why, 10);
-    kputs(" n "); kputn((uintptr_t) bad.n, 10);
-    for (int i = 0; i < 3 * bad.n && i < 6; i++) { kputs(" "); kputn(bad.q[i], 16); }
-    kputs(" fd "); kputn((uintptr_t) fd, 10); kputs(" w "); kputn((uintptr_t) w, 10); kputs("\n"); }
-  k_reset(); }
-
 // --- the SVM spike (x64 only; src/inle/x64/svm.c). (svm ()) is the capability, (svm-run ())
 // runs one guest, answering (exitcode rax rip) or ().
 #if defined(__x86_64__)
@@ -1750,6 +1756,14 @@ int k_fs_getcwd(char *b, uintptr_t n) {
   b[1 + k_fs.cwd_n] = 0;
   return 0; }
 
+// a process's cwd and the fs's own trade places, around one of its calls (src/inle/sys.c)
+void k_fs_cwd_swap(char *cwd, uintptr_t *n) {
+  char t[sizeof k_fs.cwd];
+  uintptr_t tn = k_fs.cwd_n;
+  memcpy(t, k_fs.cwd, tn);
+  memcpy(k_fs.cwd, cwd, *n), k_fs.cwd_n = *n;
+  memcpy(cwd, t, tn), *n = tn; }
+
 // the two attribute writers land on the entry, so a synthesized directory takes either as
 // a no-op: it has no row to keep bits on, and its date is its children's.
 love_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
@@ -1822,7 +1836,7 @@ static void fbwash(void) {
   for (int k = 0; k < 8; k++) kcb->dmg[k] = ~(uint32_t) 0;
   for (uintptr_t y = 0; y < kfb.height; y++)
     for (uintptr_t x = 0; x < kfb.width; x++) kfb._[y * kfb.pitch + x] = 0;
-  fbdraw(); }
+  if (!kkb.hold) fbdraw(); }
 
 // the console re-made for whatever kfb now says -- both doors below want exactly this. the
 // screen comes across by cb_regrid, text and the pictures the new store holds.
@@ -1945,6 +1959,46 @@ static lvm(lvm_kraw) {
   Sp[0] = t || k_console_in(fd) ? ZeroPoint : love_err(g, ENOTTY);
   love_musttail return Next(1); }
 
+// a row's terminal, for src/inle/sys.c's ioctl: 0, or -ENOTTY where the row has none. set
+// 1 or 0 makes input raw or cooked first; the console keeps no discipline, only the answer
+static bool k_con_raw;
+int k_fd_term(int fd, int set, int *raw, uintptr_t *rows, uintptr_t *cols) {
+  struct k_source const *s = k_source(fd);
+  struct k_pty *t = k_pty_row(fd);
+  if (!s || !(t || s->putc == serial_putc1 || s->readn == kb_readn)) return -ENOTTY;
+  unsigned const cooked = pt_icanon | pt_echo | pt_isig | pt_icrnl;
+  if (set >= 0 && t) t->flags = set ? t->flags & ~cooked : t->flags | cooked;
+  else if (set >= 0) k_con_raw = set;
+  *raw = t ? !(t->flags & pt_icanon) : k_con_raw;
+  *rows = t ? t->rows : kcb ? kcb->rows : 24;
+  *cols = t ? t->cols : kcb ? kcb->cols : 80;
+  return 0; }
+
+// (kproc argv env) -- a program in memory of its own (src/inle/sys.c's processes): argv and env
+// each its words with a NUL after every one, its stdio this task's own. -> (pid . the read end
+// of a pipe that ends when the process does), or the refusal
+long k_proc_new(char const *av, uintptr_t an, char const *ev, uintptr_t en, int const fds[3], int *wr);
+long k_proc_reap(long pid);
+love_noinline static struct g *k_kproc(struct g *g) {
+  word aw = g->sp[0], ew = g->sp[1];
+  if (!strp(aw) || !strp(ew)) return g->sp[0] = badarg(g), g;
+  int fds[3], wr = -1;
+  for (int i = 0; i < 3; i++) fds[i] = (int) k_ttyfd(g, putcharm(i));
+  struct str *a = (struct str*) aw, *e = (struct str*) ew;
+  long pid = k_proc_new(a->bytes, a->len, e->bytes, e->len, fds, &wr);
+  if (pid < 0) return g->sp[0] = love_err(g, (int) -pid), g;
+  if (!ok(g = have(g, Width(struct chain)))) return g;
+  struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)), putcharm(pid), putcharm(wr));
+  return g->sp[0] = word(w), g; }
+static lvm(lvm_kproc) {
+  LvmCallp(g, 1, k_kproc) }
+
+// (kreap pid) -- an ended process's status, its slot freed; () while it runs
+static lvm(lvm_kreap) {
+  long r = charmp(Sp[0]) ? k_proc_reap(getcharm(Sp[0])) : -EINVAL;
+  Sp[0] = r == -EAGAIN ? ZeroPoint : r < 0 ? love_err(g, (int) -r) : putcharm(r);
+  love_musttail return Next(1); }
+
 // (openpty _) -- a fresh pty as its rows: (master slave signal)
 love_noinline static struct g *k_openpty(struct g *g) {
   int fds[3];
@@ -1961,11 +2015,70 @@ love_noinline static struct g *k_openpty(struct g *g) {
 static lvm(lvm_kopenpty) {
   LvmCall(g, k_openpty) }
 
+// --- the paper for a window of its own: the framebuffer held away from the console, which
+//     keeps its text and paints it all again when the paper comes back, and the keys as
+//     set-1 codes off the tap beside their text on the console's queue ---
+static struct g *k_charms(struct g *g, intptr_t const *v, int n) {
+  if (!ok(g = have(g, n * Width(struct chain)))) return g;
+  word l = ZeroPoint;
+  for (int i = n - 1; i >= 0; i--)
+    l = word(ini_chain((struct chain*) bump(g, Width(struct chain)), putcharm(v[i]), l));
+  return g->sp[0] = l, g; }
+// (kpaper 1) holds it and arms the taps -> (w h), () with no paper; (kpaper 0) gives it back
+love_noinline static struct g *k_paper(struct g *g) {
+  if (!(charmp(g->sp[0]) && getcharm(g->sp[0]))) {
+    if (kkb.hold) kkb.hold = 0, k_scan_arm(0), fbwash();
+    return g->sp[0] = ZeroPoint, g; }
+  if (!kfb._ || !kcb) return g->sp[0] = ZeroPoint, g;
+  kkb.hold = 1, kkb.pqh = kkb.pqt = 0, k_scan_arm(1);
+  kkb.sw = kfb.width, kkb.sh = kfb.height;
+  intptr_t const v[2] = { kfb.width, kfb.height };
+  return k_charms(g, v, 2); }
+// (kshow cask y0 y1) -- rows y0..y1 of a paper the screen's size (w x h pixels, 32 bits
+// each, as paint.c lays them) onto the framebuffer -> the rows shown; 0 when the paper is
+// not held or no longer fits the screen
+love_noinline static struct g *k_show(struct g *g) {
+  uintptr_t n = 0;
+  uint8_t const *s = cask_bytes(g->sp[0], &n);
+  uintptr_t const w = kfb.width, h = kfb.height;
+  intptr_t y0 = charmp(g->sp[1]) ? getcharm(g->sp[1]) : 0, y1 = charmp(g->sp[2]) ? getcharm(g->sp[2]) : 0;
+  if (y0 < 0) y0 = 0;
+  if (y1 > (intptr_t) h) y1 = (intptr_t) h;
+  if (!kkb.hold || !s || n != w * h * 4 || y1 <= y0) return g->sp[0] = putcharm(0), g;
+  for (intptr_t y = y0; y < y1; y++) {
+    volatile uint32_t *d = kfb._ + (uintptr_t) y * kfb.pitch;
+    uint32_t const *r = (uint32_t const*) s + (uintptr_t) y * w;
+    for (uintptr_t x = 0; x < w; x++) d[x] = r[x]; }
+  k_fb_touch();
+  return g->sp[0] = putcharm(y1 - y0), g; }
+// (kscan _) -- the held paper's next event: a key's set-1 code (bit 7 the break, 0x100 the
+// extended keys), (how b x y) for the pointer, (w h) when the paper changed size; () for none
+love_noinline static struct g *k_scanev(struct g *g) {
+  if (!kkb.hold) return g->sp[0] = ZeroPoint, g;
+  k_kb_poll();
+  if (kfb.width != kkb.sw || kfb.height != kkb.sh) {
+    kkb.sw = kfb.width, kkb.sh = kfb.height;
+    intptr_t const v[2] = { kkb.sw, kkb.sh };
+    return k_charms(g, v, 2); }
+  if (kkb.pqh != kkb.pqt) {
+    uint16_t const *p = kkb.pq[kkb.pqh];
+    intptr_t const v[4] = { p[0], p[1], p[2], p[3] };
+    kkb.pqh = (kkb.pqh + 1) & 15;
+    return k_charms(g, v, 4); }
+  int const c = k_scan_pop();
+  return g->sp[0] = c < 0 ? ZeroPoint : putcharm(c), g; }
+static lvm(lvm_kpaper) {
+  LvmCall(g, k_paper) }
+static lvm(lvm_kshow) {
+  LvmCallp(g, 2, k_show) }
+static lvm(lvm_kscan) {
+  LvmCall(g, k_scanev) }
+
 static lvm(lvm_tty) {
   LvmCall(g, k_tty) }
 
 static lvm(draw) {
- fbdraw();
+ if (!kkb.hold) fbdraw();
  k_wait();
  love_musttail return Next(1); }
 
@@ -2056,7 +2169,12 @@ static union u
   nif_kttyfg[] = {{lvm_kttyfg}, {lvm_ret0}},
   nif_kttypg[] = {{lvm_kttypg}, {lvm_ret0}},
   nif_kraw[] = {{lvm_kraw}, {lvm_ret0}},
-  nif_kopenpty[] = {{lvm_kopenpty}, {lvm_ret0}};
+  nif_kopenpty[] = {{lvm_kopenpty}, {lvm_ret0}},
+  nif_kproc[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kproc}, {lvm_ret0}},
+  nif_kreap[] = {{lvm_kreap}, {lvm_ret0}},
+  nif_kpaper[] = {{lvm_kpaper}, {lvm_ret0}},
+  nif_kshow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kshow}, {lvm_ret0}},
+  nif_kscan[] = {{lvm_kscan}, {lvm_ret0}};
 
 // link every free range kboot reports into the free list, in array order: kmem is the last
 // and the earlier ones link through ->next.
@@ -2136,7 +2254,14 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"raw", {.k = nif_kraw}},
   {"openpty", {.k = nif_kopenpty}},
   {"fetch", {.k = nif_fetch}},
-  {"kexec", {.k = nif_kexec}} };
+  {"kexec", {.k = nif_kexec}},
+  // processes: programs in memory of their own, where a seat can run them (src/inle/sys.c)
+  {"kproc", {.k = nif_kproc}},
+  {"kreap", {.k = nif_kreap}},
+  // a window's paper (src/inle/seat.l's kwin-events)
+  {"kpaper", {.k = nif_kpaper}},
+  {"kshow", {.k = nif_kshow}},
+  {"kscan", {.k = nif_kscan}} };
 
 // the kore cat is catted from the ramfs at boot, so only the order is baked: one roster line
 static char const src_korelist[] =
@@ -2269,13 +2394,6 @@ void kmain(void) {
   // the crew hangs off the registry's miss, re-armed on every boot including a woken
   // image's: the load is idempotent, its own `source` row the guard.
   r = evals_(r, "((cite 'verbs 'fills) crewload)");
-  // `bake PATH` on the boot line: the warm heap -- the crew in, the seat text run -- as an
-  // image file on the ramfs, then reset; the wasm lift hands it to the next boot as
-  // kboot.image. the crew is pulled aboard first: left to the filler it is not in the heap
-  // that gets written, and every boot of that image pays the whole load at its first miss.
-  if (!memcmp(kboot.cmdline, "bake ", 5)) {
-    r = evals_(r, "(crewload 0)");
-    k_bake(r, kboot.cmdline + 5); }
   // now the line wears its real shape and the program word dispatches off the registry.
   // an empty line is a mitty on the console, lush in its first pane; when its last pane
   // ends, or it cannot start, the console shell stands in, the toolbox warm.

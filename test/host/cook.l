@@ -429,9 +429,9 @@
                  "all")
    _ (ok "wildcard: pure-love glob, nullglob" (has wld "WC[src/apps/lush.l]"))
    ; a mode letter in .SHELLFLAGS is lush's mode for the line: a tr on PATH answers
-   ; "theirs", so -a (ours ahead of PATH) never meets it; no letter and LUSHFLAGS unset is
-   ; the default, autonomous, the same; LUSHFLAGS=-g hands the line to PATH's sh and
-   ; PATH's tr (a g in .SHELLFLAGS would reach that sh too, which knows no -g)
+   ; "theirs", so -a (ours ahead of PATH) never meets it; LUSHFLAGS=-g hands the line to
+   ; PATH's sh and PATH's tr, and so does no letter with LUSHFLAGS unset, the default
+   ; (a g in .SHELLFLAGS would reach that sh too, which knows no -g)
    _ (sh ("mkdir -p " + dir + "/tb; printf '#!/bin/sh\\necho theirs\\n' > " + dir + "/tb/tr; chmod 755 " + dir + "/tb/tr"))
    tenv [("PATH=" + dir + "/tb:" + getenv "PATH") "LUSHFLAGS="]
    am (run-cook-in tenv (mk [".SHELLFLAGS := -ac" "all:" "\t@tr a b </dev/null; echo M[a]"]) "all")
@@ -440,7 +440,7 @@
                    (mk ["all:" "\t@tr a b </dev/null; echo M[g]"]) "all")
    _ (ok "LUSHFLAGS=-g: gregarious, PATH's tr" (has gm "theirs" && has gm "M[g]"))
    nm (run-cook-in tenv (mk ["all:" "\t@tr a b </dev/null; echo M[n]"]) "all")
-   _ (ok "no mode letter: autonomous, our tr" (has nm "M[n]" && !(has nm "theirs")))
+   _ (ok "no mode letter: gregarious, PATH's tr" (has nm "theirs" && has nm "M[n]"))
    ; $(shell) takes .SHELLFLAGS as a recipe line does: -e stops at the false
    se (run-cook (mk [".SHELLFLAGS := -ec" "X := $(shell false; echo no)" "all:" "\t@echo \"SE[$(X)]\""]) "all")
    _ (ok "$(shell) rides .SHELLFLAGS" (has se "SE[]"))

@@ -39,7 +39,7 @@
                   + " *) exec " + (love 0 = 47 ? love (cwd 0 + "/" + love)) + " kore scp \"$@\" ;;\nesac\n"))
         (close q))
    _ (chmod (dir + "/bin/scp") 493)
-   ; ..and PATH decides there: a lush login shell runs `-c` precarious, or its own scp wins
+   ; ..and PATH decides there: a lush login shell runs `-c` precarious, whatever LUSHFLAGS we hold
    path0 (getenv "PATH") lf0 (getenv "LUSHFLAGS")
    _ (setenv "PATH" (dir + "/bin:" + path0)) _ (setenv "LUSHFLAGS" "p")
    srv (tether [love "kore" "sshd" "-p" (show port) "-h" (dir + "/host") "-o" ("AuthorizedKeysFile=" + dir + "/ak")])
