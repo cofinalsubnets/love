@@ -9868,18 +9868,19 @@
                                    (elem A '(r0 r1 r2 r3) ? (A . go >l) (go >l))))
                       (go rides))
                (? (qk && two? qrr && qclob? irU qrr)
-                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool,
+                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5),
                    attempt ())
                   (bad? irU ||
                    two? av9 && peep g 'lsq 0 != av9 3 ||
                    !(peep g 'dseq 0 = (two? av9 ? (av9 13) (peep g 'dseq 0))))
-                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool)
+                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5))
                      sb (spillp () params 0 ())
                      sb (two? vzf ? [(<sb + vzf) <>sb] sb)
                      (build sb))
                   irU))
            (attempt 1))
        n0 (peep g 'n 0) strs0 (g 'strs) sts0 (g 'statics) fas0 (g 'fasecs)   ; snapshot the accumulators for ubuild's retry
+       pre0 ['hasasm (g 'hasasm) 'twice (g 'twice) 'ltaken (g 'ltaken)]       ; ..and the prescan's pins, which fnreset clears
        ; no pool on t32 (r4-r11 callee-saved, r0-r3/r12 scratch); riscv pools t0..t3 then a5..a7, as
        ; a64 pools x5..x7 -- an arg register is dead once spilled or homed. a64 adds x11, x13, x14,
        ; caller-saved and never an argument (x12 stays the pair and float-word scratch)
