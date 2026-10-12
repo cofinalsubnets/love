@@ -102,12 +102,12 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
     ka.flags = (unsigned long) (unsigned int) a->sa_flags | 67108864UL;   /* SA_RESTORER */
     ka.restorer = (void *) __love_sigret;
 #endif
-    ka.mask = (unsigned long) a->sa_mask.__v[0]; }
+    ka.mask = a->sa_mask.__v[0]; }
   long r = sc4(NR_rt_sigaction, sig, a ? (long) &ka : 0, old ? (long) &ko : 0, 8);
   if (r < 0) { __errno_v = (int) -r; return -1; }
   if (old) {
     memset(old, 0, sizeof *old);
     old->sa_handler = (void (*)(int)) ko.h;
     old->sa_flags = (int) ko.flags;
-    old->sa_mask.__v[0] = (long) ko.mask; }
+    old->sa_mask.__v[0] = ko.mask; }
   return 0; }

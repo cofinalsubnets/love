@@ -164,3 +164,25 @@
    ; `proc PROG ARGS ..`: love's PROG as a process, woken from the machine's own image
    (proc-main args) (k-procrun args)
    _ (pins (cite 'verbs 'tab) 'proc proc-main))
+
+; a window here is the whole screen: (kpaper 1) holds the framebuffer and answers (w h),
+; (kshow paper y0 y1) lays the paper's rows on it, (kpaper 0) gives it back to the console.
+; kwin-events answers what waits as a window's records, as src/apps/lux/wire.l's x-events
+; does on X: a key by its set-1 code, the pointer in pixels with X's buttons, the paper's new
+; size, and the text the console decoded, its escapes and controls left out
+(: (kwin-btn b) (b & 227 @ v (? (v < 3) (v + 1) (v = 64) 4 (v = 65) 5 0))
+   (kwin-rec e) (? (charm? e) [(e & 128 ? 'up 'down) (e & 383)]
+                   (#e = 2) ['size (e 0) (e 1)]
+                   (e 0 = 2) ['move (e 2) (e 3)]
+                   [(e 0 = 0 ? 'press 'release) (kwin-btn (e 1)) (e 2) (e 3)])
+   (kwin-text acc esc) (key 0 @ b
+                          (? (b = 0) acc
+                             (esc = 1) (kwin-text acc (b = 91 || b = 79 ? 2 0))   ; CSI, SS3, or a lone escape
+                             (esc = 2) (kwin-text acc (64 <= b <= 126 ? 0 2))     ; a sequence ends at its final
+                             (b = 27) (kwin-text acc 1)
+                             (b < 32 || b = 127) (kwin-text acc 0)
+                             (kwin-text (acc + string b) 0)))
+   (kwin-events _)
+    (: (go acc) (kscan 0 @ e (e = () ? (rev acc) (go (kwin-rec e . acc))))
+       t (kwin-text "" 0)
+       (go () @ l (0 < #t ? (l + [['text t]]) l))))

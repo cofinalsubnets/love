@@ -341,7 +341,7 @@
    ; without a word, so psnew/cparse-t keep the arity every caller already spells
    (psnew-d tgt dia) ({} @ t
                 (pin t 'dia dia,                  ; the dialect: what grammar the front reads (moon | c | c23)
-                 pin t 'tgt tgt,                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
+                 pin t 'tgt tgt,                  ; the codegen target: 32-bit widths (thumb, i386) vs 64-bit
                  pin t 'types {},         ; typedef name -> ty
                  pin t 'weaks (),                 ; __attribute__((weak)) function names
                  pin t 'ainl (),                  ; always_inline function names (love.h's love_inline)
@@ -392,7 +392,7 @@
                 ; swapped high bit is real: compare/divide/sizeof read the width)
                  pin (t 'sigs) "__builtin_bswap16" '(ushort (ushort) ()),
                  pin (t 'sigs) "__builtin_bswap32" '(uint (uint) ()),
-                 pin (t 'sigs) "__builtin_bswap64" '(ulong (ulong) ()),
+                 pin (t 'sigs) "__builtin_bswap64" (pst32? t ? '(ullong (ullong) ()) '(ulong (ulong) ())),   ; 8 bytes: long long where long is the word
                 ; the popcount trio. the operand is unsigned (a set high bit is a bit
                 ; like any other); the result is a plain int, gcc's own signature
                  pin (t 'sigs) "__builtin_popcount" '(int (uint) ()),
@@ -813,6 +813,7 @@
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
                     _ (0 < cap && cap < a && pin ps 'packbf 1)    ; gcc lets these straddle units; refused
+                    _ (w > ubits && pin ps 'widebf 1)             ; wider than its type: C's constraint
                     nmx (mx < a ? a mx)
                     (? (w = 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
                        uni (: fld (name ? [name 0 ['bitfield ty 0 w]])
@@ -912,6 +913,7 @@
                              lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
                              tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
                              (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
+                                (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame ("field '" + n + "' has incomplete type")))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,

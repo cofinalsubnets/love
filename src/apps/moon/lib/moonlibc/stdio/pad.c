@@ -10,7 +10,7 @@ int __fmtsgn(int neg, int fl) {
  * precision zeros + digits, or left-justified. the precision is a MINIMUM
  * digit count (C99 7.19.6.1p6) and it retires the 0 flag; .0 of a zero value
  * is the empty field. */
-void __fmtnum(void (*put)(void *, int), void *ctx, unsigned long v, unsigned base,
+void __fmtnum(void (*put)(void *, int), void *ctx, unsigned long long v, unsigned base,
                      int neg, int prec, int width, int fl, int up) {
   char tmp[24];
   int nd = 0;

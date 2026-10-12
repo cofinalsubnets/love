@@ -551,20 +551,20 @@
               "b .+2" "cbz x0, .+1048576"]))
    ;; `name .req reg` (the kernel's wx\n per register, from an .irp) and .unreq
    _ (chk-eq "gas.a64.req"
-        '(((".text" 1 6 ((raw (225 3 0 42)) (add r3 r3 1)))) () ())
+        '(((".text" 1 6 ((raw (225 3 0 42)) (add r3 r3 1)))) () () ())
         (gas-top 'a64 "\t.irp n,0,1\nwx\\n .req w\\n\n\t.endr\ntmp .req x3\n\tmov wx1, wx0\n\tadd tmp, tmp, #1\n\t.unreq tmp\n"))
    ;; backward local labels measured at expansion: the alternative's `nops (662b-661b) / 4`
    ;; and an .if over the same distance; a directive between them, or a forward label, refuses
    _ (chk-eq "gas.a64.lbldist"
         '(((".text" 1 6 ((label l661.1) (raw (32 0 128 210)) (add r0 r0 2) (ld r1 r0 0) (label l662.1)
-                          (nop) (nop) (nop) (raw (130 1 128 210))))) () ())
+                          (nop) (nop) (nop) (raw (130 1 128 210))))) () () ())
         (gas-top 'a64 "661:\tmov x0, #1\n\tadd x0, x0, #2\n\tldr x1, [x0]\n662:\n\t.rept (662b-661b) / 4\n\tnop\n\t.endr\n\t.if (662b - 661b) == 12\n\tmov x2, #12\n\t.endif\n"))
    _ (chk-eq "gas.ifb" '("nop" "b x" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro m f\n.ifb \\f\nnop\n.endif\n.ifnb \\f\nb \\f\n.endif\n.endm\nm\nm x\n")))
    ;; labels then a macro call on one line: the labels, then the call's lines
    _ (chk-eq "gas.macro.lbl" '("g:" "\tmov x0, #4" "1:" "h:" "\tmov x1, #4" "k: ret")
         (gf-expand 'a64 (gf-lines 'a64 "\t.macro m, r\n\tmov \\r, #4\n\t.endm\ng:\tm x0\n1: h: m x1\nk: ret")))
-   _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () ())"
+   _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () () ())"
         (show (gas-top 'a64 "\t.macro m\n\tb .Lx\\@\n.Lx\\@:\n\t.endm\n\tm\n\tm\n")))
    _ (chk-eq "gas.a64.lbldist.refuse" '(gas-immediate gas-immediate)
         (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
@@ -659,13 +659,48 @@
    _ (chk-eq "gas.a64.msrzr.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["msr tpidr_el0, sp" "mrs sp, tpidr_el0" "msr tpidr_el0, wzr" "mrs w0, tpidr_el0" "msr tpidr_el0, w3"]))
+   ;; the advanced simd lane, one line of each form as llvm-mc lays it (vgetrandom-chacha's
+   ;; NEON body), a register split from its arrangement glued; each refusal is llvm-mc's but
+   ;; ext's wider index, which llvm-mc masks in silence
+   _ (chk-eq "gas.a64.neon" "6c85fe7e3379450e4e86ff5e51bb200ed80f014e6d1c790e021a0f0e8308206ec457270fd506374fe1bbe06e18e4002f1f3f1e0e871fbc0ee1c7070f4ce5056fe8239f4cbc0aa04e3a58904e2c85720eacbaa06e7618ce4ee11f074e303a150efa239f0cfd0d096ed32ad14eefaf400c0b180d2e2226d24c237e000c27a4000ff61daf4e5a27096f370d084e3017416f36477a6fc91df72e7d6b1d4ed605134ec305084e27aed40c1820004c305a202e2327370f5f84e44efe1cf84ef4577c6f257a400cef5bd44ef81c3b4e8c78ca4e9e59204e8826724fc81e726e95440a6fca285c4ee5876a6e4714220f45540a6f172c404c2159206e071fb20ee726456fac1b200e5917392f25a8404c"
+        (holo-hex 'a64 (gas-text 'a64 "sub d12, d11, d30\n zip2 v19.4h, v9.4h, v5.4h\n add d14, d18, d31\n abs v17.8b, v26.8b\n dup v24.16b, w30\n bic v13.8b, v3.8b, v25.8b\n uzp1 v2.8b, v16.8b, v15.8b\n rev32 v3.16b, v4.16b\n shl v4.2s, v30.2s, #7\n sshr v21.4s, v22.4s, #9\n neg v1.2d, v31.2d\n movi d24, #0\n umov wzr, v24.h[7]\n mov v7.2s, v28.2s\n movi v1.2s, #255, msl #8\n movi v12.2d, #0xff00ff00ff00ff00\n st1 { v8.16b, v9.16b, v10.16b, v11.16b }, [sp], xzr\n rev64 v28.4s, v21.4s\n uzp2 v26.4s, v1.4s, v16.4s\n add v12.4h, v9.4h, v18.4h\n neg v12.4s, v21.4s\n uzp1 v22.2d, v3.2d, v14.2d\n ins v1.b[3], wzr\n zip1 v16.8b, v17.8b, v21.8b\n st1 { v26.8b - v29.8b }, [sp], xzr\n mov v29.b[4], v15.b[1]\n trn1 v19.2d, v22.2d, v17.2d\n ld1 { v15.1d - v16.1d }, [sp]\n ext v11.8b, v0.8b, v13.8b, #3\n ld1 { v2.8h - v5.8h }, [x17], x18\n st1 { v3.1d }, [x17]\n movi v7.4h, #1, lsl #8\n mov v22.2d, v15.2d\n urshr v26.16b, v26.16b, #7\n dup v23.2d, x9\n usra v16.2d, v25.2d, #63\n sri v22.2d, v25.2d, #6\n bif v9.8b, v14.8b, v23.8b\n trn2 v29.16b, v27.16b, v29.16b\n dup v22.16b, v14.b[9]\n dup v3.2d, v14.d[0]\n ld1 { v7.1d, v8.1d }, [x17], x20\n st1 { v24.16b - v27.16b }, [x0]\n not v16.8b, v17.8b\n srshr v3.2s, v25.2s, #9\n add v31.2d, v2.2d, v4.2d\n orn v30.16b, v7.16b, v24.16b\n sli v20.2d, v31.2d, #60\n ld1 { v5.2s }, [x17]\n uzp2 v15.2d, v31.2d, v20.2d\n and v24.16b, v7.16b, v27.16b\n zip2 v12.2d, v4.2d, v10.2d\n cnt v30.16b, v12.16b\n srshr v8.2d, v20.2d, #14\n bsl v8.16b, v22.16b, v18.16b\n sri v21.16b, v4.16b, #6\n trn1 v10.8h, v6.8h, v28.8h\n sub v5.8h, v31.8h, v10.8h\n ssra v7.2s, v2.2s, #30\n sli v5.16b, v2.16b, #2\n ld1 { v23.2d - v26.2d }, [x0]\n mvn v1.16b, v9.16b\n orr v7.8b, v24.8b, v18.8b\n urshr v7.2d, v23.2d, #59\n rev16 v12.8b, v29.8b\n usra v25.2s, v26.2s, #7\n ld1 { v5 .4s, v6 .4s }, [x1]\n")))
+   _ (chk-eq "gas.a64.neon.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["movi v0.1d, #0" "ushr v15.8b, v1.8b, #58" "mov xzr, v6.s[12]" "not v17.1d, v21.1d" "uzp2 v15.1d, v6.1d, v0.1d" "ext v26.8h, v24.8h, v7.8h, #11" "ins v19.b[0], wsp" "sshr v13.16b, v28.16b, #32" "dup v24.8b, v4.s[2]" "umov xzr, v4.d[4]" "shl v11.8h, v18.8h, #46" "cnt v8.4h, v28.4h" "rev64 v19.2d, v5.2d" "bic v7.2d, v31.2d, v31.2d" "orn v19.2s, v9.2s, v12.2s" "sli v28.4h, v6.4h, #46" "ext v1.8b, v2.8b, v3.8b, #8" "ld1 { v30.8b - v30.8b }, [x0]"]))
+   ;; a64's `ldr rt, =expr`: a constant one movz holds is that movz, else a word in the section's
+   ;; pool, one per width and expression, laid at .ltorg or the section's end, and a literal load
+   ;; of it; a .set read before it is made reads its first value (head.S's .Lpe_header_offset)
+   _ (chk-eq "gas.a64.litpool" "((((\".text\" 1 6 ((raw (128 70 130 210)) (afix ld19 1476395009 .Llit0 0) (afix ld19 1476395010 .Llit1 0) (afix ld19 1476395011 .Llit1 0) (afix ld19 402653188 .Llit2 0) (nop) (dalign 8) (label .Llit0) (raw (69 35 1 0 0 0 0 0)) (dalign 8) (label .Llit1) (raw ((fix 8 abs64 foo 0))) (dalign 4) (label .Llit2) (raw ((fix 4 abs32 foo 4))) (afix ld19 1476395013 l1.1 0) (label l1.1) (raw ((fix 4 abs32 bar 0))))) (\".x\" 1 6 ((afix ld19 1476395014 .Llit3 0) (dalign 8) (label .Llit3) (raw (255 255 255 255 255 255 255 255))))) () () ()) (((\".text\" 1 6 ((raw (2 0 0 0)) (raw (3 0 0 0))))) () () ()))"
+        (show [(gas-top 'a64 " ldr x0, =0x1234\n ldr x1, =0x12345\n ldr x2, =foo\n ldr x3, =foo\n ldr w4, =foo + 4\n nop\n .ltorg\n ldr x5, 1f\n1: .long bar\n.section .x, \"ax\"\n ldr x6, =-1\n")
+               (gas-top 'a64 ".long .La\n.set .La, 2\n.set .La, 3\n.long .La\n")]))
+   ;; a64's `//` starts a comment outside a string only (vdso-wrap.S's .incbin, laid as .base64)
+   _ (chk-eq "gas.a64.cutquote" '(".ascii \"a//b\" " ".ascii \"q\\\"//\" " "nop ")
+        (gf-lines 'a64 ".ascii \"a//b\" // c\n.ascii \"q\\\"//\" //x\nnop // d"))
+   ;; a register variable's or clobber's name takes gcc's r0..r30 for x0..x30 (arm-smccc.h's
+   ;; asm("r0")); asm text keeps llvm-mc's names, where r0 refuses
+   _ (chk-eq "gas.a64.ccnames" '((r0 r28 fp lr () r0) gas-a64-register)
+        [(map (s \ gas-regname 'a64 s) ["r0" "r28" "r29" "r30" "r31" "x0"])
+         (trap (x \ gas-text 'a64 x) "mov r0, r1" (\ a b a))])
+   ;; a note section (vdso's .note.Linux) is sht_note; an alias of an alias follows the chain to
+   ;; its label, whichever was set first (memcpy.S's __memmove), and a cycle refuses; .weak
+   ;; exports and answers its names, a name .globl also says exported once
+   _ (chk-eq "gas.note.weak" """((((".note.L" 7 2 ((raw (1 0 0 0))))) () () ()) (((".text" 1 6 ((label f) (label h) (label g) (label w) (ret) (raw ((fix 8 abs64 u 0)))))) ("f" "g" "w") () ("w" "u" "f")) gas-alias)"""
+        (show [(gas-top 'a64 ".pushsection .note.L, \"a\", @note\n.long 1\n.popsection\n")
+               (gas-top 'a64 ".globl f\nf: ret\n.globl g\n.set g, h\n.weak w\n.set w, g\n.set h, f\n.weak u\n.quad u\n.weak f\n")
+               (trap (x \ gas-top 'a64 x) ".set a, b\n.set b, a\n.globl a\n" (\ a b a))]))
+   ;; a binary literal, 0b or 0B and binary digits (proc.S's `0b01`), as llvm-mc reads it; a bare
+   ;; 0b is still the label behind, and a digit or letter glued past the bits refuses
+   _ (chk-eq "gas.a64.binlit" "((((\".text\" 1 6 ((raw (1 0 0 0 0 0 0 0 3 0 0 0 0 0 0 0 11 0 0 0 0 0 0 0)) (raw (160 0 128 210)) (raw (255)) (raw (18 0 0 0 0 0 0 0))))) () () ()) \"1f2003d5ffffff1701000014\" (gas-data gas-data gas-data gas-data gas-immediate))"
+        (show [(gas-top 'a64 ".quad 0b01, 0B11, 0b1011\nmov x0, #0b101\n.byte 0b11111111\n.quad (0b1 << 4) | 0b10\n")
+               (holo-hex 'a64 (gas-text 'a64 "0:\n nop\n b 0b\n b 0f\n0:\n"))
+               (map (l \ trap (x \ gas-top 'a64 x) l (\ a b a)) [".quad 0b2\n" ".quad 0b1x\n" ".quad 0b_1\n" ".quad 0b1_0\n" "mov x0, #0b12\n"])]))
    ;; an argument that is one quoted string passes its inside, positional or by name, as llvm-mc
    ;; expands it (entry.S's `alternative_insn nop, "dmb sy", 90`)
    _ (chk-eq "gas.macro.quote" '("nop" "dmb sy" ".ascii \"x y\"" "mov x0, x1" "mov x0, x1" "mov x2, x3" "nop" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro alt insn1, insn2, cap, enable = 1\n\\insn1\n\\insn2\n.endm\nalt nop, \"dmb sy\", 90\n.macro s a\n.ascii \"\\a\"\n.endm\ns \"x y\"\n.macro t a, b\nmov \\a, \\b\n.endm\nt \"x0\", \"x1\"\nt x0 \"x1\"\nt a=\"x2\", b=x3\n.macro w a\n.ifc \\a,dmb sy\nnop\n.endif\n.endm\nw \"dmb sy\"\n")))
    ;; .org to a label with instructions between (entry.S's `.org .Lventry_start\@ + 128`): zeros
    ;; up to it once layout holds, as llvm-mc lays them; one behind where it stands refuses
-   _ (chk-eq "gas.a64.org" "((((\".text\" 1 6 ((label a) (nop) (jmp a) (mov r0 r1) (label .Lorg0) (raw (0 0 0 0)) (nop)))) () ()) (((\".text\" 1 6 ((label .Ls0) (nop) (jmp .Ls0) (label .Lorg0) (raw (0 0 0 0 0 0 0 0)) (label .Ls1) (nop) (jmp .Ls1) (label .Lorg1) (raw (0 0 0 0 0 0 0 0))))) () ()) gas-org-back)"
+   _ (chk-eq "gas.a64.org" "((((\".text\" 1 6 ((label a) (nop) (jmp a) (mov r0 r1) (label .Lorg0) (raw (0 0 0 0)) (nop)))) () () ()) (((\".text\" 1 6 ((label .Ls0) (nop) (jmp .Ls0) (label .Lorg0) (raw (0 0 0 0 0 0 0 0)) (label .Ls1) (nop) (jmp .Ls1) (label .Lorg1) (raw (0 0 0 0 0 0 0 0))))) () () ()) gas-org-back)"
         (show (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
                    ["a: nop\n b a\n mov x0, x1\n .org a + 16\n nop\n"
                     ".macro v\n.Ls\\@: nop\n b .Ls\\@\n .org .Ls\\@ + 16\n.endm\n v\n v\n"
@@ -1492,6 +1527,7 @@
       ("i3.btm" "0fba2905" ((btm bts 4 r1 0 5)))               ; btsl $5,(%ecx)
       ("i3.testm" "f60104" ((testm 1 r1 0 4)))                 ; testb $4,(%ecx)
       ("i3.ldseg" "8cc8" ((ldseg r0 1)))                       ; mov %cs,%eax
+      ("i3.pushseg" "6606660fa01f0fa9" ((pushseg 0 2) (pushseg 4 2) (popseg 3 4) (popseg 5 4)))   ; pushw %es ; pushw %fs ; popl %ds ; popl %gs
       ("i3.stseg" "8ed8" ((stseg 3 r0)))                       ; mov %eax,%ds
       ("i3.ldcr" "0f20c0" ((ldcr r0 0)))                       ; mov %cr0,%eax
       ("i3.stcr" "0f22d9" ((stcr 3 r1)))                       ; mov %ecx,%cr3
@@ -1537,6 +1573,7 @@
       ("i3m16.cas" "f067660fb10a" ((cas r0 r1 r2)))            ; lock cmpxchg %ecx,(%edx)
       ("i3m16.alum.i" "67830903" ((alum or 2 r1 0 3)))         ; orw $3,(%ecx)
       ("i3m16.ldseg" "668cc8" ((ldseg r0 1)))                  ; mov %cs,%eax
+      ("i3m16.pushseg" "060fa0661f660fa9" ((pushseg 0 2) (pushseg 4 2) (popseg 3 4) (popseg 5 4)))   ; pushw %es ; pushw %fs ; popl %ds ; popl %gs
       ("i3m16.str" "66a5" ((str movs 4)))                      ; movsl
       ("i3m16.strb" "aa" ((str stos 1)))                       ; stosb
       ("i3m16.ret" "66c3" ((ret)))                             ; ret

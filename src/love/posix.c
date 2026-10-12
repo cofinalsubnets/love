@@ -1043,31 +1043,62 @@ static love_inline word host_fnmatch(struct g *g, word p, word t) {
  return putcharm(a && b && !fnmatch(a, b, 0)); }
 LvmWord2(fnmatch)
 
-// (regex p fl s i) -> the leftmost-longest match in s at or after i, as (so eo ..) for it and
-// its first nine groups, -1 where one took no part | () | -e, regcomp's error e for a bad p.
-// fl: regcomp's flags, regexec's shifted 8 left; what lies before i is still the text, and an
-// i past it answers p's group count
-static love_inline struct g *host_regex(struct g *g) {
+// (regcomp p fl) -> (b n): p's program b, a string to keep, and its group count | -e, regcomp's
+// error e. moonlibc's program is one block that holds no pointer, so b is a copy of it; another
+// libc's b is fl and p, compiled again at each regexec
+static love_inline struct g *host_regcomp(struct g *g) {
  char const *p = str_c(g->sp[0]);
- word s = g->sp[2], f = g->sp[1], i = g->sp[3];
- if (!p || !charmp(f) || !strp(s) || !charmp(i) || getcharm(i) < 0) return g->sp[0] = badarg(g), g;
+ word f = g->sp[1];
+ if (!p || !charmp(f) || getcharm(f) & ~255) return g->sp[0] = badarg(g), g;
  regex_t re;
- regmatch_t m[10] = {{(regoff_t) getcharm(i), (regoff_t) len(s)}};
- int rc = regcomp(&re, p, (int) (getcharm(f) & 255)), k = (int) re.re_nsub;
+ int rc = regcomp(&re, p, (int) getcharm(f));
  if (rc) return g->sp[0] = putcharm(-rc), g;
- if (getcharm(i) > (intptr_t) len(s)) return regfree(&re), g->sp[0] = putcharm(k), g;
- k = k < 9 ? k + 1 : 10;
- rc = regexec(&re, txt(s), (size_t) k, m, (int) (getcharm(f) >> 8) | REG_STARTEND);
+#ifdef REG_UTF8
+ uintptr_t z = re.re_size;
+#else
+ uintptr_t z = strlen(p) + 1;
+#endif
+ if (ok(g = have(g, str_width(z) + 2 * Width(struct chain)))) {
+  struct str *b = ini_str((struct str*) bump(g, str_width(z)), z);
+#ifdef REG_UTF8
+  memcpy(b->bytes, re.re_prog, z);
+#else
+  b->bytes[0] = (char) getcharm(f), memcpy(b->bytes + 1, txt(g->sp[0]), z - 1);
+#endif
+  word l = word(ini_chain((struct chain*) bump(g, Width(struct chain)), putcharm((intptr_t) re.re_nsub), ZeroPoint));
+  g->sp[0] = word(ini_chain((struct chain*) bump(g, Width(struct chain)), word(b), l)); }
  regfree(&re);
+ return g; }
+static lvm(lvm_regcomp) {
+ LvmCallp(g, 1, host_regcomp) }
+
+// (regexec b s i ef) -> the leftmost-longest match in s at or after i, as (so eo ..) for it and
+// its groups to the last of the first nine that took part, -1 for one that did not | () | -e.
+// ef: regexec's flags; what lies before i is still the text
+static love_inline struct g *host_regexec(struct g *g) {
+ word b = g->sp[0], s = g->sp[1], i = g->sp[2], e = g->sp[3];
+ if (!strp(b) || !len(b) || !strp(s) || !charmp(i) || !charmp(e) || getcharm(i) < 0 || getcharm(i) > (intptr_t) len(s))
+  return g->sp[0] = badarg(g), g;
+ regmatch_t m[10] = {{(regoff_t) getcharm(i), (regoff_t) len(s)}};
+ int ef = (int) getcharm(e) | REG_STARTEND, rc, k = 10;
+#ifdef REG_UTF8
+ regex_t re = {0, txt(b), len(b)};
+ rc = regexec(&re, txt(s), 10, m, ef);
+#else
+ regex_t re;
+ rc = regcomp(&re, txt(b) + 1, (unsigned char) txt(b)[0]);
+ if (!rc) rc = regexec(&re, txt(s), 10, m, ef), regfree(&re);
+#endif
  if (rc) return g->sp[0] = rc == REG_NOMATCH ? ZeroPoint : putcharm(-rc), g;
+ while (k > 1 && m[k - 1].rm_so < 0) k--;
  if (!ok(g = have(g, 2 * (uintptr_t) k * Width(struct chain)))) return g;
  word l = ZeroPoint;
  for (int j = 2 * k; j--;)
   l = word(ini_chain((struct chain*) bump(g, Width(struct chain)),
                      putcharm(j & 1 ? m[j / 2].rm_eo : m[j / 2].rm_so), l));
  return g->sp[0] = l, g; }
-static lvm(lvm_regex) {
- LvmCallp(g, 3, host_regex) }
+static lvm(lvm_regexec) {
+ LvmCallp(g, 3, host_regexec) }
 
 // (setenv name val) -> () | a nom | 'badarg misuse; a non-string val unsets the name.
 // (environ _)       -> the environment as a list of "name=value" strings (the raw POSIX
@@ -1151,7 +1182,8 @@ LvDef("sigign?", sigignp, 1, "posix");
 LvDef("wait", waitpid, 1, NULL);
 LvDef("chdir", chdir, 1, "posix");
 LvDef("fnmatch", fnmatch, 2, "posix");
-LvDef("regex", regex, 4, "posix");
+LvDef("regcomp", regcomp, 2, "posix");
+LvDef("regexec", regexec, 4, "posix");
 LvDef("cwd", cwd, 1, "posix");
 LvDef("selfpath", selfpath, 1, "posix");
 LvDef("uname", posix_uname, 1, "posix");
