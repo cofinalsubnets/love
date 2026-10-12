@@ -149,16 +149,17 @@ export function scanning(ring, ctl, el, k) {
 // --- the pointer and the clipboard: lanes of their own ---------------------------------
 // a pointer event is a record the kernel takes whole (src/inle/wasm/arch.c): how (0 a press, 1
 // a release, 2 a move), the button (0 1 2, 64 65 the wheel, 3 none held) with modifiers 4
-// shift 8 meta 16 ctrl, and the cell, 0-based. what it MEANS is the console's to say: a
-// program that asked for the mouse gets a report, and otherwise a drag selects, the release
-// comes back as { copy } and the wheel scrolls the history. a paste is its text, which the
+// shift 8 meta 16 ctrl, and the paper's pixel, y then x. what it MEANS is the kernel's to say:
+// a window holding the paper takes it as it is, a program that asked for the mouse gets a
+// report for the cell under it, and otherwise a drag selects, the release comes back as
+// { copy } and the wheel scrolls the history. a paste is its text, which the
 // console lays as a paste (bracketed when the program asked). full lanes drop the rest.
 export function pointlane(ring, ctl) {
   const lane = new Uint8Array(ring, point_at, point_n);
-  return (how, b, row, col) => {
+  return (how, b, y, x) => {
     const tail = Atomics.load(ctl, c_pt), n = (tail + 8) % point_n;
     if (n === Atomics.load(ctl, c_ph)) return false;
-    lane.set([how, b, 0, 0, row & 255, row >> 8, col & 255, col >> 8], tail);
+    lane.set([how, b, 0, 0, y & 255, y >> 8, x & 255, x >> 8], tail);
     Atomics.store(ctl, c_pt, n);
     Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2);
     return true; }; }
@@ -541,11 +542,11 @@ export async function loveMachine(root) {
   shown.type = 'button'; shown.tabIndex = -1; shown.className = 'chip scale';
   shown.addEventListener('pointerdown', e => e.preventDefault());     // the keys keep the focus shown.title = 'the console\'s scale';
   shown.textContent = Math.max(1, Math.round(scale / r)) + '\u00d7';
-  // A TAP IS A PLACE: the pointer goes to the console as the cell it is over, and the
-  // console says what it means (pointlane above) -- a game that asked for the mouse gets
-  // its report, a shell's screen is selected. the cell is the canvas's own pixels over the
-  // glyph box at the console's own scale. a move goes once per cell, and the wheel once
-  // per three lines' worth of scrolling
+  // A TAP IS A PLACE: the pointer goes to the machine as the paper's pixel it is over, and
+  // the kernel says what it means (pointlane above) -- a window holding the paper takes it
+  // as it is, a game that asked for the mouse gets its report, a shell's screen is
+  // selected. a move goes once per pixel, and the wheel once per three lines' worth of
+  // scrolling
   canvas.style.touchAction = 'none';               // a finger on the screen steers, never scrolls
   const point = pointlane(ring, ctl);
   const cell = e => {
@@ -553,7 +554,7 @@ export async function loveMachine(root) {
     if (box.width < 1 || box.height < 1) return null;
     const x = (e.clientX - box.left) * canvas.width / box.width,
           y = (e.clientY - box.top) * canvas.height / box.height;
-    return [Math.max(0, Math.floor(y / (16 * scale))), Math.max(0, Math.floor(x / (8 * scale)))]; };
+    return [Math.max(0, Math.floor(y)), Math.max(0, Math.floor(x))]; };
   const mods = e => (e.shiftKey ? 4 : 0) | (e.altKey || e.metaKey ? 8 : 0) | (e.ctrlKey ? 16 : 0);
   const button = n => n === 0 ? 0 : n === 1 ? 1 : n === 2 ? 2 : 3;
   let over = '', spun = 0;
