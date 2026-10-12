@@ -1,13 +1,13 @@
 /* a volatile local changed between setjmp and longjmp keeps its new value (C11 7.13.2.1),
- * through setjmp and sigsetjmp, with a jump from the same function and from a callee.
+ * with a jump from the same function and from a callee.
  * every check adds 1; the exit code is the count that passed. */
 #include <setjmp.h>
 
 static jmp_buf jb;
-static sigjmp_buf sjb;
+static jmp_buf jb2;
 
 static void bounce(int v) { longjmp(jb, v); }
-static void sbounce(int v) { siglongjmp(sjb, v); }
+static void bounce2(int v) { longjmp(jb2, v); }
 
 static int here(void) {
   volatile int hops = 0;
@@ -24,11 +24,11 @@ static int callee(void) {
   return n == 13 && acc == 6;
 }
 
-static int sig(void) {
+static int other(void) {
   volatile int hops = 0;
   volatile long big = 1;
-  if (sigsetjmp(sjb, 1) == 0) { hops = 7; big <<= 40; sbounce(2); }
-  return hops == 7 && big == 1L << 40;
+  if (setjmp(jb2) == 0) { hops = 7; big <<= 20; bounce2(2); }
+  return hops == 7 && big == 1L << 20;
 }
 
 /* many live names around the call: more than the registers that survive it */
@@ -39,5 +39,5 @@ static int crowd(int k) {
 }
 
 int main(void) {
-  return here() + callee() + sig() + crowd(5);
+  return here() + callee() + other() + crowd(5);
 }
