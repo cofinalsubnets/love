@@ -60,6 +60,14 @@
    _ (tuner-hear g (tuner-sine 445.0))
    ns (line g 14)
    _ (test (g 'lo = g 'hi) (has? ns "◀━━ A4  +20¢  445.0 Hz") !(has? ns "…") !(faint? (tuner-frame g 80 30 14)))
+   ; the needle: a pitch wobbling 440/446 Hz (0 and +23 cents) holds it still between them,
+   ; where the reading swings eighteen cells; a change that stays still arrives
+   j (fresh ())
+   (cell x) (: _ (tuner-frame x 80 30) <>(x 'ncell))
+   (feed f k acc) (k = 0 ? (rev acc) (: _ (tuner-hear j (tuner-sine (f k))) (feed f (k - 1) (cell j . acc))))
+   wob (drop 8 (feed (k \ k % 2 = 0 ? 440.0 446.0) 16 ()))
+   held (feed (_ \ 452.0) 16 ())
+   _ (test (last (sort wob) - <(sort wob) <= 1) (abs (<wob - 47) <= 1) (abs (last held - 73) <= 1))
    ; the room: a hush reads no pitch and sets the floor, a tone under three floors is the
    ; room too (the floor creeping up a percent), and one well over it is heard
    q (fresh ())

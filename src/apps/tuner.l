@@ -65,8 +65,10 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
    (tuner-note k) (floor (k / 4) @ s [(names (fmod s 12)) (s // 12 - 1) (k - 4 * s)])   ; name octave sub
 
    ; c is the live reading, () in a silence; last, hz and at the latest one and when it was
-   ; heard; lo and hi the note's raw cents, its range since it began
+   ; heard; lo and hi the note's raw cents, its range since it began; raw its last six, and
+   ; nd the needle, eased toward their mean; ncell the cell the needle was drawn in
    (tuner-new ref src) {'ref ref 'src src 'c () 'last 6900.0 'hz () 'at () 'lo () 'hi ()
+                        'raw () 'nd 6900.0 'ncell ()
                         'lvl 0 'floor () 'over 0 'clock (_ \ clock 0)}
    ; a reading stands while it is live and for linger ms after its last window
    (held? t now) (t 'at @ a (charm? a && now - a < linger))
@@ -83,8 +85,10 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
           (: c (tuner-cents (t 'ref) f) p (held? t now ? (t 'last) ())
              new (!p || abs (c - p) > 50.0)
              s (new ? c (p + 0.4 * (c - p)))
+             raw (new ? [c] (take 6 (c . t 'raw)))
+             nd (new ? c (t 'nd @ n (n + 0.35 * (+raw / #raw - n))))
              (pins t 'lvl l 'c s 'last s 'at now 'hz ((t 'ref) * 2.0 ** ((s - 6900.0) / 1200.0))
-                     'lo (new ? c (min c (t 'lo))) 'hi (new ? c (max c (t 'hi)))))
+                     'lo (new ? c (min c (t 'lo))) 'hi (new ? c (max c (t 'hi))) 'raw raw 'nd nd))
           (pins t 'lvl l 'c ())))
 
    ; --- the scale ---------------------------------------------------------------------
@@ -109,12 +113,17 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
           + (w < 60 || hi - lo < 1.0 ? "" ("  " + signed (lo - 100.0 * s) + "…" + signed (hi - 100.0 * s) + "¢"))
           + (abs off < 5.0 ? "  ✓" "")))))
    ; the needle: fifty cents either side of the nearest note, its centre the note itself,
-   ; the note's range drawn along it
-   (needle c w lo hi gone)
+   ; the note's range drawn along it. it rides nd, and leaves its cell only for a target
+   ; three quarters of a cell away, so a reading on a cell's edge does not flicker across it
+   (needle t c w lo hi gone)
     (: s (floor (c / 100.0 + 0.5))
        n (max 11 (w - 4)) mid (n // 2)
-       (at x) (max 0 (min (n - 1) (mid + int ((x - 100.0 * s) / 50.0 * mid))))
-       i0 (at c) a (at lo) b (at hi)
+       (pos x) (mid + (x - 100.0 * s) / 50.0 * mid)
+       (at x) (max 0 (min (n - 1) (floor (pos x + 0.5))))
+       was (t 'ncell)
+       i0 (two? was && <was = s && abs (pos c - <>was) < 0.75 ? <>was (at c))
+       _ (pin t 'ncell [s i0])
+       a (at lo) b (at hi)
        (tuner-note (4 * s) @ [_ o _]
         ("  " + cats (map (i \ (? (i = i0) ((gone ? faint bold) o "●") (a <= i <= b) (ink o "━")
                                   (i = mid) (sgr "2" "┃") (sgr "2" "─"))) ^n))))
@@ -129,7 +138,7 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
        top (sgr "7" (pad ("  love tuner   A4 = " + show (t 'ref) + " Hz   " + t 'src
                           + "   level " + show (int (t 'lvl))) w))
        bot (sgr "2" (pad "  ━ semitone  ╺━ quarter tone  · eighth tone    a/A A4 ∓1 Hz   q quit" w))
-       ([top] + rows + [(on ? (needle c w lo hi gone) (sgr "2" "  (listening)")) "" bot]))
+       ([top] + rows + [(on ? (needle t (t 'nd) w lo hi gone) (sgr "2" "  (listening)")) "" bot]))
    (paint t w h) (tuner-frame t w h @ rs ("\e[H" + cats (map (r \ r + "\e[K\r\n") (init rs)) + last rs + "\e[K"))
 
    ; --- the ears that feed it -------------------------------------------------------
