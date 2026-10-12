@@ -18,7 +18,7 @@
   test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
-  test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
+  test_objcopy test_playdate test_proof test_quick test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
@@ -37,6 +37,17 @@ test:
 # slow gate
 test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_nest test_spin test_cookdiff test_glazebench test_dist test_seed test_moon test_as test_links test_kernel_wasm test_harp
 
+
+# the core's gate: test_extra's lanes that run on this box, hold no heavy slot
+# and finish in about a minute
+test_quick: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
+	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_sat \
+	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
+	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
+	test_drv test_wake test_gz test_sqfs test_ext4 test_cpio test_tfm test_caja test_grap test_chem \
+	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
+	test_asmops test_dtb test_elf32 test_objcopy test_fat test_cci386 test_ccthumb1 test_ccthumb2 \
+	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
 
 # really slow gate
 test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
