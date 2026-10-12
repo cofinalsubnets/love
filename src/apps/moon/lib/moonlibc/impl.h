@@ -510,6 +510,8 @@ struct _IO_FILE {
 #define NR_pipe2          293
 #define NR_memfd_create   319
 #endif
+/* inle's own, outside every kernel's table: a process asks for a child (posix_spawn) */
+#define NR_inle_spawn  0x4100
 
 
 /* errno is ONE object; every member only reads it, so it rides extern here and is

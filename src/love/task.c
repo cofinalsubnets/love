@@ -307,6 +307,36 @@ lvm(lvm_yield_sw) {
 
 lvm(lvm_yield_nif) { Ip++; love_musttail return Ap(lvm_yield_sw, g); }
 lvm(lvm_task_exit) { love_musttail return Ap(lvm_yield_sw, g); }
+
+// whether a task on either ring other than the running one wears port x
+static bool wears(word l, word x) {
+  for (int i = 0; i < 3 && chainp(l); i++, l = B(l)) if (A(l) == x) return true;
+  return false; }
+static bool worn_elsewhere(struct g *g, word x) {
+  union u *me = g->tasks, *h = g->parked;
+  for (union u *n = me[0].m; n && n != me; n = n[0].m) if (wears(n[7].x, x)) return true;
+  if (h) { union u *n = h; do { if (wears(n[7].x, x)) return true; n = n[0].m; } while (n != h); }
+  return false; }
+// (quit code) in a twirled task where a task is a process (inle): _exit at task size. the
+// fds its worn stdio names close -- a pipe's write end has to, for the reader to see EOF --
+// save one another task still wears, the parent's handed down. the task lands dormant with
+// the code as its retval, what `wait` (catch) answers; the frame below Sp is abandoned whole.
+static union u const quit_body[] = { {lvm_task_exit} };
+lvm(lvm_task_quit) {
+  word l = *task_io(g);
+  for (int i = 0; i < 3 && chainp(l); i++, l = B(l)) {
+    word x = A(l);
+    if (!iop(x) || worn_elsewhere(g, x)) continue;
+    struct fio *f = (struct fio*) x;
+    intptr_t fd = io_fd(&f->io);
+    if (fd > 2) love_fd_close((int) fd), f->fd = putcharm(-1); }
+  g->next_wake_at = 0;                          // a stale intention would gate the park
+  g->next_wait_fd = -1;
+  word code = (Sp[0] & 1) ? Sp[0] : putcharm(0);
+  Sp = (word*) g + g->len - 1;
+  Sp[0] = code;
+  Ip = (union u*) quit_body;
+  love_musttail return Ap(lvm_task_exit, g); }
 static union u const spawn_body[] = { {lvm_ap}, {.ap = lvm_task_exit} };
 lvm(lvm_twirl) {
  Have(11);

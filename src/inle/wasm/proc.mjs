@@ -12,13 +12,15 @@ import { box_at, box_win } from './procbox.mjs';
 const isNode = typeof process !== 'undefined' && !!process.versions?.node;
 const port = isNode ? (await import('node:worker_threads')).parentPort
            : typeof WorkerGlobalScope !== 'undefined' ? self : null;
-if (port) isNode ? port.once('message', run) : port.addEventListener('message', (e) => run(e.data), { once: true });
+// a page's worker outlives its run unless it closes, its memory held: it says so and goes
+if (port) isNode ? port.once('message', run)
+                 : port.addEventListener('message', (e) => { run(e.data); port.postMessage(0); port.close(); }, { once: true });
 
 class Exit extends Error { constructor(s) { super('exit ' + s); this.s = s; } }
 const PAGE = 65536, enc = new TextEncoder();
 
-// a call's pointer arguments: [which, length, direction]; a length is bytes, or 'str' (to its
-// NUL), or under 6 the index of the argument whose value it is
+// a call's pointer arguments: [which, length, direction]; a length is bytes, 'str' (to its
+// NUL), 'int' (four bytes), or under 6 the index of the argument whose value it is
 const ptrs = {
   0: [[1, 2, 'out']], 1: [[1, 2, 'in']], 217: [[1, 2, 'out']],            // read write getdents64
   5: [[1, 144, 'out']], 16: [[2, 64, 'both']], 293: [[0, 8, 'out']],      // fstat ioctl pipe2
@@ -27,7 +29,8 @@ const ptrs = {
   266: [[0, 'str', 'in'], [2, 'str', 'in']], 267: [[1, 'str', 'in'], [2, 3, 'out']],
   264: [[1, 'str', 'in'], [3, 'str', 'in']], 316: [[1, 'str', 'in'], [3, 'str', 'in']],
   280: [[1, 'str', 'in'], [2, 32, 'in']], 80: [[0, 'str', 'in']], 79: [[0, 1, 'out']],
-  63: [[0, 390, 'out']] };
+  63: [[0, 390, 'out']], 61: [[1, 'int', 'out']],                           // uname wait4
+  0x4100: [[0, 1, 'in'], [2, 3, 'in'], [4, 5, 'in']] };                   // inle's spawn
 // the bulk calls go in window-sized pieces: a short count is a count all the same
 const piece = { 0: 1, 1: 1, 217: 1 };
 
@@ -45,7 +48,7 @@ function run({ module, pid, argv, env, box: boxb, ring }) {
     let at = 0, mask = 0;
     for (const [i, len, dir] of ptrs[n] ?? []) {
       if (!a[i]) continue;                              // NULL stays NULL: the kernel's EFAULT
-      const p = Number(a[i]), l = len === 'str' ? u8().indexOf(0, p) - p + 1 : len < 6 ? Number(a[len]) : len;
+      const p = Number(a[i]), l = len === 'str' ? u8().indexOf(0, p) - p + 1 : len === 'int' ? 4 : len < 6 ? Number(a[len]) : len;
       if (l < 0 || at + l > box_win) return -14n;       // EFAULT: past the window
       if (dir !== 'out') boxw.set(u8().subarray(p, p + l), at);
       if (dir !== 'in') back.push([p, at, l]);
@@ -121,7 +124,7 @@ function run({ module, pid, argv, env, box: boxb, ring }) {
       case 102: case 104: case 107: case 108: return 0n;  // uid gid euid egid: one user
       case 95: return 18n;                              // umask: 022, kept nowhere
       default: {
-        if (!(n in ptrs) && ![3, 8, 72, 77, 292, 39, 110, 109, 112, 111].includes(n)) return -38n;
+        if (!(n in ptrs) && ![3, 8, 72, 77, 292, 39, 110, 109, 112, 111, 62].includes(n)) return -38n;
         if (piece[n] && Number(c) > box_win) c = BigInt(box_win);
         return kcall(n, [a, b, c, d, e, f]); } } };
   const sys = (...a) => { const r = sys1(...a); return uni ? [r, 0n, 0, 0] : r; };

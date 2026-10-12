@@ -7,7 +7,7 @@
 ;
 ; the makefile owns the fan: a group is a few members of one ISA (out/rt/<isa>/<grp>.a,
 ; a plain archive), and the join reads every group, the ISA off each one's directory.
-; the object holds, per name in {id, x64, a64, rv64}, mksrc.l's pair shape 8-aligned:
+; the object holds, per name in {id, x64, a64, rv64, i386}, mksrc.l's pair shape 8-aligned:
 ;
 ;   rtgz_<nm>_len   an 8-byte little-endian length
 ;   rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
@@ -84,7 +84,7 @@
        objelf (cite 'holo 'objelf)
        cid ((cite 'moon 'rtcid) rt-home)
        _ (!(string? cid) ? (rt-die "no src/apps/moon/ slice to hash -- run from the tree root"))
-       ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
+       ; deflated: ~2 MB of archive across the four ISAs becomes ~520 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
        (one tgt) (: z (deflate (rt-isa tgt grps))
                     _ (!(string? z) ? (rt-die (show tgt + ": deflate refused the archive")))
@@ -92,11 +92,13 @@
        forms (rt-forms "id" cid
               + rt-forms "x64" (one 'x64)
               + rt-forms "a64" (one 'a64)
-              + rt-forms "rv64" (one 'rv64))
+              + rt-forms "rv64" (one 'rv64)
+              + rt-forms "i386" (one 'i386))
        xs '("rtgz_id" "rtgz_id_len"
             "rtgz_x64" "rtgz_x64_len"
             "rtgz_a64" "rtgz_a64_len"
-            "rtgz_rv64" "rtgz_rv64_len")
+            "rtgz_rv64" "rtgz_rv64_len"
+            "rtgz_i386" "rtgz_i386_len")
        ob (objelf arch () () () xs () () () () () forms)
        (cite 'holo 'write-bytes dst ob))        ; ob is a byte list, not a string
 
