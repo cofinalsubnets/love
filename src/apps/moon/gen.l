@@ -7390,7 +7390,7 @@
           r (gas-top-in tgt txt "" [1 6] pf)
           home (foldl (a \ x \ <x = "" ? (x 3) a) () <r)
           ; the prefix rides along: what dead code removes of the home, the record follows out
-          (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2) pf] . g 'fasecs),
+          (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2) pf (r 3)] . g 'fasecs),
            asmruns tgt home)))
    ; forms -> raw runs between the labels and aligns, every fix left open for the function's lay
    (asmruns tgt fs)
@@ -7401,9 +7401,9 @@
               (two? f && elem <f '(label align) ? (go >l () (f . flush cur acc))
                  (go >l (f . cur) acc))))
        (go fs () ()))
-   ; the file-scope asm's sections and every function's, one [secs fns objs]
+   ; the file-scope asm's sections and every function's, one [secs fns objs weaks]
    (asecs-all g) (asecs-of g (rev (g 'fasecs)))
-   (asecs-of g l) (foldl (a \ r \ two? a ? [(<a + <r) (a 1 + r 1) (a 2 + r 2)] (take 3 r))
+   (asecs-of g l) (foldl (a \ r \ two? a ? [(<a + <r) (a 1 + r 1) (a 2 + r 2) (a 3 + r 4)] [<r (r 1) (r 2) (r 4)])
                          (g 'asecs) l)
    ; ..less a function asm's whose home the dead code removed: its words name labels of that
    ; asm the text no longer lays (a BUG_ON a fold proved false keeps no __bug_table row)

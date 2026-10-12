@@ -1182,18 +1182,18 @@
       ((tacast "__asm__ volatile (\"a\" \"b\"); int x;") = '(prog ((tasm "ab") (gdecl (("x" int ()))))))
       (refused? (cparse <>(clex "int x; asm(\"\" : : \"r\"(x));")))
       (ex = '(((".export_symbol" 1 2 ((label __export_symbol_x) (raw (0)) (align 8) (raw ((fix 8 abs64 x 0))))))
-              () ()))
-      (tp = '((("__tracepoints_ptrs" 1 2 ((align 4) (raw ((fix 4 rel32 __tracepoint_x 4)))))) () ()))
+              () () ()))
+      (tp = '((("__tracepoints_ptrs" 1 2 ((align 4) (raw ((fix 4 rel32 __tracepoint_x 4)))))) () () ()))
       (sc = [[[".static_call.text" 1 6 [['label 'sc] ['label l9] ['raw [233]] ['raw [['fix 4 'rel32 'it 0]]]]]
               [".discard.annotate_insn" 1 0 [['raw [['fix 4 'rel32 l9 4] 1 0 0 0]]]]]
-             ["sc"] ()])
+             ["sc"] () ()])
       ((map (s \ [<s (s 1) (s 2)]) <st) =
          '((".text" 1 6) (".a" 1 0) (".b" 1 0) (".text.hot" 1 6) (".rodata.k" 1 2) (".bss" 8 3)))
       ((<st 0 3) = '((label x) (raw (1)) (raw (4))))
       ((<st 1 3) = '((raw (3))))
       ((<st 4 3) = '((raw (254 255))))
       (two? ob)
-      ((ob 12) = '(((".tb" 1 2 ((raw ((fix 4 rel32 hidden 4)))))) () ()))
+      ((ob 12) = '(((".tb" 1 2 ((raw ((fix 4 rel32 hidden 4)))))) () () ()))
       (elem '(label hidden) (ob 1))
       ; a function's template: gas-text takes it whole unless it carries a directive or a label
       ; beside an instruction; then gas-top reads it from the function's own place, "", its
@@ -1209,9 +1209,9 @@
       ((gas-top-in 'x64 "671: dec %rax\n.pushsection .smp_locks,\"a\"\n.long 671b - .\n.popsection" "" [1 6] "f.asm.3.") =
          '((("" 1 6 ((label f.asm.3.l671.1) (raw (72 255 200))))   ; dec %rax, laid exactly
             (".smp_locks" 1 2 ((raw ((fix 4 rel32 f.asm.3.l671.1 4))))))
-           () ()))
+           () () ()))
       ; ..and gen keeps that label in the function, where the pushed section's word names it
-      ((fob 12) = '(((".t" 1 2 ((raw ((fix 4 rel32 f.asm.0.l1.1 4)))))) () ()))
+      ((fob 12) = '(((".t" 1 2 ((raw ((fix 4 rel32 f.asm.0.l1.1 4)))))) () () ()))
       (elem '(label f.asm.0.l1.1) (fob 1))))
 
 ; -- the alive pass (per-call wrap filtering): a non-leaf fn's homed params spill/reload

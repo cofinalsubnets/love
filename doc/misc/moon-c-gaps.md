@@ -1267,6 +1267,16 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
 - **`//` inside a string on a64** (`.ascii "http://x"`, and the base64 above): no comment, as
   llvm-mc reads it; holo had cut the line there. vdso-wrap compiles, its .rodata the kernel's
   object's.
+- **`@note`** (vdso's note.S, `.pushsection .note.Linux, "a", @note`): sht_note, which moon's
+  linker places or drops as it does a C note; holo had refused the type. note.o's `.note.Linux` is
+  the kernel's object's, byte for byte.
+- **an alias of an alias** (memcpy.S's `.set __memmove, __pi_memmove`, itself set to
+  `__pi_memcpy`): followed to the label at the end of the chain, in either order; a cycle refuses.
+  holo had refused it (`gas-alias`).
+- **`.weak` binds weak** (memcpy.S's `.weak memcpy`): holo had exported it global, so a strong
+  definition elsewhere was a duplicate, and a word naming it resolved to the local body. The name
+  now rides the object weak and a word naming it is a relocation against it. memcpy.S compiles,
+  its 147 words the kernel's object's, `memcpy` and `memmove` weak as there.
 
 Still open on this side (g-21's probes):
 
@@ -1279,8 +1289,8 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, 22 compile, and the rest stop on:
-  `@note` and a `.set` alias of a function (`__memmove`). entry.S and proc.S compile. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+  units that stopped on the `.S` extable macro's `\insn`, all 24 compile. The exclusive pairs
+  (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
