@@ -490,6 +490,7 @@
           (#(lanes n) <= 1) (wide 0x12800000 n (lanes n))
           (ga-bm u z @ f (charm? f ? (sf | 0x320003E0 | f | d) ()))))
    (ga-sp? o) (o @ ('reg x _) (x = 'sp) 0)
+   (ga-irimm? m v) (nom? (peep ga-flip m ()) ? (-4095 <= v <= 4095) (charm? (ga-bm v 64)))   ; the IR lays it in one word
    (ga-dp m os z)                                   ; a data op laid as its own word, z bits wide
     (: k #os (r i) (ga-hw (ga-r (os i))) sf (z = 64 ? 0x80000000 0) top (z - 1)
        (? (m = 'mov) ((os 1) @ ('imm v) (ga-movi z (r 0) v @ w (charm? w ? (ga-raw w) (scare 'gas-a64-mov-imm v)))
@@ -1040,8 +1041,10 @@
           (k > 0 && two? (peep ga-simd m ()) && charm? (ga-vr (os 0) (ga-simd m 1))) (ga-simd-ins m os)
           (two? (peep ga-ldst m ())) (ga-ls m os)
           (two? (peep ga-mla m ())) (ga-mul m os)
-          ; an immediate op beside no sp: its one word, or refused as llvm-mc does
-          (k = 3 && two? (peep ga-walu m ()) && ((os 2) @ ('imm v) (charm? v) _ 0) && !(any ga-sp? os))
+          ; an immediate op beside no sp that the IR's rows cannot hold, zr or a word of its own: that
+          ; word, or refused as llvm-mc does
+          (k = 3 && two? (peep ga-walu m ()) && !(any ga-sp? os)
+           && ((os 2) @ ('imm v) (charm? v && (any (o \ o @ ('reg 'zr _) 1 _ 0) os || !(ga-irimm? m v))) _ 0))
            (ga-dp m os (ga-wide os = 4 ? 32 64))
           (elem m '(mov cmp tst neg mvn add sub and orr eor adds subs ands lsl lsr asr ror) && ga-wide os = 4)
            (ga-dp m os 32)

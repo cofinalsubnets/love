@@ -1293,8 +1293,7 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   laid the label's own offset.
 - **`fp` and `lr` in asm text** (`stp fp, lr, [sp, #-16]!`, `mov x0, lr`): llvm-mc's names for
   x29 and x30, in every X operand; holo had refused them. Of 800 random lines over them, 747 lay
-  llvm-mc's words and refusals, and the rest part from it as the same lines spelled x29 and x30
-  do (the open list below).
+  llvm-mc's words and refusals, and of the rest all but seven are the asm-text row below.
 - **the multiply-adds and zr in asm text**: `madd`, `msub`, `mneg`, the long `smaddl` family and
   `smull`/`umull`/`smnegl`/`umnegl`, `smulh`/`umulh`, each with zr; a logical immediate beside
   `xzr` (`orr x0, xzr, #0xff`); a load or store of `xzr`/`wzr` (`ldr xzr, [x0]`, barrier.h's
@@ -1302,7 +1301,9 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   now as llvm-mc refuses them: a writeback onto the register loaded or stored (`str x0, [x0,
   #-8]!`), sp as a load's or store's data, an X immediate no one word holds (holo had laid two).
   `adds`/`subs` by `#4096` take the shifted word, where holo had refused. Of 556 lines over these, every word and
-  refusal is llvm-mc's; golden gas.a64.mla, law test/cc/277-asm-mla.c.
+  refusal is llvm-mc's; golden gas.a64.mla, law test/cc/277-asm-mla.c. One departure, kept: a
+  written-back `ldp` of one register twice (`ldp fp, fp, [sp], #16`) refuses: the Arm ARM calls it
+  unpredictable, and llvm-mc, which lays it, refuses the offset form and `ldpsw`.
 
 Still open on this side (g-21's probes):
 
