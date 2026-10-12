@@ -433,6 +433,7 @@ extern struct port_vt const closed_vt;
 // where the device lives. the writen is weak, so a link without horn.c still stands.
 extern struct port_vt const love_horn_vt;
 struct g *love_horn_writen(struct g*, unsigned char const*, uintptr_t);
+intptr_t love_horn_readn(struct g*, unsigned char*, uintptr_t);
 void love_horn_shut(struct io*);               // `close` on one: shut the device under it
 // the C face of the same device, for a program in the image with no love heap in hand.
 // 16-bit stereo, rate rides the open: open -> 0 | -1 no device; write -> bytes landed, 0
