@@ -21,7 +21,7 @@ set -u
 ho=$1
 m=$2
 name=test_cci386
-refuse="100-complex 101-vla 111-int128 151-w128fuzz"
+refuse="111-int128 151-w128fuzz"
 wide="68-static-assert 120-bfinit 161-enumwide"
 narrow="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
 

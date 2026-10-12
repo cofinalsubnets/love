@@ -128,15 +128,19 @@ const leave = (code) => { if (process.stdin.isTTY) process.stdin.setRawMode(fals
 // a process the machine started (cpu.mjs's proc): a worker of its own over the module,
 // compiled once for all of them
 let module = null;
+const workers = new Map();
 const proc = (p) => {
   module ??= WebAssembly.compile(readFileSync(wasm));
   module.then((mod) => {
     const w = new Worker(new URL('./proc.mjs', import.meta.url));
     w.unref();
+    workers.set(p.pid, w);
+    w.on('exit', () => workers.delete(p.pid));
     w.on('error', (e) => { process.stderr.write(`\ninle: pid ${p.pid}: ${e}\n`); procdied(p.box, ring); });
     w.postMessage({ module: mod, ring, ...p }); }); };
 cpu.on('message', (m) => {
   if (m.proc) { proc(m.proc); return; }
+  if (m.stop !== undefined) { workers.get(m.stop)?.terminate(); return; }
   if (m.frame && framesOut) {                             // what a page would paint, weighed
     const px = new Uint32Array(m.frame);
     let sig = 0;                                          // every pixel: one glyph is all a

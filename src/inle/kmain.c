@@ -635,7 +635,7 @@ static bool k_fs_init(void) {
 
 // one open file: which entry, where in it, whether writes are allowed. rides the row's
 // `state`, which the close door frees.
-struct k_fh { int i, vt; uintptr_t pos; bool w; };
+struct k_fh { int i, vt, refs; uintptr_t pos; bool w; };   // refs: the rows a dup shares it across
 
 static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n);
 
@@ -833,10 +833,11 @@ static void ram_close(int fd) {
   struct k_source *s = k_source(fd);
   if (!s) return;
   struct k_fh *h = s->state;
+  *s = (struct k_source) {0};                 // the row is free again
+  if (h && --h->refs > 0) return;             // the handle stays with its other rows
   if (h && h->vt && h->w) k_vt_write(h->i, h->vt);   // the write lands when the writer is done
   if (h && k_fs.ents[h->i].refs) k_fs.ents[h->i].refs--, vfs_gc(&k_fs, h->i);
-  kfree(s->state);
-  *s = (struct k_source) {0}; }               // and the row is free again
+  kfree(h); }
 
 // the lowest free row at or past the boot rows -- POSIX's rule, which scripts lean on. a row
 // is free when it carries no method at all. the floor is F_DUPFD's; every caller else passes 0.
@@ -961,7 +962,7 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (m == 'w') e->own = true, e->len = 0, e->ms = k_clock_ms();
   if (m == 'a') len = vfs_size(&k_fs, i);
   e->refs++;
-  *h = (struct k_fh) { .i = i, .vt = vt, .pos = len, .w = m != 'r' };
+  *h = (struct k_fh) { .i = i, .vt = vt, .refs = 1, .pos = len, .w = m != 'r' };
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
@@ -1261,16 +1262,13 @@ love_noinline static int k_dup_row(int src, int at) {
   struct k_source *s = k_source(src);
   if (!s || !(s->readn || s->writen || s->putc)) return -1;
   int fd = k_fd_free_at(at);
-  struct k_fh *h = NULL;
-  if (s->readn == ram_readn) {
-    struct k_fh *o = s->state;
-    if (!o || !(h = kmallocw(b2w(sizeof *h)))) return -1;
-    *h = *o; }
+  if (s->readn == ram_readn && !s->state) return -1;
   struct k_source *t = k_source_open(fd);
-  if (!t) { kfree(h); return -1; }
+  if (!t) return -1;
   s = k_source(src);                            // the grow may have moved the table
   *t = *s;
-  if (h) t->state = h, k_fs.ents[h->i].refs++;
+  // a dup shares the open file, its offset with it, as POSIX's does
+  if (s->readn == ram_readn) ((struct k_fh*) s->state)->refs++;
   else if (s->readn == host_readn) ((struct k_hf*) s->state)->refs++;
   else if (s->readn == pipe_readn) ((struct k_pipe*) s->state)->rrefs++;
   else if (s->writen == pipe_writen) ((struct k_pipe*) s->state)->wrefs++;
@@ -2102,48 +2100,12 @@ static lvm(lvm_fault) {
   k_fault_trigger(getcharm(Sp[0]));
   love_musttail return Next(1); }
 
-// (quit code) -- the exit door, with two rooms behind it. a seated task quits as _exit: its
-// seated fds close (a write end's close is the reader's EOF), the seat retires, and the task
-// lands dormant with the code as its retval, which is what `wait` (catch) answers. unseated,
+// (quit code) -- the exit door, with two rooms behind it. a task with a pid quits as _exit
+// (src/love/task.c, lvm_task_quit): the code is what `wait` (catch) answers. without one,
 // the exit is the machine's: reset -- test/kernel/kore0.l pins (: (quit n) n) one door deeper.
-static union u const k_exit_body[] = { {lvm_task_exit} };
-// whether a task on either ring other than the running one wears port x
-static bool k_wears(word l, word x) {
-  for (int i = 0; i < 3 && chainp(l); i++, l = B(l)) if (A(l) == x) return true;
-  return false; }
-static bool k_worn_elsewhere(struct g *g, word x) {
-  union u *me = g->tasks, *h = g->parked;
-  for (union u *n = me[0].m; n && n != me; n = n[0].m) if (k_wears(n[7].x, x)) return true;
-  if (h) { union u *n = h; do { if (k_wears(n[7].x, x)) return true; n = n[0].m; } while (n != h); }
-  return false; }
-// the spawned half: shut the rows this task's worn stdio names -- a pipe's write end has to
-// close here for the reader to see EOF -- and clear the yield intentions. the port is
-// neutered as its row goes. a port another task still wears is the parent's, handed down
-// (a console-numbered slot): its row stays, or a pane's shell loses its terminal to the
-// exit of every child. -> nonzero when the task has a pid, so the wrapper knows the room.
-love_noinline static int k_task_exit(struct g *g) {
-  if (!k_cur_pid(g)) return 0;
-  word l = *task_io(g);
-  for (int i = 0; i < 3 && chainp(l); i++, l = B(l)) {
-    word x = A(l);
-    if (!iop(x) || k_worn_elsewhere(g, x)) continue;
-    struct fio *f = (struct fio*) x;
-    intptr_t fd = io_fd(&f->io);
-    if (fd > 2) k_row_close((int) fd), f->fd = putcharm(-1); }
-  g->next_wake_at = 0;                          // a stale intention would gate the park
-  g->next_wait_fd = -1;
-  return 1; }
-
 // src/love/main.c's quit nif branches here on a negative osv: the task/machine door.
 lvm(k_lvm_quit) {
-  if (k_task_exit(g)) {
-    // the love-machine _exit: the stack becomes just [code] and Ip a task-exit cell, the
-    // shape lvm_task_exit leaves. the frame below Sp is abandoned whole.
-    word code = (Sp[0] & 1) ? Sp[0] : putcharm(0);
-    Sp = (word*) g + g->len - 1;
-    Sp[0] = code;
-    Ip = (union u*) k_exit_body;
-    love_musttail return Ap(lvm_task_exit, g); }
+  if (k_cur_pid(g)) love_musttail return Ap(lvm_task_quit, g);
   k_reset();
   love_musttail return Next(1); }
 
@@ -2270,6 +2232,10 @@ static char const src_korelist[] =
 static char const src_seat[] =
 #include "seat.h"
 ;
+// a task as a process (src/inle/tasks.l): a woken image carries it, src/love/main.c's bake
+static char const src_tasks[] =
+#include "tasks.h"
+;
 // the crew roster: not in the kernel's cat, so the kernel carries the order and the members
 // are read off /love at the first ask. a path list, because a module's name does not say
 // which file holds it and sb spans three that load in the order given.
@@ -2348,7 +2314,8 @@ void kmain(void) {
     // load, and the boot cmdline's program seat reads the registry.
     "(borrow 'verbs)"
     "(borrow 'uu) (: uu (cite 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
-    "(borrow 'cli)"); }                                      //   one-name `uu` surface on this target too
+    "(borrow 'cli)");                                        //   one-name `uu` surface on this target too
+   r = evals_(r, src_tasks); }
   // the seat text, both lanes (src/inle/seat.l, laid by lcat): what this machine is that a
   // host is not. over a woken book these shadow the hosted bindings.
   r = evals_(r, src_seat);
