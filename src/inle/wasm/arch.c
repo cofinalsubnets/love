@@ -240,5 +240,7 @@ const unsigned char rtgz_a64[1] = {0};
 const uintptr_t rtgz_a64_len = 0;
 const unsigned char rtgz_rv64[1] = {0};
 const uintptr_t rtgz_rv64_len = 0;
+const unsigned char rtgz_i386[1] = {0};
+const uintptr_t rtgz_i386_len = 0;
 const unsigned char rtgz_id[1] = {0};
 const uintptr_t rtgz_id_len = 0;

@@ -443,7 +443,7 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
 # in roster order, whichever object arch it is for.
 rt_lib = src/apps/moon/lib/moonlibc
 rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
-rt_isas = x64 a64 rv64
+rt_isas = x64 a64 rv64 i386
 rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env
 rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
 rt_src_sys-af = $(call rt_sysrange,a b c d e f)
@@ -452,14 +452,18 @@ rt_src_sys-mr = $(call rt_sysrange,m n o p q r)
 rt_src_sys-sz = $(call rt_sysrange,s t u v w x y z)
 rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
 rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
-rt_a = $(foreach i,$(rt_isas),$(foreach g,$(rt_groups),out/rt/$i/$g.a))
+# i386 has no 64-bit divide: its roster carries rt.c's helpers too
+rt_src_rt = src/apps/moon/lib/rt.c
+rt_groups_i386 = $(rt_groups) rt
+rt_gs = $(if $(rt_groups_$(1)),$(rt_groups_$(1)),$(rt_groups))
+rt_a = $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),out/rt/$i/$g.a))
 define rtgroup
 out/rt/$(1)/$(2).a: $$(call rt_src,$(2)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(2)))
 endef
-$(foreach i,$(rt_isas),$(foreach g,$(rt_groups),$(eval $(call rtgroup,$i,$g))))
+$(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call rtgroup,$i,$g))))
 out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) src/tools/mkrt.l $@ $(hosta) $(rt_a)
