@@ -2,6 +2,7 @@
 ; riding home, exit status. interactive berthing stays a live probe.
 ; not in the corpus: the screen nifs are not in love0. run: cat test/00-init.l test/host/mitty.l | out/love
 
+(borrow "src/apps/mitty/mooring.l")
 (borrow "src/apps/mitty/mitty.l")
 (borrow "src/apps/mitty/wharf.l")
 (borrow "src/apps/mitty/limn.l")

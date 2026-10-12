@@ -358,7 +358,7 @@
    text (br 'mitty-stage (face 0) (face 1) (_ \ (buf 'quit || st 'over)))
    _ (pin text 'paste (face 3))
    share (min 90 ((100 * (synth-rows + 1) + <sz - 1) // <sz))   ; the keys' rows, and one over
-   (pin hb 'more (_ \ (br 'hopen ["sh"] 1 1)),
+   (pin hb 'more (_ \ ((cite 'mooring 'hopen) ["sh"] 1 1)),
     br 'hberth hb 'stack 50 (br 'hopen-stage keys <sz <>sz),
     br 'hberth hb 'stack share (br 'hopen-stage text 1 1),
     br 'hsteer hb 'up,                  ; the keys first

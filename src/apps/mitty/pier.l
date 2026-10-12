@@ -17,7 +17,7 @@
 (module '(pier pier pier-keybytes pier-main)
 (borrow 'xwire)
 (borrow 'posix)
-(borrow 'mitty)
+(borrow 'mooring)   ; hopen moor waitfor: the terminal core mitty rides too
 (borrow 'font)
 (:
    ; the special keys' bytes, by keysym: xterm's
