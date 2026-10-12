@@ -800,7 +800,7 @@
                  [['stsd base off val]])
    ; the native single lane: a 'float value rides its f-register as binary32 (C's FLT_EVAL_METHOD 0);
    ; elsewhere a float widens on load and every value is a double
-   (f32v? g) (x64? g)
+   (f32v? g) (x64? g || a8? g || t32? g)
    (n32? g ty) (ty = 'float && f32v? g)
    (fvt g ty) (n32? g ty ? 'float 'double)          ; the value type a ty load answers
    (fldv g ty freg base off) (n32? g ty ? [['ldss freg base off]] (fldf ty freg base off))
@@ -863,7 +863,8 @@
    ; result -> f0 as binary32: one rounding from any source
    (asf32 g r) (? (vty r = 'float && f32v? g) (vfs r)
                   (flo? (vty r) || gcplx? (vty r)) (asflo g r + '((cvtsd2ss f0 f0)))
-                  (ilp32? g && (llt? (vty r) || usg? (vty r))) (asflo g r + '((cvtsd2ss f0 f0)))
+                  (ilp32? g && llt? (vty r)) (asflo g r + '((cvtsd2ss f0 f0)))
+                  (ilp32? g && usg? (vty r)) (tor0 g r + '((cvtui2ss f0 r0)))
                   (vty r = 'ulong) (tor0 g r + ul2f g)
                   (tor0 g r + '((cvtsi2ss f0 r0))))
    ; unsigned 64 -> float: past 2^63 halve with the low bit kept sticky, convert, double (gcc's shape)
@@ -3223,8 +3224,7 @@
                                             ([['ov ov8 8]
                                               (aval + pstw 'sp ov8 'r0 'r1)] . acc)))))
                              (v6m? g && aty = 'float)    ; v6-M base ABI: a bare float arg is one word (binary32,
-                              (: av1 (asflo g a              ;  the gcc shape -- flo_t is float on a 32-bit love)
-                                      + '((cvtsd2ss f0 f0) (movqrx r0 f0)))
+                              (: av1 (asf32 g a + '((movdrx r0 f0)))   ;  the gcc shape -- flo_t is float on a 32-bit love)
                                  (gpc < ngp g ?
                                     (kls >as (i + 1) (gpc + 1) xmmc ovc
                                          ([['g gpc] (av1 + spush 'r0)] . acc))
@@ -3365,7 +3365,7 @@
              (dir ?
                  (: ; v6-M base ABI: a double result arrives in r0:r1, a bare float as binary32 in r0 -- either lands on f0
                     fres (? (ia32? g) (st0in g ret)                       ; i386: st(0) into f0
-                            (n32? g ret) ()                                    ; binary32 in its register: the value as is
+                            (n32? g ret) (v6m? g ? '((movdxr f0 r0)) ())       ; binary32 in its register (v6-M: in r0) -- the value as is
                             ((t32f? g || f32abi? g) && ret = 'float) '((cvtss2sd f0 f0))   ; the result is binary32 in s0
                             !(v6m? g && flo? ret) ()
                             (ret = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
@@ -3377,7 +3377,7 @@
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
                    pk (pkr g)
                    fres (? (ia32? g) (st0in g (fnret (vty hr)))
-                           (n32? g (fnret (vty hr))) ()
+                           (n32? g (fnret (vty hr))) (v6m? g ? '((movdxr f0 r0)) ())
                            ((t32f? g || f32abi? g) && fnret (vty hr) = 'float) '((cvtss2sd f0 f0))
                            !(v6m? g && flo? (fnret (vty hr))) ()
                            (fnret (vty hr) = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
@@ -3935,6 +3935,8 @@
    ; 32-byte sp cell blanketing r0-r3 (above sp: an irq frame owns the space below); d-regs need no save, moon stages doubles only in f0/f1/f15
    sf-bin {'addsd '__aeabi_dadd 'subsd '__aeabi_dsub
            'mulsd '__aeabi_dmul 'divsd '__aeabi_ddiv}
+   ; ..and on v6-M the single lane too, its word in r0 (r1 the right); sp64's fpu keeps it native
+   sf-bin1 {'addss '__aeabi_fadd 'subss '__aeabi_fsub 'mulss '__aeabi_fmul 'divss '__aeabi_fdiv}
    ; cc -> (helper sense): 'ne means helper-true holds the cc; 'eq negates (le = !(a>b), lt = !(a>=b), unordered-true like the flags)
    (sf-cc cc) (cc @ 'gt '(__aeabi_dcmpgt ne)
                     'ge '(__aeabi_dcmpge ne)
@@ -4000,6 +4002,19 @@
                         (sf-save + gd <>f 'r0 +
                          gd <>>f 'r2 + [['call h9]] + pd <>f + sf-rest + go r)
                        (op = 'movsd) (mv <>f <>>f + go r)
+                       (w6 && sf-bin1 op)            ; (op fD fS): single words through the helper
+                        (sf-save + [['ld 'r0 'r4 (fcell g <>f)] ['ld 'r1 'r4 (fcell g <>>f)] ['call (sf-bin1 op)]]
+                         + ps <>f + sf-rest + go r)
+                       (w6 && elem op '(cvtsi2ss cvtui2ss))   ; (op fD rS)
+                        (sf-slot <>>f @ sl
+                           (sf-save + (sl < 0 ? [['mov 'r0 <>>f]] [['ld 'r0 'sp sl]])
+                            + [['call (op = 'cvtsi2ss ? '__aeabi_i2f '__aeabi_ui2f)]] + ps <>f + sf-rest + go r))
+                       (w6 && elem op '(cvttss2si cvttss2ui))   ; (op rD fS)
+                        (sf-slot <>f @ sl
+                           (sf-save + gs <>>f + [['call (op = 'cvttss2si ? '__aeabi_f2iz '__aeabi_f2uiz)]]
+                            + (sl < 0 ? [['mov <>f 'r0]] [['st 'sp sl 'r0]]) + sf-rest + go r))
+                       (w6 && op = 'movdxr) ([['st 'r4 (fcell g <>f) <>>f]] + go r)
+                       (w6 && op = 'movdrx) ([['ld <>f 'r4 (fcell g <>>f)]] + go r)
                        (w6 && op = 'ldsd) (m2c g <>f <>>f <>>>f + go r)
                        (w6 && op = 'stsd) (c2m g <>f <>>f <>>>f + go r)
                        (w6 && op = 'ldss) (w2c g <>f <>>f <>>>f + go r)
@@ -8267,7 +8282,7 @@
                    rt <(peep (g 'sigs) (g 'fn) ['long ()])           ; the function's return type
                    res
                    (? (bad? r) 'bad
-                      (n32? g rt) (asf32 g r + epj)                   ; a native float leaves binary32 in its register
+                      (n32? g rt) (asf32 g r + (v6m? g ? '((movdrx r0 f0)) ()) + epj)   ; a native float leaves binary32 in its register (v6-M: r0)
                       (flo? rt)                                        ; a double return leaves f0 (xmm0);
                        (asflo g r                                      ; v6-M base ABI carries a double out on the r0:r1 pair,
                         + (? (ia32? g) [['raw (x87raw g (rt = 'float) ())]]   ; i386: out on st(0)

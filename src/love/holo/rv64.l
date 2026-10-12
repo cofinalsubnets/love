@@ -427,7 +427,7 @@
 
    ;; -- scalar-double FP (D). SSE-named IR two-address; d repeats as the first source. rm rides
    ;;    the funct3 slot: 7 = dynamic for arithmetic, 1 = toward-zero for the C-cast cvttsd2si. --
-   rv-fp3 {'addsd 1 'subsd 5 'mulsd 9 'divsd 13}
+   rv-fp3 {'addsd 1 'subsd 5 'mulsd 9 'divsd 13 'addss 0 'subss 4 'mulss 8 'divss 12}   ; funct7: .d, then .s
    (rv-fp3op op d s) (rvf d @ dn (rv-r (peep rv-fp3 op 0) (rvf s) dn 7 dn 0x53))
    (rv-fmov d s)   (rvf s @ sn (rv-r 0x11 sn sn 0 (rvf d) 0x53))           ; fsgnj.d d, s, s
    (rv-fcmp a b)   (rv-flag-set 1 (rvf a) (rvf b) -1)                        ; remember, emit nothing
@@ -437,6 +437,10 @@
    (rv-fmovrx g d) (rv-r 0x71 0 (rvf d) 0 (rvn g) 0x53)                      ; fmv.x.d
    (rv-fwiden d s)  (rv-r 0x21 0 (rvf s) 0 (rvf d) 0x53)                     ; fcvt.d.s
    (rv-fnarrow d s) (rv-r 0x20 1 (rvf s) 7 (rvf d) 0x53)                     ; fcvt.s.d (rounds)
+   (rv-scvtfs d g)  (rv-r 0x68 2 (rvn g) 7 (rvf d) 0x53)                     ; fcvt.s.l d, g
+   (rv-fcvtzss g d) (rv-r 0x60 2 (rvf d) 1 (rvn g) 0x53)                     ; fcvt.l.s g, d, rtz
+   (rv-fmovsw d g)  (rv-r 0x78 0 (rvn g) 0 (rvf d) 0x53)                     ; fmv.w.x
+   (rv-fmovws g d)  (rv-r 0x70 0 (rvf d) 0 (rvn g) 0x53)                     ; fmv.x.w (sign-extends; the gp lane zero-extends)
    (rv-xorpd d s)                                                            ; zero a double (d==s only)
       (rvf d = rvf s ? (rv-r 0x79 0 0 0 (rvf d) 0x53)                      ; fmv.d.x d, x0
          (scare 'rv-xorpd-general [d s]))
@@ -512,6 +516,8 @@
           ('addsd . rv-fp3op 'addsd) ('subsd . rv-fp3op 'subsd)
           ('mulsd . rv-fp3op 'mulsd) ('divsd . rv-fp3op 'divsd)
           ('ucomisd . rv-fcmp) ('cvtsi2sd . rv-scvtf) ('cvttsd2si . rv-fcvtzs)
+          ('addss . rv-fp3op 'addss) ('subss . rv-fp3op 'subss) ('mulss . rv-fp3op 'mulss) ('divss . rv-fp3op 'divss)
+          ('cvtsi2ss . rv-scvtfs) ('cvttss2si . rv-fcvtzss) ('movdxr . rv-fmovsw) ('movdrx . rv-fmovws)
           ('movqxr . rv-fmovxr) ('movqrx . rv-fmovrx)
           ('stsd . rv-fst) ('ldsd . rv-fld) ('stss . rv-fsts) ('ldss . rv-flds)
           ('cvtss2sd . rv-fwiden) ('cvtsd2ss . rv-fnarrow)

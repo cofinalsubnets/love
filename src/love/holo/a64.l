@@ -510,7 +510,8 @@
    a64-fregs (fregs 32)                                                                      ; f0..f31 -> 0..31 (v16+ = the pure
                                                                                                ; temps: no arg, no callee-saved half)
    (frn r) (look a64-fregs r 'badfreg)
-   a64-fp3 {'addsd 0x1E602800 'subsd 0x1E603800 'mulsd 0x1E600800 'divsd 0x1E601800}     ; SSE arith mnemonic -> the scalar-double base word (Dd = Dn OP Dm)
+   a64-fp3 {'addsd 0x1E602800 'subsd 0x1E603800 'mulsd 0x1E600800 'divsd 0x1E601800     ; SSE arith mnemonic -> the scalar-double base word (Dd = Dn OP Dm)
+            'addss 0x1E202800 'subss 0x1E203800 'mulss 0x1E200800 'divss 0x1E201800}    ; ..and the single's (Sd = Sn OP Sm)
    (a64-fp3op op d s) (: dn (frn d) sn (frn s) (le32 (peep a64-fp3 op 0 | (sn << 16 | (dn << 5 | dn)))))     ; Dd = Dd OP Ds
    (a64-fmov  d s) (: dn (frn d) sn (frn s) (le32 (0x1E604000 | (sn << 5 | dn))))           ; fmov Dd, Ds
    (a64-fcmp  a b) (: an (frn a) bn (frn b) (le32 (0x1E602000 | (bn << 16 | an << 5))))   ; FCMP Da, Db (sets NZCV; unordered -> VS)
@@ -518,6 +519,10 @@
    (a64-fcvtzs g d) (: gn (rn g) dn (frn d) (le32 (0x9E780000 | (dn << 5 | gn))))           ; fcvtzs Xg, Dd  (double -> signed int, toward zero)
    (a64-fmovxr d g) (: dn (frn d) gn (rn g) (le32 (0x9E670000 | (gn << 5 | dn))))           ; fmov Dd, Xg   (gpr bits -> fpr)  == movqxr
    (a64-fmovrx g d) (: gn (rn g) dn (frn d) (le32 (0x9E660000 | (dn << 5 | gn))))           ; fmov Xg, Dd   (fpr -> gpr bits)  == movqrx
+   (a64-scvtfs d g) (: dn (frn d) gn (rn g) (le32 (0x9E220000 | (gn << 5 | dn))))           ; scvtf Sd, Xg   == cvtsi2ss
+   (a64-fcvtzss g d) (: gn (rn g) dn (frn d) (le32 (0x9E380000 | (dn << 5 | gn))))          ; fcvtzs Xg, Sd  == cvttss2si
+   (a64-fmovsw d g) (: dn (frn d) gn (rn g) (le32 (0x1E270000 | (gn << 5 | dn))))           ; fmov Sd, Wg    == movdxr
+   (a64-fmovws g d) (: gn (rn g) dn (frn d) (le32 (0x1E260000 | (dn << 5 | gn))))           ; fmov Wg, Sd    == movdrx
    ;; fp memory takes the same three lanes as the integer ops -- a64-mem-raw with the
    ;; V=1 base words.
    (a64-fst base disp s) (a64-mem-raw 0xFC000000 0xFD000000 8 (frn s) (rn base) disp)   ; STR/STUR Ds, [base, #disp]
@@ -707,6 +712,9 @@
           ('addsd . a64-fp3op 'addsd) ('subsd . a64-fp3op 'subsd)
           ('mulsd . a64-fp3op 'mulsd) ('divsd . a64-fp3op 'divsd)
           ('ucomisd . a64-fcmp) ('cvtsi2sd . a64-scvtf) ('cvttsd2si . a64-fcvtzs)
+          ('addss . a64-fp3op 'addss) ('subss . a64-fp3op 'subss)          ; -- the single lane --
+          ('mulss . a64-fp3op 'mulss) ('divss . a64-fp3op 'divss)
+          ('cvtsi2ss . a64-scvtfs) ('cvttss2si . a64-fcvtzss) ('movdxr . a64-fmovsw) ('movdrx . a64-fmovws)
           ('movqxr . a64-fmovxr) ('movqrx . a64-fmovrx)
           ('stsd . a64-fst) ('ldsd . a64-fld) ('stss . a64-fsts) ('ldss . a64-flds)
           ('cvtss2sd . a64-fcvt-widen) ('cvtsd2ss . a64-fcvt-narrow)

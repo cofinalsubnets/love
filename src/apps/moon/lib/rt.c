@@ -356,3 +356,16 @@ uint32_t __aeabi_d2f(uint64_t u) {
  if (e) m |= HID; else e = 1;
  if (!(m & HID)) { int32_t sh = clz64(m) - 11; m = sl64(m, sh); e -= sh; }
  return packf(s, e - 896, (uint32_t) (m >> 26) | ((m << 38) != 0)); }
+
+/* ----------------------------------------------------------- binary32 arithmetic */
+/* through binary64: 53 bits carry a sum, difference, product or quotient of two 24-bit
+ * significands closely enough that one rounding to 24 is the correctly rounded single,
+ * and an int32 converts to binary64 exactly */
+uint32_t __aeabi_fadd(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_dadd(__aeabi_f2d(a), __aeabi_f2d(b))); }
+uint32_t __aeabi_fsub(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_dsub(__aeabi_f2d(a), __aeabi_f2d(b))); }
+uint32_t __aeabi_fmul(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_dmul(__aeabi_f2d(a), __aeabi_f2d(b))); }
+uint32_t __aeabi_fdiv(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_ddiv(__aeabi_f2d(a), __aeabi_f2d(b))); }
+uint32_t __aeabi_i2f(int32_t x)   { return __aeabi_d2f(__aeabi_i2d(x)); }
+uint32_t __aeabi_ui2f(uint32_t x) { return __aeabi_d2f(__aeabi_ui2d(x)); }
+int32_t __aeabi_f2iz(uint32_t u)   { return __aeabi_d2iz(__aeabi_f2d(u)); }
+uint32_t __aeabi_f2uiz(uint32_t u) { return __aeabi_d2uiz(__aeabi_f2d(u)); }

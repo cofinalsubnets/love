@@ -1960,13 +1960,13 @@
    bad2 (catmap bwd shapes)
    (test
       ; the carrier is what it says it is, and every shape is one both halves already accept
-      (96 = #shapes)
+      (107 = #shapes)
       (atom? (filter (f9 \ (rdsp gX f9) = 'bar) shapes))
       (all emits? shapes)
       (atom? (filter (o9 \ nelem o9 heads) rostered))      ; the drift gate
-      (405 = nfwd) (810 = nbwd)                               ; a silent narrowing shows up here
-      (atom? bad1)                                            ; forward: 405 renames, all encodable
-      (atom? bad2)                                            ; backward: 810 folds, all encodable
+      (435 = nfwd) (840 = nbwd)                               ; a silent narrowing shows up here
+      (atom? bad1)                                            ; forward: 435 renames, all encodable
+      (atom? bad2)                                            ; backward: 840 folds, all encodable
       ; the two shapes the guards exist for, refused by holo itself, plus the alias emit-alu
       ; welcomes when the op commutes -- coal's decline there is conservative, not necessary
       !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))

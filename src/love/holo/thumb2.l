@@ -256,6 +256,10 @@
    (thumb-subsd d m) (t2-fp3 0xEE30 0xB40 d m)                ; vsub.F64
    (thumb-mulsd d m) (t2-fp3 0xEE20 0xB00 d m)                ; vmul.F64
    (thumb-divsd d m) (t2-fp3 0xEE80 0xB00 d m)                ; vdiv.F64
+   (thumb-addss d m) (t2-fp3 0xEE30 0xA00 d m)                ; vadd.F32 S[2d], S[2d], S[2m]
+   (thumb-subss d m) (t2-fp3 0xEE30 0xA40 d m)                ; vsub.F32
+   (thumb-mulss d m) (t2-fp3 0xEE20 0xA00 d m)                ; vmul.F32
+   (thumb-divss d m) (t2-fp3 0xEE80 0xA00 d m)                ; vdiv.F32
    (thumb-movsd d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xB40 | mn)))))
    (thumb-ucomisd a b)                                        ; VCMP.F64 Da, Db ; vmrs apsr_nzcv
       (: an (frn a) bn (frn b)                                ;   (flags land like a64 fcmp: unordered -> V)
@@ -273,6 +277,17 @@
           + t32 (0xEE1F << 16 | (gn << 12 | 0xA10))))
    (thumb-cvttsd2si g f) (thumb-cvtsdxi 0xEEBD g f)           ; toward zero, signed
    (thumb-cvttsd2ui g f) (thumb-cvtsdxi 0xEEBC g f)           ; toward zero, unsigned
+   ;; ..and the single's: the convert in place on S[2f], out through s30
+   (thumb-cvtsi2ss f g) (thumb-cvtxsd 0xAC0 f g)              ; vmov S[2f], Rg ; vcvt.F32.S32 S[2f], S[2f]
+   (thumb-cvtui2ss f g) (thumb-cvtxsd 0xA40 f g)              ; ..F32.U32
+   (thumb-cvtssxi hi g f)                                     ; vcvt.{S,U}32.F32 s30, S[2f] ; vmov Rg, s30
+      (: gn (rn g) fn (frn f)
+         (t32 (hi << 16 | (0xFAC0 | fn))
+          + t32 (0xEE1F << 16 | (gn << 12 | 0xA10))))
+   (thumb-cvttss2si g f) (thumb-cvtssxi 0xEEBD g f)
+   (thumb-cvttss2ui g f) (thumb-cvtssxi 0xEEBC g f)
+   (thumb-movdxr f g) (: fn (frn f) gn (rn g) (t32 ((0xEE00 | fn) << 16 | (gn << 12 | 0xA10))))   ; vmov S[2f], Rg
+   (thumb-movdrx g f) (: fn (frn f) gn (rn g) (t32 ((0xEE10 | fn) << 16 | (gn << 12 | 0xA10))))   ; vmov Rg, S[2f]
    (thumb-movqxr f glo)                                       ; vmov Df, Rlo, Rlo+1 (the pair in)
       (: fn (frn f) gn (rn glo)
          (t32 ((0xEC40 | gn + 1) << 16 | (gn << 12 | (0xB10 | fn)))))
@@ -341,6 +356,10 @@
           ('cvtsi2sd . thumb-cvtsi2sd) ('cvtui2sd . thumb-cvtui2sd)
           ('cvttsd2si . thumb-cvttsd2si) ('cvttsd2ui . thumb-cvttsd2ui)
           ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx)
+          ('addss . thumb-addss) ('subss . thumb-subss) ('mulss . thumb-mulss) ('divss . thumb-divss)
+          ('cvtsi2ss . thumb-cvtsi2ss) ('cvtui2ss . thumb-cvtui2ss)
+          ('cvttss2si . thumb-cvttss2si) ('cvttss2ui . thumb-cvttss2ui)
+          ('movdxr . thumb-movdxr) ('movdrx . thumb-movdrx)
           ('stsd . thumb-stsd) ('ldsd . thumb-ldsd) ('stss . thumb-stss) ('ldss . thumb-ldss)
           ('cvtss2sd . thumb-cvtss2sd) ('cvtsd2ss . thumb-cvtsd2ss)
           ('movsnxr . thumb-movsnxr) ('movsnrx . thumb-movsnrx)
