@@ -351,6 +351,14 @@ static void horn_fin(struct g *g, void *p) {
 // `close` on a horn (src/love/posix.c): the same shutting, outside GC
 void love_horn_shut(struct io *io) { horn_fin(NULL, io); }
 
+// the seat is one device, and a port opened on it takes it from every port before: an
+// older one's close, or its finalizer whenever a collection finds it dead, shuts nothing
+static void seat_take(struct g *g) {
+ for (struct fz *z = g->fz; z; z = z->next)
+  if (z->fn == horn_fin) {
+   struct horn *o = (struct horn*) z->p;
+   if (getcharm(o->kind) == horn_seat) o->kind = putcharm(horn_sink); } }
+
 // (horn rate chans) -> the port at sp[2], over the two args
 love_noinline static struct g *horn_open(struct g *g) {
  word rw = g->sp[0], cw = g->sp[1];
@@ -360,7 +368,7 @@ love_noinline static struct g *horn_open(struct g *g) {
  int kind = horn_sink, fd = -1;
  if (horn_at_seat) {
   if (k_horn_open((int) rate) < 0) return g->sp[1] = love_err(g, ENODEV), g->sp += 1, g;
-  kind = horn_seat; }
+  seat_take(g), kind = horn_seat; }
 #if !love_horn_seat
  else {
   char const *dev = getenv("HORN");
