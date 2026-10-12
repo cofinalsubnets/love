@@ -30,7 +30,7 @@ const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
              lift: 0x4010, scan: 0x4011, drew: 0x4012, kexec: 0x4013,
              point: 0x4014, paste: 0x4015, copy: 0x4016,
              fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022, host: 0x4030,
-             proc: 0x4040 };
+             proc: 0x4040, proc_stop: 0x4041 };
 const ENOENT = 2, EBADF = 9, EACCES = 13, ENOSYS = 38, ENAMETOOLONG = 36;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
@@ -416,6 +416,7 @@ const sys1 = (n, a, b, c, d, e) => {
                        win: new Uint8Array(boxb, box_at, box_win) });
       post({ proc: { pid, argv: words(b, c), env: words(d, e), box: boxb } });
       return 0n; }
+    case NR.proc_stop: procs.delete(Number(a)), post({ stop: Number(a) }); return 0n;
     // the machine asks for a file to be carried out: the path into the lift slot, the
     // request raised, and the next idle reads the file and posts it
     case NR.lift: {

@@ -420,7 +420,9 @@ lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_cask,
       lvm_yield_sw,
 // how a frontend nif ends the running task: stack down to one word (the retval), Ip at a
 // {lvm_task_exit} cell, `return Ap(lvm_task_exit, g)` -- catch reads the retval off the node.
-      lvm_task_exit;
+      lvm_task_exit,
+// a twirled task's quit where a task is a process: its worn fds close, then lvm_task_exit
+      lvm_task_quit;
 
 // the vtable every port backed by a real OS fd wears; the frontend defines it,
 // and its address is what says "there is an fd behind this one" (io_fd).

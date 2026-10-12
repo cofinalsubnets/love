@@ -1472,6 +1472,11 @@ test_kernel_wasm: host
 	   test/kernel/proc.l < /dev/null > out/wasm/proc.log 2>&1; \
 	 grep -qx "proc: ok" out/wasm/proc.log || { tail -5 out/wasm/proc.log; echo "FAIL test_kernel_wasm (proc)"; exit 1; }
 	@echo "  proc: ok -- its own cwd and environment, its stdio, and its status back"
+	@echo TEST test/kernel/spawn.l "(a process starts processes: spawn, wait, kill, the shell's pipelines)"
+	@INLE_RAM=768 $(NODE) $(S)/inle/wasm/inle.mjs --image out/wasm/love.image $(R)/out/love.wasm \
+	   test/kernel/spawn.l < /dev/null > out/wasm/spawn.log 2>&1; \
+	 grep -qx "spawn: ok" out/wasm/spawn.log || { tail -5 out/wasm/spawn.log; echo "FAIL test_kernel_wasm (spawn)"; exit 1; }
+	@echo "  spawn: ok -- a pipeline of love processes, the shell's own stages, kill and wait"
 endif
 
 # doom on the wasm seat (src/inle/doom.c's kernel doors under the module): opt-in for the same

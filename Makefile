@@ -162,7 +162,7 @@ $(ho)/o/%.o: $(S)/%.c $(love_h) $(ho)/.hostcc
 # deliberately not here -- see the -DLvVersion note on boot_cc.
 # the baked source rides src/love/cats.c; main.c bakes the dist roster a bare `love bake` reads
 $(ho)/o/love/cats.o: out/lib/baked.h
-$(ho)/o/love/main.o: out/lib/distlist.h
+$(ho)/o/love/main.o: out/lib/distlist.h out/lib/tasks.h
 $(ho)/o/love/love.o: out/lib/love_version.h
 # the carried tree's reader, and the ustar walk under it and the kernel's rootfs
 $(ho)/o/love/main.o $(ho)/o/love/lib/ustar.o $(ho)/o/love/lib/srctree.o: $(S)/love/lib/ustar.h
@@ -238,7 +238,7 @@ $$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D tco=$$(tco) -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
-$$($(2))/love/main.o: out/lib/distlist.h
+$$($(2))/love/main.o: out/lib/distlist.h out/lib/tasks.h
 $$($(2))/love/cats.o: out/lib/baked.h
 $$($(2))/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 $$($(1)_math_o): $$($(2))/moonlibc/%.o: src/apps/moon/lib/moonlibc/%.c $$(moon0_dep)
@@ -732,8 +732,9 @@ out/lib/crewlist.h: Makefile
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(kcrewfiles)' > $$tf; \
 	 $(note)
 
-# the seat text kmain.c runs on both lanes, one literal like the ports' prel and post
-out/lib/seat.h: src/inle/seat.l src/tools/lcat.l $(love0)
+# the seat text kmain.c runs on both lanes, one literal like the ports' prel and post; and
+# the tasks text under it, which main.c bakes too
+out/lib/seat.h out/lib/tasks.h: out/lib/%.h: src/inle/%.l src/tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) src/tools/lcat.l $< > $@
@@ -741,7 +742,7 @@ out/lib/seat.h: src/inle/seat.l src/tools/lcat.l $(love0)
 # every $(k_c) source, wherever in the tree it lives, lands under $(k_odir) by its path.
 # `test -s`: an empty object reaches the link as a shape error naming neither file, and
 # no object of either flavour is ever legitimately empty.
-$(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h
+$(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h out/lib/tasks.h
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@ && test -s $@
@@ -760,7 +761,7 @@ kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
 # kmain.c's own bake is the two ROSTERS -- the kore cat's order, and the crew's, which it
 # carries the order of and reads the members of off /love -- and the seat text. the egg
 # and the module set are src/love/cats.c's, and that object rides the host lane above.
-kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h
+kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h out/lib/tasks.h
 define kart
 $(1)_h = $$(love_h) $$S/inle/k.h $$S/love/lib/ustar.h $$S/love/lib/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(wildcard $$S/inle/$$($(4))/*.c))
