@@ -1333,8 +1333,8 @@
    _ (test
       (two? irIH) (two? irIP) (two? irID)
       (elem '(sx4 r5) ihf)                        ; n canonicalizes on its seat (home = arrival)...
-      (elem '(ldx r9 r6 r5 8 0) ihf)              ; ...and indexes register-resident, delivered
-                                                     ;    straight to the bin die's park (no r0 hop)
+      (elem '(ldx r0 r6 r5 8 0) ihf)              ; ...and indexes register-resident, delivered
+      !(elem '(mov r0 r9) ihf)                    ;    straight to the answer (no r0 hop)
       (0 = (splds ihf))                              ; no slot traffic at all: f4 runs bare
       (elem '(sx4 r7) ipf)                        ; f5: n rides r7, canonicalized once
       (elem '(cmp r9 r7) ipf)                     ; ...and the bound compare never opens a slot
@@ -1461,7 +1461,7 @@
       (elem '(mov r6 r9) tcf)                     ; ...and hands itself to the tail call
       (0 = #(stofs tcf 'st 'r9))              ; never a cell
       (elem '(mov r5 r0) bnf)                     ; fd: r takes its seat from g's answer...
-      (elem '(ldx r6 r9 r5 8 0) bnf)              ; ...and p[r] indexes it
+      (elem '(ldx r0 r9 r5 8 0) bnf)              ; ...and p[r] indexes it
       (0 = #(stofs bnf 'st 'r5)))
    ; -- d128 locals home as cs pairs: a loop-carried __int128 local takes (lo hi) off the cs
    ; pool -- call-safe, no wraps, no operand-pool pressure. reads/writes are mov pairs on the
@@ -2122,11 +2122,13 @@
       c8 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1)
                     (mov r7 r6) (li r7 3) (ret)))
       c7 (co '((li r5 1) (add r6 r7 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
+      c9 (co '((li r5 1) (sx4 r6) (mov r7 r6) (add r0 r7 r7) (ret)))
       (test
          (c1 = (pro + '((li r5 1) (li r7 2) (add r0 r5 r7) (ret))))   ; the def takes the copy's name
          (#c2 = #(pro + '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret))))
          (elem '(mov r7 r6) c2)                     ; the source lives on: the copy stays
-         (elem '(mov r7 r6) c3)                     ; a def reading its own dest: no rename
+         (c3 = (pro + '((li r5 1) (add r7 r6 r5) (add r0 r7 r7) (ret))))  ; a pure dest renames past its read
+         (elem '(mov r7 r6) c9)                     ; an in-place rewrite does not
          (elem '(mov r7 r6) c4)                     ; the new dest is the def's second source
          (c7 = (pro + '((li r5 1) (add r7 r7 r5) (add r0 r7 r7) (ret))))  ; ..its first: the fused form
          (elem '(mov r7 r6) c5)                     ; a label between them: not adjacent
@@ -2303,7 +2305,7 @@
 ; never meet, keeps its binding when the machine reads that register past it (an argument
 ; into a call), and never shares a non-commutative op's second source
 (: v0 (name "%v0") v1 (name "%v1") v2 (name "%v2")
-   (vpfix g fs) (vpre g fs, vrfix g fs)                 ; the build's order: assign, then substitute
+   (vpfix g fs) (vrfix g (vpre g () fs ()))             ; the build's order: assign, then substitute
    (gV9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {}
             'vrn 3 'vrt {v0 'r9 v1 'r7 v2 'r10}}
    vC (vpfix (gV9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
@@ -2316,9 +2318,23 @@
       (elem '(sub r10 r6 r0) vS)                 ; r0 is sub's second source
       (vO = '((label fn) (add r0 r6 r0) (ret))))) ; ..but add lays d = b as d += a
 
+; --- ..and the staging webs: a value built on r0 for a copy is built on the copy's register,
+; while a web read at an exit, or one nothing reads (al before a call), keeps r0
+(: v0 (name "%v0")
+   (vpfix g fs) (vrfix g (vpre g () fs ()))
+   (gX9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {} 'vrn 1 'vrt {v0 'r10}}
+   xB (vpfix (gX9 ()) [['label 'fn] ['ld 'r0 'r6 8] ['add 'r0 'r0 8] ['mov v0 'r0]
+                       ['ld 'r0 'r6 16] ['st v0 0 'r0] ['li 'r0 0] ['ret]])
+   xR (vpfix (gX9 ()) [['label 'fn] ['ld 'r0 'r6 8] ['add 'r0 'r0 8] ['ret]])
+   xL (vpfix (gX9 ()) [['label 'fn] ['li 'r0 1] ['call 'g9] ['mov 'r0 'r6] ['ret]])
+   (test
+      (xB = '((label fn) (ld r0 r6 8) (add r10 r0 8) (ld r0 r6 16) (st r10 0 r0) (li r0 0) (ret)))
+      (xR = '((label fn) (ld r0 r6 8) (add r0 r0 8) (ret)))
+      (xL = '((label fn) (li r0 1) (call g9) (mov r0 r6) (ret)))))
+
 ; --- ..and on a64, whose alu is three-address: sub's dest takes its second source too
 (: v0 (name "%v0") v2 (name "%v2")
-   (vpfix g fs) (vpre g fs, vrfix g fs)
+   (vpfix g fs) (vrfix g (vpre g () fs ()))
    (gW9 _) {'tgt 'a64 'pool0 '(r6 r5 r9 r10 r7 r8 r11 r13 r14) 'sigs {}
             'vrn 3 'vrt {v0 'r9 v2 'r10}}
    wC (vpfix (gW9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
