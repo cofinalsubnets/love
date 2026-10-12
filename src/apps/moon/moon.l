@@ -203,7 +203,7 @@
    (featdefs tgt)
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
-     + (tgt = 'x64 ? () '("__STDC_NO_COMPLEX__=1"))
+     + (elem tgt '(x64 i386 i386m16) ? () '("__STDC_NO_COMPLEX__=1"))
      + (elem tgt '(x64 a64 i386 i386m16) ? () '("__STDC_NO_VLA__=1")))
    ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) -- the
    ; <stdint>/<limits>/<float.h> family a library config reads instead of probing. one table

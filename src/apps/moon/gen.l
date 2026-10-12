@@ -483,7 +483,7 @@
    ; a memory-class return: a hidden pointer as the first gp argument, filled and answered by
    ; the callee. AAPCS32 past 4 bytes -- save, on a VFP seat, an HFA, which the s/d file carries --
    ; and SysV past 16
-   (sretm? g ty) (stru? ty && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty || refm? g ty))
+   (sretm? g ty) (stru? ty && !(cxf32? g ty) && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty || refm? g ty))
    ; the by-reference class: a composite past 16 bytes (AAPCS64: and no HFA; LP64 riscv and wasm: any) travels
    ; as the address of the caller's own copy, and returns through the buffer x8 (riscv: a0) points at
    (refm? g ty) (stru? ty && 16 < tsz g ty && (rv64? g || (a64? g && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))))
@@ -2430,7 +2430,7 @@
                             (vfs lv + spush 'r0 +
                              (asflo g rv + spop 'r1 + fstf g b 'r1 0 'f0
                               + '((li r2 0))
-                              + (b @ 'float '((st4 r1 4 r2)) '((st r1 8 r2)))))))
+                              + (b @ 'float '((st4 r1 4 r2)) (z8 g 'r1 8))))))
                      !(stru? (vty rv)) 'bad
                      (mkv (vty lv) 'r0 $
                         vfs lv + spush 'r0 + tor0 g rv + spop 'r1 +
@@ -2689,16 +2689,13 @@
                      (cxout g (cxb (vty r) @ 'float (vty r) cxdty)
                         ; each component subtracts from minus zero (see the scalar lane); r0 is free, cxout writes it last
                         (<>pa + [['ldsd 'f0 'r4 <pa] ['ldsd 'f1 'r4 (<pa + 8)]
-                                  ['li 'r0 0x8000000000000000] '(movqxr f4 r0)
-                                  '(subsd f4 f0) '(movsd f0 f4)
-                                  ['li 'r0 0x8000000000000000] '(movqxr f4 r0)
-                                  '(subsd f4 f1) '(movsd f1 f4)]))))
+                                  ] + mz0 g 'f4 + '((subsd f4 f0) (movsd f0 f4))
+                                  + mz0 g 'f4 + '((subsd f4 f1) (movsd f1 f4))))))
               (flo? (vty r))                        ; unary on a double
                (: z1 (ilp32? g ? '((li r0 0) (li r1 0) (movqxr f1 r0))           ; 0.0 (the 32-bit pair)
                                '((li r0 0) (movqxr f1 r0)))
                   ; -0.0: 0.0 - 0.0 is +0.0, so negation subtracts from minus zero
-                  n0 (ilp32? g ? ['(li r0 0) ['li 'r1 0x80000000] '(movqxr f1 r0)]
-                        [['li 'r0 0x8000000000000000] '(movqxr f1 r0)])
+                  n0 (mz0 g 'f1)
                   (op @ 'neg                 ; -d = (-0.0) - d
                          (mkv 'double 'r0 (vfs r + (n0 + '((subsd f1 f0) (movsd f0 f1)))))
                         'not                 ; !d = (d == 0.0), NaN-honest: !NaN is false -- fsete
@@ -2892,6 +2889,9 @@
                  (? (bad? cr) 'bad
                     !(stru? (vty cr)) cr
                     (sretm? g (vty cr)) cr   ; a memory return: the sret temp's address in r0 is the struct value
+                    (cxf32? g (vty cr))             ; an i386 float complex: park its r0:r1 words
+                     (nslot g 8 @ toff
+                        (mkv (vty cr) 'r0 (vfs cr + [['st4 'r4 toff 'r0] ['st4 'r4 (toff + 4) 'r1] ['lean 'r0 'r4 toff]])))
                     (sse2? g (vty cr))              ; a two-double struct result: park the xmm pair in a fresh slot, answer its address
                      (nslot g 16 @ toff
                         (mkv (vty cr) 'r0 (vfs cr +
@@ -3070,7 +3070,7 @@
                                             acc)))))
                        ; an i386 struct under -mregparm: its words in registers when that many are left (gcc
                        ; passes an aggregate as it does a long long), laid in a cell the pops read
-                       (ia32? g && stru? aty && 0 < tsz g aty && gpc + ((aup (tsz g aty) 4) // 4) <= ngp g)
+                       (ia32? g && stru? aty && !(gcplx? aty) && 0 < tsz g aty && gpc + ((aup (tsz g aty) 4) // 4) <= ngp g)
                         (: sz (tsz g aty) nw (sz // 4)
                            (kls >as (i + 1) (gpc + ((aup sz 4) // 4)) xmmc ovc
                                 ([['gn gpc ((aup sz 4) // 4)]
@@ -3078,10 +3078,11 @@
                                    + catmap (j \ [['ld 'r1 'r0 (4 * j)] ['st 'sp (4 * j) 'r1]]) ^nw
                                    + catmap (j \ [['ldu1 'r1 'r0 (4 * nw + j)] ['st1 'sp (4 * nw + j) 'r1]]) ^(sz % 4))]
                                  . acc)))
-                       ; an i386 struct: its bytes into the block at ovc, words then the odd tail; the registers left are spent
+                       ; an i386 struct: its bytes into the block at ovc, words then the odd tail; the registers left are
+                       ; spent (a complex, like a double, spends none)
                        (ia32? g && stru? aty)
                         (: sz (tsz g aty) nw (sz // 4)
-                           (kls >as (i + 1) (ngp g) xmmc (ovc + aup sz 4)
+                           (kls >as (i + 1) (gcplx? aty ? gpc (ngp g)) xmmc (ovc + aup sz 4)
                                 ([['ov ovc (aup sz 4)]
                                   (tor0 g a
                                    + catmap (j \ [['ld 'r1 'r0 (4 * j)] ['st 'sp (ovc + 4 * j) 'r1]]) ^nw
@@ -3382,10 +3383,16 @@
            + a + [(fl ? 217 221) 4 36] + lea 8)))                    ; fld dword|qword [esp]
    (st0in g ty) (ia32? g && flo? ty ? [['raw (x87raw g (ty = 'float) 1)]])
    ; an i386 long long arrives in edx:eax; gen's pair is r0:r1
-   (pairin g ty) (ia32? g && pair? g ty ? [['mov 'r1 'r2]])
-   ; the C99 complex lane (x64): a complex value is its two-member struct, so it flows as one. arithmetic parks each
+   (pairin g ty) (ia32? g && (pair? g ty || cxf32? g ty) ? [['mov 'r1 'r2]])
+   ; the C99 complex lane (x64, i386): a complex value is its two-member struct, so it flows as one. arithmetic parks each
    ; side in a double-pair temp (the other side may call), f0..f3 carry (a.re a.im b.re b.im), the answer is a fresh temp's address
    (cxb ty) (<>ty = "__cplx_float" ? 'float 'double)
+   (cxf32? g ty) (ia32? g && gcplx? ty && cxb ty = 'float)     ; i386: a float complex returns on edx:eax
+   ; eight zero bytes at base+o from a zeroed r2 (ilp32: two words)
+   (z8 g b o) (ilp32? g ? [['st4 b o 'r2] ['st4 b (o + 4) 'r2]] [['st b o 'r2]])
+   ; -0.0 into fr (ilp32 builds the pair in r0:r1)
+   (mz0 g fr) (ilp32? g ? ['(li r0 0) ['li 'r1 0x80000000] ['movqxr fr 'r0]]
+                 [['li 'r0 0x8000000000000000] ['movqxr fr 'r0]])
    ; the C99 VLA type ('varr elt dim-expr [idx]): a local carries its parse-stamped idx into g 'vslots -> (ptrslot sizeslot);
    ; a pointee (char (*p)[width]) carries just the expr, re-evaluated at each scale site
    (gvarr? ty) (two? ty && <ty = 'varr)
@@ -3404,11 +3411,11 @@
                        '(ldss f2 r0 4) '(cvtss2sd f2 f2) ['stsd 'r4 (off + 8) 'f2]])
                  ty]
               [off (tor0 g rv +
-                     ['(ld r2 r0 0) ['st 'r4 off 'r2]
-                      '(ld r2 r0 8) ['st 'r4 (off + 8) 'r2]])
+                     ['(ldsd f2 r0 0) ['stsd 'r4 off 'f2]
+                      '(ldsd f2 r0 8) ['stsd 'r4 (off + 8) 'f2]])
                 ty])
           (stru? ty) 'bad
-          [off (asflo g rv + [['stsd 'r4 off 'f0] '(li r2 0) ['st 'r4 (off + 8) 'r2]])
+          [off (asflo g rv + [['stsd 'r4 off 'f0] '(li r2 0)] + z8 g 'r4 (off + 8))
             ty]))
    ; evaluate an expr and park it -> (off forms srcty) | 'bad
    (cxmat g env x)
@@ -3438,7 +3445,7 @@
            [['stsd 'r4 ro 'f0] ['stsd 'r4 (ro + 8) 'f1]])
        (mkv rt 'r0 (fs + st + [['lean 'r0 'r4 ro]])))
    (cgcx g env op a rhs)                            ; the left already evaluated (a value rec)
-    (peep g 'tgt 'x64 != 'x64 ?
+    (!(x86? g) ?
         (nolane g ("no lane for C99 complex arithmetic" + ontgt g))
        (cxarith op @ arith
           (!(two? arith) ? 'bad
@@ -6982,7 +6989,7 @@
          (cxb fty @ b
             (asflo g rv + (fstf g b 'r4 foff 'f0
              + ('((li r2 0))
-                + (b = 'float ? [['st4 'r4 (foff + 4) 'r2]] [['st 'r4 (foff + 8) 'r2]])))))))
+                + (b = 'float ? [['st4 'r4 (foff + 4) 'r2]] (z8 g 'r4 (foff + 8)))))))))
 
    ; global init (a constant byte image): scalars little-endian, aggregates a placement flatten,
    ; a pointer an abs64 fixup -- one list item but eight bytes, so lengths go through imbytelen
@@ -8225,6 +8232,7 @@
                         + [['ld 'r1 'r4 (peep g 'sret 0)]]
                         + bcopy g 0 (tsz g rt) () + epj)
                       (t32nolane? g rt) 'bad
+                      (cxf32? g rt) (tor0 g r + '((ld4 r2 r0 4) (ld4 r0 r0 0)) + epj)   ; edx:eax
                       (sse2? g rt)                                       ; a two-double struct returns as the xmm pair
                        (tor0 g r + fldf 'double (xmmreg 0) 'r0 0 +
                         (fldf 'double (xmmreg 1) 'r0 8 + epj))
@@ -9476,13 +9484,13 @@
                         (reg ? (spill hp >ps (gpi + 1) xmmi ovi ([<p off pty] . env) (acc + [['st 'r4 src (argr g gpi)]]))
                            (spill hp >ps gpi xmmi (ovi + 1) ([<p off pty] . env) acc))))
                  ; an i386 struct in registers (-mregparm): its words into a slot of its own
-                 (ia32? g && stru? pty && 0 < tsz g pty && gpi + ((aup (tsz g pty) 4) // 4) <= ngp g)
+                 (ia32? g && stru? pty && !(gcplx? pty) && 0 < tsz g pty && gpi + ((aup (tsz g pty) 4) // 4) <= ngp g)
                   (: nw ((aup (tsz g pty) 4) // 4) off (nslot g 16)
                      (spill hp >ps (gpi + nw) xmmi ovi ([<p off pty] . env)
                             (acc + catmap (j \ [['st 'r4 (off + 4 * j) (argr g (gpi + j))]]) ^nw)))
                  ; a memory-class param binds straight to the caller's overflow block (SysV: that memory is the callee's copy)
                  (ia32? g && stru? pty)
-                  (spill hp >ps (ngp g) xmmi (ovi + aup (tsz g pty) 4) ([<p (ovb g + ovi) pty] . env) acc)
+                  (spill hp >ps (gcplx? pty ? gpi (ngp g)) xmmi (ovi + aup (tsz g pty) 4) ([<p (ovb g + ovi) pty] . env) acc)
                  (amem? g pty)
                   (pol? hp || 8 < asalign g pty ? 'bad     ; under a policy, or over-aligned: deopt/refuse
                      (spill hp >ps gpi xmmi (ovi + aslots g pty)
