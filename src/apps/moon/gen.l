@@ -358,6 +358,7 @@
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    (a8? g) (a64? g || rv64? g)                        ; the 8-gp-arg LP64 pair: a64 + riscv share the AAPCS64 shapes
+   (f32abi? g) (x64? g || a8? g)                      ; a prototyped float crosses a call as binary32 in its float register
    (gchar g) (elem (peep g 'tgt 'x64) '(a64 rv64 thumb1 thumb2 thumb2sp) ? 'cchar 'char)   ; plain char, as parse.l's pchar
    (arm? g) (a64? g || t32? g || rv64? g)             ; the lr-push / fp-base frame family (riscv rides it whole)
    ; the 32-bit x86 seats (SysV i386, cdecl; i386m16 its 16-bit face): thumb's word and pair,
@@ -3140,7 +3141,7 @@
                           wd2 (wd || one = 'sse)
                           aval (? (t32? g && one = 'sse) (tor0 g a + pld 'r0 0)           ; the t32 8B blob rides the r0:r1 pair
                                   one (tor0 g a + (salw? g aty ? (ldal 'r0 'r0 0 (tsz g aty) (tal g aty)) '((ld r0 r0 0))))
-                                  wd (asflo g a + '((movqrx r0 f0)))
+                                  wd (asflo g a + (pty = 'float && f32abi? g ? '((cvtsd2ss f0 f0))) + '((movqrx r0 f0)))
                                   (asintt g a aty))
                           ; a register arg rides a 16-byte cell (sp stays aligned while later args evaluate);
                           ; an overflow arg pushes 8, the callee reads the block packed
@@ -3320,7 +3321,7 @@
              (dir ?
                  (: ; v6-M base ABI: a double result arrives in r0:r1, a bare float as binary32 in r0 -- either lands on f0
                     fres (? (ia32? g) (st0in g ret)                       ; i386: st(0) into f0
-                            (t32f? g && ret = 'float) '((cvtss2sd f0 f0))   ; AAPCS-VFP: the result is binary32 in s0
+                            ((t32f? g || f32abi? g) && ret = 'float) '((cvtss2sd f0 f0))   ; the result is binary32 in s0
                             !(v6m? g && flo? ret) ()
                             (ret = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                             '((movqxr f0 r0)))
@@ -3331,7 +3332,7 @@
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
                    pk (pkr g)
                    fres (? (ia32? g) (st0in g (fnret (vty hr)))
-                           (t32f? g && fnret (vty hr) = 'float) '((cvtss2sd f0 f0))
+                           ((t32f? g || f32abi? g) && fnret (vty hr) = 'float) '((cvtss2sd f0 f0))
                            !(v6m? g && flo? (fnret (vty hr))) ()
                            (fnret (vty hr) = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                            '((movqxr f0 r0)))
@@ -8080,7 +8081,7 @@
                       (flo? rt)                                        ; a double return leaves f0 (xmm0);
                        (asflo g r                                      ; v6-M base ABI carries a double out on the r0:r1 pair,
                         + (? (ia32? g) [['raw (x87raw g (rt = 'float) ())]]   ; i386: out on st(0)
-                             (t32f? g && rt = 'float) '((cvtsd2ss f0 f0))   ; AAPCS-VFP: narrow into s0, d0's own low half
+                             ((t32f? g || f32abi? g) && rt = 'float) '((cvtsd2ss f0 f0))   ; narrow into s0, d0's own low half
                              !(v6m? g) ()                              ; a bare float as one word (binary32 in r0)
                              (rt = 'float) '((cvtsd2ss f0 f0) (movqrx r0 f0))
                              '((movqrx r0 f0)))
@@ -9351,6 +9352,10 @@
                   (peep (g 'fpar) <p () @ fr
                      (spill hp >ps gpi (xmmi + 1) ovi ([<p ['reg fr] pty] . env)
                             (acc + [['movapd fr (xmmreg xmmi)]])))
+                 (f32abi? g && pty = 'float && xmmi < 8)   ; a float arrives binary32: stored as is, fldf widens it
+                  (nslot g 8 @ off
+                     (spill hp >ps gpi (xmmi + 1) ovi ([<p off pty] . env)
+                            (acc + [['stss 'r4 off (xmmreg xmmi)]])))
                  (flo? pty && xmmi < 8)
                   (nslot g 8 @ off
                      (spill hp >ps gpi (xmmi + 1) ovi ([<p off pty] . env)

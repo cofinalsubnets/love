@@ -755,6 +755,26 @@ $cc_g -no-pie -o "$ho/.vaexe" "$ho/.vamain.o" "$ho/.valib.o" > /dev/null 2>&1 \
 "$ho/.vaexe"; a=$?
 [ $a -eq 42 ] || fail "cc-variadic <- gcc-caller (SysV va ABI, got $a want 42)"
 
+# ------------------------------- a float crosses a call as binary32, either way
+cat > "$ho/.flib.c" <<'EOF'
+float fhalf(float f) { return f / 2; }
+double ftwice(float f, double d) { return f * 2 + d; }
+float ften(float a, float b, float c, float d, float e, float f, float g, float h, float i, float j) { return a + b + c + d + e + f + g + h + i + 10 * j; }
+EOF
+cat > "$ho/.fmain.c" <<'EOF'
+float fhalf(float); double ftwice(float, double);
+float ften(float, float, float, float, float, float, float, float, float, float);
+int main() { return (fhalf(3.0f) == 1.5f) + 2 * (ftwice(1.5f, 0.25) == 3.25) + 4 * (ften(1, 1, 1, 1, 1, 1, 1, 1, 1, 3.5f) == 44.0f) + 35; }
+EOF
+$cc_g -O1 -c -o "$ho/.flibg.o" "$ho/.flib.c"
+moonrun -c "$ho/.fmain.c" "$ho/.fmainm.o" > /dev/null 2>&1 || fail "mooncc -c float caller"
+$cc_g -no-pie -o "$ho/.fexe" "$ho/.fmainm.o" "$ho/.flibg.o" > /dev/null 2>&1 && "$ho/.fexe"; a=$?
+[ $a -eq 42 ] || fail "float args and results, mooncc calling gcc (got $a want 42)"
+moonrun -c "$ho/.flib.c" "$ho/.flibm.o" > /dev/null 2>&1 || fail "mooncc -c float callee"
+$cc_g -O1 -c -o "$ho/.fmaing.o" "$ho/.fmain.c"
+$cc_g -no-pie -o "$ho/.fexe2" "$ho/.fmaing.o" "$ho/.flibm.o" > /dev/null 2>&1 && "$ho/.fexe2"; a=$?
+[ $a -eq 42 ] || fail "float args and results, gcc calling mooncc (got $a want 42)"
+
 # ------------------------------------------------------------- weak overriding
 cat > "$ho/.wklib.c" <<'EOF'
 __attribute__((weak)) int wpick(void){return 7;}
