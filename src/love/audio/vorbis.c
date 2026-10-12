@@ -1,4 +1,4 @@
-// src/love/lib/vorbis.c -- vorbis i audio (xiph's spec), decoded.
+// src/love/audio/vorbis.c -- vorbis i audio (xiph's spec), decoded.
 // (vorbis-size id setup)  -> the bytes a decoder's state needs for these headers (the
 //                            identification and setup packets), a charm | -why
 // (vorbis-init b id setup) -> 0, b (a cask that size) laid as the decoder | why

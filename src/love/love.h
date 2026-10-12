@@ -537,7 +537,7 @@ intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t)
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),     // ..l/bz2.c
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);  // ..l/xz.c
 uint32_t crc32(unsigned char const*, uintptr_t);                                    // ..l/hash.c
-// the carried source, a container src/love/lib/srctree.h reads
+// the carried source, a container src/love/archive/srctree.h reads
 extern unsigned char const srctree[];
 extern uintptr_t const srctree_len;
 // /love on the host (src/love/lovefs.c, over src/love/vfs.c): the process's one open tree

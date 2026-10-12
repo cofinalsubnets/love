@@ -505,8 +505,8 @@ void kfree(void *p) { ff_free(&kmem, p); }
 // the initrd is the source the artifact carries (srctree, through src/love/vfs.c): its index
 // lays the rows at boot, and each section decodes into the kernel heap at the first read of
 // a file in it.
-#include "lib/ustar.h"
-#include "lib/srctree.h"
+#include "archive/ustar.h"
+#include "archive/srctree.h"
 #include "vfs.h"
 static void *k_grab(uintptr_t n) { return kmallocw(b2w(n)); }
 // the tree's rows live under /love, read-only, so a module loads from bytes the shell

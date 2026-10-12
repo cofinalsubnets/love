@@ -165,9 +165,9 @@ $(ho)/o/love/cats.o: out/lib/baked.h
 $(ho)/o/love/main.o: out/lib/distlist.h out/lib/tasks.h
 $(ho)/o/love/love.o: out/lib/love_version.h
 # the carried tree's reader, and the ustar walk under it and the kernel's rootfs
-$(ho)/o/love/main.o $(ho)/o/love/lib/ustar.o $(ho)/o/love/lib/srctree.o: $(S)/love/lib/ustar.h
-$(ho)/o/love/main.o $(ho)/o/love/lib/srctree.o $(ho)/o/love/lovefs.o $(ho)/o/love/posix.o \
-  $(ho)/o/love/src.o: $(S)/love/lib/srctree.h
+$(ho)/o/love/main.o $(ho)/o/love/archive/ustar.o $(ho)/o/love/archive/srctree.o: $(S)/love/archive/ustar.h
+$(ho)/o/love/main.o $(ho)/o/love/archive/srctree.o $(ho)/o/love/lovefs.o $(ho)/o/love/posix.o \
+  $(ho)/o/love/src.o: $(S)/love/archive/srctree.h
 # src/love/cb.c rides the src/love/quay sources by unity include -- recompile when they move.
 $(ho)/o/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 
@@ -627,7 +627,7 @@ k_libc_c = $(c_c)
 # rather than copying it is what lets a new src/inle/<app>.c reach the kernel with no rule edit.
 k_c = $(love_c) \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
-k_h = $(love_h) $(S)/love/lib/ustar.h $(S)/love/lib/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
+k_h = $(love_h) $(S)/love/archive/ustar.h $(S)/love/archive/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
 
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
@@ -763,7 +763,7 @@ kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
 # and the module set are src/love/cats.c's, and that object rides the host lane above.
 kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h out/lib/tasks.h
 define kart
-$(1)_h = $$(love_h) $$S/inle/k.h $$S/love/lib/ustar.h $$S/love/lib/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
+$(1)_h = $$(love_h) $$S/inle/k.h $$S/love/archive/ustar.h $$S/love/archive/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(wildcard $$S/inle/$$($(4))/*.c))
 $(1)_kern_o = $$(k_free_c:$$S/%.c=$$($(2))/%.o)
 $(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \

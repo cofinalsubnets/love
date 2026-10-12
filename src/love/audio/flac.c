@@ -1,4 +1,4 @@
-// src/love/lib/flac.c
+// src/love/audio/flac.c
 // (flac-frame s o bps ch) -> (pcm . next): the frame at s[o] decoded (rfc 9639), its samples
 // interleaved little-endian in (bps + 7) / 8 bytes each, right-justified, and the offset just
 // past it | why not: 1 no frame there, 2 cut short, 3 a kind it can't read, 4 a bad stream

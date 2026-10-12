@@ -128,7 +128,7 @@
          !(inflate-feed (inflate-new 0) ""),
     puts "gzc: inflate-feed ok -- every cut of a stream answers the one-shot inflate\n"))
 
-; --- crc32, the other twin in src/love/lib/hash.c, against gz-crcwalk ---
+; --- crc32, the other twin in src/love/crypto/hash.c, against gz-crcwalk ---
 ; every length 0 through 129, because the C reads eight bytes at a time where the walk
 ; reads one: the tail is the only place the two can part and it is a different tail at
 ; every length mod eight. The published check value is asserted off the C side, so a twin
@@ -163,7 +163,7 @@
  ; ..and the empty stream is not a stream at all, at either lane
  (gzc-same "" 0))
 
-; --- deflate, the coder twin (src/love/lib/gz.c): held to the bytes, not just the round
+; --- deflate, the coder twin (src/love/compress/gz.c): held to the bytes, not just the round
 ;     trip -- same parse, same block costing, same Huffman tie-breaks, so `=` over the
 ;     streams is the law. the love lane is the oracle; a divergence is the C being
 ;     wrong until proven otherwise.

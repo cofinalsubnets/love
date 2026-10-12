@@ -1,4 +1,4 @@
-// src/love/lib/eq.c -- the player's bus: a biquad cascade and a spectrum, over s16le pcm.
+// src/love/audio/eq.c -- the player's bus: a biquad cascade and a spectrum, over s16le pcm.
 // numbers cross in Q40, int64 little-endian (love lays them with pinv): love works out the
 // coefficients, window and twiddles, so nothing here needs libm.
 // (biquads pcm ch co st) -> (out . st): pcm interleaved s16le of ch (1 or 2) channels through

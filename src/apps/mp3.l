@@ -1,4 +1,4 @@
-; src/apps/mp3.l -- mpeg audio layer iii over src/love/lib/mp3.c's nifs: the decoder door, and
+; src/apps/mp3.l -- mpeg audio layer iii over src/love/audio/mp3.c's nifs: the decoder door, and
 ; mpg123's decode: -w writes a wav, -s raw samples to stdout, -t decodes and keeps nothing.
 ; `(borrow 'mp3)`, then:
 ;

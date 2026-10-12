@@ -173,7 +173,7 @@ setup: $(SETUP)
 # the build row pays a libc build inside it. cached; `make ccbench` refreshes it on its
 # own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
-$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(S)/love/love.c $(wildcard $(S)/love/*.c $(S)/love/lib/*.c) | $(BDIR)
+$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(S)/love/love.c $(wildcard $(S)/love/*.c $(S)/love/compress/*.c $(S)/love/audio/*.c $(S)/love/picture/*.c $(S)/love/crypto/*.c $(S)/love/archive/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
 	@LOVE_CFLAGS='$(cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)
