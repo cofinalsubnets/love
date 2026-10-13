@@ -9774,11 +9774,15 @@
        _ (nw wtot (f 3))
        (sub env x) (? !(two? x) x (x @ ('var v) (assoc v env @ e (two? e ? <>e x)) (map (sub env) x)))
        (vsub nm k x) (? !(two? x) x (x = ['var nm]) ['num k] (map (vsub nm k) x))
-       ; x's value past `x = rhs`: one constant whatever x held, in x's own type
+       ; x's value past `x = rhs`: one constant whatever x held, in x's own type. an rhs that
+       ; reads x is one only through a & or * with a zero
        (val nm rhs) (: ty (tys nm)
                        (at k) (cfold w64 ['cast ty (vsub nm k rhs)])
+                       (rds? x) (? !(two? x) () (x = ['var nm]) 1 (rds? <x || rds? >x))
+                       (z? x) (cfold w64 x @ v (cint? v && v = 0))
+                       ok (!(rds? rhs) || (rhs @ ('bin op p q && elem op '(& *)) (z? p || z? q) ()))
                        a (at 0)
-                       (cint? a && a = at 1 && a = at (0 - 1) ? (cnum g ['cast ty ['num a]] @ cv (two? cv ? ['cast ty ['num <cv]])) ()))
+                       (ok && cint? a && a = at 1 && a = at (0 - 1) ? (cnum g ['cast ty ['num a]] @ cv (two? cv ? ['cast ty ['num <cv]])) ()))
        ; ..and a name every write of which gives the one K (zap_pte_range's can_reclaim_pt, false at its
        ; declaration and false where it is cleared) is K at every read
        kv {}
