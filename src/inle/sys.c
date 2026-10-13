@@ -10,10 +10,12 @@
 #include <sys/utsname.h>
 
 // the C runtime is moonlibc's core.c: errno, the streams, the mmap-arena malloc. what a
-// hosted __love_start would arm the kernel arms here -- an empty environment and the std
-// streams write-through on fds 1 and 2 at cap 0. a task's C-level printf reaches the
-// console where its own port reaches the pipe. kmain calls this after the osv.
-static char *k_env0[] = { 0 };
+// hosted __love_start would arm the kernel arms here -- the machine's environment and the
+// std streams write-through on fds 1 and 2 at cap 0. a task's C-level printf reaches the
+// console where its own port reaches the pipe. kmain calls this after the osv. the
+// environment is what every reader starts from: a closure baked against the host's getenv
+// reads it, and the seat text's envt starts as a copy (src/inle/seat.l)
+static char *k_env0[] = { "HOME=/home", "COLORTERM=truecolor", 0 };   // quay keeps 24-bit colour
 void k_seat_init(void) {
   environ = k_env0;
   stdout->fd = 1; stdout->wr = 1;
