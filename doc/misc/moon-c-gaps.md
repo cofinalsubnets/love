@@ -733,8 +733,9 @@ that straddle, so 266 sits on rv64's and wasm's unsupported lists.
   the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
   a `bswap64` over a constant folds in parse and needs no lane.
 - **a packed member at an odd address on thumb1** faults (v6-M has no unaligned `ldrh`/`ldr`):
-  a load reads the member's width whatever its alignment. every other lane takes the unaligned
-  access in hardware.
+  a load reads the member's width whatever its alignment, a packed bit-field's unit too.
+  every other lane takes the unaligned access in hardware. `-mstrict-align`'s chunks are
+  a64's word (8) and its argument cells, so they do not carry over as they stand.
 
 What **thumb2** carries, so it is not re-derived (thumb1 reaches src/apps/moon/lib/rt.c, the
 compiler runtime, for most of this — the above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
@@ -1308,8 +1309,12 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   would be a unit's edge, and the struct aligns 1, as gcc lays them; mooncc had laid them as
   unpacked (`struct { char c; unsigned x : 30; }` packed was 8 bytes aligned 4, gcc's 5 aligned
   1). A field's unit is the bytes it touches, read and written exactly by its loads and stores,
-  `++`, a local's initializer and a static image. Law test/cc/278-packed-bitfield.c, its answers
-  gcc's at -O0 to -O2, 64-bit and -m32.
+  `++`, a local's initializer and a static image. A `:0` aligns the cursor to its type (i386's
+  `long long` by 4) and leaves a union's size; under AAPCS (a64, the thumbs) it raises the
+  struct's alignment too, packed or not, where SysV leaves it. mooncc had raised it on every
+  target and never when packed (`struct { char c; int : 0; char d; }` was 8 bytes on x64,
+  gcc's 5; packed on a64, 5 where gcc's is 8). Law test/cc/278-packed-bitfield.c, its answers
+  gcc's at -O0 to -O2 on x64, i386, rv64, a64, thumb1 and thumb2.
 - **the rest of `-mstrict-align` through a packed struct**: a bit-field and a 128-bit member by
   their chunks (both had refused by name, and the bit-field's struct, aligned 4, was read whole);
   an array member indexed through its decayed pointer, and a struct member passed or returned by

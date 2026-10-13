@@ -434,6 +434,7 @@
    ; char is three types (C11 6.2.5p15): 'schar and 'uchar, and plain char -- 'char where the ABI makes it
    ; signed (x86-64, wasm's C conventions), 'cchar where unsigned (AAPCS64, AAPCS32, RISC-V). each
    ; symbol's sign is its own, so nothing past here asks the target
+   (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp))   ; a64 and the thumbs lay bit-fields by AAPCS
    (pchar ps) (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp) ? 'cchar 'char)
    (pw64 ps) !(pst32? ps)                          ; is long 8 bytes? the const folder's one question
    (psword ps) (pst32? ps ? 4 8)
@@ -819,7 +820,10 @@
                     ; they touch, its fifth element
                     pn (((& bit 7) + w + 7) >> 3)
                     _ (pk && pn > 8 && pin ps 'pkwidebf 1)
-                    (? (w = 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
+                    ; `:0`, no field: the cursor aligns to its type off a union; AAPCS has the type's
+                    ; alignment raise the struct's too, packed or not, where SysV leaves it
+                    za (paapcs? ps && mx < a ? a mx)
+                    (? (w = 0) (go >l (uni ? bit (aup bit (a * 8))) za acc)
                        (uni && pk) (: fld (name ? [name 0 ['bitfield ty 0 w ((w + 7) >> 3)]])
                                       (go >l (bit < w ? w bit) nmx (name ? (fld . acc) acc)))
                        uni (: fld (name ? [name 0 ['bitfield ty 0 w]])

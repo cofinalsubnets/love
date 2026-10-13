@@ -4,13 +4,13 @@
  * register (64-bit targets only here) and, under -mstrict-align, the members a packed struct
  * holds whole: an array indexed, a struct passed and returned, a 128-bit value */
 typedef unsigned long long u64;
-#define PORT 14250449537902786276ull
+#define LAY 892678ull
+#define PORT 6457767320774498700ull
 #define WHOLE 166614367852332558ull
 #define WIDE 11892561160730410217ull
 struct __attribute__((packed)) A2 { char c; unsigned x : 12; unsigned y : 9; };
 struct __attribute__((packed)) A4 { short s; unsigned x : 20; unsigned short y : 15; };
 struct __attribute__((packed)) A5 { char c; unsigned x : 7; int y : 25; int z; };
-struct __attribute__((packed)) A7 { char c; int : 0; char d; };
 union __attribute__((packed)) U2 { char c; unsigned x : 20; };
 struct __attribute__((packed)) S3 { char c; _Bool b : 1; unsigned short h : 9; };
 struct __attribute__((packed)) PA { char c; int a[4]; };
@@ -32,14 +32,19 @@ __attribute__((noinline)) static struct I getin(struct PO *p) { return p->in; }
 __attribute__((noinline)) static long long takein(struct I v) { return (long long)v.x * 3 + v.y; }
 __attribute__((noinline)) static int idx(struct PA *p, int i) { return p->a[i]; }
 
-static u64 portable(void) {
+static u64 layout(void) {
     u64 h = SZ(struct A2);
     h = h * 7 + SZ(struct A4);
     h = h * 7 + SZ(struct A5);
-    h = h * 7 + SZ(struct A7);
     h = h * 7 + SZ(union U2);
     h = h * 7 + SZ(struct S3);
     h = h * 7 + SZ(struct PA);
+    return h;
+}
+
+#ifndef __ARM_ARCH_6M__                   /* v6-M faults a misaligned access: the layouts alone */
+static u64 portable(void) {
+    u64 h = 0;
     struct A2 a2;
     __builtin_memset(&a2, 0, sizeof a2);
     a2.c = 1, a2.x = 0xabc, a2.y = 0x1ff;
@@ -65,16 +70,43 @@ static u64 portable(void) {
     s3.c = 1, s3.b = 1, s3.h = 300;
     s3.h++;
     h = h * 3 + sum(&s3, sizeof s3) + s3.h + s3.b;
-    struct A7 a7;
-    __builtin_memset(&a7, 0, sizeof a7);
-    a7.c = 5, a7.d = 6;
-    h = h * 3 + sum(&a7, sizeof a7);
     struct PA pa = {9, {10, -20, 30, -40}};
     for (int i = 0; i < 4; i++) pa.a[i] += i;
     h = h * 3 + sum(&pa, sizeof pa) + (u64)(long long)idx(&pa, 3);
     return h;
 }
+#else
+static u64 portable(void) { return PORT; }
+#endif
 
+
+/* a `:0` aligns the cursor to its type; under AAPCS its alignment raises the struct's too,
+ * packed or not, where SysV leaves it. each row: size, alignment, d's offset */
+struct __attribute__((packed)) Z1 { char c; int : 0; char d; };
+struct Z2 { char c; int : 0; char d; };
+struct __attribute__((packed)) Z3 { char c; short : 0; char d; };
+struct __attribute__((packed)) Z4 { char c; int x : 3; int : 0; char d; };
+struct Z5 { char c; long long : 0; char d; };
+struct __attribute__((packed)) Z6 { int : 0; char d; };
+union __attribute__((packed)) Z7 { char d; int : 0; };
+#define ZR(T) (sizeof(T) * 100 + _Alignof(T) * 10 + __builtin_offsetof(T, d))
+#if defined(__arm__) || defined(__aarch64__)
+static const unsigned zwant[] = {844, 844, 422, 844, 1688, 440, 440};
+#elif defined(__i386__)
+static const unsigned zwant[] = {514, 514, 312, 514, 514, 110, 110};
+#else
+static const unsigned zwant[] = {514, 514, 312, 514, 918, 110, 110};
+#endif
+static int zerow(void) {
+    unsigned got[] = {ZR(struct Z1), ZR(struct Z2), ZR(struct Z3), ZR(struct Z4), ZR(struct Z5),
+                      ZR(struct Z6), ZR(union Z7)};
+    struct Z1 z;
+    __builtin_memset(&z, 0, sizeof z);
+    z.c = 5, z.d = 6;
+    int bad = ((unsigned char *)&z)[4] != 6;
+    for (int i = 0; i < 7; i++) bad |= got[i] != zwant[i];
+    return bad;
+}
 
 #ifndef __arm__                           /* thumb copies no packed struct member */
 static u64 whole(void) {
@@ -130,4 +162,4 @@ static int i128(void) {
 static int i128(void) { return 0; }
 #endif
 
-int main(void) { return portable() == PORT && whole() == WHOLE && wide() == WIDE && i128() == 0 ? 0 : 1; }
+int main(void) { return layout() == LAY && portable() == PORT && whole() == WHOLE && wide() == WIDE && i128() == 0 && zerow() == 0 ? 0 : 1; }
