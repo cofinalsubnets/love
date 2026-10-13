@@ -29,7 +29,7 @@
       phnum (rle16 pie 56) shnum (rle16 pie 60) shstrx (rle16 pie 62)
       (pho i) (phoff + i * 56)
       ; each load: (vaddr fileoff filesz memsz flags)
-      loads ((: (go i acc)
+      pls ((: (go i acc)
                  (? (phnum <= i) (rev acc)
                     (go (i + 1)
                         (? (rle32 pie (pho i) = 1)
@@ -37,6 +37,12 @@
                              (rle64 pie (pho i + 32)) (rle64 pie (pho i + 40))
                              (rle32 pie (pho i + 4))] . acc)
                            acc)))) 0 ())
+      ; ..and past the last, the first writable one's bytes again as the pie has them, base 0
+      ; and unpatched: what a process laid from this image starts its data from (x64/proc.c)
+      dl ((: (go l) (? (atom? l) (scare 'kproject-data) (0 < <l 4 & 2) <l (go >l))) pls)
+      pend ((: (go l m) (? (atom? l) m (go >l (: e (<l 0 + <l 3) (m < e ? e m))))) pls 0)
+      dcopy [(ld-align 4096 pend) (dl 1) (dl 2) (dl 2) 4]
+      loads (pls + [dcopy])
       (sho i) (shoff + i * 64)
       shstro (rle64 pie (sho shstrx + 24))
       (sname i) (ld-cstr pie (shstro + rle32 pie (sho i)))
@@ -90,18 +96,21 @@
       ; riscv keeps its own reloc numbers, so the machine says which namespace ldpatch reads
       cx [glo b0 b0 b0 b0 () (mach = 243) () (backends tgt) (ld-extents objs)]
 
-      ; --- the patch list: every love_rela site slides by bias, and k_image_top
-      ; takes the image's far edge, physical -- ascending, for the one-pass surgery below
-      ; (the table already lays ascending; the walk reverses it back)
+      ; --- the patch list: every love_rela site slides by bias, k_image_top takes the
+      ; image's far edge, physical, and k_pie_base and k_pie_data where the pie's base and
+      ; the data's copy sit -- ascending, for the one-pass surgery below (the table already
+      ; lays ascending; the walk reverses it back)
       (ins s l) (? (atom? l) [s]
                    (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
       sites (ins [(pie-sym "k_image_top") (top - xw)]
+            (ins [(pie-sym "k_pie_base") bias]
+            (ins [(pie-sym "k_pie_data") (bias + dcopy 0)]
                  (rev ((: (go k acc)
                            (? (relz <= k) acc
                               (: v (rle64 pie (relo + k))
                                  (go (k + 8) ([v (bias + rle64 pie (va2off v))] . acc)))))
-                      0 ())))
+                      0 ())))))
       ; one load's bytes with its patches spliced in
       (spliced go0 va fsz ss)
        ((: (go c l acc)
