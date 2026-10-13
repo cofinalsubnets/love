@@ -9,17 +9,19 @@
 ; bytes -- which is how the `love kernel` verb projects the running binary
 ; over a boot.o it laid itself (src/apps/source.l).
 
-(: (kparams arch)                       ; target, kernel base, entry symbol
-    (arch @ "x64"  ['x64   0x200000   "kmain"]
-            "a64"  ['a64 0x40200000 "a64boot"]
+(: (kparams arch)                       ; target, kernel base, entry symbol, image window
+    ; x64's image runs in the upper half, at its physical address past the window, so the
+    ; whole lower half is a process's; boot stays physical, where the loader enters it
+    (arch @ "x64"  ['x64   0x200000   "kmain" 0xffffff8000000000]
+            "a64"  ['a64 0x40200000 "a64boot" 0]
             ; entered at the lowest load, not the entry symbol -- kproject lays boot first
-            "rv64" ['rv64  0x80200000 "rvboot"]
+            "rv64" ['rv64  0x80200000 "rvboot" 0]
             (scare 'kproject-arch arch))
    (kread p) (uread p @ r (two? r ? [p <>r] (scare 'kproject-open p)))
 
    (kproject pie bootb out arch)
    (: kp (kparams arch)
-      tgt (kp 0) kbase (kp 1) entnm (kp 2)
+      tgt (kp 0) kbase (kp 1) entnm (kp 2) xw (kp 3)
       mach (peep elf-machines tgt 0)
 
       ; --- the pie, parsed: program headers, the named sections, the symtab --
@@ -68,7 +70,7 @@
       o1 (ldlayn 'rodata (ldlay1 'rodata t1 objs) objs)
       d1 (ldlayn 'data (ldlay1 'data o1 objs) objs)
       bootend (ldlayn 'bss (ldlay1 'bss d1 objs) objs)
-      bias (ld-align 4096 bootend)
+      bias (xw + ld-align 4096 bootend)
       top ((: (go l m) (? (atom? l) m
                           (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
            loads 0)
@@ -89,12 +91,12 @@
       cx [glo b0 b0 b0 b0 () (mach = 243) () (backends tgt) (ld-extents objs)]
 
       ; --- the patch list: every love_rela site slides by bias, and k_image_top
-      ; takes the image's far edge -- ascending, for the one-pass surgery below
+      ; takes the image's far edge, physical -- ascending, for the one-pass surgery below
       ; (the table already lays ascending; the walk reverses it back)
       (ins s l) (? (atom? l) [s]
                    (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
-      sites (ins [(pie-sym "k_image_top") top]
+      sites (ins [(pie-sym "k_image_top") (top - xw)]
                  (rev ((: (go k acc)
                            (? (relz <= k) acc
                               (: v (rle64 pie (relo + k))
@@ -128,7 +130,7 @@
                 loads (fo d1) ()))
       phs (: bs [1 7 (fo b0) b0 b0 (d1 - b0) (bootend - b0) 4096]
              ps (map (g \ [1 (g 4) (g 5) (bias + g 0)
-                            (bias + g 0) (g 2) (g 3) 4096])
+                            (bias + g 0 - xw) (g 2) (g 3) 4096])
                      lds)
              (0 < nsz ? ([4 4 hdrsz kbase kbase nsz nsz 4] . bs . ps)
                         (bs . ps)))

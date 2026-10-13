@@ -733,8 +733,9 @@ that straddle, so 266 sits on rv64's and wasm's unsupported lists.
   the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
   a `bswap64` over a constant folds in parse and needs no lane.
 - **a packed member at an odd address on thumb1** faults (v6-M has no unaligned `ldrh`/`ldr`):
-  a load reads the member's width whatever its alignment. every other lane takes the unaligned
-  access in hardware.
+  a load reads the member's width whatever its alignment, a packed bit-field's unit too.
+  every other lane takes the unaligned access in hardware. `-mstrict-align`'s chunks are
+  a64's word (8) and its argument cells, so they do not carry over as they stand.
 
 What **thumb2** carries, so it is not re-derived (thumb1 reaches src/apps/moon/lib/rt.c, the
 compiler runtime, for most of this — the above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
@@ -1304,15 +1305,45 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   refusal is llvm-mc's; golden gas.a64.mla, law test/cc/277-asm-mla.c. One departure, kept: a
   written-back `ldp` of one register twice (`ldp fp, fp, [sp], #16`) refuses: the Arm ARM calls it
   unpredictable, and llvm-mc, which lays it, refuses the offset form and `ldpsw`.
+- **packed bit-fields, on every target**: the bits run on from the last member, crossing what
+  would be a unit's edge, and the struct aligns 1, as gcc lays them; mooncc had laid them as
+  unpacked (`struct { char c; unsigned x : 30; }` packed was 8 bytes aligned 4, gcc's 5 aligned
+  1). A field's unit is the bytes it touches, read and written exactly by its loads and stores,
+  `++`, a local's initializer and a static image. A `:0` aligns the cursor to its type (i386's
+  `long long` by 4) and leaves a union's size; under AAPCS (a64, the thumbs) it raises the
+  struct's alignment too, packed or not, where SysV leaves it. mooncc had raised it on every
+  target and never when packed (`struct { char c; int : 0; char d; }` was 8 bytes on x64,
+  gcc's 5; packed on a64, 5 where gcc's is 8). Law test/cc/279-packed-bitfield.c, its answers
+  gcc's at -O0 to -O2 on x64, i386, rv64, a64, thumb1 and thumb2.
+- **the rest of `-mstrict-align` through a packed struct**: a bit-field and a 128-bit member by
+  their chunks (both had refused by name, and the bit-field's struct, aligned 4, was read whole);
+  an array member indexed through its decayed pointer, and a struct member passed or returned by
+  value, by the alignment the member carries, not its type's (both had been read at full width).
+  Held to clang's widths in the landing law (eight more pk_ fns in test/cc/protect/units.c), and
+  279 runs under the flag on an a64 host.
+- **`__int128` as an argument and a parameter** (x64, a64), and a64's wide answer: lo then hi
+  in two gp registers -- AAPCS64 the next even pair, else a 16-aligned stack pair that closes the
+  registers; SysV any two. a64 answered in x0:x2, where AAPCS64 says x0:x1, so a wide call across
+  compilers read the wrong half both ways. Both had refused by name (`a wide value is not carried
+  as an argument`, `.. a parameter`), which stopped `arm64_cpu_to_le128` and slub's
+  `__update_freelist_fast`. Law test/cc/abi128: mooncc's half linked with clang's (a64) and
+  gcc's (x64), calls each way. SysV's stack pair still refuses by name.
+- **the exclusive pairs and `casp`** (atomic_ll_sc.h's and atomic_lse.h's `cmpxchg128`):
+  `ldxp`/`ldaxp`, `stxp`/`stlxp`, `casp`/`caspa`/`caspl`/`caspal`, X or W. Refused as llvm-mc
+  refuses: mixed widths, sp as data, zr as a base, an offset, a status that is a data register
+  or a base other than sp, a casp pair that is not even/odd. holo had refused every one
+  (`gas-a64-op`). And `x31`/`w31` read as zr, as llvm-mc reads them: holo had laid `w31` as a
+  register with no number, a wrong word in silence. Of 400 random lines over these, 385 lay
+  llvm-mc's words and refusals; the other 15 are casp's `[xn, #0]`, which the Arm ARM spells
+  and llvm-mc refuses, laid as `[xn]`. Golden gas.a64.xp.
 
 Still open on this side (g-21's probes):
 
-- under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
-  reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
-  and a by-value struct reached as a packed member rides its type's alignment, not the member's.
+- a packed bit-field whose bytes outrun a register (five on a 32-bit target, nine anywhere)
+  refuses by name; gcc carries both. On thumb, a struct member of a packed struct is not copied
+  at all (`struct I v = p->in`, `f(p->in)`), refused with no cause named.
 - where the re-run stops now, on this side: the four units a register variable named `r0`
-  stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`. The exclusive pairs
-  (`ldxp`/`stxp` and kin) have no lane yet.
+  stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of

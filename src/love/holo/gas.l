@@ -385,9 +385,11 @@
    (ga-reg s) (name s @ k
                  (? (nom? (peep a64-names k ())) ['reg (a64-names k) 8]
                     (elem k '(fp lr)) ['reg k 8]               ; llvm-mc's names for x29 and x30
-                    (k = 'wzr) ['reg 'zr 4]
+                    (k = 'wzr || k = 'w31) ['reg 'zr 4]           ; llvm-mc reads x31 and w31 as zr
+                    (k = 'x31) ['reg 'zr 8]
                     (k = 'wsp) ['reg 'sp 4]
-                    (#s > 1 && s 0 = 119 && digit? (s 1)) ['reg (peep a64-names (name ("x" + snip s 1 #s)) ()) 4]
+                    (#s > 1 && s 0 = 119 && digit? (s 1))
+                     (peep a64-names (name ("x" + snip s 1 #s)) () @ r (nom? r ? ['reg r 4] ()))
                     ()))
    ga-exts {'uxtw 2 'lsl 3 'sxtw 6 'sxtx 7}
    ;; a shift (0-3) or an extend (8 + option) by name; a bare extend is its own `#0`
@@ -615,6 +617,29 @@
           (charm? b && <>s9 = 4 ? (ga-raw (b | (k = 3 ? (ga-hw <s9 << 16) 0) | ga-hw x << 5 | ga-hw <rw))
              (scare 'gas-a64-operand os))
           (scare 'gas-a64-operand os)))
+   ;; the exclusive pairs and casp, [X W] by the data's width: ldxp t, t2, [n]; stxp s, t, t2, [n],
+   ;; its w status never a data register nor a base but sp; casp s, s+1, t, t+1, [n], each an
+   ;; even/odd pair. data never sp, a base never zr, the address bare
+   ga-xp {'ldxp [0xC87F0000 0x887F0000] 'ldaxp [0xC87F8000 0x887F8000]}
+   ga-sxp {'stxp [0xC8200000 0x88200000] 'stlxp [0xC8208000 0x88208000]}
+   ga-casp {'casp [0x48207C00 0x08207C00] 'caspa [0x48607C00 0x08607C00]
+            'caspl [0x4820FC00 0x0820FC00] 'caspal [0x4860FC00 0x0860FC00]}
+   (ga-xpd m os i w) ((os i) @ ('reg r w2) (w2 = w && r != 'sp ? (ga-hw r) (scare 'gas-a64-operand [m os]))
+                               _ (scare 'gas-a64-operand [m os]))
+   (ga-xpb m os) ((os (#os - 1)) @ ('mem x 0) (x != 'zr ? (ga-hw x) (scare 'gas-a64-operand [m os]))
+                                   _ (scare 'gas-a64-operand [m os]))
+   (ga-xp-ins m row os)
+    (: k #os w (<>(ga-rw (os (k - 3)))) b (w = 8 ? <row <>row)
+       t (ga-xpd m os (k - 3) w) t2 (ga-xpd m os (k - 2) w) n (ga-xpb m os)
+       (? (k = 3) (ga-raw (b | t2 << 10 | n << 5 | t))
+          (: st (ga-xpd m os 0 4)
+             (? (st = t || st = t2 || (st = n && (os 3) != ['mem 'sp 0])) (scare 'gas-a64-unpredictable [m os])
+                (ga-raw (b | st << 16 | t2 << 10 | n << 5 | t))))))
+   (ga-casp-ins m row os)
+    (: w (<>(ga-rw <os)) b (w = 8 ? <row <>row)
+       r (map (i \ ga-xpd m os i w) ^4) n (ga-xpb m os)
+       (? ((r 0) & 1 || (r 1) != (r 0) + 1 || (r 2) & 1 || (r 3) != (r 2) + 1) (scare 'gas-a64-operand [m os])
+          (ga-raw (b | (r 0) << 16 | n << 5 | (r 2)))))
    ;; the memory copy and set ops (mops) by spelling: cpy|cpyf|set|setg, a stage p|m|e, then
    ;; the variant -> (kind bit26 stage op2); a copy's [d]!, [s]!, n!, a set's [d]!, n!, v,
    ;; every one an X register and no two the same
@@ -1095,6 +1120,9 @@
           (two? (peep ga-bfa m ())) (ga-bfa-ins m os)
           (two? (ga-mops m)) (ga-mops-ins m (ga-mops m) os)
           (two? (peep ga-pair m ())) (ga-pair-ins m os)
+          (two? (peep ga-xp m ())) (k = 3 ? (ga-xp-ins m (ga-xp m) os) (scare 'gas-a64-operand [m os]))
+          (two? (peep ga-sxp m ())) (k = 4 ? (ga-xp-ins m (ga-sxp m) os) (scare 'gas-a64-operand [m os]))
+          (two? (peep ga-casp m ())) (k = 5 ? (ga-casp-ins m (ga-casp m) os) (scare 'gas-a64-operand [m os]))
           (ga-lse-ins m (ga-lse m) os)))
    ;; a register a #define named reaches here apart from its arrangement (`v5` `.4s`): one symbol again
    (ga-glue ts) (ts @ (('sym a) . ('sym b) . r) (b 0 = 46 ? (ga-glue (['sym (a + b)] . r)) (['sym a] . ga-glue (['sym b] . r)))

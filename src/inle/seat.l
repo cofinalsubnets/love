@@ -88,13 +88,13 @@
                                (!(47 = peep a0 0 0) && two? (stat ("/love/" + a0)))
                                  (k-progf ("/love/" + a0) as h)
                                ()))))
-   ; a wasm module is a program of its own, run as a process (k-procrun, below) by a path, since
-   ; the kernel hands a bare word to love
-   (k-wasm? t) (string? t && 3 < #t && snip t 0 4 = (string 0) + "asm")
+   ; a wasm module or an ELF is a program of its own, run as a process (k-procrun, below) by a
+   ; path, since the kernel hands a bare word to love
+   (k-code? t) (string? t && 3 < #t && (snip t 0 4 @ m (m = (string 0) + "asm" || m = (string 127) + "ELF")))
    (k-progf a0 as h) (: t (k-slurp a0)
                         g (0 < h ? (k-bangv t a0 as))
                         (? (two? g) (k-proga g (h - 1))
-                           (k-wasm? t) ((v \ k-procrun ((elem 47 a0 ? a0 ("./" + a0)) . v)) . as)
+                           (k-code? t) ((v \ k-procrun ((elem 47 a0 ? a0 ("./" + a0)) . v)) . as)
                            (string? t) (k-run-text t . as)
                            ()))
    (k-slot w n) (task-slot w n)
@@ -158,13 +158,15 @@
 
 ; processes: programs in memory of their own, where this machine can run one (src/inle/sys.c).
 ; the task that starts one stands in for it -- wait and the job table see that task -- and
-; answers the process's status once the pipe the kernel ends with it reads to its end
+; answers the process's status once the pipe the kernel ends with it reads to its end. where
+; the kernel runs them itself (kpump), the tasks waiting on them hand out their turns
 (: k-nul (string 0)
    (k-words l) (foldl (\ s w (s + (w + k-nul))) "" l)
+   (k-pump q) (cue? q ? () (kpump 0 @ 0 () 2 (rest 0, k-pump q) _ (rest 10, k-pump q)))
    (k-procrun argv)
      (kproc (k-words argv) (k-words (environ 0)) @ r
         (!(two? r) ? (say err (<argv + ": " + show r), put err 10, 126)
-           (: q (fdopen >r) _ (slurp q) _ (close q)
+           (: q (fdopen >r) _ (k-pump q) _ (slurp q) _ (close q)
               (kreap <r @ s (charm? s ? s 1)))))
    ; `proc PROG ARGS ..`: love's PROG as a process, woken from the machine's own image
    (proc-main args) (k-procrun args)

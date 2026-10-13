@@ -708,6 +708,13 @@
         [(holo-hex 'a64 (gas-text 'a64 "madd x0, x1, x2, x3\n umaddl x0, w1, w2, x3\n smnegl x0, w1, w2\n smulh x0, x1, x2\n orr x0, xzr, #0xff\n ldr xzr, [x0]\n strb wzr, [x1, #1]\n adds x8, x30, #4096\n"))
          (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
               ["str x0, [x0, #-8]!" "ldr x0, [x0], #8" "ldr sp, [x1]" "smull x0, x1, w2" "sub x27, x4, #21845"])])
+   ;; the exclusive pairs and casp (atomic_ll_sc.h's and atomic_lse.h's cmpxchg128), and w31 as
+   ;; llvm-mc reads it; a status that is a data register or the base refuses, as casp's odd pair
+   _ (chk-eq "gas.a64.xp" '("40047fc840847f88400423c8eaaf29c8827c2048feff6608e0073fc8ff03002a"
+                           (gas-a64-unpredictable gas-a64-unpredictable gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-register))
+        [(holo-hex 'a64 (gas-text 'a64 "ldxp x0, x1, [x2]\n ldaxp w0, w1, [x2, #0]\n stxp w3, x0, x1, [x2]\n stlxp w9, x10, x11, [sp]\n casp x0, x1, x2, x3, [x4]\n caspal w6, w7, w30, wzr, [sp]\n stxp wzr, x0, x1, [sp]\n mov w31, w0\n"))
+         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+              ["stxp w0, x0, x1, [x2]" "stxp w2, x0, x1, [x2]" "ldxp x0, w1, [x2]" "ldxp x0, x1, [xzr]" "casp x1, x2, x3, x4, [x5]" "mov w32, w0"])])
    ;; a register variable's or clobber's name takes gcc's r0..r30 for x0..x30 (arm-smccc.h's
    ;; asm("r0")); asm text keeps llvm-mc's names, where r0 refuses
    _ (chk-eq "gas.a64.ccnames" '((r0 r28 fp lr () r0) gas-a64-register)
