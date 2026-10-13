@@ -11,7 +11,7 @@
 // the argv marshal lives beside the spawns that consume it; main.c wants it, not static.
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
-#include "lib/srctree.h"   // the carried tree, under /love (lovefs.c)
+#include "archive/srctree.h"   // the carried tree, under /love (lovefs.c)
 #include "vfs.h"
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
 #include <stdio.h>      // fflush, rename
@@ -227,7 +227,6 @@ void host_spawn_guard(struct g *g, int on) {
  // at g->hp, so the window above hp stays mapped and is all execvp can still read.
  guard1(g, g->hp, adv);
  guard1(g->major_base, g->major_base + g->major_len, adv);
- if (g->major_spare) guard1(g->major_spare, g->major_spare + g->major_len, adv);
 #else
 #endif
 }

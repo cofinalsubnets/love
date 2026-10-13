@@ -281,7 +281,22 @@
       ("cvtss2sd"    "f30f5ac1"               ((cvtss2sd f0 f1)))       ; cvtss2sd xmm0,xmm1 (single->double)
       ("cvtsd2ss"    "f20f5ac8"               ((cvtsd2ss f1 f0)))       ; cvtsd2ss xmm1,xmm0 (double->single)
       ("stss"        "f30f114208"             ((stss r2 8 f0)))         ; movss [rdx+8],xmm0
-      ("ldss"        "f30f100b"               ((ldss f1 r3 0))))        ; movss xmm1,[rbx]
+      ("ldss"        "f30f100b"               ((ldss f1 r3 0)))         ; movss xmm1,[rbx]
+      ;; the single lane's arithmetic (native float): F3 for F2, ucomiss without the 66. gas-verified
+      ("addss"       "f30f58c1"               ((addss f0 f1)))          ; addss xmm0,xmm1
+      ("mulss"       "f30f59c1"               ((mulss f0 f1)))
+      ("subss"       "f30f5cc8"               ((subss f1 f0)))
+      ("divss"       "f30f5ec8"               ((divss f1 f0)))
+      ("minss"       "f30f5dc1"               ((minss f0 f1)))
+      ("maxss"       "f30f5fc1"               ((maxss f0 f1)))
+      ("addss.rex"   "f3440f58c1"             ((addss f8 f1)))          ; addss xmm8,xmm1
+      ("ucomiss"     "0f2ec8"                 ((ucomiss f1 f0)))
+      ("cvtsi2ss"    "f3480f2ac0"             ((cvtsi2ss f0 r0)))       ; cvtsi2ss xmm0,rax
+      ("cvttss2si"   "f3480f2cc0"             ((cvttss2si r0 f0)))      ; cvttss2si rax,xmm0
+      ("movdxr"      "660f6ec0"               ((movdxr f0 r0)))         ; movd xmm0,eax
+      ("movdrx"      "660f7ec0"               ((movdrx r0 f0)))         ; movd eax,xmm0
+      ("movdxr.rex"  "66450f6eca"             ((movdxr f9 r9)))         ; movd xmm9,r10d
+      ("movdrx.rex"  "66450f7eca"             ((movdrx r9 f9))))        ; movd r10d,xmm9
    _ (foldl (_ \ t \ chk (t 0) (t 1) (t 2)) 0 tests)
 
    ;; -- label addresses are exposed on the assemble result, for a loader/linker to read. --
@@ -921,6 +936,14 @@
       ("a64.cvtsd2ss" "0140621e"          ((cvtsd2ss f1 f0)))           ; fcvt  s1, d0  (double -> single)
       ("a64.stss"     "400800bd"          ((stss r2 8 f0)))             ; str   s0, [x2, #8]
       ("a64.ldss"     "610040bd"          ((ldss f1 r3 0)))             ; ldr   s1, [x3]
+      ("a64.addss"    "0028211e"          ((addss f0 f1)))              ; fadd  s0, s0, s1 (the single lane, llvm-mc)
+      ("a64.subss"    "0038211e"          ((subss f0 f1)))
+      ("a64.mulss"    "0008211e"          ((mulss f0 f1)))
+      ("a64.divss"    "0018211e"          ((divss f0 f1)))
+      ("a64.cvtsi2ss" "8000229e"          ((cvtsi2ss f0 r4)))           ; scvtf s0, x4
+      ("a64.cvttss2si" "0400389e"         ((cvttss2si r4 f0)))          ; fcvtzs x4, s0
+      ("a64.movdxr"   "8000271e"          ((movdxr f0 r4)))             ; fmov s0, w4
+      ("a64.movdrx"   "0400261e"          ((movdrx r4 f0)))             ; fmov w4, s0
       ("a64.xorpd"    "841c242e"          ((xorpd f4 f4)))              ; eor   v4.8b, v4.8b, v4.8b  (zero a double)
       ;; the sized family, checked vs llvm-objdump
       ("a64.ld1"      "80809f38"          ((ld1 r0 r4 -8)))             ; ldursb x0, [x4, #-8]
@@ -1143,6 +1166,14 @@
       ("t2.ldsd.n"  "14ed041b"          ((ldsd f1 r4 -16)))           ; vldr d1, [r4, #-16]
       ("t2.stsd"    "80ed002b"          ((stsd r0 0 f2)))             ; vstr d2, [r0]
       ("t2.ldss"    "94ed011a"          ((ldss f1 r4 4)))             ; vldr s2, [r4, #4]
+      ("t2.addss"   "30ee010a"          ((addss f0 f1)))              ; vadd.f32 s0, s0, s2 (llvm-mc)
+      ("t2.subss"   "30ee410a"          ((subss f0 f1)))
+      ("t2.mulss"   "20ee010a"          ((mulss f0 f1)))
+      ("t2.divss"   "80ee010a"          ((divss f0 f1)))
+      ("t2.cvtsi2ss" "00ee103ab8eec00a" ((cvtsi2ss f0 r3)))          ; vmov s0, r3 ; vcvt.f32.s32 s0, s0
+      ("t2.cvttss2si" "bdeec0fa1fee103a" ((cvttss2si r3 f0)))        ; vcvt.s32.f32 s30, s0 ; vmov r3, s30
+      ("t2.movdxr"  "00ee103a"          ((movdxr f0 r3)))             ; vmov s0, r3
+      ("t2.movdrx"  "10ee103a"          ((movdrx r3 f0)))             ; vmov r3, s0
       ("t2.stss"    "04ed021a"          ((stss r4 -8 f1)))            ; vstr s2, [r4, #-8]
       ("t2.cvtss2sd" "b7eec11a"         ((cvtss2sd f1 f1)))           ; vcvt.f64.f32 d1, s2
       ("t2.cvtsd2ss" "b7eec11b"         ((cvtsd2ss f1 f1)))           ; vcvt.f32.f64 s2, d1
@@ -1418,6 +1449,12 @@
       ("rv.divsd"    "d3f5a51a"          ((divsd f1 f0)))              ; fdiv.d fa1, fa1, fa0
       ("rv.f.temps"  "53707002"          ((addsd f8 f15)))             ; fadd.d ft0, ft0, ft7 (the temp file)
       ("rv.cvtsi2sd" "537527d2"          ((cvtsi2sd f0 r4)))           ; fcvt.d.l fa0, a4
+      ("rv.addss"    "5375b500"          ((addss f0 f1)))              ; fadd.s fa0, fa0, fa1 (llvm-mc)
+      ("rv.mulss"    "5375b510"          ((mulss f0 f1)))
+      ("rv.cvtsi2ss" "537527d0"          ((cvtsi2ss f0 r4)))           ; fcvt.s.l fa0, a4
+      ("rv.cvttss2si" "531725c0"         ((cvttss2si r4 f0)))          ; fcvt.l.s a4, fa0, rtz
+      ("rv.movdxr"   "530507f0"          ((movdxr f0 r4)))             ; fmv.w.x fa0, a4
+      ("rv.movdrx"   "530705e0"          ((movdrx r4 f0)))             ; fmv.x.w a4, fa0
       ("rv.cvttsd2si" "531725c2"         ((cvttsd2si r4 f0)))          ; fcvt.l.d a4, fa0, rtz (toward zero)
       ("rv.movqxr"   "d30507f2"          ((movqxr f1 r4)))             ; fmv.d.x fa1, a4
       ("rv.movqrx"   "530705e2"          ((movqrx r4 f0)))             ; fmv.x.d a4, fa0
@@ -1566,6 +1603,16 @@
       ("i3.br" "0f840000000090" ((br eq L) (label L) (nop)))   ; {disp32} je L
       ("i3.mulo" "0fafc10f800000000090" ((mulo r0 r0 r1 r2 L) (label L) (nop))) ; imul %ecx,%eax ; {disp32} jo L
       ("i3.lar" "e8000000005b81c30700000090" ((lar r3 L) (label L) (nop))) ; call 1f ; 1: pop %ebx ; add $(L-1b),%ebx
+      ("i3.addss" "f30f58c1" ((addss f0 f1)))                 ; addss %xmm1,%xmm0
+      ("i3.ucomiss" "0f2ec8" ((ucomiss f1 f0)))                ; ucomiss %xmm0,%xmm1
+      ("i3.cvtsi2ss" "f30f2ac0" ((cvtsi2ss f0 r0)))            ; cvtsi2ss %eax,%xmm0
+      ("i3.cvttss2si" "f30f2cc0" ((cvttss2si r0 f0)))          ; cvttss2si %xmm0,%eax
+      ("i3.movdxr" "660f6ec0" ((movdxr f0 r0)))                ; movd %eax,%xmm0
+      ("i3.movdrx" "660f7ec0" ((movdrx r0 f0)))                ; movd %xmm0,%eax
+      ("i3.cvtui2ss" "8d6424f8890424c744240400000000df2c24d91c24f30f1004248d642408"
+        ((cvtui2ss f0 r0)))                                     ; fild qword, fstp dword, movss: one rounding
+      ("i3.cvttss2ui" "8d6424f8f30f110424d90424dd0c248b04248d642408"
+        ((cvttss2ui r0 f0)))                                    ; movss out, fld dword, fisttp qword
       )
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'i386 (t 2)) 0 i3tests)
    i3m16tests '(

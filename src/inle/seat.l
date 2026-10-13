@@ -63,8 +63,9 @@
    (crewload _) (cite 'source ? 0 (each (cwords crewlist 0 0 ()) cload, 0))
    ; the registry is the PATH: apps pin their names into (cite 'verbs 'tab), and `word` applies
    ; the shadow rules -- a slashed word or a .l name is a file, never a verb, which keeps the
-   ; two lanes below reachable. a verb takes the args after its name.
-   (k-prog argv) (k-proga argv 1)
+   ; two lanes below reachable. a verb takes the args after its name. a head (path . word) is
+   ; a shell's PATH search already made, and the path is what runs
+   (k-prog argv) (k-proga (two? <argv ? (<<argv . >argv) argv) 1)
    ; a script says who reads it: `#!`, the words after it, then this path and the args. the
    ; reader is taken by basename (usr/bin is empty, so /bin/sh is sh), one hop.
    (k-bangv t p as)
@@ -87,9 +88,13 @@
                                (!(47 = peep a0 0 0) && two? (stat ("/love/" + a0)))
                                  (k-progf ("/love/" + a0) as h)
                                ()))))
+   ; a wasm module is a program of its own, run as a process (k-procrun, below) by a path, since
+   ; the kernel hands a bare word to love
+   (k-wasm? t) (string? t && 3 < #t && snip t 0 4 = (string 0) + "asm")
    (k-progf a0 as h) (: t (k-slurp a0)
                         g (0 < h ? (k-bangv t a0 as))
                         (? (two? g) (k-proga g (h - 1))
+                           (k-wasm? t) ((v \ k-procrun ((elem 47 a0 ? a0 ("./" + a0)) . v)) . as)
                            (string? t) (k-run-text t . as)
                            ()))
    (k-slot w n) (task-slot w n)

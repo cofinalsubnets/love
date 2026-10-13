@@ -1,0 +1,45 @@
+; test/host/lorewin.l -- lore in a window, headless: a window with no screen ('evq its events)
+; under view's loop, the keys as they act -- a press once, a walking key every frame it is
+; held, not when the level says not now, q the end -- and the corridor painted onto its paper
+; at 8 by 16 a cell, the picture and the bottom row's words over it.
+; not in the corpus: crew modules. run: cat test/00-init.l test/host/lorewin.l | out/love
+(borrow 'view)
+(borrow 'corridor)
+(borrow 'posix)
+
+(: _ (setenv "HORN" "none")
+   ; the events frame t reads, each left in the queue by the frame before: k held through
+   ; frames 0 to 2, p pressed at 3 and let go at 4, q at 6
+   script {0 [['down 37]] 3 [['up 37] ['down 25]] 4 [['up 25]] 6 [['down 16]]}
+   (run held) (: win {'w 640 'h 400 'paper (cask (640 * 400 * 4)) 'evq (script 0)}
+                 lv {'new (w \ h \ {'w w 'h h 't 0 'log ()})
+                     'size (st \ w \ r \ pins st 'w w 'h (2 * r))
+                     'frame (st \ "")
+                     'key (st \ k \ pin st 'log ([(st 't) k] . st 'log))
+                     'tick (st \ pin win 'evq (peep script (st 't + 1) ()))
+                     'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win 'held held}
+                 st (view-walk lv)
+                 [(rev (st 'log)) (st 'w) (st 'h)])
+   a (run (_ \ 1))
+   b (run (_ \ 0))
+ (test (a 0 = [[0 107] [1 107] [2 107] [3 112]])                 ; k each frame held, then p once
+       (b 0 = [[0 107] [3 112]])                                  ; held, but the level says not now
+       (a 1 = 80) (a 2 = 50)))                                    ; 640 by 400: 80 cells by 25 rows
+
+; --- the corridor on a window's paper: the picture where the hall is lit, and with p the
+; --- bottom row's words, their ground and a letter's ink
+(: hall (corridor-load "src/apps/lore/levels/hall.l")
+   win {'w 640 'h 400 'paper (cask (640 * 400 * 4))}
+   st (corridor-size (pins (corridor-new 80 50 hall "src/apps/lore/levels/") 'win win 'deep 1) 80 25)
+   out (corridor-frame st)
+   (rgb x y) (4 * (y * 640 + x) @ i (string (win 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
+   lit (net (map (i \ (rgb (i * 37 % 640) (i * 53 % 384) != [0 0 0])) ^200))
+   _ (pin st 'pos 1)
+   _ (corridor-frame st)
+   ground (rgb 636 392)
+   ink (any (y \ any (x \ rgb x y = [238 238 238]) (map (+ 8) ^8)) (map (+ 384) ^16))
+ (test (out = "") (st 'kp = 8) (100 < lit) (ground = [20 20 20]) ink
+       (tablet? (corridor-opts ["--window"])) ((corridor-opts ["--window"]) 'md = 'window)))
+
+(test_fin (),
+ puts "lorewin: ok -- a held key walks every frame and a pressed one acts once, and the corridor paints its window\n")

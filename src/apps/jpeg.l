@@ -1,4 +1,4 @@
-; src/apps/jpeg.l -- jpeg decoding, over src/love/lib/jpeg.c's nif (jpeg-pixels s).
+; src/apps/jpeg.l -- jpeg decoding, over src/love/picture/jpeg.c's nif (jpeg-pixels s).
 ; `(borrow 'jpeg)`, then:
 ;
 ;   (jpeg-size s)    -> (w h) from the frame header | a string saying why not

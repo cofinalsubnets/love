@@ -1212,9 +1212,9 @@
                        'llong)
                  [['cast ty ['num v]] >ts])
              (tkk t = 'flo) [['flo (cflo (tkv t))] >ts]
-             ; an f suffix makes a float constant (C11 6.4.4.2) -- the cast is what
-             ; narrows it, so `0.1f == 0.1` is false and sizeof(1.5f) is 4
-             (tkk t = 'flof) [['cast 'float ['flo (cflo (tkv t))]] >ts]
+             ; an f suffix makes a float constant (C11 6.4.4.2): cflo32 rounds it to binary32 once,
+             ; and the cast keeps the type, so `0.1f == 0.1` is false and sizeof(1.5f) is 4
+             (tkk t = 'flof) [['cast 'float ['flo (cflo32 (tkv t))]] >ts]
              ; an imaginary literal (1.0fi, _Complex_I's spelling) is the complex constant
              ; {0, v}, complex-double -- complex floats compute as doubles too
              (tkk t = 'iflo)

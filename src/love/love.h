@@ -133,9 +133,16 @@ static love_inline uintptr_t mulsat(uintptr_t a, uintptr_t b) {
 #define Answer(v) Ip[1].ap(g, Ip + 1, Hp, (Sp[0] = (v), Sp))
 #define Answerp(k, v) Ip[1].ap(g, Ip + 1, Hp, (Sp[k] = (v), Sp + (k)))
 #define Push(v) Ip[1].ap(g, Ip + 1, Hp, (*++Sp = (v), Sp))
-#define Resume() g->ip->ap(g, g->ip, g->hp, g->sp)
+#ifdef LvGcCheck
+// g->hp and g->sp are true from a Pack to the Unpack after it, the registers ahead of them
+// otherwise. the checking build marks which, so a walk that takes the nursery's free room for
+// scratch without its vm op having packed traps (gap)
+#define Pack(g) (g->ip = Ip, g->hp = Hp, g->sp = Sp, g->unpacked = 0)
+#define Unpack(g) (Ip = g->ip, Hp = g->hp, Sp = g->sp, g->unpacked = 1)
+#else
 #define Pack(g) (g->ip = Ip, g->hp = Hp, g->sp = Sp)
 #define Unpack(g) (Ip = g->ip, Hp = g->hp, Sp = g->sp)
+#endif
 // every VM tail spells `love_musttail return ..` and every compiler is held to the jump:
 // clang/gcc 15+ take the attribute, mooncc's sibcall pass spells it or refuses the compile --
 // a miss is one frame per dispatch and a stack overflow down some long read, and `make vmret`
@@ -156,7 +163,6 @@ static love_inline uintptr_t mulsat(uintptr_t a, uintptr_t b) {
 #define Answer(v) (Sp[0] = (v), Ip += 1, g)
 #define Answerp(k, v) (Sp[k] = (v), Sp += (k), Ip += 1, g)
 #define Push(v) (*++Sp = (v), Ip += 1, g)
-#define Resume() g
 #define love_musttail
 #define Hp g->hp
 #define Sp g->sp
@@ -178,7 +184,7 @@ union u {
  Pack(g); if (!ok(g = f(g, ##__VA_ARGS__))) love_musttail return Ap(_lvm_ghelp, g)
 #define LvmCall(g, f, ...) { LvmPack(g, f, ##__VA_ARGS__); Unpack(g); love_musttail return Next(1); }
 #define LvmCallp(g, k, f, ...) { LvmPack(g, f, ##__VA_ARGS__); Unpack(g); Sp[k] = Sp[0]; love_musttail return Nextp(1, k); }
-#define LvmResume(g, f, ...) { LvmPack(g, f, ##__VA_ARGS__); love_musttail return Resume(); }
+#define LvmResume(g, f, ...) { LvmPack(g, f, ##__VA_ARGS__); Unpack(g); love_musttail return Continue(); }
 #define LvmWrap(n, f) lvm(n) LvmCall(g, f)
 // lvm_X over a word-answering host_X of the top 1, 2 or 3 words: its answer replaces them
 #define LvmWord1(x) static lvm(lvm_##x) { Sp[0] = host_##x(g, Sp[0]); love_musttail return Next(1); }
@@ -311,12 +317,15 @@ struct g {
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by LvRemCap, the fixed capacity
  int8_t lean;                             // grow-stickiness streak; a grow needs lean >= 2
+#ifdef LvGcCheck
+ bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
+#endif
  // the two pools: the main pool is pure minor, young being [end, hp); old lives in the major,
- // a two-space of separate blocks. a minor evacuates young -> the active half; a major
- // drains both, compacts into the spare half, flips, rebuilds symbols, runs finalizers.
- word *major_base, *major_spare, *major_hp;  // major: active half, spare half (major_len words each), active bump
+ // one block. a minor evacuates young -> the block; a major drains both into a to-space made
+ // for it, gives the old block back, rebuilds symbols, runs finalizers.
+ word *major_base, *major_hp;    // major: the block (major_len words), the bump
  uintptr_t
-   major_len,                     // major half size (words)
+   major_len,                     // major block size (words)
    n_minor,                       // minor collections so far (majors = n_gc - n_minor)
    minor_hi, major_hi,            // the pause gauge: peak words one minor / one major copied
                                   // (gauge[14]/[15]; test/host/gcpause.l puts wall ns against them)
@@ -528,7 +537,7 @@ intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t)
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),     // ..l/bz2.c
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);  // ..l/xz.c
 uint32_t crc32(unsigned char const*, uintptr_t);                                    // ..l/hash.c
-// the carried source, a container src/love/lib/srctree.h reads
+// the carried source, a container src/love/archive/srctree.h reads
 extern unsigned char const srctree[];
 extern uintptr_t const srctree_len;
 // /love on the host (src/love/lovefs.c, over src/love/vfs.c): the process's one open tree
@@ -1126,8 +1135,7 @@ static love_inline bool tagp(word x, word const *lo, word const *hi) {
 // of a port (heap bio, or the static it cannot own a buffer for).
 static love_inline bool in_live_pool(struct g *g, word const *p) {
  if (p >= ptr(g) && p < ptr(g) + g->len) return true;             // minor / main pool
- return (p >= g->major_base && p < g->major_base + g->major_len)                    // both major halves
-     || (g->major_spare && p >= g->major_spare && p < g->major_spare + g->major_len); }   // a missing spare holds nothing
+ return p >= g->major_base && p < g->major_base + g->major_len; }                  // the major block
 static love_inline union u *tagthread(union u *h, uintptr_t len) {
   return h[len].x = word(h) | thread_tag, h; }
 #define topof(g) ((word*)g+g->len)
@@ -1140,12 +1148,15 @@ static love_inline struct tag { union u *head; union u end[]; } *ttag(struct g*g
  return (struct tag*) k; }
 static love_inline union u *tag_head(struct tag *t) {
  return cell(word(t->head) & ~(word) 3); }
-// scratch for a walk that may not allocate: the major's spare half, dead outside a collection.
-// a major that gave the spare's room to its to-space has none, and the nursery's free gap
-// stands in -- nothing allocates there while a collection runs
+
+// scratch for a walk that may not allocate on the heap: the nursery's free room [hp, sp) --
+// true only where the vm op that reached the walk packed first. a walk that outgrows it
+// carries its worklist into blocks of its own, doubled
 static love_inline word *gap(struct g *g, word **top) {
- if (!g->major_spare) return *top = g->sp, g->hp;
- return *top = g->major_spare + g->major_len, g->major_spare; }
+#ifdef LvGcCheck
+ if (g->unpacked) __builtin_trap();                             // reached unpacked: stale
+#endif
+ return *top = g->sp, g->hp; }
 
 // --- stack and op helpers ---
 static love_inline struct g *pushq(struct g*g) { return intern(strof(g, "\\")); }
@@ -1203,6 +1214,17 @@ int code_in(struct g *g, uintptr_t v);
 // the instruction table (src/love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. nif_cell draws the line against a nif's run.
 intptr_t op_index(intptr_t ap), op_resolve(intptr_t i), def_index(intptr_t x), fn_nif(intptr_t f);
+
+// what a cell hands back as a value, or (). the three refusals are all the machine's own
+// words, never love's: a terminator (the heap's bookkeeping), an instruction the op table
+// names, and a glazed body in the code arena -- which no table names, so `pick` cannot see
+// it either and a raw code address would otherwise ride out. a pool pointer is none of the
+// three, and asking that first is also what keeps the table scan off the common peek.
+static love_inline word cellval(struct g *g, word w) {
+ if ((w & 3) == thread_tag) return ZeroPoint;
+ if (evenp(w) && in_live_pool(g, ptr(w))) return w;
+ return op_index((intptr_t) w) >= 0 || w == (word) lvm_lazy || (evenp(w) && code_in(g, (uintptr_t) w))
+  ? ZeroPoint : w; }
 int nif_cell(union u const *k);
 // the once-laid tables (love.c): love_once fills them before the first g, 0 when it could not
 int love_once(void), ops_fill(void);
@@ -1217,9 +1239,8 @@ struct g
  *gen_grow(struct g *g, uintptr_t len1),
  *gen_major(struct g *g, uintptr_t req0, bool *tight),
  *ored(struct g *g, int kind), *zflush(struct g*g);
-word *major_pair(uintptr_t n, word **spare);
 uintptr_t
- hash_at(struct g *g, intptr_t x, word *base),
+ hash_at(struct g *g, intptr_t x, word *base, word *end),
  map_probe(struct g *g, word m, word k, bool *found);
 struct str *seq_cat(struct g *g, void *w, word a, word b);
 intptr_t
