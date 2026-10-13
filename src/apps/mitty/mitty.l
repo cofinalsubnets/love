@@ -945,8 +945,8 @@
      (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
         rest (two? as && <as = "-n" && two? >as ? >>as as)
         path (mitty-sock nm)
-        (? (!(two? (tty 0)) && window-here? 0) (mitty-window rest)   ; a display and no tty
-           (getenv "MITTY" = path) (say err ("mitty: already inside mitty " + nm + "; -n another, or --here to nest\n"), 1)
+        (? (getenv "MITTY" = path) (say err ("mitty: already inside mitty " + nm + "; -n another, or --here to nest\n"), 1)
+           (!(two? (tty 0)) && window-here? 0) (mitty-window rest)   ; a display and no tty
            (mitty-attach path) 0
            (mitty-spawn nm rest) (mitty-reattach path 60 @ r (r = () ? (mitty-here rest) 0))
            (mitty-here rest))))
