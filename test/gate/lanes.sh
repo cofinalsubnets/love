@@ -12,7 +12,7 @@
 #   5. --slow: test_slow last and alone, on the same tree, only after every lane is green
 #
 # heavy slots are the caller's: `love bee --lock --heavy --out out -- sh test/gate/lanes.sh ..`.
-# N defaults to half the cores. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary.
+# N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary.
 set -u
 
 # lanes that share scratch or sub-build the same tree: each chain runs in this order
@@ -26,6 +26,14 @@ alone="test_hdiff test_ccwarn"
 
 MAKE=${MAKE:-make}
 
+# a lane starts only while the box has LANES_MEM_GB (8) available: a shared box runs out of
+# memory before it runs out of cores. off linux there is no meminfo, and no wait
+roomy() {
+  [ -r /proc/meminfo ] || return 0
+  k=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
+  [ -z "$k" ] || [ "$k" -ge $(( ${LANES_MEM_GB:-8} * 1048576 )) ]
+}
+
 # --- a chain, from inside the generated make: DIR then OFLAGS words up to --, then lanes
 if [ "${1:-}" = --chain ]; then
   d=$2; shift 2
@@ -34,6 +42,8 @@ if [ "${1:-}" = --chain ]; then
   shift
   st=0
   for l in "$@"; do
+    roomy || echo "lanes: $l waits for ${LANES_MEM_GB:-8} GB available" >&2
+    until roomy; do sleep 15; done
     s=$(date +%s)
     $MAKE --no-print-directory $o "$l" > "$d/$l.log" 2>&1
     r=$?
@@ -54,10 +64,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$args" ] || { echo "usage: lanes.sh [-j N] [-d DIR] [--slow] LANE..." >&2; exit 2; }
-if [ -z "$j" ]; then
-  c=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
-  j=$(( c / 2 )); [ $j -ge 2 ] || j=2
-fi
+[ -n "$j" ] || j=4
 rm -rf "$d" && mkdir -p "$d" || exit 1
 t0=$(date +%s)
 
