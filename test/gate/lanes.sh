@@ -145,7 +145,11 @@ for l in $run; do has "$l" "$alone" && late="$late $l" || par="$par $l"; done
     printf 'all: lane-%s\nlane-%s:\n\t+@MAKE='"'"'$(MAKE)'"'"' sh test/gate/lanes.sh --chain %s %s -- %s\n' "$l" "$l" "$d" "$oflags" "$l"
   done
 } > "$mk"
+# a lane that moves the tree mid-gate relinks love under its neighbours: the summary says so
+sums() { cksum out/love out/love.raw 2>/dev/null; }
+before=$(sums)
 $MAKE -k -j"$j" -f "$mk" all > "$d/make.log" 2>&1
+[ "$(sums)" = "$before" ] || { echo "1 0" > "$d/love-moved.rc"; echo "out/love or out/love.raw was rebuilt during the parallel phase" > "$d/love-moved.log"; }
 
 # step 4: alone, in turn
 for l in $late; do
@@ -163,7 +167,7 @@ sum() {
   [ "$r" = 0 ] || red=1
   echo "$1 exit=$r secs=$s"
 }
-for l in $lanes; do sum "$l"; done > "$d/summary"
+{ for l in $lanes; do sum "$l"; done; [ -f "$d/love-moved.rc" ] && sum love-moved; } > "$d/summary"
 grep -v 'exit=0 ' "$d/summary" > /dev/null && red=1
 cat "$d/summary"
 echo "wall=$(( $(date +%s) - t0 ))"
