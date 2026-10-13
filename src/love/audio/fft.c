@@ -7,14 +7,16 @@
 
 double lm_sin(double), lm_cos(double);
 
-void love_fft(double *z, uintptr_t n, const double *tc, const double *ts, int inv) {
- for (uintptr_t i = 1, j = 0; i < n; i++) {         // bit-reversed order
+void love_fft_rev(double *z, uintptr_t n) {
+ for (uintptr_t i = 1, j = 0; i < n; i++) {
   uintptr_t b = n >> 1;
   for (; j & b; b >>= 1) j ^= b;
   j ^= b;
   if (i < j) {
    double r = z[2 * i], m = z[2 * i + 1];
-   z[2 * i] = z[2 * j], z[2 * i + 1] = z[2 * j + 1], z[2 * j] = r, z[2 * j + 1] = m; } }
+   z[2 * i] = z[2 * j], z[2 * i + 1] = z[2 * j + 1], z[2 * j] = r, z[2 * j + 1] = m; } } }
+
+void love_fft_bf(double *z, uintptr_t n, const double *tc, const double *ts, int inv) {
  double sg = inv ? 1 : -1;
  for (uintptr_t h = 1; h < n; h <<= 1)              // butterflies, twiddle e^(-+2 pi i k / 2h)
   for (uintptr_t a = 0; a < n; a += 2 * h)
@@ -23,6 +25,9 @@ void love_fft(double *z, uintptr_t n, const double *tc, const double *ts, int in
     double c = tc[t], s = sg * ts[t], *u = z + 2 * (a + k), *v = z + 2 * (a + k + h),
            xr = v[0] * c - v[1] * s, xi = v[0] * s + v[1] * c;
     v[0] = u[0] - xr, v[1] = u[1] - xi, u[0] += xr, u[1] += xi; } }
+
+void love_fft(double *z, uintptr_t n, const double *tc, const double *ts, int inv) {
+ love_fft_rev(z, n), love_fft_bf(z, n, tc, ts, inv); }
 
 static struct g *host_fft(struct g *g, int inv) {
  word x = g->sp[0];
