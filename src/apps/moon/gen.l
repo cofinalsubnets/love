@@ -603,12 +603,12 @@
    (fsel? g) ((x64? g || a64? g || rv64? g) && !(abl? g 'fsel))   ; the targets whose double lane rides the float file (MOON_ABLATE=fsel prices it)
    (fidx? g) ((x64? g || a64? g) && fsel? g)             ; ..and whose indexed float loads/stores are one form
    ; the homable-param fold for pgo, upar and ubuild: a float/sse param spends no gp seat, the
-   ; walk stops at the home limit, and (hx acc gpi param) folds each homable seat
+   ; walk stops at the home limit or a wide param, and (hx acc gpi param) folds each homable seat
    (homefold g ps gpi acc hx)
     (!(two? ps) ? acc
        (<><ps @ pty
           (? (flo? pty || sse2? g pty || aone g pty = 'sse) (homefold g >ps gpi acc hx)
-             (nhome g <= gpi) acc
+             (nhome g <= gpi || d128? pty) acc
              (lhomable? pty) (homefold g >ps (gpi + 1) (hx acc gpi <ps) hx)
              (homefold g >ps (gpi + 1) acc hx))))
    ; the immediate lane: the left in a register, a constant on the right -> one imm-form op. a
@@ -3209,8 +3209,19 @@
                                    ([['ov ovc n] (tor0 g a + mv (n - 1) ())] . acc))))
                        (stru? aty && !(aone g aty))             ; a mixed 16B by-value struct stays ahead
                         (nolane g ("no lane for passing this " + show (tsz g aty) + "-byte struct by value" + ontgt g))
-                       (d128? aty)                               ; a wide arg: not carried (love.c passes limbs, never dlimbs)
-                        (nolane g "a wide value is not carried as an argument")
+                       ; a wide arg: two gp registers, lo first -- AAPCS64 an even pair, else a 16-aligned
+                       ; stack pair that closes gp assignment (C.10-C.11); SysV any two, its stack pair deferred
+                       (d128? aty && w128? g)
+                        (: gpe (a64? g ? (aup gpc 2) gpc)
+                           (? (gpe + 2 <= ngp g)
+                               (kls >as (i + 1) (gpe + 2) xmmc ovc ([['gw gpe] (as128 g a + wpush)] . acc))
+                              (a64? g)
+                               (aup ovc 2 @ ov2
+                                  (kls >as (i + 1) (ngp g) xmmc (ov2 + 2)
+                                       (. [['ov ov2 2] (as128 g a + [['st 'sp (8 * ov2) 'r0] ['st 'sp (8 * ov2 + 8) 'r2]])]
+                                          acc)))
+                              (nolane g "a wide value past the argument registers is not carried")))
+                       (d128? aty) (no128 g)
                        ; i386: a double its 8 bytes in the block, a float its 4 where a prototype says float
                        (ia32? g && flo? aty)
                         (: fl ((pts i) = 'float)
@@ -3323,7 +3334,7 @@
                                      (go1 >l1 (ov? <l1 ? (<l1 . acc1) acc1)))
                     (go1 kr ()))                          ; overflow entries, reversed (deepest pushes first)
              rgr (: (go2 l2 acc2) (!(two? l2) ? acc2
-                                     (go2 >l2 (elem <<<l2 '(g g2 g4 gn x x2 p2 ezd s sn) ?
+                                     (go2 >l2 (elem <<<l2 '(g g2 gw g4 gn x x2 p2 ezd s sn) ?
                                                       (<l2 . acc2) acc2)))
                     (go2 kr ()))                          ; pushing register entries, reversed (pops run forward)
              (pushcat l3 acc3) (!(two? l3) ? acc3 (pushcat >l3 (acc3 + <><l3)))
@@ -3333,6 +3344,8 @@
                          (<<l4 @ kc
                             (go4 >l4 (elem <kc '(ov ez ezm ezd ezx) ? acc4 (acc4 +
                                       (<kc @ 'g (spop (argr g <>kc))
+                                       'gw   ; a wide value: lo then hi off one cell
+                                        [['ld (argr g <>kc) 'sp 0] ['ld (argr g (<>kc + 1)) 'sp 8] '(add sp sp 16)]
                                        'g2   ; the t32 pair: both words off one cell
                                         [['ld (argr g <>kc) 'sp 0]
                                            ['ld (argr g (<>kc + 1)) 'sp 4]
@@ -3371,10 +3384,12 @@
                                                            'p2 (n5 + (ce 1 = 'x) + (ce 3 = 'x))
                                                            n5))))
                      (go5 kr 0))
-             ; slots, not entries: ('ov off n) carries a struct's slot count (t32's third field is bytes; ovblk sizes that)
+             ; slots, not entries: ('ov off n) carries a struct's slot count (t32's third field is bytes; ovblk sizes that).
+             ; a64's block spans to its highest slot's end, past a wide pair's alignment gap
              nov (: (go8 l8 n8) (!(two? l8) ? n8
                                    (<<l8 @ ce
-                                      (go8 >l8 (n8 + (two? >>ce ? <>>ce 1)))))
+                                      (: n (two? >>ce ? <>>ce 1)
+                                         (go8 >l8 (a8? g ? (max n8 (<>ce + n)) (n8 + n))))))
                     (go8 ovr 0))
              padn (nov & 1 = 1 ? 8 0)               ; keep sp 16-aligned across the overflow block
              ; t32 and i386 slots are byte offsets: the block spans to the highest slot's end, rounded to 8
@@ -3482,7 +3497,8 @@
            + a + [(fl ? 217 221) 4 36] + lea 8)))                    ; fld dword|qword [esp]
    (st0in g ty) (ia32? g && flo? ty ? [['raw (x87raw g (ty = 'float) 1)]])
    ; an i386 long long arrives in edx:eax; gen's pair is r0:r1
-   (pairin g ty) (ia32? g && (pair? g ty || cxf32? g ty) ? [['mov 'r1 'r2]])
+   (pairin g ty) (? (ia32? g && (pair? g ty || cxf32? g ty)) [['mov 'r1 'r2]]
+                    (a64? g && d128? ty) [['mov 'r2 'r1]])   ; AAPCS64's wide answer is x0:x1, the pair x0:x2
    ; the C99 complex lane (x64, i386): a complex value is its two-member struct, so it flows as one. arithmetic parks each
    ; side in a double-pair temp (the other side may call), f0..f3 carry (a.re a.im b.re b.im), the answer is a fresh temp's address
    (cxb ty) (<>ty = "__cplx_float" ? 'float 'double)
@@ -8510,8 +8526,8 @@
                                   + "-byte struct by value" + ontgt g))
                       (flo? (vty r)) (asintt g r rt + (rt @ 'bool (cvt rt 'r0) ()) + epj)     ; a double value, an int return -> truncate to r0
                       (pair? g rt) (asll g r + (ia32? g ? [['mov 'r2 'r1]] ()) + epj)   ; a pair return: r0:r1 (widen a word value); i386's is edx:eax
-                      (d128? rt)                                                ; a wide return rides rdx:rax (the SysV i128 pair)
-                       (w128? g ? (as128 g r + epj) (no128 g))
+                      (d128? rt)                                                ; a wide return rides rdx:rax (SysV), x0:x1 (AAPCS64)
+                       (w128? g ? (as128 g r + (a64? g ? [['mov 'r1 'r2]]) + epj) (no128 g))
                       (rt = 'bool)                             ; a bool return converts (callers read r0 whole -- cc calls untyped)
                        (tor0 g r + cvt rt 'r0 + epj)
                       ; int -> int: a value the return type cannot hold converts (callers read r0 whole)
@@ -9843,8 +9859,19 @@
                  (pair? g pty && ia32? g)              ; i386: the pair's two words where the caller laid them, the rest spent
                   (spill hp >ps (ngp g) xmmi (ovi + 8) ([<p (ovb g + ovi) pty] . env) acc)
                  (pair? g pty) (gpair (aup gpi 2))   ; a pair param: the even-odd register pair
-                 (d128? pty)                            ; a wide param: not carried (mirror of the arg refusal)
-                  (nolane g "a wide value is not carried as a parameter")
+                 ; a wide param, as the argument lane lays it: lo then hi into a 16-byte slot, or read where
+                 ; the caller's block holds it (homefold plans no home from here on)
+                 (d128? pty && w128? g)
+                  (: gpe (a64? g ? (aup gpi 2) gpi)
+                     (? (gpe + 2 <= ngp g)
+                         (nslot g 16 @ off
+                            (spill hp >ps (gpe + 2) xmmi ovi ([<p off pty] . env)
+                                   (acc + [['st 'r4 off (argr g gpe)] ['st 'r4 (off + 8) (argr g (gpe + 1))]])))
+                        (a64? g)
+                         (aup ovi 2 @ ov2
+                            (spill hp >ps (ngp g) xmmi (ov2 + 2) ([<p (ovb g + 8 * ov2) pty] . env) acc))
+                        (nolane g "a wide value past the argument registers is not carried as a parameter")))
+                 (d128? pty) (no128 g)
                  (!(flo? pty) && gpi < ngp g)
                   (two? hp && gpi < nhome g &&
                    (elem gpi <>hp || elem gpi (hp 2)) ?

@@ -1321,6 +1321,21 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   value, by the alignment the member carries, not its type's (both had been read at full width).
   Held to clang's widths in the landing law (eight more pk_ fns in test/cc/protect/units.c), and
   278 runs under the flag on an a64 host.
+- **`__int128` as an argument and a parameter** (x64, a64), and a64's wide answer: lo then hi
+  in two gp registers -- AAPCS64 the next even pair, else a 16-aligned stack pair that closes the
+  registers; SysV any two. a64 answered in x0:x2, where AAPCS64 says x0:x1, so a wide call across
+  compilers read the wrong half both ways. Both had refused by name (`a wide value is not carried
+  as an argument`, `.. a parameter`), which stopped `arm64_cpu_to_le128` and slub's
+  `__update_freelist_fast`. Law test/cc/abi128: mooncc's half linked with clang's (a64) and
+  gcc's (x64), calls each way. SysV's stack pair still refuses by name.
+- **the exclusive pairs and `casp`** (atomic_ll_sc.h's and atomic_lse.h's `cmpxchg128`):
+  `ldxp`/`ldaxp`, `stxp`/`stlxp`, `casp`/`caspa`/`caspl`/`caspal`, X or W. Refused as llvm-mc
+  refuses: mixed widths, sp as data, zr as a base, an offset, a status that is a data register
+  or a base other than sp, a casp pair that is not even/odd. holo had refused every one
+  (`gas-a64-op`). And `x31`/`w31` read as zr, as llvm-mc reads them: holo had laid `w31` as a
+  register with no number, a wrong word in silence. Of 400 random lines over these, 385 lay
+  llvm-mc's words and refusals; the other 15 are casp's `[xn, #0]`, which the Arm ARM spells
+  and llvm-mc refuses, laid as `[xn]`. Golden gas.a64.xp.
 
 Still open on this side (g-21's probes):
 
@@ -1328,8 +1343,7 @@ Still open on this side (g-21's probes):
   refuses by name; gcc carries both. On thumb, a struct member of a packed struct is not copied
   at all (`struct I v = p->in`, `f(p->in)`), refused with no cause named.
 - where the re-run stops now, on this side: the four units a register variable named `r0`
-  stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`. The exclusive pairs
-  (`ldxp`/`stxp` and kin) have no lane yet.
+  stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of

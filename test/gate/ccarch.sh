@@ -130,6 +130,12 @@ if [ "$arch" = a64 ]; then
   moonrun -t a64 -o "$r/abi64.t" test/cc/abi64/host.c "$d/peer.o" > "$d/abi64.log" 2>&1 \
     || { cat "$d/abi64.log" >&2; fail "abi64: mooncc could not build or link host.c"; }
   a64_job abi64.t "timeout 60 \$RUN ./abi64.t"
+  # __int128 across them: the even register pair, the 16-aligned stack pair, x0:x1 answers
+  clang --target=aarch64-linux-gnu -O2 -ffreestanding -fno-stack-protector -c -o "$d/peer128.o" test/cc/abi128/peer.c 2> "$d/peer128.log" \
+    || { cat "$d/peer128.log" >&2; fail "abi128: clang could not build peer.c"; }
+  moonrun -t a64 -o "$r/abi128.t" test/cc/abi128/host.c "$d/peer128.o" > "$d/abi128.log" 2>&1 \
+    || { cat "$d/abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
+  a64_job abi128.t "timeout 60 \$RUN ./abi128.t"
 
   # the landing law: -mbranch-protection and -mstrict-align held to clang's objects for the
   # same units (test/cc/protect/units.c) -- each fn's landing (bti c, paciasp or neither),
@@ -197,6 +203,8 @@ if [ "$arch" = a64 ]; then
   [ "$(cat "$r/res/sa278.t.rc")" -eq 0 ] || { cat "$r/res/sa278.t.out" >&2; fail "strict-align: 278-packed-bitfield.c answers wrong under -mstrict-align"; }
   [ "$(cat "$r/res/abi64.t.rc")" -eq 0 ] || { cat "$r/res/abi64.t.out" >&2; fail "abi64: mooncc and clang disagree on AAPCS64"; }
   tail -1 "$r/res/abi64.t.out"
+  [ "$(cat "$r/res/abi128.t.rc")" -eq 0 ] || { cat "$r/res/abi128.t.out" >&2; fail "abi128: mooncc and clang disagree on AAPCS64's __int128"; }
+  tail -1 "$r/res/abi128.t.out"
 fi
 
 n=0
