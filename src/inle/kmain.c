@@ -18,8 +18,9 @@ static uintptr_t k_ticks_for(uintptr_t ms) { return (ms + k_tick_ms - 1) / k_tic
 // before archinit, so arch code can use it for MMIO.
 uintptr_t khhdm;
 // the window that runs: the hhdm carries NX for the whole higher half (src/inle/mkboot.l),
-// so the identity map is the same pages without the bit, which is what code needs.
-char *code_window(char *p) { return (char*)((uintptr_t) p - khhdm); }
+// so the image window (k_xw) is the same pages without the bit, which is what code needs.
+// hosted, khhdm is 0 and the heap runs where it lies
+char *code_window(char *p) { return khhdm ? (char*)((uintptr_t) p - khhdm + k_xw) : p; }
 
 #include "ffalloc.h"
 static struct mem *kmem;
@@ -535,6 +536,8 @@ static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
 static char const k_pcmd[] = "proc/cmdline";
 // and the heap image the door handed in, read-only, for a process to wake from
 static char const k_pimg[] = "proc/image";
+// and the file the door carried in beside the kernel, read-only
+static char const k_pinitrd[] = "proc/initrd";
 // /dev/{null,zero}: neither holds bytes -- null is the source table's empty slot, zero that
 // slot with a read door. the entries below exist only so stat and dents can see them.
 static char const k_dnull[] = "dev/null", k_dzero[] = "dev/zero";
@@ -597,12 +600,14 @@ static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pi
 static bool k_fs_init(void) {
   if (k_fs.ents) return true;
   if (!k_fs.bakes && !vfs_untar(&k_fs, k_tree, srctree, srctree_len, rootfs, rootfs_len)) return false;
-  int bn = k_fs.extra ? 0 : k_baked(NULL, 0), xn = bn + (!k_fs.extra && kboot.image_len);
+  int bn = k_fs.extra ? 0 : k_baked(NULL, 0),
+      xn = bn + (!k_fs.extra && kboot.image_len) + (!k_fs.extra && kboot.initrd_len);
   if (xn > 0) {
     struct vfs_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
     int m = bn ? k_baked(xr, bn) : 0;
     if (kboot.image_len) xr[m++] = (struct vfs_file) { k_pimg, kboot.image, kboot.image_len, 0 };
+    if (kboot.initrd_len) xr[m++] = (struct vfs_file) { k_pinitrd, kboot.initrd, kboot.initrd_len, 0 };
     k_fs.extra = xr, k_fs.extra_n = m; }
   // the rows past the baked ones, each laid empty and owned; one with `to` is a link, its
   // target heap because k_ent_gc frees it, and a strdup that refuses leaves a plain directory
@@ -2160,7 +2165,7 @@ static uint8_t fbscale(void) {
 
 static bool fbinit(void) {
   if (!kboot.has_fb) return false;
-  kfb._      = kboot.fb.base;
+  kfb._      = (void*) ((uintptr_t) kboot.fb.base + (k_xw ? khhdm : 0));   // the lower half is a process's
   kfb.width  = kboot.fb.w;
   kfb.height = kboot.fb.h;
   kfb.pitch  = kboot.fb.pitch_px;

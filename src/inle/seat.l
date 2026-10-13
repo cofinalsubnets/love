@@ -88,13 +88,13 @@
                                (!(47 = peep a0 0 0) && two? (stat ("/love/" + a0)))
                                  (k-progf ("/love/" + a0) as h)
                                ()))))
-   ; a wasm module is a program of its own, run as a process (k-procrun, below) by a path, since
-   ; the kernel hands a bare word to love
-   (k-wasm? t) (string? t && 3 < #t && snip t 0 4 = (string 0) + "asm")
+   ; a wasm module or an ELF is a program of its own, run as a process (k-procrun, below) by a
+   ; path, since the kernel hands a bare word to love
+   (k-code? t) (string? t && 3 < #t && (snip t 0 4 @ m (m = (string 0) + "asm" || m = (string 127) + "ELF")))
    (k-progf a0 as h) (: t (k-slurp a0)
                         g (0 < h ? (k-bangv t a0 as))
                         (? (two? g) (k-proga g (h - 1))
-                           (k-wasm? t) ((v \ k-procrun ((elem 47 a0 ? a0 ("./" + a0)) . v)) . as)
+                           (k-code? t) ((v \ k-procrun ((elem 47 a0 ? a0 ("./" + a0)) . v)) . as)
                            (string? t) (k-run-text t . as)
                            ()))
    (k-slot w n) (task-slot w n)
