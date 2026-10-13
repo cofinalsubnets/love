@@ -566,7 +566,7 @@ int k_droid_main(int argc, char const **argv);       // the kernel as a process 
 #endif
 int main(int argc, char const **argv) {
 #if defined(INLE_DROID)
-  return k_droid_main(argc, argv);
+  if (argc < 2 || strcmp(argv[1], "bake")) return k_droid_main(argc, argv);   // bake runs hosted, as love's
 #endif
   signal(SIGPIPE, SIG_IGN);
   trap_note_on();
