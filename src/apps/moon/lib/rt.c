@@ -356,3 +356,30 @@ uint32_t __aeabi_d2f(uint64_t u) {
  if (e) m |= HID; else e = 1;
  if (!(m & HID)) { int32_t sh = clz64(m) - 11; m = sl64(m, sh); e -= sh; }
  return packf(s, e - 896, (uint32_t) (m >> 26) | ((m << 38) != 0)); }
+
+/* ----------------------------------------------------------- binary32 arithmetic */
+/* through binary64: 53 bits carry a sum, difference, product or quotient of two 24-bit
+ * significands closely enough that one rounding to 24 is the correctly rounded single,
+ * and an int32 converts to binary64 exactly */
+uint32_t __aeabi_fadd(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_dadd(__aeabi_f2d(a), __aeabi_f2d(b))); }
+uint32_t __aeabi_fsub(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_dsub(__aeabi_f2d(a), __aeabi_f2d(b))); }
+uint32_t __aeabi_fmul(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_dmul(__aeabi_f2d(a), __aeabi_f2d(b))); }
+uint32_t __aeabi_fdiv(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_ddiv(__aeabi_f2d(a), __aeabi_f2d(b))); }
+uint32_t __aeabi_i2f(int32_t x)   { return __aeabi_d2f(__aeabi_i2d(x)); }
+uint32_t __aeabi_ui2f(uint32_t x) { return __aeabi_d2f(__aeabi_ui2d(x)); }
+int32_t __aeabi_f2iz(uint32_t u)   { return __aeabi_d2iz(__aeabi_f2d(u)); }
+uint32_t __aeabi_f2uiz(uint32_t u) { return __aeabi_d2uiz(__aeabi_f2d(u)); }
+/* a 64-bit integer rounds once: past 31 significant bits the rest fold into a sticky bit,
+ * which binary64 holds exactly and binary32 rounds as it would the whole */
+static uint32_t u64tof(uint32_t s, uint64_t v) {
+ int32_t sh = 33 - clz64(v);
+ if (sh > 0) v = sl64(stick(v, sh), sh);
+ return __aeabi_d2f(u64tod(s, v)); }
+uint32_t __aeabi_l2f(int64_t x)   { return x < 0 ? u64tof(1, -(uint64_t) x) : u64tof(0, (uint64_t) x); }
+uint32_t __aeabi_ul2f(uint64_t x) { return u64tof(0, x); }
+int32_t __aeabi_fcmpeq(uint32_t a, uint32_t b) { return __aeabi_dcmpeq(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmplt(uint32_t a, uint32_t b) { return __aeabi_dcmplt(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmple(uint32_t a, uint32_t b) { return __aeabi_dcmple(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmpge(uint32_t a, uint32_t b) { return __aeabi_dcmpge(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmpgt(uint32_t a, uint32_t b) { return __aeabi_dcmpgt(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmpun(uint32_t a, uint32_t b) { return __aeabi_dcmpun(__aeabi_f2d(a), __aeabi_f2d(b)); }

@@ -1,6 +1,6 @@
 ; src/apps/kore/sum.l -- the checksum tools: cksum, sum, crc32, md5sum, sha1sum, sha224sum,
 ; sha256sum, sha384sum, sha512sum, b2sum, sha3sum, in GNU's faces, and the -c lane that reads
-; those lines back. the digests are src/love/lib/hash.c's nifs.
+; those lines back. the digests are src/love/crypto/hash.c's nifs.
 ; loads after fs.l for udirp. a body-less top-level `:` -- the mains leak, kore.l
 ; registers them.
 (module 'kore

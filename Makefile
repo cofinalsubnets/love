@@ -165,9 +165,9 @@ $(ho)/o/love/cats.o: out/lib/baked.h
 $(ho)/o/love/main.o: out/lib/distlist.h out/lib/tasks.h
 $(ho)/o/love/love.o: out/lib/love_version.h
 # the carried tree's reader, and the ustar walk under it and the kernel's rootfs
-$(ho)/o/love/main.o $(ho)/o/love/lib/ustar.o $(ho)/o/love/lib/srctree.o: $(S)/love/lib/ustar.h
-$(ho)/o/love/main.o $(ho)/o/love/lib/srctree.o $(ho)/o/love/lovefs.o $(ho)/o/love/posix.o \
-  $(ho)/o/love/src.o: $(S)/love/lib/srctree.h
+$(ho)/o/love/main.o $(ho)/o/love/archive/ustar.o $(ho)/o/love/archive/srctree.o: $(S)/love/archive/ustar.h
+$(ho)/o/love/main.o $(ho)/o/love/archive/srctree.o $(ho)/o/love/lovefs.o $(ho)/o/love/posix.o \
+  $(ho)/o/love/src.o: $(S)/love/archive/srctree.h
 # src/love/cb.c rides the src/love/quay sources by unity include -- recompile when they move.
 $(ho)/o/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 
@@ -332,7 +332,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
   src/apps/x11.l src/apps/manifest/manifest.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/scenery.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/corridor.l src/apps/lore/roost.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/mitty/mitty.l src/apps/mitty/porthole.l src/apps/font.l src/apps/mitty/pier.l src/apps/doom.l src/apps/droid/droid.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
-  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/mitty/saver.l src/apps/mitty/avatar.l src/apps/mitty/chat.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/qlog.l src/apps/hive.l src/apps/bee.l
+  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/tuner.l src/apps/mitty/saver.l src/apps/mitty/avatar.l src/apps/mitty/chat.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/qlog.l src/apps/hive.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
@@ -627,7 +627,7 @@ k_libc_c = $(c_c)
 # rather than copying it is what lets a new src/inle/<app>.c reach the kernel with no rule edit.
 k_c = $(love_c) \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
-k_h = $(love_h) $(S)/love/lib/ustar.h $(S)/love/lib/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
+k_h = $(love_h) $(S)/love/archive/ustar.h $(S)/love/archive/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
 
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
@@ -763,7 +763,7 @@ kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
 # and the module set are src/love/cats.c's, and that object rides the host lane above.
 kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h out/lib/tasks.h
 define kart
-$(1)_h = $$(love_h) $$S/inle/k.h $$S/love/lib/ustar.h $$S/love/lib/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
+$(1)_h = $$(love_h) $$S/inle/k.h $$S/love/archive/ustar.h $$S/love/archive/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(wildcard $$S/inle/$$($(4))/*.c))
 $(1)_kern_o = $$(k_free_c:$$S/%.c=$$($(2))/%.o)
 $(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \

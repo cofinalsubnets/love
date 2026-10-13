@@ -56,7 +56,7 @@
               (4 < f ? "bad filter"
                  (png-recon c f d (d - n - 1) n bpp (k = 0), row (k + 1) (d + n)))))
        (row 0 o))
-   ; src/love/lib/png.c's nif; the walk above is the oracle test/host/png.l holds it to
+   ; src/love/picture/png.c's nif; the walk above is the oracle test/host/png.l holds it to
    ; -> [rows first-row-offset row-stride] | why not
    (png-rows c o rows n bpp)
     (png-unfilter c o rows n bpp @ r (string? r ? [r 0 n] "bad filter"))

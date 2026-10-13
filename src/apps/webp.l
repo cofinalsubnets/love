@@ -1,4 +1,4 @@
-; src/apps/webp.l -- webp decoding, over src/love/lib/webp.c's nif (webp-pixels s).
+; src/apps/webp.l -- webp decoding, over src/love/picture/webp.c's nif (webp-pixels s).
 ; `(borrow 'webp)`, then:
 ;
 ;   (webp-size s)    -> (w h) off the RIFF headers, an animation's canvas | why not

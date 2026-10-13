@@ -1,4 +1,4 @@
-// src/love/lib/gif.c
+// src/love/picture/gif.c
 // (gif-frame s o canvas trans) -> canvas with the image whose descriptor is at s[o] laid on
 // it, its trans index (-1 none) left see-through | why not: 1 not a gif, 2 not an image
 // there, 3 a bad canvas. (gif-clear s o canvas) -> canvas with that image's box cleared.

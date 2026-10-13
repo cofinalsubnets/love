@@ -1,4 +1,4 @@
-// src/love/lib/eq.c -- the player's bus: a biquad cascade and a spectrum, over s16le pcm.
+// src/love/audio/eq.c -- the player's bus: a biquad cascade and a spectrum, over s16le pcm.
 // numbers cross in Q40, int64 little-endian (love lays them with pinv): love works out the
 // coefficients, window and twiddles, so nothing here needs libm.
 // (biquads pcm ch co st) -> (out . st): pcm interleaved s16le of ch (1 or 2) channels through
@@ -12,6 +12,7 @@
 //   power at its center taken between the two bins on either side.
 #include "love.h"
 #include "bytes.h"
+#include "fft.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -58,32 +59,21 @@ static struct g *host_spectrum(struct g *g) {
  intptr_t ch = getcharm(g->sp[1]);
  uintptr_t n = len(g->sp[2]) / 16, ne = len(g->sp[3]) / 4;
  if (ch < 1 || ch > 2 || n < 2 || (n & (n - 1)) || n > 65536 || ne < 2) return g->sp[3] = badarg(g), g->sp += 3, g;
- uintptr_t nw = 2 * n * sizeof(double), nout = (ne - 1) * 8;
+ uintptr_t nw = 3 * n * sizeof(double), nout = (ne - 1) * 8;
  if (!ok(g = have(g, str_width(nw) + str_width(nout)))) return g;
  struct str *work = ini_str(bump(g, str_width(nw)), nw), *out = ini_str(bump(g, str_width(nout)), nout);
  const uint8_t *in = (const uint8_t*) bytes_of(g->sp[0])->bytes, *tw = (const uint8_t*) txt(g->sp[2]),
                *ed = (const uint8_t*) txt(g->sp[3]);
  uintptr_t nf = len(bytes_of(g->sp[0])) / 2 / (uintptr_t) ch, skip = nf > n ? nf - n : 0, pad = nf < n ? n - nf : 0;
- double *re = (double*) work->bytes, *im = re + n;
+ double *z = (double*) work->bytes, *tc = z + 2 * n, *ts = tc + n / 2;
  for (uintptr_t i = 0; i < n; i++) {
   double s = 0;
   if (i >= pad) {
    uintptr_t f = skip + i - pad;
    s = ch == 2 ? (eq_s16(in, 2 * f) + eq_s16(in, 2 * f + 1)) / 2.0 : eq_s16(in, f); }
-  re[i] = s * eq_q(tw, i), im[i] = 0; }
- for (uintptr_t i = 1, j = 0; i < n; i++) {        // bit-reversed order
-  uintptr_t b = n >> 1;
-  for (; j & b; b >>= 1) j ^= b;
-  j ^= b;
-  if (i < j) { double t = re[i]; re[i] = re[j], re[j] = t; } }
- for (uintptr_t h = 1; h < n; h <<= 1)              // butterflies, twiddle e^(-2 pi i k / n)
-  for (uintptr_t a = 0; a < n; a += 2 * h)
-   for (uintptr_t k = 0; k < h; k++) {
-    uintptr_t t = k * (n / (2 * h));
-    double c = eq_q(tw, n + t), s = eq_q(tw, n + n / 2 + t),
-           xr = re[a + k + h] * c + im[a + k + h] * s, xi = im[a + k + h] * c - re[a + k + h] * s;
-    re[a + k + h] = re[a + k] - xr, im[a + k + h] = im[a + k] - xi;
-    re[a + k] += xr, im[a + k] += xi; }
+  z[2 * i] = s * eq_q(tw, i), z[2 * i + 1] = 0; }
+ for (uintptr_t k = 0; k < n / 2; k++) tc[k] = eq_q(tw, n + k), ts[k] = eq_q(tw, n + n / 2 + k);
+ love_fft(z, n, tc, ts, 0);
  uint8_t *o = (uint8_t*) out->bytes;
  uintptr_t top = 16 * (n / 2 - 1);
  for (uintptr_t b = 0; b + 1 < ne; b++) {
@@ -93,11 +83,11 @@ static struct g *host_spectrum(struct g *g) {
   double p = 0;
   if (hi < lo + 16) {                               // narrower than a bin: between two bins
    uintptr_t c = (lo + hi) / 2, k = c / 16;
-   double f = (double) (c % 16) / 16, q0 = re[k] * re[k] + im[k] * im[k];
-   double q1 = k + 1 < n / 2 ? re[k + 1] * re[k + 1] + im[k + 1] * im[k + 1] : q0;
+   double f = (double) (c % 16) / 16, q0 = z[2 * k] * z[2 * k] + z[2 * k + 1] * z[2 * k + 1];
+   double q1 = k + 1 < n / 2 ? z[2 * k + 2] * z[2 * k + 2] + z[2 * k + 3] * z[2 * k + 3] : q0;
    p = q0 + (q1 - q0) * f; }
   else for (uintptr_t k = (lo + 15) / 16; k <= hi / 16 && k < n / 2; k++) {
-   double q = re[k] * re[k] + im[k] * im[k]; if (q > p) p = q; }
+   double q = z[2 * k] * z[2 * k] + z[2 * k + 1] * z[2 * k + 1]; if (q > p) p = q; }
   uint64_t v = p >= 4.6e18 ? (uint64_t) 4600000000000000000ull : (uint64_t) p;
   for (int k = 0; k < 8; k++) o[8 * b + k] = (uint8_t) (v >> (8 * k)); }
  return g->sp[3] = word(out), g->sp += 3, g; }

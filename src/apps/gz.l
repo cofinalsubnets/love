@@ -19,7 +19,7 @@
 ;
 ; the coder is greedy LZ77 in 16k-symbol blocks, each written the cheapest of stored,
 ; fixed or dynamic Huffman; the decoder takes all three.
-; gz-inflate is a door onto src/love/lib/gz.c's nif, falling back to
+; gz-inflate is a door onto src/love/compress/gz.c's nif, falling back to
 ; gz-puff (test/host/gzc.l fuzzes the pair).
 ; a cask is mutable bytes; a tray's pin answers a copy, so trays hold constant tables only.
 ; the wrap registers module 'gz in the dist cat too, so the bake compiles it once.
@@ -34,7 +34,7 @@
    gz-crctab (star-tray '(256) (map gz-crcrow (jot 256)))
    (gz-crcwalk s) (foldl (\ c i (peep gz-crctab ((c ^ s i) & 255) 0 ^ c >> 8)) 4294967295 ^#s ^ 4294967295)
 
-   ; src/love/lib/hash.c's; the walk above states the polynomial and is the oracle
+   ; src/love/crypto/hash.c's; the walk above states the polynomial and is the oracle
    ; test/host/gzc.l holds the C to.
    ; `charm?`, not `?`: the crc of "" is 0, a true answer a truth test calls absent.
    (gz-crc32 s)
@@ -336,7 +336,7 @@
        (gz-blocks s n j t head prev 0,
         gz-align j t,
         slurp j + ""))
-   ; src/love/lib/gz.c's, a twin held to the bytes of the coder above: the love lane is the
+   ; src/love/compress/gz.c's, a twin held to the bytes of the coder above: the love lane is the
    ; oracle test/host/gzc.l holds it to.
    (gz-deflate s)
     (deflate s @ r (string? r ? r (gz-deflatel s)))
@@ -518,7 +518,7 @@
                (? (!r || peep t 1 0) ()
                   <>r [1 (gz-take b)]
                   (go ()))))
-   ; src/love/lib/gz.c's, gz-puff wherever it declines -- a torn stream declines, so a torn one
+   ; src/love/compress/gz.c's, gz-puff wherever it declines -- a torn stream declines, so a torn one
    ; is read twice and answers () both times. `string?`, never `?`: a string of NULs sums to
    ; zero and would read as absent.
    (gz-inflate s hint)

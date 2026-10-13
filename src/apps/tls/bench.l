@@ -1,4 +1,4 @@
-; src/apps/tls/bench.l -- the two ciphers, love against their C twins (src/love/lib/tls.c).
+; src/apps/tls/bench.l -- the two ciphers, love against their C twins (src/love/crypto/tls.c).
 ; test/host/tlsc.l proves they agree; this asks what the readable one costs. the ratio is
 ; the binary's: mooncc is weakest at indexed loops over arrays, so it moves most with the
 ; compiler that built love.

@@ -1,7 +1,7 @@
 // src/love/vfs.c -- the tree both seats serve (vfs.h): the entry table over baked rows, the
 // lookups, and the copies a write makes. inle's whole namespace rides it, and the host's /love.
 #include "vfs.h"
-#include "lib/ustar.h"
+#include "archive/ustar.h"
 #include <errno.h>
 #include <string.h>
 

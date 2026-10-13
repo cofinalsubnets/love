@@ -248,6 +248,12 @@
    (i3-cvttsd2ui m r f)
     (i3-cell m (i3-xmem m 242 17 (i3x f) 'sp 0
                 + i3-x87 m 221 0 + i3-x87 m 221 1 + i3mem m 4 [139] r 'sp 0))           ; fld qword; fisttp qword
+   (i3-cvtui2ss m f r)
+    (i3-cell m (i3mem m 4 [137] r 'sp 0 + i3-si m 4 'sp 4 0
+                + i3-x87 m 223 5 + i3-x87 m 217 3 + i3-xmem m 243 16 (i3x f) 'sp 0))   ; fild qword; fstp dword
+   (i3-cvttss2ui m r f)
+    (i3-cell m (i3-xmem m 243 17 (i3x f) 'sp 0
+                + i3-x87 m 217 0 + i3-x87 m 221 1 + i3mem m 4 [139] r 'sp 0))           ; fld dword; fisttp qword
    ;; the tablet for a mode
    (i386-ems m)
     (: t (emsof
@@ -295,6 +301,11 @@
            ('cvtsi2sd . (\ f r [242 15 42 (modrm 3 (i3x f) (i3rn r))]))
            ('cvttsd2si . (\ r f [242 15 44 (modrm 3 (i3rn r) (i3x f))]))
            ('cvtui2sd . i3-cvtui2sd m) ('cvttsd2ui . i3-cvttsd2ui m)
+           ('cvtsi2ss . (\ f r [243 15 42 (modrm 3 (i3x f) (i3rn r))]))
+           ('cvttss2si . (\ r f [243 15 44 (modrm 3 (i3rn r) (i3x f))]))
+           ('cvtui2ss . i3-cvtui2ss m) ('cvttss2ui . i3-cvttss2ui m)
+           ('movdxr . (\ f r [102 15 110 (modrm 3 (i3x f) (i3rn r))]))
+           ('movdrx . (\ r f [102 15 126 (modrm 3 (i3x f) (i3rn r))]))
            ('movqxr . i3-movqxr m) ('movqrx . i3-movqrx m)
            ('xaddm . (\ w b o s (i3-mw m w [15 192] [15 193] s b o)))
            ('cmpxchgm . (\ w b o s (i3-mw m w [15 176] [15 177] s b o)))
@@ -338,7 +349,7 @@
      'nop '(144)
      'zeroxor 1
      'flagr '(br set cmov adc sbb adcs sbcs carry)
-     'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs adcs sbcs ors neg mulo ucomisd)
+     'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs adcs sbcs ors neg mulo ucomisd ucomiss)
      'short x86-short}
    _ (defbackend 'i386 (i386-be i386-ems32))
    (defbackend 'i386m16 (i386-be i386-ems16)))

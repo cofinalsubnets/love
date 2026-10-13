@@ -1,4 +1,4 @@
-; src/apps/flac.l -- flac decoding over src/love/lib/flac.c's nif, and the flac and metaflac
+; src/apps/flac.l -- flac decoding over src/love/audio/flac.c's nif, and the flac and metaflac
 ; verbs: flac's decode and test, and metaflac's reading.
 ; `(borrow 'flac)`, then:
 ;
