@@ -1,12 +1,12 @@
 // src/inle/uefi/loader.c -- our own BOOTX64.EFI / BOOTAA64.EFI: the bring-up a bootloader used
 // to do, in ~250 lines of mooncc-compiled C. mkefi.l's thunks carry the calling-convention
 // seam (efi_main in, efi_call out) and efi_go, the tail that swaps the tables and jumps.
-// the loader reads love.elf off its own volume, takes the pages at the link address (or
+// the loader reads love.elf off its own volume, takes the pages at the load address (or
 // anywhere, and maps them there), copies the PT_LOADs home, finds `kboot` in the kernel's
 // symtab and fills it: the memmap's conventional ranges, the GOP framebuffer, the hhdm and
-// love.cmd's line if the volume has one. then ExitBootServices, our page tables (identity
-// plus the hhdm's no-execute twin), and the kernel's entry -- which notices nothing, since
-// kboot is kboot and the same ELF boots every door.
+// love.cmd's line if the volume has one. then ExitBootServices, our page tables (identity,
+// the hhdm's no-execute twin, and on x64 the image window), and the kernel's entry -- which
+// notices nothing, since kboot is kboot and the same ELF boots every door.
 // integer-only on purpose: the x86 entry thunk saves rsi/rdi around the sysv call and
 // nothing else, so the ms_abi xmm6..15 stay untouched only while no float sneaks in.
 
@@ -71,6 +71,17 @@ static void kcmdline(void *root, struct k_boot *kb) {
   kb->cmdline[i] = (char) cbuf[i];                // stops at the trailing newline
  kb->cmdline[i] = 0; }
 
+// a link address's physical one, through the PT_LOAD holding it: x64's image is linked in
+// the upper half and loaded low (kproject.l)
+static u64 kpa(u8 *e, u64 va) {
+ u64 phoff = *(u64*) (e + 32);
+ u16 phn = *(u16*) (e + 56), phsz = *(u16*) (e + 54);
+ for (u16 i = 0; i < phn; i++) {
+  u8 *p = e + phoff + (u64) i * phsz;
+  u64 v = *(u64*) (p + 16);
+  if (*(u32*) p == 1 && v <= va && va < v + *(u64*) (p + 40)) return *(u64*) (p + 24) + (va - v); }
+ return va; }
+
 u64 efi_main(void *handle, void *st) {
  sys = (void**) st;
  bs = (void**) sys[12];
@@ -99,8 +110,8 @@ u64 efi_main(void *handle, void *st) {
  if (efi_call(((void**) f)[4], (u64) f, (u64) &rsz, buf, 0, 0) || rsz != fsz)
   return die("short read on love.elf");
 
- // the ELF: the link is FLAT, so a PT_LOAD's vaddr is the physical address it
- // wants. take exactly those pages and copy each segment home.
+ // the ELF: a PT_LOAD's paddr is the physical address it wants. take exactly those
+ // pages and copy each segment home.
  u8 *e = (u8 *) buf;
  if (*(u32 *) e != 0x464c457f) return die("love.elf is not an ELF");
  u64 phoff = *(u64*) (e + 32), entry = *(u64*) (e + 24);
@@ -164,7 +175,7 @@ u64 efi_main(void *handle, void *st) {
    char *nm = (char*) (str + *(u32 *) sy);
    if (nm[0] == 'k' && nm[1] == 'b' && nm[2] == 'o' && nm[3] == 'o'
        && nm[4] == 't' && !nm[5]) {
-    kb = (struct k_boot*) (kbase + (*(u64*) (sy + 8) - lo));   // flat, then wherever we landed
+    kb = (struct k_boot*) (kbase + (kpa(e, *(u64*) (sy + 8)) - lo));   // its load, then wherever we landed
     break; } } }
  if (!kb) return die("no kboot symbol in love.elf");
  kb->hhdm = HHDM;
@@ -225,8 +236,10 @@ u64 efi_main(void *handle, void *st) {
   pt[512] = (u64) kpd | 3; }
  pt[0] = (u64) &pt[512] | 3;
  // NX on the hhdm entry alone: one bit at the top of the walk covers every page under
- // it. the identity window keeps X, since efi_go's next instruction fetch is there.
+ // it. the identity window keeps X, since efi_go's next instruction fetch is there, and
+ // the image window at [511] is the identity's twin, the kernel's own and its heap code's
  pt[256] = (u64) &pt[2 * 512] | 3 | (1ull << 63);
+ pt[511] = (u64) &pt[512] | 3;
 #endif
 
  // the memmap -> kboot.ram: conventional (7) only, so the kernel heap never eats this

@@ -2,6 +2,12 @@
    -mbranch-protection=pac-ret+bti -mstrict-align, each fn's landing, its exits and every
    packed access held to clang's */
 struct __attribute__((packed)) pk { char c; int i; long l; short s; };
+struct __attribute__((packed)) pka { char c; int a[4]; };
+struct __attribute__((packed)) pkb { char c; unsigned x : 12; unsigned y : 9; unsigned z : 30; };
+struct __attribute__((packed)) pkw { char c; __int128 v; };
+struct pki { long x; int y; };
+struct __attribute__((packed)) pko { char c; struct pki in; };
+extern long takei(struct pki);
 extern int ext(int);
 
 int leaf(int a) { return a * 3 + 1; }                                    /* bti c */
@@ -21,3 +27,11 @@ long pk_rdl(struct pk *p) { return p->l; }
 void pk_wr(struct pk *p, int v) { p->i = v; }
 void pk_wrl(struct pk *p, long v) { p->l = v; }
 void pk_step(struct pk *p) { p->s++; p->i += 3; }
+int pk_idx(struct pka *p, int i) { return p->a[i]; }
+void pk_idxw(struct pka *p, int i, int v) { p->a[i] = v; }
+unsigned pk_bf(struct pkb *p) { return p->y + p->z; }
+void pk_bfw(struct pkb *p, unsigned v) { p->y = v; p->z++; }
+__int128 pk_w(struct pkw *p) { return p->v; }
+void pk_ww(struct pkw *p, long v) { p->v = v; }
+struct pki pk_sv(struct pko *p) { return p->in; }
+long pk_sva(struct pko *p) { return takei(p->in); }

@@ -50,8 +50,8 @@
 ;   kore openssl x509|s_client|verify|dgst|rand|base64|version ..   openssl's read-only half
 ;                                    (src/apps/kore/openssl.l, over the tls stack)
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (src/apps/gz.l), xz|unxz|xzcat the .xz
-;                                    one (src/apps/xz.l, src/love/lib/xz.c's LZMA2), bzip2|bunzip2|bzcat
-;                                    (src/apps/bz2.l, src/love/lib/bz2.c); tar and cpio the
+;                                    one (src/apps/xz.l, src/love/compress/xz.c's LZMA2), bzip2|bunzip2|bzcat
+;                                    (src/apps/bz2.l, src/love/compress/bz2.c); tar and cpio the
 ;   kore tar {c|x|t}[vzjJ] -f A      two containers over it (src/apps/tar.l, src/apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l

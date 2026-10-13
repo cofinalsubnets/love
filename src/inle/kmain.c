@@ -18,8 +18,9 @@ static uintptr_t k_ticks_for(uintptr_t ms) { return (ms + k_tick_ms - 1) / k_tic
 // before archinit, so arch code can use it for MMIO.
 uintptr_t khhdm;
 // the window that runs: the hhdm carries NX for the whole higher half (src/inle/mkboot.l),
-// so the identity map is the same pages without the bit, which is what code needs.
-char *code_window(char *p) { return (char*)((uintptr_t) p - khhdm); }
+// so the image window (k_xw) is the same pages without the bit, which is what code needs.
+// hosted, khhdm is 0 and the heap runs where it lies
+char *code_window(char *p) { return khhdm ? (char*)((uintptr_t) p - khhdm + k_xw) : p; }
 
 #include "ffalloc.h"
 static struct mem *kmem;
@@ -505,8 +506,8 @@ void kfree(void *p) { ff_free(&kmem, p); }
 // the initrd is the source the artifact carries (srctree, through src/love/vfs.c): its index
 // lays the rows at boot, and each section decodes into the kernel heap at the first read of
 // a file in it.
-#include "lib/ustar.h"
-#include "lib/srctree.h"
+#include "archive/ustar.h"
+#include "archive/srctree.h"
 #include "vfs.h"
 static void *k_grab(uintptr_t n) { return kmallocw(b2w(n)); }
 // the tree's rows live under /love, read-only, so a module loads from bytes the shell
@@ -535,6 +536,8 @@ static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
 static char const k_pcmd[] = "proc/cmdline";
 // and the heap image the door handed in, read-only, for a process to wake from
 static char const k_pimg[] = "proc/image";
+// and the file the door carried in beside the kernel, read-only
+static char const k_pinitrd[] = "proc/initrd";
 // /dev/{null,zero}: neither holds bytes -- null is the source table's empty slot, zero that
 // slot with a read door. the entries below exist only so stat and dents can see them.
 static char const k_dnull[] = "dev/null", k_dzero[] = "dev/zero";
@@ -597,12 +600,14 @@ static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pi
 static bool k_fs_init(void) {
   if (k_fs.ents) return true;
   if (!k_fs.bakes && !vfs_untar(&k_fs, k_tree, srctree, srctree_len, rootfs, rootfs_len)) return false;
-  int bn = k_fs.extra ? 0 : k_baked(NULL, 0), xn = bn + (!k_fs.extra && kboot.image_len);
+  int bn = k_fs.extra ? 0 : k_baked(NULL, 0),
+      xn = bn + (!k_fs.extra && kboot.image_len) + (!k_fs.extra && kboot.initrd_len);
   if (xn > 0) {
     struct vfs_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
     int m = bn ? k_baked(xr, bn) : 0;
     if (kboot.image_len) xr[m++] = (struct vfs_file) { k_pimg, kboot.image, kboot.image_len, 0 };
+    if (kboot.initrd_len) xr[m++] = (struct vfs_file) { k_pinitrd, kboot.initrd, kboot.initrd_len, 0 };
     k_fs.extra = xr, k_fs.extra_n = m; }
   // the rows past the baked ones, each laid empty and owned; one with `to` is a link, its
   // target heap because k_ent_gc frees it, and a strdup that refuses leaves a plain directory
@@ -770,7 +775,7 @@ static int k_gauge(char *b, struct g const *g) {
   at = k_row(b, at, "seen-words", g->n_seen);
   at = k_row(b, at, "evac-words", g->n_evac);
   at = k_row(b, at, "old-words", (uintptr_t) (g->major_hp - g->major_base));
-  at = k_row(b, at, "major-cap", 2 * g->major_len);
+  at = k_row(b, at, "major-cap", g->major_len);
   at = k_row(b, at, "rem-miss", g->rem_miss);
   at = k_row(b, at, "rem-peak", g->rem_hi);
   at = k_row(b, at, "resizes", g->n_resize);
@@ -1997,6 +2002,13 @@ static lvm(lvm_kreap) {
   Sp[0] = r == -EAGAIN ? ZeroPoint : r < 0 ? love_err(g, (int) -r) : putcharm(r);
   love_musttail return Next(1); }
 
+// (kpump _) -- a turn for each process the kernel itself runs (sys.c's k_proc_pump): 0 when
+// there are none, 1 when each waits on a call, 2 when one wants another turn
+long k_proc_pump(void);
+static lvm(lvm_kpump) {
+  Sp[0] = putcharm(k_proc_pump());
+  love_musttail return Next(1); }
+
 // (openpty _) -- a fresh pty as its rows: (master slave signal)
 love_noinline static struct g *k_openpty(struct g *g) {
   int fds[3];
@@ -2134,6 +2146,7 @@ static union u
   nif_kopenpty[] = {{lvm_kopenpty}, {lvm_ret0}},
   nif_kproc[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kproc}, {lvm_ret0}},
   nif_kreap[] = {{lvm_kreap}, {lvm_ret0}},
+  nif_kpump[] = {{lvm_kpump}, {lvm_ret0}},
   nif_kpaper[] = {{lvm_kpaper}, {lvm_ret0}},
   nif_kshow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kshow}, {lvm_ret0}},
   nif_kscan[] = {{lvm_kscan}, {lvm_ret0}};
@@ -2160,7 +2173,7 @@ static uint8_t fbscale(void) {
 
 static bool fbinit(void) {
   if (!kboot.has_fb) return false;
-  kfb._      = kboot.fb.base;
+  kfb._      = (void*) ((uintptr_t) kboot.fb.base + (k_xw ? khhdm : 0));   // the lower half is a process's
   kfb.width  = kboot.fb.w;
   kfb.height = kboot.fb.h;
   kfb.pitch  = kboot.fb.pitch_px;
@@ -2220,6 +2233,7 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   // processes: programs in memory of their own, where a seat can run them (src/inle/sys.c)
   {"kproc", {.k = nif_kproc}},
   {"kreap", {.k = nif_kreap}},
+  {"kpump", {.k = nif_kpump}},
   // a window's paper (src/inle/seat.l's kwin-events)
   {"kpaper", {.k = nif_kpaper}},
   {"kshow", {.k = nif_kshow}},

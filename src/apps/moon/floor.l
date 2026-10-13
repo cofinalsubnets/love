@@ -1,6 +1,6 @@
 ; src/apps/moon/floor.l -- the C type floor: the laws that are neither syntax nor codegen,
 ; spelled once and read from both sides. pure over the shared type vocabulary
-; ('char 'short 'int 'long .. | ('ptr t) | ('arr t n) | ('struct tag) | ('bitfield ty off w)):
+; ('char 'short 'int 'long .. | ('ptr t) | ('arr t n) | ('struct tag) | ('bitfield ty off w [n])):
 ; the machine WORD and the struct-tag table arrive as parameters, which is the whole point --
 ; parse threads them off ps, gen off g, and a front that is neither stands on this file alone.
 ; nothing here may name a token, a parse state, a register or a target: the moment it does,
@@ -12,7 +12,7 @@
    (arr? ('arr . _)) 1
    (fn? ('fn . _)) 1                     ; ('fn ret?) -- a function; decays to its address
    (stru? ('struct . _)) 1
-   (bitf? ('bitfield . _)) 1             ; (bitfield uty bitoff width); its lvalue is a unit address
+   (bitf? ('bitfield . _)) 1             ; (bitfield uty bitoff width [n]); its lvalue is a unit address, n bytes when packed
    (cplxty? ty) (stru? ty && elem <>ty '("__cplx_double" "__cplx_float"))   ; a seeded complex
 
    ; -- sizes and alignment. w is the machine word in bytes (4 on the 32-bit thumb ABI, 8
@@ -26,7 +26,7 @@
     (? (ptr? ty) w
        (arr? ty) (<>>ty * tysz w stag <>ty)
        (stru? ty) <>(stag <>ty)
-       (bitf? ty) (tysz w stag <>ty)       ; the unit's size (a bitfield rides its declared type)
+       (bitf? ty) (two? (drop 4 ty) ? (ty 4) (tysz w stag <>ty))   ; the unit's size: a packed one's own, else its declared type's
        (ty @ ('char || 'schar || 'cchar || 'uchar || 'bool || 'void) 1   ; void is gcc's: void * steps by bytes
              ('short || 'ushort) 2
              ('int || 'uint || 'float) 4
@@ -38,7 +38,7 @@
    (tyalign w cap stag ty)
     (? (ptr? ty) w
        (arr? ty) (tyalign w cap stag <>ty)
-       (stru? ty) <>>(stag <>ty)
+       (stru? ty) (two? (drop 2 ty) ? (ty 2) <>>(stag <>ty))   ; a third element: the alignment its address carries
        (bitf? ty) (tyalign w cap stag <>ty)
        (min (tysz w stag ty) cap))
 

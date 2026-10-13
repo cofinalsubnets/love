@@ -1,4 +1,4 @@
-; src/apps/bz2.l -- bzip2 over src/love/lib/bz2.c, which holds the whole stream: its blocks lie on bit
+; src/apps/bz2.l -- bzip2 over src/love/compress/bz2.c, which holds the whole stream: its blocks lie on bit
 ; boundaries, so there is no container to read here. `(borrow 'bz2)`, then:
 ;   (bz2-pack s level)  -> the .bz2 bytes of s, level 1..9 the block in 100k
 ;   (bz2-unpack s)      -> (1 bytes) | a word saying why not ('format 'corrupt 'end 'check 'big):
@@ -56,7 +56,7 @@
 (borrow 'bz2)
 (borrow 'path)
 (borrow 'posix)
-(: bzc-help "bzip2 -- the block-sorting compressor in love (src/love/lib/bz2.c is the codec)
+(: bzc-help "bzip2 -- the block-sorting compressor in love (src/love/compress/bz2.c is the codec)
 usage: bzip2 [-cdfkqstvz] [-1..-9] [FILE..]
   -z  compress (the default)            -d  decompress (bunzip2)
   -c  write on stdout, keep the files   -k  keep the input file

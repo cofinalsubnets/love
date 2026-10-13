@@ -40,9 +40,9 @@ CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*
 # a caller's -Werror comes back out: a warning set is not throughput
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dtco=1 -fpic -I$ho -I$R -I$R/src/love -I$R/src/inle -I$R/out/lib"
 # the hosted roster, common.mk's spelling: the core (love_tu + the codec), then src/love/ less
-# the core and the board seat, plus src/love/lib/ less the codec
+# the core and the board seat, plus the nif libraries (src/love/{compress,audio,picture,crypto,archive}) less the codec
 love_tu="love gc ev task io map snap num arr lib/gz"
-host_cs=$(ls "$R"/src/love/*.c "$R"/src/love/lib/*.c | grep -v '/\(love\|gc\|ev\|task\|io\|map\|snap\|num\|arr\|gz\|bare\|nohorn\|noblob\)\.c$')
+host_cs=$(ls "$R"/src/love/*.c "$R"/src/love/compress/*.c "$R"/src/love/audio/*.c "$R"/src/love/picture/*.c "$R"/src/love/crypto/*.c "$R"/src/love/archive/*.c | grep -v '/\(love\|gc\|ev\|task\|io\|map\|snap\|num\|arr\|gz\|bare\|nohorn\|noblob\)\.c$')
 # ..and the hosted seat, the Makefile's seat_o: the kernel's doors stood in, no carried source
 host_cs="$host_cs $R/src/love/user/nokern.c $R/src/love/noblob.c"
 # common.mk's $(data_ld), owed by any link: the sentinels' tiling is love.h's love_typ, and

@@ -59,7 +59,10 @@
    w-cc {'eq 'i64.eq 'ne 'i64.ne 'lt 'i64.lt_s 'le 'i64.le_s
          'gt 'i64.gt_s 'ge 'i64.ge_s 'below 'i64.lt_u 'be 'i64.le_u
          'above 'i64.gt_u 'ae 'i64.ge_u}
-   w-fp3 {'addsd 'f64.add 'subsd 'f64.sub 'mulsd 'f64.mul 'divsd 'f64.div}
+   w-fp3 {'addsd 'f64.add 'subsd 'f64.sub 'mulsd 'f64.mul 'divsd 'f64.div
+          'addss 'f32.add 'subss 'f32.sub 'mulss 'f32.mul 'divss 'f32.div}
+   w-unss '((i64.reinterpret_f64) (i32.wrap_i64) (f32.reinterpret_i32))      ; a single's bits off its f64 local
+   w-pkss '((i32.reinterpret_f32) (i64.extend_i32_u) (f64.reinterpret_i64))  ; ..and back on
    (w-fab _) [['local.get w-FA] ['local.get w-FB]]  (w-fba _) [['local.get w-FB] ['local.get w-FA]]
    (w-fcond c)                                       ; FA against FB, rv64's law
     (c @ ('above || 'gt) (w-fba 0 + '((f64.lt)))
@@ -213,11 +216,22 @@
      'trap '((unreachable))
      ('nop || 'align) ()
      ;; the double lane
-     ('movsd || 'movapd) (w-fval (f 2) + w-fset (f 1))
+     ('movsd || 'movapd || 'movss) (w-fval (f 2) + w-fset (f 1))
      ('addsd || 'subsd || 'mulsd || 'divsd)
            (w-fval (f 1) + w-fval (f 2) + [[(w-fp3 <f)]] + w-fset (f 1))
      'xorpd (w-fval (f 1) + '((i64.reinterpret_f64)) + w-fval (f 2) + '((i64.reinterpret_f64) (i64.xor) (f64.reinterpret_i64)) + w-fset (f 1))
      'ucomisd (pin w-st 'fl 1, w-fval (f 1) + [['local.set w-FA]] + w-fval (f 2) + [['local.set w-FB]])
+     'ucomiss (pin w-st 'fl 1,                                     ; promoted to f64: exact, the same order
+               w-fval (f 1) + w-unss + [['f64.promote_f32] ['local.set w-FA]]
+               + w-fval (f 2) + w-unss + [['f64.promote_f32] ['local.set w-FB]])
+     ('addss || 'subss || 'mulss || 'divss)
+           (w-fval (f 1) + w-unss + w-fval (f 2) + w-unss + [[(w-fp3 <f)]] + w-pkss + w-fset (f 1))
+     'cvtsi2ss  (w-val (f 2) + '((f32.convert_i64_s)) + w-pkss + w-fset (f 1))
+     'cvtui2ss  (w-val (f 2) + '((f32.convert_i64_u)) + w-pkss + w-fset (f 1))
+     'cvttss2si (w-fval (f 2) + w-unss + '((i64.trunc_sat_f32_s)) + w-set (f 1))
+     'cvttss2ui (w-fval (f 2) + w-unss + '((i64.trunc_sat_f32_u)) + w-set (f 1))
+     'movdxr (w-val (f 2) + '((i32.wrap_i64) (i64.extend_i32_u) (f64.reinterpret_i64)) + w-fset (f 1))
+     'movdrx (w-fval (f 2) + '((i64.reinterpret_f64) (i32.wrap_i64) (i64.extend_i32_u)) + w-set (f 1))
      'cvtsi2sd  (w-val (f 2) + '((f64.convert_i64_s)) + w-fset (f 1))
      'cvtui2sd  (w-val (f 2) + '((f64.convert_i64_u)) + w-fset (f 1))
      'cvttsd2si (w-fval (f 2) + '((i64.trunc_sat_f64_s)) + w-set (f 1))

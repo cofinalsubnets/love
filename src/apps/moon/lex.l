@@ -64,6 +64,27 @@
                     (b < 0 ? (cfdec (m * cfipow 5 -b) b)
                              (cfdec (m * cfipow 2 b) 0)))
        v)
+   ; ..and a float literal's (f/F): decimal -> binary32 in one rounding, where cflo then a narrow
+   ; would round twice. the exact value as n/d, scaled by 2^e into [2^23, 2^24) -- e held at -149,
+   ; the subnormals' floor -- rounded half-even, and laid back as the double that is that float
+   (cbits n) (: (go k b) (k < 1 ? b (go (k // 2) (b + 1))) (go n 0))
+   (cfpow2 e) (: (go k a) (k < 1 ? a (go (k - 1) (a * (e < 0 ? 0.5 2.0)))) (go (e < 0 ? -e e) 1.0))
+   (cf32 n0 d0)
+    (? (n0 = 0) 0.0
+       (: (sc e) (e < 0 ? [(n0 * cfipow 2 -e) d0] [n0 (d0 * cfipow 2 e)])
+          (fit e) (sc e @ [n d] (? (n < 8388608 * d && -149 < e) (fit (e - 1))
+                                   (16777216 * d <= n) (fit (e + 1))
+                                   e))
+          e (fit (max -149 (cbits n0 - cbits d0 - 24)))
+          q (sc e) n <q d <>q
+          m (n // d) r (n - m * d)
+          m2 (m + (2 * r > d || 2 * r = d && m % 2 = 1))
+          (m2 = 16777216 ? (8388608.0 * cfpow2 (e + 1)) ((m2 + 0.0) * cfpow2 e))))
+   (cflo32 v)
+    (? !(two? v) v
+       (<v = 'dec) (: m <>v x <>>v (x < 0 ? (cf32 m (cfipow 10 -x)) (cf32 (m * cfipow 10 x) 1)))
+       (<v = 'hex) (: m <>v b <>>v (b < 0 ? (cf32 m (cfipow 2 -b)) (cf32 (m * cfipow 2 b) 1)))
+       v)
 
    (clex src) (clexat src 1)
    (clexat src ln0) (clexm src ln0 () ())

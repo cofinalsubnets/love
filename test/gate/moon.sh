@@ -148,6 +148,20 @@ P32S
 moonrun -c "$ho/.p32s.c" -o "$ho/.p32s.o" || fail "mooncc: pushq \$1f"
 readelf -rW "$ho/.p32s.o" | grep -q R_X86_64_32S || fail "pushq \$sym does not relocate as R_X86_64_32S"
 
+# __int128 across compilers: mooncc's half (test/cc/abi128/host.c) linked with gcc's
+# (peer.c), each calling the other with SysV's register pairs and rdx:rax answers
+$cc_g -O2 -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.peer128.o" test/cc/abi128/peer.c \
+  || fail "abi128: gcc could not build peer.c"
+moonrun -o "$ho/.abi128" test/cc/abi128/host.c "$ho/.peer128.o" > "$ho/.abi128.log" 2>&1 \
+  || { cat "$ho/.abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
+"$ho/.abi128" > "$ho/.abi128.out" || { cat "$ho/.abi128.out" >&2; fail "abi128: mooncc and gcc disagree on SysV's __int128"; }
+
+# the float fuzz (test/cc/278-f32-fuzz.c) at -Os too: its exit code folds every result's bits
+$cc_g -O0 -o "$ho/.f32g" test/cc/278-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
+moonrun -Os -o "$ho/.f32" test/cc/278-f32-fuzz.c > /dev/null 2>&1 || fail "mooncc -Os the float fuzz"
+"$ho/.f32"; a=$?
+[ $a -eq $b ] || fail "float arithmetic -Os: ours $a gcc $b"
+
 # an asm's other-section words leave with its home: a BUG_ON a late fold proves false loses its brk
 # and label, and its __bug_table row must go too, or the object names a label it never lays
 bug='asm volatile (".pushsection __bug_table,\"aw\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800");'
