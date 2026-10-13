@@ -7,10 +7,13 @@
 ;   tuner -a HZ        A4 at HZ (440 unless said)
 ;   tuner -d DEV       listen on DEV, a /dev/snd/pcmC*D*c, /dev/dsp or /dev/sound
 ;   tuner --demo       no mic: a synthesized glide through four octaves, through the same ear
+;   tuner --window     in a window of its own (src/apps/window.l): X, inle's screen, a phone
 ; under the needle, when there is room, the spectrum from C1 to B7 in semitones.
-; keys: a and A move A4 down and up a hertz, s shows or hides the spectrum, q quits.
+; keys: a and A move A4 down and up a hertz, s shows or hides the spectrum, q quits. in a
+; window a tap is a key too: a on the left third, A on the right, s between.
 (module (tuner tuner-main tuner-new tuner-yin tuner-hear tuner-cents tuner-note tuner-frame
-               tuner-sine tuner-tone tuner-plain tuner-spectrum)
+               tuner-sine tuner-tone tuner-plain tuner-spectrum tuner-glass)
+(borrow 'window)
 (:
    names ["C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"]
    hues [160 202 214 148 41 45 33 99 171]          ; octaves 0..8, red through violet
@@ -20,9 +23,10 @@
    win 2048                                         ; the window yin compares, frames
    lo 24 hi 1200                                    ; its lags: 2 kHz down to 40 Hz
    linger 2500                                      ; ms a reading stands once the sound stops
-   tuner-usage "usage: love tuner [-a HZ] [-d DEV] [--demo]
+   tuner-usage "usage: love tuner [-a HZ] [-d DEV] [--demo] [--window]
 listen and show the pitch on a scale of eighth tones, A4 at HZ (440); DEV is the capture
-device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4, s the
+device (HORN_IN's word otherwise), and --demo glides a sine instead; --window draws in a
+window, where a tap on its left, middle or right third is a, s or A. a/A move A4, s the
 spectrum, q quits."
 
    (hue o) (hues (max 0 (min 8 o)))
@@ -200,6 +204,30 @@ spectrum, q quits."
        ([top] + rows + [nl ""] + (sp ? (strip t (max 11 (w - 4)) on c + [""]) ()) + [bot]))
    (paint t w h) (tuner-frame t w h @ rs ("\e[H" + cats (map (r \ r + "\e[K\r\n") (init rs)) + last rs + "\e[K"))
 
+   ; --- a window's stage: each frame scribed into a quay screen, the glass, and the rows it
+   ;     names dirty dyed onto the paper, 8 by 16 a cell; every row onto a fresh paper ---
+   (wets sc) (: (bits d base i acc) (i < 32 ? (bits d base (i + 1) (d >> i & 1 ? ((base + i) . acc) acc)) acc)
+                (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
+                (go 0 ()))
+   (glass t)
+    (window-open 640 480 "tuner" @ wd
+     (? !(tablet? wd) (say err ("tuner: no window (" + show wd + ")\n"), 1)
+        (tuner-glass t wd, window-close wd, 0)))
+   ; t's frames on wd until a close, esc, q or t's own end; a frame follows every turn's events
+   (tuner-glass t wd)
+    (: gx {}
+       (fit w h) (: r (max 8 (h // 16)) c (max 20 (w // 8)) (pins gx () (screen (cask (screen () r c)) r c) 'all 1))
+       _ (fit <(window-size wd) (window-size wd 1))
+       (tap x) (<(window-size wd) @ w (step t (? (x < w // 3) 97 (x >= 2 * w // 3) 65 115)))
+       (event e) (e @ ['text s] (each ^#s (i \ step t (s i))) ['press _ x _] (tap x) ['size w h] (fit w h)
+                        ['down 1] (pin t 'over 1) ['close] (pin t 'over 1) 0)
+       (show _) (: sc (gx ()) r (gaze sc 1) c (gaze sc 2) p (window-paper wd) W <(window-size wd)
+                   _ (scribe sc (paint t c r))
+                   ys (wets sc @ d (gx 'all ? (pin gx 'all 0, ^r) d))
+                   (two? ys ? (each ys (y \ dye sc p W y -1 ()), window-show wd (16 * foldl min <ys ys) (16 * foldl max <ys ys + 16)) 0))
+       (go _) (each (window-events wd) event, show 0, t 'over ? 0 (rest 50, go 0))
+       (go 0))
+
    ; --- the ears that feed it -------------------------------------------------------
    ; the mic: the last long frames kept, a reading every 100 ms of fresh ones once yin's
    ; win + hi are in
@@ -223,24 +251,26 @@ spectrum, q quits."
            @ f (f && 0 < f ? f ()))
    (tuner-main as)
     (: (bad s) (say err ("tuner: " + s + "\n" + tuner-usage + "\n"), 2)
-       (go as ref dev dm)
-        (as @ ("-a" . v . r) (hz v @ x (? x (go r x dev dm) (bad ("not a frequency: " + v))))
-              ("-d" . v . r) (go r ref v dm)
-              ("--demo" . r) (go r ref dev 1)
-              () (run ref dev dm)
+       (go as ref dev dm wn)
+        (as @ ("-a" . v . r) (hz v @ x (? x (go r x dev dm wn) (bad ("not a frequency: " + v))))
+              ("-d" . v . r) (go r ref v dm wn)
+              ("--demo" . r) (go r ref dev 1 wn)
+              ("--window" . r) (go r ref dev dm 1)
+              () (run ref dev dm wn)
               (bad ("what is " + <as + "?")))
-       (run ref dev dm)
+       (run ref dev dm wn)
         (: _ (? dev (setenv "HORN_IN" dev) 0)
            h (dm ? () (horn-in rate 1))
            (? (nom? h)
               (: _ (say err ("tuner: no capture device (" + show h + "); -d or HORN_IN names one\n")) 1)
               (: t (tuner-new ref (dm ? "demo" (getenv "HORN_IN" @ x (string? x && #x ? x "mic"))))
                  _ (twirl (_ \ (dm ? (demo t (clock 0)) (listen t h "" 0))) ())
-                 _ (stage-run {'show (w \ ht \ paint t w ht) 'step (k \ step t k) 'over? (_ \ t 'over)
-                               'tick (_ \ 1) 'every 50 'modes ['hide]})
+                 _ (wn ? (glass t)
+                       (stage-run {'show (w \ ht \ paint t w ht) 'step (k \ step t k) 'over? (_ \ t 'over)
+                                   'tick (_ \ 1) 'every 50 'modes ['hide]}))
                  _ (pin t 'over 1)                ; the ear stops; the port's finalizer shuts the device
                  0)))
-       (go as 440.0 () 0))
+       (go as 440.0 () 0 0))
 
    _ (pins (cite 'verbs 'tab) 'tuner (udoor 'tuner tuner-main tuner-usage 1 1)))
 ) ; module tuner
