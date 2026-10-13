@@ -164,7 +164,7 @@
     (: t (apk-opts as {})
        fs (t 'files)
        _ (two? fs || string? (t 'b) ? 0 (apk-usage 0, quit 2))
-       nm (two? fs ? ap-stem <fs (ap-or (t 'n) "inle"))
+       nm (? (two? fs) (ap-stem <fs) (ap-or (t 'n) "inle"))
        out (ap-or (t 'o) (nm + ".apk"))
        pkg (ap-or (t 'p) ("pics.salt." + nm))
        lov (? (string? (t 'L)) (t 'L) (love-arch = 'a64) (selfpath 0)
