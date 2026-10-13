@@ -1,7 +1,7 @@
 ; test/host/porthole.l -- the mitty in a window of its own, headless: an Xvfb, `love mitty
 ; --window` on it with a child that paints cells as its input arrives, the pixels read back
 ; through GetImage and the keys sent through XTEST. asserted in turn: the child's red cells on
-; the paper, a line typed reaching it (the green), C-a v splitting the window (the right half
+; the paper (it draws them when COLORTERM says truecolor), a line typed reaching it (the green), C-a v splitting the window (the right half
 ; lit by the new pane), and C-a x twice shutting both panes, the mitty ending with status 0.
 ; no Xvfb -> a polite skip.
 ; run: cat test/00-init.l test/host/porthole.l | out/love
@@ -18,8 +18,8 @@
               0 0)
    dn (rdnum >xv)
    _ (test (charm? dn))
-   kid "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; sleep 60"
-   ph (tether ["env" "HORN=none" "MITTY=" ("DISPLAY=:" + show dn) "out/love" "mitty" "--window" "sh" "-c" kid])
+   kid "[ \"$COLORTERM\" = truecolor ] && printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; sleep 60"
+   ph (tether ["env" "HORN=none" "MITTY=" "COLORTERM=" ("DISPLAY=:" + show dn) "out/love" "mitty" "--window" "sh" "-c" kid])
    _ (rest 4000)
    XW (cite 'xwire)
    (w8 s v) (XW 'x-w8 s v) (w16 s v) (XW 'x-w16 s v) (w32 s v) (XW 'x-w32 s v)
