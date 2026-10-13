@@ -61,7 +61,7 @@
                        [28 14 15 57 1 339 328 336 331 333 327 335 329 337 338 42 54 29 285 56 312 58 51 52 41 12 13 26 27 43 39 40 53]))
    ; the keys a phone's keyboard lacks, a row of two under the paper while it types:
    ; [label key text]. ctrl and alt hold for the next key, off the row or the keyboard
-   droid-row [["esc" 1 ""] ["/" 53 "/"] ["-" 12 "-"] ["home" 327 ""] ["↑" 328 ""] ["end" 335 ""] ["pgup" 329 ""]
+   droid-row [["esc" 1 ""] ["|" 43 "|"] ["-" 12 "-"] ["home" 327 ""] ["↑" 328 ""] ["end" 335 ""] ["pgup" 329 ""]
               ["tab" 15 ""] ["ctrl" 29 ""] ["alt" 56 ""] ["←" 331 ""] ["↓" 336 ""] ["→" 333 ""] ["pgdn" 337 ""]]
    droid-rowh 96                                       ; two keys of three cells
    (droid-cols t) #(filter (b \ b & 192 != 128) (chars t))
