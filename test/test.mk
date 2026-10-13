@@ -15,7 +15,7 @@
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_hearts_boot test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
-  test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
+  test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kernel_droid test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_quick test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
@@ -1365,7 +1365,19 @@ test_inle:
 	@$(MAKE) -s test_uefi_a64
 	@$(MAKE) -s test_kernel_rv64
 	@$(MAKE) -s test_kernel_wasm
-	@echo "test_inle: boot, disk, command line, firmware -- the three arches and the wasm seat"
+	@$(MAKE) -s test_kernel_droid
+	@echo "test_inle: boot, disk, command line, firmware -- the three arches, the wasm seat and the droid one"
+
+# test_kernel_droid -- the droid seat (notes/plan/inle-droid.md): the kernel as a linux process
+# on this machine, the kernel corpus off its ramfs, the serial line its stdout, the reset its end
+test_kernel_droid: host
+	@$(MAKE) -s seat=droid a=$(hosta) kdroid
+	@echo TEST $(ko)/love-droid-$(hosta) "(the kernel corpus, the seat a process: serial on stdio, headless)"
+	@INLE_RAM=768 $(ko)/love-droid-$(hosta) test/kernel/all.l < /dev/null > $(ko)/droid-$(hosta)/kernel.log 2>&1; \
+	 grep -q "tests pass" $(ko)/droid-$(hosta)/kernel.log && ! grep -q "FAILED:" $(ko)/droid-$(hosta)/kernel.log \
+	   && ! grep -q "^0 tests pass" $(ko)/droid-$(hosta)/kernel.log \
+	   || { tail -20 $(ko)/droid-$(hosta)/kernel.log; echo "FAIL test_kernel_droid"; exit 1; }
+	@grep "tests pass" $(ko)/droid-$(hosta)/kernel.log
 
 ifeq ($(QEMU_A64),)
 test_kernel_a64:
