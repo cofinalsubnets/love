@@ -1336,6 +1336,12 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   register with no number, a wrong word in silence. Of 400 random lines over these, 385 lay
   llvm-mc's words and refusals; the other 15 are casp's `[xn, #0]`, which the Arm ARM spells
   and llvm-mc refuses, laid as `[xn]`. Golden gas.a64.xp.
+- **an a64 operand that takes an immediate or a register** (`"Kr"`, `"Lr"`, `"Ir"`, `"Jr"`,
+  the ll/sc cmpxchg's `[old] "Kr"`): a constant rides the word only where its letter encodes
+  it -- K L a logical immediate at 32 and 64 bits, I an add's, J a negated one, M N a single
+  mov, Z zero -- and a register otherwise, as gcc and clang choose. mooncc had laid every
+  constant in the word, so `cmpxchg(p, 0, v)` refused (`a64-bitmask-imm 0`, seven tinyconfig
+  units); a constant of 2^62 or more had always taken the register. Law 284-asm-kr.c.
 
 Still open on this side (g-21's probes):
 
@@ -1346,8 +1352,6 @@ Still open on this side (g-21's probes):
   stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
-- defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
-  40, 38 compile; the other two stop on a static mutex's initializer, outside the asm.
 
 ---
 
