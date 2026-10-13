@@ -318,7 +318,7 @@ static uintptr_t sun_lag(int fd, int dir, uintptr_t fb) {
 #include <sys/socket.h>
 #include <sys/un.h>
 static int sock_open(char const *path, int rate, int *err) {
- struct sockaddr_un u = {AF_UNIX};
+ struct sockaddr_un u = {.sun_family = AF_UNIX};
  if (strlen(path) >= sizeof u.sun_path) return *err = ENAMETOOLONG, -1;
  strcpy(u.sun_path, path);
  int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0), q = 32768;   // ~340 ms at 48k once doubled: a slow frame's gap

@@ -867,7 +867,7 @@
                    (tor0 g r + (cxb (vty r) = 'float ?
                                 '((ldss f0 r0 0) (cvtss2sd f0 f0))
                                 '((ldsd f0 r0 0))))
-                  (ilp32? g && llt? (vty r)) (tor0 g r + cvtlld g (usg? (vty r)))
+                  (ilp32? g && llt? (vty r)) (tor0 g r + cvtlld g (usg? (vty r)) 0)
                   (ilp32? g && usg? (vty r)) (tor0 g r + '((cvtui2sd f0 r0)))
                   (vty r = 'ulong) (tor0 g r + ul2d)
                   (tor0 g r + '((cvtsi2sd f0 r0))))
@@ -888,8 +888,10 @@
    (asf32 g r) (? (vty r = 'float && f32v? g) (vfs r)
                   (flo? (vty r) || gcplx? (vty r)) (asflo g r + '((cvtsd2ss f0 f0)))
                   (ia32? g && llt? (vty r)) (tor0 g r + ll2f g (usg? (vty r)))
-                  (t32? g && llt? (vty r))                 ; rt.c's one rounding, the answer's word in r0
+                  (v6m? g && llt? (vty r))                 ; rt.c's one rounding, the answer's word in r0
                    (tor0 g r + [['call (usg? (vty r) ? '__aeabi_ul2f '__aeabi_l2f)] '(movdxr f0 r0)])
+                  (ilp32? g && llt? (vty r))               ; sticky-folded to 53 bits: an exact double, one rounding
+                   (tor0 g r + cvtlld g (usg? (vty r)) 1 + '((cvtsd2ss f0 f0)))
                   (ilp32? g && usg? (vty r)) (tor0 g r + '((cvtui2ss f0 r0)))
                   (vty r = 'ulong) (tor0 g r + ul2f g)
                   (tor0 g r + '((cvtsi2ss f0 r0))))
@@ -952,11 +954,11 @@
    ; the type of an expression without its emission (arrays undecayed); every accumulator the
    ; walk touched is handed back as it was
    (peekty g env e)
-    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fx0 (g 'fesca) fa0 (g 'fasecs)
+    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fv0 (g 'fescv) fx0 (g 'fesca) fa0 (g 'fasecs)
        lv (clval g env e)
        _ (vm? lv ? (rfree g (vmb lv)))
        ty (bad? lv ? (cgexpr g env e () @ r (bad? r ? 'bad (rfree g (vreg r), vty r))) (vty lv))
-       (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fesca fx0 'fasecs fa0,
+       (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fescv fv0 'fesca fx0 'fasecs fa0,
         ty))
    ; the fn's read graph, flow-blind: each local to the names its decl init and its writes read
    (rdgraph x)
@@ -1639,21 +1641,26 @@
         + sm + [['jmp ld] ['label lb] '(sub r1 r1 32)]
         + big + [['label ld] '(mov r1 r3)]))
    ; llong -> double (VFP converts only through 32 bits): hi rides the U-converter scaled by 2^32,
-   ; lo adds exactly, one rounding; the signed face negates the pair in and the double out. v6-M: one call
-   (cvtlld g usg)
+   ; lo adds exactly, one rounding; the signed face negates the pair in and the double out. v6-M: one call.
+   ; sk: a magnitude at or past 2^53 first folds its low 11 bits into bit 11 (sticky), so it fits exactly
+   (cvtlld g usg sk)
     (v6m? g ?
        [['call (usg ? '__aeabi_ul2d '__aeabi_l2d)] '(movqxr f0 r0)]
     (: lu (nlab g ".lu") ld (nlab g ".ld")
-       u2d '((cvtui2sd f0 r1)
-             (li r2 0) (li r3 1106247680) (movqxr f1 r2)   ; 2^32 (0x41F00000:0)
-              (mulsd f0 f1)
-              (cvtui2sd f1 r0) (addsd f0 f1))
-       (usg ? u2d                                    ; unsigned: straight through
+       (fold lf lk) ['(li r2 2097152) '(cmp r1 r2) ['br 'ae lf] ['jmp lk] ['label lf]   ; hi >= 2^21
+                     '(li r3 2047) '(mov r2 r0) '(and r2 r2 r3) '(add r2 r2 r3) '(or r0 r0 r2)
+                     '(li r3 -2048) '(and r0 r0 r3) ['label lk]]
+       (u2d _) ((!sk ? () (fold (nlab g ".lf") (nlab g ".lk")))
+              + '((cvtui2sd f0 r1)
+                  (li r2 0) (li r3 1106247680) (movqxr f1 r2)   ; 2^32 (0x41F00000:0)
+                  (mulsd f0 f1)
+                  (cvtui2sd f1 r0) (addsd f0 f1)))
+       (usg ? (u2d 0)                                  ; unsigned: straight through
           (['(cmp r1 0) ['br 'ge lu]] + pneg g
-           + u2d
+           + (u2d 0)
            + ['(li r2 0) '(li r3 0) '(movqxr f1 r2)           ; 0.0 - d
               '(subsd f1 f0) '(movsd f0 f1) ['jmp ld] ['label lu]]
-           + u2d + [['label ld]]))))
+           + (u2d 0) + [['label ld]]))))
    ; double -> llong, toward zero: peel sign/exponent, rebuild the 53-bit mantissa as a pair, shift
    ; it into place, refix the sign. |d| < 1 answers 0; out of range is UB. v6-M: one runtime call
    (cvtdll g usg)
@@ -4311,9 +4318,10 @@
                       ['(align 4) ['lapool <>f] ['raw [['fix 4 'abs32 <>>f 0]]]])
                      + t16la u)
    ; the sibcall pass: (call F) followed by exactly the epilogue becomes epilogue + (jmp F); anything between keeps
-   ; the call. gated per fn on g 'fesc: a frame address that becomes a value pins every call (a store's own lea does not)
+   ; the call. gated per fn: g 'fesc (a frame reached with no value to follow -- frame_address, va_start, a VLA)
+   ; pins every call; a frame address that becomes a value (fescv) or a call's arg (fesca) pins the unmarked ones
    (leas? (f . u)) (two? f && <f = 'lea && <>>f = 'r4 ? 1 (leas? u))
-   (escan g r) ((two? r && leas? (vfs r) ? (pin g 'fesc 1)), r)
+   (escan g r) ((two? r && leas? (vfs r) ? (pin g 'fescv 1)), r)
    ; a frame address as a call's arg: the callee may keep it, so no later call jumps out of the
    ; frame unless the author marked it a musttail (their word that nothing reads it past the jump)
    (escana g r) ((two? r && leas? (vfs r) ? (pin g 'fesca 1)), r)
@@ -4372,7 +4380,7 @@
     (: lw2 (two? f && <f = 'lea && <>>f = 'r4 || lw)
        cand (!lw2 && two? f && (<f = 'call && two? >f ||
                                 <f = 'callr && <>f = <>crf) &&
-             (!(g 'fesca) || abl? g 'fesca || must? f))
+             (!(g 'fesca && !(abl? g 'fesca) || g 'fescv) || must? f))
        rr (cand ? (skiprel g (skipxt g r) hs) r)
        (? (cand && epim? rr ej)
            (sibjmp g f ej + sibs g (drop #ej rr) () el hs ej crf)
@@ -4395,7 +4403,10 @@
                        (<l @ f (two? f && elem <f '(call callr callm) ? (f + '(must) . >l) 'no)))))
        r (go fs)
        (r @ 'no (nolane g "a musttail return does not end in a call") r))
-   (sibcall g fs) (g 'fesc || v6m? g ?   ; v6m: the pop-pc epilogue cannot restore lr for a tail-jmp, so no sibcall
+   ; a musttail call is its author's word that nothing reads the frame past the jump, so a value
+   ; escape still jumps; a frame address laid since the last call (an arg) still refuses (lw), a
+   ; best-effort net -- one reaching the callee through memory goes unseen
+   (sibcall g fs) (g 'fesc || g 'fescv && abl? g 'fescv || v6m? g ?   ; v6m: the pop-pc epilogue cannot restore lr for a tail-jmp, so no sibcall
                       (anymust? fs ? (scare 'musttail-escape (g 'fn)), fs)
                      (peep g 'epi epi @ ej
                       (sibs g fs () (elabsx fs {} ej) (g 'homes) ej ['callr (pkr g)])))
@@ -8515,6 +8526,7 @@
      'off 8                    ; the frame cursor: slot -8 = saved r3 (see epi)
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
+     'fescv ()                 ; ..a frame address become a value (a musttail call still jumps)
      'fesca ()                 ; ..and a frame address handed a call (a later call may not jump past it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
