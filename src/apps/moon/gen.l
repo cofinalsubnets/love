@@ -8128,10 +8128,12 @@
                   (e @ ('bin _ l r) (wide? l || wide? r ? (max (wpd l) (2 + wpd r)) (max (wpd l) (wpd r)))
                        (foldl (m \ x \ max m (wpd x)) 0 e)))
        pq9 (0 = pdtl items && !wd9)
+       ; an asm anywhere pins its operands' registers, inside a statement expression too
+       (asmin e) (? (atom? e) () (<e = 'asm) 1 (any asmin e))
        (0 = peep n9 'q 0 ?
           [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa
            crh rdc rdt sqm (peep n9 'nx 0)
-           (peep n9 'asm 0) (peep n9 'vla 0) (peep n9 'sq 0) tak
+           (peep n9 'asm 0 || asmin items) (peep n9 'vla 0) (peep n9 'sq 0) tak
            (pmxl items 1 1) (pq9 ? 1) (wd9 ? 1) (wd9 ? (wpd items) 0) (peep n9 'loops ())]))
    ; alive's forward twin: cgstmt/cgdecl/cgsdecl entries tick and pin the wrapset off livtab
    ; (a miss pins 'all); a statement expression's statements neither tick nor re-pin
