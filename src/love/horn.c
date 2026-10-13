@@ -21,7 +21,8 @@
 //   - freebsd: /dev/dsp, the three OSS ioctls and write(2) or read(2)
 //   - netbsd: /dev/sound, audio(4)'s one SETINFO and write(2) or read(2)
 //   - HORN=sock:PATH: a unix socket's listener plays it (the droid bridge, AAudio under
-//     it): the rate as a little-endian u32, then the stereo frames
+//     it): the rate as a little-endian u32, then the stereo frames. HORN_IN=sock:PATH
+//     the same way round: the u32's top byte asks the channels, and the frames come back
 //   - HORN=none in the environment: a sink that keeps time and discards, so a box
 //     without a card (and every gate) still sees the shape: the ring fills, refuses,
 //     drains at the rate. HORN=<path> names the device instead of the first found.
@@ -310,20 +311,22 @@ static uintptr_t sun_lag(int fd, int dir, uintptr_t fb) {
 
 #endif
 
-// --- any kernel with sockets: a listener plays it ----------------------------------
+// --- any kernel with sockets: a listener plays it, or hears for us ----------------
 // the fd goes non-blocking once the rate is said, so a full socket is a full ring; what
-// it has not sent yet is the lag (SIOCOUTQ), the listener's own few ms left uncounted
+// it has not sent yet is the lag (SIOCOUTQ), the listener's own few ms left uncounted.
+// capture says its channels in the rate word's top byte, 0 there being playback's stereo
 #if !love_horn_seat && !defined(__wasm__)
 #define horn_sockdoor 1
 #include <sys/socket.h>
 #include <sys/un.h>
-static int sock_open(char const *path, int rate, int *err) {
+#include <poll.h>
+static int sock_open(char const *path, int rate, int inch, int *err) {
  struct sockaddr_un u = {.sun_family = AF_UNIX};
  if (strlen(path) >= sizeof u.sun_path) return *err = ENAMETOOLONG, -1;
  strcpy(u.sun_path, path);
  int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0), q = 32768;   // ~340 ms at 48k once doubled: a slow frame's gap
  if (fd >= 0) setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &q, sizeof q);
- unsigned char r[4] = {(unsigned char) rate, (unsigned char) (rate >> 8), (unsigned char) (rate >> 16), 0};
+ unsigned char r[4] = {(unsigned char) rate, (unsigned char) (rate >> 8), (unsigned char) (rate >> 16), (unsigned char) inch};
  if (fd < 0 || connect(fd, (struct sockaddr*) &u, sizeof u) < 0 || write(fd, r, 4) != 4
      || fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
   *err = errno;
@@ -336,10 +339,23 @@ static intptr_t sock_land(int fd, unsigned char const *src, uintptr_t n) {
 static uintptr_t sock_lag(int fd) {
  int q = 0;
  return ioctl(fd, 0x5411, &q) < 0 ? 0 : (uintptr_t) q / 4; }
+// what the listener has heard, in whole frames of fb bytes: a frame split across two
+// reads is waited out, a second at most; 0 when dry, -1 once the listener is gone
+static intptr_t sock_take(int fd, unsigned char *dst, uintptr_t n, uintptr_t fb) {
+ intptr_t k = read(fd, dst, n);
+ if (k <= 0) return k < 0 && errno == EAGAIN ? 0 : -1;
+ for (int w = 0; (uintptr_t) k % fb; w++) {
+  struct pollfd p = {.fd = fd, .events = POLLIN};
+  if (w == 10 || (poll(&p, 1, 100) < 0 && errno != EINTR)) return -1;
+  intptr_t j = read(fd, dst + k, fb - (uintptr_t) k % fb);
+  if (j == 0 || (j < 0 && errno != EAGAIN && errno != EINTR)) return -1;
+  if (j > 0) k += j; }
+ return k; }
 #else
 #define horn_sockdoor 0
-static int sock_open(char const *path, int rate, int *err) { return *err = ENODEV, -1; }
+static int sock_open(char const *path, int rate, int inch, int *err) { return *err = ENODEV, -1; }
 static intptr_t sock_land(int fd, unsigned char const *src, uintptr_t n) { return -1; }
+static intptr_t sock_take(int fd, unsigned char *dst, uintptr_t n, uintptr_t fb) { return -1; }
 static uintptr_t sock_lag(int fd) { return 0; }
 #endif
 static int horn_sock_name(char const *dev) { return horn_sockdoor && dev && !strncmp(dev, "sock:", 5); }
@@ -473,7 +489,7 @@ int love_horn_open(int rate) {
  if (dev && !*dev) dev = NULL;
  int err = 0, ch = 2, wid = 2;
  horn_c_sock = horn_sock_name(dev);
- horn_c_fd = horn_c_sock ? sock_open(dev + 5, rate, &err)
+ horn_c_fd = horn_c_sock ? sock_open(dev + 5, rate, 0, &err)
            : dev && !strcmp(dev, "none") ? -1 : dev_open(dev, rate, 0, &ch, &wid, &err);
 #endif
  return horn_c_fd < 0 ? -1 : 0; }
@@ -541,6 +557,7 @@ intptr_t love_horn_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   uintptr_t k = sink_take(h, n / fb) * fb;
   memset(dst, 0, k);
   return (intptr_t) k; }
+ if (kind == horn_sock) return sock_take(fd, dst, n, fb);
  if (kind != horn_dev) return -1;
  uintptr_t dchans = (uintptr_t) getcharm(h->dchans), dwid = (uintptr_t) getcharm(h->dwid),
            dfb = dwid * dchans;
@@ -599,11 +616,11 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
   if (dev && !*dev) dev = NULL;                      // set and empty is unset
   int err = 0;
   bool none = dev && !strcmp(dev, "none");
-  if (dir && horn_doorless && !none) return g->sp[1] = love_err(g, ENODEV), g->sp += 1, g;
-  if (!dir && horn_sock_name(dev)) {
-   fd = sock_open(dev + 5, (int) rate, &err);
+  if (horn_sock_name(dev)) {
+   fd = sock_open(dev + 5, (int) rate, dir ? (int) chans : 0, &err);
    if (fd < 0) return g->sp[1] = love_err(g, err), g->sp += 1, g;
    kind = horn_sock; }
+  else if (dir && horn_doorless && !none) return g->sp[1] = love_err(g, ENODEV), g->sp += 1, g;
   else if (!horn_doorless && !none) {
    fd = dev_open(dev, (int) rate, dir, &dchans, &dwid, &err);
    if (fd < 0) return g->sp[1] = love_err(g, err), g->sp += 1, g;
