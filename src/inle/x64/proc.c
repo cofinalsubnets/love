@@ -1,7 +1,8 @@
 // src/inle/x64/proc.c -- a process on x64: a program in an address space of its own, the lower
 // half, run in ring 3. its `syscall` comes back through LSTAR (mkvec.l) to k_proc_call, as a
 // wasm process's calls come through the page; the kernel's half is shared and supervisor-only.
-// the caller that starts one waits inside the start until the program is done.
+// each has a kernel stack of its own, and runs a turn at a time from sys.c's pump: a turn ends
+// at a call that must wait, at the timer, or at the end.
 #include "../../apps/moon/lib/moonlibc/impl.h"
 #include <stdint.h>
 #include <stdbool.h>
@@ -12,7 +13,8 @@
 extern uintptr_t khhdm;
 extern void *kmallocw(uintptr_t n), kfree(void *p);
 extern long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long f);
-extern void k_uenter(void *c), k_uexit(void *c) __attribute__((noreturn));
+extern void k_kswap(uint64_t *save, uint64_t load), k_ufirst(void);
+extern void **k_proc_seat(long pid);
 extern uint64_t k_cpu[4];                  // mkvec.l: [0] the kernel stack, [2] the running process
 extern uint8_t k_tss[104];                 // ..and the TSS, rsp0 at 4
 
@@ -21,13 +23,17 @@ extern uint8_t k_tss[104];                 // ..and the TSS, rsp0 at 4
 #define k_kstack (64u << 10)               // ..and the kernel's, under its calls and interrupts
 #define k_utop 0x7ffffffff000ull           // the stack's top, the lower half's last page
 #define k_upie 0x10000000ull               // where a position-independent program goes
+#define k_slice 2                          // a turn, in timer ticks
 
-// one process's machine: the five words mkvec.l reads first, then what the kernel keeps --
-// its blocks, freed at the end, and its regions, which every pointer it hands over must be in
+// one process's machine: its pc and stack where k_ufirst reads them, the two kernel stacks a
+// turn trades between, then what the kernel keeps -- its blocks, freed at the end, and its
+// regions, which every pointer it hands over must be in. why: how its last turn ended
 struct k_ureg { uint64_t lo, hi; };
 struct k_uctx {
-  uint64_t cr3, pc, sp, ksp, kcr3;
+  uint64_t cr3, pc, sp, msp, psp;
   long pid;
+  int why, slice;
+  uint8_t *kst;
   uint64_t *pml4;
   void **blk;
   int nblk, cblk, nreg;
@@ -149,18 +155,31 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
    default: return -ENOSYS; }
   return ok ? 0 : -EFAULT; }
 
+// the turn ends: back to the pump, why saying how (k_proc_run); a process that waits comes
+// back here when its next turn starts
+static void k_uyield(struct k_uctx *c, int why) {
+  c->why = why;
+  k_kswap(&c->psp, c->msp); }
+
+static void k_uend(struct k_uctx *c) __attribute__((noreturn));
+static void k_uend(struct k_uctx *c) { for (;;) k_uyield(c, 0); }
+
 // a call from the running process (k_syscall_entry, IF masked) -> its answer. a call that
-// must wait waits here, the machine halted between interrupts; a process its call ended
-// goes back to whoever started it
+// must wait ends the turn and is asked again at the next; a process its call ended is done
 long k_syscall(struct k_sysf *f) {
   struct k_uctx *c = (struct k_uctx*) (uintptr_t) k_cpu[2];
   long n = (long) f->nr, r = k_uargs(c, n, f->di, f->si, f->dx, f->r10, f->r8, f->r9);
   if (n == 32 || n == 33) n = NR_dup3, f->dx = 0;          // dup2's flags; dup lands anywhere
   if (!r) while ((r = k_proc_call(c->pid, n, (long) f->di, (long) f->si, (long) f->dx,
                                   (long) f->r10, (long) f->r8, (long) f->r9)) == K_RESTART)
-    k_sti(), k_wait(), k_cli();
-  if (k_proc_call(c->pid, NR_getpid, 0, 0, 0, 0, 0, 0) < 0) k_uexit(c);
+    k_uyield(c, 1);
+  if (k_proc_call(c->pid, NR_getpid, 0, 0, 0, 0, 0, 0) < 0) k_uend(c);
   return r; }
+
+// a tick in the running process (timer_isr): its turn spent, the machine goes back
+void k_proc_tick(void) {
+  struct k_uctx *c = (struct k_uctx*) (uintptr_t) k_cpu[2];
+  if (c && --c->slice <= 0) k_uyield(c, 2); }
 
 // a fault in the running process (k_exception, from ring 3): it ends as linux's signal would
 void k_proc_fault(uint64_t vector) {
@@ -168,7 +187,7 @@ void k_proc_fault(uint64_t vector) {
   long sig = vector == 6 ? SIGILL : vector == 0 || vector == 16 || vector == 19 ? SIGFPE
            : vector == 3 ? SIGTRAP : SIGSEGV;
   k_proc_call(c->pid, NR_kill, 0, sig, 0, 0, 0, 0);
-  k_uexit(c); }
+  k_uend(c); }
 
 // the initial stack, linux's: argc, argv, NULL, envp, NULL, auxv, then the strings -> the
 // stack pointer, 16-aligned at argc
@@ -222,17 +241,23 @@ static long k_uload(struct k_uctx *c, uint8_t const *e, uintptr_t n, uint64_t *p
   c->pc = base + h->e_entry;
   return k_uok(c, c->pc, 1) ? 0 : -ENOEXEC; }
 
-// the seat's door (sys.c): pid's program, the ELF in code, run on argv av and environment ev
-// until it is done -> 0, its status kept by its exit or its fault; -errno where it never ran.
-// a word without code is love's, which runs as no x64 process yet
+static void k_ufree(struct k_uctx *c) {
+  for (int i = 0; i < c->nblk; i++) kfree(c->blk[i]);
+  if (c->blk) kfree(c->blk);
+  kfree(c); }
+
+// the seat's door (sys.c): pid's program, the ELF in code, laid on argv av and environment ev
+// and kept in pid's record, its first turn yet to come -> 0; -errno where it cannot run. a
+// word without code is love's, which runs as no x64 process yet
 long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintptr_t en,
                   char const *code, uintptr_t cn) {
-  if (!code) return -ENOSYS;
+  void **seat = k_proc_seat(pid);
+  if (!code || !seat) return -ENOSYS;
   struct k_uctx *c = kmallocw((sizeof *c + 7) / 8);
   if (!c) return -ENOMEM;
   memset(c, 0, sizeof *c);
   c->pid = pid;
-  uint64_t phdr, phn, ks = 0;
+  uint64_t phdr, phn;
   long r = (c->pml4 = k_ublk(c, 4096)) ? 0 : -ENOMEM;
   if (!r) {                                       // the kernel's half, shared
     uint64_t const *k = k_va(k_rd_cr3() & 0x000ffffffffff000ull);
@@ -240,19 +265,32 @@ long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintpt
     c->cr3 = k_pa(c->pml4);
     r = k_uload(c, (uint8_t const*) code, cn, &phdr, &phn); }
   if (!r) r = k_umap(c, k_utop - k_ustack, k_utop, true, false);
-  uint8_t *kst = r ? NULL : k_ublk(c, k_kstack);
-  if (!r && !kst) r = -ENOMEM;
-  if (!r) {
-    c->sp = k_ustack_lay(c, av, an, ev, en, phdr, phn);
-    ks = (uint64_t) (uintptr_t) (kst + k_kstack);
-    uint64_t was[3] = { k_cpu[0], k_cpu[2], 0 };
-    memcpy(&was[2], k_tss + 4, 8);                // a process starting a process: nested
-    k_cpu[0] = ks, k_cpu[2] = (uint64_t) (uintptr_t) c;
-    memcpy(k_tss + 4, &ks, 8);
-    k_uenter(c);
-    k_cpu[0] = was[0], k_cpu[2] = was[1];
-    memcpy(k_tss + 4, &was[2], 8); }
-  for (int i = 0; i < c->nblk; i++) kfree(c->blk[i]);
-  if (c->blk) kfree(c->blk);
-  kfree(c);
-  return r; }
+  if (!r && !(c->kst = k_ublk(c, k_kstack))) r = -ENOMEM;
+  if (r) return k_ufree(c), r;
+  c->sp = k_ustack_lay(c, av, an, ev, en, phdr, phn);
+  // the first turn's stack, as k_kswap leaves one: a float file (x87 and sse at their reset
+  // control words), six registers with c in r12's, flags with IF clear, the return to k_ufirst
+  uint64_t *s = (uint64_t*) (c->kst + k_kstack) - 72;
+  memset(s, 0, 576);
+  ((uint16_t*) s)[0] = 0x37f, ((uint32_t*) s)[6] = 0x1f80;
+  s[67] = (uint64_t) (uintptr_t) c, s[70] = 2, s[71] = (uint64_t) (uintptr_t) k_ufirst;
+  c->psp = (uint64_t) (uintptr_t) s;
+  *seat = c;
+  return 0; }
+
+// one turn of the machine m (sys.c's pump) -> how it ended: 0 the process is done, 1 a call
+// waits, 2 its time ran out
+long k_proc_run(void *m) {
+  struct k_uctx *c = m;
+  uint64_t ks = (uint64_t) (uintptr_t) (c->kst + k_kstack), kcr3 = k_rd_cr3();
+  k_cpu[0] = ks, k_cpu[2] = (uint64_t) (uintptr_t) c;
+  memcpy(k_tss + 4, &ks, 8);
+  c->slice = k_slice;
+  k_wr_cr3(c->cr3);
+  k_kswap(&c->msp, c->psp);
+  k_wr_cr3(kcr3);
+  k_cpu[2] = 0;
+  return c->why; }
+
+// ..and once it is done, or killed between turns
+void k_proc_drop(void *m) { k_ufree(m); }
