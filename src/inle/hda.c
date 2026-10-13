@@ -53,7 +53,7 @@ static struct {
   uint64_t wpos, hw, zpos;           // running byte counts: landed, played, silenced to
 } khda;
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
 // --- PCI config space ------------------------------------------------------
 static void pci_w8(uint32_t bdf, uint32_t off, uint32_t v) {
   uint32_t sh = 8 * (off & 3), w = pci_r32(bdf, off) & ~(0xffu << sh);

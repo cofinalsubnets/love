@@ -1522,7 +1522,7 @@ static lvm(lvm_kexec) {
 
 // --- the SVM spike (x64 only; src/inle/x64/svm.c). (svm ()) is the capability, (svm-run ())
 // runs one guest, answering (exitcode rax rip) or ().
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
 
 static lvm(lvm_svm) {
   Sp[0] = k_svm_ok() ? putcharm(1) : ZeroPoint;
@@ -2131,7 +2131,7 @@ static union u
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
   nif_fetch[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_fetch}, {lvm_ret0}},
   nif_kexec[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kexec}, {lvm_ret0}},
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
   nif_svm[] = {{lvm_svm}, {lvm_ret0}},
   nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
   nif_vmx[] = {{lvm_vmx}, {lvm_ret0}},
@@ -2214,7 +2214,7 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"disk-write", {.k = nif_disk_write}},
   // x64 only, so a reader asks (elem 'svm (names ())) first: elsewhere the nom is not in
   // the book, and reading it is missing rather than absence.
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
   {"svm", {.k = nif_svm}},
   {"svm-run", {.k = nif_svm_run}},
   {"vmx", {.k = nif_vmx}},
@@ -2258,7 +2258,7 @@ static char const src_crewlist[] =
 ;
 
 void kmain(void) {
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
  // enable x87/SSE before any other C runs: a compiler vectorizes freely on x64 (even a struct
  // copy is movups) and that #UDs into a triple fault with no output while SSE is masked.
  k_sse_enable();
