@@ -10,7 +10,7 @@
 ; under the needle, when there is room, the spectrum from C1 to B7 in semitones.
 ; keys: a and A move A4 down and up a hertz, s shows or hides the spectrum, q quits.
 (module (tuner tuner-main tuner-new tuner-yin tuner-hear tuner-cents tuner-note tuner-frame
-               tuner-sine tuner-plain tuner-spectrum)
+               tuner-sine tuner-tone tuner-plain tuner-spectrum)
 (:
    names ["C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"]
    hues [160 202 214 148 41 45 33 99 171]          ; octaves 0..8, red through violet
@@ -40,41 +40,60 @@ spectrum, q quits."
        (go 0 ()))
 
    ; --- the ear ---------------------------------------------------------------------
-   ; yin over a float tray of win + hi samples: each lag's squared difference over the
-   ; window, normalised by the running mean (d'), and the first dip under 0.15 refined by a
-   ; parabola through it and its neighbours. -> hz, or () where nothing periodic is there.
-   ; each lag is one subtract, square and sum over a tray, so the work is the C's
+   ; yin over the last win + hi samples of a float tray: each lag's squared difference over
+   ; the window, normalised by the running mean (d'), and the first dip under 0.15 refined by
+   ; a parabola through it and its neighbours. -> hz, or () where nothing periodic is there.
+   ; the difference is the window's energy, the lagged window's and twice their correlation,
+   ; and the correlations of every lag are one transform there and back
+   (fft x) ((cite 'dsp 'fft) x)
+   (ifft x) ((cite 'dsp 'ifft) x)
    (tuner-yin x)
-    (: a (snip x 0 win)
-       (d t) (snip x t (t + win) @ b (a - b @ e (net (e * e))))
-       (walk t run p2 p1)
+    (: y (recent x)
+       sq (y * y) c (re (ifft (conj (fft (y * (iota #y < win))) * fft y)))
+       r0 (net (snip sq 0 win))
+       (walk t e run p2 p1)
         (t > hi ? ()
-           (d t @ v (run + v @ r (t * v / (r + 1e-9) @ n
+           (e - at sq (t - 1) + at sq (t + win - 1) @ e2 (r0 + e2 - 2.0 * at c t @ v (run + v @ r (t * v / (r + 1e-9) @ n
               (? (t - 1 > lo && p1 < 0.15 && n > p1)          ; p1 was the dip, at lag t - 1
                  (: den (p2 - 2.0 * p1 + n) s (den = 0 ? 0.0 (0.5 * (p2 - n) / den))
                     (rate / (t - 1 + s)))
-                 (walk (t + 1) r p1 n))))))
-       (walk 1 0.0 1.0 1.0))
+                 (walk (t + 1) e2 r p1 n)))))))
+       (walk 1 r0 0.0 1.0 1.0))
    ; s16 mono bytes as a float tray
    (samples s) (: c (cask #s) _ (pour c 0 s 0 #s)
                   t (peepv c 0 2 2 (#s // 2))
                   ((t - 65536 * (t >= 32768)) * 1.0))
    (rms x) ((net (x * x) / #x) ** 0.5)
-   (tuner-sine f) (sin ((iota (win + hi)) * (2.0 * pi * f / rate)) * 8000.0)
+   (recent x) (#x > win + hi ? (snip x (#x - win - hi) #x) x)    ; what yin and the level hear
+   (tuner-tone f n) (sin ((iota n) * (2.0 * pi * f / rate)) * 8000.0)
+   (tuner-sine f) (tuner-tone f (win + hi))
 
-   ; the spectrum: one bin a semitone from C1 to B7, each a hann-windowed dot product over the
-   ; last 17 periods of its pitch or the whole buffer, whichever is shorter. -> dBFS per bin
+   ; the spectrum: one bin a semitone from C1 to B7, each read at its pitch off a hann-windowed
+   ; transform of the last 34 periods or more, a power of two from 1024 frames to long or the
+   ; most the buffer holds. -> dBFS per bin
    bins 84
-   (kernels ref l)
-    (map (b \ (: f (ref * 2.0 ** ((b - 45) / 12.0)) n (min l (int (17.0 * rate / f)))
-                 i (iota n * 1.0) w (0.5 - 0.5 * cos (i * (2.0 * pi / (n - 1))))
-                 p (i * (2.0 * pi * f / rate))
-                 [(l - n) (w * cos p) (w * sin p) (2.0 / net w)]))
-         ^bins)
-   (tuner-spectrum ks x)
-    (map ([s c n k] \ (snip x s #x @ y (net (y * c) @ re (net (y * n) @ im
-                        (k * (re * re + im * im) ** 0.5 @ a (20.0 * log (a / 32768.0 + 1e-9) / log 10.0))))))
-         ks)
+   long 32768                                       ; the spectrum's longest look, frames
+   (up2 n) (n <= 1 ? 1 (2 * up2 ((n + 1) // 2)))
+   (down2 n) (n < 2 ? 1 (2 * down2 (n // 2)))
+   hanns {}
+   (hann n) (hanns n @ w (tray? w ? w (iota n * (2.0 * pi / (n - 1)) @ i (pin hanns n (0.5 - 0.5 * cos i), hanns n))))
+   ; per bin its transform's length, its pitch in that transform's bins, and the scale from
+   ; a peak's root power to the sine's amplitude
+   (plan ref m)
+    (: cap (min long (down2 m))
+       bs (map (b \ (: f (ref * 2.0 ** ((b - 45) / 12.0)) n (min cap (max 1024 (up2 (int (34.0 * rate / f)))))
+                       [n (f * n / rate) (2.0 / net (hann n))]))
+               ^bins)
+       [(sort (keys (foldl (\ t b (pin t <b 1)) {} bs))) bs])
+   (tuner-spectrum pl x)
+    (pl @ [ns bs]
+     (: m #x
+        pw (foldl (\ t n (pin t n (fft (snip x (m - n) m * hann n) @ z (re z * re z + im z * im z)))) {} ns)
+        (map ([n kf k] \ (: p (pw n) i (floor kf) u (kf - i)
+                            q (at p i + u * (at p (i + 1) - at p i))
+                            (20.0 * log (k * (q ** 0.5) / 32768.0 + 1e-9) / log 10.0)))
+             bs)))
+   (at v i) (peep v i 0.0)
 
    ; pitch as cents over midi 0, A4 = 6900 at ref hz; a row of the scale is k = cents / 25
    (tuner-cents ref f) (6900.0 + 1200.0 * log (f / ref) / log 2.0)
@@ -94,10 +113,11 @@ spectrum, q quits."
    ; quiet: down at once, up a percent a window, and only while nothing is pitched, so a
    ; held note never raises it
    (tuner-hear t x)
-    (: now ((t 'clock) 0) l (rms x) fl (t 'floor)
-       kk (t 'kern) ks (two? kk && <kk = t 'ref ? >kk (kernels (t 'ref) #x))
-       sp (tuner-spectrum ks x) old (t 'spec)
-       _ (pins t 'kern (t 'ref . ks) 'spec (two? old ? (map (p \ max <p (>p - 3.0)) (zip sp old)) sp))
+    (: now ((t 'clock) 0) l (rms (recent x)) fl (t 'floor)
+       kk (t 'kern) key [(t 'ref) (min long (down2 #x))]
+       pl (two? kk && <kk = key ? >kk (plan (t 'ref) #x))
+       sp (tuner-spectrum pl x) old (t 'spec)
+       _ (pins t 'kern (key . pl) 'spec (two? old ? (map (p \ max <p (>p - 3.0)) (zip sp old)) sp))
        f (l > 80.0 && (!fl || l > 3.0 * fl) ? (tuner-yin x) ())
        _ (? f 0 (pin t 'floor (? (!fl || l < fl) l (fl * 1.01))))
        (? f
@@ -181,17 +201,18 @@ spectrum, q quits."
    (paint t w h) (tuner-frame t w h @ rs ("\e[H" + cats (map (r \ r + "\e[K\r\n") (init rs)) + last rs + "\e[K"))
 
    ; --- the ears that feed it -------------------------------------------------------
-   ; the mic: the last win + hi frames kept, a reading every 50 ms of fresh ones
-   need (2 * (win + hi))
+   ; the mic: the last long frames kept, a reading every 100 ms of fresh ones once yin's
+   ; win + hi are in
+   need (2 * (win + hi)) keep (2 * long)
    (listen t h buf fresh)
     (see h @ c (c = -1 || t 'over ? ()
-      (: b (buf + string c + chug h) b2 (#b > need ? (snip b (#b - need) #b) b)
+      (: b (buf + string c + chug h) b2 (#b > keep ? (snip b (#b - keep) #b) b)
          n2 (fresh + #b - #buf)
          (n2 >= 4800 && #b2 >= need ? (tuner-hear t (samples b2), listen t h b2 0) (listen t h b2 n2)))))
    ; the demo: a sine gliding A1 to A5 and back every 16 s
    (demo t t0)
     (: u (fmod (clock t0 / 1000.0) 16.0) e (u < 8.0 ? u (16.0 - u))
-       (tuner-hear t (tuner-sine (55.0 * 2.0 ** (e / 2.0))),
+       (tuner-hear t (tuner-tone (55.0 * 2.0 ** (e / 2.0)) long),
         t 'over ? () (: _ (rest 50) (demo t t0))))
    (step t k) (k @ 113 (pin t 'over 1) 115 (pin t 'sp (1 - t 'sp)) 97 (pin t 'ref (t 'ref - 1.0)) 65 (pin t 'ref (t 'ref + 1.0)) 0)
 

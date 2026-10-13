@@ -3,7 +3,7 @@
 ; the room's floor. the clock is the law's own, so the hold needs no waiting
 ;   cat test/00-init.l test/host/tuner.l | out/love
 (borrow 'tuner)
-(: (cents-off f g) (abs (1200.0 * log (f / g) / log 2.0))
+(: (cents-off f g) (gem? f ? (abs (1200.0 * log (f / g) / log 2.0)) 1e9)
    (heard f) (tuner-yin (tuner-sine f))
    quiet (tuner-sine 440.0 * 0.0)
    ; the ear: within a cent from a bass's low B to two octaves over A4, nothing in silence
@@ -81,6 +81,11 @@
            (sp 51 < sp 52) (sp 53 < sp 52) (sp 10 < -60.0)
            (30 = #ss) (has? (ss 27) "C1") (has? (ss 27) "C7") (has? (ss 26) "█")
            (has? (ss 21) "●") (has? (tuner-frame s 80 30 26) "1;38;5;148m█"))
+   ; the bass on a long look: a bass's low E over 32768 frames stands 8 dB over the
+   ; semitones either side
+   e1 (pin (fresh ()) 'sp 1)
+   _ (tuner-hear e1 (tuner-tone 41.2034 32768))
+   _ (e1 'spec @ v (test (v 4 - v 5 > 8.0) (v 4 - v 3 > 8.0) (v 4 > -14.0)))
    _ (tuner-hear s quiet)
    _ (test (abs (s 'spec 33 - (pk - 3.0)) < 0.01))
    _ (tuner-frame s 80 20 @ r (test (20 = #r) !(has? (tuner-plain (r 17)) "C1")))
