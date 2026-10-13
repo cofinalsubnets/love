@@ -217,6 +217,7 @@ spectrum, q quits."
    (tuner-glass t wd)
     (: gx {}
        (fit w h) (: r (max 8 (h // 16)) c (max 20 (w // 8)) (pins gx () (screen (cask (screen () r c)) r c) 'all 1))
+       _ (window-typing wd 0)                     ; a phone's keyboard down: nothing here types
        _ (fit <(window-size wd) (window-size wd 1))
        (tap x) (<(window-size wd) @ w (step t (? (x < w // 3) 97 (x >= 2 * w // 3) 65 115)))
        (event e) (e @ ['text s] (each ^#s (i \ step t (s i))) ['press _ x _] (tap x) ['size w h] (fit w h)
