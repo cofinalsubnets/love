@@ -409,14 +409,17 @@ static void perms(ANativeActivity *a) {
   void *(*arr)(void *, int, void *, void *) = t[172]; void (*seta)(void *, void *, int, void *) = t[174];
   if (!push(e, 16)) {
     void *ac = a->clazz, *ck = mid(e, cls(e, ac), "checkSelfPermission", "(Ljava/lang/String;)I");
+    if (!ck) clear(e);                    /* a failed lookup leaves NoSuchMethodError pending */
     for (long i = 0; s && ck && i < n && k < 8; i++) {
       char const *p = s + i;
       while (i < n && s[i]) i++;
       if (*p && calli(e, ac, ck, str(e, p))) want[k++] = p;
     }
     void *sc = k ? find(e, "java/lang/String") : 0, *v = sc ? arr(e, k, sc, 0) : 0;
+    if (k && !sc) clear(e);
     for (int i = 0; v && i < k; i++) seta(e, v, i, str(e, want[i]));
-    if (v) callv(e, ac, mid(e, cls(e, ac), "requestPermissions", "([Ljava/lang/String;I)V"), v, 1);
+    void *rq = v ? mid(e, cls(e, ac), "requestPermissions", "([Ljava/lang/String;I)V") : 0;
+    if (rq) callv(e, ac, rq, v, 1); else clear(e);
     clear(e); pop(e, 0);
   } else clear(e);
   AAsset_close(as);

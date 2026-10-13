@@ -336,9 +336,10 @@ static int sock_open(char const *path, int rate, int inch, int *err) {
 static intptr_t sock_land(int fd, unsigned char const *src, uintptr_t n) {
  intptr_t k = write(fd, src, n & ~(uintptr_t) 3);
  return k < 0 && errno == EAGAIN ? 0 : k < 0 ? -1 : k & ~(intptr_t) 3; }
-static uintptr_t sock_lag(int fd) {
+// the frames not yet sent out (SIOCOUTQ), or heard and not yet read in (SIOCINQ)
+static uintptr_t sock_lag(int fd, int dir, uintptr_t fb) {
  int q = 0;
- return ioctl(fd, 0x5411, &q) < 0 ? 0 : (uintptr_t) q / 4; }
+ return ioctl(fd, dir ? 0x541B : 0x5411, &q) < 0 ? 0 : (uintptr_t) q / fb; }
 // what the listener has heard, in whole frames of fb bytes: a frame split across two
 // reads is waited out, a second at most; 0 when dry, -1 once the listener is gone
 static intptr_t sock_take(int fd, unsigned char *dst, uintptr_t n, uintptr_t fb) {
@@ -356,7 +357,7 @@ static intptr_t sock_take(int fd, unsigned char *dst, uintptr_t n, uintptr_t fb)
 static int sock_open(char const *path, int rate, int inch, int *err) { return *err = ENODEV, -1; }
 static intptr_t sock_land(int fd, unsigned char const *src, uintptr_t n) { return -1; }
 static intptr_t sock_take(int fd, unsigned char *dst, uintptr_t n, uintptr_t fb) { return -1; }
-static uintptr_t sock_lag(int fd) { return 0; }
+static uintptr_t sock_lag(int fd, int dir, uintptr_t fb) { return 0; }
 #endif
 static int horn_sock_name(char const *dev) { return horn_sockdoor && dev && !strncmp(dev, "sock:", 5); }
 
@@ -500,7 +501,7 @@ intptr_t love_horn_write(unsigned char const *src, uintptr_t n) {
 
 uintptr_t love_horn_lag(void) {
  if (horn_at_seat) return k_horn_lag();
- return horn_c_fd < 0 ? 0 : horn_c_sock ? sock_lag(horn_c_fd) : dev_lag(horn_c_fd, 0, 4); }
+ return horn_c_fd < 0 ? 0 : horn_c_sock ? sock_lag(horn_c_fd, 0, 4) : dev_lag(horn_c_fd, 0, 4); }
 
 // a seat may tap the sink's accepted PCM -- the browser feeds it to WebAudio. the
 // default takes nothing, so every native seat keeps discarding at the sink.
@@ -677,7 +678,7 @@ static lvm(lvm_horn_lag) {
   case horn_sink: lag = dir ? sink_heard(h) : (uintptr_t) getcharm(h->wpos) - sink_played(h); break;
   case horn_dev: lag = dev_lag((int) getcharm(h->b.f.fd), dir,
                               (uintptr_t) getcharm(h->dwid) * (uintptr_t) getcharm(h->dchans)); break;
-  case horn_sock: lag = sock_lag((int) getcharm(h->b.f.fd)); break;
+  case horn_sock: lag = sock_lag((int) getcharm(h->b.f.fd), dir, dir ? fb : 4); break;
   default: lag = k_horn_lag(); }
  if (dir) lag += h->b.rbuf && !charmp(h->b.rbuf) ? (uintptr_t) (getcharm(h->b.rlen) - getcharm(h->b.rpos)) / fb : 0;
  else lag += io_wpending(g, (struct io*) h) / fb;

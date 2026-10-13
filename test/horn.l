@@ -63,7 +63,8 @@
             (hosted ? (setenv "HORN_IN" ()))))))
 
 ; --- capture by a socket's listener: HORN_IN=sock:PATH says the rate, the u32's top byte
-; the channels, and reads the frames the listener sends until it hangs up
+; the channels, and reads the frames the listener sends until it hangs up; its lag is
+; what the listener sent and nobody has read yet
 (: _ (hosted ? (: path ("/tmp/.love-hornin-" + show (getpid 0) + ".sock")
                   l (listen ['unix path])
                   _ (setenv "HORN_IN" ("sock:" + path))
@@ -72,8 +73,9 @@
                   (word c) (map (_ \ see c) ^4)
                   wm (word cm) ws (word cs)
                   _ (say cm (string [1 0 2 0 3 0]), flush cm)
+                  lg (horn-lag hm)
                   got (see hm @ b (string [b] + chug hm))
                   _ (close cm)
                   over (see hm)
                   (close hm, close hs, close cs, close l, unlink path, setenv "HORN_IN" (),
-                   test (wm = [128 187 0 1]) (ws = [68 172 0 2]) (got = string [1 0 2 0 3 0]) (over = -1)))))
+                   test (wm = [128 187 0 1]) (ws = [68 172 0 2]) (lg = 3) (got = string [1 0 2 0 3 0]) (over = -1)))))
