@@ -605,11 +605,15 @@
    ; a param's entry cvt canonicalizes the arrival), so reads are zero forms; a bool home holds 0/1
    (lhomable? ty) (homable? ty || elem ty '(int uint short ushort char schar cchar uchar bool))
    ; a double or float local homes in an xmm seat (x64, a64, rv64; a float binary32 in it, every
-   ; target with the file carries floats native): caller-saved all, so only a name that crosses no
-   ; call takes one, and it never joins g 'homes (no wrap, no shadow). the file sits above the
-   ; protocol pair, the narrow scratch and the park file
+   ; target with the file carries floats native). the file is caller-saved: a crossing double joins
+   ; g 'homes and call-fixed wraps it (fwrap), else only a name that crosses no call takes one. the
+   ; file sits above the protocol pair, the narrow scratch and the park file
    (fhomable? ty) (ty = 'double || ty = 'float)
    (fphome? g ty) (ty = 'double || ty = 'float && f32abi? g)        ; a param: a float only where it arrives binary32
+   (fwrap? g) ((x64? g || a64? g) && !(abl? g 'fwrap))
+   ; a64's v8..v15 keep their low half across a call: a crossing double or float homes there for one
+   ; save in the prologue (g 'cssv), never a wrap
+   (fcspool g) (a64? g && !(abl? g 'fcs) && !(g 'hasasm) ? '(f8 f9 f10 f11 f12 f13 f14 f15) ())
    (ffile g) (? (abl? g 'fsel) ()
                  (x64? g) '(f8 f9 f10 f11 f12 f13 f14 f15)
                  (a64? g) '(f24 f25 f26 f27 f28 f29 f30 f31)   ; the pure temps past the parks (v8..v15 owe a save)
@@ -2479,7 +2483,20 @@
            _ (pin g 'drop9 ())
            rv (<dst = 'var ? (vent g env <>dst) 'bad)
            fd (sfd2 g env dst 1)
-           (? (two? rv && <rv = 'regv && fhomable? <>>rv)   ; store into an xmm home: off the protocol
+           ; h = h op y (h = y op h for + *) on an xmm home: y alone on the protocol, the op on the home
+           hop (two? rv && <rv = 'regv && <>>rv = 'double && fsel? g && !(abl? g 'fhop) &&
+                (rhs @ ('bin op ('var v) y) (elem op '(+ - * /) && v = <>dst ? [op y])
+                       ('bin op y ('var v)) (elem op '(+ *) && v = <>dst ? [op y])
+                       ()))
+           (? (two? hop)
+               (cgexpr g env <>hop () @ r
+                  (? (bad? r) 'bad
+                     (: bf (asflo g r)
+                        sim (fsimple g bf)
+                        opn (<hop @ '+ 'addsd '- 'subsd '* 'mulsd 'divsd)
+                        (mkv 'double 'r0 ((two? sim ? (<sim + [[opn <>rv <>sim]]) (bf + [[opn <>rv 'f0]])) +
+                                          (dq9 ? () [['movapd 'f0 <>rv]]))))))
+              (two? rv && <rv = 'regv && fhomable? <>>rv)   ; store into an xmm home: off the protocol
                (cgexpr g env rhs () @ r
                   (bad? r ? 'bad (mkv <>>rv 'r0 (asfty g r <>>rv + [['movapd <>rv 'f0]]))))
               (two? rv && <rv = 'regv)   ; store into a register-homed scalar (param or local)
@@ -3496,8 +3513,9 @@
              hs (: h9 (g 'homes) w9 (peep g 'stwrap 'all)
                    h8 (w9 @ 'all h9 (filter (h2 \ elem <>>h2 w9) h9))
                    (wasm? g ? (filter (h2 \ elem <h2 '(r0 r1 r2 r3 r4 r5 r6 r7)) h8) h8))
-             spills (foldl (a2 \ p2 \ a2 + [['st 'r4 <>p2 <p2]]) () hs)
-             relods (foldl (a2 \ p2 \ a2 + [['ld <p2 'r4 <>p2]]) () hs)
+             (fh? p2) (elem <p2 (ffile g))           ; an xmm home wraps through its own pair
+             spills (foldl (a2 \ p2 \ a2 + [(fh? p2 ? ['stsd 'r4 <>p2 <p2] ['st 'r4 <>p2 <p2])]) () hs)
+             relods (foldl (a2 \ p2 \ a2 + [(fh? p2 ? ['ldsd <p2 'r4 <>p2] ['ld <p2 'r4 <>p2])]) () hs)
              ; the targeted emissions, after the spills and before the pops: an 'ezm home mov
              ; demotes to its spill-slot load when another targeted arg writes that home
              ezt (: (go6 l6 a6) (!(two? l6) ? a6
@@ -4421,7 +4439,7 @@
    (skiprel g fs hs)
     (!(two? fs) ? fs
        (<fs @ f
-          (!(two? f && elem <f ldops9 && <>>f = 'r4) ? fs
+          (!(two? f && (elem <f ldops9 || <f = 'ldsd) && <>>f = 'r4) ? fs
              (filter (h2 \ (<h2 = <>f) && <>h2 = <>>>f) hs @ h   ; a seat serves several spans: match reg and slot
                 (? (two? h) (skiprel g >fs hs)
                    (elem <>f (g 'pool0)) (skiprel g >fs hs)
@@ -7046,7 +7064,7 @@
                (: s <l sp (span >l ()) cs <sp tl <>sp e (two? tl ? <tl)
                   h (two? e && <e = 'movapd && <>>e = 'f0 && elem <>e hs ? <>e)
                   (h && two? >tl && w0? <>tl && ok? cs h ?
-                     (rn s h . map (f \ rn f h) cs + go >tl)
+                     ((rn s h @ s2 (<>s2 = <>>s2 && <s2 = 'movapd ? () [s2])) + map (f \ rn f h) cs + go >tl)   ; a start that read h moves it onto itself
                      (s . go >l)))
               (<l . go >l))
           (go fs)))
@@ -7754,7 +7772,7 @@
               ; a d128's home is a pair (lo hi) off the cs pool -- ulloc packs two seats
               env3 ([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] + (nom? apin ? [apin]) . env2)
               ; a callee-saved home stays off g 'homes: no call wrap, no sib peel, and ezarg must not read its unwritten shadow
-              _ (hreg && !(two? hreg) && nelem hreg (cspool g) && !(fhomable? ty) && !(spr g <p) ?
+              _ (hreg && !(two? hreg) && nelem hreg (cspool g) && nelem hreg (fcspool g) && (!(fhomable? ty) || ty = 'double && fwrap? g) && !(spr g <p) ?
                    (pin g 'homes ([(rp g hreg) off <p] . g 'homes)))
               ; a constant init of a plain slotted scalar is one store-immediate; bool keeps its cvt (0/1)
               si9 (x64t? g && !hreg && <init = 'num && charm? <>init &&
@@ -10527,8 +10545,14 @@
                                              (peep crs9 nm 0 = 0 && 2 <= tc))
                                       ; a cs seat pays its save and a reload per exit -- except on wasm, where it has none
                                       cok (!fl && (wasm? g ? (2 <= tc) (2 < tc && 1 + nx9 < tc)))
-                                      ; a double: an xmm seat, unwrapped, so only a zero-crossing name
-                                      fok (fl && u9 && two? (ffile g) && peep crs9 nm 0 = 0 && 2 <= tc)
+                                      ; a double or float: the files it may take, in order. a zero-crossing name
+                                      ; takes the free file first, a crossing one the cs file (priced as cok) and
+                                      ; then, a double only, a wrapped seat, when its weighted mentions outweigh
+                                      ; the spill and reload
+                                      fok (: c9 (peep crs9 nm 0)
+                                             fc (two? (fcspool g) && 2 < tc && 1 + nx9 < tc ? (fcspool g))
+                                             fw (c9 = 0 || ty = 'double && fwrap? g && 2 * c9 < peep rdt9 nm 0 ? (ffile g))
+                                             (fl && u9 && 2 <= tc ? (c9 = 0 ? (fw + fc) (fc + fw))))
                                       (!(pok || cok || fok) ? (go (i + 1) acc)
                                          (go (i + 1) ([tc (1 < ns9 ? (peep rdt9 nm 0 // ns9)
                                                              (peep rdt9 nm 0)) i
@@ -10570,8 +10594,8 @@
                 (: sq (c 2) sp (c 3) w2 (c 4) pok (c 5) cok (c 6) fok (c 7)
                    r (pok ? (seat1 pfile sp))
                    (? r (claim r sp, pin pw r 1, pin lh sq r)
-                      fok (seat1 (ffile g) sp @ r2
-                             (r2 && (claim r2 sp, pin lh sq r2)))
+                      fok (seat1 fok sp @ r2
+                             (r2 && (claim r2 sp, (elem r2 (fcspool g) ? (pin cw r2 1)), pin lh sq r2)))
                       !cok 0
                       (w2 = 2)
                        (seat2 kp sp @ p2
@@ -10585,7 +10609,7 @@
                        (r2 && (claim r2 sp, pin cw r2 1, pin lh sq r2))))))
               0 byw)
            pused (filter (q \ peep pw q 0) hp9)
-           cu0 (filter (q \ peep cw q 0) kp)
+           cu0 (filter (q \ peep cw q 0) (kp + fcspool g))
            ; MOON_DUMP=<fn> also shows the seating: the ranked candidates (tc wt sq span w pok cok fok), the files, the map
            ((getenv "MOON_DUMP" @ w
                (string? w && w = <>f ?
@@ -10795,9 +10819,9 @@
                ; its cs seats need no save
                ; i386's ebx rides the frame's own rbx save (unframe keeps it once r3 is written)
                _ (two? cu0 && !(wasm? g) ?
-                    (map (r9 \ ['st 'r4 (nslot g 8) r9]) (filter (r9 \ !(ia32? g && r9 = 'r3)) cu0) @ sv
+                    (map (r9 \ [(elem r9 (fcspool g) ? 'stsd 'st) 'r4 (nslot g 8) r9]) (filter (r9 \ !(ia32? g && r9 = 'r3)) cu0) @ sv
                        (pin g 'cssv sv,
-                        pin g 'epi (map (f9 \ ['ld (f9 3) 'r4 (f9 2)]) sv + e0))))
+                        pin g 'epi (map (f9 \ [(<f9 = 'stsd ? 'ldsd 'ld) (f9 3) 'r4 (f9 2)]) sv + e0))))
                ; empty grants take the bare () policy, so no policy bar can fire
                spu (spillp (two? rides || two? phs ? ['uni rides phs]) params 0 ())
                spu (two? vzf ? [(<spu + vzf) <>spu] spu)
