@@ -75,7 +75,21 @@
      + [['align 2] ['label 'idtreg] ['raw (le16 4095)]]       ; the limit: sizeof idt - 1
      + [(x-quad 'idt)]
      + [['label 'idtreg_null] ['raw [0 0]]]                   ; an EMPTY IDT: int 0 triple-faults
-     + [['raw (v-zeros 8)]])
+     + [['raw (v-zeros 8)]]
+     ;; the machine's own GDT: the kernel's code and data at 0x08/0x10, a process's data and
+     ;; code at 0x18/0x20 (sysret's order, STAR below), the TSS at 0x28, its base laid by
+     ;; archinit. a door's own GDT is never read again
+     + [['align 8] ['label 'gdt64]]
+     + [['raw (le64 0)] ['raw (le64 0x00209A0000000000)] ['raw (le64 0x0000920000000000)]
+        ['raw (le64 0x0000F20000000000)] ['raw (le64 0x0020FA0000000000)]
+        ['raw (le64 0x0000890000000067)] ['raw (le64 0)]]
+     + [['label 'gdtreg64] ['raw (le16 55)] (x-quad 'gdt64)]
+     ;; the TSS: rsp0, the stack an interrupt from a process lands on (src/inle/x64/proc.c
+     ;; writes it), and no I/O map -- its offset past the limit
+     + [['align 16] ['label 'k_tss] ['raw (v-zeros 102)] ['raw (le16 104)]]
+     ;; the cpu block, gs's while the kernel runs: [0] the running process's kernel stack,
+     ;; [8] its stack while the entry has nowhere else to hold it
+     + [['align 16] ['label 'k_cpu] ['raw (v-zeros 32)]])
 
    ;; .bss: the IDT itself, 256 entries of 16 bytes. NOBITS, so the loader hands it over
    ;; zeroed and archinit fills every entry before LIDT.
@@ -90,7 +104,10 @@
      + [['align 8] ['label 'exc_common]]
      + x-push
      + x-fsave
-     + '((lea r6 sp 512) (call k_exception))
+     ;; a fault from a process (cs's low bits, past the two frames) arrives on its gs:
+     ;; the kernel's comes back, and k_exception ends the process rather than the machine
+     + '((ld r0 sp 656) (and r0 r0 3) (cmp r0 0) (br eq exc_kern) (swapgs) (label exc_kern)
+         (lea r6 sp 512) (call k_exception))
      + x-fload
      + x-pop
      + '((add sp sp 16)          ; discard the vector + error code
@@ -123,17 +140,82 @@
      + x-fload
      + x-pop
      + '((iretq))
+     ;; a process's `syscall` (LSTAR): rcx its pc, r11 its flags, IF already masked. its stack
+     ;; goes aside through gs and the cpu block's kernel stack comes up; the frame is struct
+     ;; k_sysf (x64/proc.c), the number lowest, so rdi = the frame and k_syscall answers rax.
+     ;; every register but rax comes back as it was, as linux keeps them
+     + [['align 8] ['label 'k_syscall_entry]]
+     + [['swapgs]
+        ['raw [0x65 0x48 0x89 0x24 0x25 8 0 0 0]]      ; mov %rsp, %gs:8
+        ['raw [0x65 0x48 0x8b 0x24 0x25 0 0 0 0]]      ; mov %gs:0, %rsp
+        ['raw [0x65 0xff 0x34 0x25 8 0 0 0]]]          ; push %gs:8
+     + '((push r10) (push r1) (push r8) (push r7) (push r9) (push r2) (push r5) (push r6) (push r0))
+     + x-fsave
+     + '((lea r6 sp 512) (call k_syscall))
+     + x-fload
+     + '((add sp sp 8)
+         (pop r6) (pop r5) (pop r2) (pop r9) (pop r7) (pop r8) (pop r1) (pop r10)
+         (pop sp)
+         (swapgs))
+     + [['raw [0x48 0x0f 0x07]]]                         ; sysretq
+     ;; k_uenter(c): into a process, from a kernel caller that sees a call return once the
+     ;; process is done (k_uexit). c is struct k_uctx: [0] its cr3, [8] its pc, [16] its
+     ;; stack, [24] the caller's stack kept, [32] the caller's cr3 kept. everything read
+     ;; before the switch, since the caller's stack may not be in the process's map
+     + [['align 8] ['label 'k_uenter]]
+     + '((pushf) (cli)
+         (push r3) (push r4) (push r11) (push r12) (push r13) (push r14)
+         (st r6 24 sp)
+         (ldcr r0 3) (st r6 32 r0)
+         (ld r1 r6 8) (li r10 0x202) (ld r2 r6 16) (ld r0 r6 0)
+         (stcr 3 r0)
+         (mov sp r2)
+         (xor r0 r0 r0) (xor r2 r2 r2) (xor r3 r3 r3) (xor r4 r4 r4) (xor r5 r5 r5)
+         (xor r6 r6 r6) (xor r7 r7 r7) (xor r8 r8 r8) (xor r9 r9 r9) (xor r11 r11 r11)
+         (xor r12 r12 r12) (xor r13 r13 r13) (xor r14 r14 r14)
+         (swapgs))
+     + [['raw [0x48 0x0f 0x07]]]                         ; sysretq
+     ;; k_uexit(c): the process is done; its caller's tables, stack and flags come back, and
+     ;; k_uenter returns
+     + [['align 8] ['label 'k_uexit]]
+     + '((cli)
+         (ld r0 r6 32) (stcr 3 r0)
+         (ld sp r6 24)
+         (pop r14) (pop r13) (pop r12) (pop r11) (pop r4) (pop r3)
+         (popf)
+         (ret))
      ;; archinit: walk isrs/isr_types in lockstep, packing each (handler, type) pair into a
      ;; 16-byte IDT descriptor, then LIDT, the PIT and the PIC. x87/SSE is enabled at the top
      ;; of kmain -- it must be on before any C runs -- so the FPU wants nothing here.
+     ;; first the machine's own GDT and TSS, so the gates name its code selector, and the
+     ;; syscall MSRs
      + [['align 8] ['label 'archinit]]
-     + '((la r6 idt)             ; rdi = the entry being filled
+     + '((la r0 k_tss)           ; the TSS descriptor's base, split as the CPU reads it
+         (la r6 gdt64)
+         (st2 r6 42 r0)
+         (mov r3 r0) (shr r3 16) (st1 r6 44 r3)
+         (shr r3 8) (st1 r6 47 r3)
+         (shr r3 8) (st4 r6 48 r3)
+         (la r0 gdtreg64) (lgdt r0 0)
+         (li r0 0x10) (stseg 3 r0) (stseg 0 r0) (stseg 2 r0)    ; ds es ss
+         (push 8) (la r0 gdt_cs) (push r0))
+     + [['raw [0x48 0xcb]]]                              ; lretq: cs = 0x08
+     + '((label gdt_cs)
+         (li r0 0x28) (ltr r0)
+         ;; EFER.SCE; STAR: syscall's cs 0x08, sysret's base 0x10 (+16 code, +8 data, rpl 3);
+         ;; LSTAR the entry; FMASK masks IF, TF, DF, AC, NT. gs: the cpu block while the
+         ;; kernel runs, a process's own (0) in the twin swapgs trades it for
+         (li r1 0xC0000080) (rdmsr) (or r0 r0 1) (wrmsr)
+         (li r1 0xC0000081) (li r0 0) (li r2 0x00100008) (wrmsr)
+         (li r1 0xC0000082) (la r0 k_syscall_entry) (mov r2 r0) (shr r2 32) (wrmsr)
+         (li r1 0xC0000084) (li r0 0x47700) (li r2 0) (wrmsr)
+         (li r1 0xC0000101) (la r0 k_cpu) (mov r2 r0) (shr r2 32) (wrmsr)
+         (li r1 0xC0000102) (li r0 0) (li r2 0) (wrmsr)
+         (la r6 idt)             ; rdi = the entry being filled
          (la r1 isrs)            ; rcx = the handler cursor
          (la r2 isr_types)       ; rdx = the type cursor
          (mov r0 r2)             ; rax = the sentinel: rcx reaches isr_types when done
-         ;; the bootloader's code selector: an IDT entry must name a segment valid in the
-         ;; current GDT, and the doors disagree (OVMF leaves cs = 0x38, our PVH stub 0x08),
-         ;; so reading it is the only way that is true of both.
+         ;; the code selector the gates name: the one just loaded
          (ldseg r8 1)            ; r9 = cs
          (label idt_entry)
          (ld r3 r1 0)            ; rbx = the handler address
@@ -271,12 +353,13 @@
                 [[".text"   1 6 16 x-text]
                  [".data"   1 3 8  x-rodata]
                  [".bss"    8 3 16 x-bss]]
-                '("archinit" "k_reset" "k_halt" "timer_isr" "keyboard_isr" "uart_isr")
-                ()                       ; idt/isrs/idtreg are ours alone -- no C names them
+                '("archinit" "k_reset" "k_halt" "timer_isr" "keyboard_isr" "uart_isr"
+                  "k_uenter" "k_uexit")
+                '("k_tss" "k_cpu")       ; x64/proc.c's; idt/isrs/idtreg/gdt64 are ours alone
                 ()
                 ;; the stubs and the common tail as local function symbols, so nm, gdb and
                 ;; a fault backtrace all name them where a bare label could not.
-                (x-stub-names + '("exc_common")))
+                (x-stub-names + '("exc_common" "k_syscall_entry")))
        "a64"
        (objsecs 'a64
                 [[".text.vectors" 1 6 2048 a-text]]

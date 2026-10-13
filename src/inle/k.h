@@ -16,6 +16,13 @@ void kputc(int c), kputs(char const *s), kputn(uintptr_t n, int base);
 // khhdm -- the higher-half direct-map offset (physical P is reachable at
 // khhdm + P). Defined in kmain.c. 0 means identity-mapped.
 extern uintptr_t khhdm;
+// the image window: physical P runs at k_xw + P. x64's kernel runs in the upper half,
+// leaving the lower to a process; the other arches run where they lie
+#if defined(__x86_64__)
+#define k_xw 0xffffff8000000000ull
+#else
+#define k_xw 0ull
+#endif
 extern uint64_t kticks;                // timer ticks, counted up by the arch's irq
 extern uint8_t vectors[];              // the trap entry (mkvec.l)
 void fbdraw(void);                     // kmain.c: paint the console ring to the framebuffer
@@ -69,7 +76,11 @@ struct k_boot {
  // a heap image the door carries (the wasm page fetches one beside the module and hands it
  // over): kmain wakes it before it asks baked_pick. 0 = none, ask.
  void const *image;
- uintptr_t image_len; };
+ uintptr_t image_len;
+ // a file the door carries in beside the kernel (qemu's -initrd, PVH's first module), read-only
+ // at /proc/initrd. 0 = none
+ void const *initrd;
+ uintptr_t initrd_len; };
 
 extern struct k_boot kboot;
 

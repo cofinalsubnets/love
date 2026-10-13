@@ -78,7 +78,9 @@
    ; at all. ramfb's lands in ordinary ram, so the console paints at memory
    ; speed and the lane costs nothing.
    gfx  (arch = "a64" ? ["-device" "ramfb"] ())
-   media (? elf? ["-kernel" iso "-append" (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))]   ; KTEST_CORPUS: a lane's own roster
+   ; KTEST_CORPUS: a lane's own roster; KTEST_INITRD: a file the kernel shows at /proc/initrd
+   media (? elf? (["-kernel" iso "-append" (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))]
+                  + (env-of "KTEST_INITRD" @ f (string? f ? ["-initrd" f] ())))
             dir? (fw + below4g + gfx + ["-drive" ("format=raw,file=fat:rw:" + iso)])
             (scare 'ktest-media iso))
    ; kvm where the host can back it: 7x on this corpus (50s of TCG against 7s).

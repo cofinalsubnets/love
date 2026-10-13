@@ -1311,6 +1311,15 @@ test_kernel_vmx: host $(S)/tools/ktest.l
 	 KTEST_CAP=vt-x KTEST_CORPUS=test/kernel/vmx-lane.l \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "vmx: guest ran, cpuid exited"
 
+# a C program as an x64 process: the host's mooncc builds test/kernel/c/hello.c, the kernel boots
+# with it at /proc/initrd (qemu's -initrd), and test/kernel/uproc.l runs it in ring 3
+test_kernel_uproc: host $(S)/tools/ktest.l
+	@$(MAKE) -s $(k_elf)
+	@mkdir -p $(ko)/uproc && $(ho)/love mooncc test/kernel/c/hello.c -o $(ko)/uproc/hello
+	@echo TEST $(k_elf) "(a C program as an x64 process: ring 3, an address space of its own)"
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc/hello \
+	   $m $(S)/tools/ktest.l $(k_elf) - $a "uproc: ok"
+
 # an empty boot line is a mitty on the console: keys in through qemu's monitor, lush in its
 # first pane, exit to the console shell, a reset out -- test/gate/kmitty.l
 test_kmitty: host test/gate/kmitty.l
@@ -1318,7 +1327,7 @@ test_kmitty: host test/gate/kmitty.l
 	@echo TEST $(k_elf) "(the console a mitty: an empty boot line, keys by sendkey)"
 	@$m test/gate/kmitty.l $(k_elf)
 else
-test_disk test_kboot test_kernel_vmx test_kmitty:
+test_disk test_kboot test_kernel_vmx test_kernel_uproc test_kmitty:
 	@sh test/gate/skip.sh gate-skip "$@: skipped (host arch $a is not x64)"
 endif
 
@@ -1349,6 +1358,7 @@ test_inle:
 	@$(MAKE) -s test_disk
 	@$(MAKE) -s test_uefi
 	@$(MAKE) -s test_kboot
+	@$(MAKE) -s test_kernel_uproc
 	@$(MAKE) -s test_kmitty
 	@$(MAKE) -s test_kverb
 	@$(MAKE) -s test_kernel_a64

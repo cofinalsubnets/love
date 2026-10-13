@@ -14,6 +14,7 @@ struct hvm_start_info {
   uint32_t memmap_entries, reserved; };
 
 struct hvm_memmap_entry { uint64_t addr, size; uint32_t type, reserved; };
+struct hvm_modlist_entry { uint64_t paddr, size, cmdline_paddr, reserved; };
 
 // the physical footprint qemu loaded us into -- which e820 still calls usable
 // RAM (the PVH loader reserves nothing). hand it to the heap and the kernel
@@ -21,6 +22,16 @@ struct hvm_memmap_entry { uint64_t addr, size; uint32_t type, reserved; };
 // where the flat link's kimage_end symbol used to stand.
 extern uintptr_t const k_image_top;
 
+
+// a..b to the heap, less the spans x0..x1 and y0..y1 (the image, the module)
+static void pvh_give(uint64_t a, uint64_t b, uint64_t x0, uint64_t x1, uint64_t y0, uint64_t y1) {
+  if (b <= a) return;
+  if (b <= x0 || a >= x1) {
+    if (y0 < y1) pvh_give(a, b, y0, y1, 0, 0);
+    else k_ram_give(a, b - a);
+    return; }
+  pvh_give(a, x0, y0, y1, 0, 0);                     // the piece under the span
+  pvh_give(x1, b, y0, y1, 0, 0); }                   // and the piece past it
 
 void pvh_to_kboot(uint32_t si_paddr) {
   struct hvm_start_info *si = (void *) (pvh_hhdm + si_paddr);
@@ -30,12 +41,16 @@ void pvh_to_kboot(uint32_t si_paddr) {
            k1 = (k_image_top + 0xfff) & ~0xfffull;
   kboot.hhdm = pvh_hhdm;
   if (si->cmdline_paddr) k_cmdline((char const *) (pvh_hhdm + si->cmdline_paddr), (uintptr_t) ~0);
+  // the first module is /proc/initrd, and its pages are kept from the heap as the image's are
+  uint64_t m0 = 0, m1 = 0;
+  if (si->nr_modules && si->modlist_paddr) {
+    struct hvm_modlist_entry *ml = (void *) (pvh_hhdm + si->modlist_paddr);
+    if (ml->size && ml->paddr + ml->size <= 0x100000000ull) {
+      m0 = ml->paddr & ~0xfffull, m1 = (ml->paddr + ml->size + 0xfff) & ~0xfffull;
+      kboot.initrd = (void const *) (pvh_hhdm + ml->paddr), kboot.initrd_len = ml->size; } }
   for (uint32_t i = 0; i < si->memmap_entries; i++) {
     if (mm[i].type != 1) continue;                   // 1 = usable RAM
     uint64_t a = mm[i].addr, b = a + mm[i].size;
     if (a < 0x100000) a = 0x100000;                  // low memory: the IVT, the
     if (b > 0x100000000ull) b = 0x100000000ull;      // start_info itself; >4G: unmapped
-    if (b <= a) continue;
-    if (b <= k0 || a >= k1) { k_ram_give(a, b - a); continue; }
-    if (a < k0) k_ram_give(a, k0 - a);                     // the piece under the image
-    if (b > k1) k_ram_give(k1, b - k1); } }                // and the piece past it
+    pvh_give(a, b, k0, k1, m0, m1); } }
