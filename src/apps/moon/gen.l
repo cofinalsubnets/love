@@ -2777,10 +2777,8 @@
                (cxpark g r @ pa
                   (bad? pa ? 'bad
                      (cxout g (cxb (vty r) @ 'float (vty r) cxdty)
-                        ; each component subtracts from minus zero (see the scalar lane); r0 is free, cxout writes it last
-                        (<>pa + [['ldsd 'f0 'r4 <pa] ['ldsd 'f1 'r4 (<pa + 8)]
-                                  ] + mz0 g 'f4 + '((subsd f4 f0) (movsd f0 f4))
-                                  + mz0 g 'f4 + '((subsd f4 f1) (movsd f1 f4))))))
+                        ; each component's sign bit flips, a nan's too; r0 is free, cxout writes it last
+                        (<>pa + [['ldsd 'f0 'r4 <pa] ['ldsd 'f1 'r4 (<pa + 8)]] + dneg g 'f0 + dneg g 'f1))))
               (vty r = 'float && f32v? g)           ; unary on a native float: -f flips through minus zero's single
                (op @ 'neg (mkv 'float 'r0 (vfs r + '((li r1 0x80000000) (movdxr f1 r1) (subss f1 f0) (movsd f0 f1))))
                      'not (mkv 'long 'r0 (asflo g r + '((li r1 0) (movqxr f1 r1) (ucomisd f0 f1)) + fsete))
@@ -3502,6 +3500,9 @@
    (cxf32? g ty) (ia32? g && gcplx? ty && cxb ty = 'float)     ; i386: a float complex returns on edx:eax
    ; eight zero bytes at base+o from a zeroed r2 (ilp32: two words)
    (z8 g b o) (ilp32? g ? [['st4 b o 'r2] ['st4 b (o + 4) 'r2]] [['st b o 'r2]])
+   ; a double's sign bit flipped in place, through r0 (ilp32: the pair's high word)
+   (dneg g fr) (ilp32? g ? [['movqrx 'r0 fr] '(li r2 0x80000000) '(xor r1 r1 r2) ['movqxr fr 'r0]]
+                 [['movqrx 'r0 fr] '(li r1 0x8000000000000000) '(xor r0 r0 r1) ['movqxr fr 'r0]])
    ; -0.0 into fr (ilp32 builds the pair in r0:r1)
    (mz0 g fr) (ilp32? g ? ['(li r0 0) ['li 'r1 0x80000000] ['movqxr fr 'r0]]
                  [['li 'r0 0x8000000000000000] ['movqxr fr 'r0]])
@@ -3542,13 +3543,16 @@
           '* '((movsd f4 f0) (movsd f5 f1)
                (mulsd f0 f2) (mulsd f5 f3) (subsd f0 f5)                 ; re = ac - bd
                (mulsd f4 f3) (mulsd f1 f2) (addsd f1 f4))                ; im = bc + ad
-          '/ '((movsd f4 f2) (mulsd f4 f2)                               ; c^2
-               (movsd f5 f3) (mulsd f5 f3) (addsd f4 f5)                 ; den = c^2 + d^2
+          '/ '((movsd f4 f2) (mulsd f4 f2)                               ; c^2 (a complex divisor parse could not type:
+               (movsd f5 f3) (mulsd f5 f3) (addsd f4 f5)                 ; den = c^2 + d^2   a typed one calls __divdc3)
                (movsd f5 f0) (mulsd f5 f2)                               ; ac
                (movsd f6 f1) (mulsd f6 f3) (addsd f5 f6)                 ; ac + bd
                (divsd f5 f4)                                             ; re
                (mulsd f1 f2) (mulsd f0 f3) (subsd f1 f0)                 ; bc - ad
-               (divsd f1 f4) (movsd f0 f5)))
+               (divsd f1 f4) (movsd f0 f5))
+          ())
+   ; a real divisor divides each part, as gcc's lowering does
+   (cxar op tb) (op = '/ && !(gcplx? tb) ? '((divsd f0 f2) (divsd f1 f2)) (cxarith op))
    ; the (f0 f1) result into a fresh rt-typed temp; the temp's address answers
    (cxout g rt fs)
     (: ro (ntmp g rt)
@@ -3557,7 +3561,7 @@
            [['stsd 'r4 ro 'f0] ['stsd 'r4 (ro + 8) 'f1]])
        (mkv rt 'r0 (fs + st + [['lean 'r0 'r4 ro]])))
    ; the single twins: a float complex parks as its own 8 bytes and + - * run in singles, rounding
-   ; as C's float does (/ keeps the double lane: gcc's __divsc3 scales, so no naive formula is its twin)
+   ; as C's float does, and so does / by a real that is not a double
    (cxs? g ty) (gcplx? ty && cxb ty = 'float && f32v? g)
    (cxpark32 g rv)
     (: off (ntmp g (vty rv))
@@ -3569,6 +3573,7 @@
           '* '((movapd f4 f0) (movapd f5 f1)
                (mulss f0 f2) (mulss f5 f3) (subss f0 f5)                 ; re = ac - bd
                (mulss f4 f3) (mulss f1 f2) (addss f1 f4))                ; im = bc + ad
+          '/ '((divss f0 f2) (divss f1 f2))
           ())
    ; a float complex left parks first, as singles; past the right's evaluation, a float complex right
    ; under + - * meets it in singles, else the pair loads widened onto the double lane
@@ -3576,8 +3581,12 @@
     (cxpark32 g a @ pa
        (: rl (matv g (clval g env rhs))
           rv (!(bad? rl) && stru? (vty rl) ? rl (cgexpr g env rhs ()))
-          (bad? rv ? 'bad
-             (cxs? g (vty rv) && two? (cxarith32 op) ?
+          (? (bad? rv) 'bad
+             (op = '/ && !(stru? (vty rv)) && vty rv != 'double)
+              (: ro (ntmp g (vty a)) oa <pa
+                 (mkv (vty a) 'r0 (<>pa + asf32 g rv + [['movss 'f2 'f0] ['ldss 'f0 'r4 oa] ['ldss 'f1 'r4 (oa + 4)]]
+                                   + cxarith32 op + [['stss 'r4 ro 'f0] ['stss 'r4 (ro + 4) 'f1] ['lean 'r0 'r4 ro]])))
+             (cxs? g (vty rv) && op != '/ && two? (cxarith32 op) ?
                 (cxpark32 g rv @ mb
                    (: ro (ntmp g (vty a))
                       (mkv (vty a) 'r0 (<>pa + <>mb + cxload32 <pa <mb + cxarith32 op
@@ -3589,7 +3598,7 @@
                          (cxout g rt (<>pa + <>mb
                                       + [['ldss 'f0 'r4 oa] '(cvtss2sd f0 f0) ['ldss 'f1 'r4 (oa + 4)] '(cvtss2sd f1 f1)
                                          ['ldsd 'f2 'r4 ob] ['ldsd 'f3 'r4 (ob + 8)]]
-                                      + cxarith op)))))))))
+                                      + cxar op <>>mb)))))))))
    (cgcx g env op a rhs)                            ; the left already evaluated (a value rec)
     (!(x86? g) ?
         (nolane g ("no lane for C99 complex arithmetic" + ontgt g))
@@ -3604,7 +3613,7 @@
                             rt (gcplx? (vty a) && cxb (vty a) = 'float &&
                                 gcplx? tb && cxb tb = 'float ?
                                   '(struct "__cplx_float") cxdty)
-                            (cxout g rt (<>pa + <>mb + cxload <pa <mb + arith))))))))))
+                            (cxout g rt (<>pa + <>mb + cxload <pa <mb + cxar op tb))))))))))
    ; the rotate idiom: (x >> n) | (x << (W - n)) in either order, x an unsigned W-bit pure operand -- one eval of x,
    ; one rotate (ror4/rorv4 at 32, ror/rorv at 64). a rotl count rides negated (both ISAs read the count mod W)
    (rotp? e)                                        ; pure: safe to evaluate once for the source's twice

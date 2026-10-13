@@ -1,7 +1,7 @@
 /* float _Complex arithmetic in float: + - * on two float complexes round as C's float does
  * (FLT_EVAL_METHOD 0) -- re = ac - bd is three single roundings, not one double one. a random
  * walk, every result's bits hashed into the exit code; a mixed float/double complex rides the
- * double lane. / stays out: gcc's __divsc3 scales, and no naive formula is its twin */
+ * double lane. / by a complex is libgcc's __divsc3/__divdc3 bit for bit, by a real each part */
 static unsigned st = 99u;
 static unsigned rnd(void) { st ^= st << 13; st ^= st >> 17; st ^= st << 5; return st; }
 static float rf(void) { union { unsigned u; float f; } x; unsigned r = rnd();
@@ -21,6 +21,19 @@ int main(void) {
     mz(a + b); mz(a - b); mz(a * b);
     md(a * c); md(c - a);                        /* mixed: double complex */
     float _Complex t = a; t *= b; t += a; t -= b; mz(t);
+    float r = rf();
+    mz(a / b); mz(a / r); mz(r / b); mz(a / 3);
+    md(c / a); md(a / c); md(c / (double) r);
+    t /= b; mz(t); t /= r; mz(t);
+  }
+  {                                              /* nonzero/zero, infinite/finite, finite/infinite */
+    FC z, w; float inf = 1.0f / 0.0f;
+    z.p[0] = 1.0f; z.p[1] = 2.0f; w.p[0] = 0.0f; w.p[1] = 0.0f; mz(z.z / w.z);
+    w.p[0] = -0.0f; mz(z.z / w.z);
+    z.p[0] = inf; z.p[1] = 1.0f; w.p[0] = 2.0f; w.p[1] = 3.0f; mz(z.z / w.z);
+    z.p[0] = 1.0f; z.p[1] = 2.0f; w.p[0] = inf; w.p[1] = -0.0f; mz(z.z / w.z);
+    DC y, v; y.p[0] = 1e300; y.p[1] = 3.0; v.p[0] = 1e-310; v.p[1] = 4e300; md(y.z / v.z);
+    v.p[0] = 0.0; v.p[1] = 0.0; md(y.z / v.z);
   }
   return (h ^ h >> 8 ^ h >> 16 ^ h >> 24) & 127;   /* under 128: no exit reads as a signal */
 }
