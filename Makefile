@@ -331,7 +331,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/harp/harp.l src/apps/harp/play.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
   src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/scenery.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/corridor.l src/apps/lore/roost.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
-  src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mitty.l src/apps/font.l src/apps/lux/wire.l src/apps/mitty/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
+  src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mitty.l src/apps/font.l src/apps/lux/wire.l src/apps/mitty/pier.l src/apps/doom.l src/apps/droid/droid.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
   src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/mitty/saver.l src/apps/mitty/avatar.l src/apps/mitty/chat.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/qlog.l src/apps/hive.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
@@ -443,7 +443,7 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
 # in roster order, whichever object arch it is for.
 rt_lib = src/apps/moon/lib/moonlibc
 rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
-rt_isas = x64 a64 rv64
+rt_isas = x64 a64 rv64 i386
 rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env
 rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
 rt_src_sys-af = $(call rt_sysrange,a b c d e f)
@@ -452,14 +452,18 @@ rt_src_sys-mr = $(call rt_sysrange,m n o p q r)
 rt_src_sys-sz = $(call rt_sysrange,s t u v w x y z)
 rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
 rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
-rt_a = $(foreach i,$(rt_isas),$(foreach g,$(rt_groups),out/rt/$i/$g.a))
+# i386 has no 64-bit divide: its roster carries rt.c's helpers too
+rt_src_rt = src/apps/moon/lib/rt.c
+rt_groups_i386 = $(rt_groups) rt
+rt_gs = $(if $(rt_groups_$(1)),$(rt_groups_$(1)),$(rt_groups))
+rt_a = $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),out/rt/$i/$g.a))
 define rtgroup
 out/rt/$(1)/$(2).a: $$(call rt_src,$(2)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(2)))
 endef
-$(foreach i,$(rt_isas),$(foreach g,$(rt_groups),$(eval $(call rtgroup,$i,$g))))
+$(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call rtgroup,$i,$g))))
 out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) src/tools/mkrt.l $@ $(hosta) $(rt_a)

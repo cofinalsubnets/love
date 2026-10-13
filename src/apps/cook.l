@@ -331,9 +331,9 @@
 
 ; --- importing a Makefile ------------------------------------------------------
 ; a parser is (\ s y n) over a state s (text . i): y the success continuation (rest parsed), n the
-; failure continuation (rest); the parsed payload is a list `seq` concatenates. love has no
-; regex, so the leaves are `lit` (a literal prefix), `one` (one char by predicate) and `span`
-; (a maximal run), with alt/seq/opt/many over them. the import is reasonably GNU-compatible:
+; failure continuation (rest); the parsed payload is a list `seq` concatenates. the leaves are
+; `lit` (a literal prefix), `one` (one char by predicate) and `span` (a maximal run), with
+; alt/seq/opt/many over them. the import is reasonably GNU-compatible:
 ; recursive $(VAR) and substitution refs, the common functions, ifeq/ifdef, `include`, the
 ; = := ?= += flavors, pattern and static-pattern rules, order-only prereqs and the $@ $< $^ $*
 ; automatics; each recipe line runs via ("sh" "-c" line). see test/host/cook.l.

@@ -1,35 +1,51 @@
 #include "../impl.h"
 
 /* linux answers the clock from the vdso without entering the kernel, and love's
- * scheduler reads it every switch. the elf64 seats only; a vdso that is not there
- * or refuses leaves the call to the kernel. */
+ * scheduler reads it every switch. i386's own name is the time64 one: its plain
+ * __vdso_clock_gettime fills the 32-bit record. a vdso that is not there or refuses
+ * leaves the call to the kernel. */
 #if defined(__x86_64__) || defined(__aarch64__) || defined(__riscv)
 # define LvVdso 1
+typedef Elf64_Ehdr vehdr; typedef Elf64_Phdr vphdr; typedef Elf64_Word vword;
+typedef struct { Elf64_Word st_name; unsigned char st_info, st_other; Elf64_Half st_shndx;
+                 Elf64_Addr st_value; Elf64_Xword st_size; } vsym;
+#elif defined(__i386__)
+# define LvVdso 1
+typedef Elf32_Ehdr vehdr; typedef Elf32_Phdr vphdr; typedef Elf32_Word vword;
+typedef struct { Elf32_Word st_name; Elf32_Addr st_value; Elf32_Word st_size;
+                 unsigned char st_info, st_other; Elf32_Half st_shndx; } vsym;
+#endif
+#ifdef LvVdso
 typedef int (*cgtfn)(long, struct timespec *);
-typedef struct { Elf64_Word name; unsigned char info, other; Elf64_Half shndx;
-                 Elf64_Addr value; Elf64_Xword size; } vsym;
+
+static int cgtname(char const *s) {
+#ifdef __i386__
+  return !strcmp(s, "__vdso_clock_gettime64");
+#else
+  return !strcmp(s, "__vdso_clock_gettime") || !strcmp(s, "__kernel_clock_gettime");
+#endif
+}
 
 static cgtfn vdso_cgt(void) {
-  Elf64_Ehdr const *eh = (Elf64_Ehdr const *) getauxval(33);    /* AT_SYSINFO_EHDR */
+  vehdr const *eh = (vehdr const *) getauxval(33);              /* AT_SYSINFO_EHDR */
   if (!eh) return 0;
-  Elf64_Phdr const *ph = (Elf64_Phdr const *) ((char const *) eh + eh->e_phoff);
+  vphdr const *ph = (vphdr const *) ((char const *) eh + eh->e_phoff);
   unsigned long bias = 0, dv = 0;
-  for (Elf64_Half i = 0; i < eh->e_phnum; i++) {
+  for (unsigned i = 0; i < eh->e_phnum; i++) {
     if (ph[i].p_type == PT_LOAD && ph[i].p_offset == 0)
       bias = (unsigned long) eh - ph[i].p_vaddr;
     if (ph[i].p_type == 2) dv = ph[i].p_vaddr; }                /* PT_DYNAMIC */
   if (!dv) return 0;
-  char const *str = 0; vsym const *sym = 0; Elf64_Word const *hash = 0;
-  for (long const *d = (long const *) (bias + dv); d[0]; d += 2)
+  char const *str = 0; vsym const *sym = 0; vword const *hash = 0;
+  for (long const *d = (long const *) (bias + dv); d[0]; d += 2)  /* a dynamic entry is two words */
     if (d[0] == 5) str = (char const *) (bias + d[1]);          /* DT_STRTAB */
     else if (d[0] == 6) sym = (vsym const *) (bias + d[1]);     /* DT_SYMTAB */
-    else if (d[0] == 4) hash = (Elf64_Word const *) (bias + d[1]);   /* DT_HASH: nchain is the count */
+    else if (d[0] == 4) hash = (vword const *) (bias + d[1]);   /* DT_HASH: nchain is the count */
   if (!str || !sym || !hash) return 0;
-  for (Elf64_Word i = 0; i < hash[1]; i++)
-    if (sym[i].shndx && (sym[i].info & 15) == 2                 /* defined STT_FUNC */
-        && (!strcmp(str + sym[i].name, "__vdso_clock_gettime")
-            || !strcmp(str + sym[i].name, "__kernel_clock_gettime")))
-      return (cgtfn) (bias + sym[i].value);
+  for (vword i = 0; i < hash[1]; i++)
+    if (sym[i].st_shndx && (sym[i].st_info & 15) == 2           /* defined STT_FUNC */
+        && cgtname(str + sym[i].st_name))
+      return (cgtfn) (bias + sym[i].st_value);
   return 0; }
 #endif
 
