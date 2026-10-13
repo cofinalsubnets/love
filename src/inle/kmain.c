@@ -2002,6 +2002,13 @@ static lvm(lvm_kreap) {
   Sp[0] = r == -EAGAIN ? ZeroPoint : r < 0 ? love_err(g, (int) -r) : putcharm(r);
   love_musttail return Next(1); }
 
+// (kpump _) -- a turn for each process the kernel itself runs (sys.c's k_proc_pump): 0 when
+// there are none, 1 when each waits on a call, 2 when one wants another turn
+long k_proc_pump(void);
+static lvm(lvm_kpump) {
+  Sp[0] = putcharm(k_proc_pump());
+  love_musttail return Next(1); }
+
 // (openpty _) -- a fresh pty as its rows: (master slave signal)
 love_noinline static struct g *k_openpty(struct g *g) {
   int fds[3];
@@ -2139,6 +2146,7 @@ static union u
   nif_kopenpty[] = {{lvm_kopenpty}, {lvm_ret0}},
   nif_kproc[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kproc}, {lvm_ret0}},
   nif_kreap[] = {{lvm_kreap}, {lvm_ret0}},
+  nif_kpump[] = {{lvm_kpump}, {lvm_ret0}},
   nif_kpaper[] = {{lvm_kpaper}, {lvm_ret0}},
   nif_kshow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kshow}, {lvm_ret0}},
   nif_kscan[] = {{lvm_kscan}, {lvm_ret0}};
@@ -2225,6 +2233,7 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   // processes: programs in memory of their own, where a seat can run them (src/inle/sys.c)
   {"kproc", {.k = nif_kproc}},
   {"kreap", {.k = nif_kreap}},
+  {"kpump", {.k = nif_kpump}},
   // a window's paper (src/inle/seat.l's kwin-events)
   {"kpaper", {.k = nif_kpaper}},
   {"kshow", {.k = nif_kshow}},

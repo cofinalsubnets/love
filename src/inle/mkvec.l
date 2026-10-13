@@ -114,12 +114,22 @@
          (iretq))                ; (the fatal handler never returns)
      ;; the timer (IRQ0). the neutral surface has no read-modify-write to memory, so the
      ;; counter bump is a load, an add and a store through two registers we save ourselves.
-     ;; no call, so no stack-alignment duty.
+     ;; a tick that lands in a process (cs past the two pushes) also counts down its turn,
+     ;; on the kernel's gs, and k_proc_tick may hand the machine back from there
      + [['align 8] ['label 'timer_isr]]
      + '((push r0) (push r2)
          (la r0 kticks) (ld r2 r0 0) (add r2 r2 1) (st r0 0 r2))
      + x-eoi
-     + '((pop r2) (pop r0) (iretq))
+     + '((ld r0 sp 24) (and r0 r0 3) (cmp r0 0) (br eq timer_kern)
+         (pop r2) (pop r0))
+     + x-push
+     + x-fsave
+     + '((swapgs) (call k_proc_tick) (swapgs))
+     + x-fload
+     + x-pop
+     + '((iretq)
+         (label timer_kern)
+         (pop r2) (pop r0) (iretq))
      ;; the PS/2 keyboard (IRQ1): read the scancode off port 0x60, hand it to kb_int
      + [['align 8] ['label 'keyboard_isr]]
      + x-push
@@ -158,32 +168,29 @@
          (pop sp)
          (swapgs))
      + [['raw [0x48 0x0f 0x07]]]                         ; sysretq
-     ;; k_uenter(c): into a process, from a kernel caller that sees a call return once the
-     ;; process is done (k_uexit). c is struct k_uctx: [0] its cr3, [8] its pc, [16] its
-     ;; stack, [24] the caller's stack kept, [32] the caller's cr3 kept. everything read
-     ;; before the switch, since the caller's stack may not be in the process's map
-     + [['align 8] ['label 'k_uenter]]
+     ;; k_kswap(save, load): one kernel stack to another. the leaving side's callee-saved
+     ;; registers, flags and whole float file go on its own stack, whose top lands at *save;
+     ;; the arriving side's come off load. a process's first turn arrives at k_ufirst
+     + [['align 8] ['label 'k_kswap]]
      + '((pushf) (cli)
-         (push r3) (push r4) (push r11) (push r12) (push r13) (push r14)
-         (st r6 24 sp)
-         (ldcr r0 3) (st r6 32 r0)
-         (ld r1 r6 8) (li r10 0x202) (ld r2 r6 16) (ld r0 r6 0)
-         (stcr 3 r0)
+         (push r3) (push r4) (push r11) (push r12) (push r13) (push r14))
+     + x-fsave
+     + '((st r6 0 sp) (mov sp r5))
+     + x-fload
+     + '((pop r14) (pop r13) (pop r12) (pop r11) (pop r4) (pop r3)
+         (popf)
+         (ret))
+     ;; ..its ret there, r12 the process's struct k_uctx (x64/proc.c): [8] its pc, [16] its
+     ;; stack, its cr3 already up. ring 3 at the pc, nothing of the kernel's in a register
+     + [['align 8] ['label 'k_ufirst]]
+     + '((mov r6 r11)
+         (ld r1 r6 8) (li r10 0x202) (ld r2 r6 16)
          (mov sp r2)
          (xor r0 r0 r0) (xor r2 r2 r2) (xor r3 r3 r3) (xor r4 r4 r4) (xor r5 r5 r5)
          (xor r6 r6 r6) (xor r7 r7 r7) (xor r8 r8 r8) (xor r9 r9 r9) (xor r11 r11 r11)
          (xor r12 r12 r12) (xor r13 r13 r13) (xor r14 r14 r14)
          (swapgs))
      + [['raw [0x48 0x0f 0x07]]]                         ; sysretq
-     ;; k_uexit(c): the process is done; its caller's tables, stack and flags come back, and
-     ;; k_uenter returns
-     + [['align 8] ['label 'k_uexit]]
-     + '((cli)
-         (ld r0 r6 32) (stcr 3 r0)
-         (ld sp r6 24)
-         (pop r14) (pop r13) (pop r12) (pop r11) (pop r4) (pop r3)
-         (popf)
-         (ret))
      ;; archinit: walk isrs/isr_types in lockstep, packing each (handler, type) pair into a
      ;; 16-byte IDT descriptor, then LIDT, the PIT and the PIC. x87/SSE is enabled at the top
      ;; of kmain -- it must be on before any C runs -- so the FPU wants nothing here.
@@ -202,11 +209,12 @@
      + [['raw [0x48 0xcb]]]                              ; lretq: cs = 0x08
      + '((label gdt_cs)
          (li r0 0x28) (ltr r0)
-         ;; EFER.SCE; STAR: syscall's cs 0x08, sysret's base 0x10 (+16 code, +8 data, rpl 3);
+         ;; EFER.SCE; STAR: syscall's cs 0x08, sysret's base 0x13 (+16 code, +8 data), its rpl
+         ;; 3 spelled out, since a sysret that does not or it in leaves ss at 0x18 for iret to refuse;
          ;; LSTAR the entry; FMASK masks IF, TF, DF, AC, NT. gs: the cpu block while the
          ;; kernel runs, a process's own (0) in the twin swapgs trades it for
          (li r1 0xC0000080) (rdmsr) (or r0 r0 1) (wrmsr)
-         (li r1 0xC0000081) (li r0 0) (li r2 0x00100008) (wrmsr)
+         (li r1 0xC0000081) (li r0 0) (li r2 0x00130008) (wrmsr)
          (li r1 0xC0000082) (la r0 k_syscall_entry) (mov r2 r0) (shr r2 32) (wrmsr)
          (li r1 0xC0000084) (li r0 0x47700) (li r2 0) (wrmsr)
          (li r1 0xC0000101) (la r0 k_cpu) (mov r2 r0) (shr r2 32) (wrmsr)
@@ -354,7 +362,7 @@
                  [".data"   1 3 8  x-rodata]
                  [".bss"    8 3 16 x-bss]]
                 '("archinit" "k_reset" "k_halt" "timer_isr" "keyboard_isr" "uart_isr"
-                  "k_uenter" "k_uexit")
+                  "k_kswap" "k_ufirst")
                 '("k_tss" "k_cpu")       ; x64/proc.c's; idt/isrs/idtreg/gdt64 are ours alone
                 ()
                 ;; the stubs and the common tail as local function symbols, so nm, gdb and

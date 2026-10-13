@@ -158,13 +158,15 @@
 
 ; processes: programs in memory of their own, where this machine can run one (src/inle/sys.c).
 ; the task that starts one stands in for it -- wait and the job table see that task -- and
-; answers the process's status once the pipe the kernel ends with it reads to its end
+; answers the process's status once the pipe the kernel ends with it reads to its end. where
+; the kernel runs them itself (kpump), the tasks waiting on them hand out their turns
 (: k-nul (string 0)
    (k-words l) (foldl (\ s w (s + (w + k-nul))) "" l)
+   (k-pump q) (cue? q ? () (kpump 0 @ 0 () 2 (rest 0, k-pump q) _ (rest 10, k-pump q)))
    (k-procrun argv)
      (kproc (k-words argv) (k-words (environ 0)) @ r
         (!(two? r) ? (say err (<argv + ": " + show r), put err 10, 126)
-           (: q (fdopen >r) _ (slurp q) _ (close q)
+           (: q (fdopen >r) _ (k-pump q) _ (slurp q) _ (close q)
               (kreap <r @ s (charm? s ? s 1)))))
    ; `proc PROG ARGS ..`: love's PROG as a process, woken from the machine's own image
    (proc-main args) (k-procrun args)
