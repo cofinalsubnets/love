@@ -13,7 +13,7 @@
   test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
-  test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
+  test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_hearts_boot test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
@@ -1045,9 +1045,15 @@ test_gcheck: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_hostegg
 # test_gcstress: the mutator's side -- whether the C around the collector holds a raw pointer
 # across a call that collects. LvGcStress always collects, poisons the vacated nursery, and
-# majors every 32nd. over two hours on its own tree, most of it the stress build's bake and
-# the baked leg, which tracks the glaze since every major walks it -- so it runs last.
+# majors every 32nd. test/gate/gcshard.sh runs the corpus cut into GCS_SHARDS shards a half,
+# the baked and egg halves at once (~2x GCS_SHARDS cores), each shard proved on the normal
+# build first and the counts summed to the full run's. test_gcstress_full is the corpus whole
+# through one stress process a half, in turn: the big heap's coverage, over two hours, most of
+# it the stress build's bake and the baked leg, which tracks the glaze since every major walks it.
+GCS_SHARDS ?= 4
 test_gcstress: host $(love0) out/mooncc0.image
+	@MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
+test_gcstress_full: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---------------------------------
