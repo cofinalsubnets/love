@@ -9933,7 +9933,8 @@
        ; exit. the cells the loop mentions most take them over the loop's ticks, priced by weighted
        ; mentions against the transfers an entry costs.
        ; a loop that calls takes only callee-saved seats, so no call wrap ever meets a split; a body
-       ; with a jump or asm takes none. -> [ov splits cu]: name -> ([lo hi reg]..), tick -> [evs prs]
+       ; with a jump or asm takes none, nor a loop holding a statement expression (its inner locals
+       ; and reads sit outside the ticks a split is laid by). -> [ov splits cu]: name -> ([lo hi reg]..), tick -> [evs prs]
        (usplit av9 lh9 cu0 items)
         (: sqm9 (av9 9) uv <>>av9 tak9 (av9 14) spa9 (av9 5)
            kp (cspool g)
@@ -9993,7 +9994,7 @@
                                        ([m r (in9 m) (out9 m)] . <>o)],
                             (elem r cs0 && nelem r (cu9 'cu) ? (pin cu9 'cu (r . cu9 'cu))),
                             1))))))
-               (map take9 cands))
+               (has9 '(sexpr) s9 ? () (map take9 cands)))
            (? (has9 '(goto igoto lbl asm) items) [{} {} cu0]
               (: _ (map one (sortby (x \ y \ (? (y 2 < x 2) 1 (x 2 < y 2) () (<>x - <x < <>y - <y))) (av9 19)))
                  [ov9 sp9 (cu9 'cu)])))
