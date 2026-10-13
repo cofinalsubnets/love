@@ -15,7 +15,7 @@
 // console where its own port reaches the pipe. kmain calls this after the osv. the
 // environment is what every reader starts from: a closure baked against the host's getenv
 // reads it, and the seat text's envt starts as a copy (src/inle/seat.l)
-static char *k_env0[] = { "HOME=/home", "COLORTERM=truecolor", 0 };   // quay keeps 24-bit colour
+static char *k_env0[] = { "COLORTERM=truecolor", 0 };   // quay keeps 24-bit colour
 void k_seat_init(void) {
   environ = k_env0;
   stdout->fd = 1; stdout->wr = 1;

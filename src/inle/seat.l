@@ -9,9 +9,10 @@
 ; the environment: a tablet, the pairs on slot 0, closures over it wearing the host's names --
 ; getenv the value or (), setenv () or 'badarg (a non-string value unsets), environ the raw
 ; "NAME=value" strings. it starts as the C environment src/inle/sys.c lays, read through the
-; host's environ before the closure below takes the name
+; host's environ before the closure below takes the name, and HOME -- here alone, so the
+; shell the kernel starts keeps its plain /home prompt and no history file
 (: envt {}
-   _ (pin envt 0 (map (s \ s @ (k + "=" + v) (k . v)) (environ 0)))
+   _ (pin envt 0 (("HOME" . "/home") . map (s \ s @ (k + "=" + v) (k . v)) (environ 0)))
    (envget l n) (two? l ? (n = <<l ? ><l (envget >l n)))
    (envcut l n) (two? l ? (n = <<l ? (envcut >l n) (<l . envcut >l n)))
    (getenv n) (string? n ? (envget (envt 0) n))
