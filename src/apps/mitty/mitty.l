@@ -25,7 +25,7 @@
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
-(borrow 'mooring)                       ; hopen moor waitfor, pier's too
+(borrow 'mooring)                       ; hopen moor waitfor
 (borrow 'posix)
 (borrow 'bytes)
 (borrow 'window)

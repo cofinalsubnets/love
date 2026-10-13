@@ -1,4 +1,4 @@
-; src/apps/mitty/mooring.l -- the terminal core mitty and pier share: a child opened on its own
+; src/apps/mitty/mooring.l -- the terminal core mitty and synth share: a child opened on its own
 ; pty with a quay screen to pour into, the moor that pumps it there, and the wait for its end.
 ;
 ;   (hopen argv r c)          a pane [box master pid stage name], or tether's nom
