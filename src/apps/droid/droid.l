@@ -144,10 +144,11 @@
            (uread so @ r (? (two? r) <>r (udie 1 "apk: no bridge laid"))))))
 
    (apk-usage _) (puts """
-    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] MAIN.l [FILE..]
+    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-b LINE] MAIN.l [FILE..]
       an android app (arm64) that runs MAIN.l: a window, touch and keys through the face
       (src/apps/droid/droid.l). LOVE is the a64 love it ships, baked; on an a64 machine
-      this one. the key signing it lives in ~/.love/etc/apk.pem
+      this one. -b starts LOVE on LINE's words instead, MAIN.l then optional: an inle
+      (make seat=droid a=a64 kdroid) boots LINE. the key signing it lives in ~/.love/etc/apk.pem
     """)
    (ap-base p) (p @ (_ + "/" + s) (ap-base s) p)
    (ap-stem p) (ap-base p @ b (b @ (s + ".l") s b))
@@ -155,14 +156,15 @@
    (apk-opts as t)
     (as @ ("-o" . v . r) (apk-opts r (pin t 'o v)) ("-p" . v . r) (apk-opts r (pin t 'p v))
           ("-n" . v . r) (apk-opts r (pin t 'n v)) ("-L" . v . r) (apk-opts r (pin t 'L v))
+          ("-b" . v . r) (apk-opts r (pin t 'b v))
           (("-h" || "--help") . _) (apk-usage 0, quit 0)
           (("-" + _) . _) (apk-usage 0, quit 2)
           r (pin t 'files r))
    (apk-main as)
     (: t (apk-opts as {})
        fs (t 'files)
-       _ (two? fs ? 0 (apk-usage 0, quit 2))
-       nm (ap-stem <fs)
+       _ (two? fs || string? (t 'b) ? 0 (apk-usage 0, quit 2))
+       nm (two? fs ? ap-stem <fs (ap-or (t 'n) "inle"))
        out (ap-or (t 'o) (nm + ".apk"))
        pkg (ap-or (t 'p) ("org.love." + nm))
        lov (? (string? (t 'L)) (t 'L) (love-arch = 'a64) (selfpath 0)
@@ -176,7 +178,8 @@
        ins (map (f \ [("assets/app/" + ap-base f) (uread f @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + f))))]) fs)
        z (ap-zip ([["AndroidManifest.xml" (ap-axml (ap-manifest pkg (ap-or (t 'n) nm)))]
                 ["lib/arm64-v8a/libbridge.so" so] ["lib/arm64-v8a/liblove.so" lb]
-                ["assets/argv" (ap-base <fs + string [0])]] + ins))
+                ["assets/argv" (? (string? (t 'b)) (foldl (a \ w \ a + w + string [0]) "" (filter (w \ 0 < #w) (split " " (t 'b))))
+                                  (ap-base <fs + string [0]))]] + ins))
        (? (uwrite out (v2-sign z <ks (ks 1))) (puts ("apk: " + out + " (" + pkg + ") -- adb install -r " + out + "\n"), 0)
           (udie 1 ("apk: cannot write " + out))))
 

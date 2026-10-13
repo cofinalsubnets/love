@@ -13,7 +13,8 @@
    sound is a second socket: love's horn (HORN=sock:PATH) says the rate as a u32, then
    s16 stereo frames, which a thread of their own plays through AAudio.
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
-   directory before each start, which is love's cwd and HOME. */
+   directory before each start, which is love's cwd and HOME. when love ends it is started
+   again; the app ends as android ends it. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
 
@@ -39,7 +40,6 @@ int ANativeWindow_setBuffersGeometry(void *, int, int, int);
 int ANativeWindow_getWidth(void *); int ANativeWindow_getHeight(void *);
 int ANativeWindow_lock(void *, ANativeWindow_Buffer *, void *);
 int ANativeWindow_unlockAndPost(void *);
-void ANativeActivity_finish(void *);
 void *ALooper_prepare(int); int ALooper_addFd(void *, int, int, int, void *, void *);
 int ALooper_removeFd(void *, int); int ALooper_pollOnce(int, int *, int *, void **); void ALooper_wake(void *);
 void AInputQueue_attachLooper(void *, void *, int, void *, void *); void AInputQueue_detachLooper(void *);
@@ -51,7 +51,7 @@ void *AAssetManager_open(void *, char const *, int); void const *AAsset_getBuffe
 long AAsset_getLength(void *); void AAsset_close(void *);
 void *AAssetManager_openDir(void *, char const *); char const *AAssetDir_getNextFileName(void *); void AAssetDir_close(void *);
 int dladdr(void const *, Dl_info *);
-pid_t fork(void); int execve(char const *, char *const[], char *const[]); int pipe2(int[2], int);
+pid_t fork(void); int execve(char const *, char *const[], char *const[]); int pipe2(int[2], int); int fcntl(int, int, ...);
 int dup2(int, int); int close(int); ssize_t read(int, void *, size_t); ssize_t write(int, void const *, size_t);
 void _exit(int); pid_t waitpid(pid_t, int *, int); int kill(pid_t, int); int chdir(char const *);
 int open(char const *, int, ...); int unlink(char const *);
@@ -68,7 +68,7 @@ int AAudioStreamBuilder_openStream(void *, void **);
 int AAudioStream_requestStart(void *); int AAudioStream_write(void *, void const *, int, long); int AAudioStream_close(void *);
 
 enum { LISTEN = 1, CONN, LOG, INPUT, HORN };
-enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_CLOEXEC = 02000000 };
+enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOEXEC = 02000000 };
 
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
@@ -237,7 +237,8 @@ static void input(br *b) {
 /* love's stdout and stderr, a line at a time, to logcat */
 static int logs(br *b) {
   ssize_t k = read(b->logfd, b->line + b->nline, sizeof b->line - 1 - (size_t) b->nline);
-  if (k <= 0) return -1;
+  if (k == 0) return -1;                       /* its end; a read that would wait is a stale wake */
+  if (k < 0) return 0;
   b->nline += (int) k;
   int s = 0;
   for (int i = 0; i < b->nline; i++)
@@ -299,10 +300,14 @@ static void *loop(void *p) {
         bad = readall(b->csock, &on, 1);
         if (!bad) keyboard(b, b->env, b->typing = on);
       } else if (!bad) bad = k != 'F' || frame(b);
-      if (bad) {
+      if (bad) {                                  /* love ended: it starts again, as a page boots its line */
         ALooper_removeFd(b->looper, b->csock);
         pthread_mutex_lock(b->mu); close(b->csock); b->csock = -1; pthread_mutex_unlock(b->mu);
-        ANativeActivity_finish(b->a);
+        if (b->pid > 0) waitpid(b->pid, 0, 0);
+        if (b->logfd >= 0) ALooper_removeFd(b->looper, b->logfd), close(b->logfd);
+        b->nline = 0;
+        spawn(b);
+        ALooper_addFd(b->looper, b->logfd, LOG, 1, 0, 0);
       }
     } else if (id == HORN) {
       long t; int c = accept4(b->hsock, 0, 0, O_CLOEXEC);
@@ -334,7 +339,7 @@ static void spawn(br *b) {
   int p[2]; pipe2(p, O_CLOEXEC);
   b->pid = fork();
   if (!b->pid) { dup2(p[1], 1); dup2(p[1], 2); chdir(b->data); execve(exe, av, ev); _exit(127); }
-  close(p[1]); b->logfd = p[0];
+  close(p[1]); b->logfd = p[0]; fcntl(p[0], 4, O_NONBLOCK);     /* F_SETFL: the loop never waits on it */
   if (as) AAsset_close(as);
 }
 
