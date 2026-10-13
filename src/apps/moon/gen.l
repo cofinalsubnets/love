@@ -867,7 +867,7 @@
                    (tor0 g r + (cxb (vty r) = 'float ?
                                 '((ldss f0 r0 0) (cvtss2sd f0 f0))
                                 '((ldsd f0 r0 0))))
-                  (ilp32? g && llt? (vty r)) (tor0 g r + cvtlld g (usg? (vty r)))
+                  (ilp32? g && llt? (vty r)) (tor0 g r + cvtlld g (usg? (vty r)) 0)
                   (ilp32? g && usg? (vty r)) (tor0 g r + '((cvtui2sd f0 r0)))
                   (vty r = 'ulong) (tor0 g r + ul2d)
                   (tor0 g r + '((cvtsi2sd f0 r0))))
@@ -888,8 +888,10 @@
    (asf32 g r) (? (vty r = 'float && f32v? g) (vfs r)
                   (flo? (vty r) || gcplx? (vty r)) (asflo g r + '((cvtsd2ss f0 f0)))
                   (ia32? g && llt? (vty r)) (tor0 g r + ll2f g (usg? (vty r)))
-                  (t32? g && llt? (vty r))                 ; rt.c's one rounding, the answer's word in r0
+                  (v6m? g && llt? (vty r))                 ; rt.c's one rounding, the answer's word in r0
                    (tor0 g r + [['call (usg? (vty r) ? '__aeabi_ul2f '__aeabi_l2f)] '(movdxr f0 r0)])
+                  (ilp32? g && llt? (vty r))               ; sticky-folded to 53 bits: an exact double, one rounding
+                   (tor0 g r + cvtlld g (usg? (vty r)) 1 + '((cvtsd2ss f0 f0)))
                   (ilp32? g && usg? (vty r)) (tor0 g r + '((cvtui2ss f0 r0)))
                   (vty r = 'ulong) (tor0 g r + ul2f g)
                   (tor0 g r + '((cvtsi2ss f0 r0))))
@@ -1635,21 +1637,26 @@
         + sm + [['jmp ld] ['label lb] '(sub r1 r1 32)]
         + big + [['label ld] '(mov r1 r3)]))
    ; llong -> double (VFP converts only through 32 bits): hi rides the U-converter scaled by 2^32,
-   ; lo adds exactly, one rounding; the signed face negates the pair in and the double out. v6-M: one call
-   (cvtlld g usg)
+   ; lo adds exactly, one rounding; the signed face negates the pair in and the double out. v6-M: one call.
+   ; sk: a magnitude at or past 2^53 first folds its low 11 bits into bit 11 (sticky), so it fits exactly
+   (cvtlld g usg sk)
     (v6m? g ?
        [['call (usg ? '__aeabi_ul2d '__aeabi_l2d)] '(movqxr f0 r0)]
     (: lu (nlab g ".lu") ld (nlab g ".ld")
-       u2d '((cvtui2sd f0 r1)
-             (li r2 0) (li r3 1106247680) (movqxr f1 r2)   ; 2^32 (0x41F00000:0)
-              (mulsd f0 f1)
-              (cvtui2sd f1 r0) (addsd f0 f1))
-       (usg ? u2d                                    ; unsigned: straight through
+       (fold lf lk) ['(li r2 2097152) '(cmp r1 r2) ['br 'ae lf] ['jmp lk] ['label lf]   ; hi >= 2^21
+                     '(li r3 2047) '(mov r2 r0) '(and r2 r2 r3) '(add r2 r2 r3) '(or r0 r0 r2)
+                     '(li r3 -2048) '(and r0 r0 r3) ['label lk]]
+       (u2d _) ((!sk ? () (fold (nlab g ".lf") (nlab g ".lk")))
+              + '((cvtui2sd f0 r1)
+                  (li r2 0) (li r3 1106247680) (movqxr f1 r2)   ; 2^32 (0x41F00000:0)
+                  (mulsd f0 f1)
+                  (cvtui2sd f1 r0) (addsd f0 f1)))
+       (usg ? (u2d 0)                                  ; unsigned: straight through
           (['(cmp r1 0) ['br 'ge lu]] + pneg g
-           + u2d
+           + (u2d 0)
            + ['(li r2 0) '(li r3 0) '(movqxr f1 r2)           ; 0.0 - d
               '(subsd f1 f0) '(movsd f0 f1) ['jmp ld] ['label lu]]
-           + u2d + [['label ld]]))))
+           + (u2d 0) + [['label ld]]))))
    ; double -> llong, toward zero: peel sign/exponent, rebuild the 53-bit mantissa as a pair, shift
    ; it into place, refix the sign. |d| < 1 answers 0; out of range is UB. v6-M: one runtime call
    (cvtdll g usg)
