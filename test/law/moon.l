@@ -312,6 +312,8 @@
       ; a musttail call is owed as a call: the splice that would swallow a tiny callee
       ; declines, and the kept call leaves as the jmp
       (elem '(jmp f) <>(cgn "int f(int n) { return n + 1; } int h(int n) { __attribute__((musttail)) return f(n); } int main() { return h(3); }"))
+      ; ..and a frame address become a value is no bar to it: the frame dies at the jump either way
+      (elem '(jmp g9) <>(cgn "long g9(long); void h9(char *); long f(long n) { char b[8]; char *s = b; s[0] = (char) n; h9(s); __attribute__((musttail)) return g9(n); } int main() { return 0; }"))
       (refused? (cgn "int f() { return 1; }"))                      ; no main, no program
       (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a named refusal now (rung 1)
       ; one switch, one label per value (C11 6.8.4.2p3): a repeat, a value a range holds, a second default
@@ -1557,21 +1559,32 @@
 
 ; -- the musttail contract (sibs): a marked ret-position call -- (call F must) -- leaves as
 ; the tail jmp and the marker dies with the rewrite; a shape that cannot tail scares
-; (musttail-not-a-tail), and a fn sibcall declining whole (fesc) scares musttail-escape.
+; (musttail-not-a-tail), and a fn sibcall declining whole (fesc) scares musttail-escape. a
+; frame address become a value (fescv) keeps the unmarked calls calls and the marked one jumps,
+; unless a frame address is laid for its args
 (: mg9 {} _ (pin mg9 'tgt 'x64) _ (pin mg9 'fn "f9")
    mepi '((ld r3 r4 -8) (mov sp r4) (pop r4) (ret))
    _ (test
       (elem '(jmp g9) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))
       !(elem '(call g9 must) (sibcall mg9 ('((label f9) (call g9 must)) + mepi))))
    mlog {}
-   (hear (p \ e \ (pin mlog p (1 + peep mlog p 0), 0)),
+   _ (hear (p \ e \ (pin mlog p (1 + peep mlog p 0), 0)),
     sibcall mg9 ('((label f9) (call g9 must) (mov r0 r5)) + mepi),     ; a live insn after the call: no tail
     ({} @ t9 (pin t9 'tgt 'x64, pin t9 'fesc 1, pin t9 'fn "f9",
               sibcall t9 '((label f9) (call g9 must) (ret)))),         ; the whole-fn decline
+    ({} @ t9 (pin t9 'tgt 'x64, pin t9 'fescv 1, pin t9 'fn "f9",
+              sibcall t9 ('((label f9) (lea r6 r4 -16) (call g9 must)) + mepi))),   ; a frame address for its args
     hear (),
     (test
-       (1 = (peep mlog 'musttail-not-a-tail 0))
-       (1 = (peep mlog 'musttail-escape 0)))))
+       (2 = (peep mlog 'musttail-not-a-tail 0))
+       (1 = (peep mlog 'musttail-escape 0))))
+   (fv9 _) (: t9 {} (pin t9 'tgt 'x64, pin t9 'fescv 1, pin t9 'fn "f9", t9))
+   mv9 (sibcall (fv9 ()) ('((label f9) (call h9) (call g9 must)) + mepi))
+   uv9 (sibcall (fv9 ()) ('((label f9) (call g9)) + mepi))
+   _ (test
+      (elem '(jmp g9) mv9)                          ; a value escape: the marked call still jumps
+      (elem '(call h9) mv9)
+      (elem '(call g9) uv9)))                       ; ..and an unmarked one stays a call
 
 ; -- free locals and a priced crossing (stage B1): one cold depth-0 call leaves the fn
 ; leaf-shaped (the path maximum prices it at one wrap pair), so n rides its arrival and
