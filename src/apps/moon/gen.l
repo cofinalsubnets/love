@@ -473,6 +473,11 @@
           (peep (g 'stag) <>ty 0 @ se
              (two? se ?
                 (fields <se () @ r (r @ 'no () r))))))
+   ; AAPCS64's float HFA: its member count, each member its own s register (the eightbyte classes
+   ; would pack two to a d register) -> n | ()
+   (a64hfa g ty) (a64? g && stru? ty && hfab g ty = 'float ? (tsz g ty // 4 @ n (0 < n <= 4 ? n)))
+   ; ..its n words into a 16-byte cell at sp (ld4: a 12-byte one has no fourth word to read)
+   (hfacell n) ('((sub sp sp 16)) + catmap (j \ [['ld4 'r1 'r0 (4 * j)] ['st4 'sp (4 * j) 'r1]]) ^n)
    (acls2 g ty ca cb) (aclass g ty @ (^ca ^cb) 1)
    (sse2? g ty) (acls2 g ty 'sse 'sse)       ; both eightbytes SSE: the xmm0:xmm1 pair
    (ipair? g ty) (acls2 g ty 'int 'int)      ; both INT: rax:rdx (return/result lanes)
@@ -2983,6 +2988,10 @@
                     (cxf32? g (vty cr))             ; an i386 float complex: park its r0:r1 words
                      (nslot g 8 @ toff
                         (mkv (vty cr) 'r0 (vfs cr + [['st4 'r4 toff 'r0] ['st4 'r4 (toff + 4) 'r1] ['lean 'r0 'r4 toff]])))
+                    (a64hfa g (vty cr))             ; an a64 float HFA result: s0.. into a fresh slot
+                     (nslot g 16 @ toff
+                        (mkv (vty cr) 'r0 (vfs cr + catmap (j \ [['stss 'r4 (toff + 4 * j) (xmmreg j)]]) ^(a64hfa g (vty cr))
+                                           + [['lean 'r0 'r4 toff]])))
                     (sse2? g (vty cr))              ; a two-double struct result: park the xmm pair in a fresh slot, answer its address
                      (nslot g 16 @ toff
                         (mkv (vty cr) 'r0 (vfs cr +
@@ -3028,14 +3037,16 @@
    ; a targetable gp arg: a pure single-emission read (immediate, frame, home register, label) skips the cell and
    ; lands in its register after the spills -> ((ez i) forms) | ((ezm i rH) movforms ldforms) | 'no
    ; a targetable double arg, when every arg is a pure leaf (no sibling evaluation can call out and take the xmm file):
-   ; a double read off its xmm home or its frame cell lands in its xmm register after the spills -> ((ezx i) forms) | 'no
+   ; a double read off its xmm home or its frame cell lands in its xmm register after the spills -> ((ezx i) forms) | 'no;
+   ; a float the same where a float parameter takes it binary32 (f32abi), its cell's four bytes
    (ezxarg g env e pty i)
     (? (!(fsel? g) || abl? g 'ezx || !(g 'ezride) || 8 <= i || !(<e = 'var)) 'no
        (vent g env <>e @ en
-          (? (bad? en || !(<>>en = 'double) || pty && pty != 'double) 'no
-             (<en = 'regv && elem <>en fregs16) [['ezx i] [['movapd (xmmreg i) <>en]]]
-             (<en = 'loc) [['ezx i] [['ldsd (xmmreg i) 'r4 <>en]]]
-             'no)))
+          (: fl (<>>en = 'float && pty = 'float && f32abi? g)
+             (? (bad? en || !(fl || <>>en = 'double && (!pty || pty = 'double))) 'no
+                (<en = 'regv && elem <>en fregs16) [['ezx i] [['movapd (xmmreg i) <>en]]]
+                (<en = 'loc) [['ezx i] [[(fl ? 'ldss 'ldsd) (xmmreg i) 'r4 <>en]]]
+                'no))))
    (ezall g env e pty gpc xmmc va)
     (ia32? g ? (gpc < ngp g ? (ezarg g env e pty gpc) 'no)   ; i386: a -mregparm word, never an xmm
        (: z (gpc < ngp g ? (ezarg g env e pty gpc) 'no)
@@ -3117,6 +3128,16 @@
                                 (. ['(g4 0) (tor0 g a + cell4w)] acc))
                            'bad)
                        (t32nolane? g aty) 'bad
+                       ; a64 float HFA: consecutive s registers, one a member; short of them, the whole of it
+                       ; to the stack, 8-byte rounded, and the s file closes (AAPCS64 C.3)
+                       (a64hfa g aty)
+                        (: n (a64hfa g aty)
+                           (xmmc + n <= 8 ?
+                              (kls >as (i + 1) gpc (xmmc + n) ovc (. [['sa xmmc n] (tor0 g a + hfacell n)] acc))
+                              (: ns ((aup (4 * n) 8) // 8)
+                                 (kls >as (i + 1) gpc 8 (ovc + ns)
+                                      (. [['ov ovc ns] (tor0 g a + catmap (j \ [['ld4 'r1 'r0 (4 * j)] ['st4 'sp (8 * ovc + 4 * j) 'r1]]) ^n)]
+                                         acc)))))
                        (t32f? g && sse2? g aty)            ; a 16-byte HFA: four float slots, or a d-reg pair
                         (: fb (hfab g aty)
                            k (vfpn xmmc 4 (fb @ 'float 1 2))
@@ -3312,7 +3333,7 @@
                                      (go1 >l1 (ov? <l1 ? (<l1 . acc1) acc1)))
                     (go1 kr ()))                          ; overflow entries, reversed (deepest pushes first)
              rgr (: (go2 l2 acc2) (!(two? l2) ? acc2
-                                     (go2 >l2 (elem <<<l2 '(g g2 g4 gn x x2 p2 ezd s sn) ?
+                                     (go2 >l2 (elem <<<l2 '(g g2 g4 gn x x2 p2 ezd s sn sa) ?
                                                       (<l2 . acc2) acc2)))
                     (go2 kr ()))                          ; pushing register entries, reversed (pops run forward)
              (pushcat l3 acc3) (!(two? l3) ? acc3 (pushcat >l3 (acc3 + <><l3)))
@@ -3348,6 +3369,9 @@
                                             + (<>>>kc @ 'g [['pop (argr g <>>>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>>>kc) 'r0]])))
                                        's    ; a float: the cell's binary32 word into its slot
                                         [['ld 'r12 'sp 0] ['movsnxr <>kc 'r12] '(add sp sp 16)]
+                                       'sa   ; an a64 float HFA's n words into s registers k.., off one cell
+                                        (catmap (j \ [['ldss (xmmreg (<>kc + j)) 'sp (4 * j)]]) ^(<>>kc)
+                                         + '((add sp sp 16)))
                                        'sn   ; n float words into n consecutive slots, off the same cell
                                         (catmap (i \ [['ld 'r12 'sp (4 * i)] ['movsnxr (<>kc + i) 'r12]]) ^(<>>kc)
                                          + '((add sp sp 16)))
@@ -3532,9 +3556,44 @@
            (fstf g 'float 'r4 ro 'f0 + fstf g 'float 'r4 (ro + 4) 'f1)
            [['stsd 'r4 ro 'f0] ['stsd 'r4 (ro + 8) 'f1]])
        (mkv rt 'r0 (fs + st + [['lean 'r0 'r4 ro]])))
+   ; the single twins: a float complex parks as its own 8 bytes and + - * run in singles, rounding
+   ; as C's float does (/ keeps the double lane: gcc's __divsc3 scales, so no naive formula is its twin)
+   (cxs? g ty) (gcplx? ty && cxb ty = 'float && f32v? g)
+   (cxpark32 g rv)
+    (: off (ntmp g (vty rv))
+       [off (tor0 g rv + [['ldss 'f2 'r0 0] ['stss 'r4 off 'f2] ['ldss 'f2 'r0 4] ['stss 'r4 (off + 4) 'f2]]) (vty rv)])
+   (cxload32 oa ob) [['ldss 'f0 'r4 oa] ['ldss 'f1 'r4 (oa + 4)] ['ldss 'f2 'r4 ob] ['ldss 'f3 'r4 (ob + 4)]]
+   (cxarith32 op)
+    (op @ '+ '((addss f0 f2) (addss f1 f3))
+          '- '((subss f0 f2) (subss f1 f3))
+          '* '((movapd f4 f0) (movapd f5 f1)
+               (mulss f0 f2) (mulss f5 f3) (subss f0 f5)                 ; re = ac - bd
+               (mulss f4 f3) (mulss f1 f2) (addss f1 f4))                ; im = bc + ad
+          ())
+   ; a float complex left parks first, as singles; past the right's evaluation, a float complex right
+   ; under + - * meets it in singles, else the pair loads widened onto the double lane
+   (cgcx32 g env op a rhs)
+    (cxpark32 g a @ pa
+       (: rl (matv g (clval g env rhs))
+          rv (!(bad? rl) && stru? (vty rl) ? rl (cgexpr g env rhs ()))
+          (bad? rv ? 'bad
+             (cxs? g (vty rv) && two? (cxarith32 op) ?
+                (cxpark32 g rv @ mb
+                   (: ro (ntmp g (vty a))
+                      (mkv (vty a) 'r0 (<>pa + <>mb + cxload32 <pa <mb + cxarith32 op
+                                        + [['stss 'r4 ro 'f0] ['stss 'r4 (ro + 4) 'f1] ['lean 'r0 'r4 ro]]))))
+                (cxpark g rv @ mb
+                   (bad? mb ? 'bad
+                      (: oa <pa ob <mb
+                         rt (gcplx? <>>mb && cxb <>>mb = 'float ? '(struct "__cplx_float") cxdty)
+                         (cxout g rt (<>pa + <>mb
+                                      + [['ldss 'f0 'r4 oa] '(cvtss2sd f0 f0) ['ldss 'f1 'r4 (oa + 4)] '(cvtss2sd f1 f1)
+                                         ['ldsd 'f2 'r4 ob] ['ldsd 'f3 'r4 (ob + 8)]]
+                                      + cxarith op)))))))))
    (cgcx g env op a rhs)                            ; the left already evaluated (a value rec)
     (!(x86? g) ?
         (nolane g ("no lane for C99 complex arithmetic" + ontgt g))
+       (cxs? g (vty a) && two? (cxarith op)) (cgcx32 g env op a rhs)
        (cxarith op @ arith
           (!(two? arith) ? 'bad
              (cxpark g a @ pa
@@ -8468,6 +8527,8 @@
                         + bcopy g 0 (tsz g rt) () + epj)
                       (t32nolane? g rt) 'bad
                       (cxf32? g rt) (tor0 g r + '((ld4 r2 r0 4) (ld4 r0 r0 0)) + epj)   ; edx:eax
+                      (a64hfa g rt)                                      ; an a64 float HFA returns in s0..
+                       (tor0 g r + catmap (j \ [['ldss (xmmreg j) 'r0 (4 * j)]]) ^(a64hfa g rt) + epj)
                       (sse2? g rt)                                       ; a two-double struct returns as the xmm pair
                        (tor0 g r + fldf 'double (xmmreg 0) 'r0 0 +
                         (fldf 'double (xmmreg 1) 'r0 8 + epj))
@@ -9736,6 +9797,13 @@
                                (acc + fstf g 'double 'r4 off (xmmreg (k // 2)))))
                      (aup ovi 8 @ ov8
                         (spill hp >ps gpi vfpx (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
+                 (a64hfa g pty)                         ; an a64 float HFA: its members off s registers k.., else the caller's block
+                  (: n (a64hfa g pty)
+                     (xmmi + n <= 8 ?
+                        (: off (nslot g 16)
+                           (spill hp >ps gpi (xmmi + n) ovi ([<p off pty] . env)
+                                  (acc + catmap (j \ [['stss 'r4 (off + 4 * j) (xmmreg (xmmi + j))]]) ^n)))
+                        (spill hp >ps gpi 8 (ovi + (aup (4 * n) 8) // 8) ([<p (ovb g + 8 * ovi) pty] . env) acc)))
                  (v6m? g && stru? pty && aone g pty == 'sse)           ; v6-M 8B blob param: the even-odd gp pair (the caller's g2 lane)
                   (gpair (aup gpi 2))
                  (stru? pty && two? (aeb2 g pty))       ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
