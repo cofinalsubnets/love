@@ -1988,7 +1988,7 @@
                    (? (atom? br) ()
                       (take (#ts - #(<>br)) ts @ sp
                          ; a cleanup in the specifiers would clean every declarator: pdecl1 refuses it
-                         (any (t \ tp? t "{") sp || cl? sp ? ()
+                         (any (t \ tp? t "{") sp || cl? sp || clgrp? (clat <c #sp) ? ()
                             (<c + [(<(c 2) . ";" . >>(c 2))] + sp + <>c)))))))))
    (clat l i) (? (atom? l) () (i = 0) l (clat >l (i - 1)))   ; the tail at token i
    (clp? l i s) (clat l i @ t (two? t && tp? <t s))

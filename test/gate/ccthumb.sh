@@ -92,6 +92,8 @@ echo "CCTHUMB $d"
   echo ' unsigned char *x = a; const unsigned char *y = b;'
   echo ' if (x < y) { while (n--) *x++ = *y++; }'
   echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
+  echo 'int strcmp(const char *a, const char *b){'
+  echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
 } > "$d/run.c"
 
 # shellcheck disable=SC2086  # $cpu is a deliberate word list
