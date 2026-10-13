@@ -954,11 +954,11 @@
    ; the type of an expression without its emission (arrays undecayed); every accumulator the
    ; walk touched is handed back as it was
    (peekty g env e)
-    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fx0 (g 'fesca) fa0 (g 'fasecs)
+    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fv0 (g 'fescv) fx0 (g 'fesca) fa0 (g 'fasecs)
        lv (clval g env e)
        _ (vm? lv ? (rfree g (vmb lv)))
        ty (bad? lv ? (cgexpr g env e () @ r (bad? r ? 'bad (rfree g (vreg r), vty r))) (vty lv))
-       (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fesca fx0 'fasecs fa0,
+       (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fescv fv0 'fesca fx0 'fasecs fa0,
         ty))
    ; the fn's read graph, flow-blind: each local to the names its decl init and its writes read
    (rdgraph x)
@@ -4318,9 +4318,10 @@
                       ['(align 4) ['lapool <>f] ['raw [['fix 4 'abs32 <>>f 0]]]])
                      + t16la u)
    ; the sibcall pass: (call F) followed by exactly the epilogue becomes epilogue + (jmp F); anything between keeps
-   ; the call. gated per fn on g 'fesc: a frame address that becomes a value pins every call (a store's own lea does not)
+   ; the call. gated per fn: g 'fesc (a frame reached with no value to follow -- frame_address, va_start, a VLA)
+   ; pins every call; a frame address that becomes a value (fescv) or a call's arg (fesca) pins the unmarked ones
    (leas? (f . u)) (two? f && <f = 'lea && <>>f = 'r4 ? 1 (leas? u))
-   (escan g r) ((two? r && leas? (vfs r) ? (pin g 'fesc 1)), r)
+   (escan g r) ((two? r && leas? (vfs r) ? (pin g 'fescv 1)), r)
    ; a frame address as a call's arg: the callee may keep it, so no later call jumps out of the
    ; frame unless the author marked it a musttail (their word that nothing reads it past the jump)
    (escana g r) ((two? r && leas? (vfs r) ? (pin g 'fesca 1)), r)
@@ -4379,7 +4380,7 @@
     (: lw2 (two? f && <f = 'lea && <>>f = 'r4 || lw)
        cand (!lw2 && two? f && (<f = 'call && two? >f ||
                                 <f = 'callr && <>f = <>crf) &&
-             (!(g 'fesca) || abl? g 'fesca || must? f))
+             (!(g 'fesca && !(abl? g 'fesca) || g 'fescv) || must? f))
        rr (cand ? (skiprel g (skipxt g r) hs) r)
        (? (cand && epim? rr ej)
            (sibjmp g f ej + sibs g (drop #ej rr) () el hs ej crf)
@@ -4402,7 +4403,10 @@
                        (<l @ f (two? f && elem <f '(call callr callm) ? (f + '(must) . >l) 'no)))))
        r (go fs)
        (r @ 'no (nolane g "a musttail return does not end in a call") r))
-   (sibcall g fs) (g 'fesc || v6m? g ?   ; v6m: the pop-pc epilogue cannot restore lr for a tail-jmp, so no sibcall
+   ; a musttail call is its author's word that nothing reads the frame past the jump, so a value
+   ; escape still jumps; a frame address laid since the last call (an arg) still refuses (lw), a
+   ; best-effort net -- one reaching the callee through memory goes unseen
+   (sibcall g fs) (g 'fesc || g 'fescv && abl? g 'fescv || v6m? g ?   ; v6m: the pop-pc epilogue cannot restore lr for a tail-jmp, so no sibcall
                       (anymust? fs ? (scare 'musttail-escape (g 'fn)), fs)
                      (peep g 'epi epi @ ej
                       (sibs g fs () (elabsx fs {} ej) (g 'homes) ej ['callr (pkr g)])))
@@ -8522,6 +8526,7 @@
      'off 8                    ; the frame cursor: slot -8 = saved r3 (see epi)
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
+     'fescv ()                 ; ..a frame address become a value (a musttail call still jumps)
      'fesca ()                 ; ..and a frame address handed a call (a later call may not jump past it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)

@@ -64,12 +64,14 @@
             945 223 915 960 931 963 181 964 934 920 937 948 8734 966 949 8745
             8801 177 8805 8804 8992 8993 247 8776 176 8729 183 8730 8319 178 9632 160)
    ; codepoints that MEAN one of the page's glyphs: rounded and heavy box lines onto the
-   ; singles, the eighth blocks onto the halves, typographer's dashes and quotes onto ascii
+   ; singles, half lines onto the whole, the eighth blocks onto the halves, typographer's
+   ; dashes, quotes and the minus onto ascii, the sharp onto #, minus-or-plus onto plus-or-minus
    q-alias '((9581 218) (9582 191) (9583 217) (9584 192) (9473 196) (9475 179) (9487 218)
              (9491 191) (9495 192) (9499 217) (9507 195) (9515 180) (9523 194) (9531 193)
-             (9547 197) (9585 47) (9586 92) (9679 7) (9642 254) (9601 220) (9602 220)
-             (9603 220) (9605 219) (9606 219) (9607 219) (8211 45) (8212 45) (8216 39)
-             (8217 39) (8220 34) (8221 34) (8230 46))
+             (9547 197) (9585 47) (9586 92) (9588 196) (9589 179) (9590 196) (9591 179)
+             (9592 196) (9593 179) (9594 196) (9595 179) (9679 7) (9642 254) (9601 220)
+             (9602 220) (9603 220) (9605 219) (9606 219) (9607 219) (8211 45) (8212 45)
+             (8216 39) (8217 39) (8220 34) (8221 34) (8230 46) (8722 45) (9839 35) (8723 241))
    ; the fold, cp << 8 | glyph sorted by codepoint, so the painter halves its way in.
    ; ascii and the blank never ask: they are their own glyphs
    q-fold (sort (map (e \ <e << 8 | <>e)

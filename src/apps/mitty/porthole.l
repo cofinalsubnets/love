@@ -90,6 +90,7 @@
          (? !(tablet? hb) (say err ("mitty: " + hb + "\n"), flush err, window-close win, 1)
             (: _ (pins hb 'in kin 'out fout 'csize [r c])
                _ (hgreet hb)
+               _ (window-typing win 1)                  ; a phone's keyboard up
                held {}
                (send s) (0 < #s ? (say kout s, flush kout) 0)
                ; the pointer, sent in the form the glass was asked for, a move once a cell
