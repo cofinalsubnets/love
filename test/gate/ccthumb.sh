@@ -105,8 +105,8 @@ lg=$(arm-none-eabi-gcc $cpu -print-libgcc-file-name)
 # 161-enumwide is on both refuse lists for one row of its own: an enumerator wider than
 # the int word asks for an 8-byte enum, which mooncc does not widen to on ILP32, and the
 # file's own _Static_assert is what says so. 165-constcond and its sibling 166-condconv
-# are on both for another: they print doubles, and a t32 variadic call rides the base
-# pcs, which has no d-reg lane.
+# are on both for another, and 283-splitsexpr with them: they print doubles, and a t32
+# variadic call rides the base pcs, which has no d-reg lane.
 hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope
         147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw
         159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 269-builtin-alloca"
@@ -122,14 +122,16 @@ case $tgt in
   thumb2) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 85-aggval
                   88-varargs-overflow 97-muslrungs 100-complex 101-vla 102-bigstruct
                   111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  151-w128fuzz 161-enumwide 165-constcond 166-condconv 228-strictalign 266-vaarg-struct" ;;
+                  151-w128fuzz 161-enumwide 165-constcond 166-condconv 228-strictalign 266-vaarg-struct
+                  283-splitsexpr" ;;
   # 228 lays a double at an odd packed offset, which vldr's word-aligned offset cannot carry.
   # the two lists are NOT the same list: v6-M refuses 82-znvalue where thumb2 takes it.
   # the composite rows do not move together (doc/misc/moon-c-gaps), so neither do these.
   thumb1) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 82-znvalue 85-aggval
                   88-varargs-overflow 97-muslrungs 100-complex 101-vla 102-bigstruct
                   111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  151-w128fuzz 161-enumwide 165-constcond 166-condconv 228-strictalign 266-vaarg-struct" ;;
+                  151-w128fuzz 161-enumwide 165-constcond 166-condconv 228-strictalign 266-vaarg-struct
+                  283-splitsexpr" ;;
 esac
 
 inlist() { for w in $2; do [ "$w" = "$1" ] && return 0; done; return 1; }

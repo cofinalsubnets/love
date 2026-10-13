@@ -2422,7 +2422,7 @@
    (kdtors ps ts base acc)                           ; `dtor (, dtor)* ;` -> (name ty) pairs, K&R arrays decay to ptr
     (pdtor ps ts base @ dr
        (atom? dr ? ()
-          (: nm <<dr ty0 <><dr rest <>dr
+          (: nm <<dr ty0 <><dr rest (patt <>dr)       ; `char *s __attribute__ ((unused));`
              ty (tdecay ty0)
              acc2 ([nm ty] . acc)
              (? (peekp rest ",") (kdtors ps >rest base acc2)
