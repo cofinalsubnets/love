@@ -1748,7 +1748,8 @@
        am (foldl (\ t al (pin t <al <>al)) {} (peep st 'alias ()))
        (aroot s n) (string? (labs s) || n > 16 || !(am s) ? s (aroot (am s) (n + 1)))
        _ (foldl (\ _ al (: a <al s (aroot <>al 0) nm (labs s)
-                          (!(string? nm) ? (pin st 'xal ([a s] . peep st 'xal ()))
+                          (? (!(string? nm) && am s) (scare 'gas-alias s)   ; a cycle labels nothing
+                             !(string? nm) (pin st 'xal ([a s] . peep st 'xal ()))
                              (secs nm @ r
                                 (pin labs a nm,
                                  pin secs nm [<r <>r (catmap (f \ (f = ['label (name s)] ? [['label (name a)] f] [f])) <>>r)])))))
@@ -1757,8 +1758,10 @@
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
        ; a section the text named stays though empty: a linker script may lay it (the setup's .bstext)
-       [(filter (r \ two? (r 3) || elem <r (peep st 'named ())) (map sec (rev (st 'order))))
-        (filter exec? def) (filter (l \ !(exec? l)) def) (rev (peep st 'weak ())) (rev (peep st 'xal ()))])
+       ; the aliases onto names this text never labels ride a fifth element, only when there are any
+       ([(filter (r \ two? (r 3) || elem <r (peep st 'named ())) (map sec (rev (st 'order))))
+         (filter exec? def) (filter (l \ !(exec? l)) def) (rev (peep st 'weak ()))]
+        + (peep st 'xal () @ x (two? x ? [(rev x)] ()))))
 
    ;; -- the front door: TEXT -> IR, by target. --
    (gas-text tgt src)

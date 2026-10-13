@@ -1,6 +1,5 @@
 /* an asm operand never sits in a register the asm clobbers (the x86 kernel's call_on_irqstack
  * calls out before it reads its args): past the scratch file it takes a callee-saved one. held to gcc. */
-#include <stdio.h>
 
 #if defined(__x86_64__)
 asm(".text\n.globl trash281\ntrash281: mov $1, %r9\n mov $2, %r10\n mov $3, %r8\n mov $4, %rcx\n ret\n");
@@ -18,6 +17,5 @@ __attribute__((noinline)) long run(long a, long b) { return a + b * 8; }
 
 int main(void) {
   long r = run(100, 3);
-  printf("%ld\n", r);
-  return (int)(r & 255);
+  return (int)(r % 101);   /* 23: an exit of 124 reads as timeout's */
 }

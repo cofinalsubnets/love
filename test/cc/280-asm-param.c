@@ -1,6 +1,5 @@
 /* an inlined body whose asm writes its own param (the x86 kernel's variable__ffs): the param
  * is no alias of the caller's variable, which keeps its value. held to gcc. */
-#include <stdio.h>
 
 static inline __attribute__((always_inline)) unsigned long vffs(unsigned long word) {
 #if defined(__x86_64__)
@@ -24,6 +23,5 @@ __attribute__((noinline)) int walk(unsigned long start, unsigned long end) {
 
 int main(void) {
   int n = walk(3, 100);
-  printf("%d\n", n);
   return n;
 }

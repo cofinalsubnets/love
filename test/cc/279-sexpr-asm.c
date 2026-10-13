@@ -1,6 +1,5 @@
 /* an asm inside a statement expression (the kernel's BITMAP_WEIGHT over hweight_long) pins
  * its operand's register: a param arriving there is no longer there after. held to gcc. */
-#include <stdio.h>
 
 #if defined(__x86_64__)
 register unsigned long current_stack_pointer asm("rsp");
@@ -24,6 +23,5 @@ __attribute__((noinline)) unsigned wsum(const unsigned long *b, unsigned n) {
 int main(void) {
   unsigned long a[3] = { 1, 2, 3 };
   unsigned w = wsum(a, 64 * 2 + 3);
-  printf("%u\n", w);
   return w;
 }

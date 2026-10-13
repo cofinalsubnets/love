@@ -7343,8 +7343,8 @@
                   fe (nthfield fields ci)
                 (? (bad? fe) 'bad
                    (anonbr? g fields fe it) (place (<>it + >l) cur acc bfs)
-                   ; an empty record lays nothing (its piece would overlay the next member); a flexible array does
-                   (!(arr? <>>fe) && tsz g <>>fe = 0) (place >l (fnext g fields ci) acc bfs)
+                   ; an empty record lays nothing (its piece would overlay the next member)
+                   (stru? <>>fe && tsz g <>>fe = 0) (place >l (fnext g fields ci) acc bfs)
                    (bitf? <>>fe)
                     (icfold (elval it) @ v
                        (v = 'no ? 'bad

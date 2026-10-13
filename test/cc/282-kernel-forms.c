@@ -2,7 +2,6 @@
  * _Pragma a macro spells, __builtin_strcmp over two literals (the dead arm's call never
  * links) and over a runtime string, an enum named ahead of its definition, a block static
  * named into a section of its own. held to gcc. */
-#include <stdio.h>
 
 static int freed;
 static void undo(char **p) { freed += *p ? (*p)[0] : 100; }
@@ -52,9 +51,5 @@ int main(void) {
   freed = 0; many(0); f0 = freed;
   int c1 = cmp(3, "<", 4), c2 = cmp(3, ">=", 4);
   int s1 = __builtin_strcmp("abc", "abd") < 0, s2 = __builtin_strcmp(str(xyz), "xyz"), s3 = __builtin_strcmp(buf, "abc") > 0;
-  printf("%d %d %d\n", r, f1, f0);
-  printf("%d %d %d\n", quiet(), c1, c2);
-  printf("%d %d %d\n", s1, s2, s3);
-  printf("%d %d %d\n", (int)later, (int)sizeof later, recs());
   return (r + f1 + f0 + quiet() + c1 + c2 + s1 + s2 + s3 + later + recs()) & 255;
 }

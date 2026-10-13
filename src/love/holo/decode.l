@@ -157,11 +157,11 @@
           (c && elem c '(217 219 221 223))
            (dc-at s k >> 6 = 3 ?
                (c = 219 && dc-at s k = 227 ? (fin (k + 1) [(op1 'fninit 0 ())])
-                  (c = 219 && dc-at s k = 226) (fin (k + 1) [(op1 'fnclex 0 ())]) (bad 0))
+                  (c = 219 && dc-at s k = 226) (fin (k + 1) [(op1 'fnclex 0 ())]) (fin k [(dc-byte c)]))
               (: r (dc-modrm s k p 4 4)
                  mn (c @ 217 (r 3 @ 5 'fldcw 7 'fnstcw ()) 219 (r 3 @ 0 'fildl ())
                          221 (r 3 @ 4 'frstor 6 'fnsave 7 'fnstsw ()) (r 3 @ 0 'filds 5 'fildll ()))
-                 (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (bad 0))))
+                 (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (fin k [(dc-byte c)]))))
           ;; the string ops, Intel's names (the at&T shower respells movsd's)
           164 (nil 'movsb)  165 (nil (w @ 2 'movsw 8 'movsq 'movsd))
           166 (nil 'cmpsb)  167 (nil (w @ 2 'cmpsw 8 'cmpsq 'cmpsd))
@@ -222,6 +222,7 @@
        (xxs mn) (dc-modrm s k2 p 16 16 @ r (finx (r 0) [(op1 mn 0 [(r 2) (r 1)])]))
        (c @ 5 (nil 'syscall)  7 (nil (w @ 8 'sysretq 'sysretl))  11 (nil 'ud2)  119 (nil 'emms)  8 (nil 'invd)  9 (nil 'wbinvd)  51 (nil 'rdpmc)
           48 (nil 'wrmsr)  49 (nil 'rdtsc)  50 (nil 'rdmsr)  162 (nil 'cpuid)
+          2 (ge 'lar w w)  3 (ge 'lsl w w)                                          ; a selector's rights, its limit
           (c && c = 0) (dc-modrm s k2 p 2 2 @ r (r 3 @ 3 (fin (r 0) [(op1 'ltr 2 [(r 2)])])
                                                        0 (fin (r 0) [(op1 'sldt 0 [(r 2)])]) 1 (fin (r 0) [(op1 'str 0 [(r 2)])])
                                                        2 (fin (r 0) [(op1 'lldt 0 [(r 2)])])

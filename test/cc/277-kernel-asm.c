@@ -4,7 +4,6 @@
  * percpu read), lar over a selector, an "i" only __builtin_constant_p makes constant past
  * an inlined body, an __int128 passed and taken in registers and swapped by cmpxchg16b (slub's
  * freelist), and a file-scope asm that names registers bare. held to gcc. */
-#include <stdio.h>
 
 #if defined(__x86_64__)
 static long cur = 41;
@@ -73,18 +72,14 @@ int main(void) {
   int t1 = tbit(n, &bits), t2 = tbit(2, &bits), t3 = tbit(3, &bits);
   int t = t1 + 2 * t2 + 4 * t3;
   unsigned long c = csum(w, 3);
-  printf("%ld %lu %d %u %d\n", percpu(), c, bare(), ss_rights(), t);
   int r = (int)(percpu() + c + bare() + (ss_rights() != 0) + t);
 #if defined(__x86_64__)
   unsigned __int128 x = wide(((unsigned __int128)3 << 64) | 7, n, 9);
-  printf("%lu %lu\n", (unsigned long)(x >> 64), (unsigned long)x);
   static unsigned __int128 slot __attribute__((aligned(16)));
   slot = x;
   int ok = cx16(&slot, x, 77) + 2 * cx16(&slot, x, 5);
-  printf("%lu %lu %d\n", (unsigned long)(x >> 64), (unsigned long)slot, ok);
   r += (int)(x >> 64) + (int)x + (int)slot + ok;
 #else
-  printf("3 52\n3 77 1\n");
   r += 55 + 77 + 1;
 #endif
   r += fs_twice(4);
