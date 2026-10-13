@@ -42,7 +42,7 @@
    ; a child that is not love does not see it
    (: r (hark ["sh" "-c" "cat /love/VERSION 2>/dev/null; echo $?"]) (>r != ver + "0\n"))))
 
-;; the container under it (src/love/lib/srctree.h): an index, then six tar sections, each
+;; the container under it (src/love/archive/srctree.h): an index, then six tar sections, each
 ;; decoded at the first read of a file in it. a fresh process shows which.
 (: (lf-rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
    h (tree-head 0)

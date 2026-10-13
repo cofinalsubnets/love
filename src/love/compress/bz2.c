@@ -1,4 +1,4 @@
-// src/love/lib/bz2.c -- bzip2, both directions. the whole stream is here: its blocks are laid on
+// src/love/compress/bz2.c -- bzip2, both directions. the whole stream is here: its blocks are laid on
 // bit boundaries, so there is no byte-aligned container for src/apps/bz2.l to hold.
 //   (bz2e s level)   bytes -> a .bz2 stream, level 1..9 the block in 100k | ()
 //   (bz2d s)         every .bz2 stream in s -> their bytes | 1 format, 2 corrupt, 3 end, 4 check,
@@ -472,7 +472,7 @@ love_noinline static struct g *host_bz2e(struct g *g) {
  if (w.p) alloc(w.p, 0);
  return g; }
 
-// every stream in s into exactly cap bytes of out, for a C caller with no g (src/love/lib/srctree.c)
+// every stream in s into exactly cap bytes of out, for a C caller with no g (src/love/archive/srctree.c)
 // -> cap, or -1 for a stream that is torn or says more or less than that
 intptr_t bz2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
  struct bz_w w = { .p = out, .cap = cap, .fix = 1 };

@@ -1,4 +1,4 @@
-// src/love/lib/xz.c -- LZMA and LZMA2, both directions, and xz's crc64. the codec only: src/apps/xz.l
+// src/love/compress/xz.c -- LZMA and LZMA2, both directions, and xz's crc64. the codec only: src/apps/xz.l
 // holds the .xz container, the block headers and the index, and says which door to take.
 //   (lzma2d s)               a raw LZMA2 chunk stream -> its bytes | () | 1 past XZ_MAX
 //   (lzma2len s)             the stream's length through its 0x00 end byte | ()
@@ -745,7 +745,7 @@ love_noinline static struct g *host_lzma2len(struct g *g) {
             ? putcharm((intptr_t) end) : ZeroPoint;
  return g; }
 
-// a raw LZMA2 stream into exactly cap bytes of out, for a C caller with no g (src/love/lib/srctree.c)
+// a raw LZMA2 stream into exactly cap bytes of out, for a C caller with no g (src/love/archive/srctree.c)
 // -> cap, or -1 for one that is torn or says more or less than that
 intptr_t lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
  uintptr_t end;

@@ -1,11 +1,11 @@
-// src/love/lib/opus.c -- opus (rfc 6716, as rfc 8251 amends it), decoded.
+// src/love/audio/opus.c -- opus (rfc 6716, as rfc 8251 amends it), decoded.
 // (opus-state ch)       -> the width of a decoder's state for ch channels (1 or 2): (cask
 //                          (opus-state ch)) holds one
 // (opus-init b ch gain) -> 0, b laid as a fresh decoder at 48 kHz, its samples scaled by
 //                          gain (the head's output gain: dB in Q7.8) | why
 // (opus-packet b p f)   -> one packet's samples, interleaved, s16le (f 0) or f32le (f 1); p ""
 //                          conceals a lost packet | why: an opus error code, negated
-// the decoder is the rfc's reference (its float build), in src/love/lib/opus/ with its
+// the decoder is the rfc's reference (its float build), in src/love/audio/opus/ with its
 // notices, built here as one unit. it allocates nothing: the state is the caller's cask, and
 // its scratch -- the reference's pseudostack -- the tail of that cask, pointed at for the
 // length of each call and let go after (the one mutable global, a pointer, and a decode is

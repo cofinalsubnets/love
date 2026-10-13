@@ -5,8 +5,8 @@
 // backs src.c's tree nifs and the bake (main.c).
 #include "love.h"
 #include "vfs.h"
-#include "lib/srctree.h"
-#include "lib/ustar.h"
+#include "archive/srctree.h"
+#include "archive/ustar.h"
 #include <errno.h>
 #include <string.h>
 #include <time.h>

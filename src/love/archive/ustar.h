@@ -1,5 +1,5 @@
 // ustar.h -- reading ustar headers and walking paths: the kernel's rootfs (src/inle/kmain.c)
-// and the carried source's links (src/love/lib/srctree.c). the walks stay their callers'.
+// and the carried source's links (src/love/archive/srctree.c). the walks stay their callers'.
 #ifndef USTAR_H
 #define USTAR_H
 #include <stdint.h>

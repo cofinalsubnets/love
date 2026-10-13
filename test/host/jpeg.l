@@ -1,4 +1,4 @@
-; test/host/jpeg.l -- src/apps/jpeg.l and src/love/lib/jpeg.c's jpeg-pixels
+; test/host/jpeg.l -- src/apps/jpeg.l and src/love/picture/jpeg.c's jpeg-pixels
 ; jpeg-encode's own output read back near its source, and the refusals; where magick is
 ; here, a picture written every way it writes one -- baseline and progressive, each
 ; sampling, grey, restart markers, one pixel -- and each decode held to magick's.

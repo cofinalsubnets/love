@@ -29,13 +29,13 @@ case $arch in
            ccnames="aarch64-linux-gnu-gcc a64-nerves-linux-gnu-gcc"
            ccglob="/usr/local/data/*/.nerves/artifacts/nerves_toolchain_a64*/bin/a64-nerves-linux-gnu-gcc"
            ccvar=AARCH64_CC
-           unsupported="100-complex 117-vastruct" ;;
+           unsupported="100-complex 280-cxf-fuzz 117-vastruct" ;;
   rv64) name=test_ccrv64 ; qemu=qemu-riscv64 ; pretty=rv64
            ccenv=${RISCV64_CC:-}
            ccnames="riscv64-linux-gnu-gcc riscv64-unknown-linux-gnu-gcc riscv64-unknown-elf-gcc"
            ccglob=""
            ccvar=RISCV64_CC
-           unsupported="100-complex 111-int128 117-vastruct 151-w128fuzz 266-vaarg-struct" ;;
+           unsupported="100-complex 280-cxf-fuzz 111-int128 117-vastruct 151-w128fuzz 266-vaarg-struct" ;;
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
@@ -114,6 +114,13 @@ for f in test/cc/*.c; do
   progs="$progs $b"
 done
 
+# a64: the packed program again under -mstrict-align, its misaligned members by their chunks
+if [ "$arch" = a64 ]; then
+  moonrun -t a64 -mstrict-align -o "$r/sa279.t" test/cc/279-packed-bitfield.c > "$d/sa279.log" 2>&1 \
+    || { cat "$d/sa279.log" >&2; fail "strict-align: mooncc could not build 279-packed-bitfield.c"; }
+  a64_job sa279.t "timeout 60 \$RUN ./sa279.t"
+fi
+
 # a64: the ABI across compilers -- mooncc's half (test/cc/abi64/host.c) linked with clang's
 # (peer.c), each calling the other with AAPCS64's memory-class composites
 if [ "$arch" = a64 ]; then
@@ -123,6 +130,12 @@ if [ "$arch" = a64 ]; then
   moonrun -t a64 -o "$r/abi64.t" test/cc/abi64/host.c "$d/peer.o" > "$d/abi64.log" 2>&1 \
     || { cat "$d/abi64.log" >&2; fail "abi64: mooncc could not build or link host.c"; }
   a64_job abi64.t "timeout 60 \$RUN ./abi64.t"
+  # __int128 across them: the even register pair, the 16-aligned stack pair, x0:x1 answers
+  clang --target=aarch64-linux-gnu -O2 -ffreestanding -fno-stack-protector -c -o "$d/peer128.o" test/cc/abi128/peer.c 2> "$d/peer128.log" \
+    || { cat "$d/peer128.log" >&2; fail "abi128: clang could not build peer.c"; }
+  moonrun -t a64 -o "$r/abi128.t" test/cc/abi128/host.c "$d/peer128.o" > "$d/abi128.log" 2>&1 \
+    || { cat "$d/abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
+  a64_job abi128.t "timeout 60 \$RUN ./abi128.t"
 
   # the landing law: -mbranch-protection and -mstrict-align held to clang's objects for the
   # same units (test/cc/protect/units.c) -- each fn's landing (bti c, paciasp or neither),
@@ -187,8 +200,11 @@ fi
 
 a64_run "$r" || fail "the $pretty batch did not come back"
 if [ "$arch" = a64 ]; then
+  [ "$(cat "$r/res/sa279.t.rc")" -eq 0 ] || { cat "$r/res/sa279.t.out" >&2; fail "strict-align: 279-packed-bitfield.c answers wrong under -mstrict-align"; }
   [ "$(cat "$r/res/abi64.t.rc")" -eq 0 ] || { cat "$r/res/abi64.t.out" >&2; fail "abi64: mooncc and clang disagree on AAPCS64"; }
   tail -1 "$r/res/abi64.t.out"
+  [ "$(cat "$r/res/abi128.t.rc")" -eq 0 ] || { cat "$r/res/abi128.t.out" >&2; fail "abi128: mooncc and clang disagree on AAPCS64's __int128"; }
+  tail -1 "$r/res/abi128.t.out"
 fi
 
 n=0

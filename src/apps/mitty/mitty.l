@@ -861,6 +861,7 @@
          (? !(tablet? hb) (say err ("mitty: " + hb + "\n"), flush err, window-close win, 1)
             (: _ (pins hb 'in kin 'out fout 'csize [r c] 'own (t \ window-own win 'clipboard t) 'bar 0)
                _ (hgreet hb)
+               _ (window-typing win 1)                  ; a phone's keyboard up
                held {}
                (send s) (0 < #s ? (say kout s, flush kout) 0)
                (soil _) (pin dirty () (max 1 (peep dirty () 0)))

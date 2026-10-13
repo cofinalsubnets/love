@@ -1,6 +1,6 @@
 // src/love/src.c -- the archives the artifact carries: its own source, and moonlibc per ISA
 #include "love.h"
-#include "lib/srctree.h"
+#include "archive/srctree.h"
 #include <string.h>
 
 // (tree-tar name) -> that section of the carried source as a tar of its own; (tree-tar 0) ->

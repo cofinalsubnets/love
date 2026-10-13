@@ -1,4 +1,4 @@
-// src/love/lib/mp3.c -- mpeg audio layer iii (iso 11172-3, 13818-3, and mpeg 2.5), decoded.
+// src/love/audio/mp3.c -- mpeg audio layer iii (iso 11172-3, 13818-3, and mpeg 2.5), decoded.
 // (mp3-state 0)      -> the width of a decoder's state: (cask (mp3-state 0)) is a fresh one
 // (mp3-head s o)     -> the header at s[o]: bytes | ch << 12 | rate << 16, a charm, bytes 0 for
 //                       free format (the frame ends where the next begins); 0 for no frame
