@@ -907,11 +907,11 @@
    ; the type of an expression without its emission (arrays undecayed); every accumulator the
    ; walk touched is handed back as it was
    (peekty g env e)
-    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fa0 (g 'fasecs)
+    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fx0 (g 'fesca) fa0 (g 'fasecs)
        lv (clval g env e)
        _ (vm? lv ? (rfree g (vmb lv)))
        ty (bad? lv ? (cgexpr g env e () @ r (bad? r ? 'bad (rfree g (vreg r), vty r))) (vty lv))
-       (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fasecs fa0,
+       (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fesca fx0 'fasecs fa0,
         ty))
    ; the fn's read graph, flow-blind: each local to the names its decl init and its writes read
    (rdgraph x)
@@ -2345,11 +2345,11 @@
                  (stru? ty || arr? ty ? (pin g 'argpos ()),
                   (? (stru? ty)                    ; a struct value is its address (the sse2 rep)
                       (<en = 'loc ?
-                         (mkv ty 'r0 [['lea 'r0 'r4 <>en]] @ v (ap? ? v (escan g v)))
+                         (mkv ty 'r0 [['lea 'r0 'r4 <>en]] @ v (ap? ? (escana g v) (escan g v)))
                          (mkv ty 'r0 [['la 'r0 <>en]]))
                      (arr? ty)                     ; arrays decay to their address
                       (<en = 'loc ?
-                         (mkv ['ptr <>ty] 'r0 [['lea 'r0 'r4 <>en]] @ v (ap? ? v (escan g v)))
+                         (mkv ['ptr <>ty] 'r0 [['lea 'r0 'r4 <>en]] @ v (ap? ? (escana g v) (escan g v)))
                          (mkv ['ptr <>ty] 'r0 [['la 'r0 <>en]]))
                      (gvarr? ty)                   ; a VLA local: its slot holds the block pointer
                       (<en = 'loc ?
@@ -2374,7 +2374,7 @@
                          (unlean (vfs r)))
                   _ (vm? r ? (rfree g (vmb r)))
                   v (mkv ['ptr (vty r)] 'r0 fs)
-                  (ap? ? v (escan g v)))
+                  (ap? ? (escana g v) (escan g v)))
                ; &f on a function name: the address, unless a variable of that name shadows it (the vent test)
                (<lv = 'var && bad? (vent g env <>lv) && g 'fns <>lv)
                 (mkv ['ptr (fnty g <>lv)] 'r0 [['la 'r0 (name <>lv)]])
@@ -2980,11 +2980,11 @@
            (nlab g ".S" @ lbl
               (pin g 'strs ([lbl <>e] . g 'strs),
                fin ['ptr (gchar g)] [['la rT lbl]]))
-          (<e = 'addr)                          ; &var only: lea/la, argpos-equivalent (no escan)
+          (<e = 'addr)                          ; &var only: lea/la, argpos-equivalent (escana)
            (!(<<>e = 'var) ? 'no
               (vent g env <><>e @ en
                  (? (bad? en) 'no
-                    (<en = 'loc) (fin ['ptr <>>en] [['lea rT 'r4 <>en]])
+                    (<en = 'loc) (pin g 'fesca 1, fin ['ptr <>>en] [['lea rT 'r4 <>en]])
                     (<en = 'glo) (fin ['ptr <>>en] [['la rT <>en]])
                     'no)))
           !(<e = 'var) 'no
@@ -3006,7 +3006,7 @@
                                  (fin ty [['mov rT <>en]])
                                 'no)))
                       (arr? ty)                      ; array decay: its address
-                       (<en = 'loc ? (fin ['ptr <>ty] [['lea rT 'r4 <>en]])
+                       (<en = 'loc ? (pin g 'fesca 1, fin ['ptr <>ty] [['lea rT 'r4 <>en]])
                           (fin ['ptr <>ty] [['la rT <>en]]))
                       (stru? ty || flo? ty) 'no
                       (<en = 'loc)
@@ -4113,6 +4113,9 @@
    ; the call. gated per fn on g 'fesc: a frame address that becomes a value pins every call (a store's own lea does not)
    (leas? (f . u)) (two? f && <f = 'lea && <>>f = 'r4 ? 1 (leas? u))
    (escan g r) ((two? r && leas? (vfs r) ? (pin g 'fesc 1)), r)
+   ; a frame address as a call's arg: the callee may keep it, so no later call jumps out of the
+   ; frame unless the author marked it a musttail (their word that nothing reads it past the jump)
+   (escana g r) ((two? r && leas? (vfs r) ? (pin g 'fesca 1)), r)
    (unlean (f . u))
                      ((two? f && <f = 'lean ? ('lea . >f) f) . unlean u)
    (relean (f . u)) ; the inverse, for a splice that consumes the address itself (the overflow trio's &t)
@@ -4167,7 +4170,8 @@
    (sibs g (f . r) lw el hs ej crf)
     (: lw2 (two? f && <f = 'lea && <>>f = 'r4 || lw)
        cand (!lw2 && two? f && (<f = 'call && two? >f ||
-                                <f = 'callr && <>f = <>crf))
+                                <f = 'callr && <>f = <>crf) &&
+             (!(g 'fesca) || abl? g 'fesca || must? f))
        rr (cand ? (skiprel g (skipxt g r) hs) r)
        (? (cand && epim? rr ej)
            (sibjmp g f ej + sibs g (drop #ej rr) () el hs ej crf)
@@ -8300,6 +8304,7 @@
      'off 8                    ; the frame cursor: slot -8 = saved r3 (see epi)
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
+     'fesca ()                 ; ..and a frame address handed a call (a later call may not jump past it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
      'twice ()                 ; a call returning twice pins it (no callee-saved pool)
