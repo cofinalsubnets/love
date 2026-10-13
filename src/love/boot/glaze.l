@@ -2411,6 +2411,7 @@
    natjit
     (: arch love-arch                                                     ; the runtime target ('x64 / 'a64), read on the actual binary
        G (cite 'glaze)                                                    ; not in the module (test_glaze re-cats it alone): every name arrives by key
+       defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book (map.c)
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
