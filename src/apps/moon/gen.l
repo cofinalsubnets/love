@@ -339,6 +339,7 @@
    ; live value). a C name is a string, so the compare is `=` -- `==` never matches
    (wrs? nm e)
     (e @ (('asn || 'post) . ('var ^nm) . _) 1
+         ('asm . _) (any (o \ <>o @ ('var ^nm) 1 ()) (e 2))   ; an asm output writes its name
      (: (go (a . u)) (wrs? nm a || go u) (go e)))
    ; how hard the body leans on this param: reads weighted x8 per loop level (alive's convention)
    (rdw nm e w)
