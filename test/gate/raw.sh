@@ -108,18 +108,18 @@ moonc "$d"/*.o -o "$ho/$bin" || fail "our-linker bind $bin"
 # the corpus goes in as a FILE with stdin closed, not on a pipe, for test_host's reason
 # (test/test.mk): the corpus TESTS stdin, and `reads` no longer drains stdin ahead of the
 # first form, so a piped corpus has test/io.l's see/unsee poking the script it is riding on.
-cat "$@" > "$ho/.corpus.l"
+cat "$@" > "$ho/.corpus-$target.l"
 if [ "$target" = a64 ]; then
   # the corpus reads the tree beside it, so the carried source goes over and it runs there
   a64_jobs "$ho/raw-a64-run"
-  cp "$ho/$bin" "$ho/.corpus.l" "$ho/raw-a64-run/"
+  cp "$ho/$bin" "$ho/.corpus-$target.l" "$ho/raw-a64-run/"
   a64_tree || fail "$m would not lay its carried tree"
-  a64_job corpus "cd tree && LOVE_NO_IMAGE=1 timeout 420 \$RUN ../$bin ../.corpus.l"
+  a64_job corpus "cd tree && LOVE_NO_IMAGE=1 timeout 420 \$RUN ../$bin ../.corpus-$target.l"
   a64_run "$ho/raw-a64-run" || fail "the a64 run did not come back"
   cp "$ho/raw-a64-run/res/corpus.out" "$ho/$out"
   s=$(cat "$ho/raw-a64-run/res/corpus.rc")
 else
-  LOVE_NO_IMAGE=1 timeout 420 $run "$ho/$bin" "$ho/.corpus.l" </dev/null > "$ho/$out" 2>&1
+  LOVE_NO_IMAGE=1 timeout 420 $run "$ho/$bin" "$ho/.corpus-$target.l" </dev/null > "$ho/$out" 2>&1
   s=$?
 fi
 tail -1 "$ho/$out"
