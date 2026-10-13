@@ -1923,8 +1923,10 @@
             (movqxr f0 r5) (movqrx r5 f0)
             (cvtsi2sd f0 r5) (cvttsd2si r5 f0)
             (ldsd f0 r9 8) (ldss f0 r9 8) (stsd r9 8 f0) (stss r9 8 f0)
-            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1) (movapd f0 f1)
+            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1) (movapd f0 f1) (movss f0 f1)
             (ucomisd f0 f1) (cvtss2sd f0 f1) (cvtsd2ss f0 f1)
+            (addss f0 f1) (subss f0 f1) (mulss f0 f1) (divss f0 f1) (minss f0 f1) (maxss f0 f1) (ucomiss f0 f1)
+            (cvtsi2ss f0 r5) (cvttss2si r5 f0) (movdxr f0 r5) (movdrx r5 f0)
             (ldsdx f0 r9 r10 8 0) (ldssx f0 r9 r10 8 0) (stsdx r9 r10 8 0 f0) (stssx r9 r10 8 0 f0)
             (ldsdl f0 zz9) (minsd f0 f1) (maxsd f0 f1) (cmov eq r5 r9)
             (div r5 r9 r10) (udiv r5 r9 r10) (rem r5 r9 r10 r2) (urem r5 r9 r10 r2)
@@ -1933,7 +1935,7 @@
    rostered (aluops + divops + vshops + unops + ldops9 + gstops + stxops + siops +
              leaops + xops + x4ops + m4ops + fxops + fstxops + fldops + fstops + xmmops +
              '(li mov push pop shl shr sar rol ror ror4 cmpm cmprm la laa ldsdl set cmov cmp test
-               movqxr movqrx cvtsi2sd cvttsd2si))
+               movqxr movqrx cvtsi2sd cvttsd2si cvtsi2ss cvttss2si movdxr movdrx))
    ; the forward carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
    ; form -- no guard is restated here, cpwalk decides and holo judges
    (fwd f) (catmap (i \ catmap (r9 \
@@ -1958,13 +1960,13 @@
    bad2 (catmap bwd shapes)
    (test
       ; the carrier is what it says it is, and every shape is one both halves already accept
-      (96 = #shapes)
+      (108 = #shapes)
       (atom? (filter (f9 \ (rdsp gX f9) = 'bar) shapes))
       (all emits? shapes)
       (atom? (filter (o9 \ nelem o9 heads) rostered))      ; the drift gate
-      (405 = nfwd) (810 = nbwd)                               ; a silent narrowing shows up here
-      (atom? bad1)                                            ; forward: 405 renames, all encodable
-      (atom? bad2)                                            ; backward: 810 folds, all encodable
+      (435 = nfwd) (840 = nbwd)                               ; a silent narrowing shows up here
+      (atom? bad1)                                            ; forward: 435 renames, all encodable
+      (atom? bad2)                                            ; backward: 840 folds, all encodable
       ; the two shapes the guards exist for, refused by holo itself, plus the alias emit-alu
       ; welcomes when the op commutes -- coal's decline there is conservative, not necessary
       !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))

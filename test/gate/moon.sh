@@ -84,6 +84,12 @@ for f in test/cc/*.c; do
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
 done
 
+# the float fuzz (test/cc/278-f32-fuzz.c) at -Os too: its exit code folds every result's bits
+$cc_g -O0 -o "$ho/.f32g" test/cc/278-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
+moonrun -Os -o "$ho/.f32" test/cc/278-f32-fuzz.c > /dev/null 2>&1 || fail "mooncc -Os the float fuzz"
+"$ho/.f32"; a=$?
+[ $a -eq $b ] || fail "float arithmetic -Os: ours $a gcc $b"
+
 # an asm's other-section words leave with its home: a BUG_ON a late fold proves false loses its brk
 # and label, and its __bug_table row must go too, or the object names a label it never lays
 bug='asm volatile (".pushsection __bug_table,\"aw\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800");'
