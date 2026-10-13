@@ -28,7 +28,7 @@
        (go 0 ()))
    dr-eo (#dr-z - 22)
    ; the manifest: its chunks, and its pool's strings
-   dr-x (ap-axml (ap-manifest "org.love.t" "t"))
+   dr-x (ap-axml (ap-manifest "pics.salt.t" "t"))
    (dr-walk x)
     (: (go i acc) (? (#x <= i) [i (rev acc)] (go (i + rdle x (i + 4) 4) (rdle x i 2 . acc))) (go 8 ()))
    (dr-pool x)
@@ -60,7 +60,7 @@
  ; the manifest walks chunk by chunk to its own end: the pool, the resource map, then the tree
  (: w (dr-walk dr-x) (<w = #dr-x && rdle dr-x 4 4 = #dr-x && (w 1) 0 = 1 && (w 1) 1 = 0x180))
  ; every string a string, the attribute names first in resource-id order
- (: p (dr-pool dr-x) (p 0 = "label" && elem "manifest" p && elem "org.love.t" p && elem "activity" p))
+ (: p (dr-pool dr-x) (p 0 = "label" && elem "manifest" p && elem "pics.salt.t" p && elem "activity" p))
  (: p (dr-pool dr-x) !(any (x \ !(string? x)) p)))
 
 (test

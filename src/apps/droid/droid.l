@@ -166,7 +166,7 @@
        _ (two? fs || string? (t 'b) ? 0 (apk-usage 0, quit 2))
        nm (two? fs ? ap-stem <fs (ap-or (t 'n) "inle"))
        out (ap-or (t 'o) (nm + ".apk"))
-       pkg (ap-or (t 'p) ("org.love." + nm))
+       pkg (ap-or (t 'p) ("pics.salt." + nm))
        lov (? (string? (t 'L)) (t 'L) (love-arch = 'a64) (selfpath 0)
               (udie 1 "apk: name an a64 love with -L (`love seed a64 DIR`, baked once on an a64 machine)"))
        lb (uread lov @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + lov))))
