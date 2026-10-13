@@ -473,6 +473,11 @@
           (peep (g 'stag) <>ty 0 @ se
              (two? se ?
                 (fields <se () @ r (r @ 'no () r))))))
+   ; AAPCS64's float HFA: its member count, each member its own s register (the eightbyte classes
+   ; would pack two to a d register) -> n | ()
+   (a64hfa g ty) (a64? g && stru? ty && hfab g ty = 'float ? (tsz g ty // 4 @ n (0 < n <= 4 ? n)))
+   ; ..its n words into a 16-byte cell at sp (ld4: a 12-byte one has no fourth word to read)
+   (hfacell n) ('((sub sp sp 16)) + catmap (j \ [['ld4 'r1 'r0 (4 * j)] ['st4 'sp (4 * j) 'r1]]) ^n)
    (acls2 g ty ca cb) (aclass g ty @ (^ca ^cb) 1)
    (sse2? g ty) (acls2 g ty 'sse 'sse)       ; both eightbytes SSE: the xmm0:xmm1 pair
    (ipair? g ty) (acls2 g ty 'int 'int)      ; both INT: rax:rdx (return/result lanes)
@@ -947,11 +952,11 @@
    ; the type of an expression without its emission (arrays undecayed); every accumulator the
    ; walk touched is handed back as it was
    (peekty g env e)
-    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fa0 (g 'fasecs)
+    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fx0 (g 'fesca) fa0 (g 'fasecs)
        lv (clval g env e)
        _ (vm? lv ? (rfree g (vmb lv)))
        ty (bad? lv ? (cgexpr g env e () @ r (bad? r ? 'bad (rfree g (vreg r), vty r))) (vty lv))
-       (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fasecs fa0,
+       (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fesca fx0 'fasecs fa0,
         ty))
    ; the fn's read graph, flow-blind: each local to the names its decl init and its writes read
    (rdgraph x)
@@ -2406,11 +2411,11 @@
                  (stru? ty || arr? ty ? (pin g 'argpos ()),
                   (? (stru? ty)                    ; a struct value is its address (the sse2 rep)
                       (<en = 'loc ?
-                         (mkv ty 'r0 [['lea 'r0 'r4 <>en]] @ v (ap? ? v (escan g v)))
+                         (mkv ty 'r0 [['lea 'r0 'r4 <>en]] @ v (ap? ? (escana g v) (escan g v)))
                          (mkv ty 'r0 [['la 'r0 <>en]]))
                      (arr? ty)                     ; arrays decay to their address
                       (<en = 'loc ?
-                         (mkv ['ptr <>ty] 'r0 [['lea 'r0 'r4 <>en]] @ v (ap? ? v (escan g v)))
+                         (mkv ['ptr <>ty] 'r0 [['lea 'r0 'r4 <>en]] @ v (ap? ? (escana g v) (escan g v)))
                          (mkv ['ptr <>ty] 'r0 [['la 'r0 <>en]]))
                      (gvarr? ty)                   ; a VLA local: its slot holds the block pointer
                       (<en = 'loc ?
@@ -2435,7 +2440,7 @@
                          (unlean (vfs r)))
                   _ (vm? r ? (rfree g (vmb r)))
                   v (mkv ['ptr (vty r)] 'r0 fs)
-                  (ap? ? v (escan g v)))
+                  (ap? ? (escana g v) (escan g v)))
                ; &f on a function name: the address, unless a variable of that name shadows it (the vent test)
                (<lv = 'var && bad? (vent g env <>lv) && g 'fns <>lv)
                 (mkv ['ptr (fnty g <>lv)] 'r0 [['la 'r0 (name <>lv)]])
@@ -2783,10 +2788,8 @@
                (cxpark g r @ pa
                   (bad? pa ? 'bad
                      (cxout g (cxb (vty r) @ 'float (vty r) cxdty)
-                        ; each component subtracts from minus zero (see the scalar lane); r0 is free, cxout writes it last
-                        (<>pa + [['ldsd 'f0 'r4 <pa] ['ldsd 'f1 'r4 (<pa + 8)]
-                                  ] + mz0 g 'f4 + '((subsd f4 f0) (movsd f0 f4))
-                                  + mz0 g 'f4 + '((subsd f4 f1) (movsd f1 f4))))))
+                        ; each component's sign bit flips, a nan's too; r0 is free, cxout writes it last
+                        (<>pa + [['ldsd 'f0 'r4 <pa] ['ldsd 'f1 'r4 (<pa + 8)]] + dneg g 'f0 + dneg g 'f1))))
               (vty r = 'float && f32v? g)           ; unary on a native float: -f flips through minus zero's single
                (op @ 'neg (mkv 'float 'r0 (vfs r + '((li r1 0x80000000) (movdxr f1 r1) (subss f1 f0) (movsd f0 f1))))
                      'not (mkv 'long 'r0 (asflo g r + '((li r1 0) (movqxr f1 r1) (ucomisd f0 f1)) + fsete))
@@ -2994,6 +2997,10 @@
                     (cxf32? g (vty cr))             ; an i386 float complex: park its r0:r1 words
                      (nslot g 8 @ toff
                         (mkv (vty cr) 'r0 (vfs cr + [['st4 'r4 toff 'r0] ['st4 'r4 (toff + 4) 'r1] ['lean 'r0 'r4 toff]])))
+                    (a64hfa g (vty cr))             ; an a64 float HFA result: s0.. into a fresh slot
+                     (nslot g 16 @ toff
+                        (mkv (vty cr) 'r0 (vfs cr + catmap (j \ [['stss 'r4 (toff + 4 * j) (xmmreg j)]]) ^(a64hfa g (vty cr))
+                                           + [['lean 'r0 'r4 toff]])))
                     (sse2? g (vty cr))              ; a two-double struct result: park the xmm pair in a fresh slot, answer its address
                      (nslot g 16 @ toff
                         (mkv (vty cr) 'r0 (vfs cr +
@@ -3039,14 +3046,16 @@
    ; a targetable gp arg: a pure single-emission read (immediate, frame, home register, label) skips the cell and
    ; lands in its register after the spills -> ((ez i) forms) | ((ezm i rH) movforms ldforms) | 'no
    ; a targetable double arg, when every arg is a pure leaf (no sibling evaluation can call out and take the xmm file):
-   ; a double read off its xmm home or its frame cell lands in its xmm register after the spills -> ((ezx i) forms) | 'no
+   ; a double read off its xmm home or its frame cell lands in its xmm register after the spills -> ((ezx i) forms) | 'no;
+   ; a float the same where a float parameter takes it binary32 (f32abi), its cell's four bytes
    (ezxarg g env e pty i)
     (? (!(fsel? g) || abl? g 'ezx || !(g 'ezride) || 8 <= i || !(<e = 'var)) 'no
        (vent g env <>e @ en
-          (? (bad? en || !(<>>en = 'double) || pty && pty != 'double) 'no
-             (<en = 'regv && elem <>en fregs16) [['ezx i] [['movapd (xmmreg i) <>en]]]
-             (<en = 'loc) [['ezx i] [['ldsd (xmmreg i) 'r4 <>en]]]
-             'no)))
+          (: fl (<>>en = 'float && pty = 'float && f32abi? g)
+             (? (bad? en || !(fl || <>>en = 'double && (!pty || pty = 'double))) 'no
+                (<en = 'regv && elem <>en fregs16) [['ezx i] [['movapd (xmmreg i) <>en]]]
+                (<en = 'loc) [['ezx i] [[(fl ? 'ldss 'ldsd) (xmmreg i) 'r4 <>en]]]
+                'no))))
    (ezall g env e pty gpc xmmc va)
     (ia32? g ? (gpc < ngp g ? (ezarg g env e pty gpc) 'no)   ; i386: a -mregparm word, never an xmm
        (: z (gpc < ngp g ? (ezarg g env e pty gpc) 'no)
@@ -3062,11 +3071,11 @@
            (nlab g ".S" @ lbl
               (pin g 'strs ([lbl <>e] . g 'strs),
                fin ['ptr (gchar g)] [['la rT lbl]]))
-          (<e = 'addr)                          ; &var only: lea/la, argpos-equivalent (no escan)
+          (<e = 'addr)                          ; &var only: lea/la, argpos-equivalent (escana)
            (!(<<>e = 'var) ? 'no
               (vent g env <><>e @ en
                  (? (bad? en) 'no
-                    (<en = 'loc) (fin ['ptr <>>en] [['lea rT 'r4 <>en]])
+                    (<en = 'loc) (pin g 'fesca 1, fin ['ptr <>>en] [['lea rT 'r4 <>en]])
                     (<en = 'glo) (fin ['ptr <>>en] [['la rT <>en]])
                     'no)))
           !(<e = 'var) 'no
@@ -3088,7 +3097,7 @@
                                  (fin ty [['mov rT <>en]])
                                 'no)))
                       (arr? ty)                      ; array decay: its address
-                       (<en = 'loc ? (fin ['ptr <>ty] [['lea rT 'r4 <>en]])
+                       (<en = 'loc ? (pin g 'fesca 1, fin ['ptr <>ty] [['lea rT 'r4 <>en]])
                           (fin ['ptr <>ty] [['la rT <>en]]))
                       (stru? ty || flo? ty) 'no
                       (<en = 'loc)
@@ -3128,6 +3137,16 @@
                                 (. ['(g4 0) (tor0 g a + cell4w)] acc))
                            'bad)
                        (t32nolane? g aty) 'bad
+                       ; a64 float HFA: consecutive s registers, one a member; short of them, the whole of it
+                       ; to the stack, 8-byte rounded, and the s file closes (AAPCS64 C.3)
+                       (a64hfa g aty)
+                        (: n (a64hfa g aty)
+                           (xmmc + n <= 8 ?
+                              (kls >as (i + 1) gpc (xmmc + n) ovc (. [['sa xmmc n] (tor0 g a + hfacell n)] acc))
+                              (: ns ((aup (4 * n) 8) // 8)
+                                 (kls >as (i + 1) gpc 8 (ovc + ns)
+                                      (. [['ov ovc ns] (tor0 g a + catmap (j \ [['ld4 'r1 'r0 (4 * j)] ['st4 'sp (8 * ovc + 4 * j) 'r1]]) ^n)]
+                                         acc)))))
                        (t32f? g && sse2? g aty)            ; a 16-byte HFA: four float slots, or a d-reg pair
                         (: fb (hfab g aty)
                            k (vfpn xmmc 4 (fb @ 'float 1 2))
@@ -3334,7 +3353,7 @@
                                      (go1 >l1 (ov? <l1 ? (<l1 . acc1) acc1)))
                     (go1 kr ()))                          ; overflow entries, reversed (deepest pushes first)
              rgr (: (go2 l2 acc2) (!(two? l2) ? acc2
-                                     (go2 >l2 (elem <<<l2 '(g g2 gw g4 gn x x2 p2 ezd s sn) ?
+                                     (go2 >l2 (elem <<<l2 '(g g2 gw g4 gn x x2 p2 ezd s sn sa) ?
                                                       (<l2 . acc2) acc2)))
                     (go2 kr ()))                          ; pushing register entries, reversed (pops run forward)
              (pushcat l3 acc3) (!(two? l3) ? acc3 (pushcat >l3 (acc3 + <><l3)))
@@ -3372,6 +3391,9 @@
                                             + (<>>>kc @ 'g [['pop (argr g <>>>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>>>kc) 'r0]])))
                                        's    ; a float: the cell's binary32 word into its slot
                                         [['ld 'r12 'sp 0] ['movsnxr <>kc 'r12] '(add sp sp 16)]
+                                       'sa   ; an a64 float HFA's n words into s registers k.., off one cell
+                                        (catmap (j \ [['ldss (xmmreg (<>kc + j)) 'sp (4 * j)]]) ^(<>>kc)
+                                         + '((add sp sp 16)))
                                        'sn   ; n float words into n consecutive slots, off the same cell
                                         (catmap (i \ [['ld 'r12 'sp (4 * i)] ['movsnxr (<>kc + i) 'r12]]) ^(<>>kc)
                                          + '((add sp sp 16)))
@@ -3505,6 +3527,9 @@
    (cxf32? g ty) (ia32? g && gcplx? ty && cxb ty = 'float)     ; i386: a float complex returns on edx:eax
    ; eight zero bytes at base+o from a zeroed r2 (ilp32: two words)
    (z8 g b o) (ilp32? g ? [['st4 b o 'r2] ['st4 b (o + 4) 'r2]] [['st b o 'r2]])
+   ; a double's sign bit flipped in place, through r0 (ilp32: the pair's high word)
+   (dneg g fr) (ilp32? g ? [['movqrx 'r0 fr] '(li r2 0x80000000) '(xor r1 r1 r2) ['movqxr fr 'r0]]
+                 [['movqrx 'r0 fr] '(li r1 0x8000000000000000) '(xor r0 r0 r1) ['movqxr fr 'r0]])
    ; -0.0 into fr (ilp32 builds the pair in r0:r1)
    (mz0 g fr) (ilp32? g ? ['(li r0 0) ['li 'r1 0x80000000] ['movqxr fr 'r0]]
                  [['li 'r0 0x8000000000000000] ['movqxr fr 'r0]])
@@ -3545,13 +3570,16 @@
           '* '((movsd f4 f0) (movsd f5 f1)
                (mulsd f0 f2) (mulsd f5 f3) (subsd f0 f5)                 ; re = ac - bd
                (mulsd f4 f3) (mulsd f1 f2) (addsd f1 f4))                ; im = bc + ad
-          '/ '((movsd f4 f2) (mulsd f4 f2)                               ; c^2
-               (movsd f5 f3) (mulsd f5 f3) (addsd f4 f5)                 ; den = c^2 + d^2
+          '/ '((movsd f4 f2) (mulsd f4 f2)                               ; c^2 (a complex divisor parse could not type:
+               (movsd f5 f3) (mulsd f5 f3) (addsd f4 f5)                 ; den = c^2 + d^2   a typed one calls __divdc3)
                (movsd f5 f0) (mulsd f5 f2)                               ; ac
                (movsd f6 f1) (mulsd f6 f3) (addsd f5 f6)                 ; ac + bd
                (divsd f5 f4)                                             ; re
                (mulsd f1 f2) (mulsd f0 f3) (subsd f1 f0)                 ; bc - ad
-               (divsd f1 f4) (movsd f0 f5)))
+               (divsd f1 f4) (movsd f0 f5))
+          ())
+   ; a real divisor divides each part, as gcc's lowering does
+   (cxar op tb) (op = '/ && !(gcplx? tb) ? '((divsd f0 f2) (divsd f1 f2)) (cxarith op))
    ; the (f0 f1) result into a fresh rt-typed temp; the temp's address answers
    (cxout g rt fs)
     (: ro (ntmp g rt)
@@ -3559,9 +3587,49 @@
            (fstf g 'float 'r4 ro 'f0 + fstf g 'float 'r4 (ro + 4) 'f1)
            [['stsd 'r4 ro 'f0] ['stsd 'r4 (ro + 8) 'f1]])
        (mkv rt 'r0 (fs + st + [['lean 'r0 'r4 ro]])))
+   ; the single twins: a float complex parks as its own 8 bytes and + - * run in singles, rounding
+   ; as C's float does, and so does / by a real that is not a double
+   (cxs? g ty) (gcplx? ty && cxb ty = 'float && f32v? g)
+   (cxpark32 g rv)
+    (: off (ntmp g (vty rv))
+       [off (tor0 g rv + [['ldss 'f2 'r0 0] ['stss 'r4 off 'f2] ['ldss 'f2 'r0 4] ['stss 'r4 (off + 4) 'f2]]) (vty rv)])
+   (cxload32 oa ob) [['ldss 'f0 'r4 oa] ['ldss 'f1 'r4 (oa + 4)] ['ldss 'f2 'r4 ob] ['ldss 'f3 'r4 (ob + 4)]]
+   (cxarith32 op)
+    (op @ '+ '((addss f0 f2) (addss f1 f3))
+          '- '((subss f0 f2) (subss f1 f3))
+          '* '((movapd f4 f0) (movapd f5 f1)
+               (mulss f0 f2) (mulss f5 f3) (subss f0 f5)                 ; re = ac - bd
+               (mulss f4 f3) (mulss f1 f2) (addss f1 f4))                ; im = bc + ad
+          '/ '((divss f0 f2) (divss f1 f2))
+          ())
+   ; a float complex left parks first, as singles; past the right's evaluation, a float complex right
+   ; under + - * meets it in singles, else the pair loads widened onto the double lane
+   (cgcx32 g env op a rhs)
+    (cxpark32 g a @ pa
+       (: rl (matv g (clval g env rhs))
+          rv (!(bad? rl) && stru? (vty rl) ? rl (cgexpr g env rhs ()))
+          (? (bad? rv) 'bad
+             (op = '/ && !(stru? (vty rv)) && vty rv != 'double)
+              (: ro (ntmp g (vty a)) oa <pa
+                 (mkv (vty a) 'r0 (<>pa + asf32 g rv + [['movss 'f2 'f0] ['ldss 'f0 'r4 oa] ['ldss 'f1 'r4 (oa + 4)]]
+                                   + cxarith32 op + [['stss 'r4 ro 'f0] ['stss 'r4 (ro + 4) 'f1] ['lean 'r0 'r4 ro]])))
+             (cxs? g (vty rv) && op != '/ && two? (cxarith32 op) ?
+                (cxpark32 g rv @ mb
+                   (: ro (ntmp g (vty a))
+                      (mkv (vty a) 'r0 (<>pa + <>mb + cxload32 <pa <mb + cxarith32 op
+                                        + [['stss 'r4 ro 'f0] ['stss 'r4 (ro + 4) 'f1] ['lean 'r0 'r4 ro]]))))
+                (cxpark g rv @ mb
+                   (bad? mb ? 'bad
+                      (: oa <pa ob <mb
+                         rt (gcplx? <>>mb && cxb <>>mb = 'float ? '(struct "__cplx_float") cxdty)
+                         (cxout g rt (<>pa + <>mb
+                                      + [['ldss 'f0 'r4 oa] '(cvtss2sd f0 f0) ['ldss 'f1 'r4 (oa + 4)] '(cvtss2sd f1 f1)
+                                         ['ldsd 'f2 'r4 ob] ['ldsd 'f3 'r4 (ob + 8)]]
+                                      + cxar op <>>mb)))))))))
    (cgcx g env op a rhs)                            ; the left already evaluated (a value rec)
     (!(x86? g) ?
         (nolane g ("no lane for C99 complex arithmetic" + ontgt g))
+       (cxs? g (vty a) && two? (cxarith op)) (cgcx32 g env op a rhs)
        (cxarith op @ arith
           (!(two? arith) ? 'bad
              (cxpark g a @ pa
@@ -3572,7 +3640,7 @@
                             rt (gcplx? (vty a) && cxb (vty a) = 'float &&
                                 gcplx? tb && cxb tb = 'float ?
                                   '(struct "__cplx_float") cxdty)
-                            (cxout g rt (<>pa + <>mb + cxload <pa <mb + arith))))))))))
+                            (cxout g rt (<>pa + <>mb + cxload <pa <mb + cxar op tb))))))))))
    ; the rotate idiom: (x >> n) | (x << (W - n)) in either order, x an unsigned W-bit pure operand -- one eval of x,
    ; one rotate (ror4/rorv4 at 32, ror/rorv at 64). a rotl count rides negated (both ISAs read the count mod W)
    (rotp? e)                                        ; pure: safe to evaluate once for the source's twice
@@ -4246,6 +4314,9 @@
    ; the call. gated per fn on g 'fesc: a frame address that becomes a value pins every call (a store's own lea does not)
    (leas? (f . u)) (two? f && <f = 'lea && <>>f = 'r4 ? 1 (leas? u))
    (escan g r) ((two? r && leas? (vfs r) ? (pin g 'fesc 1)), r)
+   ; a frame address as a call's arg: the callee may keep it, so no later call jumps out of the
+   ; frame unless the author marked it a musttail (their word that nothing reads it past the jump)
+   (escana g r) ((two? r && leas? (vfs r) ? (pin g 'fesca 1)), r)
    (unlean (f . u))
                      ((two? f && <f = 'lean ? ('lea . >f) f) . unlean u)
    (relean (f . u)) ; the inverse, for a splice that consumes the address itself (the overflow trio's &t)
@@ -4300,7 +4371,8 @@
    (sibs g (f . r) lw el hs ej crf)
     (: lw2 (two? f && <f = 'lea && <>>f = 'r4 || lw)
        cand (!lw2 && two? f && (<f = 'call && two? >f ||
-                                <f = 'callr && <>f = <>crf))
+                                <f = 'callr && <>f = <>crf) &&
+             (!(g 'fesca) || abl? g 'fesca || must? f))
        rr (cand ? (skiprel g (skipxt g r) hs) r)
        (? (cand && epim? rr ej)
            (sibjmp g f ej + sibs g (drop #ej rr) () el hs ej crf)
@@ -8443,6 +8515,7 @@
      'off 8                    ; the frame cursor: slot -8 = saved r3 (see epi)
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
+     'fesca ()                 ; ..and a frame address handed a call (a later call may not jump past it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
      'twice ()                 ; a call returning twice pins it (no callee-saved pool)
@@ -8505,6 +8578,8 @@
                         + bcopy g 0 (tsz g rt) () + epj)
                       (t32nolane? g rt) 'bad
                       (cxf32? g rt) (tor0 g r + '((ld4 r2 r0 4) (ld4 r0 r0 0)) + epj)   ; edx:eax
+                      (a64hfa g rt)                                      ; an a64 float HFA returns in s0..
+                       (tor0 g r + catmap (j \ [['ldss (xmmreg j) 'r0 (4 * j)]]) ^(a64hfa g rt) + epj)
                       (sse2? g rt)                                       ; a two-double struct returns as the xmm pair
                        (tor0 g r + (amark rt r @ ma (salw? g ma ?
                                       (: a (tal g ma) (ldal 'r1 'r0 8 8 a + [['movqxr (xmmreg 1) 'r1]] + ldal 'r0 'r0 0 8 a + [['movqxr (xmmreg 0) 'r0]]))
@@ -9774,6 +9849,13 @@
                                (acc + fstf g 'double 'r4 off (xmmreg (k // 2)))))
                      (aup ovi 8 @ ov8
                         (spill hp >ps gpi vfpx (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
+                 (a64hfa g pty)                         ; an a64 float HFA: its members off s registers k.., else the caller's block
+                  (: n (a64hfa g pty)
+                     (xmmi + n <= 8 ?
+                        (: off (nslot g 16)
+                           (spill hp >ps gpi (xmmi + n) ovi ([<p off pty] . env)
+                                  (acc + catmap (j \ [['stss 'r4 (off + 4 * j) (xmmreg (xmmi + j))]]) ^n)))
+                        (spill hp >ps gpi 8 (ovi + (aup (4 * n) 8) // 8) ([<p (ovb g + 8 * ovi) pty] . env) acc)))
                  (v6m? g && stru? pty && aone g pty == 'sse)           ; v6-M 8B blob param: the even-odd gp pair (the caller's g2 lane)
                   (gpair (aup gpi 2))
                  (stru? pty && two? (aeb2 g pty))       ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
@@ -10169,7 +10251,8 @@
        ; exit. the cells the loop mentions most take them over the loop's ticks, priced by weighted
        ; mentions against the transfers an entry costs.
        ; a loop that calls takes only callee-saved seats, so no call wrap ever meets a split; a body
-       ; with a jump or asm takes none. -> [ov splits cu]: name -> ([lo hi reg]..), tick -> [evs prs]
+       ; with a jump or asm takes none, nor a loop holding a statement expression (its inner locals
+       ; and reads sit outside the ticks a split is laid by). -> [ov splits cu]: name -> ([lo hi reg]..), tick -> [evs prs]
        (usplit av9 lh9 cu0 items)
         (: sqm9 (av9 9) uv <>>av9 tak9 (av9 14) spa9 (av9 5)
            kp (cspool g)
@@ -10229,7 +10312,7 @@
                                        ([m r (in9 m) (out9 m)] . <>o)],
                             (elem r cs0 && nelem r (cu9 'cu) ? (pin cu9 'cu (r . cu9 'cu))),
                             1))))))
-               (map take9 cands))
+               (has9 '(sexpr) s9 ? () (map take9 cands)))
            (? (has9 '(goto igoto lbl asm) items) [{} {} cu0]
               (: _ (map one (sortby (x \ y \ (? (y 2 < x 2) 1 (x 2 < y 2) () (<>x - <x < <>y - <y))) (av9 19)))
                  [ov9 sp9 (cu9 'cu)])))

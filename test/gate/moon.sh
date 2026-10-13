@@ -92,9 +92,9 @@ moonrun -o "$ho/.abi128" test/cc/abi128/host.c "$ho/.peer128.o" > "$ho/.abi128.l
   || { cat "$ho/.abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
 "$ho/.abi128" > "$ho/.abi128.out" || { cat "$ho/.abi128.out" >&2; fail "abi128: mooncc and gcc disagree on SysV's __int128"; }
 
-# the float fuzz (test/cc/277-f32-fuzz.c) at -Os too: its exit code folds every result's bits
-$cc_g -O0 -o "$ho/.f32g" test/cc/277-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
-moonrun -Os -o "$ho/.f32" test/cc/277-f32-fuzz.c > /dev/null 2>&1 || fail "mooncc -Os the float fuzz"
+# the float fuzz (test/cc/278-f32-fuzz.c) at -Os too: its exit code folds every result's bits
+$cc_g -O0 -o "$ho/.f32g" test/cc/278-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
+moonrun -Os -o "$ho/.f32" test/cc/278-f32-fuzz.c > /dev/null 2>&1 || fail "mooncc -Os the float fuzz"
 "$ho/.f32"; a=$?
 [ $a -eq $b ] || fail "float arithmetic -Os: ours $a gcc $b"
 

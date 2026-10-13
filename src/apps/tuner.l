@@ -7,9 +7,10 @@
 ;   tuner -a HZ        A4 at HZ (440 unless said)
 ;   tuner -d DEV       listen on DEV, a /dev/snd/pcmC*D*c, /dev/dsp or /dev/sound
 ;   tuner --demo       no mic: a synthesized glide through four octaves, through the same ear
-; keys: a and A move A4 down and up a hertz, q quits.
+; under the needle, when there is room, the spectrum from C1 to B7 in semitones.
+; keys: a and A move A4 down and up a hertz, s shows or hides the spectrum, q quits.
 (module (tuner tuner-main tuner-new tuner-yin tuner-hear tuner-cents tuner-note tuner-frame
-               tuner-sine tuner-plain)
+               tuner-sine tuner-tone tuner-plain tuner-spectrum)
 (:
    names ["C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"]
    hues [160 202 214 148 41 45 33 99 171]          ; octaves 0..8, red through violet
@@ -21,7 +22,8 @@
    linger 2500                                      ; ms a reading stands once the sound stops
    tuner-usage "usage: love tuner [-a HZ] [-d DEV] [--demo]
 listen and show the pitch on a scale of eighth tones, A4 at HZ (440); DEV is the capture
-device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4, q quits."
+device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4, s the
+spectrum, q quits."
 
    (hue o) (hues (max 0 (min 8 o)))
    (ink o s) (sgr ("38;5;" + show (hue o)) s)
@@ -38,27 +40,60 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
        (go 0 ()))
 
    ; --- the ear ---------------------------------------------------------------------
-   ; yin over a float tray of win + hi samples: each lag's squared difference over the
-   ; window, normalised by the running mean (d'), and the first dip under 0.15 refined by a
-   ; parabola through it and its neighbours. -> hz, or () where nothing periodic is there.
-   ; each lag is one subtract, square and sum over a tray, so the work is the C's
+   ; yin over the last win + hi samples of a float tray: each lag's squared difference over
+   ; the window, normalised by the running mean (d'), and the first dip under 0.15 refined by
+   ; a parabola through it and its neighbours. -> hz, or () where nothing periodic is there.
+   ; the difference is the window's energy, the lagged window's and twice their correlation,
+   ; and the correlations of every lag are one transform there and back
+   (fft x) ((cite 'dsp 'fft) x)
+   (ifft x) ((cite 'dsp 'ifft) x)
    (tuner-yin x)
-    (: a (snip x 0 win)
-       (d t) (snip x t (t + win) @ b (a - b @ e (net (e * e))))
-       (walk t run p2 p1)
+    (: y (recent x)
+       sq (y * y) c (re (ifft (conj (fft (y * (iota #y < win))) * fft y)))
+       r0 (net (snip sq 0 win))
+       (walk t e run p2 p1)
         (t > hi ? ()
-           (d t @ v (run + v @ r (t * v / (r + 1e-9) @ n
+           (e - at sq (t - 1) + at sq (t + win - 1) @ e2 (r0 + e2 - 2.0 * at c t @ v (run + v @ r (t * v / (r + 1e-9) @ n
               (? (t - 1 > lo && p1 < 0.15 && n > p1)          ; p1 was the dip, at lag t - 1
                  (: den (p2 - 2.0 * p1 + n) s (den = 0 ? 0.0 (0.5 * (p2 - n) / den))
                     (rate / (t - 1 + s)))
-                 (walk (t + 1) r p1 n))))))
-       (walk 1 0.0 1.0 1.0))
+                 (walk (t + 1) e2 r p1 n)))))))
+       (walk 1 r0 0.0 1.0 1.0))
    ; s16 mono bytes as a float tray
    (samples s) (: c (cask #s) _ (pour c 0 s 0 #s)
                   t (peepv c 0 2 2 (#s // 2))
                   ((t - 65536 * (t >= 32768)) * 1.0))
    (rms x) ((net (x * x) / #x) ** 0.5)
-   (tuner-sine f) (sin ((iota (win + hi)) * (2.0 * pi * f / rate)) * 8000.0)
+   (recent x) (#x > win + hi ? (snip x (#x - win - hi) #x) x)    ; what yin and the level hear
+   (tuner-tone f n) (sin ((iota n) * (2.0 * pi * f / rate)) * 8000.0)
+   (tuner-sine f) (tuner-tone f (win + hi))
+
+   ; the spectrum: one bin a semitone from C1 to B7, each read at its pitch off a hann-windowed
+   ; transform of the last 34 periods or more, a power of two from 1024 frames to long or the
+   ; most the buffer holds. -> dBFS per bin
+   bins 84
+   long 32768                                       ; the spectrum's longest look, frames
+   (up2 n) (n <= 1 ? 1 (2 * up2 ((n + 1) // 2)))
+   (down2 n) (n < 2 ? 1 (2 * down2 (n // 2)))
+   hanns {}
+   (hann n) (hanns n @ w (tray? w ? w (iota n * (2.0 * pi / (n - 1)) @ i (pin hanns n (0.5 - 0.5 * cos i), hanns n))))
+   ; per bin its transform's length, its pitch in that transform's bins, and the scale from
+   ; a peak's root power to the sine's amplitude
+   (plan ref m)
+    (: cap (min long (down2 m))
+       bs (map (b \ (: f (ref * 2.0 ** ((b - 45) / 12.0)) n (min cap (max 1024 (up2 (int (34.0 * rate / f)))))
+                       [n (f * n / rate) (2.0 / net (hann n))]))
+               ^bins)
+       [(sort (keys (foldl (\ t b (pin t <b 1)) {} bs))) bs])
+   (tuner-spectrum pl x)
+    (pl @ [ns bs]
+     (: m #x
+        pw (foldl (\ t n (pin t n (fft (snip x (m - n) m * hann n) @ z (re z * re z + im z * im z)))) {} ns)
+        (map ([n kf k] \ (: p (pw n) i (floor kf) u (kf - i)
+                            q (at p i + u * (at p (i + 1) - at p i))
+                            (20.0 * log (k * (q ** 0.5) / 32768.0 + 1e-9) / log 10.0)))
+             bs)))
+   (at v i) (peep v i 0.0)
 
    ; pitch as cents over midi 0, A4 = 6900 at ref hz; a row of the scale is k = cents / 25
    (tuner-cents ref f) (6900.0 + 1200.0 * log (f / ref) / log 2.0)
@@ -68,7 +103,7 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
    ; heard; lo and hi the note's raw cents, its range since it began; raw its last six, and
    ; nd the needle, eased toward their mean; ncell the cell the needle was drawn in
    (tuner-new ref src) {'ref ref 'src src 'c () 'last 6900.0 'hz () 'at () 'lo () 'hi ()
-                        'raw () 'nd 6900.0 'ncell ()
+                        'raw () 'nd 6900.0 'ncell () 'kern () 'spec () 'sp 1
                         'lvl 0 'floor () 'over 0 'clock (_ \ clock 0)}
    ; a reading stands while it is live and for linger ms after its last window
    (held? t now) (t 'at @ a (charm? a && now - a < linger))
@@ -78,7 +113,11 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
    ; quiet: down at once, up a percent a window, and only while nothing is pitched, so a
    ; held note never raises it
    (tuner-hear t x)
-    (: now ((t 'clock) 0) l (rms x) fl (t 'floor)
+    (: now ((t 'clock) 0) l (rms (recent x)) fl (t 'floor)
+       kk (t 'kern) key [(t 'ref) (min long (down2 #x))]
+       pl (two? kk && <kk = key ? >kk (plan (t 'ref) #x))
+       sp (tuner-spectrum pl x) old (t 'spec)
+       _ (pins t 'kern (key . pl) 'spec (two? old ? (map (p \ max <p (>p - 3.0)) (zip sp old)) sp))
        f (l > 80.0 && (!fl || l > 3.0 * fl) ? (tuner-yin x) ())
        _ (? f 0 (pin t 'floor (? (!fl || l < fl) l (fl * 1.01))))
        (? f
@@ -128,33 +167,54 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
         ("  " + cats (map (i \ (? (i = i0) ((gone ? faint bold) o "●") (a <= i <= b) (ink o "━")
                                   (i = mid) (sgr "2" "┃") (sgr "2" "─"))) ^n))))
 
-   ; the screen w by h, as rows: the title, the scale, the needle, a blank and the keys
+   ; the spectrum across n columns, four rows of eighth blocks over -60..0 dBFS and a row
+   ; naming each octave's C; a column takes the loudest of its bins and its octave's hue,
+   ; and the reading's own column is bold
+   blocks [" " "▁" "▂" "▃" "▄" "▅" "▆" "▇" "█"]
+   (strip t n on c)
+    (: sp (t 'spec) pb (on ? (floor (c / 100.0 + 0.5) - 24) -1)
+       (b0 i) (i * bins // n) (b1 i) (max (b0 i + 1) ((i + 1) * bins // n))
+       (lev i) (foldl max -999.0 (take (b1 i - b0 i) (drop (b0 i) sp)))
+       cols (map (i \ [(b0 i // 12 + 1) (b0 i <= pb && pb < b1 i)
+                       (max 0 (min 32 (int ((lev i + 60.0) / 60.0 * 32.0 + 0.5))))]) ^n)
+       (bar r) ("  " + cats (map ([o me e] \ (max 0 (min 8 (e - 8 * (3 - r))) @ k
+                                   (k = 0 ? " " ((me ? bold ink) o (blocks k))))) cols))
+       (lab i acc) (i >= n ? (cats (rev acc))
+                      ((b1 i - 1) // 12 @ o (b0 i <= 12 * o && i + 2 <= n
+                         ? (lab (i + 2) (ink (o + 1) ("C" + show (o + 1)) . acc))
+                         (lab (i + 1) (" " . acc)))))
+       (map bar ^4 + [("  " + lab 0 ())]))
+   ; the screen w by h, as rows: the title, the scale, the needle, a blank, the spectrum
+   ; with a blank under it when there is room and it is on, and the keys
    (tuner-frame t w h)
     (: on (held? t ((t 'clock) 0)) gone !(t 'c) c (t 'last) lo (t 'lo) hi (t 'hi)
-       body (max 5 (h - 4)) cy (body // 2) k0 (floor (c / 25.0 + 0.5))
+       sp (t 'sp && two? (t 'spec) && h >= 24)
+       body (max 5 (h - (sp ? 10 4))) cy (body // 2) k0 (floor (c / 25.0 + 0.5))
        klo (on ? (floor (lo / 25.0 + 0.5)) 1) khi (on ? (floor (hi / 25.0 + 0.5)) 0)
        mk (on ? (marker c (t 'hz) w lo hi gone) ())
        rows (map (y \ (k0 + cy - y) @ k (row k (y = cy ? mk ()) (klo <= k <= khi))) ^body)
        top (sgr "7" (pad ("  love tuner   A4 = " + show (t 'ref) + " Hz   " + t 'src
                           + "   level " + show (int (t 'lvl))) w))
-       bot (sgr "2" (pad "  ━ semitone  ╺━ quarter tone  · eighth tone    a/A A4 ∓1 Hz   q quit" w))
-       ([top] + rows + [(on ? (needle t (t 'nd) w lo hi gone) (sgr "2" "  (listening)")) "" bot]))
+       bot (sgr "2" (pad "  ━ semitone  ╺━ quarter tone  · eighth tone    a/A A4 ∓1 Hz  s spectrum  q quit" w))
+       nl (on ? (needle t (t 'nd) w lo hi gone) (sgr "2" "  (listening)"))
+       ([top] + rows + [nl ""] + (sp ? (strip t (max 11 (w - 4)) on c + [""]) ()) + [bot]))
    (paint t w h) (tuner-frame t w h @ rs ("\e[H" + cats (map (r \ r + "\e[K\r\n") (init rs)) + last rs + "\e[K"))
 
    ; --- the ears that feed it -------------------------------------------------------
-   ; the mic: the last win + hi frames kept, a reading every 50 ms of fresh ones
-   need (2 * (win + hi))
+   ; the mic: the last long frames kept, a reading every 100 ms of fresh ones once yin's
+   ; win + hi are in
+   need (2 * (win + hi)) keep (2 * long)
    (listen t h buf fresh)
     (see h @ c (c = -1 || t 'over ? ()
-      (: b (buf + string c + chug h) b2 (#b > need ? (snip b (#b - need) #b) b)
+      (: b (buf + string c + chug h) b2 (#b > keep ? (snip b (#b - keep) #b) b)
          n2 (fresh + #b - #buf)
          (n2 >= 4800 && #b2 >= need ? (tuner-hear t (samples b2), listen t h b2 0) (listen t h b2 n2)))))
    ; the demo: a sine gliding A1 to A5 and back every 16 s
    (demo t t0)
     (: u (fmod (clock t0 / 1000.0) 16.0) e (u < 8.0 ? u (16.0 - u))
-       (tuner-hear t (tuner-sine (55.0 * 2.0 ** (e / 2.0))),
+       (tuner-hear t (tuner-tone (55.0 * 2.0 ** (e / 2.0)) long),
         t 'over ? () (: _ (rest 50) (demo t t0))))
-   (step t k) (k @ 113 (pin t 'over 1) 97 (pin t 'ref (t 'ref - 1.0)) 65 (pin t 'ref (t 'ref + 1.0)) 0)
+   (step t k) (k @ 113 (pin t 'over 1) 115 (pin t 'sp (1 - t 'sp)) 97 (pin t 'ref (t 'ref - 1.0)) 65 (pin t 'ref (t 'ref + 1.0)) 0)
 
    ; N or N.N, a positive float; () for anything else
    (hz s) ((string? s ? (s @ (a + "." + b) (unum a @ x (unum b @ y (charm? x && charm? y ? (x + y / 10.0 ** #b) ())))

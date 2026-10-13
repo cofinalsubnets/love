@@ -2303,6 +2303,15 @@
       (cspos rl = 5)                             ; ..saved right after the frame's sub
       (csld? (rl (#rl - 5)))))                    ; ..restored at the teardown's head
 
+; --- a frame address handed to a call may be kept by the callee: no later call in the fn
+; jumps out of the frame under it (block() in lua's parser: enterblock(fs, &bl) .. leaveblock(fs))
+(: eF (fnf 'f <>(cgn "struct st { int *bl; }; void enter(struct st *s, int *x); void leave(struct st *s); void f(struct st *s) { int x; enter(s, &x); leave(s); } int main() { return 0; }"))
+   aF (fnf 'f <>(cgn "struct st { int *bl; }; void enter(struct st *s, int *x); void leave(struct st *s); void f(struct st *s) { int x[2]; enter(s, x); leave(s); } int main() { return 0; }"))
+   (test
+      (elem '(call leave) eF)
+      !(elem '(jmp leave) eF)
+      (elem '(call leave) aF)))                  ; an array's decay is its address too
+
 ; --- the allocator core (x64): a mint takes its copy partner's register when the two
 ; never meet, keeps its binding when the machine reads that register past it (an argument
 ; into a call), and never shares a non-commutative op's second source
