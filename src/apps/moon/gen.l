@@ -4154,7 +4154,7 @@
     (: lw2 (two? f && <f = 'lea && <>>f = 'r4 || lw)
        cand (!lw2 && two? f && (<f = 'call && two? >f ||
                                 <f = 'callr && <>f = <>crf) &&
-             (!(g 'fesca) || must? f))
+             (!(g 'fesca) || abl? g 'fesca || must? f))
        rr (cand ? (skiprel g (skipxt g r) hs) r)
        (? (cand && epim? rr ej)
            (sibjmp g f ej + sibs g (drop #ej rr) () el hs ej crf)
