@@ -1623,9 +1623,10 @@
             each fdmap sh-lay1,
             (? (sh-fd0? fdmap) (chug in) 0),     ; a new stdin: our read-ahead is not its
             each allclose (fd \ 2 < fd ? (close fd) 0),
-            ; 0: a child has a shell already. cli-line answers the line's status, a
-            ; charm, and the process answers with it; anything else is 0
-            cite 'cli 'cli-line (sh-forkv S argv) 0)
+            ; the tty is the child's own stdin, as the exec's would be: a bare `love`
+            ; on a terminal is the repl. cli-line answers the line's status, a charm,
+            ; and the process answers with it; anything else is 0
+            cite 'cli 'cli-line (sh-forkv S argv) (two? (tty 0) ? 1 0))
             (quit (charm? r ? (r & 255) 0)))))
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
