@@ -30,7 +30,7 @@ const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
              lift: 0x4010, scan: 0x4011, drew: 0x4012, kexec: 0x4013,
              point: 0x4014, paste: 0x4015, copy: 0x4016,
              fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022, host: 0x4030,
-             proc: 0x4040 };
+             proc: 0x4040, proc_stop: 0x4041 };
 const ENOENT = 2, EBADF = 9, EACCES = 13, ENOSYS = 38, ENAMETOOLONG = 36;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
@@ -302,7 +302,7 @@ const hornSink = () => {
   if (((p - w) | 0) > 0) p = w;                           // the clock passed the writer
   Atomics.store(ctl, c_played, p); };
 
-const sys1 = (n, a, b, c, d, e) => {
+const sys1 = (n, a, b, c, d, e, f) => {
   if (Number(n) >= NR.host && Number(n) < NR.host + kh.length) return BigInt(host(Number(n) - NR.host, a, b, c, d, e));
   switch (Number(n)) {
     case NR.write: {                                    // the serial line: fds 1 and 2 alike
@@ -414,8 +414,12 @@ const sys1 = (n, a, b, c, d, e) => {
       const pid = Number(a), boxb = new SharedArrayBuffer(box_n);
       procs.set(pid, { st: new Int32Array(boxb, 0, 4), args: new BigInt64Array(boxb, 16, 9),
                        win: new Uint8Array(boxb, box_at, box_win) });
-      post({ proc: { pid, argv: words(b, c), env: words(d, e), box: boxb } });
+      // a module of its own: its bytes copied out, the (code, length) pair at f
+      const cl = f ? new BigUint64Array(memory.buffer, Number(f), 2) : null,
+            code = cl ? u8().slice(Number(cl[0]), Number(cl[0]) + Number(cl[1])) : null;
+      post({ proc: { pid, argv: words(b, c), env: words(d, e), box: boxb, code } }, code ? [code.buffer] : []);
       return 0n; }
+    case NR.proc_stop: procs.delete(Number(a)), post({ stop: Number(a) }); return 0n;
     // the machine asks for a file to be carried out: the path into the lift slot, the
     // request raised, and the next idle reads the file and posts it
     case NR.lift: {

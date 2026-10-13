@@ -156,6 +156,7 @@ lvm(lvm_tablet) {
 
 // (m k): map application is lookup, () if absent; unwinds like self-quote
 lvm(lvm_map_lookup) {
+ Pack(g);                                            // packed: the probe's walks take the nursery's free room
  word v = mapget(g, ZeroPoint, Sp[0], (word) Ip);   // a map miss answers () (the zero point), not the number 0
  Ip = cell(*++Sp), *Sp = v;
  love_musttail return Continue(); }
@@ -174,7 +175,7 @@ lvm(lvm_litp) {
 op11(lvm_hotp, (caskp(Sp[0]) || iop(Sp[0])) ? putcharm(1) : zero)
 
 // (hash x) -- the general hashing method exposed to l as a fixnum.
-op11(lvm_dig, putcharm(hash(g, Sp[0])))
+op11(lvm_dig, (Pack(g), putcharm(hash(g, Sp[0]))))   // packed: hash takes the nursery's free room
 
 // (peep tray idx d) with idx an int tray: the gather. the answer takes idx's shape and the
 // tray's kind, a miss the default; a complex or object tray, a float index or a default
@@ -238,7 +239,7 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
   struct str *s = cask(x)->str;
   if (charmp(k) && (n = getcharm(k)) >= 0 && n < (word) len(s))
    z = putcharm((unsigned char) txt(s)[n]); }
- else if (tabp(x)) z = mapget(g, z, k, x);     // map lookup (not a data sentinel)
+ else if (tabp(x)) Pack(g), z = mapget(g, z, k, x);   // map lookup (not a data sentinel), packed for the probe's walks
  else if (evenp(x) && datp(x)) switch (typ(x)) {
   default: break;                               // a bare mint (DMint) is not indexable
   case DGem:                                    // a rank-0 scalar float: a zero key derefs to itself
@@ -324,6 +325,7 @@ lvm(lvm_pin) {
 lvm(lvm_pull) {
  word coll = Sp[0], v = Sp[2];                   // default
  if (tabp(coll)) {
+  Pack(g);                                     // packed: the probe's walks take the nursery's free room
   v = mapget(g, Sp[2], Sp[1], coll);           // value, or default if absent
   mapdel(g, coll, Sp[1], Sp[2]); }             // remove in place (no-op if absent)
  love_musttail return Answerp(2, v); }
@@ -346,15 +348,17 @@ lvm(lvm_keys) {
 // raw address does not, so a nif-keyed table still finds its buckets at wake.
 static const char hash_base[1] = {0};
 // the walk-from-nothing entry; hash_at (src/love/arr.c) is the same walk continued above a live
-// worklist. a charm settles here so the hot key never pays for the hand-off.
+// worklist. a charm or other leaf settles here, so the hot keys never take scratch.
 uintptr_t hash(struct g *g, intptr_t x) {
- word *top; return charmp(x) ? rot(x*mix) : hash_at(g, x, gap(g, &top)); }
+ if (charmp(x)) return rot(x*mix);
+ uintptr_t t; word src;
+ if (!chainp(x) && hash_leaf(g, x, &t, &src) != 3) return t;
+ word *top, *base = gap(g, &top);
+ return hash_at(g, x, base, top); }
 
-// a leaf's own hash, nothing walked under it: -> 0 the answer is in *out; 1 hash the
-// \-expr in *src, nothing filled; 2 bridge the closure in *src, falling back to *out when
-// it will not residualize; 3 fold the cells of the object tray in *src over the header hash
-// in *out. a chain never arrives -- hash_at spines it -- and a sourced lambda leaves by 1
-// or 2, which is what keeps this side free of the source walk.
+// a leaf's own hash, nothing walked under it: -> 0 the answer is in *out; 3 fold the cells
+// of the object tray in *src over the header hash in *out. a chain never arrives -- hash_at
+// spines it.
 // a function hashes as `=` reads it (arr.c's fn_eq): its thread's words from the value to the
 // terminator, a pointer back into its own thread by its offset, any other heap word by being
 // one -- the worklist compares those, and a hash owes `=` only that what it joins hashes alike.

@@ -8,7 +8,7 @@
 #define VFS_H
 #include <stdint.h>
 #include <stdbool.h>
-#include "lib/srctree.h"
+#include "archive/srctree.h"
 
 struct vfs_file { char const *path, *bytes; uintptr_t len, ms; };   // a baked row
 struct vfs_brow { struct vfs_file f; struct tree_row const *tree; };

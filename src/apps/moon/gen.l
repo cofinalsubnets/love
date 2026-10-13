@@ -145,11 +145,14 @@
    (ralloc g) (!(abl? g 'ralloc) ?
                (g 'pool @ (r9 . u)
                 (pin g 'pool u,
-                 (: k9 (peep g 'vrn 0)
-                    v9 (name ("%v" + show k9))
-                  (pin g 'vrn (k9 + 1),
-                   pin (g 'vrt) v9 r9,
-                   v9)))))
+                 vmint g r9)))
+   (vmint g r9) (: k9 (peep g 'vrn 0)
+                   v9 (name ("%v" + show k9))
+                 (pin g 'vrn (k9 + 1),
+                  pin (g 'vrt) v9 r9,
+                  v9))
+   ; a spare pool register a shuttle borrows for one span, minted so the allocator may move it
+   (vspare g r9) (r9 && (x64? g || a64? g) && !(abl? g 'ralloc) && !(abl? g 'vspare) ? (vmint g r9) r9)
    (rfree g rz) (rp g rz @ r
                   (elem r (g 'pool0) &&
                  nelem r (g 'pool) ?
@@ -323,14 +326,19 @@
    (rdst g rA) (wr? g rA ? rA (ralloc g @ rX (rX || 'r0)))
    ; frame-direct: a constant-indexed frame-array element is a static slot (off + k*elsize), the
    ; address consumed by its own load/store, so escaping arrays too; pair/d128 keep the address lanes
-   (afd g env e)                                    ; -> (off elty) | ()
-    (e @ ('deref ('bin '+ ('var nm) ('num i && 0 <= i)))
+   (afd g env e) (afd2 g env e ())                  ; -> (off elty) | ()
+   (afd2 g env e fl)                                ; ..fl: a double element too (a load: the stores keep the int lanes)
+    (e @ ('deref ('bin '+ ('var nm) ix))
+          (knum g ix @ kc
+           (: i (two? kc ? <kc)
+            (!(charm? i) || i < 0 ? ()
            (vent g env nm @ en
               (!(two? en && <en = 'loc && arr? <>>en) ? ()
                  (<>(<>>en) @ et
-                    ((ptr? et || elem et '(char schar cchar uchar bool short ushort int uint long ulong)) &&
+                    ((ptr? et || elem et '(char schar cchar uchar bool short ushort int uint long ulong) ||
+                      fl && flo? et && !(abl? g 'afdf)) &&
                      !(pair? g et) ?
-                       [(<>en + i * tsz g et) et])))))
+                       [(<>en + i * tsz g et) et]))))))))
    ; may this param alias? only if the body never writes it (the register holds the caller's
    ; live value). a C name is a string, so the compare is `=` -- `==` never matches
    (wrs? nm e)
@@ -848,6 +856,8 @@
    ; result -> f0 as a double. t32: an unsigned word rides the U-converter, a pair source cvtlld
    (asflo g r) (? (vty r = 'float && f32v? g) (vfs r + '((cvtss2sd f0 f0)))
                   (flo? (vty r)) (vfs r)
+                  ; an integer literal converts here, exactly, not at run time
+                  (kli? g r @ k (charm? k)) (rfree g (vreg r), vfs (mkflo g (0.0 + kli? g r)))
                   (gcplx? (vty r))                  ; complex -> real reads re (C's implicit conversion)
                    (tor0 g r + (cxb (vty r) = 'float ?
                                 '((ldss f0 r0 0) (cvtss2sd f0 f0))
@@ -856,6 +866,14 @@
                   (ilp32? g && usg? (vty r)) (tor0 g r + '((cvtui2sd f0 r0)))
                   (vty r = 'ulong) (tor0 g r + ul2d)
                   (tor0 g r + '((cvtsi2sd f0 r0))))
+   ; r as an integer literal a double holds exactly: one li, or a li and its neg -> k | ()
+   (kli? g r) (: fs (vfs r) R (vreg r)
+                 k (? (abl? g 'kflo || gcplx? (vty r) || (llt? (vty r) && ilp32? g)) ()
+                      (fs @ [('li R2 k9)] (R2 = R ? k9)
+                            [('li R2 k9) ('neg R3)] (R2 = R && R3 = R && charm? k9 ? (0 - k9))
+                            ()))
+                 (charm? k && (usg? (vty r) ? (0 <= k) 1) &&
+                  k < 9007199254740992 && 0 - 9007199254740992 < k ? k))
    (asint g r) (? (vty r = 'float && f32v? g) (vfs r + '((cvttss2si r0 f0)))
                   (flo? (vty r)) (vfs r + '((cvttsd2si r0 f0)))
                   (tor0 g r))                                                   ; result -> r0 as an int
@@ -1461,7 +1479,7 @@
     (vreg av @ rA
        (? (!(two? (vfs av)) && rA != 'r0 && psafe? g bf rA) (bf + [['mov 'r1 rA]])
           (r1safe? g bf) (af + '((mov r1 r0)) + bf)
-          (spare g bf @ s
+          (vspare g (spare g bf) @ s
              (s ? (af + [['mov s 'r0]] + bf + [['mov 'r1 s]])
                 (af + spush 'r0 + bf + spop 'r1)))))
    ; the double twin: left in f1, right in f0. x64 parks the left in an xmm the right never
@@ -1502,7 +1520,7 @@
        (fsel? g && !(fclob? bf 'f1)) (af + '((movapd f1 f0)) + bf)
        (: p (fsel? g ? (fpick bf (fparks g)) ())
           (nom? p ? (af + [['movapd p 'f0]] + bf + [['movapd 'f1 p]])
-             (: s (r1safe? g bf ? 'r1 (spare g bf))
+             (: s (r1safe? g bf ? 'r1 (vspare g (spare g bf)))
                 (s ? (af + [['movqrx s 'f0]] + bf + [['movqxr 'f1 s]])
                    (af + '((movqrx r0 f0)) + spush 'r0 + bf + spop 'r1 + '((movqxr f1 r1))))))))
    ; the ops sp64's soften turns into calls (sf-bin's and the converts), which may clobber s0..s15
@@ -1519,7 +1537,7 @@
    ; the count park: the value already in r0 holds in a pool register past the count's
    ; forms bf, then value r0 / count r1 (the variable shifts' and rotates' contract)
    (cshut g bf)
-    (spare g bf @ s
+    (vspare g (spare g bf) @ s
        (s ? ([['mov s 'r0]] + bf + ['(mov r1 r0) ['mov 'r0 s]])
           (spush 'r0 + bf + '((mov r1 r0)) + spop 'r0)))
 
@@ -1753,7 +1771,7 @@
               (mkv <>>en 'r0 [['la 'r0 <>en]])))
        ('deref X)
         ; frame-direct: a constant-indexed element is a static (r4, off) face
-        (: fdc (afd g env e)
+        (: fdc (afd2 g env e 1)
            ; *p++ on a register-homed pointer: the home steps first and the face reads one step
            ; back, so the old value needs no copy (p's step and any other read of p are unsequenced)
            pp9 (X @ ('post ('var nm) k)
@@ -1812,8 +1830,9 @@
 
    ; the static face of a store target -> (off ty) | (): afd, or a dot chain over a frame local whose
    ; clval face is (r4, off) with no emission. only a var/dot chain over a loc enters clval: any other base could emit
-   (sfd g env e)
-    (? (<e = 'deref) (afd g env e)
+   (sfd g env e) (sfd2 g env e ())
+   (sfd2 g env e fl)                                ; ..fl: a double element too (a plain store's)
+    (? (<e = 'deref) (afd2 g env e fl)
        (<e != 'dot) ()
        (: (dotv? x) (x @ ('var nm) nm  ('dot . b . _) (dotv? b)  ())
           nm (dotv? e)
@@ -2420,7 +2439,7 @@
            dq9 (g 'drop9)           ; a statement drops the answer: an asn on its right still wants its own
            _ (pin g 'drop9 ())
            rv (<dst = 'var ? (vent g env <>dst) 'bad)
-           fd (sfd g env dst)
+           fd (sfd2 g env dst 1)
            (? (two? rv && <rv = 'regv && fhomable? <>>rv)   ; store into an xmm home: off the protocol
                (cgexpr g env rhs () @ r
                   (bad? r ? 'bad (mkv <>>rv 'r0 (asfty g r <>>rv + [['movapd <>rv 'f0]]))))
@@ -2457,7 +2476,8 @@
               (two? fd)
                (: off <fd ty <>fd
                   r (cgexpr g env rhs ())
-                  (bad? r ? 'bad
+                  (? (bad? r) 'bad
+                     (flo? ty) (mkv 'double 'r0 (asflo g r + fstf g ty 'r4 off 'f0))
                      ; a register-riding value stores itself (no r0 bridge)
                      (!(flo? (vty r)) && atom? (cvt ty 'r0) && vreg r != 'r0 ?
                         (mkv ty (vreg r) (vfs r + [[(stop ty) 'r4 off (vreg r)]]))
@@ -5497,14 +5517,104 @@
               [lin lot]))))
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
+   ; the staging webs (x64, a64): a def of r0 and the reads it reaches, all explicit operands of plain
+   ; forms inside the body, never live into a join, an exit or an unnamed read, become one mint
+   ; bound to r0 that valloc may move. a web nothing reads stays (al before a variadic call)
+   (wpos f)                                         ; -> [defs reads both] operand positions | ()
+    (<f @ op
+       (? (elem op '(li la laa)) [[1] () ()]
+          (op = 'mov || elem op ldops9 || elem op leaops) [[1] [2] ()]
+          (elem op xops || elem op aluops || elem op '(adds subs)) [[1] [2 3] ()]
+          (op = 'set) [[2] () ()]
+          (elem op gstops) [() [1 3] ()]
+          (elem op stxops) [() [1 2 5] ()]
+          (elem op siops) [() [1] ()]
+          (elem op '(cmp test cmprm)) [() [1 2] ()]
+          (op = 'cmpm) [() [1 3] ()]
+          (elem op unops || elem op '(shl shr sar)) [() () [1]]
+          (op = 'cmov) [() [3] [2]]
+          (elem op x4ops) [() [2 3] [1]]
+          (elem op m4ops) [() [2] [1]]
+          ()))
+   (vweb g hd body tl)
+    (: R 'r0
+       fs (hd + body + tl)
+       k0 #hd
+       k1 (#hd + #body)
+       n #fs
+       labt {}
+       _ (foldl (i \ f \ ((two? f && <f = 'label ? (pin labt <>f i)), i + 1)) 0 fs)
+       (succ f i) (: op (two? f ? <f 'x)
+                     (? (op = 'jmp) [(peep labt <>f -1)]
+                        (op = 'br) [(peep labt <>>f -1) (i + 1)]
+                        (op = 'jmpt) (map (L \ (peep labt L -1)) (f 3))
+                        (xit? f) ()
+                        [(i + 1)]))
+       ; one form's touch of R, [reads? defs?]: a call reads it by name or as an argument
+       ; register (x64's al rides its own li)
+       (eff f) (? !(two? f) [() ()]
+                  (elem <f lvquiet) [() ()]
+                  (elem <f '(call callr callm)) [(elem R >f || elem R (argr g)) 1]
+                  (xjmp? f labt) [1 ()]
+                  (lvtx g f [R] @ 'bar [1 ()] d [(elem R <d) (elem R <>d)]))
+       ef {} sc {}
+       _ (foldl (i \ f \ (pin ef i (eff f), pin sc i (succ f i), i + 1)) 0 fs)
+       lin {}
+       (pass i ch) (? (i < 0) ch
+                      (: e (ef i)
+                         lv (<e || (!(<>e) && foldl (a \ s \ a || peep lin s ()) () (sc i)))
+                       (lv && !(lin i) ? (pin lin i 1, pass (i - 1) 1) (pass (i - 1) ch))))
+       (fix9 _) (pass (n - 1) () ? (fix9 ()) 0)
+       _ (fix9 ())
+       (at f l) (filter (p \ f p = R) l)            ; the positions of l naming R
+       (rpos f) (: (go l k) (? !(two? l) () (<l = R) (k . go >l (k + 1)) (go >l (k + 1))) (go >f 1))
+       sites {}                                      ; web -> ([i pos] ..)
+       bad {}
+       used {}
+       (add w i ps) (map (p \ pin sites w ([i p] . peep sites w ())) ps)
+       (walk i cur nw)
+        (? (i >= n) nw
+           (: f (fs i)
+              e (ef i)
+              ps (k0 <= i && i < k1 && two? f ? (wpos f) ())
+              rp (two? f ? (rpos f) ())
+              dp (two? ps ? (at f <ps))
+              up (two? ps ? (at f (<>ps + <>>ps)))
+              ok (two? ps && #rp = #dp + #up && (two? up || !(<e)) && (two? dp || two? <>>ps || !(<>e)))
+              (? ok
+                  (: _ (cur >= 0 && two? up ? (add cur i up, pin used cur 1))
+                     (two? dp ? (add nw i dp, walk (i + 1) nw (nw + 1))
+                        (walk (i + 1) cur nw)))
+                 (: _ (cur >= 0 && (two? rp || <e || (elem <f '(jmp br jmpt label) && lin i)) ? (pin bad cur 1))
+                    (walk (i + 1) (<>e || elem <f '(jmp jmpt label) || xit? f ? -1 cur) nw)))))
+       nw (walk 0 -1 0)
+       t (g 'vrt)
+       vw (: t9 {} (pin g 'vweb t9, t9))
+       sub {}                                        ; index -> ([pos mint] ..)
+       _ (: (mk w) (? (w >= nw) ()
+                      (bad w || !(used w)) (mk (w + 1))
+                      (: k9 (peep g 'vrn 0)
+                         m (name ("%v" + show k9))
+                       (pin g 'vrn (k9 + 1),
+                        pin t m R,
+                        pin vw m 1,
+                        map (s \ pin sub <s ([<>s m] . peep sub <s ())) (sites w),
+                        mk (w + 1))))
+            (mk 0))
+       (re f l) (two? l ? (re (reop f <<l <>(<l)) >l) f)
+       (: (go l i) (two? l ? (re <l (peep sub i ()) . go >l (i + 1)))
+          (go body k0)))
    ; the allocator core: a mint's register comes from interference, not the pool's order. its
    ; liveness watches only the mints and the file, one bit each, a call reading its argument file
    ; (lvnarrow). a def meets what lives past it (a mov not its source) and every operand but its
    ; first source (either, where vacomm allows). a mint meeting a name on its own register is an
    ; alias selection relied on, so it keeps that register. colours go in first-mention order -- a
-   ; copy partner's first, then the binding, then the file; a mint left without one keeps the
-   ; whole fn's binding
-   (vafile g) (lvun (lvun (g 'pool0) (rafile g)) '(r0))
+   ; copy partner's first, then the binding, then the file. answers 1, or () when a mint is left
+   ; without one (vrfix's rasg then keeps the whole fn's binding)
+   ; x64's rcx and rdx join, a64's x1-x3 (x4 is a4ize's): liveness already sees an arrival riding
+   ; them and every op that names them
+   (vafile g) (lvun (lvun (g 'pool0) (rafile g))
+                    (? (abl? g 'vrcx) '(r0) (x64? g) '(r0 r1 r2) (a64? g) '(r0 r1 r2 r3) '(r0)))
    ; the ops whose dest may share the second source: x64's holo lays d = b as d op= a when
    ; the op commutes; a64's alu is three-address throughout
    (vacomm g) (a64? g ? '(add sub and or xor adds subs imul) '(add or and xor adds imul))
@@ -5523,10 +5633,12 @@
        (bits l) (foldl (a \ x \ a | bit x) 0 l)
        (lows b) (b = 0 ? () (: lb (b & (0 - b)) (nx lb . lows (b - lb))))
        _ (map bit file)
+       ; the staging webs colour last and latest first, so a web follows the copy it feeds
        ms (: (mw acc x) (? (two? x) (foldl mw acc x)
                            (vmint? g x && peep ix x 0 = 0) (bit x, (x . acc))
                            acc)
-             (rev (foldl mw () fs)))
+             m9 (foldl mw () fs)
+             (rev (filter (m \ !(peep g 'vweb {} m)) m9) + filter (m \ peep g 'vweb {} m) m9))
        mm (bits ms)
        labt {}
        n (foldl (i \ f \ ((two? f && <f = 'label ? (pin labt <>f i)), i + 1)) 0 fs)
@@ -5574,7 +5686,7 @@
                  (: db (dd i)
                     lx (lot i - (lot i & sr i))
                   (db = 0 ? () (map (x \ nbor x (lx | db | bd i)) (lows (db & mm))),
-                   (db = 0 ? () (map (y \ nbor y db) (lows (lx & mm)))),
+                   (db = 0 ? () (map (y \ nbor y db) (lows ((lx | bd i) & mm)))),
                    w2 (i + 1))))
        sm (foldl (a \ m \ pin a (t m) (peep a (t m) (peep ix (t m) 0) | ix m)) {} ms)
        (fixed? m) (: P (t m) (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0))
@@ -5584,21 +5696,32 @@
         (: forb (map cof (lows (peep nb m 0)))
            cs (filter (r \ nelem r forb) file)
            ; r0 dies fast: a stored value born there leaves stld and the park fold nothing to forward from
-           pp (filter (r \ elem r cs && !(r = 'r0 && s0 m)) (map cof (peep pt m ())))
+           ; the copy chain read through uncoloured mints, nearest first, a few hops deep
+           (reach l seen k)
+            (? (!(two? l) || k = 0) ()
+               (: nx (filter (x \ nelem x seen) (foldl (a \ y \ a + (vmint? g y && !(col y) ? (peep pt y ()) ())) () l))
+                  (map cof l + reach nx (seen + nx) (k - 1))))
+           pp (filter (r \ elem r cs && !(r = 'r0 && s0 m)) (reach (peep pt m ()) [m] (x64? g || a64? g ? 4 1)))
            (? (two? pp) <pp (elem (t m) cs) (t m) (two? cs) <cs))
        (go l) (? !(two? l) 1
                  (col <l) (go >l)
                  (pick <l @ r (r ? (pin col <l r, go >l))))
-       (? !ok1 (rasg g fs)
+       (ok1 &&
           (: _ (fix9 ())
              _ (w2 0)
              _ (map (m \ (fixed? m ? (pin col m (t m)))) ms)
-             ((go ms) ? (map (m \ pin t m (col m)) ms) (rasg g fs)))))
+             ((go ms) ? (map (m \ pin t m (col m)) ms, 1)))))
+   ; the early assignment: valloc where it runs, before the frame is sized
+   (vpre g hd body tl)
+    (? (!(x64? g || a64? g) || abl? g 'valloc) body
+       (: b2 ((x64? g || a64? g) && !(abl? g 'vweb) ? (vweb g hd body tl) body)
+        ((peep g 'vrn 0 && valloc g (dp 'vweb (hd + b2 + tl)) ? (pin g 'vdone 1)),
+         b2)))
    ; substitute every mint over the assembled prologue+body+epilogue, the innermost build-tail
    ; link: sibcall and soften read registers, so neither may meet a vreg. the assignment runs first
    (vrfix g fs)
     (!(peep g 'vrn 0) ? fs
-       (: _ ((x64? g || a64? g) && !(abl? g 'valloc) ? (valloc g fs) (rasg g fs))
+       (: _ (g 'vdone ? () (rasg g fs))
           t (g 'vrt)
           (fix1 x) (two? x ? (map fix1 x) (t x @ p9 (p9 ? p9 x)))
           (sweep (f . u)) (f @ ('mov x x) (sweep u) (f . sweep u))
@@ -5736,11 +5859,14 @@
           d (rdsp g p)
           (d @ 'bar ()
              (<>d @ dfs
-                ; the def names S alone and never reads it
+                ; the def names S alone, and reads it only where its dest is a pure write
+                ; (S dies at the mov, so (add r0 r0 8) (mov r9 r0) is (add r9 r0 8))
                 (two? dfs && !(two? >dfs) && <dfs = S && p 1 == S &&
+                 (nelem S <d || (x64? g || a64? g) && !(abl? g 'coalrd) &&
+                  (elem <p aluops || elem <p xops || elem <p ldops9 || elem <p leaops || elem <p '(mov adds subs))) &&
                  ; D a stranger to the def's defs and reads (the emitter refuses an aliased dest),
                  ; except an alu's first source: (mov d a; op d b) lowers, so (add r7 r7 8) fuses
-                 nelem S <d && nelem D dfs &&
+                 nelem D dfs &&
                  (nelem D <d || (elem <p aluops && p 2 == D)) &&
                  nelem S (lot i) && D != S)))))
    (coal g fs)
@@ -8270,6 +8396,8 @@
     'lsq 0                     ; the alive statement counter
     'stwrap 'all
     'vrn 0                     ; the vreg mint counter (the shadow: ralloc mints, vrfix resolves)
+    'vdone ()                  ; vpre assigned this build's mints
+    'vweb {}                   ; ..and the staging webs among them
     'vrt {})           ; ...and its per-build map, mint -> physical
    ; every per-fn pin and its neutral, one roster: a new per-fn pin registers here (the computed
    ; ones -- fn, epi, pool, vslots, fc, sret -- re-pin at their owner)
@@ -9395,6 +9523,62 @@
        (atom? (keys sbs) ? f
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
+   ; -- a small counted loop unrolled: for (T k = A; k < B; k++) over a constant count of at most
+   ; 16, its copies small in all, a body that neither writes k, takes its address, nor leaves
+   ; early. each copy reads k as its literal and spells its own locals apart (respell made every
+   ; name the fn's own)
+   (unrl g f)
+    (: w64 !(ilp32? g)
+       (size x) (atom? x ? 1 (foldl (a \ y \ a + size y) 0 x))
+       (kv e) (cfold w64 e @ v (cint? v ? v ()))
+       (nogo? x k)                                  ; something a copy may not repeat, or k may not suffer
+        (? (atom? x) ()
+           (elem <x '(brk cont goto lbl case dflt switch asm sexpr sdecl)) 1
+           (x @ (('asn || 'post || 'rmw) ('var n) . _) (n = k)
+                ('rmw _ ('var n) _) (n = k)
+                ('addr ('var n)) (n = k)
+                ())
+            1
+           (foldl (a \ y \ a || nogo? y k) () x))
+       (dnames x)                                   ; the locals the body declares
+        (? (atom? x) ()
+           (<x = 'decl) (map (p \ <p) <>x)
+           (foldl (a \ y \ a + dnames y) () x))
+       (copy x k kt i ds)
+        (? (atom? x) x
+           (x @ ('var n) (? (n = k) ['cast kt ['num i]]
+                            (elem n ds) ['var (n + "`u" + show i)]
+                            x)
+                ('decl ps) ['decl (map (p \ (elem <p ds ? ((<p + "`u" + show i) . copy >p k kt i ds) (copy p k kt i ds))) ps)]
+                (map (y \ copy y k kt i ds) x)))
+       ; the trip: (k ty lo hi) for a loop in the shape, else ()
+       (trip ini cnd stp)
+        (ini @ ('decl [[k kt e0]])
+           (: lo (kv e0)
+              st (stp @ ('post ('var k2) 1) (k2 = k)
+                        ('asn ('var k2) ('bin '+ ('var k3) e1)) (k2 = k && k3 = k && kv e1 = 1)
+                        ())
+              (? !(charm? lo) () !st () !(elem kt '(char schar uchar short ushort int uint long ulong)) ()
+                 (cnd @ ('bin op ('var k2) e2)
+                    (: hi (kv e2)
+                       (? (k2 != k || !(charm? hi)) ()
+                          (op = 'lt) [k kt lo hi]
+                          (op = 'le) [k kt lo (hi + 1)]
+                          (op = 'ne && lo <= hi) [k kt lo hi]
+                          ()))
+                    ())))
+           ())
+       (walk x)
+        (? (atom? x) x
+           (x @ ('for ini cnd stp body)
+                 (: t (trip ini cnd stp)
+                    n (two? t ? (t 3 - t 2) -1)
+                    b2 (walk body)
+                    (? (n < 0 || 16 < n || 512 < n * size b2 || nogo? b2 <t) ['for ini cnd stp b2]
+                       (: ds (dnames b2)
+                          ['blk (map (i \ copy b2 <t <>t (t 2 + i) ds) ^n)])))
+                (map walk x)))
+       (abl? g 'unroll ? f (walk f)))
    ; an overflow builtin over two constant operands into a local whose address it alone takes
    ; and nothing else writes, answered here: the local's declaration takes the exact value at
    ; its width, the call whether it fit -- so kprop carries the local on (kmalloc_array's
@@ -9442,7 +9626,10 @@
        (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
        (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) f))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (bcpfin g (: k1 (kprop g (phome g (respell (oalign g (ainl g f))))) (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
+    (: f (bcpfin g (: k0 (kprop g (phome g (respell (oalign g (ainl g f)))))
+                      u0 (unrl g k0)
+                      k1 (u0 = k0 ? k0 (kprop g u0))
+                      (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
        ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
        ; arrived; a name such a probe could not resolve is no refusal's cause
        _ (pin g 'undecl ())
@@ -9751,7 +9938,12 @@
        (build sp0)                                  ; assemble prologue + body + epilogue for a spill result
         (bad? sp0 ? 'bad
            (: body (bldreset g,
-                    cgitems g <>sp0 <><>>>f ())
+                    ; the assignment runs before the frame is sized, over the fn's own label, the body
+                    ; and the tail (no prologue form names a register it watches); vrfix only substitutes
+                    cgitems g <>sp0 <><>>>f () @ b9
+                     (bad? b9 ? b9
+                        (vpre g ([['label (name <>f)]] + <sp0) b9
+                              ('((li r0 0)) + (arm? g ? (peep g 'epi epi-a64) (peep g 'epi epi))))))
               (bad? body ? 'bad
                  ; i386 enters with esp 12 past a 16 boundary and pushes ebp: 8 more keeps every call aligned
                  (aup (peep g 'off 0) 16 + (ia32? g ? 8 0) @ frame

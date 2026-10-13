@@ -1,8 +1,8 @@
 ; bench/cnifs.l -- the heavy host nifs ccbench.sh times, one row each: real work on paths a user
 ; waits on, where ccrypto.l's pair is a lever.
-;   inflate   src/love/lib/gz.c: bit reader, table lookup per symbol, byte copy -- the branchiest
-;   crc32     src/love/lib/hash.c: eight independent table lookups per eight bytes, no branches
-;   sha256    src/love/lib/hash.c: a 64-word schedule array plus eight scalars, between the two
+;   inflate   src/love/compress/gz.c: bit reader, table lookup per symbol, byte copy -- the branchiest
+;   crc32     src/love/crypto/hash.c: eight independent table lookups per eight bytes, no branches
+;   sha256    src/love/crypto/hash.c: a 64-word schedule array plus eight scalars, between the two
 ; these run the nifs, never src/apps/gz.l's love twins -- this table times C compilers. the binary
 ; under test lives in out/bench/cc where the module walk misses lib/, so everything is built from
 ; the core, and the inflate stream is laid beside it by ccgen.l through the host love.

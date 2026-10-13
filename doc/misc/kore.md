@@ -43,7 +43,7 @@ The file discipline, two shapes:
 kore.l wraps every applet on both dispatch lanes (the verb registry and the symlink), so
 one synopsis table — `korehelp` — is where a tool's shape is written down, and the two
 lanes cannot drift. The door itself is cli's, `udoor` in post.l, and the crew's own verbs
-(mc, lupa, pom, tower, story, design, slop, libra, sb, tar, fat, doom) stand at the same one; what
+(mc, lupa, pom, tuner, tower, story, design, slop, libra, sb, tar, fat, doom) stand at the same one; what
 kore keeps is the policy below. The walk reads only the leading flag words and stops at
 the first operand and at `--`. It is NOT getopt: a value word that looks like a flag is walked
 over, so `grep -e --help f` answers the help rather than searching for `--help` — glue
@@ -103,7 +103,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | wget.l, over the tls stack | wget |
 | openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 3's spelling) |
 | src/apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
-| src/apps/gz.l, src/apps/xz.l, src/apps/bz2.l, src/apps/tar.l, src/apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (src/love/lib/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (src/love/lib/bz2.c), tar, cpio |
+| src/apps/gz.l, src/apps/xz.l, src/apps/bz2.l, src/apps/tar.l, src/apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (src/love/compress/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (src/love/compress/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
@@ -357,7 +357,7 @@ toybox's (`-a` any length 128..512, 224 by default, `-S` shake's pad) with busyb
 of any length it could have written); the gate holds both directions, GNU reading ours and
 ours reading GNU's.
 
-The digests themselves are **src/love/lib/hash.c** (`md5`, `sha1`, the four sha-2s, `sha3`,
+The digests themselves are **src/love/crypto/hash.c** (`md5`, `sha1`, the four sha-2s, `sha3`,
 `blake2b`, `bsdsum`, `crc32` and `cksum` — the last being POSIX's own crc, a different polynomial from `crc32`'s
 and with the byte count folded in, which is why an empty file is `4294967295 0`). md5, sha-1
 and the sha-2s share one buffering and one state layout; sha-512 keeps its 64-bit words as
@@ -721,13 +721,13 @@ subscripts and where a bond meets them, bonds of each kind by angle or compass w
 pic and troff lines through. It writes the copy of groff's own chem.pic it finds beside
 groff, and `chem.pic` where there is none.
 
-The decoders: src/apps/png.l (every colour type and depth, Adam7), src/love/lib/jpeg.c (baseline and
-progressive, any sampling), src/love/lib/gif.c (LZW, interlace, transparency, and the three
-disposals across frames), src/love/lib/webp.c (lossy with its alpha plane, lossless, and an
+The decoders: src/apps/png.l (every colour type and depth, Adam7), src/love/picture/jpeg.c (baseline and
+progressive, any sampling), src/love/picture/gif.c (LZW, interlace, transparency, and the three
+disposals across frames), src/love/picture/webp.c (lossy with its alpha plane, lossless, and an
 animation's first frame; libwebp's pixels, byte for byte). A GIF keeps at most 1000 frames and
 128 MB of them. The encoders:
 src/apps/png.l (a palette of 1 to 8 bits a pixel up to 256 colours, else RGBA; a row that
-repeats the one above filtered up, others sub), src/love/lib/jpeg.c (baseline), src/apps/gif.l (one
+repeats the one above filtered up, others sub), src/love/picture/jpeg.c (baseline), src/apps/gif.l (one
 frame, the palette also sixel's).
 
 ## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (src/apps/kore/net.l)

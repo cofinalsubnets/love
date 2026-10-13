@@ -1419,7 +1419,7 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
   if (c) alloc(c, 0);
   return NULL; }
  if (nw > g->major_len) {                                // grow the major pool to fit the image
-  alloc(g->major_base, 0), alloc(g->major_spare, 0), g->major_base = g->major_spare = 0;
+  alloc(g->major_base, 0), g->major_base = 0;
   // the slack is what the nursery ramps into, and it must CLEAR the nursery: a minor is
   // forced to a major once the pool has less free than a whole one (please's
   // worst-case promotion test), and the wake seeds g->len at nw >> 1 below -- so a
@@ -1427,7 +1427,7 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
   // over the whole woken image. a floor besides, for the small end; the pages stay
   // untouched until the ramp wants them.
   g->major_len = nw + (nw >> 1) + (1u << 19);
-  if (!(g->major_base = major_pair(g->major_len, &g->major_spare))) goto no; }
+  if (!(g->major_base = alloc(NULL, g->major_len * sizeof(word)))) goto no; }
  word *base = g->major_base;
  g->major_hp = base + nw;
  // a distance, never two addresses: the two symbols shift together under ASLR, so storing

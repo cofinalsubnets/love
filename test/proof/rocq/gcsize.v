@@ -424,6 +424,107 @@ Proof.
   - rewrite F in F1. discriminate.
 Qed.
 
+(* --- the lone block: no spare is held. a major makes its to-space then -- the worst case and
+   a nursery's promotion past it, or the last survivors' target where that is more -- copies
+   into it, and gives the old block back; the pool it leaves is the survivors' target, inside
+   that block. between majors the one block; at a major the old block and the new one ---
+*)
+Record st4 := { N4 : nat; M4 : nat; P4 : nat; U4 : nat; V4 : nat }.
+
+Definition forced4 (s : st4) : bool := M4 s <? U4 s + N4 s + 16.
+Definition ncap4 (s : st4) : nat := Nat.max n0 (nurse (V4 s)).
+(* the to-space a major makes: whole steps of the worst case and a promotion, or more *)
+Definition to4 (s : st4) (young : nat) : nat :=
+  Nat.max (ceil_n (U4 s + young + N4 s + 16)) (target (N4 s) (V4 s)).
+
+Inductive step4 (L : nat) : st4 -> st4 -> Prop :=
+| major4 : forall s young v, forced4 s = true -> young <= N4 s -> v <= U4 s + young -> v <= L ->
+    step4 L s {| N4 := N4 s; M4 := Nat.min (target (N4 s) v) (to4 s young); P4 := to4 s young;
+                 U4 := v; V4 := v |}
+| minor4 : forall s p n', forced4 s = false -> p <= N4 s ->
+    (n' = N4 s \/ (n0 <= n' /\ n' <= ncap4 s /\ U4 s + p + n' + 16 <= M4 s)) ->
+    step4 L s {| N4 := n'; M4 := M4 s; P4 := P4 s; U4 := U4 s + p; V4 := V4 s |}.
+
+Inductive reach4 (L : nat) (s0 : st4) : st4 -> Prop :=
+| reach4_0 : reach4 L s0 s0
+| reach4_1 : forall s s', reach4 L s0 s -> step4 L s s' -> reach4 L s0 s'.
+
+Definition Nb4 (L : nat) (s0 : st4) : nat := Nat.max (N4 s0) (Nat.max n0 (nurse L)).
+Definition Mb4 (L : nat) (s0 : st4) : nat := Nat.max (M4 s0) (target (Nb4 L s0) L).
+(* a block: the pool's bound, two nurseries and a step past it, or the start's *)
+Definition Pb4 (L : nat) (s0 : st4) : nat := Nat.max (P4 s0) (Mb4 L s0 + 2 * Nb4 L s0 + 16 + K).
+
+Definition inv4 (L : nat) (s0 s : st4) : Prop :=
+  N4 s <= Nb4 L s0 /\ V4 s <= L /\ U4 s <= M4 s /\ M4 s <= Mb4 L s0 /\ M4 s <= P4 s /\ P4 s <= Pb4 L s0.
+
+Lemma to4_holds : forall s young, U4 s + young + N4 s + 16 <= to4 s young.
+Proof. intros. unfold to4. pose proof (ceil_n_ge (U4 s + young + N4 s + 16)). lia. Qed.
+
+Lemma to4_le : forall L s0 s young, inv4 L s0 s -> young <= N4 s -> to4 s young <= Pb4 L s0.
+Proof.
+  intros L s0 s young [HN [HV [HU [HM [HP HPb]]]]] Hy. unfold to4, Pb4.
+  pose proof (ceil_n_le (U4 s + young + N4 s + 16)).
+  pose proof (target_mono (N4 s) (Nb4 L s0) (V4 s) L HN HV). unfold Mb4 in *. lia.
+Qed.
+
+Lemma step4_inv : forall L s0 s s', inv4 L s0 s -> step4 L s s' -> inv4 L s0 s'.
+Proof.
+  intros L s0 s s' I St. pose proof I as I'. destruct I as [HN [HV [HU [HM [HP HPb]]]]].
+  destruct St as [s y v F Hy Hv HL | s p n' F Hp Hn]; unfold inv4; cbn [N4 M4 P4 U4 V4].
+  - pose proof (to4_le L s0 s y I' Hy). pose proof (to4_holds s y).
+    pose proof (target_ge (N4 s) v). pose proof (target_mono (N4 s) (Nb4 L s0) v L HN HL).
+    unfold Mb4 in *. lia.
+  - unfold forced4 in F. apply Nat.ltb_ge in F.
+    pose proof (nurse_mono (V4 s) L HV). unfold ncap4, Nb4 in *. lia.
+Qed.
+
+(* BOUNDED: the nursery, the pool and the block it sits in, every state a run reaches *)
+Theorem lone_bounded : forall L s0 s, V4 s0 <= L -> U4 s0 <= M4 s0 -> M4 s0 <= P4 s0 ->
+  reach4 L s0 s -> inv4 L s0 s.
+Proof.
+  intros L s0 s HV HU HP R. induction R.
+  - unfold inv4, Pb4, Mb4, Nb4. lia.
+  - eapply step4_inv; eauto.
+Qed.
+
+(* THE TO-SPACE HOLDS IT: the block a major makes takes the worst case *)
+Theorem lone_holds : forall s young, U4 s + young <= to4 s young.
+Proof. intros. pose proof (to4_holds s young). lia. Qed.
+
+(* the footprint: between majors the one block and the nursery; at a major the old block, the
+   new one and the nursery -- no third *)
+Theorem lone_footprint : forall L s0 s, V4 s0 <= L -> U4 s0 <= M4 s0 -> M4 s0 <= P4 s0 ->
+  reach4 L s0 s -> P4 s + N4 s <= Pb4 L s0 + Nb4 L s0.
+Proof.
+  intros L s0 s HV HU HP R. destruct (lone_bounded L s0 s HV HU HP R) as [HN [_ [_ [_ [_ HPb]]]]]. lia.
+Qed.
+
+Theorem lone_peak : forall L s0 s young, V4 s0 <= L -> U4 s0 <= M4 s0 -> M4 s0 <= P4 s0 ->
+  reach4 L s0 s -> young <= N4 s -> P4 s + to4 s young + N4 s <= 2 * Pb4 L s0 + Nb4 L s0.
+Proof.
+  intros L s0 s young HV HU HP R Hy. pose proof (lone_bounded L s0 s HV HU HP R) as I.
+  pose proof (to4_le L s0 s young I Hy). destruct I as [HN [_ [_ [_ [_ HPb]]]]]. lia.
+Qed.
+
+(* NO THRASH: a major leaves room for a nursery's promotion at least, so majors never come back
+   to back; and f of the survivors besides wherever their target fits the block it made *)
+Theorem lone_room : forall L s s', step4 L s s' -> forced4 s = true ->
+  N4 s' + 16 <= M4 s' - U4 s' /\ (target (N4 s) (V4 s') <= P4 s' -> more (V4 s') + N4 s' + 16 <= M4 s' - U4 s').
+Proof.
+  intros L s s' St F. destruct St as [s y v F1 Hy Hv HL | s p n' F1 Hp Hn].
+  - pose proof (target_ge (N4 s) v). pose proof (to4_holds s y). cbn [N4 M4 P4 U4 V4]. lia.
+  - rewrite F in F1. discriminate.
+Qed.
+
+Theorem lone_no_back_to_back : forall L s s', step4 L s s' -> forced4 s = true ->
+  forced4 s' = false.
+Proof.
+  intros L s s' St F. pose proof (lone_room L s s' St F) as [R _].
+  destruct St as [s y v F1 Hy Hv HL | s p n' F1 Hp Hn]; cbn [N4 M4 P4 U4 V4] in *.
+  - unfold forced4. cbn [N4 M4 P4 U4 V4]. apply Nat.ltb_ge. lia.
+  - rewrite F in F1. discriminate.
+Qed.
+
 End New.
 
 Print Assumptions current_policy_unbounded.
@@ -434,3 +535,8 @@ Print Assumptions new_policy_bounded.
 Print Assumptions new_policy_footprint.
 Print Assumptions new_policy_peak.
 Print Assumptions new_policy_no_back_to_back.
+Print Assumptions lone_bounded.
+Print Assumptions lone_holds.
+Print Assumptions lone_footprint.
+Print Assumptions lone_peak.
+Print Assumptions lone_no_back_to_back.

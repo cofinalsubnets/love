@@ -13,7 +13,7 @@
 ; number, or `set` -- the newest patch time in the nest's head (sb's set-stamp), else an
 ; unpacked release's own STAMP, else 0, which orders nothing. roster names the files a
 ; carried-source bake reads (the Makefile's distfiles).
-; the container is the one src/love/lib/srctree.h reads: a header, an index, and the tar in
+; the container is the one src/love/archive/srctree.h reads: a header, an index, and the tar in
 ; sections, each packed alone under the codec its -c table names, else deflate. the
 ; id is the sha of the joined tar, kept in src.tree.sha; the quiet pass (tar-thin? + tar-hash)
 ; answers "has the tree moved" off stat alone.
