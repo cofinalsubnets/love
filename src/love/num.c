@@ -1471,11 +1471,12 @@ lvm(lvm_sort) {
  l = Sp[0];                                        // re-read post-GC
  struct chain *spine = (struct chain*) Hp;
  Hp += n * Width(struct chain);                   // commit the spine only
- word *a = (word*) Hp, *b = a + n;                 // scratch: the uncommitted gap
+ word *a = (word*) Hp, *b = a + n, *end = b + n;   // scratch: the uncommitted gap
  uintptr_t i = 0;
  for (word p = l; chainp(p); p = B(p)) a[i++] = A(p);
  for (i = 0; i < n; i++) if (!charmp(a[i])) break;   // all-fixnum fast path: a tagged fixnum (v<<1|1)
  bool allfix = i == n;                               // orders as a signed word, so skip the generic cmp3
+ if (!allfix) Pack(g), g->hp = end;                  // cmp3's walks take the gap past the scratch
  if (allfix && n >= 64) {                            // LSD radix, a byte a pass over the key span: linear, branch-free
   intptr_t lo = (intptr_t) a[0], hi = lo;
   for (i = 1; i < n; i++) { intptr_t v = (intptr_t) a[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
@@ -1544,6 +1545,7 @@ static lvm(lvm_cmp_ord) {
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: the true-blue lattice (cmp_rank)
  else if (!(isnum(a) || twinp(a))) {                       // same non-number band: via cmp3
+  Pack(g);                                                 // packed: its walks take the gap
   intptr_t c = cmp3(g, a, b);
   if (c == cmp_torn) { Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
   r = vcmp_int(op, c, 0); }
@@ -1576,6 +1578,7 @@ static lvm(lvm_extreme2) {
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) { g->b = (word) (ismax ? vop_max : vop_min); love_musttail return Ap(lvm_vbin, g); }
  if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) { g->b = (word) (4 | ismax); love_musttail return Ap(lvm_coin_cmp, g); }   // max asks b < a, min a < b
+ Pack(g);                                                  // packed: cmp3's walks take the gap
  intptr_t c = cmp3(g, a, b);
  if (c == cmp_torn) { Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
  love_musttail return Push((ismax ? c >= 0 : c <= 0) ? a : b); }
