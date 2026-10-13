@@ -7,7 +7,7 @@
 ;   (window-show win y0 y1)   the paper's rows y0..y1-1 out to the screen
 ;   (window-events win)       the records waiting, () when none; never blocks
 ;   (window-close win)
-;   (window-typing win on)    a soft keyboard up or down, where the keys are one (android)
+;   (window-typing win on)    a phone's soft keyboard up or down, and a row of the keys it lacks
 ;
 ; the records: [down key] [up key] [text s] [press b x y] [release b x y] [move x y]
 ; [size w h] [close]. a key is its PS/2 set-1 code, where it sits and not what it types;
@@ -59,14 +59,51 @@
                  + zip (map (+ 131) ^12) [59 60 61 62 63 64 65 66 67 68 87 88]
                  + zip [66 67 61 62 111 112 19 20 21 22 122 123 92 93 124 59 60 113 114 57 58 115 55 56 68 69 70 71 72 73 74 75 76]
                        [28 14 15 57 1 339 328 336 331 333 327 335 329 337 338 42 54 29 285 56 312 58 51 52 41 12 13 26 27 43 39 40 53]))
+   ; the keys a phone's keyboard lacks, a row of two under the paper while it types:
+   ; [label key text]. ctrl and alt hold for the next key, off the row or the keyboard
+   droid-row [["esc" 1 ""] ["/" 53 "/"] ["-" 12 "-"] ["home" 327 ""] ["↑" 328 ""] ["end" 335 ""] ["pgup" 329 ""]
+              ["tab" 15 ""] ["ctrl" 29 ""] ["alt" 56 ""] ["←" 331 ""] ["↓" 336 ""] ["→" 333 ""] ["pgdn" 337 ""]]
+   droid-rowh 96                                       ; two keys of three cells
+   (droid-cols t) #(filter (b \ b & 192 != 128) (chars t))
+   (droid-sp n) (n < 1 ? "" (" " + droid-sp (n - 1)))
+   ; the row painted in the console's font, a held modifier lit
+   (droid-strip win)
+    (: w (win 'w) c (w // 8) sc (screen (cask (screen () 6 c)) 6 c) held (win 'held)
+       (key r i) (droid-row (7 * r + i) @ [lab k _]
+                    (: x0 (i * c // 7) n ((i + 1) * c // 7 - x0) pad ((n - droid-cols lab) // 2)
+                       bg (? (elem k held) "60;110;170" ((r + i) % 2 = 0) "44;44;44" "28;28;28")
+                       (each ^3 (j \ scribe sc ("\e[" + show (3 * r + j + 1) + ";" + show (x0 + 1) + "H\e[38;2;220;220;220;48;2;" + bg + "m"
+                                               + (j = 1 ? (droid-sp pad + lab + droid-sp (n - pad - droid-cols lab)) (droid-sp n)))))))
+       _ (each ^2 (r \ each ^7 (key r)))
+       st (cask (w * droid-rowh * 4))
+       (each ^6 (y \ dye sc st w y -1 ()), st))
+   (droid-send win y n px)
+    (: s (win 's) (say s ("F" + wrle (win 'w) 2 + wrle (win 'H) 2 + wrle y 2 + wrle n 2), say s px, flush s))
+   (droid-row-show win) (0 < win 'row ? (droid-send win (win 'h) (win 'row) (droid-strip win)) 0)
+   ; a key under the held modifiers: theirs down before it and up after, and let go
+   (droid-key win k t)
+    (: held (win 'held) _ (pin win 'held ())
+       ev (map (m \ ['down m]) held + [['down k]] + (0 < #t ? [['text t]] ()) + [['up k]] + map (m \ ['up m]) held)
+       (two? held ? (droid-row-show win) 0, ev))
+   ; a touch on the row: a modifier held or let go, else its key
+   (droid-tap win x y)
+    (droid-row (7 * min 1 (y // (droid-rowh // 2)) + min 6 (x * 7 // win 'w)) @ [_ k t]
+       (? (k = 29 || k = 56) (: held (win 'held)
+                                (pin win 'held (elem k held ? (filter (m \ m != k) held) (k . held)),
+                                 droid-row-show win, ()))
+          (droid-key win k t)))
    ; a record -> the window's events. a key's text is what android's map types under its
-   ; meta state, c; a touch is the left button
-   (droid-events r sc)
+   ; meta state, c; a touch is the left button, or a key of the row
+   (droid-events win r)
     (r @ [k a b c]
-       (? (k = 83) [['size (b // sc) (c // sc)]]
-          (k = 75) (: p (peep droid-set1 b ())
-                      ((charm? p ? [[(a ? 'down 'up) p]] ()) + (a && 32 <= c && c != 127 ? [['text (utf8 c)]] ())))
-          (k = 84) [(? (a = 0) ['press 1 b c] (a = 1) ['release 1 b c] ['move b c])]
+       (? (k = 83) (: _ (pin win 'H (c // droid-scale)) [['size (b // droid-scale) (c // droid-scale - win 'row)]])
+          (k = 75) (: p (peep droid-set1 b ()) t (a && 32 <= c && c != 127 ? (utf8 c) "")
+                      (? !(charm? p) (0 < #t ? [['text t]] ())
+                         (a && two? (win 'held)) (droid-key win p t)
+                         ([[(a ? 'down 'up) p]] + (0 < #t ? [['text t]] ()))))
+          (k = 84) (? (c < win 'h) [(? (a = 0) ['press 1 b c] (a = 1) ['release 1 b c] ['move b c])]
+                      (a = 0) (droid-tap win b (c - win 'h))
+                      ())
           ()))
    (droid-open-win _)
     (getenv "LOVE_FACE" @ p
@@ -77,12 +114,12 @@
                    r (wait 0)
                    (? (atom? r) r
                       (: w (r 2 // droid-scale) h (r 3 // droid-scale)
-                         {'how 'droid 's s 'w w 'h h 'paper (cask (w * h * 4))})))))))
+                         {'how 'droid 's s 'w w 'h h 'H h 'row 0 'held () 'paper (cask (w * h * 4))})))))))
    (droid-pending win)
-    (: s (win 's)
+    (: s (win 's) more (peep win 'more ()) _ (pin win 'more ())
        (go acc) (? !(cue? s) acc
-                   (droid-rec s @ r (? !r (acc + [['close]]) (go (acc + droid-events r droid-scale)))))
-       (go ()))
+                   (droid-rec s @ r (? !r (acc + [['close]]) (go (acc + droid-events win r)))))
+       (go more))
 
    (window-open w h title) (? (inle? 0) (inle-open-win ())
                               (string? (getenv "LOVE_FACE")) (droid-open-win ())
@@ -95,9 +132,7 @@
        (? (b <= a) 0
           (win 'how = 'x) (x-putrows (win 's) (win 'xw) (win 'gc) (win 'depth) (win 'paper) (win 'w) a (b - a))
           (win 'how = 'inle) (kshow (win 'paper) a b)
-          (win 'how = 'droid) (: s (win 's) w (win 'w)
-                                 (say s ("F" + wrle w 2 + wrle (win 'h) 2 + wrle a 2 + wrle (b - a) 2),
-                                  say s (snip (win 'paper) (a * w * 4) (b * w * 4)), flush s))
+          (win 'how = 'droid) (droid-send win a (b - a) (snip (win 'paper) (a * win 'w * 4) (b * win 'w * 4)))
           0))
 
    ; a size the paper has already is no news: X says one for every move
@@ -120,8 +155,13 @@
             (win 'how = 'inle) (kwin-events 0)
             (win 'how = 'droid) (droid-pending win)
             (peep win 'evq () @ q (pin win 'evq (), q)))
-       (foldl (a \ r \ a + resized win r) () l))
+       ev (foldl (a \ r \ a + resized win r) () l)
+       (win 'how = 'droid && any (e \ <e = 'size) ev ? (droid-row-show win) 0, ev))
 
    (window-close win) (win 'how = 'x || win 'how = 'droid ? (close (win 's)) (kpaper 0))
-   (window-typing win on) (win 'how = 'droid ? (: s (win 's) (say s ("I" + wrle (on ? 1 0) 1), flush s)) 0))
+   ; on a phone the keyboard comes with the row, and the paper gives it room
+   (window-typing win on)
+    (win 'how = 'droid ? (: s (win 's) _ (say s ("I" + wrle (on ? 1 0) 1), flush s)
+                            (pins win 'row (on ? droid-rowh 0) 'more [['size (win 'w) (win 'H - (on ? droid-rowh 0))]], 0))
+       0))
 ) ; module window

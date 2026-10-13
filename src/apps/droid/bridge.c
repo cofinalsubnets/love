@@ -72,7 +72,7 @@ enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_CLOEXEC = 02000000 };
 
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
-  int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, vh, typing;
+  int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, vh, typing, shown;
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
   long th; long mu[8];                    /* pthread_t, pthread_mutex_t (zero is unlocked) */
   uint32_t *fb; size_t fbsz; int gh;      /* a frame as love sent it, the window's buffer height */
@@ -146,8 +146,8 @@ static int frame(br *b) {
 
 /* the soft keyboard, through the InputMethodManager: android 12 ignores NativeActivity's own
    ask, its view being no text editor, but takes a toggle; down is a hide from the window */
-static void keyboard(br *b, int on) {
-  void *e = b->env; if (!e) return;
+static void keyboard(br *b, void *e, int on) {
+  if (!e) return;
   void *const *t = *(void *const **) e;
   void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
   void *(*callo)(void *, void *, void *, ...) = t[34]; void (*callv)(void *, void *, void *, ...) = t[61];
@@ -183,6 +183,7 @@ static void insets(br *b) {
   void *in = wi ? callo(e, wi, mid(e, cls(e, wi), "getInsets", "(I)Landroid/graphics/Insets;"), 8) : 0;
   int bot = in ? geti(e, in, fid(e, cls(e, in), "bottom", "I")) : -1;
   clear(e); pop(e, 0);
+  if (bot >= 0) b->shown = bot > 0;
   if (bot < 0 || bot >= b->wh || b->wh - bot == vis(b)) return;
   pthread_mutex_lock(b->mu); b->vh = b->wh - bot; paint(b); pthread_mutex_unlock(b->mu);
   put(b, 'S', 0, b->ww, vis(b));
@@ -224,7 +225,7 @@ static void input(br *b) {
     } else {
       int ac = AMotionEvent_getAction(e) & 0xff, vh = vis(b);
       int t = ac == 0 || ac == 5 ? 0 : ac == 1 || ac == 6 || ac == 3 ? 1 : 2;
-      if (t == 0 && b->typing) keyboard(b, 1);
+      if (t == 0 && b->typing && !b->shown) keyboard(b, b->env, 1);
       if (b->ww && vh && b->fw)
         put(b, 'T', t, (int) (AMotionEvent_getX(e, 0) * (float) b->fw / (float) b->ww),
                        (int) (AMotionEvent_getY(e, 0) * (float) b->fh / (float) vh));
@@ -296,7 +297,7 @@ static void *loop(void *p) {
       int bad = readall(b->csock, &k, 1);
       if (!bad && k == 'I') {
         bad = readall(b->csock, &on, 1);
-        if (!bad) keyboard(b, b->typing = on);
+        if (!bad) keyboard(b, b->env, b->typing = on);
       } else if (!bad) bad = k != 'F' || frame(b);
       if (bad) {
         ALooper_removeFd(b->looper, b->csock);
@@ -368,7 +369,11 @@ static void immersive(ANativeActivity *a) {
   if (v) callv(e, v, mid(e, cls(e, v), "setSystemUiVisibility", "(I)V"), 0x1000 | 0x400 | 0x200 | 0x100 | 0x4 | 0x2);
   clear(e);
 }
-static void focus(void *a, int has) { if (has) immersive(a); }
+static void focus(void *a, int has) {
+  br *b = me(a);
+  if (has) immersive(a);
+  if (has && b->typing && !b->shown) keyboard(b, ((ANativeActivity *) a)->env, 1);   /* an ask before focus is lost */
+}
 static void created(void *a, void *w) {
   br *b = me(a);
   ANativeWindow_setBuffersGeometry(w, 0, 0, 1);
