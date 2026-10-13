@@ -353,6 +353,7 @@
                  pin t 'lren {},          ; a __label__ name -> its spelling in the current block
                  pin t 'lrn 0,
                  pin t 'etag {},          ; enum tag -> the type its enumerators lowered to (see ety)
+                 pin t 'efwd {},          ; an enum tag named before its definition
                  pin t 'stag {},          ; tag -> (fields size align)
                  pin t 'tags {},          ; a block tag's spelling -> the key it took in stag (C11 6.7.2.3)
                  pin t 'utag {},          ; the tags of that table that are unions (the layout flattens them alike)
@@ -970,7 +971,10 @@
                                     (lo < -(2 ** b) || (2 ** b) <= hi)))
                                   (clblame "an enumerator does not fit the enum's __attribute__((mode))")
                                  mt)))
-                     (ty = () ? ()
+                     (? (ty = ()) ()
+                        ; a name typed ahead as uint cannot become another width
+                        (tag && peep (ps 'efwd) tag 0 && ty != 'uint)
+                         (clblame "an enum named before its definition lays other than unsigned int here")
                         (tag ? (spin ps 'etag tag ty) 0,
                          ty)))
                  (peekp ts3 "{" ?
@@ -1000,7 +1004,8 @@
                        (consts >ts3 0 1 0 0))
                     ; a tag not yet defined (a declaration ahead of its enum, the kernel's apic.h) reads
                     ; as gcc lays the enum that has no negative enumerator, so its redeclaration agrees
-                    [(peep (ps 'etag) tag 'uint) ts3]))
+                    (tag && !(peep (ps 'etag) tag ()) ? (spin ps 'efwd tag 1) 0,
+                     [(peep (ps 'etag) tag 'uint) ts3])))
              (tkk t = 'id && (peep (ps 'types) (tkv t) 0 ? 1))
               [(peep (ps 'types) (tkv t) 0) >ts]
              ; __auto_type NAME = init: the initializer's own type, parsed here with the cursor
@@ -1982,7 +1987,8 @@
                 (pbty ps ts @ br
                    (? (atom? br) ()
                       (take (#ts - #(<>br)) ts @ sp
-                         (any (t \ tp? t "{") sp ? ()
+                         ; a cleanup in the specifiers would clean every declarator: pdecl1 refuses it
+                         (any (t \ tp? t "{") sp || cl? sp ? ()
                             (<c + [(<(c 2) . ";" . >>(c 2))] + sp + <>c)))))))))
    (clat l i) (? (atom? l) () (i = 0) l (clat >l (i - 1)))   ; the tail at token i
    (clp? l i s) (clat l i @ t (two? t && tp? <t s))

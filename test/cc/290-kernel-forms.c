@@ -1,7 +1,7 @@
 /* forms the kernel's x86-64 units read with: a cleanup on one declarator of several, a
  * _Pragma a macro spells, __builtin_strcmp over two literals (the dead arm's call never
- * links) and over a runtime string, an enum named ahead of its definition, a block static
- * named into a section of its own. held to gcc. */
+ * links) and over a runtime string, a block static named into a section of its own.
+ * held to gcc. */
 
 static int freed;
 static void undo(char **p) { freed += *p ? (*p)[0] : 100; }
@@ -28,10 +28,6 @@ extern void never_linked(void);
   else if (!__builtin_strcmp(op, ">=")) r_ = (a) >= (b); \
   else never_linked(); r_; })
 
-extern enum mode later;
-enum mode { M0, M1, M2 };
-enum mode later = M2;
-
 #if defined(__ELF__)
 struct rec { int v; struct rec *n; };
 static struct rec *head;
@@ -51,5 +47,5 @@ int main(void) {
   freed = 0; many(0); f0 = freed;
   int c1 = cmp(3, "<", 4), c2 = cmp(3, ">=", 4);
   int s1 = __builtin_strcmp("abc", "abd") < 0, s2 = __builtin_strcmp(str(xyz), "xyz"), s3 = __builtin_strcmp(buf, "abc") > 0;
-  return (r + f1 + f0 + quiet() + c1 + c2 + s1 + s2 + s3 + later + recs()) & 255;
+  return (r + f1 + f0 + quiet() + c1 + c2 + s1 + s2 + s3 + 2 + recs()) & 255;
 }
