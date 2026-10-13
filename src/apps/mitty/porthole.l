@@ -85,6 +85,7 @@
          fin (fdopen <fo) fout (fdopen >fo)            ; the frames: the mitty writes, we read
          gx {(screen (cask (screen () r c)) r c)}
          dirty {1}
+         _ (setenv "COLORTERM" "truecolor")           ; the glass paints every pen as it is said
          hb (mitty-lush as r c 0)
          (? !(tablet? hb) (say err ("mitty: " + hb + "\n"), flush err, window-close win, 1)
             (: _ (pins hb 'in kin 'out fout 'csize [r c])
