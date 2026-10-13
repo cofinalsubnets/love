@@ -7635,7 +7635,12 @@
                              (k = 'pick)
                               (two? fr ? (assign >l >fr (<fr . acc)) 'bad)
                              (assign >l fr (k . acc)))))
-                   asgn (assign ops9 (filter (r9 \ (nelem r9 pinned)) (asmpk g)) ())
+                   ; no operand takes a register the asm clobbers; past the scratch file, x64 seats
+                   ; callee-saved ones, saved around the whole asm
+                   ckill (filter nom? (map (c \ (neutral? ? (intern c) (gas-regname tgt c)))
+                                           (filter (c \ !(c = "memory" || c = "cc" || vclob? g c)) <>>>>s)))
+                   xcs (x64t? g ? '(r3 r11 r12 r13 r14) ())
+                   asgn (assign ops9 (filter (r9 \ (nelem r9 pinned && nelem r9 ckill)) (asmpk g + xcs)) ())
                    (clobs l acc)
                     (!(two? l) ? (rev acc)
                        (<l @ c
@@ -7649,8 +7654,8 @@
                                    (asmsave? g r9) (clobs >l (r9 . acc))
                                    (asmno g ("an asm clobber of \"" + c + "\"")))))))
                    saves (clobs <>>>>s ())
-                   ; i386's esi edi seated as an operand are the caller's: saved around the whole asm
-                   csops (bad? saves || bad? asgn ? () (ia32? g ? (filter (r9 \ elem r9 asgn && nelem r9 saves) '(r5 r6)) ()))
+                   ; a callee-saved register seated as an operand (i386's esi edi, x64's past scratch) is the caller's: saved around the asm
+                   csops (bad? saves || bad? asgn ? () (filter (r9 \ elem r9 asgn && nelem r9 saves) (ia32? g ? '(r5 r6) xcs)))
                    ; an asm goto with outputs jumps to a trampoline per label that stores them
                    ; and goes on; a pushed clobber would leave it a frame deeper than the fall-through
                    outs? (any (e2 \ elem <e2 '(o x f)) os)
