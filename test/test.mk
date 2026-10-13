@@ -1312,11 +1312,12 @@ test_kernel_vmx: host $(S)/tools/ktest.l
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "vmx: guest ran, cpuid exited"
 
 # a C program as an x64 process: the host's mooncc builds test/kernel/c/hello.c, the kernel boots
-# with it at /proc/initrd (qemu's -initrd), and test/kernel/uproc.l runs it in ring 3
+# with it at /proc/initrd (qemu's -initrd), and test/kernel/uproc.l runs it in ring 3; then love
+# itself as processes, laid from the kernel's own image (test/kernel/{proc,spawn}.l)
 test_kernel_uproc: host $(S)/tools/ktest.l
 	@$(MAKE) -s $(k_elf)
 	@mkdir -p $(ko)/uproc && $(ho)/love mooncc test/kernel/c/hello.c -o $(ko)/uproc/hello
-	@echo TEST $(k_elf) "(a C program as an x64 process: ring 3, an address space of its own)"
+	@echo TEST $(k_elf) "(C programs and love as x64 processes: ring 3, address spaces of their own)"
 	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc/hello \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "uproc: ok"
 

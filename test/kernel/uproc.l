@@ -3,7 +3,8 @@
 ; calls through the kernel -- started by the kernel and by the kernel's own shell. its words, cwd,
 ; environment and status are its own; the kernel's memory is not, to read or to hand over. all of
 ; it beside a process that computes without a call, which only the timer stops: love's tasks keep
-; their turns, and a C cat in a pipe waits on its writer. a seat with no /proc/initrd skips
+; their turns, a C cat in a pipe waits on its writer, and lush as a process keeps answering, a C
+; program on its PATH. a seat with no /proc/initrd skips
 (stat "/proc/initrd" @ st
  (!(two? st) ? (puts "uproc: no /proc/initrd here, laws skipped", putc 10, ())
   (: o "/tmp/uproc.out"
@@ -26,6 +27,11 @@
      t0 (clock 0)
      _ (rest 30)
      t (clock 0 - t0)
+     ; lush as a process beside it, a C program found on its PATH -> (ms . (status . wrote))
+     (lush _) (: u0 (clock 0)
+                 h (onto (_ \ proc-main ["sh" "-c" "export PATH=/tmp/c:$PATH; hello three 4"]))
+                 ((clock 0 - u0) . h))
+     h (lush 0)
      a (onto (_ \ proc-main ["/tmp/c/hello" "one" "7"]))
      b (onto (_ \ spawn ["sh" "-c" "cd c && ./hello two 0; echo st $?"] @ p (wait p)))
      c (onto (_ \ proc-main ["/tmp/c/hello" "peek"]))
@@ -33,6 +39,7 @@
      e (onto (_ \ spawn ["sh" "-c" "cd /tmp; echo three four | ./c/hello cat | wc -w; ./c/hello x 0 | ./c/hello cat"] @ p (wait p)))
      _ (open "/tmp/go" "w" @ q (close q))
      g (wait s)
+     h0 (lush 0)
      fails (? (<a != 7) ("by the kernel: status " + show <a + ", not 7")
               (>a != "hello from C: one 7 in /tmp, HELLO=hi\n") ("by the kernel: wrote " + show >a)
               (<b != 0) ("by its shell: status " + show <b + ", not 0")
@@ -43,6 +50,10 @@
               (<e != 0) ("pipes: status " + show <e + ", not 0")
               (t > 2000) ("beside the spinner, a rest of 30 ms took " + show t)
               (g != 5) ("the spinner: status " + show g + ", not 5")
+              (<>h != 4) ("lush as a process: status " + show <>h + ", not 4")
+              (>>h != "hello from C: three 4 in /tmp, HELLO=hi\n") ("lush as a process: wrote " + show >>h)
+              ; beside the spinner it has half the machine, give or take the kernel's own turns
+              (<h > 3 * <h0 + 1000) ("lush beside the spinner took " + show <h + " ms, alone " + show <h0)
               ())
      _ (chdir was)
      _ (test (!(string? fails)))
