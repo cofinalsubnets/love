@@ -11,7 +11,7 @@
 ; saver ('saver) now; a key
 ; the caller pins in 'keys opens the pane its thunk answers, beside (love mitty's b, a model).
 ; the clip is the mitty's one register, vi's shape, shared by every vi buffer on it,
-; and sent out to the outer terminal's clipboard (osc 52) when it changes.
+; and sent out to the outer terminal's clipboard (osc 52) when it changes, or to 'own's.
 ; a guest may be a stage of this process -- cli's triple (show w h) (step k) (over? _) --
 ; berthed like a child; a door 'key reads its keys, a door 'tick asks for a frame.
 ;
@@ -185,7 +185,7 @@
       hbars j hb,
       peep hb 'bar 0 ? (say j (limn-go (hb 'rows - 1) 0 + hbarline hb)) 0,
       (hclip-text hb @ ct
-         (ct = hb 'c52 ? 0 (pin hb 'c52 ct, 0 < #ct ? (say j ("\e]52;c;" + b64e ct 1 + "\a")) 0))),
+         (ct = hb 'c52 ? 0 (pin hb 'c52 ct, 0 < #ct ? (peep hb 'own () @ f (() = f ? (say j ("\e]52;c;" + b64e ct 1 + "\a")) (f ct))) 0))),
       (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
          (two? p && two? b ?
             (: s (peep (hbox p) () 0) w (gaze s 0) c (gaze s 2) f (gaze s 3)

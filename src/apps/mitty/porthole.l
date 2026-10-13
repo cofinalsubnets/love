@@ -7,13 +7,19 @@
 ; names dirty are dyed onto the window's paper, 8 by 16 a cell. the window's events go back up
 ; as a terminal's bytes: a key's text as it types it, the keys with no text and every key
 ; under ctrl or alt as xterm spells them, the pointer as the reports the glass was asked for.
-; closing the window hangs up every pane's child, and the mitty ends with its last pane.
+; the pointer is the window's own where the glass asked for none, or under shift: a drag
+; selects (a double or triple click the word or the line, a right click stretches it) and
+; takes the primary, the middle button pastes it; ctrl+shift+C copies the selection onto
+; the clipboard, ctrl+shift+V and shift+Insert paste. a paste goes up bracketed, and the
+; mitty's own clip goes out as the clipboard. closing the window hangs up every pane's
+; child, and the mitty ends with its last pane.
 (module '(porthole porthole porthole-bytes porthole-mods)
 (borrow 'window)
 (borrow 'mitty)
 (borrow 'wharf)                         ; the panes, to hang up at a close
 (borrow 'mooring)
 (borrow 'posix)
+(borrow 'font)
 (:
  ; --- keys: a set-1 code -> what a terminal sends ------------------------------------
  ; the modifiers as held, each by its two keys: shift ctrl alt
@@ -54,12 +60,32 @@
  xbtn {1 0 2 1 3 2 4 64 5 65 6 66 7 67}
  (mods held) ((held 'shift ? 4 0) + (held 'alt ? 8 0) + (held 'ctrl ? 16 0))
 
+ ; --- the selection on the glass: a left press anchors it (a second or third in quick
+ ;     succession on the same cell takes the word or the line), a drag stretches it, a
+ ;     release with something chosen takes the primary. a right press moves the nearer end
+ ;     there in its own unit, and the drag goes on from it. answers whether it was ours ---
+ (choose win sc held how b gi)
+  (: s0 (gaze sc 10) s1 (gaze sc 11)
+     (? (how = 0 && b = 2 && s0 < s1)
+        ((? (gi < s0) (s1 - 1) (s1 <= gi) s0 (gi - s0 < s1 - gi) (s1 - 1) s0) @ a
+           (pins held 'anchor a 'drag 1, select sc a gi (peep held 'unit 0)))
+        (how = 0 && b = 0)
+        (: t (clock 0)
+           n (t - peep held 'tp 0 < 400 && gi = peep held 'anchor () ? (min 3 (peep held 'clicks 0 + 1)) 1)
+           (pins held 'tp t 'anchor gi 'clicks n 'unit (n - 1) 'drag 1,
+            select sc gi gi (1 < n ? (n - 1) -1)))
+        (how = 0 && b = 1) (window-ask win 'primary)
+        !(peep held 'drag 0) 0
+        (how = 2) (select sc (peep held 'anchor gi) gi (peep held 'unit 0))
+        (pin held 'drag 0,
+         s0 < s1 ? (window-own win 'primary (copied sc s0 s1)) 0)))
+
  ; --- the glass: the rows it names dirty (wet reads and clears), the cursor's row and the
  ;     one it left, dyed onto the paper and shown ---
  (wets sc) (: (bits d base i acc) (i < 32 ? (bits d base (i + 1) (d >> i & 1 ? ((base + i) . acc) acc)) acc)
               (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
               (go 0 ()))
- (paint win gx all last)
+ (paint win gx font all last)
   (: sc (peep gx () 0) p (window-paper win) W <(window-size win)
      r (gaze sc 1) c (gaze sc 2)
      cur (gaze sc 3 & 1 ? (gaze sc 0) -1)
@@ -69,14 +95,16 @@
      _ (-1 < cur && cur // c + v < r ? (pin rows (cur // c + v) 1) 0)
      _ (-1 < last && last != cur && last // c + v < r ? (pin rows (last // c + v) 1) 0)
      ys (sort (keys rows))
-     _ (each ys (y \ dye sc p W y cur ()))
+     _ (each ys (y \ dye sc p W y cur font))
      (run a b l) (? (two? l && <l = b + 1) (run a <l >l)
                     (window-show win (a * 16) ((b + 1) * 16), two? l ? (run <l <l >l) 0))
      (two? ys ? (run <ys <ys >ys) 0, cur))
 
  ; --- porthole: the mitty for the shell (argv in its first pane, when given) in a window
  ;     of 80 by 24 cells. answers 0, or 1 and why it could not ---
- (porthole as)
+ (porthole as0)
+  (: font (? (two? as0 && <as0 = "-f" && two? >as0) (uread <>as0 @ t (two? t ? (font-hex <>t))))
+     as (? (two? as0 && <as0 = "-f") (two? >as0 ? >>as0 ()) as0)
   (window-open 640 384 "mitty" @ win
    (? !(tablet? win) (say err ("mitty: no window (" + show win + ")\n"), flush err, 1)
       (: wh (window-size win) r (max 2 ((wh 1) // 16)) c (max 20 (<wh // 8))
@@ -88,21 +116,33 @@
          _ (setenv "COLORTERM" "truecolor")           ; the glass paints every pen as it is said
          hb (mitty-lush as r c 0)
          (? !(tablet? hb) (say err ("mitty: " + hb + "\n"), flush err, window-close win, 1)
-            (: _ (pins hb 'in kin 'out fout 'csize [r c])
+            (: _ (pins hb 'in kin 'out fout 'csize [r c] 'own (t \ window-own win 'clipboard t))
                _ (hgreet hb)
                held {}
                (send s) (0 < #s ? (say kout s, flush kout) 0)
-               ; the pointer, sent in the form the glass was asked for, a move once a cell
+               (soil _) (pin dirty () (max 1 (peep dirty () 0)))
+               ; the pointer, sent in the form the glass was asked for, a move once a cell;
+               ; the window's own where none was asked, or under shift
                (point how b x y) (: sc (peep gx () 0)
                                     row (max 0 (min (gaze sc 1 - 1) (y // 16))) col (max 0 (min (gaze sc 2 - 1) (x // 8)))
                                     at (row * 65536 + col)
+                                    bb (how = 2 ? (peep held 'btn 3) (peep xbtn b 3))
+                                    mine (held 'shift || !(gaze sc 3 & 7680))
                                     (how = 2 && at = peep held 'at -1 ? 0
                                        (: _ (pin held 'at at)
-                                          bb (how = 2 ? (peep held 'btn 3) (peep xbtn b 3))
-                                          (send (mouse sc (bb + mods held) row col how)))))
+                                          (? (mine && bb < 3)
+                                              (choose win sc held how bb ((row - gaze sc 8) * gaze sc 2 + col), soil 0)
+                                             mine 0
+                                             (send (mouse sc (bb + mods held) row col how))))))
+               ; the keys the window keeps: ctrl+shift+C and V, shift+Insert
+               (ours k) (? (held 'ctrl && held 'shift && k = 46)
+                             (peep gx () 0 @ sc (gaze sc 10 < gaze sc 11 ? (window-own win 'clipboard (copied sc (gaze sc 10) (gaze sc 11))) 0), 1)
+                           (held 'ctrl && held 'shift && k = 47) (window-ask win 'clipboard, 1)
+                           (held 'shift && !(held 'ctrl) && k = 338) (window-ask win 'primary, 1)
+                           0)
                (event e) (: k (e 1)
                             (? (<e = 'down) (: md (peep porthole-mods k ())
-                                               (md ? (pin held md 1) (send (porthole-bytes k held))))
+                                               (? md (pin held md 1) (ours k) 0 (send (porthole-bytes k held))))
                                (<e = 'up) (peep porthole-mods k () @ md (md ? (pin held md ()) 0))
                                (<e = 'text) (held 'ctrl || held 'alt ? 0 (send k))
                                (<e = 'press) (: _ (pin held 'btn (peep xbtn k 3)) (point 0 k (e 2) (e 3)))
@@ -112,14 +152,24 @@
                                                (pin gx () (regrid sc (cask (screen () r2 c2)) r2 c2),
                                                 pin hb 'csize [r2 c2],
                                                 pin dirty () 2))
+                               (<e = 'paste) (0 < #k ? (send ("\e[200~" + k + "\e[201~")) 0)
+                               (<e = 'lost) (k = 'primary ? (pin held 'sel (), select (peep gx () 0) 0 0 -1, soil 0) 0)
                                (<e = 'close) (each (wharf-panes (hb 'plan)) (id \ (hpane hb id @ p (hpty? p ? (still (hpid p) 1) 0))))
                                0))
                up (twirl (_ \ oars hb 0) 0)
                pump (twirl (_ \ moor-to gx fin kout dirty) 0)
                ; the glass's turn: the window's events, then the paper where the glass changed
+               ; the mitty writes every cell of a frame, and a write ends the glass's
+               ; selection: it is kept here with its text, and laid again while that holds
+               (keep _) (: sc (peep gx () 0) s0 (gaze sc 10) s1 (gaze sc 11) k (peep held 'sel ())
+                           (? (s0 < s1) (two? k && <k = s0 && k 1 = s1 ? 0 (pin held 'sel [s0 s1 (copied sc s0 s1)]))
+                              !(two? k) 0
+                              (copied sc <k (k 1) = k 2) (select sc <k (k 1 - 1) 0, soil 0)
+                              (pin held 'sel ())))
                (look last) (: _ (each (window-events win) event)
+                              _ (keep 0)
                               d (peep dirty () 0)
-                              l2 (0 < d ? (pin dirty () 0, paint win gx (d = 2) last) last)
+                              l2 (0 < d ? (pin dirty () 0, paint win gx font (d = 2) last) last)
                               (peep held 'over () ? () (rest 8, look l2)))
                face (twirl (_ \ look -1) 0)
                (hswim hb 1,                                   ; ... until the last pane empties
@@ -132,5 +182,5 @@
                 landed? face ? (catch face) (freeze face),
                 close fin, close kin,
                 window-close win,
-                0)))))))
+                0))))))))
 ) ; module porthole
