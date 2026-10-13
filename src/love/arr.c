@@ -188,7 +188,7 @@ lvm(data_sym_apply) {
 // [n, num-ap, x, ret] frame as lvm_numap
 lvm(data_num_apply) {
  Have(2);
- word h = hot_hook(g->hot_numap);
+ word h = hot_hook(g->hook[hook_numap]);
  word n = word(Ip), x = Sp[0], ret = Sp[1], *dst = Sp - 2;
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  Sp = dst, Ip = cell(numap_drive);
@@ -833,7 +833,7 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
   return t ? putcharm(1) : zero; }
  if (!isnum(a) || !isnum(b)) return zero;
  struct g *g = *fp;
- if (gemp(a) || gemp(b)) {                      // float domain -> float box
+ if (gemp(a) || gemp(b) || (op == vop_fquot && b == putcharm(0))) {   // float domain -> float box; // 0 as the scalar
   flo_t r = vop_flo(op, toflo(a), toflo(b));  // both operands read first: a/b are raw words
   if (!ok(g = have(g, gem_req))) return *fp = g, zero;   // and a float box is a heap object, so
   *fp = g;                                                    // toflo after the have reads a moved one
@@ -841,8 +841,7 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
  if (!bigp(a) && !bigp(b)) {                    // machine-int fast path, overflow-checked
   intptr_t av = toint(a), bv = toint(b), t; bool of;
   switch (op) {
-   case vop_quot: case vop_fquot:                         // object (love_O) arrays truncate under both / and //
-                  if (bv == 0) return putcharm(0);          // array convention: int /0 -> 0
+   case vop_fquot:                                        // `//` truncates; `/` is the hook's (lvm_obin)
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av / bv; break;
    case vop_rem:  if (bv == 0) return a;                     // a % 0 = a: no modulus, a whole
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av % bv; break;
@@ -856,6 +855,7 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
    if (!ok(g = have(g, wbig_req))) return *fp = g, zero;
    *fp = g;
    return mk_wbig(&g->hp, t); } }
+ if (op == vop_rem && b == putcharm(0)) return a;   // as the int lane above: a big divides by no limbs
  if (op == vop_max || op == vop_min) {          // an extreme is one of its operands: no arithmetic
   intptr_t c = big_cmp(a, b);
   return (op == vop_max ? c >= 0 : c <= 0) ? a : b; }
@@ -932,9 +932,48 @@ static struct g *obin_run(struct g *g, int op) {
  g->sp[2] = g->sp[0], g->sp += 2, g->ip += 1;
  return g; }
 
+// a cell the C lane takes is a plain number; an object tray holding anything else goes whole
+// to hook_obin, which runs the op itself on every cell. so does `/`, whose cells answer as
+// the scalar `/` does: exact where it divides, else a float
+static bool obj_plain(word x) {
+ if (!trayp(x) || tray(x)->type != love_O) return true;
+ struct tray *v = tray(x);
+ for (uintptr_t i = 0, n = tray_nelem(v); i < n; i++) if (!isnum(tray_get_obj(v, i))) return false;
+ return true; }
+
+// hook_obin's frame over the two operands: [k hook as bs sh ret], the cells paired as C
+// broadcasts them in two lists and the result's shape in a third, so an object tray conforms
+// as a numeric one does. the operands conform: the caller asked
+static struct g *obin_frame(struct g *g, int op) {
+ if (!ok(g = push(g, 4, zero, zero, zero, zero))) return g;   // operands now at sp[4], sp[5]
+ if (trayp(g->sp[4]) && tray(g->sp[4])->type != love_O && !ok(g = tray_to_obj(g, 4))) return g;
+ if (trayp(g->sp[5]) && tray(g->sp[5])->type != love_O && !ok(g = tray_to_obj(g, 5))) return g;
+ uintptr_t R, n = bshape(g->sp[4], g->sp[5], &R), shp[maxrank];
+ if (!ok(g = have(g, (2 * n + R) * chain_req))) return g;
+ word a = g->sp[4], b = g->sp[5];
+ bool atray = trayp(a), btray = trayp(b);
+ bshape_put(shp, R, a, b);
+ struct chain *as = (struct chain*) g->hp, *bs = as + n, *sh = bs + n;
+ g->hp += (2 * n + R) * chain_req;
+ struct bcast w; bc_open(&w, atray ? tray(a) : 0, btray ? tray(b) : 0, R, shp);
+ for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
+  ini_chain(as + p, atray ? tray_get_obj(tray(a), w.oa) : a, p + 1 < n ? word(as + p + 1) : ZeroPoint);
+  ini_chain(bs + p, btray ? tray_get_obj(tray(b), w.ob) : b, p + 1 < n ? word(bs + p + 1) : ZeroPoint); }
+ for (uintptr_t k = 0; k < R; k++) ini_chain(sh + k, putcharm(shp[k]), k + 1 < R ? word(sh + k + 1) : ZeroPoint);
+ g->sp[0] = putcharm(op), g->sp[1] = hot_hook(g->hook[hook_obin]);
+ g->sp[2] = n ? word(as) : ZeroPoint, g->sp[3] = n ? word(bs) : ZeroPoint;
+ g->sp[4] = R ? word(sh) : ZeroPoint, g->sp[5] = word(g->ip + 1);
+ return g; }
+
 lvm(lvm_obin) {
  int op = (int) g->b;
- LvmResume(g, obin_run, op) }
+ if (op == vop_eq || (op != vop_quot && obj_plain(Sp[0]) && obj_plain(Sp[1]))) LvmResume(g, obin_run, op)
+ uintptr_t R;
+ if (bshape(Sp[0], Sp[1], &R) == (uintptr_t) -1) { Sp[1] = zero; love_musttail return Nextp(1, 1); }   // non-conforming -> zero, as obin_run
+ LvmPack(g, obin_frame, op);
+ Unpack(g);
+ Ip = (union u*) obin_drive;
+ love_musttail return Continue(); }
 
 // love_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). g->sp[0] is the array.
 struct g *ored(struct g *g, int kind) {

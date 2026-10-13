@@ -366,7 +366,7 @@ struct port_vt const
  to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`
  closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
  ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand },  // a charlist: prel's `tap`
- love_horn_vt   = { noop_flush, love_horn_writen, NULL, NULL };      // PCM out: the horn
+ love_horn_vt   = { noop_flush, love_horn_writen, love_horn_readn, NULL };   // PCM out and in: the horn
 
 // (fputc port byte) — write byte to port; return byte. a charm operand is a raw
 // fd and the byte goes straight at the row -- nothing to buffer, nothing to flush.
@@ -599,7 +599,10 @@ lvm(lvm_fgetc) {
   if (!ok(g = zgetc(g))) love_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   if (g->b == IoWouldBlock) {          // the refill raced and lost -- park, don't spin
-   g->next_wait_fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
+   intptr_t fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
+   // a dry door with no fd to wait on (the horn's silence) takes the write residue's poll
+   if (fd < 0) g->next_wake_at = love_clock() + 1;
+   else g->next_wait_fd = (int) fd;
    love_musttail return Ap(lvm_yield_sw, g); }
   Sp[0] = putcharm(g->b); }
  else Sp[0] = putcharm(EOF);
@@ -747,10 +750,10 @@ lvm(lvm_string) {
  // `string` answers a string: a string is the only identity, every other kind coerces
  // through hook 7. px reaches `string` on chains and noms only, so show cannot recur.
  if (x == ZeroPoint) { Sp[0] = word(EmptyString); love_musttail return Next(1); }   // the empty charlist
- if (strp(x) || !evenp(g->hot_show)) love_musttail return Next(1);   // ..or the boot window, where identity stands
+ if (strp(x) || !evenp(g->hook[hook_show])) love_musttail return Next(1);   // ..or the boot window, where identity stands
  Have(2);                                               // the drive grows Sp by two
  { word *dst = Sp - 2;                                  // [x show ret] -- callout_drive's 1-arg shape
-   dst[0] = Sp[0], dst[1] = g->hot_show, dst[2] = word(Ip + 1);
+   dst[0] = Sp[0], dst[1] = g->hook[hook_show], dst[2] = word(Ip + 1);
    Sp = dst; Ip = (union u*) callout_drive; }
  love_musttail return Continue(); }
 
@@ -923,7 +926,7 @@ static struct g *rd_start(struct g *g) {
   return g->sp[RdSrc] = x, g->sp[RdCur] = putcharm(0), RdGo(RsRead); }
  if (!iop(x) && !rd_lit(x)) return RdGo(RsRead);
  if (!iop(x)) return rd_call(g, x, ZeroPoint, x);
- return rd_call(g, hot_hook(g->hot_flow), x, x); }
+ return rd_call(g, hot_hook(g->hook[hook_flow]), x, x); }
 
 // a text's escapes: n t r e 0, \xhh as two chars hex or not, \u{h..} one to six hex
 // digits naming a code point outside the surrogates (else a plain u), any other char

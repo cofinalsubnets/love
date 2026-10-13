@@ -291,7 +291,8 @@
     usage: love seed [-g] [ARCH] [DIR]
       lay this binary's source under DIR (default .) and rebuild it there;
       the result has to BE this binary, byte for byte.
-      ARCH    x64 | a64 | rv64 -- an egg for that machine instead
+      ARCH    x64 | a64 | rv64 -- an egg for that machine instead, DIR/love-ARCH.
+              its first run there bakes it in place, so it must sit somewhere writable
       -g      gregarious: the ambient cc and tools build, ours fill the gaps.
               without it ours go throughout, whatever PATH holds
 

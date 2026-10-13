@@ -397,6 +397,7 @@
    ;; X op they would spell in two words -- lands as gas's own word; an unread operand scares.
    (ga-reg s) (name s @ k
                  (? (nom? (peep a64-names k ())) ['reg (a64-names k) 8]
+                    (elem k '(fp lr)) ['reg k 8]               ; llvm-mc's names for x29 and x30
                     (k = 'wzr) ['reg 'zr 4]
                     (k = 'wsp) ['reg 'sp 4]
                     (#s > 1 && s 0 = 119 && digit? (s 1)) ['reg (peep a64-names (name ("x" + snip s 1 #s)) ()) 4]
@@ -536,10 +537,18 @@
    ;; a symbol and its addend, from `sym` or `sym+k`
    (ga-sym o) (o @ ('sym s) [s 0] ('symk s k) [s k] _ (scare 'gas-a64-operand o))
    (ga-symts ts) (ga-sym (ga-opnd ts))
-   ;; adrp to a symbol's page, and add's :lo12: of it: address fixes, the addend aboard
-   (ga-adrp os) (? (#os != 2) (scare 'gas-a64-operand ['adrp os])
-                   (ga-rw (os 0) @ (r w) (w != 8 || r = 'sp ? (scare 'gas-a64-operand ['adrp os])
-                                            (ga-sym (os 1) @ (s k) [['afix 'adrp21 (0x90000000 | ga-hw r) s k]]))))
+   ;; adrp to a symbol's page, adr to its byte, and add's :lo12: of it: address fixes, the addend aboard
+   (ga-adrp m os) (? (#os != 2) (scare 'gas-a64-operand [m os])
+                     (ga-rw (os 0) @ (r w) (w != 8 || r = 'sp ? (scare 'gas-a64-operand [m os])
+                                              (ga-dot (os 1) @ d
+                                                 ; adr to `.+k` is k itself, in bytes
+                                                 (? (m = 'adr && charm? d)
+                                                     (-1048576 <= d < 1048576 ?
+                                                        (d & 2097151 @ u (ga-raw (0x10000000 | (u & 3) << 29 | (u >> 2) << 5 | ga-hw r)))
+                                                        (scare 'gas-a64-operand [m os]))
+                                                    (ga-sym (os 1) @ (s k)
+                                                       (m = 'adr ? [['afix 'adr21 (0x10000000 | ga-hw r) s k]]
+                                                          [['afix 'adrp21 (0x90000000 | ga-hw r) s k]])))))))
    (ga-addlo os)
     (: d (ga-rw (os 0)) n (ga-rw (os 1))
        (? (<>d != 8 || <>n != 8 || <d = 'zr || <n = 'zr) (scare 'gas-a64-operand ['add os])
@@ -992,7 +1001,7 @@
           (elem m '(ldr ldrsw) && k = 2 && ((os 1) @ ('sym _) 1 ('symk _ _) 1 _ 0) && ((os 0) @ ('reg r _) (r != 'sp) _ 0))
            (: w ((os 0) 2) b (? (m = 'ldrsw) (w = 8 ? 0x98000000 ()) (w = 8) 0x58000000 0x18000000)
               (charm? b ? (ga-sym (os 1) @ (s a) [['afix 'ld19 (b | ga-hw ((os 0) 1)) s a]]) (scare 'gas-a64-operand [m os])))
-          (m = 'adrp) (ga-adrp os)
+          (elem m '(adrp adr)) (ga-adrp m os)
           (m = 'add && k = 3 && ((os 2) @ ('grp _ _) 1 _ 0)) (ga-addlo os)
           (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (peep ga-shop m ()) || two? (peep ga-shal m ()))) (ga-shifted m os)
           ; a W mov beside wsp is add #0; zr has no place beside it

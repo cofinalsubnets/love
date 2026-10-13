@@ -126,13 +126,13 @@
                               (: c (cmp k) (? c (c x) (< nfcap k) (nfloop k x) (numfn k x))))))
         (pin book 'num-ap num-ap)))
 ; seal-hook caches num-ap into the VM, so it must follow the pin above.
-(seal-hook 1 num-ap)
+(seal-hook 0 num-ap)
 ; the + and * of two functions, which is all church arithmetic is: the extra a-slot threaded into
 ; both of arrange's operands is what makes + agree with addition. lvm_addh/lvm_mulh read by slot.
 (: (arrange f g a x) (f a (g a x))                ; (+ f g)
    (compose f g x) (f (g x))                      ; (* f g)
-   _ (seal-hook 2 arrange)
-   _ (seal-hook 3 compose))
+   _ (seal-hook 1 arrange)
+   _ (seal-hook 2 compose))
 ; map runs left to right
 (: (map f l) (? (two? l) ((\ f x l (. x (map f l))) f (f (cap l)) (cup l)))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
@@ -163,7 +163,7 @@
               (saturate x))
    (measure x) (? (coin? x) (: f (ktab x 'net) (? (lit? f) (f x) (net x)))
                   (net x))
-   _ (seal-hook 8 measure)
+   _ (seal-hook 5 measure)
    (prod x) (? (tray? x) (aprod x)
                (two? x) (foldl (\ a e (* a (prod e))) 1 x)
                x)
@@ -201,7 +201,7 @@
 ; cats (a nif) is the foldr of + over a list: one allocation when its pieces are all strings
 ; or all lists, and this fold for the rest. so catmap is band-general: mapping to lists
 ; concatenates them; mapping to strings joins them; () is the unit of both of them.
-(seal-hook 10 (\ l (foldr (+) () l)))
+(seal-hook 7 (\ l (foldr (+) () l)))
 (: (catmap f l) (cats (map f l))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
    ; assoc's identity twin, as eleq is elem's: a key that is a nom or a charm wants no
@@ -659,8 +659,8 @@
    ; ev.l holds them, and a cross-file capture has only the book to go through.
    _ (pin book 'grip grip)
    (pin book 'opfix opfix))
-; the last seal: opfix joins the other four in the g->hot_* fields, so no later rebind can reach it.
-(seal-hook 4 opfix)
+; the last seal: opfix joins the other four in g's hooks, so no later rebind can reach it.
+(seal-hook 3 opfix)
 ; the ops ev's jotin splices into a loop, as values: none a loop's body can shadow
 (pin jotfuse 'ops [two? saturate (<) (+) (.) rev tally])
 
@@ -707,6 +707,13 @@
 (: (a-coll sh n acc) (n < 1 ? (: d (rev acc) (tray (a-type d) sh d))
                               (x \ (a-coll sh (n - 1) (x . acc))))
 )
+
+; an object tray whose cells C does not take -- a tray, a coin, a twin: op k (C's enum vop) over
+; the cells C paired, each the whole op, so a cell that is itself a tray goes round again.
+; the bit ops never come (C refuses them on an object tray) and `=` stays in C
+(seal-hook 8 (: ops [(+) (-) (*) (/) (%) (//) 0 0 0 0 0 max min (<) (<=) (>) (>=) (=)]
+                (go f a b) (two? a ? (f <a <b . go f >a >b) ())
+                (\ k as bs sh (tray () sh (go (ops k) as bs)))))
 
 ; recursive-value boxing for `:` -- the letrec* "capture by location" fix. a reference at-or-before
 ; its own binding is forward, and indirects through a cell keyed by the binding site's nom, so a

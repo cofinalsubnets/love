@@ -259,6 +259,20 @@ struct port_vt;   // the port's kind, in its head; spelled out with the ports
 // the reader's names (g->rnom): its wraps, its two lone chars, the torn answer, and the
 // flow a port is read through
 enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnWeave, RnN };
+// the hooks: lisp functions that C calls, by (seal-hook n f)'s n. the running task's own two
+// sit in its node, under negative n: -1 the help, -2 the stdio
+enum hook {
+ hook_numap,     // numeric application (church exponentiation)
+ hook_arrange,   // church addition (prel's `arrange`)
+ hook_compose,   // composition (church multiplication)
+ hook_opfix,     // the operator factor pass
+ hook_show,      // show a value as a string
+ hook_net,       // the measure of a compound value (prel's `measure`), what C's truth asks
+ hook_flow,      // a port as a charlist (post.l's `flow`), the reader's port door
+ hook_cats,      // cats over a list no fast lane takes (prel's foldr of +)
+ hook_obin,      // an object tray's cells no C lane takes: a tray, a coin, a twin (prel's)
+ hook_n };
+
 struct g {
  union u *ip;
  word *hp, *sp;
@@ -320,16 +334,7 @@ struct g {
      stack,  // the books checked out, ours on top; the macro table is stack[zero]'s, and
              // love's `book` is this one's head. GC-forwarded in v0..end.
      scare_a, scare_b, // the last scare's condition data, stashed at the raise for
-     // hooks: lisp functions that C calls
-     hot_numap,   // 1: numeric application (church exponentiation)
-     hot_arrange,   // 2: church addition (prel's `arrange`)
-     hot_compose, // 3: composition (church multiplication)
-     hot_opfix,   // 4: the operator factor pass
-                  // 5 the help and 6 the stdio are the running task's, in its node
-     hot_show,    // 7: show a value as a string
-     hot_net,     // 8: the measure of a compound value (prel's `measure`), what C's truth asks
-     hot_flow,    // 9: a port as a charlist (post.l's `flow`), the reader's port door
-     hot_cats,    // 10: cats over a list no fast lane takes (prel's foldr of +)
+     hook[hook_n], // the hooks (enum hook)
      lib,        // the library: name -> book. `borrow` takes one onto the stack, `cite`
                  // reads one where it stands, `leave` checks the written one back in.
      errs,        // errno vocabulary: canonical number -> its nom; love_err reads it
@@ -415,7 +420,9 @@ lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_cask,
       lvm_yield_sw,
 // how a frontend nif ends the running task: stack down to one word (the retval), Ip at a
 // {lvm_task_exit} cell, `return Ap(lvm_task_exit, g)` -- catch reads the retval off the node.
-      lvm_task_exit;
+      lvm_task_exit,
+// a twirled task's quit where a task is a process: its worn fds close, then lvm_task_exit
+      lvm_task_quit;
 
 // the vtable every port backed by a real OS fd wears; the frontend defines it,
 // and its address is what says "there is an fd behind this one" (io_fd).
@@ -428,6 +435,7 @@ extern struct port_vt const closed_vt;
 // where the device lives. the writen is weak, so a link without horn.c still stands.
 extern struct port_vt const love_horn_vt;
 struct g *love_horn_writen(struct g*, unsigned char const*, uintptr_t);
+intptr_t love_horn_readn(struct g*, unsigned char*, uintptr_t);
 void love_horn_shut(struct io*);               // `close` on one: shut the device under it
 // the C face of the same device, for a program in the image with no love heap in hand.
 // 16-bit stereo, rate rides the open: open -> 0 | -1 no device; write -> bytes landed, 0
@@ -694,7 +702,7 @@ static love_inline uintptr_t rot(uintptr_t x) {
 // any value -> its enum q: KCharm for a fixnum, KHot for a non-data heap pointer, else
 // love_typ's rep, a tray refined by element tier (KTrayZ..KTrayO).
 enum q kind(word);
-extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
+extern union u const numap_drive[], obin_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
 lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox; // the data-kind sentinels (+ ap); defined in love.c, read by inline predicates and love_typ
 // recover a data value's rep from its ap: the sentinels tile one section at data_stride in
 // enum d order, so the slot is the kind. the base is lvm_sym, slot 0 -- no bracket owed.

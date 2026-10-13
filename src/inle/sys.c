@@ -262,15 +262,18 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
 // a process is a program in memory of its own -- a wasm instance; on metal, an address space
 // to come -- whose calls arrive at k_proc_call, from the seat that runs it. what the kernel
 // keeps of one: its pid and parent, its cwd, and its fds, each a kernel row it holds. the
-// kernel's own love is not one: its tasks are the threads of the machine, as before.
+// kernel's own love is not one: its tasks are the threads of the machine, as before. a
+// status is kept as wait4 lays it: an exit's code above the low byte, a signal in it.
 extern void k_fs_cwd_swap(char *cwd, uintptr_t *n);
 extern bool k_fd_blocks(int fd);
 extern int k_fd_term(int fd, int set, int *raw, uintptr_t *rows, uintptr_t *cols);
 extern bool k_ready(int fd, int events);
 
 #define k_proc_fds 64
-struct k_proc { int pid, ppid, live, status, exitw; uintptr_t cwd_n; char cwd[256];
-                int fd[k_proc_fds]; };              // the process's fd -> the kernel's, -1 none
+struct k_proc { int pid, ppid, live, status, exitw; uint64_t cx, nb; uintptr_t cwd_n; char cwd[256];
+                int fd[k_proc_fds]; };              // the process's fd -> the kernel's, -1 none;
+                                                    // cx: which close at its exec, nb: which
+                                                    // answer EAGAIN rather than wait
 static struct k_proc *k_procs;
 static int k_procs_n, k_pid_next = 2;               // pid 1 is the kernel's own answer
 
@@ -281,6 +284,8 @@ static int k_procs_n, k_pid_next = 2;               // pid 1 is the kernel's own
 __attribute__((weak)) long k_proc_start(long pid, char const *av, uintptr_t an,
                                         char const *ev, uintptr_t en) {
   return (void) pid, (void) av, (void) an, (void) ev, (void) en, -ENOSYS; }
+// ..and to end one where it stands, at a signal
+__attribute__((weak)) void k_proc_stop(long pid) { (void) pid; }
 
 static struct k_proc *k_proc_of(long pid) {
   for (int i = 0; i < k_procs_n; i++) if (k_procs[i].pid == pid) return &k_procs[i];
@@ -298,12 +303,15 @@ static struct k_proc *k_proc_slot(void) {
   k_procs = t, k_procs_n = m;
   return p; }
 
+static void k_pbit(uint64_t *m, long fd, bool on) { *m = on ? *m | 1ull << fd : *m & ~(1ull << fd); }
+static void k_pcx(struct k_proc *p, long fd, bool on) { k_pbit(&p->cx, fd, on); }
+
 // kernel row kf at the process's lowest free fd from `at` -> that fd; the row closed, and
 // -EMFILE, where there is none
-static long k_pfd_put(struct k_proc *p, long kf, long at) {
+static long k_pfd_put(struct k_proc *p, long kf, long at, bool cx) {
   if (kf < 0) return kf;
   for (long i = at < 0 ? 0 : at; i < k_proc_fds; i++)
-    if (p->fd[i] < 0) return p->fd[i] = (int) kf, i;
+    if (p->fd[i] < 0) return p->fd[i] = (int) kf, k_pcx(p, i, cx), k_pbit(&p->nb, i, 0), i;
   k_fd_close((int) kf);
   return -EMFILE; }
 
@@ -311,11 +319,30 @@ static long k_pfd(struct k_proc const *p, long fd) {
   return fd >= 0 && fd < k_proc_fds ? p->fd[fd] : -1; }
 
 // the end: every fd let go, the status kept for the reaper, and the exit pipe closed, which
-// is what wakes the task standing in for the process
+// is what wakes the task standing in for the process. its ended children go, the rest have
+// no one to wait for them, and neither does it when its own parent is gone
 static void k_proc_end(struct k_proc *p, int status) {
   for (int i = 0; i < k_proc_fds; i++) if (p->fd[i] >= 0) k_fd_close(p->fd[i]), p->fd[i] = -1;
-  p->live = 0, p->status = status;
-  if (p->exitw >= 0) k_fd_close(p->exitw), p->exitw = -1; }
+  p->live = 0, p->status = status, p->cx = p->nb = 0;
+  if (p->exitw >= 0) k_fd_close(p->exitw), p->exitw = -1;
+  for (int i = 0; i < k_procs_n; i++) {
+    struct k_proc *q = &k_procs[i];
+    if (q->pid && q != p && q->ppid == p->pid) q->live ? (q->ppid = 0) : (q->pid = 0); }
+  if (!p->ppid) p->pid = 0; }
+
+// start p's program: love, woken from the machine's image where there is one, on the words
+// h then t, each NUL-ended
+static long k_proc_go(struct k_proc *p, char const *h, uintptr_t hn, char const *t, uintptr_t tn,
+                      char const *ev, uintptr_t en) {
+  static char const wake[] = "love\0wake\0/proc/image";
+  struct k_st st;
+  uintptr_t pn = k_fs_stat("/proc/image", 11, &st, true) ? 5 : sizeof wake, n = pn + hn + tn;
+  char *b = kmallocw((n + sizeof(uintptr_t) - 1) / sizeof(uintptr_t));
+  if (!b) return -ENOMEM;
+  memcpy(b, wake, pn), memcpy(b + pn, h, hn), memcpy(b + pn + hn, t, tn);
+  long r = k_proc_start(p->pid, b, n, ev, en);
+  kfree(b);
+  return r; }
 
 // a new process on these words, its stdio the kernel rows in fds -> its pid, *wr the read
 // end of the pipe that ends when it does; -errno to refuse
@@ -335,7 +362,7 @@ long k_proc_new(char const *av, uintptr_t an, char const *ev, uintptr_t en,
     long kf = k_fd_dup(fds[i], 3);
     if (kf < 0) r = kf;
     else p->fd[i] = (int) kf; }
-  if (!r) r = k_proc_start(p->pid, av, an, ev, en);
+  if (!r) r = k_proc_go(p, av, an, "", 0, ev, en);
   if (r) {
     k_proc_end(p, 0);
     if (w[0] >= 0) k_fd_close(w[0]);
@@ -344,13 +371,55 @@ long k_proc_new(char const *av, uintptr_t an, char const *ev, uintptr_t en,
   *wr = w[0];
   return k_pid_next++; }
 
-// pid's status once it has ended, its slot freed -> the status, -EAGAIN while it runs
+// pid's status once it has ended, its slot freed -> the status as a shell reads it,
+// -EAGAIN while it runs
 long k_proc_reap(long pid) {
   struct k_proc *p = k_proc_of(pid);
   if (!p) return -ECHILD;
   if (p->live) return -EAGAIN;
   p->pid = 0;
-  return p->status; }
+  return p->status & 0x7f ? 128 + (p->status & 0x7f) : p->status >> 8 & 255; }
+
+// a child's fds, posix_spawn's actions applied: (op fd src) triples, 1 a dup2 and 2 a close;
+// then what is close-on-exec goes, as an exec would let it
+static long k_proc_acts(struct k_proc *q, int const *op, long n) {
+  for (long i = 0; i < n; i++, op += 3) {
+    int fd = op[1], src = op[2];
+    if (fd < 0 || fd >= k_proc_fds) return -EBADF;
+    if (op[0] == 2) { if (q->fd[fd] >= 0) k_fd_close(q->fd[fd]), q->fd[fd] = -1, k_pcx(q, fd, 0); continue; }
+    if (op[0] != 1 || src < 0 || src >= k_proc_fds || q->fd[src] < 0) return -EBADF;
+    if (src != fd) {
+      long kf = k_fd_dup(q->fd[src], 3);
+      if (kf < 0) return kf;
+      if (q->fd[fd] >= 0) k_fd_close(q->fd[fd]);
+      q->fd[fd] = (int) kf;
+      k_pbit(&q->nb, fd, q->nb >> src & 1); }
+    k_pcx(q, fd, 0); }
+  for (int i = 0; i < k_proc_fds; i++)
+    if (q->cx >> i & 1 && q->fd[i] >= 0) k_fd_close(q->fd[i]), q->fd[i] = -1;
+  q->cx = 0;
+  return 0; }
+
+// a child of p: the words at w (the file, then argv), the environment at ev, the actions at
+// op -> its pid. the file names the program; argv[0] is not passed on, love's words are
+static long k_proc_spawn(long pid, char const *w, long wn, char const *ev, long en,
+                         int const *op, long on) {
+  if (!w || wn < 1 || w[wn - 1] || (en && (!ev || ev[en - 1]))) return -EINVAL;
+  long fn = (long) strlen(w) + 1, rest = fn < wn ? fn + (long) strlen(w + fn) + 1 : wn;
+  struct k_proc *q = k_proc_slot(), *p = k_proc_of(pid);   // the slot may move the table
+  if (!q) return -ENOMEM;
+  *q = (struct k_proc) { .pid = k_pid_next, .ppid = p->pid, .live = 1, .exitw = -1,
+                         .cx = p->cx, .nb = p->nb, .cwd_n = p->cwd_n };
+  memcpy(q->cwd, p->cwd, p->cwd_n);
+  long r = 0;
+  for (int i = 0; i < k_proc_fds; i++) {
+    long kf = p->fd[i] < 0 || r ? -1 : k_fd_dup(p->fd[i], 3);
+    if (kf < -1) r = kf;
+    q->fd[i] = kf < 0 ? -1 : (int) kf; }
+  if (!r) r = k_proc_acts(q, op, on / 12);
+  if (!r) r = k_proc_go(q, w, (uintptr_t) fn, w + rest, (uintptr_t) (wn - rest), ev, (uintptr_t) en);
+  if (r) { q->ppid = 1, k_proc_end(q, 0), q->pid = 0; return r; }
+  return k_pid_next++; }
 
 // a terminal's control for a process: the console and a pty answer, keeping no more than
 // raw or cooked and their size; every other row is not a terminal
@@ -386,39 +455,68 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
   if (!p || !p->live) return -ESRCH;
   long kf = k_pfd(p, a), r;
   switch (n) {
-   case NR_exit: case NR_exit_group: k_proc_end(p, (int) (a & 255)); return 0;
+   case NR_exit: case NR_exit_group: k_proc_end(p, (int) (a & 255) << 8); return 0;
    case NR_getpid: return p->pid;
+   case 110: return p->ppid ? p->ppid : 1;           // getppid: an orphan's is the kernel
+   case NR_inle_spawn:
+    return k_proc_spawn(pid, (char const*) a, b, (char const*) c, d, (int const*) e, f);
+   case NR_wait4: {                                  // a child, or any; WNOHANG asks without waiting
+    bool kids = false;
+    for (int i = 0; i < k_procs_n; i++) {
+     struct k_proc *q = &k_procs[i];
+     if (!q->pid || q == p || q->ppid != p->pid || (a > 0 && q->pid != a)) continue;
+     if (q->live) { kids = true; continue; }
+     if (b) *(int*) b = q->status;
+     r = q->pid, q->pid = 0;
+     return r; }
+    return !kids ? -ECHILD : c & 1 ? 0 : K_RESTART; }
+   case NR_kill: {                                   // a group is its leader's pid
+    struct k_proc *q = !a ? p : k_proc_of(a < 0 ? -a : a);
+    if (!q || !q->live) return -ESRCH;
+    if (b < 0 || b > 64) return -EINVAL;
+    if (!b || b == 17 || b == 18 || b == 28 || (19 <= b && b <= 23)) return 0;   // none ends it
+    k_proc_stop(q->pid);
+    k_proc_end(q, (int) b);
+    return 0; }
    case NR_mmap: case NR_munmap: case NR_mprotect: return -ENOSYS;   // its memory is its own
    case NR_read:
     if (kf < 0) return -EBADF;
-    return k_fd_blocks((int) kf) ? K_RESTART : k_fd_read((int) kf, (void*) b, c);
+    if (k_fd_blocks((int) kf)) return p->nb >> a & 1 ? -EAGAIN : K_RESTART;
+    return k_fd_read((int) kf, (void*) b, c);
    case NR_write:
     if (kf < 0) return -EBADF;
     r = k_fd_write((int) kf, (void const*) b, c);
-    return !r && c > 0 ? K_RESTART : r;
+    return !r && c > 0 ? (p->nb >> a & 1 ? -EAGAIN : K_RESTART) : r;
    case NR_close:
     if (kf < 0) return -EBADF;
-    p->fd[a] = -1;
+    p->fd[a] = -1, k_pcx(p, a, 0), k_pbit(&p->nb, a, 0);
     return k_fd_close((int) kf);
    case NR_lseek: case NR_ftruncate: case NR_fstat: case NR_getdents64:
     return kf < 0 ? -EBADF : __love_inle(n, kf, b, c, d, e, f);
    case NR_fcntl:
     if (kf < 0) return -EBADF;
-    if (b == F_DUPFD || b == F_DUPFD_CLOEXEC) return k_pfd_put(p, k_fd_dup((int) kf, 3), c);
+    if (b == F_DUPFD || b == F_DUPFD_CLOEXEC) return k_pfd_put(p, k_fd_dup((int) kf, 3), c, b != F_DUPFD);
+    if (b == F_GETFD) return p->cx >> a & 1;
+    if (b == F_SETFL) return k_pbit(&p->nb, a, c & O_NONBLOCK), 0;
+    if (b == F_GETFL) {
+     r = __love_inle(n, kf, b, c, d, e, f);
+     return r < 0 ? r : (r & ~O_NONBLOCK) | (p->nb >> a & 1 ? O_NONBLOCK : 0); }
+    if (b == F_SETFD) return k_pcx(p, a, c & FD_CLOEXEC), 0;
     return __love_inle(n, kf, b, c, d, e, f);
    case NR_dup3:
     if (kf < 0 || b < 0 || b >= k_proc_fds) return -EBADF;
-    if (a == b || c) return -EINVAL;
+    if (a == b || c & ~O_CLOEXEC) return -EINVAL;
     if ((r = k_fd_dup((int) kf, 3)) < 0) return r;
     if (p->fd[b] >= 0) k_fd_close(p->fd[b]);
-    return p->fd[b] = (int) r, b;
+    return p->fd[b] = (int) r, k_pcx(p, b, c), k_pbit(&p->nb, b, p->nb >> a & 1), b;
    case NR_pipe2: {
     if (!a) return -EFAULT;
-    if (b) return -EINVAL;
+    if (b & ~(O_CLOEXEC | O_NONBLOCK)) return -EINVAL;
     int k[2];
     if ((r = k_fd_pipe(k))) return r;
-    long r0 = k_pfd_put(p, k[0], 0), r1 = r0 < 0 ? (k_fd_close(k[1]), r0) : k_pfd_put(p, k[1], 0);
+    long r0 = k_pfd_put(p, k[0], 0, b & O_CLOEXEC), r1 = r0 < 0 ? (k_fd_close(k[1]), r0) : k_pfd_put(p, k[1], 0, b & O_CLOEXEC);
     if (r1 < 0) { if (r0 >= 0) p->fd[r0] = -1, k_fd_close(k[0]); return r1; }
+    k_pbit(&p->nb, r0, b & O_NONBLOCK), k_pbit(&p->nb, r1, b & O_NONBLOCK);
     ((int*) a)[0] = (int) r0, ((int*) a)[1] = (int) r1;
     return 0; }
    case NR_ioctl: return kf < 0 ? -EBADF : k_proc_ioctl(p, (int) kf, (unsigned long) b, (void*) c);
@@ -440,5 +538,6 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
     k_fs_cwd_swap(p->cwd, &p->cwd_n);
     r = __love_inle(n, a, b, c, d, e, f);
     k_fs_cwd_swap(p->cwd, &p->cwd_n);
-    if (n == NR_openat && r >= 0) r = k_pfd_put(p, r, 0);
+    if (n == NR_openat && r >= 0 && (r = k_pfd_put(p, r, 0, c & O_CLOEXEC)) >= 0)
+     k_pbit(&p->nb, r, c & O_NONBLOCK);
     return r; } }

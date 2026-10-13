@@ -203,8 +203,8 @@
    (featdefs tgt)
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
-     + (tgt = 'x64 ? () '("__STDC_NO_COMPLEX__=1"))
-     + (elem tgt '(x64 a64) ? () '("__STDC_NO_VLA__=1")))
+     + (elem tgt '(x64 i386 i386m16) ? () '("__STDC_NO_COMPLEX__=1"))
+     + (elem tgt '(x64 a64 i386 i386m16) ? () '("__STDC_NO_VLA__=1")))
    ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) -- the
    ; <stdint>/<limits>/<float.h> family a library config reads instead of probing. one table
    ; forked on the word width (+ the wchar fork), every value gcc's own spelling on that
@@ -838,15 +838,15 @@
    ; identity is the carried source, and a disk home serves iff its slice hashes to the
    ; stamped id (a laid seed tree does; an edited dev tree does not, and falls through to the
    ; compile).
-   ; the refusal is the target's, not the kernel's. one archive per ISA, all three cut
+   ; the refusal is the target's, not the kernel's. one archive per ISA, all four cut
    ; under -os linux, and that pin does not reach the bytes: impl.h parts the kernels at run
    ; time on __love_osv, and os.c, the only member with an OS predefine in it, sits under
-   ; #ifndef LvOsTranslate. riscv is where that stops -- no translation tables, so os.c reads
+   ; #ifndef LvOsTranslate. riscv and i386 are where that stops -- no translation tables, so os.c reads
    ; -os and only linux has an answer; the BSDs there owe a compile, which refuses by #error.
    (rtcarried home tgt os)
     (? (os = 'none) ()                                     ; freestanding owes no runtime
-       (tgt = 'rv64 && elem os '(freebsd netbsd)) ()
-       (elem tgt '(x64 a64 rv64) && string tgt @ nm
+       (elem tgt '(rv64 i386) && elem os '(freebsd netbsd)) ()
+       (elem tgt '(x64 a64 rv64 i386) && string tgt @ nm
           (!(string? nm) ? ()
              (runtime-gz nm @ z
                 (!(string? z) ? ()
@@ -1006,7 +1006,7 @@
         0))
    (cc-link ins dst t) (t 'tgt @ 'wasm (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
-                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo}))
+                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs}))
     ; a BSD links where mksys lays the translation tail (impl.h's LvOsTranslate):
     ; x64 and a64. elsewhere os.c has no tables for it, so it is refused here
     (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64))
@@ -1023,6 +1023,7 @@
        ; core boots from, and no crt0 rides first: the first text byte is the vector table.
        arm? (arm32? tgt)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
+       _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a 64-bit target")
        _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
        ; the two ways --emit-relocs cannot be answered, said here rather than left to the
        ; linker: a 64-bit seat has its own table under -pie, and thumb2's `la` is a MOVW/MOVT
@@ -1040,20 +1041,23 @@
                             ['copy dorg 'data 'bss]]
                            [['at org 'text 'rodata 'data 'nifs 'bss]])
        c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 crt0)   ; x64's serves both kernels
-       all (arm? ? srcs
+       all (arm? || so ? srcs
                    (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
-       set (lib + rtpull lib tgt os nostd vb)
-       ps (arm? ? (ldbare32 tgt runs set () relo)
-                  (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
+       ; a shared object pulls no runtime: what it owes it imports, from the -l libraries
+       set (so ? lib (lib + rtpull lib tgt os nostd vb))
+       prod ("love " + <(usplit 43 love-version))
+       ps (? arm? (ldbare32 tgt runs set () relo)
+             so (ldshared tgt (last (usplit 47 dst)) (map (l \ "lib" + l + ".so") libs) set prod)
+             (ldlink tgt pie org set prod rdme))
        ; the ei_osabi = 9 brand (rung UV3) is ldlink's, laid where the header is made:
        ; one linker, one place, so kore's `ld` and this driver cannot disagree.
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [--emit-relocs] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [--emit-relocs] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
@@ -1077,7 +1081,7 @@
    ; the cc-driver tolerance: every cc accepts the advisory families -- warnings, -O, -g,
    ; -pipe, -std= (we speak the one dialect we speak), -static (the output already is), the
    ; -f codegen-hygiene family -- so `CC=mooncc` drives a make recipe written for gcc/clang
-   ; unchanged. what would change the artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp,,
+   ; unchanged. what would change the artifact stays loud: -m.., and -Wl,/-Wa,/-Wp,,
    ; whose payload is real arguments.
    ; -lm and its family ride through too: the driver pulls its runtime by need, so the
    ; libc/libm/libdl a recipe asks for is already in the artifact before it asks. a name we
@@ -1153,7 +1157,7 @@
    ; would answer the zero point. the literal has to be complete and is wanted at two sites,
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
@@ -1161,7 +1165,8 @@
     (as @ ()
           (pins t 'is (rev (t 'is))
                   'ds (rev (t 'ds))
-                  'ins (rev (t 'ins)))
+                  'ins (rev (t 'ins))
+                  'libs (rev (t 'libs)))
           ("-c" . r) (flags r (pin t 'c 1))
           ("-E" . r) (flags r (pin t 'E 1))
           ; the same string love answers, because they are one artifact: mooncc is a
@@ -1172,6 +1177,10 @@
           (("--help" || "-h") . _)
            (puts usage, putc 10, flush out, uleave 0)
           ("-pie" . r) (flags r (pin t 'pie 1))
+          ; -shared: an et_dyn whose undefined names are imports, -lNAME naming the
+          ; library each comes from (a DT_NEEDED libNAME.so). without -shared, -l rides through
+          ("-shared" . r) (flags r (pin t 'so 1))
+          ((("-l" + w) . r) && #w) (flags r (fpush t 'libs w))
           ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
           ; linked image, so a loader placing it at a base of its own can slide them.
           ; the arm32 lane only -- ldlink's -pie answers this on the 64-bit seats.

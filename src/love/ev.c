@@ -171,7 +171,7 @@ static love_noinline struct g *c0(struct g *g, lvm_t *y) {
  // source): skipped, which also terminates the recursion through eval.
  { word x0 = g->sp[0];
    if (chainp(x0) && (!evenp(A(x0)) || datp(A(x0)))) {
-    word of = g->hot_opfix;                      // sealed: a book rebind can't reach this lane;
+    word of = g->hook[hook_opfix];                      // sealed: a book rebind can't reach this lane;
     if (evenp(of)) {                              // pre-seal (mid-prel bootstrap) it is zero and
                                                  // the pass skips -- everything there is prefix
      g = eval(gxr(gxl(gxl(pushq(gxl(push(g, 4, x0, zero, zero, of)))))));
@@ -567,7 +567,7 @@ static love_inline Ana(ana_2, word a, word b) {
   // the expansion is source again: it takes the opfix prepass a read form took, so a binder
   // a macro built (:- is one) lowers its patterns like one the reader saw. the same guard as
   // c0's: a lambda-headed chain is a constructed application, and pre-seal the pass is zero
-  word e = ok(g) ? g->sp[0] : 0, of = core_of(g)->hot_opfix;
+  word e = ok(g) ? g->sp[0] : 0, of = core_of(g)->hook[hook_opfix];
   if (chainp(e) && (!evenp(A(e)) || datp(A(e))) && evenp(of)) {
    g = eval(gxr(gxl(gxl(pushq(gxl(push(g, 4, e, zero, zero, of)))))));
    if (ok(g)) g->sp[1] = g->sp[0], g->sp += 1; }
@@ -774,6 +774,8 @@ static lvm(ap_next) {
  word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t;
  love_musttail return Ap(lvm_ap, g); }
 union u const numap_drive[] = { {lvm_ap}, {.ap = ap_next}, {.ap = lvm_ret0} };
+// ..and over four arguments, for hook_obin: [k hook as bs sh ret]
+union u const obin_drive[] = { {lvm_ap}, {.ap = ap_next}, {.ap = ap_next}, {.ap = ap_next}, {.ap = lvm_ret0} };
 
 // --- the stackless call-out bridge (the glaze call-out arc) ---
 // a native blob applies clos to arg the way the VM does: build [arg, clos, RET] on
@@ -989,37 +991,29 @@ lvm(lvm_index) {
  Unpack(g); love_musttail return Ap(self, g); }
 static lvm(lvm_numap) {
  NumapHave(lvm_numap);
- word h = hot_hook(g->hot_numap);
+ word h = hot_hook(g->hook[hook_numap]);
  word n = Sp[1], x = Sp[0], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; love_musttail return Continue(); }
 static lvm(lvm_numtap) {
  NumapHave(lvm_numtap);
- word h = hot_hook(g->hot_numap);
+ word h = hot_hook(g->hook[hook_numap]);
  word fs = getcharm(Ip[1].x), n = Sp[1], x = Sp[0], *dst = &Sp[fs + 2] - 3, ret = Sp[fs + 2];
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; love_musttail return Continue(); }
 
-// (seal-hook n f): install f as core hook n (1 num-ap, 2 stack, 3 compose,
-// 4 opfix, 5 the help, 6 the task's stdio, 7 show, 8 measure, 9 flow, 10 cats). 5 and 6 are the dynamic slots and
-// alone skip the lambda gate -- 5 takes a help or (), 6 a 3-chain or (); anything else
-// traps. a switch, not a table: a slot[] would be an address-taken local (the lvm
-// scratch rule).
+// (seal-hook n f): install f as hook n (enum hook), behind the lambda gate; -1 the task's help
+// (a help or ()) and -2 its stdio (a 3-chain or ()) skip it. any other n traps.
 lvm(lvm_seal) {
- if (getcharm(Sp[0]) != 5 && getcharm(Sp[0]) != 6 && !evenp(Sp[1])) __builtin_trap();   // the two dynamic slots alone skip the gate
- Pack(g);                        // 5 and 6 store into the node, and their barrier reads g->hp
- switch (getcharm(Sp[0])) {
-  case 1: g->hot_numap = Sp[1]; break;
-  case 2: g->hot_arrange = Sp[1]; break;
-  case 3: g->hot_compose = Sp[1]; break;
-  case 4: g->hot_opfix = Sp[1]; break;
-  case 5: *task_help(g) = Sp[1], gen_wb_cell(g, task_help(g), Sp[1]); break;
-  case 6: *task_io(g) = chainp(Sp[1]) ? Sp[1] : ZeroPoint, gen_wb_cell(g, task_io(g), *task_io(g)); break;   // anything but a chain hands the console back
-  case 7: g->hot_show = Sp[1]; break;
-  case 8: g->hot_net = Sp[1]; break;
-  case 9: g->hot_flow = Sp[1]; break;
-  case 10: g->hot_cats = Sp[1]; break;
-  default: __builtin_trap(); }
+ intptr_t n = getcharm(Sp[0]);
+ if (n >= 0 && n < hook_n) {
+  if (!evenp(Sp[1])) __builtin_trap();
+  g->hook[n] = Sp[1]; }
+ else {
+  Pack(g);                        // the task's two store into its node, and their barrier reads g->hp
+  if (n == -1) *task_help(g) = Sp[1], gen_wb_cell(g, task_help(g), Sp[1]);
+  else if (n == -2) *task_io(g) = chainp(Sp[1]) ? Sp[1] : ZeroPoint, gen_wb_cell(g, task_io(g), *task_io(g));   // anything but a chain hands the console back
+  else __builtin_trap(); }
  Sp += 1, Sp[0] = zero, Ip += 1;
  love_musttail return Continue(); }
 
@@ -1029,14 +1023,14 @@ lvm(lvm_seal) {
 lvm(lvm_addh) {
  if (coinp(Sp[0]) || coinp(Sp[1])) love_musttail return Ap(lvm_add_coin, g);
  Have(2);
- word h = hot_hook(g->hot_arrange);
+ word h = hot_hook(g->hook[hook_arrange]);
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = fa, dst[1] = h, dst[2] = ga, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; love_musttail return Continue(); }
 lvm(lvm_mulh) {
  if (coinp(Sp[0]) || coinp(Sp[1])) love_musttail return Ap(lvm_mul_coin, g);
  Have(2);
- word h = hot_hook(g->hot_compose);
+ word h = hot_hook(g->hook[hook_compose]);
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = fa, dst[1] = h, dst[2] = ga, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; love_musttail return Continue(); }
@@ -1356,7 +1350,7 @@ lvm(lvm_argcond) {
  if (__builtin_expect(!charmp(x) && !leafp(x), 0)) {
   Have(4);
   word *dst = Sp - 4;
-  dst[0] = Sp[getcharm(Ip[1].x)], dst[1] = hot_hook(g->hot_net), dst[2] = word(argcond_land), dst[3] = word(Ip);
+  dst[0] = Sp[getcharm(Ip[1].x)], dst[1] = hot_hook(g->hook[hook_net]), dst[2] = word(argcond_land), dst[3] = word(Ip);
   Sp = dst; Ip = (union u*) callout_drive; love_musttail return Continue(); }
  Ip = leaf_nilp(x) ? Ip[2].m : Ip + 3; love_musttail return Continue(); }
 // ... and the rung above: load + predicate + cond, all three in one op. measured, this
