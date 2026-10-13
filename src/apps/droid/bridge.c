@@ -5,7 +5,7 @@
    the wire, little-endian:
      love -> bridge  'F' u16 w u16 h u16 y u16 n, then n*w words 0x00rrggbb: rows y.. of a
                      w by h frame, scaled to what the window shows
-                     'I' u8 on: the soft keyboard up (and again at each touch) or down
+                     'I' u8 on: the soft keyboard up, then toggled at each touch, or down
      bridge -> love  12-byte records (u8 kind, u8 a, u16 0, i32 b, i32 c):
                      'S' the window's visible part, b by c pixels
                      'K' key a=down, b=android keycode, c=the character it types or 0
@@ -39,7 +39,7 @@ int ANativeWindow_setBuffersGeometry(void *, int, int, int);
 int ANativeWindow_getWidth(void *); int ANativeWindow_getHeight(void *);
 int ANativeWindow_lock(void *, ANativeWindow_Buffer *, void *);
 int ANativeWindow_unlockAndPost(void *);
-void ANativeActivity_finish(void *); void ANativeActivity_showSoftInput(void *, unsigned); void ANativeActivity_hideSoftInput(void *, unsigned);
+void ANativeActivity_finish(void *);
 void *ALooper_prepare(int); int ALooper_addFd(void *, int, int, int, void *, void *);
 int ALooper_removeFd(void *, int); int ALooper_pollOnce(int, int *, int *, void **); void ALooper_wake(void *);
 void AInputQueue_attachLooper(void *, void *, int, void *, void *); void AInputQueue_detachLooper(void *);
@@ -72,7 +72,7 @@ enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_CLOEXEC = 02000000 };
 
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
-  int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, top, vh, typing;
+  int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, vh, typing;
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
   long th; long mu[8];                    /* pthread_t, pthread_mutex_t (zero is unlocked) */
   uint32_t *fb; size_t fbsz; int gh;      /* a frame as love sent it, the window's buffer height */
@@ -144,6 +144,50 @@ static int frame(br *b) {
   return 0;
 }
 
+/* the soft keyboard, through the InputMethodManager: android 12 ignores NativeActivity's own
+   ask, its view being no text editor, but takes a toggle; down is a hide from the window */
+static void keyboard(br *b, int on) {
+  void *e = b->env; if (!e) return;
+  void *const *t = *(void *const **) e;
+  void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
+  void *(*callo)(void *, void *, void *, ...) = t[34]; void (*callv)(void *, void *, void *, ...) = t[61];
+  int (*callz)(void *, void *, void *, ...) = t[37];
+  void *(*str)(void *, char const *) = t[167]; void (*clear)(void *) = t[17];
+  int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
+  if (push(e, 16)) { clear(e); return; }
+  void *ac = b->a->clazz;
+  void *imm = callo(e, ac, mid(e, cls(e, ac), "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;"), str(e, "input_method"));
+  if (imm && on) callv(e, imm, mid(e, cls(e, imm), "toggleSoftInput", "(II)V"), 2, 0);
+  else if (imm) {
+    void *w = callo(e, ac, mid(e, cls(e, ac), "getWindow", "()Landroid/view/Window;"));
+    void *v = w ? callo(e, w, mid(e, cls(e, w), "getDecorView", "()Landroid/view/View;")) : 0;
+    void *tok = v ? callo(e, v, mid(e, cls(e, v), "getWindowToken", "()Landroid/os/IBinder;")) : 0;
+    if (tok) callz(e, imm, mid(e, cls(e, imm), "hideSoftInputFromWindow", "(Landroid/os/IBinder;I)Z"), tok, 0);
+  }
+  clear(e); pop(e, 0);
+}
+
+/* the part the soft keyboard leaves, asked of the decor view's insets (ime, 8) while love
+   types: a whole screen's window is not resized for it. a change goes to love as its size */
+static void insets(br *b) {
+  void *e = b->env; if (!e || !b->ww) return;
+  void *const *t = *(void *const **) e;
+  void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
+  void *(*callo)(void *, void *, void *, ...) = t[34]; void *(*fid)(void *, void *, char const *, char const *) = t[94];
+  int (*geti)(void *, void *, void *) = t[100]; void (*clear)(void *) = t[17];
+  int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
+  if (push(e, 16)) { clear(e); return; }
+  void *ac = b->a->clazz, *w = callo(e, ac, mid(e, cls(e, ac), "getWindow", "()Landroid/view/Window;"));
+  void *v = w ? callo(e, w, mid(e, cls(e, w), "getDecorView", "()Landroid/view/View;")) : 0;
+  void *wi = v ? callo(e, v, mid(e, cls(e, v), "getRootWindowInsets", "()Landroid/view/WindowInsets;")) : 0;
+  void *in = wi ? callo(e, wi, mid(e, cls(e, wi), "getInsets", "(I)Landroid/graphics/Insets;"), 8) : 0;
+  int bot = in ? geti(e, in, fid(e, cls(e, in), "bottom", "I")) : -1;
+  clear(e); pop(e, 0);
+  if (bot < 0 || bot >= b->wh || b->wh - bot == vis(b)) return;
+  pthread_mutex_lock(b->mu); b->vh = b->wh - bot; paint(b); pthread_mutex_unlock(b->mu);
+  put(b, 'S', 0, b->ww, vis(b));
+}
+
 /* what a key types: KeyCharacterMap.load(device).get(code, meta), through JNIEnv's table */
 static int typed(br *b, void const *ev) {
   void *e = b->env; if (!e) return 0;
@@ -180,10 +224,10 @@ static void input(br *b) {
     } else {
       int ac = AMotionEvent_getAction(e) & 0xff, vh = vis(b);
       int t = ac == 0 || ac == 5 ? 0 : ac == 1 || ac == 6 || ac == 3 ? 1 : 2;
-      if (t == 0 && b->typing) ANativeActivity_showSoftInput(b->a, 2);
+      if (t == 0 && b->typing) keyboard(b, 1);
       if (b->ww && vh && b->fw)
         put(b, 'T', t, (int) (AMotionEvent_getX(e, 0) * (float) b->fw / (float) b->ww),
-                       (int) ((AMotionEvent_getY(e, 0) - (float) b->top) * (float) b->fh / (float) vh));
+                       (int) (AMotionEvent_getY(e, 0) * (float) b->fh / (float) vh));
     }
     AInputQueue_finishEvent(b->queue, e, handled);
   }
@@ -239,7 +283,8 @@ static void *loop(void *p) {
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
-    int id = ALooper_pollOnce(-1, &fd, &ev, &d);
+    int id = ALooper_pollOnce(b->typing ? 200 : -1, &fd, &ev, &d);
+    if (b->typing) insets(b);
     if (id == LISTEN) {
       int c = accept4(b->lsock, 0, 0, O_CLOEXEC);
       if (c >= 0 && b->csock < 0) {
@@ -251,8 +296,7 @@ static void *loop(void *p) {
       int bad = readall(b->csock, &k, 1);
       if (!bad && k == 'I') {
         bad = readall(b->csock, &on, 1);
-        if (!bad && (b->typing = on)) ANativeActivity_showSoftInput(b->a, 2);
-        else if (!bad) ANativeActivity_hideSoftInput(b->a, 0);
+        if (!bad) keyboard(b, b->typing = on);
       } else if (!bad) bad = k != 'F' || frame(b);
       if (bad) {
         ALooper_removeFd(b->looper, b->csock);
@@ -334,13 +378,7 @@ static void created(void *a, void *w) {
   pthread_mutex_unlock(b->mu);
   put(b, 'S', 0, b->ww, vis(b));
 }
-/* the part the soft keyboard leaves: its height goes to love as the window's */
-typedef struct { int left, top, right, bottom; } ARect;
-static void rect(void *a, void const *r) {
-  br *b = me(a); ARect const *c = r;
-  pthread_mutex_lock(b->mu); b->top = c->top; b->vh = c->bottom - c->top; paint(b); pthread_mutex_unlock(b->mu);
-  if (b->ww) put(b, 'S', 0, b->ww, vis(b));
-}
+
 static void gone(void *a, void *w) {
   br *b = me(a);
   pthread_mutex_lock(b->mu); b->win = 0; pthread_mutex_unlock(b->mu);
@@ -375,7 +413,6 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   a->callbacks->onNativeWindowCreated = created; a->callbacks->onNativeWindowDestroyed = gone;
   a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
   a->callbacks->onDestroy = destroy; a->callbacks->onWindowFocusChanged = focus;
-  a->callbacks->onContentRectChanged = rect;
   immersive(a);
   struct sockaddr_un u = {1}; snprintf(u.path, sizeof u.path, "%s", b->sock);
   unlink(b->sock);

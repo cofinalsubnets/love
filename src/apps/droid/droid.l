@@ -79,7 +79,7 @@
                       [1 "extractNativeLibs" 'bool 1]]
          [["activity" [[1 "name" 'str "android.app.NativeActivity"] [1 "exported" 'bool 1]
                       [1 "configChanges" 'hex 0x4a0]                   ; orientation keyboardHidden screenSize
-                     [1 "windowSoftInputMode" 'hex 0x10]]             ; adjustResize: the keyboard shrinks the content
+                     [1 "windowSoftInputMode" 'hex 0x10]]             ; adjustResize: the keyboard never pans the window
             [["meta-data" [[1 "name" 'str "android.app.lib_name"] [1 "value" 'str "bridge"]] ()]
              ["intent-filter" ()
                [["action" [[1 "name" 'str "android.intent.action.MAIN"]] ()]
