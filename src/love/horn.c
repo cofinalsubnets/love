@@ -336,11 +336,13 @@ static intptr_t sock_land(int fd, unsigned char const *src, uintptr_t n) {
 static uintptr_t sock_lag(int fd) {
  int q = 0;
  return ioctl(fd, 0x5411, &q) < 0 ? 0 : (uintptr_t) q / 4; }
+static void sock_shut(int fd) { close(fd); }
 #else
 #define horn_sockdoor 0
 static int sock_open(char const *path, int rate, int *err) { return *err = ENODEV, -1; }
 static intptr_t sock_land(int fd, unsigned char const *src, uintptr_t n) { return -1; }
 static uintptr_t sock_lag(int fd) { return 0; }
+static void sock_shut(int fd) { (void) fd; }
 #endif
 static int horn_sock_name(char const *dev) { return horn_sockdoor && dev && !strncmp(dev, "sock:", 5); }
 
@@ -467,7 +469,7 @@ static int horn_c_fd = -1, horn_c_sock;
 int love_horn_open(int rate) {
  if (horn_at_seat) return k_horn_open(rate);
 #if !love_horn_seat
- if (horn_c_fd >= 0 && horn_c_sock) close(horn_c_fd);
+ if (horn_c_fd >= 0 && horn_c_sock) sock_shut(horn_c_fd);
  else if (horn_c_fd >= 0) dev_shut(horn_c_fd);
  char const *dev = getenv("HORN");
  if (dev && !*dev) dev = NULL;
@@ -494,7 +496,7 @@ __attribute__((weak)) void love_horn_tap(unsigned char const *pcm, uintptr_t fra
 
 void love_horn_close(void) {
  if (horn_at_seat) { k_horn_close(); return; }
- if (horn_c_fd >= 0 && horn_c_sock) close(horn_c_fd);
+ if (horn_c_fd >= 0 && horn_c_sock) sock_shut(horn_c_fd);
  else if (horn_c_fd >= 0) dev_shut(horn_c_fd);
  horn_c_fd = -1; }
 
@@ -565,7 +567,7 @@ static void horn_fin(struct g *g, void *p) {
  int kind = (int) getcharm(h->kind);
  intptr_t fd = getcharm(h->b.f.fd);
  if (kind == horn_dev && fd >= 0) dev_shut((int) fd);
- else if (kind == horn_sock && fd >= 0) close((int) fd);
+ else if (kind == horn_sock && fd >= 0) sock_shut((int) fd);
  else if (kind == horn_seat) k_horn_close();
  h->b.f.fd = putcharm(-1);
  h->kind = putcharm(horn_sink); }
@@ -611,7 +613,7 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
 #endif
  uintptr_t const n = Width(struct horn);
  if (!ok(g = have(g, n + Width(struct tag) + Width(struct fz) + 1))) {
-  if (kind == horn_dev) dev_shut(fd); else if (kind == horn_sock) close(fd); else if (kind == horn_seat) k_horn_close();
+  if (kind == horn_dev) dev_shut(fd); else if (kind == horn_sock) sock_shut(fd); else if (kind == horn_seat) k_horn_close();
   return g; }
  union u *k = bump(g, n + Width(struct tag));
  struct horn *h = (struct horn*) k;
