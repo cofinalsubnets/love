@@ -5,7 +5,7 @@
 ;   (moor bx m dirty)         m's bytes through the screen in box bx, its replies back up m,
 ;                             until m hangs up; dirty (when given) is set at each gulp
 ;   (moor-to bx m w dirty)    the same, the replies up w: a terminal whose way in is not its
-;                             way out (porthole's pipes)
+;                             way out (a window's pipes)
 ;   (waitfor pid)             the child's status pair, or a nom
 ;   hbox hmas hpid            a pane's box, master and pid
 (module '(mooring hopen hname-of moor moor-to waitfor hbox hmas hpid)

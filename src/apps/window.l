@@ -1,5 +1,6 @@
 ; src/apps/window.l -- a window: pixels out, input events in, the same face on X and on inle.
 ;
+;   (window-here? _)          whether there is a screen to open one on
 ;   (window-open w h title)   a window, or a nom: 'no-display 'refused 'no-paper
 ;   (window-paper win)        its paper: a cask of w x h 32-bit pixels, 0x00rrggbb, the form
 ;                             src/love/quay/paint.c lays and `dye` paints into
@@ -18,7 +19,7 @@
 ; w h are the screen's whatever was asked. a tablet of 'w 'h 'paper alone is a window with
 ; no screen, a law's: it shows nothing, and its events are what was left in its 'evq. off
 ; X a selection is the window's own, held and given back.
-(module '(window window-open window-paper window-size window-show window-events window-close
+(module '(window window-here? window-open window-paper window-size window-show window-events window-close
           window-own window-ask)
 (borrow 'xwire)
 (borrow 'posix)
@@ -45,6 +46,7 @@
    (inle-open-win _)
     (kpaper 1 @ wh
        (two? wh ? {'how 'inle 'w <wh 'h (wh 1) 'paper (cask (<wh * wh 1 * 4))} 'no-paper))
+   (window-here? _) (inle? 0 || 0 < #(getenv "DISPLAY"))
    (window-open w h title) (inle? 0 ? (inle-open-win ()) (x-open-win w h title))
 
    (window-paper win) (win 'paper)

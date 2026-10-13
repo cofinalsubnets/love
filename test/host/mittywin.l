@@ -1,4 +1,4 @@
-; test/host/porthole.l -- the mitty in a window of its own, headless: an Xvfb, `love mitty
+; test/host/mittywin.l -- the mitty in a window of its own, headless: an Xvfb, `love mitty
 ; --window` on it with a child that paints cells as its input arrives, the pixels read back
 ; through GetImage and the keys sent through XTEST. asserted in turn: the child's red cells on
 ; the paper (it draws them when COLORTERM says truecolor), a line typed reaching it (the
@@ -6,10 +6,10 @@
 ; (the blue), ctrl+shift+C taking the clipboard, C-a v splitting the window (the right half
 ; lit by the new pane), and C-a x twice shutting both panes, the mitty ending with status 0.
 ; no Xvfb -> a polite skip.
-; run: cat test/00-init.l test/host/porthole.l | out/love
+; run: cat test/00-init.l test/host/mittywin.l | out/love
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
-   _ (!(two? xv) ? (gate-skip "porthole: ok (no Xvfb, skipped)") 0)
+   _ (!(two? xv) ? (gate-skip "mittywin: ok (no Xvfb, skipped)") 0)
    (rdnum p) ((: (go n st) (see p @ c
                               (? (c = -1) ()
                                  (c = 13) (go n st)
@@ -85,4 +85,4 @@
     still <xv 15,
     wfx <xv,
     test_fin (),
-    puts "porthole: ok\n"))
+    puts "mittywin: ok\n"))
