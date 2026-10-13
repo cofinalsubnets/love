@@ -116,9 +116,9 @@ done
 
 # a64: the packed program again under -mstrict-align, its misaligned members by their chunks
 if [ "$arch" = a64 ]; then
-  moonrun -t a64 -mstrict-align -o "$r/sa278.t" test/cc/278-packed-bitfield.c > "$d/sa278.log" 2>&1 \
-    || { cat "$d/sa278.log" >&2; fail "strict-align: mooncc could not build 278-packed-bitfield.c"; }
-  a64_job sa278.t "timeout 60 \$RUN ./sa278.t"
+  moonrun -t a64 -mstrict-align -o "$r/sa279.t" test/cc/279-packed-bitfield.c > "$d/sa279.log" 2>&1 \
+    || { cat "$d/sa279.log" >&2; fail "strict-align: mooncc could not build 279-packed-bitfield.c"; }
+  a64_job sa279.t "timeout 60 \$RUN ./sa279.t"
 fi
 
 # a64: the ABI across compilers -- mooncc's half (test/cc/abi64/host.c) linked with clang's
@@ -200,7 +200,7 @@ fi
 
 a64_run "$r" || fail "the $pretty batch did not come back"
 if [ "$arch" = a64 ]; then
-  [ "$(cat "$r/res/sa278.t.rc")" -eq 0 ] || { cat "$r/res/sa278.t.out" >&2; fail "strict-align: 278-packed-bitfield.c answers wrong under -mstrict-align"; }
+  [ "$(cat "$r/res/sa279.t.rc")" -eq 0 ] || { cat "$r/res/sa279.t.out" >&2; fail "strict-align: 279-packed-bitfield.c answers wrong under -mstrict-align"; }
   [ "$(cat "$r/res/abi64.t.rc")" -eq 0 ] || { cat "$r/res/abi64.t.out" >&2; fail "abi64: mooncc and clang disagree on AAPCS64"; }
   tail -1 "$r/res/abi64.t.out"
   [ "$(cat "$r/res/abi128.t.rc")" -eq 0 ] || { cat "$r/res/abi128.t.out" >&2; fail "abi128: mooncc and clang disagree on AAPCS64's __int128"; }

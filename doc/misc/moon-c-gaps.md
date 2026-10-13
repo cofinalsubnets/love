@@ -1313,14 +1313,14 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   `long long` by 4) and leaves a union's size; under AAPCS (a64, the thumbs) it raises the
   struct's alignment too, packed or not, where SysV leaves it. mooncc had raised it on every
   target and never when packed (`struct { char c; int : 0; char d; }` was 8 bytes on x64,
-  gcc's 5; packed on a64, 5 where gcc's is 8). Law test/cc/278-packed-bitfield.c, its answers
+  gcc's 5; packed on a64, 5 where gcc's is 8). Law test/cc/279-packed-bitfield.c, its answers
   gcc's at -O0 to -O2 on x64, i386, rv64, a64, thumb1 and thumb2.
 - **the rest of `-mstrict-align` through a packed struct**: a bit-field and a 128-bit member by
   their chunks (both had refused by name, and the bit-field's struct, aligned 4, was read whole);
   an array member indexed through its decayed pointer, and a struct member passed or returned by
   value, by the alignment the member carries, not its type's (both had been read at full width).
   Held to clang's widths in the landing law (eight more pk_ fns in test/cc/protect/units.c), and
-  278 runs under the flag on an a64 host.
+  279 runs under the flag on an a64 host.
 - **`__int128` as an argument and a parameter** (x64, a64), and a64's wide answer: lo then hi
   in two gp registers -- AAPCS64 the next even pair, else a 16-aligned stack pair that closes the
   registers; SysV any two. a64 answered in x0:x2, where AAPCS64 says x0:x1, so a wide call across
