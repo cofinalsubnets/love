@@ -120,7 +120,7 @@
  (fresh st) (: w (st 'w) h (st 'h) hz (st 'hz) th (st 'th) foc (st 'foc) cx (st 'cx)
    xs (iota w)
    tb {'xs xs 'tops {} 'ntops {} 'bots {} 'qes {} 'sky {} 'dark {} 'rows {}
-       'qas ((floor ((th + atan ((xs - cx) / foc)) / (2.0 * pi) * 256.0) % 256 + 256) % 256)}
+       'qas ((floor ((th + atan ((xs - cx) / foc)) / tau * 256.0) % 256 + 256) % 256)}
    (row y) (y < hz ? (pin (tb 'qes) y (flo (atan ((hz - y) / foc) * foc)), row (y + 1)))
    (row (-h - 12), tb))
  ; the trees within sight, each laid into the columns it covers: a conifer or a round

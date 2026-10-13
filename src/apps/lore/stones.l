@@ -289,7 +289,7 @@
                      ((c && pc = 0 ? [[kn e 1]] ()) + [[kn e 0]] + go >l c)))
      rs (go ks 0)
      (lerp p q f) [(p 0 + f * (q 0 - p 0)) (p 1 + f * (q 1 - p 1))]
-     (at i j) (: rg (rs j) kn (rg 0) e (rg 1) w (e 0) E (e 1 + (e 1 < e 0 + pi ? (2.0 * pi) 0.0))
+     (at i j) (: rg (rs j) kn (rg 0) e (rg 1) w (e 0) E (e 1 + (e 1 < e 0 + pi ? tau 0.0))
                  ; ..its ends at their own angles, the very points the walls' tops are
                  (on a) (ring-at (kn 0) a)
                  (cut k) (? (k = 0) (on w) (k = bowl-n) (on (e 1)) (on (w + (E - w) * k / bowl-n)))
@@ -325,7 +325,7 @@
   (: hx (b 4) hy (b 5) hz (b 6)
      lx (lean * (vn (0.7 * b 0) (0.7 * b 2) 113 - 0.5)) lz (lean * (vn (0.7 * b 2) (0.7 * b 0) 127 - 0.5))
      m (mesh-grid n nr
-         (\ i j (: a (-2.0 * pi * i / n) ca (cos a) sa (sin a) q (sec a) p (prof j) t (p 0)
+         (\ i j (: a (-tau * i / n) ca (cos a) sa (sin a) q (sec a) p (prof j) t (p 0)
                     wear (1.0 + amp * (vn (ca * 1.3 + t * 2.0 + b 0) (sa * 1.3 - t * 1.4 + b 2) 101 - 0.5)
                            + 0.4 * amp * (vn (ca * 3.5 + t * 6.0 + b 2) (sa * 3.5 + b 0) 103 - 0.5))
                     y (2.0 * hy * t - hy) up (y + hy)

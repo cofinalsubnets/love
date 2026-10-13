@@ -3,7 +3,7 @@
 ; (src/love/raster.c); a camera; textures, drawn or from a picture, and their levels; and
 ; the frame out to the terminal, as half blocks or as kitty's pixels.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
-(module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-normals
+(module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
@@ -54,7 +54,7 @@
  (mesh-lathe prof n tex col k)
   (: (len i) (: (go j s) (j < i ? (go (j + 1) (s + sqrt (sq (prof (j + 1) 0 - prof j 0) + sq (prof (j + 1) 1 - prof j 1)))) s) (go 0 0.0))
      (mesh-grid n (#prof - 1)
-       (\ i j (: a (2.0 * pi * i / n) r (prof j 0)
+       (\ i j (: a (tau * i / n) r (prof j 0)
                   [(r * sin a) (prof j 1) (r * cos a) (k * a * prof 0 0) (k * len j)]))
        tex col))
  ; a flat sheet from the corner o along U and V, nu by nv cells, its front toward n,
@@ -62,6 +62,20 @@
  (mesh-sheet o U V nu nv n uv tex col)
   (: fl (dot (cross V U) n < 0.0) A (fl ? V U) B (fl ? U V) a (fl ? nv nu) b (fl ? nu nv)
      (mesh-grid a b (\ i j (: p (c+ o (c+ (c* (1.0 * i / a) A) (c* (1.0 * j / b) B))) (p + uv p))) tex col))
+ ; a tube from a to b, radius r, n sides, open at its ends: its texture tex, -1 for none,
+ ; laid ts metres a texel round it and along it
+ (mesh-rod a b r col n tex ts) (: ax (sub b a) u (unit ax) p1 (side u) p2 (cross u p1) L (sqrt (dot ax ax))
+   (ring c k) (map (j \ (: an (tau * j / n) o (c+ (c* (cos an) p1) (c* (sin an) p2))
+                          (c+ c (c* r o) + [(r * an / ts) (k * L / ts)] + o + col))) ^(n + 1))
+   (mesh (cat (ring a 0.0) (ring b 1.0))
+         (cats (map (j \ (: m (n + 1 + j) [[j (j + 1) (m + 1) tex] [j (m + 1) m tex]])) ^n))))
+ ; triangles by the tray, n at once, each its own three vertices, for facets: ps three
+ ; corners [x y z] of trays n long, sky and sun the [r g b] light on them from the sky and
+ ; from the sun, trays or numbers, the same at all three; tex the triangles' texture, -1
+ ; for none, -2 a glow. [verts tris], 11 a vertex
+ (mesh-dots ps sky sun tex) (: n #(ps 0 0) i (iota n)
+   (vtx q) [(ps q 0) (ps q 1) (ps q 2) 0.0 0.0 (sky 0) (sky 1) (sky 2) (sun 0) (sun 1) (sun 2)]
+   [(lace (cats (map vtx ^3))) (int (lace [(i * 3) (i * 3 + 1) (i * 3 + 2) tex]))])
  ; the vertices' places as trays [x y z], read by index in one step where a list walks
  (places vs) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^3))
  (at3 P i) [(peep (P 0) i 0.0) (peep (P 1) i 0.0) (peep (P 2) i 0.0)]
@@ -95,9 +109,7 @@
    L (light c)
    sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
    (lit k) (gain * c (8 + k) * ((L 1) * amb k + sun * sc k + (two? (L 2) ? (L 2 k) 0.0)))
-   cols [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]
-   i (iota n * 8)
-   [(foldl (\ v k (pin v (i + k) (cols k))) (iota (8 * n) * 0.0) ^8) (pk 'tris)])
+   [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
  ; ..or the sun's light apart, for a frame that shades by the sun's view: 11 a vertex, the
  ; light from the sky and round about, then the sun's
  (mesh-bake-sun pk lt light gain) (: c (pk 'cols) n (pk 'n) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
@@ -105,9 +117,7 @@
    sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
    (sky k) (gain * c (8 + k) * ((L 1) * amb k + (two? (L 2) ? (L 2 k) 0.0)))
    (lit k) (gain * c (8 + k) * sun * sc k)
-   cols [(c 0) (c 1) (c 2) (c 3) (c 4) (sky 0) (sky 1) (sky 2) (lit 0) (lit 1) (lit 2)]
-   i (iota n * 11)
-   [(foldl (\ v k (pin v (i + k) (cols k))) (iota (11 * n) * 0.0) ^11) (pk 'tris)])
+   [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (sky 0) (sky 1) (sky 2) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
  ; the sun's view of a place round c: along its light, half metres either side and deep
  ; along it, its matrix for facets
  (mesh-sun-view lt c half deep) (: s (lt 'sun)
@@ -141,9 +151,7 @@
  ; times its ks, through the surface's own colour, gain over all: [verts tris] 8 a vertex
  (mesh-lamps pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
    (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
-   cols [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]
-   i (iota n * 8)
-   [(foldl (\ v k (pin v (i + k) (cols k))) (iota (8 * n) * 0.0) ^8) (pk 'tris)])
+   [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
  ; ..the same, written into one buffer the packed mesh keeps, its places and texels laid
  ; once and only its colours each call: what a scene relit every frame draws. the last
  ; call's answer is the buffer, so a mesh is lit this way once a frame
@@ -211,19 +219,20 @@
    (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx)))
  ; lore's sky through the eye's gain, for mesh-frame's bare: k 1 the colours of the pixels
  ; S of the view v left bare, the stars ss (sky-stars) a pixel each among them; k past 1 the sky
- ; asked at the corners of k by k squares and shaded across each by facets, under the
- ; scene, and the stars put on after where the scene left them showing
+ ; asked at the corners of k by k squares and shaded across each by facets, on the pixels
+ ; the scene left bare, and the stars put on where it left them
  (mesh-sky ss lt wx e sim t0 k)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
                   (shine (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
-        [(v \ sky-grid v lt wx e sim k)
-         (\ v f B (: sp (mesh-spot v X Y Z) ix (over -1 (peep f sp -2 = peep B sp -3) (iota #X))
-                     (pin f (over -1 (0 <= ix) sp) (shine (sky-colour-of lt wx X Y Z (e 0) (e 2) sim) ix))))]))
- ; the sky over the whole view, asked every k pixels across and down, a flat tray
- (sky-grid v lt wx e sim k)
+        [(v \ -1)
+         (\ v f B (: g (sky-grid v lt wx e sim k f) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
+                     (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-of lt wx X Y Z (e 0) (e 2) sim) ix))))]))
+ ; the sky over the view's bare pixels in the frame f, asked every k pixels across and
+ ; down, a flat tray
+ (sky-grid v lt wx e sim k f)
   (: w (v 'w) h (v 'h) gw (w // k + 2) gh (h // k + 2) G (iota (gw * gh)) gi (G % gw) gj (G // gw)
      d (rays v (1.0 * k * gi) (1.0 * k * gj))
      c (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim)
@@ -234,7 +243,7 @@
      cs [q (q + 1) (q + gw + 1) (q * 0 - 1) q (q + gw + 1) (q + gw) (q * 0 - 1)]
      ts (foldl (\ t i (pin t (C * 8 + i) (cs i))) (iota (8 * #C) * 0) ^8)
      one (gem-tray [16] [1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0])
-     (peep (facets w h 0 one vs ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 0.0 (1.5 * lt 'expo)])) (iota (w * h)) 0))
+     (peep (facets w h f one vs ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 32.0 (1.5 * lt 'expo)])) (iota (w * h)) 0))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e)
    c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
