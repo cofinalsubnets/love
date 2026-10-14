@@ -79,6 +79,7 @@ enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_CLOEXEC = 02000000 };
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
   int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, esock, vh, typing, shown;
+  int up, ears;                           /* in sight (onStart to onStop); hear threads alive */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
   long th; long mu[8];                    /* pthread_t, pthread_mutex_t (zero is unlocked) */
   uint32_t *fb; size_t fbsz; int gh;      /* a frame as love sent it, the window's buffer height */
@@ -280,14 +281,18 @@ static void *play(void *p) {
 
 /* one ear: the rate and channels, then an AAudio input stream's frames until love hangs
    up -- its socket readable, since love says nothing after the rate. a stream refused,
-   as before RECORD_AUDIO is granted, is asked again each half second */
+   as before RECORD_AUDIO is granted, is asked again each half second; out of sight the
+   mic is let go, and taken again on the way back */
+typedef struct { br *b; int fd; } ear;
 static int hung(int fd) { struct pollfd q = {fd, 1, 0}; return poll(&q, 1, 0) != 0; }
 static void *hear(void *p) {
-  int fd = (int) (long) p; unsigned char r[4]; void *bd = 0, *st = 0; short buf[2048];
+  ear *h = p; br *b = h->b; int fd = h->fd; unsigned char r[4]; void *bd = 0, *st = 0; short buf[2048];
+  munmap(h, sizeof *h);
   void (*preset)(void *, int) = (void (*)(void *, int)) dlsym(0, "AAudioStreamBuilder_setInputPreset");
   int rate = 0, ch = 1;
   if (!readall(fd, r, 4)) rate = r[0] | r[1] << 8 | r[2] << 16, ch = r[3] == 2 ? 2 : 1;
-  while (rate && !st && !hung(fd)) {
+  while (rate && !hung(fd)) {
+    if (!__atomic_load_n(&b->up, 2)) { usleep(100000); continue; }
     if (!AAudio_createStreamBuilder(&bd)) {
       AAudioStreamBuilder_setDirection(bd, 1);                                  /* input */
       AAudioStreamBuilder_setSampleRate(bd, rate); AAudioStreamBuilder_setChannelCount(bd, ch);
@@ -296,12 +301,13 @@ static void *hear(void *p) {
       if (AAudioStreamBuilder_openStream(bd, &st) || AAudioStream_requestStart(st)) { if (st) AAudioStream_close(st); st = 0; }
       AAudioStreamBuilder_delete(bd);
     }
-    if (!st) usleep(500000);
+    if (!st) { usleep(500000); continue; }
+    for (int n; __atomic_load_n(&b->up, 2) && (n = AAudioStream_read(st, buf, (int) (sizeof buf / 2) / ch, 100000000L)) >= 0; )
+      if (n ? send(fd, buf, (size_t) n * 2 * (size_t) ch, 0x4000) < 0 : hung(fd)) { rate = 0; break; }   /* MSG_NOSIGNAL */
+    AAudioStream_close(st); st = 0;
   }
-  for (int n; st && (n = AAudioStream_read(st, buf, (int) (sizeof buf / 2) / ch, 100000000L)) >= 0; )
-    if (n ? send(fd, buf, (size_t) n * 2 * (size_t) ch, 0x4000) < 0 : hung(fd)) break;   /* MSG_NOSIGNAL */
-  if (st) AAudioStream_close(st);
   close(fd);
+  __atomic_fetch_sub(&b->ears, 1, 3);   /* the last touch of b: destroy waits on it */
   return 0;
 }
 
@@ -344,8 +350,12 @@ static void *loop(void *p) {
       else if (c >= 0) close(c);
     } else if (id == EAR) {
       long t; int c = accept4(b->esock, 0, 0, O_CLOEXEC);
-      if (c >= 0 && !pthread_create(&t, 0, hear, (void *) (long) c)) pthread_detach(t);
-      else if (c >= 0) close(c);
+      if (c >= 0) {
+        ear *h = mmap(0, sizeof *h, 3, 0x22, -1, 0);
+        h->b = b; h->fd = c; __atomic_fetch_add(&b->ears, 1, 3);
+        if (!pthread_create(&t, 0, hear, h)) pthread_detach(t);
+        else munmap(h, sizeof *h), close(c), __atomic_fetch_sub(&b->ears, 1, 3);
+      }
     } else if (id == LOG) {
       if (logs(b)) ALooper_removeFd(b->looper, b->logfd);
     } else if (id == INPUT) input(b);
@@ -465,14 +475,17 @@ static void qin(void *a, void *q) {
 static void qout(void *a, void *q) {
   br *b = me(a); AInputQueue_detachLooper(q); b->queue = 0;
 }
+static void start(void *a) { __atomic_store_n(&me(a)->up, 1, 3); }
+static void stop(void *a) { __atomic_store_n(&me(a)->up, 0, 3); }
 static void destroy(void *a) {
   br *b = me(a);
   if (b->pid > 0) kill(b->pid, 15), waitpid(b->pid, 0, 0);
+  for (int i = 0; __atomic_load_n(&b->ears, 2) && i < 50; i++) usleep(20000);   /* love gone, its ears hang up */
   b->quit = 1; ALooper_wake(b->looper); pthread_join(b->th, 0);
   if (b->csock >= 0) close(b->csock);
   close(b->lsock); close(b->hsock); close(b->esock); close(b->logfd); unlink(b->sock); unlink(b->horn); unlink(b->ear);
   if (b->fb) munmap(b->fb, b->fbsz);
-  munmap(b, sizeof *b);
+  if (!__atomic_load_n(&b->ears, 2)) munmap(b, sizeof *b);   /* an ear still up keeps b */
 }
 
 void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
@@ -489,6 +502,7 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   a->callbacks->onNativeWindowCreated = created; a->callbacks->onNativeWindowDestroyed = gone;
   a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
   a->callbacks->onDestroy = destroy; a->callbacks->onWindowFocusChanged = focus;
+  a->callbacks->onStart = start; a->callbacks->onStop = stop;
   immersive(a);
   struct sockaddr_un u = {1}; snprintf(u.path, sizeof u.path, "%s", b->sock);
   unlink(b->sock);
