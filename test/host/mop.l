@@ -8,8 +8,8 @@
 (: mop-G (cite 'guts)
    mop-gone '(peek poke pick place seek spin stem span trim cellread stack setstack
               seal-hook lib enter leave yield dis disp discell opname nifnom ci-vt to-vt
-              numfn nfq nfa lamform macros boxset lvm_ret lvm_quote)
-   mop-kept '(peepw pinw peepv pinv gv nifop letc opfixed defercell deferpatch)
+              numfn nfq nfa lamform macros boxset lvm_ret lvm_quote defercell deferpatch)
+   mop-kept '(peepw pinw peepv pinv gv nifop letc opfixed)
    (mop-has k) (mop-G k !== ())
    (mop-on-book k) (elem k (names ()))
 
@@ -25,12 +25,12 @@
            (() = (cite 'guts 'poke) 100000 7 "abc")
            (() = (cite 'guts 'place) 0 1 "abc"))
 
-   ; the glaze's deferred cells, off the book: a bad operand answers (), never a fault, and a
-   ; good cell forwards to its twin while nothing of its shape and arity patches it
-   _ (: dc (mop-G 'defercell) dp (mop-G 'deferpatch) L (dc (+) 2) M (dc (x \ x * 2) 1)
-        (test !(mop-on-book 'defercell) !(mop-on-book 'deferpatch)
-              (() = dp 1 2) (() = (dc 5 1)) (() = dc (+) 3) (() = dc (x \ x) 0) (() = dp (+) (+))
-              (L == dp L (-)) (L == dp L 7) (7 = L 3 4) (M == dp M L) ([2 4] = map M [1 2])))
+   ; the glaze's deferred cells, where the mop leaves them (LOVE_NO_MOP): a bad operand
+   ; answers (), never a fault, and a good cell forwards to its twin while nothing of its
+   ; shape and arity patches it
+   dq "(: dc (cite 'guts 'defercell) dp (cite 'guts 'deferpatch) L (dc (+) 2) M (dc (x \\ x * 2) 1) _ (putx [(dp 1 2) (dc 5 1) (dc (+) 3) (dc (x \\ x) 0) (dp (+) (+)) (? (L == dp L (-)) 1 0) (? (L == dp L 7) 1 0) (L 3 4) (? (M == dp M L) 1 0) (map M [1 2])]) (quit 0))"
+   dl (hark ["env" "LOVE_NO_IMAGE=1" "LOVE_NO_MOP=1" "out/love" "-e" dq])
+   _ (test (two? dl) (<dl = 0) (>dl = "(() () () () () 1 1 7 1 (2 4))"))
 
    ; the bounded byte doors still answer, and still hold their bounds
    _ (: c (cask 16) pinw (mop-G 'pinw) peepw (mop-G 'peepw)

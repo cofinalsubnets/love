@@ -2299,10 +2299,11 @@ void kmain(void) {
   char const *s = woke ? "; inle -- image awake\n" : "; inle -- baking the egg\n";
   for (; *s; s++) serial_putc(*s);
   if (!woke) g = ini();
-  // the nif drains re-pin over a woken book too: the section rides this binary
-  g = defn(g, __start_love_nifs,
-              (uintptr_t)(__stop_love_nifs - __start_love_nifs));
-  // ..then the kernel's own bracket, so a kernel row wins any name it shares
+  // a woken book holds the host rows as baked, mop and all
+  if (!woke) g = defn(g, __start_love_nifs,
+                      (uintptr_t)(__stop_love_nifs - __start_love_nifs));
+  // ..then the kernel's own bracket, over a woken book too (a hosted image has none), so a
+  // kernel row wins any name it shares
   g = defn(g, __start_knifs,
               (uintptr_t)(__stop_knifs - __start_knifs));
   // bound the generational collector to the device's RAM (the Appel knob): unbounded, the

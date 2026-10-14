@@ -616,7 +616,8 @@ int main(int argc, char const **argv) {
   bool argp = argc - skip > 1;
   if (!bake) g = argv_chain(g, argv, argc, skip);   // the line past the primes -- sp[0]
   if (ok(g)) {
-    g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+    if (!image_load_path)                          // a woken image holds its rows as baked, mop and all
+     g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
     if (!bake) {
       g = defv(g, "cmdline");
       if (ok(g)) g->sp++; }          // the book holds it now

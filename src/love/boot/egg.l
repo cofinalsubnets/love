@@ -26,10 +26,9 @@
                (: _ (pin F k v) (? keep 0 (pull book k k)))))
    _ (each m p)
    _ (each n p)
-   ; what a baked run may still cite: the bounded byte doors (src/love/mem.c), the glaze's
-   ; reads of ev.l and post.l, and its deferred cells (map.c, checked) -- none reaches a word
-   ; by address or writes a cell it did not lay
-   kept '(peepw pinw peepv pinv gv nifop letc opfixed threadir jotfuse defercell deferpatch)
+   ; what a baked run may still cite: the bounded byte doors (src/love/mem.c) and the glaze's
+   ; reads of ev.l and post.l -- none reaches a word by address or writes a cell
+   kept '(peepw pinw peepv pinv gv nifop letc opfixed threadir jotfuse)
    _ (? keep 0 (each (filter (\ k (? (elem k kept) 0 1)) (keys F)) (\ k (pull F k k))))
    ; raw code addresses: the natives read them through g->reach, not these
    _ (? keep 0 (each '(calloutdrive calloutresume) (\ k (pull book k k))))
