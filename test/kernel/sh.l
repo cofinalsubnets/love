@@ -41,3 +41,12 @@
    _  (sh-line ka "set -- one") _ (sh-line kb "set -- two three")
    (each ["/tmp/l-sh-fnp" "/tmp/l-sh-sub" "/tmp/l-sh-bg"] unlink,
     test (s1 = "fn\n") (s2 = "p\n") (s3 = "bg\np\n") ((ka 'sh-pos) = ["one"]) ((kb 'sh-pos) = ["two" "three"])))
+
+; the console keeps 24-bit colour, and every reader of the environment hears so: a closure
+; baked against the host's getenv (lore's view) and the shell the kernel starts read the C
+; environment, not the seat text's copy -- lore stones fell to the 256 palette without it
+(: (lush-crd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   _  (spawn ["sh" "-c" "echo $COLORTERM > /tmp/l-sh-ct"] @ p (wait p))
+   s1 (lush-crd "/tmp/l-sh-ct")
+   (unlink "/tmp/l-sh-ct",
+    test (((cite 'view 'view-deep?) 0) = 1) (s1 = "truecolor\n")))
