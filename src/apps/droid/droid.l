@@ -1,6 +1,6 @@
 ; src/apps/droid/droid.l -- love apps on android: the face a program draws through, and the apk.
 ;
-;   love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] MAIN.l [FILE..]
+;   love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-P PERM].. MAIN.l [FILE..]
 ;
 ; the app is a NativeActivity with no dex: src/apps/droid/bridge.c, built here by our own
 ; `mooncc -t a64 -shared`, owns the window, the input queue and logcat, and starts LOVE (an a64
@@ -72,10 +72,12 @@
             + ap-cat el ks
             + ax-chunk 0x103 16 (u32 1 + u32 -1 + u32 -1 + u32 (ix t))))
        (ax-chunk 3 8 (pool + rmap + nsc 0x100 + el root + nsc 0x101)))
-   (ap-manifest pkg label)
+   ; ps the permissions asked, each android's full name
+   (ap-manifest pkg label ps)
     ["manifest" [[1 "versionCode" 'int 1] [1 "versionName" 'str "1"] [0 "package" 'str pkg]]
-      [["uses-sdk" [[1 "minSdkVersion" 'int 26] [1 "targetSdkVersion" 'int 31]] ()]
-       ["application" [[1 "label" 'str label] [1 "hasCode" 'bool 0] [1 "debuggable" 'bool 1]
+      ([["uses-sdk" [[1 "minSdkVersion" 'int 26] [1 "targetSdkVersion" 'int 31]] ()]]
+       + map (p \ ["uses-permission" [[1 "name" 'str p]] ()]) ps +
+      [["application" [[1 "label" 'str label] [1 "hasCode" 'bool 0] [1 "debuggable" 'bool 1]
                       [1 "extractNativeLibs" 'bool 1]]
          [["activity" [[1 "name" 'str "android.app.NativeActivity"] [1 "exported" 'bool 1]
                       [1 "configChanges" 'hex 0x4a0]                   ; orientation keyboardHidden screenSize
@@ -83,7 +85,7 @@
             [["meta-data" [[1 "name" 'str "android.app.lib_name"] [1 "value" 'str "bridge"]] ()]
              ["intent-filter" ()
                [["action" [[1 "name" 'str "android.intent.action.MAIN"]] ()]
-                ["category" [[1 "name" 'str "android.intent.category.LAUNCHER"]] ()]]]]]]]]]
+                ["category" [[1 "name" 'str "android.intent.category.LAUNCHER"]] ()]]]]]]]])]
 
    ; --- the zip: every entry deflated, dated 1980, so the same inputs lay the same bytes ---
    (ap-zip es)
@@ -144,10 +146,12 @@
            (uread so @ r (? (two? r) <>r (udie 1 "apk: no bridge laid"))))))
 
    (apk-usage _) (puts """
-    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] MAIN.l [FILE..]
+    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-P PERM].. MAIN.l [FILE..]
       an android app (arm64) that runs MAIN.l: a window, touch and keys through the face
       (src/apps/droid/droid.l). LOVE is the a64 love it ships, baked; on an a64 machine
-      this one. the key signing it lives in ~/.love/etc/apk.pem
+      this one. each PERM is a permission the app asks for at its start, RECORD_AUDIO
+      for the mic (android.permission. unless named in full). the key signing it lives
+      in ~/.love/etc/apk.pem
     """)
    (ap-base p) (p @ (_ + "/" + s) (ap-base s) p)
    (ap-stem p) (ap-base p @ b (b @ (s + ".l") s b))
@@ -155,6 +159,7 @@
    (apk-opts as t)
     (as @ ("-o" . v . r) (apk-opts r (pin t 'o v)) ("-p" . v . r) (apk-opts r (pin t 'p v))
           ("-n" . v . r) (apk-opts r (pin t 'n v)) ("-L" . v . r) (apk-opts r (pin t 'L v))
+          ("-P" . v . r) (apk-opts r (pin t 'P (t 'P + [(has? v "." ? v ("android.permission." + v))])))
           (("-h" || "--help") . _) (apk-usage 0, quit 0)
           (("-" + _) . _) (apk-usage 0, quit 2)
           r (pin t 'files r))
@@ -174,9 +179,11 @@
        _ (mkdir tmp 448)
        so (bridge-so tmp)
        ins (map (f \ [("assets/app/" + ap-base f) (uread f @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + f))))]) fs)
-       z (ap-zip ([["AndroidManifest.xml" (ap-axml (ap-manifest pkg (ap-or (t 'n) nm)))]
+       ps (t 'P)
+       z (ap-zip ([["AndroidManifest.xml" (ap-axml (ap-manifest pkg (ap-or (t 'n) nm) ps))]
                 ["lib/arm64-v8a/libbridge.so" so] ["lib/arm64-v8a/liblove.so" lb]
-                ["assets/argv" (ap-base <fs + string [0])]] + ins))
+                ["assets/argv" (ap-base <fs + string [0])]]
+                + (two? ps ? [["assets/perms" (cats (map (p \ p + string [0]) ps))]] ()) + ins))
        (? (uwrite out (v2-sign z <ks (ks 1))) (puts ("apk: " + out + " (" + pkg + ") -- adb install -r " + out + "\n"), 0)
           (udie 1 ("apk: cannot write " + out))))
 
