@@ -14,6 +14,8 @@
 ;   love bee --state busy|idle [--pid P]     a claude code session's hooks say its state
 ;   love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..) | --hosts   work on another host
 ;   love bee --nest DIR                      a worker nest from the hub (SB_HUB), at its head
+;   love bee --shadow HUB BRANCH SHA [KEEP..]   record a commit into the shadow's hub, as a landing does
+;   love bee --shadow-check NEST BRANCH SHA [KEEP..]   is the tree recorded in NEST that commit's
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -202,13 +204,15 @@
                            + "that agreed (or, from the head's session while the leader has no live session, "
                            + "takes it, acting); sync sets what the queue lands toward (- removes it); pre_add "
                            + "adds a pre-release condition and pre_drop N drops the Nth; base moves the base line; mirror "
-                           + "names the git repository and branch an sb queue's landings are written to; lives names the box the queue lives on while a standby leads it. Only the leader may.")
+                           + "names the git repository and branch an sb queue's landings are written to; lives names the box the queue lives on while a standby leads it; "
+                           + "shadow has a git queue's landings recorded into an sb hub and checked. Only the leader may.")
              {"queue" (prop "refs/queue/NAME or queue/NAME") "leader" (prop "the session to lead")
               "sync" (prop "the sync line's text, or - to remove it") "pre_add" (prop "a pre line's text")
               "pre_drop" (prop "the pre line to drop, counting from 1")
               "base" (prop "the new sha for the base line")
               "mirror" (prop "on an sb queue: PATH BRANCH [KEEP..] -- the git repository at PATH, its branch, and the path prefixes the parent's tree keeps there; - to remove it")
-              "lives" (prop "the box the queue lives on while a standby leads it: other boxes' copies follow that box's and refuse writes; - to remove it")}
+              "lives" (prop "the box the queue lives on while a standby leads it: other boxes' copies follow that box's and refuse writes; - to remove it")
+              "shadow" (prop "on a git queue: HUB BRANCH [KEEP..] -- each landing's tree laid into the sb nest at HUB (absolute), recorded, banked gwen-SHA and written through the mirror to BRANCH, whose tree must match the landing's outside the KEEP prefixes; a mismatch stops it (HUB.shadow.stop). - to remove it")}
              ["queue"])
        (tool "queue_land" ("Land by sha (git) or psid (sb): for your green row at its head, check that the base "
                            + "is where the base line says and that landing your gated head gives the gated tree -- "
@@ -932,6 +936,7 @@
      (q-hub _) (: h (getenv "SB_HUB") (? (string? h && 0 < #h) h (setting 'hub ".")))
      (q-sbc a) ("sb -C " + sh-quote (q-hub 0) + " " + a)
      (q-sb a) (lush-out (q-sbc a))
+     (q-sbat h a) (lush-out ("sb -C " + sh-quote h + " " + a))
      ; cmd ran clean: its && echo of tok came back
      (says? cmd tok) (0 <= find (lush-out (cmd + " && echo " + tok)) tok 0)
      ; the hub's psid for a set (a psid, a ref, or head), "" when it has none
@@ -1163,7 +1168,7 @@
      (q-bare l) (words (snip l 0 (q-cut l)))
      ; the base line -- `<branch> <sha>`, a note allowed, neither a row nor the leader's, sync, pre
      ; or next -- moved to sha, its note kept
-     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next" "mirror" "lives"]) && 0 < #<w && <w 0 != 35))
+     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next" "mirror" "lives" "shadow"]) && 0 < #<w && <w 0 != 35))
      (q-base-line text) (: ls (filter q-base? (lines text)) (? (two? ls) (q-bare <ls) ()))
      (q-base text sha)
       (: ls (lines text)
@@ -1180,7 +1185,7 @@
                      (take k ls + [l] + drop k ls))))
      ; the tools: -> [ok? text]
      ; a row is one line of words: no field may hold a control character, nor a space but a text's
-     bee-texts ["note" "sync" "pre_add" "release" "mirror"]
+     bee-texts ["note" "sync" "pre_add" "release" "mirror" "shadow"]
      (q-bad in) (filter (\ k (: v (in k) (string? v && two? (filter (\ c (c < 32 || c = 127 || (c = 32 && !(elem k bee-texts))))
                                                                   (map v ^#v)))))
                         (keys in))
@@ -1298,6 +1303,7 @@
          (after ls ps l) (: k (foldl (\ a p (? (0 <= a) a (last ls p))) -1 ps) (ins ls k l))
          nl (field in "leader" "") sy (field in "sync" "") pa (field in "pre_add" "") pd (field in "pre_drop" "")
          ba (field in "base" "") mi (: m (peep in "mirror" "") (string? m ? m "")) lv (field in "lives" "")
+         sw (: m (peep in "shadow" "") (string? m ? m ""))
          pres (filter (\ i (kind (ls0 i) = "pre")) ^#ls0)
          ls1 (? (#nl = 0) ls0 (map (\ l (kind l = "leader" ? ("leader " + nl + (acting ? " acting" "")) l)) ls0))
          ls2 (? (#sy = 0) ls1
@@ -1318,10 +1324,15 @@
                 (lv = "-") (filter (\ l (kind l != "lives")) ls5)
                 (0 <= last ls5 (\ l (kind l = "lives"))) (map (\ l (kind l = "lives" ? ("lives " + lv) l)) ls5)
                 (after ls5 [(\ l (kind l = "leader"))] ("lives " + lv)))
-         (? (#nl + #sy + #pa + #pd + #ba + #mi + #lv = 0) [text "name leader, sync, pre_add, pre_drop, base, mirror or lives"]
+         ls7 (? (#sw = 0) ls6
+                (sw = "-") (filter (\ l (kind l != "shadow")) ls6)
+                (0 <= last ls6 (\ l (kind l = "shadow"))) (map (\ l (kind l = "shadow" ? ("shadow " + sw) l)) ls6)
+                (after ls6 [(\ l (kind l = "mirror")) (\ l (kind l = "pre")) (\ l (kind l = "sync")) q-base? (\ l (kind l = "leader"))] ("shadow " + sw)))
+         (? (#nl + #sy + #pa + #pd + #ba + #mi + #lv + #sw = 0) [text "name leader, sync, pre_add, pre_drop, base, mirror, lives or shadow"]
             (#pd && !(two? ls3)) [text ("no pre line " + pd)]
             (0 < #mi && mi != "-" && #(words mi) < 2) [text "mirror is PATH BRANCH [KEEP..]"]
-            [(unlines ls6) ""]))
+            (0 < #sw && sw != "-" && (#(words sw) < 2 || sw 0 != 47)) [text "shadow is HUB BRANCH [KEEP..], HUB an absolute path"]
+            [(unlines ls7) ""]))
      (queue-lead in) (: _ (pins bee-who 'tool "queue_lead") (q-wcheck in queue-lead1))
      (queue-lead1 in)
       (: q (in "queue") i (me 0) nl (field in "leader" "")
@@ -1456,8 +1467,8 @@
      ; landing recorded again writes nothing twice ---
      (q-mirror-of text) (: w (words (q-line text "mirror")) (? (2 < #w) >w ()))   ; [path branch keep..]
      (q-abs d) (chomp (lush-out ("cd " + sh-quote d + " && pwd -P")))
-     (q-mirror m msg pub)
-      (: path <m br (m 1) keep (drop 2 m) hub (q-abs (q-hub 0)) tmp (bee-hive + "/.mirror-" + me 0)
+     (q-mirror h0 m msg pub)
+      (: path <m br (m 1) keep (drop 2 m) hub (q-abs h0) tmp (bee-hive + "/.mirror-" + me 0)
          ; a branch checked out elsewhere would move under that checkout's index
          wts (lines (lush-out ("git -C " + sh-quote path + " worktree list --porcelain")))
          held (: (go ls wt) (? (atom? ls) ""
@@ -1466,7 +1477,7 @@
                               (go >ls wt))
                  (go wts ""))
          ents (filter two? (map (\ l (: k (find l "\t" 0) (? (k = 64 || k = 65) [(snip l 0 k) (snip l (k + 1) #l)] ())))
-                                (lines (q-sb "ls -l"))))
+                                (lines (q-sbat h0 "ls -l"))))
          _ (umkdirs bee-hive 448)
          ; git's id for each blob: the mirror's own map from sb's hash, each one git still holds;
          ; the rest sb lays as plain files (the hub may hold a blob as a delta) and git hashes
@@ -1485,7 +1496,7 @@
          onfile (foldl (\ t h (: f (slurp-file (at h)) (? (string? f && sha256 f = h) (pin t h (at h)) t))) {} need)
          rest (filter (h \ !(string? (onfile h))) need)
          _ (uwrite (tmp + ".need") (cats (map (h \ h + "\n") rest)))
-         _ (? (two? rest) (q-sb ("unpack " + sh-quote (tmp + ".raw") + " - < " + sh-quote (tmp + ".need"))) "")
+         _ (? (two? rest) (q-sbat h0 ("unpack " + sh-quote (tmp + ".raw") + " - < " + sh-quote (tmp + ".need"))) "")
          _ (uwrite (tmp + ".blobs") (cats (map (h \ (? (string? (onfile h)) (onfile h) (tmp + ".raw/" + h)) + "\n") need)))
          ng (? (two? need) (lines (lush-out ("git -C " + sh-quote path + " hash-object -w --stdin-paths < " + sh-quote (tmp + ".blobs")))) ())
          _ (? (#ng = #need && two? need)
@@ -1531,6 +1542,50 @@
             (two? (filter (g \ #g != 40) gs)) [0 ("the mirror at " + path + " could not store the hub's blobs")]
             (starts? o "made " || starts? o "same ") [1 o]
             [0 ("the mirror at " + path + " did not take the landing: " + o)]))
+     ; --- the shadow of a git queue: its header's `shadow HUB BRANCH [KEEP..]` has each landing's
+     ; tree laid into the sb nest at HUB, recorded and banked gwen-SHA, and written through the
+     ; mirror to BRANCH, whose tree must be the landing's outside KEEP. a mismatch or a failed
+     ; step stops it: HUB.shadow.stop holds why, and while it stands no landing is recorded.
+     ; HUB.shadow.log gets a line a landing: sha, psid, match, ms, the store's KB; HUB.shadow.index
+     ; is git's index of the tree laid last ---
+     (q-shadow-of text) (: w (words (q-line text "shadow")) (? (2 < #w) >w ()))   ; [hub branch keep..]
+     ; NEST's recorded tree written through the mirror to BRANCH: "" when it is c's outside keep, else why
+     (q-shadow-cmp nest br keep c msg)
+      (: mr (q-mirror nest ([(q-abs ".") br] + keep) msg "")
+         df (? <mr (filter (\ l (0 < #l)) (lines (git1 ("diff --name-only " + c + " " + sh-quote ("refs/heads/" + br) + " -- ."
+                                                        + foldl (\ a k (a + " " + sh-quote (":(exclude)" + k))) "" keep)))) ())
+         (? !(<mr) ("the mirror did not take it: " + mr 1)
+            (two? df) ("its tree differs from " + c + " at " + q-and (take 5 df) + (5 < #df ? " .." ""))
+            ""))
+     (q-shadow sh c)
+      (: hub <sh br (sh 1) keep (drop 2 sh) stop (hub + ".shadow.stop") lg (hub + ".shadow.log")
+         st (slurp-file stop) t0 (clock 0) have (hub + ".shadow.have") want (hub + ".shadow.want")
+         ixf (hub + ".shadow.index") ix ("env GIT_INDEX_FILE=" + sh-quote ixf + " git ")
+         (kb _) (: o (words (lush-out ("du -sk " + sh-quote (hub + "/.sb") + " 2>/dev/null"))) (? (two? o) <o "0"))
+         (halt why) (: _ (uwrite stop (why + "\n")) [0 why 1])
+         (? (string? st) [0 ("still stopped, " + stop + " says: " + chomp st) 0]
+            (: k0 (kb 0)
+               o (lush-out (unlines ["set -e" ("mkdir -p " + sh-quote hub)
+                                     ; the index kept from the landing before: only what moved is written
+                                     ("if [ -f " + sh-quote ixf + " ] && [ -d " + sh-quote (hub + "/.sb") + " ]; then "
+                                      + ix + "--work-tree=" + sh-quote hub + " read-tree -m -u " + c + "; else "
+                                      + ix + "--work-tree=" + sh-quote hub + " read-tree --reset -u " + c + "; fi")
+                                     ("sb -C " + sh-quote hub + " ls 2>/dev/null | sort > " + sh-quote have)
+                                     ("git ls-tree -r --name-only " + c + " | sort > " + sh-quote want)
+                                     ("comm -23 " + sh-quote have + " " + sh-quote want + " | while IFS= read -r p; do rm -f "
+                                      + sh-quote hub + "/\"$p\"; done")
+                                     ("rm -f " + sh-quote have + " " + sh-quote want)
+                                     ("sb -C " + sh-quote hub + " record " + sh-quote ("gwen " + c) + " >/dev/null 2>&1 || true")
+                                     ("sb -C " + sh-quote hub + " bank " + sh-quote ("gwen-" + c) + " >/dev/null 2>&1 && echo banked")]))
+               ps (chomp (q-sbat hub "psid 2>/dev/null"))
+               res (? !(starts? o "banked" && #ps = 64) ("the record or bank in " + hub + " failed: " + chomp o)
+                      (q-shadow-cmp hub br keep c ("shadow of " + c + "\n\nsb psid " + ps + "\n")))
+               ms (clock 0 - t0) k1 (kb 0)
+               _ (uwrite lg ((? (two? (stat lg)) (slurp-file lg) "")
+                             + foldl (\ a w (a + " " + w)) c [(#ps = 64 ? ps "-") (0 < #res ? "differs" "match") (show ms) k1] + "\n"))
+               (? (0 < #res) (halt res)
+                  [1 ("gwen-" + snip c 0 9 + " recorded in " + hub + " as " + snip ps 0 12 + ", the tree matches ("
+                      + show ms + " ms, the store " + k1 + " KB, " + (k0 = "0" ? "new" ("was " + k0)) + ")")]))))
      ; --- a worker nest: DIR made from the hub (SB_HUB, else (hub ..)) at its head -- the hub's
      ; store pulled and its head taken, out/ seeded from the hub's build when the hub is here --
      ; where a session works, as in a worktree. the hub may be NAME@BOX, through BOX's door ---
@@ -1675,7 +1730,7 @@
                    ; on sb, the landing is written to the git mirror, when the queue names one
                    mi (? (q-git? q) () (q-mirror-of text))
                    mr (? (string? lk || !(two? mi)) [1 ""]
-                         (q-mirror mi ("Merge queue row " + p + " (" + who + "): "
+                         (q-mirror (q-hub 0) mi ("Merge queue row " + p + " (" + who + "): "
                                        + (: ls (filter (\ x (q-row? x && <(words x) = p)) (lines text)) (? (two? ls) (q-note <ls) ""))
                                        + "\n\nsb psid " + r 4 + "\n") pub))
                    (? (string? lk) [0 lk]
@@ -1693,6 +1748,10 @@
                                        ())
                                got (map (\ x <x) (filter (\ x (#(x 1) = 0)) sent))
                                lost (filter (\ x (0 < #(x 1))) sent)
+                               ; the shadow records the landing; a stop goes to the leader too
+                               sh (? (q-git? q) (q-shadow-of t2) ())
+                               sr (? (two? sh) (q-shadow sh (git-sha short)) [1 ""])
+                               pr (? (<sr || lead = i || !(sr 2)) "" (q-post lead ("the shadow of " + q + " stopped at " + short + ": " + sr 1)))
                                [1 ("landed: " + q-rows-say gone + " left " + q + ", whose base line is now " + br + " " + short + ". "
                                    + (? (0 < #(mr 1)) ("the mirror: " + (? (starts? (mr 1) "made ") ("a commit " + snip (mr 1) 5 #(mr 1)) "the tip had the tree already")
                                                          + (0 < #pub ? (", its " + q-and (drop 2 mi) + " from " + pub) "") + ". ") "")
@@ -1705,6 +1764,7 @@
                                                ""))
                                         ("send the next rows' sessions (" + q-and to
                                          + ") a release note naming what the merge removes, renames or moves."))
+                                   + (? (two? sh) (" the shadow: " + (<sr ? (sr 1 + ".") ("STOPPED, " + sr 1 + (lead = i || !(sr 2) ? "." (0 < #pr) (". " + lead + " was not told (" + pr + "): tell them.") (". told " + lead + "."))))) "")
                                    + (0 < #bz ? (" " + bee-landed) ""))])
                             (n <= 0) [0 (q + " kept moving under the write; read it and try again")]
                             (: _ (rest 200) (try (n - 1)))))))))
@@ -2991,6 +3051,13 @@
           "--ledger" (say-r (ledger (slurp in)))
           "--beat" (say-r (beat-take (slurp in)))
           ; --beats: one beat now, and which boxes took it
+          ; --shadow HUB BRANCH SHA [KEEP..]: the shadow's record of one commit, as a landing makes it
+          "--shadow" (? (#as < 4) (say err "usage: love bee --shadow HUB BRANCH SHA [KEEP..]\n", 2)
+                        (say-r (q-shadow ([(as 1) (as 2)] + drop 4 as) (git-sha (as 3)))))
+          ; --shadow-check NEST BRANCH SHA [KEEP..]: is NEST's recorded tree SHA's? a restore's check
+          "--shadow-check" (? (#as < 4) (say err "usage: love bee --shadow-check NEST BRANCH SHA [KEEP..]\n", 2)
+                              (: c (git-sha (as 3)) r (q-shadow-cmp (as 1) (as 2) (drop 4 as) c ("the tree of " + as 1 + "\n"))
+                                 (say-r (0 < #r ? [0 r] [1 ("the tree recorded in " + as 1 + " is " + c + "'s")]))))
           "--mirror-queue" (? (#as < 3) (say err "usage: love bee --mirror-queue REF DEST\n", 2) (say-r (mirror-queue (as 1) (as 2))))
           "--beats" (: r (beat-send 0)
                        (say-r (? (two? r) [1 (foldl (\ a x (a + <x + (x 1 ? ": taken\n" ": not taken\n"))) "" r)]
@@ -3066,7 +3133,7 @@
             ; a bare bee on a terminal is the hud; a model's chat is --chat
             (!pl && !sv && !(two? words) && !(elem "--chat" as) && !(elem "--stage" as) && two? (tty 1))
              (chat 'chat-hud bee-core)
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--beat" "--beats" "--mirror-queue" "--revoke" "--revocations" "--revoked" "--door" "--node"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--beat" "--beats" "--mirror-queue" "--shadow" "--shadow-check" "--revoke" "--revocations" "--revoked" "--door" "--node"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a mitty shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
