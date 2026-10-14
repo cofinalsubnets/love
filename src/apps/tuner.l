@@ -188,18 +188,43 @@ spectrum, q quits."
                          ? (lab (i + 2) (ink (o + 1) ("C" + show (o + 1)) . acc))
                          (lab (i + 1) (" " . acc)))))
        (map bar ^4 + [("  " + lab 0 ())]))
+   ; the spectrum on its side, n rows from B7 at the top down to C1, bars bw cells long: a
+   ; row takes the loudest of its bins, the row a C first falls in names its octave, and the
+   ; reading's row is bold
+   ticks ["" "▏" "▎" "▍" "▌" "▋" "▊" "▉"]
+   (column t n bw on c)
+    (: sp (t 'spec) pb (on ? (floor (c / 100.0 + 0.5) - 24) -1)
+       (b0 i) (i * bins // n) (b1 i) (max (b0 i + 1) ((i + 1) * bins // n))
+       (lev i) (foldl max -999.0 (take (b1 i - b0 i) (drop (b0 i) sp)))
+       (one i) (: o (b0 i // 12 + 1) cb (12 * ((b1 i - 1) // 12))
+                  e (max 0 (min (8 * bw) (int ((lev i + 60.0) / 60.0 * 8.0 * bw + 0.5))))
+                  lab (b0 i <= cb && (i = 0 || b1 (i - 1) <= cb) ? (ink (cb // 12 + 1) (pad ("C" + show (cb // 12 + 1)) 3)) "   ")
+                  (lab + ((b0 i <= pb && pb < b1 i ? bold ink) o (cats (map (_ \ "█") ^(e // 8)) + ticks (e % 8)))))
+       (map (r \ one (n - 1 - r)) ^n))
+   ; a row's width as the screen shows it, and the row filled out to n with spaces
+   (wide s) (tuner-plain s @ p (net (map (b \ b & 192 != 128) (chars p))))
+   (fill s n) (s + pad "" (n - wide s))
    ; the screen w by h, as rows: the title, the scale, the needle, a blank, the spectrum
-   ; with a blank under it when there is room and it is on, and the keys
+   ; with a blank under it when there is room and it is on, and the keys. a tall screen
+   ; (rows twice the columns, a cell being twice as tall as wide) stands the spectrum
+   ; beside the scale, and its marker keeps to the note and the cents
+   besidew 29                                       ; the scale's columns beside a spectrum
    (tuner-frame t w h)
     (: on (held? t ((t 'clock) 0)) gone !(t 'c) c (t 'last) lo (t 'lo) hi (t 'hi)
-       sp (t 'sp && two? (t 'spec) && h >= 24)
+       spon (t 'sp && two? (t 'spec))
+       tall (spon && 2 * h > w && w >= besidew + 12)
+       sp (spon && !tall && h >= 24)
        body (max 5 (h - (sp ? 10 4))) cy (body // 2) k0 (floor (c / 25.0 + 0.5))
        klo (on ? (floor (lo / 25.0 + 0.5)) 1) khi (on ? (floor (hi / 25.0 + 0.5)) 0)
-       mk (on ? (marker c (t 'hz) w lo hi gone) ())
-       rows (map (y \ (k0 + cy - y) @ k (row k (y = cy ? mk ()) (klo <= k <= khi))) ^body)
-       top (sgr "7" (pad ("  love tuner   A4 = " + show (t 'ref) + " Hz   " + t 'src
-                          + "   level " + show (int (t 'lvl))) w))
-       bot (sgr "2" (pad "  ━ semitone  ╺━ quarter tone  · eighth tone    a/A A4 ∓1 Hz  s spectrum  q quit" w))
+       mk (on ? (marker c (t 'hz) (tall ? 0 w) lo hi gone) ())
+       sc (map (y \ (k0 + cy - y) @ k (row k (y = cy ? mk ()) (klo <= k <= khi))) ^body)
+       rows (tall ? (map ((r . s) \ fill r besidew + s) (zip sc (column t body (w - besidew - 4) on c))) sc)
+       top (sgr "7" (pad (w < 50 ? ("  tuner  A4 " + show (t 'ref) + "  " + t 'src + "  level " + show (int (t 'lvl)))
+                                ("  love tuner   A4 = " + show (t 'ref) + " Hz   " + t 'src
+                                 + "   level " + show (int (t 'lvl)))) w))
+       keys "a/A A4 ∓1 Hz  s spectrum  q quit"
+       bot (sgr "2" (pad ((? (w < 64) "  " (w < 84) "  ━ semitone  ╺━ ¼  · ⅛    "
+                             "  ━ semitone  ╺━ quarter tone  · eighth tone    ") + keys) w))
        nl (on ? (needle t (t 'nd) w lo hi gone) (sgr "2" "  (listening)"))
        ([top] + rows + [nl ""] + (sp ? (strip t (max 11 (w - 4)) on c + [""]) ()) + [bot]))
    (paint t w h) (tuner-frame t w h @ rs ("\e[H" + cats (map (r \ r + "\e[K\r\n") (init rs)) + last rs + "\e[K"))
