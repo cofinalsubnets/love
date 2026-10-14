@@ -9174,8 +9174,11 @@
        ; 'stmt none, 'ret the caller's own return (the body's returns stay returns, tail calls tails),
        ; ('push inv then else) an if's test, 'expr a position evaluated conditionally or in a loop:
        ; the value is the body's one expression in place, nothing hoisted -- ('exprh ws) the same
-       ; where an arg that cannot trap may still hoist to a decl, ws the statement it may not be written in
-       (site nm as d mode)
+       ; where an arg that cannot trap may still hoist to a decl, ws the statement it may not be written in.
+       ; always_inline whose returns do not fold away splices again on the jump lane
+       (site nm as d mode) (site1 nm as d mode () @ r
+                              (two? r || !(peep (g 'alw) nm ()) ? r (site1 nm as d mode 1)))
+       (site1 nm as d mode jf)
         (: c (? (elem nm d || dn nm) ()
                 ; a body that compiles only spliced has no call to fall back on: it reaches deeper
                 ((peep (g 'ineed) nm () ? 8 3) < #d) ()
@@ -9186,7 +9189,7 @@
            val? (xo || xi || elem mode '(val br))
            pm (two? mode && !xh && !xi)
            (two? c ?
-              (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5) jl (c 6)
+              (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5) jl (c 6 || jf)
                  one (body @ (('ret e)) (two? e) ())          ; the whole body one `return e`
                  nr9 (: (go x) (? !(two? x) 0 (<x = 'ret) 1 (go <x + go >x)) (go body))
                  ; ..or statements then one: at a test the statements hoist, the return is the test
@@ -9483,6 +9486,10 @@
                 ('do b c) (hxe c d () @ c2
                              (!(armc? c2 && !(hascont? b)) ? [['do (hb b d) c2]]
                                 [['do ['blk ([(hb b d)] + hs ['if ['un 'not c2] ['brk] ()] d)] ['num 1]]]))
+                ; a step that is a call is the body's last statement where no continue skips to it:
+                ; there a callee of statements splices
+                ('for i c ('call ('var nm) _) b && !(hascont? b) && two? (cand nm))
+                 (hs ['for i c () ['blk [b ['expr <>>>s]]]] d)
                 ('for i c st b) (hxe c d () @ c2
                                    (!(armc? c2) ? [['for (hxe i d ()) c2 (hxe st d ()) (hb b d)]]
                                       [['for (hxe i d ()) ['num 1] (hxe st d ()) ['blk (hs ['if ['un 'not c2] ['brk] ()] d + [(hb b d)])]]]))
