@@ -929,6 +929,16 @@ love_noinline static struct g *love_raise(struct g *c, word a, word b, union u c
 }
 // re-raise a failed op's scare: bare data, observe-then-terminal.
 lvm(_lvm_ghelp) { return love_raise(core_of(g), zero, zero, help_scare_k); }
+// a wait nothing left could wake: the scare (deadlock), with no way back -- the op it
+// stands at cannot go on. the tag may collect, so it is minted packed
+static love_noinline word deadlock_tag(struct g *g) {
+ struct g *h = intern(strof(g, "deadlock"));
+ return ok(h) ? pop1(h) : 0; }
+lvm(lvm_deadlock) {
+ Pack(g);
+ word a = deadlock_tag(g);
+ if (!a) love_musttail return Ap(_lvm_ghelp, g);
+ return love_raise(g, a, zero, help_scare_k); }
 // (scare a b): the deliberate raise. the raise point is a clean boundary, so the
 // help's result is delivered back as the value via the more continuation; with nothing heard
 // it is terminal.
