@@ -1020,6 +1020,9 @@
                          (q = 0) ((<p < 0) = (<>p < 0) ? 1e-37 -1e-37)   ; gem width)
                          q))
         (val v) (coin? v && ok? (load v) ? (measure v) v)   ; a rational as its measure, anything else itself
+        (num? v) (nstar? v || coin? v && ok? (load v))      ; a number or a rational, never a text or a list
+        (div x y) (ok? x && ok? y && <y != 0 ?              ; (n1 d1) / (n2 d2): invert and multiply; by zero
+                   (q (reduce (<x * <>y) (<>x * <y))))       ; -> () (no inf in Q; cap of a bare star is itself)
         c (coin '/// (z \ {'star 1                               ; a rational is a star
          'net measure
          '< (\ a b (: x (arg a) y (arg b)                      ; (n1 d1) < (n2 d2): cross-multiply, exact (d > 0)
@@ -1040,11 +1043,10 @@
          '- (\ a b (: x (arg a) y (arg b)                    ; (n1 d1) - (n2 d2)
              (ok? x && ok? y ?
               (q (reduce (<x * <>y - <y * <>x) (<>x * <>y))))))
-         '/ (\ a b (: x (arg a) y (arg b)                    ; (n1 d1) / (n2 d2): invert and
-             (ok? x && ok? y && <y != 0 ?                  ; multiply; by zero -> () (no inf in Q; cap of a bare star is itself)
-              (q (reduce (<x * <>y) (<>x * <y))))))}))
-        (n \ (two? n ? (q (reduce <n <>n))                    ; (/// (n d)) -- the list form
-                       (q * reduce n)))))                     ; (/// n d) -- the curried form, and 3 /// 4 spaced
+         '/ (\ a b (div (arg a) (arg b)))}))
+        (strike a b) (num? a && num? b ? (div (arg a) (arg b)))  ; a zero or non-number operand -> ()
+        (n \ (two? n ? (strike <n <>n)                         ; (/// (n d)) -- the list form
+                       (strike n)))))                         ; (/// n d) -- the curried form, and 3 /// 4 spaced
 
 
 ; glob -- the libc's fnmatch, through posix's nif, and no filesystem: pathname expansion

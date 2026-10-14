@@ -1107,10 +1107,10 @@ lvm(lvm_inner) {
  uintptr_t K = va->shape[va->rank - 1];
  if (K != vb->shape[0]) love_musttail return Push(ZeroPoint);   // contracted axes must agree
  uintptr_t M = 1, N = 1;
- for (uintptr_t i = 0; i + 1 < va->rank; i++) M *= va->shape[i];
- for (uintptr_t i = 1; i < vb->rank; i++) N *= vb->shape[i];
+ for (uintptr_t i = 0; i + 1 < va->rank; i++) M = mulsat(M, va->shape[i]);
+ for (uintptr_t i = 1; i < vb->rank; i++) N = mulsat(N, vb->shape[i]);
  uintptr_t rank = (va->rank - 1) + (vb->rank - 1), n = mulsat(M, N);
- if (rank > maxrank) love_musttail return Push(ZeroPoint);
+ if (rank > maxrank || n > words_max) love_musttail return Push(ZeroPoint);   // no heap holds it
  bool fdom = va->type == love_R || vb->type == love_R, ar = va->type == love_R, br = vb->type == love_R;
  if (n == 1) {                                  // 1D·1D dot, or any 1-cell contraction -> scalar (invariant)
   word _res;

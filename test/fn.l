@@ -76,5 +76,7 @@
   ; worklist compares above the pending pairs, so the differing tail still tells
   !((. (a \ (\ 5)) (. 5 6)) = (. (b \ (\ 5)) (. 5 7)))
   ((. (a \ (\ 5)) (. 5 6)) = (. (b \ (\ 5)) (. 5 6)))
+  ; the pairs taken as equal grow with the walk: 2000 equal threads built apart, one pair each
+  ((map (_ \ ev '(\ x (+ x 1))) ^2000) = (map (_ \ ev '(\ x (+ x 1))) ^2000))
   (string? (show map))
   (10 < #(show map))))
