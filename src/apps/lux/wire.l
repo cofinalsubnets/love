@@ -12,7 +12,7 @@
 ; module 'xwire: every name below is exported, and a file that speaks X says
 ; (borrow 'xwire) -- lux's own (ewmh, manage, config, lux) and the doom driver
 ; (src/apps/doom.l), which is why this is a module and not a leak. a client with a window
-; of its own (doom, pier) opens with x-open and lays it with x-window and the requests after.
+; of its own (doom, window.l) opens with x-open and lays it with x-window and the requests after.
 (module '(xwire
   x-w8 x-w16 x-w32 x-flush x-r8 x-r16 x-r32 x-skip
   x-rstr x-pad4 x-wname x-rbytes u16 u32 evq x-reply

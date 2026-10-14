@@ -94,6 +94,9 @@ uintptr_t knifs_slice(struct def const **s) {
 // the metal image's far edge, patched into the file by the projection (src/tools/kproject.l):
 // the flat link's kimage_end. unpatched, the memmap excludes nothing and the heap eats it.
 uintptr_t const k_image_top = 1;
+// ..and where the pie's base landed, and the copy of its data as the pie has it: what a
+// process laid from this image starts from (x64/proc.c). unpatched, 0: there is none
+uintptr_t const k_pie_base = 0, k_pie_data = 0;
 
 #include "quay.h"
 #include <stdarg.h>

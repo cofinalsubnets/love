@@ -118,7 +118,7 @@
            (r = 'sp ? "sp" ((w9 <= 4 ? "w" "x") + k)))
        (tgt = 'rv64) (peep rv-back r () @ s (!s ? (scare 'gas-reg r) (show s)))
        (show r))
-   (gas-imm tgt n mod) (: t (charm? n ? (show n) n)             ; n a number, or a "sym+k" text
+   (gas-imm tgt n mod) (: t (charm? n || sun? n ? (show n) n) ; n a number, or a "sym+k" text
                           (? (elem mod '(99 97 80)) t (gx86? tgt) ("$" + t) (gthumb? tgt) ("#" + t) t))
    (gas-mem tgt r) (? (gx86? tgt) ("(" + gas-reg tgt r (g32? tgt ? 4 8) 0 + ")")
                       (tgt = 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")

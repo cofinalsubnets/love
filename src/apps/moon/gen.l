@@ -7808,6 +7808,23 @@
           (in? (asmimm + '(114 113 103 109 111)) && any (c \ elem c '(114 113 103)) cs)
            (any (c \ elem c asmimm) cs ? 'either 'pick)
           (name c9)))
+   ; a64: some immediate letter of the set reaches v -- I an add's, J a negated one, K L a
+   ; logical immediate at 32 and 64 bits, M N a single mov, Z zero, i n anything
+   (a64fit? c9 v)
+    (: (addi u) (0 <= u && (u <= 4095 || u % 4096 = 0 && u // 4096 <= 4095))
+       (one16 u) (#(filter (k \ ((u >> (16 * k)) & 0xffff) != 0) ^4) <= 1)
+       (mov1 z) (: m ((1 << z) - 1) u (v & m) (one16 u || one16 (m - u) || a64bm? v z))
+       (fit c) (c @ 73 (addi v) 74 (addi (0 - v)) 75 (a64bm? v 32) 76 (a64bm? v 64)
+                    77 (mov1 32) 78 (mov1 64) 90 (v = 0) 105 1 110 1 0)
+       (any fit (map (i \ c9 i) ^#c9)))
+   ; v at z bits is a logical immediate: a rotated run of ones in an element repeated across it
+   (a64bm? v z)
+    (: u (v & ((1 << z) - 1))
+       (per e) (: h (e // 2) hm ((1 << h) - 1) (h >= 2 && (u & hm) = (u >> h & hm) ? (per h) e))
+       e (per z)
+       em ((1 << e) - 1) x (u & em)
+       y (x ^ (((x << 1) | (x >> (e - 1))) & em))
+       (x != 0 && x != em && net (map (k \ y >> k & 1) ^e) = 2))
    ; a `register T v asm("reg")` variable named as an operand: its pin, else ()
    (asmvpin g env e)
     (e @ ('var nm) (assoc nm env @ en (two? en && two? >>>en ? <>>>en))
@@ -7844,7 +7861,7 @@
        (local? x) (? !(two? x) ()
                      (<x = 'var) (two? (assoc <>x env))
                      (local? <x || local? >x))
-       (? (charm? k) k
+       (? (cint? k) k
           (local? e2) 'no
           ; a probe: what it fails to resolve is no refusal's cause, so the pin is left as found
           ((: u0 (g 'undecl) a (imaddr g e2) (pin g 'undecl u0, a)) @ a
@@ -7947,7 +7964,7 @@
               v (elem k '(imm either) ? (asmk g env e) 'no)
               (k @ 'bad (asmno g ("an asm input constrained \"" + <<l + "\""))
                    'imm (v != 'no ? (iconv >l (['m v 0 0] . acc)) (asmno g "an asm immediate input that is not a constant"))
-                   'either (charm? v ? (iconv >l (['m v 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
+                   'either ((a64? g ? (cint? v && a64fit? <<l v) (charm? v)) ? (iconv >l (['m v 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
                    'mem (iconv >l (['b 'pick ['addr e] 0] . acc))
                    (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
@@ -8005,7 +8022,7 @@
                       (two? labs && two? csops) (asmno g "an asm goto with an esi or edi operand")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
                          (rtext a9 w) (md \ (? (md = 108) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
-                         (itext v) (md \ (? (md = 108) 'bad neutral? (md || !(charm? v) ? 'bad (show v)) (gas-imm tgt v md)))
+                         (itext v) (md \ (? (md = 108) 'bad neutral? (md || !(cint? v) ? 'bad (show v)) (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? (peep asmnames a9 "r?" + ", 0") (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
                          (optext l al acc)
