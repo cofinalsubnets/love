@@ -1093,6 +1093,13 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   two padded pushes, which put the lr at `[fp+16]`: wrong code, silent. gen's `frrec` fuses
   the pair after every IR pass, and a lone fp or lr push left over refuses (240-framerecord.c,
   native on an a64 host).
+- **`__builtin_frame_address` and `__builtin_return_address` above level 0** walk that chain,
+  as gcc's do: level N follows the saved fp N times, the return address one slot above it.
+  Sound where the callers keep their frames, as the kernel's do (kunwind_init_from_caller's
+  `frame_address(1)`, which stopped stacktrace.c: compiles now, globals as clang's). x64, a64
+  and i386 answer as gcc; rv64 refuses, since its s0 sits above the locals and the one a frame
+  saves is not its caller's base, and wasm refuses, having no chain in linear memory. Both had
+  refused every level but 0. Law 297-frameaddr.c.
 - **a gas or holo scare is a refusal**: a function's asm, and the file-scope or `.S` text,
   read under a trap. What used to print `internal error` now names the line's piece.
 - **Q, Qo, +Q, =Q**: a64's base-register memory operand is the `[xN]` "m" already spells;
