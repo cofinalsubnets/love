@@ -523,10 +523,13 @@ lvm(lvm_deferfwd) {                           // entered at the code slot, as a 
  union u *e = cell(Ip[1].x);
  Ip = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? e + 2 : e;
  love_musttail return Continue(); }
-// (defercell interp arity)
+// (defercell interp arity): interp a function of that arity, else ()
 static lvm(lvm_defercell) {
+ word f = Sp[0];
  intptr_t ar = oddp(Sp[1]) ? getcharm(Sp[1]) : 0;
- if (ar < 1) love_musttail return Answerp(1, Sp[0]);
+ if (ar < 1 || oddp(f) || datp(f)                                         // deferfwd enters f, past its curry when ar>1
+     || (ar > 1 && (cell(f)->ap != lvm_cur || cell(f)[1].x != putcharm(ar))))
+  love_musttail return Answerp(1, ZeroPoint);
  Have(10);
  union u *k = (union u*) Hp;
  uintptr_t w = 0;
@@ -537,20 +540,24 @@ static lvm(lvm_defercell) {
  Hp += w + 1;
  tagthread(k, w);
  love_musttail return Answerp(1, word(k + 1)); }
-LvDef("defercell", defercell, 2, NULL);
-// (deferpatch cell native): a native of nif's shape (its header its code) patches the cell; the
-// interp twin back, or anything else, leaves it forwarding. answers the cell
+LvDef("defercell", defercell, 2, "guts");
+// (deferpatch cell native): a native of nif's shape (its header its code) and the cell's arity
+// patches the cell; the interp twin back, or anything else, leaves it forwarding. answers the
+// cell; a cell not deferred, or patched already, answers ()
 static lvm(lvm_deferpatch) {
- union u *v = cell(Sp[0]), *c = v->ap == lvm_cur ? v + 2 : v;
- word n = Sp[1];
- if (c->ap == lvm_deferfwd && evenp(n) && n != c[1].x && !in_data(cell(n)->ap)) {
-  union u *m = cell(n), *mc = m->ap == lvm_cur ? m + 2 : m;
-  if (mc[2].ap == lvm_ret && m[-1].ap == mc->ap) {
+ word x = Sp[0], n = Sp[1];
+ union u *v = evenp(x) && !datp(x) ? cell(x) : NULL,
+         *c = v && v->ap == lvm_cur && oddp(v[1].x) ? v + 2 : v;
+ if (!c || c->ap != lvm_deferfwd || v[-1].ap != lvm_deferfwd)
+  love_musttail return Answerp(1, ZeroPoint);
+ if (evenp(n) && n != c[1].x && !datp(n)) {
+  union u *m = cell(n), *mc = m->ap == lvm_cur && oddp(m[1].x) ? m + 2 : m;
+  if (mc[2].ap == lvm_ret && m[-1].ap == mc->ap && (mc == m ? v == c : v != c && m[1].x == v[1].x)) {
    c->ap = v[-1].ap = mc->ap;
    if ((mc[4].x & 3) != thread_tag) c[4].x = mc[4].x, gen_wb_cell(g, &c[4], mc[4].x);
    c[5].x = n, gen_wb_cell(g, &c[5], n); } }
  love_musttail return Answerp(1, Sp[0]); }
-LvDef("deferpatch", deferpatch, 2, NULL);
+LvDef("deferpatch", deferpatch, 2, "guts");
 
 // (pour dst doff src soff n): copy n bytes of string-or-cask src into cask dst,
 // clamped to both backings (an out-of-range ask copies less, never tramples); answers dst
