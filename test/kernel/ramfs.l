@@ -57,6 +57,8 @@
    (wr p s) (open p "w" @ q (port? q ? (say q s, close q, 1) 0))
  (test
    ("ram-words " = snip (rd "/proc/meminfo") 0 10)
+   ; the free list is ffalloc's whole invariant: blocks in address order, none touching
+   (elem "free-ordered 1" (split "\n" (rd "/proc/meminfo")))
    ("pool-words " = snip (rd "/proc/gauge") 0 11)
    ; the boot line, the row that says what this machine was asked to run. love's own
    ; `cmdline` is (. "love" bootargv), so the file opens on that word whatever the

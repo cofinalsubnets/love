@@ -752,13 +752,15 @@ static int k_row(char *b, int at, char const *k, uintptr_t v) {
   return at; }
 
 static int k_meminfo(char *b) {
-  uintptr_t free = 0, blocks = 0, big = 0;
+  uintptr_t free = 0, blocks = 0, big = 0, up = 1;
   for (struct mem const *m = kmem; m; m = m->next)
-    free += m->len, blocks++, big = m->len > big ? m->len : big;
+    free += m->len, blocks++, big = m->len > big ? m->len : big,
+    up &= !m->next || after((struct mem*) m) < m->next;      // ascending, no two touching
   int at = k_row(b, 0, "ram-words", kram_words);
   at = k_row(b, at, "free-words", free);
   at = k_row(b, at, "free-blocks", blocks);
   at = k_row(b, at, "free-largest", big);
+  at = k_row(b, at, "free-ordered", up);
   // heap bytes only: a baked row costs the image, not the RAM this file is about.
   uintptr_t ents = 0, bytes = 0;
   for (int i = 0; i < k_fs.n; i++)
@@ -2154,16 +2156,15 @@ static union u
   nif_kshow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kshow}, {lvm_ret0}},
   nif_kscan[] = {{lvm_kscan}, {lvm_ret0}};
 
-// link every free range kboot reports into the free list, in array order: kmem is the last
-// and the earlier ones link through ->next.
+// every free range kboot reports goes onto the list as a free does: in address order, merged
+// with a range it touches, whatever order the map gave them in
 static bool meminit(void) {
   if (!kboot.ram_n) return false;
   for (uint32_t i = 0; i < kboot.ram_n; i++) {
     struct mem *m = (struct mem*) (kboot.hhdm + kboot.ram[i].base);
     m->len = kboot.ram[i].len / sizeof(uintptr_t);
     kram_words += m->len;
-    m->next = kmem;
-    kmem = m; }
+    ff_free(&kmem, m->_); }
   return true; }
 
 // how many pixels a glyph pixel gets: the door's, where it knows the screen better than
