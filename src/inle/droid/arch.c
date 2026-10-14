@@ -15,6 +15,9 @@ void kmain(void);
 void k_kb_poll(void);
 bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale);
 void k_droid_horn(char const *out, char const *in);
+void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x);
+void k_paste_in(uint8_t const *s, long n);
+void k_paste_end(void);
 extern uint8_t const cleat_8x16[256][16];
 
 #define sys(n, a, b, c, d) __love_sys(n, (long) (a), (long) (b), (long) (c), (long) (d), 0, 0)
@@ -25,8 +28,9 @@ struct k_tio { uint32_t i, o, c, l; uint8_t line, cc[19]; };
 // the machine: the serial line, and the face -- the bridge's window (src/apps/droid/bridge.c),
 // the paper shown there as the rows that changed since the last frame (was), its records
 // read into r; under the paper the keys row, row pixels of the screen's h (rowh when it fits),
-// with ctrl and alt held off the row (ctl alt) or the keyboard's own (pctl palt)
-static struct { struct k_tio was; bool tty, eof, drew, all, ctl, alt, pctl, palt; uint64_t tick, sent;
+// with ctrl and alt held off the row (ctl alt) or the keyboard's own (pctl palt); a paste
+// asked of the bridge and not yet ended, and a touch that began on the paper (held)
+static struct { struct k_tio was; bool tty, eof, drew, all, ctl, alt, pctl, palt, pasting, held; uint64_t tick, sent;
                 unsigned n, rn, sc, row, rowh; int fd; uint32_t w, h, cap, *fb, *shown;
                 unsigned char b[2048], r[192]; } m = { .fd = -1 };
 
@@ -116,17 +120,19 @@ static int face_key(int32_t code, int32_t c, unsigned char *o) {
   return o[0] = 0xf0 | c >> 18, o[1] = 0x80 | (c >> 12 & 63), o[2] = 0x80 | (c >> 6 & 63), o[3] = 0x80 | (c & 63), 4; }
 
 // the keys a phone's keyboard lacks, a row of two under the paper: [label code char], the
-// label in the console's font (cp437), the code an android keycode for face_key
-static struct { char lab[5]; int16_t code, c; } const keys[14] = {
-  {"esc", 111, 0}, {"|", 0, '|'}, {"-", 0, '-'}, {"home", 122, 0}, {"\x18", 19, 0}, {"end", 123, 0}, {"pgup", 92, 0},
-  {"tab", 61, 0}, {"ctrl", 113, 0}, {"alt", 57, 0}, {"\x1b", 21, 0}, {"\x19", 20, 0}, {"\x1a", 22, 0}, {"pgdn", 93, 0} };
+// label in the console's font (cp437), the code an android keycode for face_key (279 paste)
+enum { kcols = 8, paste_key = 279 };
+static struct { char lab[6]; int16_t code, c; } const keys[2 * kcols] = {
+  {"esc", 111, 0}, {"|", 0, '|'}, {"-", 0, '-'}, {"home", 122, 0}, {"\x18", 19, 0}, {"end", 123, 0}, {"pgup", 92, 0}, {"paste", paste_key, 0},
+  {"tab", 61, 0}, {"ctrl", 113, 0}, {"alt", 57, 0}, {"\x1b", 21, 0}, {"\x19", 20, 0}, {"\x1a", 22, 0}, {"pgdn", 93, 0}, {"/", 0, '/'} };
 
 // the row painted under the paper, each key three cells tall, a held modifier lit
 static void row_draw(void) {
   if (!m.row) return;
   unsigned const gw = 8 * m.sc, gh = 16 * m.sc, kh = m.row / 2, y0 = m.h - m.row;
-  for (unsigned i = 0; i < 14; i++) {
-    unsigned const r = i / 7, x0 = i % 7 * m.w / 7, x1 = (i % 7 + 1) * m.w / 7, n = (unsigned) strlen(keys[i].lab);
+  for (unsigned i = 0; i < 2 * kcols; i++) {
+    unsigned const r = i / kcols, x0 = i % kcols * m.w / kcols, x1 = (i % kcols + 1) * m.w / kcols,
+                   n = (unsigned) strlen(keys[i].lab);
     bool const lit = (keys[i].code == 113 && m.ctl) || (keys[i].code == 57 && m.alt);
     uint32_t const bg = lit ? 0x3c6eaa : (r + i) % 2 ? 0x1c1c1c : 0x2c2c2c;
     unsigned const lx = x0 + (n * gw < x1 - x0 ? (x1 - x0 - n * gw) / 2 : 0), ly = y0 + r * kh + (kh - gh) / 2;
@@ -143,11 +149,16 @@ static void row_draw(void) {
 static unsigned char ctrl_of(unsigned char x) {
   return x == '?' ? 0x7f : x == ' ' ? 0 : (x >= '@' && x <= '_') || (x >= 'a' && x <= 'z') ? x & 0x1f : x; }
 
+// the clipboard asked of the bridge, its text to come as 'P' records
+static void paste_ask(void) {
+  if (m.fd >= 0 && !m.pasting) face_out("V", 1), m.pasting = true; }
+
 // a key into kmain's queue under the held modifiers: ctrl folds it, alt sends esc first,
 // and the row's own let go
 static int key_send(int32_t code, int32_t c) {
   unsigned char o[8];
   bool const ctl = m.ctl || m.pctl, alt = m.alt || m.palt;
+  if (code == paste_key) return paste_ask(), 0;
   if (ctl && code >= 29 && code <= 54) c = 'a' + code - 29;      // the letters, whatever ctrl made of them
   int n = face_key(code, c, o);
   if (!n) return 0;
@@ -161,8 +172,8 @@ static int key_send(int32_t code, int32_t c) {
 static int row_tap(int32_t x, int32_t y) {
   int32_t const y0 = (int32_t) (m.h - m.row);
   if (!m.row || y < y0 || x < 0 || (uint32_t) x >= m.w) return 0;
-  unsigned const i = 7 * ((unsigned) (y - y0) * 2 / m.row) + (unsigned) x * 7 / m.w;
-  if (i >= 14) return 0;
+  unsigned const i = kcols * ((unsigned) (y - y0) * 2 / m.row) + (unsigned) x * kcols / m.w;
+  if (i >= 2 * kcols) return 0;
   if (keys[i].code == 113) return m.ctl = !m.ctl, row_draw(), 0;
   if (keys[i].code == 57) return m.alt = !m.alt, row_draw(), 0;
   return key_send(keys[i].code, keys[i].c); }
@@ -176,8 +187,20 @@ static void face_seat(uint32_t w, uint32_t h) {
 
 static int32_t le32(unsigned char const *p) { return (int32_t) (p[0] | p[1] << 8 | p[2] << 16 | (uint32_t) p[3] << 24); }
 
+// a touch on the paper is the pointer's left button, as kmain takes it (a drag selects and its
+// release copies); one that began there stays there, its y held above the row
+static int paper_touch(int how, int32_t x, int32_t y) {
+  uint32_t const ph = m.h - m.row;
+  if (!how) m.held = (uint32_t) y < ph;
+  if (!m.held) return 0;
+  k_pointer((uint32_t) how, 0, y < 0 ? 0 : (uint32_t) y >= ph ? ph - 1 : (uint32_t) y,
+            x < 0 ? 0 : (uint32_t) x >= m.w ? m.w - 1 : (uint32_t) x);
+  if (how == 1) m.held = false;
+  return 1; }
+
 // the bridge's records: keys into kmain's queue while it has room, a new size re-seats the
-// paper, a touch on the keys row is its key. its end is the machine's
+// paper, a touch on the keys row is its key, one on the paper the pointer, a paste ten bytes
+// a record (P n bytes..) until an empty one. its end is the machine's
 static void face_take(int room) {
   if (m.fd < 0) return;
   if (m.rn < sizeof m.r) {
@@ -185,10 +208,13 @@ static void face_take(int room) {
     if (k == 0) leave(0);
     if (k > 0) m.rn += (unsigned) k; }
   unsigned at = 0;
-  for (; at + 12 <= m.rn && room >= 8; at += 12) {
+  for (; at + 12 <= m.rn && room >= (m.r[at] == 'T' ? 40 : 16); at += 12) {   // a mouse report, a paste's piece and bracket
     unsigned char const *r = m.r + at;
     int32_t b = le32(r + 4), c = le32(r + 8);
-    if (r[0] == 'K' && (b == 113 || b == 114)) m.pctl = r[1];
+    if (r[0] == 'P' && r[1]) k_paste_in(r + 2, r[1] < 10 ? r[1] : 10), room -= 16;
+    else if (r[0] == 'P') k_paste_end(), m.pasting = false, room -= 6;
+    else if (r[0] == 'T' && paper_touch(r[1], b, c)) room -= 36;
+    else if (r[0] == 'K' && (b == 113 || b == 114)) m.pctl = r[1];
     else if (r[0] == 'K' && (b == 57 || b == 58)) m.palt = r[1];
     else if (r[0] == 'K' && r[1]) room -= key_send(b, c);
     else if (r[0] == 'T' && !r[1]) room -= row_tap(b, c);
@@ -259,6 +285,13 @@ bool k_nap(uintptr_t ms) {
   k_kb_poll();
   k_tick_sync();
   return true; }
+
+// a selection to the bridge's clipboard: 'C' u32 n, then its bytes
+void k_copy_out(uint8_t const *s, uintptr_t n) {
+  unsigned char h[5] = { 'C', n & 255, n >> 8 & 255, n >> 16 & 255, n >> 24 & 255 };
+  if (m.fd < 0 || n >> 24) return;
+  face_out(h, 5);
+  face_out(s, n); }
 
 void k_reset(void) { leave(0); }
 
