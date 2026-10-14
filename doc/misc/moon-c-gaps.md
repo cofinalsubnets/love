@@ -1335,6 +1335,10 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   register with no number, a wrong word in silence. Of 400 random lines over these, 385 lay
   llvm-mc's words and refusals; the other 15 are casp's `[xn, #0]`, which the Arm ARM spells
   and llvm-mc refuses, laid as `[xn]`. Golden gas.a64.xp.
+- **the generic system-register spelling below op0 2** (`s0_3_c1_c0_1`, barrier.h's `wfit`):
+  op0 0 and 1 lay the system-instruction space, `msr` as wfit, sys or a hint, `mrs` as sysl,
+  word for word as llvm-mc lays them. holo had refused all but op0 2 and 3 (`badsysreg`), which
+  stopped `__delay`. Golden gas.a64.sgen.
 - **an a64 operand that takes an immediate or a register** (`"Kr"`, `"Lr"`, `"Ir"`, `"Jr"`,
   the ll/sc cmpxchg's `[old] "Kr"`): a constant rides the word only where its letter encodes
   it -- K L a logical immediate at 32 and 64 bits, I an add's, J a negated one, M N a single
