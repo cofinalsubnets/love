@@ -10,6 +10,15 @@
 (heard () @ fzhelp
    (hear (a \ b \ (= a 'missing ? () (fzhelp a b)))))
 
+; pinned cases, each its own top-level form so the glaze takes it: a fixnum reaching a group's
+; map or chain slot through a sibling, recursion past the native stack budget, an inner : that
+; rebinds a lambda sibling's name
+(: (gzG h i) (i ? (peep h 0 0) (gzG h 1)) (gzF h) (gzG h 0) (puts (show [(gzF 7) (gzF -1) (gzF {0 5}) (gzF "ab")] + "\n")))
+(: (gzc l i) (i ? (two? l) (gzc l 1)) (gzd l) (gzc l 0) (puts (show [(gzd 6) (gzd [1 2])] + "\n")))
+(: (gzr n) (n = 0 ? 0 (1 + gzr (n - 1))) (puts (show (gzr 400000) + "\n")))
+(: (gzl l) (two? l ? (1 + gzl (cup l)) 0) (puts (show (gzl ^400000) + "\n")))
+(: (gzf a b) 0 (gzh y) (: gzf y (gzf 1 2)) (puts (show [(gzh 9) (gzh 'zz) (gzh (+ 1))] + "\n")))
+
 (: (gfz0 i) (i + 1)                                ; globals the call-out lane can resolve: two arithmetic,
    (gfz1 i) (i * 2)                                ; two handing back a value the integer lane cannot hold
    (gfz2 i) (i < 2 ? " " i)
