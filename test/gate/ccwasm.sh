@@ -25,9 +25,9 @@ name=test_ccwasm
 # 229-labelvalue likewise: a wasm label has no address to take or jump through.
 unsupported="100-complex 280-cxf-fuzz 111-int128 117-vastruct 151-w128fuzz 160-rangeinit 229-labelvalue 256-inline-retaddr 266-vaarg-struct"
 # x64 stays the oracle for these. 268: clang has no __builtin_*_overflow_p, so emcc cannot
-# build it. 294: emcc's malloc ABORTS on a size it cannot grow to (ABORTING_MALLOC) where C
+# build it. 298: emcc's malloc ABORTS on a size it cannot grow to (ABORTING_MALLOC) where C
 # answers NULL
-noemcc="268-overflow-p 294-malloc-wrap"
+noemcc="268-overflow-p 298-malloc-wrap"
 
 d=$ho/cc-wasm
 rm -rf "$d"
