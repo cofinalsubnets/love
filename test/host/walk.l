@@ -9,7 +9,7 @@
 (: g {'turn 0.1 'walk 0.5 'tilt 0.2 'up 0.3 'down -0.3}
    (at x z th) {'px x 'pz z 'th th 'ph 0.0}
    (put st x z) (pins st 'px x 'pz z)
-   (k st key) (walk-key st key g put)
+   (k st key) (walk-key st (view-binds key) g put)
    (near a b) (mag (a - b) < 1e-9)
    ; ..a wall along x = 1: east of it is not free
    (free? st x z) (x < 1.0)
@@ -24,5 +24,14 @@
        (walk-slide (at 0.2 0.0 0.0) 0.6 0.4 free? @ s (near (s 'px) 0.6 && near (s 'pz) 0.4))
        (walk-slide (at 0.8 0.0 0.0) 1.2 0.0 (\ st x z 0) @ s (near (s 'px) 0.8 && near (s 'pz) 0.0))
        (walk-dt {} @ s (0.02 <= s 'dt <= 0.25 && charm? (s 'wall)))))
+
+; --- bindings: a level's laid over view's, its own winning and () unbinding, view's left as
+; --- they were; the help a line an action listed and bound, in the list's order
+(: wb (view-bind view-binds {112 'where 104 () 108 'spin})
+   hl (view-help wb (view-listed ['spin 'where 'nowhere]))
+ (test (wb 112 = 'where) (wb 104 = ()) (wb 108 = 'spin) (wb -2 = 'turn-right) (wb -1 = 'turn-left)
+       (view-binds 104 = 'turn-left) (view-binds 108 = 'turn-right) (view-binds 112 = ())
+       (#hl = 10) (hl 0 = "↑ k    forward") (hl 1 = "↓ j    back") (hl 2 = "←      turn-left")
+       (hl 6 = "l      spin") (hl 7 = "p      where") (hl 8 = "?      help") (hl 9 = "esc q  quit")))
 (test_fin ())
 (puts "walk: ok\n")

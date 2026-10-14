@@ -16,11 +16,11 @@
 ; are pure, gated by test/host/stones.l; only stones-walk and stones-run tie the tty.
 ;
 ; run: love lore stones [--time HH:MM] [--kitty|--cells|--window]
-;      h l or the arrows turn, k j step, u n look up and down, space kneels at the altar
-;      (the bottom row names them for the first seconds of a run);
-;      there 1 to 5, or k j and enter, choose what to do, and a walking key or space stands
-;      again; q or esc leaves, or walk back out of the canyon
-(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-move move-at curve acts ghost-on? post-batch stones-light
+;      view's walking keys, and stones-binds: space kneels at the altar (the bottom row
+;      names them for the first seconds of a run); there 1 to 5, or k j and enter, choose
+;      what to do, and a walking key or space stands again; ? the keys, q or esc leaves,
+;      or walk back out of the canyon
+(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-binds stones-move move-at curve acts ghost-on? post-batch stones-light
          stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
 (borrow 'rove)
@@ -41,10 +41,14 @@
  reach 2.2                                ; how near the altar a kneel can start
  dlg-pause 1.0                            ; seconds after an act before the choices come back
  help-t 12.0                              ; seconds the keys are named at the start
- help-text "h/j/k/l move  ·  u/n look up/down  ·  space interacts"
+ help-text "h/j/k/l move  ·  u/n look up/down  ·  space interacts  ·  ? keys"
  ; the choices at the altar, and the keys that stand a kneeler up once they are put away
  acts ["Breathe" "Weep" "Bleed" "Beg" "Wait"]
- rise-keys [32 104 108 107 106 117 110 -1 -2 -8 -9]
+ ; ..the stones' own keys, over view's: space kneels and stands, and the choices, each its
+ ; number or enter for the one marked
+ stones-binds {32 'kneel 13 'choose 10 'choose 49 'breathe 50 'weep 51 'bleed 52 'beg 53 'wait}
+ picks ['breathe 'weep 'bleed 'beg 'wait]                ; acts', as actions
+ rise-acts ['kneel 'forward 'back 'turn-left 'turn-right 'look-up 'look-down]
  ; each act a move made from the kneel: keys [t offset] for the eye's height, its pitch,
  ; its tilt and how far it leans forward; how long; and the drops it lets fall, [t kind]
  (act-keys i) (? (i = 0)
@@ -520,14 +524,14 @@
          k (min2 0.0 (dx * nx + dz * nz) - 0.05 * sqrt (dx * dx + dz * dz))
          sx (x0 + dx - k * nx) sz (z0 + dz - k * nz)
          (? (free? st sx sz) (pins st 'px sx 'pz sz) (free? st x z0) (pin st 'px x) (free? st x0 z) (pin st 'pz z) st))))
- ; ..each key as far as the time since the last frame, 'dt, carries it
- (stones-step st k) (: dt (peep st 'dt (1.0 / fps))
+ ; ..each action as far as the time since the last frame, 'dt, carries it
+ (stones-step st a) (: dt (peep st 'dt (1.0 / fps))
    (? (st 'done) st
-      (charm? (st 'dlg)) (dialog-key st k)
-      (st 'eye = 'kneel) (elem k rise-keys ? (rise! st) st)
+      (charm? (st 'dlg)) (dialog-key st a)
+      (st 'eye = 'kneel) (elem a rise-acts ? (rise! st) st)
       (st 'eye != 'walk) st
-      (k = 32) (altar-near? st ? (move! st (kneel-move st)) st)
-      (walk-key st k {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.45 'down -1.2} put! @ () st s s)))
+      (a = 'kneel) (altar-near? st ? (move! st (kneel-move st)) st)
+      (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.45 'down -1.2} put! @ () st s s)))
  ; a frame's motion: the clock at its own pace; the eye on a move of its own, or easing to
  ; the ground's height; and done once out on the plain
  (stones-move st) (: g (stones-ground (st 'px) (st 'pz)) y (st 'py) mt (peep st 'mt 0.0 + peep st 'dt (1.0 / fps))
@@ -601,12 +605,13 @@
  ; takes the one marked, and space puts them away and stands. the last, wait, puts them
  ; away and stays kneeling, and is remembered; another, its move, and the choices again
  ; after it ---
- (dialog-key st k) (: n #acts c (st 'dlg)
-   (? (49 <= k && k < 49 + n) (choose! st (k - 49))
-      (elem k [107 -8]) (pin st 'dlg ((c + n - 1) % n))
-      (elem k [106 -9]) (pin st 'dlg ((c + 1) % n))
-      (elem k [13 10]) (choose! st c)
-      (k = 32) (rise! st)
+ (dialog-key st a) (: n #acts c (st 'dlg)
+   (pick i) (? (n <= i) () (picks i = a) i (pick (i + 1)))
+   (? (charm? (pick 0)) (choose! st (pick 0))
+      (a = 'forward) (pin st 'dlg ((c + n - 1) % n))
+      (a = 'back) (pin st 'dlg ((c + 1) % n))
+      (a = 'choose) (choose! st c)
+      (a = 'kneel) (rise! st)
       st))
  (choose! st i) (: _ (pins st 'dlg () 'sel i)
    (i = #acts - 1 ? (pins st 'waited 1 'wait-at (st 'mt)) (move! st (act-move st i))))
@@ -714,6 +719,7 @@
                                ; pace would otherwise take for the frames' and run far ahead
                                (scene st, st)))
                'size stones-size 'frame stones-frame 'key stones-step
+               'binds (view-bind view-binds stones-binds) 'listed (view-listed ['kneel])
                ; ..the frame's own time, kept for the next frame's keys: a slow frame steps further
                'tick (st \ (walk-dt st,
                             stones-move st))
@@ -724,7 +730,7 @@
                'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
  ; ..and kitty's picture taken down after, where it was put up
  (stones-run o) (view-stage o stones-walk (_ \ (say out mesh-gone, flush out)))
- stones-usage "usage: love lore stones [--time HH:MM] [--kitty|--cells|--window]   (h l turn, k j step, u n look, space kneels at the altar, and there 1 to 5 or k j and space choose; a walking key or space stands again; q or esc leaves, or walk back out of the canyon)"
+ stones-usage "usage: love lore stones [--time HH:MM] [--kitty|--cells|--window]   (h l turn, k j step, u n look, space kneels at the altar, and there 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)
   (: (num w) (0 < #w && all (c \ 48 <= c <= 57) (chars w) ? <(sound w))

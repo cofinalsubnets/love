@@ -310,13 +310,14 @@
           + text + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
  ; ..or onto a window's paper and shown, view's bands painted over it by the console's
- ; painter a cell 8 by 16; answers "", there being nothing for the terminal
+ ; painter a cell 8 by 16, and 'over's, the help, over those; answers "", there being nothing for the terminal
  (mesh-win st f bands) (: win (st 'win) k (st 'kp) pw (k * st 'w) ph (k * st 'h)
    wh (window-size win) W <wh H (wh 1) P (window-paper win)
    b (frame-bytes f 1 1)
    _ (? (pw = W && ph <= H) (pour P 0 b 0 #b)
         (each ^(min ph H) (y \ pour P (y * W * 4) b (y * pw * 4) (4 * min pw W))))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
+   ov (peep st 'over {}) _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
    (window-show win 0 H, ""))
  ; ..a band [x0 cells fg bg] on cell row r: its pens 24-bit, six bits a channel, or the 256
  (mesh-band st P W H r bd) (: x0 (bd 0) cs (bd 1) n #cs

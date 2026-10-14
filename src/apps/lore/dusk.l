@@ -10,7 +10,7 @@
 ; dusk-run tie the tty and horn. dusk-walk takes a raised stage, so the apartment hands over.
 ;
 ; run: love lore dusk    h l or the arrows turn, k or up walks on, u n look up and down,
-;                   space walks on until pressed again; q or esc leaves.
+;                   space walks on until pressed again; ? the keys, q or esc leaves.
 ;                   HORN=none plays silent on a seat with no sound device
 (module (dusk dusk-run dusk-walk dusk-main dusk-new dusk-size dusk-step dusk-move dusk-settle
          dusk-frame dusk-tables dusk-song-new dusk-song-feed sun-at bush-of garage-top
@@ -215,7 +215,7 @@
  ; is no walking back -- u n look up and down, and space walks on by itself, the turns
  ; steering it
  facing (pi / 3.0)
- (dusk-step st k) (walk-rail st k facing dusk-move)
+ (dusk-step st a) (walk-rail st a facing dusk-move)
  ; --- the song: a pelog chime now and then, and a gong under it ------------------------
  ; pelog bem, five of its seven uneven steps, in semitones from middle c
  pelog [0.0 1.2 2.7 6.7 7.85]
@@ -229,11 +229,12 @@
  ; at a time, and the garage after it. dusk-walk takes a stage already raised, and
  ; dusk-run raises one ---
  (dusk-walk _) (view-walk {'new dusk-new 'size dusk-size 'frame dusk-frame 'key dusk-step 'fps fps
+                           'binds (view-bind view-binds walk-binds) 'listed walk-listed
                            'tick (st \ (? (st 'done) (dusk-settle st) (st 'walk) (dusk-move st 0.25)))
                            'song (view-song dusk-song-new dusk-song-feed)
                            'linger done-ms 'next ['garage 'garage-walk]})
  (dusk-run _) (view-run dusk-walk)
- dusk-usage "usage: love lore dusk   (h l turn, k walks on, u n look, space walks on to the garage; q or esc leaves)"
+ dusk-usage "usage: love lore dusk   (h l turn, k walks on, u n look, space walks on to the garage; ? the keys, q or esc leaves)"
  (dusk-main as) (view-main "dusk" dusk-usage (as \ view-words as []) dusk-run as)
  _ ((cite 'lore 'lore-enlist) 'dusk (udoor 'dusk dusk-main dusk-usage 1 1)))
 ) ; module dusk

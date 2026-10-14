@@ -27,13 +27,13 @@
 ; court-new, court-step, court-move and court-frame are pure, gated by test/host/court.l;
 ; only court-walk and court-run tie the tty. court-walk takes a stage already raised.
 ;
-; run: love lore court  h l or the arrows turn, k j step, u n look up and down;
-;                       [ ] an hour back or on, t the time's pace, c the cloud, p rain
-;                       or snow, v the sky smooth or in pixels; q or esc leaves
+; run: love lore court  view's walking keys, and court-binds: [ ] an hour back or on, t
+;                       the time's pace, c the cloud, p rain or snow, v the sky smooth or
+;                       in pixels; ? the keys, q or esc leaves
 ;      love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather COVER]
 ;                      [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells]
 ;                      how to start; the cover, the style, rain and snow words may stand alone
-(module (court court-run court-walk court-main court-new court-size court-step court-move
+(module (court court-run court-walk court-main court-new court-size court-step court-move court-binds
          court-frame court-sun court-light court-clock court-now court-local court-doy court-season
          court-opts court-wx-pick court-fall-pick court-month court-pens court-maps
          tree-grow top-h block-h crown-y runs boxes strands wall-of wall-texel stars windows
@@ -164,14 +164,16 @@
                   qx (x2 - bs 0) qz (z2 - bs 2) d (sqrt (qx * qx + qz * qz)) m (0.3 + body-r)
                   (d < m ? (pins st 'px (bs 0 + qx * m / max2 d 0.001) 'pz (bs 2 + qz * m / max2 d 0.001))
                      (pins st 'px x2 'pz z2)))
- (court-step st k) (: (tell st2) (pin st2 'shown (st 't + 2 * fps))
-   (walk-key st k {'turn turn-step 'walk (walk-v / fps) 'tilt tilt-step 'up 1.45 'down -1.2} put!
-    @ () (k @ 91 (tell (pin st 'sim (st 'sim - 3600.0)))
-              93 (tell (pin st 'sim (st 'sim + 3600.0)))
-              116 (tell (pin st 'pace ((st 'pace + 1) % #(st 'paces))))
-              99 (tell (pins st 'wx (wx-of ((st 'wx 'cover + 1) % 4) (st 'wx 'style) (sky-fall (st 'wx))) 'drift 0))
-              118 (tell (pin st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel) (sky-fall (st 'wx)))))
-              112 (tell (pins st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style) ((sky-fall (st 'wx) + 1) % 3)) 'drift 0))
+ ; ..the court's own keys, over view's
+ court-binds {91 'hour-back 93 'hour-on 116 'pace 99 'clouds 118 'sky-style 112 'fall}
+ (court-step st a) (: (tell st2) (pin st2 'shown (st 't + 2 * fps))
+   (walk-key st a {'turn turn-step 'walk (walk-v / fps) 'tilt tilt-step 'up 1.45 'down -1.2} put!
+    @ () (a @ 'hour-back (tell (pin st 'sim (st 'sim - 3600.0)))
+              'hour-on (tell (pin st 'sim (st 'sim + 3600.0)))
+              'pace (tell (pin st 'pace ((st 'pace + 1) % #(st 'paces))))
+              'clouds (tell (pins st 'wx (wx-of ((st 'wx 'cover + 1) % 4) (st 'wx 'style) (sky-fall (st 'wx))) 'drift 0))
+              'sky-style (tell (pin st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel) (sky-fall (st 'wx)))))
+              'fall (tell (pins st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style) ((sky-fall (st 'wx) + 1) % 3)) 'drift 0))
               st)
       s s))
  ; a frame's motion: the clock, and the leaves -- now and then one lets go of the top of
@@ -799,10 +801,12 @@
                                   _ (wx ? (pins st 'wx wx 'drift (opt 'fix ? 0 1)))
                                   (charm? p ? (pins st 'paces (p . paces) 'pace 0) st)))
                'size court-size 'frame court-frame 'key court-step 'tick court-move
+               'binds (view-bind view-binds court-binds)
+               'listed (view-listed ['hour-back 'hour-on 'pace 'clouds 'sky-style 'fall])
                'fps fps 'song (hn \ ()) 'linger 0 'next ()}))
  ; ..and kitty's picture taken down after, where it was put up
  (court-run o) (view-run (_ \ court-walk o), say out mesh-gone, flush out, 0)
- court-usage "usage: love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow, v the sky's style; q or esc leaves)"
+ court-usage "usage: love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow, v the sky's style; ? the keys; q or esc leaves)"
  ; --- the words: a date, a time, a pace, the weather's cover and the sky's style, each at
  ; most once and in any order -> the walk's start, or () for words it cannot read. a date
  ; or a time alone keeps the other from now ---

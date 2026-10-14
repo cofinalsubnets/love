@@ -1,7 +1,8 @@
 ; test/host/lorewin.l -- lore in a window, headless: a window with no screen ('evq its events)
-; under view's loop, the keys as they act -- a press once, a walking key every frame it is
-; held, not when the level says not now, q the end -- and the corridor painted onto its paper
-; at 8 by 16 a cell, the picture and the bottom row's words over it.
+; under view's loop, the keys as the actions they bind -- a press once, a walking key every
+; frame it is held, not when the level says not now, q the end, ? the help while it is held
+; -- and the corridor painted onto its paper at 8 by 16 a cell, the picture and the bottom
+; row's words over it.
 ; not in the corpus: crew modules. run: cat test/00-init.l test/host/lorewin.l | out/love
 (borrow 'view)
 (borrow 'corridor)
@@ -9,22 +10,26 @@
 
 (: _ (setenv "HORN" "none")
    ; the events frame t reads, each left in the queue by the frame before: k held through
-   ; frames 0 to 2, p pressed at 3 and let go at 4, q at 6
+   ; frames 0 to 2, p pressed at 3 and let go at 4, q at 6; or ? down at 1, up at 3
    script {0 [['down 37]] 3 [['up 37] ['down 25]] 4 [['up 25]] 6 [['down 16]]}
-   (run held) (: win {'w 640 'h 400 'paper (cask (640 * 400 * 4)) 'evq (script 0)}
-                 lv {'new (w \ h \ {'w w 'h h 't 0 'log ()})
-                     'size (st \ w \ r \ pins st 'w w 'h (2 * r))
-                     'frame (st \ "")
-                     'key (st \ k \ pin st 'log ([(st 't) k] . st 'log))
-                     'tick (st \ pin win 'evq (peep script (st 't + 1) ()))
-                     'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win 'held held}
-                 st (view-walk lv)
-                 [(rev (st 'log)) (st 'w) (st 'h)])
-   a (run (_ \ 1))
-   b (run (_ \ 0))
- (test (a 0 = [[0 107] [1 107] [2 107] [3 112]])                 ; k each frame held, then p once
-       (b 0 = [[0 107] [3 112]])                                  ; held, but the level says not now
-       (a 1 = 80) (a 2 = 50)))                                    ; 640 by 400: 80 cells by 25 rows
+   asked {1 [['down 42] ['down 53] ['text "?"]] 3 [['up 53] ['up 42]] 5 [['down 16]]}
+   (run sc held) (: win {'w 640 'h 400 'paper (cask (640 * 400 * 4)) 'evq (peep sc 0 ())}
+                    lv {'new (w \ h \ {'w w 'h h 't 0 'log () 'helped ()})
+                        'size (st \ w \ r \ pins st 'w w 'h (2 * r))
+                        'frame (st \ ((0 < #(keys (peep st 'over {})) ? (pin st 'helped (st 't . st 'helped))), ""))
+                        'key (st \ a \ pin st 'log ([(st 't) a] . st 'log))
+                        'tick (st \ pin win 'evq (peep sc (st 't + 1) ()))
+                        'binds (view-bind view-binds {112 'where})
+                        'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win 'held held}
+                    st (view-walk lv)
+                    [(rev (st 'log)) (st 'w) (st 'h) (rev (st 'helped))])
+   a (run script (_ \ 1))
+   b (run script (_ \ 0))
+   c (run asked (_ \ 1))
+ (test (a 0 = [[0 'forward] [1 'forward] [2 'forward] [3 'where]])   ; k each frame held, then p once
+       (b 0 = [[0 'forward] [3 'where]])                              ; held, but the level says not now
+       (a 1 = 80) (a 2 = 50)                                          ; 640 by 400: 80 cells by 25 rows
+       (c 3 = [1 2]) (c 0 = ())))                                     ; the help while ? is down, and no action
 
 ; --- the corridor on a window's paper: the picture where the hall is lit, and with p the
 ; --- bottom row's words, their ground and a letter's ink

@@ -4,7 +4,8 @@
 ; pixel says its colours as pens here too: 24-bit, or the 256 palette dithered.
 (module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays
          view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
-         view-deep? view-words view-flag view-arg view-main view-song view-stage view-set1)
+         view-deep? view-words view-flag view-arg view-main view-song view-stage view-set1
+         view-binds view-bind view-walking view-listed view-help view-help-say view-help-bands)
 (borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
 (borrow 'posix)    ; close, for the horn
@@ -93,27 +94,70 @@
    (rows y) (y < h // 2 ? (row 0 -1 -1 (2 * y * w) (peep bands y ()),
                            say j (esc + "[0m"), y + 1 < h // 2 ? (say j "\r\n"), rows (y + 1)))
    (rows 0, slurp j))
- ; a key in a window, by its place -> the key a terminal would have sent for it: the
- ; letters, the digits, space, and the arrows as the cli's numbers; q and esc 'quit
- view-set1 {16 'quit 1 'quit 57 32 331 -1 333 -2 328 -8 336 -9
-            17 119 18 101 19 114 20 116 21 121 22 117 23 105 24 111 25 112
+ ; --- keys: a binding is a tablet, a key's code -> the action it names, a symbol. a code is
+ ;     what a terminal sends, its byte, or an arrow as the cli has it, -1 -2 -8 -9; a window's
+ ;     keys come to the same codes. a level binds its own over these ---
+ view-binds {104 'turn-left -1 'turn-left 108 'turn-right -2 'turn-right 107 'forward -8 'forward
+             106 'back -9 'back 117 'look-up 110 'look-down 63 'help 113 'quit 27 'quit}
+ ; ..b with o laid over it, o's own winning; a code o binds to () comes unbound
+ (view-bind b o) (: t {} _ (each (keys b) (k \ pin t k (b k))) _ (each (keys o) (k \ pin t k (o k))) t)
+ ; ..the walking ones, which act every frame a window's key is held
+ view-walking ['forward 'back 'turn-left 'turn-right 'look-up 'look-down]
+ ; a key in a window, by its place -> its code where it types nothing: space, esc, enter,
+ ; the arrows; the rest come by what they type
+ view-set1 {1 27 28 13 57 32 331 -1 333 -2 328 -8 336 -9
+            16 113 17 119 18 101 19 114 20 116 21 121 22 117 23 105 24 111 25 112
             30 97 31 115 32 100 33 102 34 103 35 104 36 106 37 107 38 108
-            44 122 45 120 46 99 47 118 48 98 49 110 50 109
+            44 122 45 120 46 99 47 118 48 98 49 110 50 109 53 47
             2 49 3 50 4 51 5 52 6 53 7 54 8 55 9 56 10 57 11 48}
- ; ..and the walking ones, which act every frame they are held
- walking [104 106 107 108 117 110 -1 -2 -8 -9]
- ; a level on a stage already raised, a frame a tick: every key waiting is read and the
- ; last one acts, so a held key moves once a frame; the horn is fed until a lead stands
- ; queued, the lead paced by the frame gap; the rest is what the tick has left after the
- ; painting. the level is lv: 'new (w h) its state, 'size (st w r) a resize, 'frame (st),
- ; 'key (st k), 'tick (st) a frame's own motion, 'fps, 'song (hn) what feeds its song a
- ; chunk (st) -- asked with () on a seat with no horn, and then fed once a frame --
- ; 'linger how long it stays once 'done, and 'next the [module walk] after it, or ()
+ ; --- the help: the actions listed, a line each in their order, every key b binds to it and
+ ;     its name; one b binds no key to is left out ---
+ (view-key-name k) (k @ -1 "←" -2 "→" -8 "↑" -9 "↓" 32 "space" 27 "esc" 13 "enter" 10 "enter" 9 "tab"
+                     (32 < k && k < 127 ? (string k) ("#" + show k)))
+ ; ..the listed a level that says none has: the walking ones, then its own, then help and quit
+ (view-listed own) (view-walking + own + ['help 'quit])
+ (view-help b listed) (: cs (sort (filter (k \ b k != ()) (keys b)))
+   acts (filter (a \ elem a (map b cs)) listed)
+   (names a) (join " " (uniq (map view-key-name (filter (k \ b k = a) cs))))
+   wd (foldl max2 0 (map (a \ vlen (names a)) acts))
+   (map (a \ pad (names a) wd " " + "  " + show a) acts))
+ ; ..laid in a box over the middle of a w by r cell screen: [x0 y0 rows], each row as wide
+ ; as the box
+ (view-help-box ls w r) (: bw (2 + foldl max2 0 (map vlen ls)) rows (map (l \ " " + pad l (bw - 2) " " + " ") ([""] + ls + [""]))
+   [(max2 0 ((w - bw) // 2)) (max2 0 ((r - #rows) // 2)) rows])
+ ; ..to a terminal, over the frame and in the same synchronised update, so the two are
+ ; shown as one: inside the frame's own, or one of its own round them
+ (view-synced f o) (: e (esc + "[?2026l") n #e
+   (? (n <= #f && snip f (#f - n) #f = e) (snip f 0 (#f - n) + o + e)
+      (esc + "[?2026h" + f + o + e)))
+ (view-help-say st ls) (view-help-box ls (st 'w) (st 'h // 2) @ [x0 y0 rows]
+   (foldl (+) "" (map (i \ esc + "[" + show (y0 + i + 1) + ";" + show (x0 + 1) + "H"
+                          + esc + (st 'deep ? "[38;2;220;214;200;48;2;24;22;20m" "[38;5;253;48;5;235m")
+                          + rows i + esc + "[0m")
+                      ^#rows)))
+ ; ..or as bands, a row's [x0 cells fg bg], its pens 24-bit six bits a channel or the 256
+ (view-help-bands st ls) (view-help-box ls (st 'w) (st 'h // 2) @ [x0 y0 rows]
+   (: dp (st 'deep) fg (dp ? (55 << 12 | 53 << 6 | 50) 253) bg (dp ? (6 << 12 | 5 << 6 | 5) 235)
+      (cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
+      (foldl (t \ i \ pin t (y0 + i) [x0 (cells (rows i)) fg bg]) {} ^#rows)))
+ ; a level on a stage already raised, a frame a tick: every key waiting is read, and each
+ ; is the action the level's 'binds name it (view-binds when it has none); the horn is fed
+ ; until a lead stands queued, the lead paced by the frame gap; the rest is what the tick
+ ; has left after the painting. the level is lv: 'new (w h) its state, 'size (st w r) a
+ ; resize, 'frame (st), 'key (st action), 'tick (st) a frame's own motion, 'fps, 'song (hn)
+ ; what feeds its song a chunk (st) -- asked with () on a seat with no horn, and then fed
+ ; once a frame -- 'linger how long it stays once 'done, and 'next the [module walk] after
+ ; it, or (). 'help shows the keys of the actions 'listed names (view-listed's when it names
+ ; none): in a window while its key is held, in a terminal until the next key, which does
+ ; nothing else
  ; in a window, 'win: the frame paints the window itself (mesh-show), the cells are 8 by 16
  ; of its pixels, each key pressed acts once and a walking key held acts every frame after,
  ; unless 'held (st) says not now
  (view-walk lv) (:
    win (peep lv 'win ())
+   binds (peep lv 'binds view-binds)
+   hl (view-help binds (peep lv 'listed (view-listed ())))
+   hs {'on 0 'p ()}
    ; the terminal's size, and 80 by 24 off a tty that will not say; asked again every
    ; frame, so a resized window is painted whole
    (shape _) (? win (window-size win @ s [(max2 20 (s 0 // 8)) (max2 8 (s 1 // 16))])
@@ -124,33 +168,47 @@
                (sh 0 != st 'w || 2 * sh 1 != st 'h ?
                 (lv 'size st (sh 0) (sh 1), win ? 0 (say out (esc + "[2J")))))
    held {}
-   (hold? k) (elem k walking && (peep lv 'held (_ \ 1)) st)
-   (wkeys _) (: ev (window-events win)
-               pressed (cats (map (e \ (? (<e = 'close) ['quit]
-                                          (<e != 'down) ()
-                                          (peep view-set1 (e 1) () @ () () k (pin held (e 1) k, [k]))))
-                                  ev))
-               _ (each ev (e \ (<e = 'up ? (pin held (e 1) ()))))
+   (hold? k) (elem (binds k) view-walking && (peep lv 'held (_ \ 1)) st)
+   ; ..a window's keys: a key down is its code by what it typed, else by its place; the
+   ; help's key let go puts the help away
+   (wgo l) (? (atom? l) ()
+              (: e <l nx (two? >l ? <>l ()) t (two? nx && <nx = 'text ? (nx 1) "")
+                 k (? (0 < #t) (t 0) (peep view-set1 (e 1) ()))
+                 (? (<e = 'close) ('quit . wgo >l)
+                    (<e = 'down && charm? k) (pin held (e 1) k,
+                                              (binds k = 'help ? (pins hs 'on 1 'p (e 1))),
+                                              k . wgo >l)
+                    (<e = 'up) (pin held (e 1) (),
+                                (e 1 = hs 'p ? (pins hs 'on 0 'p ())),
+                                wgo >l)
+                    (wgo >l))))
+   (wkeys _) (: pressed (wgo (window-events win))
                again (filter (k \ hold? k && !(elem k pressed)) (filter (k \ k != ()) (map held (sort (keys held)))))
                (pressed + again))
+   ; ..a terminal's: the last waiting; with the help up, any key puts it away and does no more
+   (tkeys last) (cue? 0 ? (edkey in @ k (tkeys (charm? k ? k last))) last)
+   (tget _) (tkeys () @ k (? !(charm? k) ()
+                             (hs 'on) (pin hs 'on 0, ())
+                             (binds k = 'help) (pin hs 'on 1, ())
+                             [k]))
    tick (1000 // lv 'fps)
    hn (horn song-rate 2 @ q (nom? q ? () q))
    fd (lv 'song hn)
    pace (pacer ())
    (feed _) (? (hn && fd) (song-fill hn (song-lead-of (pace! pace)) (_ \ (fd st))) fd (fd st) 0)
-   (tkeys last) (cue? 0 ? (edkey in @ (113 || 27) 'quit k (tkeys (charm? k ? k last))) last)
    (go _) (: t0 (clock 0)
              _ (feed ())
-             ks0 (win ? (wkeys ()) ())
+             ks (win ? (wkeys ()) (tget ()))
+             acts (map (k \ k = 'quit ? 'quit (binds k)) ks)
              _ (resize ())
-             _ (win ? (lv 'frame st) (say out (esc + "[H" + lv 'frame st), flush out))
-             ks (win ? ks0 (tkeys () @ k (? (charm? k) [k] (k = 'quit) ['quit] ())))
-             k (elem 'quit ks ? 'quit ())
-             (each ks (k \ (charm? k ? (lv 'key st k))),
+             _ (pin st 'over (win && hs 'on ? (view-help-bands st hl) {}))
+             _ (win ? (lv 'frame st)
+                    (lv 'frame st @ f (say out (esc + "[H" + (hs 'on ? (view-synced f (view-help-say st hl)) f)), flush out)))
+             (each acts (a \ (nom? a && !(elem a ['quit 'help]) ? (lv 'key st a))),
               lv 'tick st,
               pin st 't (st 't + 1),
               (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0))),
-              k = 'quit || st 'done-at && lv 'linger <= clock (st 'done-at) ? ()
+              elem 'quit acts || st 'done-at && lv 'linger <= clock (st 'done-at) ? ()
                 (clock 0 - t0 @ spent
                    (spent < tick ? (rest (tick - spent)),
                     go ()))))
