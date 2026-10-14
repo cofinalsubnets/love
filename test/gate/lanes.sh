@@ -17,12 +17,13 @@ set -u
 
 # lanes that share scratch or sub-build the same tree: each chain runs in this order
 chains="test_extract,test_big,test_encver
-test_inle,test_kernel_vmx,test_disk,test_uefi,test_kboot,test_kmitty,test_kverb,test_kernel_a64,test_uefi_a64,test_kernel_rv64,test_kernel_wasm,test_seedwasm,test_nestwasm
+test_inle,test_kernel_vmx,test_disk,test_uefi,test_kboot,test_kmitty,test_kverb,test_kernel_uproc,test_kernel_a64,test_uefi_a64,test_kernel_rv64,test_kernel_wasm,test_seedwasm,test_nestwasm
 test_doomx,test_doomwasm
 test_elf32,test_mps2_build,test_virt_build,test_mps2,test_mps2_t1,test_mps2_wake,test_virt,test_nucleo446,test_nucleo446_smoke,test_teensy41,test_playdate,test_rp2040,test_boards,test_objcopy,test_links
 test_freebsd,test_netbsd,test_freebsd_a64,test_netbsd_a64"
-# lanes that rebuild out/0 and love0 with a foreign cc: nothing may run beside them
-alone="test_hdiff test_ccwarn"
+# lanes that rebuild out/0 and love0 with a foreign cc, or run their own fleet of processes:
+# nothing may run beside them
+alone="test_hdiff test_ccwarn test_gcstress test_gcstress_full"
 
 MAKE=${MAKE:-make}
 
@@ -111,7 +112,7 @@ any() { for x in "$@"; do has "$x" "$run" && return 0; done; return 1; }
 builds=
 add() { builds="$builds
 $*"; }
-any test_vec test_links test_inle test_disk test_kverb test_kboot test_kmitty test_kernel_vmx && add a=x64 kernel
+any test_vec test_links test_inle test_disk test_kverb test_kboot test_kmitty test_kernel_vmx test_kernel_uproc && add a=x64 kernel
 any test_vec test_links test_inle test_kernel_a64 test_uefi_a64 && add a=a64 kernel
 any test_vec test_links test_inle test_kernel_rv64 test_rvboot && add a=rv64 kernel
 any test_rvboot && add a=rv64 out/rv64/rv64/boot.o out/rv64/inle/rv64/dtb.o
