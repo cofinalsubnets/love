@@ -113,6 +113,9 @@
           (w = 1) [128 (modrm 3 k dn) (byte y)]
           (fits8 y) (ow m w + [131 (modrm 3 k dn) (byte y)])
           (ow m w + [129 (modrm 3 k dn)] + i3imw w y)))
+   (i3-alurm m op w d base off)
+    (: k (op @ 'add 0 'or 1 'adc 2 'sbb 3 'and 4 'sub 5 'xor 6 'cmp 7 (scare 'i386-alurm op))
+       (i3-mw m w [(8 * k + 2)] [(8 * k + 3)] d base off))
    (i3-testm m w base off y)
     (reg? y ? (i3-mw m w [132] [133] y base off)
        (i3-mw m w [246] [247] 0 base off + i3imw w y))
@@ -214,6 +217,7 @@
    (i3-cr m opc n g) (0 <= n <= 7 || scare 'i386-crnum n, [15 opc (modrm 3 n (i3rn g))])
    (i3-m0f m dig opc base off) (i3memd m 1 opc dig base off)
    (i3-mdig m opc dig w base off) (w = 8 ? (scare 'i386-width w) (i3-mw m w opc opc dig base off))
+   (i3-rrop m opc w d s) (w = 8 ? (scare 'i386-width w) (ow m w + opc + [(modrm 3 (i3rn d) (i3rn s))]))
    (i3-rdig m pfx opc dig w r) (w = 8 ? (scare 'i386-width w) (pfx + ow m w + opc + [(modrm 3 dig (i3rn r))]))
    (i3-str m op w)
     (: b (op @ 'movs 164 'cmps 166 'stos 170 'lods 172 'scas 174 'ins 108 'outs 110 (scare 'i386-str op))
@@ -248,6 +252,12 @@
    (i3-cvttsd2ui m r f)
     (i3-cell m (i3-xmem m 242 17 (i3x f) 'sp 0
                 + i3-x87 m 221 0 + i3-x87 m 221 1 + i3mem m 4 [139] r 'sp 0))           ; fld qword; fisttp qword
+   (i3-cvtui2ss m f r)
+    (i3-cell m (i3mem m 4 [137] r 'sp 0 + i3-si m 4 'sp 4 0
+                + i3-x87 m 223 5 + i3-x87 m 217 3 + i3-xmem m 243 16 (i3x f) 'sp 0))   ; fild qword; fstp dword
+   (i3-cvttss2ui m r f)
+    (i3-cell m (i3-xmem m 243 17 (i3x f) 'sp 0
+                + i3-x87 m 217 0 + i3-x87 m 221 1 + i3mem m 4 [139] r 'sp 0))           ; fld dword; fisttp qword
    ;; the tablet for a mode
    (i386-ems m)
     (: t (emsof
@@ -295,11 +305,16 @@
            ('cvtsi2sd . (\ f r [242 15 42 (modrm 3 (i3x f) (i3rn r))]))
            ('cvttsd2si . (\ r f [242 15 44 (modrm 3 (i3rn r) (i3x f))]))
            ('cvtui2sd . i3-cvtui2sd m) ('cvttsd2ui . i3-cvttsd2ui m)
+           ('cvtsi2ss . (\ f r [243 15 42 (modrm 3 (i3x f) (i3rn r))]))
+           ('cvttss2si . (\ r f [243 15 44 (modrm 3 (i3rn r) (i3x f))]))
+           ('cvtui2ss . i3-cvtui2ss m) ('cvttss2ui . i3-cvttss2ui m)
+           ('movdxr . (\ f r [102 15 110 (modrm 3 (i3x f) (i3rn r))]))
+           ('movdrx . (\ r f [102 15 126 (modrm 3 (i3x f) (i3rn r))]))
            ('movqxr . i3-movqxr m) ('movqrx . i3-movqrx m)
            ('xaddm . (\ w b o s (i3-mw m w [15 192] [15 193] s b o)))
            ('cmpxchgm . (\ w b o s (i3-mw m w [15 176] [15 177] s b o)))
            ('xchgm . (\ w b o s (i3-mw m w [134] [135] s b o)))
-           ('alum . i3-alum m) ('carry . i3-carry m) ('unm . i3-unm m) ('btm . i3-btm m) ('testm . i3-testm m)
+           ('alum . i3-alum m) ('carry . i3-carry m) ('alurm . i3-alurm m) ('unm . i3-unm m) ('btm . i3-btm m) ('testm . i3-testm m)
            ('movntim . (\ w b o s (i3-mw m w [15 195] [15 195] s b o)))
            ('ldseg . i3-ldseg m) ('stseg . i3-stseg m) ('segst . i3-segst m) ('segld . i3-segld m) ('pushseg . i3-pushseg m) ('popseg . i3-popseg m)
            ('ldcr . (\ d n (i3-cr m 32 n d))) ('stcr . (\ n s (i3-cr m 34 n s)))
@@ -307,7 +322,7 @@
            ('ltr . (\ s [15 0 (modrm 3 3 (i3rn s))]))
            ('lgdt . i3-m0f m 2 [15 1]) ('lidt . i3-m0f m 3 [15 1])
            ('sgdt . i3-m0f m 0 [15 1]) ('sidt . i3-m0f m 1 [15 1]) ('invlpg . i3-m0f m 7 [15 1])
-           ('mdig . i3-mdig m) ('rdig . i3-rdig m) ('str . i3-str m) ('bscan . i3-bscan m)
+           ('mdig . i3-mdig m) ('rdig . i3-rdig m) ('rrop . i3-rrop m) ('str . i3-str m) ('bscan . i3-bscan m)
            ('int . i3-int m) ('seg . emit-seg) ('raw . 1)
            ('ret . (o32 m + [195])) ('iretq . [207]) ('sys . [205 128])
            ('nop . [144]) ('trap . [204]) ('ud2 . [15 11])
@@ -321,7 +336,8 @@
            ('pause . [243 144]) ('mfence . [15 174 240]) ('lfence . [15 174 232]) ('sfencex . [15 174 248])
            ('stc . [249]) ('clc . [248]) ('cmc . [245]) ('stac . [15 1 203]) ('clac . [15 1 202])
            ('rdpkru . [15 1 238]) ('wrpkru . [15 1 239]) ('xgetbv . [15 1 208]) ('xsetbv . [15 1 209])
-           ('wbinvd . [15 9]) ('invd . [15 8]) ('monitor . [15 1 200]) ('mwait . [15 1 201])])
+           ('wbinvd . [15 9]) ('invd . [15 8]) ('monitor . [15 1 200]) ('mwait . [15 1 201])
+           ('monitorx . [15 1 250]) ('mwaitx . [15 1 251]) ('rdtscp . [15 1 249])])
        _ (map (k \ emrow t k (i3-alu m k)) (keys x86-alu))
        _ (map (k \ emrow t k (i3-sse m k)) (keys x86-sse))
        t)
@@ -338,7 +354,7 @@
      'nop '(144)
      'zeroxor 1
      'flagr '(br set cmov adc sbb adcs sbcs carry)
-     'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs adcs sbcs ors neg mulo ucomisd)
+     'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs adcs sbcs ors neg mulo ucomisd ucomiss)
      'short x86-short}
    _ (defbackend 'i386 (i386-be i386-ems32))
    (defbackend 'i386m16 (i386-be i386-ems16)))

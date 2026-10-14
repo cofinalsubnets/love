@@ -1,191 +1,168 @@
-; grove -- a tree grown from a seed, and drawn: a honey locust's habit, its trunk leaning
-; toward a point as it climbs and forking two ways two thirds up; each leader throws
-; limbs, each limb twigs, and each twig the fronds of a leaf twice pinnate, spear-shaped.
-; the trunk and leaders are cylinders, a 'segs list of [a b r] a metre long at most; the
-; rest is points, shuffled so any first run of them is the crown thinned evenly.
+; grove -- trees grown from a seed, and drawn. a scene gives a tree its habit, the shape of
+; its wood, grown with grove's kit: branches crooked and drooping, knots of stubs, sprays of
+; twigs forking finer, and tufts at their ends. the leaves are a tree of heaven's, long
+; and pinnate, their leaflets in pairs and now and then one at the tip; and some ends
+; carry a hanging cluster of seeds, through the winter.
+; the wood is cylinders, a 'segs list of [a b r]; the leaflets and seeds are points, each
+; with its long axis and its half-width as vectors.
 ;
-; a scene draws a tree into its buffers -- 't the depth, 'r 'g 'b the colour, trays a
-; screen wide -- through a camera tablet: 'e the eye, 'f 'r 'u its forward, right and up,
-; 'w 'h 'foc the screen, 'dx 'dy 'dz each pixel's ray. the sun's map of the tree gives the
-; shade it casts, on the tree and on the scene (grove-shade).
+; a scene draws a tree in triangles (mesh.l, over facets): the thick wood a mesh
+; (grove-wood) under its bark (grove-bark), the thin wood ribbons turned to the eye
+; (grove-twigs), and the leaflets and seeds a triangle each, swaying (grove-dots).
 ;
 ; (grove-new p) grows one; p is a tablet:
 ;   'seed     the dice                         'base   [x 0 z], where it stands
-;   'toward   [x z] the way the trunk leans     'crown  the height leaves start at
+;   'habit    kit -> the fork, the wood grown   'crown  the height leaves start at
 ;   'inside   p -> p, a point kept in bounds    'keep?  p -> 0 for a point not grown
+; the kit is a tablet: 'rr lo hi a throw, 'spread d ang a way turned off d, 'dir a b,
+; 'seg a b r a piece of wood, 'branch from way length pieces r0 r1 bend droop (its joints),
+; 'head limb i0 n, 'spray q d len n lf, 'sprig q d, 'tuft q d
 ; a scene's season rides on the tree: 'share how much of the crown is in leaf (1 unless
-; said), the rest dropped; 'turn how far the leaves have gone from green to gold
-(module (grove grove-new grove-sun grove-shade grove-wood! grove-leaves!)
+; said), the rest dropped; 'turn how far the leaves have gone from green to yellow;
+; 'seeds how many of the seed clusters hang, and 'ripe how far they are from green
+; through red to the winter's tan
+(module (grove grove-new grove-bark grove-wood grove-dots grove-twigs)
 (borrow 'view)
 (borrow 'vec)
 (borrow 'sky)                           ; the light a sky casts
+(borrow 'mesh)                          ; the tubes
 (:
  (rr g lo hi) (lo + (hi - lo) * rnd g)
  ; d turned off by ang toward a thrown bearing round it
- (spread g d ang) (turn d (turn (side d) d (rr g 0.0 (2.0 * pi))) ang)
- (cat* ls) (foldl (acc \ l \ cat acc l) () ls)
+ (spread g d ang) (turn d (turn (side d) d (rr g 0.0 tau)) ang)
  (grove-new p) (: g (rnd-new (p 'seed)) segs {'n 0} pts {'n 0}
-   inside (peep p 'inside (q \ q)) keep? (peep p 'keep? (q \ 1)) crown-y (peep p 'crown 0.0)
+   inside (peep p 'inside 1) keep? (peep p 'keep? 0) crown-y (peep p 'crown 0.0)
    (seg! a b r) (pins segs (segs 'n) [a b r] 'n (segs 'n + 1))
-   (pt! q k sh ye ph) (keep? q ? (: n (pts 'n) (pins pts n [q k sh ye ph] 'n (n + 1))))
-   (wob q) (c+ q [(rr g -0.08 0.08) 0.0 (rr g -0.08 0.08)])
-   base (p 'base) tw (peep p 'toward [0.0 0.0])
-   cdir (unit [(tw 0 - base 0) 0.0 (tw 1 - base 2)])
-   hs (rr g 7.2 7.8) lean (rr g 1.7 2.3)
-   (tp f) (c+ (c+ base (c* (lean * f * sqrt f) cdir)) [0.0 (hs * f) 0.0])
-   tq (map (f \ (0.0 < f < 1.0 ? (wob (tp f)) (tp f))) [0.0 0.25 0.5 0.75 1.0])
-   _ (each ^4 (i \ seg! (tq i) (tq (i + 1)) (0.24 - 0.07 * i / 4.0)))
-   ; ..the fork's two ways splayed either side of upright, a little toward the lean
-   top (tq 4) up0 (unit (c+ [0.0 1.0 0.0] (c* 0.2 cdir))) sd (side (unit (c+ (tq 4) (c* -1.0 (tq 3)))))
-   ; a leaf: a rachis drooping off the twig, its leaflets in pairs, widest in the middle
-   (leaf! q twd) (q 1 < crown-y ? () (: rd (unit (c+ (spread g twd (rr g 0.5 1.2)) [0.0 -0.35 0.0]))
-                    sv (side rd) ll (rr g 0.18 0.3) sh (rr g 0.75 1.15) ye (sq (rnd g)) ph (rr g 0.0 (2.0 * pi))
-                    (each ^5 (m \ (: u ((m + 0.5) / 5.0) c (c+ q (c* (ll * u) rd))
-                                     wd (0.09 * sin (pi * u) * (1.0 - 0.3 * u))
-                                     (pt! (c+ c (c* wd sv)) 2 sh ye ph,
-                                      pt! (c+ c (c* (0.0 - wd) sv)) 2 sh ye ph))))))
-   ; a twig: its wood as points, leaves along it and one at its tip
-   (twig! o ld) (: td (unit (c+ (spread g ld (rr g 0.4 1.1)) [0.0 -0.15 0.0]))
-                   tl (rr g 0.5 1.2) e (inside (c+ o (c* tl td)))
-                   nw (int (tl / 0.04)) nl (int (tl / 0.09))
-                   (each ^nw (q \ pt! (lerp o e (q / (1.0 * nw))) 1 1.0 0.0 0.0),
-                    each ^nl (q \ leaf! (lerp o e ((q + 1.0) / (nl + 1.0))) td),
-                    leaf! e td))
-   ; a limb: wood, twigs along its outer two thirds, and smaller limbs off it, their wood
-   ; as points
-   (sub! o od) (: sd2 (unit (c+ (spread g od (rr g 0.4 0.9)) [0.0 0.1 0.0]))
-                  se (inside (c+ o (c* (rr g 1.2 2.2) sd2)))
-                  nw (int (sqrt (dot (c+ se (c* -1.0 o)) (c+ se (c* -1.0 o))) / 0.03))
-                  (each ^nw (q \ pt! (lerp o se (q / (1.0 * nw))) 1 1.0 0.0 0.0),
-                   each ^5 (j \ twig! (lerp o se (0.3 + 0.17 * j)) sd2)))
-   (limb! o od) (: ld (unit (c+ (spread g od (rr g 0.8 1.4)) [0.0 0.25 0.0]))
-                   le (inside (c+ o (c* (rr g 3.0 4.5) ld)))
-                   nw (int (sqrt (dot (c+ le (c* -1.0 o)) (c+ le (c* -1.0 o))) / 0.025))
-                   (each ^nw (q \ pt! (lerp o le (q / (1.0 * nw))) 1 1.0 0.0 0.0),
-                    each ^6 (j \ twig! (lerp o le (0.3 + 0.14 * j)) ld),
-                    sub! (lerp o le (rr g 0.3 0.45)) ld, sub! (lerp o le (rr g 0.5 0.65)) ld,
-                    sub! (lerp o le (rr g 0.7 0.9)) ld))
-   ; the two leaders, forking from the trunk's top, each in two pieces, with limbs
-   (leader! sg) (: d (unit (turn up0 sd (sg * rr g 0.3 0.5)))
-                   ln (rr g 5.0 6.0) m (c+ top (c* (ln * 0.5) d))
-                   d2 (unit (c+ d [(rr g -0.1 0.1) 0.3 (rr g -0.1 0.1)]))
-                   e (inside (c+ m (c* (ln * 0.5) d2)))
-                   (seg! top m 0.14, seg! m e 0.09,
-                    limb! (lerp top m 0.9) d, limb! (lerp m e 0.25) d2, limb! (lerp m e 0.5) d2,
-                    limb! (lerp m e 0.75) d2, limb! e d2, limb! e d2))
-   _ (leader! -1.0) _ (leader! 1.0)
-   ; ..the points shuffled
-   n (pts 'n) perm (map (q \ q 1) (sort (map (i \ [(rnd g) i]) ^n)))
-   (col k) (gem-tray [n] (map (i \ pts i 0 k) perm))
-   (fld k) (gem-tray [n] (map (i \ 1.0 * pts i k) perm))
-   ; ..and the wood cut into pieces a metre long at most, so each one's box on the screen
-   ; hugs it
-   (cut s) (: a (s 0) b (s 1) r (s 2) ax (c+ b (c* -1.0 a)) k (int (sqrt (dot ax ax)) + 1)
-              (map (i \ [(lerp a b (i / (1.0 * k))) (lerp a b ((i + 1) / (1.0 * k))) r]) ^k))
-   sl (cat* (map (i \ cut (segs i)) ^(segs 'n)))
-   ; the wood as rings of points, for the shadow the sun casts
-   (rings s) (: a (s 0) b (s 1) r (s 2) ax (c+ b (c* -1.0 a)) l (sqrt (dot ax ax)) u (unit ax)
-                p1 (side u) p2 (cross u p1) k (int (l / 0.1) + 1)
-                (cat* (map (i \ (lerp a b (i / (1.0 * k))) @ c
-                                  (map (j \ c+ c (c+ (c* (r * cos (j * 1.047)) p1) (c* (r * sin (j * 1.047)) p2))) ^6))
-                           ^(k + 1))))
-   wood (cat* (map rings sl)) nwd #wood
-   X (col 0) Y (col 1) Z (col 2)
-   cen [(net X / n) (net Y / n) (net Z / n)]
-   R (sqrt (amax ((X - cen 0) * (X - cen 0) + (Y - cen 1) * (Y - cen 1) + (Z - cen 2) * (Z - cen 2))) + 0.5)
-   (wc k) (gem-tray [nwd] (map (q \ q k) wood))
-   {'segs sl 'base base 'x X 'y Y 'z Z 'kind (fld 1) 'shade (fld 2) 'yel (fld 3) 'ph (fld 4)
-    'shx (wc 0) 'shy (wc 1) 'shz (wc 2) 'c cen 'R R 'cache {}})
- ; the sun's map of the tree: every point and the wood's rings seen down the sun, a
- ; texel keeping how far toward the sun the tree stands there; () while the sun is down
- smap-n 128
- (smap-new tr s) (s 1 <= 0.0 ? ()
-   (: e1 (side s) e2 (cross e1 s) c (tr 'c) R (tr 'R) n smap-n on (in-leaf tr)
-      (pix X Y Z) (: qx (X - c 0) qy (Y - c 1) qz (Z - c 2)
-                     iu (floor (((qx * e1 0 + qy * e1 1 + qz * e1 2) / (2.0 * R) + 0.5) * n))
-                     iv (floor (((qx * e2 0 + qy * e2 1 + qz * e2 2) / (2.0 * R) + 0.5) * n))
-                     (over -1 ((0 <= iu) * (iu < n) * (0 <= iv) * (iv < n)) (iv * n + iu)))
-      (depth X Y Z) (X * s 0 + Y * s 1 + Z * s 2)
-      m0 (iota (n * n) * 0.0 - 1e9)
-      m1 (pin m0 (over -1 on (pix (tr 'x) (tr 'y) (tr 'z))) (depth (tr 'x) (tr 'y) (tr 'z)))
-      m2 (pin m1 (pix (tr 'shx) (tr 'shy) (tr 'shz)) (depth (tr 'shx) (tr 'shy) (tr 'shz)))
-      {'map m2 'pix pix 'depth depth}))
- ; the sun's map and each point's share of the sun, kept on the tree until the sun has
- ; moved a step: [map share]. clear (X Y Z s) is how much of the sun the scene lets reach
- ; the points, before the tree's own shade
- ; which of the tree's points are on it: all the wood, and the leaves the season has kept
- (in-leaf tr) ((tr 'kind != 2.0) + (tr 'kind = 2.0) * (tr 'ph / (2.0 * pi) < peep tr 'share 1.0))
- (grove-sun tr s clear) (: k [(int (s 0 * 400.0) * 1000000 + int (s 1 * 400.0) * 1000 + int (s 2 * 400.0))
-                              (int (peep tr 'share 1.0 * 200.0))]
-   cc (tr 'cache)
-   (k = cc 'key ? (cc 'sun)
-      (: sm (smap-new tr s) X (tr 'x) Y (tr 'y) Z (tr 'z)
-         c [sm (clear X Y Z s * (1.0 - grove-shade sm X Y Z))]
-         (pins cc 'key k 'sun c, c))))
- ; how much of the sun the tree takes at the points X Y Z: some of it through the leaves
- (grove-shade sm X Y Z) (sm ? (0.8 * (sm 'depth X Y Z + 0.3 < peep (sm 'map) (sm 'pix X Y Z) -1e9)) 0.0)
- ; the wood drawn into the buffers: each cylinder tried only on the pixels of its box on
- ; the screen, kept where it is nearer than what is there. lt is sky's light
- (grove-wood! tr cam lt clear buf) (: e (cam 'e) f (cam 'f) foc (cam 'foc)
-   s (lt 'sun) sm (grove-sun tr s clear 0)
-   (rel q) (c+ q (c* -1.0 e))
-   (one sg) (: a0 (sg 0) b0 (sg 1) r (sg 2)
-     za (dot (rel a0) f) zb (dot (rel b0) f)
-     idx (spot [a0 b0] (r * foc / max2 0.1 (min2 za zb) + 1.5) cam)
-     (#idx = 0 ? ()
-      (: ddx (peep (cam 'dx) idx 0.0) ddy (peep (cam 'dy) idx 0.0) ddz (peep (cam 'dz) idx 0.0)
-         ax (c+ b0 (c* -1.0 a0)) L (sqrt (dot ax ax)) u (unit ax)
-         wv (rel a0 @ q (c* -1.0 q)) wu (dot wv u) W (c+ wv (c* (0.0 - wu) u))
-         dd (ddx * u 0 + ddy * u 1 + ddz * u 2)
-         Wd (ddx * W 0 + ddy * W 1 + ddz * W 2)
-         A (max (1.0 - dd * dd) 1e-9) C (dot W W - r * r)
-         disc (Wd * Wd - A * C)
-         t ((0.0 - Wd - sqrt (max disc 0.0)) / A)
-         sa (wu + t * dd)
-         ; ..each piece runs on half its radius past either end, so a bend shows no gap
-         hit ((0.0 < disc) * (0.0 < t) * (-0.5 * r <= sa) * (sa <= L + 0.5 * r) * (t < peep (buf 't) idx 1e9))
-         i2 (over -1 hit idx)
-         nx ((W 0 + t * (ddx - dd * u 0)) / r) ny ((W 1 + t * (ddy - dd * u 1)) / r) nz ((W 2 + t * (ddz - dd * u 2)) / r)
-         X (e 0 + t * ddx) Y (e 1 + t * ddy) Z (e 2 + t * ddz)
-         p1 (side u)
-         fur (0.75 + 0.5 * frac (sin ((nx * p1 0 + ny * p1 1 + nz * p1 2) * 9.0 + sa * 3.0) * 4375.85))
-         nds (max 0.0 (nx * s 0 + ny * s 1 + nz * s 2))
-         lit (nds * clear X Y Z s * (1.0 - grove-shade sm X Y Z) * lt 'sunk)
-         bark (c* fur [0.17 0.15 0.13])
-         irr (sky-irr lt 0.9 lit)
-         cl (cm bark irr)
-         (pins buf 't (pin (buf 't) i2 t) 'r (pin (buf 'r) i2 (cl 0))
-                   'g (pin (buf 'g) i2 (cl 1)) 'b (pin (buf 'b) i2 (cl 2))))))
-   (each (tr 'segs) one))
- ; the twigs and leaves drawn into the buffers, a point a pixel, kept where nearer; the
- ; leaves sway, darken deep in the crown and glow where the sun is behind them. only the
- ; first k of the shuffled points are drawn, k kept on the tree so the last frame drew
- ; about leaf-n of them to a pixel the crown took. t0 is the frame's clock
- leaf-n 4.0
- (grove-leaves! tr cam lt clear buf t0) (: w (cam 'w) h (cam 'h)
-   s (lt 'sun) lc0 (grove-sun tr s clear 1)
-   n #(tr 'x) cc (tr 'cache) k (min n (peep cc 'k n)) ik (iota k) (fk q) (peep (tr q) ik 0.0)
-   lf (fk 'kind = 2.0) ph (fk 'ph) lc (peep lc0 ik 0.0)
-   on ((1 - lf) + lf * (ph / (2.0 * pi) < peep tr 'share 1.0))
-   sw (0.025 * sin (t0 * 0.13 + ph)) sw2 (0.02 * sin (t0 * 0.09 + ph * 1.7))
-   X (fk 'x + lf * sw) Y (fk 'y) Z (fk 'z + lf * sw2)
-   v (sight cam X Y Z) qx (v 0) qy (v 1) qz (v 2) dist (v 3) idx (v 4)
-   i2 (over -1 (on * (dist < peep (buf 't) idx 1e9)) idx)
-   lit (lc * lt 'sunk)
-   mu ((qx * s 0 + qy * s 1 + qz * s 2) / dist)
-   glow (lf * lit * sq (sat ((mu - 0.2) / 0.8)))
-   sh (fk 'shade)
-   ; ..green, or gold as far as the season has turned it, the yellower leaves first
-   yel (fk 'yel) gold (sat ((peep tr 'turn 0.0 - 0.4 * (1.0 - yel)) / 0.6))
-   leafc (cmix (c+ (c* sh [0.2 0.34 0.09]) (c* yel [0.16 0.14 -0.02])) (c* sh [0.62 0.48 0.1]) gold)
-   base (cmix [0.16 0.14 0.12] leafc lf)
-   irr (sky-irr lt 0.8 (0.6 * lit))
-   cl (c+ (cm base irr) (c* glow [0.45 0.55 0.12]))
-   ; ..and the next frame's k, by how many drawn points fell to a pixel they took, moved
-   ; only by a quarter or more so a still view settles
-   drawn (net (0 <= i2)) took (net (pin (iota (w * h) * 0) i2 1))
-   k2 (max (min n 2000) (min n (int (k * leaf-n * max2 1 took / max2 1 drawn))))
-   _ (k2 * 4 < k * 3 || k * 5 < k2 * 4 ? (pin cc 'k k2))
-   (pins buf 't (pin (buf 't) i2 dist) 'r (pin (buf 'r) i2 (cl 0))
-             'g (pin (buf 'g) i2 (cl 1)) 'b (pin (buf 'b) i2 (cl 2)))))
+   ; a point: its middle q, its long axis ax, its half-width sw, its kind (2 a leaflet, 3
+   ; a seed), its shade, how yellow it turns, and its phase
+   (pt! q ax sw k sh ye ph) (keep? q ? (: n (pts 'n) (pins pts n [q ax sw k sh ye ph] 'n (n + 1))))
+   ; a branch from o along d, len long in k pieces, its radius r0 to r1, each piece bent by
+   ; up to bend and dipped by droop: the joints, o first
+   (branch! o d len k r0 r1 bend droop)
+    (: (go i q dd acc) (i < k ? (: nd (unit (c+ (spread g dd (rr g 0.0 bend)) [0.0 -droop 0.0]))
+                                    q2 (inside (c+ q (c* (len / k) nd)))
+                                    _ (seg! q q2 (r0 + (r1 - r0) * i / (1.0 * k)))
+                                    (go (i + 1) q2 nd (q2 . acc)))
+                         (rev acc))
+       (go 0 o d [o]))
+   (dir a b) (unit (c+ b (c* -1.0 a)))
+   ; a leaf: a stalk arching out of q along d and down, its leaflets in pairs, the middle
+   ; ones the longest, and a third of the time one at its tip
+   (leaf! q d) (q 1 < crown-y ? ()
+     (: rl (rr g 0.5 0.9) np (int (rr g 8.0 12.99)) rd (unit (c+ d [0.0 -0.3 0.0]))
+        sv (side rd) nv (cross rd sv) sh (rr g 0.75 1.15) ye (2 (rnd g)) ph (rr g 0.0 tau) ll (rr g 0.09 0.13)
+        (at u) (c+ q (c+ (c* (rl * u) rd) [0.0 (-0.25 * rl * u * u) 0.0]))
+        (blade c ax lw) (pt! c (c* lw ax) (c* (0.2 * lw) (unit (cross ax nv))) 2 sh ye ph)
+        (each ^np (m \ (: u ((m + 0.7) / (np + 0.4)) lw (ll * (0.65 + 0.45 * sin (pi * (0.2 + 0.75 * u))))
+                          (each [1.0 -1.0] (sg \ (: ax (unit (c+ (c* sg sv) (c* 0.4 rd)))
+                                                    (blade (c+ (at u) (c* (0.5 * lw) ax)) ax lw)))))),
+         rnd g < 0.33 ? (blade (c+ (at 1.0) (c* (0.5 * ll) rd)) rd (0.8 * ll)))))
+   ; a cluster of seeds hanging under q: a loose drooping head of winged seeds, each turned
+   ; its own way
+   (seeds! q) (: c (c+ q [0.0 (rr g -0.25 -0.15) 0.0]) ph (rr g 0.0 tau) n (int (rr g 25.0 45.0))
+     (each ^n (i \ (: o [(rr g -0.11 0.11) (rr g -0.12 0.08) (rr g -0.11 0.11)]
+                     ax (unit [(rr g -1.0 1.0) (rr g -1.0 0.3) (rr g -1.0 1.0)])
+                     (pt! (c+ c o) (c* 0.035 ax) (c* 0.006 (side ax)) 3 (rr g 0.8 1.1) 0.0 ph)))))
+   ; a spray: a crooked bare twig off q forking n times more, shorter each time, a tuft at
+   ; one in lf of its ends; a sprig is one, bare, what a twig end shows in winter
+   (spray! q d len n lf) (: sp (branch! q d len 2 (0.004 + 0.006 * n) (0.003 + 0.005 * n) 0.6 0.05)
+     (n > 0 ? (each [1 2] (i \ (rnd g < 0.8 ? (spray! (sp i) (unit (c+ (spread g (dir (sp (i - 1)) (sp i)) (rr g 0.4 0.9)) [0.0 0.1 0.0]))
+                                                       (len * rr g 0.5 0.75) (n - 1) lf))))
+              (rnd g < lf ? (tuft! (sp 2) (dir (sp 1) (sp 2))))))
+   (sprig! q d) (spray! q (unit (c+ (spread g d (rr g 0.5 1.2)) [0.0 0.2 0.0])) (rr g 0.4 0.9) 2 0.0)
+   ; a twig end: a few short twigs, each with a leaf or three off its end; and on some, seeds
+   (tuft! q d) (each ^(int (rr g 3.0 5.99))
+                 (j \ (: td (unit (c+ (spread g d (rr g 0.3 1.0)) [0.0 0.15 0.0])) e (inside (c+ q (c* (rr g 0.12 0.35) td)))
+                         (seg! q e 0.018,
+                          each ^(int (rr g 2.0 4.99)) (i \ leaf! e (spread g td (rr g 0.2 1.0))),
+                          rnd g < 0.3 ? (seeds! e)))))
+   ; a head: a knot of short thick stubs at the end of a limb b, from its joint i0 on, and
+   ; off each stub long thin twigs fanning out and up
+   (head! b i0 n) (: k (#b - 1) ld (dir (b (k - 1)) (b k))
+     (each ^n (j \ (: o (b (int (rr g (1.0 * i0) (k + 0.99)))) d (unit (c+ (spread g ld (rr g 0.6 1.5)) [0.0 0.15 0.0]))
+                     st (branch! o d (rr g 0.3 0.8) 2 0.05 0.035 0.6 0.0) e (dir (st 1) (st 2))   ; a stub
+                     (tuft! (st 2) e,
+                      each ^(int (rr g 2.0 3.99)) (i \ spray! (st 2) (unit (c+ (spread g e (rr g 0.2 0.8)) [0.0 0.2 0.0])) (rr g 0.8 1.3) 2 0.55))))))   ; its twigs, a tuft at 0.55 of their ends
+   ; the kit a scene's habit grows the wood with; the habit answers the fork
+   kit {'rr (rr g) 'spread (spread g) 'dir dir 'seg seg! 'branch branch! 'head head! 'spray spray!
+        'sprig sprig! 'tuft tuft!}
+   base (p 'base) fk ((p 'habit) kit)
+   n (pts 'n) (fld k) (gem-tray [n] (map (i \ 1.0 * pts i k) ^n))
+   (vec k j) (gem-tray [n] (map (i \ pts i k j) ^n))
+   {'segs (map segs ^(segs 'n)) 'base base 'fork fk
+    'x (vec 0 0) 'y (vec 0 1) 'z (vec 0 2) 'ax (vec 1 0) 'ay (vec 1 1) 'az (vec 1 2) 'sx (vec 2 0) 'sy (vec 2 1) 'sz (vec 2 2)
+    'kind (fld 3) 'shade (fld 4) 'yel (fld 5) 'ph (fld 6)})
+ ; which of the tree's points are on it: the leaves and the seeds the season has kept
+ (in-leaf tr) (: q (tr 'ph / tau)
+   ((tr 'kind = 2.0) * (q < peep tr 'share 1.0) + (tr 'kind = 3.0) * (q < peep tr 'seeds 0.0)))
+ ; the bark, a texture to lay on the wood a centimetre a texel and tiling round and along:
+ ; smooth and dark, faintly mottled, and here and there a thin pale streak running down it
+ ; and fading, as a share of the wood's own colour
+ (grove-bark _) (: w 32 h 128
+   (hash x k) (frac (sin (x * 12.9898 + k * 78.233) * 43758.5453))
+   (mesh-pic w h (\ x y (: u (tau * x / w) v (tau * y / h)
+                         mot (0.04 * sin (u * 2.0 + v * 3.0) * sin (v * 5.0 - u))
+                         s0 (hash x 1) s1 (hash x 2) ln (8.0 + 50.0 * hash x 3)   ; a streak's column, top and run
+                         dy (frac ((y - s1 * h) / h) * h)
+                         st ((s0 < 0.12) * (dy < ln) * (1.0 - dy / ln))
+                         k (0.72 + mot + 0.4 * st)
+                         [k k (k * 1.01)]))))
+ ; the wood as tubes, dark grey under their bark tex: the pieces thick enough to show as
+ ; themselves, a mesh to pack and light as a scene's own (the thin ones are grove-twigs')
+ thick 0.03
+ (grove-wood tr tex) (mesh-join (map (s \ mesh-rod (s 0) (s 1) (s 2) [0.3 0.3 0.31] 8 tex 0.01) (filter (s \ thick <= s 2) (tr 'segs))))
+ ; the leaflets and seeds as a scene draws them, where they are and their colours, kept on
+ ; the tree for its season
+ (laid tr) (: k [(peep tr 'share 1.0) (peep tr 'turn 0.0) (peep tr 'seeds 0.0) (peep tr 'ripe 0.0)] was (peep tr 'laid ())
+   (two? was && was 0 = k ? (was 1)
+      (: ix (iota (in-leaf tr)) (fk q) (peep (tr q) ix 0.0)
+         lf (fk 'kind = 2.0) ph (fk 'ph) sh (fk 'shade) yel (fk 'yel)
+         ; ..a leaflet green, or yellow as far as the season has turned it, the yellower
+         ; ones first; a seed green, then red, then the winter's tan
+         gold (sat ((k 1 - 0.4 * (1.0 - yel)) / 0.6))
+         leafc (cmix (c+ (c* sh [0.2 0.34 0.11]) (c* yel [0.12 0.12 -0.02])) (c* sh [0.6 0.52 0.14]) gold)
+         r (k 3) seedc (c* sh (r < 0.5 ? (cmix [0.42 0.5 0.18] [0.62 0.3 0.2] (2.0 * r)) (cmix [0.62 0.3 0.2] [0.62 0.52 0.36] (2.0 * r - 1.0))))
+         ; ..each a triangle pointed along its axis: its corners' places
+         a [(fk 'ax) (fk 'ay) (fk 'az)] w [(fk 'sx) (fk 'sy) (fk 'sz)] P [(fk 'x) (fk 'y) (fk 'z)]
+         l {'x (fk 'x) 'z (fk 'z) 'lf lf 'ph ph 'base (cmix seedc leafc lf)
+            'cs [(map (k \ P k - 0.5 * a k - w k) ^3) (map (k \ P k - 0.5 * a k + w k) ^3) (map (k \ P k + 0.5 * a k) ^3)]}
+         (pin tr 'laid [k l], l))))
+ ; ..lit by sky's light lt and seen from e, as facets takes them (mesh-dots), kept on the
+ ; tree until the light or the season moves or the eye goes a quarter metre: the leaves
+ ; darken deep in the crown and glow where the sun is behind them. where a pixel spans pa
+ ; and a leaflet is smaller than it, one in th of them is drawn, grown to stand for the rest
+ (lit tr lt e pa) (: L0 (laid tr) (r v) (int (v * 100.0)) th (max2 1 (min2 3 (int (pa / 0.006))))
+   k [(tr 'laid 0) (map r (lt 'sun)) (r (lt 'sunk)) (map r (lt 'amb)) (map r (lt 'sunc)) (map (v \ int (v * 4.0)) e) th]
+   was (tr 'lit)
+   (two? was && was 0 = k ? (was 1)
+      (: ix (iota (iota #(L0 'lf) % th = 0)) (g t) (peep t ix 0.0) gs (sqrt (1.0 * th))
+         m (map (j \ (g (L0 'cs 0 j) + g (L0 'cs 1 j) + g (L0 'cs 2 j)) / 3.0) ^3)
+         L {'lf (g (L0 'lf)) 'base (map g (L0 'base)) 'ph (g (L0 'ph))
+            'cs (map (c \ map (j \ m j + gs * (g (c j) - m j)) ^3) (L0 'cs))}
+         s (lt 'sun) lf (L 'lf) base (L 'base) cs (L 'cs)
+         qx (cs 2 0 - e 0) qy (cs 2 1 - e 1) qz (cs 2 2 - e 2) dist (sqrt (2 qx + 2 qy + 2 qz + 1e-9))
+         glow (lf * 2 (sat (((qx * s 0 + qy * s 1 + qz * s 2) / dist - 0.2) / 0.8)))
+         sky (cm base (c* 0.8 (lt 'amb)))
+         sun (c* (lt 'sunk) (c+ (cm base (c* 0.6 (lt 'sunc))) (c* glow [0.45 0.55 0.12])))
+         b [(mesh-dots cs sky sun -1) (L 'ph)]
+         (pin tr 'lit [k b], b))))
+ ; ..at the frame's clock t0: [verts tris], each swaying its own way, the lit ones moved
+ (grove-dots tr lt e t0 pa) (: b (lit tr lt e pa) ph (b 1)
+   dx (0.025 * sin (t0 * 0.13 + ph)) dz (0.02 * sin (t0 * 0.09 + ph * 1.7))
+   [(b 0 0 + lace (catmap (q \ [dx 0.0 dz 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0]) ^3)) (b 0 1)])
+ ; the thin wood, thinner than the pixels it crosses: each piece a ribbon from a to b
+ ; turned to the eye at e, never narrower than a pixel at a, pa the angle one spans, two
+ ; triangles laced; lit by the sky and some of the sun. [verts tris] for facets
+ (grove-twigs tr lt e pa) (: T (tr 'thin @ ()
+      (: sg (filter (s \ s 2 < thick) (tr 'segs)) n #sg (col i k) (gem-tray [n] (map (s \ 1.0 * s i k) sg))
+         t {'a [(col 0 0) (col 0 1) (col 0 2)] 'b [(col 1 0) (col 1 1) (col 1 2)] 'r (gem-tray [n] (map (s \ s 2) sg))}
+         (pin tr 'thin t, t)) t t)
+   a (T 'a) b (T 'b) u [(b 0 - a 0) (b 1 - a 1) (b 2 - a 2)] v [(a 0 - e 0) (a 1 - e 1) (a 2 - e 2)]
+   d (sqrt (v 0 * v 0 + v 1 * v 1 + v 2 * v 2)) hw (max (T 'r) (0.6 * pa * d))
+   x [(u 1 * v 2 - u 2 * v 1) (u 2 * v 0 - u 0 * v 2) (u 0 * v 1 - u 1 * v 0)]
+   k (hw / sqrt (2 (x 0) + 2 (x 1) + 2 (x 2) + 1e-12))
+   col [0.22 0.22 0.23]
+   (lo q i) (q i - k * x i) (hi q i) (q i + k * x i)
+   (mesh-dots [(map (i \ lace [(lo a i) (lo a i)]) ^3) (map (i \ lace [(hi a i) (hi b i)]) ^3) (map (i \ lace [(hi b i) (lo b i)]) ^3)]
+              (cm col (c* 0.9 (lt 'amb))) (cm col (c* (0.5 * lt 'sunk) (lt 'sunc))) -1)))
 ) ; module grove

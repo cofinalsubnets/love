@@ -34,6 +34,16 @@ long host_va(int n, ...)
 }
 
 static int n_, bad_;
+struct f2 { float a, b; };
+struct f3 { float a, b, c; };
+struct f4 { float a, b, c, d; };
+float peer_f2(struct f2 p, float x);
+float peer_f34(struct f3 q, struct f4 r);
+struct f3 peer_mk3(float a, float b, float c);
+struct f4 peer_mk4(struct f4 r);
+double peer_fdeep(struct f3 q, struct f3 q2, struct f4 r, double d);
+float peer_calls_f2(void);
+struct f2 host_f2(struct f2 p) { struct f2 o = { p.b + 1, p.a * 2 }; return o; }
 static void ck(long got, long want)
 {
 	n_++;
@@ -60,6 +70,13 @@ int main(void)
 	  long n = peer_neg(five);                          /* a 32-bit neg in w0: extended here */
 	  ck(n, -5); ck(peer_neg(five) < 0, 1);
 	  ck(peer_sneg(five), -5); ck(peer_byte(0x1ff), 255); ck(peer_bool(7), 1); }
+	{ struct f2 p = { 1, 2 }; struct f3 q = { 1, 2, 3 }, q2 = { 4, 5, 6 }; struct f4 r = { 1, 2, 3, 4 };
+	  ck((long) peer_f2(p, 3), 10 + 2 + 3000);
+	  ck((long) peer_f34(q, r), 1 + 20 + 300 + 1000 + 40000);
+	  struct f3 a = peer_mk3(5, 6, 7); ck((long) a.a, 7); ck((long) a.b, 6); ck((long) a.c, 6);
+	  struct f4 b = peer_mk4(r); ck((long) b.a, 4); ck((long) b.b, 3); ck((long) b.c, 2); ck((long) b.d, 1);
+	  ck((long) peer_fdeep(q, q2, r, 2.0), 1 + 60 + 100 + 4000 + 20000);
+	  ck((long) peer_calls_f2(), 50 + 6); }
 	ck(in.a, 1);
 	printf("abi64: %d checks, %d wrong\n", n_, bad_);
 	return bad_;

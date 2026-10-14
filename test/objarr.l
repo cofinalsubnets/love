@@ -195,3 +195,13 @@
  (-7 // 0 = peep (@(1 -7) // @(2 0)) 1 0)
  (aall ((@(7 9) // @(2 3)) = @(3 3)))                    ; ..and stays int when no divisor is 0
  (!(gem? (peep (@(7 9) // 2) 0 0))))
+
+; ordering object trays hashes them, a walk with scratch of its own: sort, < and max leave
+; the trays as they were, and answer one order both ways round
+(: oa-o1 (top-tray '(2) ["a" "b"]) oa-o2 (top-tray '(2) ["c" "d"])
+   oa-os (sort [oa-o2 oa-o1 oa-o2 oa-o1]))
+(test
+ (4 = #oa-os) (two? (sort [oa-o1 oa-o1]))
+ (([oa-o1] < [oa-o2]) = !([oa-o2] < [oa-o1])) !([oa-o1] < [oa-o1])
+ ((max [oa-o1] [oa-o2]) = (max [oa-o2] [oa-o1]))
+ ("a" = peep oa-o1 0 ()) ("b" = peep oa-o1 1 ()) ("c" = peep oa-o2 0 ()) ("d" = peep oa-o2 1 ()))

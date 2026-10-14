@@ -18,6 +18,7 @@
    r-32    10                                       ; R_X86_64_32     S + A, truncated to 4 bytes -- the
                                                     ; PVH note's 32-bit entry. the kernel links flat
                                                     ; under 4 GiB so it fits; nothing hosted emits it.
+   r-32s   11                                       ; R_X86_64_32S    S + A, sign-extended (pushq $sym)
    ; ... and a64. field relocs here patch bits of an instruction word, not a
    ; whole field -- the placeholder bytes carry the base opcode (the fixup's aux).
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
@@ -44,6 +45,22 @@
    (o-has? tab k) (peep tab k 'no !== 'no)    ; is key k bound in the tablet?
    ; a lane's file size. not `tally`: an item may be a blob, one cell holding many bytes.
    (o-blen l) (:- (go l 0) (go l n) (!(two? l) ? n (go >l (n + item-len <l))))
+   ; a data section's objects -> name -> st_size: the bytes after a label, and after the labels
+   ; laid with it (an alias's), up to the next align or the next label past bytes. gen lays each
+   ; global as one: align, labels, its raw image. a form of any other kind leaves its labels unsized
+   (o-dsizes secs)
+    (: t {}
+       (key x) (string? x ? x (show x))
+       (close cur n) (n > 0 ? (map (x \ pin t (key x) n) cur) 0)
+       (go l cur n)
+        (? !(two? l) (close cur n)
+           (<l @ f
+              (<f @ 'label (n > 0 ? (close cur n, go >l [<>f] 0) (go >l (<>f . cur) n))
+                    'align (close cur n, go >l () 0)
+                    'raw (go >l cur (n + o-blen <>f))
+                    (go >l () 0))))
+       _ (map (s \ (0 < s 2 & 4 ? 0 (go (s 4) () 0))) secs)
+       t)
    (o-strbytes s) (: (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc)))
                      (go (#s - 1) ()))         ; a string -> its byte list. a real encode,
                      ; not a bytes-through-text leak: an ELF string table holds text.
@@ -268,6 +285,7 @@
        ; no ARM state at all. data syms stay even. a named symbol's section is wherever its
        ; bytes went, so a global may live in a section the writer never heard of. --
        (o-place nm) (o-where lanes (name nm) @ w (two? w ? w '(1 0)))
+       dsz (o-dsizes secs)
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
                                            (sec-exec? si ?
@@ -281,7 +299,7 @@
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym32 (stroffs (nloc + nfun + i))
-                                                     (elem gs wknames ? 2 1) 1 <w <>w 0)))
+                                                     (elem gs wknames ? 2 1) 1 <w <>w (peep dsz (string? gs ? gs (show gs)) 0))))
                                  globnames))
            ; a weak undef resolves to zero at static link, where a strong one is an
            ; error -- the binding is the whole difference
@@ -385,13 +403,15 @@
    ; linux over p_memsz, the .lds ports their own startup loop. a lay that owns no loader
    ; must not use this lane. .rodata at flags 2 is a promise to whatever linker reads it for
    ; a read-only home: no relocation, ever. holo maps it writable anyway -- one segment.
+   ; love's two own sections ride only an object that fills them: an empty one is an orphan
+   ; another link (the kernel's) must place
    (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
-    [[".text"   1 6 16 textforms]
-     [".rodata" 1 2 (o-dalign 8 rodataforms) rodataforms]
-     [".data"   1 3 (o-dalign 8 dataforms) dataforms]
-     [".bss"    8 3 (o-dalign 8 bssforms) bssforms]
-     ["love_nifs" 1 3 8 nifforms]
-     [".love.image"  1 3 16 imgforms]]
+    ([[".text"   1 6 16 textforms]
+      [".rodata" 1 2 (o-dalign 8 rodataforms) rodataforms]
+      [".data"   1 3 (o-dalign 8 dataforms) dataforms]
+      [".bss"    8 3 (o-dalign 8 bssforms) bssforms]]
+     + (two? nifforms ? [["love_nifs" 1 3 8 nifforms]] ())
+     + (two? imgforms ? [[".love.image"  1 3 16 imgforms]] ()))
    ; a named section a compiler emits: progbits on the widest grain its globals ask for and no
    ; wider -- objects' pieces tile one array (the kernel's .videocards), so a pad between is a hole --
    ; allocated, writable unless ro says every global in it is const and reloc-free.
@@ -444,8 +464,8 @@
      [[".text"   1 6 (i386? target ? 16 4) textforms]
       [".rodata" 1 2 (o-dalign 4 rodataforms) rodataforms]
       [".data"   1 3 (o-dalign 4 dataforms) dataforms]
-      [".bss"    8 3 (o-dalign 4 bssforms) bssforms]
-      ["love_nifs" 1 3 4 nifforms]]
+      [".bss"    8 3 (o-dalign 4 bssforms) bssforms]]
+     + (two? nifforms ? [["love_nifs" 1 3 4 nifforms]] ())
      + (i386? target ? () [[".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]]))   ; SHT_ARM_ATTRIBUTES
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
@@ -526,6 +546,8 @@
        ; o-place's fallback is unreachable for a defined name -- it keeps a caller that
        ; names one it never laid pointing at the first section.
        (o-place nm) (o-where lanes (name nm) @ w (two? w ? w '(1 0)))
+       dsz (o-dsizes secs)
+       (o-size nm) (peep dsz (string? nm ? nm (show nm)) 0)
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local func
                                             (elf-sym (stroffs i) 0 2 <w <>w 0)))
@@ -539,7 +561,7 @@
            ; stdout.c's real one wins, where a strong binding makes the pair a link-dup
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym (stroffs (nloc + nfun + i))
-                                                   (elem gs wknames ? 2 1) 1 <w <>w 0)))
+                                                   (elem gs wknames ? 2 1) 1 <w <>w (o-size gs))))
                                  globnames))
            ; an external symbol honours wknames too: a weak undefined reference
            ; resolves to zero at static link (musl's _DYNAMIC), where a strong
@@ -573,6 +595,7 @@
                  'abs64 (o-rela off si rabs (sa + aux))
                  ; ..and its 4-byte twin, the PVH note's 32-bit entry
                  'abs32 (o-rela off si (a64 ? ra-abs32 r-32) (sa + aux))
+                 'abs32s (o-rela off si r-32s (sa + aux))
                  ; ..and a data word measured from its own start, eight bytes (the field is 8 wide)
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; x64: the field is measured from its own end, so every addend carries

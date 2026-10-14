@@ -44,6 +44,8 @@
 ;   (ldsdx f base index scale disp) (stsdx base index scale disp f)   ; the indexed twins (ldssx/stssx single)
 ;   (ldsdl f label)                            ; xmm <- the double at a label (pc-relative, a rodata constant)
 ;   (minsd d s) (maxsd d s)                    ; d <- d < s ? d : s  /  d > s ? d : s (a NaN takes s)
+;   (addss .. ucomiss minss maxss) (cvtsi2ss cvtui2ss f g) (cvttss2si cvttss2ui g f)   ; the single twins
+;   (movdxr f g) (movdrx g f)                  ; gp<->f bit moves of a single's 32 bits
 ;   (cmov cond d s)                            ; d <- s when cond holds, off the last cmp (x86-64)
 ;
 ; a register operand is a symbol (r0..), an immediate a number -- `reg?` tells them apart, so the
@@ -135,7 +137,7 @@
               ; the fpu's state: mdig lays opcode bytes over [base+off] with a /digit, w 8 for REX.W
              'mdig 5 'fninit 0 'fnclex 0 'fwait 0 'emms 0
               ; rdig: prefix bytes, opcode bytes, a /digit, a width, and a register; movntim m <- r
-             'rdig 5 'movntim 4 'rdpmc 0 'invpcid 3
+             'rdig 5 'rrop 4 'movntim 4 'rdpmc 0 'invpcid 3
               ; the system lane -- privileged instructions, arch-specific like the port i/o above.
               ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control registers.
               ; a64: the sysreg pair, the pstate-field immediate, barriers, the sys operations (an
@@ -154,8 +156,8 @@
              'vmxon 2 'vmclear 2 'vmptrld 2 'sgdt 2 'sidt 2
              'vmread 2 'vmwrite 2
              'isb 0 'wfi 0 'wfe 0 'eret 0
-             'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0 'stac 0 'clac 0 'rdpkru 0 'wrpkru 0 'xgetbv 0 'xsetbv 0 'wbinvd 0 'invd 0 'monitor 0 'mwait 0
-             'carry 4 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
+             'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0 'stac 0 'clac 0 'rdpkru 0 'wrpkru 0 'xgetbv 0 'xsetbv 0 'wbinvd 0 'invd 0 'monitor 0 'mwait 0 'monitorx 0 'mwaitx 0 'rdtscp 0
+             'carry 4 'alurm 5 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
              'brk 1 'dbrk 1 'hvc 1 'smc 1 'udf 1 'svcn 1
              'ldcr 2 'stcr 2 'lddr 2 'stdr 2 'lgdt 2 'lidt 2 'invlpg 2
              'mrs 2 'msr 2 'msri 2
@@ -177,9 +179,11 @@
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2   ; a64's three-register twins
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
-             'movupd 2 'movsd 2 'movapd 2 'movhlps 2 'unpcklpd 2
+             'movupd 2 'movsd 2 'movss 2 'movapd 2 'movhlps 2 'unpcklpd 2
              'mulpd 2 'addpd 2 'subpd 2 'divpd 2
              'mulsd 2 'addsd 2 'subsd 2 'divsd 2
+             'mulss 2 'addss 2 'subss 2 'divss 2 'minss 2 'maxss 2 'ucomiss 2
+             'cvtsi2ss 2 'cvtui2ss 2 'cvttss2si 2 'cvttss2ui 2 'movdxr 2 'movdrx 2
              'xorpd 2 'pcmpeqd 2 'andpd 2 'psubq 2
              'cvtss2sd 2 'cvtsd2ss 2 'ucomisd 2 'movmskpd 2
              'cvtsi2sd 2 'cvtui2sd 2 'cvttsd2si 2 'cvttsd2ui 2

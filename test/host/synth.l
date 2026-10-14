@@ -154,5 +154,41 @@
        (synth-lname [0 1 0] = "E-") (synth-lname [0 -1 0] = "Ab+") (synth-lname [0 0 1] = "Bb7")
        (synth-lname [4 -1 0] = "C+")))
 
+; --- the window: the two rows' keys are a tracker's, a key down holds its note however long
+; --- and its repeats add none, up lets it fade to silence; tab esc and the arrows turn
+(: j (jug 0) st (synth-new ())
+   (loud o a n) (net (map (i \ (o (a + i * 97) != 0 ? 1 0)) ^n))
+   _ (synth-wstep st ['down 16]) _ (synth-wstep st ['down 16]) one (#(st 'hv))
+   _ (synth-wstep st ['down 44]) two (#(st 'hv)) names (synth-wframe st)
+   _ (each ^240 (i \ synth-feed st j)) _ (slurp j)                ; four seconds: a strike is long gone
+   _ (each ^10 (i \ synth-feed st j)) held (slurp j)
+   _ (synth-wstep st ['up 16]) after (#(st 'hv)) fading (#(st 'vs))
+   _ (synth-wstep st ['up 44])
+   _ (each ^30 (i \ synth-feed st j)) out (slurp j)
+   n #out quiet (all (i \ 0 = out (n - 1 - i)) ^(4 * synth-chunk))
+   _ (synth-wstep st ['down 15]) tim (st 'tim)
+   _ (synth-wstep st ['down 328]) up (st 'oct) _ (synth-wstep st ['down 336]) _ (synth-wstep st ['down 336]) down (st 'oct)
+   _ (synth-wstep st ['down 30]) none (#(st 'hv))                  ; a: no note
+   _ (synth-wstep st ['down 1]) over (st 'over)
+   s2 (synth-new ()) _ (synth-wstep s2 ['close])
+ (test (synth-qwerty 44 = -12) (synth-qwerty 16 = 0) (synth-qwerty 51 = 0) (synth-qwerty 27 = 19)
+       (one = 1) (two = 2) (has? names "C4") (has? names "C3")
+       (100 < loud held 0 300) (after = 1) (fading = 1) (#(st 'hv) = 0) (#(st 'vs) = 0) quiet
+       (tim = 1) (up = 1) (down = -1) (none = 0) (over = 1) (s2 'over = 1)))
+
+; --- the strip: painted on a paper of the window's form, a held key's note lit and the rest
+; --- not, its sharps short
+(: w 640 h 400 win {'w w 'h h 'paper (cask (w * h * 4))} st (synth-new ())
+   (rgb x y) (4 * (y * w + x) @ i (string (win 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
+   y0 (synth-trows * 16 + 16) cw (w // 32)
+   _ (synth-wstep st ['down 16])                                    ; q: middle c, the 13th cell
+   _ (synth-paint st win)
+   c (rgb (12 * cw + cw // 2) (y0 + 4)) d (rgb (14 * cw + cw // 2) (y0 + 4))
+   cs (rgb (13 * cw + cw // 2) (y0 + 4)) csl (rgb (13 * cw + cw // 2) (y0 + 90))
+   _ (synth-wstep st ['up 16]) _ (synth-paint st win)
+   c2 (rgb (12 * cw + cw // 2) (y0 + 4))
+ (test (c = [255 128 0]) (d = [208 208 208]) (cs = [56 56 56]) (csl = [0 0 0])
+       (c2 = [208 208 208])))
+
 (test_fin (),
- puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, and the loop plays what the buffer says\n")
+ puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, and a held key holds\n")

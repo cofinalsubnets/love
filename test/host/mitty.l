@@ -2,6 +2,7 @@
 ; riding home, exit status. interactive berthing stays a live probe.
 ; not in the corpus: the screen nifs are not in love0. run: cat test/00-init.l test/host/mitty.l | out/love
 
+(borrow "src/apps/mitty/mooring.l")
 (borrow "src/apps/mitty/mitty.l")
 (borrow "src/apps/mitty/wharf.l")
 (borrow "src/apps/mitty/limn.l")
@@ -318,11 +319,17 @@
              "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
  _ (test (two? md))
  m >md
- _ (rest 1200)
+ ; mitty is up and the child has scrolled once mitty asks the outer terminal for the mouse
+ ; in its turn: read to there, then send
+ (upto acc) (? (sub? acc "\e[?1000h" 0) acc
+               (see m @ c (c < 0 ? acc
+                             (: bf (cask 8192) n (swig m bf)
+                                (upto (acc + string c + (charm? n && 0 < n ? (snip bf 0 n) "")))))))
+ pre (upto "")
  _ (say m "\e[5;2~") _ (flush m)                  ; shift+PgUp
  _ (rest 400)
  _ (say m "\e[<0;3;2M\e[<0;3;2m\e[200~p\nq\e[201~") _ (flush m)   ; a click at row 2 col 3, a paste
- outb (slurp m)
+ outb (pre + slurp m)
  (test (sub? outb "TOPMARK" 0)                        ; the history, in view
        (sub? outb "\e[?1000h" 0)                      ; the child's mouse wish, passed out
        (sub? outb "^[[<0;3;2M^[[<0;3;2m^[[200~p^Mq^[[201~" 0), ; ... and the click and paste, passed in

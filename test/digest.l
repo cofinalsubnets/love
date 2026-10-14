@@ -1,4 +1,4 @@
-; --- test/digest.l: the digests in src/love/lib/hash.c, held to what publishes them ---
+; --- test/digest.l: the digests in src/love/crypto/hash.c, held to what publishes them ---
 ; (not hash.l: that is the tablet's.) test/kore/sum.sh holds kore's checksum tools to GNU;
 ; this is the half that needs no other implementation.
 ;   vectors   RFC 1321's md5 suite, fips 180-4's sha examples, RFC 7693's blake2b one.

@@ -51,13 +51,15 @@
     (: md (x86-md bn disp)
      ([(x86-modrm md regf 4) (x86-sib (x86-scale sc) ixn bn)] + x86-dispb md disp))
    ;; the xmm binop table: op -> (prefix opcode). prefix 102=66 / 242=F2 / 0=none. modrm.reg=d, rm=s.
-   x86-sse {'movupd '(102 16) 'movsd '(242 16) 'movapd '(102 40) 'movhlps '(0 18) 'unpcklpd '(102 20)   ; movapd: the whole-register copy (no merge)
+   x86-sse {'movupd '(102 16) 'movsd '(242 16) 'movss '(243 16) 'movapd '(102 40) 'movhlps '(0 18) 'unpcklpd '(102 20)   ; movapd: the whole-register copy (no merge)
             'mulpd '(102 89) 'addpd '(102 88) 'subpd '(102 92) 'divpd '(102 94)
             'mulsd '(242 89) 'addsd '(242 88) 'subsd '(242 92) 'divsd '(242 94)
             'minsd '(242 93) 'maxsd '(242 95)                                              ; d <- d < s ? d : s (a NaN takes s)
             'xorpd '(102 87) 'pcmpeqd '(102 118) 'andpd '(102 84) 'psubq '(102 251)
+            'mulss '(243 89) 'addss '(243 88) 'subss '(243 92) 'divss '(243 94)            ; the single lane: F3 for F2
+            'minss '(243 93) 'maxss '(243 95)
             'cvtss2sd '(243 90) 'cvtsd2ss '(242 90)                                    ; f3/F2 0F 5A /r  widen/narrow single<->double (the `float` lane)
-            'ucomisd '(102 46)}                                                        ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
+            'ucomisd '(102 46) 'ucomiss '(0 46)}                                                        ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
    (x86-seg s) (s @ 'fs [100] 'gs [101] 'es [38] 'cs [46] 'ss [54] 'ds [62] (scare 'x86-seg s))      ; the override prefix; the next form is its instruction
    ;; the relocation kinds: rel32 a 32-bit pc-relative field measured from the end of the field
    ;; (branches, la; aux a byte addend, gas's `.long sym - .` riding 4); rel16 its twin in a
@@ -79,6 +81,8 @@
          ;; (link.l, kind 10). i386 lays every address so.
          'abs32 ((target + aux) % 4294967296 @ v
                    (le32 (v < 0 ? (v + 4294967296) v)))
+         ;; abs32s: the address a sign-extended dword carries (pushq $sym): the kernel's at -2 GiB
+         'abs32s ((target + aux) @ v (fits32 v ? (le32 (v < 0 ? (v + 4294967296) v)) (scare 'abs32s-range v)))
          'abs16 ((target + aux) % 65536 @ v (le16 (v < 0 ? (v + 65536) v)))   ; a 16-bit segment's address
          'abs8 ((target + aux) % 256 @ v [(v < 0 ? (v + 256) v)])
          'pc8 (: d (target + aux - (site + width))       ; a hand-laid short jump's displacement
@@ -291,6 +295,10 @@
           (fits8 y) (x64-mw w () '(131) (x64-digit k) base off 1 + [(byte y)])
           (imw (w = 8 ? 4 w) y @ iy (x64-mw w () '(129) (x64-digit k) base off #iy + iy))))
    ;; adc/sbb d, y at width w: 10/11 and 18/19 /r by a register, 80/83/81 /2 /3 by an immediate
+   ;; op d, m: 02+8k/03+8k /r, the word in memory the second operand
+   (emit-alurm op w d base off)
+    (: k (op @ 'add 0 'or 1 'adc 2 'sbb 3 'and 4 'sub 5 'xor 6 'cmp 7 (scare 'x64-alurm op))
+       (x64-mw w [(8 * k + 2)] [(8 * k + 3)] d base off 0))
    (emit-carry op w d y)
     (: k (op @ 'adc 2 'sbb 3 (scare 'x64-carry op)) dn (rn d)
        yn (reg? y ? (rn y) 0)
@@ -501,13 +509,17 @@
    (emit-segst n base off) (rn base @ bn ((hi bn != 0 ? [(rex 0 0 0 1)]) + ([140] + mem n base off)))
    (emit-segld n base off) (rn base @ bn ((hi bn != 0 ? [(rex 0 0 0 1)]) + ([142] + mem n base off)))
    ;; pushl: a label's address as the sign-extended dword push takes (68 id), which the link fills
-   (emit-pushl label) [104 (fix 4 'abs32 label 0)]
+   (emit-pushl label) [104 (fix 4 'abs32s label 0)]
    ;; mdig: opcode bytes over memory, the /digit as the register field (the fpu's state doors)
    (emit-mdig opc dig w base off) (x64-mw w opc opc (x64-digit dig) base off 0)
    ;; rdig: the same over a register (mod 3), a legacy prefix ahead of the REX
    (emit-rdig pfx opc dig w r)
     (rn r @ n
        (pfx + (w = 2 ? [102] ()) + ((w = 8 || n >= 8) ? [(rex (w = 8 ? 1 0) 0 0 (hi n))]) + opc + [(modrm 3 dig (lo n))]))
+   ;; opc d, s over two registers at width w: lar and lsl (0F 02, 0F 03 /r)
+   (emit-rrop opc w d s)
+    (: dn (rn d) sn (rn s)
+       ((w = 2 ? [102] ()) + ((w = 8 || dn >= 8 || sn >= 8) ? [(rex (w = 8 ? 1 0) (hi dn) 0 (hi sn))]) + opc + [(modrm 3 (lo dn) (lo sn))]))
    (emit-invpcid r base off) (x64-mw 2 '(15 56 130) '(15 56 130) r base off 0)   ; 66 0F 38 82 /r  invpcid r, m128
    (emit-movntim w base off s) (x64-mw w '(15 195) '(15 195) s base off 0)   ; 0F C3 /r  movnti m, r
    ;; str: a string op by its stem at width w (A4..AF, 6C..6F); 66 or REX.W widens the odd byte
@@ -606,6 +618,14 @@
       (catall ['(242) [(rex 1 (hi xn) 0 (hi gn))] [15 42 (modrm 3 xn gn)]]))
    (emit-cvttsd2si g x) (: gn (rn g) xn (xrn x)                                          ; F2 REX.W 0F 2C /r  gp(reg) <- xmm(rm) (truncate toward zero)
       (catall ['(242) [(rex 1 (hi gn) 0 (hi xn))] [15 44 (modrm 3 gn xn)]]))
+   (emit-cvtsi2ss x g) (: xn (xrn x) gn (rn g)                                           ; F3 REX.W 0F 2A /r  xmm(reg) <- gp(rm), single
+      (catall ['(243) [(rex 1 (hi xn) 0 (hi gn))] [15 42 (modrm 3 xn gn)]]))
+   (emit-cvttss2si g x) (: gn (rn g) xn (xrn x)                                          ; F3 REX.W 0F 2C /r  gp(reg) <- xmm(rm), single
+      (catall ['(243) [(rex 1 (hi gn) 0 (hi xn))] [15 44 (modrm 3 gn xn)]]))
+   (emit-movdxr x g) (: xn (xrn x) gn (rn g)                                             ; 66 0F 6E /r  xmm(reg) <- gp32(rm)
+      (catall ['(102) (xrex 0 xn gn) [15 110 (modrm 3 xn gn)]]))
+   (emit-movdrx g x) (: xn (xrn x) gn (rn g)                                             ; 66 0F 7E /r  gp32(rm) <- xmm(reg)
+      (catall ['(102) (xrex 0 xn gn) [15 126 (modrm 3 xn gn)]]))
    (emit-movqxr x g) (: xn (xrn x) gn (rn g)                                             ; 66 REX.W 0F 6E /r  xmm(reg) <- gp(rm)
       (catall ['(102) [(rex 1 (hi xn) 0 (hi gn))] [15 110 (modrm 3 xn gn)]]))
    (emit-movqrx g x) (: xn (xrn x) gn (rn g)                                             ; 66 REX.W 0F 7E /r  gp(rm) <- xmm(reg)
@@ -743,6 +763,7 @@
          ('lia . emit-lia) ('ldseg . emit-ldseg) ('stseg . emit-stseg) ('pushl . emit-pushl) ('segst . emit-segst) ('segld . emit-segld)
          ('cmppd . emit-cmppd) ('movmskpd . emit-movmskpd)
          ('cvtsi2sd . emit-cvtsi2sd) ('cvttsd2si . emit-cvttsd2si)
+         ('cvtsi2ss . emit-cvtsi2ss) ('cvttss2si . emit-cvttss2si) ('movdxr . emit-movdxr) ('movdrx . emit-movdrx)
          ('movqxr . emit-movqxr) ('movqrx . emit-movqrx)
          ('stsd . emit-stsd) ('ldsd . emit-ldsd) ('stss . emit-stss) ('ldss . emit-ldss)
          ('raw . 1)
@@ -754,7 +775,7 @@
          ('outb . '(238)) ('outw . '(102 239)) ('outl . '(239))
          ('cld . '(252))
          ('str . emit-str) ('rep . '(243)) ('repne . '(242))
-         ('mdig . emit-mdig) ('rdig . emit-rdig) ('movntim . emit-movntim) ('invpcid . emit-invpcid) ('rdpmc . '(15 51)) ('fninit . '(219 227)) ('fnclex . '(219 226)) ('fwait . '(155)) ('emms . '(15 119))
+         ('mdig . emit-mdig) ('rdig . emit-rdig) ('rrop . emit-rrop) ('movntim . emit-movntim) ('invpcid . emit-invpcid) ('rdpmc . '(15 51)) ('fninit . '(219 227)) ('fnclex . '(219 226)) ('fwait . '(155)) ('emms . '(15 119))
           ; the system lane. `trap` is already int3 (CC), so `int` covers only the
           ; vectored form; `iretq` is the 64-bit return (the REX.W is what widens it).
          ('cli . '(250)) ('sti . '(251)) ('hlt . '(244)) ('pushf . '(156)) ('popf . '(157))
@@ -780,8 +801,9 @@
          ('xgetbv . '(15 1 208)) ('xsetbv . '(15 1 209))   ; XCR[ecx] <-> edx:eax
          ('wbinvd . '(15 9)) ('invd . '(15 8))              ; the caches, written back or not
          ('monitor . '(15 1 200)) ('mwait . '(15 1 201))    ; rax the line, ecx/edx the hints: the operands spell them
+         ('monitorx . '(15 1 250)) ('mwaitx . '(15 1 251)) ('rdtscp . '(15 1 249))   ; amd's pair; the tsc with its aux in ecx
          ('xaddm . emit-xaddm) ('cmpxchgm . emit-cmpxchgm) ('xchgm . emit-xchgm)
-         ('alum . emit-alum) ('carry . emit-carry) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
+         ('alum . emit-alum) ('carry . emit-carry) ('alurm . emit-alurm) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
          ('ldcr . emit-ldcr) ('stcr . emit-stcr) ('lddr . emit-lddr) ('stdr . emit-stdr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])
@@ -801,7 +823,7 @@
         ;; 0, so neither writes for this purpose, and imul/idiv leave some undefined.
         'zeroxor 1
         'flagr '(br set cmov adc sbb)
-        'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo ucomisd)
+        'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo ucomisd ucomiss)
         ;; branch relaxation: rel8 measures from the end of the 2-byte short form, so the distance
         ;; from the instruction itself is two more than the field carries. this RE-LOWERS rather than
         ;; rewriting its chunk -- an x86 short jump shares no bytes with its long twin.

@@ -312,6 +312,8 @@
       ; a musttail call is owed as a call: the splice that would swallow a tiny callee
       ; declines, and the kept call leaves as the jmp
       (elem '(jmp f) <>(cgn "int f(int n) { return n + 1; } int h(int n) { __attribute__((musttail)) return f(n); } int main() { return h(3); }"))
+      ; ..and a frame address become a value is no bar to it: the frame dies at the jump either way
+      (elem '(jmp g9) <>(cgn "long g9(long); void h9(char *); long f(long n) { char b[8]; char *s = b; s[0] = (char) n; h9(s); __attribute__((musttail)) return g9(n); } int main() { return 0; }"))
       (refused? (cgn "int f() { return 1; }"))                      ; no main, no program
       (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a named refusal now (rung 1)
       ; one switch, one label per value (C11 6.8.4.2p3): a repeat, a value a range holds, a second default
@@ -731,12 +733,12 @@
       ; a braced bitfield images its unit's bits, not a placement apiece: {0,1} is bit 1
       ; alone, and 5 with 21 above it is 5 + 21*8
       ((cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}" 2) =
-        '((label g) (raw (2 0 0 0 0 0 0 0))))
+        '((label g) (raw (2 0 0 0)) (align 1) (raw (0 0 0 0))))
       ((cobx "struct C { unsigned a:3; unsigned b:5; } h = {5,21}; int main(){return 0;}" 2) =
-        '((label h) (raw (173 0 0 0 0 0 0 0))))
+        '((label h) (raw (173 0 0 0)) (align 1) (raw (0 0 0 0))))
       ; the unit overlays what shares its bytes -- pre lives in byte 0 of the same word
       ((cobx "struct E { unsigned char pre; unsigned a:3; unsigned b:5; } e = {200,5,21}; int main(){return 0;}" 2) =
-        '((label e) (raw (200 173 0 0 0 0 0 0))))
+        '((label e) (raw (200 173 0 0)) (align 1) (raw (0 0 0 0))))
       ; the two special names keep their own streams and stay out of the extras
       ((cobx "__attribute__((section(\"love_nifs\"))) static long n = 1; int main() { return 0; }" 8) = ())
       ((cobx "__attribute__((section(\".love.image\"))) static long i = 1; int main() { return 0; }" 8) = ())))
@@ -1387,8 +1389,8 @@
       (elem 'r11 pln)
       (#(filter (r \ elem r '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)) pln) <= 1))
    _ (test
-      (elem '(lsr r6 r0 11) twf)
-      (elem '(lsl r5 r0 8) twf)
+      (elem '(lsl r5 r10 8) twf)
+      !(elem '(mov r0 r6) twf)                    ; the answer is built on r0, no closing copy
       !(twpair? twf))
    ; -- the riscv frame: a body naming no sp, fp or lr and making no call lays no frame; on wasm a call
    ; leaves every local but its answers, so there a call keeps no frame either, a home off the argument
@@ -1512,10 +1514,10 @@
        (two? irV)
        (elem '(mov r11 r0) vf)                    ; c's write lands its lo home...
        (elem '(mov r12 r2) vf)                    ; ...and its hi
-       (elem '(m128r r7 r8) vf)                   ; the mul rides the parked twins -- the
+       (elem '(m128r r10 r7) vf)                  ; the mul rides the parked twins -- the
        (elem '(a128r r11 r12) vf)                 ;   machine-stack cell never opens, and the
                                                       ;   combine reads c's home, the park copied out
-       (4 = (splds vf)))))                           ; full-word sp loads: a's two wd9-spill reloads + the cs restores
+       (2 = (splds vf)))))                           ; full-word sp loads: the cs restores (the k loop unrolls, a spills no more)
 
 ; -- the callee-saved contract (cskeep): every cgn above already compiles under it -- a
 ; breach refuses at emission -- so these laws probe the checker itself. the dirty walk is
@@ -1557,21 +1559,32 @@
 
 ; -- the musttail contract (sibs): a marked ret-position call -- (call F must) -- leaves as
 ; the tail jmp and the marker dies with the rewrite; a shape that cannot tail scares
-; (musttail-not-a-tail), and a fn sibcall declining whole (fesc) scares musttail-escape.
+; (musttail-not-a-tail), and a fn sibcall declining whole (fesc) scares musttail-escape. a
+; frame address become a value (fescv) keeps the unmarked calls calls and the marked one jumps,
+; unless a frame address is laid for its args
 (: mg9 {} _ (pin mg9 'tgt 'x64) _ (pin mg9 'fn "f9")
    mepi '((ld r3 r4 -8) (mov sp r4) (pop r4) (ret))
    _ (test
       (elem '(jmp g9) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))
       !(elem '(call g9 must) (sibcall mg9 ('((label f9) (call g9 must)) + mepi))))
    mlog {}
-   (hear (p \ e \ (pin mlog p (1 + peep mlog p 0), 0)),
+   _ (hear (p \ e \ (pin mlog p (1 + peep mlog p 0), 0)),
     sibcall mg9 ('((label f9) (call g9 must) (mov r0 r5)) + mepi),     ; a live insn after the call: no tail
     ({} @ t9 (pin t9 'tgt 'x64, pin t9 'fesc 1, pin t9 'fn "f9",
               sibcall t9 '((label f9) (call g9 must) (ret)))),         ; the whole-fn decline
+    ({} @ t9 (pin t9 'tgt 'x64, pin t9 'fescv 1, pin t9 'fn "f9",
+              sibcall t9 ('((label f9) (lea r6 r4 -16) (call g9 must)) + mepi))),   ; a frame address for its args
     hear (),
     (test
-       (1 = (peep mlog 'musttail-not-a-tail 0))
-       (1 = (peep mlog 'musttail-escape 0)))))
+       (2 = (peep mlog 'musttail-not-a-tail 0))
+       (1 = (peep mlog 'musttail-escape 0))))
+   (fv9 _) (: t9 {} (pin t9 'tgt 'x64, pin t9 'fescv 1, pin t9 'fn "f9", t9))
+   mv9 (sibcall (fv9 ()) ('((label f9) (call h9) (call g9 must)) + mepi))
+   uv9 (sibcall (fv9 ()) ('((label f9) (call g9)) + mepi))
+   _ (test
+      (elem '(jmp g9) mv9)                          ; a value escape: the marked call still jumps
+      (elem '(call h9) mv9)
+      (elem '(call g9) uv9)))                       ; ..and an unmarked one stays a call
 
 ; -- free locals and a priced crossing (stage B1): one cold depth-0 call leaves the fn
 ; leaf-shaped (the path maximum prices it at one wrap pair), so n rides its arrival and
@@ -1632,7 +1645,7 @@
    xf (fnf 'run <>irX)
    _ (test
       (two? irX)
-      (elem '(add r11 r6 r5) xf)                  ; a += b is born in a's own seat, off x's ride...
+      (elem '(add r10 r6 r5) xf)                  ; a += b is born in a's own seat, off x's ride...
       !(elem '(add r6 r6 r5) xf))                 ; ...and x's ride never takes the add (b, never
                                                      ;   written, aliases y's ride in the same form)
    ; a callee of statements at a return's ?: arm: the return is an if whose arm holds the body,
@@ -1923,8 +1936,10 @@
             (movqxr f0 r5) (movqrx r5 f0)
             (cvtsi2sd f0 r5) (cvttsd2si r5 f0)
             (ldsd f0 r9 8) (ldss f0 r9 8) (stsd r9 8 f0) (stss r9 8 f0)
-            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1) (movapd f0 f1)
+            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1) (movapd f0 f1) (movss f0 f1)
             (ucomisd f0 f1) (cvtss2sd f0 f1) (cvtsd2ss f0 f1)
+            (addss f0 f1) (subss f0 f1) (mulss f0 f1) (divss f0 f1) (minss f0 f1) (maxss f0 f1) (ucomiss f0 f1)
+            (cvtsi2ss f0 r5) (cvttss2si r5 f0) (movdxr f0 r5) (movdrx r5 f0)
             (ldsdx f0 r9 r10 8 0) (ldssx f0 r9 r10 8 0) (stsdx r9 r10 8 0 f0) (stssx r9 r10 8 0 f0)
             (ldsdl f0 zz9) (minsd f0 f1) (maxsd f0 f1) (cmov eq r5 r9)
             (div r5 r9 r10) (udiv r5 r9 r10) (rem r5 r9 r10 r2) (urem r5 r9 r10 r2)
@@ -1933,7 +1948,7 @@
    rostered (aluops + divops + vshops + unops + ldops9 + gstops + stxops + siops +
              leaops + xops + x4ops + m4ops + fxops + fstxops + fldops + fstops + xmmops +
              '(li mov push pop shl shr sar rol ror ror4 cmpm cmprm la laa ldsdl set cmov cmp test
-               movqxr movqrx cvtsi2sd cvttsd2si))
+               movqxr movqrx cvtsi2sd cvttsd2si cvtsi2ss cvttss2si movdxr movdrx))
    ; the forward carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
    ; form -- no guard is restated here, cpwalk decides and holo judges
    (fwd f) (catmap (i \ catmap (r9 \
@@ -1958,13 +1973,13 @@
    bad2 (catmap bwd shapes)
    (test
       ; the carrier is what it says it is, and every shape is one both halves already accept
-      (96 = #shapes)
+      (108 = #shapes)
       (atom? (filter (f9 \ (rdsp gX f9) = 'bar) shapes))
       (all emits? shapes)
       (atom? (filter (o9 \ nelem o9 heads) rostered))      ; the drift gate
-      (405 = nfwd) (810 = nbwd)                               ; a silent narrowing shows up here
-      (atom? bad1)                                            ; forward: 405 renames, all encodable
-      (atom? bad2)                                            ; backward: 810 folds, all encodable
+      (435 = nfwd) (840 = nbwd)                               ; a silent narrowing shows up here
+      (atom? bad1)                                            ; forward: 435 renames, all encodable
+      (atom? bad2)                                            ; backward: 840 folds, all encodable
       ; the two shapes the guards exist for, refused by holo itself, plus the alias emit-alu
       ; welcomes when the op commutes -- coal's decline there is conservative, not necessary
       !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))
@@ -2301,6 +2316,15 @@
       (cspos rl = 5)                             ; ..saved right after the frame's sub
       (csld? (rl (#rl - 5)))))                    ; ..restored at the teardown's head
 
+; --- a frame address handed to a call may be kept by the callee: no later call in the fn
+; jumps out of the frame under it (block() in lua's parser: enterblock(fs, &bl) .. leaveblock(fs))
+(: eF (fnf 'f <>(cgn "struct st { int *bl; }; void enter(struct st *s, int *x); void leave(struct st *s); void f(struct st *s) { int x; enter(s, &x); leave(s); } int main() { return 0; }"))
+   aF (fnf 'f <>(cgn "struct st { int *bl; }; void enter(struct st *s, int *x); void leave(struct st *s); void f(struct st *s) { int x[2]; enter(s, x); leave(s); } int main() { return 0; }"))
+   (test
+      (elem '(call leave) eF)
+      !(elem '(jmp leave) eF)
+      (elem '(call leave) aF)))                  ; an array's decay is its address too
+
 ; --- the allocator core (x64): a mint takes its copy partner's register when the two
 ; never meet, keeps its binding when the machine reads that register past it (an argument
 ; into a call), and never shares a non-commutative op's second source
@@ -2331,6 +2355,16 @@
       (xB = '((label fn) (ld r0 r6 8) (add r10 r0 8) (ld r0 r6 16) (st r10 0 r0) (li r0 0) (ret)))
       (xR = '((label fn) (ld r0 r6 8) (add r0 r0 8) (ret)))
       (xL = '((label fn) (li r0 1) (call g9) (mov r0 r6) (ret)))))
+
+; --- a small counted loop unrolls, a constant-indexed double element is its frame slot, and
+; an integer literal meeting a double is a double constant: no address, no loop test, no convert
+(: hC (fnf 'h <>(cgn "double h(double *v, int n) { double a[3]; for (int k = 0; k < 3; k++) a[k] = v[k]; double s = 0; for (int i = 0; i < n; i++) { s += a[0] * a[1] - a[2]; for (int k = 0; k < 3; k++) a[k] += 1; } return s >= -1 ? s : 0; } int main() { return 0; }"))
+   (hn op) (#(filter (f \ two? f && <f = op) hC))
+   (test
+      (0 = (hn 'lea))                            ; every a[k] a static slot
+      (0 = (hn 'cvtsi2sd))                       ; += 1 and >= -1 convert at compile time
+      (2 = (hn 'br))                             ; the i loop's test and the ?: -- no k loop left
+      (elem '(stsd sp 16 f0) hC)))
 
 ; --- ..and on a64, whose alu is three-address: sub's dest takes its second source too
 (: v0 (name "%v0") v2 (name "%v2")

@@ -149,7 +149,8 @@
    (tgt @ 'a64                          '("__aarch64__" "__CHAR_UNSIGNED__")
           'rv64                        '("__riscv" "__CHAR_UNSIGNED__")
           'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
-          ('thumb2 || 'thumb2sp || 'thumb1) '("__arm__" "__arm" "__CHAR_UNSIGNED__")
+          ('thumb2 || 'thumb2sp)       '("__arm__" "__arm" "__CHAR_UNSIGNED__")
+          'thumb1                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_ARCH_6M__")   ; gcc's for -mcpu=cortex-m0
           ('i386 || 'i386m16)          '("__i386__" "__i386" "__ILP32__")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; the OS predefines: -os picks, and unnamed is the ground we stand on, never a fixed
@@ -483,7 +484,7 @@
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz]] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp]] tgt)
           (okv? ob || ccdie ob src ("cc: codegen error in " + src),
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 ("cc: " + src + ": floating-point code, and -mno-sse (or its kin) rules it out"),

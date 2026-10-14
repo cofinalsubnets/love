@@ -16,7 +16,7 @@
 ; test/host/corridor.l; corridor-watch
 ; reads the disk, and only corridor-walk and corridor-run tie the tty.
 ;
-; run: love lore corridor [--level FILE] [--kitty|--cells]
+; run: love lore corridor [--level FILE] [--kitty|--cells|--window]
 ;      h l or the arrows turn, k j step, u n look up and down, p where you stand; q or
 ;      esc leaves
 (module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step
@@ -145,7 +145,7 @@
  ; edge, each seen from both sides
  (halo-ball p r col) (: n 12 z [0.0 0.0 0.0]
    (vx q k) [(q 0) (q 1) (q 2) 0.0 0.0 0.0 0.0 0.0 (k 0) (k 1) (k 2)]
-   (disc u v) (: rim (map (i \ (: a (2.0 * pi * i / n) (vx (c+ p (c+ (c* (r * cos a) u) (c* (r * sin a) v))) z))) ^n)
+   (disc u v) (: rim (map (i \ (: a (tau * i / n) (vx (c+ p (c+ (c* (r * cos a) u) (c* (r * sin a) v))) z))) ^n)
      (mesh (vx p col . rim) (cats (map (i \ (: a (1 + i) b (1 + (i + 1) % n) [[0 a b -1] [0 b a -1]])) ^n))))
    (mesh-join [(disc [1.0 0.0 0.0] [0.0 1.0 0.0]) (disc [0.0 1.0 0.0] [0.0 0.0 1.0]) (disc [1.0 0.0 0.0] [0.0 0.0 1.0])]))
  (sign-light lv s) (: a (s 'at) hg (hang lv (a 0) (a 1)) n (hg 1) rt (hg 2) h (a 3)
@@ -311,21 +311,22 @@
  ; --- the walk, on view's loop; corridor-run raises the stage ---
  (corridor-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level)
-                               st (pins (corridor-new w h lv (dir-of p)) 'deep (view-deep? ()) 'kitty (mesh-mode (o 'md)) 'path p)
+                               st (pins (corridor-new w h lv (dir-of p)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
+                                        'win (peep o 'win ()) 'path p)
                                (corridor-watch (corridor-size st w (h // 2)))))
                'size corridor-size 'frame corridor-frame 'key corridor-step
                'tick (st \ (walk-dt st,
                             corridor-move st,
                             (st 't % watch-every = 0 ? (corridor-watch st))))
-               'fps fps 'linger 0 'next () 'song (_ \ ())})
+               'fps fps 'linger 0 'next () 'song (_ \ ()) 'win (peep o 'win ())})
  ; ..the level named, else the tree's own on disk, else the one the binary carries
  (corridor-run o) (: p (o 'level @ () (two? (stat the-level) ? the-level ("/love/" + the-level)) q q)
                      lv (corridor-load p)
    (? (string? lv) (say err ("corridor: " + p + ": " + lv + "\n"), flush err, 1)
-      (view-run (_ \ corridor-walk (pin o 'level p) lv), say out mesh-gone, flush out, 0)))
- corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells]   (h l turn, k j step, u n look, p where you stand; q or esc leaves; the level is read again when it changes)"
+      (view-stage (pin o 'level p) (o2 \ corridor-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
+ corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window]   (h l turn, k j step, u n look, p where you stand; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for corridor-run, or () where one is wrong or said twice
- (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells)
+ (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window)
                                     (view-arg "--level" 'level (w \ w))])
  (corridor-main as) (view-main "corridor" corridor-usage corridor-opts corridor-run as)
  _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1)))

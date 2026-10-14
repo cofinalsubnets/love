@@ -64,6 +64,7 @@
    lit-m (zen != bare) hot (iota lit-m)
    ; the sky asked every 4 pixels and shaded between: near the sky asked at each, the box
    ; the same, the rest near on the mean; by night the stars a pixel each over it, as many
+   ; as there are in view, against the same sky with every star turned under the ground
    fg (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars noon 0.0 0.65) sl wx [0.0 0.0 0.0] noon 0.0 4))
    (gap a b) (: p (mesh-flat a) q (mesh-flat b) (+(map (k \ net (max (p k - q k) (q k - p k))) ^3) / (3.0 * #a)))
    ; a box over a sheet, the sun overhead: seen from above, the sheet dark under the box by
@@ -75,7 +76,8 @@
    fsh (mesh-frame vd [(shs 0) (shs 1) [sv mp 0.02]] () [0 0 0 0.0 0.0] 0 0.0 7)
    fno (mesh-frame vd [(shs 0) (shs 1) ()] () [0 0 0 0.0 0.0] 0 0.0 7)
    gk (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 4)
-   hot4 (iota (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk != mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 [(<gk) (\ v f B f)]))
+   gk0 (mesh-sky (pins ns 'y (ns 'y * 0.0 - 1.0)) nl wx [0.0 0.0 0.0] night 0.0 4)
+   hot4 (iota (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk != mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk0))
  (test (all (k \ round k != 7) ^4)
        (mid < <(cols right))
        (#(rows up) = 0 || <(rows up) > <(rows right))

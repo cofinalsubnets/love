@@ -11,47 +11,26 @@
 ; saver ('saver) now; a key
 ; the caller pins in 'keys opens the pane its thunk answers, beside (love mitty's b, a model).
 ; the clip is the mitty's one register, vi's shape, shared by every vi buffer on it,
-; and sent out to the outer terminal's clipboard (osc 52) when it changes.
+; and sent out to the outer terminal's clipboard (osc 52) when it changes, or to 'own's.
 ; a guest may be a stage of this process -- cli's triple (show w h) (step k) (over? _) --
 ; berthed like a child; a door 'key reads its keys, a door 'tick asks for a frame.
 ;
 ; run: out/love -e "(: _ (borrow 'mitty) (mitty [\"sh\"]))", or `love mitty` for lush in it.
 ; host-only (screen/tether/tty ride src/love/*.c): never in the corpus; test/host/mitty.l
 ; smokes it over a real pty. a module, so a guest that berths itself (vi's splits) cites it.
-(module '(mitty mitty mitty-stage mitty-up hberth hsail hopen hopen-stage moor waitfor
-          hbox hmas hpid hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hshut
+(module '(mitty mitty mitty-stage mitty-up hberth hsail hopen-stage
+          hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hname-of hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands mitty-bee mitty-main)
+          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands mitty-bee mitty-window mitty-keybytes mitty-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
+(borrow 'mooring)                       ; hopen moor waitfor
 (borrow 'posix)
 (borrow 'bytes)
+(borrow 'window)
+(borrow 'font)
 (:
- ; --- the moor: pump the master through the screen until the child hangs up.
- ; the screen lives in box bx (a relay swaps it); replies pour straight back;
- ; a dirty box (when given) cues the painter
- ; park on the first byte, then swig the rest of the gulp -- per-byte sees
- ; cap out near a megabyte a second, and a full-screen guest pours six
- ; the box is re-read every gulp on purpose: that is how a resize reaches a
- ; running moor with no signal, and why a pane's screen may be swapped freely.
- (moor bx m dirty) (see m @ ch
-                    (ch = -1 ? ()
-                     (: s (peep bx () 0)
-                        _ (scribe s ch)
-                        b (cask 8192)
-                        _ (: (drain x) (swig m b @ n
-                                          (charm? n && 0 < n ? (scribe (peep bx () 0) (snip b 0 n), drain ()) 0))
-                           (drain ()))
-                        rep (reply (peep bx () 0))
-                        ; a reply is a byte stream and its order is the whole content
-                        ; of it -- and one say beats six puts.
-                        (rep ? (say m (foldl (a \ b \ a + string b) "" rep), flush m) 0,
-                         dirty ? (pin dirty () 1) 0,
-                         moor bx m dirty))))
-
- (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
-
  ; --- the mitty: every pane's screen, pty and child, under one wharf plan ---
  ; a pane is (box master pid stage): a child's has its master and pid and no stage,
  ; a stage's the stage and neither. the mitty is a tablet, and the keys are the
@@ -62,15 +41,9 @@
  (hin hb) (peep hb 'in in)
  (hout hb) (peep hb 'out out)
  (hlive? hb) (hot? (hout hb))
- (hbox p) <p
- (hmas p) <>p
- (hpid p) <>>p
  (hstage p) (p 3)
  ; what runs there, for the bar: a program's name (love's verb when it is love), a stage's own
  (hname p) (? (4 < #p) (p 4) "")
- (hname-of argv) (: b (: w <argv k (: (go i) (? (i < 0) 0 (w i = 47) (i + 1) (go (i - 1))) (go (#w - 1)))
-                         (snip w k #w))
-                     (b = "love" && two? >argv ? <>argv b))
  (hpty? p) (() != hmas p)
  ; the clip's text: a linewise register ends each line, a charwise one is as it is
  (hclip-text hb) (peep (hb 'clip) () () @ v
@@ -90,17 +63,6 @@
  (hpane hb id) (peep (hb 'panes) id ())
  (hfind bs id) (two? bs ? (wharf-id <bs = id ? <bs (hfind >bs id)) ())
  (hsoil hb) (hb 'dirt @ b (pin b () 1))
-
- ; open a child on its own pty at r x c. tether's errno rides back out on a
- ; refusal -- a nom, never two?, which is how the caller tells it from a pane.
- (hopen argv r c) (: _ (setenv "TERM" "xterm-256color")   ; the dialect we actually speak
-                     md (tether argv)
-                     (atom? md ? md
-                      (: m >md
-                         s (screen (cask (screen () r c)) r c)
-                         bx {s}
-                         (settty m r c,
-                          [bx m <md () (hname-of argv)]))))
 
  ; --- the stage door: a stage berths on a screen of its own, its frame scribed there
  ; at the pane's size, which the frame is asked for as w h
@@ -225,7 +187,7 @@
       hbars j hb,
       peep hb 'bar 0 ? (say j (limn-go (hb 'rows - 1) 0 + hbarline hb)) 0,
       (hclip-text hb @ ct
-         (ct = hb 'c52 ? 0 (pin hb 'c52 ct, 0 < #ct ? (say j ("\e]52;c;" + b64e ct 1 + "\a")) 0))),
+         (ct = hb 'c52 ? 0 (pin hb 'c52 ct, 0 < #ct ? (peep hb 'own () @ f (() = f ? (say j ("\e]52;c;" + b64e ct 1 + "\a")) (f ct))) 0))),
       (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
          (two? p && two? b ?
             (: s (peep (hbox p) () 0) w (gaze s 0) c (gaze s 2) f (gaze s 3)
@@ -491,11 +453,12 @@
  ; fresh pty answers (0 . 0) -- two? and true and useless -- and a wharf of no
  ; cells lays every pane at zero extent, which paints a blank screen and never
  ; recovers. the opening had this floor; the tide did not, and quietly undid it
- ; half a second in.
+ ; half a second in. a mitty with no tty of its own -- a server's, a window's -- has its
+ ; size said, 'csize
  (hsize u) (tty 1 @ ws
               [(two? ws && 5 < <ws ? <ws 24)
                (two? ws && 19 < >ws ? >ws 80)])
- (htide hb) (: sz (peep hb 'serve 0 ? (peep hb 'csize [24 80]) (hsize 0)) r <sz c <>sz
+ (htide hb) (: sz (peep hb 'serve 0 || peep hb 'csize () ? (peep hb 'csize [24 80]) (hsize 0)) r <sz c <>sz
                (r = hb 'rows && c = hb 'cols ? ()
                 (pin hb 'rows r, pin hb 'cols c, hrelay hb)))
 
@@ -787,24 +750,209 @@
                              (puts (snip f 0 (#f - 5) + (hot? s ? (close s, "") "  (dead)") + "\n"))))
                      (sort ns),
                  flush out, 0))
- ; love mitty: attach to the mitty named main (or -n NAME), started when none is up; one
- ; that cannot be served (a seat with no sockets) runs here instead. --here always does. a
- ; pane of mitty NAME never attaches to NAME: it would take the glass from the terminal
- ; showing it, and show the mitty inside itself
+ ; --- the window: the mitty as a terminal of its own (src/apps/window.l) -- `love mitty
+ ;     --window`, or a mitty with a display and no tty ---
+ ; the mitty is as it is on a terminal, its 'in and 'out two pipes instead of a tty. its frames
+ ; pour through one quay screen, the glass -- the console's own parser, so the bars, the
+ ; borders, the cursor, the saver and the pictures come as they are -- and the rows the glass
+ ; names dirty are dyed onto the window's paper, 8 by 16 a cell. the window's events go back up
+ ; as a terminal's bytes: a key's text as it types it, the keys with no text and every key
+ ; under ctrl or alt as xterm spells them, the pointer as the reports the glass was asked for.
+ ; the pointer is the window's own where the glass asked for none, or under shift: a drag
+ ; selects (a double or triple click the word or the line, a right click stretches it) and
+ ; takes the primary, the middle button pastes it; ctrl+shift+C copies the selection onto
+ ; the clipboard, ctrl+shift+V and shift+Insert paste. a paste goes up bracketed, and the
+ ; mitty's own clip goes out as the clipboard. closing the window hangs up every pane's
+ ; child, and the mitty ends with its last pane.
+ ; --- keys: a set-1 code -> what a terminal sends ------------------------------------
+ ; the modifiers as held, each by its two keys: shift ctrl alt
+ mw-modkeys {42 'shift 54 'shift 29 'ctrl 285 'ctrl 56 'alt 312 'alt}
+ ; the keys with no text, xterm's spelling; [lead final] where a modifier goes between
+ mw-special {28 "\r" 284 "\r" 14 "\x7f" 1 "\e"
+             328 ["\e[" "A"] 336 ["\e[" "B"] 333 ["\e[" "C"] 331 ["\e[" "D"]
+             327 ["\e[" "H"] 335 ["\e[" "F"]
+             329 ["\e[5" "~"] 337 ["\e[6" "~"] 338 ["\e[2" "~"] 339 ["\e[3" "~"]
+             59 ["\eO" "P"] 60 ["\eO" "Q"] 61 ["\eO" "R"] 62 ["\eO" "S"]
+             63 ["\e[15" "~"] 64 ["\e[17" "~"] 65 ["\e[18" "~"] 66 ["\e[19" "~"] 67 ["\e[20" "~"]
+             68 ["\e[21" "~"] 87 ["\e[23" "~"] 88 ["\e[24" "~"]}
+ ; the keys ctrl and alt read by place, as on a us board: the letters, the digits, and the
+ ; punctuation ctrl folds onto C0
+ mw-places {16 113 17 119 18 101 19 114 20 116 21 121 22 117 23 105 24 111 25 112
+            30 97 31 115 32 100 33 102 34 103 35 104 36 106 37 107 38 108
+            44 122 45 120 46 99 47 118 48 98 49 110 50 109
+            2 49 3 50 4 51 5 52 6 53 7 54 8 55 9 56 10 57 11 48
+            57 32 26 91 27 93 43 92 12 45 13 61 39 59 40 39 41 96 51 44 52 46 53 47}
+ ; a key down with the modifiers held -> its bytes, or "" for one whose text says it
+ (mitty-keybytes k held)
+  (: sh (held 'shift) ct (held 'ctrl) al (held 'alt)
+     m (1 + (sh ? 1 0) + (al ? 2 0) + (ct ? 4 0))
+     sp (peep mw-special k ()) pl (peep mw-places k ())
+     (? (string? sp) ((al ? "\e" "") + sp)
+        (two? sp) (? (m = 1) (sp 0 + sp 1)
+                     (sp 0 = "\eO" || sp 0 = "\e[") ("\e[1;" + show m + sp 1)
+                     (sp 0 + ";" + show m + sp 1))
+        (k = 15) (sh ? "\e[Z" "\t")
+        !(charm? pl) ""
+        ct (: c (? (97 <= pl <= 122) (pl - 96) (pl = 32 || pl = 50) 0 (pl = 91) 27 (pl = 92) 28
+                   (pl = 93) 29 (pl = 54) 30 (pl = 47 || pl = 45) 31 -1)
+              (c < 0 ? "" ((al ? "\e" "") + string c)))
+        al ("\e" + string (sh && 97 <= pl <= 122 ? (pl - 32) pl))
+        ""))
+
+ ; --- the pointer: X's buttons as the report's, and the cell under a pixel ---------
+ mw-xbtn {1 0 2 1 3 2 4 64 5 65 6 66 7 67}
+ (mw-mods held) ((held 'shift ? 4 0) + (held 'alt ? 8 0) + (held 'ctrl ? 16 0))
+
+ ; --- the selection on the glass: a left press anchors it (a second or third in quick
+ ;     succession on the same cell takes the word or the line), a drag stretches it, a
+ ;     release with something chosen takes the primary. a right press moves the nearer end
+ ;     there in its own unit, and the drag goes on from it. answers whether it was ours ---
+ (mw-choose win sc held how b gi)
+  (: s0 (gaze sc 10) s1 (gaze sc 11)
+     (? (how = 0 && b = 2 && s0 < s1)
+        ((? (gi < s0) (s1 - 1) (s1 <= gi) s0 (gi - s0 < s1 - gi) (s1 - 1) s0) @ a
+           (pins held 'anchor a 'drag 1, select sc a gi (peep held 'unit 0)))
+        (how = 0 && b = 0)
+        (: t (clock 0)
+           n (t - peep held 'tp 0 < 400 && gi = peep held 'anchor () ? (min 3 (peep held 'clicks 0 + 1)) 1)
+           (pins held 'tp t 'anchor gi 'clicks n 'unit (n - 1) 'drag 1,
+            select sc gi gi (1 < n ? (n - 1) -1)))
+        (how = 0 && b = 1) (window-ask win 'primary)
+        !(peep held 'drag 0) 0
+        (how = 2) (select sc (peep held 'anchor gi) gi (peep held 'unit 0))
+        (pin held 'drag 0,
+         s0 < s1 ? (window-own win 'primary (copied sc s0 s1)) 0)))
+
+ ; --- the glass: the rows it names dirty (wet reads and clears), the cursor's row and the
+ ;     one it left, dyed onto the paper and shown ---
+ (mw-wets sc) (: (bits d base i acc) (i < 32 ? (bits d base (i + 1) (d >> i & 1 ? ((base + i) . acc) acc)) acc)
+              (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
+              (go 0 ()))
+ (mw-paint win gx font all last)
+  (: sc (peep gx () 0) p (window-paper win) W <(window-size win)
+     r (gaze sc 1) c (gaze sc 2)
+     cur (gaze sc 3 & 1 ? (gaze sc 0) -1)
+     v (gaze sc 8)
+     rows (tablet 8)
+     _ (each (all ? (jot r) (mw-wets sc)) (y \ (y < r ? (pin rows y 1) 0)))
+     _ (-1 < cur && cur // c + v < r ? (pin rows (cur // c + v) 1) 0)
+     _ (-1 < last && last != cur && last // c + v < r ? (pin rows (last // c + v) 1) 0)
+     ys (sort (keys rows))
+     _ (each ys (y \ dye sc p W y cur font))
+     (run a b l) (? (two? l && <l = b + 1) (run a <l >l)
+                    (window-show win (a * 16) ((b + 1) * 16), two? l ? (run <l <l >l) 0))
+     (two? ys ? (run <ys <ys >ys) 0, cur))
+
+ ; --- mitty-window: the mitty for the shell (argv in its first pane, when given) in a window
+ ;     of 80 by 24 cells. answers 0, or 1 and why it could not ---
+ (mitty-window as0)
+  (: font (? (two? as0 && <as0 = "-f" && two? >as0) (uread <>as0 @ t (two? t ? (font-hex <>t))))
+     as (? (two? as0 && <as0 = "-f") (two? >as0 ? >>as0 ()) as0)
+  (window-open 640 384 "mitty" @ win
+   (? !(tablet? win) (say err ("mitty: no window (" + show win + ")\n"), flush err, 1)
+      (: wh (window-size win) r (max 2 ((wh 1) // 16)) c (max 20 (<wh // 8))
+         ki (pipe 0) fo (pipe 0)
+         kin (fdopen <ki) kout (fdopen >ki)            ; the keys: we write, the mitty reads
+         fin (fdopen <fo) fout (fdopen >fo)            ; the frames: the mitty writes, we read
+         gx {(screen (cask (screen () r c)) r c)}
+         dirty {1}
+         _ (setenv "COLORTERM" "truecolor")           ; the glass paints every pen as it is said
+         hb (mitty-lush as r c 0)
+         (? !(tablet? hb) (say err ("mitty: " + hb + "\n"), flush err, window-close win, 1)
+            (: _ (pins hb 'in kin 'out fout 'csize [r c] 'own (t \ window-own win 'clipboard t) 'bar 0)
+               _ (hgreet hb)
+               _ (window-typing win 1)                  ; a phone's keyboard up
+               held {}
+               (send s) (0 < #s ? (say kout s, flush kout) 0)
+               (soil _) (pin dirty () (max 1 (peep dirty () 0)))
+               ; the pointer, sent in the form the glass was asked for, a move once a cell;
+               ; the window's own where none was asked, or under shift
+               (point how b x y) (: sc (peep gx () 0)
+                                    row (max 0 (min (gaze sc 1 - 1) (y // 16))) col (max 0 (min (gaze sc 2 - 1) (x // 8)))
+                                    at (row * 65536 + col)
+                                    bb (how = 2 ? (peep held 'btn 3) (peep mw-xbtn b 3))
+                                    mine (held 'shift || !(gaze sc 3 & 7680))
+                                    (how = 2 && at = peep held 'at -1 ? 0
+                                       (: _ (pin held 'at at)
+                                          (? (mine && bb < 3)
+                                              (mw-choose win sc held how bb ((row - gaze sc 8) * gaze sc 2 + col), soil 0)
+                                             mine 0
+                                             (send (mouse sc (bb + mw-mods held) row col how))))))
+               ; the keys the window keeps: ctrl+shift+C and V, shift+Insert
+               (ours k) (? (held 'ctrl && held 'shift && k = 46)
+                             (peep gx () 0 @ sc (gaze sc 10 < gaze sc 11 ? (window-own win 'clipboard (copied sc (gaze sc 10) (gaze sc 11))) 0), 1)
+                           (held 'ctrl && held 'shift && k = 47) (window-ask win 'clipboard, 1)
+                           (held 'shift && !(held 'ctrl) && k = 338) (window-ask win 'primary, 1)
+                           0)
+               (event e) (: k (e 1)
+                            (? (<e = 'down) (: md (peep mw-modkeys k ())
+                                               (? md (pin held md 1) (ours k) 0 (send (mitty-keybytes k held))))
+                               (<e = 'up) (peep mw-modkeys k () @ md (md ? (pin held md ()) 0))
+                               (<e = 'text) (held 'ctrl || held 'alt ? 0 (send k))
+                               (<e = 'press) (: _ (pin held 'btn (peep mw-xbtn k 3)) (point 0 k (e 2) (e 3)))
+                               (<e = 'release) (: _ (pin held 'btn ()) (point 1 k (e 2) (e 3)))
+                               (<e = 'move) (point 2 0 (e 1) (e 2))
+                               (<e = 'size) (: r2 (max 2 ((e 2) // 16)) c2 (max 20 ((e 1) // 8)) sc (peep gx () 0)
+                                               (pin gx () (regrid sc (cask (screen () r2 c2)) r2 c2),
+                                                pin hb 'csize [r2 c2],
+                                                pin dirty () 2))
+                               (<e = 'paste) (0 < #k ? (send ("\e[200~" + k + "\e[201~")) 0)
+                               (<e = 'lost) (k = 'primary ? (pin held 'sel (), select (peep gx () 0) 0 0 -1, soil 0) 0)
+                               (<e = 'close) (each (wharf-panes (hb 'plan)) (id \ (hpane hb id @ p (hpty? p ? (still (hpid p) 1) 0))))
+                               0))
+               up (twirl (_ \ oars hb 0) 0)
+               pump (twirl (_ \ moor-to gx fin kout dirty) 0)
+               ; the glass's turn: the window's events, then the paper where the glass changed
+               ; the mitty writes every cell of a frame, and a write ends the glass's
+               ; selection: it is kept here with its text, and laid again while that holds
+               (keep _) (: sc (peep gx () 0) s0 (gaze sc 10) s1 (gaze sc 11) k (peep held 'sel ())
+                           (? (s0 < s1) (two? k && <k = s0 && k 1 = s1 ? 0 (pin held 'sel [s0 s1 (copied sc s0 s1)]))
+                              !(two? k) 0
+                              (copied sc <k (k 1) = k 2) (select sc <k (k 1 - 1) 0, soil 0)
+                              (pin held 'sel ())))
+               ; the bar while there is more than one pane or face to show on it
+               (lone _) (: want (1 < #(wharf-panes (hb 'plan)) || two? (hfaces hb) ? 1 0)
+                           (want = peep hb 'bar 0 ? 0 (pin hb 'bar want, hrelay hb, hsoil hb)))
+               (look last) (: _ (each (window-events win) event)
+                              _ (keep 0)
+                              _ (lone 0)
+                              d (peep dirty () 0)
+                              l2 (0 < d ? (pin dirty () 0, mw-paint win gx font (d = 2) last) last)
+                              (peep held 'over () ? () (rest 8, look l2)))
+               face (twirl (_ \ look -1) 0)
+               (hswim hb 1,                                   ; ... until the last pane empties
+                map (t \ landed? t ? (catch t) (freeze t)) (hb 'jobs),
+                hbye hb,
+                pin held 'over 1,
+                close fout, close kout,
+                landed? up ? (catch up) (freeze up),
+                landed? pump ? (catch pump) (freeze pump),
+                landed? face ? (catch face) (freeze face),
+                close fin, close kin,
+                window-close win,
+                0)))))))
+
+ ; love mitty: with a display and no tty, a window of its own. else attach to the mitty
+ ; named main (or -n NAME), started when none is up; one that cannot be served (a seat with
+ ; no sockets) runs here instead. --here always does. a pane of mitty NAME never attaches to
+ ; NAME: it would take the glass from the terminal showing it, and show the mitty inside itself
  (mitty-main as)
   (? (two? as && <as = "--serve" && two? >as) (mitty-serve <>as >>as)
      (two? as && <as = "--here") (mitty-here >as)
+     (two? as && <as = "--window") (mitty-window >as)                  ; in a window of its own
      (two? as && <as = "--ls") (mitty-ls 0)
      (two? as && elem <as ["-s" "--screensaver"]) ((cite 'saver 'saver-cli) >as)   ; a saver, no mitty
      (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
         rest (two? as && <as = "-n" && two? >as ? >>as as)
         path (mitty-sock nm)
         (? (getenv "MITTY" = path) (say err ("mitty: already inside mitty " + nm + "; -n another, or --here to nest\n"), 1)
+           (!(two? (tty 0)) && window-here? 0) (mitty-window rest)   ; a display and no tty
            (mitty-attach path) 0
            (mitty-spawn nm rest) (mitty-reattach path 60 @ r (r = () ? (mitty-here rest) 0))
            (mitty-here rest))))
  mitty-usage "usage: love mitty [-n NAME] [COMMAND ..]   the mitty NAME (main), started when none is up;
-       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process;
+       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process,
+       --window [-f FONT.hex] one in a window of its own, as with a display and no tty;
        -s [NAME] a screensaver until a key, -s alone names them
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 faces, b a model,
        space open an app, w go to a pane, z the screensaver now, d detach, C-a a literal C-a"

@@ -1432,19 +1432,22 @@
                    (sh-onpath? w))
    ; can this seat run the word at all? PATH answers wherever there is a seat to exec.
    ; a seat with none never execs: the kernel's spawn hands a bare word to the verb
-   ; registry and a spelled path to the file at it, so both are asked here -- either
-   ; alone would call half the words on such a machine missing.
+   ; registry and a spelled path to the file at it, and sh-spawnv spells a word PATH found,
+   ; so all are asked here -- any alone would call some of the words on such a machine missing.
    (sh-known? S w) (? !(sh-seat ())
-                      (? (sh-slashed? w || sh-dotl? w) (two? (stat w)) (sh-verbw? w))
+                      (? (sh-slashed? w || sh-dotl? w) (two? (stat w))
+                         (sh-verbw? w || two? (sh-whichp S w)))
                     (sh-verbours? S w) 1
                     (two? (sh-whichp S w)))
    ; the argv a spawn execs: a bare verb word ours by the mode spawns this binary
    ; under the word, so PATH decides nothing there either; anything else runs as spelled
    ; a foreign bare word goes as (path . word): PATH was searched here already, so the
    ; exec takes that file and the child is still named as spelled. a seat with none
-   ; (the kernel) hands the bare word to its registry
+   ; (inle) hands a verb's bare word to its registry, and any other the path PATH found
    (sh-spawnv S argv) (: w <argv exe (sh-seat ())
-                       (? (!(string? exe)) argv
+                       (? (!(string? exe))
+                            (? (sh-slashed? w || sh-verbw? w) argv
+                               (sh-whichp S w @ r (two? r ? ((<>r . w) . >argv) argv)))
                           (sh-slashed? w) (sh-asverb S w >argv @ v (two? v ? v argv))
                           (!(sh-dotl? w) && (sh-verbours? S) w) (exe . argv)
                           (: r (sh-whichp S w)
@@ -1620,9 +1623,10 @@
             each fdmap sh-lay1,
             (? (sh-fd0? fdmap) (chug in) 0),     ; a new stdin: our read-ahead is not its
             each allclose (fd \ 2 < fd ? (close fd) 0),
-            ; 0: a child has a shell already. cli-line answers the line's status, a
-            ; charm, and the process answers with it; anything else is 0
-            cite 'cli 'cli-line (sh-forkv S argv) 0)
+            ; the tty is the child's own stdin, as the exec's would be: a bare `love`
+            ; on a terminal is the repl. cli-line answers the line's status, a charm,
+            ; and the process answers with it; anything else is 0
+            cite 'cli 'cli-line (sh-forkv S argv) (two? (tty 0) ? 1 0))
             (quit (charm? r ? (r & 255) 0)))))
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
