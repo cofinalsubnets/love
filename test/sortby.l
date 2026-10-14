@@ -9,10 +9,12 @@
    rs (recs (genl 3 400) 0)
    ; the spine is reserved after the merge, and that reservation collects like any other --
    ; which re-enters the step at its top, where the last compare's answer is still pending.
-   ; the law wants that collection, so it sorts under a budget tight enough to force one
-   ; (tune's units are words; the knobs are put back before anything else reads them).
+   ; the law wants that collection, so it sorts under a budget tight enough to force one:
+   ; twice the live set, as ord.l does, the nursery at its floor (tune's units are words; the
+   ; knobs are put back before anything else reads them).
    k0 (tune ())
-   _ (tune [1048576 8192 65536 24])
+   _ (please 1)
+   _ (tune [(2 * peep (gauge 0) 8 0) 8192 65536 24])
    tight (sortby (a \ b \ ([a b (show a)], a < b)) l)
    (tune k0,
     (test

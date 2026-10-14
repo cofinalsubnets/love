@@ -321,6 +321,9 @@ struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
  // to be freed. cleared here rather than in please alone, because a major can be
  // called directly -- the image dump compacts before it serializes.
  g->rem_n = 0, g->rem_miss = 0;
+ // the budget is a cap: a live set past all of it fits no pool the budget allows, so it
+ // scares here, the heap whole, rather than grow without end
+ if (g->budget && (uintptr_t) (g->major_hp - to) > g->budget) return encode(g, status_scare);
  return g; }
 
 // resize the minor pool, decoupled from the major. every caller has emptied the nursery,
@@ -328,7 +331,7 @@ struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
 // copy and every value stays where it is: the major, the image, or the binary.
 struct g *gen_grow(struct g *g, uintptr_t len1) {
  if (g->hp != g->end) __builtin_trap();
- if (len1 > words_max) return encode(g, status_scare);
+ if (len1 > words_max || (g->budget && len1 > g->budget)) return encode(g, status_scare);   // the stack rides this pool: the budget caps it too
  struct g *h = alloc(NULL, len1 * sizeof(word));
  if (!h) return encode(g, status_scare);
  uintptr_t sh = (uintptr_t) (ptr(g) + g->len - g->sp);
@@ -343,7 +346,14 @@ struct g *gen_grow(struct g *g, uintptr_t len1) {
 
 // the GC entry: a minor unless the rem set missed or the major lacks headroom -- then a
 // major. afterwards the nursery grows on copy overhead and shrinks only to the budget.
+static struct g *please_(struct g *g, uintptr_t req0);
+// the collector, asked for req0 words: the ask rides g while it works, so an oom can say it
 love_noinline struct g *please(struct g *g, uintptr_t req0) {
+ g->ask = req0;
+ g = please_(g, req0);
+ if (ok(g)) g->ask = 0;
+ return g; }
+static struct g *please_(struct g *g, uintptr_t req0) {
  if (req0 > words_max) return encode(g, status_scare);   // no heap holds it: refuse before any sum
  uintptr_t seen_young = (uintptr_t)(g->hp - g->end),
            major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);

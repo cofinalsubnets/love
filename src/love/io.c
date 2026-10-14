@@ -490,16 +490,21 @@ static struct g *facex(struct g *g, word x, int d) {
    if (!chainp(B(x))) return ioputc(g, ')'); } }
  return ioputn(ioputc(g, '\\'), (intptr_t) x, 36); }
 
-// the terminal scare face (love.h): stashed condition data prints ";; a b" on err;
-// the bare scare (oom) prints ";; oom@len=N". best-effort. N is the MAIN POOL's length
-// in words -- what the heap had, not what the refused allocation asked for. reading it
-// as the ask sends you hunting an oversized request when the story is usually the pool.
+// the terminal scare face (love.h): stashed condition data prints ";; a b" on err; the bare
+// scare is the oom, ";; oom (ask nursery major)" in words: what the collector was asked for
+// (0 when the refusal was not its), the main pool and the major pool. best-effort.
 void scare_face(struct g *g) {
  if (!(g = core_of(g))) return;
  g->io = &love_stderr.io;
  if (zerop(g->scare_a) && zerop(g->scare_b)) {
-  g = ioputs(g, ";; oom@len=");
-  if (ok(g)) g = ioputn(g, (intptr_t) g->len, 10); }
+  uintptr_t ask = g->ask, len = g->len, major = g->major_len;
+  g = ioputs(g, ";; oom (");
+  if (ok(g)) g = ioputn(g, (intptr_t) ask, 10);
+  if (ok(g)) g = ioputc(g, ' ');
+  if (ok(g)) g = ioputn(g, (intptr_t) len, 10);
+  if (ok(g)) g = ioputc(g, ' ');
+  if (ok(g)) g = ioputn(g, (intptr_t) major, 10);
+  if (ok(g)) g = ioputc(g, ')'); }
  else {
   g = ioputs(g, ";; ");
   if (ok(g)) g = facex(g, g->scare_a, 0);

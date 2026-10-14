@@ -102,6 +102,12 @@ static love_inline size_t b2w(size_t b) {
 #ifndef love_budget
 # define love_budget 0
 #endif
+// the C stack a compile (ev.c's c0) may take below its outermost frame, in bytes, where the
+// seat says no more: inle's boot stack is a MiB with the page tables under it; a device sets
+// its own (-Dlove_cstack=...), and a host takes three quarters of its rlimit
+#ifndef love_cstack
+# define love_cstack (768u << 10)
+#endif
 
 // --- status ---
 // status rides the 2 pointer tag bits: bit 0 scare, bit 1 more input wanted; eof = both
@@ -277,6 +283,7 @@ enum hook {
  hook_flow,      // a port as a charlist (post.l's `flow`), the reader's port door
  hook_cats,      // cats over a list no fast lane takes (prel's foldr of +)
  hook_obin,      // an object tray's cells no C lane takes: a tray, a coin, a twin (prel's)
+ hook_opfixp,    // the factor pass over a macro's (expansion . operands), the operands kept whole
  hook_n };
 
 struct g {
@@ -336,6 +343,8 @@ struct g {
                                             // rule the nursery gets what the major pool leaves
    minor0, major0, ratio;         // nursery floor, major grow/shrink step, copy-overhead setpoint;
                                           // seeded at ini, moved by `tune`. untraced: a bake drops them.
+ uintptr_t cbase, croom;          // a compile's outermost C frame (ev.c's c0), 0 outside one, and the stack it may take
+ uintptr_t ask;                   // the words the collector was asked for while it works: an oom's first datum
  union {
   intptr_t v0;
   struct {
@@ -343,6 +352,7 @@ struct g {
      stack,  // the books checked out, ours on top; the macro table is stack[zero]'s, and
              // love's `book` is this one's head. GC-forwarded in v0..end.
      scare_a, scare_b, // the last scare's condition data, stashed at the raise for
+     scare_c,    // a C lane's reason, (tag . datum), for the scare it fails with: the re-raise takes it
      hook[hook_n], // the hooks (enum hook)
      lib,        // the library: name -> book. `borrow` takes one onto the stack, `cite`
                  // reads one where it stands, `leave` checks the written one back in.
@@ -606,7 +616,7 @@ void image_warm(void);
 void code_warm(struct g *g);
 
 // the terminal scare face: ";; a b\n" (show forms) to the err port from the stashed
-// condition data; the bare oom prints ";; oom@len=N\n".
+// condition data; the bare scare prints ";; oom (ask nursery major)\n".
 void scare_face(struct g*);
 
 extern struct fio love_stdin, love_stdout, love_stderr;

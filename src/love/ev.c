@@ -1,6 +1,9 @@
 // ev.c -- ev, vm, the lisp help. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are src/love/love.h.
 #include "love.h"
+#if __STDC_HOSTED__
+#include <sys/resource.h>   // getrlimit: c0_floor
+#endif
 #if tco
 #define status_yield status_ok
 #else
@@ -52,7 +55,6 @@ static word
  assq(struct g *g, word l, word k),
  eget(struct g *g, struct env *e, int k),
  lget(struct g *g, word y, int k),
- lidx(struct g*g, word x, word l),
  memq(struct g *g, word l, word k),
  sget(struct g *g, word s, int k);
 // ============================================================================
@@ -163,6 +165,17 @@ static struct g *append(struct g *g) {
  if (ok(g)) g->sp[1] = g->sp[0], g->sp++;
  return g; }
 
+// the C stack a compile may take below its outermost frame: three quarters of a host's stack
+// rlimit, else love_cstack (inle's own stack, a device's, an rlimit the seat will not say)
+static uintptr_t c0_room(void) {
+ uintptr_t room = love_cstack;
+#if __STDC_HOSTED__
+ struct rlimit r;
+ if (__love_osv >= 0 && !getrlimit(RLIMIT_STACK, &r))
+  room = r.rlim_cur == RLIM_INFINITY ? 64u << 20 : r.rlim_cur / 4 * 3 > room ? (uintptr_t) (r.rlim_cur / 4 * 3) : room;
+#endif
+ return room; }
+
 // don't inline this so callers can tail call optimize
 static love_noinline struct g *c0(struct g *g, lvm_t *y) {
  // every in-place store below is precisely barriered (gen_wb_cell/two), so a
@@ -182,9 +195,13 @@ static love_noinline struct g *c0(struct g *g, lvm_t *y) {
  word x = g->sp[0];
  g->sp[0] = (word) c1_yield;
  mm(g, &c); mm(g, &x);
+ char here;                                      // the outermost compile's frame: the floor is measured from it
+ uintptr_t base0 = g->cbase;
+ if (!base0) g->cbase = (uintptr_t) &here, g->croom = c0_room();
  if (ok(g = analyze(g, &c, x)))
    g = c1(c0_ix(g, &c, y, word(g->ip)), &c);
  um(g), um(g);
+ core_of(g)->cbase = base0;
  return g; }
 
 static Cata(c1) {
@@ -301,10 +318,29 @@ struct g *eval(struct g *g) {
 #endif
 }
 
-static word lidx(struct g*g, word x, word l) {
+// the compile-time stack, EStack: a let's name for its slot, zero for one slot, and a charm
+// n > 0 for n slots in a row holding operands on their way to a call, so a walk costs the
+// names, not the nesting
+static uintptr_t es_n(word e) { return charmp(e) && getcharm(e) > 0 ? (uintptr_t) getcharm(e) : 1; }
+static uintptr_t es_len(word s) { uintptr_t n = 0; for (; chainp(s); s = B(s)) n += es_n(A(s)); return n; }
+static word es_idx(struct g *g, word x, word s) {     // the slots above x's
  word i = 0;
- for (; chainp(l); i++, l = B(l)) if (eql(g, x, A(l))) return i;
+ for (; chainp(s); i += (word) es_n(A(s)), s = B(s)) if (eql(g, x, A(s))) return i;
  return -1; }
+static struct g *es_push(struct g *g, struct env **c) {   // one operand slot more
+ word s = eget(g, *c, EStack);
+ bool run = chainp(s) && charmp(A(s)) && getcharm(A(s)) > 0;
+ g = gxl(push(g, 2, putcharm(run ? getcharm(A(s)) + 1 : 1), run ? B(s) : s));
+ return ok(g) ? eset(g, c, EStack, pop1(g)) : g; }
+static struct g *es_pop(struct g *g, struct env **c, uintptr_t k) {   // k slots fewer
+ word s = eget(g, *c, EStack);
+ for (; k && chainp(s); s = B(s)) {
+  uintptr_t n = es_n(A(s));
+  if (n > k) {
+   g = gxl(push(g, 2, putcharm(n - k), B(s)));
+   return ok(g) ? eset(g, c, EStack, pop1(g)) : g; }
+  k -= n; }
+ return eset(g, c, EStack, s); }
 
 static Ana(ana_v) {
  word y;
@@ -340,7 +376,7 @@ static Ana(ana_v) {
    return g; }
   // let binding in the *current* scope -> a direct stack slot.
   if (d == *c && memq(g, eget(g, d, EStack), x)) return
-    c0_ix(g, c, lvm_arg, putcharm(lidx(g, x, eget(g, d, EStack))));
+    c0_ix(g, c, lvm_arg, putcharm(es_idx(g, x, eget(g, d, EStack))));
   // the shadow guard: d's let binds x (fars) but x is not yet a lams entry or a
   // slot -- the nom is this let's, so the walk must not escape to an enclosing
   // binding of the same spelling. import it; the rebuild resolves it through lams.
@@ -363,7 +399,7 @@ static Ana(ana_v) {
 
 
 static Cata(c1_var) {
- word v = pop1(g), i = llen(pop1(g)); // stack inset
+ word v = pop1(g), i = (word) es_len(pop1(g)); // stack inset
  for (word l = eget(g, (*c), EImps); !zerop(l); l = B(l), i++)
   if (eql(g, v, A(l))) goto out;
  for (word l = eget(g, (*c), EArgs); !zerop(l); l = B(l), i++)
@@ -374,7 +410,24 @@ out:
         Kp[1].x = putcharm(i),
         pull(g, c); }
 
+// a compile past its room of C stack scares (deep (used room)) before the stack runs out
+static love_noinline bool c0_deep(struct g *g) {
+ char here;
+ struct g *c = core_of(g);
+ return c->cbase && c->cbase > (uintptr_t) &here && c->cbase - (uintptr_t) &here > c->croom; }
+static love_noinline struct g *c0_scare(struct g *g) {
+ char here;
+ struct g *c = core_of(g);
+ intptr_t used = (intptr_t) (c->cbase - (uintptr_t) &here), room = (intptr_t) c->croom;
+ g = intern(strof(g, "deep"));
+ g = gxl(push(g, 2, putcharm(room), ZeroPoint));
+ g = gxr(gxl(push(g, 1, putcharm(used))));
+ if (ok(g)) g->scare_c = pop1(g);
+ return encode(core_of(g), status_scare); }
+
 static love_noinline Ana(analyze) {
+ if (!ok(g)) return g;
+ if (c0_deep(g)) return c0_scare(g);
  if (nomp(x) && x != ZeroPoint) return ana_v(g, c, x); // lookup symbol as variable
  if (!chainp(x)) return ana_q(g, c, x); // non-chains are self quoting
  word a = A(x), b = B(x);                        // it must be a chain
@@ -395,6 +448,7 @@ static love_noinline Ana(analyze) {
 // only on a lambda being renamed, so the fresh spine costs what it renames.
 static struct g *subst1(struct g *g, word x, word p, word m) {
  if (!ok(g)) return g;
+ if (c0_deep(g)) return c0_scare(g);
  if (x == p) return push(g, 1, m);
  if (!chainp(x)) return push(g, 1, x);
  { struct str *nm; word a = A(x);
@@ -511,33 +565,34 @@ static struct g *ana_ap(struct g *g, struct env **c, intptr_t x) {
   lvm_t *i = cell(g->sp[2])[2].ap;
   g->sp += 3;
   g = c0_i(ana_ap_r2l(g, c, x), c, i); // r2l arg eval
-  if (ok(g)) { word s = eget(g, *c, EStack); while (ca--) s = B(s); g = eset(g, c, EStack, s); }
+  if (ok(g)) g = es_pop(g, c, (uintptr_t) ca);
   return g; }
 
- if (ok(g = gxl(push(g, 3, zero, eget(g, *c, EStack), x)))) {
-  g = eset(g, c, EStack, pop1(g)), x = pop1(g), mm(g, &x);
+ g = push(g, 1, x);
+ if (ok(g = es_push(g, c))) {
+  x = pop1(g), mm(g, &x);
   if (anp) { // r2l 1 n-ary ap
    g = ana_ap_r2l(g, c, x),
    incl(*c, 2),
    g = push(g, 2, c1_apn, putcharm(ca));
-   if (ok(g)) { word s = eget(g, *c, EStack); while (ca--) s = B(s); g = eset(g, c, EStack, s); } }
+   if (ok(g)) g = es_pop(g, c, (uintptr_t) ca); }
   else while (chainp(x)) // l2r n 1-ary ap
    g = analyze(g, c, A(x)),
    incl(*c, 2),
    g = push(g, 2, c1_apn, putcharm(1)),
    x = B(x);
-  um(g), g = eset(g, c, EStack, B(eget(g, *c, EStack))); }
+  um(g), g = es_pop(g, c, 1); }
 
  return g; }
 
 
 static struct g *ana_ap_r2l(struct g *g, struct env **c, word x) {
+ if (ok(g) && c0_deep(g)) return c0_scare(g);
  if (chainp(x)) {
   word y = A(x);
   avec(g, y, g = ana_ap_r2l(g, c, B(x)));
   g = analyze(g, c, y);
-  g = gxl(push(g, 2, zero, eget(g, *c, EStack)));
-  if (ok(g)) g = eset(g, c, EStack, pop1(g)); }
+  if (ok(g)) g = es_push(g, c); }
  return g; }
 
 static love_inline bool lambp(struct g *g, word x) {
@@ -566,15 +621,18 @@ static bool lexbound(struct g *g, struct env *d, word x) {
  return false; }
 
 static love_inline Ana(ana_2, word a, word b) {
- if ((x = stacklook_macro(core_of(g), a)) && !lexbound(g, *c, a)) {  // macro table = each layer's [zero] slot, walked; the scope walk only on a macro hit
+ if (nomp(a) && (x = stacklook_macro(core_of(g), a)) && !lexbound(g, *c, a)) {  // macro table = each layer's [zero] slot, walked; the scope walk only on a macro hit. a macro is named, so a compound head asks nothing
+  g = push(g, 1, b);                             // the operands, held over the expansion
   g = eval(gxr(gxl(gxl(pushq(gxl(push(g, 4, b, zero, zero, x)))))));
   // the expansion is source again: it takes the opfix prepass a read form took, so a binder
   // a macro built (:- is one) lowers its patterns like one the reader saw. the same guard as
-  // c0's: a lambda-headed chain is a constructed application, and pre-seal the pass is zero
-  word e = ok(g) ? g->sp[0] : 0, of = core_of(g)->hook[hook_opfix];
+  // c0's: a lambda-headed chain is a constructed application, and pre-seal the pass is zero.
+  // the operands came in factored, so the pass keeps them whole: (of '(e . operands))
+  word e = ok(g) ? g->sp[0] : 0, of = core_of(g)->hook[hook_opfixp];
   if (chainp(e) && (!evenp(A(e)) || datp(A(e))) && evenp(of)) {
-   g = eval(gxr(gxl(gxl(pushq(gxl(push(g, 4, e, zero, zero, of)))))));
-   if (ok(g)) g->sp[1] = g->sp[0], g->sp += 1; }
+   g = eval(gxr(gxl(gxl(pushq(gxl(gxl(push(g, 5, e, g->sp[1], zero, zero, of))))))));
+   if (ok(g)) g->sp[2] = g->sp[0], g->sp += 2; }
+  else if (ok(g)) g->sp[1] = g->sp[0], g->sp += 1;
   return analyze(g, c, ok(g) ? pop1(g) : 0); }
  if (!chainp(b)) return analyze(g, c, a);  // (f) == f -- below the macro lane, which has no value to be
  return avec(g, b, g = analyze(g, c, a)),
@@ -927,8 +985,12 @@ love_noinline static struct g *love_raise(struct g *c, word a, word b, union u c
  }
  return encode(c, status_scare);
 }
-// re-raise a failed op's scare: bare data, observe-then-terminal.
-lvm(_lvm_ghelp) { return love_raise(core_of(g), zero, zero, help_scare_k); }
+// re-raise a failed op's scare: the reason a C lane left, else bare; observe-then-terminal.
+lvm(_lvm_ghelp) {
+ struct g *c = core_of(g);
+ word r = c->scare_c;                          // (tag . datum), or zero
+ c->scare_c = zero;
+ return love_raise(c, chainp(r) ? A(r) : zero, chainp(r) ? B(r) : zero, help_scare_k); }
 // (scare a b): the deliberate raise. the raise point is a clean boundary, so the
 // help's result is delivered back as the value via the more continuation; with nothing heard
 // it is terminal.
