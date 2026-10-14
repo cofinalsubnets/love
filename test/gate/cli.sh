@@ -90,6 +90,12 @@ nl -m zz -e 1
 # neither; `verbs` is a row, and naming itself is the check that cannot rot.
 try 0 verbs verbs                         # the rail's own listing, off the tab
 
+# a named image that will not wake fails by name -- 1 unopenable, 2 not this binary's image --
+# and never boots the egg in its place
+junk=$d/junk.img; printf 'not an image\n' > $junk
+try 1 "wake: /nonexistent.img: cannot open" wake /nonexistent.img -e 1
+try 2 "not an image this binary can wake" wake $junk -e 1
+
 # a program's own udie leaves by the same door, with its status and no raise line
 die=$d/die.l; printf '(udie 3 "boom")\n' > $die
 try 3 boom -e '(udie 3 "boom")'
