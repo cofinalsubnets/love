@@ -30,6 +30,10 @@ if [ -z "${GCS_NOBUILD:-}" ]; then
 fi
 for b in out/love out/love.raw out$gs/love out$gs/love.raw; do [ -x $b ] || fail "no $b"; done
 rm -rf $w; mkdir -p $w
+# a native hashes by its seat in the image, not its address: the two builds lay code apart
+dg='(putx (map dig [negate cup atom? fraction]))'
+[ "$(env LOVE_NO_IMAGE=1 out/love.raw -e "$dg" 2>&1)" = "$(env LOVE_NO_IMAGE=1 out$gs/love.raw -e "$dg" 2>&1)" ] \
+  || fail "a native hashes apart in the normal and stress builds"
 
 # one run in the background: its output in $w/TAG.out, its status in $w/TAG.rc
 job() { tg=$1; shift; ( "$@" > $w/$tg.out 2>&1 < /dev/null; echo $? > $w/$tg.rc ) & }
