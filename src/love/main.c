@@ -16,6 +16,7 @@
 #include <stdnoreturn.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/utsname.h>
 
 // love_clock lives in src/love/posix.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
@@ -47,8 +48,21 @@ static struct g *stdin_take(struct g *g) {
 _lvm(k_lvm_quit);
 _lvm(k_lvm_getpid);
 
+// a process on inle speaks linux's calls, and only its uname names the kernel under it
+static bool on_inle(void) {
+#if defined(__moonlibc__)
+ struct utsname u;
+ return !uname(&u) && !strcmp(u.sysname, "Inle");
+#else
+ return false;
+#endif
+}
+
+// on inle, in a process as on the kernel, a twirled task is a process of the shell's
 static lvm(lvm_exit) {
  if (__love_osv < 0) love_musttail return Ap(k_lvm_quit, g);
+ union u *t = g->tasks;
+ if (t && (t[2].x & 1) && getcharm(t[2].x) && on_inle()) love_musttail return Ap(lvm_task_quit, g);
  for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
 
                                                                           //
@@ -300,6 +314,7 @@ static char const glaze_off[] = "";
 // bao already did restore the true baseline rather than a raw one.
 static struct g *run_program(struct g *g, bool replp) {
   if (replp) (void) raw_mode(1);
+  if (__love_osv > 0 && on_inle()) g = evals_(g, "(task-doors-on 0)");
   g = love_open(g);
   if (getenv("LOVE_NO_GLAZE")) g = evals_(g, glaze_off);
   return evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
@@ -308,8 +323,12 @@ static struct g *run_program(struct g *g, bool replp) {
 // love0's seat is its own translation unit: inle/boot.c, linked only into love0.
 struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load, char const *bake_out);
 #else
+// the kernel's tasks text (src/inle/tasks.l), which a process on inle runs its own stages by
+static char const src_tasks[] =
+#include "tasks.h"
+ ;
 #ifdef LvBakeSrc
-#include "lib/srctree.h"
+#include "archive/srctree.h"
 static char const src_distlist[] =
 #include "distlist.h"
  ;
@@ -450,6 +469,30 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
     "   (raw on) (peep seat-doors 8 0 on)"
     "   (ttyfg pg) (peep seat-doors 9 0 pg)"
     "   (ttypg fd) (peep seat-doors 10 0 fd))");
+  // a task as a process (src/inle/tasks.l), the kernel's text. a process on inle has no fork, so
+  // a shell's own stage (['thunk f]) runs in its heap as one; every other argv is a process
+  g = evals_(g, src_tasks);
+  g = evals_(g,
+    "(: (task-doors-on _)"
+    "   (: (th? a) (two? a && <a = 'thunk)  (nofg gp) 0"
+    "      (run a f0 f1 f2 pg fg) (task-run [<>a] a f0 f1 f2 pg fg nofg)"
+    "      (io i o e) (: (one n f) (charm? f && 0 <= f ? [(n . f)] ()) (one 0 i + (one 1 o + one 2 e)))"
+    // a process started from inside a task takes the stdio that task wears
+    "      (host a m cl pg fg) (spawnmap0 a (task-worn m) cl pg fg)"
+    "      _ (pin seat-doors 0 (\\ a (? (th? a) (run a -1 -1 -1 -1 0)"
+    "                                (two? (worn ())) (host a () () -1 0)"
+    "                                (spawn0 a))))"
+    "      _ (pin seat-doors 1 (\\ a i o e cl pg fg"
+    "                         (? (th? a) (run a (task-fdw i) (task-fdw o) (task-fdw e) pg fg)"
+    "                            (two? (worn ())) (host a (io i o e) cl pg fg)"
+    "                            (spawnio0 a i o e cl pg fg))))"
+    "      _ (pin seat-doors 2 (\\ a m cl pg fg"
+    "                         (th? a ? (task-map m (\\ x y z (run a x y z pg fg)))"
+    "                            (host a m cl pg fg))))"
+    "      _ (pin seat-doors 3 (\\ p (task? p ? (task-wait p) (wait0 p))))"
+    "      (pin seat-doors 5 (\\ p s (? (task? p) (task-still p s)"
+    "                                   (charm? p && p < 0 && two? (task-members -p)) (task-still p s)"
+    "                                   (still0 p s))))))");
 
   // FIXME why are we pulling from book here, that's what mop is for
   g = evals_(g, bake
@@ -582,7 +625,7 @@ int main(int argc, char const **argv) {
       char const *osn =
 #if defined(__moonlibc__)
         __love_osv  < 0 ? "inle" :
-        __love_osv == 1 ? "linux" : __love_osv == 2 ? "freebsd" : __love_osv == 3 ? "netbsd" : 0;
+        __love_osv == 1 ? (on_inle() ? "inle" : "linux") : __love_osv == 2 ? "freebsd" : __love_osv == 3 ? "netbsd" : 0;
 #elif defined(__linux__)
         "linux";
 #elif defined(__FreeBSD__)

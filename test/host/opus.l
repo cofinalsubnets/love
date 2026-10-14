@@ -1,4 +1,4 @@
-; test/host/opus.l -- src/love/lib/opus.c and ogg.l's opus. the rfc 8251 test vectors (make
+; test/host/opus.l -- src/love/audio/opus.c and ogg.l's opus. the rfc 8251 test vectors (make
 ; dl/opus-vectors) decoded at 48 kHz: stereo held to their reference decode by 11172-4's full
 ; accuracy on s16 (every sample within two steps, the rms under 1/sqrt 12 of one), mono 60 dB
 ; clear of its downmix, and the head's output gain scaling each sample. then, where ffmpeg is, libopus streams through the door: lengths

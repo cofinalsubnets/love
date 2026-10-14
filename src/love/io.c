@@ -7,7 +7,7 @@ double lm_strtod(char const*, char**);   // correctly rounded read: the printer'
 #endif
 #define love_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 // this file's own, forward-declared so order within it does not matter.
-static love_noinline double strtod_wrap(struct g*g, word x);
+static love_noinline double str_flo(word x);
 static bool
  bio_wpending(struct bio *b),
  is_dec_int(char const *s, uintptr_t n),
@@ -366,7 +366,7 @@ struct port_vt const
  to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`
  closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
  ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand },  // a charlist: prel's `tap`
- love_horn_vt   = { noop_flush, love_horn_writen, NULL, NULL };      // PCM out: the horn
+ love_horn_vt   = { noop_flush, love_horn_writen, love_horn_readn, NULL };   // PCM out and in: the horn
 
 // (fputc port byte) — write byte to port; return byte. a charm operand is a raw
 // fd and the byte goes straight at the row -- nothing to buffer, nothing to flush.
@@ -599,7 +599,10 @@ lvm(lvm_fgetc) {
   if (!ok(g = zgetc(g))) love_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   if (g->b == IoWouldBlock) {          // the refill raced and lost -- park, don't spin
-   g->next_wait_fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
+   intptr_t fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
+   // a dry door with no fd to wait on (the horn's silence) takes the write residue's poll
+   if (fd < 0) g->next_wake_at = love_clock() + 1;
+   else g->next_wait_fd = (int) fd;
    love_musttail return Ap(lvm_yield_sw, g); }
   Sp[0] = putcharm(g->b); }
  else Sp[0] = putcharm(EOF);
@@ -690,22 +693,21 @@ struct g *grbufg(struct g *g, uintptr_t len) {
   g->sp++;
  return g; }
 
-static love_noinline double strtod_wrap(struct g*g, word x) {
+// a string read as a decimal float where it lies, NAN unless the whole of it is one: its bytes
+// end in a NUL, and a parse that stops short of its length -- at a NUL inside it, or anything
+// else -- is not the whole string. out of line, so no vm op hands out a local's address
+static love_noinline double str_flo(word x) {
  struct str *s = str(x);
  if (!strp(x) || !s->len) return NAN;
- word *top;
- char *e, *b = (char*) gap(g, &top);
- if (s->len >= (uintptr_t) ((char*) top - b)) return NAN;
- memcpy(b, s->bytes, s->len);
- b[s->len] = 0;
- double r = lm_strtod(b, &e);
- return e != b && *e == 0 ? (flo_t) r : (flo_t) NAN; }
+ char *e;
+ double r = lm_strtod(s->bytes, &e);
+ return e == s->bytes + s->len ? (flo_t) r : (flo_t) NAN; }
 
 // (gem s): parse a string as a decimal float -> a box if the whole string parses,
 // else zero (the l-side reader's twin of the C cascade)
 lvm(lvm_gem) {
  word x = Sp[0];
- double d = strtod_wrap(g, x);
+ double d = str_flo(x);
  if (d != d) love_musttail return Answer(zero);
  Have(gem_req);
  Sp[0] = mk_gem(&Hp, (flo_t) d);

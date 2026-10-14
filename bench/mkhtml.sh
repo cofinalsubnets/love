@@ -174,7 +174,7 @@ optimizing compilers is modest, and the binary it emits passes the identical cor
 <p class="note">The <b>chacha</b> and <b>poly1305</b> rows are single C functions rather
 than the whole corpus
 (<code>bench/ccrypto.l</code> drives the <code>chacha20</code> and <code>poly1305</code>
-nifs in <code>src/love/lib/tls.c</code>), and they are here because an average can hide a
+nifs in <code>src/love/crypto/tls.c</code>), and they are here because an average can hide a
 lopsided one. <b>chacha</b> indexes a sixteen-word state <i>array</i> in its inner loop;
 <b>poly1305</b> keeps its five limbs as scalar <i>locals</i>. mooncc gives a register
 home to the second shape and not the first, so the two rows are a gauge: wide chacha

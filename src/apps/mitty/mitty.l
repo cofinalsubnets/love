@@ -18,40 +18,17 @@
 ; run: out/love -e "(: _ (borrow 'mitty) (mitty [\"sh\"]))", or `love mitty` for lush in it.
 ; host-only (screen/tether/tty ride src/love/*.c): never in the corpus; test/host/mitty.l
 ; smokes it over a real pty. a module, so a guest that berths itself (vi's splits) cites it.
-(module '(mitty mitty mitty-stage mitty-up hberth hsail hopen hopen-stage moor waitfor
-          hbox hmas hpid hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hshut
+(module '(mitty mitty mitty-stage mitty-up hberth hsail hopen-stage
+          hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hname-of hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands mitty-bee mitty-main)
+          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands mitty-bee mitty-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
+(borrow 'mooring)                       ; hopen moor waitfor, pier's too
 (borrow 'posix)
 (borrow 'bytes)
 (:
- ; --- the moor: pump the master through the screen until the child hangs up.
- ; the screen lives in box bx (a relay swaps it); replies pour straight back;
- ; a dirty box (when given) cues the painter
- ; park on the first byte, then swig the rest of the gulp -- per-byte sees
- ; cap out near a megabyte a second, and a full-screen guest pours six
- ; the box is re-read every gulp on purpose: that is how a resize reaches a
- ; running moor with no signal, and why a pane's screen may be swapped freely.
- (moor bx m dirty) (see m @ ch
-                    (ch = -1 ? ()
-                     (: s (peep bx () 0)
-                        _ (scribe s ch)
-                        b (cask 8192)
-                        _ (: (drain x) (swig m b @ n
-                                          (charm? n && 0 < n ? (scribe (peep bx () 0) (snip b 0 n), drain ()) 0))
-                           (drain ()))
-                        rep (reply (peep bx () 0))
-                        ; a reply is a byte stream and its order is the whole content
-                        ; of it -- and one say beats six puts.
-                        (rep ? (say m (foldl (a \ b \ a + string b) "" rep), flush m) 0,
-                         dirty ? (pin dirty () 1) 0,
-                         moor bx m dirty))))
-
- (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
-
  ; --- the mitty: every pane's screen, pty and child, under one wharf plan ---
  ; a pane is (box master pid stage): a child's has its master and pid and no stage,
  ; a stage's the stage and neither. the mitty is a tablet, and the keys are the
@@ -62,15 +39,9 @@
  (hin hb) (peep hb 'in in)
  (hout hb) (peep hb 'out out)
  (hlive? hb) (hot? (hout hb))
- (hbox p) <p
- (hmas p) <>p
- (hpid p) <>>p
  (hstage p) (p 3)
  ; what runs there, for the bar: a program's name (love's verb when it is love), a stage's own
  (hname p) (? (4 < #p) (p 4) "")
- (hname-of argv) (: b (: w <argv k (: (go i) (? (i < 0) 0 (w i = 47) (i + 1) (go (i - 1))) (go (#w - 1)))
-                         (snip w k #w))
-                     (b = "love" && two? >argv ? <>argv b))
  (hpty? p) (() != hmas p)
  ; the clip's text: a linewise register ends each line, a charwise one is as it is
  (hclip-text hb) (peep (hb 'clip) () () @ v
@@ -90,17 +61,6 @@
  (hpane hb id) (peep (hb 'panes) id ())
  (hfind bs id) (two? bs ? (wharf-id <bs = id ? <bs (hfind >bs id)) ())
  (hsoil hb) (hb 'dirt @ b (pin b () 1))
-
- ; open a child on its own pty at r x c. tether's errno rides back out on a
- ; refusal -- a nom, never two?, which is how the caller tells it from a pane.
- (hopen argv r c) (: _ (setenv "TERM" "xterm-256color")   ; the dialect we actually speak
-                     md (tether argv)
-                     (atom? md ? md
-                      (: m >md
-                         s (screen (cask (screen () r c)) r c)
-                         bx {s}
-                         (settty m r c,
-                          [bx m <md () (hname-of argv)]))))
 
  ; --- the stage door: a stage berths on a screen of its own, its frame scribed there
  ; at the pane's size, which the frame is asked for as w h
@@ -491,11 +451,12 @@
  ; fresh pty answers (0 . 0) -- two? and true and useless -- and a wharf of no
  ; cells lays every pane at zero extent, which paints a blank screen and never
  ; recovers. the opening had this floor; the tide did not, and quietly undid it
- ; half a second in.
+ ; half a second in. a mitty with no tty of its own -- a server's, a porthole's -- has its
+ ; size said, 'csize
  (hsize u) (tty 1 @ ws
               [(two? ws && 5 < <ws ? <ws 24)
                (two? ws && 19 < >ws ? >ws 80)])
- (htide hb) (: sz (peep hb 'serve 0 ? (peep hb 'csize [24 80]) (hsize 0)) r <sz c <>sz
+ (htide hb) (: sz (peep hb 'serve 0 || peep hb 'csize () ? (peep hb 'csize [24 80]) (hsize 0)) r <sz c <>sz
                (r = hb 'rows && c = hb 'cols ? ()
                 (pin hb 'rows r, pin hb 'cols c, hrelay hb)))
 
@@ -794,6 +755,7 @@
  (mitty-main as)
   (? (two? as && <as = "--serve" && two? >as) (mitty-serve <>as >>as)
      (two? as && <as = "--here") (mitty-here >as)
+     (two? as && <as = "--window") ((cite 'porthole 'porthole) >as)   ; in a window of its own (porthole.l)
      (two? as && <as = "--ls") (mitty-ls 0)
      (two? as && elem <as ["-s" "--screensaver"]) ((cite 'saver 'saver-cli) >as)   ; a saver, no mitty
      (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
@@ -804,7 +766,8 @@
            (mitty-spawn nm rest) (mitty-reattach path 60 @ r (r = () ? (mitty-here rest) 0))
            (mitty-here rest))))
  mitty-usage "usage: love mitty [-n NAME] [COMMAND ..]   the mitty NAME (main), started when none is up;
-       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process;
+       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process,
+       --window one in a window of its own;
        -s [NAME] a screensaver until a key, -s alone names them
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 faces, b a model,
        space open an app, w go to a pane, z the screensaver now, d detach, C-a a literal C-a"

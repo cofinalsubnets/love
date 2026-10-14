@@ -454,12 +454,19 @@ export async function loveMachine(root) {
   const ctx = canvas.getContext('2d');
   const cpu = new Worker(url('cpu.mjs'), { type: 'module' });
   // a process the machine started (cpu.mjs's proc): a worker of its own over the module,
-  // compiled once -- here, before the bytes go to the machine
+  // compiled once -- here, before the bytes go to the machine -- or over a module of its own
+  // that the machine sent along
   const module = WebAssembly.compile(wasm);
-  const proc = p => module.then(mod => {
+  const workers = new Map();
+  const proc = ({ code, ...p }) => (code ? WebAssembly.compile(code) : module).then(mod => {
     const w = new Worker(url('proc.mjs'), { type: 'module' });
     w.onerror = e => { console.warn(`pid ${p.pid}: ${e.message}`); procdied(p.box, ring); };
-    w.postMessage({ module: mod, ring, ...p }); });
+    workers.set(p.pid, w);
+    w.onmessage = () => workers.delete(p.pid);
+    w.postMessage({ module: mod, ring, ...p }); })
+    .catch(e => { console.warn(`pid ${p.pid}: ${e.message}`); procdied(p.box, ring); });
+  // a process signalled: its worker ends where it stands; the kernel has its status
+  const stop = pid => { workers.get(pid)?.terminate(); workers.delete(pid); };
   // the serial run is not rendered -- the canvas already shows it -- but its ARRIVAL is
   // the machine's proof of life, and the page owes the reader that: `status` stays up
   // until the machine has spoken once, so a machine that never boots says so instead of
@@ -508,6 +515,7 @@ export async function loveMachine(root) {
   cpu.onmessage = ({ data: m }) => {
     if (m.frame) { latest = m; follow(m); if (!due) due = requestAnimationFrame(draw); }
     else if (m.proc) proc(m.proc);
+    else if (m.stop !== undefined) stop(m.stop);
     else if (m.copy !== undefined) { copied = m.copy; if (fresh()) copy(); }
     else if (m.lift !== undefined) lifted(m);
     else if (m.fault) halt('the machine faulted: ' + m.fault); };

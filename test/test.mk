@@ -18,7 +18,7 @@
   test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
-  test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
+  test_objcopy test_playdate test_proof test_quick test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
@@ -37,6 +37,17 @@ test:
 # slow gate
 test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_nest test_spin test_cookdiff test_glazebench test_dist test_seed test_moon test_as test_links test_kernel_wasm test_harp
 
+
+# the core's gate: test_extra's lanes that run on this box, hold no heavy slot
+# and finish in about a minute
+test_quick: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
+	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_sat \
+	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
+	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
+	test_drv test_wake test_gz test_sqfs test_ext4 test_cpio test_tfm test_caja test_grap test_chem \
+	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
+	test_asmops test_dtb test_elf32 test_objcopy test_fat test_cci386 test_ccthumb1 test_ccthumb2 \
+	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
 
 # really slow gate
 test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
@@ -206,7 +217,7 @@ test_front: $(ho)/front $(ho)/frontseat
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/corridor.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/qlog.l test/host/broker.l test/host/showbig.l test/host/lovefs.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/corridor.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/window.l test/host/lorewin.l test/host/porthole.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/qlog.l test/host/broker.l test/host/showbig.l test/host/lovefs.l test/host/droid.l
 # out/lush: test/host/sh.l drives the built shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -1461,6 +1472,18 @@ test_kernel_wasm: host
 	   test/kernel/proc.l < /dev/null > out/wasm/proc.log 2>&1; \
 	 grep -qx "proc: ok" out/wasm/proc.log || { tail -5 out/wasm/proc.log; echo "FAIL test_kernel_wasm (proc)"; exit 1; }
 	@echo "  proc: ok -- its own cwd and environment, its stdio, and its status back"
+	@echo TEST test/kernel/spawn.l "(a process starts processes: spawn, wait, kill, the shell's pipelines)"
+	@INLE_RAM=768 $(NODE) $(S)/inle/wasm/inle.mjs --image out/wasm/love.image $(R)/out/love.wasm \
+	   test/kernel/spawn.l < /dev/null > out/wasm/spawn.log 2>&1; \
+	 grep -qx "spawn: ok" out/wasm/spawn.log || { tail -5 out/wasm/spawn.log; echo "FAIL test_kernel_wasm (spawn)"; exit 1; }
+	@echo "  spawn: ok -- a pipeline of love processes, the shell's own stages, kill and wait"
+	@echo TEST test/kernel/cprog.l "(a C program is a process: mooncc's wasm, by path and on PATH, in a pipeline)"
+	@rm -rf out/wasm/cprog && mkdir -p out/wasm/cprog
+	@for c in hello cat; do $(ho)/love mooncc -t wasm test/kernel/c/$$c.c -o out/wasm/cprog/$$c.wasm || exit 1; done
+	@INLE_RAM=768 $(NODE) $(S)/inle/wasm/inle.mjs --host $(R)/out/wasm/cprog --image out/wasm/love.image $(R)/out/love.wasm \
+	   test/kernel/cprog.l < /dev/null > out/wasm/cprog.log 2>&1; \
+	 grep -qx "cprog: ok" out/wasm/cprog.log || { tail -5 out/wasm/cprog.log; echo "FAIL test_kernel_wasm (cprog)"; exit 1; }
+	@echo "  cprog: ok -- a C hello and a C cat, as the process shell and the kernel's run them"
 endif
 
 # doom on the wasm seat (src/inle/doom.c's kernel doors under the module): opt-in for the same

@@ -869,7 +869,7 @@
        (gripe? g && (gmsg g = "no lane for passing this 24-byte struct by value on a64 (in t)")))
       (cgt (v3 + "struct v m(double x){ struct v r; r.a=x; return r; }") 'a64 @ g
        (gripe? g && (gmsg g = "no lane for returning this 24-byte struct by value on a64 (in m)")))
-      ; C99 complex arithmetic is an x64 lane only
+      ; C99 complex arithmetic is an x86 lane only (x64, i386)
       (cgt "double _Complex f(double _Complex a, double _Complex b){ return a*b; }" 'a64 @ g
        (gripe? g && (gmsg g = "no lane for C99 complex arithmetic on a64 (in f)")))
       ; a refusal with no named cause is still one gripe, never a note on one channel and
@@ -1333,8 +1333,8 @@
    _ (test
       (two? irIH) (two? irIP) (two? irID)
       (elem '(sx4 r5) ihf)                        ; n canonicalizes on its seat (home = arrival)...
-      (elem '(ldx r9 r6 r5 8 0) ihf)              ; ...and indexes register-resident, delivered
-                                                     ;    straight to the bin die's park (no r0 hop)
+      (elem '(ldx r0 r6 r5 8 0) ihf)              ; ...and indexes register-resident, delivered
+      !(elem '(mov r0 r9) ihf)                    ;    straight to the answer (no r0 hop)
       (0 = (splds ihf))                              ; no slot traffic at all: f4 runs bare
       (elem '(sx4 r7) ipf)                        ; f5: n rides r7, canonicalized once
       (elem '(cmp r9 r7) ipf)                     ; ...and the bound compare never opens a slot
@@ -1387,8 +1387,8 @@
       (elem 'r11 pln)
       (#(filter (r \ elem r '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)) pln) <= 1))
    _ (test
-      (elem '(lsr r6 r0 11) twf)
-      (elem '(lsl r5 r0 8) twf)
+      (elem '(lsl r5 r10 8) twf)
+      !(elem '(mov r0 r6) twf)                    ; the answer is built on r0, no closing copy
       !(twpair? twf))
    ; -- the riscv frame: a body naming no sp, fp or lr and making no call lays no frame; on wasm a call
    ; leaves every local but its answers, so there a call keeps no frame either, a home off the argument
@@ -1461,7 +1461,7 @@
       (elem '(mov r6 r9) tcf)                     ; ...and hands itself to the tail call
       (0 = #(stofs tcf 'st 'r9))              ; never a cell
       (elem '(mov r5 r0) bnf)                     ; fd: r takes its seat from g's answer...
-      (elem '(ldx r6 r9 r5 8 0) bnf)              ; ...and p[r] indexes it
+      (elem '(ldx r0 r9 r5 8 0) bnf)              ; ...and p[r] indexes it
       (0 = #(stofs bnf 'st 'r5)))
    ; -- d128 locals home as cs pairs: a loop-carried __int128 local takes (lo hi) off the cs
    ; pool -- call-safe, no wraps, no operand-pool pressure. reads/writes are mov pairs on the
@@ -1512,10 +1512,10 @@
        (two? irV)
        (elem '(mov r11 r0) vf)                    ; c's write lands its lo home...
        (elem '(mov r12 r2) vf)                    ; ...and its hi
-       (elem '(m128r r7 r8) vf)                   ; the mul rides the parked twins -- the
+       (elem '(m128r r10 r7) vf)                  ; the mul rides the parked twins -- the
        (elem '(a128r r11 r12) vf)                 ;   machine-stack cell never opens, and the
                                                       ;   combine reads c's home, the park copied out
-       (4 = (splds vf)))))                           ; full-word sp loads: a's two wd9-spill reloads + the cs restores
+       (2 = (splds vf)))))                           ; full-word sp loads: the cs restores (the k loop unrolls, a spills no more)
 
 ; -- the callee-saved contract (cskeep): every cgn above already compiles under it -- a
 ; breach refuses at emission -- so these laws probe the checker itself. the dirty walk is
@@ -1632,7 +1632,7 @@
    xf (fnf 'run <>irX)
    _ (test
       (two? irX)
-      (elem '(add r11 r6 r5) xf)                  ; a += b is born in a's own seat, off x's ride...
+      (elem '(add r10 r6 r5) xf)                  ; a += b is born in a's own seat, off x's ride...
       !(elem '(add r6 r6 r5) xf))                 ; ...and x's ride never takes the add (b, never
                                                      ;   written, aliases y's ride in the same form)
    ; a callee of statements at a return's ?: arm: the return is an if whose arm holds the body,
@@ -2122,11 +2122,13 @@
       c8 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1)
                     (mov r7 r6) (li r7 3) (ret)))
       c7 (co '((li r5 1) (add r6 r7 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
+      c9 (co '((li r5 1) (sx4 r6) (mov r7 r6) (add r0 r7 r7) (ret)))
       (test
          (c1 = (pro + '((li r5 1) (li r7 2) (add r0 r5 r7) (ret))))   ; the def takes the copy's name
          (#c2 = #(pro + '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret))))
          (elem '(mov r7 r6) c2)                     ; the source lives on: the copy stays
-         (elem '(mov r7 r6) c3)                     ; a def reading its own dest: no rename
+         (c3 = (pro + '((li r5 1) (add r7 r6 r5) (add r0 r7 r7) (ret))))  ; a pure dest renames past its read
+         (elem '(mov r7 r6) c9)                     ; an in-place rewrite does not
          (elem '(mov r7 r6) c4)                     ; the new dest is the def's second source
          (c7 = (pro + '((li r5 1) (add r7 r7 r5) (add r0 r7 r7) (ret))))  ; ..its first: the fused form
          (elem '(mov r7 r6) c5)                     ; a label between them: not adjacent
@@ -2299,28 +2301,63 @@
       (cspos rl = 5)                             ; ..saved right after the frame's sub
       (csld? (rl (#rl - 5)))))                    ; ..restored at the teardown's head
 
+; --- a frame address handed to a call may be kept by the callee: no later call in the fn
+; jumps out of the frame under it (block() in lua's parser: enterblock(fs, &bl) .. leaveblock(fs))
+(: eF (fnf 'f <>(cgn "struct st { int *bl; }; void enter(struct st *s, int *x); void leave(struct st *s); void f(struct st *s) { int x; enter(s, &x); leave(s); } int main() { return 0; }"))
+   aF (fnf 'f <>(cgn "struct st { int *bl; }; void enter(struct st *s, int *x); void leave(struct st *s); void f(struct st *s) { int x[2]; enter(s, x); leave(s); } int main() { return 0; }"))
+   (test
+      (elem '(call leave) eF)
+      !(elem '(jmp leave) eF)
+      (elem '(call leave) aF)))                  ; an array's decay is its address too
+
 ; --- the allocator core (x64): a mint takes its copy partner's register when the two
 ; never meet, keeps its binding when the machine reads that register past it (an argument
 ; into a call), and never shares a non-commutative op's second source
 (: v0 (name "%v0") v1 (name "%v1") v2 (name "%v2")
+   (vpfix g fs) (vrfix g (vpre g () fs ()))             ; the build's order: assign, then substitute
    (gV9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {}
             'vrn 3 'vrt {v0 'r9 v1 'r7 v2 'r10}}
-   vC (vrfix (gV9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
-   vA (vrfix (gV9 ()) [['label 'fn] ['li v1 5] ['call 'g9] ['ret]])
-   vS (vrfix (gV9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
-   vO (vrfix (gV9 ()) [['label 'fn] ['add v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   vC (vpfix (gV9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
+   vA (vpfix (gV9 ()) [['label 'fn] ['li v1 5] ['call 'g9] ['ret]])
+   vS (vpfix (gV9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   vO (vpfix (gV9 ()) [['label 'fn] ['add v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
    (test
       (vC = '((label fn) (and r0 r6 7) (ret)))   ; coalesced: the copy swept
       (elem '(li r7 5) vA)                       ; the call reads r7: the binding stays
       (elem '(sub r10 r6 r0) vS)                 ; r0 is sub's second source
       (vO = '((label fn) (add r0 r6 r0) (ret))))) ; ..but add lays d = b as d += a
 
+; --- ..and the staging webs: a value built on r0 for a copy is built on the copy's register,
+; while a web read at an exit, or one nothing reads (al before a call), keeps r0
+(: v0 (name "%v0")
+   (vpfix g fs) (vrfix g (vpre g () fs ()))
+   (gX9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {} 'vrn 1 'vrt {v0 'r10}}
+   xB (vpfix (gX9 ()) [['label 'fn] ['ld 'r0 'r6 8] ['add 'r0 'r0 8] ['mov v0 'r0]
+                       ['ld 'r0 'r6 16] ['st v0 0 'r0] ['li 'r0 0] ['ret]])
+   xR (vpfix (gX9 ()) [['label 'fn] ['ld 'r0 'r6 8] ['add 'r0 'r0 8] ['ret]])
+   xL (vpfix (gX9 ()) [['label 'fn] ['li 'r0 1] ['call 'g9] ['mov 'r0 'r6] ['ret]])
+   (test
+      (xB = '((label fn) (ld r0 r6 8) (add r10 r0 8) (ld r0 r6 16) (st r10 0 r0) (li r0 0) (ret)))
+      (xR = '((label fn) (ld r0 r6 8) (add r0 r0 8) (ret)))
+      (xL = '((label fn) (li r0 1) (call g9) (mov r0 r6) (ret)))))
+
+; --- a small counted loop unrolls, a constant-indexed double element is its frame slot, and
+; an integer literal meeting a double is a double constant: no address, no loop test, no convert
+(: hC (fnf 'h <>(cgn "double h(double *v, int n) { double a[3]; for (int k = 0; k < 3; k++) a[k] = v[k]; double s = 0; for (int i = 0; i < n; i++) { s += a[0] * a[1] - a[2]; for (int k = 0; k < 3; k++) a[k] += 1; } return s >= -1 ? s : 0; } int main() { return 0; }"))
+   (hn op) (#(filter (f \ two? f && <f = op) hC))
+   (test
+      (0 = (hn 'lea))                            ; every a[k] a static slot
+      (0 = (hn 'cvtsi2sd))                       ; += 1 and >= -1 convert at compile time
+      (2 = (hn 'br))                             ; the i loop's test and the ?: -- no k loop left
+      (elem '(stsd sp 16 f0) hC)))
+
 ; --- ..and on a64, whose alu is three-address: sub's dest takes its second source too
 (: v0 (name "%v0") v2 (name "%v2")
+   (vpfix g fs) (vrfix g (vpre g () fs ()))
    (gW9 _) {'tgt 'a64 'pool0 '(r6 r5 r9 r10 r7 r8 r11 r13 r14) 'sigs {}
             'vrn 3 'vrt {v0 'r9 v2 'r10}}
-   wC (vrfix (gW9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
-   wS (vrfix (gW9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   wC (vpfix (gW9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
+   wS (vpfix (gW9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
    (test
       (wC = '((label fn) (and r0 r6 7) (ret)))
       (wS = '((label fn) (sub r0 r6 r0) (ret)))))

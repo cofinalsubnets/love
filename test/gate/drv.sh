@@ -6,7 +6,7 @@
 #   2. a link owing libc symbols pulls the runtime BY NEED -- moonlibc + the lm
 #      math + the sys leaf, compiled from the sources beside us -- and the
 #      binary RUNS;
-#   3. the loud edges stay loud: -shared refuses (usage, exit 2) and -nostdlib
+#   3. the semantic flags are kept: -shared lays a shared object and -nostdlib
 #      leaves the libc out (exit 1) -- an ignored SEMANTIC flag would be the
 #      silent-no-op trap wearing a cc face, and this gate keeps that door shut.
 #      And -nostdlib's refusal is pinned by its SENTENCE, not just its exit
@@ -53,9 +53,9 @@ moonc "$@" -o "$d/drv2" "$d/a.o" "$d/b.o" -lm || fail "link with -lm"
 # name and the word after it as an input, which is the silent no-op wearing a cc face.
 moonc -c "$d/b.c" -o "$d/b3.o" -l 2>/dev/null && fail "a bare -l did not refuse"
 
-# 3a: -shared refuses loudly
-moonc -shared "$d/b.o" -o "$d/x.so" 2>/dev/null && fail "-shared did not refuse"
-[ $? -eq 2 ] || fail "-shared refused with the wrong exit"
+# 3a: -shared lays a shared object: e_type 3, ET_DYN
+moonc -shared "$d/b.o" -o "$d/x.so" || fail "-shared did not link"
+[ "$(od -An -tu1 -j16 -N1 "$d/x.so" | tr -d ' ')" = 3 ] || fail "-shared laid no shared object"
 
 # 3b: -nostdlib turns the driver's libc off, and the owed symbols are an
 # UNDEFINED REFERENCE -- named, on stderr, with a cc: prefix like every other
@@ -103,4 +103,4 @@ head -1 "$d/k.d" | grep -q "^$d/m.o: $d/m.c" || fail "-Wp,-MMD,FILE wrote no rul
 moonc -MMD -MP -MT tgt -MF "$d/p.d" -I "$d/inc" -c "$d/m.c" -o "$d/m.o" || fail "-MP -MT -MF did not compile"
 grep -q "^tgt: " "$d/p.d" && grep -q "side.h:$" "$d/p.d" || fail "-MT / -MP not in the rule: $(cat "$d/p.d")"
 
-echo "test_drv: CC=mooncc -- the cc flag soup rides through, the runtime pulls by need, the configure probe answers, -E and -MD speak gcc, -shared/-nostdlib stay loud"
+echo "test_drv: CC=mooncc -- the cc flag soup rides through, the runtime pulls by need, the configure probe answers, -E and -MD speak gcc, -shared lays a .so, -nostdlib stays loud"

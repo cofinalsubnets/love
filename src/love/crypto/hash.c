@@ -1,4 +1,4 @@
-// src/love/lib/hash.c -- digests over a string's bytes. auto-globbed and LvNif-registered,
+// src/love/crypto/hash.c -- digests over a string's bytes. auto-globbed and LvNif-registered,
 // the fs.c discipline; value ops, so absence or misuse answers ().
 //   (md5 str) (sha1 str) (sha224 str) (sha256 str) (sha384 str) (sha512 str)
 //   (blake2b str) (sha3 str)  -> the lowercase hex digest (blake2b's the 64-byte one,

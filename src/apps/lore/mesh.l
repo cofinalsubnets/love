@@ -1,14 +1,15 @@
 ; mesh -- what a level drawn in triangles rides: meshes as lists, built from a few shapes
 ; and joined, lit once by the sky's sun or by lamps, packed into trays for facets
 ; (src/love/raster.c); a camera; textures, drawn or from a picture, and their levels; and
-; the frame out to the terminal, as half blocks or as kitty's pixels.
+; the frame out to the terminal, as half blocks or as kitty's pixels, or into a window.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
-         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-show mesh-gone)
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-show mesh-win mesh-gone)
 (borrow 'view)
+(borrow 'window)                        ; --window: the frame on a window's paper
 (borrow 'vec)
 (borrow 'sky)
 (:
@@ -286,24 +287,48 @@
  ; ..and a picture taken down
  (mesh-kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\"
  ; --- the screen a first-person level shows its frames on: 'kitty 1 for kitty's pixels,
- ;     else half blocks ---
- ; ..'kitty or 'cells as a level's words said it, or what the terminal says of itself
- (mesh-mode md) (md @ 'kitty 1 'cells 0 (mesh-kitty? ()))
+ ;     'win a window, else half blocks ---
+ ; ..'kitty or 'cells as a level's words said it, or what the terminal says of itself; a
+ ; window is no kitty
+ (mesh-mode md) (md @ 'kitty 1 'cells 0 'window 0 (mesh-kitty? ()))
  ; ..w cells by r rows, two pixels a row, and its dither; under kitty 'kp pixels a column
- ; and twice that a row, for a picture about kitty-w pixels across
+ ; and twice that a row, for a picture about kitty-w pixels across; in a window a cell is
+ ; 8 by 16 of its pixels
  kitty-w 640
  (mesh-size st w r) (: h (2 * r)
-   (pins (view! st w h r) 'bay (view-bayer w h) 'kp (st 'kitty ? (max2 1 (kitty-w // w)) 1)))
+   (pins (view! st w h r) 'bay (view-bayer w h)
+         'kp (? (peep st 'win ()) 8 (st 'kitty) (max2 1 (kitty-w // w)) 1)))
  ; ..a frame f of the state's 'kp: kitty's pictures go up as ids 7 and 8 by turns, the last
  ; taken down only once the next is over it, the two in one synchronised update -- one id
  ; put up again would go blank first -- with text over them; or the cells, with view's
  ; bands over them
  (mesh-show st f text bands) (: w (st 'w) h (st 'h) k (peep st 'kp 1)
-   (? (st 'kitty)
+   (? (peep st 'win ()) (mesh-win st f bands)
+      (st 'kitty)
       (: n (peep st 'kn 0) _ (pin st 'kn (1 - n))
          (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
           + text + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
+ ; ..or onto a window's paper and shown, view's bands painted over it by the console's
+ ; painter a cell 8 by 16; answers "", there being nothing for the terminal
+ (mesh-win st f bands) (: win (st 'win) k (st 'kp) pw (k * st 'w) ph (k * st 'h)
+   wh (window-size win) W <wh H (wh 1) P (window-paper win)
+   b (frame-bytes f 1 1)
+   _ (? (pw = W && ph <= H) (pour P 0 b 0 #b)
+        (each ^(min ph H) (y \ pour P (y * W * 4) b (y * pw * 4) (4 * min pw W))))
+   _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
+   (window-show win 0 H, ""))
+ ; ..a band [x0 cells fg bg] on cell row r: its pens 24-bit, six bits a channel, or the 256
+ (mesh-band st P W H r bd) (: x0 (bd 0) cs (bd 1) n #cs
+   (pen p bg) (? !(st 'deep) (esc + "[" + (bg ? "48" "38") + ";5;" + show p + "m")
+                 (: (ch k) (show ((p >> k & 63) * 255 // 63))
+                    (esc + "[" + (bg ? "48" "38") + ";2;" + ch 12 + ";" + ch 6 + ";" + ch 0 + "m")))
+   sc (screen (cask (screen () 1 n)) 1 n)
+   _ (scribe sc (pen (bd 2) 0 + pen (bd 3) 1 + foldl (+) "" cs))
+   bw (n * 8) t (cask (bw * 64))
+   _ (dye sc t bw 0 -1 ())
+   cw (4 * max 0 (min bw (W - x0 * 8)))
+   (0 < cw ? (each ^(min 16 (H - r * 16)) (j \ pour P (((r * 16 + j) * W + x0 * 8) * 4) t (j * bw * 4) cw))))
  ; ..and both taken down when the level is left
  mesh-gone (mesh-kitty-del 7 + mesh-kitty-del 8))
 ) ; module mesh

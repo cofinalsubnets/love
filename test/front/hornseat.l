@@ -82,6 +82,17 @@
   tapped (),
   assert (0 = horn-lag h)))
 
+; --- a port opened on the seat takes it from the ports before ---------------------
+; the seat is one device. a port dropped while another plays is closed by its finalizer
+; whenever a collection finds it dead; that close is the dropped port's, and must not
+; shut the device the newer one holds. a major here runs it, between the say and the read
+(: (dropped _) (: h (horn 44100 2) _ (say h (ramp 400)) _ (flush h) 0)
+   _ (dropped 0)
+   h (horn 44100 2) _ (say h (ramp 400)) _ (flush h)
+   _ (please 1) _ (please 1)
+   (assert (100 = horn-lag h),
+    tapped ()))
+
 ; --- misuse is the port's, not the door's ----------------------------------------
 (assert (nom? (horn 10 2)),
  assert (nom? (horn 44100 3)),
