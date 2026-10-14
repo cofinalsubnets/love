@@ -269,8 +269,9 @@ spectrum, q quits."
                  _ (wn ? (glass t)
                        (stage-run {'show (w \ ht \ paint t w ht) 'step (k \ step t k) 'over? (_ \ t 'over)
                                    'tick (_ \ 1) 'every 50 'modes ['hide]}))
-                 _ (pin t 'over 1)                ; the ear stops; the port's finalizer shuts the device
-                 0)))
+                 _ (pin t 'over 1)                ; the ear stops
+                 _ (dm ? 0 (close h))             ; and the device with it: run in-process (lush under inle,
+                 0)))                             ; a mitty pane) the port outlives tuner until a collection
        (go as 440.0 () 0 0))
 
    _ (pins (cite 'verbs 'tab) 'tuner (udoor 'tuner tuner-main tuner-usage 1 1)))
