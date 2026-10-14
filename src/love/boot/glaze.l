@@ -1388,7 +1388,8 @@
    (jgir-ok? defs) (: syms (map (d \ <<d) defs)
       (all (d \ jgir-ops-ok? syms >d) defs && jgir-kinds-ok? defs))
    ; the param kinds at the fixpoint: only the entry's slots are guarded, so every group call must hand a
-   ; kinded slot a value of that same kind -- a param of the caller kinded alike, or a cell of a chain
+   ; kinded slot a value of that same kind -- a param of the caller kinded alike (or a pin/mpin on one,
+   ; which answers it), or a cell of a chain
    (jgir-info defs) (map (d \ (: nf <d [<nf >nf >d #>nf])) defs)          ; (name params body arity)
    (jgir-kmaps info) (map (u \ kfix u info) [suse? muse? buse? cuse? nuse?])   ; per kind: string map cask chain point
    (jgir-kind km nm j) (: ks (filter (k \ elem j (gsm nm (km k))) (rangeL 0 5))
@@ -1396,7 +1397,8 @@
    (jgir-kinds-ok? defs)
     (: info (jgir-info defs) km (jgir-kmaps info) syms (map cap info)
        (cellv? a) (two? a && elem <a '(cap cup .))
-       (argok? f fp g j a) (: kg (jgir-kind km g j)
+       (argp a) (? (two? a && elem <a '(pin mpin)) <>a a)          ; (pin P ..) and (mpin P ..) answer P
+       (argok? f fp g j a0) (: kg (jgir-kind km g j) a (argp a0)
           (? (elem a fp) (kg = jgir-kind km f (posof a fp 0))
              (atom? kg) 1
              (all (k \ k >= 3) kg && cellv? a)))
@@ -2184,8 +2186,9 @@
                          (gfix fns cm pm vnames cands))
    (rewrite-bindings bl gnames gdefs) (atom? >bl ? bl                                  ; the trailing body form -> keep
       (: nf <bl val <>bl  hit (two? nf && elem <nf gnames)
-         ((hit ? <nf nf)                                                            ; drop the (name p..) define-sugar -> a plain binding
-            . ((hit ? (jgir-ok? gdefs ? (jitgroupir gdefs <nf arch) val) val)   ; jgir-ok? spans the recognizer grammar, so the interp fallback is a backstop, not a live lane
+         ok (hit && jgir-ok? gdefs)                                                    ; a declined group keeps its define-sugar
+         ((ok ? <nf nf)                                                             ; drop the (name p..) define-sugar -> a plain binding
+            . ((ok ? (jitgroupir gdefs <nf arch) val)
                   . (rewrite-bindings >>bl gnames gdefs)))))
    ; memo-leak?: a candidate reading a `:`-sibling map free. the group lane touches only a fn's own params, so a free map is a silent miscompile: decline to interp
    (memo-leak? form)
@@ -2257,7 +2260,7 @@
                    !(ho-any (p \ elem (two? <p ? <<p <p) (map cap grp)) pairs) form0
                    (: gnames (map cap grp)
                       gdefs (map mapfix-def (filter (p \ elem <<p gnames) fns))   ; the group's (nameform . body) defs, with map-valued peeps rewritten to mpeep
-                      (': . rewrite-bindings >form gnames gdefs))))))))             ; each binding of the lifted form -> its native
+                      (jgir-ok? gdefs ? (': . rewrite-bindings >form gnames gdefs) form0))))))))   ; a group the lane declines stakes nothing on the lowered form             ; each binding of the lifted form -> its native
    ; --- twolow: a complex-recurrence grid becomes the real-pair float grid autonat glazes: each twin param p splits into (p_r p_i),
    ;     twin ops become real-pair arithmetic, call-site twin args split in two; a fixpoint picks the twin params. bit-exact: z*z's imag rides 2*re*im, and scaling by 2 is exact
    (twolow form)
