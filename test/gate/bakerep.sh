@@ -72,12 +72,13 @@ fi
 
 # ..and the heap is the crew's, not the carried source's: prof_raw differs from love.raw only in
 # the hot.prof it carries, so their images agree but for the anchor that names the binary
-# (header bytes 32..39). a table keyed by a binary address, which the carried source moves, breaks it
+# (header bytes 32..39). a table keyed by a binary address, which the carried source moves, breaks
+# it. both bake to one path: the path a bake writes is in its heap
 if [ "$praw" != "$ho/love.raw" ]; then
   for r in p:"$praw" r:"$ho/love.raw"; do
-    env LOVE_NO_IMAGE=1 "${r#*:}" bake -l "$ho/.dist-cat.l" "$w/i${r%%:*}" > "$w/img.log" 2>&1 \
+    env LOVE_NO_IMAGE=1 "${r#*:}" bake -l "$ho/.dist-cat.l" "$w/img" > "$w/img.log" 2>&1 \
       || { cat "$w/img.log"; fail "the image bake of ${r#*:} failed"; }
-    head -c 32 "$w/i${r%%:*}" > "$w/h${r%%:*}" && tail -c +41 "$w/i${r%%:*}" > "$w/t${r%%:*}" \
+    head -c 32 "$w/img" > "$w/h${r%%:*}" && tail -c +41 "$w/img" > "$w/t${r%%:*}" \
       || fail "cannot split the image of ${r#*:}"
   done
   cmp -s "$w/hp" "$w/hr" && cmp -s "$w/tp" "$w/tr" \
