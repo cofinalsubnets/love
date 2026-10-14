@@ -740,6 +740,13 @@ grep -q "incomplete type 't'" "$ho/.cc7.out" || fail "mooncc incomplete member m
 printf 'struct u;\nint main(void) { return sizeof (struct u); }\n' > "$ho/.cc8.c"
 moonrun "$ho/.cc8.c" "$ho/.ccx" > "$ho/.cc8.out" 2>&1
 grep -q "sizeof an incomplete type" "$ho/.cc8.out" || fail "mooncc sizeof incomplete must refuse: $(head -1 "$ho/.cc8.out")"
+# and neither is its alignment, by type-name or (gcc's __alignof__) by expression
+printf 'struct u;\nint main(void) { return _Alignof (struct u); }\n' > "$ho/.cc8a.c"
+moonrun "$ho/.cc8a.c" "$ho/.ccx" > "$ho/.cc8a.out" 2>&1
+grep -q "alignof an incomplete type" "$ho/.cc8a.out" || fail "mooncc _Alignof incomplete must refuse: $(head -1 "$ho/.cc8a.out")"
+printf 'struct u;\nint f(struct u *p) { return __alignof__ (*p); }\nint main(void) { return 0; }\n' > "$ho/.cc8b.c"
+moonrun "$ho/.cc8b.c" "$ho/.ccx" > "$ho/.cc8b.out" 2>&1
+grep -q "alignof an incomplete type" "$ho/.cc8b.out" || fail "mooncc __alignof__ incomplete must refuse: $(head -1 "$ho/.cc8b.out")"
 # C11 6.7p4: an object redeclared at file scope keeps its type -- autoconf finds a type's
 # literal suffix by redeclaring one (`extern ptrdiff_t foo; extern int foo;` must refuse)
 printf 'extern long foo;\nextern int foo;\nint main(void) { return 0; }\n' > "$ho/.cc9.c"

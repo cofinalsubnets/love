@@ -1554,12 +1554,16 @@
               (>ts @ r1
                  (? (ptyat? ps r1)
                      (thenw (pcty ps >r1) ")" @ tr
-                        (two? tr ? [['cast (szty ps) ['num (talign ps <tr)]] <>tr]))
+                        (two? tr ? (talign ps <tr @ n
+                                      (charm? n ? [['cast (szty ps) ['num n]] <>tr]
+                                         (blame <>tr "alignof an incomplete type")))))
                     (tkv t != "__alignof__") ()
                     (punary ps r1 @ r
                        (atom? r ? ()
                           (ptype ps <r @ ty
-                             (ty ? [['cast (szty ps) ['num (talign ps ty)]] <>r]))))))
+                             (ty ? (talign ps ty @ n
+                                      (charm? n ? [['cast (szty ps) ['num n]] <>r]
+                                         (blame <>r "alignof an incomplete type")))))))))
              ; __extension__ (gcc) prefixes a cast-expression as a no-op
              (idv? t "__extension__") (punary ps >ts)
              (tp? t "*") (punary ps >ts @ r
