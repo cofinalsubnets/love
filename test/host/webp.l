@@ -1,4 +1,4 @@
-; test/host/webp.l -- src/apps/webp.l and src/love/lib/webp.c's webp-pixels
+; test/host/webp.l -- src/apps/webp.l and src/love/picture/webp.c's webp-pixels
 ; small pictures libwebp wrote -- lossy, lossy over an alpha plane compressed and raw,
 ; lossless with a palette and with its transforms, one pixel, an animation whose first frame
 ; sits inside its canvas -- each decoded to the rgba libwebp gives, by its sha-256. then,

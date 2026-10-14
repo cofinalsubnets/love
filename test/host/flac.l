@@ -1,4 +1,4 @@
-; test/host/flac.l -- src/apps/flac.l and src/love/lib/flac.c's flac-frame.
+; test/host/flac.l -- src/apps/flac.l and src/love/audio/flac.c's flac-frame.
 ; a small stream libFLAC wrote, three frames, decoded to its samples by their sha-256 and its
 ; md5; every byte of it flipped and decoded, which answers why or samples and never falls
 ; over; then, where the reference flac is, streams of every shape held to flac -d and

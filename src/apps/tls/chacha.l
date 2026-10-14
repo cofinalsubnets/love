@@ -5,7 +5,7 @@
 ; vectorised across blocks, not across the state: each of the 16 state words is a galaxy
 ; of n cells, one per block in flight, so a round is pure elementwise work and the
 ; diagonal round only names other galaxies. the counter word is ctr + (iota n).
-; the serving path uses the C twin (src/love/lib/tls.c's `chacha20`); this file is the
+; the serving path uses the C twin (src/love/crypto/tls.c's `chacha20`); this file is the
 ; oracle, and test/host/tlsc.l holds the twin to it.
 ;
 ; fresh names per step: in one body-having `:`, `(: a (& (a + b) m32) ..)` reads the

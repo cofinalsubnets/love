@@ -2,7 +2,7 @@
 ;
 ;   (bcrypt-pbkdf pass salt rounds n)   n bytes of key
 ;
-; the blowfish block, bcrypt_hash, is the bcrypt-hash nif (src/love/lib/bcrypt.c); this is the
+; the blowfish block, bcrypt_hash, is the bcrypt-hash nif (src/love/crypto/bcrypt.c); this is the
 ; pbkdf2-like chain around it, sha-512 between the blocks, and blowfish's starting state,
 ; which is pi's hex fraction and is computed here by machin's formula, not transcribed.
 (module 'ssh

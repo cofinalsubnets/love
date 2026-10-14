@@ -1,4 +1,4 @@
-; test/host/mp3.l -- src/love/lib/mp3.c's nifs and src/apps/mp3.l. a small stream laid here,
+; test/host/mp3.l -- src/love/audio/mp3.c's nifs and src/apps/mp3.l. a small stream laid here,
 ; decoded to its samples; every byte of it flipped, which answers why or samples and never
 ; falls over; then the iso 11172-4 and 13818-4 layer iii conformance streams (make
 ; dl/mp3-vectors) held to their reference output by 11172-4's full accuracy, and lame streams
