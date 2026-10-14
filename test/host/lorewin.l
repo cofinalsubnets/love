@@ -13,6 +13,8 @@
    ; frames 0 to 2, p pressed at 3 and let go at 4, q at 6; or ? down at 1, up at 3
    script {0 [['down 37]] 3 [['up 37] ['down 25]] 4 [['up 25]] 6 [['down 16]]}
    asked {1 [['down 42] ['down 53] ['text "?"]] 3 [['up 53] ['up 42]] 5 [['down 16]]}
+   ; ..+ finer, then - twice coarser: 2 to 1, 2 and 4
+   scaled {1 [['down 13] ['text "+"]] 2 [['up 13] ['down 12] ['text "-"]] 3 [['up 12] ['down 12] ['text "-"]] 5 [['down 16]]}
    (run sc held) (: win {'w 640 'h 400 'paper (cask (640 * 400 * 4)) 'evq (peep sc 0 ())}
                     lv {'new (w \ h \ {'w w 'h h 't 0 'log () 'helped ()})
                         'size (st \ w \ r \ pins st 'w w 'h (2 * r))
@@ -22,14 +24,15 @@
                         'binds (view-bind view-binds {112 'where})
                         'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win 'held held}
                     st (view-walk lv)
-                    [(rev (st 'log)) (st 'w) (st 'h) (rev (st 'helped))])
+                    [(rev (st 'log)) (st 'w) (st 'h) (rev (st 'helped)) (peep st 'scale ())])
    a (run script (_ \ 1))
    b (run script (_ \ 0))
    c (run asked (_ \ 1))
+   d (run scaled (_ \ 1))
  (test (a 0 = [[0 'forward] [1 'forward] [2 'forward] [3 'where]])   ; k each frame held, then p once
        (b 0 = [[0 'forward] [3 'where]])                              ; held, but the level says not now
        (a 1 = 80) (a 2 = 50)                                          ; 640 by 400: 80 cells by 25 rows
-       (c 3 = [1 2]) (c 0 = ())))                                     ; the help while ? is down, and no action
+       (c 3 = [1 2]) (c 0 = ()) (d 4 = 4) (d 0 = ()) (a 4 = ())))                                     ; the help while ? is down, and no action
 
 ; --- the corridor on a window's paper: the picture where the hall is lit, and with p the
 ; --- bottom row's words, their ground and a letter's ink
@@ -39,11 +42,14 @@
    out (corridor-frame st)
    (rgb x y) (4 * (y * 640 + x) @ i (string (win 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
    lit (net (map (i \ (rgb (i * 37 % 640) (i * 53 % 384) != [0 0 0])) ^200))
+   ; ..each of the picture's pixels a 2 by 2 square, the scale unless said
+   sq (all (i \ (: x (2 * (i * 37 % 320)) y (2 * (i * 23 % 190)) c (rgb x y)
+                  (c = rgb (x + 1) y && c = rgb x (y + 1) && c = rgb (x + 1) (y + 1)))) ^200)
    _ (pin st 'pos 1)
    _ (corridor-frame st)
    ground (rgb 636 392)
    ink (any (y \ any (x \ rgb x y = [238 238 238]) (map (+ 8) ^8)) (map (+ 384) ^16))
- (test (out = "") (st 'kp = 8) (100 < lit) (ground = [20 20 20]) ink
+ (test (out = "") (st 'kp = 4) (100 < lit) sq (ground = [20 20 20]) ink
        (tablet? (corridor-opts ["--window"])) ((corridor-opts ["--window"]) 'md = 'window)))
 
 (test_fin (),

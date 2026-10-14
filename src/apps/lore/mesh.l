@@ -293,11 +293,13 @@
  (mesh-mode md) (md @ 'kitty 1 'cells 0 'window 0 (mesh-kitty? ()))
  ; ..w cells by r rows, two pixels a row, and its dither; under kitty 'kp pixels a column
  ; and twice that a row, for a picture about kitty-w pixels across; in a window a cell is
- ; 8 by 16 of its pixels
+ ; 8 by 16 of its pixels, a picture's pixel 'scale by 'scale of them -- 1 2 4 or 8, 2
+ ; unless said -- so 'kp is 8 over it
  kitty-w 640
- (mesh-size st w r) (: h (2 * r)
+ (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
+ (mesh-size st w r) (: h (2 * r) s (mesh-scale st)
    (pins (view! st w h r) 'bay (view-bayer w h)
-         'kp (? (peep st 'win ()) 8 (st 'kitty) (max2 1 (kitty-w // w)) 1)))
+         'kp (? (tablet? (peep st 'win ())) (8 // s) (st 'kitty) (max2 1 (kitty-w // w // s)) 1)))
  ; ..a frame f of the state's 'kp: kitty's pictures go up as ids 7 and 8 by turns, the last
  ; taken down only once the next is over it, the two in one synchronised update -- one id
  ; put up again would go blank first -- with text over them; or the cells, with view's
@@ -309,13 +311,17 @@
          (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
           + text + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
- ; ..or onto a window's paper and shown, view's bands painted over it by the console's
- ; painter a cell 8 by 16, and 'over's, the help, over those; answers "", there being nothing for the terminal
- (mesh-win st f bands) (: win (st 'win) k (st 'kp) pw (k * st 'w) ph (k * st 'h)
-   wh (window-size win) W <wh H (wh 1) P (window-paper win)
-   b (frame-bytes f 1 1)
-   _ (? (pw = W && ph <= H) (pour P 0 b 0 #b)
-        (each ^(min ph H) (y \ pour P (y * W * 4) b (y * pw * 4) (4 * min pw W))))
+ ; ..or onto a window's paper and shown, each of the picture's pixels a square of the
+ ; scale's, view's bands painted over it by the console's painter a cell 8 by 16, and 'over's, the help,
+ ; over those; answers "", there being nothing for the terminal
+ (mesh-win st f bands) (: win (st 'win) s (mesh-scale st) k (st 'kp) w (k * st 'w) h (k * st 'h)
+   pw (s * w) ph (s * h)
+   wh (window-size win) W <wh H (wh 1) P (window-paper win) cw (4 * min pw W)
+   ; ..the whole at once at its own size; scaled, a row at a time, each its s rows
+   _ (? (s = 1 && pw = W && ph <= H) (frame-bytes f 1 1 @ b (pour P 0 b 0 #b))
+        (each ^(min h ((H + s - 1) // s))
+              (y \ frame-bytes (peep f (iota w + y * w) 0) 1 s @ b
+                   (each ^(min s (H - y * s)) (j \ pour P ((y * s + j) * W * 4) b (j * pw * 4) cw)))))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    ov (peep st 'over {}) _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
    (window-show win 0 H, ""))

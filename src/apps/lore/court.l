@@ -31,7 +31,8 @@
 ;                       the time's pace, c the cloud, p rain or snow, v the sky smooth or
 ;                       in pixels; ? the keys, q or esc leaves
 ;      love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather COVER]
-;                      [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells]
+;                      [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells|--window]
+;                      [--scale 1|2|4|8]
 ;                      how to start; the cover, the style, rain and snow words may stand alone
 (module (court court-run court-walk court-main court-new court-size court-step court-move court-binds
          court-frame court-sun court-light court-clock court-now court-local court-doy court-season
@@ -795,18 +796,19 @@
  ; dst], 'wx the weather, 'pace seconds of the sky a second (t steps on to the usual ones)
  (court-walk o) (: (opt k) (tablet? o ? (o k) ())
    (view-walk {'new (w \ h \ (: st (court-size (pins (court-new w h (opt 'now @ n (n ? n (court-now ()))))
-                                                    'deep (view-deep? ()) 'kitty (mesh-mode (opt 'md)))
+                                                    'deep (opt 'md = 'window || view-deep? ()) 'kitty (mesh-mode (opt 'md))
+                                                    'win (opt 'win) 'scale (opt 'scale))
                                               w (h // 2))
                                   wx (opt 'wx) p (opt 'pace)
                                   _ (wx ? (pins st 'wx wx 'drift (opt 'fix ? 0 1)))
                                   (charm? p ? (pins st 'paces (p . paces) 'pace 0) st)))
                'size court-size 'frame court-frame 'key court-step 'tick court-move
                'binds (view-bind view-binds court-binds)
-               'listed (view-listed ['hour-back 'hour-on 'pace 'clouds 'sky-style 'fall])
-               'fps fps 'song (hn \ ()) 'linger 0 'next ()}))
+               'listed (view-listed ['hour-back 'hour-on 'pace 'clouds 'sky-style 'fall 'finer 'coarser])
+               'fps fps 'song (hn \ ()) 'linger 0 'next () 'win (opt 'win)}))
  ; ..and kitty's picture taken down after, where it was put up
- (court-run o) (view-run (_ \ court-walk o), say out mesh-gone, flush out, 0)
- court-usage "usage: love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow, v the sky's style; ? the keys; q or esc leaves)"
+ (court-run o) (view-stage o court-walk (_ \ (say out mesh-gone, flush out)))
+ court-usage "usage: love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells|--window] [--scale 1|2|4|8]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow, v the sky's style; ? the keys; q or esc leaves)"
  ; --- the words: a date, a time, a pace, the weather's cover and the sky's style, each at
  ; most once and in any order -> the walk's start, or () for words it cannot read. a date
  ; or a time alone keeps the other from now ---
@@ -827,7 +829,8 @@
    r (view-words as [(view-arg "--date" 'date date) (view-arg "--time" 'time hm) (view-arg "--pace" 'pace pnum)
                      (view-arg "--weather" 'cov cov) (view-arg "--sky" 'sty sty) (view-arg "--fall" 'fall fal)
                      (bare 'fall fal (w \ w = "rain" || w = "snow")) (bare 'cov cov (w \ charm? (cov w)))
-                     (bare 'sty sty (w \ charm? (sty w))) (view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells)])
+                     (bare 'sty sty (w \ charm? (sty w))) (view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells)
+                     (view-flag "--window" 'md 'window) view-scale])
    (tablet? r ?
       (: now0 (court-now ()) l0 (int (now0 0)) d (r 'date) t (r 'time)
          now (d = () && t = () ? now0
@@ -837,7 +840,7 @@
          ; ..what is not said is the season's: a fall said without a cover comes from overcast
          sty (y = () ? 'smooth (sky-styles y))
          c2 (? (c != ()) c (0 < fl) 3 (court-wx-pick m (throw sd 7 71 20)))
-         {'now now 'pace (r 'pace) 'fix (c = () && fl = () ? 0 1) 'md (r 'md)
+         {'now now 'pace (r 'pace) 'fix (c = () && fl = () ? 0 1) 'md (r 'md) 'scale (r 'scale)
           'wx (c = () && y = () && fl = () ? ()
                  (wx-of c2 sty (fl = () ? (court-fall-pick m c2 (throw sd 9 73 20) (throw sd 11 79 2)) fl)))})))
  (court-main as) (view-main "court" court-usage court-opts court-run as)

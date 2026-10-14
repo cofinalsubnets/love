@@ -4,8 +4,9 @@
 ; pixel says its colours as pens here too: 24-bit, or the 256 palette dithered.
 (module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays
          view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
-         view-deep? view-words view-flag view-arg view-main view-song view-stage view-set1
-         view-binds view-bind view-walking view-listed view-help view-help-say view-help-bands)
+         view-deep? view-words view-flag view-arg view-scale view-main view-song view-stage view-set1
+         view-binds view-bind view-walking view-listed view-help view-help-say view-help-bands
+         view-rescale)
 (borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
 (borrow 'posix)    ; close, for the horn
@@ -98,9 +99,15 @@
  ;     what a terminal sends, its byte, or an arrow as the cli has it, -1 -2 -8 -9; a window's
  ;     keys come to the same codes. a level binds its own over these ---
  view-binds {104 'turn-left -1 'turn-left 108 'turn-right -2 'turn-right 107 'forward -8 'forward
-             106 'back -9 'back 117 'look-up 110 'look-down 63 'help 113 'quit 27 'quit}
+             106 'back -9 'back 117 'look-up 110 'look-down 63 'help 113 'quit 27 'quit
+             43 'finer 61 'finer 45 'coarser}
  ; ..b with o laid over it, o's own winning; a code o binds to () comes unbound
  (view-bind b o) (: t {} _ (each (keys b) (k \ pin t k (b k))) _ (each (keys o) (k \ pin t k (o k))) t)
+ ; ..a picture's pixel scale halved or doubled, 1 to 8, and the screen sized again for it:
+ ; fewer pixels drawn for more frames, or the other way
+ (view-rescale lv st a) (: s (peep st 'scale 2)
+   _ (pin st 'scale (a = 'finer ? (max2 1 (s // 2)) (min2 8 (s * 2))))
+   (lv 'size st (st 'w) (st 'h // 2)))
  ; ..the walking ones, which act every frame a window's key is held
  view-walking ['forward 'back 'turn-left 'turn-right 'look-up 'look-down]
  ; a key in a window, by its place -> its code where it types nothing: space, esc, enter,
@@ -204,7 +211,8 @@
              _ (pin st 'over (win && hs 'on ? (view-help-bands st hl) {}))
              _ (win ? (lv 'frame st)
                     (lv 'frame st @ f (say out (esc + "[H" + (hs 'on ? (view-synced f (view-help-say st hl)) f)), flush out)))
-             (each acts (a \ (nom? a && !(elem a ['quit 'help]) ? (lv 'key st a))),
+             (each acts (a \ (? (elem a ['finer 'coarser]) (view-rescale lv st a)
+                                (nom? a && !(elem a ['quit 'help])) (lv 'key st a))),
               lv 'tick st,
               pin st 't (st 't + 1),
               (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0))),
@@ -253,6 +261,9 @@
  ; ..a word alone that says v of k, and a word whose next one (read w) reads
  (view-flag w k v) (l \ <l = w ? [k v >l])
  (view-arg w k read) (l \ two? >l && <l = w ? [k (read <>l) >>l])
+ ; ..--scale N, a picture's pixel N by N of the screen's, N a power of two to 8: fewer
+ ; pixels drawn for more frames
+ view-scale (view-arg "--scale" 'scale (w \ w @ "1" 1 "2" 2 "4" 4 "8" 8 ()))
  ; ..the verb: the words read, or the usage and 2 where they cannot be
  (view-main name usage opts run as) (opts as @ o
    (tablet? o ? (run o) (say err (name + ": " + usage + "\n"), flush err, 2))))

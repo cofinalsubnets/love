@@ -713,13 +713,13 @@
    (view-walk {'new (w \ h \ (: sd (clock 0) now0 (cite 'court 'court-now ()) l0 (int (now0 0)) t (o 'time)
                                now (t @ () now0 (cite 'court 'court-local (86400 * (l0 // 86400) + t)))
                                st (stones-size (pins (stones-new w h now sd) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
-                                                     'win (peep o 'win ()))
+                                                     'win (peep o 'win ()) 'scale (peep o 'scale 2))
                                                w (h // 2))
                                ; ..the land built and lit before the first frame, which the song's
                                ; pace would otherwise take for the frames' and run far ahead
                                (scene st, st)))
                'size stones-size 'frame stones-frame 'key stones-step
-               'binds (view-bind view-binds stones-binds) 'listed (view-listed ['kneel])
+               'binds (view-bind view-binds stones-binds) 'listed (view-listed ['kneel 'finer 'coarser])
                ; ..the frame's own time, kept for the next frame's keys: a slow frame steps further
                'tick (st \ (walk-dt st,
                             stones-move st))
@@ -730,13 +730,14 @@
                'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
  ; ..and kitty's picture taken down after, where it was put up
  (stones-run o) (view-stage o stones-walk (_ \ (say out mesh-gone, flush out)))
- stones-usage "usage: love lore stones [--time HH:MM] [--kitty|--cells|--window]   (h l turn, k j step, u n look, space kneels at the altar, and there 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
+ stones-usage "usage: love lore stones [--time HH:MM] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, space kneels at the altar, and there 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)
   (: (num w) (0 < #w && all (c \ 48 <= c <= 57) (chars w) ? <(sound w))
      (hm w) (w @ (h + ":" + m) (: a (num h) b (num m) (charm? a && charm? b && a < 24 && b < 60 ? (3600 * a + 60 * b)))
                  _ ())
-     (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) (view-arg "--time" 'time hm)]))
+     (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
+                     (view-arg "--time" 'time hm)]))
  (stones-main as) (view-main "stones" stones-usage stones-opts stones-run as)
  _ (cite 'lore 'lore-enlist 'stones (udoor 'stones stones-main stones-usage 1 1)))
 ) ; module stones

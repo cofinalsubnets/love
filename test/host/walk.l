@@ -31,6 +31,7 @@
    hl (view-help wb (view-listed ['spin 'where 'nowhere]))
  (test (wb 112 = 'where) (wb 104 = ()) (wb 108 = 'spin) (wb -2 = 'turn-right) (wb -1 = 'turn-left)
        (view-binds 104 = 'turn-left) (view-binds 108 = 'turn-right) (view-binds 112 = ())
+       (view-binds 43 = 'finer) (view-binds 61 = 'finer) (view-binds 45 = 'coarser)
        (#hl = 10) (hl 0 = "↑ k    forward") (hl 1 = "↓ j    back") (hl 2 = "←      turn-left")
        (hl 6 = "l      spin") (hl 7 = "p      where") (hl 8 = "?      help") (hl 9 = "esc q  quit")))
 (test_fin ())

@@ -34,13 +34,15 @@
        (has? f " › 1  Breathe") (has? d " › 2  Weep") (rows f = 24) (rows d = 24) !(has? f "H\e[")))
 
 ; --- ..and as kitty's pixels: one picture over the screen's cells, the cursor left where it is;
-; --- sized for kitty, about kitty-w pixels across, a whole number a column; ids 7 and 8 by
-; --- turns, each frame taking the last one down after, in one synchronised update
+; --- sized for kitty, about kitty-w pixels across over the scale, a whole number a column;
+; --- ids 7 and 8 by turns, each frame taking the last one down after, in one synchronised
+; --- update
 (: kt (pin (at 12.0 7) 'kitty 1) k (stones-frame kt) k2 (stones-frame kt)
    k8 (stones-frame (stones-size (pin (at 12.0 7) 'kitty 1) 80 24))
+   k1 (stones-frame (stones-size (pins (at 12.0 7) 'kitty 1 'scale 1) 80 24))
  (test (snip k 0 8 = "\e[?2026h") (snip k (#k - 8) #k = "\e[?2026l")
        (has? k "i=7,s=") (has? k "a=d,d=I,i=8,") (has? k2 "i=8,s=") (has? k2 "a=d,d=I,i=7,") (has? k "f=24") (has? k "C=1") (has? k "s=80,v=48,c=80,r=24,") (has? k "m=0;")
-       (has? k8 "s=640,v=384,c=80,r=24,") ((stones-size (at 12.0 7) 80 24) 'kp = 1)))
+       (has? k8 "s=320,v=192,c=80,r=24,") (has? k1 "s=640,v=384,c=80,r=24,") ((stones-size (at 12.0 7) 80 24) 'kp = 1)))
 ; --- ..the choices' cells blanked over the picture once, the frame they are put away, and
 ; --- not before or after
 (: kb (pin (at 12.0 7) 'kitty 1) r ((kb 'h) // 2) r0 (max2 0 (r - r // 3 - 4)) c0 (max2 0 ((kb 'w - 22) // 2))

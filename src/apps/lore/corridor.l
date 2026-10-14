@@ -314,10 +314,10 @@
  (corridor-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level)
                                st (pins (corridor-new w h lv (dir-of p)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
-                                        'win (peep o 'win ()) 'path p)
+                                        'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
                                (corridor-watch (corridor-size st w (h // 2)))))
                'size corridor-size 'frame corridor-frame 'key corridor-step
-               'binds (view-bind view-binds corridor-binds) 'listed (view-listed ['where])
+               'binds (view-bind view-binds corridor-binds) 'listed (view-listed ['where 'finer 'coarser])
                'tick (st \ (walk-dt st,
                             corridor-move st,
                             (st 't % watch-every = 0 ? (corridor-watch st))))
@@ -327,9 +327,9 @@
                      lv (corridor-load p)
    (? (string? lv) (say err ("corridor: " + p + ": " + lv + "\n"), flush err, 1)
       (view-stage (pin o 'level p) (o2 \ corridor-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
- corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window]   (h l turn, k j step, u n look, p where you stand; ? the keys; q or esc leaves; the level is read again when it changes)"
+ corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, p where you stand; ? the keys; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for corridor-run, or () where one is wrong or said twice
- (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window)
+ (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
                                     (view-arg "--level" 'level (w \ w))])
  (corridor-main as) (view-main "corridor" corridor-usage corridor-opts corridor-run as)
  _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1)))
