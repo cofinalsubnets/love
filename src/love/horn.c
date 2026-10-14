@@ -20,6 +20,8 @@
 //     syscalls only
 //   - freebsd: /dev/dsp, the three OSS ioctls and write(2) or read(2)
 //   - netbsd: /dev/sound, audio(4)'s one SETINFO and write(2) or read(2)
+//   - HORN=sock:PATH: a unix socket's listener plays it (the droid bridge, AAudio under
+//     it): the rate as a little-endian u32, then the stereo frames
 //   - HORN=none in the environment: a sink that keeps time and discards, so a box
 //     without a card (and every gate) still sees the shape: the ring fills, refuses,
 //     drains at the rate. HORN=<path> names the device instead of the first found.
@@ -46,7 +48,7 @@ intptr_t k_horn_write(unsigned char const *src, uintptr_t n);
 uintptr_t k_horn_lag(void);
 void k_horn_close(void);
 
-enum { horn_sink, horn_dev, horn_seat };
+enum { horn_sink, horn_dev, horn_seat, horn_sock };
 // the port: the bio, then the device's words, all charms. wpos and t0 are the sink's
 // clock (frames landed or handed out, and the ms the drain is reckoned from); dir is 0 out
 // and 1 in, dchans and dwid the device's own channel count and bytes a sample; the others
@@ -308,6 +310,42 @@ static uintptr_t sun_lag(int fd, int dir, uintptr_t fb) {
 
 #endif
 
+// --- any kernel with sockets: a listener plays it ----------------------------------
+// the fd goes non-blocking once the rate is said, so a full socket is a full ring; what
+// it has not sent yet is the lag (SIOCOUTQ), the listener's own few ms left uncounted
+#if !love_horn_seat && !defined(__wasm__)
+#define horn_sockdoor 1
+#include <sys/socket.h>
+#include <sys/un.h>
+static int sock_open(char const *path, int rate, int *err) {
+ struct sockaddr_un u = {.sun_family = AF_UNIX};
+ if (strlen(path) >= sizeof u.sun_path) return *err = ENAMETOOLONG, -1;
+ strcpy(u.sun_path, path);
+ int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0), q = 32768;   // ~340 ms at 48k once doubled: a slow frame's gap
+ if (fd >= 0) setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &q, sizeof q);
+ unsigned char r[4] = {(unsigned char) rate, (unsigned char) (rate >> 8), (unsigned char) (rate >> 16), 0};
+ if (fd < 0 || connect(fd, (struct sockaddr*) &u, sizeof u) < 0 || write(fd, r, 4) != 4
+     || fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
+  *err = errno;
+  if (fd >= 0) close(fd);
+  return -1; }
+ return fd; }
+static intptr_t sock_land(int fd, unsigned char const *src, uintptr_t n) {
+ intptr_t k = write(fd, src, n & ~(uintptr_t) 3);
+ return k < 0 && errno == EAGAIN ? 0 : k < 0 ? -1 : k & ~(intptr_t) 3; }
+static uintptr_t sock_lag(int fd) {
+ int q = 0;
+ return ioctl(fd, 0x5411, &q) < 0 ? 0 : (uintptr_t) q / 4; }
+static void sock_shut(int fd) { close(fd); }
+#else
+#define horn_sockdoor 0
+static int sock_open(char const *path, int rate, int *err) { return *err = ENODEV, -1; }
+static intptr_t sock_land(int fd, unsigned char const *src, uintptr_t n) { return -1; }
+static uintptr_t sock_lag(int fd) { return 0; }
+static void sock_shut(int fd) { (void) fd; }
+#endif
+static int horn_sock_name(char const *dev) { return horn_sockdoor && dev && !strncmp(dev, "sock:", 5); }
+
 // --- the door, chosen on the kernel we woke on ------------------------------------
 // linux takes ALSA, freebsd OSS and netbsd audio(4); a kernel with none answers ENODEV.
 // the fd carries no flavour, so land, take and lag ask the same question open did;
@@ -426,26 +464,29 @@ static uintptr_t sink_take(struct horn *h, uintptr_t frames) {
 // --- the C face on this seat --------------------------------------------------------
 // one device for a program with no heap in hand (doom's mixer): the kernel's under
 // inle, else the host's card, opened here and kept -- the singleton the C face is.
-static int horn_c_fd = -1;
+static int horn_c_fd = -1, horn_c_sock;
 
 int love_horn_open(int rate) {
  if (horn_at_seat) return k_horn_open(rate);
 #if !love_horn_seat
- if (horn_c_fd >= 0) dev_shut(horn_c_fd);
+ if (horn_c_fd >= 0 && horn_c_sock) sock_shut(horn_c_fd);
+ else if (horn_c_fd >= 0) dev_shut(horn_c_fd);
  char const *dev = getenv("HORN");
  if (dev && !*dev) dev = NULL;
  int err = 0, ch = 2, wid = 2;
- horn_c_fd = dev && !strcmp(dev, "none") ? -1 : dev_open(dev, rate, 0, &ch, &wid, &err);
+ horn_c_sock = horn_sock_name(dev);
+ horn_c_fd = horn_c_sock ? sock_open(dev + 5, rate, &err)
+           : dev && !strcmp(dev, "none") ? -1 : dev_open(dev, rate, 0, &ch, &wid, &err);
 #endif
  return horn_c_fd < 0 ? -1 : 0; }
 
 intptr_t love_horn_write(unsigned char const *src, uintptr_t n) {
  if (horn_at_seat) return k_horn_write(src, n);
- return horn_c_fd < 0 ? -1 : dev_land(horn_c_fd, src, n & ~(uintptr_t) 3); }
+ return horn_c_fd < 0 ? -1 : horn_c_sock ? sock_land(horn_c_fd, src, n) : dev_land(horn_c_fd, src, n & ~(uintptr_t) 3); }
 
 uintptr_t love_horn_lag(void) {
  if (horn_at_seat) return k_horn_lag();
- return horn_c_fd < 0 ? 0 : dev_lag(horn_c_fd, 0, 4); }
+ return horn_c_fd < 0 ? 0 : horn_c_sock ? sock_lag(horn_c_fd) : dev_lag(horn_c_fd, 0, 4); }
 
 // a seat may tap the sink's accepted PCM -- the browser feeds it to WebAudio. the
 // default takes nothing, so every native seat keeps discarding at the sink.
@@ -455,7 +496,8 @@ __attribute__((weak)) void love_horn_tap(unsigned char const *pcm, uintptr_t fra
 
 void love_horn_close(void) {
  if (horn_at_seat) { k_horn_close(); return; }
- if (horn_c_fd >= 0) dev_shut(horn_c_fd);
+ if (horn_c_fd >= 0 && horn_c_sock) sock_shut(horn_c_fd);
+ else if (horn_c_fd >= 0) dev_shut(horn_c_fd);
  horn_c_fd = -1; }
 
 // --- the door -------------------------------------------------------------------
@@ -464,12 +506,12 @@ void love_horn_close(void) {
 static intptr_t horn_land(struct horn *h, unsigned char const *src, uintptr_t n) {
  int kind = (int) getcharm(h->kind), fd = (int) getcharm(h->b.f.fd);
  if (getcharm(h->chans) == 2)
-  return kind == horn_dev ? dev_land(fd, src, n) : k_horn_write(src, n);
+  return kind == horn_dev ? dev_land(fd, src, n) : kind == horn_sock ? sock_land(fd, src, n) : k_horn_write(src, n);
  unsigned char t[4096];
  if (n > sizeof t / 2) n = sizeof t / 2;
  for (uintptr_t i = 0; i < n; i += 2)
   t[2 * i] = t[2 * i + 2] = src[i], t[2 * i + 1] = t[2 * i + 3] = src[i + 1];
- intptr_t k = kind == horn_dev ? dev_land(fd, t, 2 * n) : k_horn_write(t, 2 * n);
+ intptr_t k = kind == horn_dev ? dev_land(fd, t, 2 * n) : kind == horn_sock ? sock_land(fd, t, 2 * n) : k_horn_write(t, 2 * n);
  return k > 0 ? k / 2 : k; }
 
 struct g *love_horn_writen(struct g *g, unsigned char const *src, uintptr_t n) {
@@ -525,6 +567,7 @@ static void horn_fin(struct g *g, void *p) {
  int kind = (int) getcharm(h->kind);
  intptr_t fd = getcharm(h->b.f.fd);
  if (kind == horn_dev && fd >= 0) dev_shut((int) fd);
+ else if (kind == horn_sock && fd >= 0) sock_shut((int) fd);
  else if (kind == horn_seat) k_horn_close();
  h->b.f.fd = putcharm(-1);
  h->kind = putcharm(horn_sink); }
@@ -559,14 +602,18 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
   int err = 0;
   bool none = dev && !strcmp(dev, "none");
   if (dir && horn_doorless && !none) return g->sp[1] = love_err(g, ENODEV), g->sp += 1, g;
-  if (!horn_doorless && !none) {
+  if (!dir && horn_sock_name(dev)) {
+   fd = sock_open(dev + 5, (int) rate, &err);
+   if (fd < 0) return g->sp[1] = love_err(g, err), g->sp += 1, g;
+   kind = horn_sock; }
+  else if (!horn_doorless && !none) {
    fd = dev_open(dev, (int) rate, dir, &dchans, &dwid, &err);
    if (fd < 0) return g->sp[1] = love_err(g, err), g->sp += 1, g;
    kind = horn_dev; } }
 #endif
  uintptr_t const n = Width(struct horn);
  if (!ok(g = have(g, n + Width(struct tag) + Width(struct fz) + 1))) {
-  if (kind == horn_dev) dev_shut(fd); else if (kind == horn_seat) k_horn_close();
+  if (kind == horn_dev) dev_shut(fd); else if (kind == horn_sock) sock_shut(fd); else if (kind == horn_seat) k_horn_close();
   return g; }
  union u *k = bump(g, n + Width(struct tag));
  struct horn *h = (struct horn*) k;
@@ -615,6 +662,7 @@ static lvm(lvm_horn_lag) {
   case horn_sink: lag = dir ? sink_heard(h) : (uintptr_t) getcharm(h->wpos) - sink_played(h); break;
   case horn_dev: lag = dev_lag((int) getcharm(h->b.f.fd), dir,
                               (uintptr_t) getcharm(h->dwid) * (uintptr_t) getcharm(h->dchans)); break;
+  case horn_sock: lag = sock_lag((int) getcharm(h->b.f.fd)); break;
   default: lag = k_horn_lag(); }
  if (dir) lag += h->b.rbuf && !charmp(h->b.rbuf) ? (uintptr_t) (getcharm(h->b.rlen) - getcharm(h->b.rpos)) / fb : 0;
  else lag += io_wpending(g, (struct io*) h) / fb;

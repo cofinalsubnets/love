@@ -434,6 +434,7 @@
    ; char is three types (C11 6.2.5p15): 'schar and 'uchar, and plain char -- 'char where the ABI makes it
    ; signed (x86-64, wasm's C conventions), 'cchar where unsigned (AAPCS64, AAPCS32, RISC-V). each
    ; symbol's sign is its own, so nothing past here asks the target
+   (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp))   ; a64 and the thumbs lay bit-fields by AAPCS
    (pchar ps) (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp) ? 'cchar 'char)
    (pw64 ps) !(pst32? ps)                          ; is long 8 bytes? the const folder's one question
    (psword ps) (pst32? ps ? 4 8)
@@ -563,13 +564,14 @@
                     (ptr? a || arr? a) (elem <>e '(+ -) ? (tdecay a))
                     (ptr? b || arr? b) (<>e = '+ ? (tdecay b))
                     (parith? a && parith? b) (puac !(pst32? ps) a b)
+                    (elem <>e '(+ - * /) && (cplxty? a || cplxty? b) && a && b) (cxuac a b)
                     ()))
              ; a shift's type is the promoted left operand alone (C11 6.5.7) --
              ; the right side never converts into it
              (k = 'bin && elem <>e '(shl shr))
               (ptype ps <>>e @ a (parith? a ? (pprom a)))
              (k = 'un && elem <>e '(neg bnot))
-              (ptype ps <>>e @ a (parith? a ? (pprom a)))
+              (ptype ps <>>e @ a (? (parith? a) (pprom a) (cplxty? a && <>e = 'neg) a))
              ; ?: arms meet by puac (6.5.15); same non-arithmetic type rides
              ; through whole (sizeof(c ? s1 : s2) over one struct type)
              (k = 'cond)
@@ -814,10 +816,21 @@
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
                     _ (0 < cap && cap < a && pin ps 'packbf 1)    ; gcc lets these straddle units; refused
                     _ (w > ubits && pin ps 'widebf 1)             ; wider than its type: C's constraint
-                    nmx (mx < a ? a mx)
-                    (? (w = 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
+                    nmx (pk || a <= mx ? mx a)                    ; packed: the unit asks no alignment
+                    ; packed, the bits run on from the cursor and the field's unit is the n bytes
+                    ; they touch, its fifth element
+                    pn (((& bit 7) + w + 7) >> 3)
+                    _ (pk && pn > 8 && pin ps 'pkwidebf 1)
+                    ; `:0`, no field: the cursor aligns to its type off a union; AAPCS has the type's
+                    ; alignment raise the struct's too, packed or not, where SysV leaves it
+                    za (paapcs? ps && mx < a ? a mx)
+                    (? (w = 0) (go >l (uni ? bit (aup bit (a * 8))) za acc)
+                       (uni && pk) (: fld (name ? [name 0 ['bitfield ty 0 w ((w + 7) >> 3)]])
+                                      (go >l (bit < w ? w bit) nmx (name ? (fld . acc) acc)))
                        uni (: fld (name ? [name 0 ['bitfield ty 0 w]])
                               (go >l (bit < ubits ? ubits bit) nmx (name ? (fld . acc) acc)))
+                       pk (: fld (name ? [name (bit >> 3) ['bitfield ty (& bit 7) w pn]])
+                             (go >l (bit + w) nmx (name ? (fld . acc) acc)))
                        (: bit2 ((& bit (ubits - 1)) + w > ubits ? (aup bit ubits) bit)   ; bump to avoid straddling the unit
                           uoff (& (bit2 >> 3) (0 - usz))              ; the declared-type-aligned word holding these bits
                           bitoff (bit2 - uoff * 8)
@@ -914,6 +927,7 @@
                              tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
                              (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
                                 (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
+                                (peep ps 'pkwidebf ()) (pin ps 'pkwidebf (), clblame "a packed bit-field spanning more than 8 bytes is not carried out")
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame ("field '" + n + "' has incomplete type")))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
@@ -1152,13 +1166,30 @@
    ; arithmetic-real -> the real side rises to {x, 0} (a clit, single-eval), so gen's
    ; complex lane only meets complex operands
    (cxwrap ty x) ['clit ty ['init [x '(flo 0.0)]]]
+   ; the complex type two operands meet at: double if either side is, else float
+   (cxuac ta tb) (elem '(struct "__cplx_double") [ta tb] || elem 'double [ta tb] ?
+                    '(struct "__cplx_double") '(struct "__cplx_float"))
+   ; a real divisor divides each part (gen's lane, as gcc's); a complex one calls libgcc's
+   ; __divsc3/__divdc3 on the four parts, an operand that may not be read twice parked first
+   (cxdiv ps l r ta tb)
+    (: w (cxuac ta tb) b (w = '(struct "__cplx_float") ? 'float 'double)
+       nm (b = 'float ? "__divsc3" "__divdc3")
+       _ (peep (ps 'sigs) nm () ? 0 (pin (ps 'sigs) nm [w [b b b b] ()]))
+       (side x t) (elvpure? x ? [x ()]
+                     (: n (1 + peep ps 'cxdn 0) _ (pin ps 'cxdn n) v ("__cxdiv_" + show n)
+                        [['var v] [['decl [[v t x]]]]]))
+       (part x t f) (t = w ? ['dot x f] ['cast b ['dot x f]])     ; a float side widens a part at a time
+       sl (side l ta) sr (side r tb)
+       call ['call ['var nm] [(part <sl ta "re") (part <sl ta "im") (part <sr tb "re") (part <sr tb "im")]]
+       (two? (<>sl + <>sr) ? ['sexpr (<>sl + <>sr) call w] call))
    (mkbin ps op l r)
     (: tl (ptype ps l) tr (ptype ps r)
        cl (cplxty? tl) cr (cplxty? tr)
        (? (cl && !cr && tr && !(ptr? tr || arr? tr || stru? tr))
-           ['bin op l (cxwrap tl r)]
+           (op = '/ ? ['bin op l r] ['bin op l (cxwrap (cxuac tl tr) r)])
           (cr && !cl && tl && !(ptr? tl || arr? tl || stru? tl))
-           ['bin op (cxwrap tr l) r]
+           (cxuac tl tr @ w (op = '/ ? (cxdiv ps (cxwrap w l) r w tr) ['bin op (cxwrap w l) r]))
+          (cl && cr && op = '/) (cxdiv ps l r tl tr)
           ['bin op l r]))
    ; one left-associative binary level
    (plevel ps sub ops ts)
@@ -1199,9 +1230,9 @@
                        'llong)
                  [['cast ty ['num v]] >ts])
              (tkk t = 'flo) [['flo (cflo (tkv t))] >ts]
-             ; an f suffix makes a float constant (C11 6.4.4.2) -- the cast is what
-             ; narrows it, so `0.1f == 0.1` is false and sizeof(1.5f) is 4
-             (tkk t = 'flof) [['cast 'float ['flo (cflo (tkv t))]] >ts]
+             ; an f suffix makes a float constant (C11 6.4.4.2): cflo32 rounds it to binary32 once,
+             ; and the cast keeps the type, so `0.1f == 0.1` is false and sizeof(1.5f) is 4
+             (tkk t = 'flof) [['cast 'float ['flo (cflo32 (tkv t))]] >ts]
              ; an imaginary literal (1.0fi, _Complex_I's spelling) is the complex constant
              ; {0, v}, complex-double -- complex floats compute as doubles too
              (tkk t = 'iflo)
@@ -1600,7 +1631,7 @@
                          greg (two? lv && <lv = 'var && two? (peep (ps 'gregs) <>lv ()))
                          (greg ? (blame <>r2 "a write to a global register variable")
                             [(? !op ['asn lv <r2]                      ; plain =: no duplicate to make
-                                 (calm? lv) ['asn lv ['bin op lv <r2]] ; the desugar, exact here
+                                 (calm? lv) ['asn lv (mkbin ps op lv <r2)] ; the desugar, exact here
                                  ['rmw op lv <r2])                     ; evaluate the lvalue once
                                <>r2]))))))))
    (pexpr ps ts) (pone ps pasn "," 'comma ts)
