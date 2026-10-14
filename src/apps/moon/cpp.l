@@ -263,6 +263,15 @@
              (idv? t "_Pragma" && two? rest && pv? <rest "(" && two? >rest && kof <>rest = 'str
               && two? >>rest && pv? <>>rest ")" && !(starts? (vof <>rest) "pack"))
               (expand >>>rest macs)
+             ; ..and one whose operand a macro spells (the kernel's __diag(s) stringizes): the
+             ; operand expanded first, then read the same way
+             (idv? t "_Pragma" && two? rest && pv? <rest "(")
+              (collargs >rest @ ca
+                 (atom? ca ? (t . expand rest macs)
+                    (: x (expand <(<ca) macs)
+                       (two? x && atom? >x && kof <x = 'str && !(starts? (vof <x) "pack") && #(<ca) = 1
+                          ? (expand <>ca macs)
+                          (t . expand rest macs)))))
              (macnm t @ nm
                 (mdef macs nm @ m
                    (? (atom? m) (t . expand rest macs)          ; no macro, so no hideset to walk

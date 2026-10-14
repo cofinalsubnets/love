@@ -10,10 +10,12 @@
 #include <sys/utsname.h>
 
 // the C runtime is moonlibc's core.c: errno, the streams, the mmap-arena malloc. what a
-// hosted __love_start would arm the kernel arms here -- an empty environment and the std
-// streams write-through on fds 1 and 2 at cap 0. a task's C-level printf reaches the
-// console where its own port reaches the pipe. kmain calls this after the osv.
-static char *k_env0[] = { 0 };
+// hosted __love_start would arm the kernel arms here -- the machine's environment and the
+// std streams write-through on fds 1 and 2 at cap 0. a task's C-level printf reaches the
+// console where its own port reaches the pipe. kmain calls this after the osv. the
+// environment is what every reader starts from: a closure baked against the host's getenv
+// reads it, and the seat text's envt starts as a copy (src/inle/seat.l)
+static char *k_env0[] = { "COLORTERM=truecolor", 0 };   // quay keeps 24-bit colour
 void k_seat_init(void) {
   environ = k_env0;
   stdout->fd = 1; stdout->wr = 1;
@@ -222,7 +224,7 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
    kfree(((void **) a)[-1]);
    return 0;
   // the map is not flat: mkboot.l puts NX on the hhdm and these are 2 MiB entries the
-  // identity window shares, so nothing here lifts it off one page. R/W is what every heap
+  // executable window shares, so nothing here lifts it off one page. R/W is what every heap
   // page already is, so answer that and refuse the exec ask rather than tell a caller
   // whose next move is a jump that it succeeded.
   case NR_mprotect: return (c & 4) ? -EACCES : 0;
@@ -259,8 +261,8 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
   default:       return -38; } }                       // ENOSYS, canonically
 
 // --- processes ----------------------------------------------------------------------------
-// a process is a program in memory of its own -- a wasm instance; on metal, an address space
-// to come -- whose calls arrive at k_proc_call, from the seat that runs it. what the kernel
+// a process is a program in memory of its own -- a wasm instance, or on x64 an address space
+// (x64/proc.c) -- whose calls arrive at k_proc_call, from the seat that runs it. what the kernel
 // keeps of one: its pid and parent, its cwd, and its fds, each a kernel row it holds. the
 // kernel's own love is not one: its tasks are the threads of the machine, as before. a
 // status is kept as wait4 lays it: an exit's code above the low byte, a signal in it.
@@ -271,9 +273,10 @@ extern bool k_ready(int fd, int events);
 
 #define k_proc_fds 64
 struct k_proc { int pid, ppid, live, status, exitw; uint64_t cx, nb; uintptr_t cwd_n; char cwd[256];
-                int fd[k_proc_fds]; };              // the process's fd -> the kernel's, -1 none;
-                                                    // cx: which close at its exec, nb: which
-                                                    // answer EAGAIN rather than wait
+                int fd[k_proc_fds];                 // the process's fd -> the kernel's, -1 none;
+                void *m; };                         // cx: which close at its exec, nb: which
+                                                    // answer EAGAIN rather than wait; m: the
+                                                    // seat's machine, where the kernel runs it
 static struct k_proc *k_procs;
 static int k_procs_n, k_pid_next = 2;               // pid 1 is the kernel's own answer
 
@@ -281,21 +284,30 @@ static int k_procs_n, k_pid_next = 2;               // pid 1 is the kernel's own
 #define K_RESTART -512
 
 // the seat's door: start pid's program with these words, each NUL-ended -- love's, or with
-// code, a wasm module's own bytes. -errno to refuse
+// code, the program's own bytes. -errno to refuse
 __attribute__((weak)) long k_proc_start(long pid, char const *av, uintptr_t an,
                                         char const *ev, uintptr_t en,
                                         char const *code, uintptr_t cn) {
   return (void) pid, (void) av, (void) an, (void) ev, (void) en, (void) code, (void) cn, -ENOSYS; }
 // ..and to end one where it stands, at a signal
 __attribute__((weak)) void k_proc_stop(long pid) { (void) pid; }
+// ..a turn of a machine the start left in a record, and the machine let go once it is done
+__attribute__((weak)) long k_proc_run(void *m) { return (void) m, 0; }
+__attribute__((weak)) void k_proc_drop(void *m) { (void) m; }
 
 static struct k_proc *k_proc_of(long pid) {
   for (int i = 0; i < k_procs_n; i++) if (k_procs[i].pid == pid) return &k_procs[i];
   return NULL; }
 
-// a free slot, the table doubled first when there is none
+// where the seat keeps pid's machine
+void **k_proc_seat(long pid) {
+  struct k_proc *p = k_proc_of(pid);
+  return p ? &p->m : NULL; }
+
+// a free slot, the table doubled first when there is none. a record reaped while its machine
+// is still held stays taken until the pump lets the machine go
 static struct k_proc *k_proc_slot(void) {
-  for (int i = 0; i < k_procs_n; i++) if (!k_procs[i].pid) return &k_procs[i];
+  for (int i = 0; i < k_procs_n; i++) if (!k_procs[i].pid && !k_procs[i].m) return &k_procs[i];
   int m = k_procs_n ? 2 * k_procs_n : 8;
   struct k_proc *t = kmallocw((m * sizeof *t + sizeof(uintptr_t) - 1) / sizeof(uintptr_t));
   if (!t) return NULL;
@@ -332,10 +344,15 @@ static void k_proc_end(struct k_proc *p, int status) {
     if (q->pid && q != p && q->ppid == p->pid) q->live ? (q->ppid = 0) : (q->pid = 0); }
   if (!p->ppid) p->pid = 0; }
 
-// path's bytes, read under p's cwd, when they are a wasm module -> them in kernel memory and
-// *n; NULL for anything else, or what does not open
-static char *k_proc_wasm(struct k_proc *p, char const *path, uintptr_t pn, uintptr_t *n) {
+// path's bytes, read under p's cwd, when they are a program this machine runs -- a wasm module
+// on wasm, an ELF on metal -> them in kernel memory and *n; NULL for anything else, or what
+// does not open
+static char *k_proc_code(struct k_proc *p, char const *path, uintptr_t pn, uintptr_t *n) {
+#if defined(__wasm__)
   static unsigned char const magic[4] = { 0, 'a', 's', 'm' };
+#else
+  static unsigned char const magic[4] = { 0x7f, 'E', 'L', 'F' };
+#endif
   unsigned char h[4];
   struct k_st st;
   char *b = NULL;
@@ -353,13 +370,13 @@ static char *k_proc_wasm(struct k_proc *p, char const *path, uintptr_t pn, uintp
   k_fs_cwd_swap(p->cwd, &p->cwd_n);
   return b; }
 
-// start p's program, the file f on argv av: a path to a wasm module runs as itself; anything
+// start p's program, the file f on argv av: a path to a program runs as itself; anything
 // else -- a bare word above all, whatever PATH holds -- is love's, woken from the machine's
 // image where there is one, on f then the words after argv[0]
 static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t an,
                       char const *ev, uintptr_t en) {
   uintptr_t cn = 0, fn = strlen(f);
-  char *code = memchr(f, '/', fn) ? k_proc_wasm(p, f, fn, &cn) : NULL;
+  char *code = memchr(f, '/', fn) ? k_proc_code(p, f, fn, &cn) : NULL;
   if (code) {
     long r = k_proc_start(p->pid, av, an, ev, en, code, cn);
     kfree(code);
@@ -373,6 +390,19 @@ static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t
   memcpy(b, wake, pn), memcpy(b + pn, f, fn + 1), memcpy(b + pn + fn + 1, av + a0, an - a0);
   long r = k_proc_start(p->pid, b, n, ev, en, NULL, 0);
   kfree(b);
+  return r; }
+
+// a turn for every process the kernel runs (k_proc_run), the done ones let go -> 0 when there
+// are none, 1 when each waits on a call, 2 when one wants another turn. a turn may spawn, and
+// the table move under it
+long k_proc_pump(void) {
+  long r = 0;
+  for (int i = 0; i < k_procs_n; i++) {
+    void *m = k_procs[i].m;
+    if (!m) continue;
+    long t = k_procs[i].live ? k_proc_run(m) : 0;
+    if (!k_procs[i].live) k_proc_drop(m), k_procs[i].m = NULL;
+    else r = r > t ? r : t ? t : 1; }
   return r; }
 
 // a new process on these words, its stdio the kernel rows in fds -> its pid, *wr the read

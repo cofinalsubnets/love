@@ -133,7 +133,7 @@
    ; back out -- `ulong` is moon's word for the type, not C's.
    spelling '((uchar "unsigned char") (schar "signed char") (cchar "char") (ushort "unsigned short") (uint "unsigned int")
               (ulong "unsigned long") (ullong "unsigned long long") (llong "long long")
-              (bool "_Bool"))
+              (i128 "__int128") (u128 "unsigned __int128") (bool "_Bool"))
    (cptr? ('ptr . _)) 1
    ; a tag spells as itself. cident? is a first-character check and wants to be no
    ; more: the non-identifiers reaching here are parse's synthetic keys, which all

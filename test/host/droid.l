@@ -28,7 +28,8 @@
        (go 0 ()))
    dr-eo (#dr-z - 22)
    ; the manifest: its chunks, and its pool's strings
-   dr-x (ap-axml (ap-manifest "org.love.t" "t"))
+   dr-x (ap-axml (ap-manifest "org.love.t" "t" ()))
+   dr-xp (ap-axml (ap-manifest "org.love.t" "t" ["android.permission.RECORD_AUDIO"]))
    (dr-walk x)
     (: (go i acc) (? (#x <= i) [i (rev acc)] (go (i + rdle x (i + 4) 4) (rdle x i 2 . acc))) (go 8 ()))
    (dr-pool x)
@@ -61,7 +62,11 @@
  (: w (dr-walk dr-x) (<w = #dr-x && rdle dr-x 4 4 = #dr-x && (w 1) 0 = 1 && (w 1) 1 = 0x180))
  ; every string a string, the attribute names first in resource-id order
  (: p (dr-pool dr-x) (p 0 = "label" && elem "manifest" p && elem "org.love.t" p && elem "activity" p))
- (: p (dr-pool dr-x) !(any (x \ !(string? x)) p)))
+ (: p (dr-pool dr-x) !(any (x \ !(string? x)) p))
+ ; a permission asked is an element of its own, its name a string of the pool
+ (: w (dr-walk dr-xp) (<w = #dr-xp && #(w 1) = #((dr-walk dr-x) 1) + 2))
+ (: p (dr-pool dr-xp) (elem "uses-permission" p && elem "android.permission.RECORD_AUDIO" p))
+ !(elem "uses-permission" (dr-pool dr-x)))
 
 (test
  ; the block's magic and its two sizes
@@ -73,5 +78,55 @@
  (dr-has? dr-sd (v2-digest [(snip dr-z 0 dr-b0) (snip dr-z dr-b0 dr-eo) (snip dr-z dr-eo #dr-z)]))
  (dr-has? dr-sd dr-c)
  (1 = sig-ok? (unhex "2a8648ce3d040302") (spki-key dr-spk (der dr-spk 0 #dr-spk)) dr-sd dr-sig))
+
+;; the window over the bridge's wire, the bridge played here: a window's paper is the screen
+;; over the scale, its records come back as events, and a show sends just its rows
+(borrow 'window)
+(: dw-path ((getenv "TMPDIR" @ t (string? t ? t "/tmp")) + "/droid-face-" + show (getpid 0))
+   _ (unlink dw-path)
+   dw-l (listen ['unix dw-path])
+   _ (setenv "LOVE_FACE" dw-path)
+   (dw-rec k a b c) (string k + string a + string 0 + string 0 + wrle b 4 + wrle c 4)
+   dw-got {}
+   dw-srv (twirl (_ \ (: _ (await dw-l) c (accept dw-l)
+                         _ (say c (dw-rec 83 0 1080 2400), flush c)
+                         _ (pin dw-got 'c c)
+                         0)) 0)
+   dw-w (window-open 640 384 "t")
+   _ (catch dw-srv)
+   dw-sz (window-size dw-w)
+   dc (dw-got 'c)
+   _ (say dc (dw-rec 75 1 29 97 + dw-rec 75 0 29 0 + dw-rec 75 1 66 10 + dw-rec 84 0 10 20 + dw-rec 84 2 11 21
+              + dw-rec 83 0 1080 1200), flush dc)
+   _ (rest 50)
+   dw-ev (window-events dw-w)
+   _ (window-show dw-w 1 3)
+   (dw-take n) (map (_ \ see dc) ^n)
+   (dw-snip l n) (n < 1 ? () (<l . dw-snip >l (n - 1)))
+   dw-hd (dw-take 9)
+   _ (dw-take (2 * 540 * 4))
+   ; typing: the keyboard asked for, the paper short by the row, the row sent under it; ctrl
+   ; tapped on the row holds for the keyboard's next key
+   _ (window-typing dw-w 1)
+   dw-i (dw-take 2)
+   ; the row is more than a socket holds: read it beside
+   (dw-beside n) (twirl (_ \ dw-take n) 0)
+   dw-rd (dw-beside (9 + 540 * 96 * 4))
+   dw-ev2 (window-events dw-w)
+   dw-rh (dw-snip (catch dw-rd) 9)
+   _ (say dc (dw-rec 84 0 115 562 + dw-rec 84 1 115 562 + dw-rec 75 1 31 99 + dw-rec 75 0 31 0), flush dc)
+   _ (rest 50)
+   dw-rd2 (dw-beside (2 * (9 + 540 * 96 * 4)))
+   dw-ev3 (window-events dw-w)
+   _ (catch dw-rd2))
+(test
+ ([540 1200] = dw-sz)
+ (dw-ev = [['down 30] ['text "a"] ['up 30] ['down 28] ['press 1 10 20] ['move 11 21] ['size 540 600]])
+ (540 * 504 * 4 = #(window-paper dw-w))
+ (dw-hd = [70 28 2 88 2 1 0 2 0])
+ (dw-i = [73 1]) (dw-ev2 = [['size 540 504]]) ([540 504] = window-size dw-w)
+ (dw-rh = [70 28 2 88 2 248 1 96 0])
+ (dw-ev3 = [['down 29] ['down 46] ['text "c"] ['up 46] ['up 29] ['up 46]]))
+(: _ (window-close dw-w) _ (close dc) _ (close dw-l) _ (unlink dw-path) 0)
 
 (puts "droid: ok") (putc 10)
