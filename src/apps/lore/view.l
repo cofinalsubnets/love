@@ -5,7 +5,7 @@
 (module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays
          view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
          view-deep? view-words view-flag view-arg view-scale view-main view-song view-stage view-set1
-         view-binds view-bind view-walking view-listed view-help view-help-say view-help-bands
+         view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
          view-rescale)
 (borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
@@ -108,7 +108,9 @@
  (view-rescale lv st a) (: s (peep st 'scale 2)
    _ (pin st 'scale (a = 'finer ? (max2 1 (s // 2)) (min2 8 (s * 2))))
    (lv 'size st (st 'w) (st 'h // 2)))
- ; ..the walking ones, which act every frame a window's key is held
+ ; ..the walking ones, which act again while a window's key is held: after a pause, then
+ ; at a pace (ms), like a keyboard's own repeat
+ view-repeat [250 110]
  view-walking ['forward 'back 'turn-left 'turn-right 'look-up 'look-down]
  ; a key in a window, by its place -> its code where it types nothing: space, esc, enter,
  ; the arrows; the rest come by what they type
@@ -158,8 +160,8 @@
  ; none): in a window while its key is held, in a terminal until the next key, which does
  ; nothing else
  ; in a window, 'win: the frame paints the window itself (mesh-show), the cells are 8 by 16
- ; of its pixels, each key pressed acts once and a walking key held acts every frame after,
- ; unless 'held (st) says not now
+ ; of its pixels, each key pressed acts once and a walking key held acts again at 'repeat's
+ ; pace ([pause gap] ms, view-repeat), unless 'held (st) says not now
  (view-walk lv) (:
    win (peep lv 'win ())
    binds (peep lv 'binds view-binds)
@@ -175,6 +177,7 @@
                (sh 0 != st 'w || 2 * sh 1 != st 'h ?
                 (lv 'size st (sh 0) (sh 1), win ? 0 (say out (esc + "[2J")))))
    held {}
+   rep (peep lv 'repeat view-repeat)
    (hold? k) (elem (binds k) view-walking && (peep lv 'held (_ \ 1)) st)
    ; ..a window's keys: a key down is its code by what it typed, else by its place; the
    ; help's key let go puts the help away
@@ -182,16 +185,22 @@
               (: e <l nx (two? >l ? <>l ()) t (two? nx && <nx = 'text ? (nx 1) "")
                  k (? (0 < #t) (t 0) (peep view-set1 (e 1) ()))
                  (? (<e = 'close) ('quit . wgo >l)
-                    (<e = 'down && charm? k) (pin held (e 1) k,
+                    (<e = 'down && charm? k && held (e 1) != ()) (wgo >l)
+                    (<e = 'down && charm? k) (pin held (e 1) [k (clock 0 + rep 0)],
                                               (binds k = 'help ? (pins hs 'on 1 'p (e 1))),
                                               k . wgo >l)
                     (<e = 'up) (pin held (e 1) (),
                                 (e 1 = hs 'p ? (pins hs 'on 0 'p ())),
                                 wgo >l)
                     (wgo >l))))
-   (wkeys _) (: pressed (wgo (window-events win))
-               again (filter (k \ hold? k && !(elem k pressed)) (filter (k \ k != ()) (map held (sort (keys held)))))
-               (pressed + again))
+   ; ..a down for a key already held is the keyboard's repeat, which the pace here stands for
+   ; ..and one due before this frame's events and still down after them acts again
+   (wkeys _) (: now (clock 0)
+               due (filter (c \ held c @ h (h != () && hold? (h 0) && h 1 <= now)) (sort (keys held)))
+               pressed (wgo (window-events win))
+               again (filter (c \ held c != ()) due)
+               _ (each again (c \ pin held c [(held c 0) (now + rep 1)]))
+               (pressed + map (c \ held c 0) again))
    ; ..a terminal's: the last waiting; with the help up, any key puts it away and does no more
    (tkeys last) (cue? 0 ? (edkey in @ k (tkeys (charm? k ? k last))) last)
    (tget _) (tkeys () @ k (? !(charm? k) ()
