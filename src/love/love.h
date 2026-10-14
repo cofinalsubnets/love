@@ -453,6 +453,12 @@ int k_horn_open(int rate);
 intptr_t k_horn_write(unsigned char const*, uintptr_t);
 uintptr_t k_horn_lag(void);
 void k_horn_close(void);
+// the seat's mic, the caller's channels of 16-bit: open -> 0 | -1 none; read -> bytes of
+// whole frames, 0 dry, -1 gone; lag -> frames heard and unread
+int k_horn_in_open(int rate, int chans);
+intptr_t k_horn_read(unsigned char*, uintptr_t);
+uintptr_t k_horn_in_lag(void);
+void k_horn_in_close(void);
 // ..and the same face on whichever seat this is: k_horn_* under inle, the host's own
 // card otherwise (src/love/horn.c keeps that one open). what src/inle/doomsnd.c calls.
 int love_horn_open(int rate);

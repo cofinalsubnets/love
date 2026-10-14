@@ -14,6 +14,7 @@ void kq(uint8_t);
 void kmain(void);
 void k_kb_poll(void);
 bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale);
+void k_droid_horn(char const *out, char const *in);
 extern uint8_t const cleat_8x16[256][16];
 
 #define sys(n, a, b, c, d) __love_sys(n, (long) (a), (long) (b), (long) (c), (long) (d), 0, 0)
@@ -278,6 +279,7 @@ int k_droid_main(int argc, char const **argv) {
   uintptr_t len = (uintptr_t) (mib >= 64 ? mib : 512) << 20;
   long base = __love_sys(NR_mmap, 0, (long) len, 7, 0x22, -1, 0); // rwx, private anonymous
   if (base < 0 && base > -4096) leave(1);
+  k_droid_horn(getenv("HORN"), getenv("HORN_IN"));
   k_ram_give((uint64_t) base, face_open((uintptr_t) base, len));
   k_cmdline(line, n);
   kmain();
