@@ -1345,7 +1345,7 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   `if (!scs_is_enabled()) return;`): its own back edge had kept its label, so its calls wrote a
   callee-saved register the prologue never saved (`cs-unsaved r19` on a64, `r15` on rv64; x64
   laid the dead loop and kept quiet). A label now lives only if code reached from the entry
-  names it, so a block reached by a later jump stays. Three tinyconfig units; law 285-deadloop.c.
+  names it, so a block reached by a later jump stays. Three tinyconfig units; law 293-deadloop.c.
 
 Still open on this side (g-21's probes):
 
