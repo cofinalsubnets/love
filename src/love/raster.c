@@ -136,14 +136,23 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  int shade = 0, under = r->flags & rz_under;   // the sun's view is asked only where some of the sun falls
  for (int i = 0; r->sm && i < 3; i++) shade |= P[i]->a[5] != 0 || P[i]->a[6] != 0 || P[i]->a[7] != 0;
  for (intptr_t y = y0; y < y1; y++) {
-  flo_t const py = (flo_t) y + (flo_t) 0.5, px0 = (flo_t) x0 + (flo_t) 0.5;
+  // the row's run inside all three edges: each is c + ex x, exact, so where it turns is a
+  // whole x found by division, and the pixels of the box outside it are never walked
+  intptr_t xs = x0, xe = x1;
+  for (int i = 0; i < 3; i++) {
+   int64_t const c = ec[i] + ey[i] * (int64_t) y;
+   if (ex[i] > 0) { int64_t const m = c >= 0 ? 0 : (-c + ex[i] - 1) / ex[i]; xs = m > xs ? (intptr_t) m : xs; }
+   else if (ex[i] < 0) { int64_t const m = c < 0 ? 0 : c / -ex[i] + 1; xe = m < xe ? (intptr_t) m : xe; }
+   else if (c < 0) xe = xs; }
+  if (xs >= xe) continue;
+  flo_t const py = (flo_t) y + (flo_t) 0.5, px0 = (flo_t) xs + (flo_t) 0.5;
   int64_t e[3];
   flo_t a[2 + rz_na];
-  for (int i = 0; i < 3; i++) e[i] = ec[i] + ey[i] * (int64_t) y + ex[i] * (int64_t) x0;
+  for (int i = 0; i < 3; i++) e[i] = ec[i] + ey[i] * (int64_t) y + ex[i] * (int64_t) xs;
   for (int k = 0; k < 2 + rz_na; k++) a[k] = v0[k] + vx[k] * (px0 - x0f) + vy[k] * (py - y0f);
   intptr_t *o = r->out + y * r->W;
   flo_t *dz = r->depth + y * r->W;
-  for (intptr_t x = x0; x < x1; x++) {
+  for (intptr_t x = xs; x < xe; x++) {
    if ((e[0] | e[1] | e[2]) >= 0 && a[0] >= -1 && a[0] <= 1 && a[0] < dz[x] && !(under && o[x] >= 0)) {
     if (r->flags & rz_depth) dz[x] = a[0];
     else {
