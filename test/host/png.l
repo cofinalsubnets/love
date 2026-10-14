@@ -1,4 +1,4 @@
-; test/host/png.l -- src/apps/png.l and src/love/lib/png.c's unfilter
+; test/host/png.l -- src/apps/png.l and src/love/picture/png.c's unfilter
 ; the nif and the walk on rows worked by hand: each filter, a bad filter byte, too few
 ; bytes. then, where python3 with PIL and magick are here, images of every colour type, grey
 ; at 1 to 16 bits, palettes of 1 to 8, colour keys, 16-bit and interlaced ones at a size

@@ -280,10 +280,12 @@ static int k_procs_n, k_pid_next = 2;               // pid 1 is the kernel's own
 // a call that must wait: the seat holds it and asks again, the process none the wiser
 #define K_RESTART -512
 
-// the seat's door: start pid's program with these words, each NUL-ended. -errno to refuse
+// the seat's door: start pid's program with these words, each NUL-ended -- love's, or with
+// code, a wasm module's own bytes. -errno to refuse
 __attribute__((weak)) long k_proc_start(long pid, char const *av, uintptr_t an,
-                                        char const *ev, uintptr_t en) {
-  return (void) pid, (void) av, (void) an, (void) ev, (void) en, -ENOSYS; }
+                                        char const *ev, uintptr_t en,
+                                        char const *code, uintptr_t cn) {
+  return (void) pid, (void) av, (void) an, (void) ev, (void) en, (void) code, (void) cn, -ENOSYS; }
 // ..and to end one where it stands, at a signal
 __attribute__((weak)) void k_proc_stop(long pid) { (void) pid; }
 
@@ -330,17 +332,46 @@ static void k_proc_end(struct k_proc *p, int status) {
     if (q->pid && q != p && q->ppid == p->pid) q->live ? (q->ppid = 0) : (q->pid = 0); }
   if (!p->ppid) p->pid = 0; }
 
-// start p's program: love, woken from the machine's image where there is one, on the words
-// h then t, each NUL-ended
-static long k_proc_go(struct k_proc *p, char const *h, uintptr_t hn, char const *t, uintptr_t tn,
+// path's bytes, read under p's cwd, when they are a wasm module -> them in kernel memory and
+// *n; NULL for anything else, or what does not open
+static char *k_proc_wasm(struct k_proc *p, char const *path, uintptr_t pn, uintptr_t *n) {
+  static unsigned char const magic[4] = { 0, 'a', 's', 'm' };
+  unsigned char h[4];
+  struct k_st st;
+  char *b = NULL;
+  k_fs_cwd_swap(p->cwd, &p->cwd_n);
+  int fd = k_fs_stat(path, pn, &st, true) || (st.mode & 040000) || st.size < 8 ? -1 : k_fs_open(path, pn, 'r');
+  if (fd >= 0 && k_fd_read(fd, h, 4) == 4 && !memcmp(h, magic, 4)
+      && (b = kmallocw((st.size + sizeof(uintptr_t) - 1) / sizeof(uintptr_t)))) {
+    memcpy(b, h, 4);
+    uintptr_t at = 4;
+    for (long r = 1; at < st.size && r > 0; at += r > 0 ? (uintptr_t) r : 0)
+      r = k_fd_read(fd, b + at, (long) (st.size - at));
+    if (at < st.size) kfree(b), b = NULL;
+    *n = at; }
+  if (fd >= 0) k_fd_close(fd);
+  k_fs_cwd_swap(p->cwd, &p->cwd_n);
+  return b; }
+
+// start p's program, the file f on argv av: a path to a wasm module runs as itself; anything
+// else -- a bare word above all, whatever PATH holds -- is love's, woken from the machine's
+// image where there is one, on f then the words after argv[0]
+static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t an,
                       char const *ev, uintptr_t en) {
+  uintptr_t cn = 0, fn = strlen(f);
+  char *code = memchr(f, '/', fn) ? k_proc_wasm(p, f, fn, &cn) : NULL;
+  if (code) {
+    long r = k_proc_start(p->pid, av, an, ev, en, code, cn);
+    kfree(code);
+    return r; }
   static char const wake[] = "love\0wake\0/proc/image";
   struct k_st st;
-  uintptr_t pn = k_fs_stat("/proc/image", 11, &st, true) ? 5 : sizeof wake, n = pn + hn + tn;
+  uintptr_t a0 = an ? strlen(av) + 1 : 0,
+            pn = k_fs_stat("/proc/image", 11, &st, true) ? 5 : sizeof wake, n = pn + fn + 1 + an - a0;
   char *b = kmallocw((n + sizeof(uintptr_t) - 1) / sizeof(uintptr_t));
   if (!b) return -ENOMEM;
-  memcpy(b, wake, pn), memcpy(b + pn, h, hn), memcpy(b + pn + hn, t, tn);
-  long r = k_proc_start(p->pid, b, n, ev, en);
+  memcpy(b, wake, pn), memcpy(b + pn, f, fn + 1), memcpy(b + pn + fn + 1, av + a0, an - a0);
+  long r = k_proc_start(p->pid, b, n, ev, en, NULL, 0);
   kfree(b);
   return r; }
 
@@ -362,7 +393,7 @@ long k_proc_new(char const *av, uintptr_t an, char const *ev, uintptr_t en,
     long kf = k_fd_dup(fds[i], 3);
     if (kf < 0) r = kf;
     else p->fd[i] = (int) kf; }
-  if (!r) r = k_proc_go(p, av, an, "", 0, ev, en);
+  if (!r) r = an ? k_proc_go(p, av, av, an, ev, en) : -EINVAL;
   if (r) {
     k_proc_end(p, 0);
     if (w[0] >= 0) k_fd_close(w[0]);
@@ -401,11 +432,11 @@ static long k_proc_acts(struct k_proc *q, int const *op, long n) {
   return 0; }
 
 // a child of p: the words at w (the file, then argv), the environment at ev, the actions at
-// op -> its pid. the file names the program; argv[0] is not passed on, love's words are
+// op -> its pid. the file names the program (k_proc_go)
 static long k_proc_spawn(long pid, char const *w, long wn, char const *ev, long en,
                          int const *op, long on) {
   if (!w || wn < 1 || w[wn - 1] || (en && (!ev || ev[en - 1]))) return -EINVAL;
-  long fn = (long) strlen(w) + 1, rest = fn < wn ? fn + (long) strlen(w + fn) + 1 : wn;
+  long fn = (long) strlen(w) + 1;
   struct k_proc *q = k_proc_slot(), *p = k_proc_of(pid);   // the slot may move the table
   if (!q) return -ENOMEM;
   *q = (struct k_proc) { .pid = k_pid_next, .ppid = p->pid, .live = 1, .exitw = -1,
@@ -417,7 +448,7 @@ static long k_proc_spawn(long pid, char const *w, long wn, char const *ev, long 
     if (kf < -1) r = kf;
     q->fd[i] = kf < 0 ? -1 : (int) kf; }
   if (!r) r = k_proc_acts(q, op, on / 12);
-  if (!r) r = k_proc_go(q, w, (uintptr_t) fn, w + rest, (uintptr_t) (wn - rest), ev, (uintptr_t) en);
+  if (!r) r = k_proc_go(q, w, w + fn, (uintptr_t) (wn - fn), ev, (uintptr_t) en);
   if (r) { q->ppid = 1, k_proc_end(q, 0), q->pid = 0; return r; }
   return k_pid_next++; }
 

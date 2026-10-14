@@ -328,7 +328,7 @@ static char const src_tasks[] =
 #include "tasks.h"
  ;
 #ifdef LvBakeSrc
-#include "lib/srctree.h"
+#include "archive/srctree.h"
 static char const src_distlist[] =
 #include "distlist.h"
  ;

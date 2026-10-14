@@ -32,7 +32,7 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_fetch_read 0x4021                // (buf, n) -> bytes copied, on from the last
 #define hc_fetch_close 0x4022
 #define hc_host 0x4030                      // +op: kmain's k_host, the seat's own files
-#define hc_proc 0x4040                      // (pid, argv, n, env, n): a process, its own instance
+#define hc_proc 0x4040                      // (pid, argv, n, env, n, code): a process, its own instance
 #define hc_proc_stop 0x4041                 // (pid): its worker ended where it stands
 #define hc_clock_gettime 228
 
@@ -164,8 +164,11 @@ void k_reset(void) { serial_drain(); for (;;) __love_sys(hc_reboot, 0, 0, 0, 0, 
 // worker reads the file at the reset the way it lifts one, then boots those bytes
 // a process is an instance of its own, in a worker of its own: the page starts it, and its
 // calls come back through the worker's mailbox to src/inle/sys.c's k_proc_call
-long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintptr_t en) {
-  return __love_sys(hc_proc, pid, (long) av, (long) an, (long) ev, (long) en, 0); }
+// a module's own bytes ride as a (code, length) pair, the call having one argument left
+long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintptr_t en,
+                  char const *code, uintptr_t cn) {
+  uintptr_t c[2] = { (uintptr_t) code, cn };
+  return __love_sys(hc_proc, pid, (long) av, (long) an, (long) ev, (long) en, code ? (long) c : 0); }
 void k_proc_stop(long pid) { __love_sys(hc_proc_stop, pid, 0, 0, 0, 0, 0); }
 
 long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {

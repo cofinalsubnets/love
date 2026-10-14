@@ -34,7 +34,7 @@ cp "$xlove" "$s/love" && cp "$cat" "$s/cat.l" && cp "$K" "$s/Image" && cp test/g
   && cp "$fw" "$s/fw/code.fd" && cp "$(dirname "$fw")/ovmf-vars-aarch64.fd" "$s/fw/vars.fd" || fail "cannot lay $s"
 for f in src/apps/sqfs.l src/apps/ext4.l src/apps/hearts/image.l src/apps/hearts/dev.l src/apps/hearts/app.l \
     src/apps/helm/unit.l src/apps/helm/sup.l src/apps/helm/moor.l src/apps/helm/helm.l \
-    src/inle/uefi/slot.c src/love/inflate.h src/love/inf.h src/inle/uefi/mkefi.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
+    src/inle/uefi/slot.c src/love/compress/inflate.h src/love/compress/prefix.h src/inle/uefi/mkefi.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
     src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/pe.l; do
   mkdir -p "$s/$(dirname $f)" && cp "$f" "$s/$f" || fail "cannot lay $f"
 done
