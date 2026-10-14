@@ -1121,12 +1121,17 @@ lvm(lvm_tap) {
  love_musttail return Continue(); }
 
 // apply to multiple arguments
+// the callee must be a cur of exactly n: the compiler's width is a guess about a
+// name, so a miss scares rather than entering a non-function past its prologue
+static bool apn_ok(word f, size_t n) {
+ return evenp(f) && cell(f)[0].ap == lvm_cur && cell(f)[1].x == putcharm(n); }
+
 lvm(lvm_apn) {
  size_t n = getcharm(Ip[1].x);
  union u *r = Ip + 2; // return address
- // this instruction is only emitted when the callee is known to be a function
- // so putting a value off the stack into Ip is safe. the +2 is cause we leave
- // the currying instruction in there... should be skipped in compiler instead FIXME
+ if (!apn_ok(Sp[n], n)) return Pack(g), love_raise(g, zero, zero, help_scare_k);
+ // the +2 is cause we leave the currying instruction in there... should be
+ // skipped in compiler instead FIXME
  Ip = cell(Sp[n]) + 2;
  Sp[n] = word(r); // store return address
  YieldCheck();
@@ -1136,6 +1141,7 @@ lvm(lvm_apn) {
 lvm(lvm_tapn) {
  size_t n = getcharm(Ip[1].x),
         r = getcharm(Ip[2].x);
+ if (!apn_ok(Sp[n], n)) return Pack(g), love_raise(g, zero, zero, help_scare_k);
  Ip = cell(Sp[n]) + 2;
  word *o = Sp;
  for (Sp += r + 1; n--; Sp[n] = o[n]);

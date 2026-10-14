@@ -626,10 +626,13 @@
       (: s (c 'stk) k (apr2l c as) (pin c 'stk s, k * em1 op)))) ; n-ary, r2l args
   ; falook: walk the scope chain for head's fixed arity, recorded by ale in each enclosing let's
   ; 'far map. > 0 = a multi-arg lambda sibling of that arity; 0 = a binding of that name that is
-  ; not one -- it shadows outer fars, so stop; -1 = not bound in this scope, keep walking.
+  ; not one -- it shadows outer fars, so stop; -1 = not bound in this scope, keep walking, unless
+  ; the name is this scope's own arg or stack local, which shadows the same way.
   (falook c h) (?- 0 c
    (: far (c 'far) a (tablet? far ? (peep far h -1) -1)
-    (? (0 < a) a (-1 = a) (falook (c 'par) h) 0)))
+    (? (0 < a) a
+       (-1 = a && !(elem h (c 'arg) || elem h (c 'stk))) (falook (c 'par) h)
+       0)))
   ; apxh: (apx n head . args) -> apply. n > 1 -> r2l eval of the leading n args and one n-ary
   ; apply, surplus args curried onto the answer l2r; n = 0 -> the plain 1-ary chain. the width
   ; comes from fold/napof (a book global) or falook (a letrec lambda sibling the args saturate).
