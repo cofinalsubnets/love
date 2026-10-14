@@ -1,13 +1,15 @@
-; test/host/porthole.l -- the mitty in a window of its own, headless: an Xvfb, `love mitty
+; test/host/mittywin.l -- the mitty in a window of its own, headless: an Xvfb, `love mitty
 ; --window` on it with a child that paints cells as its input arrives, the pixels read back
 ; through GetImage and the keys sent through XTEST. asserted in turn: the child's red cells on
-; the paper, a line typed reaching it (the green), C-a v splitting the window (the right half
+; the paper (it draws them when COLORTERM says truecolor), a line typed reaching it (the
+; green), a word chosen under shift taking the primary and pasted back with the middle button
+; (the blue), ctrl+shift+C taking the clipboard, C-a v splitting the window (the right half
 ; lit by the new pane), and C-a x twice shutting both panes, the mitty ending with status 0.
 ; no Xvfb -> a polite skip.
-; run: cat test/00-init.l test/host/porthole.l | out/love
+; run: cat test/00-init.l test/host/mittywin.l | out/love
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
-   _ (!(two? xv) ? (gate-skip "porthole: ok (no Xvfb, skipped)") 0)
+   _ (!(two? xv) ? (gate-skip "mittywin: ok (no Xvfb, skipped)") 0)
    (rdnum p) ((: (go n st) (see p @ c
                               (? (c = -1) ()
                                  (c = 13) (go n st)
@@ -18,8 +20,8 @@
               0 0)
    dn (rdnum >xv)
    _ (test (charm? dn))
-   kid "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; sleep 60"
-   ph (tether ["env" "HORN=none" "MITTY=" ("DISPLAY=:" + show dn) "out/love" "mitty" "--window" "sh" "-c" kid])
+   kid "[ \"$COLORTERM\" = truecolor ] && printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; read m; [ \"$m\" = a ] && printf '\\033[44m  \\033[m'; sleep 60"
+   ph (tether ["env" "HORN=none" "MITTY=" "COLORTERM=" ("DISPLAY=:" + show dn) "out/love" "mitty" "--window" "sh" "-c" kid])
    _ (rest 4000)
    XW (cite 'xwire)
    (w8 s v) (XW 'x-w8 s v) (w16 s v) (XW 'x-w16 s v) (w32 s v) (XW 'x-w32 s v)
@@ -53,6 +55,20 @@
    _ (test ([128 0 0] = until 4 4 [128 0 0] 40))                 ; the child's red cells, top left
    _ (tap 38, tap 36)                                            ; a, Return
    _ (test ([0 128 0] = until 4 20 [0 128 0] 40))                ; a row down: the green, the child read `a`
+   ; GetSelectionOwner: who holds a selection
+   (owner a) (: _ (w8 s 23, w8 s 0, w16 s 2, w32 s a, XW 'x-flush s) hdr (XW 'x-reply s) (XW 'u32 hdr 8))
+   ; under shift the pointer is the window's: a double click takes the echoed a as a word
+   ; and the primary with it, and the middle button pastes it, a line the child reads
+   _ (fake 2 50, fakeat 6 0 20 8, fake 4 1, fake 5 1, fake 4 1, fake 5 1, fake 3 50)
+   _ (rest 300)
+   _ (test (win = owner 1))
+   _ (fake 2 50, fake 4 2, fake 5 2, fake 3 50, rest 300, tap 36)
+   _ (test ([0 0 128] = until 4 36 [0 0 128] 40))                ; the blue: the child read the paste
+   ; ctrl+shift+C: the selection onto the clipboard
+   cb (XW 'x-intern s "CLIPBOARD")
+   _ (fake 2 37, fake 2 50, tap 54, fake 3 50, fake 3 37, rest 300)
+   _ (test (win = owner cb))
+   _ (fakeat 6 0 300 200)
    right0 (lit 400 0 240 64)
    _ (chord 38, tap 55)                                          ; C-a v: a pane beside
    (grew n) (lit 400 0 240 64 @ v (right0 < v || n < 1 ? v (rest 100, grew (n - 1))))
@@ -69,4 +85,4 @@
     still <xv 15,
     wfx <xv,
     test_fin (),
-    puts "porthole: ok\n"))
+    puts "mittywin: ok\n"))

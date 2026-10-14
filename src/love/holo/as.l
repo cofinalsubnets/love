@@ -202,7 +202,7 @@
             'cbw '(102 152) 'cwde '(152) 'cdqe '(72 152)      ; al -> ax, ax -> eax, eax -> rax
             'cwd '(102 153) 'cdq '(153) 'cqo '(72 153)        ; .. and the dx:ax splits
             'int3 '(204) 'ud2 '(15 11) 'pause '(243 144)
-            'cpuid '(15 162) 'rdtsc '(15 49)
+            'cpuid '(15 162) 'rdtsc '(15 49) 'rdtscp '(15 1 249)
             'cli '(250) 'sti '(251)                  ; the interrupt flag
             'pushf '(156) 'pushfq '(156) 'popf '(157) 'popfq '(157)   ; ... and the whole word, through the stack
             'clc '(248) 'stc '(249) 'cmc '(245)   ; ... the carry flag
@@ -280,6 +280,7 @@
                     (0 < v || #c < 2 ? v (peep as-cc (name ("j" + snip c 0 (#c - 1))) 0)))
    (as-sym o) (as-symw o 4)                                             ; `$sym+k` -> its fix
    (as-symw o k) (xa-symoff (show <>o) @ so (fix k (k = 2 ? 'abs16 'abs32) <so >so))   ; ..a 16-bit operand's two bytes
+   (as-syms o) (xa-symoff (show <>o) @ so (fix 4 'abs32s <so >so))      ; ..a dword the cpu sign-extends (64-bit mode)
    (as-gp? o) (<o = 'rg && as-regw o < 16)
    (as-xw d s w) (? (w = 8) 1 (as-gp? d && as-regw d = 8) 1 (as-gp? s && as-regw s = 8) 1 0)
    (as-sse-op md pf op wb rn rm)
@@ -305,14 +306,14 @@
            (as-s3a mn @ r (as-imt (as-sse-op3 md <r 58 <>r (as-regn d) s + [(byte <>(ops 2))]) 1 s))
           ; a symbol's address as the immediate
           (n = 2 && <s = 'ims)
-           (: fx (as-symw s (w = 2 ? 2 4)) frc (as-frc d)
+           (: fx (md = 64 && w = 8 ? (as-syms s) (as-symw s (w = 2 ? 2 4))) frc (as-frc d)
               (? (mn = 'mov && <d = 'rg && w <= 4) (catall [(as-osz md w) (as-rexm md frc 0 0 0 (as-hi (as-regn d))) [(184 | as-lo (as-regn d)) fx]])
                  (mn = 'mov) (as-emit md w frc '(199) 0 d + [fx] @ bs (<d = 'rip ? (as-riptail bs 4) bs))
                  (two? (as-alu mn)) (as-emit md w frc '(129) <>(as-alu mn) d + [fx] @ bs (<d = 'rip ? (as-riptail bs 4) bs))
                  ()))
           ; push $sym: the segment's width unless a suffix says (pushw in a 32-bit one, pushl in a 16-bit)
           (n = 1 && mn = 'push && <d = 'ims)
-           (: pw (? (w > 0) w (md = 16) 2 4) (as-osz md pw + [104 (as-symw d (pw = 2 ? 2 4))]))
+           (: pw (? (w > 0) w (md = 16) 2 4) (as-osz md pw + [104 (md = 64 ? (as-syms d) (as-symw d (pw = 2 ? 2 4)))]))
           (n = 1 && elem mn '(prefetchnta prefetcht0 prefetcht1 prefetcht2) && as-mem? d)   ; 0F 18 /0../3
            (as-emit md 0 0 '(15 24) (mn @ 'prefetchnta 0 'prefetcht0 1 'prefetcht1 2 3) d)
           ; the extends, exactly: w is the destination's, so movsbl sign-fills 32 and zeroes the rest

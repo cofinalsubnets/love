@@ -11,6 +11,7 @@
 // build decodes the same samples. the floor's inverse-db table is the spec's.
 #include "love.h"
 #include "bytes.h"
+#include "fft.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -253,7 +254,7 @@ static void vb_tables(struct va *a, struct vh *h, int k) {
  int n = h->bs[k], m = n / 2, q = m / 2;
  h->win[k] = va_get(a, 8 * (uint32_t) m);
  h->pre[k] = va_get(a, 16 * (uint32_t) q), h->post[k] = va_get(a, 16 * (uint32_t) q);
- h->tw[k] = va_get(a, 16 * (uint32_t) q), h->rev[k] = va_get(a, 4 * (uint32_t) q);
+ h->tw[k] = va_get(a, 8 * (uint32_t) q), h->rev[k] = va_get(a, 4 * (uint32_t) q);
  if (!a->b || a->bad) return;
  uint8_t *base = a->b;
  double *w = AT(double, h->win[k]), *pr = AT(double, h->pre[k]), *po = AT(double, h->post[k]), *tw = AT(double, h->tw[k]);
@@ -266,7 +267,7 @@ static void vb_tables(struct va *a, struct vh *h, int k) {
   double s, c;
   vb_sc(-(4 * i + 1), 8 * m, &s, &c), pr[2 * i] = c, pr[2 * i + 1] = s;
   vb_sc(-i, 2 * m, &s, &c), po[2 * i] = c, po[2 * i + 1] = s;
-  vb_sc(-i, q, &s, &c), tw[2 * i] = c, tw[2 * i + 1] = s; }
+  if (i < q / 2) vb_sc(-i, q, &s, &c), tw[i] = c, tw[q / 2 + i] = -s; }   // love_fft's cosines, then sines
  int bits = vb_ilog((uint32_t) q) - 1;
  for (int i = 0; i < q; i++) {
   uint32_t r = 0;
@@ -456,7 +457,7 @@ static void vb_resid(uint8_t *base, struct vh *h, struct vres *r, struct vbit *b
   for (int i = 0; i < n0; i++)
    for (int c = 0; c < nv; c++) v0[c][i] = one[0][i * nv + c]; }
 
-// the dct-iv of m points, x into c, through an m/4-point complex fft in z
+// the dct-iv of m points, x into c, through an m/4-point complex fft in z, laid bit-reversed
 static void vb_dct4(const uint8_t *base, const struct vh *h, int k, const double *x, double *c, double *z) {
  int m = h->bs[k] / 2, q = m / 2;
  const double *pr = AT(const double, h->pre[k]), *po = AT(const double, h->post[k]), *tw = AT(const double, h->tw[k]);
@@ -465,13 +466,7 @@ static void vb_dct4(const uint8_t *base, const struct vh *h, int k, const double
   double a = x[2 * i], b = x[m - 1 - 2 * i];
   uint32_t j = rv[i];
   z[2 * j] = a * pr[2 * i] - b * pr[2 * i + 1], z[2 * j + 1] = a * pr[2 * i + 1] + b * pr[2 * i]; }
- for (int len = 2; len <= q; len *= 2)
-  for (int s = 0; s < q; s += len)
-   for (int j = 0; j < len / 2; j++) {
-    double wr = tw[2 * (j * (q / len))], wi = tw[2 * (j * (q / len)) + 1];
-    double *u = z + 2 * (s + j), *v = z + 2 * (s + j + len / 2);
-    double tr = v[0] * wr - v[1] * wi, ti = v[0] * wi + v[1] * wr;
-    v[0] = u[0] - tr, v[1] = u[1] - ti, u[0] += tr, u[1] += ti; }
+ love_fft_bf(z, (uintptr_t) q, tw, tw + q / 2, 0);
  for (int i = 0; i < q; i++) {
   double ur = z[2 * i] * po[2 * i] - z[2 * i + 1] * po[2 * i + 1], ui = z[2 * i] * po[2 * i + 1] + z[2 * i + 1] * po[2 * i];
   c[2 * i] = ur, c[m - 1 - 2 * i] = -ui; } }

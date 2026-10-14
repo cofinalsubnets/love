@@ -30,7 +30,10 @@ static char const *const exc_name[32] = {
 // fr->vector == 6 and fr->rip at its ud2, so it maps straight back to
 // whichever guard fired. faults are not resumed -- returning from
 // #UD/#GP/#PF would just re-execute the instruction and fault again.
+// one from ring 3 is a process's, and ends it instead of the machine.
+void k_proc_fault(uint64_t vector);   // x64/proc.c: a process's fault ends the process
 void k_exception(struct k_frame *fr) {
+  if (fr->cs & 3) k_proc_fault(fr->vector);
   k_cli();                             // no interrupts while reporting
   static int nested;
   if (nested) k_halt();                // faulted while reporting -- stop
