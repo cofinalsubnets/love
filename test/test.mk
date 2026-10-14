@@ -140,10 +140,10 @@ test_stdinbuf: $(ho)/love
 # cat'ing also keeps the corpus's one-global-scope property.
 test_host: $(ho)/love
 	@echo TEST $m
-	@cat $t > out/.test_host.l
-	@{ $m out/.test_host.l </dev/null; echo $$? > out/.test_host.rc; } | tee out/.test_host.out; \
-	  s=$$(cat out/.test_host.rc); \
-	  [ $$s -eq 0 ] && grep -q "tests pass" out/.test_host.out
+	@cat $t > $(ho)/.test_host.l
+	@{ $m $(ho)/.test_host.l </dev/null; echo $$? > $(ho)/.test_host.rc; } | tee $(ho)/.test_host.out; \
+	  s=$$(cat $(ho)/.test_host.rc); \
+	  [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_host.out
 # test_hostegg -- the same corpus down the egg boot. a woken heap is not the egg's: it
 # arrives with a pinned prefix it did not copy and an intern map it did not build, so both
 # doors are worth running. wants $(ho)/love.raw, not the bake -- an egg lane has no use for
@@ -151,10 +151,10 @@ test_host: $(ho)/love
 # `(lit? (cite 'holo))` and holo lives in the glaze, so those two laws are the baked door's.
 test_hostegg: $(ho)/love.raw
 	@echo TEST $m "(egg)"
-	@cat $t > out/.test_hostegg.l
-	@{ env LOVE_NO_IMAGE=1 $(ho)/love.raw out/.test_hostegg.l </dev/null; echo $$? > out/.test_hostegg.rc; } | tee out/.test_hostegg.out; \
-	  s=$$(cat out/.test_hostegg.rc); \
-	  [ $$s -eq 0 ] && grep -q "tests pass" out/.test_hostegg.out
+	@cat $t > $(ho)/.test_hostegg.l
+	@{ env LOVE_NO_IMAGE=1 $(ho)/love.raw $(ho)/.test_hostegg.l </dev/null; echo $$? > $(ho)/.test_hostegg.rc; } | tee $(ho)/.test_hostegg.out; \
+	  s=$$(cat $(ho)/.test_hostegg.rc); \
+	  [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_hostegg.out
 # test_stdincorpus -- the only oracle for `reads` over STDIN at corpus scale, which is where
 # a reader's window arithmetic breaks. three doors because they are three readers: a file and
 # a redirect share the borrowed run (src/love/love.c's rbio_of), a pipe has none and drips. both
@@ -617,7 +617,7 @@ test_raw: host
 # tail-threaded lvm shape goes uncalled there. this is the full love at tco=0 -- build,
 # bake, pass the corpus -- in its own hsuf'd tree, so it neither clobbers nor is clobbered.
 # no vmret here: at tco=0 an lvm returns, which is the point.
-test_tco0:
+test_tco0: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory tco=0 host
 	@$(MAKE) --no-print-directory tco=0 test_host
 	@echo "test_tco0: the trampoline builds, bakes and passes the host corpus"
@@ -666,7 +666,7 @@ $(ko)/rv64/rvboot.o: test/gate/rvboot.c $(love_h) $(S)/inle/k.h $(S)/inle/dtb.h 
 $(ko)/rv64/rvboot.elf: $(rvboot_o) test/gate/rvboot.l $m
 	@echo 'RVLINK	'$@
 	@LOVE_NO_IMAGE= $m test/gate/rvboot.l $(rvboot_o) $@
-test_rvboot:
+test_rvboot: host
 	@$(MAKE) -s a=rv64 $(ko)/rv64/rv64/boot.o $(ko)/rv64/inle/rv64/dtb.o
 	@$(MAKE) -s $(ko)/rv64/rvboot.elf
 	@sh test/gate/boot.sh rvboot "$(MAKE)"
@@ -1122,7 +1122,8 @@ test_uugen: host
 # it in Rocq -- two derivations of one datum.
 test_mx: host
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat src/love/mx.l src/tools/mx2coq.l | $m > test/proof/rocq/mx.v
+	@cat src/love/mx.l src/tools/mx2coq.l | $m > out/.mx.v.tmp
+	@cmp -s out/.mx.v.tmp test/proof/rocq/mx.v || mv out/.mx.v.tmp test/proof/rocq/mx.v
 	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif

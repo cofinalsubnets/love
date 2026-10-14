@@ -69,7 +69,11 @@ cat $pre $fin > $w/pre.l
 # the full corpus (the baked half marked between files), and the harness alone
 job fb out/love $w/timed.l; job fe $egg out/love.raw $w/full.l
 job pb out/love $w/pre.l; job pe $egg out/love.raw $w/pre.l
+# a native hashes by its seat in the image, not its address: the two builds lay code apart
+dg='(putx (map dig [negate cup atom? fraction]))'
+job dgn $egg out/love.raw -e "$dg"; job dgs $egg out$gs/love.raw -e "$dg"
 wt
+[ "$(cat $w/dgn.out)" = "$(cat $w/dgs.out)" ] || fail "a native hashes apart in the normal and stress builds"
 for h in b e; do ok f$h "the full corpus on the normal build ($h)"; ok p$h "the harness alone ($h)"; done
 sed -n 's/^@@gcshard \([0-9][0-9]*\)$/\1/p' $w/fb.out > $w/clock
 [ $(wc -l < $w/clock) -eq $(wc -l < $w/rest) ] || fail "the marked run lost a mark"

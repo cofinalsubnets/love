@@ -1214,6 +1214,7 @@ int code_in(struct g *g, uintptr_t v);
 // the instruction table (src/love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. nif_cell draws the line against a nif's run.
 intptr_t op_index(intptr_t ap), op_resolve(intptr_t i), def_index(intptr_t x), fn_nif(intptr_t f);
+intptr_t image_seat(word v);   // an out-of-pool word's image index, -1 for none (snap.c)
 
 // what a cell hands back as a value, or (). the three refusals are all the machine's own
 // words, never love's: a terminator (the heap's bookkeeping), an instruction the op table
