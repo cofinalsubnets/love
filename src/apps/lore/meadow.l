@@ -249,7 +249,7 @@
    mcs (on-screen st mo) md (mo 1 < -0.03 || !mcs ? () (disc st mcs 2.8))
    col0 (two? md ? (: du (md 1) dv (md 2) ix (md 0) (dir v) (peep v ix 0.0)
                      sg (? (0.0 < wrap (at2 (s 0) (s 2) - at2 (mo 0) (mo 2))) 1.0 -1.0)
-                     lit (sg * du > cos (2.0 * pi * ph) * sqrt (max (1.0 - dv * dv) 0.0))
+                     lit (sg * du > cos (tau * ph) * sqrt (max (1.0 - dv * dv) 0.0))
                      sea (0.72 + 0.28 * vn ((du + 3.0) * 2.3) ((dv + 3.0) * 2.3) 77)
                      cl (sky-cloud wx (mo 0) (mo 1) (mo 2) (eye 0) (eye 2) sim)
                      k (sea * (0.5 + 0.9 * (1.0 - lt 'day)) * (1.0 - 0.85 * cl))

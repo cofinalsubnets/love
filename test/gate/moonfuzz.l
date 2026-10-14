@@ -101,7 +101,7 @@
                           (b 1 = a) ['ok 'clay]
                           ['diff 'clay]))))))))
 
-   files (filter dotc? (readdir "test/cc"))
+   files (sort (filter dotc? (readdir "test/cc")))   ; sorted: a file's seed stays put as the corpus grows
    ; per file: muts mutants, from a seed keyed by the file's own index, so a red
    ; names a (file, case) pair that reproduces on its own.
    muts 8

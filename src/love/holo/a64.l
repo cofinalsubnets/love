@@ -594,7 +594,8 @@
                 'icc_ctlr_el1 (sreg 3 0 12 12 4) 'icc_sre_el1 (sreg 3 0 12 12 5)
                 'icc_igrpen1_el1 (sreg 3 0 12 12 7) 'icc_sre_el2 (sreg 3 4 12 9 5)}
    ;; gas's generic spelling, s<op0>_<op1>_c<n>_c<m>_<op2>, names one the table does not; a name
-   ;; reads in any case (the kernel's CurrentEL)
+   ;; reads in any case (the kernel's CurrentEL). op0 0 and 1 lay the system-instruction space
+   ;; as llvm-mc does (`msr s0_3_c1_c0_1, x0` is wfit, the kernel's spelling of it)
    (a64-sgen s)
     (: (parts i j acc) (? (#s <= j) (rev ((snip s i j) . acc))
                           (s j = 95) (parts (j + 1) (j + 1) ((snip s i j) . acc))
@@ -605,7 +606,7 @@
        ps (1 < #s && s 0 = 115 ? (parts 1 1 ()) ())
        (#ps != 5 ? ()
           (: o0 (dec <ps) o1 (dec (ps 1)) cn (crx (ps 2)) cm (crx (ps 3)) o2 (dec (ps 4))
-             (2 <= o0 <= 3 && 0 <= o1 <= 7 && 0 <= cn <= 15 && 0 <= cm <= 15 && 0 <= o2 <= 7 ?
+             (0 <= o0 <= 3 && 0 <= o1 <= 7 && 0 <= cn <= 15 && 0 <= cm <= 15 && 0 <= o2 <= 7 ?
                 (sreg o0 o1 cn cm o2) ()))))
    (a64-sysreg nm)
     (: s (lower (show nm))

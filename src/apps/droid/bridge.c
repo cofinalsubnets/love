@@ -11,7 +11,10 @@
                      'K' key a=down, b=android keycode, c=the character it types or 0
                      'T' touch a=action (0 down 1 up 2 move), b c in frame pixels
    sound is a second socket: love's horn (HORN=sock:PATH) says the rate as a u32, then
-   s16 stereo frames, which a thread of their own plays through AAudio.
+   s16 stereo frames, which a thread of their own plays through AAudio. the mic is a
+   third (HORN_IN=sock:PATH): the rate word's top byte asks the channels, and an AAudio
+   input stream's s16 frames go back. assets/perms names the permissions to ask for at
+   start (RECORD_AUDIO for the mic), NUL-separated; the input stream waits on the grant.
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
    directory before each start, which is love's cwd and HOME. when love ends it is started
    again; the app ends as android ends it. */
@@ -66,17 +69,21 @@ void AAudioStreamBuilder_setSampleRate(void *, int); void AAudioStreamBuilder_se
 void AAudioStreamBuilder_setFormat(void *, int); void AAudioStreamBuilder_setPerformanceMode(void *, int);
 int AAudioStreamBuilder_openStream(void *, void **);
 int AAudioStream_requestStart(void *); int AAudioStream_write(void *, void const *, int, long); int AAudioStream_close(void *);
+void AAudioStreamBuilder_setDirection(void *, int); int AAudioStream_read(void *, void *, int, long);
+void *dlsym(void *, char const *); int usleep(unsigned); ssize_t send(int, void const *, size_t, int);
+struct pollfd { int fd; short events, revents; }; int poll(struct pollfd *, unsigned long, int);
 
-enum { LISTEN = 1, CONN, LOG, INPUT, HORN };
+enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR };
 enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOEXEC = 02000000 };
 
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
-  int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, vh, typing, shown;
+  int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, esock, vh, typing, shown;
+  int up, ears;                           /* in sight (onStart to onStop); hear threads alive */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
   long th; long mu[8];                    /* pthread_t, pthread_mutex_t (zero is unlocked) */
   uint32_t *fb; size_t fbsz; int gh;      /* a frame as love sent it, the window's buffer height */
-  char dir[512], data[512], sock[600], horn[600], line[2048]; int nline;
+  char dir[512], data[512], sock[600], horn[600], ear[600], line[2048]; int nline;
 } br;
 
 #define LOG(s) __android_log_write(4, "love", s)
@@ -273,6 +280,38 @@ static void *play(void *p) {
   return 0;
 }
 
+/* one ear: the rate and channels, then an AAudio input stream's frames until love hangs
+   up -- its socket readable, since love says nothing after the rate. a stream refused,
+   as before RECORD_AUDIO is granted, is asked again each half second; out of sight the
+   mic is let go, and taken again on the way back */
+typedef struct { br *b; int fd; } ear;
+static int hung(int fd) { struct pollfd q = {fd, 1, 0}; return poll(&q, 1, 0) != 0; }
+static void *hear(void *p) {
+  ear *h = p; br *b = h->b; int fd = h->fd; unsigned char r[4]; void *bd = 0, *st = 0; short buf[2048];
+  munmap(h, sizeof *h);
+  void (*preset)(void *, int) = (void (*)(void *, int)) dlsym(0, "AAudioStreamBuilder_setInputPreset");
+  int rate = 0, ch = 1;
+  if (!readall(fd, r, 4)) rate = r[0] | r[1] << 8 | r[2] << 16, ch = r[3] == 2 ? 2 : 1;
+  while (rate && !hung(fd)) {
+    if (!__atomic_load_n(&b->up, 2)) { usleep(100000); continue; }
+    if (!AAudio_createStreamBuilder(&bd)) {
+      AAudioStreamBuilder_setDirection(bd, 1);                                  /* input */
+      AAudioStreamBuilder_setSampleRate(bd, rate); AAudioStreamBuilder_setChannelCount(bd, ch);
+      AAudioStreamBuilder_setFormat(bd, 1); AAudioStreamBuilder_setPerformanceMode(bd, 12);
+      if (preset) preset(bd, 9);                                                /* unprocessed: no gain riding */
+      if (AAudioStreamBuilder_openStream(bd, &st) || AAudioStream_requestStart(st)) { if (st) AAudioStream_close(st); st = 0; }
+      AAudioStreamBuilder_delete(bd);
+    }
+    if (!st) { usleep(500000); continue; }
+    for (int n; __atomic_load_n(&b->up, 2) && (n = AAudioStream_read(st, buf, (int) (sizeof buf / 2) / ch, 100000000L)) >= 0; )
+      if (n ? send(fd, buf, (size_t) n * 2 * (size_t) ch, 0x4000) < 0 : hung(fd)) { rate = 0; break; }   /* MSG_NOSIGNAL */
+    AAudioStream_close(st); st = 0;
+  }
+  close(fd);
+  __atomic_fetch_sub(&b->ears, 1, 3);   /* the last touch of b: destroy waits on it */
+  return 0;
+}
+
 static void *loop(void *p) {
   br *b = p;
   void *const *vt = *(void *const **) b->a->vm;
@@ -282,6 +321,7 @@ static void *loop(void *p) {
   ALooper_addFd(b->looper, b->lsock, LISTEN, 1, 0, 0);
   ALooper_addFd(b->looper, b->logfd, LOG, 1, 0, 0);
   ALooper_addFd(b->looper, b->hsock, HORN, 1, 0, 0);
+  ALooper_addFd(b->looper, b->esock, EAR, 1, 0, 0);
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
@@ -313,6 +353,14 @@ static void *loop(void *p) {
       long t; int c = accept4(b->hsock, 0, 0, O_CLOEXEC);
       if (c >= 0 && !pthread_create(&t, 0, play, (void *) (long) c)) pthread_detach(t);
       else if (c >= 0) close(c);
+    } else if (id == EAR) {
+      long t; int c = accept4(b->esock, 0, 0, O_CLOEXEC);
+      if (c >= 0) {
+        ear *h = mmap(0, sizeof *h, 3, 0x22, -1, 0);
+        h->b = b; h->fd = c; __atomic_fetch_add(&b->ears, 1, 3);
+        if (!pthread_create(&t, 0, hear, h)) pthread_detach(t);
+        else munmap(h, sizeof *h), close(c), __atomic_fetch_sub(&b->ears, 1, 3);
+      }
     } else if (id == LOG) {
       if (logs(b)) ALooper_removeFd(b->looper, b->logfd);
     } else if (id == INPUT) input(b);
@@ -326,7 +374,7 @@ static void *loop(void *p) {
 }
 
 static void spawn(br *b) {
-  char *av[32], exe[600], *ev[5], home[600], tmp[600], face[640], horn[640];
+  char *av[32], exe[600], *ev[6], home[600], tmp[600], face[640], horn[640], ear[640];
   void *as = AAssetManager_open(b->a->assetManager, "argv", 3);
   char const *s = as ? AAsset_getBuffer(as) : 0; long n = as ? AAsset_getLength(as) : 0;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
@@ -335,7 +383,8 @@ static void spawn(br *b) {
   av[k] = 0;
   snprintf(home, sizeof home, "HOME=%s", b->data); snprintf(tmp, sizeof tmp, "TMPDIR=%s", b->data);
   snprintf(face, sizeof face, "LOVE_FACE=%s", b->sock); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
-  ev[0] = home; ev[1] = tmp; ev[2] = face; ev[3] = horn; ev[4] = 0;
+  snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear);
+  ev[0] = home; ev[1] = tmp; ev[2] = face; ev[3] = horn; ev[4] = ear; ev[5] = 0;
   int p[2]; pipe2(p, O_CLOEXEC);
   b->pid = fork();
   if (!b->pid) { dup2(p[1], 1); dup2(p[1], 2); chdir(b->data); execve(exe, av, ev); _exit(127); }
@@ -359,6 +408,37 @@ static void lay(br *b) {
 }
 
 static br *me(void *a) { return ((ANativeActivity *) a)->instance; }
+
+/* assets/perms, asked of the user where not granted yet: checkSelfPermission each, then
+   one requestPermissions with the rest, through JNIEnv's table */
+static void perms(ANativeActivity *a) {
+  void *as = AAssetManager_open(a->assetManager, "perms", 3);
+  if (!as) return;
+  char const *s = AAsset_getBuffer(as), *want[8]; long n = AAsset_getLength(as); int k = 0;
+  void *e = a->env; void *const *t = *(void *const **) e;
+  void *(*find)(void *, char const *) = t[6]; void (*clear)(void *) = t[17];
+  int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
+  void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
+  int (*calli)(void *, void *, void *, ...) = t[49]; void (*callv)(void *, void *, void *, ...) = t[61];
+  void *(*str)(void *, char const *) = t[167];
+  void *(*arr)(void *, int, void *, void *) = t[172]; void (*seta)(void *, void *, int, void *) = t[174];
+  if (!push(e, 16)) {
+    void *ac = a->clazz, *ck = mid(e, cls(e, ac), "checkSelfPermission", "(Ljava/lang/String;)I");
+    if (!ck) clear(e);                    /* a failed lookup leaves NoSuchMethodError pending */
+    for (long i = 0; s && ck && i < n && k < 8; i++) {
+      char const *p = s + i;
+      while (i < n && s[i]) i++;
+      if (*p && calli(e, ac, ck, str(e, p))) want[k++] = p;
+    }
+    void *sc = k ? find(e, "java/lang/String") : 0, *v = sc ? arr(e, k, sc, 0) : 0;
+    if (k && !sc) clear(e);
+    for (int i = 0; v && i < k; i++) seta(e, v, i, str(e, want[i]));
+    void *rq = v ? mid(e, cls(e, ac), "requestPermissions", "([Ljava/lang/String;I)V") : 0;
+    if (rq) callv(e, ac, rq, v, 1); else clear(e);
+    clear(e); pop(e, 0);
+  } else clear(e);
+  AAsset_close(as);
+}
 
 /* the whole screen: getWindow().getDecorView().setSystemUiVisibility(immersive sticky,
    the bars hidden, laid out under them), through JNIEnv's table -- the spec fixes the slots */
@@ -400,14 +480,17 @@ static void qin(void *a, void *q) {
 static void qout(void *a, void *q) {
   br *b = me(a); AInputQueue_detachLooper(q); b->queue = 0;
 }
+static void start(void *a) { __atomic_store_n(&me(a)->up, 1, 3); }
+static void stop(void *a) { __atomic_store_n(&me(a)->up, 0, 3); }
 static void destroy(void *a) {
   br *b = me(a);
   if (b->pid > 0) kill(b->pid, 15), waitpid(b->pid, 0, 0);
+  for (int i = 0; __atomic_load_n(&b->ears, 2) && i < 50; i++) usleep(20000);   /* love gone, its ears hang up */
   b->quit = 1; ALooper_wake(b->looper); pthread_join(b->th, 0);
   if (b->csock >= 0) close(b->csock);
-  close(b->lsock); close(b->hsock); close(b->logfd); unlink(b->sock); unlink(b->horn);
+  close(b->lsock); close(b->hsock); close(b->esock); close(b->logfd); unlink(b->sock); unlink(b->horn); unlink(b->ear);
   if (b->fb) munmap(b->fb, b->fbsz);
-  munmap(b, sizeof *b);
+  if (!__atomic_load_n(&b->ears, 2)) munmap(b, sizeof *b);   /* an ear still up keeps b */
 }
 
 void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
@@ -419,10 +502,12 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   snprintf(b->data, sizeof b->data, "%s", a->internalDataPath);
   snprintf(b->sock, sizeof b->sock, "%s/face", b->data);
   snprintf(b->horn, sizeof b->horn, "%s/horn", b->data);
+  snprintf(b->ear, sizeof b->ear, "%s/ear", b->data);
   b->a = a; b->csock = -1; a->instance = b;
   a->callbacks->onNativeWindowCreated = created; a->callbacks->onNativeWindowDestroyed = gone;
   a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
   a->callbacks->onDestroy = destroy; a->callbacks->onWindowFocusChanged = focus;
+  a->callbacks->onStart = start; a->callbacks->onStop = stop;
   immersive(a);
   struct sockaddr_un u = {1}; snprintf(u.path, sizeof u.path, "%s", b->sock);
   unlink(b->sock);
@@ -432,6 +517,11 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   unlink(b->horn);
   b->hsock = socket(1, 1 | O_CLOEXEC, 0);
   bind(b->hsock, &hu, sizeof hu); listen(b->hsock, 2);
+  struct sockaddr_un eu = {1}; snprintf(eu.path, sizeof eu.path, "%s", b->ear);
+  unlink(b->ear);
+  b->esock = socket(1, 1 | O_CLOEXEC, 0);
+  bind(b->esock, &eu, sizeof eu); listen(b->esock, 2);
+  perms(a);
   lay(b); spawn(b);
   pthread_create(&b->th, 0, loop, b);
 }

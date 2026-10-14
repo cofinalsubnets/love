@@ -28,7 +28,8 @@
        (go 0 ()))
    dr-eo (#dr-z - 22)
    ; the manifest: its chunks, and its pool's strings
-   dr-x (ap-axml (ap-manifest "pics.salt.t" "t"))
+   dr-x (ap-axml (ap-manifest "pics.salt.t" "t" ()))
+   dr-xp (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.RECORD_AUDIO"]))
    (dr-walk x)
     (: (go i acc) (? (#x <= i) [i (rev acc)] (go (i + rdle x (i + 4) 4) (rdle x i 2 . acc))) (go 8 ()))
    (dr-pool x)
@@ -61,7 +62,11 @@
  (: w (dr-walk dr-x) (<w = #dr-x && rdle dr-x 4 4 = #dr-x && (w 1) 0 = 1 && (w 1) 1 = 0x180))
  ; every string a string, the attribute names first in resource-id order
  (: p (dr-pool dr-x) (p 0 = "label" && elem "manifest" p && elem "pics.salt.t" p && elem "activity" p))
- (: p (dr-pool dr-x) !(any (x \ !(string? x)) p)))
+ (: p (dr-pool dr-x) !(any (x \ !(string? x)) p))
+ ; a permission asked is an element of its own, its name a string of the pool
+ (: w (dr-walk dr-xp) (<w = #dr-xp && #(w 1) = #((dr-walk dr-x) 1) + 2))
+ (: p (dr-pool dr-xp) (elem "uses-permission" p && elem "android.permission.RECORD_AUDIO" p))
+ !(elem "uses-permission" (dr-pool dr-x)))
 
 (test
  ; the block's magic and its two sizes

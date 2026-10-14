@@ -11,9 +11,9 @@
 ; a scene's time is local seconds 'sim and the summer offset 'dst; its rays are trays of
 ; unit directions [east up north]. the weather is a tablet, (sky-weather cover style):
 ; cover 0 to 3, style 'smooth or 'pixel; and what falls from it, 'fall 0 nothing, 1 rain,
-; 2 snow (nothing unless said), drawn into a scene by sky-fall!
+; 2 snow (nothing unless said), placed round the eye by sky-drops
 (module (sky sky-sun sky-body sky-light sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-near sky-tone
-         sky-irr sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-fall! bil cloud-n day-secs rgb)
+         sky-irr sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
 (borrow 'view)
 (borrow 'vec)
 (borrow 'starmap)
@@ -25,7 +25,7 @@
  ; the year dd days: the moon, a phase p round, is the sun's hour -24p and its day +365p
  (sky-body s lat dh dd) (: hr (day-secs s / 3600.0 + dh)
    doy (sky-doy s + dd)
-   dec (-0.4091 * cos (2.0 * pi * (doy + 10.0) / 365.2422))
+   dec (-0.4091 * cos (tau * (doy + 10.0) / 365.2422))
    ha ((hr - 12.0) * pi / 12.0)
    [(0.0 - cos dec * sin ha)
     (sin lat * sin dec + cos lat * cos dec * cos ha)
@@ -33,7 +33,7 @@
  (sky-doy s) (s / 86400.0 - 10957.0 - 365.2422 * floor ((s / 86400.0 - 10957.0) / 365.2422))
  ; the local sidereal time, as an angle: the sun's hour angle and its right ascension, off
  ; the same year as its declination -- so the stars keep their place against the sun
- (sky-lst s) (: lam (2.0 * pi * (sky-doy s - 81.31) / 365.2422) k (1.0 - cos 0.4091)
+ (sky-lst s) (: lam (tau * (sky-doy s - 81.31) / 365.2422) k (1.0 - cos 0.4091)
    ((day-secs s / 3600.0 - 12.0) * pi / 12.0 + lam - atan (k * sin lam * cos lam / (1.0 - k * sq (sin lam)))))
  ; --- the weather ---
  sky-covers ['clear 'partly 'mostly 'overcast]
@@ -52,7 +52,7 @@
  ; a loop: 'per on the weather is its length in sim seconds and 'tper in frames, and each of
  ; the sky's clocks then comes round a whole number of times in it -- the nearest number, so
  ; a slow one stands still. turns snaps a rate in radians, lap a drift over a wrapping map
- (turns wx k w) (peep wx k 0 @ p (p = 0 ? w (2.0 * pi * floor (w * p / (2.0 * pi) + 0.5) / p)))
+ (turns wx k w) (peep wx k 0 @ p (p = 0 ? w (tau * floor (w * p / tau + 0.5) / p)))
  (lap wx r k) (peep wx 'per 0 @ p (p = 0 ? r (floor (r * k * p / cloud-n + 0.5) * cloud-n / (k * p))))
  ; the clouds' thickness, a square that tiles: value noise on lattices that wrap
  (cloud-map _) (: n cloud-n i (iota (n * n)) u (i % n / (1.0 * n)) v (i // n / (1.0 * n))
@@ -240,40 +240,25 @@
        v (wx 'style = 'pixel ? ((0.6 < tw) * (lt 'day < 0.1) * (cl < 0.5) * (0.0 < Y) * 1.6)
             (ss 'b * (0.75 + 0.25 * tw) * nt * (1.0 - cl)))
        (map (k \ peep (c k) ix 0.0 @ o (pin (c k) ix (o + (ss 'tint) k * v))) ^3))))
- ; --- what falls: rain in streaks and snow in flakes, drawn into a scene's buffers -- 't
- ; the depth, 'r 'g 'b the colour -- through a camera (grove's: 'e 'f 'r 'u 'w 'h 'foc),
- ; at sec seconds of the scene's own clock. no state: a drop is where its number and the
- ; clock put it, on a lattice fixed to the ground and wrapped round the eye, so walking
- ; through it is walking through weather; nearer than the scene or not drawn ---
+ ; --- what falls: rain in streaks and snow in flakes round the eye at e, at sec seconds
+ ; of the scene's own clock, for a scene to draw: () for none, or {'x 'y 'z the foot of
+ ; each, 'len how long it is, 'wd how wide, 'a how strongly it shows, 'c its colour}. no
+ ; state: a drop is where its number and the clock put it, on a lattice fixed to the
+ ; ground and wrapped round the eye, so walking through it is walking through weather ---
  fall-r 6.0 fall-h 9.0 rain-n 1600 snow-n 1400
- (sky-fall! wx cam lt buf sec) (: f (sky-fall wx)
-   (f = 0 ? buf
-      (: e (cam 'e) fw (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
-         n (f = 1 ? rain-n snow-n) i (iota n) R fall-r H fall-h
+ (sky-drops wx lt e sec) (: f (sky-fall wx)
+   (f = 0 ? ()
+      (: n (f = 1 ? rain-n snow-n) i (iota n) R fall-r H fall-h
          (rnd k) (frac (sin (i * 12.9898 + k * 78.233) * 43758.5453))
          v (f = 1 ? 7.5 1.1) sway (f = 1 ? 0.0 0.25)
          (wrap w0 c) (c + 2.0 * R * (frac ((w0 - c) / (2.0 * R)) - 0.5))
-         X0 (wrap (2.0 * R * rnd 1 + sway * sin (sec * 0.7 + 6.3 * rnd 4)) (e 0))
-         Z0 (wrap (2.0 * R * rnd 2 + sway * cos (sec * 0.5 + 6.3 * rnd 5)) (e 2))
-         Y0 (H * (1.0 - frac (rnd 3 + sec * v / H)))
-         ; ..a drop is a streak three points long, a flake a point and its neighbour
-         (one dy) (: Y (Y0 + dy) qx (X0 - e 0) qy (Y - e 1) qz (Z0 - e 2)
-                     zc (qx * fw 0 + qy * fw 1 + qz * fw 2) zs (max zc 0.1)
-                     cx (floor (w / 2.0 + foc * (qx * rt 0 + qy * rt 1 + qz * rt 2) / zs))
-                     cy (floor (h / 2.0 - foc * (qx * uv 0 + qy * uv 1 + qz * uv 2) / zs))
-                     dist (sqrt (qx * qx + qy * qy + qz * qz))
-                     ok ((0.1 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h))
-                     idx (over -1 ok (cy * w + cx))
-                     i2 (over -1 (dist < peep (buf 't) idx 1e9) idx)
-                     a ((f = 1 ? 0.38 0.85) * sat (1.4 - dist / R))
-                     tc (f = 1 ? (c* 0.95 (c+ (lt 'amb) [0.08 0.09 0.11]))
-                                 (sky-irr lt 1.5 (0.4 * lt 'sunk)))
-                     (old k) (peep (buf k) i2 0.0)
-                     (pins buf 'r (pin (buf 'r) i2 (old 'r + a * (tc 0 - old 'r)))
-                               'g (pin (buf 'g) i2 (old 'g + a * (tc 1 - old 'g)))
-                               'b (pin (buf 'b) i2 (old 'b + a * (tc 2 - old 'b)))))
-         _ (each (f = 1 ? [0.0 0.07 0.14] [0.0 0.012]) one)
-         buf)))
+         X (wrap (2.0 * R * rnd 1 + sway * sin (sec * 0.7 + 6.3 * rnd 4)) (e 0))
+         Z (wrap (2.0 * R * rnd 2 + sway * cos (sec * 0.5 + 6.3 * rnd 5)) (e 2))
+         Y (H * (1.0 - frac (rnd 3 + sec * v / H)))
+         dist (sqrt (sq (X - e 0) + sq (Y - e 1) + sq (Z - e 2)))
+         {'x X 'y Y 'z Z 'len (f = 1 ? 0.14 0.012) 'wd (f = 1 ? 0.004 0.012)
+          'a ((f = 1 ? 0.38 0.85) * sat (1.4 - dist / R))
+          'c (f = 1 ? (c* 0.95 (c+ (lt 'amb) [0.08 0.09 0.11])) (sky-irr lt 1.5 (0.4 * lt 'sunk)))})))
  ; ..and the eye: its gain against the dark under lt, and a soft shoulder that keeps a hue
  (sky-tone lt col) (: k (1.5 * lt 'expo)
    [(1.0 - exp (0.0 - k * col 0)) (1.0 - exp (0.0 - k * col 1)) (1.0 - exp (0.0 - k * col 2))]))

@@ -1,6 +1,6 @@
 ; test/host/tuner.l -- the tuner (src/apps/tuner.l): the ear on known tones, the scale's
-; eighth tones and their octaves, a frame, the reading's smoothing, range and hold, and
-; the room's floor. the clock is the law's own, so the hold needs no waiting
+; eighth tones and their octaves, a frame, the reading's smoothing, range and hold, the
+; room's floor and a window's paper. the clock is the law's own, so the hold needs no waiting
 ;   cat test/00-init.l test/host/tuner.l | out/love
 (borrow 'tuner)
 (: (cents-off f g) (gem? f ? (abs (1200.0 * log (f / g) / log 2.0)) 1e9)
@@ -91,6 +91,16 @@
    _ (tuner-frame s 80 20 @ r (test (20 = #r) !(has? (tuner-plain (r 17)) "C1")))
    _ (pin s 'sp 0)
    _ (test !(has? (line s 27) "C1"))
+   ; a window with no screen: one turn's events -- s, a tap on the right third and two on
+   ; the left, a close -- then that turn's frame on its paper, the top bar in reverse video
+   tw (pin (fresh ()) 'sp 1)
+   _ (tuner-hear tw (tuner-sine 220.0))
+   twd {'w 640 'h 480 'paper (cask (640 * 480 * 4))
+        'evq [['text "s"] ['press 1 600 100] ['press 1 10 100] ['press 1 10 100] ['close]]}
+   _ (test (tuner-glass tw twd = 0) (tw 'sp = 0) (tw 'ref = 439.0) (tw 'over = 1))
+   tpp (string (twd 'paper))
+   (tpx x y) (4 * (y * 640 + x) @ i [(tpp (i + 2)) (tpp (i + 1)) (tpp i)])
+   _ (test (tpx 4 4 != [0 0 0]) (24 < net (map (y \ any (x \ tpx x (16 * y + 8) != [0 0 0]) ^640) ^30)))
    ; the room: a hush reads no pitch and sets the floor, a tone under three floors is the
    ; room too (the floor creeping up a percent), and one well over it is heard
    q (fresh ())

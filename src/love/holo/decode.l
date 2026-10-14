@@ -157,11 +157,11 @@
           (c && elem c '(217 219 221 223))
            (dc-at s k >> 6 = 3 ?
                (c = 219 && dc-at s k = 227 ? (fin (k + 1) [(op1 'fninit 0 ())])
-                  (c = 219 && dc-at s k = 226) (fin (k + 1) [(op1 'fnclex 0 ())]) (bad 0))
+                  (c = 219 && dc-at s k = 226) (fin (k + 1) [(op1 'fnclex 0 ())]) (fin k [(dc-byte c)]))
               (: r (dc-modrm s k p 4 4)
                  mn (c @ 217 (r 3 @ 5 'fldcw 7 'fnstcw ()) 219 (r 3 @ 0 'fildl ())
                          221 (r 3 @ 4 'frstor 6 'fnsave 7 'fnstsw ()) (r 3 @ 0 'filds 5 'fildll ()))
-                 (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (bad 0))))
+                 (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (fin k [(dc-byte c)]))))
           ;; the string ops, Intel's names (the at&T shower respells movsd's)
           164 (nil 'movsb)  165 (nil (w @ 2 'movsw 8 'movsq 'movsd))
           166 (nil 'cmpsb)  167 (nil (w @ 2 'cmpsw 8 'cmpsq 'cmpsd))
@@ -222,6 +222,7 @@
        (xxs mn) (dc-modrm s k2 p 16 16 @ r (finx (r 0) [(op1 mn 0 [(r 2) (r 1)])]))
        (c @ 5 (nil 'syscall)  7 (nil (w @ 8 'sysretq 'sysretl))  11 (nil 'ud2)  119 (nil 'emms)  8 (nil 'invd)  9 (nil 'wbinvd)  51 (nil 'rdpmc)
           48 (nil 'wrmsr)  49 (nil 'rdtsc)  50 (nil 'rdmsr)  162 (nil 'cpuid)
+          2 (ge 'lar w w)  3 (ge 'lsl w w)                                          ; a selector's rights, its limit
           (c && c = 0) (dc-modrm s k2 p 2 2 @ r (r 3 @ 3 (fin (r 0) [(op1 'ltr 2 [(r 2)])])
                                                        0 (fin (r 0) [(op1 'sldt 0 [(r 2)])]) 1 (fin (r 0) [(op1 'str 0 [(r 2)])])
                                                        2 (fin (r 0) [(op1 'lldt 0 [(r 2)])])
@@ -241,6 +242,8 @@
                   202 (fin (k2 + 1) [(op1 'clac 0 ())])
                   200 (fin (k2 + 1) [(op1 'monitor 0 ())])
                   201 (fin (k2 + 1) [(op1 'mwait 0 ())])
+                  250 (fin (k2 + 1) [(op1 'monitorx 0 ())])
+                  251 (fin (k2 + 1) [(op1 'mwaitx 0 ())])
                   203 (fin (k2 + 1) [(op1 'stac 0 ())])
                   238 (fin (k2 + 1) [(op1 'rdpkru 0 ())])
                   239 (fin (k2 + 1) [(op1 'wrpkru 0 ())])
@@ -254,6 +257,7 @@
           120 (eg 'vmread 8 8)  121 (ge 'vmwrite 8 8)
           199 (dc-modrm s k2 p 8 8 @ r
                  (r 3 @- (bad 0)
+                  1 (dc-at s k2 >> 6 = 3 ? (bad 0) (fin (r 0) [(op1 (w = 8 ? 'cmpxchg16b 'cmpxchg8b) 0 [(r 2)])]))
                   (3 || 4 || 5) (dc-at s k2 >> 6 = 3 || px != 'none ? (bad 0)
                                    (fin (r 0) [(op1 (dc-x64 w 0 (r 3 @ 3 'xrstors 4 'xsavec 'xsaves)) 0 [(r 2)])]))
                   6 (finx (r 0) [(op1 (px @ 'none 'vmptrld '66 'vmclear 'f3 'vmxon 'vmptrld) 0 [(r 2)])])))
