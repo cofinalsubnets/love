@@ -40,6 +40,7 @@ uint64_t k_asmops_probe(uint16_t port, uint8_t v) {
   k_sidt(dt);
   k_lgdt(dt);
   k_wr_cr0(k_rd_cr0());
+  k_wr_cr3(k_rd_cr3());
   k_wr_cr4(k_rd_cr4());
   return k_rd_cr2() + k_inb(port) + k_inl(port) + k_rdmsr(0xc0000080u) + b + c + d
        + k_rd_cr0() + k_rd_cr3() + k_vmread(0x4402) + (uint64_t) k_vmlaunch(&grax) + grax; }
@@ -66,6 +67,7 @@ void const *const k_asmops_keep[] = {
   (void const*) k_rd_cr3,
   (void const*) k_rd_cr4,
   (void const*) k_wr_cr0,
+  (void const*) k_wr_cr3,
   (void const*) k_wr_cr4,
   (void const*) k_rdmsr,
   (void const*) k_wrmsr,

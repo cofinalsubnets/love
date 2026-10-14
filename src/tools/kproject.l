@@ -9,17 +9,19 @@
 ; bytes -- which is how the `love kernel` verb projects the running binary
 ; over a boot.o it laid itself (src/apps/source.l).
 
-(: (kparams arch)                       ; target, kernel base, entry symbol
-    (arch @ "x64"  ['x64   0x200000   "kmain"]
-            "a64"  ['a64 0x40200000 "a64boot"]
+(: (kparams arch)                       ; target, kernel base, entry symbol, image window
+    ; x64's image runs in the upper half, at its physical address past the window, so the
+    ; whole lower half is a process's; boot stays physical, where the loader enters it
+    (arch @ "x64"  ['x64   0x200000   "kmain" 0xffffff8000000000]
+            "a64"  ['a64 0x40200000 "a64boot" 0]
             ; entered at the lowest load, not the entry symbol -- kproject lays boot first
-            "rv64" ['rv64  0x80200000 "rvboot"]
+            "rv64" ['rv64  0x80200000 "rvboot" 0]
             (scare 'kproject-arch arch))
    (kread p) (uread p @ r (two? r ? [p <>r] (scare 'kproject-open p)))
 
    (kproject pie bootb out arch)
    (: kp (kparams arch)
-      tgt (kp 0) kbase (kp 1) entnm (kp 2)
+      tgt (kp 0) kbase (kp 1) entnm (kp 2) xw (kp 3)
       mach (peep elf-machines tgt 0)
 
       ; --- the pie, parsed: program headers, the named sections, the symtab --
@@ -27,7 +29,7 @@
       phnum (rle16 pie 56) shnum (rle16 pie 60) shstrx (rle16 pie 62)
       (pho i) (phoff + i * 56)
       ; each load: (vaddr fileoff filesz memsz flags)
-      loads ((: (go i acc)
+      pls ((: (go i acc)
                  (? (phnum <= i) (rev acc)
                     (go (i + 1)
                         (? (rle32 pie (pho i) = 1)
@@ -35,6 +37,12 @@
                              (rle64 pie (pho i + 32)) (rle64 pie (pho i + 40))
                              (rle32 pie (pho i + 4))] . acc)
                            acc)))) 0 ())
+      ; ..and past the last, the first writable one's bytes again as the pie has them, base 0
+      ; and unpatched: what a process laid from this image starts its data from (x64/proc.c)
+      dl ((: (go l) (? (atom? l) (scare 'kproject-data) (0 < <l 4 & 2) <l (go >l))) pls)
+      pend ((: (go l m) (? (atom? l) m (go >l (: e (<l 0 + <l 3) (m < e ? e m))))) pls 0)
+      dcopy [(ld-align 4096 pend) (dl 1) (dl 2) (dl 2) 4]
+      loads (pls + [dcopy])
       (sho i) (shoff + i * 64)
       shstro (rle64 pie (sho shstrx + 24))
       (sname i) (ld-cstr pie (shstro + rle32 pie (sho i)))
@@ -68,7 +76,7 @@
       o1 (ldlayn 'rodata (ldlay1 'rodata t1 objs) objs)
       d1 (ldlayn 'data (ldlay1 'data o1 objs) objs)
       bootend (ldlayn 'bss (ldlay1 'bss d1 objs) objs)
-      bias (ld-align 4096 bootend)
+      bias (xw + ld-align 4096 bootend)
       top ((: (go l m) (? (atom? l) m
                           (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
            loads 0)
@@ -88,18 +96,21 @@
       ; riscv keeps its own reloc numbers, so the machine says which namespace ldpatch reads
       cx [glo b0 b0 b0 b0 () (mach = 243) () (backends tgt) (ld-extents objs)]
 
-      ; --- the patch list: every love_rela site slides by bias, and k_image_top
-      ; takes the image's far edge -- ascending, for the one-pass surgery below
-      ; (the table already lays ascending; the walk reverses it back)
+      ; --- the patch list: every love_rela site slides by bias, k_image_top takes the
+      ; image's far edge, physical, and k_pie_base and k_pie_data where the pie's base and
+      ; the data's copy sit -- ascending, for the one-pass surgery below (the table already
+      ; lays ascending; the walk reverses it back)
       (ins s l) (? (atom? l) [s]
                    (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
-      sites (ins [(pie-sym "k_image_top") top]
+      sites (ins [(pie-sym "k_image_top") (top - xw)]
+            (ins [(pie-sym "k_pie_base") bias]
+            (ins [(pie-sym "k_pie_data") (bias + dcopy 0)]
                  (rev ((: (go k acc)
                            (? (relz <= k) acc
                               (: v (rle64 pie (relo + k))
                                  (go (k + 8) ([v (bias + rle64 pie (va2off v))] . acc)))))
-                      0 ())))
+                      0 ())))))
       ; one load's bytes with its patches spliced in
       (spliced go0 va fsz ss)
        ((: (go c l acc)
@@ -128,7 +139,7 @@
                 loads (fo d1) ()))
       phs (: bs [1 7 (fo b0) b0 b0 (d1 - b0) (bootend - b0) 4096]
              ps (map (g \ [1 (g 4) (g 5) (bias + g 0)
-                            (bias + g 0) (g 2) (g 3) 4096])
+                            (bias + g 0 - xw) (g 2) (g 3) 4096])
                      lds)
              (0 < nsz ? ([4 4 hdrsz kbase kbase nsz nsz 4] . bs . ps)
                         (bs . ps)))

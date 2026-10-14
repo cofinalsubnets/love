@@ -53,6 +53,9 @@ static inline uint64_t k_rd_cr4(void) {
 static inline void k_wr_cr0(uint64_t v) {
   asm volatile ("mov %0, %%cr0" :: "r"(v) : "memory"); }
 
+static inline void k_wr_cr3(uint64_t v) {
+  asm volatile ("mov %0, %%cr3" :: "r"(v) : "memory"); }
+
 static inline void k_wr_cr4(uint64_t v) {
   asm volatile ("mov %0, %%cr4" :: "r"(v) : "memory"); }
 

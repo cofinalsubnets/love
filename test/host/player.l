@@ -1,6 +1,6 @@
-; test/host/player.l -- src/apps/player: the bus (eq.c's biquads and spectrum, bus.l's
-; coefficients) and the core, driven in process through its messages on HORN=none, which keeps
-; real time, so every track here is a fraction of a second. where sox is, one band of the eq
+; test/host/player.l -- src/apps/player: the bus (eq.c's biquads and spectrum, fft.c's
+; transform, bus.l's coefficients) and the core, driven in process through its messages on
+; HORN=none, which keeps real time, so every track here is a fraction of a second. where sox is, one band of the eq
 ; is held to sox's equalizer, the same rbj filter, within a sample's rounding.
 ;   cat test/00-init.l test/host/player.l | out/love
 (borrow 'posix)
@@ -72,6 +72,25 @@
            (6 <= #(uniq (snip (bus-spec nz 2 44100 32) 0 8)))           ; bars narrower than a bin
            (#(bus-scope sine 2 8) = 8)
            (bus-scope sine 2 1 = [[-128 127]]))
+   ; the transform: an impulse is flat, a cosine on bin 3 of 64 is n/2 there and at -3 and
+   ; nothing else, energy is kept n-fold, a complex input goes too, the inverse undoes it,
+   ; and a length short of a power of two is the next one, zeros past the end
+   fft (cite 'dsp 'fft) ifft (cite 'dsp 'ifft)
+   (pw z) (re z * re z + im z * im z)
+   (near a b) (amax ((a - b) * (a - b)) < 1e-18)
+   imp (fft ((iota 8 = 0) * 1.0))
+   cs (fft (cos (iota 64 * (2.0 * 3.14159265358979 * 3 / 64))))
+   xr (iota 16 * iota 16 * 1.0 - 40.0)
+   xc (fft (fft xr))                                                   ; a complex tray in
+   _ (test (near (re imp) (iota 8 * 0.0 + 1.0)) (near (im imp) (iota 8 * 0.0))
+           (abs (peep (re cs) 3 0.0 - 32.0) < 1e-9) (abs (peep (re cs) 61 0.0 - 32.0) < 1e-9)
+           (amax ((pw cs) * (1 - (iota 64 = 3) - (iota 64 = 61))) < 1e-18)
+           (abs (net (pw (fft xr)) - 16.0 * net (xr * xr)) < 1e-6)
+           (near (re (ifft (fft xr))) xr) (near (im (ifft (fft xr))) (xr * 0.0))
+           (near (re (ifft (ifft xc))) xr)
+           (#(fft (iota 6 * 1.0)) = 8)
+           (near (re (fft (iota 6 * 1.0))) (re (fft (iota 8 * (iota 8 < 6) * 1.0))))
+           (fft [1.0 2.0] = 'badarg) (fft 3.0 = 'badarg))
 
    ; --- one band against sox's equalizer --------------------------------------
    mono (pl-pcm [(pl-noise 22050 3)])

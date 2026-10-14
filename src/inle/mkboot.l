@@ -5,10 +5,11 @@
 ;   (lay-boot dst "a64")   the translation tables, MAIR/TCR/TTBR, the MMU switch, the hop, khop
 ;   (lay-boot dst "rv64")  the one sv39 root, satp, sstatus.FS, khop
 ;
-; the link is flat on every arch (vaddr = paddr at the kernel base), so a label's running, linked
-; and page-table address are one number and `la` answers it. `lia` (an absolute) stays only where
-; wanted for its own sake: the first fetch after the MMU comes on, where a pc-relative branch would
-; ride a broken map instead of failing on it, and the stack it lands on.
+; boot's link is flat on every arch (vaddr = paddr at the kernel base), so a label's running, linked
+; and page-table address are one number and `la` answers it; x64's image lies above it, in the
+; upper half (kproject.l). `lia` (an absolute) stays only where wanted for its own sake: the first
+; fetch after the MMU comes on, where a pc-relative branch would ride a broken map instead of
+; failing on it, the stack it lands on, and x64's reach up to the image.
 ; runs after src/love/holo/{elf,obj}.l in a (borrow 'holo) cat with the target's backend joined;
 ; the Makefile drives it. registers are holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi;
 ; a64: rN = xN.
@@ -99,14 +100,16 @@
         (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 8))
         (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 16))
         (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 24))]
-     ;; PML4: [0] identity, [256] the hhdm at 0xffff8000_00000000 -- one PDPT
-     ;; described twice, and NX on the second description is the whole reason the
-     ;; hhdm exists. one bit at the top of the walk covers every page under it, and
-     ;; the hhdm is how the kernel reaches ram (kboot.hhdm), so heap and every page
-     ;; it hands out stop being executable without a second table. the identity
-     ;; window keeps X: the kernel image and the framebuffer are read through it.
+     ;; PML4: [0] identity, [256] the hhdm at 0xffff8000_00000000, [511] the image
+     ;; window at 0xffffff80_00000000 -- one PDPT described three times. NX on the
+     ;; hhdm is the whole reason it exists: one bit at the top of the walk covers
+     ;; every page under it, and the hhdm is how the kernel reaches ram (kboot.hhdm),
+     ;; so heap and every page it hands out stop being executable without a second
+     ;; table. the image window keeps X: the kernel runs there (kproject.l), and so
+     ;; does code the heap holds (code_window). identity is this stub's alone, and
+     ;; leaves the lower half to a process.
      + [(i32 (i-edi-sym 'pml4 0)) (i32 (i-eax-sym 'pdpt_id 3))
-        (i32 i-st-edi0) (i32 (i-st-edi (256 * 8)))
+        (i32 i-st-edi0) (i32 (i-st-edi (256 * 8))) (i32 (i-st-edi (511 * 8)))
         (i32 (i-stimm-edi (256 * 8 + 4) 0x80000000))]
      ;; the long-mode ladder: GDT, CR4.PAE, CR3, EFER.LME, CR0.PG|PE, far jump
      + [(i32 (i-lgdt 'gdtreg 0))
@@ -130,10 +133,14 @@
 
    ;; past the hop: a stack, SSE on before ANY C runs (pvh_to_kboot is compiled
    ;; and free to vectorize -- the same dance as the top of kmain, which stays
-   ;; for a door that hands over with C already reachable), then C.
+   ;; for a door that hands over with C already reachable), then C. the stack is
+   ;; read through the image window, and C is reached there by absolute calls:
+   ;; the image is a half of the address space away from this text.
    x-text
     '((label khop)
        (lia sp kstack_top)
+       (li r0 0xffffff8000000000)
+       (add sp sp r0)
        (ldcr r0 0)
        (and r0 r0 -5)                                ; ~(1 << 2): CR0.EM = 0
        (or r0 r0 2)                                  ; CR0.MP = 1
@@ -144,8 +151,10 @@
        ;; hvm_start_info (a low physical address) -> arg0. the zx4 is `mov
        ;; %ebx, %edi`: the 32-bit half is all the loader set.
        (mov r6 r3) (zx4 r6)
-       (call pvh_to_kboot)
-       (call kmain)
+       (lia r0 pvh_to_kboot)
+       (callr r0)
+       (lia r0 kmain)
+       (callr r0)
        (label x_park)
        (cli) (hlt) (jmp x_park))
 

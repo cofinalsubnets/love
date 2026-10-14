@@ -227,8 +227,11 @@ static void rz_draw(struct rz *r, struct tray *vt, intptr_t const ix[3], struct 
   out[0] += p[i].x < -p[i].w, out[1] += p[i].x > p[i].w, out[2] += p[i].y < -p[i].w;
   out[3] += p[i].y > p[i].w, out[4] += p[i].z < -p[i].w, out[5] += p[i].z > p[i].w; }
  for (int k = 0; k < 6; k++) if (out[k] == 3) return;
- int n = 3;
- for (int k = 0; k < 5 && n >= 3; k++) {
+ // a triangle inside every plane passes the cuts unchanged, so it skips them
+ int n = 3, in = 1;
+ for (int k = 0; k < 5 && in; k++)
+  for (int i = 0; i < 3; i++) in &= rz_side(p + i, k) >= 0;
+ for (int k = 0; k < 5 && n >= 3 && !in; k++) {
   int m = 0;
   for (int i = 0; i < n; i++) {
    struct rz_v const *a = p + i, *b = p + (i + 1) % n;
