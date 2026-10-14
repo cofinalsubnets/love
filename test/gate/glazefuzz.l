@@ -18,6 +18,15 @@
 (: (gzr n) (n = 0 ? 0 (1 + gzr (n - 1))) (puts (show (gzr 400000) + "\n")))
 (: (gzl l) (two? l ? (1 + gzl (cup l)) 0) (puts (show (gzl ^400000) + "\n")))
 (: (gzf a b) 0 (gzh y) (: gzf y (gzf 1 2)) (puts (show [(gzh 9) (gzh 'zz) (gzh (+ 1))] + "\n")))
+; and the wrong answers: a closed form over a bound that is not a whole N >= 0, a deopt rerunning a
+; read-then-write, a param shadowing a group fn, a folded twin arg
+(: (gzs n) (: (go i s) (i < n ? (go (i + 1) (s + i)) s) (go 0 0)) (puts (show [(gzs 10) (gzs 3.5) (gzs -2) (gzs (2 ~ 1))] + "\n")))
+(: (gzj n) (foldl (+) 0 (jot n)) (puts (show [(gzj 10) (gzj -3) (gzj 4.5) (gzj "ab") (gzj [1 2])] + "\n")))
+(: (gzk n) (foldl (+) 0.5 (map (x \ x * x) (jot n))) (puts (show [(gzk 10) (gzk 2.5)] + "\n")))
+(: (gzq n) (foldl (+) 0 (map (x \ x * x) (jot n))) (puts (show [(gzq 100) (gzq -3) (gzq 0) (gzq 2.5) (gzq "ab")] + "\n")))
+(: T {0 0} (gzm n t) (n = 0 ? 1 (n * gzm (n - 1) (pin t 0 (peep t 0 0 + 1)))) r (gzm 30 T) (puts (show [r (T 0)] + "\n")))
+(: (gzp a b) (a * 10 + b) (gzq x) (: (gzw gzp) (gzp 1 2) (gzw x)) (puts (show (gzq 9) + "\n")))
+(: (gzt x) (x 1 2) (puts (show (gzt (0 ~ 1)) + "\n")))
 
 (: (gfz0 i) (i + 1)                                ; globals the call-out lane can resolve: two arithmetic,
    (gfz1 i) (i * 2)                                ; two handing back a value the integer lane cannot hold
