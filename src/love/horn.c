@@ -49,7 +49,7 @@ intptr_t k_horn_write(unsigned char const *src, uintptr_t n);
 uintptr_t k_horn_lag(void);
 void k_horn_close(void);
 
-enum { horn_sink, horn_dev, horn_seat, horn_sock };
+enum { horn_sink, horn_dev, horn_seat, horn_sock, horn_seat_in };
 // the port: the bio, then the device's words, all charms. wpos and t0 are the sink's
 // clock (frames landed or handed out, and the ms the drain is reckoned from); dir is 0 out
 // and 1 in, dchans and dwid the device's own channel count and bytes a sample; the others
@@ -561,6 +561,7 @@ intptr_t love_horn_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   memset(dst, 0, k);
   return (intptr_t) k; }
  if (kind == horn_sock) return sock_take(fd, dst, n, fb);
+ if (kind == horn_seat_in) return k_horn_read(dst, n);
  if (kind != horn_dev) return -1;
  uintptr_t dchans = (uintptr_t) getcharm(h->dchans), dwid = (uintptr_t) getcharm(h->dwid),
            dfb = dwid * dchans;
@@ -578,6 +579,12 @@ intptr_t love_horn_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   if (chans == 2) dst[4 * i + 2] = (unsigned char) r, dst[4 * i + 3] = (unsigned char) (r >> 8); }
  return (intptr_t) (frames * fb); }
 
+// a seat that cannot listen refuses, and one that can answers these itself
+__attribute__((weak)) int k_horn_in_open(int rate, int chans) { (void) rate, (void) chans; return -1; }
+__attribute__((weak)) intptr_t k_horn_read(unsigned char *dst, uintptr_t n) { (void) dst, (void) n; return -1; }
+__attribute__((weak)) uintptr_t k_horn_in_lag(void) { return 0; }
+__attribute__((weak)) void k_horn_in_close(void) { }
+
 // the finalizer, inside GC: shut the device. the fd lane's fd is io_close's too, but
 // that one only runs for the fd port; this port's close is its own.
 static void horn_fin(struct g *g, void *p) {
@@ -587,22 +594,23 @@ static void horn_fin(struct g *g, void *p) {
  if (kind == horn_dev && fd >= 0) dev_shut((int) fd);
  else if (kind == horn_sock && fd >= 0) sock_shut((int) fd);
  else if (kind == horn_seat) k_horn_close();
+ else if (kind == horn_seat_in) k_horn_in_close();
  h->b.f.fd = putcharm(-1);
  h->kind = putcharm(horn_sink); }
 
 // `close` on a horn (src/love/posix.c): the same shutting, outside GC
 void love_horn_shut(struct io *io) { horn_fin(NULL, io); }
 
-// the seat is one device, and a port opened on it takes it from every port before: an
-// older one's close, or its finalizer whenever a collection finds it dead, shuts nothing
-static void seat_take(struct g *g) {
+// the seat is one device each way, and a port opened on it takes it from every port before:
+// an older one's close, or its finalizer whenever a collection finds it dead, shuts nothing
+static void seat_take(struct g *g, int kind) {
  for (struct fz *z = g->fz; z; z = z->next)
   if (z->fn == horn_fin) {
    struct horn *o = (struct horn*) z->p;
-   if (getcharm(o->kind) == horn_seat) o->kind = putcharm(horn_sink); } }
+   if (getcharm(o->kind) == kind) o->kind = putcharm(horn_sink); } }
 
 // (horn rate chans) and (horn-in rate chans) -> the port at sp[2], over the two args.
-// a seat's own card plays and does not yet listen, and a doorless build hears only
+// a seat listens where it answers k_horn_in_*, and a doorless build hears only
 // HORN_IN=none's silence: it has no card to be quiet about.
 love_noinline static struct g *horn_mk(struct g *g, int dir) {
  word rw = g->sp[0], cw = g->sp[1];
@@ -611,8 +619,10 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
   return g->sp[1] = badarg(g), g->sp += 1, g;
  int kind = horn_sink, fd = -1, dchans = dir ? (int) chans : 2, dwid = 2;
  if (horn_at_seat) {
-  if (dir || k_horn_open((int) rate) < 0) return g->sp[1] = love_err(g, ENODEV), g->sp += 1, g;
-  seat_take(g), kind = horn_seat; }
+  kind = dir ? horn_seat_in : horn_seat;
+  if ((dir ? k_horn_in_open((int) rate, (int) chans) : k_horn_open((int) rate)) < 0)
+   return g->sp[1] = love_err(g, ENODEV), g->sp += 1, g;
+  seat_take(g, kind); }
 #if !love_horn_seat
  else {
   char const *dev = getenv(dir ? "HORN_IN" : "HORN");
@@ -632,6 +642,7 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
  uintptr_t const n = Width(struct horn);
  if (!ok(g = have(g, n + Width(struct tag) + Width(struct fz) + 1))) {
   if (kind == horn_dev) dev_shut(fd); else if (kind == horn_sock) sock_shut(fd); else if (kind == horn_seat) k_horn_close();
+  else if (kind == horn_seat_in) k_horn_in_close();
   return g; }
  union u *k = bump(g, n + Width(struct tag));
  struct horn *h = (struct horn*) k;
@@ -681,6 +692,7 @@ static lvm(lvm_horn_lag) {
   case horn_dev: lag = dev_lag((int) getcharm(h->b.f.fd), dir,
                               (uintptr_t) getcharm(h->dwid) * (uintptr_t) getcharm(h->dchans)); break;
   case horn_sock: lag = sock_lag((int) getcharm(h->b.f.fd), dir, dir ? fb : 4); break;
+  case horn_seat_in: lag = k_horn_in_lag(); break;
   default: lag = k_horn_lag(); }
  if (dir) lag += h->b.rbuf && !charmp(h->b.rbuf) ? (uintptr_t) (getcharm(h->b.rlen) - getcharm(h->b.rpos)) / fb : 0;
  else lag += io_wpending(g, (struct io*) h) / fb;

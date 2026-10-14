@@ -146,12 +146,13 @@
            (uread so @ r (? (two? r) <>r (udie 1 "apk: no bridge laid"))))))
 
    (apk-usage _) (puts """
-    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-P PERM].. MAIN.l [FILE..]
+    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-b LINE] [-P PERM].. MAIN.l [FILE..]
       an android app (arm64) that runs MAIN.l: a window, touch and keys through the face
       (src/apps/droid/droid.l). LOVE is the a64 love it ships, baked; on an a64 machine
-      this one. each PERM is a permission the app asks for at its start, RECORD_AUDIO
-      for the mic (android.permission. unless named in full). the key signing it lives
-      in ~/.love/etc/apk.pem
+      this one. -b starts LOVE on LINE's words instead, MAIN.l then optional: an inle
+      (make seat=droid a=a64 kdroid) boots LINE. each PERM is a permission the app asks for
+      at its start, RECORD_AUDIO for the mic (android.permission. unless named in full).
+      the key signing it lives in ~/.love/etc/apk.pem
     """)
    (ap-base p) (p @ (_ + "/" + s) (ap-base s) p)
    (ap-stem p) (ap-base p @ b (b @ (s + ".l") s b))
@@ -159,6 +160,7 @@
    (apk-opts as t)
     (as @ ("-o" . v . r) (apk-opts r (pin t 'o v)) ("-p" . v . r) (apk-opts r (pin t 'p v))
           ("-n" . v . r) (apk-opts r (pin t 'n v)) ("-L" . v . r) (apk-opts r (pin t 'L v))
+          ("-b" . v . r) (apk-opts r (pin t 'b v))
           ("-P" . v . r) (apk-opts r (pin t 'P (t 'P + [(has? v "." ? v ("android.permission." + v))])))
           (("-h" || "--help") . _) (apk-usage 0, quit 0)
           (("-" + _) . _) (apk-usage 0, quit 2)
@@ -166,10 +168,10 @@
    (apk-main as)
     (: t (apk-opts as {})
        fs (t 'files)
-       _ (two? fs ? 0 (apk-usage 0, quit 2))
-       nm (ap-stem <fs)
+       _ (two? fs || string? (t 'b) ? 0 (apk-usage 0, quit 2))
+       nm (? (two? fs) (ap-stem <fs) (ap-or (t 'n) "inle"))
        out (ap-or (t 'o) (nm + ".apk"))
-       pkg (ap-or (t 'p) ("org.love." + nm))
+       pkg (ap-or (t 'p) ("pics.salt." + nm))
        lov (? (string? (t 'L)) (t 'L) (love-arch = 'a64) (selfpath 0)
               (udie 1 "apk: name an a64 love with -L (`love seed a64 DIR`, baked once on an a64 machine)"))
        lb (uread lov @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + lov))))
@@ -182,7 +184,8 @@
        ps (t 'P)
        z (ap-zip ([["AndroidManifest.xml" (ap-axml (ap-manifest pkg (ap-or (t 'n) nm) ps))]
                 ["lib/arm64-v8a/libbridge.so" so] ["lib/arm64-v8a/liblove.so" lb]
-                ["assets/argv" (ap-base <fs + string [0])]]
+                ["assets/argv" (? (string? (t 'b)) (foldl (a \ w \ a + w + string [0]) "" (filter (w \ 0 < #w) (split " " (t 'b))))
+                                  (ap-base <fs + string [0]))]]
                 + (two? ps ? [["assets/perms" (cats (map (p \ p + string [0]) ps))]] ()) + ins))
        (? (uwrite out (v2-sign z <ks (ks 1))) (puts ("apk: " + out + " (" + pkg + ") -- adb install -r " + out + "\n"), 0)
           (udie 1 ("apk: cannot write " + out))))
