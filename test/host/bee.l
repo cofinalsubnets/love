@@ -1291,5 +1291,23 @@
       (<nd = 1) (cr-in (nd 1) "next  love, nested in ~/.love/bin"))
    0)
 
+; --- the lane map (src/apps/lanemap.l): AGENTS.md's table is laid from it, so the two agree, and
+; lanes.sh asks bee for its chains and alone set
+(: lm-doc ((cite 'lanemap 'lanes-doc) 0)
+   (lm-block ls on acc)
+    (? (atom? ls) ()
+       (starts? <ls "<!-- /lanes") (rev acc)
+       on (lm-block >ls 1 (<ls . acc))
+       (lm-block >ls (starts? <ls "<!-- lanes:") acc))
+   lm-agents (lm-block (lines (cr-get (cr-home + "/AGENTS.md"))) 0 ())
+   lm-map (hark [cr-love cr-app "--lanes-map"])
+   _ (test
+      (two? lm-doc)
+      (lm-agents = lm-doc)
+      (<lm-map = 0)
+      (cr-in >lm-map "chain test_extract,test_big,test_encver\n")
+      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcstress"))
+   0)
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

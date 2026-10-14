@@ -14,6 +14,7 @@
 ;   love bee --state busy|idle [--pid P]     a claude code session's hooks say its state
 ;   love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..) | --hosts   work on another host
 ;   love bee --nest DIR                      a worker nest from the hub (SB_HUB), at its head
+;   love bee --lanes-doc | --lanes-map       the lanes a change owes: AGENTS.md's table, lanes.sh's chains
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -3060,6 +3061,9 @@
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["--on" "--hosts"]) ((cite 'hosts 'hosts-on) as)   ; so do --on's
             (two? as && <as = "--nest") (nest-cmd as)
+            ; the lanes a change owes (src/apps/lanemap.l): AGENTS.md's table, lanes.sh's chains
+            (two? as && elem <as ["--lanes-doc" "--lanes-map"])
+             (: _ (puts (unlines ((cite 'lanemap (<as = "--lanes-doc" ? 'lanes-doc 'lanes-map)) 0))) 0)
             ; ahead of --hud, which the hooks add so that a bee older than --state only prints its hud
             (two? as && <as = "--state") (: _ (state-cmd as) 0)
             (elem "--hud" as) (: _ (puts (unlines (hud-lines 0))) 0)   ; once, as text
@@ -3097,6 +3101,7 @@
        love bee --state busy|idle [--pid P]          a claude code session's hooks say its state
        love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..)   a command on a host that can
        love bee --hosts                              the hosts this box knows
+       love bee --lanes-doc | --lanes-map            the lanes a change owes: AGENTS.md's table, lanes.sh's chains
        love bee --nest DIR                           a worker nest made from the hub (SB_HUB, or (hub ..)) at its head
        love bee --node                               a fresh box checked in order: what it has, and the next step
        love bee --door [KEY ..]                      the door's hello here; KEY: the authorized_keys line that holds a key to it
