@@ -315,13 +315,8 @@
  ; scale's, view's bands painted over it by the console's painter a cell 8 by 16, and 'over's, the help,
  ; over those; answers "", there being nothing for the terminal
  (mesh-win st f bands) (: win (st 'win) s (mesh-scale st) k (st 'kp) w (k * st 'w) h (k * st 'h)
-   pw (s * w) ph (s * h)
-   wh (window-size win) W <wh H (wh 1) P (window-paper win) cw (4 * min pw W)
-   ; ..the whole at once at its own size; scaled, a row at a time, each its s rows
-   _ (? (s = 1 && pw = W && ph <= H) (frame-bytes f 1 1 @ b (pour P 0 b 0 #b))
-        (each ^(min h ((H + s - 1) // s))
-              (y \ frame-bytes (peep f (iota w + y * w) 0) 1 s @ b
-                   (each ^(min s (H - y * s)) (j \ pour P ((y * s + j) * W * 4) b (j * pw * 4) cw)))))
+   wh (window-size win) W <wh H (wh 1) P (window-paper win)
+   _ (frame-paint f w s P W)
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    ov (peep st 'over {}) _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
    (window-show win 0 H, ""))
