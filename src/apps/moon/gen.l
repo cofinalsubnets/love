@@ -9754,7 +9754,8 @@
        (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) '(109 111)) 1 (go (i + 1)))) 0)
        (cen x) (? !(two? x) 0
                   (x @ ('addr ('var nm)) (pin tak nm 1, 0)
-                       ('decl ps) (foldl (_ \ p \ (pin tys <p <>p, cen >>p)) 0 ps)
+                       ; a register variable keeps its pin, as kprop keeps it
+                       ('decl ps) (foldl (_ \ p \ (pin tys <p <>p, (two? >>>p ? (pin tak <p 1) 0), cen >>p)) 0 ps)
                        ('asm . _) (: _ (foldl (_ \ o \ (mem? <o ? (<>o @ ('var v) (pin tak v 1) 0) 0)) 0 (x 2 + x 3)) (cen <x, cen >x))
                        (cen <x, cen >x)))
        _ (cen (f 3))
