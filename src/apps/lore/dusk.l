@@ -87,7 +87,7 @@
    xc (iota w + 0.5) us ((xc - st 'cx) / foc)
    rs (view-rays st) vx (rs 0) vz (rs 1)
    ab (st 'th + atan us)
-   cell ((floor (ab / (2.0 * pi) * mesa-n) % mesa-n + mesa-n) % mesa-n)
+   cell ((floor (ab / tau * mesa-n) % mesa-n + mesa-n) % mesa-n)
    tw ((gz - pz) / max vz 0.000001)
    hx (px + tw * vx)
    ; ..and where the columns' edges meet it, so the columns tile the face exactly

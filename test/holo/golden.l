@@ -88,6 +88,13 @@
       ("sys.xcr"     "0f01d00f01d1"          ((xgetbv) (xsetbv)))
       ("sys.cache"   "0f090f08"              ((wbinvd) (invd)))
       ("sys.mwait"   "0f01c80f01c9"          ((monitor) (mwait)))
+      ("sys.mwaitx"  "0f01f90f01fa0f01fb"    ((rdtscp) (monitorx) (mwaitx)))
+      ("sys.rdrand"  "480fc7f00fc7f8"        ((rdig () (15 199) 6 8 r0) (rdig () (15 199) 7 4 r0)))   ; rdrand rax ; rdseed eax
+      ("sys.alurm"   "480306481346081b0b4c3b4010"
+                     ((alurm add 8 r0 r5 0) (alurm adc 8 r0 r5 8) (alurm sbb 4 r1 r3 0) (alurm cmp 8 r7 r0 16)))   ; add (%rsi),%rax ; adc 8(%rsi),%rax ; sbb (%rbx),%ecx ; cmp 16(%rax),%r8
+      ("sys.rrop"    "0f02c1440f03c0"        ((rrop (15 2) 4 r0 r1) (rrop (15 3) 4 r7 r0)))   ; lar %ecx,%eax ; lsl %eax,%r8d
+      ("sys.prefetch" "0f0d080f184b08"       ((mdig (15 13) 1 4 r0 0) (mdig (15 24) 1 4 r3 8)))   ; prefetchw (%rax) ; prefetcht0 8(%rbx)
+      ("sys.cx16"    "480fc70f0fc74b08"      ((mdig (15 199) 1 8 r6 0) (mdig (15 199) 1 4 r3 8)))   ; cmpxchg16b (%rdi) ; cmpxchg8b 8(%rbx)
       ("sys.rdig"    "0f00c8660f00c8f3480faed00f00d1"  ((rdig () (15 0) 1 4 r0) (rdig () (15 0) 1 2 r0) (rdig (243) (15 174) 2 8 r0) (rdig () (15 0) 2 4 r1)))   ; str eax ; str ax ; wrfsbase rax ; lldt cx
       ("mem.ind"     "ff10ff6308"            ((mdig (255) 2 4 r0 0) (mdig (255) 4 4 r3 8)))   ; call [rax] ; jmp [rbx+8]
       ("mem.pushpop" "ff30ff73088f00"        ((mdig (255) 6 4 r0 0) (mdig (255) 6 4 r3 8) (mdig (143) 0 4 r0 0)))   ; push [rax] ; push [rbx+8] ; pop [rax]
@@ -508,6 +515,12 @@
               "ldtr x0, [x1, #255]" "ldtrb w0, [x1]" "ldtrsw x0, [x1]" "mrs x0, sp_el0" "mrs x1, CurrentEL"
               "msr tpidrro_el0, x2" "mrs x3, id_aa64mmfr0_el1" "mrs x4, s3_0_c15_c0_4" "msr daif, x0"
               "ic ialluis" "tlbi vale1is, x0" "dc cvap, x1"]))
+   ;; the generic spelling below op0 2: the system-instruction space, as llvm-mc lays it
+   _ (chk-eq "gas.a64.sgen"
+        ["201003d5" "211023d5" "020008d5" "a3342ad5" "e5ff07d5" "1f2003d5"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["msr s0_3_c1_c0_1, x0" "mrs x1, s0_3_c1_c0_1" "msr s1_0_c0_c0_0, x2" "mrs x3, s1_2_c3_c4_5"
+              "msr s0_7_c15_c15_7, x5" "msr s0_3_c2_c0_0, xzr"]))
    ;; the exclusive pair and acquire/release, the atomics' and the spinlocks' loads and stores
    _ (chk-eq "gas.a64.ex"
         ["207c5fc8" "207c5f88" "207c5f08" "20fc5f48" "207c02c8" "207c0288" "20fc0208" "20fcdfc8" "20fc9f88"]
@@ -1582,6 +1595,8 @@
       ("i3.alum" "015108" ((alum add 4 r1 8 r2)))              ; add %edx,8(%ecx)
       ("i3.alum.i" "66830903" ((alum or 2 r1 0 3)))            ; orw $3,(%ecx)
       ("i3.alum.b" "802903" ((alum sub 1 r1 0 3)))             ; subb $3,(%ecx)
+      ("i3.alurm" "0306134608661b0b" ((alurm add 4 r0 r5 0) (alurm adc 4 r0 r5 8) (alurm sbb 2 r1 r3 0)))   ; add (%esi),%eax ; adc 8(%esi),%eax ; sbb (%ebx),%cx
+      ("i3.rrop" "0f02c1" ((rrop (15 2) 4 r0 r1)))             ; lar %ecx,%eax
       ("i3.carry" "11c8" ((carry adc 4 r0 r1)))                ; adc %ecx,%eax
       ("i3.carry.i" "83da00" ((carry sbb 4 r2 0)))             ; sbb $0,%edx
       ("i3.unm" "ff01" ((unm inc 4 r1 0)))                     ; incl (%ecx)

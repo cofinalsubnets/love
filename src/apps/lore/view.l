@@ -13,7 +13,7 @@
  pi 3.141592653589793
  (clamp v lo hi) (v < lo ? lo (hi < v ? hi v))
  (flo v) (int (v + 1000.0) - 1000)
- (wrap a) (a < -pi ? (wrap (a + 2.0 * pi)) (pi < a ? (wrap (a - 2.0 * pi)) a))
+ (wrap a) (a < -pi ? (wrap (a + tau)) (pi < a ? (wrap (a - tau)) a))
  (min2 a b) (a < b ? a b)
  (max2 a b) (a < b ? b a)
  (over c m v) (c + m * (v - c))                          ; v where the mask holds, c elsewhere
