@@ -1085,8 +1085,7 @@ the `.ARM.attributes` and `__OPTIMIZE__` artifacts above; 9 refuse where the cla
 
 **measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,
 `mooncc -t a64 -c`): of 474 units, 117 compiled, 149 crashed and 183 refused. With the rows
-below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by name but for two
-(gen's `cs-unsaved`). What landed on the inline-asm and assembler side, each held by a law:
+below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by name. What landed on the inline-asm and assembler side, each held by a law:
 
 - **the frame record**: fp and lr save as one AAPCS64 record, `stp x29, x30, [sp, #-32]!`
   and its `ldp`, so `[fp]` is the caller's fp and `[fp+8]` the return address, which the
@@ -1336,12 +1335,21 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   register with no number, a wrong word in silence. Of 400 random lines over these, 385 lay
   llvm-mc's words and refusals; the other 15 are casp's `[xn, #0]`, which the Arm ARM spells
   and llvm-mc refuses, laid as `[xn]`. Golden gas.a64.xp.
+- **the generic system-register spelling below op0 2** (`s0_3_c1_c0_1`, barrier.h's `wfit`):
+  op0 0 and 1 lay the system-instruction space, `msr` as wfit, sys or a hint, `mrs` as sysl,
+  word for word as llvm-mc lays them. holo had refused all but op0 2 and 3 (`badsysreg`), which
+  stopped `__delay`. Golden gas.a64.sgen.
 - **an a64 operand that takes an immediate or a register** (`"Kr"`, `"Lr"`, `"Ir"`, `"Jr"`,
   the ll/sc cmpxchg's `[old] "Kr"`): a constant rides the word only where its letter encodes
   it -- K L a logical immediate at 32 and 64 bits, I an add's, J a negated one, M N a single
   mov, Z zero -- and a register otherwise, as gcc and clang choose. mooncc had laid every
   constant in the word, so `cmpxchg(p, 0, v)` refused (`a64-bitmask-imm 0`, seven tinyconfig
   units); a constant of 2^62 or more had always taken the register. Law 284-asm-kr.c.
+- **a loop no path reaches goes** (behind a `return`, or a guard that folds false, the kernel's
+  `if (!scs_is_enabled()) return;`): its own back edge had kept its label, so its calls wrote a
+  callee-saved register the prologue never saved (`cs-unsaved r19` on a64, `r15` on rv64; x64
+  laid the dead loop and kept quiet). A label now lives only if code reached from the entry
+  names it, so a block reached by a later jump stays. Three tinyconfig units; law 293-deadloop.c.
 
 Still open on this side (g-21's probes):
 

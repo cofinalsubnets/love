@@ -6393,12 +6393,19 @@
    (deadlab fs) (deadlabk {} fs)
    (deadlabk ks fs) (deadlab1 ks fs @ r (#r = #fs ? r (deadlabk ks r)))
    (deadlab1 ks fs)
-    (: refs (foldl (t \ k \ pin t k 1) {} (keys ks))
-       (scan l) (!(two? l) ? 0
-                   (<l @ f
-                      (two? f && <f != 'label ? (pinnoms refs >f),
-                       scan >l)))
-       _ (scan fs)
+    (: ; the names the reachable forms make: a label reads live once a live form names it, so a
+       ; dead loop's own back edge keeps nothing. grown from ks to a fixpoint
+       (live R) (: t (foldl (t \ k \ pin t k 1) {} (keys ks))
+                   (walk l dead) (two? l ?
+                                    (<l @ f
+                                       (? (two? f && <f = 'label) (walk >l (dead && !(R <>f)))
+                                          dead (walk >l 1)
+                                          (two? f ? (pinnoms t >f),
+                                           walk >l (xit? f || two? f && elem <f '(jmp jmpt))))))
+                   _ (walk fs 0)
+                   t)
+       (reach R) (live R @ R2 (#(keys R2) = #(keys R) ? R (reach R2)))
+       refs (reach {})
        (sweep l dead)
         (two? l ?
            (: f <l

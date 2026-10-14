@@ -2,13 +2,18 @@
 ; this process and laid red, and a second wire of the test's that reads its pixels back through
 ; GetImage, sends keys and the pointer through XTEST and resizes it. asserted: the paper shown,
 ; a key down and up by its set-1 code and the text it types, a move, a press and a release in
-; the window's pixels, a size and the fresh paper it brings; then `love synth -w`, a key's
-; note lit while it is held, and `love lore corridor --window`, turning while a key is held.
-; no Xvfb -> a polite skip.
+; the window's pixels, a size and the fresh paper it brings; the clipboard and the primary
+; owned and asked for back over X, the clipboard lost to another, and another's pasted
+; INCR in pieces; then `love synth -w`, a key's note lit while it is held, and `love lore
+; corridor --window`, turning while a key is held.
+; a screenless window keeps its selections itself. no Xvfb -> a polite skip.
 ; run: cat test/00-init.l test/host/window.l | out/love
 (borrow 'window)
 (borrow 'synth)   ; synth-trows, where its strip sits
-(: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
+(: w0 {'w 1 'h 1 'paper (cask 4)}
+   _ (window-own w0 'clipboard "kept", window-ask w0 'clipboard, window-ask w0 'primary)
+   _ (test ([['paste "kept"] ['paste ""]] = window-events w0) (() = window-events w0))
+   xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
    _ (!(two? xv) ? (gate-skip "window: ok (no Xvfb, skipped)") 0)
    (rdnum p) ((: (go n st) (see p @ c
@@ -69,6 +74,52 @@
    ev2 (drain () 4)
    _ (test (elem ['size 200 100] ev2) ([200 100] = window-size win)
            (200 * 100 * 4 = #(window-paper win)))
+   ; the selections: owned, asked for and served back through the server, utf-8 whole
+   _ (window-own win 'clipboard "h\u00e9llo\nw\u00f6rld", window-ask win 'clipboard)
+   _ (rest 300)
+   ev3 (drain () 4)
+   _ (window-own win 'primary "p1", window-ask win 'primary)
+   _ (rest 300)
+   ev4 (drain () 4)
+   ; SetSelectionOwner from the test's wire, owner none: the window loses the clipboard
+   cb (XW 'x-intern s "CLIPBOARD")
+   _ (w8 s 22, w8 s 0, w16 s 4, w32 s 0, w32 s cb, w32 s 0, XW 'x-flush s)
+   _ (rest 300)
+   ev5 (drain () 4)
+   _ (test (elem ['paste "h\u00e9llo\nw\u00f6rld"] ev3) (elem ['paste "p1"] ev4)
+           (elem ['lost 'clipboard] ev5))
+   ; the clipboard the test's own window holds, asked for and sent INCR: the pieces go on
+   ; the window's property each time it deletes the last, the empty one closing it
+   u32 (XW 'u32)
+   ow (XW 'scr-idbase sc)
+   _ (XW 'x-window s ow (XW 'scr-root sc) 1 1 0)
+   ic (XW 'x-intern s "INCR")
+   (prop w pr ty fmt n bs) (w8 s 18, w8 s 0, w16 s (6 + (#bs + 3) // 4), w32 s w, w32 s pr,
+                            w32 s ty, w8 s fmt, w8 s 0, w16 s 0, w32 s n, XW 'x-wpad s bs)
+   (next code f) (XW 'x-next s @ e (? !(two? e) () (XW 'ev-code e = code && f (XW 'ev-raw e)) (XW 'ev-raw e) (next code f)))
+   (serve _) (: raw (next 30 (r \ 1))
+                rq (u32 raw 12) sel (u32 raw 16) ty (u32 raw 20) pr (u32 raw 24)
+                _ (w8 s 2, w8 s 0, w16 s 4, w32 s rq, w32 s 2048, w32 s 4194304)     ; its property changes, to us
+                _ (prop rq pr ic 32 1 (string 5 + string 0 + string 0 + string 0))
+                _ (w8 s 25, w8 s 0, w16 s 11, w32 s rq, w32 s 0)
+                _ (w8 s 31, w8 s 0, w16 s 0, w32 s 0, w32 s rq, w32 s sel)
+                _ (w32 s ty, w32 s pr, w32 s 0, w32 s 0)
+                _ (XW 'x-flush s)
+                (feed l) (two? l ?
+                            (next 28 (r \ (u32 r 4 = rq && u32 r 8 = pr && r 16 = 1)),
+                             prop rq pr ty 8 #<l <l,
+                             XW 'x-flush s,
+                             feed >l)
+                            0)
+                (feed ["p1" "\nq2" ""]))
+   _ (w8 s 22, w8 s 0, w16 s 4, w32 s ow, w32 s cb, w32 s 0, XW 'x-flush s)
+   it (twirl (_ \ (serve 0)) 0)
+   _ (rest 100, window-ask win 'clipboard)
+   (waitpaste n acc) (window-events win @ l
+                    (acc + l @ a (any (r \ <r = 'paste) a || n < 1 ? a (rest 100, waitpaste (n - 1) a))))
+   ev6 (waitpaste 30 ())
+   _ (landed? it ? 0 (freeze it))
+   _ (test (elem ['paste "p1\nq2"] ev6))
    _ (window-close win)
    ; synth in a window of its own: q's note lit while it is held and not once it is let go,
    ; esc the end with status 0

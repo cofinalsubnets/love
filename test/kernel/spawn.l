@@ -2,7 +2,7 @@
 ; kernel, wait4 brings its status back, kill ends it. the shell runs as a process here: a
 ; pipeline of two love processes, a stage of the shell's own in its heap beside a process, a
 ; capture, and background jobs -- a process and a stage -- that kill reaches and whose cd
-; stays theirs. the wasm lane runs it.
+; stays theirs. the wasm lane runs it, and x64's test_kernel_uproc.
 (: o "/tmp/spawn.out"
    chdir (cite 'posix 'chdir) cwd (cite 'posix 'cwd)
    ; the process's words, with its stdout and stderr on a file -> (status . what it wrote)
@@ -29,4 +29,4 @@ exit 3"""
             (<a != 3) ("status " + show <a + ", not 3")
             (>a != want) ("the shell wrote " + show >a)
             ())
-   (puts (two? fails || string? fails ? ("spawn: failed: " + fails + "\n") "spawn: ok\n"), reset 0))
+   (puts (two? fails || string? fails ? ("spawn: failed: " + fails + "\n") "spawn: ok\n")))

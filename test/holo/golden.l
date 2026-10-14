@@ -515,6 +515,12 @@
               "ldtr x0, [x1, #255]" "ldtrb w0, [x1]" "ldtrsw x0, [x1]" "mrs x0, sp_el0" "mrs x1, CurrentEL"
               "msr tpidrro_el0, x2" "mrs x3, id_aa64mmfr0_el1" "mrs x4, s3_0_c15_c0_4" "msr daif, x0"
               "ic ialluis" "tlbi vale1is, x0" "dc cvap, x1"]))
+   ;; the generic spelling below op0 2: the system-instruction space, as llvm-mc lays it
+   _ (chk-eq "gas.a64.sgen"
+        ["201003d5" "211023d5" "020008d5" "a3342ad5" "e5ff07d5" "1f2003d5"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["msr s0_3_c1_c0_1, x0" "mrs x1, s0_3_c1_c0_1" "msr s1_0_c0_c0_0, x2" "mrs x3, s1_2_c3_c4_5"
+              "msr s0_7_c15_c15_7, x5" "msr s0_3_c2_c0_0, xzr"]))
    ;; the exclusive pair and acquire/release, the atomics' and the spinlocks' loads and stores
    _ (chk-eq "gas.a64.ex"
         ["207c5fc8" "207c5f88" "207c5f08" "20fc5f48" "207c02c8" "207c0288" "20fc0208" "20fcdfc8" "20fc9f88"]
