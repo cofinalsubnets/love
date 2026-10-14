@@ -120,6 +120,10 @@ hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-decls
 # ABI; 144 counts a `long`'s leading zeros as 64. gcc is the witness for each -- it either refuses the source or answers differently
 # for the program's reason.
 narrow="81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins"
+# no witness here: gcc's ARM build follows no frame chain past level 1 (297's return_address(1)
+# and frame_address(2) answer otherwise there, 41 to our 71), so it cannot check our walk;
+# x64, a64 and i386 check it against gcc instead
+nowit="297-frameaddr"
 
 case $tgt in
   thumb2) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 85-aggval
@@ -139,7 +143,7 @@ esac
 
 inlist() { for w in $2; do [ "$w" = "$1" ] && return 0; done; return 1; }
 
-nrun=0; nref=0; nhost=0; nnar=0
+nrun=0; nref=0; nhost=0; nnar=0; nwit=0
 for f in test/cc/*.c; do
   b=$(basename "$f" .c)
 
@@ -159,6 +163,7 @@ for f in test/cc/*.c; do
   # compiler is the witness -- either it refuses the source outright, or it runs and the
   # two of us disagree for a reason that is the program's and not the codegen's.
   if inlist "$b" "$narrow"; then nnar=$((nnar + 1)); continue; fi
+  if inlist "$b" "$nowit"; then nwit=$((nwit + 1)); continue; fi
 
   # a runtime we do not link: the LINK must be what fails, on an undefined symbol, for
   # at least one of the two builds -- 142-syntax is gcc's side (emutls), the rest are ours
@@ -214,4 +219,4 @@ for f in test/cc/*.c; do
 done
 
 [ $nrun -gt 0 ] || fail "no programs ran from test/cc/"
-echo "$name: $nrun programs answer on qemu $mach exactly as arm-none-eabi-gcc's build of the same source does; $nref refuse cleanly, $nhost want a libc we do not link, $nnar assume a 64-bit long"
+echo "$name: $nrun programs answer on qemu $mach exactly as arm-none-eabi-gcc's build of the same source does; $nref refuse cleanly, $nhost want a libc we do not link, $nnar assume a 64-bit long, $nwit have no gcc witness here"
