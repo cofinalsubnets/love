@@ -858,28 +858,65 @@ static love_noinline uintptr_t rd_send(struct str const *s, uintptr_t i) {
 
 // the vm calls f on a, and lvm_rd_called lays the answer in: the cells from the committed
 // position to the one whose tail was t are copied, the last copy's tail the answer, and the
-// asking state runs again over the copy. the four words are RdSlack's
-static struct g *rd_call(struct g *g, word f, word a, word t) {
- g->sp -= 4;
- g->sp[0] = a, g->sp[1] = f, g->sp[2] = t, g->sp[3] = word(g->ip);
+// asking state runs again over the copy. w is what the walk wants of the answer: a token's
+// end, a text's closing quote or a comment's line end. an answer with none of it in its
+// chunk is wanted whole, so its tail is forced too, and the chunks are copied once, behind
+// the committed run, so a run over many chunks costs its length once. the six words are
+// RdSlack's
+enum { RwOne, RwTok, RwStr, RwLine };
+static struct g *rd_call(struct g *g, word f, word a, word t, int w) {
+ g->sp -= 6;
+ g->sp[0] = a, g->sp[1] = f, g->sp[2] = ZeroPoint, g->sp[3] = putcharm(w), g->sp[4] = t;
+ g->sp[5] = word(g->ip);
  return g->ip = (union u*) rd_call_k, g; }
-#define RdStep(n, p) if (rd_lit(n = rd_next(p))) return rd_call(g, n, ZeroPoint, n)
+#define RdStepW(n, p, w) if (rd_lit(n = rd_next(p))) return rd_call(g, n, ZeroPoint, n, w)
+#define RdStep(n, p) RdStepW(n, p, RwOne)
 
-static struct g *rd_called(struct g *g) {             // [v t ip regs ..]
- word t = g->sp[1], p = g->sp[3 + RdCur];
- if (p == t) {                                          // the door's: the text is the answer
-  word v = g->sp[0];
-  g->sp[3 + RdCur] = rd_lit(v) ? ZeroPoint : v, g->sp += 3;
-  return RdGo(RsRead); }
+// whether a cell's char holds what w wants: any cell holding no byte does
+static bool rd_wants(intptr_t w, word a) {
+ intptr_t c = charmp(a) && (uintptr_t) getcharm(a) < 256 ? getcharm(a) : 256;
+ return w == RwOne || c == 256 || (w == RwTok ? (rd_cls[c] & RcEnd) != 0 : w == RwStr ? c == '"'
+      : c == '\n' || c == '\r'); }
+// the cells of a chunk up to the one whose tail is a promise, and that cell, in *last;
+// () in *last where the chunk ends or holds what w wants
+static uintptr_t rd_chunk(word v, intptr_t w, word *last) {
  uintptr_t k = 1;
- for (; B(p) != t; p = B(p)) k++;
- if (!ok(g = have(g, k * chain_req))) return g;
- word v = g->sp[0];
- if (rd_lit(v)) v = ZeroPoint;                          // a promise of a promise ends the text
- word *c = bump(g, k * chain_req);
- p = g->sp[3 + RdCur], g->sp[3 + RdCur] = word(c);
+ for (; chainp(v); v = B(v), k++) {
+  if (rd_wants(w, A(v))) break;
+  if (rd_lit(B(v))) return *last = v, k; }
+ return *last = ZeroPoint, 0; }
+// k cells from p, copies onto c with the last's tail at v -> c's room past them
+static word *rd_lay(word *c, word p, uintptr_t k, word v) {
  for (; k--; p = B(p), c += chain_req) ini_chain((struct chain*) c, A(p), k ? word(c + chain_req) : v);
- g->ip = cell(g->sp[2]), g->sp += 3;
+ return c; }
+
+static word rd_cons(struct g *g, word a, word b);
+static struct g *rd_called(struct g *g) {             // [v acc w t ip regs ..]
+ if (rd_lit(g->sp[0])) g->sp[0] = ZeroPoint;            // a promise of a promise ends the text
+ intptr_t const w = getcharm(g->sp[2]);
+ word last;
+ if (rd_chunk(g->sp[0], w, &last)) {                    // none of it here: the next chunk too
+  if (!ok(g = have(g, chain_req + 1))) return g;
+  rd_chunk(g->sp[0], w, &last);
+  word acc = rd_cons(g, g->sp[0], g->sp[1]);
+  g->sp -= 1;
+  g->sp[0] = ZeroPoint, g->sp[1] = B(last), g->sp[2] = acc;
+  return g->ip = (union u*) rd_call_k, g; }
+ word t = g->sp[3], p = g->sp[5 + RdCur];
+ uintptr_t k = 0, n = 0;                                // the committed run's cells, and all
+ if (p != t) for (k = 1; B(p) != t; p = B(p)) k++;
+ n = k;
+ for (word a = g->sp[1]; chainp(a); a = B(a)) n += rd_chunk(A(a), w, &last);
+ if (!n) {                                              // the door's: the text is the answer
+  g->sp[5 + RdCur] = g->sp[0], g->ip = cell(g->sp[4]), g->sp += 5;
+  return RdGo(RsRead); }
+ if (!ok(g = have(g, n * chain_req))) return g;
+ word *c = bump(g, n * chain_req), *e = c + n * chain_req, v = g->sp[0];
+ for (word a = g->sp[1]; chainp(a); a = B(a)) {         // newest first, so laid from the end
+  uintptr_t j = rd_chunk(A(a), w, &last);
+  e -= j * chain_req, rd_lay(e, A(a), j, v), v = word(e); }
+ if (k) rd_lay(c, g->sp[5 + RdCur], k, v), v = word(c);
+ g->sp[5 + RdCur] = v, g->ip = cell(g->sp[4]), g->sp += 5;
  return g; }
 
 // the room is the caller's, from here down: a cons, and k words in under the registers
@@ -924,8 +961,8 @@ static struct g *rd_start(struct g *g) {
  if (strp(x)) {
   return g->sp[RdSrc] = x, g->sp[RdCur] = putcharm(0), RdGo(RsRead); }
  if (!iop(x) && !rd_lit(x)) return RdGo(RsRead);
- if (!iop(x)) return rd_call(g, x, ZeroPoint, x);
- return rd_call(g, hot_hook(g->hook[hook_flow]), x, x); }
+ if (!iop(x)) return rd_call(g, x, ZeroPoint, x, RwOne);
+ return rd_call(g, hot_hook(g->hook[hook_flow]), x, x, RwOne); }
 
 // a text's escapes: n t r e 0, \xhh as two chars hex or not, \u{h..} one to six hex
 // digits naming a code point outside the surrogates (else a plain u), any other char
@@ -1029,7 +1066,7 @@ static struct g *rd_rawstr(struct g *g) {
  word e;
  intptr_t w = -1, k = rd_raww(g->sp[RdSrc], g->sp[RdCur], NULL, &w, &e);
  if (k == -1) return rd_torn(g);
- if (k == -2) return rd_call(g, e, ZeroPoint, e);
+ if (k == -2) return rd_call(g, e, ZeroPoint, e, RwStr);
  k = rd_raww(g->sp[RdSrc], g->sp[RdCur], NULL, &w, &e);
  if (!ok(g = have(g, str_width(k) + RdSlack))) return g;
  struct str *s = k ? ini_str(bump(g, str_width(k)), k) : NULL;
@@ -1045,7 +1082,7 @@ static struct g *rd_weave(struct g *g) {
  bool hole = false;
  intptr_t k = rd_strw(g->sp[RdSrc], g->sp[RdCur], NULL, &e, &hole);
  if (k == -1) return rd_torn(g);
- if (k == -2) return rd_call(g, e, ZeroPoint, e);
+ if (k == -2) return rd_call(g, e, ZeroPoint, e, RwStr);
  uintptr_t cnt = getcharm(g->sp[RdCnt]);
  if (!ok(g = have(g, str_width(k) + (cnt + 4) * chain_req + RdSlack))) return g;
  struct str *s = k ? ini_str(bump(g, str_width(k)), k) : NULL;
@@ -1103,7 +1140,7 @@ static struct g *rd_tok(struct g *g, bool split) {
  word src = g->sp[RdSrc], p = g->sp[RdCur], n;
  uintptr_t len = 0;
  if (rd_in(src, p)) len = rd_send(str(src), getcharm(p)) - getcharm(p);
- else for (; rd_at(src, p) >= 0 && !(rd_c(src, p) & RcEnd); p = n, len++) RdStep(n, p);
+ else for (; rd_at(src, p) >= 0 && !(rd_c(src, p) & RcEnd); p = n, len++) RdStepW(n, p, RwTok);
  if (!ok(g = have(g, 2 * str_width(len) + RdSlack))) return g;
  src = g->sp[RdSrc], p = g->sp[RdCur];
  struct str *s = ini_str(bump(g, str_width(len)), len);
@@ -1169,7 +1206,7 @@ static struct g *rd_read(struct g *g) {
     RdStep(n, p);
     if (rd_at(src, n) != '!') break;
     p = n; }
-   do { RdStep(n, p); p = n; } while ((c = rd_at(src, p)) >= 0 && c != '\n' && c != '\r');
+   do { RdStepW(n, p, RwLine); p = n; } while ((c = rd_at(src, p)) >= 0 && c != '\n' && c != '\r');
    if (c >= 0) { RdStep(n, p); p = n; }
    g->sp[RdCur] = p; }
   g->sp[RdCur] = p;
