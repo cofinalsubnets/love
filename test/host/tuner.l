@@ -81,6 +81,16 @@
            (sp 51 < sp 52) (sp 53 < sp 52) (sp 10 < -60.0)
            (30 = #ss) (has? (ss 27) "C1") (has? (ss 27) "C7") (has? (ss 26) "█")
            (has? (ss 21) "●") (has? (tuner-frame s 80 30 26) "1;38;5;148m█"))
+   ; a tall screen stands the spectrum beside the scale: no strip under the needle, every
+   ; octave's C down the side, B7 above C1, A3's row bold, nothing past the screen's edge
+   vf (tuner-frame s 45 43)
+   vs (map tuner-plain vf)
+   (at? c) (foldl (\ i r (has? (vs r) c ? r i)) -1 ^43)   ; the row that names c
+   (cols r) (net (map (b \ b & 192 != 128) (chars r)))    ; utf-8 bytes that lead a char
+   _ (test (43 = #vs) !(any (r \ has? r "C1" && has? r "C7") vs) (all (r \ cols r <= 45) vs)
+           (0 < at? "C7" && at? "C7" < at? "C4" && at? "C4" < at? "C1")
+           (has? (vs (at? "◀")) "A3") !(has? (vs (at? "◀")) "Hz")
+           (any (r \ has? r "1;38;5;148m█") vf))
    ; the bass on a long look: a bass's low E over 32768 frames stands 8 dB over the
    ; semitones either side
    e1 (pin (fresh ()) 'sp 1)
