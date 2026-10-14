@@ -234,13 +234,13 @@
      x (ya * (rr 3 160 / 100.0 - 0.8)) z0 (yb * (rr 4 160 / 100.0 - 0.8))
      z ((x - bs 0) * (x - bs 0) + (z0 - bs 2) * (z0 - bs 2) < 0.6 ? (z0 - 1.5) z0)
      _ (pins st 'px x 'pz z 'th (rr 5 628 / 100.0) 'ph (rr 6 18 / 100.0 + 1.22) 'pace 1 'deep 0
-                   'U (st 'U * 0.58) 'V (st 'V * 0.58) 'foc (st 'foc / 0.58))
+                   'fov (2.0 * atan 0.58) 'bay ((cite 'view 'view-bayer) c (2 * r)))
      {'st st 'done 0 'th (st 'th) 'ph (st 'ph)})
  (court-draw s cv t)
   (: st (s 'st)
      _ (owe s (t * 20 // 1000) (_ \ (pin st 't (st 't + 1), (cite 'court 'court-move) st)))
      _ (pins st 'th (s 'th + t * 0.00003) 'ph (s 'ph + 0.05 * sin (t * 0.000045)))
-     (halves cv (scene-pens ((cite 'court 'court-pens) st) (st 'bay))))
+     (halves cv (scene-pens ((cite 'mesh 'mesh-flat) ((cite 'court 'court-pens) st)) (st 'bay))))
  ; ..grass99: the week from a thrown hour of it, a field its own; at the week's end another
  (meadow-new r c seed p sty)
   (: g ((cite 'grass 'grass-new) r c seed)
