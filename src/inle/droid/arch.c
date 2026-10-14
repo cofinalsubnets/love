@@ -14,6 +14,7 @@ void kq(uint8_t);
 void kmain(void);
 void k_kb_poll(void);
 bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale);
+extern uint8_t const cleat_8x16[256][16];
 
 #define sys(n, a, b, c, d) __love_sys(n, (long) (a), (long) (b), (long) (c), (long) (d), 0, 0)
 
@@ -22,9 +23,11 @@ bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale);
 struct k_tio { uint32_t i, o, c, l; uint8_t line, cc[19]; };
 // the machine: the serial line, and the face -- the bridge's window (src/apps/droid/bridge.c),
 // the paper shown there as the rows that changed since the last frame (was), its records
-// read into r
-static struct { struct k_tio was; bool tty, eof, drew, all; uint64_t tick, sent; unsigned n, rn;
-                int fd; uint32_t w, h, cap, *fb, *shown; unsigned char b[2048], r[192]; } m = { .fd = -1 };
+// read into r; under the paper the keys row, row pixels of the screen's h (rowh when it fits),
+// with ctrl and alt held off the row (ctl alt) or the keyboard's own (pctl palt)
+static struct { struct k_tio was; bool tty, eof, drew, all, ctl, alt, pctl, palt; uint64_t tick, sent;
+                unsigned n, rn, sc, row, rowh; int fd; uint32_t w, h, cap, *fb, *shown;
+                unsigned char b[2048], r[192]; } m = { .fd = -1 };
 
 static void serial_drain(void) {
   for (unsigned at = 0; at < m.n; ) {
@@ -111,10 +114,69 @@ static int face_key(int32_t code, int32_t c, unsigned char *o) {
   if (c < 0x10000) return o[0] = 0xe0 | c >> 12, o[1] = 0x80 | (c >> 6 & 63), o[2] = 0x80 | (c & 63), 3;
   return o[0] = 0xf0 | c >> 18, o[1] = 0x80 | (c >> 12 & 63), o[2] = 0x80 | (c >> 6 & 63), o[3] = 0x80 | (c & 63), 4; }
 
+// the keys a phone's keyboard lacks, a row of two under the paper: [label code char], the
+// label in the console's font (cp437), the code an android keycode for face_key
+static struct { char lab[5]; int16_t code, c; } const keys[14] = {
+  {"esc", 111, 0}, {"|", 0, '|'}, {"-", 0, '-'}, {"home", 122, 0}, {"\x18", 19, 0}, {"end", 123, 0}, {"pgup", 92, 0},
+  {"tab", 61, 0}, {"ctrl", 113, 0}, {"alt", 57, 0}, {"\x1b", 21, 0}, {"\x19", 20, 0}, {"\x1a", 22, 0}, {"pgdn", 93, 0} };
+
+// the row painted under the paper, each key three cells tall, a held modifier lit
+static void row_draw(void) {
+  if (!m.row) return;
+  unsigned const gw = 8 * m.sc, gh = 16 * m.sc, kh = m.row / 2, y0 = m.h - m.row;
+  for (unsigned i = 0; i < 14; i++) {
+    unsigned const r = i / 7, x0 = i % 7 * m.w / 7, x1 = (i % 7 + 1) * m.w / 7, n = (unsigned) strlen(keys[i].lab);
+    bool const lit = (keys[i].code == 113 && m.ctl) || (keys[i].code == 57 && m.alt);
+    uint32_t const bg = lit ? 0x3c6eaa : (r + i) % 2 ? 0x1c1c1c : 0x2c2c2c;
+    unsigned const lx = x0 + (n * gw < x1 - x0 ? (x1 - x0 - n * gw) / 2 : 0), ly = y0 + r * kh + (kh - gh) / 2;
+    for (unsigned y = y0 + r * kh; y < y0 + (r + 1) * kh; y++)
+      for (unsigned x = x0; x < x1; x++) {
+        uint32_t v = bg;
+        if (y >= ly && y < ly + gh && x >= lx && x < lx + n * gw) {
+          unsigned const g = (unsigned char) keys[i].lab[(x - lx) / gw];
+          if (cleat_8x16[g][(y - ly) / m.sc] >> (7 - (x - lx) % gw / m.sc) & 1) v = 0xdcdcdc; }
+        m.fb[y * m.w + x] = v; } }
+  m.drew = true; }
+
+// a ctrl'd byte, as a terminal sends it
+static unsigned char ctrl_of(unsigned char x) {
+  return x == '?' ? 0x7f : x == ' ' ? 0 : (x >= '@' && x <= '_') || (x >= 'a' && x <= 'z') ? x & 0x1f : x; }
+
+// a key into kmain's queue under the held modifiers: ctrl folds it, alt sends esc first,
+// and the row's own let go
+static int key_send(int32_t code, int32_t c) {
+  unsigned char o[8];
+  bool const ctl = m.ctl || m.pctl, alt = m.alt || m.palt;
+  if (ctl && code >= 29 && code <= 54) c = 'a' + code - 29;      // the letters, whatever ctrl made of them
+  int n = face_key(code, c, o);
+  if (!n) return 0;
+  if (ctl && n == 1) o[0] = ctrl_of(o[0]);
+  if (alt) kq(0x1b);
+  for (int i = 0; i < n; i++) kq(o[i]);
+  if (m.ctl || m.alt) m.ctl = m.alt = false, row_draw();
+  return n + alt; }
+
+// a touch on the row: a modifier held or let go, else its key
+static int row_tap(int32_t x, int32_t y) {
+  int32_t const y0 = (int32_t) (m.h - m.row);
+  if (!m.row || y < y0 || x < 0 || (uint32_t) x >= m.w) return 0;
+  unsigned const i = 7 * ((unsigned) (y - y0) * 2 / m.row) + (unsigned) x * 7 / m.w;
+  if (i >= 14) return 0;
+  if (keys[i].code == 113) return m.ctl = !m.ctl, row_draw(), 0;
+  if (keys[i].code == 57) return m.alt = !m.alt, row_draw(), 0;
+  return key_send(keys[i].code, keys[i].c); }
+
+// the screen h tall: the paper over the row, the row where it leaves the paper room
+static void face_seat(uint32_t w, uint32_t h) {
+  unsigned const row = h >= 3 * m.rowh ? m.rowh : 0;
+  if (!k_fb_reseat(w, h - row, w, 0)) return;
+  m.w = w, m.h = h, m.row = row, m.all = m.drew = true;
+  row_draw(); }
+
 static int32_t le32(unsigned char const *p) { return (int32_t) (p[0] | p[1] << 8 | p[2] << 16 | (uint32_t) p[3] << 24); }
 
 // the bridge's records: keys into kmain's queue while it has room, a new size re-seats the
-// paper, a touch asks for the keyboard. its end is the machine's
+// paper, a touch on the keys row is its key. its end is the machine's
 static void face_take(int room) {
   if (m.fd < 0) return;
   if (m.rn < sizeof m.r) {
@@ -124,15 +186,13 @@ static void face_take(int room) {
   unsigned at = 0;
   for (; at + 12 <= m.rn && room >= 8; at += 12) {
     unsigned char const *r = m.r + at;
-    unsigned char o[8];
     int32_t b = le32(r + 4), c = le32(r + 8);
-    if (r[0] == 'K' && r[1]) {
-      int n = face_key(b, c, o);
-      for (int i = 0; i < n; i++) kq(o[i]);
-      room -= n; }
-    else if (r[0] == 'S' && b > 0 && c > 0 && (uint32_t) b * (uint32_t) c <= m.cap
-             && k_fb_reseat((unsigned) b, (unsigned) c, (unsigned) b, 0))
-      m.w = (uint32_t) b, m.h = (uint32_t) c, m.all = m.drew = true; }
+    if (r[0] == 'K' && (b == 113 || b == 114)) m.pctl = r[1];
+    else if (r[0] == 'K' && (b == 57 || b == 58)) m.palt = r[1];
+    else if (r[0] == 'K' && r[1]) room -= key_send(b, c);
+    else if (r[0] == 'T' && !r[1]) room -= row_tap(b, c);
+    else if (r[0] == 'S' && b > 0 && c > 0 && (uint32_t) b * (uint32_t) c <= m.cap)
+      face_seat((uint32_t) b, (uint32_t) c); }
   for (unsigned i = at; i < m.rn; i++) m.r[i - at] = m.r[i];
   m.rn -= at; }
 
@@ -161,10 +221,12 @@ static uintptr_t face_open(uintptr_t base, uintptr_t len) {
   m.fb = (uint32_t *) (base + len - bytes), m.shown = (uint32_t *) (base + len - 2 * bytes);
   char const *e = getenv("LOVE_FACE_SCALE");
   long sc = e ? atol(e) : 0;
-  kboot.fb.base = m.fb, kboot.fb.w = (uint16_t) w, kboot.fb.h = (uint16_t) h, kboot.fb.pitch_px = w;
   if (sc < 1 || sc > 8) sc = w / 320 < 1 ? 1 : w / 320 > 8 ? 8 : w / 320;   // a phone: forty columns or more
+  m.sc = (unsigned) sc, m.rowh = 96 * m.sc, m.row = h >= 3 * m.rowh ? m.rowh : 0;
+  kboot.fb.base = m.fb, kboot.fb.w = (uint16_t) w, kboot.fb.h = (uint16_t) (h - m.row), kboot.fb.pitch_px = w;
   kboot.fb.scale = (uint8_t) sc, kboot.fb.cap_px = (uint32_t) cap;
   kboot.has_fb = true;
+  row_draw();
   face_out("I\x01", 2);                                          // the keyboard, when focus lets it
   return len - 2 * bytes; }
 
