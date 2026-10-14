@@ -61,6 +61,9 @@ static void *__marena(size_t nu) {
     if (q == __mfree)
       if (!(q = __mcore(nu))) { __errno_v = ENOMEM; return 0; } } }
 void *malloc(size_t n) {
+  /* no object passes PTRDIFF_MAX, and past it the units and the page rounding below wrap
+     to a small block handed back as the large one asked for */
+  if (n > ((size_t) -1 >> 1) - 65536) { __errno_v = ENOMEM; return 0; }
   size_t nu = (n + sizeof(__mhdr) - 1) / sizeof(__mhdr) + 1;
   if (n >= MBig) return __mbig(nu);
   __mtake();
