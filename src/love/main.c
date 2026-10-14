@@ -419,6 +419,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   // reaches this; a mopped one keeps none of the cell or stack doors (egg.l).
   char const *nm = getenv("LOVE_NO_MOP");
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
+  g = evals_(g, "(: latemop 1)");                   // the egg leaves its mop here, run past the glaze
   g = cats_egg(g);                                    // prel then ev's half, and the printer with `@`
   g = cats_lib(g);                                   // register every baked module; the uses below are splices
   g = evals_(g,
@@ -450,6 +451,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
 #ifdef LvGlazed
   g = shelve(g);                                    // holo back to non-ambient
 #endif
+  g = evals_(g, "(latemop ())");                    // the egg's mop, now nothing reads what it takes
 
   g = evals_(g,
     "(: spawn0 spawn  spawnio0 spawnio  spawnmap0 spawnmap  wait0 wait"
@@ -619,6 +621,7 @@ int main(int argc, char const **argv) {
 #ifndef Love0
   if (!g && !bake && !(noimg && *noimg)) self_bake(argv);
 #endif
+  bool woke = g != NULL;
   if (!g) g = ini();
   // -n lays the stub back and saves no heap, so it skips the warm outright: the strip is
   // instant, and it answers for a binary whose own corpus would not boot.
@@ -630,7 +633,7 @@ int main(int argc, char const **argv) {
   bool argp = argc - skip > 1;
   if (!bake) g = argv_chain(g, argv, argc, skip);   // the line past the primes -- sp[0]
   if (ok(g)) {
-    g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+    if (!woke) g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);   // a woken book has them, mopped
     if (!bake) {
       g = defv(g, "cmdline");
       if (ok(g)) g->sp++; }          // the book holds it now

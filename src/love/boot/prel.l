@@ -282,17 +282,20 @@
                   F (? (tablet? r) r (: t (tablet 0) _ (pin t 0 (tablet 0)) t))
                   _ (pin F 31337 (. (stack ()) nm))
                   (setstack (. F (stack ()))))
-    ; a list head is (name export..): the body defglobs as ever, then every nom not named
-    ; is pulled off the tablet. the charm keys (0 the macros, 31337 the parent chain) are
-    ; not noms and so survive. quote the list head -- unquoted it rides the opfix pass, and
-    ; one operator nom in it re-associates the whole list and the module leaves empty.
+    ; a list head is (name export..): the body defglobs as ever, then every nom it added and
+    ; did not name is pulled off the tablet. what the tablet held at the open stays: a C row
+    ; that names the module (love.h's LvDef), or an earlier opening's exports. the charm keys
+    ; (0 the macros, 31337 the parent chain) are not noms and so survive. quote the list head
+    ; -- unquoted it rides the opfix pass, and one operator nom in it re-associates the whole
+    ; list and the module leaves empty.
     (mrun nm fs) (: n  (? (two? nm) (cap nm) nm)
                      xs (? (two? nm) (cup nm) ())
                      _  (mopen n)
-                     _  (each fs (\ f (ev 'ev f)))
                      F  (cap (stack ()))
+                     ks (keys F)
+                     _  (each fs (\ f (ev 'ev f)))
                      _  (? (two? xs)
-                           (each (keys F) (\ k (? (nom? k) (? (elem k xs) 0 (pull F k 0)) 0)))
+                           (each (keys F) (\ k (? (nom? k) (? (elem k xs) 0 (elem k ks) 0 (pull F k 0)) 0)))
                            0)
                      (leave ()))
     ; the quote takes the forms list whole -- (\ (f ..)), one element per form; an extra
