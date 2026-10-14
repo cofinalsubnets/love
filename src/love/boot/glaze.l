@@ -1402,11 +1402,11 @@
              (all (k \ k >= 3) kg && cellv? a)))
        (callok? f fp e) (? (atom? e) 1
           (: g <e as >e
-             (!(elem g syms) || all (j \ argok? f fp g j (as j)) (rangeL 0 #as))
-             && all (callok? f fp) as))
+             ((!(elem g syms) || all (j \ argok? f fp g j (as j)) (rangeL 0 #as))
+              && all (callok? f fp) as)))
        (all (i \ (: f <i fp (i 1)
-                     (all (j \ elem (jgir-kind km f j) ['() '(0) '(0 2) '(1) '(3) '(4)]) (rangeL 0 #fp))
-                     && callok? f fp (i 2))) info))
+                     (all (j \ elem (jgir-kind km f j) ['() '(0) '(0 2) '(1) '(3) '(4)]) (rangeL 0 #fp)
+                      && callok? f fp (i 2)))) info))
    ; jgir-lrf -- the ((mpeep..) (peep..) (mpin..) (pin..) def..) tail the deopt fallback re-evaluates.
    (jgir-lrf entry ds) (atom? ds ? [entry] (: d <ds (<d . (>d . jgir-lrf entry >ds))))
    ; jitgroupir: defs are ((nameform . body) ..), the entry is the group's value. the deopt fallback is (ev <group>), so the
