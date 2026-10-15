@@ -222,6 +222,7 @@ hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
 hostnif_tests += test/host/xz.l test/host/bz2.l   # the xz and bzip2 pulls against their whole-string reads
+hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 # ev read back off its show names the doors ev closes over, which a mopped image has dropped
 hostnif_nomop = test/host/evback.l
 hostnif_exec =                                   # empty: the gc gates run warm, in the fork lane
