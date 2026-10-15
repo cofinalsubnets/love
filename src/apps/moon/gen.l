@@ -9031,6 +9031,22 @@
    ; in place, at a return the body's returns stay returns, and at an if's test each return decides the
    ; if where it stands, the arms copied there. the caller's analyses then see one body.
    ; what it declines stays a call --
+   ; a statement that can do nothing goes before a callee is judged: typecheck()'s compare of two fresh
+   ; locals' addresses, its value dropped. no read counts (a volatile one is an effect), nor a division
+   (nofx x) (? !(two? x) x
+               (x @ ('expr e) (fxless? e ? '(expr (num 0)) x)
+                    (map nofx x)))
+   (fxless? e) (e @ ('num . _) 1
+                    ('addr ('var _)) 1
+                    ('cast _ a) (fxless? a)
+                    ('un 'not a) (fxless? a)
+                    ('bin op a b) (elem op '(eq ne lt le gt ge + - * & | ^) && fxless? a && fxless? b)
+                    ('sexpr . ss . v . _) ((!(two? v) || fxless? v) && atom? (filter (st \ !(fxlst? st)) ss))
+                    ())
+   (fxlst? st) (st @ ('decl ps) (atom? (filter (p \ two? >>p && <>>p != ()) ps))
+                     ('expr e) (fxless? e)
+                     ('nop) 1
+                     ())
    (acand g nm)                                    ; -> (params body rt locals frees decls) | ()
     (g 'inl nm @ f
        (two? f ?
@@ -9039,7 +9055,7 @@
              ; the body's dead arms pruned before any caller splices it: a call types by its
              ; signature, a cast by its type -- all a body's own typer here
              (sty e) (e @ ('call ('var n) _) <(peep (g 'sigs) n [()]) ('cast t _) t ())
-             body (dprune !(ilp32? g) sty <>(rf 3))
+             body (nofx (dprune !(ilp32? g) sty <>(rf 3)))
              (dps x a) (? !(two? x) a
                           (<x = 'decl) (foldl (a2 \ p \ p . a2) a <>x)
                           (dps >x (dps <x a)))
@@ -9771,6 +9787,60 @@
        ; ..and not a name the unit has at file scope: a block's `extern` reads that one, as kprop says
        (ok? nm) (!(tak nm) && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)
                  && elem (peep tys nm ()) '(bool char schar cchar uchar short ushort int uint long ulong))
+       ; -- not-equal facts: a test `x != K` (K small) holds where only the test leads, until x is written or a
+       ; label is passed, and a `switch (x)` there drops `case K` when only the dispatch reaches it. x is a
+       ; scalar local, or a member of a local struct whose address is never taken --
+       (mb x) (x @ ('var v) v ('dot . y . _) (mb y) ('idx . y . _) (mb y) ())
+       mtk {}
+       (mcen x) (? !(two? x) 0
+                   (: _ (x @ ('addr e) (mb e @ b (string? b ? (pin mtk b 1) 0))
+                             ('asm . _) (foldl (_ \ o \ (mb <>o @ b (string? b ? (pin mtk b 1) 0))) 0 (x 2 + x 3))
+                             0)
+                      (mcen <x, mcen >x)))
+       _ (mcen (f 3))
+       ; ..a record of scalars at distinct offsets: no union's overlap, no array decaying to an address
+       (rec? ty) (g 'stag <>ty @ e
+                    (two? e && (: ms <e
+                                  (sc? t) (ptr? t || elem t '(bool char schar cchar uchar short ushort int uint long ulong llong ullong))
+                                  (dis l) (? !(two? l) 1 (elem <l >l) () (dis >l))
+                                  (two? ms && atom? (filter (m \ !(sc? (m 2))) ms) && dis (map (m \ m 1) ms)))))
+       (mok? s) (!(tak s) && !(mtk s) && !(two? (peep (g 'glob) s 0)) && !(g 'fns s)
+                 && (peep tys s () @ ('struct . _) (rec? (tys s)) ()))
+       (fk a) (a @ ('var v) (ok? v ? v ()) ('dot ('var s) fl) (mok? s ? (s + "." + fl) ()) ())
+       (nf a e) (: q (fk a) k (e @ ('num n) n ())
+                   (string? q && charm? k && 0 <= k && k < 128 ? [[q k]] ()))
+       (tf c) (c @ ('bin 'ne a b) (nf a b + nf b a)
+                   ('land a b) (tf a + tf b)
+                   ('un 'not a) (ff a)
+                   (fk c @ q (string? q ? [[q 0]] ())))
+       (ff c) (c @ ('bin 'eq a b) (nf a b + nf b a)
+                   ('lor a b) (ff a + ff b)
+                   ('un 'not a) (tf a)
+                   ())
+       ; the keys a statement writes, a whole struct's name for a write into it, and what it declares
+       (tk t) (t @ ('dot ('var s) fl) (s + "." + fl) (mb t))
+       (nws x acc) (? !(two? x) acc
+                      (x @ (('asn || 'post) . t . _) (nws >>x (tk t . acc))
+                           ('rmw . _ . t . _) (nws >>>x (tk t . acc))
+                           ('asm . _) (foldl (a \ o \ (tk <>o . a)) acc (x 2))
+                           (('decl || 'sdecl) . ps . _) (nws >x (foldl (a \ p \ (<p . a)) acc ps))
+                           (nws >x (nws <x acc))))
+       (kb k) ((: (go i) (? (#k <= i) k (k i = 46) (snip k 0 i) (go (i + 1)))) 0)
+       (nkill ws ng) (filter (e \ nelem <e ws && nelem (kb <e) ws) ng)
+       (cln? c) (atom? (filter string? (nws c ())))
+       ; a label kills them, but a case of a switch inside the statement is reached from that switch alone
+       (lbl? x) (? !(two? x) () (<x = 'lbl) 1 (lbl? <x || lbl? >x))
+       (lab2? x) (? !(two? x) () (<x = 'switch) (lbl? x) (elem <x '(lbl case dflt)) 1 (lab2? <x || lab2? >x))
+       (uj? x) (x @ (('goto || 'brk || 'cont || 'ret) . _) 1 ('blk is) (two? is && uj? (is (#is - 1))) ())
+       (scut l ks open)
+        (!(two? l) ? ()
+           (<l @ ('case k && charm? k && elem k ks && !open)
+                 ((: (skip m) (? !(two? m) () (lab? <m) (scut m ks ()) (skip >m))) >l)
+                 (<l . scut >l ks !(uj? <l))))
+       (swp sw ng) (sw @ ('switch sc body)
+                         (: q (fk sc) ks (foldl (a \ e \ (<e = q ? (<>e . a) a)) () ng)
+                            (string? q && two? ks ? ['switch sc (scut body ks ())] sw))
+                         sw)
        ; the names a statement writes (an asm's outputs among them), and whether it holds a label
        (wrs x acc) (? !(two? x) acc
                       (x @ (('asn || 'post) . ('var v) . _) (wrs >>x (v . acc))
@@ -9817,7 +9887,7 @@
                       ('asn . ('var v) . rhs . _) ['asn ['var v] (rd rhs)]
                       (map rd x)))
        ; top: the body's own list, where an item's writes are counted (a nested one starts with nothing)
-       (blk items env top)
+       (blk items env ng top)
         (!(two? items) ? ()
            (: it <items
               e0 (lab? it ? (gs 'g || !top ? () (filter (e \ peep wtot <e 0 = peep wdone <e 0) env)) env)
@@ -9825,20 +9895,30 @@
               _ (gto? it ? (pin gs 'g 1) 0)
               ws (wrs it ())
               e1 (filter (e \ nelem <e ws) e0)
-              it2 (inner (sub e1 it))
+              n0 (lab2? it ? () ng)
+              it1 (sub e1 (it @ ('switch . _) (swp it (nkill (nws (it 1) ()) n0)) it))
+              ; a block in the run is entered from above, so it starts with the facts
+              it2 (it1 @ ('blk is) ['blk (blk is () n0 ())] (inner it1))
               e2 (it2 @ ('expr . ('asn . ('var v) . rhs . _) . _) (ok? v ? (val v rhs @ k (two? k ? ([v k] . e1) e1)) e1)
                         ('decl ps) (foldl (a \ p \ (two? >>p && ok? <p ? (val <p <>>p @ k (two? k ? ([<p k] . a) a)) a)) e1 ps)
                         e1)
-              (it2 . blk >items e2 top)))
-       ; a nested block starts over: the entry it is reached by need not be the one above it
-       (inner x) (? !(two? x) x (<x = 'blk) ['blk (blk <>x () ())] (map inner x))
+              (it2 . blk >items e2 (nkill (nws it ()) n0) top)))
+       ; a nested block starts over: the entry it is reached by need not be the one above it.
+       ; but a loop's body and an if's arms are entered by the test alone, which they keep
+       (arm a n) (a @ ('blk is) ['blk (blk is () n ())] (inner a))
+       (inner x) (? !(two? x) x
+                    (<x = 'blk) ['blk (blk <>x () () ())]
+                    (x @ ('for i c st b) ['for (inner i) (inner c) (inner st) (arm b (cln? c ? (tf c) ()))]
+                         ('while c b) ['while (inner c) (arm b (cln? c ? (tf c) ()))]
+                         ('if c t e) ['if (inner c) (arm t (cln? c ? (tf c) ())) (arm e (cln? c ? (ff c) ()))]
+                         (map inner x)))
        ; `0 || e` and `1 && e` are e's truth: it evaluates as surely as the test does, where the
        ; inliner takes it (copy_fpstate_to_sigframe's `ia32_fxstate || !use_fxsr()`)
        (simp x) (? !(two? x) x
                    (x @ ('lor . a . b . _) (zfold w64 a = 0 ? ['un 'not ['un 'not (simp b)]] (map simp x))
                         ('land . a . b . _) (zfold w64 a @ v (cint? v && v != 0 ? ['un 'not ['un 'not (simp b)]] (map simp x)))
                         (map simp x)))
-       (tw? (f 3) ? f ([<f <>f <>>f (simp ((rd (f 3)) @ ('blk items) ['blk (blk items () 1)] (inner (rd (f 3)))))] + >>>>f)))
+       (tw? (f 3) ? f ([<f <>f <>>f (simp ((rd (f 3)) @ ('blk items) ['blk (blk items () () 1)] (inner (rd (f 3)))))] + >>>>f)))
    ; -- AST constant propagation: a scalar local declared once from a folding initializer, never
    ; written or &-taken, shadowing nothing, reads as its cast literal and its decl drops. runs to a fixpoint --
    (kprop g f)
