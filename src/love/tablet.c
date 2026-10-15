@@ -430,6 +430,12 @@ static uintptr_t fn_hash_d(struct g *g, word x, int d) {
   h = (h ^ t) * mix; }
  return h; }
 
+// a box's bytes past its first word: that word is the kind's op, an address the load moves
+// and every box of the kind shares, so the hash is the payload's alone
+static uintptr_t box_hash(word x, uintptr_t len) {
+ uintptr_t h = mix;
+ for (uint8_t const *bs = (uint8_t const*) x + sizeof(word), *e = (uint8_t const*) x + len; bs < e; h ^= *bs++, h *= mix);
+ return h; }
 int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
  if (charmp(x)) return *out = rot(x*mix), 0;
  if (!datp(x)) return *out = fn_hash(g, x), 0;
@@ -444,22 +450,11 @@ int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
     // hash_at folds the cells: two trays built apart hold one set of values behind two
     // sets of pointers, and `=` reads through to the values
     bool obj = objtrayp(x);
-    uintptr_t len = obj ? (uintptr_t) ((uint8_t*) tray_data(tray(x)) - (uint8_t*) x)
-                        : love_tray_bytes(tray(x)), h = mix;
-    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, obj ? (*src = x, 3) : 0; }
-   case DBig: {
-    uintptr_t len = big_bytes(big(x)), h = mix;
-    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, 0; }
-   case DGem: {                                 // hash the lean box (ap is GC-stable, payload is the value)
-    uintptr_t len = gem_req * sizeof(word), h = mix;
-    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, 0; }
-   case DTwin: {                                // same: hash the lean (ap, re, im) box bytes
-    uintptr_t len = twin_req * sizeof(word), h = mix;
-    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, 0; }
+    *out = box_hash(x, obj ? (uintptr_t) ((uint8_t*) tray_data(tray(x)) - (uint8_t*) x) : love_tray_bytes(tray(x)));
+    return obj ? (*src = x, 3) : 0; }
+   case DBig: return *out = box_hash(x, big_bytes(big(x))), 0;
+   case DGem: return *out = box_hash(x, gem_req * sizeof(word)), 0;    // the lean box: its payload is the value
+   case DTwin: return *out = box_hash(x, twin_req * sizeof(word)), 0;  // same: (re, im)
    case DString: {
     uintptr_t n = len(x), h = mix;
     char const *bs = txt(x);
