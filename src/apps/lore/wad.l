@@ -294,13 +294,15 @@
  (wad-size st w r) (mesh-size st w r)
  (restart st) (enter (fresh st) (st 'wd) (wad-map (st 'wd) (st 'M 'name)))
  ; --- the lines: where they stand, what blocks, the floors and ceilings either side ---
- (lines-of M) (: ls (M 'lines) vs (M 'vs) sd (M 'sides) S (M 'secs)
-   (col f) (gem-tray [#ls] (map f ls))
-   (sec l k) (l k = 65535 ? () (S (sd (l k) 5)))
-   (h l k i) (sec l k @ () (sec l 5 i) s (1.0 * s i))
-   {'ax (col (l \ vs (l 0) 0)) 'ay (col (l \ vs (l 0) 1)) 'bx (col (l \ vs (l 1) 0)) 'by (col (l \ vs (l 1) 1))
-    'blk (col (l \ (l 6 = 65535 || (l 2 & 1) != 0) ? 1.0 0.0)) 'bm (col (l \ (l 2 & 2) != 0 ? 1.0 0.0))
-    'ff (col (l \ h l 5 0)) 'fc (col (l \ h l 5 1)) 'bf (col (l \ h l 6 0)) 'bc (col (l \ h l 6 1))})
+ (lines-of M) (: ls (M 'lines) vs (M 'vs) sd (M 'sides)
+   (col f) (gem-tray [#ls] (map f ls)) (sec l k) (sd (l (l k = 65535 ? 5 k)) 5)
+   (heights {'ax (col (l \ vs (l 0) 0)) 'ay (col (l \ vs (l 0) 1)) 'bx (col (l \ vs (l 1) 0)) 'by (col (l \ vs (l 1) 1))
+             'blk (col (l \ (l 6 = 65535 || (l 2 & 1) != 0) ? 1.0 0.0)) 'bm (col (l \ (l 2 & 2) != 0 ? 1.0 0.0))
+             'fs (star-tray [#ls] (map (l \ sec l 5) ls)) 'bs (star-tray [#ls] (map (l \ sec l 6) ls))}
+            M))
+ ; ..and their floors and ceilings either side, from the sectors' as they stand
+ (heights L M) (: S (M 'secs) F (gem-tray [#S] (map (s \ 1.0 * s 0) S)) C (gem-tray [#S] (map (s \ 1.0 * s 1) S))
+   (pins L 'ff (peep F (L 'fs) 0.0) 'fc (peep C (L 'fs) 0.0) 'bf (peep F (L 'bs) 0.0) 'bc (peep C (L 'bs) 0.0)))
  ; ..the solid things, as trays, laid again each tic
  (solids st) (: os (filter (o \ o 'solid = 1 && o 'gone = 0) (st 'objs)) (col f) (gem-tray [#os] (map f os))
    {'n #os 'x (col (o \ o 'x)) 'z (col (o \ o 'z)) 'r (col (o \ o 'r))})
@@ -371,7 +373,7 @@
    (#(keys d) = 0 ? st
       (: _ (pin sc 'secs (remap (sc 'secs) (\ i b (peep d i 0 = 1 ? (sector-batch M sc i) b))))
          _ (each (st 'objs) (o \ o 'proj = 0 ? (place M o) 0))
-         (pins st 'dirty {} 'lines (lines-of M) 'sol ()))))
+         (pins st 'dirty {} 'lines (heights (st 'lines) M) 'sol ()))))
  ; --- the fight: monsters wake, chase and shoot; their fireballs fly; the player is hurt, takes
  ;     what lies about, and shoots back ---
  (hurt st d) (: take (min2 (st 'ar) (st 'ac = 2 ? (d // 2) (d // 3))) hp (max2 0 (st 'hp - d + take))
@@ -402,7 +404,7 @@
           'ball (close ? (hurt st (3 * (1 + rand 8))) (vis ? (shoot-ball st o) 0))
           _ 0))
  ; ..a step toward the player, round what is in the way
- (walk-to st o dx dz d) (: v (o 'm 2 / 4.0) b (bearing dx dz)
+ (walk-to st o dx dz d) (: v (1.0 * o 'm 2) b (bearing dx dz)
    (try as) (? (atom? as) 0
                (: a <as x (o 'x + v * sin a) z (o 'z + v * cos a)
                   (free-at st x z (o 'x) (o 'z) (o 'y) (o 'r) 1 ? (place (st 'M) (pins o 'x x 'z z 'th a 'sol ())) (try >as))))
@@ -414,9 +416,12 @@
     'idle (t % 8 = 0 && (o 'heard = 1 || (d < 2000.0 && (d < 80.0 + o 'r || mag (wrap (bearing dx dz - o 'th)) < pi / 2.0)
                                           && sees st (o 'x) (o 'z) px pz))
            ? (pins o 'st 'chase 'tic 0 'cd (rand 40)) 0)
-    'chase (: cd (o 'cd - 1) _ (pin o 'cd cd) reach (d < 80.0 + o 'r && m 4 != 'shot)
-             (st 'hp > 0 && cd <= 0 && (reach || (randf 1.0 < 0.06 && sees st (o 'x) (o 'z) px pz))
-              ? (pins o 'st 'shoot 'tic 0 'th (bearing dx dz)) (walk-to st o dx dz d)))
+    ; ..a chase acts once a walking frame, 4 tics
+    'chase (: cd (o 'cd - 4) reach (d < 80.0 + o 'r && m 4 != 'shot)
+             (? (t % 4 != 0) 0
+                (st 'hp > 0 && cd <= 0 && (reach || (randf 1.0 < 0.2 && sees st (o 'x) (o 'z) px pz)))
+                (pins o 'st 'shoot 'tic 0 'th (bearing dx dz))
+                (: _ (pin o 'cd cd) (walk-to st o dx dz d))))
     'shoot (? (t = 8 * (#(m 7) - 1)) (attack st o d) (t >= 8 * #(m 7)) (pins o 'st 'chase 'tic 0 'cd (30 + rand 60)) 0)
     'pain (t >= 6 ? (pins o 'st 'chase 'tic 0) 0)
     _ 0))
