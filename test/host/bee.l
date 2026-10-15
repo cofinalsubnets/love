@@ -1267,6 +1267,9 @@
    lp-plan ((cite 'lanemap 'lanes-plan) ["src/love/gc.c" "src/apps/moon/gen.l" "src/apps/kore/a/b.l" "doc/x.md"]
             ["src/apps/moon/gen.l"] lp-cov)
    lp-names (map (r \ <r) lp-plan)
+   ; the C core alone owes test_gcstress; what the bake runs owes test_gcstress_bake, which runs
+   ; test_gcstress's shards too, so a change owing both runs the bake alone
+   lp-core (map (r \ <r) ((cite 'lanemap 'lanes-plan) ["src/love/num.c"] () lp-cov))
    lp-heavy (map (r \ r 1) (drop 1 lp-plan))
    lp-cli (hark [cr-love cr-app "--lanes" "HEAD" "HEAD"])
    _ (test
@@ -1279,7 +1282,9 @@
       (elem "test_quick" lp-names)
       (elem "test_kore" lp-names)
       (elem "test_bakerep" lp-names)
-      (elem "test_gcstress" lp-names)
+      (elem "test_gcstress_bake" lp-names) !(elem "test_gcstress" lp-names)
+      (elem "test_gcstress" lp-core) !(elem "test_gcstress_bake" lp-core)
+      (lp-cov "test_gcstress_bake" = ["test_gcstress"])
       !(elem "test_clay" lp-names)
       (lp-heavy = sort lp-heavy)
       (<lp-cli = 0)
