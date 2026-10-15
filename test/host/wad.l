@@ -1,5 +1,5 @@
 ; test/host/wad.l -- lore's wad: a wad laid here, a room 256 square under the sky with a barrel
-; in it, read, walked and drawn. run: cat test/00-init.l test/host/wad.l | out/love
+; in it, read, walked, drawn and heard. run: cat test/00-init.l test/host/wad.l | out/love
 (borrow 'wad)
 (borrow 'bytes)
 (: (wad-t-w16 v) (wrle (v < 0 ? (v + 65536) v) 2)
@@ -45,7 +45,10 @@
                ["SECTORS" (wad-t-cat [(wad-t-cat [(wad-t-w16 0) (wad-t-w16 128) (wad-t-name "FLR") (wad-t-name "F_SKY1") (wad-t-w16 255) (wad-t-w16 0) (wad-t-w16 0)])
                                       (wad-t-cat [(wad-t-w16 0) (wad-t-w16 0) (wad-t-name "FLR") (wad-t-name "FLR") (wad-t-w16 160) (wad-t-w16 0) (wad-t-w16 0)])])]
                ["REJECT" ""] ["BLOCKMAP" ""]]
-   lumps ([["PLAYPAL" wad-t-pal] ["PNAMES" (wrle 2 4 + wad-t-name "WALLP" + wad-t-name "SKYP")] ["TEXTURE1" wad-t-t1]
+   ; ..a shot's sound: format 3, 11025 a second, a tenth of a second of square wave padded 16 either end
+   wad-t-snd (: pd (wad-t-cat (map (_ \ string 128) ^16))
+               (wad-t-cat [(wad-t-w16 3) (wad-t-w16 11025) (wrle 1135 4) pd (wad-t-cat (map (i \ string (i // 25 % 2 ? 64 192)) ^1103)) pd]))
+   lumps ([["PLAYPAL" wad-t-pal] ["DSPISTOL" wad-t-snd] ["PNAMES" (wrle 2 4 + wad-t-name "WALLP" + wad-t-name "SKYP")] ["TEXTURE1" wad-t-t1]
            ["WALLP" (wad-t-patch 64 64 10 0 0)] ["SKYP" (wad-t-patch 256 128 20 0 0)]
            ["F_START" ""] ["FLR" (wad-t-cat (map (_ \ string 30) ^4096))] ["F_END" ""]
            ["S_START" ""] ["BAR1A0" (wad-t-patch 16 32 40 8 32)] ["S_END" ""] ["E1M1" ""]] + wad-t-map + [["E1M2" ""]] + wad-t-map2)
@@ -98,9 +101,17 @@
    _ (test (d 'hp = 101) (d 'pz > 200.0) (d 'pz < 241.0) (zom d 'st = 'idle))
    ; ..used, it opens to its neighbour's ceiling less 4, and the zombieman wakes to the player
    d (wad-tics (wad-step d 'use) 70)
-   _ (test (d 'M 'secs 1 1 = 124) (wad-free? d 128.0 300.0))
+   (heard s) (map (f \ f 0) (s 'sfx))
+   _ (test (d 'M 'secs 1 1 = 124) (wad-free? d 128.0 300.0) (elem "DOROPN" (heard d)) (elem "ITEMUP" (heard d)))
    d (wad-tics d 24)
-   _ (test (zom d 'st != 'idle))
+   _ (test (zom d 'st != 'idle) (any (n \ elem n ["POSIT1" "POSIT2" "POSIT3"]) (heard d)))
+   ; ..heard: the mixer takes what was asked and writes 16-bit pairs, the shot's square wave in them
+   snd ("out/.wad-snd-" + show (getpid 0) + ".raw")
+   _ (open snd "w" @ p (: fd (wad-mixer p) _ (fd d) _ (test (d 'sfx = ()))
+                          d1 (wad-step d 'fire) _ (test (elem "PISTOL" (heard d1)))
+                          (fd d1, fd d1, close p)))
+   pcm (uread snd @ r (two? r ? (r 1) ""))
+   _ (test (#pcm > 0) (#pcm % 4 = 0) (any (i \ pcm i != 0) ^#pcm))
    ; ..and the pistol puts it down, a bullet a shot
    (shoot s k) (k = 0 || zom s 'st = 'die ? s (shoot (wad-tics (wad-step s 'fire) 15) (k - 1)))
    d (shoot d 12)
@@ -110,6 +121,7 @@
    r (wad-tics (wad-step (pins (wad-new 64 40 wd (wad-map wd "E1M2")) 'px 128.0 'pz 230.0) 'use) 70)
    r (wad-tics (wad-step (pins r 'has [0 1 4] 'rkt 2 'gun 4) 'fire) 20)
    _ (test (zom r 'st = 'die) (r 'rkt = 1) (any (o \ o 'proj = 1 && o 'boom > 0) (r 'objs)))
+   _ (test (elem "RLAUNC" (heard r)) (elem "BAREXP" (heard r)) (any (n \ elem n ["PODTH1" "PODTH2" "PODTH3"]) (heard r)))
 
    ; the body: a push glides on and slows; a strafe goes sideways; a gun changed comes down, then up
    ; (the state is one tablet, ticked in place: what to compare is read off first)
@@ -132,6 +144,6 @@
    f (wad-new 64 40 wd (typed 3))
    seen (keys (foldl (\ t v (pin t v 1)) {} (map (_ \ (: _ (wad-tics f 1) (peep (wad-pens f) (20 * 64 + 8) -1))) ^40)))
    ((test (#(f 'lights) = 1) (#seen >= 2)),
-    unlink path,
+    unlink path, unlink snd,
     test_fin (),
     puts "wad: ok\n"))
