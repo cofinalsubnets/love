@@ -37,6 +37,7 @@
 #
 # usage: ulp.sh OUTDIR LOVE
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 
 ho=$1
@@ -44,8 +45,7 @@ m=$2
 d=$ho/ulpgate            # NOT $ho/ulp -- that name is `make ulp`'s binary
 mkdir -p "$d"
 
-fail() { echo "FAIL test_ulp: $*" >&2; exit 1; }
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
+name=test_ulp
 
 arch=$(uname -m)
 if [ "$arch" != x64 ] && [ "$arch" != x86_64 ]; then

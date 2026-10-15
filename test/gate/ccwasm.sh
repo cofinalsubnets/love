@@ -14,6 +14,7 @@
 #
 # usage: ccwasm.sh OUTDIR LOVE
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 
 ho=$1
@@ -36,8 +37,6 @@ d=$ho/cc-wasm
 rm -rf "$d"
 mkdir -p "$d"
 
-fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 NODE=$(command -v node 2>/dev/null || true)
 if [ -z "$NODE" ]; then
@@ -58,13 +57,7 @@ for f in test/cc/*.c; do
 
   case " $unsupported " in
     *" $b "*)
-      if moonrun -t wasm -o "$d/$b.wasm" "$f" > "$d/$b.tlog" 2>&1; then
-        fail "$b: mooncc -t wasm BUILT a program listed as unsupported -- take it off the list in this script"
-      fi
-      st=$?
-      [ $st -lt 128 ] || fail "$b: mooncc died on a signal ($st) where a refusal was expected"
-      grep -q "$f" "$d/$b.tlog" \
-        || { cat "$d/$b.tlog" >&2; fail "$b: the refusal does not name the file"; }
+      refused "$d/$b.tlog" "$f" -t wasm -o "$d/$b.wasm" "$f"
       nref=$((nref + 1))
       continue ;;
   esac

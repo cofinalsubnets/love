@@ -19,6 +19,7 @@
 #
 # usage: ccthumb.sh TARGET OUTDIR LOVE     (TARGET: thumb1 | thumb2)
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 
 tgt=$1
@@ -33,8 +34,6 @@ case $tgt in
   *) echo "ccthumb.sh: unknown target $tgt" >&2; exit 1 ;;
 esac
 
-fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
   command -v $tool > /dev/null 2>&1 || {
@@ -144,13 +143,7 @@ for f in test/cc/*.c; do
 
   # the target has no lane: the build must FAIL, without a signal, naming the file
   if inlist "$b" "$refuse"; then
-    if moonrun -t "$tgt" -Dmain=cc_main -c "$f" "$d/$b.t.o" > "$d/$b.tlog" 2>&1; then
-      fail "$b: mooncc -t $tgt BUILT a program listed as unsupported -- take it off refuse="
-    fi
-    st=$?
-    [ $st -lt 128 ] || fail "$b: mooncc died on a signal ($st) where a refusal was expected"
-    grep -q "$f" "$d/$b.tlog" \
-      || { cat "$d/$b.tlog" >&2; fail "$b: the refusal does not name the file"; }
+    refused "$d/$b.tlog" "$f" -t "$tgt" -Dmain=cc_main -c "$f" "$d/$b.t.o"
     nref=$((nref + 1)); continue
   fi
 

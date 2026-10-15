@@ -22,6 +22,7 @@
 #
 # usage: thumb.sh TARGET OUTDIR
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 
 tgt=$1
@@ -38,8 +39,6 @@ case $tgt in
 esac
 
 name=test_$tgt
-fail() { echo "FAIL $*" >&2; exit 1; }
-moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
 
 for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
   command -v $tool > /dev/null 2>&1 || {

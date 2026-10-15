@@ -528,13 +528,10 @@ test_forge: host
 # the three programs no cross lane can build must refuse, not skip.
 test_cca64 test_ccrv64: test_cc%: host
 	@$(gsh) test/gate/ccarch.sh $* $(ho) $m
-# test_cci386 -- the battery whole on i386 (moonlibc, our link), run natively against gcc -m32
-test_cci386: host
-	@$(gsh) test/gate/cci386.sh $(ho) $m
-# test_ccarm -- the battery whole on linux's arm (moonlibc, our link), under qemu-arm against
-# arm-none-eabi-gcc's newlib build of the same source
-test_ccarm: host
-	@$(gsh) test/gate/ccarm.sh $(ho) $m
+# test_cci386 test_ccarm -- the battery whole on a 32-bit linux target (moonlibc, our link),
+# against gcc -m32 natively or arm-none-eabi-gcc's newlib under qemu-arm (cc32.sh)
+test_cci386 test_ccarm: test_cc%: host
+	@$(gsh) test/gate/cc32.sh $* $(ho) $m
 # test_ccwasm -- the same battery on the wasm target, node as the machine (ccwasm.sh)
 test_ccwasm: host
 	@$(gsh) test/gate/ccwasm.sh $(ho) $m

@@ -26,6 +26,7 @@
 #
 # usage: libc.sh OUTDIR LOVE
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 
 ho=$1
@@ -33,9 +34,7 @@ m=$2
 d=$ho/libc
 mkdir -p "$d"
 
-fail() { echo "FAIL test_libc: $*" >&2; exit 1; }
-# the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
+name=test_libc
 
 arch=$(uname -m)
 # uname's spelling, not the tree's `x64` -- the two part company here

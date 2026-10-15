@@ -31,6 +31,7 @@
 #
 # usage: asmops.sh HOSTDIR
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 ho=$1
 probe=test/gate/asmops.c
@@ -39,9 +40,6 @@ mkdir -p "$work"
 trap 'rm -rf "$work"' EXIT
 rc=0
 fail() { echo "FAIL test_asmops: $*" >&2; rc=1; }
-moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
-
-have() { command -v "$1" >/dev/null 2>&1; }
 
 # declared divergences, per arch: none. a name here is an op the two readers
 # are allowed to disagree on, with its reason beside it.

@@ -34,6 +34,7 @@
 # usage: cts.sh ARCH OUTDIR LOVE     (ARCH: x64 | a64 | rv64 | wasm)
 . test/gate/skip.sh
 . test/gate/a64run.sh
+. test/gate/cclib.sh
 set -u
 
 arch=$1
@@ -77,8 +78,6 @@ if [ "$arch" = wasm ]; then
 00187 no filesystem under the loader's kernel: fopen answers NULL, and a NULL FILE does not trap on wasm
 "
 fi
-fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # the roster read two ways: which kind a number is on, and what its cause says
 kindof() {
   case "$roster_refuses" in *"
@@ -138,9 +137,7 @@ for f in "$cts"/tests/single-exec/*.c; do
       pass)  fail "$b: mooncc refused a program that must pass -- $(head -1 "$d/$b.cclog")" ;;
       wrong) fail "$b: mooncc refuses a program rostered as compiling and answering WRONG ($(causeof "$b")) -- a gap and a defect are not the same news, so move its line" ;;
     esac
-    [ $st -lt 128 ] || fail "$b: mooncc died on a signal ($st) where a refusal was expected"
-    grep -q "$f" "$d/$b.cclog" \
-      || { cat "$d/$b.cclog" >&2; fail "$b: the refusal does not name the file"; }
+    refusal $st "$d/$b.cclog" "$f"
     nref=$((nref + 1)); continue
   fi
   [ "$want" != refuses ] \

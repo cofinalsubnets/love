@@ -16,6 +16,7 @@
 # usage: softfp.sh OUTDIR LOVE
 . test/gate/skip.sh
 . test/gate/a64run.sh
+. test/gate/cclib.sh
 set -u
 
 ho=$1
@@ -25,8 +26,6 @@ mkdir -p "$d"
 rc=0
 
 fail() { echo "FAIL $*" >&2; rc=1; }
-# the compiler under test, run from the project root -- rt.c comes in on -I.
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 # the system cc first: it is the reading of the algorithm, and if THIS leg fails the
 # mooncc legs are reporting the same bug and not a codegen one.

@@ -19,8 +19,8 @@ set -u
 ho=$1; shift
 d=$ho/drv
 mkdir -p "$d"
-fail() { echo "FAIL test_drv: $*" >&2; exit 1; }
-moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
+. test/gate/cclib.sh
+name=test_drv
 
 cat > "$d/a.c" <<'EOF'
 #include <stdio.h>

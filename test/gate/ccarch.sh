@@ -17,6 +17,7 @@
 # usage: ccarch.sh ARCH OUTDIR LOVE     (ARCH: a64 | rv64)
 . test/gate/skip.sh
 . test/gate/a64run.sh
+. test/gate/cclib.sh
 set -u
 
 arch=$1
@@ -45,8 +46,6 @@ d=$ho/cc-$arch
 rm -rf "$d"
 mkdir -p "$d"
 
-fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # a law's own flags for this target, off its first line: /* mooncc -t ARCH: FLAGS */. the x86-64
 # reference builds without them, so a flagged build must answer what the plain one does
 tflags() { sed -n "1s|^/\* mooncc -t $arch: \(.*\) \*/\$|\1|p" "$1"; }
@@ -84,13 +83,7 @@ for f in test/cc/*.c; do
 
   case " $unsupported " in
     *" $b "*)
-      if moonrun -t "$arch" -o "$d/$b.t" "$f" > "$d/$b.tlog" 2>&1; then
-        fail "$b: mooncc -t $arch BUILT a program listed as unsupported -- take it off the list in this script"
-      fi
-      st=$?
-      [ $st -lt 128 ] || fail "$b: mooncc died on a signal ($st) where a refusal was expected"
-      grep -q "$f" "$d/$b.tlog" \
-        || { cat "$d/$b.tlog" >&2; fail "$b: the refusal does not name the file"; }
+      refused "$d/$b.tlog" "$f" -t "$arch" -o "$d/$b.t" "$f"
       nref=$((nref + 1))
       continue ;;
   esac

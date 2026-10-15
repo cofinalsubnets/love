@@ -10,15 +10,14 @@
 #
 # usage: moon.sh OUTDIR LOVE LOVE0
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 
 ho=$1
 m=$2
 love0=$3
 
-fail() { echo "FAIL $*" >&2; exit 1; }
-# the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
+name=test_moon
 # ..and the BOOTSTRAP one, the lane that compiles src/love/love.c: love0 waking mooncc0.image
 moon0() { "$love0" wake out/mooncc0.image mooncc "$@"; }
 
@@ -60,23 +59,8 @@ fi
 
 cc_g=$(command -v gcc || command -v cc)
 
-# ------------------------------------------------- return 42, and agree with gcc
-printf 'int main() { return 42; }\n' > "$ho/.cc1.c"
-moonrun "$ho/.cc1.c" "$ho/.cc1" > /dev/null 2>&1 || fail "mooncc compile"
-"$ho/.cc1"; a=$?
-$cc_g -O0 -o "$ho/.cc1g" "$ho/.cc1.c" && "$ho/.cc1g"; b=$?
-[ $a -eq 42 ] && [ $a -eq $b ] || fail "mooncc vs gcc (ours $a gcc $b)"
-
-cat > "$ho/.cc2.c" <<'EOF'
-// c
-int f() { return 1; }
-int main() { return 7; }
-EOF
-moonrun "$ho/.cc2.c" "$ho/.cc2" > /dev/null 2>&1 && "$ho/.cc2"; a=$?
-$cc_g -O0 -o "$ho/.cc2g" "$ho/.cc2.c" && "$ho/.cc2g"; b=$?
-[ $a -eq $b ] || fail "mooncc two-fn vs gcc (ours $a gcc $b)"
-
 # ------------------------------------------------------------- the battery
+printf 'int main() { return 42; }\n' > "$ho/.cc1.c"
 for f in test/cc/*.c; do
   moonrun "$f" "$ho/.ccb" > /dev/null 2>&1 || fail "mooncc compile $f"
   "$ho/.ccb"; a=$?
@@ -439,11 +423,12 @@ echo "mooncc: -fshort-wchar, -fmacro-prefix-map and -ffixed-x18 do what they say
 # gcc cannot be the oracle here -- it HAS atomics -- so these are ours alone, and
 # each row must track the parity table: a claimed absence we do not have sends a
 # portable source down a fallback for nothing.
+# cok/cno TGT SRC MSG: mooncc -t TGT builds (cok) or refuses (cno) the printf format SRC
+cok() { printf "$2" > "$ho/.feat.c"; moonrun -c -t "$1" -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 || fail "$3"; }
+cno() { printf "$2" > "$ho/.feat.c"; moonrun -c -t "$1" -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "$3"; }
 c11feat() {                        # TGT MACRO want(1 present | 0 absent)
   if [ "$3" = 1 ]; then b="#ifndef $2"; else b="#ifdef $2"; fi
-  printf '%s\n#error no\n#endif\nint m(void){return 0;}\n' "$b" > "$ho/.feat.c"
-  moonrun -c -t "$1" -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-    || fail "C11 feature macro $2 on $1 (want present=$3)"
+  cok "$1" "$b\n#error no\n#endif\nint m(void){return 0;}\n" "C11 feature macro $2 on $1 (want present=$3)"
 }
 for t in x64 a64 rv64 thumb2 thumb2sp thumb1 arm; do
   for mac in __STDC_NO_ATOMICS__ __STDC_NO_THREADS__ __STDC_UTF_16__ __STDC_UTF_32__; do
@@ -454,29 +439,21 @@ for t in x64 a64 rv64 thumb2 thumb2sp thumb1 arm; do
 done
 # a TU that is ONLY a _Static_assert -- want answers the remainder, which is () at
 # EOF, and that read as "no `;` found". a failing assert must still refuse.
-printf '_Static_assert(1, "ok");' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 || fail "a TU of one _Static_assert"
-printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
+cok x64 '_Static_assert(1, "ok");' "a TU of one _Static_assert"
+cno x64 '_Static_assert(0, "boom");' "a FAILING lone _Static_assert passed"
 
 # C11 6.5.16.1: an integer reaches a pointer only as a NULL POINTER CONSTANT, so
 # `return 1` from a T* is a constraint violation -- src/love/main.c carried one for years,
 # clang named it, and we took it in silence and handed back address 1
-printf 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-  && fail "an int returned where a pointer is owed was accepted"
-printf 'struct s;\nstatic struct s *f(int x){ if (x) return (struct s*)1; return 0; }\nint m(void){return 0;}\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-  || fail "a CAST to the pointer type must still pass"
+cno x64 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' "an int returned where a pointer is owed was accepted"
+cok x64 'struct s;\nstatic struct s *f(int x){ if (x) return (struct s*)1; return 0; }\nint m(void){return 0;}\n' "a CAST to the pointer type must still pass"
 
 # a bound that does not fold at file scope is refused and named, never laid as a pointer's
 # worth of storage -- a runtime __builtin_offsetof reaching one must not pass in silence
 printf 'int n = 3;\nstatic int x[n];\nstruct S { int a[4]; };\nint i;\nchar y[__builtin_offsetof(struct S, a[i])];\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "variably modified 'x' at file scope" \
   || fail "a variably modified object at file scope was not refused by name"
-printf 'struct S { int a[4]; };\nint i;\nchar y[__builtin_offsetof(struct S, a[i])];\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-  && fail "a runtime offsetof as a file-scope bound was accepted"
+cno x64 'struct S { int a[4]; };\nint i;\nchar y[__builtin_offsetof(struct S, a[i])];\n' "a runtime offsetof as a file-scope bound was accepted"
 
 # cleanup (test/cc/176 holds the well-formed side): what it cannot carry refuses by name,
 # never a skipped attribute -- a dropped call is linux's guard() never unlocking
@@ -629,12 +606,8 @@ moonrun -o "$ho/.wk" "$ho/.wka.o" > /dev/null 2>&1 || fail "an asm .weak alone d
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the
 # well-formed side; only the refusals live here.
-printf 'int m(void){ int x __asm__("y"); return x; }\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-  && fail "an asm NAME on a local was skipped as decoration"
-printf 'int m(void){ register long sp asm("rsp"); asm("" : "+r"(sp)); return (int)sp; }\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-  && fail "a register variable pinned to the stack pointer was accepted"
+cno x64 'int m(void){ int x __asm__("y"); return x; }\n' "an asm NAME on a local was skipped as decoration"
+cno x64 'int m(void){ register long sp asm("rsp"); asm("" : "+r"(sp)); return (int)sp; }\n' "a register variable pinned to the stack pointer was accepted"
 # a FILE-SCOPE `register T nm asm("rsp")` is GNU's global register variable -- x86's
 # current_stack_pointer, which every kernel TU reaches through asm/asm.h. reads answer
 # the register and lay no storage; a WRITE refuses (gcc reserves the register for the
@@ -651,18 +624,12 @@ printf 'register unsigned long v asm("rcx");\nunsigned long m(void){ return v; }
 moonrun -c -o /dev/null "$ho/.greg3.c" 2>&1 | grep -q "stack pointer only" \
   || fail "a global register variable on an allocatable register was taken"
 
-printf 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return (int)v; }\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-  || fail "a register variable pinned by asm() to a nameable register refused"
+cok x64 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return (int)v; }\n' "a register variable pinned by asm() to a nameable register refused"
 # C11 6.8.1p3: a label is unique to its FUNCTION. two of a name laid one mangled label
 # twice and every goto took the first -- so they refuse. gcc's __label__ makes two blocks'
 # L two labels, and those compile.
-printf 'int m(void){ { L: ; } { L: ; } return 0; }\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-  && fail "a duplicate label was accepted"
-printf 'int m(void){ { __label__ L; L: ; } { __label__ L; L: ; } return 0; }\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-  || fail "two blocks' __label__ L refused"
+cno x64 'int m(void){ { L: ; } { L: ; } return 0; }\n' "a duplicate label was accepted"
+cok x64 'int m(void){ { __label__ L; L: ; } { __label__ L; L: ; } return 0; }\n' "two blocks' __label__ L refused"
 
 # a UCN takes EXACTLY 4 (or 8) hex digits -- a short run must REFUSE, not take what
 # it found. test/cc/138 holds the well-formed side; only the refusals live here.
@@ -673,26 +640,18 @@ moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
 # relaxation, which is why the cross gcc caught this and the host one did not.
 for bad in '\134u00E' '\134U0001F60' '\134u' '\134uZZZZ' \
            '\134u0041' '\134u0000' '\134u009F' '\134uD800' '\134uDFFF' '\134U00110000'; do
-  printf "char *s = \"$bad\";\nint m(void){return 0;}\n" > "$ho/.feat.c"
-  moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-    && fail "a malformed universal character name was accepted: $bad"
+  cno x64 "char *s = \"$bad\";\nint m(void){return 0;}\n" "a malformed universal character name was accepted: $bad"
 done
 # ..and in an IDENTIFIER, the other position a UCN takes (test/cc/138 holds the well-formed side)
 for bad in '\134u0041' '\134u00E' '\134uD800'; do
-  printf "int $bad;\nint m(void){return 0;}\n" > "$ho/.feat.c"
-  moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-    && fail "a malformed universal character name was accepted in an identifier: $bad"
+  cno x64 "int $bad;\nint m(void){return 0;}\n" "a malformed universal character name was accepted in an identifier: $bad"
 done
 for ok in '\134u0024' '\134u0040' '\134u0060' '\134u00A0' '\134U0010FFFF'; do
-  printf "char *s = \"$ok\";\nint m(void){return 0;}\n" > "$ho/.feat.c"
-  moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-    || fail "a legal universal character name was refused: $ok"
+  cok x64 "char *s = \"$ok\";\nint m(void){return 0;}\n" "a legal universal character name was refused: $ok"
 done
 
 # the freestanding header set is C11 4p6: these two were the ones we did not ship
-printf '#include <iso646.h>\n#include <stdalign.h>\nint m(void){return (1 and 2) + alignof(int);}\n' \
-  > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 || fail "iso646.h + stdalign.h"
+cok x64 '#include <iso646.h>\n#include <stdalign.h>\nint m(void){return (1 and 2) + alignof(int);}\n' "iso646.h + stdalign.h"
 echo "mooncc: C11 conditional features track the parity table on all six targets"
 
 # --------------------------------------------- -fno-inline: real, and neutral
