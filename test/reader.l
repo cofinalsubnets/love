@@ -28,7 +28,11 @@
  ('torn = sound '(40))                              ; the text ran out inside a shape
  (sound '(49 32 50) @ r                               ; ...and the residue reads the next
   (1 = <r && 2 = <(sound >r)))
- (sound '(40 41) @ r (two? r && !<r)))                  ; the datum () is still a datum
+ (sound '(40 41) @ r (two? r && !<r))                   ; the datum () is still a datum
+ ; a charlist whose tail is a number: the tail is its residue as it stands, as a name's is
+ (sound (cons 97 5) @ r ('a = <r && 5 = >r))
+ (sound (cons 97 0) @ r ('a = <r && 0 = >r && charm? >r))
+ (sound (cons 97 (cons 32 1)) @ r ('a = <r && 1 = >>r)))
 
 ; --- the string door -----------------------------------------------------------
 ; text is a string or a charlist and the reader spreads the first itself -- every

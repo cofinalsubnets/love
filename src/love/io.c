@@ -1274,7 +1274,7 @@ static struct g *rd_datum(struct g *g) {
   int const k = RdKind(h);
   if (k == RkOne) {
    word r = g->sp[RdCur];
-   if (charmp(r)) {
+   if (rd_in(g->sp[RdSrc], r)) {   // a string's position: a charlist's number tail is its rest as is
     if (!ok(g = have(g, (len(str(g->sp[RdSrc])) - getcharm(r) + 1) * chain_req))) return g;
     r = rd_rest(g); }
    return rd_done(g, rd_cons(g, g->sp[RdVal], r)); }
