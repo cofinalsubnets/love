@@ -29,6 +29,13 @@ test/uu.l, the ported section only (from "UniMath Foundations PartA")
   Definitions and theorem statements from Foundations/PartA.v et al, ported to
   uu's surface with the original names.
 
+src/love/audio/opus/, the Opus codec (decoder; the encoder half is removed)
+  Copyright 1994-2011 IETF Trust, Xiph.Org, Skype Limited, Octasic, Jean-Marc Valin,
+  Timothy B. Terriberry, CSIRO, Gregory Maxwell, Mark Borgerding, Erik de Castro Lopo.
+  BSD 3-Clause; the full text in src/love/audio/opus/COPYING.
+  The reference implementation from RFC 6716, its float build, compiled as one unit
+  by src/love/audio/opus.c. Each file keeps its own license header.
+
 
 --- data ---
 
@@ -60,3 +67,8 @@ src/love/quay/cleat_8x16.c
 src/apps/lore/grass.l, the `score` list
   "Toy Soldiers", written by Martika and Michael Jay, 1988.
   The tune the music box plays is an arrangement by ear of its chorus melody.
+
+src/apps/lore/grass99.l, the `score99` list
+  "I Want It That Way", written by Max Martin and Andreas Carlsson, recorded by the
+  Backstreet Boys, 1999.
+  The tune the music box plays is an arrangement of a bar of its melody.

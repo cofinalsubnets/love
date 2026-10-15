@@ -1,12 +1,12 @@
-; src/apps/tls/chacha.l -- chacha20 (rfc 8439), in the word lane.
+; test/host/chacha.l -- chacha20 (rfc 8439), in the word lane.
 ;
 ; the cipher is add / xor / rotate on 32-bit words, which is what a z-tray does: fixed
 ; width, wrapping `+ - *`, the bitwise five elementwise (test/spec.l's WIDTH LAW).
 ; vectorised across blocks, not across the state: each of the 16 state words is a galaxy
 ; of n cells, one per block in flight, so a round is pure elementwise work and the
 ; diagonal round only names other galaxies. the counter word is ctr + (iota n).
-; the serving path uses the C twin (src/love/crypto/tls.c's `chacha20`); this file is the
-; oracle, and test/host/tlsc.l holds the twin to it.
+; the aead runs the C (src/love/crypto/tls.c's `chacha20`); this is its oracle, loaded by the
+; laws into module 'tls: test/host/tls.l holds it to the rfc, test/host/tlsc.l the C to it.
 ;
 ; fresh names per step: in one body-having `:`, `(: a (& (a + b) m32) ..)` reads the
 ; inner `a` before its pin -- 0 -- and the cipher still runs, encrypting with nothing.

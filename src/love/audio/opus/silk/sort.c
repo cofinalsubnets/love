@@ -41,52 +41,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "SigProc_FIX.h"
 
-void silk_insertion_sort_increasing(
-    opus_int32           *a,             /* I/O   Unsorted / Sorted vector               */
-    opus_int             *idx,           /* O     Index vector for the sorted elements   */
-    const opus_int       L,              /* I     Vector length                          */
-    const opus_int       K               /* I     Number of correctly sorted positions   */
-)
-{
-    opus_int32    value;
-    opus_int        i, j;
-
-    /* Safety checks */
-    silk_assert( K >  0 );
-    silk_assert( L >  0 );
-    silk_assert( L >= K );
-
-    /* Write start indices in index vector */
-    for( i = 0; i < K; i++ ) {
-        idx[ i ] = i;
-    }
-
-    /* Sort vector elements by value, increasing order */
-    for( i = 1; i < K; i++ ) {
-        value = a[ i ];
-        for( j = i - 1; ( j >= 0 ) && ( value < a[ j ] ); j-- ) {
-            a[ j + 1 ]   = a[ j ];       /* Shift value */
-            idx[ j + 1 ] = idx[ j ];     /* Shift index */
-        }
-        a[ j + 1 ]   = value;   /* Write value */
-        idx[ j + 1 ] = i;       /* Write index */
-    }
-
-    /* If less than L values are asked for, check the remaining values, */
-    /* but only spend CPU to ensure that the K first values are correct */
-    for( i = K; i < L; i++ ) {
-        value = a[ i ];
-        if( value < a[ K - 1 ] ) {
-            for( j = K - 2; ( j >= 0 ) && ( value < a[ j ] ); j-- ) {
-                a[ j + 1 ]   = a[ j ];       /* Shift value */
-                idx[ j + 1 ] = idx[ j ];     /* Shift index */
-            }
-            a[ j + 1 ]   = value;   /* Write value */
-            idx[ j + 1 ] = i;       /* Write index */
-        }
-    }
-}
-
 #ifdef FIXED_POINT
 /* This function is only used by the fixed-point build */
 void silk_insertion_sort_decreasing_int16(

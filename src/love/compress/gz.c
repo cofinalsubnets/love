@@ -336,8 +336,8 @@ LvDef("inflate-feed", inflate_feed, 2, "gz");
 // a twin held to the bytes: same greedy parse (chain 32, min match 3, the far-3
 // refusal at 4096), same 16384-symbol blocks each costed stored/fixed/dynamic, same
 // two-queue Huffman merge with its leaf-wins tie, same halving walk back under the
-// depth limit -- so `cmp` over any input is the differential. gz-deflate stays the
-// readable statement; test/host/gzc.l holds the two to the same bytes.
+// depth limit -- so `cmp` over any input is the differential. test/host/gzdeflate.l's
+// gz-deflatel is the readable statement; test/host/gzc.l holds the two to the same bytes.
 // why it exists: the love coder is 35x-to-13x off C, but its real cost is the heap.
 // interpreted DEFLATE churns cells per symbol, and on the love0 egg that runs selfpack
 // the heap grows toward the budget before a collection pays. this is a fixed window
