@@ -1,17 +1,11 @@
-; random (xoshiro256++ / SplitMix64), two layers. functional: (wheel n) -> a fresh
-; 256-bit state (rank-1 len-4 tuple); (random st n) -> (value . st'), value's type
-; by n -- positive int -> int in [0,n), float -> float in [0,n), n <= 0 -> a
-; full-width int. The state is copied not mutated, so a seed repeats on every target
-; (the tuple is a Z array on a 64-bit word, a C array on wasm -- the draw canonicalizes
-; to 62 bits). global (hidden clock-seeded stream; (rng-set (wheel n)) pins it): (rand n)
-; -> int in [0,n) (n<=0 full-width); (randf n) -> float in [0,n) (n<=0 -> [0,1)).
+; random: functional (wheel n) and (random st n) -> (value . st'), and the global rand/randf.
+; the state is copied, not mutated, so a seed repeats on every target
 
 (: (rdraw s) <(random (wheel s) 0)                  ; 1st full-width functional draw
    (rseq3 s) (: st (wheel s) a (random st 0) b (random >a 0) c (random >b 0)
                 [<a <b <c]))             ; first 3 full-width functional draws
 (test
- ; --- state-tuple structure: rank-1, length 4, 64-bit limbs (Z array, or C on
- ; a 32-bit word where C is the 8-byte-wide kind -- the 256-bit payload either way) ---
+ ; --- the state: rank 1, four 64-bit limbs ---
  (4 = #(wheel 1))
  (1 = rank (wheel 1))
  (tier (wheel 0) = tier (wheel 1))       ; a seed's limb type is stable...
@@ -55,8 +49,7 @@
  (randf 4 @ u (0 <= u && u < 4))               ; (randf n) -> [0,n)
  (gem? (randf 100))
 
- ; --- rng-set pins the global stream: (rng-set (wheel n)) makes rand/randf
- ; reproducible -- the public writer beside the public readers; rng-get reads it ---
+ ; --- rng-set pins the global stream, rng-get reads it ---
  (: _ (rng-set (wheel 5)) a (rand 0) _ (rng-set (wheel 5)) b (rand 0) (a = b))
  (: _ (rng-set (wheel 5)) a (randf 0) _ (rng-set (wheel 5)) b (randf 0) (a = b))
  (: _ (rng-set (wheel 5)) a (rand 0) _ (rng-set (wheel 6)) b (rand 0) !(a = b))

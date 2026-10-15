@@ -1,20 +1,6 @@
-/* 32-bit unsigned arithmetic WRAPS -- `unsigned` is a modular ring at 2^32, and
- * C says so for + - * << (& | ^ cannot carry, / and % cannot grow).
- *
- * cc computes in 64-bit registers and used to truncate only on a STORE, so a
- * uint result consumed IN PLACE -- by a shift, a compare, an index -- carried
- * bits above 31 that C had already thrown away. Parking the same value in a
- * variable first hid it, which is why every package gate passed for months: the
- * shape that catches it is a raw overflowing product fed straight to a shift,
- * and the classic instance is a de Bruijn ctz. musl's mallocng has one, and the
- * garbage index it read walked mallocng into unbounded recursion.
- *
- * The type matters as much as the wrap: `(x & -x) * K` needs the `&` to answer
- * `unsigned int` too, or the multiply sees a 64-bit operand and skips its own
- * narrowing. Constant folding needs it as well -- the folder reads its types off
- * the casts the literal lane emits for a `u` suffix.
- *
- * Each check contributes 1, so the exit code IS the number that passed. */
+/* 32-bit unsigned + - * << wraps at 2^32, also when consumed in place (shift,
+ * compare, index) -- the de Bruijn ctz shape. `x & -x` must type unsigned int too,
+ * or the multiply sees a 64-bit operand. each check adds 1: the exit code is the pass count. */
 
 typedef unsigned int u32;
 

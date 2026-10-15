@@ -1,6 +1,5 @@
-; sizes no heap holds and depths no C stack holds: each is refused as a scare a trap
-; catches, or as the lane's own (), and the session carries on. the operands ride trap's
-; x, so no constant fold runs the refusal at compile time, outside the trap.
+; sizes no heap holds and depths no c stack holds are refused, and the session carries on.
+; operands ride trap's x so no constant fold runs the refusal outside the trap
 (: rf-no (a \ b \ 'refused)
    (rf-try f x) (trap f x rf-no)
    rf-huge (max-charm // 2 + 1)                                ; 2^61 on a 64-bit charm

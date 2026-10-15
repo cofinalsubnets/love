@@ -1,40 +1,14 @@
-(* proof/spec.v -- ai's headline laws, machine-checked in Rocq.
-
-   The executable spec is test/spec.l: every claim assert-backed, on every
-   target, green under `make test`. That DEMONSTRATES the laws (it exhibits
-   them at runtime). This file is the translation "back to coq" that upgrades
-   demonstrate toward PROVE -- the same laws as theorems in a consistent
-   metatheory.
-
-   Scope: the pure combinator / numeral / absence core -- spec.l's first
-   section ("everything is a function"). The numeric tower (float, complex,
-   bignum) and the honest transcendental misses (e^(i*pi) misses -1 by ~1e-16
-   ON PURPOSE) are deliberately out of this first slice.
-
-   "up to explosion of world": the uu kernel (test/uu.l) runs type-in-type
-   (UniMath's `Unset Universe Checking`), so there `empty` is inhabited
-   -- `but_seriously_the_world_explodes : empty` (uu.l:1355) -- and ex falso
-   gives every value. This file lives in UNIVERSE-CHECKED Rocq: the world does
-   not explode here, so the theorems below are unconditional. The caveat is
-   honest about the only escape hatch any formal demonstration has -- the
-   consistency of its own metatheory.
-
-   Written by Claude (Anthropic), the Opus 4.8 model. *)
+(* spec.v -- the headline laws of test/spec.l, machine-checked: the combinator, numeral and
+   absence core. universe-checked, so unlike uu's type-in-type these are unconditional. *)
 
 From Stdlib Require Import PeanoNat List.
 Import ListNotations.
-(* the numeral tower (262144, 65536, 3^27, ..) are big nat literals; Coq parses
-   them via of_num_uint to AVOID a parse-time stack overflow, then warns it did so.
-   that warning is noise -- the safe thing shouldn't nag. silence it. *)
+(* the tower's big nat literals parse via of_num_uint; silence its warning *)
 Set Warnings "-abstract-large-number".
 
-(* ============================================================ *)
-(* the numeral lane: (n x) = x ** n                              *)
-(* ============================================================ *)
+(* --- the numeral lane: (n x) = x ** n --- *)
 
-(* A numeral is an operator. Applied to a value it raises that value to the
-   n: a single law from which 0 is const-1 (x^0 = 1), 1 is the identity
-   (x^1 = x), and the whole tower fall out. *)
+(* a numeral is an operator: applied to a value it raises it to the n *)
 
 Definition app (n x : nat) : nat := Nat.pow x n.
 
@@ -62,15 +36,9 @@ Proof. reflexivity. Qed.
 Theorem tetration : app (app (app 2 2) 2) 2 = 65536.
 Proof. reflexivity. Qed.
 
-(* ============================================================ *)
-(* the function lane: (n f) iterates f n times                  *)
-(* ============================================================ *)
+(* --- the function lane: (n f) iterates f n times --- *)
 
-(* The SAME church numeral, dispatched on the KIND of its argument. Applied
-   to a function it composes: (n f) = f o f o ... o f, n times. `Nat.iter`
-   is exactly this. (n x) = x ** n above is the instance where the argument
-   is itself a numeral -- so x^n is not the whole story, only the
-   numeral-on-numeral face of one operation. *)
+(* the same numeral applied to a function composes it n times; x ** n is its numeral face *)
 
 Definition appf {A} (n : nat) (f : A -> A) : A -> A := fun x => Nat.iter n f x.
 
@@ -82,8 +50,7 @@ Proof. reflexivity. Qed.
 Theorem inc_three : appf 3 S 9 = 12.
 Proof. reflexivity. Qed.
 
-(* The two lanes agree where they meet: iterating multiply-by-b, b times
-   on 1, is b ** n -- the numeral-on-numeral identity made explicit. *)
+(* the lanes agree: iterating multiply-by-x n times on 1 is x ** n *)
 Theorem lanes_agree : forall n x, app n x = appf n (Nat.mul x) 1.
 Proof.
   intros n x. unfold app, appf.
@@ -91,12 +58,9 @@ Proof.
   simpl. rewrite IH. reflexivity.
 Qed.
 
-(* ============================================================ *)
-(* currying and the empty form                                  *)
-(* ============================================================ *)
+(* --- currying and the empty form --- *)
 
-(* Application is left-associative -- f x y = (f x) y -- and with no
-   operands (f) = f, the empty-form law. A spine makes both definitional. *)
+(* application is left-associative, and (f) = f *)
 
 Fixpoint spine (f : nat) (xs : list nat) : nat :=
   match xs with
@@ -112,16 +76,10 @@ Proof. reflexivity. Qed.
 Theorem curry : forall f x y, spine f [x; y] = app (app f x) y.
 Proof. reflexivity. Qed.
 
-(* ============================================================ *)
-(* the zero point as a unit: it absorbs application both ways    *)
-(* ============================================================ *)
+(* --- the zero point as a unit --- *)
 
-(* A name not in the book reads as the zero point: a nameless unit, `Pt`.
-   The binary shows it absorbs application two ways:
-     (Pt x)        = 1     -- as operator it is const-1 (like 0)
-     (numeric Pt)  = Pt    -- as a numeral's base it absorbs: Pt ** n = Pt
-   vapp is TOTAL: a value for every pair -- no stuck state, no undefined
-   behavior, up to explosion of world. *)
+(* an unbound name reads as the zero point Pt: const-1 as operator, absorbing as a base.
+   vapp is total. *)
 
 Inductive value := Num (n : nat) | Cx | Pt.   (* Cx stands in for i: numeric, not a nat numeral *)
 
@@ -140,46 +98,20 @@ Definition vapp (f a : value) : value :=
 Theorem unit_is_const_one : forall a, vapp Pt a = Num 1.
 Proof. reflexivity. Qed.
 
-(* the nothing surface: () (the zero-point Pt) is DISTINCT from the number 0 (Num 0) --
-   a mask of nothing is a FACE, not the bare value. Both are nothing by net (the V model
-   below: Vnil and Vnum 0 both net 0); they are distinct VALUES wearing different masks. *)
+(* () (Pt) is distinct from 0 (Num 0), though both net 0 *)
 Theorem unit_neq_zero : Pt <> Num 0.
 Proof. discriminate. Qed.
 
-(* ============================================================ *)
-(* totality: no undefined behavior, up to explosion of world    *)
-(* ============================================================ *)
+(* --- totality --- *)
 
-(* vapp is a total function: defined on EVERY pair by an exhaustive match
-   (Rocq checks the exhaustiveness). There is no error constructor and no
-   stuck state -- "no undefined behavior" by construction. The model covers
-   the absence/numeral fragment; full no-UB over the whole tower is the
-   larger program this file seeds. *)
+(* vapp is total by exhaustive match: no error constructor, no stuck state *)
 Theorem total : forall f a, exists v, vapp f a = v.
 Proof. intros f a. exists (vapp f a). reflexivity. Qed.
 
-(* ============================================================ *)
-(* true and false: the net measure and its saturation          *)
-(* ============================================================ *)
+(* --- true and false: the net measure and its saturation --- *)
 
-(* false is NOTHING: a value is false iff its net measure is <= 0. The net is
-   a complex-valued content measure; this slice models the REAL fragment
-   (net : V -> Z): a number is its own value, () is 0, and a link is the sum of
-   its two halves -- net (Vcons a b) = net a + net b, with no case on b, so a
-   proper list's Vnil tail adds nothing and a dotted tail counts like any car.
-   The complex extension (! and $ both read the REAL part alone; the
-   magnitude is abs's business) needs
-   reals and is the next slice; everything here is exact over the integer net.
-
-   The FINER carrier is test/uuval.l's `val`, in uu: the measure there is complex
-   over half-integers rather than Z (so ceil is not the identity, and the ratio and
-   twin bands are readable), a leaf carries a tag (so () and 0 part without a
-   separate constructor), and equality is structural rather than propositional.
-   It exports back to universe-checked Rocq through src/tools/uu2coq.l, so the two are
-   not a strong/weak pair -- what this file keeps is the WIDTH (maxcharm at the
-   host's 2^62-1, where uu names a small one and proves the same three clamp laws
-   against it), the order and colour facts the rest of this file leans on, and the
-   APPEND hom, which the list view has and the tree view does not. *)
+(* false is nothing: net <= 0. the real fragment, net : V -> Z; a link nets car + cdr,
+   so a dotted tail counts. the complex net is further down. *)
 
 From Stdlib Require Import ZArith Lia Permutation.
 Open Scope Z_scope.
@@ -193,18 +125,12 @@ Fixpoint net (v : V) : Z :=
   | Vcons a b           => net a + net b    (* every link: the car and the cdr *)
   end.
 
-(* THE CHARM CEILING. a charm is the codomain of every rung of the measure tower, so a
-   net that will not fit lands on the EDGE rather than wrapping or widening (love.c's
-   saturate/ceilnet). the charm is the word minus its two tag bits, so the bound is
-   width-dependent -- 2^62-1 on the 64-bit host every gate here runs, and the model names
-   that one. the LAWS below are stated against `maxcharm` and hold at any width; only the
-   literal moves. spec.l asserts the ceiling without naming it: ($(100 2) = $(200 2)) is
-   the whole of "every positive big saturates", true at every width. *)
+(* the charm ceiling: a net that will not fit lands on the edge. 2^62-1 is the 64-bit
+   width; the laws hold at any width, only the literal moves. *)
 Definition maxcharm : Z := 2^62 - 1.
 Theorem maxcharm_pos : 0 < maxcharm.  Proof. reflexivity. Qed.
 
-(* $ (sat): the clamp at BOTH ends -- max(0, ceil net) then the charm ceiling; an integer
-   net makes ceil the identity, and the Z face is what gen.v's instances speak. *)
+(* $ (sat): clamp to [0, maxcharm]; an integer net makes ceil the identity *)
 Definition satZ (n : Z) : Z := Z.min maxcharm (Z.max 0 n).
 Definition sat (v : V) : Z := satZ (net v).
 (* ! (nilp): false is nothing -- net <= 0. *)
@@ -212,7 +138,7 @@ Definition nilp (v : V) : bool := net v <=? 0.
 (* !! : the truth bit -- positive green, net > 0. *)
 Definition tru (v : V) : bool := 0 <? net v.
 
-(* THE INVARIANT  !x == (0 = $x)  -- spec.l: (!"" = 0 = $"") *)
+(* the invariant  !x == (0 = $x) *)
 Theorem nilp_iff_sat0 : forall v, nilp v = (sat v =? 0).
 Proof.
   intro v. unfold nilp, sat, satZ. pose proof maxcharm_pos as Hc.
@@ -221,9 +147,7 @@ Proof.
   - apply Z.leb_gt in H. symmetry. apply Z.eqb_neq. lia.
 Qed.
 
-(* the saturation law: $ is nonnegative, it keeps a net that FITS, and it clamps at both
-   ends -- 0 below, the charm ceiling above. sat_ceils is what makes every positive big
-   one value: past the ceiling the net is no longer readable, only its edge. *)
+(* $ is nonnegative, keeps a net that fits, and clamps at both ends *)
 Theorem sat_nonneg : forall v, 0 <= sat v.
 Proof. intro v. unfold sat, satZ. pose proof maxcharm_pos. lia. Qed.
 Theorem sat_keeps  : forall v, 0 < net v -> net v <= maxcharm -> sat v = net v.
@@ -231,20 +155,15 @@ Proof. intros v H H2. unfold sat, satZ. lia. Qed.
 Theorem sat_ceils  : forall v, maxcharm <= net v -> sat v = maxcharm.
 Proof. intros v H. unfold sat, satZ. pose proof maxcharm_pos. lia. Qed.
 
-(* the nothing surface, by net: every mask of nothing nets 0 (green/false). The empty chain
-   () (Vnil) and the number 0 (Vnum 0) are DISTINCT values yet both nilp -- masks of one
-   nothing, not the same value. (spec.l: !() !0, !(= () 0).) *)
+(* () and 0 are distinct values, both nothing *)
 Theorem nil_nothing  : nilp Vnil = true.        Proof. reflexivity. Qed.
 Theorem zero_nothing : nilp (Vnum 0) = true.    Proof. reflexivity. Qed.
 Theorem nil_neq_zero : Vnil <> Vnum 0.          Proof. discriminate. Qed.
 Theorem sat_clamps  : forall v, net v <= 0 -> sat v = 0.
 Proof. intros v H. unfold sat, satZ. pose proof maxcharm_pos. lia. Qed.
 
-(* the COLORS, by the SIGN of the net (its real part -- not the total order, which
-   parts from truth on the imaginary axis): GREEN nonneg (the kept band, what $ keeps;
-   positive green = true), RED neg (below the floor, $ clamps it up), BLUE the floor
-   (net 0). green and blue are DUAL, not disjoint: 0 is green by sign AND blue by measure
-   -- the overlap where green meets nothing. (Reverts the b601b93b frequency flip.) *)
+(* colours by the sign of the real net: green >= 0, red < 0, blue = 0; green and blue
+   overlap at 0 *)
 Definition green (v : V) := 0 <= net v.
 Definition red   (v : V) := net v < 0.
 Definition blue  (v : V) := net v = 0.
@@ -270,7 +189,7 @@ Proof.
     rewrite IH. reflexivity.
 Qed.
 
-(* + IS THE MEASURE HOMOMORPHISM: net distributes over append *)
+(* + is the measure homomorphism: net distributes over append *)
 Theorem netl_app : forall xs ys, netl (xs ++ ys) = netl xs + netl ys.
 Proof. induction xs as [|x xs IH]; intro ys; simpl; [reflexivity | rewrite IH; lia]. Qed.
 
@@ -288,33 +207,16 @@ Theorem net_red    : net (vlist [Vnum (-2); Vnum 1]) = -1.       Proof. reflexiv
 Theorem red_red    : red (vlist [Vnum (-2); Vnum 1]).            Proof. reflexivity. Qed. (* ... and red *)
 Theorem blue_zero  : blue (Vnum 0).                              Proof. reflexivity. Qed.
 
-(* ============================================================ *)
-(* order & equality: < is a TOTAL order over all values         *)
-(* ============================================================ *)
+(* --- order and equality: < is a total order --- *)
 
-(* The total order flattens the type lattice into BANDS, low to high (TRUE-BLUE:
-   the symbol band -- mints AND noms -- is the floor, below string and number):
-     symbol < string < number < product < map < top
-   and orders within each band by value / lexicographically. This slice
-   models the band structure with one comparable key per band (the within-band
-   lex order for text and products collapsed to that key -- the lexicographic
-   refinement is the next slice). The point proved here is the marquee claim:
-   the relation is a genuine TOTAL ORDER (irreflexive + transitive + trichotomy
-   for <, reflexive + antisymmetric + transitive + total for <=), and `=` is
-   its Eq cell -- propositional equality, a linear order not a preorder.
-
-   `=` bridges the numeric tower (3 = 3.0): a number band carries the
-   mathematical value rep-blindly, so the float 3.0 and the fixnum 3 are the
-   SAME Onum -- there is no separate rep to model. And `idp` (pointer identity)
-   is FINER than `=` on heap values: '(1) = '(1) yet !(idp '(1) '(1)). Identity
-   has no model here, where nothing is shared -- a deliberate omission. *)
+(* < is a total order: bands symbol < string < number < product < map < top, one key per
+   band, = its eq cell. 3 and 3.0 are one Onum; idp is not modeled. *)
 
 Inductive O :=
   | Onum (z : Z) | Ostr (z : Z) | Osym (z : Z)
   | Oprod (z : Z) | Omap (z : Z) | Otop (z : Z).
 
-(* TRUE-BLUE: the symbol band (mints + noms) is the FLOOR, below string and
-   number; a point thus sits below every number (the blue floor). *)
+(* the symbol band is the floor, so a point sits below every number *)
 Definition band (o : O) : Z :=
   match o with Osym _ => 0 | Ostr _ => 1 | Onum _ => 2
              | Oprod _ => 3 | Omap _ => 4 | Otop _ => 5 end.
@@ -382,39 +284,13 @@ Theorem number_lt_product : forall x y, lt (Onum x)  (Oprod y). Proof. intros. l
 Theorem product_lt_map    : forall x y, lt (Oprod x) (Omap y).  Proof. intros. left. cbn. lia. Qed.
 Theorem map_lt_top        : forall x y, lt (Omap x)  (Otop y).  Proof. intros. left. cbn. lia. Qed.
 
-(* the 0-vs-() discipline, ORDER side: () is a FLOOR MINT (an Osym, the greenest
-   point), so it sits strictly below the number 0 (an Onum) -- ORDER-distinct,
-   while the value model has them =-equal-as-nothing (nil_neq_zero: both nilp, yet
-   distinct values). Two of the three axes the flip thread asked the proof to keep
-   apart; the third, CONTROL (() hands control to the runtime g, 0 is the inert
-   value-false bit -- floor-is-the-runtime), is operational and lives outside this
-   pure order/net math. *)
+(* () is a floor mint, strictly below the number 0 *)
 Theorem unit_lt_zero : forall z, lt (Osym z) (Onum 0).  Proof. intros. left. cbn. lia. Qed.
 
-(* ============================================================ *)
-(* comparing functions: = is alpha + structural                 *)
-(* ============================================================ *)
+(* --- comparing functions: = is alpha + structural --- *)
 
-(* `=` on functions is alpha-equivalence of their source. With de Bruijn
-   indices alpha-equivalence IS syntactic equality (the names are gone), so it
-   is DECIDABLE and structural -- exactly the spec's claim. A number NEVER
-   equals a closure: numerals ACT as their lambdas under apply ((1 z) = z,
-   (0 z) = 1 -- the reduction section below), but `=` stays representation-
-   strict (bridging 0/1 would break congruence (2 * id <> 2), the total
-   order (a lambda seats in the top band), and tower transitivity).
-
-   Where the line sits, precisely (it is NOT "never reduce"): `=` cannot chase
-   GENERAL beta -- beta-equality of lambda terms is undecidable (a common reduct
-   may never appear), and `=` is total -- so on two SOURCE terms it stays α+structural
-   and reduces nothing. eta likewise stays unbridged: (\ x (f x)) /= f (eta_not_bridged
-   below), since bridging it means REDUCING an unreduced term, off the decidable side.
-   BUT a CLOSURE VALUE is `ev`'s already-reduced artifact -- a partial-app is a held
-   beta-redex with its argument captured RIGHT THERE -- so closure `=` (and the α-hash a
-   map keys by) sees the ONE reduction `ev` performed to build it: (adder 5) = (\ x (+ x 5)).
-   That is decidable (the redex is already contracted in the value -- finite captures, no
-   search) and adds no reduction power: it is exactly st_beta surfaced into `=`
-   (closure_beta_bridge, in the reduction section). So `=` never reduces on its OWN; it
-   just declines to pretend the capture isn't there. *)
+(* `=` on functions is alpha-equivalence: syntactic under de bruijn, so decidable. it never
+   chases general beta or eta; a closure value already carries the one beta ev ran. *)
 
 Open Scope nat_scope.
 Inductive tm := Var (n : nat) | Lam (b : tm) | App (f a : tm).
@@ -441,9 +317,7 @@ Proof. reflexivity. Qed.
 Theorem free_neq_bound : tm_one <> Lam (Var 1).
 Proof. discriminate. Qed.
 
-(* const-1's body IS the identity term: (\ _ 1) and (\ _ (\ x x)) share one
-   de Bruijn skeleton -- a fact about the term model (the runtime `=` never
-   bridges a numeral to a lambda). *)
+(* const-1's body is the identity term (a term fact: runtime = never bridges a numeral) *)
 Theorem zero_is_const_one : tm_zero = Lam tm_one.
 Proof. reflexivity. Qed.
 Theorem zero_ne_const_two : tm_zero <> Lam (Lam (Lam (Var 0))).
@@ -455,23 +329,9 @@ Proof. discriminate. Qed.
 Theorem eta_not_bridged : Lam (App tm_plus (Var 0)) <> tm_plus.
 Proof. discriminate. Qed.
 
-(* ============================================================ *)
-(* reduction: the semantics `ev` RUNS (not what `=` observes)   *)
-(* ============================================================ *)
-(* `=` is alpha+structural and deliberately stops there (above). The runtime's
-   evaluator `ev` goes further -- it REDUCES. This models that operational layer
-   with de Bruijn beta+eta, so the numeral laws (1 acts as id, 0 as const-1, the
-   Church tower) hold not just as an encoding but as actual reductions, and the
-   distinctions `=` keeps survive reduction too. Each theorem here has a twin
-   assertion against the real binary in test/spec.l (e.g. ((\ x x) 5) ; 5): the
-   Rocq side says "valid by the calculus", the corpus side says "the binary
-   computes exactly this". Two independent witnesses for one claim.
-
-   shift bumps the free vars (index >= cutoff c) when we pass under a binder;
-   subst j s t replaces var j by s and renumbers the vars that outlive the
-   removed binder. The example proofs close by COMPUTATION (exact reduces the
-   index `if`s), so an off-by-one in subst cannot typecheck -- the safety is in
-   the conversion check, not in trusting the definition. *)
+(* --- reduction: what `ev` runs, not what `=` observes --- *)
+(* de bruijn beta+eta, what ev runs; each theorem has a twin in test/spec.l. the examples
+   close by computation, so an off-by-one in subst cannot typecheck. *)
 
 Fixpoint shift (d c : nat) (t : tm) : tm :=
   match t with
@@ -508,12 +368,7 @@ Proof. intro a. exact (st_beta (Var 0) a). Qed.
 Theorem beta_const : forall a, step (App tm_zero a) tm_one.
 Proof. intro a. exact (st_beta (Lam (Var 0)) a). Qed.
 
-(* THE BETA BRIDGE that closure `=` observes (love.c clo_eq / nf_hash): a held redex --
-   a partial-app (App (Lam b) a), the captured arg a sitting in the closure -- and its
-   contractum (subst 0 a b, the no-capture residual) are identified by value `=` and the
-   α-hash. This is SOUND and decidable precisely because it is ONE st_beta step, already in
-   the calculus: the value `=` agreeing with the reduction `ev` ran, never reducing on its
-   own (so general beta / eta stay unbridged -- eta_not_bridged). The proof IS st_beta. *)
+(* the beta bridge closure `=` observes: a held redex equals its contractum, one st_beta *)
 Theorem closure_beta_bridge : forall b a, step (App (Lam b) a) (subst 0 a b).
 Proof. intros. apply st_beta. Qed.
 
@@ -526,33 +381,14 @@ Proof.
   apply sn_refl.
 Qed.
 
-(* eta reinforces eta_not_bridged: under de Bruijn the eta-reduct of
-   `Lam (App (Var 7) (Var 0))` is Var 6, NOT tm_plus = Var 7 -- the binder
-   shifted the index, so reduction cannot collapse them either. *)
+(* the eta-reduct is Var 6, not Var 7: reduction cannot collapse them either *)
 Theorem eta_redex_shifts : step (Lam (App (Var 7) (Var 0))) (Var 6).
 Proof. exact (st_eta (Var 6)). Qed.
 
-(* ============================================================ *)
-(* + and * are generic: the sequence monoid and repetition      *)
-(* ============================================================ *)
+(* --- + and * are generic: the sequence monoid and repetition --- *)
 
-(* `+` on sequences (strings, lists) is concatenation -- a MONOID: associative,
-   with the empty sequence as identity ("" and () are the units, cat_nil_l/r).
-   The runtime LIFTS that unit out of the sequence lane: a bare mint -- the zero
-   point () too -- is +'s IDENTITY in EVERY lane (() + x = x for a number,
-   string, complex, array, anything). Under * that same token is the ZERO, and
-   the zero ANNIHILATES (() * x = (), gunit_times_l/r below); *'s identity is 1,
-   the numeral that is already the identity function. `*` is REPEATED `+`: a
-   sequence times an EXACT count is |count| copies concatenated (smul_hom, the
-   action law), and an inexact count is no count -- it answers the absorbing ().
-   `+` is also the MEASURE HOMOMORPHISM: the net of a concatenation is the sum
-   of the nets. Mixed-band + DEGENERATES (the associativity law): a number
-   against a sequence arrives as that band's unit, so the sequence answers whole
-   -- the byte law and the element-adjoin law are RETIRED, which is what lets
-   gplus_assoc below quantify with no side conditions. A NAMED symbol is a point
-   like the mint: the identity in every lane, and two points JOIN -- the greater
-   in love's order stands, () the bottom (GNom, gnom_* below), a semilattice, so
-   the point lane is commutative as well. string-`-` (numeric only) stays nil. *)
+(* + on sequences is the concatenation monoid; a point is +'s identity in every lane and *'s
+   annihilating zero; * is repeated + by |count|; mixed-band + degenerates. *)
 
 Open Scope Z_scope.
 
@@ -563,8 +399,7 @@ Theorem cat_nil_l : forall (A:Type) (x : list A), [] ++ x = x.  Proof. reflexivi
 Theorem cat_nil_r : forall (A:Type) (x : list A), x ++ [] = x.
 Proof. intros A x. induction x as [|a x IH]; simpl; [reflexivity | rewrite IH; reflexivity]. Qed.
 
-(* concrete: "ab"+"cd"="abcd"; '(1 2)+'(3 4)='(1 2 3 4); 5+'(1 2)='(1 2) (degenerate,
-   in gplus below -- at the bare list level there is nothing left to state) *)
+(* "ab"+"cd"="abcd"; '(1 2)+'(3 4)='(1 2 3 4) *)
 Theorem cat_strings : [97;98] ++ [99;100] = [97;98;99;100].    Proof. reflexivity. Qed.
 Theorem cat_lists   : [1;2] ++ [3;4] = ([1;2;3;4] : list Z).    Proof. reflexivity. Qed.
 
@@ -575,10 +410,7 @@ Definition srep {A} (n : nat) (s : list A) : list A := concat (repeat s n).
 Theorem star_is_repeated_plus : forall (A:Type) (n:nat) (s:list A), srep (S n) s = s ++ srep n s.
 Proof. intros. unfold srep. reflexivity. Qed.
 
-(* THE * COUNT LAW (the associativity arc): an exact count acts by |count| --
-   magnitude is the one multiplicative hom over the sign crossing, since
-   (-1)*(-2) re-enters the positives -- so smul is a MONOID ACTION of multiplicative Z.
-   ($'s saturating count stays with numeral-apply below: application is not *.) *)
+(* an exact count acts by |count|, so smul is a monoid action of multiplicative Z *)
 Definition mcount (c : Z) : nat := Z.abs_nat c.
 Definition smul {A} (c : Z) (s : list A) : list A := srep (mcount c) s.
 
@@ -586,36 +418,20 @@ Theorem star_ab_3   : smul 3 [97;98] = [97;98;97;98;97;98].     Proof. reflexivi
 Theorem star_list_2 : smul 2 [1;2] = ([1;2;1;2] : list Z).      Proof. reflexivity. Qed. (* '(1 2)*2 *)
 Theorem star_neg    : smul (-3) [97;98] = [97;98;97;98;97;98].  Proof. reflexivity. Qed. (* "ab"*-3: |−3| copies *)
 Theorem star_zero   : forall (A:Type) (s:list A), smul 0 s = [].     Proof. reflexivity. Qed. (* '(1 2)*0 = () *)
-(* the * IDENTITY is 1 (smul 1 = id) -- the numeral that is already the identity
-   function. Contrast star_zero: the number 0 empties the kind, and () (below)
-   ANNIHILATES; nothing but 1 passes through. *)
+(* *'s identity is 1; 0 empties the kind and () annihilates *)
 Theorem smul_one    : forall (A:Type) (s:list A), smul 1 s = s.
 Proof. intros A s. unfold smul, srep, mcount. simpl. apply app_nil_r. Qed.
 
-(* the action law: smul is a hom from multiplicative Z -- THE fact that makes mixed
-   * associate ((x * a) * b = x * (a * b) with the sequence in any seat) *)
+(* the action law: smul is a hom from multiplicative Z, which makes mixed * associate *)
 Lemma srep_mult : forall (A:Type) (a b:nat) (s:list A), srep (a * b) s = srep a (srep b s).
 Proof. intros A a b s. unfold srep. induction a as [|a IH]; simpl.
   reflexivity. rewrite repeat_app, concat_app, IH. reflexivity. Qed.
 Theorem smul_hom : forall (A:Type) (a b:Z) (s:list A), smul (a * b) s = smul a (smul b s).
 Proof. intros A a b s. unfold smul, mcount. rewrite Zabs2Nat.inj_mul. apply srep_mult. Qed.
 
-(* ---- () is +'s IDENTITY and *'s ZERO (the associativity law, 2026-08-16) -----
-   One () token, one law per face: () + x = x (nothing adjoins nothing), and
-   () * x = () (a semiring's zero ANNIHILATES its product; the * identity is 1,
-   the numeral that is already the identity function). Mixed bands DEGENERATE
-   under +: a number against a sequence arrives as that band's unit, so the
-   sequence answers whole -- the only hom from a group into a free monoid is
-   trivial, which is what buys associativity OVER THE WHOLE CARRIER (gplus_assoc
-   below, no side conditions). Under *, numbers act on sequences by |count|
-   (smul_hom's action law), sequence-by-sequence * is the cartesian product
-   (each pair a 2-list, why the carrier NESTS), and undefined mixes answer () --
-   lawful here, where () absorbs, in a way it never was for +. *)
-(* a point is GNom n, n its seat in love's order (a bare mint by serial, a name by
-   spelling then serial, every name above every bare mint). () is the bare mint of
-   serial 0 -- love's mint_zero, .code = 0, and every fresh mint takes
-   ++next_serial -- so it is GNom 0 and not a constructor of its own: the unit laws
-   below are the join at its bottom, not a separate row, in Rocq as in mint_cmp. *)
+(* () is +'s identity and *'s zero. mixed bands degenerate under +, which buys associativity
+   over the whole carrier; sequence * sequence is the cartesian product. *)
+(* a point is GNom n, n its seat in love's order; () is the mint of serial 0, GNom 0 *)
 Inductive gval := GNum (z : Z) | GSeq (xs : list gval) | GNom (n : nat).
 Definition GUnit := GNom 0.
 
@@ -647,22 +463,18 @@ Theorem gunit_plus_r  : forall x, gplus x GUnit = x.   Proof. intro x; destruct 
 Theorem gunit_times_l : forall x, gtimes GUnit x = GUnit.  Proof. intro x; destruct x; reflexivity. Qed.
 Theorem gunit_times_r : forall x, gtimes x GUnit = GUnit.  Proof. intro x; destruct x; reflexivity. Qed.
 
-(* () is still NOT the number 0: on a string, 0 counts (0 copies = "", the kind's
-   own empty) where () annihilates to () -- the model keeps GSeq [] and GUnit
-   apart just as love keeps "" and () apart (cf. unit_neq_zero). *)
+(* () is not 0: on a string 0 counts to the empty kind, () annihilates *)
 Theorem gzero_annihilates : forall ys, gtimes (GNum 0) (GSeq ys) = GSeq [].
 Proof. intros ys. cbn. reflexivity. Qed.
 Theorem gunit_ne_zero : gtimes GUnit (GSeq [GNum 1]) <> gtimes (GNum 0) (GSeq [GNum 1]).
 Proof. cbv. discriminate. Qed.
 
-(* THE LAW ITSELF: + associates over the WHOLE carrier, no side conditions --
-   this is what retiring the adjoin bought (5 + '(1 2) = '(5 1 2) broke it). *)
+(* + associates over the whole carrier, no side conditions *)
 Theorem gplus_assoc : forall x y z, gplus (gplus x y) z = gplus x (gplus y z).
 Proof. intros x y z. destruct x, y, z; cbn; try reflexivity.
   f_equal; lia. f_equal; apply cat_assoc. f_equal; lia. Qed.
 
-(* the point lane on its own: a bounded semilattice. commutative (the one lane of +
-   that is), idempotent, () the bottom -- and absent under *, like (). *)
+(* the point lane: a bounded semilattice, commutative, idempotent, () the bottom *)
 Theorem gnom_plus_comm : forall m n, gplus (GNom m) (GNom n) = gplus (GNom n) (GNom m).
 Proof. intros. cbn. f_equal. lia. Qed.
 Theorem gnom_plus_idem : forall n, gplus (GNom n) (GNom n) = GNom n.
@@ -674,10 +486,7 @@ Proof. split; reflexivity. Qed.
 Theorem gnom_times_l : forall n x, gtimes (GNom n) x = GUnit. Proof. intros n x. destruct x; reflexivity. Qed.
 Theorem gnom_times_r : forall n x, gtimes x (GNom n) = GUnit. Proof. intros n x. destruct x; reflexivity. Qed.
 
-(* ... and * associates wherever the cartesian is not engaged: the annihilating
-   () and the |count| action law close every mixed shape. (chain*chain, the
-   nesting cartesian, is the carve-out -- ordered pairs nest differently and
-   the law holds only through tally, cart_length below.) *)
+(* * associates wherever the cartesian is not engaged; chain*chain only through tally *)
 Theorem gtimes_assoc_num : forall a b c,
   gtimes (gtimes (GNum a) (GNum b)) (GNum c) = gtimes (GNum a) (gtimes (GNum b) (GNum c)).
 Proof. intros. cbn. f_equal. lia. Qed.
@@ -696,12 +505,8 @@ Theorem gtimes_assoc_seq1 : forall a b s,
 Proof. intros. cbn. f_equal.
   change (smul (a * b) s = smul a (smul b s)). apply smul_hom. Qed.
 
-(* LIST * LIST is the CARTESIAN PRODUCT (the chain lane, lvm_mul_cart): every ordered
-   pairing, each pair a 2-list. This is the semiring product whose + is ++ -- but only
-   ON THE CHAIN, whose cells hold pairs; strings (atomic bytes) carry the * UNIT
-   (smul, repeat) and no in-carrier product. tally (length) is the HOMOMORPHISM, and
-   the product is RIGHT-distributive on the nose; LEFT-distributivity holds only up to
-   a PERMUTATION (intrinsic to ordered pairs -- same multiset, different order). *)
+(* list * list is the cartesian product: tally is the hom, right-distributive on the nose,
+   left only up to permutation *)
 Definition cart {A B} (a : list A) (b : list B) : list (A * B) :=
   flat_map (fun x => map (fun y => (x,y)) b) a.
 
@@ -730,16 +535,8 @@ Proof. intros A B a b c. unfold cart. induction a as [|x a IH]; simpl.
     + rewrite <- !app_assoc. apply Permutation_app_head.
       rewrite !app_assoc. apply Permutation_app_tail. apply Permutation_app_comm. Qed.
 
-(* THE TWO COUNT LAWS SPLIT (the associativity arc): `*` repeats by |count|
-   (mcount -- smul must be a hom from multiplicative Z, see smul_hom), while numeral-apply
-   composes f a SATURATED count of times (scount, the same 0 floor `satZ` puts under
-   `sat` -- with no ceiling: a count is a nat, not a charm, so it has no edge to land
-   on) -- application is not *, and it owes no product law. count_saturates
-   is the compose-floor; its value-side twin is sat_clamps (net <= 0 => sat = 0),
-   and its third face is the n-ary closure's fire-vs-hold (test/oracle.l,
-   test/proof/rocq/extract.v). (Only the COMPOSITION count saturates; the
-   numeral-on-numeral exponent climbs to reciprocals -- (-1 x) = 1/x -- so this
-   is appf-iteration, not `app`.) *)
+(* numeral-apply composes a saturated count (floor 0, no ceiling), unlike *'s |count|;
+   only the composition count saturates, not the exponent *)
 Definition scount (c : Z) : nat := Z.to_nat (Z.max 0 c).
 Theorem count_saturates : forall c, c <= 0 -> scount c = 0%nat.
 Proof. intros c H. unfold scount. rewrite Z.max_l by lia. reflexivity. Qed.
@@ -747,8 +544,7 @@ Theorem count_keeps : forall c, 0 <= c -> Z.of_nat (scount c) = c.
 Proof. intros c H. unfold scount. rewrite Z.max_r by lia. apply Z2Nat.id. lia. Qed.
 Definition numap {A} (c : Z) (f : A -> A) (x : A) : A := Nat.iter (scount c) f x.
 
-(* a non-positive count composes 0 times: the identity -- the compose-FLOOR,
-   the eval-count reflection of sat_clamps, via the SAME count_saturates *)
+(* a non-positive count composes 0 times: the identity *)
 Theorem numap_floor : forall A (c : Z) (f : A -> A) (x : A),
   c <= 0 -> numap c f x = x.
 Proof. intros A c f x H. unfold numap. rewrite (count_saturates c H). reflexivity. Qed.
@@ -761,7 +557,7 @@ Proof.
   unfold scount. rewrite Z.max_r by lia. apply Nat2Z.id.
 Qed.
 
-(* + IS THE MEASURE HOMOMORPHISM, and * scales the measure by the count *)
+(* + is the measure homomorphism, and * scales the measure by the count *)
 Definition sum (s : list Z) : Z := fold_right Z.add 0 s.
 Theorem sum_cat  : forall x y, sum (x ++ y) = sum x + sum y.
 Proof. induction x as [|a x IH]; intro y; simpl; [reflexivity | rewrite IH; lia]. Qed.
@@ -773,25 +569,15 @@ Proof.
     replace (Z.of_nat (S n)) with (Z.of_nat n + 1) by lia. ring.
 Qed.
 
-(* the byte law is RETIRED (the associativity law): a number against a string
-   arrives as that band's unit, so the string answers whole -- (string c) is
-   the one spelling of a byte now. gplus says it; the concrete witnesses: *)
+(* a number against a string answers the string whole *)
 Theorem degen_str_num : gplus (GSeq [GNum 120]) (GNum 66) = GSeq [GNum 120].
 Proof. reflexivity. Qed.                                      (* "x"+66="x" *)
 Theorem degen_num_str : gplus (GNum 66) (GSeq [GNum 120]) = GSeq [GNum 120].
 Proof. reflexivity. Qed.                                      (* 66+"x"="x" *)
 
-(* ============================================================ *)
-(* arrays: shaped, broadcasting, reductions, contraction        *)
-(* ============================================================ *)
+(* --- arrays: shaped, broadcasting, reductions, contraction --- *)
 
-(* A rank-1 array is a vector (list Z); a shape is its dimension sizes. The
-   cell count is the PRODUCT of the shape (alen), the rank its length. Indexing
-   is row-major and out-of-bounds reads the default (peep). + and scalar-* and
-   the contractions are elementwise/bilinear, and the EMPTY REDUCTIONS ANSWER
-   THEIR MONOID UNITS (asum []=0, aprod []=1, aall []=true). Shapes/indices are
-   modeled as Z (via Z.to_nat for nth) to stay in one scope; the higher-rank
-   layout is sketched by the row-major flatten and the matmul cell. *)
+(* rank-1 arrays as list Z: row-major, oob reads the default, empty reductions answer units *)
 
 Open Scope Z_scope.
 
@@ -834,7 +620,7 @@ Theorem vadd_mismatch : vadd [1;2;3] [1;2] = None.                 Proof. reflex
 Definition vscale (c : Z) (v : list Z) : list Z := map (Z.mul c) v.
 Theorem vscale_123 : vscale 2 [1;2;3] = [2;4;6].  Proof. reflexivity. Qed.
 
-(* + is the MEASURE HOMOMORPHISM on arrays; * scales the measure by the count *)
+(* + is the measure homomorphism on arrays; * scales the measure by the count *)
 Lemma asum_cons : forall x v, asum (x :: v) = x + asum v.
 Proof. reflexivity. Qed.
 Lemma asum_app : forall a b, asum (a ++ b) = asum a + asum b.
@@ -849,7 +635,7 @@ Qed.
 Theorem asum_vscale : forall c v, asum (vscale c v) = c * asum v.
 Proof. intros c v. unfold vscale, asum. induction v as [|x v IH]; simpl; [ring | rewrite IH; ring]. Qed.
 
-(* iota: the z-array 0..n-1, jot's array twin, and its GAUSS SUM *)
+(* iota: the z-array 0..n-1, and its gauss sum *)
 Definition iota (n : nat) : list Z := map Z.of_nat (seq 0 n).
 Theorem iota_3 : iota 3 = [0;1;2].  Proof. reflexivity. Qed.
 Theorem iota_0 : iota 0 = [].       Proof. reflexivity. Qed. (* (iota 0) empty -> nothing *)
@@ -863,16 +649,9 @@ Proof.
 Qed.
 Theorem asum_iota_100 : asum (iota 100) = 4950.  Proof. now vm_compute. Qed.
 
-(* ============================================================ *)
-(* the Z lane: ONE model, shared with the generated test/proof/rocq/gen.v  *)
-(* ============================================================ *)
-(* The nat `app` (Nat.pow) above carries the numeral LAWS by clean unary induction.
-   The GENERATED corpus checks (test/proof/rocq/gen.v, from src/tools/spec2coq.l) instead need Z --
-   3^27 would blow unary-nat vm_compute -- so they run over `appZ`. These are not two
-   models: `app_appZ` PROVES appZ and app are ONE function under the nat->Z embedding,
-   so gen.v `Require Import spec` and checks its instances against THIS file's
-   definitions (asum/aprod/amax/vscale/srep shared verbatim, appZ/iotaZ the Z faces),
-   not a separate copy. The closing of the two-models gap. *)
+(* --- the Z lane --- *)
+(* gen.v requires this file and checks over Z (3^27 would blow unary nat); app_appZ makes
+   appZ and app one function *)
 Definition appZ  (n x : Z) : Z := Z.pow x n.
 Definition iotaZ (n : Z) : list Z := iota (Z.to_nat n).   (* iota's Z-arg face, same data *)
 Theorem app_appZ : forall n x, appZ (Z.of_nat n) (Z.of_nat x) = Z.of_nat (app n x).
@@ -898,31 +677,15 @@ Theorem matmul_cell :
   mm_cell [[1;2;3];[4;5;6]] [[7;8];[9;10];[11;12]] 1 1 = 154.
 Proof. reflexivity. Qed.
 
-(* ============================================================ *)
-(* strings, symbols & mints                                     *)
-(* ============================================================ *)
+(* --- strings, symbols & mints --- *)
 
-(* A string is its bytes (list Z): it INDEXES them, its NET is the charm sum (a
-   NUL byte nets nothing, so + reaches the bytes and an all-NUL text is
-   nothing), and tally COUNTS them. A symbol is a POINT: a mint is a fresh
-   nameless point -- serial-keyed, materially empty ($ = 0), applying const-1,
-   DISTINCT from every other and equal only to itself; the zero point is the
-   mint at serial 0, the face of absence. A nom is the explicit PRODUCT
-   (name . mint) -- a chain of a name string and a mint, EXACTLY as internally
-   (cap the name, cup the mint), ordered (name lex, then the mint's serial);
-   same-name noms split by serial. The symbol band (mints AND noms) is the
-   FLOOR: it sorts BELOW string and number, so every point sits below every
-   number -- (mint 0) < 0, the blue floor -- and a bare mint below a named nom
-   (proved via the order section's `lt`: a point or nom is Osym, a string Ostr,
-   a number Onum). *)
+(* a string is its bytes: index, net = byte sum, tally = count. a mint is a fresh nameless
+   point, a nom is (name . mint); the symbol band is the floor. *)
 
 Open Scope Z_scope.
 
-(* --- strings: indexed bytes; net = charm sum; tally = count ---
-   sidx is the SEQUENCE index law, shared with the chain: out of range EITHER way -- past
-   the end, or below zero -- answers (), the None of this model, so the law is PARTIAL and
-   says so rather than defaulting into the element domain. The i < 0 guard is load-bearing:
-   Z.to_nat sends every negative to 0, so without it (l -1) would answer the FIRST element. *)
+(* --- strings ---
+   sidx misses either way; the i < 0 guard matters, Z.to_nat sends negatives to 0 *)
 Definition sidx (v : list Z) (i : Z) : option Z :=
   if i <? 0 then None else nth_error v (Z.to_nat i).
 Definition tally (v : list Z) : Z := Z.of_nat (length v).
@@ -931,9 +694,7 @@ Theorem str_index_oob : sidx [104;105] 9 = None.     Proof. reflexivity. Qed. (*
 Theorem str_net       : asum [97;98;99] = 294.    Proof. reflexivity. Qed. (* $"abc" = 294 *)
 Theorem str_tally     : tally [97;98;99] = 3.     Proof. reflexivity. Qed. (* (tally "abc") = 3 *)
 
-(* JUXTAPOSITION: a string applied to a string is the concatenation -- C's adjacent-literal
-   law with the literal restriction lifted. It IS ++, so it inherits the monoid (associative
-   with "" the unit) and hence agrees with `+` and curries to any arity. *)
+(* juxtaposition: a string applied to a string concatenates; it is ++ *)
 Definition sjux (s t : list Z) : list Z := s ++ t.
 Theorem str_juxt      : sjux [97;98] [99;100] = [97;98;99;100]. Proof. reflexivity. Qed. (* ("ab" "cd") = "abcd" *)
 Theorem str_juxt_cat  : forall s t, sjux s t = s ++ t.          Proof. reflexivity. Qed. (* agrees with `+` *)
@@ -942,19 +703,14 @@ Theorem str_juxt_unitr: forall s, sjux s [] = s.                Proof. intros. a
 Theorem str_juxt_assoc: forall s t u, sjux (sjux s t) u = sjux s (sjux t u).  (* so ("a" "b" "c") joins three *)
 Proof. intros. unfold sjux. now rewrite app_assoc. Qed.
 
-(* A NEGATIVE INDEX IS OUT OF RANGE, exactly like one past the end. peep reads a sequence
-   by the same law, differing only in the miss -- () here, the caller default there. That
-   the two coincide is a rule the tree keeps, not a law it promises: a tray towers. *)
+(* a negative index is out of range, like one past the end *)
 Theorem str_idx_neg1  : sidx [97;98;99] (-1) = None. Proof. reflexivity. Qed. (* ("abc" -1) = () *)
 Theorem str_idx_neg3  : sidx [97;98;99] (-3) = None. Proof. reflexivity. Qed. (* ("abc" -3) = () *)
 Theorem str_idx_neg_far : sidx [97;98;99] (-4) = None. Proof. reflexivity. Qed. (* and further out, still () *)
 Theorem str_idx_total : forall v i, i < 0 -> sidx v i = None.                 (* every negative, not just these *)
 Proof. intros v i H. unfold sidx. now apply Z.ltb_lt in H as E; rewrite E. Qed.
 
-(* --- chains: the SAME two laws one lattice rung up -- index an ELEMENT, juxtapose by
-   APPEND. The Church eliminator ((a . b) g) == (g a b) was retired once the tree was
-   checked and nothing applied a chain to a function; every non-index, non-chain operand
-   takes the default action, () (see mx.l). --- *)
+(* --- chains: index an element, juxtapose by append --- *)
 Definition cidx (v : list Z) (i : Z) : option Z := sidx v i.
 Definition cjux (s t : list Z) : list Z := s ++ t.
 Theorem chain_idx      : cidx [7;8;9] 0 = Some 7.    Proof. reflexivity. Qed. (* ('(7 8 9) 0) = 7 *)
@@ -993,15 +749,9 @@ Theorem mint_self     : forall m : mint, m = m.         Proof. reflexivity. Qed.
 Theorem mint_distinct : forall a b, Mint a = Mint b <-> a = b.  (* distinct iff serials agree *)
 Proof. intros a b. split; [intro H; injection H; auto | intro H; subst; reflexivity]. Qed.
 
-(* --- noms: the explicit PRODUCT (name . mint) -- a chain of a name string and
-   a mint, EXACTLY the internal representation: cap is the name, cup is the mint,
-   and the mint (its serial) keys same-name noms. Reuses the `mint` type above,
-   so a nom IS a name paired with a genuine point, not a flattened serial. --- *)
+(* --- noms: the pair (name, mint); the mint keys same-name noms --- *)
 Definition nom := (list Z * mint)%type.
-(* A nom is its OWN kind (KNom: a name + a serial), modeled here as the abstract
-   pair name x identity -- NOT a surface chain. The projections below are the
-   abstract pair components (the cell's name / serial fields); the SURFACE reads
-   the name via `string` (a nom is not a chain, so `cap` no longer projects it). *)
+(* a nom is its own kind, modeled as the abstract pair; the surface reads the name via `string` *)
 Definition nom_name (n : nom) : list Z := fst n.        (* the name component *)
 Definition nom_mint (n : nom) : mint  := snd n.         (* the identity component *)
 Definition nom_serial (n : nom) : nat := match snd n with Mint s => s end.
@@ -1024,22 +774,12 @@ Proof. intros nm s1 s2 H. right. split; [reflexivity | exact H]. Qed.
 Theorem same_name_distinct : forall (nm : list Z) (s1 s2 : nat), s1 <> s2 -> (nm, Mint s1) <> (nm, Mint s2).
 Proof. intros nm s1 s2 H C. apply H. injection C. auto. Qed.
 
-(* the FLOOR: the symbol band (mints AND noms) sits BELOW the numbers -- the blue
-   floor, every point under every number. Within the floor a bare mint (lower
-   serial-key) sorts below a named nom; the nom_lt section refines that order. *)
+(* the symbol band sits below the numbers; a bare mint sorts below a named nom *)
 Theorem point_below_number : lt (Osym 5) (Onum 0).   Proof. left.  cbn. lia. Qed. (* (mint 0) < 0 *)
 Theorem mint_below_nom     : lt (Osym 3) (Osym 5).   Proof. right. cbn. split; [reflexivity | lia]. Qed. (* a bare mint < a nom *)
 
-(* ============================================================ *)
-(* the complex tier: EXACT complex as Gaussian integers Z[i]    *)
-(* ============================================================ *)
-(* The numeric tower's float/transcendental tier stays an honest miss
-   (spec.v:10-12, not vm_compute-able: e^(iπ) misses -1 by ~1e-16). But the
-   EXACT complex algebra the spec leans on -- i*i = -1 and the (re,im) order --
-   IS exact integer arithmetic, machine-checked here over Z[i]. `twin re im` is
-   the ~(re im) constructor; i = twin 0 1; a real lifts ~r = ~(r 0); and `~`
-   bare conjugates (an involution). Ground-truthed against the binary: the
-   conjugate of ~(2 3) is ~(2 -3), and conj is an involution (~~~(2 3)=~(2 3)). *)
+(* --- the complex tier: gaussian integers Z[i] --- *)
+(* exact complex as gaussian integers: twin re im, i = twin 0 1, ~ conjugates *)
 Record Zi := twin { re : Z ; im : Z }.
 Definition cadd (a b : Zi) : Zi := twin (re a + re b) (im a + im b).
 Definition cmul (a b : Zi) : Zi :=
@@ -1048,8 +788,7 @@ Definition cconj (z : Zi) : Zi := twin (re z) (- im z).
 Definition I : Zi := twin 0 1.
 Definition cof (r : Z) : Zi := twin r 0.
 
-(* the algebraic heart of Euler. NOTE: cbn does NOT unfold these Definitions on
-   its own -- `unfold` the ops first (reflexivity forces delta). *)
+(* cbn does not unfold these definitions: unfold the ops first *)
 Theorem i_squared       : cmul I I = cof (-1).               Proof. reflexivity. Qed.  (* i * i = -1 *)
 Theorem conj_involution : forall z, cconj (cconj z) = z.     Proof. intros [r k]; unfold cconj; cbn; f_equal; lia. Qed. (* ~~~(2 3) = ~(2 3) *)
 Theorem conj_add        : forall a b, cconj (cadd a b) = cadd (cconj a) (cconj b).
@@ -1065,13 +804,8 @@ Theorem i_above_zero : clt (cof 0) I.                       Proof. right; cbn; l
 Theorem conj_below   : forall z, im z > 0 -> clt (cconj z) z. (* (conj ~(2 3)) < ~(2 3) *)
 Proof. intros [r k] H; right; unfold cconj in *; cbn in *; lia. Qed.
 
-(* ============================================================ *)
-(* within a band: text and chains order LEXICOGRAPHICALLY        *)
-(* ============================================================ *)
-(* The O-model (spec.v:272-274) collapses within-band order to one key; this is
-   the refinement it deferred. `lex_lt` (above, where noms reuse it) is the same
-   relation that carries text (lists of char-keys) and chains (lists of
-   element-keys). Ground-truthed: "abc"<"abd", "ab"<"abc", '(1 2)<'(1 3). *)
+(* --- within a band: lexicographic order --- *)
+(* the within-band refinement: lex_lt orders text and chains *)
 Theorem str_lex_lt    : lex_lt [97;98;99] [97;98;100].   Proof. cbn; lia. Qed. (* "abc" < "abd" *)
 Theorem str_prefix_lt : lex_lt [97;98] [97;98;99].       Proof. cbn; lia. Qed. (* "ab"  < "abc" -- a prefix is lower *)
 Theorem chain_lex_lt  : lex_lt [1;2] [1;3].              Proof. cbn; lia. Qed. (* '(1 2) < '(1 3) -- same lex on element-keys *)
@@ -1082,23 +816,9 @@ Proof. induction a as [|x a IH]; intros [|y b] [|z c]; cbn; try tauto.
   intros [H1|[H1a H1b]] [H2|[H2a H2b]]; subst; try (left; lia).
   right; split; [reflexivity | eapply IH; eauto]. Qed.
 
-(* ============================================================ *)
-(* the complex net: a complex GEM nets ITSELF, phase intact      *)
-(* ============================================================ *)
-(* Closes on the Z[i] tier above. The real-fragment net (spec.v:174-179) said
-   the complex extension was the next slice; here it is. `cnet z = z` (a gem is
-   its own measure); `cnilp` gates on the REAL PART, so it agrees with the real
-   `nilp` (net <= 0) on lifted reals, and phases CANCEL AS VECTORS.
-
-   THE GATE IS NOT THE TOTAL ORDER, and this is the one place the two part. It
-   was lexicographic (re, then im) until 2026-07-27, which made `i` true and `-i`
-   false -- but conjugation is a field AUTOMORPHISM, so nothing intrinsic
-   separates them, and C admits no order compatible with its arithmetic at all
-   (in an ordered field every square is >= 0, yet i^2 = -1). Truth cannot rest on
-   which root we named. So a PURE PHASE is BLUE: it has magnitude, but no
-   positive amount. The lexicographic order stays exactly as it was for SORTING,
-   which needs totality and must keep i and -i apart. Ground-truthed: !i,
-   !~(0 -1), !~(-3 4), !!~(3 4). *)
+(* --- the complex net: a gem nets itself --- *)
+(* a complex net is itself; truth gates on the real part, not the total order: conjugation
+   is an automorphism, so a pure phase is blue, while sorting keeps i and -i apart. *)
 Definition cnet (z : Zi) : Zi := z.
 Definition cnilp (z : Zi) : bool := re z <=? 0.
 Theorem cnet_self    : forall z, cnet z = z.                Proof. reflexivity. Qed.
@@ -1106,26 +826,19 @@ Theorem i_blue       : cnilp I = true.                      Proof. reflexivity. 
 Theorem negi_blue    : cnilp (twin 0 (-1)) = true.          Proof. reflexivity. Qed. (* !~(0 -1) *)
 Theorem neg_re_false : cnilp (twin (-3) 4) = true.          Proof. reflexivity. Qed. (* !~(-3 4): re<0 *)
 Theorem pos_re_true  : cnilp (twin 3 4) = false.            Proof. reflexivity. Qed. (* !!~(3 4) *)
-(* CONJUGATE-BLIND, which the old gate was not: i and -i now agree, as they must *)
+(* conjugate-blind: i and -i agree *)
 Theorem conj_blind : forall z, cnilp z = cnilp (twin (re z) (- im z)).
 Proof. intro z. unfold cnilp. reflexivity. Qed.
-(* phases cancel AS VECTORS: ~(3 4) + ~(-3 4) nets ~(0 8) -- a pure phase, so BLUE *)
+(* phases cancel as vectors: ~(3 4) + ~(-3 4) nets ~(0 8), a pure phase, so blue *)
 Theorem phase_vector_add : cadd (twin 3 4) (twin (-3) 4) = twin 0 8.  Proof. reflexivity. Qed.
 Theorem phase_sum_blue   : cnilp (cadd (twin 3 4) (twin (-3) 4)) = true.  Proof. reflexivity. Qed.
 (* the tie-in: cnilp agrees with the real nilp (net <= 0) on lifted reals *)
 Theorem cnilp_real : forall r, cnilp (cof r) = (r <=? 0).
 Proof. reflexivity. Qed.
 
-(* ============================================================ *)
-(* the crew as FACES of `top`                    *)
-(* ============================================================ *)
-(* ai (the language) is `top` -- the universal object (everything applies; top is vacuous).
-   The apps are FACES of it, in dual pairs glued by DIFFERENT universal shapes. The
-   SOURCE faces COMPOSE: read (charms->forms) runs THROUGH feel (the weaver, forms->top),
-   so the charm face factors through the lisp face -- chars -> top <- forms, the two lanes
-   converging on one core. The WORLD faces are a COPRODUCT: one i/o trunk forks into bao
-   (local) and ain (net). Both axiom-free; the coproduct's uniqueness is stated
-   POINTWISE, so no functional extensionality is needed. *)
+(* --- the crew as faces of `top` --- *)
+(* the apps as faces of top: source faces compose (read through feel), world faces are a
+   coproduct, uniqueness stated pointwise *)
 Section Faces.
   Variables Top Charm Form Out Loc Net : Type.
 
@@ -1155,16 +868,8 @@ Section Faces.
   Theorem top_vacuous : forall x, is_top x.  Proof. intro x; unfold is_top; constructor. Qed.
 End Faces.
 
-(* ============================================================ *)
-(* axiom audit: every headline law, closed under NO assumptions *)
-(* ============================================================ *)
-(* The cheapest attack on any machine-checked claim is "grep for Axiom/admit".
-   This file has none -- and rather than ask the reader to take that on faith,
-   we make coqc PRINT it. Each line below must report "Closed under the global
-   context" in the build log; anything else (a stray Axiom, an axiom dragged in
-   from the stdlib -- funext, classic, proof-irrelevance) would show here. One
-   representative theorem per pillar: saturation, the total order, the function
-   semantics, the reduction layer, and the complex net. *)
+(* --- axiom audit --- *)
+(* each line must print "Closed under the global context": no axioms *)
 Print Assumptions sat_clamps.        (* the net/saturation law (value side) *)
 Print Assumptions app_appZ.          (* the Z lane IS the nat lane: gen.v shares this model *)
 Print Assumptions numap_floor.       (* the count-law floor (count side, same $) *)

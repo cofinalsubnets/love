@@ -1,7 +1,5 @@
-/* gcc's case ranges, wide ones too: linux's sysreg switches span thousands of encodings
- * (`case SYS_ID_AA64PFR0_EL1 ... SYS_ID_AA64ZFR0_EL1:`), each one compare, never one label a
- * value; a range across zero, a narrow one, a char control, and a case value past 2^62
- * (MAX_SCHEDULE_TIMEOUT is LONG_MAX; long long here, so 32-bit targets agree). freestanding, exit-code only. */
+/* case ranges, wide ones too (thousands of values, one compare each), across zero, narrow, a
+ * char control, and a case past 2^62 (long long, so 32-bit targets agree). exit-code only. */
 
 #define ENC(op0, op1, crn, crm, op2) (((op0) << 19) | ((op1) << 16) | ((crn) << 12) | ((crm) << 8) | ((op2) << 5))
 

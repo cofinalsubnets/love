@@ -1,9 +1,5 @@
-; test/host/mp3.l -- src/love/audio/mp3.c's nifs and src/apps/mp3.l. a small stream laid here,
-; decoded to its samples; every byte of it flipped, which answers why or samples and never
-; falls over; then the iso 11172-4 and 13818-4 layer iii conformance streams (make
-; dl/mp3-vectors) held to their reference output by 11172-4's full accuracy, and lame streams
-; of every shape held to ffmpeg's and mpg123's decodes the same way, gapless; last the door,
-; mpg123's verb, a stream entered mid-way and a second song's tags.
+; test/host/mp3.l -- src/love/audio/mp3.c's nifs and src/apps/mp3.l: a small stream and its
+; flips, the 11172-4/13818-4 conformance streams (make dl/mp3-vectors), lame against ffmpeg/mpg123
 ;   cat test/00-init.l test/host/mp3.l | out/love
 (borrow 'posix)
 (borrow 'mp3)
@@ -34,8 +30,7 @@
      "616591326873873b970b88264348290132f4ded2f134625d2efe0d05415fd40d094eff834a4c414d45342e30aaaaaaaa"
      "fff328c40b0000034801c00000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]))
-   ; every frame from 0 on, one state -> the samples, s16 (f 0) or f32 (f 1) | why not. a
-   ; last frame cut short is the end, as it is to the pump
+   ; every frame from 0, one state -> samples, s16 (f 0) or f32 (f 1) | why; a short last frame ends it
    (mp-all s f) (: st (cask (mp3-state 0))
                    (go o acc) (? (o >= #s) (cats (rev acc))
                                  (mp3-frame st s o f @ (pcm . nx) (go nx (pcm . acc)) 2 (cats (rev acc)) w w))
@@ -63,10 +58,8 @@
    (mp-flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    _ (test (atom? (filter (i \ !(mp-all (mp-flip tiny i) 0 @ r (string? r || charm? r))) (jot #tiny))))
 
-   ; -- 11172-4's full accuracy, on s16: rms under 1/sqrt 12 of a step, none more than two ---
-   ; the conformance streams: a reference may leave out a last frame, and sin1k0db's leaves
-   ; out the first two (whose main data reaches back before the stream: silence here); that
-   ; one opens on zeros, so it is decoded from its first frame
+   ; 11172-4 full accuracy on s16: rms under 1/sqrt 12 of a step, none more than two
+   ; a reference may drop a last frame; sin1k0db's drops the first two, so it is decoded from its first
    vd (getenv "DL" @ d (string? d ? (d + "/mp3-vectors") ""))
    iso ["l3-compl" "l3-he_32khz" "l3-he_44khz" "l3-he_48khz" "l3-he_free" "l3-he_mode" "l3-hecommon"
         "l3-si" "l3-si_block" "l3-si_huff" "l3-test45" "l3-test46" "M2L3_bitrate_16_all"
@@ -79,7 +72,7 @@
                   (mp-all (snip b (mp3-meta b 'at) #b) 0 @ pcm (? (string? pcm) (av-t-full (snip pcm 9216 (9216 + #r)) r)) _ 0)))
         (gate-partly "mp3: no dl/mp3-vectors (make dl/mp3-vectors), the conformance streams skipped"))
 
-   ; -- lame's streams against ffmpeg's float decoder and mpg123, gapless ----------------------
+   ; lame's streams against ffmpeg's float decoder and mpg123, gapless
    ref? (all (t \ <(hark ["sh" "-c" ("command -v " + t + " >/dev/null")]) = 0) ["ffmpeg" "mpg123"])
    (sh c) (hark ["sh" "-c" ("cd " + dir + " && " + c)])
    cases [["44100" "2" "-b:a 128k"] ["48000" "2" "-b:a 320k"] ["32000" "1" "-b:a 48k"] ["22050" "2" "-b:a 64k"]
@@ -97,22 +90,19 @@
                (av-t-full a (av-t-rd (dir + "/" + f + ".m123")) && av-t-full a (av-t-rd (dir + "/" + f + ".ff"))))
    _ (ref? ? (: fs (map (i \ mk i (cases i)) ^#cases)
                 (test (all string? fs) (all same fs)
-                      ; mpg123's wav: the same header, the same length
                       (sh "mpg123 -q -w m.wav c0.mp3 && ../love mpg123 -w l.wav c0.mp3" = (0 . ""))
                       (av-t-rd (dir + "/m.wav") @ a (av-t-rd (dir + "/l.wav") @ b (snip a 0 44 = snip b 0 44 && #a = #b)))
-                      ; with no -w -s or -t it plays, as mpg123 does: HORN=none keeps the 1.3 s
+                      ; with no -w -s or -t it plays: HORN=none keeps the 1.3 s
                       (: t0 (clock 0) r (sh "HORN=none ../love mpg123 c0.mp3") (r = (0 . "") && 1000 <= clock 0 - t0))
-                      ; the door: its tags, its gapless length, and the horn
                       (sh ("HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) (puts (show (av-open (open \"c0.mp3\" \"r\") @ [n m h] [n (m (quote total)) (m (quote tags))] w w))) (puts (show (av-play (open \"c0.mp3\" \"r\")))) (quit 0)' 2>&1")
                          = (0 . "(\"mp3\" 57330 (\"TITLE=c0\"))0"))
-                      ; entered mid-way: the pump finds the next frame, and from a few frames on
-                      ; plays what the whole stream does
+                      ; entered mid-way, a few frames on it plays what the whole stream does
                       (: s (av-t-rd (dir + "/c2.mp3")) m (pins (mp3-meta s) 'skip 0 'total 0) b {'l ()}
                          _ (open (dir + "/mid") "w" @ q (say q (snip s (#s // 2) #s), close q))
                          q (open (dir + "/mid") "r") r (mp3-pump q "" m (pcm \ pin b 'l (pcm . b 'l)))
                          all (mp-all (snip s (m 'at) #s) 0) mid (cats (rev (b 'l)))
                          (close q, r = 0 && 4608 < #mid && snip mid (#mid - 4608) #mid = snip all (#all - 4608) #all))
-                      ; a second song at the same rate on the same line: its id3 tags, a link counted
+                      ; a second song on the same line: its tags, a link counted
                       (sh "cat c0.mp3 c9.mp3 > two.mp3" = (0 . ""))
                       (: q (open (dir + "/two.mp3") "r")
                          r (av-open q @ [n m h] (: x (mp3-pump q h m (_ \ 0)) [x (m 'link) (m 'tags)]) w w)

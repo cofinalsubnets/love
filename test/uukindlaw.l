@@ -1,23 +1,13 @@
-; test/uukindlaw.l -- the laws of the kinds-lattice join, proved of the generated
-; term (test/uukind.l, lifted from test/proto/kinds.l by src/tools/kinds2uu.l). the
-; abstract domain is finite -- seven codes, bot..top plus the incomparable str --
-; so the semilattice laws are decidable by exhausting the carrier: we evaluate the
-; generated `kjoin` in the kernel (vof) over every pairing/tripling of uk-codes and
-; check idempotence, commutativity, associativity and the bot/top bounds. a check
-; here is thus a complete proof over the carrier, and drift-gated: a kinds.l edit
-; that breaks a law re-emits a kjoin that fails an assert at `make test`. the four
-; kinds.l driver cases ride below as uu idpath lemmas -- the bridge to Rocq + Lean.
-; guard: the uu kernel (test/uu.l -- vof/defn/kjoin/...) must load before these laws. $t front-loads
-; it, but a locale-sorted corpus glob puts uukind* first and the laws would run against an unloaded
-; kernel (a cryptic ;; missing vof -> BADJJ). Fail loudly and by name instead if that ever recurs.
+; test/uukindlaw.l -- the kinds-lattice join laws, proved of the generated kjoin
+; (test/uukind.l), exhaustively over the finite carrier uk-codes.
+; guard: the kernel must load first; a locale-sorted glob would run these against none.
 (test (elem 'vof (names ())))
 (:
    (uk-jj a b) (vof 0 ['kjoin a b])                      ; kjoin a b, run in the kernel
    (uk-all f)  (foldl (acc \ x \ acc && f x) 1 uk-codes) ; forall over the carrier
    (uk-all2 f) (uk-all (a \ uk-all (b \ f a b)))
    (uk-all3 f) (uk-all (a \ uk-all (b \ uk-all (c \ f a b c))))
-   ; the codes by name, read back out of the kernel: uukind.l emits one defn per
-   ; kind, so nothing here recovers a code by its position in the carrier
+   ; codes read back by name, never by position in the carrier
    uk-bot (vof 0 'ukbot) uk-top (vof 0 'uktop)
    uk-str (vof 0 'ukstr) uk-charm (vof 0 'ukcharm))
 
@@ -28,14 +18,11 @@
  (uk-all3 (a \ b \ c \ uk-jj (uk-jj a b) c = uk-jj a (uk-jj b c)))        ; associative
  (uk-all  (a \ (uk-jj uk-bot a = a) && (uk-jj a uk-bot = a)))             ; bot the identity
  (uk-all  (a \ (uk-jj uk-top a = uk-top) && (uk-jj a uk-top = uk-top)))   ; top absorbs
- ; --- str (the last code) is the incomparable branch: it joins up to top against
- ;     any numeric, so it is not the spine's max (that is the whole point of str) ---
+ ; --- str is incomparable: it joins any numeric up to top ---
  (vof 0 '(numq ukstr) = vof 0 'false)   ; str is not numeric
  (uk-jj uk-str uk-charm = uk-top))      ; str `join` charm = top, not str
 
-; --- the bridge: kinds.l's four driver cases as uu idpath lemmas. these are real
-;     kernel proof terms (paths over a computing join), so they export axiom-free
-;     through src/tools/uu2coq.l + uu2lean.l to Rocq and Lean alongside the uu corpus. ---
+; --- kinds.l's four driver cases as idpath lemmas, exported with the corpus ---
 (test
  (defq kjoin-tier-wins  (paths nat (kjoin ukcharm ukcplx) ukcplx) (idpath ukcplx)) ; A. higher tier wins
  (defq kjoin-bot-unit   (paths nat (kjoin ukbot ukreal) ukreal)   (idpath ukreal)) ; B. bot is the unit

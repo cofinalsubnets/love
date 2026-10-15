@@ -1,12 +1,5 @@
-; test/uuhomlaw.l -- the laws of the destination die, proved of the terms
-; test/uuhomgen.l generated from test/proto/dest.l (loaded just before this by
-; sort order; machine + skeleton in test/uuhom.l, kernel in test/uu.l). dest.l
-; pins these laws by assert on its emissions; here each is a theorem of the
-; lifted terms -- the semantic ones forall machine states (neutral state, the
-; balanced shuttle computing through it), the shape ones decidable on the data.
-; a dest.l edit that breaks one fails a proof at `make test`, and the laws
-; export to Rocq + Lean with the corpus (test_uugen / test_uulean).
-; guard: substrate + generated terms must land in glob first; fail by name if not.
+; test/uuhomlaw.l -- the destination-die laws, proved of uuhomgen.l's lifted terms
+; guard: substrate + generated terms must load first; fail by name if not.
 (test (elem 'vof (names ())) (two? (peep GLOB 'drun 0)) (two? (peep GLOB 'ds1ck 0)))
 
 ; --- the member store & the home write collapse: one si, one alu ---
@@ -24,8 +17,7 @@
                  (mrg (drun ds2cv (mmk R F K 0)) 8)))))
    (lam R (lam F (lam K (idpath (mrg (drun ds2ck (mmk R F K 0)) 8)))))))
 
-; --- control destinations: ck branches off the compares, cv reifies -- the
-; --- set forms are the bridge the ('br) die never pays ---
+; --- control destinations: ck branches off the compares, cv reifies via set ---
 (test
  (defq dl-noset (paths bool (memb 8 (opsof ds3ck)) false)
    (idpath false))
@@ -54,8 +46,7 @@
                  (mrg (drun ds4cvargs (mmk R F K 0)) 5)))))
    (lam R (lam F (lam K (idpath (mrg (drun ds4ckargs (mmk R F K 0)) 5)))))))
 
-; --- the degenerate die: a leaf under () compiles byte-for-byte as cv does --
-; --- data equality, the law that makes migration lane-by-lane ---
+; --- the degenerate die: a leaf under () compiles byte-for-byte as cv does ---
 (test
  (defq dl-lane-k (paths nlist de5kcv de5kck) (idpath de5kck))
  (defq dl-lane-v (paths nlist de5vcv de5vck) (idpath de5vck)))

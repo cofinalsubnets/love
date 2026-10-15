@@ -1,8 +1,5 @@
-/* C11 6.5.15p6: in a conditional expression one operand being a NULL POINTER
- * CONSTANT gives the result the OTHER operand's type -- and a cast is a null
- * pointer constant only when its operand is a constant expression. that is the
- * whole of the kernel's __is_constexpr (include/linux/compiler.h), which
- * const_true() and min()/max() ask before they choose a lane. held to gcc. */
+/* a cast is a null pointer constant only over a constant expression, and a ?: with one
+ * null-pointer-constant arm takes the other arm's type (6.5.15p6): __is_constexpr. held to gcc. */
 #include <stdio.h>
 
 #define ISCE(x) (sizeof(int) == sizeof(*(8 ? ((void *) ((long) (x) * 0l)) : (int *) 8)))

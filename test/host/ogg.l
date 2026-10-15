@@ -1,9 +1,6 @@
-; test/host/ogg.l -- src/apps/ogg.l: pages, packets, ogg flac through the decoder door.
-; a stream laid here page by page around a small flac, decoded to its samples; every byte of
-; it flipped, which answers why or samples and never falls over; then, where the reference
-; tools are, `flac --ogg` streams of every shape held to flac -d byte for byte, a chain, a
-; multiplex, a stream entered mid-way and one damaged.
-;   cat test/00-init.l test/host/ogg.l | out/love
+; test/host/ogg.l -- src/apps/ogg.l: pages, packets, ogg flac and vorbis through the decoder door,
+; held to the reference tools where they are
+; run: cat test/00-init.l test/host/ogg.l | out/love
 (borrow 'posix)
 (borrow 'flac)
 (borrow 'ogg)
@@ -59,7 +56,7 @@
            (ogg-meta "OggT" = "not an Ogg stream") (ogg-meta (snip toga 0 40) = 'more)
            (ogg-meta (og-page 2 0 1 0 ["\x01vorbiz"]) = 'more)
            (ogg-meta (og-page 0 0 1 0 ["x"]) = "an ogg stream with no codec this reads"))
-   ; a picture block in flac's mapping is held as one byte, and read as an empty padding block
+   ; a picture block in flac's mapping is held as one byte, read as empty padding
    og-pic (string [6 0 234 96] + string (cask 60000))
    og-toga3 (cats [(og-page 2 0 7 0 [h1]) (og-page 0 0 7 1 [og-pic]) (og-page 0 0 7 2 [h2]) (og-page 4 96 7 3 tfr)])
    og-om3 (ogg-meta og-toga3)
@@ -71,14 +68,14 @@
    om2 (ogg-meta toga2)
    _ (test (om2 'skip = 1) (om2 'at = 28 + #h1)
            (og-pump (snip toga2 (om2 'at) #toga2) om2 @ [r pcm] (r = 0 && sha256 pcm = want)))
-   ; a flipped byte anywhere answers why or samples, and never takes the process down
+   ; a flipped byte anywhere answers why or samples, never a crash
    (og-flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    _ (test (atom? (filter (i \ !(ogg-meta (og-flip toga i) @ m2
                                   (? (tablet? m2) (og-pump (snip (og-flip toga i) (m2 'at) #toga) m2 @ [r _] (r = 0 || string? r))
                                      (string? m2 || m2 = 'more))))
                           (jot #toga))))
 
-   ; -- against the reference ------------------------------------------------------------
+   ; against the reference
    ref? (all (t \ <(hark ["sh" "-c" ("command -v " + t + " >/dev/null")]) = 0) ["flac" "ffmpeg"])
    (sh c) (hark ["sh" "-c" ("cd " + dir + " && " + c)])
    ; a file through the door -> [codec r samples]
@@ -128,8 +125,8 @@
                          = (0 . "0"))))
         (gate-partly "ogg: no flac or ffmpeg, the reference streams skipped"))
 
-   ; -- vorbis against ffmpeg's float decoder: 11172-4's full accuracy on s16 (rms under
-   ;    1/sqrt 12 of a step, none more than two), the end page's granule giving its length ------
+   ; vorbis against ffmpeg's float: 11172-4 full accuracy on s16 (rms under 1/sqrt 12 of a step,
+   ; none more than two); the end page's granule gives its length
    vb-tone "0.5*sin(440*2*PI*t)*lt(mod(t\\,0.25)\\,0.02)+0.2*random(0)*lt(mod(t\\,0.5)\\,0.01)+0.3*sin(3000*2*PI*t)"
    (vb-src ch) (cats (map (i \ (? (i = 0) vb-tone ("|" + show (0.1 + 0.05 * i) + "*sin(" + show (300 + 170 * i) + "*2*PI*t)"))) ^ch))
    vcases [["44100" 2 "4"] ["48000" 2 "10"] ["44100" 1 "-1"] ["22050" 2 "0"] ["8000" 1 "1"] ["96000" 2 "6"]
@@ -142,14 +139,14 @@
    (vsame f) (og-dec (f + ".ogg") @ ["ogg" 0 pcm] (av-t-full pcm (av-t-rd (dir + "/" + f + ".ff"))) _ 0)
    _ (ref? ? (: fs (map (i \ vmk i (vcases i)) ^#vcases)
                 (test (all string? fs) (all vsame fs)
-                      ; a radio's chain of songs: the second's title reaches m, and both play whole
+                      ; a radio's chain: the second's title reaches m, both play whole
                       (sh "cat v0.ogg v7.ogg > vch.ogg && cat v0.ff v7.ff > vch.ff" = (0 . ""))
                       (vsame "vch")
                       (: q (open (dir + "/vch.ogg") "r")
                          r (av-open q @ [n m h] (: x ((<(filter (c \ <c = n) (av-codecs ()))) 4 q h m (_ \ 0))
                                                    [x (m 'link) (elem "TITLE=v7" (m 'tags))]) w w)
                          (close q, r = [0 1 1]))
-                      ; a flipped byte anywhere answers why or samples, and never falls over
+                      ; a flipped byte anywhere answers why or samples
                       (: s (av-t-rd (dir + "/v4.ogg"))
                          (all (i \ (: p (dir + "/flip") c (cask #s)
                                       _ (pour c 0 s 0 #s, pin c i (255 - s i), open p "w" @ q (say q (string c), close q))

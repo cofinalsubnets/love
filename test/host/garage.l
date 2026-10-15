@@ -1,15 +1,12 @@
-; test/host/garage.l -- the parking garage, headless: the lay (pilasters, bays, wrecks never on the
-; bed, the bed through east and west walls), the rats, the walls holding, the way out west, and
-; the song into a jug. not in the corpus: it loads a crew module.
-; run: cat test/00-init.l test/host/garage.l | out/love
+; test/host/garage.l -- the parking garage headless: the lay, the rats, the walls, the way out
+; west, the song into a jug. not in the corpus: it loads a crew module.
+; run: cat test/00-init.l test/host/00-host.l test/host/garage.l | out/love
 
-(borrow 'garage)   ; the artifact's module, warm from the tree
+(borrow 'garage)
 (borrow 'rove)     ; dat, open?
 
-(: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
-   (rows s) (1 + count s "\r\n")
-   (range a b) (map (+ a) ^(b - a))
-   ; the cells of the bed you can walk to from where you stand, eight ways at a step
+(: (range a b) (map (+ a) ^(b - a))
+   ; the bed cells reachable from where you stand, eight ways a step
    (bed-reach g) (: d (g 'd) w (d 'w) h (d 'h) seen {}
                     (nbs i) (: x (i % w) y (i // w)
                                (filter (j \ 0 <= j)
@@ -19,33 +16,33 @@
                     (go l) (l @- seen (i . u) (seen i ? (go u) (pin seen i 1, go (u + nbs i))))
                     (go [(g 'p 'x + w * g 'p 'y)])))
 
-; --- the lay ---
+; the lay
 (: g (garage-new 80 22 (wheel 5)) d (g 'd) w 80 h 22 p (g 'p)
    (t x y) (dat d x y)
    (has-tile? k) (any (i \ k = peep (d 't) i 0) ^(w * h))
    cars (d 'cars)
    f (garage-frame g) f2 (garage-frame g)
    reach (bed-reach g)
- (test (rows f = h + 2) (f = f2)
-       (all (x \ 0 = t x 0 && 0 = t x (h - 1)) ^w)                    ; concrete along the top and the bottom
-       (all (y \ elem (t 0 y) '(0 5) && elem (t (w - 1) y) '(0 5)) ^h)   ; ..and down the sides, but for the bed
-       (any (y \ 5 = t 0 y) ^h) (any (y \ 5 = t (w - 1) y) ^h)         ; which breaks through both
+ (test (h-rows f = h + 2) (f = f2)
+       (all (x \ 0 = t x 0 && 0 = t x (h - 1)) ^w)
+       (all (y \ elem (t 0 y) '(0 5) && elem (t (w - 1) y) '(0 5)) ^h)   ; concrete sides, but for the bed (5)
+       (any (y \ 5 = t 0 y) ^h) (any (y \ 5 = t (w - 1) y) ^h)
        (has-tile? 2) (has-tile? 3) (has-tile? 4)                        ; columns, pilasters, lines
-       ; ..and none of them, nor a wreck, in the zone the bed runs through
+       ; none of them, nor a wreck (6), in the bed's zone
        (d 'zone @ z (all (i \ !(elem (peep (d 't) i 0) '(2 4 6))) (range (w * <z) (w * <>z))))
        (all (i \ !(elem (peep (d 't) i 0) '(2 4 6))) (filter (i \ 5 = peep (d 't) i 0) ^(w * h)))
-       (0 < #cars) (all (c \ all (cl \ 6 = peep (d 't) <cl 0) (car-cells c w)) cars)   ; wrecks whole, and not on the bed
+       (0 < #cars) (all (c \ all (cl \ 6 = peep (d 't) <cl 0) (car-cells c w)) cars)
        (all (c \ (bay-d * (bay-w - 1)) = #(car-cells c w)) cars)
-       (p 'x = w - 1) (5 = t (p 'x) (p 'y))                            ; you start on the bed at the east wall
+       (p 'x = w - 1) (5 = t (p 'x) (p 'y))
        (any (i \ 0 = i % w) (keys reach))                                ; ..and the bed runs through to the west wall
-       (0 < #(g 'ms)) (all (m \ open? d (m 'x) (m 'y)) (g 'ms))         ; the rats, on bare cells
+       (0 < #(g 'ms)) (all (m \ open? d (m 'x) (m 'y)) (g 'ms))
        (two? (g 'sign)) (garage-turn g 32, !(g 'sign))))
 
-; --- the rats wander and stay on bare cells; one bumped has its say and nobody moves for it ---
+; the rats wander on bare cells; one bumped has its say and nobody moves
 (: g (garage-new 80 22 (wheel 5)) d (g 'd) w 80 p (g 'p)
    _ (garage-turn g 32)
    was (map (m \ [(m 'x) (m 'y)]) (g 'ms))
-   _ (each ^30 (i \ garage-turn g '(1 0)))                              ; thirty turns at the east wall
+   _ (each ^30 (i \ garage-turn g '(1 0)))
    now (map (m \ [(m 'x) (m 'y)]) (g 'ms))
    r <(g 'ms) rx (r 'x) ry (r 'y)
    (pins p 'x (rx + 1) 'y ry,
@@ -54,30 +51,29 @@
          (0 < #(g 'msg)) (p 'x = rx + 1) (p 'y = ry) !(g 'over)
          (string? (rat-interaction (g 'sb) r))))
 
-; --- concrete holds and so does a wreck; west along the bed is the way out, east is not ---
+; concrete and wrecks hold; west along the bed is the way out, east is not
 (: g (garage-new 80 22 (wheel 5)) d (g 'd) w 80 h 22 p (g 'p)
    (t x y) (dat d x y)
    _ (garage-turn g 32)
    x0 (p 'x) y0 (p 'y)
    _ (garage-turn g '(1 0)) m1 (g 'msg) o1 (g 'over)                  ; east, off the map: no
-   _ (pins p 'x 1 'y 0, garage-turn g '(0 -1)) m2 (g 'msg)          ; into the top wall
+   _ (pins p 'x 1 'y 0, garage-turn g '(0 -1)) m2 (g 'msg)
    c <(d 'cars)
-   _ (pins p 'x (c 'x - 1) 'y (c 'y), garage-turn g '(1 0)) m3 (g 'msg) x3 (p 'x)   ; into a wreck
+   _ (pins p 'x (c 'x - 1) 'y (c 'y), garage-turn g '(1 0)) m3 (g 'msg) x3 (p 'x)
    wy <(filter (y \ 5 = t 0 y) ^h)
-   (pins p 'x 0 'y wy, garage-turn g '(-1 0),                           ; west, off the map along the bed
+   (pins p 'x 0 'y wy, garage-turn g '(-1 0),
     test (0 < #m1) !o1 (0 < #m2) (0 < #m3) (x3 = c 'x - 1)
          ('west = g 'over)))
 
-; --- a garage too small for a bay is laid without one, and without a car, and stands ---
+; a garage too small for a bay is laid without one, nor a car
 (: g (garage-new 24 10 (wheel 5)) d (g 'd) w 24 h 10
    (t x y) (dat d x y)
- (test (rows (garage-frame g) = h + 2) !(d 'cars)
+ (test (h-rows (garage-frame g) = h + 2) !(d 'cars)
        (all (i \ !(elem (peep (d 't) i 0) '(2 4 6))) ^(w * h))
        (any (y \ 5 = t 0 y) ^h) (any (y \ 5 = t (w - 1) y) ^h)
        (5 = t (g 'p 'x) (g 'p 'y))))
 
-; --- the song: a chunk a feed, the tune's cycles pulled as the head reaches them and its
-; voices sounding; no tune, and the same chunks are silence ---
+; the song: a chunk a feed, cycles pulled as the head reaches them; no tune is silence
 (: j (jug 0) s (garage-song-new (garage-tune ()) j (wheel 7))
    spc (int (song-rate / song-cps))
    n (1 + spc // song-chunk)                              ; feeds enough to reach the second cycle
@@ -90,9 +86,9 @@
        (2 = s 'cyc) (2 * spc = s 'next) (n * song-chunk = s 'fpos)
        (#out2 = 5 * 4 * song-chunk) (all (i \ 0 = out2 i) ^#out2) (0 = s2 'cyc)))
 
-;; a tap steers here as in the tower: toward where it landed, and a sign takes it as a key
+; a tap steers toward where it landed, and a sign takes it as a key
 (: g (garage-new 80 22 (wheel 5)) d (g 'd) p (g 'p)
-   _ (pin g 'sign ())                                      ; the opening sign down
+   _ (pin g 'sign ())
    (at dx dy) (tap-key g [(p 'x + dx + peep d 'vx 0) (p 'y + dy + 1 + peep d 'vy 0)])
    east (at 6 0) north (at 0 -2)
    _ (pin g 'sign '("t" "a line"))

@@ -1,11 +1,6 @@
-/* __attribute__((aligned(N))) on a data declarator is HONORED, not skipped --
- * a skipped aligned(N) silently misaligns the object (page tables, DMA), which
- * is worse than the old parse error. exercises: the array-declarator trailing
- * run (the shape that refused), a scalar between neighbours that would land it
- * off-grain, an initialized aligned global (bytes AND boundary), and bare
- * `aligned`, whose N is the target's own __BIGGEST_ALIGNMENT__ -- 16 nearly
- * everywhere, 8 under AAPCS32, which is why the check asks the macro and not a
- * number. gcc agrees on every exit. */
+/* __attribute__((aligned(N))) on data is honored: a trailing array run, a scalar
+ * that would land off-grain, an initialized global, and bare `aligned`, whose N is
+ * __BIGGEST_ALIGNMENT__ (16 mostly, 8 under AAPCS32): ask the macro, not a number. */
 typedef unsigned long u64;
 
 static char crumb1 = 1;                                   /* off-grain neighbours: the pad is real */

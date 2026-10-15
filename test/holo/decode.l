@@ -1,9 +1,5 @@
-; the gate for src/love/holo/decode.l against objdump: test/gate/decode.sh lays @PAIRS@, one
-; `text.bin text.dis` pair per line -- the raw .text of a gcc object and objdump's reading of
-; it. the judge decodes the bytes and holds two things per instruction: the boundary (objdump
-; started an instruction at the same offset, and nowhere in between) and the mnemonic, with
-; objdump's at&T suffix and prefix words allowed for (movl = mov, cltq = cdqe, `lock cmpxchg`
-; is our two items). a `.byte` of ours is a miss by construction: the bytes said something.
+; the decoder against objdump: @PAIRS@ is `text.bin text.dis` lines. per instruction the
+; boundary and the mnemonic must agree, at&t suffixes and prefix words allowed for; a .byte misses.
 (borrow 'holo)
 
 (borrow 'posix)

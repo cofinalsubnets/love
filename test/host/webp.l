@@ -1,11 +1,6 @@
-; test/host/webp.l -- src/apps/webp.l and src/love/picture/webp.c's webp-pixels
-; small pictures libwebp wrote -- lossy, lossy over an alpha plane compressed and raw,
-; lossless with a palette and with its transforms, one pixel, an animation whose first frame
-; sits inside its canvas -- each decoded to the rgba libwebp gives, by its sha-256. then,
-; where python3's PIL writes webp, more of them, each held to PIL's own decode byte for byte;
-; animations composed frame by frame, one muxed by hand and PIL's own, held to PIL's frames
-; (libwebp's animation decoder); the lossless encoder read back exactly, here and by PIL;
-; last the refusals.
+; test/host/webp.l -- src/apps/webp.l and webp.c's webp-pixels: libwebp's pictures, stills and
+; animations, by sha-256; then, where PIL writes webp, held to PIL's decode byte for byte; the lossless
+; encoder read back exactly, here and by PIL; then the refusals.
 ;   cat test/00-init.l test/host/webp.l | out/love
 (borrow 'posix)
 (borrow 'hashes)
@@ -19,7 +14,7 @@
    (unx h) (cask (#h // 2) @ c (map (i \ pin c i (nib (h (2 * i)) * 16 + nib (h (2 * i + 1)))) (jot (#h // 2)),
                                string c))
 
-   ; -- libwebp's own -------------------------------------------------------------------
+   ; -- libwebp's own
    lossy (unx (cats [
      "524946464600000057454250565038203a0000005003009d012a180012003eb554a44d24a32221280800"
      "9416896500c10a8000455b580000feebde2ff9dad86207b1ffc06ebe2db818136ce80000"]))
@@ -66,7 +61,7 @@
            ; the canvas round the first frame stays clear
            (webp-decode anim @ d (d 2 3 = 0)))
 
-   ; -- animations ----------------------------------------------------------------------
+   ; animations
    ; muxed by hand on a 20x12 canvas: a drawn first frame, semi-clear frames blended over it,
    ; one cleared away and the next copied where it was, an overwrite with alpha, a blend
    hand (unx (cats [
@@ -93,7 +88,7 @@
            (webp-frames anim 10 @ f (two? f && f 2 0 0 = webp-decode anim 2))
            (webp-frames lossy 10 = [24 18 [[(webp-decode lossy 2) 0]]]))
 
-   ; -- against PIL ---------------------------------------------------------------------
+   ; against PIL
    pil? (: r (hark ["python3" "-c" "from PIL import features; assert features.check('webp')"])
            (two? r) && (<r = 0))
    _ (put (dir + "/mk.py") "import sys, math
@@ -179,10 +174,8 @@ open(d + '/anims', 'w').write(chr(10).join(man) + chr(10))
                 (test (<r = 0) (6 < #ls) (atom? (filter (l \ !(anim-same l)) ls))))
         (gate-partly "webp: no python3 PIL with webp, its animations skipped"))
 
-   ; -- the lossless encoder -------------------------------------------------------------
-   ; palettes of 2, 3, 5, 17 and 256 colours (packed 8, 4, 2 to a pixel, then one), alpha, a
-   ; gradient, noise, one pixel and a long row: each read back exactly, here and where PIL is
-   ; by libwebp; a flat picture in a few dozen bytes
+   ; -- the lossless encoder: palettes packed 8, 4, 2 and 1 a pixel, alpha, a gradient, noise,
+   ; one pixel, a long row, each read back exactly here and by libwebp
    (image w h f)
     (cask (4 * w * h) @ c
      (map (i \ (: p (f (i % w) (i // w)) o (4 * i)
@@ -209,7 +202,7 @@ open(d + '/anims', 'w').write(chr(10).join(man) + chr(10))
    _ (pil? ? (: r (hark ["python3" (dir + "/enc.py") dir (show #encs)]) (test (<r = 0)))
         (gate-partly "webp: no python3 PIL with webp, its reading of our encoder skipped"))
 
-   ; -- the refusals --------------------------------------------------------------------
+   ; -- refusals
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    (test (webp-decode "hello" = "not a webp") (webp-size "hello" = "not a webp")
          (webp-decode (snip ll 0 40) = "cut short") (webp-decode (snip lossy 0 20) = "cut short")

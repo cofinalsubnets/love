@@ -1,8 +1,5 @@
-/* the conditional CONVERTS its arms: one flo arm makes the result flo, the
-   integer arm converts at its edge -- love's eq lane compares
-   (Cp(a) ? cplx_im(a) : 0) == (Cp(b) ? cplx_im(b) : 0) and the charm side
-   rode the int arm straight into a double compare. + a negative float
-   literal in a global image (folds through the unary neg). */
+/* ?: converts its arms: one float arm makes the result float, the int arm converts
+   at its edge. plus a negative float literal in a global image. */
 static double R[2] = { -1.0, 0.0 };
 static double re(long x) { return R[0]; }
 static double im(long x) { return R[1]; }

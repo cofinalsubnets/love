@@ -1,25 +1,5 @@
-(* test/proof/rocq/gcsize.v -- the collector's SIZING, as numbers: how big the major pool
-   gets. gc.v proves a collection loses nothing and copies once; this file is about space.
-
-   The model is src/love/gc.c's sizing with no budget and every allocation granted:
-     N  the nursery (g->len), which no rule here changes
-     M  the major pool's size (g->major_len), U its occupancy (major_hp - major_base)
-     K  the pool's step (g->major0)
-   a collection is a major when the pool lacks room for a whole nursery's promotion
-   (please: major_free < len + req0 + 16, req0 taken as 0), else a minor. a major sizes
-   its to-space for the worst case, every word of the pool and the nursery surviving
-   (gen_major: need = used + young; want = need + slack + need/4 + 16, slack = len + 16;
-   rounded up to a whole step), and leaves the pool holding the survivors. a minor
-   promotes what survives the nursery into the pool.
-
-   The mutator is the adversary: its live set never passes L, and each minor promotes p
-   words that are dead by the next major -- a frame's temporaries caught alive at a
-   minor. Under it the pool grows at every major and without bound
-   (current_policy_unbounded), though nothing it holds stays live: a major sizes the pool
-   from its occupancy just before the copy, and the pool is only ever collected when that
-   occupancy is within a nursery of all of it.
-
-   Written by Claude (Anthropic), the Opus 5.5 model. *)
+(* gcsize.v -- how big the major pool gets. N the nursery, M the pool, U its
+   occupancy, K the step; the adversary promotes p words per minor, dead by the next major *)
 
 From Stdlib Require Import PeanoNat Lia Wf_nat Bool.
 
@@ -32,7 +12,7 @@ Hypothesis K_pos : 0 < K.
 (* the pool lacks room for a nursery's promotion: please's forcing test *)
 Definition forced (s : st) : bool := M s <? U s + N s + 16.
 
-(* gen_major's ask, the nursery full when the collection was asked for *)
+(* a major's ask: room for the pool and a full nursery surviving, in whole steps *)
 Definition ceil_step (w : nat) : nat := (w + K - 1) / K * K.
 Definition grown (s : st) : nat :=
   let need := U s + N s in Nat.max K (ceil_step (need + (N s + 16) + need / 4 + 16)).
@@ -59,16 +39,13 @@ Proof.
   rewrite Nat.mul_comm. lia.
 Qed.
 
-(* a major asks for more than the whole pool it collects: its ask starts from the
-   occupancy, which forced puts within a nursery and 16 of M *)
+(* a major asks for more than the pool it collects *)
 Theorem major_grows : forall s, forced s = true -> M s < grown s.
 Proof.
   intros s H. unfold forced in H. apply Nat.ltb_lt in H.
   unfold grown. pose proof (ceil_step_ge (U s + N s + (N s + 16) + (U s + N s) / 4 + 16)). lia.
 Qed.
 
-(* what the run keeps: the live words sit in the pool, the pool holds what it holds, the
-   nursery stays the size it was *)
 Definition inv (L N0 : nat) (s : st) : Prop := L <= U s /\ U s <= M s /\ N s = N0.
 
 Lemma step_inv : forall L p N0 s, p <= N0 -> inv L N0 s -> inv L N0 (step L p s).
@@ -89,8 +66,7 @@ Proof.
   pose proof (major_grows s F). lia.
 Qed.
 
-(* from any state, a major comes: each minor closes the room left by p >= 1, so some
-   later collection is forced, and it grows the pool *)
+(* each minor closes the room by p >= 1, so a growing major comes *)
 Lemma some_growth : forall L p N0 s, 1 <= p -> p <= N0 -> inv L N0 s ->
   exists k, M s < M (iter k (step L p) s).
 Proof.
@@ -107,8 +83,7 @@ Proof.
     exists (Datatypes.S k). rewrite iter_succ, Hs. simpl in Hk. exact Hk.
 Qed.
 
-(* THE RATCHET: a mutator with at most L live words, any L, and a pool that passes every
-   bound. nothing it promotes outlives a major, and the pool still grows at each one *)
+(* live set at most L, yet the pool passes every bound *)
 Theorem current_policy_unbounded : forall L p N0 M0, 1 <= p -> p <= N0 -> L <= M0 ->
   forall B, exists n,
     B < M (iter n (step L p) {| N := N0; M := M0; U := L |}).
@@ -135,13 +110,8 @@ Qed.
 
 End Sizing.
 
-(* --- the same policy under a budget B: the pool climbs to the budget's share whatever
-   the live set. the share is half of what the nursery leaves (major_share); at it the major
-   comes a nursery early (at_share); an ask past the share takes the share in whole steps,
-   or the tight size if that is more (gen_major's clamp); and a pool that holds the worst
-   case keeps its size. the nursery is the adversary's to keep: its own rule leaves it while
-   a minor's promotion stays under 1/ratio of it and the budget's nursery cap is above it ---
-*)
+(* --- under a budget B: the share is half of what the nursery leaves; an ask
+   past it is clamped to it in whole steps --- *)
 Section Budget.
 Variables K B n0 : nat.
 Hypothesis K_pos : 0 < K.
@@ -205,7 +175,6 @@ Proof.
   destruct (share s <? askb s), (need_k s <? share s); lia.
 Qed.
 
-(* the share is the nursery's alone: a run that keeps the nursery keeps it *)
 Definition sk (N0 : nat) : nat := (B - N0) / 2 / K * K.
 Lemma share_k_sk : forall s, share_k s = sk (N s).
 Proof. reflexivity. Qed.
@@ -239,8 +208,7 @@ Proof.
     exists (Datatypes.S k). rewrite iter_succ, Hs. simpl in Hk'. exact Hk'.
 Qed.
 
-(* THE RATCHET UNDER A BUDGET: the pool reaches the budget's share, in whole steps, for
-   every live set the share can hold -- however small *)
+(* the pool reaches the share for any live set it can hold, however small *)
 Theorem budget_ratchet : forall L p N0 M0, 1 <= p -> p <= N0 -> L <= sk N0 -> L <= M0 ->
   exists n, sk N0 <= M (iter n (stepb L p) {| N := N0; M := M0; U := L |}).
 Proof.
@@ -258,7 +226,7 @@ Proof.
   apply (G (sk N0 - M0) {| N := N0; M := M0; U := L |}); [unfold invb; simpl; lia | reflexivity].
 Qed.
 
-(* ..and so the footprint, both halves and the nursery, comes within two steps of B *)
+(* so the footprint comes within two steps of B *)
 Theorem budget_footprint : forall N0 m, N0 <= B -> sk N0 <= m -> B <= 2 * m + N0 + 2 * K + 1.
 Proof.
   intros N0 m HN H. unfold sk in H.
@@ -269,31 +237,24 @@ Qed.
 
 End Budget.
 
-(* --- the new rule: the pool sized from what SURVIVED, not from what it held. a major
-   copies into a to-space that holds the worst case, every word of the pool and the nursery
-   surviving -- target of need, which is more than need -- and after the copy the pool is
-   target of the survivors: the survivors, f = fn / fd of them again, and room for a
-   nursery's promotion, in whole steps. the nursery may change size at a minor, to no more than
-   max n0 (q V), q = qn / qd, V the last major's survivors, and only to a size whose promotion the
-   pool still has room for. the mutator chooses every survivor count, promotion and
-   nursery size the rules allow; its live set never passes L ---
-*)
+(* --- the pool sized from its survivors: after a major it holds them, f of them
+   again and a promotion. a minor may resize the nursery up to max n0 (q V) --- *)
 Record st2 := { N2 : nat; M2 : nat; U2 : nat; V2 : nat }.
 
 Section New.
 Variables K n0 qn qd fn fd : nat.
 Hypothesis K_pos : 0 < K.
 Hypothesis fd_pos : 0 < fd.
-(* f = fn / fd: the room a major leaves past its survivors, as a share of them *)
+(* f = fn / fd *)
 Definition more (v : nat) : nat := v * fn / fd.
-(* q = qn / qd: the nursery's ceiling, as a share of the survivors *)
+(* q = qn / qd *)
 Definition nurse (v : nat) : nat := v * qn / qd.
 
 Definition ceil_n (w : nat) : nat := (w + K - 1) / K * K.
 Definition target (n v : nat) : nat := Nat.max K (ceil_n (v + more v + n + 16)).
 Definition forced2 (s : st2) : bool := M2 s <? U2 s + N2 s + 16.
 Definition ncap (s : st2) : nat := Nat.max n0 (nurse (V2 s)).
-(* the to-space a major copies into: the worst case's target *)
+(* the to-space holds the worst case *)
 Definition to_space (s : st2) (young : nat) : nat := target (N2 s) (U2 s + young).
 
 Inductive step2 (L : nat) : st2 -> st2 -> Prop :=
@@ -364,7 +325,7 @@ Proof.
     unfold ncap, Nb in *. lia.
 Qed.
 
-(* BOUNDED: every state a run reaches keeps the nursery under Nb and the pool under Mb *)
+(* every reached state keeps the nursery under Nb and the pool under Mb *)
 Theorem new_policy_bounded : forall L s0 s, V2 s0 <= L -> U2 s0 <= M2 s0 ->
   reach L s0 s -> inv2 L s0 s.
 Proof.
@@ -373,8 +334,7 @@ Proof.
   - eapply step2_inv; eauto.
 Qed.
 
-(* ..so the footprint between collections, both halves of the pool and the nursery:
-   2 (1 + f) L + 3 Nb and a few steps, from a start no bigger than that *)
+(* footprint between collections: 2 (1 + f) L + 3 Nb and a few steps *)
 Theorem new_policy_footprint : forall L s0 s, V2 s0 <= L -> U2 s0 <= M2 s0 ->
   M2 s0 <= target (Nb L s0) L -> reach L s0 s ->
   2 * M2 s + N2 s <= 2 * (L + more L) + 3 * Nb L s0 + 32 + 2 * K.
@@ -383,8 +343,7 @@ Proof.
   unfold Mb in HMs. pose proof (target_le (Nb L s0) L). lia.
 Qed.
 
-(* ..and the peak, during a major: the pool, the to-space beside it, and the nursery --
-   the pool's bound Mb twice, f of it again, and a few nurseries and steps *)
+(* peak during a major: pool, to-space and nursery *)
 Theorem new_policy_peak : forall L s0 s young, V2 s0 <= L -> U2 s0 <= M2 s0 ->
   M2 s0 <= target (Nb L s0) L -> reach L s0 s -> young <= N2 s ->
   M2 s + to_space s young + N2 s
@@ -399,14 +358,10 @@ Proof.
   lia.
 Qed.
 
-(* the to-space holds the worst case: everything in the pool and the nursery *)
 Lemma to_space_holds : forall s young, U2 s + young <= to_space s young.
 Proof. intros. unfold to_space. pose proof (target_ge (N2 s) (U2 s + young)). lia. Qed.
 
-(* NO THRASH: a major leaves room for f of its survivors and a nursery's promotion, so
-   the collection after it is a minor -- majors never come back to back -- and with the
-   nursery kept, the next major waits for f of the survivors to be promoted, so its copy
-   of the survivors is paid for, 1/f a word for each word promoted since *)
+(* a major leaves room for f of its survivors and a promotion: no back-to-back majors *)
 Theorem new_policy_room : forall L s s', step2 L s s' -> forced2 s = true ->
   more (V2 s') + N2 s' + 16 <= M2 s' - U2 s'.
 Proof.
@@ -424,16 +379,12 @@ Proof.
   - rewrite F in F1. discriminate.
 Qed.
 
-(* --- the lone block: no spare is held. a major makes its to-space then -- the worst case and
-   a nursery's promotion past it, or the last survivors' target where that is more -- copies
-   into it, and gives the old block back; the pool it leaves is the survivors' target, inside
-   that block. between majors the one block; at a major the old block and the new one ---
-*)
+(* --- the lone block: no spare held; a major makes its to-space, copies, and
+   gives the old block back --- *)
 Record st4 := { N4 : nat; M4 : nat; P4 : nat; U4 : nat; V4 : nat }.
 
 Definition forced4 (s : st4) : bool := M4 s <? U4 s + N4 s + 16.
 Definition ncap4 (s : st4) : nat := Nat.max n0 (nurse (V4 s)).
-(* the to-space a major makes: whole steps of the worst case and a promotion, or more *)
 Definition to4 (s : st4) (young : nat) : nat :=
   Nat.max (ceil_n (U4 s + young + N4 s + 16)) (target (N4 s) (V4 s)).
 
@@ -451,7 +402,6 @@ Inductive reach4 (L : nat) (s0 : st4) : st4 -> Prop :=
 
 Definition Nb4 (L : nat) (s0 : st4) : nat := Nat.max (N4 s0) (Nat.max n0 (nurse L)).
 Definition Mb4 (L : nat) (s0 : st4) : nat := Nat.max (M4 s0) (target (Nb4 L s0) L).
-(* a block: the pool's bound, two nurseries and a step past it, or the start's *)
 Definition Pb4 (L : nat) (s0 : st4) : nat := Nat.max (P4 s0) (Mb4 L s0 + 2 * Nb4 L s0 + 16 + K).
 
 Definition inv4 (L : nat) (s0 s : st4) : Prop :=
@@ -478,7 +428,6 @@ Proof.
     pose proof (nurse_mono (V4 s) L HV). unfold ncap4, Nb4 in *. lia.
 Qed.
 
-(* BOUNDED: the nursery, the pool and the block it sits in, every state a run reaches *)
 Theorem lone_bounded : forall L s0 s, V4 s0 <= L -> U4 s0 <= M4 s0 -> M4 s0 <= P4 s0 ->
   reach4 L s0 s -> inv4 L s0 s.
 Proof.
@@ -487,12 +436,10 @@ Proof.
   - eapply step4_inv; eauto.
 Qed.
 
-(* THE TO-SPACE HOLDS IT: the block a major makes takes the worst case *)
 Theorem lone_holds : forall s young, U4 s + young <= to4 s young.
 Proof. intros. pose proof (to4_holds s young). lia. Qed.
 
-(* the footprint: between majors the one block and the nursery; at a major the old block, the
-   new one and the nursery -- no third *)
+(* one block between majors, two at a major, never a third *)
 Theorem lone_footprint : forall L s0 s, V4 s0 <= L -> U4 s0 <= M4 s0 -> M4 s0 <= P4 s0 ->
   reach4 L s0 s -> P4 s + N4 s <= Pb4 L s0 + Nb4 L s0.
 Proof.
@@ -506,8 +453,7 @@ Proof.
   pose proof (to4_le L s0 s young I Hy). destruct I as [HN [_ [_ [_ [_ HPb]]]]]. lia.
 Qed.
 
-(* NO THRASH: a major leaves room for a nursery's promotion at least, so majors never come back
-   to back; and f of the survivors besides wherever their target fits the block it made *)
+(* room for a promotion always, and for f of the survivors where their target fits *)
 Theorem lone_room : forall L s s', step4 L s s' -> forced4 s = true ->
   N4 s' + 16 <= M4 s' - U4 s' /\ (target (N4 s) (V4 s') <= P4 s' -> more (V4 s') + N4 s' + 16 <= M4 s' - U4 s').
 Proof.
