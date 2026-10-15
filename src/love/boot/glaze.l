@@ -361,13 +361,14 @@
            [tally 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
            [(>) '>] [(>=) '>=] [(=) '=] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]]
    ; ev.l's iop carries a nif as its op word (a charm), which aopv's values never equal: the
-   ; words of the globals amble can name, word -> nom, filled at the first ask -- guts is not
-   ; there yet when this file bakes
+   ; words of the globals amble can name, word -> nom, filled at the first ask by ev.l's
+   ; readers, cited here before the mop takes them
    aopix {}
+   aopnf (cite 'guts 'nifop)  aopgv (cite 'guts 'gv)
    probebox {}                                                            ; slot 0 set: amble answers 1 where it would compile, and emits nothing
    (aopw x)
     (: _ (#(keys aopix) = 0 ?
-            (: nf (cite 'guts 'nifop) gv (cite 'guts 'gv)
+            (: nf aopnf gv aopgv
                (each '(pin peep elem max min snip tally two? cap cup + - * // % & | ^ < <= > >= = == .
                        rev cat assoc last string charm? nom? tablet? lit? string? gem? atom? nil? abs)
                      (n \ (: v (gv ? (gv n 0) 0) w (nf && v && !(charm? v) ? (nf v) 0)
@@ -2488,7 +2489,7 @@
    natjit
     (: arch love-arch                                                     ; the runtime target ('x64 / 'a64), read on the actual binary
        G (cite 'glaze)                                                    ; not in the module (test_glaze re-cats it alone): every name arrives by key
-       defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, kept in guts (egg.l)
+       defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, cited before the mop (egg.l)
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
