@@ -27,6 +27,20 @@ __mhdr *__mblock(void *p, char const *who) {
     write(2, ": not a live block (freed already, or never malloc's)\n", 54);
     abort(); }
   return b; }
+/* an arena is laid [header, its span, sentinel]: the sentinel stops a free span coalescing
+   into the next arena, so a span that fills its arena whole is the arena empty again, and
+   its pages go back -- but one empty arena is kept, so a program that churns does not map
+   and unmap the same megabyte */
+static __mhdr *__mspare;
+static __mhdr *__mwhole(__mhdr *f) {                    /* f a whole arena's span: its header */
+  __mhdr *h = f - 1, *e = f + f->size;
+  return h->next == __MArena && h->size == f->size + 2 && e->next == __MLive && e->size == 1 ? h : 0; }
+static void __mtrim(__mhdr *f, __mhdr *h) {             /* lock held */
+  if (!__mspare || __mspare == h || !__mwhole(__mspare + 1)) { __mspare = h; return; }
+  __mhdr *p = __mfree;
+  while (p->next != f) p = p->next;
+  p->next = f->next, __mfree = p;
+  munmap(h, (long) (h->size * sizeof(__mhdr))); }
 static void __mput(__mhdr *b) {                        /* the arena's own free, lock held */
   __mhdr *q = __mfree;
   for (; !(b > q && b < q->next); q = q->next)
@@ -58,14 +72,20 @@ void free(void *p) {
   if (!p) return;
   __mhdr *b = __mblock(p, "free");
   if (b->next == __MDirect) { munmap(b, (long) (b->size * sizeof(__mhdr))); return; }
-  __mtake(); __mput(b); __mgive(); }
+  __mtake();
+  __mput(b);
+  __mhdr *f = __mfree < b && b < __mfree + __mfree->size ? __mfree : b, *h = __mwhole(f);   /* b's span now */
+  if (h) __mtrim(f, h);
+  __mgive(); }
 static __mhdr *__mcore(size_t nu) {
-  size_t need = (nu + 1) * sizeof(__mhdr);
+  size_t need = (nu + 2) * sizeof(__mhdr);
   size_t len = need < (1UL << 20) ? (1UL << 20) : ((need + 4095UL) & ~4095UL);
   void *m = mmap(0, (long) len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (m == (void *) -1) return 0;
-  __mhdr *u = m;
-  u->size = len / sizeof(__mhdr);
+  __mhdr *h = m, *u = h + 1, *e = h + len / sizeof(__mhdr) - 1;
+  h->next = __MArena, h->size = len / sizeof(__mhdr);
+  e->next = __MLive, e->size = 1;
+  u->size = h->size - 2;
   u->next = 0;
   __mput(u);
   return __mfree; }

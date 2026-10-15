@@ -617,6 +617,7 @@ typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in
 #define __MDirect ((__mhdr *) 1)   /* in an allocated block's `next': a mapping of its own, pages fresh from the kernel */
 #define __MLive ((__mhdr *) 3)     /* ..an arena block */
 #define __MAlign ((__mhdr *) 5)    /* ..a stand-in before an aligned pointer: size is the units back to the block's payload */
+#define __MArena ((__mhdr *) 7)    /* an arena's first unit, never handed out: size is the arena's units, its last a sentinel (__MLive, 1) */
 __mhdr *__mblock(void *p, char const *who);   /* the block behind p, or an abort naming who */
 int __mgrow(__mhdr *b, size_t nu);            /* realloc's growth in place: 1 when b now holds nu units */
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
