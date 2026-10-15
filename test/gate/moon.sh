@@ -1266,11 +1266,18 @@ for os in linux freebsd netbsd; do
   [ $(( $(date +%s) - s0 )) -lt 5 ] \
     || fail "carried runtime: -os $os took the member-compile lane (it refused the carried archive)"
 done
-# ..and where the arch has NO translation tables the refusal must stand: riscv's os.c
+for os in linux freebsd netbsd; do
+  s0=$(date +%s)
+  moonrun -t rv64 -os $os "$ho/.os.c" -o "$ho/.os.rv$os" > /dev/null 2>&1 \
+    || fail "carried runtime: -t rv64 -os $os did not link"
+  [ $(( $(date +%s) - s0 )) -lt 5 ] \
+    || fail "carried runtime: -t rv64 -os $os took the member-compile lane (it refused the carried archive)"
+done
+# ..and where the arch has NO translation tables the refusal must stand: i386's os.c
 # reads -os and only linux has an answer, so a BSD there owes a compile that #errors.
 # handing it the carried (linux-built) archive would link linux's numbers in silence.
-moonrun -t rv64 "$ho/.os.c" -o "$ho/.os.rv" > /dev/null 2>&1 \
-  || fail "carried runtime: -t rv64 did not link"
-moonrun -t riscv64 -os netbsd "$ho/.os.c" -o "$ho/.os.rvnb" > /dev/null 2>&1 \
-  && fail "carried runtime: -t riscv64 -os netbsd linked -- it took linux's archive for a BSD"
-echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it; riscv's BSDs still refuse) ok"
+moonrun -t i386 "$ho/.os.c" -o "$ho/.os.i386" > /dev/null 2>&1 \
+  || fail "carried runtime: -t i386 did not link"
+moonrun -t i386 -os netbsd "$ho/.os.c" -o "$ho/.os.i386nb" > /dev/null 2>&1 \
+  && fail "carried runtime: -t i386 -os netbsd linked -- it took linux's archive for a BSD"
+echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it on x64, a64 and rv64; i386's BSDs still refuse) ok"

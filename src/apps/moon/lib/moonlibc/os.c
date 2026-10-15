@@ -2,8 +2,8 @@
  * rungs UV1-UV2). one build runs linux, freebsd and netbsd: __love_osdetect asks
  * the kernel which it is (once, at entry or lazily under __love_call), and
  * numbers, errnos, signals, masks and flag words translate through the tables
- * here. x64 and a64 carry them; riscv takes the identity stubs below and
- * answers whichever kernel -os named. */
+ * here. x64, a64 and rv64 carry them; i386 and arm take the identity stubs
+ * below and answer whichever kernel -os named. */
 #include "impl.h"
 
 long __love_osv;         /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd; -1 inle,
@@ -97,8 +97,10 @@ long __love_osdetect(void) {
    * signals SIGILL/ILL_ILLOPN for any but zero -- asking blind kills the
    * process before it can hear an answer. So freebsd is already OUT by the
    * time this runs: crt0 parts it from the rest by the entry protocol alone
-   * and hands 2 down, and this branch only ever asks linux from netbsd. */
-# if defined(__aarch64__)
+   * and hands 2 down, and this branch only ever asks linux from netbsd.
+   * on riscv the doors are leaves too: linux reads the number in a7 and netbsd
+   * in t6, so each leaf sets both; freebsd is out by the same entry protocol. */
+# if defined(__aarch64__) || defined(__riscv)
   long r = __love_nbp20(-1);
   if (r <= 0) return 1;
   { int mib[2] = {1, 1};
@@ -237,6 +239,9 @@ static short const os_nr[][3] = {
   {NR_newfstatat,    NR_fb_newfstatat,  466},   /* the member fills the OS twin */
   {NR_unlinkat,      NR_fb_unlinkat,    471},
   {NR_renameat,      NR_fb_renameat,    458},
+#ifdef __riscv
+  {NR_renameat2,     NR_fb_renameat,    458},   /* riscv's rename: flags 0, one argument the BSDs ignore */
+#endif
   {NR_linkat,        NR_fb_linkat,      457},
   {NR_symlinkat,     NR_fb_symlinkat,   470},
   {NR_readlinkat,    NR_fb_readlinkat,  469},
