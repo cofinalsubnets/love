@@ -6,9 +6,10 @@
 ;                             until m hangs up; dirty (when given) is set at each gulp
 ;   (moor-to bx m w dirty)    the same, the replies up w: a terminal whose way in is not its
 ;                             way out (a window's pipes)
+;   (hpour s x w)             x through screen s, its replies said up w as they come
 ;   (waitfor pid)             the child's status pair, or a nom
 ;   hbox hmas hpid            a pane's box, master and pid
-(module '(mooring hopen hname-of moor moor-to waitfor hbox hmas hpid)
+(module '(mooring hopen hname-of moor moor-to hpour waitfor hbox hmas hpid)
 (borrow 'posix)
 (:
  (hbox p) <p
@@ -30,6 +31,16 @@
                          (snip w k #w))
                      (b = "love" && two? >argv ? <>argv b))
 
+ ; x into s, its replies up w per write: a queue that fills stops the feed, and
+ ; what is left goes in once they are said. the first drain tells the screen its
+ ; replies are heard, before a burst of asks. a reply is a byte stream and its
+ ; order is the whole content of it -- and one say beats six puts.
+ (hpour s x w) (: (said _) (: rep (reply s) (two? rep ? (say w (foldl (a \ b \ a + string b) "" rep), flush w) 0))
+                  _ (said 0)
+                  r (scribe s x)
+                  _ (said 0)
+                  (charm? r ? (hpour s (snip x r #x) w) 0))
+
  ; --- the moor: pump the master through the screen until the child hangs up.
  ; the screen lives in box bx (a relay swaps it); replies pour straight back;
  ; a dirty box (when given) cues the painter
@@ -40,17 +51,12 @@
  (moor bx m dirty) (moor-to bx m m dirty)
  (moor-to bx m w dirty) (see m @ ch
                     (ch = -1 ? ()
-                     (: s (peep bx () 0)
-                        _ (scribe s ch)
+                     (: _ (hpour (peep bx () 0) ch w)
                         b (cask 8192)
                         _ (: (drain x) (swig m b @ n
-                                          (charm? n && 0 < n ? (scribe (peep bx () 0) (snip b 0 n), drain ()) 0))
+                                          (charm? n && 0 < n ? (hpour (peep bx () 0) (snip b 0 n) w, drain ()) 0))
                            (drain ()))
-                        rep (reply (peep bx () 0))
-                        ; a reply is a byte stream and its order is the whole content
-                        ; of it -- and one say beats six puts.
-                        (rep ? (say w (foldl (a \ b \ a + string b) "" rep), flush w) 0,
-                         dirty ? (pin dirty () 1) 0,
+                        (dirty ? (pin dirty () 1) 0,
                          moor-to bx m w dirty))))
 
  (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid)))))

@@ -38,34 +38,51 @@ static int __sint(struct __ssrc *r, int base, int w, unsigned long long *v, int 
   __sunget(r, c);
   return any; }
 
+/* a float field's text: on the stack, then on the heap past it, so no field is cut short;
+ * a heap that cannot hold it marks the field lost */
+struct __sfb { char *p; size_t n, cap; int lost; char s[512]; };
+static void __sfput(struct __sfb *b, int c) {
+  if (b->n + 1 >= b->cap) {
+    char *q = b->p == b->s ? malloc(2 * b->cap) : realloc(b->p, 2 * b->cap);
+    if (!q) { b->lost = 1; return; }
+    if (b->p == b->s) memcpy(q, b->s, b->n);
+    b->p = q, b->cap *= 2; }
+  b->p[b->n++] = (char) c; }
+static int __sfdrop(struct __sfb *b) { if (b->p != b->s) free(b->p); return 0; }
+static int __sfend(struct __sfb *b, double *out) {
+  int ok = !b->lost;
+  if (ok) b->p[b->n] = 0, *out = strtod(b->p, 0);
+  __sfdrop(b);
+  return ok; }
+
 /* a float field: the longest prefix strtod would take, gathered into b, then strtod */
 static int __sflo(struct __ssrc *r, int w, double *out) {
-  char b[512]; int n = 0, c = __sget(r);
-  #define FlTake (b[n++] = (char) c, c = (--w > 0 && n < 510) ? __sget(r) : EOF)
+  struct __sfb b = { 0, 0, sizeof b.s, 0, {0} }; int c = __sget(r);
+  b.p = b.s;
+  #define FlTake (__sfput(&b, c), c = --w > 0 ? __sget(r) : EOF)
   if (c == '+' || c == '-') FlTake;
   int lc = c | 32;
   if (lc == 'i' || lc == 'n') {                     /* inf, infinity, nan */
     char const *word = lc == 'i' ? "infinity" : "nan";
     int k = 0;
     while (w > 0 && word[k] && (c | 32) == word[k]) { FlTake; k++; }
-    if (lc == 'i' && k != 3 && k != 8) { __sunget(r, c); return 0; }
-    if (lc == 'n' && k != 3) { __sunget(r, c); return 0; }
-    __sunget(r, c); b[n] = 0; *out = strtod(b, 0); return 1; }
+    if (lc == 'i' && k != 3 && k != 8) { __sunget(r, c); return __sfdrop(&b); }
+    if (lc == 'n' && k != 3) { __sunget(r, c); return __sfdrop(&b); }
+    __sunget(r, c); return __sfend(&b, out); }
   int hex = 0, digs = 0;
   if (c == '0') { FlTake; digs = 1; if ((c | 32) == 'x' && w > 0) { FlTake; hex = 1; digs = 0; } }
   while (w > 0 && (hex ? __sdig(c, 16) >= 0 : c >= '0' && c <= '9')) { FlTake; digs = 1; }
   if (w > 0 && c == '.') { FlTake; while (w > 0 && (hex ? __sdig(c, 16) >= 0 : c >= '0' && c <= '9')) { FlTake; digs = 1; } }
-  if (!digs) { __sunget(r, c); return 0; }
+  if (!digs) { __sunget(r, c); return __sfdrop(&b); }
   if (w > 0 && (c | 32) == (hex ? 'p' : 'e')) {     /* an exponent marker owes a digit */
     FlTake;
     if (w > 0 && (c == '+' || c == '-')) FlTake;
     int ed = 0;
     while (w > 0 && c >= '0' && c <= '9') { FlTake; ed = 1; }
-    if (!ed) { __sunget(r, c); return 0; } }
+    if (!ed) { __sunget(r, c); return __sfdrop(&b); } }
   #undef FlTake
   __sunget(r, c);
-  b[n] = 0; *out = strtod(b, 0);
-  return 1; }
+  return __sfend(&b, out); }
 
 static int __vscan(struct __ssrc *r, char const *fmt, va_list ap) {
   int got = 0, c;

@@ -67,7 +67,7 @@ moon0 -pie "$@" -o "$d/love1" || fail "love1 relink"
 
 echo "FIX  $d/love1 rebuilds itself"
 
-# love1 bakes its own compiler image (anchor-checked to love1)...
+# love1 bakes its own compiler image (fingerprinted to love1)...
 LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (quit 0) (quit 1))" \
   || fail "love1 bakes mooncc1.image"
 
