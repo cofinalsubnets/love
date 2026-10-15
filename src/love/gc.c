@@ -162,7 +162,7 @@ static word major_symbols_rebuild(struct g *g, struct gcx *X, word om) {
   word fwd = cell(os[2 * j + 1])->x;
   if (!sym_survived(fwd, lo, hi)) continue;
   word nk = nom(fwd)->name;
-  uintptr_t i = hash(g, nk) & mask;
+  uintptr_t i = nom(fwd)->dig & mask;   // the cached spelling hash: hash(g, nk) without the walk
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
   ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
  b[1].x = putcharm(n);
