@@ -49,6 +49,22 @@ fsh 'echo x | love -e "(3 + 4)"' >/dev/null; r=$?; [ $r -eq 0 ] || fail "fork la
 # so `love sh` there would read "sh" as a filename.)
 [ "$(fsh 'echo x | LOVE_NO_IMAGE=1 love -e "(elem (quote love-image) (names ()))"')" = "0" ] \
   || fail "fork lane swallowed LOVE_NO_IMAGE"
+# ..and every other boot knob (main.c's boot-env), down every lane that runs this heap:
+# a pipeline stage, a simple command, an export, a command substitution. a 64 MB budget
+# cannot hold 4M cells; the shell's own can, so a count here means the shell's heap ran it
+big='love -e "(tally (jot 4000000))"'
+[ "$(fsh "echo x | $big" 2>/dev/null)" = "4000000" ] || fail "fork lane big list (control)"
+[ "$(fsh "echo x | LOVE_BUDGET_MB=64 $big" 2>/dev/null)" != "4000000" ] || fail "fork lane swallowed LOVE_BUDGET_MB (stage)"
+[ "$(fsh "LOVE_BUDGET_MB=64 $big" 2>/dev/null)" != "4000000" ] || fail "fork lane swallowed LOVE_BUDGET_MB (simple)"
+[ "$(fsh "export LOVE_BUDGET_MB=64; $big" 2>/dev/null)" != "4000000" ] || fail "fork lane swallowed LOVE_BUDGET_MB (export)"
+[ "$(fsh "echo \$(LOVE_BUDGET_MB=64 $big)" 2>/dev/null)" != "4000000" ] || fail "fork lane swallowed LOVE_BUDGET_MB (cmdsub)"
+off='love -e "(nil? natjit)"'
+[ "$(fsh "echo x | $off")" = "0" ] || fail "fork lane glaze (control)"
+[ "$(fsh "echo x | LOVE_NO_GLAZE=1 $off")" = "1" ] || fail "fork lane swallowed LOVE_NO_GLAZE (stage)"
+[ "$(fsh "LOVE_NO_GLAZE=1 $off")" = "1" ] || fail "fork lane swallowed LOVE_NO_GLAZE (simple)"
+[ "$(fsh "export LOVE_NO_GLAZE=1; echo \$($off)")" = "1" ] || fail "fork lane swallowed LOVE_NO_GLAZE (export, cmdsub)"
+# an empty knob is no knob: the glaze stays on
+[ "$(fsh "LOVE_NO_GLAZE= $off")" = "0" ] || fail "fork lane empty LOVE_NO_GLAZE"
 # a word with nothing past it may want a terminal, and the repl is the caller's isatty
 # answer to give -- so the bare word is asked of the STAGE, not of the word: a pipe or a
 # `<` laying fd 0 answers it, and only a bare word that would inherit a terminal spawns.
