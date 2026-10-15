@@ -2508,6 +2508,10 @@
        (opnd-ok? ps e) (? (two? e) (all (opnd-ok? ps) >e)  (nom? e) (elem e ps)  1)   ; every operand leaf a frame param: jgir has no slot for a free capture
        (gdefs-ok? gds) (all (gd \ opnd-ok? ><gd >gd) gds)                             ; ... and per def body, over that def's own params
        threadir (G 'threadir)  leafops (G 'leafops)  thleaf (G 'thleaf)  thloop (G 'thloop)  thcount (G 'thcount)
+       ; a nested operand is a native push, and a lane's own pushes are under no stack check: a body
+       ; nested past gnest declines to its thread
+       gnest 1024
+       (nest? x n) (? (n <= 0) 1 (two? x) (any (y \ nest? y (n - 1)) x) 0)
        ; e = the bytecode entry (deopt target), s = the surface (\ frame.. body), a = arity, gv = ala's folded global resolver,
        ; farq = the letrec-local predicate (a farq name is wire-resolved: never gv it, the book namesake is stale), lams = the scope's
        ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = ev.l's uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
@@ -2516,10 +2520,12 @@
         (: _ (peep gvbox 0 0 ? 0 (pin gvbox 0 gv))
            _ (pin probebox 0 0)
            ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
-           t (threadir e leafops)                                                            ; the thread ev wrote, read once for every thread lane
+           deep (nest? body gnest)
+           t (deep ? 0 (threadir e leafops))                                                            ; the thread ev wrote, read once for every thread lane
            lf (thleaf t)
            lp (two? lf ? 0 (thloop t))
-           (? (two? lf) (hit (nif (emit (peep (asm arch (coreir arch (init >lf) (last lf) (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e a))
+           (? deep e
+              (two? lf) (hit (nif (emit (peep (asm arch (coreir arch (init >lf) (last lf) (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e a))
               (two? lp) (thcount lp @ [B I op cmp] (hit (njit-loop B I op cmp e))     ; the counted loop, then the n-var one: the back-edge is the win
                          (hit (njit-loop-n (lp 0) (lp 1) (lp 2) (lp 3) (lp 4) (lp 5) e)))
               !(all nom? ps) e                                                        ; a frame that is not all points (a pattern binder) declines every source lane

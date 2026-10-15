@@ -1433,7 +1433,7 @@ static void img_fault(int sig, siginfo_t *si, void *uc) {
   static char const m[] = "love: the image is damaged: a chunk of it will not wake\n";
   if (write(2, m, sizeof m - 1) < 0) {}
   _exit(70); }
- signal(sig, SIG_DFL); }                          // not the image's: the access retries into the default
+ love_fault_note(sig, si); }                      // not the image's: a stack's says so, the rest retry into the default
 
 // before a warm fork: the chunks any process of this image has woken, woken here too. a
 // child's wakes die with it, so without this each child decodes them again; want is shared
@@ -1495,7 +1495,7 @@ static int img_lazy_arm(struct img_lazy *L) {
  if (L->pg1 <= L->pg0) return 0;
  struct sigaction sa;
  memset(&sa, 0, sizeof sa);
- sa.sa_sigaction = img_fault, sa.sa_flags = SA_SIGINFO;   // a fault inside the handler is a bug: it dies
+ sa.sa_sigaction = img_fault, sa.sa_flags = SA_SIGINFO | SA_ONSTACK;   // a fault inside the handler is a bug: it dies
  sigemptyset(&sa.sa_mask);
  if (sigaction(SIGSEGV, &sa, NULL) || sigaction(SIGBUS, &sa, NULL)) return 0;
  if (mprotect((void*) L->pg0, L->pg1 - L->pg0, 0)) return 0;
