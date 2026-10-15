@@ -83,7 +83,7 @@
 ; compile laws here time hosted seats only: on the inle kernel they read a ratio the hosted
 ; seats do not, unsettled yet whether that is its compile or its clock
 (: (fnq-nest n) (n = 0 ? 1 [(fnq-nest (n - 1))])
- (test (1 = ev (fnq-nest 50)) (!hosted || test-linear (n \ ev ['\ 'u (fnq-nest n)]) 1500)))
+ (test (1 = ev (fnq-nest 50)) (test-linear (n \ ev ['\ 'u (fnq-nest n)]) 1500)))
 
 ; opfix twice is opfix once: an operator symbol it makes an operand is spelled by value
 (: (fnq-fix s) (opfix <(sound s) @ a (opfix a = a))
@@ -93,4 +93,4 @@
 ; text holes nested n deep compile in their length: each macro's operands come in factored
 (: (fnq-holes k) (k = 0 ? "\"x\"" ("\"a \\(" + fnq-holes (k - 1) + ") b\""))
  (test ("a a x b b" = ev <(sound (fnq-holes 2)))
-       (!hosted || test-linear (n \ ev ['\ 'u <(sound (fnq-holes n))]) 250)))
+       (test-linear (n \ ev ['\ 'u <(sound (fnq-holes n))]) 250)))
