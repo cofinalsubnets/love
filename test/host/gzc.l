@@ -1,10 +1,12 @@
-; test/host/gzc.l -- the C twins of gz.l (`inflate`, `crc32`) held to the love they shadow; the
-; love is the oracle. round trips over the shapes that break coders, size hints wrong every way,
+; test/host/gzc.l -- the C twins of gz.l (`inflate`, `crc32`) and test/host/gzdeflate.l (`deflate`)
+; held to the love they shadow; the love is the oracle. round trips over the shapes that break
+; coders, size hints wrong every way,
 ; every torn prefix, a flipped bit anywhere (a corrupt block must decode to the same nonsense in
 ; both), crc at every length 0..129, and misuse answering ().
 ; `string?`, never `?` or `!`, asks whether an answer is there: a run of NULs reads as false.
 ; not in the corpus: host nifs. run: cat test/00-init.l test/host/gzc.l | out/love
 (borrow 'gz)
+(borrow "test/host/gzdeflate.l")       ; gz-deflatel, the coder's oracle
 (borrow 'hashes)
 
 (test
