@@ -1242,7 +1242,8 @@ char *code_install(struct g *g, char const *src, size_t n), *code_adopt(struct g
                 unsigned char const *dz, size_t ndz, size_t nd, int kept);
 int code_seat(struct g *g, char const *a);
 char *code_window(char *p);
-void code_free(struct g *g, char *code), code_fin(struct g *g), code_stats(struct g *g, uintptr_t s[4]);
+void code_free(struct g *g, char *code), code_fin(struct g *g);
+uintptr_t code_stat(struct g *g, int i);
 int code_in(struct g *g, uintptr_t v);
 // the instruction table (src/love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. nif_cell draws the line against a nif's run.

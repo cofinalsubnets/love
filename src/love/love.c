@@ -496,11 +496,9 @@ lvm(lvm_natp) {
 lvm(lvm_arena) {
  enum { N = 4 };
  Have(N * Width(struct chain));
- uintptr_t v[N];
- code_stats(g, v);
  struct chain *c = (struct chain*) Hp;
  Hp += N * Width(struct chain);
- for (int i = 0; i < N; i++) ini_chain(c + i, putcharm((intptr_t) v[i]), i + 1 < N ? (intptr_t) word(c + i + 1) : (intptr_t) ZeroPoint);
+ for (int i = 0; i < N; i++) ini_chain(c + i, putcharm((intptr_t) code_stat(g, i)), i + 1 < N ? (intptr_t) word(c + i + 1) : (intptr_t) ZeroPoint);
  love_musttail return Answer(word(c)); }
 // a woken native's entry until its chunk of the image's code is seated: seat it, write the
 // code into the cell, enter. the header already names the code, one word behind an arity-1
@@ -814,11 +812,13 @@ void code_free(struct g *g, char *code) {
  for (struct code *c = g->code; c; c = c->next)      // the image's chunk is text: the dump packs one blob
   if (c->fixed && p >= c->base && p < c->base + c->len) return;   // per distinct BODY, so a dead closure never
  code_release(g, p, ((uintptr_t*) p)[1]); }                       // frees bytes another one is still running
-// the arena's state: [mapped, bumped, free, free spans] over the chunks installs own
-void code_stats(struct g *g, uintptr_t s[4]) {
- s[0] = s[1] = s[2] = s[3] = 0;
- for (struct code *c = g->code; c; c = c->next) if (!c->fixed) s[0] += c->len, s[1] += c->used;
- for (struct cfree *f = g->cfree; f; f = f->next) s[2] += f->n, s[3] += 1; }
+// the arena's state, one figure at a time: 0 mapped, 1 bumped, 2 free, 3 free spans, over
+// the chunks installs own. a figure, not an array, so the nif keeps no local across its tail
+uintptr_t code_stat(struct g *g, int i) {
+ uintptr_t s = 0;
+ if (i < 2) { for (struct code *c = g->code; c; c = c->next) if (!c->fixed) s += i ? c->used : c->len; }
+ else for (struct cfree *f = g->cfree; f; f = f->next) s += i == 2 ? f->n : 1;
+ return s; }
 int code_in(struct g *g, uintptr_t v) {                          // a code address of this session's arena?
  for (struct code *c = g->code; c; c = c->next)
   if (v >= (uintptr_t) c->base && v < (uintptr_t) c->base + c->used) return 1;
@@ -864,7 +864,7 @@ int code_in(struct g *g, uintptr_t v) { return 0; }
 // snap's code rung reaches this only behind the code_in above, which owns no address
 size_t code_len(char *code) { return 0; }
 void code_free(struct g *g, char *code) { }
-void code_stats(struct g *g, uintptr_t s[4]) { s[0] = s[1] = s[2] = s[3] = 0; }
+uintptr_t code_stat(struct g *g, int i) { return 0; }
 static void code_drop(struct g *g, struct code *c) { alloc(c->own, 0); }
 // a chunk like the hosted lane's, so the session owns it and code_fin frees it
 static struct code *code_region(struct g *g, size_t n, char **w) {
