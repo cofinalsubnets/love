@@ -185,11 +185,13 @@
              {} [])
        (tool "queue_gate" ("Gate your row in a git merge queue: the head row, or the row behind a green one, its union "
                            + "merged and committed in dir. It writes the row gating with dir's HEAD and starts love bee "
-                           + "--gate there, which runs the heavy lanes the change owes from the row's gated-on and the slow "
-                           + "lane last, through test/gate/lanes.sh under the heavy lock, then writes the row green with each "
-                           + "lane's result, or waiting with its reds, each red told to the owners of the paths that owed "
-                           + "it. A message comes when it ends; dir/out/gate.log is its log.")
-             {"queue" (prop "refs/queue/NAME") "dir" (prop "the worktree holding the union, its out/ built; the working directory unless given")}
+                           + "--gate there, which runs every lane the union owes from the row's gated-on, light and heavy, "
+                           + "once, the slow lane last, through test/gate/lanes.sh under the heavy lock, then writes the row "
+                           + "green with each lane's result, or waiting with its reds and the rows whose files owe each, "
+                           + "who are told. Split those rows out of the union and pass lanes to run only the red ones again: "
+                           + "the lanes the last gate passed stand. A message comes when it ends; dir/out/gate.log is its log.")
+             {"queue" (prop "refs/queue/NAME") "dir" (prop "the worktree holding the union, its out/ built; the working directory unless given")
+              "lanes" (prop "after a split, the red lanes to run again, space-separated; the slow lane always runs")}
              ["queue"])
        (tool "lanes" ("The lanes a change owes, in the order to run them, one line each: the lane, light or heavy, "
                       + "its wall seconds on a shared box (? when unmeasured) and the paths that owed it. test comes "
@@ -1071,7 +1073,7 @@
                                       ((cite 'lanemap 'lanes-covers) (string? mk ? mk ""))))
 
      ; --- queue_gate: bee gates a row. the tool writes the caller's row gating with dir's HEAD and starts
-     ; `love bee --gate` there, detached in its own group: the heavy lanes the change owes from the row's
+     ; `love bee --gate` there, detached in its own group: every lane the union owes from the row's
      ; gated-on, the slow lane last, through test/gate/lanes.sh under the heavy lock; then the row green
      ; with each lane's result, or waiting with its reds, each red told to the owners of the paths that
      ; owed it -- a folded row's owner by its own head's paths ---
@@ -1090,31 +1092,34 @@
             (#(g-git dir "rev-parse --verify -q HEAD") = 0) ("no commit checked out in " + dir)
             (0 < #(g-git dir "status --short --untracked-files=no")) (dir + " has changes not committed: a gate runs on a commit")
             ""))
-     (gate-spawn q dir who)
+     (gate-spawn q dir who only)
       (? !(string? bee-self) "this bee cannot find its own binary"
          (: _ (umkdirs (dir + "/out") 493)
             line ("cd " + sh-quote dir + " && BEE_NAME=" + sh-quote who + " PWD=" + sh-quote dir + " exec "
-                  + sh-quote bee-self + " bee --gate " + sh-quote q + " >> " + sh-quote (dir + "/out/gate.log") + " 2>&1")
+                  + sh-quote bee-self + " bee --gate " + sh-quote q + cats (map (\ l (" " + sh-quote l)) only)
+                  + " >> " + sh-quote (dir + "/out/gate.log") + " 2>&1")
             nul (openfd "/dev/null" 0)
             p (spawnio [bee-self "lush" "-c" line] nul nul nul (open-fds 0) 0 0)
             _ (? (0 <= nul) (close nul) 0)
             (? !(charm? p && 0 < p) "love bee --gate did not start" (: _ (twirl (\ _ (reap p)) 0) ""))))
      (queue-gate in)
-      (: q (in "queue") who (me 0) dir (gate-dir in) rd (q-read q)
+      (: q (in "queue") who (me 0) dir (gate-dir in) rd (q-read q) only (words (field in "lanes" ""))
          (? (<rd = "none") [0 ("no queue " + q)]
             (: r (q-own (q-rows (rd 1)) who) why (gate-why q (rd 1) who dir) h (g-git dir "rev-parse HEAD")
                (? (0 < #why) [0 why]
                   (: w (queue-row1 {"queue" q "state" "gating" "gated_head" h "row" r})
-                     e (? <w (gate-spawn q dir who) "")
+                     e (? <w (gate-spawn q dir who only) "")
                      (? !<w w
                         (0 < #e) [0 ("row " + r + " is gating at " + h + ", but " + e + ": write it back to waiting")]
-                        [1 ("row " + r + " is gating at " + h + ". love bee --gate runs its heavy lanes there, the slow lane "
-                            + "last, under the heavy lock, logging to " + dir + "/out/gate.log, and writes the row when it "
-                            + "ends; a message says so.")]))))))
+                        [1 ("row " + r + " is gating at " + h + ". love bee --gate runs "
+                            + (two? only ? (join " " only + " again, the lanes its last gate passed standing,")
+                                 "every lane its union owes there,")
+                            + " the slow lane last, under the heavy lock, logging to " + dir + "/out/gate.log, and writes "
+                            + "the row when it ends; a message says so.")]))))))
      ; the runner, in the union's worktree as the row's session
      (gate-say s) (: _ (puts ("love bee --gate: " + s + "\n")) _ (flush out) 0)
      (gate-wait p) (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 1000) (gate-wait p))))   ; a gate's hours
-     (gate-run q)
+     (gate-run q only)
       (: who (me 0) dir bee-cwd rd (q-read q) text (rd 1) rows (q-rows text) r (q-own rows who)
          row (? (r = ()) () (rows r)) h (git1 "rev-parse HEAD")
          ; an ignore every child inherits: spawnio resets the job signals (int quit pipe tstp ttin ttou)
@@ -1126,28 +1131,41 @@
             (two? ign) (back ("signals " + join " " (map show ign) + " are ignored here, and every lane would "
                               + "inherit them: start it from a shell that ignores none"))
             (: b (row 3) plan (lanes-plan-of b h)
-               ls (map (\ x <x) (filter (\ x (x 1 && <x != "test_slow")) plan))
-               _ (gate-say ("row " + r + " at " + h + " from " + b + ": " + join " " (ls + ["test_slow"])))
+               all (map (\ x <x) (filter (\ x (<x != "test_slow")) plan))
+               ln (filter (\ l (q-row? l && <(words l) = r)) (lines text))
+               n (? (two? ln) (q-note <ln) "")
+               ; a rerun after a split: the lanes named run again, and the ones the last gate passed stand
+               ls (? (two? only) (filter (\ l (l != "test_slow")) only) all)
+               stood (? (two? only) (filter (\ l (!(elem l ls) && elem [l "0"] (gate-was n))) all) ())
+               _ (gate-say ("row " + r + " at " + h + " from " + b + ": " + join " " (ls + ["test_slow"])
+                            + (two? stood ? (", standing: " + join " " stood) "")))
                ; the lanes write to this log as they run
                p (spawnio ([bee-self "bee" "--lock" "--heavy" "--out" (dir + "/out") "--" "sh" "test/gate/lanes.sh"
                             "-d" "out/lanes-gate" "--slow"] + ls + ["test_slow"]) -1 -1 -1 () -1 0)
                rc (? (charm? p && 0 < p) (gate-wait p) -1)
                sm (slurp-file (dir + "/out/lanes-gate/summary"))
                got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1))])) (filter (\ l (starts? l "test")) (? (string? sm) (lines sm) ())))
-               res (map (\ l (: g (filter (\ y (<y = l)) got) [l (? (two? g) (<g 1) "unrun")])) (ls + ["test_slow"]))
+               (one l) (: g (filter (\ y (<y = l)) got) [l (? (two? g) (<g 1) (elem l stood) "0" "unrun")])
+               res (map one (q-uniq (all + ls + ["test_slow"])))
                reds (filter (\ y (y 1 != "0")) res)
                ok (rc = 0 && !(two? reds))
-               ln (filter (\ l (q-row? l && <(words l) = r)) (lines text))
+               owe (gate-owe r rows b plan (map (\ y <y) reds))
                ; a gate's result replaces the last one's
-               n0 (: n (? (two? ln) (q-note <ln) "") k (find n " | gate " 0)
-                     (? (starts? n "gate ") "" (k < 0) n (snip n 0 k)))
+               n0 (: k (find n " | gate " 0) (? (starts? n "gate ") "" (k < 0) n (snip n 0 k)))
+               said (join "; " (map gate-said owe))
                note ((0 < #n0 ? (n0 + " | ") "") + "gate " + snip h 0 9 + ": " + join " " (map (\ y (<y + "=" + y 1)) res)
-                     + ((ok || two? reds) ? "" (" lanes.sh=" + show rc)))
+                     + ((ok || two? reds) ? "" (" lanes.sh=" + show rc))
+                     + (two? stood ? (" | stood: " + join " " stood) "")
+                     + (two? reds ? (" | red: " + said) ""))
                w (queue-row1 {"queue" q "state" (ok ? "green" "waiting") "row" r "note" note})
                _ (gate-say (w 1))
-               _ (? ok 0 (gate-tell q r rows b plan (map (\ y <y) reds) dir))
+               _ (? ok 0 (gate-tell q r owe dir))
                _ (post-as ("gate-" + r) who ("queue_gate: row " + r + " at " + h + (ok ? " is green: " " is red: ")
-                                             + join " " (map (\ y (<y + "=" + y 1)) res) + "; the log is " + dir + "/out/gate.log"))
+                                             + join " " (map (\ y (<y + "=" + y 1)) res)
+                                             + (two? reds ? ("; " + said + ". split those rows out of the union, then queue_gate "
+                                                             + "lanes \"" + join " " (map (\ y <y) reds) + "\" runs only them again")
+                                                  "")
+                                             + "; the log is " + dir + "/out/gate.log"))
                (ok ? 0 1))))
      ; --- a heavy ticket belongs to a queue row: one of a git queue here carrying the tree's branch or
      ; its HEAD (a gate writes its row gating with the head first). only a work tree's top is asked, so
@@ -1163,18 +1181,30 @@
             ("no row of " + join " " qs + " carries " + br + " or " + snip h 0 9 + ": heavy lanes run only in the "
              + "queue, once in a union at its head. join, write the row gating with this head, or pass --no-row "
              + "REASON (lock_acquire's no_row)")))
-     ; each red lane to the owners of the paths that owed it: a member's paths are its own head's
-     ; change from the row's gated-on; a lane no member's paths owed goes to the row's owner
-     (gate-tell q r rows b plan reds dir)
-      (: ms (r . q-folds rows r)
-         mp (map (\ m (: hm ((rows m) 4) [((rows m) 1) (row-paths (git1 ("merge-base " + sh-quote b + " " + sh-quote hm)) hm)])) ms)
+     ; each red lane and the rows whose paths owed it: a member's paths are its own head's change from
+     ; the row's gated-on; a lane no member's paths owed is the row's own -> [[lane [[pos session branch
+     ; paths] ..] why] ..]. the owners are told, and those rows split out of the union
+     (gate-owe r rows b plan reds)
+      (: mp (map (\ m (: rw (rows m) hm (rw 4) [m (rw 1) (rw 2) (row-paths (git1 ("merge-base " + sh-quote b + " " + sh-quote hm)) hm)]))
+                 (r . q-folds rows r))
          (why l) (: p (filter (\ x (<x = l)) plan) (? (two? p) (<p 3) ()))
-         (owners l) (: os (q-uniq (map (\ o <o) (filter (\ o (any (\ p (elem p (o 1))) (why l))) mp)))
-                       (? (two? os) os [((rows r) 1)]))
-         (map (\ l (map (\ o (post o (q-short q + ": row " + r + "'s union went red in " + l + ", owed by "
-                                        + join " " (take 5 (why l)) + "; the log is " + dir + "/out/lanes-gate/" + l + ".log")))
-                         (owners l)))
+         (map (\ l (: os (filter (\ o (any (\ p (elem p (o 3))) (why l))) mp)
+                     [l (? (two? os) os (filter (\ o (<o = r)) mp)) (why l)]))
               reds))
+     (gate-said o) (<o + " owed by " + join ", " (map (\ m (<m + " " + m 2)) (o 1)))
+     (gate-tell q r owe dir)
+      (map (\ o (map (\ s (post s (q-short q + ": row " + r + "'s union went red in " + <o + ", owed by "
+                                   + join ", " (map (\ m (<m + " " + m 2)) (o 1)) + " (" + join " " (take 5 (o 2))
+                                   + "); the log is " + dir + "/out/lanes-gate/" + <o + ".log")))
+                     (q-uniq (map (\ m (m 1)) (o 1)))))
+           owe)
+     ; [[lane rc] ..] a row's note says its last gate ran
+     (gate-was n)
+      (: k (find n " | gate " 0)
+         s (? (0 <= k) (snip n (k + 8) #n) (starts? n "gate ") (snip n 5 #n) "")
+         e (find s " | " 0)
+         (map (\ w (: i (find w "=" 0) [(snip w 0 i) (snip w (i + 1) #w)]))
+              (filter (\ w (0 < find w "=" 0)) (words (e < 0 ? s (snip s 0 e))))))
      (git-tree x) (git1 ("rev-parse --verify -q " + sh-quote (x + "^{tree}")))
      ; the base line a new queue starts from: the branch it is named for, at its sha
      (q-base-of q)
@@ -1190,9 +1220,10 @@
            ("# read:  queue_read, or sb -C HUB ledger " + q + " --text   (HUB: SB_HUB, the one nest every session names)"))
         "# write: only through bee's tools -- queue_row, queue_lead, queue_land, queue_landed -- from a bee, or from"
         "#   claude code through love bee --mcp. each write is a compare-and-swap and refuses what these rules forbid."
-        "# join: add your row at the bottom, waiting, once your branch's light lanes pass -- a row per branch, so a second"
-        "#   branch joins its own row and a fold already made stays. the order is fixed at join, never by who finishes a"
-        "#   gate first. the heavy lanes (love bee --lanes marks them) run only in the queue, once a union, at its head."
+        "# join: add your row at the bottom, waiting, once your branch builds and passes make test and the laws it adds"
+        "#   -- a row per branch, so a second branch joins its own row and a fold already made stays. its other lanes,"
+        "#   light and heavy (love bee --lanes), run in the queue, once for a union, at its head. the order is fixed at"
+        "#   join, never by who finishes a gate first."
         "# stacked: the head gates its branch merged with the base; row k+1 gates its branch merged with row k's gated"
         "#   head, so when k lands the base equals the tree k+1 certified and k+1 lands with no re-gate. a failure, or a"
         "#   new head above, re-gates only the rows behind it."
@@ -1220,14 +1251,16 @@
         "# merge, not line up: waiting rows fold into one union. a join with its head folds into the earliest waiting row"
         "#   ahead, never one gating: on a git queue bee writes the fold when the heads merge clean but for the paths a"
         "#   union lays again (hot.prof), and tells both owners; else the leader places it. the absorbing row merges"
-        "#   every folded head onto its gated-on, runs each owed heavy lane once on that merged tree (the slow lane last)"
-        "#   and lands one merge. a red goes to the owner of its branch's files, and that branch splits out so the rest"
-        "#   lands. a merge-tree conflict, or a row passed keep 1, keeps its own slot, behind the fold. a publish folds"
-        "#   into the waiting union and gates with it once; test_gcstress then runs in the background after the push."
+        "#   each folded head at once onto its gated-on, runs every lane its branches owe once on that merged tree,"
+        "#   light and heavy, the slow lane last (queue_gate), and lands one merge. a red lane goes to the branches whose"
+        "#   files owe it (lanemap): they split out to their owners, only the red lanes run again on the union without"
+        "#   them, and the green lanes stand. a merge-tree conflict, or a row passed keep 1, keeps its own slot, behind"
+        "#   the fold. a publish folds into the waiting union and gates with it once; test_gcstress then runs in the"
+        "#   background after the push."
         "#   a re-cut row (a tree-wide rename) takes folds like any waiting row: its owner merges the join in the old"
         "#   layout and the re-cut moves it."
         "# long: two or more rows waiting or gating, or more heavy-lock waiters than slots. then, unasked: one owner's"
-        "#   branches join as one union (each stops at its light lanes, the union gates once, the slow lane last);"
+        "#   branches join as one union (each joins on make test and its laws, the union gates once, the slow lane last);"
         "#   neighbours offer each other a fold; a build seeds out/ from a built tree of its base; nothing holds a heavy"
         "#   slot it is not using."
         "# sync TEXT: what the queue lands toward. pre TEXT: a condition before that. both are the leader's to keep."
@@ -1272,11 +1305,12 @@
      (q-long? text) (: rs (q-rows text) (1 < #(filter (\ p (elem ((rs p) 5) ["waiting" "gating"])) (keys rs))))
      (lock-crowd _)
       (? !(locks? 0) 0 (: w (peep ((lk 'locks-list) ((lk 'locks-root) 0)) "waiting" ()) (bee-hmax < #(two? w ? w ()))))
-     bee-long ("fold, not line up. join waiting once a branch's light lanes pass, with its head, and bee folds it into "
-               + "the earliest waiting row ahead when the heads merge clean but for hot.prof (else offer that row a fold; "
-               + "never into a gating row); join one owner's branches as one union; the heavy lanes run once, in the "
-               + "union at the head, never per branch; a red splits its branch out; a publish folds into the waiting "
-               + "union; hold no heavy slot you are not using.")
+     bee-long ("fold, not line up. join waiting once a branch builds and passes make test and the laws it adds, with "
+               + "its head, and bee folds it into the earliest waiting row ahead when the heads merge clean but for "
+               + "hot.prof (else offer that row a fold; never into a gating row); join one owner's branches as one union, "
+               + "merged at once; its lanes, light and heavy, run once, in the union at the head, never per branch; a red "
+               + "lane splits out the branches that owe it, and only the red lanes run again; a publish folds into the "
+               + "waiting union; hold no heavy slot you are not using.")
      (q-crowd text)
       (: a (q-long? text) b (lock-crowd 0)
          (? (a || b) ("\nthe queue is long (" + (a ? "two or more rows waiting or gating" "") + (a && b ? ", and " "")
@@ -1457,7 +1491,8 @@
          m (q-short q + ": bee folded row " + p + " (" + who + ", " + field in "branch" "-" + ") into waiting row " + t
             + " (" + r 1 + ", " + r 2 + ") on its join: their heads merge clean" + (" but for " + join " " q-relaid)
             + ", which the union lays again. " + r 1 + " merges " + field in "gated_head" "" + " into " + t
-            + "'s union, which gates once; queue_row keep 1 on either row keeps its own slot instead.")
+            + "'s union now, which runs every lane its branches owe once; queue_row keep 1 on either row keeps its own "
+            + "slot instead.")
          _ (? (r 1 != me 0) (post (r 1) m) "")
          _ (? (who != me 0) (post who m) "")
          ("\nfolded into row " + t + " (" + r 1 + "): " + m))
@@ -2468,7 +2503,7 @@
                  "lock_release" (in "name")
                  "lock_list" ""
                  "lanes" (field in "branch" "HEAD")
-                 "queue_gate" (in "queue" + " " + gate-dir in)
+                 "queue_gate" (in "queue" + " " + gate-dir in + (: l (field in "lanes" "") (#l ? (" " + l) "")))
                  ("pane_list" || "pane_open") ""
                  ("pane_read" || "pane_focus" || "pane_close") (in "id")
                  "pane_type" (in "id" + ": " + (: t (in "text") (#t <= 60 ? t (snip t 0 60 + "…"))))
@@ -3342,7 +3377,7 @@
             ; the lanes a change owes (src/apps/lanemap.l): AGENTS.md's table, lanes.sh's chains
             (two? as && elem <as ["--lanes-doc" "--lanes-map"])
              (: _ (puts (unlines ((cite 'lanemap (<as = "--lanes-doc" ? 'lanes-doc 'lanes-map)) 0))) 0)
-            (two? as && <as = "--gate" && #as = 2) (gate-run (as 1))
+            (two? as && <as = "--gate" && 2 <= #as) (gate-run (as 1) >>as)
             (two? as && <as = "--lanes" && #as <= 3)
              (: r (lanes-of (#as > 1 ? (as 1) "") (#as > 2 ? (as 2) "HEAD"))
                 _ (puts (<r ? (r 1) ("love bee --lanes: " + r 1 + "\n")))
