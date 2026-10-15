@@ -2511,16 +2511,11 @@
      (? (atom? l) l
         (? (two? >l && (<l = <>l)) (sh-uniq >l)
            (<l . sh-uniq >l)))
-   (sh-pathdirs s)                              ; "a:b:c" -> ("a" "b" "c")
-     (:- (go 0 0 ()) n #s (go i st acc)
-      (i @ ^n (rev (snip s st i . acc))
-       (s i @ 58 (go (i + 1) (i + 1) (snip s st i . acc))
-        (go (i + 1) st acc))))
    (sh-verbnames _) (map string (keys (cite 'verbs 'tab)))
    (sh-cmds S w)                                  ; command candidates for prefix w
      (sh-uniq (sort (filter (sh-prefix? w) sh-binames +   ; the dispatch table itself, so none is missed
                      (? (2 = (sh-mode S) 0) () (filter (sh-prefix? w) (sh-verbnames 0))) +
-                     (catmap (filter (sh-prefix? w) * readdir) (sh-pathdirs (sh-path ()))))))
+                     (catmap (filter (sh-prefix? w) * readdir) (sh-pathdirs ())))))
    (sh-dirp q) (: st (stat q) (two? st && (16384 = (61440 & (st 2)))))
    (sh-unfold w)                                ; ~/x -> $HOME/x (stat wants the real path)
      (? (#w && w 0 = 126) ("" + getenv "HOME" + snip w 1 #w) w)
