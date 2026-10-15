@@ -156,8 +156,8 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/love/snap.c`, `src/love/image.c`, `Makefile`, `src/tools/hotbake.sh` -> `test_ccwarn` `test_hdiff` `test_inle`
 - the rest of the core, `src/love/*.c` and `src/love/boot/*.l` -> `test_quick`
 - a crewfiles member, or anything else baked -> `test_fixpoint` `test_bakerep`, and `make hotprof` to write `src/tools/hot.prof` again (bakerep fails while it is stale)
-- `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_fixpoint` `test_moonfuzz`
-- `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz`
+- `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_fixpoint` `test_moonfuzz` `test_inle`
+- `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
 - `src/apps/sb/*` -> `test_sb`
 - `src/apps/hearts/*` -> `test_hearts` `test_hearts_boot`
 
