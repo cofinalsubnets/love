@@ -1,29 +1,9 @@
-; src/apps/kore/pic.l -- pictures on a terminal and between formats. png, jpeg, gif, webp, bmp,
-; ico and netpbm's are read (src/apps/png.l, jpeg.l, gif.l, webp.l, bmp.l, pnm.l); png, jpeg,
-; gif, ppm, pam and sixel are written.
-;
-;   pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]
-;         each picture as wide as the terminal (or COLS, or 80) and no taller than ROWS,
-;         never enlarged; no FILE reads stdin. MODE is block (the default), two pixels a
-;         cell (the upper a `▀`, the lower its background, 24-bit where COLORTERM says so,
-;         else the 256-colour cube); sixel; kitty's graphics; or auto, what the terminal
-;         answers to being asked, blocks off a terminal. pngcat, jpegcat, gifcat the same
-;   pic less [-g MODE] FILE..   a viewer: fitted, zoomed and panned, a gif played, in
-;         MODE as pic cat's. picless too
-;   pic convert [-q Q] [-t TYPE] IN OUT
-;         one format to another, by OUT's extension or TYPE (png gif jpeg ppm pam sixel ans); - is
-;         stdin or stdout. a gif keeps its first frame, a file already TYPE is copied. ans
-;         is pic cat's blocks as text, 80 wide
-;   pic pixelize [-w COLS] [-h ROWS] [-s PX] [-c 256] [-q Q] [-t TYPE] IN OUT
-;         the picture as pic cat's blocks draw it at COLS (80) by ROWS, written back out:
-;         each half-cell PX pixels square (the source's size by default), clear where the
-;         terminal's ground shows, and in the cube's own levels with -c 256; or, to .ans,
-;         the blocks' text itself
-;   pic [-nCSU] [-t [-cz]] [FILE..]
-;         classic pic, the troff preprocessor (src/apps/kore/gpic.l): a bare pic with one of
-;         GNU pic's flags, or whose first input is not a picture pic reads. -g -w -h are
-;         pic cat's
-;
+; src/apps/kore/pic.l -- pictures on a terminal and between formats: png, jpeg, gif, webp,
+; bmp, ico and netpbm's read (src/apps/png.l, jpeg.l, gif.l, webp.l, bmp.l, pnm.l); png, jpeg,
+; gif, ppm, pam and sixel written.
+; the default draw is blocks, two pixels a cell (▀ fg over bg), 24-bit where COLORTERM says so,
+; else the 256-colour cube; never enlarged. convert keeps a gif's first frame.
+; a bare pic may be classic pic, the troff preprocessor (gpic.l): see pic-route.
 ; www draws a page's pictures through pic-art too.
 (module 'kore
 (borrow 'cli)
@@ -84,10 +64,8 @@
        (pic-decode b @ r (two? r ? [(r 0) (r 1) [[(r 2) 0]]] r)))
 
    ; -- sampling ----------------------------------------------------------------
-   ; ow*oh pixels, the first at source x0 y0 and s source pixels to each -> [ow oh rgba]. a
-   ; pixel is its box's mean over four samples weighted by alpha, so a see-through sample
-   ; does not darken it; clear (alpha 0) off the picture or where mostly see-through, else
-   ; alpha 255
+   ; ow*oh pixels from source x0 y0, s source pixels to each -> [ow oh rgba]. a pixel is its
+   ; box's mean over four samples weighted by alpha, so a see-through sample does not darken it
    (pic-sample im x0 y0 s ow oh)
     (: w (im 0) h (im 1) px (im 2) c (cask (4 * ow * oh))
        (at x y) (4 * (y * w + x) @ i [(peep px i 0) (peep px (i + 1) 0) (peep px (i + 2) 0) (peep px (i + 3) 0)])
@@ -145,10 +123,8 @@
        (pic-view im 0 0 s (max 1 (int (im 0 / s))) (max 1 (int (im 1 / s))) deep))
 
    ; -- graphics: sixel and kitty's -----------------------------------------------
-   ; a picture as one sixel string: the palette gif's (exact to 255 colours, a median cut
-   ; past; idx holds each pixel's register plus one, 0 clear, in a byte), a pixel under
-   ; half alpha left to the ground. a band's colours each run from their first pixel to
-   ; their last
+   ; one sixel string, gif's palette (exact to 255 colours, median cut past); idx is each
+   ; pixel's register plus one, 0 clear; a pixel under half alpha is left to the ground
    (pic-sixel im)
     (: w (im 0) h (im 1) px (im 2) n (w * h) e (string 27)
        key (cite 'gif 'gif-key)
@@ -369,10 +345,8 @@
         [W H (string c)]))
 
    ; -- picless: the viewer ----------------------------------------------------------
-   ; st: 'fs 'i the file, 'im [w h frames] or why not, 'f the frame, 'z the zoom over the fit,
-   ; 'cx 'cy the view's centre in source pixels, 'play, 'due the next frame's clock,
-   ; 'h 'w the screen, 'rows the cache of drawn frames for 'ck, the view they were drawn for,
-   ; 'mode block sixel or kitty and 'ux 'uy the pixels a cell holds in it
+   ; 'z the zoom over the fit, 'cx 'cy the view's centre in source pixels, 'rows the cache of
+   ; drawn frames for the view 'ck, 'ux 'uy the pixels a cell holds
    (pv-new fs h w)
     (tablet 0 @ st
        (pins st 'fs fs 'i 0 'h h 'w w 'quit 0 'msg "" 'mode "block" 'ux 1 'uy 2,
@@ -385,10 +359,8 @@
        (pins st 'im im 'f 0 'z 1.0 'play 1 'due 0 'rows {} 'ck ()
                 'cx (ok ? (im 0 / 2) 0) 'cy (ok ? (im 1 / 2) 0)))
    (pv-nf st) (st 'im @ im (two? im ? #(im 2) 0))
-   ; [s x0 y0 ow oh left top]: the scale, the source origin, the output pixels, and the cells
-   ; and rows of margin that centre a picture smaller than the screen. the centre is held
-   ; where the edges stop it. a sixel is whole bands of 6, lest its last spill onto the
-   ; status line and scroll
+   ; [s x0 y0 ow oh left top]: scale, source origin, output pixels, centring margin. a sixel
+   ; is whole bands of 6, lest its last spill onto the status line and scroll
    (pv-view st)
     (: im (st 'im) w (im 0) h (im 1) cols (st 'w) rows (st 'h - 1) ux (st 'ux) uy (st 'uy)
        pw (cols * ux) ph (rows * uy @ p (st 'mode = "sixel" ? (6 * (p // 6)) p))

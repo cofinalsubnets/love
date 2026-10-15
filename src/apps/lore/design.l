@@ -1,22 +1,8 @@
-; design -- the level designer: a story's map painted where it is played. the map is
-; tiles, a room is what you wall off, and a thing is a glyph placed on a tile; every
-; edit is a key at the cursor, and the level is saved as the datum story.l plays
-; (src/apps/lore/levels). the words -- a thing's dialog -- are edited in vi on the file,
-; and the level is played from here to try it.
-;
-;   hjkl yubn / arrows  the cursor        space  paint the brush here
-;   1-9  the brush is the palette's nth tile;  #  .  the wall or floor brush
-;   a  a new tile kind: "CH GLYPH FG BG [wall]" in one line, and it is the brush
-;   c  the pens of what is here -- a thing, else the brush's kind: "FG BG"
-;   t  a thing here: its id, then its glyph, then its name      x  remove the thing here
-;   m  the start is here   v  save and open the file in vi   p  save and play   s  save
-;   :  a command line: :w saves, :q leaves, :wq both -- q alone is nothing
-;
-; every key is a pure step on the state and every frame a pure lay into a port, so
-; the designer gates headless (test/host/design.l); only design-run ties the tty, on
-; cli's stage, and the prompts are cli's editor. the engine's words -- level, kind,
-; thing, kind-of, load-level, save-level, story-run, pen -- are the story module's.
-; usage: love lore design [LEVEL.l]      the file to lay out (default src/apps/lore/levels/lighthouse.l)
+; design -- the level designer: a story's map painted where it is played. tiles, a room is
+; what you wall off, a thing is a glyph on a tile; every edit is a key at the cursor, and the
+; level is saved as the datum story.l plays. dialog is edited in vi on the file.
+; every key is a pure step and every frame a pure lay into a port; only design-run ties the
+; tty, on cli's stage, and the prompts are cli's editor. level, kind, thing and the rest are story's.
 (module (design design-main design-run design-new design-key design-frame)
 (borrow 'story)
 (:
@@ -68,8 +54,8 @@
                (lvl ? (pin d 'lvl lvl, tell d "reloaded") (tell d "the file no longer reads as a level")))
 
  ; --- one key: the mode says what a key means -------------------------------------
- ; map: the cursor and the edits. a prompt collects a line into buf; a thing takes
- ; three in turn (id, glyph, name). esc backs out.
+ ; map: the cursor and the edits. a prompt collects a line into buf; a thing takes three in
+ ; turn (id, glyph, name); esc backs out
  (prompt d m) (pins d 'mode m 'buf (ednew ()))
  (commit d b) (d 'mode @ m
                (pin d 'mode 'map,
@@ -114,8 +100,8 @@
     (go x p acc) (x >= w ? acc
      (: c (cell x y) cur? (x = d 'cx && y = d 'cy) p2 >c
       (go (x + 1) p2 (acc + (p2 @ ^p "" (pen p2)) + (cur? ? ("\e[7m" + <c + "\e[27m") <c))))))
-   ; the erase goes FIRST: after a row that reached the screen's edge it would take
-   ; the last cell, the very glyph that raised the pending wrap
+   ; the erase goes first: after a row that reached the edge it would take the glyph that
+   ; raised the pending wrap
    _ (say j ("\e[H\e[0m\e[K\e[7m" + edfit (" design: " + lvl 'title + " -- " + d 'path + (d 'dirty ? " [+]" "")) w " " + "\e[0m\r\n"))
    _ (each ^mh (y \ say j ("\e[0m\e[K" + row y + "\e[0m\r\n")))
    t (thing-at lvl (d 'cx) (d 'cy))
@@ -141,7 +127,7 @@
                    ; each leaves the screen and the tty as it found them, so this one re-arms
                    (visit f) (save d, f (), ttytake ())
                    (step c) (design-key d c,
-                             d 'want @ 'vi (pin d 'want (), vi ? (visit (_ \ vi [p]), reload d) (tell d "no editor on this seat"))
+                             d 'want @ 'vi (pin d 'want (), vi ? (visit (_ \ vi [p]), reload d) (tell d "no editor"))
                                        'play (pin d 'want (), visit (_ \ story-run (d 'lvl))))
                    (stage (w \ h \ design-frame d w h) step (_ \ (d 'over))))
  design-usage "usage: love lore design [LEVEL.l]"

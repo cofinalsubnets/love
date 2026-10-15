@@ -1,8 +1,5 @@
-; src/apps/kore/proc.l -- the process and world tools of kore: env nohup nice renice
-; printenv sleep kill xargs date id whoami groups stty microcom who users logname.
-; a toolbox dispatched by kore.l on the u-floor, no nifs of its own. spawn answers the pid
-; or a negative errno; a child that cannot exec exits 127. a body-less top-level `:`
-; leaking udur (lawed in test/law/kore.l) and the mains.
+; src/apps/kore/proc.l -- the process and world tools of kore: env, nice, kill, xargs, date,
+; id, stty, ps, free, who and kin. no nifs of its own. spawn answers the pid or a negative errno
 (module 'kore
 (borrow 'cli)
 (borrow 'bytes)
@@ -24,10 +21,7 @@
                         (setenv (snip s 0 i) (snip s (i + 1) #s),
                          setp >a))
                    a)))
-       ; the options come first: -i empties the environment, -u NAME drops one -- a
-       ; non-string value unsets (src/love/main.c's setenv shape); -0 ends each listed with a
-       ; NUL, -C DIR runs the command there, -S STRING splits STRING into words, the
-       ; shebang's way (env -S 'cmd a b'); then the assignments
+       ; options precede the assignments; setenv of () unsets
        st {'nul 0 'dir ()}
        (unset-all e) (atom? e ? 0 (: k <e i (eqat k) (setenv (i ? (snip k 0 i) k) (), unset-all >e)))
        (opts a) (atom? a ? a
@@ -64,11 +58,8 @@
         (rest t,
          0)))
 
-   ; -TERM / -15 / -9 -> the number, or () for anything else. shared with kill, which
-   ; is the tool that taught the table; pkill and killall wear the same spelling.
-   ; the one signal table: kill, pkill, killall and timeout spell by it, and lush's
-   ; trap and kill builtins read it too. the numbers are Linux's; USR1 USR2 CHLD TSTP
-   ; want an ISA/OS table on a BSD
+   ; the one signal table: kill, pkill, killall, timeout and lush's trap read it.
+   ; the numbers are linux's; USR1 USR2 CHLD TSTP differ on a BSD
    usignames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ILL" 4) ("TRAP" 5) ("ABRT" 6) ("BUS" 7) ("FPE" 8)
                ("KILL" 9) ("USR1" 10) ("SEGV" 11) ("USR2" 12) ("PIPE" 13) ("ALRM" 14) ("TERM" 15)
                ("STKFLT" 16) ("CHLD" 17) ("CONT" 18) ("STOP" 19) ("TSTP" 20) ("TTIN" 21) ("TTOU" 22)
@@ -116,11 +107,9 @@
                       (flush err, ok ? 0 1))
            (go pids 1))))
 
-   ; -- the time zone: TZ, else /etc/localtime. a zone is a function from utc seconds to
-   ; [offset-east-seconds abbreviation]. a TZif file is read for its transitions and its
-   ; footer rule past the last one; a TZ that names no file is read as a posix rule
-   ; (EST5EDT,M3.2.0,M11.1.0); an empty TZ, or nothing readable, is utc
-   ; the day a second falls in, floored: before the epoch // would round toward it
+   ; -- the time zone: TZ, else /etc/localtime. a zone maps utc seconds to
+   ; [offset-east-seconds abbreviation]: a TZif file's transitions and footer rule, else a
+   ; posix rule (EST5EDT,M3.2.0,M11.1.0); an empty TZ, or nothing readable, is utc
    (tzday0 s) (s // 86400 @ q (s < q * 86400 ? (q - 1) q))
    (tzs s k n) (foldl (\ a i (a * 256 + s (k + i))) (s k >= 128 ? -1 0) ^n)
    (tzu s k n) (foldl (\ a i (a * 256 + s (k + i))) 0 ^n)
@@ -326,11 +315,9 @@
          (ucal-say (ucal-mid 20 (monl (m - 1) + " " + show y)), ucal-say ucal-hdr, map ucal-say (ucal-weeks y m), 1)),
         flush out, 0))
 
-   ; -- id: who this process is. -u/-g/-G the ids, -n their names, and the bare face
-   ; GNU's uid=/gid=/groups= line. the supplementary groups are read out of
-   ; /etc/group -- there is no getgroups here and no nss anywhere, so a box whose groups
-   ; live in a directory service will be told less than the truth. -r is taken and
-   ; changes nothing: this love holds only the real ids, which is what -r asks for.
+   ; -- id: -u/-g/-G the ids, -n their names, bare GNU's uid=/gid=/groups= line.
+   ; supplementary groups come from /etc/group (no getgroups, no nss); -r is a no-op,
+   ; only the real ids are held
    (id-main as)
     (: (fl a t)
         (? (atom? a) t
@@ -355,10 +342,8 @@
                      + (" groups=" + ujoinc 44 (map one gs))))),
         put out 10, flush out, 0))
 
-   ; -- nohup: SIGHUP ignored, then exec the command. a terminal on 0 is swapped for
-   ; /dev/null, one on 1 for nohup.out (0600, $HOME's when the cwd refuses), one on 2
-   ; for stdout; the sentence says which, before err moves. 125 nohup's own trouble,
-   ; 126 the command would not run, 127 no such command, else the command's own --
+   ; -- nohup: SIGHUP ignored, then exec. a tty on 0 becomes /dev/null, on 1 nohup.out
+   ; (0600, in $HOME when the cwd refuses), on 2 stdout. 125 our trouble, 126/127 the command's
    (nohup-main as)
     (: cmd (two? as && <as = "--" ? >as as)
        _ (two? cmd ? () (udie 125 "nohup: missing operand"))
@@ -479,11 +464,9 @@
        n (? (<fo 102) <>(uhw-self 0) (<fo 115) (findsub h "." @ k (k < 0 ? h (snip h 0 k))) h)
        (say out n, put out 10, flush out, 0))
 
-   ; -- hostid and dnsdomainname: what the resolver says of this host's own name, read
-   ; the way glibc's lookup reaches it here -- /etc/hosts, then the addresses the host
-   ; itself carries (systemd's myhostname, which the resolver asks next), lowest
-   ; interface first and never loopback, then 127.0.0.2 where it carries none. no DNS:
-   ; a name the host gives itself is not a question for a nameserver --
+   ; -- hostid and dnsdomainname: the host's own name as glibc resolves it here: /etc/hosts,
+   ; then the host's own addresses (myhostname), lowest interface first, never loopback,
+   ; else 127.0.0.2. no DNS --
    (uhw-words l) (filter (w \ (0 < #w)) (foldl (a \ w \ a + usplit 9 w) () (usplit 32 l)))
    (uhw-quad w)                         ; dotted quad -> the in_addr as a charm (a first, low)
     (: ps (usplit 46 w)
@@ -572,10 +555,8 @@
                 w (wait p)
                 0))))
 
-   ; -- watch: a command run again every -n seconds (2 by default, tenths allowed), its
-   ; output laid over the screen under procps' title line; -t drops the title, -x execs
-   ; the words rather than `sh -c` them, -b rings on a failure, -e stops on one, -g
-   ; stops when the output changes --
+   ; -- watch: a command rerun every -n seconds (tenths allowed), laid over the screen
+   ; under procps' title line --
    (watch-main as)
     (: (usage m) (udie 1 ("watch: " + m + "\nTry 'watch --help' for more information."))
        (secs w) (udur w @ v
@@ -642,12 +623,10 @@
         put out 10, flush out,
         t? ? 0 1))
 
-   ; -- stty: the line discipline on stdin (or -F's device), shown or set. the flags are
-   ; linux's names and bits, which the libc hands over whatever kernel is under it; the
-   ; views are GNU's: bare the changes from sane, -a all of it, -g the saved form. there
-   ; is one speed, so ispeed and ospeed both set it. a row
-   ; is (name word marks bits mask): word 0 iflag 1 oflag 2 cflag 3 lflag, marks 1 may be
-   ; negated, 2 set by sane, 4 cleared by sane, 8 an alias never shown --
+   ; -- stty: the line discipline on stdin (or -F's device). linux's flag names and bits;
+   ; GNU's views. one speed serves both ispeed and ospeed. a row is (name word marks bits mask):
+   ; word 0 iflag 1 oflag 2 cflag 3 lflag; marks 1 negatable, 2 set by sane, 4 cleared by sane,
+   ; 8 an alias never shown --
    ustty-modes
     '(("parenb" 2 1 256 0) ("parodd" 2 1 512 0) ("cmspar" 2 1 1073741824 0)
       ("cs5" 2 0 0 48) ("cs6" 2 0 16 48) ("cs7" 2 0 32 48) ("cs8" 2 0 48 48)
@@ -845,9 +824,7 @@
    (ustty-byte0 w) (ustty-int w @ v (charm? v && v <= 65535 ? v (udie 1 ("stty: invalid integer argument: '" + w + "'"))))
 
    ; -- microcom: a serial line and this terminal, byte for byte, busybox's. the device is
-   ; opened read-write, never as our controlling terminal, and set raw 8N1 without flow
-   ; control at -s's speed (or its own); ^X leaves unless -X, and -t ms of quiet both ways
-   ; leaves too. the device's termios goes back as it was
+   ; opened without becoming our controlling tty and set raw 8N1; its termios is restored
    (microcom-main as)
     (: usage "usage: microcom [-X] [-s SPEED] [-t TIMEOUT] TTY"
        t {}
@@ -919,15 +896,9 @@
            go >l (two? hs ? bad 1))))
        (go ns 0))
 
-   ; -- timeout: run a command, and end it if it outruns the clock. `gather` polls
-   ; without blocking, so the wait and the deadline are the one loop; the signal is
-   ; TERM unless -s names another, and -k arms a KILL that far past it. GNU's status:
-   ; 124 for a command the clock ended, 125 for our own trouble, 126/127 for one that
-   ; would not start, and otherwise the command's own --
-   ; the deadline and the wait are one loop: gather polls without blocking, so there
-   ; is no alarm to arm and no handler to run. `sent` is the elapsed reading the signal
-   ; went out at and () while the command still has its time; k? says the KILL followed.
-   ; o: 'v says each signal sent, 'keep answers the command's own status where 124 would
+   ; -- timeout: the deadline and the wait are one loop, since gather polls without blocking.
+   ; 124 the clock ended it, 125 our trouble, 127 it would not start, else its own status.
+   ; `sent` is the elapsed reading the signal went out at, () until then; k? the KILL followed
    (utmo-wait p t0 lim sig kill o)
     (: (name n) (filter (x \ <>x = n) usignames @ e (two? e ? <<e (show n)))
        (send s) (o 'v ? (say err ("timeout: sending signal " + name s + " to command '" + o 'cmd + "'\n")) 0, still p s)
@@ -966,21 +937,11 @@
           (utmo-wait p t0 lim sig kill {'v (t 118) 'keep (t 1001) 'cmd <cmd})))
 
 
-   ; ---- chroot, mount and umount: the three the distro's own boot asks for -------
-   ; every one of them needs privilege and says so through errno like any other row:
-   ; 'eperm is an answer, not a crash, which is what makes them safe to smoke unprivileged.
+   ; ---- chroot, mount and umount: each needs privilege and answers 'eperm as an errno, not a crash
 
-   ; chroot DIR [CMD [ARG..]] -- LFS chapter 7 is this call. the root changes, the cwd
-   ; follows it to /, and the command REPLACES us, so the only thing that returns here
-   ; is a failure.
-   ;
-   ; with no CMD the command is our own shell, not $SHELL and not /bin/sh: in an empty
-   ; root there is no /bin/sh to be had, and there does not need to be one -- lush's
-   ; verbs are in this binary, so an autonomous shell in a root with no files in it is
-   ; a whole userland. what that costs is an exec of an image the new root cannot name,
-   ; which is exactly what fexecve is for: the fd is opened HERE, before the root moves,
-   ; and names the image afterwards when no path does. a seat that cannot say where it
-   ; is (no selfpath) has no self to exec and falls back to the path it was given.
+   ; chroot: with no CMD the command is our own shell (lush), exec'd through an fd opened before
+   ; the root moves, since the new root may hold no /bin/sh and cannot name our image.
+   ; without selfpath it falls back to the path it was given.
    (chroot-main as0)
     (: as (ucmdflags "chroot" as0 () "" 1)
        _ (two? as ? () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
@@ -1055,14 +1016,7 @@
        (flush err, ok ? 0 1))
 
    ; ---- the /proc family: ps, free, uptime, pidof, pgrep, pkill, killall, pwdx ----
-   ; no nif grew for any of these. /proc is a filesystem, so the whole family is
-   ; `uread` and a parser -- which is also why a world without one (the kernel's own
-   ; image, src/inle/kmain.c, mounts no procfs) reads as no processes rather than as an
-   ; error. The tools say what they found; they do not invent a reason.
-   ; and none of them can be smoked byte-for-byte against procps: the process table
-   ; moves between two runs, and every number here is a clock. So the parsers are lawed
-   ; (test/law/kore.l) and the faces are smoked as sets -- a pid we made ourselves is in the
-   ; listing, a pid we killed is gone -- which is test/kore/procfs.sh's own note.
+   ; all `uread` and a parser; with no procfs mounted they read as no processes, not an error
 
    (uprocs _)                          ; every numeric name under /proc, ascending
     (: r (readdir "/proc")
@@ -1072,10 +1026,8 @@
                              0)
                    (go 0))
        (two? r ? (sort (map uatoi (filter dig? r)))))
-   ; a stat line -> (pid comm state ppid pgrp session tty_nr ..). the comm is taken
-   ; between the first "(" and the last ")" and never by splitting on spaces: a program
-   ; may be named `(sd-pam)` or `a b)c`, and a naive split reads its parentheses as
-   ; fields -- silently, since every field after it is then off by the same amount.
+   ; a stat line -> (pid comm state ppid pgrp session tty_nr ..). the comm is taken between
+   ; the first "(" and the last ")": a name like `a b)c` would shift every later field
    (ustatf ln)
     (: n #ln
        (lp k) (? (k < 0) -1 (ln k = 41) k (lp (k - 1)))
@@ -1132,12 +1084,7 @@
        (two? r ? (foldl (_ \ ln \ one ln) 0 (lines <>r)) 0,
         t))
 
-   ; -- ps: the pid, its terminal, its cpu time and its name. -e/-A/a/x take every
-   ; process; bare ps takes the ones that are ours and share this terminal, which is
-   ; procps' rule (same euid, same tty) and not a simplification of it -- a bare ps
-   ; listing root's daemons would be a different tool.
-   ; the owner comes off /proc/PID itself, whose directory is owned by the process:
-   ; one stat where /proc/PID/status would be a second read and a second parser.
+   ; the owner is the owner of /proc/PID: one stat, not a read of /proc/PID/status
    (upuid p) (stat ("/proc/" + show p) @ st (5 < #st ? (st 4) -1))
    ; the columns: [header right-aligned? cell-of]. a cell reads the stat fields f, the pid
    ; and a box of the clock readings, and answers text
@@ -1180,14 +1127,7 @@
         'cmd ["CMD" 0 args 0]
         'ucmd ["CMD" 0 (p \ f \ f 1) 0]
         'args ["COMMAND" 0 args 0]})
-   ; -- ps: bare ps takes the ones that are ours and share this terminal, procps' rule
-   ; (same euid, same tty); -e -A and a x ax take every one, -p PID,.. and -u USER,..
-   ; those. the face is PID TTY TIME CMD; -f is the full one, BSD's u the user one (so
-   ; `ps aux`), and -o KEY[=HEADER],.. names its own, from pid ppid uid user tty time
-   ; stat ni rss vsz pcpu pmem c start stime comm cmd args. times are UTC.
-   ; the owner comes off /proc/PID itself, whose directory is owned by the process:
-   ; one stat where /proc/PID/status would be a second read and a second parser.
-   (upuid p) (stat ("/proc/" + show p) @ st (5 < #st ? (st 4) -1))
+   ; -- ps: bare takes ours on this terminal, procps' rule (same euid, same tty). times are UTC
    (ps-main as)
     (: bsd (filter (w \ 0 < #w && !(w 0 = 45) && all (c \ elem c "aux") (chars w)) as)
        fo (uflags "ps" (filter (w \ !(elem w bsd)) as) '(111 112 117) "Aaefopux")
@@ -1237,11 +1177,8 @@
         flush out,
         two? rows ? 0 1))
 
-   ; -- free: /proc/meminfo, procps' six columns. used is total minus available and
-   ; not total minus free: the kernel's own estimate of what a new program could have
-   ; is the only honest reading of "used", and it is what procps prints --
-   ; -b bytes, -k KiB (unsaid), -m MiB, -g GiB, -h the unit each fits; -t a Total row
-   ; of the two; -w buffers and cache apart
+   ; -- free: /proc/meminfo, procps' six columns. used is total minus available, not minus free,
+   ; as procps prints it --
    (free-main as)
     (: fo (uflags "free" as () "bghkmtw")
        t <fo
@@ -1307,10 +1244,9 @@
        (say out (" " + tod + " up " + uupsay secs + us + ",  load average: " + ld),
         put out 10, flush out, 0))
 
-   ; -- the utmp family: who, users, logname. the host keeps the file and kore only
-   ; reads it, in the three shapes a host writes: glibc's 384-byte record, netbsd's
-   ; 520-byte utmpx, freebsd's packed 197-byte futx (big-endian). a record reads as
-   ; (type pid line id user host secs term exit), the type in sysv's numbering --
+   ; -- the utmp family: who, users, logname. read only, in three host shapes: glibc's 384-byte
+   ; record, netbsd's 520-byte utmpx, freebsd's packed 197-byte futx (big-endian). a record reads
+   ; as (type pid line id user host secs term exit), the type in sysv's numbering --
    (ucz s i n)                         ; the NUL-ended text in s[i, i+n)
     (: e (i + n) (go j) (j < e && !(s j = 0) ? (go (j + 1)) (snip s i j)) (go i))
    (uut-glibc s i)
@@ -1511,10 +1447,7 @@
     (uflags "reset" as () "",
      (two? (tty 0) && !(nom? (termios in)) ? (stty-main ["sane"]) 0, say out "\ec", flush out, 0))
 
-   ; -- ts: each line of the input stamped as it arrives, toybox's: the date and time
-   ; ("%b %d %H:%M:%S"), or with -s the time since the start and with -i since the line
-   ; before ("%H:%M:%S"); -m adds the milliseconds; a FORMAT is strftime's. UTC, as every
-   ; clock here is --
+   ; -- ts: each input line stamped as it arrives, toybox's. UTC --
    (ts-main as)
     (: (go a o) (? (atom? a) o
                    (1 < #<a && <a 0 = 45)
@@ -1649,13 +1582,8 @@
        ok (foldl (a \ w \ one w a) 1 as)
        (flush out, ok ? 0 1))
 
-   ; -- xargs: stdin's words onto the command's tail (echo when none). words split on
-   ; blanks and newlines, '..' "..." and \ quoting as GNU's; -0 and -d C split on a NUL or
-   ; C instead, quotes plain. -n N words a run, -L N lines a run, -I S one run a line
-   ; with S replaced in the command's words; -r runs nothing on no input, -t says each
-   ; run on stderr, -P N keeps N going at once (0 as many as there are). exits 0 clean,
-   ; 123 when a run failed, 127 when one could not exec. the command's own flags follow
-   ; it, so the walk stops at the command's name --
+   ; -- xargs: stdin's words onto the command's tail. 123 a run failed, 127 one could not exec.
+   ; the command's own flags follow it, so the walk stops at the command's name --
    (xwords s)
     (: n #s
        (go i q w acc)
@@ -1704,14 +1632,9 @@
                (go >rs (live + [p]) bad))))
        (go runs2 () 0 @ r (flush out, r)))
 
-   ; -- time: what a command costs. real off the wall clock; user and sys out of the
-   ; rusage the kernel keeps for reaped children, read on both sides of the spawn --
-   ; the child is the only one reaped in between, so the difference is its own. the
-   ; three lines go to err, after the command's own output, and the status answered is
-   ; the command's (127 for one that would not start). one face, posix's: -p is the
-   ; spelling for it and not a switch, there being no second format to choose.
-   ; a kernel with no rusage row (netbsd, and inle) reports the real line and dashes the
-   ; other two, rather than call a pair of zeroes a measurement.
+   ; -- time: real off the wall clock, user and sys from the children's rusage on both sides of
+   ; the spawn (the child is the only one reaped between). -p is posix's one face, not a switch.
+   ; with no rusage (netbsd, inle) user and sys are dashed rather than shown as zeroes
    (utsec us)                          ; microseconds -> seconds, two places
     ((us + 5000) // 10000 @ cs
      (show (cs // 100) + "." + zpad 2 (show (cs % 100))))

@@ -1,23 +1,10 @@
-; mitty -- quay's terminal multiplexer: where programs tie up.
-;
-; each child rides its own pty (tether); its bytes pour through a quay cb screen (the
-; kernel console's vt parser, hosted by src/love/cb.c) and the grids repaint the outer
-; terminal. the panes come from wharf.l (plan tree -> rectangles), the paint from limn.l
-; (grid -> escapes); neither knows a pty, so the kernel console uses them too.
-;
-; C-a is the prefix, intercepted in the key pump below every guest: s/v split, h j k l
-; steer, x shut, [ copy mode (the pane's screen as a vi buffer), ] paste, C-a a literal;
-; c a fresh face, n p the next and last, 0-9 a face by number (made when missing), z the
-; saver ('saver) now; a key
-; the caller pins in 'keys opens the pane its thunk answers, beside (love mitty's b, a model).
-; the clip is the mitty's one register, vi's shape, shared by every vi buffer on it,
-; and sent out to the outer terminal's clipboard (osc 52) when it changes, or to 'own's.
-; a guest may be a stage of this process -- cli's triple (show w h) (step k) (over? _) --
-; berthed like a child; a door 'key reads its keys, a door 'tick asks for a frame.
-;
-; run: out/love -e "(: _ (borrow 'mitty) (mitty [\"sh\"]))", or `love mitty` for lush in it.
-; host-only (screen/tether/tty ride src/love/*.c): never in the corpus; test/host/mitty.l
-; smokes it over a real pty. a module, so a guest that berths itself (vi's splits) cites it.
+; mitty -- the terminal multiplexer. each child rides its own pty; its bytes pour through
+; a cb screen (the console's vt parser) and the grids repaint the outer terminal. panes
+; come from wharf.l, the paint from limn.l; neither knows a pty, so the console uses them too.
+; C-a is the prefix, read in the key pump ahead of every guest. a guest may also be a stage
+; of this process, cli's triple (show w h) (step k) (over? _); a door 'key reads its keys,
+; 'tick asks for a frame. the clip is one vi-shaped register, sent out by osc 52 or to 'own.
+; host-only; a module, so a guest that berths itself (vi's splits) cites it.
 (module '(mitty mitty mitty-stage mitty-up hberth hsail hopen-stage
           hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
@@ -31,13 +18,10 @@
 (borrow 'window)
 (borrow 'font)
 (:
- ; --- the mitty: every pane's screen, pty and child, under one wharf plan ---
- ; a pane is (box master pid stage): a child's has its master and pid and no stage,
- ; a stage's the stage and neither. the mitty is a tablet, and the keys are the
- ; whole state: plan focus next rows cols panes lay dirt more jobs clip keys bar bart barx, and the faces --
- ; face the one shown, faces the others' [plan focus] by number, the shown one's never kept there.
- ; the mitty's own tty: 'in and 'out, the process's unless a client's (rung 5's server);
- ; () when no client is attached, and then nothing is painted and the dirt waits
+ ; --- the mitty: a tablet holding the whole state (see mitty-up), every pane under one plan.
+ ; a pane is (box master pid stage name): a child's has master and pid, a stage's the stage.
+ ; 'face is the one shown, 'faces the others' [plan focus] by number, never the shown one.
+ ; 'in and 'out are the process's tty or a client's; () with none attached, and the dirt waits
  (hin hb) (peep hb 'in in)
  (hout hb) (peep hb 'out out)
  (hlive? hb) (hot? (hout hb))
@@ -78,11 +62,8 @@
                          (hshow p,
                           p))
 
- ; --- the relay: the plan says where every pane is, so every screen is laid
- ; across to its rectangle and every pty told its new size. what the old grid
- ; held comes along; the rest is the guest's to repaint on its own sigwinch.
- ; a pane with no room still needs a valid screen (the nifs refuse a zero
- ; axis), so its grid is 1x1 and wharf-show? is what keeps it off the glass.
+ ; --- the relay: every screen regridded to its rectangle and every pty told its size.
+ ; a pane with no room is 1x1 (the nifs refuse a zero axis); wharf-show? keeps it off the glass.
  ; the rows the panes share: all of them, less the bar's when it is up
  (hlr hb) (hb 'rows - peep hb 'bar 0)
  (hrelay hb) (wharf-lay (hb 'plan) (hlr hb) (hb 'cols) @ bs
@@ -100,8 +81,7 @@
                  hsoil hb))
 
  ; --- the frame -------------------------------------------------------------
- ; the painting is src/apps/mitty/limn.l's: cells at an origin, and the bars off wharf-bars.
- ; what stays here is which grid goes where, which is the only half mitty owns
+ ; limn paints; mitty only says which grid goes where
  (hbars j hb) (limn-bars j (wharf-bars (hb 'plan) (hlr hb) (hb 'cols)))
 
  ; --- the bar: the bottom row, when 'bar is 1 -- the faces (the shown one lit), what has
@@ -129,17 +109,13 @@
                   (: x (peep hb 'barx () @ f (f ? (f ()) "")) t (x + (0 < #x ? "  " "") + hclock hb + " ")
                      (t = peep hb 'bart "" ? 0 (pin hb 'bart t, hsoil hb))))
 
- ; the outer terminal's mouse follows the focused pane's wish (quay.h's flag bits); the
- ; reports always come as ?1006's, and `mouse` lays them into what the pane asked for
- ; with 'mouse on the mitty wants presses and drags itself, for its bars and its bar
+ ; the outer mouse mode follows the focused pane's flag bits; reports always come as ?1006
+ ; and `mouse` re-encodes them. 'mouse on: the mitty wants drags itself, for its bars
  (hmice hb f) (? (f & 4096) "\e[?1003h" (f & 2048 || peep hb 'mouse 0) "\e[?1002h" (f & 1536) "\e[?1000h"
                  "\e[?1003l\e[?1002l\e[?1000l")
 
- ; nothing is erased between frames, and nothing needs to be: panes and bars
- ; tile the wharf exactly (src/apps/mitty/wharf.l's standing law), so every cell is written
- ; every frame and no stale glyph can survive a layout change.
- ; a picture kitty holds (pics 1) whose pane's screen keeps it no longer -- the pane gone, or
- ; the store swept it -- is freed there, data and all, and forgotten, so it goes again if seen
+ ; nothing is erased between frames: panes and bars tile the wharf exactly, so every cell
+ ; is written. a kitty picture (pics 1) no pane's screen keeps any more is freed there
  (hfree j hb)
   (: live {} seen {}
      (look ib) (peep seen ib 0 ? 0
@@ -149,10 +125,8 @@
      (keep t id) (look (id // 1048576),
                   peep live id 0 ? (pin t id 1) (say j ("\e_Ga=d,d=I,i=" + show id + ",q=2\e\\"), t))
      (pin hb 'sent (foldl keep {} (sort (keys (hb 'sent))))))
- ; with kitty's pictures on (pics 1), every placement goes first and the ones still in view
- ; come back. sixels (pics 2) sit in the text layer: a pane's go out again only when what it
- ; shows of them moves, the cells the old ones covered erased before anything is painted,
- ; and never on the outer terminal's last row, which a sixel reaching would scroll
+ ; kitty (pics 1): every placement goes, the ones in view come back. sixels (pics 2) are
+ ; resent only when they move, old cells erased first, never on the last row (it would scroll)
  (hframe hb)
   (: j (jug 0) pk (peep hb 'pics 0)
      shown (filter (b \ wharf-show? b && two? (hpane hb (wharf-id b))) (hb 'lay))
@@ -200,15 +174,13 @@
       slurp j))
 
  ; --- the panes: opening, steering, shutting -------------------------------
- ; a pane's pump, twirled: moor runs until the child hangs up and the pane is
- ; shut for it. the handle is kept in 'jobs so the teardown can reap it.
+ ; a pane's pump runs until the child hangs up, then shuts it; 'jobs keeps it for the teardown
  (hmoor hb id) (: p (hpane hb id)
                   t (twirl (_ \ (moor (hbox p) (hmas p) (hb 'dirt), hshut hb id)) 0)
                   (pin hb 'jobs (t . hb 'jobs)))
 
- ; tie a pane up: the first takes the whole wharf, another splits the focused pane
- ; and takes its focus, pct the share the focused one keeps. a pane opens at 1x1 and
- ; the relay right after is what gives it its real size; a child's pump is twirled here
+ ; the first pane takes the whole wharf, another splits the focused one (pct its share) and
+ ; takes the focus. a pane opens 1x1 and the relay gives it its size
  (hberth hb d pct p) (hb 'next @ id
                     (pin (hb 'panes) id p,
                      pin hb 'next (id + 1),
@@ -222,12 +194,8 @@
  (hsteer hb d) (wharf-steer (hb 'lay) (hb 'focus) d @ id
                   (id = hb 'focus ? 0 (pin hb 'focus id, hsoil hb)))
 
- ; shut a pane: its pty closes, the plan promotes its sibling over the bar they
- ; shared, and the focus moves on if it was the one that left. shutting twice
- ; is safe -- the second finds no pane and closes nothing, which is what a child
- ; hanging up on a pane the user already shut looks like.
- ; a pane on a face not shown leaves that face's plan, and an emptied face is gone; the
- ; shown face emptied hands the glass to the first face left
+ ; shutting twice is safe: a child may hang up on a pane the user already shut. a pane on
+ ; a hidden face leaves that face's plan; the shown face emptied hands over to the first left
  (hshut hb id) (: p (hpane hb id)
                   _ (two? p && hpty? p ? (close (hmas p)) 0)
                   _ (two? p && !(hpty? p) && hstage p 'shut ? (hstage p 'shut ()) 0)   ; a stage's own leavings
@@ -267,9 +235,8 @@
  (hfresh hb) (: (free i) (i = hb 'face || two? (hb 'faces i) ? (free (i + 1)) i)
                 (hgo hb (free 0)))
 
- ; --- copy mode: the focused pane's screen as a vi buffer above it, on the clip;
- ; answers the buffer's state, or () on a seat with no vi. paste: the clip typed at
- ; a child, or handed to a stage's paste door ---
+ ; --- copy mode: the focused pane's screen as a vi buffer; () where there is no vi.
+ ; paste: the clip typed at a child, or handed to a stage's paste door ---
  (hcopy hb) (: p (hpane hb (hb 'focus)) vi (cite 'vi)
                (? (atom? p || !(tablet? vi)) ()
                   (: st (vi 'vi-open "")
@@ -409,11 +376,8 @@
                       112 (hcycle hb -1)                ; p
                       (d && 47 < d < 58) (hgo hb (d - 48))   ; 0-9
                       (peep (hb 'keys) k () @ f (f ? (f () @ p (two? p ? (hberth hb 'beside 50 p) 0)) 0)))))
- ; a child gets the bytes as typed, a sequence read whole when its ESC has company
- ; (a lone ESC is a key); a stage gets edkey's keys, as on cli's stage, or its own
- ; reader's; and the user's eof leaves it
- ; g is the attach this pump serves: a later one (or a detach) ends it, so a client's eof
- ; never touches the client after it
+ ; a child gets bytes as typed, a sequence whole when its ESC has company; a stage gets
+ ; edkey's keys or its own reader's. g is the attach served: a later one ends this pump
  (oars hb g) (? (peep hb 'serve 0 && g != peep hb 'gen 0) 0
               (: p (hpane hb (hb 'focus))
                  ch (? (two? p && !(hpty? p)) (peep (hstage p) 'key edkey (hin hb)) (see (hin hb)))
@@ -431,9 +395,8 @@
  ; a key: 1 when it woke a saver, which then is owed a whole frame
  (hwake hb) (: w (peep hb 'saver ()) k (cite 'saver 'saver-key) _ (pin hb 'forced 0)
                (? (tablet? w && k && k w (clock 0)) (: _ (hsoil hb) 1) 0))
- ; quiet: every pane on the shown face a bare shell, one at its prompt with no job in
- ; front -- its terminal's group its own -- and no face at all quiet too. only then does
- ; the saver's clock run; anything else on the glass holds it off, as a key would
+ ; quiet: every shown pane a shell at its prompt (its tty's group its own). only then does
+ ; the saver's clock run
  hshells ["lush" "sh" "bash" "zsh" "dash" "ksh" "mksh" "fish" "tcsh"]
  (hbare? p) (&& (two? p) (hpty? p) (elem (hname p) hshells)
                 (: g (ttypg (hmas p)) (charm? g && g = hpid p)))
@@ -449,12 +412,8 @@
  (hsleep hb) (: w (peep hb 'saver ()) (? (tablet? w && 0 < w 'idle) (: _ (pin hb 'forced 1) (pin w 'last (clock 0 - w 'idle))) 0))
 
  ; --- the tide: mirror the outer terminal's size onto the whole wharf -------
- ; the floor is not decoration, and it lives here so both callers share it: a
- ; fresh pty answers (0 . 0) -- two? and true and useless -- and a wharf of no
- ; cells lays every pane at zero extent, which paints a blank screen and never
- ; recovers. the opening had this floor; the tide did not, and quietly undid it
- ; half a second in. a mitty with no tty of its own -- a server's, a window's -- has its
- ; size said, 'csize
+ ; floored: a fresh pty answers (0 . 0), and a zero wharf never recovers. a mitty with
+ ; no tty of its own is told its size, 'csize
  (hsize u) (tty 1 @ ws
               [(two? ws && 5 < <ws ? <ws 24)
                (two? ws && 19 < >ws ? >ws 80)])
@@ -496,12 +455,10 @@
                         'face 0 'faces {} 'c52 "" 'keys {} 'bar 0 'mouse 0 'drag (),
                    hb))
 
- ; --- sail: the mitty on the tty, raw and on the alternate screen, keys pumped
- ; and frames painted until the last pane empties; the tty as it was after ---
- ; the outer terminal taken: the alternate screen, the mouse's reports as ?1006's, pastes
- ; bracketed. does it take kitty's pictures? a 1x1 query, then its cell's size, and DA behind
- ; them so a terminal that ignores APC still answers something (and says whether it draws
- ; sixels). asked only where a child has the keys: a stage's reader would take the answers
+ ; --- sail: the mitty on the tty, raw, until the last pane empties ---
+ ; alternate screen, ?1006 mouse, bracketed paste; then a kitty query, the cell size, and DA
+ ; (sixels?) so every terminal answers something. only where a child has the keys: a
+ ; stage's reader would eat the answers
  (hgreet hb) (: o (hout hb)
                 (say o "\e[?1049h\e[2J\e[?1006h\e[?2004h",
                  hpty? (hpane hb (hb 'focus)) ? (say o "\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\\e[16t\e[c") 0,
@@ -521,9 +478,8 @@
                 raw 0,
                 0))
 
- ; --- the server (rung 5): the mitty with no tty of its own, a client's socket as its
- ; 'in and 'out. one client at a time: an attach takes the glass from the last, and a
- ; client's leaving -- its eof, or C-a d -- leaves the panes running and the dirt waiting ---
+ ; --- the server: a client's socket as 'in and 'out, one client at a time. an attach takes
+ ; the glass from the last; a leaving (eof, C-a d) leaves the panes running ---
  (hattach hb c) (: _ (hdetach hb)
                    g (peep hb 'gen 0 + 1)
                    _ (pins hb 'gen g 'in c 'out c 'mice "" 'pics 0 'sent {} 'six {})
@@ -546,11 +502,8 @@
                       hsail hb,
                       stg ? 0 (waitfor (hpid p0))))))
 
- ; --- love mitty: the shell on any terminal -- lush in every pane a
- ; split or a face opens, and argv, when given, in the first ---
- ; --- the picker: seek's list in a pane, narrowed as it is typed at; on enter it becomes
- ; what its item opens, in place -- or, when the item answers no pane, simply goes. an item
- ; is [label thunk]; the keys are seek's (src/apps/seek.l), esc goes ---
+ ; --- the picker: seek's list in a pane; enter replaces it with what the item opens, or
+ ; closes it when the item answers no pane. an item is [label thunk] ---
  (hsub? h n) (: (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))) (go 0))
  ; a stage pane stands in for pane id: the old one's own leavings first. a pty's moor would
  ; shut the id when its child hangs up, so only a stage's place is taken this way
@@ -693,8 +646,7 @@
  (mitty-here as) (: _ (setenv "MITTY" "--here") sz (hsize 0) hb (mitty-lush as <sz (sz 1) 0)
                    (? (tablet? hb) (hsail hb, 0) (say err ("mitty: " + hb + "\n"), 1)))
 
- ; --- the server and its clients (rung 5): a mitty per name, listening on
- ; MITTY_RUN/NAME.sock (~/.love/run/mitty), outliving every terminal that attaches ---
+ ; --- the server and its clients: a mitty per name on MITTY_RUN/NAME.sock, outliving its terminals ---
  (mitty-dir _) (: e (getenv "MITTY_RUN") h (getenv "HOME")
                  (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/mitty") "/tmp/mitty"))
  (mitty-sock nm) (mitty-dir 0 + "/" + nm + ".sock")
@@ -750,20 +702,11 @@
                              (puts (snip f 0 (#f - 5) + (hot? s ? (close s, "") "  (dead)") + "\n"))))
                      (sort ns),
                  flush out, 0))
- ; --- the window: the mitty as a terminal of its own (src/apps/window.l) -- `love mitty
- ;     --window`, or a mitty with a display and no tty ---
- ; the mitty is as it is on a terminal, its 'in and 'out two pipes instead of a tty. its frames
- ; pour through one quay screen, the glass -- the console's own parser, so the bars, the
- ; borders, the cursor, the saver and the pictures come as they are -- and the rows the glass
- ; names dirty are dyed onto the window's paper, 8 by 16 a cell. the window's events go back up
- ; as a terminal's bytes: a key's text as it types it, the keys with no text and every key
- ; under ctrl or alt as xterm spells them, the pointer as the reports the glass was asked for.
- ; the pointer is the window's own where the glass asked for none, or under shift: a drag
- ; selects (a double or triple click the word or the line, a right click stretches it) and
- ; takes the primary, the middle button pastes it; ctrl+shift+C copies the selection onto
- ; the clipboard, ctrl+shift+V and shift+Insert paste. a paste goes up bracketed, and the
- ; mitty's own clip goes out as the clipboard. closing the window hangs up every pane's
- ; child, and the mitty ends with its last pane.
+ ; --- the window: the mitty as a terminal of its own (src/apps/window.l) ---
+ ; 'in and 'out are pipes; frames pour through one screen, the glass, whose dirty rows are
+ ; dyed onto the window, 8 by 16 a cell. events go up as a terminal's bytes, xterm's
+ ; spelling. the pointer is the window's own (selection) where the glass asked for none,
+ ; or under shift
  ; --- keys: a set-1 code -> what a terminal sends ------------------------------------
  ; the modifiers as held, each by its two keys: shift ctrl alt
  mw-modkeys {42 'shift 54 'shift 29 'ctrl 285 'ctrl 56 'alt 312 'alt}
@@ -803,10 +746,8 @@
  mw-xbtn {1 0 2 1 3 2 4 64 5 65 6 66 7 67}
  (mw-mods held) ((held 'shift ? 4 0) + (held 'alt ? 8 0) + (held 'ctrl ? 16 0))
 
- ; --- the selection on the glass: a left press anchors it (a second or third in quick
- ;     succession on the same cell takes the word or the line), a drag stretches it, a
- ;     release with something chosen takes the primary. a right press moves the nearer end
- ;     there in its own unit, and the drag goes on from it. answers whether it was ours ---
+ ; --- the selection on the glass: a press anchors (a double or triple, the word or line), a
+ ;     drag stretches, a release takes the primary; a right press moves the nearer end ---
  (mw-choose win sc held how b gi)
   (: s0 (gaze sc 10) s1 (gaze sc 11)
      (? (how = 0 && b = 2 && s0 < s1)
@@ -932,10 +873,8 @@
                 window-close win,
                 0)))))))
 
- ; love mitty: with a display and no tty, a window of its own. else attach to the mitty
- ; named main (or -n NAME), started when none is up; one that cannot be served (a seat with
- ; no sockets) runs here instead. --here always does. a pane of mitty NAME never attaches to
- ; NAME: it would take the glass from the terminal showing it, and show the mitty inside itself
+ ; attach to mitty NAME, started when none is up, else run here. a pane of mitty NAME never
+ ; attaches to NAME: it would take the glass from the terminal showing it
  (mitty-main as)
   (? (two? as && <as = "--serve" && two? >as) (mitty-serve <>as >>as)
      (two? as && <as = "--here") (mitty-here >as)
