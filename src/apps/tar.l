@@ -146,7 +146,7 @@
    (tar-hash es)                            ; -> the 64-char digest | ()
     (: h (cask tar-shast)
        _ (sha256-init h)
-       (tar-emit es (sha256-feed h) ? sha256-done h))
+       (tar-emit es (sha256-feed h) ? (sha256-done h) ()))
 
    (tar-pad s) (s + zbytes (padk #s tar-blk))  ; up to the next 512
    (tar-pack es)
