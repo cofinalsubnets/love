@@ -103,23 +103,21 @@
  ; cat adds spine lengths, and the net law holds exactly: $ of a cat is the
  ; saturated sum of the two lists' element sums (one clamp, at the top)
  (fz-ok 300 23 (fz-pair2 fz-l fz-l)
-   (v \ (: (ln x) (foldl (n \ _ \ 1 + n) 0 x)
-           (sum x) (foldl (+) 0 x)
+   (v \ (: (sum x) (foldl (+) 0 x)
            a <v b <>v
-           (ln (a + b) = ln a + ln b && $(a + b) = $(sum a + sum b)))))
+           (#(a + b) = #a + #b && $(a + b) = $(sum a + sum b)))))
  (fz-ok 300 24 (fz-pair2 fz-l fz-l)
    (v \ rev (<v + <>v) = rev <>v + rev <v))    ; rev of cat
- ; map preserves spine length ($ is the net sum, so count the spine explicitly)
- (fz-ok 300 25 fz-l (l \ (: (ln x) (foldl (n \ _ \ 1 + n) 0 x) (ln (map (+ 1) l) = ln l))))
+ ; map preserves spine length
+ (fz-ok 300 25 fz-l (l \ #(map (+ 1) l) = #l))
  ; take n ++ drop n = identity, for n drawn within [0, spine length]
- (fz-ok 300 26 (fz-bind fz-l (l \ fz-map (n \ [l n]) (fz-int 0 (1 + foldl (n \ _ \ 1 + n) 0 l))))
+ (fz-ok 300 26 (fz-bind fz-l (l \ fz-map (n \ [l n]) (fz-int 0 (1 + #l))))
    (v \ <v = take <>v <v + drop <>v <v))
  ; filter keeps only matching elements and never grows the spine (the clamped $
- ; can grow under filter -- dropping a negative raises the net -- so fold)
+ ; can grow under filter -- dropping a negative raises the net)
  (fz-ok 300 27 fz-l
-   (l \ (: (ln x) (foldl (n \ _ \ 1 + n) 0 x)
-           p (x \ 0 = x % 2)
-           (all p (filter p l) && ln (filter p l) <= ln l))))
+   (l \ (: p (x \ 0 = x % 2)
+           (all p (filter p l) && #(filter p l) <= #l))))
  ; an element consed on is found by elem
  (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (v \ elem <v (<v . <>v))))
 

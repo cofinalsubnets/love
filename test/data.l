@@ -15,21 +15,20 @@
  (Put k v) (pin t k v)
  (Del k) (pull t k 0)
  (Get k) (peep t k 0)
- (ln x) (foldl (n \ _ \ 1 + n) 0 x)             ; spine length ($ on a list is the net sum)
  (Put 1 2,
   Put 2 3,
   Put 3 4,
   Put 't 'f,
   (test
    (4 = #t)
-   (4 = ln (keys t))),
+   (4 = #(keys t))),
   Del 2,
   Del 't,
   (test
      (2 = #t)
-     (2 = ln (keys t))
+     (2 = #(keys t))
      (: (lll t) (foldl (l \ k \ k . Get k . l) () (keys t))
-      (2 * #t = ln (lll t))))))
+      (2 * #t = #(lll t))))))
 
 (:
  (stripPrefix p s) (? (p = snip s 0 #p) (snip s #p #s))
