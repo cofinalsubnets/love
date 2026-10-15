@@ -27,11 +27,14 @@ enum { cb_lead = 1, cb_tail = 2 };  // the width field: a wide char's two halves
 #define cb_ttx(g)   (((g) >> 8) & 255u)
 #define cb_tty(g)   ((g) & 255u)
 
-// a grapheme cluster: a base and up to three combining marks, in a pool the header holds.
-// a mark joins the cell before the cursor; a slot is free while its base is 0, and one no
-// cell names is taken back when the pool is full
+// a grapheme cluster: a base and up to nine marks, in a pool of slots: the header's
+// cb_nclu, then cx more after the twin. a mark joins the cell before the cursor; a slot is
+// free while its base is 0, and one no cell names is taken back when the pool fills. a
+// pool still full after that sets cfull, for the feeder to lay a bigger one
 enum { cb_nclu = 128, cb_clun = 10 };
+enum { cb_clumax = 0x1fffff - 0x110000 + 1 };   // the slots a glyph word can name
 #define cb_clu0 0x110000u
+#define cb_xsize(cx) ((uintptr_t) (cx) * cb_clun * sizeof(uint32_t))
 
 enum {              // face bits, the glyph word's top byte
   cb_bold = 1, cb_under = 2, cb_rev = 4, cb_dim = 8,
@@ -65,6 +68,7 @@ enum {              // flag bits: the console's modes
 enum { cb_mice = cb_mx10 | cb_mbtn | cb_mdrag | cb_many };
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
+enum { cb_saymax = 40 };  // one reply's longest: kitty's, with a 10-digit id and its error
 // the charsets: G0 and G1 each ascii or DEC special graphics, and SO's shift to G1
 enum { cb_g0 = 1, cb_g1 = 2, cb_so = 4 };
 enum { cb_pmax = 16 };  // CSI parameters kept: two rgb pens in one SGR are ten
@@ -77,8 +81,12 @@ struct cb {
   uint32_t sfg, sbg;  // the saved pen (DECSC), with sface
   uint8_t cur_face, sface, esc, gset;  // esc: escape-parser state; gset: the charsets (cb_g0 cb_g1 cb_so)
   uint16_t pv[cb_pmax]; uint8_t pn, ci;  // pv/pn: collected CSI parameters, ci its intermediate
+  // SGR as its parameters arrive: the pen it is making, and a colour mid-spelling -- ps 1
+  // after 38/48, 2 its index to come, 3..5 its r g b; pw 38 or 48; pacc the rgb so far
+  uint32_t pfg, pbg, pacc; uint8_t pface, ps, pw;
   uint16_t top, bot;  // the scroll region, inclusive rows
   uint8_t out[cb_outn], on, sgset;  // the reply queue (DSR/DA answers ride home here); DECSC's charsets
+  uint8_t rd, cfull;  // rd: someone drains the queue (cb_reply), so a feed waits on it (cb_full)
   uint32_t ucp; uint8_t un;  // utf-8 in flight: the codepoint, continuations to come
   uint8_t ob[6], ol;  // an OSC body's head: enough to recognize the colour asks
   uint32_t dmg[8];  // dirty rows, one bit each (row 255 stands for 255-and-past);
@@ -94,6 +102,7 @@ struct cb {
   uint32_t ks, kv, ki, kc, kr, kval, kacc, kpx, kpix, kslot;
   uint8_t ka, kf, km, kq, kcur, kd, kt, ko, kkey, kvc, kn, kbyte, kpad, kopen;
   uint32_t clu[cb_nclu][cb_clun];  // the clusters, their unused words 0
+  uint32_t cx;                     // the pool's slots past these, after the twin
   // history: a ring of hl lines, cols wide, after the store -- rows a scroll pushed off the
   // top, hn of them held, the oldest at line hh. view is how many a reader looks back.
   // twin: a grid's room after the history, where the main grid waits out the alternate screen
@@ -123,8 +132,9 @@ void
   cb_store(struct cb*, uint32_t sn),   // lay an empty store of sn bytes after the cells
   cb_hist(struct cb*, uint32_t hl),    // lay an empty history of hl lines after the store
   cb_twin(struct cb*, uint32_t on),    // lay (1) or take away (0) the twin grid after the history
+  cb_xclu(struct cb*, uint32_t cx),    // grow the slots after the twin to cx, the new ones empty
   // old laid across into a fresh rows x cols screen: a store of sn bytes, hl lines of
-  // history, and a twin grid when tw
+  // history, a twin grid when tw, and old's cx cluster slots after it
   cb_regrid(struct cb*, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl,
             uint32_t tw),
   cb_peer(struct cb*, uint32_t n),     // look n lines back into the history, 0 the live grid
@@ -136,6 +146,8 @@ void
   cb_recolor(struct cb*, uint32_t fg, uint32_t bg),
   cb_cur(struct cb*, uint32_t row, uint32_t col);
 int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
+int cb_full(struct cb const*);       // a drained queue without room for one more reply
+uintptr_t cb_laid(struct cb const*); // the bytes the screen spans, its last cluster slot's end
 // a pointer event at row, col -> the report the program asked for into buf (cb_mousen), its
 // length, 0 for none. b the button (0 1 2, 64 65 the wheel up and down, 3 none held) with
 // modifiers 4 shift 8 meta 16 ctrl; how 0 a press, 1 a release, 2 a move

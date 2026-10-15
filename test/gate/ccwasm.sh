@@ -28,8 +28,9 @@ name=test_ccwasm
 unsupported="100-complex 280-cxf-fuzz 111-int128 117-vastruct 151-w128fuzz 160-rangeinit 229-labelvalue 256-inline-retaddr 266-vaarg-struct 294-asmlabel 297-frameaddr"
 # x64 stays the oracle for these. 268: clang has no __builtin_*_overflow_p, so emcc cannot
 # build it. 298: emcc's malloc ABORTS on a size it cannot grow to (ABORTING_MALLOC) where C
-# answers NULL
-noemcc="268-overflow-p 298-malloc-wrap"
+# answers NULL. 300: emcc's aligned_alloc keeps C11's first rule (a size a multiple of the
+# alignment, an alignment of a pointer at least), which C17 dropped and C answers here
+noemcc="268-overflow-p 298-malloc-wrap 300-aligned-alloc"
 
 d=$ho/cc-wasm
 rm -rf "$d"

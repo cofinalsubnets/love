@@ -92,7 +92,7 @@
                                  bx (hbox p)
                                  s (peep bx () 0)
                                  (nr = gaze s 1 && nc = gaze s 2 ? 0
-                                  (regrid s (cask (screen () nr nc)) nr nc @ s2
+                                  (regrid s (cask (regrid s () nr nc)) nr nc @ s2
                                      (pin bx () s2,
                                       hpty? p ? (settty (hmas p) nr nc) (hshow p))))))))
                      bs,
@@ -893,7 +893,7 @@
                                (<e = 'release) (: _ (pin held 'btn ()) (point 1 k (e 2) (e 3)))
                                (<e = 'move) (point 2 0 (e 1) (e 2))
                                (<e = 'size) (: r2 (max 2 ((e 2) // 16)) c2 (max 20 ((e 1) // 8)) sc (peep gx () 0)
-                                               (pin gx () (regrid sc (cask (screen () r2 c2)) r2 c2),
+                                               (pin gx () (regrid sc (cask (regrid sc () r2 c2)) r2 c2),
                                                 pin hb 'csize [r2 c2],
                                                 pin dirty () 2))
                                (<e = 'paste) (0 < #k ? (send ("\e[200~" + k + "\e[201~")) 0)

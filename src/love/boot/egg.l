@@ -27,7 +27,7 @@
    _ (each m p)
    _ (each n p)
    ; what a baked run may still cite: the bounded byte doors (src/love/mem.c), the glaze's
-   ; reads of ev.l and post.l, and its deferred cells (map.c, checked: the glaze loads after
+   ; reads of ev.l and post.l, and its deferred cells (tablet.c, checked: the glaze loads after
    ; this) -- none reaches a word by address or writes a cell it did not lay
    kept '(peepw pinw peepv pinv gv nifop letc opfixed threadir jotfuse defercell deferpatch)
    _ (? keep 0 (each (filter (\ k (? (elem k kept) 0 1)) (keys F)) (\ k (pull F k k))))

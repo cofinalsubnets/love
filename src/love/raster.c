@@ -28,8 +28,9 @@ float lm_expf(float);
 #define rz_exp lm_expf
 #endif
 
-enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_lv = 8, rz_tn = 256,
+enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_lv = 8 * sizeof(word), rz_tn = 256,
        rz_na = 11 };   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
+                       // rz_lv: a level halves, so a word's bits hold every chain
 // a vertex in clip space with what rides on it; once projected x y are pixels and z ndc
 struct rz_v { flo_t x, y, z, w, a[rz_na]; };
 struct rz_tex { intptr_t const *px; intptr_t w, h; };
@@ -222,6 +223,7 @@ static struct rz_v rz_lerp(struct rz_v const *a, struct rz_v const *b, flo_t t) 
 // the planes a triangle is cut at, as d = (x y z w) . p >= 0: the near one, and a guard
 // band far past the screen's edges, which keeps a pixel's sixteenths within an int64's reach
 #define rz_guard 64
+#define rz_side_max ((intptr_t) 1 << 20)   // a frame's side: the edge sums, near 2^21 side^2, stay in reach
 static flo_t rz_side(struct rz_v const *v, int k) {
  switch (k) {
   case 0: return v->z + v->w;
@@ -308,13 +310,13 @@ love_noinline static struct g *host_raster(struct g *g) {
  if (!(a[0] & a[1] & 1) || !galaxyp(a[3]) || tray_nelem(tray(a[3])) < 16 || !rz_batches(a[4], a[5], st)) {
   a[0] = ZeroPoint; return g; }
  intptr_t const W = getcharm(a[0]), H = getcharm(a[1]);
- if (W < 1 || H < 1 || W > 4096 || H > 4096) { a[0] = ZeroPoint; return g; }
+ if (W < 1 || H < 1 || W > rz_side_max || H > rz_side_max) { a[0] = ZeroPoint; return g; }
  uintptr_t nv = 0;   // the most vertices a batch has
  if (galaxyp(a[4])) nv = tray_nelem(tray(a[4])) / st;
  else for (word v = a[4]; chainp(v); v = B(v)) nv = tray_nelem(tray(A(v))) / st > nv ? tray_nelem(tray(A(v))) / st : nv;
  word const o0 = chainp(a[7]) ? A(a[7]) : a[7];
  uintptr_t const fr1 = ((intptr_t) rz_opt(o0, 5, 0) & rz_flat) ? 1 : 2;   // the colours' rank
- uintptr_t const n = (uintptr_t) (W * H),
+ uintptr_t const n = mulsat((uintptr_t) W, (uintptr_t) H),   // past every heap: have refuses it
                  fw = b2w(tray_bytes(love_Z, fr1, n)), dw = b2w(tray_bytes(love_R, 2, n)),
                  pw = b2w(tray_bytes(love_R, 1, 8 * nv + 1));
  if (!ok(g = have(g, fw + dw + pw))) return g;

@@ -40,6 +40,8 @@
    (sunlit m) (facets 4 4 0 fc-id rec (fc-z [[0 1 2 -1]]) () [(fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0]]) fc-id m])
    ; levels: red where a pixel is a texel, green where it crosses four
    lv [[(star-tray [4 4] (map (k \ red) ^16)) (star-tray [2 2] (map (k \ 65280) ^4))]]
+   ; twelve levels, each its own colour: a pixel that crosses 2^10 texels reaches the eleventh
+   lv12 [(map (k \ star-tray [2 2] [(k + 1) (k + 1) (k + 1) (k + 1)]) ^12)]
    ; a perspective eye 1 above a floor that runs out behind it: cut at the near plane
    pm (fc-g [[1.0 0.0 0.0 0.0] [0.0 1.0 0.0 0.0] [0.0 0.0 -1.002 -0.2002] [0.0 0.0 -1.0 0.0]])
    fl (fc-g [(fc-vx -50 -1 5 0 0 1 0 0) (fc-vx 50 -1 5 0 0 1 0 0) (fc-vx 0 -1 -50 0 0 1 0 0)])
@@ -67,10 +69,13 @@
       (flat (laid 4 [tex] 1) = map (k \ 1052688 * k) ^16)
       (peep (laid 4 [hol] 0) [1 1] 0 = 7) (peep (laid 4 [hol] 0) [1 2] 0 = 1052688 * 6)
       (fc-n (laid 4 lv 0) red = 16) (fc-n (laid 16 lv 0) 65280 = 16)
+      (peep (laid 4 lv12 0) [1 1] 0 = 1) (peep (laid 4096 lv12 0) [1 1] 0 = 11)
       (fc-n (facets 4 4 7 fc-id nf (fc-z [[0 1 2 -1]]) () (fc-g [[10.0 20.0 30.0 0.0 0.5 0.0]])) 660510 = 16)
       (peep floor [0 3] 0 = 7) (peep floor [7 3] 0 = red) (peep floor [7 0] 0 = red)
       (peep rp [0 0] 0 < peep rp [0 4] 0) (peep rp [0 4] 0 < peep rp [0 7] 0)
       (facets 0 4 7 fc-id sq (fc-z [[0 1 2 -1]]) () () = ())
+      (facets 5000 1 7 fc-id sq (fc-z [[0 1 2 -1] [3 4 5 -1]]) () () @ w    ; a side past 4096 is a frame
+       ([1 5000] = shape w && fc-n w red + fc-n w blue = 5000))
       (facets 4 4 7 fc-id (fc-g [[1.0 2.0 3.0]]) (fc-z [[0 1 2 -1]]) () () = ())
       (fc-n (facets 4 4 7 fc-id sq (fc-z [[0 1 9 -1]]) () ()) 7 = 16)
       (show bt = show ab)
