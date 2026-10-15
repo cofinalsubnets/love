@@ -1,15 +1,7 @@
-; grove -- trees grown from a seed, and drawn. a scene gives a tree its habit, the shape of
-; its wood, grown with grove's kit: branches crooked and drooping, knots of stubs, sprays of
-; twigs forking finer, and tufts at their ends. the leaves are a tree of heaven's, long
-; and pinnate, their leaflets in pairs and now and then one at the tip; and some ends
-; carry a hanging cluster of seeds, through the winter.
-; the wood is cylinders, a 'segs list of [a b r]; the leaflets and seeds are points, each
-; with its long axis and its half-width as vectors.
-;
-; a scene draws a tree in triangles (mesh.l, over facets): the thick wood a mesh
-; (grove-wood) under its bark (grove-bark), the thin wood ribbons turned to the eye
-; (grove-twigs), and the leaflets and seeds a triangle each, swaying (grove-dots).
-;
+; grove -- trees of heaven grown from a seed, and drawn. a scene gives a tree its habit, the
+; shape of its wood, grown with grove's kit. the wood is a 'segs list of [a b r]; leaflets and
+; seeds are points, each with its long axis and half-width as vectors. drawn in triangles
+; (mesh.l): thick wood grove-wood under grove-bark, thin wood grove-twigs, points grove-dots.
 ; (grove-new p) grows one; p is a tablet:
 ;   'seed     the dice                         'base   [x 0 z], where it stands
 ;   'habit    kit -> the fork, the wood grown   'crown  the height leaves start at
@@ -17,10 +9,8 @@
 ; the kit is a tablet: 'rr lo hi a throw, 'spread d ang a way turned off d, 'dir a b,
 ; 'seg a b r a piece of wood, 'branch from way length pieces r0 r1 bend droop (its joints),
 ; 'head limb i0 n, 'spray q d len n lf, 'sprig q d, 'tuft q d
-; a scene's season rides on the tree: 'share how much of the crown is in leaf (1 unless
-; said), the rest dropped; 'turn how far the leaves have gone from green to yellow;
-; 'seeds how many of the seed clusters hang, and 'ripe how far they are from green
-; through red to the winter's tan
+; the season rides on the tree, each 0..1: 'share of the crown in leaf (default 1), 'turn
+; green to yellow, 'seeds of the clusters hanging, 'ripe green through red to tan
 (module (grove grove-new grove-bark grove-wood grove-dots grove-twigs)
 (borrow 'view)
 (borrow 'vec)
@@ -95,9 +85,8 @@
  ; which of the tree's points are on it: the leaves and the seeds the season has kept
  (in-leaf tr) (: q (tr 'ph / tau)
    ((tr 'kind = 2.0) * (q < peep tr 'share 1.0) + (tr 'kind = 3.0) * (q < peep tr 'seeds 0.0)))
- ; the bark, a texture to lay on the wood a centimetre a texel and tiling round and along:
- ; smooth and dark, faintly mottled, and here and there a thin pale streak running down it
- ; and fading, as a share of the wood's own colour
+ ; the bark, a texture a centimetre a texel, tiling round and along: dark, faintly mottled,
+ ; thin pale streaks running down and fading; a share of the wood's own colour
  (grove-bark _) (: w 32 h 128
    (hash x k) (frac (sin (x * 12.9898 + k * 78.233) * 43758.5453))
    (mesh-pic w h (\ x y (: u (tau * x / w) v (tau * y / h)
@@ -127,10 +116,9 @@
          l {'x (fk 'x) 'z (fk 'z) 'lf lf 'ph ph 'base (cmix seedc leafc lf)
             'cs [(map (k \ P k - 0.5 * a k - w k) ^3) (map (k \ P k - 0.5 * a k + w k) ^3) (map (k \ P k + 0.5 * a k) ^3)]}
          (pin tr 'laid [k l], l))))
- ; ..lit by sky's light lt and seen from e, as facets takes them (mesh-dots), kept on the
- ; tree until the light or the season moves or the eye goes a quarter metre: the leaves
- ; darken deep in the crown and glow where the sun is behind them. where a pixel spans pa
- ; and a leaflet is smaller than it, one in th of them is drawn, grown to stand for the rest
+ ; ..lit by sky's light lt seen from e, kept until the light or season moves or the eye goes
+ ; a quarter metre; deep leaves darken, backlit ones glow. where a pixel spans pa and a leaflet
+ ; is smaller, one in th is drawn, grown to stand for the rest
  (lit tr lt e pa) (: L0 (laid tr) (r v) (int (v * 100.0)) th (max2 1 (min2 3 (int (pa / 0.006))))
    k [(tr 'laid 0) (map r (lt 'sun)) (r (lt 'sunk)) (map r (lt 'amb)) (map r (lt 'sunc)) (map (v \ int (v * 4.0)) e) th]
    was (tr 'lit)
@@ -150,9 +138,8 @@
  (grove-dots tr lt e t0 pa) (: b (lit tr lt e pa) ph (b 1)
    dx (0.025 * sin (t0 * 0.13 + ph)) dz (0.02 * sin (t0 * 0.09 + ph * 1.7))
    [(b 0 0 + lace (catmap (q \ [dx 0.0 dz 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0]) ^3)) (b 0 1)])
- ; the thin wood, thinner than the pixels it crosses: each piece a ribbon from a to b
- ; turned to the eye at e, never narrower than a pixel at a, pa the angle one spans, two
- ; triangles laced; lit by the sky and some of the sun. [verts tris] for facets
+ ; the thin wood: each piece a ribbon a to b turned to the eye at e, never narrower than a
+ ; pixel (pa the angle one spans); [verts tris] for facets
  (grove-twigs tr lt e pa) (: T (tr 'thin @ ()
       (: sg (filter (s \ s 2 < thick) (tr 'segs)) n #sg (col i k) (gem-tray [n] (map (s \ 1.0 * s i k) sg))
          t {'a [(col 0 0) (col 0 1) (col 0 2)] 'b [(col 1 0) (col 1 1) (col 1 2)] 'r (gem-tray [n] (map (s \ s 2) sg))}

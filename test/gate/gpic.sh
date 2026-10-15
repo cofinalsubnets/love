@@ -28,6 +28,8 @@ for f in /usr/share/groff/*/tmac/chem.pic; do [ -f "$f" ] && { chem=$f; break; }
 run() {
   rm -rf "$w/c"; mkdir "$w/c"
   cp "$1"/*.pic "$w/c/" 2>/dev/null
+  # the random cases ride one file, one `@@ name` line before each
+  [ -f "$1/random.pack" ] && awk -v d="$w/c" '/^@@ /{close(f); f = d "/" $2; next} {print > f}' "$1/random.pack"
   if [ -n "$chem" ]; then cp "$chem" "$w/c/chem.pic"; else rm -f "$w/c"/chem-*.pic; fi
   for f in "$w/c"/*.pic; do
     [ -f "$f" ] || continue

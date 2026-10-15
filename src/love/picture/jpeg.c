@@ -2,9 +2,10 @@
 // (jpeg-encode w h rgba q) -> a baseline jfif of the w*h rgba image at quality 1..100 | ()
 // jpeg's own tables (itu t.81 annex k) scaled by quality as libjpeg scales them, 4:2:0
 // chroma, alpha dropped. the stream is sized by a counting pass, then written.
-// (jpeg-pixels s) -> the rgba of a baseline or progressive jpeg, grey or ycbcr (rgb by
-// adobe's word), any sampling | why not: 1 not a jpeg, 2 cut short, 3 a kind it can't
-// read (arithmetic, lossless, 12-bit, cmyk), 4 a bad table or scan, 5 past 2^24 pixels
+// (jpeg-pixels s o) -> the rgba of a baseline or progressive jpeg, grey or ycbcr (rgb by
+// adobe's word), any sampling, laid upright by exif orientation o (1..8) | why not: 1 not
+// a jpeg, 2 cut short, 3 a kind it can't read (arithmetic, lossless, 12-bit, cmyk), 4 a
+// bad table or scan, 5 past 2^24 pixels
 #include "love.h"
 #include "bytes.h"
 #include <stdint.h>
@@ -519,11 +520,25 @@ static int jd_sample(struct jd *d, struct jd_comp *c, uintptr_t x, uintptr_t y) 
 
 static uint8_t jd_clamp(int v) { return (uint8_t) (v < 0 ? 0 : v > 255 ? 255 : v); }
 
-static void jd_rgba(struct jd *d, uint8_t *o) {
+// exif's orientation ori: each pixel goes where the picture is shown upright, 5..8 turning it
+// on its side, so the rows out are as long as the frame is tall
+static uintptr_t jd_at_or(int ori, uintptr_t x, uintptr_t y, uintptr_t w, uintptr_t h) {
+ switch (ori) {
+  case 2: return y * w + (w - 1 - x);
+  case 3: return (h - 1 - y) * w + (w - 1 - x);
+  case 4: return (h - 1 - y) * w + x;
+  case 5: return x * h + y;
+  case 6: return x * h + (h - 1 - y);
+  case 7: return (w - 1 - x) * h + (h - 1 - y);
+  case 8: return (w - 1 - x) * h + y;
+  default: return y * w + x; } }
+
+static void jd_rgba(struct jd *d, uint8_t *out, int ori) {
  int rgb = d->nc == 3 && ((d->adobe && !d->transform)
                           || (d->c[0].id == 'R' && d->c[1].id == 'G' && d->c[2].id == 'B'));
  for (uintptr_t y = 0; y < (uintptr_t) d->h; y++)
-  for (uintptr_t x = 0; x < (uintptr_t) d->w; x++, o += 4) {
+  for (uintptr_t x = 0; x < (uintptr_t) d->w; x++) {
+   uint8_t *o = out + 4 * jd_at_or(ori, x, y, (uintptr_t) d->w, (uintptr_t) d->h);
    int l = jd_sample(d, &d->c[0], x, y);
    if (d->nc == 1) o[0] = o[1] = o[2] = (uint8_t) l;
    else {
@@ -542,20 +557,22 @@ static uintptr_t jd_scratch(struct jd *d) {
 
 love_noinline static struct g *host_jpegd(struct g *g) {
  struct jd d;
- if (!strp(g->sp[0])) return g->sp[0] = putcharm(1), g;
+ int ori = oddp(g->sp[1]) ? (int) getcharm(g->sp[1]) : 1;
+ if (ori < 1 || ori > 8) ori = 1;
+ if (!strp(g->sp[0])) return g->sp[1] = putcharm(1), g->sp += 1, g;
  memset(&d, 0, sizeof d), d.s = (const uint8_t*) txt(g->sp[0]), d.n = len(g->sp[0]);
  int why = jd_walk(&d, 1);
- if (why) return g->sp[0] = putcharm(why), g;
+ if (why) return g->sp[1] = putcharm(why), g->sp += 1, g;
  uintptr_t need = jd_scratch(&d);
- if (!ok(g = str0(g, need))) return g;           // pushes: the scratch over s
+ if (!ok(g = str0(g, need))) return g;           // pushes: the scratch over s and o
  d.s = (const uint8_t*) txt(g->sp[1]), d.base = (uint8_t*) txt(g->sp[0]);
  memset(d.base, 0, need);
- if ((why = jd_walk(&d, 0))) return g->sp[1] = putcharm(why), g->sp += 1, g;
+ if ((why = jd_walk(&d, 0))) return g->sp[2] = putcharm(why), g->sp += 2, g;
  jd_idct(&d);
  if (!ok(g = str0(g, (uintptr_t) d.w * (uintptr_t) d.h * 4))) return g;
  d.base = (uint8_t*) txt(g->sp[1]);
- jd_rgba(&d, (uint8_t*) txt(g->sp[0]));
- g->sp[2] = g->sp[0], g->sp += 2;
+ jd_rgba(&d, (uint8_t*) txt(g->sp[0]), ori);
+ g->sp[3] = g->sp[0], g->sp += 3;
  return g; }
 static lvm(lvm_jpegd) LvmCall(g, host_jpegd)
-LvDef("jpeg-pixels", jpegd, 1, "jpeg");
+LvDef("jpeg-pixels", jpegd, 2, "jpeg");

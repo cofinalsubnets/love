@@ -55,49 +55,6 @@ static unsigned ec_laplace_get_freq1(unsigned fs0, int decay)
    return ft*(16384-decay)>>15;
 }
 
-void ec_laplace_encode(ec_enc *enc, int *value, unsigned fs, int decay)
-{
-   unsigned fl;
-   int val = *value;
-   fl = 0;
-   if (val)
-   {
-      int s;
-      int i;
-      s = -(val<0);
-      val = (val+s)^s;
-      fl = fs;
-      fs = ec_laplace_get_freq1(fs, decay);
-      /* Search the decaying part of the PDF.*/
-      for (i=1; fs > 0 && i < val; i++)
-      {
-         fs *= 2;
-         fl += fs+2*LAPLACE_MINP;
-         fs = (fs*(opus_int32)decay)>>15;
-      }
-      /* Everything beyond that has probability LAPLACE_MINP. */
-      if (!fs)
-      {
-         int di;
-         int ndi_max;
-         ndi_max = (32768-fl+LAPLACE_MINP-1)>>LAPLACE_LOG_MINP;
-         ndi_max = (ndi_max-s)>>1;
-         di = IMIN(val - i, ndi_max - 1);
-         fl += (2*di+1+s)*LAPLACE_MINP;
-         fs = IMIN(LAPLACE_MINP, 32768-fl);
-         *value = (i+di+s)^s;
-      }
-      else
-      {
-         fs += LAPLACE_MINP;
-         fl += fs&~s;
-      }
-      celt_assert(fl+fs<=32768);
-      celt_assert(fs>0);
-   }
-   ec_encode_bin(enc, fl, fl+fs, 15);
-}
-
 int ec_laplace_decode(ec_dec *dec, unsigned fs, int decay)
 {
    int val=0;

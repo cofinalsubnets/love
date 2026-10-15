@@ -1,17 +1,10 @@
-; src/apps/kore/u.l -- the u-floor: the shared helpers every kore tool stands on, and the only
-; part of kore that anything outside kore uses: text and argument plumbing. the door under
-; it (uread uwrite udie uleave urun) is post.l's, so a tool outside kore reaches it too.
-; its own file so mooncc's cat (ubase usplit) does not carry the whole toolbox.
-;
-; a body-less top-level `:` -- these names leak on purpose, which is what makes them a floor.
+; src/apps/kore/u.l -- the u-floor: the helpers every kore tool stands on, and the only part of
+; kore that anything outside kore uses. its own file so mooncc's cat does not carry the toolbox.
 (module 'kore
 (borrow 'posix)
-; lastslash, for the two path clips below (src/love/boot/post.l)
-(borrow 'path)
-; cpat/cpnext/cpn, for tr's sets and wc -m (src/love/boot/post.l)
-(borrow 'text)
-; civil, epoch-days, monl, wdl, for udate (src/love/boot/post.l)
-(borrow 'cal)
+(borrow 'path) ; lastslash, for the path clips
+(borrow 'text) ; cpat/cpnext/cpn, for tr's sets and wc -m
+(borrow 'cal) ; civil, epoch-days, monl, wdl, for udate
 
 (:
    ; -- the u-floor --
@@ -20,9 +13,7 @@
     (: n #s
        (go i acc) (i >= n ? acc (go (i + 1) (10 * acc + s i - 48)))
        (0 < n && s 0 = 45 ? (0 - go 1 0) (go 0 0)))
-   ; text with its sgr runs taken out, every other byte where it was. the shape a tool
-   ; wants when its own output is going somewhere that is not a terminal -- a colour is
-   ; for a reader, and a pipe is not one. lapiz's tty shower is what puts them in.
+   ; text with its sgr runs taken out, for output that is not going to a terminal
    (usgr s)
     (: n #s o (jug 0)
        (go i) (? (n <= i) (slurp o)
@@ -30,8 +21,7 @@
                   ((: (g k) (? (n <= k) (slurp o) (s k = 109) (go (k + 1)) (g (k + 1)))) (i + 2))
                  (put o (s i), go (i + 1)))
        (go 0))
-   ; left-pad with spaces to width w (a wider count never shrinks), and its mirror --
-   ; the columns that count from the left (ps's TTY, free's label) want the other one
+   ; pad with spaces to width w, on the left and on the right; a wider text never shrinks
    (upad w s) (#s < w ? (upad w (" " + s)) s)
    (urpad w s) (#s < w ? (urpad w (s + " ")) s)
    ; join texts with single spaces
@@ -40,18 +30,16 @@
                 (<a + " " + ujoin >a))
    ; the many-file banner head and tail share: none before the first, a blank between
    (uhdr first f) (first ? ("==> " + f + " <==\n") ("\n==> " + f + " <==\n"))
-   ; the two pure line clips (lawed in test/law/kore.l). each chomps only when the source's last
-   ; line actually rode through: head that cut before it ends on a line the text itself
-   ; terminated, so it keeps its newline whatever the far end of the input looked like.
+   ; the pure line clips. each chomps only when the source's last line rode through: a head
+   ; that cut before it keeps its newline
    (uhead n t) (: ls (lines t) k #ls cut (n < k)
                   o (unlines (cut ? (take n ls) ls))
                   (cut || nl-end? t ? o (chomp o)))
    (utail n t) (: ls (lines t) k #ls
                   o (unlines (n < k ? (drop (k - n) ls) ls))
                   (nl-end? t ? o (chomp o)))
-   ; the wc counter as a fold, so a gulp can be counted and dropped: st is
-   ; [inw lines words bytes]. `inw` has to ride between gulps -- a word is a
-   ; maximal ink run and one straddling the boundary counts twice without it.
+   ; the wc counter as a fold over gulps: st is [inw lines words bytes]. inw rides between
+   ; gulps, or a word straddling the boundary counts twice
    (ucount-go st s)
     (: n #s
        (ws? c) (c = 32 || 8 < c < 14)
@@ -61,8 +49,7 @@
                                  (go (k + 1) 1 l (inw ? w (w + 1))))))
        r (go 0 <st <>st <>>st)
        [<r <>r <>>r (<>>>st + n)])
-   ; the word state is a per-byte machine; a wc that was not asked for words has no
-   ; reason to run it, and one that wants only bytes has none to look at them at all
+   ; lighter folds for a wc not asked for words, or asked for bytes alone
    (ucount-b st s) [<st <>st <>>st (<>>>st + #s)]
    (ucount-l sc st s)
     (: n #s
@@ -71,9 +58,8 @@
    (ucount-for l? w?)
     (w? ? ucount-go (l? ? (ucount-l (cite 'scan 'scanner ())) ucount-b))
    ucount0 [0 0 0 0]
-   ; wc -m as its own fold: st is [chars held], held the torn sequence a gulp ended in,
-   ; so a character straddling the boundary counts once. a byte that begins no valid
-   ; character counts nothing, and a torn one at the very end is left in held
+   ; wc -m as a fold: st is [chars held], held the torn sequence a gulp ended in. a byte that
+   ; begins no valid character counts nothing
    (ucharc-go st s)
     (: t (<>st + s) n #t
        (need b) (? (b < 194) 0 (b < 224) 2 (b < 240) 3 (b < 245) 4 0)
@@ -86,12 +72,10 @@
        (go 0 <st))
    ucharc0 [0 ""]
    (ucount-say st) [<>st <>>st <>>>st]      ; the state's (lines words bytes) face
-   ; text -> (lines words bytes), a word a maximal ink run (lawed in test/law/kore.l)
+   ; text -> (lines words bytes), a word a maximal ink run
    (ucount t) (ucount-say (ucount-go ucount0 t))
-   ; the two pure path clips (basename NAME [SUFFIX] / dirname NAME; lawed in test/law/kore.l).
-   ; posix's faces, not make's: trailing slashes are stripped first, and a bare name's
-   ; directory is "." where make's $(dir) says "./". `chop` is that strip, and what is
-   ; left is one 'glob lastslash -- the scan itself lives there.
+   ; the pure path clips, basename and dirname in posix's faces: trailing slashes are stripped
+   ; first (uchop), and a bare name's directory is ".", not make's "./"
    (uchop p) (: (e k) (0 < k && p (k - 1) = 47 ? (e (k - 1)) k) (e #p))
    (ubase p sfx)
     (uchop p @ e0
@@ -102,9 +86,8 @@
    ; the process umask, read and put back
    (umask-now _) (umask 18 @ o
                     (umask o, o))
-   ; a tool's flags off the head of as: [t operands], every letter in `ok` and a value
-   ; letter in `vals`. a stranger letter, a flag after an operand or a value flag with
-   ; none refuses before anything is done; the file really called -x is `-- -x`
+   ; a tool's flags off the head of as -> [t operands], letters in `ok`, value letters in
+   ; `vals`. a stranger, a flag after an operand or a value flag with none refuses with 2
    (uflags who as vals ok) (uflagsl who as vals ok ())
    ; the same with long words, `longs` uopt's map of a name to its key
    (uflagsl who as vals ok longs)
@@ -114,8 +97,7 @@
         uoptbad as t ok @ c (!c ? () (udie 2 (who + ": unknown option -" + string c))),
         uoptstray as <>>o @ w (!w ? () (udie 2 (who + ": unknown option " + w))),
         [t <>>o]))
-   ; a tool that runs a command: its flags, then the command and the command's own flags,
-   ; which are not its to judge -> [t cmd..]. a stranger before the command refuses with 2
+   ; a tool that runs a command -> [t cmd..]: the command's own flags are not its to judge
    (ucmdflags who as vals ok) (ucmdflagsl who as vals ok ())
    (ucmdflagsl who as vals ok longs)
     (: t {}
@@ -123,16 +105,13 @@
        (atom? o && udie 2 (who + ": an option wants a value"),
         uoptbad as t ok @ c (!c ? () (udie 2 (who + ": unknown option -" + string c))),
         [t <>>o]))
-   ; a hand-walked tool's operands, refused with 2 when one still looks like a flag: its
-   ; walk stops at the first word it does not know, so that word is a stranger or a flag
-   ; after an operand
+   ; a hand-walked tool's operands, refused with 2 when one still looks like a flag
    (ustray who as rest) (uoptstray as rest @ w (!w ? rest (udie 2 (who + ": unknown option " + w))))
    ; octal text -> a charm ("755" is 493), chmod's one argument shape
    (uoct s) (foldl (\ acc i (8 * acc + s i - 48)) 0 ^#s)
-   ; a mode word onto the mode cur: octal whole, or chmod's symbolic clauses, `who` of
-   ; ugoa then +-= runs of rwxXst or one of ugo to copy (u+x,go-w,a=rX). no who is all
-   ; three less the umask um. a directory keeps its setuid and setgid bits through = and
-   ; octal, as GNU's does. () for a word that is neither
+   ; a mode word onto the mode cur: octal, or chmod's symbolic clauses (u+x,go-w,a=rX). no who
+   ; is all three less the umask um; a directory keeps setuid/setgid through = and octal, as GNU's.
+   ; () for a word that is neither
    (umode m cur dir? um)
     (: n #m
        (oct? i) (? (n <= i) 1 (48 <= m i <= 55) (oct? (i + 1)) 0)
@@ -171,12 +150,8 @@
               (clauses (r 0 + 1) (r 1))))
        (? (0 < n && n <= 4 && oct? 0) (uoct m | (dir? ? (cur & 3072) 0)) (0 < n) (clauses 0 cur) ()))
    ; -- a date as GNU's -d reads the common spellings -> ms since the epoch, or () --
-   ; absolute: @N, YYYY-MM-DD (a T or a space, then its time), MM/DD/YYYY, a month's name
-   ; with its day and year in either order, HH:MM[:SS] alone for today's; a Z, UTC or
-   ; +HH[:]MM after a time. now, today, yesterday, tomorrow. relative: [+-]N UNIT, `ago`
-   ; turning the item before it back, next and last as 1 and -1, stacking. a date without
-   ; a time is its midnight, a time without a date today's. UTC, as every clock here is. a weekday
-; rides a date (date's own `Thu Jan  1 00:00:00 UTC 2026`, its year last) and alone is refused
+   ; absolute and relative items stack; a date alone is its midnight, a time alone today's,
+   ; all UTC. a weekday rides a date (date's own output reads back) and alone is refused
    (uint w) (: n #w sg (0 < n && (w 0 = 43 || w 0 = 45) ? 1 0) d (snip w sg n)
                (0 < #d && all digit? (chars d) ? (sg && w 0 = 45 ? (0 - unum d) (unum d))))
    (udate s now)
@@ -219,8 +194,7 @@
                               (q ? (rel (-2 * <q) <>q) 0, pin st 'last (), go >l))
                (wkday? w) (pin st 'wd 1, go >l)
                (st 'ydef && charm? iv && !u && 999 < iv) (st 'd @ d (pins st 'd [iv (d 1) (d 2)] 'ydef 0, go >l))
-               ; a signed number just after a time is its zone, as GNU reads it: +1 an hour,
-               ; +0130 an hour and a half, +90 no zone at all
+               ; a signed number just after a time is its zone, as GNU reads it: +1, +0130
                (two? (st 't) && !(st 'tz) && (w 0 = 43 || w 0 = 45) && charm? iv)
                 (: dg (#w - 1) a (iv < 0 ? (0 - iv) iv)
                    hm (? (dg <= 2) [a 0] (dg <= 4) [(a // 100) (a % 100)] ())
@@ -292,10 +266,8 @@
      0 (0 < #p ? "/" ".")
      e0 (lastslash (snip p 0 e0) @ 0 "."
          b0 (uchop (snip p 0 b0) @ 0 "/" z (snip p 0 z))))
-   ; split at charm c, every piece kept -- "a:" is ("a" ""), "" is ("") (cut's face,
-   ; where lines would drop the empty tail)
-   ; the scan floor finds each separator natively; the charm walk stands in where
-   ; the floor is not aboard
+   ; split at charm c, every piece kept: "a:" is ("a" ""), "" is (""). natively by the scan
+   ; floor, a charm walk where it is not aboard
    (usplit c s)
     (: n #s
        sc (cite 'scan 'scanner)
@@ -355,29 +327,22 @@
                  (go j (c . acc)))))
        (go 0 ()))
    ; --- reading an input without holding it ----------------------------------
-   ; uread + `lines` keeps four whole copies of the input alive at once -- `rev` of
-   ; 50 MB wanted 1.09 GB of live set. These hand it over a gulp or a line at a time.
-   ; see/unsee/chug and not `swig`: kore runs in two worlds (see ucopy-bytes), and
-   ; the gulp door is core's, so no probe.
-   ; 'p is the unread cursor into the held bytes, 'm how far the newline scan has
-   ; looked. the read-through prefix is dropped when a fill wants the room and not
-   ; per line, so a line costs its own length instead of the tail behind it
+   ; a gulp or a line at a time, never the whole input. see/unsee/chug, core's in every world.
+   ; 'p is the unread cursor, 'm how far the newline scan has looked; the read-through prefix
+   ; drops on a fill, not per line, so a line costs its own length, not the tail behind it
    (urd q) {'q q 'h "" 'p 0 'm 0 'e 0 'sc (cite 'scan 'scanner ())}
    (urd-drop t)                                  ; let the read-through bytes go
     (peep t 'p 0 @ 0 0 p 
      (peep t 'h "" @ h (pins t 'h (snip h p #h) 'm (peep t 'm 0 - p) 'p 0)))
-   ; one gulp onto the held bytes; 1 when something arrived, 0 at the end. the
-   ; see/unsee pair is what terminates it -- `see` touches the device (chug never
-   ; does) and the byte it answers is one chug must count, so a gulp is never empty.
+   ; one gulp onto the held bytes; 1 when something arrived, 0 at the end. `see` touches the
+   ; device (chug never does), and its unseen byte keeps a gulp from being empty
    (urd-fill t)
     (: q (t 'q)
        c (see q)
        (c @ -1 (pin t 'e 1, 0)
           (unsee q c, urd-drop t, pin t 'h (peep t 'h "" + chug q), 1)))
-   ; the next line -> [line term?], () when spent. term? is whether the source ended
-   ; it with a newline -- what `nl-end?` answers on the whole-text road.
-   ; the scan mark is not an optimisation: without it the held bytes are rescanned
-   ; from the front every gulp, so an input with no newline costs its length squared.
+   ; the next line -> [line term?], () when spent; term? when the source ended it with a
+   ; newline. the scan mark keeps a newline-less input from costing its length squared
    (urd-line t)
     (: h (peep t 'h "") n #h p (peep t 'p 0) m (peep t 'm 0)
        i (t 'sc h 10 (m < p ? p m))          ; the newline, natively where it can be
@@ -392,11 +357,9 @@
           (pins t 'h "" 'p 0 'm 0,
            p @ 0 h (snip h p #h)))
        "")
-   ; a tool that stops short hands the held tail back to the port, so the next reader of
-   ; stdin -- the shell's own `read`, or a child through the fd -- starts where the tool
-   ; did. a gulp is one run of the port and a fill comes only when the held bytes hold no
-   ; line, so what is unread at a stop lies inside the run the port still holds, which is
-   ; as far as unchug reaches
+   ; a tool that stops short hands the held tail back to the port, so the next reader of stdin
+   ; starts where it stopped. a fill comes only when no line is held, so the tail lies inside
+   ; the port's last run, which is as far as unchug reaches
    (urd-back t k) (0 < k ? (unchug (t 'q) k) 0)   ; the last k bytes of the latest gulp, back to the port
    (urd-give t)
     (: h (peep t 'h "") p (peep t 'p 0)
@@ -404,23 +367,19 @@
         pins t 'h "" 'p 0 'm 0))
 
    ; --- the operand walk -----------------------------------------------------
-   ; each name in turn, a miss complains and costs the status without stopping the
-   ; run. no operands at all is one operand, and it is stdin.
+   ; each name in turn; a miss costs the status without stopping the run. no operands is stdin
    (uwalk one as)
     (: (go a ok) (two? a ? (go >a (one <a ok)) (flush out, !ok))
      (two? as ? (go as 1) (one "-" 1, flush out, 0)))
-   ; an operand open for reading -> [port close?] | (). "-" is stdin and is not
-   ; closed after: a later operand may be it again. `miss` says the complaint, because
-   ; grep and sed each owe GNU a different sentence for the same failure.
    ; is the path a directory (stat follows links, like the tools want)
    (udirp q) (stat q @ st (two? st && 16384 = 61440 & <>>st))
    ; a path's own kind, a link not followed: 'dir, 'link or 'file, () when there is none
    (ukind q) (lstat q @ st (atom? st ? () (61440 & <>>st @ m (? (m = 16384) 'dir (m = 40960) 'link 'file))))
+   ; an operand open for reading -> [port close?] | (). "-" is stdin, never closed: a later
+   ; operand may be it again. `miss` says the complaint, each tool its own sentence
    (uin miss f)
     (? (f = "-") [in 0]
-       ; a directory opens, and reading it hands back the raw getdents bytes: `cat DIR`
-       ; printed them and `wc DIR` counted none, both leaving 0. it is a miss like any
-       ; other -- the complaint is the caller's sentence and the status follows
+       ; a directory opens and reads as raw getdents bytes, so it is a miss
        (udirp f) (miss f, ())
        (open f "r" @ q (hot? q ? [q 1] (miss f, ()))))
    (umiss who) (f \ (say err (who + ": cannot open " + f), put err 10, 0))
@@ -447,11 +406,8 @@
                            (go 0)))
             as)
    ; --- the operands as one stream -------------------------------------------
-   ; sed's joined lane: the line numbers and `$` run through the files, so the read
-   ; has to cross them. one line of lookahead, which is the whole reason this is
-   ; not `ureach` -- `$` is "no further line anywhere", and nothing shorter answers it.
-   ; 'bad is read off the box after the walk: a miss cannot stop a joined stream,
-   ; it only costs the status, and by then the reader has passed it.
+   ; sed's joined lane: line numbers and `$` run through the files, and `$` needs one line
+   ; of lookahead. a miss only sets 'bad, read off the box after the walk
    (urdj-box miss fs)
     {'m miss 'fs (two? fs ? fs '("-")) 'rd () 'cl () 'bad 0 'h "" 'hp 0}
    ; open the next operand; 1 when one did, 0 when the list is spent
@@ -476,12 +432,10 @@
             [<pk <>pk (atom? nx)]))))
    ; the line face: primed, so `last?` is answerable from the first line on
    (urdj miss fs) (urdj-box miss fs @ t (pin t 'pk (urdj-raw t)))
-   ; the byte face: unprimed, because priming would eat a line. od dumps rows and its
-   ; offsets run through the operands, which is the same join and not the same unit.
+   ; the byte face, for od: unprimed, because priming would eat a line
    (urdb miss fs) (urdj-box miss fs)
-   ; up to k bytes off the joined stream, "" when it is spent. 'hp is the unread
-   ; cursor: od takes its rows in small bites, and re-copying the held tail behind
-   ; each one costs the gulp squared
+   ; up to k bytes off the joined stream, "" when it is spent. 'hp is the unread cursor, so
+   ; small bites do not re-copy the held tail
    (urdj-drop t)
     (peep t 'hp 0 @ 0 0 p
      (peep t 'h "" @ h (pins t 'h (snip h p #h) 'hp 0)))
@@ -501,9 +455,7 @@
        (pin t 'hp (p + m),
         snip h p (p + m)))
 
-   ; dot gets (line term?), one line at a time -- every tool whose whole-text body was
-   ; `(go (lines t))`. dot answering 0 stops this operand, so a tool can read no
-   ; further than it has to.
+   ; dot gets (line term?), one line at a time; dot answering 0 stops this operand
    (ulines who dot as)
     (ureach who
             (\ f fst rd (: (go _) (urd-line rd @ l (? (atom? l) 1 (dot <l <>l) (go 0) 1))

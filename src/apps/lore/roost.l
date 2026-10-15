@@ -1,15 +1,9 @@
-; roost -- the nest as a floor: `love nest` on a terminal. the room is ~/.love/bin: the
-; perch in the middle holds the nest's love, a shelf along the north wall is each tool's
-; link, and the door in the south wall is the way out. bumping the perch asks whether to
-; lay this build on it, bumping a shelf turns that tool's link on or off, and the door
-; asks whether to do it all. the plan is src/apps/source.l's (nest-plan), edited in place, and
-; every line said about it is source.l's too, so the floor and `love nest -n` cannot
-; disagree. roost-run answers 'apply or 'cancel.
-;
-; a floor on rove: laid, not delved, lit end to end; the painter, the signs and the keys are
-; rove's, a tap included: on a question a tap on a choice answers it.
-; roost-new, roost-turn and roost-frame are state in and state out, gated headless by
-; test/host/roost.l.
+; roost -- the nest as a floor: `love nest` on a terminal. the room is ~/.love/bin: the perch
+; in the middle holds the nest's love, a shelf on the north wall each tool's link, the door in
+; the south wall the way out; bumping each asks or toggles. the plan is source.l's
+; (nest-plan), edited in place, and its lines are source.l's too, so the floor and
+; `love nest -n` agree. a rove floor, laid and lit end to end; roost-new, roost-turn and
+; roost-frame are pure. roost-run answers 'apply or 'cancel.
 (module (roost roost-run roost-new roost-turn roost-frame roost-face)
 (borrow 'posix)
 (borrow 'rove)

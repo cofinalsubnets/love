@@ -1,22 +1,8 @@
-; src/apps/kore/less.l -- the pager: one screenful of a text at a time, with the keys
-; less answers to. `less` and `more` are the same door, and both behave like less.
-;
-; the engine is pure, as src/apps/vi/'s: a state tablet stepped a byte at a time (pgstep)
-; and rendered to one escape frame (pgframe); the face reads keys, performs the file
-; requests the engine leaves, and blits. the laws drive pgstep with byte lists.
-;
-; keys: space f ^F ^V forward a screen, b ^B back one, return j e ^N ^E down a
-; line, k y ^Y ^P up one, d ^D half down, u ^U half up, g < top, G > end, p %
-; a percentage, a count prefix on any of them (5j, 100g, 50p), / and ? search
-; (ERE, over src/love/boot/post.l), n and N repeat forward and reversed, = ^G the position,
-; : then n or p or q the file walk and the exit, h the help, q Q zz quit.
-; flags: -N line numbers, -i case-blind search, -s runs of blank lines squeezed
-; to one, -e quit at the end rather than hold there; +N opens at line N and
-; +/pat at its first match.
-;
-; long lines wrap; a display row carries its source line, so counts stay the source's. a
-; control byte shows as ^X, except an sgr sequence, which rides through at no column (man's
-; bold) and is closed and reopened across a wrap. no -S, marks, or +F.
+; src/apps/kore/less.l -- the pager; `less` and `more` are the same door. the engine is pure:
+; a state tablet stepped a byte at a time (pgstep) and rendered to one escape frame (pgframe);
+; the face reads keys, performs the file requests the engine leaves, and blits.
+; long lines wrap; a display row carries its source line, so counts stay the source's.
+; an sgr sequence rides through at no column and is reopened across a wrap. no -S, marks, or +F.
 (borrow 're)
 
 (module 'kore
@@ -51,10 +37,8 @@
    ; -- the display: tabs, columns, and the wrap ---------------------------------
    (pgsp k) (k < 1 ? "" (" " + pgsp (k - 1)))
    pgrst (string 27 + "[0m")
-   ; an sgr sequence at k -- ESC [ digits-and-semicolons m -- and how long it is, or 0.
-   ; a colour is the one escape the text is allowed to carry, so it is the only one read:
-   ; anything else with a CSI final byte can move the cursor, and a file is not permitted
-   ; to move ours. it costs no column, which is what pgtabs and pgspan each need from it.
+   ; the length of an sgr sequence (ESC [ digits ; m) at k, or 0. the only escape a text may
+   ; carry: any other CSI could move our cursor. it costs no column
    (pgesc s k)
     (#s @ n
        (!(k + 1 < n && s k = 27 && s (k + 1) = 91) ? 0
@@ -95,9 +79,8 @@
                            (say o (snip ln k (k + m)),
                             go (k + m) (c + max 0 (wcwidth u))))))))))
        (go 0 0))
-   ; the byte index where column k of s falls -- a character costs its wcwidth and an sgr
-   ; sequence none. the stop is before the character that would overflow, so a wide one
-   ; straddling the edge goes whole to the next row
+   ; the byte index where column k of s falls, stopping before a character that would
+   ; overflow, so a wide one straddling the edge goes whole to the next row
    (pgspan s k)
     (: n #s
        (go i c) (n <= i ? i
@@ -107,13 +90,11 @@
                           (k < c2 ? i (go (cpnext s i) c2))))))
        (go 0 0))
    (pgclip w s) (pgspan s w @ k (k < #s ? (snip s 0 k) s))
-   ; the status line clips from the left, the way vi's does: its tail is what
-   ; carries the news -- the line span, the percent, the end of the / being typed
-   ; -- and a deep path would otherwise push every word of it off the screen
+   ; the status line clips from the left: its tail carries the news, and a deep path would
+   ; push it off the screen
    (pgclipl w s) (#s @ k (w < k ? ("<" + snip s (k - w + 1) k) s))
-   ; a line -> its fragments at width w, at least one, so a blank line is a row.
-   ; a fragment closes whatever colour it opened and the next one opens it again, so a
-   ; wrap through the middle of an attribute cannot leave the rest of the screen wearing it
+   ; a line -> its fragments at width w, at least one, so a blank line is a row. a fragment
+   ; closes the colour it leaves open and the next reopens it
    (pgwrap w ln)
     (: (go s a acc)
         (pgspan s w @ k
@@ -136,10 +117,8 @@
                          (ln = last ? 0 (pin t ln i),
                           go >r (i + 1) ln)))
        (go rw 0 -1))
-   ; the k-th element, or () -- a list does not index by application here
-   ; the rows from 'top, walked on from the last answer when the view did not move
-   ; back. without it every frame re-walks the buffer from its head, which is a
-   ; whole 50k-row list per keystroke once you are near the end of one
+   ; the rows from 'top, walked on from the last answer when the view did not move back,
+   ; so a frame does not re-walk the whole buffer per keystroke
    (pgfrom st)
     (: top (st 'top) ct (st 'ct)
        l (0 <= ct && ct <= top ? (drop (top - ct) (st 'cr)) (drop top (st 'rw)))
@@ -349,18 +328,15 @@
           + e + "[" + show (st 'h) + ";" + show (#line + 1) + "H"))
 
    ; -- the face: keys off a port, frames onto out -------------------------------
-   ; not a terminal: pour the operands through, which is what more and less both
-   ; do when nothing is going to read a screen
+   ; not a terminal: pour the operands through
    (pgpour as) (uchunks "less" puts as)
    ; less's start command: +N opens at line N, +/pat at its first match
    (pgstart st p)
     (? !(0 < #p) st
        (p 0 = 47) (pgsearch st (snip p 1 #p) 1)
        (pgline! st (uatoi p - 1)))
-   ; one key, the arrow and page keys decoded to their plain twins, and shift-tab to 265
-   ; (a tab past a byte) for a face that wants it. any other byte
-   ; after ESC is delivered after the bare 27 (a one-byte pushback), so ESC q reads
-   ; as the two keys it is. answers (byte next-pushback)
+   ; one key -> [byte pushback]: arrow and page keys decoded to their plain twins, shift-tab
+   ; to 265. any other byte after ESC is pushed back, so ESC q reads as two keys
    (pgkey kq pend)
     (0 <= pend ? [pend -1]
      (see kq @ c
@@ -416,10 +392,8 @@
         (uoptbad as t '(78 105 115 101) @ c
            (!c ? () (udie 2 ("less: unknown option -" + string c)))),
         [t <>>o]))
-   ; -- hexedit: toybox's -- a file as rows of sixteen bytes, the hex and then the
-   ; characters, the cursor on a nibble. 0-9 a-f change it and the byte goes to the
-   ; file at once (-r only looks); u undoes; the arrows, PgUp/PgDn, Home/End (^Home and
-   ; ^End the file's ends) move; : jumps to a hex offset (+/- from here); q ^C ^Q Esc quit --
+   ; -- hexedit: toybox's. the cursor sits on a nibble; an edited byte goes to the file at
+   ; once (-r only looks); u undoes; : jumps to a hex offset (+/- from here) --
    (hx-key kq)                          ; -> a charm, or a symbol for a named key
     (see kq @ c
        (!(c = 27) ? c
@@ -524,11 +498,9 @@
               rd (uread f)
               (two? rd ? () (udie 1 ("less: cannot open " + f)),
                pgride fs (lines <>rd) f in <>hw <hw t plus))
-          ; no operand, so stdin is the TEXT -- and fd 0 is the only door `raw`
-          ; has, so the pipe moves aside and /dev/tty takes fd 0. no controlling
-          ; terminal, no keys: pour it through instead. stdin being the terminal
-          ; means there is no text at all, and `raw` is the isatty we have: it
-          ; answers () for a terminal on fd 0 and 'enotty for anything else
+          ; no operand: stdin is the text, and `raw` only works on fd 0, so the pipe moves
+          ; aside and /dev/tty takes fd 0; no tty, pour it. `raw` is the isatty here:
+          ; () for a terminal on fd 0, 'enotty else -- a terminal stdin means no text
           (: tty0? !(raw 1)
              _ (raw 0)
              _ (tty0? ? (udie 2 "usage: less [-Nise] [+N|+/PAT] [FILE..]") 0)

@@ -1,16 +1,8 @@
-; tower -- the climb, on quay's roguelike engine (src/apps/lore/rove.l).
-;
-; each tier is built of its own stuff and its litter is the cell's own dice, so a floor
-; reproduces with its rooms: the garden, the middle and heaven, pennies underfoot and a
-; stair above, then the circle. pure state in, pure state out, one key per turn. it is
-; not a game about fighting -- a turn spent acting mends the bar and a turn passed does
-; not, so a climber dies only by standing still beside something.
-;
-; a floor's music is a rule and not a recording, built off the cycle number through the
-; same dice that strews it, and fed to the card from the climb's own loop.
-;
-; run: love lore tower. the climb gates headless in test/host/rove.l; only tower-run ties the
-; tty, and test/host/tty.l plays it on a pty.
+; tower -- the climb, on rove.l's roguelike engine: garden, middle and heaven, then the vale
+; and its circle. each floor and its litter come off the seed's dice, so a floor reproduces.
+; pure state in, pure state out, one key per turn; only tower-run touches the tty.
+; acting mends the bar and passing does not, so a climber dies only standing beside something.
+; a floor's music is a rule off the cycle number and the same dice, not a recording.
 (module (tower tower-run tower-main bell-row bell-open bell-key cell-face
          live-cells crawl-new crawl-turn crawl-frame crawl-bar mob-new mob-set stock mend
          ascend circle? vale-new vale-tick walled? on-ring? done? enter exit-at circle-r
@@ -24,14 +16,12 @@
 (borrow 'x11)
 (borrow 'rove)
 (:
- ; --- the floor: tiles in a cask, (x y) indexed; 0 rock, 1 ground, 2 the stair, 3 water,
+ ; --- the floor: tiles in a cask, (x y) indexed; the codes are rove.l's, by dat
 
 
- ; --- city: the middle is not delved but laid -- streets on a grid, two cells across
- ; and one along, and the blocks between them buildings: a wall ring with a floor
- ; inside, and two or three doors on different walls, every wall facing a street. the
- ; climber arrives inside the last building; the stairs are inside two others. a
- ; block too small to hold a room stays solid. answers (floor . st') like delve. ---
+ ; --- city: the middle is laid, not delved -- a street grid, each street two lanes, and
+ ; between them buildings: a wall ring, a floor, doors on two or three walls. the climber
+ ; starts in the last building, stairs in the first two. answers (floor . st') like delve ---
  street-x 9                                             ; a block's stride across, and along
  street-y 6
  (city w h st) (:
@@ -84,18 +74,16 @@
 
 
 
- ; --- heaven: platforms in a void. a platform is a rhombus of checkered floor, twice as
- ; wide as it is tall because a cell is; each one is joined to the one before it by a
- ; stairway, a line of steps three cells across so it is walked without a diagonal
- ; step. the void between is glass: looked across, never entered. answers like delve ---
+ ; --- heaven: rhombus platforms in a void of glass, twice as wide as tall since a cell
+ ; is; each joined to the last by a stairway three cells across, walkable without a
+ ; diagonal step. answers like delve ---
  plat-from 4                                            ; a platform's half-width, from and by
  plat-by 5
 
 
 
- ; the coloured squares of a platform's checker, one colour to a platform: x11's names,
- ; at the nearest pen the face has, lit and remembered. dealt out, so no two platforms
- ; share one while there are enough to go round.
+ ; a platform's checker colour, x11 names at their nearest pens, lit and dim; dealt out,
+ ; so no two platforms share one while there are enough
  plat-hues '(("█" 99 61)                                ; medium slate blue
              ("█" 48 29)                                ; medium spring green
              ("█" 92 54)                                ; dark violet
@@ -157,10 +145,9 @@
  (carve-floor w h st lvl) (lvl @ 2 (city w h st) 3 (sky w h st) (delve w h st (plan lvl)))
 
 
- ; --- the make of each floor: rock, the ground, what is strewn over it, and the plan
- ; its rooms are cut to -- the only place a tier's look is written. a face is
- ; (glyph lit dim), and a strewing carries a fourth number: cells in a hundred -- and
- ; may carry a sixth, its weight inside a bed, where flowers grow together.
+ ; --- a tier's make, the one place its look is written: rock, ground, strewings, plan.
+ ; a face is (glyph lit dim); a strewing adds cells in a hundred, a name, and maybe its
+ ; weight inside a bed
  th-garden '((38 28 22) (46 137 94)                     ; hedge and dirt
              ((42 212 89 1 "aster" 30) (42 220 136 1 "goldenrod" 30)
               (44 71 65 34 "tuft") (34 34 22 30 "grass") (126 38 24 3 "runnel"))
@@ -171,8 +158,7 @@
              (4 7 3 4 24))                              ; rooms, the middling sort
 
 
- ; ..and a fifth thing where the floor has glass in it: what is seen through it, strewn
- ; the same way over nothing. the middle's is the road going on; heaven's is stars.
+ ; ..and a fifth where the floor has glass: what is seen through it, strewn the same way
  th-heaven '((35 255 249) (32 0 0)                      ; marble, and the dark
              ()
              (8 9 4 5 40)                               ; blocks, if it must be delved
@@ -191,20 +177,15 @@
 
 
 
- ; the garden's greens are not one green, nor its browns one brown: the hedge wears a
- ; still frame of the walk's shimmer -- the circle's field -- and the ground another,
- ; out of phase, so a bed is one shade here and another there in bands, not the mottle
- ; dice would give. the ramps run pale to deep, keyed by the pen the theme gave the
- ; cell; only the lantern's light shows a grade, memory is flat.
+ ; the garden graded in bands by a still frame of the walk's shimmer, hedge and ground
+ ; out of phase; ramps run pale to deep, keyed by the theme's pen; only lit cells grade
  hedge-ramp [70 34 34 28 28 22 22 22]
  lawn-ramp [118 112 76 70 40 34 28 22]
  dirt-ramp [180 137 137 136 94 94 95 58]
 
 
 
- ; ..and the middle's stone the same way, walls and flags each on a band of greys. one
- ; frame serves a whole floor: hedge and lawn, or wall and flag, read off the same
- ; wave, so the bands run through both and nothing is mottled
+ ; ..and the middle's walls and flags the same way, one frame a floor so bands run through both
  stone-ramp [252 250 248 247 246 245 244 243]
  flag-ramp [250 249 248 247 246 245 244 243]
  skin-kinds {28 'hedge 137 'dirt 34 'lawn 71 'lawn 246 'stone 245 'flag}
@@ -213,11 +194,8 @@
 
 
 
- ; the vale's last field is one frame of the walk's shimmer too, held still, and as the
- ; ring closes the grass past a front goes over to slop's pink. these ramps run pale to
- ; deep rather than looping: a still frame never wraps. span is the band of skin they
- ; cover, the four sines seldom leaving +-3; the front waits beyond the corner of the
- ; board until the ring is half its scale, then comes in to under half the board.
+ ; the vale's grass, a still shimmer frame too; past a front it turns slop's pink as the
+ ; ring closes. span is the skin band covered, the four sines seldom leaving +-3
  circle-r0 8                                            ; the ring's scale, for the song and the pink
  grass-ramp [194 157 120 114 78 71 34 22]
  pink-ramp [224 218 217 212 211 206 205 199]
@@ -227,9 +205,7 @@
 
 
 
- ; the vale: trees for rock, and grass for ground -- no flowers, a tuft here and
- ; there, all of it one green the still shimmer grades; and the house: timber for
- ; rock, boards for ground
+ ; the vale: trees and grass, no flowers; the house: timber and boards
  th-vale '(("♣" 28 22) (46 34 22)
            ((44 34 22 12 "tuft") (34 34 22 8 "grass"))
            (4 7 2 4 14))
@@ -243,9 +219,7 @@
 
 
 
- ; ..and what else moves while the climber stands still. the loop keeps a quarter-second
- ; count on the floor, d 'ft, and these are picked by it: water runs a row a count, the
- ; coals breathe on a phase of their own, a star now and then flares or fades
+ ; ..what moves while the climber stands still, picked by the quarter-second count d 'ft
  water-flow '(45 39 38)
  ember-pens {'brazier '(88 124 52 88) 'hearth '(196 160 202 196)}
  star-bright 231
@@ -260,11 +234,8 @@
 
 
 
- ; what lies on a cell besides pennies: furniture, which stands there to be bumped and
- ; says one thing. glyph, pen lit, pen dim, the line. a glyph here is a string, so
- ; the page's own letters serve (quay folds them onto its face).
- ; ..and a fifth thing where there is one: a book the piece opens, its title then its
- ; pages, a stanza to a page
+ ; furniture, bumped to say its line: glyph (a string), pen lit, pen dim, the line, and
+ ; maybe a book it opens -- its title, then a stanza a page
  feat-book {'table ["π" 240 236 "a rough stone table stained on top with dark liquid"]
             'throne ["H" 130 94 "a tree stump carved into an ornate throne sits empty"]
             'chair ["h" 137 94 "an office chair, the wheels gummed up"]
@@ -351,10 +322,8 @@
 
 
 
- ; the cottage's book: OEIS A000110, the Bell numbers, a page a number and no last page --
- ; the next row of the Bell triangle is made as the page is turned, and B(n) heads it.
- ; a page offers the next or the shelf; when a number would not fit the box a bookmark
- ; falls out instead, and the book ends
+ ; the cottage's book: the bell numbers, a triangle row made per page turned, B(n) its
+ ; head; a number too wide for the box ends the book with a bookmark
  bell-ttl "OEIS A000110"
  bell-foot "-- page ~: 1, 2 --"
  bell-choices '((1 "turn the page") (2 "put it back"))
@@ -556,10 +525,9 @@
 
 
 
- ; --- the music: a slot is a voice tablet play can sound or () for silence, a bar is
- ; slots across one cycle, and a floor answers a list of bars sounded together. all of
- ; it off the cycle number through the floors' own dice, so nothing is stored.
- ; `songs` is how loud a floor is; the circle's is the ring's size instead.
+ ; --- the music: a slot is a voice tablet or () for silence, a bar the slots of one
+ ; cycle, a floor a list of bars sounded together, all off the cycle number's dice.
+ ; `songs` is each floor's loudness; the circle's is the ring's size instead
  songs '(2.00 1.60 2.60 2.60)
  (vox nm nt gn lg) {'s nm 'note nt 'gain gn 'legato lg}
 
@@ -626,10 +594,8 @@
 
 
 
- ; the circle: a heart, lub then dub a quarter-beat behind, three beats to a bar while
- ; the ring is wide and one at the point. the fade is the ring's too.
- ; two voices to a beat because the kick alone runs 134 Hz down to 46 and a small
- ; speaker answers none of it; the snare over it is noise, which every speaker answers.
+ ; the circle: a heart, lub then dub a quarter-beat behind, faster as the ring narrows.
+ ; a snare doubles the kick, which a small speaker cannot sound
  heart-lub {'s "bd" 'gain 0.90}
  heart-dub {'s "bd" 'gain 0.55 'speed 1.25}
  knock-lub {'s "sn" 'gain 0.40 'legato 0.13}
@@ -767,9 +733,8 @@
   (lines-of nm @ ls (two? ls ? (peep ls (k % #ls) "") ""))
 
 
- ; --- the climb: the proving game. state in a tablet, one key per turn ---
- ; the bar is not a resource: a turn spent acting mends and a turn passed does not.
- ; forty against a worst bite of three means one mob is a nuisance and two are a death.
+ ; --- the climb: state in a tablet, one key per turn. a turn acted mends, one passed
+ ; does not; a start of forty against a worst bite of three makes two mobs a death ---
  regen 2
  climb-hp 20
  (mend g) (: p (g 'p) h (p 'hp + regen) (pin p 'hp (h < p 'mx ? h (p 'mx))))
@@ -780,11 +745,9 @@
                    'hp (peep r 3 3) 'dm (peep r 4 1) 'pc (peep r 5 1) 'nm <r})
 
 
- ; --- the cars: the middle's traffic, on the roads and never off them. a car keeps
- ; its heading and its speed, turns at a crossing now and then and nowhere else, and
- ; drives off the map where its road does, to come in again by another. one that
- ; reaches you takes you off your feet -- a step aside, where there is one -- and
- ; sounds its horn twice. it waits for nothing but another car, and cannot be struck.
+ ; --- the cars: on the roads only, turning only at crossings, off the map and back by
+ ; another gate. one that reaches you knocks you aside and honks; it waits only for
+ ; another car, and cannot be struck
  car-speed 3
  car-dm 10
  car-pens '(196 226 39 250 208 201)
@@ -933,18 +896,16 @@
                                     [x1 (y0 + 1 + roll sb (y1 - y0 - 1))])
                    (0 = dat d <c <>c ? (pin loot (<c + d 'w * <>c) '(lamp))))
    _ (lvl @ 2 (each rms (rm \ (lamp-on rm, roll sb 2 @ 0 (furnish-in rm 'brazier)))))
-   ; heaven's platforms: fountains, and mirrors on platforms of their own -- one mirror
-   ; lets out of another, so there are two at least where there are two platforms.
-   ; heaven's furniture is walked round, never through: only where the ring about it is
-   ; all walked and bare, so a stairway's mouth or a rim is never the one way past it
+   ; heaven's fountains and mirrors stand only where all eight neighbours are open and
+   ; bare, so a piece never blocks the one way past
    (ringed? x y) (all (o \ (: nx (x + <o) ny (y + <>o) l (loot (nx + d 'w * ny))
                              (open? d nx ny && !(l && <l != 'penny))))
                       '((-1 -1) (0 -1) (1 -1) (-1 0) (1 0) (-1 1) (0 1) (1 1)))
    (furnish-ringed rm k n) (0 < n ? (spot-in rm 40 @ xy
                                      (xy && ringed? <xy <>xy ? (pin loot (<xy + d 'w * <>xy) [k])
                                       (furnish-ringed rm k (n - 1)))))
-   ; mirrors first, each on a platform of its own; one too small to ring a mirror hands
-   ; it on to the next, so there are two at least wherever two platforms can hold them
+   ; mirrors first, one a platform, at least two where platforms can hold them: one
+   ; mirror lets out of another
    (mirrors ps n) (0 < n && two? ps ? (mirrors >ps (n - (furnish-ringed <ps 'mirror 40 ? 1 0))))
    _ (lvl @ 3
       (mirrors (deal sb rms) (2 + roll sb 2),
@@ -1153,15 +1114,10 @@
                   note g (fill w-floor [(here g)]))))
 
 
- ; --- the vale: the last floor, and not a delve at all. a road up through the trees
- ; to a clearing; in it an octagon of stones round a fire with her beside it, and past
- ; it a cottage with the token in its attic. the floor is three screens tall and the
- ; painter shows the rows about the climber; it is lit end to end, and nothing on it
- ; bites. once the token is out of the house the vale closes: walls nobody sees draw
- ; in on the fire, then the ring is there at the screen's edge and draws in too, and
- ; the ring is the end. all of it is measured from the fire, the way the ring always
- ; was: a cell is about twice as tall as it is wide, so the measure counts a row
- ; twice, in quarter units, where radius r stands at (2r)^2.
+ ; --- the vale: the last floor, laid not delved: a road to a clearing, stones round a
+ ; fire, a cottage with the token in its attic; three screens tall, lit, nothing bites.
+ ; with the token out, hidden walls then the ring close on the fire. distance from the
+ ; fire counts a row twice (a cell is twice as tall), in quarter units: radius r at (2r)^2
  ring-glyph "█"                                       ; a solid block, as the slop's water is
  oct-x 9                                                ; the octagon's reach, across and down
  oct-y 4
@@ -1224,9 +1180,8 @@
 
 
 
- ; how far out the pink front stands, as a share of the board's reach: past the corner
- ; -- which is to say nowhere on the board -- until the ring is half its scale, and then
- ; in to a little under half the board by the time the ring is a point
+ ; the pink front, a share of the board's reach: 1.0 (past the corner) until the ring is
+ ; down to pink-start, then in to pink-floor at the point
  (pink-front g) (circle-r g @ r (r < 0 || pink-start <= r ? 1.0
                  (pink-floor + ((1.0 - pink-floor) * r) / pink-start)))
  (ramp-pen rp v) (cite 'slop 'slop-ramp-pen rp pink-span v)
@@ -1440,9 +1395,8 @@
            'sk sk
            'vis (lit-all d))
    _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
-   ; the painter's overlay: the ring where it stands, wearing the slop's pink over this
-   ; floor's own shimmer -- the ocean at the tower's foot, arriving early. the sample walks
-   ; with the radius, so the colour crawls across the ring as it closes
+   ; the painter's overlay: the ring in slop's pink, sampled with the radius so the colour
+   ; crawls as it closes
    _ (pin d 'over (x \ y \ ('ring = g 'phase && on-ring? g x y ?
                               (cite 'slop 'slop-face sk (ramp-pen pink-ramp) x ((y + g 'r) % h) ring-glyph))))
    (note g (fill w-floor [(here g)])))
@@ -1511,13 +1465,8 @@
 
 
  ; --- the song: a floor's bar, out the card a chunk at a time -----------------------
- ; it stands below the circle because song-vol reads circle-r0, and a value read from
- ; above where it is bound answers () rather than scaring -- a silent song, in silence.
- ; harp and play are cited by name, never borrowed: borrowing harp would put its rev
- ; and every over prel's for everything below.
- ;
- ; the harp of it is one line -- lay the slots across the cycle, sound the bars
- ; together. a slot's tablet is what mkvoice reads, so no control word is wanted.
+ ; harp and play are cited, never borrowed: harp's rev and every would shadow prel's.
+ ; a slot's tablet is what mkvoice reads, so no control word is wanted
  (tower-tune lvl c r) (:
    hush (cite 'harp 'hush) pure (cite 'harp 'pure)
    fastcat (cite 'harp 'fastcat) stack (cite 'harp 'stack)
@@ -1539,10 +1488,8 @@
 
 
 
- ; where the game is, read off it each frame. only a bar not yet built reads them, so
- ; a stair or a struck ring lands at the next bar line and never cuts the one sounding.
- ; the ring's radius is scaled to the heart's own eight, so a wide one races and the
- ; point is a beat a bar; -1 is no ring yet
+ ; the game's tier and ring, read each frame but used only by the next bar built, so a
+ ; change lands on a bar line; radius scaled to circle-r0, -1 no ring yet
  (song-tier s g) (pins s 'lvl (g 'lvl)
                          'rad (circle? g && 0 <= circle-r g ? (circle-r g * circle-r0 // g 'r0) -1),
                   song-sfx s g)
@@ -1583,11 +1530,8 @@
 
 
 
- ; --- tower: the climb on cli's stage. any seed climbs; q or esc leaves ---
- ; the token is the last thing the tower says, and the field it opens onto is the next
- ; thing on the same screen: the walk takes the stage the climb already raised, so
- ; nothing between the circle and the slop is torn down. slop is cited at the door,
- ; not borrowed, so a seat that carries no walk still climbs.
+ ; --- tower: the win hands the raised screen straight to slop's walk; slop is cited,
+ ; not borrowed, so a build without it still climbs ---
  (tower-win g) (: tk (g 'token || tokens (roll (g 'sb) #tokens))
                   _ (pin g 'msg (fill w-won [tk (g 'p 'penny)]))
                   _ (say out (crawl-frame g), flush out, rest 2200)
@@ -1597,20 +1541,15 @@
 
 
 
- ; the climb keeps its own stage rather than cli's: stage blocks on a key, and a card
- ; with nothing coming out of it is a card that stops. the raising and the putting back
- ; are stage's, line for line; what is different is the wait in the middle.
+ ; its own loop, not cli's stage: stage blocks on a key, and a starved card stops
  (tower-run _) (: ws (ttysize 7 19)
              r (<ws - 2) c <>ws
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
              ; the card, if this seat has one: no horn and the tower is quiet
              hn (horn song-rate 2 @ q (nom? q ? () q))
              sng (hn ? (song-new hn))
-             ; the wait IS the song: a chunk goes out whenever the card has less than the
-             ; lead queued, and a loop that feeds while no key is waiting keeps time.
-             ; with no card it is a plain poll, and the tower is silent as it was.
-             ; ..and while it waits the floor's live cells go on: a quarter-second count
-             ; kept on the floor, and each count they are laid again, alone
+             ; the wait is the song: feed a chunk whenever less than the lead is queued,
+             ; else a plain poll; and each quarter-second count repaint the live cells
              (flick! _) (: d (g 'd) t (clock 0 // 250)
                            (t != peep d 'ft () ? (pin d 'ft t, say out (live-frame g), flush out)))
              ; the lead paced by the frame gap: rove's pacer, asked each feed
