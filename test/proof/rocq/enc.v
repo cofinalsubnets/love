@@ -1,21 +1,5 @@
-(* enc.v -- a machine-checked x86-64 encoder for the register-direct core:
-   64-bit mov + the ALU reg-reg ops (add/sub/and/or/xor/cmp), which all share
-   the one REX + opcode + ModRM(mod=11) shape. The point of interest is the
-   REX/ModRM BIT-PACKING -- the fiddliest, most error-prone part of x86 encoding
-   (which register bit lands in REX.R vs REX.B, the mod=11 register-direct form).
-
-   `roundtrip_ok` proves `decode (encode o d s) = Some (o,d,s)` over the FULL
-   16x16 register matrix x all 7 ops. The register domain is finite, so the
-   exhaustive check IS a complete proof -- computed by vm_compute (gen.v style),
-   axiom-free (Print Assumptions below must stay "Closed under the global
-   context"). `encode` then extracts to OCaml so enc_drive.ml can validate holo's
-   own encoder BYTE-FOR-BYTE against this proven reference (test_encver).
-
-   Scope: this is the register-direct core. Immediate loads and memory operands
-   (SIB, the rbp-forced-disp / rsp-needs-SIB quirks) are the next slices. The
-   theorem proves the encode/decode PAIR is internally consistent (invertible);
-   grounding the decode model against the real ISA is the objdump/llvm-mc fuzz
-   rung (test/holo/fuzz) -- the two rungs compose. *)
+(* enc.v -- a proven x86-64 encoder for mov + the reg-reg alu ops (REX + opcode
+   + ModRM mod=11); decode inverts encode over all 16x16 registers x 7 ops *)
 
 From Stdlib Require Import List Arith Bool.
 Import ListNotations.
@@ -39,8 +23,7 @@ Definition op_eqb (a b:op) : bool :=
   | _,_ => false
   end.
 
-(* REX prefix 0100_WRXB: W=1 (64-bit) always; X=0; R set iff src>=8 (its bit
-   extends the ModRM.reg field), B set iff dest>=8 (extends ModRM.rm). *)
+(* REX 0100_WRXB: W=1, X=0, R iff src>=8 (ModRM.reg), B iff dest>=8 (ModRM.rm) *)
 Definition rex (dest src:reg) : byte :=
   64 + 8 + (if 7 <? src then 4 else 0) + (if 7 <? dest then 1 else 0).
 
@@ -48,17 +31,12 @@ Definition rex (dest src:reg) : byte :=
 Definition modrm (dest src:reg) : byte :=
   192 + (src mod 8) * 8 + (dest mod 8).
 
-(* REX with W=0. The zeroing idiom below is the only form here that wants it. *)
+(* REX with W=0, for the zeroing idiom only *)
 Definition rex0 (dest src:reg) : byte :=
   64 + (if 7 <? src then 4 else 0) + (if 7 <? dest then 1 else 0).
 
-(* the zeroing peephole (holo's x64.l, emit-alu): `xor r,r` clears the WHOLE 64-bit
-   register through the 32-bit form, a 32-bit write zero-extending into the top half.
-   So W drops to 0, and with W gone the REX byte itself goes for r<8 -- a bare 0x40
-   encodes nothing. Two bytes where the 64-bit spelling takes three.
-   `op` carries no width in this model, so the short form names the same (Oxor,r,r)
-   the long one did; that erasure is what makes the peephole expressible here, and
-   grounding the widths against the real ISA stays the fuzz rung's job. *)
+(* `xor r,r` zeroes through the 32-bit form: W=0, and no REX at all for r<8.
+   op carries no width, so the short form still decodes to (Oxor,r,r) *)
 Definition zeroing (o:op) (dest src:reg) : bool :=
   op_eqb o Oxor && (dest =? src).
 
@@ -69,16 +47,14 @@ Definition encode (o:op) (dest src:reg) : list byte :=
         else [ opcode o ; modrm dest src ])
   else [ rex dest src ; opcode o ; modrm dest src ].
 
-(* --- decoder (a small auditable model of the same encoding rules) --- *)
+(* --- decoder --- *)
 Definition decode_op (b:byte) : option op :=
   if b =? 137 then Some Omov else if b =? 1  then Some Oadd
   else if b =? 41 then Some Osub else if b =? 33 then Some Oand
   else if b =? 9  then Some Oor  else if b =? 49 then Some Oxor
   else if b =? 57 then Some Ocmp else None.
 
-(* the REX-less arm: two bytes are the zeroing form, both register fields the same
-   and both low. The three-byte arm below never read W, so it already inverts a
-   W=0 prefix -- only the missing byte is new. *)
+(* two bytes: the REX-less zeroing form. the three-byte arm ignores W *)
 Definition decode (bs:list byte) : option (op * reg * reg) :=
   match bs with
   | [oc; mr] =>
@@ -119,9 +95,7 @@ Proof. vm_compute. reflexivity. Qed.
 
 Print Assumptions roundtrip_ok.   (* must stay "Closed under the global context" *)
 
-(* --- extraction: nat -> int (the standard pragmatic mapping for an extracted
-   test driver; the proof above stays over real nat). Only `encode` + the op
-   list/constructors are needed by the driver. --- *)
+(* --- extraction --- nat -> int: the proof stays over nat *)
 From Stdlib Require Import Extraction.
 Extraction Language OCaml.
 Set Extraction Output Directory ".".

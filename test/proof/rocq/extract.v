@@ -1,15 +1,5 @@
-(* extract.v -- the differential oracle's reference normalizer, EXTRACTED.
-
-   test/oracle.l hand-transcribes spec.v's subst into ai; this closes that gap.
-   Here the executable normalizer is built directly on spec.v's PROVEN `subst`
-   and `shift` (Require Import spec), then extracted to OCaml. So the reference
-   the fuzzer runs is, up to the standard nat->int extraction mapping, the very
-   definitions the spec.v theorems are about -- machine-checked end to end.
-
-   `nf` mirrors test/oracle.l's evaluator exactly: ai's strategy -- N-ary
-   closures, CBV, weak (no reduction under a binder), saturating (a beta step
-   fires only when all n args are present; an under-applied closure is held
-   unreduced). The beta primitive it uses IS spec.v's st_beta (lemma below). *)
+(* extract.v -- the oracle's reference normalizer, built on spec.v's subst and
+   extracted. ai's strategy: n-ary closures, cbv, weak, saturating *)
 
 Require Import spec.
 From Stdlib Require Import List.
@@ -51,22 +41,16 @@ Fixpoint evs (fuel : nat) (t : tm) (args : list tm) : tm :=
 
 Definition nf (fuel : nat) (t : tm) : tm := evs fuel t [].
 
-(* the machine-checked LINK: the beta step `nf` performs (via apply_n -> subst
-   0 a b) is exactly spec.v's proven st_beta. So the executable reference's one
-   reduction primitive is the relation the theorems reason about. (Full
-   normalization soundness vs `step` is the Tier-1 confluence project; this is
-   the local correspondence, axiom-free.) *)
+(* nf's one beta step (apply_n -> subst 0 a b) is spec.v's st_beta *)
 Theorem beta_is_step : forall b a, step (App (Lam b) a) (subst 0 a b).
 Proof. intros; apply st_beta. Qed.
 
 Print Assumptions beta_is_step.   (* must stay "Closed under the global context" *)
 
-(* --- extraction --- nat -> int for a usable executable (the proofs above stay
-   over real nat; this mapping is the standard pragmatic choice for an extracted
-   test driver, not a proven-correct compiler). *)
+(* --- extraction --- nat -> int: the proofs stay over nat, the mapping is trusted *)
 From Stdlib Require Import Extraction.
 Extraction Language OCaml.
-(* keep the .ml next to this file (cwd); silences the 9.x default-output-dir warning *)
+(* the .ml lands beside this file *)
 Set Extraction Output Directory ".".
 Extract Inductive nat => "int"
   [ "0" "(fun x -> x + 1)" ]
