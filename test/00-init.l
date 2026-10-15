@@ -86,10 +86,12 @@
    (test-up p) (test-until nom? (_ \ connect ['tcp "127.0.0.1" p] @ c (nom? c ? c (close c)))))
 ; how a cost grows: (f n) and (f (4 * n)) timed, the best of five each after a warm run,
 ; the second held under eight times the first. a linear or n log n cost sits near four, a
-; quadratic one at sixteen
-(: (test-took f n) (: t0 (nclock 0) _ (f n) (nclock t0))
-   (test-best f n) (foldl min (test-took f n) (map (u \ test-took f n) ^4))
-   (test-linear f n) (: _ (f n) a (test-best f n) b (test-best f (4 * n)) (b < 8 * a)))
+; quadratic one at sixteen. each timing is k calls, k doubled until the small one fills 20 ms
+; (64 at most), so a seat whose clock counts milliseconds still reads a ratio
+(: (test-took f n k) (: t0 (nclock 0) _ (each ^k (u \ f n)) (nclock t0))
+   (test-reps f n k) (k >= 64 || 20000000 <= test-took f n k ? k (test-reps f n (2 * k)))
+   (test-best f n k) (foldl min (test-took f n k) (map (u \ test-took f n k) ^4))
+   (test-linear f n) (: _ (f n) k (test-reps f n 1) a (test-best f n k) b (test-best f (4 * n) k) (b < 8 * a)))
 
 (:: 'test (l \
                (:
