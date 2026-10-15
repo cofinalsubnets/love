@@ -367,8 +367,8 @@ long __love_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
  * what the canonical shape can hold. */
 struct __fb_siginfo { int signo, err, code, pid; unsigned uid; int status; void *addr; };
 struct __nb_siginfo { int signo, code, err;
-#ifndef __ILP32__
-  int pad;
+#ifndef __i386__
+  int pad;                            /* the union holds 64-bit words: on 8, but on i386 */
 #endif
   union { void *addr; struct { int pid; unsigned uid; int status; } chld; } u; };
 /* which lane a record carries. the lanes overlap on two of the three kernels, so
