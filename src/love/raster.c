@@ -12,7 +12,8 @@
 //         list of them, each level half the last
 //  opts   fog r g b, fog near, fog far (view depth), flags: 1 affine, 2 snap, 4 dither, 8 cull,
 //         16 depth (the answer the depth buffer, [h w] floats, 2 where nothing was drawn),
-//         32 under (drawn only where the base is bare, below 0: a sky after the scene);
+//         32 under (drawn only where the base is bare, below 0: a sky after the scene),
+//         64 flat (the colours answered as one row of w*h, not [h w]);
 //         and an exposure k, a colour c 0 to 255 shown as 255 (1 - e^(-k c / 255)), 0 none;
 //         and a shadow's bias, in the sun's depth
 //         or a list (opts sun depth): the verts then 11 a vertex, the r g b of the light
@@ -27,7 +28,7 @@ float lm_expf(float);
 #define rz_exp lm_expf
 #endif
 
-enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_lv = 8 * sizeof(word), rz_tn = 256,
+enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_lv = 8 * sizeof(word), rz_tn = 256,
        rz_na = 11 };   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
                        // rz_lv: a level halves, so a word's bits hold every chain
 // a vertex in clip space with what rides on it; once projected x y are pixels and z ndc
@@ -135,8 +136,12 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
   ex[i] = -dy * 16, ey[i] = dx * 16;
   ec[i] = dx * (8 - Y[i]) - dy * (8 - X[i]) - (dy < 0 || (dy == 0 && dx > 0) ? 0 : 1); }
  flo_t const fn = r->fog[3], ff = r->fog[4], fs = ff > fn ? 1 / (ff - fn) : 0;
- int shade = 0, under = r->flags & rz_under;   // the sun's view is asked only where some of the sun falls
- for (int i = 0; r->sm && i < 3; i++) shade |= P[i]->a[5] != 0 || P[i]->a[6] != 0 || P[i]->a[7] != 0;
+ int lit = 0, under = r->flags & rz_under;   // the sun's view is asked only where some of the sun falls
+ for (int i = 0; i < 3; i++) lit |= P[i]->a[5] != 0 || P[i]->a[6] != 0 || P[i]->a[7] != 0;
+ int const shade = lit && r->sm,
+           // ..and a pixel steps only the planes it reads: up to the colours, then the
+           // sun's colours, then the place as the sun sees it; the rest stay as set
+           nk = shade ? 2 + rz_na : lit ? 10 : 7;
  for (intptr_t y = y0; y < y1; y++) {
   // the row's run inside all three edges: each is c + ex x, exact, so where it turns is a
   // whole x found by division, and the pixels of the box outside it are never walked
@@ -196,7 +201,9 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
                          | rz_ch(c[2] + (flo_t) (q & 255), 0); }
      else o[x] = rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d), dz[x] = a[0]; } } }
    for (int i = 0; i < 3; i++) e[i] += ex[i];
-   for (int k = 0; k < 2 + rz_na; k++) a[k] += vx[k]; } } }
+   for (int k = 0; k < 7; k++) a[k] += vx[k];
+   if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];
+   if (nk > 10) for (int k = 10; k < 2 + rz_na; k++) a[k] += vx[k]; } } }
 
 // clip space to pixels; snapped to whole ones on request
 static void rz_project(struct rz const *r, struct rz_v *v) {
@@ -307,15 +314,19 @@ love_noinline static struct g *host_raster(struct g *g) {
  uintptr_t nv = 0;   // the most vertices a batch has
  if (galaxyp(a[4])) nv = tray_nelem(tray(a[4])) / st;
  else for (word v = a[4]; chainp(v); v = B(v)) nv = tray_nelem(tray(A(v))) / st > nv ? tray_nelem(tray(A(v))) / st : nv;
+ word const o0 = chainp(a[7]) ? A(a[7]) : a[7];
+ uintptr_t const fr1 = ((intptr_t) rz_opt(o0, 5, 0) & rz_flat) ? 1 : 2;   // the colours' rank
  uintptr_t const n = mulsat((uintptr_t) W, (uintptr_t) H),   // past every heap: have refuses it
-                 fw = b2w(tray_bytes(love_Z, 2, n)), dw = b2w(tray_bytes(love_R, 2, n)),
+                 fw = b2w(tray_bytes(love_Z, fr1, n)), dw = b2w(tray_bytes(love_R, 2, n)),
                  pw = b2w(tray_bytes(love_R, 1, 8 * nv + 1));
  if (!ok(g = have(g, fw + dw + pw))) return g;
  a = g->sp;
- struct tray *fr = ini_tray(bump(g, fw), love_Z, 2), *dp = ini_tray(bump(g, dw), love_R, 2),
+ struct tray *fr = ini_tray(bump(g, fw), love_Z, fr1), *dp = ini_tray(bump(g, dw), love_R, 2),
              *pt = ini_tray(bump(g, pw), love_R, 1);
  pt->shape[0] = 8 * nv + 1;
- fr->shape[0] = dp->shape[0] = (uintptr_t) H, fr->shape[1] = dp->shape[1] = (uintptr_t) W;
+ dp->shape[0] = (uintptr_t) H, dp->shape[1] = (uintptr_t) W;
+ if (fr1 == 2) fr->shape[0] = (uintptr_t) H, fr->shape[1] = (uintptr_t) W;
+ else fr->shape[0] = n;
  struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(fr), .depth = tray_data(dp), .pv = tray_data(pt) };
  // the opts, and the sun's view and depths where they come as a list; read after the
  // allocation, which may move them

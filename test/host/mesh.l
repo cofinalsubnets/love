@@ -78,6 +78,10 @@
    gk (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 4)
    gk0 (mesh-sky (pins ns 'y (ns 'y * 0.0 - 1.0)) nl wx [0.0 0.0 0.0] night 0.0 4)
    hot4 (iota (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk != mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk0))
+   ; ..and by day none: the sky shaded between as it is, under a partly cloudy sky
+   wp (sky-weather 1 'smooth) lp (sky-light (sky-sun noon 0.0 0.65) wp noon)
+   (dk s) (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky s lp wp [0.0 0.0 0.0] noon 0.0 4))
+   ds (sky-stars noon 0.0 0.65) ds0 (: u (sky-stars noon 0.0 0.65) (pins u 'y (u 'y * 0.0 - 1.0)))
  (test (all (k \ round k != 7) ^4)
        (mid < <(cols right))
        (#(rows up) = 0 || <(rows up) > <(rows right))
@@ -99,6 +103,7 @@
        (at fs mid cen = at f0 mid cen) (at fs 0 0 = peep sk 0 0) (at fs (W - 1) 0 = peep sk (W - 1) 0)
        (0 < seen) (0.9 * seen <= #hot) (#hot <= seen)
        (at fg mid cen = at f0 mid cen) (two? gk) (gap fg fs < 0.01) (0.9 * seen <= #hot4) (#hot4 <= seen)
+       (0 < net (-1 < mesh-spot vu (ds 'x) (ds 'y) (ds 'z))) (net (dk ds != dk ds0) = 0)
        (shape mp = [64 64]) (at fsh mid cen < at fno mid cen) (at fsh (mid + 6) cen = at fno (mid + 6) cen)))
 ; --- a picture's texture: any size, its levels halved each way to a side of one; from rgba
 ; --- bytes, each texel the mean under it, a hole where they are mostly clear
