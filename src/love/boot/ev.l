@@ -93,7 +93,7 @@
   ; the nil? nif for cflip's head test: opfix's glued lane splices the value, never the name,
   ; so `!e` reaches the peephole unnamed. read once, like lvm_cur.
   nilv (gv 'nil? ())
-  (sco p a i) {'arg a 'imp i 'par p}
+  (sco p a i) {'arg a 'imp i 'par p 'sn 0 'st {}}
   (rootc c) (: p (c 'par) (!p ? c (rootc p)))   ; top scope: where feel stashes 'src
   ; --- the emission interface (the codegen seam) ---
   ; ana emits through curried emitters (\ k n ..): k = the continuation emitter, n = the current
@@ -634,9 +634,19 @@
                                   ; closure to its imports. never a macro (feel expanded them all).
   (push c k x) (pin c k (x . c k), x)
   (pop c k) (c k @ (a . u) (pin c k u, a))
+  ; the stack: 'sn slots deep; 'st has each depth's name (a charm key) and each name's depths,
+  ; newest first. a restore only lowers 'sn, so a name's depth holds while 'st has it there
+  (sput c n) (: k (c 'sn) t (c 'st)
+               (pin t k n, charm? n || pin t n (k . t n), pin c 'sn (k + 1), n))
+  ; sat: the depth of x's topmost slot, or -1; the stale depths ahead of it go
+  (sat c x) (!c ? -1 (: t (c 'st) n (c 'sn)
+              (live l) (two? l && !(<l < n && t <l == x) ? (live >l) l)
+              l (t x) l2 (live l)
+             (l2 == l || pin t x l2, two? l2 ? <l2 -1)))
+  (sidx c x) (c 'sn - 1 - sat c x)   ; x's slot counted from the top, as karg takes it
   (iap c b) (: op <b as >b                       ; (iop op . args) -> inline the vm op
    (atom? >as ? (ana c <as * em1 op)      ; one arg
-      (: s (c 'stk) k (apr2l c as) (pin c 'stk s, k * em1 op)))) ; n-ary, r2l args
+      (: s (c 'sn) k (apr2l c as) (pin c 'sn s, k * em1 op)))) ; n-ary, r2l args
   ; falook: walk the scope chain for head's fixed arity, recorded by ale in each enclosing let's
   ; 'far map. > 0 = a multi-arg lambda sibling of that arity; 0 = a binding of that name that is
   ; not one -- it shadows outer fars, so stop; -1 = not bound in this scope, keep walking, unless
@@ -644,7 +654,7 @@
   (falook c h) (?- 0 c
    (: far (c 'far) a (tablet? far ? (peep far h -1) -1)
     (? (0 < a) a
-       (-1 = a && !(elem h (c 'arg) || elem h (c 'stk))) (falook (c 'par) h)
+       (-1 = a && !(elem h (c 'arg) || 0 <= sat c h)) (falook (c 'par) h)
        0)))
   ; apxh: (apx n head . args) -> apply. n > 1 -> r2l eval of the leading n args and one n-ary
   ; apply, surplus args curried onto the answer l2r; n = 0 -> the plain 1-ary chain. the width
@@ -656,22 +666,22 @@
               ; map and can answer an enclosing binding's arity where an inner scope rebinds the
               ; name. exact saturation is the most a guess can carry.
               n2 (nary ? nary (nom? head && (: a (falook c head) (1 < a && a = #args && a))))
-              f (ana c head) s (c 'stk) _ (push c 'stk 0) s2 (c 'stk)
+              f (ana c head) s (c 'sn) _ (sput c 0) s2 (c 'sn)
               g (n2 ? (napn c args n2 s2) (apl2r c args))
-              (pin c 'stk s, f * g))
+              (pin c 'sn s, f * g))
   ; napn: the n-ary apply, then the surplus. the pin puts the compile-time stack back at the head
   ; slot -- apn consumes its arg slots and leaves the answer there, which is where l2r addresses from.
   (napn c args n s) (: r (drop n args)
                        g (apr2l c (take n args) * kap n)
-                     (pin c 'stk s,
+                     (pin c 'sn s,
                       atom? r ? g (g * apl2r c r)))
   (app c a b) (: f (ana c a)
-                 s (c 'stk)
-                 g (push c 'stk 0,
+                 s (c 'sn)
+                 g (sput c 0,
                     apl2r c b)
-               (pin c 'stk s, f * g))
+               (pin c 'sn s, f * g))
  (apl2r c b) (?- id (two? b) (: f (ana c <b) g (apl2r c >b) (f * kap 1 * g)))
- (apr2l c b) (?- id (two? b) (: g (apr2l c >b) f (ana c <b) (push c 'stk 0, g * f)))
+ (apr2l c b) (?- id (two? b) (: g (apr2l c >b) f (ana c <b) (sput c 0, g * f)))
  (kap n k m)
   (:- (p j)
     j (k (2 + m))
@@ -723,13 +733,13 @@
                         (: site (lfd . {})
                          (pin scope 'sites (site . scope 'sites),
                           qsite site)))
-                   q (push c 'stk 0,
+                   q (sput c 0,
                       apl2r c >(cof lfd))
-                 (pop c 'stk,
+                 (pin c 'sn (c 'sn - 1),
                   p * q))
   (ava c x) (avw c c x)
   (shadowed? c d x) (: far (d 'far)
-   (tablet? far && 0 <= peep far x -1 && !(elem x (d 'par 'stk))))
+   (tablet? far && 0 <= peep far x -1 && sat (d 'par) x < 0))
   (avw c d x)
    (!d ? ; outside all lexical scopes?
     (: y (gv x gone) (y == gone ? (em2 lvm_index x) (kim y)))   ; ==, not the pin: see gv
@@ -737,14 +747,13 @@
      (? (two? lfd) (lz c lfd d)
         (!home && shadowed? c d x)
          (c 'par ? (push c 'imp x), em2 lvm_index x)
-        (: s (d 'stk)
-           (stki d2) (lidx x (d2 'imp + d2 'arg))
+        (: (stki d2) (lidx x (d2 'imp + d2 'arg))
            (q i j m) (karg (i + stki c) j m)
          (?- (avw c (d 'par) x)
-          (elem x s) (home ? (karg (lidx x s))
-                         (c 'par ? (push c 'imp x), q #(c 'stk)))
-          (stki d >= 0) (home ? (q #(c 'stk))
-                         (c 'par ? (push c 'imp x), q #(c 'stk))))))))
+          (0 <= sat d x) (home ? (karg (sidx c x))
+                         (c 'par ? (push c 'imp x), q (c 'sn)))
+          (stki d >= 0) (home ? (q (c 'sn))
+                         (c 'par ? (push c 'imp x), q (c 'sn))))))))
   ; lambda analyzer
   (ala c imp exp nm hq) (:
    d (sco c (init exp) imp)
@@ -812,19 +821,19 @@
                             cput cls x)))
         f (ana c d)
         g (?- id (even && !(c 'par) && !(mint? n)) (em2 lvm_defglob n))  ; a `_` row (opfix's fresh nom) never reaches the book
-        h (push c 'stk n,
+        h (sput c n,
            weave >nds)
         (f * g * h)))
     s (pin q 'lam lams,
-       c 'stk)
-    g (push c 'stk 0,
+       c 'sn)
+    g (sput c 0,
        weave prs)
     ; closures final -> backpatch each recorded recursive-fn ref with its text.
     f (each (q 'sites) (s \ poke 0 <(cof <s) (peep >s 0 0)),
        pin q 'sites 0,
-       pin c 'stk s,
+       pin c 'sn s,
        ; body-lambda analyzed after inits (it takes the bindings as args; never makes sites)
        ana c ('\ . revcat (map cap prs) [body]))
     h (kap #prs)
-    (pin c 'stk s,
+    (pin c 'sn s,
      f * g * h)))))
