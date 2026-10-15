@@ -1,18 +1,5 @@
-/* C11 6.5.15p5: where both arms of a `?:` are arithmetic, the result takes the usual
- * arithmetic conversions over the TWO of them -- the same law a binary operator's
- * operands meet. So `(1 ? -1 : 0u)` is unsigned, value 4294967295, whatever the dead
- * arm does at runtime, and the compare, divide, shift or widening that reads it next
- * goes by that type.
- *
- * The rows below are the conversions themselves, not the branch: every pair of ranks
- * and signednesses that can meet, each one read back through an operator that can tell
- * the answers apart (a compare's signedness, a divide's, a shift's, and the widening
- * to 64 bits, which is the one that catches a right type carrying a wrong extension).
- * The arms come in both faces -- literal and variable -- since a literal's type is the
- * one C reads off the source, not the one the register wears.
- *
- * The non-arithmetic arms ride along as a guard: a float, a pointer, a struct or a
- * void arm must keep answering what it always did. */
+/* a ?: over two arithmetic arms takes their usual conversions (6.5.15p5): every rank and sign
+ * pair, literal and variable, read back by a compare, divide, shift or widen; other arm kinds guard. */
 #include <stdio.h>
 
 static int c1(void) { return 1; }

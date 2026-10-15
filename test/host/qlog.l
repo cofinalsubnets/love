@@ -1,8 +1,5 @@
-; --- test/host/qlog.l: a queue as a signed log (src/apps/qlog.l, sb's signed ledgers) -------
-; one lineage -- a root, the hub box, two cells -- then a chain of entries, each way one can
-; lie, and sb's two sides of it: a ledger that moves only by an entry that follows, and nests
-; that pull a queue only along a chain that checks. run from the repo root:
-;   cat test/00-init.l test/host/qlog.l | out/love
+; test/host/qlog.l -- a queue as a signed log (src/apps/qlog.l) and sb's signed ledgers
+; run: cat test/00-init.l test/host/qlog.l | out/love
 
 (borrow 'qlog)
 (borrow 'seals)
@@ -39,7 +36,7 @@
    (ql-step prev e before after) (qlog-step prev e before after <ql-tr (ql-tr 1))
    (ql-sub s old new) (: i (fsub s old 0) (? (i < 0) s (snip s 0 i + new + snip s (i + #old) #s))))
 
-; --- the entry: laid one way, read back, its writer as the queue spells it ---------------
+; the entry: laid one way, read back, its writer as the queue spells it
 (: f (qlog-read ql-e1)
    _ (test (tablet? f) (f "seq" = "1") (f "by" = "bob@hub") (f "text" = sha256 ql-t1)
            (qlog-who f = "bob")
@@ -49,8 +46,7 @@
            (() = qlog-read "leader ant\n"))
    0)
 
-; --- the chain: each entry follows the one before, by a writer whose card and sig check, making
-;     a change it may make. each way to lie is refused by its own law ---------------------------
+; the chain: each way to lie is refused by its own law
 (: e2 (ql-mk 2 (qlog-hash ql-e1) "bob@hub" "queue_row" ql-tx ql-bob)            ; bob moves ant's row
    e2l (ql-mk 2 (qlog-hash ql-e1) "bob@hub" "queue_landed" ql-tl ql-bob)       ; bob's own landing
    e2s (ql-mk 3 (qlog-hash ql-e1) "bob@hub" "queue_row" ql-t1 ql-bob)          ; a seq skipped
@@ -74,8 +70,7 @@
            (0 <= fsub (ql-step () ql-e1 () ql-t1) "seq does not follow" 0))           ; truncated head
    0)
 
-; --- sb: a nest's queue moves only by an entry that follows; a plain write, or an entry that
-;     does not chain, is refused once it is signed --------------------------------------------
+; sb: once signed, a nest's queue moves only by an entry that follows
 (: n1 (ql-dir + "/n1")
    _ (mkdir n1 493) _ (chdir n1) _ (mk ())
    (put was s) (: f (ql-dir + "/put") _ (lay f s) (lg-swap "queue/q" was f))
@@ -90,8 +85,7 @@
    _ (chdir ql-home)
    0)
 
-; --- the pull: a second nest takes the chain and folds it to the same text; a peer behind it, a
-;     fork and a log out of order move nothing, and the fork is kept --------------------------
+; the pull: a peer behind, a fork, and a log out of order move nothing; the fork is kept
 (: n1 (ql-dir + "/n1") n2 (ql-dir + "/n2") n3 (ql-dir + "/n3") n4 (ql-dir + "/n4")
    (nest d) (: _ (mkdir d 493) _ (chdir d) (mk ()))
    (copy d ls) (: _ (mkparents (d + "/.sb/ledger/queue/x")) (lay (d + "/.sb/ledger/queue/q") (cats (map (l \ l + "\n") ls))))

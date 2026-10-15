@@ -1,9 +1,6 @@
-; test/host/qoi.l -- src/apps/qoi.l and src/love/picture/qoi.c
-; seven pixels that take every op once -- rgb, a run, diff, luma, an index hit, rgba -- written
-; to the bytes the spec gives and read back; pictures of each kind round trip exactly; where
-; python3's PIL is, our files read in PIL as their source, PIL's read here the same, and our
-; ops byte for byte PIL's own encoder's; last the refusals and flipped bytes.
-;   cat test/00-init.l test/host/qoi.l | out/love
+; test/host/qoi.l -- src/apps/qoi.l and qoi.c: every op by hand, round trips, then where PIL is,
+; each way read alike and our ops byte for byte PIL's encoder's; then the refusals
+;   cat test/00-init.l test/host/00-host.l test/host/qoi.l | out/love
 (borrow 'posix)
 (borrow 'qoi)
 (borrow "src/apps/qoi.l")

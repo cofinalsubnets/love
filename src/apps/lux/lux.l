@@ -568,7 +568,7 @@
                  resweep sh2 (n - 1))))))
    sh1 (resweep sh0 4)
    _ (twirl (u \ lux-moor (lux-sock ())) 0)                                   ; the repl moor: its own task, its own sockets
-   _ (loop sh1 () () ())
+   _ (loop sh1 () ())
    _ (close s)
    _ (line "lux: done")
    (quit 0))                                                                    ; the shebang's -l makes this file a preload: falling off

@@ -1,7 +1,5 @@
-/* *p++ and *p-- through a register-riding pointer: the pointer steps first and the access reads
- * one step back, so no copy of the old pointer is kept. stores, loads, a compound op, a struct
- * stride, an address taken through it, a narrow and a wide element, both directions, and the
- * pointer's own value afterwards. held to gcc. */
+/* *p++ and *p-- through a register pointer: step first, access one step back, no copy of the old
+ * pointer; stores, loads, compound ops, struct stride, narrow and wide, both ways. held to gcc. */
 
 struct rec { long a; int b; char pad[20]; };
 

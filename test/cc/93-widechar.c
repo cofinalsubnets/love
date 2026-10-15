@@ -1,9 +1,5 @@
-/* wide / prefixed character constants -- L'a' (wchar_t), u'x' / U'x'
-   (char16_t / char32_t). mooncc carries no distinct wide type, so the prefix
-   drops and the value is the ordinary character code; the escape forms ride
-   through too. identifiers that merely START with L/u/U (no quote follows) are
-   untouched. exit agrees with gcc because a wchar_t constant of an ASCII char
-   is just its code. */
+/* wide/prefixed char constants L'a', u'x', U'x' (escapes too) answer the plain
+   code; identifiers merely starting with L/u/U are untouched. */
 int main(void)
 {
   int a = L'A';        /* 65 */

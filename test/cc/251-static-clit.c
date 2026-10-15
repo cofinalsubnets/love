@@ -1,8 +1,6 @@
-/* a compound literal in a static initializer is an object of its own, with static storage
- * (C11 6.5.2.5): linux's clk tables point at them -- `.hw.init = &(struct clk_init_data){..}`,
- * `.parent_names = (const char *[]){ "a", "b" }` -- and an array-typed element decays to its
- * first element's address, a row of a 2-D table (`.regs = pll_regs[N]`) or `&a[0][0]`.
- * freestanding, exit-code only. */
+/* a compound literal in a static initializer is its own static object (6.5.2.5), and an
+ * array-typed element decays to its first element's address (a 2-d table row, `&a[0][0]`).
+ * exit-code only. */
 
 struct init { const char *name; const char *const *parents; int n; };
 struct hw { const struct init *init; int id; };

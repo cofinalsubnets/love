@@ -1,13 +1,6 @@
-/* a loop lends its registers: a name the loop never mentions parks in its slot and comes
- * back past the exit, and a cell the loop leans on rides a register across it. every shape
- * here went wrong once while the splitter was built:
- *   - the register comes back AFTER the cell leaves it (both live past the loop);
- *   - a for's step and a do's cond lay after their body, outside any inner loop's lease;
- *   - a name declared later in the outer body is not parked before it exists;
- *   - break, continue and return leave a lease the same way the test does.
- * many locals stay live at once, so the seats run out and the leases happen.
- * unsigned throughout, so a 32-bit long wraps the same in every build. every check adds 1;
- * the exit code is the count that passed. */
+/* a loop lends its registers: an unmentioned name parks and returns past the exit, a cell it leans
+ * on rides a register; for-steps, do-conds, later declarations, break/continue/return. unsigned, so
+ * 32-bit longs agree. each check adds 1 to the exit code. */
 
 /* twelve accumulators live at once: more than the seats, so the leases happen */
 #define ACC unsigned long a = 1, b = 2, c = 3, d = 4, e = 5, f = 6, g = 7, h = 8, m = 9, o = 10, w = 11, z = 12

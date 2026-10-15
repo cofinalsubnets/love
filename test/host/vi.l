@@ -1,22 +1,17 @@
 ; test/host/vi.l -- vi on a mitty, over a real pty
-; not in the test/*.l corpus (the mitty rides screen/scribe/tether in src/love/*.c). the
-; engine's laws are test/law/vi.l; this is the visit: a buffer berthed as a stage,
-; :vs and :sp opening another beside or under it, the prefix steering the focus, and
-; :q shutting the one it is typed in until the last leaves.
+; the engine's laws are test/law/vi.l; this drives panes: :vs, :sp, the prefix, :q
 ;   cat test/00-init.l test/host/vi.l | out/love
 
 (borrow 'posix)
 
-(: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
-   ; type, and take what came back within a beat
-   (drink m) (:- (go "") (go acc) (? (cue? m) (: b (cask 4096) n (swig m b)
+(: (drink m) (:- (go "") (go acc) (? (cue? m) (: b (cask 4096) n (swig m b)
                                                   (charm? n && 0 < n ? (go (acc + snip b 0 n)) acc))
                                     (rest 150, cue? m) (go acc)
                                     acc))
    (say! m s) (say m s, flush m, drink m)
-   ; n within a row of at: the row's cells follow its address, pens between them
+   ; n within a row of at: the row's cells follow its address
    (after? h at n) (:- (go 0) (go i) (? (#h < i + #at) 0
-                                        (at = snip h i (i + #at)) (sub? (snip h i (min #h (i + 120))) n 0)
+                                        (at = snip h i (i + #at)) (has? (snip h i (min #h (i + 120))) n)
                                         (go (i + 1))))
    md (tether ["out/love" "vi"])
    _ (test (two? md))
@@ -24,26 +19,26 @@
    _ (rest 1200)
    b0 (drink m)
    b1 (say! m "ihello\e")
-   b2 (say! m ":vs\r")                     ; a fresh buffer beside, 39 + bar + 40
+   b2 (say! m ":vs\r")                     ; 39 + bar + 40
    b3 (say! m "isecond\e")
-   b4 (say! m "\x01h")                     ; C-a h: the focus back to the first
+   b4 (say! m "\x01h")                     ; C-a h
    b5 (say! m "Aagain\e")
    b6 (say! m ":sp\r")                     ; a third, under the first
-   b7 (say! m ":q\r")                      ; ... and shut again
+   b7 (say! m ":q\r")
    ba (say! m "yy\x01l")                    ; the first line yanked, over to the second pane
-   bb (say! m "p")                          ; ..and put under its line: the one register
-   bc (say! m "\x01]")                      ; C-a ]: the same put, the mitty's way
+   bb (say! m "p")                          ; one register across panes
+   bc (say! m "\x01]")                      ; C-a ]: the mitty's put
    b8 (say! m "\x01h:q!\r")                ; the first, dirty
-   b9 (say! m ":q!\r")                     ; the last one leaves, and so does vi
+   b9 (say! m ":q!\r")                     ; the last pane, and vi
    st (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md))
- (test (sub? b0 "\e[?1049h" 0)
-       (sub? b1 "hello" 0)
-       (sub? b2 "\e[1;40H" 0) (sub? b2 "\e[2;41H" 0)
-       (sub? b3 "second" 0)
-       (sub? b5 "helloagain" 0)
+ (test (has? b0 "\e[?1049h")
+       (has? b1 "hello")
+       (has? b2 "\e[1;40H") (has? b2 "\e[2;41H")
+       (has? b3 "second")
+       (has? b5 "helloagain")
        (after? bb "\e[2;41H" "helloagain")    ; pane 2, row 2: the put line
        (after? bc "\e[3;41H" "helloagain")    ; ..and row 3, the paste
-       (sub? b9 "\e[?1049l" 0)
+       (has? b9 "\e[?1049l")
        (two? st)))
 
 (test_fin ())

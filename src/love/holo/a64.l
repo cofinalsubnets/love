@@ -227,6 +227,7 @@
    (a64-mvn d s) (: dt (rn d) st (rn s) (le32 (0xAA2003E0 | (st << 16 | dt))))   ; orn d, xzr, s (mvn)
    (a64-inc d) (a64-addsub-imm 'add d d 1)
    (a64-dec d) (a64-addsub-imm 'sub d d 1)
+   (a64-decm base off) (a64-ld 'r17 base off + a64-addsub-imm 'subs 'r17 'r17 1 + a64-st base off 'r17)   ; [base+off] -= 1 through x17, the flags set
 
    ;; control: B/BL carry a 26-bit offset (bits[25:0]); B.cond a 19-bit one (bits[23:5]). the offset
    ;; is pc-relative to the instruction's own address, in units of 4. the fix is the whole word.
@@ -692,7 +693,7 @@
           ('rol . a64-shift 'rol) ('ror . a64-shift 'ror) ('ror4 . a64-shift 'ror4)
           ('lea . a64-lea) ('lean . a64-lea)           ; a consumed lea (x64 tells them apart for the escape gate)
           ('push . a64-push) ('pop . a64-pop) ('frpush . a64-frpush) ('frpop . a64-frpop) ('cbr . a64-cbr) ('tbr . a64-tbr) ('afix . a64-afix)
-          ('neg . a64-neg) ('not . a64-not) ('inc . a64-inc) ('dec . a64-dec)
+          ('neg . a64-neg) ('not . a64-not) ('inc . a64-inc) ('dec . a64-dec) ('decm . a64-decm)
           ('jmp . a64-jmp) ('br . a64-br) ('jmpr . a64-jmpr) ('jmpt . a64-jmpt) ('callr . a64-callr)
           ('mulo . a64-mulo) ('mulh . a64-mulh) ('umulh . a64-umulh) ('set . a64-set) ('test . a64-test)
           ('div . a64-div) ('rem . a64-rem) ('udiv . a64-udiv) ('urem . a64-urem)

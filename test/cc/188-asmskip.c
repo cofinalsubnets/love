@@ -1,7 +1,6 @@
-/* the alternatives' padding, held to gcc: `.skip` over label arithmetic, forward and back and
- * across sections, grows the original to the replacement's size, and `.byte 773b-771b` records
- * it -- the count reads once the whole template has, gas's `>` answering -1 for true. a target
- * with no template here computes the same. */
+/* `.skip` over label arithmetic (forward, back, across sections) and `.byte 773b-771b`, read
+ * once the whole template has; gas's `>` answers -1 for true. held to gcc; targets without a
+ * template compute the same. */
 
 extern const unsigned char __start_tai_rep[], __stop_tai_rep[];
 extern const unsigned char __start_tai_len[];

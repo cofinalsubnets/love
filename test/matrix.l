@@ -1,14 +1,6 @@
-; === the generic-op dispatch matrices, walked cell by cell ====================
-; the generic dyadic ops are NxN matrices over the kind lattice (l.h's enum): kcharm |
-; ksun kgem ktwin | ktrayZ ktrayR ktrayC ktrayO (one rep, DTray, by element tier) |
-; kstring kmint | kchain | ktablet khot. a monadic op is its matrix's diagonal. g_add_mx,
-; g_mul_mx and g_apply_mx are explicit tables; the rest are lane aps over the same lattice.
-; this file holds the fine cells (fix vs box/float/complex, one-word vs wider box, the
-; tray tiers); each row's coarse cell is spec.l's and the church rows are functions.l's.
+; === the generic-op dispatch matrices, the fine cells; the coarse ones are spec.l's ===
 
-; one representative value per kind -- the legend a row is read against. The three
-; boxed scalars are distinct kinds (KGem/KTwin/KSun) but share one apply cell, and
-; KSun is one kind at two widths: mx-box fits a word, mx-big does not.
+; one value per kind; mx-box fits a word, mx-big does not
 (: mx-fix 5                              ; kcharm
    mx-real 2.5                            ; kgem, the gem (float box)
    mx-cpx (2 ~ 3)                       ; ktwin, complex scalar (Cp)
@@ -24,19 +16,9 @@
    mx-fn  (+ 1)                          ; khot (nif partial application)
    mx-map {1 10 2 20})                    ; ktablet (a tablet is a lookup-lambda)
 
-; ============================================================================
-; apply matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
-; ============================================================================
-; Each data kind's sentinel tail-jumps through this. The arg-kind dimension is
-; uniform today (a link for later), so we vary it to pin that. The index/append
-; laws themselves are spec.l's (chains, strings, points); the church rows are
-; functions.l's whole numeric tower. What is left here is the cells no band law
-; reaches.
+; === apply matrix: [applied kind][arg kind], the cells no band law reaches ===
 (test
- ; --- row kchain: a chain is a sequence, the text law one lattice rung up. it was the
- ;     Church eliminator ((p f) == (f (a p) (B p))) until the tree was checked and nothing
- ;     at all applied a chain to a function -- so a lambda takes the default action, and
- ;     that is the cell worth pinning. the index/append rows are spec.l's chains section. ---
+ ; --- row kchain: a chain applied to a lambda takes the default action ---
  !((. 1 2) 1)            ; improper chain: the spine is one cell, so 1 is oob
  !('(1 2) (a \ b \ [a b])) ; arg = a lambda: the default action, not an eliminator
  !('(1 2) "ab")          ; ... as for every other kind
@@ -45,25 +27,11 @@
  (255 = (string 255 0))   ; byte is unsigned 0..255
  !("" 5) !("" -1)         ; the empty string indexes to 1
 
- ; --- row kmint: a point applies as every unit does, const-1 -- spec.l's mints section
- ;     says it for both the bare mint and the named symbol, so the row is a pointer.
-
- ; --- the boxed-scalar + array rows (KGem/KTwin/KSun/KTray*, all -> data_num_apply):
- ;     a box or tray is a Church numeral (operand ** operator, or operator-fold over a
- ;     function). The whole tower, saturation included, is functions.l's. A KSun past
- ;     the word is a Church numeral too, but its magnitude is astronomical, so
- ;     (bignum x) cannot terminate in a finite test and that half of the row is unexercised. ---
-
- ; --- non-matrix apply paths: the charm numeral, the lambda and the cask take their own
- ;     routes and are said elsewhere; the nif partial and the tablet miss are here ---
+ ; --- the nif partial and the tablet miss ---
  (7 = (((+) 3) 4)) ; khot: a nif fired through the unit call
  !(mx-map 9))      ; ktablet: a missing key -> nil, the zero point
 
-; ============================================================================
-; `+` matrix (g_add_mx): the fine within-category cells the spec's band laws fold together
-; ============================================================================
-; addn lane (numeric tower & arrays): the matrix routes here for any arith x
-; arith chain; the lane then refines by representation. Each rep pairing:
+; === `+` matrix: the within-category cells the band laws fold together ===
 (test
  ; --- scalar tower: fix / float / wide int / bignum / complex, every mix ---
  (7 = (5 + 2))                                 ; fix + fix (overflow-free fast path)
@@ -93,30 +61,23 @@
  ((11 ~ 2) = peep ((10 ~ 0) + mx-ac) 0 0) ; C array + complex scalar
  ((11 ~ 2) = peep (@(10 20) + mx-ac) 0 0) ; R/Z array + C array (real promotes)
 
- ; --- add_string lane: text x text; a number (tray included) arrives as the unit
- ;     and the text answers whole. the crossings the spec states once, the orders
- ;     it does not, and the reps it has no room for: ---
+ ; --- text: a number, tray included, is the unit against text ---
  ("ab" = ('ef + "ab"))                               ; a name is a point: the identity against text
  ("ab" = (@(1 2) + "ab"))   ("ab" = ("ab" + @(1 2))) ; a tray is number-band against text, either side
  ("@(1 2)" = show (@(1 2) + 'ef))                    ; ..and against a tray
  ("ab" = (mx-big + "ab"))                            ; a bignum is a number like any other
 
- ; --- add_seq lane: a list against text (chain wins); a number degenerates ---
+ ; --- a list against text: the chain wins; a number degenerates ---
  ('(1 2) = ('(1 2) + 5))            ; list <-> num, the order the spec leaves open
  ('(97 98 1 2) = ("ab" + '(1 2)))   ; str <-> list: the bytes splice (the charlist hom)
  ("(7 8)" = show (@(1 2) + '(7 8))) ; array <-> list: the tray is number-band, it degenerates
 
- ; --- addl lane: a lambda operand anywhere -> church-numeral add (not pointwise):
- ;     (m + n) a x == m a (n a x), so the result is a function awaiting (f x).
- ;     "1" + "1" == "2": apply (+ 1) twice to 0. ---
+ ; --- a lambda operand anywhere: church add, (m + n) a x == m a (n a x) ---
  (2 = ((((f \ x \ f x) + (f \ x \ f x)) (+ 1)) 0))
  (lit? ((+ 1) + 2))   (lit? (2 + (+ 1))) ; num + fn (either order) -> a function
  (lit? ((+ 1) + (+ 1))))                 ; fn + fn -> a function
 
-; ============================================================================
-; `*` matrix (g_mul_mx): the multiplicative analog (semiring product of `+`)
-; ============================================================================
-; muln (arith), mul_rep (seq x count), lvm_0 (seq x seq -> nil), mull (compose).
+; === `*` matrix: arith, seq x count, seq x seq, compose ===
 (test
  ; --- muln: scalar tower + arrays ---
  (6 = (2 * 3))                                  ; fix * fix
@@ -131,13 +92,11 @@
  (top-tray = tier (mx-ao * mx-ao))              ; O * O exact
  ((80 2) = peep (top-tray '(2) [(40 2) (40 2)] * top-tray '(2) [(40 2) (40 2)]) 0 0)   ; 2^40 * 2^40, exact (an z array would wrap)
 
- ; --- mul_rep: the repeat law and its |count| are the spec's; the cells here are the
- ;     ones no band law reaches -- the reversed order, and a non-number count ---
+ ; --- repeat: the reversed order, and a non-number count ---
  ("ababab" = (3 * "ab"))             ; str * count commutes
  !("ab" * @(1 2))   !(@(1 2) * "ab") ; an array is no count -> nil
 
- ; --- seq * seq: chain x chain is the cartesian product (spec.l); string stays nil,
- ;     and so does symbol, which the string lane might have been read to cover ---
+ ; --- seq * seq: a symbol stays nil like a string ---
  !('a * 'b)
 
  ; --- mull: a lambda operand anywhere -> composition (Church mul) ---
@@ -145,10 +104,7 @@
  (26 = (((x \ x + 1) * 2) 5))             ; (inc (2 5)) = inc 25 = 26 (numeral then inc)
  (10 = ((mx-map * (x \ x - 1)) 2)))       ; a map composes too: m(2-1) = m 1 = 10
 
-; ============================================================================
-; the other dyadic generic ops (lane aps, not explicit tables): -, /, %,
-; comparisons, =. Same lattice; these had no consolidated matrix test.
-; ============================================================================
+; === the other dyadic ops: -, /, %, comparisons, = ===
 (test
  ; --- subtraction `-` is numeric only (text/list/lambda operands -> nil) ---
  (3 = (5 - 2))   (2.5 = (5 - 2.5))      ; fix/float tower
@@ -170,11 +126,7 @@
  !((1 ~ 2) % 2)      ; complex -> nil
  !("a" % 2)          ; non-numeric -> nil
 
- ; === ordered comparison (< <= > >=): a total order over all values. The bands -- points at
- ; the floor, then string, then the numbers, then tray < chain < map < top -- are spec.l's
- ; order section. Here: the reps that interleave within the number band, the complex rule,
- ; the lambda class, and the array operand, which broadcasts to a mask rather than ordering.
- ; `> >=` are `< <=` with operands reversed (a > b == b < a).
+ ; === ordered comparison: a total order; here the number reps, complex, lambdas, trays
  ; --- within number: the whole tower orders by value (reps interleave) ---
  (1 < 2)   (1.5 < 2)                              ; fix / float
  (word ? ((1 << 62) < 3 * (1 << 62)) 1)         ; box < box (64-bit word only)

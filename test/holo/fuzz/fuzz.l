@@ -1,19 +1,8 @@
-; test/holo/fuzz/fuzz.l -- holo encoder differential fuzz: x86-64 + a64 + rv64.
-; for each generated IR form we know the intended instruction. holo (loaded in-process)
-; encodes it; the bytes go through a foreign decoder (x64: objdump -M intel, cross-read
-; by llvm-mc; a64/riscv: llvm-mc) and the decoded instruction must match intent --
-; mnemonic, operands, and nothing undecodable. tolerates encoding non-uniqueness:
-; registers compare by abstract identity (width-agnostic), immediates by value mod 2^64;
-; a byte-exact oracle would false-alarm on legal 32-bit-mov-zero-extend and disp-size
-; choices. a decode oracle checks meaning, not layout.
-;
-; knobs ride the environment: FUZZ_N (per class, default 8), FUZZ_SEED, FUZZ_ARCH
-; (x64|a64|rv64 -- the lane names below; any other spelling scares rather than
-; filtering to nothing). run from the repo root:
-;
-;   out/love test/holo/fuzz/fuzz.l
-;
-; exit 1 on any failure; each failure names its class, IR, hex and reason.
+; holo's encoder differential fuzz, x64 + a64 + rv64: each generated ir form's bytes go through a
+; foreign decoder (objdump -M intel cross-read by llvm-mc; llvm-mc for a64/rv64), which must read
+; back the intended mnemonic and operands. registers compare width-agnostic, immediates mod 2^64:
+; a decode oracle checks meaning, not layout. knobs: FUZZ_N (per class, 8), FUZZ_SEED, FUZZ_ARCH
+; (x64|a64|rv64; another spelling scares). run from the root: out/love test/holo/fuzz/fuzz.l
 
 (borrow 'posix)
 (reads (open "src/love/holo/holo.l" "r"))
@@ -130,10 +119,8 @@
                           #(toks (fs 1)) (has? <m "(bad)")] . acc)))))))
      (go (lines (rdf (tmpd + "/.fuzz.out"))) ()))
 
- ; a64/riscv: llvm-mc --disassemble. a fixed-width lane gets full consumption for free
- ; (count*4 must equal the byte count); riscv rides the C extension and is variable width, so
- ; vw walks the stream instead -- an instruction's first byte has its low two bits set on a
- ; 4-byte word and clear on a 2-byte one, which is the whole of risc-v's length encoding here.
+ ; a64/riscv: llvm-mc --disassemble. fixed width checks consumption by count*4; riscv rides the
+ ; c extension, so vw walks the stream: low two bits set on a 4-byte word, clear on a 2-byte one.
  (rv-icount bs)
   (: n #bs
      (go i k) (n <= i ? k (go (i + (((bs i) & 3) = 3 ? 4 2)) (k + 1)))
@@ -177,9 +164,8 @@
         (: in (snip op (a + 1) b)
            ; the scaled index: reg*S
            st (idx-of in "*")
-           ; ix/sc take their values from r below and nowhere else: a `:` binds a
-           ; repeated name once, at its first spelling, so an earlier ix/sc here would
-           ; be the whole answer and the scaled index would read as absent.
+           ; ix/sc take their values from r below only: `:` binds a repeated name at its first
+           ; spelling, so an earlier ix/sc would win and the scaled index read as absent
            r (? (charm? st)
                 (: ib (: (bk i) (0 < i && (in (i - 1) @ c (digit? c || (97 <= c && c <= 122))) ? (bk (i - 1)) i) (bk st))
                    ixs (snip in ib st) scs (snip in (st + 1) (st + 2))

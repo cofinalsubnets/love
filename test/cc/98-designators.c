@@ -1,8 +1,6 @@
-/* designator chains (C99 6.7.9): .a.b = v, .a[i] = v, [i].f = v -- and the
- * backward-jumping designator ({ [2] = 9, [0] = 1 }), which must not end the
- * fill walk. globals image (placement-sorted), locals zero-then-store; a
- * consecutive same-head run (.lim[0], .lim[1]) coalesces into ONE member
- * image -- musl's sigaction/setrlimit/getaddrinfo shapes. */
+/* designator chains (C99 6.7.9): .a.b, .a[i], [i].f, and a backward jump
+ * ({ [2] = 9, [0] = 1 }) that must not end the fill. globals and locals; a same-head
+ * run (.lim[0], .lim[1]) coalesces into one member. */
 
 struct in { int b; int c; };
 struct sa { long h; struct in nest; int flags; long lim[2]; };

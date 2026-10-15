@@ -1,6 +1,5 @@
-/* the landing law's units (test/gate/ccarch.sh): built by clang and by mooncc under
-   -mbranch-protection=pac-ret+bti -mstrict-align, each fn's landing, its exits and every
-   packed access held to clang's */
+/* landing units built by clang and by mooncc under -mbranch-protection=pac-ret+bti
+   -mstrict-align: each fn's landing, exits and packed accesses held to clang's */
 struct __attribute__((packed)) pk { char c; int i; long l; short s; };
 struct __attribute__((packed)) pka { char c; int a[4]; };
 struct __attribute__((packed)) pkb { char c; unsigned x : 12; unsigned y : 9; unsigned z : 30; };

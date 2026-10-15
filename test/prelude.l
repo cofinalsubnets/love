@@ -1,6 +1,5 @@
 (: l [0 1 2 3 4 5 6 7 8 9]
    (diag f x) (f x x)
-   (ln x) (foldl (n \ _ \ 1 + n) 0 x)
    m (map (diag (+)) l)
    n (map (* 2) l)
    (even n) (n ? (odd (-1 + n)) 1)
@@ -13,8 +12,8 @@
   (m = n)
   ('(1 2 3 4) = take 4 '(1 2 3 4 5 6 7 8))
   ('(5 6 7 8) = drop 4 '(1 2 3 4 5 6 7 8))
-  (10 = ln (cat es os))
-  (ln es = ln os)
+  (10 = #(cat es os))
+  (#es = #os)
   (all even es)
   (all odd os)
   (all even m)

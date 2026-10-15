@@ -1020,7 +1020,9 @@
      (gate-spawn q dir who only)
       (? !(string? bee-self) "this bee cannot find its own binary"
          (: _ (umkdirs (dir + "/out") 493)
-            line ("cd " + sh-quote dir + " && BEE_NAME=" + sh-quote who + " PWD=" + sh-quote dir + " exec "
+            ; BEE_AS, not BEE_NAME: the caller's own mcp card holds who while the gate runs, and
+            ; BEE_NAME takes a name only when it is free
+            line ("cd " + sh-quote dir + " && BEE_AS=" + sh-quote who + " PWD=" + sh-quote dir + " exec "
                   + sh-quote bee-self + " bee --gate " + sh-quote q + cats (map (\ l (" " + sh-quote l)) only)
                   + " >> " + sh-quote (dir + "/out/gate.log") + " 2>&1")
             nul (openfd "/dev/null" 0)

@@ -1,15 +1,7 @@
-; test/holo/fuzz/sysdiff.l -- holo system-lane differential: every privileged encoding,
-; byte-exact against llvm-mc. fuzz.l is a decode oracle (holo may legally pick among
-; encodings); the system lane is the opposite -- each op has exactly one encoding and a
-; small enumerable operand space, so the sharp oracle is assemble-side: write the
-; instruction llvm-mc's way, assemble, demand the same bytes holo produced.
-;
-; the a64 op tables and riscv's CSR table are read straight out of src/love/holo/a64.l
-; and rv64.l, so a row added to holo is checked the next run with no edit here -- the
-; uncovered row is the one that ships wrong. the x86 side has no name tables (the operand
-; space IS the register file), so it enumerates. SYSDIFF_ARCH=x64|a64|rv64 narrows;
-; default all three.
-;
+; holo's system lane byte-exact against llvm-mc: each op has one encoding and a small operand
+; space, so llvm-mc assembles its own spelling and the bytes must match. the a64 op tables and
+; riscv's csr table are read from holo's sources, so a new row is checked with no edit here; x86
+; enumerates its register file. SYSDIFF_ARCH=x64|a64|rv64 narrows, default all three.
 ;   out/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
 (borrow 'posix)
@@ -163,9 +155,8 @@
  ro-reject "expected writable system register"
  wo-reject "expected readable system register"
  (llvm arch asms)
-  ; the triple is LLVM's word, never ours: arch-uname is the tree's table for exactly
-  ; that (uname's machine, and the head of a gnu triple). llvm-mc refuses an unknown
-  ; target outright, so a nom that reached it here would read as 0 encodings.
+  ; the triple is llvm's word: arch-uname maps uname's machine to it. llvm-mc refuses an
+  ; unknown target, so a stray name would read as 0 encodings.
   (: triple (peep arch-uname (archof arch) "x86_64")
      ; a64: the extensions holo's names come from (pan, mte, sve, sme, pauth keys, the range
      ; and outer-shareable tlbis, dc cvap), so a name is held to its word, not refused for its level
