@@ -221,7 +221,7 @@
  ; lore's sky through the eye's gain, for mesh-frame's bare: k 1 the colours of the pixels
  ; S of the view v left bare, the stars ss (sky-stars) a pixel each among them; k past 1 the sky
  ; asked at the corners of k by k squares and shaded across each by facets, on the pixels
- ; the scene left bare, and the stars put on where it left them
+ ; the scene left bare, and by night the stars put on where it left them
  (mesh-sky ss lt wx e sim t0 k)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
@@ -230,7 +230,7 @@
                   (shine (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
          (\ v f B (: g (sky-grid v lt wx e sim k f) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
-                     (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-of lt wx X Y Z (e 0) (e 2) sim) ix))))]))
+                     (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-of lt wx X Y Z (e 0) (e 2) sim) ix)))))]))
  ; the sky over the view's bare pixels in the frame f, asked every k pixels across and
  ; down, a flat tray
  (sky-grid v lt wx e sim k f)
