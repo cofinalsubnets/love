@@ -1060,8 +1060,8 @@
    (flo9? g env e)
     (e @ ('flo . _) 1
          ('var nm) (vent g env nm @ en (two? en && flo? <>>en))
-         ('cast ty . _) (flo? ty)
-         ('call ('var nm) . _) (: sig (bad? (vent g env nm) ? (g 'sigs nm)) (two? sig && flo? <sig))
+         ('cast . ty . _) (flo? ty)
+         ('call . ('var nm) . _) (: sig (bad? (vent g env nm) ? (g 'sigs nm)) (two? sig && flo? <sig))
          ('bin o a b && elem o '(+ - * /)) (flo9? g env a || flo9? g env b)
          ('un 'neg x) (flo9? g env x)
          ('cond _ a b) (flo9? g env a || flo9? g env b)
