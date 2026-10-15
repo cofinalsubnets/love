@@ -10,10 +10,18 @@
 ;   (lanes-doc _)   AGENTS.md's table, its lines (love bee --lanes-doc)
 ;   (lanes-map _)   lanes.sh's chains and alone set, `chain A,B,..` and `alone A B ..` lines
 ;                   (love bee --lanes-map)
+;   (lanes-covers mk) test/test.mk's text -> lane -> the lanes it runs: its prerequisites and the
+;                   targets of its recipe's $(MAKE) lines, read as written
+;   (lanes-plan paths baked covers)  the lanes a change owes, in the order to run them:
+;                   [[lane heavy? cost why] ..]. light before heavy, cheap first, a lane another
+;                   owed lane runs dropped, test always and test_slow last. why is the paths that
+;                   owed it
+;   (lanes-lines plan)  the plan as `lane light|heavy cost why` lines (love bee --lanes)
 ;
 ; a glob's `*` crosses `/`; "baked" is the crew roster ($(ho)/.dist.list), not a glob. every
 ; change owes `make test` besides, and test_slow runs last on the tree that lands
-(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-doc lanes-map)
+(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-doc lanes-map
+                 lanes-covers lanes-plan lanes-lines)
 
 (: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_ccrv64" "test_ccwasm" "test_ccthumb1"
                "test_ccthumb2" "test_fixpoint" "test_moonfuzz" "test_inle"]
@@ -33,7 +41,8 @@
      ["" ["src/apps/hearts/*"] ["test_hearts" "test_hearts_boot"] ""]]
    lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_boards" "test_hearts"
                 "test_hearts_boot" "moon-flex" "moon-bison"]
-   lanes-cost {"test_quick" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_vec" 1679 "test_xfixpoint" 2365}
+   lanes-cost {"test" 195 "test_quick" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
+               "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
    lanes-chains
     [["test_extract" "test_big" "test_encver"]
      ["test_inle" "test_kernel_vmx" "test_disk" "test_uefi" "test_kboot" "test_kmitty" "test_kverb" "test_kernel_uproc"
@@ -43,7 +52,8 @@
       "test_nucleo446" "test_nucleo446_smoke" "test_teensy41" "test_playdate" "test_rp2040" "test_boards"
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64"]]
-   lanes-alone ["test_hdiff" "test_ccwarn" "test_gcstress" "test_gcstress_full"]
+   ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot
+   lanes-alone ["test_hdiff" "test_ccwarn" "test_gcstress" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
 
    (lm-tick s) ("`" + s + "`")
    (lanes-doc _)
@@ -51,5 +61,57 @@
                 ("- " + (#label > 0 ? label (join ", " (map lm-tick globs))) + " -> " + join " " (map lm-tick ls) + tail))
          lanes-rules)
    (lanes-map _)
-    (map (c \ "chain " + join "," c) lanes-chains + [("alone " + join " " lanes-alone)]))
+    (map (c \ "chain " + join "," c) lanes-chains + [("alone " + join " " lanes-alone)])
+
+   ; a glob's stars cross `/`: the first piece a prefix, the last a suffix, the rest in order between
+   (lm-from s p i) (? (#s < i + #p) -1 (snip s i (i + #p) = p) i (lm-from s p (i + 1)))
+   (lm-mid s ps i lim)
+    (? (atom? ps) 1
+       (: j (lm-from s <ps i) (? ((j < 0) || (lim < j + #<ps)) 0 (lm-mid s >ps (j + #<ps) lim))))
+   (lm-glob? g s)
+    (: ps (split "*" g) a <ps z (ps (#ps - 1))
+       (? (#ps = 1) (g = s)
+          (#s < #a + #z || !(starts? s a) || !(ends? s z)) 0
+          (lm-mid s (take (#ps - 2) >ps) #a (#s - #z))))
+   (lm-hit? baked p g) (g = "baked" ? (elem p baked) (lm-glob? g p))
+
+   (lm-tests s) (filter (w \ starts? w "test_") (words s))
+   (lm-joined ls)
+    (rev (foldl (\ acc l (? (two? acc && ends? <acc "\\") ((snip <acc 0 (#<acc - 1) + " " + l) . >acc) (l . acc)))
+                () ls))
+   (lanes-covers mk)
+    (: (add t ns s) (foldl (\ t n (pin t n (peep t n () + lm-tests s))) t ns)
+       (step st l)
+        (st @ [t cur]
+         (? (starts? l "\t") (? (two? cur && 0 <= lm-from l "$(MAKE)" 0) [(add t cur l) cur] st)
+            (#l = 0 || starts? l "#") st
+            (: i (lm-from l ":" 0) ns (words (snip l 0 (i < 0 ? 0 i)))
+               (? ((i < 0) || !(two? ns) || any (n \ !(starts? n "test")) ns || (0 <= lm-from l "=" 0)) [t ()]
+                  [(add t ns (snip l (i + 1) #l)) ns]))))
+       <(foldl step [{} ()] (lm-joined (lines mk))))
+   ; every lane l runs, through its members' members too
+   (lm-under covers l)
+    (:- (go [l] ()) (go todo seen)
+        (? (atom? todo) seen
+           (elem <todo seen) (go >todo seen)
+           (go (peep covers <todo () + >todo) (<todo . seen))))
+   (lm-heavy? l) (any (h \ h = l || (ends? h "%" && starts? l (snip h 0 (#h - 1)))) lanes-heavy)
+   (lanes-plan paths baked covers)
+    (: owed (foldl (\ t p (foldl (\ t r (r @ [_ globs ls _]
+                                          (? (any (lm-hit? baked p) globs)
+                                             (foldl (\ t l (: o (peep t l ()) (pin t l (elem p o ? o (o + [p]))))) t ls) t)))
+                                 t lanes-rules))
+                   {} paths)
+       ls (filter (l \ l != "test" && l != "test_slow") (keys owed))
+       under (map (l \ [l (filter (m \ m != l) (lm-under covers l))]) ls)
+       kept (filter (l \ !(any (u \ <u != l && elem l (u 1)) under)) ls)
+       row (\ l why [l (lm-heavy? l) (peep lanes-cost l ()) why])
+       by (sort (map (l \ [(lm-heavy? l) (peep lanes-cost l 900) l]) kept))
+       ([(row "test" ["every change"])] + (map (k \ k @ [_ _ l] (row l (owed l))) by)
+        + [(row "test_slow" ["last, on the tree that lands"])]))
+   (lanes-lines plan)
+    (map (r \ r @ [l h c why]
+                (l + " " + (h ? "heavy" "light") + " " + (charm? c ? (show c + "s") "?") + " "
+                 + join " " (take 3 why) + (#why > 3 ? (" +" + show (#why - 3)) "")))
+         plan))
 ) ; module lanemap

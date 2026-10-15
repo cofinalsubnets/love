@@ -49,6 +49,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --lanes-doc** \| **--lanes-map**
 
+**love bee --lanes** \[*base* \[*head*\]\]
+
 **love bee --nest** *dir*
 
 **love bee --node**
@@ -63,7 +65,7 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 - **shell**, which runs a command line in **lush -a** (this binary's shell, with love's own verbs ahead of PATH);
 - **list_sessions** and **send_message**, described under SESSIONS AND MESSAGES;
 - **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS;
-- **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS;
+- **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS, and **lanes**, after them;
 - **queue_read**, **queue_row**, **queue_lead**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
 - in a pane of **love mitty**, **pane_list**, **pane_read**, **pane_type**, **pane_open**, **pane_focus** and **pane_close**: the desktop's other panes by id, read as text, typed into as keys (a newline is Enter, and the answer is the pane once quiet), opened beside, given the keyboard, closed. The model's own pane is never typed into or closed.
 
@@ -177,6 +179,8 @@ The machine is shared, and **src/apps/locks.l** keeps its locks: an exclusive lo
 The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*), **lock_release** and **lock_list**; the last two run without asking. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **src/apps/locks.l** says so.
 
 Which lanes a change owes is data, **src/apps/lanemap.l**: path rules, each naming the lanes owed by a change that touches its paths, the heavy lanes, and the chains and alone set that **test/gate/lanes.sh** runs lanes by. **love bee --lanes-doc** prints AGENTS.md's table, which is laid from it, and test/host/bee.l fails when the two disagree. **--lanes-map** prints lanes.sh's chains and alone set.
+
+**love bee --lanes** and the **lanes** tool (*branch*, *base*; it runs without asking) answer the lanes a change owes, in the order to run them. The change is *head*'s (HEAD unless given) against *base*, or, unless given, against where *head* left the branch of the one queue here. Its paths come from **git diff --name-only**, or **sb paths** in the hub when *base* is no commit here. A rule owes its lanes to every path it matches. A lane that another owed lane runs is left out: its prerequisites and its recipe's **$(MAKE)** lines, read from **make -pq**. The light lanes come first, then the heavy ones, each cheapest first. **test** always heads the list and **test_slow** always closes it. Each line is the lane, **light** or **heavy**, its wall seconds on a shared box (**?** when unmeasured) and the paths that owed it.
 
 # HOSTS
 

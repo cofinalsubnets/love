@@ -15,6 +15,7 @@
 ;   love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..) | --hosts   work on another host
 ;   love bee --nest DIR                      a worker nest from the hub (SB_HUB), at its head
 ;   love bee --lanes-doc | --lanes-map       the lanes a change owes: AGENTS.md's table, lanes.sh's chains
+;   love bee --lanes [BASE [HEAD]]           the lanes HEAD's change owes, in order, and why
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -176,6 +177,12 @@
              {"name" (prop "the lock's name")} ["name"])
        (tool "lock_list" "The machine's locks: who holds what, who waits, memory available and load."
              {} [])
+       (tool "lanes" ("The lanes a change owes, in the order to run them, one line each: the lane, light or heavy, "
+                      + "its wall seconds on a shared box (? when unmeasured) and the paths that owed it. test comes "
+                      + "first and test_slow last; a lane another owed lane runs is left out.")
+             {"branch" (prop "the branch or commit to answer for, HEAD unless given")
+              "base" (prop "the commit its change is measured from; unless given, where it left the branch of the one queue here")}
+             [])
        (tool "queue_read" ("A merge queue's text as it stands: its header, rules, leader and rows. "
                            + "queue/NAME@BOX reads the queue in BOX's hub, as the other queue tools reach it.")
              {"queue" (prop "refs/queue/NAME for git, queue/NAME for an sb ledger in the hub, or either @BOX")}
@@ -1021,6 +1028,24 @@
          r)
      ; a commit's or a tree's full sha, "" when there is none
      (git-sha x) (git1 ("rev-parse --verify -q " + sh-quote (x + "^{commit}")))
+     ; a change's paths, sorted: git's diff when base is a commit here, else the hub's sb
+     (row-paths base head)
+      (sort (filter (\ s (0 < #s))
+                    (lines (? (0 < #(git-sha base)) (git1 ("diff --name-only " + sh-quote base + " " + sh-quote head))
+                              (q-sb ("paths " + sh-quote base + " " + sh-quote head + " 2>/dev/null"))))))
+     ; the lanes a change owes (src/apps/lanemap.l), from base, or from where head left the branch
+     ; of the one queue here. the covers are test/test.mk's; the baked roster the build's, and with
+     ; no build every .l counts as baked
+     (lanes-of base head)
+      (: qs (lines (git1 ("for-each-ref --format=" + sh-quote "%(refname:lstrip=2)" + " refs/queue")))
+         b (? (0 < #base) base (#qs = 1) (git1 ("merge-base " + sh-quote <qs + " " + sh-quote head)) "")
+         lm (\ n (cite 'lanemap n))
+         (? (#b = 0) [0 "no base: name one, or keep one queue here to measure from"]
+            (0 < #(git-sha "HEAD") && #(git-sha b) = 0) [0 ("no commit " + b + " here")]
+            (0 < #(git-sha "HEAD") && #(git-sha head) = 0) [0 ("no commit " + head + " here")]
+            (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
+               bk (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
+               [1 (unlines (lm 'lanes-lines (lm 'lanes-plan ps bk (lm 'lanes-covers (string? mk ? mk "")))))])))
      (git-tree x) (git1 ("rev-parse --verify -q " + sh-quote (x + "^{tree}")))
      ; the base line a new queue starts from: the branch it is named for, at its sha
      (q-base-of q)
@@ -1444,12 +1469,13 @@
               + " merges " + g + " with the gated tree " + gt + ", and the tip's tree is " + git-tree br
               + ": the row stays; tell the leader")
             [(git1 ("rev-parse --short " + sh-quote at))
-             (? (0 < #from) (git1 ("diff --name-only " + from + " " + at + " -- " + bee-served)) "")]))
+             (? (0 < #from) (q-served (row-paths from at)) "")]))
      (q-landed-sb was g)
       (: cur (q-psid "head")
          (? (cur != g) ("the hub's head is " + (0 < #cur ? cur "unreadable") + ", not the gated set " + g
                         + ": land it first, as queue_land says")
-            [g (: ws (words bee-served) (q-joins (filter (\ x (elem x ws)) (lines (q-sb ("paths " + sh-quote was + " " + sh-quote g + " 2>/dev/null"))))))]))
+            [g (q-served (row-paths was g))]))
+     (q-served ps) (: ws (words bee-served) (q-joins (filter (\ x (elem x ws)) ps)))
      ; --- the git mirror of an sb queue: a landing written as one commit of the hub's tree on the
      ; mirror line's branch -- its paths from the hub's blobs, and the parent's paths under the
      ; KEEP prefixes kept, what the hub's store leaves out -- or, for a publish, taken from the
@@ -2158,6 +2184,7 @@
           "lock_acquire" (lock-acquire in)
           "lock_release" (lock-release in)
           "lock_list" (lock-list 0)
+          "lanes" (lanes-of (field in "base" "") (field in "branch" "HEAD"))
           "pane_list" (bee-hands 'panes ())
           "pane_read" (: r (bee-hands 'read (in "id")) [<r (clip (r 1))])
           "pane_type" (bee-hands 'type (in "id") (in "text"))
@@ -2202,6 +2229,7 @@
                  "lock_acquire" (in "name" + " " + field in "kind" "exclusive")
                  "lock_release" (in "name")
                  "lock_list" ""
+                 "lanes" (field in "branch" "HEAD")
                  ("pane_list" || "pane_open") ""
                  ("pane_read" || "pane_focus" || "pane_close") (in "id")
                  "pane_type" (in "id" + ": " + (: t (in "text") (#t <= 60 ? t (snip t 0 60 + "…"))))
@@ -2213,7 +2241,7 @@
      ; own, or answer how to land without landing. read_file runs unasked inside the working tree
      ; only. a message or a queue write asks, since either can start a turn in a peer that acts
      ; without asking
-     bee-free ["list_sessions" "check_job" "stop_job" "lock_list" "lock_release" "queue_read" "queue_land"
+     bee-free ["list_sessions" "check_job" "stop_job" "lock_list" "lock_release" "lanes" "queue_read" "queue_land"
                "pane_list" "pane_read"]
      (free? name in) (? (name = "read_file") (in-tree? (in "path")) (elem name bee-free))
 
@@ -2573,7 +2601,7 @@
      ; whole conversation without a child. an id is presence, not truth: requests count from 0 ---
      (line-of p) (:- (go ()) (go acc) (see p @ -1 (two? acc ? (string (rev acc))) 10 (string (rev acc)) c (go (c . acc))))
      mcp-shared ["list_sessions" "send_message" "queue_read" "queue_row" "queue_lead" "queue_land" "queue_landed"
-                 "lock_acquire" "lock_release" "lock_list"]
+                 "lock_acquire" "lock_release" "lock_list" "lanes"]
      mcp-tools
       ([{"name" "approve"
          "description" "Ask this bee's user whether a tool may run: Claude Code's permission prompt, answered from bee's screen."
@@ -3064,6 +3092,10 @@
             ; the lanes a change owes (src/apps/lanemap.l): AGENTS.md's table, lanes.sh's chains
             (two? as && elem <as ["--lanes-doc" "--lanes-map"])
              (: _ (puts (unlines ((cite 'lanemap (<as = "--lanes-doc" ? 'lanes-doc 'lanes-map)) 0))) 0)
+            (two? as && <as = "--lanes" && #as <= 3)
+             (: r (lanes-of (#as > 1 ? (as 1) "") (#as > 2 ? (as 2) "HEAD"))
+                _ (puts (<r ? (r 1) ("love bee --lanes: " + r 1 + "\n")))
+                (<r ? 0 1))
             ; ahead of --hud, which the hooks add so that a bee older than --state only prints its hud
             (two? as && <as = "--state") (: _ (state-cmd as) 0)
             (elem "--hud" as) (: _ (puts (unlines (hud-lines 0))) 0)   ; once, as text
@@ -3102,6 +3134,7 @@
        love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..)   a command on a host that can
        love bee --hosts                              the hosts this box knows
        love bee --lanes-doc | --lanes-map            the lanes a change owes: AGENTS.md's table, lanes.sh's chains
+       love bee --lanes [BASE [HEAD]]                the lanes HEAD's change owes, in order, and why
        love bee --nest DIR                           a worker nest made from the hub (SB_HUB, or (hub ..)) at its head
        love bee --node                               a fresh box checked in order: what it has, and the next step
        love bee --door [KEY ..]                      the door's hello here; KEY: the authorized_keys line that holds a key to it
