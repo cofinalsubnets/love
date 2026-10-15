@@ -234,6 +234,7 @@
    (emit-orx4 d base index scale disp) (x64-memx 0 '(11) d base index scale disp)
    (emit-xorx4 d base index scale disp) (x64-memx 0 '(51) d base index scale disp)
    (emit-andm4 d base off) (x64-mem () 0 '(35) d base off)
+   (emit-decm base off) (mrex 1 '(255) 1 0 (rn base) + '(255) + mem 1 base off)   ; FF /1  dec qword [base+off], the flags set
    (emit-orm4 d base off) (x64-mem () 0 '(11) d base off)
    (emit-xorm4 d base off) (x64-mem () 0 '(51) d base off)
    (emit-stxb base index scale disp s) (x64-memx 0 '(136) s base index scale disp)     ; 88    mov BYTE, sl (REX.W=0; mrex forces the prefix for s 4-7: spl/sil.., not ah/ch..)
@@ -716,7 +717,7 @@
          ('lea . emit-lea) ('lean . emit-lea)              ; lean: cc's consumed frame address -- same bytes, invisible to the sibcall escape gate
          ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)
          ('ldxb . emit-ldxb) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
-         ('andx4 . emit-andx4) ('orx4 . emit-orx4) ('xorx4 . emit-xorx4) ('andm4 . emit-andm4) ('orm4 . emit-orm4) ('xorm4 . emit-xorm4)
+         ('andx4 . emit-andx4) ('orx4 . emit-orx4) ('xorx4 . emit-xorx4) ('andm4 . emit-andm4) ('orm4 . emit-orm4) ('xorm4 . emit-xorm4) ('decm . emit-decm)
          ('ldsdx . emit-ldsdx) ('stsdx . emit-stsdx) ('ldssx . emit-ldssx) ('stssx . emit-stssx)
          ('ldsdl . emit-ldsdl)
          ('ld1 . emit-ld1) ('ld2 . emit-ld2) ('ld4 . emit-ld4)

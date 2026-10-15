@@ -182,7 +182,7 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  g->reach[ReachChain] = (word) lvm_chain, g->reach[ReachStr] = (word) lvm_str, g->reach[ReachMap] = (word) lvm_map_lookup;
  g->reach[ReachNom] = (word) lvm_nom, g->reach[ReachMint] = (word) lvm_sym, g->reach[ReachGem] = (word) lvm_gembox;
  g->reach[ReachCask] = (word) lvm_cask, g->reach[ReachDrive] = (word) callout_drive, g->reach[ReachResume] = (word) callout_resume;
- g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc, g->reach[ReachGap] = map_gap;
+ g->fair = 64, g->ticks = 0, g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc, g->reach[ReachGap] = map_gap;
  // book + macro maps (lookup-lambdas) then the main task thread.
  if (ok(g = map_new(g)) && ok(g = map_new(g)) && ok(g = have(g, 9))) {
   union u *M = bump(g, 9);            // sp[0]=macro, sp[1]=book (no GC since have)
@@ -394,7 +394,7 @@ static lvm(lvm_please) {
  Sp[0] = putcharm((intptr_t) g->n_gc);
  Ip += 1; love_musttail return Continue(); }
 
-// (gauge 0) -> a list of sixteen VM stats, so a caller can match it with @:
+// (gauge 0) -> a list of seventeen VM stats, so a caller can match it with @:
 //   [0] len       pool size (words)
 //   [1] heap      words used from base (core + live heap)
 //   [2] stack     stack height (words)
@@ -411,9 +411,10 @@ static lvm(lvm_please) {
 //  [13] n_resize  pool reallocations so far (the pool-cliff tell)
 //  [14] minor_hi  peak words one minor copied -- the pause gauge (a copying
 //  [15] major_hi  peak words one major copied    collection's pause is its copy volume)
+//  [16] ticks     work in 64-step units: native countdowns refilled, and fairness yields (a clock-free cost)
 // derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap
 static lvm(lvm_gauge) {
- enum { N = 16 };
+ enum { N = 17 };
  Have(N * Width(struct chain));
  struct chain *c = (struct chain*) Hp;
  Hp += N * Width(struct chain);
@@ -435,6 +436,7 @@ static lvm(lvm_gauge) {
  Gs(13, g->n_resize);
  Gs(14, g->minor_hi);
  Gs(15, g->major_hi);
+ Gs(16, g->ticks);
  #undef Gs
  love_musttail return Answer(word(c)); }
 
