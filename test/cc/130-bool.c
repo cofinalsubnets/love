@@ -1,8 +1,5 @@
-/* _Bool is ONE BYTE and conversion to it compares with 0 (C11 6.3.1.2) -- never
- * a truncation. Every write site normalizes: init, assignment, cast, ++/--, the
- * bitfield RMW, a param's arrival, a return; a static's image folds the same way.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* _Bool is one byte and converts by comparing with 0, never truncating: init,
+ * assign, cast, ++/--, bitfield, param, return, static image. each check adds 1: the exit code is the pass count. */
 
 typedef _Bool bl;
 

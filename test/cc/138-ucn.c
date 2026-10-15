@@ -1,12 +1,6 @@
-/* universal character names (C99 6.4.3), mandatory since C99 and absent until
- * 2026-08-14. A UCN names a code POINT, not a byte -- which is the whole trap:
- * "\u00E4" in a NARROW string is the two utf-8 bytes C3 A4, where "\xE4" is the
- * one byte E4. The lexer already re-encoded escapes for the wide faces; the narrow
- * one had to learn it, so escseq reports whether the escape was a UCN.
- *
- * An IDENTIFIER may be spelled with one too (6.4.2.1), and names the same object the
- * raw utf-8 spelling does -- down to the bytes of the symbol the .o exports.
- */
+/* universal character names (C99 6.4.3) name a code point: "\u00E4" in a narrow
+ * string is the utf-8 bytes C3 A4. an identifier spelled with one names the same
+ * object as its raw utf-8 spelling. */
 char narrow[] = "\u00E4";
 char emoji[]  = "\U0001F600";
 

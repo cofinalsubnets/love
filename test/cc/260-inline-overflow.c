@@ -1,7 +1,5 @@
-/* an inline helper whose local's address goes only to an overflow builtin (linux's
- * kmalloc_array: `if (__builtin_mul_overflow(n, size, &bytes)) return NULL;`): the product, the
- * overflow it reports, and add/sub beside it, with constant and runtime operands. moon.sh holds
- * that it is spliced; this holds what it answers. freestanding, exit-code only. */
+/* an inline helper whose local's address goes only to an overflow builtin: product, overflow
+ * flag, add and sub, constant and runtime operands. exit-code only. */
 
 typedef unsigned long size_t;
 

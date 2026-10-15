@@ -1,7 +1,5 @@
-/* gcc's `a ?: b`, held to gcc: a when it is true, else b, with a read ONCE -- a call, an
- * increment or an assignment in it happens one time -- and a constant a still a constant
- * (an enumerator, an array bound, a static initializer). the arms convert as `?:` does,
- * and the operator nests to the right. */
+/* `a ?: b`, held to gcc: a read once, a constant a still constant (enumerator, bound, static
+ * initializer), arms convert as ?: does, nesting to the right. */
 
 static int calls;
 static int bump(int v) { calls++; return v; }

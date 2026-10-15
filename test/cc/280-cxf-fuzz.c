@@ -1,7 +1,6 @@
-/* float _Complex arithmetic in float: + - * on two float complexes round as C's float does
- * (FLT_EVAL_METHOD 0) -- re = ac - bd is three single roundings, not one double one. a random
- * walk, every result's bits hashed into the exit code; a mixed float/double complex rides the
- * double lane. / by a complex is libgcc's __divsc3/__divdc3 bit for bit, by a real each part */
+/* float _Complex rounds in float (FLT_EVAL_METHOD 0): re = ac - bd is three single roundings.
+ * a random walk hashed into the exit code; mixed float/double rides double; / by a complex is
+ * __divsc3/__divdc3 bit for bit, by a real per part */
 static unsigned st = 99u;
 static unsigned rnd(void) { st ^= st << 13; st ^= st >> 17; st ^= st << 5; return st; }
 static float rf(void) { union { unsigned u; float f; } x; unsigned r = rnd();

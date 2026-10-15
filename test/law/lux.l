@@ -1,8 +1,6 @@
-; test/law/lux.l -- xmonad's QuickCheck properties for src/apps/lux/core.l, in exact arithmetic,
-; plus a seeded fuzz. Reads src/apps/lux/core.l's names off the row that loads them both
-; (t/gates.l 'lux). Split into small independent top-level `:` forms -- each
-; self-contained, nothing new leaks, and no single form grows big enough to stress the
-; whole-form compiler.
+; test/law/lux.l -- xmonad's QuickCheck properties for lux, in exact arithmetic, plus a
+; seeded fuzz; the names come from test/gate/gates.l's 'lux row. small self-contained
+; top-level `:` forms, so nothing leaks and no one form grows large.
 
 ; --- the zipper laws ---
 (borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
@@ -46,8 +44,7 @@
       (wstagof s2 10 = 1) !(wstagof s2 99)
       (wsring s2 = '(30 20 10))))                                               ; no floats: the ring is the tiled row
 
-; --- the floating half (W.float / W.sink): the alist is geometry alone, so
-;     lifting a window never moves it in the ring and sinking it never moves it back ---
+; --- the floating half (W.float / W.sink): geometry alone, so float and sink never move the ring ---
 (: s2 (admit (admit (admit (sheaf '(1 2 3)) 10) 20) 30) r99 '(20 20 200 100)
    (sameset? a b) (#a = #b && all (x \ any (= x) b) a)
    f2 (wsdofloat s2 20 r99)
@@ -122,8 +119,8 @@
       (wsfocw s4 10 = s4) (wsfocw s3 99 = s3)                                    ; hidden or unknown: no-op
       (wsvistags (wsfocw s3 30) = '(1 2))))                                      ; nothing trades screens
 
-; --- a float's home follows its screen: floated or moved with its centre on another screen, it
-;     changes tag, takes the focus there, and that screen is current; hidden, or on its own screen, nothing moves ---
+; --- a float centred on another screen takes that screen's tag, focus and currency; hidden,
+; or on its own screen, nothing moves ---
 (: r1 '(0 0 800 600) r2 '(800 0 800 600)
    s2 (wsrescreen (admit (admit (sheaf '(1 2 3)) 10) 20) [r1 r2])              ; tag 1 (20 10) on r1, tag 2 empty on r2
    f (wsdofloat s2 10 '(900 100 200 100))                                       ; centre 1000: the right screen
@@ -160,7 +157,7 @@
          (all (w \ wstagof sF w = wscur sF) (wsring sF))                             ; and the ring holds exactly what lives here
          (wsrow sF = filter (w \ !(wsfloating? sF w)) (wsring sF))))                  ; the tiled row is the ring's float-free subsequence
 
-; --- the layout engine (src/apps/lux/layout.l): geometry is a partition ---
+; --- the layout engine (layout.l): geometry is a partition ---
 (: (area p) (p 3 * p 4)                                                ; a placement's w*h
    (sumarea ps) (foldl (a \ p \ a + area p) 0 ps)
    r (rct 0 0 800 600) full-area 480000
@@ -196,7 +193,7 @@
       ; a message ||| doesn't know (shrink) delegates to the active sublayout
       (ch-cur (lay-msg (choice [L1 full]) 'shrink z3) 2 = 0.48)))
 
-; --- the book (src/apps/lux/layout.l): one layout per tag, () = every tag on the default ---
+; --- the book: one layout per tag, () = every tag on the default ---
 (: L1 (resizable-tall 1 0.02 0.5) b1 (lays-put () 2 full)
    (test
       (lays-of () 1 L1 = L1)                                                     ; no entry: the default
@@ -204,10 +201,8 @@
       (lays-of (lays-put b1 2 L1) 2 full = L1) (#(lays-put b1 2 L1) = 1)         ; put replaces, never doubles
       (#(lays-put b1 1 L1) = 2)))
 
-; --- the tiling ledger (rtwinsrow, test/uulay.l: proved of the model in uu,
-; --- certified by Rocq + Lean; here the same law watched on the metal):
-; --- rt-tile's placements name the row exactly -- every window placed once,
-; --- none invented, row order kept -- whatever the master count ---
+; --- the tiling ledger: rt-tile places every window of the row once, none invented, in
+; row order, whatever the master count ---
 (: (wincol ps) (two? ps ? (<<ps . wincol >ps) ())
    r (rct 0 0 800 600) ws '(10 20 30 40 50) z (zfrom ws)
    (test
@@ -216,7 +211,7 @@
       (wincol <(lay-tile (tall 9) r z) = ws)
       !(wincol <(lay-tile (tall 2) r (zfrom ())))))
 
-; --- the layout modifiers (src/apps/lux/layout.l rung 4): each wraps a layout ---
+; --- the layout modifiers: each wraps a layout ---
 (: (area p) (p 3 * p 4)
    (sumarea ps) (foldl (a \ p \ a + area p) 0 ps)
    r (rct 0 0 800 600) z3 (zfrom '(10 20 30)) z1 (zfrom '(10))
@@ -251,10 +246,8 @@
       (#<(lay-tile (lay-msg stk 'next-layout z3) r z3) = 3)                 ; next-layout reaches the ||| at the bottom
       (<(lay-tile (lay-msg stk 'toggle-layout z3) r z3) @ q (#q = 1 && <q 5 = 0))))                 ; toggle-full through the stack -> fullscreen, borderless
 
-; --- the open dispatch lane: a layout whose head is a closure answers the
-; --- 'tile/'msg protocol itself -- user layouts enter as plain data, no table
-; --- edit (the lux repl's live-layout hook), and modifiers wrap them like
-; --- any builtin ---
+; --- a layout whose head is a closure answers 'tile/'msg itself: user layouts are plain
+; data, and modifiers wrap them like any builtin ---
 (: (q op lay a b) (op @ 'tile (zfoc b @ f                                  ; focus in a fixed corner box; state = (lay 1)
                                [(f ? [(f . rct 0 0 100 (lay 1))] ()) lay])
                         'msg (a @ 'grow [<lay (lay 1 + 10)]))
@@ -268,7 +261,7 @@
        (#p = 1 && #<p = 6))
       (lay-msg (smart-borders Q) 'grow z3 1 1 = 60)))                  ; ... and a delegated message threads the closure's new state
 
-; --- the manageHook dsl (src/apps/lux/manage.l rung 5): combinators + float actions ---
+; --- the manageHook dsl (manage.l): combinators + float actions ---
 (: s0 (admit (admit (sheaf '(1 2 3)) 10) 20)                                     ; ws1 tiled (20 10); we manage 20
    c (mg-ctx 0 20 (rct 0 0 800 600) (rct 100 100 300 200))                      ; socket 0 (unused: pure actions/mocks), win 20, screen, geom
    yes (c \ 1) no (c \ 0)                                                        ; mock predicates
@@ -295,7 +288,7 @@
       ; manage-for is the assembled config hook -- a runnable closure (X-driven; not called here)
       (lit? manage-default) (lit? (manage-for '("a") '("b") '("c")))))
 
-; --- the Go/Swap zipper halves (src/apps/lux/core.l rung 6): focus/swap by NAME ---
+; --- the Go/Swap zipper halves: focus/swap by name ---
 (zmk 2 '(1) '(3) @ z3                                                            ; row (1 2 3), 2 focused
  (test
     (zfoc (zfocto 3 z3) = 3) (zrow (zfocto 3 z3) = '(1 2 3))                     ; zfocto moves only the focus
@@ -305,7 +298,7 @@
     (zswapw 1 3 (zswapw 1 3 z3) = z3)                                            ; an involution
     (zswapw 1 9 z3 = z3)))                                                       ; a missing party: no-op
 
-; --- the keymap (src/apps/lux/keys.l rung 6): the table's shape, the union law, nextMatch ---
+; --- the keymap (keys.l): the table's shape, the union law, nextMatch ---
 (: (test
       ; every binding is (lib keysym action), the action a tagged list
       (all (r \ #r = 3 && two? (kb-act r) && name? <(kb-act r)) the-keys)
@@ -333,7 +326,7 @@
       (nm-pick '(10 20) 10 '(99 20 10) 1 = 20)                                   ; other-workspace history is ignored
       !(nm-pick '(10) 10 '(10) 1)))                                              ; nowhere to go
 
-; --- EWMH + docks (src/apps/lux/ewmh.l rung 7): strut arithmetic + wire encodings ---
+; --- EWMH + docks (ewmh.l): strut arithmetic + wire encodings ---
 (: (test
       ; _net_wm_strut_partial's 12 values ride whole; _net_wm_strut's 4 get whole-edge spans; short = none
       (strut-parse '(0 0 30 0 0 0 0 0 0 0 400 800) = '(0 0 30 0 0 0 0 0 0 0 400 800))
@@ -380,9 +373,8 @@
  (test (ewmh-cm-win pk = 9) (ewmh-cm-type pk = 5)
          (ewmh-cm-d0 pk = 2) (ewmh-cm-d1 pk = 7) (ewmh-cm-d2 pk = 8)))
 
-; --- the config (src/apps/lux/config.l rung 8): the transliteration's shape.
-;     every law here reads an empty tablet, never lux-conf: this gate must mean
-;     the same thing on a machine that has written ~/.love/etc/lux.l. ---
+; --- the config (config.l): every law reads an empty tablet, never lux-conf, so the
+; gate means the same on a machine with its own ~/.love/etc/lux.l ---
 (: c0 {}
    lay0 (foldr lux-wrap-of (choice (filter two? (map lux-lay-of (conf-roster c0 'layout '((rtall 1 0.02 0.5) (dwindle phi))))))
                (conf-roster c0 'layout-wrap '(minimize smart toggle-full mirror)))
@@ -398,9 +390,8 @@
       (#(keys-build supm 20 9 () ()) = 74) (lit? (manage-for '("a") '("b") ()))
       (<<(conf-roster c0 'startup '(("setxkbmap"))) = "setxkbmap")))
 
-; --- the config door (src/apps/libra/salt.l): every setting overrides, and its absence is
-;     the value that used to be hardcoded. the tablet is built by hand -- salt
-;     pins a setting's whole tail under its head, which is what salt-file writes. ---
+; --- the config door (salt): every setting overrides, its absence the default. the tablet
+; is built by hand: a setting's whole tail under its head, as salt-file writes it ---
 (: (st l) (foldl (t \ p \ pin t <p >p) {} l)                             ; a settings roster -> the tablet salt would answer
    c1 (st '((border 5) (mod alt) (tags 4) (nudge 7)
             (layout (dwindle 2.0)) (layout-wrap smart)
@@ -424,7 +415,7 @@
       (keys-find km altm 52 = '(view 4)) !(keys-find km altm 53)                 ; digit rows stop at the tag count
       (two? lux-tags) (two? lux-keymap) (lit? lux-manage) (two? lux-layout)))    ; and the live ones built, whatever this machine's file says
 
-; --- key specs (src/apps/lux/keys.l): the surface a config writes chords in ---
+; --- key specs: the surface a config writes chords in ---
 (: c2 (foldl (t \ p \ pin t <p >p) {}
              '((bind ((sup Return) (spawn "alacritty" "-e" "tmux"))
                      ((sup shift F1) (view 1))
@@ -452,7 +443,7 @@
       (keys-find km supm 120 = '(kill))                                          ; ... only what it names
       (#km = 75)))                                                          ; 74 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
 
-; --- ~/.Xauthority parsing (src/apps/lux/wire.l rung 8), on mock bytes ---
+; --- ~/.Xauthority parsing (wire.l), on mock bytes ---
 (: (be16 n) (string (n >> 8) + string (255 & n))                                        ; big-endian u16 as two appended bytes
    (fld t) (be16 #t + t)
    (entry num data) (be16 256 + fld "bee" + fld num + fld "MIT-MAGIC-COOKIE-1" + fld data)
@@ -497,7 +488,7 @@
          (x-events (ev 33 32 0 0 0 dl) km dl = [['close]]) (x-events (ev 33 32 0 0 0 5) km dl = ())
          (x-events (ev 17 0 0 0 0 0) km dl = [['close]]) (x-events (ev 12 0 0 0 0 0) km dl = ())))
 
-; --- the rung-8 wire encodings, byte-exact into a jug ---
+; --- more wire encodings, byte-exact into a jug ---
 (: j (jug 0) _ (x-borderpix j 5 77) b (slurp j)                                  ; cwa cwborderPixel
    (test (#b = 16) (b 0 = 2) (b 4 = 5) (b 8 = 8) (b 12 = 77)))
 (: j (jug 0) _ (x-cursor j 9 41 42) b (slurp j)                                  ; OpenFont + CreateGlyphCursor + CloseFont + cwa cwcursor
@@ -506,7 +497,7 @@
            (b 20 = 94) (b 24 = 42) (b 36 = 68)                                   ; CreateGlyphCursor, cid, glyph 68
            (b 52 = 46) (b 60 = 2) (b 68 = 0) (b 69 = 64) (b 72 = 42)))           ; CloseFont; cwa mask 0x4000, value cid
 
-; --- minimize's targeted restore (a taskbar activate; src/apps/lux/layout.l rung 8) ---
+; --- minimize's targeted restore (a taskbar activate) ---
 (: z3 (zfrom '(10 20 30)) r (rct 0 0 800 600)
    M (lay-msg (minimize (resizable-tall 1 0.02 0.5)) '(minimize-window 20) z3)
    (test
@@ -514,8 +505,8 @@
       (#<(lay-tile (lay-msg M '(restore-window 20) z3) r z3) = 3)           ; named restore brings it back
       !(lay-msg M '(restore-window 30) z3)))                                     ; not minimized -> unhandled ()
 
-; --- bsp: mitty's wharf plan as a layout. the row and the plan stay in step, every
-;     placement sits inside the rect, none overlap, and the messages move the focus's split ---
+; --- bsp: the wharf plan as a layout. row and plan stay in step, placements sit inside the
+; rect without overlap, and the messages move the focus's split ---
 (: r (rct 10 20 800 600)
    (bz row foc) (zmk foc (rev (take (posof foc row) row)) (drop (posof foc row + 1) row))
    (tile lay row foc) (lay-tile lay r (bz row foc))

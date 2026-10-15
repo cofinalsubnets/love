@@ -1,7 +1,6 @@
-/* gcc's half of the i386 register-argument check (host.c is mooncc's): both halves build
- * with the same -mregparm=N, and every shape crosses both ways -- words, narrow words, a
- * long long that fits the registers left and one that does not, doubles and structs that
- * never take one, a struct returned through the hidden pointer, a variadic call */
+/* gcc's half of the i386 register-argument check, both halves built with the same -mregparm=N:
+ * words, narrow words, a long long that fits the registers left and one that does not, doubles and
+ * structs, a hidden-pointer return, a variadic call */
 #include <stdarg.h>
 
 struct s3 { int a, b, c; };
