@@ -8,7 +8,9 @@
 
 (: cr-home (cwd 0)
    cr-love (: l <cmdline (l 0 = 47 ? l (cr-home + "/" + l)))
-   cr-app (cr-home + "/src/apps/bee.l")
+   ; the verb the binary carries, baked from this tree's src/apps/bee.l -- the lane makes `host`
+   ; first -- and what a user runs; a read of the source would cost each of 126 runs ~3.5 s
+   cr-app "bee"
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
    cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
@@ -240,7 +242,11 @@
    _ (mkdir wt 493)
    _ (cr-serves [(done 0)])
    sp (cr-run cr-j "" ("--spawn w1 '" + wt + "' 'look around'"))
-   ls (cr-run cr-j "" "--list")
+   ; w1 is idle once its first turn is spent, which takes the time it takes: up to 30 s
+   ls (: t0 (clock 0)
+         (go _) (: l (cr-run cr-j "" "--list")
+                   (? (cr-in (l 1) "w1  idle" || 30000 < clock t0) l (: _ (rest 100) (go 0))))
+         (go 0))
    st (cr-run cr-j "" "--stop w1")
    _ (rest 300)
    gone (cr-run cr-j "" "--list")
@@ -1307,6 +1313,32 @@
       (<lm-map = 0)
       (cr-in >lm-map "chain test_extract,test_big,test_encver\n")
       (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcstress"))
+   0)
+
+; the projection: a rule owes its lanes to each path it matches (a star crosses `/`), a lane another
+; owed lane runs drops out, light before heavy, test heads the list and test_slow closes it
+(: lp-db "test_quick: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\n"
+   lp-cov ((cite 'lanemap 'lanes-covers) lp-db)
+   lp-plan ((cite 'lanemap 'lanes-plan) ["src/love/gc.c" "src/apps/moon/gen.l" "src/apps/kore/a/b.l" "doc/x.md"]
+            ["src/apps/moon/gen.l"] lp-cov)
+   lp-names (map (r \ <r) lp-plan)
+   lp-heavy (map (r \ r 1) (drop 1 lp-plan))
+   lp-cli (hark [cr-love cr-app "--lanes" "HEAD" "HEAD"])
+   _ (test
+      (lp-cov "test_quick" = ["test_clay" "test_x" "test_y"])
+      (lp-cov "test_inle" = ["test_disk"])
+      (lp-cov "test_a" = ["test_disk"])
+      !(two? (lp-cov "x"))
+      (<lp-names = "test")
+      (lp-names (#lp-names - 1) = "test_slow")
+      (elem "test_quick" lp-names)
+      (elem "test_kore" lp-names)
+      (elem "test_bakerep" lp-names)
+      (elem "test_gcstress" lp-names)
+      !(elem "test_clay" lp-names)
+      (lp-heavy = sort lp-heavy)
+      (<lp-cli = 0)
+      (cr-in >lp-cli "test light 195s every change\ntest_slow heavy ? last, on the tree that lands"))
    0)
 
 (hark ["rm" "-rf" cr-root])

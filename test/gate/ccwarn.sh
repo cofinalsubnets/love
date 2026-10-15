@@ -2,8 +2,9 @@
 # test/gate/ccwarn.sh -- each foreign cc builds love without a warning: love0, the bootstrap
 # the ambient cc compiles in the default lane, and the whole hosted vm (HCC=1, tco=1), at
 # the tree's own -W set with -Werror. a warning turns the lane red here, not a line in a log.
-# out/cc is cleared first: its stamp keys on the cc, not the flags, so objects an earlier
-# lane laid would be taken as they are and read by no one.
+# the ccs build at once, each in a copy of the tree of its own under out/.ccwarn/CC, from
+# clean: love0 is out/0 whatever the cc, so two in one tree would build over each other.
+# each make takes -j$CCWARN_J, or none under a parent's jobserver, whose pool it then shares.
 # usage: ccwarn.sh CC..
 . test/gate/skip.sh
 set -u
@@ -19,20 +20,35 @@ printf '%s\n' \
   '#endif' \
   'int main(void) { return 0; }' > "$mtc"
 
-ran=""
+ccs=""
 for cc in "$@"; do
   command -v "$cc" > /dev/null 2>&1 || { gate_partly "test_ccwarn: no $cc, skipped"; continue; }
   "$cc" -c "$mtc" -o "$mtc".o > /dev/null 2>&1 || {
     gate_partly "test_ccwarn: $cc has no musttail, so it cannot build the vm -- SKIPPED, not passed"
     continue; }
-  log=out/.ccwarn-$cc.log
-  rm -rf out/cc
-  echo "  $cc: love0 and the hosted vm, -Werror"
-  make --no-print-directory HCC=1 CC="$cc" EXTRA_CFLAGS=-Werror host > "$log" 2>&1 || {
-    grep -e 'warning:' -e 'error:' "$log" | head -20 >&2
-    fail "$cc does not build love clean (all of it in $log)"; }
-  ran="$ran $cc"
+  ccs="$ccs $cc"
 done
+
+case "${MAKEFLAGS:-}" in *jobserver*) j="";; *) j="-j${CCWARN_J:-4}";; esac
+pids=""
+for cc in $ccs; do
+  d=out/.ccwarn/$cc log=out/.ccwarn-$cc.log
+  rm -rf "$d" && mkdir -p "$d"
+  tar -cf - --exclude=./out --exclude=./.git . | tar -xf - -C "$d"
+  echo "  $cc: love0 and the hosted vm, -Werror"
+  make -C "$d" --no-print-directory $j HCC=1 CC="$cc" EXTRA_CFLAGS=-Werror host > "$log" 2>&1 &
+  pids="$pids $!"
+done
+
+ran="" bad=""
+set -- $pids
+for cc in $ccs; do
+  if wait "$1"; then ran="$ran $cc"
+  else grep -e 'warning:' -e 'error:' "out/.ccwarn-$cc.log" | head -20 >&2; bad="$bad $cc"; fi
+  rm -rf "out/.ccwarn/$cc"                  # the log is outside it, and a build is a lot to keep
+  shift
+done
+[ -z "$bad" ] || fail "$bad do not build love clean (all of it in out/.ccwarn-CC.log)"
 
 rm -f "$mtc" "$mtc".o
 [ -n "$ran" ] || gate_skip "test_ccwarn: no cc here could run this lane -- nothing was proved"

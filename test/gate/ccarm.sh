@@ -30,7 +30,7 @@ name=test_ccarm
 refuse="111-int128 151-w128fuzz 161-enumwide 291-enumahead"
 wide="68-static-assert 120-bfinit"
 narrow="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
-hosted="72-quals 125-widelit 150-alloc 160-rangeinit 297-frameaddr 298-malloc-wrap"
+hosted="72-quals 125-widelit 150-alloc 160-rangeinit 297-frameaddr 298-malloc-wrap 300-aligned-alloc 301-free-checks"
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }

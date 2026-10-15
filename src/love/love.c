@@ -948,7 +948,7 @@ struct g *intern(struct g*g) {
 // backing. callers reserve this before intern_checked, so the insert never allocates.
 uintptr_t intern_reserve(struct g *g) {
  word m = g->symbols;
- uintptr_t extra = m && (map_len(m) + 1) * 4 >= map_cap(m) * 3 ? 4 + 4 * map_cap(m) : 0;
+ uintptr_t extra = m && (map_len(m) + 1) * 4 >= map_cap(m) * 3 ? map_back_words(2 * map_cap(m)) : 0;
  return Width(struct nom) + extra; }   // a named symbol is one flat KNom (name + serial)
 
 // probe the weak intern map by string content; a miss mints the canonical KNom
@@ -960,8 +960,8 @@ love_noinline word intern_checked(struct g *g, struct str *b) {
  if (found) return map_slots(m)[2 * i + 1];
  if ((map_len(m) + 1) * 4 >= map_cap(m) * 3) {           // at load: rehash into a doubled backing
   uintptr_t ncap = 2 * map_cap(m), nmask = ncap - 1;
-  union u *nb = map_fill_back(bump(g, 4 + 2 * ncap), ncap);
-  word *os = map_slots(m), *ns = &nb[3].x;
+  union u *nb = map_fill_back(bump(g, map_back_words(ncap)), ncap);
+  word *os = map_slots(m), *ns = tablet_back(nb)->slot;
   uintptr_t ocap = map_cap(m), nlen = 0;
   for (uintptr_t j = 0; j < ocap; j++) {
    word k = os[2 * j];
@@ -969,14 +969,14 @@ love_noinline word intern_checked(struct g *g, struct str *b) {
    uintptr_t x = hash(g, k) & nmask;
    while (ns[2 * x] != map_gap) x = (x + 1) & nmask;
    ns[2 * x] = k, ns[2 * x + 1] = os[2 * j + 1], nlen++; }
-  nb[1].x = putcharm(nlen);
-  cell(m)[1].x = (word) nb, gen_wb(g, m, (word) nb);     // swap backing; header identity stable
+  tablet_back(nb)->len = putcharm(nlen);
+  tablet(m)->back = (word) nb, gen_wb(g, m, (word) nb);  // swap backing; header identity stable
   i = map_probe(g, m, word(b), &found); }
  struct nom *y = ini_nom(bump(g, Width(struct nom)), word(b), nom_dig(word(b)));  // the canonical KNom: name + serial + cached spelling hash
  word *slots = map_slots(m);
  slots[2 * i] = word(b), slots[2 * i + 1] = word(y);
  gen_wb(g, map_back(m), word(y));                        // a fresh atom in a tenured backing
- cell(map_back(m))[1].x = putcharm(map_len(m) + 1);
+ map_len_set(m, map_len(m) + 1);
  return word(y); }
 
 // (nom? x): a real point -- a non-() mint or a named nom; () is the one point

@@ -12,6 +12,8 @@ void *calloc(size_t, size_t);
 void *realloc(void*, size_t);
 void *reallocarray(void*, size_t, size_t);
 void  free(void*);
+void *aligned_alloc(size_t, size_t);
+int   posix_memalign(void**, size_t, size_t);
 const char *getprogname(void);   /* glibc >= 2.33 home (gnulib also reaches unistd.h for it) */
 void  exit(int);
 void  abort(void);

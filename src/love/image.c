@@ -93,7 +93,7 @@ struct g *image_dump(struct g *g, char const *path) {
 // self-bake, in place; a path writes a copy there instead. ETXTBSY-proof by the adopt
 // pattern -- copy the file, lay the blob in, fsync, rename, so anything still executing
 // keeps the old inode.
-// same build = same layout, so the codec's anchor/refsym guards hold by construction.
+// same build = same tables and C, so the codec's guards (image_why) hold by construction.
 // .image is laid last, so the blob is appended where the section already sits and only the
 // one phdr and shdr that name it are rewritten. no reserve, no ceiling, and no vaddr moves.
 // bake_tail reads that requirement off the binary's own section headers rather than a build
@@ -270,7 +270,8 @@ static lvm(lvm_bake) {
 
 LvDef("bake", bake, 1, NULL);
 
-struct g *image_load(char const *path) {
+// why: image_why's answer for a file that does not wake (0 when it is torn past the header)
+struct g *image_load(char const *path, int *why) {
   int fd = open(path, O_RDONLY);
   if (fd < 0) return NULL;
   struct stat st;
@@ -287,6 +288,6 @@ struct g *image_load(char const *path) {
         if (nl) off = (size_t)(nl - (char*) buf) + 1; }
       // kept: a woken session keeps the map, so its code and heap chunks wake as first touched
       if (off < n) g = love_image_load((char*) buf + off, (uintptr_t)(n - off), 2);
-      if (!g) munmap(buf, n); } }
+      if (!g) *why = off < n ? image_why((char*) buf + off, (uintptr_t)(n - off)) : 1, munmap(buf, n); } }
   close(fd);
   return g; }

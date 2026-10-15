@@ -48,16 +48,19 @@ was measured, and the counts follow a kernel's image or an artifact's wherever t
 **NULL is an immortal.** A live bio port carries undressed `rbuf`/`wbuf` zero words; a raw
 zero is even and below the index bound, so it needs its own slot in `image_immortals`.
 
-## the stamp is a DISTANCE
+## the stamp is what the indices MEAN
 
-Not a build hash: `arch` (a compile-time tag) + `anchor`, the **gap** between `image_save` and
-`image_immortals`. A different binary — cross-arch, or a stale rebuild — lays symbols out
-differently, the gap changes, and the image is refused.
+Every word of an image is an index into the waking binary's tables, so the header says what
+those tables are, and nothing about where they lie: `arch` (a compile-time tag); `fp`, a hash
+of the lanes' widths, every nif's name and module in seat order, and the `struct g` offsets a
+native reads (`snap.c`'s `image_fp`); and `src`, the crc and length of the carried source's `c`
+section, every `.c .h .S .s` of the tree (`src.c`'s `image_carried_c`, read off the container's header). Any
+build of one tree wakes another's image -- the stress runtime wakes the normal bake's, which is
+what `test_gcstress` does -- and an edited or foreign binary refuses it, saying which
+(`image_why`, `love wake`'s message). A link that carries no source (`noblob.c`) reads 0.
 
-it was two addresses, compared to check their ASLR deltas agreed — which is that gap being
-preserved, said the long way round and at the price of writing the baker's mmap base into every
-image. Two bakes of one tree then differed there and nowhere else. The distance discriminates
-exactly as well and is the same number every run; `test_bakerep` is what holds it.
+Two bakes of one tree are then one byte string, header included: no address and no ASLR base
+rides it. `test_bakerep` holds that, and that each of two such builds wakes the other's image.
 
 ## the section carries an ARRAY
 
@@ -72,7 +75,7 @@ to shave disappear, and one plain image is simpler everywhere.)
 (`-Wl,--section-start=.image=0x2000000`, the Makefile) — so the bake APPENDS the blob at the
 first page past every other allocated byte and rewrites the one phdr and one shdr that name it,
 relaying the non-allocated tail (symtab/strtab/shstrtab) after it. No vaddr moves, so the
-two-anchor stamp holds by construction. This is why there is no fixed reserve to bump whenever
+binary the image was baked by is the binary it lies in. This is why there is no fixed reserve to bump whenever
 the image outgrows it, and no shipped zeros.
 
 It has to stay a real allocated section rather than loose bytes at EOF: `strip` (which
@@ -220,8 +223,8 @@ hold it to.
 1. **A kernel-loadable image.** The codec is buffer-based and stdio-free, so it compiles into the
    freestanding kernel, and the kernel runs the generational collector bounded by `g->budget`,
    which the codec needs (it relocates into the major pool). What is left is that a host-dumped
-   image will not load in the kernel: the arch+anchor stamp rejects a different binary (different
-   `lvm_*` table order, different binary-pointer addresses). Options: dump from the KERNEL binary
+   image will not load in the kernel: the stamp rejects a different binary (a different nif
+   slice, a different `struct g`). Options: dump from the KERNEL binary
    (unexec — boot in qemu, serialize, emit the bytes over serial, `objcopy` into the kernel,
    RELINK with image.o placed LAST so .text/.rodata addresses do not shift — the kernel is
    non-PIE, so absolute pointers stay valid only if nothing moves); or a layout-stable shared TU.

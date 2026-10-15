@@ -225,14 +225,25 @@ hostnif_tests += test/host/xz.l test/host/bz2.l   # the xz and bzip2 pulls again
 # ev read back off its show names the doors ev closes over, which a mopped image has dropped
 hostnif_nomop = test/host/evback.l
 hostnif_exec =                                   # empty: the gc gates run warm, in the fork lane
+# the gates run hostnif_j at once, one target each, a gate's whole output kept in out/hostnif/
+# and shown only when it fails, the longest started first. under a parent's jobserver the
+# sub-make takes no -j of its own, and shares that pool
+hostnif_j = 4
+hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
 test_hostnif: host out$(hsuf)/lush
-	@for s in $(hostnif_tests); do echo "TEST $$s"; \
-	  case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
-	  case " $(hostnif_nomop) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 $m";; esac; \
-	  case " $(hostnif_exec) " in *" $$s "*) L="env $m";; esac; \
-	  cat test/00-init.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif "$$L" ": ok" \
-	    || { echo "  (the gate above is $$s)"; exit 1; }; \
-	done
+	@rm -rf out$(hsuf)/hostnif && mkdir -p out$(hsuf)/hostnif
+	@$(MAKE) -s $(if $(findstring jobserver,$(MAKEFLAGS)),,-j$(hostnif_j)) hsuf=$(hsuf) \
+	   $(patsubst test/host/%.l,hostnif-%,$(filter $(hostnif_tests),$(hostnif_first)) $(filter-out $(hostnif_first),$(hostnif_tests)))
+	@echo "test_hostnif: $(words $(hostnif_tests)) gates"
+hostnif-%:
+	@s=test/host/$*.l; t0=`date +%s`; \
+	 case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
+	 case " $(hostnif_nomop) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 $m";; esac; \
+	 case " $(hostnif_exec) " in *" $$s "*) L="env $m";; esac; \
+	 cat test/00-init.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif-$* "$$L" ": ok" \
+	   > out$(hsuf)/hostnif/$*.log 2>&1 \
+	   || { cat out$(hsuf)/hostnif/$*.log; echo "  (the gate above is $$s)"; exit 1; }; \
+	 echo "TEST $$s ($$((`date +%s` - t0))s)"
 # Runnable design companions -- pure-love models that pin the shape a C design
 # takes. Zero-dep, but they leak helper names into the
 # one global scope, so they run standalone. Same contract: exit 0 and a "<name>: ok".
@@ -689,13 +700,14 @@ endif
 ifeq ($(hosta),a64)
 kvec_a64 = $(moon_d)/kvec.o
 endif
+# the three arches build and boot at once, after the tree and the rootfs, as test_inle does
 test_vec: host
-	@$(MAKE) -s a=x64 kernel
-	@$(gsh) test/gate/vec.sh x64 out/love-x64.elf $(kvec_x64)
-	@$(MAKE) -s a=a64 kernel
-	@$(gsh) test/gate/vec.sh a64 out/love-a64.elf $(kvec_a64)
-	@$(MAKE) -s a=rv64 kernel
-	@$(gsh) test/gate/vec.sh rv64 out/love-rv64.elf $(kvec_rv64)
+	@$(MAKE) -s $(src_tree) out/rootfs.tar
+	@rm -rf out/vec && mkdir -p out/vec
+	@$(MAKE) -s $(if $(findstring jobserver,$(MAKEFLAGS)),,-j3) vec-x64 vec-a64 vec-rv64
+vec-%:
+	@{ $(MAKE) -s a=$* kernel && $(gsh) test/gate/vec.sh $* out/love-$*.elf $(kvec_$*); } \
+	   > out/vec/$*.log 2>&1; r=$$?; cat out/vec/$*.log; exit $$r
 # the fixpoint: the default love is mooncc-built, so this gate has it rebuild itself --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
 # love2, and the two must be byte-identical. a headline invariant -- but it runs in
@@ -1055,13 +1067,17 @@ test_gcheck: host $(love0) out/mooncc0.image
 # across a call that collects. LvGcStress always collects, poisons the vacated nursery, and
 # majors every 32nd. test/gate/gcshard.sh runs the corpus cut into GCS_SHARDS shards a half,
 # the baked and egg halves at once (~2x GCS_SHARDS cores), each shard proved on the normal
-# build first and the counts summed to the full run's. a shard's heap holds only its own files,
-# so test_gcstress_full keeps the corpus whole through one stress process a half, in turn: the
+# build first and the counts summed to the full run's; the baked half wakes the normal bake's
+# image. test_gcstress_bake bakes on the stress runtime too, and the baked half wakes that: the
+# bake's own C and the glaze owe it. a shard's heap holds only its own files, so
+# test_gcstress_full keeps the corpus whole through one stress process a half, in turn: the
 # heap every earlier file built, over two hours, most of it the stress build's bake and the
 # baked leg, which tracks the glaze since every major walks it.
 GCS_SHARDS ?= 4
 test_gcstress: host $(love0) out/mooncc0.image
 	@MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
+test_gcstress_bake: host $(love0) out/mooncc0.image
+	@GCS_BAKE=1 MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
 test_gcstress_full: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
@@ -1371,19 +1387,24 @@ test_uefi_a64: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/esp-a64 $(OVMF_A64) a64
 endif
 
-test_inle:
-	@$(MAKE) -s test_disk
-	@$(MAKE) -s test_uefi
-	@$(MAKE) -s test_kboot
-	@$(MAKE) -s test_kernel_uproc
-	@$(MAKE) -s test_kmitty
-	@$(MAKE) -s test_kverb
-	@$(MAKE) -s test_kernel_a64
-	@$(MAKE) -s test_uefi_a64
-	@$(MAKE) -s test_kernel_rv64
-	@$(MAKE) -s test_kernel_wasm
-	@$(MAKE) -s test_kernel_droid
+# rv64's tcg corpus runs near its ceiling on a busy box and loses it with anything beside
+# it, so it boots alone first; then the other arches at once, each its lanes in turn (an
+# arch's lanes share its elf's disk). logs in out/inle/ARCH.log. the tree and rootfs are made
+# first: selfpack writes the tree in place. under a parent's jobserver no -j of its own
+inle_rv64 = test_kernel_rv64
+inle_x64 = test_disk test_uefi test_kboot test_kernel_uproc test_kmitty test_kverb
+inle_wasm = test_kernel_wasm
+inle_a64 = test_kernel_a64 test_uefi_a64
+inle_droid = test_kernel_droid
+test_inle: host
+	@$(MAKE) -s $(src_tree) out/rootfs.tar
+	@rm -rf out/inle && mkdir -p out/inle
+	@$(MAKE) -s inle-rv64
+	@$(MAKE) -s $(if $(findstring jobserver,$(MAKEFLAGS)),,-j4) inle-x64 inle-wasm inle-a64 inle-droid
 	@echo "test_inle: boot, disk, command line, firmware -- the three arches, the wasm seat and the droid one"
+inle-%:
+	@for l in $(inle_$*); do $(MAKE) -s $$l || { echo "FAIL $$l"; exit 1; }; done > out/inle/$*.log 2>&1; \
+	 r=$$?; cat out/inle/$*.log; exit $$r
 
 # test_kernel_droid -- the droid seat (notes/plan/inle-droid.md): the kernel as a linux process
 # on this machine, the kernel corpus off its ramfs, the serial line its stdout, the reset its end
