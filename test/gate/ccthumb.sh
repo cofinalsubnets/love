@@ -1,22 +1,11 @@
 #!/bin/sh
-# test/gate/ccthumb.sh -- the C battery on the device cpus: every test/cc/*.c built by
-# `mooncc -t thumb1|thumb2`, run on qemu's cortex-m, must answer what arm-none-eabi-gcc
-# answers for the same source on the same machine. m-profile is ilp32 with no qemu-user
-# lane, so x64 cannot be the reference as it is in ccarch.sh; the cross gcc is.
-#
-# three lists, each asserted:
-#   refuse   mooncc has no lane: nonzero exit, no signal, the diagnostic names the file.
-#            the day a lane lands this fails, and the name comes off.
-#   hosted   the program wants printf, malloc, emutls or a header the bare-metal sysroot
-#            lacks, so at least one of the two builds must fail to produce a binary.
-#   narrow   the program assumes a 64-bit long; the reference compiler must agree it does
-#            not carry to ilp32 -- see the note beside each name.
-#
-# these binaries have no libc, so the exit code is compared alone; each program returns
-# its count of passing checks. a code can look like a signal (43-dispatch answers 131),
-# so a fault is read off qemu's own output, whose first line is `qemu: fatal`. 124 is
-# timeout's. not set -e: the checks report their own failures.
-#
+# test/gate/ccthumb.sh -- the C battery on cortex-m: every test/cc/*.c built by
+# `mooncc -t thumb1|thumb2` must exit on qemu-system-arm as arm-none-eabi-gcc's build does.
+# no libc, so the exit code alone; a fault is qemu's `qemu: fatal`, since a code can look
+# like a signal (43-dispatch answers 131). the lists:
+#   refuse  mooncc refuses, by name, without a signal
+#   hosted  wants a libc or runtime: at least one of the two links fails
+#   narrow  assumes a 64-bit long: skipped
 # usage: ccthumb.sh TARGET OUTDIR LOVE     (TARGET: thumb1 | thumb2)
 . test/gate/skip.sh
 . test/gate/cclib.sh
@@ -40,20 +29,16 @@ for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
     gate_skip "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; }
 done
 
-# cleared at the start, not the end: the last run stays for a post-mortem
+# cleared at the start: the last run stays for a post-mortem
 d=$ho/cc-$tgt
 rm -rf "$d"
 mkdir -p "$d"
 
 echo "CCTHUMB $d"
 
-# the startup is thumb.sh's -- vector table, `bl run`, then semihosting SYS_EXIT_EXTENDED
-# carrying run()'s answer out as the process exit code -- flash and the 16 KiB SRAM
-# window exactly as that gate spells them. the initial SP is a real address on this
-# machine and not a size to raise at will: 0x20040000 is off the end of the M7 board's
-# SRAM, and every program then faults before its first instruction, both compilers' alike
-# -- which reads as agreement on a crash and says nothing. Hence the check below. A VFP target must enable CP10/CP11
-# in CPACR first or the first float instruction UsageFaults.
+# the startup: vectors, `bl run`, semihosting SYS_EXIT_EXTENDED with run()'s answer.
+# the initial sp must lie in the board's sram, or both builds fault alike; a vfp target
+# enables CP10/CP11 in CPACR first
 { echo '.syntax unified'
   echo ".cpu $acpu"
   [ -n "$afpu" ] && echo ".fpu $afpu"
@@ -77,10 +62,7 @@ echo "CCTHUMB $d"
   echo '  .bss : { *(.bss*) *(COMMON) } > RAM'; echo '}'
 } > "$d/link.ld"
 
-# main is renamed so the startup's `run` can call it: the battery's programs all define
-# main and return their count. memset/memcpy/memmove are the freestanding floor C11 lets
-# an implementation call for aggregate copies -- gcc emits a memset for `struct s = { 0 }`
-# where our cgzero lays stores -- so they belong to the harness, not to a libc.
+# main is renamed cc_main for `run`; mem* and strcmp are the floor a compiler may call
 { echo 'int cc_main(void);'
   echo 'int run(void){ return cc_main(); }'
   echo 'void *memset(void *p, int c, unsigned long n){'
@@ -100,39 +82,23 @@ arm-none-eabi-gcc $cpu -c "$d/start.S" -o "$d/start.o" || fail "as start.S"
 arm-none-eabi-gcc $cpu -ffreestanding -O2 -c "$d/run.c" -o "$d/run.o" || fail "gcc run.c"
 lg=$(arm-none-eabi-gcc $cpu -print-libgcc-file-name)
 
-# -- the three lists, per target. see the header for what each one asserts. --
-# refuse is tested FIRST, so a name may sit in both -- a program the compiler declines
-# never reaches the libc question behind it.
-# 161-enumwide is on both refuse lists for one row of its own: an enumerator wider than
-# the int word asks for an 8-byte enum, which mooncc does not widen to on ILP32, and the
-# file's own _Static_assert is what says so.
-# 291-enumahead names an enum before its definition: AAPCS32's short enum has no width yet.
+# refuse is tested first, so a name may sit in both lists
 hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope
         147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw
         159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 269-builtin-alloca
         298-malloc-wrap 115-rmwop 165-constcond 166-condconv 283-splitsexpr 228-strictalign
         300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn"
-# each name, and what it assumes: 81 puts 2^62 in a `long`; 99 and 104 shift a
-# `unsigned long` by 32 or more, which is undefined once long is 32 bits; 105 unions a
-# double with one and reads bit 63; 120 asks for a `:40` bit-field (gcc REFUSES it here,
-# rightly); 125 wants char32_t to be the type of a U"" literal, which it is not on this
-# ABI; 144 counts a `long`'s leading zeros as 64; 266 builds a `long` from 1L << 40. gcc is the
-# witness for each -- it either refuses the source or answers differently for the program's reason.
 narrow="81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins 266-vaarg-struct"
-# no witness here: gcc's ARM build follows no frame chain past level 1 (297's return_address(1)
-# and frame_address(2) answer otherwise there, 41 to our 71), so it cannot check our walk;
-# x64, a64 and i386 check it against gcc instead
+# gcc's arm build follows no frame chain past level 1, so it cannot witness 297
 nowit="297-frameaddr"
 
 case $tgt in
   thumb2) refuse="68-static-assert 111-int128 151-w128fuzz 161-enumwide 291-enumahead" ;;
-  # the two lists are NOT the same list: v6-M refuses 82-znvalue where thumb2 takes it.
-  # the composite rows do not move together (doc/misc/moon-c-gaps), so neither do these.
   thumb1) refuse="67-varargs-double 88-varargs-overflow 97-muslrungs 68-static-assert 82-znvalue 85-aggval 100-complex 280-cxf-fuzz 101-vla 102-bigstruct 111-int128
                   117-vastruct 129-sync 151-w128fuzz 161-enumwide 228-strictalign 266-vaarg-struct 291-enumahead" ;;
 esac
 
-# v6-M's double varargs call out to rt.c's soft-float, which this lane does not link
+# v6-m's double varargs need rt.c's soft-float, which is not linked here
 [ $tgt = thumb1 ] && hosted="$hosted 71-varargs-sysv"
 
 inlist() { for w in $2; do [ "$w" = "$1" ] && return 0; done; return 1; }
@@ -141,20 +107,15 @@ nrun=0; nref=0; nhost=0; nnar=0; nwit=0
 for f in test/cc/*.c; do
   b=$(basename "$f" .c)
 
-  # the target has no lane: the build must FAIL, without a signal, naming the file
   if inlist "$b" "$refuse"; then
     refused "$d/$b.tlog" "$f" -t "$tgt" -Dmain=cc_main -c "$f" "$d/$b.t.o"
     nref=$((nref + 1)); continue
   fi
 
-  # the program assumes a 64-bit long: its answers do not carry here, and the reference
-  # compiler is the witness -- either it refuses the source outright, or it runs and the
-  # two of us disagree for a reason that is the program's and not the codegen's.
   if inlist "$b" "$narrow"; then nnar=$((nnar + 1)); continue; fi
   if inlist "$b" "$nowit"; then nwit=$((nwit + 1)); continue; fi
 
-  # a runtime we do not link: the LINK must be what fails, on an undefined symbol, for
-  # at least one of the two builds -- 142-syntax is gcc's side (emutls), the rest are ours
+  # at least one build or link fails: 142-syntax is gcc's (emutls), the rest ours
   if inlist "$b" "$hosted"; then
     hitu=0
     for k in t g; do
@@ -199,8 +160,7 @@ for f in test/cc/*.c; do
     || fail "$b: GCC'S binary faulted on $mach -- the harness or the program, not our codegen"
   [ $rt -eq $rg ] || fail "$b: ours $rt, gcc $rg -- same source, same machine, one compiler"
 
-  # A PASSED CASE IS DEAD WEIGHT: `fail` exits, so reaching here means every leg agreed
-  # and nothing downstream reads these again. A failing one keeps all of it.
+  # a passed case's files go; a failing one keeps them
   rm -f "$d/$b.t.o" "$d/$b.g.o" "$d/$b.t.elf" "$d/$b.g.elf" \
         "$d/$b.tlog" "$d/$b.glog" "$d/$b.llog" "$d/$b.tout" "$d/$b.gout"
   nrun=$((nrun + 1))

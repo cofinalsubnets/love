@@ -1,12 +1,9 @@
 #!/bin/sh
-# test/kore/lapiz.sh -- markdown and html2text -- the lapiz doors, cited not borrowed
+# test/kore/lapiz.sh -- markdown and html2text, the lapiz doors cited, not borrowed
 . "$(dirname "$0")/common.sh"
 
-# These reach lapiz through `cite` with no `borrow` ahead of it, and that lane is the whole
-# reason this section exists: a lapiz name bound as a VALUE, reading a sibling defined after
-# it, resolves under a spliced module and does NOT resolve under a cited one. The hole is
-# invisible until a document uses the block that carries it -- a blockquote, which is why
-# one is in every input below. The laws cannot see this; they run with lapiz borrowed.
+# cited, a lapiz value binding reading a later sibling must still resolve; a blockquote in
+# every input reaches it
 md=$ho/.kore-md
 printf '# T\n\npara *em*.\n\n> quoted\n\n- one\n- two\n' > "$md"
 korerun markdown "$md" > "$o" 2>&1 || fail "kore markdown"
@@ -18,8 +15,7 @@ grep -q '^\.SH T' "$o" || { cat "$o"; fail "kore markdown -t roff: no .SH"; }
 korerun markdown -t text -w 40 "$md" > "$o" 2>&1 || fail "kore markdown -t text"
 grep -q 'quoted' "$o" || { cat "$o"; fail "kore markdown -t text: the quote did not read"; }
 awk 'length > 40 { exit 1 }' "$o" || fail "kore markdown -t text -w 40: a line overran"
-# -t cells: the same words as -t text, each paragraph broken by caja, so a long one breaks
-# elsewhere -- and still no line past the width
+# -t cells: -t text's words, broken by caja, still no line past the width
 printf '\nthe inventory below names tools, never their flag coverage, and the two are not the same reach. a tool listed here answers to its name; which options it answers to is stated at the head of its own source, absences included.\n' >> "$md"
 korerun markdown -t text -w 40 "$md" > "$g" 2>&1 || fail "kore markdown -t text (long)"
 korerun markdown -t cells -w 40 "$md" > "$o" 2>&1 || fail "kore markdown -t cells"

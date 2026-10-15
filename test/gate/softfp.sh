@@ -1,18 +1,6 @@
 #!/bin/sh
-# test/gate/softfp.sh -- the compiler runtime (src/apps/moon/lib/rt.c) against the hardware.
-# Those __aeabi_* entries ARE double arithmetic on a v6-M board, where nothing else can
-# check them: the Pico has no second opinion on board, and a wrong low mantissa bit still
-# prints "0.1". So they are gated here, on machines that have the instruction, and held to
-# BIT equality with it -- see softfp.c for what the sample covers.
-#
-# Two axes, for the same reason test_ulp has two: the system cc's build asks whether the
-# ALGORITHM is right, and mooncc's build of the same source asks whether OUR COMPILER
-# builds it -- and float bits are where a codegen fault hides best. The cross legs add the
-# other two backends, so a64 and rv64 lay this file too.
-#
-# make owns the dependency graph; this owns the procedure.
-# NOT set -e: each leg reports its own failure with context.
-#
+# test/gate/softfp.sh -- rt.c's soft-float __aeabi_* entries held bit-equal to the hardware,
+# built by the system cc (the algorithm) and by mooncc for x64, a64 and rv64 (the compiler)
 # usage: softfp.sh OUTDIR LOVE
 . test/gate/skip.sh
 . test/gate/a64run.sh
@@ -27,8 +15,7 @@ rc=0
 
 fail() { echo "FAIL $*" >&2; rc=1; }
 
-# the system cc first: it is the reading of the algorithm, and if THIS leg fails the
-# mooncc legs are reporting the same bug and not a codegen one.
+# the system cc first: if it fails, the mooncc legs share the bug
 cc=${CC:-cc}
 if command -v "$cc" >/dev/null 2>&1; then
   if "$cc" -O2 -w -I. -o "$d/cc" test/gate/softfp.c 2>"$d/cc.err"; then
@@ -43,8 +30,7 @@ if moonrun -I. test/gate/softfp.c "$d/native" > "$d/native.err" 2>&1; then
   head -11 "$d/native.out"
 else fail "mooncc build of softfp.c"; sed -n 1,5p "$d/native.err"; fi
 
-# ..and the cross backends: a64 on an a64 host where one answers, else each under its own
-# qemu-user. A missing runner skips that leg; a mooncc that cannot BUILD it does not.
+# the cross backends on an a64 host or qemu-user; a missing runner skips, a failed build does not
 a64_how "$m"
 for t in a64 rv64; do
   case $t in a64) q=qemu-aarch64 ;; rv64) q=qemu-riscv64 ;; esac

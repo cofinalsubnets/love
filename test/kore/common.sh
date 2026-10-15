@@ -1,19 +1,7 @@
-# test/kore/common.sh -- what every check in test/kore/ drinks from. dotted, never run:
-# each subject script takes OUTDIR and LOVE and dots this to get the helpers.
-#
-# A file here is named for the tool it holds to GNU (sed.sh, awk.sh), or for the family
-# where one fixture serves several (line.sh, field.sh, toolchain.sh). `prop-*.sh` is the
-# other kind: ONE property over MANY tools, which is why it answers to no tool's name --
-# prop-seams.sh the 4096-byte read boundary, prop-door.sh --help/--version, prop-status.sh
-# the exit charm. laws.sh is the .l-level suite and stands apart from both.
-#
-# The shape almost every check takes: run the system tool, run OUR applet the same way,
-# and require byte-identical stdout -- and, where the exit code carries meaning (grep's
-# 0/1/2, sed's 1/2, xargs' 123/127, expr's 0/1/2, patch's 0/1), that too. GNU is not
-# assumed correct, only independent. That shape is `both`/`pipe`; where a check is
-# genuinely its own thing it is written out in the subject's own file.
-#
-# NOT set -e: the exit-code comparisons need $? to survive.
+# test/kore/common.sh -- the helpers every test/kore subject dots; never run alone.
+# each subject takes OUTDIR LOVE. a check runs the system tool and ours alike and wants the
+# same stdout, and the status where it carries meaning; gnu is independent, not right.
+# not set -e: the status comparisons need $?
 set -u
 
 ho=$1
@@ -22,11 +10,8 @@ m=$2
 fail() { echo "FAIL $*" >&2; exit 1; }
 korerun() { LOVE_NO_IMAGE= "$m" kore "$@"; }
 moonc() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
-# the love and the out dir, spelled ABSOLUTELY: $m and $ho are relative (the root
-# Makefile sets R := .), and the checks that cd somewhere -- split's output directory,
-# patch's tree -- cannot use either. a `< $ho/p.diff` INSIDE a cd'd subshell opens
-# after the cd, so a relative one silently hands patch an empty stdin -- and both sides
-# then do nothing and match, which reads exactly like a pass.
+# $ho and $m are relative, so checks that cd use these; a relative `<` inside a cd'd
+# subshell hands an empty stdin, and both sides match doing nothing
 case $ho in /*) HO=$ho;; *) HO=$PWD/$ho;; esac
 K=$PWD/$m
 
@@ -45,8 +30,7 @@ pipe() { n=$1; i=$2; shift 2
          printf '%s' "$i" | "$@" > "$g" 2>/dev/null
          printf '%s' "$i" | korerun "$@" > "$o" 2>/dev/null
          same "$n"; }
-# a door check: run it, require exit 0 and a first line matching. the exit code is the
-# half that is easy to lose -- a help leaving 2 reads as a usage error to its caller.
+# a door check: exit 0 and a first line matching
 hv() { n=$1; want=$2; shift 2
        "$@" > "$o" 2>/dev/null; r=$?
        [ $r -eq 0 ] || fail "$n (exit $r)"

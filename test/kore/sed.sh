@@ -24,19 +24,17 @@ sed -f "$ho/.sd3" "$ho/.sd2" > "$g"; korerun sed -f "$ho/.sd3" "$ho/.sd2" > "$o"
 for sc in 'y/ab/c/' 'y/a/b/x'; do
   bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
 done
-# -E moves the backslashes; the dialect must reach BOTH an address and an s
+# -E reaches both an address and an s
 for sc in 's/(a|x)b/@/' 's/a|z/Y/g' 's/[[:digit:]]+/#/' '/a|q/d' 's/b{1,2}/B/'; do
   bothrc "sed -E '$sc'" sed -E "$sc" "$ho/.sd1"
 done
-# -e stacks in order, and clusters (-ne is how this tree writes it)
+# -e stacks in order and clusters (-ne)
 sed -n -e 1p -e 3p "$ho/.sd1" > "$g"; korerun sed -n -e 1p -e 3p "$ho/.sd1" > "$o"
 same "sed -e stacking"
 sed -ne 2p "$ho/.sd1" > "$g"; korerun sed -ne 2p "$ho/.sd1" > "$o"; same "sed -ne clustered"
 sed -e 's/a/1/' -e 's/b/2/' "$ho/.sd1" > "$g"
 korerun sed -e 's/a/1/' -e 's/b/2/' "$ho/.sd1" > "$o"; same "sed -e twice"
-# -i IS A DIFFERENT STREAM MODEL, not just a different sink: each file is its own
-# stream, so line numbers restart and $ is per-file. TWO files is the only test that
-# can tell that from the joined lane -- with one file the two models agree
+# -i makes each file its own stream: line numbers restart and $ is per file; two files tell
 for t in 's/b/X/g' '1d' '$d' 's/[[:digit:]]/#/g'; do
   cp "$ho/.sd1" "$ho/.sdg"; cp "$ho/.sd1" "$ho/.sdo"
   sed -i "$t" "$ho/.sdg"; korerun sed -i "$t" "$ho/.sdo"
@@ -61,10 +59,8 @@ printf 'a\n' | korerun sed 's/a' > /dev/null 2>&1; b=$?
 sed p "$ho/.sd-nope" "$ho/.sd1" > "$g" 2>&1; a=$?
 korerun sed p "$ho/.sd-nope" "$ho/.sd1" > "$o" 2>&1; b=$?
 cmp -s "$g" "$o" && [ $a -eq 2 ] && [ $b -eq 2 ] || fail "kore sed missing file vs GNU"
-# A MISSING FINAL NEWLINE IS DATA. GNU drops it after the LAST WRITE and not after
-# every one, so `-n 'p;p'` keeps the inner newline and loses only the outer -- which is
-# why the line rides a jug rather than a per-write flag. The whole line lane answers to
-# this: sed, rev and the two clips (head that CUT before the last line does not).
+# a missing final newline is data: dropped after the last write only, so -n 'p;p' keeps the
+# inner one; sed, rev and the clips share this
 printf 'a\nx' > "$ho/.nonl"
 for sc in '' 'p' 's/a/A/' 's/x/Y/'; do
   sed "$sc" "$ho/.nonl" > "$g"; korerun sed "$sc" "$ho/.nonl" > "$o"
@@ -80,9 +76,8 @@ for t in "rev" "head -n 5" "tail -n 5" "head -n 1" "head -1" "tail -1" "head -2"
   same "$t on a source with no final newline"
 done
 rm -f "$ho/.nonl"
-# -f FILE in its place among -e (either order, and in a cluster), --file, -r, -s's
-# per-file streams, -i's suffix glued or long (and -in, which is a suffix of n), -f of no
-# file answering GNU's 4
+# -f among -e in either order and clustered, --file, -r, -s, -i's suffix glued or long
+# (-in is suffix n), -f of no file answering 4
 S=$ho/.sedf; rm -rf "$S"; mkdir "$S"; printf 's/a/X/\n2d\n' > "$S/sc"; printf 'abc\nbbb\nabab\n' > "$S/in"; printf 'a1\na2\n' > "$S/in2"
 for c in "-f $S/sc" "-n -f $S/sc -e p" "-e s/b/Q/ -f $S/sc" "-f $S/sc -e s/b/Q/" "-nf $S/sc" "--file=$S/sc" "-r s/(a)+/<\1>/" "-s 1d $S/in2" "-s \$d $S/in2"; do
   # shellcheck disable=SC2086

@@ -2,8 +2,7 @@
 # test/kore/grep.sh -- grep: the BRE and ERE batteries, the clustered flags
 . "$(dirname "$0")/common.sh"
 
-# `(a|aa)+` over a run of a's is exponential to a backtracker that tries every split;
-# the engine walks a (pc, pos) once, so it comes back at once
+# `(a|aa)+` over a's is exponential to a backtracker; the engine walks each (pc, pos) once
 awk 'BEGIN { s = ""; for (i = 0; i < 40; i++) s = s "a"; print s }' > "$ho/.rebt"
 t0=$(date +%s)
 korerun grep -E '^(a|aa)+b$' "$ho/.rebt" > /dev/null 2>&1
@@ -22,8 +21,7 @@ both "grep -l"       grep -l b "$ho/.gr1" "$ho/.gr2"
 pipe "grep -l stdin" 'q
 '                    grep -l q
 both "grep empty pattern" grep '' "$ho/.gr1"
-# the BRE battery: star, anchors, classes, +/? , groups, and the two shapes where a
-# leading + or * is a LITERAL because there is nothing to repeat
+# BRE: star, anchors, classes, +/?, groups, and a leading + or * as a literal
 for p in 'ab*c' '^x' 'z$' '[abx]b' '[^a]b' 'b\+' 'xb\?z' '\(zz\)*z' '.z' '^\+q' '^*r' 'x[b-z]z' \
          'a\|z' 'abc\|zzz\|nope' '\(a\|x\)b' 'a\|b\|c' 'a\|' '\|a' \
          'b\{2\}' 'z\{2,\}' 'z\{1,2\}' '\{2\}' '\+q' 'a\{3,2\}' 'a\{2' \
@@ -31,21 +29,16 @@ for p in 'ab*c' '^x' 'z$' '[abx]b' '[^a]b' 'b\+' 'xb\?z' '\(zz\)*z' '.z' '^\+q' 
          '[[:upper:]]' '[[:punct:]]' '[[:xdigit:]]' '[]a]' '[a-]' '[[:nope:]]'; do
   bothrc "grep BRE '$p'" grep -c "$p" "$ho/.gr1"
 done
-# the ERE battery. THE RAGGED EDGES ARE THE POINT: a loose repeat is DROPPED in
-# ERE where BRE keeps it as ink, and an unclosed brace / stray ) are literals here
-# and malformed there -- all four read off GNU, none of them guessable
+# ERE's ragged edges, read off gnu: a loose repeat dropped (BRE keeps it), an unclosed brace
+# or stray ) literal here and malformed there
 for p in 'a|z' '(a|x)b' 'a{2}' 'z{2,}' 'z{1,2}' '[[:digit:]]+' 'a+' 'ab?c' '(a|b)+' \
          '^(a|x)' '(a|b|z)+$' 'a{1,2}b' '[[:digit:]]{2}' '*r' '+q' '?x' '{2}' \
          'a{' 'a)' 'a||z' 'a{3,2}' '(a'; do
   bothrc "grep ERE '$p'" grep -Ec "$p" "$ho/.gr1"
 done
-# the flag matrix, CLUSTERED as this tree's own scripts write them (-qF, -qiw, -oE):
-# a walk that reads only whole words takes `-qF` for a pattern and passes every
-# single-flag test while doing it
+# clustered flags (-qF, -qiw, -oE): a reader of whole words would take -qF for a pattern
 printf 'abc\nxbz\nzzz\n+q\n*r\nFoo Bar\nab_cd\nx{2}y\na1b2\n' > "$ho/.gr3"
-# set -f FIRST: the word split below is deliberate, the PATHNAME EXPANSION that
-# rides along with it is not -- `[a-z]*` and `*r` are globs, and an unguarded split
-# hands grep whatever files happen to sit in the cwd instead of the pattern
+# set -f: the word split below is meant, its globbing is not
 set -f
 for fl in '-c b' '-i FOO' '-i foo' '-w ab' '-w abc' '-x zzz' '-x zz' \
           '-F a\|z' '-F *r' '-F ab' '-o b' '-oE [a-z]+' '-n -i foo' '-h b' '-a b' \
@@ -55,19 +48,15 @@ for fl in '-c b' '-i FOO' '-i foo' '-w ab' '-w abc' '-x zzz' '-x zz' \
   set -- $fl
   bothrc "grep flags '$fl'" grep "$@" "$ho/.gr3"
 done
-# THE EMPTY PATTERN IS ITS OWN ROW. `set -- $fl` word-splits, so an empty word cannot
-# ride that list at all: the `-x ` and `-o ` rows above were really `grep -x FILE`, a
-# pattern and NO file -- which reads STDIN, and hangs any run whose stdin is a pipe
-# instead of a terminal. Both sides hung or both saw EOF, so it passed while proving
-# nothing about the empty pattern it was written for.
+# the empty pattern rides its own row: `set -- $fl` drops an empty word, leaving grep to read stdin
 for fl in -x -o -c -v; do
   bothrc "grep $fl '' (the empty pattern)" grep $fl '' "$ho/.gr3"
 done
 set +f
-# -e stacks and, once given, every positional word is a FILE
+# -e stacks, and then every positional word is a file
 grep -e abc -e zzz "$ho/.gr3" > "$g"; korerun grep -e abc -e zzz "$ho/.gr3" > "$o"
 same "grep -e stacking"
-# -q is output-free and speaks only in the exit code (61 uses of it in this tree)
+# -q speaks only in the exit code
 korerun grep -q b "$ho/.gr3" > "$o"; r=$?
 [ $r -eq 0 ] && [ ! -s "$o" ] || fail "kore grep -q hit (exit $r, or it spoke)"
 korerun grep -q qqq "$ho/.gr3" > "$o"; r=$?
@@ -85,8 +74,7 @@ for c in "egrep a+b" "fgrep a+b" "egrep -c x|a" "fgrep -v x.y"; do
   set -- $c
   "$@" "$ho/.gr-eg" > "$g" 2>/dev/null; korerun "$@" "$ho/.gr-eg" > "$o" 2>/dev/null; same "$c"
 done
-# a pattern reads utf-8 by character: GNU's answers under a utf-8 locale, spelled out so
-# the gate's own locale cannot move them
+# a pattern reads utf-8 by character: gnu's answers under utf-8, spelled out
 gc() { want=$1; shift; got=$(printf '日本語 éé\na\377b\n' | korerun grep -ao "$@" | tr '\n' '|')
        [ "$got" = "$want" ] || fail "kore grep -o $* by character: got [$got] want [$want]"; }
 gc '本語|' '本.'
@@ -95,7 +83,7 @@ gc '日本|éé|a|b|' -E '[^ 語]+'
 gc '語 é|' '[à-語][^a]é'
 gc '' 'a.b'
 gc '' 'a[^x]b'
-# the POSIX classes past ascii, and -i by gnulib's fold (ſ takes s, İ does not take i)
+# posix classes past ascii, and -i by gnulib's fold (ſ takes s, İ does not take i)
 gi() { want=$1; shift; got=$(printf 'naïve ٣—x\nSTRAßE ſ İ\n' | korerun grep -o "$@" | tr '\n' '|')
        [ "$got" = "$want" ] || fail "kore grep -o $* by class: got [$got] want [$want]"; }
 gi 'naïve|٣|x|STRAßE|ſ|İ|' '[[:alpha:]]*'
@@ -110,9 +98,8 @@ gi 'x|' -w 'x'
 gi 'naï|' '\<na.'
 gi 'S|' '\bS'
 gi '' 'T\>'
-# -r and -R over a tree (GNU walks in readdir order, so the rows compare sorted), a link
-# skipped under -r and followed under -R, --include/--exclude, -H -L -s -f, and the
-# context rows -A -B -C with their -- gaps, -C0's too, and -m's owed trailing context
+# -r and -R (rows sorted: gnu walks readdir order), a link followed only under -R, --include,
+# --exclude, -H -L -s -f, -A -B -C with -- gaps, -C0, -m's trailing context
 R=$ho/.grtree; rm -rf "$R"; mkdir -p "$R/t/a/b" "$R/t/c"
 printf 'foo\nbar\n' > "$R/t/a/x.c"; printf 'x\nfoo 2\n' > "$R/t/a/b/y.h"; printf 'nofoo\n' > "$R/t/c/z.txt"; ln -s ../a "$R/t/c/la"
 bsort() { n=$1; shift; "$@" 2>/dev/null | sort > "$g"; korerun "$@" 2>/dev/null | sort > "$o"; same "$n"; }

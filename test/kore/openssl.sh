@@ -2,9 +2,8 @@
 # test/kore/openssl.sh -- openssl: x509, verify, dgst, rand, base64, genpkey, req, x509 -req, and bad input
 . "$(dirname "$0")/common.sh"
 
-# the chain fixtures are test/host/tlschain's (gen.sh lays them). the fixed answers below
-# are the host openssl's own, pinned, so the check stands where no openssl is installed;
-# where one is and it speaks openssl 3's current face, whole outputs are compared too.
+# the fixed answers are the host openssl's, pinned, so the check stands without one; where
+# openssl 3 is present whole outputs are compared too
 tc=test/host/tlschain
 d=$ho/.kore-openssl
 rm -rf "$d"; mkdir -p "$d"
@@ -22,7 +21,7 @@ clean "with no command" 1
 clean "an unknown command" 1 nosuch
 grep -q "^Invalid command 'nosuch'" "$d/err" || fail "kore openssl nosuch: no complaint"
 
-# --- x509, answers pinned from openssl 3.6 ---
+# --- x509 ---
 is subject "$(k x509 -in $tc/leafr.pem -noout -subject)" "subject=CN=leafr"
 is issuer "$(k x509 -in $tc/leafr.pem -noout -issuer)" "issuer=CN=interr"
 is serial "$(k x509 -in $tc/leafr.pem -noout -serial)" "serial=30721B40F3DE43F9"

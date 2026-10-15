@@ -1,17 +1,8 @@
 #!/bin/sh
-# test/gate/ccwasm.sh -- the C battery on the WASM target, ccarch.sh's procedure with node
-# as the machine: every test/cc/*.c built by `mooncc -t wasm`, run under node through
-# src/inle/wasm/loader.js (the loader is the kernel), and required to answer exactly what the
-# same source answers on x86-64 -- stdout and the exit status both. the programs this
-# target has no lane for must REFUSE, not skip, and the list is asserted (ccarch.sh says why).
-# skips whole without node. NOT set -e: the checks report their own failures with context.
-#
-# AND against emcc where the box has one, in ccarch.sh's cross-gcc seat: a foreign
-# compiler (clang) AND a foreign libc (musl) building the same source for the same
-# machine, wasm64 (-sMEMORY64, so long and pointers are 8 bytes as ours are). x64 pins the
-# shared model only where x64 has no lane of its own to route around it; emcc shares
-# nothing with us, so a fault the two targets agree on is loud here. `EMCC=` names one.
-#
+# test/gate/ccwasm.sh -- the C battery on wasm: every test/cc/*.c built by `mooncc -t wasm`,
+# run by node under src/inle/wasm/loader.js, must answer stdout and exit as our x86-64 build
+# does, and as emcc's wasm64 does where the box has one (EMCC= names it). $unsupported must
+# refuse. skips without node
 # usage: ccwasm.sh OUTDIR LOVE
 . test/gate/skip.sh
 . test/gate/cclib.sh
@@ -20,17 +11,11 @@ set -u
 ho=$1
 m=$2
 name=test_ccwasm
-# the 128-bit lane (rv64's own refusals, since the lane is rv64's), plus whatever else
-# the wasm machine cannot yet carry. 160-rangeinit and 256-inline-retaddr are not "not yet": a
-# wasm return address lives on the engine's call stack, where linear memory cannot reach it, and
-# 229-labelvalue likewise: a wasm label has no address to take or jump through; 297-frameaddr's
-# frame chain likewise. 294-asmlabel's labels rename symbols, and a wasm module lays no symbol
-# table to carry them.
+# return addresses, frame chains and label values live off linear memory, and a module
+# has no symbol table for 294's asm labels
 unsupported="100-complex 280-cxf-fuzz 111-int128 117-vastruct 151-w128fuzz 160-rangeinit 229-labelvalue 256-inline-retaddr 266-vaarg-struct 294-asmlabel 297-frameaddr"
-# x64 stays the oracle for these. 268: clang has no __builtin_*_overflow_p, so emcc cannot
-# build it. 298: emcc's malloc ABORTS on a size it cannot grow to (ABORTING_MALLOC) where C
-# answers NULL. 300: emcc's aligned_alloc keeps C11's first rule (a size a multiple of the
-# alignment, an alignment of a pointer at least), which C17 dropped and C answers here
+# x64 alone for these: clang lacks __builtin_*_overflow_p, emcc's malloc aborts where C
+# answers NULL, its aligned_alloc keeps C11's size rule
 noemcc="268-overflow-p 298-malloc-wrap 300-aligned-alloc"
 
 d=$ho/cc-wasm
@@ -45,7 +30,7 @@ fi
 if [ "$(uname -m)" != x86_64 ]; then
   gate_skip "$name: skipped (the reference build is native x86-64)"
 fi
-# the OPTIONAL extra oracle, found as src/inle/wasm/Makefile finds it
+# the optional second oracle
 EMCC=${EMCC:-$(command -v emcc 2>/dev/null || true)}
 [ -n "$EMCC" ] || [ ! -x /usr/lib/emscripten/emcc ] || EMCC=/usr/lib/emscripten/emcc
 
@@ -78,10 +63,9 @@ for f in test/cc/*.c; do
     fail "$b: our wasm codegen disagrees with our x86-64"
   fi
 
-  # the same source through emcc, run by the same node: ours must answer what it answers
   case " $noemcc " in *" $b "*) noe=1 ;; *) noe= ;; esac
   if [ -n "$EMCC" ] && [ -z "$noe" ]; then
-    # -w: the battery is about the ANSWERS, and clang warns about deliberate edges
+    # -w: clang warns about the battery's deliberate edges
     if "$EMCC" -sMEMORY64=1 -O0 -w -o "$d/$b.e.js" "$f" > "$d/$b.elog" 2>&1; then
       timeout 60 "$NODE" "$d/$b.e.js" > "$d/$b.eout" 2>&1; re=$?
       [ $rt -eq $re ] || fail "$b: exit ours $rt, emcc $re (both wasm64 under node)"
@@ -96,7 +80,7 @@ for f in test/cc/*.c; do
     fi
   fi
 
-  # a passed case is dead weight (ccarch.sh says why): a failing one keeps everything
+  # a passed case's files go; a failing one keeps them
   rm -f "$d/$b.wasm" "$d/$b.tout" "$d/$b.x" "$d/$b.xout" "$d/$b.xlog" "$d/$b.tlog" \
         "$d/$b.e.js" "$d/$b.e.wasm" "$d/$b.eout" "$d/$b.elog"
   n=$((n + 1))

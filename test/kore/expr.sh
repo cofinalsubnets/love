@@ -2,10 +2,8 @@
 # test/kore/expr.sh -- expr: the expressions and the 0/1/2 exit
 . "$(dirname "$0")/common.sh"
 
-# EXPR SPEAKS IN THE EXIT CODE as much as on stdout (0 the answer is neither ""
-# nor "0", 1 it is, 2 the expression will not do), so `both` comparing both is the
-# whole check. the arithmetic ones are here because C's TRUNCATING division and
-# love's FLOORING // disagree on every negative pair.
+# expr speaks in its exit code (0 an answer neither "" nor "0", 1 it is, 2 a bad expression)
+# as much as on stdout. negative pairs test truncating division against love's flooring //
 for e in '1 + 2' '10 / 3' '10 % 3' '3 * 4' '1 + 2 * 3' '( 1 + 2 ) * 3' '5 - 8' \
          '-7 / 2' '-7 % 2' '7 / -2' 'abc = abc' 'abc = abd' '2 < 10' '2 < 10a' \
          'abc < abd' '3 >= 3' '3 != 4' '1 | 2' '0 | 3' '0 & 2' '1 & 2' \

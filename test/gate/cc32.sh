@@ -7,8 +7,7 @@
 #   refuse  mooncc has no lane: it refuses, by name, without a signal
 #   wide    not C on ilp32 (a static assert, a bit-field past its type): both refuse
 #   narrow  assumes a 64-bit long: the reference fails it, ours runs it to an exit
-#   hosted  the reference cannot speak for it (newlib's gaps; 160 and 297 read gcc's
-#           thumb frames otherwise): ours builds it and runs it to an exit
+#   hosted  newlib's gaps, or gcc's thumb frames read otherwise: ours runs it to an exit
 # usage: cc32.sh TARGET OUTDIR LOVE     (TARGET: arm | i386)
 . test/gate/skip.sh
 . test/gate/cclib.sh
@@ -83,8 +82,7 @@ for f in test/cc/*.c; do
   else n=$((n + 1)); fi
 done
 
-# i386's register arguments across compilers: mooncc's test/cc/abi386/host.c linked with
-# gcc's peer.c, each calling the other, at every -mregparm the kernel's units might ask for
+# i386: abi386/host.c by mooncc linked with gcc's peer.c, each calling the other, -mregparm 0..3
 if [ $tgt = i386 ]; then
   for rp in 0 1 2 3; do
     gcc -m32 -mregparm=$rp -O1 -w -c -o "$d/peer$rp.o" test/cc/abi386/peer.c 2> "$d/peer.log" \

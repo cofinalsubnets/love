@@ -1,34 +1,8 @@
 #!/bin/sh
-# test/gate/asmops.sh -- the inline-asm SEAM gate.
-#
-# src/inle/<a>/asmops.h says every privileged instruction the kernel needs
-# ONCE, in GNU's template: clang reads it natively, mooncc lowers the same text
-# through src/love/holo/gas.l. one spelling, two readers -- and the reader that
-# rots quietly is ours, so:
-#
-#   1. COVERAGE. every `static inline k_*` the header defines is called by
-#      test/gate/asmops.c. derived from the header itself, so adding an op and
-#      forgetting the probe fails here rather than going unchecked. the probe
-#      also takes each op's ADDRESS (k_asmops_keep): calling one is not enough
-#      to make it EXIST, since a static inline whose calls are all inlined is
-#      dead and a compiler is right to drop it.
-#   2. MOONCC TAKES IT. the probe compiles with `mooncc -t <arch> -nostdinc`.
-#      that alone exercises the whole seam: -nostdinc keeps glibc's headers out
-#      of a freestanding compile, and each template goes through the GNU-dialect
-#      front and holo's encoder (an unknown op or a bad operand SCARES, it does
-#      not shrug).
-#   3. THE TWO READERS AGREE. with clang present, compile the same probe with
-#      it and compare the two objects op by op: same privileged mnemonics, same
-#      symbolic operands, same order, inside the same function. this is rung 5's
-#      compiler-vs-compiler differential in miniature, and it is the only check
-#      that can catch our reading of a template drifting from GNU's.
-#
-# what the comparison deliberately does NOT compare: register allocation (the
-# two compilers pick different ones and both are right) and the plain
-# arithmetic around a privileged instruction. so a wrong MASK inside a
-# read-modify-write is out of its reach -- those live in C-readable form in the
-# header, and the encodings themselves are frozen in test/holo/golden.l.
-#
+# test/gate/asmops.sh -- src/inle/<a>/asmops.h's templates, read by mooncc and by clang.
+# every k_* op the header defines is probed by asmops.c, mooncc compiles the probe, and
+# with clang the two objects agree op by op: privileged mnemonics and symbolic operands
+# in order, registers and the arithmetic around them not compared.
 # usage: asmops.sh HOSTDIR
 . test/gate/skip.sh
 . test/gate/cclib.sh
@@ -41,16 +15,13 @@ trap 'rm -rf "$work"' EXIT
 rc=0
 fail() { echo "FAIL test_asmops: $*" >&2; rc=1; }
 
-# declared divergences, per arch: none. a name here is an op the two readers
-# are allowed to disagree on, with its reason beside it.
+# ops the two readers may disagree on, per arch, each with its reason
 divergent_x64=""
 divergent_a64=""
 divergent_rv64=""
 
-# the privileged sequence of each function in an object: mnemonic and symbolic
-# operands, registers normalized away. k_asmops_probe itself is skipped -- it is
-# the inlined copy of everything below it, and the two compilers inline
-# differently.
+# each function's privileged sequence, registers normalized away. k_asmops_probe is
+# skipped: the compilers inline into it differently
 seq() {
   llvm-objdump -d --no-show-raw-insn "$1" | awk -v arch="$2" '
     /^[0-9a-f]+ <.*>:$/ { fn=$2; sub(/^</,"",fn); sub(/>:$/,"",fn)
@@ -107,10 +78,7 @@ for a in x64 a64 rv64; do
     gate_partly "  (asmops $a: sequence checks skipped, no llvm-objdump)"; continue
   fi
   seq "$work/$a-moon.o" $t > "$work/$a-moon.seq"
-  # every op the object carries must have emitted at least one privileged
-  # instruction -- a template that assembled to nothing is a silent no-op.
-  # (a `for`, not a piped `while`: a fail inside a pipeline's subshell never
-  # reaches rc, and the gate read green over a red.)
+  # every op emits a privileged instruction. a `for`: a piped fail never reaches rc
   empties=$(awk '/^@/ { if (name != "" && n == 0) print name; name=substr($0,2); n=0; next }
                  { n++ }
                  END { if (name != "" && n == 0) print name }' "$work/$a-moon.seq")
@@ -126,11 +94,7 @@ for a in x64 a64 rv64; do
   fi
   seq "$work/$a-clang.o" $t > "$work/$a-clang.seq"
   eval "skip=\$divergent_$a"
-  # the two sides are separated by a MARKER LINE, not by which file a record came
-  # from. An empty side is a real state -- a compiler that inlines every op and drops
-  # the dead statics emits none of them -- and FNR==1 never fires for an empty file,
-  # so a record-driven side counter silently files the OTHER compiler's functions under
-  # the first one's name and blames the wrong half. That is exactly what it did.
+  # a marker line splits the sides: either may be empty, where FNR==1 never fires
   n=$({ cat "$work/$a-moon.seq"; echo "@@side@@"; cat "$work/$a-clang.seq"; } |
       awk -v skip="$skip" '
     function flush(  i) {
@@ -158,8 +122,7 @@ for a in x64 a64 rv64; do
           bad++
         }
       }
-      # ..and the other direction, which used to be silence: an op only ONE compiler
-      # emitted was simply never compared, so the gate could lose coverage and stay green.
+      # ..and an op only clang emitted
       for (i = 1; i <= kb; i++) {
         key = orderB[i]
         if (index(" " skip " ", " " key " ")) continue
