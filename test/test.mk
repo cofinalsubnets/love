@@ -350,22 +350,14 @@ test_gates: host
 # test_slow because the failure it catches is silent by construction (a seat that answers
 # () is indistinguishable from an app with nothing to say).
 .PHONY: test_seat test_cli test_nest
-test_seat: host
-	@echo TEST test/gate/seat.sh "(the file-seat lane)"
-	@$(gsh) test/gate/seat.sh $m
+gate_m += test_seat   # the file-seat lane
 # the CLI's exit status -- 0 working, 1 unopenable, 2 malformed, a verb's own charm.
 # seat.sh reads what the binary says; until this, nothing read what it answers.
-test_cli: host
-	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
-	@$(gsh) test/gate/cli.sh $m
-test_nest: host
-	@echo TEST test/gate/nest.sh "(love nest, in a HOME of its own)"
-	@$(gsh) test/gate/nest.sh $m
+gate_m += test_cli   # the cli exit-status lane
+gate_m += test_nest   # love nest, in a HOME of its own
 # what a machine SPENDS while it waits. no other gate weighs it: a scheduler that spins
 # answers everything it is asked and stays green through the whole tree.
-test_spin: host
-	@echo TEST test/gate/spin.sh "(the machine spends nothing while it waits)"
-	@$(gsh) test/gate/spin.sh $m
+gate_m += test_spin   # the machine spends nothing while it waits
 
 # the front page's icon is laid (src/tools/mkicon.l) and checked in for github pages: a lay
 # that differs from the tree means someone edited a source without `make web`. the page
@@ -398,15 +390,13 @@ $(kore_parts:%=test_kore_%): test_kore_%: host
 # test_kore's battery is a list someone thought of; this one is NOT, which is the point.
 # skips (exit 0) without GNU grep/sed, and checks --version, since an interactive `grep`
 # may be a ugrep shim whose BRE differs. ~a minute.
-test_refuzz: host
-	@$(gsh) test/gate/refuzz.sh $m
+gate_m += test_refuzz
 # cook against GNU make, differentially (doc: the script's own head). The oracle is a
 # second implementation, and it has to be: a builtin cook never implemented is a variable
 # reference in make's grammar, so it expands to empty and the build carries on -- invisible
 # to any test that only asks whether cook agrees with itself. Skips (exit 0) where GNU make
 # is not on the box, since there is no oracle to ask.
-test_cookdiff: host
-	@$(gsh) test/gate/cookdiff.sh $m
+gate_m += test_cookdiff
 # the dist artifact -- the tree's own baked binary: test_dist smokes its verb rail,
 # the bare cc door, the image chain and the in-image lane. seconds, test_slow.
 test_dist: $(ho)/love
@@ -529,15 +519,12 @@ test_forge: host
 test_cca64 test_ccrv64: test_cc%: host
 	@$(gsh) test/gate/ccarch.sh $* $(ho) $m
 # test_cci386 -- the battery whole on i386 (moonlibc, our link), run natively against gcc -m32
-test_cci386: host
-	@$(gsh) test/gate/cci386.sh $(ho) $m
+gate_hm += test_cci386
 # test_ccarm -- the battery whole on linux's arm (moonlibc, our link), under qemu-arm against
 # arm-none-eabi-gcc's newlib build of the same source
-test_ccarm: host
-	@$(gsh) test/gate/ccarm.sh $(ho) $m
+gate_hm += test_ccarm
 # test_ccwasm -- the same battery on the wasm target, node as the machine (ccwasm.sh)
-test_ccwasm: host
-	@$(gsh) test/gate/ccwasm.sh $(ho) $m
+gate_hm += test_ccwasm
 # the same battery on the device CPUs: M-profile has no qemu-user lane and is ILP32, so
 # x64 is neither runnable nor the oracle -- arm-none-eabi-gcc's build of the source is.
 test_ccthumb1 test_ccthumb2: test_cc%: host
@@ -585,25 +572,21 @@ dl/opus-vectors:
 # test_libc -- our C library against the system's, function by function:
 # test/libc/*.c built by mooncc (pulling src/apps/moon/lib/moonlibc/ by need) and by gcc, run,
 # and the two outputs compared, so a drift names the function and the case.
-test_libc: host
-	@$(gsh) test/gate/libc.sh $(ho) $m
+gate_hm += test_libc
 # test_ulp -- the math floor, built by both compilers and required to agree. `make ulp`
 # measures lm.c's accuracy for the $(CC) build alone, which asks whether the algorithm is
 # right, never whether our compiler builds it -- and float bits are where codegen hides.
-test_ulp: host
-	@$(gsh) test/gate/ulp.sh $(ho) $m
+gate_hm += test_ulp
 # test_softfp -- the compiler runtime, against the machine that has the instruction.
 # src/apps/moon/lib/rt.c is what mooncc's own lowering calls on a board with no FPU, no umull
 # and no clz; on the board there is no second opinion, so it is held to bit equality with
 # real hardware here, built by the system cc and by mooncc on all three backends.
-test_softfp: host
-	@$(gsh) test/gate/softfp.sh $(ho) $m
+gate_hm += test_softfp
 # test_reloc32 -- --emit-relocs on the arm32 lane: a fully linked image that keeps its
 # R_ARM_ABS32 sites, so a loader placing it at a base of its own can slide them. The gate
 # links one source twice, 64K apart, and holds the table to being exactly the words that
 # moved -- and holds the seat whose absolutes ride MOVW/MOVT to refusing outright.
-test_reloc32: host
-	@$(gsh) test/gate/reloc32.sh $(ho) $m
+gate_hm += test_reloc32
 # the rung-2 self-host gate: every love C file and moonlibc compiled by mooncc, the system
 # linker binding them -- test/gate/selfhost.sh. opt-in; x86-64 only.
 test_selfhost: host
@@ -645,8 +628,7 @@ test_drv: host
 # the kernel's inline-asm seam: src/inle/<a>/asmops.h says every privileged instruction
 # once, in GNU's template, and mooncc reads it through holo/gas.l -- so the gate compiles one
 # probe with mooncc and clang and compares op by op. Skips without llvm-objdump.
-test_asmops: host
-	@$(gsh) test/gate/asmops.sh $(ho)
+gate_ho += test_asmops
 # test_dtb -- src/inle/dtb.h, the walk both device-tree doors ride (a64_dtb.c and
 # rv64_dtb.c, each one two constants and this include), on trees the gate builds
 # rather than a machine hands over. a boot reaches exactly one tree, virt's; these reach
@@ -906,9 +888,7 @@ test_distboot: dist
 # test_hearts -- hearts (src/apps/hearts) builds the arm64 defconfig kernel Image from the pinned
 # linux tarball, byte-identical to kbuild+clang's, both at one canonical path (/var/tmp/hearts).
 # two kernel builds on the host's borrowed toolchain: heavy, opt-in by name.
-test_hearts: host
-	@echo TEST test/gate/hearts.sh
-	@$(gsh) test/gate/hearts.sh $(ho)/love
+gate_love += test_hearts
 # test_hearts_boot -- hearts rung 0 under qemu virt (a64): our chooser, the Image test_hearts
 # certified and kept, helm as pid 1 on a squashfs root, and three updates in one run (refused,
 # committed, reverted). heavy: an a64 bake (qemu-user off an a64 box) and the boots.
@@ -918,13 +898,9 @@ test_hearts_boot: host $(hb_love) $(ho)/.dist-cat.l
 	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l
 # test_sqfs -- src/apps/sqfs.l against mksquashfs over four trees: byte for byte stored, read back deflated.
 # skips without mksquashfs or unsquashfs.
-test_sqfs: host
-	@echo TEST test/gate/sqfs.sh
-	@$(gsh) test/gate/sqfs.sh $(ho)/love
+gate_love += test_sqfs
 # test_ext4 -- src/apps/ext4.l against mke2fs, byte for byte, at five sizes. skips without mke2fs.
-test_ext4: host
-	@echo TEST test/gate/ext4.sh
-	@$(gsh) test/gate/ext4.sh $(ho)/love
+gate_love += test_ext4
 # test_gz -- src/apps/tar.l + src/apps/gz.l against the two programs they replace. the laws
 # are test/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
 # a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
@@ -954,36 +930,24 @@ test_fat32: host
 # from test_gz for the same reason test_gz is separate from the laws: the system tool
 # is the only oracle that can catch a format two of our own functions agree on. This
 # is the wire `make distro-initramfs` cuts its image with.
-test_cpio: host
-	@echo TEST test/gate/cpio.sh
-	@$(gsh) test/gate/cpio.sh $(ho)/love
+gate_love += test_cpio
 # test_tfm -- src/apps/tfm.l against TeX Live: tfm-pl = tftopl and tfm-read = TeX's own font
 # loading on every installed TFM, and on seeded copies with bytes hit. skips without TeX Live
-test_tfm: host
-	@echo TEST test/gate/tfm.sh
-	@$(gsh) test/gate/tfm.sh $(ho)/love
+gate_love += test_tfm
 # test_gpic -- classic pic (src/apps/kore/gpic.l) against groff's pic, byte for byte in troff, -n
 # and -t, over test/gpic; test/gpic/open is counted, not gated. skips without groff
-test_gpic: host
-	@echo TEST test/gate/gpic.sh
-	@$(gsh) test/gate/gpic.sh $(ho)/love
+gate_love += test_gpic
 # test_grap -- grap (src/apps/kore/grap.l) against plan9port's, byte for byte over test/grap, and
 # what each draws through our pic against groff's; test/grap/open is counted, not gated. skips
 # without plan9port
-test_grap: host
-	@echo TEST test/gate/grap.sh
-	@$(gsh) test/gate/grap.sh $(ho)/love
+gate_love += test_grap
 # test_chem -- chem (src/apps/kore/chem.l) against groff's, byte for byte over test/chem, and what
 # each draws through our pic against groff's; test/chem/open is counted, not gated. skips
 # without groff's chem
-test_chem: host
-	@echo TEST test/gate/chem.sh
-	@$(gsh) test/gate/chem.sh $(ho)/love
+gate_love += test_chem
 # test_caja -- caja (src/apps/caja/) against TeX: the same boxes and paragraphs through both, DVI byte for byte.
 # skips without TeX Live
-test_caja: host
-	@echo TEST test/gate/caja.sh
-	@$(gsh) test/gate/caja.sh $(ho)/love
+gate_love += test_caja
 # The neutral assembler (src/love/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (test/holo/golden.l). a host-only app -- it adds no nif and is not
 # baked into love0. The sources are cat'd in because the host bakes its native backend
@@ -1010,14 +974,12 @@ test_as: host
 # lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
 # test/holo/golden.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
 # and nothing else -- no as, no ld, no arm-none-eabi -- so it runs where the thumb gates skip.
-test_elf32: host
-	@$(gsh) test/gate/elf32.sh $(ho)
+gate_ho += test_elf32
 # test_objcopy -- src/love/holo/copy.l, the flatten, against the objcopy it replaces: a BYTE
 # comparison of both output formats over fixtures our own linker mints plus every ELF on
 # hand. Intel HEX is a wire (a Teensy loader reads it), so nothing softer would do. The
 # gate skips where no objcopy exists -- see the script for what the fixtures are for.
-test_objcopy: host
-	@$(gsh) test/gate/objcopy.sh $(ho)
+gate_ho += test_objcopy
 # nc's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
 # full-duplex, each asserting it got what the other sent. The only net gate driving the real
 # `love src/apps/nc.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
@@ -1648,3 +1610,15 @@ endif
 waits: host
 	@fs=$$($m src/tools/selfpack.l -l | grep '\.c$$'); [ -n "$$fs" ] || { echo "FAIL waits: no .c files listed"; exit 1; }; \
 	 $m src/tools/waits.l $$fs
+
+# a gate script run whole by name: test_X runs test/gate/X.sh
+$(gate_love): test_%: host
+	@echo TEST test/gate/$*.sh
+	@$(gsh) test/gate/$*.sh $(ho)/love
+$(gate_m): test_%: host
+	@echo TEST test/gate/$*.sh
+	@$(gsh) test/gate/$*.sh $m
+$(gate_hm): test_%: host
+	@$(gsh) test/gate/$*.sh $(ho) $m
+$(gate_ho): test_%: host
+	@$(gsh) test/gate/$*.sh $(ho)
