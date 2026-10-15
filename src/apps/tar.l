@@ -101,11 +101,11 @@
             string b))))
    ; --- the archive as a stream ----------------------------------------------
    ; tar-pack's answer exists to be looked at once and dropped, and for a source tree
-   ; that is megabytes held to be hashed. tar-hash is the same archive fed through a
-   ; resumable sha-256 (src/love/crypto/hash.c) a bufferful at a time: the header, then the file's
-   ; bytes read straight off 'path, then the pad -- so the peak is one cask and not one
-   ; archive. It answers what (sha256 (tar-pack es)) answers, and test/gate/targz.sh
-   ; holds the two together over a tree with the awkward shapes in it.
+   ; that is megabytes held. tar-emit is the same archive through put a bufferful at a
+   ; time: the header, then the file's bytes read straight off 'path, then the pad -- so
+   ; the peak is one cask and not one archive. tar-hash feeds it to a resumable sha-256
+   ; (src/love/crypto/hash.c) and answers what (sha256 (tar-pack es)) answers;
+   ; test/gate/targz.sh holds the two together over a tree with the awkward shapes in it.
    ; it reads what the header says. a file that moved between the walk's stat and
    ; this read would put a body of one length under a header of another, so a short
    ; read is a torn archive and answers () -- the caller cuts the fat way, which reads
@@ -113,12 +113,12 @@
    ; `snip` reads the cask, and it must: (snip (string buf) 0 k) copies the whole
    ; buffer to take the corner a read filled -- 64K for a 12-byte file, and over a
    ; source tree more copying than the archive it is hashing.
-   (tar-feed h buf e)                       ; feed one file's body + pad; 1 | ()
+   (tar-feed put buf e)                     ; one file's body + pad through put; 1 | ()
     (!(string? (tar-get e 'path ())) ?      ; a fat entry, no file behind it
        (: b (tar-get e 'body "")
-          _ (sha256-feed h b)
+          _ (put b)
           r (#b % tar-blk)
-          ((r ? (sha256-feed h * string * cask $ tar-blk - r) 0),
+          ((r ? (put * string * cask $ tar-blk - r) 0),
            1))
     (: n (tar-get e 'size 0)
        q (0 < n ? (open (tar-get e 'path "") "r") 0)
@@ -128,24 +128,25 @@
                         (swig q buf @ k
                          (!(charm? k && 0 < k) ? ()
                           (: k2 (left < k ? left k)
-                             (sha256-feed h (snip buf 0 k2),
+                             (put (snip buf 0 k2),
                               go (left - k2))))))
              ok (go n)
              (close q,
-              ok && (n % tar-blk @ r (r && sha256-feed h * string * cask $ tar-blk - r, 1)))))))
-   (tar-hash es)                            ; -> the 64-char digest | ()
-    (: h (cask tar-shast)
-       _ (sha256-init h)
-       buf (cask 65536)
+              ok && (n % tar-blk @ r (r && put * string * cask $ tar-blk - r, 1)))))))
+   (tar-emit es put)                        ; -> 1 | () a path too long, or a file torn
+    (: buf (cask 65536)
        (go xs) (atom? xs ? 1
                   (: e <xs
                      hd (tar-head e)
                      (!hd ? ()
-                        (: _ (sha256-feed h hd)
-                           ok (tar-get e 'kind 'file = 'file ? (tar-feed h buf e) 1)
+                        (: _ (put hd)
+                           ok (tar-get e 'kind 'file = 'file ? (tar-feed put buf e) 1)
                            (ok && go >xs)))))
-       (go es ? (sha256-feed h (string (cask (tar-blk * 2))),
-                 sha256-done h)))
+       (go es ? (put (string (cask (tar-blk * 2))), 1)))
+   (tar-hash es)                            ; -> the 64-char digest | ()
+    (: h (cask tar-shast)
+       _ (sha256-init h)
+       (tar-emit es (sha256-feed h) ? (sha256-done h) ()))
 
    (tar-pad s) (s + zbytes (padk #s tar-blk))  ; up to the next 512
    (tar-pack es)
@@ -170,8 +171,9 @@
                              pre (tar-txt h 345 155)
                              nom (#pre ? (pre + "/" + name) name)
                              tc (h 156)
-                             kind (tc @ 53 'dir (50 || 49) 'link 'file)   ; '5' '2'/'1'
-                             sz (kind == 'file && tar-oct h 124 12)
+                             ; '5' '2'/'1', and 'g' a pax global header: what packed it, read past
+                             kind (tc @ 53 'dir (50 || 49) 'link 103 'global 'file)
+                             sz ((kind == 'file || kind == 'global) && tar-oct h 124 12)
                              [1 {'nom nom 'kind kind
                                  'mode (tar-oct h 100 8)
                                  'uid (tar-oct h 108 8)
@@ -201,7 +203,7 @@
      (go o acc) (n - o >= tar-blk ?
                  (tar-read1 s n o @ r
                   (? (r == 'end) [1 (rev acc)]
-                      r (go <>>r (<(>r) . acc))))))
+                      r (go <>>r (tar-get <(>r) 'kind 'file = 'global ? acc (<(>r) . acc)))))))
 
    ; --- reading off a stream --------------------------------------------------
    ; a source is a reader rd (rd _ the next piece, "" at the end) behind a buffer, so a
@@ -247,10 +249,11 @@
               (tar-zero? h 0) [1 k]
               (tar-hdr h @ r
                  (!r ? ()
-                    (: sz (r 2)   b {'left sz}   (pin (r 1) 'size sz,
-                                                  (f (r 1) b != 1 ? 'stop
-                                                     (peep b 'left 0 + padk sz tar-blk @ n
-                                                        (tar-pour s n (x \ 0) < n ? () (go (k + 1)))))))))))
+                    (: sz (r 2)   b {'left sz}   meta (tar-get (r 1) 'kind 'file = 'global)
+                       (pin (r 1) 'size sz,
+                        (!meta && f (r 1) b != 1 ? 'stop
+                           (peep b 'left 0 + padk sz tar-blk @ n
+                              (tar-pour s n (x \ 0) < n ? () (go (meta ? k (k + 1))))))))))))
        (go 0))
    (tar-body s b wr) (: n (peep b 'left 0)   got (tar-pour s n wr)   (pin b 'left (n - got), got = n))
 
@@ -451,6 +454,10 @@
        (ends? p ".xz" || ends? p ".txz") 'J
        ())
    (tarc-zname z) (z @ 'z "gzip" 'j "bzip2" "xz")
+   ; the archive goes out a piece at a time, coded in runs of tarc-run: gzip members and xz
+   ; and bzip2 streams each read on into the next, so one coded whole is the same archive and
+   ; no member is held. an archive under a run is one member, as it always was
+   tarc-run 4194304
 
    ; --- the flags ----------------------------------------------------------------
    ; each letter's rows: what it pins, and 'arg for the two that take a word
@@ -560,23 +567,31 @@
        a (tarc-arch t)
        _ (a = "-" && two? (tty out) && tarc-die "Refusing to write archive contents to terminal (missing -f option?)")
        root (peep t 'C "")
+       ; opened before the walk, so an archive inside the tree is seen as itself and left out
+       q (a = "-" ? out (open a "w"))
+       _ (!(hot? q) && tarc-die (a + ": Cannot open"))
+       (self? e) (a != "-" && tar-strip (tar-get e 'path "") = tar-strip a
+                  && (tarc-warn (tar-get e 'nom "" + ": file is the archive; not dumped"), 1))
        ; each member as named: a leading / comes off, as GNU takes it off, and says so
        (one p)
         (: p2 (tarc-trim p)
            abs (0 < #p2 && p2 0 = 47)
            rel (: (go k) (k < #p2 && p2 k = 47 ? (go (k + 1)) (snip p2 k #p2)) (go 0))
            _ (abs && !(peep t 'slash 0) && (pin t 'slash 1, tarc-warn "Removing leading `/' from member names"))
-           g (tar-gather (abs ? "/" (#root ? root ".")) (abs && !#rel ? "." rel))
+           g (tar-thin? 0 (abs ? "/" (#root ? root ".")) (abs && !#rel ? "." rel))
            (g ? <>g (tarc-warn (p + ": Cannot stat: No such file or directory"), pin t 'bad 1, ())))
-       es (foldl (acc \ p \ acc + one p) () ops)
+       es (filter (e \ !(self? e)) (foldl (acc \ p \ acc + one p) () ops))
+       _ (any (e \ !(tar-head e)) es && tarc-die "cannot pack (a path too long for ustar?)")
        _ (peep t 'v 0 && each es (e \ tarc-tell t (tar-get e 'nom "")))
-       ar (tar-pack es)
-       _ (!ar && tarc-die "cannot pack (a path too long for ustar?)")
        z (? (peep t 'z ()) (peep t 'z ()) (peep t 'auto 0) (tarc-bysuf a) ())
-       b (tarc-zip z ar)
-       ((? (a = "-") (say out b, flush out)
-           (uwrite a b) 0
-           (tarc-die (a + ": Cannot open"))),
+       run {'l () 'n 0}
+       (spill _) (: b (cats (rev (run 'l))) (pins run 'l () 'n 0, #b && say q (tarc-zip z b)))
+       (put x) (pins run 'l (x . run 'l) 'n (run 'n + #x), (tarc-run <= run 'n && spill 0))
+       ok (tar-emit es put)
+       (spill 0,
+        flush q,
+        (a = "-" || close q),
+        !ok && tarc-die "a file changed as we read it",
         (peep t 'bad 0 ? 2 0)))
 
    ; the archive as a source, read a piece at a time off the file or stdin, its codec
