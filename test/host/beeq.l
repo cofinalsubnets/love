@@ -14,7 +14,7 @@
 
 (: bq-home (cwd 0)
    bq-love (: l <cmdline (l 0 = 47 ? l (bq-home + "/" + l)))
-   bq-app (bq-home + "/src/apps/bee.l")
+   bq-app "bee"            ; the binary's verb, baked from this tree: the lane makes `host` first
    bq-root (bq-home + "/out/.beeq-" + show (getpid 0))
    _ (mkdir bq-root 493)
    (bq-put p s) (: f (open p "w") _ (say f s) (close f))
