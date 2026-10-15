@@ -21,9 +21,14 @@ static love_noinline void wait_one(int fd, int events, uintptr_t ms) {
   struct wait_fd w = { .fd = fd, .events = (short) events };
   wait_fds(&w, 1, ms); }
 
+// whether the op yielding goes on from where it stands: catch and a task's exit come
+// back to themselves, so with nothing left that could wake, they would spin
+static love_inline int stays(union u const *ip) { return ip->ap == lvm_wait || ip->ap == lvm_task_exit; }
+
 // monotask fast path
 static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
  int my_wait_fd = g->next_wait_fd, my_events = g->next_wait_events;
+ if (!my_wake && my_wait_fd < 0 && stays(Ip)) love_musttail return Ap(lvm_deadlock, g);   // the last task, ending or waiting on none
  g->next_wake_at = 0;
  g->next_wait_fd = -1;
  g->next_wait_events = wait_in;
@@ -158,7 +163,7 @@ static love_noinline int poll_parked(struct g *g, uintptr_t now) {
 // cap by construction. called with g packed. both rings are walked: the run
 // ring holds the sleepers, the parked ring the fds -- one ring's terms alone
 // oversleep the other's.
-static love_noinline union u *yield_sw_wait(struct g *g, uintptr_t my_wake, int my_wait_fd, int my_events, int me_live) {
+static love_noinline union u *yield_sw_wait(struct g *g, uintptr_t my_wake, int my_wait_fd, int my_events, int me_live, int *stuck) {
  // the syscall-free wakes first, load-bearing: a parked task whose port already
  // holds bytes is runnable over an fd with nothing left to say -- a wait built
  // while it is parked never returns and `catch` hangs (test/host/parked.l, law 2).
@@ -177,7 +182,7 @@ static love_noinline union u *yield_sw_wait(struct g *g, uintptr_t my_wake, int 
        if (!held(q) && wa && (!min_wake || wa < min_wake)) min_wake = wa;
        if (!held(q) && getcharm(q[4].x) >= 0) nfds++;
        q = q->m; } while (q != g->parked); }
- if (!min_wake && !nfds) return NULL;
+ if (!min_wake && !nfds) return *stuck = 1, NULL;   // no clock and no fd: nothing can wake
  uintptr_t now = love_clock(), ticks = min_wake ? min_wake - now : 0;
  // the filled block, once the wait answers it; stays NULL unless some entry came
  // back nonzero, so a frontend that fills nothing keeps working the old way
@@ -245,9 +250,11 @@ lvm(lvm_yield_sw) {
   // a blocked task still waits below, and so does a dead one: it waits on its peers'
   // behalf until one of them can run, which is what leaves it a collectable zombie.
   if (fair) { g->yield_ctr = 0; love_musttail return Continue(); }
+  int stuck = 0;
   Pack(g);                     // the wait lays its fd block in the [hp, sp) gap
-  next = yield_sw_wait(g, my_wake, my_wait_fd, my_events, me_live);
+  next = yield_sw_wait(g, my_wake, my_wait_fd, my_events, me_live, &stuck);
   Unpack(g);                   // nothing allocated, so these come back unchanged
+  if (!next && stuck && stays(Ip)) love_musttail return Ap(lvm_deadlock, g);
   if (!next) {
    g->next_wake_at = 0;
    g->next_wait_fd = -1;

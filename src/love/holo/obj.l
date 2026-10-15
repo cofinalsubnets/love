@@ -173,7 +173,10 @@
    r-thm-movt 48                                    ; R_ARM_THM_MOVT_ABS     S+A, high 16
    ; an 8-byte rel entry (the symbols are elf.l's elf-sym32, st_size 0).
    (o-rel32 offset symidx typ) (catall [(le32 offset) (le32 (symidx * 256 + typ))])
-   (objsecs32 target0 secs funcnames globnames wknames)
+   ; anames maps a C name to the symbol it is laid as (an asm label): the strtab spells that,
+   ; the forms keep the C name
+   (objsecs32 target0 secs funcnames globnames wknames) (objsecs32n target0 secs funcnames globnames wknames {})
+   (objsecs32n target0 secs funcnames globnames wknames anames)
     (: target (arch-nom target0)
        machine (elf-machines target)
        _ (!machine ? (scare 'no-elf-machine target))
@@ -277,7 +280,7 @@
                                        bs))))
            (go rs bytes))
        lbytes (map (l \ (ln-rl l @ rs (bakepc (bakemw (bakeabs (ln-bs l) rs) rs) rs))) lanes)
-       symnames (map (string * cap) locs + funcnames + globnames + map string exts)
+       symnames (map (s \ peep anames s s) (map (string * cap) locs + funcnames + globnames + map string exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
        ; -- the symbol table. a func symbol's value carries the thumb bit (bit 0), which a
@@ -481,7 +484,8 @@
    ; in place, a reference across becomes a relocation. shf_execinstr (flags & 4) picks the
    ; relaxer and the internal-resolve lane, which a64's branches take in any section. a NOBITS section (type 8) still lays its forms,
    ; where its labels and its size come from, but writes no file bytes. --
-   (objsecs target0 secs funcnames globnames wknames locnames)
+   (objsecs target0 secs funcnames globnames wknames locnames) (objsecsn target0 secs funcnames globnames wknames locnames {})
+   (objsecsn target0 secs funcnames globnames wknames locnames anames)
     (: target (arch-nom target0)
        a64 (target = 'a64)
        rv (target = 'rv64)
@@ -535,7 +539,7 @@
                                                      ; is referenced through its own symbol, not fnidx's miss (index 0)
 
        ; -- .strtab: every symbol's name (statics, funcs, globs, exts as spellings) --
-       symnames (locnames + funcnames + globnames + map string exts)
+       symnames (map (s \ peep anames s s) (locnames + funcnames + globnames + map string exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
 
