@@ -44,7 +44,7 @@
           (k = 'ico) (cite 'bmp 'ico-size b)
           (k = 'pnm) (cite 'pnm 'pnm-size b)
           "not a picture"))
-   ; -> [w h rgba] | why not; a gif's or an animated webp's first frame
+   ; -> [w h rgba] | why not; a gif's or an animated webp's first frame, an apng's default image
    (pic-decode b)
     (pic-kind b @ k
        (? (k = 'png) (cite 'png 'png-decode b)
@@ -62,6 +62,7 @@
        (? (string? d) d
           (k = 'gif) (cite 'gif 'gif-frames b most)
           (k = 'webp) (cite 'webp 'webp-frames b most)
+          (k = 'png) (cite 'png 'png-frames b most)
           (pic-decode b @ r (two? r ? [(r 0) (r 1) [[(r 2) 0]]] r))))
 
    ; -- sampling ----------------------------------------------------------------
