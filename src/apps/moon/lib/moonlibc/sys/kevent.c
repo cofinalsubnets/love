@@ -1,6 +1,35 @@
 #include <sys/event.h>
 #include "../impl.h"
 
+#ifdef LvMac
+/* macos: freebsd's head in 32 bytes, no ext -- repacked both ways through a
+ * buffer, as netbsd's is */
+static int __love_mackev(int kq, struct kevent const *ch, int nch,
+                         struct kevent *ev, int nev, struct timespec const *ts) {
+  struct __mac_kevent b[8];
+  for (int at = 0; at < nch; at += 8) {
+    int k = nch - at > 8 ? 8 : nch - at;
+    for (int i = 0; i < k; i++) {
+      struct kevent const *c = ch + at + i;
+      long id = (long) c->ident;
+      if (c->filter == EVFILT_SIGNAL && (id = __love_sigfb(id)) < 0) { __errno_v = EINVAL; return -1; }
+      b[i].ident = (unsigned long) id; b[i].filter = c->filter;
+      b[i].flags = c->flags; b[i].fflags = c->fflags;
+      b[i].data = (long) c->data; b[i].udata = c->udata; }
+    if (er(fb6(363, kq, (long) b, k, 0, 0, 0)) < 0) return -1; }
+  if (nev <= 0) return 0;
+  long got = er(fb6(363, kq, 0, 0, (long) b, nev > 8 ? 8 : nev, (long) ts));
+  if (got < 0) return -1;
+  for (long i = 0; i < got; i++) {
+    long id = (long) b[i].ident;
+    if (b[i].filter == EVFILT_SIGNAL) id = __love_sigcan(id);
+    ev[i].ident = (unsigned long) id; ev[i].filter = b[i].filter;
+    ev[i].flags = b[i].flags; ev[i].fflags = b[i].fflags;
+    ev[i].data = b[i].data; ev[i].udata = b[i].udata;
+    ev[i].ext[0] = ev[i].ext[1] = ev[i].ext[2] = ev[i].ext[3] = 0; }
+  return (int) got; }
+#endif
+
 /* the canonical record is freebsd's; netbsd repacks to __kevent50's 40 bytes
  * with the positive filter (= -canon - 1, an involution). EVFILT_SIGNAL is
  * the one filter whose ident is a signal number, so it alone rides the
@@ -9,6 +38,9 @@
 int kevent(int kq, struct kevent const *ch, int nch,
            struct kevent *ev, int nev, struct timespec const *ts) {
   if (__love_osv < 2) { __errno_v = ENOSYS; return -1; }
+#ifdef LvMac
+  if (__love_osv == 4) return __love_mackev(kq, ch, nch, ev, nev, ts);
+#endif
   int nb = __love_osv == 3;
   long nr = nb ? 435 : NR_fb_kevent;   /* __kevent50 */
   long tw = (long) ts;                 /* the timeout, in the kernel's own timespec */

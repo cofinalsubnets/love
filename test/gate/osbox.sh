@@ -14,7 +14,9 @@
 # on a64 the local half of each comparison runs on an a64 host where one answers, else
 # under qemu-aarch64, and skips with neither. on rv64 it runs under qemu-riscv64.
 # provisioning the boxes: doc/misc/osbox.md.
-# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64|rv64]
+# macos meets no ELF: each leg's source is linked twice, the default lane's ELF for the local
+# half and a mach-o (-os macos) for the box, and the two must answer alike.
+# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd|macos [x64|a64|rv64|arm|i386]
 . test/gate/skip.sh
 set -u
 
@@ -33,6 +35,7 @@ case "$os-$arch" in
   netbsd-arm)  box=${NBSD_ARM_SSH:-${NBSD_ARM64_SSH:-}}; sd= ;;
   freebsd-i386) box=${FBSD_I386_SSH:-${FBSD_SSH:-}}; sd= ;;
   netbsd-i386)  box=${NBSD_I386_SSH:-${NBSD_SSH:-}}; sd= ;;
+  macos-x64)    box=${MAC_SSH:-}; sd= ;;
   *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
 esac
 [ -n "$box" ] || box=$("$ho/love" bee --on "$os-$arch" --ssh 2>/dev/null) || box=
@@ -164,6 +167,9 @@ int main(void) {
 EOF
 
 moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
+# a leg's binary for the box: the local one, or its mach-o twin linked beside it
+twin() { [ "$os" != macos ] || moon0 -os macos "$d/$1.c" -o "$d/$2.mac"; }
+boxbin() { if [ "$os" = macos ]; then echo "$d/$1.mac"; else echo "$d/$1"; fi; }
 
 # ---- rung UV1: ONE binary, both kernels ----
 # the DEFAULT lane, no -os: canonical numbers dispatched at runtime (os.c's
@@ -197,10 +203,11 @@ int main(int argc, char **argv) {
   return 42; }
 EOF
 moon0 -t "$arch" "$d/uv1.c" -o "$d/uv1" || fail "uv1: the default-lane compile"
+twin uv1 uv1 || fail "uv1: the mach-o compile"
 [ "$(dd if="$d/uv1" bs=1 skip=7 count=1 2>/dev/null | od -An -tu1 | tr -d ' ')" = 9 ] \
   || fail "uv1: not born branded EI_OSABI=9"
 lout=$(for i in 1 2 3 4; do run "$d/uv1" one two; echo "rc=$?"; done)
-fout=$($box 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$d/uv1") \
+fout=$($box 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$(boxbin uv1)") \
   || fail "uv1: the box could not take or run it"
 [ "$lout" = "$fout" ] || fail "uv1: the kernels disagree -- linux[$lout] $os[$fout]"
 echo "$lout" | grep -q "uv1: argc=3 jmp=7 ebadf=ok kill=ok" || fail "uv1 body -- got: $lout"
@@ -215,8 +222,9 @@ echo "$t: UV1 -- ONE default-lane binary answered both kernels the same"
 # translated at runtime, and the SAME file answers the SAME text on both
 # kernels. (the linux run answers here; the box answers over ssh.)
 moon0 -t "$arch" "$d/rung2.c" -o "$d/uv2" || fail "uv2: the default-lane compile"
+twin rung2 uv2 || fail "uv2: the mach-o compile"
 l2=$(run "$d/uv2" < /dev/null; echo "rc=$?")   # stdin pinned: the battery asserts isatty(0)==0
-f2=$($box 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$d/uv2") \
+f2=$($box 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$(boxbin uv2)") \
   || fail "uv2: the box could not take or run it"
 [ "$l2" = "$f2" ] || fail "uv2: the kernels disagree -- linux[$l2] $os[$f2]"
 echo "$l2" | grep -q "rc=42" || fail "uv2 exit -- got: $l2"
@@ -337,8 +345,9 @@ int main(void) {
 }
 EOF
 moon0 -t "$arch" "$d/uvnet.c" -o "$d/uvnet" || fail "uvnet: the default-lane compile"
+twin uvnet uvnet || fail "uvnet: the mach-o compile"
 ln=$(run "$d/uvnet" < /dev/null; echo "rc=$?")
-fn=$($box 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$d/uvnet") \
+fn=$($box 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$(boxbin uvnet)") \
   || fail "uvnet: the box could not take or run it"
 [ "$ln" = "$fn" ] || fail "uvnet: the kernels disagree -- linux[$ln] $os[$fn]"
 echo "$ln" | grep -q "net all" || fail "uvnet battery -- got: $ln"
@@ -408,8 +417,9 @@ int main(void) {
 }
 EOF
 moon0 -t "$arch" "$d/uvsig.c" -o "$d/uvsig" || fail "uvsig: the default-lane compile"
+twin uvsig uvsig || fail "uvsig: the mach-o compile"
 ls2=$(run "$d/uvsig" < /dev/null; echo "rc=$?")
-fs2=$($box 'cat > /tmp/uvsig && chmod +x /tmp/uvsig && /tmp/uvsig; echo "rc=$?"' < "$d/uvsig") \
+fs2=$($box 'cat > /tmp/uvsig && chmod +x /tmp/uvsig && /tmp/uvsig; echo "rc=$?"' < "$(boxbin uvsig)") \
   || fail "uvsig: the box could not take or run it"
 [ "$ls2" = "$fs2" ] || fail "uvsig: the kernels disagree -- linux[$ls2] $os[$fs2]"
 echo "$ls2" | grep -q "uvsig: usr1=10 chld=17 canonical" || fail "uvsig body -- got: $ls2"
@@ -455,8 +465,9 @@ int main(void) {
 }
 EOF
 moon0 -t "$arch" "$d/uvpty.c" -o "$d/uvpty" || fail "uvpty: the default-lane compile"
+twin uvpty uvpty || fail "uvpty: the mach-o compile"
 lp=$(run "$d/uvpty" < /dev/null; echo "rc=$?")
-fp=$($box 'cat > /tmp/uvpty && chmod +x /tmp/uvpty && /tmp/uvpty; echo "rc=$?"' < "$d/uvpty") \
+fp=$($box 'cat > /tmp/uvpty && chmod +x /tmp/uvpty && /tmp/uvpty; echo "rc=$?"' < "$(boxbin uvpty)") \
   || fail "uvpty: the box could not take or run it"
 [ "$lp" = "$fp" ] || fail "uvpty: the kernels disagree -- linux[$lp] $os[$fp]"
 echo "$lp" | grep -q "pty all" || fail "uvpty battery -- got: $lp"
@@ -556,9 +567,16 @@ int main(void) {
   return 42; }
 EOF
 moon0 -t "$arch" "$d/uvsi.c" -o "$d/uvsi" || fail "uvsi: the default-lane compile"
+twin uvsi uvsi || fail "uvsi: the mach-o compile"
 lout=$(run "$d/uvsi"; echo "rc=$?")
-fout=$($box 'cat > /tmp/uvsi && chmod +x /tmp/uvsi && /tmp/uvsi; echo "rc=$?"' < "$d/uvsi") \
+fout=$($box 'cat > /tmp/uvsi && chmod +x /tmp/uvsi && /tmp/uvsi; echo "rc=$?"' < "$(boxbin uvsi)") \
   || fail "uvsi: the box could not take or run it"
+# xnu fills a sent SIGBUS as a fault of its own (BUS_ADRERR, no sender), its libc's
+# handlers reading the same: there is no sender to give back, so that line is not compared
+if [ "$os" = macos ]; then
+  echo "$fout" | grep -q "uvsi: sbus signo=7 code=2 pid=0" || fail "uvsi: xnu's sent bus fault -- got: $fout"
+  lout=$(echo "$lout" | grep -v "uvsi: sbus"); fout=$(echo "$fout" | grep -v "uvsi: sbus")
+fi
 [ "$lout" = "$fout" ] || fail "uvsi: the kernels disagree -- linux[$lout] $os[$fout]"
 echo "$lout" | grep -q "uvsi: chld signo=17 code=1 status=7 pid=1" \
   || fail "uvsi child lane -- got: $lout"
@@ -566,7 +584,7 @@ echo "$lout" | grep -q "uvsi: usr1 signo=10 code=0 pid=1" \
   || fail "uvsi sender band -- got: $lout"
 echo "$lout" | grep -q "uvsi: segv signo=11 code=1 addr=0x12340000" \
   || fail "uvsi fault lane -- got: $lout"
-echo "$lout" | grep -q "uvsi: sbus signo=7 code=0 pid=1" \
+[ "$os" = macos ] || echo "$lout" | grep -q "uvsi: sbus signo=7 code=0 pid=1" \
   || fail "uvsi sent-fault lane -- got: $lout"
 echo "$lout" | grep -q "rc=42" || fail "uvsi exit -- got: $lout"
 

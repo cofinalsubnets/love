@@ -746,7 +746,7 @@ test_fat: dist-fat
 # freebsd-x64 or netbsd-x64 (doc/bee.md, HOSTS), or FBSD_SSH / NBSD_SSH for a release, and
 # without one the gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
 # NBSD_SEED=1 adds the on-box `love seed` trophy leg (minutes).
-.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 test_freebsd_arm test_netbsd_arm test_freebsd_i386 test_netbsd_i386
+.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 test_freebsd_arm test_netbsd_arm test_freebsd_i386 test_netbsd_i386 test_macos
 test_freebsd test_netbsd: test_%: host $(love0) out/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $*
 # the second ISA: freebsd-a64 and netbsd-a64 hosts are aarch64 boxes, and the local half of each
@@ -765,6 +765,9 @@ test_freebsd_arm test_netbsd_arm: test_%_arm: host $(love0) out/mooncc0.image
 # i386: the amd64 boxes run i386 binaries in their 32-bit lane, and so does this machine
 test_freebsd_i386 test_netbsd_i386: test_%_i386: host $(love0) out/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* i386
+# macos: a mach-o for the box (cap macos-x64) beside each leg's ELF, the two answering alike
+test_macos: host $(love0) out/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) macos x64
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the whole corpus. Opt-in: needs the -pie toolchain, x86-64 only.

@@ -84,6 +84,8 @@
          (br eq sj-fb)
          (cmp r1 3)
          (br eq sj-nb)
+         (cmp r1 4)
+         (br eq sj-mac)
          (li r6 0)                   ; rdi = SIG_BLOCK
          (li r9 8)                   ; r10 = sigsetsize
          (li r0 14)                  ; rt_sigprocmask
@@ -99,6 +101,12 @@
          (label sj-nb)
          (li r6 1)
          (li r0 293)                 ; __sigprocmask14: the same 16-byte shape
+         (sys)
+         (li r0 0)
+         (ret)
+         (label sj-mac)
+         (li r6 1)
+         (li r0 33554480)            ; xnu's sigprocmask 48, a 4-byte set
          (sys)
          (li r0 0)
          (ret)
@@ -120,6 +128,8 @@
          (br eq lj-fb)
          (cmp r1 3)
          (br eq lj-nb)
+         (cmp r1 4)
+         (br eq lj-mac)
          (li r6 2)                   ; rdi = SIG_SETMASK
          (li r9 8)                   ; r10 = sigsetsize
          (li r0 14)                  ; rt_sigprocmask
@@ -133,6 +143,11 @@
          (label lj-nb)
          (li r6 3)
          (li r0 293)                 ; __sigprocmask14
+         (sys)
+         (jmp lj-file)
+         (label lj-mac)
+         (li r6 3)
+         (li r0 33554480)            ; xnu's sigprocmask
          (sys)
          (label lj-file)
          (mov r0 r4)                 ; rax <- val, before rbp is restored
@@ -208,7 +223,58 @@
          (sys)
          (li r6 -1)
          (li r0 1)                   ; exit
-         (sys))
+         (sys)
+
+         ; -- __love_mac_sigtramp: xnu enters the registered tramp with (handler,
+         ;    style, sig, info, uctx, token) and wants sigreturn(uctx, style, token)
+         ;    back. what the handler clobbers is sigreturn's to restore, so the three
+         ;    ride callee-saved registers and the stack is only aligned
+         (label __love_mac_sigtramp)
+         (mov r3 r7)                 ; rbx <- uctx
+         (mov r11 r5)                ; r12 <- style
+         (mov r12 r8)                ; r13 <- token
+         (mov r0 r6)                 ; the handler
+         (mov r6 r2)                 ; rdi <- sig
+         (mov r5 r1)                 ; rsi <- info
+         (mov r2 r3)                 ; rdx <- uctx
+         (and sp sp -16)
+         (callr r0)
+         (mov r6 r3)
+         (mov r5 r11)
+         (mov r2 r12)
+         (li r0 33554616)            ; sigreturn 184
+         (sys)
+         (li r6 -1)
+         (li r0 33554433)            ; exit
+         (sys)
+
+         ; -- __love_macfork: xnu answers the child with the parent's pid in rax
+         ;    and 1 in rdx, so the child's 0 is said here
+         (label __love_macfork)
+         (li r0 33554434)            ; fork 2
+         (cmp r0 0)
+         (sys)
+         (br below mf-err)
+         (cmp r2 0)
+         (br eq mf-out)
+         (li r0 0)
+         (label mf-out)
+         (ret)
+         (label mf-err)
+         (neg r0)
+         (lea r0 r0 -4096)
+         (ret)
+
+         ; -- __love_macpipe: pipe's two ends come back in eax and edx, answered as
+         ;    one word, the second end high
+         (label __love_macpipe)
+         (li r0 33554474)            ; pipe 42
+         (cmp r0 0)
+         (sys)
+         (br below mf-err)
+         (shl r2 32)
+         (or r0 r0 r2)
+         (ret))
 
          (arch = 'i386)
          ; the i386 lane, the three kernels: cdecl args on the stack. linux reads them
@@ -1179,7 +1245,8 @@
        ; tail, which is the whole of what impl.h's LvOsTranslate says to the C.
        (objelf arch ir ()
                (? (arch = 'x64)
-                  '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone")
+                  '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone"
+                    "__love_mac_sigtramp" "__love_macfork" "__love_macpipe")
                   (arch = 'a64)
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
                     "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp")

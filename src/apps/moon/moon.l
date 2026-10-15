@@ -166,6 +166,7 @@
     'none    'none
     'freebsd 'freebsd
     'netbsd  'netbsd
+    'macos   'macos
              (udie 2 ("cc: unknown os " + string s)))
    ; the ground: main.c pins `love-os` per run, because one binary meets three kernels and
    ; the compile that made it cannot say which. the nom is data, for mcid's reason -- a bare
@@ -180,6 +181,7 @@
        (os @ 'none    ()
              'freebsd '("__FreeBSD__=14" "__unix__" "__unix")   ; stable/14, whose syscall.h the tables speak
              'netbsd  '("__NetBSD__" "__unix__" "__unix")
+             'macos   '("__APPLE__" "__MACH__")
              'linux   '("__linux__" "__linux" "__unix__" "__unix")
                       (udie 2 ("cc: no predefines for os " + string os))))
    ; C11's conditional features (6.10.8.3) -- an absence said out loud is what makes it
@@ -586,6 +588,19 @@
           (call main)
           (pop r6)
           (ret))
+   ; the macos entry: a mach-o meets one kernel, so the second word says which and nothing
+   ; is probed. xnu lays argc at [rsp] as linux does; exit is 1 in the unix class
+   crt0-macos '((mov r6 sp)
+                (li r5 4)
+                (call __love_start)
+                (mov r6 r0) (li r0 33554433) (sys)
+                (label __love_start)
+                (push r6)
+                (lea r5 r6 8)
+                (ld r6 r6 0)
+                (call main)
+                (pop r6)
+                (ret))
    ; the i386 entry: argc at [esp], the vector's address and what ebx says of the kernel handed to
    ; __love_start as cdecl arguments with esp 16-aligned at the call, then exit_group 252 (exit 1,
    ; a BSD's, if it returns)
@@ -1066,6 +1081,10 @@
     ; x64, a64 and rv64. elsewhere os.c has no tables for it, so it is refused here
     (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64 rv64))
           && udie 1 "cc: -os \(os) links on x64, a64 and rv64 only")
+       ; a mach-o: static, fixed-base, its entry knowing the kernel
+       mac? (os = 'macos)
+       _ (mac? && tgt != 'x64 && udie 1 "cc: -os macos links on x64 only")
+       _ (mac? && (pie || so || charm? org) && udie 2 "cc: -os macos lays a fixed-base executable: no -pie, -shared or -Ttext")
        ars (filter dota? ins)
        srcs (map (f \ (? (dotsrc? f) [f (string (cc-objbytes f t))]
                          (doto? f) (uread f @ r
@@ -1095,7 +1114,7 @@
        runs (charm? dorg ? [['at org 'text 'rodata 'nifs]
                             ['copy dorg 'data 'bss]]
                            [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0)   ; x64's serves both kernels
+       c9 (mac? ? crt0-macos (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves both kernels
        all (arm? || so ? srcs
                    (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
@@ -1105,6 +1124,7 @@
        set (so ? lib (lib + rtpull lib tgt os nostd vb))
        prod ("love " + <(usplit 43 love-version))
        ps (? arm? (ldbare32 tgt runs set () relo)
+             mac? (macholink tgt set)
              so (ldshared tgt (last (usplit 47 dst)) (map (l \ "lib" + l + ".so") libs) set prod)
              (ldlink tgt pie org set prod rdme))
        ; the ei_osabi = 9 brand (rung UV3) is ldlink's, laid where the header is made:
@@ -1112,7 +1132,7 @@
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [--emit-relocs] [-x c] [-t x64|a64|rv64|arm] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [--emit-relocs] [-x c] [-t x64|a64|rv64|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s

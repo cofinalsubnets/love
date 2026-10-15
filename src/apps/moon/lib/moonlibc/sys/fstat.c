@@ -128,6 +128,11 @@ int fstat(int fd, struct stat *st) {
     long r = er(sc2(NR_fstat, fd, (long) &f));
     if (r >= 0) __love_fbstat(&f, st);
     return (int) r; }
+  if (__love_osv == 4) {
+    struct __mac_stat f;
+    long r = er(sc2(NR_fstat, fd, (long) &f));
+    if (r >= 0) __love_macstat(&f, st);
+    return (int) r; }
   if (__love_osv == 3) {
     struct __nb_stat f;
     long r = er(sc2(NR_fstat, fd, (long) &f));

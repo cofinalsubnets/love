@@ -60,6 +60,9 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 # define LvOsTranslate 1        /* os.c's tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
+#if defined(__x86_64__) && defined(LvOsTranslate)
+# define LvMac 1                /* macos: mksys's xnu leaves, a mach-o's kernel */
+#endif
 #if defined(__ARM_EABI__) || defined(__i386__)
 extern long __love_sys8(long n, long a, long b, long c, long d, long e, long f, long g, long h);   /* a BSD's mmap: 8 words */
 extern long long __love_sysw(long n, long a, long b, long c, long d, long e, long f);   /* ..and its lseek, r0:r1 */
@@ -727,6 +730,11 @@ static long __love_call(long n, long a, long b, long c, long d, long e, long f) 
     return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
 #endif
   if (v >= 2) {
+#ifdef LvMac
+    if (v == 4) {                                     /* AT_FDCWD and the AT_ bits, in a copy: no arg's address is taken */
+      long w[5] = {a, b, c, d, e};
+      if (__love_macat(n, w)) a = w[0], b = w[1], c = w[2], d = w[3], e = w[4]; }
+#endif
     n = __love_nrfb(n);
     if (n < 0) return -38; }                          /* ENOSYS, canonically */
 #ifdef __ARM_EABI__
@@ -746,7 +754,10 @@ static long __love_call(long n, long a, long b, long c, long d, long e, long f) 
 #endif
   }
   return r; }
+/* xnu's unix calls answer in their class: the BSD number with this bit */
+#define LvMacUnix 0x2000000L
 static long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
+  if (__love_osv == 4) n |= LvMacUnix;
   long r = __love_sys(n, a, b, c, d, e, f);
 #ifdef LvOsTranslate
   return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
@@ -889,13 +900,13 @@ struct __fb_msghdr {                  /* BOTH BSDs: int-wide lengths, 48 bytes (
   int flags;
 };
 /* a BSD's cmsg: the 12-byte head (len level type, all ints), its data at the head rounded
- * up to the kernel's alignment -- 8 on 64-bit and netbsd's arm, 4 on i386 and freebsd's arm */
+ * up to the kernel's alignment -- 8 on 64-bit and netbsd's arm, 4 on i386, freebsd's arm and macos */
 #ifdef __ARM_EABI__
 static unsigned long __love_cmh(void) { return __love_osv == 3 ? 16 : 12; }
 static unsigned long __love_cma(void) { return __love_osv == 3 ? 8 : 4; }
 #else
-static unsigned long __love_cmh(void) { return sizeof(long) == 8 ? 16 : 12; }
-static unsigned long __love_cma(void) { return sizeof(long); }
+static unsigned long __love_cmh(void) { return sizeof(long) == 8 && __love_osv != 4 ? 16 : 12; }
+static unsigned long __love_cma(void) { return __love_osv == 4 ? 4 : sizeof(long); }   /* macos aligns on 4 */
 #endif
 struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 speeds, no c_line */
   unsigned int c_iflag, c_oflag, c_cflag, c_lflag;
@@ -960,6 +971,61 @@ extern void __love_nbstat(struct __nb_stat const *f, struct stat *st);
 #ifdef LvNbTramp
 extern void __love_nb_sigtramp(void);   /* mksys: the ucontext register; setcontext */
 #endif
+/* ---- the fourth kernel: macos (xnu), the only one a mach-o meets. crt0 says so
+ * (osv 4) and nothing is probed. its unix calls are the classic BSD band in a
+ * class of their own (LvMacUnix); signals, sa flags, the siginfo head, termios
+ * bits and msghdr are freebsd's. its own: these records, AT_FDCWD -2 and the AT_
+ * bits, the calls it never had (clock_gettime, nanosleep, pipe2, getcwd,
+ * utimensat), fork and pipe answering in two registers, and a userland sigtramp
+ * that hands sigreturn a token. */
+struct __mac_stat {                   /* stat64, 144 bytes: a birth time after ctime */
+  int dev;
+  unsigned short mode, nlink;
+  unsigned long long ino;
+  unsigned int uid, gid;
+  int rdev;
+  struct timespec atim, mtim, ctim, btim;
+  long long size, blocks;
+  int blksize;
+  unsigned int flags, gen;
+  int lspare;
+  long long qspare[2];
+};
+struct __mac_dirent {                 /* getdirentries64's record: namlen before type */
+  unsigned long long ino, seekoff;
+  unsigned short reclen, namlen;
+  unsigned char type;
+  char name[1024];
+};
+struct __mac_sigact { void *h, *tramp; unsigned int mask; int flags; };   /* the tramp rides in.. */
+struct __mac_osigact { void *h; unsigned int mask; int flags; };          /* ..and not back out */
+struct __mac_kevent {                 /* 32 bytes: freebsd's head with no ext */
+  unsigned long ident;
+  short filter;
+  unsigned short flags;
+  unsigned int fflags;
+  long data;
+  void *udata;
+};
+struct __mac_termios {                /* freebsd's bits in long-wide words: 72 bytes */
+  unsigned long c_iflag, c_oflag, c_cflag, c_lflag;
+  unsigned char c_cc[20];
+  unsigned long c_ispeed, c_ospeed;
+};
+#ifdef LvMac
+_Static_assert(sizeof(struct __mac_stat) == 144, "macos's stat64 is 144 bytes");
+_Static_assert(sizeof(struct __mac_termios) == 72, "macos's termios is 72 bytes");
+_Static_assert(sizeof(struct __mac_kevent) == 32, "macos's kevent is 32 bytes");
+extern long __love_macfork(void);
+extern long __love_macpipe(void);          /* the ends as one word, the second high */
+extern void __love_mac_sigtramp(void);
+#endif
+extern void __love_macstat(struct __mac_stat const *f, struct stat *st);
+extern void __love_macsofl(int fd, long t);   /* SOCK_CLOEXEC/NONBLOCK, by fcntl */
+extern int __love_macat(long n, long *w);   /* an *at call's args, made xnu's: 1 if it was one */
+extern void __love_tiomac(struct __fb_termios const *f, struct __mac_termios *m);
+extern void __love_tiounmac(struct __mac_termios const *m, struct __fb_termios *f);
+
 #if defined(__aarch64__) || defined(__riscv)
 /* THE PROBE CANNOT USE __love_sys HERE. netbsd/aarch64 takes the number from
  * the SVC IMMEDIATE and SIGSYSes the register form, so asking which kernel we

@@ -29,6 +29,38 @@ static void __love_sigshim(int s, void *si, void *ctx) {
 }
 
 int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
+#ifdef LvMac
+  if (__love_osv == 4) {
+    /* freebsd's numbers, flags and shim; the record carries the tramp the kernel
+     * enters (mksys's __love_mac_sigtramp), a 4-byte mask, and the old one comes
+     * back in the user's shape */
+    long fs = __love_sigfb(sig);
+    if (fs <= 0) { __errno_v = EINVAL; return -1; }
+    struct __mac_sigact ka;
+    struct __mac_osigact ko;
+    memset(&ko, 0, sizeof ko);
+    void (*prev)(int) = __sighand[fs];
+    unsigned char prevsi = __sigsi[fs];
+    if (a) {
+      void (*h)(int) = a->sa_handler;
+      if (h == (void (*)(int)) 0 || h == (void (*)(int)) 1) {
+        ka.h = (void *) h; __sighand[fs] = 0; __sigsi[fs] = 0; }
+      else {
+        ka.h = (void *) __love_sigshim; __sighand[fs] = h;
+        __sigsi[fs] = (a->sa_flags & SA_SIGINFO) ? 1 : 0; }
+      ka.tramp = (void *) __love_mac_sigtramp;
+      ka.flags = (int) __love_safb(a->sa_flags);
+      ka.mask = (unsigned int) __love_maskfb((unsigned long) a->sa_mask.__v[0]); }
+    long r = fb3(46, fs, a ? (long) &ka : 0, old ? (long) &ko : 0);
+    if (r < 0) { if (a) __sighand[fs] = prev, __sigsi[fs] = prevsi;
+                 __errno_v = (int) -r; return -1; }
+    if (old) {
+      memset(old, 0, sizeof *old);
+      old->sa_handler = (ko.h == (void *) __love_sigshim) ? prev : (void (*)(int)) ko.h;
+      old->sa_flags = (int) __love_sacan(ko.flags);
+      old->sa_mask.__v[0] = (long) __love_maskcan(ko.mask); }
+    return 0; }
+#endif
   if (__love_osv == 2) {
     long fs = __love_sigfb(sig);
     if (fs <= 0) { __errno_v = EINVAL; return -1; }
