@@ -54,7 +54,7 @@ Every word of an image is an index into the waking binary's tables, so the heade
 those tables are, and nothing about where they lie: `arch` (a compile-time tag); `fp`, a hash
 of the lanes' widths, every nif's name and module in seat order, and the `struct g` offsets a
 native reads (`snap.c`'s `image_fp`); and `src`, the crc and length of the carried source's `c`
-section, every `.c .h .S .s` of the tree (`image_src`, read off the container's header). Any
+section, every `.c .h .S .s` of the tree (`src.c`'s `image_carried_c`, read off the container's header). Any
 build of one tree wakes another's image -- the stress runtime wakes the normal bake's, which is
 what `test_gcstress` does -- and an edited or foreign binary refuses it, saying which
 (`image_why`, `love wake`'s message). A link that carries no source (`noblob.c`) reads 0.

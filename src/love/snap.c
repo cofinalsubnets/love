@@ -200,7 +200,7 @@ static intptr_t image_imm_index(word v) {
 #endif
 // an image's indices mean what the waking binary's tables say, so three guards reject a
 // mismatch -> NULL -> normal boot: `arch`; `fp`, what the indices mean (image_fp); and
-// `src`, the carried C (image_src). any build of one tree wakes another's image -- the
+// `src`, the carried C (image_carried_c). any build of one tree wakes another's image -- the
 // stress runtime the normal bake's -- and a stale or foreign one is refused. the code segment leads with [raw length, chunks, dictionary
 // length, its deflated length] so it describes itself: then nch chunks' [raw offset, deflated
 // offset] pairs, the dictionary and the chunks deflated against it -- or with no chunks the raw blobs.
@@ -243,20 +243,10 @@ static uint64_t image_fp(void) {
  for (uintptr_t j = 0; j < def1_n; j++) h = fp_name(fp_name(h, love_def1[j].n), love_def1[j].m);
  for (uintptr_t k = 0; k < nh; k++) h = fp_name(fp_name(h, image_host_def(k)->n), image_host_def(k)->m);
  return h; }
-// the carried C: the source container's "c" section (every .c .h .S .s of the tree, its
-// paths and the stamp they are pinned to), its crc32 over its length -- read off the
-// container's header, nothing decoded. 0 for a link that carries none (noblob.c)
-static uint64_t image_src(void) {
- unsigned char const *z = srctree;
- if (srctree_len < 12 || memcmp(z, "lovetree", 8)) return 0;
- uint32_t ns = (uint32_t) z[8] | (uint32_t) z[9] << 8 | (uint32_t) z[10] << 16 | (uint32_t) z[11] << 24;
- for (uint32_t i = 0; i < ns && 12 + 24 * (uintptr_t)(i + 1) <= srctree_len; i++) {
-  unsigned char const *r = z + 12 + 24 * i;
-  if (r[0] != 'c' || r[1]) continue;
-  uint64_t v = 0;
-  for (int b = 0; b < 4; b++) v |= (uint64_t) r[12 + b] << 8 * b | (uint64_t) r[20 + b] << (32 + 8 * b);
-  return v; }
- return 0; }
+// the carried C (src.c's image_carried_c): the source container's "c" section, every .c .h
+// .S .s of the tree, its paths and the stamp they are pinned to. the core is linked where no
+// container is (an embedder, a board), so its default here is the none answer, 0
+__attribute__((weak)) uint64_t image_carried_c(void) { return 0; }
 // a header this binary refuses, and why: 0 none, 1 another format, arch or word,
 // 2 another binary's tables, 3 other C. the wake takes the first refusal as final
 int image_why(void const *buf, uintptr_t len) {
@@ -265,7 +255,7 @@ int image_why(void const *buf, uintptr_t len) {
  memcpy(&H, buf, sizeof H);
  if (H.magic != ImageMagic || H.wordsize != sizeof(word) || H.arch != ImageArch) return 1;
  if (!love_once() || H.fp != op_fp) return 2;
- return H.src != image_src() ? 3 : 0; }
+ return H.src != image_carried_c() ? 3 : 0; }
 
 // an image is wholly symbolic: every word encodes as a heap offset, an lvm index, an
 // immortal index, a nif-cell seat or a code offset, so a raw address of the binary refuses
@@ -1056,7 +1046,7 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  // header, so two bakes of one tree are one byte string.
  // the counter drops to the live count: the woken twin's first mint lands
  // above every renamed 1..kser, and the bytes carry no dead mints.
- struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, op_fp, 0, image_src(), 0, kser, x->cn, {0}, {0} };
+ struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, op_fp, 0, image_carried_c(), 0, kser, x->cn, {0}, {0} };
  alloc(rank, 0);
  // roots = symbols + tasks (live outside v0), then the whole GC-traced v0..end block, generically: any
  // field added to struct g's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
