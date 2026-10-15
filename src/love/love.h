@@ -815,7 +815,7 @@ lvm_t lvm_kcall,
  lvm_reach_offset,       // (reach-offset x): g->reach' byte offset, what the emitter's `reach` law loads from
  lvm_natp,        // (nat? f): is f a native closure -- its code in the arena
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
- lvm_deferfwd;    // a deferred native's code slot until its compile patches it (map.c)
+ lvm_deferfwd;    // a deferred native's code slot until its compile patches it (tablet.c)
 // the attributes are the declaration: `lvm(n)` is `love_noinline noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both.
 love_noinline noicf lvm_t
@@ -1073,12 +1073,20 @@ static love_inline bool tabp(word _) { return evenp(_) && cell(_)->ap == lvm_map
 extern const word map_gap_cell;   // one definition: map_gap is its address
 #define map_gap ((word) &map_gap_cell)
 #define map_min_cap 4
-static love_inline word map_back(word m) { return cell(m)[1].x; }
-static love_inline uintptr_t map_serial(word m) { return getcharm(cell(m)[2].x); }
-enum { map_head = 4 };   // the header's words, tag included
-static love_inline word *map_slots(word m) { return &cell(map_back(m))[3].x; }
-static love_inline uintptr_t map_len(word m) { return getcharm(cell(map_back(m))[1].x); }
-static love_inline uintptr_t map_cap(word m) { return getcharm(cell(map_back(m))[2].x); }
+// the header and its backing. serial, len and cap are charms, so gc scans both as threads
+struct tablet { lvm_t *ap; word back, serial; };
+struct tablet_back { lvm_t *ap; word len, cap, slot[]; };   // slot: cap k,v pairs
+#define tablet(_) ((struct tablet*)(_))
+#define tablet_back(_) ((struct tablet_back*)(_))
+enum { map_head = sizeof(struct tablet) / sizeof(word) + 1 };   // the header's words, tag included
+// a backing's words for cap slots, tag included
+static love_inline uintptr_t map_back_words(uintptr_t cap) { return Width(struct tablet_back) + 1 + 2 * cap; }
+static love_inline word map_back(word m) { return tablet(m)->back; }
+static love_inline uintptr_t map_serial(word m) { return getcharm(tablet(m)->serial); }
+static love_inline word *map_slots(word m) { return tablet_back(map_back(m))->slot; }
+static love_inline uintptr_t map_len(word m) { return getcharm(tablet_back(map_back(m))->len); }
+static love_inline uintptr_t map_cap(word m) { return getcharm(tablet_back(map_back(m))->cap); }
+static love_inline void map_len_set(word m, uintptr_t n) { tablet_back(map_back(m))->len = putcharm(n); }
 word
  mapget(struct g*, word, word, word),
  stacklook(struct g*, word, word),   // the layered global read: walks g->stack (a chain of books) head-first
@@ -1155,6 +1163,11 @@ static love_inline bool in_live_pool(struct g *g, word const *p) {
  return p >= g->major_base && p < g->major_base + g->major_len; }                  // the major block
 static love_inline union u *tagthread(union u *h, uintptr_t len) {
   return h[len].x = word(h) | thread_tag, h; }
+// a tablet's header at h over backing b, tagged: the word callers hold
+static love_inline word ini_tablet(union u *h, word b, word serial) {
+ struct tablet *t = tablet(h);
+ t->ap = lvm_map_lookup, t->back = b, t->serial = serial;
+ return word(tagthread(h, Width(struct tablet))); }
 #define topof(g) ((word*)g+g->len)
 static love_inline struct tag { union u *head; union u end[]; } *ttag(struct g*g, union u *k) {
  // scan k forward to its terminator; a tenured object lives in the major pool, so pick the range

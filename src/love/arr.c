@@ -547,7 +547,7 @@ static void walk_grow(struct g *g, word **base, word **w, word **hi, uintptr_t w
  *own = true, *base = b, *w = b + k, *hi = b + n2; }
 
 // the value hash: a chain spines, its cars pending on the worklist under one running h, and
-// every leaf goes to map.c's hash_leaf -- a function among them hashed by its thread there,
+// every leaf goes to tablet.c's hash_leaf -- a function among them hashed by its thread there,
 // which never recurs into a value -- and an object tray's cells fold like cars
 uintptr_t hash_at(struct g *g, intptr_t x0, word *base, word *end) {
  word *sw = base, x = x0, src = 0;
