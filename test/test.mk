@@ -11,7 +11,7 @@
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
-  test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
+  test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_hearts_boot test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
@@ -46,7 +46,7 @@ test_quick: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
 	test_drv test_wake test_gz test_sqfs test_ext4 test_cpio test_tfm test_caja test_grap test_chem \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
-	test_asmops test_dtb test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
+	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
 	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
 
 # really slow gate
@@ -59,7 +59,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_sqfs test_ext4 test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
-	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat \
+	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
 	test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
@@ -667,6 +667,12 @@ test_dtb:
 	@echo TEST test/gate/dtb.c
 	@$(CC) -I$S/inle -I$S/love -I$R -o $(ho)/.dtbgate $R/test/gate/dtb.c
 	@$(ho)/.dtbgate
+# test_ffalloc -- src/inle/ffalloc.h, the free list the kernel and the boards allocate from,
+# churned on the host and checked whole after every step
+test_ffalloc:
+	@echo TEST test/gate/ffalloc.c
+	@$(CC) -I$S/inle -I$S/love -I$R -o $(ho)/.ffallocgate $R/test/gate/ffalloc.c
+	@$(ho)/.ffallocgate
 # test_rvboot -- the riscv bring-up on A HART: mkboot.l's sv39 lane and src/inle/rv64/dtb.c
 # under qemu -M virt, entered the way the kernel will be (OpenSBI, S-mode, a1 the tree).
 # Three objects and nothing else -- the stub, the door, and test/gate/rvboot.c standing in

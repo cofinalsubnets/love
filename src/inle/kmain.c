@@ -6,6 +6,7 @@
 #include "bput.h"
 #include <stdarg.h>
 #include <limits.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>      // the E numbers only (the host's, linux's) -- no errno variable down here
 
@@ -127,8 +128,8 @@ struct k_boot kboot;
 // a NULL slot is "no method" and the dispatcher skips it: writes discard, reads answer the
 // end, ready answers false. `state` is per-instance scratch, a ramfs fd's handle. the table
 // grows in the kernel's own heap through k_source_open, up to k_fd_most rows.
-void *kmallocw(uintptr_t n);
-void kfree(void *p);
+void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
+void kfree(void *p), k_drop(void *p);
 
 struct k_source {
   // the read door (love.h's readn contract, one fd deeper): >0 bytes, 0 nothing, -1 end
@@ -205,8 +206,8 @@ void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x) {
   else if (how == 2) cb_select(kcb, kkb.anchor, gi, kkb.clicks - 1u);
   else if (kcb->sel0 < kcb->sel1) {
     uintptr_t const n = cb_copied(kcb, 0, kcb->sel0, kcb->sel1);
-    uint8_t *t = kmallocw(b2w(n + 1));
-    if (t) cb_copied(kcb, t, kcb->sel0, kcb->sel1), k_copy_out(t, n), kfree(t); }
+    uint8_t *t = k_grab(n + 1);
+    if (t) cb_copied(kcb, t, kcb->sel0, kcb->sel1), k_copy_out(t, n), k_drop(t); }
   fbdraw(); }
 
 // slot 0: PS/2 keyboard. drains what the interrupt queued and answers 0 when there is
@@ -281,11 +282,11 @@ static struct k_source *k_source_open(int fd) {
   int m = k_sources_n;
   while (m <= fd) m *= 2;
   if (m > k_fd_most) m = k_fd_most;
-  struct k_source *t = kmallocw(b2w((uintptr_t) m * sizeof *t));
+  struct k_source *t = k_grab((uintptr_t) m * sizeof *t);
   if (!t) return NULL;
   for (int i = 0; i < m; i++)
     t[i] = i < k_sources_n ? k_sources[i] : (struct k_source) {0};
-  if (k_sources != k_boot) kfree(k_sources);
+  if (k_sources != k_boot) k_drop(k_sources);
   k_sources = t, k_sources_n = m; }
  return &k_sources[fd]; }
 
@@ -513,13 +514,21 @@ void kb_int(const uint8_t code) {
 
 void *kmallocw(uintptr_t n) { return ff_alloc(&kmem, n); }
 
+// n words starting on a multiple of a bytes, freed by kfree like any other
+void *kmallocwa(uintptr_t n, uintptr_t a) { return ff_alloc_aligned(&kmem, n, a); }
+
 void kfree(void *p) { ff_free(&kmem, p); }
+
+// the small objects -- a row's state, the tables, the ramfs's bytes -- ride malloc, one fit
+// for everything small; kmallocw keeps the pages and regions
+void *k_grab(uintptr_t n) { return malloc(n); }
+void k_drop(void *p) { free(p); }
 
 
 // --- the ramfs: the baked tree, and the copies writes make -----------------
 // the initrd is read-only bytes and one row per file. reads come straight off it; the first
 // write copies that file into the kernel heap and the entry reads the copy ever after.
-// kmallocw/kfree rather than alloc: a vt method is handed an fd and nothing else, so g
+// k_grab/k_drop rather than alloc: a vt method is handed an fd and nothing else, so g
 // is out of reach at the door that grows a file. ms is the source's baked mtime.
 // the initrd is the source the artifact carries (srctree, through src/love/vfs.c): its index
 // lays the rows at boot, and each section decodes into the kernel heap at the first read of
@@ -527,7 +536,6 @@ void kfree(void *p) { ff_free(&kmem, p); }
 #include "archive/ustar.h"
 #include "archive/srctree.h"
 #include "vfs.h"
-static void *k_grab(uintptr_t n) { return kmallocw(b2w(n)); }
 // the tree's rows live under /love, read-only, so a module loads from bytes the shell
 // cannot have edited. the root holds src/inle/rootfs/, a second tar walked with no prefix.
 static char const k_home[] = "home";
@@ -611,7 +619,7 @@ static char const *const k_pins[] = { k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_pli
 // the namespace: entries in the kernel heap, one per baked row, growing as create and mkdir
 // add paths. the cwd is canonical ("" the root); chdir writes it, and the boot seat is the home.
 static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pins,
-                           .npins = countof(k_pins), .grab = k_grab, .drop = kfree, .now = k_clock_ms };
+                           .npins = countof(k_pins), .grab = k_grab, .drop = k_drop, .now = k_clock_ms };
 
 // lay the table on first use: every baked row live off .rodata, plus the rows below.
 // idempotent, and a refusal leaves the console standing (the caller answers ENOMEM).
@@ -621,7 +629,7 @@ static bool k_fs_init(void) {
   int bn = k_fs.extra ? 0 : k_baked(NULL, 0),
       xn = bn + (!k_fs.extra && kboot.image_len) + (!k_fs.extra && kboot.initrd_len);
   if (xn > 0) {
-    struct vfs_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
+    struct vfs_file *xr = k_grab((uintptr_t) xn * sizeof *xr);
     if (!xr) return false;
     int m = bn ? k_baked(xr, bn) : 0;
     if (kboot.image_len) xr[m++] = (struct vfs_file) { k_pimg, kboot.image, kboot.image_len, 0 };
@@ -720,9 +728,9 @@ static void k_vt_read(int i, int slot) {
 static void k_vt_font(unsigned char const *b, uintptr_t n) {
   uint8_t *q = 0;
   if (n) {
-    if (!cb_font_ok(b, n) || !(q = kmallocw(b2w(n)))) return;
+    if (!cb_font_ok(b, n) || !(q = k_grab(n))) return;
     memcpy(q, b, n); }
-  if (kqf) kfree(kqf);
+  if (kqf) k_drop(kqf);
   kqf = q;
   if (kcb) fbwash(); }
 
@@ -862,7 +870,7 @@ static void ram_close(int fd) {
   if (h && --h->refs > 0) return;             // the handle stays with its other rows
   if (h && h->vt && h->w) k_vt_write(h->i, h->vt);   // the write lands when the writer is done
   if (h && k_fs.ents[h->i].refs) k_fs.ents[h->i].refs--, vfs_gc(&k_fs, h->i);
-  kfree(h); }
+  k_drop(h); }
 
 // the lowest free row at or past the boot rows -- POSIX's rule, which scripts lean on. a row
 // is free when it carries no method at all. the floor is F_DUPFD's; every caller else passes 0.
@@ -893,7 +901,7 @@ static void host_close(int fd) {
   struct k_source *s = k_source(fd);
   if (!s) return;
   struct k_hf *f = s->state;
-  if (f && --f->refs <= 0) k_host(kh_close, f->h, 0, 0, 0, 0), kfree(f);
+  if (f && --f->refs <= 0) k_host(kh_close, f->h, 0, 0, 0, 0), k_drop(f);
   *s = (struct k_source) {0}; }
 static struct k_hf *k_hf(int fd) {
   struct k_source *s = k_source(fd);
@@ -919,9 +927,9 @@ static int k_host_open(char const *p, uintptr_t n, char m) {
   long h = k_host(kh_open, (long) p, (long) n, m, 0, 0);
   if (h < 0) return (int) h;
   int fd = k_fd_free();
-  struct k_hf *f = kmallocw(b2w(sizeof *f));
+  struct k_hf *f = k_grab(sizeof *f);
   struct k_source *s = f ? k_source_open(fd) : NULL;
-  if (!s) { kfree(f); k_host(kh_close, h, 0, 0, 0, 0); return -ENOMEM; }
+  if (!s) { k_drop(f); k_host(kh_close, h, 0, 0, 0, 0); return -ENOMEM; }
   long st[3] = { 0, 0, 0 };
   if (m == 'a') k_host(kh_fstat, h, (long) st, 0, 0, 0);
   *f = (struct k_hf) { .h = h, .pos = (uintptr_t) st[0], .refs = 1, .w = m != 'r' };
@@ -970,10 +978,10 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
     if ((i = vfs_create(&k_fs, cp, (uintptr_t) cn, false, 0644)) < 0) return -ENOMEM;
     made = true; }
   int fd = k_fd_free();
-  struct k_fh *h = kmallocw(b2w(sizeof *h));
+  struct k_fh *h = k_grab(sizeof *h);
   struct k_source *s = h ? k_source_open(fd) : NULL;   // the grow door; NULL is no memory
   if (!s) {
-    kfree(h);
+    k_drop(h);
     // an open that refuses leaves the tree as it found it -- a file it minted goes too
     if (made) k_fs.ents[i].live = false, vfs_gc(&k_fs, i);
     return -ENOMEM; }
@@ -1072,10 +1080,10 @@ static intptr_t q_put(struct k_pipe *p, unsigned char const *src, uintptr_t n) {
     if (p->wp + n > p->cap) {
       uintptr_t cap = p->cap ? p->cap : 4096;
       while (cap < p->wp + n) cap *= 2;
-      unsigned char *b = kmallocw(b2w(cap));
+      unsigned char *b = k_grab(cap);
       if (!b) return -1;                        // memory refusing, said out loud
       if (p->wp) memcpy(b, p->buf, p->wp);
-      kfree(p->buf);
+      k_drop(p->buf);
       p->buf = b, p->cap = cap; } }
   memcpy(p->buf + p->wp, src, n);
   p->wp += n;
@@ -1100,8 +1108,8 @@ static bool pipe_rready(int fd) {
 
 static void pipe_free(struct k_pipe *p) {
   if (p->rrefs || p->wrefs) return;
-  kfree(p->buf);
-  kfree(p); }
+  k_drop(p->buf);
+  k_drop(p); }
 
 static void pipe_rclose(int fd) {
   struct k_pipe *p = k_pipe_of(fd);
@@ -1139,8 +1147,8 @@ static struct k_pty *k_pty_of(int fd) {
 
 static void pty_free(struct k_pty *t) {
   if (t->mrefs || t->srefs || t->grefs) return;
-  kfree(t->in.buf), kfree(t->out.buf), kfree(t->ed.buf), kfree(t->sig.buf);
-  kfree(t); }
+  k_drop(t->in.buf), k_drop(t->out.buf), k_drop(t->ed.buf), k_drop(t->sig.buf);
+  k_drop(t); }
 
 // what the program writes, and what the discipline echoes: \n as \r\n under opost
 static void pty_out(struct k_pty *t, unsigned char const *s, uintptr_t n) {
@@ -1262,7 +1270,7 @@ static struct k_pty *k_pty_row(intptr_t fd) {
 
 // three fresh rows -- master, slave, signal -- cooked at 24x80
 static int k_fd_pty(int fds[3]) {
-  struct k_pty *t = kmallocw(b2w(sizeof *t));
+  struct k_pty *t = k_grab(sizeof *t);
   if (!t) return -ENOMEM;
   *t = (struct k_pty) { .mrefs = 1, .srefs = 1, .grefs = 1, .rows = 24, .cols = 80,
                         .flags = pt_icanon | pt_echo | pt_isig | pt_icrnl | pt_opost };
@@ -1275,7 +1283,7 @@ static int k_fd_pty(int fds[3]) {
     struct k_source *r = k_source_open(fd);
     if (!r) {
       for (int j = 0; j < i; j++) k_row_zero(fds[j]);
-      kfree(t);
+      k_drop(t);
       return -ENOMEM; }
     *r = rows[i], fds[i] = fd; }
   return 0; }
@@ -1325,7 +1333,7 @@ long k_fd_dup3(int src, int dst) {
 // the row mechanics of pipe(2), g-free: two rows over one queue. src/inle/sys.c's
 // pipe2 arm calls it with the caller's own int pair.
 long k_fd_pipe(int fds[2]) {
-  struct k_pipe *p = kmallocw(b2w(sizeof *p));
+  struct k_pipe *p = k_grab(sizeof *p);
   if (!p) return -ENOMEM;
   *p = (struct k_pipe) { .rrefs = 1, .wrefs = 1 };
   int rfd = k_fd_free();
@@ -1336,7 +1344,7 @@ long k_fd_pipe(int fds[2]) {
   struct k_source *ws = rs ? k_source_open(wfd) : NULL;
   if (!ws) {
     if (rs) k_row_zero(rfd);
-    kfree(p);
+    k_drop(p);
     return -ENOMEM; }
   *ws = (struct k_source) { .writen = pipe_writen, .close = pipe_wclose, .state = p };
   fds[0] = rfd, fds[1] = wfd;
@@ -1349,7 +1357,7 @@ struct k_dh { uintptr_t pn; int at; char p[256]; };
 static void k_dir_close(int fd) {
  struct k_source *s = k_source(fd);
  if (!s) return;
- kfree(s->state);
+ k_drop(s->state);
  *s = (struct k_source) {0}; }
 
 // a host directory opens as its whole listing, taken once: a kind byte (d or f), the
@@ -1359,19 +1367,19 @@ static void k_hdir_close(int fd) {
  struct k_source *s = k_source(fd);
  if (!s) return;
  struct k_hd *h = s->state;
- if (h) kfree(h->b), kfree(h);
+ if (h) k_drop(h->b), k_drop(h);
  *s = (struct k_source) {0}; }
 static long k_host_opendir(char const *p, uintptr_t n) {
  for (long cap = 4096; ; ) {
-  char *b = kmallocw(b2w((uintptr_t) cap));
+  char *b = k_grab((uintptr_t) cap);
   if (!b) return -ENOMEM;
   long k = k_host(kh_list, (long) p, (long) n, (long) b, cap, 0);
-  if (k < 0) return kfree(b), k;
-  if (k > cap) { kfree(b); cap = k; continue; }        // the seat said how much room it wants
+  if (k < 0) return k_drop(b), k;
+  if (k > cap) { k_drop(b); cap = k; continue; }        // the seat said how much room it wants
   int fd = k_fd_free();
-  struct k_hd *h = kmallocw(b2w(sizeof *h));
+  struct k_hd *h = k_grab(sizeof *h);
   struct k_source *s = h ? k_source_open(fd) : NULL;
-  if (!s) { kfree(h), kfree(b); return -ENOMEM; }
+  if (!s) { k_drop(h), k_drop(b); return -ENOMEM; }
   *h = (struct k_hd) { b, k, 0, 0 };
   *s = (struct k_source) { .close = k_hdir_close, .state = h };
   return fd; } }
@@ -1386,9 +1394,9 @@ long k_fs_opendir(char const *p, uintptr_t pn) {
  if (!vfs_dirp(&k_fs, cp, (uintptr_t) cn))
   return vfs_find(&k_fs, cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
  int fd = k_fd_free();
- struct k_dh *h = kmallocw(b2w(sizeof *h));
+ struct k_dh *h = k_grab(sizeof *h);
  struct k_source *s = h ? k_source_open(fd) : NULL;
- if (!s) { kfree(h); return -ENOMEM; }
+ if (!s) { k_drop(h); return -ENOMEM; }
  h->pn = (uintptr_t) cn, h->at = 0;
  memcpy(h->p, cp, (uintptr_t) cn);
  *s = (struct k_source) { .close = k_dir_close, .state = h };
@@ -1666,7 +1674,7 @@ love_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintp
   char *q = vfs_strdup(&k_fs, t, tn);
   if (!q) return -ENOMEM;
   int i = vfs_create(&k_fs, cp, (uintptr_t) cn, false, 0777);
-  if (i < 0) return kfree(q), -ENOMEM;
+  if (i < 0) return k_drop(q), -ENOMEM;
   k_fs.ents[i].to = q;
   return 0; }
 
@@ -1718,7 +1726,7 @@ love_noinline int k_fs_rename(char const *o, uintptr_t olen,
     char *q = vfs_strdup(&k_fs, np, (uintptr_t) nn);
     if (!q) return -ENOMEM;
     if (di >= 0) k_fs.ents[di].live = false, vfs_gc(&k_fs, di);
-    if (k_fs.ents[si].heap) kfree((void*) k_fs.ents[si].path);
+    if (k_fs.ents[si].heap) k_drop((void*) k_fs.ents[si].path);
     k_fs.ents[si].path = q, k_fs.ents[si].heap = true;
     return 0; }
   // the directory lane
@@ -1732,11 +1740,11 @@ love_noinline int k_fs_rename(char const *o, uintptr_t olen,
     uintptr_t tl = strlen(t->path);
     if (tl < (uintptr_t) on || memcmp(t->path, op, (uintptr_t) on)
         || (tl > (uintptr_t) on && t->path[on] != '/')) continue;
-    char *q = kmallocw(b2w((uintptr_t) nn + tl - (uintptr_t) on + 1));
-    struct k_ren *r = q ? kmallocw(b2w(sizeof *r)) : NULL;
+    char *q = k_grab((uintptr_t) nn + tl - (uintptr_t) on + 1);
+    struct k_ren *r = q ? k_grab(sizeof *r) : NULL;
     if (!r) {                                    // roll the staging back whole
-      kfree(q);
-      while (st) { struct k_ren *x = st; st = st->next; kfree(x->q), kfree(x); }
+      k_drop(q);
+      while (st) { struct k_ren *x = st; st = st->next; k_drop(x->q), k_drop(x); }
       return -ENOMEM; }
     memcpy(q, np, (uintptr_t) nn);
     memcpy(q + nn, t->path + on, tl - (uintptr_t) on);
@@ -1745,11 +1753,11 @@ love_noinline int k_fs_rename(char const *o, uintptr_t olen,
     st = r; }
   while (st) {
     struct vfs_ent *t = &k_fs.ents[st->i];
-    if (t->heap) kfree((void*) t->path);
+    if (t->heap) k_drop((void*) t->path);
     t->path = st->q, t->heap = true;
     struct k_ren *x = st;
     st = st->next;
-    kfree(x); }
+    k_drop(x); }
   return 0; }
 
 love_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
@@ -2180,7 +2188,7 @@ static bool meminit(void) {
     struct mem *m = (struct mem*) (kboot.hhdm + kboot.ram[i].base);
     m->len = kboot.ram[i].len / sizeof(uintptr_t);
     kram_words += m->len;
-    ff_free(&kmem, m->_); }
+    ff_free(&kmem, ff_body(m)); }
   return true; }
 
 // how many pixels a glyph pixel gets: the door's, where it knows the screen better than
@@ -2300,10 +2308,10 @@ void kmain(void) {
   if (fbinit()) cbinit();        // the framebuffer console; the palette is a table now
   // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
   // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
-  k_blk_init(kmallocw(b2w(352)));
+  k_blk_init(kmallocwa(b2w(320), 16));
   // the sound card: command rings, buffer list and position buffer in one block, 128-aligned
   // inside (hda.c lays it); the sample ring is its own
-  k_hda_init(kmallocw(b2w(4096 + 128)));
+  k_hda_init(kmallocwa(b2w(3840), 128));
   // the wake: baked_pick reads the projection's re-based image off the same two symbols
   // the hosted start does; any problem answers NULL and the egg bakes from source below.
   struct g *g = NULL;

@@ -54,9 +54,8 @@ static inline void dma_fence(void) {
 // lays desc/avail/used plus the request header and status byte into the DMA
 // block, 16-aligned. sizes at qsz=8: desc 128, avail 22, used 70.
 static int vq_lay(void *dma) {
-  uintptr_t a = ((uintptr_t) dma + 15) & ~(uintptr_t) 15;
   kblk.qsz = 8;
-  kblk.desc  = (volatile uint8_t*) a;
+  kblk.desc  = dma;
   kblk.avail = kblk.desc + 128;
   kblk.used  = kblk.desc + 192;
   kblk.hdr   = kblk.desc + 288;
@@ -231,7 +230,7 @@ static void blk_scan(void *dma) { }
 #endif
 
 // --- the three doors kmain wires to love ------------------------------------
-// dma is one kmallocw block (>= 336 bytes; 16-align slack included) the ring
+// dma is one kmallocw block (>= 320 bytes, 16-aligned) the ring
 // and request header live in for the machine's life.
 void k_blk_init(void *dma) {
   if (!dma) return;
