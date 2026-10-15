@@ -60,9 +60,6 @@
    ; hosted: a kernel underneath -- processes (hark), an environ, a filesystem. false on
    ; inle and in the browser, where love-os says so; gates the laws that reach the OS.
    hosted (love-os @ ('linux || 'freebsd || 'netbsd) 1 0)
-   ; gcstress: the LvGcStress runtime, which collects at every call that may, so a show
-   ; apiece moves the collection count; laws timing a live structure's growth skip there
-   gcstress (: c (peep (gauge 0) 3 0) _ (map show ^64) (peep (gauge 0) 3 0 - c > 32))
    ; files: a real filesystem underneath -- native AND inle (a ramfs), not the browser.
    ; word was this proxy while the wasm shim was 32-bit; the wasm64 module is 64-bit, so
    ; word is true there now and a filesystem law needs its own predicate.
@@ -87,14 +84,21 @@
                            (go 0))
    ; a server that takes many connections is up when one lands on loopback at port p
    (test-up p) (test-until nom? (_ \ connect ['tcp "127.0.0.1" p] @ c (nom? c ? c (close c)))))
-; how a cost grows: (f n) and (f (4 * n)) timed, the best of five each after a warm run,
-; the second held under eight times the first. a linear or n log n cost sits near four, a
-; quadratic one at sixteen. hosted only: the inle kernel's clock counts milliseconds, and
-; there the same laws pass and fail with the box's load; and not under gcstress, where each
-; collection walks the whole live set. in both it answers 1 untimed
-(: (test-took f n) (: t0 (nclock 0) _ (f n) (nclock t0))
-   (test-best f n) (foldl min (test-took f n) (map (u \ test-took f n) ^4))
-   (test-linear f n) (!hosted || gcstress || (: _ (f n) a (test-best f n) b (test-best f (4 * n)) (b < 8 * a))))
+; how a cost grows: (f n) and (f (4 * n)) counted after a warm run, the second held under
+; eight times the first. a linear or n log n cost sits near four, a quadratic one at sixteen.
+; the count is the evaluator's, never the clock, so load, the kernel and the collector leave
+; it alone: gauge [16]'s ticks, one per 64 native steps and, while another task is on the
+; ring (a sleeper, frozen after), one per 64 vm calls and jumps. test-linear-words counts
+; the words f allocates, for a cost spent inside a nif -- alone, since a task's yield copies
+; its stack to the heap
+(: (test-turns f n) (: p (twirl (_ \ (rest 1000000000)) ()) _ (rest 0)
+     t0 (peep (gauge 0) 16 0) _ (f n) t1 (peep (gauge 0) 16 0) _ (freeze p)
+     (t1 - t0))
+   (test-words f n) (: _ (please 1) w0 (peep (gauge 0) 6 0) _ (f n) _ (please 1)   ; [6] sums each nursery's fill
+                      (peep (gauge 0) 6 0 - w0))
+   (test-grows c f n) (: _ (f n) a (c f n) b (c f (4 * n)) (b < 8 * a))
+   (test-linear f n) (test-grows test-turns f n)
+   (test-linear-words f n) (test-grows test-words f n))
 
 (:: 'test (l \
                (:

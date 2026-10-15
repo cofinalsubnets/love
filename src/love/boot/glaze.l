@@ -51,7 +51,13 @@
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-t/auto.l)
    (gfind p l) (atom? l ? () (p <l) <l (gfind p >l))     ; first elt matching p
    ; a blob names no address of the binary: sentinels and drives are reached through g (love.h's Reach* slots)
-   (reach tgt r k) ['ld r (greg tgt 'g) (reach-offset 0 + 8 * k)]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap
+   (reach tgt r k) ['ld r (greg tgt 'g) (reach-offset 0 + 8 * k)]
+   ; the cost count: g's fair takes one per native loop step or call (fairck), or 64 at every 64th step
+   ; of a loop counting by one (fairbit, off the counter's bits); at 0 it refills and g's ticks counts it
+   (fairtk tgt r o ok) [['li r 64] ['st (greg tgt 'g) o r] ['ld r (greg tgt 'g) (o + 8)] ['add r r 1] ['st (greg tgt 'g) (o + 8) r] ['label ok]]
+   (fairck tgt r) (: o (reach-offset 0 + 96) ok (mint 0) ([['decm (greg tgt 'g) o] ['br 'gt ok]] + fairtk tgt r o ok))
+   (fairbit tgt cv r) (: G (greg tgt 'g) o (reach-offset 0 + 96) ok (mint 0)
+                         ([['test cv 63] ['br 'ne ok] ['ld r G o] ['sub r r 64] ['st G o r] ['cmp r 0] ['br 'gt ok]] + fairtk tgt r o ok))   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap
    mapmix 0x9e3779b97f4a7c15                                       ; = love.c's map hash multiplier, for the inline probe
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
    (asmx ir) (hasm 'x64 ir 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
@@ -120,7 +126,7 @@
                         ([['mulo ACC ACC A (greg tgt 'scratch) dl] ['jmp ok] ['label dl]] + deoptbody tgt 0 + [['label ok]])))
        pre  [['ld N S 0] ['sar N 1] ['li CV 0] ['li ACC (foldinit op)]]   ; N = Sp[0]>>1 (assumed fixnum) ; cv = 0 ; acc = init
        (asmt tgt (pre + ['(label top) ['cmp CV N] ['br (exitcc cmp) 'end]]   ; cmp cv,N ; exit when (cmp CV N) false
-              + bodyir + accir + [['inc CV] '(jmp top) '(label end) ['mov A ACC]] + loopepi tgt)))   ; cv++ ; loop ; acc <- acc ; putfix + Continue
+              + bodyir + accir + [['inc CV]] + fairbit tgt CV (greg tgt 'tmp) + ['(jmp top) '(label end) ['mov A ACC]] + loopepi tgt)))   ; cv++ ; loop ; acc <- acc ; putfix + Continue
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop (x86 self-test helper).
    (jitsum body)
     (: src ['\ 'n [[': ['go 'i 'a] ['? ['< 'i 'n] ['go ['+ 'i 1] ['+ 'a body]] 'a]] 0 0]]
@@ -769,7 +775,7 @@
                        (achain as cso d))))
              (agous us j d) (two? us ? (acg <us (d + j) + [['st SP (spill (d + j)) A]] + agous >us (j + 1) d))
              (agomv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (8 * j) A]] + agomv (j - 1) d))
-             (ago as d) (agous as 0 d + agomv (k - 1) d + [['jmp 'top]])                            ; updates from the old vars (spilled first), then the back-edge
+             (ago as d) (agous as 0 d + agomv (k - 1) d + fairck tgt SC + [['jmp 'top]])                            ; updates from the old vars (spilled first), then the back-edge
              (asmv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (fro + 8 * (ni + j)) A]] + asmv (j - 1) d))
              ; aselfcall: a saturated non-tail self-call enters the own blob on the frame [imports.. args..
              ; resume tag(bb-entry0) entry0], Ip off So; its hand-rolled ret returns through lvm_resume to bb
@@ -788,7 +794,7 @@
                   ['label ch] ['ld A SP soo]]
                + catmap (i \ adrivep (voff i)) simp + catmap (j \ adrivep (spill (d + j))) ^(a - ni)
                + [['label dn]]))
-             (aselfgo as d) (agous as 0 d + asmv (a - ni - 1) d + [['jmp 'sgo]])               ; saturated tail self-call: new args (spilled first) over the arg slots (imports keep), jump the body top
+             (aselfgo as d) (agous as 0 d + asmv (a - ni - 1) d + fairck tgt SC + [['jmp 'sgo]])               ; saturated tail self-call: new args (spilled first) over the arg slots (imports keep), jump the body top
              (acqt st sth sel d) (qrun ['? st sth sel]                                                ; acq, tails threaded
                                    (q \ y \ le \ ln \ (: tr (atruth 0)
                                       [(acg q d) <tr [['cmp A 1] ['br 'le le]] (acgt y d) [['jmp ln]] <>tr [['label le]]]))
@@ -851,7 +857,7 @@
                       ['ld T SP seo] ['add SP SP fro]]                                                  ; (d0 room-guard entries never count); twin from its slot before the restore
                   + (a = 1 ? [['mov IP T]] [['lea IP T 16]])                                      ; a=1: re-apply e; else enter e's body on the saturated frame
                   + [['ld T IP 0] ['jmpr T]])
-             prog (['(label entry0)                                                                       ; entry0 = the resume-offset anchor (the blob's first byte)
+             prog (['(label entry0)] + fairck tgt SC + [                                                                      ; entry0 = the resume-offset anchor (the blob's first byte)
                       ['lea X HP (40 + 8 * (R + 4 + amax a nd))] ['cmp SP X] ['br 'below 'd0]    ; room guard: the reservation + the widest call frame (nd bounds any site's args) + floor must fit Sp-Hp
                       ['ld T IP 32] ['ld X T 8] ['cmp X 1] ['br 'le 'd0]                            ; the deopt budget (extras link 0, a charm): spent -> every call takes d0
                       ['sub SP SP fro]]                                                                   ; straight to the twin, and a perma-deopting native heals to bytecode
@@ -875,7 +881,8 @@
        rb   (cgvir tgt nvld result 0)
        (asmt tgt (pre + '((label top))
               + tb + [['cmp A 0] '(br eq end)]           ; <test>; acc==0 (false) -> end
-              + ups + pops + '((jmp top) (label end))      ; updates ; loop top
+              + ups + pops + (: j ((: (go l i) (atom? l ? -1 (>l = ['+ <l 1] ? i (go >l (i + 1))))) (zip vars updates) 0)   ; a var stepping by one counts the loop
+                               (j < 0 ? (fairck tgt (greg tgt 'tmp)) (fairbit tgt (lvreg tgt j) (greg tgt 'tmp)))) + '((jmp top) (label end))      ; updates ; loop top
               + rb + loopepi tgt)))                      ; result -> acc ; putfix + Continue
    ; (jitloop-n lam vars updates test result inits) -- a general N-var loop -> native (x86 self-test helper).
    (jitloop-n lam vars updates test result inits)
@@ -1353,7 +1360,7 @@
    (mkhir tgt syms nm ps body)
     (: k #ps Lbody (mint 0)
        (bcat [[['label nm] ['lea 'r9 (govf tgt) (0 - gdepth)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)]
-               (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]]
+               (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]] (fairck tgt 'r10)
                (hasl body ? (cggvir tgt syms ps body) (cggtir tgt syms ps body nm Lbody))
                (restargsir tgt k) (hrest tgt) ['(ret)]]))
    ; mkouterir: the entry's outer -- anchor = sp, kind-guard and push the args, call H_entry, putfix + Continue.

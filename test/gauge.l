@@ -5,7 +5,7 @@
 ; answering the collection count, so two asks order strictly. the worst pause of each kind
 ; rides gauge 14 and 15; test/host/gcpause.l reads the same list by index and proves the
 ; minor's cost flat in the live set.
-(test (charm? (clock 0)) (0 <= nclock (nclock 0)) (16 = tally (gauge 0)))
+(test (charm? (clock 0)) (0 <= nclock (nclock 0)) (17 = tally (gauge 0)))
 (: c1 (please ()) c2 (please 1)                  ; the sequence law orders the two asks
  (test (c1 < c2)))
 

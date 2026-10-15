@@ -234,6 +234,7 @@ lvm(lvm_yield_sw) {
  // it answers Continue(), which lands back on the same op, so "keep running" is a spin.
  // a catcher is one; a task on its way out is the other, and it has no work left to keep.
  int fair = !my_wake && my_wait_fd < 0 && Ip->ap != lvm_wait && Ip->ap != lvm_task_exit;
+ g->ticks += (uintptr_t) fair;   // one per 64 calls and jumps, the clock-free cost (gauge [16])
  // the clock rides the same tick: on wasm a read is a trip out to the host, and between
  // ticks a peer's deadline is late by at most sweep_interval fairness yields.
  uintptr_t now = g->clock_at;
