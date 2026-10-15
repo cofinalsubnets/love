@@ -542,7 +542,7 @@ int raw_mode(intptr_t on);                      // the (raw on) latch; main.c's 
 size_t host_selfpath(char*, size_t);               // the one selfpath door (per-OS ladder)
 // ..i/image.c, the carried image and the self-bake..
 int image_bake(struct g*, char const *out, int bare), baked_pick(void const **blob, uintptr_t *blen);
-struct g *image_load(char const*), *image_dump(struct g*, char const*);
+struct g *image_load(char const*, int*), *image_dump(struct g*, char const*);
 extern uint64_t baked_image[];
 extern uintptr_t baked_image_len;
 // ..l/gz.c, the other codecs' doors, and the source the link carries (src/love/noblob.c's zero without one)
@@ -615,6 +615,8 @@ struct image_opt { uintptr_t chunk; uint64_t const *hot; uintptr_t nhot; };
 void *image_save2(struct g*, uintptr_t *outlen, struct image_bad*, struct image_opt const*);
 struct g
  *love_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session; 2: and the image may wake lazily
+int image_why(void const *buf, uintptr_t len);   // a header refused: 0 no, 1 another format, 2 another binary's, 3 other C
+uint64_t image_carried_c(void);                  // the carried C's crc and length, 0 for none
 // a lazy image's pool given up (a major's copy done, a session's end): its pages open, its state gone
 void image_drop(word const *pool);
 // before a warm fork: what any process of this image woke or seated, done here as well

@@ -33,13 +33,17 @@
      ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*` and the `Makefile`"
       ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile"] ["test_gcstress"]
       ", in the queue's union; a `.l`, doc, app or test diff never owes it"]
+     ["what the bake runs, `src/love/{gc,snap,image,ev,io,love,map,tablet,alloc}.c` and the glaze"
+      ["src/love/gc.c" "src/love/snap.c" "src/love/image.c" "src/love/ev.c" "src/love/io.c" "src/love/love.c"
+       "src/love/map.c" "src/love/tablet.c" "src/love/alloc.c" "src/love/boot/glaze.l"] ["test_gcstress_bake"]
+      ", which runs test_gcstress's shards as well: owing both runs it alone"]
      ["a crewfiles member, or anything else baked" ["baked"] ["test_fixpoint" "test_bakerep"]
       ", and `make hotprof` to write `src/tools/hot.prof` again (bakerep fails while it is stale)"]
      ["" ["src/apps/moon/*"] moon-lanes ""]
      ["" ["src/love/holo/*"] ["test_holo" "test_as" "test_holofuzz" "test_inle"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/hearts/*"] ["test_hearts" "test_hearts_boot"] ""]]
-   lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_boards" "test_hearts"
+   lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_boards" "test_hearts"
                 "test_hearts_boot" "moon-flex" "moon-bison"]
    lanes-cost {"test" 195 "test_quick" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
                "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
@@ -53,7 +57,7 @@
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64"]]
    ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot
-   lanes-alone ["test_hdiff" "test_ccwarn" "test_gcstress" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
+   lanes-alone ["test_hdiff" "test_ccwarn" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
 
    (lm-tick s) ("`" + s + "`")
    (lanes-doc _)
