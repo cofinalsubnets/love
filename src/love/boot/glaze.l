@@ -839,7 +839,9 @@
                        (op = amble-lam) (asite as d)
                        (op = go) (ago as d)
                        (acall op as d))))
-             initR ([['li T 1]] + map (j \ ['st SP (8 * j) T]) ^R)                                                          ; every reserved slot a valid value before any call (GC walks them)
+             ; every reserved slot a valid value before any call (GC walks them), but those unpk lays
+             ; straight after with nothing between that collects: Se So budget, the extras, ovt
+             initR ([['li T 1]] + map (j \ ['st SP (8 * j) T]) (filter (j \ !(k <= j < k + 3 + ng || fbk && 8 * j = ovt)) ^R))
              unpk ([['ld T IP 8] ['st SP seo T]]                                                  ; Se = value[1] = e (plain -- image-revert-clean)
                    + (a = 1 ? [['st SP soo IP]] [['mov T IP] ['sub T T 16] ['st SP soo T]])     ; So = the own cell (= Ip, or Ip-16 past the cur pair) -- the self-drive callee
                    + [['ld T IP 32]                                                               ; T = the nifx extras chain
