@@ -150,6 +150,7 @@
           'rv64                        '("__riscv" "__CHAR_UNSIGNED__")
           'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
           ('thumb2 || 'thumb2sp)       '("__arm__" "__arm" "__CHAR_UNSIGNED__")
+          'arm                         '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_EABI__" "__thumb__" "__thumb2__")
           'thumb1                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_ARCH_6M__")   ; gcc's for -mcpu=cortex-m0
           ('i386 || 'i386m16)          '("__i386__" "__i386" "__ILP32__")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
@@ -192,8 +193,8 @@
    ; always, 0 refused (rv64 has no sub-word read-modify-write, thumb2 no doubleword, thumb1 no
    ; exclusives). the -fshort-wchar fork narrows wchar_t's row
    (atomdefs tgt sw)
-    (: ws (tgt @ 'thumb1 () 'rv64 '(4 8) ('thumb2 || 'thumb2sp || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
-       lw (elem tgt '(thumb2 thumb2sp thumb1 i386 i386m16) ? 4 8)
+    (: ws (tgt @ 'thumb1 () 'rv64 '(4 8) ('thumb2 || 'thumb2sp || 'arm || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
+       lw (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16) ? 4 8)
        (lf n) (elem n ws ? "2" "0")
        ('("__ATOMIC_RELAXED=0" "__ATOMIC_CONSUME=1" "__ATOMIC_ACQUIRE=2" "__ATOMIC_RELEASE=3"
           "__ATOMIC_ACQ_REL=4" "__ATOMIC_SEQ_CST=5" "__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1")
@@ -204,8 +205,8 @@
    (featdefs tgt)
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
-     + (elem tgt '(x64 i386 i386m16) ? () '("__STDC_NO_COMPLEX__=1"))
-     + (elem tgt '(x64 a64 i386 i386m16) ? () '("__STDC_NO_VLA__=1")))
+     + (elem tgt '(x64 i386 i386m16 a64 thumb2 arm) ? () '("__STDC_NO_COMPLEX__=1"))
+     + (elem tgt '(x64 a64 i386 i386m16 thumb2 thumb2sp arm) ? () '("__STDC_NO_VLA__=1")))
    ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) -- the
    ; <stdint>/<limits>/<float.h> family a library config reads instead of probing. one table
    ; forked on the word width (+ the wchar fork), every value gcc's own spelling on that
@@ -601,6 +602,19 @@
                (call main)
                (mov sp r4) (pop r4)
                (ret))
+   ; the arm entry (linux eabi): argc at [sp], 8-aligned, the vector handed to __love_start in
+   ; r0, then exit_group 248 in r7 (exit 1 if it returns). two pushes keep the alignment
+   crt0-arm '((mov r0 sp)
+              (call __love_start)
+              (li r7 248) (sys)
+              (li r7 1) (sys)
+              (label __love_start)
+              (push lr) (push r4)
+              (lea r1 r0 4)
+              (ld r0 r0 0)
+              (call main)
+              (pop r4) (pop lr)
+              (ret))
    ; the a64 twin, serving both kernels the way x64's does (rung UV1): linux zeroes every
    ; register and lays argc at [sp], freebsd hands the vector base in x0 with sp only near
    ; it, a pad word below argc as often as not -- so a zero x0 says linux and sp is the
@@ -846,7 +860,7 @@
    ; -os and only linux has an answer; the BSDs there owe a compile, which refuses by #error.
    (rtcarried home tgt os)
     (? (os = 'none) ()                                     ; freestanding owes no runtime
-       (elem tgt '(rv64 i386) && elem os '(freebsd netbsd)) ()
+       (elem tgt '(rv64 i386 arm) && elem os '(freebsd netbsd)) ()
        (elem tgt '(x64 a64 rv64 i386) && string tgt @ nm
           (!(string? nm) ? ()
              (runtime-gz nm @ z
@@ -906,8 +920,8 @@
                              (dotc? sub ? (a + [[(dotobj (swap47 sub)) k]]) a))
                   () (sort (filter (k \ starts? k d) (keys vb)))))
        ; i386 has no 64-bit divide: gen.l calls __udivdi3 and kin, rt.c's
-       (map ((a b) \ [a b [inc]]) (nlmems ndir + (tgt = 'i386 ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
-        + (elem tgt '(x64 a64 rv64 i386) ? [["mksys.o" "" ()]] ())))
+       (map ((a b) \ [a b [inc]]) (nlmems ndir + (elem tgt '(i386 arm) ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
+        + (elem tgt '(x64 a64 rv64 i386 arm) ? [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it), and the sys
    ; leaf is the os's own -- freebsd rides the x64 machine.
    (rtflags tgt os vb is) (pins (fseed tgt 'moon) 'os os 'is is 'vb vb)
@@ -1019,10 +1033,10 @@
                                                 (udie 1 "cc: cannot open \(f)")))
                          (udie 2 "cc: not a .c/.s/.o/.a input: \(f)")))
                  (filter (f \ !(dota? f)) ins))
-       ; an arm32 target has no hosted lane -- nothing on this side of the toolchain runs a
-       ; thumb exe -- so every thumb link is a board's: the image lays at the address the
-       ; core boots from, and no crt0 rides first: the first text byte is the vector table.
-       arm? (arm32? tgt)
+       ; a thumb link is a board's: the image lays at the address the core boots from, and
+       ; no crt0 rides first: the first text byte is the vector table. -t arm is linux's,
+       ; hosted as i386 is
+       arm? (arm32? tgt && tgt != 'arm)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
        _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a 64-bit target")
        _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
@@ -1041,7 +1055,7 @@
        runs (charm? dorg ? [['at org 'text 'rodata 'nifs]
                             ['copy dorg 'data 'bss]]
                            [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 crt0)   ; x64's serves both kernels
+       c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0)   ; x64's serves both kernels
        all (arm? || so ? srcs
                    (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
@@ -1058,7 +1072,7 @@
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [--emit-relocs] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [--emit-relocs] [-x c] [-t x64|a64|rv64|arm] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s

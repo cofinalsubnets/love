@@ -24,9 +24,9 @@ struct stat {
   unsigned int __unused4;
   unsigned int __unused5;
 };
-#elif defined(__i386__)
-/* i386: no kernel record is filled in place (statx is, and fstat.c reads it across),
- * so the words are the wide ones */
+#elif defined(__ILP32__)
+/* i386 and arm: no kernel record is filled in place (statx or stat64 is, and fstat.c
+ * reads it across), so the words are the wide ones */
 struct stat {
   dev_t st_dev;
   ino_t st_ino;

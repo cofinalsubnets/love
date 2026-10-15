@@ -106,36 +106,30 @@ lg=$(arm-none-eabi-gcc $cpu -print-libgcc-file-name)
 # never reaches the libc question behind it.
 # 161-enumwide is on both refuse lists for one row of its own: an enumerator wider than
 # the int word asks for an 8-byte enum, which mooncc does not widen to on ILP32, and the
-# file's own _Static_assert is what says so. 165-constcond and its sibling 166-condconv
-# are on both for another, and 283-splitsexpr with them: they print doubles, and a t32
-# variadic call rides the base pcs, which has no d-reg lane.
+# file's own _Static_assert is what says so.
 # 291-enumahead names an enum before its definition: AAPCS32's short enum has no width yet.
 hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope
         147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw
-        159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 269-builtin-alloca"
+        159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 269-builtin-alloca
+        115-rmwop 165-constcond 166-condconv 283-splitsexpr 228-strictalign"
 # each name, and what it assumes: 81 puts 2^62 in a `long`; 99 and 104 shift a
 # `unsigned long` by 32 or more, which is undefined once long is 32 bits; 105 unions a
 # double with one and reads bit 63; 120 asks for a `:40` bit-field (gcc REFUSES it here,
 # rightly); 125 wants char32_t to be the type of a U"" literal, which it is not on this
-# ABI; 144 counts a `long`'s leading zeros as 64. gcc is the witness for each -- it either refuses the source or answers differently
-# for the program's reason.
-narrow="81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins"
+# ABI; 144 counts a `long`'s leading zeros as 64; 266 builds a `long` from 1L << 40. gcc is the
+# witness for each -- it either refuses the source or answers differently for the program's reason.
+narrow="81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins 266-vaarg-struct"
 
 case $tgt in
-  thumb2) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 85-aggval
-                  88-varargs-overflow 97-muslrungs 100-complex 280-cxf-fuzz 101-vla 102-bigstruct
-                  111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  151-w128fuzz 161-enumwide 165-constcond 166-condconv 228-strictalign 266-vaarg-struct
-                  283-splitsexpr 291-enumahead" ;;
-  # 228 lays a double at an odd packed offset, which vldr's word-aligned offset cannot carry.
+  thumb2) refuse="68-static-assert 111-int128 151-w128fuzz 161-enumwide 291-enumahead" ;;
   # the two lists are NOT the same list: v6-M refuses 82-znvalue where thumb2 takes it.
   # the composite rows do not move together (doc/misc/moon-c-gaps), so neither do these.
-  thumb1) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 82-znvalue 85-aggval
-                  88-varargs-overflow 97-muslrungs 100-complex 280-cxf-fuzz 101-vla 102-bigstruct
-                  111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  151-w128fuzz 161-enumwide 165-constcond 166-condconv 228-strictalign 266-vaarg-struct
-                  283-splitsexpr 291-enumahead" ;;
+  thumb1) refuse="67-varargs-double 88-varargs-overflow 97-muslrungs 68-static-assert 82-znvalue 85-aggval 100-complex 280-cxf-fuzz 101-vla 102-bigstruct 111-int128
+                  117-vastruct 129-sync 151-w128fuzz 161-enumwide 228-strictalign 266-vaarg-struct 291-enumahead" ;;
 esac
+
+# v6-M's double varargs call out to rt.c's soft-float, which this lane does not link
+[ $tgt = thumb1 ] && hosted="$hosted 71-varargs-sysv"
 
 inlist() { for w in $2; do [ "$w" = "$1" ] && return 0; done; return 1; }
 

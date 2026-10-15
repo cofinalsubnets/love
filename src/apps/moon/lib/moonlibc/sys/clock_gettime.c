@@ -1,7 +1,7 @@
 #include "../impl.h"
 
 /* linux answers the clock from the vdso without entering the kernel, and love's
- * scheduler reads it every switch. i386's own name is the time64 one: its plain
+ * scheduler reads it every switch. a 32-bit target's own name is the time64 one: its plain
  * __vdso_clock_gettime fills the 32-bit record. a vdso that is not there or refuses
  * leaves the call to the kernel. */
 #if defined(__x86_64__) || defined(__aarch64__) || defined(__riscv)
@@ -9,7 +9,7 @@
 typedef Elf64_Ehdr vehdr; typedef Elf64_Phdr vphdr; typedef Elf64_Word vword;
 typedef struct { Elf64_Word st_name; unsigned char st_info, st_other; Elf64_Half st_shndx;
                  Elf64_Addr st_value; Elf64_Xword st_size; } vsym;
-#elif defined(__i386__)
+#elif defined(__ILP32__)
 # define LvVdso 1
 typedef Elf32_Ehdr vehdr; typedef Elf32_Phdr vphdr; typedef Elf32_Word vword;
 typedef struct { Elf32_Word st_name; Elf32_Addr st_value; Elf32_Word st_size;
@@ -19,7 +19,7 @@ typedef struct { Elf32_Word st_name; Elf32_Addr st_value; Elf32_Word st_size;
 typedef int (*cgtfn)(long, struct timespec *);
 
 static int cgtname(char const *s) {
-#ifdef __i386__
+#ifdef __ILP32__
   return !strcmp(s, "__vdso_clock_gettime64");
 #else
   return !strcmp(s, "__vdso_clock_gettime") || !strcmp(s, "__kernel_clock_gettime");

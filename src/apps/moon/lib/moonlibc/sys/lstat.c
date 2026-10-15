@@ -1,7 +1,7 @@
 #include "../impl.h"
 
 int lstat(char const *p, struct stat *st) {
-#ifdef __i386__
+#ifdef __ILP32__
   return __love_statx(AT_FDCWD, p, AT_SYMLINK_NOFOLLOW, st);
 #else
   if (__love_osv == 2) {
