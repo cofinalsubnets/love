@@ -1,5 +1,6 @@
-; src/apps/kore/pic.l -- pictures on a terminal and between formats. png, jpeg, gif and webp are
-; read (src/apps/png.l, jpeg.l, gif.l, webp.l); png, jpeg, gif and sixel are written.
+; src/apps/kore/pic.l -- pictures on a terminal and between formats. png, jpeg, gif, webp, bmp,
+; ico and netpbm's are read (src/apps/png.l, jpeg.l, gif.l, webp.l, bmp.l, pnm.l); png, jpeg,
+; gif, ppm, pam and sixel are written.
 ;
 ;   pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]
 ;         each picture as wide as the terminal (or COLS, or 80) and no taller than ROWS,
@@ -10,7 +11,7 @@
 ;   pic less [-g MODE] FILE..   a viewer: fitted, zoomed and panned, a gif played, in
 ;         MODE as pic cat's. picless too
 ;   pic convert [-q Q] [-t TYPE] IN OUT
-;         one format to another, by OUT's extension or TYPE (png gif jpeg sixel ans); - is
+;         one format to another, by OUT's extension or TYPE (png gif jpeg ppm pam sixel ans); - is
 ;         stdin or stdout. a gif keeps its first frame, a file already TYPE is copied. ans
 ;         is pic cat's blocks as text, 80 wide
 ;   pic pixelize [-w COLS] [-h ROWS] [-s PX] [-c 256] [-q Q] [-t TYPE] IN OUT
@@ -20,7 +21,7 @@
 ;         the blocks' text itself
 ;   pic [-nCSU] [-t [-cz]] [FILE..]
 ;         classic pic, the troff preprocessor (src/apps/kore/gpic.l): a bare pic with one of
-;         GNU pic's flags, or whose first input is not a png, jpeg, gif or webp. -g -w -h are
+;         GNU pic's flags, or whose first input is not a picture pic reads. -g -w -h are
 ;         pic cat's
 ;
 ; www draws a page's pictures through pic-art too.
@@ -32,7 +33,7 @@
 (:
    pic-usage (cats ["usage: pic [cat] [-g block|sixel|kitty|auto] [-w COLS] [-h ROWS] [FILE..]\n"
                     "       pic less [-g block|sixel|kitty|auto] FILE..\n"
-                    "       pic convert [-q QUALITY] [-t png|gif|jpeg|sixel|ans] IN OUT\n"
+                    "       pic convert [-q QUALITY] [-t png|gif|jpeg|ppm|pam|sixel|ans] IN OUT\n"
                     "       pic pixelize [-w COLS] [-h ROWS] [-s PX] [-c 256] [-q QUALITY] [-t TYPE] IN OUT"])
    picless-usage "usage: pic less [-g block|sixel|kitty|auto] FILE.."
    pic-swig (cite 'posix 'swig)
@@ -41,13 +42,16 @@
    ; -- reading -----------------------------------------------------------------
    (pic-le16 b i) (b i + 256 * b (i + 1))
    (pic-be32 b i) (((b i * 256 + b (i + 1)) * 256 + b (i + 2)) * 256 + b (i + 3))
-   ; bytes -> 'png 'jpeg 'gif 'webp | ()
+   ; bytes -> 'png 'jpeg 'gif 'webp 'bmp 'ico 'pnm | ()
    (pic-kind b)
     (? !(string? b && 8 <= #b) ()
        (snip b 1 4 = "PNG") 'png
        (b 0 = 255 && b 1 = 216) 'jpeg
        (snip b 0 4 = "GIF8") 'gif
        (12 <= #b && snip b 0 4 = "RIFF" && snip b 8 12 = "WEBP") 'webp
+       (snip b 0 2 = "BM") 'bmp
+       (b 0 = 0 && b 1 = 0 && (b 2 = 1 || b 2 = 2) && b 3 = 0 && 0 < b 4 + b 5) 'ico
+       (b 0 = 80 && 49 <= b 1 <= 55 && elem (b 2) [9 10 13 32]) 'pnm
        ())
    ; -> [w h] off the header | why not
    (pic-size b)
@@ -56,6 +60,9 @@
           (k = 'jpeg) (cite 'jpeg 'jpeg-size b)
           (k = 'gif) [(pic-le16 b 6) (pic-le16 b 8)]
           (k = 'webp) (cite 'webp 'webp-size b)
+          (k = 'bmp) (cite 'bmp 'bmp-size b)
+          (k = 'ico) (cite 'bmp 'ico-size b)
+          (k = 'pnm) (cite 'pnm 'pnm-size b)
           "not a picture"))
    ; -> [w h rgba] | why not; a gif's or an animated webp's first frame
    (pic-decode b)
@@ -64,6 +71,9 @@
           (k = 'jpeg) (cite 'jpeg 'jpeg-decode b)
           (k = 'gif) (cite 'gif 'gif-decode b)
           (k = 'webp) (cite 'webp 'webp-decode b)
+          (k = 'bmp) (cite 'bmp 'bmp-decode b)
+          (k = 'ico) (cite 'bmp 'ico-decode b)
+          (k = 'pnm) (cite 'pnm 'pnm-decode b)
           "not a picture"))
    ; -> [w h [[rgba ms] ..]] | why not: a gif's frames, as many as fit 128 MB, and a still
    ; one frame of no time
@@ -225,12 +235,15 @@
    (pic-type nm)
     (: (dot i) (? (i < 0) -1 (nm i = 46) i (dot (i - 1)))
        x (wg-lower (snip nm (dot (#nm - 1) + 1) #nm))
-       (x @ "png" 'png "gif" 'gif "jpg" 'jpeg "jpeg" 'jpeg "six" 'sixel "sixel" 'sixel "ans" 'ans ()))
+       (x @ "png" 'png "gif" 'gif "jpg" 'jpeg "jpeg" 'jpeg "ppm" 'ppm "pnm" 'ppm "pam" 'pam "six" 'sixel
+            "sixel" 'sixel "ans" 'ans ()))
    ; -> the picture's bytes as ty | why not
    (pic-encode ty im q)
     (? (ty = 'png) (cite 'png 'png-encode (im 0) (im 1) (im 2))
        (ty = 'gif) (cite 'gif 'gif-encode (im 0) (im 1) (im 2))
        (ty = 'jpeg) (jpeg-encode (im 0) (im 1) (im 2) q @ r (string? r ? r "cannot encode a jpeg"))
+       (ty = 'ppm) (cite 'pnm 'pnm-encode (im 0) (im 1) (im 2))
+       (ty = 'pam) (cite 'pnm 'pam-encode (im 0) (im 1) (im 2))
        (ty = 'sixel) (pic-sixel im)
        "no such type")
    (pic-in who p)
@@ -244,7 +257,7 @@
    (pic-otype who t p dflt)
     (: v (uoptv t 116) ty (string? v ? (pic-type ("." + v)) (pic-type p))
        (? (ty != ()) ty (dflt != () && !(string? v)) dflt
-          (udie 2 (who + ": " + (string? v ? ("no type " + v) ("no type for " + p)) + "; png gif jpeg sixel or ans"))))
+          (udie 2 (who + ": " + (string? v ? ("no type " + v) ("no type for " + p)) + "; png gif jpeg ppm pam sixel or ans"))))
    (pic-num t k d) (uoptv t k @ v (string? v ? (uatoi v @ n (0 < n ? n d)) d))
    (pic-decoded who nm b)
     (pic-decode b @ im (two? im ? im (udie 1 (who + ": " + nm + ": " + im))))
@@ -258,7 +271,7 @@
            "help" (say out (pic-usage + "\n"), 0)
            (pic-route as))
    ; a bare pic: a flag of cat's (-g -w -h) is pictures, one of GNU pic's is classic pic
-   ; (src/apps/kore/gpic.l); with neither the first input decides, a png, jpeg, gif or webp being
+   ; (src/apps/kore/gpic.l); with neither the first input decides, a picture pic reads being
    ; a picture and anything else a document with .PS/.PE in it. stdin is read once
    (pic-route as)
     (: (flags l) (atom? l || <l = "--" || <l = "-" || !(0 < #<l && <l 0 = 45) ? () (<l . flags >l))

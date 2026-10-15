@@ -26,7 +26,7 @@
 ; a page asks for gzip and is unzipped (src/apps/gz.l); one in latin-1 or windows-1252, by its
 ; header or its own <meta>, is re-spelled as utf-8, and any other charset is taken as utf-8.
 ; a <base href> is what the links resolve against. an image is its alt text, and on a
-; terminal a png, jpeg, gif or webp is drawn under it as it comes near the screen, two pixels a
+; terminal a picture pic reads is drawn under it as it comes near the screen, two pixels a
 ; cell (src/apps/kore/pic.l). the window changing width lays the page again, the same link at
 ; the top.
 ;
@@ -381,7 +381,7 @@
                        (: to (ww-resolve url loc) (? (ww-hop? url to) (ww-fetch url to (hops - 1)) ()))
                       (200 <= code < 300) (r 2)
                       ()))))))
-   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png, jpeg, gif or webp (its first
+   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a picture pic reads (its first
    ; frame) of up to 4 megapixels
    (ww-picture b)
     (: d (pic-size b)
