@@ -16,6 +16,7 @@
 ;   love bee --nest DIR                      a worker nest from the hub (SB_HUB), at its head
 ;   love bee --lanes-doc | --lanes-map       the lanes a change owes: AGENTS.md's table, lanes.sh's chains
 ;   love bee --lanes [BASE [HEAD]]           the lanes HEAD's change owes, in order, and why
+;   love bee --gate QUEUE                    queue_gate's runner: this worktree's union, as BEE_NAME's row
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -177,6 +178,14 @@
              {"name" (prop "the lock's name")} ["name"])
        (tool "lock_list" "The machine's locks: who holds what, who waits, memory available and load."
              {} [])
+       (tool "queue_gate" ("Gate your row in a git merge queue: the head row, or the row behind a green one, its union "
+                           + "merged and committed in dir. It writes the row gating with dir's HEAD and starts love bee "
+                           + "--gate there, which runs the heavy lanes the change owes from the row's gated-on and the slow "
+                           + "lane last, through test/gate/lanes.sh under the heavy lock, then writes the row green with each "
+                           + "lane's result, or waiting with its reds, each red told to the owners of the paths that owed "
+                           + "it. A message comes when it ends; dir/out/gate.log is its log.")
+             {"queue" (prop "refs/queue/NAME") "dir" (prop "the worktree holding the union, its out/ built; the working directory unless given")}
+             ["queue"])
        (tool "lanes" ("The lanes a change owes, in the order to run them, one line each: the lane, light or heavy, "
                       + "its wall seconds on a shared box (? when unmeasured) and the paths that owed it. test comes "
                       + "first and test_slow last; a lane another owed lane runs is left out.")
@@ -1047,6 +1056,103 @@
             (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
                bk (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
                [1 (unlines (lm 'lanes-lines (lm 'lanes-plan ps bk (lm 'lanes-covers (string? mk ? mk "")))))])))
+     ; the plan itself, [[lane heavy? cost why] ..], for base..head in this tree
+     (lanes-plan-of b head)
+      (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
+         ((cite 'lanemap 'lanes-plan) ps (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
+                                      ((cite 'lanemap 'lanes-covers) (string? mk ? mk ""))))
+
+     ; --- queue_gate: bee gates a row. the tool writes the caller's row gating with dir's HEAD and starts
+     ; `love bee --gate` there, detached in its own group: the heavy lanes the change owes from the row's
+     ; gated-on, the slow lane last, through test/gate/lanes.sh under the heavy lock; then the row green
+     ; with each lane's result, or waiting with its reds, each red told to the owners of the paths that
+     ; owed it -- a folded row's owner by its own head's paths ---
+     (g-git dir a) (chomp (lush-out ("git -C " + sh-quote dir + " " + a)))
+     (gate-dir in) (: d (field in "dir" bee-cwd) (? (d 0 = 47) d (bee-cwd + "/" + d)))
+     (gate-why q text who dir)
+      (: rows (q-rows text) r (q-own rows who)
+         ahead (? (r = ()) () (filter (\ p (!(q-folded? (rows p)) && q-num p < q-num r)) (keys rows)))
+         prev (foldl (\ a p (? (#a = 0 || q-num a < q-num p) p a)) "" ahead)
+         (? !(q-git? q) "queue_gate gates a git queue's row"
+            (r = ()) ("you hold no row in " + q)
+            (q-folded? (rows r)) ("row " + r + " is " + (rows r) 5 + ": the union's own row gates")
+            (0 < #prev && (rows prev) 5 != "green")
+             ("row " + prev + " ahead is " + (rows prev) 5 + ": the head row gates, or the row behind a green one")
+            !(two? (stat (dir + "/test/gate/lanes.sh"))) ("no test/gate/lanes.sh in " + dir)
+            (#(g-git dir "rev-parse --verify -q HEAD") = 0) ("no commit checked out in " + dir)
+            (0 < #(g-git dir "status --short --untracked-files=no")) (dir + " has changes not committed: a gate runs on a commit")
+            ""))
+     (gate-spawn q dir who)
+      (? !(string? bee-self) "this bee cannot find its own binary"
+         (: _ (umkdirs (dir + "/out") 493)
+            line ("cd " + sh-quote dir + " && BEE_NAME=" + sh-quote who + " PWD=" + sh-quote dir + " exec "
+                  + sh-quote bee-self + " bee --gate " + sh-quote q + " >> " + sh-quote (dir + "/out/gate.log") + " 2>&1")
+            nul (openfd "/dev/null" 0)
+            p (spawnio [bee-self "lush" "-c" line] nul nul nul (open-fds 0) 0 0)
+            _ (? (0 <= nul) (close nul) 0)
+            (? !(charm? p && 0 < p) "love bee --gate did not start" (: _ (twirl (\ _ (reap p)) 0) ""))))
+     (queue-gate in)
+      (: q (in "queue") who (me 0) dir (gate-dir in) rd (q-read q)
+         (? (<rd = "none") [0 ("no queue " + q)]
+            (: r (q-own (q-rows (rd 1)) who) why (gate-why q (rd 1) who dir) h (g-git dir "rev-parse HEAD")
+               (? (0 < #why) [0 why]
+                  (: w (queue-row1 {"queue" q "state" "gating" "gated_head" h "row" r})
+                     e (? <w (gate-spawn q dir who) "")
+                     (? !<w w
+                        (0 < #e) [0 ("row " + r + " is gating at " + h + ", but " + e + ": write it back to waiting")]
+                        [1 ("row " + r + " is gating at " + h + ". love bee --gate runs its heavy lanes there, the slow lane "
+                            + "last, under the heavy lock, logging to " + dir + "/out/gate.log, and writes the row when it "
+                            + "ends; a message says so.")]))))))
+     ; the runner, in the union's worktree as the row's session
+     (gate-say s) (: _ (puts ("love bee --gate: " + s + "\n")) _ (flush out) 0)
+     (gate-wait p) (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 1000) (gate-wait p))))   ; a gate's hours
+     (gate-run q)
+      (: who (me 0) dir bee-cwd rd (q-read q) text (rd 1) rows (q-rows text) r (q-own rows who)
+         row (? (r = ()) () (rows r)) h (git1 "rev-parse HEAD")
+         ; an ignore every child inherits: spawnio resets the job signals (int quit pipe tstp ttin ttou)
+         ign (filter (\ n ((cite 'posix 'sigign?) n)) (filter (\ n !(elem n [2 3 9 13 19 20 21 22])) (map (+ 1) ^31)))
+         (back why) (: _ (gate-say why) _ (queue-row1 {"queue" q "state" "waiting" "row" r})
+                       _ (post-as ("gate-" + r) who ("queue_gate: row " + r + " is waiting again, ungated: " + why)) 1)
+         (? (r = ()) (: _ (gate-say (who + " holds no row in " + q)) 1)
+            (row 4 != h) (back ("row " + r + " gates " + row 4 + ", but HEAD is " + h))
+            (two? ign) (back ("signals " + join " " (map show ign) + " are ignored here, and every lane would "
+                              + "inherit them: start it from a shell that ignores none"))
+            (: b (row 3) plan (lanes-plan-of b h)
+               ls (map (\ x <x) (filter (\ x (x 1 && <x != "test_slow")) plan))
+               _ (gate-say ("row " + r + " at " + h + " from " + b + ": " + join " " (ls + ["test_slow"])))
+               ; the lanes write to this log as they run
+               p (spawnio ([bee-self "bee" "--lock" "--heavy" "--out" (dir + "/out") "--" "sh" "test/gate/lanes.sh"
+                            "-d" "out/lanes-gate" "--slow"] + ls + ["test_slow"]) -1 -1 -1 () -1 0)
+               rc (? (charm? p && 0 < p) (gate-wait p) -1)
+               sm (slurp-file (dir + "/out/lanes-gate/summary"))
+               got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1))])) (filter (\ l (starts? l "test")) (? (string? sm) (lines sm) ())))
+               res (map (\ l (: g (filter (\ y (<y = l)) got) [l (? (two? g) (<g 1) "unrun")])) (ls + ["test_slow"]))
+               reds (filter (\ y (y 1 != "0")) res)
+               ok (rc = 0 && !(two? reds))
+               ln (filter (\ l (q-row? l && <(words l) = r)) (lines text))
+               ; a gate's result replaces the last one's
+               n0 (: n (? (two? ln) (q-note <ln) "") k (find n " | gate " 0)
+                     (? (starts? n "gate ") "" (k < 0) n (snip n 0 k)))
+               note ((0 < #n0 ? (n0 + " | ") "") + "gate " + snip h 0 9 + ": " + join " " (map (\ y (<y + "=" + y 1)) res)
+                     + ((ok || two? reds) ? "" (" lanes.sh=" + show rc)))
+               w (queue-row1 {"queue" q "state" (ok ? "green" "waiting") "row" r "note" note})
+               _ (gate-say (w 1))
+               _ (? ok 0 (gate-tell q r rows b plan (map (\ y <y) reds) dir))
+               _ (post-as ("gate-" + r) who ("queue_gate: row " + r + " at " + h + (ok ? " is green: " " is red: ")
+                                             + join " " (map (\ y (<y + "=" + y 1)) res) + "; the log is " + dir + "/out/gate.log"))
+               (ok ? 0 1))))
+     ; each red lane to the owners of the paths that owed it: a member's paths are its own head's
+     ; change from the row's gated-on; a lane no member's paths owed goes to the row's owner
+     (gate-tell q r rows b plan reds dir)
+      (: ms (r . q-folds rows r)
+         mp (map (\ m (: hm ((rows m) 4) [((rows m) 1) (row-paths (git1 ("merge-base " + sh-quote b + " " + sh-quote hm)) hm)])) ms)
+         (why l) (: p (filter (\ x (<x = l)) plan) (? (two? p) (<p 3) ()))
+         (owners l) (: os (q-uniq (map (\ o <o) (filter (\ o (any (\ p (elem p (o 1))) (why l))) mp)))
+                       (? (two? os) os [((rows r) 1)]))
+         (map (\ l (map (\ o (post o (q-short q + ": row " + r + "'s union went red in " + l + ", owed by "
+                                        + join " " (take 5 (why l)) + "; the log is " + dir + "/out/lanes-gate/" + l + ".log")))
+                         (owners l)))
+              reds))
      (git-tree x) (git1 ("rev-parse --verify -q " + sh-quote (x + "^{tree}")))
      ; the base line a new queue starts from: the branch it is named for, at its sha
      (q-base-of q)
@@ -2236,6 +2342,7 @@
           "lock_release" (lock-release in)
           "lock_list" (lock-list 0)
           "lanes" (lanes-of (field in "base" "") (field in "branch" "HEAD"))
+          "queue_gate" (queue-gate in)
           "pane_list" (bee-hands 'panes ())
           "pane_read" (: r (bee-hands 'read (in "id")) [<r (clip (r 1))])
           "pane_type" (bee-hands 'type (in "id") (in "text"))
@@ -2281,6 +2388,7 @@
                  "lock_release" (in "name")
                  "lock_list" ""
                  "lanes" (field in "branch" "HEAD")
+                 "queue_gate" (in "queue" + " " + gate-dir in)
                  ("pane_list" || "pane_open") ""
                  ("pane_read" || "pane_focus" || "pane_close") (in "id")
                  "pane_type" (in "id" + ": " + (: t (in "text") (#t <= 60 ? t (snip t 0 60 + "…"))))
@@ -2652,7 +2760,7 @@
      ; whole conversation without a child. an id is presence, not truth: requests count from 0 ---
      (line-of p) (:- (go ()) (go acc) (see p @ -1 (two? acc ? (string (rev acc))) 10 (string (rev acc)) c (go (c . acc))))
      mcp-shared ["list_sessions" "send_message" "queue_read" "queue_row" "queue_lead" "queue_land" "queue_landed"
-                 "lock_acquire" "lock_release" "lock_list" "lanes"]
+                 "lock_acquire" "lock_release" "lock_list" "lanes" "queue_gate"]
      mcp-tools
       ([{"name" "approve"
          "description" "Ask this bee's user whether a tool may run: Claude Code's permission prompt, answered from bee's screen."
@@ -3143,6 +3251,7 @@
             ; the lanes a change owes (src/apps/lanemap.l): AGENTS.md's table, lanes.sh's chains
             (two? as && elem <as ["--lanes-doc" "--lanes-map"])
              (: _ (puts (unlines ((cite 'lanemap (<as = "--lanes-doc" ? 'lanes-doc 'lanes-map)) 0))) 0)
+            (two? as && <as = "--gate" && #as = 2) (gate-run (as 1))
             (two? as && <as = "--lanes" && #as <= 3)
              (: r (lanes-of (#as > 1 ? (as 1) "") (#as > 2 ? (as 2) "HEAD"))
                 _ (puts (<r ? (r 1) ("love bee --lanes: " + r 1 + "\n")))
@@ -3186,6 +3295,7 @@
        love bee --hosts                              the hosts this box knows
        love bee --lanes-doc | --lanes-map            the lanes a change owes: AGENTS.md's table, lanes.sh's chains
        love bee --lanes [BASE [HEAD]]                the lanes HEAD's change owes, in order, and why
+       love bee --gate QUEUE                         queue_gate's runner: this worktree's union, as BEE_NAME's row
        love bee --nest DIR                           a worker nest made from the hub (SB_HUB, or (hub ..)) at its head
        love bee --node                               a fresh box checked in order: what it has, and the next step
        love bee --door [KEY ..]                      the door's hello here; KEY: the authorized_keys line that holds a key to it

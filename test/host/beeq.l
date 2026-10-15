@@ -581,5 +581,51 @@
       (bq-in (k0 6) "row now: 4 dan k1") !(bq-in q2 "\nkeep "))
    0)
 
+;; --- queue_gate: the head row's union gated by bee -- its row gating with the worktree's HEAD, the
+; lanes the change owes run through test/gate/lanes.sh (a stub here) under the heavy lock, then the
+; row green with each lane's result, or waiting with its reds; refused off the head, or dirty ----
+(: w (bq-world "gate") lq bq-q
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   _ (hark ["mkdir" "-p" (w 'repo + "/test/gate")])
+   _ (bq-put (w 'repo + "/test/gate/lanes.sh")
+             "d=out/lanes-gate; mkdir -p $d; echo \"$@\" > out/args\nif [ -f red ]; then echo 'test_slow exit=1 secs=0' > $d/summary; exit 1; fi\necho 'test_slow exit=0 secs=0' > $d/summary\n")
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   (row p) (: ls (filter (\ l (starts? l (p + " "))) (lines (bq-out (bq-git w ["cat-file" "-p" lq]))))
+              (? (two? ls) <ls ""))
+   m (sha "test")
+   a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "gated_on" m "gated_head" (sha "ant") "leader" "queen"}]])
+   _ (bq-git w ["checkout" "-q" "ant"])
+   g1 (calls "ant" [[2 "queue_gate" {"dir" (w 'repo)}]])
+   ok1 (bq-until (\ _ (bq-in (row "1") " green  #")) 300)
+   args (bq-get (w 'repo + "/out/args"))
+   b (calls "bob" [[3 "queue_row" {"state" "waiting" "branch" "bob" "gated_on" (sha "ant") "gated_head" (sha "bob")}]])
+   c (calls "carol" [[4 "queue_gate" {"dir" (w 'repo)}]])
+   _ (bq-git w ["checkout" "-q" "bob"])
+   _ (bq-put (w 'repo + "/f") "dirty\n")
+   d (calls "bob" [[5 "queue_gate" {"dir" (w 'repo)}]])
+   _ (bq-git w ["checkout" "-q" "--" "f"])
+   _ (bq-put (w 'repo + "/red") "")
+   g2 (calls "bob" [[6 "queue_gate" {"dir" (w 'repo)}]])
+   ok2 (bq-until (\ _ (bq-in (row "2") "test_slow=1")) 300)
+   e (calls "carol" [[7 "queue_row" {"state" "waiting" "branch" "carol" "gated_head" (sha "bob") "keep" "1"}]
+                     [8 "queue_gate" {"dir" (w 'repo)}]])
+   _ (test
+      (bq-in (g1 2) "row 1 is gating at ")
+      ok1 (bq-in (row "1") "  # gate ") (bq-in (row "1") "test_slow=0")
+      (args = "-d out/lanes-gate --slow test_slow\n")
+      (bq-in (c 4) "you hold no row")
+      (bq-in (d 5) "has changes not committed")
+      (bq-in (g2 6) "row 2 is gating at ")
+      ok2 (bq-in (row "2") " waiting  #")
+      (bq-in (e 8) "row 2 ahead is waiting"))
+   0)
+
 (hark ["rm" "-rf" bq-root])
 (test_fin (), puts "beeq: ok", putc 10, 0)

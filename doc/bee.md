@@ -51,6 +51,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --lanes** \[*base* \[*head*\]\]
 
+**love bee --gate** *queue*
+
 **love bee --nest** *dir*
 
 **love bee --node**
@@ -66,7 +68,7 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 - **list_sessions** and **send_message**, described under SESSIONS AND MESSAGES;
 - **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS;
 - **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS, and **lanes**, after them;
-- **queue_read**, **queue_row**, **queue_lead**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
+- **queue_read**, **queue_row**, **queue_lead**, **queue_gate**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
 - in a pane of **love mitty**, **pane_list**, **pane_read**, **pane_type**, **pane_open**, **pane_focus** and **pane_close**: the desktop's other panes by id, read as text, typed into as keys (a newline is Enter, and the answer is the pane once quiet), opened beside, given the keyboard, closed. The model's own pane is never typed into or closed.
 
 A write, an edit, a shell command, a job's start, a message to another session, a queue write, a spawn and a stop of another bee, and typing into, opening, focusing or closing a pane ask y/n before they run, unless **-y** is given, and so does **read_file** of a path outside the working tree (a link out of it included). The rest run without asking. An ask shows the whole input, a control character as **^X**; on the full screen **y** runs it only once every row has been on the screen, and the arrows scroll it.
@@ -361,6 +363,9 @@ Every tool reads the queue fresh and writes it by compare-and-swap, reading agai
     - a *gated_on* or *gated_head* that does not resolve where the queue lives: a commit in the repository (git), or a set the hub holds (sb). The answer names it and says to paste it from **git rev-parse** or **sb psid**.
 
     Only the leader may pass **session** to edit another's row, **base** to move the base line, or **position** to place a new row at a number no row holds. **leader** names the leader of a queue being made. When the queue is long, the answer says so and tells the model to fold, not line up.
+
+**queue_gate** (*queue*, *dir*)
+:   Gates the caller's row on a git queue: the head row, or the row behind a green one, its union merged and committed in *dir* (the working directory unless given), with its **out/** built. It refuses a row that is folded, a row behind one that is not green, and a *dir* with uncommitted changes or no **test/gate/lanes.sh**. It writes the row **gating** with *dir*'s HEAD and starts **love bee --gate** *queue* there, detached in its own group, as the caller. That runner refuses to start when it inherited any ignored signal, since every lane would inherit it too. It runs the heavy lanes the change owes from the row's gated-on (**love bee --lanes**), the slow lane last, through **test/gate/lanes.sh -d out/lanes-gate --slow** under the heavy lock (**love bee --lock --heavy**). Then it writes the row **green**, its note ending **| gate** *sha*: *lane***=***exit* for each lane, or **waiting** with the same note when a lane is red. Each red goes to the owners of the paths that owed it: a folded row's owner by its own head's change from the row's gated-on, and a lane no member's paths owed to the row's owner. The caller hears the result too. The log is *dir***/out/gate.log**.
 
 **queue_lead** (*queue*, and any of *leader*, *sync*, *pre_add*, *pre_drop*, *base*, *mirror*)
 :   The leader's own lines, for the leader alone. **leader** hands the queue on. **base** moves the base line, touching no row. **sync** sets the sync line, and **-** removes it. **pre_add** adds a pre line, and **pre_drop** *n* drops the *n*th. **mirror** sets an sb queue's mirror line, and **-** removes it. The head row's session may pass itself as **leader** while the leader has no live session in the hive. That writes **leader** *itself* **acting**.
