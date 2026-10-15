@@ -746,6 +746,8 @@ typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in
 #define __MLive ((__mhdr *) 3)     /* ..an arena block */
 #define __MAlign ((__mhdr *) 5)    /* ..a stand-in before an aligned pointer: size is the units back to the block's payload */
 #define __MArena ((__mhdr *) 7)    /* an arena's first unit, never handed out: size is the arena's units, its last a sentinel (__MLive, 1) */
+#define __MSlot ((__mhdr *) 9)     /* ..a size class's slot: size is its units, and its index in its slab << 16 */
+static size_t __munits(__mhdr const *b) { return b->next == __MSlot ? b->size & 0xffff : b->size; }
 __mhdr *__mblock(void *p, char const *who);   /* the block behind p, or an abort naming who */
 int __mgrow(__mhdr *b, size_t nu);            /* realloc's growth in place: 1 when b now holds nu units */
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;

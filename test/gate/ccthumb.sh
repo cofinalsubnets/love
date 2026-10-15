@@ -112,7 +112,7 @@ hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-decls
         147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw
         159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 269-builtin-alloca
         298-malloc-wrap 115-rmwop 165-constcond 166-condconv 283-splitsexpr 228-strictalign
-        111-int128 151-w128fuzz 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn"
+        111-int128 151-w128fuzz 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn 304-size-classes"
 # each name, and what it assumes: 81 puts 2^62 in a `long`; 99 and 104 shift a
 # `unsigned long` by 32 or more, which is undefined once long is 32 bits; 105 unions a
 # double with one and reads bit 63; 120 asks for a `:40` bit-field (gcc REFUSES it here,

@@ -21,9 +21,9 @@ int *__errno_location(void) { return &__errno_v; }
 /* ---- exit: the atexit chain, the stdio flush, then exit_group ---- */
 
 
-/* ---- malloc: K&R's first-fit free list over 1MB mmap arenas. 16-byte units,
- * 16-byte alignment, coalescing free. love mallocs pools (big, rare) and codec /
- * line buffers (small, freed) -- this shape covers both without ceremony. ---- */
+/* ---- malloc (mem/free.c): small blocks are slots of a size class in 64 KiB slabs,
+ * the rest come off a coalescing free list over 1 MiB mmap arenas, and a block past
+ * 128 KiB gets a mapping of its own. 16-byte units and alignment. ---- */
 typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in units */
 
 /* alloca: no native / __builtin form, so malloc backs it and stack depth
