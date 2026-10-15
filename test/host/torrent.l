@@ -1,8 +1,5 @@
-; test/host/torrent.l -- the torrent client, offline: bencode's laws and refusals, a
-; metainfo read back from torrents laid here, transmission-show's sizes, the tracker's
-; parsing, and a whole download from a seeder on loopback -- one file and two, and the
-; ordered port from a byte inside the first piece -- then that file, whole on disk, checked
-; and seeded to another swarm of ours.
+; test/host/torrent.l -- the torrent client offline: bencode, metainfo, the tracker's
+; parsing, and downloads from a seeder on loopback
 ; run: cat test/00-init.l test/host/torrent.l | out/love
 (borrow 'posix)
 (borrow 'bytes)

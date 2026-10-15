@@ -1,9 +1,5 @@
-; test/host/webp.l -- src/apps/webp.l and src/love/picture/webp.c's webp-pixels
-; small pictures libwebp wrote -- lossy, lossy over an alpha plane compressed and raw,
-; lossless with a palette and with its transforms, one pixel, an animation whose first frame
-; sits inside its canvas -- each decoded to the rgba libwebp gives, by its sha-256. then,
-; where python3's PIL writes webp, more of them, each held to PIL's own decode byte for byte;
-; last the refusals.
+; test/host/webp.l -- src/apps/webp.l and webp.c's webp-pixels: libwebp's pictures by sha-256,
+; then, where PIL writes webp, held to PIL's decode byte for byte; then the refusals.
 ;   cat test/00-init.l test/host/webp.l | out/love
 (borrow 'posix)
 (borrow 'hashes)
@@ -17,7 +13,7 @@
    (unx h) (cask (#h // 2) @ c (map (i \ pin c i (nib (h (2 * i)) * 16 + nib (h (2 * i + 1)))) (jot (#h // 2)),
                                string c))
 
-   ; -- libwebp's own -------------------------------------------------------------------
+   ; -- libwebp's own
    lossy (unx (cats [
      "524946464600000057454250565038203a0000005003009d012a180012003eb554a44d24a32221280800"
      "9416896500c10a8000455b580000feebde2ff9dad86207b1ffc06ebe2db818136ce80000"]))
@@ -64,7 +60,7 @@
            ; the canvas round the first frame stays clear
            (webp-decode anim @ d (d 2 3 = 0)))
 
-   ; -- against PIL ---------------------------------------------------------------------
+   ; -- against PIL
    pil? (: r (hark ["python3" "-c" "from PIL import features; assert features.check('webp')"])
            (two? r) && (<r = 0))
    _ (put (dir + "/mk.py") "import sys, math
@@ -97,12 +93,12 @@ open(d + '/8.rgba', 'wb').write(Image.open(d + '/8.webp').convert('RGBA').tobyte
                       (same 7) (same 8)))
         (gate-partly "webp: no python3 PIL with webp, its pictures skipped"))
 
-   ; -- the refusals --------------------------------------------------------------------
+   ; -- refusals
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    (test (webp-decode "hello" = "not a webp") (webp-size "hello" = "not a webp")
          (webp-decode (snip ll 0 40) = "cut short") (webp-decode (snip lossy 0 20) = "cut short")
          (webp-pixels 7 = 1) (webp-pixels (snip alpha 0 60) = 2)
-         ; a flipped byte answers why, or a picture, and never takes the process down
+         ; a flipped byte answers why or a picture, never a crash
          (atom? (filter (i \ !(webp-decode (flip ll i) @ d (string? d || two? d))) (jot #ll))),
     hark ["rm" "-rf" dir],
     0))

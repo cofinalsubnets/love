@@ -1,9 +1,5 @@
-; test/host/png.l -- src/apps/png.l and src/love/picture/png.c's unfilter
-; the nif and the walk on rows worked by hand: each filter, a bad filter byte, too few
-; bytes. then, where python3 with PIL and magick are here, images of every colour type, grey
-; at 1 to 16 bits, palettes of 1 to 8, colour keys, 16-bit and interlaced ones at a size
-; that splits bytes and adam7 passes, each decoded and held to magick's own rgba byte for
-; byte. last the refusals: not a png, a torn file, a flipped byte under a crc.
+; test/host/png.l -- src/apps/png.l and png.c's unfilter: hand-worked rows, then (with PIL and
+; magick) every colour type, depth and interlace held to magick's rgba; then the refusals.
 ;   cat test/00-init.l test/host/png.l | out/love
 (borrow 'posix)
 (borrow 'gz)
@@ -16,7 +12,7 @@
    (put p s) (open p "w" @ q (say q s, close q))
    (bytes l) (cask #l @ c (map (i \ pin c i (l i)) (jot #l), string c))
 
-   ; -- the nif --------------------------------------------------------------------------
+   ; -- the nif
    ; sub then paeth over the row above, then none, up and average, bpp 1 and 2
    r1 (png-unfilter (bytes [1 10 5 5  4 1 1 1]) 0 2 3 1)
    r2 (png-unfilter (bytes [9 9  0 7 8 9 250  2 1 1 1 10  3 2 2 2 2]) 2 3 4 2)
@@ -36,7 +32,7 @@
            (png-unfilter (bytes [0 1 2]) 0 1 3 1 = ())
            (png-unfilter "abc" 0 1 3 0 = ()))
 
-   ; -- images against magick ------------------------------------------------------------
+   ; -- against magick
    (has p) (open p "r" @ q (hot? q ? (close q, 1) 0))
    pil? (: r (hark ["python3" "-c" "import PIL"]) (two? r) && (<r = 0))
    ok? (pil? && has "/usr/bin/magick")
@@ -87,15 +83,14 @@ for n in (2, 4, 16, 256):
            (test (filter (n \ !(one n)) names = ())))
         (gate-partly "png: no python3 PIL or magick, images skipped"))
 
-   ; -- refusals -------------------------------------------------------------------------
+   ; -- refusals
    good (ok? ? (rd (dir + "/c8.png")) "")
    (flip s i) (cask #s @ c (pour c 0 s 0 #s, pin c i (255 - s i), string c))
    _ (test (png-decode "GIF89a" = "not a png")
            (ok? ? (png-decode (snip good 0 (#good - 20)) = "truncated") 1)
            (ok? ? (png-decode (flip good (#good - 30)) = "bad crc in IDAT") 1)
            (ok? ? (png-decode (flip good 20) = "bad crc in IHDR") 1))
-   ; a header past 2^24 pixels is refused before any of it is allocated, and so is image
-   ; data too short for its header
+   ; refused before allocating: a header past 2^24 pixels, data too short for its header
    wrbe (cite 'bytes 'wrbe) zb (cite 'bytes 'zbytes)
    (chunk ty b) (wrbe #b 4 + ty + b + wrbe (crc32 (ty + b)) 4)
    (mkpng w h z) (bytes [137 80 78 71 13 10 26 10]
