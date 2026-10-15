@@ -90,20 +90,21 @@
                         || y1 = P && two? x1 && elem <x1 '(cap cup)))
         1
        (foldl (a \ x \ a || nuse? x P) 0 >e))
-   ; string-param inference: a param is a string if used in peep/tally or passed to a sibling's
-   ; string param, to a fixpoint over the (name . smask) map; smasks only grow, so monofix converges
+   ; param-kind inference: a param has a kind if its body uses it so (use) or it is passed to a sibling's
+   ; param of that kind, to a fixpoint over the (name . mask) map; masks only grow, so monofix converges
    (dedup l) (atom? l ? () (elem <l >l) (dedup >l) (<l . dedup >l))   ; unique elements
-   (gsm nm smap) (atom? smap ? () (nm = <<smap) ><smap (gsm nm >smap))                ; nm's smask in the (name . smask) map (() absent)
-   (fnsm fp body smap)
+   (gsm nm smap) (atom? smap ? () (nm = <<smap) ><smap (gsm nm >smap))                ; nm's mask in the (name . mask) map (() absent)
+   (fnkm use fp body smap)
     (dedup ((: (walk e acc)
               (two? e ?
-                (: gm (gsm <e smap)                                                                 ; if <e is a group fn, its string-param indices
-                   a2 (atom? gm ? acc (foldl (\ ac j (: arg (>e j) (elem arg fp ? (posof arg fp 0 . ac) ac))) acc gm))   ; a string arg that is our param -> our string param
+                (: gm (gsm <e smap)                                                                 ; if <e is a group fn, its kinded param indices
+                   a2 (atom? gm ? acc (foldl (\ ac j (: arg (>e j) (elem arg fp ? (posof arg fp 0 . ac) ac))) acc gm))   ; a kinded arg that is our param -> our kinded param
                    (foldl (\ ac x (walk x ac)) a2 >e))
                 acc))
-              body (filter (k \ suse? body (fp k)) (rangeL 0 #fp))))                        ; seed acc = the direct peep/tally params
+              body (filter (k \ use body (fp k)) (rangeL 0 #fp))))                        ; seed acc = the direct uses
    (sm-size smap) (foldl (a \ e \ a + #>e) 0 smap)                                          ; total mask width, the ascending measure
-   (smfix info smap) (monofix smap (st \ map (f \ <f . fnsm (f 1) (f 2) st) info) sm-size)
+   (kfix use info) (monofix (map (f \ <f . filter (j \ use (f 2) (f 1 j)) (rangeL 0 (f 3))) info)
+                            (st \ map (f \ <f . fnkm use (f 1) (f 2) st) info) sm-size)
    ; the counted fold loop: acc = fold of body(cv) over cv while (cmp cv N), N the tagged Sp[0]
    (foldinit op)  (op = '* ? 1 0)                                 ; * folds from 1, + from 0
    (loopregs tgt) (tgt = 'x64 ? '(r8 r9 r10) '(r6 r7 r8))   ; N / counter / acc: disjoint from acc/tmp/scratch/anchor on both targets
@@ -1341,10 +1342,13 @@
                  (bcat [(cggir tgt syms ps c) [['cmp A 0] ['br 'le el]] (cggtir tgt syms ps t selfnm Lbody)
                         [['jmp en] ['label el]] (cggtir tgt syms ps f selfnm Lbody) [['label en]]]))
                (cggir tgt syms ps e))))                                          ; any other tail expr -> a value in acc
-   ; mkhir: one function. a value body (it conses) takes cggvir with no tco; an int body takes cggtir
+   ; mkhir: one function. a value body (it conses) takes cggvir with no tco; an int body takes cggtir.
+   ; a call deeper than gdepth bytes below the outer's anchor deopts, so deep recursion runs on the heap stack
+   gdepth 262144                                                                   ; well inside inle's 1 MiB kernel stack
    (mkhir tgt syms nm ps body)
     (: k #ps Lbody (mint 0)
-       (bcat [[['label nm]] (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]]
+       (bcat [[['label nm] ['lea 'r9 (govf tgt) (0 - gdepth)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)]
+               (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]]
                (hasl body ? (cggvir tgt syms ps body) (cggtir tgt syms ps body nm Lbody))
                (restargsir tgt k) (hrest tgt) ['(ret)]]))
    ; mkouterir: the entry's outer -- anchor = sp, kind-guard and push the args, call H_entry, putfix + Continue.
@@ -1382,7 +1386,29 @@
           n (jgir-arity op)
           ((elem op syms || n && #e = n) && all (x \ jgir-ops-ok? syms x) >e)))
    (jgir-ok? defs) (: syms (map (d \ <<d) defs)
-      (all (d \ jgir-ops-ok? syms >d) defs))
+      (all (d \ jgir-ops-ok? syms >d) defs && jgir-kinds-ok? defs))
+   ; the param kinds at the fixpoint: only the entry's slots are guarded, so every group call must hand a
+   ; kinded slot a value of that same kind -- a param of the caller kinded alike (or a pin/mpin on one,
+   ; which answers it), or a cell of a chain
+   (jgir-info defs) (map (d \ (: nf <d [<nf >nf >d #>nf])) defs)          ; (name params body arity)
+   (jgir-kmaps info) (map (u \ kfix u info) [suse? muse? buse? cuse? nuse?])   ; per kind: string map cask chain point
+   (jgir-kind km nm j) (: ks (filter (k \ elem j (gsm nm (km k))) (rangeL 0 5))
+      (elem 3 ks ? (filter (k \ k != 4) ks) ks))                            ; a chain-used param is never a point
+   (jgir-kinds-ok? defs)
+    (: info (jgir-info defs) km (jgir-kmaps info) syms (map cap info)
+       (cellv? a) (two? a && elem <a '(cap cup .))
+       (argp a) (? (two? a && elem <a '(pin mpin)) <>a a)          ; (pin P ..) and (mpin P ..) answer P
+       (argok? f fp g j a0) (: kg (jgir-kind km g j) a (argp a0)
+          (? (elem a fp) (kg = jgir-kind km f (posof a fp 0))
+             (atom? kg) 1
+             (all (k \ k >= 3) kg && cellv? a)))
+       (callok? f fp e) (? (atom? e) 1
+          (: g <e as >e
+             ((!(elem g syms) || all (j \ argok? f fp g j (as j)) (rangeL 0 #as))
+              && all (callok? f fp) as)))
+       (all (i \ (: f <i fp (i 1)
+                     (all (j \ elem (jgir-kind km f j) ['() '(0) '(0 2) '(1) '(3) '(4)]) (rangeL 0 #fp)
+                      && callok? f fp (i 2)))) info))
    ; jgir-lrf -- the ((mpeep..) (peep..) (mpin..) (pin..) def..) tail the deopt fallback re-evaluates.
    (jgir-lrf entry ds) (atom? ds ? [entry] (: d <ds (<d . (>d . jgir-lrf entry >ds))))
    ; jitgroupir: defs are ((nameform . body) ..), the entry is the group's value. the deopt fallback is (ev <group>), so the
@@ -1397,13 +1423,13 @@
        efn (gfind (f \ (<f = entry)) parse)  eps (efn 1)  eb (efn 2)  k #eps
        ord (efn . filter (f \ !(<f = entry)) parse)                      ; the entry first, so H_entry sits right after the outer
        valt (hasl eb)                                                                 ; a value-typed entry (its body conses) takes the value epilogue
-       info (map (f \ [<f (f 1) (f 2) #(f 1)]) parse)                   ; (name params body arity), for the interprocedural string fixpoint
-       smap0 (map (f \ <f . filter (j \ suse? (f 2) (f 1 j)) (rangeL 0 (f 3))) info)   ; per-fn direct string params (peep/tally/pin)
-       smask (gsm entry (smfix info smap0))                                            ; the entry's string params at the fixpoint -> raw pointer, kind-guarded
-       mmask (filter (j \ muse? eb (eps j)) (rangeL 0 k))                         ; entry map params (mpeep/mpin)
-       bufmask (filter (j \ buse? eb (eps j)) (rangeL 0 k))                       ; entry cask params (pin)
-       cmask (filter (j \ cuse? eb (eps j)) (rangeL 0 k))                         ; entry chain params (cap/cup/two?) -> raw, no guard
-       pmask (filter (j \ nuse? eb (eps j) && !(elem j cmask)) (rangeL 0 k))   ; entry point keys -> raw, nom|mint-guarded; a chain-used param is never a point
+       km (jgir-kmaps (jgir-info defs))                                              ; the param kinds at the interprocedural fixpoint
+       (kmask i) (filter (j \ elem i (jgir-kind km entry j)) (rangeL 0 k))
+       smask (kmask 0)                                                                ; the entry's string params -> raw pointer, kind-guarded
+       mmask (kmask 1)                                                                ; map params (mpeep/mpin)
+       bufmask (kmask 2)                                                              ; cask params (pin)
+       cmask (kmask 3)                                                                ; chain params (cap/cup/two?) -> raw, no guard
+       pmask (kmask 4)                                                                ; point keys -> raw, nom|mint-guarded
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)
        (nif (emit (assemble tgt (bcat [outer Hs]) 'bytes)) deopt k))
@@ -2160,8 +2186,9 @@
                          (gfix fns cm pm vnames cands))
    (rewrite-bindings bl gnames gdefs) (atom? >bl ? bl                                  ; the trailing body form -> keep
       (: nf <bl val <>bl  hit (two? nf && elem <nf gnames)
-         ((hit ? <nf nf)                                                            ; drop the (name p..) define-sugar -> a plain binding
-            . ((hit ? (jgir-ok? gdefs ? (jitgroupir gdefs <nf arch) val) val)   ; jgir-ok? spans the recognizer grammar, so the interp fallback is a backstop, not a live lane
+         ok (hit && jgir-ok? gdefs)                                                    ; a declined group keeps its define-sugar
+         ((ok ? <nf nf)                                                             ; drop the (name p..) define-sugar -> a plain binding
+            . ((ok ? (jitgroupir gdefs <nf arch) val)
                   . (rewrite-bindings >>bl gnames gdefs)))))
    ; memo-leak?: a candidate reading a `:`-sibling map free. the group lane touches only a fn's own params, so a free map is a silent miscompile: decline to interp
    (memo-leak? form)
@@ -2233,7 +2260,7 @@
                    !(ho-any (p \ elem (two? <p ? <<p <p) (map cap grp)) pairs) form0
                    (: gnames (map cap grp)
                       gdefs (map mapfix-def (filter (p \ elem <<p gnames) fns))   ; the group's (nameform . body) defs, with map-valued peeps rewritten to mpeep
-                      (': . rewrite-bindings >form gnames gdefs))))))))             ; each binding of the lifted form -> its native
+                      (jgir-ok? gdefs ? (': . rewrite-bindings >form gnames gdefs) form0))))))))   ; a group the lane declines stakes nothing on the lowered form             ; each binding of the lifted form -> its native
    ; --- twolow: a complex-recurrence grid becomes the real-pair float grid autonat glazes: each twin param p splits into (p_r p_i),
    ;     twin ops become real-pair arithmetic, call-site twin args split in two; a fixpoint picks the twin params. bit-exact: z*z's imag rides 2*re*im, and scaling by 2 is exact
    (twolow form)
@@ -2411,6 +2438,7 @@
    natjit
     (: arch love-arch                                                     ; the runtime target ('x64 / 'a64), read on the actual binary
        G (cite 'glaze)                                                    ; not in the module (test_glaze re-cats it alone): every name arrives by key
+       defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, kept in guts (egg.l)
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)

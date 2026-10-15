@@ -561,7 +561,13 @@ static void trap_note_on(void) {
 #endif
 }
 
+#if defined(INLE_DROID)
+int k_droid_main(int argc, char const **argv);       // the kernel as a process (src/inle/droid/arch.c)
+#endif
 int main(int argc, char const **argv) {
+#if defined(INLE_DROID)
+  if (argc < 2 || strcmp(argv[1], "bake")) return k_droid_main(argc, argv);   // bake runs hosted, as love's
+#endif
   signal(SIGPIPE, SIG_IGN);
   trap_note_on();
   struct g *g = NULL;
@@ -593,7 +599,12 @@ int main(int argc, char const **argv) {
   // the registry's row would complain about the one thing this invocation got right.
   else if (argc == 2 && !strcmp(argv[1], "wake"))
    return fprintf(stderr, "love: wake needs an image path\n"), 2;
-  if (image_load_path && !(g = image_load(image_load_path))) image_load_path = NULL;   // NULL -> normal boot
+  // a named image that will not wake is the run's error, never an egg boot in its place: a
+  // foreign build's image (its anchor), a torn one, or none at all
+  if (image_load_path && !(g = image_load(image_load_path))) {
+   int rd = !access(image_load_path, R_OK);
+   return fprintf(stderr, rd ? "love: wake: %s: not an image this binary can wake (torn, or baked by another build)\n"
+                             : "love: wake: %s: cannot open\n", image_load_path), rd ? 2 : 1; }
   char const *noimg = getenv("LOVE_NO_IMAGE");
   uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {

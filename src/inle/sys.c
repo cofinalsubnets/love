@@ -133,6 +133,7 @@ static long k_utimeat(long dfd, char const *p, struct timespec const *ts, long f
 // the rows are exercised through the ordinary nifs, which issue them -- (open)
 // openat, (stat) newfstatat and fstat, (readdir) getdents64, (dup) fcntl. the
 // argument-refusal arms below have no caller in the tree: defensive, not covered.
+static long k_term_ioctl(long pid, int kf, unsigned long q, void *arg);
 long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
  long r;
  switch (n) {
@@ -241,6 +242,8 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
   // inle is one process and love tasks are its threads, so getpid answers the machine's
   // constant. the task pid is love's question, and its nif keeps the g that holds it.
   case NR_getpid: return 1;
+  // a closure baked against the host's tty and raw asks the console here
+  case NR_ioctl: return k_term_ioctl(1, (int) a, (unsigned long) b, (void *) c);
   // the machine names itself; it keeps no host name and no release to report
   case NR_uname: {
    struct utsname *u = (struct utsname *) a;
@@ -482,9 +485,9 @@ static long k_proc_spawn(long pid, char const *w, long wn, char const *ev, long 
   if (r) { q->ppid = 1, k_proc_end(q, 0), q->pid = 0; return r; }
   return k_pid_next++; }
 
-// a terminal's control for a process: the console and a pty answer, keeping no more than
-// raw or cooked and their size; every other row is not a terminal
-static long k_proc_ioctl(struct k_proc const *p, int kf, unsigned long q, void *arg) {
+// a terminal's control, for a process or the kernel's own (pid 1): the console and a pty
+// answer, keeping no more than raw or cooked and their size; every other row is not a terminal
+static long k_term_ioctl(long pid, int kf, unsigned long q, void *arg) {
   int raw;
   uintptr_t rows, cols;
   long r = k_fd_term(kf, -1, &raw, &rows, &cols);
@@ -503,7 +506,7 @@ static long k_proc_ioctl(struct k_proc const *p, int kf, unsigned long q, void *
     *(struct winsize*) arg = (struct winsize) { (unsigned short) rows, (unsigned short) cols, 0, 0 };
     return 0;
    case TIOCSWINSZ: return 0;
-   case 21519: *(int*) arg = p->pid; return 0;      // TIOCGPGRP: the process leads its own
+   case 21519: *(int*) arg = (int) pid; return 0;   // TIOCGPGRP: the process leads its own
    case 21520: return 0;                             // TIOCSPGRP
    default: return -EINVAL; } }
 
@@ -580,7 +583,7 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
     k_pbit(&p->nb, r0, b & O_NONBLOCK), k_pbit(&p->nb, r1, b & O_NONBLOCK);
     ((int*) a)[0] = (int) r0, ((int*) a)[1] = (int) r1;
     return 0; }
-   case NR_ioctl: return kf < 0 ? -EBADF : k_proc_ioctl(p, (int) kf, (unsigned long) b, (void*) c);
+   case NR_ioctl: return kf < 0 ? -EBADF : k_term_ioctl(p->pid, (int) kf, (unsigned long) b, (void*) c);
    case NR_ppoll: {
     struct pollfd *q = (struct pollfd*) a;
     long k = 0;

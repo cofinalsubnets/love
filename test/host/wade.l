@@ -3,6 +3,9 @@
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/wade.l | out/love
 
 (borrow 'wade)    ; the artifact's module, warm from the tree
+(borrow 'view)     ; the keys' actions
+(borrow 'walk)     ; the rail's key
+(: wade-kb (view-bind view-binds walk-binds))   ; a key's code -> its action
 
 (: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
    (has? h n) (find h n 0)
@@ -60,16 +63,16 @@
 
 ; --- a step: on down the river whichever way the player faces, never back, and a ring, but not two at once ---
 (: st (wade-new 80 48)
-   _ (wade-step st 107)                         ; k: on
+   _ (wade-step st (wade-kb 107))                         ; k: on
    z1 (st 'pz) n1 #(st 'rings)
-   _ (wade-step st 107)
+   _ (wade-step st (wade-kb 107))
    n2 #(st 'rings)
-   _ (pin st 't 10, wade-step st -9, wade-step st 106)         ; down, j: nothing, six ticks on
+   _ (pin st 't 10, wade-step st (wade-kb -9), wade-step st (wade-kb 106))         ; down, j: nothing, six ticks on
    n3 #(st 'rings) z3 (st 'pz)
-   _ (each '(20 30 40 50 60 70) (t \ (pin st 't t, wade-step st 107)))
+   _ (each '(20 30 40 50 60 70) (t \ (pin st 't t, wade-step st (wade-kb 107))))
    n4 #(st 'rings)
    (pins st 'th 1.5707963267948966 'px 0.0,
-    each '(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20) (i \ wade-step st 107),
+    each '(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20) (i \ wade-step st (wade-kb 107)),
     test (0.0 < z1) (n1 = 1) (n2 = 1)
          (abs (z3 - 2 * z1) < 0.001) (n3 = 1) (n4 = 5)   ; two steps on, and the back keys took none
          (st 'px = 0.0) (z3 < st 'pz)                    ; facing the bank, the wading is still down the river
@@ -79,7 +82,7 @@
          ; lamp, which is dead ahead, and pitched down to its reflection, the horizon
          ; higher on the screen
          (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5) 'th 0.5 'hz 20) _ (wade-move s 1.0) z (s 'pz)
-            _ (wade-step s 107, wade-step s 32, wade-move s 1.0, wade-step s 108, wade-step s 117)
+            _ (wade-step s (wade-kb 107), wade-step s (wade-kb 32), wade-move s 1.0, wade-step s (wade-kb 108), wade-step s (wade-kb 117))
             a (wade-aim s)
             _ (wade-settle s 0.0) t0 (s 'th) h0 (s 'hz)
             _ (wade-settle s 0.5) t5 (s 'th) h5 (s 'hz)
@@ -100,14 +103,14 @@
 
 ; --- the helm: turns stop at sixty degrees, tilts clamp, space walks, the rest is nothing ---
 (: st (wade-new 80 48)
-   _ (wade-step st 108) th1 (st 'th)
-   _ (wade-step st -1) th2 (st 'th)
-   _ (each ^100 (i \ wade-step st 104)) th3 (st 'th)
-   _ (each ^10 (i \ wade-step st 117)) hz1 (st 'hz)
-   _ (each ^20 (i \ wade-step st 110)) hz2 (st 'hz)
-   _ (wade-step st 32) w1 (st 'walk)
-   _ (wade-step st 32) w2 (st 'walk)
-   (wade-step st 120, wade-step st 'tap, wade-step st (),
+   _ (wade-step st (wade-kb 108)) th1 (st 'th)
+   _ (wade-step st (wade-kb -1)) th2 (st 'th)
+   _ (each ^100 (i \ wade-step st (wade-kb 104))) th3 (st 'th)
+   _ (each ^10 (i \ wade-step st (wade-kb 117))) hz1 (st 'hz)
+   _ (each ^20 (i \ wade-step st (wade-kb 110))) hz2 (st 'hz)
+   _ (wade-step st (wade-kb 32)) w1 (st 'walk)
+   _ (wade-step st (wade-kb 32)) w2 (st 'walk)
+   (wade-step st (wade-kb 120), wade-step st 'tap, wade-step st (),
     test (0.0 < th1) (abs th2 < 0.001)
          (-1.05 < th3 < 0.0)                         ; a hundred left turns stop at sixty degrees
          (24 < hz1 <= 36) (12 <= hz2 < 24) (w1 = 1) (w2 = 0)   ; looking up, the horizon drops down the screen, within bounds

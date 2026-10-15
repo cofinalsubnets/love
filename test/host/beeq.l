@@ -537,5 +537,55 @@
       (bq-in (e 8) "love bee --lock --out ") (bq-in (e 8) (w 'repo + "/out")) (bq-in (e 8) " -- make test"))
    0)
 
+;; --- the shadow of a git queue: each landing laid into an sb hub, recorded, banked and
+; written through the mirror to a branch whose tree must be the landing's; a tree that differs
+; (out/x, which sb never records) stops it, and a stopped shadow records nothing ------------
+(: w (bq-world "shadow") lq bq-q hub (w 'dir + "/hub")
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   (sb d as) (bq-out (hark ([bq-love "sb" "-C" d] + as)))
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   (row nm k br on)
+    (calls nm [[k "queue_row" (: j {"state" "waiting" "branch" br} (k = 1 ? (pin j "leader" "queen") j))]
+               [(k + 1) "queue_row" {"state" "green" "gated_on" on "gated_head" (sha br)}]])
+   _ (row "ant" 1 "ant" (sha "test"))
+   s0 (calls "queen" [[3 "queue_lead" {"shadow" "rel/hub sh"}] [4 "queue_lead" {"shadow" (hub + " sh web/")}]])
+   _ (bq-git w ["merge" "-q" "--no-ff" (sha "ant") "-m" "Merge queue row 1 (ant)"])
+   b (calls "ant" [[5 "queue_landed" {}]])
+   t1 (sha "test") lg (bq-get (hub + ".shadow.log")) tr [(sha "sh^{tree}") (sha "test^{tree}")]
+   (check c) (bq-sh w ("GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "
+                       + bq-sq bq-love + " " + bq-sq bq-app + " --shadow-check " + bq-sq hub + " ck " + c))
+   k1 (check t1) k0 (check (sha "test^"))
+   _ (bq-git w ["checkout" "-q" "-b" "bobx" "test"]) _ (hark ["mkdir" "-p" (w 'repo + "/out")])
+   _ (bq-put (w 'repo + "/out/x") "x\n") _ (bq-git w ["add" "-f" "out/x"]) _ (bq-git w ["commit" "-q" "-m" "out/x"])
+   _ (bq-git w ["checkout" "-q" "test"])
+   _ (row "bob" 6 "bobx" t1)
+   _ (bq-git w ["merge" "-q" "--no-ff" (sha "bobx") "-m" "Merge queue row 2 (bob)"])
+   d (calls "bob" [[8 "queue_landed" {}]])
+   st (bq-get (hub + ".shadow.stop"))
+   _ (bq-git w ["checkout" "-q" "-b" "c3" "test"]) _ (bq-put (w 'repo + "/c") "c\n")
+   _ (bq-git w ["add" "c"]) _ (bq-git w ["commit" "-q" "-m" "c"]) _ (bq-git w ["checkout" "-q" "test"])
+   _ (row "carol" 9 "c3" (sha "test"))
+   _ (bq-git w ["merge" "-q" "--no-ff" (sha "c3") "-m" "Merge queue row 3 (carol)"])
+   e (calls "carol" [[11 "queue_landed" {}]])
+   _ (test
+      (bq-in (s0 3) "shadow is HUB BRANCH") (bq-in (s0 4) "the change is in")
+      (bq-in (b 5) "landed: row 1 left")
+      (bq-in (b 5) ("the shadow: gwen-" + snip t1 0 9 + " recorded in " + hub)) (bq-in (b 5) "the tree matches")
+      (<tr = tr 1) (bq-in (bq-out (bq-git w ["log" "-1" "--format=%B" "sh"])) ("shadow of " + t1))
+      (sb hub ["psid" ("gwen-" + t1)] = sb hub ["psid"]) (bq-get (hub + "/a") = "a\n")
+      (bq-in lg (t1 + " ")) (bq-in lg " match ")
+      (<k1 = 0) (bq-in (k1 1) (t1 + "'s")) (<k0 = 1) (bq-in (k0 1) "differs")
+      (bq-in (d 8) "landed: row 2 left") (bq-in (d 8) "the shadow: STOPPED") (bq-in (d 8) "out/x")
+      (bq-in (d 8) "queen") (bq-in st "out/x")
+      (bq-in (e 11) "landed: row 3 left") (bq-in (e 11) "still stopped") !(bq-in (e 11) "queen") (bq-get (hub + "/c") = ""))
+   0)
+
 (hark ["rm" "-rf" bq-root])
 (test_fin (), puts "beeq: ok", putc 10, 0)

@@ -2078,20 +2078,26 @@
         (ilp32? g ? (mkv 'double 'r0 '((li r0 0) (li r1 2146959360) (movqxr f0 r0)))
            (mkv 'double 'r0 '((li r0 9221120237041090560) (movqxr f0 r0))))
        (bi = "__builtin_expect") (cgexpr g env <args ())
-       ; level 0 only. the return address sits one push slot above the frame base, so both answers
-       ; want the link kept: fpin (a base slot is what unframe rewrites). wasm has no return address in linear memory
+       ; the frame base holds the caller's, the return address one push slot above it, so both
+       ; answers want the link kept: fpin (a base slot is what unframe rewrites). a level above 0
+       ; walks that chain, as gcc's does: sound where the callers keep their frames (the kernel's
+       ; always do). wasm has no return address, nor a chain, in linear memory
        (elem bi '("__builtin_return_address" "__builtin_frame_address"))
         (: lvl (two? args && two? <args && <<args = 'num ? <><args 'no)
            fb (fbase g)
            ; the saved lr above the base: a64's frame record, riscv's padded push, x64's 8
            w (? (ilp32? g) 4 (a64? g) 8 (rv64? g) 16 8)
-           (? (lvl != 0) (nolane g (bi + " above level 0" + ontgt g))
-              (wasm? g && bi = "__builtin_return_address")
-               (nolane g (bi + " -- no return address in linear memory" + ontgt g))
+           up (map (_ \ ['ld 'r0 'r0 0]) ^(charm? lvl ? lvl 0))
+           (? (!(charm? lvl) || lvl < 0) (nolane g (bi + " of a level that is no constant" + ontgt g))
+              (wasm? g && (lvl != 0 || bi = "__builtin_return_address"))
+               (nolane g (bi + (lvl != 0 ? " above level 0" " -- no return address") + " in linear memory" + ontgt g))
+              ; rv64's base sits above its locals, so the s0 a frame saves is not the caller's base
+              (rv64? g && lvl != 0) (nolane g (bi + " above level 0 (the saved s0 is not the caller's base)" + ontgt g))
               (pin g 'fesc 1,
                pin g 'fpin 1,
-               (bi = "__builtin_frame_address" ? (mkv '(ptr void) 'r0 [['lean 'r0 fb 0]])
-                  (mkv '(ptr void) 'r0 [['ld 'r0 fb w]])))))
+               (? (bi = "__builtin_frame_address") (mkv '(ptr void) 'r0 (['lean 'r0 fb 0] . up))
+                  (lvl = 0) (mkv '(ptr void) 'r0 [['ld 'r0 fb w]])
+                  (mkv '(ptr void) 'r0 (['lean 'r0 fb 0] . up + [['ld 'r0 'r0 w]]))))))
        ; a prefetch is a hint: the address evaluates for its effects, the locality/rw operands are ignored
        (bi = "__builtin_prefetch") (cgexpr g env <args ())
        (bi = "__builtin___clear_cache")
@@ -9174,8 +9180,11 @@
        ; 'stmt none, 'ret the caller's own return (the body's returns stay returns, tail calls tails),
        ; ('push inv then else) an if's test, 'expr a position evaluated conditionally or in a loop:
        ; the value is the body's one expression in place, nothing hoisted -- ('exprh ws) the same
-       ; where an arg that cannot trap may still hoist to a decl, ws the statement it may not be written in
-       (site nm as d mode)
+       ; where an arg that cannot trap may still hoist to a decl, ws the statement it may not be written in.
+       ; always_inline whose returns do not fold away splices again on the jump lane
+       (site nm as d mode) (site1 nm as d mode () @ r
+                              (two? r || !(peep (g 'alw) nm ()) ? r (site1 nm as d mode 1)))
+       (site1 nm as d mode jf)
         (: c (? (elem nm d || dn nm) ()
                 ; a body that compiles only spliced has no call to fall back on: it reaches deeper
                 ((peep (g 'ineed) nm () ? 8 3) < #d) ()
@@ -9186,7 +9195,7 @@
            val? (xo || xi || elem mode '(val br))
            pm (two? mode && !xh && !xi)
            (two? c ?
-              (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5) jl (c 6)
+              (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5) jl (c 6 || jf)
                  one (body @ (('ret e)) (two? e) ())          ; the whole body one `return e`
                  nr9 (: (go x) (? !(two? x) 0 (<x = 'ret) 1 (go <x + go >x)) (go body))
                  ; ..or statements then one: at a test the statements hoist, the return is the test
@@ -9483,6 +9492,10 @@
                 ('do b c) (hxe c d () @ c2
                              (!(armc? c2 && !(hascont? b)) ? [['do (hb b d) c2]]
                                 [['do ['blk ([(hb b d)] + hs ['if ['un 'not c2] ['brk] ()] d)] ['num 1]]]))
+                ; a step that is a call is the body's last statement where no continue skips to it:
+                ; there a callee of statements splices
+                ('for i c ('call ('var nm) _) b && !(hascont? b) && two? (cand nm))
+                 (hs ['for i c () ['blk [b ['expr <>>>s]]]] d)
                 ('for i c st b) (hxe c d () @ c2
                                    (!(armc? c2) ? [['for (hxe i d ()) c2 (hxe st d ()) (hb b d)]]
                                       [['for (hxe i d ()) ['num 1] (hxe st d ()) ['blk (hs ['if ['un 'not c2] ['brk] ()] d + [(hb b d)])]]]))
