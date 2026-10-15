@@ -1128,7 +1128,6 @@
         'ucmd ["CMD" 0 (p \ f \ f 1) 0]
         'args ["COMMAND" 0 args 0]})
    ; -- ps: bare takes ours on this terminal, procps' rule (same euid, same tty). times are UTC
-   (upuid p) (stat ("/proc/" + show p) @ st (5 < #st ? (st 4) -1))
    (ps-main as)
     (: bsd (filter (w \ 0 < #w && !(w 0 = 45) && all (c \ elem c "aux") (chars w)) as)
        fo (uflags "ps" (filter (w \ !(elem w bsd)) as) '(111 112 117) "Aaefopux")
