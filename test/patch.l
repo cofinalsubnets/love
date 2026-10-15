@@ -10,29 +10,87 @@
 ;   L2  inverse round-trips (in context)       patches are order-free
 ;                                          L3b a frontier is stable under an
 ;                                              adjacent swap of independent patches
-; helpers stay local and the asserts run inside the body: the corpus is one scope.
+; the corpus is one scope: shared helpers carry pt-, the rest stay local to their block.
+
+(:
+ ; the shared kit: sequences, trees, paths, patch shapes, the clash cell, patterns
+ (pt-htake s n) (n < 1 ? () (<s . pt-htake >s (n - 1)))
+ (pt-hdrop s n) (n < 1 ? s (pt-hdrop >s (n - 1)))
+ (pt-hcat a b) (atom? a ? b (<a . pt-hcat >a b))
+ (pt-seg s i n) (pt-htake (pt-hdrop s i) n)
+ (pt-splice s i c news) (pt-hcat (pt-htake s i) (pt-hcat news (pt-hdrop s (i + c))))
+ (pt-nth s j) <(pt-hdrop s j)
+ (pt-heq a b) (? (atom? a && atom? b) (a = b)
+               (atom? a || atom? b) 0
+               (pt-heq <a <b && pt-heq >a >b))
+ (pt-tnav t path) (atom? path ? t (pt-tnav (pt-nth t <path) >path))
+ (pt-tlay t path s2)
+    (atom? path ? s2
+       (pt-splice t <path 1
+               [(pt-tlay (pt-nth t <path) >path s2)]))
+ (pt-setidx path d v) (d = 0 ? (v . >path)
+                       (<path . pt-setidx >path (d - 1) v))
+ (pt-rel P Q d) (? (atom? P && atom? Q) '(same)
+                 (atom? P) ['inq <Q d]
+                 (atom? Q) ['inp <P d]
+                 (<P = <Q) (pt-rel >P >Q (d + 1))
+                 '(apart))
+ (pt-pathok t path) (atom? path ? 1
+                     (<path @ j
+                      (j < #t
+                          && (pt-nth t j @ e
+                              (!(atom? e) && pt-pathok e >path)))))
+ (pt-tp path i o n) ['tp path i o n]
+ (pt-pp p) <>p
+ (pt-pi p) <>>p
+ (pt-po p) <>>>p
+ (pt-pn p) <>>>>p
+ (pt-hunk i o n) ['hunk i o n]
+ (pt-hi p) <>p
+ (pt-ho p) <>>p
+ (pt-hn p) <>>>p
+ (pt-pk p) <>p
+ (pt-pa p) <>>p
+ (pt-pb p) <>>>p
+ (pt-tget t k) (atom? t ? 0 (<t @ c (k = <c ? >c (pt-tget >t k))))
+ (pt-tset t k v) ((k . v) . t)
+ (pt-clash a rs) ['clash a rs]
+ (pt-clash? v) (atom? v ? 0 (<v = 'clash))
+ (pt-cbase c) <>c
+ (pt-rivals c) <>>c
+ (pt-cins x rs) (atom? rs ? [x]
+                 (<rs @ h
+                  (? (x = h) rs
+                     (x < h) (x . rs)
+                     (h . pt-cins x >rs))))
+ (pt-hstr h s i n) (i = n ? h (pt-hstr (((h * 33) + s i) % 4294967296) s (i + 1) n))
+ (pt-hval v) (show v @ s (pt-hstr 5381 s 0 #s))
+ (pt-asq k s) (atom? s ? () (<s @ c (k = <c ? [>c] (pt-asq k >s))))
+ (pt-mv? x) (atom? x ? 0 (<x = 'mv))
+ (pt-mvname x) <>x
+ (pt-inst p s) (? (pt-mv? p) (pt-asq (pt-mvname p) s @ r (atom? r ? p <r))
+                (atom? p) p
+                (pt-inst <p s . pt-inst >p s))
+ (pt-mtch p g s)
+    (? (s = 'no) 'no
+       (pt-mv? p) (pt-asq (pt-mvname p) s @ r
+                (atom? r ? ((pt-mvname p . g) . s)
+                   (pt-heq <r g ? s 'no)))
+       (atom? p && atom? g) (p = g ? s 'no)
+       (atom? p || atom? g) 'no
+       (pt-mtch >p >g (pt-mtch <p <g s))))
 
 (:
  ; --- the model ---
  (chg k a b) ('chg . k . a . b . 0)       ; patch: change slot k, old->new
- (pk p) <>p                               ; the slot it touches
- (pa p) <>>p                              ; its context (old value)
- (pb p) <>>>p                             ; the new value
- (tget t k) (atom? t ? 0 (<t @ c (k = <c ? >c (tget >t k))))
- (tset t k v) ((k . v) . t)                      ; newest shadows; a missing slot reads 0
- (valid t p) (tget t (pk p) = pa p)              ; a patch belongs iff its context matches
- (apon t p) (tset t (pk p) (pb p))               ; lay the patch's new value
+ (valid t p) (pt-tget t (pt-pk p) = pt-pa p)              ; a patch belongs iff its context matches
+ (apon t p) (pt-tset t (pt-pk p) (pt-pb p))               ; lay the patch's new value
  (applall t ps) (foldl apon t ps)                ; fold a whole frontier onto a tree
- (invert p) (chg (pk p) (pb p) (pa p))           ; the groupoid inverse (unpull)
- (commute p q) (pk p = pk q ? 0 (q . p . 0))     ; partial: 0 = a dependency
+ (invert p) (chg (pt-pk p) (pt-pb p) (pt-pa p))           ; the groupoid inverse (unpull)
+ (commute p q) (pt-pk p = pt-pk q ? 0 (q . p . 0))     ; partial: 0 = a dependency
 
- ; --- spec-local equality: deep-structural (patches are lists), and tree agreement
- ;     at a witness key set (trees are maps -> compare pointwise, as the .v does) ---
- (leq a b) (? (atom? a && atom? b) (a = b)
-              (atom? a || atom? b) 0
-              (leq <a <b && leq >a >b))
- (teq a b ks) (atom? ks ? 1 ((tget a <ks = tget b <ks) && teq a b >ks))
- (cat2 a b) (atom? a ? b (<a . cat2 >a b))
+ ; --- tree agreement at a witness key set (trees are maps: pointwise, as the .v does) ---
+ (teq a b ks) (atom? ks ? 1 ((pt-tget a <ks = pt-tget b <ks) && teq a b >ks))
 
  ; --- witnesses ---
  px (chg 'x 0 1) py (chg 'y 0 2)                          ; independent -- different slots
@@ -41,36 +99,36 @@
  ; (L1) commute is involutive: swap two independent patches, swap the result back,
  ;      and you are home. same-slot patches don'T commute -- 0, a dependency.
  ((test
-   (leq (commute px py) (py . px . 0))                          ; p;q -> q;p
-   (commute px py @ c (leq (commute <c <>c)
+   (pt-heq (commute px py) (py . px . 0))                          ; p;q -> q;p
+   (commute px py @ c (pt-heq (commute <c <>c)
                            (px . py . 0)))                      ; ...and back to p;q
    !(commute p1 p2)                                                  ; same slot -> no commute
-   (leq p1 p1) !(leq px py)),                                        ; leq itself is honest
+   (pt-heq p1 p1) !(pt-heq px py)),                                        ; leq itself is honest
 
   ; (L2) inverse round-trips in context: where the patch is valid, apply then unpull
   ;      (apply the inverse) restores every slot; invert is its own inverse.
-  (: t0 (tset 0 'x 5) p (chg 'x 5 9)
+  (: t0 (pt-tset 0 'x 5) p (chg 'x 5 9)
      (test
       (valid t0 p)                                                   ; p belongs on t0
       (apon (apon t0 p) (invert p) @ t1 (teq t1 t0 '(x y)))          ; apply;unpull == id
-      (leq p (invert (invert p))))),                                 ; invert involutive
+      (pt-heq p (invert (invert p))))),                                 ; invert involutive
 
   ; (L3a) independent patches are order-free (the semantic heart -- what makes merge
   ;       and cherry-pick sound): both pull orders land the same tree.
   (: a (apon (apon 0 px) py) b (apon (apon 0 py) px)
-     (test (teq a b '(x y)) (1 = tget a 'x) (2 = tget a 'y))),
+     (test (teq a b '(x y)) (1 = pt-tget a 'x) (2 = pt-tget a 'y))),
 
   ; (L3b) a frontier is stable under swapping two adjacent independent patches -- the
   ;       reproducibility tie: meaning is order-free, so the (unordered) patch set is
   ;       a sound version identity. and the distribution face: two disjoint components
   ;       install to the same frontier whichever is pulled first.
   (: pre (chg 'a 0 7 . 0) post (chg 'b 0 8 . 0)
-     f1 (applall 0 (cat2 pre (px . py . post)))                ; pre ++ [px py] ++ post
-     f2 (applall 0 (cat2 pre (py . px . post)))                ; ...px,py swapped
+     f1 (applall 0 (pt-hcat pre (px . py . post)))                ; pre ++ [px py] ++ post
+     f2 (applall 0 (pt-hcat pre (py . px . post)))                ; ...px,py swapped
      ((test (teq f1 f2 '(a b x y))),
       (: holo (chg 'holo 0 1 . 0) glaze (chg 'glaze 0 1 . 0)
-         (test (teq (applall 0 (cat2 holo glaze))
-                      (applall 0 (cat2 glaze holo)) '(holo glaze)))))),
+         (test (teq (applall 0 (pt-hcat holo glaze))
+                      (applall 0 (pt-hcat glaze holo)) '(holo glaze)))))),
   0))
 
 ; --- the positional rung: hunks over a sequence, where commute genuinely re-aims ---
@@ -86,99 +144,87 @@
 
 (:
  ; --- the model: sequences and hunks ---
- (hunk i o n) ['hunk i o n]                  ; at i, the segment o becomes n
- (hi p) <>p                                  ; where it aims
- (ho p) <>>p                                 ; its context (the old segment)
- (hn p) <>>>p                                ; the new segment
- (htake s n) (n < 1 ? () (<s . htake >s (n - 1)))
- (hdrop s n) (n < 1 ? s (hdrop >s (n - 1)))
- (hcat a b) (atom? a ? b (<a . hcat >a b))
- (seg s i n) (htake (hdrop s i) n)                        ; the n elements from index i
- (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (i + c))))
- (heq a b) (? (atom? a && atom? b) (a = b)
-              (atom? a || atom? b) 0
-              (heq <a <b && heq >a >b))
- (valid s p) ((hi p + #(ho p)) <= #s                ; in range -- the round-trip bound
-                 && heq (seg s (hi p) #(ho p)) (ho p))
- (apon s p) (splice s (hi p) #(ho p) (hn p))
+ (valid s p) ((pt-hi p + #(pt-ho p)) <= #s                ; in range -- the round-trip bound
+                 && pt-heq (pt-seg s (pt-hi p) #(pt-ho p)) (pt-ho p))
+ (apon s p) (pt-splice s (pt-hi p) #(pt-ho p) (pt-hn p))
  (applall s ps) (foldl apon s ps)
- (invert p) (hunk (hi p) (hn p) (ho p))
+ (invert p) (pt-hunk (pt-hi p) (pt-hn p) (pt-ho p))
 
  ; --- commute: the re-aim. p;q -> q';p'. q strictly past p's news shifts back by
  ;     p's delta (j + |o1| - |n1|); q strictly before shifts p forward by q's
  ;     delta. overlap or touch answers () -- a dependency. ---
  (commute p q)
-   (: i (hi p) o1 #(ho p) n1 #(hn p)
-      j (hi q) o2 #(ho q) n2 #(hn q)
-      (? (j > (i + n1)) [(hunk ((j + o1) - n1) (ho q) (hn q)) p]
-         ((j + o2) < i) [q (hunk ((i + n2) - o2) (ho p) (hn p))]
+   (: i (pt-hi p) o1 #(pt-ho p) n1 #(pt-hn p)
+      j (pt-hi q) o2 #(pt-ho q) n2 #(pt-hn q)
+      (? (j > (i + n1)) [(pt-hunk ((j + o1) - n1) (pt-ho q) (pt-hn q)) p]
+         ((j + o2) < i) [q (pt-hunk ((i + n2) - o2) (pt-ho p) (pt-hn p))]
          ()))
 
  ; --- witnesses: a file of five forms; p grows the file (delta +1) ---
  s0 '(a b c d e)
- p (hunk 1 '(b) '(x y))                                   ; at 1, b -> x y
- q (hunk 4 '(d) '(z))                                     ; post-p coords: d sits at 4
+ p (pt-hunk 1 '(b) '(x y))                                   ; at 1, b -> x y
+ q (pt-hunk 4 '(d) '(z))                                     ; post-p coords: d sits at 4
 
  ; (L1) commute is involutive -- and the swap is a genuine re-aim: q comes back
  ;      at 3 (its pre-p seat), p rides unmoved, and swapping again is home.
  ((: c (commute p q) cq <c cp <>c
      (test
-      (4 = hi q) (3 = hi cq)                          ; the shift is real
-      (heq cp p)
+      (4 = pt-hi q) (3 = pt-hi cq)                          ; the shift is real
+      (pt-heq cp p)
       (commute cq cp @ c2
-       (heq <c2 p && heq <>c2 q)))),
+       (pt-heq <c2 p && pt-heq <>c2 q)))),
 
   ; dependencies: overlap, and the seam -- touching refuses too (strict)
   (test
-   !(commute p (hunk 2 '(y) '(w)))                        ; lands inside p's news
-   !(commute p (hunk 3 '(c) '(w)))                        ; starts exactly at p's end
-   !(commute (hunk 1 () '(u)) (hunk 1 () '(v)))),         ; two inserts, one seam
+   !(commute p (pt-hunk 2 '(y) '(w)))                        ; lands inside p's news
+   !(commute p (pt-hunk 3 '(c) '(w)))                        ; starts exactly at p's end
+   !(commute (pt-hunk 1 () '(u)) (pt-hunk 1 () '(v)))),         ; two inserts, one seam
 
   ; (L2) inverse round-trips in context -- and valid's bound has teeth: the
   ;      out-of-range insert is exactly the hunk whose round-trip would lie.
   (test
    (valid s0 p)
-   (heq (apon (apon s0 p) (invert p)) s0)
-   (heq p (invert (invert p)))
-   !(valid '(a) (hunk 5 () '(u)))),                       ; past the end: no home
+   (pt-heq (apon (apon s0 p) (invert p)) s0)
+   (pt-heq p (invert (invert p)))
+   !(valid '(a) (pt-hunk 5 () '(u)))),                       ; past the end: no home
 
   ; (L3a) commute is sound: p;q and q';p' land the same sequence -- while q
   ;       un-shifted does not even belong on s0 (the point of the re-aim).
   (: c (commute p q) cq <c cp <>c
      (test
-      (heq (apon (apon s0 p) q) (apon (apon s0 cq) cp))
-      (heq (apon (apon s0 p) q) '(a x y c z e))
+      (pt-heq (apon (apon s0 p) q) (apon (apon s0 cq) cp))
+      (pt-heq (apon (apon s0 p) q) '(a x y c z e))
       !(valid s0 q))),                                    ; naive swap: context miss
 
   ; a shrinking p (delta -1) shifts q the other way -- same law, other sign
-  (: pn (hunk 1 '(b c) '(u)) qn (hunk 3 '(e) '(w))        ; post-pn coords: e at 3
+  (: pn (pt-hunk 1 '(b c) '(u)) qn (pt-hunk 3 '(e) '(w))        ; post-pn coords: e at 3
      c (commute pn qn) cq <c cp <>c
      (test
-      (4 = hi cq)                                       ; back up to its s0 seat
-      (heq (apon (apon s0 pn) qn) (apon (apon s0 cq) cp))
-      (heq (apon (apon s0 pn) qn) '(a u d w)))),
+      (4 = pt-hi cq)                                       ; back up to its s0 seat
+      (pt-heq (apon (apon s0 pn) qn) (apon (apon s0 cq) cp))
+      (pt-heq (apon (apon s0 pn) qn) '(a u d w)))),
 
   ; the before branch: q lands ahead of p, so p is the one re-aimed (by q's delta)
-  (: pb (hunk 3 '(d) '(w)) qb (hunk 0 '(a b) '(u))        ; qb shrinks the prefix
+  (: pb (pt-hunk 3 '(d) '(w)) qb (pt-hunk 0 '(a b) '(u))        ; qb shrinks the prefix
      c (commute pb qb) cq <c cp <>c
      (test
-      (heq cq qb) (2 = hi cp)                           ; q unmoved; p slides down
-      (heq (apon (apon s0 pb) qb) (apon (apon s0 cq) cp))
-      (heq (apon (apon s0 pb) qb) '(u c w e)))),
+      (pt-heq cq qb) (2 = pt-hi cp)                           ; q unmoved; p slides down
+      (pt-heq (apon (apon s0 pb) qb) (apon (apon s0 cq) cp))
+      (pt-heq (apon (apon s0 pb) qb) '(u c w e)))),
 
   ; the elements are forms, not lines -- the love-native grain: a hunk swaps a whole
   ; definition and nothing above cares what an element is.
   (: fs '((f a) (g b) (main ()))
-     fp (hunk 1 '((g b)) '((g c) (h d)))
+     fp (pt-hunk 1 '((g b)) '((g c) (h d)))
      (test (valid fs fp)
-             (heq (apon fs fp) '((f a) (g c) (h d) (main ()))))),
+             (pt-heq (apon fs fp) '((f a) (g c) (h d) (main ()))))),
 
   ; (L3b) a frontier is stable under the adjacent independent swap -- the
   ;       reproducibility tie again, now with real shifting inside the list.
   (: c (commute p q)
-     f1 (applall s0 [(hunk 0 '(a) '(aa)) p q])
-     f2 (applall s0 (hunk 0 '(a) '(aa) . c))
-     (test (heq f1 f2) (heq f1 '(aa x y c z e)))),
+     f1 (applall s0 [(pt-hunk 0 '(a) '(aa)) p q])
+     f2 (applall s0 (pt-hunk 0 '(a) '(aa) . c))
+     (test (pt-heq f1 f2) (pt-heq f1 '(aa x y c z e)))),
   0))
 
 ; --- the conflictor rung: a real merge records, and the state enlarges ---
@@ -196,41 +242,25 @@
 (:
  ; --- the model: rung 1's trees and patches, plus the clash cell ---
  (chg k a b) ['chg k a b]
- (pk p) <>p (pa p) <>>p (pb p) <>>>p
- (tget t k) (atom? t ? 0 (<t @ c (k = <c ? >c (tget >t k))))
- (tset t k v) ((k . v) . t)
- (invert p) (chg (pk p) (pb p) (pa p))
- (heq a b) (? (atom? a && atom? b) (a = b)
-              (atom? a || atom? b) 0
-              (heq <a <b && heq >a >b))
- (teq a b ks) (atom? ks ? 1 (heq (tget a <ks) (tget b <ks)
+ (invert p) (chg (pt-pk p) (pt-pb p) (pt-pa p))
+ (teq a b ks) (atom? ks ? 1 (pt-heq (pt-tget a <ks) (pt-tget b <ks)
                                 && teq a b >ks))
- (clash a rs) ['clash a rs]                       ; base a, rivals rs (sorted)
- (clash? v) (atom? v ? 0 (<v = 'clash))
- (cbase c) <>c
- (rivals c) <>>c
- (cins x rs) (atom? rs ? [x]        ; canonical insert, dedup --
-                (<rs @ h            ; the set that makes merge
-                 (? (x = h) rs      ; order-free
-                    (x < h) (x . rs)
-                    (h . cins x >rs))))
 
  ; --- pull: total merge-application. five lanes; the last is the discipline
  ;     backstop (a cell-shaped mismatch no-ops rather than inventing a story). ---
  (pull t p)
-   (: k (pk p) a (pa p) b (pb p) v (tget t k)
-      (? (heq v a) (tset t k b)                            ; the plain lane: context matches
-         (heq v b) t                                       ; the same edit again: settled
-         (clash? v && (heq (cbase v) a && !(clash? b)))
-           (tset t k (clash a (cins b (rivals v))))        ; join the rivals
-         (!(clash? v) && !(clash? a) && !(clash? b))
-           (tset t k (clash a (cins b (cins v ()))))       ; a rival landed first
+   (: k (pt-pk p) a (pt-pa p) b (pt-pb p) v (pt-tget t k)
+      (? (pt-heq v a) (pt-tset t k b)                            ; the plain lane: context matches
+         (pt-heq v b) t                                       ; the same edit again: settled
+         (pt-clash? v && (pt-heq (pt-cbase v) a && !(pt-clash? b)))
+           (pt-tset t k (pt-clash a (pt-cins b (pt-rivals v))))        ; join the rivals
+         (!(pt-clash? v) && !(pt-clash? a) && !(pt-clash? b))
+           (pt-tset t k (pt-clash a (pt-cins b (pt-cins v ()))))       ; a rival landed first
          t))                                               ; discipline breach: no-op
  (applall t ps) (foldl pull t ps)
- (cat2 a b) (atom? a ? b (<a . cat2 >a b))
 
  ; --- witnesses: three rivals for x over base 1, and an independent bystander ---
- t0 (tset 0 'x 1)
+ t0 (pt-tset 0 'x 1)
  p (chg 'x 1 2) q (chg 'x 1 3) r (chg 'x 1 4)
  w (chg 'y 0 9)
 
@@ -243,13 +273,13 @@
   ; (M2) the plain lane is rung 1: a matching context applies as ever, and the
   ;      same edit arriving twice settles (idempotent).
   (test
-   (2 = tget (pull t0 p) 'x)
+   (2 = pt-tget (pull t0 p) 'x)
    (teq (pull (pull t0 p) p) (pull t0 p) '(x y))),
 
   ; (M3) a conflict is honest: the slot carries the base and both rivals,
   ;      canonically ordered -- neither side silently won.
-  (: m (pull (pull t0 q) p) c (tget m 'x)
-     (test (clash? c) (1 = cbase c) (heq (rivals c) '(2 3)))),
+  (: m (pull (pull t0 q) p) c (pt-tget m 'x)
+     (test (pt-clash? c) (1 = pt-cbase c) (pt-heq (pt-rivals c) '(2 3)))),
 
   ; (M4) three rivals, any order: one cell, one set -- the associativity that
   ;      broke classic darcs, answered by a set instead of patch algebra.
@@ -257,23 +287,23 @@
      m2 (pull (pull (pull t0 r) q) p)
      m3 (pull (pull (pull t0 q) r) p)
      (test (teq m1 m2 '(x)) (teq m2 m3 '(x))
-             (heq (rivals (tget m1 'x)) '(2 3 4)))),
+             (pt-heq (pt-rivals (pt-tget m1 'x)) '(2 3 4)))),
 
   ; (M5) resolution is just a patch: old value = the cell, new = the choice --
   ;      the plain lane applies it, invert unpulls it and the clash returns.
-  (: m (pull (pull t0 p) q) cell (tget m 'x)
+  (: m (pull (pull t0 p) q) cell (pt-tget m 'x)
      res (chg 'x cell 5)
      m2 (pull m res)
      (test
-      (5 = tget m2 'x) !(clash? (tget m2 'x))
+      (5 = pt-tget m2 'x) !(pt-clash? (pt-tget m2 'x))
       (teq (pull m2 (invert res)) m '(x y)))),
 
   ; and the distribution face: two components pinning one name differently
   ;      install to the same recorded clash whichever is pulled first.
   (: holo [(chg 'font 0 1)] glaze [(chg 'font 0 2)]
-     fa (applall 0 (cat2 holo glaze))
-     fb (applall 0 (cat2 glaze holo))
-     (test (teq fa fb '(font)) (clash? (tget fa 'font)))),
+     fa (applall 0 (pt-hcat holo glaze))
+     fb (applall 0 (pt-hcat glaze holo))
+     (test (teq fa fb '(font)) (pt-clash? (pt-tget fa 'font)))),
   0))
 
 ; --- the identity rung: a version is its patch set, hashed canonically ---
@@ -289,13 +319,8 @@
 ; collision-freedom is engineering (djb2 here); the laws live on the canonical list.
 
 (:
- (hstr h s i n) (i = n ? h (hstr (((h * 33) + s i) % 4294967296) s (i + 1) n))
- (hval v) (show v @ s (hstr 5381 s 0 #s))           ; djb2 over the printed form
- (cins x rs) (atom? rs ? [x]
-                (<rs @ h (? (x = h) rs (x < h) (x . rs)
-                                 (h . cins x >rs))))
- (fid ps) (foldl (acc \ p \ cins (hval p) acc) () ps)      ; the canonical hash set
- (ident ps) (hval (fid ps))                                 ; one scalar to name it
+ (fid ps) (foldl (acc \ p \ pt-cins (pt-hval p) acc) () ps)      ; the canonical hash set
+ (ident ps) (pt-hval (fid ps))                                 ; one scalar to name it
  (chg k a b) ['chg k a b]
 
  ; --- witnesses ---
@@ -337,140 +362,111 @@
 
 (:
  ; --- the sequence kit (rung 2, local) ---
- (htake s n) (n < 1 ? () (<s . htake >s (n - 1)))
- (hdrop s n) (n < 1 ? s (hdrop >s (n - 1)))
- (hcat a b) (atom? a ? b (<a . hcat >a b))
- (seg s i n) (htake (hdrop s i) n)
- (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (i + c))))
- (nth s j) <(hdrop s j)
- (heq a b) (? (atom? a && atom? b) (a = b)
-              (atom? a || atom? b) 0
-              (heq <a <b && heq >a >b))
 
  ; --- the tree kit: navigate to a path's sequence, lay a new one back ---
- (tnav t path) (atom? path ? t (tnav (nth t <path) >path))
- (tlay t path s2)
-   (atom? path ? s2
-      (splice t <path 1
-              [(tlay (nth t <path) >path s2)]))
 
  ; --- patches: (tp path i olds news) -- a hunk with a postcode ---
- (tp path i o n) ['tp path i o n]
- (pp p) <>p            (pi p) <>>p
- (po p) <>>>p (pn p) <>>>>p
- (apon t p) (tlay t (pp p) (splice (tnav t (pp p)) (pi p) #(po p) (pn p)))
+ (apon t p) (pt-tlay t (pt-pp p) (pt-splice (pt-tnav t (pt-pp p)) (pt-pi p) #(pt-po p) (pt-pn p)))
  (applall t ps) (foldl apon t ps)
- (invert p) (tp (pp p) (pi p) (pn p) (po p))
- (pathok t path) (atom? path ? 1
-                    (<path @ j
-                     (j < #t
-                         && (nth t j @ e
-                             (!(atom? e) && pathok e >path)))))
- (valid t p) (pathok t (pp p)
-                 && (tnav t (pp p) @ s
-                     ((pi p + #(po p)) <= #s
-                         && heq (seg s (pi p) #(po p)) (po p))))
+ (invert p) (pt-tp (pt-pp p) (pt-pi p) (pt-pn p) (pt-po p))
+ (valid t p) (pt-pathok t (pt-pp p)
+                 && (pt-tnav t (pt-pp p) @ s
+                     ((pt-pi p + #(pt-po p)) <= #s
+                         && pt-heq (pt-seg s (pt-pi p) #(pt-po p)) (pt-po p))))
 
  ; --- path surgery + the path relation ---
- (setidx path d v) (d = 0 ? (v . >path)
-                      (<path . setidx >path (d - 1) v))
- (rel P Q d) (? (atom? P && atom? Q) '(same)
-                (atom? P) ['inq <Q d]
-                (atom? Q) ['inp <P d]
-                (<P = <Q) (rel >P >Q (d + 1))
-                '(apart))
 
  ; --- commute: four lanes, two kinds of re-aim (index at 'same, PATH at the
  ;     crossings), () a dependency ---
  (commute p q)
-   (: P (pp p) ip (pi p) o1 #(po p) n1 #(pn p) dp (n1 - o1)
-      Q (pp q) iq (pi q) o2 #(po q) n2 #(pn q) dq (n2 - o2)
-      r (rel P Q 0) tag <r
+   (: P (pt-pp p) ip (pt-pi p) o1 #(pt-po p) n1 #(pt-pn p) dp (n1 - o1)
+      Q (pt-pp q) iq (pt-pi q) o2 #(pt-po q) n2 #(pt-pn q) dq (n2 - o2)
+      r (pt-rel P Q 0) tag <r
       (? (tag = 'same)
-           (? (iq > (ip + n1)) [(tp Q ((iq + o1) - n1) (po q) (pn q)) p]
-              ((iq + o2) < ip) [q (tp P ((ip + n2) - o2) (po p) (pn p))]
+           (? (iq > (ip + n1)) [(pt-tp Q ((iq + o1) - n1) (pt-po q) (pt-pn q)) p]
+              ((iq + o2) < ip) [q (pt-tp P ((ip + n2) - o2) (pt-po p) (pt-pn p))]
               ())
          (tag = 'inq)
            (: j <>r d <>>r
               (? (j < ip) [q p]
                  (j >= (ip + n1))
-                   [(tp (setidx Q d (j - dp)) iq (po q) (pn q)) p]
+                   [(pt-tp (pt-setidx Q d (j - dp)) iq (pt-po q) (pt-pn q)) p]
                  ()))
          (tag = 'inp)
            (: j <>r d <>>r
               (? (j < iq) [q p]
                  (j >= (iq + o2))
-                   [q (tp (setidx P d (j + dq)) ip (po p) (pn p))]
+                   [q (pt-tp (pt-setidx P d (j + dq)) ip (pt-po p) (pt-pn p))]
                  ()))
          [q p]))
 
  ; --- witnesses: a little program -- three top forms, one nested ---
  t0 '((: a 1) (: b 2) (main (f x)))
- pr (tp () 0 () '((borrow m)))                                ; root insert at 0 (dp +1)
- qd (tp '(3) 1 '((f x)) '((g y)))                          ; deep edit, aimed post-pr
+ pr (pt-tp () 0 () '((borrow m)))                                ; root insert at 0 (dp +1)
+ qd (pt-tp '(3) 1 '((f x)) '((g y)))                          ; deep edit, aimed post-pr
 
  ; (L1) commute is involutive, and the re-aim is a PATH re-aim: qd's postcode
  ;      slides 3 -> 2 (its pre-pr seat), and swapping back is home.
  ((: c (commute pr qd) cq <c cp <>c
      (test
-      (heq (pp qd) '(3)) (heq (pp cq) '(2))                ; the path moved
-      (heq cp pr)
+      (pt-heq (pt-pp qd) '(3)) (pt-heq (pt-pp cq) '(2))                ; the path moved
+      (pt-heq cp pr)
       (commute cq cp @ c2
-       (heq <c2 pr && heq <>c2 qd)))),
+       (pt-heq <c2 pr && pt-heq <>c2 qd)))),
 
   ; dependencies: a deep edit inside freshly-written news, and the swallow
   ;      (q replaces the subtree p edited -- shut HERE; form six opens it)
   (test
-   !(commute pr (tp '(0) 0 '(borrow) '(want)))                ; inside pr's news
-   !(commute (tp '(1) 2 '(1) '(7)) (tp () 1 '((: a 7)) ()))),     ; swallowed
+   !(commute pr (pt-tp '(0) 0 '(borrow) '(want)))                ; inside pr's news
+   !(commute (pt-tp '(1) 2 '(1) '(7)) (pt-tp () 1 '((: a 7)) ()))),     ; swallowed
 
   ; (L2) inverse round-trips at depth
-  (tp '(2) 1 '((f x)) '((g y) (h z)) @ pd
+  (pt-tp '(2) 1 '((f x)) '((g y) (h z)) @ pd
    (test
     (valid t0 pd)
-    (heq (apon (apon t0 pd) (invert pd)) t0)
-    (valid t0 (tp '(2 1) 0 () '(u)))                       ; (f x) is a sequence: descend
-    !(valid t0 (tp '(9) 0 () '(u)))                        ; no such child
-    !(valid t0 (tp '(2 0) 0 () '(u))))),                   ; main is a leaf: no descent
+    (pt-heq (apon (apon t0 pd) (invert pd)) t0)
+    (valid t0 (pt-tp '(2 1) 0 () '(u)))                       ; (f x) is a sequence: descend
+    !(valid t0 (pt-tp '(9) 0 () '(u)))                        ; no such child
+    !(valid t0 (pt-tp '(2 0) 0 () '(u))))),                   ; main is a leaf: no descent
 
   ; (L3a) commute is sound across levels: root insert then deep edit == re-aimed
   ;       deep edit then root insert -- and the un-shifted qd has no home on t0.
   (: c (commute pr qd) cq <c cp <>c
      (test
-      (heq (apon (apon t0 pr) qd) (apon (apon t0 cq) cp))
-      (heq (apon (apon t0 pr) qd)
+      (pt-heq (apon (apon t0 pr) qd) (apon (apon t0 cq) cp))
+      (pt-heq (apon (apon t0 pr) qd)
            '((borrow m) (: a 1) (: b 2) (main (g y))))
       !(valid t0 qd))),
 
   ; the inp lane: a deep edit rides a root shrink the other way (path 2 -> 1)
-  (: pd (tp '(2) 1 '((f x)) '((g y))) qr (tp () 0 '((: a 1)) ())
+  (: pd (pt-tp '(2) 1 '((f x)) '((g y))) qr (pt-tp () 0 '((: a 1)) ())
      c (commute pd qr) cq <c cp <>c
      (test
-      (heq cq qr) (heq (pp cp) '(1))                       ; p slides down
-      (heq (apon (apon t0 pd) qr) (apon (apon t0 cq) cp))
-      (heq (apon (apon t0 pd) qr) '((: b 2) (main (g y)))))),
+      (pt-heq cq qr) (pt-heq (pt-pp cp) '(1))                       ; p slides down
+      (pt-heq (apon (apon t0 pd) qr) (apon (apon t0 cq) cp))
+      (pt-heq (apon (apon t0 pd) qr) '((: b 2) (main (g y)))))),
 
   ; apart: sibling subtrees ride untouched, both orders agree
-  (: pa (tp '(0) 2 '(1) '(9)) qa (tp '(2) 1 '((f x)) '((g y)))
+  (: pa (pt-tp '(0) 2 '(1) '(9)) qa (pt-tp '(2) 1 '((f x)) '((g y)))
      c (commute pa qa)
      (test
-      (heq <c qa) (heq <>c pa)
-      (heq (apon (apon t0 pa) qa) (apon (apon t0 qa) pa)))),
+      (pt-heq <c qa) (pt-heq <>c pa)
+      (pt-heq (apon (apon t0 pa) qa) (apon (apon t0 qa) pa)))),
 
   ; same sequence at depth: rung 2's shift verbatim, riding a postcode
   (: ts '((a b c d e))
-     p1 (tp '(0) 1 '(b) '(x y)) q1 (tp '(0) 4 '(d) '(z))
+     p1 (pt-tp '(0) 1 '(b) '(x y)) q1 (pt-tp '(0) 4 '(d) '(z))
      c (commute p1 q1) cq <c
      (test
-      (3 = pi cq) (heq (pp cq) '(0))                     ; index shifts, path rides
-      (heq (apon (apon ts p1) q1) (apon (apon ts cq) <>c))
-      (heq (apon (apon ts p1) q1) '((a x y c z e))))),
+      (3 = pt-pi cq) (pt-heq (pt-pp cq) '(0))                     ; index shifts, path rides
+      (pt-heq (apon (apon ts p1) q1) (apon (apon ts cq) <>c))
+      (pt-heq (apon (apon ts p1) q1) '((a x y c z e))))),
 
   ; (L3b) a frontier is stable under the adjacent independent swap, mixed grains
   (: c (commute pr qd)
      f1 (applall t0 [pr qd])
      f2 (applall t0 c)
-     (test (heq f1 f2))),
+     (test (pt-heq f1 f2))),
   0))
 
 ; --- the content-rewrite rung: the swallow commutes -- context rewrites through ---
@@ -493,53 +489,24 @@
 
 (:
  ; --- the tree kit (rung 5, local) ---
- (htake s n) (n < 1 ? () (<s . htake >s (n - 1)))
- (hdrop s n) (n < 1 ? s (hdrop >s (n - 1)))
- (hcat a b) (atom? a ? b (<a . hcat >a b))
- (seg s i n) (htake (hdrop s i) n)
- (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (i + c))))
- (nth s j) <(hdrop s j)
- (heq a b) (? (atom? a && atom? b) (a = b)
-              (atom? a || atom? b) 0
-              (heq <a <b && heq >a >b))
- (tnav t path) (atom? path ? t (tnav (nth t <path) >path))
- (tlay t path s2)
-   (atom? path ? s2
-      (splice t <path 1
-              [(tlay (nth t <path) >path s2)]))
- (tp path i o n) ['tp path i o n]
- (pp p) <>p            (pi p) <>>p
- (po p) <>>>p (pn p) <>>>>p
- (apon t p) (tlay t (pp p) (splice (tnav t (pp p)) (pi p) #(po p) (pn p)))
+ (apon t p) (pt-tlay t (pt-pp p) (pt-splice (pt-tnav t (pt-pp p)) (pt-pi p) #(pt-po p) (pt-pn p)))
  (applall t ps) (foldl apon t ps)
- (invert p) (tp (pp p) (pi p) (pn p) (po p))
- (pathok t path) (atom? path ? 1
-                    (<path @ j
-                     (j < #t
-                         && (nth t j @ e
-                             (!(atom? e) && pathok e >path)))))
- (valid t p) (pathok t (pp p)
-                 && (tnav t (pp p) @ s
-                     ((pi p + #(po p)) <= #s
-                         && heq (seg s (pi p) #(po p)) (po p))))
- (setidx path d v) (d = 0 ? (v . >path)
-                      (<path . setidx >path (d - 1) v))
- (rel P Q d) (? (atom? P && atom? Q) '(same)
-                (atom? P) ['inq <Q d]
-                (atom? Q) ['inp <P d]
-                (<P = <Q) (rel >P >Q (d + 1))
-                '(apart))
+ (invert p) (pt-tp (pt-pp p) (pt-pi p) (pt-pn p) (pt-po p))
+ (valid t p) (pt-pathok t (pt-pp p)
+                 && (pt-tnav t (pt-pp p) @ s
+                     ((pt-pi p + #(pt-po p)) <= #s
+                         && pt-heq (pt-seg s (pt-pi p) #(pt-po p)) (pt-po p))))
 
  ; --- the matching kit: a subtree's occurrences, counted and found at every
  ;     depth (occs and ffind descend the same way -- their agreement is what
  ;     makes the ==1 guard name ffind's answer) ---
  (occs f x) (atom? f ? 0
                 (<f @ h
-                 ((? (heq h x) 1 (atom? h) 0 (occs h x))
+                 ((? (pt-heq h x) 1 (atom? h) 0 (occs h x))
                   + occs >f x)))
  (ffind f x) (atom? f ? ()
                 (<f @ h
-                 (heq h x ? '(0)
+                 (pt-heq h x ? '(0)
                     ((atom? h ? () (ffind h x)) @ r
                      (!(atom? r) ? (0 . r)
                         (ffind >f x @ d
@@ -549,8 +516,8 @@
  ; swallowed element survives into the far side -- (k), or () when nothing
  ; survives (erasure: the honest dependency)
  (sunit el R n2 k)
-   (? !(pathok el (htake R k)) ()
-      (0 < occs n2 (tnav el (htake R k))) [k]
+   (? !(pt-pathok el (pt-htake R k)) ()
+      (0 < occs n2 (pt-tnav el (pt-htake R k))) [k]
       (#R <= k) ()
       (sunit el R n2 (k + 1)))
 
@@ -561,41 +528,41 @@
  ;     the survivor's seat in the news. the guards make the match canonical;
  ;     any miss answers () -- declining is always sound. ---
  (swal dp sp j d)
-   (: S (pp sp) is (pi sp) O (po sp) N (pn sp)
-      R (hdrop (pp dp) (d + 1)) off (j - is) el (nth O off)
+   (: S (pt-pp sp) is (pt-pi sp) O (pt-po sp) N (pt-pn sp)
+      R (pt-hdrop (pt-pp dp) (d + 1)) off (j - is) el (pt-nth O off)
       (atom? el ? ()
          (sunit el R N 0 @ u
           (atom? u ? ()
-             (: k <u Rk (htake R k) Rrem (hdrop R k)
-                ep (tnav el Rk)
-                bak (tp Rrem (pi dp) (pn dp) (po dp))
+             (: k <u Rk (pt-htake R k) Rrem (pt-hdrop R k)
+                ep (pt-tnav el Rk)
+                bak (pt-tp Rrem (pt-pi dp) (pt-pn dp) (pt-po dp))
                 (!(valid ep bak) ? ()
                    (apon ep bak @ e
                     (!(1 = occs O ep
                               && (0 = occs O e
                                   && ((1 = occs N ep) && (0 = occs N e)))) ? ()
                        (ffind N ep @ fd
-                        (. (tp S is (tlay O (off . Rk) e) (tlay N fd e))
-                              (. (tp (hcat S (hcat (setidx fd 0 (is + <fd)) Rrem))
-                                        (pi dp) (po dp) (pn dp))
+                        (. (pt-tp S is (pt-tlay O (off . Rk) e) (pt-tlay N fd e))
+                              (. (pt-tp (pt-hcat S (pt-hcat (pt-setidx fd 0 (is + <fd)) Rrem))
+                                        (pt-pi dp) (pt-po dp) (pt-pn dp))
                                     ())))))))))))
 
  ; --- commute: rung 5's four lanes, the two swallow refusals now doors --
  ;     inp calls swal straight (p IS deep-first), inq flips through the
  ;     groupoid inverse and back ---
  (commute p q)
-   (: P (pp p) ip (pi p) o1 #(po p) n1 #(pn p)
-      Q (pp q) iq (pi q) o2 #(po q) n2 #(pn q)
-      r (rel P Q 0) tag <r
+   (: P (pt-pp p) ip (pt-pi p) o1 #(pt-po p) n1 #(pt-pn p)
+      Q (pt-pp q) iq (pt-pi q) o2 #(pt-po q) n2 #(pt-pn q)
+      r (pt-rel P Q 0) tag <r
       (? (tag = 'same)
-           (? (iq > (ip + n1)) [(tp Q ((iq + o1) - n1) (po q) (pn q)) p]
-              ((iq + o2) < ip) [q (tp P ((ip + n2) - o2) (po p) (pn p))]
+           (? (iq > (ip + n1)) [(pt-tp Q ((iq + o1) - n1) (pt-po q) (pt-pn q)) p]
+              ((iq + o2) < ip) [q (pt-tp P ((ip + n2) - o2) (pt-po p) (pt-pn p))]
               ())
          (tag = 'inq)
            (: j <>r d <>>r
               (? (j < ip) [q p]
                  (j >= (ip + n1))
-                   [(tp (setidx Q d ((j + o1) - n1)) iq (po q) (pn q)) p]
+                   [(pt-tp (pt-setidx Q d ((j + o1) - n1)) iq (pt-po q) (pt-pn q)) p]
                  (swal (invert q) (invert p) j d @ c
                   (atom? c ? ()
                      [(invert <>c) (invert <c)]))))
@@ -603,85 +570,85 @@
            (: j <>r d <>>r
               (? (j < iq) [q p]
                  (j >= (iq + o2))
-                   [q (tp (setidx P d ((j + n2) - o2)) ip (po p) (pn p))]
+                   [q (pt-tp (pt-setidx P d ((j + n2) - o2)) ip (pt-po p) (pt-pn p))]
                  (swal p q j d)))
          [q p]))
 
  ; --- witnesses: the same little program; pd edits deep, qm moves the edited
  ;     form (its context aimed post-pd, as a second branch would record it) ---
  t0 '((: a 1) (: b 2) (main (f x)))
- pd (tp '(1) 2 '(2) '(9))                                  ; deep: (: b 2) -> (: b 9)
- qm (tp () 1 '((: b 9) (main (f x))) '((main (f x)) (: b 9)))
+ pd (pt-tp '(1) 2 '(2) '(9))                                  ; deep: (: b 2) -> (: b 9)
+ qm (pt-tp () 1 '((: b 9) (main (f x))) '((main (f x)) (: b 9)))
 
  ; (L1) the swallow commutes: qm's context rewrites through (both sides read
  ;      (: b 2) now -- the pre state), the deep edit re-aims to the moved
  ;      seat (path 1 -> 2), and swapping back is home.
  ((: c (commute pd qm) cq <c cp <>c
      (test
-      (heq (pp cp) '(2))                                   ; the survivor's new seat
-      (heq (po cq) '((: b 2) (main (f x))))                ; undo laid into olds
-      (heq (pn cq) '((main (f x)) (: b 2)))                ; ...and into news
+      (pt-heq (pt-pp cp) '(2))                                   ; the survivor's new seat
+      (pt-heq (pt-po cq) '((: b 2) (main (f x))))                ; undo laid into olds
+      (pt-heq (pt-pn cq) '((main (f x)) (: b 2)))                ; ...and into news
       (commute cq cp @ c2
-       (heq <c2 pd && heq <>c2 qm)))),
+       (pt-heq <c2 pd && pt-heq <>c2 qm)))),
 
   ; (L3a) sound across the rewrite: both orders land the same tree -- while the
   ;       un-rewritten qm has no home on t0 (its olds still carry the edit).
   (: c (commute pd qm) cq <c cp <>c
      (test
-      (heq (apon (apon t0 pd) qm) (apon (apon t0 cq) cp))
-      (heq (apon (apon t0 pd) qm) '((: a 1) (main (f x)) (: b 9)))
+      (pt-heq (apon (apon t0 pd) qm) (apon (apon t0 cq) cp))
+      (pt-heq (apon (apon t0 pd) qm) '((: a 1) (main (f x)) (: b 9)))
       !(valid t0 qm))),
 
   ; the wrap: the survivor sits at depth in the news (the unit walk descends),
   ;      so the re-aimed path grows a component (1 -> 1 1) -- and back is home,
   ;      the unwrap direction shedding it again.
-  (: qw (tp () 1 '((: b 9)) '((guard (: b 9))))
+  (: qw (pt-tp () 1 '((: b 9)) '((guard (: b 9))))
      c (commute pd qw) cq <c cp <>c
      (test
-      (heq (pp cp) '(1 1))
-      (heq (pn cq) '((guard (: b 2))))
-      (heq (apon (apon t0 pd) qw) (apon (apon t0 cq) cp))
+      (pt-heq (pt-pp cp) '(1 1))
+      (pt-heq (pt-pn cq) '((guard (: b 2))))
+      (pt-heq (apon (apon t0 pd) qw) (apon (apon t0 cq) cp))
       (commute cq cp @ c2
-       (heq <c2 pd && heq <>c2 qw)))),
+       (pt-heq <c2 pd && pt-heq <>c2 qw)))),
 
   ; the mirror lane (the groupoid ride): the move lands first, the deep edit
   ;      aims into its news -- commute re-aims the edit to the pre-move seat
   ;      (path 2 -> 1) and advances the move's both sides to the edited content.
-  (: pm (tp () 1 '((: b 2) (main (f x))) '((main (f x)) (: b 2)))
-     qd (tp '(2) 2 '(2) '(9))
+  (: pm (pt-tp () 1 '((: b 2) (main (f x))) '((main (f x)) (: b 2)))
+     qd (pt-tp '(2) 2 '(2) '(9))
      c (commute pm qd) cq <c cp <>c
      (test
-      (heq (pp cq) '(1))
-      (heq (po cp) '((: b 9) (main (f x))))
-      (heq (apon (apon t0 pm) qd) (apon (apon t0 cq) cp))
-      (heq (apon (apon t0 pm) qd) '((: a 1) (main (f x)) (: b 9)))
+      (pt-heq (pt-pp cq) '(1))
+      (pt-heq (pt-po cp) '((: b 9) (main (f x))))
+      (pt-heq (apon (apon t0 pm) qd) (apon (apon t0 cq) cp))
+      (pt-heq (apon (apon t0 pm) qd) '((: a 1) (main (f x)) (: b 9)))
       (commute cq cp @ c2
-       (heq <c2 pm && heq <>c2 qd)))),
+       (pt-heq <c2 pm && pt-heq <>c2 qd)))),
 
   ; the refusals keep the door honest: erasure is a real dependency, a
   ;      duplicate has no single home, a news already carrying the pre state
   ;      cannot tell undo from content, and content the shallow patch wrote
   ;      fresh was never anywhere else to move from.
   (test
-   !(commute pd (tp () 1 '((: b 9)) ()))                           ; deleted: erased edit
-   !(commute pd (tp () 1 '((: b 9)) '((: b 9) (: b 9))))           ; duplicated
-   !(commute pd (tp () 1 '((: b 9) (main (f x))) '((: b 2) (: b 9))))      ; pre state in news
-   !(commute (tp () 1 '((: b 2)) '((let x))) (tp '(1) 1 '(x) '(y)))),      ; fresh content
+   !(commute pd (pt-tp () 1 '((: b 9)) ()))                           ; deleted: erased edit
+   !(commute pd (pt-tp () 1 '((: b 9)) '((: b 9) (: b 9))))           ; duplicated
+   !(commute pd (pt-tp () 1 '((: b 9) (main (f x))) '((: b 2) (: b 9))))      ; pre state in news
+   !(commute (pt-tp () 1 '((: b 2)) '((let x))) (pt-tp '(1) 1 '(x) '(y)))),      ; fresh content
 
   ; (L2) the rewritten pair are honest patches: each round-trips in context.
   (: c (commute pd qm) cq <c cp <>c
      t1 (apon t0 cq)
      (test
       (valid t0 cq) (valid t1 cp)
-      (heq (apon t1 (invert cq)) t0)
-      (heq (apon (apon t1 cp) (invert cp)) t1))),
+      (pt-heq (apon t1 (invert cq)) t0)
+      (pt-heq (apon (apon t1 cp) (invert cp)) t1))),
 
   ; (L3b) a frontier is stable under the swallow swap, a bystander riding along.
-  (: w (tp '(0) 2 '(1) '(7))
+  (: w (pt-tp '(0) 2 '(1) '(7))
      c (commute pd qm)
      f1 (applall t0 [w pd qm])
      f2 (applall t0 (w . c))
-     (test (heq f1 f2) (heq f1 '((: a 7) (main (f x)) (: b 9))))),
+     (test (pt-heq f1 f2) (pt-heq f1 '((: a 7) (main (f x)) (: b 9))))),
   0))
 
 ; --- the clash-segments rung: the conflictor cell lifted to sequences ---
@@ -718,55 +685,39 @@
 
 (:
  ; --- the sequence kit (rung 2, local) ---
- (htake s n) (n < 1 ? () (<s . htake >s (n - 1)))
- (hdrop s n) (n < 1 ? s (hdrop >s (n - 1)))
- (hcat a b) (atom? a ? b (<a . hcat >a b))
- (seg s i n) (htake (hdrop s i) n)
- (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (i + c))))
- (heq a b) (? (atom? a && atom? b) (a = b)
-              (atom? a || atom? b) 0
-              (heq <a <b && heq >a >b))
- (hunk i o n) ['hunk i o n]
- (hi p) <>p (ho p) <>>p (hn p) <>>>p
- (valid s p) ((hi p + #(ho p)) <= #s
-                 && heq (seg s (hi p) #(ho p)) (ho p))
- (apon s p) (splice s (hi p) #(ho p) (hn p))
- (invert p) (hunk (hi p) (hn p) (ho p))
+ (valid s p) ((pt-hi p + #(pt-ho p)) <= #s
+                 && pt-heq (pt-seg s (pt-hi p) #(pt-ho p)) (pt-ho p))
+ (apon s p) (pt-splice s (pt-hi p) #(pt-ho p) (pt-hn p))
+ (invert p) (pt-hunk (pt-hi p) (pt-hn p) (pt-ho p))
  (commute p q)
-   (: i (hi p) o1 #(ho p) n1 #(hn p)
-      j (hi q) o2 #(ho q) n2 #(hn q)
-      (? (j > (i + n1)) [(hunk ((j + o1) - n1) (ho q) (hn q)) p]
-         ((j + o2) < i) [q (hunk ((i + n2) - o2) (ho p) (hn p))]
+   (: i (pt-hi p) o1 #(pt-ho p) n1 #(pt-hn p)
+      j (pt-hi q) o2 #(pt-ho q) n2 #(pt-hn q)
+      (? (j > (i + n1)) [(pt-hunk ((j + o1) - n1) (pt-ho q) (pt-hn q)) p]
+         ((j + o2) < i) [q (pt-hunk ((i + n2) - o2) (pt-ho p) (pt-hn p))]
          ()))
 
  ; --- the cell: hull base + rivals, canonically ordered by content hash ---
- (hstr h s i n) (i = n ? h (hstr (((h * 33) + s i) % 4294967296) s (i + 1) n))
- (hval v) (show v @ s (hstr 5381 s 0 #s))
- (clash b rs) ['clash b rs]
- (clash? v) (atom? v ? 0 (<v = 'clash))
- (cbase c) <>c
- (rivals c) <>>c
  (sins x rs) (atom? rs ? [x]        ; canonical insert --
                 (<rs @ h            ; dedup by content,
-                 (? (heq x h) rs    ; order by its hash
-                    (hval x < hval h) (x . rs)
+                 (? (pt-heq x h) rs    ; order by its hash
+                    (pt-hval x < pt-hval h) (x . rs)
                     (h . sins x >rs))))
- (has rs x) (atom? rs ? 0 (heq <rs x || has >rs x))
+ (has rs x) (atom? rs ? 0 (pt-heq <rs x || has >rs x))
 
  ; --- merge2: the pushout off the shared base. equal edits settle; commute
  ;     re-aims an independent q past p; a refusal makes the bubble ---
  (merge2 s0 p q)
-   (heq p q ? (apon s0 p)
+   (pt-heq p q ? (apon s0 p)
       (commute (invert p) q @ c
        (!(atom? c) ? (apon (apon s0 p) <c)
-          (: lo (hi q < hi p ? (hi q) (hi p))           ; the union hull
-             e1 (hi p + #(ho p)) e2 (hi q + #(ho q))
+          (: lo (pt-hi q < pt-hi p ? (pt-hi q) (pt-hi p))           ; the union hull
+             e1 (pt-hi p + #(pt-ho p)) e2 (pt-hi q + #(pt-ho q))
              hu (e1 < e2 ? e2 e1)
-             base (seg s0 lo (hu - lo))
-             rp (splice base (hi p - lo) #(ho p) (hn p))
-             rq (splice base (hi q - lo) #(ho q) (hn q))
-             (splice s0 lo (hu - lo)
-                     [(clash base (sins rp (sins rq ())))])))))
+             base (pt-seg s0 lo (hu - lo))
+             rp (pt-splice base (pt-hi p - lo) #(pt-ho p) (pt-hn p))
+             rq (pt-splice base (pt-hi q - lo) #(pt-ho q) (pt-hn q))
+             (pt-splice s0 lo (hu - lo)
+                     [(pt-clash base (sins rp (sins rq ())))])))))
 
  ; --- pull: plain / settled / the widening join / breach -- what state can
  ;     answer. the join lane is general: any rival whose base span overlaps
@@ -781,141 +732,141 @@
  ;     rebuilt hull; any mismatch no-ops. ---
  (findc s q k)          ; first cell whose
    (#s <= k ? ()        ; hull meets q's span
-      (<(hdrop s k) @ e
-       (? (clash? e
-              && (hi q <= (k + #(cbase e))
-                  && k <= (hi q + #(ho q)))) [k]
+      (<(pt-hdrop s k) @ e
+       (? (pt-clash? e
+              && (pt-hi q <= (k + #(pt-cbase e))
+                  && k <= (pt-hi q + #(pt-ho q)))) [k]
           (findc s q (k + 1)))))
  (pull s q)
-   (: i (hi q) o (ho q) n (hn q)
+   (: i (pt-hi q) o (pt-ho q) n (pt-hn q)
       (? (valid s q) (apon s q)                  ; plain: rung 2
-         (0 < #n && heq (seg s i #n) n) s        ; settled (non-empty)
+         (0 < #n && pt-heq (pt-seg s i #n) n) s        ; settled (non-empty)
          (findc s q 0 @ f
           (atom? f ? s                                      ; no cell: breach, no-op
-             (: k <f e <(hdrop s k) b (cbase e)
+             (: k <f e <(pt-hdrop s k) b (pt-cbase e)
                 lo (i < k ? i k)                            ; the union hull
                 eo (k + #b) eq (i + #o)
                 hu (eo < eq ? eq eo)
-                pl (seg s lo (k - lo))                      ; the pads, off the state
-                pr (seg s (k + 1) (hu - eo))
-                hull (hcat pl (hcat b pr))
-                (!(heq (seg hull (i - lo) #o) o) ? s        ; dishonest: no-op
-                   (: rs (foldl (a \ x \ sins (hcat pl (hcat x pr)) a) () (rivals e))
-                      rv (splice hull (i - lo) #o n)
-                      (splice s (k - #pl) (#pl + (1 + #pr))
-                              [(clash hull (sins rv rs))]))))))))
+                pl (pt-seg s lo (k - lo))                      ; the pads, off the state
+                pr (pt-seg s (k + 1) (hu - eo))
+                hull (pt-hcat pl (pt-hcat b pr))
+                (!(pt-heq (pt-seg hull (i - lo) #o) o) ? s        ; dishonest: no-op
+                   (: rs (foldl (a \ x \ sins (pt-hcat pl (pt-hcat x pr)) a) () (pt-rivals e))
+                      rv (pt-splice hull (i - lo) #o n)
+                      (pt-splice s (k - #pl) (#pl + (1 + #pr))
+                              [(pt-clash hull (sins rv rs))]))))))))
 
  ; --- witnesses: one disputed span, rivals of three different sizes (the
  ;     segment teeth), and an independent bystander ---
  s0 '(a b c d e)
- p (hunk 2 '(c) '(p1 p2)) q (hunk 2 '(c) '(q1)) r (hunk 2 '(c) '(r1 r2 r3))
- w (hunk 4 '(e) '(e9))
+ p (pt-hunk 2 '(c) '(p1 p2)) q (pt-hunk 2 '(c) '(q1)) r (pt-hunk 2 '(c) '(r1 r2 r3))
+ w (pt-hunk 4 '(e) '(e9))
 
  ; (M1) merge is total and symmetric: rivals or bystanders, either order --
  ;      the independent lane riding commute, the rival lane riding the set.
  ((test
-   (heq (merge2 s0 p q) (merge2 s0 q p))
-   (heq (merge2 s0 p w) (merge2 s0 w p))
-   (heq (merge2 s0 p w) '(a b p1 p2 d e9))),
+   (pt-heq (merge2 s0 p q) (merge2 s0 q p))
+   (pt-heq (merge2 s0 p w) (merge2 s0 w p))
+   (pt-heq (merge2 s0 p w) '(a b p1 p2 d e9))),
 
   ; (M2) the same edit settles: merged with itself is a plain apply, pulled
   ;      again it is already in, and a rival re-arriving is absorbed.
   (test
-   (heq (merge2 s0 p p) (apon s0 p))
-   (heq (pull (apon s0 p) p) (apon s0 p))
-   (merge2 s0 p q @ m (heq (pull m p) m))),
+   (pt-heq (merge2 s0 p p) (apon s0 p))
+   (pt-heq (pull (apon s0 p) p) (apon s0 p))
+   (merge2 s0 p q @ m (pt-heq (pull m p) m))),
 
   ; (M3) the conflict is honest, and the bubble fixes the length: rivals of
   ;      sizes 2 and 1 over a span of 1, and the sequence stays 5 long --
   ;      every downstream seat determinate before anyone resolves.
-  (: m (merge2 s0 p q) e <(hdrop m 2)
+  (: m (merge2 s0 p q) e <(pt-hdrop m 2)
      (test
-      (5 = #m) (clash? e)
-      (heq (cbase e) '(c)) (2 = #(rivals e))
-      (has (rivals e) '(p1 p2)) (has (rivals e) '(q1))
-      (heq (hdrop m 3) '(d e)))),
+      (5 = #m) (pt-clash? e)
+      (pt-heq (pt-cbase e) '(c)) (2 = #(pt-rivals e))
+      (has (pt-rivals e) '(p1 p2)) (has (pt-rivals e) '(q1))
+      (pt-heq (pt-hdrop m 3) '(d e)))),
 
   ; (M4) three rivals, any order: one cell, one set -- pull's join lane
   ;      absorbing whichever arrives last.
   (: m1 (pull (merge2 s0 p q) r)
      m2 (pull (merge2 s0 q r) p)
      m3 (pull (merge2 s0 r p) q)
-     (test (heq m1 m2) (heq m2 m3)
-             (3 = #(rivals <(hdrop m1 2))))),
+     (test (pt-heq m1 m2) (pt-heq m2 m3)
+             (3 = #(pt-rivals <(pt-hdrop m1 2))))),
 
   ; (M5) resolution is just a hunk: olds = the one-element cell segment --
   ;      the plain lane applies it, invert unpulls it and the clash returns.
-  (: m (merge2 s0 p q) cell <(hdrop m 2)
-     res (hunk 2 [cell] '(z9))
+  (: m (merge2 s0 p q) cell <(pt-hdrop m 2)
+     res (pt-hunk 2 [cell] '(z9))
      m2 (pull m res)
      (test
-      (heq m2 '(a b z9 d e)) !(clash? <(hdrop m2 2))
-      (heq (pull m2 (invert res)) m))),
+      (pt-heq m2 '(a b z9 d e)) !(pt-clash? <(pt-hdrop m2 2))
+      (pt-heq (pull m2 (invert res)) m))),
 
   ; the seam answered: two inserts on one seam -- rung 2 refused by fiat;
   ;      here the ambiguity is recorded, a cell with an empty base.
-  (: sp (hunk 1 () '(u)) sq (hunk 1 () '(v))
-     m (merge2 s0 sp sq) e <(hdrop m 1)
+  (: sp (pt-hunk 1 () '(u)) sq (pt-hunk 1 () '(v))
+     m (merge2 s0 sp sq) e <(pt-hdrop m 1)
      (test
-      (heq m (merge2 s0 sq sp))
-      (6 = #m) (clash? e) (heq (cbase e) ())
-      (has (rivals e) '(u)) (has (rivals e) '(v))
-      (heq (hdrop m 2) '(b c d e)))),
+      (pt-heq m (merge2 s0 sq sp))
+      (6 = #m) (pt-clash? e) (pt-heq (pt-cbase e) ())
+      (has (pt-rivals e) '(u)) (has (pt-rivals e) '(v))
+      (pt-heq (pt-hdrop m 2) '(b c d e)))),
 
   ; overlapping spans: the union hull is the base, each rival the hull with
   ;      its hunk laid inside -- and downstream rides at a determinate seat.
-  (: op (hunk 1 '(b c) '(x)) oq (hunk 2 '(c d) '(y z))
-     m (merge2 s0 op oq) e <(hdrop m 1)
+  (: op (pt-hunk 1 '(b c) '(x)) oq (pt-hunk 2 '(c d) '(y z))
+     m (merge2 s0 op oq) e <(pt-hdrop m 1)
      (test
-      (heq m (merge2 s0 oq op))
-      (3 = #m) (clash? e)
-      (heq (cbase e) '(b c d))
-      (has (rivals e) '(x d)) (has (rivals e) '(b y z))
-      (heq (hdrop m 2) '(e)))),
+      (pt-heq m (merge2 s0 oq op))
+      (3 = #m) (pt-clash? e)
+      (pt-heq (pt-cbase e) '(b c d))
+      (has (pt-rivals e) '(x d)) (has (pt-rivals e) '(b y z))
+      (pt-heq (pt-hdrop m 2) '(e)))),
 
   ; the boundary, honest: a first rival arriving by pull no-ops (state cannot
   ;      delimit its footprint -- the extent problem; the first clash needs
   ;      merge2, both patches in hand), a deletion arriving twice rests in the
   ;      breach lane, and a mismatch that is neither settled nor a join rides
   ;      through untouched.
-  (: dl (hunk 3 '(d) ()) s1 (apon s0 dl)
+  (: dl (pt-hunk 3 '(d) ()) s1 (apon s0 dl)
      (test
-      (heq (pull (apon s0 p) q) (apon s0 p))
-      (heq (pull s1 dl) s1)
-      (merge2 s0 p q @ m (heq (pull m (hunk 0 '(zz) '(ww))) m)))),
+      (pt-heq (pull (apon s0 p) q) (apon s0 p))
+      (pt-heq (pull s1 dl) s1)
+      (merge2 s0 p q @ m (pt-heq (pull m (pt-hunk 0 '(zz) '(ww))) m)))),
 
   ; the widening: three rivals over three different overlapping spans (the
   ;      middle one bridging, the outer two merely touching) -- whichever pair
   ;      bubbles first, the third widens the cell to the union hull and every
   ;      rival re-renders over it: one bubble, one set, any arrival order.
-  (: p2 (hunk 1 '(b c) '(x)) q2 (hunk 2 '(c d) '(y z)) r2 (hunk 3 '(d e) '(w))
+  (: p2 (pt-hunk 1 '(b c) '(x)) q2 (pt-hunk 2 '(c d) '(y z)) r2 (pt-hunk 3 '(d e) '(w))
      m1 (pull (merge2 s0 p2 q2) r2)
      m2 (pull (merge2 s0 q2 r2) p2)
      m3 (pull (merge2 s0 r2 p2) q2)
-     e <(hdrop m1 1)
+     e <(pt-hdrop m1 1)
      (test
-      (heq m1 m2) (heq m2 m3)
-      (2 = #m1) (clash? e)                                ; (a BUBBLE) -- length fixed
-      (heq (cbase e) '(b c d e))
-      (3 = #(rivals e))
-      (has (rivals e) '(x d e)) (has (rivals e) '(b y z e)) (has (rivals e) '(b c w)))),
+      (pt-heq m1 m2) (pt-heq m2 m3)
+      (2 = #m1) (pt-clash? e)                                ; (a BUBBLE) -- length fixed
+      (pt-heq (pt-cbase e) '(b c d e))
+      (3 = #(pt-rivals e))
+      (has (pt-rivals e) '(x d e)) (has (pt-rivals e) '(b y z e)) (has (pt-rivals e) '(b c w)))),
 
   ; a contained rival lays into the landed hull -- same lane, pads empty.
-  (: op (hunk 1 '(b c) '(x)) oq (hunk 2 '(c d) '(y z))
-     m (pull (merge2 s0 op oq) (hunk 2 '(c) '(k1)))
-     e <(hdrop m 1)
+  (: op (pt-hunk 1 '(b c) '(x)) oq (pt-hunk 2 '(c d) '(y z))
+     m (pull (merge2 s0 op oq) (pt-hunk 2 '(c) '(k1)))
+     e <(pt-hdrop m 1)
      (test
-      (3 = #(rivals e))
-      (has (rivals e) '(b k1 d)))),
+      (3 = #(pt-rivals e))
+      (has (pt-rivals e) '(b k1 d)))),
 
   ; resolution off the widened bubble stays ordinary -- and unpull returns it.
-  (: p2 (hunk 1 '(b c) '(x)) q2 (hunk 2 '(c d) '(y z)) r2 (hunk 3 '(d e) '(w))
+  (: p2 (pt-hunk 1 '(b c) '(x)) q2 (pt-hunk 2 '(c d) '(y z)) r2 (pt-hunk 3 '(d e) '(w))
      m (pull (merge2 s0 p2 q2) r2)
-     cell <(hdrop m 1)
-     res (hunk 1 [cell] '(z9))
+     cell <(pt-hdrop m 1)
+     res (pt-hunk 1 [cell] '(z9))
      (test
-      (heq (pull m res) '(a z9))
-      (heq (pull (pull m res) (invert res)) m))),
+      (pt-heq (pull m res) '(a z9))
+      (pt-heq (pull (pull m res) (invert res)) m))),
   0))
 
 ; --- the metavariable rung: patches grow variables, the unifier takes the seat ---
@@ -950,72 +901,29 @@
 
 (:
  ; --- the tree kit (rung 5, local) ---
- (htake s n) (n < 1 ? () (<s . htake >s (n - 1)))
- (hdrop s n) (n < 1 ? s (hdrop >s (n - 1)))
- (hcat a b) (atom? a ? b (<a . hcat >a b))
- (seg s i n) (htake (hdrop s i) n)
- (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (i + c))))
- (nth s j) <(hdrop s j)
- (heq a b) (? (atom? a && atom? b) (a = b)
-              (atom? a || atom? b) 0
-              (heq <a <b && heq >a >b))
- (tnav t path) (atom? path ? t (tnav (nth t <path) >path))
- (tlay t path s2)
-   (atom? path ? s2
-      (splice t <path 1
-              [(tlay (nth t <path) >path s2)]))
- (tp path i o n) ['tp path i o n]
- (pp p) <>p            (pi p) <>>p
- (po p) <>>>p (pn p) <>>>>p
- (invert p) (tp (pp p) (pi p) (pn p) (po p))
- (pathok t path) (atom? path ? 1
-                    (<path @ j
-                     (j < #t
-                         && (nth t j @ e
-                             (!(atom? e) && pathok e >path)))))
- (setidx path d v) (d = 0 ? (v . >path)
-                      (<path . setidx >path (d - 1) v))
- (rel P Q d) (? (atom? P && atom? Q) '(same)
-                (atom? P) ['inq <Q d]
-                (atom? Q) ['inp <P d]
-                (<P = <Q) (rel >P >Q (d + 1))
-                '(apart))
+ (invert p) (pt-tp (pt-pp p) (pt-pi p) (pt-pn p) (pt-po p))
 
  ; --- the pattern kit: metavariables, match, instantiate. a (mv v) cell is
  ;     a variable (data by discipline: ground content never spells one) ---
- (mv? x) (atom? x ? 0 (<x = 'mv))
- (mvname x) <>x
- (asq k s) (atom? s ? () (<s @ c (k = <c ? [>c] (asq k >s))))
- (mtch p g s)                                        ; one-sided unification:
-   (? (s = 'no) 'no                                  ; pattern vs ground, the
-      (mv? p) (asq (mvname p) s @ r                  ; substitution threading --
-               (atom? r ? ((mvname p . g) . s)       ; a rebound variable must
-                  (heq <r g ? s 'no)))               ; agree (the kanren move)
-      (atom? p && atom? g) (p = g ? s 'no)
-      (atom? p || atom? g) 'no
-      (mtch >p >g (mtch <p <g s)))
- (inst p s) (? (mv? p) (asq (mvname p) s @ r (atom? r ? p <r))
-               (atom? p) p
-               (inst <p s . inst >p s))
 
  ; --- apply: match the olds, lay the news instantiated ---
- (valid t q) (pathok t (pp q)
-                 && (tnav t (pp q) @ s
-                     ((pi q + #(po q)) <= #s
-                         && !((mtch (po q) (seg s (pi q) #(po q)) ()) = 'no))))
- (apon t q) (: sq (tnav t (pp q))
-               sg (mtch (po q) (seg sq (pi q) #(po q)) ())
-               (tlay t (pp q) (splice sq (pi q) #(po q) (inst (pn q) sg))))
+ (valid t q) (pt-pathok t (pt-pp q)
+                 && (pt-tnav t (pt-pp q) @ s
+                     ((pt-pi q + #(pt-po q)) <= #s
+                         && !((pt-mtch (pt-po q) (pt-seg s (pt-pi q) #(pt-po q)) ()) = 'no))))
+ (apon t q) (: sq (pt-tnav t (pt-pp q))
+               sg (pt-mtch (pt-po q) (pt-seg sq (pt-pi q) #(pt-po q)) ())
+               (pt-tlay t (pt-pp q) (pt-splice sq (pt-pi q) #(pt-po q) (pt-inst (pt-pn q) sg))))
  (applall t ps) (foldl apon t ps)
 
  ; --- the variable's seats: count and address in a pattern segment ---
  (mvn f v) (atom? f ? 0
                (<f @ h
-                ((? (atom? h) 0 (mv? h && (mvname h = v)) 1 (mvn h v))
+                ((? (atom? h) 0 (pt-mv? h && (pt-mvname h = v)) 1 (mvn h v))
                  + mvn >f v)))
  (mvat f v) (atom? f ? ()
                 (<f @ h
-                 (!(atom? h) && (mv? h && (mvname h = v)) ? '(0)
+                 (!(atom? h) && (pt-mv? h && (pt-mvname h = v)) ? '(0)
                     ((atom? h ? () (mvat h v)) @ r
                      (!(atom? r) ? (0 . r)
                         (mvat >f v @ d
@@ -1029,56 +937,56 @@
  ;     ('at pat) -- the path landed on a pattern sequence (the whole-binding
  ;     swap checks there); 'no -- fell off the rigid structure ---
  (bind e R)
-   (? (mv? e) ['in e R]
+   (? (pt-mv? e) ['in e R]
       (atom? R) ['at e]
       (<R @ j
        (atom? e || #e <= j ? 'no
-          (bind (nth e j) >R))))
+          (bind (pt-nth e j) >R))))
 
  ; --- mvswal: the schematic swallow. the rule rides unchanged (its variable
  ;     abstracts the content); the deep patch re-aims from the variable's
  ;     olds seat to its news seat. linearity is the guard: the variable
  ;     exactly once on each side, or the dependency is real. ---
  (mvswal dp sp j d)
-   (: S (pp sp) is (pi sp) O (po sp) N (pn sp)
-      R (hdrop (pp dp) (d + 1)) off (j - is)
-      b (bind (nth O off) R)
+   (: S (pt-pp sp) is (pt-pi sp) O (pt-po sp) N (pt-pn sp)
+      R (pt-hdrop (pt-pp dp) (d + 1)) off (j - is)
+      b (bind (pt-nth O off) R)
       (? (atom? b) ()
          (<b = 'in)
-           (: v (mvname <>b) rest <>>b
+           (: v (pt-mvname <>b) rest <>>b
               (!((1 = mvn O v) && (1 = mvn N v)) ? ()
                  (mvat N v @ an
-                  (. sp (. (tp (hcat S ((is + <an) . hcat >an rest))
-                                     (pi dp) (po dp) (pn dp)) ())))))
-         (: pat <>b im (pi dp)                                     ; the whole-binding swap:
-            (? !((1 = #(po dp)) && (1 = #(pn dp))) ()              ; one for one,
+                  (. sp (. (pt-tp (pt-hcat S ((is + <an) . pt-hcat >an rest))
+                                     (pt-pi dp) (pt-po dp) (pt-pn dp)) ())))))
+         (: pat <>b im (pt-pi dp)                                     ; the whole-binding swap:
+            (? !((1 = #(pt-po dp)) && (1 = #(pt-pn dp))) ()              ; one for one,
                (#pat <= im) ()                                     ; exactly at the seat
-               (nth pat im @ m
-                (atom? m || !(mv? m) ? ()                ; rigid part: a real dependency
-                   (mvname m @ v
+               (pt-nth pat im @ m
+                (atom? m || !(pt-mv? m) ? ()                ; rigid part: a real dependency
+                   (pt-mvname m @ v
                     (!((1 = mvn O v) && (1 = mvn N v)) ? ()
                        (mvat N v @ an
                         (? (atom? >an)
-                           [sp (tp S (is + <an) (po dp) (pn dp))]
-                           (. sp (. (tp (hcat S ((is + <an) . abut >an))
-                                              (alast >an) (po dp) (pn dp)) ()))))))))))))
+                           [sp (pt-tp S (is + <an) (pt-po dp) (pt-pn dp))]
+                           (. sp (. (pt-tp (pt-hcat S ((is + <an) . abut >an))
+                                              (alast >an) (pt-po dp) (pt-pn dp)) ()))))))))))))
 
  ; --- commute: the tree lift's lanes, the swallow arms schematic; a ground
  ;     swallow refuses here (form six owns the ground rewrite; a real vcs
  ;     composes both) ---
  (commute p q)
-   (: P (pp p) ip (pi p) o1 #(po p) n1 #(pn p)
-      Q (pp q) iq (pi q) o2 #(po q) n2 #(pn q)
-      r (rel P Q 0) tag <r
+   (: P (pt-pp p) ip (pt-pi p) o1 #(pt-po p) n1 #(pt-pn p)
+      Q (pt-pp q) iq (pt-pi q) o2 #(pt-po q) n2 #(pt-pn q)
+      r (pt-rel P Q 0) tag <r
       (? (tag = 'same)
-           (? (iq > (ip + n1)) [(tp Q ((iq + o1) - n1) (po q) (pn q)) p]
-              ((iq + o2) < ip) [q (tp P ((ip + n2) - o2) (po p) (pn p))]
+           (? (iq > (ip + n1)) [(pt-tp Q ((iq + o1) - n1) (pt-po q) (pt-pn q)) p]
+              ((iq + o2) < ip) [q (pt-tp P ((ip + n2) - o2) (pt-po p) (pt-pn p))]
               ())
          (tag = 'inq)
            (: j <>r d <>>r
               (? (j < ip) [q p]
                  (j >= (ip + n1))
-                   [(tp (setidx Q d ((j + o1) - n1)) iq (po q) (pn q)) p]
+                   [(pt-tp (pt-setidx Q d ((j + o1) - n1)) iq (pt-po q) (pt-pn q)) p]
                  (mvswal (invert q) (invert p) j d @ c
                   (atom? c ? ()
                      [(invert <>c) (invert <c)]))))
@@ -1086,72 +994,72 @@
            (: j <>r d <>>r
               (? (j < iq) [q p]
                  (j >= (iq + o2))
-                   [q (tp (setidx P d ((j + n2) - o2)) ip (po p) (pn p))]
+                   [q (pt-tp (pt-setidx P d ((j + n2) - o2)) ip (pt-po p) (pt-pn p))]
                  (mvswal p q j d)))
          [q p]))
 
  ; --- witnesses: the rule renames main -> run and moves the body (the
  ;     variable's seat slides from child 1 to child 2); the deep edit rides ---
  t0 '((: a 1) (: b 2) (main (f x)))
- q8 (tp () 2 '((main (mv v))) '((run () (mv v))))
- p8 (tp '(2 1) 0 '(f) '(g))
+ q8 (pt-tp () 2 '((main (mv v))) '((run () (mv v))))
+ p8 (pt-tp '(2 1) 0 '(f) '(g))
 
  ; (L1 + L3a) the edit rides inside the binding: the rule commutes unchanged,
  ;      the deep path follows the seat (2 1 -> 2 2), both orders land the
  ;      same tree, and swapping back is home.
  ((: c (commute p8 q8) cq <c cp <>c
      (test
-      (heq cq q8)                                          ; the rule is blind: q' = q
-      (heq (pp cp) '(2 2))                                 ; the seat re-aim
-      (heq (apon (apon t0 p8) q8) (apon (apon t0 cq) cp))
-      (heq (apon (apon t0 p8) q8) '((: a 1) (: b 2) (run () (g x))))
+      (pt-heq cq q8)                                          ; the rule is blind: q' = q
+      (pt-heq (pt-pp cp) '(2 2))                                 ; the seat re-aim
+      (pt-heq (apon (apon t0 p8) q8) (apon (apon t0 cq) cp))
+      (pt-heq (apon (apon t0 p8) q8) '((: a 1) (: b 2) (run () (g x))))
       (commute cq cp @ c2
-       (heq <c2 p8 && heq <>c2 q8)))),
+       (pt-heq <c2 p8 && pt-heq <>c2 q8)))),
 
   ; the whole-binding swap: a one-for-one replacement at the variable's seat
   ;      re-seats the same way (path 2 index 1 -> path 2 index 2).
-  (: p9 (tp '(2) 1 '((f x)) '((h y)))
+  (: p9 (pt-tp '(2) 1 '((f x)) '((h y)))
      c (commute p9 q8) cq <c cp <>c
      (test
-      (heq cq q8)
-      (heq (pp cp) '(2)) (2 = pi cp)
-      (heq (apon (apon t0 p9) q8) (apon (apon t0 cq) cp))
-      (heq (apon (apon t0 p9) q8) '((: a 1) (: b 2) (run () (h y))))
+      (pt-heq cq q8)
+      (pt-heq (pt-pp cp) '(2)) (2 = pt-pi cp)
+      (pt-heq (apon (apon t0 p9) q8) (apon (apon t0 cq) cp))
+      (pt-heq (apon (apon t0 p9) q8) '((: a 1) (: b 2) (run () (h y))))
       (commute cq cp @ c2
-       (heq <c2 p9 && heq <>c2 q8)))),
+       (pt-heq <c2 p9 && pt-heq <>c2 q8)))),
 
   ; the refusals read off the rule: a rigid-part edit (the rule's context
   ;      mentions it), a duplicating rule (the edit would be needed twice),
   ;      an erasing rule (the edit would vanish), a span covering rigid
   ;      structure beside the binding.
   (test
-   !(commute (tp '(2) 0 '(main) '(go)) q8)
-   !(commute p8 (tp () 2 '((main (mv v))) '((run (mv v) (mv v)))))
-   !(commute p8 (tp () 2 '((main (mv v))) '((halt))))
-   !(commute (tp '(2) 0 '(main (f x)) '(go)) q8)),
+   !(commute (pt-tp '(2) 0 '(main) '(go)) q8)
+   !(commute p8 (pt-tp () 2 '((main (mv v))) '((run (mv v) (mv v)))))
+   !(commute p8 (pt-tp () 2 '((main (mv v))) '((halt))))
+   !(commute (pt-tp '(2) 0 '(main (f x)) '(go)) q8)),
 
   ; the unifier face: a non-linear pattern binds consistently or not at all,
   ;      and instantiation reads the bindings back out.
   (: t1 '((pair 5 5) (pair 5 6))
-     qc (tp () 0 '((pair (mv w) (mv w))) '((mv w)))
+     qc (pt-tp () 0 '((pair (mv w) (mv w))) '((mv w)))
      (test
       (valid t1 qc)
-      !(valid t1 (tp () 1 '((pair (mv w) (mv w))) '((mv w))))
-      (heq (apon t1 qc) '(5 (pair 5 6))))),
+      !(valid t1 (pt-tp () 1 '((pair (mv w) (mv w))) '((mv w))))
+      (pt-heq (apon t1 qc) '(5 (pair 5 6))))),
 
   ; (L2) a variable-preserving rule round-trips through its inverse: the news
   ;      pattern matches what it laid, and the olds pattern restores.
   (apon t0 q8 @ t2
    (test
     (valid t0 q8) (valid t2 (invert q8))
-    (heq (apon t2 (invert q8)) t0))),
+    (pt-heq (apon t2 (invert q8)) t0))),
 
   ; (L3b) a frontier is stable under the schematic swallow swap.
-  (: w (tp '(0) 2 '(1) '(7))
+  (: w (pt-tp '(0) 2 '(1) '(7))
      c (commute p8 q8)
      f1 (applall t0 [w p8 q8])
      f2 (applall t0 (w . c))
-     (test (heq f1 f2) (heq f1 '((: a 7) (: b 2) (run () (g x)))))),
+     (test (pt-heq f1 f2) (pt-heq f1 '((: a 7) (: b 2) (run () (g x)))))),
   0))
 
 ; --- the critical-pairs rung: two rules meet on one tree ---
@@ -1176,41 +1084,14 @@
 
 (:
  ; --- the tree + pattern kit (form 8's, trimmed local) ---
- (htake s n) (n < 1 ? () (<s . htake >s (n - 1)))
- (hdrop s n) (n < 1 ? s (hdrop >s (n - 1)))
- (hcat a b) (atom? a ? b (<a . hcat >a b))
- (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (i + c))))
- (nth s j) <(hdrop s j)
- (heq a b) (? (atom? a && atom? b) (a = b)
-              (atom? a || atom? b) 0
-              (heq <a <b && heq >a >b))
- (tnav t path) (atom? path ? t (tnav (nth t <path) >path))
- (tlay t path s2)
-   (atom? path ? s2
-      (splice t <path 1
-              [(tlay (nth t <path) >path s2)]))
- (mv? x) (atom? x ? 0 (<x = 'mv))
- (mvname x) <>x
- (asq k s) (atom? s ? () (<s @ c (k = <c ? [>c] (asq k >s))))
- (mtch p g s)
-   (? (s = 'no) 'no
-      (mv? p) (asq (mvname p) s @ r
-               (atom? r ? ((mvname p . g) . s)
-                  (heq <r g ? s 'no)))
-      (atom? p && atom? g) (p = g ? s 'no)
-      (atom? p || atom? g) 'no
-      (mtch >p >g (mtch <p <g s)))
- (inst p s) (? (mv? p) (asq (mvname p) s @ r (atom? r ? p <r))
-               (atom? p) p
-               (inst <p s . inst >p s))
 
  ; --- a rule at a seat: match olds against the subtree, lay news
  ;     instantiated; rw answers (tree) or (), rw2 sequences two ---
  (rw R path t)
-   (: sub (tnav t path)
-      sg (mtch <R sub ())
+   (: sub (pt-tnav t path)
+      sg (pt-mtch <R sub ())
       (sg = 'no ? ()
-         [(tlay t path (inst <>R sg))]))
+         [(pt-tlay t path (pt-inst <>R sg))]))
  (rw2 Ra pa Rb pb t) (rw Ra pa t @ r (atom? r ? () (rw Rb pb <r)))
 
  t0 '((f 1) ((g 2) (h 3)))
@@ -1221,11 +1102,11 @@
  ;     unshifted -- both orders, one tree; deeper shared prefixes too
  ((: c1 (rw2 Ra '(0) Rb '(1 1) t0) c2 (rw2 Rb '(1 1) Ra '(0) t0)
      (test
-      !(atom? c1) (heq <c1 <c2)
-      (heq <c1 '((f (1 1)) ((g 2) (k 3)))))),
+      !(atom? c1) (pt-heq <c1 <c2)
+      (pt-heq <c1 '((f (1 1)) ((g 2) (k 3)))))),
   (: p9 '((g (mv u)) (g ((mv u)))) q9 '((h (mv v)) (h))
      c1 (rw2 p9 '(1 0) q9 '(1 1) t0) c2 (rw2 q9 '(1 1) p9 '(1 0) t0)
-     (test !(atom? c1) (heq <c1 <c2))),
+     (test !(atom? c1) (pt-heq <c1 <c2))),
 
   ; the critical pair, earned: one seat, two rules, both orders green --
   ;     and they disagree, so no total commute exists at rule grain
@@ -1233,8 +1114,8 @@
      c1 (rw2 R1 () R2 () t0) c2 (rw2 R2 () R1 () t0)
      (test
       !(atom? c1) !(atom? c2)
-      !(heq <c1 <c2)
-      (heq <c1 '(b)) (heq <c2 '(a)))),
+      !(pt-heq <c1 <c2)
+      (pt-heq <c1 '(b)) (pt-heq <c2 '(a)))),
 
   ; the destroyed redex, the overlap's other face: nested seats, and the
   ;     order decides which rule survives at all
