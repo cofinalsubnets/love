@@ -12,6 +12,9 @@
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
    cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
+   ; a session running these passes its own hive down -- BEE_HIVE, BEE_NAME, BEE_AS -- and a
+   ; world would read the live sessions and write its cells among them: HOME alone says here
+   _ (map (\ k (setenv k ())) ["BEE_HIVE" "BEE_NAME" "BEE_AS"])
    (cr-put d nm s) (: p (open (d + "/" + nm) "w") _ (say p s) (close p))
    (cr-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
    ; the config is HOME's own: a tree's ./.bee.l cannot say where bee dials
