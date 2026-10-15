@@ -1,11 +1,8 @@
-; test/host/synth.l -- the keyboard synth, headless
-; not in the test/*.l corpus (it loads a crew module). the keys, the notes and the feed
-; are pure, so everything but the tty runner gates here: a key into a degree and its
-; bends, the bends' sizes against each other, a note's name, the timbre and octave
-; turned and bounded, and a strike ringing into a jug.
+; test/host/synth.l -- the keyboard synth, headless: all but the tty runner
+; not in the test/*.l corpus (it loads a crew module)
 ;   cat test/00-init.l test/host/synth.l | out/love
 
-(borrow 'synth)   ; the artifact's module, warm from the tree
+(borrow 'synth)
 (borrow 'vi)      ; a buffer, for the loop's ex words
 (borrow 'harp)    ; the events, to ask a text read by
 (borrow 'play)    ; harp-read
@@ -18,27 +15,25 @@
    st (synth-new ())
    (semis c) (synth-semis st c))
 
-; --- a key: a digit is a degree, its shifted mate the same with shift, 256 past either
-; --- is alt, and any other key is nothing
+; a key: a digit is a degree, its shifted mate adds shift, 256 past either is alt
 (test (synth-code d0 = [0 0 0]) (synth-code d1 = [1 0 0]) (synth-code (synth-digits 11) = [11 0 0])
       (#synth-digits = 12) (#synth-shifted = 12)                 ; a chromatic octave, and its shifted row
       (synth-code s0 = [0 1 0]) (synth-code (256 + d0) = [0 0 1]) (synth-code (256 + s0) = [0 1 1])
       (synth-code 97 = ()) (synth-code 9 = ()) (synth-code -8 = ()))
 
-; --- the bends against each other: a key on is a semitone, the last key of the row an
-; --- octave less one, shift the octave, alt half a semitone down, both together both
+; the bends: a key a semitone, shift an octave, alt half a semitone down
 (: a (semis [0 0 0]) b (semis [1 0 0]) sh (semis [0 1 0]) al (semis [0 0 1]) bo (semis [0 1 1])
  (test (abs (b - a - 1.0) < 0.001) (abs (sh - a - 12.0) < 0.001)
        (abs (a - al - 0.5) < 0.001) (abs (bo - a - 11.5) < 0.001)
        (abs (semis [11 0 0] - a - 11.0) < 0.001)))
 
-; --- a name: middle c and its octaves, the semitone under a quarter tone said in cents
+; a name: octaves of c, and cents under a quarter tone
 (test (synth-name 0.0 = "C4") (synth-name 12.0 = "C5") (synth-name -12.0 = "C3")
       (synth-name -1.0 = "B3") (synth-name 1.0 = "C#4") (synth-name 11.0 = "B4")
       (has? (synth-name 0.5) "C4") (has? (synth-name 0.5) "50") !(has? (synth-name 0.0) "50")
       (has? (synth-name -0.5) "B3"))
 
-; --- the timbre cycles through them all and round; the octave climbs and stops --------
+; the timbre cycles round; the octave climbs and stops
 (: st (synth-new ())
    t0 (st 'tim)
    seen (map (i \ (synth-step st 9, st 'tim)) ^#synth-timbres)
@@ -49,8 +44,7 @@
        (up = synth-octaves) (down = 0 - synth-octaves) (back = down + 1)
        (abs (synth-semis st [0 0 0] - 12.0 * back) < 0.001)))
 
-; --- a strike rings into a jug: a chunk a feed, sound after the strike and a note held
-; --- for the screen; a voice that has died is dropped
+; a strike rings into a jug; a dead voice is dropped
 (: j (jug 0) st (synth-new ())
    _ (synth-feed st j) n0 #(slurp j)
    _ (synth-step st d0)
@@ -63,9 +57,7 @@
        (#(st 'vs) = 0) (string? (st 'last)) (has? f (st 'last))
        (has? f (synth-timbres (st 'tim) 0))))
 
-; --- the loop: a text sent is read as harp reads it and plays from the next chunk,
-; --- its cycles ringing into the jug; a bad one is said and the sent one kept; stopped,
-; --- it rings out to silence; the cps is bounded, and the keys turn it all
+; the loop: a sent text plays from the next chunk; a bad one is said and the old kept
 (: j (jug 0) st (synth-new ())
    _ (synth-send st "bd sn")
    on (st 'on) m1 (st 'lmsg) good (st 'nextp)
@@ -91,8 +83,7 @@
          (abs (up - 1.0 - synth-cps-step) < 0.001) (abs (1.0 - synth-cps-step - down) < 0.001)
          (p1 = 1) (p2 = 0) (st 'over = 1)))
 
-; --- the buffer's ex words: send plays its lines, cps sets, stop stops, and a word that
-; --- is neither the engine's nor the loop's is still a complaint
+; the buffer's ex words: send, cps, stop, and a complaint for any other
 (: st (synth-new ()) buf (vi-open "") _ (pin buf 'lines ["bd sn" "hh"])
    face (vi-face buf {'ex (synth-ex st)})
    (ex s) (":" + s @ t (map (face 1) (map (i \ t i) ^#t + [13])))
@@ -106,8 +97,7 @@
        (m4 = "stopped") (off = 0) (m5 = "playing") (back = 1)
        (m6 = "not an ex command: zz")))
 
-; --- the text is read as harp reads it: a form's names are harp's even where the prel
-; --- has one of the same name, and comment lines before the paren are passed over
+; a form's names are harp's even where the prel has one; leading comment lines are passed over
 (: (evs p) (filter onset? (p (qi 0) (qi 1)))
    r (harp-read "(jux rev (hit (mini \"bd sn\")))")
    right (filter (x \ 1.0 = (evv x) 'pan) (evs r))
@@ -120,9 +110,7 @@
        (4 = #gs) (0 < net (map (x \ (x != gs 0)) gs))       ; a swell, not the prel's sin of a span
        (3 = #(evs c)) (2 = #(evs m))))
 
-; --- the drift: d walks; k turns the row fixed, then following the center, then just
-; --- over it; a cycle's phrase rings, the knobs turn and stop, the screen draws the
-; --- lattice, and d again stops
+; the drift: d walks, k turns the row fixed, following, then just; d again stops
 (: j (jug 0) st (synth-new ())
    _ (synth-step st 100) on (st 'dr) pl (st 'on)
    fix (synth-semis st [7 0 0])
@@ -157,8 +145,7 @@
        (synth-lname [0 1 0] = "E-") (synth-lname [0 -1 0] = "Ab+") (synth-lname [0 0 1] = "Bb7")
        (synth-lname [4 -1 0] = "C+")))
 
-; --- the window: the two rows' keys are a tracker's, a key down holds its note however long
-; --- and its repeats add none, up lets it fade to silence; tab esc and the arrows turn
+; the window: a held key holds its note, repeats add none, up lets it fade
 (: j (jug 0) st (synth-new ())
    (loud o a n) (net (map (i \ (o (a + i * 97) != 0 ? 1 0)) ^n))
    _ (synth-wstep st ['down 16]) _ (synth-wstep st ['down 16]) one (#(st 'hv))
@@ -179,8 +166,7 @@
        (100 < loud held 0 300) (after = 1) (fading = 1) (#(st 'hv) = 0) (#(st 'vs) = 0) quiet
        (tim = 1) (up = 1) (down = -1) (none = 0) (over = 1) (s2 'over = 1)))
 
-; --- the strip: painted on a paper of the window's form, a held key's note lit and the rest
-; --- not, its sharps short
+; the strip: a held key's note lit, its sharps short
 (: w 640 h 400 win {'w w 'h h 'paper (cask (w * h * 4))} st (synth-new ())
    (rgb x y) (4 * (y * w + x) @ i (string (win 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
    y0 (synth-trows * 16 + 16) cw (w // 32)

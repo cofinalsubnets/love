@@ -44,7 +44,7 @@
           (k = 'ico) (cite 'bmp 'ico-size b)
           (k = 'pnm) (cite 'pnm 'pnm-size b)
           "not a picture"))
-   ; -> [w h rgba] | why not; a gif's or an animated webp's first frame
+   ; -> [w h rgba] | why not; a gif's or an animated webp's first frame, an apng's default image
    (pic-decode b)
     (pic-kind b @ k
        (? (k = 'png) (cite 'png 'png-decode b)
@@ -55,13 +55,15 @@
           (k = 'ico) (cite 'bmp 'ico-decode b)
           (k = 'pnm) (cite 'pnm 'pnm-decode b)
           "not a picture"))
-   ; -> [w h [[rgba ms] ..]] | why not: a gif's frames, as many as fit 128 MB, and a still
-   ; one frame of no time
+   ; -> [w h [[rgba ms] ..]] | why not: a gif's or a webp's frames, as many as fit 128 MB, and
+   ; a still one frame of no time
    (pic-frames b)
-    (pic-kind b = 'gif ?
-        (: d (pic-size b) n (d 0 * d 1)
-           (cite 'gif 'gif-frames b (max 1 (min 1000 (33554432 // max 1 n)))))
-       (pic-decode b @ r (two? r ? [(r 0) (r 1) [[(r 2) 0]]] r)))
+    (: k (pic-kind b) d (pic-size b) most (string? d ? 1 (max 1 (min 1000 (33554432 // max 1 (d 0 * d 1)))))
+       (? (string? d) d
+          (k = 'gif) (cite 'gif 'gif-frames b most)
+          (k = 'webp) (cite 'webp 'webp-frames b most)
+          (k = 'png) (cite 'png 'png-frames b most)
+          (pic-decode b @ r (two? r ? [(r 0) (r 1) [[(r 2) 0]]] r))))
 
    ; -- sampling ----------------------------------------------------------------
    ; ow*oh pixels from source x0 y0, s source pixels to each -> [ow oh rgba]. a pixel is its
@@ -435,7 +437,7 @@
            (c = 32) (pins st 'play !(st 'play) 'due 0)
            (c = 46) (frame 1) (c = 44) (frame -1)
            (pin st 'msg picless-help))))
-   ; the clock moves a playing gif on: 1 when the frame changed
+   ; the clock moves a playing animation on: 1 when the frame changed
    (pv-tick st now)
     (pv-nf st @ nf
        (? (nf < 2 || !(st 'play)) 0

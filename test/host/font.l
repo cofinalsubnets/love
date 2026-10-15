@@ -1,14 +1,11 @@
-; test/host/font.l -- src/apps/font.l's fonts, and quay's own reading of them
-; love lays a font off .hex text; the painter reads it in C (src/love/quay/quay.c's cb_font_ok
-; and cb_font_rows, through the `fontrow` nif). the two must read every row the same, and
-; C must refuse a font that is not one rather than index past it.
-;
-;   cat test/00-init.l test/host/font.l | out/love      ; exits 1 on fail, prints font: ok
+; test/host/font.l -- src/apps/font.l lays a font off .hex text; quay reads it in C (cb_font_ok,
+; cb_font_rows, via the `fontrow` nif). both must read every row the same, and C refuse a non-font.
+;   cat test/00-init.l test/host/font.l | out/love
 (borrow "src/apps/font.l")
 (: (hexrow v d) (radix v 16 @ h (zpad d h))           ; v as d hex digits
    (glyph cp d f) (zpad 4 (radix cp 16) + ":" + cats (map (r \ (hexrow (f r) d)) (jot 16)))
-   ; A: narrow, row r holds r; 世 wide and solid; 丗 wide, row r holds r in both bytes;
-   ; Ā narrow and solid; ā narrow, its leftmost pixel; U+0301 narrow, its rightmost. a comment, a blank and a short line are no glyphs
+   ; A row r holds r; 世 wide solid; 丗 wide, r in both bytes; Ā solid; ā leftmost pixel;
+   ; U+0301 rightmost. a comment, a blank and a short line are no glyphs
    hex (cats (map (l \ (l + "\n"))
          [(glyph 65 2 (r \ r)) (glyph 19990 4 (r \ 65535)) (glyph 19991 4 (r \ (r * 257)))
           (glyph 256 2 (r \ 255)) (glyph 257 2 (r \ 128)) (glyph 769 2 (r \ 1))
@@ -16,7 +13,7 @@
    f (font-hex hex)
    rows (cp \ (font-rows f cp))
 
-; --- love's reading: a narrow glyph's row sits in the high byte ---
+; love's reading: a narrow glyph's row sits in the high byte
    _ (test
       (string? f)
       (map (r \ (r << 8)) (jot 16) = rows 65)
@@ -28,15 +25,13 @@
       !(rows 1114112)                             ; past unicode
       !(font-hex "no glyphs here\n"))
 
-; --- C's reading, row for row ---
    (same? cp) (foldl (a \ r \ (&& a (fontrow f cp r = (rows cp) r))) 1 (jot 16))
    _ (test
       (same? 65) (same? 19990) (same? 19991) (same? 256)
       !(fontrow f 66 0)                           ; a code point the font lacks
       !(fontrow f 65 16))                         ; a row past the glyph
 
-; --- C refuses what is no font: short, long, a bad magic, a page or glyph index past the
-;     tables. each answers () where the whole font answered a row ---
+; C refuses what is no font: each answers () where the whole font answered a row
    (poke s i v) (snip s 0 i + string v + snip s (i + 1) #s)
    _ (test
       !(fontrow (snip f 0 (tally f - 1)) 65 0)
@@ -46,13 +41,12 @@
       !(fontrow (poke f (12 + 2) 200) 65 0)       ; page 0's directory word names page 200
       !(fontrow (poke f (8716 + 2 * 65) 250) 65 0))   ; A's glyph index past the glyphs
 
-; --- the painter lays a cluster's marks over its base: ā then 丗, each with U+0301. the
-;     mark keeps its place over a narrow base and moves half a cell right over a wide one ---
+; a mark over a narrow base keeps its place, over a wide one moves half a cell right
    sc (screen (cask (screen () 1 4)) 1 4)
    _ (scribe sc "\u{101}\u{301}\u{4e17}\u{301}")
    px (cask (4 * 32 * 16))
    _ (dye sc px 32 0 -1 f)
-   pb (snip px 0 #px)                   ; the pixels, as a string
+   pb (snip px 0 #px)
    (lit y x) (4 * (y * 32 + x) @ i (0 < pb i + pb (i + 1) + pb (i + 2)))
    (lits y) (filter (lit y) (jot 32))
    (test ([0 7 19] = lits 0)                         ; ā, the mark, 丗's row 0 empty but for it

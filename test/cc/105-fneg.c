@@ -1,18 +1,5 @@
-/* unary minus on a float, a double and a _Complex -- NEGATION, not a subtract
- * from zero.
- *
- * the two agree on every input but one. `0.0 - d` cannot produce -0.0, because
- * 0.0 - 0.0 is +0.0 by IEEE 754; only flipping the sign (or subtracting from
- * MINUS zero, which is what gen.l does) gets it right. this lane read `0.0 - d`
- * for years and nothing noticed: love has no negative zero at all, so the fault
- * was unreachable from the language and visible only to a C program.
- *
- * it was found by test/libc/num.c -- strtod("-0.0") against glibc -- and it
- * lives HERE because it is a codegen law, freestanding and exit-code compared
- * like the rest of this battery. the zero cases are the whole point: drop them
- * and the test passes against the broken lowering.
- *
- * NaN's sign is deliberately not asserted -- C promises nothing about it. */
+/* unary minus on float, double and _Complex is negation, not 0.0 - x: only a sign
+ * flip makes -0.0. the zero cases are the point; NaN's sign is not asserted. */
 
 static int dneg(double d)      /* through a call, so nothing is folded away */
 {

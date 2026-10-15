@@ -1,19 +1,14 @@
-; test/host/lorewin.l -- lore in a window, headless: a window with no screen ('evq its events)
-; under view's loop, the keys as the actions they bind -- a press once, a walking key again
-; while it is held at the level's pace, not when the level says not now, the keyboard's own
-; repeat no press, q the end, ? the help while it is held
-; -- and the corridor painted onto its paper at 8 by 16 a cell, the picture and the bottom
-; row's words over it.
+; test/host/lorewin.l -- view's loop on a headless window ('evq its events): keys to actions,
+; held keys at the level's pace, repeat no press, ? help; and the corridor painted on its paper.
 ; not in the corpus: crew modules. run: cat test/00-init.l test/host/lorewin.l | out/love
 (borrow 'view)
 (borrow 'corridor)
 (borrow 'posix)
 
 (: _ (setenv "HORN" "none")
-   ; the events frame t reads, each left in the queue by the frame before: k held through
-   ; frames 0 to 2, p pressed at 3 and let go at 4, q at 6; or ? down at 1, up at 3
+   ; events by frame: k held 0-2, p at 3-4, q at 6; or ? down 1-3
    script {0 [['down 37]] 3 [['up 37] ['down 25]] 4 [['up 25]] 6 [['down 16]]}
-   ; ..k held, its keyboard repeating at frames 1 and 2
+   ; ..k held, repeating at frames 1 and 2
    echoed {0 [['down 37]] 1 [['down 37]] 2 [['down 37]] 3 [['up 37] ['down 25]] 4 [['up 25]] 6 [['down 16]]}
    asked {1 [['down 42] ['down 53] ['text "?"]] 3 [['up 53] ['up 42]] 5 [['down 16]]}
    ; ..+ finer, then - twice coarser: 2 to 1, 2 and 4
@@ -42,15 +37,14 @@
        (a 1 = 80) (a 2 = 50)                                          ; 640 by 400: 80 cells by 25 rows
        (c 3 = [1 2]) (c 0 = ()) (d 4 = 4) (d 0 = ()) (a 4 = ())))                                     ; the help while ? is down, and no action
 
-; --- the corridor on a window's paper: the picture where the hall is lit, and with p the
-; --- bottom row's words, their ground and a letter's ink
+; the corridor on a window's paper: the lit hall, and with p the bottom row's words
 (: hall (corridor-load "src/apps/lore/levels/hall.l")
    win {'w 640 'h 400 'paper (cask (640 * 400 * 4))}
    st (corridor-size (pins (corridor-new 80 50 hall "src/apps/lore/levels/") 'win win 'deep 1) 80 25)
    out (corridor-frame st)
    (rgb x y) (4 * (y * 640 + x) @ i (string (win 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
    lit (net (map (i \ (rgb (i * 37 % 640) (i * 53 % 384) != [0 0 0])) ^200))
-   ; ..each of the picture's pixels a 2 by 2 square, the scale unless said
+   ; ..each pixel a 2 by 2 square, the default scale
    sq (all (i \ (: x (2 * (i * 37 % 320)) y (2 * (i * 23 % 190)) c (rgb x y)
                   (c = rgb (x + 1) y && c = rgb x (y + 1) && c = rgb (x + 1) (y + 1)))) ^200)
    _ (pin st 'pos 1)

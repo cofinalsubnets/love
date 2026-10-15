@@ -1,7 +1,5 @@
-; test/host/aplay.l -- src/apps/wav.l: the RIFF walk, every format down to s16, and the aplay
-; verb. wavs built here with known samples; then, where ffmpeg is, a signal in every format
-; held to ffmpeg's own s16 byte for byte; then the refusals; last the verb into HORN=none.
-;   cat test/00-init.l test/host/aplay.l | out/love
+; test/host/aplay.l -- src/apps/wav.l: every format to s16, held to ffmpeg's where it is
+; run: cat test/00-init.l test/host/aplay.l | out/love
 (borrow 'posix)
 (borrow "src/apps/wav.l")
 (borrow 'bytes)
@@ -22,7 +20,7 @@
                     (pour c 0 s (h 'at) #c, ap-s16 (string (wav-pcm h n c))))))
    (ap-mono tag bits w samples) (ap-dec (ap-wav (ap-fmt tag 1 8000 bits w)
                                                 (join "" (map (v \ wrle v w) samples))))
-   ; -- known samples ------------------------------------------------------------------
+   ; known samples
    _ (test (ap-mono 1 8 1 [0 128 255] = [-32768 0 32512])
            (ap-mono 1 16 2 [65535 32767 32768] = [-1 32767 -32768])
            (ap-mono 1 24 3 [8388607 8388608 16777215 256] = [32767 -32768 -1 1])
@@ -47,7 +45,7 @@
            (wav-format "S99" = ())
            (wav-desc (pins (wav-format "U8") 'rate 8000 'ch 6) = "Unsigned 8 bit, Rate 8000 Hz, Channels 6"))
 
-   ; -- against ffmpeg -----------------------------------------------------------------
+   ; against ffmpeg
    ff? (: r (hark ["sh" "-c" "command -v ffmpeg >/dev/null"]) (<r = 0))
    src "aevalsrc=1.3*sin(440*2*PI*t)+0.01*random(0)|0.7*sin(97*2*PI*t)*random(1):s=44100:d=0.05"
    wavs ["u8" "s16le" "s24le" "s32le" "f32le" "f64le" "mulaw" "alaw"]
@@ -68,7 +66,7 @@
    _ (ff? ? (test (all ap-ff-wav wavs) (all (x \ ap-ff-raw <x <>x) raws))
         (gate-partly "aplay: no ffmpeg, its formats skipped"))
 
-   ; -- the refusals --------------------------------------------------------------------
+   ; the refusals
    _ (test (wav-head (ap-wav (ap-fmt 85 1 8000 16 2) "") = "can't play WAVE-file format 0x0055 which is not PCM or FLOAT encoded")
            (wav-head (ap-wav (ap-fmt 1 1 8000 12 2) "") = "can't play WAVE-files with sample 12 bits wide")
            (wav-head (join "" ["RIFF" (wrle 12 4) "WAVE" "data" (wrle 0 4)]) = "a WAVE-file with no fmt chunk ahead of its data")
@@ -78,7 +76,7 @@
    _ (open (dir + "/huge.wav") "w" @ q (say q (join "" ["RIFF" (wrle 36 4) "WAVE" "fmt " (wrle 2147483632 4)]), close q))
    _ (test ((cite 'av 'av-open) (open (dir + "/huge.wav") "r") = "the head of this stream is past 16 MiB"))
 
-   ; -- the verb ------------------------------------------------------------------------
+   ; the verb
    (run cmd) (hark ["sh" "-c" ("cd " + dir + " && HORN=none ../love aplay " + cmd + " 2>&1")])
    _ (put (dir + "/a.wav") (ap-wav (ap-fmt 1 2 8000 16 2) (join "" (map (v \ wrle v 4) ^80))))
    _ (put (dir + "/z.raw") (join "" (map (k \ string [0]) ^400)))
@@ -93,7 +91,7 @@
            (run "nope.wav a.wav" = (1 . "nope.wav: No such file or directory\nPlaying WAVE 'a.wav' : Signed 16 bit Little Endian, Rate 8000 Hz, Stereo\n"))
            (run "--bogus" = (1 . "aplay: unrecognized option '--bogus'\n"))
            (run "-c 300 z.raw" = (1 . "aplay: value 300 for channels is invalid\n")))
-   ; the last gulp plays too, so a wav read whole at once is half a second of HORN=none's time
+   ; the last gulp plays too: a wav read whole is half a second of HORN=none's time
    _ (put (dir + "/half.wav") (ap-wav (ap-fmt 1 1 8000 8 1) (join "" (map (k \ string [128]) ^4000))))
    t0 (clock 0)
    _ (test (run "-q half.wav" = (0 . "")) (400 <= clock 0 - t0),

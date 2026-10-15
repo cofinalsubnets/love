@@ -326,6 +326,7 @@ struct g {
  // rescanned by the next minor. any rem_miss forces the next collection major (force sets one).
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by LvRemCap, the fixed capacity
+ uint64_t child_ign;                      // bit n: signal n stays ignored in a spawned child (a shell's trap '')
  int8_t lean;                             // grow-stickiness streak; a grow needs lean >= 2
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
@@ -348,6 +349,7 @@ struct g {
                                           // seeded at ini, moved by `tune`. untraced: a bake drops them.
  uintptr_t cbase, croom;          // a compile's outermost C frame (ev.c's c0), 0 outside one, and the stack it may take
  uintptr_t ask;                   // the words the collector was asked for while it works: an oom's first datum
+ struct pool *pool;               // the threads C kernels share out over (pool.c), made at the first ask
  union {
   intptr_t v0;
   struct {
@@ -556,6 +558,9 @@ intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t)
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),     // ..l/bz2.c
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);  // ..l/xz.c
 uint32_t crc32(unsigned char const*, uintptr_t);                                    // ..l/hash.c
+// the thread pool (src/love/pool.c): fn(ctx, i) for chunks 0..n-1, C kernels only
+void par_run(struct g*, intptr_t, void (*)(void*, intptr_t), void*);
+intptr_t par_width(struct g*, intptr_t);
 // the carried source, a container src/love/archive/srctree.h reads
 extern unsigned char const srctree[];
 extern uintptr_t const srctree_len;

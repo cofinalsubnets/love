@@ -1,13 +1,5 @@
-/* C11 6.7.2.3 -- a struct or union tag defined inside a block belongs to that block, so an
- * inner `struct T` neither reaches the file scope nor collides with an outer one of the same
- * spelling. Ours kept one flat tag table keyed by the spelling, so the LAST definition in the
- * TU laid out every earlier one's members -- gen resolves an offset long after the brace
- * closed, which made the collision a refusal and the escape a wrong answer.
- *
- * 147-enumscope.c holds the enum-constant half of block scope; this is the tag half, and the
- * two do NOT share a mechanism (a tag key rides out to gen, so it renames rather than retires).
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* C11 6.7.2.3: a struct or union tag defined in a block belongs to it, neither
+ * leaking out nor colliding with an outer tag of the same spelling. each check adds 1: the exit code is the pass count. */
 
 extern int printf(const char *, ...);
 

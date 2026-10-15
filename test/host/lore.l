@@ -1,14 +1,12 @@
-; test/host/lore.l -- `love lore`: the games behind one verb. alone it lists them, a
-; name plays one, an unknown name exits 2, and no game is a verb of its own.
-;   cat test/00-init.l test/host/lore.l | out/love
+; test/host/lore.l -- `love lore`: alone it lists the games, a name plays one, an
+; unknown name exits 2, and no game is a verb of its own.
+;   cat test/00-init.l test/host/00-host.l test/host/lore.l | out/love
 (borrow 'lore)
 (borrow 'posix)
 (: lo-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
-   (lo-has? s t) (: n #t (go i) (i + n <= #s && (snip s i (i + n) = t || go (i + 1))) (go 0))
    ; a run on a pty: its status and its lines
    (lo-run argv) (: md (tether argv) o (slurp >md)
-                    (wf p) (gather p @ g (two? g ? g (rest 2, wf p)))
-                    st (wf <md)
+                    st (h-wf <md)
                     _ (close >md)
                     [<st (split "\r\n" o) o])
    games ["apartment" "corridor" "court" "design" "dusk" "garage" "grass88" "grass99" "shaft" "slop" "stones" "story" "tower" "wad" "wade"]
@@ -20,9 +18,9 @@
    ga (lo-run [lo-love "lore" "grass" "--help"])          ; an alias plays its game, unlisted
    (test (games = lore-games ())
          (0 = <ls) (all (n \ elem n (ls 1)) games)
-         (0 = <help) (lo-has? (help 2) "usage: love lore")
-         (2 = <bad) (lo-has? (bad 2) "no game nope")
+         (0 = <help) (has? (help 2) "usage: love lore")
+         (2 = <bad) (has? (bad 2) "no game nope")
          (elem "lore" (vs 1)) !(any (n \ elem n (vs 1)) games)
-         (0 = <gh) (lo-has? (gh 2) "usage: love lore court")
-         (0 = <ga) (lo-has? (ga 2) "usage: love lore grass88") !(elem "grass" (ls 1)),
+         (0 = <gh) (has? (gh 2) "usage: love lore court")
+         (0 = <ga) (has? (ga 2) "usage: love lore grass88") !(elem "grass" (ls 1)),
     puts "lore: ok\n"))

@@ -1,9 +1,6 @@
-/* an inline helper weighed by its structure, not the spelling of its names: linux's
- * kmalloc_array -- long names, a helper around an overflow builtin, __builtin_expect(!!(..))
- * inside it -- and a short-named twin of the same shape answer alike; and an overflow builtin
- * over constants, answered whole. moon.sh holds that the long-named one is spliced and that a
- * constant size reaches kmalloc's __builtin_constant_p; this holds what each answers.
- * freestanding, exit-code only. */
+/* an inline helper weighed by structure, not name length: a long-named helper around an
+ * overflow builtin with __builtin_expect(!!(..)) and its short-named twin answer alike; an overflow
+ * builtin over constants answers whole. exit-code only. */
 
 typedef unsigned long size_t;
 

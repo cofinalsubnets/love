@@ -1,7 +1,5 @@
-/* the debug registers: mov to and from db0..db3, db6 and db7, spelled %db and %dr, as the
- * kernel's hw_breakpoint and debugreg.h lay them, and invpcid over its descriptor, as its tlb
- * code does. privileged, so laid and read back through objdump, never run; main holds only
- * what any lane can say. the asm is x64's. held to gcc. */
+/* mov to and from db0-3, db6, db7 (%db and %dr spellings) and invpcid: privileged, so laid and
+ * checked by objdump, never run; main holds only what any lane can say. x64 asm. held to gcc. */
 
 #if defined(__x86_64__)
 unsigned long rd(void) {

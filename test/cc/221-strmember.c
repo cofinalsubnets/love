@@ -1,7 +1,6 @@
-/* a string initializing a char array that is a member or an element of a LOCAL aggregate
- * lays its bytes there, with the rest zero (6.7.9p14) -- braced or bare, designated, nested,
- * and one exactly as long as the array, which keeps no NUL. freestanding, exit-code only:
- * each wrong case sets its own bit. */
+/* a string initializing a char array member or element of a local aggregate lays its bytes,
+ * zero after (6.7.9p14): braced, bare, designated, nested, exact length without NUL. each wrong
+ * case sets a bit. */
 
 struct mid { int x; char s[13]; long y; };
 struct one { char s[8]; };

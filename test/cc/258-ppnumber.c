@@ -1,7 +1,6 @@
-/* a pp-number runs through identifier characters (C11 6.4.8): `9p_fid_ref` is one token, so a
- * paste onto it makes one name -- linux's DECLARE_TRACEPOINT(9p_fid_ref) pastes
- * __tracepoint_##tp. hex and exponent spellings ride the same way, and ordinary numbers beside
- * them still read as numbers. freestanding, exit-code only. */
+/* a pp-number runs through identifier characters (6.4.8): `9p_fid_ref` is one token, so a paste
+ * onto it makes one name; hex and exponent spellings likewise, plain numbers still numbers.
+ * exit-code only. */
 
 #define TP(tp) static int __tracepoint_##tp
 #define CAT(a, b) a##b

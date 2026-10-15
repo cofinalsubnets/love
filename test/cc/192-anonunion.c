@@ -1,8 +1,6 @@
-/* brace elision past a union, held to gcc: a positional initializer fills a union's first
- * member and passes the rest by (an anonymous union's members are spliced flat, so the walk
- * must know them), an anonymous struct as that first member takes its whole run, a union
- * named as a member stops at one element, and a designator into a union resumes past it.
- * bitfields ahead of a union keep their unit. static images and block scope alike. */
+/* brace elision past a union, held to gcc: positional fill takes the first member (anonymous
+ * members spliced flat), a named union stops at one element, a designator resumes past it,
+ * bitfields keep their unit. static and block scope. */
 
 struct s1 { int a; int b; };
 struct s2 { int a; int b; union { int c; int d; }; struct s1 s; };
