@@ -1315,7 +1315,7 @@
    lp-cov ((cite 'lanemap 'lanes-covers) lp-db)
    lp-plan ((cite 'lanemap 'lanes-plan) ["src/love/gc.c" "src/apps/moon/gen.l" "src/apps/kore/a/b.l" "doc/x.md"]
             ["src/apps/moon/gen.l"] lp-cov)
-   lp-names (map (<) lp-plan)
+   lp-names (map (r \ <r) lp-plan)
    lp-heavy (map (r \ r 1) (drop 1 lp-plan))
    lp-cli (hark [cr-love cr-app "--lanes" "HEAD" "HEAD"])
    _ (test
