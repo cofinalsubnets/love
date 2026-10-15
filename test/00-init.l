@@ -45,8 +45,6 @@
    word (32 2 < max-charm)
    ; a host os underneath (processes, environ); false on inle and in the browser
    hosted (love-os @ ('linux || 'freebsd || 'netbsd) 1 0)
-   ; the gc-stress runtime: collects at every call that may, so growth timings skip
-   gcstress (: c (peep (gauge 0) 3 0) _ (map show ^64) (peep (gauge 0) 3 0 - c > 32))
    ; a real filesystem: native and inle (ramfs), not the browser
    files !(love-os = 'wasm)
    ; (f 0) with stdout to /dev/null, so a terminal's answers don't land on the command line
@@ -65,11 +63,18 @@
                            (go 0))
    ; a server that takes many connections is up when one lands on loopback at port p
    (test-up p) (test-until nom? (_ \ connect ['tcp "127.0.0.1" p] @ c (nom? c ? c (close c)))))
-; best-of-five (f (4 * n)) under 8x (f n): linear sits near 4, quadratic at 16.
-; answers 1 untimed off-host (coarse clock) and under gcstress
-(: (test-took f n) (: t0 (nclock 0) _ (f n) (nclock t0))
-   (test-best f n) (foldl min (test-took f n) (map (u \ test-took f n) ^4))
-   (test-linear f n) (!hosted || gcstress || (: _ (f n) a (test-best f n) b (test-best f (4 * n)) (b < 8 * a))))
+; how a cost grows: (f n) and (f (4 * n)) counted after a warm run, the second held under
+; eight times the first (linear sits near 4, quadratic at 16). the count is the evaluator's
+; ticks (gauge [16]), never the clock; test-linear-words counts the words f allocates, for a
+; cost inside a nif
+(: (test-turns f n) (: p (twirl (_ \ (rest 1000000000)) ()) _ (rest 0)
+     t0 (peep (gauge 0) 16 0) _ (f n) t1 (peep (gauge 0) 16 0) _ (freeze p)
+     (t1 - t0))
+   (test-words f n) (: _ (please 1) w0 (peep (gauge 0) 6 0) _ (f n) _ (please 1)   ; [6] sums each nursery's fill
+                      (peep (gauge 0) 6 0 - w0))
+   (test-grows c f n) (: _ (f n) a (c f n) b (c f (4 * n)) (b < 8 * a))
+   (test-linear f n) (test-grows test-turns f n)
+   (test-linear-words f n) (test-grows test-words f n))
 
 (:: 'test (l \
                (:

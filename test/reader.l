@@ -57,9 +57,9 @@
  (test (rdr-dripped "abc-def 7") (rdr-dripped "2?<>x") (rdr-dripped "\"a \\x41\\u{e9} \\(1 + 2) b\" 3")
        (rdr-dripped "\"\"\"raw \" text\"\"\"") (rdr-dripped "; a comment\n(a . b)")
        (rdr-dripped "#!/usr/bin/env love\n(a b)")
-       (test-linear (n \ sound (rdr-drip ("a" * n) 0)) 16000)
-       (test-linear (n \ sound (rdr-drip ("\"" + "a b " * n + "\"") 0)) 4000)
-       (test-linear (n \ sound (rdr-drip ("; " + "c" * n + "\n7") 0)) 16000)))
+       (test-linear-words (n \ sound (rdr-drip ("a" * n) 0)) 16000)
+       (test-linear-words (n \ sound (rdr-drip ("\"" + "a b " * n + "\"") 0)) 4000)
+       (test-linear-words (n \ sound (rdr-drip ("; " + "c" * n + "\n7") 0)) 16000)))
 
 ; --- the lexer: a name token keeps - ? ! and the prime inside it; a punct-led token is a sigil
 (test

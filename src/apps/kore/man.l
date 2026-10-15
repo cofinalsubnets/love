@@ -1,12 +1,6 @@
-; src/apps/kore/man.l -- `man`: the page a name has, laid out for a terminal.
-;
-;   man [-w] [SECTION] NAME..     man 3 printf     man -w ls
-;
-; lapiz's roff reader takes the page to the document AST, its tty shower lays it out, and
-; less.l pages it; man is the search path, the decompression, and the handing over. MANPATH,
-; else the roots below, in section order. a page is gzipped by its magic bytes, not its
-; suffix; a lone `.so` redirect is followed once. -w answers the path and reads nothing; no
-; terminal pours the page plain. mdoc (.Dd/.Sh/.Nm) is refused by name, not rendered.
+; src/apps/kore/man.l -- `man`: the page a name has, laid out for a terminal. lapiz reads and
+; lays the roff, less.l pages it; man is the search path, the decompression and the handing over.
+; a lone `.so` redirect is followed once; mdoc is refused, not rendered.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -70,10 +64,8 @@
    (man-root p) (: n #p
                    (go i k) (? (i < 0) "" (p i = 47) (k ? (snip p 0 i) (go (i - 1) 1)) (go (i - 1) k))
                    (go (n - 1) 0))
-   ; ..and the file a .so names. it names an UNCOMPRESSED path and the file it names is
-   ; usually gzipped, so the target is looked up the way any page is -- by stem, in its
-   ; section directory -- rather than opened under the name as written. that is the whole
-   ; of `man zcat`: every gzip alias in man1 is a .so onto gzip.1, and the file is gzip.1.gz.
+   ; ..and the file a .so names: by stem in its section directory, not as written, since a
+   ; .so names an uncompressed path and the file is usually gzipped (zcat.1 -> gzip.1.gz)
    (man-follow root so)
     (: d (root + "/" + man-head so)
        h (udirp d ? (man-hits d (man-stem (man-base so))))
@@ -105,9 +97,8 @@
                            [0 ("man: " + nm + " is an mdoc page, which is not read yet")]
                           [1 (p2 ? p2 p) (cite 'lapiz 'rf->tty s2 w)]))))))))
    (man-moan m) (say err m, put err 10, 1)
-   ; a leading operand is the section only if it LOOKS like one -- a digit, then up to three
-   ; more -- and only if a name follows it. `man 411toppm` names a page, and taking its
-   ; first byte for a section leaves no name at all and answers the usage instead.
+   ; a leading operand is a section only if it starts with a digit, is at most 4 long, and a
+   ; name follows it: `man 411toppm` names a page
    (man-sec? rest)
     (two? rest && two? >rest && 0 < #(<rest) <= 4 && 47 < <rest 0 < 58)
    (man-main as)

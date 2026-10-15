@@ -107,7 +107,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
-| pic.l, over png.l, jpeg.l, gif.l and webp.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, a gif played) |
+| pic.l, over png.l, jpeg.l, gif.l, webp.l, bmp.l and pnm.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, a gif played) |
 | net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | src/apps/lush.l | sh / lush |
 
@@ -635,11 +635,12 @@ second what RFC 8446 has every server speak.
 ## pic (src/apps/kore/pic.l)
 
 `pic` is one command with four verbs. With none, it is `pic cat` when its first input is a
-PNG, JPEG or GIF (or a flag is one of cat's, `-g`, `-w`, `-h`) and classic pic otherwise
-(below).
+picture it reads (or a flag is one of cat's, `-g`, `-w`, `-h`) and classic pic otherwise
+(below). It reads PNG, JPEG (turned upright by its EXIF orientation), GIF, WebP, BMP, ICO and
+CUR, and netpbm's PBM, PGM, PPM and PAM.
 
-`pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]` prints each picture, PNG, JPEG or GIF (a
-GIF's first frame), as wide as the terminal (or `COLS`, or 80 when there is none) and no
+`pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]` prints each picture (an animation's first
+frame), as wide as the terminal (or `COLS`, or 80 when there is none) and no
 taller than `ROWS` cells, shrunk and never enlarged. With no FILE it reads stdin, and with
 several it names each above it. `MODE` picks how:
 
@@ -667,7 +668,8 @@ name, the size, the zoom and the frame. `picless`, `pngless`, `jpegless` and `gi
 the same tool.
 
 `pic convert [-q QUALITY] [-t TYPE] IN OUT` writes IN as OUT's type, from its extension
-(`.png`, `.gif`, `.jpg`/`.jpeg`, `.six`/`.sixel`, `.ans`) or `-t`. `ans` is the blocks
+(`.png`, `.gif`, `.jpg`/`.jpeg`, `.ppm`/`.pnm`, `.pam`, `.six`/`.sixel`, `.ans`) or `-t`. A PPM
+drops alpha; a PAM keeps it. `ans` is the blocks
 `pic cat` prints, as text 80 cells wide, for `cat` to show again. `-` is stdin for IN and stdout for
 OUT. A GIF gives its first frame, except that a file already of the type goes across as it
 is (a GIF keeps its frames), unless `-q` asks for a JPEG to be written again. A JPEG has

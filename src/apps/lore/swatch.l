@@ -1,36 +1,11 @@
-; swatch -- a texture from a recipe: layers painted one over another on a picture w by h,
-; x from the left and y down from the top, in texels. the picture starts mid grey, and each
-; layer paints the texels of its shape, the later over the earlier.
-;
-;   layers
-;   (fill PAINT)                        every texel
-;   (rows from to PAINT)                rows from up to but not to; (cols from to PAINT) columns
-;   (rect x0 y0 x1 y1 PAINT)            a box, x0 y0 in and x1 y1 just out
-;   (disc x y r PAINT)                  a round r in radius, its middle at x y
-;   (grid dx dy w PAINT)                lines w wide every dx columns and every dy rows; 0 none
-;   (checker dx dy PAINT)               every other cell dx by dy, the corner's left as it was
-;   (stripes every w slant PAINT)       bands w wide every so many columns, leaning slant
-;                                       across for each row down: 0 upright, 1 or -1 diagonal
-;   (dots dx dy r PAINT)                a round r in radius in the middle of every cell dx by
-;                                       dy: rivets, holes
-;   (bevel dx dy w LIGHT DARK)          every cell dx by dy a panel, its top and left w wide
-;                                       painted LIGHT, its bottom and right DARK
-;   (patches size cover PAINT)          blotches size across, cover 0 to 1 how much: grime
-;   (within x0 y0 x1 y1 LAYER ..)       the layers, painting only inside the box
-;   PAINT                               a paint alone paints every texel, as fill
-;
-;   paints
-;   (rgb r g b) (grey g) or a number    that colour, 0 to 1
-;   (shade k)                           what is there times k: darker below 1
-;   (tint (rgb r g b))                  what is there times a colour
-;   (mix (rgb r g b) t)                 what is there t of the way to a colour
-;   (noise size amount) (noise sx sy amount)  what is there times 1 less up to amount,
-;                                       varying smoothly over size texels; size 1 a grain
-;   hole                                nothing: the surface not drawn there
-;
-;   (swatch-fault layers)               () when every layer is understood, else [Q USAGE]
-;   (swatch-texel layers)               (\ x y colour), or () for a hole
-;   (swatch w h layers)                 the picture, as mesh-pic makes it
+; swatch -- a texture from a recipe: layers painted in order over a w by h picture, mid grey
+; at first; x from the left, y down, in texels. a layer is one of `usage` below, a bare paint a fill.
+; ranges take from and leave out to; stripes lean slant columns per row down; checker leaves the
+; corner cell; bevel paints top/left LIGHT, bottom/right DARK; patches cover is 0 to 1.
+; paints: (rgb r g b), (grey g) or a number, 0 to 1; (shade k) and (tint rgb) multiply what is
+; there, (mix rgb t) goes t of the way to a colour, (noise size [sy] amount) multiplies by 1 less
+; up to amount, smooth over size texels. hole leaves the texel undrawn; a later colour fills it, shading keeps it a hole.
+; (swatch-fault l) is () or [Q USAGE]; (swatch-texel l) is (\ x y colour-or-()).
 (module (swatch swatch swatch-fault swatch-texel)
 (borrow 'vec)                           ; vn, cmix, c*
 (borrow 'mesh)                          ; mesh-pic

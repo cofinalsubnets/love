@@ -6,8 +6,11 @@
 //   (lzma2e-by s base)       s coded against base: the stream reaches into base as if it had
 //                            just been said, and carries only s | ()
 //   (lzma2d-by z base)       such a stream with its base -> s | ()
-//   (lzmad s props dict n)   a .lzma body (after its 13-byte head) -> its bytes | () | 1 past
-//                            XZ_MAX; n -1 unknown
+//   (lzma-new props dict n)  a state for a .lzma body (after its 13-byte head) as it comes; n
+//                            -1 unknown -> the state | () | 1 a window past XZ_MAX
+//   (lzma-feed st s)         the next piece in, "" once there is no more -> bytes out (all of s
+//                            taken), (bytes . rest) paused with rest to feed again, or ended with
+//                            ("" . rest) once the bytes are out, | () corrupt
 //   (crc64 s)                CRC-64/XZ as the 8 little-endian bytes a check field holds
 //   (crc64-on c s)           the same carried on: c what crc64 said of the bytes before s
 //   (lzma2-new dict)         a state for LZMA2 a chunk at a time: the model, and a window of
@@ -28,6 +31,7 @@
 #define LZ_TOP (1u << 24)
 #define LZ_MINLEN 2
 #define LZ_MAXLEN 273
+#define LZ_REQ 20                               // the most input one symbol reads
 // the output is one string in the heap: past this a stream is refused, not grown into
 #define XZ_MAX ((uintptr_t) 1 << 30)
 
@@ -114,23 +118,12 @@ static love_noinline uintptr_t lz_fmlit(struct lz_cs *s, lzp *p, uintptr_t mb) {
  s->rg = rg, s->cd = cd, s->ip = ip;
  return sy; }
 #define LZ_CALL(call, v) { cs.rg = rg, cs.cd = cd, cs.ip = ip; v = call; rg = cs.rg, cd = cs.cd, ip = cs.ip; }
-// the output, which is the dictionary. `grow` lets a sizeless .lzma double it as it goes.
-struct lz_out { uint8_t *b; uintptr_t n, cap, base; int grow, big; };
-
-static int out_room(struct lz_out *o, uintptr_t k) {
- if (o->n + k <= o->cap) return 1;
- if (!o->grow) return 0;
- if (o->n + k > XZ_MAX) return o->big = 1, 0;
- uintptr_t c = o->cap < 65536 ? 65536 : o->cap;
- while (c < o->n + k) c *= 2;
- uint8_t *nb = alloc(NULL, c);
- if (!nb) return 0;
- if (o->n) memcpy(nb, o->b, o->n);
- if (o->b) alloc(o->b, 0);
- o->b = nb; o->cap = c; return 1; }
+// the output, which is the dictionary. `pause` stops at a symbol's start where cap may not
+// hold one more match (1, 2) or the input may not hold one more symbol (1): a stream fed in pieces
+struct lz_out { uint8_t *b; uintptr_t n, cap, base; int pause; };
 
 // decode until `lim` bytes stand in the output or, with eopm, the end marker says so.
-// -> 1 done, 2 the marker seen, 0 corrupt. a match may not run past lim. the coder, the
+// -> 1 done, 2 the marker seen, 3 paused for input, 0 corrupt. a match may not run past lim. the coder, the
 // state and rep0 ride locals, back in r and m at the end for the next chunk; the other reps
 // move only on a rep, and stay in m.
 static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr_t lim, int eopm) {
@@ -141,15 +134,17 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
  int rc = 1;
  if (r->bad) ip = ie + 1;
  if (eopm) lim = ~(uintptr_t) 0;
+ uintptr_t hlim = lim, istop = (uintptr_t) ie;
+ if (o->pause) {
+  if (o->cap - LZ_MAXLEN < lim) lim = o->cap - LZ_MAXLEN;
+  if (o->cap < hlim) hlim = o->cap;
+  if (o->pause == 1) istop -= LZ_REQ; }
  while (n < lim) {
   uintptr_t ps = n & (((uintptr_t) 1 << m->pb) - 1);
-  if (ip > ie) { rc = 0; break; }
+  if ((uintptr_t) ip > istop) { rc = ip > ie ? 0 : 3; break; }
   LZ_BIT(&m->ismatch[st][ps], b)
   if (!b) {
-   if (n >= o->cap) {
-    o->n = n;
-    if (!out_room(o, 1)) { rc = 0; break; }
-    ob = o->b; }
+   if (n >= o->cap) { rc = 0; break; }
    uintptr_t prev = n > o->base ? ob[n - 1] : 0, s = 1;
    lzp *p = m->lit + 0x300 * (((n & (((uintptr_t) 1 << m->lp) - 1)) << m->lc) + (prev >> (8 - m->lc)));
    if (st >= 7) {                                 // led by the byte at rep0 while the bits agree:
@@ -186,10 +181,7 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
     LZ_BIT(&m->isrep0l[st][ps], b)
     if (!b) {                                     // the short rep: one byte from rep0
      if (n - o->base <= r0) { rc = 0; break; }
-     if (n >= o->cap) {
-      o->n = n;
-      if (!out_room(o, 1)) { rc = 0; break; }
-      ob = o->b; }
+     if (n >= o->cap) { rc = 0; break; }
      ob[n] = ob[n - r0 - 1], n++;
      st = st < 7 ? 9 : 11;
      continue; } }
@@ -204,11 +196,8 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
    LZ_LEN(&m->rep, ps, len)
    st = st < 7 ? 8 : 11; }
   len += LZ_MINLEN;
-  if (n - o->base <= r0 || ip > ie || lim - n < len) { rc = 0; break; }
-  if (o->cap - n < len) {
-   o->n = n;
-   if (!out_room(o, len)) { rc = 0; break; }
-   ob = o->b; }
+  if (n - o->base <= r0 || ip > ie || hlim - n < len) { rc = 0; break; }
+  if (o->cap - n < len) { rc = 0; break; }
   uint8_t *dp = ob + n, *sp = dp - r0 - 1, *de = dp + len;
 #if wideld
   if (r0 >= 7 && o->cap - n >= len + 8)              // whole words, the last running into room
@@ -248,7 +237,7 @@ static int64_t l2_walk(const uint8_t *s, uintptr_t n, uintptr_t *end) {
 // decode the chunks into out (cap its exact size). -> 0 ok, -1 corrupt. the reset rules:
 // a dict reset first, props before the first LZMA chunk and after a 0x01.
 static int l2_dec(const uint8_t *s, uint8_t *out, uintptr_t cap, struct lz_model *m, uintptr_t pre) {
- struct lz_out o = { out, pre, cap, 0, 0, 0 };        // pre bytes of out said already: a preset base
+ struct lz_out o = { out, pre, cap, 0, 0 };        // pre bytes of out said already: a preset base
  struct lz_rd r;
  uintptr_t i = 0;
  int needdict = !pre, needprops = 1;
@@ -722,7 +711,7 @@ static intptr_t l2_step(struct l2_st *S, uint8_t *win, const uint8_t *s, uintptr
  if (n != h + k) return -1;
  if (c >= 0xa0) lz_reset(&S->m);
  l2_slide(S, win, u);
- struct lz_out o = { win, S->n, S->cap, S->base, 0, 0 };
+ struct lz_out o = { win, S->n, S->cap, S->base, 0 };
  struct lz_rd r;
  if (!rd_init(&r, s + h, s + h + k) || lz_run(&S->m, &r, &o, o.n + u, 0) != 1) return -1;
  rd_norm(&r);
@@ -831,40 +820,91 @@ love_noinline static struct g *host_lzma2d_by(struct g *g) {
  if (buf) alloc(buf, 0);
  return g; }
 
-love_noinline static struct g *host_lzmad(struct g *g) {
- word sw = g->sp[0], pw = g->sp[1], nw = g->sp[3];
- struct lz_model *m = NULL;
+// a .lzma body as it comes, in a cask: the model, the coder between feeds, the input a symbol
+// might still want, and a window of the last dict bytes with LM_ROOM past them, slid down by
+// a multiple of 16 as l2_slide does. a feed answers what its input decoded, LM_ROOM at most:
+// past that it pauses and hands back the input it did not reach
+#define LM_ROOM ((uintptr_t) 1 << 20)
+#define LM_MAGIC 0x6c7a6d6131u
+struct lm_st { uint64_t magic, n, cap, dict, tot, want, litn; uint32_t range, code, pend, started, done;
+               uint8_t pin[LZ_REQ + 4]; struct lz_model m; };
+#define LM_HEAD ((sizeof(struct lm_st) + 7) & ~(uintptr_t) 7)
+static struct str *lm_cask(word x) {
+ struct str *s = cask_str(x);
+ struct lm_st *S = s && s->len > LM_HEAD ? (struct lm_st*) s->bytes : NULL;
+ return S && S->magic == LM_MAGIC && LM_HEAD + S->litn * sizeof(lzp) + S->cap == s->len ? s : NULL; }
+love_noinline static struct g *host_lzma_new(struct g *g) {
+ word pw = g->sp[0], dw = g->sp[1], nw = g->sp[2];
  struct lz_model pm;
- if (!strp(sw) || !oddp(pw) || !oddp(nw) || !oddp(g->sp[2]) || getcharm(nw) < -1
-     || getcharm(pw) < 0 || !lz_props(&pm, (unsigned) getcharm(pw), 12)
-     || !(m = lz_new(pm.lc + pm.lp))) {
-  g->sp[3] = ZeroPoint, g->sp += 3; return g; }
- m->lc = pm.lc; m->lp = pm.lp; m->pb = pm.pb;
- lz_reset(m);
+ if (!oddp(pw) || !oddp(dw) || !oddp(nw) || getcharm(nw) < -1 || getcharm(pw) < 0
+     || !lz_props(&pm, (unsigned) getcharm(pw), 12))
+  return g->sp[2] = ZeroPoint, g->sp += 2, g;
+ uintptr_t dict = (uintptr_t) getcharm(dw) & 0xffffffffu;
  intptr_t want = getcharm(nw);
- struct lz_rd r;
- int rc = 0;
- if (want >= 0 && (uintptr_t) want > XZ_MAX) {
-  alloc(m, 0);
-  g->sp[3] = putcharm(1), g->sp += 3; return g; }
- if (want >= 0) {                                   // the size is known: straight into the string
-  if (!ok(g = str0(g, (uintptr_t) want))) { alloc(m, 0); return g; }
-  struct lz_out o = { (uint8_t*) txt(g->sp[0]), 0, (uintptr_t) want, 0, 0, 0 };
-  const uint8_t *s = (const uint8_t*) txt(g->sp[1]);
-  rc = rd_init(&r, s, s + len(g->sp[1])) && lz_run(m, &r, &o, (uintptr_t) want, 0) && !r.bad;
-  alloc(m, 0);
-  g->sp[4] = rc ? g->sp[0] : ZeroPoint, g->sp += 4;
-  return g; }
- struct lz_out o = { NULL, 0, 0, 0, 1, 0 };
- const uint8_t *s = (const uint8_t*) txt(sw);
- rc = rd_init(&r, s, s + len(sw)) && lz_run(m, &r, &o, 0, 1) == 2;
- alloc(m, 0);
- if (rc && ok(g = str0(g, o.n))) {
-  if (o.n) memcpy(txt(g->sp[0]), o.b, o.n);
-  g->sp[4] = g->sp[0], g->sp += 4; }
- else if (ok(g)) g->sp[3] = o.big ? putcharm(1) : ZeroPoint, g->sp += 3;
- if (o.b) alloc(o.b, 0);
- return g; }
+ if (dict < 4096) dict = 4096;
+ if (want >= 0 && (uintptr_t) want < dict) dict = want < 4096 ? 4096 : (uintptr_t) want;
+ if (dict > XZ_MAX) return g->sp[2] = putcharm(1), g->sp += 2, g;
+ uintptr_t litn = (uintptr_t) 0x300 << (pm.lc + pm.lp), cap = dict + LM_ROOM,
+           n = LM_HEAD + litn * sizeof(lzp) + cap,
+           sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
+ if (!ok(g = have(g, sreq + breq))) return g;
+ struct str *s = ini_str(bump(g, sreq), n);
+ memset(s->bytes, 0, LM_HEAD);
+ struct lm_st *S = (struct lm_st*) s->bytes;
+ S->magic = LM_MAGIC, S->cap = cap, S->dict = dict, S->litn = litn, S->want = (uint64_t) want;
+ S->m.lc = pm.lc, S->m.lp = pm.lp, S->m.pb = pm.pb, S->m.lit = (lzp*) (s->bytes + LM_HEAD);
+ lz_reset(&S->m);
+ union u *k = bump(g, breq);
+ cask(k)->ap = lvm_cask, cask(k)->str = s;
+ tagthread(k, Width(struct cask));
+ return g->sp[2] = word(k), g->sp += 2, g; }
+love_noinline static struct g *host_lzma_feed(struct g *g) {
+ struct str *cs = lm_cask(g->sp[0]);
+ if (!cs || !strp(g->sp[1])) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+ struct lm_st *S = (struct lm_st*) cs->bytes;
+ uintptr_t sn = len(g->sp[1]), in = S->pend + sn, o0 = S->n, used = 0;
+ int last = !sn, rc = S->done ? 2 : 1;
+ uint8_t *buf = alloc(NULL, in + 1);
+ if (!buf) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+ memcpy(buf, S->pin, S->pend), memcpy(buf + S->pend, txt(g->sp[1]), sn);
+ if (!S->done) {
+  uint8_t *win = (uint8_t*) cs->bytes + LM_HEAD + S->litn * sizeof(lzp);
+  S->m.lit = (lzp*) (cs->bytes + LM_HEAD);          // the cask moves: the pointer is laid again
+  if (S->cap - S->n <= LZ_MAXLEN) {
+   uintptr_t shift = (S->n - (S->n < S->dict ? S->n : S->dict)) & ~(uintptr_t) 15;
+   memmove(win, win + shift, S->n - shift), S->n -= shift, o0 = S->n; }
+  struct lz_rd r = { buf, buf + in, S->range, S->code, 0 };
+  if (!S->started) {
+   if (in < 5 && !last) rc = 3;
+   else if (!rd_init(&r, buf, buf + in)) rc = 0;
+   else S->started = 1; }
+  if (S->started && rc == 1) {
+   int known = S->want != (uint64_t) -1;
+   struct lz_out o = { win, S->n, S->cap - S->n < LM_ROOM ? S->cap : S->n + LM_ROOM, 0, last ? 2 : 1 };
+   rc = known && S->tot == S->want ? 1 : lz_run(&S->m, &r, &o, known ? S->n + (S->want - S->tot) : 0, !known);
+   if (r.bad && rc) rc = 0;
+   S->tot += o.n - S->n, S->n = o.n, S->range = r.range, S->code = r.code;
+   if (rc == 1 && known && S->tot == S->want) rc = 2;
+   else if (rc == 1 && last && o.n < o.cap - LZ_MAXLEN) rc = 0;   // the input over, the stream not
+   used = (uintptr_t) (r.p - buf); }
+  if (rc == 2) S->done = 1; }
+ if (!rc) return alloc(buf, 0), g->sp[1] = ZeroPoint, g->sp += 1, g;
+ uintptr_t on = S->n - o0, rest = in - used;
+ if (rc == 3) {                                       // the rest kept for the next feed
+  memcpy(S->pin, buf + used, rest), S->pend = (uint32_t) rest, rest = 0; }
+ else S->pend = 0;
+ uintptr_t need = str_width(on) + (rc == 3 ? 0 : str_width(rest) + Width(struct chain));
+ if (!ok(g = have(g, need))) return alloc(buf, 0), g;
+ cs = lm_cask(g->sp[0]), S = (struct lm_st*) cs->bytes;       // have may move it
+ struct str *o = ini_str(bump(g, str_width(on)), on);
+ memcpy(o->bytes, cs->bytes + LM_HEAD + S->litn * sizeof(lzp) + o0, on);
+ if (rc == 3) return alloc(buf, 0), g->sp[1] = word(o), g->sp += 1, g;
+ struct str *t = ini_str(bump(g, str_width(rest)), rest);
+ memcpy(t->bytes, buf + used, rest);
+ alloc(buf, 0);
+ struct chain *c = ini_chain(bump(g, Width(struct chain)), (intptr_t) o, (intptr_t) t);
+ return g->sp[1] = word(c), g->sp += 1, g; }
+
 
 love_noinline static struct g *host_crc64(struct g *g) {
  if (!strp(g->sp[0])) { g->sp[0] = ZeroPoint; return g; }
@@ -923,7 +963,8 @@ static LvmWrap(lvm_lzma2d, host_lzma2d)
 static LvmWrap(lvm_lzma2e, host_lzma2e)
 static LvmWrap(lvm_lzma2e_by, host_lzma2e_by)
 static LvmWrap(lvm_lzma2d_by, host_lzma2d_by)
-static LvmWrap(lvm_lzmad, host_lzmad)
+static LvmWrap(lvm_lzma_new, host_lzma_new)
+static LvmWrap(lvm_lzma_feed, host_lzma_feed)
 static LvmWrap(lvm_crc64, host_crc64)
 
 LvDef("lzma2len", lzma2len, 1, "xz");
@@ -931,9 +972,10 @@ LvDef("lzma2d", lzma2d, 1, "xz");
 LvDef("lzma2e", lzma2e, 2, "xz");
 LvDef("lzma2e-by", lzma2e_by, 2, "xz");
 LvDef("lzma2d-by", lzma2d_by, 2, "xz");
-LvDef("lzmad", lzmad, 4, "xz");
 LvDef("crc64", crc64, 1, "xz");
 LvDef("crc64-on", crc64_on, 2, "xz");
 LvDef("lzma2-new", lzma2_new, 1, "xz");
 LvDef("lzma2-chunk", lzma2_chunk, 2, "xz");
+LvDef("lzma-new", lzma_new, 3, "xz");
+LvDef("lzma-feed", lzma_feed, 2, "xz");
 #endif
