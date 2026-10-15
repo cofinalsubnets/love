@@ -89,11 +89,11 @@
    have-mtools (hark '("sh" "-c" "command -v mdir >/dev/null && echo yes") @ r
                 (! <r && 0 < #>r))
    _ (? have-mtools
-        (: ip "out/.fat-probe.img"
+        (: ip ("out/.fat-probe." + show (getpid 0) + ".img")   ; per process: shards run at once
            _ (open ip "w" @ p (say p (string img), close p))
            md (hark ["mdir" "-i" ip "-b" "::/"])
            mt (hark ["mtype" "-i" ip "::/limine.conf"])
-           lp "out/.fat-probe.txt"
+           lp ("out/.fat-probe." + show (getpid 0) + ".txt")
            _ (open lp "w" @ p (say p "from the host side", close p))
            mc (hark ["mcopy" "-i" ip lp "::/fromhost.txt"])
            s (: q (open ip "r") t (slurp q) (close q, t))

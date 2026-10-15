@@ -37,7 +37,7 @@
 
 
   ; --- the fs nifs: stat readdir unlink lseek (the posix_ lane in src/love/posix.c) -----
-  (: d "out/.fs-nif-probe" f (d + "/x")
+  (: d ("out/.fs-nif-probe." + show (getpid 0)) f (d + "/x")   ; per process: shards run at once
      _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
      _ (unlink f)                                     ; a clean slate, tolerated if absent
      ; write 5 bytes through the port lane, then measure with stat
@@ -79,7 +79,8 @@
       ; unlink: () ok, then the file really is gone, and a re-unlink says so
       !(unlink f)
       ((stat f) = 'enoent) ((readdir d) = ())
-      ('enoent = (unlink f))))
+      ('enoent = (unlink f))
+      !(rmdir d)))
 
   ; --- the raw-fd lane: the port ops with a charm where the port goes ------------
   ; an fd carries no buffer of love's and no seat, so each op is one motion on the
@@ -103,12 +104,12 @@
       (test (97 = a) ("bcdef" = x) (-1 = e) ("" = y))))
 
   ; a file reads the same bytes both ways, gulp boundaries and all
-  (: d "out/.fd-lane-probe" f (d + "/x")
+  (: d ("out/.fd-lane-probe." + show (getpid 0)) f (d + "/x")
      _ (mkdir d 493)
      _ (open f "w" @ p (say p ("abcdefgh" * 2000), close p))
      fd (openfd f 0) a (slurp fd) _ (close fd)
      p (open f "r") b (slurp p) (close p,
-                                 unlink f,
+                                 unlink f, rmdir d,
                                  (test (a = b) (16000 = #a))))
 
   ; a row that is not there swallows and reads as the end: a closed seat's output
