@@ -746,7 +746,7 @@ test_fat: dist-fat
 # freebsd-x64 or netbsd-x64 (doc/bee.md, HOSTS), or FBSD_SSH / NBSD_SSH for a release, and
 # without one the gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
 # NBSD_SEED=1 adds the on-box `love seed` trophy leg (minutes).
-.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64
+.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 test_freebsd_arm test_netbsd_arm
 test_freebsd test_netbsd: test_%: host $(love0) out/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $*
 # the second ISA: freebsd-a64 and netbsd-a64 hosts are aarch64 boxes, and the local half of each
@@ -758,6 +758,10 @@ test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) out/mooncc0.image
 # qemu-riscv64. the doors there are each kernel's number register: linux a7, freebsd t0, netbsd t6.
 test_freebsd_rv64 test_netbsd_rv64: test_%_rv64: host $(love0) out/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* rv64
+# 32-bit arm: the arm64 boxes run armv7 binaries in their 32-bit lane, the local half rides
+# qemu-arm. netbsd's door there is svc #255 with the number in r0.
+test_freebsd_arm test_netbsd_arm: test_%_arm: host $(love0) out/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* arm
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the whole corpus. Opt-in: needs the -pie toolchain, x86-64 only.

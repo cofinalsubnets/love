@@ -29,9 +29,13 @@ case "$os-$arch" in
   netbsd-a64)  box=${NBSD_ARM64_SSH:-}; sd=${NBSD_ARM64_SEED:-} ;;
   freebsd-rv64) box=${FBSD_RV64_SSH:-}; sd= ;;    # the trophy ships an x64 love; none for rv64 yet
   netbsd-rv64)  box=${NBSD_RV64_SSH:-}; sd= ;;
+  freebsd-arm) box=${FBSD_ARM_SSH:-${FBSD_ARM64_SSH:-}}; sd= ;;
+  netbsd-arm)  box=${NBSD_ARM_SSH:-${NBSD_ARM64_SSH:-}}; sd= ;;
   *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
 esac
 [ -n "$box" ] || box=$("$ho/love" bee --on "$os-$arch" --ssh 2>/dev/null) || box=
+# an arm64 BSD runs armv7 binaries in its 32-bit lane, so an a64 box answers for arm too
+[ -n "$box" ] || [ "$arch" != arm ] || box=$("$ho/love" bee --on "$os-a64" --ssh 2>/dev/null) || box=
 t=test_$os; [ "$arch" = x64 ] || t=test_${os}_${arch}
 d=$ho/$os-$arch
 
@@ -48,6 +52,9 @@ if [ "$arch" = a64 ]; then
 elif [ "$arch" = rv64 ]; then
   command -v qemu-riscv64 > /dev/null || gate_skip "$t: skipped (no qemu-riscv64 for the local half)"
   run() { qemu-riscv64 "$@"; }
+elif [ "$arch" = arm ]; then
+  command -v qemu-arm >/dev/null 2>&1 || gate_skip "$t: skipped (no qemu-arm for the local half)"
+  run() { qemu-arm "$@"; }
 else
   run() { "$@"; }
 fi

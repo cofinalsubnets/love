@@ -2,7 +2,12 @@
 
 void *mmap(void *a, long n, int prot, int fl, int fd, off_t off) {
   long r;
-#ifdef LvOsTranslate
+#if defined(__ARM_EABI__)
+  if (__love_osv >= 2)                     /* both BSDs: (addr len prot flags fd PAD pos), pos an even pair */
+    r = __love_fb8(__love_osv == 3 ? 197 : NR_fb_mmap, (long) a, n, prot, (int) __love_mapfb(fl), fd, 0,
+                   (long) off, (long) (off >> 32));
+  else
+#elif defined(LvOsTranslate)
   if (__love_osv == 3)
     /* netbsd keeps the classic pad: (addr len prot flags fd PAD pos), the
      * seventh riding the stack through the wide door */

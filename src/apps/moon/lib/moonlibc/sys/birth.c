@@ -15,9 +15,8 @@ int __love_birth(char const *p, int follow, struct timespec *out) {
   if (__love_osv == 3) {
     struct __nb_stat f;
     if (er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) &f, follow ? 0 : 0x200)) < 0) return -1;
-    if (!f.btime) return 1;
-    out->tv_sec = f.btime, out->tv_nsec = f.btimensec;
-    return 0; }
+    if (!f.btim.tv_sec) return 1;
+    return *out = f.btim, 0; }
 #endif
   { struct __lx_statx sx;                 /* linux; a seat whose door lacks the number refuses */
     long fl = follow ? 0 : AT_SYMLINK_NOFOLLOW;

@@ -604,9 +604,29 @@
                (call main)
                (mov sp r4) (pop r4)
                (ret))
-   ; the arm entry (linux eabi): argc at [sp], 8-aligned, the vector handed to __love_start in
-   ; r0, then exit_group 248 in r7 (exit 1 if it returns). two pushes keep the alignment
-   crt0-arm '((mov r0 sp)
+   ; the arm entry: argc at [sp], 8-aligned, the vector handed to __love_start in r0 and what
+   ; the entry says of the kernel in r1. linux and freebsd zero r0, freebsd's 32-bit lane on
+   ; arm64 hands the vector there, netbsd ps_strings -- so a zero is asked later (os.c), sp
+   ; is freebsd, anything else netbsd. each side exits by its own door if main returns. two
+   ; pushes keep the alignment
+   crt0-arm '((mov r2 sp)
+              (cmp r0 0)
+              (br eq c0r-ask)
+              (cmp r0 r2)
+              (br eq c0r-fb)
+              (mov r0 r2)
+              (li r1 3)
+              (call __love_start)
+              (mov r12 r0)
+              (li r0 1) (raw (255 223))
+              (label c0r-fb)
+              (mov r0 r2)
+              (li r1 2)
+              (call __love_start)
+              (li r7 1) (sys)
+              (label c0r-ask)
+              (mov r0 r2)
+              (li r1 0)
               (call __love_start)
               (li r7 248) (sys)
               (li r7 1) (sys)

@@ -100,7 +100,12 @@ long __love_osdetect(void) {
    * and hands 2 down, and this branch only ever asks linux from netbsd.
    * on riscv the doors are leaves too: linux reads the number in a7 and netbsd
    * in t6, so each leaf sets both; freebsd is out by the same entry protocol. */
-# if defined(__aarch64__) || defined(__riscv)
+# if defined(__ARM_EABI__)
+  /* crt0 parted netbsd and freebsd's 32-bit lane by the entry: a zero r0 is linux or freebsd
+   * on arm. close(-1) is 6 on both, and the linux door leaves the carry unread: linux answers
+   * -EBADF, freebsd +EBADF */
+  return __love_sys(6, -1, 0, 0, 0, 0, 0) > 0 ? 2 : 1;
+# elif defined(__aarch64__) || defined(__riscv)
   long r = __love_nbp20(-1);
   if (r <= 0) return 1;
   { int mib[2] = {1, 1};
@@ -190,13 +195,11 @@ static short const os_nr[][3] = {
   {NR_getpeername,   NR_fb_getpeername,  31},
   {NR_setsockopt,    NR_fb_setsockopt,  105},
   {NR_getsockopt,    NR_fb_getsockopt,  118},
-  {57,               NR_fb_fork,          2},   /* fork: linux's fork.c rides clone (56,
-                                                 * unmapped); a BSD branch calls 57 */
   {NR_execve,        NR_fb_execve,       59},
   {NR_execveat,      NR_fb_fexecve,     465},   /* the member builds the OS shape: the BSDs
                                                  * have fexecve(fd av ev), linux wants the
                                                  * empty path and AT_EMPTY_PATH */
-  {60,               NR_fb_exit,          1},   /* exit and exit_group are one act here */
+  {NR_exit,          NR_fb_exit,          1},   /* exit and exit_group are one act here */
   {NR_wait4,         NR_fb_wait4,       449},
   /* getrusage: freebsd's struct agrees through the two timevals, which is the whole
    * of what the member reads. netbsd versioned the call away (__getrusage50) and
@@ -257,7 +260,7 @@ static short const os_nr[][3] = {
  * defines per arch, so the written order is ascending on x64 (read 0, write
  * 1, close 3 ..) and is NOT on the asm-generic arches (read 63, write 64, close
  * 57 ..). An early exit on a passed key would answer ENOSYS to almost every
- * call the moment this lane opens on arm64. 71 rows, and only on a BSD. */
+ * call the moment this lane opens on arm64. a short table, and only on a BSD. */
 long __love_nrfb(long n) {
   int col = __love_osv == 3 ? 2 : 1;
   for (unsigned i = 0; i < sizeof os_nr / sizeof *os_nr; i++)

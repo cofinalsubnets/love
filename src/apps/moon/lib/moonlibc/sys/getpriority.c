@@ -6,7 +6,7 @@
 int getpriority(int w, id_t who) {
   if (__love_osv >= 2) {
     long r = __love_sys(NR_fb_getpriority, w, (long) who, 0, 0, 0, 0);
-    if (r < -4096L) { __errno_v = (int) __love_errfb(-r - 4096); return -1; }
+    if (__love_parked(r)) { __errno_v = (int) __love_errfb(-r - 4096); return -1; }
     return (int) r; }
   long r = er(sc2(NR_getpriority, w, (long) who));
   return r < 0 ? -1 : (int) (20 - r); }

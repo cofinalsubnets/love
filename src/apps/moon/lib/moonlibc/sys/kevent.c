@@ -22,9 +22,10 @@ int kevent(int kq, struct kevent const *ch, int nch,
       if (c->filter == EVFILT_SIGNAL && (id = __love_sigfb(id)) < 0) {
         __errno_v = EINVAL; return -1; }
       if (nb) {
+        memset(nc + i, 0, sizeof nc[i]);
         nc[i].ident = (unsigned long) id;
         nc[i].filter = (unsigned int) (-(long) c->filter - 1);
-        nc[i].flags = c->flags; nc[i].fflags = c->fflags; nc[i]._p0 = 0;
+        nc[i].flags = c->flags; nc[i].fflags = c->fflags;
         nc[i].data = c->data; nc[i].udata = c->udata; }
       else fc[i] = *c, fc[i].ident = (unsigned long) id; }
     if (er(fb6(nr, kq, (long) (nb ? (void*) nc : (void*) fc), k, 0, 0, 0)) < 0)
