@@ -33,6 +33,7 @@
 #
 # usage: vec.sh ARCH ELF OBJ
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 arch=$1; elf=$2; obj=$3
 work=${TMPDIR:-/tmp}/vec.$$
@@ -41,7 +42,6 @@ trap 'rm -rf "$work"' EXIT
 # a `while read` on the end of a pipe is its own process, so a failure raised
 # in one cannot set a variable here -- it leaves a mark on the filesystem instead.
 fail() { echo "FAIL test_vec($arch): $*" >&2; : > "$work/failed"; }
-have() { command -v "$1" >/dev/null 2>&1; }
 
 case $arch in
   x64)  qemu=qemu-system-x86_64;  mach="-M q35" ;;
