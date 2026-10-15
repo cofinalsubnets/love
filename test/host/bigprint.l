@@ -10,7 +10,24 @@
    b (best show v2)
    _ (test (b < 12 * a) (b < 1000))
 
-   ; a show aboard a task yields, so a freeze lands at once
+   ; reading by halves, the same; radix too, which walked a digit at a time
+   (rd s) <(sound s)
+   r1 (show v2)  r2 (show (1048576 5))
+   c (best rd r1)
+   d (best rd r2)
+   (rx b) (x \ radix x b)
+   e (best (rx 16) v1)
+   f (best (rx 7) v1)
+   _ (test (d < 12 * c) (d < 3000) (e < 300) (f < 300))
+
+   ; a product eight times lopsided goes in short-sized karatsuba pieces: well under the
+   ; square of its long operand, which schoolbook pieces cost as much as
+   la ((64 * 16384) 2 - 5)  lb ((64 * 2048) 2 - 3)
+   h (best (x \ x * lb) la)
+   i (best (x \ x * x) la)
+   _ (test (2 * h < i))
+
+   ; a freeze lands while a long show runs
    x (1048576 5)
    pid (twirl (_ \ show x) ())
    t0 (clock 0)

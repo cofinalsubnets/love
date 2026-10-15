@@ -256,16 +256,23 @@
    (hue-hx c) (? (48 <= c && c <= 57) (c - 48) (65 <= c && c <= 70) (c - 55) (c - 87))
    (hue-byte t k) (hue-hx (t k) * 16 + hue-hx (t (k + 1)))
    (hue-faces fs) (foldl (a \ f \ a + (f = 'bold ? "1;" "3;")) "" fs)
+   (hue-rgb g) (show (hue-byte g 1) + ";" + show (hue-byte g 3) + ";" + show (hue-byte g 5))
+   ; a row's ground, when it has one, rides as its fifth and sixth columns
    (hue-pen row deep)
     (: n (row 1) g (row 2) fs (row 3)
        ("\e[" + hue-faces fs
-        + (deep ? ("38;2;" + show (hue-byte g 1) + ";" + show (hue-byte g 3)
-                          + ";" + show (hue-byte g 5))
-             ("38;5;" + show n))
+        + (deep ? ("38;2;" + hue-rgb g) ("38;5;" + show n))
+        + (#row < 6 ? "" (deep ? (";48;2;" + hue-rgb (row 5)) (";48;5;" + show (row 4))))
         + "m"))
+   ; a theme with a Normal row owns the ground: 'ground sets it, 'off ends a run back on
+   ; it rather than on the terminal's, and Visual, when there is one, is the selection's
    (hue-pens rows deep)
     (foldl (b \ r \ pin b <r (hue-pen r deep)) (tablet ()) rows @ gp
-       (foldl (b \ c \ pin b (hue-cls c) (gp (hue-grp c))) (tablet ()) hue-classes))
+       (: b (foldl (b \ c \ pin b (hue-cls c) (gp (hue-grp c))) (tablet ()) hue-classes)
+          gr (peep gp 'Normal ()) sl (peep gp 'Visual ())
+          (string? gr ? (pin b 'ground gr, pin b 'off (hue-off + gr)) 0,
+           string? sl ? (pin b 'sel sl) 0,
+           b)))
 
    ; --- painting one line -----------------------------------------------------
    ; escapes are zero width, so a caller clips first and paints the clipped text:
@@ -275,7 +282,7 @@
        (go i l acc)
         (atom? l ? (acc + snip s i n)
            (: r <l k <r a <>r b <>>r p (pens k)
-              (string? p ? (go b >l (acc + snip s i a + p + snip s a b + hue-off))
+              (string? p ? (go b >l (acc + snip s i a + p + snip s a b + peep pens 'off hue-off))
                  (go b >l (acc + snip s i b)))))
        (go 0 runs ""))
    ; one window of a line: columns [a b). the runs are read from column 0, since
@@ -300,17 +307,30 @@
    ; thing for a theme file to mean, so the question is whether it opened -- not
    ; whether it had bytes. a row that is not a row is simply not a row: a bad
    ; theme must not take the editor down with it.
+   ; a bare name in it picks the theme the rows fold over, the last name read winning
    (hue-over rows r) (two? r ? (map (o \ (<o = <r ? r o)) rows) rows)
-   (hue-rows x)
+   (hue-file x)                                    ; -> [name rows], name () for none
     (: h (getenv "HOME")
        q (string? h ? (open (h + hue-theme-file) "r") ())
        (hot? q ? (: t (slurp q)
-                    (go x acc) (sound x @ r
-                                  (two? r ? (go >r (<r . acc)) (rev acc)))
-                    rs (go t ())
-                    (close q, foldl hue-over hue-theme rs))
-          hue-theme))
+                    (go x nm acc) (sound x @ r
+                                     (? !(two? r) [nm (rev acc)]
+                                        (name? <r) (go >r (show <r) acc)
+                                        (go >r nm (<r . acc))))
+                    f (go t () ())
+                    (close q, f))
+          [() ()]))
+   ; a theme's rows by name, a string or a symbol, or () for none such
+   (hue-theme-of nm) (: k (string? nm ? nm (show nm))
+                        r (filter (t \ show <t = k) hue-themes)
+                        (two? r ? <>(<r) ()))
+   ; the theme in force: nm when given, else the file's, else molokai
+   (hue-name nm) (string? nm ? nm (<(hue-file ()) @ f (string? f ? f "molokai")))
+   (hue-rows nm)
+    (: f (hue-file ())
+       base (hue-theme-of (hue-name nm) @ b (two? b ? b hue-theme))
+       (foldl hue-over base <>f))
    (hue-deep x) (getenv "COLORTERM" @ ct
                    (string? ct ? (ct = "truecolor" || ct = "24bit") ()))
-   (hue-wake x) (hue-pens (hue-rows ()) (hue-deep ())))
+   (hue-wake x) (hue-pens (hue-rows x) (hue-deep ())))
 ) ; module 'vi

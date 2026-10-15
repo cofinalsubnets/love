@@ -1,7 +1,8 @@
-; test/host/gzc.l -- the C twins of gz.l (`inflate`, `crc32`, `deflate`) held to the love, the oracle
-; `string?`, never `?` or `!`, asks whether an answer is there: a run of NULs reads as false
+; test/host/gzc.l -- the C twins of gz.l (`inflate`, `crc32`) and gzdeflate.l (`deflate`) held to the
+; love, the oracle. `string?`, never `?` or `!`, asks whether an answer is there: a run of NULs reads as false
 ; not in the corpus: host nifs. run: cat test/00-init.l test/host/gzc.l | out/love
 (borrow 'gz)
+(borrow "test/host/gzdeflate.l")       ; gz-deflatel, the coder's oracle
 (borrow 'hashes)
 
 (test

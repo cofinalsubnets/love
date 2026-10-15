@@ -122,17 +122,6 @@ kiss_fft_state *opus_fft_alloc_twiddles(int nfft,void * mem,size_t * lenmem, con
 
 kiss_fft_state *opus_fft_alloc(int nfft,void * mem,size_t * lenmem);
 
-/**
- * opus_fft(cfg,in_out_buf)
- *
- * Perform an FFT on a complex input buffer.
- * for a forward FFT,
- * fin should be  f[0] , f[1] , ... ,f[nfft-1]
- * fout will be   F[0] , F[1] , ... ,F[nfft-1]
- * Note that each element is complex and can be accessed like
-    f[k].r and f[k].i
- * */
-void opus_fft(const kiss_fft_state *cfg,const kiss_fft_cpx *fin,kiss_fft_cpx *fout);
 void opus_ifft(const kiss_fft_state *cfg,const kiss_fft_cpx *fin,kiss_fft_cpx *fout);
 
 void opus_fft_free(const kiss_fft_state *cfg);

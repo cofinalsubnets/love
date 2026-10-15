@@ -149,19 +149,12 @@
    (: dp (st 'deep) fg (dp ? (55 << 12 | 53 << 6 | 50) 253) bg (dp ? (6 << 12 | 5 << 6 | 5) 235)
       (cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
       (foldl (t \ i \ pin t (y0 + i) [x0 (cells (rows i)) fg bg]) {} ^#rows)))
- ; a level on a stage already raised, a frame a tick: every key waiting is read, and each
- ; is the action the level's 'binds name it (view-binds when it has none); the horn is fed
- ; until a lead stands queued, the lead paced by the frame gap; the rest is what the tick
- ; has left after the painting. the level is lv: 'new (w h) its state, 'size (st w r) a
- ; resize, 'frame (st), 'key (st action), 'tick (st) a frame's own motion, 'fps, 'song (hn)
- ; what feeds its song a chunk (st) -- asked with () on a seat with no horn, and then fed
- ; once a frame -- 'linger how long it stays once 'done, and 'next the [module walk] after
- ; it, or (). 'help shows the keys of the actions 'listed names (view-listed's when it names
- ; none): in a window while its key is held, in a terminal until the next key, which does
- ; nothing else
- ; in a window, 'win: the frame paints the window itself (mesh-show), the cells are 8 by 16
- ; of its pixels, each key pressed acts once and a walking key held acts again at 'repeat's
- ; pace ([pause gap] ms, view-repeat), unless 'held (st) says not now
+ ; a level lv on a stage already raised, a frame a tick. lv: 'new (w h) its state, 'size
+ ; (st w r), 'frame (st), 'key (st action), 'tick (st), 'fps, 'linger once 'done, 'next
+ ; [module walk] or (), 'song (hn) a feeder of (st), hn () with no horn, fed every frame;
+ ; optional 'binds 'listed 'win 'repeat ([pause gap] ms) and 'held (st) to stop a repeat.
+ ; help shows in a terminal until the next key, which does nothing else; in a window while
+ ; held. in a window the frame paints itself (mesh-show) and a cell is 8 by 16 pixels
  (view-walk lv) (:
    win (peep lv 'win ())
    binds (peep lv 'binds view-binds)

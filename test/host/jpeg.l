@@ -7,6 +7,7 @@
 (: dir (cwd 0 + "/out/.jpegd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (put p s) (open p "w" @ q (say q s, close q))
+   (rd p) (: q (open p "r") s (slurp q) (close q, s))
    (image w h f)
     (cask (4 * w * h) @ c
      (map (i \ (: p (f (i % w) (i // w)) o (4 * i)
@@ -36,9 +37,60 @@
            (g95 2 3 = 255)
            (jpeg-decode "hello" = "not a jpeg") (jpeg-size "hello" = "not a jpeg")
            (jpeg-decode (snip j 0 300) = "cut short")
-           (jpeg-pixels (snip j 0 300) = 2) (jpeg-pixels 7 = 1)
+           (jpeg-pixels (snip j 0 300) 1 = 2) (jpeg-pixels 7 1 = 1)
            ; the entropy data cut halfway still draws, the rest of it grey
            (2000 < #jn) (two? (jpeg-decode (snip jn 0 (#jn // 2)))))
+
+   ; exif's orientation
+   ; s with an app1 after its soi whose tiff header, mm or ii, says orientation o
+   (exif s o mm)
+    (: (w2 v) (mm ? [(v >> 8) (v & 255)] [(v & 255) (v >> 8)])
+       (w4 v) (mm ? [0 0 (v >> 8) (v & 255)] [(v & 255) (v >> 8) 0 0])
+       t (by ((mm ? [77 77] [73 73]) + w2 42 + w4 8 + w2 1 + w2 274 + w2 3 + w4 1 + w2 o + [0 0] + w4 0))
+       (snip s 0 2 + seg 225 ("Exif\0\0" + t) + snip s 2 #s))
+   ; the picture shown upright for o, from flips and a transpose: 6 turns it a quarter clockwise
+   (pxat im x y) (snip (im 2) (4 * (y * im 0 + x)) (4 * (y * im 0 + x) + 4))
+   (remap im w h f) [w h (cats (map (k \ f (k % w) (k // w)) (jot (w * h))))]
+   (upright im o)
+    (: w (im 0) h (im 1)
+       (? (o = 2) (remap im w h (x \ y \ pxat im (w - 1 - x) y))
+          (o = 3) (remap im w h (x \ y \ pxat im (w - 1 - x) (h - 1 - y)))
+          (o = 4) (remap im w h (x \ y \ pxat im x (h - 1 - y)))
+          (o = 5) (remap im h w (x \ y \ pxat im y x))
+          (o = 6) (remap im h w (x \ y \ pxat im y (h - 1 - x)))
+          (o = 7) (remap im h w (x \ y \ pxat im (w - 1 - y) (h - 1 - x)))
+          (o = 8) (remap im h w (x \ y \ pxat im (w - 1 - y) x))
+          im))
+   jo (enc odd 90)
+   base (jpeg-decode jo)
+   os (map (+ 1) (jot 8))
+   _ (test (jpeg-orient jo = 1)
+           (atom? (filter (o \ !(jpeg-orient (exif jo o 1) = o && jpeg-orient (exif jo o 0) = o)) os))
+           (atom? (filter (o \ !(jpeg-decode (exif jo o 1) = upright base o)) os))
+           (atom? (filter (o \ !(jpeg-decode (exif jo o 0) = upright base o)) os))
+           (jpeg-size (exif jo 6 1) = [7 13]) (jpeg-size (exif jo 3 0) = [13 7])
+           ; no turn past 8, nor from a tiff header that is not one, nor from a cut app1
+           (jpeg-orient (exif jo 9 1) = 1) (jpeg-decode (exif jo 9 1) = base)
+           (jpeg-orient (snip (exif jo 6 1) 0 30) = 1)
+           (jpeg-orient ((exif jo 6 1) @ x (snip x 0 12 + "XX" + snip x 14 #x)) = 1))
+
+   ; ..held near PIL's own turn, four flat quarters at each orientation
+   pil? (: r (hark ["python3" "-c" "import PIL"]) (two? r) && (<r = 0))
+   _ (put (dir + "/or.py") "import sys
+from PIL import Image, ImageOps
+d = sys.argv[1]
+im = Image.new('RGB', (40, 24))
+im.putdata([((220, 30, 30), (30, 200, 30), (30, 30, 220), (230, 230, 230))[(x >= 20) + 2 * (y >= 12)]
+            for y in range(24) for x in range(40)])
+for o in range(1, 9):
+    e = Image.Exif(); e[274] = o
+    im.save('%s/or%d.jpg' % (d, o), quality=95, exif=e)
+    open('%s/or%d.rgba' % (d, o), 'wb').write(ImageOps.exif_transpose(Image.open('%s/or%d.jpg' % (d, o))).convert('RGBA').tobytes())
+")
+   (near-pil o) (: s (jpeg-decode (rd (dir + "/or" + show o + ".jpg"))) r (rd (dir + "/or" + show o + ".rgba"))
+                   (two? s && #(s 2) = #r && (o < 5 ? (s 0 = 40) (s 0 = 24)) && mse (s 2) r < 30))
+   _ (pil? ? (: r (hark ["python3" (dir + "/or.py") dir]) (test (<r = 0) (atom? (filter (o \ !(near-pil o)) os))))
+        (gate-partly "jpeg: no python3 PIL, its turns skipped"))
 
    ; against magick
    magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))

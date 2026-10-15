@@ -106,24 +106,25 @@
               b (bytes n byte)
               (close q, b))
 
-   ; --- the aead: RFC 8439's, the poly key block zero of the stream; or aes-gcm's nifs ---
+   ; --- the aead: RFC 8439's, the poly key block zero of the stream; or aes-gcm's. all nifs
+   ; (src/love/crypto/tls.c) ---
    (nonce iv seq) (xors iv (zeros 4 + u64be seq))
    (aead-seal key iv seq aad pt)
     (? (#key = 16) (aes-gcm-seal key (nonce iv seq) aad pt)
     (: nn (nonce iv seq)
-       pk (snip (cc-stream key nn 0 1) 0 32)
-       ct (cc-xor key nn 1 pt)
-       (ct + po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct))))
+       pk (chacha20 key nn 0 (zeros 32))
+       ct (chacha20 key nn 1 pt)
+       (ct + poly1305 pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct))))
    (aead-open key iv seq aad ctag)
     (? (#key = 16) (: p (aes-gcm-open key (nonce iv seq) aad ctag) (string? p ? [1 p] ()))
     (: n (#ctag - 16)
        (? (n < 0) ()
           (: nn (nonce iv seq)
-             pk (snip (cc-stream key nn 0 1) 0 32)
+             pk (chacha20 key nn 0 (zeros 32))
              ct (snip ctag 0 n)
              tag (snip ctag n #ctag)
-             (ct-same? tag (po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct))
-               ? [1 (cc-xor key nn 1 ct)] ())))))
+             (ct-same? tag (poly1305 pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct))
+               ? [1 (chacha20 key nn 1 ct)] ())))))
 
    ; --- the wire: exact reads over the socket, a run kept between records ---
    (rd t n)

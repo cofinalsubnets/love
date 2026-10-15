@@ -4,6 +4,8 @@
 
 (borrow 'tls)
 (borrow "src/apps/tls/tls.l")
+(borrow "test/host/chacha.l")              ; the love oracles, spliced into module 'tls
+(borrow "test/host/poly1305.l")
 
 (test
  (lit? chacha20)

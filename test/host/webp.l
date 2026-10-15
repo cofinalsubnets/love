@@ -1,5 +1,5 @@
-; test/host/webp.l -- src/apps/webp.l and webp.c's webp-pixels: libwebp's pictures by sha-256,
-; then, where PIL writes webp, held to PIL's decode byte for byte; then the refusals.
+; test/host/webp.l -- src/apps/webp.l and webp.c's webp-pixels: libwebp's pictures, stills and
+; animations, by sha-256; then, where PIL writes webp, held to PIL's decode byte for byte; then the refusals.
 ;   cat test/00-init.l test/host/webp.l | out/love
 (borrow 'posix)
 (borrow 'hashes)
@@ -60,7 +60,34 @@
            ; the canvas round the first frame stays clear
            (webp-decode anim @ d (d 2 3 = 0)))
 
-   ; -- against PIL
+   ; animations
+   ; muxed by hand on a 20x12 canvas: a drawn first frame, semi-clear frames blended over it,
+   ; one cleared away and the next copied where it was, an overwrite with alpha, a blend
+   hand (unx (cats [
+     "52494646d801000057454250565038580a000000120000001300000b0000414e494d06000000ffffffff"
+     "0000414e4d46360000000000000000001300000b00001e0000005650384c1e0000002f13c00200b98ce8"
+     "7fec22a2ff0121016184ff7b357518462b2600a99435414e4d463e000000010000010000070000050000"
+     "280000005650384c260000002f07400110b98ce87f404840c8fe4f962c187d05691bb0b0dd1193a62176"
+     "9bc309e0891bb401414e4d4640000000020000020000050000030000320000015650384c270000002f05"
+     "c00010b98ce87fec22a2ff01856c2340e74f765e3fc2288c874020c5916cf204b0410a1d0000414e4d46"
+     "500000000300000100000900000500003c0000005650384c380000002f09400110b93244f43f7611d1ff"
+     "50286adb060a7f8465d3d70e0cd1640ca0a2b66de0600be0da388dcd26a092300780e607d805fc00a70a"
+     "414e4d463c0000000000000000001300000b0000460000035650384c230000002f13c00210b98ce87fec"
+     "22a2ff01210121fb3f5a53077928840429c4e804507289d60000414e4d46440000000100000000000500"
+     "00050000500000005650384c2c0000002f054001102f20904dbefcad939800850002a0a021c8b60d6dbb"
+     "ccb30f3e0402c482162dfe772c44f43fb005"
+     ]))
+   hand-sums ["a8d3533e51a9f876926efe3e0cbf6267add7dfb82856da78c09325184449814e" "61da5fdf7f5b8202c079637c6dc6c34d6548bf53738697b4ecfa66a1d8a990e7" "06bbd9e01704d83d0c3bf99df48382aa7be88904c181ee717ab52a7f1d5b021f" "7cb1f76e6839cc61f18380dc2e2aa2d4bf3a87a2347b44878b6ece72b5da2555" "d3599e46d35d21404cb89b55a81867152378631b5bd4ced635b73ddf67115510" "81de011603658cd4eaecb56d436365aeda7c2322c164cbc74b5aee4140a96c55"]
+   hf (webp-frames hand 100)
+   _ (test (two? hf) (hf 0 = 20) (hf 1 = 12) (#(hf 2) = 6)
+           (map (f \ f 1) (hf 2) = [30 40 50 60 70 80])
+           (map (f \ sha256 (f 0)) (hf 2) = hand-sums)
+           (#(webp-frames hand 2 2) = 2)
+           ; the first frame is webp-decode's, and a still picture is one frame of no time
+           (webp-frames anim 10 @ f (two? f && f 2 0 0 = webp-decode anim 2))
+           (webp-frames lossy 10 = [24 18 [[(webp-decode lossy 2) 0]]]))
+
+   ; against PIL
    pil? (: r (hark ["python3" "-c" "from PIL import features; assert features.check('webp')"])
            (two? r) && (<r = 0))
    _ (put (dir + "/mk.py") "import sys, math
@@ -92,14 +119,69 @@ open(d + '/8.rgba', 'wb').write(Image.open(d + '/8.webp').convert('RGBA').tobyte
                 (test (<r = 0) (same 0) (same 1) (same 2) (same 3) (same 4) (same 5) (same 6)
                       (same 7) (same 8)))
         (gate-partly "webp: no python3 PIL with webp, its pictures skipped"))
+   _ (put (dir + "/an.py") "# animated webps from PIL (libwebp's encoder picks each frame's box, blend and dispose), and each
+# frame as PIL composes it (libwebp's animation decoder): <name>.<k>.rgba, durations in the manifest
+import sys, struct, random, math
+from PIL import Image, ImageSequence
+d = sys.argv[1]; random.seed(5)
+def frame(w, h, k, alpha, moving):
+    im = Image.new('RGBA', (w, h), (0, 0, 0, 0) if alpha else (20, 40, 60, 255))
+    px = im.load()
+    for y in range(h):
+        for x in range(w):
+            if moving and abs(x - (k * 3) % w) < 4 and abs(y - (k * 2) % h) < 3:
+                px[x, y] = (255, (k * 40) % 256, 30, 255 if not alpha else (100 + k * 30) % 256)
+            elif not moving:
+                px[x, y] = (int(127 + 120 * math.sin(x * 0.3 + k)), (y * 9 + k * 20) % 256, (x * y + k) % 256,
+                            ((x + k) * 23) % 256 if alpha else 255)
+    return im
+cases = [('lossless-move', 24, 16, 1, 1, dict(lossless=True)),
+         ('lossless-move-opaque', 24, 16, 0, 1, dict(lossless=True)),
+         ('lossy-move', 32, 20, 1, 1, dict(lossless=False, quality=80)),
+         ('mixed-alpha', 30, 18, 1, 0, dict(allow_mixed=True, quality=70)),
+         ('lossless-full', 17, 11, 1, 0, dict(lossless=True)),
+         ('kmax1', 24, 16, 1, 1, dict(lossless=True, kmin=0, kmax=1)),
+         ('minsize', 24, 16, 1, 1, dict(lossless=True, minimize_size=True))]
+man = []
+for name, w, h, alpha, moving, o in cases:
+    fs = [frame(w, h, k, alpha, moving) for k in range(6)]
+    p = '%s/%s.webp' % (d, name)
+    fs[0].save(p, 'WEBP', save_all=True, append_images=fs[1:], duration=[40, 50, 60, 70, 80, 90], loop=0, **o)
+    im = Image.open(p); n = 0
+    for k, f in enumerate(ImageSequence.Iterator(im)):
+        open('%s/%s.%d.rgba' % (d, name, k), 'wb').write(f.convert('RGBA').tobytes()); n += 1
+    # what the encoder chose, frame by frame: x y w h dispose blend
+    b = open(p, 'rb').read(); q = 12; fl = []; durs = []
+    while q + 8 <= len(b):
+        cc = b[q:q + 4]; sz = struct.unpack('<I', b[q + 4:q + 8])[0]
+        if cc == b'ANMF':
+            x = int.from_bytes(b[q + 8:q + 11], 'little') * 2; y = int.from_bytes(b[q + 11:q + 14], 'little') * 2
+            fw = int.from_bytes(b[q + 14:q + 17], 'little') + 1; fh = int.from_bytes(b[q + 17:q + 20], 'little') + 1
+            durs.append(int.from_bytes(b[q + 20:q + 23], 'little'))
+            f = b[q + 23]; fl.append('%d,%d %dx%d %s%s %s' % (x, y, fw, fh, 'D' if f & 1 else '-', 'N' if f & 2 else 'B', b[q + 24:q + 28].decode()))
+        q += 8 + sz + (sz & 1)
+    man.append('%s %d %d %d %s' % (name, w, h, n, ' '.join(map(str, durs))))
+open(d + '/anims', 'w').write(chr(10).join(man) + chr(10))
+")
+   (anim-same l)
+    (: ws (split " " l) nm (ws 0) n <(sound (ws 3)) ds (map (t \ <(sound t)) (drop 4 ws))
+       r (webp-frames (rd (dir + "/" + nm + ".webp")) 1000)
+       (two? r && r 0 = <(sound (ws 1)) && r 1 = <(sound (ws 2)) && #(r 2) = n
+        && atom? (filter (k \ !(r 2 k 0 = rd (dir + "/" + nm + "." + show k + ".rgba") && r 2 k 1 = ds k)) (jot n))))
+   _ (pil? ? (: r (hark ["python3" (dir + "/an.py") dir])
+                ls (filter (l \ 0 < #l) (split "\n" (rd (dir + "/anims"))))
+                (test (<r = 0) (6 < #ls) (atom? (filter (l \ !(anim-same l)) ls))))
+        (gate-partly "webp: no python3 PIL with webp, its animations skipped"))
 
    ; -- refusals
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    (test (webp-decode "hello" = "not a webp") (webp-size "hello" = "not a webp")
          (webp-decode (snip ll 0 40) = "cut short") (webp-decode (snip lossy 0 20) = "cut short")
          (webp-pixels 7 = 1) (webp-pixels (snip alpha 0 60) = 2)
-         ; a flipped byte answers why or a picture, never a crash
-         (atom? (filter (i \ !(webp-decode (flip ll i) @ d (string? d || two? d))) (jot #ll))),
+         ; a flipped byte answers why, or a picture, and never takes the process down
+         (atom? (filter (i \ !(webp-decode (flip ll i) @ d (string? d || two? d))) (jot #ll)))
+         (atom? (filter (i \ !(webp-frames (flip hand i) 10 @ d (string? d || two? d))) (jot #hand)))
+         (webp-frames "hello" 10 = "not a webp"),
     hark ["rm" "-rf" dir],
     0))
 

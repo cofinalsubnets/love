@@ -20,7 +20,13 @@
     (: r (0 < #f ? (uread f))
        st (vnew (two? r ? (lines <>r)) f)
        (0 < #f && atom? r ? (vmsg st (f + ": new file")),
-        (pin st 'pens (hues-wake ()), st)))
+        (vi-theme st ())))
+   ; the pens, and the door :colorscheme rings to swap them: the face reads the env
+   ; and the theme file, the engine neither
+   (vi-theme st nm)
+    (pin st 'pens (hues-wake nm), pin st 'theme (hue-name nm),
+     pin st 'retheme (n \ two? (hue-theme-of n) ? (hues-wake n) ()),
+     st)
    ; the ex write requests: (name) means write, "" means the buffer's file
    (dow s2)
     (s2 'dow @ rq

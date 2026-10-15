@@ -186,14 +186,19 @@
  (ldoc-md "; prose.\n; a second line fills into it.\n(: x 1)\n"
   = "prose.\na second line fills into it.\n"))
 
-; a real header comes out with headings, which papel reads a page's title and nav from
-(: (rd f) (open f "r" @ q (hot? q ? (slurp q) ""))
-   d (mdread ("# src/apps/lapiz.l\n\n" + ldoc-md (rd "src/apps/lapiz.l")))
+; a header comes out with headings, which papel reads a page's title and nav from; its own
+; header, so a source file's comments are free to change
+(: hdr (cats [ "; tool -- what it is.\n;\n"
+               "; --- usage ---------------\n; a line of prose.\n;\n"
+               ";   a b c    a display, kept as laid\n;   d e f\n;\n"
+               "; --- design --------------\n; more prose.\n;\n"
+               "; --- traps ---------------\n; the last.\n(: x 1)\n" ])
+   d (mdread ("# tool\n\n" + ldoc-md hdr))
    heads (filter (b \ (<b = 'head)) d)
    (test (3 < tally heads)
-         ('(head 1 ((text "src/apps/lapiz.l"))) = <heads)
-         (2 = <>(heads 1))
-         (0 < tally (filter (b \ (<b = 'fence)) d)),
+         ('(head 1 ((text "tool"))) = <heads)           ; the file names the page
+         (2 = <>(heads 1))                               ; ..and its banners are sections
+         (0 < tally (filter (b \ (<b = 'fence)) d)),    ; the diagrams survived as displays
     0))
 
 (test_fin ())

@@ -1,4 +1,4 @@
-; src/apps/tls/poly1305.l -- poly1305 (rfc 8439 §2.5), the one-time authenticator.
+; test/host/poly1305.l -- poly1305 (rfc 8439 §2.5), the one-time authenticator.
 ;
 ; the arithmetic is a polynomial evaluated mod 2^130 - 5: for each 16-byte block,
 ; h = (h + block) * r, and the tag is h + s. love has bignums and `%`, so the
@@ -23,8 +23,9 @@
 ; would be a branch on the accumulator, which is a branch on the message and the
 ; key together.
 ;
-; src/love/crypto/tls.c's `poly1305` nif is the C twin, the same five limbs and the same
-; mask; test/host/tlsc.l holds it to this file, src/apps/tls/bench.l times both.
+; src/love/crypto/tls.c's `poly1305` nif is what the aead runs, the same five limbs and the
+; same mask; this is its oracle, loaded by the laws into module 'tls: test/host/tlsc.l holds
+; the nif to it, and src/apps/tls/bench.l times both.
 (module 'tls
 (:
    m26 67108863                              ; 2^26 - 1, one limb

@@ -1,5 +1,5 @@
-; test/host/pic.l -- kore's pictures (src/apps/kore/pic.l) and the gif decoder: kinds, sixel
-; and kitty off a quay screen, pic's verbs, picless's keys, and gifs against magick where present
+; test/host/pic.l -- kore's pictures (src/apps/kore/pic.l) and the gif decoder: kinds (netpbm written
+; too), sixel and kitty off a quay screen, pic's verbs, picless's keys, and gifs against magick where present
 ;   cat test/00-init.l test/host/00-host.l test/host/pic.l | out/love
 (borrow 'posix)
 (borrow 'jpeg)
@@ -131,6 +131,15 @@
            (<(pic ["convert" (dir + "/c.png") (dir + "/c.bmp")]) = 2)
            (<(pic ["convert" (dir + "/n.txt") (dir + "/n.png")]) = 1)
            (<(pic ["convert" (dir + "/c.png")]) = 2))
+   ; netpbm's written and read back, a pam with its alpha; bmp, ico and netpbm sniffed and drawn
+   _ (test (<(pic ["convert" (dir + "/c.png") (dir + "/c.pam")]) = 0)
+           (kind (file (dir + "/c.pam")) = 'pnm) (dec (file (dir + "/c.pam")) = im)
+           (<(pic ["convert" "-t" "ppm" (dir + "/c.png") (dir + "/c.out")]) = 0)
+           (snip (file (dir + "/c.out")) 0 2 = "P6") (size (file (dir + "/c.out")) = [(im 0) (im 1)])
+           (<(pic ["cat" "-w" "8" (dir + "/c.out")]) = 0)
+           (kind ("BM" + bytes [0 0 0 0 0 0]) = 'bmp) (kind (bytes [0 0 1 0 1 0 8 8]) = 'ico)
+           (kind "P6\n1 1\n255\n" = 'pnm) (kind "P9\n1 1\n255\n" = ())
+           (dec ("P6 2 1 255\n" + bytes [255 0 0 0 0 255]) = [2 1 (bytes (red + blue))]))
    ; pixelize: 16x12 at 8 cells is 8x6 pixels, each s pixels square; the cube's levels
    ; with -c 256, and an odd last row's lower half clear
    pz (dir + "/z.png")
