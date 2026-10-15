@@ -815,7 +815,7 @@ lvm_t lvm_kcall,
  lvm_reach_offset,       // (reach-offset x): g->reach' byte offset, what the emitter's `reach` law loads from
  lvm_natp,        // (nat? f): is f a native closure -- its code in the arena
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
- lvm_deferfwd;    // a deferred native's code slot until its compile patches it (map.c)
+ lvm_deferfwd;    // a deferred native's code slot until its compile patches it (tablet.c)
 // the attributes are the declaration: `lvm(n)` is `love_noinline noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both.
 love_noinline noicf lvm_t

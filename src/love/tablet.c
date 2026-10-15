@@ -1,4 +1,4 @@
-// map.c -- map, codegen backend. one translation unit of the runtime;
+// tablet.c -- tablets, codegen backend. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are src/love/love.h.
 #include "love.h"
 // a tray key -> a row-major element offset: a fixnum on a rank-1 tray, else a shape-list of
