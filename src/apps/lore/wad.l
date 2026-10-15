@@ -8,12 +8,13 @@
 ;      view's walking keys, a d to strafe, r to run, e or space to use, f to fire, 1-6 the guns; q or esc leaves
 (module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-free? wad-size wad-sector wad-usage wad-mixer)
 (borrow 'posix)
-(borrow 'rove)                          ; pad, for the status row; song-rate
+(borrow 'rove)                          ; pad, for the status row
 (borrow 'bytes)                         ; rdle
 (borrow 'view)
 (borrow 'mesh)
 (borrow 'walk)
 (borrow 'vec)                           ; sq
+(borrow 'mixer)
 (:
  fps 35
  eye-h 41 body-r 16 step-h 24 body-h 56
@@ -382,13 +383,13 @@
  ; --- the specials: a line set going moves its sectors, leaves the level, or sends the player on ---
  (act st i how) (: M (st 'M) l (M 'lines i) k (peep line-kinds (peep (st 'spec) i 0) ())
    (? (atom? k || !(k 0 = how || (how = 'u && k 0 = 's))) st
-      (two? (k 4) && !(elem (k 4) (st 'keys))) (cry (pin st 'msg ("you need the " + (k 4 @ 'b "blue" 'y "yellow" _ "red") + " key")) "NOWAY" ())
+      (two? (k 4) && !(elem (k 4) (st 'keys))) (mix-cry (pin st 'msg ("you need the " + (k 4 @ 'b "blue" 'y "yellow" _ "red") + " key")) "NOWAY" ())
       (: secs (k 0 = 'u ? (l 6 = 65535 ? () [(M 'sides (l 6) 5)]) (filter (s \ l 4 != 0 && M 'secs s 6 = l 4) ^#(M 'secs)))
          _ (k 1 = 0 ? (pin st 'spec (pin (st 'spec) i 0)) 0)
          ; ..a switch shows it was thrown, a repeatable one again a second on
-         _ (k 0 = 's ? (: _ (flip st (l 5)) _ (cry st (elem (k 2) ['exit 'secret] ? "SWTCHX" "SWTCHN") [(0.5 * (M 'vs (l 0) 0 + M 'vs (l 1) 0)) (0.5 * (M 'vs (l 0) 1 + M 'vs (l 1) 1))]) (k 1 = 1 ? (pin st 'flips ([(st 't + 35) (l 5)] . st 'flips)) 0)) 0)
+         _ (k 0 = 's ? (: _ (flip st (l 5)) _ (mix-cry st (elem (k 2) ['exit 'secret] ? "SWTCHX" "SWTCHN") [(0.5 * (M 'vs (l 0) 0 + M 'vs (l 1) 0)) (0.5 * (M 'vs (l 0) 1 + M 'vs (l 1) 1))]) (k 1 = 1 ? (pin st 'flips ([(st 't + 35) (l 5)] . st 'flips)) 0)) 0)
          (k 2 @ 'exit (pin st 'exit (next-map (M 'name) 0)) 'secret (pin st 'exit (next-map (M 'name) 1))
-                'tele (cry (teleport st (l 4)) "TELEPT" ())
+                'tele (mix-cry (teleport st (l 4)) "TELEPT" ())
                 'stop (pin st 'movers (filter (m \ !(m 'k = 'crush && elem (m 's) secs)) (st 'movers)))
                 'stairs (foldl (\ s q (stairs s q)) st secs)
                 _ (foldl (\ s q (start s q (k 2) (k 3))) st secs)))))
@@ -411,8 +412,8 @@
  ; ..one mover a sector; a door used again while it opens or waits goes back down
  (start-to st s kind fast to) (: F (st 'M 'secs s) was (filter (m \ m 's = s) (st 'movers))
    up (elem kind ['door 'open 'close 'shut30 'crush])
-   (? (two? was) (: m <was _ (m 'k = 'door && m 'ph != 'back ? (: _ (pins m 'ph 'back 'w 0) (cry st "DORCLS" (mid st s))) 0) st)
-      (: _ (cry st (kind @ 'door (fast ? "BDOPN" "DOROPN") 'open (fast ? "BDOPN" "DOROPN") 'close (fast ? "BDCLS" "DORCLS")
+   (? (two? was) (: m <was _ (m 'k = 'door && m 'ph != 'back ? (: _ (pins m 'ph 'back 'w 0) (mix-cry st "DORCLS" (mid st s))) 0) st)
+      (: _ (mix-cry st (kind @ 'door (fast ? "BDOPN" "DOROPN") 'open (fast ? "BDOPN" "DOROPN") 'close (fast ? "BDCLS" "DORCLS")
                              'shut30 "DORCLS" 'lift "PSTART" _ "") (mid st s))
       (pin st 'movers ({'s s 'k kind 'p (up ? 1 0) 'to (1.0 * to) 'home (1.0 * F (up ? 1 0)) 'ph 'go 'w 0
                         'v (kind @ 'crush (fast ? 2.0 1.0) 'lift 4.0 _ (fast ? 8.0 (up ? 2.0 1.0)))} . st 'movers)))))
@@ -426,19 +427,19 @@
  ;   crusher goes on down, hurting all under it, then up and down again until stopped
  (move-tic st m) (: M (st 'M) s (m 's) p (m 'p) k (m 'k) cur (1.0 * M 'secs s p) ph (m 'ph)
    (? (ph = 'wait) (: w (m 'w - 1) _ (pins m 'w w 'ph (w <= 0 ? 'back 'wait))
-                      _ (w <= 0 ? (cry st (k @ 'lift "PSTART" 'shut30 "DOROPN" _ (m 'v > 4.0 ? "BDCLS" "DORCLS")) (mid st s)) 0) 1)
+                      _ (w <= 0 ? (mix-cry st (k @ 'lift "PSTART" 'shut30 "DOROPN" _ (m 'v > 4.0 ? "BDCLS" "DORCLS")) (mid st s)) 0) 1)
       (: to (ph = 'go ? (m 'to) (m 'home)) nv (cur + max2 (0.0 - m 'v) (min2 (m 'v) (to - cur)))
          here (wad-sector M (st 'px) (st 'pz) = s) low (nv < M 'secs s 0 + 1.0 * body-h)
          _ (k = 'crush && ph = 'go && low && st 't % 4 = 0
             ? (: _ (here ? (hurt st 10) 0)
                  (each (filter (o \ two? (o 'm) && o 'gone = 0 && wad-sector M (o 'x) (o 'z) = s) (st 'objs)) (o \ hit st o 10 ()))) 0)
-         (? (p = 1 && ph = 'back && k != 'crush && here && low) (: _ (pin m 'ph 'go) _ (cry st "DOROPN" (mid st s)) 1)
+         (? (p = 1 && ph = 'back && k != 'crush && here && low) (: _ (pin m 'ph 'go) _ (mix-cry st "DOROPN" (mid st s)) 1)
             (: _ (pin M 'secs (remap (M 'secs) (\ i S (i = s ? (p = 0 ? (nv . cup S) (cap S . nv . cup (cup S))) S))))
                _ (each (s . peep (st 'nb) s ()) (q \ pin (st 'dirty) q 1))
                ; ..a floor grinds on, a lift or floor stops with a clunk
                door (elem k ['door 'open 'close 'shut30])
-               _ (!door && k != 'lift && nv != to && st 't % 8 = 0 ? (cry st "STNMOV" (mid st s)) 0)
-               _ (!door && k != 'crush && nv = to ? (cry st "PSTOP" (mid st s)) 0)
+               _ (!door && k != 'lift && nv != to && st 't % 8 = 0 ? (mix-cry st "STNMOV" (mid st s)) 0)
+               _ (!door && k != 'crush && nv = to ? (mix-cry st "PSTOP" (mid st s)) 0)
                (? (nv != to) 1
                   (k = 'crush) (: _ (pin m 'ph (ph = 'go ? 'back 'go)) 1)
                   (ph = 'back || !(elem k ['door 'lift 'shut30])) 0
@@ -466,11 +467,9 @@
    _ (each (st 'lights) (L \ (: v (glow L t) (v = L 'now ? 0 (: _ (pin L 'now v) (pin ch (L 's) (1.0 * v / max2 1 (L 'hi))))))))
    (#(keys ch) = 0 ? st (: _ (pin sc 'secs (remap (sc 'secs) (\ i b (peep ch i -1.0 < 0.0 ? b (tint sc i b (ch i)))))) st)))
  ; --- the sounds: a DS lump is format 3, a rate, a count, then that many unsigned bytes, 16 of
- ;     padding at either end; heard whole within 200, gone past 1200, and panned to the ear ---
- ; ..a sound asked for, from where [x z] or () the player's own; eight at most a frame
- (cry st nm at) (: q (peep st 'sfx ()) (#q < 8 && #nm > 0 ? (pin st 'sfx ([nm at] . q)) st))
+ ;     padding at either end; mixed by mixer.l, whole within 200, gone past 1200 ---
  (spot o) [(o 'x) (o 'z)]
- (yell st o k) (peep cries (o 'spr) () @ () st c (: e (c k) (cry st (string? e ? e (e (rand #e))) (spot o))))
+ (yell st o k) (peep cries (o 'spr) () @ () st c (: e (c k) (mix-cry st (string? e ? e (e (rand #e))) (spot o))))
  ; ..the middle of a sector, by its lines' ends
  (mid st s) (: L (st 'lines) w ((L 'fs = s) + (L 'bs = s) > 0) n (2.0 * max2 1 (net w))
    [(net ((L 'ax + L 'bx) * w) / n) (net ((L 'ay + L 'by) * w) / n)])
@@ -481,33 +480,17 @@
                        v (n > 32 ? [(gem-tray [(n - 32)] (map (i \ (b (24 + i) - 128) / 128.0) ^(n - 32))) (u16 b 2)] ())
                        _ (pin c nm v) v)
                   v v))
- ; ..a voice started: [samples step at left right], the step the sound's rate over the horn's
- (voice st f) (: S (noise (st 'wd) (f 0)) at (f 1)
-   (? (atom? S) ()
-      (: dx (atom? at ? 0.0 (at 0 - st 'px)) dz (atom? at ? 0.0 (at 1 - st 'pz)) d (sqrt (dx * dx + dz * dz))
-         v (d < 200.0 ? 1.0 (max2 0.0 ((1200.0 - d) / 1000.0)))
-         p (d < 1.0 ? 0.5 (0.5 + 0.375 * sin (bearing dx dz - st 'th)))
-         (v <= 0.0 ? () [(S 0) (1.0 * S 1 / song-rate) 0 (v * (1.0 - p)) (v * p)]))))
- (firsts l k) (k = 0 || atom? l ? () (<l . firsts >l (k - 1)))
- ; ..the mixer into horn hn: what the tics asked for started, eight voices at most, the newest
- ;   kept; a tic's frames a feed
- (wad-mixer hn) (: box {'vs ()} n (song-rate // fps) pk (cite 'play 'pack) z (iota n * 0.0)
-   (st \ (: fx (peep st 'sfx ()) _ (pin st 'sfx ())
-            vs (firsts (filter two? (map (f \ voice st f) (rev fx)) + box 'vs) 8)
-            (go l L R keep) (? (atom? l) [L R (rev keep)]
-               (: v <l y (peep (v 0) (int ((iota n + v 2) * v 1)) 0.0) p (v 2 + n)
-                  (go >l (L + y * v 3) (R + y * v 4) (p * v 1 < #(v 0) ? ([(v 0) (v 1) p (v 3) (v 4)] . keep) keep))))
-            r (go vs z z ())
-            (pin box 'vs (r 2), say hn (pk (r 0 . r 1) n 20000.0)))))
+ ; ..the mixer into horn hn, the player the ear, by doom's distances
+ (wad-mixer hn wd) (mix-new hn (nm \ noise wd nm) (st \ [(st 'px) (st 'pz) (st 'th)]) {'near 200.0 'far 1200.0 'fps fps})
  ; --- the fight: monsters wake, chase and shoot, each other too once hurt by one; missiles fly
  ;     and burst; the player is hurt, takes what lies about, and shoots back ---
  (hurt st d) (: take (min2 (st 'ar) (st 'ac = 2 ? (d // 2) (d // 3))) hp (max2 0 (st 'hp - d + take))
-   _ (st 'hp > 0 ? (cry st (hp = 0 ? "PLDETH" "PLPAIN") ()) 0)
+   _ (st 'hp > 0 ? (mix-cry st (hp = 0 ? "PLDETH" "PLPAIN") ()) 0)
    (pins st 'ar (st 'ar - take) 'hp hp 'msg (hp = 0 ? "dead -- e to begin the level again" (st 'msg))))
  ; ..a thing hit by by: a monster turned on its own kind's foe, a barrel bursting
  (hit st o d by) (: m (o 'm) hp (o 'hp - d)
    (? (o 'gone = 1 || o 'st = 'die || (atom? m && o 't != 2035)) st
-      (hp <= 0) (: _ (pins o 'hp 0 'st 'die 'tic 0 'solid 0) _ (o 't = 2035 ? (cry st "BAREXP" (spot o)) (yell st o 3))
+      (hp <= 0) (: _ (pins o 'hp 0 'st 'die 'tic 0 'solid 0) _ (o 't = 2035 ? (mix-cry st "BAREXP" (spot o)) (yell st o 3))
                    (o 't = 2035 ? (: _ (pin o 'gone 1) (splash st (o 'x) (o 'z) 128 by)) st))
       (: _ (pins o 'hp hp 'heard 1)
          _ (two? m && tablet? by && by 'id != o 'id && by 'spr != o 'spr ? (pin o 'tg by) 0)
@@ -523,7 +506,7 @@
    (pin st 'objs ({'id id 'proj 1 'spr (p 0) 'fr "A" 'x x 'z z 'y y 'vx (p 1 * sin b) 'vz (p 1 * cos b) 'th b 'r 8.0
                    'solid 0 'gone 0 'k 1.0 'tic 0 'hung 0 'm () 'by by 'dmg (p 2 * (1 + rand (p 3))) 'splash (p 4) 'boom 0} . st 'objs)))
  (burst st o) (: e (peep bursts (o 'spr) ["BAL1" "CDE"])
-   _ (cry st (o 'spr = "MISL" ? "BAREXP" "FIRXPL") (spot o))
+   _ (mix-cry st (o 'spr = "MISL" ? "BAREXP" "FIRXPL") (spot o))
    _ (o 'splash > 0 ? (splash st (o 'x) (o 'z) (1.0 * o 'splash) (o 'by)) 0)
    (pins o 'boom 1 'ex (e 1) 'spr (e 0) 'fr (string (e 1 0)) 'vx 0.0 'vz 0.0))
  (target st o) (: q (peep o 'tg ()) (tablet? q && q 'gone = 0 && q 'st != 'die ? [(q 'x) (q 'z) q] [(st 'px) (st 'pz) ()]))
@@ -539,7 +522,7 @@
          (pins o 'x x 'z z 'tic t 'fr (o 'spr = "MISL" || t // 4 % 2 = 0 ? "A" "B")))))
  (attack st o d) (: m (o 'm) T (target st o) q (T 2) close (d < 80.0 + o 'r) vis (sees st (o 'x) (o 'z) (T 0) (T 1))
    (strike n) (tablet? q ? (hit st q n o) (hurt st n))
-   _ (m 4 = 'ball && !close ? (vis ? (cry st "FIRSHT" (spot o)) 0) (m 4 = 'shot || close ? (yell st o 4) 0))
+   _ (m 4 = 'ball && !close ? (vis ? (mix-cry st "FIRSHT" (spot o)) 0) (m 4 = 'shot || close ? (yell st o 4) 0))
    (m 4 @ 'shot (each ^(m 5) (_ \ (vis && randf 1.0 < max2 0.15 (0.8 - d / 1500.0) ? (strike (3 * (1 + rand 5))) 0)))
           'bite (close ? (strike (4 * (1 + rand 10))) 0)
           'ball (close ? (strike (3 * (1 + rand 8))) (vis ? (launch st o (o 'x) (o 'z) (o 'y + 32.0) (bearing (T 0 - o 'x) (T 1 - o 'z)) (m 10)) 0))
@@ -583,7 +566,7 @@
       (k = 'ar && n >= 100) (: _ (pin o 'gone 1) (pins st 'ar n 'ac (n >= 200 ? 2 1)))
       (: _ (pin o 'gone 1) (pin st k (min2 top (st k + n))))))
  (take st) (foldl (\ s o (o 'gone = 1 || atom? (o 'it) || sq (o 'x - s 'px) + sq (o 'z - s 'pz) > 1296.0 ? s (got (gain s o) o))) st (st 'objs))
- (got st o) (o 'gone = 1 ? (cry st (o 'it 0 @ 'gun "WPNUP" 'suit "GETPOW" _ "ITEMUP") ()) st)
+ (got st o) (o 'gone = 1 ? (mix-cry st (o 'it 0 @ 'gun "WPNUP" 'suit "GETPOW" _ "ITEMUP") ()) st)
  ; ..the nearest thing a shot along a reaches: a monster up, or a barrel
  (aim st a reach) (: px (st 'px) pz (st 'pz)
    (ok o) (: dx (o 'x - px) dz (o 'z - pz) d (sqrt (dx * dx + dz * dz))
@@ -599,12 +582,12 @@
          _ (each (st 'objs) (o \ (two? (o 'm) && !(o 'deaf) && sq (o 'x - px) + sq (o 'z - pz) < 2560000.0 ? (pin o 'heard 1) 0)))
          _ (two? (g 10) ? (launch st 'player (px + 16.0 * sin th) (pz + 16.0 * cos th) (st 'py - 8.0) th (g 10))
               (each ^(g 3) (_ \ (aim st (th + g 6 * (randf 1.0 - 0.5)) (g 8) @ () 0
-                                                                       o (: _ (st 'gun = 0 ? (cry st "PUNCH" ()) 0) (hit st o (g 4 * (1 + rand (g 5))) 'player))))))
-         _ (st 'gun = 0 ? 0 (cry st (shots (st 'gun)) ()))
+                                                                       o (: _ (st 'gun = 0 ? (mix-cry st "PUNCH" ()) 0) (hit st o (g 4 * (1 + rand (g 5))) 'player))))))
+         _ (st 'gun = 0 ? 0 (mix-cry st (shots (st 'gun)) ()))
          c (filter (c \ peep (st 'spec) (c 1) 0 != 0) (crossed st px pz (px + 2048.0 * sin th) (pz + 2048.0 * cos th)))
          (two? c ? (act st (<c 1) 'g) st))))
  (use st) (: th (st 'th) c (crossed st (st 'px) (st 'pz) (st 'px + 64.0 * sin th) (st 'pz + 64.0 * cos th))
-   (atom? c ? st (: i (<c 1) (peep (st 'spec) i 0 = 0 && shut st i ? (cry st "NOWAY" ()) (act st i 'u)))))
+   (atom? c ? st (: i (<c 1) (peep (st 'spec) i 0 = 0 && shut st i ? (mix-cry st "NOWAY" ()) (act st i 'u)))))
  ; ..a gun put down 6 a tic and the next one raised; the body slid on as far as it goes, and slowed
  (gun-tic st) (? (st 'gnext >= 0) (st 'gy >= 96 ? (pins st 'gun (st 'gnext) 'gnext -1) (pin st 'gy (st 'gy + 6)))
                  (st 'gy > 0) (pin st 'gy (max2 0 (st 'gy - 6))) st)
@@ -661,7 +644,7 @@
                'size wad-size 'frame wad-frame 'key wad-step
                'binds (view-bind view-binds wad-binds) 'listed (view-listed ['use 'fire 'strafe-left 'strafe-right 'run 'gun1 'gun2 'gun3 'gun4 'gun5 'gun6 'finer 'coarser])
                'tick wad-tick
-               'fps fps 'linger 0 'next () 'song (hn \ (hn ? (wad-mixer hn) ())) 'win (peep o 'win ())})
+               'fps fps 'linger 0 'next () 'song (hn \ (hn ? (wad-mixer hn (o 'wad)) ())) 'win (peep o 'win ())})
  (wad-run o) (: wd (wad-read (o 'file)) m (o 'map)
    M (two? wd ? (wad-map wd m) ())
    (? (atom? wd) (say err ("wad: " + o 'file + ": not a wad\n"), flush err, 1)

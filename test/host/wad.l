@@ -1,6 +1,7 @@
 ; test/host/wad.l -- lore's wad: a wad laid here, a room 256 square under the sky with a barrel
 ; in it, read, walked, drawn and heard. run: cat test/00-init.l test/host/wad.l | out/love
 (borrow 'wad)
+(borrow 'mixer)
 (borrow 'bytes)
 (: (wad-t-w16 v) (wrle (v < 0 ? (v + 65536) v) 2)
    (wad-t-name s) (s + zbytes (8 - #s))
@@ -107,11 +108,22 @@
    _ (test (zom d 'st != 'idle) (any (n \ elem n ["POSIT1" "POSIT2" "POSIT3"]) (heard d)))
    ; ..heard: the mixer takes what was asked and writes 16-bit pairs, the shot's square wave in them
    snd ("out/.wad-snd-" + show (getpid 0) + ".raw")
-   _ (open snd "w" @ p (: fd (wad-mixer p) _ (fd d) _ (test (d 'sfx = ()))
+   _ (open snd "w" @ p (: fd (wad-mixer p wd) _ (fd d) _ (test (d 'sfx = ()))
                           d1 (wad-step d 'fire) _ (test (elem "PISTOL" (heard d1)))
                           (fd d1, fd d1, close p)))
    pcm (uread snd @ r (two? r ? (r 1) ""))
    _ (test (#pcm > 0) (#pcm % 4 = 0) (any (i \ pcm i != 0) ^#pcm))
+   ; ..the mixer alone, in metres: a tone east of a listener facing north sounds in the right ear
+   ;   more, and one past far not at all
+   (wad-t-mix at) (: q ("out/.wad-mix-" + show (getpid 0) + ".raw")
+     _ (open q "w" @ p (: fd (mix-new p (_ \ [(iota 400 % 2 * 1.0 - 0.5) 8000]) (_ \ [0.0 0.0 0.0]) {'near 1.0 'far 20.0})
+                          (fd (mix-cry {} "tone" at), close p)))
+     b (uread q @ r (two? r ? (r 1) ""))
+     _ (unlink q)
+     (side k) (net (map (i \ (: v (rdle b (4 * i + 2 * k) 2) (v < 32768 ? v (65536 - v)))) ^(#b // 4)))
+     [(side 0) (side 1)])
+   e (wad-t-mix [5.0 0.0])
+   _ (test (e 1 > 2 * e 0) (e 0 > 0) (wad-t-mix [30.0 0.0] = [0 0]) (: c (wad-t-mix ()) (c 0 = c 1 && c 0 > 0)))
    ; ..and the pistol puts it down, a bullet a shot
    (shoot s k) (k = 0 || zom s 'st = 'die ? s (shoot (wad-tics (wad-step s 'fire) 15) (k - 1)))
    d (shoot d 12)
