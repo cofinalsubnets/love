@@ -36,6 +36,24 @@ static void __mput(__mhdr *b) {                        /* the arena's own free, 
   if (q + q->size == b) { q->size += b->size; q->next = b->next; }
   else q->next = b;
   __mfree = q; }
+/* the free block right after b, when there is one and it holds the rest, joins b -- split
+   when it holds more. love's strings grow their buffers a great deal */
+int __mgrow(__mhdr *b, size_t nu) {
+  int ok = 0;
+  __mtake();
+  __mhdr *prev = __mfree, *nb = b + b->size;
+  if (prev)
+    for (__mhdr *q = prev->next; ; prev = q, q = q->next) {
+      if (q == nb) {
+        size_t need = nu - b->size;
+        if (q->size >= need) {
+          if (q->size == need) prev->next = q->next;
+          else { __mhdr *r = q + need; r->size = q->size - need; r->next = q->next; prev->next = r; }
+          b->size = nu, __mfree = prev, ok = 1; }
+        break; }
+      if (q == __mfree) break; }
+  __mgive();
+  return ok; }
 void free(void *p) {
   if (!p) return;
   __mhdr *b = __mblock(p, "free");

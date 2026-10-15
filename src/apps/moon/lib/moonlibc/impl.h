@@ -618,6 +618,7 @@ typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in
 #define __MLive ((__mhdr *) 3)     /* ..an arena block */
 #define __MAlign ((__mhdr *) 5)    /* ..a stand-in before an aligned pointer: size is the units back to the block's payload */
 __mhdr *__mblock(void *p, char const *who);   /* the block behind p, or an abort naming who */
+int __mgrow(__mhdr *b, size_t nu);            /* realloc's growth in place: 1 when b now holds nu units */
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
 struct __sctx { char *p; size_t n, at; };
 struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long long mask; };
