@@ -17,13 +17,13 @@
 struct img_ctx;
 struct chain; struct hc; struct image_hdr; struct img_dec; struct img_ord;
 // this file's own, forward-declared so order within it does not matter.
-static love_noinline intptr_t img_decode_cold(intptr_t v, char *code);
+static love_noinline intptr_t img_decode_cold(intptr_t v, struct img_dec *d);
 static int
  img_lt_pair(struct img_ord const *o, uintptr_t i, uintptr_t j),
  img_lt_word(struct img_ord const *o, uintptr_t i, uintptr_t j),
  img_nom_before(word a, word b),
  img_tok(word const *key, uint16_t const *tk, word v),
- img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, int lazy);
+ img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, uintptr_t cn, int lazy);
 static intptr_t
  image_ap_index(intptr_t ap),
  image_ap_resolve(intptr_t idx),
@@ -31,7 +31,7 @@ static intptr_t
  image_fn_resolve(intptr_t j),
  image_fn_slot(word const *cell),
  image_imm_index(word v),
- img_decode(intptr_t v, struct img_dec const *d),
+ img_decode(intptr_t v, struct img_dec *d),
  img_encode(struct img_ctx *x, intptr_t v);
 static struct g
  *img_canon_symbols(struct g *g),
@@ -66,7 +66,7 @@ static word
             uintptr_t *outnw, char **cseg, uintptr_t *ncode, uintptr_t **cbo, uintptr_t *ncbo),
  hc_can(struct hc *h, word x),
  hc_intern(struct hc *h, union u *p, uintptr_t hv),
- image_root_dec(uint64_t tag, uint64_t val, word *base);
+ image_root_dec(uint64_t tag, uint64_t val, word *base, uintptr_t nw, int *bad);
 // ============================================================================
 // the heap-image snapshot (doc/misc/snapshot.md): serialize the compacted live heap
 // with every pointer-bearing word range-encoded in place, so a fresh process
@@ -188,7 +188,7 @@ static intptr_t image_imm_index(word v) {
 /* bump if the wire format changes -- which includes RENUMBERING image_immortals, since a
    saved index means nothing to a binary that lays the table differently. "..07": the
    header carries the fingerprint and the source digest. */
-#define ImageMagic 0x37304f4e5349411aULL
+#define ImageMagic 0x38304f4e5349411aULL
 #if defined(__x86_64__)
 #define ImageArch 1
 #elif defined(__aarch64__)
@@ -205,6 +205,7 @@ static intptr_t image_imm_index(word v) {
 // length, its deflated length] so it describes itself: then nch chunks' [raw offset, deflated
 // offset] pairs, the dictionary and the chunks deflated against it -- or with no chunks the raw blobs.
 #define CodeSegHead (4 * sizeof(uint64_t))
+#define CodeRow (3 * sizeof(uint64_t))                         // raw offset, deflated offset, digest
 #define CodeZChunk ((uintptr_t) 64 << 10)
 #define CodeDict ((uintptr_t) 32 << 10)
 // the token stream likewise: [raw length, chunks], then per chunk [first word, raw offset,
@@ -212,6 +213,7 @@ static intptr_t image_imm_index(word v) {
 // first object on or past a multiple of StreamZWords, so no object spans two and each chunk
 // inflates, expands and walks on its own
 #define StreamSegHead (2 * sizeof(uint64_t))
+#define StreamRow (4 * sizeof(uint64_t))                       // first word, raw offset, deflated offset, digest
 #define StreamZWords ((uintptr_t) 2 << 10)
 #ifndef ImageZStream
 #define ImageZStream 1
@@ -221,7 +223,7 @@ static intptr_t image_imm_index(word v) {
 // length and the count written into it cannot be spelled in two units and disagree.
 #define LvImgRoots (2 + (__builtin_offsetof(struct g, end) - __builtin_offsetof(struct g, v0)) / sizeof(word))
 struct image_hdr {
- uint64_t magic, wordsize, nwords, arch, fp, nroot, src, nstream, next_serial, ncode;
+ uint64_t magic, wordsize, nwords, arch, fp, nroot, src, nstream, next_serial, ncode, sum;
  uint64_t root_tag[LvImgRoots], root_val[LvImgRoots]; };   // symbols, tasks, then the entire v0..end region walked
                                              // GENERICALLY -- a new v0 field rides with no codec change
 // what this binary's indices mean, hashed (fnv-1a): the lanes' widths, every nif's name and
@@ -247,15 +249,28 @@ static uint64_t image_fp(void) {
 // .S .s of the tree, its paths and the stamp they are pinned to. the core is linked where no
 // container is (an embedder, a board), so its default here is the none answer, 0
 __attribute__((weak)) uint64_t image_carried_c(void) { return 0; }
+static int img_damaged(void const *buf, uintptr_t len);
 // a header this binary refuses, and why: 0 none, 1 another format, arch or word,
-// 2 another binary's tables, 3 other C. the wake takes the first refusal as final
+// 2 another binary's tables, 3 other C, 4 a head its digest does not match. the wake takes
+// the first refusal as final
 int image_why(void const *buf, uintptr_t len) {
  struct image_hdr H;
  if (len < sizeof H) return 1;
  memcpy(&H, buf, sizeof H);
  if (H.magic != ImageMagic || H.wordsize != sizeof(word) || H.arch != ImageArch) return 1;
  if (!love_once() || H.fp != op_fp) return 2;
- return H.src != image_carried_c() ? 3 : 0; }
+ return H.src != image_carried_c() ? 3 : img_damaged(buf, len) ? 4 : 0; }
+// the digests: `sum` is the head's -- the header with sum 0, the dictionary, each segment's head
+// and table, and a segment stored whole -- and every deflated chunk carries its own in its row
+// of the table, checked before it inflates. a word at a time through a bijective mix, so one
+// word changed anywhere always moves the answer
+uint64_t image_sum(void const *p, uintptr_t n, uint64_t h) {
+ unsigned char const *b = p;
+ uint64_t w;
+ for (h ^= n * 0x9e3779b97f4a7c15ull; n >= 8; n -= 8, b += 8)
+  memcpy(&w, b, 8), h = (h ^ w) * 0xff51afd7ed558ccdull, h ^= h >> 32;
+ for (; n; n--) h = (h ^ *b++) * 0xff51afd7ed558ccdull, h ^= h >> 32;
+ return h; }
 
 // an image is wholly symbolic: every word encodes as a heap offset, an lvm index, an
 // immortal index, a nif-cell seat or a code offset, so a raw address of the binary refuses
@@ -337,10 +352,6 @@ static void image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *v
  else if ((ii = image_imm_index(v)) >= 0) *tag = 3, *val = (uint64_t) ii;
  else *tag = 0, *val = (uint64_t) v; }            // out-of-pool non-immortal root (unexpected): keep absolute
 
-static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
- return tag == 1 ? word(base + val) : tag == 2 ? (word) image_ap_resolve((intptr_t) val)
-      : tag == 3 ? image_immortals[val] : (word) val; }
-
 // the self-describing blob (no reloc tables; the load re-derives by re-walking):
 //   heap pointer  -> its byte offset       [0, IdxBase)
 //   lvm_* ap      -> IdxBase + 2*index     [IdxBase, IdxBase+2*NLVM)
@@ -381,6 +392,15 @@ intptr_t image_seat(word v) {
 #define ImageCodeBase (ImageIdxBase + 2 * (ImageNLvm + ImageNImm) \
                                     + 2 * ImageNLvm * ImageCellW + 2 * ImageNFn)
 #define ImageCodeMax ((uintptr_t) 1 << 28)   /* bytes of code an image can carry */
+// a root back: 0 tag passes as it is, and a root naming past the pool, past a table, or a
+// slot this binary leaves empty sets *bad
+static word image_root_dec(uint64_t tag, uint64_t val, word *base, uintptr_t nw, int *bad) {
+ if (tag == 0) return (word) val;
+ if (tag == 1 && val < nw) return word(base + val);
+ if (tag == 3 && val < ImageNImm) return image_immortals[val];
+ word r = tag == 2 && val < ImageNLvm ? (word) image_ap_resolve((intptr_t) val) : 0;
+ if (!r) *bad = 1;
+ return r; }
 
 // the instruction table, opened to love: `pick`/`place` move a thread's code words as these
 // indices, so no code address ever lands in a love value. the image's lanes number the same
@@ -492,31 +512,35 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  return img_refuse(x, v); }
 // the decode ladder, split hot/cold by the rung-0 census: odd, heap offset, lvm index and
 // immortal are 98.7% of decodes, so the cold tail stays out of the walk's way.
-static love_noinline intptr_t img_decode_cold(intptr_t v, char *code) {
+// what a decode needs, gathered once: the pool it re-seats into, the woken code segment and
+// its length, and `b1`, the top of the lvm lane -- ImageNLvm reads def1_n, a link-time
+// quantity no compiler folds, and the ladder would ask for it at every word of the image. one
+// argument, not four: an inline site copies each actual into a slot of its own. lazy: a
+// native's entry wakes as lvm_lazy, its chunk of code seated at first call. bad: a cold lane
+// named nothing this binary has, and the walk refuses
+struct img_dec { word *base; char *code; uintptr_t b1, cn; int lazy, bad; };
+static love_noinline intptr_t img_decode_cold(intptr_t v, struct img_dec *d) {
  uintptr_t const hb = ImageIdxBase;
- uintptr_t uv = (uintptr_t) v;
+ uintptr_t uv = (uintptr_t) v, r;
  if (uv < hb + 2 * (ImageNLvm + ImageNImm) + 2 * ImageNLvm * ImageCellW) {   // nif-cell interior: base + word offset
   uintptr_t k = (uv - hb - 2 * (ImageNLvm + ImageNImm)) / 2;
-  return image_ap_resolve((intptr_t)(k / ImageCellW)) + (k % ImageCellW) * sizeof(word); }
+  if (!(r = (uintptr_t) image_ap_resolve((intptr_t)(k / ImageCellW)))) d->bad = 1;
+  return (intptr_t) (r + (k % ImageCellW) * sizeof(word)); }
  if (uv < hb + 2 * (ImageNLvm + ImageNImm) + 2 * ImageNLvm * ImageCellW
-         + 2 * ImageNFn)                                                        // bare-fn lane: the cell's code slot
-  return image_fn_resolve((intptr_t)((uv - hb - 2 * (ImageNLvm + ImageNImm)
-                                         - 2 * ImageNLvm * ImageCellW) / 2));
- return (intptr_t)(code + (uv - ImageCodeBase) / 2); }                       // native code: the woken segment
+         + 2 * ImageNFn) {                                                      // bare-fn lane: the cell's code slot
+  if (!(r = (uintptr_t) image_fn_resolve((intptr_t)((uv - hb - 2 * (ImageNLvm + ImageNImm)
+                                                     - 2 * ImageNLvm * ImageCellW) / 2)))) d->bad = 1;
+  return (intptr_t) r; }
+ if ((uv - ImageCodeBase) / 2 >= d->cn) return d->bad = 1, 0;                  // native code: inside the woken segment
+ return (intptr_t)(d->code + (uv - ImageCodeBase) / 2); }
 
-// what a decode needs, gathered once: the pool it re-seats into, the woken code segment,
-// and `b1`, the top of the lvm lane -- ImageNLvm reads def1_n, a link-time quantity no
-// compiler folds, and the ladder would ask for it at every word of the image. one
-// argument, not four: an inline site copies each actual into a slot of its own. lazy: a
-// native's entry wakes as lvm_lazy, its chunk of code seated at first call.
-struct img_dec { word *base; char *code; uintptr_t b1; int lazy; };
-static love_inline intptr_t img_decode(intptr_t v, struct img_dec const *d) {
+static love_inline intptr_t img_decode(intptr_t v, struct img_dec *d) {
  if (oddp(v)) return v;
  uintptr_t uv = (uintptr_t) v;
  if (uv < ImageIdxBase) return (intptr_t)((char*) d->base + uv);                 // byte offset -> live pointer
  if (uv < d->b1) return image_ap_resolve((intptr_t)((uv - ImageIdxBase) / 2));
  if (uv < d->b1 + 2 * ImageNImm) return (intptr_t) image_immortals[(uv - d->b1) / 2];
- return img_decode_cold(v, d->code); }
+ return img_decode_cold(v, d); }
 // ============================================================================
 // the token stream: an encoded word rides as one byte when it is one of the image's
 // commonest, else as an escape naming its own width. half an image is 25 distinct words and
@@ -1045,9 +1069,10 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  alloc(slots, 0);
  // fp and src are pure functions of the tables and the carried tree: no address rides the
  // header, so two bakes of one tree are one byte string.
+ // `sum` is laid last, over the wire (img_wire).
  // the counter drops to the live count: the woken twin's first mint lands
  // above every renamed 1..kser, and the bytes carry no dead mints.
- struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, op_fp, 0, image_carried_c(), 0, kser, x->cn, {0}, {0} };
+ struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, op_fp, 0, image_carried_c(), 0, kser, x->cn, 0, {0}, {0} };
  alloc(rank, 0);
  // roots = symbols + tasks (live outside v0), then the whole GC-traced v0..end block, generically: any
  // field added to struct g's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
@@ -1111,7 +1136,7 @@ static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, s
                                   uintptr_t const *cb, uintptr_t ncb, uintptr_t *outn) {
  uintptr_t rn = img_stream(NULL, blob, nw, d->key, d->tk), ncap = ncb, nch = 0, zn = 0;
  unsigned char *raw = alloc(NULL, rn + 1), *z = ImageZStream ? alloc(NULL, rn + 1) : NULL, *seg = NULL;
- uint64_t *tab = z ? alloc(NULL, 3 * ncap * sizeof(uint64_t)) : NULL;
+ uint64_t *tab = z ? alloc(NULL, 4 * ncap * sizeof(uint64_t)) : NULL;
  if (!raw) goto out;
  img_stream(raw, blob, nw, d->key, d->tk);
  if (tab)
@@ -1120,13 +1145,14 @@ static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, s
              rb = ra + img_stream(NULL, blob + a, b - a, d->key, d->tk);
    intptr_t got = nch < ncap ? deflate_raw(g, raw + ra, rb - ra, z + zn, rn - zn) : -1;
    if (got <= 0) { nch = 0; break; }
-   tab[3 * nch] = a, tab[3 * nch + 1] = ra, tab[3 * nch + 2] = zn, nch++, zn += (uintptr_t) got;
+   tab[4 * nch] = a, tab[4 * nch + 1] = ra, tab[4 * nch + 2] = zn, tab[4 * nch + 3] = image_sum(z + zn, (uintptr_t) got, 0);
+   nch++, zn += (uintptr_t) got;
    a = b, ra = rb; }
- if (nch && 24 * nch + zn >= rn) nch = 0;
- uintptr_t body = nch ? 24 * nch + zn : rn;
+ if (nch && StreamRow * nch + zn >= rn) nch = 0;
+ uintptr_t body = nch ? StreamRow * nch + zn : rn;
  if ((seg = alloc(NULL, StreamSegHead + body))) {
   ((uint64_t*) seg)[0] = rn, ((uint64_t*) seg)[1] = nch;
-  if (nch) memcpy(seg + StreamSegHead, tab, 24 * nch), memcpy(seg + StreamSegHead + 24 * nch, z, zn);
+  if (nch) memcpy(seg + StreamSegHead, tab, StreamRow * nch), memcpy(seg + StreamSegHead + StreamRow * nch, z, zn);
   else memcpy(seg + StreamSegHead, raw, rn);
   *outn = StreamSegHead + body; }
 out:
@@ -1136,6 +1162,33 @@ out:
  return seg; }
 
 // ..and the wire: {header, dictionary, stream segment}, alloc'd. fills H.nstream.
+// the head's digest over the wire at b: the header as if sum were 0, the dictionary (hd ends
+// it), each segment's head and table -- or the whole segment where it is stored whole. a
+// count past its segment reads as stored whole; the wake refuses that table anyway
+static uint64_t img_head_sum(unsigned char const *b, uintptr_t hd, uintptr_t ns, uintptr_t nc) {
+ struct image_hdr H;
+ uint64_t q[4] = {0}, h;
+ memcpy(&H, b, sizeof H), H.sum = 0;
+ h = image_sum(b + sizeof H, hd - sizeof H, image_sum(&H, sizeof H, 0));
+ unsigned char const *s = b + hd, *c = s + ns;
+ uintptr_t sn = ns, cn = nc;
+ if (ns >= StreamSegHead) memcpy(q, s, StreamSegHead);
+ if (q[1] && q[1] <= (ns - StreamSegHead) / StreamRow) sn = StreamSegHead + StreamRow * (uintptr_t) q[1];
+ q[1] = 0;
+ if (nc >= CodeSegHead) memcpy(q, c, CodeSegHead);
+ if (q[1] && q[1] <= (nc - CodeSegHead) / CodeRow && q[3] <= nc - CodeSegHead - CodeRow * q[1])
+  cn = CodeSegHead + CodeRow * (uintptr_t) q[1] + (uintptr_t) q[3];
+ return image_sum(c, cn, image_sum(s, sn, h)); }
+
+// a head the digest refuses: the header, the dictionary, each segment's head and table. a
+// buffer too short to hold them is torn, not damaged, and the wake refuses it on its own
+static int img_damaged(void const *buf, uintptr_t len) {
+ struct image_hdr H;
+ memcpy(&H, buf, sizeof H);
+ uintptr_t db = ImageNAll * sizeof(word), ns = H.nstream;
+ if (len < sizeof H + db || ns > len - sizeof H - db || H.ncode > len - sizeof H - db - ns) return 0;
+ return img_head_sum(buf, sizeof H + db, ns, H.ncode) != H.sum; }
+
 static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintptr_t nw, char const *cseg,
                       uintptr_t const *cb, uintptr_t ncb, uintptr_t *outlen) {
  uintptr_t bytes = nw * sizeof(word);
@@ -1169,7 +1222,7 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
   uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2;
   intptr_t dg = dz && (dn = img_code_dict(cseg, craw, dic)) ? deflate_raw(g, dic, dn, dz, CodeDict + 64) : 0;
   if (dg <= 0) dn = 0; else dnz = (uintptr_t) dg;
-  uint64_t *tab = alloc(NULL, 2 * ncap * sizeof(uint64_t));
+  uint64_t *tab = alloc(NULL, 3 * ncap * sizeof(uint64_t));
   if (tab && (cz = alloc(NULL, craw)))
    for (uintptr_t a = 0, b; a < craw; a = b) {
     for (b = a; b < craw && b - a < CodeZChunk; )
@@ -1177,15 +1230,17 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
     intptr_t got = nch < ncap && b <= craw
                  ? deflate_dict(g, (unsigned char const*) cseg + a, b - a, dic, dn, cz + zn, craw - zn) : -1;
     if (got <= 0) { nch = 0; break; }
-    tab[2 * nch] = a, tab[2 * nch + 1] = zn, nch++, zn += (uintptr_t) got; }
-  unsigned char *t = nch && 16 * nch + dnz + zn < craw ? alloc(NULL, 16 * nch + dnz + zn) : NULL;   // the table, the dictionary, the chunks
-  if (t) memcpy(t, tab, 16 * nch), memcpy(t + 16 * nch, dz, dnz), memcpy(t + 16 * nch + dnz, cz, zn);
+    tab[3 * nch] = a, tab[3 * nch + 1] = zn, tab[3 * nch + 2] = image_sum(cz + zn, (uintptr_t) got, 0);
+    nch++, zn += (uintptr_t) got; }
+  uintptr_t tn = CodeRow * nch;
+  unsigned char *t = nch && tn + dnz + zn < craw ? alloc(NULL, tn + dnz + zn) : NULL;   // the table, the dictionary, the chunks
+  if (t) memcpy(t, tab, tn), memcpy(t + tn, dz, dnz), memcpy(t + tn + dnz, cz, zn);
   else nch = 0, dn = dnz = 0;
   if (cz) alloc(cz, 0);
   if (tab) alloc(tab, 0);
   if (dic) alloc(dic, 0);
   cz = t;
-  cstore = CodeSegHead + (nch ? 16 * nch + dnz + zn : craw);
+  cstore = CodeSegHead + (nch ? CodeRow * nch + dnz + zn : craw);
   H->ncode = cstore; }
  uintptr_t total = sizeof *H + db + ns + cstore;
  char *buf = alloc(NULL, total);
@@ -1200,6 +1255,7 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
   memcpy(p + CodeSegHead, cz ? (char const*) cz : cseg, cstore - CodeSegHead); }
  if (cz) alloc(cz, 0);
  alloc(d, 0);
+ ((struct image_hdr*) buf)->sum = img_head_sum((unsigned char const*) buf, sizeof *H + db, ns, H->ncode);
  return *outlen = total, buf; }
 
 void *image_save(struct g *g, uintptr_t *outlen, struct image_bad *bad) {
@@ -1223,8 +1279,8 @@ void *image_save2(struct g *g, uintptr_t *outlen, struct image_bad *bad, struct 
 // its own function on purpose: in img_wake's frame every value here spills to the stack.
 // words lo..hi of the pool, a chunk or the whole: offsets stay the pool's, and the last
 // object must end at hi.
-static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, int lazy) {
- struct img_dec D = { base, code, ImageIdxBase + 2 * ImageNLvm, lazy }, *d = &D;
+static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, uintptr_t cn, int lazy) {
+ struct img_dec D = { base, code, ImageIdxBase + 2 * ImageNLvm, cn, lazy, 0 }, *d = &D;
  // the chain lane. two words in three of a live image are a chain's, and its head is one
  // constant of this binary -- so the token is compared where it lies, ahead of the decode
  // ladder, the size call and the kind switch alike. the seat is image_extra_aps', the same
@@ -1245,6 +1301,7 @@ static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, int lazy
   word w0 = o[0];
   o[0] = (word) img_decode((intptr_t) w0, d);                                     // word0 first: the ap (kinding needs it real)
   if (in_data(p->ap)) { sz = image_datasize(p, o);                                // data kinds: size by love_typ + the source's raw length words
+   if (sz - 1 >= hi - off) return 0;                                              // its length words name none, or more than is left
    switch (love_typ(p)) {                                                          // DChain went up the lane above
     case DNom:   o[1] = (word) img_decode((intptr_t) o[1], d); break;             // dig rides raw
     case DTray:  if (tray(p)->type == love_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
@@ -1266,52 +1323,57 @@ static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, int lazy
    o[k] = (word) p + thread_tag;                                               // the terminator, decoded by hand: its head went live
    sz = k + 1; }
   off += sz; }
- return off == hi; }
+ return off == hi && !d->bad; }
 
 // a chunked stream's table and scratch: per chunk [first word, raw offset, deflated offset],
-// a sentinel [nw, raw length, deflated length] after the last, and which chunks are live.
+// a sentinel [nw, raw length, deflated length] after the last, each chunk's digest, and which
+// chunks are live.
 // an eager wake decodes every chunk and drops it; a lazy one keeps it and decodes a chunk
 // when a page of it is first touched
 struct img_lazy {
  word *base; char *code; word const *dict; unsigned char const *z;
- uint64_t *t; unsigned char *run, *st, *want;
- uintptr_t nw, nch, left, ps, pg0, pg1; int clazy; };
+ uint64_t *t, *sum; unsigned char *run, *st, *want;
+ uintptr_t nw, nch, left, ps, pg0, pg1, cn; int clazy; };
 
 // the segment's table, checked to tile the image, into a fresh img_lazy. NULL refuses
 static struct img_lazy *img_lazy_new(word *base, uintptr_t nw, unsigned char const *p, uintptr_t ns,
-                                     word const *dict, char *code, int clazy) {
- uint64_t rn, nch, t[6];
+                                     word const *dict, char *code, uintptr_t cn, int clazy) {
+ uint64_t rn, nch, t[8];
  if (ns < StreamSegHead) return NULL;
  memcpy(&rn, p, 8), memcpy(&nch, p + 8, 8);
  p += StreamSegHead, ns -= StreamSegHead;
- if (!nch || nch > ns / 24) return NULL;
- uintptr_t zn = ns - 24 * (uintptr_t) nch, most = 0;
+ if (!nch || nch > ns / StreamRow) return NULL;
+ uintptr_t zn = ns - StreamRow * (uintptr_t) nch, most = 0;
  for (uint64_t k = 0; k < nch; k++) {
-  memcpy(t, p + 24 * k, 24);
-  if (k + 1 < nch) memcpy(t + 3, p + 24 * (k + 1), 24);
-  else t[3] = nw, t[4] = rn, t[5] = zn;
-  if ((k == 0 && (t[0] || t[1] || t[2])) || t[0] >= t[3] || t[1] >= t[4] || t[2] >= t[5]
-      || t[3] > nw || t[4] > rn || t[5] > zn) return NULL;
-  if (t[4] - t[1] > most) most = (uintptr_t) (t[4] - t[1]); }
+  memcpy(t, p + StreamRow * k, StreamRow);
+  if (k + 1 < nch) memcpy(t + 4, p + StreamRow * (k + 1), StreamRow);
+  else t[4] = nw, t[5] = rn, t[6] = zn;
+  if ((k == 0 && (t[0] || t[1] || t[2])) || t[0] >= t[4] || t[1] >= t[5] || t[2] >= t[6]
+      || t[4] > nw || t[5] > rn || t[6] > zn) return NULL;
+  if (t[5] - t[1] > most) most = (uintptr_t) (t[5] - t[1]); }
  uintptr_t tb = 24 * ((uintptr_t) nch + 1);
- struct img_lazy *L = alloc(NULL, sizeof *L + tb + (uintptr_t) nch + most);
+ struct img_lazy *L = alloc(NULL, sizeof *L + tb + 8 * (uintptr_t) nch + (uintptr_t) nch + most);
  if (!L) return NULL;
- L->base = base, L->code = code, L->dict = dict, L->z = p + 24 * nch, L->clazy = clazy;
- L->t = (uint64_t*) (L + 1), L->st = (unsigned char*) L->t + tb, L->run = L->st + nch;
- memcpy(L->t, p, 24 * (uintptr_t) nch);
+ L->base = base, L->code = code, L->cn = cn, L->dict = dict, L->z = p + StreamRow * nch, L->clazy = clazy;
+ L->t = (uint64_t*) (L + 1), L->sum = L->t + 3 * (nch + 1);
+ L->st = (unsigned char*) (L->sum + nch), L->run = L->st + nch;
+ for (uint64_t k = 0; k < nch; k++)
+  memcpy(L->t + 3 * k, p + StreamRow * k, 24), memcpy(L->sum + k, p + StreamRow * k + 24, 8);
  L->t[3 * nch] = nw, L->t[3 * nch + 1] = rn, L->t[3 * nch + 2] = zn;
  memset(L->st, 0, (uintptr_t) nch);
  L->nw = nw, L->nch = (uintptr_t) nch, L->left = (uintptr_t) nch, L->ps = 0, L->pg0 = L->pg1 = 0;
  L->want = NULL;
  return L; }
 
-// chunk k into its words: inflated into the scratch run, expanded, walked. 0 refuses
+// chunk k into its words: its digest checked, inflated into the scratch run, expanded,
+// walked. 0 refuses
 static int img_chunk(struct img_lazy *L, uintptr_t k) {
  uint64_t const *t = L->t + 3 * k;
  uintptr_t rl = (uintptr_t) (t[4] - t[1]);
- if (inflate_raw(L->z + t[2], (uintptr_t) (t[5] - t[2]), L->run, rl) != (intptr_t) rl
+ if (image_sum(L->z + t[2], (uintptr_t) (t[5] - t[2]), 0) != L->sum[k]
+     || inflate_raw(L->z + t[2], (uintptr_t) (t[5] - t[2]), L->run, rl) != (intptr_t) rl
      || img_expand(L->base + t[0], (uintptr_t) (t[3] - t[0]), L->run, L->run + rl, L->dict) != L->run + rl
-     || !img_walk(L->base, (uintptr_t) t[0], (uintptr_t) t[3], L->code, L->clazy)) return 0;
+     || !img_walk(L->base, (uintptr_t) t[0], (uintptr_t) t[3], L->code, L->cn, L->clazy)) return 0;
  return L->st[k] = 1, L->left--, 1; }
 
 #if ImageLazy
@@ -1350,20 +1412,27 @@ static int img_lazy_open(struct img_lazy *L, uintptr_t k) {
  return 1; }
 
 // a touch of a page asleep: every chunk under it made live. 0 when there was none to wake,
-// and the touch is not the image's
+// and the touch is not the image's; -1 when a chunk refused
 static int img_lazy_seat(struct img_lazy *L, uintptr_t a) {
  uintptr_t pg = a & ~(L->ps - 1), b = (uintptr_t) L->base, n = 0,
            w0 = pg > b ? (pg - b) / sizeof(word) : 0, w1 = (pg + L->ps - 1 - b) / sizeof(word);
  if (w1 >= L->nw) w1 = L->nw - 1;
  for (uintptr_t k = img_chunk_of(L, w0), e = img_chunk_of(L, w1); k <= e; k++)
-  if (!L->st[k]) { if (!img_lazy_open(L, k)) return 0; n++; }
+  if (!L->st[k]) { if (!img_lazy_open(L, k)) return -1; n++; }
  return n > 0; }
 
+// a chunk that refuses at its first touch has nothing left to fall back to -- the session is
+// running on the image -- so the process ends, saying so, rather than take the fault
 static void img_fault(int sig, siginfo_t *si, void *uc) {
  struct img_lazy *L = img_lazy_on;
  uintptr_t a = (uintptr_t) si->si_addr;
  (void) uc;
- if (L && a >= L->pg0 && a < L->pg1 && img_lazy_seat(L, a)) return;
+ int r = L && a >= L->pg0 && a < L->pg1 ? img_lazy_seat(L, a) : 0;
+ if (r > 0) return;
+ if (r < 0) {
+  static char const m[] = "love: the image is damaged: a chunk of it will not wake\n";
+  if (write(2, m, sizeof m - 1) < 0) {}
+  _exit(70); }
  signal(sig, SIG_DFL); }                          // not the image's: the access retries into the default
 
 // before a warm fork: the chunks any process of this image has woken, woken here too. a
@@ -1433,7 +1502,7 @@ static int img_lazy_arm(struct img_lazy *L) {
  void *w = mmap(NULL, L->nch, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
  L->want = w == MAP_FAILED ? NULL : w;                     // none: a fork's child wakes alone
  img_lazy_on = L;
- if ((b < L->pg0 && !img_lazy_seat(L, b)) || (L->pg1 < e && !img_lazy_seat(L, L->pg1)))   // the ragged edges
+ if ((b < L->pg0 && img_lazy_seat(L, b) < 1) || (L->pg1 < e && img_lazy_seat(L, L->pg1) < 1))   // the ragged edges
   return img_lazy_disarm(L), 0;
  if (getenv("LOVE_TOUCH_OUT")) atexit(img_touch_atexit);
  return 1; }
@@ -1453,7 +1522,8 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
  // the stream's length is the header's, never the buffer's: a baked image arrives inside a
  // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
  // the one reading that would make a good image look foreign and fall silently back to the egg.
- if (len < sizeof H + db + ns + H.ncode) return NULL;             // truncated buffer
+ if (len < sizeof H + db || ns > len - sizeof H - db || H.ncode > len - sizeof H - db - ns)
+  return NULL;                                                    // truncated buffer
  struct g *g = ini();
  if (!ok(g)) {                    // a refused ini answers a tagged core, never NULL
   struct g *c = core_of(g);
@@ -1474,6 +1544,7 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
  // the natives' code: a chunk of the arena the walk names, seated a chunk at a time as its
  // natives first run when buf stays, else here and now
  char *code = NULL;
+ uintptr_t cn = 0;
  int lazy = 0;
  if (H.ncode) {
   unsigned char const *p = (unsigned char const*) buf + sizeof H + db + ns;
@@ -1481,10 +1552,11 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
   if (H.ncode < CodeSegHead) goto no;
   memcpy(&craw, p, 8), memcpy(&nch, p + 8, 8), memcpy(&nd, p + 16, 8), memcpy(&ndz, p + 24, 8);
   if (!nch) code = craw == H.ncode - CodeSegHead ? code_adopt(g, (char const*) p + CodeSegHead, craw) : NULL;
-  else if (nch <= (H.ncode - CodeSegHead) / 16 && ndz <= H.ncode - CodeSegHead - 16 * nch && nd <= CodeDict)
-   code = code_lazy(g, craw, p + CodeSegHead + 16 * nch + ndz, H.ncode - CodeSegHead - 16 * nch - ndz,
-                    p + CodeSegHead, nch, p + CodeSegHead + 16 * nch, ndz, nd, kept), lazy = kept;
-  if (!code) goto no; }
+  else if (nch <= (H.ncode - CodeSegHead) / CodeRow && ndz <= H.ncode - CodeSegHead - CodeRow * nch && nd <= CodeDict)
+   code = code_lazy(g, craw, p + CodeSegHead + CodeRow * nch + ndz, H.ncode - CodeSegHead - CodeRow * nch - ndz,
+                    p + CodeSegHead, nch, p + CodeSegHead + CodeRow * nch, ndz, nd, kept), lazy = kept;
+  if (!code) goto no;
+  cn = (uintptr_t) craw; }
  // expand the token stream into the pool, then decode it there in place. the two passes
  // read and write one word at a time at the same index, so src and base are the same array
  // -- and a payload word arrives already seated, which is why the flat-leaf memcpys are gone.
@@ -1499,9 +1571,9 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
    if (!sch) {
     if (rn != ns - StreamSegHead
         || img_expand(base, nw, sp + StreamSegHead, sp + ns, dict) != sp + ns
-        || !img_walk(base, 0, nw, code, lazy)) goto no; }
+        || !img_walk(base, 0, nw, code, cn, lazy)) goto no; }
    else {
-    struct img_lazy *L = img_lazy_new(base, nw, sp, ns, dict, code, lazy);
+    struct img_lazy *L = img_lazy_new(base, nw, sp, ns, dict, code, cn, lazy);
     if (!L) goto no;
     if (!(kept == 2 && img_lazy_arm(L))) {
      int ok = 1;
@@ -1510,12 +1582,14 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
      if (!ok) goto no; } } }
  uintptr_t nv = LvImgRoots - 2;                                          // same struct (fingerprinted) -> same layout
  if (H.nroot != LvImgRoots) goto no;                                     // root count mismatch -> stale/foreign image -> normal boot
- g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base);
- g->tasks   = (union u*) image_root_dec(H.root_tag[1], H.root_val[1], base);
+ int bad = 0;
+ g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base, nw, &bad);
+ g->tasks   = (union u*) image_root_dec(H.root_tag[1], H.root_val[1], base, nw, &bad);
  // the parked ring is not in the image: an fd means nothing in a new process,
  // and a baker is single-tasked -- a woken runtime starts empty
  g->parked  = NULL;
- for (uintptr_t i = 0; i < nv; i++) ((word*) &g->v0)[i] = image_root_dec(H.root_tag[2 + i], H.root_val[2 + i], base);
+ for (uintptr_t i = 0; i < nv; i++) ((word*) &g->v0)[i] = image_root_dec(H.root_tag[2 + i], H.root_val[2 + i], base, nw, &bad);
+ if (bad || H.root_tag[1] != 1) goto no;                                // the wake writes into the task ring below
  g->next_serial = H.next_serial;
  g->tasks[7].x = ZeroPoint;   // a worn port names an fd, which means nothing in a new process -- a woken task wears the console (the parked ring's rule)
  // sp stays at ini's topof(g) (empty ai stack); the dispatch re-establishes ip

@@ -842,10 +842,11 @@ char *code_adopt(struct g *g, char const *src, size_t n) {
  if (code_wopen(c, c->base, n, 1)) return NULL;
  code_sync(c->base, c->base + n);
  return c->base; }
-// a segment deflated a chunk at a time, each seated when a native in it first runs: tab
-// holds where each chunk starts in the segment and in z, two words apiece. every chunk was
-// deflated against dic, nd bytes, a preset dictionary
-struct lazy { unsigned char const *z, *dz; char *w; unsigned char *seated, *dic, *want; uintptr_t n, nz, nch, nd, ndz; uint64_t tab[]; };
+// a segment deflated a chunk at a time, each seated when a native in it first runs: the
+// image's table holds where each chunk starts in the segment and in z, and its digest, three
+// words apiece; tab keeps the first two, sum the third. every chunk was deflated against dic,
+// nd bytes, a preset dictionary
+struct lazy { unsigned char const *z, *dz; char *w; unsigned char *seated, *dic, *want; uint64_t *sum; uintptr_t n, nz, nch, nd, ndz; uint64_t tab[]; };
 static int code_seat1(struct code *c, uintptr_t k) {
  struct lazy *l = c->lz;
  if (l->seated[k]) return 0;
@@ -853,7 +854,8 @@ static int code_seat1(struct code *c, uintptr_t k) {
  l->dz = NULL;
  uintptr_t a = (uintptr_t) l->tab[2 * k], b = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 2] : l->n,
            za = (uintptr_t) l->tab[2 * k + 1], zb = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 3] : l->nz;
- if (code_wopen(c, c->base + a, b - a, 0)
+ if (image_sum(l->z + za, zb - za, 0) != l->sum[k]                   // a damaged chunk: never seated, never run
+     || code_wopen(c, c->base + a, b - a, 0)
      || inflate_dict(l->z + za, zb - za, (unsigned char*) l->w + a, b - a, l->dic, l->nd) != (intptr_t)(b - a)
      || code_wopen(c, c->base + a, b - a, 1)) return -1;
  code_sync(c->base + a, c->base + b);
@@ -865,11 +867,13 @@ char *code_lazy(struct g *g, size_t n, unsigned char const *z, size_t nz, unsign
                 unsigned char const *dz, size_t ndz, size_t nd, int kept) {
  char *w;
  struct code *c = code_region(g, n, &w);
- struct lazy *l = c ? alloc(NULL, sizeof *l + nch * (2 * sizeof(uint64_t) + 1) + nd) : NULL;
+ struct lazy *l = c ? alloc(NULL, sizeof *l + nch * (3 * sizeof(uint64_t) + 1) + nd) : NULL;
  if (!l) return NULL;
- l->z = z, l->w = w, l->n = n, l->nz = nz, l->nch = nch, l->seated = (unsigned char*)(l->tab + 2 * nch);
- l->dic = l->seated + nch, l->nd = nd, l->dz = nd ? dz : NULL, l->ndz = ndz;
- memcpy(l->tab, tab, 2 * nch * sizeof(uint64_t)), memset(l->seated, 0, nch);
+ l->z = z, l->w = w, l->n = n, l->nz = nz, l->nch = nch, l->sum = l->tab + 2 * nch;
+ l->seated = (unsigned char*)(l->sum + nch), l->dic = l->seated + nch, l->nd = nd, l->dz = nd ? dz : NULL, l->ndz = ndz;
+ for (uintptr_t k = 0; k < nch; k++)
+  memcpy(l->tab + 2 * k, tab + 24 * k, 16), memcpy(l->sum + k, tab + 24 * k + 16, 8);
+ memset(l->seated, 0, nch);
  l->want = NULL;
  c->lz = l;
  for (uintptr_t k = 0; k < nch; k++) {
