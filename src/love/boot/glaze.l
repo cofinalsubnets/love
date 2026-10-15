@@ -145,9 +145,8 @@
        (bin a b fin) (caargir tgt a coff + [['push A]] + caargir tgt b coff + fin)
        (? (nom? e) [['ld A S coff]]                                                                          ; the counter, raw
           (whole? e) [['li A e]]
-          (e @ ('? c t f) (: el (mint 0) en (mint 0)
-                             (caargir tgt c coff + [['cmp A 0] ['br 'le el]] + caargir tgt t coff
-                              + [['jmp en] ['label el]] + caargir tgt f coff + [['label en]]))
+          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(caargir tgt q coff) [['cmp A 0] ['br 'le el]] (caargir tgt y coff) [['jmp en] ['label el]]])
+                                 (x \ caargir tgt x coff))
                (op a b) (? (elem op '(+ - *))       (bin a b ([['pop T]] + arithir tgt op))
                            (elem op '(// %) && divc? b) (caargir tgt a coff + [['mov T A]] + divk tgt op b)
                            (elem op '(// %))        (bin a b ([['test A A] '(br eq deopt) ['pop T]] + divir tgt op))
@@ -655,9 +654,11 @@
                                              [['lea X HP 88] ['cmp SP X] ['br 'below 'deopt]         ; stub, whose cons collects
                                               (reach tgt X 0) ['st HP 0 X] ['st HP 8 T] ['st HP 16 A]
                                               ['mov A HP] ['add HP HP 24]]))
-             (acq st sth sel d) (: le (mint 0)  ln (mint 0)  tr (atruth 0)
-              (acg st d + <tr + [['cmp A 1] ['br 'le le]]                                       ; heap truth -> net -> twin, or the bit stub; tag(x)<=1 <=> x<=0
-               + acg sth d + [['jmp ln]] + <>tr + [['label le]] + acg sel d + [['label ln]]))
+             (acq st sth sel d) (qrun ['? st sth sel]
+                                  (q \ y \ le \ ln \ (: tr (atruth 0)
+                                     [(acg q d) <tr [['cmp A 1] ['br 'le le]]                 ; heap truth -> net -> twin, or the bit stub; tag(x)<=1 <=> x<=0
+                                      (acg y d) [['jmp ln]] <>tr [['label le]]]))
+                                  (x \ acg x d))
              (adrive cso) (: bb (mint 0)                                                                    ; apply the value at Sp[cso] to the arg in A, via the walkable resume:
               [['st SP -32 A] ['ld T SP cso] ['st SP -24 T]                                         ; frame [arg, callee, tag(bb-entry0), entry0] -- an odd charm + an out-of-
                  ['lar T bb] ['lar X 'entry0] ['subs T T X] ['leax T T T 1 1]                       ; pool code base, so a GC with the call pending walks it clean
@@ -788,9 +789,10 @@
                + catmap (i \ adrivep (voff i)) simp + catmap (j \ adrivep (spill (d + j))) ^(a - ni)
                + [['label dn]]))
              (aselfgo as d) (agous as 0 d + asmv (a - ni - 1) d + [['jmp 'sgo]])               ; saturated tail self-call: new args (spilled first) over the arg slots (imports keep), jump the body top
-             (acqt st sth sel d) (: le (mint 0)  ln (mint 0)  tr (atruth 0)                          ; acq, tails threaded
-              (acg st d + <tr + [['cmp A 1] ['br 'le le]]
-               + acgt sth d + [['jmp ln]] + <>tr + [['label le]] + acgt sel d + [['label ln]]))
+             (acqt st sth sel d) (qrun ['? st sth sel]                                                ; acq, tails threaded
+                                   (q \ y \ le \ ln \ (: tr (atruth 0)
+                                      [(acg q d) <tr [['cmp A 1] ['br 'le le]] (acgt y d) [['jmp ln]] <>tr [['label le]]]))
+                                   (x \ acgt x d))
              (acgt e d)                                                                             ; tail-position acg: thread tails through ? and let bodies so a saturated self-call jumps
               (? (aquote? e) (acg e d)
                  (atom? e) (acg e d)
@@ -954,7 +956,15 @@
        (go (i + 1) >ds (binop? dag i && (v = <><ds || v = <>><ds) ? i best)))) 0 dag -1)
    (dies? v i dag rv n) (binop? dag v && luse v dag rv n = i && !(elem v rv))
    (rgof leaf env) (: e (clook leaf env) (two? e ? <>e (scare 'glaze-leaf leaf)))   ; a leaf -> its fixed reg
-   (bcat ps) (foldl (+) () ps)                                          ; concat a list of IR pieces
+   (bcat ps) (cats ps)                                                  ; concat a list of IR pieces, once
+   ; a ? chain, (? c t (? c2 t2 .. f)), laid as one run: per arm (arm c t el en)'s pieces -- the
+   ; test, the branch, a jump to the one end, the else label -- then (last f) and the end. the
+   ; code the nest lays, its inner ends merged into the outer, joined once where a nest
+   ; joined its else at every level
+   (qrun e arm last) (: en (mint 0)
+      (go e acc) (e @ ('? c t f) (go f (rev (arm c t (mint 0) en) + acc))
+                       (cats (rev ([['label en]] . last e . acc))))
+      (go e ()))
    (efold names i) (two? names ? ([<names i] . efold >names (i + 1)) ())   ; names -> (name reg) from reg i
    ; --- the nested grid owner, D-dimensional -----------------------------------------------------
    ; a whole counted-loop nest as one native kernel: D integer loops, M derived-float invariants per
@@ -1145,9 +1155,8 @@
        (bin a b fin) (cgir tgt ps a + [['push A]] + cgir tgt ps b + fin)
        (? (elem e ps) (fxir tgt (argix e ps 0))
           (whole? e) [['li A e]]
-          (e @ ('? c t f) (: el (mint 0) en (mint 0)
-                             (cgir tgt ps c + [['cmp A 0] ['br 'le el]] + cgir tgt ps t
-                              + [['jmp en] ['label el]] + cgir tgt ps f + [['label en]]))
+          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(cgir tgt ps q) [['cmp A 0] ['br 'le el]] (cgir tgt ps y) [['jmp en] ['label el]]])
+                                 (x \ cgir tgt ps x))
                (op a b) (? (elem op '(+ - *))       (bin a b ([['pop T]] + arithir tgt op))
                            (elem op '(// %) && divc? b) (cgir tgt ps a + [['mov T A]] + divk tgt op b)
                            (elem op '(// %))        (bin a b ([['test A A] '(br eq deopt) ['pop T]] + divir tgt op))
@@ -1212,9 +1221,8 @@
        vl (varld e d)
        (? vl vl                                              ; a var -> its loader IR (acc <- the var, at depth d)
           (whole? e) [['li A e]]
-          (e @ ('? c t f) (: el (mint 0) en (mint 0)
-                             (cgvir tgt varld c d + [['cmp A 0] ['br 'le el]] + cgvir tgt varld t d
-                              + [['jmp en] ['label el]] + cgvir tgt varld f d + [['label en]]))
+          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(cgvir tgt varld q d) [['cmp A 0] ['br 'le el]] (cgvir tgt varld y d) [['jmp en] ['label el]]])
+                                 (x \ cgvir tgt varld x d))
                (op a b) (? (elem op '(+ - *))       (bin a b ([['pop T]] + arithl tgt op d))
                            (elem op '(// %) && divc? b) (cgvir tgt varld a d + [['mov T A]] + divk tgt op b)
                            (elem op '(// %))        (bin a b (divl tgt op d))
@@ -1286,9 +1294,7 @@
                ())
             (op a b c)
             (? (op = '?)
-                 (: el (mint 0) en (mint 0)
-                    (bcat [(go a) [['cmp A 0] ['br 'le el]] (go b)
-                            [['jmp en] ['label el]] (go c) [['label en]]]))
+                 (qrun e (q \ y \ el \ en \ [(go q) [['cmp A 0] ['br 'le el]] (go y) [['jmp en] ['label el]]]) go)
                (op = 'peep) (: R (argregir tgt (argix a ps 0)) inl (mint 0) endl (mint 0)   ; (peep STR i d): i unsigned-vs-len, out of range -> d, else the byte at [STR+i+16]
                   (bcat [(go b)
                          [['ld T R 8] ['cmp A T] ['br 'below inl] ['li A (whole? c ? c 0)] ['jmp endl] ['label inl] ['ldxb A R A 1 16] ['label endl]]]))
@@ -1327,9 +1333,8 @@
          (atom? e) ()
          (elem <e syms) (cggir tgt syms ps e)                                   ; a value-group call: cggir's call already answers the value
          (e @ ('. a b) (bcat [(cggvir tgt syms ps a) [['push A]] (cggvir tgt syms ps b) [['pop T]] (consir tgt)])   ; A ; push ; B ; pop T(=A) ; cons(T,A)
-              ('? c t f) (: el (mint 0) en (mint 0)
-                 (bcat [(cggir tgt syms ps c) [['cmp A 0] ['br 'le el]] (cggvir tgt syms ps t)
-                        [['jmp en] ['label el]] (cggvir tgt syms ps f) [['label en]]]))
+              ('? _ _ _) (qrun e (q \ y \ el \ en \ [(cggir tgt syms ps q) [['cmp A 0] ['br 'le el]] (cggvir tgt syms ps y) [['jmp en] ['label el]]])
+                              (x \ cggvir tgt syms ps x))
               ())))
    ; cggtir: e in tail position. a tail self-call of matching arity recomputes the args onto the stack, pops them into
    ; the arg regs and jumps Lbody past save/load: the frame is reused. self only; a sibling tail-call stays a plain `call`
@@ -1339,9 +1344,8 @@
             (bcat [(gargsir tgt syms ps >e)                                      ; push the new args, all read from the old regs
                    (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))   ; pop into the arg regs, in reverse
                    [['jmp Lbody]]])
-          (e @ ('? c t f) (: el (mint 0) en (mint 0)                            ; a tail ? -> test non-tail, both branches tail
-                 (bcat [(cggir tgt syms ps c) [['cmp A 0] ['br 'le el]] (cggtir tgt syms ps t selfnm Lbody)
-                        [['jmp en] ['label el]] (cggtir tgt syms ps f selfnm Lbody) [['label en]]]))
+          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(cggir tgt syms ps q) [['cmp A 0] ['br 'le el]] (cggtir tgt syms ps y selfnm Lbody) [['jmp en] ['label el]]])   ; a tail ? -> test non-tail, both branches tail
+                                 (x \ cggtir tgt syms ps x selfnm Lbody))
                (cggir tgt syms ps e))))                                          ; any other tail expr -> a value in acc
    ; mkhir: one function. a value body (it conses) takes cggvir with no tco; an int body takes cggtir.
    ; a call deeper than gdepth bytes below the outer's anchor deopts, so deep recursion runs on the heap stack
