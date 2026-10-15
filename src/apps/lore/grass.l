@@ -1,24 +1,12 @@
 ; grass -- grass simulator 1988: you are a blade of grass, for one week.
-;
-; the field is a row of blades on a strip of dirt under a sky, drawn in coarse colour
-; cells: the sky's ground turns with the hour, clouds ride the wind, stars come out
-; at night, the sun and the moon cross, and every blade throws a shadow the sun's
-; length. a blade is a spring: the wind bends it and it swings back, and the one you
-; are is the one the arrow keys push. that is the whole of the controls -- dancing. a
-; press within a beat of the last, on another key, grows the combo, and the combo is
-; the points. dancing costs water; water comes back as dew on calm cool nights and
-; goes in the sun and the wind by day, and a blade with water and warmth grows. after
-; seven days the week is over, and what you grew and what you scored is the end.
-;
-; the game is pure love -- grass-new, grass-key, grass-tick and grass-frame are state
-; in and state out, gated headless by test/host/grass.l; only grass-run ties the tty.
-; the song is harp's, a music box, out the horn when the seat has one.
-;
-; run: love lore grass88 (or grass)
+; a row of blades under a turning sky; each blade a spring the wind bends, yours pushed by
+; the keys. presses on different keys within dance-gap grow the combo, the points. water
+; is the weather's alone: lost in sun and wind, back as dew; water and warmth grow a blade.
+; grass-new/key/tick/frame are pure; only grass-run touches the tty. grass99.l borrows the week.
 (module (grass grass-run grass-look grass-main grass-new grass-key grass-tick grass-frame grass-hud
          grass-bar grass-rows grass-paint grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
          grass-tune grass-song-new grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
-         daylight sky-pen compass fx1 week-hours dh fps dance-cost)
+         daylight sky-pen compass fx1 week-hours dh fps)
 (borrow 'rove)
 (borrow 'harp)                          ; the cycle algebra the song is scheduled by
 (borrow 'score)                         ; the tune as text
@@ -116,11 +104,8 @@
     'songs songs 'sang -1 'cue 0
     'dewday 0 'pts 0 'combo 0 'dk 0 'dms 0 'lk 0 'lt 0 'over 0 'msg ""})
 
- ; --- the helm: an arrow or hjkl pushes your blade, q or esc leaves ---------------
- ; a press within the gap of the last, on another key, grows the combo; the combo
- ; is the points. sideways is a shove on the lean; up is a reach that stretches the
- ; blade, down a bow that shortens it -- and a blade shortened hard enough buckles. a
- ; diagonal (yubn) is both at once
+ ; --- the helm: sideways shoves the lean, up stretches, down shortens (hard enough
+ ; buckles), a diagonal both; q or esc leaves ---
  (grass-key g k now) (: mv (steer k) me (g 'me)
    (? (g 'over) g
       (k @ (113 || 27) 1 0) (pins g 'over 'fled 'msg "")
@@ -162,10 +147,8 @@
    hr (grass-hour g) dl (daylight hr) temp (grass-temp g)
    cover (g 'covers day)
    sun (dl * (1.0 - 0.6 * cover))              ; what reaches the ground
-   ; the water: each tick a blade throws against the sky's thirst -- a chance in a
-   ; thousand -- and loses a drop when it hits; the night gives some back a little at a
-   ; time, and the dewfall before dawn a drink. nothing you do touches your water: the
-   ; week's weather is the whole of it
+   ; the water: a blade loses a drop on a roll in a thousand against the thirst; night and
+   ; the dewfall before dawn give back. the weather alone moves it
    thirst (1000.0 * dry-rate * (0.05 + sun) * (1.0 + (temp - 60.0) / 50.0)
                   * (1.0 + wind / 30.0) * dh / dry-drop)
    dew ((1.0 - dl) * dew-rate * (1.0 - 0.5 * wind / 30.0) * clamp ((78.0 - temp) / 20.0) 0.2 1.0 * dh)
@@ -237,12 +220,8 @@
     (: me (g 'me) (shadow me, blade me)),
     [ov sh ys]))
 
- ; the clouds of the day as a tablet of sky index -> depth, 3 at the core down to 0 at
- ; the edge: the cover picks how many show, each an ellipse on the drift, flatter under
- ; than over, its edge dithered, its underside a shade darker, and a little noise
- ; through the whole of it. where two overlap the deeper one shows
- ; ..a cloud steps by whole columns, so the layout holds until one steps: it is kept under
- ; the columns the clouds stand on
+ ; the day's clouds, sky index -> depth 3 (core) to 0 (edge), the deeper winning; the
+ ; cover picks how many. kept until a cloud steps a whole column
  (grass-clouds g) (: n (3 + int (g 'covers (grass-day g) * 10.0)) drift (g 'drift)
    key (map (cl \ int (cl 'x0 + drift)) (first-n n (g 'clouds)))
    kept (g 'cm)
@@ -251,9 +230,7 @@
  (clouds-lay g n drift) (:
    cm {} r (g 'r) c (g 'c)
    (deep k v) (peep cm k -1 @ o (o < v ? (pin cm k v)))
-   ; a cloud sits on a whole column and is tested by whole columns, so nothing at its
-   ; edge moves until the whole of it steps; the noise and the dither are keyed to the
-   ; cloud's own columns, so they step with it
+   ; noise and dither keyed to the cloud's own columns, so they step with it
    (lay cl) (: cx ((int (cl 'x0 + drift) + 2 * c) % c) w (cl 'w) hh (cl 'h) cy (cl 'y)
                k0 (int (cl 'x0 - w) - 2)                 ; the cloud's own first column
                (row y x) (x <= cx + w ?
@@ -270,12 +247,8 @@
    (each (first-n n (g 'clouds)) lay,
     cm))
 
- ; the frame's rows as strings -- the hud, every field row with its end, the bar: the
- ; frame is their join, and a paint is the rows that changed. a row nothing stands on
- ; is the sky or the dirt alone, the same until the light, the clouds or the sun move:
- ; it is kept under a key of those, as its cells and as its string; a row a blade
- ; stands on takes its sky from the kept cells instead of asking the dice again. the
- ; stars' twinkle turns a row over only if a star is in it
+ ; the frame's rows as strings, hud to bar; a paint is the rows that changed. a bare sky
+ ; or dirt row is kept under a key of light, clouds and sun; a blade's row reuses its cells
  (grass-rows g) (:
    r (g 'r) c (g 'c) base (r - 4)
    hr (grass-hour g) dl (daylight hr)
@@ -417,14 +390,10 @@
       say (s 'h) (pack (mixdown vs base song-chunk) song-chunk song-gain)))
 
  ; --- the week on the tty ------------------------------------------------------------
- ; the clock paces the ticks, thirty a second, and the horn is fed by its lag: chunks go
- ; out until a lead stands queued, ahead of anything else the loop does. a frame is
- ; painted only when the tick it shows is on time -- a seat too slow to draw every tick
- ; still ticks at the clock's rate and still sounds, and gives up frames rather than either.
+ ; the clock paces ticks at fps; the horn is fed first, to a lead; a late tick is not
+ ; painted, so a slow machine drops frames, never ticks or sound
  tick-ms (1000.0 / fps)
- ; a sign stands deaf for half a second, then waits for a key; the song plays under it
- ; either way, since a beat is what feeds the horn. deaf by the clock and not by beats:
- ; a card takes its first chunks at once, so the beats say nothing about the time
+ ; a sign is deaf by the clock, not by beats: a card takes its first chunks at once
  sign-deaf 500                                          ; ms a sign is deaf for
  (sign lk g ttl rows beat) (: _ (say out (sign-over (lk 'frame g) ttl rows 0 (g 'r) (g 'c)), flush out)
                            t0 (clock 0)
@@ -441,10 +410,8 @@
    bs (filter (b \ !(b 'err)) (score-parse ls))
    hn (bs ? (horn song-rate 2 @ h (nom? h ? () h)))
    sng (hn ? (grass-song-new bs hn (wheel (clock 0))))
-   ; THE QUEUE MUST OUTLAST THE GAP BETWEEN FEEDS, and on a slow seat that gap is one
-   ; frame's painting: a fifth of a second is a desktop's answer and a phone's silence.
-   ; so the gap is measured, held at its recent worst -- halving every two seconds, by
-   ; the clock and not by calls -- and the lead follows it
+   ; the queue must outlast the gap between feeds, a frame's painting on a slow machine:
+   ; the pacer holds the recent worst gap and the lead follows it
    pace (pacer ())
    (feed _) (song-lead-of (pace! pace) @ l
                (sng ? (song-fill hn l (_ \ grass-song-feed sng (g 'wind)))))

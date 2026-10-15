@@ -1,18 +1,13 @@
-; grass99 -- grass simulator 1999: the sequel. the same week as a blade of
-; grass, the same field, the same weather and the same dance -- grass's own state and
-; rules, ticked by grass's own loop -- stood up in three dimensions by meadow, with a
-; tune of its own.
-;
-; run: love lore grass99
+; grass99 -- grass simulator 1999, the sequel: grass's own week, state, rules and loop,
+; stood up in three dimensions by meadow, with a tune of its own.
 (module (grass99 grass99-main grass99-look grass99-frame score99)
 (borrow 'rove)
 (borrow 'grass)                         ; the week: its state, its rules, its loop
 (borrow 'meadow)                        ; the field in three dimensions
 (:
  esc (string 27)
- ; the tune as a score, read as grass reads its own: gwen's bar, picked out on synth's row
- ; as 3 6 0 8 6, on the music box alone -- spread over two bars, so at grass's tempo it
- ; goes half as fast, and an octave under, the box's own low end and the chimes' with it
+ ; the tune as a score, read as grass reads its own: spread over two bars an octave under,
+ ; so at grass's tempo it goes half as fast, on the music box alone
  score99 '("D3 1.5 F3 1.5 A3 1"
            "G3 1.5 F3 2.5")
  ttl99 "grass simulator 1999"
@@ -21,9 +16,8 @@
           "q or esc to quit"
           ""
           "-- any key --")
- ; the frame: the hud, the meadow under the rows between, and the bar. the meadow's
- ; screen is laid at the first frame, its own blades thrown from the week's first day,
- ; its colours 24-bit where the seat says so
+ ; the frame: the hud, the meadow under it, and the bar. the meadow is laid at the first
+ ; frame, its blades thrown from the week's first day, 24-bit where COLORTERM says so
  (lay g) (: m (meadow-new (int (g 'tdays 0 * 977.0)) (g 'c) (2 * (g 'r - 1)))
              (pin m 'deep (elem (getenv "COLORTERM") ["truecolor" "24bit"]),
               pin g 'mv m,
