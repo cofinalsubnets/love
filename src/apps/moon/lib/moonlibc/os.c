@@ -22,6 +22,52 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
 __attribute__((weak))
 int __love_efault(void) { return 0; }
 
+#ifdef __ARM_EABI__
+/* arm's *_time64 calls are linux 5.1's: before it the 32-bit twin answers, each record
+ * narrowed going in and widened coming back. a time past 2038 cannot be said, EOVERFLOW */
+int __love_t32k;
+
+struct __ts32 { long s, ns; };
+static int nar(long p, struct __ts32 *o, int n) {
+  struct timespec const *t = (struct timespec const *) p;
+  for (int i = 0; i < n; i++) {
+    if (t[i].tv_sec != (long) t[i].tv_sec) return -75;
+    o[i].s = (long) t[i].tv_sec, o[i].ns = t[i].tv_nsec; }
+  return 0; }
+static void wid(struct __ts32 const *o, long p) {
+  struct timespec *t = (struct timespec *) p;
+  t->tv_sec = o->s, t->tv_nsec = o->ns; }
+
+long __love_t32(long n, long a, long b, long c, long d, long e, long f) {
+  struct __ts32 o[2];
+  long r;
+  if (n == NR_clock_gettime) {
+    r = __love_sys(NR_clock_gettime_32, a, (long) o, 0, 0, 0, 0);
+    if (!r) wid(o, b);
+    return r; }
+  if (n == NR_clock_nanosleep) {
+    if ((r = nar(c, o, 1))) return r;
+    r = __love_sys(NR_clock_nanosleep_32, a, b, (long) o, d ? (long) (o + 1) : 0, 0, 0);
+    if (r == -4 && d) wid(o + 1, d);                     /* EINTR: the time left */
+    return r; }
+  if (n == NR_ppoll || n == NR_pselect6) {
+    long t = n == NR_ppoll ? c : e;
+    if (t && (r = nar(t, o, 1))) return r;
+    r = n == NR_ppoll ? __love_sys(NR_ppoll_32, a, b, t ? (long) o : 0, d, e, 0)
+                      : __love_sys(NR_pselect6_32, a, b, c, d, t ? (long) o : 0, f);
+    if (t && r >= 0) wid(o, t);
+    return r; }
+  if (n == NR_utimensat) {
+    if (c && (r = nar(c, o, 2))) return r;
+    return __love_sys(NR_utimensat_32, a, b, c ? (long) o : 0, d, 0, 0); }
+  if (n == NR_futex) {
+    if (d && ((b & 127) == 0 || (b & 127) == 9)) {     /* FUTEX_WAIT, _WAIT_BITSET: d is a time */
+      if ((r = nar(d, o, 1))) return r;
+      d = (long) o; }
+    return __love_sys(NR_futex_32, a, b, c, d, e, f); }
+  return -38; }
+#endif
+
 long __love_osdetect(void) {
 #ifndef LvOsTranslate
   /* no tables on this arch: the kernel is whichever one the build was compiled

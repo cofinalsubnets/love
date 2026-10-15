@@ -55,7 +55,7 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
  * lays x64 and arm64). Where it is absent netbsd's sigaction refuses BY NAME
  * rather than register a trampoline that is not there; freebsd on the same arch
  * is unaffected. */
-#if !defined(__riscv) && !defined(__wasm__) && !defined(__i386__)   /* wasm's one kernel is the page's loader; i386 is linux's alone */
+#if !defined(__riscv) && !defined(__wasm__) && !defined(__ILP32__)   /* wasm's one kernel is the page's loader; i386 and arm are linux's alone */
 # define LvOsTranslate 1        /* os.c's tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
@@ -295,6 +295,119 @@ struct _IO_FILE {
 #define NR_fstatfs         44
 #define NR_memfd_create   279
 #define NR_execveat       281
+#elif defined(__ARM_EABI__)
+/* arm (linux eabi): x64's names at arm's numbers. off_t and time_t are 64-bit, through the
+ * *64 and *_time64 calls as on i386; a kernel before 5.1 has neither *_time64 nor statx, and
+ * answers through the 32-bit twins named beside them (os.c, fstat.c) */
+#define NR_read             3
+#define NR_write            4
+#define NR_close            6
+#define NR_mmap           192   /* mmap2 */
+#define NR_mprotect       125
+#define NR_munmap          91
+#define NR_mremap         163
+#define NR_madvise        220
+#define NR_msync          144
+#define NR_copy_file_range 391
+#define NR_mincore        219
+#define NR_rt_sigaction   174
+#define NR_rt_sigprocmask 175
+#define NR_ioctl           54
+#define NR_pread64        180
+#define NR_pwrite64       181
+#define NR_getpid          20
+#define NR_uname          122
+#define NR_sysinfo        116
+#define NR_setuid         213   /* setuid32 */
+#define NR_setgid         214   /* setgid32 */
+#define NR_setgroups      206   /* setgroups32 */
+#define NR_setresuid      208   /* setresuid32 */
+#define NR_sigaltstack    186
+#define NR_setresgid      210   /* setresgid32 */
+#define NR_geteuid        201   /* geteuid32 */
+#define NR_sendfile       239   /* sendfile64 */
+#define NR_pselect6       413   /* pselect6_time64 */
+#define NR_pselect6_32    335
+#define NR_socket         281
+#define NR_socketpair     288
+#define NR_connect        283
+#define NR_accept         366   /* accept4 */
+#define NR_sendto         290
+#define NR_getsockname    286
+#define NR_getpeername    287
+#define NR_recvfrom       292
+#define NR_sendmsg        296
+#define NR_recvmsg        297
+#define NR_shutdown       293
+#define NR_bind           282
+#define NR_listen         284
+#define NR_getsockopt     295
+#define NR_setsockopt     294
+#define NR_clone          120
+#define NR_execve          11
+#define NR_execveat       387
+#define NR_wait4          114
+#define NR_getrusage       77
+#define NR_getrlimit      191   /* ugetrlimit */
+#define NR_setrlimit       75
+#define NR_getpriority     96
+#define NR_setpriority     97
+#define NR_statx          397
+#define NR_kill            37
+#define NR_fcntl          221   /* fcntl64 */
+#define NR_fsync          118
+#define NR_fdatasync      148
+#define NR_fchown         207   /* fchown32 */
+#define NR_ftruncate      194   /* ftruncate64 */
+#define NR_getcwd         183
+#define NR_chdir           12
+#define NR_chroot          61
+#define NR_fchmod          94
+#define NR_umask           60
+#define NR_getuid         199   /* getuid32 */
+#define NR_getgid         200   /* getgid32 */
+#define NR_setpgid         57
+#define NR_setsid          66
+#define NR_getpgid        132
+#define NR_sync            36
+#define NR_mount           21
+#define NR_reboot          88
+#define NR_umount2         52
+#define NR_getdents64     217
+#define NR_clock_gettime  403   /* clock_gettime64 */
+#define NR_clock_gettime_32 263
+#define NR_exit_group     248
+#define NR_exit             1
+#define NR_futex          422   /* futex_time64 */
+#define NR_futex_32       240
+#define NR_sched_yield    158
+#define NR_openat         322
+#define NR_mkdirat        323
+#define NR_mknodat        324
+#define NR_fchownat       325
+#define NR_faccessat      334
+#define NR_unlinkat       328
+#define NR_renameat       329
+#define NR_renameat2      382
+#define NR_linkat         330
+#define NR_symlinkat      331
+#define NR_readlinkat     332
+#define NR_fchmodat       333
+#define NR_ppoll          414   /* ppoll_time64 */
+#define NR_ppoll_32       336
+#define NR_unshare        337
+#define NR_utimensat      412   /* utimensat_time64 */
+#define NR_utimensat_32   348
+#define NR_signalfd4      355
+#define NR_dup3           358
+#define NR_pipe2          359
+#define NR_memfd_create   385
+#define NR__llseek        140
+#define NR_clock_nanosleep 407   /* clock_nanosleep_time64 */
+#define NR_clock_nanosleep_32 265
+#define NR_statfs64       266
+#define NR_fstatfs64      267
+#define NR_fstatat64      327
 #elif defined(__i386__)
 /* i386: x64's names at i386's numbers. time_t and off_t are 64-bit here, so a call
  * whose i386 twin takes them narrow rides its *64 / *_time64 cousin (named beside it);
@@ -563,6 +676,15 @@ extern long __love_msgcan(long fl);        /* ..and recvmsg's msg_flags back */
 extern int __love_sofb(long *lv, long *op);        /* sockopt level+name; -1 unmapped */
 extern unsigned int __love_sain(void const *a, unsigned int n, void *out);   /* sockaddr head, in; answers the namelen */
 extern void __love_saout(void *a, unsigned int n);                   /* ..and back out */
+#ifdef __ARM_EABI__
+/* a time64 call on a linux before 5.1: ENOSYS once, and os.c answers through the 32-bit
+ * twin from then on */
+extern int __love_t32k;
+long __love_t32(long n, long a, long b, long c, long d, long e, long f);
+static int __love_t64(long n) {
+  return n == NR_clock_gettime || n == NR_clock_nanosleep || n == NR_ppoll || n == NR_pselect6
+      || n == NR_utimensat || n == NR_futex; }
+#endif
 static long __love_call(long n, long a, long b, long c, long d, long e, long f) {
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();
@@ -570,7 +692,13 @@ static long __love_call(long n, long a, long b, long c, long d, long e, long f) 
   if (v >= 2) {
     n = __love_nrfb(n);
     if (n < 0) return -38; }                          /* ENOSYS, canonically */
+#ifdef __ARM_EABI__
+  if (v == 1 && __love_t32k && __love_t64(n)) return __love_t32(n, a, b, c, d, e, f);
+#endif
   long r = __love_sys(n, a, b, c, d, e, f);
+#ifdef __ARM_EABI__
+  if (r == -38 && v == 1 && __love_t64(n)) __love_t32k = 1, r = __love_t32(n, a, b, c, d, e, f);
+#endif
 #ifdef LvOsTranslate                                     /* a parked answer, BSD's; on i386 a high address reads negative */
   if (r < -4096L) r = -__love_errfb(-r - 4096);
 #endif
@@ -640,7 +768,7 @@ struct __lx_statx {
   unsigned long long __rest[14];      /* mnt id, dio -- unread here */
 };
 _Static_assert(sizeof(struct __lx_statx) == 256, "statx buffer is the kernel's 256");
-#ifdef __i386__
+#ifdef __ILP32__
 int __love_statx(int dirfd, char const *p, int fl, struct stat *st);   /* fstat.c's, the stat trio's floor */
 #endif
 struct __fb_stat {                    /* ino64, 224 bytes; mode is 16-BIT */

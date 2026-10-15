@@ -1,13 +1,13 @@
 #ifndef _LOVE_TIME_H
 #define _LOVE_TIME_H
-#ifdef __i386__
+#ifdef __ILP32__
 typedef long long time_t;
 #else
 typedef long time_t;
 #endif
 typedef long clock_t;
 #define CLOCKS_PER_SEC 1000000
-#ifdef __i386__                 /* the kernel's time64 record: 16 bytes, the pad is not read */
+#ifdef __ILP32__                /* the kernel's time64 record: 16 bytes, the pad is not read */
 struct timespec { time_t tv_sec; long tv_nsec; long __pad; };
 #else
 struct timespec { long tv_sec; long tv_nsec; };
