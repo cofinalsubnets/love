@@ -1566,14 +1566,19 @@
    ; a word may be self, and a call is: a verb whose answer turns on its args is asked
    ; of this one; the lane, picked before a word expands, trusts only a plain yes
    (sh-selfok? S w) (two? (sh-imgfn S w))
-   (sh-selfcall? S av) (sh-selfok? S <av && cite 'verbs 'holds (name <av) 'self >av)
-   (sh-selfplain? S w) (sh-selfok? S w && 1 = cite 'verbs 'trait (name w) 'self)
+   (sh-selfcall? S av) (sh-selfok? S <av && sh-bootsame? 0 && cite 'verbs 'holds (name <av) 'self >av)
+   ; this heap answers only for a child that would boot it: a knob read once at boot or
+   ; wake (main.c's boot-env, each as this process saw it) set otherwise for the child --
+   ; a prefix assignment, an export -- wants a fresh image, so the self and fork lanes pass
+   (sh-bootsame? _) (? !(elem 'boot-env (names ())) 1
+                       (foldl (\ a kv (a && (getenv <kv @ v (string? v && 0 < #v ? v ())) = <>kv)) 1 (ev 'boot-env)))
+   (sh-selfplain? S w) (sh-selfok? S w && sh-bootsame? 0 && 1 = cite 'verbs 'trait (name w) 'self)
    ; a verb that wants a fresh process says so ('exec, verbs' traits), asked of this call
    ; under the name its word runs as -- a path to this binary is `love`
    (sh-exec? av) (: V (cite 'verbs) (V 'holds (name (V 'bn <av)) 'exec >av))
    (sh-forkok? S av fdmap)
      (? (sh-exec? av) 0
-        (0 < #(getenv "LOVE_NO_IMAGE") && elem 'love-image (names ())) 0
+        !(sh-bootsame? 0) 0
         (S 'sh-tty) 1                         ; our stdin is the terminal: nothing to duplicate
         !(S 'sh-inread) 1                     ; we never read our stdin: nothing buffered to duplicate
         (sh-fd0? fdmap) 1                     ; the child's stdin is its own
