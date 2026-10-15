@@ -254,9 +254,7 @@ printf 'x = 6\n' > "$ho/.kore-bc1"; printf 'y = 7\n' > "$ho/.kore-bc2"
 printf 'x*y\n' | bc "$ho/.kore-bc1" "$ho/.kore-bc2" > "$g" 2>/dev/null
 printf 'x*y\n' | korerun bc "$ho/.kore-bc1" "$ho/.kore-bc2" > "$o" 2>/dev/null
 same "bc files then stdin"
-printf '' | bc "$ho/.kore-bc-nope" > /dev/null 2>&1; a=$?
-printf '' | korerun bc "$ho/.kore-bc-nope" > /dev/null 2>&1; b=$?
-[ $a -eq $b ] || fail "kore bc missing file (gnu $a ours $b)"
+bothrc "bc missing file" bc "$ho/.kore-bc-nope" < /dev/null
 # dc: GNU's, stdout and stderr, over the arithmetic and its scale, the bases, the
 # registers and arrays, macros and their exits, and every complaint
 # read(): the program from a file, its number from stdin's next line, in ibase (one read and one

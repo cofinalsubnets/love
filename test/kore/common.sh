@@ -35,6 +35,11 @@ o=$ho/.kore-o
 same() { cmp -s "$g" "$o" || fail "kore $1 vs GNU"; }
 # the workhorse: the system tool, then ours, then compare stdout
 both() { n=$1; shift; "$@" > "$g" 2>/dev/null; korerun "$@" > "$o" 2>/dev/null; same "$n"; }
+# ..and the status too; -C DIR runs both sides there
+bothrc() { _c=.; [ "$1" = -C ] && { _c=$2; shift 2; }; n=$1; shift
+           (cd "$_c" && "$@") > "$g" 2>/dev/null; rg=$?
+           (cd "$_c" && LOVE_NO_IMAGE= "$K" kore "$@") > "$o" 2>/dev/null; ro=$?
+           cmp -s "$g" "$o" && [ $rg -eq $ro ] || fail "kore $n vs GNU (exit $ro, GNU's $rg)"; }
 # ..and the stdin face
 pipe() { n=$1; i=$2; shift 2
          printf '%s' "$i" | "$@" > "$g" 2>/dev/null

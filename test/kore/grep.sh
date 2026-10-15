@@ -29,9 +29,7 @@ for p in 'ab*c' '^x' 'z$' '[abx]b' '[^a]b' 'b\+' 'xb\?z' '\(zz\)*z' '.z' '^\+q' 
          'b\{2\}' 'z\{2,\}' 'z\{1,2\}' '\{2\}' '\+q' 'a\{3,2\}' 'a\{2' \
          '[[:digit:]]' '[[:alpha:]][[:digit:]]' '[^[:alnum:]]' '[[:space:]]' \
          '[[:upper:]]' '[[:punct:]]' '[[:xdigit:]]' '[]a]' '[a-]' '[[:nope:]]'; do
-  grep -c "$p" "$ho/.gr1" > "$g" 2>/dev/null; a=$?
-  korerun grep -c "$p" "$ho/.gr1" > "$o" 2>/dev/null; b=$?
-  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep BRE '$p' vs GNU"
+  bothrc "grep BRE '$p'" grep -c "$p" "$ho/.gr1"
 done
 # the ERE battery. THE RAGGED EDGES ARE THE POINT: a loose repeat is DROPPED in
 # ERE where BRE keeps it as ink, and an unclosed brace / stray ) are literals here
@@ -39,9 +37,7 @@ done
 for p in 'a|z' '(a|x)b' 'a{2}' 'z{2,}' 'z{1,2}' '[[:digit:]]+' 'a+' 'ab?c' '(a|b)+' \
          '^(a|x)' '(a|b|z)+$' 'a{1,2}b' '[[:digit:]]{2}' '*r' '+q' '?x' '{2}' \
          'a{' 'a)' 'a||z' 'a{3,2}' '(a'; do
-  grep -Ec "$p" "$ho/.gr1" > "$g" 2>/dev/null; a=$?
-  korerun grep -Ec "$p" "$ho/.gr1" > "$o" 2>/dev/null; b=$?
-  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep ERE '$p' vs GNU"
+  bothrc "grep ERE '$p'" grep -Ec "$p" "$ho/.gr1"
 done
 # the flag matrix, CLUSTERED as this tree's own scripts write them (-qF, -qiw, -oE):
 # a walk that reads only whole words takes `-qF` for a pattern and passes every
@@ -57,9 +53,7 @@ for fl in '-c b' '-i FOO' '-i foo' '-w ab' '-w abc' '-x zzz' '-x zz' \
           '-ow [a-z]*' '-oE [0-9]|[A-Z]'; do
   # shellcheck disable=SC2086
   set -- $fl
-  grep "$@" "$ho/.gr3" > "$g" 2>/dev/null; a=$?
-  korerun grep "$@" "$ho/.gr3" > "$o" 2>/dev/null; b=$?
-  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep flags '$fl' vs GNU"
+  bothrc "grep flags '$fl'" grep "$@" "$ho/.gr3"
 done
 # THE EMPTY PATTERN IS ITS OWN ROW. `set -- $fl` word-splits, so an empty word cannot
 # ride that list at all: the `-x ` and `-o ` rows above were really `grep -x FILE`, a
@@ -67,9 +61,7 @@ done
 # instead of a terminal. Both sides hung or both saw EOF, so it passed while proving
 # nothing about the empty pattern it was written for.
 for fl in -x -o -c -v; do
-  grep $fl '' "$ho/.gr3" > "$g" 2>/dev/null; a=$?
-  korerun grep $fl '' "$ho/.gr3" > "$o" 2>/dev/null; b=$?
-  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep $fl '' (the empty pattern) vs GNU"
+  bothrc "grep $fl '' (the empty pattern)" grep $fl '' "$ho/.gr3"
 done
 set +f
 # -e stacks and, once given, every positional word is a FILE

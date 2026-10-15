@@ -8,33 +8,25 @@ for sc in 's/b/X/' 's/z/Q/g' '2d' '/x/,/q/d' '$d' '2q' 's/x*/-/g' 's/\(b*\)z/[\1
           's/a\|z/Y/g' 's/[[:digit:]]/#/g' 's/b\{2\}/B/' '/a\|q/d' 's/\(a\|x\)b/@/' \
           '/x/!d' '2! d' '$!s/z/Q/g' '2,4!d' '/^q4$/!s/[a-z].*/_/' \
           'y/abz/ABZ/' 'y,b/,\n_,' '2y/z/\\/;s/z/y/'; do
-  sed "$sc" "$ho/.sd1" > "$g"; a=$?
-  korerun sed "$sc" "$ho/.sd1" > "$o"; b=$?
-  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed '$sc' vs GNU"
+  bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
 done
 # { } groups under an address, nested and negated; a bracket holds the delimiter as a byte
 printf 'a/b]c:d\nxbz\nzzz\n' > "$ho/.sd2"
 for sc in '/b/{s/b/X/;p}' '/b/!{p;p}' '2,3{/z/d;p}' '/a/{/b/{s/a/Q/};s/c/C/;p}' '$!{$!d};p' \
           '/x/,/z/{p;}' '{};p' 's/[/]/X/p' 's:[:]:X:p' 's/[]/]/X/gp' 's/[^]/]/X/gp' \
           's:[[:alpha:]]:Q:gp' '/[/]/s/a/A/p' '{p' 'p}' 's/[/X/'; do
-  sed -n "$sc" "$ho/.sd2" > "$g" 2>/dev/null; a=$?
-  korerun sed -n "$sc" "$ho/.sd2" > "$o" 2>/dev/null; b=$?
-  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed -n '$sc' vs GNU"
+  bothrc "sed -n '$sc'" sed -n "$sc" "$ho/.sd2"
 done
 # -f takes a commented script: whole-line comments, and one after a command
 printf '#!/bin/sed -f\n# drop the b lines\n\n/b/d   # gone\ns/z/Z/g;# then this\n' > "$ho/.sd3"
 sed -f "$ho/.sd3" "$ho/.sd2" > "$g"; korerun sed -f "$ho/.sd3" "$ho/.sd2" > "$o"; same "sed -f with # comments"
 # a y whose sets differ in length, or with a tail, is refused: exit 1, nothing out
 for sc in 'y/ab/c/' 'y/a/b/x'; do
-  sed "$sc" "$ho/.sd1" > "$g" 2>/dev/null; a=$?
-  korerun sed "$sc" "$ho/.sd1" > "$o" 2>/dev/null; b=$?
-  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed '$sc' vs GNU"
+  bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
 done
 # -E moves the backslashes; the dialect must reach BOTH an address and an s
 for sc in 's/(a|x)b/@/' 's/a|z/Y/g' 's/[[:digit:]]+/#/' '/a|q/d' 's/b{1,2}/B/'; do
-  sed -E "$sc" "$ho/.sd1" > "$g"; a=$?
-  korerun sed -E "$sc" "$ho/.sd1" > "$o"; b=$?
-  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed -E '$sc' vs GNU"
+  bothrc "sed -E '$sc'" sed -E "$sc" "$ho/.sd1"
 done
 # -e stacks in order, and clusters (-ne is how this tree writes it)
 sed -n -e 1p -e 3p "$ho/.sd1" > "$g"; korerun sed -n -e 1p -e 3p "$ho/.sd1" > "$o"
