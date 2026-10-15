@@ -204,7 +204,8 @@
               "session" (prop "leader only: the row's session, when not yours")
               "base" (prop "leader only: the new sha for the base line")
               "position" (prop "leader only: a new row's position, one no row holds")
-              "leader" (prop "a queue not made yet: its leader, you unless given")}
+              "leader" (prop "a queue not made yet: its leader, you unless given")
+              "keep" (prop "1: the row keeps its own slot -- no join folds into it, and a join folds nowhere; 0 lifts it. a git queue's")}
              ["queue" "state"])
        (tool "queue_lead" ("The leader's own lines of a merge queue: leader hands the queue to a live session "
                            + "that agreed (or, from the head's session while the leader has no live session, "
@@ -1061,8 +1062,9 @@
            ("# read:  queue_read, or sb -C HUB ledger " + q + " --text   (HUB: SB_HUB, the one nest every session names)"))
         "# write: only through bee's tools -- queue_row, queue_lead, queue_land, queue_landed -- from a bee, or from"
         "#   claude code through love bee --mcp. each write is a compare-and-swap and refuses what these rules forbid."
-        "# join: add your row at the bottom when your branch is ready to gate -- a row per branch, so a second branch"
-        "#   joins its own row and a fold already made stays. the order is fixed at join, never by who finishes a gate first."
+        "# join: add your row at the bottom, waiting, once your branch's light lanes pass -- a row per branch, so a second"
+        "#   branch joins its own row and a fold already made stays. the order is fixed at join, never by who finishes a"
+        "#   gate first. the heavy lanes (love bee --lanes marks them) run only in the queue, once a union, at its head."
         "# stacked: the head gates its branch merged with the base; row k+1 gates its branch merged with row k's gated"
         "#   head, so when k lands the base equals the tree k+1 certified and k+1 lands with no re-gate. a failure, or a"
         "#   new head above, re-gates only the rows behind it."
@@ -1087,12 +1089,15 @@
         "#   branch, and tells the sessions each such edit moves. it hands off by rewriting the line to a live session"
         "#   that agreed. while the leader has no live session, the head's session writes `leader <itself> acting`."
         "#   the leader never lands, reorders or gates on another's behalf."
-        "# merge, not line up: a waiting row folds into the earliest waiting row ahead of it, never into one gating, and"
-        "#   a join while a row waits folds into that row. the leader writes folded-into-N and tells both owners. the"
-        "#   absorbing row merges every folded head onto its gated-on, gates the union of their lanes once and lands one"
-        "#   merge. a red in a folded branch's files goes to its owner; a merge-tree conflict, or an owner who objects,"
-        "#   keeps that row its own slot, behind the fold. a re-cut row (a tree-wide rename) takes folds like any"
-        "#   waiting row: its owner merges the join in the old layout and the re-cut moves it."
+        "# merge, not line up: waiting rows fold into one union. a join with its head folds into the earliest waiting row"
+        "#   ahead, never one gating: on a git queue bee writes the fold when the heads merge clean but for the paths a"
+        "#   union lays again (hot.prof), and tells both owners; else the leader places it. the absorbing row merges"
+        "#   every folded head onto its gated-on, runs each owed heavy lane once on that merged tree (the slow lane last)"
+        "#   and lands one merge. a red goes to the owner of its branch's files, and that branch splits out so the rest"
+        "#   lands. a merge-tree conflict, or a row passed keep 1, keeps its own slot, behind the fold. a publish folds"
+        "#   into the waiting union and gates with it once; test_gcstress then runs in the background after the push."
+        "#   a re-cut row (a tree-wide rename) takes folds like any waiting row: its owner merges the join in the old"
+        "#   layout and the re-cut moves it."
         "# long: two or more rows waiting or gating, or more heavy-lock waiters than slots. then, unasked: one owner's"
         "#   branches join as one union (each stops at its light lanes, the union gates once, the slow lane last);"
         "#   neighbours offer each other a fold; a build seeds out/ from a built tree of its base; nothing holds a heavy"
@@ -1139,9 +1144,11 @@
      (q-long? text) (: rs (q-rows text) (1 < #(filter (\ p (elem ((rs p) 5) ["waiting" "gating"])) (keys rs))))
      (lock-crowd _)
       (? !(locks? 0) 0 (: w (peep ((lk 'locks-list) ((lk 'locks-root) 0)) "waiting" ()) (bee-hmax < #(two? w ? w ()))))
-     bee-long ("fold, not line up. offer the earliest waiting row ahead of yours a fold (the leader places it, never "
-               + "into a gating row); join one owner's branches as one union that gates once; run only a branch's light "
-               + "lanes before the union gates; hold no heavy slot you are not using.")
+     bee-long ("fold, not line up. join waiting once a branch's light lanes pass, with its head, and bee folds it into "
+               + "the earliest waiting row ahead when the heads merge clean but for hot.prof (else offer that row a fold; "
+               + "never into a gating row); join one owner's branches as one union; the heavy lanes run once, in the "
+               + "union at the head, never per branch; a red splits its branch out; a publish folds into the waiting "
+               + "union; hold no heavy slot you are not using.")
      (q-crowd text)
       (: a (q-long? text) b (lock-crowd 0)
          (? (a || b) ("\nthe queue is long (" + (a ? "two or more rows waiting or gating" "") + (a && b ? ", and " "")
@@ -1189,7 +1196,7 @@
      (q-bare l) (words (snip l 0 (q-cut l)))
      ; the base line -- `<branch> <sha>`, a note allowed, neither a row nor the leader's, sync, pre
      ; or next -- moved to sha, its note kept
-     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next" "mirror" "lives"]) && 0 < #<w && <w 0 != 35))
+     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next" "mirror" "lives" "keep"]) && 0 < #<w && <w 0 != 35))
      (q-base-line text) (: ls (filter q-base? (lines text)) (? (two? ls) (q-bare <ls) ()))
      (q-base text sha)
       (: ls (lines text)
@@ -1291,6 +1298,41 @@
       (: _ (pins bee-who 'tool "queue_row")
        (q-wcheck in (\ in (: bad (q-unresolved (in "queue") [(field in "gated_on" "") (field in "gated_head" "")])
                          (? (two? bad) [0 (q-unres-why (in "queue") <bad)] (queue-row1 in))))))
+     ; --- folds bee makes: a join that waits, with its head, folds into the earliest waiting row ahead
+     ; that keeps no slot, when git merges its head with that row's head and its folds' heads clean but
+     ; for the paths a union lays again. a git queue's; on sb the leader places every fold ---
+     q-relaid ["src/tools/hot.prof"]
+     (q-keeps text) (: w (words (q-line text "keep")) (? (two? w) >w ()))
+     ; the keep line with p in it, or out of it: rows gone drop off, and an empty line goes
+     (q-keep text p on)
+      (: rows (q-rows text)
+         ps ((filter (\ x (two? (peep rows x ()) && x != p)) (q-keeps text)) + (on ? [p] ()))
+         l ("keep " + join " " ps)
+         ls (filter (\ x !(starts? x "keep ")) (lines text))
+         k (foldl (\ a i (? (a < 0 && q-row? (ls i)) i a)) -1 ^#ls)
+         (unlines (? !(two? ps) ls (k < 0) (ls + [l]) (take k ls + [l] + drop k ls))))
+     (q-with in k v) (pin (foldl (\ t x (pin t x (in x))) {} (keys in)) k v)
+     (q-clean? a b)
+      (: ls (lines (git1 ("merge-tree --write-tree --name-only --no-messages " + sh-quote a + " " + sh-quote b)))
+         (two? ls && !(two? (filter (\ p !(elem p q-relaid)) >ls))))
+     (q-autofold q text who own in)
+      (: rows (q-rows text) h (field in "gated_head" "") ks (q-keeps text)
+         ws (sort (map (\ p [(q-num p) p]) (filter (\ p ((rows p) 5 = "waiting" && !(elem p ks))) (keys rows))))
+         t (? (two? ws) (<ws 1) "")
+         (? (own != () || in "state" != "waiting" || !(q-git? q) || field in "keep" "" = "1"
+             || #t = 0 || #(git-sha h) = 0) ""
+            (all (\ f (q-clean? h ((rows f) 4))) (t . q-folds rows t)) t
+            ""))
+     ; the join's owner and the absorbing row's are told; the answer says so too
+     (q-told-fold q text who t p in)
+      (: r ((q-rows text) t)
+         m (q-short q + ": bee folded row " + p + " (" + who + ", " + field in "branch" "-" + ") into waiting row " + t
+            + " (" + r 1 + ", " + r 2 + ") on its join: their heads merge clean" + (" but for " + join " " q-relaid)
+            + ", which the union lays again. " + r 1 + " merges " + field in "gated_head" "" + " into " + t
+            + "'s union, which gates once; queue_row keep 1 on either row keeps its own slot instead.")
+         _ (? (r 1 != me 0) (post (r 1) m) "")
+         _ (? (who != me 0) (post who m) "")
+         ("\nfolded into row " + t + " (" + r 1 + "): " + m))
      ; a queue not made yet is made on bee's standard header, led by the leader given, else this session
      (queue-row1 in)
       (: q (in "queue") who (field in "session" (me 0))
@@ -1299,17 +1341,26 @@
              text (? new? (q-standard q (field in "leader" (me 0)) (q-base-of q)) (rd 1))
              own (q-pick (q-rows text) who in)
              why (? (string? own && !(q-digits? own)) own (q-refuse text who in new? own))
-             (? (0 < #why) [0 why]
+             why2 (? (0 < #why) why
+                     (0 < #(field in "keep" "") && !(q-git? q)) "keep is a git queue's: on sb the leader places every fold"
+                     "")
+             fo (? (0 < #why2) "" (q-autofold q text who own in))
+             (? (0 < #why2) [0 why2]
                 (: b (? (field in "base" "" = "") [text ""] (q-base text (in "base")))
-                   e0 (? (0 < #(b 1)) [text "" (b 1)] (q-edit <b who in own))
+                   e0 (? (0 < #(b 1)) [text "" (b 1)]
+                         (q-edit <b who (? (#fo = 0) in (q-with in "state" ("folded-into-" + fo))) own))
                    ; a join moves the counter past its position
-                   e (? (0 < #(e0 2) || own != () || #(e0 1) = 0) e0
-                        (: p (q-num <(words (e0 1))) c (q-num (q-next <b))
-                           [(q-count <e0 (show (max c (p + 1)))) (e0 1) ""]))
+                   e1 (? (0 < #(e0 2) || own != () || #(e0 1) = 0) e0
+                         (: p (q-num <(words (e0 1))) c (q-num (q-next <b))
+                            [(q-count <e0 (show (max c (p + 1)))) (e0 1) ""]))
+                   kp (field in "keep" "")
+                   e (? (#kp = 0 || 0 < #(e1 2) || #(e1 1) = 0) e1
+                        [(q-keep <e1 <(words (e1 1)) (kp = "1")) (e1 1) ""])
                    (? (0 < #(e 2)) [0 (e 2)]
                       (q-write q old text <e)
                        [1 ((new? ? ("made " + q + " on bee's standard header, led by " + q-leader <e + "\n") "")
                            + (? (0 < #(e 1)) ("row now: " + e 1) ("the change is in " + q))
+                           + (? (0 < #fo) (q-told-fold q text who fo <(words (e 1)) in) "")
                            + (in "state" = "left" ? "" (q-crowd <e)))]
                       (n <= 0) [0 (q + " kept moving under the write; read it and try again")]
                       (: _ (rest 200) (try (n - 1)))))))

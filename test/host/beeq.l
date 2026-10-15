@@ -537,5 +537,49 @@
       (bq-in (e 8) "love bee --lock --out ") (bq-in (e 8) (w 'repo + "/out")) (bq-in (e 8) " -- make test"))
    0)
 
+;; --- a join that waits with its head folds into the earliest waiting row ahead when the heads
+; merge clean but for hot.prof; a conflict, or keep, keeps its own slot -------------------------
+(: w (bq-world "autofold") lq bq-q
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   (branch nm files)
+    (: _ (bq-git w ["checkout" "-q" "-b" nm "test"])
+       _ (hark ["mkdir" "-p" (w 'repo + "/src/tools")])
+       _ (map (\ f (: _ (bq-put (w 'repo + "/" + <f) (f 1)) (bq-git w ["add" <f]))) files)
+       _ (bq-git w ["commit" "-q" "-m" nm])
+       (bq-git w ["checkout" "-q" "test"]))
+   _ (branch "p1" [["src/tools/hot.prof" "x\n"] ["p1.txt" "p1\n"]])
+   _ (branch "p2" [["src/tools/hot.prof" "y\n"] ["p2.txt" "p2\n"]])
+   _ (branch "c1" [["p1.txt" "other\n"]])
+   _ (branch "k1" [["k1.txt" "k\n"]])
+   _ (branch "e1" [["e1.txt" "e\n"]])
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   (join nm id br more) (calls nm [[id "queue_row" (foldl (\ t k (pin t k (more k))) {"state" "waiting" "branch" br "gated_head" (sha br)} (keys more))]])
+   a (join "ant" 1 "p1" {"leader" "queen"})
+   b (join "bob" 2 "p2" {})
+   c (join "carol" 3 "c1" {})
+   d (join "dan" 4 "k1" {"keep" "1"})
+   e (join "eve" 5 "e1" {})
+   q (bq-out (bq-git w ["cat-file" "-p" lq]))
+   (row p) (: ls (filter (\ l (starts? l (p + " "))) (lines q)) (? (two? ls) (words <ls) ()))
+   k0 (calls "dan" [[6 "queue_row" {"state" "waiting" "branch" "k1" "keep" "0"}]])
+   q2 (bq-out (bq-git w ["cat-file" "-p" lq]))
+   _ (test
+      (row "1" 5 = "waiting")
+      (bq-in (b 2) "folded into row 1 (ant)") (bq-in (b 2) "but for src/tools/hot.prof")
+      (row "2" 5 = "folded-into-1")
+      (row "3" 5 = "waiting") !(bq-in (c 3) "folded into")          ; p1.txt conflicts with row 1
+      (row "4" 5 = "waiting") !(bq-in (d 4) "folded into")          ; keep
+      (bq-in q "\nkeep 4\n")
+      (bq-in (e 5) "folded into row 1 (ant)") (row "5" 5 = "folded-into-1")
+      (bq-in (k0 6) "row now: 4 dan k1") !(bq-in q2 "\nkeep "))
+   0)
+
 (hark ["rm" "-rf" bq-root])
 (test_fin (), puts "beeq: ok", putc 10, 0)

@@ -292,6 +292,7 @@ A queue is lines:
 - the base line, *branch* *sha*, with an optional note after **#**;
 - **next** *n*, the position the next join takes, so numbers never repeat;
 - optionally **sync** *text*, what the queue lands toward, and **pre** *text* lines, conditions before that;
+- on git, optionally **keep** *position* ..., the rows that keep their own slot (**queue_row** *keep*);
 - a row per merge: *position* *session* *branch* *gated-on* *gated-head* *state*, with an optional note after two spaces and **#**.
 
 *gated-on* is the base's sha for the head row, and the row above's *gated-head* for any other. *state* is **waiting**, **gating**, **green** or **folded-into-***N*. A field not known yet is **-**.
@@ -300,7 +301,7 @@ When a queue does not exist yet, **queue_row** makes it on bee's standard header
 
 ## The rules
 
-**Join.** A session adds its row at the bottom when its branch is ready to gate. The order is fixed at join, never by who finishes a gate first.
+**Join.** A session adds its row at the bottom, **waiting**, once its branch's light lanes pass. The heavy lanes (**love bee --lanes** marks them) run only in the queue, once for a union, at its head. The order is fixed at join, never by who finishes a gate first.
 
 **Stacked.** The head row gates its branch merged with the base. Row *k*+1 gates its branch merged with row *k*'s gated head, so when *k* lands the base already equals the tree *k*+1 certified, and *k*+1 lands without gating again. A failure, or a new head above, re-gates only the rows behind it.
 
@@ -324,11 +325,12 @@ A session works in a *worker nest*, as it would in a git worktree: **love bee --
 
 The leader hands off by rewriting the line to a live session that agreed, and says so to everyone. While the leader has no live session, the head row's session writes **leader** *itself* **acting**. The leader never lands, reorders or gates on another's behalf.
 
-**Merge, not line up.** A waiting row folds into the earliest waiting row ahead of it, never into one that is gating, and a join while a row waits folds into that row. The leader writes **folded-into-***N* and tells both owners. The absorbing row merges every folded head onto its gated-on, gates the union of their lanes once, and lands one merge. A red in a folded branch's files goes to that branch's owner. A slow fix unfolds that branch so the rest can land. A merge-tree conflict between the heads goes to both owners with the hunk, and neither side is picked. That conflict, or an owner who objects, keeps the row its own slot, behind the fold. A re-cut row (a tree-wide rename) takes folds like any waiting row: its owner merges the join in the old layout, and the re-cut moves it.
+**Merge, not line up.** Waiting rows fold into one union. A join folds into the earliest waiting row ahead of it, never into one that is gating. On a git queue, bee writes the fold itself when the join is waiting with its head. The joining head must merge clean with the absorbing row's head and with each head already folded into it, except in the paths a union lays again (**src/tools/hot.prof**). bee then tells both owners. Otherwise the leader writes **folded-into-***N* and tells them. The absorbing row merges every folded head onto its gated-on and runs each owed heavy lane once on that merged tree, the slow lane last. It then lands one merge. A red goes to the owner of its branch's files, and that branch splits out so the rest can land. A merge-tree conflict between the heads goes to both owners with the hunk, and neither side is picked. That conflict, or a row passed **keep 1**, keeps its own slot, behind the fold. A publish row folds into the waiting union and gates with it once. **test_gcstress** then runs in the background after the push. A re-cut row (a tree-wide rename) takes folds like any waiting row: its owner merges the join in the old layout, and the re-cut moves it.
 
 **The long queue.** A queue is *long* when two or more rows are waiting or gating, or when more sessions wait for a heavy lock than there are slots. Then, without being asked:
 
 - branches with one owner join as one union: each stops at its own light lanes, and the union gates once, the slow lane last;
+- no heavy lane runs per branch: each runs once, in the union at the queue's head;
 - sessions with neighbouring work offer each other a fold, and the leader places it;
 - a build seeds its **out/** from a built tree of its base with `cp -a`, which keeps file times -- never `cp -r`, which stamps every output newer than its sources so nothing rebuilds; when `cp -a` is refused, build clean;
 - nothing holds a heavy slot it is not using.
@@ -346,13 +348,14 @@ Every tool reads the queue fresh and writes it by compare-and-swap, reading agai
 **queue_read** (*queue*)
 :   The queue's text as it stands: header, rules, leader and rows. It writes nothing and runs without asking. A queue on another box (**@***box*) is read there, like any queue call, so a node reads the hub's queues with it.
 
-**queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*, *row*)
-:   Sets exactly one of the caller's rows. A session holds a row per branch: the write sets the row **row** names, else the row carrying **branch**, else the caller's only row, and a **branch** it holds no row for joins a new one. A new row joins at the bottom, at the **next** line's position, and moves that line past it; a queue without the line starts one past the highest position and writes it. **left** removes the row. Fields not given keep their values. It refuses:
+**queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*, *row*, *keep*)
+:   Sets exactly one of the caller's rows. On a git queue, a **waiting** join with a *gated_head* folds into the earliest waiting row ahead, as **Merge, not line up** says, and the answer says so. **keep 1** puts the row on the **keep** line: no join folds into it, and it folds into none. **keep 0** takes it off, and rows gone drop off the line. A session holds a row per branch: the write sets the row **row** names, else the row carrying **branch**, else the caller's only row, and a **branch** it holds no row for joins a new one. A new row joins at the bottom, at the **next** line's position, and moves that line past it; a queue without the line starts one past the highest position and writes it. **left** removes the row. Fields not given keep their values. It refuses:
 
     - a state outside the list above;
     - a write that cannot say which row, from a session holding more than one, naming neither *row* nor *branch*;
     - a new *branch* written onto a row that is folded or gating (pass the branch alone, to join a new row);
-    - a fold by anyone but the leader;
+    - a fold by anyone but the leader (bee's own fold on a join aside);
+    - *keep* on an sb ledger, where the leader places every fold;
     - a fold into a row that is missing, not waiting, or not ahead;
     - a fold of a row that others fold into;
     - a *gated_on* or *gated_head* that does not resolve where the queue lives: a commit in the repository (git), or a set the hub holds (sb). The answer names it and says to paste it from **git rev-parse** or **sb psid**.
