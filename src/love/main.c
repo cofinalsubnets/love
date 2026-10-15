@@ -1,3 +1,4 @@
+#define _GNU_SOURCE     // sigaltstack, SA_ONSTACK, MAP_ANONYMOUS
 #include "love.h"
 #include "cats.h"
 #include <stdio.h>
@@ -17,6 +18,8 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/utsname.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
 
 // love_clock lives in src/love/posix.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
@@ -534,20 +537,54 @@ love_noinline static struct g *argv_chain(struct g *g, char const **v, int argc,
 // the address is spelled by hand. it does not resume: the default disposition
 // goes back on and the signal is re-raised, so the exit status and the core stay
 // what they were.
-static void trap_note(int s, siginfo_t *si, void *ctx) {
-  char b[48], *p = b;
-  for (char const *m = s == SIGTRAP ? "*** love: SIGTRAP at 0x"
-                                    : "*** love: SIGILL at 0x"; *m; m++) *p++ = *m;
-  uintptr_t a = si ? (uintptr_t) si->si_addr : 0;
+static void fault_line(char const *m, uintptr_t a) {
+  char b[64], *p = b;
+  for (; *m; m++) *p++ = *m;
   int seen = 0;
   for (int i = (int) sizeof a * 8 - 4; i >= 0; i -= 4) {
     unsigned d = (unsigned) (a >> i) & 15;
     if (d || seen || !i) *p++ = "0123456789abcdef"[d], seen = 1; }
   *p++ = '\n';
+  (void) write(2, b, (size_t) (p - b)); }
+static void trap_note(int s, siginfo_t *si, void *ctx) {
   (void) ctx;
-  (void) write(2, b, (size_t) (p - b));
+  fault_line(s == SIGTRAP ? "*** love: SIGTRAP at 0x" : "*** love: SIGILL at 0x", si ? (uintptr_t) si->si_addr : 0);
   signal(s, SIG_DFL);
   raise(s); }
+
+// a C walk past the stack: the fault lands below the stack, where no frame can run its
+// handler, so the handler runs on a stack of its own, whose base holds the main stack's
+// top and limit. a stack fault says so; any other goes back to the default and retries
+void love_fault_note(int s, void *v) {
+  siginfo_t *si = v;
+  stack_t o;
+  uintptr_t a = si ? (uintptr_t) si->si_addr : 0;
+  if (!sigaltstack(NULL, &o) && o.ss_sp) {
+    uintptr_t const *k = (uintptr_t const*) o.ss_sp, top = k[0], lim = k[1];
+    if (a < top && top - a <= lim) {
+      fault_line("*** love: stack overflow at 0x", a);
+      signal(s, SIG_DFL);
+      raise(s);
+      return; } }
+  signal(s, SIG_DFL); }
+static void stack_note(int s, siginfo_t *si, void *ctx) { (void) ctx; love_fault_note(s, si); }
+static void stack_note_on(void const *top) {
+  size_t n = 1 << 18;                               // a lazy wake decodes its chunk on it too
+  void *m = mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (m == MAP_FAILED) return;
+  struct rlimit r;
+  uintptr_t cap = UINTPTR_MAX / 4,                  // no limit, or one past the word: a quarter of it
+            lim = !getrlimit(RLIMIT_STACK, &r) && r.rlim_cur != RLIM_INFINITY && r.rlim_cur < cap ? (uintptr_t) r.rlim_cur : cap;
+  ((uintptr_t*) m)[0] = (uintptr_t) top, ((uintptr_t*) m)[1] = lim + ((uintptr_t) 1 << 20);   // a guard's width past the limit
+  stack_t ss = { .ss_sp = m, .ss_flags = 0, .ss_size = n };
+  if (sigaltstack(&ss, NULL)) { munmap(m, n); return; }
+  struct sigaction sa;
+  memset(&sa, 0, sizeof sa);
+  sa.sa_sigaction = stack_note;
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+  sigemptyset(&sa.sa_mask);
+  sigaction(SIGSEGV, &sa, NULL);
+  sigaction(SIGBUS, &sa, NULL); }
 
 // SIGTRAP only where the trap instruction raises it -- on x86 it is the
 // debugger's, and naming a breakpoint "love: trap" would be a lie.
@@ -572,6 +609,7 @@ int main(int argc, char const **argv) {
 #endif
   signal(SIGPIPE, SIG_IGN);
   trap_note_on();
+  stack_note_on(&argc);
   struct g *g = NULL;
   char const *image_load_path = NULL, *bake = NULL,   // see boot(): "" = self-bake, a path = an image file
              *bake_load = NULL,                      // bake -l CAT: read-eval it before the seal

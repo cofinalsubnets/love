@@ -1393,11 +1393,14 @@ static word kind_serial(struct g *g, word x) {
  return chainp(e) ? A(e) : zero; }
 // the total order sort and < share. a coin sits in its own band by payload: a kind's own
 // order ('<) lives in love, and the lanes that can ask it (lvm_cmp_ord, sortby) do.
-// a car descent is a C frame, so d counts them: past cmp_deep the walk answers
+// a car descent would be a C frame, so the walk keeps the pending cdrs on a worklist:
+// the gap first (the callers leave it free), then off the heap. out of room it answers
 // cmp_torn, which every nonzero test carries up and each caller turns into a scare
-#define cmp_deep 1024
 #define cmp_torn INTPTR_MIN
-static intptr_t cmp3d(struct g *g, word a, word b, uintptr_t d) {
+enum { CmpSettled, CmpChain, CmpCoin };                    // what a step left for the walk
+static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
+ word a = *pa, b = *pb;
+ *go = CmpSettled;
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) return ra < rb ? -1 : 1;                    // cross-kind: the true-blue lattice (cmp_rank)
  // same band -- dispatch by the actual kind (not the synthetic cmp_rank, which remaps mint/
@@ -1421,11 +1424,9 @@ static intptr_t cmp3d(struct g *g, word a, word b, uintptr_t d) {
   if (gemp(a) || gemp(b)) { flo_t av = toflo(a), bv = toflo(b); return av < bv ? -1 : av > bv ? 1 : 0; }
   return big_cmp(a, b); }                                // exact fix/box/big tower
  if (strp(a)) return bytes_cmp(txt(a), len(a), txt(b), len(b));
- if (chainp(a)) {                                          // chain: car, then cdr
-  if (d >= cmp_deep) return cmp_torn;
-  intptr_t c = cmp3d(g, A(a), A(b), d + 1); return c ? c : cmp3d(g, B(a), B(b), d); }
+ if (chainp(a)) return *go = CmpChain, 0;                 // chain: car, then cdr -- the walk's
  if (coinp(a) && coinp(b)) {
-  if (coin_kind(a) == coin_kind(b)) return cmp3d(g, coin_load(a), coin_load(b), d);   // one kind: by payload
+  if (coin_kind(a) == coin_kind(b)) return *pa = coin_load(a), *pb = coin_load(b), *go = CmpCoin, 0;   // one kind: by payload
   word sa = kind_serial(g, a), sb = kind_serial(g, b);                             // two: by registration
   if (charmp(sa) && charmp(sb) && sa != sb) return getcharm(sa) < getcharm(sb) ? -1 : 1; }
  if (tabp(a) && tabp(b)) { uintptr_t sa = map_serial(a), sb = map_serial(b);   // tablet: by serial -- mutable, so
@@ -1433,9 +1434,37 @@ static intptr_t cmp3d(struct g *g, word a, word b, uintptr_t d) {
  uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/i/cask: by repr hash
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 
+static bool cmp_grow(struct g *g, word **base, word **w, word **hi, bool *own) {
+ uintptr_t n = (uintptr_t) (*hi - *base), k = (uintptr_t) (*w - *base), n2 = n < 32 ? 64 : 2 * n;
+ if (n2 > 4 * ((uintptr_t) g->len + g->major_len) + ((uintptr_t) 1 << 20)) return false;
+ word *b = alloc(NULL, n2 * sizeof(word));
+ if (!b) return false;
+ if (k) memcpy(b, *base, k * sizeof(word));
+ if (*own) alloc(*base, 0);
+ *own = true, *base = b, *w = b + k, *hi = b + n2;
+ return true; }
+static intptr_t cmp3w(struct g *g, word a, word b) {
+ word *hi, *base = gap(g, &hi), *w = base, *hp0 = g->hp;
+ bool own = false;
+ int go;
+ intptr_t c;
+ for (;;) {
+  if (!own) g->hp = w;                                     // a hash's own walk takes the gap past ours
+  c = cmp3leaf(g, &a, &b, &go);
+  g->hp = hp0;
+  if (go == CmpCoin) continue;                             // a coin: its payload, in place
+  if (go == CmpChain) {                                    // the cdrs wait, the cars go first
+   if ((uintptr_t) (hi - w) < 2 && !cmp_grow(g, &base, &w, &hi, &own)) { c = cmp_torn; break; }
+   *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
+   continue; }
+  if (c || w == base) break;
+  b = *--w, a = *--w; }
+ if (own) alloc(base, 0);
+ return c; }
+
 // the two arr.c's equality lane needs: whether a value orders as a number, and the order itself
 bool numband(struct g *g, word x) { return cmp_rank(g, x) == 2; }
-static love_inline intptr_t cmp3(struct g *g, word a, word b) { return cmp3d(g, a, b, 0); }
+static love_inline intptr_t cmp3(struct g *g, word a, word b) { return cmp3w(g, a, b); }
 intptr_t love_cmp3(struct g *g, word a, word b) { return cmp3(g, a, b); }
 
 // (sort l): stable ascending merge by cmp3 -- one reservation up front (n result

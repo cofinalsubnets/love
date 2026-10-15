@@ -898,6 +898,7 @@ intptr_t love_mint_cmp(struct g*, word, word); // -1/0/1 over two points: () < b
 // the number band's order, for arr.c's equality lane: what seats there compares by value
 bool numband(struct g*, word);            // x orders as a number (cmp_rank 2)
 intptr_t love_cmp3(struct g*, word, word);     // -1/0/1, the order sort and < share
+void love_fault_note(int, void*);              // a fault no handler owns (main.c): a stack's said so
 struct g
  *big_binop(struct g*, int vop),  // vop_add..vop_rem, packed; pops one operand
  *big_bitop(struct g*, int vop),  // vop_band..vop_bxor, two's complement; pops one operand
