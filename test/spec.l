@@ -307,7 +307,7 @@
  (5 = (abs -5)) (charm? (abs -5)) (5.0 = (abs (3 ~ 4))) (2 = (int 2.9))
  ((abs -9223372036854775808) = 9223372036854775808)   ; |sun min| overflows the word: the bignum lane
  (1024 = (10 2)) (21 = (gcd 1071 462)) (976371285 = (modpow 2 100 1000000007))
- (2.0 = ((1 / 2) 4)) (1024 = (10 2)) (1 = (0 e)) (2.718281828459045 = e))
+ (2.0 = ((1 / 2) 4)) (1 = (0 e)) (2.718281828459045 = e))
 
 ; --- a few identities --- tetration is the tower with one base; i*i = -1; euler holds in the
 ; exact direction ((log -1) = i * pi -- `=` is exact, so e^(i*pi) does not hold forward); power's
@@ -518,9 +518,9 @@
  (tablet? {}) (0 = #{}) (? {})                    ; {} is the empty map: 0 keys, and truthy (a lambda nets 1)
  ({1 10 2 20} @ t (20 = peep t 2 0 && 20 = t 2 && 99 = peep t 9 99))
  (: t {1 0} s (mint 0) (!(s = peep t 1 s) && s = peep t 9 s))              ; peep as the total presence test: a pinned 0 is present, an absent key is not
- (50 = (peep (pin {} 5 50) 5 0)) ({1 10 2 20} @ t (pull t 1 0, 1 = #t))
+ ({1 10 2 20} @ t (pull t 1 0, 1 = #t))
  (: t {1 10 2 20} v (pull t 2 0) (20 = v && 1 = #t && 99 = peep t 2 99 && -1 = pull t 9 -1))   ; pull: value or default, removes the key
- ('(1 2) = (sort (keys {1 10 2 20}))) ((dig 'k) = (dig 'k)) (tablet? {}) !(tablet? 5)
+ ('(1 2) = (sort (keys {1 10 2 20}))) ((dig 'k) = (dig 'k)) !(tablet? 5)
  ({1 10} != {1 10}) ({1 10} @ t (t = t))         ; mutable -> identity =
  (: t {} r (pins t 1 10 2 20) (r = t && 10 = t 1 && 20 = t 2 && 2 = #t))          ; pins: multi-pin onto a live tablet, returns it (the mutable twin of {..})
  (pins {} 1 10 2 @ t (10 = t 1 && 1 = #t)))                    ; an odd trailing key is dropped

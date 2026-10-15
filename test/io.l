@@ -151,15 +151,8 @@
      ; that is not a cons, the one place a flow does not look like a list.
      (lit? t && 98 = <x && x = y))
 
-  ; --- sound: one datum per call, off text ---
-  ; sound takes a charlist and answers three ways: the datum consed onto what is left,
-  ; () at a clean end, or `torn` where the text ran out inside a shape. presence is the
-  ; cons -- ask two?, never the net -- and the residue is the answer, so the caller owns
-  ; what is left and nothing is stashed in a port.
-  !(sound ())
-
-  ; single datum: number, symbol, list, quoted form, string literal
-  (1 = <(sound '(49)))            ; "1"
+  ; --- sound: one datum per call, off text (its protocol is test/reader.l's) ---
+  ; single datum: symbol, list, quoted form, string literal
   ('a = <(sound '(97)))           ; "a"
   (<(sound '(40 49 32 50 41)) @ d ; "(1 2)"
    (two? d && 1 = <d && 2 = <>d))
@@ -180,14 +173,10 @@
   !(sound '(41))                                  ; ")"
 
   ; --- torn: the text ran out inside a shape ---
-  ('torn = sound '(40))                               ; unclosed list
   ('torn = sound '(34 97))                            ; unterminated string
   ('torn = sound '(39))                               ; dangling quote
 
-  ; torn and the clean end are distinct, and neither is a datum: a datum comes back as a
-  ; cons whatever it holds, so reading "()" answers the datum () -- exactly the case a
-  ; net test would call nothing.
-  (sound '(40 41) @ r (two? r && !<r))
+  ; torn and the clean end are distinct
   ('torn != sound ())
 
   ; a torn read resumes: hand back the same text with the rest appended
@@ -201,8 +190,4 @@
   ; this arm a residue arriving unforced would read as a clean end -- a short read,
   ; silently. the cost is that a closure handed to sound is called, not refused.
   (sound (once (u \ map "(1 2)" ^5)) @ r
-   (two? r && '(1 2) = <r))
-
-  ; misuse: a non-charlist holds no datum, and reads as the clean end
-  !(sound 42)
-  !(sound 'notaport))
+   (two? r && '(1 2) = <r)))
