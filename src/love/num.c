@@ -1393,9 +1393,9 @@ static word kind_serial(struct g *g, word x) {
  return chainp(e) ? A(e) : zero; }
 // the total order sort and < share. a coin sits in its own band by payload: a kind's own
 // order ('<) lives in love, and the lanes that can ask it (lvm_cmp_ord, sortby) do.
-// a car descent would be a C frame, so the walk keeps the pending cdrs on a worklist:
-// the gap first (the callers leave it free), then off the heap. out of room it answers
-// cmp_torn, which every nonzero test carries up and each caller turns into a scare
+// a car descent would be a C frame, so the walk keeps the pending cdrs on a worklist in
+// the gap (the callers leave it free). spent, it answers cmp_torn with the room it wanted
+// in g->walk, which every nonzero test carries up and each caller's op runs again on
 #define cmp_torn INTPTR_MIN
 enum { CmpSettled, CmpChain, CmpCoin };                    // what a step left for the walk
 static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
@@ -1434,33 +1434,21 @@ static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
  uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/i/cask: by repr hash
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 
-static bool cmp_grow(struct g *g, word **base, word **w, word **hi, bool *own) {
- uintptr_t n = (uintptr_t) (*hi - *base), k = (uintptr_t) (*w - *base), n2 = n < 32 ? 64 : 2 * n;
- if (n2 > 4 * ((uintptr_t) g->len + g->major_len) + ((uintptr_t) 1 << 20)) return false;
- word *b = alloc(NULL, n2 * sizeof(word));
- if (!b) return false;
- if (k) memcpy(b, *base, k * sizeof(word));
- if (*own) alloc(*base, 0);
- *own = true, *base = b, *w = b + k, *hi = b + n2;
- return true; }
 static intptr_t cmp3w(struct g *g, word a, word b) {
  word *hi, *base = gap(g, &hi), *w = base, *hp0 = g->hp;
- bool own = false;
  int go;
- intptr_t c;
  for (;;) {
-  if (!own) g->hp = w;                                     // a hash's own walk takes the gap past ours
-  c = cmp3leaf(g, &a, &b, &go);
+  g->hp = w;                                               // a hash's own walk takes the gap past ours
+  intptr_t c = cmp3leaf(g, &a, &b, &go);
   g->hp = hp0;
+  if (g->walk) return cmp_torn;                            // a walk under it spent the gap
   if (go == CmpCoin) continue;                             // a coin: its payload, in place
   if (go == CmpChain) {                                    // the cdrs wait, the cars go first
-   if ((uintptr_t) (hi - w) < 2 && !cmp_grow(g, &base, &w, &hi, &own)) { c = cmp_torn; break; }
+   if ((uintptr_t) (hi - w) < 2) return walk_short(g, base, hi, 2), cmp_torn;
    *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
    continue; }
-  if (c || w == base) break;
-  b = *--w, a = *--w; }
- if (own) alloc(base, 0);
- return c; }
+  if (c || w == base) return c;
+  b = *--w, a = *--w; } }
 
 // the two arr.c's equality lane needs: whether a value orders as a number, and the order itself
 bool numband(struct g *g, word x) { return cmp_rank(g, x) == 2; }
@@ -1534,7 +1522,7 @@ lvm(lvm_sort) {
    if (allfix) while (x < m && y < hi) b[o++] = (intptr_t) a[y] < (intptr_t) a[x] ? a[y++] : a[x++];   // branch once per segment, not per compare
    else        while (x < m && y < hi) {
     intptr_t c = cmp3(g, a[y], a[x]);
-    if (c == cmp_torn) { Hp = (word*) spine; Pack(g); love_musttail return Ap(_lvm_ghelp, g); }   // the spine unlaid first
+    if (c == cmp_torn) { Hp = (word*) spine; WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }   // the spine unlaid first
     b[o++] = c < 0 ? a[y++] : a[x++]; }
    while (x < m) b[o++] = a[x++];
    while (y < hi) b[o++] = a[y++]; }
@@ -1586,7 +1574,7 @@ static lvm(lvm_cmp_ord) {
  else if (!(isnum(a) || twinp(a))) {                       // same non-number band: via cmp3
   Pack(g);                                                 // packed: its walks take the gap
   intptr_t c = cmp3(g, a, b);
-  if (c == cmp_torn) { Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
+  if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
   r = vcmp_int(op, c, 0); }
  else if (twinp(a) || twinp(b)) {                          // complex: lexicographic, per op
   flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
@@ -1619,7 +1607,7 @@ static lvm(lvm_extreme2) {
  if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) { g->b = (word) (4 | ismax); love_musttail return Ap(lvm_coin_cmp, g); }   // max asks b < a, min a < b
  Pack(g);                                                  // packed: cmp3's walks take the gap
  intptr_t c = cmp3(g, a, b);
- if (c == cmp_torn) { Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
+ if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
  love_musttail return Push((ismax ? c >= 0 : c <= 0) ? a : b); }
 lvm(lvm_max2) { g->b = (word) 1; love_musttail return Ap(lvm_extreme2, g); }
 lvm(lvm_min2) { g->b = (word) 0; love_musttail return Ap(lvm_extreme2, g); }
