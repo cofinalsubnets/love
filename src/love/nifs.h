@@ -153,7 +153,8 @@
  P(404, "calloutresume", lvm_calloutresume, 0) \
  C(406, 3, "sits?", lvm_sitsp, 0) \
  C(410, 3, "subidx", lvm_subidx, 0) \
- P(414, "cats", lvm_cats, 0)
+ P(414, "cats", lvm_cats, 0) \
+ P(416, "bitlen", lvm_bitlen, 0)
 #define inst_rows(I) \
  I(lvm_unc) I(lvm_index) I(lvm_ret) I(lvm_ap) I(lvm_tap) I(lvm_apn) \
  I(lvm_tapn) I(lvm_jump) I(lvm_cond) I(lvm_arg) I(lvm_quote) I(lvm_defglob) \

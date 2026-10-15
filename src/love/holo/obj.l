@@ -448,12 +448,12 @@
    ; le32 length, then (tag value) pairs -- uleb128 each, a string value NUL-terminated.
    ; every tag and value here is under 128, so one byte apiece.
    (armattrs t)
-    (: t1 (t == 'thumb1)
-       pairs ('(5) + o-strbytes (t1 ? "6-M" "7E-M") + '(0)     ; Tag_CPU_name
-              + [6 (t1 ? 11 13)]                               ; Tag_CPU_arch: v6-M | v7E-M
-              + '(7 77)                                        ; Tag_CPU_arch_profile: 'M'
+    (: t1 (t == 'thumb1) a? (t == 'arm)                       ; linux's arm: the fpv5 set is armv8's aarch32
+       pairs ('(5) + o-strbytes (? t1 "6-M" a? "8-A" "7E-M") + '(0)   ; Tag_CPU_name
+              + [6 (? t1 11 a? 14 13)]                         ; Tag_CPU_arch: v6-M | v8 | v7E-M
+              + [7 (a? ? 65 77)]                               ; Tag_CPU_arch_profile: 'A' | 'M'
               + [9 (t1 ? 1 2)]                                 ; Tag_THUMB_ISA_use: 1 | 2
-              + (? (t == 'thumb2) '(10 8)                      ; Tag_FP_arch: FPv5/FP-D16
+              + (? (t == 'thumb2 || a?) '(10 8)                ; Tag_FP_arch: FPv5/FP-D16
                    (t == 'thumb2sp) '(10 6 27 1) ())           ; ..VFPv4-D16, and SP only
               + '(18 4)                                        ; Tag_ABI_PCS_wchar_t
               + '(23 3)                                        ; Tag_ABI_FP_number_model: IEEE 754

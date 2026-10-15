@@ -547,7 +547,7 @@ static void walk_grow(struct g *g, word **base, word **w, word **hi, uintptr_t w
  *own = true, *base = b, *w = b + k, *hi = b + n2; }
 
 // the value hash: a chain spines, its cars pending on the worklist under one running h, and
-// every leaf goes to map.c's hash_leaf -- a function among them hashed by its thread there,
+// every leaf goes to tablet.c's hash_leaf -- a function among them hashed by its thread there,
 // which never recurs into a value -- and an object tray's cells fold like cars
 uintptr_t hash_at(struct g *g, intptr_t x0, word *base, word *end) {
  word *sw = base, x = x0, src = 0;
@@ -608,15 +608,14 @@ static enum eqstep eqv_leaf(struct g *g, word a, word b) {
 // captures), so a pair met again holds rather than walks forever. the walk never calls back
 // in, so this is the only frame of it the C stack ever holds.
 // ..eqv's region holds both: the pairs taken as equal at its base, nseen of them, and the
-// worklist over them. grown, both are carried over and the table may grow, to 1024 pairs;
+// worklist over them. grown, both are carried over and the table grows with the region;
 // a region the caller lent is left to the caller, a block of the walk's own given back
 static bool eqv_grow(struct g *g, word **base, word **w, word **hi, uintptr_t *nseen,
                      uintptr_t ns, bool *own, uintptr_t want) {
  uintptr_t n = *base ? (uintptr_t) (*hi - *base) : 0,
            k = *base ? (uintptr_t) (*w - (*base + 2 * *nseen)) : 0, n2 = n ? 2 * n : 64, ns2;
  for (;; n2 *= 2) {
-  ns2 = n2 / 8 > 1024 ? 1024 : n2 / 8;
-  if (ns2 < *nseen) ns2 = *nseen;
+  ns2 = n2 / 8 < *nseen ? *nseen : n2 / 8;
   if (n2 >= 2 * ns2 + k + want) break; }
  if (n2 > 4 * ((uintptr_t) g->len + g->major_len) + ((uintptr_t) 1 << 20)) return false;
  word *b = alloc(NULL, n2 * sizeof(word));
@@ -629,7 +628,6 @@ static bool eqv_grow(struct g *g, word **base, word **w, word **hi, uintptr_t *n
 
 static int eqv_at(struct g *g, word a, word b, word *base, word *top) {
  uintptr_t nseen = base ? (uintptr_t) (top - base) / 8 : 0, ns = 0;
- if (nseen > 1024) nseen = 1024;
  word *hi = top, *w = base ? base + 2 * nseen : 0;
  bool own = false;
  int r = 0;
@@ -669,8 +667,8 @@ static int eqv_at(struct g *g, word a, word b, word *base, word *top) {
      a = (word) ba, b = (word) bb; continue; }
     for (word *s = base; s && s < base + 2 * ns; s += 2)
      if (s[0] == a && s[1] == b) goto held;               // already taken as equal: it holds
-    if (ns == nseen                                       // the table is full: grown, unless at its cap
-        && (nseen == 1024 || !eqv_grow(g, &base, &w, &hi, &nseen, ns, &own, 0) || ns == nseen)) { r = -1; goto out; }
+    if (ns == nseen                                       // the table is full: grown
+        && (!eqv_grow(g, &base, &w, &hi, &nseen, ns, &own, 0) || ns == nseen)) { r = -1; goto out; }
     base[2 * ns] = a, base[2 * ns + 1] = b, ns++;
     { int f = fn_eq(c, a, b, &w, hi);
       // fn_eq ran out of room: the pair comes off the table, the worklist grows, and the
@@ -693,7 +691,7 @@ love_noinline bool eqv(struct g *g, word a, word b) {
  if (s == eq_yes || s == eq_no) return s == eq_yes;        // settled without a walk, so no scratch
  word *top, *base = gap(g, &top);
  int r = eqv_at(g, a, b, base, top);
- if (r < 0) __builtin_trap();                            // no room to walk, or past the table's cap
+ if (r < 0) __builtin_trap();                            // no room to walk: the oom no reservation saw
  return r > 0; }
 
 // whole-array `=`: a boolean like every other kind (shapes match, every cell
@@ -920,7 +918,7 @@ static struct g *obin_run(struct g *g, int op) {
  word a = g->sp[0], b = g->sp[1];
  bool atray = trayp(a), btray = trayp(b);
  if (atray && tray(a)->type != love_O) { if (!ok(g = tray_to_obj(g, 0))) return g; }
- if (btray && tray(b)->type != love_O) { if (!ok(g = tray_to_obj(g, 1))) return g; }
+ if (btray && tray(g->sp[1])->type != love_O) { if (!ok(g = tray_to_obj(g, 1))) return g; }   // b may have moved
  a = g->sp[0], b = g->sp[1], atray = trayp(a), btray = trayp(b);
  uintptr_t R, n = bshape(a, b, &R), shp[maxrank];
  if (n == (uintptr_t) -1) {                                    // non-conforming -> zero

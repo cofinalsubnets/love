@@ -6,6 +6,15 @@
 ; card: src/inle/hda.c's where the machine has a controller, the page's own where it is a
 ; wasm module (src/inle/wasm/horn.c). a seat with neither is the errno nom.
 
+; a wait yields: a task polls while the loop works, and marks it ran when it finds the loop
+; inside a call that waits. a call that waited 10 ms without it ran had the scheduler held.
+; on a loaded box the ring drains while the process is off the cpu and no call need wait:
+; then there is nothing to witness, and the law holds of no call
+(: (hn-witness box) (twirl (_ \ (: (go u) (? (box 'done) () (box 'in) (pin box 'ran 1) (: _ (rest 1) (go 0))) (go 0))) ())
+   (hn-waits box f) (: a (clock 0) _ (pin box 'in 1) r (f 0) _ (pin box 'in ())
+                       (: _ (? (clock a >= 10) (pin box 'waited 1) 0) r))
+   (hn-yielded? box) (: _ (pin box 'done 1) (!(box 'waited) || box 'ran)))
+
 (: _ (hosted ? (setenv "HORN" "none"))           ; inle and the browser read no policy word
    h (horn 48000 2)
    _ (test ('badarg = horn 100 2) ('badarg = horn 48000 3) ('badarg = horn "a" 2))
@@ -17,12 +26,12 @@
            ; while it waits another task gets to run
            z (: (mk n acc) (n = 0 ? acc (mk (n - 1) (0 . acc))) (string (mk 4096 ())))
            box {}
-           _ (twirl (_ \ (rest 20, pin box 'ran 1)) ())
+           _ (hn-witness box)
            t0 (clock 0)
-           _ (: (go n) (n = 0 ? () (say h z, go (n - 1))) (go 47))
+           _ (: (go n) (n = 0 ? () (hn-waits box (u \ say h z), go (n - 1))) (go 47))
            dt (clock t0)
            lag (horn-lag h)
-           _ (test (hot? h) (dt >= 200) (dt < 5000) (0 < lag) (lag <= 48000) (box 'ran))
+           _ (test (hot? h) (dt >= 200) (dt < 5000) (0 < lag) (lag <= 48000) (hn-yielded? box))
            ; mono: a frame is two bytes, and the lag counts the caller's frames (plus a lead)
            m (horn 48000 1)
            ((test (hot? m) (0 = horn-lag m)),
@@ -46,13 +55,13 @@
    (? (nom? hi)
         (test (hi = 'enodev) !hosted)
         (: box {}
-           _ (twirl (_ \ (rest 20, pin box 'ran 1)) ())
+           _ (hn-witness box)
            t0 (clock 0)
            ; a byte by see, the rest of the gulp by chug: n bytes and their sum
-           (rd p n k z) (n <= k ? [k z] (see p @ c (c = -1 ? [k z] (: s (chug p) (rd p n (k + 1 + #s) (z + c + +s))))))
+           (rd p n k z) (n <= k ? [k z] (hn-waits box (u \ see p) @ c (c = -1 ? [k z] (: s (chug p) (rd p n (k + 1 + #s) (z + c + +s))))))
            r (rd hi 24000 0 0)
            dt (clock t0)
-           _ (test (r 0 >= 24000) (r 1 = 0) (dt >= 200) (dt < 5000) (box 'ran) (0 <= horn-lag hi < 12001))
+           _ (test (r 0 >= 24000) (r 1 = 0) (dt >= 200) (dt < 5000) (hn-yielded? box) (0 <= horn-lag hi < 12001))
            ; stereo is four bytes a frame, and what waits to be read is the lag
            hj (horn-in 44100 2)
            ((rest 100),

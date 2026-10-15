@@ -12,13 +12,14 @@
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag
+(: corridor-kb (view-bind view-binds corridor-binds))   ; a key's code -> its action
 
 (: (rows s) (: (go i k) (i + 2 <= #s ? (go (i + 1) (k + ("\r\n" = snip s i (i + 2)))) k) (1 + go 0 0))
    hall (corridor-load "src/apps/lore/levels/hall.l")
    (at w h) (corridor-new w h hall "src/apps/lore/levels/")
    (px f st x y) (peep f (y * st 'w + x) 0)
    (lum c) ((c >> 16 & 255) + (c >> 8 & 255) + (c & 255))
-   (steps st k n) (each ^n (_ \ (corridor-step st k, corridor-move st)), st)
+   (steps st k n) (each ^n (_ \ (corridor-step st (corridor-kb k), corridor-move st)), st)
    (lv s) (corridor-read ("(level \"t\" " + s + ")"))
    (put p s) (: q (open p "w") (say q s, close q)))
 

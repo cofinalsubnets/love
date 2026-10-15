@@ -1297,5 +1297,49 @@
       (<nd = 1) (cr-in (nd 1) "next  love, nested in ~/.love/bin"))
    0)
 
+; --- the lane map (src/apps/lanemap.l): AGENTS.md's table is laid from it, so the two agree, and
+; lanes.sh asks bee for its chains and alone set
+(: lm-doc ((cite 'lanemap 'lanes-doc) 0)
+   (lm-block ls on acc)
+    (? (atom? ls) ()
+       (starts? <ls "<!-- /lanes") (rev acc)
+       on (lm-block >ls 1 (<ls . acc))
+       (lm-block >ls (starts? <ls "<!-- lanes:") acc))
+   lm-agents (lm-block (lines (cr-get (cr-home + "/AGENTS.md"))) 0 ())
+   lm-map (hark [cr-love cr-app "--lanes-map"])
+   _ (test
+      (two? lm-doc)
+      (lm-agents = lm-doc)
+      (<lm-map = 0)
+      (cr-in >lm-map "chain test_extract,test_big,test_encver\n")
+      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcstress"))
+   0)
+
+; the projection: a rule owes its lanes to each path it matches (a star crosses `/`), a lane another
+; owed lane runs drops out, light before heavy, test heads the list and test_slow closes it
+(: lp-db "test_quick: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\n"
+   lp-cov ((cite 'lanemap 'lanes-covers) lp-db)
+   lp-plan ((cite 'lanemap 'lanes-plan) ["src/love/gc.c" "src/apps/moon/gen.l" "src/apps/kore/a/b.l" "doc/x.md"]
+            ["src/apps/moon/gen.l"] lp-cov)
+   lp-names (map (r \ <r) lp-plan)
+   lp-heavy (map (r \ r 1) (drop 1 lp-plan))
+   lp-cli (hark [cr-love cr-app "--lanes" "HEAD" "HEAD"])
+   _ (test
+      (lp-cov "test_quick" = ["test_clay" "test_x" "test_y"])
+      (lp-cov "test_inle" = ["test_disk"])
+      (lp-cov "test_a" = ["test_disk"])
+      !(two? (lp-cov "x"))
+      (<lp-names = "test")
+      (lp-names (#lp-names - 1) = "test_slow")
+      (elem "test_quick" lp-names)
+      (elem "test_kore" lp-names)
+      (elem "test_bakerep" lp-names)
+      (elem "test_gcstress" lp-names)
+      !(elem "test_clay" lp-names)
+      (lp-heavy = sort lp-heavy)
+      (<lp-cli = 0)
+      (cr-in >lp-cli "test light 195s every change\ntest_slow heavy ? last, on the tree that lands"))
+   0)
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

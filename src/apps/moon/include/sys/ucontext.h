@@ -59,5 +59,18 @@ typedef struct ucontext_t {
   sigset_t uc_sigmask;
   mcontext_t uc_mcontext;
 } ucontext_t;
+#elif defined(__ARM_EABI__)
+typedef struct {
+  unsigned long trap_no, error_code, oldmask;
+  unsigned long arm_r0, arm_r1, arm_r2, arm_r3, arm_r4, arm_r5, arm_r6, arm_r7, arm_r8, arm_r9, arm_r10;
+  unsigned long arm_fp, arm_ip, arm_sp, arm_lr, arm_pc, arm_cpsr, fault_address;
+} mcontext_t;
+typedef struct ucontext_t {
+  unsigned long uc_flags;
+  struct ucontext_t *uc_link;
+  stack_t uc_stack;
+  mcontext_t uc_mcontext;
+  sigset_t uc_sigmask;
+} ucontext_t;
 #endif
 #endif

@@ -105,8 +105,8 @@ static uintptr_t image_objsize(struct g *g, union u *p) {
 // length is a runtime quantity where the token layout wants a compile-time one, so the index
 // space reserves a fixed slice and only the occupied prefix is spelled. a host nif's value is
 // the bare fn, so without this lane every app nif rode as an absolute. the slice is indexed
-// by position, so this order is part of the image's contract -- unchecked by name, since a
-// binary whose nif set differs is a different binary and its anchor says so.
+// by position, so this order is part of the image's contract -- checked by name: the
+// fingerprint (image_fp) spells every entry, so a binary whose nif set differs says so.
 #define ImageNHost 256u
 // the kernel's own bracket (src/inle/kmain.c's knifs) rides the slice behind the host's, so a
 // kernel bakes the book it drained: a link without one -- a board, the bootstrap -- answers none
@@ -115,12 +115,13 @@ static love_inline uintptr_t image_nhost(void) {
  struct def const *ks;
  uintptr_t n = (uintptr_t)(__stop_love_nifs - __start_love_nifs) + knifs_slice(&ks);
  return n < ImageNHost ? n : ImageNHost; }
-static love_inline intptr_t image_host_x(uintptr_t k) {                // slice entry k's cell
+static love_inline struct def const *image_host_def(uintptr_t k) {    // slice entry k
  uintptr_t nh = (uintptr_t)(__stop_love_nifs - __start_love_nifs);
  struct def const *ks;
- if (k < nh) return __start_love_nifs[k].v.x;
+ if (k < nh) return __start_love_nifs + k;
  knifs_slice(&ks);
- return ks[k - nh].v.x; }
+ return ks + (k - nh); }
+static love_inline intptr_t image_host_x(uintptr_t k) { return image_host_def(k)->v.x; }  // its cell
 
 // the op index: every code address the tables below name, as (address, kind:index) word
 // pairs in an open-addressed table, laid kind by kind and index by index -- so the first row
@@ -131,6 +132,7 @@ enum { OpExtra, OpDef, OpFn, OpHost };
 #define OpMask(k) (1u << (k))
 static word *op_rows;
 static uintptr_t op_bits;              // the table holds 1 << op_bits rows
+static uint64_t op_fp;                 // image_fp, laid with the table
 static love_inline uintptr_t op_home(intptr_t a) {
  return (uintptr_t) a * (uintptr_t) 0x9e3779b97f4a7c15u >> (sizeof(uintptr_t) * 8 - op_bits); }
 // the first row at a whose kind the mask admits, -1 for none
@@ -184,10 +186,9 @@ static intptr_t image_imm_index(word v) {
 // {header, dictionary, token stream}; load validates, expands, decodes in place.
 // a mismatched buffer -> NULL, so the caller boots normally -- never wrong.
 /* bump if the wire format changes -- which includes RENUMBERING image_immortals, since a
-   saved index means nothing to a binary that lays the table differently. "..06": the
-   stream grew the 8-aligned lane and the wide dictionary seats below. test/gate/
-   bakerep.sh greps the SPELLING ("AISNO06") to corrupt a header, so the two move together. */
-#define ImageMagic 0x36304f4e5349411aULL
+   saved index means nothing to a binary that lays the table differently. "..07": the
+   header carries the fingerprint and the source digest. */
+#define ImageMagic 0x37304f4e5349411aULL
 #if defined(__x86_64__)
 #define ImageArch 1
 #elif defined(__aarch64__)
@@ -197,10 +198,10 @@ static intptr_t image_imm_index(word v) {
 #else
 #define ImageArch 0
 #endif
-// the image is binary-specific: its indices and kept absolutes mean anything only in the
-// binary that dumped it. two guards reject a mismatch -> NULL -> normal boot: `arch`, and
-// `anchor`, the gap between two of the binary's own symbols, which a cross-arch or stale
-// build lays out differently. the code segment leads with [raw length, chunks, dictionary
+// an image's indices mean what the waking binary's tables say, so three guards reject a
+// mismatch -> NULL -> normal boot: `arch`; `fp`, what the indices mean (image_fp); and
+// `src`, the carried C (image_carried_c). any build of one tree wakes another's image -- the
+// stress runtime the normal bake's -- and a stale or foreign one is refused. the code segment leads with [raw length, chunks, dictionary
 // length, its deflated length] so it describes itself: then nch chunks' [raw offset, deflated
 // offset] pairs, the dictionary and the chunks deflated against it -- or with no chunks the raw blobs.
 #define CodeSegHead (4 * sizeof(uint64_t))
@@ -220,9 +221,41 @@ static intptr_t image_imm_index(word v) {
 // length and the count written into it cannot be spelled in two units and disagree.
 #define LvImgRoots (2 + (__builtin_offsetof(struct g, end) - __builtin_offsetof(struct g, v0)) / sizeof(word))
 struct image_hdr {
- uint64_t magic, wordsize, nwords, arch, anchor, nroot, rsv1, nstream, next_serial, ncode;
+ uint64_t magic, wordsize, nwords, arch, fp, nroot, src, nstream, next_serial, ncode;
  uint64_t root_tag[LvImgRoots], root_val[LvImgRoots]; };   // symbols, tasks, then the entire v0..end region walked
                                              // GENERICALLY -- a new v0 field rides with no codec change
+// what this binary's indices mean, hashed (fnv-1a): the lanes' widths, every nif's name and
+// module in seat order, love_def1's then the host slice's, and the struct g a native reads
+// off by offset. a build flag that moves none of them (LvGcStress) keeps it
+static uint64_t fp_byte(uint64_t h, uint64_t b) { return (h ^ b) * 0x100000001b3u; }
+static uint64_t fp_word(uint64_t h, uint64_t v) {
+ for (int i = 0; i < 8; i++) h = fp_byte(h, v >> 8 * i & 0xff);
+ return h; }
+static uint64_t fp_name(uint64_t h, char const *s) {
+ for (; s && *s; s++) h = fp_byte(h, (unsigned char) *s);
+ return fp_byte(h, 0x100); }                       // past every byte: "ab" "c" is not "a" "bc"
+static uint64_t image_fp(void) {
+ uint64_t h = 0xcbf29ce484222325u;
+ uintptr_t nh = image_nhost();
+ uint64_t const w[] = { countof(image_extra_aps), countof(image_immortals), def1_n, nh, LvImgRoots,
+                        sizeof(struct g), __builtin_offsetof(struct g, reach) };
+ for (uintptr_t i = 0; i < countof(w); i++) h = fp_word(h, w[i]);
+ for (uintptr_t j = 0; j < def1_n; j++) h = fp_name(fp_name(h, love_def1[j].n), love_def1[j].m);
+ for (uintptr_t k = 0; k < nh; k++) h = fp_name(fp_name(h, image_host_def(k)->n), image_host_def(k)->m);
+ return h; }
+// the carried C (src.c's image_carried_c): the source container's "c" section, every .c .h
+// .S .s of the tree, its paths and the stamp they are pinned to. the core is linked where no
+// container is (an embedder, a board), so its default here is the none answer, 0
+__attribute__((weak)) uint64_t image_carried_c(void) { return 0; }
+// a header this binary refuses, and why: 0 none, 1 another format, arch or word,
+// 2 another binary's tables, 3 other C. the wake takes the first refusal as final
+int image_why(void const *buf, uintptr_t len) {
+ struct image_hdr H;
+ if (len < sizeof H) return 1;
+ memcpy(&H, buf, sizeof H);
+ if (H.magic != ImageMagic || H.wordsize != sizeof(word) || H.arch != ImageArch) return 1;
+ if (!love_once() || H.fp != op_fp) return 2;
+ return H.src != image_carried_c() ? 3 : 0; }
 
 // an image is wholly symbolic: every word encodes as a heap offset, an lvm index, an
 // immortal index, a nif-cell seat or a code offset, so a raw address of the binary refuses
@@ -327,6 +360,14 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 // the bare-fn lane's width: one slot per nif cell whose code slot a thread can embed --
 // love_def1's, then the host slice's (LvNif registers a cell too: src/love/main.c's nif_exit[]).
 #define ImageNFn ((uintptr_t)(def1_n + ImageNHost))
+// an out-of-pool word's seat in the image's index space (an op or nif, an immortal, a bare
+// nif fn), -1 for none: a hash keys a binary address by it, so a table orders alike in every
+// build of one source
+intptr_t image_seat(word v) {
+ intptr_t i = image_ap_index((intptr_t) v);
+ if (i >= 0) return i;
+ if ((i = image_imm_index(v)) >= 0) return (intptr_t) ImageNLvm + i;
+ return (i = image_fn_index((intptr_t) v)) >= 0 ? (intptr_t) (ImageNLvm + ImageNImm) + i : -1; }
 // the lane floor: above any heap this codec encodes (1 TB on 64-bit, 128 MB on 32-bit;
 // a dump past it is refused rather than aliased) and below the absolute lane. spelled by
 // the preprocessor: mooncc does not fold a sizeof ternary, and every decoded word asks.
@@ -547,6 +588,7 @@ int ops_fill(void) {
    op_put(image_fn_slot((word const*) love_def1[j].v.k), OpFn, j);
  for (uintptr_t k = 0; k < nh; k++) op_put(image_fn_slot((word const*) image_host_x(k)), OpFn, d + k);
  for (uintptr_t k = 0; k < nh; k++) op_put(image_host_x(k), OpHost, k);
+ op_fp = image_fp();
  return 1; }
 // the commonest words of the blob, most frequent first -- the byte seats take the head of
 // that order and the wide ones the rest, so nothing here knows where the line is. exact,
@@ -958,7 +1000,8 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
   else { for (uintptr_t i = 1; i < sz; i++)                                                  // thread interior + terminator;
           blob[off + i] = img_encode(x, ptr(p)[i] == (word) lvm_lazy ? ptr(p)[0] : ptr(p)[i]);  // a woken entry is its header
          if (p->ap == lvm_map_lookup) {                                                // a tablet's serial, a charm
-          if (nslot < ncap) slots[nslot++] = (off + 2) | SlotCharm; else slotover = true; } }
+          if (nslot < ncap) slots[nslot++] = (off + __builtin_offsetof(struct tablet, serial) / sizeof(word)) | SlotCharm;
+          else slotover = true; } }
   p = cell(ptr(p) + sz); }
  if (x->ob)                                        // chunk starts in the laid order
   for (uintptr_t q = 0; q < x->nobj; q++) { uintptr_t no = x->nob[x->ord[q]]; if (no >= nextk) cb[ncb++] = no, nextk = (no / kw + 1) * kw; }
@@ -1000,13 +1043,11 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
    uintptr_t off = img_remap(x, (uintptr_t)(ptr(n) - base) * sizeof(word)) / sizeof(word), pid = getcharm(n[2].x);
    if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
  alloc(slots, 0);
- // rsv1 is reserved: it carried the kept-absolute count while absolutes were encodable.
- // `anchor` is the gap between the two symbols, not either address. addresses would
- // write this run's ASLR base into the header, which is the whole of what a
- // reproducible bake must not carry.
+ // fp and src are pure functions of the tables and the carried tree: no address rides the
+ // header, so two bakes of one tree are one byte string.
  // the counter drops to the live count: the woken twin's first mint lands
  // above every renamed 1..kser, and the bytes carry no dead mints.
- struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, (uint64_t)((word) &image_save - (word) image_immortals), 0, 0, 0, kser, x->cn, {0}, {0} };
+ struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, op_fp, 0, image_carried_c(), 0, kser, x->cn, {0}, {0} };
  alloc(rank, 0);
  // roots = symbols + tasks (live outside v0), then the whole GC-traced v0..end block, generically: any
  // field added to struct g's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
@@ -1407,7 +1448,7 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
  struct image_hdr H;
  if (len < sizeof H) return NULL;
  memcpy(&H, buf, sizeof H);
- if (H.magic != ImageMagic || H.wordsize != sizeof(word) || H.arch != ImageArch) return NULL;
+ if (image_why(buf, len)) return NULL;                            // another arch, binary or tree
  uintptr_t nw = H.nwords, db = ImageNAll * sizeof(word), ns = H.nstream;
  // the stream's length is the header's, never the buffer's: a baked image arrives inside a
  // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
@@ -1430,15 +1471,6 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
   if (!(g->major_base = alloc(NULL, g->major_len * sizeof(word)))) goto no; }
  word *base = g->major_base;
  g->major_hp = base + nw;
- // a distance, never two addresses: the two symbols shift together under ASLR, so storing
- // where they landed would write this run's mmap base into the header and no bake could be
- // checked by its hash. the gap is the same number every run and discriminates as well --
- // a stale or cross-arch binary moves one symbol without the other -- and absolutes are
- // stored anchor-relative, so the decode side wants no shift. unconditional, symbolic image
- // or not: an index means whatever this binary's tables say, so a foreign build reads the
- // same words as other functions.
- if ((intptr_t)((word) &image_save - (word) image_immortals) != (intptr_t) H.anchor)
-  goto no;                                                                       // a different binary -> normal boot
  // the natives' code: a chunk of the arena the walk names, seated a chunk at a time as its
  // natives first run when buf stays, else here and now
  char *code = NULL;
@@ -1476,7 +1508,7 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
      for (uintptr_t k = 0; ok && k < L->nch; k++) if (!L->st[k]) ok = img_chunk(L, k);
      alloc(L, 0);
      if (!ok) goto no; } } }
- uintptr_t nv = LvImgRoots - 2;                                          // same struct/binary (anchor-checked) -> same layout
+ uintptr_t nv = LvImgRoots - 2;                                          // same struct (fingerprinted) -> same layout
  if (H.nroot != LvImgRoots) goto no;                                     // root count mismatch -> stale/foreign image -> normal boot
  g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base);
  g->tasks   = (union u*) image_root_dec(H.root_tag[1], H.root_val[1], base);

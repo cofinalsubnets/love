@@ -52,6 +52,13 @@ check((await copy([[0, 0, 2, 0], [2, 0, 2, 4], [1, 0, 2, 4]])) === 'hello', 'a d
 check((await copy(click(2, 7, 2))) === 'world', 'a double click on world');
 check((await copy(click(2, 3, 3))) === 'hello world', 'a triple click on the line');
 
+// two hundred distinct clusters, past the header's 128 slots: the console's pool grows under
+// a program's write, so the line copies back with every mark
+const clus = Array.from({ length: 200 }, (_, i) => String.fromCodePoint(65 + Math.floor(i / 100), 0x300 + i % 100)).join('');
+type("printf '\\033[2J\\033[3;1H'; love -e '(: _ (puts (cats (map (\\ i (utf8 (65 + (i // 100)) + utf8 (768 + (i % 100)))) (jot 200)))) _ (puts \"\\n\") (quit 0))'\r");
+await nap(4000);
+check((await copy(click(2, 3, 3))) === clus, 'two hundred clusters copied back whole');
+
 // a paste reaches the shell as typed, less its control byte, and its newline runs nothing:
 // the shell brackets pastes, so the line waits for the enter typed after it
 const ran = () => said.split(/\r?\n/).some((l) => l.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').trim() === 'pasted');

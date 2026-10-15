@@ -537,5 +537,171 @@
       (bq-in (e 8) "love bee --lock --out ") (bq-in (e 8) (w 'repo + "/out")) (bq-in (e 8) " -- make test"))
    0)
 
+;; --- the shadow of a git queue: each landing laid into an sb hub, recorded, banked and
+; written through the mirror to a branch whose tree must be the landing's; a tree that differs
+; (out/x, which sb never records) stops it, and a stopped shadow records nothing ------------
+(: w (bq-world "shadow") lq bq-q hub (w 'dir + "/hub")
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   (sb d as) (bq-out (hark ([bq-love "sb" "-C" d] + as)))
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   (row nm k br on)
+    (calls nm [[k "queue_row" (: j {"state" "waiting" "branch" br} (k = 1 ? (pin j "leader" "queen") j))]
+               [(k + 1) "queue_row" {"state" "green" "gated_on" on "gated_head" (sha br)}]])
+   _ (row "ant" 1 "ant" (sha "test"))
+   s0 (calls "queen" [[3 "queue_lead" {"shadow" "rel/hub sh"}] [4 "queue_lead" {"shadow" (hub + " sh web/")}]])
+   _ (bq-git w ["merge" "-q" "--no-ff" (sha "ant") "-m" "Merge queue row 1 (ant)"])
+   b (calls "ant" [[5 "queue_landed" {}]])
+   t1 (sha "test") lg (bq-get (hub + ".shadow.log")) tr [(sha "sh^{tree}") (sha "test^{tree}")]
+   (check c) (bq-sh w ("GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "
+                       + bq-sq bq-love + " " + bq-sq bq-app + " --shadow-check " + bq-sq hub + " ck " + c))
+   k1 (check t1) k0 (check (sha "test^"))
+   _ (bq-git w ["checkout" "-q" "-b" "bobx" "test"]) _ (hark ["mkdir" "-p" (w 'repo + "/out")])
+   _ (bq-put (w 'repo + "/out/x") "x\n") _ (bq-git w ["add" "-f" "out/x"]) _ (bq-git w ["commit" "-q" "-m" "out/x"])
+   _ (bq-git w ["checkout" "-q" "test"])
+   _ (row "bob" 6 "bobx" t1)
+   _ (bq-git w ["merge" "-q" "--no-ff" (sha "bobx") "-m" "Merge queue row 2 (bob)"])
+   d (calls "bob" [[8 "queue_landed" {}]])
+   st (bq-get (hub + ".shadow.stop"))
+   _ (bq-git w ["checkout" "-q" "-b" "c3" "test"]) _ (bq-put (w 'repo + "/c") "c\n")
+   _ (bq-git w ["add" "c"]) _ (bq-git w ["commit" "-q" "-m" "c"]) _ (bq-git w ["checkout" "-q" "test"])
+   _ (row "carol" 9 "c3" (sha "test"))
+   _ (bq-git w ["merge" "-q" "--no-ff" (sha "c3") "-m" "Merge queue row 3 (carol)"])
+   e (calls "carol" [[11 "queue_landed" {}]])
+   _ (test
+      (bq-in (s0 3) "shadow is HUB BRANCH") (bq-in (s0 4) "the change is in")
+      (bq-in (b 5) "landed: row 1 left")
+      (bq-in (b 5) ("the shadow: gwen-" + snip t1 0 9 + " recorded in " + hub)) (bq-in (b 5) "the tree matches")
+      (<tr = tr 1) (bq-in (bq-out (bq-git w ["log" "-1" "--format=%B" "sh"])) ("shadow of " + t1))
+      (sb hub ["psid" ("gwen-" + t1)] = sb hub ["psid"]) (bq-get (hub + "/a") = "a\n")
+      (bq-in lg (t1 + " ")) (bq-in lg " match ")
+      (<k1 = 0) (bq-in (k1 1) (t1 + "'s")) (<k0 = 1) (bq-in (k0 1) "differs")
+      (bq-in (d 8) "landed: row 2 left") (bq-in (d 8) "the shadow: STOPPED") (bq-in (d 8) "out/x")
+      (bq-in (d 8) "queen") (bq-in st "out/x")
+      (bq-in (e 11) "landed: row 3 left") (bq-in (e 11) "still stopped") !(bq-in (e 11) "queen") (bq-get (hub + "/c") = ""))
+   0)
+
+;; --- a join that waits with its head folds into the earliest waiting row ahead when the heads
+; merge clean but for hot.prof; a conflict, or keep, keeps its own slot -------------------------
+(: w (bq-world "autofold") lq bq-q
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   (branch nm files)
+    (: _ (bq-git w ["checkout" "-q" "-b" nm "test"])
+       _ (hark ["mkdir" "-p" (w 'repo + "/src/tools")])
+       _ (map (\ f (: _ (bq-put (w 'repo + "/" + <f) (f 1)) (bq-git w ["add" <f]))) files)
+       _ (bq-git w ["commit" "-q" "-m" nm])
+       (bq-git w ["checkout" "-q" "test"]))
+   _ (branch "p1" [["src/tools/hot.prof" "x\n"] ["p1.txt" "p1\n"]])
+   _ (branch "p2" [["src/tools/hot.prof" "y\n"] ["p2.txt" "p2\n"]])
+   _ (branch "c1" [["p1.txt" "other\n"]])
+   _ (branch "k1" [["k1.txt" "k\n"]])
+   _ (branch "e1" [["e1.txt" "e\n"]])
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   (join nm id br more) (calls nm [[id "queue_row" (foldl (\ t k (pin t k (more k))) {"state" "waiting" "branch" br "gated_head" (sha br)} (keys more))]])
+   a (join "ant" 1 "p1" {"leader" "queen"})
+   b (join "bob" 2 "p2" {})
+   c (join "carol" 3 "c1" {})
+   d (join "dan" 4 "k1" {"keep" "1"})
+   e (join "eve" 5 "e1" {})
+   q (bq-out (bq-git w ["cat-file" "-p" lq]))
+   (row p) (: ls (filter (\ l (starts? l (p + " "))) (lines q)) (? (two? ls) (words <ls) ()))
+   k0 (calls "dan" [[6 "queue_row" {"state" "waiting" "branch" "k1" "keep" "0"}]])
+   q2 (bq-out (bq-git w ["cat-file" "-p" lq]))
+   _ (test
+      (row "1" 5 = "waiting")
+      (bq-in (b 2) "folded into row 1 (ant)") (bq-in (b 2) "but for src/tools/hot.prof")
+      (row "2" 5 = "folded-into-1")
+      (row "3" 5 = "waiting") !(bq-in (c 3) "folded into")          ; p1.txt conflicts with row 1
+      (row "4" 5 = "waiting") !(bq-in (d 4) "folded into")          ; keep
+      (bq-in q "\nkeep 4\n")
+      (bq-in (e 5) "folded into row 1 (ant)") (row "5" 5 = "folded-into-1")
+      (bq-in (k0 6) "row now: 4 dan k1") !(bq-in q2 "\nkeep "))
+   0)
+
+;; --- queue_gate: the head row's union gated by bee -- its row gating with the worktree's HEAD, the
+; lanes the change owes run through test/gate/lanes.sh (a stub here) under the heavy lock, then the
+; row green with each lane's result, or waiting with its reds; refused off the head, or dirty ----
+(: w (bq-world "gate") lq bq-q
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   _ (hark ["mkdir" "-p" (w 'repo + "/test/gate")])
+   _ (bq-put (w 'repo + "/test/gate/lanes.sh")
+             "d=out/lanes-gate; mkdir -p $d; echo \"$@\" > out/args\nif [ -f red ]; then echo 'test_slow exit=1 secs=0' > $d/summary; exit 1; fi\necho 'test_slow exit=0 secs=0' > $d/summary\n")
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   (row p) (: ls (filter (\ l (starts? l (p + " "))) (lines (bq-out (bq-git w ["cat-file" "-p" lq]))))
+              (? (two? ls) <ls ""))
+   m (sha "test")
+   a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "gated_on" m "gated_head" (sha "ant") "leader" "queen"}]])
+   _ (bq-git w ["checkout" "-q" "ant"])
+   g1 (calls "ant" [[2 "queue_gate" {"dir" (w 'repo)}]])
+   ok1 (bq-until (\ _ (bq-in (row "1") " green  #")) 300)
+   args (bq-get (w 'repo + "/out/args"))
+   b (calls "bob" [[3 "queue_row" {"state" "waiting" "branch" "bob" "gated_on" (sha "ant") "gated_head" (sha "bob")}]])
+   c (calls "carol" [[4 "queue_gate" {"dir" (w 'repo)}]])
+   _ (bq-git w ["checkout" "-q" "bob"])
+   _ (bq-put (w 'repo + "/f") "dirty\n")
+   d (calls "bob" [[5 "queue_gate" {"dir" (w 'repo)}]])
+   _ (bq-git w ["checkout" "-q" "--" "f"])
+   _ (bq-put (w 'repo + "/red") "")
+   g2 (calls "bob" [[6 "queue_gate" {"dir" (w 'repo)}]])
+   ok2 (bq-until (\ _ (bq-in (row "2") "test_slow=1")) 300)
+   e (calls "carol" [[7 "queue_row" {"state" "waiting" "branch" "carol" "gated_head" (sha "bob") "keep" "1"}]
+                     [8 "queue_gate" {"dir" (w 'repo)}]])
+   _ (test
+      (bq-in (g1 2) "row 1 is gating at ")
+      ok1 (bq-in (row "1") "  # gate ") (bq-in (row "1") "test_slow=0")
+      (args = "-d out/lanes-gate --slow test_slow\n")
+      (bq-in (c 4) "you hold no row")
+      (bq-in (d 5) "has changes not committed")
+      (bq-in (g2 6) "row 2 is gating at ")
+      ok2 (bq-in (row "2") " waiting  #")
+      (bq-in (e 8) "row 2 ahead is waiting"))
+   0)
+
+;; --- a heavy ticket belongs to a queue row: refused at a work tree's top whose branch and HEAD no
+; row carries, unless --no-row says why; granted to a row's branch, and anywhere with no queue ------
+(: w (bq-world "heavyrow") lq bq-q
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   (cli nm args) (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " " + args))
+   n0 (cli "ant" "--lock --heavy -- true")                                  ; no queue yet
+   q0 (bq-put (w 'dir + "/q.in") (json-show {"jsonrpc" "2.0" "id" 1 "method" "tools/call"
+                                            "params" {"name" "queue_row" "arguments" {"queue" lq "state" "waiting" "branch" "ant"}}}
+                                 + "\n" + json-show {"jsonrpc" "2.0" "id" 2 "method" "tools/call"
+                                                     "params" {"name" "lock_acquire" "arguments" {"name" "heavy" "kind" "heavy"}}}
+                                 + "\n" + json-show {"jsonrpc" "2.0" "id" 3 "method" "tools/call"
+                                                     "params" {"name" "lock_acquire" "arguments" {"name" "heavy" "kind" "heavy" "no_row" "a measurement"}}}
+                                 + "\n"))
+   t (cli "ant" ("--mcp < " + bq-sq (w 'dir + "/q.in")))
+   n1 (cli "ant" "--lock --heavy -- true")                                  ; on test: no row carries it
+   n2 (cli "ant" "--lock --heavy --no-row measure -- true")
+   _ (bq-git w ["checkout" "-q" "ant"])
+   n3 (cli "ant" "--lock --heavy -- true")                                  ; row 1 carries ant
+   _ (test
+      (<n0 = 0)
+      (bq-in (t 1) "\"id\":2") (bq-in (t 1) "heavy lanes run only in the queue")
+      (bq-in (t 1) "granted heavy")
+      (<n1 = 1) (bq-in (n1 1) "no row of refs/queue/test carries test")
+      (<n2 = 0) (<n3 = 0))
+   0)
+
 (hark ["rm" "-rf" bq-root])
 (test_fin (), puts "beeq: ok", putc 10, 0)

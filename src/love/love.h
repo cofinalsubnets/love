@@ -102,6 +102,12 @@ static love_inline size_t b2w(size_t b) {
 #ifndef love_budget
 # define love_budget 0
 #endif
+// the C stack a compile (ev.c's c0) may take below its outermost frame, in bytes, where the
+// seat says no more: inle's boot stack is a MiB with the page tables under it; a device sets
+// its own (-Dlove_cstack=...), and a host takes three quarters of its rlimit
+#ifndef love_cstack
+# define love_cstack (768u << 10)
+#endif
 
 // --- status ---
 // status rides the 2 pointer tag bits: bit 0 scare, bit 1 more input wanted; eof = both
@@ -277,6 +283,7 @@ enum hook {
  hook_flow,      // a port as a charlist (post.l's `flow`), the reader's port door
  hook_cats,      // cats over a list no fast lane takes (prel's foldr of +)
  hook_obin,      // an object tray's cells no C lane takes: a tray, a coin, a twin (prel's)
+ hook_opfixp,    // the factor pass over a macro's (expansion . operands), the operands kept whole
  hook_n };
 
 struct g {
@@ -336,6 +343,8 @@ struct g {
                                             // rule the nursery gets what the major pool leaves
    minor0, major0, ratio;         // nursery floor, major grow/shrink step, copy-overhead setpoint;
                                           // seeded at ini, moved by `tune`. untraced: a bake drops them.
+ uintptr_t cbase, croom;          // a compile's outermost C frame (ev.c's c0), 0 outside one, and the stack it may take
+ uintptr_t ask;                   // the words the collector was asked for while it works: an oom's first datum
  union {
   intptr_t v0;
   struct {
@@ -343,6 +352,7 @@ struct g {
      stack,  // the books checked out, ours on top; the macro table is stack[zero]'s, and
              // love's `book` is this one's head. GC-forwarded in v0..end.
      scare_a, scare_b, // the last scare's condition data, stashed at the raise for
+     scare_c,    // a C lane's reason, (tag . datum), for the scare it fails with: the re-raise takes it
      hook[hook_n], // the hooks (enum hook)
      lib,        // the library: name -> book. `borrow` takes one onto the stack, `cite`
                  // reads one where it stands, `leave` checks the written one back in.
@@ -453,6 +463,12 @@ int k_horn_open(int rate);
 intptr_t k_horn_write(unsigned char const*, uintptr_t);
 uintptr_t k_horn_lag(void);
 void k_horn_close(void);
+// the seat's mic, the caller's channels of 16-bit: open -> 0 | -1 none; read -> bytes of
+// whole frames, 0 dry, -1 gone; lag -> frames heard and unread
+int k_horn_in_open(int rate, int chans);
+intptr_t k_horn_read(unsigned char*, uintptr_t);
+uintptr_t k_horn_in_lag(void);
+void k_horn_in_close(void);
 // ..and the same face on whichever seat this is: k_horn_* under inle, the host's own
 // card otherwise (src/love/horn.c keeps that one open). what src/inle/doomsnd.c calls.
 int love_horn_open(int rate);
@@ -526,7 +542,7 @@ int raw_mode(intptr_t on);                      // the (raw on) latch; main.c's 
 size_t host_selfpath(char*, size_t);               // the one selfpath door (per-OS ladder)
 // ..i/image.c, the carried image and the self-bake..
 int image_bake(struct g*, char const *out, int bare), baked_pick(void const **blob, uintptr_t *blen);
-struct g *image_load(char const*), *image_dump(struct g*, char const*);
+struct g *image_load(char const*, int*), *image_dump(struct g*, char const*);
 extern uint64_t baked_image[];
 extern uintptr_t baked_image_len;
 // ..l/gz.c, the other codecs' doors, and the source the link carries (src/love/noblob.c's zero without one)
@@ -599,6 +615,8 @@ struct image_opt { uintptr_t chunk; uint64_t const *hot; uintptr_t nhot; };
 void *image_save2(struct g*, uintptr_t *outlen, struct image_bad*, struct image_opt const*);
 struct g
  *love_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session; 2: and the image may wake lazily
+int image_why(void const *buf, uintptr_t len);   // a header refused: 0 no, 1 another format, 2 another binary's, 3 other C
+uint64_t image_carried_c(void);                  // the carried C's crc and length, 0 for none
 // a lazy image's pool given up (a major's copy done, a session's end): its pages open, its state gone
 void image_drop(word const *pool);
 // before a warm fork: what any process of this image woke or seated, done here as well
@@ -606,7 +624,7 @@ void image_warm(void);
 void code_warm(struct g *g);
 
 // the terminal scare face: ";; a b\n" (show forms) to the err port from the stashed
-// condition data; the bare oom prints ";; oom@len=N\n".
+// condition data; the bare scare prints ";; oom (ask nursery major)\n".
 void scare_face(struct g*);
 
 extern struct fio love_stdin, love_stdout, love_stderr;
@@ -790,6 +808,7 @@ lvm_t lvm_kcall,
  lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound, lvm_sounds,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
+ lvm_bitlen,
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_aany, lvm_max2, lvm_min2, lvm_floor, lvm_inner, lvm_outer,
  lvm_litp, lvm_hotp,
  lvm_nif,         // codegen backend: emitted bytes -> applicable native value (1-arg / multi-arg)
@@ -798,7 +817,7 @@ lvm_t lvm_kcall,
  lvm_reach_offset,       // (reach-offset x): g->reach' byte offset, what the emitter's `reach` law loads from
  lvm_natp,        // (nat? f): is f a native closure -- its code in the arena
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
- lvm_deferfwd;    // a deferred native's code slot until its compile patches it (map.c)
+ lvm_deferfwd;    // a deferred native's code slot until its compile patches it (tablet.c)
 // the attributes are the declaration: `lvm(n)` is `love_noinline noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both.
 love_noinline noicf lvm_t
@@ -1056,12 +1075,20 @@ static love_inline bool tabp(word _) { return evenp(_) && cell(_)->ap == lvm_map
 extern const word map_gap_cell;   // one definition: map_gap is its address
 #define map_gap ((word) &map_gap_cell)
 #define map_min_cap 4
-static love_inline word map_back(word m) { return cell(m)[1].x; }
-static love_inline uintptr_t map_serial(word m) { return getcharm(cell(m)[2].x); }
-enum { map_head = 4 };   // the header's words, tag included
-static love_inline word *map_slots(word m) { return &cell(map_back(m))[3].x; }
-static love_inline uintptr_t map_len(word m) { return getcharm(cell(map_back(m))[1].x); }
-static love_inline uintptr_t map_cap(word m) { return getcharm(cell(map_back(m))[2].x); }
+// the header and its backing. serial, len and cap are charms, so gc scans both as threads
+struct tablet { lvm_t *ap; word back, serial; };
+struct tablet_back { lvm_t *ap; word len, cap, slot[]; };   // slot: cap k,v pairs
+#define tablet(_) ((struct tablet*)(_))
+#define tablet_back(_) ((struct tablet_back*)(_))
+enum { map_head = sizeof(struct tablet) / sizeof(word) + 1 };   // the header's words, tag included
+// a backing's words for cap slots, tag included
+static love_inline uintptr_t map_back_words(uintptr_t cap) { return Width(struct tablet_back) + 1 + 2 * cap; }
+static love_inline word map_back(word m) { return tablet(m)->back; }
+static love_inline uintptr_t map_serial(word m) { return getcharm(tablet(m)->serial); }
+static love_inline word *map_slots(word m) { return tablet_back(map_back(m))->slot; }
+static love_inline uintptr_t map_len(word m) { return getcharm(tablet_back(map_back(m))->len); }
+static love_inline uintptr_t map_cap(word m) { return getcharm(tablet_back(map_back(m))->cap); }
+static love_inline void map_len_set(word m, uintptr_t n) { tablet_back(map_back(m))->len = putcharm(n); }
 word
  mapget(struct g*, word, word, word),
  stacklook(struct g*, word, word),   // the layered global read: walks g->stack (a chain of books) head-first
@@ -1138,6 +1165,11 @@ static love_inline bool in_live_pool(struct g *g, word const *p) {
  return p >= g->major_base && p < g->major_base + g->major_len; }                  // the major block
 static love_inline union u *tagthread(union u *h, uintptr_t len) {
   return h[len].x = word(h) | thread_tag, h; }
+// a tablet's header at h over backing b, tagged: the word callers hold
+static love_inline word ini_tablet(union u *h, word b, word serial) {
+ struct tablet *t = tablet(h);
+ t->ap = lvm_map_lookup, t->back = b, t->serial = serial;
+ return word(tagthread(h, Width(struct tablet))); }
 #define topof(g) ((word*)g+g->len)
 static love_inline struct tag { union u *head; union u end[]; } *ttag(struct g*g, union u *k) {
  // scan k forward to its terminator; a tenured object lives in the major pool, so pick the range
@@ -1214,6 +1246,7 @@ int code_in(struct g *g, uintptr_t v);
 // the instruction table (src/love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. nif_cell draws the line against a nif's run.
 intptr_t op_index(intptr_t ap), op_resolve(intptr_t i), def_index(intptr_t x), fn_nif(intptr_t f);
+intptr_t image_seat(word v);   // an out-of-pool word's image index, -1 for none (snap.c)
 
 // what a cell hands back as a value, or (). the three refusals are all the machine's own
 // words, never love's: a terminator (the heap's bookkeeping), an instruction the op table

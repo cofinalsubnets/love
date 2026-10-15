@@ -27,8 +27,9 @@ float lm_expf(float);
 #define rz_exp lm_expf
 #endif
 
-enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_lv = 8, rz_tn = 256,
+enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_lv = 8 * sizeof(word), rz_tn = 256,
        rz_na = 11 };   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
+                       // rz_lv: a level halves, so a word's bits hold every chain
 // a vertex in clip space with what rides on it; once projected x y are pixels and z ndc
 struct rz_v { flo_t x, y, z, w, a[rz_na]; };
 struct rz_tex { intptr_t const *px; intptr_t w, h; };
@@ -42,6 +43,7 @@ struct rz {
  flo_t tl[rz_tn + 2];   // the tone at k c / 255 = i / 32, 0 to 8, eased between
  intptr_t *out;
  flo_t *depth;
+ flo_t *pv;              // a batch's vertices once through m and lm: x y z w, the sun's x y z, outside
  struct rz_tex lv[rz_lv];
  int nlv; };
 
@@ -136,14 +138,23 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  int shade = 0, under = r->flags & rz_under;   // the sun's view is asked only where some of the sun falls
  for (int i = 0; r->sm && i < 3; i++) shade |= P[i]->a[5] != 0 || P[i]->a[6] != 0 || P[i]->a[7] != 0;
  for (intptr_t y = y0; y < y1; y++) {
-  flo_t const py = (flo_t) y + (flo_t) 0.5, px0 = (flo_t) x0 + (flo_t) 0.5;
+  // the row's run inside all three edges: each is c + ex x, exact, so where it turns is a
+  // whole x found by division, and the pixels of the box outside it are never walked
+  intptr_t xs = x0, xe = x1;
+  for (int i = 0; i < 3; i++) {
+   int64_t const c = ec[i] + ey[i] * (int64_t) y;
+   if (ex[i] > 0) { int64_t const m = c >= 0 ? 0 : (-c + ex[i] - 1) / ex[i]; xs = m > xs ? (intptr_t) m : xs; }
+   else if (ex[i] < 0) { int64_t const m = c < 0 ? 0 : c / -ex[i] + 1; xe = m < xe ? (intptr_t) m : xe; }
+   else if (c < 0) xe = xs; }
+  if (xs >= xe) continue;
+  flo_t const py = (flo_t) y + (flo_t) 0.5, px0 = (flo_t) xs + (flo_t) 0.5;
   int64_t e[3];
   flo_t a[2 + rz_na];
-  for (int i = 0; i < 3; i++) e[i] = ec[i] + ey[i] * (int64_t) y + ex[i] * (int64_t) x0;
+  for (int i = 0; i < 3; i++) e[i] = ec[i] + ey[i] * (int64_t) y + ex[i] * (int64_t) xs;
   for (int k = 0; k < 2 + rz_na; k++) a[k] = v0[k] + vx[k] * (px0 - x0f) + vy[k] * (py - y0f);
   intptr_t *o = r->out + y * r->W;
   flo_t *dz = r->depth + y * r->W;
-  for (intptr_t x = x0; x < x1; x++) {
+  for (intptr_t x = xs; x < xe; x++) {
    if ((e[0] | e[1] | e[2]) >= 0 && a[0] >= -1 && a[0] <= 1 && a[0] < dz[x] && !(under && o[x] >= 0)) {
     if (r->flags & rz_depth) dz[x] = a[0];
     else {
@@ -205,6 +216,7 @@ static struct rz_v rz_lerp(struct rz_v const *a, struct rz_v const *b, flo_t t) 
 // the planes a triangle is cut at, as d = (x y z w) . p >= 0: the near one, and a guard
 // band far past the screen's edges, which keeps a pixel's sixteenths within an int64's reach
 #define rz_guard 64
+#define rz_side_max ((intptr_t) 1 << 20)   // a frame's side: the edge sums, near 2^21 side^2, stay in reach
 static flo_t rz_side(struct rz_v const *v, int k) {
  switch (k) {
   case 0: return v->z + v->w;
@@ -213,25 +225,32 @@ static flo_t rz_side(struct rz_v const *v, int k) {
   case 3: return rz_guard * v->w - v->y;
   default: return rz_guard * v->w + v->y; } }
 
-// one triangle of the list: to clip space, cut at the planes, then a fan
+// a batch's vertices through the view and the sun's, each once, with the planes each is
+// outside of as bits
+static void rz_verts(struct rz *r, struct tray *vt, intptr_t nv) {
+ flo_t const *m = r->m, *l = r->lm;
+ for (intptr_t i = 0; i < nv; i++) {
+  uintptr_t const b = (uintptr_t) (i * r->stride);
+  flo_t const X = rz_num(vt, b), Y = rz_num(vt, b + 1), Z = rz_num(vt, b + 2);
+  flo_t *o = r->pv + 8 * i;
+  flo_t const x = m[0] * X + m[1] * Y + m[2] * Z + m[3], y = m[4] * X + m[5] * Y + m[6] * Z + m[7],
+              z = m[8] * X + m[9] * Y + m[10] * Z + m[11], w = m[12] * X + m[13] * Y + m[14] * Z + m[15];
+  o[0] = x, o[1] = y, o[2] = z, o[3] = w;
+  o[4] = l[0] * X + l[1] * Y + l[2] * Z + l[3];
+  o[5] = l[4] * X + l[5] * Y + l[6] * Z + l[7];
+  o[6] = l[8] * X + l[9] * Y + l[10] * Z + l[11];
+  o[7] = (flo_t) ((x < -w) | (x > w) << 1 | (y < -w) << 2 | (y > w) << 3 | (z < -w) << 4 | (z > w) << 5); } }
+
+// one triangle of the list: its vertices from rz_verts, cut at the planes, then a fan
 static void rz_draw(struct rz *r, struct tray *vt, intptr_t const ix[3], struct rz_tex const *lv, int nlv) {
+ flo_t const *P[3] = { r->pv + 8 * ix[0], r->pv + 8 * ix[1], r->pv + 8 * ix[2] };
+ if ((int) P[0][7] & (int) P[1][7] & (int) P[2][7]) return;   // all outside one plane
  struct rz_v p[8], q[8];
- int out[6] = { 0 };
  for (int i = 0; i < 3; i++) {
-  flo_t const *m = r->m;
   uintptr_t const b = (uintptr_t) (ix[i] * r->stride);
-  flo_t const X = rz_num(vt, b), Y = rz_num(vt, b + 1), Z = rz_num(vt, b + 2), *l = r->lm;
-  p[i].x = m[0] * X + m[1] * Y + m[2] * Z + m[3];
-  p[i].y = m[4] * X + m[5] * Y + m[6] * Z + m[7];
-  p[i].z = m[8] * X + m[9] * Y + m[10] * Z + m[11];
-  p[i].w = m[12] * X + m[13] * Y + m[14] * Z + m[15];
+  p[i].x = P[i][0], p[i].y = P[i][1], p[i].z = P[i][2], p[i].w = P[i][3];
   for (int k = 0; k < 8; k++) p[i].a[k] = k < r->stride - 3 ? rz_num(vt, b + 3 + (uintptr_t) k) : 0;
-  p[i].a[8] = l[0] * X + l[1] * Y + l[2] * Z + l[3];
-  p[i].a[9] = l[4] * X + l[5] * Y + l[6] * Z + l[7];
-  p[i].a[10] = l[8] * X + l[9] * Y + l[10] * Z + l[11];
-  out[0] += p[i].x < -p[i].w, out[1] += p[i].x > p[i].w, out[2] += p[i].y < -p[i].w;
-  out[3] += p[i].y > p[i].w, out[4] += p[i].z < -p[i].w, out[5] += p[i].z > p[i].w; }
- for (int k = 0; k < 6; k++) if (out[k] == 3) return;
+  p[i].a[8] = P[i][4], p[i].a[9] = P[i][5], p[i].a[10] = P[i][6]; }
  // a triangle inside every plane passes the cuts unchanged, so it skips them
  int n = 3, in = 1;
  for (int k = 0; k < 5 && in; k++)
@@ -267,11 +286,13 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
  intptr_t const nv = (intptr_t) tray_nelem(vt) / r->stride;
  uintptr_t const nt = tray_nelem(tt) / 4;
  intptr_t ct = -1;   // the texture the last triangle used, its levels still in r->lv
+ int seen = 0;   // its vertices put through once a triangle wants them
  r->nlv = 0, r->add = 0;   // ..none yet: what the last batch left is not this one's
  for (uintptr_t i = 0; i < nt; i++) {
   intptr_t const ix[3] = { tray_get_int(tt, 4 * i), tray_get_int(tt, 4 * i + 1), tray_get_int(tt, 4 * i + 2) },
                  t = tray_get_int(tt, 4 * i + 3);
   if (ix[0] < 0 || ix[1] < 0 || ix[2] < 0 || ix[0] >= nv || ix[1] >= nv || ix[2] >= nv) continue;
+  if (!seen) rz_verts(r, vt, nv), seen = 1;
   if (t != ct) ct = t, r->nlv = t < 0 ? 0 : rz_levels(texs, t, r->lv), r->add = t == -2;
   rz_draw(r, vt, ix, r->lv, r->nlv); } }
 
@@ -282,14 +303,20 @@ love_noinline static struct g *host_raster(struct g *g) {
  if (!(a[0] & a[1] & 1) || !galaxyp(a[3]) || tray_nelem(tray(a[3])) < 16 || !rz_batches(a[4], a[5], st)) {
   a[0] = ZeroPoint; return g; }
  intptr_t const W = getcharm(a[0]), H = getcharm(a[1]);
- if (W < 1 || H < 1 || W > 4096 || H > 4096) { a[0] = ZeroPoint; return g; }
- uintptr_t const n = (uintptr_t) (W * H),
-                 fw = b2w(tray_bytes(love_Z, 2, n)), dw = b2w(tray_bytes(love_R, 2, n));
- if (!ok(g = have(g, fw + dw))) return g;
+ if (W < 1 || H < 1 || W > rz_side_max || H > rz_side_max) { a[0] = ZeroPoint; return g; }
+ uintptr_t nv = 0;   // the most vertices a batch has
+ if (galaxyp(a[4])) nv = tray_nelem(tray(a[4])) / st;
+ else for (word v = a[4]; chainp(v); v = B(v)) nv = tray_nelem(tray(A(v))) / st > nv ? tray_nelem(tray(A(v))) / st : nv;
+ uintptr_t const n = mulsat((uintptr_t) W, (uintptr_t) H),   // past every heap: have refuses it
+                 fw = b2w(tray_bytes(love_Z, 2, n)), dw = b2w(tray_bytes(love_R, 2, n)),
+                 pw = b2w(tray_bytes(love_R, 1, 8 * nv + 1));
+ if (!ok(g = have(g, fw + dw + pw))) return g;
  a = g->sp;
- struct tray *fr = ini_tray(bump(g, fw), love_Z, 2), *dp = ini_tray(bump(g, dw), love_R, 2);
+ struct tray *fr = ini_tray(bump(g, fw), love_Z, 2), *dp = ini_tray(bump(g, dw), love_R, 2),
+             *pt = ini_tray(bump(g, pw), love_R, 1);
+ pt->shape[0] = 8 * nv + 1;
  fr->shape[0] = dp->shape[0] = (uintptr_t) H, fr->shape[1] = dp->shape[1] = (uintptr_t) W;
- struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(fr), .depth = tray_data(dp) };
+ struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(fr), .depth = tray_data(dp), .pv = tray_data(pt) };
  // the opts, and the sun's view and depths where they come as a list; read after the
  // allocation, which may move them
  word o = a[7], sv = ZeroPoint, sd = ZeroPoint;
@@ -357,6 +384,27 @@ love_noinline static struct g *host_frame_bytes(struct g *g) {
  return g; }
 static lvm(lvm_frame_bytes) { LvmCallp(g, 2, host_frame_bytes) }
 
+// (frame-paint f w s P W): a frame w pixels wide onto the cask P, W 32-bit xrgb pixels a
+// row, each of the frame's an s by s square from the corner, clipped to P; answers P
+static lvm(lvm_frame_paint) {
+ word const f = Sp[0], P = Sp[3];
+ if (galaxyp(f) && caskp(P) && (Sp[1] & Sp[2] & Sp[4] & 1)) {
+  struct tray *t = tray(f);
+  struct str *d = cask(P)->str;
+  intptr_t const w = getcharm(Sp[1]), s = getcharm(Sp[2]), W = getcharm(Sp[4]);
+  if (w > 0 && s > 0 && W > 0) {
+   intptr_t const h = (intptr_t) tray_nelem(t) / w, H = (intptr_t) len(d) / 4 / W,
+                  cw = w * s < W ? w * s : W, rows = h * s < H ? h * s : H;
+   uint8_t *o = (uint8_t*) txt(d);
+   for (intptr_t y = 0; y < rows; y++) {
+    uint8_t *row = o + 4 * y * W;
+    if (y % s) { memcpy(row, row - 4 * W, (size_t) (4 * cw)); continue; }   // a square's rows alike
+    for (intptr_t i = y / s * w, x = 0; x < cw; i++) {
+     uint32_t const c = (uint32_t) tray_get_int(t, (uintptr_t) i);
+     for (intptr_t k = 0; k < s && x < cw; k++, x++)
+      row[4 * x] = (uint8_t) c, row[4 * x + 1] = (uint8_t) (c >> 8), row[4 * x + 2] = (uint8_t) (c >> 16), row[4 * x + 3] = 0; } } } }
+ love_musttail return Answerp(4, P); }
+
 // (lace cols): a list of k columns laced into one float tray, row i the i-th of each --
 // facets's verts from their parts. a tray column n long, a number the same in every row;
 // () when the trays' lengths differ, or a column is neither
@@ -386,4 +434,5 @@ static lvm(lvm_lace) { LvmCall(g, host_lace) }
 
 LvDef("facets", raster, 8, NULL);
 LvDef("frame-bytes", frame_bytes, 3, NULL);
+LvDef("frame-paint", frame_paint, 5, NULL);
 LvDef("lace", lace, 1, NULL);

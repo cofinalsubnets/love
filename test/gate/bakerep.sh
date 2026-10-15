@@ -70,6 +70,30 @@ else
   cmp -s "$w/p1" src/tools/hot.prof || fail "src/tools/hot.prof is stale for this tree: make hotprof"
 fi
 
+# ..and the heap is the crew's, not the carried source's: prof_raw differs from love.raw only in
+# the hot.prof it carries, so their images are one byte string -- the header's fingerprint and
+# carried-C digest included, which a binary's address would break. a table keyed by a binary
+# address, which the carried source moves, breaks it too. both bake to one path: the path a
+# bake writes is in its heap
+if [ "$praw" != "$ho/love.raw" ]; then
+  for r in p:"$praw" r:"$ho/love.raw"; do
+    env LOVE_NO_IMAGE=1 "${r#*:}" bake -l "$ho/.dist-cat.l" "$w/img" > "$w/img.log" 2>&1 \
+      || { cat "$w/img.log"; fail "the image bake of ${r#*:} failed"; }
+    mv "$w/img" "$w/i${r%%:*}" || fail "cannot keep the image of ${r#*:}"
+  done
+  cmp -s "$w/ip" "$w/ir" || fail "the carried source is in the heap: prof_raw and love.raw bake different images"
+  # ..and each wakes the other's: the tables and the C are one tree's
+  out=$(env -u LOVE_NO_IMAGE "$praw" wake "$w/ir" -e '(puts "woke")' 2>&1)
+  case $out in *woke*) ;; *) fail "prof_raw will not wake love.raw's image: [$out]" ;; esac
+  # ..and a header naming other tables (bytes 32..39, fp) or other C (48..55, src) is refused, saying which
+  for f in 32:"tables differ" 48:"other C"; do
+    o=${f%%:*}
+    { head -c $o "$w/ir"; printf 'XXXXXXXX'; tail -c +$((o + 9)) "$w/ir"; } > "$w/ix"
+    out=$("$praw" wake "$w/ix" -e '(puts "woke")' 2>&1)
+    case $out in *"${f#*:}"*) ;; *) fail "a header with byte $o moved wakes or says the wrong thing: [$out]" ;; esac
+  done
+fi
+
 # ..and the thing still has to WAKE: a bake that is reproducible and dead passes everything
 # above. GREP, never a whole-output compare -- `-e` prints the form's value as well as
 # anything it said, so a probe that puts "x" answers `x"x"`.

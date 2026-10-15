@@ -10,7 +10,7 @@
 ; answers for none of them -- `files` is true there and not enough, so these laws ask
 ; for a kernel underneath. run.l guards the same way, for the same kind of reason.
 (!hosted ? 0
-(: d "out/.fs-nif-smoke"
+(: d ("out/.fs-nif-smoke." + show (getpid 0))        ; per process: shards run at once
    a (d + "/a") b (d + "/b") l (d + "/l")
    (mkdir d 493,                                    ; EEXIST from a prior run is fine
     unlink a, unlink b, unlink l,                   ; a clean slate, tolerated if absent
@@ -119,5 +119,5 @@
            ('badarg = (spawn ["true" ("a" + string 0)]))
            (two? (stat d)))),
 
-    unlink l, unlink b,
+    unlink l, unlink b, rmdir d,
     test_fin ())))

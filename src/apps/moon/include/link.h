@@ -40,7 +40,7 @@ typedef struct {
   Elf32_Word  e_flags;
   Elf32_Half  e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx;
 } Elf32_Ehdr;
-#ifdef __i386__
+#ifdef __ILP32__
 #define ElfW(t) Elf32_##t
 #else
 #define ElfW(t) Elf64_##t

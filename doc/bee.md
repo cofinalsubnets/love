@@ -29,7 +29,7 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --mcp**
 
-**love bee --lock** \[**--heavy**\] \[**--out** *dir*\] **--** *command* ...
+**love bee --lock** \[**--heavy** \[**--no-row** *reason*\]\] \[**--out** *dir*\] **--** *command* ...
 
 **love bee --avatar** \[*name*\]
 
@@ -47,6 +47,12 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --hosts**
 
+**love bee --lanes-doc** \| **--lanes-map**
+
+**love bee --lanes** \[*base* \[*head*\]\]
+
+**love bee --gate** *queue*
+
 **love bee --nest** *dir*
 
 **love bee --node**
@@ -61,8 +67,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 - **shell**, which runs a command line in **lush -a** (this binary's shell, with love's own verbs ahead of PATH);
 - **list_sessions** and **send_message**, described under SESSIONS AND MESSAGES;
 - **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS;
-- **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS;
-- **queue_read**, **queue_row**, **queue_lead**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
+- **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS, and **lanes**, after them;
+- **queue_read**, **queue_row**, **queue_lead**, **queue_gate**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
 - in a pane of **love mitty**, **pane_list**, **pane_read**, **pane_type**, **pane_open**, **pane_focus** and **pane_close**: the desktop's other panes by id, read as text, typed into as keys (a newline is Enter, and the answer is the pane once quiet), opened beside, given the keyboard, closed. The model's own pane is never typed into or closed.
 
 A write, an edit, a shell command, a job's start, a message to another session, a queue write, a spawn and a stop of another bee, and typing into, opening, focusing or closing a pane ask y/n before they run, unless **-y** is given, and so does **read_file** of a path outside the working tree (a link out of it included). The rest run without asking. An ask shows the whole input, a control character as **^X**; on the full screen **y** runs it only once every row has been on the screen, and the arrows scroll it.
@@ -172,7 +178,13 @@ Asking stays with the caller. A bee's child asks through **approve**. A Claude C
 
 The machine is shared, and **src/apps/locks.l** keeps its locks: an exclusive lock per resource, such as one make per **out/**, and a pool of heavy tickets, at most **(heavy-max** *n***)** at once (2 unless set) and none granted while available memory is below **(mem-floor** *gb***)**. A lock is held by a pid, so it lives as long as its holder. A bee holds its locks under its own pid, the one on its card, even when its **--mcp** child asks for them. That way a lock outlives a Claude child that ends and dies with the bee.
 
-The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*), **lock_release** and **lock_list**; the last two run without asking. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **src/apps/locks.l** says so.
+The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*, *no_row*), **lock_release** and **lock_list**; the last two run without asking. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **src/apps/locks.l** says so.
+
+A heavy ticket belongs to a queue row. In a git work tree that has queues under **refs/queue/**, **--heavy** asks at the tree's top: the directory above **--out**'s, or the working directory. It is refused, naming the rule, while no row carries the tree's branch or its HEAD. A gate writes its row **gating** with that head first, so the head then matches. **--no-row** *reason* (the tool's *no_row*) passes, and the reason rides the lock's note, where **lock_list** shows it. Fair reasons are the leader's own work, a measurement gwen asked for, and a clean build before a join. A directory below a tree's top, such as scratch under **out/**, is not asked, and neither is a tree with no queue.
+
+Which lanes a change owes is data, **src/apps/lanemap.l**: path rules, each naming the lanes owed by a change that touches its paths, the heavy lanes, and the chains and alone set that **test/gate/lanes.sh** runs lanes by. **love bee --lanes-doc** prints AGENTS.md's table, which is laid from it, and test/host/bee.l fails when the two disagree. **--lanes-map** prints lanes.sh's chains and alone set.
+
+**love bee --lanes** and the **lanes** tool (*branch*, *base*; it runs without asking) answer the lanes a change owes, in the order to run them. The change is *head*'s (HEAD unless given) against *base*, or, unless given, against where *head* left the branch of the one queue here. Its paths come from **git diff --name-only**, or **sb paths** in the hub when *base* is no commit here. A rule owes its lanes to every path it matches. A lane that another owed lane runs is left out: its prerequisites and its recipe's **$(MAKE)** lines, read from **make -pq**. The light lanes come first, then the heavy ones, each cheapest first. **test** always heads the list and **test_slow** always closes it. Each line is the lane, **light** or **heavy**, its wall seconds on a shared box (**?** when unmeasured) and the paths that owed it.
 
 # HOSTS
 
@@ -284,6 +296,7 @@ A queue is lines:
 - the base line, *branch* *sha*, with an optional note after **#**;
 - **next** *n*, the position the next join takes, so numbers never repeat;
 - optionally **sync** *text*, what the queue lands toward, and **pre** *text* lines, conditions before that;
+- on git, optionally **keep** *position* ..., the rows that keep their own slot (**queue_row** *keep*);
 - a row per merge: *position* *session* *branch* *gated-on* *gated-head* *state*, with an optional note after two spaces and **#**.
 
 *gated-on* is the base's sha for the head row, and the row above's *gated-head* for any other. *state* is **waiting**, **gating**, **green** or **folded-into-***N*. A field not known yet is **-**.
@@ -292,7 +305,7 @@ When a queue does not exist yet, **queue_row** makes it on bee's standard header
 
 ## The rules
 
-**Join.** A session adds its row at the bottom when its branch is ready to gate. The order is fixed at join, never by who finishes a gate first.
+**Join.** A session adds its row at the bottom, **waiting**, once its branch's light lanes pass. The heavy lanes (**love bee --lanes** marks them) run only in the queue, once for a union, at its head. The order is fixed at join, never by who finishes a gate first.
 
 **Stacked.** The head row gates its branch merged with the base. Row *k*+1 gates its branch merged with row *k*'s gated head, so when *k* lands the base already equals the tree *k*+1 certified, and *k*+1 lands without gating again. A failure, or a new head above, re-gates only the rows behind it.
 
@@ -302,7 +315,9 @@ When a queue does not exist yet, **queue_row** makes it on bee's standard header
 
 **Land by psid.** On an sb ledger a row's gated head is the *psid* of the patch set it gated: the worker banks that set (**sb bank** *name*) and deposits it in the hub (**sb sync --keep** *hub*), and the bank travels with it. The green head row lands it with **sb -C** *hub* **take** *psid*, and only when the hub's head is the base line and lies inside that set. The hub's tree is a pure function of the set it realizes, so the hub then realizes exactly the set that was gated, and there is no merge to check. After the landing the hub's head must be that psid, and the base line moves to it.
 
-**The git mirror.** An sb queue whose header has a **mirror** *path* *branch* \[*keep* ...\] line (the leader's, set with **queue_lead**) writes each landing to git: **queue_landed** builds the hub's tree in a private index from the hub's blobs, keeps the parent's paths under each *keep* prefix (what the hub's store leaves out, such as generated artifacts), and commits it onto *branch* of the repository at *path*, the row's note its message, by compare-and-swap. A tip that already has that tree is left alone. It refuses a *branch* checked out anywhere but the hub, which would move under that checkout. A publish row's landing passes **publish**, the directory on the hub's box where the publisher laid its generated files: the mirror's commit then takes every *keep* path from there instead of from the parent, so the generated files land in the same commit as the source they were built from. When the mirror does not take the landing, the row stays. does not take the landing, the row stays.
+**The git mirror.** An sb queue whose header has a **mirror** *path* *branch* \[*keep* ...\] line (the leader's, set with **queue_lead**) writes each landing to git: **queue_landed** builds the hub's tree in a private index from the hub's blobs, keeps the parent's paths under each *keep* prefix (what the hub's store leaves out, such as generated artifacts), and commits it onto *branch* of the repository at *path*, the row's note its message, by compare-and-swap. A tip that already has that tree is left alone. It refuses a *branch* checked out anywhere but the hub, which would move under that checkout. A publish row's landing passes **publish**, the directory on the hub's box where the publisher laid its generated files: the mirror's commit then takes every *keep* path from there instead of from the parent, so the generated files land in the same commit as the source they were built from. When the mirror does not take the landing, the row stays.
+
+**The shadow.** A git queue whose header has a **shadow** *hub* *branch* \[*keep* ...\] line (the leader's, set with **queue_lead**; *hub* an absolute path) records each landing on sb as well. After **queue_landed** writes the queue, it lays the landed commit's tree into the sb nest at *hub* (made on the first landing), removes the paths the commit lacks, records it, banks it as **gwen-**_sha_, and writes it through the mirror to *branch* of the queue's repository. The tree on *branch* must be the landed commit's outside the *keep* prefixes. A mismatch, or any step that fails, stops the shadow: *hub*.shadow.stop says why, the answer says STOPPED, and the leader is told. A stopped shadow records nothing until the file is removed. Every landing appends a line to *hub*.shadow.log: the sha, the psid, match or differs, the milliseconds, and the store's size in KB. The landing itself never depends on the shadow. **love bee --shadow** *hub* *branch* *sha* \[*keep* ...\] records one commit the way a landing does, to seed the hub or to record by hand, and **love bee --shadow-check** *nest* *branch* *sha* \[*keep* ...\] says whether the tree recorded in *nest* (a restore, say) is that commit's.
 
 A session works in a *worker nest*, as it would in a git worktree: **love bee --nest** *dir* makes *dir* from the hub (**SB_HUB**, else **(hub** ...**)**), pulling the hub's store and taking its head (**sb sync --take**), and seeding *dir*/**out/** from the hub's build when the hub is on this box. It lays the nest's verbs in *dir*/**.sb/bin**: a script per love verb the host's PATH lacks (**sb**, **cook**, **kore** ...), each running the nest's own **out/love** when built, else **love**. The tree's **.claude/settings.json** puts that directory first on its sessions' PATH (a SessionStart hook through **CLAUDE_ENV_FILE**), so a session in a nest says **sb** bare and keeps the host's own **cc**, **ssh** and **make**; a shell outside the nest has no **sb** and says **love sb**. It refuses a *dir* that is already there, except a nest, whose verbs it lays again. A hub on another box is *name***@***box* (NEW NODE).
 
@@ -316,11 +331,12 @@ A session works in a *worker nest*, as it would in a git worktree: **love bee --
 
 The leader hands off by rewriting the line to a live session that agreed, and says so to everyone. While the leader has no live session, the head row's session writes **leader** *itself* **acting**. The leader never lands, reorders or gates on another's behalf.
 
-**Merge, not line up.** A waiting row folds into the earliest waiting row ahead of it, never into one that is gating, and a join while a row waits folds into that row. The leader writes **folded-into-***N* and tells both owners. The absorbing row merges every folded head onto its gated-on, gates the union of their lanes once, and lands one merge. A red in a folded branch's files goes to that branch's owner. A slow fix unfolds that branch so the rest can land. A merge-tree conflict between the heads goes to both owners with the hunk, and neither side is picked. That conflict, or an owner who objects, keeps the row its own slot, behind the fold. A re-cut row (a tree-wide rename) takes folds like any waiting row: its owner merges the join in the old layout, and the re-cut moves it.
+**Merge, not line up.** Waiting rows fold into one union. A join folds into the earliest waiting row ahead of it, never into one that is gating. On a git queue, bee writes the fold itself when the join is waiting with its head. The joining head must merge clean with the absorbing row's head and with each head already folded into it, except in the paths a union lays again (**src/tools/hot.prof**). bee then tells both owners. Otherwise the leader writes **folded-into-***N* and tells them. The absorbing row merges every folded head onto its gated-on and runs each owed heavy lane once on that merged tree, the slow lane last. It then lands one merge. A red goes to the owner of its branch's files, and that branch splits out so the rest can land. A merge-tree conflict between the heads goes to both owners with the hunk, and neither side is picked. That conflict, or a row passed **keep 1**, keeps its own slot, behind the fold. A publish row folds into the waiting union and gates with it once. **test_gcstress** then runs in the background after the push. A re-cut row (a tree-wide rename) takes folds like any waiting row: its owner merges the join in the old layout, and the re-cut moves it.
 
 **The long queue.** A queue is *long* when two or more rows are waiting or gating, or when more sessions wait for a heavy lock than there are slots. Then, without being asked:
 
 - branches with one owner join as one union: each stops at its own light lanes, and the union gates once, the slow lane last;
+- no heavy lane runs per branch: each runs once, in the union at the queue's head;
 - sessions with neighbouring work offer each other a fold, and the leader places it;
 - a build seeds its **out/** from a built tree of its base with `cp -a`, which keeps file times -- never `cp -r`, which stamps every output newer than its sources so nothing rebuilds; when `cp -a` is refused, build clean;
 - nothing holds a heavy slot it is not using.
@@ -338,21 +354,25 @@ Every tool reads the queue fresh and writes it by compare-and-swap, reading agai
 **queue_read** (*queue*)
 :   The queue's text as it stands: header, rules, leader and rows. It writes nothing and runs without asking. A queue on another box (**@***box*) is read there, like any queue call, so a node reads the hub's queues with it.
 
-**queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*, *row*)
-:   Sets exactly one of the caller's rows. A session holds a row per branch: the write sets the row **row** names, else the row carrying **branch**, else the caller's only row, and a **branch** it holds no row for joins a new one. A new row joins at the bottom, at the **next** line's position, and moves that line past it; a queue without the line starts one past the highest position and writes it. **left** removes the row. Fields not given keep their values. It refuses:
+**queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*, *row*, *keep*)
+:   Sets exactly one of the caller's rows. On a git queue, a **waiting** join with a *gated_head* folds into the earliest waiting row ahead, as **Merge, not line up** says, and the answer says so. **keep 1** puts the row on the **keep** line: no join folds into it, and it folds into none. **keep 0** takes it off, and rows gone drop off the line. A session holds a row per branch: the write sets the row **row** names, else the row carrying **branch**, else the caller's only row, and a **branch** it holds no row for joins a new one. A new row joins at the bottom, at the **next** line's position, and moves that line past it; a queue without the line starts one past the highest position and writes it. **left** removes the row. Fields not given keep their values. It refuses:
 
     - a state outside the list above;
     - a write that cannot say which row, from a session holding more than one, naming neither *row* nor *branch*;
     - a new *branch* written onto a row that is folded or gating (pass the branch alone, to join a new row);
-    - a fold by anyone but the leader;
+    - a fold by anyone but the leader (bee's own fold on a join aside);
+    - *keep* on an sb ledger, where the leader places every fold;
     - a fold into a row that is missing, not waiting, or not ahead;
     - a fold of a row that others fold into;
     - a *gated_on* or *gated_head* that does not resolve where the queue lives: a commit in the repository (git), or a set the hub holds (sb). The answer names it and says to paste it from **git rev-parse** or **sb psid**.
 
     Only the leader may pass **session** to edit another's row, **base** to move the base line, or **position** to place a new row at a number no row holds. **leader** names the leader of a queue being made. When the queue is long, the answer says so and tells the model to fold, not line up.
 
-**queue_lead** (*queue*, and any of *leader*, *sync*, *pre_add*, *pre_drop*, *base*, *mirror*)
-:   The leader's own lines, for the leader alone. **leader** hands the queue on. **base** moves the base line, touching no row. **sync** sets the sync line, and **-** removes it. **pre_add** adds a pre line, and **pre_drop** *n* drops the *n*th. **mirror** sets an sb queue's mirror line, and **-** removes it. The head row's session may pass itself as **leader** while the leader has no live session in the hive. That writes **leader** *itself* **acting**.
+**queue_gate** (*queue*, *dir*)
+:   Gates the caller's row on a git queue: the head row, or the row behind a green one, its union merged and committed in *dir* (the working directory unless given), with its **out/** built. It refuses a row that is folded, a row behind one that is not green, and a *dir* with uncommitted changes or no **test/gate/lanes.sh**. It writes the row **gating** with *dir*'s HEAD and starts **love bee --gate** *queue* there, detached in its own group, as the caller. That runner refuses to start when it inherited any ignored signal, since every lane would inherit it too. It runs the heavy lanes the change owes from the row's gated-on (**love bee --lanes**), the slow lane last, through **test/gate/lanes.sh -d out/lanes-gate --slow** under the heavy lock (**love bee --lock --heavy**). Then it writes the row **green**, its note ending **| gate** *sha*: *lane***=***exit* for each lane, or **waiting** with the same note when a lane is red. Each red goes to the owners of the paths that owed it: a folded row's owner by its own head's change from the row's gated-on, and a lane no member's paths owed to the row's owner. The caller hears the result too. The log is *dir***/out/gate.log**.
+
+**queue_lead** (*queue*, and any of *leader*, *sync*, *pre_add*, *pre_drop*, *base*, *mirror*, *shadow*)
+:   The leader's own lines, for the leader alone. **leader** hands the queue on. **base** moves the base line, touching no row. **sync** sets the sync line, and **-** removes it. **pre_add** adds a pre line, and **pre_drop** *n* drops the *n*th. **mirror** sets an sb queue's mirror line, and **-** removes it. **shadow** sets a git queue's shadow line, and **-** removes it. The head row's session may pass itself as **leader** while the leader has no live session in the hive. That writes **leader** *itself* **acting**.
 
 **queue_land** (*queue*)
 :   Answers how to land the caller's row, and changes nothing, except that for a row owned on another box it does the hub's **take** itself, since only the hub's box can, and says the head it reached. The row must be green and at the head. While the row ahead is merged onto the base (or taken by the hub) but has not yet called **queue_landed**, it is still landing, its fast gate running in the base's checkout, and the answer says to wait for it. The row's gated-on and gated head must resolve here, as **queue_row** requires (and so must they for **queue_landed**). On git, the base branch must be where the base line says, and **git merge-tree --write-tree** of the base and the gated head must give the gated tree. The answer is the checkout of the base, then **git rev-parse** of the base and the sha it must print, **git merge --no-ff** *sha*, **git rev-parse 'HEAD^{tree}'** with the tree it must print, and the fast gate under the checkout's out/ lock (**love bee --lock --out** *dir***/out -- make test**). On sb, the hub's head must be the base line, the hub must hold the set the gated psid names, and the head must lie inside it (**sb within head** *psid*). The answer is **sb -C** *hub* **take** *psid*, then **sb -C** *hub* **psid** and the psid it must print.

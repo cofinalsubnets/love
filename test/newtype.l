@@ -107,6 +107,9 @@
     (1 /// 2 = 2 /// 3 * 3 /// 4)    ; 2/3 * 3/4 = 1/2
     (1 /// 2 = 2 /// 4)                ; reduced on construction
     (1 /// 2 = (/// [1 2]))             ; the 2-list form (what show reads back)
+    (1 /// 6 = (1 /// 3) /// 2)  (2 = (4 /// 3) /// (2 /// 3))   ; a rational operand divides exactly
+    !(1 /// 0)  !(/// [1 0])  !((1 /// 3) /// 0)  !((1 /// 3) /// (1 /// 0))   ; by zero -> ()
+    !("ab" /// 2)  !(2 /// "ab")  !([1 2] /// 3)                 ; a non-number -> ()
     ; show is reduced, and reparsable -- which wants the payload quoted: a bare (1 2)
     ; in a form is an application, so the old (q (1 2)) read back as q applied to 2; now the
     ; rational wears the operator, which reads back as itself.

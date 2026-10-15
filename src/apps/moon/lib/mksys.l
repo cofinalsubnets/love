@@ -19,6 +19,7 @@
    (mksys-a64 dst) (mksys-as 'a64 dst)
    (mksys-rv64 dst) (mksys-as 'rv64 dst)
    (mksys-i386 dst) (mksys-as 'i386 dst)
+   (mksys-arm dst) (mksys-as 'arm dst)
    (mksys-freebsd dst) (mksys-as 'x64 dst)   ; one object serves both kernels
    (mksys-as arch dst) (write-bytes dst (mksys-bytes arch))
    ; the netbsd/aarch64 dispatch table. That kernel takes the syscall number
@@ -310,6 +311,97 @@
          (br eq tp-none)
          (raw (101 161 0 0 0 0))     ; mov eax, gs:[0]
          (label tp-none)
+         (ret))
+
+         (arch = 'arm)
+         ; the arm lane, linux eabi alone: aapcs args in r0-r3 then the stack, the
+         ; kernel's in r0-r5 with the number in r7 through svc 0. the jmp_buf: [0..28]
+         ; r4-r11, [32] sp, [36] lr, [40..103] d8-d15, the 8-byte mask at [104].
+         '(
+         (label __love_sys)
+         (push r4) (push r5) (push r7)
+         (mov r7 r0)                 ; r7 <- n
+         (mov r0 r1)                 ; r0 <- a
+         (mov r1 r2)                 ; r1 <- b
+         (mov r2 r3)                 ; r2 <- c
+         (ld r3 sp 12)               ; r3 <- d, past the three pushes
+         (ld r4 sp 16)               ; r4 <- e
+         (ld r5 sp 20)               ; r5 <- f
+         (sys)
+         (pop r7) (pop r5) (pop r4)
+         (ret)
+
+         (label __sigsetjmp)
+         (st r0 0 r4) (st r0 4 r5) (st r0 8 r6) (st r0 12 r7)
+         (st r0 16 r8) (st r0 20 r9) (st r0 24 r10) (st r0 28 r11)
+         (mov r12 sp)                ; str cannot take sp
+         (st r0 32 r12)
+         (st r0 36 lr)
+         (lea r12 r0 40)
+         (raw (140 236 16 139))      ; vstmia r12, {d8-d15}
+         (lea r2 r0 104)             ; oldset
+         (push r7)
+         (li r0 0)                   ; SIG_BLOCK
+         (li r1 0)                   ; NULL (read only)
+         (li r3 8)                   ; sigsetsize
+         (li r7 175)                 ; rt_sigprocmask
+         (sys)
+         (pop r7)
+         (li r0 0)
+         (ret)
+
+         (label siglongjmp)
+         (mov r4 r0)                 ; buf and val ride callee-saved through the kernel
+         (mov r5 r1)
+         (li r0 2)                   ; SIG_SETMASK
+         (lea r1 r4 104)             ; the saved mask
+         (li r2 0)
+         (li r3 8)
+         (li r7 175)
+         (sys)
+         (mov r0 r5)
+         (cmp r0 0)
+         (br ne lj-live)
+         (li r0 1)
+         (label lj-live)
+         (lea r12 r4 40)
+         (raw (156 236 16 139))      ; vldmia r12, {d8-d15}
+         (ld r5 r4 4) (ld r6 r4 8) (ld r7 r4 12) (ld r8 r4 16)
+         (ld r9 r4 20) (ld r10 r4 24) (ld r11 r4 28)
+         (ld r12 r4 32)
+         (mov sp r12)
+         (ld lr r4 36)
+         (ld r4 r4 0)                ; r4, last, off itself
+         (jmpr lr)
+
+         (label __love_sigret)
+         (li r7 173)                 ; rt_sigreturn
+         (sys)
+
+         ; -- __love_clone(flags, sp, ptid, ctid, tls): arm's clone orders (flags sp ptid
+         ;    tls ctid), tls setting TPIDRURO. the child wakes on sp, where its caller laid
+         ;    [fn arg], and calls fn(arg)
+         (label __love_clone)
+         (push r4) (push r7)
+         (mov r4 r3)                 ; r4 <- ctid
+         (ld r3 sp 8)                ; r3 <- tls, the stack arg past two pushes
+         (li r7 120)                 ; clone
+         (sys)
+         (cmp r0 0)
+         (br ne clone-out)
+         (ld r0 sp 4)
+         (ld r12 sp 0)
+         (callr r12)
+         (li r0 0)
+         (li r7 1)                   ; exit
+         (sys)
+         (label clone-out)
+         (pop r7) (pop r4)
+         (ret)
+
+         ; -- __love_tp: TPIDRURO, 0 in the first thread
+         (label __love_tp)
+         (raw (29 238 112 15))       ; mrc p15, 0, r0, c13, c0, 3
          (ret))
 
          (arch = 'a64)
@@ -728,7 +820,7 @@
                   (arch = 'a64)
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
                     "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp")
-                  (arch = 'i386)
+                  (elem arch '(i386 arm))
                   '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp")
                   '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp"))
                () () () () () () ())))

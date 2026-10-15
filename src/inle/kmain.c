@@ -219,9 +219,24 @@ static intptr_t kb_readn(int fd, unsigned char *dst, uintptr_t n) {
 
 static bool kb_ready(int fd) { return k_kb_poll(), kkb.qh != kkb.qt; }
 
+// the console's cluster pool grown when it fills: twice the slots past the header's, the
+// screen laid again in a bigger block. a program's write grows it; kputc, which may run
+// from a fault, keeps what there is
+static void k_cb_grow(void) {
+  uint32_t const most = cb_clumax - cb_nclu, add = kcb->cx ? kcb->cx : cb_nclu,
+                 cx = add < most - kcb->cx ? kcb->cx + add : most;
+  uintptr_t const n = cb_laid(kcb);
+  struct cb *c = kmallocw(b2w(n + cb_xsize(cx - kcb->cx)));
+  if (!c) return;
+  memcpy(c, kcb, n);
+  cb_xclu(c, cx);
+  struct cb *const old = kcb;
+  kcb = c, kfree(old); }   // published whole before the old goes, as k_cb_remake does
+
 // slot 1: serial console -- the framebuffer when there is one, always mirrored to COM1.
 static void serial_putc1(int fd, int c) {
   if (kcb) cb_putc(kcb, c);
+  if (kcb && kcb->cfull && kcb->cx < cb_clumax - cb_nclu) k_cb_grow();
   serial_putc(c); }
 
 // kq's drops, said before the frame goes up.
@@ -752,13 +767,15 @@ static int k_row(char *b, int at, char const *k, uintptr_t v) {
   return at; }
 
 static int k_meminfo(char *b) {
-  uintptr_t free = 0, blocks = 0, big = 0;
+  uintptr_t free = 0, blocks = 0, big = 0, up = 1;
   for (struct mem const *m = kmem; m; m = m->next)
-    free += m->len, blocks++, big = m->len > big ? m->len : big;
+    free += m->len, blocks++, big = m->len > big ? m->len : big,
+    up &= !m->next || after((struct mem*) m) < m->next;      // ascending, no two touching
   int at = k_row(b, 0, "ram-words", kram_words);
   at = k_row(b, at, "free-words", free);
   at = k_row(b, at, "free-blocks", blocks);
   at = k_row(b, at, "free-largest", big);
+  at = k_row(b, at, "free-ordered", up);
   // heap bytes only: a baked row costs the image, not the RAM this file is about.
   uintptr_t ents = 0, bytes = 0;
   for (int i = 0; i < k_fs.n; i++)
@@ -1525,7 +1542,7 @@ static lvm(lvm_kexec) {
 
 // --- the SVM spike (x64 only; src/inle/x64/svm.c). (svm ()) is the capability, (svm-run ())
 // runs one guest, answering (exitcode rax rip) or ().
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
 
 static lvm(lvm_svm) {
   Sp[0] = k_svm_ok() ? putcharm(1) : ZeroPoint;
@@ -1857,8 +1874,9 @@ static bool k_cb_remake(void) {
   uint16_t const orows = old->rows, ocols = old->cols;
   if (rows == orows && cols == ocols) return fbwash(), true;  // same grid, new pixels
   uint32_t sn = k_sn(rows, cols), hl = k_hl(cols), tw = 1;
-  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols) + cb_tsize(rows, cols)));
-  if (!c) sn = hl = tw = 0, c = kmallocw(b2w(cb_size(rows, cols, 0)));   // no room: the grid alone
+  uintptr_t const xs = cb_xsize(old->cx);   // the grown cluster slots come along
+  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols) + cb_tsize(rows, cols) + xs));
+  if (!c) sn = hl = tw = 0, c = kmallocw(b2w(cb_size(rows, cols, 0) + xs));   // no room: the grid alone
   if (!c) return false;
   cb_regrid(c, old, (uint16_t) rows, (uint16_t) cols, sn, hl, tw);
   kcb = c;
@@ -2134,7 +2152,7 @@ static union u
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
   nif_fetch[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_fetch}, {lvm_ret0}},
   nif_kexec[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kexec}, {lvm_ret0}},
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
   nif_svm[] = {{lvm_svm}, {lvm_ret0}},
   nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
   nif_vmx[] = {{lvm_vmx}, {lvm_ret0}},
@@ -2154,16 +2172,15 @@ static union u
   nif_kshow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kshow}, {lvm_ret0}},
   nif_kscan[] = {{lvm_kscan}, {lvm_ret0}};
 
-// link every free range kboot reports into the free list, in array order: kmem is the last
-// and the earlier ones link through ->next.
+// every free range kboot reports goes onto the list as a free does: in address order, merged
+// with a range it touches, whatever order the map gave them in
 static bool meminit(void) {
   if (!kboot.ram_n) return false;
   for (uint32_t i = 0; i < kboot.ram_n; i++) {
     struct mem *m = (struct mem*) (kboot.hhdm + kboot.ram[i].base);
     m->len = kboot.ram[i].len / sizeof(uintptr_t);
     kram_words += m->len;
-    m->next = kmem;
-    kmem = m; }
+    ff_free(&kmem, m->_); }
   return true; }
 
 // how many pixels a glyph pixel gets: the door's, where it knows the screen better than
@@ -2217,7 +2234,7 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"disk-write", {.k = nif_disk_write}},
   // x64 only, so a reader asks (elem 'svm (names ())) first: elsewhere the nom is not in
   // the book, and reading it is missing rather than absence.
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
   {"svm", {.k = nif_svm}},
   {"svm-run", {.k = nif_svm_run}},
   {"vmx", {.k = nif_vmx}},
@@ -2261,7 +2278,7 @@ static char const src_crewlist[] =
 ;
 
 void kmain(void) {
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
  // enable x87/SSE before any other C runs: a compiler vectorizes freely on x64 (even a struct
  // copy is movups) and that #UDs into a triple fault with no output while SSE is masked.
  k_sse_enable();

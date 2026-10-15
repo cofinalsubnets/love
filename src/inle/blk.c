@@ -42,7 +42,8 @@ static struct {
 // x86 is TSO and every ring access above is volatile, so program order is
 // enough; a64 reorders Normal-vs-Device, so a real barrier stands there.
 static inline void dma_fence(void) {
-#if defined(__aarch64__)
+#if defined(INLE_DROID)
+#elif defined(__aarch64__)
   k_dsb_ish();
 #elif defined(__riscv)
   k_fence();
@@ -102,7 +103,9 @@ static int vq_go(uint32_t type, uint64_t lba, void *data, uint32_t bytes) {
   dma_fence();
   return r8(kblk.sts) == 0 ? 0 : -1; }
 
-#if defined(__x86_64__)
+#if defined(INLE_DROID)
+static void blk_scan(void *dma) { }
+#elif defined(__x86_64__)
 // --- the modern virtio-pci transport ----------------------------------------
 
 // a memory BAR's assigned address (the firmware laid it), 0 when empty/io.

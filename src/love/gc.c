@@ -152,9 +152,9 @@ static word major_symbols_rebuild(struct g *g, struct gcx *X, word om) {
  // sized to its survivors, so an image's map is a function of the live set; one more intern fits (intern_reserve)
  while ((n + 1) * 4 >= cap * 3) cap *= 2;
  uintptr_t mask = cap - 1;
- union u *b = map_fill_back(gbump(g, 4 + 2 * cap), cap), *hd = gbump(g, map_head);
- hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, hd[2].x = cell(om)[2].x, tagthread(hd, 3);
- word *ns = &b[3].x;
+ union u *b = map_fill_back(gbump(g, map_back_words(cap)), cap), *hd = gbump(g, map_head);
+ ini_tablet(hd, (word) b, tablet(om)->serial);
+ word *ns = tablet_back(b)->slot;
  n = 0;
  for (uintptr_t j = 0; j < ocap; j++) {
   word k = os[2 * j];
@@ -162,7 +162,7 @@ static word major_symbols_rebuild(struct g *g, struct gcx *X, word om) {
   word fwd = cell(os[2 * j + 1])->x;
   if (!sym_survived(fwd, lo, hi)) continue;
   word nk = nom(fwd)->name;
-  uintptr_t i = hash(g, nk) & mask;
+  uintptr_t i = nom(fwd)->dig & mask;   // the cached spelling hash: hash(g, nk) without the walk
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
   ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
  b[1].x = putcharm(n);
@@ -321,6 +321,9 @@ struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
  // to be freed. cleared here rather than in please alone, because a major can be
  // called directly -- the image dump compacts before it serializes.
  g->rem_n = 0, g->rem_miss = 0;
+ // the budget is a cap: a live set past all of it fits no pool the budget allows, so it
+ // scares here, the heap whole, rather than grow without end
+ if (g->budget && (uintptr_t) (g->major_hp - to) > g->budget) return encode(g, status_scare);
  return g; }
 
 // resize the minor pool, decoupled from the major. every caller has emptied the nursery,
@@ -328,7 +331,7 @@ struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
 // copy and every value stays where it is: the major, the image, or the binary.
 struct g *gen_grow(struct g *g, uintptr_t len1) {
  if (g->hp != g->end) __builtin_trap();
- if (len1 > words_max) return encode(g, status_scare);
+ if (len1 > words_max || (g->budget && len1 > g->budget)) return encode(g, status_scare);   // the stack rides this pool: the budget caps it too
  struct g *h = alloc(NULL, len1 * sizeof(word));
  if (!h) return encode(g, status_scare);
  uintptr_t sh = (uintptr_t) (ptr(g) + g->len - g->sp);
@@ -343,7 +346,14 @@ struct g *gen_grow(struct g *g, uintptr_t len1) {
 
 // the GC entry: a minor unless the rem set missed or the major lacks headroom -- then a
 // major. afterwards the nursery grows on copy overhead and shrinks only to the budget.
+static struct g *please_(struct g *g, uintptr_t req0);
+// the collector, asked for req0 words: the ask rides g while it works, so an oom can say it
 love_noinline struct g *please(struct g *g, uintptr_t req0) {
+ g->ask = req0;
+ g = please_(g, req0);
+ if (ok(g)) g->ask = 0;
+ return g; }
+static struct g *please_(struct g *g, uintptr_t req0) {
  if (req0 > words_max) return encode(g, status_scare);   // no heap holds it: refuse before any sum
  uintptr_t seen_young = (uintptr_t)(g->hp - g->end),
            major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);

@@ -17,9 +17,9 @@
 ; reads the disk, and only corridor-walk and corridor-run tie the tty.
 ;
 ; run: love lore corridor [--level FILE] [--kitty|--cells|--window]
-;      h l or the arrows turn, k j step, u n look up and down, p where you stand; q or
-;      esc leaves
-(module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step
+;      view's walking keys, and corridor-binds: p where you stand; ? the keys, q or esc
+;      leaves
+(module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds
          corridor-move corridor-frame corridor-pens corridor-opts corridor-read corridor-load
          corridor-watch corridor-free? corridor-ks fps eye-h body-r)
 (borrow 'rove)                          ; pad, for the bottom row
@@ -280,10 +280,12 @@
    (all (q \ brush-medium bs [(q 0) (fl + 0.3) (q 1)] = 1 && brush-medium bs [(q 0) (fl + 1.7) (q 1)] = 1) pts
     && !(any shut? ^#(lv 'doors))))
  (put! st x z) (walk-slide st x z corridor-free?)
- ; ..each key as far as the time since the last frame, 'dt, carries it; p where you stand
- (corridor-step st k) (: dt (peep st 'dt (1.0 / fps))
-   (walk-key st k {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
-    @ () (k = 112 ? (pin st 'pos (1 - peep st 'pos 0)) st)
+ ; ..the corridor's own keys, over view's
+ corridor-binds {112 'where}
+ ; ..each action as far as the time since the last frame, 'dt, carries it
+ (corridor-step st a) (: dt (peep st 'dt (1.0 / fps))
+   (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
+    @ () (a = 'where ? (pin st 'pos (1 - peep st 'pos 0)) st)
       s s))
  ; a frame's motion: the clock, and each door toward open while the player is near it
  (corridor-move st) (: dt (peep st 'dt (1.0 / fps)) lv (st 'lvl) x (st 'px) z (st 'pz)
@@ -312,9 +314,10 @@
  (corridor-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level)
                                st (pins (corridor-new w h lv (dir-of p)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
-                                        'win (peep o 'win ()) 'path p)
+                                        'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
                                (corridor-watch (corridor-size st w (h // 2)))))
                'size corridor-size 'frame corridor-frame 'key corridor-step
+               'binds (view-bind view-binds corridor-binds) 'listed (view-listed ['where 'finer 'coarser])
                'tick (st \ (walk-dt st,
                             corridor-move st,
                             (st 't % watch-every = 0 ? (corridor-watch st))))
@@ -324,9 +327,9 @@
                      lv (corridor-load p)
    (? (string? lv) (say err ("corridor: " + p + ": " + lv + "\n"), flush err, 1)
       (view-stage (pin o 'level p) (o2 \ corridor-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
- corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window]   (h l turn, k j step, u n look, p where you stand; q or esc leaves; the level is read again when it changes)"
+ corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, p where you stand; ? the keys; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for corridor-run, or () where one is wrong or said twice
- (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window)
+ (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
                                     (view-arg "--level" 'level (w \ w))])
  (corridor-main as) (view-main "corridor" corridor-usage corridor-opts corridor-run as)
  _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1)))

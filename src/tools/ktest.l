@@ -56,7 +56,7 @@
    ; the two virts carry their disk on virtio-mmio; q35 on pci
    mmio? (arch = "a64" || arch = "rv64")
    ; 1536M. the corpus outgrew 256M (a silent death mid-corpus), then
-   ; 512M and then 768M (";; oom@len=N" at a deterministic dot) -- all the same
+   ; 512M and then 768M (";; oom (..)" at a deterministic dot) -- all the same
    ; wall: a major collection grows the pool by allocating a new contiguous 2x
    ; pair while the old pair still stands, so the ask (~78M at today's corpus)
    ; must fit a hole in ram the old pair fragments -- and whether one fits is a
