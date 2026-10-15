@@ -14,7 +14,8 @@
 #   hosted   the reference cannot speak for it: ours must still build it and run it to an
 #            exit, not a signal. 72 and 125 newlib's gcc will not build; 150 newlib's
 #            allocator answers short of the contract; 160 asks gcc's thumb frame address,
-#            r7 at its frame's foot, what a frame base above its locals answers.
+#            r7 at its frame's foot, what a frame base above its locals answers; 297 walks the
+#            frame chain past level 1, which gcc's arm build does not follow.
 #
 # stdout and the exit code are compared, for our build plain and at -Os. not set -e: the
 # checks report their own failures.
@@ -28,7 +29,7 @@ name=test_ccarm
 refuse="111-int128 151-w128fuzz 161-enumwide 291-enumahead"
 wide="68-static-assert 120-bfinit"
 narrow="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
-hosted="72-quals 125-widelit 150-alloc 160-rangeinit"
+hosted="72-quals 125-widelit 150-alloc 160-rangeinit 297-frameaddr"
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
