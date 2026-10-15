@@ -733,7 +733,7 @@
 (: (lambp x) (two? x && == '\ <x && two? >>x) ; \ with >=1 param (one-operand \ is quote)
    (dsug n d) (atom? n ? (n . d) (dsug <n ('\ . >n + list d)))
    (lp x) (: a >x (atom? >a ? (0 . <a) (init a . last a)))
-   (ln bs) (? (atom? bs) 0 (atom? >bs) 0 (<(dsug <bs 0) . ln >>bs))
+   (ln bs) (? (atom? bs) () (atom? >bs) () (<(dsug <bs 0) . ln >>bs))
    ; w/wl: does x / binding-list bs reference symbol v? \ and : shadow, one-operand \ is quote,
    ; macros expand. u tracks lambda depth; dm counts only references not under a lambda.
    (w v x bnd u dm) (?

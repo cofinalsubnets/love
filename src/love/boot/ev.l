@@ -772,7 +772,7 @@
      (? (atom? rest)       (rev (nd . prs) . <nd . 1)   ; body-less: the last name is the body
         (atom? >rest)      (rev (nd . prs) . <rest . 0)   ; a trailing body form
                            (collect (nd . prs) <rest <>rest >>rest)))
-    cb (collect 0 a <b >b)
+    cb (collect () a <b >b)
     ; far: {name -> arity} for the lambda siblings, syntactic (binder count off the \-expr). only
     ; fixed-arity multi-arg lambdas carry one; a value binding, single-arg lambda or rebound name
     ; pins 0 -> the call stays l2r. pinned before the closures analyze their bodies, so falook
