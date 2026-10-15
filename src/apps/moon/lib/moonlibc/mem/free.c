@@ -16,6 +16,17 @@ static __mhdr *__mfree;
 struct __love_mt __love_mt;
 static void __mtake(void) { if (__love_mt.threads) while (__sync_lock_test_and_set(&__love_mt.lock, 1)) sc0(NR_sched_yield); }
 static void __mgive(void) { if (__love_mt.threads) __sync_lock_release(&__love_mt.lock); }
+/* an allocated block's `next' is a tag (impl.h), never a list pointer, and the free list
+   writes a pointer there; so a word free never handed out, or a block freed already, reads
+   as neither tag and aborts -- a corrupted list is worse than a crash */
+__mhdr *__mblock(void *p, char const *who) {
+  __mhdr *b = (__mhdr *) p - 1;
+  if (b->next == __MAlign) b = (__mhdr *) p - b->size - 1;
+  if (b->next != __MLive && b->next != __MDirect) {
+    write(2, "moonlibc: ", 10), write(2, who, (long) strlen(who));
+    write(2, ": not a live block (freed already, or never malloc's)\n", 54);
+    abort(); }
+  return b; }
 static void __mput(__mhdr *b) {                        /* the arena's own free, lock held */
   __mhdr *q = __mfree;
   for (; !(b > q && b < q->next); q = q->next)
@@ -25,9 +36,27 @@ static void __mput(__mhdr *b) {                        /* the arena's own free, 
   if (q + q->size == b) { q->size += b->size; q->next = b->next; }
   else q->next = b;
   __mfree = q; }
+/* the free block right after b, when there is one and it holds the rest, joins b -- split
+   when it holds more. love's strings grow their buffers a great deal */
+int __mgrow(__mhdr *b, size_t nu) {
+  int ok = 0;
+  __mtake();
+  __mhdr *prev = __mfree, *nb = b + b->size;
+  if (prev)
+    for (__mhdr *q = prev->next; ; prev = q, q = q->next) {
+      if (q == nb) {
+        size_t need = nu - b->size;
+        if (q->size >= need) {
+          if (q->size == need) prev->next = q->next;
+          else { __mhdr *r = q + need; r->size = q->size - need; r->next = q->next; prev->next = r; }
+          b->size = nu, __mfree = prev, ok = 1; }
+        break; }
+      if (q == __mfree) break; }
+  __mgive();
+  return ok; }
 void free(void *p) {
   if (!p) return;
-  __mhdr *b = (__mhdr *) p - 1;
+  __mhdr *b = __mblock(p, "free");
   if (b->next == __MDirect) { munmap(b, (long) (b->size * sizeof(__mhdr))); return; }
   __mtake(); __mput(b); __mgive(); }
 static __mhdr *__mcore(size_t nu) {
@@ -56,7 +85,7 @@ static void *__marena(size_t nu) {
       if (q->size == nu) prev->next = q->next;
       else { q->size -= nu; q += q->size; q->size = nu; }
       __mfree = prev;
-      q->next = 0;                                      /* the tag, written before any payload can */
+      q->next = __MLive;                                /* the tag, written before any payload can */
       return (void *) (q + 1); }
     if (q == __mfree)
       if (!(q = __mcore(nu))) { __errno_v = ENOMEM; return 0; } } }
