@@ -9,7 +9,8 @@ static int hits;
 static __attribute__((noinline)) int id(int x) { return x; }
 static __attribute__((noinline)) void touch(struct tmp *s) { s->state = st_done; }
 
-static __attribute__((noinline)) int step(struct tmp s) {
+static __attribute__((noinline)) int step(int x) {
+  struct tmp s = { .state = x };
   int r = 0;
   for (; s.state != st_done; s.n++) {
     switch (s.state) {
@@ -106,8 +107,7 @@ static __attribute__((noinline)) int un(int x) {
 }
 
 int main(void) {
-  struct tmp s = { .state = st_less };
-  int r = step(s);                                /* 10 * 4 + 1 = 41 */
+  int r = step(st_less);                          /* 10 * 4 + 1 = 41 */
   r += written(st_done) + written(st_lock);       /* 7 + 1 + 2 = 10 */
   r += fall(2) + fall(3) + fall(0);               /* 6 + 9 + 0 = 15 */
   r += label(5);                                  /* 1 + 100 = 101 */
