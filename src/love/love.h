@@ -793,6 +793,7 @@ lvm_t lvm_kcall,
  lvm_bmul_start,             // the resumable bignum multiply's entry; its loop bodies are num.c's
  lvm_quote, lvm_index,  lvm_eval,   lvm_cond, lvm_jump,   lvm_defglob,
  lvm_ap,    lvm_tap,    lvm_apn,    lvm_tapn, lvm_ret,
+ lvm_apo,   lvm_tapo,   lvm_uncn, lvm_rev,
  lvm_argap, lvm_quoteap, lvm_argtap,
  lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
  lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2,

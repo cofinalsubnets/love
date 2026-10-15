@@ -176,7 +176,7 @@
       lvm_quote lvm_defglob lvm_argap lvm_quoteap lvm_argtap lvm_arg0 lvm_arg1 lvm_arg2
       lvm_arg3 lvm_quo0 lvm_quo1 lvm_quo2 lvm_quo3 lvm_quom1 lvm_quom2 lvm_aa lvm_aq lvm_qa
       lvm_qq lvm_aap lvm_aqp lvm_qap lvm_qqp lvm_argcap lvm_argcup lvm_argtwo lvm_argcond
-      lvm_argtwocond)
+      lvm_argtwocond lvm_apo lvm_tapo lvm_uncn lvm_rev)
 
    ; --- the C, through clay ------------------------------------------------------
    ; the roster laid once as X-rows, and three consumers expanding it: the nifs table,

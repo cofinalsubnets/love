@@ -1220,6 +1220,79 @@ lvm(lvm_tapn) {
  YieldCheck();
  love_musttail return Continue(); }
 
+// the optimistic n-ary apply, for a call whose width the compiler could not prove: the
+// apn frame is laid anyway, a cur of exactly n enters it, and anything else misses to
+// apo_miss, which answers what the l2r chain would have
+static lvm(lvm_apo_miss);
+lvm(lvm_apo) {
+ size_t n = getcharm(Ip[1].x);
+ if (__builtin_expect(!apn_ok(Sp[n], n), 0)) love_musttail return Ap(lvm_apo_miss, g);
+ union u *r = Ip + 2;
+ Ip = cell(Sp[n]) + 2;
+ Sp[n] = word(r);
+ YieldCheck();
+ love_musttail return Continue(); }
+
+lvm(lvm_tapo) {
+ size_t n = getcharm(Ip[1].x),
+        r = getcharm(Ip[2].x);
+ if (__builtin_expect(!apn_ok(Sp[n], n), 0)) love_musttail return Ap(lvm_apo_miss, g);
+ Ip = cell(Sp[n]) + 2;
+ word *o = Sp;
+ for (Sp += r + 1; n--; Sp[n] = o[n]);
+ YieldCheck();
+ love_musttail return Continue(); }
+
+// the top n slots reversed: an apo whose args ran l2r, their order observable, takes them
+// into the apn frame's r2l
+lvm(lvm_rev) {
+ size_t n = getcharm(Ip[1].x);
+ for (size_t i = 0, j = n - 1; i < j; i++, j--) { word x = Sp[i]; Sp[i] = Sp[j], Sp[j] = x; }
+ love_musttail return Next(2); }
+
+// a partial over many args at once: [uncn n x1..xn k] pushes them, x1 on top, and enters
+// k -- the frame a chain of n unc cells lays one cell at a time
+lvm(lvm_uncn) {
+ size_t n = getcharm(Ip[1].x);
+ Have(n);
+ Sp -= n;
+ for (size_t i = 0; i < n; i++) Sp[i] = Ip[2 + i].x;
+ Ip = Ip[2 + n].m;
+ love_musttail return Continue(); }
+
+// an apo whose callee is not a cur of n, its frame [a1..an f]. a cur of more is one
+// partial, [cur m-n]? [uncn n a1..an f+2]; anything else runs the l2r chain from a
+// thread laid over the values, which jumps back past the apo or, for a tapo, tail calls
+static lvm(lvm_apo_miss) {
+ bool tail = Ip[0].ap == lvm_tapo;
+ size_t n = getcharm(Ip[1].x), drop = tail ? getcharm(Ip[2].x) : 0;
+ word f = Sp[n];
+ size_t m = evenp(f) && cell(f)[0].ap == lvm_cur ? getcharm(cell(f)[1].x) : 0;
+ if (m > n) {
+  size_t c = m - n > 1 ? 2 : 0, S = c + n + 3;
+  Have(S + Width(struct tag));
+  union u *k = (union u*) Hp, *j = k + c;
+  Hp += S + Width(struct tag);
+  if (c) k[0].ap = lvm_cur, k[1].x = putcharm(m - n);
+  j[0].ap = lvm_uncn, j[1].x = putcharm(n);
+  for (size_t i = 0; i < n; i++) j[2 + i].x = Sp[i];
+  j[2 + n].m = cell(Sp[n]) + 2;
+  Sp += n, Sp[0] = word(tagthread(k, S));
+  if (!tail) { Ip += 2; love_musttail return Continue(); }
+  Ip = cell(Sp[drop + 1]), Sp[drop + 1] = Sp[0], Sp += drop + 1;   // ret over the frame
+  love_musttail return Continue(); }
+ size_t S = 2 * n + 4;
+ Have(S + Width(struct tag));
+ union u *k = (union u*) Hp, *j = k;
+ Hp += S + Width(struct tag);
+ j[0].ap = lvm_quote, j[1].x = Sp[n], j += 2;
+ for (size_t i = 0; i + 1 < n; i++) j[0].ap = lvm_quoteap, j[1].x = Sp[i], j += 2;
+ if (tail) j[0].ap = lvm_quote, j[1].x = Sp[n - 1], j[2].ap = lvm_tap, j[3].x = putcharm(0);
+ else j[0].ap = lvm_quoteap, j[1].x = Sp[n - 1], j[2].ap = lvm_jump, j[3].m = Ip + 2;
+ Ip = tagthread(k, S);
+ Sp += n + 1 + drop;
+ love_musttail return Continue(); }
+
 // return
 lvm(lvm_ret) {
  word n = getcharm(Ip[1].x) + 1;

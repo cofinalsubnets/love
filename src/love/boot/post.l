@@ -348,7 +348,7 @@
 ; symbolic run of the stack machine (ev.c's thrun): every value pushed is a slot, a fresh
 ; mint whose node says how it was made, and the nodes render as source once the run is done.
 (: lamthr (:
-   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) gcache {}
+   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) uncn lvm_uncn gcache {}
    ; what thrun reads: a nif -> its name, then the node tags and the fused loads' names
    thcfg [(foldl (\ t v (nifnom v @ nm (string? nm ? (pin t v (name nm)) t)))
                  {} (catmap (l \ (map l (keys l))) (stack ())))
@@ -365,10 +365,13 @@
    (fn? v) (lit? v && !(tablet? v) && !(hot? v))
    (arity e) (cur == pick 0 e ? (peek 1 e) 1)
    (entry e) (cur == pick 0 e ? (seek 2 e) e)
-   (partp v) (unc == pick 0 v || cur == pick 0 v && unc == pick 2 v)
+   (uncp o) (o == unc || o == uncn)
+   (partp v) (uncp (pick 0 v) || cur == pick 0 v && uncp (pick 2 v))
    (unc0 v) (cur == pick 0 v ? (seek 2 v) v)
-   (pargs v) (: (go u a) (peek 2 u @ l (unc == pick 0 l ? (go l (peek 1 u . a)) (peek 1 u . a))) (go (unc0 v) ()))
-   (fbase v) (: (go u) (peek 2 u @ l (unc == pick 0 l ? (go l) (seek -2 l))) (go (unc0 v)))
+   (ulink u) (unc == pick 0 u ? (peek 2 u) (peek (2 + peek 1 u) u))
+   (uargs u) (unc == pick 0 u ? [(peek 1 u)] (map (i \ peek (2 + i) u) ^(peek 1 u)))
+   (pargs v) (: (go u a) (ulink u @ l (uncp (pick 0 l) ? (go l (uargs u + a)) (uargs u + a))) (go (unc0 v) ()))
+   (fbase v) (: (go u) (ulink u @ l (uncp (pick 0 l) ? (go l) (seek -2 l))) (go (unc0 v)))
    ; a row's value is a binding power, negative as often as not: ask for presence
    (infix? x) (name? x ? (any (k \ (k != 0 && peep (operators k) x () !== ())) (keys operators)))
 
@@ -716,7 +719,7 @@
   ; or self reference -- the printer below is one), a sibling bound to an unfoldable
   ; call is boxed too and its cell never filled, so every read of it raises `missing`:
   ;   (: f (: (a o) (f o) c (tablet 0) (\ o c)))   -> ;; missing c
-  cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1))
+  cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) uncn lvm_uncn
   ; the float width is the seat's, never this file's: a 32-bit seat gets binary32 for
   ; flo_t. so ask the arithmetic -- a hard-coded 2^53 sends norm's doubling loop past
   ; every float32 there is and it never returns.
@@ -890,12 +893,17 @@
                      px o p sn, put o 41)))
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
-  ; [2], so the base value sits at link-2.
-  (partp v) (unc == pick 0 v || cur == pick 0 v && unc == pick 2 v)
+  ; [2], an uncn cell its n args from [2] and the link after them, so the base value
+  ; sits at link-2.
+  (uncp o) (o == unc || o == uncn)
+  (partp v) (uncp (pick 0 v) || cur == pick 0 v && uncp (pick 2 v))
   (unc0 v) (cur == pick 0 v ? (seek 2 v) v)
-  (nargs v) (: (go u n) (peek 2 u @ l (unc == pick 0 l ? (go l (1 + n)) n)) (go (unc0 v) 1))
-  (fbase v) (: (go u) (peek 2 u @ l (unc == pick 0 l ? (go l) (seek -2 l))) (go (unc0 v)))
-  (farg v i n) (: (go u w) (0 < w ? (go (peek 2 u) (w - 1)) (peek 1 u)) (go (unc0 v) ((n - 1) - i)))
+  (ulink u) (unc == pick 0 u ? (peek 2 u) (peek (2 + peek 1 u) u))
+  (uargs u) (unc == pick 0 u ? [(peek 1 u)] (map (i \ peek (2 + i) u) ^(peek 1 u)))
+  (pargs v) (: (go u a) (ulink u @ l (uncp (pick 0 l) ? (go l (uargs u + a)) (uargs u + a))) (go (unc0 v) ()))
+  (fbase v) (: (go u) (ulink u @ l (uncp (pick 0 l) ? (go l) (seek -2 l))) (go (unc0 v)))
+  (nargs v) #(pargs v)
+  (farg v i n) (pargs v i)
 
   (pfn o v sn) (nifnom v @ nm
                   (string? nm ? (lamform v @ s (s == name nm ? (say o nm) (px o s sn)))   ; off the book: what binds it

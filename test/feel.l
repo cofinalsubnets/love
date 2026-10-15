@@ -193,3 +193,37 @@
     (3 = (oas-in [1 2 3]))                              ; the inner arity is the one that runs
     (3 = (oas-in ()))                                   ; ..including where the walk ends at once
     (9 = (oas-w [1 2] 9))))                             ; and the outer still answers for itself
+
+; --- an unknown head takes the optimistic apply (apo) --- the args land r2l in the apn frame
+; and a cur of exactly that many enters it; anything else misses into what the l2r chain
+; answers: a cur of more is one partial over all the args at once, `=` and hashed as the
+; chain's (show.l shows it), and a head of fewer, or no cur at all, runs the chain off the
+; values in hand. args keep call order: r2l only where at most one can act. the heads
+; arrive as params, so no fold knows them, and they recurse, so the inliner declines them.
+; ap-t* call in tail position, over a frame of their own; ap-n* do not.
+(: (ap-k3 a b c) (a < 1 ? [a b c] (ap-k3 (a - 1) b c))
+   (ap-k4 a b c d) (a < 1 ? [a b c d] (ap-k4 (a - 1) b c d))
+   (ap-k2 a b) (a < 1 ? (c \ [b c]) (ap-k2 (a - 1) b))      ; arity 2, answers a function
+   (ap-k1 a) (a < 1 ? (b \ a - b) (ap-k1 (a - 1)))         ; no cur: one arg at a time
+   (ap-t2 f a b n) (n < 1 ? (f a b) (ap-t2 f a b (n - 1)))
+   (ap-t3 f a b c n) (n < 1 ? (f a b c) (ap-t3 f a b c (n - 1)))
+   (ap-n2 f a b n) (n < 1 ? [(f a b)] (ap-n2 f a b (n - 1)))
+   (ap-n3 f a b c n) (n < 1 ? [(f a b c)] (ap-n3 f a b c (n - 1)))
+   (ap-pr a b) (a < 0 ? 0 [a b])
+   ap-c (cask 1)
+   (ap-b _) (peep ap-c 0 0 @ v (pin ap-c 0 (v + 1), v + 1))
+   (ap-o2 f n) (n < 1 ? (f (ap-b 0) (peep ap-c 0 0)) (ap-o2 f (n - 1)))      ; two args that act
+   (test
+    ([0 2 3] = ap-t3 ap-k3 0 2 3 1) ([[0 2 3]] = ap-n3 ap-k3 0 2 3 1)        ; saturated
+    ([0 2 3] = ap-t2 ap-k3 0 2 1 3) ([0 2 3] = cap (ap-n2 ap-k3 0 2 1) 3)    ; short: a partial
+    ([0 2 3 4] = ap-t2 (ap-t2 ap-k4 0 2 1) 3 4 1)                          ; a partial of a partial
+    ([0 2 3 4] = ap-t2 ap-k4 0 2 1 3 4)                                    ; ..entered saturated
+    ((ap-t2 ap-k3 0 2 1) = (ap-k3 0) 2)                                    ; the one cell is the chain's
+    !((ap-t2 ap-k4 0 2 1) = ((ap-k4 0) 2) 3)                               ; ..and differs from a longer one
+    (((ap-t2 ap-k4 0 2 1) 3) = cap (ap-n3 ap-k4 0 2 3 1))                  ; an unc over an uncn is the one cell
+    (9 = peep {((ap-k3 0) 2) 9} (ap-t2 ap-k3 0 2 1) 0)                     ; hashed as the chain's
+    ([2 3] = ap-t3 ap-k2 0 2 3 1) ([[2 3]] = ap-n3 ap-k2 0 2 3 1)          ; long: the surplus curries
+    (-2 = ap-t2 ap-k1 1 2 1) ([-2] = ap-n2 ap-k1 1 2 1)                     ; no cur
+    (5 = ap-t2 {1 (x \ x + 4)} 1 1 1) ([5] = ap-n2 {1 (x \ x + 4)} 1 1 1)  ; a tablet
+    (7 = ap-t2 1 (+ 3) 4 1) ([7] = ap-n2 1 (+ 3) 4 1)                     ; a number: the tower
+    (: _ (pin ap-c 0 0) ([1 1] = ap-o2 ap-pr 1))))                         ; args that act keep call order
