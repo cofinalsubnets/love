@@ -337,7 +337,7 @@
                        (: to (ww-resolve url loc) (? (ww-hop? url to) (ww-fetch url to (hops - 1)) ()))
                       (200 <= code < 300) (r 2)
                       ()))))))
-   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png, jpeg, gif or webp (its first
+   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a picture pic reads (its first
    ; frame) of up to 4 megapixels
    (ww-picture b)
     (: d (pic-size b)
