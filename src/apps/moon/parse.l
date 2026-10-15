@@ -953,7 +953,9 @@
               ; the underlying type is unsigned when no enumerator is negative (gcc's choice),
               ; which shows in an enum bit-field: `enum c code : 8` holding 148 must load 148
               ; back, not -108. the tag remembers, so a later `enum c` reads the same signedness.
-              (: ts2 >ts
+              ; an attribute run may stand before the tag (mesa's `enum PACKED name`), as after the body
+              (: hp (pattpk ps >ts) lpk <hp
+                 ts2 <>hp
                  tag (idat? ts2 ? (tkv <ts2))
                  ts3 (tag ? >ts2 ts2)
                  ; an enum tag scopes by restoring, not by renaming: the type is a plain integer
@@ -991,7 +993,7 @@
                  (peekp ts3 "{" ?
                     (: (consts ts4 v pos lo hi)
                         (? (peekp ts4 "}")                         ; a trailing comma (or empty body): the enum ends
-                            (pattpk ps >ts4 @ pa (ety pos lo hi <pa (modeat ps >ts4) @ ty (ty = () ? () [ty <>pa])))
+                            (pattpk ps >ts4 @ pa (ety pos lo hi (max <pa lpk) (modeat ps >ts4) @ ty (ty = () ? () [ty <>pa])))
                            !(idat? ts4) ()
                            (: name (tkv <ts4)
                               ts5 >ts4
@@ -1011,7 +1013,7 @@
                                     (peekp ts6 "," ? (consts >ts6 (<vr + 1) pos2 lo2 hi2)
                                        (: rest (want ts6 "}")
                                           pa (two? rest ? (pattpk ps rest) [0 rest])
-                                          (two? rest ? (ety pos2 lo2 hi2 <pa (modeat ps rest) @ ty (ty = () ? () [ty <>pa])))))))))
+                                          (two? rest ? (ety pos2 lo2 hi2 (max <pa lpk) (modeat ps rest) @ ty (ty = () ? () [ty <>pa])))))))))
                        (consts >ts3 0 1 0 0))
                     ; a tag not yet defined (a declaration ahead of its enum, the kernel's apic.h) reads
                     ; as gcc lays the enum that has no negative enumerator, so its redeclaration agrees
@@ -1415,8 +1417,9 @@
                     !(charm? cv) (blame r1 "__builtin_choose_expr wants a constant condition")
                     [(cv = 0 ? <rb <ra) rest]))
              ; __func__ (C99 6.4.2.2): the enclosing function's name as a string, pinned by the
-             ; two body-parsing sites; outside a body it stays an undeclared identifier.
-             (idv? t "__func__" && string? (ps 'fnname))
+             ; two body-parsing sites; outside a body it stays an undeclared identifier. gcc's
+             ; __FUNCTION__ and __PRETTY_FUNCTION__ are the same string in C
+             (tkk t = 'id && elem (tkv t) '("__func__" "__FUNCTION__" "__PRETTY_FUNCTION__") && string? (ps 'fnname))
               [['str (ps 'fnname)] >ts]
              ; a name being declared right now is not an enum constant. C11 6.2.1p7: a
              ; declarator's scope begins at the end of its declarator, so `uintptr_t M = f(),
@@ -2008,19 +2011,40 @@
    (clat l i) (? (atom? l) () (i = 0) l (clat >l (i - 1)))   ; the tail at token i
    (clp? l i s) (clat l i @ t (two? t && tp? <t s))
    (cli? l i s) (clat l i @ t (two? t && idv? <t s))
-   (clgrp? l) (cli? l 0 "__attribute__" && clp? l 1 "(" && clp? l 2 "(" &&
-               (cli? l 3 "cleanup" || cli? l 3 "__cleanup__") &&
-               clp? l 4 "(" && idat? (clat l 5) && clp? l 6 ")" && clp? l 7 ")" && clp? l 8 ")")
+   (clgrp? l) (two? (clpick l))
+   ; an __attribute__((..)) holding cleanup(f) among its items -> (f  the attribute without
+   ; that item, () when it was the only one  the tokens past the attribute) | ()
+   (clpick l)
+    (: (cl1? it) (#it = 4 && (idv? <it "cleanup" || idv? <it "__cleanup__") && tp? (it 1) "("
+                  && idat? (clat it 2) && tp? (it 3) ")")
+       ; the items at depth 0 of the list, each its tokens, up to the closing `))`
+       (items s d cur acc cm)
+        (? (atom? s) ()
+           (d = 0 && tp? <s ")") (two? >s && tp? <>s ")" ? [(rev (rev cur . acc)) cm s] ())
+           (d = 0 && tp? <s ",") (items >s 0 () (rev cur . acc) <s)
+           (tp? <s "(") (items >s (d + 1) (<s . cur) acc cm)
+           (tp? <s ")") (items >s (d - 1) (<s . cur) acc cm)
+           (items >s d (<s . cur) acc cm))
+       (? !(cli? l 0 "__attribute__" && clp? l 1 "(" && clp? l 2 "(") ()
+          (items (clat l 3) 0 () () () @ r
+             (? (atom? r) ()
+                (: its <r cm <>r cl <>>r ks (filter (it \ !(cl1? it)) its)
+                   (#ks = #its - 1 ?
+                      [(tkv (<(filter cl1? its) 2))
+                       (#ks = 0 ? () (take 3 l + foldl (\ a it (a = () ? it (a + [cm] + it))) () ks + take 2 cl))
+                       >>cl]
+                      ()))))))
    ; over the first declarator, up to its `=` `,` or `;` -> (f-name | () | 'many  tokens
    ; the-word-before-the-attribute)
    (clstrip ts)
     (: (go l d acc f pv)
         (? (atom? l) [() ts]
            (d = 0 && (tp? <l ";" || tp? <l "=" || tp? <l ",")) (f ? [f (rev acc + l) pv] [() ts])
-           (clgrp? l) (go (clat l 9) d acc (f ? 'many (tkv <(clat l 5))) (two? acc ? (tkv <acc)))
-           (tp? <l "(" || tp? <l "[" || tp? <l "{") (go >l (d + 1) (<l . acc) f pv)
-           (tp? <l ")" || tp? <l "]" || tp? <l "}") (go >l (d - 1) (<l . acc) f pv)
-           (go >l d (<l . acc) f pv))
+           (clpick l @ k
+              (? (two? k) (go <>>k d (rev <>k + acc) (f ? 'many <k) (two? acc ? (tkv <acc)))
+                 (tp? <l "(" || tp? <l "[" || tp? <l "{") (go >l (d + 1) (<l . acc) f pv)
+                 (tp? <l ")" || tp? <l "]" || tp? <l "}") (go >l (d - 1) (<l . acc) f pv)
+                 (go >l d (<l . acc) f pv))))
        (go ts 0 () () ()))
    (pdecl0 ps ts)
     (: br (pbty ps ts)
