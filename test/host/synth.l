@@ -10,6 +10,9 @@
 (borrow 'harp)    ; the events, to ask a text read by
 (borrow 'play)    ; harp-read
 (borrow 'drift)   ; a walk's state, to stand the center somewhere
+(borrow 'opl)     ; a bank for the FM timbre
+(borrow 'bytes)   ; zbytes
+(borrow 'rove)    ; song-rate
 
 (: d0 (synth-digits 0) d1 (synth-digits 1) s0 (synth-shifted 0)
    st (synth-new ())
@@ -190,5 +193,25 @@
  (test (c = [255 128 0]) (d = [208 208 208]) (cs = [56 56 56]) (csl = [0 0 0])
        (c2 = [208 208 208])))
 
+; --- the FM timbre: with a bank it is the last; left and right choose its instrument, a strike
+; --- and a held key sound through it, and a key let go rings out its release
+(: (syn-fm-b l) (foldl (\ a c (a + string c)) "" l)
+   ; ..one instrument, a sine (the modulator silent), held while the key is; the rest empty
+   v (syn-fm-b [33 240 15 0 0 63 0 33 240 15 0 0 0 0 0 0])
+   B (opl-bank ("#OPL_II#" + syn-fm-b [0 0 128 0] + v + v + zbytes (174 * 36) + "sine" + zbytes (28 + 174 * 32)))
+   j (jug 0) st (synth-new {'fm B})
+   n0 #(synth-tims st)
+   _ (pin st 'tim (n0 - 1)) nm (synth-tname st)
+   _ (synth-step st -11) back (st 'prog) _ (synth-step st -10) fwd (st 'prog)
+   _ (synth-step st 49) struck #(st 'vs)
+   _ (each ^10 (i \ synth-feed st j)) rang (slurp j)
+   _ (synth-wstep st ['down 16]) hv (st 'hv)
+   _ (each ^10 (i \ synth-feed st j)) held (slurp j)
+   _ (synth-wstep st ['up 16]) let (st 'vs)
+ (test (n0 = #synth-timbres + 1) (#(synth-tims (synth-new ())) = #synth-timbres) (nm = "fm 0 sine")
+       (back = 174) (fwd = 0) (struck = 1) (any (i \ rang i != 0) ^#rang)
+       (#hv = 1) (#(<hv) = 5) (any (i \ held i != 0) ^#held)
+       (any (v \ v 0 < st 'fpos + 10 * song-rate) let)))
+
 (test_fin (),
- puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, and a held key holds\n")
+ puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, and the FM timbre plays\n")
