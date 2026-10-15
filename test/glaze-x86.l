@@ -837,7 +837,7 @@
       (: (mk d) (? (< d 1) 0 (. (mk (- d 1)) (mk (- d 1))))                                                       ; an interp tree builder (the allocating mk stays interp)
          ckn (jitgroupir [(. '(ck t) '(? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0))] 'ck 'x64)              ; native node-count walk
          (&& (255 = (ckn (mk 8))) (15 = (ckn (mk 4)))                                                                ; 2^d-1 nodes, native cap/cup recursion
-             (0 = (ckn 0)) (1 = (ckn (. 0 0)))))                                                                  ; two? total: a fixnum leaf -> 0; a lone chain -> 1
+             (0 = (ckn 0)) (1 = (ckn (. 0 ())))))                                                                  ; two? total: a fixnum leaf -> 0; a lone chain -> 1
       ; tco: a tail self-call loops in place (reuse the frame, O(1) stack) -- 1M deep would sigsegv without it
       (1000000 = ((jitgroupir [(. '(loop i) '(? (< i 1000000) (loop (+ i 1)) i))] 'loop 'x64) 0))                 ; single-arg counted loop
       (499999500000 = ((jitgroupir [(. '(sm i a) '(? (< i 1000000) (sm (+ i 1) (+ a i)) a))] 'sm 'x64) 0 0))      ; multi-arg tail accumulator (sum 0..1M-1)
