@@ -16,13 +16,40 @@ static __mhdr *__mfree;
 struct __love_mt __love_mt;
 static void __mtake(void) { if (__love_mt.threads) while (__sync_lock_test_and_set(&__love_mt.lock, 1)) sc0(NR_sched_yield); }
 static void __mgive(void) { if (__love_mt.threads) __sync_lock_release(&__love_mt.lock); }
+/* a small block is a slot of its size class, carved from a slab: one 64 KiB arena block,
+   [slab, slots], a bit per slot held. malloc and free there flip a bit, no list walk; the
+   scan resumes where it stopped, so a freed slot is not handed straight back. an empty
+   slab goes back to the arena at once (the arenas keep one spare). the slot's header
+   stays, tagged __MSlot, its size the units and its index << 16 */
+#define SlabU (65536 / sizeof(__mhdr))
+#define NCls 24
+static unsigned char const __mcls[NCls] = {2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160};
+typedef struct __mslab { struct __mslab *next, *prev; unsigned cls, n, used, at; unsigned map[SlabU / 64 + 1]; } __mslab;
+#define SlabH ((sizeof(__mslab) + sizeof(__mhdr) - 1) / sizeof(__mhdr))   /* the slab's own units */
+#define NMap (sizeof ((__mslab *) 0)->map / sizeof(unsigned))
+static __mslab *__mslabs[NCls];                       /* each class's slabs with a slot free */
+static __mslab *__mslabof(__mhdr *b) { return (__mslab *) (b - (b->size >> 16) * (b->size & 0xffff) - SlabH); }
+static int __mheld(__mhdr *b) {                       /* a slot its slab holds, by the slab's own record */
+  __mslab *s = __mslabof(b);
+  unsigned i = (unsigned) (b->size >> 16);
+  __mhdr *h = (__mhdr *) s - 1;
+  return h->next == __MLive && h->size == SlabU && s->cls < NCls && __mcls[s->cls] == (b->size & 0xffff)
+      && i < s->n && s->map[i / 32] >> (i % 32) & 1; }
+static void __mlink(__mslab *s) {
+  s->prev = 0, s->next = __mslabs[s->cls];
+  if (s->next) s->next->prev = s;
+  __mslabs[s->cls] = s; }
+static void __munlink(__mslab *s) {
+  if (s->prev) s->prev->next = s->next; else __mslabs[s->cls] = s->next;
+  if (s->next) s->next->prev = s->prev;
+  s->next = s->prev = 0; }
 /* an allocated block's `next' is a tag (impl.h), never a list pointer, and the free list
    writes a pointer there; so a word free never handed out, or a block freed already, reads
    as neither tag and aborts -- a corrupted list is worse than a crash */
 __mhdr *__mblock(void *p, char const *who) {
   __mhdr *b = (__mhdr *) p - 1;
   if (b->next == __MAlign) b = (__mhdr *) p - b->size - 1;
-  if (b->next != __MLive && b->next != __MDirect) {
+  if (!(b->next == __MLive || b->next == __MDirect || (b->next == __MSlot && __mheld(b)))) {
     write(2, "moonlibc: ", 10), write(2, who, (long) strlen(who));
     write(2, ": not a live block (freed already, or never malloc's)\n", 54);
     abort(); }
@@ -68,14 +95,22 @@ int __mgrow(__mhdr *b, size_t nu) {
       if (q == __mfree) break; }
   __mgive();
   return ok; }
+static void __mrelease(__mhdr *b) {                    /* an arena block back, lock held */
+  __mput(b);
+  __mhdr *f = __mfree < b && b < __mfree + __mfree->size ? __mfree : b, *h = __mwhole(f);   /* b's span now */
+  if (h) __mtrim(f, h); }
+static void __mslotfree(__mhdr *b) {                   /* lock held */
+  __mslab *s = __mslabof(b);
+  unsigned i = (unsigned) (b->size >> 16);
+  s->map[i / 32] &= ~(1u << (i % 32));
+  if (s->used-- == s->n) __mlink(s);
+  if (!s->used) { __munlink(s); __mrelease((__mhdr *) s - 1); } }
 void free(void *p) {
   if (!p) return;
   __mhdr *b = __mblock(p, "free");
   if (b->next == __MDirect) { munmap(b, (long) (b->size * sizeof(__mhdr))); return; }
   __mtake();
-  __mput(b);
-  __mhdr *f = __mfree < b && b < __mfree + __mfree->size ? __mfree : b, *h = __mwhole(f);   /* b's span now */
-  if (h) __mtrim(f, h);
+  if (b->next == __MSlot) __mslotfree(b); else __mrelease(b);
   __mgive(); }
 static __mhdr *__mcore(size_t nu) {
   size_t need = (nu + 2) * sizeof(__mhdr);
@@ -109,6 +144,23 @@ static void *__marena(size_t nu) {
       return (void *) (q + 1); }
     if (q == __mfree)
       if (!(q = __mcore(nu))) { __errno_v = ENOMEM; return 0; } } }
+static void *__mslot(unsigned c) {                     /* lock held */
+  __mslab *s = __mslabs[c];
+  unsigned u = __mcls[c];
+  if (!s) {
+    if (!(s = __marena(SlabU))) return 0;
+    s->cls = c, s->n = (unsigned) ((SlabU - 1 - SlabH) / u), s->used = 0, s->at = 0;
+    for (unsigned w = 0; w < NMap; w++)                /* the bits past the last slot read as held */
+      s->map[w] = w * 32 + 32 <= s->n ? 0 : w * 32 >= s->n ? ~0u : ~0u << (s->n % 32);
+    __mlink(s); }
+  unsigned w = s->at;
+  while (s->map[w] == ~0u) w = w + 1 == NMap ? 0 : w + 1;
+  unsigned i = w * 32 + (unsigned) __builtin_ctz(~s->map[w]);
+  s->map[w] |= 1u << (i % 32), s->at = w;
+  if (++s->used == s->n) __munlink(s);
+  __mhdr *b = (__mhdr *) s + SlabH + (size_t) i * u;
+  b->next = __MSlot, b->size = u | (size_t) i << 16;
+  return (void *) (b + 1); }
 void *malloc(size_t n) {
   /* no object passes PTRDIFF_MAX, and past it the units and the page rounding below wrap
      to a small block handed back as the large one asked for */
@@ -116,6 +168,8 @@ void *malloc(size_t n) {
   size_t nu = (n + sizeof(__mhdr) - 1) / sizeof(__mhdr) + 1;
   if (n >= MBig) return __mbig(nu);
   __mtake();
-  void *p = __marena(nu);
+  void *p;
+  if (nu <= 160) { unsigned c = 0; while (__mcls[c] < nu) c++; p = __mslot(c); }
+  else p = __marena(nu);
   __mgive();
   return p; }

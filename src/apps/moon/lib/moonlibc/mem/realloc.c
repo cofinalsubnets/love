@@ -2,8 +2,8 @@
 #include <sys/mman.h>
 
 /* grows in place where it can: an arena block into the free block after it, a mapping of
-   its own through mremap (linux's; elsewhere ENOSYS, and the copy below). an aligned
-   pointer always copies */
+   its own through mremap (linux's; elsewhere ENOSYS, and the copy below). a slot past its
+   class, or an aligned pointer, copies */
 void *realloc(void *p, size_t n) {
   if (!p) return malloc(n);
   if (n == 0) { free(p); return 0; }
@@ -13,8 +13,8 @@ void *realloc(void *p, size_t n) {
   __mhdr *b = __mblock(p, "realloc");
   size_t nu = (n + sizeof(__mhdr) - 1) / sizeof(__mhdr) + 1;
   if (p == (void *) (b + 1)) {
-    if (b->next != __MDirect) { if (__mgrow(b, nu)) return p; }
-    else {
+    if (b->next == __MLive) { if (__mgrow(b, nu)) return p; }
+    else if (b->next == __MDirect) {
       int e = __errno_v;
       size_t len = b->size * sizeof(__mhdr), nlen = (nu * sizeof(__mhdr) + 4095UL) & ~4095UL;
       void *m = mremap(b, len, nlen, MREMAP_MAYMOVE);
