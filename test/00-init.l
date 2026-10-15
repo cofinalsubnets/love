@@ -86,10 +86,11 @@
    (test-up p) (test-until nom? (_ \ connect ['tcp "127.0.0.1" p] @ c (nom? c ? c (close c)))))
 ; how a cost grows: (f n) and (f (4 * n)) timed, the best of five each after a warm run,
 ; the second held under eight times the first. a linear or n log n cost sits near four, a
-; quadratic one at sixteen
+; quadratic one at sixteen. hosted seats only: the inle kernel's clock counts milliseconds,
+; and there the same laws pass and fail with the box's load, so it answers 1 untimed
 (: (test-took f n) (: t0 (nclock 0) _ (f n) (nclock t0))
    (test-best f n) (foldl min (test-took f n) (map (u \ test-took f n) ^4))
-   (test-linear f n) (: _ (f n) a (test-best f n) b (test-best f (4 * n)) (b < 8 * a)))
+   (test-linear f n) (!hosted || (: _ (f n) a (test-best f n) b (test-best f (4 * n)) (b < 8 * a))))
 
 (:: 'test (l \
                (:
