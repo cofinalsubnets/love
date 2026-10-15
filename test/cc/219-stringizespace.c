@@ -1,7 +1,5 @@
-/* # spells an argument with the source's own spacing (C11 6.10.3.2): one space where
- * the argument had any whitespace between two tokens, none where it had none, and
- * none at either end. the kernel's __stringify of asm text leans on it -- ".pushsection"
- * spelled ". pushsection" is no directive. */
+/* # spells an argument with the source's spacing (6.10.3.2): one space where any whitespace
+ * stood, none where none did, none at the ends -- ".pushsection" must not become ". pushsection". */
 
 #define S_(x) #x
 #define S(x) S_(x)

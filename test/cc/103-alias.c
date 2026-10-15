@@ -1,13 +1,6 @@
-/* __attribute__((alias("target"))) -- musl's weak_alias, its single most-used
- * idiom (189 files): `extern __typeof(old) new __attribute__((__weak__,
- * __alias__("old")))` gives `new` as another NAME for `old`'s address, weakly
- * bound so a strong definition elsewhere wins the link.
- *
- * covered: an alias onto a defined function, onto a STATIC function (musl's
- * exit.c aliases a local dummy so a real implementation can override it), and
- * onto a data object (its __stdin_used trio). the binding itself -- weak vs
- * strong -- is a link-time property the batteries cannot see; the moon-musl
- * rung is what proves it, by linking musl's two competing __stdout_used. */
+/* __attribute__((alias("target"))): another name for a defined function, a static
+ * function, and a data object. weak vs strong binding is a link property this
+ * program cannot see. */
 
 #define weak_alias(old, new) \
 	extern __typeof(old) new __attribute__((__weak__, __alias__(#old)))

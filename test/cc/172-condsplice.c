@@ -1,8 +1,5 @@
-/* a callee of several statements at a position a value cannot hoist from -- a ?: arm, the
- * right of && || or a comma, a loop's test -- becomes a temporary of the position's own type
- * assigned under an if where its body splices, or the loop's test an if at its body's head:
- * the arms still meet at their common type, the untaken arm still does not run, continue
- * still runs the test. main answers how many shapes agree with the value C gives them (19). */
+/* a multi-statement callee where no value can hoist (?: arm, && || comma right, loop test)
+ * splices under an if into a temporary of the position's type. main answers 19. */
 
 typedef unsigned long word;
 #define inl static inline __attribute__((always_inline))

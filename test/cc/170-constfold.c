@@ -1,8 +1,6 @@
-/* a constant expression folds in C's types: operands meet at the usual arithmetic
- * conversions, so -1 < 1u is 0 and -6 / 3u divides unsigned, and each result wraps to its
- * type -- in a static, an aggregate, a local, an array bound and a case label alike. some
- * readings differ by target (-1L < 1u: long holds every uint on LP64 only); main answers a
- * checksum of them all, held to gcc on every target. */
+/* constant expressions fold in c's types (-1 < 1u is 0, -6 / 3u divides unsigned) in statics,
+ * aggregates, locals, bounds and case labels; some readings differ by target, so main answers a
+ * checksum, held to gcc. */
 
 static int s1 = -1 < 1u;
 static unsigned s2 = -6 / 3u;

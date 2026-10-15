@@ -1,31 +1,6 @@
-/* the 5th integer parameter is a POINTER, not the frame.
- *
- * 106-param4's a64 sibling, and a different fault under the same lane. gen
- * speaks r4 for the frame base on every target, and a4ize retargets it to fp
- * at the end of build BY POSITION: an r4 sitting in a memory op's BASE slot
- * becomes fp, an r4 anywhere else is left alone. On AArch64 gp 4 arrives in
- * x4 -- so the moment the ride analysis lets the 5th parameter stay in its
- * arrival register, and the body uses it the way a pointer is used, its base
- * slot reads as the frame pointer. `*p`, `p[i]` and `p + i` all addressed the
- * FRAME instead of p.
- *
- * silent, and it answers rather than faults: fp is a valid address, so the
- * load lands in the caller's own frame and returns plausible garbage. Lua 5.4
- * found it -- lstrlib's prepstate takes six parameters, its 6th spilled and
- * its 5th rode x4, so ms->p_end came out as sp + lp and EVERY pattern match
- * silently returned nil. string.match, string.gsub and string.find with a
- * pattern were all dead in an interpreter that otherwise ran its whole test
- * battery, printed floats correctly and ran coroutines through setjmp.
- *
- * x64 cannot reach it (r4 is rbp, never an argument register) and neither can
- * thumb (4 arg registers) or riscv (nhome = 0, so nothing rides) -- which is
- * why 110 programs and the whole love corpus under mooncc/a64 stayed green.
- *
- * The register pressure is load-bearing, exactly as in 106: the 6th parameter
- * must exist and be live, or the 5th never rides and the fault does not
- * appear. Keep all six.
- *
- * Each check contributes 1, so the exit code IS the number that passed. */
+/* the 5th integer parameter used as a pointer addresses its pointee, not the frame
+ * (a64: it arrives in x4, the frame register's number). keep all six parameters
+ * live, or the 5th never stays in its arrival register. each check adds 1: the exit code is the pass count. */
 
 #include <stdio.h>
 
@@ -37,8 +12,8 @@ struct span {
 	int depth;
 };
 
-/* the exact shape from lua-5.4.7 lstrlib.c prepstate: six parameters, the
- * last two a pointer and its length, written into a caller-owned struct */
+/* six parameters, the last two a pointer and its length, written into a
+ * caller-owned struct */
 static void prepstate(struct span *ms, void *owner,
                       const char *s, unsigned long ls,
                       const char *p, unsigned long lp)

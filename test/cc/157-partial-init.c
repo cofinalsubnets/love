@@ -1,8 +1,5 @@
 // a local aggregate initialized in part: the fields the list does not reach are zero.
-// codegen zeroes the slot and then fills it, so a FULLY spelled initializer overwrites
-// every gap and never reads the zeroing back -- this is the shape that does.
-// gen.l's cgzero strides 8 bytes per store, so a 32-bit target zeroes every other word;
-// the run under a 64-bit qemu cannot see that, and test_mps2 is where it shows.
+// a 32-bit target is where a zeroing stride of 8 bytes would miss every other word.
 struct wide {
   void *p; long *a, *b;
   unsigned long u, v;

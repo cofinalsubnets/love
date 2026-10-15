@@ -1,7 +1,5 @@
-/* a fn no path leaves owes no callee-saved file back: its epilogue is unreachable,
- * so the restores go and the saves with them. spin below holds values across calls
- * the compiler cannot see through -- the volatile pointers are what earn the seats
- * that make the shape bite -- and it is emitted on every target and never entered. */
+/* a fn no path leaves restores no callee-saved registers. spin holds values across
+ * opaque calls (the volatile pointers earn the registers), and is never entered. */
 unsigned long acc;
 
 unsigned long step(unsigned long x) { acc += x + 1; return acc ^ (x << 3); }

@@ -1,7 +1,5 @@
-/* the layout and call extensions a kernel header leans on: #pragma pack's whole stack (acpi's
- * tables), a transparent union parameter taking any member's type (mm.h's release_pages),
- * and a __COUNTER__ inside an argument naming one variable however often it is used
- * (__UNIQUE_ID). exit-code only: the answers are compared, never hard-coded widths. */
+/* #pragma pack's whole stack, a transparent union parameter taking any member's type, and
+ * __COUNTER__ in an argument naming one variable however often used. answers compared, not widths. */
 #include <stddef.h>
 
 #pragma pack(push, 1)

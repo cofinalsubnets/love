@@ -1,10 +1,5 @@
-/* the dlmalloc builtins: __sync_lock_test_and_set (atomic exchange, acquire --
- * x64 xchg, a64 ldaxr/stxr, rv amoswap.aq), __sync_lock_release (release store
- * of 0), and the 32-bit __builtin_clz/__builtin_ctz. The exchange is sized and
- * signed by the POINTEE: the negative row proves the old value re-extends, the
- * pointer row proves the 8-byte lane.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* __sync_lock_test_and_set (sized and signed by the pointee), __sync_lock_release,
+ * 32-bit __builtin_clz/ctz. each check adds 1: the exit code is the pass count. */
 
 extern int printf(const char *, ...);
 

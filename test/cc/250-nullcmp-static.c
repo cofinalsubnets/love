@@ -1,9 +1,6 @@
-/* an object's or a function's address is never null, so a static initializer's test of one
- * against a null constant, or its negation, is decided at image time (gcc's and clang's
- * reading): linux's OF_DECLARE lays `.data = (fn == (fn_type)NULL) ? fn : fn` into a named
- * section, walked by __start_/__stop_ as the kernel walks its of_device_id tables. every entry
- * must land there with its own value, aligned as the kernel aligns them so the section reads as
- * an array. freestanding, exit-code only. */
+/* an object's or function's address is never null, so a static initializer comparing one to
+ * null is decided at image time; entries laid in a named section, aligned, read back as an array
+ * via __start_/__stop_. exit-code only. */
 
 struct ofid { char compatible[16]; const void *data; };
 typedef void (*initfn)(void *);

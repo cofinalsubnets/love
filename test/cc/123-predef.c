@@ -1,11 +1,5 @@
-/* the gcc-shaped predefine table (moon.l stddefs): the <stdint>/<limits>/
- * <float.h> family a library config reads instead of probing -- pdclib,
- * gnulib and musl typedef straight off these names. forked once on the word
- * width plus the wchar ABI fork; __LDBL_* deliberately answer double's
- * values (no long double here). and __LINE__ is TRUE: the -D text stamps
- * 1-k..0 (clexat), so the TU's own numbering starts at 1 unskewed.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* the gcc-shaped predefines (<stdint>/<limits>/<float.h> names); __LDBL_* answer
+ * double's values; __LINE__ counts the TU from 1. each check adds 1: the exit code is the pass count. */
 
 #include <float.h>
 

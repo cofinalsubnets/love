@@ -1,7 +1,5 @@
-/* mov to and from a segment register, a register or memory at the other end: the kernel's
- * iret_to_self (mov %ss / %cs, r) and the real-mode helpers' movw over "rm" (%ds %fs %gs).
- * a user process reads its selectors (RPL 3 on cs and ss) and writes es back with its own
- * value. the asm is x64's. held to gcc. */
+/* mov to and from segment registers, register or memory at the other end (movw over "rm");
+ * a user process reads RPL 3 on cs and ss and writes es back. x64 asm. held to gcc. */
 
 #if defined(__x86_64__)
 static unsigned rd_cs(void) { unsigned v; asm volatile("mov %%cs, %0" : "=r"(v)); return v & 0xffff; }

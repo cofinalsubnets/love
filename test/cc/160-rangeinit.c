@@ -1,7 +1,5 @@
-/* gcc's `[a ... b] =` range designator, and the frame's own two addresses.
- * the kernel writes both: a range fills a table of defaults, and _RET_IP_ is
- * __builtin_return_address(0). both addresses are asked something a wrong one
- * fails: two call sites disagree, and a frame base outranks its own locals. */
+/* the `[a ... b] =` range designator, and __builtin_return_address(0) and the
+ * frame address: two call sites must differ, a frame base outranks its locals. */
 #include <stdio.h>
 
 int tbl[10] = { [0 ... 3] = 7, [5] = 9, [7 ... 8] = -1 };
