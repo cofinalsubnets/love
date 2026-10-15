@@ -48,7 +48,7 @@
    ; -- sync: sync(2), the bare call; FILE operands are refused, since syncing everything
    ; for them would be a different thing wearing the same name
    (sync-main as)
-    (two? as ? (udie 1 "sync: takes no operands here (no fsync nif)"), lit? (cite 'posix 'sync) ? (sync 0), 0)
+    (two? as ? (udie 1 "sync: takes no operands; fsync FILE.. syncs files"), lit? (cite 'posix 'sync) ? (sync 0), 0)
 
    ; -- mkfifo and mknod: mode carries the type bits too, as mknod(2) takes it:
    ; S_IFIFO 4096, S_IFCHR 8192, S_IFBLK 24576. linux packs a device number wide: major
