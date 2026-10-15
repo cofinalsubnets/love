@@ -323,6 +323,7 @@ struct g {
  // rescanned by the next minor. any rem_miss forces the next collection major (force sets one).
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by LvRemCap, the fixed capacity
+ uint64_t child_ign;                      // bit n: signal n stays ignored in a spawned child (a shell's trap '')
  int8_t lean;                             // grow-stickiness streak; a grow needs lean >= 2
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)

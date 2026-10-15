@@ -19,6 +19,7 @@
    readlink (cite 'posix 'readlink) rmdir (cite 'posix 'rmdir)
    selfpath (cite 'posix 'selfpath) stat (cite 'posix 'stat)
    sigclear (cite 'posix 'sigclear) sigfd (cite 'posix 'sigfd)
+   childign (cite 'posix 'childign)
    umask (cite 'posix 'umask)     rusage (cite 'posix 'rusage)
    rlimit (cite 'posix 'rlimit)   setrlimit (cite 'posix 'setrlimit)
    sigign? (cite 'posix 'sigign?)  sigtake (cite 'posix 'sigtake)
@@ -90,6 +91,9 @@
      sh-signums)
    ; every trapped condition that is a signal -- exit leaves by its own door
    (sh-sigconds S _) (filter (!= "EXIT") (keys (S 'sh-traps)))
+   ; the ones trapped with '': ignored, and kept so in a subshell and what the shell starts
+   (sh-igntraps S _) (filter (c \ 0 = #(peep (S 'sh-traps) c "")) (sh-sigconds S 0))
+   (sh-ignsigs S _) (filter (!= 0) (map sh-signum (sh-igntraps S 0)))
    ; a signal ignored on entry cannot be trapped (POSIX). snapshot before the
    ; interactive entry sets ignores of its own
    (sh-snapign S _)
@@ -100,7 +104,8 @@
    (sh-rearm S _)
      (: cs (sh-sigconds S 0)
         ns (filter (!= 0) (map sh-signum cs))
-        ((S 'sh-sigport) && close (S 'sh-sigport),
+        (childign (sh-ignsigs S 0),
+         (S 'sh-sigport) && close (S 'sh-sigport),
          pin S 'sh-sigport 0,
          sigclear 0,
          two? ns ? (sigfd ns @ p (hot? p ? (pin S 'sh-sigport p) 0)),
@@ -1533,8 +1538,8 @@
               (: _ (pin S 'sh-retf 0)            ; a stale interactive `return` must not clip the file
                  p (open f "r") _ (sh-lines S p "") _ (close p) (S 'sh-status))
               (cmderr S (f + ": not found")))))
-   ; trap [action] condition..: `-` and '' both remove the entry, so '' does not ignore;
-   ; `trap INT` is `trap - INT`
+   ; trap [action] condition..: `-` removes the entry, '' keeps it with nothing to run, which
+   ; ignores the signal here and in what the shell starts; `trap INT` is `trap - INT`
    (sh-cond w)
      (: u (sh-upper w)
         v (u @ ("SIG" + (s && 0 < #s)) s u)
@@ -1565,9 +1570,7 @@
                     ; a condition ignored on entry is skipped, silently (POSIX)
                     (each conds
                           (\ w (: c (sh-cond w)
-                                  (? (sh-ignored? S c) 0
-                                     #act (pin (S 'sh-traps) c act)
-                                     (pull (S 'sh-traps) c 0)))),
+                                  (? (sh-ignored? S c) 0 (pin (S 'sh-traps) c act)))),
                      0))))))
    ; which/where: a builtin, since PATH alone cannot see functions or the mode
    (sh-whichb S args)
@@ -1993,7 +1996,10 @@
      (: w <argv
         _ (sh-disarm S 0)                            ; the mask outlives an exec too
         _ (sh-exectty S 0)
+        ig (sh-ignsigs S 0)
+        _ (each ig (n \ signal n 1))                 ; trap '' rides the exec, as an ignore
         e (exec (sh-spawnv S argv))                  ; answers only when it did not happen
+        _ (each ig (n \ signal n 0))
         _ (sh-exectty S 1)
         _ (sh-rearm S 0)
         st (e @ 'enoent 127 126)
@@ -2233,12 +2239,14 @@
      (each (S 'sh-subfds) (\ e (close <e, catch >e, 0)),
       pin S 'sh-subfds (),
       pin S 'sh-online 0,                      ; nor inside a line: its `exit` ends the child
-      ; no parent traps (POSIX), and an empty mask, or ^C could not reach it
-      each (keys (S 'sh-traps)) (k \ pull (S 'sh-traps) k 0), (sh-disarm S) 0, 0)
+      ; no parent traps but the ignored (POSIX), and a mask of those alone, or ^C could not reach it
+      each (keys (S 'sh-traps)) (k \ (? (elem k (sh-igntraps S 0)) 0 (pull (S 'sh-traps) k 0))),
+      (sh-disarm S) 0, (two? (sh-igntraps S 0) ? (sh-rearm S 0) 0), 0)
    ; with no fork, a subshell task's state: a copy, cleared as a fork child clears its
    ; own; the fds, signal port and dispositions stay shared
    (sh-subtask S)
-     (sh-copy S @ c (pins c 'sh-subfds () 'sh-online 0 'sh-jc 0 'sh-sigport 0 'sh-traps {}))
+     (sh-copy S @ c (pins c 'sh-subfds () 'sh-online 0 'sh-jc 0 'sh-sigport 0
+                          'sh-traps (foldl (\ t k (pin t k "")) {} (sh-igntraps S 0))))
    (sh-tabsnap t) (map (k \ k . t k) (keys t))
    (sh-tabback t sn)
      (each (keys t) (k \ pull t k 0),

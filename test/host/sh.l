@@ -200,6 +200,20 @@
    r (hark ["out/love" "out/lush" "-c" "trap 'echo CAUGHT' INT; kill -INT $$; echo done"])
    _ (signal sig-int 0)
    (test ("done\n" = >r)))
+; trap '' is an ignore (POSIX): the shell lives through the signal, lists the entry, and
+; what it starts or becomes starts ignoring it too -- a subshell keeps it, `trap -` ends it
+(: r (hark ["out/love" "out/lush" "-c" "trap '' INT; kill -INT $$; echo alive"])
+   (test ("alive\n" = >r) (0 = <r)))
+(: r (hark ["out/love" "out/lush" "-c" "trap '' INT; trap"])
+   (test ("trap -- '' INT\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "trap '' INT; /bin/sh -c 'kill -INT $$; echo child'; echo parent"])
+   (test ("child\nparent\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "trap '' INT; exec /bin/sh -c 'kill -INT $$; echo kept'"])
+   (test ("kept\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "trap '' INT; (trap)"])
+   (test ("trap -- '' INT\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "trap '' INT; trap - INT; /bin/sh -c 'kill -INT $$; echo NOT'; echo after"])
+   (test ("after\n" = >r)))
 
 ; exec: the shell becomes the command, or keeps the redirects of one that is not
 ; there. the words after it run in this very process -- nothing after the line does
