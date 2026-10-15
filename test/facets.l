@@ -1,10 +1,6 @@
-; src/love/raster.c's facets: triangles onto a frame. a shared edge is drawn once, the nearer
-; face stands whichever comes first, a texture laid a texel a pixel comes back as it was, and
-; its level follows how many texels a pixel crosses. the loop holds more each round, so the
-; collections the frame asks for move it under the heap (make test_gcstress). frame-bytes
-; spells a frame for a window or a terminal, and frame-paint lays it on a window's paper; an
-; exposure rolls the light off as lore's eye does; a big frame drawn in bands over the pool
-; comes out the same at widths 1, 2 and 8
+; facets: triangles onto a frame. a shared edge drawn once, the nearer face standing,
+; textures and their levels; frame-bytes and frame-paint lay a frame out; an exposure rolls
+; the light off; a big frame drawn in bands over the pool comes out the same at widths 1, 2, 8
 (: (fc-flat l) (foldr (+) () l)
    (fc-g l) (fc-flat l @ f (gem-tray [(tally f)] f))
    (fc-z l) (fc-flat l @ f (star-tray [(tally f)] f))
@@ -33,9 +29,8 @@
    qt (fc-z [[0 3 2 0] [0 2 1 0]])
    (laid s texs fl) (facets 4 4 7 fc-id (quad s) qt texs (fc-g [[0.0 0.0 0.0 0.0 0.0 fl]]))
    (flat f) (map (k \ peep f [(k // 4) (k % 4)] 0) ^16)
-   ; the depth alone: the near face's, 2 where nothing was drawn; and a face lit only by the
-   ; sun (11 a vertex, its sun red), whole where the sun's view of it is clear, dark where
-   ; that view saw something nearer
+   ; the depth alone (2 where nothing was drawn); and a face lit only by the sun, dark
+   ; where the sun's view saw something nearer
    dop (fc-g [[0.0 0.0 0.0 0.0 0.0 16.0]])
    near (facets 4 4 7 fc-id nf (fc-z [[0 1 2 -1]]) () dop) none (facets 4 4 7 fc-id nf (fc-z []) () dop)
    (sv x y z) [(1.0 * x) (1.0 * y) (1.0 * z) 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0]
@@ -88,8 +83,7 @@
       (frame-bytes px2 2 1 = "EjRW////")
       (frame-bytes px2 0 2 = "\x12\x34\x56\x12\x34\x56\xff\xff\xff\xff\xff\xff\x12\x34\x56\x12\x34\x56\xff\xff\xff\xff\xff\xff")
       (frame-bytes px2 3 1 = ())
-      ; ..or paints it onto a window's paper, here 3 wide and 3 high: px2 a column, each pixel
-      ; 2 by 2, clipped at the paper's right and its bottom
+      ; ..or paints it onto a 3x3 paper, each pixel 2 by 2, clipped right and bottom
       (string (frame-paint px2 1 2 (cask 36) 3) = "\x56\x34\x12\x00\x56\x34\x12\x00\x00\x00\x00\x00\x56\x34\x12\x00\x56\x34\x12\x00\x00\x00\x00\x00\xff\xff\xff\x00\xff\xff\xff\x00\x00\x00\x00\x00")
       (string (frame-paint px2 0 1 (cask 4) 1) = "\x00\x00\x00\x00")
       ; an exposure of 1 shows white as 255 (1 - 1/e)

@@ -1,15 +1,7 @@
-; --- test/horn.l: the horn, PCM out as a port ---
-; the laws are the port's shape, not the sound: a full device refuses at the door,
-; the writer parks and the scheduler runs on, what has played drains at the rate.
-; on the host HORN=none picks the sink, a ring that keeps time and discards -- so
-; the gate needs no card and wakes no speaker. under inle the same laws meet a real
-; card: src/inle/hda.c's where the machine has a controller, the page's own where it is a
-; wasm module (src/inle/wasm/horn.c). a seat with neither is the errno nom.
+; --- the horn, pcm out as a port: the laws are the port's shape, not the sound ---
+; on the host HORN=none is a sink that keeps time and discards, so no card is needed
 
-; a wait yields: a task polls while the loop works, and marks it ran when it finds the loop
-; inside a call that waits. a call that waited 10 ms without it ran had the scheduler held.
-; on a loaded box the ring drains while the process is off the cpu and no call need wait:
-; then there is nothing to witness, and the law holds of no call
+; a wait yields: a call that waited 10 ms while the polling task never ran had the scheduler held
 (: (hn-witness box) (twirl (_ \ (: (go u) (? (box 'done) () (box 'in) (pin box 'ran 1) (: _ (rest 1) (go 0))) (go 0))) ())
    (hn-waits box f) (: a (clock 0) _ (pin box 'in 1) r (f 0) _ (pin box 'in ())
                        (: _ (? (clock a >= 10) (pin box 'waited 1) 0) r))
@@ -21,9 +13,7 @@
    _ (? (nom? h)
         ; no device: only inle on a machine with no card of its own may say so
         (test (h = 'enodev) (love-os = 'inle) !(elem love-arch '(x64 wasm)))
-        (: ; one second of silence, 4K at a time: the sink holds a quarter second, the
-           ; card's ring under two thirds, so the loop must WAIT for most of it -- and
-           ; while it waits another task gets to run
+        (: ; a second of silence, 4K at a time: the sink holds a quarter second, so the loop waits
            z (: (mk n acc) (n = 0 ? acc (mk (n - 1) (0 . acc))) (string (mk 4096 ())))
            box {}
            _ (hn-witness box)
@@ -42,13 +32,10 @@
             (test !(close m) !(horn-lag m) !(close h) !(horn-lag h)),
             ; and a horn is not the reader
             (test (quote (5) = sound "5")),
-            ; the policy word goes, so the environ laws downstream count what they always did
+            ; unset, so the environ laws downstream see no extra word
             (hosted ? (setenv "HORN" ()))))))
 
-; --- the horn turned round: capture is a port that reads. on the host HORN_IN=none is
-; silence heard at the rate, so a quarter second of it takes a quarter second to read,
-; and the reader parks while it waits. a seat's own card does not listen yet: the
-; errno nom, where the host always has the silence.
+; --- capture is a port that reads: HORN_IN=none is silence at the rate, and the reader parks ---
 (: _ (hosted ? (setenv "HORN_IN" "none"))
    hi (horn-in 48000 1)
    _ (test ('badarg = horn-in 100 1) ('badarg = horn-in 48000 3) ('badarg = horn-in 48000 "a"))
@@ -71,9 +58,7 @@
             (test !(close hi) !(horn-lag hi) !(close hj) !(horn-lag hj)),
             (hosted ? (setenv "HORN_IN" ()))))))
 
-; --- capture by a socket's listener: HORN_IN=sock:PATH says the rate, the u32's top byte
-; the channels, and reads the frames the listener sends until it hangs up; its lag is
-; what the listener sent and nobody has read yet
+; --- HORN_IN=sock:PATH: a u32 says the rate (top byte the channels), then frames until hangup ---
 (: _ (hosted ? (: path ("/tmp/.love-hornin-" + show (getpid 0) + ".sock")
                   l (listen ['unix path])
                   _ (setenv "HORN_IN" ("sock:" + path))
