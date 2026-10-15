@@ -1,8 +1,5 @@
-/* a block-scope `extern` declaration names the FILE-SCOPE object (C11 6.2.2p4):
- * it lays no slot and takes no local name, so a read sees what the rest of the
- * TU wrote and a write is seen by it. doom's d_net.c says
- * `extern boolean advancedemo;` inside a function and tested a slot nobody
- * wrote; every value below was garbage before that was fixed. */
+/* a block-scope extern names the file-scope object (C11 6.2.2p4): no slot, so
+ * reads and writes are shared with the rest of the TU. */
 #include <stdio.h>
 
 int seen_early = 3;

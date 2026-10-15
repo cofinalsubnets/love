@@ -1,8 +1,6 @@
-/* packed bit-fields as gcc lays them: the bits run on from the last member with no unit
- * alignment, the struct aligns 1, and a field reads and writes exactly the bytes it touches --
- * stores, ++, a local's initializer and a static image all reach them. a unit past the
- * register (64-bit targets only here) and, under -mstrict-align, the members a packed struct
- * holds whole: an array indexed, a struct passed and returned, a 128-bit value */
+/* packed bitfields as gcc lays them: bits run on with no unit alignment, align 1, each field
+ * touches only its bytes (stores, ++, initializers, static images); a unit past the register (64-bit
+ * only) and, under -mstrict-align, packed whole members */
 typedef unsigned long long u64;
 #define LAY 892678ull
 #define PORT 6457767320774498700ull

@@ -1,12 +1,6 @@
-; wasm fuzz -- random holo IR lowered by wasm-fn, run under node, every answer held to what
-; the program means. the other lanes read their bytes back through a foreign disassembler;
-; wasm has none in the tree and none on most boxes (no wabt, and llvm-mc does not disassemble
-; a module), so the second opinion here is the ENGINE: v8 decodes and runs what we laid, and
-; a wrong immediate or a mis-lowered shift stops being a plausible number.
-;
-; the model is the point. every op is simulated over an unsigned 64-bit register file with
-; wasm's own semantics -- shr_u against shr_s, i64.mul wrapping, div_u -- so the expectation
-; comes from the instruction's MEANING and not from a second run of our own code.
+; wasm fuzz: random holo ir lowered by wasm-fn and run under node. no disassembler reads a
+; module, so v8 is the second opinion, and each answer is held to a model of wasm's own
+; semantics over unsigned 64-bit registers (shr_u vs shr_s, wrapping mul, div_u).
 ; run: cat src/love/holo/holo.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/fuzz/wasm.l | out/love
 
 (borrow 'holo)
@@ -35,10 +29,9 @@
    (imm _) (coin 0 ? (pick imms) (rint -1000 1000))
    (src _) (coin 0 ? (pick regs) (imm 0))
 
-   ; ---- one instruction, in the operand shapes wasmfn's arms actually take ----
-   ; binary is 3-operand (dest, two values); a shift is 2-operand and in place; the unaries
-   ; likewise. udiv's divisor is a nonzero immediate: i64.div_u TRAPS on zero, and a trap is
-   ; not a wrong answer, it is a dead module.
+   ; ---- one instruction, in the operand shapes wasmfn's arms take ----
+   ; binary is 3-operand; a shift and the unaries are 2-operand in place. udiv's divisor is a
+   ; nonzero immediate: div_u traps on zero.
    (gen-op _)
     (: k (rnd 12) d (pick regs)
        (? (k < 5) [(pick bins) d (src 0) (src 0)]

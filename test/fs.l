@@ -1,14 +1,5 @@
-; --- test/fs.l: smoke test for the fs nifs (src/love/posix.c) ---
-; rename/symlink/readlink/chmod/chown/utime/umask link into `love` and love0 alike
-; (love0 carries the whole src/love/*.c glob since the self-host promotion), so these
-; are corpus laws. it still reads standalone (test comes from test/00-init.l):
-;   cat test/00-init.l test/fs.l | out/love
-; the conventions under test are src/love/posix.c's posix_ lane: an effect op answers
-; () ok | an errno nom | 'badarg misuse; a value op answers the value | () | a nom.
-
-; the seat: rename/symlink/chown/utime are the OS's own metadata, and inle's ramfs
-; answers for none of them -- `files` is true there and not enough, so these laws ask
-; for a kernel underneath. run.l guards the same way, for the same kind of reason.
+; the fs nifs: an effect op answers () ok, an errno nom, or 'badarg on misuse;
+; a value op answers the value, (), or a nom. hosted only: inle's ramfs keeps no such metadata
 (!hosted ? 0
 (: d ("out/.fs-nif-smoke." + show (getpid 0))        ; per process: shards run at once
    a (d + "/a") b (d + "/b") l (d + "/l")
@@ -23,18 +14,15 @@
       ('enoent = (rename a (d + "/x")))  ; a missing source is a live errno
       ('badarg = (rename 7 b))),         ; misuse: a non-string path
 
-    ; symlink + readlink: path becomes a link to target -- and the target string
-    ; resolves relative to the link's directory, so a link beside its file names
-    ; it bare. readlink answers that string verbatim; on a non-link (or a miss)
-    ; it is nothing. stat follows the link, so through l it sees the file whole.
+    ; symlink + readlink: the target resolves from the link's directory, readlink
+    ; answers it verbatim, and stat follows the link
     (test
       !(symlink "b" l)
       (readlink l = "b")
       (5 = <(stat l)) (32768 = (& 61440 <>>(stat l)))
       ((readlink b) = 'einval) ((readlink (d + "/nope")) = 'enoent)),
 
-    ; chmod: the permission bits land exactly (0600 = 384); utime: the mtime
-    ; lands on the stat scale (MILLISECONDS), and a non-charm ms reads "now"
+    ; chmod: the bits land exactly (0600 = 384); utime: milliseconds, a non-charm is "now"
     (test
       !(chmod b 384)
       (384 = (<>>(stat b) - 32768))
@@ -64,8 +52,7 @@
         ('enoent = (rmdir e))                      ; already gone: a live errno
         ('badarg = (rmdir 7))))),
 
-    ; hardlink: two names, one file -- content shows through both, and the
-    ; survivor keeps it when the first name unlinks
+    ; hardlink: two names, one file; the survivor keeps it when the first unlinks
     ((d + "/h") @ h
      (unlink h,
       (test
@@ -75,9 +62,7 @@
         (unlink b, (5 = <(stat h)))
         !(unlink h)))),
 
-    ; copyfile: a value op -- the byte count, or the failure's nom. an empty source
-    ; answers 0, a falsy success, which is why every caller asks charm? and never
-    ; the truth.
+    ; copyfile: the byte count or a nom; an empty source answers a falsy 0, so ask charm?
     (: c (d + "/c") z (d + "/z")
        ((open c "w" @ p (say p "five!", close p)),
         (open z "w" @ p (close p)),
@@ -90,9 +75,7 @@
           !(unlink c) !(unlink z)
           !(unlink (d + "/c2")) !(unlink (d + "/z2"))))),
 
-    ; selfpath: the running binary's own path, the seat every library walk starts
-    ; from. no cwd and no argv here -- an absolute path at a real regular file is
-    ; the whole contract, and it is what the per-OS doors have to agree on.
+    ; selfpath: the running binary, an absolute path at a regular file
     (selfpath 0 @ s
      (test
        (string? s)
@@ -100,16 +83,12 @@
        (32768 = (& 61440 <>>(stat s)))         ; s_ifreg: a file, not the /proc link
        (0 < <(stat s)))),
 
-    ; the OS roster: the linux lane is compiled in, not its stub. a lost
-    ; __linux__ predefine compiles posix.c's lanes out in silence, so probe one:
-    ; the stub always answers 'enosys, the real mount answers the call's own
-    ; errno (nobody mounts "" on / as no-such-fs). sigfd's twin assert lives in
-    ; test/host/sh.l. forks on the OS when a second one joins.
+    ; the os lane is compiled in, not its stub: the stub answers 'enosys, a real mount
+    ; its own errno
     (mount "" "/" "no-such-fs" @ e
      (test (nom? e) !(e = 'enosys))),
 
-    ; a NUL inside a path is misuse: the kernel would stop at it, and open a shorter path
-    ; than the one love was asked about (d + NUL + "x" would be d)
+    ; a NUL inside a path is misuse: the kernel would stop at it, at a shorter path
     ((d + string 0 + "x") @ z
      (test ('badarg = (open z "r")) ('badarg = (stat z)) ('badarg = (lstat z))
            ('badarg = (openfd z 0)) ('badarg = (readdir z)) ('badarg = (unlink z))

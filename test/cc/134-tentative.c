@@ -1,28 +1,6 @@
-/* a tentative definition COMPLETES an earlier `extern T x[];`.
- *
- * C's composite-type rule (6.2.7): where one declaration of an object has an
- * array type of unknown size and another has a size, the composite type has
- * the size. gen's tentative rule (6.9.2) was keeping whichever entry already
- * stood unless the newcomer carried an INITIALIZER -- so
- *
- *     extern char a[];      <- entered at size 0
- *     char a[1024];         <- tentative, no initializer: entry kept
- *
- * left `a` laid in .bss at SIZE ZERO. Which is not a refusal and not a wrong
- * answer at the site: it is the NEXT global getting the same address. Two
- * such arrays alias completely, and the link succeeds.
- *
- * this is exactly the shape a header makes, so it is the common one rather
- * than a corner: gzip.h declares `extern char ifname[], ofname[];` and gzip.c
- * defines both. With them aliased, gzip 1.2.4 built, linked, ran, printed its
- * version and its compilation options -- and then opened its OUTPUT name for
- * reading, because setting ofname had overwritten ifname. `gzip -c f` died at
- * open("stdout") and `gzip f` at open("V.gz"): a plausible-looking errno from
- * a program whose first four syscalls were all correct.
- *
- * the sizes here are the two gzip uses. The witness is that a write through
- * one name leaves the other alone -- and the trailing scalars catch the
- * milder version where the arrays are distinct but one is laid short. */
+/* a tentative definition completes an earlier `extern T x[];` (C 6.2.7): the
+ * object is laid at full size, so a write through one array leaves the other alone
+ * and the trailing scalars catch one laid short. */
 #include <stdio.h>
 
 extern char a[];

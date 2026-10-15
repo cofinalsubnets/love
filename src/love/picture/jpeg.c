@@ -2,10 +2,10 @@
 // (jpeg-encode w h rgba q) -> a baseline jfif of the w*h rgba image at quality 1..100 | ()
 // jpeg's own tables (itu t.81 annex k) scaled by quality as libjpeg scales them, 4:2:0
 // chroma, alpha dropped. the stream is sized by a counting pass, then written.
-// (jpeg-pixels s o) -> the rgba of a baseline or progressive jpeg, grey or ycbcr (rgb by
-// adobe's word), any sampling, laid upright by exif orientation o (1..8) | why not: 1 not
-// a jpeg, 2 cut short, 3 a kind it can't read (arithmetic, lossless, 12-bit, cmyk), 4 a
-// bad table or scan, 5 past 2^24 pixels
+// (jpeg-pixels s o) -> the rgba of a baseline or progressive jpeg, grey, ycbcr (rgb by
+// adobe's word), or cmyk (ycck by adobe's), any sampling, laid upright by exif orientation o
+// (1..8) | why not: 1 not a jpeg, 2 cut short, 3 a kind it can't read (arithmetic,
+// lossless, 12-bit), 4 a bad table or scan, 5 past 2^24 pixels
 #include "love.h"
 #include "bytes.h"
 #include <stdint.h>
@@ -228,10 +228,10 @@ struct jd {
  uintptr_t fed;                  // zero bytes fed past the scan's data
  uint16_t q[4][64];              // natural order
  struct jd_huff dc[4], ac[4];
- struct jd_comp c[3];
+ struct jd_comp c[4];
  int nc, hmax, vmax, w, h, prog, frame, scans, ri, adobe, transform, eobrun;
  uintptr_t mcux, mcuy;
- int ns, sc[3], ss, se, ah, al; };
+ int ns, sc[4], ss, se, ah, al; };
 
 // scans past this many are ignored; a real progressive file has about ten
 #define JD_MAXSCANS 1000
@@ -381,7 +381,7 @@ static int jd_sof(struct jd *d, const uint8_t *p, int n, int m) {
  if (m != 0xc0 && m != 0xc1 && m != 0xc2) return 3;
  if (n < 6 || p[0] != 8) return 3;
  d->h = (int) ld16be(p + 1), d->w = (int) ld16be(p + 3), d->nc = p[5], d->prog = m == 0xc2;
- if (!d->h || !d->w || (d->nc != 1 && d->nc != 3)) return 3;
+ if (!d->h || !d->w || (d->nc != 1 && d->nc != 3 && d->nc != 4)) return 3;
  if (n < 6 + 3 * d->nc) return 4;
  if ((uintptr_t) d->w * (uintptr_t) d->h > (uintptr_t) 1 << 24) return 5;
  d->hmax = d->vmax = 1;
@@ -533,6 +533,15 @@ static uintptr_t jd_at_or(int ori, uintptr_t x, uintptr_t y, uintptr_t w, uintpt
   case 8: return (w - 1 - x) * h + y;
   default: return y * w + x; } }
 
+static void jd_ycc(uint8_t *o, int l, int b, int r) {
+ b -= 128, r -= 128;                              // + 2^24 keeps the shifts on positives
+ o[0] = jd_clamp(l + ((91881 * r + 32768 + (1 << 24)) >> 16) - 256);
+ o[1] = jd_clamp(l + ((-22554 * b - 46802 * r + 32768 + (1 << 24)) >> 16) - 256);
+ o[2] = jd_clamp(l + ((116130 * b + 32768 + (1 << 24)) >> 16) - 256); }
+
+// a*b/255, rounded
+static int jd_mul255(int a, int b) { int t = a * b + 128; return ((t >> 8) + t) >> 8; }
+
 static void jd_rgba(struct jd *d, uint8_t *out, int ori) {
  int rgb = d->nc == 3 && ((d->adobe && !d->transform)
                           || (d->c[0].id == 'R' && d->c[1].id == 'G' && d->c[2].id == 'B'));
@@ -543,12 +552,14 @@ static void jd_rgba(struct jd *d, uint8_t *out, int ori) {
    if (d->nc == 1) o[0] = o[1] = o[2] = (uint8_t) l;
    else {
     int b = jd_sample(d, &d->c[1], x, y), r = jd_sample(d, &d->c[2], x, y);
-    if (rgb) o[0] = (uint8_t) l, o[1] = (uint8_t) b, o[2] = (uint8_t) r;
-    else {
-     b -= 128, r -= 128;                          // + 2^24 keeps the shifts on positives
-     o[0] = jd_clamp(l + ((91881 * r + 32768 + (1 << 24)) >> 16) - 256);
-     o[1] = jd_clamp(l + ((-22554 * b - 46802 * r + 32768 + (1 << 24)) >> 16) - 256);
-     o[2] = jd_clamp(l + ((116130 * b + 32768 + (1 << 24)) >> 16) - 256); } }
+    if (d->nc == 4) {                             // adobe's cmyk, stored inverted: 255 no ink
+     uint8_t c[3];
+     int k = jd_sample(d, &d->c[3], x, y);
+     if (d->adobe && d->transform == 2) jd_ycc(c, l, b, r), c[0] = 255 - c[0], c[1] = 255 - c[1], c[2] = 255 - c[2];
+     else c[0] = (uint8_t) l, c[1] = (uint8_t) b, c[2] = (uint8_t) r;
+     for (int i = 0; i < 3; i++) o[i] = (uint8_t) (k - jd_mul255(255 - c[i], k)); }
+    else if (rgb) o[0] = (uint8_t) l, o[1] = (uint8_t) b, o[2] = (uint8_t) r;
+    else jd_ycc(o, l, b, r); }
    o[3] = 255; } }
 
 static uintptr_t jd_scratch(struct jd *d) {

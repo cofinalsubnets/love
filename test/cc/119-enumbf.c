@@ -1,15 +1,6 @@
-/* an enum with no negative enumerator has an UNSIGNED underlying type.
- *
- * Every enum canonicalized to `int`, so an enum bit-field extracted with an
- * arithmetic shift: `enum tree_code code : 8` holding 148 loaded back -108, the
- * switch over it took `default`, and nothing said a word (c-testsuite's 00218).
- *
- * gcc's rule, and the one the corpus holds us to: unsigned when no enumerator is
- * negative, signed when one is. It rides the TAG, so a later `enum c` by tag
- * alone extracts the same way as the definition did -- which is how 00218 spells
- * it, and an anonymous enum written straight into the member must work too.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* an enum with no negative enumerator is unsigned, so an enum bit-field reads
+ * back zero-extended -- by definition, by tag alone, or anonymous in the member.
+ * each check adds 1: the exit code is the pass count. */
 
 enum pos { P0 = 0, P148 = 148, P149 };            /* bit 7 set, none negative */
 enum neg { N1 = -1, N148 = 148 };                 /* one negative: stays signed */

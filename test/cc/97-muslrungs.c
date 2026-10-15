@@ -1,8 +1,5 @@
-/* the musl rungs: C99 [static n] array parameters, the __builtin_va_list
- * builtin typedef (+ __builtin_va_copy), and __typeof/__typeof__ -- the
- * declaration surface musl 1.2.5 stands on (its alltypes.h typedefs va_list
- * from the builtin; its weak_alias declares through __typeof; syscall.h's
- * __procfdname takes a [static n] buffer). freestanding, exit-code only. */
+/* [static n] array parameters, the builtin __builtin_va_list typedef and
+ * __builtin_va_copy, and __typeof/__typeof__. */
 
 typedef __builtin_va_list va_list;
 typedef __builtin_va_list __isoc_va_list;

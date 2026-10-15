@@ -1,9 +1,5 @@
-/* __builtin_bswap16/32/64 -- the byte-order trio glibc's <byteswap.h> inlines
- * reach (every TU that includes <endian.h> compiles them). The results type
- * UNSIGNED at their exact width: a swapped high bit is real, so the compare
- * and the sizeof rows are load-bearing, not decoration.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* __builtin_bswap16/32/64 type unsigned at their exact width: the compare and
+ * sizeof rows are load-bearing. each check adds 1: the exit code is the pass count. */
 
 extern int printf(const char *, ...);
 

@@ -1,7 +1,5 @@
-/* an always_inline body spliced where it is called: a switch holding returns with more after it
- * (linux's cpucap_is_possible), a break at the switch's level that must still meet that tail,
- * a case that falls out of the switch into it, and a value no case names. 256 shows the splice
- * itself. freestanding, exit-code only. */
+/* an always_inline body spliced in: a switch with returns and a tail after it, a switch-level
+ * break that must reach the tail, a case falling out, a value no case names. exit-code only. */
 
 static inline __attribute__((__always_inline__)) int pick(int x, int other)
 {

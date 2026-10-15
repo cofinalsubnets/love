@@ -1,16 +1,6 @@
-/* the gcc builtins that answer a CONSTANT at parse, plus the library ones and the
- * l/ll counting spellings -- all held to gcc, which is the only reason the exact
- * values below are written out.
- *
- *   - __builtin_offsetof rides the same fold as the hand-written &((T*)0)->m idiom,
- *     so the two spellings cannot disagree; the designator takes .b and [i] tails.
- *   - __builtin_types_compatible_p compares the MARKED types _Generic keeps, so an
- *     inner const tells `const char *` from `char *`, and NOTHING decays: T[] is
- *     not T*, which is the question linux's __must_be_array asks it.
- *   - __builtin_constant_p is 1 only where the parse-time fold settles the operand.
- *     CONSERVATIVE: a miss answers 0 and sends the consumer down its runtime lane.
- *   - __builtin_memcpy and friends ARE the plain functions, declared on the way past.
- */
+/* parse-time builtins held to gcc: __builtin_offsetof (.b and [i] tails),
+ * __builtin_types_compatible_p (no decay: T[] is not T*), __builtin_constant_p
+ * (0 when unsure), and __builtin_memcpy & co. as the plain functions. */
 #include <stddef.h>
 
 struct S { int a; char b; int c[4]; };

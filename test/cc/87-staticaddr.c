@@ -1,9 +1,6 @@
-/* a static initializer may be any CONSTANT ADDRESS EXPRESSION -- a label plus a
- * compile-time byte offset. exercises: &arr[i], the decayed array + const
- * (pointer arithmetic scaled by the element), a const-expr subscript, &struct
- * .member, &arr[i].member (nested), and the bare decay. every pointer is laid
- * as an abs64 relocation with the offset as its addend; gen folds the offset,
- * holo/obj/link carry the addend, so *p reads the right cell. gcc agrees. */
+/* a static initializer may be any constant address: &arr[i], decay + const,
+ * a const-expr subscript, &s.member, &arr[i].member, the bare decay -- each an
+ * abs64 relocation with the offset as addend. */
 struct pt { int x, y, z; };
 static int a[5] = {0, 10, 20, 30, 40};
 static struct pt s = {7, 8, 9};

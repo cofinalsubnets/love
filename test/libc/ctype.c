@@ -1,18 +1,7 @@
-/* the ctype thirteen, over the WHOLE argument domain.
- *
- * each predicate answers 256 times -- one line of 256 '0'/'1' -- so the
- * differential is exhaustive rather than sampled, and a drift names both the
- * function and the exact byte. that is worth doing here and nowhere else: the
- * domain is small enough to enumerate, which is rare.
- *
- * the C locale is the whole contract. glibc without setlocale is in it, and
- * ours has no locales at all, so the two agree by construction from 0..127. the
- * 128..255 half is the interesting one -- a table-driven ctype that indexed with
- * a SIGNED char, or one that let the high half through, would show here.
- *
- * tolower/toupper are reported as VALUES, not flags: they must pass every
- * non-letter through unchanged, which a mapping table gets wrong at exactly the
- * bytes nobody tries by hand. */
+/* the ctype thirteen over the whole domain: each predicate prints 256 '0'/'1', so a
+ * drift names the function and the byte. the c locale: 0..127 agree by construction,
+ * 128..255 catches a signed-char index or a leaking high half. tolower/toupper print
+ * values: every non-letter passes through unchanged. */
 #include <ctype.h>
 #include "say.h"
 
@@ -23,7 +12,7 @@ static void mask(char const *nm, int (*f)(int)) {
  say_s(nm, row); }
 
 static void mapping(char const *nm, int (*f)(int)) {
- /* the fixed points collapse to a single mark; only the MOVED bytes are
+ /* the fixed points collapse to a single mark; only the moved bytes are
     spelled out, so a drift reads as a short diff rather than 256 numbers */
  for (int c = 0, r; c < 256; c++)
   if ((r = f(c)) != c) say_n(nm, c), say_n(nm, r); }
@@ -44,13 +33,9 @@ int main(void) {
  mapping("tolower", tolower);
  mapping("toupper", toupper);
 
- /* the partition laws, checked rather than assumed: every byte is exactly
-    one of print/cntrl or neither (the 128..255 half is neither), and
-    graph = print minus the space.
-    every answer is normalized with !! first. a predicate's TRUE is
-    implementation-defined -- glibc hands back the mask bit it tested
-    (_ISalnum is 8), ours hands back 1 -- so comparing two of them with !=
-    finds a difference that is not one. found by this gate, in this file. */
+ /* the partition laws: every byte is one of print/cntrl or neither (128..255 is neither),
+    and graph = print minus space. answers go through !! first: a predicate's true is
+    implementation-defined (glibc answers its mask bit). */
  int bad = 0;
  for (int c = 0; c < 256; c++) {
   if (isprint(c) && iscntrl(c)) bad++;

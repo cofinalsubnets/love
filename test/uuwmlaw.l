@@ -1,17 +1,11 @@
-; test/uuwmlaw.l -- the laws of the window-manager moves, over the ops that
-; test/uuwm.l generated from src/apps/lux/core.l (this file loads after it by sort
-; order; the substrate + kernel live in test/uu.l). This is the stage-5 lock:
-; the theorems below are checked against terms compiled from the source, so a
-; core.l edit that breaks an invariant fails a proof right here, on every
-; target, at `make test`. zsane is the specification (a row with no
-; duplicates); zinsane is Swierstra's insert invariant.
+; test/uuwmlaw.l -- window-manager laws, proved of uuwm.l's terms from src/apps/lux/core.l
+; zsane is the specification (a duplicate-free row); zinsane is Swierstra's insert invariant.
 
 ; --- the specification: sanity is a duplicate-free row ---
 (test
  (defn zsane (pi z stk bool) (lam z (nodupb (zrow z)))))
 
-; --- the moves compute: rows, counts, focus motion (the wrap included),
-; --- the master reorder, the swaps, and all four delete faces ---
+; --- the moves compute: rows, counts, focus, master, swaps, the delete faces ---
 (test
  (4 = (vof 0 '(zcount (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil))))))
  (5 = (vof 0 '(zcount (zins 4 (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil)))))))
@@ -42,12 +36,8 @@
   = (vof 0 '(ncons 7 (ncons 5 nnil))))
  ((vof 0 '(zfoc (zswapdn (zmk 5 (ncons 2 nnil) (ncons 7 nnil))))) = 5))
 
-; --- the theorems, proved OF the compiled terms. zrevrev is sigma-eta;
-; --- zfocins is computation; zcountins is natplusnsm riding maponpaths
-; --- (add (succ n) m unfolds to succ (add n m) even on a neutral n);
-; --- zinsane -- Swierstra's insert invariant -- is nodupmid instantiated
-; --- at the row's split, since zrow (zins w z) is lapp (lrev up)
-; --- (ncons w (ncons f dn)) by computation ---
+; --- the theorems: zcountins is natplusnsm under maponpaths; zinsane is nodupmid
+; --- at the row's split, as zrow (zins w z) computes to lapp (lrev up) (w f . dn) ---
 (test
  (defn zrevrev (pi z stk (paths stk (zrev (zrev z)) z))
    (lam z (idpath z)))

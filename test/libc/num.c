@@ -1,15 +1,5 @@
-/* the number parsers -- the part of the floor that has a RULE in it rather than
- * a loop, and therefore the part that actually drifted.
- *
- * moonlibc's strtol used to WRAP on overflow where glibc saturates, so one source
- * text read as two different numbers depending on which libc the binary carried;
- * love.c's reader leaned on the wrap to carry hex kernel addresses
- * (free/klink.l). the reader now reads all three integer bases itself and
- * never calls strtol, which is exactly why this needs a gate of its own: nothing
- * else in the tree observes the difference any more.
- *
- * endptr is reported as an OFFSET (say.h) -- the addresses differ, the
- * offsets do not. */
+/* the number parsers: overflow saturates with ERANGE, the bounds, the one wrap the
+ * standard asks for, every base, the scan's edges. endptr is reported as an offset. */
 #include <stdlib.h>
 #include <limits.h>
 #include <errno.h>
@@ -32,7 +22,7 @@ static void U(char const *nm, char const *s, int base) {
  say_n(nm, errno == ERANGE ? 1 : 0); }
 
 int main(void) {
- /* --- the overflow rule: SATURATE, do not wrap, and say ERANGE --- */
+ /* --- the overflow rule: saturate, do not wrap, and say ERANGE --- */
  L("over.dec", "99999999999999999999999999", 10);
  L("over.neg", "-99999999999999999999999999", 10);
  L("over.hex", "0xffffffff80200000", 16);
@@ -41,7 +31,7 @@ int main(void) {
  U("over.udec", "99999999999999999999999999", 10);
  U("over.uhex", "0xffffffffffffffffff", 0);
 
- /* --- the exact bounds: the digits that land ON the limit must NOT trip
+ /* --- the exact bounds: the digits that land on the limit must not trip
     the overflow test, in either direction --- */
  L("bound.max", "9223372036854775807", 10);
  L("bound.min", "-9223372036854775808", 10);
@@ -51,7 +41,7 @@ int main(void) {
  U("bound.umax", "18446744073709551615", 10);
  U("bound.overumax", "18446744073709551616", 10);
 
- /* --- ..and the one wrap the standard DOES ask for: a leading minus
+ /* --- ..and the one wrap the standard does ask for: a leading minus
     negates the magnitude modulo the width --- */
  U("neg.one", "-1", 10);
  U("neg.two", "-2", 10);
@@ -70,7 +60,7 @@ int main(void) {
  L("plain.b36", "zz", 36);
  L("plain.b2", "1011", 2);
 
- /* --- the edges of the SCAN: leading space, no digits, a partial parse,
+ /* --- the edges of the scan: leading space, no digits, a partial parse,
     a prefix with nothing after it, a base that forbids the digits --- */
  L("scan.space", "   \t\n 17rest", 10);
  L("scan.nodigits", "abc", 10);
@@ -82,10 +72,8 @@ int main(void) {
  L("scan.oct9", "0778", 8);          /* stops at the 8 */
  L("scan.plusminus", "+-5", 10);
  L("scan.dec_x", "12x", 0);
- /* no invalid-base case here. base must be 0 or 2..36 and the standard
-    says nothing about the rest: BOTH libraries return 0 and leave endptr
-    untouched, so a differential on it compares two uninitialized pointers
-    and fails at random. (it did, on this gate's first run.) */
+ /* no invalid-base case: the standard leaves it open, both libcs return 0 and leave
+    endptr untouched, so a differential would compare uninitialized pointers */
 
  /* --- the wider twins share the body; check they answer alike --- */
  char *e;                       /* the scratch endptr, shared with the strtod lane below */
@@ -104,15 +92,10 @@ int main(void) {
  say_n("abs.zero", abs(0));
  say_n("labs", labs(-1234567890123L));
 
- /* --- strtod: ours is lm_strtod, correctly rounded, and the reader's float
-    lane rides it on every target. compared through its BITS, because a
-    decimal reprint would hide a one-ulp difference -- which is the whole
-    thing lm_strtod exists to get right. --- */
+ /* --- strtod, correctly rounded, compared through its bits: a reprint would hide an ulp --- */
  double d;
- /* ..and C99 7.20.1.3's HEX lane, where the exponent is optional and the
-    significand is already binary: the ties and the subnormal floor are the
-    rows that would catch a rounding slip, and 0x / 0xg back up to the "0"
-    alone, leaving the x -- which is what the endptr column pins. */
+ /* ..and the hex lane (C99 7.20.1.3): the ties and the subnormal floor catch a rounding
+    slip, and 0x / 0xg back up to the "0", leaving the x (the endptr column) */
  char const *cases[] = { "0.3", "1.5", "-2.25", "1e10", "1e-10", "3.14159265358979",
                          "0.1", "123456789.123456789", "5e-324", "1.7976931348623157e308",
                          "0", "-0.0", "  42.5xyz", "nope",

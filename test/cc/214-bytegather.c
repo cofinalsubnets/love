@@ -1,7 +1,6 @@
-/* a little-endian byte gather is one load: (T)p[0] | (T)p[1] << 8 | .. over consecutive
- * bytes of one unsigned char pointer, in any term order, at two, four and eight bytes, at an
- * offset; and the shapes that are not one -- a gap, a signed byte, two pointers, a byte out of
- * place, a big-endian order -- keep their meaning. each is held to a byte loop, and to gcc. */
+/* a little-endian byte gather is one load (2, 4, 8 bytes, any term order, at an offset); a gap,
+ * signed byte, two pointers, misplaced byte or big-endian order keep their meaning. held to a byte
+ * loop and gcc. */
 
 #include <stdint.h>
 

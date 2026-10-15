@@ -227,14 +227,16 @@
         h))
    (tar-pour s n wr)
     (: b (peep s 'b "")   o (peep s 'o 0)   have (#b - o)
-       (n <= have ? (wr (snip b o (o + n)), pin s 'o (o + n), n)
-          (: _ (0 < have ? (wr (snip b o #b)) 0)
-             _ (pins s 'b "" 'o 0)
-             (go k) (peep s 'rd () 0 @ p
-                       (? (#p = 0) (n - k)
-                          (#p < k) (wr p, go (k - #p))
-                          (wr (snip p 0 k), pins s 'b p 'o k, n)))
-             (go (n - have)))))
+       (? (n <= have) (: _ (wr (snip b o (o + n))) _ (pin s 'o (o + n)) n)
+          (: _ (0 < have ? (wr (snip b o #b)) 0) _ (pins s 'b "" 'o 0) (tar-pour1 s wr n (n - have)))))
+   ; k of n still to pour, the buffer empty. the last piece's arm is a function of its own: as an
+   ; arm here, storing p into s kept the turn before it from being a tail call, every piece held
+   (tar-pour1 s wr n k)
+    (: p (peep s 'rd () 0)
+       (? (#p = 0) (n - k)
+          (#p < k) (: _ (wr p) (tar-pour1 s wr n (k - #p)))
+          (tar-pour-end s wr p k n)))
+   (tar-pour-end s wr p k n) (: _ (wr (snip p 0 k)) _ (pins s 'b p 'o k) n)
    (tar-rd s) (_ \ (: b (peep s 'b "")   o (peep s 'o 0)
                      (o < #b ? (pins s 'b "" 'o 0, snip b o #b) (peep s 'rd () 0))))
    ; the members as they come off s: (f e b) for each, e the entry with its 'size and no

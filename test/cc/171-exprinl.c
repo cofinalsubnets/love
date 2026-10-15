@@ -1,7 +1,5 @@
-/* a one-expression callee at a position evaluated conditionally or in a loop -- a ?: arm, the
- * right of && || or a comma, a loop's test or step -- is its expression in place: nothing runs
- * that would not have, an arg that may trap stays where it was, a hoisted one reads after the
- * statement's earlier writes. main answers how many shapes agree with the value C gives them (16). */
+/* a one-expression callee in a conditional or loop position (?: arm, && || comma right, loop
+ * test or step) inlines in place: nothing extra runs, a trapping arg stays put. main answers 16. */
 
 typedef unsigned long word;
 struct tr { int rank; long shape[2]; };

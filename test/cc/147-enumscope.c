@@ -1,13 +1,6 @@
-/* C11 6.2.1p7 -- an enum constant declared in a BLOCK has that block's scope, so it
- * comes back off at the closing brace. Ours pinned into one flat table and never took
- * it off, so a constant declared inside one function answered in every later one.
- * 146-declscope.c holds the other half of the same rule (a declarator is in scope for
- * the initializers after it); 78-enumshadow.c holds the local-hides-a-constant case.
- *
- * The shape that shows it: a file-scope constant and a block-scope one of the SAME
- * name. Both spellings compile either way, so only the VALUE says which scope won.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* C11 6.2.1p7: an enum constant declared in a block leaves at its closing brace; a
+ * file-scope and block-scope one share a name, so only the value says which won.
+ * each check adds 1: the exit code is the pass count. */
 
 extern int printf(const char *, ...);
 

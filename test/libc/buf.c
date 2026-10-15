@@ -1,22 +1,9 @@
-/* stdio's BUFFERING edges -- the fill boundary, at every alignment.
- *
- * THE BYTES ALONE CANNOT SEE THIS FAMILY. a stream that overruns its buffer
- * writes its payload to the memory just past it and then hands that same
- * contiguous run to write(2) at the next flush, so the output is CORRECT while
- * the heap behind it is not -- the defect that prompted this file emitted 8448
- * byte-identical bytes before the runaway reached an unmapped page. so the
- * buffer is followed by a GUARD that is read back directly: the differential
- * still compares the payload, but the count below is what actually names it.
- *
- * setvbuf is called ONCE, before any other use of the stream -- ISO C fixes
- * no behaviour for a second one, and a small buffer is the whole instrument:
- * it puts the boundary 128 times over in 20 kB instead of once in 8 kB.
- *
- * the law: a buffered stream is never LEFT full. filling it exactly must drain
- * it, or the next byte lands one past the end and a `len == cap` fill test
- * never matches again -- unbounded from there. fputc alone cannot reach it
- * (it drains on the byte that fills); it takes an fwrite/fputs landing flush
- * against the end, which is why the sweep pairs the two. */
+/* stdio's buffering edges: the fill boundary at every alignment. an overrun still writes
+ * the right bytes (the run past the buffer is what gets flushed), so a guard after the
+ * buffer is read back: its count names the fault, the payload cannot. setvbuf once, small,
+ * puts the boundary 128 times in 20 kB. the law: a full buffer is drained at once, or a
+ * `len == cap` test never matches again; fputc drains on the filling byte, so the sweep
+ * pairs it with fwrite/fputs landing flush against the end. */
 #include <stdio.h>
 #include <string.h>
 #include "say.h"

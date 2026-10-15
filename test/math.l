@@ -1,13 +1,11 @@
-; transcendentals + sqrt + power + pi, under both the love and the math.h spellings.
-; host uses libm; precision is ~1 ulp so identities don't need a slop band
-; except where two errors compound (e.g. (sine pi) is ~1e-16, not exactly 0).
+; transcendentals, sqrt, power and pi, love and math.h spellings; ~1 ulp, slop only where errors compound
 
 (: (near? a b eps) (((a < b ? (b - a) (a - b)) - 0) < eps)
    (near a b)       (near? a b (word ? 1e-12 1e-5))   ; f32 reals (wasm) need a looser eps
    (very-near a b)  (near? a b (word ? 1e-15 1e-5))
 
    (test
-    ; --- pi from boot.l, basic identities ---
+    ; --- basic identities ---
     (1.0 = cos 0)
     (0.0 = sin 0)
     (-1.0 = cos pi)
@@ -19,7 +17,7 @@
     (near 1.0 (sin 1.234 * sin 1.234 + cos 1.234 * cos 1.234))
     (near 1.0 (sin -0.7 * sin -0.7 + cos -0.7 * cos -0.7))
 
-    ; --- atan inverse of tan in (-pi/2, pi/2); tan is now (/ (sine x) (cosine x)) ---
+    ; --- atan inverse of tan in (-pi/2, pi/2) ---
     (near 0.7 (arg (1 ~ (sin 0.7 / cos 0.7))))
 
     ; --- atan2 quadrants ---
@@ -59,24 +57,22 @@
     ; --- the math.h spellings name the same functions ---
     (sin = sine) (cos = cosine) (tan = tangent) (fabs = abs)
     (3.0 = sqrt 9.0) (very-near e (exp 1))
-    ; one exponent, three spellings -- and it is the tower, not the inexact leaf `fpow`
-    ; underneath it: exact on whole exponents, elementwise on an array one.
+    ; one exponent, three spellings, all the tower: exact on whole exponents, elementwise on trays
     (power 2 10 = (2 ** 10)) (pow 2 10 = (2 ** 10)) (1024 = power 2 10)
     (8.0 = power 2.0 3.0) (gem-tray '(2) '(4.0 9.0) = power @(2.0 3.0) 2)
     (very-near (pi / 4) (atan 1.0)) (very-near (pi / 4) (atan2 1.0 1.0))
     (very-near pi (atan2 0 -1))
 
-    ; --- non-numeric arg → nil ---
-    ; (nil counts as numeric — it's putnum(0).)
+    ; --- non-numeric arg -> nil; nil itself counts as 0 ---
     !(sine "x")
     !(twin "x" 1)      ; twin of a non-number -> nil (so (arg (twin 1 "x")) folds to 0)
 
-    ; --- generic over bignums: the operand widens full-magnitude (g_big_to_flo) ---
+    ; --- a bignum operand widens full-magnitude ---
     (1125899906842624.0 = (1 / 2) 1267650600228229401496703205376) ; sqrt(2^100) = 2^50
     (gem? (2.0 1267650600228229401496703205376))                     ; bignum^2.0 -> float
     (word ? (1e300 < 1e20 2) 1)                                    ; 2^1e20, f64 only -- 1e300 is inf in f32
 
-    ; --- power elementwise over arrays (numpy broadcast); float lane -> r ---
+    ; --- power elementwise over arrays, broadcast ---
     (gem-tray = tier (2.0 (star-tray '(2) '(2 3))))                ; array^2.0 -> float array
     (aall (2 (gem-tray '(3) '(1 2 3)) = gem-tray '(3) '(1 4 9))) ; array ^ scalar
     (aall (gem-tray '(3) '(1 2 3) 2 = gem-tray '(3) '(2 4 8))) ; scalar ^ array (array numeral)
@@ -84,10 +80,8 @@
            =  gem-tray '(3) '(1 4 9)))
     (near 1.570796326794897 (peep (arg ((gem-tray '(2) '(1 0)) ~ (gem-tray '(2) '(1 1)))) 1 0))
 
-    ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to
-    ;     the array's element form -- full magnitude in a float array, low bits in
-    ;     an int array (modular, so it wraps: 2^64 + 5 contributes 5). Comparison
-    ;     against a bignum stays magnitude-exact -- see test/bignum.l ---
+    ; --- bignum + array: the bignum demotes to the element form, full magnitude in a float
+    ;     array, low bits in an int array ---
     (aall (star-tray '(2) '(1 2) + 18446744073709551621        ; 2^64 + 5 -> low word 5
            = star-tray '(2) '(6 7)))
     (1e19 < peep (gem-tray '(2) '(0 0) + 18446744073709551616) 0 0)))  ; 2^64 full magnitude

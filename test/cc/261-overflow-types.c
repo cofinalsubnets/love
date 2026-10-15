@@ -1,7 +1,5 @@
-/* __builtin_{add,sub,mul}_overflow as C defines them: the exact value of a op b, each operand
- * in its own type, stored in *r's type modulo its width, and whether it fit there -- for every
- * result width and signedness, mixed-sign operands, and a store that touches *r alone.
- * freestanding, exit-code only. */
+/* __builtin_{add,sub,mul}_overflow: the exact a op b in the operands' own types, stored modulo
+ * *r's width, and whether it fit -- every width and sign, mixed signs, *r alone touched. exit-code only. */
 
 typedef unsigned long size_t;
 

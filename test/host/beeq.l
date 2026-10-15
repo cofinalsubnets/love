@@ -10,6 +10,9 @@
    bq-app (bq-home + "/src/apps/bee.l")
    bq-root (bq-home + "/out/.beeq-" + show (getpid 0))
    _ (mkdir bq-root 493)
+   ; a session running these passes its own hive down -- BEE_HIVE, BEE_NAME, BEE_AS -- and a
+   ; world would read the live sessions and write its cells among them: HOME alone says here
+   _ (map (\ k (setenv k ())) ["BEE_HIVE" "BEE_NAME" "BEE_AS"])
    (bq-put p s) (: f (open p "w") _ (say f s) (close f))
    (bq-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ""))
    bq-find fsub
@@ -565,7 +568,8 @@
 
 ; queue_gate: the head row's union gated by bee -- every owed lane through test/gate/lanes.sh (a stub
 ; here) under the heavy lock, the row green with each result or waiting with its reds and the rows owing
-; them; refused off the head, or dirty; after a split only the red lanes run again
+; them; refused off the head, or dirty; after a split only the red lanes run again. the first gate
+; is asked by a server that stays up, so its card holds the name while the gate runs
 (: w (bq-world "gate") lq bq-q
    (sha r) (bq-out (bq-git w ["rev-parse" r]))
    _ (hark ["mkdir" "-p" (w 'repo + "/test/gate")])
@@ -575,12 +579,16 @@
                        "  if [ -f red-$a ]; then echo \"$a exit=1 secs=0\" >> $d/summary; rc=1"
                        "  else echo \"$a exit=0 secs=0\" >> $d/summary; fi;; esac; done"
                        "exit $rc"]))
-   (calls nm cs)
+   (calls nm cs) (calls-for nm cs "")
+   ; ..and hold: the server's stdin stays open that much longer after the asks, the name its card's
+   (calls-for nm cs hold)
     (: f (w 'dir + "/" + nm + ".in")
        _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
                                                 "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
                          "" cs))
-       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       srv ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp")
+       r (bq-sh w (? (0 < #hold) ("sh -c \"(cat " + bq-sq f + "; sleep " + hold + ") | " + srv + "\"")
+                     (srv + " < " + bq-sq f)))
        (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
               {} (filter (\ l (0 < #l)) (lines (r 1)))))
    (row p) (: ls (filter (\ l (starts? l (p + " "))) (lines (bq-out (bq-git w ["cat-file" "-p" lq]))))
@@ -588,7 +596,7 @@
    m (sha "test")
    a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "gated_on" m "gated_head" (sha "ant") "leader" "queen"}]])
    _ (bq-git w ["checkout" "-q" "ant"])
-   g1 (calls "ant" [[2 "queue_gate" {"dir" (w 'repo)}]])
+   g1 (calls-for "ant" [[2 "queue_gate" {"dir" (w 'repo)}]] "8")
    ok1 (bq-until (\ _ (has? (row "1") " green  #")) 300)
    args (bq-get (w 'repo + "/out/args"))
    _ (bq-git w ["checkout" "-q" "bob"])                              ; bob's change owes test_kore

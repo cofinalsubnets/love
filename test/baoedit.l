@@ -1,15 +1,6 @@
-; --- test/baoedit.l: a smoke test for the raw-line editor (src/love/boot/post.l `edraw`) ---
-; edraw reads from a port arg (here a (tap ..), never stdin), which keeps it clear of the
-; corpus stream love0 reads. run: cat test/00-init.l test/baoedit.l | out/love
-; interactive editing on a real tty stays manual.
-
-; (ed-keys l) = a sip over the byte list l -> an input port edraw reads keystroke by
-; keystroke. event bytes: 13 = Enter; 4 = ^D; 127 = backspace; ESC [ D/C/H/F =
-; left/right/home/end. abc = the charlist "abc", the target of every edit.
-; eof = the sentinel edraw returns at ^D / port EOF: captured by reading it back
-; off an empty port (the sentinel is bao-private now -- the editor no longer leaks
-; its `eofsym` global, so we name it by what edraw produces, not by its binding).
-; the editor paints stdout and asks the terminal questions: muted, so neither reaches it
+; the raw-line editor edraw, fed keys from a (tap ..) port, never stdin
+; keys: 13 enter, 4 ^D, 127 backspace, ESC [ D/C/H/F left/right/home/end.
+; eof is edraw's private sentinel, read back off an empty port; output muted
 (: edraw (k \ p \ test-mute (_ \ cite 'cli 'edraw k p))
    edln (k \ p \ h \ test-mute (_ \ cite 'cli 'edln k p h))
    edlay (cite 'cli 'edlay)
@@ -17,7 +8,7 @@
    abc [97 98 99]
    eof (edraw (ed-keys 0) ""))
 
-; submit, edit, and EOF -- all returning the raw bytes (no parseall), prompt "".
+; submit, edit, and eof: raw bytes, prompt ""
 (: _ (test
    ; plain: a b c Enter -> "abc"
    (abc = edraw (ed-keys [97 98 99 13]) "")
@@ -34,11 +25,9 @@
    ; port EOF (empty input) -> the same sentinel
    (eof = edraw (ed-keys 0) "")))
 
-; --- edln: edraw plus command history. returns (line . nhist), or 'eof at EOF
-; (a public symbol, not edraw's private sentinel). same editing primitives; up/
-; down (ESC [ A / ESC [ B) recall through hist (past lines, most-recent first).
+; --- edln: edraw plus history, answering (line . nhist) or 'eof; up/down recall
 (: _ (test
-   ; the editing primitives carry over -- the line is now (cap r):
+   ; the editing primitives carry over; the line is (cap r)
    (abc = <(edln (ed-keys [97 98 99 13]) "" ()))          ; a b c -> "abc"
    (abc = <(edln (ed-keys [97 99 27 91 68 98 13]) "" ())) ; a c, left, b -> "abc"
    (abc = <(edln (ed-keys [97 98 120 127 99 13]) "" ()))  ; a b x <bsp> c -> "abc"
@@ -55,16 +44,14 @@
    ; the live draft survives an up/down round-trip:
    ([120] = <(edln (ed-keys [120 27 91 65 27 91 66 13]) "" [abc]))))      ; x, up, down -> "x"
 
-; a bracketed paste is text: a line break in it breaks the buffer's line and submits nothing,
-; a crlf is one break, a tab stays and every other control goes; the whole buffer is the line
+; a bracketed paste is text: a break (crlf one) splits the line, submits nothing; a tab stays
 (: _ (test
    ("ab\nc" = string (edraw (ed-keys [97 27 91 50 48 48 126 98 10 99 27 91 50 48 49 126 13]) ""))
    ("x\ny\n\tz" = string (edraw (ed-keys [27 91 50 48 48 126 120 13 10 121 10 27 1 9 122 27 91 50 48 49 126 13]) ""))
    ("ls" = string <(edln (ed-keys [27 91 50 48 48 126 108 115 27 91 50 48 49 126 13]) "" ()))
    (0 = (cite 'cli 'edkey (ed-keys [27 91 50 48 49 126])))))     ; a stray close is a miss
 
-; a terminal that answers DECRQM with ?2027 set measures by grapheme cluster, and the editor
-; then measures, steps and deletes by cluster too; reset, or unknown, it stays off
+; a terminal answering DECRQM ?2027 set makes the editor work by grapheme cluster
 (: edkey (cite 'cli 'edkey) edgc (cite 'cli 'edgc)
    (bs s) (map (i \ s i) (jot #s))
    fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"         ; 👨‍👩‍👧: 18 bytes, three wide chars
@@ -79,9 +66,8 @@
     (test ([0 8 0] = edlay 80 2 () (rev (bs fam)) () ()))))                   ; off: wcwidth's six
 
 
-; the layout under the redraw: [row col endrow] of the cursor on a screen w wide, rows
-; from the buffer's first. a line wraps at w; one ending on the margin leaves the
-; cursor pending, so it covers no extra row -- but the cursor itself is placed past it
+; edlay: the cursor's [row col endrow] on a screen w wide; a line ending on the margin
+; takes no extra row, but the cursor sits past it
 (: _ (test
    ([0 3 0] = edlay 80 2 () ^1 () ())             ; "> a": row 0, column 3
    ([1 0 0] = edlay 10 2 () ^8 () ())             ; the cursor on the margin: the row below, col 0
