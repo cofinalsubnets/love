@@ -1,8 +1,6 @@
-/* gas's macro language, held to gcc: the kernel's exception-table macro finds the error
- * register's number by name -- `.macro` with :req parameters, `.set` symbols counting through
- * `.irp` loops, `.ifc` against each register's spelling, `.if` over `!=` guarding an `.error`,
- * a keyword call and `.purgem`. which register the compiler picks is its own, so the entry is
- * read as a type and a register number. a target with no template here computes the same. */
+/* gas macros, held to gcc: .macro with :req, .set counting through .irp, .ifc on register
+ * spellings, .if != guarding .error, keyword calls, .purgem; the register is the compiler's, so the
+ * entry reads as type and number. */
 
 extern const int __start_tai_ex[], __stop_tai_ex[];
 #if defined(__x86_64__)

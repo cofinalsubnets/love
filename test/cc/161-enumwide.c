@@ -1,7 +1,5 @@
-/* two rows the kernel's own headers need: an enumerator that does not fit an int
- * (gcc widens the underlying type rather than refusing), and a _Static_assert
- * standing as a struct member -- which is what `sizeof(struct {_Static_assert(..);})`
- * is, the shape include/linux/const.h builds const_true out of. */
+/* an enumerator past int widens the underlying type, and a _Static_assert may
+ * stand as a struct member. */
 #include <stdio.h>
 
 enum wide {

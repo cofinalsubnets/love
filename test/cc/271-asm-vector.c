@@ -1,8 +1,6 @@
-/* the vector rows through an inline template, held to gcc: pshufb (a64 rev32) turns each word's
- * bytes, palignr shifts a register pair, pblendw takes halves by mask, and where the cpu says the
- * sha extensions are there sha256msg1 (a64 sha256su0) lays its schedule step, checked against the
- * same step in C. the asm names its vector clobbers. a target with no template computes the same
- * answers. */
+/* vector ops through inline asm, held to gcc: pshufb (a64 rev32), palignr, pblendw, and
+ * sha256msg1 (a64 sha256su0) where the cpu has it, checked against c; the asm names its vector
+ * clobbers. targets without a template compute the same. */
 
 static unsigned rr(unsigned x, int n) { return (x >> n) | (x << (32 - n)); }
 

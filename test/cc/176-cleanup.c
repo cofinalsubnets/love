@@ -1,7 +1,5 @@
-/* gcc's __attribute__((cleanup(f))), held to gcc: f(&v) runs on every way out of v's
- * scope -- the block's end, return (after the value is taken), break and continue,
- * a goto to a label outside, an asm goto -- innermost and newest first. linux's guard()
- * and scoped_guard() are these shapes. a log of calls is the answer. */
+/* __attribute__((cleanup(f))), held to gcc: f(&v) on every exit of v's scope (block end,
+ * return after the value, break, continue, goto out, asm goto), innermost first. a call log answers. */
 
 static int log_[64], nl;
 static void note(int *p) { if (nl < 64) log_[nl++] = *p; }

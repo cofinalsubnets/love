@@ -1,8 +1,6 @@
-/* an aligned ask on a struct: after the body (the kernel's struct page, 56 bytes of members
- * that are 64 with its `__aligned__(2 * sizeof(unsigned long))`), before the tag, on a typedef'd
- * anonymous struct, carried into an enclosing struct and an array, and a constant expression
- * as the ask on a variable; and a member's own ask, trailing, `_Alignas`, leading, beside
- * packed, and on the second of two declarators. held to gcc. */
+/* aligned on a struct: after the body, before the tag, on a typedef'd anonymous struct, carried
+ * into an enclosing struct and array, a constant expression ask; a member's ask trailing, _Alignas,
+ * leading, beside packed, on a second declarator. held to gcc. */
 
 #include <stddef.h>
 

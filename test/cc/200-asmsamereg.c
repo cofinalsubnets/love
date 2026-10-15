@@ -1,7 +1,5 @@
-/* an asm input pinned to the register an output also pins: gcc reads it as that output's
- * tie -- the input goes in, the output comes out of the same register. zstd's cpuid
- * ("=a"(n) : "a"(0), "=c" beside "c"(0)) and clear_page's "=D"(page) : "D"(page). the
- * asm is x64's; elsewhere the answers are spelled in C. held to gcc. */
+/* an asm input pinned to the register an output pins is that output's tie ("=a"(n) : "a"(0),
+ * "=D"(p) : "D"(p)). x64 asm, c elsewhere. held to gcc. */
 
 static unsigned leaf0(void) {
   unsigned n;

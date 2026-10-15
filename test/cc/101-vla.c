@@ -1,14 +1,6 @@
-/* C99 variable-length arrays (x64 + a64), the musl shapes: a plain runtime-dim
- * local (execl's char *argv[argc+1]), sizeof over one (getcwd's `size =
- * sizeof tmp`), a decl RE-EXECUTED in a loop (execvp's char b[l+k+1] --
- * each pass must free the prior block or the stack walks away), a runtime
- * STRIDE pointee (lsearch's char (*p)[width]), a 2D outer-runtime array
- * (res_msend's alen_buf[nqueries][2]), and sizeof of a VLA TYPE
- * (if_nameindex's sizeof(struct if_nameindex[n+1])).
- *
- * the loop case is the leak canary: 10000 iterations x 8KB is 80MB of
- * stack if a re-execution forgets to free -- a segfault, not a wrong
- * answer. freestanding, exit-code only. */
+/* C99 VLAs: a runtime-dim local, sizeof over one, a decl re-executed in a loop, a
+ * runtime-stride pointee, a 2D outer-runtime array, sizeof of a VLA type. the loop
+ * is the leak canary: 10000 x 8KB of stack if a pass does not free its block. */
 
 typedef unsigned long size_t;
 

@@ -1,13 +1,6 @@
-/* #line moves the reported line (C11 6.10.4) -- it had never moved anything, so
- * a generated .c reported positions in the generator's output rather than in the
- * source it came from. Plus the two declarator rows that landed beside it: `[*]`
- * as a prototype's unspecified VLA bound, and a function-typed parameter carrying
- * a non-empty parameter list.
- *
- * `#line N` makes the NEXT line N, so the line after it is N and not N+1.
- * the file operand is accepted and DROPPED -- __FILE__ stays the TU's name, so
- * nothing here may test it.
- */
+/* #line N makes the next line N; its file operand is dropped, so __FILE__ is not
+ * tested. plus `[*]` as a prototype VLA bound and a function-typed parameter with
+ * a parameter list. */
 
 /* the operands for the two macro-expanded `#line`s below: a plain object macro, and
    one that only becomes a digit sequence after a second round of expansion */
