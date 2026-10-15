@@ -115,9 +115,12 @@
  items {2011 ['hp 10 100] 2012 ['hp 25 100] 2014 ['hp 1 200] 2013 ['hp 100 200] 2015 ['ar 1 200] 2018 ['ar 100 100]
    2019 ['ar 200 200] 2007 ['bul 10 200] 2048 ['bul 50 200] 2008 ['shl 4 50] 2049 ['shl 20 50] 8 ['bul 10 200]
    2001 ['gun 2 8] 2002 ['gun 3 20] 5 ['key 'b 0] 40 ['key 'b 0] 6 ['key 'y 0] 39 ['key 'y 0] 13 ['key 'r 0] 38 ['key 'r 0]}
- ; ..a gun: [sprite flash ammo pellets damage dice spread tics reach]
- guns [["PUNG" () () 1 2 10 0.0 14 64.0] ["PISG" "PISF" 'bul 1 5 3 0.05 14 4096.0]
-       ["SHTG" "SHTF" 'shl 7 5 3 0.2 37 4096.0] ["CHGG" "CHGF" 'bul 1 5 3 0.08 4 4096.0]]
+ ; ..a gun: [sprite flash ammo pellets damage dice spread frames reach flashes], its firing a frame
+ ;   letter a tic and its flash's, "." none, as the DeHackEd docs list the states
+ guns [["PUNG" () () 1 2 10 0.0 "BBBBCCCCDDDDDCCCCBBBBB" 64.0 ""]
+       ["PISG" "PISF" 'bul 1 5 3 0.05 "AAAABBBBBBCCCCBBBBB" 4096.0 "....AAAAAAA"]
+       ["SHTG" "SHTF" 'shl 7 5 3 0.2 "AAAAAAAAAABBBBBCCCCCDDDDCCCCCBBBBBAAAAAAAAAA" 4096.0 "...AAAABBB"]
+       ["CHGG" "CHGF" 'bul 1 5 3 0.08 "AAAA" 4096.0 "AAAA"]]
  ; --- the shapes: the map's box cut by each node's line to its subsectors, each by its segs ---
  (side-of a b) (: x (a 0) y (a 1) dx (b 0 - x) dy (b 1 - y) (p \ (p 0 - x) * dy - (p 1 - y) * dx))
  (lerp a b t) [(a 0 + t * (b 0 - a 0)) (a 1 + t * (b 1 - a 1))]
@@ -252,8 +255,10 @@
  (gun-over st f w h) (: g (guns (st 'gun)) cache (peep st 'gunc () @ () (pin st 'gunc {}) c c)
    (px k) (: id (k + show w + "x" + show h) (peep cache id () @ () (: v (gun-px st w h k) _ (pin cache id v) v) v v))
    (lay f k) (: p (px k) (#(p 0) > 0 ? (pin f (p 0) (p 1)) f))
-   f2 (lay f (g 0 + (st 'gcd > g 7 // 2 ? "B0" "A0")))
-   (st 'flash > 0 && string? (g 1) ? (lay f2 (g 1 + "A0")) f2))
+   ; ..the tic of its firing it is at, its frame and its flash's then
+   i (st 'gcd > 0 ? (#(g 7) - st 'gcd) -1) (at s) (i < 0 || i >= #s ? 46 (s i))
+   f2 (lay f (g 0 + string (at (g 7) @ 46 65 c c) + "0"))
+   (at (g 9) = 46 || !(string? (g 1)) ? f2 (lay f2 (g 1 + string (at (g 9)) + "0"))))
  (wad-pens st) (: k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) sc (st 'sc)
    v (mesh-eye w h [(st 'px) (st 'py) (st 'pz)] (st 'th) (st 'ph) 0.0 fov 2.0 8000.0)
    all (sc 'secs + sprites st)
@@ -289,7 +294,7 @@
    (pins st 'M M 'wd wd 'sc (wad-scene wd M) 'objs (objs-of M) 'movers () 'dirty {} 'lines (lines-of M) 'sol () 'nb nb
         'spec (star-tray [#(M 'lines)] (map (l \ l 3) (M 'lines))) 'exit ()
         'px x 'pz z 'py (1.0 * (M 'secs (wad-sector M x z) 0) + eye-h) 'th ((90 - p 2) * pi / 180.0) 'ph 0.0 'msg (M 'name)))
- (fresh st) (pins st 'hp 100 'ar 0 'ac 0 'bul 50 'shl 0 'has [0 1] 'gun 1 'keys () 'gcd 0 'flash 0 'frac 0.0)
+ (fresh st) (pins st 'hp 100 'ar 0 'ac 0 'bul 50 'shl 0 'has [0 1] 'gun 1 'keys () 'gcd 0 'frac 0.0)
  (wad-new w h wd M) (wad-size (enter (fresh {'deep 0 'kitty 0 'kp 1 't 0}) wd M) w (h // 2))
  (wad-size st w r) (mesh-size st w r)
  (restart st) (enter (fresh st) (st 'wd) (wad-map (st 'wd) (st 'M 'name)))
@@ -444,7 +449,7 @@
  (fire st) (: g (guns (st 'gun)) a (g 2) th (st 'th) px (st 'px) pz (st 'pz)
    (? (st 'gcd > 0 || st 'hp <= 0) st
       (a != () && st a < 1) (pin st 'msg "no ammo")
-      (: _ (pins st 'gcd (g 7) 'flash (a = () ? 0 4) 'msg "")
+      (: _ (pins st 'gcd #(g 7) 'msg "")
          _ (a = () ? 0 (pin st a (st a - 1)))
          _ (each (st 'objs) (o \ (two? (o 'm) && !(o 'deaf) && sq (o 'x - px) + sq (o 'z - pz) < 2560000.0 ? (pin o 'heard 1) 0)))
          _ (each ^(g 3) (_ \ (aim st (th + g 6 * (randf 1.0 - 0.5)) (g 8) @ () 0 o (hit st o (g 4 * (1 + rand (g 5)))))))
@@ -453,7 +458,7 @@
  (use st) (: th (st 'th) c (crossed st (st 'px) (st 'pz) (st 'px + 64.0 * sin th) (st 'pz + 64.0 * cos th))
    (atom? c ? st (act st (<c 1) 'u)))
  ; --- the tic, 35 a second: movers, monsters, fireballs, what is taken; then what moved laid again ---
- (tic st) (: s (pins st 'sol () 'gcd (max2 0 (st 'gcd - 1)) 'flash (max2 0 (st 'flash - 1)) 't (st 't + 1))
+ (tic st) (: s (pins st 'sol () 'gcd (max2 0 (st 'gcd - 1)) 't (st 't + 1))
    _ (pin s 'movers (filter (m \ move-tic s m = 1) (s 'movers)))
    _ (each (s 'objs) (o \ (o 'gone = 1 ? 0 (o 'proj = 1 ? (fly s o) (two? (o 'm) ? (think s o) 0)))))
    s2 (take s)
