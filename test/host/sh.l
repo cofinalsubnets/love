@@ -214,6 +214,9 @@
    (test ("trap -- '' INT\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c" "trap '' INT; trap - INT; /bin/sh -c 'kill -INT $$; echo NOT'; echo after"])
    (test ("after\n" = >r)))
+; completion offers every builtin the shell dispatches on, not a list kept beside it
+(: S ((cite 'lush 'sh-new) 0) cmds (cite 'lush 'sh-cmds)
+   (test (elem "eval" (cmds S "ev")) (elem "ev" (cmds S "ev")) (elem "trap" (cmds S "tra"))))
 
 ; exec: the shell becomes the command, or keeps the redirects of one that is not
 ; there. the words after it run in this very process -- nothing after the line does

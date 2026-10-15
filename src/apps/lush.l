@@ -2501,8 +2501,6 @@
         (? (hot? o) (say o (ln + "\n"), flush o, close o) 0))
 
    ; --- completion: (insert . candidates) off the text left of the cursor ------
-   sh-builtins '("cd" "exit" "exec" "export" "pwd" "jobs" "fg" "bg" "which" "where" "type"
-                 "kill" "umask" "getopts" "readonly" "alias" "unalias" "times" "hash" "ulimit")
    (sh-prefix? p s) (: n #p ((n <= #s) && (p = (snip s 0 n))))
    (sh-comm2 a s)                               ; longest common prefix of two
      (: n (? (#a < #s) #a #s)
@@ -2520,7 +2518,7 @@
         (go (i + 1) st acc))))
    (sh-verbnames _) (map string (keys (cite 'verbs 'tab)))
    (sh-cmds S w)                                  ; command candidates for prefix w
-     (sh-uniq (sort (filter (sh-prefix? w) sh-builtins +
+     (sh-uniq (sort (filter (sh-prefix? w) sh-binames +   ; the dispatch table itself, so none is missed
                      (? (2 = (sh-mode S) 0) () (filter (sh-prefix? w) (sh-verbnames 0))) +
                      (catmap (filter (sh-prefix? w) * readdir) (sh-pathdirs (sh-path ()))))))
    (sh-dirp q) (: st (stat q) (two? st && (16384 = (61440 & (st 2)))))
