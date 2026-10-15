@@ -4,13 +4,15 @@
 # arm-none-eabi-gcc answers for the same source on the same cpu. the reference is newlib over
 # semihosting, which qemu-arm speaks: an arm compiler, so arm's layout and its unsigned char.
 #
-# four lists, each asserted:
+# five lists, each asserted:
 #   refuse   mooncc has no lane: nonzero exit, no signal, the diagnostic names the file.
 #            the day a lane lands this fails, and the name comes off.
 #   narrow   the program assumes a 64-bit long: the reference must fail it too (a nonzero
 #            exit), and ours must run it to an exit, not a signal.
 #   wide     ..so far that it is not C on ilp32 (a static assert, a bit-field past its type):
 #            both compilers must refuse it, ours naming the file.
+#   w128     __int128, which arm-none-eabi-gcc has no lane for: the host gcc's build of the same
+#            source, run here, is the reference instead (the programs keep to a 64-bit long long).
 #   hosted   the reference cannot speak for it: ours must still build it and run it to an
 #            exit, not a signal. 72 and 125 newlib's gcc will not build; newlib's allocator
 #            answers short of 150's contract and passes one of 298's wraps through; 160 asks
@@ -27,7 +29,8 @@ set -u
 ho=$1
 m=$2
 name=test_ccarm
-refuse="111-int128 151-w128fuzz 161-enumwide 291-enumahead"
+refuse="161-enumwide 291-enumahead"
+w128="111-int128 151-w128fuzz"
 wide="68-static-assert 120-bfinit"
 narrow="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
 hosted="72-quals 125-widelit 150-alloc 160-rangeinit 297-frameaddr 298-malloc-wrap 300-aligned-alloc 301-free-checks"
@@ -69,6 +72,13 @@ for f in test/cc/*.c; do
   esac
   ref=1
   case " $hosted " in *" $b "*) ref=0 ;; esac
+  case " $w128 " in
+    *" $b "*)
+      cc -w -O1 -o "$d/$b.g" "$f" > "$d/$b.glog" 2>&1 \
+        || { cat "$d/$b.glog" >&2; fail "$b: the host cc could not build it"; }
+      (cd "$d" && timeout 60 "./$b.g" > "$b.gout" 2>&1; echo $? > "$b.grc")
+      rg=$(cat "$d/$b.grc"); ref=2 ;;
+  esac
   if [ $ref = 1 ]; then
     gccarm -w -O1 -o "$d/$b.g" "$f" -lm > "$d/$b.glog" 2>&1 \
       || { cat "$d/$b.glog" >&2; fail "$b: arm-none-eabi-gcc could not build it (list it as hosted?)"; }
