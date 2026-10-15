@@ -103,7 +103,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | wget.l, over the tls stack | wget |
 | openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 3's spelling) |
 | src/apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
-| src/apps/gz.l, src/apps/xz.l, src/apps/bz2.l, src/apps/tar.l, src/apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (src/love/compress/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (src/love/compress/bz2.c), tar, cpio |
+| src/apps/gz.l, src/apps/xz.l, src/apps/bz2.l, src/apps/zstd.l, src/apps/tar.l, src/apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (src/love/compress/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (src/love/compress/bz2.c), zstd unzstd zstdcat (src/love/compress/zstd.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |

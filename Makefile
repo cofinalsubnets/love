@@ -316,8 +316,8 @@ moon_mid = src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/app
 # the archives: the codec, then the two containers over it. a kore member rather than
 # a crew one because the distro's /bin IS the kore cat -- a userland that cannot open
 # a tarball is not one, and these are the tools that open every tarball there is.
-# tar before xz: xz reads a stream through tar's source
-kore_arc = src/apps/gz.l src/apps/tar.l src/apps/xz.l src/apps/bz2.l src/apps/cpio.l
+# tar before xz and zstd: they read a stream through tar's source
+kore_arc = src/apps/gz.l src/apps/tar.l src/apps/xz.l src/apps/bz2.l src/apps/zstd.l src/apps/cpio.l
 # the tls stack and the multi-call door that ends kore's cat
 kore_net = src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/verify.l src/apps/tls/client.l src/apps/tls/p256.l src/apps/tls/cert.l \
   src/apps/ssh/sha512.l src/apps/ssh/ed25519.l src/apps/ssh/aes.l src/apps/ssh/bcrypt.l src/apps/ssh/client.l \

@@ -51,7 +51,8 @@
 ;                                    (src/apps/kore/openssl.l, over the tls stack)
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (src/apps/gz.l), xz|unxz|xzcat the .xz
 ;                                    one (src/apps/xz.l, src/love/compress/xz.c's LZMA2), bzip2|bunzip2|bzcat
-;                                    (src/apps/bz2.l, src/love/compress/bz2.c); tar and cpio the
+;                                    (src/apps/bz2.l, src/love/compress/bz2.c), zstd|unzstd|zstdcat
+;                                    (src/apps/zstd.l, src/love/compress/zstd.c); tar and cpio the
 ;   kore tar {c|x|t}[vzjJ] -f A      two containers over it (src/apps/tar.l, src/apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l
@@ -825,6 +826,8 @@
             'lzcat (cite 'xzcmd 'xzcat-main)
             'bzip2 (cite 'bz2cmd 'bzip2-main) 'bunzip2 (cite 'bz2cmd 'bunzip2-main)
             'bzcat (cite 'bz2cmd 'bzcat-main)
+            'zstd (cite 'zstdcmd 'zstd-main) 'unzstd (cite 'zstdcmd 'unzstd-main)
+            'zstdcat (cite 'zstdcmd 'zstdcat-main)
             'tar (cite 'tarcmd 'tar-main) 'cpio (cite 'cpiocmd 'cpio-main)
             ; the byte tools, the clock's other face, and the four one-liners
             'dd dd-main 'xxd xxd-main 'strings strings-main 'hexdump hexdump-main 'hd hd-main
@@ -1049,7 +1052,8 @@
     'zcat (cite 'gzcmd 'gzc-help)
     'xz (cite 'xzcmd 'xzc-help) 'unxz (cite 'xzcmd 'xzc-help) 'xzcat (cite 'xzcmd 'xzc-help)
     'unlzma (cite 'xzcmd 'xzc-help) 'lzcat (cite 'xzcmd 'xzc-help)
-    'bzip2 (cite 'bz2cmd 'bzc-help) 'bunzip2 (cite 'bz2cmd 'bzc-help) 'bzcat (cite 'bz2cmd 'bzc-help)}
+    'bzip2 (cite 'bz2cmd 'bzc-help) 'bunzip2 (cite 'bz2cmd 'bzc-help) 'bzcat (cite 'bz2cmd 'bzc-help)
+    'zstd (cite 'zstdcmd 'zsc-help) 'unzstd (cite 'zstdcmd 'zsc-help) 'zstdcat (cite 'zstdcmd 'zsc-help)}
 
    ; echo, test and [ read no options at all -- posix says so, and a script writing
    ; `echo --help` means the word. cook and lush answer the flags themselves, each
@@ -1172,6 +1176,7 @@ every tool answers --help and --version, and -h where the letter is free
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (src/apps/gz.l)
   xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (src/apps/xz.l)
   bzip2 | bunzip2 | bzcat [-cdfkqtvz1-9]       the block-sorting one (src/apps/bz2.l)
+  zstd | unzstd | zstdcat [-cdfkqtvz#] [-o F]  zstandard (src/apps/zstd.l)
   tar {c|x|t}[vzjJaO] [-f A] [-C D] [M..]      the ustar archive; z gzip, j bzip2, J xz (src/apps/tar.l)
   cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (src/apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
