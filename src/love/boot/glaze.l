@@ -251,7 +251,7 @@
    amble-nil (:)
    amble-lam (mint 0)                                             ; the inner-lambda site marker: (amble-lam i n v..) -- entry i of arity n, curried through the imports v..
    (amax a b) (a < b ? b a)
-   (adistinct l) (l @ (a . u) (!(elem a u) && adistinct u) 1)
+   (adistinct l) (: (go l t) (l @ (a . u) (peep t a 0 ? 0 (go u (pin t a 1))) 1) (go l {}))   ; no name twice
    (amentions? x e) (? (aquote? e) 0  (e = x) 1  (two? e) (foldl (\ a y (a || amentions? x y)) 0 e)  0)
    ; the params name distinct slots; a captured sequencing binder may arrive as several _, harmless
    ; while nothing reads _
@@ -411,7 +411,8 @@
                ['? ['== (adesug env ti ta <as) (adesug env ti ta <>as)] 0 1]
              ((op = op0 ? (adesug env ti ta op0) op) . map (x \ adesug env ti ta x) as))))
    ; alets: the value-let binders of e, or 'bad: even tally (the body-less form binds the enclosing
-   ; scope), name binders, no shadowing (enc = those in scope); one slot serves a name wherever bound
+   ; scope), name binders, no shadowing (enc = those in scope); one slot serves a name wherever bound.
+   ; past 48, more than the slots ok allows, it stops: 'bad
    (alets e acc) (alt e acc ())
    (alt e acc enc)
     (? (acc = 'bad) 'bad
@@ -428,7 +429,7 @@
                          (? (a2 = 'bad) 'bad
                             (p = '_) (gol >>l a2 en)
                             (elem p en) 'bad
-                            (gol >>l (elem p a2 ? a2 (p . a2)) (p . en))))))))
+                            (gol >>l (elem p a2 ? a2 (48 <= #a2 ? 'bad (p . a2))) (p . en))))))))
             >e acc enc))
        (foldl (\ ac x (alt x ac enc)) acc e))
    ; adrv?: does e drive -- a self-call or an applied frame nom? the non-loop cost gate: a body whose
@@ -497,9 +498,9 @@
        envl (lts = 'bad ? env (env + lts))
        ; a free head that is not farq resolves via gv at compile (redefinition-stale); a farq name is a
        ; woven sibling, called as entry(imports.. args..) off lz's frozen (entry . import-names), never gv
-       cand (filter (f \ !(f = self)) (foldl (\ ac i (aheads envl go i ac)) (aheads envl go body ()) inits))
-       drok (lp ? 1 (two? cand || two? ins ? (adrv? envl self body) 1))  ; the non-loop cost gate: free heads and inner lambdas ride only a body that
-                                                                         ; drives a param or itself -- and a declining body skips the resolution below
+       cand (lts = 'bad ? () (filter (f \ !(f = self)) (foldl (\ ac i (aheads envl go i ac)) (aheads envl go body ()) inits)))
+       drok (lts != 'bad && (lp ? 1 (two? cand || two? ins ? (adrv? envl self body) 1)))   ; the non-loop cost gate: free heads and inner lambdas ride only a body that
+                                                                         ; drives a param or itself -- and a declining body, or refused lets, skips the walks below
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the lam-list assoc; the cell read mirrors ev.l's cof, box slot 0
                                  (two? lfd ? (peep >lfd 0 0) 0))
@@ -567,7 +568,7 @@
                             (: bad (filter (x \ two? x && !(aquote? x) && !(amble-ok? envl shd kn go k 0 x)) >e)
                                (two? bad ? (small <bad) e)))
                why (? !(two? s && two? >s && all nom? ps && aparams? ps M && a = #ps && 0 < a) 'shape
-                      !lpok 'loop !drok 'cost (lts = 'bad) 'lets !(two? body) 'nobody
+                      !lpok 'loop (lts = 'bad) 'lets !drok 'cost !(two? body) 'nobody
                       !(all lit? gvals) ['globals (filter (p \ !(lit? <>p)) (map (f \ [f (gv f 0)]) gn))] !(all lit? ovals) 'ops
                       !(nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48) 'slots
                       !(all (amble-ok? ps shd kn 0 0 0) inits) 'inits
