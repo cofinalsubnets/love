@@ -890,6 +890,7 @@
               ("q" "q") ("w" "w") ("wq" "wq") ("x" "x")
               ("e" "edit") ("o" "edit") ("edit" "edit")
               ("hl" "hl") ("set" "set") ("lint" "lint")
+              ("colo" "colorscheme") ("colorscheme" "colorscheme")
               ("sp" "split") ("split" "split") ("vs" "vsplit") ("vsplit" "vsplit")
               ("find" "find") ("grep" "grep") ("explore" "explore"))
    ; the word as typed when it is one, else the meaning of the one word it heads;
@@ -944,9 +945,20 @@
                         vmsg st (st 'hl ? "syntax on" "syntax off"))
             ; :set knows one option, which is the one > and < need a number for
             (w = "set") (vexset st arg)
+            (w = "colorscheme") (vcolo st arg)
             (w = "lint") (vlint st)                    ; libra's scan, on the buffer
             ; unknown here, but left on the state: a face with more ex words takes it
             (pin st 'dox [w arg], vmsg st $ "not an ex command: " + w))))
+   ; :colorscheme NAME swaps the pens through the face's door; bare, it names the one in force.
+   ; the painted rows and the laid frame are keyed without the pens, so both caches go
+   (vcolo st nm)
+    (: f (st 'retheme)
+       (? (0 = #nm) (vmsg st (st 'theme @ t (string? t ? t "molokai")))
+          !(lit? f) (vmsg st "no themes in this editor")
+          (f nm @ p
+             (? !(tablet? p) (vmsg st ("no theme: " + nm))
+                (pin st 'pens p, pin st 'theme nm, pin st 'hlrow (tablet ()), pin st 'laycar (),
+                 vmsg st ("colorscheme " + nm))))))
    (vex st)
     (: s (edtext (st 'cmd))
        n #s
@@ -1388,7 +1400,7 @@
            (? (two? s && (k = 0 || <s < b) && a < <>s)
                (: p (<s < a ? a <s) q (b < <>s ? b <>s)
                   pad (k < <>s && q = k ? " " "")       ; the cell past the end, a line's own
-                  (snip raw a p + "\e[7m" + snip raw p q + pad + "\e[0m" + snip raw q b))
+                  (snip raw a p + vpen st 'sel "\e[7m" + snip raw p q + pad + vpen st 'off "\e[0m" + snip raw q b))
               (b <= a) ""
               !paint (snip raw a b)
               (: rw (st 'hlrow) ky [raw in a b lg] c (peep rw i ())
@@ -1427,27 +1439,34 @@
        ; are the ones we laid last time -- a keystroke that only walks the cursor
        ; about lays nothing at all, which is the common keystroke
        key [(st 'hlgen) w top tops left body (paint ? 1 ()) (wrap? ? 1 ())
-            (vis? ? [(st 'mode) vr1 vc1 vr2 vc2])]
+            (vis? ? [(st 'mode) vr1 vc1 vr2 vc2]) (st 'theme)]
        lc (st 'laycar)
        rs (two? lc && <lc = key ? <>lc
              (rows (vdrop l0 (top - t0)) (vdrop car top) 0 tops () top @ k
                 (pin st 'laycar [key k],
                  k)))
-       [rs (clipl status) cr cc key])
+       ; a theme that owns the ground sets it at each row's head, so \e[K clears to it
+       g (vpen st 'ground "")
+       [(0 < #g ? (map (r \ g + r) rs) rs) (g + clipl status) cr cc key])
 
    ; -- the frame: one full redraw as a single text --
    (vframe st)
     (: e (string 27) L (vlay st)
        (go l acc) (atom? l ? acc (go >l (acc + <l + e + "[K" + "\r\n")))
        (e + "[H" + go <L "" + <>L + e + "[K"
-          + e + "[" + show <>>L + ";" + show <>>>L + "H"))
+          + e + "[" + show <>>L + ";" + show <>>>L + "H" + vgone st))
+   ; a frame that set a ground hands the terminal back its own
+   (vgone st) (0 < #(vpen st 'ground "") ? "\e[0m" "")
+   ; a pen off the face's table, or d when there is none such
+   (vpen st k d) (st 'pens @ p (tablet? p ? (peep p k d) d))
 
    ; -- the frame as a refresh: only what changed -------------------------------
    ; src/apps/tui.l does the diffing; what is vi's here is the geometry that says the view
    ; has not moved, and vlay's own key, which says the body cannot have changed
    (vfresh st)
     (: L (vlay st)
-       (tui-fresh st (st 'h)
-                  [(st 'w) (st 'h) (st 'top) (st 'tops) (st 'left)]
-                  (L 4) <L <>L <>>L <>>>L)))
+       ((tui-fresh st (st 'h)
+                   [(st 'w) (st 'h) (st 'top) (st 'tops) (st 'left)]
+                   (L 4) <L <>L <>>L <>>>L)
+        + vgone st)))
 ) ; module 'vi

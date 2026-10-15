@@ -548,5 +548,5 @@
     (foldl (b \ c \ (: r (filter (r \ <r = hue-grp c) rows)
                        (two? r ? (pin b (hue-cls c) (hue-pen <r deep)) b)))
            (hue-pens rows deep) hues-classes)
-   (hues-wake x) (hues-pens (hue-rows ()) (hue-deep ())))
+   (hues-wake x) (hues-pens (hue-rows x) (hue-deep ())))
 ) ; module 'vi
