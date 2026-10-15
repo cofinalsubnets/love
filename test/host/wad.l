@@ -28,10 +28,27 @@
               ["NODES" ""]
               ["SECTORS" (wad-t-cat [(wad-t-w16 0) (wad-t-w16 128) (wad-t-name "FLR") (wad-t-name "F_SKY1") (wad-t-w16 255) (wad-t-w16 0) (wad-t-w16 0)])]
               ["REJECT" ""] ["BLOCKMAP" ""]]
+   ; ..and a second: the room, and north of it a door shut (a sector floor and ceiling 0) whose
+   ;   line is a door's (special 1), a zombieman past it, a health bonus on the way; one node
+   ;   between them
+   (wad-t-side up mid s) (wad-t-cat [(wad-t-w16 0) (wad-t-w16 0) (wad-t-name up) (wad-t-name "-") (wad-t-name mid) (wad-t-w16 s)])
+   (wad-t-recs rs) (wad-t-cat (map (r \ wad-t-cat (map wad-t-w16 r)) rs))
+   wad-t-map2 [["THINGS" (wad-t-recs [[128 64 90 1 7] [128 384 270 3004 7] [128 128 0 2014 7]])]
+               ["LINEDEFS" (wad-t-recs [[0 1 1 0 0 0 65535] [1 2 4 1 0 1 2] [2 3 1 0 0 3 65535] [3 0 1 0 0 4 65535]
+                                        [1 4 1 0 0 5 65535] [4 5 1 0 0 6 65535] [5 2 1 0 0 7 65535]])]
+               ["SIDEDEFS" (wad-t-cat [(wad-t-side "-" "WALL" 0) (wad-t-side "WALL" "-" 0) (wad-t-side "-" "-" 1) (wad-t-side "-" "WALL" 0)
+                                       (wad-t-side "-" "WALL" 0) (wad-t-side "-" "WALL" 1) (wad-t-side "-" "WALL" 1) (wad-t-side "-" "WALL" 1)])]
+               ["VERTEXES" (wad-t-recs [[0 0] [0 256] [256 256] [256 0] [0 512] [256 512]])]
+               ["SEGS" (wad-t-recs [[0 1 0 0 0 0] [1 2 0 1 0 0] [2 3 0 2 0 0] [3 0 0 3 0 0] [2 1 0 1 1 0] [1 4 0 4 0 0] [4 5 0 5 0 0] [5 2 0 6 0 0]])]
+               ["SSECTORS" (wad-t-recs [[4 0] [4 4]])]
+               ["NODES" (wad-t-recs [[0 256 256 0 256 0 0 256 512 256 0 256 32768 32769]])]
+               ["SECTORS" (wad-t-cat [(wad-t-cat [(wad-t-w16 0) (wad-t-w16 128) (wad-t-name "FLR") (wad-t-name "F_SKY1") (wad-t-w16 255) (wad-t-w16 0) (wad-t-w16 0)])
+                                      (wad-t-cat [(wad-t-w16 0) (wad-t-w16 0) (wad-t-name "FLR") (wad-t-name "FLR") (wad-t-w16 160) (wad-t-w16 0) (wad-t-w16 0)])])]
+               ["REJECT" ""] ["BLOCKMAP" ""]]
    lumps ([["PLAYPAL" wad-t-pal] ["PNAMES" (wrle 2 4 + wad-t-name "WALLP" + wad-t-name "SKYP")] ["TEXTURE1" wad-t-t1]
            ["WALLP" (wad-t-patch 64 64 10 0 0)] ["SKYP" (wad-t-patch 256 128 20 0 0)]
            ["F_START" ""] ["FLR" (wad-t-cat (map (_ \ string 30) ^4096))] ["F_END" ""]
-           ["S_START" ""] ["BAR1A0" (wad-t-patch 16 32 40 8 32)] ["S_END" ""] ["E1M1" ""]] + wad-t-map)
+           ["S_START" ""] ["BAR1A0" (wad-t-patch 16 32 40 8 32)] ["S_END" ""] ["E1M1" ""]] + wad-t-map + [["E1M2" ""]] + wad-t-map2)
    ; ..laid: the header, the lumps, then the directory
    offs (rev (foldl (\ a l ((<a + #(l 1)) . a)) [12] lumps))
    body (wad-t-cat (map (l \ l 1) lumps))
@@ -63,10 +80,31 @@
    _ (test (px 32 0 = 1973960))                                   ; the sky's own blue, 0x1e1ec8, unlit
    _ (test (most (px 32 39) 1))                                   ; the floor, green
 
-   ; walked: free in the room, not at the wall, and a walk north stops short of it
+   ; walked: free in the room, not at the wall; north stops short of the barrel, and beside it
+   ;   short of the wall
    _ (test (wad-free? st 128.0 128.0) !(wad-free? st 128.0 250.0) !(wad-free? st 4.0 128.0))
    s (foldl (\ s _ (wad-step s 'forward)) (pin st 'dt 0.25) ^40)
-   ((test (s 'pz > 200.0) (s 'pz < 241.0) (s 'px = 128.0)),
+   _ (test (s 'pz > 150.0) (s 'pz < 167.0) (s 'px = 128.0))
+   s (foldl (\ s _ (wad-step s 'forward)) (pins (wad-new 64 40 wd M) 'dt 0.25 'px 40.0) ^40)
+   _ (test (s 'pz > 200.0) (s 'pz < 241.0))
+
+   ; the door: the bonus taken on the way to it, the door shut, the zombieman behind it asleep
+   _ (rng-set (wheel 3))
+   M2 (wad-map wd "E1M2")
+   d (pins (wad-new 64 40 wd M2) 'w 64 'h 40 'kp 1 'dt 0.25)
+   (zom s) <(filter (o \ o 't = 3004) (s 'objs))
+   _ (test (#(d 'objs) = 2) (zom d 'st = 'idle) (d 'hp = 100) (d 'bul = 50))
+   d (wad-tics (foldl (\ s _ (wad-step s 'forward)) d ^40) 35)
+   _ (test (d 'hp = 101) (d 'pz > 200.0) (d 'pz < 241.0) (zom d 'st = 'idle))
+   ; ..used, it opens to its neighbour's ceiling less 4, and the zombieman wakes to the player
+   d (wad-tics (wad-step d 'use) 70)
+   _ (test (d 'M 'secs 1 1 = 124) (wad-free? d 128.0 300.0))
+   d (wad-tics d 24)
+   _ (test (zom d 'st != 'idle))
+   ; ..and the pistol puts it down, a bullet a shot
+   (shoot s k) (k = 0 || zom s 'st = 'die ? s (shoot (wad-tics (wad-step s 'fire) 15) (k - 1)))
+   d (shoot d 12)
+   ((test (zom d 'st = 'die) (d 'bul < 50) (d 'hp > 0)),
     unlink path,
     test_fin (),
     puts "wad: ok\n"))
