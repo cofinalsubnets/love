@@ -1,6 +1,5 @@
 ; test/host/seek.l -- the picker and help's lines, headless
-; seek is a pure step and a pure frame (src/apps/seek.l): this drives both over a small list,
-; then help's line table over a tree laid here. run: cat test/00-init.l test/host/seek.l | out/love
+; run: cat test/00-init.l test/host/seek.l | out/love
 (borrow 'seek)
 (borrow 'help)
 (borrow 'posix)
@@ -26,8 +25,7 @@
    e (seek-new items (x \ x) (x \ x) "t")
    _ (sk-keys! e "zzz", seek-key e 13, test (e 'n = 0) (e 'pick = ()) (e 'over = 0))
    _ (seek-key e 27, test (e 'over = 1) (e 'pick = ()))
-   ;; the frame: the query and its count on top, the chosen row reversed, the window
-   ;; following the choice down a list longer than the screen
+   ;; the frame: query and count on top, the choice reversed, the window following it
    f (seek-frame d 40 4)
    _ (test (has? f "> ") (has? f "4 of 4  t") (has? f "\e[7m> beta gamma"))
    g (seek-new (map show ^10) (x \ x) (x \ "row " + x) "t")
@@ -44,7 +42,7 @@
    ls (help-lines r)
    _ (test (#ls = 3) (ls 0 = [(r + "/a.l") 1 "one"]) (ls 1 = [(r + "/a.l") 2 "two stage"])
            (ls 2 = [(r + "/b/c.l") 1 "stage three"]))
-   ;; vi's :find and :grep, over the tree under the working directory: a dot name is passed by
+   ;; vi's :find and :grep; a dot name is passed by
    _ (chdir r)
    _ (test (seek-files "." = ["a.l" "b/bin" "b/c.l"]))
    st ((cite 'vi 'vi-open) "")

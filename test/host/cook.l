@@ -1,37 +1,23 @@
-; the gate for cook's Makefile importer (src/apps/cook.l).
-;
-; Run on the host binary:  out/love test/host/cook.l
-; (wired into the build as one of test_hostnif's rows).
-;
-; cook reads a real Makefile -- variable expansion, the make functions,
-; conditionals, include, pattern + static-pattern rules -- so these tests build
-; fixture Makefiles (a flat list of lines, joined by newlines), run cook on them
-; as a subprocess (the host `hark` nif), and assert over its captured stdout. The
-; recipes mostly `echo` a computed value, so the assertion is a substring check;
-; the pattern-rule tests build real files and check they appear.
-
-; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here.
+; test/host/cook.l -- cook's Makefile importer (src/apps/cook.l): fixture Makefiles run
+; through cook as a subprocess, asserted over its stdout. standalone, not in the corpus
+; run: out/love test/host/cook.l
+; driven bare, so the posix door is borrowed here
 (cite 'posix ? (borrow 'posix) ())
 
 (: dir ("/tmp/cooktest-" + show (getpid 0))   ; per run: sessions share the box
-   love  "out/love"                          ; run from the project root (where make runs)
+   love  "out/love"
 
-   ; -- a tiny assert harness (this file is standalone, not in the corpus) --
    pass {} fail {}
    _ (pin pass 0 0) _ (pin fail 0 0)
    (ok nm c) (c ? (pin pass 0 (1 + peep pass 0 0)) (pin fail 0 (1 + peep fail 0 0),
                  say out ("FAIL " + nm),
                  put out 10))
 
-   ; join a list of lines into Makefile text (each line gets a trailing newline).
    (mk l) (two? l ? (<l + ("\n" + mk >l)) "")
 
    (write-file path content) (: q (open path "w") _ (say q content) (close q))
    (sh cmd) (hark ["sh" "-c" cmd])
-   ; run cook on a fixture Makefile, return its captured stdout.
-   ; -f names the build file. a positional is a goal wherever discovery can name the
-   ; build file itself, and every spawn here runs from the repo root, where it names
-   ; ./Makefile -- so a positional fixture would read as a goal against this tree.
+   ; -f, not a positional: from the repo root a positional is a goal against ./Makefile
    (run-cook src tgt)
    (: _ (write-file (dir + "/Makefile") src)
        r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") tgt])
@@ -41,7 +27,6 @@
    (: _ (write-file (dir + "/Makefile") src)
        r (hark ((["env"] + env) + [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") tgt]))
        (two? r ? >r ""))
-   ; --emit a fixture Makefile, return the generated Cookfile text (stdout).
    (run-emit src)
    (: _ (write-file (dir + "/Makefile") src)
        r (hark [love "-l" "src/apps/cook.l" "--emit" "-f" (dir + "/Makefile")])
@@ -49,7 +34,7 @@
 
    _ (sh ("rm -rf " + dir + "; mkdir -p " + dir))
 
-   ; ---------------------------------------------------------------- expansion
+   ; expansion
    ev (run-cook (mk '("R := ."
                       "ho = out"
                       "love_c = $R/love/love.c $R/data.c"
@@ -63,7 +48,7 @@
    _ (ok "suffix subst-ref"                 (has? ev "E2[./love/love.o ./data.o]"))
    _ (ok "single-char $R + $(VAR)"          (has? ev "E3[./out]"))
 
-   ; ---------------------------------------------------------------- functions
+   ; functions
    fn (run-cook (mk '("files = a.c b.c sub/c.c"
                        "empty ="
                        "all:"
@@ -98,7 +83,7 @@
    _ (ok "if (true)"  (has? fn "F14[yes]"))
    _ (ok "shell"      (has? fn "F15[SH]"))
 
-   ; ------------------------------------------------------------- conditionals
+   ; conditionals
    cnd (run-cook (mk '("x = 1"
                         "ifeq ($(x),1)"  "a = eqyes"  "else" "a = eqno"  "endif"
                         "ifneq ($(x),1)" "b = neqyes" "else" "b = neqno" "endif"
@@ -108,14 +93,12 @@
                         "\techo \"C[$(a) $(b) $(c) $(d)]\"")) "all")
    _ (ok "ifeq/ifneq/ifdef/ifndef" (has? cnd "C[eqyes neqno def ndef]"))
 
-   ; a conditional inside a recipe block selects which recipe lines run.
+   ; a conditional inside a recipe block selects which recipe lines run
    rci (run-cook (mk '("on = 1" "all:" "\techo R-a"
                         "ifeq ($(on),1)" "\techo R-b" "endif" "\techo R-c")) "all")
    _ (ok "recipe-internal ifeq" (has? rci "R-b" && has? rci "R-c"))
 
-   ; -------------------------------------------------------------------- include
-   ; (make resolves an include relative to the cwd; the fixture lives elsewhere,
-   ; so name it absolutely.)
+   ; include (resolved against the cwd, so the fixture names it absolutely)
    _ (sh ("mkdir -p " + (dir + "/mk")))
    _ (write-file (dir + "/mk/common.mk") "FROM_INC = included-ok\n")
    inc (run-cook (mk [("include " + (dir + "/mk/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\""]) "all")
@@ -128,13 +111,12 @@
    hinc (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "include of a missing file fails" !(0 = hinc))
 
-   ; ----------------------------------------------------- automatic vars + dir
+   ; automatic vars + dir
    av (run-cook (mk '("all: foo/bar.o"
                        "foo/bar.o:" "\techo \"A[@=$@ star=$* d=$(dir $@)]\"")) "foo/bar.o")
    _ (ok "auto-vars + $(dir $@)" (has? av "A[@=foo/bar.o star= d=foo/]"))
 
-   ; --------------------------------------------------------- pattern rules
-   ; build x.o from x.c via an implicit pattern rule; check the file appears.
+   ; pattern rules
    _ (sh ("mkdir -p " + ((dir + "/p; echo SRC > ") + (dir + "/p/x.c"))))
    _ (run-cook (mk [("all: " + (dir + "/p/x.o"))
                      ((dir + "/p/%.o: ") + (dir + "/p/%.c")) "\tcp $< $@"]) (dir + "/p/x.o"))
@@ -147,68 +129,48 @@
                      ("$(outs): " + (dir + ("/p/%.out: " + (dir + "/p/%.in")))) "\tcp $< $@"]) "all")
    _ (ok "static pattern rule builds target" (0 = <(sh ("test -f " + (dir + "/p/y.out")))))
 
-   ; the cancellation idiom: an empty recipe unmakes a pattern rule ("an empty
-   ; recipe unmakes the rule" -- mk/common.mk cancels make's lex builtin exactly
-   ; so). a live `%.c: %.l` would make every .c demand a sibling .l.
+   ; an empty recipe cancels a pattern rule; a live `%.c: %.l` would make every .c demand a .l
    _ (sh ("echo C > " + (dir + "/p/n.c")))
    ca (run-cook (mk ["%.c: %.l"
                      ("all: " + (dir + "/p/n.c")) "\t@echo \"CA[ok]\""]) "all")
    _ (ok "an empty pattern recipe cancels, not registers" (has? ca "CA[ok]"))
 
-   ; ---------------------------------------------- the builtin implicit rules
-   ; make's own database, which a Makefile never states: lua 5.4 writes recipes for
-   ; three of its 34 objects and leaves the rest to it. CC is overridden per-run so
-   ; the test never depends on a host compiler.
-   ; the assertion is on the command cook issues, not on an object -- so the gate
-   ; needs no host compiler, and it reads the rule's shape (-c -o $@ $<) directly.
+   ; the builtin implicit rules, asserted on the command issued so no host compiler is needed
    _ (sh ("mkdir -p " + dir + "/b; echo SRCB > " + dir + "/b/z.c"))
    bi (run-cook (mk ["CC = echo-cc"
                      ("all: " + (dir + "/b/z.o")) "\t@echo BUILTIN-DONE"]) "all")
    _ (ok "builtin %.o: %.c fires" (has? bi "echo-cc" && has? bi "-c -o" && has? bi "z.c"))
-   ; ..and the match-anything builtins (`%: %.c`, `%: %.o`) must stay out: they match
-   ; every target there is, and this resolver does not model the conditions GNU only
-   ; dares them under. with `x.o` on disk, a link target `x` must still be the
-   ; Makefile's own recipe -- not a builtin linking that one object alone.
+   ; ..and the match-anything builtins (`%: %.c`, `%: %.o`) stay out: with `x.o` on disk, a
+   ; link target `x` is still the Makefile's own recipe
    _ (sh ("echo O > " + (dir + "/b/lone.o")))
    ma (run-cook (mk [("all: " + (dir + "/b/lone")) ((dir + "/b/lone: ") + (dir + "/b/lone.o"))
                      "\t@echo \"MA[mine]\""]) "all")
    _ (ok "no match-anything builtin hijacks a link" (has? ma "MA[mine]"))
 
-   ; -------------------------------------------------- old-style suffix rules
-   ; `.c.o:` is `%.o: %.c` -- st and every suckless Makefile is written this way, and
-   ; the dot-target drop would otherwise eat it in silence, leaving the builtin above
-   ; to compile the file with default flags instead of the Makefile's own.
+   ; old-style suffix rules: `.c.o:` is `%.o: %.c`, ahead of the builtin
    _ (sh ("echo SRCS > " + (dir + "/b/s.c")))
    _ (run-cook (mk [".SUFFIXES: .c .o"
                     ".c.o:" "\tcp $< $@"
                     ("all: " + (dir + "/b/s.o"))]) "all")
    _ (ok "suffix rule .c.o builds the target" (0 = <(sh ("test -f " + (dir + "/b/s.o")))))
 
-   ; ------------------------------------------------------------------ .POSIX
-   ; not decoration: it moves make's defaults to c99 and -O1, which is where st's
-   ; whole build gets its flags. as defaults, so a file's own CC= still wins.
+   ; .POSIX moves make's defaults to c99 and -O1, as defaults: a file's own CC= still wins
    px (run-cook (mk '(".POSIX:" "all:" "\t@echo \"PX[$(CC) $(CFLAGS)]\"")) "all")
    _ (ok ".POSIX moves CC/CFLAGS" (has? px "PX[c99 -O1]"))
    nx (run-cook (mk '("all:" "\t@echo \"NX[$(CC)]\"")) "all")
    _ (ok "without .POSIX, CC stays cc" (has? nx "NX[cc]"))
 
-   ; ------------------------------------------------- $@ of a PHONY target
-   ; a phony item is a symbol, and an automatic must read as the NAME either way --
-   ; lua's top Makefile is `all: guess` + `cd src && $(MAKE) $@`, and an empty $@
-   ; hands the recursive make no target at all.
+   ; $@ of a phony target reads as the name (lua's `cd src && $(MAKE) $@`)
    pa (run-cook (mk '(".PHONY: guess" "all: guess" "guess:" "\t@echo \"PA[$@]\"")) "all")
    _ (ok "$@ of a phony target is its name" (has? pa "PA[guess]"))
 
-   ; ------------------------------------------------------------- assignment ops
+   ; assignment ops
    ops (run-cook (mk '("a := base" "a += more" "b ?= keep" "b ?= nope"
                         "all:" "\techo \"O[$(a)|$(b)]\"")) "all")
    _ (ok "+= and ?=" (has? ops "O[base more|keep]"))
 
-   ; ------------------------------------- the environment, the command line, origin
-   ; cook seeds its variable table the way make does: the environment first, then
-   ; the builtin defaults, then the command line's VAR=VAL words -- which silence
-   ; file assignments to the same name, unless the file says `override`. run-cook's
-   ; subprocess inherits this process's environment, so setenv reaches the fixture.
+   ; seeding as make: environment, builtin defaults, then command-line VAR=VAL, which silences
+   ; the file's assignment unless `override`; the subprocess inherits setenv
    (D2 f) (dir + f)
    (run-cookv src args)
    (: _ (write-file (dir + "/Makefile") src)
@@ -261,7 +223,7 @@
    evr (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "$(eval) in a recipe refuses" !(0 = evr))
 
-   ; ------------------------------------------------- @D/@F, wildcard, abspath
+   ; @D/@F, wildcard, abspath
    adf (run-cook (mk '("all: foo/bar.o"
                        "foo/bar.o:" "\techo \"D[$(@D) $(@F)]\"")) "foo/bar.o")
    _ (ok "$(@D) and $(@F)" (has? adf "D[foo bar.o]"))
@@ -277,15 +239,9 @@
                       "all:" "\techo \"P[$(p)]\"")) "all")
    _ (ok "abspath cleans // . .." (has? ab "P[/x/z]"))
 
-   ; ---------------------------------------------------------------------- emit
-   ; --emit transpiles a Makefile to a resolved Cookfile: vars/patterns expanded,
-   ; .PHONY targets -> symbols, files -> strings, each recipe line an
-   ; ("sh" "-c" cmd) step, the default ticket first, a trailing (cook (ticket 0)).
-   ; the sources are real, like every other pattern test here (the head note says
-   ; so). a pattern whose source cannot be had does not apply -- make rejects it
-   ; whether the target exists or not (asked, both ways) -- and emit resolves against
-   ; the disk it is run on. a fixture with no .c proves nothing about resolution; this
-   ; one passed only on the last-resort fallback 4bfac33b removed.
+   ; --emit: a resolved Cookfile, .PHONY targets as symbols, files as strings, each recipe line
+   ; a ("sh" "-c" cmd) step, the default ticket first. a pattern whose source is missing does
+   ; not apply, so the sources are real
    _ (sh ("mkdir -p " + dir + "/e; touch " + dir + "/e/a.c " + dir + "/e/b.c"))
    eo (dir + "/e/a.o " + dir + "/e/b.o")
    em (run-emit (mk ["CC := cc"  ("OBJ := " + eo)  ".PHONY: all clean"
@@ -300,8 +256,7 @@
    _ (ok "emit: default ticket emitted first" (has? em "(recipe 'all "))
    _ (ok "emit: trailing cook call"        (has? em "(cook-all 0)"))
 
-   ; round-trip: cook the emitted Cookfile and confirm it runs the recipe. The
-   ; rule just writes a file (no compiler / source lookup), so the test is hermetic.
+   ; round-trip: cook the emitted Cookfile; the rule only writes a file, so it is hermetic
    _ (sh ("mkdir -p " + (dir + "/e")))
    emc (run-emit (mk [".PHONY: all"
                        ("all: " + (dir + "/e/out.txt"))
@@ -311,9 +266,7 @@
    _ (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/e/Cookfile") "all"])
    _ (ok "emit: round-trip cooks the emitted Cookfile" (0 = <(sh ("test -f " + (dir + "/e/out.txt")))))
 
-   ; .DEFAULT_GOAL overrides "the first rule declared" as the default ticket --
-   ; both when cooking the Makefile directly and through the emitted Cookfile
-   ; (which must therefore lead with that recipe).
+   ; .DEFAULT_GOAL overrides the first rule as the default, directly and through --emit
    dgsrc (mk '(".PHONY: first second"
                ".DEFAULT_GOAL := second"
                "first:"  "\techo FIRST"
@@ -325,14 +278,8 @@
    dgc (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/e/Cookfile")]) (two? r ? >r ""))
    _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has? dgc "SECOND"))
 
-   ; ------------------------------------------------- side-effect writes are seen
-   ; a step may write anything, not only its own target (make's two-outputs-one-recipe
-   ; idiom writes a sibling), so an item's date must be read fresh when its turn comes:
-   ; `first` writes a file it does not own, and `second` must see the new one. (this
-   ; once guarded the warmed stat(1) date cache; the stat nif retired the cache, and
-   ; this fixture is what fails if any date memo ever comes back unsoundly.)
-   ; (every path in a fixture recipe must be ABSOLUTE: cook runs from the project root,
-   ;  not from `dir`, so a bare `> out.txt` writes into the repo.)
+   ; a step may write a file it does not own, so an item's date is read fresh at its turn
+   ; (every fixture path is absolute: cook runs from the project root, not `dir`)
    (D f) (dir + f)
    _ (sh ("echo OLD > " + (D "/shared.txt" + (" && sleep 0.01 && echo STALE > " + D "/second"))))
    sidesrc (mk [".PHONY: all first"
@@ -345,16 +292,8 @@
    side (: r (sh ("cat " + D "/second")) (two? r ? >r ""))
    _ (ok "a recipe's side-effect write invalidates the date cache" (has? side "NEW"))
 
-   ; (the cache's OTHER rule -- it records only what stat actually reported, never a miss
-   ;  -- has no fixture here, and deliberately: from a Makefile there is no way to make
-   ;  `stat` itself fail, which is the case it guards. it costs speed, never an answer.)
 
-   ; ------------------------------------------------------- .ONESHELL / .SHELLFLAGS
-   ; make runs each recipe line in its own shell, which is why a recipe with any
-   ; state has to be one \-joined line. .ONESHELL hands the whole recipe to one
-   ; shell instead, so a variable set on one line is live on the next -- the single
-   ; observable that tells the two apart, and the reason a recipe can read as a
-   ; script. Differential against GNU make, not just against itself.
+   ; .ONESHELL: a variable set on one line is live on the next; differential against GNU make
    one (run-cook (mk '(".ONESHELL:"
                        ".SHELLFLAGS := -ec"
                        "all:"
@@ -366,11 +305,8 @@
                        "\tx=hello"
                        "\techo \"O2[$$x world]\"")) "all")
    _ (ok "no .ONESHELL: a line still gets its own shell" (has? sep "O2[ world]"))
-   ; with one shell, a plain -c checks only the last line's status, so a failing
-   ; middle line would pass silently. -e is what keeps a recipe honest: the third
-   ; line must never run. The recipe is silenced (@ on the first line governs the
-   ; lot) because a one-shell recipe is echoed whole -- an un-silenced echo would
-   ; print the text of the third line and the assertion would read its own echo.
+   ; one shell checks only the last line's status, so -e must stop the third line; silenced
+   ; because a one-shell recipe echoes whole, and the assertion would read its own echo
    ec (run-cook (mk '(".ONESHELL:"
                       ".SHELLFLAGS := -ec"
                       "all:"
@@ -380,13 +316,7 @@
    _ (ok ".SHELLFLAGS -ec: a failing middle line stops the recipe"
          (has? ec "O3-one" && !(has? ec "O3-three")))
 
-   ; ------------------------------------------------------- multi-target rules
-   ; `a b: src` is one rule registered under both targets (the Makefile's
-   ; love/love.cand link rule is this shape). the target span runs to the colon,
-   ; blanks included -- the old span stopped at whitespace, so the whole line
-   ; classified 'skip and every multi-target rule silently vanished; a built
-   ; tree masked it, since an existing output reads as a source leaf. asking
-   ; cook for the second target is what proves the registration went wide.
+   ; `a b: src` is one rule under both targets; asking for the second proves it
    _ (sh ("echo x > " + D "/msrc"))
    _ (run-cook (mk [(D "/m1.out " + (D "/m2.out: " + D "/msrc"))
                     ("\techo M4 > " + D "/m1.out")
@@ -395,24 +325,15 @@
    m2 (: r (sh ("cat " + D "/m2.out")) (two? r ? >r ""))
    _ (ok "a multi-target rule registers every target" (has? m2 "M4"))
 
-   ; --------------------------------------------------- modifiers via expansion
-   ; make reads the @/-/+ prefixes after expansion (the `Q = @` verbose-build
-   ; idiom; the Makefile's lcat_h leads with @ from inside the variable) -- an
-   ; expanded @ silences the line, it never reaches the shell as a word.
+   ; the @/-/+ prefixes are read after expansion (`Q = @`): an expanded @ silences the line
    qm (run-cook (mk '("Q = @"
                       "all:"
                       "\t$(Q)echo M5[quiet]")) "all")
    _ (ok "an expanded @ is a modifier, not a word"
          (has? qm "M5[quiet]" && !(has? qm "@echo")))
 
-   ; ------------------------------------------------------------ SHELL + wildcard
-   ; SHELL picks the shell recipe lines and $(shell) ride -- observable through
-   ; $0, which lush pins to "lush" in its -c lane (a stock sh answers "sh").
-   ; the repo's own shell is the fixture's shell: make-with-lush, the rung-4
-   ; distro loop closed. $(wildcard) is lush's pure glob at the repo root
-   ; (sorted; a no-match pattern contributes nothing -- nullglob).
-   ; SHELL names a path, so the shim is one: it runs the lush this binary carries
-   ; (`love lush`), spelled through the tree's out/love so the law reads this build.
+   ; SHELL picks the shell for recipe lines and $(shell), seen through $0 (lush pins "lush" in
+   ; -c). the shim runs `love lush` through out/love. $(wildcard) is lush's glob, nullglob
    _ (write-file (dir + "/lushsh") "#!/bin/sh\nexec out/love lush \"$@\"\n")
    _ (sh ("chmod +x " + (dir + "/lushsh")))
    shl (run-cook (mk [("SHELL := " + (dir + "/lushsh"))
@@ -426,10 +347,8 @@
                        "\t@echo \"WC[$(wildcard src/apps/lus*.l src/apps/zz-nope*.q)]\""))
                  "all")
    _ (ok "wildcard: pure-love glob, nullglob" (has? wld "WC[src/apps/lush.l]"))
-   ; a mode letter in .SHELLFLAGS is lush's mode for the line: a tr on PATH answers
-   ; "theirs", so -a (ours ahead of PATH) never meets it; LUSHFLAGS=-g hands the line to
-   ; PATH's sh and PATH's tr, and so does no letter with LUSHFLAGS unset, the default
-   ; (a g in .SHELLFLAGS would reach that sh too, which knows no -g)
+   ; a mode letter in .SHELLFLAGS is lush's: -a runs ours ahead of PATH's tr ("theirs");
+   ; LUSHFLAGS=-g, or no letter with LUSHFLAGS unset, hands the line to PATH's sh and tr
    _ (sh ("mkdir -p " + dir + "/tb; printf '#!/bin/sh\\necho theirs\\n' > " + dir + "/tb/tr; chmod 755 " + dir + "/tb/tr"))
    tenv [("PATH=" + dir + "/tb:" + getenv "PATH") "LUSHFLAGS="]
    am (run-cook-in tenv (mk [".SHELLFLAGS := -ac" "all:" "\t@tr a b </dev/null; echo M[a]"]) "all")
@@ -442,15 +361,14 @@
    ; $(shell) takes .SHELLFLAGS as a recipe line does: -e stops at the false
    se (run-cook (mk [".SHELLFLAGS := -ec" "X := $(shell false; echo no)" "all:" "\t@echo \"SE[$(X)]\""]) "all")
    _ (ok "$(shell) rides .SHELLFLAGS" (has? se "SE[]"))
-   ; ..and runs in this image where a recipe line would: under -a with PATH emptied it
-   ; still has uname, and -e still stops at the false
+   ; ..and runs in this image: under -a with PATH emptied it still has uname
    ea (run-cook-in ["PATH=/nonexistent" "LUSHFLAGS=-a"]
                    (mk ["U := $(shell uname -s)" ".SHELLFLAGS := -ec" "X := $(shell false; echo no)"
                         "all:" "\t@echo \"SA[$(U)]\"" "\t@echo \"SB[$(X)]\""]) "all")
    _ (ok "$(shell) in this image: no PATH wanted" (has? ea "SA[" && !(has? ea "SA[]")))
    _ (ok "$(shell) in this image rides .SHELLFLAGS" (has? ea "SB[]"))
-   ; a line run in this image forks warm children -- `sh FILE`, a ( ), a pipeline stage --
-   ; and each one's `exit` ends that child with its status, never the line above it
+   ; a line run in this image forks warm children (`sh FILE`, ( ), a pipeline stage); each
+   ; one's `exit` ends that child only
    _ (write-file (dir + "/x0.sh") "true\nexit\n")
    _ (write-file (dir + "/x3.sh") "f() { exit 3; }\nf\necho no\n")
    xe (: _ (write-file (dir + "/Makefile")
@@ -472,11 +390,7 @@
    fdl (run-cook (mk ["all:" "\t@ls -l /proc/self/fd/ 2>/dev/null"]) "all")
    _ (ok "the Makefile's fd is not a recipe's" !(has? fdl (dir + "/Makefile")))
 
-   ; ------------------------------------------------------------------ -j jobs
-   ; the job pool: under -j N a stale recipe runs in a forked child. the claim is
-   ; that width changes nothing but the wall clock, so every case here asks the same
-   ; fixture at -j4 and answers it against the serial law -- not against a timing,
-   ; which is the one thing a gate cannot hold still.
+   ; -j: every case answers the same fixture at -j4 against the serial law, never a timing
    (run-cookj src tgt j)
    (: _ (write-file (dir + "/Makefile") src)
        r (hark [love "-l" "src/apps/cook.l" "-j" j "-f" (dir + "/Makefile") tgt])
@@ -501,7 +415,7 @@
    jg (: r (hark [love "-l" "src/apps/cook.l" "-j4" "-f" (dir + "/Makefile") "all"]) (two? r ? >r ""))
    _ (ok "-j4 glued reads as -j 4" (j1 = jg))
 
-   ; an edge still orders: one must finish before two starts, however wide the pool.
+   ; an edge still orders: one finishes before two starts
    _ (sh ("rm -f " + (D "/j/log" + (" " + (D "/j/one " + D "/j/two")))))
    jchain (mk [".PHONY: all"
                ("all: " + D "/j/two")
@@ -511,8 +425,7 @@
    jlog (: r (sh ("cat " + D "/j/log")) (two? r ? >r ""))
    _ (ok "-j4 keeps an edge in order" (has? jlog "one\ntwo"))
 
-   ; a red recipe under -j is still red, and its siblings are let finish rather than
-   ; killed -- a half-written file left behind would read as up to date next run.
+   ; a red recipe under -j is still red, and its siblings finish rather than leave half files
    _ (sh ("rm -f " + (D "/j/ok " + D "/j/red")))
    jred (mk [".PHONY: all"
              ("all: " + (D "/j/ok " + D "/j/red"))
@@ -523,12 +436,11 @@
    _ (ok "-j4: a failed recipe fails the run" !(0 = jrst))
    _ (ok "-j4: outstanding jobs finish first" (0 = <(sh ("test -f " + D "/j/ok"))))
 
-   ; the width is the caller's to say: a bare -j is make's "unlimited", and one
-   ; translation unit here peaks at 2.3 GB, so cook asks for the number instead.
+   ; a bare -j is make's unlimited; cook asks for a number (one unit here peaks at 2.3 GB)
    jbad (: r (hark [love "-l" "src/apps/cook.l" "-j" "x" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "-j wants a count" !(0 = jbad))
 
-   ; ------------------------------------------------------- kbuild's make
+   ; kbuild's make
    ; a name is make's: hyphens, and a computed part expanded before it is assigned
    kn (run-cook (mk '("X := y" "obj-y := a.o" "obj-$(X) += b.o" "obj- += c.o"
                      "all:" "\t@echo \"N[$(obj-y)]\"")) "all")
@@ -601,15 +513,15 @@
    _ (ok "expand: the text around references" (ce "x$(A)y$$z$Bw$,v$" (pins {} "A" "1" "B" "2") = "x1y$z2w$,v$"))
    _ (ok "$(subst): every match, an empty from changes nothing"
          (ce "$(subst ab,X,abcabab)|$(subst ,X,abc)" {} = "XcXX|abc"))
-   ; a .cmd's deps_ line is thousands of words: a := of it is linear (it was 20 s at 4000)
+   ; a .cmd's deps_ line is thousands of words: a := of it must stay linear
    lw (join " " (map (i \ "/k/include/linux/h" + show i + ".h $(wildcard include/config/C" + show i + ")") ^4000))
    lt {}
    t0 (clock 0)
    _ (hv ("D := " + lw + "\n") lt)
    _ (ok "a := of a long value is linear" (clock 0 - t0 < 3000 && #(words (lt "D")) = 4000))
 
-   ; a caller's command line, named under " cl", beats a file's assignment as make's does --
-   ; = and += pass it by, override does not, and $(origin) says so
+   ; a caller's command line, named under " cl", beats a file's assignment: = and += pass
+   ; it by, override does not, and $(origin) says so
    tc (pins {} " cl" ["CC" "W"] "CC" "mine" "W" "a")
    _ (hv "CC = clang\nW += b\nO = x\noverride CC2 = y\nOC := $(origin CC) $(origin O)\n" tc)
    _ (ok "cook-vars: the caller's command line beats the file" (tc "CC" = "mine" && tc "W" = "a"))
@@ -618,7 +530,7 @@
    _ (hv "override CC = clang\n" tc2)
    _ (ok "cook-vars: override beats the command line" (tc2 "CC" = "clang"))
 
-   ; ---------------------------------------------------------------- summary
+   ; summary
    _ (sh ("rm -rf " + dir))
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (show np + (" cook tests pass" + ? (0 < nf) (", " + (show nf + " FAIL")) "")))

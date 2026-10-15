@@ -1,15 +1,11 @@
-; test/host/saver.l -- mitty's screensavers (src/apps/mitty/saver.l), headless: every saver's
-; frame covers the screen it is asked for in well-formed escapes, the moon is lit on the side
-; its phase says, the idle watch fires on a fake clock and a key takes the saver down, and
-; love mitty -s names the savers. mitty's glass going to its saver is test/host/mitty.l's.
-;   cat test/00-init.l test/host/00-host.l test/host/saver.l | out/love
+; mitty's screensavers (src/apps/mitty/saver.l) headless; the glass going to its saver is test/host/mitty.l's
+; run: cat test/00-init.l test/host/00-host.l test/host/saver.l | out/love
 (borrow 'saver)
 
 (: sv-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
    (sv-num s) (: (go i a) (? (i < #s) (? (48 <= s i < 58) (go (i + 1) (a * 10 + s i - 48)) -1) a)
                  (#s ? (go 0 0) -1))
-   ; a frame read the way a terminal reads it -> [ok cells]: every escape one the savers
-   ; send, every glyph inside r by c, and how many distinct cells were written
+   ; -> [ok cells]: ok when every escape is one the savers send and every glyph lands in r by c
    (sv-scan f r c)
     (: seen (cask (r * c))
        (csi i) (: (go j) (? (j < #f && (48 <= f j < 60 || f j = 63)) (go (j + 1)) j) (go i))
@@ -35,24 +31,22 @@
        (go 0 0 0 1 0))
    _ (test (["court" "grass99" "life" "matrix" "pom" "slop"] = saver-names))
 
-   ; --- each saver, two sizes: a whole frame covers every cell in escapes it may send ---
    _ (each saver-names
        (nm \ each [[24 80] [11 37]]
          (z \ (: r <z c (z 1) s (sv-scan (saver-frame nm r c 1500 0.4) r c)
                  (test <s (s 1 = r * c))))))
 
-   ; --- a style after the name: pom natural covers the screen too, and is not pom's own
-   ; --- face; a style a saver has not is never one ---
+   ; a style after the name; one a saver lacks is never one
    nat (saver-frame "pom natural" 24 80 1500 0.4)
    _ (test (sv-scan nat 24 80 @ s (<s && s 1 = 24 * 80)) (nat != saver-frame "pom" 24 80 1500 0.4)
            (0 < (saver-watch "pom natural" 5) 'idle) (0 = (saver-watch "pom fancy" 5) 'idle)
            (0 = (saver-watch "life natural" 5) 'idle))
 
-   ; --- the lore scenes are pictures: half blocks over the whole canvas, in many pens ---
+   ; the lore scenes: half blocks in many pens
    (pic? nm) (: cv (saver-canvas nm 24 80 1500 ()) cs (map (i \ saver-cell cv (i // 80) (i % 80)) ^(24 * 80))
                 pens (foldl (t \ k \ pin t (k 1) 1) {} cs)
                 (all (k \ <k = 128) cs && 6 < #(keys pens)))
-   ; ..in 24-bit colour where COLORTERM says the terminal has it, else the 256 palette's
+   ; 24-bit colour where COLORTERM has it, else the 256 palette
    (pens-of nm) (: cv (saver-canvas nm 24 80 1500 ()) (map (i \ saver-cell cv (i // 80) (i % 80) 1) ^(24 * 80)))
    ct0 (getenv "COLORTERM")
    _ (setenv "COLORTERM" "truecolor")
@@ -65,48 +59,47 @@
            (has? dframe "[38;2;") (sv-scan dframe 24 80 @ s (<s && s 1 = 24 * 80)))
    _ (test (pic? "court") (pic? "grass99"))
 
-   ; --- the moon is lit on its phase's side ---
    ph (cite 'pom 'pom-phase)
-   wax (ph 12 9 23 2026)                                  ; waxing gibbous, 81%
-   wane (ph 23 12 31 1999)                                ; waning crescent, 33%
+   wax (ph 12 9 23 2026)
+   wane (ph 23 12 31 1999)
    (lit? cv y x) (: k (saver-cell cv y x) (<k = 128 && elem (k 1) [230 187]))
    (dark? cv y x) (: k (saver-cell cv y x) (<k = 128 && k 1 = 234))
    cw (saver-canvas "pom" 24 80 0 wax)
    cn (saver-canvas "pom" 24 80 0 wane)
    _ (test (saver-moon-lit? wax 0.8 0.0) !(saver-moon-lit? wax -0.9 0.0)
            (saver-moon-lit? wane -0.9 0.0) !(saver-moon-lit? wane 0.5 0.0)
-           (lit? cw 11 55) (dark? cw 11 23)                 ; lit right, dark at the left limb
-           (lit? cn 11 25) (dark? cn 11 55)                 ; and the waning one the other way
+           (lit? cw 11 55) (dark? cw 11 23)
+           (lit? cn 11 25) (dark? cn 11 55)
            (has? (saver-frame "pom" 24 80 0 wax) "Waxing Gibbous, 81% of full")
            (has? (saver-frame "pom" 24 80 0 wane) "Waning Crescent, 33% of full"))
 
-   ; --- the idle watch, on a fake clock ---
+   ; the idle watch on a fake clock
    w (saver-watch "matrix" 10)
    mn 60000
-   _ (test ("" = saver-tick w 0 24 80 0)                    ; the first tick starts the clock
-           ("" = saver-tick w (10 * mn - 1) 24 80 0)       ; a moment short of ten minutes
+   _ (test ("" = saver-tick w 0 24 80 0)
+           ("" = saver-tick w (10 * mn - 1) 24 80 0)
            !(saver-on? w)
-           (0 = saver-key w (5 * mn))                      ; a key, not the saver's: the clock again
+           (0 = saver-key w (5 * mn))   ; resets the clock
            ("" = saver-tick w (10 * mn) 24 80 0))
-   f0 (saver-tick w (15 * mn) 24 80 0)                    ; ten minutes from that key
+   f0 (saver-tick w (15 * mn) 24 80 0)
    _ (test (saver-on? w)
-           (snip f0 0 6 = "\e[?25l")                        ; the cursor goes
+           (snip f0 0 6 = "\e[?25l")
            (: s (sv-scan (snip f0 6 #f0) 24 80) (<s && s 1 = 24 * 80))
-           ("" = saver-tick w (15 * mn + 10) 24 80 0)      ; the next frame is not due yet
+           ("" = saver-tick w (15 * mn + 10) 24 80 0)
            (0 < #(saver-tick w (15 * mn + 70) 24 80 0))
            !(has? (saver-tick w (15 * mn + 140) 24 80 0) "✉")
-           (has? (saver-tick w (15 * mn + 210) 24 80 1) "✉")   ; mail came: a mark
+           (has? (saver-tick w (15 * mn + 210) 24 80 1) "✉")
            (<(sv-scan (saver-tick w (15 * mn + 280) 24 80 1) 24 80))
-           (1 = saver-key w (15 * mn + 300))               ; the key that wakes it is swallowed
+           (1 = saver-key w (15 * mn + 300))   ; the waking key is swallowed
            !(saver-on? w)
-           ("\e[0m\e[?25h" = saver-tick w (15 * mn + 301) 24 80 1)   ; the cursor back
+           ("\e[0m\e[?25h" = saver-tick w (15 * mn + 301) 24 80 1)
            ("" = saver-tick w (15 * mn + 400) 24 80 1)
-           (0 = saver-key w (16 * mn)))                    ; and the next key is the screen's
+           (0 = saver-key w (16 * mn)))
    _ (test ("" = saver-tick (saver-watch "pom" 0) 0 24 80 0)
-           (: w0 (saver-watch "pom" 0) _ (saver-tick w0 0 24 80 0) ("" = saver-tick w0 (999 * mn) 24 80 0))   ; 0 is never
-           (: wn (saver-watch "nope" 1) _ (saver-tick wn 0 24 80 0) ("" = saver-tick wn (9 * mn) 24 80 0))   ; nor a name it lacks
+           (: w0 (saver-watch "pom" 0) _ (saver-tick w0 0 24 80 0) ("" = saver-tick w0 (999 * mn) 24 80 0))
+           (: wn (saver-watch "nope" 1) _ (saver-tick wn 0 24 80 0) ("" = saver-tick wn (9 * mn) 24 80 0))
            (: h-wf (saver-watch "pom" 0.5) _ (saver-tick h-wf 0 24 80 0) (0 < #(saver-tick h-wf 30000 24 80 0))))
-   ; cycle: a saver of the roster at each start, and the next once five minutes have run
+   ; cycle: a roster saver each start, the next after five minutes
    wc (saver-watch "cycle" 1)
    _ (saver-tick wc 0 24 80 0)
    _ (saver-tick wc mn 24 80 0)
@@ -119,7 +112,7 @@
    c3 ((wc 'on) 'nm)
    _ (test (elem c1 saver-names) (elem c2 saver-names) (elem c3 saver-names) (c1 != c2) (c2 != c3))
 
-   ; --- love mitty -s: the names, and an unknown one exits 2 naming them ---
+   ; love mitty -s; an unknown name exits 2
    (sv-run argv) (: md (tether argv) o (slurp >md)
                     st (h-wf <md)
                     _ (close >md)

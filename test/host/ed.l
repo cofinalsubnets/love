@@ -1,11 +1,9 @@
 ; test/host/ed.l -- ed and ex on a terminal
-; test/kore/ed.sh drives both as scripts; this is the other face, a pty: ed's prompt, an
-; error that says `?` and lets the edit go on, h saying why; ex's prompt and autoprint,
-; and its vi handing the buffer to the vi engine, whose :wq writes it and ends both.
+; over a pty: ed's prompt, `?` and h; ex's autoprint and its vi, whose :wq ends both
 ;   cat test/00-init.l test/host/00-host.l test/host/ed.l | out/love
 (borrow 'posix)
 (: love <cmdline
-   ; every path this lays is the pid's own, so two runs over one out/ keep apart
+   ; per pid, so two runs over one out/ keep apart
    dir ("out/.edtest-" + show (getpid 0))
    _ (mkdir dir 493)
    f (dir + "/t")

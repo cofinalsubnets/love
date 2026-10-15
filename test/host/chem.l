@@ -1,8 +1,5 @@
-; test/host/chem.l -- chem (src/apps/kore/chem.l), the laws without groff at hand
-; the prelude and chem.pic's copy once, a moiety's width and subscripts, a bond's corners, a
-; ring's vertices in chem's own degrees, heterocycles chopped at their atoms; then chem as a
-; command. test/gate/chem.sh holds it to groff's own, byte for byte.
-;   cat test/00-init.l test/host/chem.l | out/love
+; chem (src/apps/kore/chem.l) without groff; test/gate/chem.sh holds it to groff byte for byte
+; run: cat test/00-init.l test/host/chem.l | out/love
 (borrow 'posix)
 (: K (cite 'kore)
    run (K 'ch-run)
@@ -12,7 +9,7 @@
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (put p s) (open p "w" @ q (say q s, close q))
 
-   ; -- the alkyl chain of the manual ----------------------------------------------------
+   ; the manual's alkyl chain
    c1 (chem "a\n.cstart\nCH3\nbond\nC\ndouble bond up\nO\nbond right from C\nCH3\n.cend\nb\n.cstart\n.cend\n")
    _ (test (has? c1 "a\n.PS\ncopy \"")
            (has? c1 "\"\n\ttextht = 0.16; textwid = .1; cwid = 0.12\n\tlineht = 0.2; linewid = 0.2\nLast: 0,0\n\n#CH3\n")
@@ -23,7 +20,7 @@
            (has? c1 "Last: bond(0.2, 90, from C.R.e)\n")
            ; the second diagram has no prelude
            (has? c1 ".PE\nb\n.PS\nLast: 0,0\n.PE\n"))
-   ; -- rings: chem's degrees are 57.29578 to the radian, so a vertex straight down is off
+   ; chem's degree is 57.29578 to the radian, so straight down is off by a hair
    c2 (chem ".cstart\nR1: ring put N at 1 double 2,3\n.cend\n")
    _ (test (has? c2 "R1: Last: [\n\tC: 0,0\n\tV0: (-0.259808,0.15)\n\tV1: (0,0.3)\n")
            (has? c2 "\tV4: (8.00947e-09,-0.3)\n")
@@ -31,12 +28,11 @@
            (has? c2 "\tline from V1 to V2 chop 0.08 chop 0\n")
            (has? c2 "\tline from 0.85<C,V2> to 0.85<C,V3> chop 0 chop 0\n")
            (has? c2 "] with .V5.w at Last.e \n"))
-   ; the size scales what it says, a ring5's radius is pi's own
    c3 (chem ".cstart\nsize 12\nbenzene\n.cend\n")
    c4 (chem ".cstart\nring5 pointing down\n.cend\n")
    _ (test (has? c3 "\tcircle rad 0.18 at 0,0\n") (has? c4 "\tV5: (0.242705,-0.0788596)\n"))
 
-   ; -- the command ----------------------------------------------------------------------
+   ; the command
    f (dir + "/c.ms")
    _ (put f ".cstart\nbenzene\nbond 30 ; OH\n.cend\n")
    r1 (hark [love "kore" "chem" f])

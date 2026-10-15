@@ -1,8 +1,5 @@
-; test/host/pic.l -- kore's pictures (src/apps/kore/pic.l) and the gif decoder under them
-; a two-frame gif assembled by hand read back frame by frame; each kind sniffed, sized and
-; drawn; sixel and kitty's graphics read back off a quay screen, and quay's answers to the
-; probe; pic and its verbs run as commands; picless stepped through its keys, the screen
-; left out. where magick is here, gifs of each disposal held to its coalesced frames.
+; test/host/pic.l -- kore's pictures (src/apps/kore/pic.l) and the gif decoder: kinds, sixel
+; and kitty off a quay screen, pic's verbs, picless's keys, and gifs against magick where present
 ;   cat test/00-init.l test/host/00-host.l test/host/pic.l | out/love
 (borrow 'posix)
 (borrow 'jpeg)
@@ -17,7 +14,7 @@
    (bytes l) (foldl (a \ b \ (a + string b)) "" l)
    red [255 0 0 255] blue [0 0 255 255]
 
-   ; -- two frames by hand: 2x1, red blue then blue red, 100 and 200 ms ----------------
+   ; two frames by hand: 2x1, red blue then blue red, 100 and 200 ms
    ; clear 4, the two indices, end 5, three bits a code, lsb first
    anim ("GIF89a" + bytes ([2 0 1 0 128 0 0 255 0 0 0 0 255]
                 + [33 249 4 0 10 0 0 0] + [44 0 0 0 0 2 0 1 0 0 2 2 68 10 0]
@@ -33,7 +30,7 @@
            (#(frames (snip anim 0 40) 2) = 1)
            (frames "GIF8" = "not a picture") (dec "hello" = "not a picture"))
 
-   ; -- each kind, and its drawing ------------------------------------------------------
+   ; each kind, and its drawing
    (image w h f)
     (cask (4 * w * h) @ c
      (map (i \ (: p (f (i % w) (i // w)) o (4 * i)
@@ -61,7 +58,7 @@
    ; rows caps the height: 16x12 in 2 rows is 16 by 4 pixels at most, scale 3
    _ (test (#(art im 80 2 1) = 2))
 
-   ; -- sixel and kitty's, through quay ---------------------------------------------------
+   ; sixel and kitty's, through quay
    ; a picture's pixels as a quay screen of 8x16 cells holds them, clear 0
    (shot im t) (: s (h-mkscr 4 10) _ (scribe s t) w (im 0)
                   (map (i \ (: x (i % w) y (i // w) (tilepx s (y // 16 * 10 + x // 8) (x % 8) (y % 16))))
@@ -95,7 +92,7 @@
    _ (K 'pic-heard "" @ h (test !(h 'kitty) !(h 'sixel) (h 'cw = 0)))
    _ (K 'pic-heard "\e[6;20;10t\e[?62;22c" @ h (test !(h 'kitty) !(h 'sixel) (h 'cw = 10) (h 'ch = 20)))
 
-   ; -- pic as a command ----------------------------------------------------------------
+   ; pic as a command
    _ (put (dir + "/a.gif") gf, put (dir + "/b.jpg") jp, put (dir + "/n.txt") "hello")
    _ (put (dir + "/anim.gif") anim)
    r1 (hark [love "kore" "pic" "-w" "8" (dir + "/a.gif")])
@@ -105,8 +102,7 @@
            (<r2 = 0) (has? >r2 "a.gif:\n") (has? >r2 "b.jpg:\n")
            (<r3 = 1))
    (pic as) (hark ([love "kore" "pic"] + as))
-   ; a bare pic sniffs: a picture is drawn, anything else is a document for classic pic
-   ; (src/apps/kore/gpic.l), and a flag says which outright
+   ; a bare pic sniffs: a picture is drawn, anything else goes to classic pic (src/apps/kore/gpic.l)
    _ (put (dir + "/d.ms") ".PS\nbox\n.PE\ntext\n")
    _ (test (pic [(dir + "/a.gif")] @ r (<r = 0 && has? >r "▀"))
            (pic [(dir + "/n.txt")] @ r (<r = 0 && has? >r ".do if !dPS" && has? >r "\nhello\n"))
@@ -116,7 +112,7 @@
            (pic ["-w" "8" (dir + "/n.txt")] @ r (<r = 1))
            (pic [(dir + "/n.txt") (dir + "/none.png")] @ r (<r = 3)))
    (file p) (uread p @ r (two? r ? <>r ""))
-   ; the verbs; cat is the default, and a mode is said, not probed, off a terminal
+   ; cat is the default, and off a terminal a mode is said, not probed
    _ (test (pic ["cat" "-w" "8" (dir + "/a.gif")] = r1)
            (pic ["-g" "sixel" (dir + "/a.gif")] @ r (<r = 0 && snip >r 0 2 = "\eP"))
            (pic ["cat" "-g" "kitty" (dir + "/a.gif")] @ r (<r = 0 && snip >r 0 3 = "\e_G"))
@@ -161,7 +157,7 @@
            (<(pic ["convert" (dir + "/a.gif") (dir + "/c.ans")]) = 0)
            (file (dir + "/c.ans") = (K 'pic-ans) im 80 () 1))
 
-   ; -- picless, its keys -----------------------------------------------------------------
+   ; picless, its keys
    st (pnew [(dir + "/anim.gif") (dir + "/a.gif") (dir + "/n.txt")] 12 200)
    s0 (pframe st)
    _ (test (has? s0 "anim.gif  [1/3]  2x1") (has? s0 "frame 1/2") !(has? s0 "paused")
@@ -202,7 +198,7 @@
    _ (pstep st 113)
    _ (test (st 'quit))
 
-   ; -- picless in sixel and kitty's: the screen it writes, read back off quay ------------
+   ; picless in sixel and kitty's, read back off quay
    ; a 16x12 picture on 6 rows of 30 cells of 8x16 fits at its size, centred: 14 cells over
    ; (30 less its 2, halved) and 2 rows down (5 rows less its 1, halved)
    (pv-in mode)
@@ -227,7 +223,7 @@
    _ (test (<(hark [love "kore" "pic" "less" (dir + "/a.gif")]) = 2)
            (<(hark [love "kore" "pic" "less" "-g" "neon" (dir + "/a.gif")]) = 2))
 
-   ; -- markdown and html2text on a terminal: a local picture under its image's line ------
+   ; markdown and html2text on a terminal: a local picture under its image's line
    _ (put (dir + "/sub.gif") gf)
    md (cite 'lapiz 'mdread "# t\n\nsee ![it](sub.gif) here\n\n![gone](nope.png) and ![w](http://x/y.png)\n")
    lp (K 'lens-pics md 40 (dir + "/doc.md"))
@@ -240,7 +236,7 @@
            (#(filter (l \ has? l "▀") ll) = 6)
            (has? lp "[gone] and [w]"))
 
-   ; -- against magick: every disposal, frame by frame -----------------------------------
+   ; against magick: every disposal, frame by frame
    magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))
    (coalesced f) (hark ["magick" f "-coalesce" "-depth" "8" "rgba:-"] @ r (two? r && <r = 0 ? >r))
    ; pixels that differ in whether they are seen, or in colour where both are

@@ -1,5 +1,5 @@
-; test/host/lore.l -- `love lore`: the games behind one verb. alone it lists them, a
-; name plays one, an unknown name exits 2, and no game is a verb of its own.
+; test/host/lore.l -- `love lore`: alone it lists the games, a name plays one, an
+; unknown name exits 2, and no game is a verb of its own.
 ;   cat test/00-init.l test/host/00-host.l test/host/lore.l | out/love
 (borrow 'lore)
 (borrow 'posix)

@@ -1,10 +1,9 @@
-; test/host/shaft.l -- the elevator shaft, headless: the frame and lights, the gaps, walking,
-; jumps, falls, ladders, the doors, and the song into a jug.
+; test/host/shaft.l -- the elevator shaft, headless
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/shaft.l | out/love
 
-(borrow 'shaft)   ; the artifact's module, warm from the tree
-(borrow 'view)     ; the keys' actions
-(: shaft-kb (view-bind view-binds shaft-binds))   ; a key's code -> its action
+(borrow 'shaft)
+(borrow 'view)
+(: shaft-kb (view-bind view-binds shaft-binds))
 
    ; so many frames, a key each or none
 (: (tick st k) ((charm? k ? (shaft-step st (shaft-kb k))), shaft-move st, pin st 't (st 't + 1))
@@ -20,9 +19,7 @@
    half-on (int (fps * light-on / 2.0))
    half-off (int (fps * (light-on + light-period) / 2.0)))
 
-; --- the frame: half the pixel rows in cells, the same state the same frame, a wide
-; --- one wider; the lights blink -- on then off within a period, and the wall with them
-; --- on it paints differently lit and dark
+; the frame: half the pixel rows in cells, deterministic; the lights blink
 (: st (fresh ()) f (shaft-frame st) f2 (shaft-frame st)
    wide (shaft-new 120 60 (wheel 5))
    _ (on st shaft-r 0.0, pins st 'th 1.5707963 't half-on) lit (shaft-frame st)   ; facing the wall at x = r
@@ -35,9 +32,7 @@
        ; the hole over a ladder is drawn -- the frame differs with it and without -- and stood on
        (: l <ladders e (ring-pt (l 0) walk-q) (ledge-under? (st 'lay) 1 (e 0) (e 1)))))
 
-; --- the lay: gaps on every ring above the floor, each within one wall and clear of its
-; --- ends, and no gap under a ladder or the door; the floor everywhere and the middle of
-; --- the shaft under no ledge; the same die the same lay
+; the lay: gaps on every ring above the floor, within one wall, none under a ladder or door
 (: st (fresh ()) lay (st 'lay)
    rings (map (+ 1) ^(floors - 1))
    gaps (map (f \ peep (lay 'gaps) f ()) rings)
@@ -55,8 +50,7 @@
        (all (f \ !(ledge-under? lay f 0.0 0.0)) rings) (ledge-under? lay 0 0.0 0.0)
        (show lay = show (shaft-new 80 48 (wheel 5) 'lay))))
 
-; --- walking: k steps the way you face, j back, a key a frame; h and l turn, all the way
-; --- round; a wall stops you ---
+; walking: k forward, j back, h and l turn; a wall stops you
 (: st (fresh ()) x0 (st 'px) z0 (st 'pz) th0 (st 'th)
    _ (walk st 107 10) x1 (st 'px) z1 (st 'pz)
    _ (walk st 106 5) x2 (st 'px)
@@ -68,7 +62,7 @@
        (near? zw (shaft-r - body-r)) (st 'ground) (0.0 = st 'y)
        (thw * thw <= 9.8696045)))                                     ; wrapped: never past pi
 
-; --- a jump: up off the floor and back down onto it, carrying the walk; none from the air ---
+; a jump carries the walk; none from the air
 (: st (fresh ()) x0 (st 'px)
    _ (tick st 107, shaft-jump st) g0 (st 'ground)
    _ (run st 3) y3 (st 'y)
@@ -78,7 +72,7 @@
                    test !g0 (0.0 < y3) (vy-mid < jump-v) (st 'ground) (0.0 = st 'y) (x0 < st 'px)
        (st2 'ground) (near? (st2 'px) x0)))                           ; stood still: straight up and down
 
-; --- a gap: walked into, the player falls to what is under it; jumped, they land past it ---
+; a gap: walked into, you fall; jumped, you land past it
 (: st (fresh ()) lay (st 'lay) g <(peep (lay 'gaps) 1 ()) g0 (g 0) g1 (g 1) th (tangent-of g0)
    _ (on st (g0 - 0.3) floor-h, pin st 'th th)
    _ (walk st 107 12) fell !(st 'ground) yf (st 'y)
@@ -89,8 +83,7 @@
  (test fell (yf < floor-h) (st 'ground) (yl < floor-h) (yl = ground-at lay (st 'px) (st 'pz) yl)
        (st2 'ground) (st2 'y = floor-h) (g1 < nw 1) (nw 2 <= ledge-d)))
 
-; --- a fall: from a floor up, the screen flashes and the flash fades; from two floors
-; --- up it flashes more and fades slower; a thud is due either way ---
+; a fall flashes, more and slower from higher; a thud either way
 (: st (fresh ()) lay (st 'lay) g <(peep (lay 'gaps) 1 ()) s ((g 0 + g 1) / 2.0)
    _ (on st s floor-h, pin st 'ground 0)
    _ (settle st 300) a1 (st 'flash) k1 (st 'flash-k) n1 #(st 'sfx)
@@ -101,9 +94,7 @@
  (test (0.0 = st 'y) (0.0 < a1 <= 1.0) (a1b < a1) (0.0 = a1c) (0 < n1)
        (0.0 = st2 'y) (a1 < a2 <= 1.0) (k1 < k2 < 1.0)))
 
-; --- a ladder: space at its foot takes hold, k climbs to the ledge above and lets go
-; --- there; space at the top takes hold, j climbs down; space midway lets go, and down
-; --- you come ---
+; a ladder: space takes hold at foot or top, k and j climb, space midway lets go
 (: st (fresh ()) l <ladders
    _ (on st (l 0) (l 1), shaft-step st (shaft-kb 32)) held (st 'rung)
    _ (walk st 107 5) yb (st 'y) th (st 'th)
@@ -118,15 +109,14 @@
        (l 1 < ym) !let-go (st 'ground) (st 'y = l 1)
        !(st2 'rung) !(st2 'ground)))
 
-; --- the look: u and n tilt it and no further than the screen allows ---
+; the look: u and n tilt, clamped
 (: st (fresh ()) hz0 (st 'hz) h (st 'h)
    _ (shaft-step st (shaft-kb 117)) hzu (st 'hz) _ (shaft-step st (shaft-kb 110)) hzn (st 'hz)
    _ (each ^100 (i \ shaft-step st (shaft-kb 117))) top (st 'hz)
    _ (each ^200 (i \ shaft-step st (shaft-kb 110))) bot (st 'hz)
  (test (hz0 < hzu) (hzn = hz0) (top = 7 * h // 8) (bot = h // 8)))
 
-; --- the doors: standing at the top one opens it, which is the level done, and the
-; --- frame shows it; standing at a lower one does nothing ---
+; the doors: the top one opens and ends the level; a lower one does nothing
 (: st (fresh ()) top ((floors - 1) * floor-h)
    _ (on st door-s floor-h, run st 3) d1 (st 'done)
    _ (on st door-s top, pin st 'th (tangent-of door-s + 1.5707963))      ; facing the door wall
@@ -136,7 +126,7 @@
    _ (shaft-step st (shaft-kb 107), run st 2) x (st 'px)
  (test !d1 (d2 = 1) (shut != open) (near? x (ring-pt door-s walk-q 0)) (elem 'door (st 'sfx))))
 
-; --- the song: silence until something happens, then not; a chunk a feed ---
+; the song: silence until something happens; a chunk a feed
 (: j (jug 0) s (shaft-song-new j (wheel 7)) st (fresh ())
    _ (each ^5 (i \ (shaft-sfx s st, shaft-song-feed s)))
    quiet (slurp j)

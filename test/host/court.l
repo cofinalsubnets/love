@@ -1,8 +1,7 @@
-; test/host/court.l -- the courtyard, headless: the frame in both palettes, the sun by
-; the hour, the low sun on the top of the wall it faces, walking, looking, and the clock.
+; test/host/court.l -- the courtyard, headless
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/court.l | out/love
 
-(borrow 'court)   ; the artifact's module, warm from the tree
+(borrow 'court)
 (borrow 'vec)
 (borrow 'mesh)    ; a frame's colours as trays
 
@@ -13,8 +12,7 @@
    (near? a b) (a - b @ d (d * d < 0.0001))
    (keys! st ks) (each ks (k \ court-step st (court-kb k))))
 
-; --- the frame: half the pixel rows in cells, the same state the same frame, in the 256
-; --- palette and in 24 bits; the clock in the corner at the start and gone after
+; the frame: deterministic, in the 256 palette and in 24 bits; the clock shown only at the start
 (: st (at 12.0) f (court-frame st) f2 (court-frame st)
    deep (court-frame (pin (at 12.0) 'deep 1))
    _ (pin st 't 100) quiet (court-frame st)
@@ -22,18 +20,16 @@
        (has? f "38;5;") (has? deep "38;2;")
        (has? f (court-clock st)) !(has? quiet (court-clock st))))
 
-; --- an odd width puts a column dead ahead: at a run's start, facing due west, it is drawn
-; --- like its neighbours, every pixel a number
+; an odd width puts a column dead ahead, drawn like its neighbours
 (: st (court-new 41 30 [(day0 + 15.0 * 3600.0) 3600]) c (mesh-flat (court-pens st)) n (41 * st 'h)
    (col k x) (peep (c k) (iota (st 'h) * 41 + x) 0.0)
  (test (0.0 < net (c 0) + net (c 1) + net (c 2))
        (net (col 1 20) < 1.5 * net (col 1 19)) (0.66 * net (col 1 19) < net (col 1 20))))
 
-; --- the stars by night: each one pixel, never a patch -- looking straight up from the
-; --- middle of the yard on a clear night some show, each alone among dark ones; none by day
+; the stars: each one pixel, never a patch; none by day
 (borrow 'sky)
-(borrow 'view)     ; the keys' actions
-(: court-kb (view-bind view-binds court-binds))   ; a key's code -> its action
+(borrow 'view)
+(: court-kb (view-bind view-binds court-binds))
 (: (up hr) (: st (pins (at hr) 'px 0.0 'pz 0.0 'ph 1.5 'wx (sky-weather 0 'smooth)) c (mesh-flat (court-pens st))
               l (c 0 + c 1 + c 2) w (st 'w) n #l b (net l / n * 4.0 + 0.05 < l) i (iota n)
               (at k) (peep b k 0)
@@ -41,8 +37,7 @@
    night (up 23.0) day (up 13.0)
  (test (5 < night 1) (day 0 = 0)))
 
-; --- the sun: up by day and down by night, south at noon, east in the morning and west in
-; --- the evening, a unit vector; summer's hour is taken off the wall clock
+; the sun, a unit vector by the hour; summer's hour is taken off the wall clock
 (: (sun hr) (court-sun (at hr)) n (sun 13.0) m (sun 8.0) e (sun 18.0) mid (sun 1.0)
    (len s) (s 0 * s 0 + s 1 * s 1 + s 2 * s 2)
  (test (0.0 < n 1) (mid 1 < 0.0) (m 1 < n 1) (e 1 < n 1)
@@ -50,14 +45,12 @@
        (near? (len n) 1.0) (near? (len e) 1.0)
        (sun 13.0 = court-sun (court-new 80 48 [(day0 + 12.0 * 3600.0) 0]))))
 
-; --- the light: day at noon and none at midnight, the eye's gain up in the dark; and the
-; --- low sun orange, the high sun near white
+; the light: the eye's gain up in the dark; the low sun orange, the high near white
 (: noon (court-light (at 13.0)) night (court-light (at 1.0)) low (court-light (at 17.6))
  (test (noon 'day = 1.0) (night 'day = 0.0) (noon 'expo < night 'expo)
        (0.0 < low 'sunk) (low 'sunc 2 < 0.5) (0.75 < noon 'sunc 2)))
 
-; --- the low sun on the rim: an hour before sunset, looking up the east wall from across
-; --- the yard, the top of the wall is warm and lit and its foot is not
+; an hour before sunset the top of the east wall is lit and its foot is not
 (: st (pins (at 17.4) 'px (0.0 - yard-a + 0.5) 'pz 0.0 'th (pi / 2.0) 'ph 1.1)
    c (mesh-flat (court-pens st)) w (st 'w)
    ; the column down the middle: the rim's row is the first from the top that is wall
@@ -66,9 +59,7 @@
    top (foldl (a \ y \ (a < 0 && warm? y ? y a)) -1 ^(st 'h))
  (test (0 <= top) !(warm? (st 'h - 1))))
 
-; --- walking: k steps the way you face, j back; h and l turn; the walls stop you; u and
-; --- n tilt the look, never past straight up or down; a run starts by the east wall,
-; --- facing west and looking up
+; walking: the walls stop you; the tilt clamps at straight up and down
 (: st (pins (at 12.0) 'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5) z0 (st 'pz) th0 (st 'th)
    _ (keys! st [107 107 107]) z1 (st 'pz)
    _ (keys! st [106]) z2 (st 'pz)
@@ -81,7 +72,7 @@
        (st0 'tree 'base @ b (near? (st0 'px) (yard-a - 0.5) && near? (st0 'pz) (b 2 - 1.0))) (st0 'th < 0.0) (1.3 < st0 'ph)
        (near? far (yard-a - body-r)) (up <= 1.45) (1.4 < up) (-1.21 < down) (down < -1.1)))
 
-; --- the time: ] and [ an hour on and back, t the pace, a frame its share of it ---
+; the time: ] and [ an hour on and back, t the pace
 (: st (at 12.0) s0 (st 'sim)
    _ (keys! st [93 93 91]) s1 (st 'sim)
    _ (court-move st) s2 (st 'sim)
@@ -92,17 +83,12 @@
        (court-clock st = "13:00")
        (court-now () @ n (two? n && 0.0 < n 0))))
 
-; --- the sun's shadows: a clear midsummer noon, looking straight down by the north wall
-; --- west of the tree's shade -- the floor is in the sun, and by the south wall in the wall's shadow
+; midsummer noon: the floor by the north wall in sun, by the south wall in shadow
 (: (down z) (: st (pins (on 6 21) 'px -1.5 'pz z 'th 0.0 'ph -1.45 'wx (sky-weather 0 'smooth) 'wet 0.0 'snow 0.0)
                 c (mesh-flat (court-pens st)) (net (c 0 + c 1 + c 2) / #(c 0)))
  (test (1.3 * down (0.6 - yard-b) < down (yard-b - 0.6))))
 
-; --- the tree: the same seed the same tree; planted by the east wall, leaning a little
-; --- west, forked in the third floor, every leaf and seed inside the walls below
-; --- their tops, the leaves from the crown's height (their stalks hanging lower) to over
-; --- the walls, seeds hanging among them; and drawn: the frame with it is not the frame
-; --- without
+; the tree: the same seed the same tree, every leaf and seed inside the walls, and drawn
 (: t1 (tree-grow 7) t2 (tree-grow 7) t3 (tree-grow 8) bs (t1 'base) segs (t1 'segs)
    fork (t1 'fork) n (#(t1 'x))
    (in? k lim) (aall (mag (t1 k) <= lim + 0.0001 + 99.0 * (wall-h <= t1 'y)))
@@ -116,16 +102,14 @@
        (0 < net (t1 'kind = 3.0))
        (f1 != f2)))
 
-; --- the trunk stands in the way: walking into it, the player stays a body's width off
+; the trunk keeps the player a body's width off
 (: st (at 12.0) bs (st 'tree 'base)
    _ (pins st 'px (bs 0) 'pz (bs 2 - 1.5) 'th 0.0)
    _ (keys! st (map (i \ 107) ^60))
  (test (0.55 < sqrt (sq (st 'px - bs 0) + sq (st 'pz - bs 2)))))
 
-; --- the floor's litter: branches laid in a ring round the trunk's foot, none in a wall, the
-; --- floor or the trunk, none leant up, the ring no wider than a long branch; twigs strewn round it
-; --- and the leaves flat on the ground, all of it inside the walls; and the leaves a falling
-; --- one starts from, high in the crown
+; the litter: branches in a ring round the trunk, none in a wall, floor or trunk; twigs and
+; leaves flat, all inside the walls
 (: st (at 12.0) bs (st 'tree 'base) L (st 'litter) P (L 'pts) X (P 'x) Y (P 'y) Z (P 'z)
    G (L 'leaves) rs (L 'rods) ends (cat (map (r \ r 0) rs) (map (r \ r 1) rs))
    (out Q) ((yard-a < mag (Q 'x)) + (yard-b < mag (Q 'z)))
@@ -138,18 +122,14 @@
        (1000 < #(G 'x)) (0 = net (0.01 < G 'y)) (0 = net (G 'up < 1.0)) (0 = net (out G))
        (two? tops) (all (y \ amax (st 'tree 'y) - 1.5 < y) ty)))
 
-; --- a crate propped on the trunk's north side by a big branch lying on the floor along the
-; --- north wall at its foot, and a plate east of it that the heap leaves bare
+; a crate propped on the trunk's north side, and a plate east of it the heap leaves bare
 (: st (at 12.0) bs (st 'tree 'base) L (st 'litter) lb (<(L 'lain)) cc (<(crate-of bs)) pl (plate-of bs)
    (off? r) (all (f \ (: q (lerp (r 0) (r 1) f) (plate-r < sqrt (sq (q 0 - pl 0) + sq (q 2 - pl 2))))) [0.0 0.5 1.0])
  (test (bs 2 < cc 2) (near? (lb 0 1) (lb 2)) (near? (lb 1 1) (lb 2)) (near? (lb 0 2) (lb 1 2)) (cc 2 < lb 0 2) (bs 0 < pl 0)
        (all off? (L 'rods))))
 
-; --- the cables: each step of a run is along one axis on one wall's face, below the parapet's
-; --- top, and laid it darkens the walls' map along it; a box on each short wall, mirrored, its
-; --- foot at the second floor's sill between the stair's windows and the east one, a run
-; --- climbing into it; the loose ones hang from the parapet's top inside the walls, and the
-; --- lower ends sway while the tops keep still
+; the cables: each step along one axis on one wall's face, darkening the walls' map; a box
+; on each short wall, mirrored; the loose ones sway at the foot while the tops keep still
 (: (axes p q) #(filter (k \ 0.0001 < mag (p k - q k)) ^3)
    (face? p wid) (? (wid = 0) (mag (p 0 - yard-a) < 0.01) (wid = 1) (mag (p 0 + yard-a) < 0.01)
                     (wid = 2) (mag (p 2 - yard-b) < 0.01) (mag (p 2 + yard-b) < 0.01))
@@ -172,8 +152,7 @@
        (two? lows) (all (k \ 0.001 < moved k) lows)
        (two? tops) (all (k \ s0 k 0 = s1 k 0) tops)))
 
-; --- falling leaves: now and then one lets go of the top of the crown and comes down, and
-; --- it lies on the floor where it lands, inside the walls; the frame draws them
+; falling leaves lie where they land, inside the walls
 (: st (on 10 25) seen {}
    (tick k) (pin st 't k, court-move st,
              (two? (st 'fall) ? (pin seen 'fell (cat (peep seen 'fell ()) [(rev (st 'fall) 0 1)]))))
@@ -184,9 +163,7 @@
        (all (q \ mag (q 0) < yard-a && mag (q 2) < yard-b) fl)
        (5.0 < foldl (a \ b \ a < b ? b a) 0.0 ys) (foldl (a \ b \ a < b ? a b) 99.0 ys < 1.0) (h-rows f = 24)))
 
-; --- the seasons: bare in january with last fall's leaves thick on the ground, leafing out
-; --- in may, green and full in july with little underfoot, gold by late october and
-; --- dropping fast; no leaf falls from a bare tree; and the crown is drawn as the season has it
+; the seasons: the crown and the litter by month; no leaf falls from a bare tree
 (: jan (court-season (on 1 15)) may (court-season (on 5 1)) jul (court-season (on 7 4))
    oct (court-season (on 10 25)) dec (court-season (on 12 20))
    bare (on 1 15) _ (each ^800 (k \ (pin bare 't k, court-move bare)))
@@ -204,8 +181,7 @@
 
 (borrow 'sky)
 
-; --- the weather by season: january's odds lean overcast and july's clear; left to the
-; --- season it drifts a notch at a time as the hours turn; a cover chosen holds
+; the weather: january leans overcast, july clear; it drifts a notch at a time; a cover chosen holds
 (: (odds m) (map (k \ court-wx-pick m k) ^20) jan (odds 1) jul (odds 7)
    (n c l) #(filter (x \ x = c) l)
    st (on 1 15) seen {}
@@ -218,9 +194,8 @@
        (all (d \ -1 <= d && d <= 1) steps) (any (d \ d != 0) steps)
        (fx 'wx 'cover = 2) (court-month day0 = 10)))
 
-; --- rain and snow: snow in the depth of winter and rain in summer, from heavy cover only;
-; --- snow lies over the hours and goes, rain wets the floor; p steps what falls and holds
-; --- the weather, c keeps it; the floor is darker wet and paler snowed on, and the rain is drawn
+; rain and snow from heavy cover only; p steps what falls, c keeps it; wet floors darken,
+; snowed ones pale
 (: (fp m c j) (map (k \ court-fall-pick m c k j) ^20) (n v l) #(filter (x \ x = v) l)
    jan (fp 1 3 0) jul (fp 7 3 0) clear (fp 7 0 0) mar (fp 3 3 1)
    (wxf c f) (pins (sky-weather c 'smooth) 'fall f)
@@ -241,9 +216,8 @@
        (o 'wx 'fall = 2) (o 'wx 'cover = 3) (o 'fix = 1) (r 'wx 'fall = 1) (r 'wx 'cover = 1)
        (court-opts ["--fall" "hail"] = ())))
 
-; --- the words: a date, a time, a pace and the weather, in any order, each at most once;
-; --- a date alone keeps now's hour; a pace leads the paces t steps through; words it cannot
-; --- read refuse
+; the words: date, time, pace and weather in any order, each at most once; a date alone keeps
+; now's hour; unreadable words refuse
 (: o (court-opts ["--date" "2026-10-25" "--time" "16:30" "--pace" "120" "--weather" "overcast" "--sky" "pixel"])
    w (court-opts ["partly"]) n (court-opts [])
    d (court-opts ["--date" "2026-07-04"]) dn (court-now ())
@@ -261,9 +235,7 @@
 
 (borrow 'sky)
 
-; --- the weather: c steps the cover, v the style; the more cover, the more of the sky is
-; --- cloud in either style; under overcast the sun is all but off the walls; and the
-; --- styles draw different skies
+; c steps the cover, v the style: more cover more cloud; overcast all but hides the sun
 (: st (at 13.0)
    _ (pin st 'wx (sky-weather 0 'smooth))
    _ (keys! st [99]) w1 (st 'wx)
@@ -271,8 +243,7 @@
    _ (keys! st [99 99 99]) w3 (st 'wx)
    clear (sky-light (court-sun st) (sky-weather 0 'smooth) (st 'sim))
    oc (sky-light (court-sun st) (sky-weather 3 'smooth) (st 'sim))
-   ; the sky above 25 degrees, a golden spiral of rays: the share of it that is not the
-   ; clear sky's colour
+   ; the cloudy share of the sky above 25 degrees, sampled on a golden spiral
    n 3000 i (iota n) y (0.42 + 0.58 * (i + 0.5) / n) r (sqrt (1.0 - y * y))
    dx (r * cos (i * 2.39996)) dz (r * sin (i * 2.39996)) sim (st 'sim) s (court-sun st)
    (cloud c sty) (: wx (sky-weather c sty) lt (sky-light s wx sim)

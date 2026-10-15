@@ -1,7 +1,5 @@
 ; test/host/bigprint.l -- a big's digits in products, and a long print stopped
-; four times the digits costs well under sixteen times the time; a show aboard a task yields, so a
-; freeze lands at once; and the repl's ^C stops a print where it stands, the next line answering.
-; host-side for its clocks: a ratio on the stress build says nothing.
+; host-side for its clocks: a ratio on the stress build says nothing
 ;   cat test/00-init.l test/host/00-host.l test/host/bigprint.l | out/love
 (borrow 'posix)
 (: love <cmdline
@@ -12,7 +10,7 @@
    b (best show v2)
    _ (test (b < 12 * a) (b < 1000))
 
-   ; a freeze lands while a long show runs
+   ; a show aboard a task yields, so a freeze lands at once
    x (1048576 5)
    pid (twirl (_ \ show x) ())
    t0 (clock 0)

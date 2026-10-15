@@ -1,11 +1,5 @@
-; --- test/host/smallweb.l: www's gopher and gemini ---------------------------------------
-; gopher against a hole served by a love process: a menu's text lines laid as they are and
-; its items as links with their kinds, a text item's dots, a search answered. gemini, where
-; python3 and openssl are here, against a tls server of python's that also asks for a client
-; certificate (an empty one goes back): a text/gemini page's every kind of line, plain text,
-; an ask for input and its answer, a redirect, a refusal, and the pinned certificate held to
-; -- a new one refused until its line goes. www runs with HOME in out/, so the pins it
-; writes are the test's own.
+; test/host/smallweb.l -- www's gopher against a love hole, gemini against python's tls server
+; (when python3 and openssl are here), its pinned certificate held to. HOME is in out/, so the pins are the test's own
 ;   cat test/00-init.l test/host/00-host.l test/host/smallweb.l | out/love
 (borrow 'posix)
 (: K (cite 'kore)
@@ -15,11 +9,10 @@
    home0 (getenv "HOME")
    _ (setenv "HOME" dir)
    (put p s) (: q (open p "w") _ (say q s) (close q))
-   ; www on a pipe, where it pours the page and its references (on a pty it would wait for
-   ; keys); its complaints are stderr, so they ride along
+   ; on a pipe www pours the page and its references; stderr rides along
    (www u) (: r (hark ["sh" "-c" (love + " kore www '" + u + "' 2>&1")]) [(? (two? r) >r "") <r])
 
-   ; -- gopher ---------------------------------------------------------------------------
+   ; gopher
    gp (test-free 0)
    gs (show gp)
    _ (put (dir + "/hole.l") ("(borrow 'posix)
@@ -39,7 +32,7 @@
    0)
 "))
    srv (tether [love (dir + "/hole.l")])
-   _ (test-until (\ s !(two? s)) (\ _ (stat (dir + "/hole.up"))))   ; it listens: it takes three, so no probe
+   _ (test-until (\ s !(two? s)) (\ _ (stat (dir + "/hole.up"))))   ; a probe would spend one of its three
    m (www ("gopher://127.0.0.1:" + gs + "/"))
    a (www ("gopher://127.0.0.1:" + gs + "/0/about"))
    f (www ("gopher://127.0.0.1:" + gs + "/7/find?search=love+kore"))
@@ -52,7 +45,7 @@
            (has? <a "Line one") (has? <a ".dotted") !(has? <a "..dotted") (a 1 = 0)
            (has? <f "you searched for love kore"))
 
-   ; -- gemini ---------------------------------------------------------------------------
+   ; gemini
    py? (: q (open "/usr/bin/python3" "r") (? (hot? q) (close q, 1) 0))
    ssl? (: q (open "/usr/bin/openssl" "r") (? (hot? q) (close q, 1) 0))
    gm (test-free 0)
@@ -100,7 +93,7 @@ for _ in range(int(sys.argv[3])):
            e (www (base + "/gone"))
            _ (still <s1 15) _ (h-waitfor <s1)
            pins (: q (open (dir + "/.love/gemini_hosts") "r") (? (hot? q) (: s (slurp q) _ (close q) s) ""))
-           ; the same host with another certificate: refused, and taken once its line is gone
+           ; another certificate: refused until its line is gone
            s2 (serve "two" 2)
            _ (test-until (\ s !(two? s)) (\ _ (stat (dir + "/two.up"))))
            c (www (base + "/doc"))
