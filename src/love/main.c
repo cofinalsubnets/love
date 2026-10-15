@@ -600,11 +600,14 @@ int main(int argc, char const **argv) {
   else if (argc == 2 && !strcmp(argv[1], "wake"))
    return fprintf(stderr, "love: wake needs an image path\n"), 2;
   // a named image that will not wake is the run's error, never an egg boot in its place: a
-  // foreign build's image (its anchor), a torn one, or none at all
-  if (image_load_path && !(g = image_load(image_load_path))) {
-   int rd = !access(image_load_path, R_OK);
-   return fprintf(stderr, rd ? "love: wake: %s: not an image this binary can wake (torn, or baked by another build)\n"
-                             : "love: wake: %s: cannot open\n", image_load_path), rd ? 2 : 1; }
+  // foreign build's image (its fingerprint or its C), a torn one, or none at all
+  int why = 0;
+  if (image_load_path && !(g = image_load(image_load_path, &why))) {
+   static char const *const says[] = { "torn", "another format, arch or word", "baked by a binary whose tables differ",
+                                       "baked from other C" };
+   return access(image_load_path, R_OK)
+    ? (fprintf(stderr, "love: wake: %s: cannot open\n", image_load_path), 1)
+    : (fprintf(stderr, "love: wake: %s: not an image this binary can wake (%s)\n", image_load_path, says[why & 3]), 2); }
   char const *noimg = getenv("LOVE_NO_IMAGE");
   uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {

@@ -63,11 +63,12 @@ void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   cb_store(c, sn);
   cb_hist(c, 0), c->twin = 0;
   c->flag = cb_show | cb_wrap;
-  c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0;
+  c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0, c->rd = 0, c->ps = 0;
   c->ucp = 0, c->un = 0, c->ol = 0;
   for (int k = 0; k < 8; k++) c->dmg[k] = 0;
   for (uint32_t k = 0; k < cb_nclu; k++)
     for (uint32_t j = 0; j < cb_clun; j++) c->clu[k][j] = 0;
+  c->cx = 0, c->cfull = 0;
   cb_attr(c, cb_ink(cb_idx, 7), cb_ink(cb_idx, 0));
   c->sfg = c->sbg = cb_ink(cb_def, 0), c->sface = 0;
   c->top = 0, c->bot = rows - 1u;
@@ -150,7 +151,9 @@ static void cb_sayn(struct cb *c, uint32_t n) {
 int cb_reply(struct cb *c, uint8_t *buf) {
   int n = c->on;
   for (int i = 0; i < n; i++) buf[i] = c->out[i];
-  return c->on = 0, n; }
+  return c->on = 0, c->rd = 1, n; }
+
+int cb_full(struct cb const *c) { return c->rd && c->on > cb_outn - cb_saymax; }
 
 static uint32_t cb_decn(uint8_t *o, uint32_t k, uint32_t n) {
   uint8_t b[10]; uint32_t i = 10;
@@ -321,31 +324,52 @@ static void cb_unpair(struct cb *c, uint32_t p) {
   if (w == cb_tail && col) c->cb[p - 1].g &= 0xff000000u;
   if (w == cb_lead && col + 1u < cs) c->cb[p + 1].g &= 0xff000000u; }
 
+static uint32_t *cb_xbase(struct cb const *c);
+// slot k: the header's, then the ones after the twin
+static uint32_t *cb_slotp(struct cb const *c, uint32_t k) {
+  return k < cb_nclu ? (uint32_t*) c->clu[k] : cb_xbase(c) + (uintptr_t) (k - cb_nclu) * cb_clun; }
+
 uint32_t const *cb_clu(struct cb const *c, uint32_t g) {
-  uint32_t const k = cb_cp(g) - cb_clu0;
-  return !(g & cb_pic) && cb_cp(g) >= cb_clu0 && k < cb_nclu && c->clu[k][0] ? c->clu[k] : 0; }
+  uint32_t const k = cb_cp(g) - cb_clu0, *v = k < cb_nclu + c->cx ? cb_slotp(c, k) : 0;
+  return !(g & cb_pic) && cb_cp(g) >= cb_clu0 && v && v[0] ? v : 0; }
 
 uint32_t cb_base(struct cb const *c, uint32_t g) {
   uint32_t const *v = cb_clu(c, g);
   return v ? cb_cp(v[0]) : cb_cp(g); }
 
+// a free slot, or n for none
+static uint32_t cb_free(struct cb const *c, uint32_t n) {
+  uint32_t k = 0;
+  while (k < n && cb_slotp(c, k)[0]) k++;
+  return k; }
+
+// the sweep: every slot no cell nor the history names is freed, save `keep`; cell `skip`
+// names nothing, its slot about to change. a named slot is marked in its base's top bit,
+// which no codepoint reaches
+static void cb_reap(struct cb *c, uint32_t keep, uint32_t skip) {
+  uint32_t const n = cb_nclu + c->cx;
+  for (uint32_t i = 0, m = cb_ncells(c); i < m; i++) {
+    uint32_t const g = cb_nth(c, i)->g;
+    if (i != skip && cb_clu(c, g)) cb_slotp(c, cb_cp(g) - cb_clu0)[0] |= (uint32_t) 1 << 31; }
+  if (keep < n) cb_slotp(c, keep)[0] |= (uint32_t) 1 << 31;
+  for (uint32_t k = 0; k < n; k++) {
+    uint32_t *const v = cb_slotp(c, k);
+    v[0] = v[0] >> 31 ? v[0] & ~((uint32_t) 1 << 31) : 0; } }
+
 // the slot holding v: one that already does, else a free one, else one freed by a sweep
-// of the cells and the history (all but cell `skip`, whose slot v replaces); cb_nclu when
-// every slot is named
+// (all but cell `skip`, whose slot v replaces); n when every slot is named. taking the
+// last free one sweeps at once, and a pool still full says so in cfull
 static uint32_t cb_slot(struct cb *c, uint32_t const *v, uint32_t skip) {
+  uint32_t const n = cb_nclu + c->cx;
   uint32_t k, j;
-  for (k = 0; k < cb_nclu; k++) {
-    for (j = 0; j < cb_clun && c->clu[k][j] == v[j]; j++) ;
+  for (k = 0; k < n; k++) {
+    uint32_t const *const w = cb_slotp(c, k);
+    for (j = 0; j < cb_clun && w[j] == v[j]; j++) ;
     if (j == cb_clun) return k; }
-  for (k = 0; k < cb_nclu && c->clu[k][0]; k++) ;
-  if (k == cb_nclu) {
-    uint32_t named[cb_nclu / 32] = { 0 };
-    for (uint32_t i = 0, n = cb_ncells(c); i < n; i++) {
-      uint32_t const g = cb_nth(c, i)->g;
-      if (i != skip && cb_clu(c, g)) j = cb_cp(g) - cb_clu0, named[j >> 5] |= (uint32_t) 1 << (j & 31); }
-    for (j = 0; j < cb_nclu; j++) if (!(named[j >> 5] >> (j & 31) & 1)) c->clu[j][0] = 0;
-    for (k = 0; k < cb_nclu && c->clu[k][0]; k++) ; }
-  if (k < cb_nclu) for (j = 0; j < cb_clun; j++) c->clu[k][j] = v[j];
+  if ((k = cb_free(c, n)) == n) cb_reap(c, n, skip), k = cb_free(c, n);
+  if (k == n) return c->cfull = 1, n;
+  for (j = 0; j < cb_clun; j++) cb_slotp(c, k)[j] = v[j];
+  if (cb_free(c, n) == n) cb_reap(c, k, skip), c->cfull = cb_free(c, n) == n;
   return k; }
 
 static int cb_vs16(uint32_t cp) { return __ucd_in(ucd_vs, cp); }
@@ -410,7 +434,7 @@ static void cb_mark(struct cb *c, uint32_t m) {
   if (n < cb_clun) {
     v[n] = m;
     uint32_t const k = cb_slot(c, v, p);
-    if (k < cb_nclu) c->cb[p].g = (g & 0xffe00000u) | (cb_clu0 + k), cb_dirt(c, p / cs, p / cs); }
+    if (k < cb_nclu + c->cx) c->cb[p].g = (g & 0xffe00000u) | (cb_clu0 + k), cb_dirt(c, p / cs, p / cs); }
   if (c->flag & cb_gc && (m == 0xfe0fu || cb_width(m))) cb_emoji(c, p, m != 0xfe0fu); }
 
 static void cb_glyph(struct cb *c, uint32_t cp) {
@@ -487,6 +511,16 @@ void cb_twin(struct cb *c, uint32_t on) { c->twin = on ? 1u : 0u; }
 // the twin grid, or 0 for a screen laid without one
 static struct cb_cell *cb_twins(struct cb const *c) {
   return c->twin ? cb_ring(c) + (uintptr_t) c->hl * c->cols : 0; }
+
+// --- the cluster slots past the header's, after the twin --------------------------------
+static uint32_t *cb_xbase(struct cb const *c) {
+  return (uint32_t*) (cb_ring(c) + (uintptr_t) c->hl * c->cols + (c->twin ? (uintptr_t) c->rows * c->cols : 0)); }
+
+void cb_xclu(struct cb *c, uint32_t cx) {
+  for (uintptr_t i = (uintptr_t) c->cx * cb_clun, n = (uintptr_t) cx * cb_clun; i < n; i++) cb_xbase(c)[i] = 0;
+  if (cx > c->cx) c->cx = cx, c->cfull = 0; }
+
+uintptr_t cb_laid(struct cb const *c) { return (uintptr_t) ((uint8_t*) cb_xbase(c) - (uint8_t*) c) + cb_xsize(c->cx); }
 
 // grid row r, a history line in its place for as many rows as the view looks back
 struct cb_cell const *cb_seen(struct cb const *c, uint32_t r) {
@@ -610,6 +644,7 @@ void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols,
     for (uint32_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
     cb_mend(c, dr); }
   cb_hist(c, hl), cb_twin(c, tw);
+  for (uintptr_t i = 0, n = (uintptr_t) old->cx * cb_clun; i < n; i++) cb_xbase(c)[i] = cb_xbase(old)[i];
   struct cb_cell *nt = cb_twins(c);
   struct cb_cell const *ot = old->flag & cb_alt ? cb_twins(old) : 0;
   if (nt) for (uint32_t i = 0, n = (uint32_t) rows * cols; i < n; i++) nt[i] = blank;
@@ -931,6 +966,7 @@ static void cb_ris(struct cb *c) {
   c->flag = (uint16_t) (cb_show | cb_wrap | lnm);
   c->wpos = c->spos = 0;
   c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0, c->ol = 0, c->sslot = 0, c->sm = 0, c->kopen = 0;
+  c->ps = 0;
   cb_clear(c); }
 
 static void cb_save(struct cb *c) {  // DECSC: cursor + pen + charsets
@@ -949,31 +985,39 @@ static void cb_decstr(struct cb *c) {
   c->gset = c->sgset = 0, c->spos = 0, c->sfg = c->sbg = c->cur_fg, c->sface = 0; }
 
 // SGR: the pen. colours by index (8 + bright 8 + 256) or 38;2 rgb, faces in
-// the glyph word's top byte.
+// the glyph word's top byte. each parameter moves the pen being made as it arrives, so
+// a sequence of any length is heard whole; an m final makes it the pen
 static uint32_t cb_chan(uint16_t v) { return v > 255 ? 255u : v; }
-static void cb_sgr(struct cb *c) {
+static void cb_sgr1(struct cb *c, uint16_t p) {
   static uint8_t const on[10] = { 0, cb_bold, cb_dim, cb_ital, cb_under, cb_blink, 0, cb_rev, cb_hide, cb_strike };
-  for (uint8_t k = 0; k < c->pn; k++) {
-    uint16_t p = c->pv[k];
-    if (p == 0) c->cur_fg = c->cur_bg = cb_ink(cb_def, 0), c->cur_face = 0;
-    else if (p < 10) c->cur_face |= on[p];
-    else if (p == 22) c->cur_face &= (uint8_t) ~(cb_bold | cb_dim);
-    else if (p >= 23 && p <= 29 && p != 26) c->cur_face &= (uint8_t) ~on[p - 20];
-    else if (p >= 30 && p <= 37) c->cur_fg = cb_ink(cb_idx, p - 30);
-    else if (p == 39) c->cur_fg = cb_ink(cb_def, 0);
-    else if (p >= 40 && p <= 47) c->cur_bg = cb_ink(cb_idx, p - 40);
-    else if (p == 49) c->cur_bg = cb_ink(cb_def, 0);
-    else if (p >= 90 && p <= 97) c->cur_fg = cb_ink(cb_idx, p - 90 + 8);
-    else if (p >= 100 && p <= 107) c->cur_bg = cb_ink(cb_idx, p - 100 + 8);
-    else if ((p == 38 || p == 48) && k + 2 < c->pn && c->pv[k + 1] == 5) {
-      uint32_t v = cb_ink(cb_idx, c->pv[k + 2] & 255);
-      if (p == 38) c->cur_fg = v; else c->cur_bg = v;
-      k += 2; }
-    else if ((p == 38 || p == 48) && k + 4 < c->pn && c->pv[k + 1] == 2) {
-      uint32_t v = cb_ink(cb_rgb, cb_chan(c->pv[k + 2]) << 16 | cb_chan(c->pv[k + 3]) << 8
-                                  | cb_chan(c->pv[k + 4]));
-      if (p == 38) c->cur_fg = v; else c->cur_bg = v;
-      k += 4; } } }
+  uint32_t *const ink = c->pw == 38 ? &c->pfg : &c->pbg;
+  switch (c->ps) {
+   case 1: c->ps = p == 5 ? 2 : p == 2 ? 3 : 0;        // 38;5;n or 38;2;r;g;b, else p is its own
+    if (c->ps) return;
+    break;
+   case 2: *ink = cb_ink(cb_idx, p & 255), c->ps = 0; return;
+   case 3: case 4: c->pacc = c->pacc << 8 | cb_chan(p), c->ps++; return;
+   case 5: *ink = cb_ink(cb_rgb, (c->pacc << 8 | cb_chan(p)) & 0xffffffu), c->ps = 0; return; }
+  if (p == 0) c->pfg = c->pbg = cb_ink(cb_def, 0), c->pface = 0;
+  else if (p < 10) c->pface |= on[p];
+  else if (p == 22) c->pface &= (uint8_t) ~(cb_bold | cb_dim);
+  else if (p >= 23 && p <= 29 && p != 26) c->pface &= (uint8_t) ~on[p - 20];
+  else if (p >= 30 && p <= 37) c->pfg = cb_ink(cb_idx, p - 30);
+  else if (p == 39) c->pfg = cb_ink(cb_def, 0);
+  else if (p >= 40 && p <= 47) c->pbg = cb_ink(cb_idx, p - 40);
+  else if (p == 49) c->pbg = cb_ink(cb_def, 0);
+  else if (p >= 90 && p <= 97) c->pfg = cb_ink(cb_idx, p - 90 + 8);
+  else if (p >= 100 && p <= 107) c->pbg = cb_ink(cb_idx, p - 100 + 8);
+  else if (p == 38 || p == 48) c->ps = 1, c->pw = (uint8_t) p, c->pacc = 0; }
+
+// a CSI parameter done: kept for the dispatch while there is room, and heard by SGR
+static void cb_param(struct cb *c) {
+  if (c->pn < cb_pmax) c->pv[c->pn++] = c->arg;
+  cb_sgr1(c, c->arg);
+  c->arg = 0; }
+
+static void cb_sgr(struct cb *c, int priv) {
+  if (!priv) c->cur_fg = c->pfg, c->cur_bg = c->pbg, c->cur_face = c->pface; }
 
 // DECRQM (CSI ? Ps $ p, CSI Ps $ p): a mode's state as CSI ? Ps ; s $ y -- 1 set, 2 reset,
 // 0 one quay does not know
@@ -1093,7 +1137,7 @@ static void cb_csi(struct cb *c, uint8_t i) {
      uint32_t t = c->pv[0] ? c->pv[0] : 1, b = c->pn > 1 && c->pv[1] ? c->pv[1] : c->rows;
      if (t < b && b <= c->rows) c->top = (uint16_t) (t - 1u), c->bot = (uint16_t) (b - 1u), cb_goto(c, 0, 0); }
     return;
-   case 'm': return cb_sgr(c);
+   case 'm': return cb_sgr(c, priv || gt);   // CSI > 4 ; 2 m and kin are keyboard modes
    case 'h': return cb_mode(c, priv, 1);
    case 'l': return cb_mode(c, priv, 0);
    case 'n':
@@ -1128,6 +1172,7 @@ static void cb_put1(struct cb *c, uint8_t i) {
     c->esc = 0;
     switch (i) {
      case '[': c->esc = 2, c->arg = 0, c->pn = 0, c->ci = 0;
+      c->pfg = c->cur_fg, c->pbg = c->cur_bg, c->pface = c->cur_face, c->ps = 0;
       c->flag &= (uint16_t) ~(cb_priv | cb_junk | cb_gt); return;
      case ']': c->esc = 7, c->ol = 0; return;       // OSC: capture the head (colour asks answer)
      case 'P': c->esc = 9, c->pn = 0, c->arg = 0; return;  // DCS: its parameters, then its final
@@ -1152,14 +1197,11 @@ static void cb_put1(struct cb *c, uint8_t i) {
     if (i >= '0' && i <= '9') {
       if (c->arg < 6553) c->arg = (uint16_t) (c->arg * 10 + (i - '0'));
       return; }
-    if (i == ';' || i == ':') {              // ':' -- colon-form SGR subparameters
-      if (c->pn < cb_pmax) c->pv[c->pn++] = c->arg;
-      c->arg = 0;
-      return; }
+    if (i == ';' || i == ':') return cb_param(c);   // ':' -- colon-form SGR subparameters
     if (i == '>') { c->flag |= cb_gt; return; }     // the secondary-DA marker
     if (i == '?' || i == '=' || i == '<') { c->flag |= cb_priv; return; }
     if (i <= '/') { c->flag |= cb_junk, c->ci = i; return; }  // an intermediate: kept for DECRQM
-    if (c->pn < cb_pmax) c->pv[c->pn++] = c->arg;        // the final parameter
+    cb_param(c);                                           // the final parameter
     c->esc = 0;
     if (c->flag & cb_junk) {
       int const priv = !!(c->flag & cb_priv);

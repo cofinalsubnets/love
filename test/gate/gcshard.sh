@@ -1,10 +1,11 @@
 #!/bin/sh
 # test/gate/gcshard.sh -- test_gcstress in shards, on any tree: the corpus cut into N slices a
 # half, each slice behind the harness (00-init spec uu) and before zz-fin, on the stress runtime
-# (hsuf=/gcs GCDBG=-DLvGcStress). the stress bake is its own job, started first: the cut, the
-# normal shards and the egg half's stress shards run beside it, and the baked half's shards wake
-# its image once it lands. the bake passes when its image answers and its heap, shown name by
-# name, is the normal bake's -- an image does not depend on when collections fall.
+# (hsuf=/gcs GCDBG=-DLvGcStress). the baked half's stress shards wake the normal bake's image:
+# one tree's builds share their tables and their C, so any of them wakes another's image
+# (snap.c's image_why). GCS_BAKE=1 bakes on the stress runtime as well, its own job started
+# first, and the baked half wakes that image instead; it passes when it answers and its heap,
+# shown name by name, is the normal bake's -- an image does not depend on when collections fall.
 # the cut is contiguous and balanced by each file's time on the normal build, read off one
 # marked run of the whole corpus. a shard first passes on the normal build: the corpus is one
 # scope, so a file that leans on an earlier file's binding (`;; missing NAME`, uu's
@@ -12,15 +13,18 @@
 # shards' counts, less the harness's and the carried files' own, sum to the full run's, so a
 # cut that drops an assert shows; each stress shard then answers its normal count.
 #
+# each stress shard is marked between files, so $w/cost holds what every file took there.
+#
 # usage: gcshard.sh TREE [SHARDS]   SHARDS a half (GCS_SHARDS, default 4); GCS_NOBUILD=1 runs
 # the binaries TREE already has; GCS_HSUF names the stress build's out suffix (default /gcs);
-# MAKE the tree's make (make). the stress runtime is out$GCS_HSUF/love.raw: its bake is this
-# script's, never the Makefile's
+# MAKE the tree's make (make); GCS_BAKE=1 the stress bake. the stress runtime is
+# out$GCS_HSUF/love.raw: its bake is this script's, never the Makefile's
 set -u
 [ $# -ge 1 ] || { echo "usage: gcshard.sh TREE [SHARDS]"; exit 2; }
 cd "$1" || exit 2
 n=${2:-${GCS_SHARDS:-4}}
 gs=${GCS_HSUF-/gcs}
+sbake=${GCS_BAKE:-0}
 w=out/gcshard
 esc=$(printf '\033')
 # a failure stops the bakes still running (each keeps its love's pid)
@@ -48,7 +52,7 @@ wt() { for p in $ps; do wait $p; done; ps=; }
 hot=$PWD/src/tools/hot.prof
 bake() { ( cd $w/$1 && { env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT=$hot "$2" bake -l "$3" love.img > out 2>&1 < /dev/null &
                          echo $! > pid; wait $!; echo $? > rc; } ) & }
-bake bs $PWD/out$gs/love.raw $PWD/out$gs/.dist-cat.l; bsp=$!
+[ "$sbake" = 1 ] && { bake bs $PWD/out$gs/love.raw $PWD/out$gs/.dist-cat.l; bsp=$!; }
 bake bn $PWD/out/love.raw $PWD/out/.dist-cat.l; bnp=$!
 cnt() { sed -n 's/^\([0-9][0-9]*\) tests pass in .*/\1/p' $w/$1.out | tail -1; }
 # a failed run's tail, its green dots dropped
@@ -83,7 +87,10 @@ paste -d ' ' $w/clock $w/rest | awk -v n=$n '{ c[NR] = $1; f[NR] = $2 }
 el "the full corpus and the cut"
 
 # a shard: the harness, its carried files, its slice, zz-fin
-lay() { cat $pre $(cat $w/c$1) $(awk -v k=$1 '$1 == k { print $2 }' $w/cut) $fin > $w/s$1.l; }
+# ..and its marked twin, a mark behind each slice file, which the stress runs take
+lay() { cat $pre $(cat $w/c$1) $(awk -v k=$1 '$1 == k { print $2 }' $w/cut) $fin > $w/s$1.l
+        { cat $pre $(cat $w/c$1); for f in $(awk -v k=$1 '$1 == k { print $2 }' $w/cut); do cat $f; echo; echo "$mark"; done
+          cat $fin; } > $w/m$1.l; }
 # the earliest corpus file that binds NAME at the head of a line: a letrec's, a define's, uu's (defn ..)
 binder() { for f in $(cat $w/rest); do
              awk -v nm="$1" 'function at(s) { if (index(s, nm) != 1) return 0; c = substr(s, length(nm) + 1, 1); return c == " " || c == "\t" || c == ")" || c == "" }
@@ -136,28 +143,31 @@ for h in b e; do
 done
 el "the shards on the normal build"
 
-# the stress runtime's egg half wakes no image, so its shards run while the stress bake does;
-# the baked half waits for the bake and wakes its image -- an image wakes only on the binary
-# that baked it
+# the stress runtime's egg half wakes no image, so its shards run while the bakes do; the
+# baked half wakes the image its bake lays, the stress one's or else the normal one's
 i=0
-while [ $i -lt $n ]; do job se$i $egg out$gs/love.raw $w/s$i.l; i=$((i + 1)); done
-wait $bsp
-[ "$(cat $w/bs/rc)" = 0 ] && [ -s $w/bs/love.img ] || { tail -5 $w/bs/out; fail "the stress bake"; }
-el "the stress bake"
-# the bake passes when its image answers on the stress runtime -- woken, not an egg boot
-sm=$w/sm; ( out$gs/love.raw wake $w/bs/love.img -e '(? (elem (quote love-image) (names ())) 42 0)' > $sm.out 2>&1 < /dev/null
-            echo $? > $sm.rc )
-[ "$(cat $sm.rc)" = 0 ] && [ "$(cat $sm.out)" = 42 ] || { say sm; fail "the stress image's smoke run"; }
-i=0
-while [ $i -lt $n ]; do job sb$i out$gs/love.raw wake $w/bs/love.img $w/s$i.l; i=$((i + 1)); done
-# ..and its heap is the normal bake's: each image woken by its own runtime, every global but the
-# runtime's own cmdline shown in name order. both bake as love.img, so the path they keep agrees
+while [ $i -lt $n ]; do job se$i $egg out$gs/love.raw $w/m$i.l; i=$((i + 1)); done
+if [ "$sbake" = 1 ]; then
+  wait $bsp
+  [ "$(cat $w/bs/rc)" = 0 ] && [ -s $w/bs/love.img ] || { tail -5 $w/bs/out; fail "the stress bake"; }
+  el "the stress bake"
+  im=$w/bs/love.img
+fi
 wait $bnp
 [ "$(cat $w/bn/rc)" = 0 ] && [ -s $w/bn/love.img ] || { tail -5 $w/bn/out; fail "the normal bake"; }
-# each global behind its own `@@ NAME` line, since a shown value may span lines
+[ "$sbake" = 1 ] || { im=$w/bn/love.img; el "the normal bake"; }
+# the image answers on the stress runtime -- woken, not an egg boot
+sm=$w/sm; ( out$gs/love.raw wake $im -e '(? (elem (quote love-image) (names ())) 42 0)' > $sm.out 2>&1 < /dev/null
+            echo $? > $sm.rc )
+[ "$(cat $sm.rc)" = 0 ] && [ "$(cat $sm.out)" = 42 ] || { say sm; fail "the stress runtime's smoke run of $im"; }
+i=0
+while [ $i -lt $n ]; do job sb$i out$gs/love.raw wake $im $w/m$i.l; i=$((i + 1)); done
+# ..and the stress image's heap is the normal bake's: each image woken by its own runtime, every
+# global but the runtime's own cmdline shown in name order. both bake as love.img, so the path
+# they keep agrees. each global behind its own `@@ NAME` line, since a shown value may span lines
 canon='(map (n \ (, (puts "@@ ") (puts (show n)) (putc 10) (puts (show (ev n))) (putc 10))) (sort (filter (n \ n != (quote cmdline)) (names ()))))'
 digest() { ( cd $1 && "$2" wake love.img -e "$canon" ); }
-job dn digest $w/bn $PWD/out/love.raw; job ds digest $w/bs $PWD/out$gs/love.raw
+[ "$sbake" = 1 ] && { job dn digest $w/bn $PWD/out/love.raw; job ds digest $w/bs $PWD/out$gs/love.raw; }
 wt
 for h in b e; do
   i=0
@@ -168,10 +178,23 @@ for h in b e; do
   done
 done
 el "the stress runtime: $n shards a half, both halves, each its normal count"
-for d in dn ds; do [ "$(cat $w/$d.rc)" = 0 ] && [ -s $w/$d.out ] || { say $d; fail "the $d digest"; }; done
-cmp -s $w/dn.out $w/ds.out \
-  || fail "the stress image's heap differs from the normal one's, in: $(awk 'FNR == 1 { f++ } /^@@ / { n = $2; k[n] = 1; next }
-                                    { v[f, n] = v[f, n] $0 "\n" } END { for (n in k) if (v[1, n] != v[2, n]) print n }' \
-                                    $w/dn.out $w/ds.out | sort | head -8 | tr '\n' ' ')"
-el "the stress image: it answers, and its heap is the normal image's"
+# what each slice file took under stress, the egg half's ms then the baked half's, costliest first
+for h in e b; do
+  i=0
+  while [ $i -lt $n ]; do
+    awk -v k=$i '$1 == k { print $2 }' $w/cut > $w/f$i
+    sed -n 's/^@@gcshard \([0-9][0-9]*\)$/\1/p' $w/s$h$i.out | awk 'NR == 1 { p = 0 } { print $1 - p; p = $1 }' | paste -d ' ' - $w/f$i
+    i=$((i + 1))
+  done > $w/cost$h
+done
+awk 'NR == FNR { e[$2] = $1; next } { print e[$2], $1, $2 }' $w/coste $w/costb | sort -k2 -rn > $w/cost
+echo "gcshard: the costliest under stress (egg ms, baked ms): $(head -3 $w/cost | awk '{ printf "%s %s %s; ", $3, $1, $2 }')"
+if [ "$sbake" = 1 ]; then
+  for d in dn ds; do [ "$(cat $w/$d.rc)" = 0 ] && [ -s $w/$d.out ] || { say $d; fail "the $d digest"; }; done
+  cmp -s $w/dn.out $w/ds.out \
+    || fail "the stress image's heap differs from the normal one's, in: $(awk 'FNR == 1 { f++ } /^@@ / { n = $2; k[n] = 1; next }
+                                      { v[f, n] = v[f, n] $0 "\n" } END { for (n in k) if (v[1, n] != v[2, n]) print n }' \
+                                      $w/dn.out $w/ds.out | sort | head -8 | tr '\n' ' ')"
+  el "the stress image: it answers, and its heap is the normal image's"
+fi
 echo "gcshard: ok"

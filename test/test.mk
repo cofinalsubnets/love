@@ -1051,13 +1051,17 @@ test_gcheck: host $(love0) out/mooncc0.image
 # across a call that collects. LvGcStress always collects, poisons the vacated nursery, and
 # majors every 32nd. test/gate/gcshard.sh runs the corpus cut into GCS_SHARDS shards a half,
 # the baked and egg halves at once (~2x GCS_SHARDS cores), each shard proved on the normal
-# build first and the counts summed to the full run's. a shard's heap holds only its own files,
-# so test_gcstress_full keeps the corpus whole through one stress process a half, in turn: the
+# build first and the counts summed to the full run's; the baked half wakes the normal bake's
+# image. test_gcstress_bake bakes on the stress runtime too, and the baked half wakes that: the
+# bake's own C and the glaze owe it. a shard's heap holds only its own files, so
+# test_gcstress_full keeps the corpus whole through one stress process a half, in turn: the
 # heap every earlier file built, over two hours, most of it the stress build's bake and the
 # baked leg, which tracks the glaze since every major walks it.
 GCS_SHARDS ?= 4
 test_gcstress: host $(love0) out/mooncc0.image
 	@MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
+test_gcstress_bake: host $(love0) out/mooncc0.image
+	@GCS_BAKE=1 MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
 test_gcstress_full: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
