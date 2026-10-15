@@ -1,9 +1,6 @@
-/* the mem* five. moonlibc copies WORD-WIDE where the pointers agree and falls to
- * bytes where they do not, so every case here is run at several alignments and
- * across the word boundary -- an off-by-one in the wide lane hides completely at
- * offset 0. this battery is 64-bit only, and the wide lane is written against
- * sizeof(long): what proves the 32-bit stride is the thumb boards booting
- * (test_mps2, test_mps2_t1), since moonlibc is their libc too. */
+/* the mem* five. the copies run word-wide where the pointers agree and bytewise where
+ * they do not, so each case runs at several alignments and across the word boundary:
+ * an off-by-one in the wide lane hides at offset 0. the stride is sizeof(long). */
 #include <string.h>
 #include "say.h"
 
@@ -57,7 +54,7 @@ int main(void) {
   say_n("memcpy.shift.bad", bad); }
 
  /* --- memmove: the overlap both directions, adjacent and by a word.
-    dest > src must copy BACKWARD or it eats its own tail. --- */
+    dest > src must copy backward or it eats its own tail. --- */
  for (int d = 1; d <= 9; d++) {
   fill(buf, 40, 0);
   memmove(buf + d, buf, 24);                /* forward overlap */
@@ -86,7 +83,7 @@ int main(void) {
  memmove(buf, buf, 20);                        /* exactly equal: a no-op */
  say_b("memmove.eq", buf, 24);
 
- /* --- memcmp: the SIGN only (see say.h), at every alignment, with the
+ /* --- memcmp: the sign only (see say.h), at every alignment, with the
     difference in the first, middle and last byte --- */
  for (int off = 0; off < 9; off++) {
   fill(buf, sizeof buf, 0);
@@ -104,9 +101,8 @@ int main(void) {
   say_c("memcmp.short", memcmp(buf + off, b2 + off, 23)); } /* one shy: equal */
 
  say_c("memcmp.0", memcmp("a", "b", 0));       /* zero length is always equal */
- /* INDEPENDENT offsets. the sweep above moves both pointers together, so the
-    two always share an alignment and the word lane always takes -- these are
-    what reach it when they do not, and the lengths that cross its step. */
+ /* independent offsets: the sweep above keeps both pointers aligned alike, these do not,
+    and their lengths cross the word step */
  for (int ox = 0; ox < 9; ox++)
   for (int oy = 0; oy < 9; oy++) {
    fill(buf, sizeof buf, 0);
@@ -119,7 +115,7 @@ int main(void) {
      say_c("memcmp.mix.rev", memcmp(b2 + oy, buf + ox, n));
      b2[oy + d] ^= 0x80; } } }
 
- /* the bytes compare as UNSIGNED char: 0x80 is ABOVE 0x7f, not below */
+ /* the bytes compare as unsigned char: 0x80 is above 0x7f, not below */
  unsigned char hi[2], lo[2];
  hi[0] = 0x80; hi[1] = 0; lo[0] = 0x7f; lo[1] = 0;
  say_c("memcmp.unsigned", memcmp(hi, lo, 1));
@@ -137,10 +133,8 @@ int main(void) {
  unsigned char u[4]; u[0] = 1; u[1] = 0xc3; u[2] = 2; u[3] = 3;
  say_p("memchr.high", u, memchr(u, 0xc3, 4)); /* the int arg is taken as unsigned char */
 
- /* the WORD LOOP and its corners: memchr reads a word at a time, so every
-  * alignment of the start, every length modulo the word, and a needle at each
-  * position in it must answer what a byte walk answers -- including the needle
-  * sitting one past the searched span, which must not be found. */
+ /* the word loop's corners: every start alignment, length mod the word and needle position
+  * answers as a byte walk, and a needle one past the span is not found */
   static unsigned char big[160];
   unsigned i, off, len;
   for (i = 0; i < sizeof big; i++) big[i] = 'a' + (i % 23);
