@@ -52,4 +52,5 @@ __pycache__/
 # the two generated proof terms: test_uugen and test_uulean write them from the uu
 # corpus on EVERY run, so a committed copy is 810 KB nothing ever reads
 test/proof/rocq/uugen.v
+test/proof/rocq/mx.v
 test/proof/lean/uugen.lean

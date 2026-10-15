@@ -440,20 +440,20 @@
            ((tc "127.0.0.1" ["leafr" "interr"]) = 1)                 ; an address against iPAddress
            ((tc "good.test" ["leafr" "rootr" "interr"]) = 1)         ; out of order, its root sent
            ((tc "good.test" ["deep" "inter1" "inter0"]) != 1)
-           (tc-has (tc "good.test" ["expired" "interr"]) "\"expired\": it has expired")
-           (tc-has (tc "good.test" ["notyet" "interr"]) "\"notyet\": it is not valid yet")
+           (tc-has (tc "good.test" ["expired" "intere"]) "\"expired\": it has expired")
+           (tc-has (tc "good.test" ["notyet" "intere"]) "\"notyet\": it is not valid yet")
            (tc-has (tc "bad.test" ["leafr" "interr"]) "\"leafr\": it does not name bad.test")
            (tc-has (tc "127.0.0.2" ["leafr" "interr"]) "does not name")
            (tc-has (tc "a.b.wild.test" ["leafr" "interr"]) "does not name")   ; one label only
            (tc-has (tc "wild.test" ["leafr" "interr"]) "does not name")        ; not the bare name
-           (tc-has (tc "foo.wild.test" ["partial" "interr"]) "does not name")  ; no f*.wild.test
-           (tc-has (tc "x.test" ["partial" "interr"]) "does not name")         ; no *.test
-           (tc-has (tc "good.test" ["undernoca" "noca" "interr"]) "\"noca\": it is not a certificate authority")
+           (tc-has (tc "foo.wild.test" ["partial" "intere"]) "does not name")  ; no f*.wild.test
+           (tc-has (tc "x.test" ["partial" "intere"]) "does not name")         ; no *.test
+           (tc-has (tc "good.test" ["undernoca" "noca" "intere"]) "\"noca\": it is not a certificate authority")
            (tc-has (tc "good.test" ["deep" "inter1" "inter0"]) "\"inter0\": its pathLen is exceeded")
-           (tc-has (tc "good.test" ["crit" "interr"]) "\"crit\": a critical extension it does not know")
-           (tc-has (tc "good.test" ["client" "interr"]) "\"client\": it is not for serving tls")
+           (tc-has (tc "good.test" ["crit" "intere"]) "\"crit\": a critical extension it does not know")
+           (tc-has (tc "good.test" ["client" "intere"]) "\"client\": it is not for serving tls")
            (tc-has (tc "good.test" ["undernosign" "nosign"]) "\"nosign\": its keyUsage does not allow")
-           (tc-has (tc "good.test" ["nosan" "interr"]) "\"nosan\": it does not name good.test")
+           (tc-has (tc "good.test" ["nosan" "intere"]) "\"nosan\": it does not name good.test")
            (tc-has (tc "good.test" ["leafr"]) "\"leafr\": no issuer for it is known")
            (tc-has (chain-ok? [(tc-ld "leafr") (tc-ld "interr")] () "good.test" tc-now) "no issuer")
            (tc-has (chain-ok? [] tc-roots "good.test" tc-now) "no certificate"))
