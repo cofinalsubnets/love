@@ -181,10 +181,18 @@ korerun zstd -q "$ho/.arcq" 2> "$g"; r=$?
 [ $r -eq 1 ] && grep -q 'already exists' "$g" || fail "kore zstd: an output there is not overwritten (rc $r)"
 rm "$ho/.arcq"; korerun unzstd --rm "$ho/.arcq.zst" || fail "kore unzstd --rm"
 cmp -s "$ho/.arc1" "$ho/.arcq" && [ ! -e "$ho/.arcq.zst" ] || fail "kore unzstd --rm in place"
-korerun zstd -q -o "$ho/.arco.zst" "$ho/.arc1" && korerun zstd -dc "$ho/.arco.zst" | cmp -s - "$ho/.arc1" || fail "kore zstd -o"
+rm -f "$ho/.arco.zst"; korerun zstd -q -o "$ho/.arco.zst" "$ho/.arc1" && korerun zstd -dc "$ho/.arco.zst" | cmp -s - "$ho/.arc1" || fail "kore zstd -o"
 korerun unzstd "$ho/.arc1" 2> "$g"; r=$?
 [ $r -eq 1 ] && grep -q 'unknown suffix' "$g" || fail "kore unzstd of a name it cannot strip (rc $r)"
+( cd "$ho" && "$K" kore tar --zstd -cf .arc.tzst .arcd ) || fail "kore tar --zstd -cf"
+korerun tar tf "$ho/.arc.tzst" > "$o" 2>&1 || fail "kore tar tf of a .tzst, sniffed"
+grep -q 'sub/two\.txt' "$o" || fail "kore tar --zstd: the listing"
+( cd "$ho" && "$K" kore tar caf .arca.tar.zst .arcd ) || fail "kore tar caf .tar.zst"
+korerun zstd -t "$ho/.arca.tar.zst" || fail "kore tar -a: .tar.zst is not zstd"
 if command -v zstd >/dev/null 2>&1; then
+  zstd -q -dc "$ho/.arc.tzst" | tar tf - > "$o" 2>&1; grep -q 'sub/two\.txt' "$o" || fail "zstd -d | tar of kore's tar --zstd"
+  ( cd "$ho" && tar cf - .arcd ) | zstd -q -c > "$ho/.arcg.tzst"
+  korerun tar tf "$ho/.arcg.tzst" > "$o" 2>&1; grep -q 'sub/two\.txt' "$o" || fail "kore tar of tar | zstd"
   for p in -1 -19 "-T2 --no-check"; do
     zstd -q $p -c "$ho/.arcb" > "$ho/.arcg.zst"
     korerun zstd -dc "$ho/.arcg.zst" > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore unzstd of zstd $p"

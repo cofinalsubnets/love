@@ -412,12 +412,13 @@
 ; `love tar`, GNU tar's spelling over the module above: the bundled key (czf), dashed
 ; letters (-c -z -f A, -czfA) and the long names, in any mix.
 ;
-;   tar {c|x|t}[v][z|j|J|a] [-f ARCHIVE] [-C DIR] [-O] [--strip-components=N] [MEMBER..]
+;   tar {c|x|t}[v][z|j|J|a] [--zstd] [-f ARCHIVE] [-C DIR] [-O] [--strip-components=N] [MEMBER..]
 ;
 ; c packs each MEMBER as named, relative to -C; x and t take the members to pick, a
 ; directory naming all it holds. ARCHIVE `-` or none is stdin/stdout. z gzip, j bzip2
-; (src/apps/bz2.l), J xz (src/apps/xz.l); a read that names none sniffs the magic, and a
-; create under -a picks by the archive's suffix. bz2 and xz are reached at the call:
+; (src/apps/bz2.l), J xz (src/apps/xz.l), --zstd zstd (src/apps/zstd.l); a read that names
+; none sniffs the magic, and a create under -a picks by the archive's suffix. bz2, xz and
+; zstd are reached at the call:
 ; the path-loaded tools (selfpack, mkrootfs) take tar with gz alone. statuses as
 ; GNU's: 0, 2 a failure.
 ;
@@ -433,29 +434,33 @@
    (tarc-warn m) (say err ("tar: " + m + "\n"), flush err)
    (tarc-lazy m f what) (cite m f @ b (lit? b ? b (tarc-die ("no " + what + " aboard"))))
 
-   ; --- the codecs: 'z 'j 'J, and () for a bare tar ---------------------------------
+   ; --- the codecs: 'z 'j 'J 'zst, and () for a bare tar -----------------------------
    (tarc-zip z a) (z @ 'z (gz-zip a "" 0)
                        'j (tarc-lazy 'bz2 'bz2-pack "bzip2" a 9)
                        'J (tarc-lazy 'xz 'xz-pack "xz" a 8388608 'crc64)
+                       'zst (tarc-lazy 'zstd 'zstd-pack "zstd" a 3)
                        a)
    (tarc-unzip z b)                    ; -> (1 bytes) | ()
     (z @ 'z (gz-unzip b)
          'j (tarc-lazy 'bz2 'bz2-unpack "bzip2" b @ v (two? v && v))
          'J (tarc-lazy 'xz 'xz-unpack "xz" b @ v (two? v && v))
+         'zst (tarc-lazy 'zstd 'zstd-unpack "zstd" b @ v (two? v && v))
          [1 b])
    (tarc-sniff b)
     (? (2 <= #b && b 0 = 31 && b 1 = 139) 'z
        (4 <= #b && snip b 0 3 = "BZh") 'j
        (6 <= #b && b 0 = 253 && snip b 1 5 = "7zXZ" && b 5 = 0) 'J
+       (4 <= #b && snip b 0 4 = "\x28\xb5\x2f\xfd") 'zst
        ())
    (tarc-bysuf p)
     (? (ends? p ".gz" || ends? p ".tgz" || ends? p ".taz") 'z
        (ends? p ".bz2" || ends? p ".tbz" || ends? p ".tbz2" || ends? p ".tb2") 'j
        (ends? p ".xz" || ends? p ".txz") 'J
+       (ends? p ".zst" || ends? p ".tzst") 'zst
        ())
-   (tarc-zname z) (z @ 'z "gzip" 'j "bzip2" "xz")
-   ; the archive goes out a piece at a time, coded in runs of tarc-run: gzip members and xz
-   ; and bzip2 streams each read on into the next, so one coded whole is the same archive and
+   (tarc-zname z) (z @ 'z "gzip" 'j "bzip2" 'zst "zstd" "xz")
+   ; the archive goes out a piece at a time, coded in runs of tarc-run: gzip members, xz
+   ; and bzip2 streams and zstd frames each read on into the next, so one coded whole is the same archive and
    ; no member is held. an archive under a run is one member, as it always was
    tarc-run 4194304
 
@@ -464,7 +469,7 @@
    tarc-letters [[99 'mode 'c] [120 'mode 'x] [116 'mode 't] [122 'z 'z] [106 'z 'j]
                  [74 'z 'J] [97 'auto 1] [118 'v 1] [79 'O 1] [102 'f 'arg] [67 'C 'arg]]
    tarc-longs [["create" 'mode 'c] ["extract" 'mode 'x] ["get" 'mode 'x] ["list" 'mode 't]
-               ["gzip" 'z 'z] ["gunzip" 'z 'z] ["ungzip" 'z 'z] ["bzip2" 'z 'j] ["xz" 'z 'J]
+               ["gzip" 'z 'z] ["gunzip" 'z 'z] ["ungzip" 'z 'z] ["bzip2" 'z 'j] ["xz" 'z 'J] ["zstd" 'z 'zst]
                ["auto-compress" 'auto 1] ["verbose" 'v 1] ["to-stdout" 'O 1]
                ["file" 'f 'arg] ["directory" 'C 'arg] ["strip-components" 'strip 'arg]]
    (tarc-row k rows) (: (go l) (? !(two? l) () (<<l = k) <l (go >l)) (go rows))
@@ -610,10 +615,10 @@
        (? (z = 'z)
           (: g (gz-pull (tar-rd raw))   src (tar-src (_ \ gz-next g))
              [src (_ \ (drain src, two? (peep g 'ans ()))) z])
-          (z = 'J || z = 'j)
-          (: m (z = 'J ? 'xz 'bz2)
-             g (tarc-lazy m (z = 'J ? 'xz-pull 'bz2-pull) (tarc-zname z) (tar-rd raw))
-             next (cite m (z = 'J ? 'xz-next 'bz2-next))
+          (z = 'J || z = 'j || z = 'zst)
+          (: m (z @ 'J 'xz 'j 'bz2 'zstd)
+             g (tarc-lazy m (intern (show m + "-pull")) (tarc-zname z) (tar-rd raw))
+             next (cite m (intern (show m + "-next")))
              src (tar-src (_ \ next g))
              [src (_ \ (drain src, two? (peep g 'ans ()))) z])
           (: u (z ? (tarc-unzip z (all (tar-rd raw) ())) [1 raw])
@@ -652,7 +657,7 @@
         tarc-end t sf w,
         (peep t 'bad 0 ? 2 0)))
 
-   usage "usage: tar {c|x|t}[vzjJaO] [-f ARCHIVE] [-C DIR] [--strip-components=N] [MEMBER..]"
+   usage "usage: tar {c|x|t}[vzjJaO] [--zstd] [-f ARCHIVE] [-C DIR] [--strip-components=N] [MEMBER..]"
    (tar-main av)
     ({} @ t
        (tarc-opts t av,

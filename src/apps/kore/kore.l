@@ -1177,7 +1177,7 @@ every tool answers --help and --version, and -h where the letter is free
   xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (src/apps/xz.l)
   bzip2 | bunzip2 | bzcat [-cdfkqtvz1-9]       the block-sorting one (src/apps/bz2.l)
   zstd | unzstd | zstdcat [-cdfkqtvz#] [-o F]  zstandard (src/apps/zstd.l)
-  tar {c|x|t}[vzjJaO] [-f A] [-C D] [M..]      the ustar archive; z gzip, j bzip2, J xz (src/apps/tar.l)
+  tar {c|x|t}[vzjJaO] [-f A] [-C D] [M..]      the ustar archive; z gzip, j bzip2, J xz, --zstd (src/apps/tar.l)
   cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (src/apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
   xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs
