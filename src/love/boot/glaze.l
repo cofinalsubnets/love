@@ -445,6 +445,13 @@
           (nom? op && (op = sf || (elem op env && two? >e))
            || foldl (a \ x \ a || adrv? env sf x) 0 >e))
        0)
+   ; aself?: does e call itself. a param applied is often an index, not a call, and a large
+   ; body that only indexes glazes to tens of KB entered from interpreted code: it drives by
+   ; self alone, a small one (acells) by either
+   (aself? sf e) (? (aquote? e) 0
+                    (two? e) (nom? <e && <e = sf || foldl (a \ x \ a || aself? sf x) 0 >e)
+                    0)
+   (acells e) (two? e ? (1 + acells <e + acells >e) 0)
    ; ainl: every inner lambda ala recorded (inl = ((exp src-tail (entry . imports))..), matched by
    ; node) becomes (amble-lam i n v..): entry i in st, arity n = imports + params, v.. the import names
    (ainlr t inl) (atom? inl ? 0  (t = <<inl || (t = <><inl)) <>><inl  (ainlr t >inl))
@@ -504,8 +511,8 @@
        ; a free head that is not farq resolves via gv at compile (redefinition-stale); a farq name is a
        ; woven sibling, called as entry(imports.. args..) off lz's frozen (entry . import-names), never gv
        cand (filter (f \ !(f = self)) (foldl (\ ac i (aheads envl go i ac)) (aheads envl go body ()) inits))
-       drok (lp ? 1 (two? cand || two? ins ? (adrv? envl self body) 1))  ; the non-loop cost gate: free heads and inner lambdas ride only a body that
-                                                                         ; drives a param or itself -- and a declining body skips the resolution below
+       drok (lp ? 1 (two? cand || two? ins ? (aself? self body || adrv? envl self body && acells body <= 64) 1))  ; the non-loop cost gate: free heads and inner lambdas ride only a body that
+                                                                         ; drives itself, or a param while small -- and a declining body skips the resolution below
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the lam-list assoc; the cell read mirrors ev.l's cof, box slot 0
                                  (two? lfd ? (peep >lfd 0 0) 0))
