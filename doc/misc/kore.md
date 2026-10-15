@@ -107,7 +107,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
-| pic.l, over png.l, jpeg.l, gif.l, webp.l, bmp.l and pnm.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, an animation played) |
+| pic.l, over png.l, jpeg.l, gif.l, webp.l, bmp.l, pnm.l and qoi.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, an animation played) |
 | net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | src/apps/lush.l | sh / lush |
 
@@ -668,8 +668,8 @@ name, the size, the zoom and the frame. `picless`, `pngless`, `jpegless` and `gi
 the same tool.
 
 `pic convert [-q QUALITY] [-t TYPE] IN OUT` writes IN as OUT's type, from its extension
-(`.png`, `.gif`, `.jpg`/`.jpeg`, `.ppm`/`.pnm`, `.pam`, `.six`/`.sixel`, `.ans`) or `-t`. A PPM
-drops alpha; a PAM keeps it. `ans` is the blocks
+(`.png`, `.gif`, `.jpg`/`.jpeg`, `.webp`, `.qoi`, `.ppm`/`.pnm`, `.pam`, `.six`/`.sixel`, `.ans`) or `-t`. A PPM
+drops alpha; a PAM keeps it. A WebP is written lossless. `ans` is the blocks
 `pic cat` prints, as text 80 cells wide, for `cat` to show again. `-` is stdin for IN and stdout for
 OUT. A GIF gives its first frame, except that a file already of the type goes across as it
 is (a GIF keeps its frames), unless `-q` asks for a JPEG to be written again. A JPEG has
@@ -727,11 +727,13 @@ The decoders: src/apps/png.l (every colour type and depth, Adam7, APNG's frames 
 spec's blend and dispose), src/love/picture/jpeg.c (baseline and progressive, any sampling, grey,
 YCbCr, and Adobe's CMYK and YCCK), src/love/picture/gif.c (LZW, interlace, transparency, and the three
 disposals across frames), src/love/picture/webp.c (lossy with its alpha plane, lossless, and an
-animation's frames; libwebp's pixels, byte for byte). A GIF keeps at most 1000 frames and
+animation's frames; libwebp's pixels, byte for byte), src/love/picture/qoi.c (QOI). A GIF keeps at most 1000 frames and
 128 MB of them. The encoders:
 src/apps/png.l (a palette of 1 to 8 bits a pixel up to 256 colours, else RGBA; a row that
 repeats the one above filtered up, others sub), src/love/picture/jpeg.c (baseline), src/apps/gif.l (one
-frame, the palette also sixel's).
+frame, the palette also sixel's), src/love/picture/webp.c (lossless: a palette to 256 colours,
+else green subtracted and a predictor a 16x16 tile; LZ77 and a colour cache), src/love/picture/qoi.c
+(the reference encoder's bytes).
 
 ## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (src/apps/kore/net.l)
 

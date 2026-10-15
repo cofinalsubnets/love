@@ -1,6 +1,7 @@
 ; src/apps/webp.l -- webp decoding, over src/love/picture/webp.c's nif (webp-pixels s).
 ; `(borrow 'webp)`, then:
 ;
+;   (webp-encode w h rgba) -> a lossless webp of the rgba, from webp.c | ()
 ;   (webp-size s)    -> (w h) off the RIFF headers, an animation's canvas | why not
 ;   (webp-decode s)  -> (w h rgba) | a string saying why not
 ;   (webp-frames s most) -> (w h ((rgba ms) ..)), each frame as shown and how long, at most
@@ -9,7 +10,7 @@
 ; lossy with or without its alpha plane, lossless, and an animation's first frame on its
 ; canvas, the pixels libwebp's own; its frames composed as libwebp's animation decoder does.
 ; where the artifact carries no nif, every webp is "no decoder here".
-(module (webp webp-size webp-decode webp-pixels webp-frames)
+(module (webp webp-size webp-decode webp-pixels webp-frames webp-encode)
 (borrow 'bytes)
 (:
    webp-why ["" "not a webp" "cut short" "a kind of webp this can't read" "a bad stream"
