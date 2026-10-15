@@ -1,17 +1,15 @@
 ; test/host/stones.l -- the canyon and the bowl, headless: the frame in both palettes and as kitty's pixels, the
 ; rock where it should stand, the ring and its missing stone, the audience thrown each run,
 ; walking up the slot and into what stops it, and out of the mouth to the end.
-; not in the corpus: a crew module. run: cat test/00-init.l test/host/stones.l | out/love
+; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/stones.l | out/love
 
 (borrow 'stones)   ; the artifact's module, warm from the tree
 (borrow 'vec)
 (borrow 'view)     ; pi, wrap
 (: stones-kb (view-bind view-binds stones-binds))   ; a key's code -> its action
 
-(: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
-   (rows s) (1 + count s "\r\n")
    ; the cell row the words n first appear on, or -1
-   (row-of s n) (:- (go 0) (go i) (i + #n <= #s ? (n = snip s i (i + #n) ? (count (snip s 0 i) "\r\n") (go (i + 1))) -1))
+(: (row-of s n) (:- (go 0) (go i) (i + #n <= #s ? (n = snip s i (i + #n) ? (h-count (snip s 0 i) "\r\n") (go (i + 1))) -1))
    day0 (1.0 * 1790812800)                          ; 2026-10-01, midnight on the wall clock
    (at hr sd) (stones-new 80 48 [(day0 + hr * 3600.0) 3600] sd)
    (keys! st ks) (each ks (k \ (stones-step st (stones-kb k), stones-move st)))
@@ -21,7 +19,7 @@
 ; --- palette and in 24 bits; and the same again once kept, standing still
 (: st (at 12.0 7) f (stones-frame st) f2 (stones-frame st)
    deep (stones-frame (pin (at 12.0 7) 'deep 1))
- (test (rows f = 24) (f = f2) (rows deep = 24) (f != deep)
+ (test (h-rows f = 24) (f = f2) (h-rows deep = 24) (f != deep)
        (has? f "38;5;") (has? deep "38;2;")))
 ; --- ..the keys named on the bottom row at the start, and gone a while in; laid in the frame
 ; --- as it is written, one synchronised update, and not written over it after
@@ -31,7 +29,7 @@
 ; --- ..the choices a third of the way up, in the frame too: the marked one first
 (: st (pin (at 12.0 7) 'dlg 0) f (stones-frame st) d (stones-frame (pin (at 12.0 7) 'deep 1 @ s (pin s 'dlg 1)))
  (test (row-of f "1  Breathe" = 24 - 24 // 3 - 4 + 1) (row-of f "5  Wait" = 24 - 24 // 3 - 4 + 5)
-       (has? f " › 1  Breathe") (has? d " › 2  Weep") (rows f = 24) (rows d = 24) !(has? f "H\e[")))
+       (has? f " › 1  Breathe") (has? d " › 2  Weep") (h-rows f = 24) (h-rows d = 24) !(has? f "H\e[")))
 
 ; --- ..and as kitty's pixels: one picture over the screen's cells, the cursor left where it is;
 ; --- sized for kitty, about kitty-w pixels across over the scale, a whole number a column;
@@ -66,7 +64,7 @@
        (stones-field (slot-x 50.0) 1.0 50.0 > 0.0) (stones-field 0.0 1.0 zc > 0.0) (stones-field 0.0 -0.1 zc < 0.0)
        (stones-field (rim-r + 3.0) 9.0 zc < 0.0) (stones-field 20.0 1.0 (exit-z - 10.0) > 0.0)
        (stones-ground x 0.0 = 0.0) (stones-ground 0.0 zc = 0.0)
-       (rows * row-h - 1.0 < stones-ground (floor-r + rows * row-w - 0.5) zc)))
+       (h-rows * row-h - 1.0 < stones-ground (floor-r + h-rows * row-w - 0.5) zc)))
 
 ; --- the blocks: the altar in the middle, the ring of seven round it -- every place of the
 ; --- octagon but the one north of north-west, and none between the slot and the altar -- and the audience on the rows, three to six of them,
@@ -75,7 +73,7 @@
    aud (filter (b \ b 7 = 1 && 7.0 < sqrt (sq (b 0) + sq (b 2 - zc))) bs)
    (slot b) (int (wrap (ang b) / (pi / 4.0) + 8.0) % 8)
    places (sort (map slot ring))
-   (on-row? b) (: g (stones-ground (b 0) (b 2)) (row-h - 0.1 <= g && g <= rows * row-h))
+   (on-row? b) (: g (stones-ground (b 0) (b 2)) (row-h - 0.1 <= g && g <= h-rows * row-h))
    (notch? b) (mag (wrap (ang b + pi / 2.0)) < 0.4)
    counts (map (sd \ #(stones-blocks sd) - 8) ^40)
  (test (al 7 = 0) (al 0 = 0.0) (al 2 = zc) (#ring = 7) (places = [0 1 3 4 5 6 7])
@@ -102,7 +100,7 @@
    _ (keys! st (map (i \ 107) ^600)) top (st 'py)
    ab (pins (at 12.0 7) 'px 0.0 'pz (zc - 3.0) 'th 0.0 'py eye-h)
    _ (keys! ab (map (i \ 107) ^100))
- (test (eye-h + (rows - 1) * row-h < top) (top < eye-h + rows * row-h + 0.5)
+ (test (eye-h + (h-rows - 1) * row-h < top) (top < eye-h + h-rows * row-h + 0.5)
        (ab 'pz < zc - 0.5)))
 
 ; --- out: turned round and walked back out of the mouth, the run is done, and the keys

@@ -464,7 +464,6 @@
    sg (slop-post g)
    x <sg w <>sg
    row (split "\r\n" (slop-frame g) w)                   ; on the screen from the start
-   (has? s p) (: n #p (go i) (? (i + n > #s) 0 (snip s i (i + n) = p) 1 (go (i + 1))) (go 0))
  (test (7 = w) (2 < |(x - slop-road g w)) ('("¶" 137) = slop-turf g w x)
        !('("¶" 137) = slop-turf g w (x + 1)) !('("¶" 137) = slop-turf g (w + 1) x)
        (has? row "¶")))

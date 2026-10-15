@@ -6,8 +6,6 @@
 (borrow 'rove)   ; the artifact's modules, warm from the tree
 (borrow 'tower)
 
-(: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0))
-
 ; --- delve: a seed reproduces its floor; floors are connected and bordered ---
 (: p1 (delve 60 20 (wheel 11) (plan 2))
    p2 (delve 60 20 (wheel 11) (plan 2))
@@ -76,9 +74,9 @@
  ("you strike the rat (2)" = fill "you strike the ~ (~)" ["rat" 2])
  ("nothing to fill" = fill "nothing to fill" ())      ; no hole, no change
  ("abc" = fit "abcdef" 3)                             ; a row is cut to fit
- (find (fit "a {b} c" 40) "38;5;201" 0)               ; the token's pen goes on
- (find (fit "{abcde}" 5) "abcde" 0)                   ; ..and an escape costs no width
- !(find (fit "{abcde}" 3) "abcde" 0)                  ; ..so the cut is still honest
+ (has? (fit "a {b} c" 40) "38;5;201")               ; the token's pen goes on
+ (has? (fit "{abcde}" 5) "abcde")                   ; ..and an escape costs no width
+ !(has? (fit "{abcde}" 3) "abcde")                  ; ..so the cut is still honest
  ("日本" = fit "日本語" 5)                               ; a wide character is two cells, and
  ("a" = fit "a日" 2)                                   ; ..one that would cross the edge stays off
  (4 = vlen "{日本}"))
@@ -199,7 +197,7 @@
    c (car-new 2 1 -1 0 196)
    (pin g 'ms [c],
     crawl-turn g 46,                                    ; a turn passed: the car comes
-    test (30 = g 'p 'hp) (find (g 'msg) "car" 0) (elem 'horn (g 'sfx))
+    test (30 = g 'p 'hp) (has? (g 'msg) "car") (elem 'horn (g 'sfx))
          (-1 = c 'dx) ("◄" = c 'gl) (2 = c 'x)          ; ..and it is where it was, still headed your way
          (1 = g 'p 'x) (2 = g 'p 'y),                    ; you are off its line, the one way you could be
     pin g 'sfx (),
@@ -273,7 +271,7 @@
    (find-m s i) (109 = s i ? i (find-m s (i + 1)))
    rs (split "\r\n" out)
  (test (8 = #rs) (all (r \ #(bare r) <= 30) rs)
-       (find out "the quick brown" 0) (find out "screen" 0)))
+       (has? out "the quick brown") (has? out "screen")))
 
 ; a cell is a character and not a byte: a box laid over rows of the face's blocks --
 ; three bytes to a cell -- still leaves every row as wide as the screen, with the
@@ -290,8 +288,8 @@
    (chars s) #(filter (c \ !(128 <= c && c < 192)) (map (i \ s i) ^#s))
    rs (map bare (split "\r\n" out))
  (test (6 = #rs) (all (r \ 30 = chars r) rs)
-       (find out "a line" 0)
-       (find (rs 1) (blk + "+") 0) (find (rs 1) ("+" + blk) 0)   ; blocks meet the box's corners whole
+       (has? out "a line")
+       (has? (rs 1) (blk + "+")) (has? (rs 1) ("+" + blk))   ; blocks meet the box's corners whole
        (30 = chars (rs 0))))
 
 ; glass is looked through and not walked: the lantern reaches past it, a stride does not
@@ -332,7 +330,7 @@
 (hand-g () @ g
  (pin (g 'loot) (2 + 9 * 1) '(mirror),
   crawl-turn g [1 0],
-  test (1 = g 'p 'x) (find (g 'msg) "is solid" 0),
+  test (1 = g 'p 'x) (has? (g 'msg) "is solid"),
   pin (g 'loot) (6 + 9 * 2) '(mirror),
   crawl-turn g [1 0],
   test (0 < #(g 'msg))
@@ -366,12 +364,12 @@
 (hand-g () @ g
  (pin (g 'loot) (2 + 9 * 1) '(shelf),
   crawl-turn g [1 0],
-  test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "one book" 0)
-       (find (last (g 'sign)) "1 of 6" 0) (5 = #(g 'pages)),
+  test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (has? (g 'msg) "one book")
+       (has? (last (g 'sign)) "1 of 6") (5 = #(g 'pages)),
   crawl-turn g [1 0],
-  test (1 = g 'p 'x) (two? (g 'sign)) (find (last (g 'sign)) "2 of 6" 0),
+  test (1 = g 'p 'x) (two? (g 'sign)) (has? (last (g 'sign)) "2 of 6"),
   each ^4 (_ \ crawl-turn g 46),
-  test (two? (g 'sign)) (find (last (g 'sign)) "6 of 6" 0) !(g 'pages),
+  test (two? (g 'sign)) (has? (last (g 'sign)) "6 of 6") !(g 'pages),
   crawl-turn g 46,
   test !(g 'sign) (1 = g 'p 'x)))
 
@@ -385,7 +383,7 @@
    _ (crawl-turn g [1 0])
    (line _) (g 'sign 2)
    _ (test (1 = g 'p 'x) ("OEIS A000110" = <(g 'sign)) ("B(0) = 1" = line ()) ('(0 (1)) = g 'bell)
-           (find (g 'msg) "shelf" 0) (any (l \ find l "put it back" 0) (g 'sign)))
+           (has? (g 'msg) "shelf") (any (l \ has? l "put it back") (g 'sign)))
    _ (crawl-turn g 49)
    _ (test ("B(1) = 1" = line ()))
    _ (crawl-turn g 46)
@@ -395,10 +393,10 @@
    _ (crawl-turn g [1 0])
    _ (test ("B(0) = 1" = line ()))
    _ (each ^4 (_ \ crawl-turn g 49))
-   _ (test ("B(4) = 15" = line ()) (find (last (g 'sign)) "page 5" 0))
+   _ (test ("B(4) = 15" = line ()) (has? (last (g 'sign)) "page 5"))
    (turn n) ("a bookmark" = <(g 'sign) ? n (crawl-turn g 49, turn (n + 1)))
    n (turn 0)
-   (test (10 < n < 40) !(g 'bell) (any (l \ find l "handwriting" 0) (g 'sign)),
+   (test (10 < n < 40) !(g 'bell) (any (l \ has? l "handwriting") (g 'sign)),
     crawl-turn g 46,
     test !(g 'sign) !(g 'bell) (1 = g 'p 'x)
          ('(1 2) = bell-row [1]) ('(2 3 5) = bell-row [1 2]) ('(5 7 10 15) = bell-row [2 3 5])))
@@ -409,7 +407,7 @@
    _ (pin (g 'loot) (2 + 9 * 1) '(bells))
    _ (crawl-turn g [1 0])
    ls >(g 'sign)
-   (row-of s) (: (go i) (find (ls i) s 0 ? i (go (i + 1))) (go 0))
+   (row-of s) (: (go i) (has? (ls i) s ? i (go (i + 1))) (go 0))
    (tap-at i) (: (go y) (i = sign-line <(g 'sign) ls 1 12 40 y ? y (go (y + 1))) (go 0))
  (test (50 = tap-key g [20 (tap-at (row-of "put it back"))])
        (49 = tap-key g [20 (tap-at (row-of "turn the page"))])
@@ -419,8 +417,8 @@
 ; between them and puts the pen it was given back
 (: s (string 1 + "ab" + string 2 + "c")
    f (fit-in s 400 "X")
- (test (find f "\e[48;5;" 0) (find f "abX" 0) ("c" = snip f (#f - 1) #f)
-       (find (fit s 400) "ab\e[0m" 0)))
+ (test (has? f "\e[48;5;") (has? f "abX") ("c" = snip f (#f - 1) #f)
+       (has? (fit s 400) "ab\e[0m")))
 
 ; a long note wraps onto a second and a third row, each covering a floor row: the frame
 ; is no taller and the floor does not move under it, so a tap counts from the same row
@@ -434,7 +432,7 @@
    (bare s) (:- (go 0 "")
               (go i acc) (? (i >= #s) acc (s i = 27) (go (1 + past i) acc) (go (i + 1) (acc + string (s i))))
               (past i) (s (i + 1) @ c (? (i + 1 >= #s) i (c = 91 || c < 64) (past (i + 1)) (i + 1))))
- (test (#r1 = #r2) (find (r2 1) "screen" 0) (bare (r1 3) = bare (r2 3)) (bare (last r1) = bare (last r2))
+ (test (#r1 = #r2) (has? (r2 1) "screen") (bare (r1 3) = bare (r2 3)) (bare (last r1) = bare (last r2))
        (60 = tap-steer g [(g 'p 'x + peep (g 'd) 'vx 0) (g 'p 'y + 1)])))
 
 ; ..and standing on a stair, a tap on any of the nine cells about you is the stair
@@ -467,9 +465,9 @@
    f0 (crawl-frame g) l0 (live ())
    _ (pin d 'ft 1)
    f1 (crawl-frame g) l1 (live ())
-   _ (test ('(1 14 20 21) = ls) (4 = moves l0) (find l0 "\e[4;8H" 0) (find l0 "\e[3;11H" 0)
+   _ (test ('(1 14 20 21) = ls) (4 = moves l0) (has? l0 "\e[4;8H") (has? l0 "\e[3;11H")
            (bare f0 = bare f1) !(f0 = f1) !(l0 = l1)
-           (find l0 "\e[38;5;45m" 0) (find l0 "\e[38;5;38m" 0))    ; two rows of water, two pens
+           (has? l0 "\e[38;5;45m") (has? l0 "\e[38;5;38m"))    ; two rows of water, two pens
    _ (pin g 'msg "a note far too long for a screen twenty cells wide")
    _ (crawl-frame g)
    l2 (live ())
@@ -477,7 +475,7 @@
    _ (pin g 'sign '("a sign" "over the floor"))
    _ (crawl-frame g)
    l3 (live ())
- (test (2 = moves l2) !(find l2 "\e[2;7H" 0) !(find l2 "\e[3;" 0)   ; the water under the note is left
+ (test (2 = moves l2) !(has? l2 "\e[2;7H") !(has? l2 "\e[3;")   ; the water under the note is left
        (two? (d 'box)) (moves l3 < 4)))                  ; ..and so is what the box covers
 
 ; pennies weigh in, and they are the only thing on the floor
@@ -583,12 +581,12 @@
    _ (pin (g 'd) 'sd (salt 0))
    s (underfoot g 2 1)
    (crawl-turn g [1 0],
-    test (0 < #s) (find (g 'msg) s 0) (s = underfoot g 2 1)))
+    test (0 < #s) (has? (g 'msg) s) (s = underfoot g 2 1)))
 
 ; ..and a mob says its piece the first time you lay into it, and only then
 (: g (hand-g ())
    _ (pin g 'ms [(mob-new 0 2 1)])
-   (rat? t) (find t (mutter 0 "rat") 0 || find t (mutter 1 "rat") 0)
+   (rat? t) (has? t (mutter 0 "rat") || has? t (mutter 1 "rat"))
    _ (crawl-turn g [1 0])
    f (g 'msg)
    (crawl-turn g [1 0],
@@ -618,7 +616,7 @@
   test (2 = g 'lvl) (0 < #(g 'msg))                ; the imperative restated
          (elem (dat (g 'd) (g 'p 'x) (g 'p 'y)) '(1 4 8))   ; standing on the fresh floor, in a building, on a platform
          (60 = g 'p 'mx)                         ; a climb is twenty more of the bar
-         (60 = g 'p 'hp || find (g 'msg) "bites" 0)   ; ..and the bar is full, unless something met you there
+         (60 = g 'p 'hp || has? (g 'msg) "bites")   ; ..and the bar is full, unless something met you there
          (tablet? (g 'loot))))
 
 ; ..and the same climb by the keys a seat with no < to hand has: enter, return, space
@@ -716,7 +714,7 @@
    _ (crawl-turn g [1 0])                              ; the box
    _ (test (string? (g 'token)) (elem (g 'token) tokens) (two? (g 'sign))
            (0 < #(last (g 'sign)))
-           (any (l \ find l (g 'token) 0) (g 'sign)))   ; ..named in the sign
+           (any (l \ has? l (g 'token)) (g 'sign)))   ; ..named in the sign
    _ (crawl-turn g 46)                                 ; the sign down
    _ (crawl-turn g [1 0])                              ; again: empty now
    _ (test (0 < #(g 'msg)) !(g 'sign))
@@ -771,8 +769,8 @@
    root (talk-node 'start)
    c1 (root 2 0)
    _ (test (two? (g 'sign)) ('start = g 'talk) (g 'talked) (tablet? (g 'her))
-           (find (g 'sign 1) (root 1 0) 0)             ; the root's first line
-           (any (l \ find l (show <c1 + "  ") 0) (g 'sign)))   ; ..and its choices numbered
+           (has? (g 'sign 1) (root 1 0))             ; the root's first line
+           (any (l \ has? l (show <c1 + "  ")) (g 'sign)))   ; ..and its choices numbered
    _ (crawl-turn g (48 + <c1))                         ; the first branch
    _ (test (c1 2 = g 'talk) (two? (g 'sign)))
    _ (crawl-turn g 120)                                ; x: not a choice, the page again
@@ -801,10 +799,10 @@
    hd (g 'd)
    rs (split "\r\n" f2)
  (test (24 = #rs)
-       (find (rs 0) "every word of it" 0)                 ; the note row is the screen's width, not the room's
+       (has? (rs 0) "every word of it")                 ; the note row is the screen's width, not the room's
        (0 < hd 'vx) (hd 'vy < 0)                          ; ..and the room sits in the middle of the screen
-       (find (rs 1) "\e[K" 0) !(find (rs 1) "#" 0)        ; the rows above it blank, and cleared
-       (find (rs 7) "#" 0) (find (rs 7) "\e[K" 0)         ; ..and a row of it cleared past its edge
+       (has? (rs 1) "\e[K") !(has? (rs 1) "#")        ; the rows above it blank, and cleared
+       (has? (rs 7) "#") (has? (rs 7) "\e[K")         ; ..and a row of it cleared past its edge
        ; ..and a sign over the attic, eleven cells wide, is laid at the screen's width
        (: _ (enter g 'attic 2 3)
           _ (pin g 'sign '("t" "a line of some length, laid whole across the box" "" "" "" "" "" "" "" "" "" "" "and a foot"))
@@ -819,8 +817,8 @@
           ; every row of the box starts at one column, over the room and over the blank
           ; rows beside it alike
           (find-l r i) (i >= #r || 124 = r i ? i (find-l r (i + 1)))
-          lefts (map (r \ find-l r 0) (filter (r \ find r "|" 0) (map bare (split "\r\n" f3))))
-          (find f3 "a line of some length, laid whole across the box" 0
+          lefts (map (r \ find-l r 0) (filter (r \ has? r "|") (map bare (split "\r\n" f3))))
+          (has? f3 "a line of some length, laid whole across the box"
               && 12 = #lefts                              ; the box's twelve barred rows
               && all (l \ l = <lefts) lefts))))
 
@@ -879,11 +877,11 @@
    x (g 'p 'x) y (g 'p 'y)
    _ (crawl-turn g [1 0])
    f2 (crawl-frame g)
- (test (find f "+-" 0)                          ; the box, titled the way story titles
-         (find f bar 0)                          ; the bar is not covered
+ (test (has? f "+-")                          ; the box, titled the way story titles
+         (has? f bar)                          ; the bar is not covered
          (#(split "\r\n" f) = #(split "\r\n" f2))   ; a sign costs no rows
          (x = g 'p 'x) (y = g 'p 'y)             ; the key that took it down took no turn
-         !(find f2 "+-" 0)))
+         !(has? f2 "+-")))
 
 ; --- the stair says what it is when you stand on it, and the bar says what to do
 (: g (hand-g ())
@@ -891,7 +889,7 @@
    _ (dput (g 'd) 2 1 2)                         ; a stair cut to the right of you
    s (underfoot g 2 1)
    (crawl-turn g [1 0],
-    test (0 < #s) (find (g 'msg) s 0)
+    test (0 < #s) (has? (g 'msg) s)
            (hand-g () @ h !(crawl-bar g = crawl-bar h))))   ; ..and the bar says more on it than off it
 
 ; --- pennies: a thing that goes down leaves some, the ground carries more, and they
@@ -904,7 +902,7 @@
    _ (test (two? it) ('penny = <it) (0 < <>it))  ; it dropped them where it stood
    n <>it
    _ (crawl-turn g [1 0])
-   (says? t) (foldl (a \ k \ (a || find t (mutter k "pennies") 0)) 0 ^4)
+   (says? t) (foldl (a \ k \ (a || has? t (mutter k "pennies"))) 0 ^4)
  (test (n = g 'p 'penny) (says? (g 'msg))))
 
 ; ..and a fresh floor is not miserly: every room bar your own carries a pile or more
@@ -983,9 +981,9 @@
    f (crawl-frame g)
  (test
   (string? f)
-  (find f "@" 0)                                 ; you are on the map
-  (find f (crawl-bar g) 0)                       ; the bar tells the tale
-  (find f "\r\n" 0)))                            ; frames ride \r\n
+  (has? f "@")                                 ; you are on the map
+  (has? f (crawl-bar g))                       ; the bar tells the tale
+  (has? f "\r\n")))                            ; frames ride \r\n
 
 ; the middle's stone is graded under one still frame of the shimmer, lit walls and
 ; flags off the same wave -- and the garden's hedge and lawn read off one frame too
@@ -1000,7 +998,7 @@
    _ (pin g 'sign ())
    f (crawl-frame g)
    (pen n) ("\e[38;5;" + show n + "m")
-   greys (filter (n \ find f (pen n) 0) '(252 250 248 247 245 244 243))
+   greys (filter (n \ has? f (pen n)) '(252 250 248 247 245 244 243))
  (test (2 = g 'lvl) (tablet? (d 'skin)) !(() = d 'skin 'ground) !(d 'skin 'hedge)
        (1 < #greys)                                    ; more than one grey on the walls: a grade, not a flat
        (tablet? gsk) !(gsk 'hedge) !(() = gsk 'ground)))   ; the garden: one frame, no second
@@ -1025,9 +1023,9 @@
  (test
   (6 = #srs)
   (all (r \ sw = scells r) srs)                  ; every row, its whole width
-  (find sout "sign" 0)                           ; ..and the box is really on it
-  (all (r \ find r "\e[38;5;34m" 0) srs)         ; the field's pen survives the box
-  (all (r \ find r "\e[K" 0) srs)))            ; ..and so does the erase it ends on
+  (has? sout "sign")                           ; ..and the box is really on it
+  (all (r \ has? r "\e[38;5;34m") srs)         ; the field's pen survives the box
+  (all (r \ has? r "\e[K") srs)))            ; ..and so does the erase it ends on
 
 ; --- pens: a pen's rgb and back, a pair as a glyph on a ground, and a fg that reads
 ; --- over a bg -- itself when far enough, otherwise something far
@@ -1038,8 +1036,8 @@
    (kept? fg bg) (fg = legible fg bg)
  (test (pen-rgb 16 = [0 0 0]) (pen-rgb 231 = [255 255 255]) (pen-rgb 233 = [18 18 18])
        (all (c \ c = (pen-rgb c @ q (rgb-pen (q 0) (q 1) (q 2)))) (map (+ 16) ^240))   ; every pen comes back
-       (find (pen [228 22]) ";48;5;22m" 0) (find (pen [228 22]) "38;5;228" 0)
-       (find f ";48;5;22m" 0) (find f "\e[49m" 0)                    ; the ground put on, and off again
+       (has? (pen [228 22]) ";48;5;22m") (has? (pen [228 22]) "38;5;228")
+       (has? f ";48;5;22m") (has? f "\e[49m")                    ; the ground put on, and off again
        (kept? 228 22) (kept? 16 231)                                  ; far apart: the hue itself
        !(kept? 22 22) !(kept? 244 244) !(kept? 228 187)         ; too close: another
        !(kept? 213 118) !(kept? 226 118)                          ; ..as bright as each other: another

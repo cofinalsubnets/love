@@ -1,25 +1,21 @@
 ; test/host/wade.l -- the night river, headless: the frame, the moon turning with the player,
 ; the banks, a step's ring, the helm, the walk, the mirror, and the song into a jug.
-; not in the corpus: a crew module. run: cat test/00-init.l test/host/wade.l | out/love
+; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/wade.l | out/love
 
 (borrow 'wade)    ; the artifact's module, warm from the tree
 (borrow 'view)     ; the keys' actions
 (borrow 'walk)     ; the rail's key
 (: wade-kb (view-bind view-binds walk-binds))   ; a key's code -> its action
 
-(: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
-   (has? h n) (find h n 0)
-   (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
-   (rows s) (1 + count s "\r\n")
-   (pen? s n) (has? s ("38;5;" + show n + ";") || has? s (";48;5;" + show n + "m"))
+(: (pen? s n) (has? s ("38;5;" + show n + ";") || has? s (";48;5;" + show n + "m"))
    (moon th hz) (moon-at (pins (wade-new 80 48) 'th th 'hz hz)))
 
 ; --- the frame: 24 rows of 80 cells, the moon and its path, trees, water and bank ---
 (: st (wade-new 80 48) f (wade-frame st)
    wide (wade-new 120 60) g (wade-frame wide)   ; a 120 by 30 terminal
  (test
-  (rows f = 24) (count f "▀" <= 1920)             ; a cell a pixel pair, less any words over them
-  (rows g = 30) (count g "▀" <= 3600) (pen? g 230) (pen? g 179) (pen? g 16)
+  (h-rows f = 24) (h-count f "▀" <= 1920)             ; a cell a pixel pair, less any words over them
+  (h-rows g = 30) (h-count g "▀" <= 3600) (pen? g 230) (pen? g 179) (pen? g 16)
   (wide 'hz = 30) (wide 'foc = 60.0) (wide 'cx = 60.0)
   (pen? f 230) (pen? f 179)                     ; the moon, and the moon in the water
   (pen? f 16) (pen? f 233) (pen? f 232)         ; a near tree, the water's grey, the bank
@@ -44,8 +40,8 @@
        (m0 1 < m1 1) (m1 0 < m0 0) (m0 4 = 0.0)                  ; ..from high on the right
        (m2 2 < 1.0) (m2 2 < m1 2) (24.0 < m2 3) (0.0 < m2 4)     ; contracted into a lamp on a post into the water
        (m2 2 < m3 2) (m2 3 < m3 3) (m3 1 < m2 1)                 ; nearer: bigger, the foot deeper, the lamp higher
-       (rows f1 = 24) (pen? f1 230) (pen? f1 179)                ; both paint, the lamp and its path
-       (rows f3 = 24) (pen? f3 230) (pen? f3 179)))
+       (h-rows f1 = 24) (pen? f1 230) (pen? f1 179)                ; both paint, the lamp and its path
+       (h-rows f3 = 24) (pen? f3 230) (pen? f3 179)))
 
 ; --- the banks repeat: a whole loop down the river lays the same treeline to within
 ; --- float noise, though the swell rides the river's length and so the water differs
@@ -98,7 +94,7 @@
 ; --- end, each of its cells in place of a pixel pair, on the average of what it covers
 (: e (texts 0) a (e 0) b (e 1) txt (e 2)
    on (wade-frame (pins (wade-new 80 48) 'pz ((a + b) / 2.0))) off (wade-frame (pins (wade-new 80 48) 'pz b))
- (test (has? on txt) !(has? off txt) (count on "▀" = 1920 - #txt) (count off "▀" <= 1920)
+ (test (has? on txt) !(has? off txt) (h-count on "▀" = 1920 - #txt) (h-count off "▀" <= 1920)
        (elem txt (texts-at a)) (nelem txt (texts-at b))))
 
 ; --- the helm: turns stop at sixty degrees, tilts clamp, space walks, the rest is nothing ---
@@ -123,8 +119,8 @@
 ; --- the screen's edge but its path is in the water; looking down, a full screen paints
 (: st (wade-new 80 48) _ (pins st 'th 0.5 'hz 8) up (wade-frame st)
    _ (pin st 'hz 36) down (wade-frame st)
-   sky (snip up 0 (find up "\r\n" 0))          ; the first row alone
- (test (rows up = 24) (rows down = 24)
+   sky (snip up 0 (has? up "\r\n"))          ; the first row alone
+ (test (h-rows up = 24) (h-rows down = 24)
        (pen? up 179)                            ; the path
        !(pen? sky 187)                        ; ..and no sea on the top row: the disc is above it
        (pen? down 230) (pen? down 16)))

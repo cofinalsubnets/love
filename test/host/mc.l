@@ -1,17 +1,13 @@
 ; test/host/mc.l -- the two-pane browser, headless: every key a pure step, every frame a pure lay.
 ; the listing and its order, the hues, the cursor and its window, tab, enter and its refusals, the
 ; climb, and the frame, whose every row must be exactly the screen's width even when a name wears
-; colour (post.l's edfit). the runner stays a live probe. run: cat test/00-init.l test/host/mc.l | out/love
+; colour (post.l's edfit). the runner stays a live probe. run: cat test/00-init.l test/host/00-host.l test/host/mc.l | out/love
 
 (borrow 'posix)
 (borrow 'mc)
 
 (: R "/tmp/mctest"
    ; the text under the escapes: an ESC and its sequence, up to the final letter, drop
-   (plain s) ((: (g i acc esc) (i < #s ? (s i @ c
-                                     (? esc (g (i + 1) acc (65 <= c < 91 || 97 <= c < 123 ? 0 1))
-                                        (c = 27) (g (i + 1) acc 1)
-                                        (g (i + 1) (acc + string c) 0))) acc)) 0 "" 0)
    (blurt p s) (open p "w" @ q (hot? q && (say q s, close q, 1)))
    (scrub _) (each ["/sub/deep.txt" "/plain.txt" "/run.sh" "/good" "/bad" "/zeta.txt"]
                         (n \ unlink (R + n)),
@@ -46,9 +42,9 @@
              (starts? (cellof "run.sh") "\e[32m")   ; the x bit
              (starts? (cellof "plain.txt") " "))    ; and a plain file wears nothing
    ; a coloured cell is still exactly its field wide -- the escapes cost no column
-   _ (each ["sub" "good" "bad" "run.sh" "plain.txt"] (n \ test (30 = #(plain (cellof n)))))
+   _ (each ["sub" "good" "bad" "run.sh" "plain.txt"] (n \ test (30 = #(h-plain (cellof n)))))
    ; a name too long for the field is cut, not wrapped, and the size stays on the row
-   _ (test (30 = #(plain (mc-cell R [(80 (s \ (s + "x")) "n") 33188 7] 30 0))))
+   _ (test (30 = #(h-plain (mc-cell R [(80 (s \ (s + "x")) "n") 33188 7] 30 0))))
    _ (test (has? (mc-cell R ["n" 16384 0] 30 0) "<dir>"))
 
    ; --- the cursor, and the window that follows it ----------------------------------
@@ -101,7 +97,7 @@
    ; / : the files under the pane's directory, no link followed; a pick takes the pane there
    s6 (mc-new R R)
    _ (mc-key s6 47, test (!(nil? (s6 'seek))) (((s6 'seek) 'items) = [(R + "/plain.txt") (R + "/run.sh") (R + "/sub/deep.txt")]))
-   _ (test (has? (plain (mc-frame s6 70 14)) "sub/deep.txt"))
+   _ (test (has? (h-plain (mc-frame s6 70 14)) "sub/deep.txt"))
    _ (each (map (i \ "deep" i) ^4) (c \ mc-key s6 c), mc-key s6 13)
    _ (test (nil? (s6 'seek)) ((R + "/sub") = s6 'l 'dir) (1 = s6 'l 'cur))
    _ (mc-key s6 47, mc-key s6 27, test (nil? (s6 'seek)) ((R + "/sub") = s6 'l 'dir))
@@ -112,11 +108,11 @@
    f (mc-frame (mc-new R R) 70 14)
    rows (split "\r\n" f)
    _ (test (14 = #rows))                            ; a row per screen line
-   _ (each rows (r \ test (70 = #(plain r))))
-   _ (test (has? (plain (rows 0)) R))               ; the header names the directory
-   _ (test (has? (plain (rows 1)) "..")
-             (has? (plain (rows 2)) "sub") (has? (plain (rows 2)) "<dir>"))
-   _ (test (has? (plain (last rows)) "q quit"))
+   _ (each rows (r \ test (70 = #(h-plain r))))
+   _ (test (has? (h-plain (rows 0)) R))               ; the header names the directory
+   _ (test (has? (h-plain (rows 1)) "..")
+             (has? (h-plain (rows 2)) "sub") (has? (h-plain (rows 2)) "<dir>"))
+   _ (test (has? (h-plain (last rows)) "q quit"))
    ; the active pane's cursor is reversed, the idle pane's underlined, so tab comes back
    ; to where it left without either claiming the eye the other has
    _ (test (has? (rows 1) "\e[7m") (has? (rows 1) "\e[4m"))
@@ -125,7 +121,7 @@
 
    ; --- quick view and thumbnails: the other pane looks inside the cursor's entry -----
    ; a width by columns: the half block is three bytes and one column
-   (wid s) (: t (plain s) (g i a) (#t <= i ? a (g (i + 1) (a + (128 <= t i < 192 ? 0 1)))) (g 0 0))
+   (wid s) (: t (h-plain s) (g i a) (#t <= i ? a (g (i + 1) (a + (128 <= t i < 192 ? 0 1)))) (g 0 0))
    (lawful f w) (each (split "\r\n" f) (r \ test (w = wid r)))
    (any? f s) (two? (filter (r \ has? r s) (split "\r\n" f)))
    P "/tmp/mctest-pic"
@@ -148,8 +144,8 @@
    _ (test (16 = #(split "\r\n" f1)))
    _ (lawful f1 70)
    _ (test (any? f1 "▀") (any? f1 " a.png") (any? f1 "8x6  png"))
-   _ (test (has? (plain <(split "\r\n" f1)) "view a.png"))
-   _ (test (has? (plain ((split "\r\n" f1) 1)) ".."))  ; the active pane still lists
+   _ (test (has? (h-plain <(split "\r\n" f1)) "view a.png"))
+   _ (test (has? (h-plain ((split "\r\n" f1) 1)) ".."))  ; the active pane still lists
    ; the picture sits right of the rule, in the other pane
    _ (test (two? (filter (r \ has? r "▀" && has? <(split "▀" r) "|") (split "\r\n" f1))))
    _ (mc-key q 106) f2 (mc-frame q 70 16)                ; a gif

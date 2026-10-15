@@ -3,7 +3,7 @@
 ; the size is set by `stty` inside the child: a fresh pty is 0x0 and a parent's settty races the
 ; child's first read. no escape key ever: ESC then a key reads as alt-key, and a child that never
 ; quits is killed at the deadline so its law reads red.
-; not in the corpus: tether is not in love0. run: cat test/00-init.l test/host/tty.l | out/love
+; not in the corpus: tether is not in love0. run: cat test/00-init.l test/host/00-host.l test/host/tty.l | out/love
 (borrow 'synth)   ; the keyboard's own naming of a note, for the alt law
 (: reaped {}                                           ; pids waitfor has had back
    deadline 20000                                              ; ms a child may take
@@ -15,9 +15,6 @@
                      (deadline < clock t0) (still (0 - pid) 9)
                      (rest 50, watch pid t0))
    (guard t) ((two? t ? (twirl (_ \ watch <t (clock 0)) 0) 0), t)
-   (has? h n) (: k #n m #h
-                 (go i) (? (m - k < i) 0 (n = snip h i (i + k)) 1 (go (i + 1)))
-                 (go 0))
    ; the wire read until a phrase has passed, as the text so far: a read at a time, the
    ; phrase sought only where the new bytes could finish it. a byte at a time costs a
    ; frame half a second, which is longer than the deafest box stays deaf
@@ -41,7 +38,6 @@
                             ("\e[?1049l" = snip h i (i + k)) (go (i + 1) i)
                             (go (i + 1) best))
                (go 0 -1 @ b (b < 0 ? h (snip h 0 b))))
-   (mkscr r c) (screen (cask (screen () r c)) r c)
    (chat s i) (2097151 & glass s i 0)
    (cbg s i) (glass s i 2 @ k (k >> 24 = 1 ? (k & 255) 0))   ; a bg index, 0 for the default
    (rowtx s r) (gaze s 2 @ c
@@ -62,7 +58,7 @@
        _ (say m keys)
        txt (slurp m)
        _ (waitfor <t)
-       s (mkscr r c)
+       s (h-mkscr r c)
        (scribe s (held txt),
         [txt s]))
 
@@ -157,7 +153,7 @@
  _ (say sm "jlq")                                           ; back, sideways, then ashore
  stx (sseen + slurp sm)
  _ (waitfor <st)
- ss (mkscr 12 40 @ s (scribe s (held stx), s))
+ ss (h-mkscr 12 40 @ s (scribe s (held stx), s))
  _ (test
     (has? stx "\e[?1049h") (has? stx "\e[?1049l")            ; on the alternate screen
     !(has? stx "\e[48;5;")                                   ; no slop: the walk starts in a field

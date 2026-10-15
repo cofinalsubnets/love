@@ -1,16 +1,12 @@
 ; test/host/story.l -- rove's fiction engine, headless: the level file read and written back the
 ; same, a turn, the window and the prompt's interpreter, the frame, and the library lifted from
 ; a. the runner is test/host/tty.l's. not in the corpus: it reads the tree.
-; run: cat test/00-init.l test/host/story.l | out/love
+; run: cat test/00-init.l test/host/00-host.l test/host/story.l | out/love
 
 (borrow 'story)   ; the artifact's module, warm from the tree
 
 ; the text under the escapes: an ESC and its csi sequence, up to the final letter, drop
-(: (plain s) ((: (g i acc esc) (i < #s ? (s i @ c
-                                     (? esc (g (i + 1) acc (65 <= c < 91 || 97 <= c < 123 ? 0 1))
-                                        (c = 27) (g (i + 1) acc 1)
-                                        (g (i + 1) (acc + string c) 0))) acc)) 0 "" 0)
-   (keys! g s) (each (map (i \ s i) ^#s) (c \ story-key g c))
+(: (keys! g s) (each (map (i \ s i) ^#s) (c \ story-key g c))
 
    ; --- the level file, and its round trip ---
    L (load-level "src/apps/lore/levels/lighthouse.l")
@@ -59,7 +55,7 @@
 
    ; --- the frame: @ where you stand, the things, the status line; the box over it ---
    g2 (story-new L)
-   f (plain (story-frame g2 30 14))
+   f (h-plain (story-frame g2 30 14))
    rows (split "\r\n" f)
    _ (test (14 = #rows) (64 = (rows 8) 6) (42 = (rows 2) 6) (63 = (rows 9) 6)
              (32 = (rows 0) 0) (35 = (rows 0) 2) (126 = (rows 12) 0)             ; the unseen wall, the seen, the water
@@ -69,24 +65,24 @@
    _ (test (has? fp "\e[38;5;27m\e[48;5;17m~") (has? fp "\e[38;5;240m\e[49m."))
    _ (keys! g2 "kkkkkk")                              ; up the shaft to the lamp
    _ (test (g2 'win) ("the lamp" = g2 'win 'title))
-   f2 (plain (story-frame g2 70 20))
+   f2 (h-plain (story-frame g2 70 20))
    _ (test (has? f2 "+-the lamp ") (has? f2 "| a fresnel lens") (has? f2 "-- enter --") (has? f2 "esc closes"))
    ; the command line shows at the foot in place of the status
    _ (keys! g2 "\e:q")
-   _ (test (has? (plain (story-frame g2 70 20)) "\r\n:q"))
+   _ (test (has? (h-plain (story-frame g2 70 20)) "\r\n:q"))
    _ (keys! g2 "\e")
 
    ; --- the view scrolls: a map wider and taller than the screen follows you ---
    big (level "wide" 1 1 (map (y \ (: (go x acc) (x < 60 ? (go (x + 1) (acc + (y = 0 || y = 29 || x = 0 || x = 59 ? "#" "."))) acc) (go 0 ""))) (jot 30)) {} {})
    g4 (story-new big)
-   f4 (plain (story-frame g4 20 10))
+   f4 (h-plain (story-frame g4 20 10))
    r4 (split "\r\n" f4)
    _ (test (0 = g4 'vx) (0 = g4 'vy) (64 = (r4 1) 1))               ; the corner: @ at 1,1 of the view
    _ (keys! g4 "llllllllllllllllllll")                                   ; twenty east: x 21
-   f5 (plain (story-frame g4 20 10))
+   f5 (h-plain (story-frame g4 20 10))
    _ (test (21 = g4 'x) (5 = g4 'vx) (64 = (split "\r\n" f5) 1 16))  ; the view slid; @ sits a margin in
    _ (keys! g4 "jjjjjjjjjjjjjjjjjjjjjjjjjjj")                           ; to the south wall: y 28
-   f6 (plain (story-frame g4 20 10))
+   f6 (h-plain (story-frame g4 20 10))
    _ (test (28 = g4 'y) (21 = g4 'vy) (64 = (split "\r\n" f6) 7 16))   ; the view stops at the map's edge
    _ (keys! g4 "llllllllllllllllllllllllllllllllllllllllllllll")          ; to the east wall: x 58
    _ (story-frame g4 20 10)                                               ; the view follows at the lay

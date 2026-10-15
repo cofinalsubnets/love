@@ -1,16 +1,12 @@
 ; test/host/design.l -- the level designer, headless: a map painted from keys alone (brush, walls,
 ; a new tile kind, a thing in three prompts, the start), saved as the datum story.l plays and
 ; loaded back the same, and the frame. the runner stays a live probe: `love lore design`.
-; run: cat test/00-init.l test/host/design.l | out/love
+; run: cat test/00-init.l test/host/00-host.l test/host/design.l | out/love
 
 (borrow 'story)
 (borrow 'design)
 
 (: S "/tmp/designtest.l"
-   (plain s) ((: (g i acc esc) (i < #s ? (s i @ c
-                                     (? esc (g (i + 1) acc (65 <= c < 91 || 97 <= c < 123 ? 0 1))
-                                        (c = 27) (g (i + 1) acc 1)
-                                        (g (i + 1) (acc + string c) 0))) acc)) 0 "" 0)
    d (design-new (level "a test" 1 1 ["###" "#.#" "###"] {} {}) S)
    (keys! s) (each (map (i \ s i) ^#s) (c \ design-key d c))
    lvl (d 'lvl)
@@ -63,11 +59,11 @@
    _ (story-key g 108)
    _ (test (2 = g 'x))
    ; the frame: the title bar, what is under the cursor, the brush, the help
-   f (plain (design-frame d 60 12))
+   f (h-plain (design-frame d 60 12))
    (test (has? f "design: a test") (has? f "4,1 # wall") (has? f "brush: .") (has? f "palette: ~") (has? f "hjkl yubn move"),     ; past the row's end is wall
     ; ..and no line of a frame is wider than the screen: one that wrapped would scroll the
     ; frame up a row, and every key would redraw the whole map
-    test (foldl (a \ l \ (a && #l <= 41)) 1 (split "\n" (plain (design-frame d 40 12)))),
+    test (foldl (a \ l \ (a && #l <= 41)) 1 (split "\n" (h-plain (design-frame d 40 12)))),
     test_fin (),
     puts "design: ok -- a map from keys alone, its palette and pens, saved as the datum story plays\n",
     0))

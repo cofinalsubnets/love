@@ -34,40 +34,38 @@
    fet "GET / HTTP/1.1\r\nHost: x\r\nsec-fetch-dest: empty\r\n\r\n"
    (mk p)    (sv-make dir box p nav)
    (fetch p) (sv-make dir box p fet)
-   (sub? s t) (: n #s m #t
-                 ((: (g i) (i + m <= n ? (snip s i (i + m) = t ? 1 (g (i + 1))) 0)) 0))
 
    ; --- the three it answers for ----------------------------------------------
    ((mk "/x.l" @ r
      (test (two? r)
            (<r = "text/html; charset=utf-8")
-           (sub? <>r "class=\"l-comment\"")        ; painted, by hue's own table
-           (sub? <>r "id=\"L1\"")                  ; and every line is linkable
-           (sub? <>r "/hue.css"),                 ; ..with the stylesheet that colours it
+           (has? <>r "class=\"l-comment\"")        ; painted, by hue's own table
+           (has? <>r "id=\"L1\"")                  ; and every line is linkable
+           (has? <>r "/hue.css"),                 ; ..with the stylesheet that colours it
       0)),
     (mk "/d.md" @ r
      (test (two? r)
            (<r = "text/html; charset=utf-8")
-           (sub? <>r "<h1>a head</h1>")            ; rendered, through lapiz
-           (sub? <>r "<em>prose</em>"),
+           (has? <>r "<h1>a head</h1>")            ; rendered, through lapiz
+           (has? <>r "<em>prose</em>"),
       0)),
     ; `.l.md` is claimed before `.md`, and reads the .l with the suffix off. the
     ; two pages link to each other, which is the whole reason the nav line exists.
     (mk "/x.l.md" @ r
      (test (two? r)
-           (sub? <>r "<h1>/x.l</h1>")              ; the file names the document
-           (sub? <>r "a comment")                  ; ..and its header is the document
-           (sub? <>r "href=\"/x.l\""),           ; ..with the way back to the source
+           (has? <>r "<h1>/x.l</h1>")              ; the file names the document
+           (has? <>r "a comment")                  ; ..and its header is the document
+           (has? <>r "href=\"/x.l\""),           ; ..with the way back to the source
       0)),
     ; a file with no header says so, rather than serving a blank page
     (: _ (spit "/bare.l" "(: x 1)\n")
        r (mk "/bare.l.md")
-       (test (two? r) (sub? <>r "no header comment"),
+       (test (two? r) (has? <>r "no header comment"),
         0)),
     (mk "/hue.css" @ r
      (test (two? r)
            (<r = "text/css; charset=utf-8")
-           (sub? <>r ".hue .l-comment{color:#"),  ; the theme join, not a guess
+           (has? <>r ".hue .l-comment{color:#"),  ; the theme join, not a guess
       0)),
 
     ; --- and the ones it refuses -----------------------------------------------
@@ -84,8 +82,8 @@
     (fetch "/x.l" @ r
      (test (two? r)
            (<r = "text/plain; charset=utf-8")
-           (sub? <>r "; a comment")                ; the file itself
-           !(sub? <>r "class=\"l-comment\""),     ; ..not the painting
+           (has? <>r "; a comment")                ; the file itself
+           !(has? <>r "class=\"l-comment\""),     ; ..not the painting
       0)),
     ; ..but a .l.md is a rendering with no file behind it, so it is made either way
     (fetch "/x.l.md" @ r

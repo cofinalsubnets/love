@@ -1,6 +1,6 @@
 ; test/host/grass.l -- grass simulator 1988, headless: the clock and sky, water given and taken by the
 ; weather, a blade growing, the dance, the words, the helm, the week's end, the song, the frame.
-; not in the corpus: a crew module. run: cat test/00-init.l test/host/grass.l | out/love
+; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/grass.l | out/love
 
 (borrow 'grass)   ; the artifact's module, warm from the tree
 (borrow 'score)   ; the tune's reader, for the song laws
@@ -8,7 +8,6 @@
 (: (ticks g n) (0 < n ? (grass-tick g, ticks g (n - 1)) g)
    ; a row in cells: a glyph's tail bytes ride the lead that began it
    (wide s) (:- (go 0 0) (go i n) (i >= #s ? n (go (i + 1) (n + (128 <= s i < 192 ? 0 1)))))
-   (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    ; a known week: mild days and every blade equally thirsty, so the laws below do not
    ; ride the dice
    (fresh _) (grass-new 23 80 (wheel 12) @ g
@@ -138,10 +137,9 @@
 ; --- the frame on a real console: every row reaches the last column and keeps it. an
 ;     erase after a full row takes the glyph that raised the pending wrap, so the score
 ;     lost its last digit and the field its last stalk
-(: (mkscr r c) (screen (cask (screen () r c)) r c)
-   (chat s i) (2097151 & glass s i 0)
+(: (chat s i) (2097151 & glass s i 0)
    g (fresh ()) _ (pin g 'h 12.0)
-   s (mkscr 24 80)
+   s (h-mkscr 24 80)
    (scribe s (grass-frame g),
     test (chat s 79 != 0) (chat s 79 != 32)      ; the hud's last cell holds
          (chat s 159 != 0)))                      ; ..and the first field row's
@@ -150,7 +148,7 @@
 (: g (fresh ())
    _ (pin g 'h 12.0) noon (grass-frame g)
    _ (pin g 'h 1.0) night (grass-frame g)
- (test (count noon "\r\n" = 23) (count night "\r\n" = 23)
+ (test (h-count noon "\r\n" = 23) (h-count night "\r\n" = 23)
        !(noon = night)))
 
 ; --- the kept rows: a frame off the kept rows and clouds is the frame a fresh painter
@@ -164,17 +162,16 @@
 
 ; --- a paint: the first is the whole frame; after ticks it is the rows that changed,
 ;     under their cursor moves, and a screen taking the paints shows the frame
-(: (mkscr r c) (screen (cask (screen () r c)) r c)
-   (cells s n) (map (i \ [(glass s i 0) (glass s i 1) (glass s i 2)]) (jot n))
+(: (cells s n) (map (i \ [(glass s i 0) (glass s i 1) (glass s i 2)]) (jot n))
    g (fresh ()) _ (pin g 'h 12.0)
-   a (mkscr 24 80) b (mkscr 24 80)
+   a (h-mkscr 24 80) b (h-mkscr 24 80)
    p0 (grass-paint g) _ (scribe a p0)
    _ (ticks g 10) p1 (grass-paint g) _ (scribe a p1)
    _ (ticks g 10) p2 (grass-paint g) _ (scribe a p2)
    _ (scribe b (grass-frame g))
    n (24 * 80)
  (test (p0 = grass-frame g || 1)                   ; (the first paint says every row)
-       (count p0 "\r\n" = 23) (count p1 "\r\n" < 16) (count p2 "\r\n" < 16)
+       (h-count p0 "\r\n" = 23) (h-count p1 "\r\n" < 16) (h-count p2 "\r\n" < 16)
        (cells a n = cells b n)))
 
 (test_fin (),

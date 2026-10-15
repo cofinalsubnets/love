@@ -96,7 +96,6 @@
                       rc (test-until (\ r (r = 1)) (\ _ (W (as + ["-q" "-O" o ("https://127.0.0.1:" + show port + "/")]))))
                       _ (reap p)
                       [rc (: r (uread o) (? (two? r) <>r ""))])
-   (has s x) (0 <= fsub s x 0)
    _ (? os?
         (: _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
            a (fetch (test-free 0) [])
@@ -112,8 +111,8 @@
            _ (setenv "HOME" (? (string? home0) home0 ""))
            _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
            _ (hark ["rm" "-rf" odir])
-           (test (<a = 0) (has (a 1) "TLSv1.3") (<b = 5) (<c = 0) (has (c 1) "TLSv1.3")
-                 (<d = 0) (has (d 1) "TLSv1.3")))
+           (test (<a = 0) (has? (a 1) "TLSv1.3") (<b = 5) (<c = 0) (has? (c 1) "TLSv1.3")
+                 (<d = 0) (has? (d 1) "TLSv1.3")))
         0)
    0)
 

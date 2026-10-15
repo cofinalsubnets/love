@@ -281,9 +281,8 @@
           0)
    ; "cannot connect" is the server not listening yet
    (page port) (: p (srv port)
-                  g (test-until (r \ (has (r 1) "cannot connect")) (_ \ (G ("https://127.0.0.1:" + show port + "/") 1)))
+                  g (test-until (r \ (has? (r 1) "cannot connect")) (_ \ (G ("https://127.0.0.1:" + show port + "/") 1)))
                   (reap p, g))
-   (has s x) (string? s && 0 <= fsub s x 0)
    ((os? ?
        (: _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
           a (page (test-free 0))
@@ -291,7 +290,7 @@
           b (page (test-free 0))
           (setenv "SSL_CERT_FILE" (string? cf0 ? cf0 ""),
            hark ["rm" "-rf" odir],
-           test (<a = 0) (has (a 3) "TLSv1.3") (<b = 1) (has (b 1) "no root certificates") (has (b 1) "tls_pins")))
+           test (<a = 0) (has? (a 3) "TLSv1.3") (<b = 1) (has? (b 1) "no root certificates") (has? (b 1) "tls_pins")))
        0),
     0))
 

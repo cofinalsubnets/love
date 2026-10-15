@@ -17,11 +17,6 @@
 ; --- a config on disk -------------------------------------------------------------
 (: (spill path text) (open path "w" @ q (say q text, flush q, close q))
    ; is n a substring of h? there is no core `find`, and the gate needs one
-   (has? h n) (: nh #h nn #n
-                 (go i) (? (nh - nn < i) 0
-                           (n = snip h i (i + nn)) 1
-                           (go (i + 1)))
-                 (go 0))
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
    me (show (getpid 0))
    good ("out/.helm-test-" + me + ".l")

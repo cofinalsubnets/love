@@ -4,7 +4,7 @@
 ; and every pixel held to magick's own read of the same file: set where its alpha is half
 ; or past, its rgb then exact. a torn file is refused, and a chunked one lands whole.
 ; no magick on the box -> a polite skip.
-;   cat test/00-init.l test/host/kitpng.l | out/love
+;   cat test/00-init.l test/host/00-host.l test/host/kitpng.l | out/love
 (borrow 'posix)
 (: magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))
    _ (magick? ? 0 (gate-skip "kitpng: ok (no magick, skipped)"))
@@ -38,9 +38,8 @@
                (map (i \ (o (4 * i + 3) @ a
                             (a < 128 ? 0 (255 << 24 | o (4 * i) << 16 | o (4 * i + 1) << 8 | o (4 * i + 2)))))
                     (jot (W * H))))
-   (mkscr r c) (screen (cask (screen () r c)) r c)
    ; the file through kitty onto a fresh screen: its pixels as tilepx reads them, and the reply
-   (got f) (: s (mkscr 4 10)
+   (got f) (: s (h-mkscr 4 10)
               _ (scribe s ("\e_Ga=T,f=100,i=1;" + b64 (rd f) + "\e\\"))
               rep (string (reply s))
               [rep (map (i \ (: x (i % W) y (i // W) (tilepx s (x // 8) (x % 8) y))) (jot (W * H)))])
@@ -62,13 +61,13 @@
                  (puts ("kitpng: " + <w + " differs: " + show <g + "\n"), 0)))
    _ (test (foldl (a \ w \ (&& a (check w))) 1 ways))
    ; a torn file: refused, and nothing placed
-   s (mkscr 4 10)
+   s (h-mkscr 4 10)
    torn (rd (dir + "/rgba8.png") @ b (snip b 0 (#b - 20)))
    _ (scribe s ("\e_Ga=T,f=100,i=3;" + b64 torn + "\e\\"))
    _ (test ("\e_Gi=3;EBADPNG:png\e\\" = string (reply s))
            !(tilepx s 0 0 0))
    ; the same file in chunks cut on a base64 quantum: m=1 then m=0
-   s2 (mkscr 4 10)
+   s2 (h-mkscr 4 10)
    e (b64 (rd (dir + "/pal8.png")))
    k (4 * (#e // 8))
    (scribe s2 ("\e_Ga=T,f=100,i=4,m=1;" + snip e 0 k + "\e\\"),

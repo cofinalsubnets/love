@@ -3,16 +3,14 @@
 ; everything but the tty runner gates here: the frame's shape and pens, the sun turning
 ; with the player and setting behind the garage, the dark coming on, the hole filling
 ; the screen at the end, the banks repeating, a step, the helm, and the song into a jug.
-;   cat test/00-init.l test/host/dusk.l | out/love
+;   cat test/00-init.l test/host/00-host.l test/host/dusk.l | out/love
 
 (borrow 'dusk)    ; the artifact's module, warm from the tree
 (borrow 'view)     ; the keys' actions
 (borrow 'walk)     ; the rail's key
 (: dusk-kb (view-bind view-binds walk-binds))   ; a key's code -> its action
 
-(: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
-   (rows s) (1 + count s "\r\n")
-   (pen? s n) (has? s ("38;5;" + show n + ";") || has? s (";48;5;" + show n + "m"))
+(: (pen? s n) (has? s ("38;5;" + show n + ";") || has? s (";48;5;" + show n + "m"))
    (sun? f) (any (p \ pen? f p) sun-pens)
    (at z) (dusk-frame (pins (dusk-new 80 48) 'pz z))
    (sun th z) (sun-at (pins (dusk-new 80 48) 'th th 'pz z)))
@@ -21,8 +19,8 @@
 (: st (dusk-new 80 48) f (dusk-frame st)
    wide (dusk-new 120 60) g (dusk-frame wide)
  (test
-  (rows f = 24) (count f "▀" = 1920)
-  (rows g = 30) (count g "▀" = 3600)
+  (h-rows f = 24) (h-count f "▀" = 1920)
+  (h-rows g = 30) (h-count g "▀" = 3600)
   (wide 'hz = 30) (wide 'foc = 60.0) (wide 'cx = 60.0)
   (sun? f) (pen? f 215)                         ; the sun, and the sky warm at the horizon
   (pen? f 180) (pen? f 137)                     ; the sand, and the bed
@@ -48,7 +46,7 @@
 ; --- the dusk: dark and starry past the sunset, and at the mouth nothing but the hole ---
 (: late (at 190.0) f (at end-z)
  (test (pen? late 244) (pen? late 16) !(sun? late)
-       (rows f = 24) (pen? f 16)
+       (h-rows f = 24) (pen? f 16)
        !(pen? f 180) !(pen? f 137) !(pen? f 215)))
 
 ; --- the banks repeat: a whole loop down the river stands the same bush again ---

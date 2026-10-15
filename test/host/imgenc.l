@@ -28,7 +28,6 @@
    (gif im) (gif-encode (im 0) (im 1) (im 2))
    (jpeg im q) (jpeg-encode (im 0) (im 1) (im 2) q)
    (png im) (png-encode (im 0) (im 1) (im 2))
-   (has s p) (#p @ n (: (go i) (? (#s - n < i) 0 (snip s i (i + n) = p) 1 (go (i + 1))) (go 0)))
    (ends s a z) (snip s 0 #a = a && snip s (#s - #z) #s = z)
    soi (string 255 + string 216)
    eoi (string 255 + string 217)
@@ -41,7 +40,7 @@
            (png-decode (png dot) = dot) (png-decode (png noise) = noise) (png-decode (png grad) = grad)
            ; depth and colour type: two colours a 1-bit palette, 256 an 8-bit one, past that rgba
            (png checker 24 = 1) (png checker 25 = 3) (png noise 24 = 8) (png noise 25 = 3)
-           (png grad 25 = 6) (has (png keyed) "tRNS") !(has (png checker) "tRNS"))
+           (png grad 25 = 6) (has? (png keyed) "tRNS") !(has? (png checker) "tRNS"))
 
    ; -- a run of frames: gif-anim, read back by gif-frames -- each as given, its delay kept
    flip (image 9 4 (x \ y \ ((x + y) % 2 ? [255 255 255 255] [0 0 0 255])))
@@ -49,7 +48,7 @@
    run [[keyed 100] [flip 250] [one 40] [keyed 30]]
    anim (gif-anim 9 4 (map (f \ [(f 0 2) (f 1)]) run))
    got (gif-frames anim 10)
-   _ (test (ends anim "GIF89a" ";") (has anim "NETSCAPE2.0")
+   _ (test (ends anim "GIF89a" ";") (has? anim "NETSCAPE2.0")
            (got 0 = 9) (got 1 = 4) (#(got 2) = 4)
            ('(100 250 40 30) = map (f \ f 1) (got 2))
            (all (i \ got 2 i 0 = run i 0 2) ^4))

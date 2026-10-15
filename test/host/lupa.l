@@ -4,9 +4,8 @@
 ; reads the frames back. run: cat test/00-init.l test/host/lupa.l | out/love
 (borrow 'lupa)
 
-(: (has? h n) (0 <= findsub h n)
    ;; the frame less its escapes: a csi ends at its final byte, any of @ through ~
-   (plain s) ((: (g i acc esc) (i < #s ? (s i @ c
+(: (plain s) ((: (g i acc esc) (i < #s ? (s i @ c
                                      (? esc (g (i + 1) acc (? (c = 91) 1 (64 <= c <= 126) 0 1))
                                         (c = 27) (g (i + 1) acc 1)
                                         (g (i + 1) (acc + string c) 0))) acc)) 0 "" 0)

@@ -1,7 +1,7 @@
 ; test/host/manifest.l -- the spreadsheet, engine and tui, end to end: the engine probed against
 ; the loaded app, the tui driven over a real pty and its screen read back through the cb glass.
 ; not in the corpus: init.l reaps by pid where this file holds a pty child.
-; run: cat test/00-init.l test/host/manifest.l | out/love
+; run: cat test/00-init.l test/host/00-host.l test/host/manifest.l | out/love
 
 (borrow 'manifest)
 
@@ -70,8 +70,6 @@
 ; --- the tui, over a real pty, the cb screen as witness: type a formula,
 ; sail right, type another that reads the first, watch the paint ---
 (: (findi h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? i (findi h n (i + 1))) -1)
-   (find h n i) !!(1 + findi h n i)
-   (mkscr r c) (screen (cask (screen () r c)) r c)
    (rowtx s r) (gaze s 2 @ c
                 (foldl (a \ i \ (a + (2097151 & glass s (r * c + i) 0 @ ch (0 = ch ? " " (utf8 ch)))))
                        "" (jot c)))
@@ -85,7 +83,7 @@
                               (ch = -1 ? () (pin buf () (peep buf () "" + string ch),
                                 pump ())))
                   (pump ()))) 0)
- (await s tries) (: (aw t) (? (find (peep buf () "") s 0) 1
+ (await s tries) (: (aw t) (? (has? (peep buf () "") s) 1
                               (t < 1) 0
                               (rest 30, aw (t - 1)))
                     (aw tries))
@@ -100,18 +98,18 @@
  st (: (wf p2) (gather p2 @ g2 (two? g2 ? g2 (rest 2, wf p2))) (wf <md))
  _ (catch rd)                             ; the reader drains to EOF and rests
  outb (peep buf () "")
- scr (mkscr 24 80)
+ scr (h-mkscr 24 80)
  ; the tail "\e[?1049l" would bring the main grid back over the witness (the
  ; alternate screen's leave) -- scribe only the voyage, not the stepping-ashore
  shore (findi outb "\e[?1049l" 0)
  _ (scribe scr (-1 < shore ? (snip outb 0 shore) outb))
  row1 (rowtx scr 2)                       ; screen line 2 = sheet row 1
  (test (two? st) (0 = <st)              ; a clean exit
-       (find outb "\e[?1049h" 0)             ; the alt screen was entered
-       (find outb "\e[?1049l" 0)             ; ... and left
-       (find row1 "10" 0)                    ; a1 painted
-       (find row1 "70" 0)                    ; b1 = a1 * 7 painted
-       (find (rowtx scr 0) "b1" 0),       ; the formula bar rode the cursor
+       (has? outb "\e[?1049h")             ; the alt screen was entered
+       (has? outb "\e[?1049l")             ; ... and left
+       (has? row1 "10")                    ; a1 painted
+       (has? row1 "70")                    ; b1 = a1 * 7 painted
+       (has? (rowtx scr 0) "b1"),       ; the formula bar rode the cursor
   close m))
 
 (test_fin ())

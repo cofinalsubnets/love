@@ -23,7 +23,6 @@
    _ (tuner-hear t (tuner-sine 445.0))
    fr (tuner-frame t 80 30)
    rs (map tuner-plain fr)
-   (has? s n) (0 <= fsub s n 0)
    (line x i) (tuner-plain (tuner-frame x 80 30 i))     ; row i of x's frame, as the screen shows it
    _ (test (30 = #rs) (has? (rs 14) "◀━━ A4  +20¢  445.0 Hz") (has? (rs 15) "A4   ━━━━━━┫")
            (has? (rs 11) "A♯4") (has? (rs 7) "B4") (has? (rs 3) "C5") (has? (rs 13) "╺━━━┃ ¼")

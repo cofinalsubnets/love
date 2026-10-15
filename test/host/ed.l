@@ -2,7 +2,7 @@
 ; test/kore/ed.sh drives both as scripts; this is the other face, a pty: ed's prompt, an
 ; error that says `?` and lets the edit go on, h saying why; ex's prompt and autoprint,
 ; and its vi handing the buffer to the vi engine, whose :wq writes it and ends both.
-;   cat test/00-init.l test/host/ed.l | out/love
+;   cat test/00-init.l test/host/00-host.l test/host/ed.l | out/love
 (borrow 'posix)
 (: love <cmdline
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
@@ -10,10 +10,8 @@
    _ (mkdir dir 493)
    f (dir + "/t")
    _ (open f "w" @ q (say q "alpha\nbeta\ngamma\n", close q))
-   (sub? h n) (: (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))) (go 0))
    ; what the pty shows up to pat, or all of it at its end
-   (upto m pat t) (see m @ b (b < 0 ? t (t + string b @ t2 (sub? t2 pat ? t2 (upto m pat t2)))))
-   (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
+   (upto m pat t) (see m @ b (b < 0 ? t (t + string b @ t2 (has? t2 pat ? t2 (upto m pat t2)))))
    (type m s) (say m s, flush m)
    r (tether [love "kore" "ed" "-p" "* " f])
    _ (test (two? r))
@@ -27,8 +25,8 @@
    a3 (upto m "* " "")
    _ (type m "Q\r")
    _ (slurp m)
-   s1 (waitfor <r)
-   _ (test (sub? a0 "17") (sub? a1 "beta") (sub? a2 "?") (sub? a3 "unknown command") (<s1 = 0))
+   s1 (h-waitfor <r)
+   _ (test (has? a0 "17") (has? a1 "beta") (has? a2 "?") (has? a3 "unknown command") (<s1 = 0))
    r2 (tether [love "kore" "ex" f])
    _ (test (two? r2))
    n >r2
@@ -40,9 +38,9 @@
    _ (rest 300)
    _ (type n ":wq\r")
    b3 (slurp n)
-   s2 (waitfor <r2)
+   s2 (h-waitfor <r2)
    got (open f "r" @ q (hot? q ? (slurp q @ g (close q, g)) ""))
-   (test (sub? b0 "3L, 17B") (sub? b1 "beta") (sub? b2 "\e[?1049h") (sub? b3 "\e[?1049l")
+   (test (has? b0 "3L, 17B") (has? b1 "beta") (has? b2 "\e[?1049h") (has? b3 "\e[?1049l")
          (<s2 = 0) (got = "beta\ngamma\n"),
     hark ["rm" "-rf" dir]))
 (test_fin (), puts "ed: ok", putc 10, 0)

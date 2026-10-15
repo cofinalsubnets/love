@@ -7,16 +7,15 @@
 
 (borrow 'posix)
 
-(: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    ; type, and take what came back within a beat
-   (drink m) (:- (go "") (go acc) (? (cue? m) (: b (cask 4096) n (swig m b)
+(: (drink m) (:- (go "") (go acc) (? (cue? m) (: b (cask 4096) n (swig m b)
                                                   (charm? n && 0 < n ? (go (acc + snip b 0 n)) acc))
                                     (rest 150, cue? m) (go acc)
                                     acc))
    (say! m s) (say m s, flush m, drink m)
    ; n within a row of at: the row's cells follow its address, pens between them
    (after? h at n) (:- (go 0) (go i) (? (#h < i + #at) 0
-                                        (at = snip h i (i + #at)) (sub? (snip h i (min #h (i + 120))) n 0)
+                                        (at = snip h i (i + #at)) (has? (snip h i (min #h (i + 120))) n)
                                         (go (i + 1))))
    md (tether ["out/love" "vi"])
    _ (test (two? md))
@@ -36,14 +35,14 @@
    b8 (say! m "\x01h:q!\r")                ; the first, dirty
    b9 (say! m ":q!\r")                     ; the last one leaves, and so does vi
    st (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md))
- (test (sub? b0 "\e[?1049h" 0)
-       (sub? b1 "hello" 0)
-       (sub? b2 "\e[1;40H" 0) (sub? b2 "\e[2;41H" 0)
-       (sub? b3 "second" 0)
-       (sub? b5 "helloagain" 0)
+ (test (has? b0 "\e[?1049h")
+       (has? b1 "hello")
+       (has? b2 "\e[1;40H") (has? b2 "\e[2;41H")
+       (has? b3 "second")
+       (has? b5 "helloagain")
        (after? bb "\e[2;41H" "helloagain")    ; pane 2, row 2: the put line
        (after? bc "\e[3;41H" "helloagain")    ; ..and row 3, the paste
-       (sub? b9 "\e[?1049l" 0)
+       (has? b9 "\e[?1049l")
        (two? st)))
 
 (test_fin ())

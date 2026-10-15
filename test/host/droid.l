@@ -46,7 +46,6 @@
    dr-p (dr-b0 + 32 + #dr-sd)
    dr-sig (snip dr-s (dr-p + 16) (dr-p + 16 + rdle dr-s (dr-p + 12) 4))
    dr-spk (key-spki dr-k)
-   (dr-has? s t) (any (i \ snip s i (i + #t) = t) ^(#s - #t + 1))
    _ 0)
 
 (test
@@ -75,8 +74,8 @@
  ; out again, with the end record's offset put back, the block leaves the zip it was laid in
  (snip dr-s 0 dr-b0 + snip dr-s dr-co (#dr-s - 6) + wrle dr-b0 4 + snip dr-s (#dr-s - 2) #dr-s = dr-z)
  ; the signed data carries the zip's digest and the certificate, and the signature verifies
- (dr-has? dr-sd (v2-digest [(snip dr-z 0 dr-b0) (snip dr-z dr-b0 dr-eo) (snip dr-z dr-eo #dr-z)]))
- (dr-has? dr-sd dr-c)
+ (has? dr-sd (v2-digest [(snip dr-z 0 dr-b0) (snip dr-z dr-b0 dr-eo) (snip dr-z dr-eo #dr-z)]))
+ (has? dr-sd dr-c)
  (1 = sig-ok? (unhex "2a8648ce3d040302") (spki-key dr-spk (der dr-spk 0 #dr-spk)) dr-sd dr-sig))
 
 ;; the window over the bridge's wire, the bridge played here: a window's paper is the screen

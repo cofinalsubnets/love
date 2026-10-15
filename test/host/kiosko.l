@@ -68,8 +68,6 @@
                  r))
    (get p)   (ask ("GET " + p + " HTTP/1.1\r\nHost: x\r\n\r\n"))
    (code r)  (#r @ n ((: (g i) (i < n && !(r i = 32) ? (g (i + 1)) (snip r (i + 1) (i + 4)))) 0))
-   (sub? s t) (: n #s m #t
-                 ((: (g i) (i + m <= n ? (snip s i (i + m) = t ? 1 (g (i + 1))) 0)) 0))
 
    ; --- the maker hook -------------------------------------------------------------------
    ; it is asked first, before the file on disk, which is the whole point: `love web`
@@ -77,9 +75,9 @@
    ; static server, and every case below proves that half.
    _ (test
       ("200" = code (get "/made"))
-      (sub? (get "/made") "made on the way out")
-      (sub? (get "/a.txt") "the hook wins over the file")     ; ..even when the file exists
-      (sub? (get "/echo") "GET /echo")                        ; ..the head is the second argument
+      (has? (get "/made") "made on the way out")
+      (has? (get "/a.txt") "the hook wins over the file")     ; ..even when the file exists
+      (has? (get "/echo") "GET /echo")                        ; ..the head is the second argument
       ("404" = code (get "/nope")))                         ; ..and () is still a 404
 
    ; --- the guard, first ------------------------------------------------------------------
@@ -90,15 +88,15 @@
       (code (get "..") = "403")                          ; unrooted
       ; and it is a segment test: a file whose name merely contains .. is ordinary
       (code (get "/a..b") = "200")
-      (sub? (get "/a..b") "not an escape"))
+      (has? (get "/a..b") "not an escape"))
 
    ; --- methods ---------------------------------------------------------------------------
    hd (ask "HEAD /index.html HTTP/1.1\r\nHost: x\r\n\r\n")
    _ (test
       (code (get "/index.html") = "200")
       (code hd = "200")
-      (sub? hd "Content-Length: 13")     ; head reports the body it does not send
-      !(sub? hd "<h1>root</h1>")
+      (has? hd "Content-Length: 13")     ; head reports the body it does not send
+      !(has? hd "<h1>root</h1>")
       (code (ask "PUT / HTTP/1.1\r\nHost: x\r\n\r\n") = "405")
       (code (ask "DELETE / HTTP/1.1\r\nHost: x\r\n\r\n") = "405"))
 
@@ -117,18 +115,18 @@
             r (slurp c)
             (close c,
              r))
-   _ (test (code split = "200") (sub? split "<h1>root</h1>"))
+   _ (test (code split = "200") (has? split "<h1>root</h1>"))
 
    ; --- paths ------------------------------------------------------------------------------
    _ (test
       (code (get "/") = "200")                       ; the root directory's index.html
-      (sub? (get "/") "<h1>root</h1>")
-      (sub? (get "/index.html?v=2") "<h1>root</h1>")   ; a query string is cut
-      (sub? (get "/odd%20name.txt") "spaced")          ; ..and an escape is decoded
+      (has? (get "/") "<h1>root</h1>")
+      (has? (get "/index.html?v=2") "<h1>root</h1>")   ; a query string is cut
+      (has? (get "/odd%20name.txt") "spaced")          ; ..and an escape is decoded
       (code (get "/sub") = "301")                    ; a directory redirects to its slash
-      (sub? (get "/sub") "Location: /sub/")
-      (sub? (get "/sub/") "<h1>sub</h1>")
-      (sub? (get "/bare/") "one.txt")                  ; no index.html -> a listing
+      (has? (get "/sub") "Location: /sub/")
+      (has? (get "/sub/") "<h1>sub</h1>")
+      (has? (get "/bare/") "one.txt")                  ; no index.html -> a listing
       (code (get "/nope.html") = "404"))
 
    ; --- what a request may not carry, and what a page may not echo -------------------------
@@ -149,24 +147,24 @@
       (code (get "/index.html%00.css") = "400")
       (code (get "/a%0d%0aSet-Cookie:%20x") = "400")
       (code (get "/d%0D%0AX-Inj:%201") = "400")
-      !(sub? (get "/d%0D%0AX-Inj:%201") "X-Inj")
+      !(has? (get "/d%0D%0AX-Inj:%201") "X-Inj")
       (code (get "/a%7fb") = "400")
       (code (get "/.env") = "404")
       (code (get "/%2eenv") = "404")
       (code (get "/sub/../.env") = "404")
       (code (get "/.git/config") = "404")
-      (sub? (get "/sp%20ace") "Location: /sp%20ace/\r\n")
-      (sub? ls "one.txt")
-      !(sub? ls ".hid")
-      (sub? ls ">&lt;b&gt;&quot;&#39;&amp;.txt</a>")
-      (sub? ls "href=\"%3Cb%3E%22%27%26.txt\""))
+      (has? (get "/sp%20ace") "Location: /sp%20ace/\r\n")
+      (has? ls "one.txt")
+      !(has? ls ".hid")
+      (has? ls ">&lt;b&gt;&quot;&#39;&amp;.txt</a>")
+      (has? ls "href=\"%3Cb%3E%22%27%26.txt\""))
 
    ; --- a body past the chunk boundary ----------------------------------------------------
    bigr (get "/big.txt")
    _ (: i ((: (g k) (k < #bigr && !(snip bigr k (k + 4) = "\r\n\r\n") ? (g (k + 1)) k)) 0)
         body (snip bigr (i + 4) #bigr)
         _ (test (#big = 192000)                       ; the fixture is really 3 chunks
-                  (sub? bigr "Content-Length: 192000")
+                  (has? bigr "Content-Length: 192000")
                   (#body = #big)
                   (body = big)))                               ; ..and byte-for-byte, not just as long
 
@@ -191,8 +189,8 @@
        (test (#under = 131064) (#over = 131080)  ; really either side of 131072
                (bodyof u = under)                              ; the copy lane
                (bodyof o = over)                               ; the cask lane
-               (sub? u "Content-Length: 131064")
-               (sub? o "Content-Length: 131080"))),
+               (has? u "Content-Length: 131064")
+               (has? o "Content-Length: 131080"))),
 
     ; --- the read's slow lane, which no served file reaches any more --------------------
     ; `gulp` proves it has the whole file from a short read: the buffer is one byte larger
@@ -212,12 +210,12 @@
                (#big = #bigr))),            ; ..and nothing truncated at 4096
 
     ; --- content types -------------------------------------------------------------------
-    test (sub? (get "/index.html") "Content-Type: text/html")
-         (sub? (get "/a.css") "Content-Type: text/css")
-         (sub? (get "/blob.zzz") "Content-Type: application/octet-stream")
+    test (has? (get "/index.html") "Content-Type: text/html")
+         (has? (get "/a.css") "Content-Type: text/css")
+         (has? (get "/blob.zzz") "Content-Type: application/octet-stream")
          ; every answer is framed the same way, which is what lets the client above just slurp
-         (sub? (get "/a.css") "Connection: close")
-         (sub? (get "/a.css") "Content-Length: 15"),
+         (has? (get "/a.css") "Connection: close")
+         (has? (get "/a.css") "Content-Length: 15"),
 
     ; raise the flag, then one last request to let the loop see it and return
     pin stop 0 1,

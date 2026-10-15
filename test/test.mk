@@ -230,7 +230,7 @@ test_hostnif: host out$(hsuf)/lush
 	  case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
 	  case " $(hostnif_nomop) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 $m";; esac; \
 	  case " $(hostnif_exec) " in *" $$s "*) L="env $m";; esac; \
-	  cat test/00-init.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif "$$L" ": ok" \
+	  cat test/00-init.l test/host/00-host.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif "$$L" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
 # Runnable design companions -- pure-love models that pin the shape a C design

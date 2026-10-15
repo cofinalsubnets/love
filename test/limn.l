@@ -9,8 +9,7 @@
 ; 0-based going in and 1-based on the wire, which is the one conversion here.
 (borrow "src/apps/mitty/limn.l")
 
-; `sub?` is each gate's own here (test/host/mitty.l carries the same three lines) --
-; it searches from i; `at?` is the exact-position twin, which is what counting wants
+; `sub?` searches from i; `at?` is the exact-position twin, which is what counting wants
 (: (at? h n i) (((i + #n) <= #h) && n = snip h i (i + #n))
    (sub? h n i) (? ((i + #n) < (#h + 1))
                    (at? h n i ? 1 (sub? h n (i + 1)))

@@ -25,8 +25,6 @@
 
    ; join a list of lines into Makefile text (each line gets a trailing newline).
    (mk l) (two? l ? (<l + ("\n" + mk >l)) "")
-   ; does string s contain the substring sub?
-   (has s sub) ((: (g i) ((i + #sub) > #s ? 0 (sub = snip s i (i + #sub) ? 1 (g (1 + i))))) 0)
 
    (write-file path content) (: q (open path "w") _ (say q content) (close q))
    (sh cmd) (hark ["sh" "-c" cmd])
@@ -61,9 +59,9 @@
                       "\techo \"E1[$(h_o)]\""
                       "\techo \"E2[$(suf)]\""
                       "\techo \"E3[$R/$(ho)]\"")) "all")
-   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/love/love.o out/data.o]"))
-   _ (ok "suffix subst-ref"                 (has ev "E2[./love/love.o ./data.o]"))
-   _ (ok "single-char $R + $(VAR)"          (has ev "E3[./out]"))
+   _ (ok "nested-paren + pattern subst-ref" (has? ev "E1[out/love/love.o out/data.o]"))
+   _ (ok "suffix subst-ref"                 (has? ev "E2[./love/love.o ./data.o]"))
+   _ (ok "single-char $R + $(VAR)"          (has? ev "E3[./out]"))
 
    ; ---------------------------------------------------------------- functions
    fn (run-cook (mk '("files = a.c b.c sub/c.c"
@@ -84,21 +82,21 @@
                        "\techo \"F13[$(if $(empty),yes,no)]\""
                        "\techo \"F14[$(if x,yes,no)]\""
                        "\techo \"F15[$(shell echo SH)]\"")) "all")
-   _ (ok "dir"        (has fn "F1[./ ./ sub/]"))
-   _ (ok "notdir"     (has fn "F2[a.c b.c c.c]"))
-   _ (ok "patsubst"   (has fn "F3[a.o b.o sub/c.o]"))
-   _ (ok "filter-out" (has fn "F4[a.c b.c]"))
-   _ (ok "filter"     (has fn "F5[a.c b.c sub/c.c]"))
-   _ (ok "sort+uniq"  (has fn "F6[a b c]"))
-   _ (ok "subst"      (has fn "F7[ayby]"))
-   _ (ok "strip"      (has fn "F8[a b]"))
-   _ (ok "addprefix"  (has fn "F9[o/x o/y]"))
-   _ (ok "addsuffix"  (has fn "F10[x.o y.o]"))
-   _ (ok "firstword"  (has fn "F11[x]"))
-   _ (ok "words"      (has fn "F12[3]"))
-   _ (ok "if (false)" (has fn "F13[no]"))
-   _ (ok "if (true)"  (has fn "F14[yes]"))
-   _ (ok "shell"      (has fn "F15[SH]"))
+   _ (ok "dir"        (has? fn "F1[./ ./ sub/]"))
+   _ (ok "notdir"     (has? fn "F2[a.c b.c c.c]"))
+   _ (ok "patsubst"   (has? fn "F3[a.o b.o sub/c.o]"))
+   _ (ok "filter-out" (has? fn "F4[a.c b.c]"))
+   _ (ok "filter"     (has? fn "F5[a.c b.c sub/c.c]"))
+   _ (ok "sort+uniq"  (has? fn "F6[a b c]"))
+   _ (ok "subst"      (has? fn "F7[ayby]"))
+   _ (ok "strip"      (has? fn "F8[a b]"))
+   _ (ok "addprefix"  (has? fn "F9[o/x o/y]"))
+   _ (ok "addsuffix"  (has? fn "F10[x.o y.o]"))
+   _ (ok "firstword"  (has? fn "F11[x]"))
+   _ (ok "words"      (has? fn "F12[3]"))
+   _ (ok "if (false)" (has? fn "F13[no]"))
+   _ (ok "if (true)"  (has? fn "F14[yes]"))
+   _ (ok "shell"      (has? fn "F15[SH]"))
 
    ; ------------------------------------------------------------- conditionals
    cnd (run-cook (mk '("x = 1"
@@ -108,12 +106,12 @@
                         "ifndef y" "d = ndef" "endif"
                         "all:"
                         "\techo \"C[$(a) $(b) $(c) $(d)]\"")) "all")
-   _ (ok "ifeq/ifneq/ifdef/ifndef" (has cnd "C[eqyes neqno def ndef]"))
+   _ (ok "ifeq/ifneq/ifdef/ifndef" (has? cnd "C[eqyes neqno def ndef]"))
 
    ; a conditional inside a recipe block selects which recipe lines run.
    rci (run-cook (mk '("on = 1" "all:" "\techo R-a"
                         "ifeq ($(on),1)" "\techo R-b" "endif" "\techo R-c")) "all")
-   _ (ok "recipe-internal ifeq" (has rci "R-b" && has rci "R-c"))
+   _ (ok "recipe-internal ifeq" (has? rci "R-b" && has? rci "R-c"))
 
    ; -------------------------------------------------------------------- include
    ; (make resolves an include relative to the cwd; the fixture lives elsewhere,
@@ -121,11 +119,11 @@
    _ (sh ("mkdir -p " + (dir + "/mk")))
    _ (write-file (dir + "/mk/common.mk") "FROM_INC = included-ok\n")
    inc (run-cook (mk [("include " + (dir + "/mk/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\""]) "all")
-   _ (ok "include" (has inc "I[included-ok]"))
+   _ (ok "include" (has? inc "I[included-ok]"))
    sinc (run-cook (mk [("-include " + (dir + "/mk/nosuch.mk " + dir + "/mk/common.mk"))
                        ("sinclude " + dir + "/mk/nosuch2.mk")
                        "all:" "\techo \"S[$(FROM_INC)]\""]) "all")
-   _ (ok "-include and sinclude pass over a missing file" (has sinc "S[included-ok]"))
+   _ (ok "-include and sinclude pass over a missing file" (has? sinc "S[included-ok]"))
    _ (write-file (dir + "/Makefile") (mk [("include " + dir + "/mk/nosuch.mk") "all:" "\techo x"]))
    hinc (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "include of a missing file fails" !(0 = hinc))
@@ -133,7 +131,7 @@
    ; ----------------------------------------------------- automatic vars + dir
    av (run-cook (mk '("all: foo/bar.o"
                        "foo/bar.o:" "\techo \"A[@=$@ star=$* d=$(dir $@)]\"")) "foo/bar.o")
-   _ (ok "auto-vars + $(dir $@)" (has av "A[@=foo/bar.o star= d=foo/]"))
+   _ (ok "auto-vars + $(dir $@)" (has? av "A[@=foo/bar.o star= d=foo/]"))
 
    ; --------------------------------------------------------- pattern rules
    ; build x.o from x.c via an implicit pattern rule; check the file appears.
@@ -155,7 +153,7 @@
    _ (sh ("echo C > " + (dir + "/p/n.c")))
    ca (run-cook (mk ["%.c: %.l"
                      ("all: " + (dir + "/p/n.c")) "\t@echo \"CA[ok]\""]) "all")
-   _ (ok "an empty pattern recipe cancels, not registers" (has ca "CA[ok]"))
+   _ (ok "an empty pattern recipe cancels, not registers" (has? ca "CA[ok]"))
 
    ; ---------------------------------------------- the builtin implicit rules
    ; make's own database, which a Makefile never states: lua 5.4 writes recipes for
@@ -166,7 +164,7 @@
    _ (sh ("mkdir -p " + dir + "/b; echo SRCB > " + dir + "/b/z.c"))
    bi (run-cook (mk ["CC = echo-cc"
                      ("all: " + (dir + "/b/z.o")) "\t@echo BUILTIN-DONE"]) "all")
-   _ (ok "builtin %.o: %.c fires" (has bi "echo-cc" && has bi "-c -o" && has bi "z.c"))
+   _ (ok "builtin %.o: %.c fires" (has? bi "echo-cc" && has? bi "-c -o" && has? bi "z.c"))
    ; ..and the match-anything builtins (`%: %.c`, `%: %.o`) must stay out: they match
    ; every target there is, and this resolver does not model the conditions GNU only
    ; dares them under. with `x.o` on disk, a link target `x` must still be the
@@ -174,7 +172,7 @@
    _ (sh ("echo O > " + (dir + "/b/lone.o")))
    ma (run-cook (mk [("all: " + (dir + "/b/lone")) ((dir + "/b/lone: ") + (dir + "/b/lone.o"))
                      "\t@echo \"MA[mine]\""]) "all")
-   _ (ok "no match-anything builtin hijacks a link" (has ma "MA[mine]"))
+   _ (ok "no match-anything builtin hijacks a link" (has? ma "MA[mine]"))
 
    ; -------------------------------------------------- old-style suffix rules
    ; `.c.o:` is `%.o: %.c` -- st and every suckless Makefile is written this way, and
@@ -190,21 +188,21 @@
    ; not decoration: it moves make's defaults to c99 and -O1, which is where st's
    ; whole build gets its flags. as defaults, so a file's own CC= still wins.
    px (run-cook (mk '(".POSIX:" "all:" "\t@echo \"PX[$(CC) $(CFLAGS)]\"")) "all")
-   _ (ok ".POSIX moves CC/CFLAGS" (has px "PX[c99 -O1]"))
+   _ (ok ".POSIX moves CC/CFLAGS" (has? px "PX[c99 -O1]"))
    nx (run-cook (mk '("all:" "\t@echo \"NX[$(CC)]\"")) "all")
-   _ (ok "without .POSIX, CC stays cc" (has nx "NX[cc]"))
+   _ (ok "without .POSIX, CC stays cc" (has? nx "NX[cc]"))
 
    ; ------------------------------------------------- $@ of a PHONY target
    ; a phony item is a symbol, and an automatic must read as the NAME either way --
    ; lua's top Makefile is `all: guess` + `cd src && $(MAKE) $@`, and an empty $@
    ; hands the recursive make no target at all.
    pa (run-cook (mk '(".PHONY: guess" "all: guess" "guess:" "\t@echo \"PA[$@]\"")) "all")
-   _ (ok "$@ of a phony target is its name" (has pa "PA[guess]"))
+   _ (ok "$@ of a phony target is its name" (has? pa "PA[guess]"))
 
    ; ------------------------------------------------------------- assignment ops
    ops (run-cook (mk '("a := base" "a += more" "b ?= keep" "b ?= nope"
                         "all:" "\techo \"O[$(a)|$(b)]\"")) "all")
-   _ (ok "+= and ?=" (has ops "O[base more|keep]"))
+   _ (ok "+= and ?=" (has? ops "O[base more|keep]"))
 
    ; ------------------------------------- the environment, the command line, origin
    ; cook seeds its variable table the way make does: the environment first, then
@@ -223,9 +221,9 @@
                         "\techo \"N1[$(COOKT_ENV)]\""
                         "\techo \"N2[$(origin COOKT_ENV) $(origin fv) $(origin COOKT_NO)]\""))
                   '("all"))
-   _ (ok "environment import (and ?= yields to it)" (has env "N1[from-env]"))
+   _ (ok "environment import (and ?= yields to it)" (has? env "N1[from-env]"))
    _ (ok "$(origin): environment / file / undefined"
-         (has env "N2[environment file undefined]"))
+         (has? env "N2[environment file undefined]"))
    _ (setenv "COOKT_ENV" ())
    cli (run-cookv (mk '("cv = filewins"
                         "override ov := forced"
@@ -233,16 +231,16 @@
                         "\techo \"L[$(cv) $(ov) $(origin cv)]\""))
                   '("all" "cv=cli" "ov=cli"))
    _ (ok "a command-line VAR=VAL silences the file assignment"
-         (has cli "L[cli forced command line]"))
+         (has? cli "L[cli forced command line]"))
    xp (run-cook (mk '("export EX := exported"
                       "all:"
                       "\techo \"X[$$EX]\"")) "all")
-   _ (ok "export hands the value to the recipe's environment" (has xp "X[exported]"))
+   _ (ok "export hands the value to the recipe's environment" (has? xp "X[exported]"))
    cal (run-cook (mk '("greet = hi-$(1)-$(2)"
                        "g := $(call greet,a,b)"
                        "all:"
                        "\techo \"G[$(g)]\"")) "all")
-   _ (ok "$(call) binds $1..$n over the body" (has cal "G[hi-a-b]"))
+   _ (ok "$(call) binds $1..$n over the body" (has? cal "G[hi-a-b]"))
    evl (run-cook (mk '("define grp"
                        "$(1)-$(2):"
                        "\t@echo \"E[$(1) $(2) $$(src_$(2))]\""
@@ -253,12 +251,12 @@
                        "v := $(eval w = in-assign)"
                        "all: i1-a i2-b"
                        "\t@echo \"W[$(w)]\"")) "all")
-   _ (ok "$(eval) nested in a foreach lays rules" (has evl "E[i1 a x]" && has evl "E[i2 b yb]"))
-   _ (ok "$(eval) inside an assignment runs" (has evl "W[in-assign]"))
+   _ (ok "$(eval) nested in a foreach lays rules" (has? evl "E[i1 a x]" && has? evl "E[i2 b yb]"))
+   _ (ok "$(eval) inside an assignment runs" (has? evl "W[in-assign]"))
    dsh (run-cook (mk '("src_sys-af = one" "x-y := two" "k = sys-af"
                        "all:"
                        "\t@echo \"N[$(src_sys-af) $(x-y) $(src_$(k))]\"")) "all")
-   _ (ok "a variable name may hold a dash" (has dsh "N[one two one]"))
+   _ (ok "a variable name may hold a dash" (has? dsh "N[one two one]"))
    _ (write-file (dir + "/Makefile") (mk '("all:" "\t@echo $(eval z = 1)")))
    evr (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "$(eval) in a recipe refuses" !(0 = evr))
@@ -266,7 +264,7 @@
    ; ------------------------------------------------- @D/@F, wildcard, abspath
    adf (run-cook (mk '("all: foo/bar.o"
                        "foo/bar.o:" "\techo \"D[$(@D) $(@F)]\"")) "foo/bar.o")
-   _ (ok "$(@D) and $(@F)" (has adf "D[foo bar.o]"))
+   _ (ok "$(@D) and $(@F)" (has? adf "D[foo bar.o]"))
    _ (sh ("mkdir -p " + (D2 "/w; touch " + (D2 "/w/b.c " + (D2 "/w/a.c " + D2 "/w/.h.c")))))
    wc (run-cook (mk [("ws := $(wildcard " + (D2 "/w/*.c" + ")"))
                      ("ex := $(wildcard " + (D2 "/w/a.c" + ")"))
@@ -274,10 +272,10 @@
                      "all:"
                      "\techo \"W[$(notdir $(ws))|$(notdir $(ex))|$(no)]\""]) "all")
    _ (ok "wildcard: sorted glob, no dotfiles, existence word, empty miss"
-         (has wc "W[a.c b.c|a.c|]"))
+         (has? wc "W[a.c b.c|a.c|]"))
    ab (run-cook (mk '("p := $(abspath /x//y/./../z)"
                       "all:" "\techo \"P[$(p)]\"")) "all")
-   _ (ok "abspath cleans // . .." (has ab "P[/x/z]"))
+   _ (ok "abspath cleans // . .." (has? ab "P[/x/z]"))
 
    ; ---------------------------------------------------------------------- emit
    ; --emit transpiles a Makefile to a resolved Cookfile: vars/patterns expanded,
@@ -295,12 +293,12 @@
                       "prog: $(OBJ)"  "\t$(CC) -o $@ $(OBJ)"
                       "%.o: %.c"      "\t$(CC) -c -o $@ $<"
                       "clean:"        "\t-rm -f prog $(OBJ)"]))
-   _ (ok "emit: .PHONY target -> symbol"   (has em "(recipe 'all "))
-   _ (ok "emit: file target -> string"     (has em "(recipe '\"prog\" "))
-   _ (ok "emit: var-resolved step"         (has em ("(\"sh\" \"-c\" \"cc -o prog " + (eo + "\")"))))
-   _ (ok "emit: pattern-resolved step"     (has em ("(\"sh\" \"-c\" \"cc -c -o " + (dir + ("/e/a.o " + (dir + "/e/a.c\")"))))))
-   _ (ok "emit: default ticket emitted first" (has em "(recipe 'all "))
-   _ (ok "emit: trailing cook call"        (has em "(cook-all 0)"))
+   _ (ok "emit: .PHONY target -> symbol"   (has? em "(recipe 'all "))
+   _ (ok "emit: file target -> string"     (has? em "(recipe '\"prog\" "))
+   _ (ok "emit: var-resolved step"         (has? em ("(\"sh\" \"-c\" \"cc -o prog " + (eo + "\")"))))
+   _ (ok "emit: pattern-resolved step"     (has? em ("(\"sh\" \"-c\" \"cc -c -o " + (dir + ("/e/a.o " + (dir + "/e/a.c\")"))))))
+   _ (ok "emit: default ticket emitted first" (has? em "(recipe 'all "))
+   _ (ok "emit: trailing cook call"        (has? em "(cook-all 0)"))
 
    ; round-trip: cook the emitted Cookfile and confirm it runs the recipe. The
    ; rule just writes a file (no compiler / source lookup), so the test is hermetic.
@@ -322,10 +320,10 @@
                "second:" "\techo SECOND"))
    _ (write-file (dir + "/Makefile") dgsrc)
    dgr (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile")]) (two? r ? >r ""))
-   _ (ok ".DEFAULT_GOAL is the default ticket" (has dgr "SECOND"))
+   _ (ok ".DEFAULT_GOAL is the default ticket" (has? dgr "SECOND"))
    _ (write-file (dir + "/e/Cookfile") (run-emit dgsrc))
    dgc (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/e/Cookfile")]) (two? r ? >r ""))
-   _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has dgc "SECOND"))
+   _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has? dgc "SECOND"))
 
    ; ------------------------------------------------- side-effect writes are seen
    ; a step may write anything, not only its own target (make's two-outputs-one-recipe
@@ -345,7 +343,7 @@
    _ (write-file (D "/Makefile") sidesrc)
    _ (: r (hark [love "-l" "src/apps/cook.l" "-f" (D "/Makefile") "all"]) 0)
    side (: r (sh ("cat " + D "/second")) (two? r ? >r ""))
-   _ (ok "a recipe's side-effect write invalidates the date cache" (has side "NEW"))
+   _ (ok "a recipe's side-effect write invalidates the date cache" (has? side "NEW"))
 
    ; (the cache's OTHER rule -- it records only what stat actually reported, never a miss
    ;  -- has no fixture here, and deliberately: from a Makefile there is no way to make
@@ -362,12 +360,12 @@
                        "all:"
                        "\tx=hello"
                        "\techo \"O1[$$x world]\"")) "all")
-   _ (ok ".ONESHELL: one shell for the whole recipe" (has one "O1[hello world]"))
+   _ (ok ".ONESHELL: one shell for the whole recipe" (has? one "O1[hello world]"))
    ; ..and without it the default still holds: separate shells, so x is gone
    sep (run-cook (mk '("all:"
                        "\tx=hello"
                        "\techo \"O2[$$x world]\"")) "all")
-   _ (ok "no .ONESHELL: a line still gets its own shell" (has sep "O2[ world]"))
+   _ (ok "no .ONESHELL: a line still gets its own shell" (has? sep "O2[ world]"))
    ; with one shell, a plain -c checks only the last line's status, so a failing
    ; middle line would pass silently. -e is what keeps a recipe honest: the third
    ; line must never run. The recipe is silenced (@ on the first line governs the
@@ -380,7 +378,7 @@
                       "\tfalse"
                       "\techo O3-three")) "all")
    _ (ok ".SHELLFLAGS -ec: a failing middle line stops the recipe"
-         (has ec "O3-one" && !(has ec "O3-three")))
+         (has? ec "O3-one" && !(has? ec "O3-three")))
 
    ; ------------------------------------------------------- multi-target rules
    ; `a b: src` is one rule registered under both targets (the Makefile's
@@ -395,7 +393,7 @@
                     ("\techo M4 > " + D "/m2.out")])
                (D "/m2.out"))
    m2 (: r (sh ("cat " + D "/m2.out")) (two? r ? >r ""))
-   _ (ok "a multi-target rule registers every target" (has m2 "M4"))
+   _ (ok "a multi-target rule registers every target" (has? m2 "M4"))
 
    ; --------------------------------------------------- modifiers via expansion
    ; make reads the @/-/+ prefixes after expansion (the `Q = @` verbose-build
@@ -405,7 +403,7 @@
                       "all:"
                       "\t$(Q)echo M5[quiet]")) "all")
    _ (ok "an expanded @ is a modifier, not a word"
-         (has qm "M5[quiet]" && !(has qm "@echo")))
+         (has? qm "M5[quiet]" && !(has? qm "@echo")))
 
    ; ------------------------------------------------------------ SHELL + wildcard
    ; SHELL picks the shell recipe lines and $(shell) ride -- observable through
@@ -422,12 +420,12 @@
                       "\t@echo \"L1[$$0]\""
                       "\t@echo \"L2[$(shell echo $$0)]\""])
                  "all")
-   _ (ok "SHELL: recipe lines ride lush"   (has shl "L1[lush]"))
-   _ (ok "SHELL: $(shell) rides lush too"  (has shl "L2[lush]"))
+   _ (ok "SHELL: recipe lines ride lush"   (has? shl "L1[lush]"))
+   _ (ok "SHELL: $(shell) rides lush too"  (has? shl "L2[lush]"))
    wld (run-cook (mk '("all:"
                        "\t@echo \"WC[$(wildcard src/apps/lus*.l src/apps/zz-nope*.q)]\""))
                  "all")
-   _ (ok "wildcard: pure-love glob, nullglob" (has wld "WC[src/apps/lush.l]"))
+   _ (ok "wildcard: pure-love glob, nullglob" (has? wld "WC[src/apps/lush.l]"))
    ; a mode letter in .SHELLFLAGS is lush's mode for the line: a tr on PATH answers
    ; "theirs", so -a (ours ahead of PATH) never meets it; LUSHFLAGS=-g hands the line to
    ; PATH's sh and PATH's tr, and so does no letter with LUSHFLAGS unset, the default
@@ -435,22 +433,22 @@
    _ (sh ("mkdir -p " + dir + "/tb; printf '#!/bin/sh\\necho theirs\\n' > " + dir + "/tb/tr; chmod 755 " + dir + "/tb/tr"))
    tenv [("PATH=" + dir + "/tb:" + getenv "PATH") "LUSHFLAGS="]
    am (run-cook-in tenv (mk [".SHELLFLAGS := -ac" "all:" "\t@tr a b </dev/null; echo M[a]"]) "all")
-   _ (ok ".SHELLFLAGS -ac: autonomous, our tr" (has am "M[a]" && !(has am "theirs")))
+   _ (ok ".SHELLFLAGS -ac: autonomous, our tr" (has? am "M[a]" && !(has? am "theirs")))
    gm (run-cook-in [("PATH=" + dir + "/tb:" + getenv "PATH") "LUSHFLAGS=-g"]
                    (mk ["all:" "\t@tr a b </dev/null; echo M[g]"]) "all")
-   _ (ok "LUSHFLAGS=-g: gregarious, PATH's tr" (has gm "theirs" && has gm "M[g]"))
+   _ (ok "LUSHFLAGS=-g: gregarious, PATH's tr" (has? gm "theirs" && has? gm "M[g]"))
    nm (run-cook-in tenv (mk ["all:" "\t@tr a b </dev/null; echo M[n]"]) "all")
-   _ (ok "no mode letter: gregarious, PATH's tr" (has nm "theirs" && has nm "M[n]"))
+   _ (ok "no mode letter: gregarious, PATH's tr" (has? nm "theirs" && has? nm "M[n]"))
    ; $(shell) takes .SHELLFLAGS as a recipe line does: -e stops at the false
    se (run-cook (mk [".SHELLFLAGS := -ec" "X := $(shell false; echo no)" "all:" "\t@echo \"SE[$(X)]\""]) "all")
-   _ (ok "$(shell) rides .SHELLFLAGS" (has se "SE[]"))
+   _ (ok "$(shell) rides .SHELLFLAGS" (has? se "SE[]"))
    ; ..and runs in this image where a recipe line would: under -a with PATH emptied it
    ; still has uname, and -e still stops at the false
    ea (run-cook-in ["PATH=/nonexistent" "LUSHFLAGS=-a"]
                    (mk ["U := $(shell uname -s)" ".SHELLFLAGS := -ec" "X := $(shell false; echo no)"
                         "all:" "\t@echo \"SA[$(U)]\"" "\t@echo \"SB[$(X)]\""]) "all")
-   _ (ok "$(shell) in this image: no PATH wanted" (has ea "SA[" && !(has ea "SA[]")))
-   _ (ok "$(shell) in this image rides .SHELLFLAGS" (has ea "SB[]"))
+   _ (ok "$(shell) in this image: no PATH wanted" (has? ea "SA[" && !(has? ea "SA[]")))
+   _ (ok "$(shell) in this image rides .SHELLFLAGS" (has? ea "SB[]"))
    ; a line run in this image forks warm children -- `sh FILE`, a ( ), a pipeline stage --
    ; and each one's `exit` ends that child with its status, never the line above it
    _ (write-file (dir + "/x0.sh") "true\nexit\n")
@@ -465,14 +463,14 @@
          (hark ["env" "PATH=/nonexistent" "LUSHFLAGS=-a" love "-l" "src/apps/cook.l"
                 "-f" (dir + "/Makefile") "all"]))
    xo (two? xe ? >xe "")
-   _ (ok "sh FILE's exit ends the script: status 0" (has xo "X0[0]"))
-   _ (ok "exit 3 in a script's function: status 3" (has xo "X3[3]" && !(has xo "no")))
-   _ (ok "exit in a ( ): the subshell's status" (has xo "XS[4]"))
-   _ (ok "exit in a pipeline stage: that stage's" (has xo "XP[0]"))
-   _ (ok "a recipe line of sh FILE; exit: rc 0" (has xo "XE[end]" && two? xe && 0 = <xe))
+   _ (ok "sh FILE's exit ends the script: status 0" (has? xo "X0[0]"))
+   _ (ok "exit 3 in a script's function: status 3" (has? xo "X3[3]" && !(has? xo "no")))
+   _ (ok "exit in a ( ): the subshell's status" (has? xo "XS[4]"))
+   _ (ok "exit in a pipeline stage: that stage's" (has? xo "XP[0]"))
+   _ (ok "a recipe line of sh FILE; exit: rc 0" (has? xo "XE[end]" && two? xe && 0 = <xe))
    ; the build file's fd is closed before any recipe runs
    fdl (run-cook (mk ["all:" "\t@ls -l /proc/self/fd/ 2>/dev/null"]) "all")
-   _ (ok "the Makefile's fd is not a recipe's" !(has fdl (dir + "/Makefile")))
+   _ (ok "the Makefile's fd is not a recipe's" !(has? fdl (dir + "/Makefile")))
 
    ; ------------------------------------------------------------------ -j jobs
    ; the job pool: under -j N a stale recipe runs in a forked child. the claim is
@@ -511,7 +509,7 @@
                (D "/j/two: " + D "/j/one") ("\t@echo two >> " + (D "/j/log" + ("; touch " + D "/j/two")))])
    _ (run-cookj jchain "all" "4")
    jlog (: r (sh ("cat " + D "/j/log")) (two? r ? >r ""))
-   _ (ok "-j4 keeps an edge in order" (has jlog "one\ntwo"))
+   _ (ok "-j4 keeps an edge in order" (has? jlog "one\ntwo"))
 
    ; a red recipe under -j is still red, and its siblings are let finish rather than
    ; killed -- a half-written file left behind would read as up to date next run.
@@ -534,49 +532,49 @@
    ; a name is make's: hyphens, and a computed part expanded before it is assigned
    kn (run-cook (mk '("X := y" "obj-y := a.o" "obj-$(X) += b.o" "obj- += c.o"
                      "all:" "\t@echo \"N[$(obj-y)]\"")) "all")
-   _ (ok "obj-$(X) names obj-y" (has kn "N[a.o b.o]"))
+   _ (ok "obj-$(X) names obj-y" (has? kn "N[a.o b.o]"))
    ; += onto a simple variable expands its value now (u is unset at that line)
    ks (run-cook (mk '("s := 1" "t = $(u)" "s += [$(t)]" "u = late"
                      "all:" "\t@echo \"S[$(s)]\"")) "all")
-   _ (ok "+= onto := expands now" (has ks "S[1 []]"))
+   _ (ok "+= onto := expands now" (has? ks "S[1 []]"))
    ; -include of a missing file is no error, include of a present one still splices
    ko (run-cook (mk [("-include " + dir + "/no-such.mk") "sinclude /no/such/either.mk"
                      "all:" "\t@echo \"O[ok]\""]) "all")
-   _ (ok "-include of a missing file" (has ko "O[ok]"))
+   _ (ok "-include of a missing file" (has? ko "O[ok]"))
    ; $(file) bare is a variable (a foreach's), and $(eval) inside the foreach assigns
    ke (run-cook (mk '("$(foreach file,a b,$(eval V_$(file) := x$(file)))"
                      "all:" "\t@echo \"E[$(V_a)$(V_b)]\"")) "all")
-   _ (ok "nested $(eval) under foreach's $(file)" (has ke "E[xaxb]"))
+   _ (ok "nested $(eval) under foreach's $(file)" (has? ke "E[xaxb]"))
    ; a name's $(..) may hold spaces; a tab-led line with no rule open is an ordinary line
    kp (run-cook (mk ["M := m" "obj-$(subst m,y,$(M)) += host/" "ifdef M" "\tobj-y += tab.o" "endif"
                      "all:" "\t@echo \"P[$(obj-y)]\""]) "all")
-   _ (ok "obj-$(subst ..) names obj-y; a tab line outside a rule" (has kp "P[host/ tab.o]"))
+   _ (ok "obj-$(subst ..) names obj-y; a tab line outside a rule" (has? kp "P[host/ tab.o]"))
    ; a blank line inside a recipe leaves the rule open
    kb (run-cook (mk '("all:" "\t@echo \"B[one]\"" "" "\t@echo \"B[two]\"")) "all")
-   _ (ok "a blank line inside a recipe" (has kb "B[two]"))
+   _ (ok "a blank line inside a recipe" (has? kb "B[two]"))
    ; else ifeq chains: the first true arm, and a taken arm closes the rest
    kc (run-cook (mk ["A := 2" "ifeq ($(A),1)" "R := one" "else ifeq ($(A),2)" "R := two"
                      "else" "R := other" "endif"
                      "ifeq ($(A),2)" "T := first" "else ifeq ($(A),2)" "T := second" "endif"
                      "ifdef NOPE" "Q := a" "else ifndef NOPE" "Q := b" "endif"
                      "$(info C[$(R) $(T) $(Q)])" "all: ;@:"]) "all")
-   _ (ok "else ifeq / else ifndef chains" (has kc "C[two first b]"))
+   _ (ok "else ifeq / else ifndef chains" (has? kc "C[two first b]"))
    ; an expanded value keeps its $: a :=, a call's argument, a foreach's word, $(value)
    kd (run-cook (mk ["x := $$y" "w := $(call f,$$p,q)" "v := $(foreach i,$$k,<$(i)>)" "u := $x"
                      "u += $$m" "define f" "$(1)-$(2)" "endef"
                      "$(info D[$(x)] [$(call f,$$p,q)] [$(v)] [$(value x)] [$(u)])" "all: ;@:"]) "all")
-   _ (ok "$$ survives := call foreach value +=" (has kd "D[$y] [$p-q] [<$k>] [$y] [$y $m]"))
+   _ (ok "$$ survives := call foreach value +=" (has? kd "D[$y] [$p-q] [<$k>] [$y] [$y $m]"))
    ; define's value stops before the newline that precedes endef
    kf (run-cook (mk ["define g" "a" "b" "endef" "$(info F[$(g)])" "all: ;@:"]) "all")
-   _ (ok "define drops the newline before endef" (has kf "F[a\nb]"))
+   _ (ok "define drops the newline before endef" (has? kf "F[a\nb]"))
    ; $(intcmp): gt falls back to eq; two args answer the number when equal
    ki (run-cook (mk ["$(info I[$(intcmp 1,2,lt,eq,gt) $(intcmp 3,2,lt,eq) $(intcmp 3,2,lt,eq,gt) $(intcmp 2,2)])"
                      "all: ;@:"]) "all")
-   _ (ok "$(intcmp ..)" (has ki "I[lt eq gt 2]"))
+   _ (ok "$(intcmp ..)" (has? ki "I[lt eq gt 2]"))
    ; $(file <f) reads a file less its last newline, as kbuild's read-file does
    _ (write-file (dir + "/rf.txt") "hi there\n")
    kr (run-cook (mk [("R := $(file <" + dir + "/rf.txt)") "$(info R[$(R)])" "all: ;@:"]) "all")
-   _ (ok "$(file <f)" (has kr "R[hi there]"))
+   _ (ok "$(file <f)" (has? kr "R[hi there]"))
    ; a caller of cook-vars may answer $(shell ..) itself
    hv (cite 'cook 'cook-vars)
    ht (pins {} " shell" (c \ "<" + c + ">"))
@@ -584,14 +582,14 @@
    _ (ok "cook-vars: a caller's $(shell) answerer" (ht "X" = "<uname -m>"))
    ; `export A B` exports each, and a recipe sees both
    kx (run-cook (mk ["A := a1" "B = b$(A)" "export A B" "all:" "\t@echo \"X[$$A $$B]\""]) "all")
-   _ (ok "export A B exports each" (has kx "X[a1 ba1]"))
+   _ (ok "export A B exports each" (has? kx "X[a1 ba1]"))
    ; an included file is on MAKEFILE_LIST while it is read
    _ (write-file (dir + "/inc.mk") "ME := $(lastword $(MAKEFILE_LIST))\n")
    km (run-cook (mk [("include " + dir + "/inc.mk") "$(info M[$(notdir $(ME))])" "all: ;@:"]) "all")
-   _ (ok "MAKEFILE_LIST names the file being read" (has km "M[inc.mk]"))
+   _ (ok "MAKEFILE_LIST names the file being read" (has? km "M[inc.mk]"))
    ; a define body's tab-led lines join as a variable's: one space, the whitespace around it gone
    kj (run-cook (mk ["define v" "\tone two  \\" "\t\tthree" "endef" "$(info J[$(v)])" "all: ;@:"]) "all")
-   _ (ok "a define's continuation folds as a variable's" (has kj "J[\tone two three]"))
+   _ (ok "a define's continuation folds as a variable's" (has? kj "J[\tone two three]"))
    ; target-specific assignments come back for a reader that scopes them, newest first
    tt {}
    _ (hv "T := a.o\n$(T) b.o: private X := 1\n%.p: Y += 2\nv: export Z = 3\n" tt)

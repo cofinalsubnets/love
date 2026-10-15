@@ -6,7 +6,7 @@
 ; an ask for input and its answer, a redirect, a refusal, and the pinned certificate held to
 ; -- a new one refused until its line goes. www runs with HOME in out/, so the pins it
 ; writes are the test's own.
-;   cat test/00-init.l test/host/smallweb.l | out/love
+;   cat test/00-init.l test/host/00-host.l test/host/smallweb.l | out/love
 (borrow 'posix)
 (: K (cite 'kore)
    love <cmdline
@@ -14,8 +14,6 @@
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
    home0 (getenv "HOME")
    _ (setenv "HOME" dir)
-   (has? t s) (0 <= fsub t s 0)
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (put p s) (: q (open p "w") _ (say q s) (close q))
    ; www on a pipe, where it pours the page and its references (on a pty it would wait for
    ; keys); its complaints are stderr, so they ride along
@@ -45,7 +43,7 @@
    m (www ("gopher://127.0.0.1:" + gs + "/"))
    a (www ("gopher://127.0.0.1:" + gs + "/0/about"))
    f (www ("gopher://127.0.0.1:" + gs + "/7/find?search=love+kore"))
-   _ (waitfor <srv)
+   _ (h-waitfor <srv)
    _ (test (has? <m "Welcome to the test hole") (has? <m "  ascii   art")
            (has? <m "(TXT) [1]About this hole") (has? <m "(DIR) [2]A deeper menu")
            (has? <m "(?) [3]Search here") (has? <m "(HTML) [4]A web page") (has? <m "oops, an error line")
@@ -100,7 +98,7 @@ for _ in range(int(sys.argv[3])):
            x (www (base + "/in?input=x+y"))
            r (www (base + "/go"))
            e (www (base + "/gone"))
-           _ (still <s1 15) _ (waitfor <s1)
+           _ (still <s1 15) _ (h-waitfor <s1)
            pins (: q (open (dir + "/.love/gemini_hosts") "r") (? (hot? q) (: s (slurp q) _ (close q) s) ""))
            ; the same host with another certificate: refused, and taken once its line is gone
            s2 (serve "two" 2)
@@ -108,7 +106,7 @@ for _ in range(int(sys.argv[3])):
            c (www (base + "/doc"))
            _ (hark ["rm" "-f" (dir + "/.love/gemini_hosts")])
            c2 (www (base + "/doc"))
-           _ (still <s2 15) _ (waitfor <s2)
+           _ (still <s2 15) _ (h-waitfor <s2)
            (test (has? <g "Title") (has? <g "Sub") (has? <g "one") (has? <g "two") (has? <g "quoted")
                  (has? <g "  pre  formatted") (has? <g "[1]A doc") (has? <g (base + "/doc"))
                  (has? <g "gemini://elsewhere.example/") (has? <g "plain line") (g 1 = 0)

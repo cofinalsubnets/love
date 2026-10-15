@@ -1,15 +1,12 @@
 ; test/host/apartment.l -- the glass cube on the plain, headless: the lay, the names, the sign,
 ; glass that holds, the talk through the pane to a leaf, the ending (the pane open, the grass gone
 ; to sand, the plain reachable), and the song into a jug. not in the corpus: a crew module.
-; run: cat test/00-init.l test/host/apartment.l | out/love
+; run: cat test/00-init.l test/host/00-host.l test/host/apartment.l | out/love
 
 (borrow 'apartment)   ; the artifact's module, warm from the tree
 (borrow 'rove)        ; dat, open?, the words
 
-(: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
-   (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
-   (rows s) (1 + count s "\r\n")
-   (range a b) (map (+ a) ^(b - a))
+(: (range a b) (map (+ a) ^(b - a))
    ; the cells you can walk to from where you stand, eight ways at a step
    (reach g) (: d (g 'd) w (d 'w) h (d 'h) seen {}
                 (nbs i) (: x (i % w) y (i // w)
@@ -46,7 +43,7 @@
    _ (apartment-turn g 32)
    _ (each ^30 (i \ apartment-turn g '(0 -1)))                   ; thirty turns at the wall
    now (map (m \ [(m 'x) (m 'y)]) (g 'ms))
- (test (rows f = h + 2) (f = f2)                                ; the note row, the plain, the bar
+ (test (h-rows f = h + 2) (f = f2)                                ; the note row, the plain, the bar
        (all (x \ 0 <= river-at x) ^w)                            ; the river, edge to edge
        (hx < east < w - 1)
        (all (x \ |(river-at x - river-at (x + 1)) <= 1) ^(w - 1))   ; ..a row a column, never a jump
@@ -122,7 +119,7 @@
          (all (m \ m 'bones && m 'gl = bones-glyph) (g 'ms))        ; the others are bones
          (bones = map (m \ [(m 'x) (m 'y)]) (g 'ms))               ; ..where they stood
          (pins p 'x (bp 0) 'y (bp 1), apartment-turn g (bp 2), p 'x = <pn && p 'y = <>pn)   ; out onto the pane
-         (rows (apartment-frame g) = h + 2)
+         (h-rows (apartment-frame g) = h + 2)
          ; the river is dry to the west edge, and walked: a step onto the stone reads it,
          ; and a step west off the map along the bed is the way out
          (all (i \ 4 != peep (d 't) i 0) ^(w * h))
@@ -184,8 +181,8 @@
 (: g (apartment-new 80 22 (wheel 5)) d (g 'd) p (g 'p)
    _ (chat g 'start)
    ls >(g 'sign)
-   (row-of t) (: (go i) (find (ls i) t 0 ? i (go (i + 1))) (go 0))
-   (tap-at i) (: (go y) (y > 40 ? -1 (i = sign-line <(g 'sign) ls 1 (peep d 'rows (d 'h)) (peep d 'cols (d 'w)) y ? y (go (y + 1)))) (go 0))
+   (row-of t) (: (go i) (has? (ls i) t ? i (go (i + 1))) (go 0))
+   (tap-at i) (: (go y) (y > 40 ? -1 (i = sign-line <(g 'sign) ls 1 (peep d 'h-rows (d 'h)) (peep d 'cols (d 'w)) y ? y (go (y + 1)))) (go 0))
    k2 (tap-key g [40 (tap-at (row-of "Where is this place?"))])
    k0 (tap-key g [0 0])
    _ (apartment-turn g k2)

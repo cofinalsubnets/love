@@ -25,9 +25,6 @@
        txt (slurp m)
        st (waitfor <r)
        [txt <st])
-   (has? t s) (: n #t k #s
-                 (go i) (? (n - k < i) () (s = snip t i (i + k)) 1 (go (i + 1)))
-                 (go 0))
 
    ; --- q leaves at once: the first screenful, the status line, and the screen back
    r1 (run "" [f])

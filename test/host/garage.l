@@ -1,14 +1,12 @@
 ; test/host/garage.l -- the parking garage, headless: the lay (pilasters, bays, wrecks never on the
 ; bed, the bed through east and west walls), the rats, the walls holding, the way out west, and
 ; the song into a jug. not in the corpus: it loads a crew module.
-; run: cat test/00-init.l test/host/garage.l | out/love
+; run: cat test/00-init.l test/host/00-host.l test/host/garage.l | out/love
 
 (borrow 'garage)   ; the artifact's module, warm from the tree
 (borrow 'rove)     ; dat, open?
 
-(: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
-   (rows s) (1 + count s "\r\n")
-   (range a b) (map (+ a) ^(b - a))
+(: (range a b) (map (+ a) ^(b - a))
    ; the cells of the bed you can walk to from where you stand, eight ways at a step
    (bed-reach g) (: d (g 'd) w (d 'w) h (d 'h) seen {}
                     (nbs i) (: x (i % w) y (i // w)
@@ -26,7 +24,7 @@
    cars (d 'cars)
    f (garage-frame g) f2 (garage-frame g)
    reach (bed-reach g)
- (test (rows f = h + 2) (f = f2)
+ (test (h-rows f = h + 2) (f = f2)
        (all (x \ 0 = t x 0 && 0 = t x (h - 1)) ^w)                    ; concrete along the top and the bottom
        (all (y \ elem (t 0 y) '(0 5) && elem (t (w - 1) y) '(0 5)) ^h)   ; ..and down the sides, but for the bed
        (any (y \ 5 = t 0 y) ^h) (any (y \ 5 = t (w - 1) y) ^h)         ; which breaks through both
@@ -71,7 +69,7 @@
 ; --- a garage too small for a bay is laid without one, and without a car, and stands ---
 (: g (garage-new 24 10 (wheel 5)) d (g 'd) w 24 h 10
    (t x y) (dat d x y)
- (test (rows (garage-frame g) = h + 2) !(d 'cars)
+ (test (h-rows (garage-frame g) = h + 2) !(d 'cars)
        (all (i \ !(elem (peep (d 't) i 0) '(2 4 6))) ^(w * h))
        (any (y \ 5 = t 0 y) ^h) (any (y \ 5 = t (w - 1) y) ^h)
        (5 = t (g 'p 'x) (g 'p 'y))))

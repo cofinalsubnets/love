@@ -1,14 +1,12 @@
 ; test/host/court.l -- the courtyard, headless: the frame in both palettes, the sun by
 ; the hour, the low sun on the top of the wall it faces, walking, looking, and the clock.
-; not in the corpus: a crew module. run: cat test/00-init.l test/host/court.l | out/love
+; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/court.l | out/love
 
 (borrow 'court)   ; the artifact's module, warm from the tree
 (borrow 'vec)
 (borrow 'mesh)    ; a frame's colours as trays
 
-(: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
-   (rows s) (1 + count s "\r\n")
-   day0 (1.0 * 1790812800)                          ; 2026-10-01, midnight on the wall clock
+(: day0 (1.0 * 1790812800)                          ; 2026-10-01, midnight on the wall clock
    (at hr) (court-new 80 48 [(day0 + hr * 3600.0) 3600])
    ; ..and on another day of 2026, at noon
    (on m d) (court-new 80 48 [(86400.0 * (cite 'cal 'epoch-days) 2026 m d + 12.0 * 3600.0) 3600])
@@ -20,7 +18,7 @@
 (: st (at 12.0) f (court-frame st) f2 (court-frame st)
    deep (court-frame (pin (at 12.0) 'deep 1))
    _ (pin st 't 100) quiet (court-frame st)
- (test (rows f = 24) (f = f2) (rows deep = 24) (f != deep)
+ (test (h-rows f = 24) (f = f2) (h-rows deep = 24) (f != deep)
        (has? f "38;5;") (has? deep "38;2;")
        (has? f (court-clock st)) !(has? quiet (court-clock st))))
 
@@ -184,7 +182,7 @@
    f (court-frame st)
  (test (two? ys) (two? fl) (all (q \ q 1 < 0.01) fl)
        (all (q \ mag (q 0) < yard-a && mag (q 2) < yard-b) fl)
-       (5.0 < foldl (a \ b \ a < b ? b a) 0.0 ys) (foldl (a \ b \ a < b ? a b) 99.0 ys < 1.0) (rows f = 24)))
+       (5.0 < foldl (a \ b \ a < b ? b a) 0.0 ys) (foldl (a \ b \ a < b ? a b) 99.0 ys < 1.0) (h-rows f = 24)))
 
 ; --- the seasons: bare in january with last fall's leaves thick on the ground, leafing out
 ; --- in may, green and full in july with little underfoot, gold by late october and

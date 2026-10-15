@@ -1,15 +1,13 @@
 ; test/host/shaft.l -- the elevator shaft, headless: the frame and lights, the gaps, walking,
 ; jumps, falls, ladders, the doors, and the song into a jug.
-; not in the corpus: a crew module. run: cat test/00-init.l test/host/shaft.l | out/love
+; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/shaft.l | out/love
 
 (borrow 'shaft)   ; the artifact's module, warm from the tree
 (borrow 'view)     ; the keys' actions
 (: shaft-kb (view-bind view-binds shaft-binds))   ; a key's code -> its action
 
-(: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
-   (rows s) (1 + count s "\r\n")
    ; so many frames, a key each or none
-   (tick st k) ((charm? k ? (shaft-step st (shaft-kb k))), shaft-move st, pin st 't (st 't + 1))
+(: (tick st k) ((charm? k ? (shaft-step st (shaft-kb k))), shaft-move st, pin st 't (st 't + 1))
    (run st n) (0 < n ? (tick st (), run st (n - 1)) st)
    (walk st k n) (0 < n ? (tick st k, walk st k (n - 1)) st)
    ; ..until the player stands on something, or too long
@@ -29,7 +27,7 @@
    wide (shaft-new 120 60 (wheel 5))
    _ (on st shaft-r 0.0, pins st 'th 1.5707963 't half-on) lit (shaft-frame st)   ; facing the wall at x = r
    _ (pin st 't half-off) dark (shaft-frame st)
- (test (rows f = 24) (f = f2) (rows (shaft-frame wide) = 30)
+ (test (h-rows f = 24) (f = f2) (h-rows (shaft-frame wide) = 30)
        (blink half-on 0 = 1.0) (blink half-off 0 = 0.0) (all (t \ 0.0 <= blink t 0 <= 1.0) ^300)
        (lit != dark)
        ; the floors drift apart: a tick where the ground floor is full on and the top is not
