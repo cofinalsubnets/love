@@ -53,22 +53,23 @@ clean "x509 an unknown option" 1 x509 -bogus
 
 # --- verify: every kind of failure the fixtures carry, as openssl numbers it ---
 cat $tc/rootr.pem $tc/interr.pem > "$d/rr.pem"
+cat $tc/roote.pem $tc/intere.pem > "$d/re.pem"                 # the rule-breaking ones hang off the ec chain
 cat $tc/inter0.pem $tc/inter1.pem > "$d/i01.pem"
 is "verify ok" "$(k verify -CAfile "$d/rr.pem" $tc/leafr.pem)" "$tc/leafr.pem: OK"
 is "verify -untrusted" "$(k verify -CAfile $tc/rootr.pem -untrusted $tc/interr.pem $tc/leafr.pem)" "$tc/leafr.pem: OK"
 is "verify SSL_CERT_FILE" "$(SSL_CERT_FILE=$d/rr.pem korerun openssl verify $tc/leaf512.pem)" "$tc/leaf512.pem: OK"
-is "verify, no purpose asked" "$(k verify -CAfile "$d/rr.pem" $tc/client.pem)" "$tc/client.pem: OK"
+is "verify, no purpose asked" "$(k verify -CAfile "$d/re.pem" $tc/client.pem)" "$tc/client.pem: OK"
 vfail() { n=$1; want=$2; shift 2
           k verify "$@" > "$o" 2> "$d/err"; r=$?
           [ $r -eq 2 ] || fail "kore openssl verify $n (exit $r)"
           grep -q "^$want\$" "$d/err" || fail "kore openssl verify $n: $(grep '^error [0-9]' "$d/err")"; }
-vfail expired "error 10 at 0 depth lookup: certificate has expired" -CAfile "$d/rr.pem" $tc/expired.pem
-vfail notyet "error 9 at 0 depth lookup: certificate is not yet valid or the system clock is incorrect" -CAfile "$d/rr.pem" $tc/notyet.pem
-vfail "no issuer" "error 20 at 0 depth lookup: unable to get local issuer certificate" -CAfile "$d/rr.pem" $tc/undernoca.pem
-vfail "not a ca" "error 24 at 1 depth lookup: invalid CA certificate" -CAfile $tc/rootr.pem -untrusted $tc/noca.pem $tc/undernoca.pem
-vfail "no keyCertSign" "error 32 at 1 depth lookup: key usage does not include certificate signing" -CAfile $tc/rootr.pem -untrusted $tc/nosign.pem $tc/undernosign.pem
-vfail pathlen "error 25 at 2 depth lookup: path length constraint exceeded" -CAfile $tc/rootr.pem -untrusted "$d/i01.pem" $tc/deep.pem
-vfail critical "error 34 at 0 depth lookup: unhandled critical extension" -CAfile "$d/rr.pem" $tc/crit.pem
+vfail expired "error 10 at 0 depth lookup: certificate has expired" -CAfile "$d/re.pem" $tc/expired.pem
+vfail notyet "error 9 at 0 depth lookup: certificate is not yet valid or the system clock is incorrect" -CAfile "$d/re.pem" $tc/notyet.pem
+vfail "no issuer" "error 20 at 0 depth lookup: unable to get local issuer certificate" -CAfile "$d/re.pem" $tc/undernoca.pem
+vfail "not a ca" "error 24 at 1 depth lookup: invalid CA certificate" -CAfile $tc/roote.pem -untrusted $tc/noca.pem $tc/undernoca.pem
+vfail "no keyCertSign" "error 32 at 1 depth lookup: key usage does not include certificate signing" -CAfile $tc/roote.pem -untrusted $tc/nosign.pem $tc/undernosign.pem
+vfail pathlen "error 25 at 2 depth lookup: path length constraint exceeded" -CAfile $tc/roote.pem -untrusted "$d/i01.pem" $tc/deep.pem
+vfail critical "error 34 at 0 depth lookup: unhandled critical extension" -CAfile "$d/re.pem" $tc/crit.pem
 vfail "self-signed" "error 18 at 0 depth lookup: self-signed certificate" -CAfile $tc/interr.pem $tc/rootr.pem
 grep -q "^error $tc/rootr.pem: verification failed\$" "$d/err" || fail "kore openssl verify: the file's failure line"
 # a signature with its last byte changed
@@ -193,8 +194,8 @@ if command -v openssl > /dev/null 2>&1 && [ "$(openssl x509 -in $tc/leafr.pem -n
   for a in -md5 -sha1 -sha256 -sha512; do both "openssl dgst $a" openssl dgst $a "$d/h" "$d/b"; done
   both "openssl base64" openssl base64 -in "$d/b"
   for c in expired notyet crit undernoca; do
-    openssl verify -CAfile "$d/rr.pem" $tc/$c.pem > "$g" 2>&1; rg=$?
-    k verify -CAfile "$d/rr.pem" $tc/$c.pem > "$o" 2>&1; ro=$?
+    openssl verify -CAfile "$d/re.pem" $tc/$c.pem > "$g" 2>&1; rg=$?
+    k verify -CAfile "$d/re.pem" $tc/$c.pem > "$o" 2>&1; ro=$?
     same "openssl verify $c"; [ $rg -eq $ro ] || fail "kore openssl verify $c exit ($ro vs $rg)"
   done
   # what kore made, read and verified by the host's openssl, and its text the same
