@@ -755,21 +755,36 @@
    ; shielded by a \ -- a call comes after the pin), and, for a value name, a read from anywhere
    ; the earlier bindings reach through the let's own names -- capture, not evaluation order.
    (boxset prs es) (: nm (map cap prs)
-     (reads m) >(assoc m es)
-     (anyname m) (map cap (reads m))                           ; read anywhere
-     (barename m) (map cap (filter (nil? * cup) (reads m)))   ; read not under a \
-     (grow s) (: s2 (foldl (a \ m \ a + filter (k \ !(elem k a)) (anyname m)) s s)
-                  (#s2 = #s ? s (grow s2)))
+     ; the first of each, as assoc and lidx find them: a name's position and def, a def's reads
+     (firsts l i t) (atom? l ? t (firsts >l (i + 1) (peep t <l -1 < 0 ? (pin t <l i) t)))
+     (first1 ps t) (atom? ps ? t (first1 >ps (two? (peep t <<ps ()) ? t (pin t <<ps (1 . ><ps)))))
+     at (firsts nm 0 (tablet 0))
+     df (first1 prs (tablet 0))
+     rd (first1 es (tablet 0))
+     (reads m) >(peep rd m ())
+     (anyname m) (map cap (reads m))
+     (lam? v) (lambp >(peep df v ()))
+     ; the earliest binding reading each name: any read, and a read under no lambda
+     (mark t x i) (peep t x -1 < 0 ? (pin t x i) t)
+     (seen l i ma mb) (atom? l ? [ma mb]
+                        (: rs (reads <l)
+                           (seen >l (i + 1) (foldl (\ t r (mark t <r i)) ma rs)
+                                            (foldl (\ t r (!>r ? (mark t <r i) t)) mb rs))))
+     mm (seen nm 0 (tablet 0) (tablet 0))
      ; near: a read from a binding at or before v. a lambda name takes only the bare ones --
      ; a call comes after the pin -- a value name every one.
-     (near v) (: d (lambp >(assoc v prs))
-                 (any (m \ elem v (d ? (barename m) (anyname m)))
-                      (take (1 + lidx v nm) nm)))
+     (near v) (: k (peep at v 0) (0 <= peep (mm (lam? v ? 1 0)) v -1 <= k))
      ; reach: v is read from anywhere the bindings before it get to through the let's own
      ; names -- capture, not evaluation order. an earlier closure inherits a later sibling's
-     ; captures, so it wants v's slot at construction, before that slot exists.
-     (reach v) (elem v (grow (catmap anyname (take (lidx v nm) nm))))
-     (filter (v \ (? (near v) 1 (lambp >(assoc v prs)) 0 (reach v))) nm))
+     ; captures, so it wants v's slot at construction, before that slot exists. the names the
+     ; bindings before a position reach only grow, so one walk keeps them, each added once
+     (add s x) (peep s x 0 ? s (foldl add (pin s x 1) (anyname x)))
+     (walk l i s r) (atom? l ? r
+                       (: r2 (peep at <l -1 = i ? (pin r <l (peep s <l 0)) r)
+                          (walk >l (i + 1) (foldl add s (anyname <l)) r2)))
+     rch (walk nm 0 (tablet 0) (tablet 0))
+     (reach v) (peep rch v 0)
+     (filter (v \ (? (near v) 1 (lam? v) 0 (reach v))) nm))
    ; breads: the read graph boxset takes -- per def, every sibling name it reads, tagged with
    ; whether the read sat under a \ (u). \ and : bind, a one-operand \ is quote, macros expand,
    ; except a head this let binds, which is a variable and never a macro. c0's door builds it here;
