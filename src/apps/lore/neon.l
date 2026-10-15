@@ -1,13 +1,8 @@
-; neon -- signs bent from glass tube: a stroke font, and a sign laid on a wall from it as
-; three things a scene draws -- the tubes, lit by nothing but themselves; the halo they
-; throw on the wall close by, glows added over it; and a lamp (mesh.l's) for the light
-; they throw further off.
-;
-;   (neon-strokes s)                    s's strokes, polylines of [x y] in caps 1 tall,
-;                                       and its width: [lines w]
-;   (neon-sign s o al up out h col)     s laid from its bottom left o along al, up up, out of
-;                                       the wall toward out, h metres tall, its light col:
-;                                       {'tube pk 'halo pk 'lamp lamp 'w metres}
+; neon -- signs bent from glass tube: a stroke font, and a sign laid on a wall as three things
+; a scene draws -- the tubes, lit by nothing but themselves; the halo on the wall close by;
+; and a lamp (mesh.l's) for the light further off.
+; (neon-strokes s) answers [lines w], polylines of [x y] in caps 1 tall; (neon-sign s o al up
+; out h col) lays s from its bottom left o, h metres tall: {'tube pk 'halo pk 'lamp lamp 'w metres}
 (module (neon neon-font neon-strokes neon-sign)
 (borrow 'vec)
 (borrow 'mesh)

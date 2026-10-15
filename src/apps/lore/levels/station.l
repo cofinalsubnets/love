@@ -33,10 +33,9 @@
 (level "the station"
   (textures {'wall wall 'floor tiles 'ceiling panels 'door steel})
   (start [0 0 2] 0 0)
-  ; the hall, ten metres across, five high and thirty-two long
+  ; the hall, 38 metres across, five high and 16 long
   (room [-19 0 0] [19 5 16])
-  ; the pilasters, ten a side: each a column 0.6 wide standing 0.3 out from the wall, and
-  ; over it from 3.2 up a buttress whose underside slopes out to 0.9 at the ceiling
+  ; solid blocks standing in from the side walls, mirrored about x 0
   (mirror-x 0
    [(solid (box [-19 0 0] [-11 5 4]))
     (solid (box [-7 0 0] [-3 5 4]))
