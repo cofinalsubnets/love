@@ -332,7 +332,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
   src/apps/x11.l src/apps/manifest/manifest.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/scenery.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/corridor.l src/apps/lore/roost.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/font.l src/apps/mitty/mitty.l src/apps/doom.l src/apps/droid/droid.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
-  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/tuner.l src/apps/mitty/saver.l src/apps/mitty/avatar.l src/apps/mitty/chat.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/qlog.l src/apps/hive.l src/apps/bee.l
+  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/tuner.l src/apps/mitty/saver.l src/apps/mitty/avatar.l src/apps/mitty/chat.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/qlog.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
@@ -607,7 +607,10 @@ mooncc = LOVE_NO_IMAGE= $m mooncc
 mooncc_dep = $(mdep)
 
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
-k_arch_c = $(wildcard $(S)/inle/$a/*.c)
+# seat=droid is the same kernel as a linux process (notes/plan/inle-droid.md): its machine
+# files are src/inle/droid/'s and its objects keep apart under $(ko)/droid-$a
+k_seat = $(if $(filter droid,$(seat)),droid,$a)
+k_arch_c = $(wildcard $(S)/inle/$(k_seat)/*.c)
 k_free_c = $S/inle/kmain.c $S/inle/blk.c $S/inle/hda.c $S/inle/sys.c
 # ..and doom, named here and not in its lane below: a rule's targets and prerequisites
 # are fixed where the rule is read, and every rule that links these is above that lane
@@ -629,7 +632,7 @@ k_c = $(love_c) \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
 k_h = $(love_h) $(S)/love/archive/ustar.h $(S)/love/archive/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
 
-k_odir = $(ko)/$a
+k_odir = $(ko)/$(if $(filter droid,$(seat)),droid-$a,$a)
 k_elf = $(ko)/love-$a.elf
 k_pie = $(k_odir)/love.pie
 # ..and the wasm seat's own end of the lane: one module, no elf to project out of it,
@@ -655,7 +658,7 @@ kcppflags := \
   -I. -Isrc/love -Isrc/inle -Iout/lib -I$(S)/love/quay -I$(R) \
   -I$(S)/apps/moon/include \
   $(kcppflags)
-kcc = $(mooncc) $(kcppflags) -t $a
+kcc = $(mooncc) $(kcppflags) $(if $(filter droid,$(seat)),-D INLE_DROID,) -t $a
 
 kernel: $(k_elf)
 
@@ -689,6 +692,19 @@ $(k_mod): $(k_o) $(mdep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -t $a $(k_o) -o $@
+endif
+
+# THE DROID SEAT: the metal lane's compile under INLE_DROID, linked as a process. no vectors
+# and no boot object: moonlibc's entry runs as for any program, and main hands the machine to
+# droid/arch.c. `make seat=droid a=$a kdroid` lays the executable.
+k_droid = $(ko)/love-droid-$a
+ifeq ($(seat),droid)
+k_mach_o = $(k_tail_o) $(k_odir)/moonlibc.o $(k_doom_o)
+kdroid: $(k_droid)
+$(k_droid): $(k_o) $(mdep)
+	@echo 'MOON	'$@
+	@mkdir -p "$(dir $@)"
+	@$(mooncc) -pie -t $a $(k_o) -o $@ && test -s $@
 endif
 kproject_l = $S/apps/kore/text.l $S/apps/kore/u.l $S/apps/kore/asbook.l \
   $S/love/holo/elf.l $S/love/holo/obj.l $S/love/holo/link.l $S/tools/kproject.l

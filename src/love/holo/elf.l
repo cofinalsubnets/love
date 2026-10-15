@@ -125,7 +125,7 @@
    ;; the LINK -- an .o carries 0x05000000 whatever its abi, gcc's included, and ld derives
    ;; the executable's bit from the inputs' attributes. a seat with an fpu is hard-float
    ;; here, since mooncc has no softfp lane.
-   (arm-eflags target) (elem target '(thumb2 thumb2sp) ? 83887104 83886080)
+   (arm-eflags target) (elem target '(thumb2 thumb2sp arm) ? 83887104 83886080)
 
    ;; elf64-at's twin at 32 bits. `entry` answers the code address, even -- the thumb bit
    ;; is the header's business, not an address you can compare or disassemble at.

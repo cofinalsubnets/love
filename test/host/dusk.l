@@ -6,6 +6,9 @@
 ;   cat test/00-init.l test/host/dusk.l | out/love
 
 (borrow 'dusk)    ; the artifact's module, warm from the tree
+(borrow 'view)     ; the keys' actions
+(borrow 'walk)     ; the rail's key
+(: dusk-kb (view-bind view-binds walk-binds))   ; a key's code -> its action
 
 (: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    (rows s) (1 + count s "\r\n")
@@ -56,12 +59,12 @@
 ; --- a step: on down the bed whichever way the player faces, never back, and at the
 ; --- mouth the level is done, the view easing back to dead ahead and level
 (: st (dusk-new 80 48)
-   _ (dusk-step st 107) z1 (st 'pz)
-   _ (dusk-step st -9, dusk-step st 106) z2 (st 'pz)
-   _ (pins st 'th 1.0 'pz 10.0, dusk-step st 107) z3 (st 'pz)
+   _ (dusk-step st (dusk-kb 107)) z1 (st 'pz)
+   _ (dusk-step st (dusk-kb -9), dusk-step st (dusk-kb 106)) z2 (st 'pz)
+   _ (pins st 'th 1.0 'pz 10.0, dusk-step st (dusk-kb 107)) z3 (st 'pz)
    e (pins (dusk-new 80 48) 'pz (end-z - 0.3) 'th 0.5 'hz 20 'walk 1)
-   _ (dusk-step e 107) ez (e 'pz) ed (e 'done) ew (e 'walk)
-   _ (dusk-step e 107, dusk-step e 108, dusk-move e 1.0)
+   _ (dusk-step e (dusk-kb 107)) ez (e 'pz) ed (e 'done) ew (e 'walk)
+   _ (dusk-step e (dusk-kb 107), dusk-step e (dusk-kb 108), dusk-move e 1.0)
    th0 (e 'th) hz0 (e 'hz)
    _ (dusk-settle e) th1 (e 'th) hz1 (e 'hz)
    (each ^60 (i \ dusk-settle e),
@@ -73,13 +76,13 @@
 
 ; --- the helm: turns stop at sixty degrees, tilts clamp, space walks ---
 (: st (dusk-new 80 48)
-   _ (dusk-step st 108) th1 (st 'th)
-   _ (each ^100 (i \ dusk-step st 104)) th2 (st 'th)
-   _ (each ^10 (i \ dusk-step st 117)) hz1 (st 'hz)
-   _ (each ^20 (i \ dusk-step st 110)) hz2 (st 'hz)
-   _ (dusk-step st 32) w1 (st 'walk)
-   _ (dusk-step st 32) w2 (st 'walk)
-   (dusk-step st 120, dusk-step st 'tap, dusk-step st (),
+   _ (dusk-step st (dusk-kb 108)) th1 (st 'th)
+   _ (each ^100 (i \ dusk-step st (dusk-kb 104))) th2 (st 'th)
+   _ (each ^10 (i \ dusk-step st (dusk-kb 117))) hz1 (st 'hz)
+   _ (each ^20 (i \ dusk-step st (dusk-kb 110))) hz2 (st 'hz)
+   _ (dusk-step st (dusk-kb 32)) w1 (st 'walk)
+   _ (dusk-step st (dusk-kb 32)) w2 (st 'walk)
+   (dusk-step st (dusk-kb 120), dusk-step st 'tap, dusk-step st (),
     test (0.0 < th1) (-1.05 < th2 < 0.0)
          (24 < hz1 <= 36) (12 <= hz2 < 24) (w1 = 1) (w2 = 0)
          (st 'pz = 0.0)

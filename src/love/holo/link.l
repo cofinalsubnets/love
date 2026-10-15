@@ -752,8 +752,8 @@
        _ (0 < mach ? 0 (scare 'link-target target))
        objs (map (p \ ld-read <p <>p mach) srcs)
        rv (mach = 243)                          ; em_rv64: its own reloc-number namespace (see ldpatch)
-       ; em_386 lays the same image on ELF32's wire: the headers, the symbols, rel fields
-       w32 (mach = 3)
+       ; em_386 and em_arm lay the same image on ELF32's wire: the headers, the symbols, rel fields
+       w32 (elem mach '(3 40))
        _ (w32 && pie ? (scare 'link-i386-pie target))
        shf (w32 ? elf-shdr32 elf-shdr)
        phf (w32 ? elf32-phdr elf64-phdr)
@@ -822,7 +822,7 @@
               o1 <objs
               (two? e ? <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
-       cx [glo n0 end r0 r1 relbox rv (w32 ? 'i386 ()) (backends target) (ld-extents objs)]
+       cx [glo n0 end r0 r1 relbox rv (? (mach = 3) 'i386 (mach = 40) 1 ()) (backends target) (ld-extents objs)]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
@@ -884,7 +884,7 @@
                  [(phf 1 7 0 base base (dend - base) (bend - base) pg)])
             + (img? ? [(phf 1 6 isho ist ist iszr iszr pg)])
             + (nb? ? [(phf 4 4 nbo (base + nbo) (base + nbo) 24 24 4)]))
-       hdr (w32 ? (elf32-hdrn 2 ent mach 0 [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
+       hdr (w32 ? (elf32-hdrn 2 ent mach (arm-eflags target) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
        ; the brand: ei_osabi = 9 in e_ident[7] on every exe this lane writes for an ISA that
        ; can meet freebsd -- linux never reads the byte and freebsd's imgact refuses without
        ; it. made here and not at a caller, so the two doors over one linker agree.

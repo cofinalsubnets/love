@@ -11,7 +11,7 @@ void *mmap(void *a, long n, int prot, int fl, int fd, off_t off) {
 #endif
   {
     if (__love_osv == 2) fl = (int) __love_mapfb(fl);
-#ifdef __i386__
+#ifdef __ILP32__
     if (off & 4095) { __errno_v = EINVAL; return (void *) -1; }
     r = sc6(NR_mmap, (long) a, n, prot, fl, fd, (long) (off >> 12));   /* mmap2: the offset in pages */
 #else

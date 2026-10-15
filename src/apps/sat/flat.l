@@ -647,6 +647,8 @@
    fmaxl0 {2000}   ; the initial learnt-db cap (the gate lowers it to force reductions)
    frp0 {4}        ; rephase-wheel cadence in restarts (pin 0 = off)
    fcmp0 {1048576} ; arena-words threshold for the real compaction
+   fcmpk {2}       ; ..and past it, the arena's multiple of its live words after the last one
+   fcmpn {0}       ; compactions so far (the gate counts them)
    fru0 {400}      ; the luby restart unit (conflicts per luby-1 block)
    fst0 {10000}    ; the stable/focused mode budget in conflicts (x3/2 per switch)
    ; --- drat proof emission: pin a jug into fdrat0 and every UNSAT solve leaves a
@@ -779,7 +781,9 @@
         pin s 'maxl (peep s 'maxl 2000 + 500)))
    ; rare real compaction (fcompact): the tombstone reducer leaks dead slabs -- on a
    ; 100k+-conflict run the arena spreads over tens of MB and bcp's working set dies.
-   ; when the arena top passes fcmp0 words (at a level-0 restart, after freduce), the
+   ; when the arena top passes its mark (at a level-0 restart, after freduce) -- fcmp0
+   ; words, or fcmpk times the live words the last compaction left, whichever is more, so
+   ; a live set past fcmp0 compacts once garbage matches it, not at every restart -- the
    ; live clauses compact into a fresh cask, watches rebuild from scratch (wn resets:
    ; its dead nodes leak too), learnt cids remap. same level-0 discipline as freduce:
    ; level-0 reasons zeroed, a level-0-satisfied clause drops, a single-nonfalse one
@@ -830,7 +834,9 @@
                                        (walk nxt (nu + (n + 1))
                                              (whole? g ? ((nu . g) . nls) nls)))))))))))
             2 2 ())
-       (putw fx 4 <res, pin s 'learnts >res, pin s 'nl #>res))
+       (putw fx 4 <res, pin s 'learnts >res, pin s 'nl #>res,
+        pin s 'cmpat (max (peep fcmp0 () 1048576) (peep fcmpk () 2 * <res)),
+        pin fcmpn () (1 + peep fcmpn () 0)))
    ; --- the search loop: three kernel calls + lisp bookkeeping --------------------
    (fsearch s)                                              ; -> 'sat or 'unsat (s holds the model on SAT)
     (: fx (s 'fx) nv (peep s 'nvars 0)
@@ -858,7 +864,7 @@
                    peep s 'nl 0 > peep s 'maxl 2000))
                     (: _ (fbackjump s 0) _ (fnext-restart s)
                        _ (peep s 'nl 0 > peep s 'maxl 2000 ? (freduce s) 0)
-                       _ (getw fx 4 > peep fcmp0 () 1048576 ? (fcompact s) 0)
+                       _ (getw fx 4 > peep s 'cmpat (peep fcmp0 () 1048576) ? (fcompact s) 0)
                        ; stable/focused alternation on a growing conflict budget (fst0,
                        ; x3/2 per switch): focused = the luby schedule; stable = rare
                        ; geometric restarts (climit 2000 x6/5 within the phase) with
@@ -1291,12 +1297,21 @@
        ok (fcdcl (php 5) (php-vars 5) = 'unsat &&
            ffuzz 30 12 50 && fboth (php 4) (php-vars 4))
        (pin fmaxl0 () keep, ok))
-    ; force the real compaction path the same way (a tiny arena threshold -> fcompact at
-    ; every level-0 restart; its all-false-at-level-0 UNSAT verdict and cid remapping are
-    ; only reachable here -- an untested fcompact once shipped a bogus SAT on uuf250)
-    (: keep (peep fcmp0 () 0) _ (pin fcmp0 () 64)
+    ; force the real compaction path the same way (a tiny arena threshold and no multiple
+    ; -> fcompact at every level-0 restart; its all-false-at-level-0 UNSAT verdict and cid
+    ; remapping are only reachable here -- an untested fcompact once shipped a bogus SAT on uuf250)
+    (: keep (peep fcmp0 () 0) kk (peep fcmpk () 2) _ (pin fcmp0 () 64) _ (pin fcmpk () 0)
        ok (fcdcl (php 5) (php-vars 5) = 'unsat &&
            ffuzz 30 12 50 && count-fcdcl (cyclic 10) 10 = lucas 10)
-       (pin fcmp0 () keep, ok)))
+       (pin fcmp0 () keep, pin fcmpk () kk, ok))
+    ; ..and the mark: at fcmpk 2 a live set past fcmp0 compacts once its garbage matches it,
+    ; so php(5), restarting every few conflicts, compacts, and fewer times than at every
+    ; level-0 restart
+    (: keep (peep fcmp0 () 0) kk (peep fcmpk () 2) ku (peep fru0 () 400)
+       _ (pin fcmp0 () 64) _ (pin fru0 () 8)
+       (n k) (: _ (pin fcmpk () k) _ (pin fcmpn () 0) v (fcdcl (php 5) (php-vars 5)) [v (peep fcmpn () 0)])
+       every (n 0) marked (n 2)
+       (pin fcmp0 () keep, pin fcmpk () kk, pin fru0 () ku,
+        <every = 'unsat && <marked = 'unsat && 0 < <>marked < <>every)))
  _ (say err ("src/apps/sat/flat: ok -- flat-arena CDCL == DPLL on 150 fuzzed + PHP(5) + #SAT==Lucas"
              + (two? (fbcpk 8) ? " (native bcp+conf+dec+bvag kernels live)\n" " (interpreted twins)\n"))))

@@ -486,12 +486,12 @@ c11feat() {                        # TGT MACRO want(1 present | 0 absent)
   moonrun -c -t "$1" -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
     || fail "C11 feature macro $2 on $1 (want present=$3)"
 }
-for t in x64 a64 rv64 thumb2 thumb2sp thumb1; do
+for t in x64 a64 rv64 thumb2 thumb2sp thumb1 arm; do
   for mac in __STDC_NO_ATOMICS__ __STDC_NO_THREADS__ __STDC_UTF_16__ __STDC_UTF_32__; do
     c11feat "$t" "$mac" 1
   done
-  case $t in x64|a64) c11feat "$t" __STDC_NO_VLA__ 0 ;; *) c11feat "$t" __STDC_NO_VLA__ 1 ;; esac
-  case $t in x64)       c11feat "$t" __STDC_NO_COMPLEX__ 0 ;; *) c11feat "$t" __STDC_NO_COMPLEX__ 1 ;; esac
+  case $t in x64|a64|thumb2|thumb2sp|arm) c11feat "$t" __STDC_NO_VLA__ 0 ;; *) c11feat "$t" __STDC_NO_VLA__ 1 ;; esac
+  case $t in x64|a64|thumb2|arm)          c11feat "$t" __STDC_NO_COMPLEX__ 0 ;; *) c11feat "$t" __STDC_NO_COMPLEX__ 1 ;; esac
 done
 # a TU that is ONLY a _Static_assert -- want answers the remainder, which is () at
 # EOF, and that read as "no `;` found". a failing assert must still refuse.

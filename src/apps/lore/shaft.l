@@ -28,9 +28,9 @@
 ; run: love lore shaft   h l or the arrows turn, k or up steps forward, j or down back -- a
 ;                   held key repeats, which is a walk; space jumps, or at a ladder takes
 ;                   hold of it, and then k and j climb it and space lets go; u n look up
-;                   and down; q or esc leaves.
+;                   and down; ? the keys, q or esc leaves.
 ;                   HORN=none plays silent on a seat with no sound device
-(module (shaft shaft-run shaft-walk shaft-main shaft-new shaft-size shaft-lay shaft-step shaft-move
+(module (shaft shaft-run shaft-walk shaft-main shaft-new shaft-size shaft-lay shaft-step shaft-binds shaft-move
          shaft-jump shaft-land shaft-frame shaft-song-new shaft-song-feed shaft-sfx blink
          ledge? ledge-under? ground-at land-at ladder-at ring-pt wall-of wall-s wall-q wrap-s s-apart
          tangent-of near-wall
@@ -196,9 +196,10 @@
  ; is a walk, a step a frame -- u n tilt the look; space jumps, or at a ladder takes hold
  ; of it: then k and j climb, off at the top onto the ledge or at the foot onto the
  ; ground, and space lets go
- (shaft-step st k) (: turn (k @ (104 || -1) (0.0 - turn-step) (108 || -2) turn-step 0.0)
-   h (st 'h) tilt (k @ 117 (h // 16) 110 (0 - h // 16) 0)
-   fwd (k @ (107 || -8) 1.0 (106 || -9) -1.0 0.0)
+ shaft-binds {32 'jump}                  ; the shaft's own key, over view's
+ (shaft-step st a) (: turn (a @ 'turn-left (0.0 - turn-step) 'turn-right turn-step 0.0)
+   h (st 'h) tilt (a @ 'look-up (h // 16) 'look-down (0 - h // 16) 0)
+   fwd (a @ 'forward 1.0 'back -1.0 0.0)
    l (st 'rung)
    (step d) (d * walk-v / fps @ v (pins st 'kx (v * sin (st 'th)) 'kz (v * cos (st 'th)) 'kt (st 't)))
    (climb d) (st 'y + d * climb-v / fps @ y2
@@ -210,7 +211,7 @@
    (? (st 'done) st
       (turn != 0.0) (pin st 'th (wrap (st 'th + turn)))
       (tilt != 0) (view-hz st (st 'hz + tilt) 8)
-      (k = 32) (l ? (pins st 'rung () 'ground 0 'off-t (st 't))
+      (a = 'jump) (l ? (pins st 'rung () 'ground 0 'off-t (st 't))
                   (ladder-at (st 'lay) (st 'px) (st 'pz) (st 'y) @ la (la ? (hold la) (shaft-jump st))))
       (fwd != 0.0) (l ? (climb fwd) (step fwd))
       st))
@@ -355,11 +356,12 @@
  ; raised, and shaft-run raises one ---
  (shaft-walk _) (view-walk {'new (w \ h \ shaft-new w h (wheel (clock 0))) 'size shaft-size
                             'frame shaft-frame 'key shaft-step 'tick shaft-move 'fps fps
+                            'binds (view-bind view-binds shaft-binds) 'listed (view-listed ['jump])
                             'song (hn \ ((hn ? (shaft-song-new hn (wheel (clock 0)))) @ s
                                            (s ? (st \ (shaft-sfx s st, shaft-song-feed s)) (st \ pin st 'sfx ()))))
                             'linger done-ms 'next ['court 'court-walk]})
  (shaft-run _) (view-run shaft-walk)
- shaft-usage "usage: love lore shaft   (h l turn, k j step, space jumps or takes a ladder, u n look; q or esc leaves)"
+ shaft-usage "usage: love lore shaft   (h l turn, k j step, space jumps or takes a ladder, u n look; ? the keys, q or esc leaves)"
  (shaft-main as) (as @ () (shaft-run ())
                        (say err ("shaft: " + shaft-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'shaft (udoor 'shaft shaft-main shaft-usage 1 1)))

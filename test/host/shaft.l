@@ -3,11 +3,13 @@
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/shaft.l | out/love
 
 (borrow 'shaft)   ; the artifact's module, warm from the tree
+(borrow 'view)     ; the keys' actions
+(: shaft-kb (view-bind view-binds shaft-binds))   ; a key's code -> its action
 
 (: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    (rows s) (1 + count s "\r\n")
    ; so many frames, a key each or none
-   (tick st k) ((charm? k ? (shaft-step st k)), shaft-move st, pin st 't (st 't + 1))
+   (tick st k) ((charm? k ? (shaft-step st (shaft-kb k))), shaft-move st, pin st 't (st 't + 1))
    (run st n) (0 < n ? (tick st (), run st (n - 1)) st)
    (walk st k n) (0 < n ? (tick st k, walk st k (n - 1)) st)
    ; ..until the player stands on something, or too long
@@ -62,7 +64,7 @@
    _ (walk st 106 5) x2 (st 'px)
    _ (walk st 104 10) thl (st 'th) _ (walk st 108 20) thr (st 'th)
    _ (pins st 'th 0.0, walk st 107 300) zw (st 'pz)
-   _ (each ^100 (i \ shaft-step st 108)) thw (st 'th)
+   _ (each ^100 (i \ shaft-step st (shaft-kb 108))) thw (st 'th)
  (test (x0 < x1) (near? z0 z1) (x2 < x1) (x2 != x0)
        (thl < th0) (th0 < thr) (near? (thr - th0) (10 * turn-step))
        (near? zw (shaft-r - body-r)) (st 'ground) (0.0 = st 'y)
@@ -105,13 +107,13 @@
 ; --- there; space at the top takes hold, j climbs down; space midway lets go, and down
 ; --- you come ---
 (: st (fresh ()) l <ladders
-   _ (on st (l 0) (l 1), shaft-step st 32) held (st 'rung)
+   _ (on st (l 0) (l 1), shaft-step st (shaft-kb 32)) held (st 'rung)
    _ (walk st 107 5) yb (st 'y) th (st 'th)
    _ (walk st 107 300) ya (st 'y) held2 (st 'rung)
-   _ (shaft-step st 32) held3 (st 'rung) _ (walk st 106 300) yd (st 'y)
-   _ (shaft-step st 32, walk st 107 20) ym (st 'y) _ (shaft-step st 32) let-go (st 'rung)
+   _ (shaft-step st (shaft-kb 32)) held3 (st 'rung) _ (walk st 106 300) yd (st 'y)
+   _ (shaft-step st (shaft-kb 32), walk st 107 20) ym (st 'y) _ (shaft-step st (shaft-kb 32)) let-go (st 'rung)
    _ (settle st 300)
-   st2 (fresh ()) (shaft-step st2 32,                                ; space away from a ladder: a jump
+   st2 (fresh ()) (shaft-step st2 (shaft-kb 32),                                ; space away from a ladder: a jump
                    test (two? held) (l 1 < yb < l 2) (near? th (tangent-of (l 0) + 1.5707963))
        (ya = l 2) !held2 (st 'ground)
        (two? held3) (yd = l 1) (st 'ground)
@@ -120,9 +122,9 @@
 
 ; --- the look: u and n tilt it and no further than the screen allows ---
 (: st (fresh ()) hz0 (st 'hz) h (st 'h)
-   _ (shaft-step st 117) hzu (st 'hz) _ (shaft-step st 110) hzn (st 'hz)
-   _ (each ^100 (i \ shaft-step st 117)) top (st 'hz)
-   _ (each ^200 (i \ shaft-step st 110)) bot (st 'hz)
+   _ (shaft-step st (shaft-kb 117)) hzu (st 'hz) _ (shaft-step st (shaft-kb 110)) hzn (st 'hz)
+   _ (each ^100 (i \ shaft-step st (shaft-kb 117))) top (st 'hz)
+   _ (each ^200 (i \ shaft-step st (shaft-kb 110))) bot (st 'hz)
  (test (hz0 < hzu) (hzn = hz0) (top = 7 * h // 8) (bot = h // 8)))
 
 ; --- the doors: standing at the top one opens it, which is the level done, and the
@@ -133,7 +135,7 @@
    shut (shaft-frame st)
    _ (run st 3) d2 (st 'done)
    open (shaft-frame st)
-   _ (shaft-step st 107, run st 2) x (st 'px)
+   _ (shaft-step st (shaft-kb 107), run st 2) x (st 'px)
  (test !d1 (d2 = 1) (shut != open) (near? x (ring-pt door-s walk-q 0)) (elem 'door (st 'sfx))))
 
 ; --- the song: silence until something happens, then not; a chunk a feed ---

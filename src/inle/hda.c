@@ -53,7 +53,7 @@ static struct {
   uint64_t wpos, hw, zpos;           // running byte counts: landed, played, silenced to
 } khda;
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(INLE_DROID)
 // --- PCI config space ------------------------------------------------------
 static void pci_w8(uint32_t bdf, uint32_t off, uint32_t v) {
   uint32_t sh = 8 * (off & 3), w = pci_r32(bdf, off) & ~(0xffu << sh);
@@ -403,7 +403,7 @@ void k_hda_init(void *dma) {
 // wasm's card is the page (src/inle/wasm/horn.c), and answers them there.
 void k_hda_init(void *dma) { (void) dma; }
 void k_horn_poll(void) { }
-#ifndef __wasm__
+#if !defined(__wasm__) && !defined(INLE_DROID)
 int k_horn_open(int rate) { return -1; }
 intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
 uintptr_t k_horn_lag(void) { return 0; }

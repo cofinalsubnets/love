@@ -23,7 +23,7 @@
 ; only wade-walk and wade-run tie the tty and the horn.
 ;
 ; run: love lore wade    h l or the arrows turn, k or up wades on, u n look up and down,
-;                   space walks on until pressed again; q or esc leaves. reaching the
+;                   space walks on until pressed again; ? the keys, q or esc leaves. reaching the
 ;                   lamppost ends the level: the view turns to the lamp and pitches up
 ;                   to hold its flame, a moment passes, and the apartment takes the
 ;                   screen (src/apps/lore/apartment.l) where the seat carries it.
@@ -312,7 +312,7 @@
  ; look up. a tty tells of keys pressed and never of keys let go, and it repeats one key
  ; at a time, so a chord cannot be seen: space walks on by itself, and the turns steer it
  facing (pi / 3.0)
- (wade-step st k) (walk-rail st k facing wade-move)     ; arrived, the view is the level's
+ (wade-step st a) (walk-rail st a facing wade-move)     ; arrived, the view is the level's
  ; --- arrived: the view is the level's. it turns to the lamp and pitches down until the
  ; flame's reflection holds the middle of the screen, eased over settle-ms from where
  ; the player left it, and the level is over done-ms after that. the reflection hangs
@@ -341,13 +341,14 @@
  ; lamp over settle-ms, and the apartment after it. wade-walk takes a stage already
  ; raised, and wade-run raises one ---
  (wade-walk _) (view-walk {'new wade-new 'size wade-size 'frame wade-frame 'key wade-step 'fps fps
+                           'binds (view-bind view-binds walk-binds) 'listed walk-listed
                            'tick (st \ (? (st 'done-at) (clock (st 'done-at) / (1.0 * settle-ms) @ s
                                                             (wade-settle st (1.0 < s ? 1.0 s)))
                                           (st 'walk) (wade-move st 0.25)))
                            'song (view-song wade-song-new wade-song-feed)
                            'linger (settle-ms + done-ms) 'next ['apartment 'apartment-walk]})
  (wade-run _) (view-run wade-walk)
- wade-usage "usage: love lore wade   (h l turn, k j wade, u n look, space walks on to the lamppost; q or esc leaves)"
+ wade-usage "usage: love lore wade   (h l turn, k j wade, u n look, space walks on to the lamppost; ? the keys, q or esc leaves)"
  (wade-main as) (view-main "wade" wade-usage (as \ view-words as []) wade-run as)
  _ ((cite 'lore 'lore-enlist) 'wade (udoor 'wade wade-main wade-usage 1 1)))
 ) ; module wade

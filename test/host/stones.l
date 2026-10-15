@@ -6,6 +6,7 @@
 (borrow 'stones)   ; the artifact's module, warm from the tree
 (borrow 'vec)
 (borrow 'view)     ; pi, wrap
+(: stones-kb (view-bind view-binds stones-binds))   ; a key's code -> its action
 
 (: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    (rows s) (1 + count s "\r\n")
@@ -13,7 +14,7 @@
    (row-of s n) (:- (go 0) (go i) (i + #n <= #s ? (n = snip s i (i + #n) ? (count (snip s 0 i) "\r\n") (go (i + 1))) -1))
    day0 (1.0 * 1790812800)                          ; 2026-10-01, midnight on the wall clock
    (at hr sd) (stones-new 80 48 [(day0 + hr * 3600.0) 3600] sd)
-   (keys! st ks) (each ks (k \ (stones-step st k, stones-move st)))
+   (keys! st ks) (each ks (k \ (stones-step st (stones-kb k), stones-move st)))
    (ang b) (: x (b 0 + 1e-9) a (atan ((b 2 - zc) / x)) (x < 0.0 ? (a + pi) a)))
 
 ; --- the frame: half the pixel rows in cells, the same state the same frame, in the 256
@@ -33,13 +34,15 @@
        (has? f " › 1  Breathe") (has? d " › 2  Weep") (rows f = 24) (rows d = 24) !(has? f "H\e[")))
 
 ; --- ..and as kitty's pixels: one picture over the screen's cells, the cursor left where it is;
-; --- sized for kitty, about kitty-w pixels across, a whole number a column; ids 7 and 8 by
-; --- turns, each frame taking the last one down after, in one synchronised update
+; --- sized for kitty, about kitty-w pixels across over the scale, a whole number a column;
+; --- ids 7 and 8 by turns, each frame taking the last one down after, in one synchronised
+; --- update
 (: kt (pin (at 12.0 7) 'kitty 1) k (stones-frame kt) k2 (stones-frame kt)
    k8 (stones-frame (stones-size (pin (at 12.0 7) 'kitty 1) 80 24))
+   k1 (stones-frame (stones-size (pins (at 12.0 7) 'kitty 1 'scale 1) 80 24))
  (test (snip k 0 8 = "\e[?2026h") (snip k (#k - 8) #k = "\e[?2026l")
        (has? k "i=7,s=") (has? k "a=d,d=I,i=8,") (has? k2 "i=8,s=") (has? k2 "a=d,d=I,i=7,") (has? k "f=24") (has? k "C=1") (has? k "s=80,v=48,c=80,r=24,") (has? k "m=0;")
-       (has? k8 "s=640,v=384,c=80,r=24,") ((stones-size (at 12.0 7) 80 24) 'kp = 1)))
+       (has? k8 "s=320,v=192,c=80,r=24,") (has? k1 "s=640,v=384,c=80,r=24,") ((stones-size (at 12.0 7) 80 24) 'kp = 1)))
 ; --- ..the choices' cells blanked over the picture once, the frame they are put away, and
 ; --- not before or after
 (: kb (pin (at 12.0 7) 'kitty 1) r ((kb 'h) // 2) r0 (max2 0 (r - r // 3 - 4)) c0 (max2 0 ((kb 'w - 22) // 2))
@@ -111,17 +114,17 @@
 ; --- the altar: space far off does nothing; near it, the eye kneels there, facing it, low,
 ; --- with no jump from frame to frame on the way, and stays while the walking keys go
 ; --- unheard; space again stands it up where it knelt, as high as before
-(: far (at 15.5 7) _ (stones-step far 32)
+(: far (at 15.5 7) _ (stones-step far (stones-kb 32))
    st (at 15.5 7) z0 (zc - 2.6) g0 (stones-ground 0.8 z0)
    _ (pins st 'px 0.8 'pz z0 'th 0.25 'ph 0.0 'py (g0 + eye-h) 'dt 0.05)
-   _ (stones-step st 32) began (st 'eye)
+   _ (stones-step st (stones-kb 32)) began (st 'eye)
    ; ..ticks until the move is done: the most the eye went in one, up and round
    (run n jy jt) (: y (st 'py) t (st 'th) _ (stones-move st)
                     jy2 (max2 jy (mag (st 'py - y))) jt2 (max2 jt (mag (wrap (st 'th - t))))
                     (st 'eye = 'move && n < 400 ? (run (n + 1) jy2 jt2) [n jy2 jt2]))
    k (run 0 0.0 0.0) knelt (st 'eye) kx (st 'px) ky (st 'py) kth (st 'th)
-   _ (stones-step st 107) _ (stones-move st) still (st 'px = kx)
-   _ (stones-step st 32) u (run 0 0.0 0.0) stood (st 'eye)
+   _ (stones-step st (stones-kb 107)) _ (stones-move st) still (st 'px = kx)
+   _ (stones-step st (stones-kb 32)) u (run 0 0.0 0.0) stood (st 'eye)
  (test (far 'eye = 'walk) (began = 'move) (knelt = 'kneel) (still)
        (ky < stones-ground kx (st 'pz) + 1.3) (mag (wrap (atan2 (0.0 - kx) (zc - st 'pz) - kth)) < 0.5)
        (k 1 < 0.06) (k 2 < 0.12) (u 1 < 0.06) (stood = 'walk)
@@ -132,15 +135,15 @@
 ; --- and then a walking key stands the eye up
 (: st (at 15.5 7) z0 (zc - 2.6)
    _ (pins st 'px 0.3 'pz z0 'th 0.0 'ph 0.0 'py (stones-ground 0.3 z0 + eye-h) 'dt 0.05)
-   _ (stones-step st 32)
+   _ (stones-step st (stones-kb 32))
    (until f n) (stones-move st, f () || 400 < n ? n (until f (n + 1)))
    _ (until (_ \ charm? (st 'dlg)) 0) shown (st 'dlg)
-   _ (stones-step st 106) marked (st 'dlg)
-   _ (stones-step st 51) acting (st 'eye) hid (st 'dlg)
+   _ (stones-step st (stones-kb 106)) marked (st 'dlg)
+   _ (stones-step st (stones-kb 51)) acting (st 'eye) hid (st 'dlg)
    _ (until (_ \ charm? (st 'dlg)) 0) back (st 'dlg)
    tops (filter (d \ 0.6 < d 'p 1) (st 'splats))
-   _ (stones-step st 53) waited [(st 'dlg) (st 'eye)]
-   _ (stones-step st 104) rising (st 'eye)
+   _ (stones-step st (stones-kb 53)) waited [(st 'dlg) (st 'eye)]
+   _ (stones-step st (stones-kb 104)) rising (st 'eye)
  (test (shown = 0) (marked = 1) (acting = 'move) (hid = ()) (back = 2) (0 < #tops)
        (waited = [() 'kneel]) (rising = 'move)))
 
@@ -149,27 +152,33 @@
 ; --- the missing stone glows where it stood, till the eye stands
 (: st (at 15.5 7) z0 (zc - 2.6)
    _ (pins st 'px 0.3 'pz z0 'th 0.0 'ph 0.0 'py (stones-ground 0.3 z0 + eye-h) 'dt 0.05)
-   _ (stones-step st 32)
+   _ (stones-step st (stones-kb 32))
    (until s f n) (stones-move s, f () || 400 < n ? n (until s f (n + 1)))
    _ (until st (_ \ charm? (st 'dlg)) 0)
-   _ (stones-step st 32) spaced [(st 'dlg) (st 'eye)]
+   _ (stones-step st (stones-kb 32)) spaced [(st 'dlg) (st 'eye)]
    ; ..knelt again, and waited
    w (at 15.5 7) _ (pins w 'px 0.3 'pz z0 'th 0.0 'ph 0.0 'py (stones-ground 0.3 z0 + eye-h) 'dt 0.05)
-   _ (stones-step w 32) _ (until w (_ \ charm? (w 'dlg)) 0) _ (stones-step w 53)
+   _ (stones-step w (stones-kb 32)) _ (until w (_ \ charm? (w 'dlg)) 0) _ (stones-step w (stones-kb 53))
    post (post-batch w (stones-light w))
    ; ..the rows beside the slot, stepping toward it
    x0 3.2 rz 95.0 g0 (stones-ground x0 rz)
    e (at 15.5 7) _ (pins e 'px x0 'pz rz 'th (0.0 - pi / 2.0) 'py (g0 + eye-h) 'dt 0.05)
-   _ (each ^12 (_ \ stones-step e 107))
+   _ (each ^12 (_ \ stones-step e (stones-kb 107)))
    ; ..the same wait at night, half an hour on
    n (at 23.0 7) _ (pins n 'px 0.3 'pz z0 'th 0.0 'ph 0.0 'py (stones-ground 0.3 z0 + eye-h) 'dt 0.05)
-   _ (stones-step n 32) _ (until n (_ \ charm? (n 'dlg)) 0) _ (stones-step n 53)
+   _ (stones-step n (stones-kb 32)) _ (until n (_ \ charm? (n 'dlg)) 0) _ (stones-step n (stones-kb 53))
    early (ghost-on? n (stones-light n))
    _ (pin n 'wait-at (n 'mt - 1900.0)) late (ghost-on? n (stones-light n))
-   _ (stones-step n 107) gone (ghost-on? n (stones-light n))
+   _ (stones-step n (stones-kb 107)) gone (ghost-on? n (stones-light n))
  (test (spaced = [() 'move]) (w 'waited = 1) (w 'dlg = ()) (w 'eye = 'kneel) (two? post)
        (0 < g0) (mag (stones-ground (e 'px) (e 'pz) - g0) < 0.9)
        (early = 0) (late = 1) (gone = 0)))
+
+; --- the help lists the walking keys, kneel, help and quit: the choices are bound but not
+; --- listed, being the dialog's own
+(: hl (view-help stones-kb (view-listed ['kneel]))
+ (test (#hl = 9) (hl 6 = "space  kneel") (hl 8 = "esc q  quit")
+       !(any (l \ 1 < #(split "bleed" l) || 1 < #(split "choose" l)) hl)))
 
 (test_fin ())
 (puts "stones: ok\n")
