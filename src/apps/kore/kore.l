@@ -1054,7 +1054,7 @@ every tool answers --help and --version, and -h where the letter is free
   markdown [-t html|roff|text|dvi] [F..]  markdown laid out the other way
   www [-w COLS] URL|FILE                  a web page, its links numbered (src/apps/kore/www.l)
   pic [cat] [-g MODE] [-w COLS] [-h ROWS] [F..]   png, jpeg, gif in cells; -g sixel kitty auto
-  pic less [-g MODE] F..                  a picture viewer, a gif played; picless pngless ..
+  pic less [-g MODE] F..                  a picture viewer, an animation played; picless pngless ..
   pic convert [-q Q] [-t TYPE] IN OUT     png gif jpeg sixel ans, by OUT's extension or TYPE
   pic pixelize [-w C] [-s PX] [-c 256] IN OUT   pic's blocks as a picture, or as .ans text
   telnet HOST [PORT]                      a remote terminal; ^] closes (src/apps/kore/net.l)

@@ -107,7 +107,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
-| pic.l, over png.l, jpeg.l, gif.l, webp.l, bmp.l and pnm.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, a gif played) |
+| pic.l, over png.l, jpeg.l, gif.l, webp.l, bmp.l and pnm.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, an animation played) |
 | net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | src/apps/lush.l | sh / lush |
 
@@ -662,8 +662,8 @@ when the terminal does not say). `pngcat`, `jpegcat` and `gifcat` are `pic cat`.
 as `-g` says (the modes are `pic cat`'s). In sixel and kitty's a view is sampled by nearest
 pixel, so a redraw stays quick, and 100% is a source pixel to a screen pixel. `+` and `-`
 zoom (past the fit into single pixels, and back out below it), `0` fits it again, `h` `j` `k`
-`l` or the arrows pan a quarter of the view, `n` and `p` move between files. A GIF plays at
-its own delays; `space` pauses it and `.` and `,` step a frame. The status line holds the
+`l` or the arrows pan a quarter of the view, `n` and `p` move between files. A GIF or an
+animated WebP plays at its own delays; `space` pauses it and `.` and `,` step a frame. The status line holds the
 name, the size, the zoom and the frame. `picless`, `pngless`, `jpegless` and `gifless` are
 the same tool.
 
