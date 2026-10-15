@@ -103,6 +103,22 @@ long __love_tbsd(long n, long a, long b, long c, long d, long e, long f) {
   return __love_sys(nr, a, b, c ? (long) o : 0, d, e, f); }
 #endif
 
+/* the running binary's path, which macos keeps out of any /proc: proc_info's
+ * PROC_PIDPATHINFO. 0 on every other kernel, whose /proc or sysctl answers */
+unsigned long __love_selfpath(char *b, unsigned long n) {
+#ifdef LvMac
+  if (__love_osv == 4) {
+    char t[4096];
+    memset(t, 0, sizeof t);
+    if (__love_fb(336, 2, getpid(), 11, 0, (long) t, sizeof t) < 0) return 0;   /* pidinfo, pathinfo */
+    unsigned long k = strlen(t);
+    if (!k || k >= n) return 0;
+    memcpy(b, t, k + 1);
+    return k; }
+#endif
+  (void) b, (void) n;
+  return 0; }
+
 long __love_osdetect(void) {
 #ifndef LvOsTranslate
   /* no tables on this arch: the kernel is whichever one the build was compiled

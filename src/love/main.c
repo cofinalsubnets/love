@@ -680,13 +680,16 @@ int main(int argc, char const **argv) {
       char const *osn =
 #if defined(__moonlibc__)
         __love_osv  < 0 ? "inle" :
-        __love_osv == 1 ? (on_inle() ? "inle" : "linux") : __love_osv == 2 ? "freebsd" : __love_osv == 3 ? "netbsd" : 0;
+        __love_osv == 1 ? (on_inle() ? "inle" : "linux") : __love_osv == 2 ? "freebsd" : __love_osv == 3 ? "netbsd"
+        : __love_osv == 4 ? "macos" : 0;
 #elif defined(__linux__)
         "linux";
 #elif defined(__FreeBSD__)
         "freebsd";
 #elif defined(__NetBSD__)
         "netbsd";
+#elif defined(__APPLE__)
+        "macos";
 #else
         0;
 #endif

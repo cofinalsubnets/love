@@ -1397,6 +1397,8 @@
        _ (f 'fx18 && f 'tgt != 'a64 && udie 2 ("cc: -ffixed-x18 names an a64 register, and the target is " + show (f 'tgt)))
        ; wasm's kernel is the page's loader, which speaks linux's numbers: the os unless named
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
+       ; on macos an x64 link is a mach-o unless -os names another kernel: it meets no ELF
+       _ (f 'tgt = 'x64 && !(f 'os) && elem 'love-os (names ()) && host-os 0 = 'macos && pin f 'os 'macos)
        _ ((f 'sal || two? (f 'bp)) && f 'tgt != 'a64 &&
           udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
        _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")

@@ -283,6 +283,12 @@ $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootf
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+# love for macos: the same objects as a mach-o, unbaked -- the image is its own binary's, so
+# the bake runs on the box (test_macos_love)
+$(ho)/love-macos.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
+	@echo 'MOON	'$@
+	@mkdir -p $(dir $@)
+	@$(moon0) -os macos $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
