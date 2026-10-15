@@ -1359,6 +1359,12 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   missed it. A label that renames refuses on wasm, which lays no symbol table. Two C names on
   one label in one file lay the label defined and undefined, which ld and lld bind as one.
   Law 294-asmlabel.c.
+- **a test pushed down through a `!` keeps a missing else missing** (arm64 `do_page_fault`'s
+  `if (fault_from_pkey(..)) {}`, whose `return !arch_vma_access_permitted(..)` reaches a
+  `return true`): a constant return takes the caller's arm, and the absent else, wrapped by the
+  first push, read as present, so the splice laid an empty statement gen has no lane for
+  (`cannot compile 'do_page_fault' (cause unnamed)`, on every target). An absent arm now lays
+  nothing; an absent then arm under a flip is an empty block. Law 299-armpush.c.
 
 Still open on this side (g-21's probes):
 
