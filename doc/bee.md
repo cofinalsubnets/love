@@ -29,7 +29,7 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --mcp**
 
-**love bee --lock** \[**--heavy**\] \[**--out** *dir*\] **--** *command* ...
+**love bee --lock** \[**--heavy** \[**--no-row** *reason*\]\] \[**--out** *dir*\] **--** *command* ...
 
 **love bee --avatar** \[*name*\]
 
@@ -178,7 +178,9 @@ Asking stays with the caller. A bee's child asks through **approve**. A Claude C
 
 The machine is shared, and **src/apps/locks.l** keeps its locks: an exclusive lock per resource, such as one make per **out/**, and a pool of heavy tickets, at most **(heavy-max** *n***)** at once (2 unless set) and none granted while available memory is below **(mem-floor** *gb***)**. A lock is held by a pid, so it lives as long as its holder. A bee holds its locks under its own pid, the one on its card, even when its **--mcp** child asks for them. That way a lock outlives a Claude child that ends and dies with the bee.
 
-The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*), **lock_release** and **lock_list**; the last two run without asking. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **src/apps/locks.l** says so.
+The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*, *no_row*), **lock_release** and **lock_list**; the last two run without asking. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **src/apps/locks.l** says so.
+
+A heavy ticket belongs to a queue row. In a git work tree that has queues under **refs/queue/**, **--heavy** asks at the tree's top: the directory above **--out**'s, or the working directory. It is refused, naming the rule, while no row carries the tree's branch or its HEAD. A gate writes its row **gating** with that head first, so the head then matches. **--no-row** *reason* (the tool's *no_row*) passes, and the reason rides the lock's note, where **lock_list** shows it. Fair reasons are the leader's own work, a measurement gwen asked for, and a clean build before a join. A directory below a tree's top, such as scratch under **out/**, is not asked, and neither is a tree with no queue.
 
 Which lanes a change owes is data, **src/apps/lanemap.l**: path rules, each naming the lanes owed by a change that touches its paths, the heavy lanes, and the chains and alone set that **test/gate/lanes.sh** runs lanes by. **love bee --lanes-doc** prints AGENTS.md's table, which is laid from it, and test/host/bee.l fails when the two disagree. **--lanes-map** prints lanes.sh's chains and alone set.
 

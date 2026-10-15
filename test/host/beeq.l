@@ -627,5 +627,31 @@
       (bq-in (e 8) "row 2 ahead is waiting"))
    0)
 
+;; --- a heavy ticket belongs to a queue row: refused at a work tree's top whose branch and HEAD no
+; row carries, unless --no-row says why; granted to a row's branch, and anywhere with no queue ------
+(: w (bq-world "heavyrow") lq bq-q
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   (cli nm args) (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " " + args))
+   n0 (cli "ant" "--lock --heavy -- true")                                  ; no queue yet
+   q0 (bq-put (w 'dir + "/q.in") (json-show {"jsonrpc" "2.0" "id" 1 "method" "tools/call"
+                                            "params" {"name" "queue_row" "arguments" {"queue" lq "state" "waiting" "branch" "ant"}}}
+                                 + "\n" + json-show {"jsonrpc" "2.0" "id" 2 "method" "tools/call"
+                                                     "params" {"name" "lock_acquire" "arguments" {"name" "heavy" "kind" "heavy"}}}
+                                 + "\n" + json-show {"jsonrpc" "2.0" "id" 3 "method" "tools/call"
+                                                     "params" {"name" "lock_acquire" "arguments" {"name" "heavy" "kind" "heavy" "no_row" "a measurement"}}}
+                                 + "\n"))
+   t (cli "ant" ("--mcp < " + bq-sq (w 'dir + "/q.in")))
+   n1 (cli "ant" "--lock --heavy -- true")                                  ; on test: no row carries it
+   n2 (cli "ant" "--lock --heavy --no-row measure -- true")
+   _ (bq-git w ["checkout" "-q" "ant"])
+   n3 (cli "ant" "--lock --heavy -- true")                                  ; row 1 carries ant
+   _ (test
+      (<n0 = 0)
+      (bq-in (t 1) "\"id\":2") (bq-in (t 1) "heavy lanes run only in the queue")
+      (bq-in (t 1) "granted heavy")
+      (<n1 = 1) (bq-in (n1 1) "no row of refs/queue/test carries test")
+      (<n2 = 0) (<n3 = 0))
+   0)
+
 (hark ["rm" "-rf" bq-root])
 (test_fin (), puts "beeq: ok", putc 10, 0)

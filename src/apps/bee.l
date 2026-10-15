@@ -170,9 +170,12 @@
                              + "holder of a named resource (an out/ directory), kind heavy for the few heavy "
                              + "lanes the machine allows at once above its memory floor (a slow gate, a clean "
                              + "build). It answers at once, granted or queued; a queued one is mailed to you "
-                             + "from lock-NAME when it is yours. Release it when done.")
+                             + "from lock-NAME when it is yours. Release it when done. A heavy one belongs to a "
+                             + "queue row: it is refused while no row of a git queue here carries this tree's branch "
+                             + "or its HEAD, unless no_row says why.")
              {"name" (prop "the resource: a path, or heavy") "kind" (prop "exclusive or heavy")
-              "note" (prop "what you will run under it")}
+              "note" (prop "what you will run under it")
+              "no_row" (prop "heavy without a queue row: why (the leader's work, a measurement gwen asked for, a clean build before a join)")}
              ["name"])
        (tool "lock_release" "Release a lock you hold, or drop your queued ticket for it."
              {"name" (prop "the lock's name")} ["name"])
@@ -1141,6 +1144,20 @@
                _ (post-as ("gate-" + r) who ("queue_gate: row " + r + " at " + h + (ok ? " is green: " " is red: ")
                                              + join " " (map (\ y (<y + "=" + y 1)) res) + "; the log is " + dir + "/out/gate.log"))
                (ok ? 0 1))))
+     ; --- a heavy ticket belongs to a queue row: one of a git queue here carrying the tree's branch or
+     ; its HEAD (a gate writes its row gating with the head first). only a work tree's top is asked, so
+     ; a scratch dir under out/ is not; a tree with no queue asks nothing;
+     ; --no-row REASON (the tool's no_row) passes, and the reason rides the lock's note ---
+     (heavy-why dir)
+      (: qs (filter (\ l (0 < #l)) (lines (g-git dir ("for-each-ref --format=" + sh-quote "%(refname)" + " refs/queue"))))
+         top (g-git dir "rev-parse --show-toplevel") here (chomp (lush-out ("cd " + sh-quote dir + " && pwd -P")))
+         br (g-git dir "rev-parse --abbrev-ref HEAD") h (g-git dir "rev-parse --verify -q HEAD")
+         (has? q) (: rs (q-rows (g-git dir ("cat-file -p " + sh-quote q)))
+                     (any (\ p (: r (rs p) (r 2 = br || r 4 = h))) (keys rs)))
+         (? (!(two? qs) || #h = 0 || top != here || any has? qs) ""
+            ("no row of " + join " " qs + " carries " + br + " or " + snip h 0 9 + ": heavy lanes run only in the "
+             + "queue, once in a union at its head. join, write the row gating with this head, or pass --no-row "
+             + "REASON (lock_acquire's no_row)")))
      ; each red lane to the owners of the paths that owed it: a member's paths are its own head's
      ; change from the row's gated-on; a lane no member's paths owed goes to the row's owner
      (gate-tell q r rows b plan reds dir)
@@ -1919,8 +1936,11 @@
            + "; a message from lock-" + nm + " comes when it is yours")))
      (lock-acquire in)
       (? !(locks? 0) [0 "locks are not in this binary"]
-         (: nm (in "name") kind (field in "kind" "exclusive") note (field in "note" "")
+         (: nm (in "name") kind (field in "kind" "exclusive") nr (field in "no_row" "")
+            note ((0 < #nr ? ("[no row: " + nr + "] ") "") + field in "note" "")
+            why (? (kind = "heavy" && #nr = 0) (heavy-why bee-cwd) "")
             (? !(elem kind ["exclusive" "heavy"]) [0 "kind is exclusive or heavy"]
+               (0 < #why) [0 why]
                (: r (lock-ask nm kind note)
                   (? !(tablet? r) [0 ("the lock answered " + show r)]
                      (peep r "granted" 0 @ 1 (pull bee-locks nm 0) (pin bee-locks nm [kind note]),
@@ -3136,9 +3156,13 @@
               out (? (0 < #od) (od 0 = 47 ? od (bee-cwd + "/" + od))
                      (two? (stat (bee-cwd + "/out"))) (bee-cwd + "/out") "")
               reqs ((0 < #out ? [[out 'exclusive]] ()) + (elem "--heavy" as ? [["heavy" 'heavy]] ()))
-              (? !(two? dd) (say err "usage: love bee --lock [--heavy] [--out DIR] -- CMD ..\n", 2)
+              nr (: k (findsub as ["--no-row"]) (? (0 <= k && k + 1 < #as && (k < findsub as ["--"])) (as (k + 1)) ""))
+              why (? (elem "--heavy" as && #nr = 0) (heavy-why (0 < #out ? (out + "/..") bee-cwd)) "")
+              (? !(two? dd) (say err "usage: love bee --lock [--heavy [--no-row REASON]] [--out DIR] -- CMD ..\n", 2)
                  !(locks? 0) (say err "bee: locks are not in this binary\n", 1)
-                 (lk 'locks-run (lk 'locks-root 0) reqs (join " " dd) bee-floor bee-hmax dd)))
+                 (0 < #why) (say err ("bee: " + why + "\n"), 1)
+                 (lk 'locks-run (lk 'locks-root 0) reqs ((0 < #nr ? ("[no row: " + nr + "] ") "") + join " " dd)
+                    bee-floor bee-hmax dd)))
           ; --avatar lists them, --avatar NAME wears one from now on
           "--avatar" (: r (avatar-cmd (join " " as) 80)
                         _ (say (<r ? out err) (foldl (\ a l (a + l + "\n")) (<r ? "" "bee: ") (r 1)))
