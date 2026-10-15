@@ -344,9 +344,14 @@ lvm(lvm_keys) {
  Sp[0] = list;
  love_musttail return Next(1); }
 
-// the anchor an out-of-pool ap hashes against: the offset survives a bake/wake where the
-// raw address does not, so a nif-keyed table still finds its buckets at wake.
+// an out-of-pool word hashes by its seat in the image, as a bake encodes it, so a table keyed
+// by natives orders alike in every build of one source; one with no seat by its offset from
+// an anchor on its own side of .rodata, where the carried archives lie
 static const char hash_base[1] = {0};
+static intptr_t oop_key(word x) {
+ intptr_t s = image_seat(x);
+ return s >= 0 ? s : (uintptr_t) x < (uintptr_t) hash_base ? (intptr_t) x - (intptr_t) hash_base
+                                                         : (intptr_t) x - (intptr_t) __start_love_nifs; }
 // the walk-from-nothing entry; hash_at (src/love/arr.c) is the same walk continued above a live
 // worklist. a charm or other leaf settles here, so the hot keys never take scratch.
 uintptr_t hash(struct g *g, intptr_t x) {
@@ -363,7 +368,7 @@ uintptr_t hash(struct g *g, intptr_t x) {
 // terminator, a pointer back into its own thread by its offset, any other heap word by being
 // one -- the worklist compares those, and a hash owes `=` only that what it joins hashes alike.
 // a partial folds its base and its captures, a native is its twin, a carrier its length (it
-// is equal to itself alone). out of the pool, an offset from hash_base. all GC-stable.
+// is equal to itself alone). out of the pool, its seat (oop_key). all GC-stable.
 // d levels of those heap words fold their own leaf hash, the rest a 2: threads alike in
 // shape but not in what they call part here, where the worklist would walk them deep.
 // the length and a prefix are read, which bounds a probe on a big thread
@@ -377,7 +382,7 @@ static uintptr_t fn_word(struct g *g, word v, int d) {
 static uintptr_t fn_hash(struct g *g, word x) { return fn_hash_d(g, x, 1); }
 static uintptr_t fn_hash_d(struct g *g, word x, int d) {
  x = fn_meaning(g, x);
- if (!in_heap(g, x)) return rot(((intptr_t) x - (intptr_t) hash_base) * mix);
+ if (!in_heap(g, x)) return rot(oop_key(x) * mix);
  union u *k = cell(x);
  struct tag *tg = ttag(g, k);
  uintptr_t h = mix;
@@ -399,7 +404,7 @@ static uintptr_t fn_hash_d(struct g *g, word x, int d) {
   if (!(v & 1) && !(v >= hd && v <= e)) { word m = fn_meaning(g, v); if (m >= hd && m <= e) v = m; }
   uintptr_t t = (v & 1) ? (uintptr_t) v
               : v >= hd && v <= e ? (uintptr_t) (v - x)
-              : in_heap(g, v) ? fn_word(g, v, d) : (uintptr_t) (v - (intptr_t) hash_base);
+              : in_heap(g, v) ? fn_word(g, v, d) : (uintptr_t) oop_key(v);
   h = (h ^ t) * mix; }
  return h; }
 

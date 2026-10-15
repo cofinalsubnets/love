@@ -1122,7 +1122,8 @@ test_uugen: host
 # it in Rocq -- two derivations of one datum.
 test_mx: host
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat src/love/mx.l src/tools/mx2coq.l | $m > test/proof/rocq/mx.v
+	@cat src/love/mx.l src/tools/mx2coq.l | $m > out/.mx.v.tmp
+	@cmp -s out/.mx.v.tmp test/proof/rocq/mx.v || mv out/.mx.v.tmp test/proof/rocq/mx.v
 	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif

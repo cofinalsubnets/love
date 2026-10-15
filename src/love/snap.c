@@ -327,6 +327,14 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 // the bare-fn lane's width: one slot per nif cell whose code slot a thread can embed --
 // love_def1's, then the host slice's (LvNif registers a cell too: src/love/main.c's nif_exit[]).
 #define ImageNFn ((uintptr_t)(def1_n + ImageNHost))
+// an out-of-pool word's seat in the image's index space (an op or nif, an immortal, a bare
+// nif fn), -1 for none: a hash keys a binary address by it, so a table orders alike in every
+// build of one source
+intptr_t image_seat(word v) {
+ intptr_t i = image_ap_index((intptr_t) v);
+ if (i >= 0) return i;
+ if ((i = image_imm_index(v)) >= 0) return (intptr_t) ImageNLvm + i;
+ return (i = image_fn_index((intptr_t) v)) >= 0 ? (intptr_t) (ImageNLvm + ImageNImm) + i : -1; }
 // the lane floor: above any heap this codec encodes (1 TB on 64-bit, 128 MB on 32-bit;
 // a dump past it is refused rather than aliased) and below the absolute lane. spelled by
 // the preprocessor: mooncc does not fold a sizeof ternary, and every decoded word asks.
