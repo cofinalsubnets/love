@@ -1,19 +1,8 @@
 ; src/apps/kore/htop.l -- top's rich face, htop's shape, and top-main, the door to both.
-; the samples are top.l's (tp-take); this file draws them and walks them.
-;
-; the face is an engine and a seat, as less.l is: tr-step takes one key into the state
-; tablet and answers what the seat owes (0 nothing, 1 quit, 2 a repaint, 3 a fresh
-; sample), tr-draw answers one whole frame for w by h, and tr-ride is the only part
-; with a terminal. a frame pads every line to the width, so nothing is erased behind a
-; glyph that raised a pending wrap.
-;
-; keys: arrows, j, PgUp PgDn Home End walk the list (the selection keeps its pid; F its
-; row). t F5 the tree; F6 < > the sort picker, P M T N procps' orders, I reverses; / F3
-; search, n the next; \ F4 filter, u a user; k F9 a signal; F7 [ F8 ] nice; H threads,
-; K kernel threads; c the command line; h ? F1 help; q F10 quit. the mouse selects,
-; sorts by a column and presses the key bar.
-; flags: -P the plain face, -C no colour, -b batch (plain, no terminal), -n FRAMES,
-; -d SECS, -p PID (repeatable).
+; an engine and a seat, as less.l is: tr-step takes one key into the state tablet and
+; answers what the seat owes (0 nothing, 1 quit, 2 a repaint, 3 a fresh sample), tr-draw
+; answers one whole frame for w by h, and tr-ride alone touches the terminal. every line is
+; padded to the width, so nothing is erased behind a glyph that raised a pending wrap.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)

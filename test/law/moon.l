@@ -1996,6 +1996,314 @@
          ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret)) ||
           ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret)))))))
 
+; --- the value layer's instrument, over val.l's live half: functions of a TU, the escape census,
+; cells, dead stores and per-def chains. a frame op off the base+const shape reads everything,
+; so every count is conservative.
+(:
+   voff 4294967296              ; offset shift: encoded keys stay positive for // and %
+   (valu? x) (elem x '(add sub and or xor imul))
+   (vbase? x) (x = 'sp || x = 'r4)
+   (vsbit x) (x = 'sp ? 0 1)
+   (vspc b) (b = 0 ? 'sp 'r4)
+   ; ops that neither read nor write frame memory
+   (vpure? x) (elem x '(ret br label li mov cmp test push pop set la ldsdl ud2
+                           add sub and or xor imul shl shr sar ror4
+                           sx4 zx4 sx2 zx2 sx1 zx1 not neg))
+   (vsans a b) (? (atom? a) () (atom? b) a
+                  (<a < <b) (<a . vsans >a b)
+                  (<b < <a) (vsans a >b)
+                  (vsans >a >b))
+   (vall? x) (x = 'all)
+   (vsz x) (vall? x ? -1 #x)
+   (vuq l) (atom? l ? () (vuq >l @ r (two? r && <l = <r ? r (<l . r))))
+   (vkeep p l) (? (atom? l) () (p <l) (<l . vkeep p >l) (vkeep p >l))
+   (vtake n l) (n < 1 || atom? l ? () (<l . vtake (n - 1) >l))
+   (vat k l) (k < 1 ? <l (vat (k - 1) >l))
+
+   ; -- indexing --
+   (vtab l) (: t {} (go l i) (atom? l ? t (pin t i <l, go >l (i + 1))) (go l 0))
+   (vdot? s) (46 = (show s) 0)
+
+   ; -- a TU's forms into functions: a non-dot label opens one, align is glue --
+   (vfns fs)
+    (: (shut nm bd acc) (nm = () ? acc ([nm (rev bd)] . acc))
+       (go l nm bd acc)
+        (atom? l ? (rev (shut nm bd acc))
+           (<l @ f
+              (? (two? f && <f = 'label && !(vdot? <>f)) (go >l <>f () (shut nm bd acc))
+                 (two? f && <f = 'align) (go >l nm bd acc)
+                 (nm = ()) (go >l nm bd acc)
+                 (go >l nm (f . bd) acc))))
+       (go fs () () ()))
+
+   ; -- escape census: spaces whose address leaks --
+   (vesc bd)
+    (: t {}
+       (mark l) (atom? l ? 0 (vbase? <l ? (pin t <l 1) 0, mark >l))
+       (go l)
+        (atom? l ? t
+           (<l @ f
+              (atom? f ? 0
+                 (<f @ op
+                    (? (elem op '(lea lean leax)) (mark >f)
+                       (0 < vldw op || 0 < vstw op || 0 < vsiw op
+                        || elem op '(ldsd stsd cmpm cmprm ldss stss ldsdl cvtsi2sd movqxr movqrx)) 0
+                       (valu? op && <>f = 'sp) 0
+                       (mark >f))),
+               go >l)))
+       (go bd))
+
+   ; -- back-edge spans and the loop weight 8^min(depth,3) --
+   (vspans bd)
+    (: lt (vlabs bd)
+       (go l i acc)
+        (atom? l ? (rev acc)
+           (: f <l
+              j (? (atom? f) -1
+                   (<f = 'jmp) (peep lt <>f -1)
+                   (<f = 'br) (peep lt <>>f -1)
+                   -1)
+              (go >l (i + 1) (0 <= j && j < i ? ([j i] . acc) acc))))
+       (go bd 0 ()))
+
+   ; -- forward sp cursor: reach from entry, first visit wins (the oracle's walk) --
+   (vcur bt n succ)
+    (: t {}
+       (go wk)
+        (atom? wk ? t
+           (: p <wk i <p c <>p
+              (n <= i || charm? (t i) ? (go >wk)
+                 (: _ (pin t i c)
+                    f (bt i)
+                    c2 (atom? f ? c
+                          (<f @ op
+                             (? (valu? op && <>f = 'sp && <>>f = 'sp && charm? <>>>f)
+                                 (op = 'add ? (c + <>>>f) (c - <>>>f))
+                                (op = 'push) (c - 8)
+                                (op = 'pop) (c + 8)
+                                c)))
+                    (go (vapp (rev (map (j \ [j c2]) (succ i))) >wk))))))
+       (go [[0 0]]))
+
+   ; -- one form's frame bytes: [reads writes all?], keys (off*2 + space bit) --
+   (vbytes b o w)
+    (: sb (vsbit b)
+       (go k acc) (k < 0 ? acc (go (k - 1) ((o + k) * 2 + sb . acc)))
+       (go (w - 1) ()))
+   (vrw f c lt)
+    (atom? f ? [() () 0]
+       (: op <f
+          lw (vldw op) sw (vstw op) iw (vsiw op)
+          (? (0 < lw) (vbase? <>>f && charm? <>>>f ? [(vbytes <>>f (c + <>>>f) lw) () 0] [() () 1])
+             (elem op '(ldsd ldss)) (vbase? <>>f && charm? <>>>f ? [(vbytes <>>f (c + <>>>f) 8) () 0] [() () 1])
+             (0 < sw) (vbase? <>f && charm? <>>f ? [() (vbytes <>f (c + <>>f) sw) 0] [() () 1])
+             (0 < iw) (vbase? <>f && charm? <>>f ? [() (vbytes <>f (c + <>>f) iw) 0] [() () 1])
+             (elem op '(stsd stss)) (vbase? <>f && charm? <>>f ? [() (vbytes <>f (c + <>>f) 8) 0] [() () 1])
+             (elem op '(cmpm cmprm call callr sys raw jmpr jmpm)) [() () 1]
+             (op = 'jmp) (0 <= peep lt <>f -1 ? [() () 0] [() () 1])
+             (vpure? op) [() () 0]
+             [() () 1])))
+
+   ; -- backward byte liveness to the fixpoint. () nothing, 'all the top.
+   ; monotone, so a set's tally is the change detector; the least fixpoint is
+   ; sweep-order-free.
+   (vlive bt n succ cur lt escn)
+    (: lv {}
+       rwt (foldl (\ t i (pin t i (vrw (bt i) (peep cur i 0) lt))) {} ^n)
+       (out ss seed)
+        (? (vall? seed) 'all
+           (atom? ss) seed
+           (lv <ss @ s
+              (vall? s ? 'all (out >ss (vun seed s)))))
+       (sweep chg i)
+        (i < 0 ? chg
+           (: f (bt i)
+              o0 ((two? f && elem <f '(ret jmpr jmpm sys ud2)) && escn ? 'all)
+              ou (out (succ i) o0)
+              rw (rwt i)
+              nin (0 < <>>rw || vall? ou ? 'all (vun (vsans ou <>rw) <rw))
+              osz (vsz (lv i))
+              (pin lv i nin,
+               sweep (osz = vsz nin ? chg 1) (i - 1))))
+       (fix _) (0 < sweep 0 (n - 1) ? (fix 0) lv)
+       (fix 0))
+
+   ; -- the census walk (LINEAR cursor, the oracle's promo model): touch table
+   ; ((off+voff)*2+sb)*16+w -> (idx op) list newest-first, unpromotable cells,
+   ; call indices. 'skip when an unmodeled base use turns the fn conservative.
+   (vmb? f) (: (go l) (? (atom? l) 0 (vbase? <l) 1 (go >l)) (go >f))
+   (vtk sb o w) (((o + voff) * 2 + sb) * 16 + w)
+   (vdek k) (: w (k % 16) r (k // 16) [(r % 2) (r // 2 - voff) w])
+   (vtouch bd)
+    (: tt {} bad {}
+       (go l i c ci)
+        (atom? l ? [tt bad (rev ci)]
+           (<l @ f
+              (atom? f ? (go >l (i + 1) c ci)
+                 (: op <f
+                    lw (vldw op) sw (vstw op) iw (vsiw op)
+                    (? (valu? op && <>f = 'sp && <>>f = 'sp && charm? <>>>f)
+                        (go >l (i + 1) (op = 'add ? (c + <>>>f) (c - <>>>f)) ci)
+                       (op = 'push) (go >l (i + 1) (c - 8) ci)
+                       (op = 'pop) (go >l (i + 1) (c + 8) ci)
+                       (0 < lw && vbase? <>>f && charm? <>>>f)
+                        (vtk (vsbit <>>f) (c + <>>>f) lw @ k
+                           (pin tt k ([i op] . tt k),
+                            go >l (i + 1) c ci))
+                       (0 < sw && vbase? <>f && charm? <>>f)
+                        (vtk (vsbit <>f) (c + <>>f) sw @ k
+                           (pin tt k ([i op] . tt k),
+                            go >l (i + 1) c ci))
+                       (0 < iw && vbase? <>f && charm? <>>f)
+                        (vtk (vsbit <>f) (c + <>>f) iw @ k
+                           (pin tt k ([i op] . tt k),
+                            go >l (i + 1) c ci))
+                       (elem op '(ldsd ldss))
+                        (vbase? <>>f && charm? <>>>f ? (pin bad ((c + <>>>f + voff) * 2 + vsbit <>>f) 1) 0,
+                         go >l (i + 1) c ci)
+                       (elem op '(stsd stss))
+                        (vbase? <>f && charm? <>>f ? (pin bad ((c + <>>f + voff) * 2 + vsbit <>f) 1) 0,
+                         go >l (i + 1) c ci)
+                       (vmb? f && !(elem op '(label jmp br ret call li mov cmp test la))) 'skip
+                       (go >l (i + 1) c
+                           (elem op '(call callr sys) ? (i . ci) ci)))))))
+       (go bd 0 0 ()))
+
+   ; -- cells: the touches grouped 8-aligned per space, with the census flags
+   ; and the def/use split the chains read. rows sort by (base, space).
+   ; each: [sb base full across si nar multi nt wsum defs uses]
+   (vflr8 o) (o % 8 @ r (o - (r < 0 ? (r + 8) r)))
+   (vcls tch spans esc)
+    (tch = 'skip ? ()
+       (: tt <tch bad <>tch ci <>>tch
+          ct {}
+          _ (: (go l)
+               (atom? l ? 0
+                  (: k <l d (vdek k) sb <d off <>d w <>>d
+                     ck ((vflr8 off + voff) * 2 + sb)
+                     (pin ct ck ([off w (rev (tt k))] . ct ck),
+                      go >l)))
+               (go (sort (keys tt))))
+          (row l acc)
+           (atom? l ? (rev acc)
+              (: ck <l
+                 sb (ck % 2) base (ck // 2 - voff)
+                 es (rev (ct ck))
+                 (badc? l2) (? (atom? l2) 0
+                                (peep bad ((<<l2 + voff) * 2 + sb) 0) 1
+                                (badc? >l2))
+                 (? (peep esc (vspc sb) 0) (row >l acc)
+                    (badc? es) (row >l acc)
+                    (: allts (sort (: (g l2 a) (atom? l2 ? a
+                                                  (<l2 @ e (g >l2 (vapp (map (t \ <t) <>>e) a))))
+                                      (g es ())))
+                       offs (vuq (sort (map (e \ <e) es)))
+                       ws (vuq (sort (map (e \ <>e) es)))
+                       sifed (vany (e \ vany (t \ 0 < vsiw <>t) <>>e) es)
+                       full (ws = '(8) && #offs = 1 && !sifed)
+                       nar (#offs = 1 && !full && #ws = 1)
+                       multi (1 < #offs ? 1 0)
+                       lo <allts
+                       hi (: (g l2) (atom? >l2 ? <l2 (g >l2)) (g allts))
+                       across (vany (cx \ lo < cx && cx < hi) ci)
+                       wsum (: (g l2 a) (atom? l2 ? a (g >l2 (a + vwt spans <l2))) (g allts 0))
+                       dfs (sort (: (g l2 a)
+                                    (atom? l2 ? a
+                                       (<l2 @ e
+                                          (g >l2 (vapp (map (t \ <t)
+                                                            (vkeep (t \ 0 < vstw <>t || 0 < vsiw <>t) <>>e))
+                                                       a))))
+                                    (g es ())))
+                       uss (sort (: (g l2 a)
+                                    (atom? l2 ? a
+                                       (<l2 @ e
+                                          (g >l2 (vapp (map (t \ <t) (vkeep (t \ 0 < vldw <>t) <>>e))
+                                                       a))))
+                                    (g es ())))
+                       (row >l ([sb base (full ? 1 0) (across ? 1 0) (sifed ? 1 0)
+                                 (nar ? 1 0) multi #allts wsum dfs uss] . acc))))))
+          (row (sort (keys ct)) ())))
+
+   ; -- the whole layer over one body --
+   (vctx bd)
+    (: t {}
+       bt (vtab bd) n #bd lt (vlabs bd)
+       succ (vsucc bd) esc (vesc bd) spans (vspans bd)
+       cur (vcur bt n succ)
+       escn (0 < #(keys esc))
+       lv (vlive bt n succ cur lt escn)
+       tch (vtouch bd)
+       cls (vcls tch spans esc)
+       (pin t 'bt bt, pin t 'n n, pin t 'lt lt, pin t 'succ succ,
+        pin t 'esc esc, pin t 'spans spans, pin t 'cur cur,
+        pin t 'lv lv, pin t 'ci (tch = 'skip ? () <>>tch), pin t 'cls cls,
+        t))
+
+   ; -- the census rows: [sb base full across si nar multi nt wsum] --
+   (vcells ctx) (map (vtake 9) (ctx 'cls))
+
+   ; -- dead stores: a write no path reads. [i op weight near-call] --
+   (vdead ctx)
+    (: bt (ctx 'bt) n (ctx 'n) succ (ctx 'succ) cur (ctx 'cur)
+       lt (ctx 'lt) lv (ctx 'lv) spans (ctx 'spans)
+       (near i) (: (go k) (n <= k || i + 5 < k ? 0
+                             (bt k @ f
+                                (two? f && elem <f '(call callr) ? 1 (go (k + 1)))))
+                   (go (i + 1)))
+       (out ss seed)
+        (? (vall? seed) 'all
+           (atom? ss) seed
+           (lv <ss @ s
+              (vall? s ? 'all (out >ss (vun seed s)))))
+       (row i acc)
+        (i < 0 ? acc
+           (: f (bt i)
+              rw (vrw f (peep cur i 0) lt)
+              wr <>rw
+              (atom? wr ? (row (i - 1) acc)
+                 (out (succ i) () @ ou
+                    (? (vall? ou) (row (i - 1) acc)
+                       (two? (vboth wr ou)) (row (i - 1) acc)
+                       (row (i - 1) ([i <f (vwt spans i) (near i)] . acc)))))))
+       (row (n - 1) ()))
+
+   ; -- per-def chains: each cell's stores grouped by the loads that join them,
+   ; and the call-crossing verdict per chain, not per hull. [sb base defs uses cross]
+   (vchains ctx)
+    (: n (ctx 'n) succ (ctx 'succ) lv (ctx 'lv) ci (ctx 'ci)
+       (out ss seed)
+        (? (vall? seed) 'all
+           (atom? ss) seed
+           (lv <ss @ s
+              (vall? s ? 'all (out >ss (vun seed s)))))
+       (cell1 cl acc)
+        (: sb <cl base <>cl
+           dfs (vat 9 cl) uss (vat 10 cl)
+           rt (vreach 0 (n - 1) succ dfs)
+           gn (vgroup rt dfs uss)
+           nod <>gn
+           cbytes (vbytes (vspc sb) base 8)
+           (celllive? cx) (out (succ cx) () @ o
+                             (? (vall? o) 1 (two? (vboth o cbytes)) 1 0))
+           (cross ds) (vany (cx \ two? (vboth (rt cx) ds) && celllive? cx) ci)
+           rows (map (gp \ [sb base <gp <>gp (cross <gp ? 1 0)]) <gn)
+           (vapp acc (vapp rows (two? nod ? [[sb base () nod 0]]))))
+       (go l acc) (atom? l ? acc (go >l (cell1 <l acc)))
+       (go (ctx 'cls) ()))
+
+   ; -- the differential rows for one TU: C census, D dead, H chains, per fn --
+   (vgauge tu fs)
+    (: (fn1 nb acc)
+        (: nm <nb bd <>nb
+           ctx (vctx bd)
+           cs (map (r \ vapp ['C tu nm] (vtake 9 r)) (ctx 'cls))
+           dd (map (r \ vapp ['D tu nm] r) (vdead ctx))
+           hs (map (r \ vapp ['H tu nm] r) (vchains ctx))
+           (vapp acc (vapp cs (vapp dd hs))))
+       (go l acc) (atom? l ? acc (go >l (fn1 <l acc)))
+       (go (vfns fs) ()))
+)
+
 ; --- the value layer: cfg, escape census, cells, dead stores, per-def chains, on hand shapes.
 ; every v-list is sorted and the fixpoints are monotone unions, so no tablet order reaches an answer.
 (: fsA '((align 2) (label g) (li r5 0) (li r9 0) (label .c.0) (cmp r9 r6) (br ge .d.2)

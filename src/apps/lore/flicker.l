@@ -1,6 +1,4 @@
-; flicker -- how bright a light is over time: each a number at t seconds, 1 its full
-; light, for a lamp, a window, a flame, anything that glows.
-;
+; flicker -- how bright a light is at t seconds, 1 its full light, for anything that glows.
 ;   (flicker-stammer t sd)               a tube failing: mostly on, now and then off in a
 ;                                        burst of stutters; sd keeps two out of step
 ;   (flicker-buzz t)                     a tube's buzz, never far from full

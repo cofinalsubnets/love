@@ -683,7 +683,7 @@
       (hue-book () @ b (b "assert" = 'macro && (b "tau" = 'const) &&
                         (b "map" = 'book))))
 
-; --- the pens: molokayo, and every class has one -----------------------------
+; --- the pens: the theme, and every class has one -----------------------------
    _ (test
       (hue-pen '(Comment 59 "#75715E" ()) () = "\e[38;5;59m")
       (hue-pen '(Statement 161 "#F92672" (bold)) () = "\e[1;38;5;161m")

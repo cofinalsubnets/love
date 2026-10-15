@@ -1,18 +1,11 @@
-; src/apps/kore/bc.l -- bc: the arbitrary-precision calculator language. a toolbox
-; file, no seat -- kore is its door, and it stands on the u-floor alone.
-;
-;   bc [-l] [-q] [file..]        the files in turn, then stdin, as POSIX says
-;
+; src/apps/kore/bc.l -- bc, the arbitrary-precision calculator, GNU's dialect; and dc below.
 ; a number is [v s]: the exact integer v over 10^s, v a bigint. POSIX's scale rules all
-; truncate, which is why love's // (toward zero) is the divide this file wants:
+; truncate, so love's // (toward zero) is the divide wanted:
 ;   + -  max(sa, sb)                  *  min(sa + sb, max(scale, sa, sb))
 ;   /    scale                        %  max(scale + sb, sa)
 ;   ^    min(sa * b, max(scale, sa))  sqrt  max(scale, sa)
-;
-; the dialect is GNU's: POSIX bc plus multi-character names, print, else, halt, last
-; (and `.`), && || !, the # comment, and read(): a number from the next line of stdin, which
-; the program read from stdin shares a line at a time. not here: -s and -w, and a lexer-time
-; quit -- quit runs as a statement.
+; read() takes the next line of stdin, which a program read from stdin shares a line at a
+; time. not here: -s and -w, and a lexer-time quit (quit runs as a statement).
 (module 'kore
 (borrow 'posix)
 
@@ -133,9 +126,8 @@
    (bc-print st n) (pin st 'last n, bc-say st (bc-show st n))
 
    ; -- the complaints --------------------------------------------------------
-   ; `?` sums what it is handed, so a signal or a node may not be asked for its
-   ; presence with one -- ['ret v] carrying a negative v reads as false, and the
-   ; return is silently dropped. presence is a pattern here, everywhere
+   ; `?` sums what it is handed, so ['ret v] with a negative v reads false: presence is
+   ; asked by a pattern, never by `?`
    (bc-nil? ()) 1
    (bc-there? v) !(bc-nil? v)
    (bc-err m) (scare 'bc-err m)
@@ -632,10 +624,9 @@
                       (flush out, say err ("bc: " + b), put err 10,
                        flush err, 0)
                       (scare a b))))
-   ; is the buffer still mid-item? the lexer answers it: an unclosed brace, or a
-   ; string or comment that ran off the end. this is what makes stdin a prompt
-   ; rather than a slurp. asked once per line, over the open text only -- a closed
-   ; line costs one line, and only a define pays for its own length twice
+   ; is the buffer still mid-item (an unclosed brace, or a string or comment run off the
+   ; end)? this makes stdin a prompt rather than a slurp. asked once per line, over the
+   ; open text only
    (bc-open? t)
     (#t @ n
        (0 < n && t (n - 1) = 10 && 1 < n && t (n - 2) = 92 ? 1
@@ -659,11 +650,8 @@
        (go ""))
 
    ; -- the math library, in bc's own language --------------------------------
-   ; agreement with GNU stops at scale 10. above it these are byte-identical over
-   ; every argument swept; below it the two part on 29 of 735 sampled calls, each one
-   ; a place where GNU's own series ran out of guard digits -- ours is the correctly
-   ; truncated value every time, asked of GNU itself at scale 40. the gate takes the
-   ; scales where both are right
+   ; byte-identical to GNU's above scale 10; below it GNU's series can run out of guard
+   ; digits, and ours is the correctly truncated value
    bc-mathlib "
 scale = 20
 define e(x) {
@@ -761,11 +749,8 @@ define j(n, x) {
         pin st 'scale 0, pin st 'ibase 10, pin st 'obase 10,
         pin st 'last bn-zero, pin st 'col 0,
         st))
-   ; -- dc: the reverse-polish desk calculator, GNU's, on bc's numbers and bc's output
-   ; column (69 wide here). a value is a number [v s] or a string; a failed command
-   ; says so on err and leaves the stack as it found it. registers are stacks
-   ; (s l S L) and arrays (: ;), macros run by x and the six comparisons, q leaves two
-   ; levels (dc itself from the top two), Q n levels --
+   ; -- dc: the reverse-polish desk calculator, GNU's, on bc's numbers and output column
+   ; (69 wide). a failed command says so on err and leaves the stack as it found it --
    (dc-state _) {'stk () 'reg {} 'arr {} 'k 0 'ibase 10 'obase 10 'col 0 'wrap 69 'depth 0 'exit 0}
    (dc-err st m) (0 < peep st 'col 0 ? (put out 10, pin st 'col 0) 0,
                   flush out, say err ("dc: " + m + "\n"), flush err)

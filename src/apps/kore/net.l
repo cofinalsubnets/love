@@ -1,18 +1,7 @@
-; src/apps/kore/net.l -- telnet, telnetd, httpd, nslookup, ping and ping6: network tools over
-; doors the tree already has (src/love/sock.c's connect/listen/bind, src/apps/dns.l, kiosko).
-;
-;   telnet HOST [PORT]                a remote terminal over tcp, port 23 by default
-;   telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]   its server
-;   httpd [-fv] [-p PORT] [-h DIR]    kiosko under busybox's name and flags
-;   nslookup [-type=T] HOST [SERVER]  a name's records, asked of a nameserver directly
-;   ping [-46q] [-c N] [-i S] [-W S] [-s N] HOST  icmp echoes and their round trips
-;   ping6 [-q] [-c N] [-i S] [-W S] [-s N] HOST   the same over ipv6 (ping -6)
-;   traceroute [-46nI] [-f F] [-m M] [-q N] [-w S] HOST   the routers on the way (traceroute6)
-;
-; telnet is nc with RFC 854/855's options answered: it lets the server echo and suppress
-; go-ahead and refuses every other option. while the server echoes the terminal is raw
-; (character mode), else line mode. ^] closes; a stdin that is not a terminal is sent by lines.
-; httpd never detaches (-f is always true); busybox's other flags are refused by name.
+; src/apps/kore/net.l -- telnet, telnetd, httpd, nslookup, ping, traceroute and their 6s:
+; network tools over src/love/sock.c, src/apps/dns.l and kiosko.
+; telnet answers RFC 854/855 options: the server may echo and suppress go-ahead, all else
+; refused; the terminal is raw while the server echoes. httpd is kiosko under busybox's flags.
 ; nslookup asks resolv.conf's first answering nameserver, no hosts file, no search domains.
 ; ping rides linux's unprivileged echo socket, else a raw one; no reply at all is exit 1.
 (module 'kore
@@ -28,11 +17,8 @@
    ns-types '(("a" 1) ("aaaa" 28) ("cname" 5) ("mx" 15) ("ns" 2) ("ptr" 12) ("soa" 6) ("txt" 16))
    ns-rcodes '((1 "FORMERR") (2 "SERVFAIL") (3 "NXDOMAIN") (4 "NOTIMP") (5 "REFUSED"))
 
-   ; -- telnet: the option talk -------------------------------------------------------
-   ; the state of one connection: 'm is where the next byte falls -- 0 data, 1 past IAC,
-   ; 2 past IAC and a verb ('v), 3 inside SB, 4 past IAC inside SB. 'him and 'us are the
-   ; options in force at each end, 'cr a CR just shown (a NUL after it is part of it), and
-   ; 'raw whether the terminal is in character mode
+   ; one connection: 'm is where the next byte falls -- 0 data, 1 past IAC, 2 past IAC and
+   ; a verb ('v), 3 inside SB, 4 past IAC inside SB. 'cr a CR just shown (a NUL after is part of it)
    (tn-new _) (tablet 0 @ st
                  (pins st 'm 0 'v 0 'him () 'us () 'cr 0 'raw 0, st))
    (tn-cmd v x) (string 255 + string v + string x)
@@ -53,10 +39,8 @@
           (m = 2) (pin st 'm 0, ["" (tn-opt st (st 'v) c)])
           (m = 3) (c = 255 ? (pin st 'm 4) 0, ["" ""])
           (pin st 'm (c = 240 ? 0 3), ["" ""])))   ; SE ends it; anything else stays in
-   ; a verb about option x -> the reply owed. the server may echo (1) and suppress go-ahead
-   ; (3), we suppress go-ahead, and everything else is refused. a request for what is
-   ; already on, or a refusal of what is already off, answers nothing: that is what keeps
-   ; two agreeable ends from acknowledging each other forever
+   ; a verb about option x -> the reply owed. a request for what is already on, or a refusal
+   ; of what is already off, answers nothing, lest two agreeable ends acknowledge forever
    (tn-opt st v x)
     (: him (st 'him) us (st 'us)
        (? (v = 251) (? (elem x him) ""
@@ -107,11 +91,8 @@
        (up 0))
 
    ; -- telnetd ------------------------------------------------------------------------
-   ; busybox's: each connection a program on a pty, /bin/login unless -l names another.
-   ; the server offers to echo and suppress go-ahead and asks the window size (NAWS), which
-   ; the pty follows; every other option is refused. the state of one connection's input:
-   ; 'm 0 data, 1 past IAC, 2 past a verb ('v), 3 inside SB (its bytes in 'sb), 4 past IAC
-   ; inside SB; 'cr a CR just passed, whose LF or NUL is part of it
+   ; each connection a program on a pty (/bin/login unless -l); offers echo and suppress
+   ; go-ahead and asks NAWS, which the pty follows. 'm as telnet's, SB bytes in 'sb
    td-usage "usage: telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]"
    td-offer (tn-cmd 251 1 + tn-cmd 251 3 + tn-cmd 253 31)
    (td-new _) (tablet 0 @ st
@@ -358,11 +339,8 @@
         fin 0))
 
    ; -- traceroute ---------------------------------------------------------------------
-   ; icmp echoes with the ttl rising from -f (1) to -m (30), -q (3) to each hop: the routers'
-   ; time-exceeded errors come back through (bind [.. 'errs]), the target's echo reply ends
-   ; it, and so does an unreachable (marked !N !H !P !X). each probe waits -w seconds (3).
-   ; a router's name is its PTR off the first nameserver unless -n. busybox's probes are udp;
-   ; these are what its -I sends, the one kind an unprivileged linux socket may send
+   ; icmp echoes with the ttl rising; routers' time-exceeded errors come back through bind's
+   ; 'errs. echoes as busybox's -I sends: the one probe an unprivileged linux socket may send
    tr-usage "usage: traceroute [-46nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
    tr6-usage "usage: traceroute6 [-nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
    (traceroute-main as) (tr-run 0 as)

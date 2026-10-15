@@ -1,11 +1,11 @@
-; src/apps/vi/config.l -- the theme: molokayo, as plain data the painter reads.
+; src/apps/vi/config.l -- the theme: molokai, two hues our own, as plain data the painter reads.
 ; src/apps/lux/config.l is the shape -- a body-less `:`, values not code.
 ;
 ; keyed by vim highlight group, not syntax class: hue.l says a comment is a Comment, this
 ; says what a Comment looks like, so the generated vim syntax emits plain `hi def link`
-; lines while the painter gets the same colours from this table. every value is lifted
-; verbatim from molokayo.vim (molokai with its own `hi!` lines); the cterm numbers are
-; molokai's own 256-colour fallback.
+; lines while the painter gets the same colours from this table. the values are molokai's
+; (Tomas Restrepo's, after Wimer Hazenberg's monokai), the cterm numbers its 256-colour
+; fallback; Identifier and Special are the tree's own, a warmer amber and a cooler cyan.
 ;
 ; a row is `(group cterm256 "#rrggbb" faces)`, faces drawn from (bold italic).
 (module 'vi
@@ -17,8 +17,8 @@
       (Constant   135 "#AE81FF" (bold))
       (Statement  161 "#F92672" (bold))
       (Function   118 "#A6E22E" ())
-      (Identifier 214 "#ffb700" ())          ; molokayo over molokai's #fd971f/208
-      (Special    81  "#66d0ef" (italic))    ; molokayo over molokai's #66d9ef
+      (Identifier 214 "#ffaa1e" ())          ; ours, over molokai's #fd971f/208
+      (Special    81  "#62d2f2" (italic))    ; ours, over molokai's #66d9ef
       (Operator   161 "#F92672" ())
       (Delimiter  241 "#8F8F8F" ())
       (Type       81  "#66D9EF" ())          ; these two paint only src/apps/vi/hues.l's classes

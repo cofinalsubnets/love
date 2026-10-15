@@ -48,7 +48,7 @@
    ; the frame: a slab to sit on, and line numbers out of a css counter -- so the
    ; markup carries one span per line and no number, and selecting the code copies
    ; the code alone. the page's own colours answer to the reader's theme; the
-   ; syntax colours are molokayo either way, which is what the editor shows.
+   ; syntax colours are the theme either way, which is what the editor shows.
    hw-frame
    ".hue{background:var(--pre);padding:1rem 0;border-radius:6px;overflow-x:auto;counter-reset:ln;
   font:.82rem/1.55 ui-monospace,Menlo,monospace}

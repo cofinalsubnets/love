@@ -1,23 +1,10 @@
-; brush -- a world built as the dark engine built one: space starts solid, an air brush
-; carves it open and a solid brush fills it again, each brush a convex solid and the later
-; winning where they overlap. a surface is drawn wherever air meets solid, facing the air,
-; cut fine for the light that is baked into its corners.
-;
-;   (brush air planes)             a brush from its planes, each [n d] -- the points p it
-;                                  holds have dot n p <= d -- air 1 or solid 0
-;   (brush-box air lo hi)          ..a box between corners lo and hi
-;   (brush-prism air y0 y1 ps)     ..an upright prism, its floor plan ps [x z] going round
-;                                  either way, its sides convex
-;   (brush-cut b p q r)            b less what lies across the plane through p q r from
-;                                  its middle
-;   (brush-move b d) (brush-mirror b k c)  b moved by d; b reflected in the plane where
-;                                  axis k (0 x, 1 y, 2 z) is c
-;   (brush-medium bs p)            1 where p is air among the brushes bs, else 0
-;   (brush-faces bs)               the surfaces, each [ps n i]: its corners, the way it
-;                                  faces, and the brush it is a face of
-;   (brush-mesh bs cell look)      the surfaces, as a mesh; (look n p b) the texture and
-;                                  its texels [tex u v] at a place p of a surface facing n,
-;                                  a face of brush b
+; brush -- a world built as the dark engine built one: space starts solid, an air brush (air
+; 1) carves it and a solid brush (air 0) fills it again, each a convex solid, the later
+; winning. a surface is drawn wherever air meets solid, facing the air, cut fine for the light
+; baked into its corners.
+; a plane is [n d], holding the points p with dot n p <= d. brush-prism's plan ps is [x z]
+; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
+; corners, facing, and the brush index; brush-mesh's (look n p b) answers [tex u v].
 (module (brush brush brush-box brush-prism brush-cut brush-move brush-mirror brush-medium brush-mesh brush-faces)
 (borrow 'view)                          ; min2 max2
 (borrow 'vec)                           ; triples
@@ -72,10 +59,9 @@
  ; --- the medium at a place: the last brush holding it says, and solid where none does ---
  (inside? b p) (all (pl \ side pl p <= 0.0) (b 'planes))
  (brush-medium bs p) (: (go l) (? (atom? l) 0 (inside? <l p) (<l 'air) (go >l)) (go (rev bs)))
- ; --- the surfaces: each face cut by the planes of the brushes it meets, each piece kept
- ;     where air is on one side and solid on the other and no later brush has a face on
- ;     it, turned to the air; then cut on a grid cell wide, so the light's corners are near
- ;     enough together, the same lines in every face so their edges meet ---
+ ; --- the surfaces: each face cut by the planes of the brushes it meets, a piece kept where
+ ;     air meets solid and no later brush has a face on it, turned to the air; then cut on a
+ ;     grid a cell wide, the same lines in every face so the edges meet ---
  (near? a b) (all (k \ a 'lo k - 0.01 <= b 'hi k && b 'lo k - 0.01 <= a 'hi k) ^3)
  (fbox f) (: bx (box-of f) {'lo (bx 0) 'hi (bx 1)})
  (on-face? b c n) (any (pl \ mag (mag (dot (pl 0) n) - 1.0) < 1e-6 && mag (side pl c) < 1e-4) (b 'planes)

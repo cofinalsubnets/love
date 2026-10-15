@@ -1,29 +1,15 @@
-; src/apps/kore/awk.l -- awk: a pattern-action language over records and fields. a
-; toolbox file, no seat -- kore is its door. every regex rides re.l's ERE engine,
-; compiled to a matcher once and cached.
-;
-;   awk [-F fs] [-v var=value].. 'program' [file..]
-;   awk [-F fs] [-v var=value].. -f progfile.. [file..]
-;
-; the dialect is POSIX awk. not here: getline, output pipes, an RS other than newline,
-; ARGV/ARGC/ENVIRON, and printf's `*` width and `#` flag.
-;
-; number formatting is by hand (aw-fixed/aw-expo/aw-gen, %.6g off a normalised mantissa):
-; it rounds half away from zero where C rounds half to even, so the two part only on an
-; exact decimal tie.
+; src/apps/kore/awk.l -- awk, the POSIX dialect; each regex compiled once and cached. not here:
+; getline, output pipes, an RS other than newline, ARGV/ARGC/ENVIRON, and printf's `*` width
+; and `#` flag. also the shell's printf, over the same number engine.
 (module 'kore
 (borrow 'posix)
 (borrow 'text)
 
 (:
    ; -- values --------------------------------------------------------------
-   ; a value is () uninitialised, a number, a string, or ('sn n s) -- a strnum,
-   ; the thing that came off input looking like a number: it must compare as a
-   ; number and print as the text it arrived in ("007" is 7 and prints 007)
-   ; `nil?` is a truth test, not a type one -- it answers 1 for 0, for -4 and
-   ; for "" as readily as for (). awk leans on the difference every line (an
-   ; uninitialised value is () and prints "", the number 0 prints "0"), so the
-   ; empty question is asked by identity and never by truth
+   ; a value is () uninitialised, a number, a string, or ('sn n s), a strnum: input that looks
+   ; numeric compares as a number and prints as it arrived ("007"). the empty question is a
+   ; match on (), never truth: love's `nil?` answers 1 for 0 and "" too
    (aw-nil? ()) 1
    (aw-sn? ('sn . _)) 1
    (aw-numeric? v) !(string? v)          ; () and strnum both compare numeric
@@ -42,8 +28,7 @@
               k2 (run k)
               (k2 = k ? i3 k2))                          ; a bare e is not an exponent
           i3))
-   ; the text of a number -> the number (the span is already known good): love's own
-   ; strtod, correctly rounded, which is the one rounding C's makes; a whole value a
+   ; the text of a number -> the number, correctly rounded as C's strtod; a whole value a
    ; double holds exactly comes back a charm
    (aw-parse s a b) (gem (snip s a b) @ v (abs v < 9.0e15 && v = int v ? (int v) v))
    ; awk's string->number: the longest numeric prefix, blanks first, 0 for none
@@ -70,12 +55,8 @@
 
    ; -- the decimal engine: C's %f, %e and %g by hand --------------------------
    (aw-trunc x) (-9.0e18 < x < 9.0e18 ? (int x) x)
-   ; an integral double past a charm still owes its digits. awk prints 1e20 as
-   ; its twenty-one figures, and `int` overflows to 0 there. every double at that
-   ; size is m*2^k for an exact m under 2^53, so scale down to m, take it as a
-   ; charm, and scale back up through love's bigints -- exact, and glibc-identical
-   ; even where the double is not the round number it was written as (1e23 is
-   ; 99999999999999991611392 to both)
+   ; an integral double past a charm still owes its digits, and `int` overflows there: it is
+   ; m*2^k for an exact m under 2^53, so take m as a charm and scale up through bigints, exact
    (aw-bigint x)
     (: a (abs x)
        (k j) (a / 2 ** j < 9.0e15 ? j (k (j + 1)))
@@ -266,12 +247,9 @@
        (go 0 as))
 
    ; -- printf, the shell's ----------------------------------------------------
-   ; the format walked as C walks it, over the number engine above: flags - + space # 0,
-   ; a width and a precision (either may be *), d i o u x X c s b q f F e E g G and %%.
-   ; the escapes of the format and of %b; each argument read the way C's strto* read it,
-   ; so a word that is not wholly a number is said on err, printed as far as it went,
-   ; and the status left 1. the format is reused while arguments remain. \c ends it all.
-   ; no %a: a hex float is the one conversion nothing here spells.
+   ; the format walked as C walks it; each argument read as C's strto* reads it, so a word not
+   ; wholly a number is said on err, printed as far as it went, and the status left 1. the
+   ; format is reused while arguments remain. no %a
    (pf-die m) (flush out, udie 1 ("printf: " + m))
    ; the escapes are u.l's, which echo -e shares
    (pf-esc s k b?) (uesc s k b? "printf")
@@ -871,10 +849,9 @@
             ())))
 
    ; -- the runtime ---------------------------------------------------------
-   ; E carries the whole world: 'g the globals, 'loc the current frame or (),
-   ; 'fn the functions, 'rec the record with 'raws its split and 'flds the slots
-   ; a program has touched, 'fs the separator it arrived under, 're the regex
-   ; cache, 'ports the open redirections, 'ranges the pattern ranges that are on
+   ; E carries the world: 'g globals, 'loc the frame or (), 'fn functions, 'rec the record,
+   ; 'raws its split, 'flds the touched slots, 'fs its separator, 're the regex cache, 'ports
+   ; the open redirections, 'ranges the ranges that are on, 'ph the phase
    (aw-new fns)
     (: E {} g {}
        (pins E 'g g  'fn fns  'loc ()
@@ -906,9 +883,8 @@
        v)))
    (aw-arr E nm)
     (aw-get E nm @ v (tablet? v ? v ({} @ t (aw-put E nm t, t))))
-   ; a deleted element stays in the tablet wearing 'nope -- there is no unpin, and
-   ; `delete a` inside a function must empty the caller's array, which a fresh
-   ; tablet would not do
+   ; a deleted element stays in the tablet wearing 'nope: there is no unpin, and `delete a`
+   ; in a function must empty the caller's array, which a fresh tablet would not
    (aw-akeys a) (:- (go (keys a) ())
     (go l acc) (l @- (rev acc) (k . u) (go u (peep a k 'nope == 'nope ? acc (k . acc)))))
    (aw-key E subs)
@@ -965,10 +941,8 @@
     (? (fs = " ") (aw-splitw t)
        (#fs = 1) (aw-splitc t (fs 0))
        (aw-splitre E t fs))
-   ; a record is not split until something asks for a field, and a field is not
-   ; read as a number until something reads it -- an untouched field costs the
-   ; walk that found its edges and nothing else. fs is sampled when the record
-   ; arrives, so changing fs mid-record still splits by the separator it came in on
+   ; a record is split, and a field read as a number, only when asked. fs is sampled when the
+   ; record arrives, so changing fs mid-record still splits by the one it came in on
    (aw-setrec E s)
     (pins E 'rec s  'raws 'none  'flds 'none
             'fs (aw-sv E (peep (aw-g E) "FS" " ")),
@@ -1028,9 +1002,7 @@
            v)))
 
    ; -- comparison ------------------------------------------------------------
-   ; the strnum rule: two numeric-ish values compare as numbers, anything else
-   ; as text. this is why a field carries both faces -- "10" from input is less
-   ; than "9" as text and greater as a number, and awk owes the number
+   ; the strnum rule: two numeric-ish values compare as numbers, anything else as text
    (aw-slt a b)
     (: na #a nb #b
        (go k) (? (na <= k && nb <= k) 0
@@ -1041,9 +1013,7 @@
                  (go (k + 1)))
        (go 0))
    ; -- the analyser ---------------------------------------------------------
-   ; a node becomes a lambda of E, once, before the run. the tag walk, the
-   ; operator spelling and the accessor chains are spent here; what is left over
-   ; the records is a call
+   ; a node becomes a lambda of E, once, before the run
    (aw-an e)
     (<e @ ('num || 'str) (<>e @ v (E \ v))
           'grp (aw-an <>e)
@@ -1114,8 +1084,7 @@
            "*" (x \ y \ x * y)
            "/" (x \ y \ y = 0 && aw-err d0 || x / y)
                (x \ y \ y = 0 && aw-err d0m || x - y * aw-trunc (x / y))))
-   ; the strnum rule: two numeric-ish values compare as numbers, anything else as
-   ; text -- so each op is analysed into its pair of faces
+   ; each comparison is analysed into its numeric and text faces (the strnum rule)
    (aw-ancmp op a b)
     (: p (op @ "<" [(x \ y \ x < y) aw-slt]
                "<=" [(x \ y \ x <= y) (nil? * flip aw-slt)]
@@ -1152,8 +1121,8 @@
              (E \ put E (aw-numv (get E) + d))))
 
    ; -- the builtins ----------------------------------------------------------
-   ; a start under 1 clamps and the length is not docked for it -- gnu's reading,
-   ; not POSIX's: substr("hello",0,3) is "hel" there and "he" by the standard
+   ; a start under 1 clamps and the length is not docked for it, as gnu's (substr("hello",0,3)
+   ; is "hel"; POSIX says "he")
    ; the characters in s; the last answer is kept, so a loop over one string walks it once
    (aw-cpn E s)
     (peep E 'cpn () @ c
@@ -1299,12 +1268,8 @@
            ((lo + hi) / 2 @ m
               (tangent m < t ? (go m hi (k - 1)) (go lo m (k - 1)))))
        (go 0 (pi / 2) 60))
-   ; an array argument passes its tablet, which is awk's one aliasing rule: the
-   ; callee's delete and its assignments are the caller's too. a scalar is
-   ; evaluated and copied, so only a name already holding an array aliases
-   ; a signal that walks out of a call has no answer-place, so it goes the old
-   ; way. `rk` below says whether any function can do this; where it cannot, not
-   ; one trap is armed for the whole run
+   ; a signal that walks out of a call has no answer-place, so it leaves by scare. `rk` says
+   ; whether any function can do this; where none can, no trap is armed for the whole run
    (aw-flee sig)
     (sig @ 'nxt (scare 'awk-next ())
          'brk (scare 'awk-break ())
@@ -1318,6 +1283,7 @@
    (aw-risky? fns)
     (:- (go (keys fns))
      (go l) (l @ (nm . u) (peep fns nm () @ f (aw-flow? <>f || go u)) 0))
+   ; an array argument passes its tablet, awk's one aliasing rule; a scalar is copied
    (aw-anarg nd)
     (<nd @ 'var (: nm <>nd f (aw-anvar nm)
                    (E \ (aw-get E nm @ cur (tablet? cur ? cur (f E)))))
@@ -1338,16 +1304,14 @@
        _ (bind ps gs)
        old (E 'loc)
        _ (pin E 'loc loc)
-       ; a call sits in expression position, so a signal that is not this
-       ; function's own has nowhere to go but out -- the one scare awk still needs
+       ; a signal that is not this function's own has nowhere to go but out (aw-flee)
        sig (body E)
        _ (pin E 'loc old)
        r (? (sig == 0) ()
             (two? sig && <sig == 'ret) <>sig
             (aw-flee sig))
-       ; an untyped name handed in (g(A) with a never touched) becomes an array
-       ; iff the callee subscripted it -- awk decides late, so the answer only
-       ; exists now. carry the tablet back to the caller's name
+       ; an untyped name handed in becomes an array iff the callee subscripted it: carry
+       ; the tablet back to the caller's name
        ((: (back l a)
             (atom? l || atom? a ? 0
                (: vnm <a
@@ -1388,11 +1352,9 @@
        (E \ (say (pf E) (aw-sprintf (aw-sv E (f0 E)) (map (g \ g E) rest)
                                     (peep (aw-g E) "CONVFMT" "%.6g")),
              0)))
-   ; a statement answers its completion instead of throwing it: 0 falls through,
-   ; 'brk 'cnt 'nxt are the bare ones and ['ret v] ['exi c] carry a value. every
-   ; construct absorbs what it owns and hands the rest up, so a loop that cannot
-   ; break arms nothing -- a trap costs ~4.8k instructions to install and awk was
-   ; paying one per record, per iteration and per call
+   ; a statement answers its completion instead of throwing it: 0 falls through, 'brk 'cnt
+   ; 'nxt bare, ['ret v] ['exi c] with a value. each construct absorbs what it owns and hands
+   ; the rest up, so no trap is armed per record, iteration or call
    (aw-anlist rk ss)
     (map (aw-ax rk) ss @ fs
        (? (atom? fs) (_ \ 0)
@@ -1522,9 +1484,7 @@
        (go 0))
    (aw-cmdas E a)
     (a @ (k + "=" + v) (aw-put E k (aw-mk (aw-unesc v))))
-   ; the operands ride the u-floor's line reader, a record at a time: awk never
-   ; wants the whole input, and uread + lines held four copies of it to hand over
-   ; the first one
+   ; the operands ride the u-floor's line reader, a record at a time
    (aw-input E items as feed)
     (:- (go as 0)
      (one f)
@@ -1555,9 +1515,7 @@
              "-F" (two? >a ? (aw-flags >>a <>a vs pfs) (udie 2 "awk: -F wants a separator"))
              "-v" (two? >a ? (aw-flags >>a fs (<>a . vs) pfs) (udie 2 "awk: -v wants var=value"))
              "-f" (two? >a ? (aw-flags >>a fs vs (<>a . pfs)) (udie 2 "awk: -f wants a file"))
-             ;; a glued -Fx -vx -fx: the letter after the dash, or nothing. a dash word
-             ;; that is none of them is refused and not read as the program -- `awk -Z`
-             ;; used to be the program `-Z`, which parses, matches nothing and leaves 0
+             ;; a glued -Fx -vx -fx; any other dash word is refused, not read as the program
              (1 < n && w 0 = 45 @ f?
                 (? !f? [fs (rev vs) (rev pfs) a]
                    (2 < n && elem (w 1) '(70 118 102))
@@ -1588,8 +1546,7 @@
         feed (<>anp ? aw-feedt aw-feed)
         _ (aw-nil? fs || pin (aw-g E) "FS" (aw-unesc fs))
         _ (map (v \ aw-cmdas E v) vs)
-        ; exit outside end still runs the end rules -- POSIX, and the whole
-        ; reason the phase is tracked; an exit inside them is the end of it
+        ; exit outside end still runs the end rules (POSIX); an exit inside them ends it
         (ending b)
          (peep E 'ph 'end == 'end
           || (pin E 'ph 'end,

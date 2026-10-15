@@ -317,6 +317,9 @@ struct g {
  // what a native reads off g instead of carrying: the kind sentinels and callout drives are
  // addresses of this binary, so a blob holding one could not ride an image. ini fills it.
  word reach[12];
+ intptr_t fair;   // right past reach, where the glaze reads it: native code's countdown, a loop
+                  // step or a call takes one, and at 0 it refills
+ uintptr_t ticks; // ..and counts the refills, with the vm's fairness yields: work in 64-step units
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied
  // the remembered set, the whole write barrier: old cells that took a young pointer,
