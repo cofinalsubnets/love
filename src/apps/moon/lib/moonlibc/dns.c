@@ -43,16 +43,23 @@ static int __lines(char const *path, char const *host, unsigned int *out,
                    int (*one)(char*, char const*, unsigned int*)) {
   int fd = open(path, 0);
   if (fd < 0) return -1;
-  char buf[1024], ln[512];
-  long n; int li = 0, hit = -1;
+  char buf[1024], st[512], *ln = st;          /* a line on the stack, on the heap past it */
+  long n; size_t li = 0, cap = sizeof st; int hit = -1;
   while (hit < 0 && (n = read(fd, buf, sizeof buf)) > 0)
     for (long i = 0; i < n; i++) {
-      if (buf[i] != '\n') { if (li < (int) sizeof ln - 1) ln[li++] = buf[i]; continue; }
+      if (buf[i] != '\n') {
+        if (li + 1 >= cap) {
+          char *q = ln == st ? malloc(2 * cap) : realloc(ln, 2 * cap);
+          if (!q) { hit = -2; break; }           /* no room for the line: not found */
+          if (ln == st) memcpy(q, st, li);
+          ln = q, cap *= 2; }
+        ln[li++] = buf[i]; continue; }
       ln[li] = 0, li = 0;
       if (one(ln, host, out) == 0) { hit = 0; break; } }
-  if (hit < 0 && li) { ln[li] = 0; if (one(ln, host, out) == 0) hit = 0; }
+  if (hit == -1 && li) { ln[li] = 0; if (one(ln, host, out) == 0) hit = 0; }
+  if (ln != st) free(ln);
   close(fd);
-  return hit; }
+  return hit < 0 ? -1 : 0; }
 /* a resolv.conf "nameserver A.B.C.D" line; host carries a (char) slot index */
 static int __rline(char *ln, char const *slot, unsigned int *out) {
   char *p = ln;

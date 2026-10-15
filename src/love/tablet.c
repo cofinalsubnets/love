@@ -1,4 +1,4 @@
-// map.c -- map, codegen backend. one translation unit of the runtime;
+// tablet.c -- tablets, codegen backend. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are src/love/love.h.
 #include "love.h"
 // a tray key -> a row-major element offset: a fixnum on a rank-1 tray, else a shape-list of
@@ -65,19 +65,20 @@ word stacklook_macro(struct g *g, word k) {
 
 // fill an empty cap-slot backing at b (cap a power of two); caller reserves it.
 union u *map_fill_back(union u *b, uintptr_t cap) {
- b[0].ap = lvm_map_data, b[1].x = putcharm(0), b[2].x = putcharm(cap);
- for (uintptr_t i = 0; i < cap; i++) b[3 + 2 * i].x = map_gap, b[4 + 2 * i].x = zero;
- return tagthread(b, 3 + 2 * cap); }
+ struct tablet_back *t = tablet_back(b);
+ t->ap = lvm_map_data, t->len = putcharm(0), t->cap = putcharm(cap);
+ for (uintptr_t i = 0; i < cap; i++) t->slot[2 * i] = map_gap, t->slot[2 * i + 1] = zero;
+ return tagthread(b, map_back_words(cap) - 1); }
 
 // double the backing of the map at sp[2], rehash, swap into header[1]; the
 // header never moves, so aliased references stay valid
 static love_noinline struct g *map_grow(struct g *g) {
  uintptr_t ncap = 2 * map_cap(g->sp[2]);
- if (!ok(g = have(g, 4 + 2 * ncap))) return g;
+ if (!ok(g = have(g, map_back_words(ncap)))) return g;
  word m = g->sp[2];                                 // re-fetch header after GC
  union u *nb = map_fill_back((union u*) g->hp, ncap);
- g->hp += 4 + 2 * ncap;
- word *os = map_slots(m), *ns = &nb[3].x;
+ g->hp += map_back_words(ncap);
+ word *os = map_slots(m), *ns = tablet_back(nb)->slot;
  uintptr_t ocap = map_cap(m), nlen = 0, nmask = ncap - 1;
  for (uintptr_t j = 0; j < ocap; j++) {
   word k = os[2 * j];
@@ -85,8 +86,8 @@ static love_noinline struct g *map_grow(struct g *g) {
   uintptr_t i = hash(g, k) & nmask;
   while (ns[2 * i] != map_gap) i = (i + 1) & nmask;
   ns[2 * i] = k, ns[2 * i + 1] = os[2 * j + 1], nlen++; }
- nb[1].x = putcharm(nlen);
- cell(m)[1].x = (word) nb;                         // swap backing; header identity stable
+ tablet_back(nb)->len = putcharm(nlen);
+ tablet(m)->back = (word) nb;                      // swap backing; header identity stable
  gen_wb(g, m, (word) nb);                          // barrier: old header now points at the fresh (young) backing
  return g; }
 
@@ -106,7 +107,7 @@ love_noinline struct g *mapput(struct g *g) {
  s[2 * i] = g->sp[0], s[2 * i + 1] = g->sp[1];
  gen_wb(g, map_back(g->sp[2]), g->sp[0]);          // barrier: a young key ...
  gen_wb(g, map_back(g->sp[2]), g->sp[1]);          // ... or young value into an old backing
- cell(map_back(g->sp[2]))[1].x = putcharm(map_len(g->sp[2]) + 1);
+ map_len_set(g->sp[2], map_len(g->sp[2]) + 1);
  return g->sp += 2, g; }
 
 // mapdel: delete k, backward-shift the probe chain so no tombstone is
@@ -127,17 +128,17 @@ static love_noinline word mapdel(struct g *g, word m, word k, word dflt) {
    gen_wb(g, map_back(m), s[2 * i]), gen_wb(g, map_back(m), s[2 * i + 1]);  // delete shifts a (maybe young) k/v within an old backing
    i = j; } }
  s[2 * i] = map_gap, s[2 * i + 1] = zero;
- cell(map_back(m))[1].x = putcharm(map_len(m) - 1);
+ map_len_set(m, map_len(m) - 1);
  return m; }
 
 // C-callable fresh empty map, pushed on sp[0]. same shape as lvm_tablet.
 struct g *map_new(struct g *g) {
- uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
+ uintptr_t cap = map_min_cap, nb = map_back_words(cap);
  if (!ok(g = have(g, nb + map_head))) return g;
- union u *b = map_fill_back(cell(g->hp), cap), *h = cell(g->hp + nb);
- h[0].ap = lvm_map_lookup, h[1].x = (word) b, h[2].x = putcharm(++g->next_serial), tagthread(h, 3);
+ union u *b = map_fill_back(cell(g->hp), cap);
+ word h = ini_tablet(cell(g->hp + nb), (word) b, putcharm(++g->next_serial));
  g->hp += nb + map_head;
- return push(g, 1, (word) h); }
+ return push(g, 1, h); }
 
 // (tablet n): a fresh empty map; n is a size hint (presized below the 0.75 load
 // factor, so inserting n known keys never rehashes). n<=0 keeps the min capacity.
@@ -146,12 +147,10 @@ lvm(lvm_tablet) {
  uintptr_t hint = raw <= 0 ? 0 : (uintptr_t) raw > map_hint_max ? map_hint_max : (uintptr_t) raw,
            cap = map_min_cap;
  while (cap * 3 <= hint * 4) cap *= 2;                        // grow to hold `hint` below the 0.75 load factor
- uintptr_t nb = 4 + 2 * cap;
+ uintptr_t nb = map_back_words(cap);
  Have(nb + map_head);
- union u *b = map_fill_back(cell(Hp), cap),
-         *h = cell(Hp + nb);
- h[0].ap = lvm_map_lookup, h[1].x = (word) b, h[2].x = putcharm(++g->next_serial), tagthread(h, 3);
- Sp[0] = (word) h;
+ union u *b = map_fill_back(cell(Hp), cap);
+ Sp[0] = ini_tablet(cell(Hp + nb), (word) b, putcharm(++g->next_serial));
  Hp += nb + map_head; love_musttail return Next(1); }
 
 // (m k): map application is lookup, () if absent; unwinds like self-quote

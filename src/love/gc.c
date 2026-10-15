@@ -152,9 +152,9 @@ static word major_symbols_rebuild(struct g *g, struct gcx *X, word om) {
  // sized to its survivors, so an image's map is a function of the live set; one more intern fits (intern_reserve)
  while ((n + 1) * 4 >= cap * 3) cap *= 2;
  uintptr_t mask = cap - 1;
- union u *b = map_fill_back(gbump(g, 4 + 2 * cap), cap), *hd = gbump(g, map_head);
- hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, hd[2].x = cell(om)[2].x, tagthread(hd, 3);
- word *ns = &b[3].x;
+ union u *b = map_fill_back(gbump(g, map_back_words(cap)), cap), *hd = gbump(g, map_head);
+ ini_tablet(hd, (word) b, tablet(om)->serial);
+ word *ns = tablet_back(b)->slot;
  n = 0;
  for (uintptr_t j = 0; j < ocap; j++) {
   word k = os[2 * j];

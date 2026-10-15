@@ -46,6 +46,13 @@ int main(void) {
     R("%4lf%n", &d, &n1); { char t[40]; snprintf(t, sizeof t, "%.6g", d); say_s("  d", t); say_n("  n", n1); }
     R("%p", &p); say_n("  p", (long) p);
     R(" %n%d%n", &n1, &a, &n2); say_n("  n1", n1); say_n("  a", a); say_n("  n2", n2); }
+  /* a float field past any small buffer: 1 then 700 zeros, scaled back to 1, is one field */
+  { static char lng[800]; int k = 0, n1 = -1, n2 = -1; double d = -1, e = -1;
+    lng[k++] = '1'; while (k < 701) lng[k++] = '0';
+    memcpy(lng + k, "e-700 5", 8);
+    say_n("long", sscanf(lng, "%lf%n %lf%n", &d, &n1, &e, &n2));
+    { char t[40]; snprintf(t, sizeof t, "%.6g %.6g", d, e); say_s("  d e", t); }
+    say_n("  n1", n1); say_n("  n2", n2); }
   /* a stream: what the conversions leave unread is the next getc */
   FILE *t = tmpfile(); fputs("12 abc 0x10z rest", t); rewind(t);
   int a = 0, x = 0; char w[16];
