@@ -20,7 +20,6 @@
    (bq-put p s) (: f (open p "w") _ (say f s) (close f))
    (bq-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ""))
    bq-find fsub
-   (bq-in s p) (0 <= bq-find s p 0)
    (bq-reap p) (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 5) (bq-reap p))))
    (bq-chomp s) (: n #s (? (0 < n && s (n - 1) = 10) (snip s 0 (n - 1)) s))
    (bq-sq s) ("'" + s + "'")
@@ -33,7 +32,7 @@
    bq-pl (test-listen 0)
    bq-l (bq-pl 1)
    bq-url ("http://127.0.0.1:" + show <bq-pl)
-   (bq-head c a) (: b (see c) (? (b < 0) a (: a2 (a + string b) (? (bq-in a2 "\r\n\r\n") a2 (bq-head c a2)))))
+   (bq-head c a) (: b (see c) (? (b < 0) a (: a2 (a + string b) (? (has? a2 "\r\n\r\n") a2 (bq-head c a2)))))
    (bq-take c n a) (? (#a < n) (: b (see c) (? (b < 0) a (bq-take c n (a + string b)))) a)
    (bq-who body)
     (: s (peep body "system" "") k (bq-find s "session named " 0)
@@ -144,13 +143,23 @@
        (: (tidy s) (: n #s (? (0 < n && s (n - 1) = 10) (tidy (snip s 0 (n - 1))) s))
           (: (swap s) (: j (bq-find s (w 'repo) 0) (? (j < 0) s (swap (snip s 0 j + "REPO" + snip s (j + #(w 'repo)) #s))))
              (swap (tidy s)))))
+   ; tools/call lines to `bee --mcp` as nm on queue q, env words ahead ("" or "K=V .. "):
+   ; the answers' texts by id
+   (bq-calls w q env nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" q)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env " + env + "BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
    bq-gap 2000)                                                   ; two readings of each queue apart
 
 ; --- the bee agents: each serves, and a message from the driver starts the turn whose one call
 ; the model hands it. the answers and the mail come back in the requests the model hears ---
 (: w (bq-world "native")
    ps (map (\ nm (bq-start w nm "--serve -y" 0)) bq-names)
-   _ (bq-until (\ _ (all (\ nm (bq-in (bq-card w nm) "state idle")) bq-names)) 100)
+   _ (bq-until (\ _ (all (\ nm (has? (bq-card w nm) "state idle")) bq-names)) 100)
    (post nm) (: ib (w 'dir + "/.love/run/hive/" + nm + "/inbox") id (show (clock 0) + "-driver")
                 _ (bq-put (ib + "/." + id) "from driver\n\ngo on\n")
                 (rename (ib + "/." + id) (ib + "/" + id)))
@@ -160,7 +169,7 @@
           _ (pin (bq-box 'q) nm [(bq-use <s (s 2) (s 3))])
           _ (post nm)
           _ (bq-until (\ _ !(two? (peep (bq-box 'q) nm ()))) 150)
-          _ (bq-until (\ _ (bq-in (bq-card w nm) "state idle")) 150)
+          _ (bq-until (\ _ (has? (bq-card w nm) "state idle")) 150)
           (rest bq-gap)))
    _ (map step (bq-steps w))
    _ (rest (2 * bq-gap))                                         ; the last notices, taken
@@ -237,25 +246,25 @@
    _ (test
       (0 < #q) (n 'queue = q)                                         ; the same queue, byte for byte
       !(two? same) !(two? diff)                                       ; the same answers, the same notices
-      (bq-in q "on bee's standard protocol") (bq-in q "leader queen")
-      (bq-in q "3 carol carol - - waiting  # still here") !(bq-in q " ant ") !(bq-in q " bob ")
-      (bq-in q ("test " + bq-out (bq-git (m 'w) ["rev-parse" "--short" "test"])))
-      (bq-in (said "s1") "made refs/queue/test on bee's standard header, led by queen")
-      (bq-in (said "s2") "the queue is long (two or more rows waiting or gating)")
-      (bq-in (said "s3") "row now: 2 bob bob - - folded-into-1")
-      (bq-in (said "s6") "row 1 is gating: a row folds only into a waiting row")
-      (bq-in (said "s8") ("git merge --no-ff " + bq-out (bq-git (m 'w) ["rev-parse" "union"])))
-      (bq-in (said "s8") "in the checkout of test, REPO:")
-      (bq-in (said "s9") "landed: rows 1 and 2 left refs/queue/test") (bq-in (said "s9") "the release note went to carol")
-      (bq-in (said "s10") "more heavy-lock waiters than slots")
+      (has? q "on bee's standard protocol") (has? q "leader queen")
+      (has? q "3 carol carol - - waiting  # still here") !(has? q " ant ") !(has? q " bob ")
+      (has? q ("test " + bq-out (bq-git (m 'w) ["rev-parse" "--short" "test"])))
+      (has? (said "s1") "made refs/queue/test on bee's standard header, led by queen")
+      (has? (said "s2") "the queue is long (two or more rows waiting or gating)")
+      (has? (said "s3") "row now: 2 bob bob - - folded-into-1")
+      (has? (said "s6") "row 1 is gating: a row folds only into a waiting row")
+      (has? (said "s8") ("git merge --no-ff " + bq-out (bq-git (m 'w) ["rev-parse" "union"])))
+      (has? (said "s8") "in the checkout of test, REPO:")
+      (has? (said "s9") "landed: rows 1 and 2 left refs/queue/test") (has? (said "s9") "the release note went to carol")
+      (has? (said "s10") "more heavy-lock waiters than slots")
       (hears "ant" "queue-watch: - row 2 folds into yours: bob's bob at -")
       (hears "carol" "queue-watch: - row 1, which yours stacked on, has left the queue")
       (hears "carol" ("ant: row 1 landed on test at " + bq-out (bq-git (m 'w) ["rev-parse" "--short" "test"]) + ": nothing moves or goes"))
       (hears "queen" ("queue-watch: - row 1 moved: 1 (ant, ant) at " + g + ", green (was " + g + ", gating)"))
       (hears "bob" "queue-watch: - your row 2 has left the queue: landed, or dropped")
-      (bq-in (m 'listed) "queen  idle") (bq-in (m 'listed) "carol  idle")   ; claude code sessions in the hive
-      !(bq-in (m 'gone) "queen")                                      ; and out of it when they end
-      (bq-in (m 'init) "You are the session named ant"))
+      (has? (m 'listed) "queen  idle") (has? (m 'listed) "carol  idle")   ; claude code sessions in the hive
+      !(has? (m 'gone) "queen")                                      ; and out of it when they end
+      (has? (m 'init) "You are the session named ant"))
    0)
 
 ; --- the leader's own lines, and what only the leader may do --------------------------------
@@ -263,14 +272,7 @@
 ; carol, not the leader, may not touch sync, but as the head takes the queue, acting, once
 ; queen has no live session
 (: w (bq-box 'mcp 'w)
-   (calls nm cs)
-    (: f (w 'dir + "/" + nm + ".in")
-       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
-                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" bq-q)}} + "\n"))
-                         "" cs))
-       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
-       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
-              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   calls (bq-calls w bq-q "")
    a (calls "queen" [[1 "queue_lead" {"sync" "toward 0.3"}] [2 "queue_lead" {"pre_add" "one"}]
                      [3 "queue_lead" {"pre_add" "two"}] [4 "queue_lead" {"pre_drop" "1"}]
                      [5 "queue_row" {"session" "dan" "state" "waiting" "branch" "dan" "position" "7"}]
@@ -279,13 +281,13 @@
    b (calls "carol" [[8 "queue_lead" {"sync" "mine"}] [9 "queue_lead" {"leader" "carol"}]])
    q (bq-out (bq-git w ["cat-file" "-p" bq-q]))
    _ (test
-      (bq-in (a 5) "row now: 7 dan dan - - waiting")
-      (bq-in (a 6) "no row 9 to fold into")
-      (bq-in (a 7) "row 7 is not ahead of row 3")
-      (bq-in (b 8) "only the leader, queen,")
-      (bq-in (b 9) "you lead it, acting, in place of queen")
-      (bq-in q ("test " + bq-out (bq-git w ["rev-parse" "--short" "test"]) + "\nsync toward 0.3\npre two\n"))
-      !(bq-in q "pre one") (bq-in q "leader carol acting") (bq-in q "7 dan dan - - waiting"))
+      (has? (a 5) "row now: 7 dan dan - - waiting")
+      (has? (a 6) "no row 9 to fold into")
+      (has? (a 7) "row 7 is not ahead of row 3")
+      (has? (b 8) "only the leader, queen,")
+      (has? (b 9) "you lead it, acting, in place of queen")
+      (has? q ("test " + bq-out (bq-git w ["rev-parse" "--short" "test"]) + "\nsync toward 0.3\npre two\n"))
+      !(has? q "pre one") (has? q "leader carol acting") (has? q "7 dan dan - - waiting"))
    0)
 
 ; --- stacked landings recorded late, the counter, a noted base line, a release that misses ---
@@ -295,14 +297,7 @@
 ; ant's release note goes to bob, who has no session, and the answer says so
 (: w (bq-box 'mcp 'w) stq "refs/queue/stack"
    (git as) (bq-out (bq-git w as))
-   (calls nm cs)
-    (: f (w 'dir + "/" + nm + ".in")
-       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
-                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" stq)}} + "\n"))
-                         "" cs))
-       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
-       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
-              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   calls (bq-calls w stq "")
    (commit br from f) (: _ (git ["checkout" "-q" "-b" br from]) _ (bq-put (w 'repo + "/" + f) (f + "\n"))
                          _ (git ["add" f]) _ (git ["commit" "-q" "-m" f]) (git ["rev-parse" "HEAD"]))
    (merge h nm) (: _ (git ["merge" "-q" "--no-ff" h "-m" nm]) (git ["rev-parse" "--short" "HEAD"]))
@@ -332,16 +327,16 @@
    f (calls "dan" [[7 "queue_landed" {}]])
    q4 (queue 0)
    _ (test
-      (bq-in (a 1) "row now: 1 ant s1") (bq-in (b 2) "row now: 2 bob s2")
-      (bq-in (c 3) ("landed: row 1 left refs/queue/stack, whose base line is now stack " + m1 + "."))
-      (bq-in (c 3) "the release note reached no session. it could not reach bob (not in the hive): relay it to that session yourself.")
-      (bq-in q1 ("\nstack " + m1 + "\n")) (bq-in q1 "2 bob s2")
-      (bq-in (d 4) ("landed: row 2 left refs/queue/stack, whose base line is now stack " + m2 + "."))
-      (bq-in q2 ("\nstack " + m2 + "\nnext 3")) !(bq-in q2 " bob ")
-      (bq-in (e 5) "row now: 3 dan s3 - - waiting")
-      (bq-in q3 ("\nstack " + m2 + "  # the base, noted\nnext 4\n3 dan s3 "))
-      (bq-in (f 7) ("landed: row 3 left refs/queue/stack, whose base line is now stack " + m3 + "."))
-      (bq-in q4 ("\nstack " + m3 + "  # the base, noted\nnext 4")))
+      (has? (a 1) "row now: 1 ant s1") (has? (b 2) "row now: 2 bob s2")
+      (has? (c 3) ("landed: row 1 left refs/queue/stack, whose base line is now stack " + m1 + "."))
+      (has? (c 3) "the release note reached no session. it could not reach bob (not in the hive): relay it to that session yourself.")
+      (has? q1 ("\nstack " + m1 + "\n")) (has? q1 "2 bob s2")
+      (has? (d 4) ("landed: row 2 left refs/queue/stack, whose base line is now stack " + m2 + "."))
+      (has? q2 ("\nstack " + m2 + "\nnext 3")) !(has? q2 " bob ")
+      (has? (e 5) "row now: 3 dan s3 - - waiting")
+      (has? q3 ("\nstack " + m2 + "  # the base, noted\nnext 4\n3 dan s3 "))
+      (has? (f 7) ("landed: row 3 left refs/queue/stack, whose base line is now stack " + m3 + "."))
+      (has? q4 ("\nstack " + m3 + "  # the base, noted\nnext 4")))
    0)
 
 ; --- a landing that changes bee says to restart onto it ----------------------------------------
@@ -349,14 +344,7 @@
 ; their inboxes keep the release notes: carl's ends with the restart line, dan's does not
 (: w (bq-box 'mcp 'w) sq "refs/queue/served"
    (git as) (bq-out (bq-git w as))
-   (calls nm cs)
-    (: f (w 'dir + "/" + nm + ".in")
-       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
-                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" sq)}} + "\n"))
-                         "" cs))
-       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
-       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
-              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   calls (bq-calls w sq "")
    (commit br from f) (: _ (git ["checkout" "-q" "-b" br from]) _ (hark ["mkdir" "-p" (w 'repo + "/src/apps")])
                          _ (bq-put (w 'repo + "/" + f) (br + "\n"))
                          _ (git ["add" f]) _ (git ["commit" "-q" "-m" br]) (git ["rev-parse" "HEAD"]))
@@ -379,10 +367,10 @@
    b (calls "queen" [[5 "queue_landed" {"session" "carl" "release" "v2 is in"}]])
    _ (git ["checkout" "-q" "test"])
    _ (test
-      (bq-in (a 4) "the release note went to carl.") (bq-in (a 4) "this landing changed bee: every live session restarts")
-      (bq-in (note "carl") "v1 is in this landing changed bee: every live session restarts at the next convenient point -- between tasks, never mid-gate --")
-      (bq-in (b 5) "the release note went to dan.") !(bq-in (b 5) "changed bee")
-      (bq-in (note "dan") ": v2 is in") !(bq-in (note "dan") "changed bee"))
+      (has? (a 4) "the release note went to carl.") (has? (a 4) "this landing changed bee: every live session restarts")
+      (has? (note "carl") "v1 is in this landing changed bee: every live session restarts at the next convenient point -- between tasks, never mid-gate --")
+      (has? (b 5) "the release note went to dan.") !(has? (b 5) "changed bee")
+      (has? (note "dan") ": v2 is in") !(has? (note "dan") "changed bee"))
    0)
 
 ; --- a session told once when its binary is replaced by one carrying other bee source --------
@@ -414,7 +402,7 @@
    _ (test
       (n-told t1 = 0)
       (n-told t2 = 0) (n-told t3 = 0)
-      (n-told t4 = 1) (bq-in t4 ("bee was updated: " + exe + " was replaced")) (bq-in t4 "never mid-gate")
+      (n-told t4 = 1) (has? t4 ("bee was updated: " + exe + " was replaced")) (has? t4 "never mid-gate")
       (n-told t5 = 0))
    0)
 
@@ -425,15 +413,7 @@
 (: w (bq-box 'mcp 'w) lq "queue/sbq" hub (w 'dir + "/hub") wa (w 'dir + "/wa") wb (w 'dir + "/wb")
    (sb d as) (bq-out (hark ([bq-love "sb" "-C" d] + as)))
    (put d f) (bq-put (d + "/" + f) (f + "\n"))
-   (calls nm cs)
-    (: f (w 'dir + "/" + nm + ".in")
-       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
-                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
-                         "" cs))
-       r (bq-sh w ("env SB_HUB=" + bq-sq hub + " GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t"
-                   + " BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
-       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
-              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   calls (bq-calls w lq ("SB_HUB=" + bq-sq hub + " GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "))
    _ (map (\ d (mkdir d 493)) [hub wa wb])
    _ (put hub "f") _ (sb hub ["record" "one"])
    m (sb hub ["psid"])
@@ -485,39 +465,32 @@
    rd (calls "bob" [[13 "queue_read" {}]])
    _ (test
       (#m = 64) (#g = 64) (m != g)
-      (bq-in (a 1) "made queue/sbq on bee's standard header, led by queen")
-      (bq-in (a 2) ("no set " + g + " in the hub: paste it from sb psid"))   ; refused before the deposit
-      (bq-in (a 3) "only a green row lands") (bq-in (b 14) " green")
-      (bq-in (b 4) ("sb -C " + hub + " take " + g)) (bq-in (b 4) ("psid   # must print " + g))
-      (bq-in (b 5) ("not the gated set " + g))
-      (bq-in (c 6) ("landed: row 1 left queue/sbq, whose base line is now sbq " + g + "."))
-      (bq-in (c 6) "this landing changed bee: every live session restarts")
-      (bq-in (m1 7) "the change is in") (bq-in (c0 8) "is checked out at") (bq-in (c0 8) "the row stays")
-      (bq-in (c 6) "the mirror: a commit")
+      (has? (a 1) "made queue/sbq on bee's standard header, led by queen")
+      (has? (a 2) ("no set " + g + " in the hub: paste it from sb psid"))   ; refused before the deposit
+      (has? (a 3) "only a green row lands") (has? (b 14) " green")
+      (has? (b 4) ("sb -C " + hub + " take " + g)) (has? (b 4) ("psid   # must print " + g))
+      (has? (b 5) ("not the gated set " + g))
+      (has? (c 6) ("landed: row 1 left queue/sbq, whose base line is now sbq " + g + "."))
+      (has? (c 6) "this landing changed bee: every live session restarts")
+      (has? (m1 7) "the change is in") (has? (c0 8) "is checked out at") (has? (c0 8) "the row stays")
+      (has? (c 6) "the mirror: a commit")
       (mt = "a\nb\nf\nsrc/apps/bee.l\nweb/keep.txt") (mparent = mp) (mbee = "src/apps/bee.l")
-      (bq-in mmsg "Merge queue row 1 (ant)") (bq-in mmsg ("sb psid " + g))
-      (bq-in q "land by psid") (bq-in q ("\nsbq " + g + "\n")) !(bq-in q " ant ")
+      (has? mmsg "Merge queue row 1 (ant)") (has? mmsg ("sb psid " + g))
+      (has? q "land by psid") (has? q ("\nsbq " + g + "\n")) !(has? q " ant ")
       (sb hub ["psid"] = g2)
       (bq-get (hub + "/a") = "a\n") (bq-get (hub + "/b") = "b\n")
-      (#g2 = 64) (bq-in (e 12) ("whose base line is now sbq " + g2 + ".")) !(bq-in (e 12) "restarts")
-      (bq-in (e0 15) "publish is the absolute path") (bq-in (e0 16) "has no web") (bq-in (e0 16) "the row stays")
-      (bq-in (e 12) ("its web/ from " + pd)) (mkeep = "new")
+      (#g2 = 64) (has? (e 12) ("whose base line is now sbq " + g2 + ".")) !(has? (e 12) "restarts")
+      (has? (e0 15) "publish is the absolute path") (has? (e0 16) "has no web") (has? (e0 16) "the row stays")
+      (has? (e 12) ("its web/ from " + pd)) (mkeep = "new")
       (mt2 = "a\nb\nd\nf\nsrc/apps/bee.l\nweb/keep.txt\nweb/wasm/m.wasm")
-      (bq-in (rd 13) ("\nsbq " + g2 + "\n")) (bq-in (rd 13) "land by psid"))
+      (has? (rd 13) ("\nsbq " + g2 + "\n")) (has? (rd 13) "land by psid"))
    0)
 
 ;; --- a row merged but not yet queue_landed is still landing: the row behind may not land
 ; until it leaves the queue, and the answer names the locked fast gate ----------------------
 (: w (bq-world "landing") lq bq-q
    (sha r) (bq-out (bq-git w ["rev-parse" r]))
-   (calls nm cs)
-    (: f (w 'dir + "/" + nm + ".in")
-       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
-                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
-                         "" cs))
-       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
-       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
-              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   calls (bq-calls w lq "")
    m (sha "test") ga (sha "ant") gu (sha "union")
    a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "leader" "queen"}]
                    [2 "queue_row" {"state" "green" "gated_on" m "gated_head" ga}]])
@@ -529,12 +502,12 @@
    d (calls "ant" [[7 "queue_landed" {}]])
    e (calls "bob" [[8 "queue_land" {}]])
    _ (test
-      (bq-in (b 4) " green")
-      (bq-in (b 5) "row 1 is ahead of row 2: the head lands first")
-      (bq-in (c 6) "row 1 is still landing (merged, make test running); wait for its queue_landed")
-      (bq-in (d 7) "landed: row 1 left")
-      (bq-in (e 8) ("git merge --no-ff " + gu))
-      (bq-in (e 8) "love bee --lock --out ") (bq-in (e 8) (w 'repo + "/out")) (bq-in (e 8) " -- make test"))
+      (has? (b 4) " green")
+      (has? (b 5) "row 1 is ahead of row 2: the head lands first")
+      (has? (c 6) "row 1 is still landing (merged, make test running); wait for its queue_landed")
+      (has? (d 7) "landed: row 1 left")
+      (has? (e 8) ("git merge --no-ff " + gu))
+      (has? (e 8) "love bee --lock --out ") (has? (e 8) (w 'repo + "/out")) (has? (e 8) " -- make test"))
    0)
 
 ;; --- the shadow of a git queue: each landing laid into an sb hub, recorded, banked and
@@ -543,14 +516,7 @@
 (: w (bq-world "shadow") lq bq-q hub (w 'dir + "/hub")
    (sha r) (bq-out (bq-git w ["rev-parse" r]))
    (sb d as) (bq-out (hark ([bq-love "sb" "-C" d] + as)))
-   (calls nm cs)
-    (: f (w 'dir + "/" + nm + ".in")
-       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
-                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
-                         "" cs))
-       r (bq-sh w ("env GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
-       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
-              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   calls (bq-calls w lq "GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t ")
    (row nm k br on)
     (calls nm [[k "queue_row" (: j {"state" "waiting" "branch" br} (k = 1 ? (pin j "leader" "queen") j))]
                [(k + 1) "queue_row" {"state" "green" "gated_on" on "gated_head" (sha br)}]])
@@ -575,16 +541,16 @@
    _ (bq-git w ["merge" "-q" "--no-ff" (sha "c3") "-m" "Merge queue row 3 (carol)"])
    e (calls "carol" [[11 "queue_landed" {}]])
    _ (test
-      (bq-in (s0 3) "shadow is HUB BRANCH") (bq-in (s0 4) "the change is in")
-      (bq-in (b 5) "landed: row 1 left")
-      (bq-in (b 5) ("the shadow: gwen-" + snip t1 0 9 + " recorded in " + hub)) (bq-in (b 5) "the tree matches")
-      (<tr = tr 1) (bq-in (bq-out (bq-git w ["log" "-1" "--format=%B" "sh"])) ("shadow of " + t1))
+      (has? (s0 3) "shadow is HUB BRANCH") (has? (s0 4) "the change is in")
+      (has? (b 5) "landed: row 1 left")
+      (has? (b 5) ("the shadow: gwen-" + snip t1 0 9 + " recorded in " + hub)) (has? (b 5) "the tree matches")
+      (<tr = tr 1) (has? (bq-out (bq-git w ["log" "-1" "--format=%B" "sh"])) ("shadow of " + t1))
       (sb hub ["psid" ("gwen-" + t1)] = sb hub ["psid"]) (bq-get (hub + "/a") = "a\n")
-      (bq-in lg (t1 + " ")) (bq-in lg " match ")
-      (<k1 = 0) (bq-in (k1 1) (t1 + "'s")) (<k0 = 1) (bq-in (k0 1) "differs")
-      (bq-in (d 8) "landed: row 2 left") (bq-in (d 8) "the shadow: STOPPED") (bq-in (d 8) "out/x")
-      (bq-in (d 8) "queen") (bq-in st "out/x")
-      (bq-in (e 11) "landed: row 3 left") (bq-in (e 11) "still stopped") !(bq-in (e 11) "queen") (bq-get (hub + "/c") = ""))
+      (has? lg (t1 + " ")) (has? lg " match ")
+      (<k1 = 0) (has? (k1 1) (t1 + "'s")) (<k0 = 1) (has? (k0 1) "differs")
+      (has? (d 8) "landed: row 2 left") (has? (d 8) "the shadow: STOPPED") (has? (d 8) "out/x")
+      (has? (d 8) "queen") (has? st "out/x")
+      (has? (e 11) "landed: row 3 left") (has? (e 11) "still stopped") !(has? (e 11) "queen") (bq-get (hub + "/c") = ""))
    0)
 
 ;; --- a join that waits with its head folds into the earliest waiting row ahead when the heads
@@ -602,14 +568,7 @@
    _ (branch "c1" [["p1.txt" "other\n"]])
    _ (branch "k1" [["k1.txt" "k\n"]])
    _ (branch "e1" [["e1.txt" "e\n"]])
-   (calls nm cs)
-    (: f (w 'dir + "/" + nm + ".in")
-       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
-                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
-                         "" cs))
-       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
-       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
-              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   calls (bq-calls w lq "")
    (join nm id br more) (calls nm [[id "queue_row" (foldl (\ t k (pin t k (more k))) {"state" "waiting" "branch" br "gated_head" (sha br)} (keys more))]])
    a (join "ant" 1 "p1" {"leader" "queen"})
    b (join "bob" 2 "p2" {})
@@ -622,13 +581,13 @@
    q2 (bq-out (bq-git w ["cat-file" "-p" lq]))
    _ (test
       (row "1" 5 = "waiting")
-      (bq-in (b 2) "folded into row 1 (ant)") (bq-in (b 2) "but for src/tools/hot.prof")
+      (has? (b 2) "folded into row 1 (ant)") (has? (b 2) "but for src/tools/hot.prof")
       (row "2" 5 = "folded-into-1")
-      (row "3" 5 = "waiting") !(bq-in (c 3) "folded into")          ; p1.txt conflicts with row 1
-      (row "4" 5 = "waiting") !(bq-in (d 4) "folded into")          ; keep
-      (bq-in q "\nkeep 4\n")
-      (bq-in (e 5) "folded into row 1 (ant)") (row "5" 5 = "folded-into-1")
-      (bq-in (k0 6) "row now: 4 dan k1") !(bq-in q2 "\nkeep "))
+      (row "3" 5 = "waiting") !(has? (c 3) "folded into")          ; p1.txt conflicts with row 1
+      (row "4" 5 = "waiting") !(has? (d 4) "folded into")          ; keep
+      (has? q "\nkeep 4\n")
+      (has? (e 5) "folded into row 1 (ant)") (row "5" 5 = "folded-into-1")
+      (has? (k0 6) "row now: 4 dan k1") !(has? q2 "\nkeep "))
    0)
 
 ;; --- queue_gate: the head row's union gated by bee -- its row gating with the worktree's HEAD, the
@@ -639,21 +598,14 @@
    _ (hark ["mkdir" "-p" (w 'repo + "/test/gate")])
    _ (bq-put (w 'repo + "/test/gate/lanes.sh")
              "d=out/lanes-gate; mkdir -p $d; echo \"$@\" > out/args\nif [ -f red ]; then echo 'test_slow exit=1 secs=0' > $d/summary; exit 1; fi\necho 'test_slow exit=0 secs=0' > $d/summary\n")
-   (calls nm cs)
-    (: f (w 'dir + "/" + nm + ".in")
-       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
-                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
-                         "" cs))
-       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
-       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
-              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   calls (bq-calls w lq "")
    (row p) (: ls (filter (\ l (starts? l (p + " "))) (lines (bq-out (bq-git w ["cat-file" "-p" lq]))))
               (? (two? ls) <ls ""))
    m (sha "test")
    a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "gated_on" m "gated_head" (sha "ant") "leader" "queen"}]])
    _ (bq-git w ["checkout" "-q" "ant"])
    g1 (calls "ant" [[2 "queue_gate" {"dir" (w 'repo)}]])
-   ok1 (bq-until (\ _ (bq-in (row "1") " green  #")) 300)
+   ok1 (bq-until (\ _ (has? (row "1") " green  #")) 300)
    args (bq-get (w 'repo + "/out/args"))
    b (calls "bob" [[3 "queue_row" {"state" "waiting" "branch" "bob" "gated_on" (sha "ant") "gated_head" (sha "bob")}]])
    c (calls "carol" [[4 "queue_gate" {"dir" (w 'repo)}]])
@@ -663,18 +615,18 @@
    _ (bq-git w ["checkout" "-q" "--" "f"])
    _ (bq-put (w 'repo + "/red") "")
    g2 (calls "bob" [[6 "queue_gate" {"dir" (w 'repo)}]])
-   ok2 (bq-until (\ _ (bq-in (row "2") "test_slow=1")) 300)
+   ok2 (bq-until (\ _ (has? (row "2") "test_slow=1")) 300)
    e (calls "carol" [[7 "queue_row" {"state" "waiting" "branch" "carol" "gated_head" (sha "bob") "keep" "1"}]
                      [8 "queue_gate" {"dir" (w 'repo)}]])
    _ (test
-      (bq-in (g1 2) "row 1 is gating at ")
-      ok1 (bq-in (row "1") "  # gate ") (bq-in (row "1") "test_slow=0")
+      (has? (g1 2) "row 1 is gating at ")
+      ok1 (has? (row "1") "  # gate ") (has? (row "1") "test_slow=0")
       (args = "-d out/lanes-gate --slow test_slow\n")
-      (bq-in (c 4) "you hold no row")
-      (bq-in (d 5) "has changes not committed")
-      (bq-in (g2 6) "row 2 is gating at ")
-      ok2 (bq-in (row "2") " waiting  #")
-      (bq-in (e 8) "row 2 ahead is waiting"))
+      (has? (c 4) "you hold no row")
+      (has? (d 5) "has changes not committed")
+      (has? (g2 6) "row 2 is gating at ")
+      ok2 (has? (row "2") " waiting  #")
+      (has? (e 8) "row 2 ahead is waiting"))
    0)
 
 ;; --- a heavy ticket belongs to a queue row: refused at a work tree's top whose branch and HEAD no
@@ -697,9 +649,9 @@
    n3 (cli "ant" "--lock --heavy -- true")                                  ; row 1 carries ant
    _ (test
       (<n0 = 0)
-      (bq-in (t 1) "\"id\":2") (bq-in (t 1) "heavy lanes run only in the queue")
-      (bq-in (t 1) "granted heavy")
-      (<n1 = 1) (bq-in (n1 1) "no row of refs/queue/test carries test")
+      (has? (t 1) "\"id\":2") (has? (t 1) "heavy lanes run only in the queue")
+      (has? (t 1) "granted heavy")
+      (<n1 = 1) (has? (n1 1) "no row of refs/queue/test carries test")
       (<n2 = 0) (<n3 = 0))
    0)
 
