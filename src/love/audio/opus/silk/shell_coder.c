@@ -35,32 +35,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "main.h"
 
-/* shell coder; pulse-subframe length is hardcoded */
-
-static inline void combine_pulses(
-    opus_int         *out,   /* O    combined pulses vector [len] */
-    const opus_int   *in,    /* I    input vector       [2 * len] */
-    const opus_int   len     /* I    number of OUTPUT samples     */
-)
-{
-    opus_int k;
-    for( k = 0; k < len; k++ ) {
-        out[ k ] = in[ 2 * k ] + in[ 2 * k + 1 ];
-    }
-}
-
-static inline void encode_split(
-    ec_enc                      *psRangeEnc,    /* I/O  compressor data structure                   */
-    const opus_int              p_child1,       /* I    pulse amplitude of first child subframe     */
-    const opus_int              p,              /* I    pulse amplitude of current subframe         */
-    const opus_uint8            *shell_table    /* I    table of shell cdfs                         */
-)
-{
-    if( p > 0 ) {
-        ec_enc_icdf( psRangeEnc, p_child1, &shell_table[ silk_shell_code_table_offsets[ p ] ], 8 );
-    }
-}
-
 static inline void decode_split(
     opus_int                    *p_child1,      /* O    pulse amplitude of first child subframe     */
     opus_int                    *p_child2,      /* O    pulse amplitude of second child subframe    */
@@ -77,47 +51,6 @@ static inline void decode_split(
         p_child2[ 0 ] = 0;
     }
 }
-
-/* Shell encoder, operates on one shell code frame of 16 pulses */
-void silk_shell_encoder(
-    ec_enc                      *psRangeEnc,                    /* I/O  compressor data structure                   */
-    const opus_int              *pulses0                        /* I    data: nonnegative pulse amplitudes          */
-)
-{
-    opus_int pulses1[ 8 ], pulses2[ 4 ], pulses3[ 2 ], pulses4[ 1 ];
-
-    /* this function operates on one shell code frame of 16 pulses */
-    silk_assert( SHELL_CODEC_FRAME_LENGTH == 16 );
-
-    /* tree representation per pulse-subframe */
-    combine_pulses( pulses1, pulses0, 8 );
-    combine_pulses( pulses2, pulses1, 4 );
-    combine_pulses( pulses3, pulses2, 2 );
-    combine_pulses( pulses4, pulses3, 1 );
-
-    encode_split( psRangeEnc, pulses3[  0 ], pulses4[ 0 ], silk_shell_code_table3 );
-
-    encode_split( psRangeEnc, pulses2[  0 ], pulses3[ 0 ], silk_shell_code_table2 );
-
-    encode_split( psRangeEnc, pulses1[  0 ], pulses2[ 0 ], silk_shell_code_table1 );
-    encode_split( psRangeEnc, pulses0[  0 ], pulses1[ 0 ], silk_shell_code_table0 );
-    encode_split( psRangeEnc, pulses0[  2 ], pulses1[ 1 ], silk_shell_code_table0 );
-
-    encode_split( psRangeEnc, pulses1[  2 ], pulses2[ 1 ], silk_shell_code_table1 );
-    encode_split( psRangeEnc, pulses0[  4 ], pulses1[ 2 ], silk_shell_code_table0 );
-    encode_split( psRangeEnc, pulses0[  6 ], pulses1[ 3 ], silk_shell_code_table0 );
-
-    encode_split( psRangeEnc, pulses2[  2 ], pulses3[ 1 ], silk_shell_code_table2 );
-
-    encode_split( psRangeEnc, pulses1[  4 ], pulses2[ 2 ], silk_shell_code_table1 );
-    encode_split( psRangeEnc, pulses0[  8 ], pulses1[ 4 ], silk_shell_code_table0 );
-    encode_split( psRangeEnc, pulses0[ 10 ], pulses1[ 5 ], silk_shell_code_table0 );
-
-    encode_split( psRangeEnc, pulses1[  6 ], pulses2[ 3 ], silk_shell_code_table1 );
-    encode_split( psRangeEnc, pulses0[ 12 ], pulses1[ 6 ], silk_shell_code_table0 );
-    encode_split( psRangeEnc, pulses0[ 14 ], pulses1[ 7 ], silk_shell_code_table0 );
-}
-
 
 /* Shell decoder, operates on one shell code frame of 16 pulses */
 void silk_shell_decoder(
