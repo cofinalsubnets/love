@@ -17,6 +17,9 @@
    bq-app (bq-home + "/src/apps/bee.l")
    bq-root (bq-home + "/out/.beeq-" + show (getpid 0))
    _ (mkdir bq-root 493)
+   ; a session running these passes its own hive down -- BEE_HIVE, BEE_NAME, BEE_AS -- and a
+   ; world would read the live sessions and write its cells among them: HOME alone says here
+   _ (map (\ k (setenv k ())) ["BEE_HIVE" "BEE_NAME" "BEE_AS"])
    (bq-put p s) (: f (open p "w") _ (say f s) (close f))
    (bq-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ""))
    bq-find fsub
@@ -631,20 +634,30 @@
       (bq-in (k0 6) "row now: 4 dan k1") !(bq-in q2 "\nkeep "))
    0)
 
-;; --- queue_gate: the head row's union gated by bee -- its row gating with the worktree's HEAD, the
-; lanes the change owes run through test/gate/lanes.sh (a stub here) under the heavy lock, then the
-; row green with each lane's result, or waiting with its reds; refused off the head, or dirty ----
+;; --- queue_gate: the head row's union gated by bee -- its row gating with the worktree's HEAD, every
+; lane the change owes run through test/gate/lanes.sh (a stub here) under the heavy lock, then the
+; row green with each lane's result, or waiting with its reds and the rows that owe them; refused off
+; the head, or dirty; after a split, lanes runs the red ones again and the green ones stand. the
+; first gate is asked by a server that stays up, so its card holds the name while the gate runs ----
 (: w (bq-world "gate") lq bq-q
    (sha r) (bq-out (bq-git w ["rev-parse" r]))
    _ (hark ["mkdir" "-p" (w 'repo + "/test/gate")])
    _ (bq-put (w 'repo + "/test/gate/lanes.sh")
-             "d=out/lanes-gate; mkdir -p $d; echo \"$@\" > out/args\nif [ -f red ]; then echo 'test_slow exit=1 secs=0' > $d/summary; exit 1; fi\necho 'test_slow exit=0 secs=0' > $d/summary\n")
-   (calls nm cs)
+             (unlines ["d=out/lanes-gate; mkdir -p $d; echo \"$@\" > out/args; : > $d/summary; rc=0"
+                       "for a in \"$@\"; do case $a in test*)"
+                       "  if [ -f red-$a ]; then echo \"$a exit=1 secs=0\" >> $d/summary; rc=1"
+                       "  else echo \"$a exit=0 secs=0\" >> $d/summary; fi;; esac; done"
+                       "exit $rc"]))
+   (calls nm cs) (calls-for nm cs "")
+   ; ..and hold: the server's stdin stays open that much longer after the asks, the name its card's
+   (calls-for nm cs hold)
     (: f (w 'dir + "/" + nm + ".in")
        _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
                                                 "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
                          "" cs))
-       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       srv ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp")
+       r (bq-sh w (? (0 < #hold) ("sh -c \"(cat " + bq-sq f + "; sleep " + hold + ") | " + srv + "\"")
+                     (srv + " < " + bq-sq f)))
        (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
               {} (filter (\ l (0 < #l)) (lines (r 1)))))
    (row p) (: ls (filter (\ l (starts? l (p + " "))) (lines (bq-out (bq-git w ["cat-file" "-p" lq]))))
@@ -652,29 +665,41 @@
    m (sha "test")
    a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "gated_on" m "gated_head" (sha "ant") "leader" "queen"}]])
    _ (bq-git w ["checkout" "-q" "ant"])
-   g1 (calls "ant" [[2 "queue_gate" {"dir" (w 'repo)}]])
+   g1 (calls-for "ant" [[2 "queue_gate" {"dir" (w 'repo)}]] "8")
    ok1 (bq-until (\ _ (bq-in (row "1") " green  #")) 300)
    args (bq-get (w 'repo + "/out/args"))
+   _ (bq-git w ["checkout" "-q" "bob"])                              ; bob's change owes test_kore
+   _ (hark ["mkdir" "-p" (w 'repo + "/src/apps/kore")])
+   _ (bq-put (w 'repo + "/src/apps/kore/x.l") "x\n")
+   _ (bq-git w ["add" "src"]) _ (bq-git w ["commit" "-q" "-m" "kore"])
    b (calls "bob" [[3 "queue_row" {"state" "waiting" "branch" "bob" "gated_on" (sha "ant") "gated_head" (sha "bob")}]])
    c (calls "carol" [[4 "queue_gate" {"dir" (w 'repo)}]])
    _ (bq-git w ["checkout" "-q" "bob"])
    _ (bq-put (w 'repo + "/f") "dirty\n")
    d (calls "bob" [[5 "queue_gate" {"dir" (w 'repo)}]])
    _ (bq-git w ["checkout" "-q" "--" "f"])
-   _ (bq-put (w 'repo + "/red") "")
+   _ (bq-put (w 'repo + "/red-test_kore") "")
    g2 (calls "bob" [[6 "queue_gate" {"dir" (w 'repo)}]])
-   ok2 (bq-until (\ _ (bq-in (row "2") "test_slow=1")) 300)
+   ok2 (bq-until (\ _ (bq-in (row "2") "test_kore=1")) 300)
+   red (row "2")
    e (calls "carol" [[7 "queue_row" {"state" "waiting" "branch" "carol" "gated_head" (sha "bob") "keep" "1"}]
                      [8 "queue_gate" {"dir" (w 'repo)}]])
+   _ (hark ["rm" (w 'repo + "/red-test_kore")])
+   g3 (calls "bob" [[9 "queue_gate" {"dir" (w 'repo) "lanes" "test_kore"}]])
+   ok3 (bq-until (\ _ (bq-in (row "2") " green  #")) 300)
+   args3 (bq-get (w 'repo + "/out/args"))
    _ (test
       (bq-in (g1 2) "row 1 is gating at ")
       ok1 (bq-in (row "1") "  # gate ") (bq-in (row "1") "test_slow=0")
-      (args = "-d out/lanes-gate --slow test_slow\n")
+      (args = "-d out/lanes-gate --slow test test_slow\n")
       (bq-in (c 4) "you hold no row")
       (bq-in (d 5) "has changes not committed")
       (bq-in (g2 6) "row 2 is gating at ")
-      ok2 (bq-in (row "2") " waiting  #")
-      (bq-in (e 8) "row 2 ahead is waiting"))
+      ok2 (bq-in red " waiting  #") (bq-in red "test_kore=1") (bq-in red "| red: test_kore owed by 2 bob")
+      (bq-in (e 8) "row 2 ahead is waiting")
+      (bq-in (g3 9) "runs test_kore again")
+      ok3 (args3 = "-d out/lanes-gate --slow test_kore test_slow\n")
+      (bq-in (row "2") "test=0") (bq-in (row "2") "| stood: test") !(bq-in (row "2") "| red:"))
    0)
 
 ;; --- a heavy ticket belongs to a queue row: refused at a work tree's top whose branch and HEAD no

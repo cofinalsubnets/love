@@ -7,8 +7,7 @@
    f37 (f3 -7)
  (test (-1 = f37 99) (-7 = f37 33)))
 
-; applying a number is Church-numeral application: numeric operand -> exponentiation
-; (operand ** operator), non-numeric operand -> the operator-fold composition.
+; applying a number: a numeric operand exponentiates, any other composes
 (test
  (2 = (1 2))               ; (1 2) = 2 ** 1
  (1 = (2 1))               ; (2 1) = 1 ** 2
@@ -18,11 +17,8 @@
  (mint 0 @ m (m = m 5))    ; an anonymous one too
  (8 = (3 2))               ; (3 2) = 2 ** 3
  (13 = ((3 (+ 1)) 10)))    ; non-numeric operand -> (+ 1) composed 3 times on 10
-; the whole numeric tower is a Church numeral, not just fixnums (data.c data_num_apply
-; routes float/box/complex/array/bignum operators through num-ap, like the odd-tag
-; fixnum path). 0 applied to anything is 1 -- it *is* const-1, the zero numeral.
-; the compose count is ($ n) -- saturating, true to the !!$ truth bits: a non-positive
-; numeral acts as the zero numeral, a float ceils, a complex/array its saturated net.
+; every numeric kind is a church numeral; 0 is const-1. the compose count is ($ n):
+; non-positive is zero, a float ceils, a complex or array its saturated net
 (test
  (8 = (3 2.0))                                                              ; float operand: 2.0 ** 3 = 8.0, = bridges to 8
  (9 = (2.0 3))                                                              ; float operator: 3 ** 2.0 via real power = 9.0
@@ -37,7 +33,7 @@
  (15 = (star-tray '(2) '(2 3) (+ 1) 10))                                    ; array operator on a fn: compose ($ [2 3]) = 2+3 = 5, the net sum
  (13 = (((3 ~ 4) (+ 1)) 10))                                                ; complex operator on a fn: compose ($ (3 ~ 4)) = 3, the real part
  (10 = (((-3 ~ 4) (+ 1)) 10))                                               ; ... but a complex sorting negative saturates to 0
- (twin? ((0 ~ 1) 5))                                                        ; complex operator on a number -> complex power (5^i), no longer fenced
+ (twin? ((0 ~ 1) 5))                                                        ; complex operator on a number -> complex power (5^i)
  (abs (1 - abs ((0 ~ 1) 5)) < 0.0001)                                       ; |5^i| = 1 exactly (w^z = exp(z Log w))
  (abs (im ((0 ~ 1) (0 ~ 1))) < 0.0001))                                     ; i^i = e^(-pi/2) is real
 ; basic arithmetic
@@ -77,8 +73,7 @@
    l (c1895_inv p)
    (test (103 = <l) (110 = <>l)))
 
-; heron's method for finding square roots (integer Newton -- floor division `//`,
-; so it converges to the exact integer root and the `=` test terminates)
+; heron's square root, integer newton with `//` so it converges exactly
 (: (heron x g) (g = (x // g) ? g
     (heron x ((g + (x // g)) // 2)))
    guess 1337

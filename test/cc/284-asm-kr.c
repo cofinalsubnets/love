@@ -1,7 +1,5 @@
-/* a64 asm operands that take an immediate or a register ("Kr", "Lr", "Ir", "Jr", the kernel's
- * ll/sc cmpxchg spelling): a constant the letter cannot encode (0 as a logical immediate, 4097 as
- * an add) rides a register, one it can is laid in the word. a target with no template here
- * computes the same in C. */
+/* a64 "Kr" "Lr" "Ir" "Jr" operands: a constant the letter cannot encode (0 logical, 4097 add)
+ * rides a register, one it can is laid in the word. targets without a template compute the same. */
 typedef unsigned long long u64;
 
 #if defined(__aarch64__)

@@ -1,14 +1,7 @@
-/* the formatter: snprintf / sprintf / vsnprintf over one body (__femit's twin),
- * with %s %c %d %u %x %o, the l/z widths, and the %[-0]WIDTH.PREC flags.
- *
- * this is the one program whose subject appears in the PAYLOAD rather than the
- * frame: say.h turns its own digits by hand, so a drifted %d shows up here as a
- * wrong bracketed string and NOT as garbage across the other five programs. if
- * every family diffs at once, read this one first.
- *
- * snprintf's RETURN is the length it WOULD have written, not what it did --
- * the difference is the whole reason the function exists, and a truncating
- * implementation that returns the truncated length is the classic bug. */
+/* the formatter: snprintf / sprintf / vsnprintf over one body, with %s %c %d %u %x %o,
+ * the l/z widths and the %[-0]WIDTH.PREC flags. its subject rides the payload (say.h turns
+ * its own digits), so if every family diffs at once, read this one first. snprintf returns
+ * the length it would have written, not what it did. */
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -16,7 +9,7 @@
 
 static char b[64];
 
-/* one case: run it, report the bytes AND the return */
+/* one case: run it, report the bytes and the return */
 static void F(char const *nm, int r) { say_s(nm, b); say_n(nm, r); }
 
 static int vtest(char *p, size_t n, char const *fmt, ...) {
@@ -49,7 +42,7 @@ int main(void) {
  F("zu", snprintf(b, sizeof b, "%zu", (size_t) 1234));
 
  /* --- width, the zero flag and the left flag. zeros hug the digits and
-    sit INSIDE the sign; spaces sit outside it. --- */
+    sit inside the sign; spaces sit outside it. --- */
  F("w", snprintf(b, sizeof b, "[%6d]", 42));
  F("w.left", snprintf(b, sizeof b, "[%-6d]", 42));
  F("w.zero", snprintf(b, sizeof b, "[%06d]", 42));
@@ -66,7 +59,7 @@ int main(void) {
  F("p.strover", snprintf(b, sizeof b, "[%.9s]", "abc"));
  F("p.strzero", snprintf(b, sizeof b, "[%.0s]", "abc"));
  F("p.both", snprintf(b, sizeof b, "[%8.2s]", "abcdef"));
- /* on an integer the precision is a MINIMUM digit count, it retires the 0
+ /* on an integer the precision is a minimum digit count, it retires the 0
     flag, and .0 of a zero is the empty field (C99 7.19.6.1p6). */
  F("p.d", snprintf(b, sizeof b, "[%.3d]", 33));
  F("p.dover", snprintf(b, sizeof b, "[%.2d]", 12345));
@@ -81,14 +74,14 @@ int main(void) {
  F("p.u", snprintf(b, sizeof b, "[%.5u]", 42));
  F("p.o", snprintf(b, sizeof b, "[%.4o]", 8));
 
- /* --- TRUNCATION: the bytes stop, the return does not --- */
+ /* --- truncation: the bytes stop, the return does not --- */
  memset(b, '#', sizeof b);
  F("cut.5", snprintf(b, 5, "%s", "abcdefgh"));
  memset(b, '#', sizeof b);
  F("cut.1", snprintf(b, 1, "%s", "abcdefgh"));          /* just the NUL */
  memset(b, '#', sizeof b);
 
- int r = snprintf(b, 0, "%s", "abcdefgh");             /* touches NOTHING */
+ int r = snprintf(b, 0, "%s", "abcdefgh");             /* touches nothing */
  say_b("cut.0", b, 4);
  say_n("cut.0", r);
 

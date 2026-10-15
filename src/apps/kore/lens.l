@@ -1,14 +1,7 @@
 ; src/apps/kore/lens.l -- the two kore doors onto lapiz: `html2text` and `markdown`.
-;
-;   html2text [-w COLS] [FILE..]                          html2text index.html
-;   markdown [-t html|roff|text|cells] [-w COLS] [FILE..] markdown README.md > readme.html
-;   markdown -t dvi [FILE]                                markdown README.md > readme.dvi
-;
-; the width is -w, else the terminal's, else 80; no operands reads stdin. attributes ride
-; out only to a terminal. -t cells is -t text broken by caja (src/apps/caja/cell.l).
-; `markdown` writes a fragment -- papel owns the page template. html2text reads a page as
-; prose: lapiz's scrub drops script, style and head; an image says its [alt], and on a
-; terminal a local one is drawn under it (pic.l).
+; no operands reads stdin; attributes ride out only to a terminal. `markdown` writes a
+; fragment, no page template. html2text reads a page as prose: an image says its [alt], and on
+; a terminal a local one is drawn under it.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -73,9 +66,8 @@
 
    md-usage "usage: markdown [-t html|roff|text|cells|dvi] [-w COLS] [FILE..]"
    md-tos ["html" "roff" "text" "cells" "dvi"]
-   ; -t dvi: caja sets the document in pages (src/apps/caja/doc.l), with Computer Modern's
-   ; metrics and plain's patterns out of a TeX tree -- $CAJA_TEXMF, else where TeX Live puts
-   ; one. one file or stdin; a man page (its first line a request) is read as roff
+   ; -t dvi: caja sets pages with cm metrics and hyphen patterns from a TeX tree ($CAJA_TEXMF,
+   ; else TeX Live's). one file or stdin; a man page (first line a request) is read as roff
    texmf-roots ["/usr/share/texmf-dist" "/usr/share/texlive/texmf-dist" "/usr/local/share/texmf-dist"]
    (lens-texmf rel)
     (: e (getenv "CAJA_TEXMF")

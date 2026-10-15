@@ -1,8 +1,4 @@
-; --- test/fat.l: FAT32 in love (src/apps/fat.l) over a cask device -- the same
-; module the kernel mounts on its virtio disk (rung 5), proven here where the
-; laws run in milliseconds and mtools can sit on the other side of the format.
-; run standalone from the repo root:
-;   cat test/00-init.l test/fat.l | out/love
+; FAT32 in love over a cask device, with mtools on the other side when present
 
 (borrow "src/apps/fat.l")
 
@@ -79,8 +75,7 @@
  ("ELF!" = <>(fat-read f2 "boot/love.elf"))
  ("" = <>(fat-read f2 "empty")))
 
-; --- the other side of the format: mtools reads what we wrote, we read what it
-; wrote. guarded on mdir being installed (the hdd lane already leans on it).
+; --- mtools reads what we wrote, we read what it wrote; only where mdir is installed
 (: (lines* s) (: n #s
                  (go i w acc) (n <= i ? (rev (#w ? (w . acc) acc))
                                  (s i = 10 ? (go (i + 1) "" (w . acc))
@@ -109,8 +104,7 @@
             (unlink ip, unlink lp, 1)))
         (puts "  (mtools interop skipped: no mdir here)")))
 
-; a chain that loops back on itself -- a corrupt or hostile image -- ends where it loops:
-; a file's clusters 3 4 5 6 with 4 pointed back at 3, then the root's own cluster at itself
+; a cluster chain that loops back on itself ends where it loops: a file's, then the root's
 (: lp-im (cask (70000 * 512))
    lp-dev (mkdev lp-im)
    rdle (cite 'bytes 'rdle) wrle (cite 'bytes 'wrle)

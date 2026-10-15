@@ -1,21 +1,12 @@
-; src/apps/kore/patch.l -- patch(1), the other half of diff: unified hunks laid on a tree.
-; a toolbox of one: patch-main, no seat, kore.l is its door. unified diffs only.
-;
-;   * a file is a list of (text nl) pairs -- a missing final newline is data, and a patch
-;     can carry one in or take one away, so the flag rides per line.
-;   * a hunk is (ostart nstart lines), a line (op text nl), op 32 keep / 45 del / 43 add.
-;   * applying walks the hunks over the evolving file carrying the delta between old and
-;     new positions; a hunk that does not sit where it says searches outward (`offset`).
-;
-; the exit code is patch's: 0 everything applied, 1 some hunk was rejected (a .rej beside
-; the file, the original kept as .orig), 2 the patch itself is unreadable.
+; src/apps/kore/patch.l -- patch(1) for unified diffs. a file is a list of (text nl) pairs,
+; so a missing final newline is data a patch can add or take away. a hunk is
+; (ostart nstart lines), a line (op text nl), op 32 keep / 45 del / 43 add.
+; exit 0 all applied, 1 a hunk rejected (.rej beside, .orig kept), 2 the patch unreadable.
 (module 'kore
 (borrow 'posix)
 
 (:
-   ; the say flushes: the hunk reports go to err and the file report to out, so an
-   ; unflushed out lands its line in the middle of a later one -- patch's own output
-   ; reads as one conversation and has to stay one
+   ; flushed: hunk reports go to err, file reports to out, and must interleave in order
    (pt-say s) (say out s, put out 10, flush out)
    (pt-cry s) (flush out, say err s, put err 10, flush err)
    ; a header line -> its path: everything past "--- " up to the first tab, or the whole
@@ -45,13 +36,9 @@
               (: o (pt-side ow) n (pt-side nw) [<o <>o <n <>n])))))
 
    ; --- the reader: a patch text -> ((oldname newname hunks)..) -------------------
-   ; a section opens on a --- / +++ pair and runs to the next one. anything between
-   ; sections is prose (a mail body, a commit message) and is skipped, which is how a
-   ; patch pulled off a mailing list applies at all.
-   ; the `\` line is tested before the counts run out. `\ No newline at end of file`
-   ; carries no count of its own, so the one that follows the hunk's last line arrives
-   ; after both counters have hit zero -- and a body that stopped on the counts alone
-   ; would leave every "the patch takes the newline away" case unmarked.
+   ; a section opens on a --- / +++ pair; anything between sections (a mail body) is skipped.
+   ; the `\` line is tested before the counts run out: `\ No newline at end of file` after a
+   ; hunk's last line arrives once both counters are zero
    (pt-body m no nn acc)
     (atom? m ? [(rev acc) m]
      (: ln <m
@@ -101,8 +88,8 @@
     (: (go m o) (? (atom? o) 1 (atom? m) 0 (<<m = <o) (go >m >o) 0)
        (go (drop k ps) old))
    (pt-fits ps k old) ((0 <= k && k + #old <= #ps) && pt-match ps k old)
-   ; the reach is (n + 1 + |want|), not n: a create hunk's `-0,0` wants seat -1 in a
-   ; file of no lines, so a search bounded by the file's own length never takes a step.
+   ; the reach is (n + 1 + |want|), not n: a create hunk's `-0,0` wants position -1 in a
+   ; file of no lines
    (pt-seek ps old want)
     (: far (#ps + 1 + abs want)
        (try d) (? (far < d) ()
@@ -126,9 +113,7 @@
         slurp o))
 
    ; --- one file's worth ----------------------------------------------------------
-   ; the hunks are reversed before anything else under -R: swapping each line's op and
-   ; the two starts turns the patch around, and everything downstream then reads one
-   ; shape. a -R that reversed at apply time would owe every later step a second lane.
+   ; -R flips the hunks first (each line's op and the two starts), so all downstream reads one shape
    (pt-flip h)
     [<>h <h (map (l \ [(? (<l = 45) 43 (<l = 43) 45 32) <>l (l 2)]) (h 2))]
    (pt-file nm hs dry? silent?)
@@ -140,8 +125,8 @@
         (atom? m ? [ps bad (rev rej) off?]
          (: h <m
             old (pt-old h) new (pt-new h)
-            ; the -0,0 convention: a side with no lines names the seat before it, so
-            ; start 0 is position 0 and not -1 (diff.l writes it, this reads it)
+            ; the -0,0 convention: a side with no lines names the position before it, so
+            ; start 0 is position 0 and not -1
             want ((0 < <h ? (<h - 1) 0) + delta)
             s (pt-seek ps old want)
             (atom? s ?
@@ -162,9 +147,7 @@
            (pt-cry (show bad + " out of " + show nh + (nh = 1 ? " hunk" " hunks")
                     + (" FAILED -- saving rejects to file " + nm + ".rej")))),
         (dry? ? ()
-           ; the .orig lands on a mismatch and not only on a failure -- a hunk
-           ; that moved applied to a file the patch did not quite describe, and GNU's
-           ; --backup-if-mismatch keeps the original for exactly that case
+           ; .orig on a mismatch too, not only a failure, as GNU's --backup-if-mismatch
            ((bad || off?) && !fresh ? (uwrite (nm + ".orig") <>r), bad ? (uwrite (nm + ".rej") (pt-rej nm rej)), uwrite nm (pt-render ps'))),
         bad))
 

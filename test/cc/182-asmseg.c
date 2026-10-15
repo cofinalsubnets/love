@@ -1,7 +1,5 @@
-/* a %gs: operand, held to gcc: the kernel's percpu reads and writes, `mov %gs:%[var], %[val]`
- * through an "m" operand, and get_current's `%gs:%a[var]` through an "i" address. a linux
- * process runs with a zero gs base, so the override reaches the plain address. a target
- * with no template here computes the same. */
+/* %gs: operands, held to gcc: through "m" and through an "i" address (`%gs:%a[var]`); a zero
+ * gs base reaches the plain address. targets without a template compute the same. */
 
 long cell = 5, spare[2] = {7, 9};
 unsigned char tiny = 200;

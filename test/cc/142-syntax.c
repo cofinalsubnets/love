@@ -1,9 +1,6 @@
-/* The syntax rungs of doc/misc/moon-c-gaps.md, held to gcc: a brace-less switch body, a
- * declarator list opening with a FUNCTION, an attribute run BEFORE a struct/union
- * tag, _Thread_local, bare typeof (over a qualified type-name too). The battery compares EXIT CODES, so a failing
- * check's number comes back. _Thread_local is plain static storage here, so this
- * is an oracle only for the single-threaded reading gcc shares.
- */
+/* a brace-less switch body, a declarator list opening with a function, attributes
+ * before a struct tag, _Thread_local (plain static here: single-threaded only),
+ * bare typeof. a failing check's number comes back. */
 
 /* the substatement under the label belongs to the switch: no case, no run */
 static int sw(int x)  { int r = 0; switch (x) case 2: r = 5; return r; }
@@ -20,7 +17,7 @@ static int mul(int a, int b) { return a * b; }
 int wide(double d, short s) { return (int)d + s; }
 int g2(int x) { return x; }
 
-/* the attribute run before the tag, where only after the body used to parse */
+/* the attribute run before the tag */
 struct __attribute__((packed)) P { char a; int b; };
 union  __attribute__((packed)) Q { char a; int b; };
 struct __attribute__((packed)) R { char a; int b; } rv;

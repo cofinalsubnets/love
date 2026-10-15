@@ -1,55 +1,22 @@
 #!/usr/bin/env -S love -l
-; papel -- the static site: a tree of markdown becomes a tree of html, and neither
-; the rendering nor the rebuilding is papel's own idea.
-;
-;   lapiz  reads each page into the AST and shows it as html      (src/apps/lapiz.l)
-;   cook   decides which pages are stale and runs only those      (src/apps/cook.l)
-;   papel  is what is left: the site -- titles, anchors, contents, cross-links, the page
-;          template -- the things that are true of a page only because of the other pages.
-;
-; papel declares one cook recipe per page (out/site/x.html from doc/x.md), so the
-; incremental build is cook's, and it never parses markdown or emits a paragraph: lapiz
-; does. its own part is the site-level reading of the AST, each a small walk:
-;
-;   title     the first head-1, else the meta `title`, else the file name.
-;   anchors   every head gets a stable id (`slug`, deduped), so a heading is linkable.
-;   contents  the same heads become the page's toc -- one parse, two uses.
-;   blurb     the first paragraph, clipped, becomes the page's line on the index.
-;   relink    a `[x](hatch.md)` link is rewritten to hatch.html -- but only when that page
-;             is in the site. a link out of the site is left exactly as written, so papel
-;             cannot invent a dead link that markdown did not already have.
-;
-; the index page is built the same way as any other: papel makes an AST (a head and a
-; deflist of link/blurb pairs) and hands it to lapiz to show. there is no html in papel
-; except the page template and two nodes -- the anchored heading, and the deflist whose
-; terms are anchored and whose class is its heading -- which papel renders itself,
-; because lapiz has nowhere to put an id. everything else is `htb`, lapiz's own block
-; shower.
-;
-; usage:  love -l src/apps/papel.l [-o out] [-t title] [src ..]       (make site runs it)
-; src is a .md file or a directory of them; with none, this tree's own docs (README.md
-; and doc/). out defaults to out/site. papel writes out/<name>.html per source, out/
-; papel.css, and out/index.html -- the last only when no source is itself an index.md.
+; papel -- the static site: a tree of markdown becomes a tree of html. lapiz reads and shows
+; each page; cook rebuilds only the stale ones, one recipe per page. papel keeps what is true
+; of a page only because of the others: titles, anchors, contents, blurbs, cross-links.
+; the index is an AST papel builds and lapiz shows. papel's own html is the template and the
+; two nodes lapiz has no id for: the anchored head and the anchored deflist.
 
-; no brackets here: the runtime supplies the layer (a module consumer says
-; (borrow 'papel); a -l load rides the session layer, where the seat reads bare).
+; no brackets: a consumer says (borrow 'papel); a -l load reads the names bare.
 
 ; --- the modules papel stands on ---------------------------------------------------------
-; papel loads its siblings itself rather than being handed them: two tool files cannot both
-; be -l'd, since each one's seat would fire on the other's command line, so make site -l's
-; this file alone. the root comes off our own seat word, so the siblings are read from the
-; tree this papel sits in -- `want` hands the loader that PATH ((borrow "src/apps/lapiz.l")),
-; which loads it as a module and splices it. a module already registered (the gate, a host
-; embedding) is left alone. `root` is exactly the kind of name a leak makes dangerous, and
-; it stays wherever this file's layer is -- never orth.
+; papel loads its siblings itself, since two tool files cannot both be -l'd. `root` is this
+; file's directory off the command line, so siblings come from the tree papel sits in.
 (borrow 'path)
 (borrow 'posix)
 (: (findme (a . u)) ; the word that named this file, if any
     (pbase a @ ("papel" || "papel.l") a (findme u))
    root (findme >cmdline @ me (me ? (phead me) "src/apps/"))          ; src/apps/papel.l -> src/apps/
-   ; want: the sibling module beside this file, else by NAME off the registry an installed
-   ; love baked. the tree lane probes first, so a tree papel running under an installed
-   ; love reads its own siblings, never the baked older copies.
+   ; want: a module already registered is left alone; else the sibling beside this file,
+   ; else by name off the registry
    (want nm f) (cite nm ? 1
                   (open (root + f) "r" @ q
                      (hot? q ? (close q, borrow (root + f), 1)
@@ -59,10 +26,8 @@
    _ (want 'hueweb "vi/hueweb.l"))
 
 ; --- the two seams -------------------------------------------------------------------
-; from lapiz, the document surface (read a page, show a page) plus the three pieces the
-; template needs to render one node itself: `hq` (escape), `hti` (an inl), `htb` (a block).
-; papel renders exactly one node -- an anchored head -- and defers every other to `htb`.
-; from cook, the two verbs a build is made of.
+; from lapiz, read and show plus what papel's own nodes need: `hq` escapes, `hti` shows an
+; inl, `htb` a block. from cook, the two verbs a build is made of.
 (: L (cite 'lapiz)
    mdread (L 'mdread)  htshow (L 'htshow)  htb (L 'htb)  hti (L 'hti)  hq (L 'hq)  mget (L 'mget)
    C (cite 'cook)
@@ -72,14 +37,11 @@
 (: (strcat l)    (foldl (+) "" l)
    (slurpf f)    (uread f @ [1 s] s "")
    (spitf f s)   (open f "w" @ q (hot? q ? (say q s, close q, 1) 0))
-   ; a directory answers a list from readdir, a file answers nothing -- that is the test,
-   ; and it needs no mode bits (love has no bitwise and to pick S_IFDIR out of stat's mode).
+   ; a directory answers a list from readdir, a file nothing: no mode bits needed
    (dir? p)      (two? (readdir p)))
 
 ; --- slugs: a heading becomes an id ----------------------------------------------------
-; lowercase, runs of anything-else collapsed to one dash, the ends trimmed. two headings
-; (or terms) that spell the same slug are deduped by a counter, so an anchor is stable
-; for a given page even when its text is not unique.
+; lowercase, other runs one dash, the ends trimmed; a repeated slug is deduped by a counter
 (: (down c)   (65 <= c && c <= 90 ? (c + 32) c)
    (squash s) (:- (g 0 "" 0)
                   (g i acc prev) (i < #s ?
@@ -118,9 +80,8 @@
                               sn (0 < k ? (s0 + "-" + show k) s0)
                               (pin seen s0 (k + 1), g >l seen ([<>b sn lab] . acc)))
                            (g >l seen acc)))))
-   ; the deflist terms, each with its slug: one list per deflist, in document order, deduped
-   ; after the heads so a term and a heading never share an anchor. a glossary entry is
-   ; linkable the way a heading is, and a link to one is checked the same way.
+   ; the deflist terms with their slugs, one list per deflist, deduped after the heads so a
+   ; term and a heading never share an anchor
    (pterms d hs) (: seen (foldl (t \ h \ (slug (h 2) @ s0 (pin t s0 (peep t s0 0 + 1)))) {} hs)
                     (one it) (: s0 (slug (itext <it))
                                 k (peep seen s0 0)
@@ -141,9 +102,8 @@
                  (two? ps ? [['text (clip (itext <><ps) 160)]] ())))
 
 ; --- cross-links: .md becomes .html, but only inside the site --------------------------
-; a url is rewritten iff it is a bare relative `*.md` naming a page the site actually
-; builds. anything absolute, anchored, or pointing outside stays exactly as written --
-; papel will not manufacture a dead link that the markdown did not already have.
+; a `*.md` url is rewritten iff it has no :// and its basename is a page the site builds;
+; anything else stays as written, so papel invents no dead link
 (: (mdurl known u)
    (u @ (? (has? u "://")) u
         (s + ".md") (pbase u @ b (peep known b 0 ? (s + ".html") u))
@@ -161,12 +121,9 @@
    (relink f d) (map (b \ rlb f b) d))
 
 ; --- showing: lapiz shows every block but two ------------------------------------------
-; the anchored head and the anchored deflist are the nodes papel emits itself, because
-; lapiz's html has nowhere to put an id or a class and inventing a node for them would push
-; a site's concern into the lens. a deflist wears the slug of the heading it sits under as
-; its class, so a page's glossary and its roster can style apart with no markup to say so.
-; the heads and terms arrive already slugged, in document order, so the walk just consumes
-; them in step.
+; papel emits the anchored head and deflist itself: lapiz has nowhere for an id or a class.
+; a deflist's class is the slug of the heading above it. heads and terms arrive slugged, in
+; document order, and the walk consumes them in step.
 (: (hhead lev sl inl) (: h ("h" + show lev)
                          ("<" + h + " id=\"" + hq sl + "\">" + hti inl + "</" + h + ">"))
    (hdl cls sls items)
@@ -210,9 +167,8 @@
        + "</body>\n</html>\n")))
 
 ; --- the stylesheet ---------------------------------------------------------------------
-; one file, linked by every page, written by the same cook recipe machinery as the pages
-; (so editing this string rebuilds the site). the colours are config.l's paper palette
-; through hueweb's hw-vars, so this sheet and the painted sources' agree by construction.
+; one file, linked by every page, built by a cook recipe like the pages. the colours are
+; the paper palette through hueweb's hw-vars
 (: css
    (cite 'hueweb 'hw-vars 'paper +
    "*{box-sizing:border-box}
@@ -257,8 +213,7 @@ table{border-collapse:collapse}
       (spitf dst (wrap conf ttl (pmetah (pmeta d)) (ptoc body hs)
                        (pshow body hs (pterms body hs))),
        dst))
-   ; the index is a page like any other: papel builds an AST -- a head, then a deflist of
-   ; link/blurb pairs -- and lapiz shows it. no second template, no html here at all.
+   ; the index is an AST, a head then a deflist of link/blurb pairs, shown like any page
    (index-doc conf srcs)
    (: site (peep conf 'title "papel")
       rows (map (s \ (mdread (slurpf s) @ d
@@ -274,29 +229,16 @@ table{border-collapse:collapse}
                 (ends? p ".md") [p])
    (sources conf) (foldl (+) () (map mdsof (conf 'src)))
    (conf0 _) {'out "out/site" 'title "papel" 'src () 'self "src/apps/papel.l"}
-   ; the build is a declaration, not a loop: one recipe per page, one for the stylesheet,
-   ; one for the index, and a phony `site` over the lot -- then cook decides what is stale.
-   ; every output also depends on this file, since the template and the stylesheet live in
-   ; it; edit either and the whole site is correctly out of date. (only when the file is
-   ; really there -- cook quits on an ingredient that exists neither on disk nor as a rule.)
-   ; the dev-server gate. before calling `build` at all, take a cheap fingerprint of
-   ; the sources -- one `stat` nif call each -- and only call it when that changed:
-   ; a no-op `build` still walks the whole recipe graph, and a page should serve in
-   ; the sub-ms its serving actually costs. answers what `build` answers, 0 when
-   ; nothing did. (cook's date is the same stat nif now; the fingerprint keeps the
-   ; per-request path down to the sources alone.)
-   ;
-   ; comparing against a remembered fingerprint rather than against the outputs is what
-   ; makes this safe to be coarse. the nif's mtime is milliseconds, so an edit landing in
-   ; the same millisecond as our reading could be missed once -- but the very next
-   ; request compares against that same reading and sees it. and `build` itself is
-   ; untouched, so the decision that actually matters stays cook's, at cook's resolution.
-   ; mtime and size, because an edit can preserve either one alone.
+   ; the dev server's gate: `build` only when a fingerprint of the sources moved, as even a
+   ; no-op build walks the recipe graph. 0 when nothing ran. mtime and size, as an edit can
+   ; keep either one
    (fprint conf) (foldl (+) 0 (map (s \ (stat s @ st (two? st ? (<>st + <st) 0)))
                                    (sources conf)))
    (refresh conf box) (fprint conf @ f
                          (f = peep box 'f -1 ? 0 (pin box 'f f, build conf)))
 
+   ; one recipe per page, one for the sheet, one for the index, a phony `site` over them; cook
+   ; decides what is stale. each also depends on this file, when it is on disk
    (build conf)
    (: out (peep conf 'out "out/site")
       srcs (sources conf)
@@ -314,9 +256,7 @@ table{border-collapse:collapse}
       own? (peep known "index.md" 0)                 ; a real index.md wins; papel adds none
       _ (own? ? 0 (recipe idx (srcs + dep) [(_ \ windex conf srcs idx)]))
       _ (recipe 'site (dsts + [sheet] + (own? ? () [idx])) ())
-      ; cook's own `cook` prints its verdict; papel wants the number, so it takes the
-      ; quiet entry. $ of a map is its key count, and cook marks an item shipped only when
-      ; the recipe really advanced its mtime -- so this is exactly "files written".
+      ; prepped is cook's quiet entry: the items whose recipe advanced their mtime
       n #(prepped 'site)
       _ (!(peep conf 'quiet 0) ?
          (puts $ "papel: " + (0 < n ? (show n + " written to " + out + "/\n")
@@ -335,11 +275,9 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
    pm (:
    (pdie c m) (udie c ("papel: " + m))
    (papel-main as)
-   (: _ (lit? (cite 'papel) ? (borrow 'papel) 0)   ; splice my registered self if I am one (cook-main's
-                                                  ; guard); on a -l load my names already walk
-      ; ..and posix beside it. a global name reads the LIVE book (src/love/ev.c's lvm_index),
-      ; and this is called on a chain that carries neither: the line above puts back
-      ; this file's own names, and nothing puts back the doors it was loaded with.
+   (: _ (lit? (cite 'papel) ? (borrow 'papel) 0)   ; splice my registered self if I am one;
+                                                  ; on a -l load my names already read bare
+      ; ..and posix: a global name reads the live book, which the caller's chain may lack
       _ (borrow 'posix)
       c (conf0 ())
       t {}
@@ -357,16 +295,8 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       _ (!sp ? 0 (uport sp @ v (v ? (pin c 'serve v) (pdie 2 ("not a port: " + sp)))))
       _ (pin c 'src (two? src ? src '("README.md" "doc")))
       _ (build c)
-      ; --serve: hand the finished directory to kiosko, which is a separate crew member and
-      ; stays one -- papel does not know what a socket is, and kiosko does not know what
-      ; markdown is. the whole integration is a directory, a port, and a thunk.
-      ;
-      ; the thunk is what makes it a dev server rather than a viewer: kiosko runs it before
-      ; each client, and it is `refresh` -- a fingerprint of the sources, and `build` only
-      ; when that moved. so an unchanged page load costs nothing and an edited one
-      ; re-renders exactly what changed, between hitting save and hitting reload. quiet,
-      ; because a rebuild per request is not news. the box carries the last fingerprint,
-      ; seeded from the build we just did so the first request is not a false alarm.
+      ; --serve hands the built directory to kiosko with `refresh` as the thunk it runs before
+      ; each client, quiet. the box holds the last fingerprint, seeded from this build
       port (peep c 'serve 0)
       ((port ?
           (: _ (want 'kiosko "kiosko/kiosko.l")
@@ -380,10 +310,8 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 
    papel-main pm)
 
-; the seat (cook's shape): fire papel-main iff this file -- or the installed `papel`
-; script -- sits in the program seat of the real command line, on the args after it.
-; body-having, so the machinery leaks nothing; papel-main reads bare -- whichever
-; layer holds this file's binds is still the head here.
+; fire papel-main iff this file or the installed `papel` script is the program named on
+; the real command line, on the args after it
 (: door (udoor 'papel (urun papel-main) papel-usage 1 1)
    s (cite 'verbs 'fire ["papel" "papel.l"])
    (two? s ? (quit (door >s))))

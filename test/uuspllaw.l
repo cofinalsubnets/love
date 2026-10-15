@@ -1,10 +1,5 @@
-; test/uuspllaw.l -- the splice license, proved of the terms test/uusplgen.l generated from
-; test/proto/spl.l (loaded just before this; the stack machine is test/uuhom.l's, the
-; kernel test/uu.l's). the model asserts these laws at one env; here each holds forall
-; states. the observation carries a trace for the flip pair: substituting an effectful arg
-; read twice keeps the value and doubles the trace, a breach R alone cannot see. sl-cross
-; meets the register machine's de5bck (test/uuhomgen.l) at the same value, forall states
-; of both. the guard below fails by name if the substrate or generated terms are missing.
+; test/uuspllaw.l -- the splice license, proved forall states of uusplgen.l's terms
+; the observation carries a trace: an effectful arg read twice doubles it unseen by value.
 (test (elem 'vof (names ())) (two? (peep GLOB 'srun 0)) (two? (peep GLOB 'sp0call 0)))
 
 ; --- the license: the splice observes as the call, value and trace, forall states ---
@@ -44,8 +39,7 @@
       (paths nat (strat 0 (srun sp3call A (smk S 0 L E T 0))) (A 0)))))))
    (lam A (lam S (lam L (lam E (lam T (idpath (A 0)))))))))
 
-; --- the flip: substitution under an effectful arg read twice -- the VALUE
-; --- stays equal (R cannot convict) and the trace doubles (the trace can) ---
+; --- the flip: an effectful arg read twice keeps the value, doubles the trace ---
 (test
  (defq sl-flip-value
    (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst
@@ -61,9 +55,7 @@
       (paths nat (strn (srun sp2subst A (smk S 0 L E T 0))) 2))))))
    (lam A (lam S (lam L (lam E (lam T (idpath 2))))))))
 
-; --- the substitution license, the pure face: an effect-free arg substitutes --
-; --- value and trace as the call (the lane ev.l's cprop ships for pure args;
-; --- the impure args take the binding splice, sl-lic) ---
+; --- the pure face: an effect-free arg substitutes as the call, value and trace ---
 (test
  (defq sl-sub-0
    (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst
@@ -75,9 +67,7 @@
       (paths nat (strn (srun sp0subst A (smk S 0 L E T 0)))
                  (strn (srun sp0call A (smk S 0 L E T 0)))))))))
    (lam A (lam S (lam L (lam E (lam T (idpath (strn (srun sp0subst A (smk S 0 L E T 0))))))))))
- ; ... and the read-once face: one effectful arg, read once -- substitution still
- ; observes as the call, value, trace count and trace content (the licence ev.l's
- ; read-once refinement ships under; a read-twice arg is sl-flip, the breach)
+ ; the read-once face: one effectful arg read once still observes as the call
  (defq sl-sub-1
    (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst
       (paths nat (stos (srun sp1subst A (smk S 0 L E T 0)))
@@ -93,9 +83,7 @@
       (paths nat (strat 0 (srun sp1subst A (smk S 0 L E T 0))) (A 0)))))))
    (lam A (lam S (lam L (lam E (lam T (idpath (A 0)))))))))
 
-; --- the cross-machine theorem: one source (y + 1), two machines, one value --
-; --- the stack machine's binding splice meets the register machine's de5bck
-; --- forall states of both ---
+; --- one source (y + 1): the stack splice meets the register de5bck, forall states ---
 (test
  (defq sl-cross
    (pi v nat (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst

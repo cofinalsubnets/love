@@ -1,8 +1,6 @@
-/* gcc's __atomic and __sync builtins (sqlite's AtomicLoad/AtomicStore, under GCC_VERSION):
- * loads, stores, fences, every read-modify-write in both spellings, exchange, compare-and-swap
- * with its expected value written back, test_and_set/clear. one thread, so the law is the
- * answers; each width runs where the target says it lays it (__GCC_HAVE_SYNC_COMPARE_AND_SWAP_N),
- * a negative operand and a high bit where the exclusive loads widen. exit-code only. */
+/* __atomic and __sync builtins: loads, stores, fences, every rmw in both spellings, exchange, cas
+ * writing expected back, test_and_set/clear; widths per __GCC_HAVE_SYNC_COMPARE_AND_SWAP_N, negative
+ * and high-bit operands. one thread. exit-code only. */
 static int bad;
 #define CHECK(b, c) (bad |= !(c) << (b))
 #define SEQ __ATOMIC_SEQ_CST

@@ -1,8 +1,5 @@
-/* declarators linux's helpers write: an __auto_type with attributes between its name and its =
- * (the scoped guards' `for (const __auto_type p __attribute__((__cleanup__(f))) = ..;..)`), an
- * __auto_type over a bit builtin (ilog2's __builtin_clzll), and an earlier declarator of the
- * same list in scope for the initializers after it, under typeof and sizeof too (get_user's
- * `int timeout, err = ({ __typeof__(timeout) v; .. })`). freestanding, exit-code only. */
+/* __auto_type with attributes before its =, over a bit builtin, and an earlier declarator of
+ * the same list in scope for the later initializers, under typeof and sizeof too. exit-code only. */
 
 static int ends;
 static void done(int **p) { (void)p; ends++; }

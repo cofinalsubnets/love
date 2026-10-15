@@ -1,18 +1,12 @@
-; test/uuvaldiff.l -- the differential binding test/uuval.l's model to the implementation.
-; the model proves the tower's shape and no arithmetic; this runs love's saturate/bit/
-; nil?/ceil beside vsat/vbit/vnil/vceil over test/law.l's corpus, encoded structurally
-; (a pair a link, an atom a leaf carrying its measure), so a wrong fold or ceil reddens
-; `make test`. the leaf measure is love's own net, the one primitive this cannot check.
-; a measure neither whole nor a half is off the model and says so (uuval-not-a-half).
+; test/uuvaldiff.l -- uuval.l's model beside love's saturate/bit/nil?/ceil over law.l's corpus
+; the leaf measure is love's own net, the one primitive this cannot check.
 (test (elem 'vof (names ())))
 
-; a body-less `:` -- the uv2-* vocabulary leaks; none shadows a nif.
+; a body-less `:`: the uv2-* names leak; none may shadow a nif
 (:
    (uv2-max a b) (a < b ? b a)
    (uv2-floor r) (0 - (ceil (0 - r)))
-   ; twice the real part, as an exact integer -- love's ceil already drops the
-   ; imaginary rung, and ceil = floor is the whole-number test. this is the door
-   ; `re` cannot open: the ratio band answers () to it, and 7/2 is a half
+   ; twice the real part as an exact int; ceil, not re, which answers () on a ratio
    (uv2-twice m)
     (: x (2 * m) c (ceil x)
        (c = (0 - (ceil (0 - x))) ? c (scare 'uuval-not-a-half m)))
@@ -30,8 +24,7 @@
    ; a leaf wears its tag: () is the unit atom, everything else its measure
    (uv2-atm x) (= x () ? ['ii1 'tt] ['ii2 (uv2-msr (net x))])
    (uv2-ht x) (two? x ? (1 + (uv2-max (uv2-ht <x) (uv2-ht >x))) 0)
-   ; the tree at a given height bound: a leaf spells the same at every height, so
-   ; the shallow limb of a pair costs nothing to raise
+   ; the tree at a height bound; a leaf spells the same at every height
    (uv2-tre x d)
     (? (two? x) ['ii2 ['tpair (uv2-tre <x (d - 1)) (uv2-tre >x (d - 1))]]
        (d = 0)  (uv2-atm x)
@@ -43,7 +36,7 @@
    (uv2-ceil x) (uv2-unz (vof 0 ['vceil (uv2-enc x)]))
    (uv2-bit x)  (vof 0 ['vbit (uv2-enc x)] = 'true ? 1 0)
    (uv2-nil x)  (vof 0 ['vnil (uv2-enc x)] = 'true ? 1 0)
-   ; ..and the clamped one, against love's own saturate held to the model's width
+   ; the clamped lane, against saturate held to the model's width
    (uv2-satc x) (vof 0 ['vsatc (uv2-enc x)])
    uv2-chmax  (vof 0 'chmax)
 
@@ -73,8 +66,7 @@
 (test
  ; the four lanes agree with love over the whole corpus
  (uv2-run uv2-corpus)
- ; ..and the comparison has teeth: the fold over a link is what makes (1 2)
- ; differ from its head, so an encoder that dropped a limb would not pass above
+ ; teeth: an encoder that dropped a limb would not pass above
  (! ((vof 0 ['vsat (uv2-enc 1)]) = (saturate '(1 2))))
  (3 = (uv2-sat '(1 2)))
  (0 = (uv2-sat '(-2 1)))                                  ; the net goes negative, the clamp bites
@@ -82,19 +74,15 @@
  (-2 = (uv2-ceil -2.5))
  (4 = (uv2-ceil (7 /// 2)))
  (3 = (uv2-ceil (twin 3 4)))                              ; re drops the imaginary rung
- ; the ceiling bites at the model's width, which is the whole of what it says
+ ; the ceiling bites at the model's width
  (7 = (uv2-satc 9))
  (7 = uv2-chmax)
- ; ..and () is not 0 down here either: same net, same nil?, different value
+ ; () is not 0: same net, same nil?, different value
  (0 = (vof 0 ['veq (uv2-enc ()) (uv2-enc 0)] = 'true ? 1 0))
  (1 = (vof 0 ['veq (uv2-enc ()) (uv2-enc ())] = 'true ? 1 0)))
 
-; --- and the same differential for the band algebra (test/uuvalband.l): love's
-; --- own + and * beside the model's vadd and vmul, over every ordered pair of a
-; --- corpus drawn from the three bands the model carries -- (), a number, a
-; --- chain. the comparison is through the net, which is what sees a mixed band
-; --- degenerate (5 + '(1 2) nets 3, not 8) and what a wrong cell would move.
-; --- the corpus is whole by construction: * is modelled at the integer rung.
+; --- the band algebra (uuvalband.l): love's + and * beside vadd and vmul, through the net
+; --- the corpus stays whole: * is modelled at the integer rung ---
 (:
    (uv3-add x y) (vof 0 ['vsat ['vadd (uv2-enc x) (uv2-enc y)]])
    (uv3-mul x y) (vof 0 ['vsat ['vmul (uv2-enc x) (uv2-enc y)]])
@@ -116,8 +104,7 @@
 (test
  ; every ordered pair, both operations
  (uv3-run uv3-corpus)
- ; ..and it has teeth: the degeneration is visible in the net, so a cell that
- ; kept the number instead of dropping it would not pass above
+ ; teeth: a cell that kept the number instead of dropping it would not pass above
  (3 = (uv3-add 5 '(1 2)))
  (8 = (5 + net '(1 2)))
  (9 = (uv3-mul 3 '(1 2)))

@@ -1,24 +1,10 @@
-; corridor -- an indoor level played in first person, its rooms read from a level file
-; and read again whenever the file changes, so a level is built by hand in an editor
-; beside the running game. the first is the test corridor (src/apps/lore/levels/hall.l):
-; a station hallway under light strips, one of them failing, a poster and a neon sign on
-; its walls, and a sliding door at its end onto a room lit by one red bulb. the second is
-; a subway station (levels/station.l), its walls ribbed with pilasters that slope into
-; buttresses under the ceiling.
-;
-; a level is a love file, its words scenery.l's (listed at its top): forms run in turn,
-; the last of them (level NAME PART ..). a texture is one by its recipe (swatch.l); a
-; wall's sits on its brush's foot, and a surface no texture names is a grid.
-;
-; nothing outside: every light is a lamp (mesh.l's), baked once into a channel and summed
-; each frame by how bright it is just then. corridor-read runs a level's text, and
-; corridor-new, corridor-step, corridor-move and corridor-frame are pure, gated by
-; test/host/corridor.l; corridor-watch
-; reads the disk, and only corridor-walk and corridor-run tie the tty.
-;
-; run: love lore corridor [--level FILE] [--kitty|--cells|--window]
-;      view's walking keys, and corridor-binds: p where you stand; ? the keys, q or esc
-;      leaves
+; corridor -- an indoor level in first person, its rooms read from a level file and read
+; again whenever the file changes, so a level can be edited beside the running game.
+; a level is a love file in scenery.l's words, its last form (level NAME PART ..); a texture
+; is made from its recipe (swatch.l), and a surface no texture names is a grid.
+; nothing outside: every light is a lamp (mesh.l), baked once into a channel and summed each
+; frame by how bright it is just then. corridor-read, -new, -step, -move and -frame are pure;
+; corridor-watch reads the disk, and only corridor-walk and corridor-run touch the tty.
 (module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds
          corridor-move corridor-frame corridor-pens corridor-opts corridor-read corridor-load
          corridor-watch corridor-free? corridor-ks fps eye-h body-r)
@@ -40,9 +26,8 @@
  cell 0.25                                ; how fine the surfaces are cut, for the light
  watch-every 10                           ; frames between looks at the files
  the-level "src/apps/lore/levels/hall.l"
- ; --- the level, read: (corridor-read s) runs a level file's text, its last form the
- ;     level (scenery.l) -- a tablet {'name 'start 'rooms 'doors 'strips 'bulbs 'posters
- ;     'signs 'brushes 'textures} -- or a string saying what is wrong ---
+ ; --- the level, read: (corridor-read s) runs a level file's text into a tablet {'name 'start
+ ;     'rooms 'doors 'strips 'bulbs 'posters 'signs 'brushes 'textures}, or a string saying why not ---
  (skin-name sk c) (foldl (\ a e (e 0 = c ? e 1 a)) c sk)
  ; ..a brush with no inside: a box flat in some direction, a prism no height
  (empty? r) (: sh (r 'shape)
@@ -293,10 +278,9 @@
              want (sq (p 0 - x) + sq (p 2 - z) < sq door-near ? 1.0 0.0)
              (want < o ? (max2 want (o - door-v * dt)) (min2 want (o + door-v * dt))))
    (pins st 'mt (st 'mt + dt) 'doors (map go ^#(lv 'doors))))
- ; --- the files watched: the level and its pictures, each by its size, time and inode;
- ;     the first look takes them, and a change reads the level again and builds its
- ;     scene, the player kept where they stand. a level that will not read keeps the
- ;     last, and says why ---
+ ; --- the files watched: the level and its pictures, each by its stat stamp. a change reads
+ ;     the level again, keeping the player where they stand; one that will not read keeps the
+ ;     last and says why ---
  (stamp p) (stat p @ s (two? s ? [(s 0) (s 3) (s 8)] ()))
  (files st) (: p (st 'path)
    (string? p ? (p . filter string? (map (q \ file-of (st 'dir) q) (st 'lvl 'posters))) ()))

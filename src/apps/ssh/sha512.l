@@ -10,7 +10,6 @@
 (borrow 'tls)
 (:
    m64 ((1 << 64) - 1)
-   (bitlen n) (: (go n k) (n < 1 ? k (go (n >> 1) (k + 1))) (go n 0))
    ; floor of the r-th root, newton from above
    (iroot r n)
     (: (go x) (((r - 1) * x + n // (r - 1) x) // r @ y (y < x ? (go y) x))

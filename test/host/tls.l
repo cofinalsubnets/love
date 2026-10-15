@@ -22,13 +22,16 @@
 ; run:  cat test/00-init.l test/host/tls.l | out/love
 
 (borrow "src/apps/tls/tls.l")
+(borrow "test/host/chacha.l")              ; the oracles, spliced into module 'tls
+(borrow "test/host/poly1305.l")
 (borrow 'hashes)
 
 (test
  (elem 'tls (cite ()))
  (elem 'cc-block (keys (cite 'tls)))
  (elem 'po-mac (keys (cite 'tls)))
- (lit? (cite 'tls 'cc-xor)))
+ (lit? (cite 'tls 'cc-xor))
+ (lit? chacha20) (lit? poly1305))
 
 ; --- bytes ------------------------------------------------------------------------
 (test
@@ -59,7 +62,9 @@
  ((snip (cc-stream rfckey n232 1 4) 64 128) = (cc-stream rfckey n232 2 1))
  ((snip (cc-stream rfckey n232 1 4) 192 256) = (cc-stream rfckey n232 4 1))
  ; ..and distinct blocks are distinct, so the above is not two copies of nothing
- !((cc-stream rfckey n232 1 1) = (cc-stream rfckey n232 2 1)))
+ !((cc-stream rfckey n232 1 1) = (cc-stream rfckey n232 2 1))
+ ; the nif's keystream is the same blocks
+ ((chacha20 rfckey n232 1 (zeros 256)) = (cc-stream rfckey n232 1 4)))
 
 ; --- cipher: §2.4.2, the sunscreen paragraph ---------------------------------------
 (: pt242 ("Ladies and Gentlemen of the class of '99: If I could offer you only "
@@ -74,7 +79,9 @@
     ; xor is its own inverse, so decryption is the same act
     (pt242 = (cc-xor rfckey n242 1 ct242))
     ; ..and the keystream is what did it
-    !(ct242 = pt242)))
+    !(ct242 = pt242)
+    ; the nif, both ways
+    ((chacha20 rfckey n242 1 pt242) = ct242) ((chacha20 rfckey n242 1 ct242) = pt242)))
 
 ; --- mac: §2.5.2, and the block edges ---------------------------------------------
 (: k252 (unhex "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b")
@@ -89,7 +96,10 @@
     ((hex (po-mac rfckey "A")) = "245295d81b5fa2e5286caff23579bcff")
     ((hex (po-mac rfckey (bytes 16 (\ i i)))) = "a2291a363def0b53845fa4126a6ad364")
     ((hex (po-mac rfckey (bytes 17 (\ i i)))) = "f735c97f7308fd79222447fe76a96872")
-    ((hex (po-mac rfckey (bytes 100 (\ i i)))) = "2c48db4b08964d7e67950fbd89760c4d")))
+    ((hex (po-mac rfckey (bytes 100 (\ i i)))) = "2c48db4b08964d7e67950fbd89760c4d")
+    ; the nif on the same vectors
+    ((hex (poly1305 k252 "Cryptographic Forum Research Group")) = "a8061dc1305136c6c22b8baf0c0127a9")
+    (all (m \ poly1305 rfckey m = po-mac rfckey m) ["" "A" (bytes 16 (\ i i)) (bytes 17 (\ i i)) (bytes 100 (\ i i))])))
 
 ; --- the reduction boundary -------------------------------------------------------
 ; no message reaches this. the final conditional subtract fires only when the

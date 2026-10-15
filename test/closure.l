@@ -1,21 +1,16 @@
-; test/closure.l -- recursive bindings in `:` (l's letrec*).
-;
-; a binding may refer to earlier bindings and to itself. recursive functions (a `\`
-; literal or `(name args) body`) resolve lazily, per call (lvm_lazyb). recursive values
-; are the hard case: closures capture by value at creation, so ev.l's `boxfix` indirects
-; through a heap cell exactly the names a def at index <= its own reads -- directly, or
-; through an earlier closure that inherits a later sibling's captures.
+; recursive bindings in `:`. functions resolve lazily per call; a recursive value is
+; boxed through a heap cell, since closures capture by value at creation
 
 (:
  ; recursive function: recursion via the lazily-resolved name
  (nfac n) (n < 1 ? 1 (n * nfac (n - 1)))
- ; the eta-expanded factory idiom (a *function* binding) -- still works
+ ; the eta-expanded factory idiom (a function binding)
  (mkconst z) (n \ n < 1 ? z (kconst (n - 1)))
  kconst (mkconst 7)
  ; memoizing fixpoint combinator (used for the recursive-value fib below)
  (memo f) (: m {} (x \ (: c (peep m x 0) (c ? c (: y (f x) (pin m x y, y))))))
  (test
-  ; --- recursive functions (unchanged behaviour) ---
+  ; --- recursive functions ---
   (120 = nfac 5) ; named recursion
   (7 = kconst 0) ; eta-expanded factory, base case
   (7 = kconst 5) ; eta-expanded factory, re-entrant
@@ -45,14 +40,11 @@
   ; --- a value defined before the function using it needs no box, stays correct ---
   (6 = (: x 5 f (n \ x + n) (f 1)))
 
-  ; --- `_` is a binder like any other, and repeats: each pin is its own slot, nothing
-  ; reads them, and a bare literal body still answers ---
+  ; --- `_` repeats, each its own slot, and a literal body still answers ---
   (0 = (: _ 1 _ 2 0))
   (7 = (: _ 1 _ 2 _ 3 7))
 
-  ; --- box cells must not shift an earlier ref: `a` reads an outer binding
-  ; before a later init's forward capture forces `self` to be boxed; the cell
-  ; sits below `a` at runtime, so `a`'s captured slot must already count it ---
+  ; --- a box cell must not shift an earlier ref to an outer binding ---
   (108 = (: outer 100
             (: a (outer + 1)
                (mk z) (n \ n < 1 ? z (self (n - 1)))
@@ -65,16 +57,14 @@
                (mkb z) (n \ n < 1 ? z (ka (n - 1)))
                ka (mka 7) kb (mkb 9)
                (a + ka 1))))
-  ; nested boxing let: an init reaches a sibling of an enclosing let via the
-  ; data stack (g is below the inner let's box cell) -- the cell must not shift it
+  ; nor a sibling of an enclosing let, below the inner let's cell
   (108 = (: g 100
             q (: a (g + 1)
                   (mk z) (n \ n < 1 ? z (self (n - 1)))
                   self (mk 7)
                   (a + self 3))
             q))
-  ; doubly nested: `a` reaches g (two boxing lets out) and b (one out) -- the
-  ; reference crosses two cell regions and must account for both ---
+  ; doubly nested: the reference crosses two cell regions
   (114 = (: g 100
             q (: b 7
                  r (: a (g + b)
@@ -84,11 +74,7 @@
                  r)
             q))))
 
-; --- tenured closures (generational): a major promotes fa/ga into the major pool, so the
-;     print/introspect paths -- show, = over the threads, and the thread hash a map keys by --
-;     must read them there, not just the main pool (in_heap). `=` and the hash have to agree,
-;     or a map keyed on fa cannot find the equal ga. (a no-op on the single-pool gcg build,
-;     where nothing tenures elsewhere.)
+; --- tenured closures: show, = and the hash read them in the major pool, and agree ---
 (: (lots n) ((: (go i a) (i >= n ? #a (go (i + 1) (i . a)))) 0 ())
    (fa a b) (a + b) (ga a b) (a + b)
    _ (lots 200000)                                       ; force a major -> fa/ga tenured
@@ -97,16 +83,8 @@
      (9 = peep {fa 9} ga 0)  ; map keyed on fa, found by the equal ga (eq/hash consistent)
      (8 < #(show fa)))) ; show finds the tenured source
 
-; --- a nested loop nom shadows an enclosing letrec sibling --- a lambda (zap)
-; whose body opens a nested `:` binding a loop named like a later sibling of the
-; enclosing let (go/go), beside a sibling that carries an import (rq, a computed
-; pin it reads): the walk for the inner self-reference must not escape to the
-; outer sibling. it once did -- during the closures phase the inner 'lam is not
-; yet pinned -- and applied the sibling's import row mid-weave, past the fixcaps
-; fixpoint, so every recursive (zap x) inside zap's own body under-applied: a
-; truthy partial, the body never ran, silently (rm -r walked a tree and deleted
-; nothing). avw's shadow guard ('far keys every binding name) now stops the
-; escape, and weave scares 'imports-grew if a frozen import row ever grows again.
+; --- an inner loop `go` shadows a later outer sibling `go`: the inner self-reference
+; must not reach the outer one, or (zap x) under-applies to a truthy partial ---
 (: rq <[1]
    (zap q)
     (? (two? q)
@@ -117,11 +95,8 @@
    (go a) (? rq (zap a) 0)
    (test (1 = go [5 6 7])))                        ; ran to every leaf, no partial anywhere
 
-; --- capture that reaches through a later sibling -----------------------------
-; the read that wants a cell need not sit in the value's own def-prefix: an earlier
-; closure inherits a later sibling's captures whole, so it asks for the value's slot
-; at construction -- before that slot exists. boxset follows the read graph to a
-; fixpoint, so the value is boxed on the reach, not only on a direct mention.
+; --- capture through a later sibling: an earlier closure inherits its captures, so
+; the value is boxed on the reach, not only on a direct mention ---
 (: (tk1 _) (: (a o) (f o) c {} f (o \ peep c o 'no) _ (pin c 'k 'yes) (a 'k))
    (tk2 _) (: (helper x) (other x) K {} (other y) (peep K y 'no)
                _ (pin K 'k 'yes) (helper 'k))
@@ -129,10 +104,8 @@
    (tk3 _) (: (a o) (zz o) c {} zz (o \ peep c o 'no) _ (pin c 'k 'yes) (a 'k))
    (test ('yes = tk1 ()) ('yes = tk2 ()) ('yes = tk3 ())))
 
-; --- a top-level `:` reads its own name late ----------------------------------
-; the outer let is body-less, so closure-fct defglobs -- after its own def is built.
-; a nested lambda naming it must read the book when it runs; capturing a value that
-; does not exist yet is what the missing condition used to report at definition.
+; --- a body-less top-level `:` defines after its def is built, so a nested lambda
+; naming it reads the book when it runs ---
 (: closure-fct (: (h n acc) (n < 1 ? acc (h (n - 1) (acc * n))) (n \ h n 1)))
 (: (tl1 _) (: walk (: (kid k) (two? k ? (walk >k) k) kid) (walk '(1 2 3)))
    (test (120 = closure-fct 5) !(tl1 ())))

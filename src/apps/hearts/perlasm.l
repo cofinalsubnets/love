@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0
 ; src/apps/hearts/perlasm.l -- the kernel's lib/crypto/arm64/sha2-armv8.pl, ported: the one perlasm
 ; script an arm64 defconfig runs (sha256-core.S, sha512-core.S), its output held byte-identical to
 ; perl's. the script is pinned by its sha256 -- another refuses, so an upstream change shows rather

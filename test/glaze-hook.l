@@ -1,12 +1,7 @@
-; --- test/glaze-hook.l: the natjit creation-hook laws ---------------------------
-; the hook is src/love/boot/glaze.l's hook half: ev.l's `ala` reads it via (gv 'natjit) on
-; every closure built, and a qualifying leaf is native-backed at creation. it executes
-; native code, so common.mk's $t filters it out; `make test_hook` runs it on x86-64 + a64
-; against the woken image's hook and the egg boot's (what ships, and what a hook.l edit moves).
-; it drives the three names hook.l leaks on purpose: `natjit`, `fires` (the probe counter)
-; and `fired?`. every law takes a count, builds a closure through the live ev, and claims
-; both the answer and that the hook owned it -- bytecode computes the answer too.
-(assert (lit? natjit) (lit? fires) (lit? fired?))            ; the const-1 trap: unbound -> ()=zero point -> every claim below reads 1
+; the natjit creation hook: a qualifying leaf is native-backed when its closure is built.
+; runs native code, so it is its own lane (test_hook), not the corpus. each law claims the
+; answer and that the hook fired (`fires`, `fired?`), since bytecode computes it too
+(assert (lit? natjit) (lit? fires) (lit? fired?))            ; unbound, every claim below would read 1
 
 (assert
     ; --- embedded leaves get native-backed at creation, and compute correctly ---
@@ -14,7 +9,7 @@
        (31 = (ev '(: f (\ x (+ (* x 3) 1)) (f 10)))                ; leaf in a let body
         && fired? n))                                               ; ... the hook fired on it
     (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; embedded leaf, applied inline -> deopt -> bignum
-    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; chain body -> the amble lane owns it now, still right
+    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; chain body -> the amble lane owns it
     ; --- an embedded float-result leaf: native gem box at creation, == interp, deopts on a non-float arg ---
     (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))         ; f built by ala -> the float lane fires
        (gem? (fr 4) && 8.0 = (fr 4) && (fr 4 = ((x \ (x * 1.5) + 2.0) 4))      ; boxes a gem, == the interpreter
@@ -28,9 +23,7 @@
     (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)           ; inner (\ x (+ x y)) is the embedded one
        (15 = (a5 10) && ('(6 7 8) = (map a5 '(1 2 3)))     ; native captured closure, composes
         && a5 = ((y \ (x \ x + y)) 5)))                    ; ... and = the interpreter's instance
-    ; --- == + transparency on an embedded capturing leaf pulled out as a value ---
-    ; (the leaf must CAPTURE (z) -- a closed leaf like (\ x (+ x 0)) hoists to a shared
-    ; constant, so (id 9) twice is one object; a capturing one is allocated per call.
+    ; --- transparency on a capturing leaf pulled out as a value (a closed one would hoist) ---
     (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)  ; inner captures z -> a fresh native cell per call
        (19 = (f 10) && f = ((z \ (x \ x + z)) 9)))       ; computes right, = the interp instance
     ; --- the self seam: a letrec name recurs natively -- a tail call re-enters as a loop,
@@ -61,10 +54,8 @@
        h (ev '(: (h a b) (? (< 0 b) (+ (+ (// a b) (% a b)) (+ (& a b) (+ (| a b) (^ a b)))) 0) h))
        i (a \ b \ ((a // b) + (a % b)) + ((a & b) + ((a | b) + (a ^ b))))
        (fired? n && (h 17 5 = i 17 5) && (h -17 8 = i -17 8) && 0 = (h 17 0)))
-    ; --- an inner lambda in a driver body: the site builds the closure natively (lz's chain
-    ; over the frame's imports), fresh per evaluation, = the interpreter's instance; a
-    ; closed one is the shared cell. the inner bodies here decline every lane (a show call
-    ; in a one-shot body), so the fire is the driver's own.
+    ; --- an inner lambda in a driver body is built natively, fresh per evaluation; a closed
+    ; one is shared. the inner bodies decline every lane, so the fire is the driver's
     (: n (peep fires () 0)
        ad (ev '(: (ad f l) (? (two? l) (. (f (\ x (+ (tally (show x)) (cap l)))) (ad f (cup l))) ()) ad))
        cs (ad (g \ g) '(1 2))
@@ -75,9 +66,7 @@
        ac (ev '(: (ac f l) (? (two? l) (. (f (\ x (+ (tally (show x)) 1))) (ac f (cup l))) ()) ac))
        cs (ac (g \ g) '(1 2))
        (fired? n && ('(2 2) = (ac (g \ g 5) '(1 2))) && (cap cs = cap >cs)))
-    ; --- the negations, a cond chain, and an inlined sibling's mint-bound arg: (nil? x) is
-    ; (? x 0 1), (? c a c2 b e) nests, and cprop's (: <mint> (arg) body) binds like a name --
-    ; the shapes holo's layout loop is made of
+    ; --- the negations, a cond chain, and an inlined sibling's mint-bound arg
     (: n (peep fires () 0)
        lay (ev '(: (pad be n) (list n n) (at l k) (? (= k 0) (cap l) (at (cup l) (- k 1)))
                    (lay p acc) (? !(two? p) (rev acc)
@@ -94,17 +83,13 @@
     (: n (peep fires () 0)
        mk (ev '(\ l ((: (go l acc) (? (two? l) (go (cup l) (. (\ y (* y (tally (show (cap l))))) acc)) acc)) l ())))
        (fired? n && ('(2 2 2) = (map (c \ c 2) (mk '(1 2 3)))) && ('(4 2) = (map (c \ c 2) (mk '(1 10))))))
-    ; --- the restart law: a deopt re-runs the twin from the restart point, so any call-out the
-    ;     native already made is made again. both loops write a byte and then overflow a fixnum
-    ;     on the very next step, so the guard fires with the byte already out -- the amble
-    ;     declines them, and the answer is the interpreter's: 40 bytes, nothing written twice.
+    ; --- the restart law: a deopt re-runs from the restart point, so a loop that writes and
+    ;     then overflows is declined, and nothing is written twice
     (: f (ev '(: (mk o n k) (? (<= n 0) (slurp o) (: _ (put o (+ 97 (% k 5))) (mk o (- n 1) (+ (* k 7) 3)))) mk))
        ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40 9)))     ; a self-call loop: its restart point is the running iteration
     (: f (ev '(: (build o n) ((: (go m k) (? (<= m 0) (slurp o) (: _ (put o (+ 97 (% k 5))) (go (- m 1) (+ (* k 7) 3))))) n 9) build))
        ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40)))       ; a named-let: its vars ride reserved slots, so the restart is the whole loop
-    ; --- a constant past fixnum range cannot ride as an immediate: tag(e) = 2e+1 overflows the
-    ;     machine word, so the amble must decline the body rather than lay it truncated. the
-    ;     answer is the whole number, never a wrapped negative -- and the sign both ways.
+    ; --- a constant past fixnum range is no immediate: declined, never laid truncated
     (: f (ev '(\ x (: y 6000000000000000000 (+ x y))))
        (6000000000000000000 = (f 0) && (f 0 = ((x \ (: y 6000000000000000000 (x + y))) 0))))
     (: f (ev '(\ x (: y -6000000000000000000 (+ x y))))
@@ -113,10 +98,8 @@
        (6000000000000000000 = (f 4)))                            ; ... and one folding left behind in a loop
     (: f (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a 6000000000000000000)) a)) 0 0)))
        (6000000000000000000 = (f 1)))
-    ; --- the fallback stubs: a body with a call never restarts, so the recursive list idiom --
-    ;     a call, then a cons, a sum or a truth test over its answer -- ambles, and a guard that
-    ;     fails past the call drives the op's own value in place: the bignum, the heap truth and
-    ;     the collected cons all come back right, and no call runs twice
+    ; --- the fallback stubs: a guard failing past a call computes the op in place, so the
+    ;     recursive list idiom ambles and no call runs twice
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) () ((h m) . (g h (- m 1)))) g))
        (fired? n && ('(9 4 1) = f (x \ x * x) 3)))                     ; a cons after the non-tail self-call
@@ -126,8 +109,7 @@
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) 0 (? (h m) (+ 1 (g h (- m 1))) (g h (- m 1)))) g))
        (fired? n && (2 = f (x \ x = 2 ? () [x]) 3)))                     ; a heap truth on the call's answer: the bit stub decides
-    ; ... and the stub's bit is the glaze's own, whatever the book binds to the name (a spliced
-    ;     module may export one): a nil in a let slot still reads false
+    ; ... and the stub's bit is the glaze's own, whatever the book binds to `bit`
     (: old bit
        _ (ev '(: bit (\ a b 1)))
        n (peep fires () 0)
@@ -143,9 +125,8 @@
     (: n (peep fires () 0)
        f (ev '(: (go i m a) (? (< i m) (go (+ i 1) m (tally (show (+ a i)))) a) go))
        (fired? n && 2 = (f 0 20 0)))
-    ; --- a literal divisor never divides: a power of two shifts, any other rides its magic
-    ;     multiply (mulh), and both truncate toward zero as the interpreter does -- the sign both
-    ;     ways, on the leaf, the loop and the amble
+    ; --- a literal divisor shifts or multiplies by its magic, truncating toward zero,
+    ;     on the leaf, the loop and the amble
     (: n (peep fires () 0)
        f (ev '(\ x (+ (* 100 (// x 7)) (% x 7))))
        (fired? n && ('(-1401 -1 0 1 1401 20000 -20000) = map f '(-99 -1 0 1 99 1400 -1400))))
@@ -167,9 +148,8 @@
        _ (ev '(module (gzh gzh-sum) (: (gzh-sum l acc) (? (two? l) (gzh-sum >l (acc + gzh-sq <l)) acc) (gzh-sq x) (x * x))))
        f (cite 'gzh 'gzh-sum)
        (fired? n && nat? f && 14 = (f [1 2 3] 0)))
-    ; --- a saturated call lays its frame below Sp, and a call-out before it may have spent the
-    ;     room: gzfmk leaves m words (gauge's pool less heap less stack) and makes a tablet in
-    ;     them, swept over m. the frame must not land on that tablet -- the 15th argument stays one
+    ; --- a saturated call's frame must not land on a tablet a call-out just made in the
+    ;     last free words: swept over m, the 15th argument stays a tablet
     (: n (peep fires () 0)
        f (ev '(: (gzf16 a b c d e f g h i j k l m n o p) (? (tablet? o) 0 1)
                  (gzfmk m) (: g (gauge 0)  r (- (- (g 0) (g 1)) (g 2))

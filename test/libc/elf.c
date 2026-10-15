@@ -1,5 +1,5 @@
 /* elf.h against the system's: every constant, every struct's size and its fields' offsets,
- * and the info macros on sample values, as src/apps/moon/include/elf.h has them */
+ * and the info macros on sample values */
 #include <elf.h>
 #include <stddef.h>
 #include "say.h"

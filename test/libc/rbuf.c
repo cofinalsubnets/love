@@ -1,6 +1,6 @@
 /* a read stream reads ahead of its fd, and the stream's position is still the one a program sees:
  * ftell and fseek count the read-ahead and the pushback, an input fflush puts the fd back where
- * the stream stands (gnulib's fflush probe, whole), and fread, getc, ungetc and fgets interleave */
+ * the stream stands, and fread, getc, ungetc and fgets interleave */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdio_ext.h>

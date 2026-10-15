@@ -1,7 +1,5 @@
-; src/apps/kore/fs.l -- the fs tools of kore: ls cp mv rm mkdir rmdir ln touch pwd chmod
-; truncate. a toolbox dispatched by kore.l, after core.l on the u-floor. an effect op of
-; posix.c answers () on success or an errno nom, so !e is the success every loop asks.
-; a body-less top-level `:` leaking uoct (lawed in test/law/kore.l) and the mains.
+; src/apps/kore/fs.l -- kore's file tools: ls cp mv rm mkdir ln touch chmod stat du df and kin.
+; an effect op of posix.c answers () on success or an errno nom, so !e is success.
 (module 'kore
 (borrow 'cli)
 (borrow 'cal)
@@ -12,12 +10,9 @@
 (:
    ; a file destination: into a directory the source's basename lands beside
    (udest src dst) (udirp dst ? (dst + "/" + ubase src "") dst)
-   ; copy bytes + permission bits (cp's heart; mv's cross-device leg)
-   ; the bytes, by whichever door this love has. kore runs in two worlds and they do not
-   ; carry the same nifs: the Makefile bakes this whole cat verbatim (korecat), and a seat
-   ; without `copyfile` takes the slurp, the freestanding leg. asked at the call, never bound at the top: the kernel's image is
-   ; baked by a host love, so a load-time answer would freeze this world's nif set into
-   ; that one's.
+   ; copy bytes + permission bits (cp's heart; mv's cross-device leg).
+   ; copyfile where this love has it, else the slurp; asked at the call, not bound at load,
+   ; since the kernel's image is baked by a host love whose nif set differs
    (ucopy-bytes src dst)
     (lit? (cite 'posix 'copyfile) ?
      (charm? (copyfile src dst))
@@ -25,11 +20,8 @@
       (two? r ? (open dst "w" @ q
                  (hot? q ? (say q <>r, close q, 1) 0))
        0)))
-   ; the stat leads so the two failures stay tellable apart: one errno covers either end,
-   ; and `cp: cannot open X` vs `cannot create Y` is the whole diagnostic. it is the same
-   ; stat the mode comes from, so it costs nothing it did not already spend.
-   ; ucopy1 says its complaint and answers 0, so a tool with many operands carries on;
-   ; ucopy leaves with 1 instead
+   ; the stat leads so `cannot open X` and `cannot create Y` stay apart (one errno covers
+   ; either end); it is the stat the mode comes from. ucopy1 says and answers 0; ucopy leaves 1
    (usay-err m) (say err m, put err 10, 0)
    (ucopy1 who src dst)
     (stat src @ st
@@ -43,9 +35,8 @@
                a (line ())
                (two? a && (<a = 121 || <a = 89) ? 1 0))
 
-   ; -- pwd: where we stand. -P the path with no link in it; -L $PWD, the way the shell
-   ; came, when it is absolute, holds no . or .., and is the same directory; the later
-   ; of the two wins, and -P unsaid --
+   ; -- pwd: -P the path with no link in it; -L $PWD when absolute, free of . and .., and
+   ; the same directory; the later of the two wins, -P unsaid --
    (pwd-main as)
     (: L? (filter (w \ w = "-L" || w = "-P") as @ ws (two? ws ? (<(rev ws) = "-L") 0))
        e (getenv "PWD")
@@ -54,22 +45,17 @@
        w (L? && string? e && 0 < #e && e 0 = 47 && clean? e && same e "." ? e (cwd ()))
        (say out w, put out 10, flush out, 0))
 
-   ; -- sync: the writeback, scheduled. sync(2) answers nothing and cannot fail.
-   ; GNU's takes FILEs and fsyncs each; this one is the bare call only, since the
-   ; per-file lane wants an fsync nif and there is none -- taking the operands and
-   ; syncing everything instead would be a different thing wearing the same name.
+   ; -- sync: sync(2), the bare call; FILE operands are refused, since syncing everything
+   ; for them would be a different thing wearing the same name
    (sync-main as)
-    (two? as ? (udie 1 "sync: takes no operands here (no fsync nif)"), lit? (cite 'posix 'sync) ? (sync 0), 0)
+    (two? as ? (udie 1 "sync: takes no operands; fsync FILE.. syncs files"), lit? (cite 'posix 'sync) ? (sync 0), 0)
 
-   ; -- mkfifo and mknod: the two rows a /dev wants ------------------------------
-   ; mode carries the TYPE bits as well as the permissions, which is mknod(2)'s own
-   ; shape: S_IFIFO 4096, S_IFCHR 8192, S_IFBLK 24576.
-   ; linux packs a device number wide -- major in bits 8..19 and 44.., minor in 0..7
-   ; and 20.. -- so the obvious (major << 8) | minor is right only while both are small.
+   ; -- mkfifo and mknod: mode carries the type bits too, as mknod(2) takes it:
+   ; S_IFIFO 4096, S_IFCHR 8192, S_IFBLK 24576. linux packs a device number wide: major
+   ; bits 8..19 and 44.., minor 0..7 and 20.., so (major << 8) | minor holds only while small
    (umkdev maj mn)
     ((maj & 4095) << 8 | mn & 255 | (maj >> 12) << 44 | (mn >> 8) << 20)
-   ; the seat may carry no mknod (inle, wasm), so the row is probed -- and probed in the
-   ; MODULE, which is where posix's names live: the book holds none of them.
+   ; mknod may be absent (inle, wasm): probed in the posix module, where its names live
    (umknod who p md dev)
     (lit? (cite 'posix 'mknod) ? (mknod p md dev) 'enosys)
    (mkfifo-main as)
@@ -107,32 +93,12 @@
        e (umknod "mknod" nm (md | kind) dev)
        (e ? (udie 1 ("mknod: cannot create " + nm + ": " + show e)) 0))
 
-   ; -- ls: a directory's entries, sorted, dotfiles held back (-a shows them);
-   ; a file argument answers its own name --
-   ;   -a all   -A all but . and ..   -l long   -d the directory itself
-   ;   -r reverse   -t newest first
-   ;   -1 one per line   -C columns down   -x columns across
-   ; the format with none of those spelled is the terminal's: columns onto one, a
-   ; name a line into a pipe. GNU lets the LAST format flag win; uopt keeps presence
-   ; and not order, so they rank instead -- -l, then -1, then -x, then -C.
-   ; the screen and the grid on it are both grid's: $COLUMNS then the terminal, ragged
-   ; columns, a pad that elides onto tab stops. all three are GNU's own and not an
-   ; imitation of them, and test/kore/ls.sh is where the two are compared.
-   ; several operands print GNU's `name:` headers, files before directories.
-   ; the long row's clock is UTC. this tree carries no timezone database (see
-   ; date's own note), so `ls -l` reads local time only where local time is UTC, and
-   ; the gate that compares it to GNU sets TZ for that reason.
-   ; colour is automatic and goes only onto a terminal -- (tty 1) answers a pair for
-   ; one and 'enotty for anything else, so a pipe keeps the plain name and `ls | grep`
-   ; reads what it always read; --color=always|never|auto says otherwise, bare always.
-   ;   -h sizes as du -h's   -S by size   -u -c atime or ctime for -t and the row
-   ;   -R down every directory, a link never followed   -L the thing a link names
-   ;   -F / * @ | = after a name, -p the / alone   -i inode, -s 1K blocks, ahead of it
-   ;   -n numeric owners, -g no owner, -o no group -- each of the three a long row
+   ; -- ls. uopt keeps presence and not order, so where GNU lets the last format flag win
+   ; these rank: -l, then -1, -x, -C; none spelled is columns on a terminal, a name a line
+   ; into a pipe. the long row's clock is UTC (no timezone database here). colour goes
+   ; only onto a terminal unless --color says otherwise
    uls-opts (chars "aACcdFghiLlnoprRsStux1" + [1001])
-   ; GNU shows the clock for the last six months and the year outside them. six
-   ; months is 31556952/2 -- the average Gregorian year halved, coreutils' own
-   ; constant, not 180 days.
+   ; GNU's six months is 31556952/2, the average Gregorian year halved, not 180 days
    (uls-when s now)
     (: ymd (civil (s // 86400)) secs (s % 86400)
        mo (mon3 (<>ymd - 1))
@@ -141,9 +107,8 @@
         (mo + " " + d + " " + zpad 2 (show (secs // 3600))
             + ":" + zpad 2 (show ((secs % 3600) // 60)))
         (mo + " " + d + "  " + show <ymd)))
-   ; the sgr a name wears, "" for none. the class is read off the lstat already in
-   ; hand; a broken link is the one class that costs a second call, since only the
-   ; stat behind the link can miss.
+   ; the sgr a name wears, "" for none, off the lstat in hand; only a link costs a second
+   ; stat, to tell a broken one
    (uls-hue p md)
     (md & 61440 @ k
      (? (k = 16384) "\e[1;34m"
@@ -152,9 +117,8 @@
         ""))
    (uls-tint s h) (#h ? (h + (s + "\e[0m")) s)
    (uls-name e tty?) (uls-tint <e (tty? ? (uls-hue (e 2) (<>e 2)) ""))
-   ; a name as the long row shows it -- a link wears its target, which is why every
-   ; stat here is an lstat: ls -l describes the link and not what it points at. the
-   ; colour dresses the name alone: the target after the arrow keeps its own text.
+   ; a name as the long row shows it: a link wears its target (hence lstat everywhere);
+   ; the colour dresses the name alone
    (uls-nom p nm md h)
     (uls-tint nm h @ n
      (40960 = (md & 61440) ?
@@ -178,18 +142,14 @@
      (? (k = 16384) "/" !F? ""
         (k = 40960) (long? ? "" "@") (k = 4096) "|" (k = 49152) "="
         (k = 32768 && 0 < (st 2 & 73)) "*" ""))
-   ; the names as a grid. a cell's width is the NAME's and not the coloured text's:
-   ; the sgr bytes ride along and take up no screen, and a wide character takes two.
+   ; a cell's width is the name's, not the coloured text's; a wide character takes two
    (uls-grid es tty? w down? pre)
     (: cs (map (e \ ((pre e + uls-name e tty?) . (#(pre e) + swidth <e))) es)
        (go l) (atom? l ? () (say out <l, put out 10, go >l))
        (go (cite 'grid 'lay cs w down?)))
    (uls-wide rs k) (foldl (w \ r \ (#(r k) @ n (w < n ? n w))) 0 rs)
-   ; the widths come from `ws` and not from `rs`. GNU sizes the command-line block's
-   ; columns over every operand, directories included -- even though a directory
-   ; operand is listed further down as a block of its own and its row is never
-   ; printed here. `ls -l file dir` pads file's size to the width of dir's, and a
-   ; block sizing itself off its own rows silently loses that space.
+   ; widths come from `ws`, not `rs`: GNU sizes the command-line block over every operand,
+   ; directories included, so `ls -l file dir` pads file's size to dir's
    (uls-emit rs ws0 pres)               ; the rows, columns aligned the way GNU aligns
     (: wl (uls-wide ws0 1) wu (uls-wide ws0 2) wg (uls-wide ws0 3) ws (uls-wide ws0 4)
        (cell s pad w) (string? s ? (" " + pad w s) "")
@@ -201,15 +161,12 @@
                     put out 10,
                     go >l >ps)))
        (go rs pres))
-   ; the order: by name, or by mtime newest-first under -t with the name breaking a
-   ; tie. -r turns whichever of those around, which is why it is applied last and not
-   ; folded into the comparison.
+   ; by name, or by mtime newest-first under -t, the name breaking a tie; -r applied last
    (uls-sort es key r?)                 ; key: () by name, else a number, biggest first
     (: le (key ? (x \ y \ (: a (key <>x) b (key <>y) (a = b ? (<x <= <y) (b < a))))
            (x \ y \ <x <= <y))
        s (sortby le es)
        (r? ? (rev s) s))
-   ; one entry: [name lstat] | () when it cannot be stat'd
    ; one entry: [name stat path] | () when it cannot be stat'd; -L's stat reads through a
    ; link, and a broken one keeps its own
    (uls-ent dir nm L?)
@@ -264,13 +221,11 @@
               (: (go l) (atom? l ? ()
                          (<l @ e (say out (pre e + name e), put out 10, go >l)))
                  (go es))))
-       ; a directory's own listing: the entries, with `total` ahead of a long one.
-       ; an EMPTY directory still owes its header and its `total 0`, so nothing here
-       ; returns early on the empty readdir.
+       ; a directory's listing, `total` ahead of a long one; an empty one still owes its
+       ; header and `total 0`
        (dirlist p first ok)
-        ; readdir does not hand back . and .. -- it answers the names a walk wants.
-        ; `ls -a` owes both, so they are put back here rather than taught to readdir,
-        ; where every other caller would then have to take them out again.
+        ; readdir omits . and ..; `ls -a` puts them back here rather than in readdir,
+        ; whose other callers would then take them out again
         (: ns (readdir p)
            keep (? a? ("." . (".." . ns))
                    aa? ns
@@ -285,8 +240,8 @@
            ; -R: each directory in the listing, in its order, a link to one not followed
            sub (R? ? (filter (e \ !(<e = "." || <e = "..") && 16384 = 61440 & (<>e 2)) srt))
            (foldl (k \ e \ dirlist (e 2) 0 k) ok sub))
-       ; the operands, GNU's way round: the non-directories first as one listing,
-       ; then a listing per directory. -d makes every operand a non-directory.
+       ; the non-directory operands first as one listing, then a listing per directory;
+       ; -d makes every operand a non-directory
        (miss p) (say err ("ls: cannot access " + p), put err 10, 0)
        bad (filter (p \ atom? (lstat p)) fs)
        good (filter (p \ two? (lstat p)) fs)
@@ -296,21 +251,15 @@
        pes (filter two? (map (p \ uls-ent "" p L?) plain))
        aes (filter two? (map (p \ uls-ent "" p L?) good))
        _ (two? pes ? (show1 (uls-sort pes key r?) (rows aes)))
-       ; the directory operands go in name order (-r turns them around); -t orders
-       ; what is INSIDE a directory and is not claimed over the operands themselves.
+       ; directory operands in name order (-r reverses); -t orders only what is inside
        dps (sort dirs @ s (r? ? (rev s) s))
        (walk l first ok) (atom? l ? ok (walk >l 0 (dirlist <l first ok)))
        ok (walk dps (atom? pes) (two? bad ? 0 1))
-       ; GNU's ls answers 2 for "cannot access", not 1: 1 is a minor trouble
-       ; (an unreadable subdirectory under -R) and 2 is "the operand is not there",
-       ; which is the status a script's `ls x || ...` is reading.
+       ; GNU's 2 for "cannot access" (what `ls x || ..` reads), 1 for minor trouble
        (flush out, ok ? 0 2))
 
-   ; -- cp and mv: a directory destination pulls the basename in beside --
-   ; -f is taken and ignored: it means "do not prompt", and without -i nothing prompts.
-   ; -i asks before replacing, -n never replaces, the last of -f -i -n spelled wins; -u
-   ; replaces only an older file. cp -a is -rpP: under -r or -P a link is copied as a
-   ; link, and -L follows it as a plain cp does
+   ; -- cp and mv: -f is ignored (nothing prompts without -i); the last of -f -i -n wins.
+   ; cp -a is -rpP: under -r or -P a link is copied as a link, -L follows it
    ; whether src may land on dst, which may already be there
    (uclob who how u? src dst)
     (: a (stat src) b (stat dst)
@@ -319,9 +268,8 @@
           (u? && two? a && two? b && <>>>a <= <>>>b) 0
           (how = 105) (uyes (who + ": overwrite '" + dst + "'? "))
           1))
-   ; SRC.. DST, or with -t DIR every operand a source. with more than one source the
-   ; target must be a directory; each source lands under udest, a miss is said and the
-   ; rest still go
+   ; SRC.. DST, or -t DIR: more than one source wants a directory target; a miss is said
+   ; and the rest still go
    (cp-srcs who ops td each1)
     (: fs (rev ops)
        dst (td ? td <fs)
@@ -354,8 +302,7 @@
                   k)))
            (k ? (said s d) 0,
             k))
-       ; -r walks a tree top-down: a directory is laid at the far end and its entries
-       ; follow it, its mode after them. a miss inside costs the answer, not the rest
+       ; -r is top-down: a directory laid first, its entries after, its mode last
        (tree s d)
         (udirp d ? 0 (mkdir d 493, said s d),
          (!(udirp d) ? (usay-err ("cp: cannot create " + d))
@@ -391,9 +338,7 @@
                k)))
        (cp-srcs "mv" (fo 1) (uoptv t 116) one))
 
-   ; -- rm: unlink; -r walks a tree bottom-up and never through a link; -d takes an empty
-   ; directory; -f keeps quiet about misses and answers no prompt; -i asks for each, the
-   ; later of -f and -i winning. . and .. are refused, as GNU's are --
+   ; -- rm: -r bottom-up, never through a link; the later of -f and -i wins; . and .. refused --
    (rm-main as)
     (: fo (uflags "rm" as () "dfirRv")
        t <fo fs (fo 1)
@@ -424,8 +369,7 @@
           f? 0
           (udie 2 "usage: rm [-dfirRv] FILE..")))
 
-   ; -- mkdir and rmdir: -p lays every prefix on the way down, or takes it away on the
-   ; way up; -m sets the new directory's mode whole, the umask aside --
+   ; -- mkdir and rmdir: -p every prefix; -m sets the mode whole, the umask aside --
    (mkdir-main as)
     (: fo (uflags "mkdir" as '(109) "mpv")
        t <fo fs (fo 1)
@@ -458,8 +402,7 @@
        (two? (fo 1) ? (foldl (ok \ q \ (rd q ? ok 0)) 1 (fo 1) ? 0 1)
         (udie 2 "usage: rmdir [-pv] DIR..")))
 
-   ; -- ln: two names for one thing (-s the pointing kind, -f moves the old name aside).
-   ; TARGET LINK, TARGET alone into here, or TARGET.. DIR; -T never reads the last as a
+   ; -- ln: TARGET LINK, TARGET into here, or TARGET.. DIR; -T never reads the last as a
    ; directory, -n not when it is a link to one --
    (ln-main as)
     (: fo (uflags "ln" as () "fnsTv")
@@ -477,8 +420,7 @@
           (2 < n) (udie 1 ("ln: target " + last + " is not a directory"))
           (mk <ops last ? 0 1)))
 
-   ; -- touch: be there, and be now; -c makes nothing, -r takes a file's time, -d DATE
-   ; a given one, as date -d reads it --
+   ; -- touch: -d DATE as date -d reads it --
    (touch-main as)
     (: fo (uflags "touch" as '(100 114) "cdr")
        t <fo fs (fo 1)
@@ -497,18 +439,16 @@
        (go a ok) (two? a ? (go >a (one <a ok)) (ok ? 0 1))
        (two? fs ? (go fs 1) (udie 2 "usage: touch [-c] [-r FILE] [-d @SECONDS] FILE..")))
 
-   ; -- lift: hand a file to whatever is outside the machine -- the page's downloads,
-   ; the node runner's directory -- by way of /proc/lift. a seat with no outside has
-   ; no such file, and says so.
+   ; -- lift: hand a file outside the machine (the page's downloads, the node runner's
+   ; directory) through /proc/lift; where there is none, says so
    (lift-main as)
     (: f (two? as && atom? >as ? <as (udie 2 "usage: lift FILE"))
        _ (two? (stat f) ? () (udie 1 ("lift: no such file: " + f)))
        p (open "/proc/lift" "w")
        (hot? p ? (say p f, close p, 0) (udie 1 "lift: nothing outside this seat to lift to")))
 
-   ; -- chmod: a mode, octal or symbolic, onto every named path; -R down each directory,
-   ; never through a link found on the way; -f keeps quiet. a word that is no mode
-   ; refuses before anything changes --
+   ; -- chmod: -R never through a link found on the way; a word that is no mode refuses
+   ; before anything changes --
    (chmod-main as)
     (: (cfl? w) (1 < #w && w 0 = 45 && all (i \ elem (w i) "Rf") >^#w)
        (fl a r f) (? (atom? a) [r f a]
@@ -531,14 +471,8 @@
           (k ? ok 0)))
        (foldl (ok \ q \ tree q ok) 1 >rest ? 0 1))
 
-   ; -- install: copy with the mode set in the same breath (what the build's
-   ; place-a-file steps say). SRC DST, SRC.. DIR, or -t DIR SRC.., as cp's walk takes
-   ; them; -d makes directories (with parents, like -p); -D lays the destination's
-   ; parents first; -m MODE sets the mode (755 else), octal or symbolic; -o and -g the
-   ; owner and group; -p keeps the source's time; -C leaves a target already the same
-   ; bytes and mode alone; -v says each; -s (strip) is accepted and noted -- no
-   ; stripper rides kore yet, so the copy keeps its symbol table (a fatter install,
-   ; never a wrong one) --
+   ; -- install: copy with the mode set (755 else), cp's operand shapes. -C leaves a target
+   ; with the same bytes and mode alone; -s is accepted and does nothing, nothing strips here
    (imkp q v?)                     ; a tolerant mkdir at every slash (parents only), -v saying each made
     (: n #q
        (mk d) (!(mkdir d 493) && v? ? (say out ("install: creating directory '" + d + "'\n")) 0)
@@ -577,7 +511,7 @@
           (t 84) (atom? >fs ? (udie 2 "usage: install -T SRC DST") (one <fs <>fs ? 0 1))
           (cp-srcs "install" fs (uoptv t 116) one @ r (flush out, r))))
 
-   ; -- readlink: what a symbolic link says (-f chases to an absolute, clean path) --
+   ; -- readlink's helpers: an absolute path, and a lexical clean (.. pops a segment) --
    (rl-abs q) ((0 < tally q) && (q 0 = 47) ? q (cwd () + "/" + q))
    (rl-clean q)                    ; lexically: no // . .. (.. pops a segment)
     (: n #q
@@ -591,9 +525,8 @@
                        (<l = "..") (fold >l (two? acc ? >acc acc))
                        (fold >l (<l . acc)))
        ("/" + ujoinc 47 (fold (seg 0 0 ()) ())))
-   ; -- readlink: a link's target, or with -f -e -m the whole path canonical by
-   ; realpath's walk -- -f all but the last name there, -e all of it, -m none; -n no
-   ; newline, -z a NUL after each; a failure says nothing and costs the status --
+   ; -- readlink: a link's target; -f -e -m canonical by realpath's walk (-f all but the
+   ; last name there, -e all, -m none); a failure says nothing and costs the status --
    (readlink-main as)
     (: fo (uflagsl "readlink" as () "efmnqsvz" {"canonicalize" 102 "canonicalize-existing" 101 "canonicalize-missing" 109
                                                  "no-newline" 110 "zero" 122 "quiet" 113 "silent" 115 "verbose" 118})
@@ -609,10 +542,8 @@
        ok (foldl (ok \ q \ (one q @ r (string? r ? (say out (r + end), ok) 0))) 1 fs)
        (flush out, ok ? 0 1))
 
-   ; -- realpath: a path with every symlink, every . and every .. taken out of it.
-   ; the walk resolves component by component, so a last name that does not exist yet
-   ; still answers -- GNU's default face. -e wants the whole path to be there, -m
-   ; allows any of it to be missing, -s takes the links as they lie --
+   ; -- realpath: resolved component by component, so a last name not there yet still
+   ; answers (GNU's default); -e wants all of it, -m none, -s takes links as they lie --
    (rp-parts p) (filter (w \ 0 < tally w) (usplit 47 p))
    (rp-canon q n)                      ; the resolved path, or () past n links
     (: (walk acc parts d)
@@ -626,9 +557,8 @@
                     (!(string? t) ? (walk cand >parts d)
                      (walk (t 0 = 47 ? "/" acc) (rp-parts t + >parts) (d - 1)))))))
        (walk "/" (rp-parts (rl-abs q)) n))
-   ; -q says nothing of a miss, -z ends each with a NUL; -L takes .. before the links
-   ; (a/link/.. is a), -P after them, the default; --relative-to=DIR says the answer
-   ; from DIR, --relative-base=DIR only for what lies under DIR
+   ; -L takes .. before the links (a/link/.. is a), -P after, the default;
+   ; --relative-base=DIR relativises only what lies under DIR
    (rp-rel p base)                     ; two canonical paths -> p seen from base
     (: a (rp-parts p) b (rp-parts base)
        (common x y) (two? x && two? y && <x = <y ? (common >x >y) [x y])
@@ -665,8 +595,7 @@
        (go a ok) (two? a ? (go >a (one <a ok)) (flush out, ok ? 0 1))
        (go fs 1))
 
-   ; -- link and unlink: the two syscalls said plainly, no face on them (ln and rm
-   ; are where the faces live) --
+   ; -- link and unlink: the bare syscalls --
    (link-main as0)
     (uflags "link" as0 () "" 1 @ as
      (atom? >as ? (udie 1 "usage: link FILE NEW")
@@ -679,11 +608,8 @@
        (!e ? 0 (udie 1 ("unlink: cannot unlink " + <as))))))
 
    ; ---- the reporting tools: stat, du -- and chown, mktemp ---------------------
-   ; these read the stat tail. src/love/posix.c's stat answers
-   ; (size mtime mode ns uid gid nlink blocks ino), append-only, and the kernel's own
-   ; stat (src/inle/kmain.c) answers the first four alone -- an image tree has no ownership
-   ; to tell about. so the tail is asked by tally and a world that does not carry it
-   ; says so rather than reading a 0 someone might believe.
+   ; the stat tuple's tail past size mtime mode may be missing (the kernel's has no
+   ; ownership): ust-at asks by tally and answers (), never a 0 someone might believe
    (ust-at st k) (#st <= k ? () (st k))
    ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam)
    (uidname path id)                   ; a numeric id -> its name, or the number back
@@ -698,9 +624,8 @@
    (:- (go (lines <>r)) (go ls) (two? ls ? 
     (usplit 58 <ls @ f
      (3 <= #f && f 0 = nm ? [1 (uatoi (f 2))] (go >ls)))))))
-   ; every group a user belongs to: the primary first, then the /etc/group rows naming
-   ; them, ascending -- which is the order the kernel keeps its credential list in, and
-   ; so the order `id` prints
+   ; every group a user is in: the primary, then /etc/group's rows ascending, the
+   ; kernel's credential order and so `id`'s
    (ugroups nm gid)
     (: r (uread "/etc/group")
        (go ls acc)
@@ -712,17 +637,11 @@
        rest (two? r ? (sort (go (lines <>r) ())))
        (gid . rest))
 
-   ; -- stat: the file's own facts. bare, it prints GNU's eight-line block; -c FORMAT
-   ; (or --printf=, which reads the escapes and adds no newline) asks for named fields:
-   ; %n %N %s %b %B %f %a %A %F %u %U %g %G %h %i %m %o %d %D %r %R %t %T %y %Y %x %X
-   ; %z %Z %w %W, the \n \t \\ escapes, and %% ; anything else is GNU's bare ?. -L
-   ; follows a symbolic link and the bare face does not.
-   ; %N is the name shell-quoted, and a link's own target after an arrow. a name the shell
-   ; reads as itself goes bare, as GNU's shell-escape style has it; else the quoting is the
-   ; shell's: single quotes, '\'' for a quote of its own, $'\t' for a control byte, and
-   ; double quotes for a name whose only trouble is the quote. a byte over 127 rides
-   ; through -- there is no locale here to tell text from a stray byte, and text is what a
-   ; name usually is.
+   ; -- stat: bare, GNU's eight-line block; -c FORMAT or --printf= names fields, anything
+   ; unknown GNU's bare ?. -L follows a link, the bare face does not.
+   ; %N quotes as GNU's shell-escape style: bare when the shell reads it as itself, else
+   ; single quotes, '\'' for a quote, $'\t' for a control, double quotes when only a quote
+   ; is the trouble. a byte over 127 rides through: no locale here to tell text from it
    (ushq-esc c)                        ; the text after the backslash in $'..'
     (c @ 7 "a" 8 "b" 9 "t" 10 "n" 11 "v" 12 "f" 13 "r" (zpad 3 (radix c 8)))
    (ushq-ctl? c) (c < 32 || c = 127)
@@ -749,9 +668,8 @@
     (ushq p @ q
      (!(40960 = md & 61440) ? q
       (readlink p @ t (string? t ? (q + " -> " + ushq t) q))))
-   ; a device number is one packed word and linux splits it unevenly: the major's low
-   ; twelve bits sit at 8, its high twenty at 32; the minor's low eight at 0 and the
-   ; rest at 12. %t/%T print the two in hex, %d/%D and %r/%R the whole word either way.
+   ; linux packs a device number unevenly: major low 12 bits at 8, high 20 at 32; minor
+   ; low 8 at 0, the rest at 12. %t/%T print the parts in hex
    (ust-major d) ((d >> 32) & 4294963200 | (d >> 8) & 4095)
    (ust-minor d) ((d >> 12) & 4294967040 | d & 255)
    (ust-mount p)                       ; %m: the mount point the path sits on
@@ -782,9 +700,8 @@
        (((show <ymd + "-" + p2 <>ymd + "-" + p2 <>>ymd) + " ")
         + ((p2 (secs // 3600) + ":" + p2 ((secs % 3600) // 60) + ":" + p2 (secs % 60))
            + ("." + zpad 9 (show frac) + " +0000"))))
-   ; -c does not read escapes -- `stat -c 'a\tb'` prints the backslash and the t, and
-   ; adds a newline of its own; --printf reads them and adds none. GNU's split, and the
-   ; only way a format can carry a literal backslash at all.
+   ; -c does not read escapes and adds a newline; --printf reads them and adds none (GNU's
+   ; split, the only way a format carries a literal backslash)
    (ust-expand fmt p st esc? L?)
     (:- (go 0)
      n #fmt o (jug 0)
@@ -825,8 +742,7 @@
       120 (say o (when ats))
       90 (say o (secs cts))
       122 (say o (when cts))
-      ; the birth time is statx's own call, so it is asked only where it is spelled --
-      ; and a filesystem keeping none answers the dash and the zero GNU answers
+      ; birth is statx's own call, asked only where spelled; none kept answers - and 0, as GNU
       87 (say o (birth p L? @ b (charm? b ? (secs b) "0")))
       119 (say o (birth p L? @ b (charm? b ? (ustamp b) "-")))
       100 (say o (num dev))
@@ -839,18 +755,14 @@
       109 (say o (ust-mount p))
       67 (say o "?")                  ; the security context: no labels here
       (put o 63))))))                 ; an unknown directive is GNU's bare ?
-   ; the default face: GNU's block, line for line. what once refused it was missing
-   ; access, change and device -- the stat tuple carries all three now -- and the birth
-   ; time, which is statx's own call and answers the dash where a filesystem keeps none.
-   ; the widths are GNU's printf: a Links is padded only when a device type follows it,
-   ; and the name is %N's, quoted only where the shell needs it.
+   ; the default face: GNU's block line for line. a Links is padded only when a device
+   ; type follows it; the name is %N's
    (ust-block p st L?)
     (: sz <st md <>>st ns (st 3)
        kind (md & 61440)
        dev (ust-at st 11) rdev (ust-at st 12)
        dev? (kind = 8192 || kind = 24576)
-       ; -L followed, so a link's own mode can only be here when it did not: the kind
-       ; alone says whether there is an arrow to draw
+       ; -L followed, so a link's own mode here means it did not: the kind says the arrow
        (num v) (charm? v ? (show v) "?")
        (idcol id path) ((charm? id ? (uidname path id) "?") @ n
                         (upad 5 (num id) + "/" + upad 8 n))
@@ -875,10 +787,8 @@
        _ (line ("Change: " + ustamp (ust-at st 10)))
        b (birth p L?)
        (line (" Birth: " + (charm? b ? (ustamp b) "-"))))
-   ; -f: the filesystem a path is on, statfs's tuple through a format of its own -- %n
-   ; the name, %i the id and %l the longest name, %t the type's magic in hex and %T its
-   ; name off the mount list, %s %S the block and fundamental block, %b %f %a the blocks,
-   ; free and available, %c %d the inodes and free ones; a - and a width pad a field
+   ; -f: the filesystem a path is on, statfs's tuple through its own format (%n %i %l %t
+   ; %T %s %S %b %f %a %c %d); a - and a width pad a field
    ufs-face "    ID: %-8i Namelen: %-7l Type: %T\nBlock size: %-10s Fundamental block size: %S\nBlocks: Total: %-10b Free: %-10f Available: %a\nInodes: Total: %-10c Free: %d\n"
    (ufs-expand fmt p r)
     (: n #fmt o (jug 0)
@@ -925,14 +835,9 @@
        (go a ok) (two? a ? (go >a ((fsm 'f ? one one0) <a ok)) (flush out, !ok))
        (go fs 1))
 
-   ; -- du: what a tree costs on the disk. the count is st_blocks (512 each), which is
-   ; allocation and not size -- a sparse file costs less than it measures and a tiny one
-   ; costs a whole block -- and the report is in 1K units, rounded up, unless -b asks for
-   ; apparent bytes or -h for the three-figure human face. -a counts files too, -s only
-   ; the totals, -c a grand total, -d N stops descending. a hard link is counted once
-   ; per run, keyed by inode alone: this stat carries no device, so a walk crossing two
-   ; filesystems could collide two inodes -- rare, and named here rather than hidden.
-   ; the walk sorts each directory, like find's, so the same tree reports twice alike.
+   ; -- du: st_blocks (512 each), allocation not size, reported in 1K rounded up. a hard
+   ; link counts once per run, keyed by inode alone, so two filesystems could collide.
+   ; each directory sorted, as find's, so the same tree reports alike
    (uhuman n) (uhumanb n 0)             ; GNU's -h: three significant figures, rounded up
    ; the same in powers of 1000 when si? (-H, --si), kilo spelled k as GNU's spells it
    (uhumanb n si?)
@@ -985,22 +890,19 @@
        fs (two? <>p ? <>p '("."))
        a? (t 'a) s? (t 's) c? (t 'c)
        b? (t 'b) h? (t 'h) maxd (t 'd)
-       ; --apparent-size counts as -b does and still says K; -x keeps to the first
-       ; operand's device, -L stats through links, --exclude drops a name by its glob
+       ; --apparent-size is -b that still says K; -x keeps to the first operand's device
        ap? (b? || t 'ap) x? (t 'x) L? (t 'L) ex (t 'ex)
        seen {}
        (fmt n) (h? ? (uhuman n) (b? ? (show n) (show $ (n + 1023) // 1024)))
        (emit n q) (say out (fmt n), put out 9, say out q, put out (t 'z ? 0 10))
-       ; -b's apparent size counts a file's st_size and a directory's not at all --
-       ; GNU's rule, and not a guess: an empty directory whose st_size is 40 reports 0.
+       ; -b counts a file's st_size and a directory's not at all, as GNU's (an empty one is 0)
        (own st dir?)
         (: nlk (ust-at st 6) ino (ust-at st 8)
            ct (ap? ? (dir? ? 0 <st) (512 * (charm? (ust-at st 7) ? (ust-at st 7) 0)))
            ((charm? nlk) && (1 < nlk) || L? ?
             (peep seen ino 0 ? 0 (pin seen ino 1, ct))
             ct))
-       ; a directory is counted once however it is reached -- under -L a link can reach
-       ; one twice, and GNU's says it where it met it first
+       ; a directory counts once however reached (-L can reach one twice), where first met
        (again? st) ([(ust-at st 11) (ust-at st 8)] @ k (peep seen k 0 ? 1 (pin seen k 1, 0)))
        (walk q depth top?)
         ((L? ? (stat q @ s (two? s ? s (lstat q))) (lstat q)) @ st
@@ -1021,19 +923,10 @@
         flush out,
         !!(peep t 'bad 0)))
 
-   ; -- df: what each filesystem holds. the mount list is /proc/self/mounts, the same
-   ; place `mount` reads and the only one there is here, and the numbers are statfs(2)'s
-   ; -- linux's call alone, so a kernel without it never gets past the mount list.
-   ; 1K blocks by default; -h the three-figure human face du -h already spells, -i the
-   ; inode counts instead, -a the filesystems with no blocks at all (proc, sysfs, the
-   ; cgroups), which the bare face drops the way GNU's does. every figure rounds UP, and
-   ; Use% is taken off the raw counts rather than the rounded ones -- a filesystem whose
-   ; used and available are both nothing has no percentage, and says so with a dash.
-   ; a named FILE reports the one filesystem holding it: statfs answers the numbers, and
-   ; the longest mount point its resolved path starts with names the device.
-   ; every mount here is asked, GNU's -a dashes a few by TYPE (autofs and the rest of its
-   ; dummy list) without asking at all -- so an automount placeholder reports the zeroes
-   ; statfs really answered instead of a dash.
+   ; -- df: mounts from /proc/self/mounts, numbers from statfs(2) (linux's call). every
+   ; figure rounds up; Use% is off the raw counts, a dash when used and available are both 0.
+   ; -a keeps the no-block filesystems, every one actually asked: an automount placeholder
+   ; reports the zeroes statfs gave, where GNU dashes its dummy types unasked
    (udf-esc w)                         ; a mount line's \040 \011 \012 \134, read back
     (: n #w o (jug 0)
        (oct? c) (47 < c && c < 56)
@@ -1050,9 +943,8 @@
                    (words <l @ w
                     (go >l (3 <= #w ? ([(udf-esc (w 0)) (udf-esc (w 1)) (w 2)] . acc) acc))))
        (two? r ? (go (filter (s \ #s) (lines <>r)) ())))
-   ; the mount a path sits on: the LONGEST point its resolved name starts with, so a
-   ; bind mount names itself and not the twin it shares a device with. stat's %m asks
-   ; this too, which is why it is here and not inside df's own walk.
+   ; the mount a path sits on: the longest point its resolved name starts with, so a bind
+   ; mount names itself. stat's %m asks this too
    (udf-holds ms p)
     (: c (rp-canon p 40 @ q (two? q ? <>q p))
        (fits m) (: pt <>m n #pt
@@ -1066,10 +958,8 @@
        (sz n) (h? ? (uhumanb (n * frs) (h? = 'si)) (show (udf-up (n * frs) 1024)))
        (i? ? [dev (show ino) (show (ino - ifr)) (show ifr) (udf-pct (ino - ifr) ifr) pt]
         [dev (sz blk) (sz (blk - fre)) (sz av) (udf-pct (blk - fre) av) pt]))
-   ; the table: every column as wide as its widest cell but never under the floor below,
-   ; one space between, the ends ragged -- the first column reads left and the last is
-   ; never padded at all. the floors are GNU's, and they are why a table of short names
-   ; still lines up with one of long ones.
+   ; the table: each column as wide as its widest cell, never under GNU's floor below; one
+   ; space between, the last never padded
    udf-min '(14 5 5 5 4 0)
    (udf-show rows mins lefts)           ; lefts: the columns that read left
     (: n #<rows
@@ -1121,9 +1011,8 @@
          (two? r ? (udf-holds ms p @ m (atom? m ? acc ((typed (m 2) (udf-cells <m <>m r h? i?)) . acc)))
           (say err ("df: " + p + ": "
                          + (r = 'eacces ? "Permission denied" "No such file or directory")), put err 10, pin t 'bad 1, acc)))
-       ; a filesystem the call refuses or cannot find (a mount someone else owns) is
-       ; dropped from the bare face and kept by -a, its figures dashed -- a row of zeroes
-       ; would read as an answer. any other failure (a dead fuse mount) is said and dropped.
+       ; a filesystem refused or not found (another's mount) is dropped from the bare face and
+       ; dashed under -a, as zeroes would read as an answer; any other failure is said and dropped
        (scan mm acc)
         (atom? mm ? acc
          (: m <mm r (statfs <>m)
@@ -1135,9 +1024,8 @@
         flush out,
         !!(peep t 'bad 0)))
 
-   ; -- chown: owner[:group] onto every named path, -R down the tree. a name is looked
-   ; up in /etc/passwd / /etc/group, a numeral is taken as itself, and an empty side is
-   ; -1, which the kernel reads as "leave this one alone" --
+   ; -- chown: a name looked up in /etc/passwd or /etc/group, a numeral as itself, an
+   ; empty side -1, the kernel's "leave this one alone" --
    (uowner who spec shown)             ; "u:g" / "u" / ":g" -> (uid gid), -1 for absent
     (: ps (usplit 58 spec)
        (side w path kind) (0 >= #w ? -1
@@ -1145,10 +1033,8 @@
                             (two? r ? <>r (w 0 @ c (48 <= c <= 57 ? (uatoi w)
                                            (udie 1 (who + ": invalid " + kind + ": '" + shown + "'")))))))
        [(side <ps "/etc/passwd" "user") (atom? >ps ? -1 (side <>ps "/etc/group" "group"))])
-   ; chown and chgrp are one walk: chgrp's GROUP is chown's :GROUP
-   ; -R goes down a tree, a directory after what is in it, changing a link found on the
-   ; way itself and never what it names; -h does the same for an operand; -v says each, -c only those it changed; --reference=FILE takes
-   ; FILE's owner and group, every operand then a file
+   ; chown and chgrp are one walk: chgrp's GROUP is chown's :GROUP. -R changes a link
+   ; found on the way itself, never what it names
    (uchown who as)
     (: fo (uflagsl who as '(1001) (chars "chRv" + [1001 102]) {"reference" 1001 "no-dereference" 104 "changes" 99 "verbose" 118
                                                         "recursive" 82 "silent" 102 "quiet" 102})
@@ -1184,9 +1070,7 @@
    (chown-main as) (uchown "chown" as)
    (chgrp-main as) (uchown "chgrp" as)
 
-   ; -- truncate: each file cut or stretched to a size. -s [+-<>/%]N with GNU's suffixes
-   ; (grow by, shrink by, at most, at least, down or up to a multiple), -r a file whose
-   ; size is the start, -o the count in the file's own blocks, -c make no file --
+   ; -- truncate: -s [+-<>/%]N grow, shrink, at most, at least, down or up to a multiple --
    (utrunc-n w)
     (: n #w (dend k) (k < n && 47 < w k < 58 ? (dend (k + 1)) k)
        e (dend 0) v (0 < e ? (unum (snip w 0 e)))
@@ -1262,10 +1146,8 @@
        (flush err,
         ok ? 0 1))
 
-   ; -- dircolors: LS_COLORS spelled for a shell, off GNU's database -- its own text,
-   ; which says it may be copied, as -p prints it -- or a file of that language: the
-   ; TERM and COLORTERM globs pick the stanzas that apply, a keyword names a file kind,
-   ; .ext and *glob name a suffix. -b and -c pick the shell, else $SHELL does --
+   ; -- dircolors: LS_COLORS for a shell, off GNU's database (its own text, which allows
+   ; copying, as -p prints it) or a file: TERM and COLORTERM globs pick the stanzas
    udc-db "# Configuration file for dircolors, a utility to help you set the
 # LS_COLORS environment variable used by GNU ls with the --color option.
 # Copyright (C) 1996-2026 Free Software Foundation, Inc.
@@ -1615,10 +1497,8 @@ EXEC 01;32
                 (say out (sh = 'c ? ("setenv LS_COLORS '" + v + "'\n") ("LS_COLORS='" + v + "';\nexport LS_COLORS\n")),
                  flush out, 0)))))))
 
-   ; -- pathchk: would these names work. bare, each is asked of the system as it stands
-   ; (a component that is a file, a name past the limits where it does not exist yet);
-   ; -p asks POSIX's portable floor instead (the 65 characters, 14 a component, 255 a
-   ; name), -P forbids the empty name and a leading '-', --portability is both --
+   ; -- pathchk: bare asks the system as it stands; -p POSIX's portable floor (14 a
+   ; component, 255 a name, the portable set), -P no empty name or leading '-' --
    (upc-oct c) ("\\" + string (48 + c // 64) + string (48 + c // 8 % 8) + string (48 + c % 8))
    (upc-print? c) (31 < c && c < 127)
    (upc-all p s) (: (go k) (? (#s <= k) 1 (p (s k)) (go (k + 1)) 0) (go 0))
@@ -1677,10 +1557,8 @@ EXEC 01;32
        (flush err,
         ok ? 0 1))
 
-   ; -- mountpoint: is DIR where a filesystem is mounted -- a target in the kernel's
-   ; own table (/proc/self/mountinfo) where there is one, else a device that differs
-   ; from its parent's. -d says that filesystem's major:minor, -x DEV a block device's
-   ; own; 32 for "not", 1 for trouble, util-linux's --
+   ; -- mountpoint: a target in /proc/self/mountinfo where there is one, else a device
+   ; differing from its parent's; exit 32 for "not", 1 for trouble, as util-linux --
    (ump-unesc s)                        ; mountinfo's \ooo escapes put back
     (: n #s o (jug 0)
        (go k) (? (n <= k) (slurp o)
@@ -1719,11 +1597,9 @@ EXEC 01;32
             (string? hit ? (say1 (o 'd ? hit (p + " is a mountpoint")), 0)
              (say1 (p + " is not a mountpoint"), 32))))))
 
-   ; -- shred: a file overwritten where it lies, -n passes (3) of random bytes and GNU's
-   ; patterns in GNU's arrangement, -z a last pass of zeros; the size rounded up to the
-   ; file's block unless -x, or -s bytes exactly; each pass forced to the disk. -u then
-   ; empties it, renames it down to one character and removes it; -v says each step as
-   ; GNU says it. the random bytes are /dev/urandom's --
+   ; -- shred: GNU's random and pattern passes in GNU's arrangement, each forced to disk;
+   ; the size rounded up to the block unless -x. -u empties, renames down to one character,
+   ; removes. random bytes from /dev/urandom --
    ushr-pats '(-2 2 0 4095 2 1365 2730 -1 6 585 1170 1755 2340 2925 3510
                12 273 546 819 1092 1638 1911 2184 2457 3003 3276 3549 3822 -1
                8 4096 4681 5266 5851 6436 7021 7606 8191
@@ -1742,8 +1618,7 @@ EXEC 01;32
                                    (pad >q n (m - 1) k))
                   (pad >p n v k)))))
        rp (stage1 ushr-pats num 0 0)
-       ; the random passes spread evenly, the first and the last among them; the
-       ; patterns shuffled into the seats between
+       ; the random passes spread evenly, first and last among them; patterns shuffled between
        (stage2 n top nx)
         (? (num <= n) ()
            (nx < rp && nx * (num - 1) <= n * (rp - 1))
@@ -1852,11 +1727,8 @@ EXEC 01;32
        ok (foldl (a \ f \ (one f ? a 0)) 1 fs)
        (ok ? 0 1))
 
-   ; -- mktemp: a name nobody else has, made and not merely proposed. the trailing run
-   ; of X's in the template becomes random alphanumerics and the name is claimed with an
-   ; exclusive create (openfd's mode 3) or an exclusive mkdir under -d, so the answer is
-   ; a fact by the time it is printed. -u drops the file again (the unsafe face, and
-   ; GNU calls it that too), -p DIR / -t put the name under a directory --
+   ; -- mktemp: the X run becomes random alphanumerics and the name is claimed by an
+   ; exclusive create (openfd mode 3) or mkdir, so the answer is a fact when printed --
    umtchars "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
    (umtname tmpl)                      ; the X run filled with fresh charms
     (: n #tmpl
@@ -1867,8 +1739,7 @@ EXEC 01;32
        (go k) (n > k ? (put o (umtchars (rand 62)), go (k + 1)))
        (go en,
         slurp o))
-   ; GNU's long names too: --suffix=S after the random run, --tmpdir[=DIR] as -p (bare,
-   ; $TMPDIR or /tmp), --directory --dry-run --quiet
+   ; --tmpdir bare is $TMPDIR or /tmp
    (mktemp-main as)
     (: sf {'s ""}
        (fl a d u q dir fs)
@@ -1883,8 +1754,7 @@ EXEC 01;32
                "-t" (fl >a d u q (dir ? dir (getenv "TMPDIR")) fs)
                "-p" (two? >a ? (fl >>a d u q <>a fs) (udie 1 "mktemp: -p wants a directory"))
                ("-p" + v) (fl >a d u q v fs)
-               ; anything else is the template -- unless it still looks like a flag, which
-               ; would name a temporary file after the option someone meant
+               ; else the template, unless it looks like a flag
                (? (1 < #<a && <a 0 = 45)) (udie 1 ("mktemp: unknown option " + <a))
                (fl >a d u q dir (<a . fs))))
        p (fl as 0 0 0 () ())
@@ -1904,11 +1774,8 @@ EXEC 01;32
                say out nm, put out 10, flush out, 0)))))
        (try 100))
 
-   ; -- cmp: are two files the same bytes. the first difference is said by its char (POSIX's word)
-   ; and line, as POSIX has it; -b adds the two bytes, -l lists every difference in
-   ; octal, -s says nothing and the status answers; -n N compares at most N, -i SKIP or
-   ; SKIP1:SKIP2 (and the operands after the files) skip a start. a file that ends
-   ; first is an EOF on stderr, status 1 --
+   ; -- cmp: the first difference by char and line, as POSIX says; a file ending first is
+   ; an EOF on stderr, status 1 --
    (cmp-main as)
     (: fo (uflagsl "cmp" as '(110 105) "blsin" {"silent" 115 "quiet" 115 "verbose" 108 "print-bytes" 98 "bytes" 110 "ignore-initial" 105})
        t <fo s? (t 115) l? (t 108) b? (t 98) fs (fo 1)

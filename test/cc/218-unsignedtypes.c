@@ -1,7 +1,6 @@
-/* an unsigned answer stays unsigned: a sum or difference of unsigned operands widened to 64 bits
- * or converted to double (the shuttle's type), an unsigned constant past long's range or wrapped
- * below zero converted to double at compile time, and a literal only unsigned long can hold. each
- * held to the same conversion done at run time through a value the compiler cannot see, and to gcc. */
+/* an unsigned answer stays unsigned: unsigned sums widened or converted to double, unsigned
+ * constants past long or wrapped converted at compile time, a literal only unsigned long holds.
+ * held to opaque runtime conversions and gcc. */
 
 #include <stdint.h>
 

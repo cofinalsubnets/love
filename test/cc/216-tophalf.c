@@ -1,7 +1,6 @@
-/* the top half of a register: a 32-bit value's zero-extension kept where the high bits may be
- * live (an add's carry, a shl, a signed or full-word load, a call, a join of two paths) and
- * dropped where they cannot be; a 32-bit load folded into the and/or/xor reading it, by index and
- * by base, two- and three-address. each is held to a reference that cannot see through, and to gcc. */
+/* a 32-bit value's zero-extension kept where high bits may be live (carry, shl, signed or full
+ * load, call, join) and dropped where not; a 32-bit load folded into and/or/xor. held to an opaque
+ * reference and gcc. */
 
 #include <stdint.h>
 

@@ -1,6 +1,4 @@
-; the wrap: see src/apps/tar.l -- `borrow` splices into the current layer, so the ask
-; needs a layer of this file's own rather than the dist cat's. the seed's lay reads the
-; carried tree through it.
+; a module of its own, so `borrow` splices tar into this layer, not the dist cat's
 (module 'source
 (borrow 'tar)
 
@@ -9,9 +7,7 @@
 (borrow 'cal)
 (: (src-die m) (udie 1 (";; " + m))
 
-   ; the directory is positional, so a mistyped flag would be taken as one and a whole
-   ; tree laid under it. a leading dash is never a directory here: name the flags, ask
-   ; about anything else.
+   ; a leading dash is never the positional directory, so a mistyped flag lays nothing
    (src-dash? w) (#w @ n (0 < n && w 0 = 45))
    (src-help? ("-h" || "--help" || "-help" || "help")) 1
    (src-vers? ("-v" || "--version")) 1
@@ -38,17 +34,11 @@
        w (tar-scatter dir es)
        _ (atom? w ? (src-die ("can't write " + dir)))
        root (dir = "." ? top (dir + "/" + top))
-       ; no love is laid beside the source: which mode a build is in belongs to whoever
-       ; drives it. bare make has no love and can only mean the ambient cc; a love driving
-       ; knows its own selfpath and says so in CC. a copy in bin/ would be the toolchain by
-       ; being there, which is a claim made by a file existing rather than by anyone.
-       ; nor the container: the laid tree cuts its own, to the same bytes.
+       ; no love is laid beside the source: the driver names the compiler in CC
        [1 root <>w])
 
-   ; the nest every verb shares: love-<version> under dir, laid once. source, seed, doom
-   ; and web build in the one tree, in any order, and a tree laid before is taken as it
-   ; stands. the lay runs in a child where there is a path to one: the unpack leaves
-   ; heap no collection gives back, and a server would hold it for good.
+   ; love-<version> under dir, laid once and shared by every verb that builds. the lay
+   ; runs in a child where it can: the unpack leaves heap no collection gives back.
    (src-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
    (src-nest dir)
     (: root (src-root dir)
@@ -79,10 +69,7 @@
                         (go (k + 1) st acc))
        (go 0 0 ()))
    (src-foreign? p) (: a (stat p) b (stat (selfpath 0)) (two? a ? !(a = b) 0))
-   ; the probe asks a yes/no question of a candidate we may well reject, so its own
-   ; diagnostics are not the caller's news -- both streams go to the hole and only the
-   ; status is read. herald tees stdout and leaves stderr on the terminal, which is how
-   ; a `cc` that exists and fails used to print its complaint before the first `;;` line.
+   ; a candidate's complaints are not the caller's news: both streams to /dev/null, status only
    (src-ccworks? cc dir)
     (: c (dir + "/.ccprobe.c") o (dir + "/.ccprobe.o")
        q (open c "w")
@@ -109,33 +96,25 @@
         each (keys (cite 'verbs 'tab))
              (k \ (d + "/" + string k @ p (unlink p, symlink exe p))),
         d))
-   ; this binary as a path, or () where there is none: on inle the artifact IS the
-   ; kernel, so there is nothing to exec, no path to name and no farm worth laying --
-   ; the verb registry is that machine's PATH already. every door below asks this.
+   ; this binary as a path, or () where there is none (on inle the artifact is the kernel)
    (src-me _) (selfpath 0 @ p (string? p ? p ()))
-   ; the build's driver. a hosted seat execs the binary and reads the status back; a
-   ; seat with none spawns a task, which is this same program under the same registry.
+   ; run a verb: exec this binary where it has a path, else spawn a task
    (src-run exe as)
     (string? exe ? (herald (exe . as) @ s (two? s ? <s s))
        (spawn as @ p (charm? p && 0 <= p ? (wait p) 127)))
-   ; the autonomous arming, what a seed sets before its build: the farm of our verbs
-   ; first on PATH, lush autonomous, CC our mooncc. `love web` and `love doom` build
-   ; under the same, so a nest or a page is ours throughout whatever PATH holds -- a
-   ; tree our mooncc built and an object the ambient cc made link neither way.
+   ; the autonomous build: our verbs first on PATH, lush autonomous, CC our mooncc.
+   ; objects from our mooncc and the ambient cc do not link together.
    (src-arm root exe)
     (src-farm root exe @ farm
        (setenv "PATH" (farm + ":" + getenv "PATH"),
         setenv "LUSHFLAGS" "-a",
         setenv "CC" (exe + " mooncc"),
-       ; the arm, said out loud: a recipe's `cat` is kore's here and its shell is lush,
-       ; so the build's tags name the tool that RAN (common.mk). LUSHFLAGS is not
-       ; that answer -- a person may set it for their own reasons.
+       ; says the arm out loud for common.mk's tags; a person may set LUSHFLAGS themselves
         setenv "LOVE_ARMED" "1",
         farm))
    src-needs '("cc" "make" "sh" "sed" "grep" "tr" "cat" "mkdir" "mv" "rm" "ln"
                "test" "uname" "printf" "install" "cmp" "chmod" "touch" "echo")
-   ; kore's ujoin is not in this layer -- src-dirs rolls its own split for the
-   ; same reason, so the join is local too.
+   ; kore's ujoin is not in this layer, so the join is local, like src-dirs' split
    (src-words l) (? (atom? l) "" (atom? >l) <l (<l + " " + src-words >l))
    (src-ours ns) (:- (go ns ())
     (go l acc) (atom? l ? (rev acc)
@@ -144,11 +123,8 @@
                              (: d (#<ds ? <ds ".") p (d + "/" + w)
                               (src-foreign? p ? 1 (any >ds))))
                  (go >l (any (src-dirs ()) ? acc (w . acc))))))
-   ; not (sha256 (slurp a) = sha256 (slurp b)): slurp draws a byte at a time and the
-   ; answer is copied, so two 13 MB binaries cost the waiter ~140 MB it never gets back.
+   ; compare two files in chunks, not whole: slurping two binaries holds their heap for good.
    ; a short read rides as a leftover, so the streams line up however the reads fall.
-   ; `snip` reads the cask -- (snip (string b) 0 k) would copy all 64K to take the k bytes
-   ; the read filled, and a short read at the tail of every file pays it twice.
    (src-chunk q b) (swig q b @ k (charm? k && 0 < k ? (snip b 0 k) ""))
    (src-same? p1 p2)
     (: q1 (open p1 "r")
@@ -171,23 +147,14 @@
               close q2,
               v))))
 
-   ; a seat whose files are inside the machine: ask whatever is outside to carry one out,
-   ; the way `lift` does. a hosted seat has no such file, and nothing is said.
+   ; inside a guest, ask the outside to carry the file out, as `lift` does; hosted, a no-op
    (src-lift p)
     (open "/proc/lift" "w" @ q
        (hot? q ? (say q p, close q, 1) 0))
 
-   ; the fixpoint is scoped, not dropped: it can hold only where the output ought to be
-   ; this binary, and a cross lay is the one case the invocation itself says it cannot.
-   ; a dirty tree still fails.
-   ; the lay is an egg -- the crew arrives at bake and a bake means running the artifact,
-   ; which this machine cannot do for another ISA. the egg carries its source and the dist
-   ; roster, so a bake on the target lays the crew from them (src/love/main.c), the same
-   ; bytes a native `make dist` lays -- and the egg is marked to do that itself: the first
-   ; word of its .love.image stub, 1 in a fresh link, is laid as 2, which main.c reads on
-   ; a run that finds no image as `bake in place, then run the line again`.
-   ; made laid at dst with the mark on: 1, or () where it is not an egg we can mark --
-   ; the header, the section table and the names read, the one byte written
+   ; a cross lay is an unbaked egg: no fixpoint, since it cannot be this binary. the first
+   ; word of its .love.image stub goes 1 -> 2, which src/love/main.c reads as `bake in
+   ; place, then run again`. answers 1, or () where made is not an egg we can mark
    (seed-mark made dst)
     (: (rd o n) (uread-at made o n @ [1 t] t "")
        at ((cite 'holo 'elf-sec-at) rd ".love.image")
@@ -207,12 +174,8 @@
              + ";; no fixpoint claimed here: a cross lay cannot BE this binary --\n"
              + ";; `love seed` on the " + xa + " machine proves it.\n")))
 
-   ; the wait runs in a fresh process. src-lay's inflate leaves ~200 MB of heap the parent
-   ; would otherwise hold through the whole build, and no collection gives it back -- free
-   ; coalesces into a list and never unmaps, so tightening the budget only raises rss. exec
-   ; is the one thing that returns the pages; the waiter boots at ~57 MB. PATH, CC and the
-   ; cwd all ride the environment across it, so only the root has to be said. a seat
-   ; with no exec pays those pages: seed-lay calls this one straight through instead.
+   ; run in a fresh exec, since the lay's heap is never unmapped; PATH and CC ride the
+   ; environment. with no path to exec, seed-lay calls this directly and keeps the heap
    (seed-wait root xa dst)
     (: exe (src-me 0)
        here (cwd 0)
@@ -227,8 +190,7 @@
        (chdir here,
         (0 != st ? (src-die ("the build failed (exit " + show st + ")"))),
         (string? xa ? (seed-cross root xa dst)
-           ; the one artifact (seed-universal U2): the seed is the laid tree's own
-           ; binary, and the rebuild must be this binary, byte for byte.
+           ; the rebuild must be this binary, byte for byte
            (seed-fix exe (root + "/out/love")))))
 
    ; the imageless projection of a binary, written beside p. a binary carrying no image
@@ -238,17 +200,12 @@
        r (hark [exe "bake" "-n" "-o" p])
        (two? r && <r = 0 ? p ()))
 
-   ; the fixpoint compares LIKE WITH LIKE. an image is a deterministic function of the
-   ; binary carrying it (test_bakerep), so two sides in the same state are compared whole,
-   ; images and all, and a mixed pair -- an installed love with no image rebuilding a baked
-   ; one, either way round -- is compared stripped. that keeps a differing image a failure
-   ; where both sides have one, instead of an answer no configuration could give.
+   ; like with like: two baked or two bare sides compare whole, a mixed pair stripped.
+   ; an image is a deterministic function of its binary, so differing images still fail
    (seed-fix exe out)
     (: a (seed-bare exe (out + ".bare0"))
        b (seed-bare out (out + ".bare1"))
-       ; a seat with no bake door strips NEITHER side -- the wasm guest has no ELF and no
-       ; selfpath, and there both sides are unbaked by construction, so the whole compare
-       ; already is like with like. one side stripping and the other not is a real refusal.
+       ; neither side strips where there is no bake (wasm): both are bare already.
        ; every predicate parenthesised: a bare infix one swallows the arm beside it
        v (? (!(string? a) && !(string? b))          (src-same? exe out ? 'yes 'no)
             (!(string? a) || !(string? b))          'nostrip
@@ -264,14 +221,8 @@
              'nostrip (say err ";; fixpoint: can't lay an imageless copy\n", 1)
              (say err ";; fixpoint failed\n", 1))))
 
-   ; the cross door: we are a cross compiler carrying our own source, so a seed
-   ; lays a seed for a machine it is not -- which is the portability story now
-   ; that one binary per ISA is the shape. Every love carries every ISA's
-   ; runtime (mkrt joins all three), so any version builds any other.
-   ; canonical inside, the world's word only at the doors. the prel's arch-canon takes
-   ; every other spelling anyone types -- uname's, Debian's, the ISA shorthands -- so there
-   ; is no second table here; `arch-mach` puts the triple word back on where make wants it
-   ; (a cross toolchain's prefix is spelled a64-, never a64-).
+   ; a seed can lay for another machine: every love carries every ISA's runtime.
+   ; arch-nom (post.l) canonicalises any spelling to these words
    seed-arches '(x64 a64 rv64)
    ; the arch word is positional and A PATH still wins: `./a64` is the
    ; directory, the verb rail's own rule worn one level down.
@@ -280,10 +231,7 @@
                              (w i @ 47 0 (go (i + 1)))))
    ; this machine's arch: love-arch is already canonical, which is seed-arches' spelling.
    (seed-native _) love-arch
-   ; the OS a cross lay is for, named only where this machine cannot be asked. we are
-   ; the kernel on inle, so a compile there owes the target a named OS rather than
-   ; whichever hosted one reads closest (src/apps/moon/moon.l) -- linux is the word, and the
-   ; make line carries it where nothing else can say it.
+   ; the OS a cross lay is for, named only where this machine is not a hosted OS (inle): linux
    (seed-os _) (elem 'love-os (names ()) && ev 'love-os @ n
                   (nom? n && !(elem n '(linux freebsd netbsd)) ? 'linux ()))
 
@@ -303,49 +251,35 @@
        _ (two? as0 && src-vers? <as0 ? (src-vers "seed"))
        f0 (two? as0 ? <as0 "")
        greg? (f0 = "-g")
-       as1 (greg? || f0 = "-a" ? >as0 as0)     ; -a is the default now; the word still eats
-       ; naming this machine is a native seed, fixpoint and all: the cross lane
-       ; exists for a machine we are not, and the fixpoint is scoped to where the
-       ; output ought to be this binary -- which `love seed x64` on an x64
-       ; box asks for exactly as much as a bare `love seed`. the word is eaten either
-       ; way, or the arch would go on to be read as the directory.
+       as1 (greg? || f0 = "-a" ? >as0 as0)     ; -a is the default, still eaten
+       ; naming this machine's own arch is a native seed, fixpoint and all. the word is
+       ; eaten either way, or it would be read as the directory
        xa0 (two? as1 && seed-arch? <as1 ? (arch-nom <as1) ())
        xa (nom? xa0 && xa0 = seed-native 0 ? () xa0)
        as (nom? xa0 ? >as1 as1)
        dir (two? as ? <as ".")
        _ (src-dash? dir ? (src-not-dir "seed" dir))
        exe (src-me 0)
-       ; a seat with no path to itself lays an egg for another machine and nothing
-       ; else: a native seed's claim is that the rebuild IS this binary, and there is
-       ; no file here to hold it to. said bare, the machines it can lay for are the answer
+       ; with no path to itself there is no binary to hold a native seed to: cross only.
+       ; said bare, it lists the machines it can lay for
        _ (!(string? exe) && !(nom? xa) ?
           (two? as ? (src-die "this seat has no path to itself -- name a machine: `love seed x64`")
              (puts ("seed for a machine: " + src-words (map show seed-arches) + "\n"), quit 0)))
        root (src-nest dir)
        farm (string? exe ? (src-farm root exe) "")
        path ("" + getenv "PATH")
-       ; ours lead, so ours win wherever we carry a tool of that name; -g puts them
-       ; last, where they fill the gaps only. the build's shells read the same choice
-       ; off LUSHFLAGS: -g (gregarious) hands a bare word to PATH first, ours in its gaps (the
-       ; bootstrap through an ambient cc and userland), -a keeps lush autonomous, PATH deciding nothing
+       ; ours lead PATH, or with -g trail it to fill the gaps; lush reads the same
+       ; choice off LUSHFLAGS
        _ (string? exe ? (setenv "PATH" (greg? ? (path + ":" + farm) (farm + ":" + path))) 0)
        _ (setenv "LUSHFLAGS" (greg? ? "-g" "-a"))
-       ; naming ourselves where there is no path to name: `love` is a verb like every
-       ; other (src/love/boot/cli), so the Makefile's driving-love lane reaches this binary by
-       ; word. no love0 is compiled under it -- there is no seat here to run one.
+       ; with no path to name, the Makefile reaches this binary by the verb `love`
        _ (string? exe ? 0 (setenv "LOVE" "love"))
        env (getenv "CC")
        ; the probe writes into the laid tree's root: it is the one directory a lay
        ; is known to have made, and the two scratch files go straight back out
        amb (greg? && string? exe && !(string? env) ? (src-cc root))
-       ; something has to be named. the tree carries no love, so an unnamed CC is the
-       ; ambient cc and nothing else -- right as make's default, wrong as this verb's
-       ; answer where the probe just found no cc that works. a working ambient one is the
-       ; stronger claim, a foreign compiler holding the scaffold being the one thing a self
-       ; build cannot say; this binary's own mooncc is the fallback, and the default
-       ; takes it outright. naming CC reaches any other mix: `CC="<love> mooncc" love seed`
-       ; is our compiler under an ambient userland. `cc` is that compiler's own verb
-       ; row, which is the whole of CC on a seat whose PATH is the registry.
+       ; CC is always named: an env CC wins, then with -g a working ambient cc, else our
+       ; mooncc (the verb `cc` where there is no path to exec)
        _ (string? env ? 0
           (two? amb ? (setenv "CC" <>amb)
            (setenv "CC" (string? exe ? (exe + " mooncc") "cc"))))
@@ -373,13 +307,8 @@
           (seed-wait root xa dst)))
 
    ; --- `love kernel OUT.elf` -- the metal projection of this binary ----------
-   ; the artifact is the kernel: this verb emits
-   ; the flat image a boot door eats, from nothing but what it already carries.
-   ; the boot stub is laid here, not stored: mkboot.l rides the carried tree and
-   ; holo is baked, so the lay's cat (kore text/u/asbook, then mkboot, then
-   ; kproject) evals off /love, exactly the shape the Makefile cats from the
-   ; tree. the arch is the binary's own -- e_machine says it, and a
-   ; projection of self can be nothing else.
+   ; the boot stub is laid, not stored: the cat below evals off the carried tree in the
+   ; Makefile's order. the arch is this binary's own, read off e_machine
    (kern-pick nm)
     (uread ("/love/" + nm) @ [1 s] (s + "") (src-die ("the carried tree has no " + nm)))
    (kern-b16 s i) (s i + 256 * s (i + 1))
@@ -400,12 +329,8 @@
        m (kern-b16 pie 18)
        arch (m @ 62 "x64" 183 "a64" 243 "rv64"
              (src-die "no boot door for this machine"))
-       ; the inputs cross on the verb table -- the one tablet every layer can
-       ; reach ((cite 'verbs 'tab) hands the real thing) -- under a key pulled
-       ; back off below, so `love verbs` never lists it. the stream evals in
-       ; its own layer, where a plain name cannot cross either way; its last
-       ; form does the whole projection where everything is visible, so
-       ; nothing has to cross back out either.
+       ; the stream evals in its own layer, so the inputs cross on the verb table,
+       ; the one tablet every layer reaches, under a key pulled back off after
        _ (pins kern-box 'pie pie 'out out 'arch arch)
        vt (cite 'verbs 'tab)
        _ (pin vt 'kern-in kern-box)
@@ -449,9 +374,8 @@
    ; default, runs every other verb by name (`lush -c 'mooncc ..'`), PATH or no PATH
    nest-tools ["lush"]
    nest-keep ["love" "lush"]
-   ; what an earlier nest or install laid that the one install no longer keeps: a link to
-   ; love by another name, the lux script, the bao launcher, the papel link to its source.
-   ; anything else in the nest is not ours to judge, and stays
+   ; what an earlier install laid that is no longer kept: a link to love by another
+   ; name, the lux script, a shell launcher, the papel link. anything else stays
    (nest-laid? p)
     (readlink p @ l
        (? (string? l) (l = "love" || (#l > 17 && snip l (#l - 17) #l = "/src/apps/papel.l"))
@@ -468,11 +392,9 @@
                      && (elem nm gone || !(two? (stat (bin + "/" + nm)))))
                (two? (stat d) ? (readdir d) ())))
 
-   ; the plan: what is there, what this build is, and what to do about each. the verdict
-   ; says how the two builds stand -- 'fresh (none there) 'older 'same (these very bytes)
-   ; 'twin (one stamp, other bytes) 'newer, or 'other (other bytes, where either stamp is 0 and
-   ; orders nothing) -- and 'bin is 'lay or 'keep. a tool's 'was is
-   ; its link's target, "a file", or "" when absent; its 'act is 'link or 'keep
+   ; the verdict: 'fresh (none there) 'older 'same (these bytes) 'twin (one stamp, other
+   ; bytes) 'newer, or 'other (a stamp is 0, so no order). a tool's 'was is its link's
+   ; target, "a file", or "" when absent
    (nest-vd old new mine theirs)
     (? !(string? old) 'fresh (old = new) 'same (theirs < 1 || mine < 1) 'other
        (theirs < mine) 'older (theirs = mine) 'twin 'newer)

@@ -1,7 +1,5 @@
-; --- test/law/drift.l: the just lattice (src/apps/harp/just.l), the center that walks
-; it (src/apps/harp/drift.l), and the tonnetz's chords and lines (src/apps/harp/tonnetz.l) ---
-; ratios are exact, so the lattice laws are equalities; the walk is floats over
-; integer points, so its laws are about which point it lands on and what it owes.
+; the just lattice, the center that walks it, and the tonnetz. ratios are exact, so lattice
+; laws are equalities; the walk is floats over integer points, so its laws are where it lands.
 (borrow 'harp)
 (borrow 'just)
 (borrow 'drift)
@@ -31,8 +29,7 @@
            (lnorm [1 0 0] = lnorm [-1 0 0])
            ('fifth = jname 3)
            (() = jname (7 /// 5)))
-   ; the paths that disagree: four fifths against a third and two octaves is the
-   ; syntonic comma, and the fixed scale's d-a is that much short of a fifth
+   ; four fifths against a third and two octaves is the syntonic comma; d-a falls that short
    _ (test ((dr-pow (3 /// 2) 4 * (1 /// 4) * (4 /// 5)) = jcomma 'syntonic)
            ((5 /// 3) * rinv (9 /// 8) = (40 /// 27))
            (dr-near (cents (40 /// 27)) (cents (3 /// 2) - cents (jcomma 'syntonic))))
@@ -87,8 +84,7 @@
    _ (test ; a flip keeps two notes and undoes itself
            (dr-all (map (f \ 2 = common (ttones cmaj) (ttones (tflip cmaj f))) ['P 'R 'L]))
            (dr-all (map (f \ tflip (tflip cmaj f) f = cmaj) ['P 'R 'L]))
-           ; the cycles that close in twelve do not here: PL thrice misses by the diesis,
-           ; PR four times by four minor thirds against an octave
+           ; twelve-tone cycles do not close: PL thrice misses by the diesis, PR four times by 4 minor thirds vs an octave
            ([[0 -3 0] 'maj] = last (twalk cmaj ['P 'L 'P 'L 'P 'L]))
            (dr-near (cents (jcomma 'diesis)) (1200.0 - cents (unpoint [0 3 0])))
            ([[4 -4 0] 'maj] = last (twalk cmaj ['P 'R 'P 'R 'P 'R 'P 'R]))

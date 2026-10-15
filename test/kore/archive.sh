@@ -109,6 +109,8 @@ if command -v xz >/dev/null 2>&1; then
   xz --format=lzma -c "$ho/.arc1" > "$ho/.arc1.lzma"
   korerun unlzma -c "$ho/.arc1.lzma" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore unlzma of xz's .lzma"
   cat "$ho/.arc1" | xz --format=lzma | korerun lzcat > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore lzcat of a sizeless .lzma"
+  n=$(wc -c < "$ho/.arc1.lzma"); head -c $((n - 6)) "$ho/.arc1.lzma" | korerun lzcat > /dev/null 2> "$g"; r=$?
+  [ $r -eq 1 ] || fail "kore lzcat of a torn .lzma (rc $r)"
 fi
 hv "xz --help" '^xz -- the' korerun xz --help
 # bzip2: round trip, the empty stream (14 bytes), torn and foreign streams with bzip2's
@@ -221,6 +223,18 @@ evil() { w=$1; x=$2
   [ ! -e "$E/out/x" ] || fail "kore $w: walked through a symlinked directory"
   [ "$(stat -c %a "$x/s")" = 755 ] || fail "kore $w: laid a set-id bit"
   [ "$(cat "$x/ok/f.txt")" = fine ] || fail "kore $w: an ordinary member was lost"; }
+# git archive leads with a pax global header ('g', the commit): read past, as GNU tar does
+if command -v git >/dev/null 2>&1; then
+  P=$HO/.arcp; rm -rf "$P"; mkdir -p "$P/r" "$P/x"
+  ( cd "$P/r" && git init -q && printf 'g\n' > f && git add f \
+    && git -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm m && git archive --format=tar -o ../g.tar HEAD ) \
+    || fail "git archive"
+  korerun tar tf "$P/g.tar" > "$o" || fail "kore tar tf of git archive's tar"
+  [ "$(cat "$o")" = f ] || fail "kore tar tf lists git archive's pax header: $(cat "$o")"
+  korerun tar xf "$P/g.tar" -C "$P/x" || fail "kore tar xf of git archive's tar"
+  [ ! -e "$P/x/pax_global_header" ] && [ "$(cat "$P/x/f")" = g ] || fail "kore tar xf laid git archive's pax header"
+  rm -rf "$P"
+fi
 korerun tar xf "$E/evil.tar" -C "$E/tx" 2> "$o"; r=$?
 [ $r -eq 2 ] || fail "kore tar: a hostile archive (rc $r)"
 grep -q "Member name contains '..'" "$o" || fail "kore tar: a '..' member not named"
@@ -242,7 +256,18 @@ if command -v gzip >/dev/null 2>&1; then
   [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tzf of 1100 MiB of zeros did not stream (rc $r)"; }
   # a member bigger than the heap is poured to its file: 300 MiB under 64 MiB
   mkdir -p "$B/t" "$B/x"; dd if=/dev/zero bs=1048576 count=300 2>/dev/null > "$B/t/big"; printf 'tail\n' > "$B/t/small"
-  ( cd "$B" && "$K" kore tar czf big.tgz t ) || fail "kore tar czf of a 300 MiB member"
+  # ..and is packed a run at a time, as gzip members, bzip2 and xz streams read on in one
+  ( cd "$B" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" kore tar czf big.tgz t ) 2> "$o" || { cat "$o"; fail "kore tar czf of a 300 MiB member did not stream"; }
+  cbig() {
+    ( cd "$B" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" kore tar c$1f big.$2 t ) 2> "$o" \
+      || { cat "$o"; fail "kore tar c$1f of a 300 MiB member did not stream"; }
+    LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar tvf "$B/big.$2" > "$g" 2> "$o" || { cat "$o"; fail "kore tar tvf big.$2"; }
+    grep -q ' 314572800 .* t/big$' "$g" && grep -q 't/small$' "$g" || fail "kore tar c$1f of a 300 MiB member: $(cat "$g")"
+  }
+  cbig j tbz; cbig J txz
+  if command -v tar >/dev/null 2>&1; then
+    tar tzf "$B/big.tgz" > "$g" 2>&1 && grep -q '^t/small$' "$g" || fail "the system tar of kore's czf: $(cat "$g")"
+  fi
   rm -rf "$B/t"
   LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar xzf "$B/big.tgz" -C "$B/x" 2> "$o" || { cat "$o"; fail "kore tar xzf of a 300 MiB member did not stream"; }
   [ "$(wc -c < "$B/x/t/big" | tr -d ' ')" = 314572800 ] && [ "$(cat "$B/x/t/small")" = tail ] \
@@ -260,10 +285,11 @@ if command -v gzip >/dev/null 2>&1; then
   fi
 fi
 if command -v xz >/dev/null 2>&1; then
+  # .lzma, sizeless, the same: whole, under a 64 MiB heap
   big xz --format=lzma -0 > "$B/z.lzma"
-  korerun unlzma -c "$B/z.lzma" > /dev/null 2> "$o"; r=$?
-  [ $r -eq 1 ] && grep -q 'Memory usage limit' "$o" || fail "kore unlzma of a sizeless 1100 MiB (rc $r)"
-  # .xz a chunk at a time under 64 MiB, through unxz and tar J
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore unlzma -c "$B/z.lzma" 2> "$o" | wc -c > "$g"
+  [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore unlzma of a sizeless 1100 MiB did not stream: $(cat "$g") bytes"; }
+  # .xz streams a chunk at a time under a 64 MiB heap, through unxz and tar J
   big xz -0 -T1 > "$B/z.xz"
   LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore unxz -c "$B/z.xz" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore unxz of 1100 MiB did not stream: $(cat "$g") bytes"; }

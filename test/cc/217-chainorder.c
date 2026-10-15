@@ -1,6 +1,5 @@
-/* x = a ^ b ^ .. with some terms reading x again through the locals: the order of an and/or/xor
- * chain may change, its answer may not. chains of one type, of mixed widths and signs, through
- * calls, and loop-carried, and one op over mixed signs, each held to a fixed-order reference and to gcc. */
+/* an and/or/xor chain may reorder, its answer may not: terms re-reading x, mixed widths and signs,
+ * calls, loop-carried. held to a fixed-order reference and gcc. */
 
 #include <stdint.h>
 

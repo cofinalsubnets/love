@@ -1,39 +1,8 @@
-; court -- the inner courtyard of an apartment block, first person in half blocks: the
-; level after the shaft. twenty feet by thirty of concrete gone green with moss, a grated
-; sump in the middle, four floors of brick painted grey and chipped to the red beneath,
-; windows lit and dark, a tree of heaven by the east wall, its limbs climbing back over
-; it, and the sky at the top of the well.
-;
-; the long walls run north and south with four sash windows a floor, the west's ground
-; floor the lobby, lit all night, and small high ones by the corners -- one each end over
-; the west's ground floor, two each end on the east; the short walls carry two narrow ones
-; a floor and the stair's three between the floors, the south a black door under them.
-; a battlement stands over each short wall west of its middle, the north's nearer the west
-; wall, and a short one at the north's east end beside a brick block on the roof in the
-; north-east corner. cables come down over the parapets, most bundled neat against
-; the walls, to holes, window corners and a box on the north wall, a few hanging loose.
-; the tree is grown by grove afresh each run, to the habit given here (tree-habit), fallen
-; branches piled at its foot; the sky is sky's, the sun at this hour of this day at a fixed
-; latitude under the weather -- clear, partly or mostly cloudy, or overcast, the sky
-; drawn smooth or in the grass game's pixels -- and runs on faster than the clock: the
-; sun comes in over the rim where it can, low and orange on the top of a wall at either
-; end of the day, and windows come on and go off with the hours.
-;
-; the yard is drawn in triangles (mesh.l, over facets): the walls and the floor over maps
-; of their texels, and what stands in it, lit by the sky and by the sun, which the sun's
-; own view of the scene shades; the sky where they leave the screen bare. out as half
-; blocks -- 24-bit where COLORTERM says so, else the 256 palette dithered -- or as kitty's
-; pixels on a terminal that takes them.
-; court-new, court-step, court-move and court-frame are pure, gated by test/host/court.l;
-; only court-walk and court-run tie the tty. court-walk takes a stage already raised.
-;
-; run: love lore court  view's walking keys, and court-binds: [ ] an hour back or on, t
-;                       the time's pace, c the cloud, p rain or snow, v the sky smooth or
-;                       in pixels; ? the keys, q or esc leaves
-;      love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather COVER]
-;                      [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells|--window]
-;                      [--scale 1|2|4|8]
-;                      how to start; the cover, the style, rain and snow words may stand alone
+; court -- the inner courtyard of an apartment block, first person: the level after the shaft.
+; the walls and floor are texel maps laid once a run, the tree is grove's grown to tree-habit,
+; the sun, sky and weather are sky's at a fixed latitude on a clock that runs fast; all drawn
+; in triangles through mesh.l. court-new, court-step, court-move and court-frame are pure;
+; only court-walk and court-run tie the tty, and court-walk takes a stage already raised.
 (module (court court-run court-walk court-main court-new court-size court-step court-move court-binds
          court-frame court-sun court-light court-clock court-now court-local court-doy court-season
          court-opts court-wx-pick court-fall-pick court-month court-pens court-maps
@@ -49,44 +18,34 @@
 (borrow 'mesh)                          ; the triangles, lit and drawn
 (:
  fps 20
- ; --- the yard, in metres: x east, z north, y up, the sump at the origin. the long walls
- ; stand at x = -a and a, the short at z = -b and b ---
+ ; --- the yard, in metres: x east, z north, y up, the sump at the origin; the long walls at
+ ; x = -a and a, the short at z = -b and b. walls 0..3 are east, west, north, south ---
  yard-a 3.05 yard-b 4.57
  floors 4 floor-h 3.0
  wall-h (floors * floor-h + 0.5)        ; ..and a parapet over the top floor
- ; the battlements, a floor high, each its coping standing out over its faces: [wall
- ; centre half-length] -- the north's west of its middle and a short one at its east end,
- ; the south's nearer the middle; and the roof's block as high, along the east wall at its
- ; north end and back over the roof
+ ; the battlements, a floor high over the short walls: [wall centre half-length]; the roof's
+ ; block as high at the east wall's north end
  block-h floor-h top-h (wall-h + block-h) wall-t 0.45 cw 1.8 lip 0.07
  bats [[2 -0.9 1.8] [2 2.45 0.6] [3 0.1 1.8]]
  eye-h 1.6 body-r 0.3
  walk-v 1.4 turn-step 0.07 tilt-step 0.06
  lat (40.7 * pi / 180.0)
  paces [60.0 600.0 1.0 0.0]             ; seconds of the sky a second, t steps through them
- ; the litter and the falling leaves: branches in the heap, twigs strewn round it, leaves
- ; on the ground, how low a leaf lies, how many landed are kept, how fast one falls; the
- ; barks, grey-brown, dark, weathered and stripped; and the leaves' colours, dry yellow,
- ; tan, brown, a few still green
+ ; the litter: heap branches, twigs, ground leaves, a lying leaf's height, landed leaves kept,
+ ; fall speed; the barks' and the leaves' colours
  heap-n 64 stick-n 14 leaf-n 420 leaf-y 0.006 fallen-n 400 fall-v 0.45
  barks [[0.19 0.16 0.13] [0.15 0.12 0.09] [0.12 0.1 0.08] [0.27 0.26 0.23] [0.33 0.28 0.21]]
  snowc [0.88 0.9 0.94]
  hues [[0.6 0.5 0.17] [0.5 0.39 0.19] [0.36 0.26 0.14] [0.33 0.38 0.13]]
- ; the weather's odds by month, in twentieths: clear, partly, mostly cloudy, overcast --
- ; grey winters, clear late summers and falls
+ ; the weather's odds by month, in twentieths: clear, partly, mostly cloudy, overcast
  wx-odds [[4 5 4 7] [4 5 4 7] [4 5 5 6] [4 6 5 5] [4 7 5 4] [5 7 5 3]
           [5 8 4 3] [6 7 4 3] [7 7 3 3] [7 6 3 4] [5 5 4 6] [4 5 4 7]]
- ; ..and under an overcast sky the twentieths it rains or snows (half that mostly cloudy,
- ; none lighter): snow in the depth of winter, either at its edges, rain the rest
+ ; ..and the twentieths it rains or snows under overcast (half that mostly cloudy, none lighter)
  fall-odds [9 9 9 9 9 8 7 7 7 7 8 9]
- ; a long wall's sashes, 1.8 apart and 0.72 wide, and its small windows: the west's one
- ; each end, the east's two, 0.34 wide; sills at 0.9 and 1.4, heads at 2.3, a sash's and
- ; a short wall's arched rise higher in the middle under its brick arch
+ ; a long wall's sashes bay apart; half-widths of a sash and a small window; rise, an arch's lift
  bay 1.8 sash-w 0.36 nook-w 0.17 rise 0.09
- ; --- the windows: a long wall's four sashes a floor and the small ones by its corners --
- ; the west's a bathroom's, sill raised, the east's a living room's -- a short wall's two
- ; narrow ones a floor, and the stair's between the floors: [wall along half-width sill
- ; height key kind], kind 0 a sash, 1 a small one, 2 a short wall's, 3 the stair's ---
+ ; --- the windows, each [wall along half-width sill height key kind]: kind 0 a sash, 1 a small
+ ; corner one, 2 a short wall's, 3 the stair's between the floors ---
  windows (: fls ^floors
    (key wid fl k) (wid * 100 + fl % 8 * 10 + k)
    (long wid) (cats (map (fl \ (: y (fl * floor-h) nb (wid = 0 ? 0.9 1.4)
@@ -99,18 +58,15 @@
    (cats [(long 0) (long 1) (short 2) (short 3)]))
  ; ..one air conditioner, on the sill of the west wall's south sash on the top floor
  (cooled? w) (w 0 = 1 && w 6 = 0 && w 1 < -2.0 && (floors - 1) * floor-h < w 3)
- ; --- the cables: the building's wiring. one runs neat along the west wall over the ground
- ; floor's windows and round onto the short walls, dips under the stair's lowest window and
- ; climbs into a box beside it, each box west of the east window at the second floor's sill,
- ; the north's and the south's mirrored; and a few hang loose from the parapets, cut, and
- ; sway. a run is [width colour waypoints], each step along one axis on one wall's face;
- ; a box is [low corner, high corner, wall] ---
+ ; --- the cables: one run along the west wall and round onto the short walls into a box on
+ ; each, and loose strands (strands). a run is [width colour waypoints], each step along one
+ ; axis on one wall's face; a box is [low corner, high corner, wall] ---
  cab [0.25 0.25 0.26]
  boxes [[[0.95 3.9 (yard-b - 0.23)] [1.25 4.2 yard-b] 2] [[0.95 3.9 (0.0 - yard-b)] [1.25 4.2 (0.23 - yard-b)] 3]]
  (to-box z) [[1.09 3.9 z] [1.09 2.62 z] [0.45 2.62 z] [0.45 2.3 z] [-0.43 2.3 z] [-0.43 2.62 z] [(0.0 - yard-a) 2.62 z]]
  runs [[0.04 cab (to-box (0.0 - yard-b) + rev (to-box yard-b))]]
- ; --- the time: 'sim is the wall clock's local seconds, 'dst what summer adds to it ---
- ; now, as [local-seconds dst]: the zone's offset now, against the least of it a season on, two and three
+ ; --- the time: 'sim is local seconds, 'dst what summer adds: the offset now less the least
+ ; of it a season, two and three on ---
  ; the zone's offset at utc u, the zone read once a call
  (zone-off _) (: zone (cite 'kore 'tz-zone 0) (u \ zone ? (zone u 0) 0))
  (court-when s) (: off (zone-off 0)
@@ -120,13 +76,9 @@
  ; ..and a wall-clock time L in local seconds, as [L dst] in this zone
  (court-local L) (: off (zone-off 0) l (int L)
                     (court-when (l - off (l - off l))))
- ; --- the season, by the day of the year as the sky counts it (0 the first of january):
- ; the tree of heaven leafs out from mid april to mid may, turns yellow from late
- ; september, drops from mid october to mid november, and stands bare the winter through.
- ; its seeds hang from june, green, red by august and tan by october, and hold on through
- ; the winter until they drop in april. the leaves lie thickest after the fall, and rot
- ; down by summer; a leaf lets go about one frame in 'every while it is in leaf, and
- ; fastest in the drop ---
+ ; --- the season, by the day of the year (0 the first of january): leafing mid april to mid
+ ; may, turning from late september, dropping mid october to mid november; seeds june to
+ ; april. a leaf lets go about one frame in 'every ---
  (court-doy st) (: d (st 'sim / 86400.0 - 10957.0) (d - 365.2422 * floor (d / 365.2422)))
  (court-season st) (: d (court-doy st) spring (sat ((d - 108.0) / 22.0)) drop (sat ((d - 285.0) / 30.0))
    share (min2 spring (1.0 - drop))
@@ -140,11 +92,8 @@
  ; the sun as [east up north] and its light, at the scene's hour
  (court-sun st) (sky-sun (st 'sim) (st 'dst) lat)
  (court-light st) (sky-light (court-sun st) (st 'wx) (st 'sim))
- ; --- the state: the screen as view lays it, where the player stands and looks ('th the
- ; bearing, 'ph the pitch), the clock, its pace, and the pixels' rays. a run starts with
- ; its back to the east wall, the tree's fork just ahead, its foot ahead and to the right,
- ; looking up into the crown ---
- ; the weather a run starts under, unless it is said: the cover thrown, the sky smooth
+ ; --- the state: view's screen, the player's place, 'th the bearing, 'ph the pitch, the clock
+ ; and its pace. a run starts by the east wall looking up into the crown ---
  (court-new w h now) (: sd (int (now 0)) tr (tree-grow sd) lr (litter tr sd)
                         bs (tr 'base)
                         st {'px (yard-a - 0.5) 'pz (bs 2 - 1.0) 'th (0.0 - pi / 2.0) 'ph 1.4
@@ -186,9 +135,8 @@
          (tops (throw t 5 89 #tops) @ p [[(p 0) (p 1) (p 2) (throw t 7 83 628 / 100.0) hue]]))
    moved (map (q \ fall-step q t) (cat born (st 'fall)))
    down (filter (q \ q 1 <= leaf-y) moved)
-   ; ..the ground under the weather, by the sky's seconds this frame: rain wets the floor
-   ; in half an hour and it dries in three; snow covers it in three hours, and goes in six
-   ; dry or one under rain
+   ; ..the ground under the weather, in sky seconds: rain wets it in half an hour, it dries in
+   ; three; snow covers it in three hours and goes in six, one under rain
    dt (st 'paces (st 'pace) / fps) f (sky-fall (st 'wx))
    _ (pins st 'sim (st 'sim + dt)
              'fall (filter (q \ leaf-y < q 1) moved)
@@ -196,9 +144,8 @@
              'wet (sat (st 'wet + (f @ 1 (dt / 1800.0) (0.0 - dt / 10800.0))))
              'snow (sat (st 'snow + (f @ 2 (dt / 10800.0) (-dt / (f @ 1 3600.0 21600.0))))))
    (court-drift st))
- ; --- the weather's month and its drift: a month's odds pick a cover from k in 0..19; and
- ; while the weather is the season's own, about one sky hour in four it steps a notch
- ; toward a cover the month's odds draw ---
+ ; --- the weather: a month's odds pick a cover from k in 0..19; while 'drift is set it steps
+ ; a notch toward a fresh draw about one sky hour in four ---
  (court-month sim) (cite 'cal 'civil (int sim // 86400) 1)
  (court-wx-pick m k) (: o (wx-odds (m - 1))
    (go i a) (i < 3 && a + o i <= k ? (go (i + 1) (a + o i)) i)
@@ -225,8 +172,7 @@
          f (? (c < 2) 0 (0 < f0 && throw h 21 43 3 != 0) f0
               (court-fall-pick m c (throw h 17 53 20) (throw h 19 47 2)))
          (pins st 'hour h 'wx (wx-of c (st 'wx 'style) f)))))
- ; --- the maps: the walls and the floor, laid once a run in texels
- ; and gathered from by every frame, so no hash is thrown a frame ---
+ ; --- the maps: the walls and the floor laid once a run in texels, gathered from each frame ---
  ts 0.04                                ; a texel's side
  (cells l) (int (l / ts + 0.999))
  nu-long (cells (2.0 * yard-b)) nu-short (cells (2.0 * yard-a)) nv (cells top-h)
@@ -237,11 +183,8 @@
  fts 0.02                               ; ..and the floor's, finer for its joints and grate
  fl-nx (int (2.0 * yard-a / fts + 0.999)) fl-nz (int (2.0 * yard-b / fts + 0.999))
  maps {}
- ; the brick, painted grey and chipped, at the run along wall wid and the height py:
- ; the windows and their sills, frames and arches, the south's door, the paint mottled,
- ; grimed at the foot and stained under the sills, the red or an older coat beneath, and
- ; the coping; over it the battlements, weathered harder under their pale caps. what a window
- ; shows lit is laid here too, which window it is, and whether it is lit all night
+ ; a wall texel: its colour, and what its window shows lit -- 'glass, 'key the window,
+ ; 'night lit all night, 'tv
  (wall-at i) (:
    wid ((nu-long * nv <= i) + (2 * nu-long * nv <= i) + ((2 * nu-long + nu-short) * nv <= i))
    nu (peep wall-nus wid 0) j (i - peep wall-offs wid 0)
@@ -250,9 +193,7 @@
    al ((j % nu + 0.5) * ts - half) py ((j // nu + 0.5) * ts)
    b yard-b hh wall-h
    fl (floor (py / floor-h)) yy (py - fl * floor-h) infl (fl < floors)
-   ; the windows: a long wall's four sashes a floor and the small ones by its corners --
-   ; the west's a bathroom's, sill raised, the east's a living room's, level with the
-   ; sashes -- a short wall's two narrow ones a floor, and the stair's between the floors
+   ; the windows, as windows lays them
    wi (max 0 (min 3 (floor (al / bay + 2.0)))) ca (al - (wi - 1.5) * bay)
    lr (sat (1.0 - sq (ca / sash-w)))
    lw (isx * (sq ca < sash-w * sash-w) * (0.9 < yy) * (yy < 2.3 + rise * lr) * infl)
@@ -280,9 +221,8 @@
    arch (isx * (sq ca < la * la) * (2.3 + rise * lr <= yy) * (yy < 2.42 + rise * sat (1.0 - sq (ca / la))) * infl
          + isz * (sq sa < sb * sb) * (2.4 + rise * sr <= yy) * (yy < 2.52 + rise * sat (1.0 - sq (sa / sb))) * infl)
    ajt (frac ((isx * ca + isz * sa) / 0.075) < 0.2)
-   ; ..each room its own, a long wall's sashes and corner windows by the pair: lamps warm
-   ; and various, a few with the curtains drawn, a few a television, a bathroom's white;
-   ; the lobby's, the stair's and the ground floor halls' lit all night
+   ; ..each room its own by wkey: lamps warm and various, some curtained, some a television,
+   ; a bathroom's white; the lobby, the stair and the ground floor halls lit all night
    wkey (wid * 100 + fl % 8 * 10 + lw * (2 <= wi) + nw * (4 + 2 * (0.0 < al)) + sw * (4 + (0.0 < al)))
    lob (lw * (wid = 1) * (fl = 0)) hall (sw * (fl = 0) * (al < 0.0)) nt (stw + lob + hall)
    bw (nw * bath)
@@ -331,10 +271,8 @@
                          battle up) [0.17 0.115 0.08] dr) [0.1 0.075 0.055] dfr) [0.55 0.45 0.22] knob)
    {'r (alb 0) 'g (alb 1) 'b (alb 2) 'glass glass 'key wkey 'night nt 'tv tv
     'er (em 0) 'eg (em 1) 'eb (em 2)})
- ; the floor: eight triangular slabs meeting at the sump -- split by the two axes and the
- ; two diagonals to the corners -- each poured a shade apart, their joints, moss over
- ; most of it and thickest by the walls, in the joints and round the sump, and the
- ; sump's round grate
+ ; the floor: eight triangular slabs meeting at the sump, split by the axes and the diagonals,
+ ; each a shade apart; moss thickest by the walls, in the joints and round the sump's grate
  sump-r 0.2
  (floor-at i) (: a yard-a b yard-b
    px ((i % fl-nx + 0.5) * fts - a) pz ((i // fl-nx + 0.5) * fts - b)
@@ -358,8 +296,7 @@
    grate (cmix (cmix [0.01 0.01 0.01] [0.18 0.16 0.14] bar) [0.24 0.21 0.18] rim)
    alb (cmix (c* wet (cmix conc mossc moss)) grate sump)
    {'r (alb 0) 'g (alb 1) 'b (alb 2)})
- ; ..each laid a slice of texels at a time into trays n long, so what a texel takes on its
- ; way is held for a slice and not the whole map: a small machine has the room
+ ; ..laid a slice of k texels at a time, so the intermediates are held for a slice, not the map
  (lay-map n f) (: k 16384
    (go lo out) (lo < n ? (: ix (lo + iota (min2 k (n - lo))) c (f ix)
                             (go (lo + k) (foldl (o \ key \ pin o key (pin (peep o key (iota n * 0 + peep (c key) 0 0 * 0)) ix (c key)))
@@ -368,18 +305,14 @@
    (go 0 {}))
  (court-maps _) (maps 'wall ? maps (: m (lay-map wall-n wall-at) _ (each runs (rn \ lay-run m rn))
                                      (pins maps 'wall m 'floor (lay-map (fl-nx * fl-nz) floor-at))))
- ; --- the tree: a tree of heaven by the east wall, leaning a little west;
- ; its leaves from the third floor up, and below the wall tops a point is kept inside the
- ; walls, or not grown if it would be in one ---
+ ; --- the tree: below the wall tops a point is kept inside the walls, or not grown in one ---
  crown-y 5.5
  (inside p) (p 1 < wall-h ? [(clamp (p 0) (0.15 - yard-a) (yard-a - 0.15)) (max2 0.05 (p 1))
                             (clamp (p 2) (0.15 - yard-b) (yard-b - 0.15))] p)
  (in-wall? p) (p 1 < wall-h && (yard-a - 0.1 < mag (p 0) || yard-b - 0.1 < mag (p 2)))
- ; its habit: the trunk rising nearly straight from its foot by the east wall, leaning a
- ; little west, to a split in the third floor -- a long limb climbing off south and a short
- ; one back east over the wall, each to a knot of stubs and twigs -- and long thin branches
- ; sweeping out south off the long one. grown with grove's kit k from the foot base, it
- ; answers the fork
+ ; its habit: the trunk from the east wall leaning a little west to a fork in the third floor,
+ ; a long limb climbing south and a short one back east, long thin branches sweeping off the
+ ; long one. grown with grove's kit k from base, it answers the fork
  (tree-habit base k) (: rr (k 'rr) spread (k 'spread) dir (k 'dir) seg! (k 'seg) branch! (k 'branch)
                         head! (k 'head) spray! (k 'spray) sprig! (k 'sprig) tuft! (k 'tuft)
     tw [0.0 1.0]                          ; the point on the ground, [x z], the trunk leans toward
@@ -390,10 +323,8 @@
     tq (map (f \ (0.0 < f < 1.0 ? (c+ (tp f) [(rr -0.1 0.1) 0.0 (rr -0.1 0.1)]) (tp f))) [0.0 0.2 0.4 0.6 0.8 1.0])   ; its crook
     _ (each ^5 (i \ seg! (tq i) (tq (i + 1)) (0.22 - 0.08 * i / 5.0)))   ; its girth, foot to fork
     fk (tq 5)
-    ; ..the fork: the trunk parting into two limbs near its own girth -- one long, climbing
-    ; steeply off to the lean's left, the other short, up and back against the lean and a
-    ; little to its right -- each crooked to a head. a branch's way is weighed from up,
-    ; cdir (the lean) and lh (the lean's left); (branch! from way length pieces r0 r1 bend droop)
+    ; ..the fork: a long limb steep off to the lean's left, a short one up and back; ways weighed
+    ; from up, cdir (the lean) and lh (its left); (branch! from way length pieces r0 r1 bend droop)
     lh [(0.0 - cdir 2) 0.0 (cdir 0)]
     up (branch! fk (unit (c+ (c+ [0.0 2.0 0.0] (c* 1.6 cdir)) (c* 1.1 lh))) (rr 3.2 3.8) 6 0.12 0.07 0.3 0.0)   ; the long limb
     _ (head! up 4 (int (rr 10.0 13.99)))   ; its head: from joint 4, the stubs
@@ -404,9 +335,7 @@
                           st (branch! (up i) d (rr 1.5 2.6) 3 0.05 0.025 0.4 0.05)
                           (tuft! (st 3) (dir (st 2) (st 3)),
                            each [1 2 3] (m \ spray! (st m) (unit (c+ (spread (dir (st (m - 1)) (st m)) (rr 0.3 0.9)) [0.0 0.2 0.0])) (rr 0.5 0.9) 2 0.3)))))
-    ; ..and the long ones sweeping out from low on the long limb, off to the lean's left and
-    ; rising, wandering and drooping, bare sprigs and thin twigs hanging off them and leaves
-    ; at every end
+    ; ..and the long ones sweeping out low off the long limb, twigs off them, leaves at every end
     _ (each ^(int (rr 2.0 3.99))   ; how many
         (j \ (: o (lerp (up 2) (up 3) (rr 0.0 1.0)) a (rr -0.5 0.3)   ; from where, turned how far
                 d (unit (c+ (turn (unit (c+ lh (c* 0.3 cdir))) [0.0 1.0 0.0] a) [0.0 0.6 0.0]))   ; their way
@@ -421,15 +350,12 @@
                      base [(rr 1.75 2.05) 0.0 (rr 1.2 1.5)]   ; its foot, x east and z north
                      (grove-new {'seed seed 'base base 'habit (tree-habit base) 'crown crown-y
                                  'inside inside 'keep? (p \ !(in-wall? p))}))
- ; --- what lies under it: the fallen branches people have piled at the foot of the trunk,
- ; twigs strewn round them, and the leaves the crown has dropped, laid once a run from the
- ; tree's own seed; and the high leaves a falling one may start from. a point is
- ; [x y z r g b up], up 1 for one lying flat; a branch is [a b r colour bark] ---
+ ; --- the litter, laid once a run from the tree's seed: the heap at the trunk's foot, twigs,
+ ; ground leaves, and the high leaves a falling one starts from. a point is [x y z r g b up],
+ ; up 1 lying flat; a branch is [a b r colour bark] ---
  (newest n l) (n < 1 || atom? l ? () (<l . newest (n - 1) >l))
- ; a milk crate leaning back on the trunk's north side, its long side along the north wall
- ; and its open side tipped up toward that wall's window, propped there by a big branch
- ; lying along the wall at its foot: [centre half-sizes tilt reach], reach the half-sizes
- ; of the room it takes; and a 6.8 kg plate lying flat east of it
+ ; a milk crate leaning back on the trunk's north side, open side up, propped by a branch:
+ ; [centre half-sizes tilt reach], reach the half-sizes of the room it takes; a plate east of it
  (crate-of bs) (: a (pi / 4.0) hx 0.24 hy 0.165 hz 0.14 cy (hy * cos a + hz * sin a) ez (hy * sin a + hz * cos a)
    [[(bs 0) cy (bs 2 + 0.22 + ez)] [hx hy hz] a [hx cy ez]])
  (plate-of bs) [(bs 0 + 0.7) 0.0 (bs 2 + 0.36)]
@@ -444,10 +370,8 @@
    bs (tr 'base) X (tr 'x) Y (tr 'y) Z (tr 'z) K (tr 'kind) n #X top (amax Y)
    ; a leaf of the crown, thrown for until one comes up, or the first point
    (pick k ok?) (: i (int (rr 0.0 (n - 0.5))) (k < 1 || peep K i 0.0 = 2.0 && ok? i ? i (pick (k - 1) ok?)))
-   ; ..the heap: branches laid on the floor in a ring hard against the trunk, thickest there so
-   ; no floor shows round it -- most along the ring, passing the bark as close as their own
-   ; width lets them, the rest pointing out from it -- an end a little off the floor where the
-   ; ring is deep; most forked, some forks with a twig off them
+   ; ..the heap: branches in a ring hard against the trunk so no floor shows, most along the
+   ; ring, the rest pointing out; most forked
    (keep q) [(clamp (q 0) (0.12 - yard-a) (yard-a - 0.12)) (q 1) (clamp (q 2) (0.12 - yard-b) (yard-b - 0.12))]
    (round a d y) (keep [(bs 0 + d * cos a) y (bs 2 + d * sin a)])
    (from q) (sqrt (sq (q 0 - bs 0) + sq (q 2 - bs 2)))
@@ -565,12 +489,8 @@
  (lay-run m rn) (: wd (rn 0) c (rn 1) ps (rn 2) n #ps
    _ (each ^(n - 1) (i \ (: p (ps i) q (ps (i + 1)) wid (wall-of p q)
                            (lay-step m wid (along-of wid p) (along-of wid q) (p 1) (q 1) wd c)))))
- ; --- the scene in triangles (mesh.l, over facets): the walls and the floor quads over
- ; the maps' texels, laid once a process; what stands in the yard tubes and boxes, and
- ; the twigs and leaves on the ground a little triangle each, laid once a run; all lit
- ; again every two minutes of the sky, and the sun's view of them shading them. the
- ; windows' panes, the tree's leaves, the cables that sway, the leaves falling and
- ; what falls from the sky laid every frame ---
+ ; --- the scene in triangles: walls and floor laid once a process, what stands and the litter
+ ; once a run, all relit every two sky minutes; panes, leaves, swaying cables and weather every frame ---
  ; texels w by h, an index tray of that shape counting along each row
  (grid h w) ((star-tray [h w] 0) + iota w + star-tray [h 1] (map (i \ i * w) ^h))
  (q v) (int (sat v * 255.0 + 0.5))
@@ -581,15 +501,13 @@
    (map (wid \ (: ix (peep wall-offs wid 0 + grid nv (peep wall-nus wid 0))
                   (word [(peep (m 'r) ix 0.0) (peep (m 'g) ix 0.0) (peep (m 'b) ix 0.0)] * (1 - peep (m 'glass) ix 0))))
         ^4))
- ; ..and the floor's, darker wet and white under snow -- the pale concrete first, the
- ; joints, the moss and a speckle of it last
+ ; ..and the floor's, darker wet and white under snow
  (floor-tex mp wet snow) (: m (mp 'floor) ix (grid fl-nz fl-nx)
    fc [(peep (m 'r) ix 0.0) (peep (m 'g) ix 0.0) (peep (m 'b) ix 0.0)] lum ((fc 0 + fc 1 + fc 2) / 3.0)
    spk (frac (sin (ix * 12.9898) * 43758.5453))
    sw (sat (snow * 1.3 - 0.6 * (0.5 - lum) - 0.15 * spk))
    (word (cmix (c* (1.0 - 0.35 * wet) fc) snowc sw)))
- ; ..the five, the floor's laid again when the wet or the snow has moved a twentieth, and
- ; the bark the wood wears
+ ; ..the four walls', the floor's (laid again when wet or snow moves a twentieth) and the bark's
  (court-texs st) (: mp (court-maps ())
    wt (peep maps 'wtex () @ () (: t (wall-texs mp) (pin maps 'wtex t, t)) t t)
    k [(int (st 'wet * 20.0)) (int (st 'snow * 20.0))]
@@ -632,9 +550,8 @@
    (c \ (: fl (0.5 < c 6)
            sv ((over (0.45 + 0.5 * min 1.0 (c 1 / wall-h)) fl 0.42) * (1.0 + 0.2 * lt 'day * (c 5 * s 0 + c 7 * s 2)))
            [0.9 sv (c* (lt 'sunk * 0.05) (lt 'sunc))])))
- ; --- what stands in the yard, laid once a run and kept with its tree: the heap's
- ; branches; the cables along the walls, a little off them, and their boxes, grey paint
- ; gone dull; the windows' air conditioners; the battlements' copings; the tree's wood ---
+ ; --- what stands in the yard, laid once a run and kept with its tree: branches, cables and
+ ; boxes, air conditioners, copings, the crate, the plate and the tree's wood ---
  (props st) (: tr (st 'tree) (peep tr 'props () @ () (:
    (step wd c p q) (: o (c* (0.5 * wd) (ins (wall-of p q))) (mesh-rod (c+ p o) (c+ q o) (0.5 * wd) c 5 -1 1.0))
    (run rn) (: ps (rn 2) (map (i \ step (rn 0) (rn 1) (ps i) (ps (i + 1))) ^(#ps - 1)))
@@ -671,18 +588,15 @@
  ; ..a packed mesh under snow: its colours toward the snow's by w, a tray of its vertices
  (snowed pk w) (: c (pk 'cols) (mix k) (c (8 + k) + w * (snowc k - c (8 + k)))
    {'n (pk 'n) 'tris (pk 'tris) 'cols (take 8 c + [(mix 0) (mix 1) (mix 2)])})
- ; --- points as little triangles, [verts tris] for facets, the sun's light apart: P the
- ; trays bits makes, lying flat where 'up, else standing as a leaf falls; their colours
- ; white under snow sn where they lie; lit as the floor is ---
+ ; --- points as little triangles for facets: P the trays bits makes, lying flat where 'up,
+ ; else standing; white under snow sn where they lie ---
  (dots P lt sn sz) (: s (lt 'sun) X (P 'x) Y (P 'y) Z (P 'z) up (P 'up)
    base (cmix [(P 'r) (P 'g) (P 'b)] snowc (up * sn))
    face (up * max2 (s 1) 0.0 + (1.0 - up) * 0.5)
    (corner k) [(X + sz * cos (2.1 * k)) (Y + (1.0 - up) * sz * sin (2.1 * k)) (Z + up * sz * sin (2.1 * k))]
    (mesh-dots [(corner 0) (corner 1) (corner 2)] (cm base (c* 0.42 (lt 'amb))) (cm base (c* (0.9 * face * lt 'sunk) (lt 'sunc))) -1))
- ; --- the scene lit, kept with the run's tree until the sky has gone on two minutes or
- ; the snow or the season has moved: [verts tris] lists, and the sun's view [view depths
- ; bias], () while it is down. the sun's view takes all that stands, the tree's leaves as
- ; they were when it was laid ---
+ ; --- the scene lit, kept with the tree until two sky minutes pass or the snow or season
+ ; moves: [verts tris] lists, and the sun's view [view depths bias], () while it is down ---
  sun-n 1024 sun-half 10.0 sun-deep 30.0 sun-bias 0.06
  (scene st lt) (: was (peep (st 'tree) 'scene ()) sim (st 'sim) sea (court-season st) sn (st 'snow)
    key [(int (sn * 20.0)) (int (sea 'ground * 50.0)) (int (sea 'share * 50.0)) (int (sea 'turn * 50.0)) (int (sea 'seeds * 50.0))]
@@ -706,11 +620,8 @@
  (court-shell _) (peep maps 'shell () @ () (: m (shell ()) (pin maps 'shell m, m)) m m)
  ; the tree in its season
  (tree-of st sea) (pins (st 'tree) 'share (sea 'share) 'turn (sea 'turn) 'seeds (sea 'seeds) 'ripe (sea 'ripe))
- ; ..each window's glass in six panes a hair off the wall: the lower sash and the upper,
- ; each in three across, the upper reaching into the arch, the outer two behind a
- ; curtain where one is drawn. as trays: each corner's place, its window, whether it is
- ; behind the curtain, and how much of the sky it gives back -- the upper sash more, a
- ; lower one pale with its blind down
+ ; ..each window's glass in six panes a hair off the wall, as trays: each corner's place, its
+ ; window, whether behind a curtain, and how much sky it gives back
  (court-panes _) (peep maps 'panes () @ ()
    (: (pieces wn) (: w (windows wn) wid (w 0) c (w 1) hw (w 2) y0 (w 3) vh (w 4) o (c* 0.02 (ins wid))
         xs [(0.0 - hw + 0.05) (-0.45 * hw) (0.45 * hw) (hw - 0.05)] ys [0.07 (0.5 * vh - 0.03) (0.5 * vh + 0.03) (vh - 0.06)]
@@ -728,10 +639,8 @@
          'rf (gem-tray [(4 * n)] (cats (map (p \ [(p 3) (p 3) (p 3) (p 3)]) ps)))
          'tris (star-tray [(8 * n)] (cats (map (i \ (: v (4 * i) [v (v + 1) (v + 2) -2 v (v + 2) (v + 3) -2])) ^n)))}
       (pin maps 'panes t, t)) t t)
- ; ..and each frame's light in them: the sky in the glass, and the room behind when it is
- ; lit -- lamps warm and various, a few with the curtains drawn, a few a television, a
- ; bathroom's white; each by the hour, the lobby's, the stair's and the ground floor
- ; halls' whenever it is dark out, a television flickering. a glow over the black glass
+ ; ..and each frame's light in them: the sky in the glass, the room behind when lit by the
+ ; hour; the lobby, stair and ground floor halls whenever it is dark out
  (panes-batch st lt) (: t0 (st 't) P (court-panes ()) ws windows
    (w k) (gem-tray [#ws] (map (x \ 1.0 * x k) ws)) wid (w 0) c (w 1) y0 (w 3) kd (w 6) K (int (w 5))
    fl (floor (y0 / floor-h))
@@ -763,7 +672,7 @@
  ; --- the stars: sky's at the hour, each one pixel where the eye sees it through the top ---
  (stars st) (sky-stars (st 'sim) (st 'dst) lat)
  ; --- the frame ---
- ; the lit share of the windows by the hour of the evening
+ ; the percent of windows lit by the hour
  (lit-share hr) (? (hr < 5.0) 6 (hr < 6.5) 12 (hr < 9.0) 35 (hr < 16.0) 4 (hr < 18.0) 25 (hr < 23.0) 60 25)
  fov (pi / 2.0)
  sky-k 2                                  ; the sky asked every sky-k columns of kitty's pixels
@@ -791,9 +700,8 @@
    bands (up ? {0 [1 txt (deep ? 249660 255) (deep ? 33288 235)]} {})
    text (? !kit "" up (esc + "[1;1H" + esc + "[0m" + txt) (st 't = st 'shown) (esc + "[1;1H" + esc + "[0m" + pad "" w " ") "")
    (mesh-show st f text bands))
- ; --- the walk, on view's loop; court-run raises the stage ---
- ; ..o says how to start, or () for now and the run's own weather: 'now [local-seconds
- ; dst], 'wx the weather, 'pace seconds of the sky a second (t steps on to the usual ones)
+ ; --- the walk, on view's loop; court-run raises the stage. o says how to start, or ():
+ ; 'now [local-seconds dst], 'wx the weather, 'pace sky seconds a second ---
  (court-walk o) (: (opt k) (tablet? o ? (o k) ())
    (view-walk {'new (w \ h \ (: st (court-size (pins (court-new w h (opt 'now @ n (n ? n (court-now ()))))
                                                     'deep (opt 'md = 'window || view-deep? ()) 'kitty (mesh-mode (opt 'md))
@@ -809,9 +717,8 @@
  ; ..and kitty's picture taken down after, where it was put up
  (court-run o) (view-stage o court-walk (_ \ (say out mesh-gone, flush out)))
  court-usage "usage: love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells|--window] [--scale 1|2|4|8]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow, v the sky's style; ? the keys; q or esc leaves)"
- ; --- the words: a date, a time, a pace, the weather's cover and the sky's style, each at
- ; most once and in any order -> the walk's start, or () for words it cannot read. a date
- ; or a time alone keeps the other from now ---
+ ; --- the words -> the walk's start, or () for words it cannot read; a date or a time
+ ; alone keeps the other from now ---
  (court-opts as) (: (ix l w) (: (go i) (i < #l ? (l i = name w ? i (go (i + 1))) ()) (go 0))
    (cov w) (ix sky-covers w) (sty w) (ix sky-styles w) (fal w) (ix sky-falls w)
    (dnum w) (: n #w (go i v) (i < n ? (48 <= w i <= 57 ? (go (i + 1) (v * 10 + w i - 48)) ()) v)

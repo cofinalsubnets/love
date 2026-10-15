@@ -1,10 +1,7 @@
-; src/apps/kore/diff.l -- myers diff: the shortest edit script between two lists (Myers 1986,
-; the greedy O(ND) forward pass with a trace, then the backtrack). pure love; element
-; equality is `=`, so it diffs lines, symbols, charms, whole trees alike.
-;
-; the script is a list of (op x) 2-lists, op one of 'keep 'del 'add, in order: the
-; keep+del column spells the old list, keep+add the new, and the del+add count is
-; minimal -- the three laws test/law/kore.l holds it to. a body-less top-level `:`:
+; src/apps/kore/diff.l -- myers diff: the shortest edit script between two lists, the greedy
+; O(ND) forward pass with a trace, then the backtrack. equality is `=`, so it diffs lines,
+; symbols, charms, whole trees alike. the script is (op x) 2-lists, op 'keep 'del 'add, in
+; order: keep+del spells the old list, keep+add the new, and the del+add count is minimal.
 ; `myers` the entry, dold/dnew/dcost the script readers, d* the machinery.
 (module 'kore
 (:
@@ -67,15 +64,10 @@
    (dnew s) (map caup (filter (\ o !(<o = 'del)) s))
    (dcost s) #(filter (\ o !(<o = 'keep)) s))
 
-; --- patience: the anchoring layer over myers (Bram Cohen). same script shape, so the
-; projection laws carry over verbatim -- what changes is the shape of the hunks: anchor
-; on the lines a human would (unique in both sides), recurse between anchors, and let
-; myers fill the gaps, trading minimality (dcost patience >= dcost myers) for hunks
-; that align on landmarks instead of boilerplate. the pass: peel the common prefix and
-; suffix (keeps for free, and they shrink the D the O(ND) core sees), census both sides
-; (tablets key elements STRUCTURALLY, so string lines and whole trees census alike),
-; pair the unique-in-both positions, keep the longest increasing subsequence of them
-; (the patience-sorting step, an O(k^2) DP -- k is tiny), and split at the survivors.
+; --- patience: anchoring over myers, same script shape. anchor on lines unique to both
+; sides, recurse between anchors, let myers fill the gaps: hunks align on landmarks, at the
+; cost of minimality (dcost patience >= dcost myers). common prefix and suffix are peeled
+; first; the anchors kept are the longest increasing run of the unique pairs (an O(k^2) DP)
 (:
    ; occurrence census: element -> how many times it appears
    (dcensus l) (: t {}
@@ -136,12 +128,10 @@
        a2 (rev <s) b2 (rev <>s) suf <>>s      ; ... and its keeps come back forward
        (pre + dmid a2 b2 + suf)))
 
-; --- the unified surface (diff -u): the script rendered as unified hunks, over jugs so
-; big files stay linear. every entry tags as (op x i j) -- i/j the 1-based old/new seats
-; it sits at -- then hunks gather with c lines of context, splitting where a keep run
-; tops 2c (the coalescing law patch(1) expects); a side with no lines names the seat
-; before it (the -0,0 convention). `udiff` is the tool's engine: two texts and their
-; names -> the whole unified text, nothing when they agree.
+; --- the unified surface (diff -u), over jugs so big files stay linear. each entry tags as
+; (op x i j), i/j its 1-based old/new lines; hunks take c lines of context and split where a
+; keep run tops 2c, as patch(1) expects; an empty side names the line before it (-0,0).
+; `udiff`: two texts and their names -> the unified text, nothing when they agree.
 (:
    (utag s)                                                       ; seat every entry: (op x) -> (op x i j)
     (: (go m i j acc)

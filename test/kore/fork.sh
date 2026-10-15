@@ -36,6 +36,21 @@ fsh 'echo x | love -e "(3 + 4)"' >/dev/null; r=$?; [ $r -eq 0 ] || fail "fork la
 # swallowed it. the knob rides the command (an egg-booted love has no verb table)
 [ "$(fsh 'echo x | LOVE_NO_IMAGE=1 love -e "(elem (quote love-image) (names ()))"')" = "0" ] \
   || fail "fork lane swallowed LOVE_NO_IMAGE"
+# every other boot knob, down every lane that runs this heap (stage, simple, export, cmdsub):
+# a 64 MB budget cannot hold 4M cells and the shell's own can
+big='love -e "(tally (jot 4000000))"'
+[ "$(fsh "echo x | $big" 2>/dev/null)" = "4000000" ] || fail "fork lane big list (control)"
+[ "$(fsh "echo x | LOVE_BUDGET_MB=64 $big" 2>/dev/null)" != "4000000" ] || fail "fork lane swallowed LOVE_BUDGET_MB (stage)"
+[ "$(fsh "LOVE_BUDGET_MB=64 $big" 2>/dev/null)" != "4000000" ] || fail "fork lane swallowed LOVE_BUDGET_MB (simple)"
+[ "$(fsh "export LOVE_BUDGET_MB=64; $big" 2>/dev/null)" != "4000000" ] || fail "fork lane swallowed LOVE_BUDGET_MB (export)"
+[ "$(fsh "echo \$(LOVE_BUDGET_MB=64 $big)" 2>/dev/null)" != "4000000" ] || fail "fork lane swallowed LOVE_BUDGET_MB (cmdsub)"
+off='love -e "(nil? natjit)"'
+[ "$(fsh "echo x | $off")" = "0" ] || fail "fork lane glaze (control)"
+[ "$(fsh "echo x | LOVE_NO_GLAZE=1 $off")" = "1" ] || fail "fork lane swallowed LOVE_NO_GLAZE (stage)"
+[ "$(fsh "LOVE_NO_GLAZE=1 $off")" = "1" ] || fail "fork lane swallowed LOVE_NO_GLAZE (simple)"
+[ "$(fsh "export LOVE_NO_GLAZE=1; echo \$($off)")" = "1" ] || fail "fork lane swallowed LOVE_NO_GLAZE (export, cmdsub)"
+# an empty knob is no knob: the glaze stays on
+[ "$(fsh "LOVE_NO_GLAZE= $off")" = "0" ] || fail "fork lane empty LOVE_NO_GLAZE"
 # a bare word may want a terminal: it spawns only when it would inherit one; a pipe or a `<` on fd 0 forks
 [ "$(fsh 'echo "(puts \"bare\")" | love')" = "bare" ] || fail "fork lane bare word"
 [ "$(fsh 'kore seq 3 | sort | kore tr -d "\n"')" = "123" ] || fail "fork lane bare stage"

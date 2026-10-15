@@ -1,7 +1,5 @@
-/* __builtin_constant_p where gcc -O0 and mooncc agree: a literal and a constant expression
- * read 1, a param of a function not inlined reads 0, and the operand is never evaluated. the
- * deferred answer (decided after inlining) rides codegen and the clay round trip.
- * freestanding, exit-code only. */
+/* __builtin_constant_p where gcc -O0 agrees: a literal or constant expression reads 1, a param
+ * of a non-inlined function 0, the operand never evaluated. exit-code only. */
 
 static int hits;
 static int bump(void) { return ++hits; }
