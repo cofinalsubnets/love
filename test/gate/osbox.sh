@@ -31,11 +31,15 @@ case "$os-$arch" in
   netbsd-rv64)  box=${NBSD_RV64_SSH:-}; sd= ;;
   freebsd-arm) box=${FBSD_ARM_SSH:-${FBSD_ARM64_SSH:-}}; sd= ;;
   netbsd-arm)  box=${NBSD_ARM_SSH:-${NBSD_ARM64_SSH:-}}; sd= ;;
+  freebsd-i386) box=${FBSD_I386_SSH:-${FBSD_SSH:-}}; sd= ;;
+  netbsd-i386)  box=${NBSD_I386_SSH:-${NBSD_SSH:-}}; sd= ;;
   *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
 esac
 [ -n "$box" ] || box=$("$ho/love" bee --on "$os-$arch" --ssh 2>/dev/null) || box=
-# an arm64 BSD runs armv7 binaries in its 32-bit lane, so an a64 box answers for arm too
+# an arm64 BSD runs armv7 binaries in its 32-bit lane, so an a64 box answers for arm too, and
+# an amd64 one for i386
 [ -n "$box" ] || [ "$arch" != arm ] || box=$("$ho/love" bee --on "$os-a64" --ssh 2>/dev/null) || box=
+[ -n "$box" ] || [ "$arch" != i386 ] || box=$("$ho/love" bee --on "$os-x64" --ssh 2>/dev/null) || box=
 t=test_$os; [ "$arch" = x64 ] || t=test_${os}_${arch}
 d=$ho/$os-$arch
 

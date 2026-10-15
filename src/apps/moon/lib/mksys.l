@@ -211,12 +211,19 @@
          (sys))
 
          (arch = 'i386)
-         ; the i386 lane, linux alone: cdecl args on the stack, the kernel's in
-         ; ebx ecx edx esi edi ebp through int 0x80. registers r0..r6 = eax ecx
-         ; edx ebx ebp esi edi. the jmp_buf: [0] ebx [4] esi [8] edi [12] ebp
-         ; [16] esp [20] eip, the 8-byte mask at [32].
+         ; the i386 lane, the three kernels: cdecl args on the stack. linux reads them
+         ; from ebx ecx edx esi edi ebp through int 0x80; both BSDs read them off the user
+         ; stack above a return slot, as a cdecl callee would, and answer an error with
+         ; the carry set and +errno in eax, a 64-bit answer in edx:eax. registers r0..r6
+         ; = eax ecx edx ebx ebp esi edi. the jmp_buf: [0] ebx [4] esi [8] edi [12] ebp
+         ; [16] esp [20] eip, the mask at [32], 16 bytes for a BSD's.
          '(
          (label __love_sys)
+         (label __love_sysw)         ; __love_sys read as long long: a BSD's lseek in edx:eax
+         (la r1 __love_osv)
+         (ld r1 r1 0)
+         (cmp r1 2)
+         (br ge sys-bsd)
          (push r4) (push r6) (push r5) (push r3)
          (ld r0 sp 20)               ; eax <- n
          (ld r3 sp 24)               ; ebx <- a
@@ -227,6 +234,33 @@
          (ld r4 sp 44)               ; ebp <- f
          (sys)
          (pop r3) (pop r5) (pop r6) (pop r4)
+         (ret)
+         (label sys-bsd)             ; f..a pushed: each push brings the next one to the same slot
+         (ld r1 sp 28) (push r1) (ld r1 sp 28) (push r1) (ld r1 sp 28) (push r1)
+         (ld r1 sp 28) (push r1) (ld r1 sp 28) (push r1) (ld r1 sp 28) (push r1)
+         (push r1)                   ; the return slot
+         (ld r0 sp 32)               ; eax <- n
+         (cmp r0 0)                  ; clears the carry
+         (sys)
+         (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1)   ; a pop leaves the flags
+         (br below sys-err)          ; `below' is carry set: a BSD error
+         (ret)
+         (label sys-err)
+         (neg r0)
+         (lea r0 r0 -4096)           ; -(errno+4096): parked for __love_call
+         (li r2 -1)                  ; ..and the high word, for __love_sysw
+         (ret)
+
+         ; -- __love_sys8(n,a..h): a BSD's mmap, eight words; never linux's
+         (label __love_sys8)
+         (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1)
+         (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1)
+         (push r1)
+         (ld r0 sp 40)               ; eax <- n
+         (cmp r0 0)
+         (sys)
+         (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1)
+         (br below sys-err)
          (ret)
 
          (label __sigsetjmp)
@@ -239,8 +273,12 @@
          (st r1 16 r0)
          (ld r0 sp 0)
          (st r1 20 r0)
-         (push r3) (push r5)
          (lea r2 r1 32)              ; edx = oldset
+         (la r0 __love_osv)
+         (ld r0 r0 0)
+         (cmp r0 2)
+         (br ge sj-bsd)
+         (push r3) (push r5)
          (li r3 0)                   ; ebx = SIG_BLOCK
          (li r1 0)                   ; ecx = NULL (read only)
          (li r5 8)                   ; esi = sigsetsize
@@ -249,16 +287,50 @@
          (pop r5) (pop r3)
          (li r0 0)
          (ret)
+         (label sj-bsd)              ; sigprocmask(SIG_BLOCK, NULL, oldset), a 16-byte set
+         (li r1 340)                 ; freebsd's
+         (cmp r0 3)
+         (br ne sj-num)
+         (li r1 293)                 ; netbsd's __sigprocmask14
+         (label sj-num)
+         (push r2)
+         (li r2 0) (push r2)
+         (li r2 1) (push r2)
+         (push r2)
+         (mov r0 r1)
+         (sys)
+         (pop r1) (pop r1) (pop r1) (pop r1)
+         (li r0 0)
+         (ret)
 
          (label siglongjmp)
          (ld r6 sp 4)                ; edi <- buf, through the kernel
          (ld r4 sp 8)                ; ebp <- val
-         (li r3 2)                   ; ebx = SIG_SETMASK
          (lea r1 r6 32)              ; ecx = the saved mask
+         (la r0 __love_osv)
+         (ld r0 r0 0)
+         (cmp r0 2)
+         (br ge lj-bsd)
+         (li r3 2)                   ; ebx = SIG_SETMASK
          (li r2 0)
          (li r5 8)
          (li r0 175)
          (sys)
+         (jmp lj-file)
+         (label lj-bsd)              ; sigprocmask(SIG_SETMASK, mask, NULL)
+         (li r2 340)
+         (cmp r0 3)
+         (br ne lj-num)
+         (li r2 293)
+         (label lj-num)
+         (li r0 0) (push r0)
+         (push r1)
+         (li r0 3) (push r0)
+         (push r0)
+         (mov r0 r2)
+         (sys)
+         (pop r1) (pop r1) (pop r1) (pop r1)
+         (label lj-file)
          (mov r0 r4)
          (ld r3 r6 0)
          (ld r5 r6 4)
@@ -271,6 +343,25 @@
          (li r0 1)
          (label lj-live)
          (jmpr r1)
+
+         ; -- __love_sigret0: linux's return from the old frame, the one a handler without
+         ;    SA_SIGINFO gets on i386: the signal number off, then sigreturn
+         (label __love_sigret0)
+         (pop r0)
+         (li r0 119)                 ; sigreturn
+         (sys)
+
+         ; -- __love_nb_sigtramp: netbsd's return path. the handler returns onto the signal
+         ;    number with the ucontext 140 bytes up; setcontext takes it in the arg slot
+         (label __love_nb_sigtramp)
+         (lea r0 sp 140)
+         (st sp 4 r0)
+         (li r0 308)                 ; setcontext
+         (sys)
+         (li r1 -1)
+         (st sp 4 r1)
+         (li r0 1)                   ; exit
+         (sys)
 
          (label __love_sigret)
          (li r0 173)                 ; rt_sigreturn
@@ -1095,7 +1186,7 @@
                   (arch = 'arm)
                   '("__love_sys" "__love_sysw" "__love_sys8" "__love_fbfork" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone" "__love_tp")
                   (arch = 'i386)
-                  '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp")
+                  '("__love_sys" "__love_sysw" "__love_sys8" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_sigret0" "__love_nb_sigtramp" "__love_clone" "__love_tp")
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
                     "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp"))
                () () () () () () ())))

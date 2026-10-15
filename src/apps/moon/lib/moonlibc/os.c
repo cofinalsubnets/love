@@ -68,6 +68,41 @@ long __love_t32(long n, long a, long b, long c, long d, long e, long f) {
   return -38; }
 #endif
 
+#ifdef __i386__
+/* a timespec in a BSD's own shape: freebsd's 32-bit time_t cannot say past 2038, EOVERFLOW */
+union __bts { __fbts f; __nbts n; };
+static long bnar(long p, union __bts *o, int k) {
+  struct timespec const *t = (struct timespec const *) p;
+  for (int i = 0; i < k; i++) {
+    if (__love_osv == 3) o[i].n.tv_sec = t[i].tv_sec, o[i].n.tv_nsec = (long) t[i].tv_nsec;
+    else if (t[i].tv_sec != (int) t[i].tv_sec) return -75;
+    else o[i].f.tv_sec = (int) t[i].tv_sec, o[i].f.tv_nsec = (long) t[i].tv_nsec; }
+  return 0; }
+static void bwid(union __bts const *o, long p) {
+  *(struct timespec *) p = __love_osv == 3 ? __love_nbts(o->n) : __love_fbts(o->f); }
+
+long __love_tbsd(long n, long a, long b, long c, long d, long e, long f) {
+  union __bts o[2];
+  long nr = __love_nrfb(n), r;
+  if (nr < 0) return -38;
+  if (n == NR_clock_gettime) {
+    r = __love_sys(nr, a, (long) o, 0, 0, 0, 0);
+    if (!r) bwid(o, b);
+    return r; }
+  if (n == NR_nanosleep) {
+    if ((r = bnar(a, o, 1))) return r;
+    r = __love_sys(nr, (long) o, b ? (long) (o + 1) : 0, 0, 0, 0, 0);
+    if (b && __love_parked(r)) bwid(o + 1, b);           /* EINTR: the time left */
+    return r; }
+  if (n == NR_ppoll || n == NR_pselect6) {
+    long t = n == NR_ppoll ? c : e;
+    if (t && (r = bnar(t, o, 1))) return r;
+    return n == NR_ppoll ? __love_sys(nr, a, b, t ? (long) o : 0, d, e, f)
+                         : __love_sys(nr, a, b, c, d, t ? (long) o : 0, f); }
+  if (c && (r = bnar(c, o, 2))) return r;                /* utimensat: two */
+  return __love_sys(nr, a, b, c ? (long) o : 0, d, e, f); }
+#endif
+
 long __love_osdetect(void) {
 #ifndef LvOsTranslate
   /* no tables on this arch: the kernel is whichever one the build was compiled
@@ -105,6 +140,15 @@ long __love_osdetect(void) {
    * on arm. close(-1) is 6 on both, and the linux door leaves the carry unread: linux answers
    * -EBADF, freebsd +EBADF */
   return __love_sys(6, -1, 0, 0, 0, 0, 0) > 0 ? 2 : 1;
+# elif defined(__i386__)
+  /* crt0 asks only when ebx said a BSD: both take their args off the stack, so the door
+   * is set to that before kern.ostype parts the two */
+  __love_osv = 2;
+  { int mib[2] = {1, 1};
+    char b[16] = {0};
+    unsigned long len = sizeof b;
+    __love_sys(202, (long) mib, 2, (long) b, (long) &len, 0, 0);
+    return b[0] == 'N' ? 3 : 2; }
 # elif defined(__aarch64__) || defined(__riscv)
   long r = __love_nbp20(-1);
   if (r <= 0) return 1;
@@ -322,7 +366,10 @@ long __love_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
  * code and errno and unions the lanes where linux does. neither is read past
  * what the canonical shape can hold. */
 struct __fb_siginfo { int signo, err, code, pid; unsigned uid; int status; void *addr; };
-struct __nb_siginfo { int signo, code, err, pad;
+struct __nb_siginfo { int signo, code, err;
+#ifndef __ILP32__
+  int pad;
+#endif
   union { void *addr; struct { int pid; unsigned uid; int status; } chld; } u; };
 /* which lane a record carries. the lanes overlap on two of the three kernels, so
  * the question is asked once here rather than by every handler downstairs -- and

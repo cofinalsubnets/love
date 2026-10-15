@@ -2,10 +2,11 @@
 
 void *mmap(void *a, long n, int prot, int fl, int fd, off_t off) {
   long r;
-#if defined(__ARM_EABI__)
-  if (__love_osv >= 2)                     /* both BSDs: (addr len prot flags fd PAD pos), pos an even pair */
-    r = __love_fb8(__love_osv == 3 ? 197 : NR_fb_mmap, (long) a, n, prot, (int) __love_mapfb(fl), fd, 0,
-                   (long) off, (long) (off >> 32));
+#if defined(__ARM_EABI__) || defined(__i386__)
+  if (__love_osv >= 2) {                   /* (addr len prot flags fd [PAD] pos), pos a pair */
+    long nr = __love_osv == 3 ? 197 : NR_fb_mmap, f2 = (int) __love_mapfb(fl), lo = (long) off, hi = (long) (off >> 32);
+    r = __love_osv == 3 || LvFbPad ? __love_fb8(nr, (long) a, n, prot, f2, fd, 0, lo, hi)
+                                   : __love_fb8(nr, (long) a, n, prot, f2, fd, lo, hi, 0); }
   else
 #elif defined(LvOsTranslate)
   if (__love_osv == 3)

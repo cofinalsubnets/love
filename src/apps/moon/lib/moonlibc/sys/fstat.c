@@ -14,9 +14,9 @@ void __love_fbstat(struct __fb_stat const *f, struct stat *st) {
   st->st_size = f->st_size;
   st->st_blksize = f->st_blksize;
   st->st_blocks = f->st_blocks;
-  st->st_atim = f->st_atim;
-  st->st_mtim = f->st_mtim;
-  st->st_ctim = f->st_ctim; }
+  st->st_atim = __love_fbts(f->st_atim);
+  st->st_mtim = __love_fbts(f->st_mtim);
+  st->st_ctim = __love_fbts(f->st_ctim); }
 
 /* ..and the netbsd twin (__fstat50's shape), same sharing */
 void __love_nbstat(struct __nb_stat const *f, struct stat *st) {
@@ -31,9 +31,9 @@ void __love_nbstat(struct __nb_stat const *f, struct stat *st) {
   st->st_size = f->size;
   st->st_blksize = f->blksize;
   st->st_blocks = f->blocks;
-  st->st_atim = f->atim;
-  st->st_mtim = f->mtim;
-  st->st_ctim = f->ctim; }
+  st->st_atim = __love_nbts(f->atim);
+  st->st_mtim = __love_nbts(f->mtim);
+  st->st_ctim = __love_nbts(f->ctim); }
 
 #endif
 

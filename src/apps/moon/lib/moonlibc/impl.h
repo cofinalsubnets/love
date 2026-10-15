@@ -56,18 +56,26 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
  * lays x64, arm64 and riscv). Where it is absent netbsd's sigaction refuses BY NAME
  * rather than register a trampoline that is not there; freebsd on the same arch
  * is unaffected. */
-#if !defined(__wasm__) && (!defined(__ILP32__) || defined(__ARM_EABI__))   /* wasm's one kernel is the page's loader; i386 is linux's alone */
+#if !defined(__wasm__)   /* wasm's one kernel is the page's loader */
 # define LvOsTranslate 1        /* os.c's tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
-#if defined(__ARM_EABI__)
+#if defined(__ARM_EABI__) || defined(__i386__)
 extern long __love_sys8(long n, long a, long b, long c, long d, long e, long f, long g, long h);   /* a BSD's mmap: 8 words */
 extern long long __love_sysw(long n, long a, long b, long c, long d, long e, long f);   /* ..and its lseek, r0:r1 */
+#ifdef __ARM_EABI__
 extern long __love_fbfork(void);         /* freebsd's fork, made from arm state */
+# define LvFbPad 1                       /* freebsd pads a 64-bit arg to an even slot here; netbsd does everywhere */
+#else
+# define LvFbPad 0
+#endif
 #elif defined(LvOsTranslate)
 extern long __love_sys7(long n, long a, long b, long c, long d, long e, long f, long g);   /* the 7th arg rides the stack (netbsd mmap) */
 #endif
 extern void __love_sigret(void);
+#ifdef __i386__
+extern void __love_sigret0(void);          /* the old frame's sigreturn */
+#endif
 extern int main(int, char**);
 
 /* FILE: stdio.h hands out an opaque pointer, so a member touching a stream
@@ -524,6 +532,10 @@ struct _IO_FILE {
 #define NR_clock_nanosleep 407   /* clock_nanosleep_time64 */
 #define NR_statfs64       268
 #define NR_fstatfs64      269
+#define NR_lseek           19    /* the BSDs' keys in os.c's map, as arm's */
+#define NR_fstat          197
+#define NR_newfstatat     300
+#define NR_nanosleep      162
 #define NR_set_thread_area 243
 #else
 #define NR_read             0
@@ -697,10 +709,23 @@ static int __love_t64(long n) {
 /* a BSD's error as the tail parks it, -(errno+4096): the band and not the sign, since a
  * 32-bit address above 2G reads negative */
 static int __love_parked(long r) { return r < -4096L && r >= -4096L - 256; }
+#ifdef __i386__
+/* i386's BSDs keep their own timespec (__fbts, __nbts): a call carrying one narrows it going
+ * in and widens it coming back (os.c), its answer parked as any BSD's */
+long __love_tbsd(long n, long a, long b, long c, long d, long e, long f);
+static int __love_tbsdn(long n) {
+  return n == NR_clock_gettime || n == NR_nanosleep || n == NR_ppoll || n == NR_pselect6
+      || n == NR_utimensat; }
+#endif
 static long __love_call(long n, long a, long b, long c, long d, long e, long f) {
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();
   if (v < 0) return __love_inle(n, a, b, c, d, e, f);   /* before the BSD read: inle translates nothing */
+#ifdef __i386__
+  if (v >= 2 && __love_tbsdn(n)) {
+    long r = __love_tbsd(n, a, b, c, d, e, f);
+    return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
+#endif
   if (v >= 2) {
     n = __love_nrfb(n);
     if (n < 0) return -38; }                          /* ENOSYS, canonically */
@@ -728,7 +753,7 @@ static long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
 #else
   return r; }
 #endif
-#if defined(__ARM_EABI__)
+#if defined(__ARM_EABI__) || defined(__i386__)
 static long __love_fb8(long n, long a, long b, long c, long d, long e, long f, long g, long h) {
   long r = __love_sys8(n, a, b, c, d, e, f, g, h);
   return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
@@ -794,7 +819,17 @@ _Static_assert(sizeof(struct __lx_statx) == 256, "statx buffer is the kernel's 2
 #ifdef __ILP32__
 int __love_statx(int dirfd, char const *p, int fl, struct stat *st);   /* fstat.c's, the stat trio's floor */
 #endif
-struct __fb_stat {                    /* ino64, 224 bytes; mode is 16-BIT */
+/* a BSD's own timespec. i386's: freebsd keeps a 32-bit time_t, netbsd a 64-bit one on 4
+ * with a 32-bit nsec; everywhere else both are ours */
+#ifdef __i386__
+typedef struct { int tv_sec; long tv_nsec; } __fbts;
+typedef struct { long long tv_sec; long tv_nsec; } __nbts;
+#else
+typedef struct timespec __fbts, __nbts;
+#endif
+static struct timespec __love_fbts(__fbts t) { struct timespec r = { t.tv_sec, t.tv_nsec }; return r; }
+static struct timespec __love_nbts(__nbts t) { struct timespec r = { t.tv_sec, t.tv_nsec }; return r; }
+struct __fb_stat {                    /* ino64, 224 bytes (208 on i386); mode is 16-BIT */
   unsigned long long st_dev;
   unsigned long long st_ino;
   unsigned long long st_nlink;
@@ -804,10 +839,14 @@ struct __fb_stat {                    /* ino64, 224 bytes; mode is 16-BIT */
   unsigned int  st_gid;
   int           __pad0;
   unsigned long long st_rdev;
-  struct timespec st_atim;              /* a 64-bit time_t on every arch but i386 */
-  struct timespec st_mtim;
-  struct timespec st_ctim;
-  struct timespec st_birthtim;
+#ifdef __i386__
+  int st_atim_ext; __fbts st_atim;     /* i386's 32-bit time_t, a pad word ahead of each */
+  int st_mtim_ext; __fbts st_mtim;
+  int st_ctim_ext; __fbts st_ctim;
+  int st_birthtim_ext; __fbts st_birthtim;
+#else
+  __fbts st_atim, st_mtim, st_ctim, st_birthtim;
+#endif
   long long     st_size;
   long long     st_blocks;
   int           st_blksize;
@@ -817,7 +856,11 @@ struct __fb_stat {                    /* ino64, 224 bytes; mode is 16-BIT */
   unsigned long long __spare[9];
 };
 #ifdef LvOsTranslate
+#ifdef __i386__
+_Static_assert(sizeof(struct __fb_stat) == 208, "freebsd's stat is 208 bytes on i386");
+#else
 _Static_assert(sizeof(struct __fb_stat) == 224, "freebsd's stat is 224 bytes");
+#endif
 #endif
 struct __fb_dirent {                  /* the ino64 record getdirentries fills */
   unsigned long long d_ino;
@@ -845,10 +888,15 @@ struct __fb_msghdr {                  /* BOTH BSDs: int-wide lengths, 48 bytes (
   unsigned int controllen;
   int flags;
 };
-/* a BSD's cmsg: the 12-byte head (len level type, all ints) and its data at 16 on 8, but
- * for freebsd on a 32-bit arch, which aligns on 4 and lays the data at 12 */
-static unsigned long __love_cmh(void) { return sizeof(long) == 8 || __love_osv == 3 ? 16 : 12; }
-static unsigned long __love_cma(void) { return sizeof(long) == 8 || __love_osv == 3 ? 8 : 4; }
+/* a BSD's cmsg: the 12-byte head (len level type, all ints), its data at the head rounded
+ * up to the kernel's alignment -- 8 on 64-bit and netbsd's arm, 4 on i386 and freebsd's arm */
+#ifdef __ARM_EABI__
+static unsigned long __love_cmh(void) { return __love_osv == 3 ? 16 : 12; }
+static unsigned long __love_cma(void) { return __love_osv == 3 ? 8 : 4; }
+#else
+static unsigned long __love_cmh(void) { return sizeof(long) == 8 ? 16 : 12; }
+static unsigned long __love_cma(void) { return sizeof(long); }
+#endif
 struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 speeds, no c_line */
   unsigned int c_iflag, c_oflag, c_cflag, c_lflag;
   unsigned char c_cc[20];
@@ -869,17 +917,27 @@ extern void __love_tiocan(struct __fb_termios const *f, struct termios *t);
 #define NR_nb_sigaction_sigtramp 340   /* (sig, nsa, osa, tramp, 2) */
 struct __nb_stat {                    /* the timespec quartet mid-struct, each time_t 64-bit */
   unsigned long long dev;
-  unsigned int mode, _p0;
+  unsigned int mode;
+#ifndef __i386__
+  unsigned int _p0;                   /* a 64-bit word sits on 8, but on i386 */
+#endif
   unsigned long long ino;
-  unsigned int nlink, uid, gid, _p1;
+  unsigned int nlink, uid, gid;
+#ifndef __i386__
+  unsigned int _p1;
+#endif
   unsigned long long rdev;
-  struct timespec atim, mtim, ctim, btim;
+  __nbts atim, mtim, ctim, btim;
   long long size, blocks;
   int blksize;
   unsigned int flags, gen, spare0, spare1;
 };
 #ifdef LvOsTranslate
+#ifdef __i386__
+_Static_assert(sizeof(struct __nb_stat) == 124, "netbsd's stat is 124 bytes on i386");
+#else
 _Static_assert(sizeof(struct __nb_stat) == 152, "netbsd's stat is 152 bytes");
+#endif
 #endif
 struct __nb_dirent {                  /* __getdents30's record: name at byte 13 */
   unsigned long long fileno;

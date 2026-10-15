@@ -586,11 +586,18 @@
           (call main)
           (pop r6)
           (ret))
-   ; the i386 entry (linux): argc at [esp], the vector's address handed to __love_start as a cdecl
-   ; argument with esp 16-aligned at the call, then exit_group 252 (exit 1 if it returns)
+   ; the i386 entry: argc at [esp], the vector's address and what ebx says of the kernel handed to
+   ; __love_start as cdecl arguments with esp 16-aligned at the call, then exit_group 252 (exit 1,
+   ; a BSD's, if it returns)
    crt0-i386 '((mov r0 sp)
                (and sp sp -16)
-               (sub sp sp 12)
+               (sub sp sp 8)
+               (li r1 1)                ; linux zeroes ebx at entry: osv 1
+               (cmp r3 0)
+               (br eq c0i-lx)
+               (li r1 0)                ; both BSDs hand ps_strings there: os.c asks which
+               (label c0i-lx)
+               (push r1)
                (push r0)
                (call __love_start)
                (mov r3 r0) (li r0 252) (sys)

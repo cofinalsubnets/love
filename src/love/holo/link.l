@@ -774,7 +774,7 @@
        ; netbsd's exec requires the ident note (no note -> ENOEXEC; other kernels ignore
        ; notes). 24 bytes in the header reserve, pt_note plus an alloc section so strip
        ; keeps it, on the ISAs that can meet that kernel.
-       bsd? (elem mach '(62 183 243) || target = 'arm)   ; the ISAs that can meet a BSD
+       bsd? (elem mach '(62 183 243 3) || target = 'arm)   ; the ISAs that can meet a BSD
        nb? (wx? && bsd?)
        hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 3 1) + (img? ? 1 0) + (nb? ? 1 0)) + (nb? ? 24 0))
        nbo (hdrsz - 24)

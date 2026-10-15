@@ -11,6 +11,14 @@ int kevent(int kq, struct kevent const *ch, int nch,
   if (__love_osv < 2) { __errno_v = ENOSYS; return -1; }
   int nb = __love_osv == 3;
   long nr = nb ? 435 : NR_fb_kevent;   /* __kevent50 */
+  long tw = (long) ts;                 /* the timeout, in the kernel's own timespec */
+#ifdef __i386__
+  __fbts f32; __nbts n32;
+  if (ts && nb) n32.tv_sec = ts->tv_sec, n32.tv_nsec = (long) ts->tv_nsec, tw = (long) &n32;
+  else if (ts) {
+    if (ts->tv_sec != (int) ts->tv_sec) { __errno_v = EOVERFLOW; return -1; }
+    f32.tv_sec = (int) ts->tv_sec, f32.tv_nsec = (long) ts->tv_nsec, tw = (long) &f32; }
+#endif
   /* changes first (chunked through the translation buffer, no timeout leg),
    * then the wait -- the order one kernel call keeps. */
   for (int at = 0; at < nch; at += 8) {
@@ -33,7 +41,7 @@ int kevent(int kq, struct kevent const *ch, int nch,
   if (nev <= 0) return 0;
   long got;
   if (!nb) {
-    got = er(fb6(nr, kq, 0, 0, (long) ev, nev, (long) ts));
+    got = er(fb6(nr, kq, 0, 0, (long) ev, nev, tw));
     if (got < 0) return -1;
     for (long i = 0; i < got; i++)
       if (ev[i].filter == EVFILT_SIGNAL)
@@ -42,7 +50,7 @@ int kevent(int kq, struct kevent const *ch, int nch,
     /* through the repack buffer: up to 8 a call (fewer than asked is a legal
      * kevent answer; a hungrier caller loops) */
     struct __nb_kevent no[8];
-    got = er(fb6(nr, kq, 0, 0, (long) no, nev > 8 ? 8 : nev, (long) ts));
+    got = er(fb6(nr, kq, 0, 0, (long) no, nev > 8 ? 8 : nev, tw));
     if (got < 0) return -1;
     for (long i = 0; i < got; i++) {
       long f = -(long) no[i].filter - 1;

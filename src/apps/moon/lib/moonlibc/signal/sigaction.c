@@ -105,6 +105,9 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
 #if defined(__aarch64__) || defined(__riscv) || defined(__ARM_EABI__)   /* the kernel's own return path */
     ka.flags = (unsigned long) (unsigned int) a->sa_flags;
     ka.restorer = 0;
+#elif defined(__i386__)
+    ka.flags = (unsigned long) (unsigned int) a->sa_flags | 67108864UL;   /* SA_RESTORER */
+    ka.restorer = (void *) (a->sa_flags & SA_SIGINFO ? __love_sigret : __love_sigret0);   /* the frame decides */
 #else
     ka.flags = (unsigned long) (unsigned int) a->sa_flags | 67108864UL;   /* SA_RESTORER */
     ka.restorer = (void *) __love_sigret;
