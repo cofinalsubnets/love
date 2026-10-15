@@ -1,12 +1,6 @@
-; test/law/vi.l -- the editor's laws, held by assertion: every key sequence
-; below drives the pure engine (vstep, one byte at a time) and reads the
-; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
-;
-;   cat test/00-init.l src/apps/kore/text.l src/apps/kore/core.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/libra/lint.l \
-;       src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/hues.l src/apps/vi/core.l test/law/vi.l | out/love
-;
-; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
-; the 27-element list shape), and answers the state; the helpers read it back.
+; test/law/vi.l -- the editor's laws: key sequences drive the pure engine a byte at a
+; time and read the tablet back; no tty, port or file. run by `make test_vi`'s cat.
+; (vgo lines keys) feeds the text's bytes to a fresh buffer and answers the state.
 (borrow 'vi) ; the editor's engine just registered module 'vi in this cat
 
 (: (bytes s) (: n #s (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc))) (go (n - 1) ()))
@@ -36,9 +30,8 @@
       (at (vgo '("a" "b" "c") "Ggg") = '(0 0))
       (at (vgo '("a" "b" "c") "3gg") = '(2 0)))
 
-; --- the diagonals: alt-y u b n arrive as 256 + the letter, a vertical then a
-; horizontal, the count on both; fenced like their halves; not a range, so an
-; operator is dropped ---
+; --- the diagonals: alt-y u b n arrive as 256 + the letter, a vertical then a horizontal,
+; the count on both; not a range, so an operator is dropped ---
    _ (test
       (at (vgob '("abc" "def" "ghi") (bytes "l" + [354])) = '(1 0))        ; alt-b: down-left
       (at (vgob '("abc" "def" "ghi") [366]) = '(1 1))                      ; alt-n: down-right
@@ -92,8 +85,7 @@
       (at (vgob '("ab" "cd") [106 105 BS]) = '(0 2))
       (at (vgob '("abc") [65 27]) = '(0 2))                             ; esc steps left, fenced
       (st? (vgob '("a") [105 120 27]) 'mode = 'n))
-   ; the arrows in insert (edkey's -1 -2 -8 -9): the cursor may sit past the last
-   ; char, the fences are the line's ends, and up and down keep the goal column
+   ; insert's arrows: the cursor may sit past the last char, up and down keep the goal column
    _ (test
       (lns (vgob '("abc") [65 -1 120]) = '("abxc"))                     ; A, left, x
       (lns (vgob '("abc") [105 -2 -2 -2 -2 120]) = '("abcx"))          ; i, right past the end
@@ -157,9 +149,7 @@
       (at (vgo '("abc") " ") = '(0 1))
       (at (vgob '("abc") [108 108 8]) = '(0 1)))
 
-; --- % over the delimiters. in a .l buffer the paint's lexer says which ( is
-;     code, so a ) inside a literal is not a mate; in any other file every one
-;     counts, which is the classic vi rule and the fallback ------------------
+; --- % over the delimiters: in a .l buffer a ) inside a literal is not a mate, elsewhere all count ---
    _ (test
       (at (vgo '("(a (b) c)") "%") = '(0 8))
       (at (vgo '("(a (b) c)") "$%") = '(0 0))
@@ -179,8 +169,7 @@
       (at (vgo '("abcabcabc") "$Fa;") = '(0 3))
       (at (vgo '("abc") ";") = '(0 0)))                      ; with none remembered
 
-; --- the text objects: i and a after an operator. every one answers a range in
-;     vapply's vocabulary, so ci( di( yi( are one object under three operators --
+; --- the text objects: i and a after an operator, one range under every operator ---
    _ (test
       (lns (vgo '("f(ab)g") "lllci(X") = '("f(X)g"))
       (lns (vgo '("f(ab)g") "lci(X") = '("f(X)g"))            ; on the delimiter itself
@@ -194,7 +183,7 @@
       (st? (vgo '("f(ab)g") "lllci(") 'mode = 'i)
       (lns (vgo '("f()g") "lldi(") = '("f()g")))              ; an empty pair cuts nothing
    _ (test
-      ; the bracket objects cross rows, which is the whole point in a .l file
+      ; the bracket objects cross rows
       (lns (vgo '("(a" " b" " c)") "di(") = '("()"))
       (lns (vgo '("x(a" " b" " c)y") "lda(") = '("xy"))
       ((vgo '("(a" " b)" "z") "yi(" 'reg) = '(chr "a\n b"))
@@ -215,8 +204,7 @@
       (lns (vgo '("a" "b" "" "c") "dap") = '("c"))
       (lns (vgo '("a" "" "" "b") "jdip") = '("a" "b")))       ; a blank run is a paragraph too
 
-; --- `.` -- the last CHANGE again, and a count on it replaces the count it
-;     carried. a motion, an undo and a yank are not changes and do not arm it --
+; --- `.` repeats the last change, a count replacing its own; motions, undo and yank do not arm it ---
    _ (test
       (lns (vgo '("abcdef") "x..") = '("def"))
       (lns (vgo '("abcdefgh") "x3.") = '("efgh"))             ; the count is replaced
@@ -259,7 +247,7 @@
       (lns (vgob '("x -3 y") [24]) = '("x -4 y"))                    ; the sign rides along
       (st? (vgob '("abc") [1]) 'msg = "no number here"))
    _ (test
-      ; * is word-bounded, which re.l has no node for -- the hunt checks the span
+      ; * is word-bounded: the hunt checks the span
       (at (vgo '("foo bar" "xfoo" "foo") "*") = '(2 0))
       (at (vgo '("foo" "bar" "foo z") "G#") = '(0 0))
       (st? (vgo '("   ") "*") 'msg = "no word under the cursor")
@@ -280,8 +268,7 @@
       (lns (vgob '("  foo bar") ((bytes "A") + [21])) = '("  "))
       (lns (vgob '("ab") ((bytes "I") + [21])) = '("ab")))            ; nothing before it
 
-; --- an operator that crosses rows is charwise, the way vim's is. the linewise
-;     motions (j k G gg) stay linewise, and dw stops at the line it ends -----
+; --- an operator across rows is charwise; j k G gg stay linewise, dw stops at its line's end ---
    _ (test
       (lns (vgo '("ab" "cd ef") "ldw") = '("a" "cd ef"))
       (lns (vgo '("a" "b" "c") "d2w") = '("" "c"))
@@ -339,9 +326,8 @@
       (st? (vgob '("a") ((bytes ":vsplit x") + [CR])) 'dos = '(beside "x"))
       !(st? (vgob '("a") ((bytes ":w") + [CR])) 'dos))
 
-; --- visual mode: v and V select from the cursor, the motions stretch it, o swaps
-; --- the ends, an operator takes it charwise with both ends in or by lines, and
-; --- escape or the same key again leaves; the frame reverses the selection ---
+; --- visual mode: v and V select, motions stretch, o swaps the ends, an operator takes it
+; charwise or by lines, escape or the same key leaves; the frame reverses the selection ---
    (has? h n) (:- (go 0) (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))))
    (vmini ls ks) (vgo ls ks @ st (pin st 'w 8, pin st 'h 4, vframe st))
    _ (test
@@ -390,10 +376,8 @@
          f (vframe st)
          ((st 'top = 2) && two? [f])))
 
-; --- vfresh: the frame as a refresh. the first one is everything, and after that
-;     only the rows that differ from the ones the last frame put there, each
-;     placed absolutely. the whole thing rides the terminal's synchronised-output
-;     bracket, so a scroll lands in one piece rather than line by line ---------
+; --- vfresh: the first refresh is everything, then only the rows that differ, placed
+; absolutely, inside the synchronised-output bracket ---
    (small ls ks) (vgo ls ks @ st (pin st 'w 16, pin st 'h 4, st))
    (hlon st) (pin st 'pens (hues-pens hue-theme ()), pin st 'hl 1, st)
    SY (E$ + "[?2026h") YS (E$ + "[?2026l")
@@ -417,8 +401,7 @@
          f (vfresh st)
          (f = (SY + E$ + "[H" + "c" + E$ + "[K\r\n" + "d" + E$ + "[K\r\n" + "e" + E$ + "[K\r\n"
                  + place 4 "t  5,1" + E$ + "[3;1H" + YS))))
-   ; and the law that keeps the two honest: what a fresh refresh lays is what
-   ; vframe lays, rows for rows and status for status
+   ; a fresh refresh lays exactly what vframe lays
    _ (test
       (: a (small '("ab" "cd") "j") b (small '("ab" "cd") "j")
          (vlay a = (vlay b)))
@@ -427,15 +410,13 @@
          (vframe st = (E$ + "[H" + <L 0 + E$ + "[K\r\n" + <L 1 + E$ + "[K\r\n" + <L 2 + E$ + "[K\r\n"
                 + <>L + E$ + "[K" + E$ + "[" + show <>>L + ";" + show <>>>L + "H"))))
 
-; --- the painted row is cached against the text that made it, so a keystroke
-;     that only moves the cursor re-lexes nothing -----------------------------
+; --- the painted row is cached against its text: a cursor move re-lexes nothing ---
    _ (test
       (: st (hlon (small '("(map f)" "(g 1)") "")) _ (vfresh st)
          r0 (st 'hlrow 0)
          ; [[text carry from to] painted]: the key is what it was painted from
          (<r0 = ["(map f)" 0 0 7 'l] && 0 < #<>r0))
-      ; the cache is keyed by SCREEN row, so it is the height of the view and
-      ; never the height of the file
+      ; keyed by screen row: the view's height, never the file's
       (hlon (small '("a" "b" "c" "d" "e" "f") "") @ st (vfresh st, vfeed st (bytes "G"),
                                                         vfresh st,
                                                         3 = #(keys (st 'hlrow)))))
@@ -445,8 +426,7 @@
    (see st ks) (vfeed st (string? ks ? (bytes ks) ks), vframe st, st)
    (body st) <(vlay st)
    _ (test
-      ; nowrap is the default: 'left slides so the cursor shows, and stops at
-      ; the line's end rather than running off into blank columns
+      ; nowrap is the default: 'left slides so the cursor shows, stopping at the line's end
       (see (box '("abcdefghij") 8 4) "$" @ st
        ((st 'left = 2) && (body st = '("cdefghij" "~" "~"))))
       (see (see (box '("abcdefghij") 8 4) "$") "0" @ st
@@ -498,8 +478,7 @@
       (vgo '("a") "" @ q (pin q 'hl 1, vload q '("z") "n.txt", !(q 'hl)))
       (vgo '("a") "" @ q (vload q () "e.l", lns q = '(""))))                  ; an empty read is one empty line
 
-; --- libra ⚖ on the buffer: :lint weighs what you are looking at. one scanner
-;     (src/apps/libra/lint.l) under libra's faces and this one ---------------------------
+; --- :lint weighs the buffer with libra's scanner ---
    (ex ls s) (vgob ls ((bytes (":" + s)) + [CR]))
    _ (test
       (st? (ex '("(: a 1)") "lint") 'msg = "balance clean")
@@ -509,9 +488,7 @@
       (ex '("(f x)" "(: a 1" "(g y)") "lint" @ q
        ((at q = '(1 0)) && (q 'msg = "1 warning: 2,1 unclosed ("))))
 
-; --- the ex language: addresses, then the commands that read a range ---
-; every line below goes in through the same `:` the hand does, so what is lawed
-; is the parse as well as the edit.
+; --- the ex language: addresses, then the range commands, each typed through `:` ---
    ab5 '("aa" "bb" "cc" "dd" "ee")
    _ (test
       ; addresses: N . $ , ; % and the +N / -N offsets
@@ -564,8 +541,7 @@
       (ex '("ab" "cd" "ab") "s/ab/zz/" @ q (q 'pattx = "ab")))
 
    _ (test
-      ; :g and :v -- the body runs from the last row up, so a delete never
-      ; moves a row still to be visited, and the whole sweep is one undo
+      ; :g and :v run from the last row up, so a delete moves no row still to visit; one undo
       (lns (ex ab5 "g/[bd]/d") = '("aa" "cc" "ee"))
       (lns (ex ab5 "v/[bd]/d") = '("bb" "dd"))
       (lns (ex '("a1" "b2" "a3") "g/a/s/[0-9]/X/") = '("aX" "b2" "aX"))
@@ -610,8 +586,7 @@
    (frame3 tail) (E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
                      + tail + E$ + "[K" + E$ + "[1;1H")
    _ (test
-      ; 11 characters into a view 8 wide: the head goes, `<` says so, and the
-      ; tail -- which is where the news lives -- is what you are left looking at
+      ; 11 characters into 8 columns: the head goes and `<` says so
       (miniw '("ab") "" "abcdefghijk" = (frame3 "<efghijk"))
       (miniw '("ab") "" "12345678" = (frame3 "12345678"))    ; exactly w: untouched
       (miniw '("ab") "" "short" = (frame3 "short")))
@@ -623,15 +598,12 @@
       (mini '("ab") "/x" @ f (snip f (#f - 6) #f = (E$ + "[4;3H")))
       (mini '("ab") "" @ f (snip f (#f - 6) #f = (E$ + "[1;1H"))))
 
-; --- the syntax paint (src/apps/vi/hue.l): classes, the carry, and the one law
-; that keeps every exact-frame assertion above honest --------------------------
+; --- the syntax paint (hue.l): classes, the carry, and paint invariance ---
    hbk (hue-book ())
    hlx (s \ in \ keep \ hue-lex hbk s in keep)
    (klass s) (map (r \ <r) <(hue-lex hbk s 0 1))
    (runs s in) <(hue-lex hbk s in 1)
-   ; strip SGR and only SGR: \e[<digits;>m goes, \e[H and \e[K and \e[r;cH stay,
-   ; because those are the frame's own geometry and the whole point is that the
-   ; paint did not touch it
+   ; strip SGR only: \e[..m goes, the frame's geometry (\e[H \e[K \e[r;cH) stays
    (bare s)
     (: n #s
        (dig? c) ((48 <= c && c <= 57) || c = 59)
@@ -645,8 +617,8 @@
            (go (i + 1) (acc + string (s i))))
        (go 0 ""))
 
-; --- one class per token, table order: a word lane beats the punct lanes, the
-;     number lane beats a leading sigil, and punct inside a name is the name ---
+; --- one class per token: a word lane beats punct, a number beats a leading sigil,
+; punct inside a name is the name ---
    _ (test
       (klass "; hi" = '(comment))
       (klass "#!/x" = '(comment))
@@ -667,29 +639,24 @@
       (klass "1.5e-3" = '(number))
       (klass "1e10" = '(number)))
 
-; --- a stop still ends the token and the walk still moves on. `,` is one: it
-;     reads as a symbol and terminates one ((sound "a,b") answers a, then ,b),
-;     so the lexer meets it bare. it wears the `comma` class (hue.l's `sep` tag)
-;     because it is its own case everywhere else too. a control byte is the case
-;     that stays unclaimed, and it ends a token exactly the same way ----------
+; --- a stop ends the token and the walk moves on: `,` wears the comma class, a control
+; byte stays unclaimed, and both end a token alike ---
    _ (test
       (klass "," = '(comma))
       (runs "," 0 = '((comma 0 1)))
       (runs "map,map" 0 = '((book 0 3) (comma 3 4) (book 4 7)))
       (runs ("map" + (string 1) + "map") 0 = '((book 0 3) (book 4 7))))   ; unclaimed: no run of its own
 
-; --- the carry: a string spans lines (papel.l's css is forty of them), so a
-;     line's class depends on where the line before it ended -----------------
+; --- the carry: a string spans lines, so a line's class depends on where the last one ended ---
    _ (test
       (hue-carry hlx '("(: css \"a" "b\" 1)" "x") = '(0 1 0))
       (runs "a ; b\" c" 1 = '((string 0 6)))        ; carried in: the ; is still string
       (runs "a ; b" 1 = '((string 0 5)))            ; and it stays open to the end
-      ; keep () is the same walk with its answers dropped -- one lexer, provably
+      ; keep () is the same walk with its answers dropped
       (: a (hue-lex hbk "\"x" 0 1) b (hue-lex hbk "\"x" 0 ())
          (<>a = <>b && !(two? <b))))
 
-; --- the word lanes are asked, not listed. only the three special forms are
-;     written out, and they are the grammar rather than the book ---------------
+; --- the word lanes are asked of the book; only the three special forms are written out ---
    _ (test
       (map hue-arg (hue-tagged 'word) @ ls
        ((#(filter nom? ls) = 3) &&                  ; macros values names
@@ -697,8 +664,7 @@
       (0 < #(hue-words 'macros))
       (0 < #(hue-words 'values))
       (0 < #(hue-words 'names))
-      ; the probes answer what they claim to: a known macro, a known constant, a
-      ; known verb -- each in its lane and no other
+      ; a known macro, constant and verb, each in its lane only
       (elem "assert" (hue-words 'macros))
       (elem "&&" (hue-words 'macros))                   ; not filtered: a sigil macro is a macro
       (elem "tau" (hue-words 'values))
@@ -707,10 +673,8 @@
       (nelem "$" (hue-words 'values))
       ; sorted, because the generator freezes them into a diff-gated file
       (hue-words 'names @ w (w = (sort w)))
-      ; the stability law. both book lanes are positive tests -- a name does
-      ; something or is something -- so session data (argv, cmdline, `parsed`,
-      ; which is bound only when love was handed a file) falls out of both, and
-      ; the generated syntax file cannot depend on how the generator was started.
+      ; both lanes are positive tests, so session data (argv, cmdline, `parsed`) falls out
+      ; and the generated file cannot depend on how the generator was started
       (all (w \ lit? (ev (intern w))) (hue-words 'names))
       (all (w \ !(lit? (ev (intern w)))) (hue-words 'values))
       (nelem "argv" (hue-words 'names))
@@ -729,8 +693,7 @@
       (all (r \ any (c \ hue-grp c = <r) hue-classes || any (c \ hue-grp c = <r) hues-classes)
            hue-theme))
 
-; --- paint invariance: colour adds colour and moves nothing. this is what keeps
-;     every byte-exact frame law above meaningful once the paint exists -------
+; --- paint invariance: colour adds colour and moves nothing ---
    (twin ls ks) (: a (vgo ls ks) b (vgo ls ks)
                    (pin a 'w 30, pin a 'h 5, pin b 'w 30, pin b 'h 5,
                     hlon b,
@@ -742,8 +705,7 @@
       (twin '("(a really quite long line that clips at the view edge)") "$")
       (twin '("") ""))
 
-; --- the other languages (src/apps/vi/hues.l): the name picks the lexer, else a #!
-;     naming a shell, and each answers hue-lex's shape, the carry included ----
+; --- the other languages (hues.l): the name, else a shell #!, picks the lexer; hue-lex's shape ---
    (hk g s in) (map (r \ <r) <(hues-lexer g s in 1))
    (hc g ls) (hue-carry (hues-lexer g) ls)
    _ (test
@@ -860,8 +822,7 @@
      (at (vfeed (vnew '("f(\")\", x)") "t.c") (bytes "%")) = '(0 8))
      (at (vgo '("f(\")\", x)") "%") = '(0 3))),
 
-    ; --- born on for a language hues-lang names, off for everything else (which is
-    ;     why "t" above is plain), and :hl flips it -------------------------------
+    ; --- the paint is on for a language hues-lang names, off otherwise; :hl flips it ---
     (test
      !(st? (vnew '("a") "t") 'hl)
      !(st? (vnew '("a") "") 'hl)
@@ -875,8 +836,7 @@
      (st? (vgob '("a") ((bytes ":hl") + [CR])) 'hl)
      !(st? (vgob '("a") ((bytes ":hl") + [CR] + (bytes ":hl") + [CR])) 'hl)),
 
-    ; --- characters, not bytes: the cursor sits on a character's first byte, every
-    ; motion steps whole ones, and the screen counts columns -- a wide one takes two.
+    ; --- characters, not bytes: motions step whole ones, a wide one takes two columns.
     ; "a日本b" is a(0) 日(1) 本(4) b(7), eight bytes and six columns
     (test
      (at (vgo '("a日本b") "l") = '(0 1)) (at (vgo '("a日本b") "ll") = '(0 4))

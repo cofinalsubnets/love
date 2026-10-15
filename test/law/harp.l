@@ -1,12 +1,5 @@
-; --- test/law/harp.l: harp, tidal's cycle algebra in love (src/apps/harp/harp.l) ---
-; the laws are queries: a pattern is a function from a span to events, so every
-; combinator can be checked by asking it for a span and reading the answer. the
-; shape under test is [wb we v] per event, with the times as plain numbers -- the
-; part is checked separately, where it is the point (onsets, tails, `appl`).
-;
-; the voices (src/apps/harp/play.l) are checked at the far end only: one cycle out the
-; timed sink keeps time, and one cycle into a .wav has the right header and puts
-; its energy where the pattern said. no gate can listen.
+; harp's laws: a pattern is a function from a span to events, so each law asks for a
+; span and reads [wb we v] back; the part is checked where it is the point (onsets).
 (borrow 'harp)
 (borrow 'play)                                  ; the voices, off their own module
 (:
@@ -15,29 +8,23 @@
    (evs p a b) (map we (p (qi a) (qi b)))
    (ons p a b) (map we (filter onset? (p (qi a) (qi b))))
    (cnt p a b) #(p (qi a) (qi b))
-   ; a query answers in EMISSION order, not time order -- a stack interleaves its
-   ; members -- so a law about which value lands where sorts first.
+   ; a query answers in emission order (a stack interleaves), so value laws sort first
    (vals p a b) (map (x \ evv x)
                      (sortby (u \ v \ (evwb u) < (evwb v))
                              (filter onset? (p (qi a) (qi b)))))
 
-   ; --- cycle time: what harp leans on the tree's rationals for --------------
-   ; not a re-test of `///` (src/love/boot/post.l owns that) -- these are the four
-   ; properties the algebra would break without, stated where they can be read.
+   ; --- cycle time: the four rational properties the algebra leans on ---
    _ (test ; exact, so a third of a cycle survives being multiplied back
              (((1 /// 3) * 3) = (1 /// 1))
              (((1 /// 3) + (1 /// 6)) = (1 /// 2))
-             ; ordered by value and not by shape: (1 3) and (1 6) compare on 1/3
-             ; against 1/6, which is the one a structural read gets backwards
+             ; ordered by value, not shape: a structural read gets 1/3 vs 1/6 backwards
              ((1 /// 6) < (1 /// 3))  !((1 /// 3) < (1 /// 6))
              ((-1 /// 2) < (1 /// 3)) ((7 /// 2) < (5 /// 1))
              ; equality by value, which is the whole of what onset? rests on
              ((qi 1) = (1 /// 1))  ((qi 2) = (4 /// 2))  !((qi 1) = (qi 2))
-             ; and a rational does not meet a tray: it answers (), silently, so
-             ; src/apps/harp/play.l crosses to frames through qnum and never after
+             ; a rational does not meet a tray: it answers (), so frames go through qnum
              !((iota 4) + (1 /// 3))
-             ; // truncates toward zero; a floor that did not step down would
-             ; put cycle -1/2 in cycle 0 and every negative span would be wrong
+             ; qfl floors where // truncates: cycle -1/2 is in cycle -1
              (0  = qfl (1 /// 2))   (-1 = qfl (-1 /// 2))
              (-1 = qfl (-1 /// 1))  (-2 = qfl (-3 /// 2))
              (0.25 = qnum (1 /// 4)))
@@ -54,8 +41,7 @@
              (3 = cnt (fast (qi 3) (pure 'a)) 0 1)
              (2 = cnt (stack [(pure 'a) (pure 'b)]) 0 1))
 
-   ; fast and slow undo each other, and rev is its own inverse -- the two laws a
-   ; change of variable has to keep or the times have drifted
+   ; fast and slow undo each other, and rev is its own inverse
    pp (fastcat [(pure 'a) (pure 'b) (pure 'c)])
    _ (test ((evs (fast (qi 3) (slow (qi 3) pp)) 0 2) = (evs pp 0 2))
              ((evs (rev (rev pp)) 0 2) = (evs pp 0 2))
@@ -65,9 +51,7 @@
              ((vals (rev pp) 1 2) = ['c 'b 'a]))
 
    ; --- whole vs part: the difference a player reads -------------------------
-   ; one event two cycles wide is struck in the cycle it begins and only sounds on
-   ; through the next -- which is exactly the onset test, and the only thing that
-   ; keeps a player from re-triggering a long note every cycle.
+   ; an event two cycles wide is struck where it begins and only sounds on through the next
    sl (slow (qi 2) (pure 'a))
    _ (test (1 = cnt sl 0 1)  (1 = cnt sl 1 2)
              (onset? (sl (qi 0) (qi 1) 0))  !(onset? (sl (qi 1) (qi 2) 0))
@@ -111,10 +95,7 @@
              ; and two `?`s in one sequence must not agree by construction
              ((#(evs (mini "a? b? c? d? e? f? g? h?") 0 8)) < 64))
 
-   ; --- the continuous patterns: a value everywhere, no structure of their own -
-   ; they take their shape from whatever they are combined with, so the law is the
-   ; span: a real one answers exactly one event spanning it, an empty one answers
-   ; nothing at all. an inverted test here silences the whole family in silence.
+   ; --- the continuous patterns: a real span answers one event spanning it, an empty one nothing ---
    _ (test
       (sine (qi 0) (qi 1) @ r
        (1 = #r && ((0 = qnum (evwb (r 0))) && (1 = qnum (evwe (r 0))))))
@@ -137,8 +118,7 @@
              ((pset (hit (pure "bd")) (note (pure 7)) (qi 0) (qi 1) @ r
                [(peep (evv (r 0)) 's ()) (peep (evv (r 0)) 'note ())])
               = ["bd" 7])
-             ; psets is # over several controls in one form, folded from the left: the
-             ; later word wins a key, and a pattern alone is itself
+             ; psets folds # from the left: the later word wins a key, a pattern alone is itself
              ((: r ((psets (hit (pure "bd")) (note (pure 7)) (gain (pure 0.5)) (note (pure 9))) (qi 0) (qi 1))
                  v (evv (r 0))
                  [(peep v 's ()) (peep v 'note ()) (peep v 'gain ())])
@@ -151,8 +131,7 @@
                (sort (map (x \ peep (evv x) 'pan ()) r)))
               = [0.0 0.0 1.0 1.0]))
 
-   ; --- a scalar where a pattern is wanted is one by its type: a string is mini, a
-   ; number is pure, and a time may be an int or a decimal, made exact
+   ; --- a scalar as a pattern: a string is mini, a number pure, a time int or decimal made exact
    _ (test ((map (x \ evv x) (stack ["bd sn"] (qi 0) (qi 1))) = ["bd" "sn"])
              ((map (x \ peep (evv x) 's ()) (hit "bd sn" (qi 0) (qi 1))) = ["bd" "sn"])
              ((peep (evv (note 7 (qi 0) (qi 1) 0)) 'note ()) = 7)
@@ -165,9 +144,7 @@
              ((peep (evv (((psets "sqr" (note -10) (slide 24)) (qi 0) (qi 1)) 0)) 'slide ()) = 24)
              ((evs (timecat [(3 . "a") (1 . "b")]) 0 1) = [[0 0.75 "a"] [0.75 1 "b"]]))
 
-   ; --- smooth: a sequence of numbers drifts from each value to the next, the value
-   ; at a time on the line between the two events' starts; a span answers one event
-   ; sampled at its middle, as the signals do, and a bare word is left as it is
+   ; --- smooth: values drift linearly between event starts; a span samples its middle
    (sm p b e) (evv (smooth p b e 0))
    _ (test ((sm (mini "0 10") (qi 0) qhalf) = 5.0)           ; the middle of the first step
              ((sm (mini "0 10") qhalf (qi 1)) = 5.0)         ; ..and of the second, on the way back to 0
@@ -178,10 +155,8 @@
              (1 = #(smooth (mini "0 10") (qi 0) (qi 1)))
              !(smooth (mini "0 10") (qi 1) (qi 1)))
 
-   ; --- slide: a control word like the rest, and at the voice a phase that bends: the
-   ; integral of a frequency rising at the slide's rate, the plain product when it holds.
-   ; a note that slides an octave over a second ends at 1/ln 2 times the cycles of one
-   ; that holds; a slide of 0 is the held note bit for bit; a sliding one is another
+   ; --- slide: a control word, and at the voice a phase integrating a rising frequency;
+   ; an octave over a second ends at 1/ln 2 of the held cycles, a slide of 0 is the held note
    _ (test ((peep (evv (slide (pure 3) (qi 0) (qi 1) 0)) 'slide ()) = 3)
              ((vphase 1.0 100.0 0.0) = 100.0)
              ((abs (vphase 1.0 100.0 0.6931471805599453 - 144.26950408889634)) < 0.0001)
@@ -213,9 +188,7 @@
              ; every step of a bad string is still a step: no hang, no scare
              (0 <= #(m "bd ] sn"))))
 
-; --- the voices, at the far end only ----------------------------------------
-; the pure half above is the gate; this half proves the pattern reaches PCM. it
-; wants a filesystem and the horn's policy word, so it is hosted-only.
+; --- the voices: the pattern reaches pcm (hosted only: files and HORN) ---
 (: _ (!(hosted && files) ? 0
         (: _ (setenv "HORN" "none")
            p (hit (mini "bd*2 [~ sn]"))
@@ -228,9 +201,7 @@
            _ (test (("RIFF" = snip s 0 4)  ("WAVE" = snip s 8 12)
                       ("data" = snip s 36 40)
                       (#s = (44 + (spc * 4)))))
-           ; the energy has to land where the pattern put it: a kick at 0 and at a
-           ; quarter cycle, a snare at three quarters, and near-nothing between --
-           ; the peak of n frames from frame a, left channel, sign-extended
+           ; energy lands where the pattern put it; pk: the left peak of n frames from a
            (pk a n) (: e (44 + ((a + n) * 4))
                        (go i m) (i >= e ? m
                                    (: v ((s i) + ((s (i + 1)) << 8))
@@ -240,22 +211,16 @@
            _ (test ((pk 0 2000) > 1000)                            ; kick
                      ((pk (spc // 4) 2000) > 1000)                   ; kick
                      ((pk ((spc * 3) // 4) 2000) > 1000)             ; snare
-                     ; the `~` is a rest, not a silence: the second kick is still
-                     ; ringing through it, so the law is the ratio and not a floor
+                     ; the `~` still rings with the kick, so the law is a ratio, not a floor
                      ((10 * (pk ((spc * 2) // 3) 2000)) < (pk ((spc * 3) // 4) 2000)))
-           ; and the timed sink keeps the clock: two cycles at cps 2 is one second,
-           ; and the sink only holds a quarter of it, so most of that is real waiting
+           ; the timed sink keeps the clock: two cycles at cps 2 take about a second
            t0 (clock 0)
            _ (harp-horn p 0 2 24000 2 0 20000.0)
            dt (clock t0)
            ((test (dt >= 400) (dt < 8000)),
             setenv "HORN" ()))))
 
-; --- pack: the two ways of laying a chunk answer the same bytes ---------------------
-; pack has a fast path (guts' pinv, a channel a call, the stride doing the interleave)
-; and a byte loop for a seat that carries no such door. one is the other's reading, so
-; the law is that they agree -- over the saturation at both rails, the truncation toward
-; zero either side of it, and a run long enough to be worth the fast path at all.
+; --- pack: the pinv fast path and the byte loop answer the same bytes, rails and all ---
 (:
    lay (cite 'guts 'pinv)
    ; the byte loop, transcribed: pack's own slow arm, so a drift in either is caught
@@ -271,8 +236,7 @@
        (string (go 0)))
    n 600
    ix ((iota n) * 1.0)
-   ; a ramp that leaves the rails at both ends and a sine that does not, so the law
-   ; reads the clamp, the sign and the ordinary middle in one pass
+   ; a ramp past both rails and a sine within them
    L (((ix / (n * 1.0)) * 5.0) - 2.5)
    R (sin (ix * 0.017))
    ((test lay                                             ; the door is here at all
