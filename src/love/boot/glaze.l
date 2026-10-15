@@ -529,7 +529,7 @@
        ; fbk: a body with a call never restarts: its guards jump stubs that drive the op's own value
        ; (fb1/fb2/atruth), pulled off the extras chain past the inner entries into the one ovo slot
        fbk  (drok && (ahascall? env go body || foldl (\ ac i (ac || ahascall? env go i)) 0 inits))
-       ovs  (fbk ? '(+ - * // % & | ^ < <= > >= = cap cup . bit) ())
+       ovs  (fbk ? '(bit + - < = cap cup . <= > >= * // % & | ^) ())   ; the most driven first: a stub walks to its own
        ovals (map (o \ o = 'bit ? bit (gv o 0)) ovs)   ; the truth stub's bit is the glaze's own: the book's may be a module's namesake
        nd0  (drok ? (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits)) 0)
        nd   (nd0 + (fbk ? 1 0))                                  ; the stubs read the right operand off one spill past its op
@@ -587,7 +587,7 @@
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)   ; the compile trace: names every ambled source
              ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin)   ; extras = [() | globals | siblings | quotes | = | inner entries] (+ op values, chain-only):
                                                                 ; heap values riding the nifx chain into GC-walked slots; () is the empty mint, not li 1
-             R (k + 3 + ng + nd + nl + (fbk ? 1 0))         ; loopvars | Se | So | budget | extras | spills | lets | op value
+             R (k + 3 + ng + nd + nl + (fbk ? 2 0))         ; loopvars | Se | So | budget | extras | spills | lets | op value, op values' link
              A (greg tgt 'acc)  T (greg tgt 'tmp)  X (greg tgt 'anchor)  SC (greg tgt 'scratch)
              SP (greg tgt 'sp)  IP (greg tgt 'ip)  HP (greg tgt 'hp)
              seo (8 * k)  soo (8 * (k + 1))  budo (8 * (k + 2))  gbo (8 * (k + 3))  spo (8 * (k + 3 + ng))  fro (8 * R)
@@ -596,9 +596,8 @@
              eqo (gbo + 8 * (1 + #gn + #cn + nq))   ; the = value's extras slot (past globals, siblings, quotes)
              ino (eqo + 8 * (lit? eqv ? 1 0))                    ; the inner entries' slots (past =)
              ovo (8 * (k + 3 + ng + nd + nl))                       ; the one op-value slot, fallback mode only: a stub fills it off the chain
-             (ovload o) ([['ld T SP budo]]                          ; the chain from the budget cell: ng copied links, then the op values
-                         + ((: (go j) (j < 1 + ng + posof o ovs 0 ? (['ld T T 16] . go (j + 1)) ())) 0)
-                         + [['ld X T 8] ['st SP ovo X]])
+             ovt (ovo + 8)                                        ; the chain's first op value, laid by the prologue past the extras
+             (ovload o) ([['ld T SP ovt]] + map (_ \ ['ld T T 16]) ^(posof o ovs 0) + [['ld X T 8] ['st SP ovo X]])
              lto (8 * (k + 3 + ng + nd))                    ; the let region, past the spills
              (lvo v) (lto + 8 * posof v lts 0)
              (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T and a fixnum, else lbl
@@ -845,7 +844,8 @@
                    + (a = 1 ? [['st SP soo IP]] [['mov T IP] ['sub T T 16] ['st SP soo T]])     ; So = the own cell (= Ip, or Ip-16 past the cur pair) -- the self-drive callee
                    + [['ld T IP 32]                                                               ; T = the nifx extras chain
                        ['st SP budo T] ['ld T T 16]]                                                    ; link 0 = the budget cell (saved for the deopt decrement), slots after it
-                   + (:- (gou 0) (gou j) (j < ng ? ([['ld X T 8] ['st SP (gbo + 8 * j) X] ['ld T T 16]] + gou (j + 1)))))
+                   + (:- (gou 0) (gou j) (j < ng ? ([['ld X T 8] ['st SP (gbo + 8 * j) X] ['ld T T 16]] + gou (j + 1))))
+                   + (fbk ? [['st SP ovt T]] ()))
              initsir (: (goj is j) (two? is ? (acg <is 0 + [['st SP (8 * j) A]] + goj >is (j + 1)))
                         (goj inits 0))
              bodyir ((sfq ? ['(label sgo)] ())                                                     ; the self-jump landing: a fresh invocation on the rewritten frame
