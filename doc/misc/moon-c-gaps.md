@@ -202,8 +202,8 @@ Four of them carry an edge worth knowing:
   constant expression folds, so `aligned(2 * sizeof(long))` counts); the `.o`'s section header
   asks the linker for a global's boundary. The row below.
 
-- **variable-length arrays** ride x64, a64 and rv64; the thumb family says `no lane
-  for a variable-length array on <tgt>`. a VLA with an *initializer* refuses everywhere
+- **variable-length arrays** ride x64, a64, rv64, thumb2, thumb2sp and arm; thumb1 says `no
+  lane for a variable-length array on thumb1`. a VLA with an *initializer* refuses everywhere
   (`parse error near =`) — C's own rule, not a gap. `__builtin_alloca` is absent on every
   target, so a VLA is the only dynamic frame allocation here.
 - **wide and prefixed literals** desugar to a *bounded compound literal* of the element type
@@ -295,7 +295,7 @@ Three deliberate deviations, all in the compiler's favor of honesty:
 six targets). Saying an absence out loud is what makes it *conforming* rather than a hole, and
 it lets a portable source take its other lane instead of hitting a parse error:
 `__STDC_NO_ATOMICS__` and `__STDC_NO_THREADS__` everywhere, `__STDC_NO_COMPLEX__` off x64,
-`__STDC_NO_VLA__` off x64/a64 — each row tracking the parity table below, because claiming an
+a64, thumb2 and arm, `__STDC_NO_VLA__` off x64, a64, thumb2, thumb2sp and arm — each row tracking the parity table below, because claiming an
 absence we do not have sends a consumer down a fallback for nothing. `__STDC_UTF_16__` and
 `__STDC_UTF_32__` are the positive twins: `u""` is UTF-16 and `U""` UTF-32, which is exactly
 what those two assert.
@@ -640,27 +640,28 @@ gate compiling clang at `tco=1`, which is what caught it.
 
 ## target asymmetries
 
-Six targets: **x64, a64, rv64, thumb2, thumb2sp, thumb1**. The 32-bit ones carry most of
-the live gaps, but not all of them — two lanes are x64-only. Everything here is a **loud scare,
+Seven targets: **x64, a64, rv64, thumb2, thumb2sp, thumb1, arm** -- arm is thumb2's code
+hosted on linux (`-t arm`, armv7-a and up). The 32-bit ones carry most of the live gaps, but
+not all of them. Everything here is a **loud scare,
 never silent**.
 
-| lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|
-| `__int128` | ✓ | ✓ | — | — | — | — |
-| `_Complex` arithmetic | ✓ | — | — | — | — | — |
-| variable-length array | ✓ | ✓ | ✓ | — | — | — |
-| by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | — | — | — |
-| by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | — | — | — |
-| composite passed at a variadic call site | ✓ | ✓ | ✓ | — | — | — |
-| composite NAMED in a variadic parameter list | ✓ | ✓ | — | — | — | — |
-| va_arg of a composite, ≤16B all-int | ✓ | ✓ | ✓ | — | — | — |
-| composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| composite return, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `__builtin_bswap64` | ✓ | ✓ | ✓ | — | — | — |
-| `__sync` spin-lock pair | ✓ | ✓ | ✓ | — | — | — |
-| signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | rt.c | rt.c | rt.c |
-| 64-bit `*` and shifts | ✓ | ✓ | ✓ | ✓ | ✓ | rt.c |
-| `double`/`float` arithmetic | ✓ | ✓ | ✓ | ✓ | rt.c | rt.c |
+| lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 | arm |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| `__int128` | ✓ | ✓ | — | — | — | — | — |
+| `_Complex` arithmetic | ✓ | ✓ | — | ✓ | — | — | ✓ |
+| variable-length array | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| composite passed at a variadic call site | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| composite NAMED in a variadic parameter list | ✓ | ✓ | — | ✓ | ✓ | — | ✓ |
+| va_arg of a composite, ≤16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| composite return, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `__builtin_bswap64` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `__sync` spin-lock pair | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | rt.c | rt.c | rt.c | rt.c |
+| 64-bit `*` and shifts | ✓ | ✓ | ✓ | ✓ | ✓ | rt.c | ✓ |
+| `double`/`float` arithmetic | ✓ | ✓ | ✓ | ✓ | rt.c | rt.c | ✓ |
 
 **The table is generated, not maintained: `src/tools/moon-parity.sh table` prints it and
 `src/tools/moon-parity.sh check` fails if this doc and the compiler have drifted** (`why` prints
@@ -685,7 +686,9 @@ object, which is how the table finds it. Everywhere else the lane is ours or the
 **The two struct rows do not move together, and t32 inverts them.** AAPCS32 returns a
 struct over 4 bytes through memory (`sretm?`) -- every one on v6-M, and on thumb2/thumb2sp
 every one that is no VFP HFA (at most four of one float type, which the s/d file carries) --
-so t32 takes both composite returns while refusing the int composite *argument*. a64 and
+so t32 takes both composite returns. the composite *argument* rides thumb2's family as core
+words -- r0-r3, an 8-aligned one from an even register, else the stack with the gp file closed,
+split at r3 while the stack is still empty (C.5) -- and v6-M refuses it. a64 and
 rv64 (and wasm, on rv64's lanes) pass a composite past 16 bytes by reference both ways
 (`refm?`): an argument as the address of the caller's copy, a return through a hidden
 pointer (x8 on a64, a0 on rv64) -- save, on a64, an HFA of three or four doubles, which
@@ -700,10 +703,13 @@ other register file, and c-testsuite's 00204 is the probe.
 **a64, rv64 and t32 refuse the gp case too** — deliberately, because each has a
 *different* rule:
 AAPCS64 closes the gp file behind a stack composite (C.13), rv64 SPLITS one across the
-register/stack seam, and t32 has no lane at all. Three rules, three rungs; do not fold them.
+register/stack seam, and thumb2's family splits at r3 only while the stack is empty (the
+caller and callee above). Three rules, three rungs; do not fold them.
 
-**A by-value composite NAMED in a variadic parameter list rides x64 and a64** (`vaspill`,
-`vaspill-a64`); `vaspill-rv` and `vaspill-t32` refuse the shape, each for its own ABI's reason.
+**A by-value composite NAMED in a variadic parameter list rides x64, a64 and thumb2's family**
+(`vaspill`, `vaspill-a64`, `vaspill-t32`: on t32 every named param is read in place off the
+pushed r0-r3 and the caller's block, the base pcs's rule); `vaspill-rv` refuses the shape, and
+v6-M refuses it whole.
 that is a different shape from *passing* a composite at a variadic call site, which rv64
 also takes — probe the one you mean.
 
@@ -711,27 +717,22 @@ also takes — probe the one you mean.
 x64 from the gp save area while gp_offset + its size stays ≤ 48, else whole from the overflow area,
 and a MEMORY-class one from there; a64 from the x save area, else `__stack` with the gp file closed
 behind it, and its memory class through the slot's pointer; rv64 walks `__ap`. an SSE-touching one
-on x64, an HFA on a64, one aligned past 8, and t32 refuse. the a64 caller lays a 9..16B gp composite
+on x64, an HFA on a64, one aligned past 8, and v6-M refuse; thumb2's family walks `__ap`, a
+composite at its own alignment and a double or pair 8-aligned. the a64 caller lays a 9..16B gp composite
 the registers no longer hold on the stack and closes the file (C.13); rv64's caller still refuses
 that straddle, so 266 sits on rv64's and wasm's unsupported lists.
 
-- **mixed/int-pair 8..16B composites on t32** — an aone-`int` 5..8B, or a two-eightbyte
-  not-both-sse aggregate by value; register-exhausted stack HFAs (9+ double args); and
-  doubles/pairs/structs across a t32 VARIADIC seam. love.c reaches none of them.
-- **a memory-returning call through a POINTER on t32** — `no lane for an indirect call to a
-  MEMORY-returning function`: the direct call stages the hidden pointer, the indirect one
-  does not yet. test/thumb2/libr.c is the direct lane's differential against gcc.
+- **register-exhausted stack HFAs on thumb2** (9+ double args), and doubles, pairs and structs
+  across a VARIADIC seam on v6-M.
 - **signed 64-bit `/` and `%` on t32** call out to the runtime's own `__divdi3`/`__moddi3`
   (src/apps/moon/lib/rt.c) on all three targets.
 - **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
   `;; lea-range (r0 r4 8)`, the scaled-indexed-address gap.
-- **`__builtin_bswap64` and the `__sync` spin-lock pair on t32** — `no lane for <name> on
-  <tgt>`; bswap16/32 and clz/ctz ride every target (t32 clz is the CLZ word / `__clzsi2`,
-  ctz the isolate-and-clz / `__ctzsi2`), but the 64-bit swap wants the r0:r1 pair lane and
-  the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
-  a `bswap64` over a constant folds in parse and needs no lane.
+- **the `__sync` spin-lock pair on thumb1** — `no lane for <name> on thumb1`: v6-M has no
+  LDREX/STREX. thumb2's family takes the pair through them, a dmb behind; `bswap64` and
+  `popcountll` ride every target, a 32-bit one a word at a time.
 - **a packed member at an odd address on thumb1** faults (v6-M has no unaligned `ldrh`/`ldr`):
   a load reads the member's width whatever its alignment, a packed bit-field's unit too.
   every other lane takes the unaligned access in hardware. `-mstrict-align`'s chunks are
@@ -1093,6 +1094,14 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   two padded pushes, which put the lr at `[fp+16]`: wrong code, silent. gen's `frrec` fuses
   the pair after every IR pass, and a lone fp or lr push left over refuses (240-framerecord.c,
   native on an a64 host).
+- **`__builtin_frame_address` and `__builtin_return_address` above level 0** walk that chain,
+  as gcc's do: level N follows the saved fp N times, the return address one slot above it.
+  Sound where the callers keep their frames, as the kernel's do (kunwind_init_from_caller's
+  `frame_address(1)`, which stopped stacktrace.c: compiles now, globals as clang's). x64, a64
+  and i386 answer as gcc; thumb answers the same, where gcc's ARM build follows no chain past
+  level 1 and so is no witness there; rv64 refuses, since its s0 sits above the locals and the one a frame
+  saves is not its caller's base, and wasm refuses, having no chain in linear memory. Both had
+  refused every level but 0. Law 297-frameaddr.c.
 - **a gas or holo scare is a refusal**: a function's asm, and the file-scope or `.S` text,
   read under a trap. What used to print `internal error` now names the line's piece.
 - **Q, Qo, +Q, =Q**: a64's base-register memory operand is the `[xN]` "m" already spells;
@@ -1350,6 +1359,21 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   callee-saved register the prologue never saved (`cs-unsaved r19` on a64, `r15` on rv64; x64
   laid the dead loop and kept quiet). A label now lives only if code reached from the entry
   names it, so a block reached by a later jump stays. Three tinyconfig units; law 293-deadloop.c.
+- **an asm label on a file-scope declaration is the symbol's name** (`void f(void) asm("g")`,
+  glibc's `__REDIRECT`, the kernel's `ret_from_fork`): the object's symbol table spells the
+  label, definitions and references alike, so two C names under one label are one object; the
+  forms keep the C name. `asm`, `__asm__`, `__asm`, and adjacent strings. The plain `asm`
+  spelling had refused (`parse error near asm`, which stopped process.c); the other two had
+  dropped the label in silence, so the symbol kept its C name and a caller naming the label
+  missed it. A label that renames refuses on wasm, which lays no symbol table. Two C names on
+  one label in one file lay the label defined and undefined, which ld and lld bind as one.
+  Law 294-asmlabel.c.
+- **a test pushed down through a `!` keeps a missing else missing** (arm64 `do_page_fault`'s
+  `if (fault_from_pkey(..)) {}`, whose `return !arch_vma_access_permitted(..)` reaches a
+  `return true`): a constant return takes the caller's arm, and the absent else, wrapped by the
+  first push, read as present, so the splice laid an empty statement gen has no lane for
+  (`cannot compile 'do_page_fault' (cause unnamed)`, on every target). An absent arm now lays
+  nothing; an absent then arm under a flip is an empty block. Law 299-armpush.c.
 
 Still open on this side (g-21's probes):
 

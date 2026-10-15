@@ -463,12 +463,15 @@
    ; fold a frame with what it has: nothing collected gives the plain symbol, a shortfall the
    ; partial application. kind tests throughout the walk, never truth -- an operand list like
    ; (0) or ("") nets zero. a chain shows as the interleaved operators the join left in `got`.
-   (op-fold f) (? (atom? (op-frg f)) (op-fro f)
+   ; an operand that is an operator symbol is spelled as one by value, (x), as the source
+   ; spells it: bare, the next pass would read it infix again
+   (op-val o) (? (op-puncp o) (. o ()) o)
+   (op-fold dn f) (? (atom? (op-frg f)) (op-fro f)
                   (: nm (op-frn f) os (rev (op-frg f))
-                     (? (== nm '\) (op-core (. '\ os))
-                        (== nm ':) (op-core (. ': (op-cl-splice os)))
+                     (? (== nm '\) (op-core dn (. '\ os))
+                        (== nm ':) (op-core dn (. ': (op-cl-splice os)))
                         (&& (two? (cup os)) (&& (two? (cuup os)) (op-chain? nm))) (op-chn nm os)
-                        (. nm os))))
+                        (. nm (map op-val os)))))
    ; deliver datum d -> (out' . pend'). a collecting frame takes it; a filled infix frame extends
    ; its right operand into a span, since juxtaposition binds tighter: (a = b c) is (= a (b c)).
    ; the span state rides `need`: 0 = a lone datum, -1 = growing.
@@ -486,12 +489,12 @@
    ; at equal band the incomer's hand decides: right-handed steals, left-handed yields. at top
    ; level the whole leading span is taken: (a b = c) captures (a b), not just b. an n-ary frame
    ; holding only its scrutinee has none to give, which keeps (c ? a + b) reading (? c (+ a b)).
-   (op-steal g h out pend)
+   (op-steal dn g h out pend)
     (? (two? pend)
        (: f (cap pend) nd (op-frd f)
           (? (< nd 1)
              (? (? h (<= g (op-frband f)) (< g (op-frband f)))
-                (: r (op-del (op-fold f) out (cup pend)) (op-steal g h (cap r) (cup r)))
+                (: r (op-del (op-fold dn f) out (cup pend)) (op-steal dn g h (cap r) (cup r)))
                 (? (? (= nd -2) (atom? (cup (op-frg f))) 0) 0
                    (. (cap (op-frg f))
                          (. out (. (op-frw f (? (= nd -2) -2 1) (cup (op-frg f))) (cup pend))))))
@@ -501,17 +504,17 @@
    ; fold every pending frame tighter than an incoming (g,h) and answer (out . pend) -- op-steal's
    ; own climb, split out so the chain join can see the frame it will meet: (a < b + c < d) reaches
    ; the second `<` with the additive frame on top, and without this the join never fires.
-   (op-climb g h out pend)
+   (op-climb dn g h out pend)
     (? (&& (two? pend) (&& (< (op-frd (cap pend)) 1)
                            (? h (<= g (op-frband (cap pend))) (< g (op-frband (cap pend))))))
-       (: r (op-del (op-fold (cap pend)) out (cup pend)) (op-climb g h (cap r) (cup r))) (. out pend))
+       (: r (op-del (op-fold dn (cap pend)) out (cup pend)) (op-climb dn g h (cap r) (cup r))) (. out pend))
    ; drain at end of list: fold every pending frame innermost-out
-   (op-drain out pend)
+   (op-drain dn out pend)
     (? (atom? pend) (rev out)
-       (: r (op-del (op-fold (cap pend)) out (cup pend))
-          (op-drain (cap r) (cup r))))
-   (op-w l out pend)
-    (? (atom? l) (op-drain out pend)
+       (: r (op-del (op-fold dn (cap pend)) out (cup pend))
+          (op-drain dn (cap r) (cup r))))
+   (op-w dn l out pend)
+    (? (atom? l) (op-drain dn out pend)
        (: e (cap l)
           (? (op-puncp e)
              ; a spaced sigil is one name -- an unrowed one takes the house band, and with no
@@ -521,8 +524,8 @@
                 nm (cap en) gp (caup en) hd (cap (cuup en))
                 ; fresh noms: this `:` is one scope, so rebinding out/pend here would make the
                 ; op-climb call read its own later binding and raise `missing out`.
-                cl (op-climb gp hd out pend) ou (cap cl) pd (cup cl)   ; fold what is tighter, then look
-                st (op-steal gp hd ou pd)   ; capture a left operand if one exists (at this band + hand)
+                cl (op-climb dn gp hd out pend) ou (cap cl) pd (cup cl)   ; fold what is tighter, then look
+                st (op-steal dn gp hd ou pd)   ; capture a left operand if one exists (at this band + hand)
                 ; the join: a chainable sigil meeting a filled chainable frame at its own band
                 ; pushes its own nom into that frame's got and asks for one more, so the run
                 ; stays flat. filled is op-steal's test (need below 1), not need 0: a right
@@ -531,28 +534,28 @@
                        (&& (two? pd)
                            (&& (< (op-frd (cap pd)) 1)
                                (&& (= gp (op-frband (cap pd))) (op-chain? (op-frn (cap pd)))))))
-                    (op-w (cup l) ou (. (op-frw (cap pd) 1 (. nm (op-frg (cap pd)))) (cup pd)))
-                   (two? st) (op-w (cup l) (caup st)
+                    (op-w dn (cup l) ou (. (op-frw (cap pd) 1 (. nm (op-frg (cap pd)))) (cup pd)))
+                   (two? st) (op-w dn (cup l) (caup st)
                             (. (op-fr e nm (? (= -1 (cup (cuup en))) -2 1) gp (. (cap st) ()))   ; -2 = n-ary: the row's lane, so an alias inherits it
                                   (cuup st)))
                    (: r (op-del e ou pd)     ; no left operand: the plain symbol
-                      (op-w (cup l) (cap r) (cup r)))))
-             (: r (op-del (op-core e) out pend)
-                (op-w (cup l) (cap r) (cup r))))))
+                      (op-w dn (cup l) (cap r) (cup r)))))
+             (: r (op-del (op-core dn e) out pend)
+                (op-w dn (cup l) (cap r) (cup r))))))
    ; a `:` binds, it does not apply, so opfix must not rearrange it. binders stay verbatim but for
    ; `_`, and only each pair's value and the trailing body factor. the pairing matches eval's exactly.
-   (op-colon fs)
+   (op-colon dn fs)
     (? (atom? fs) fs
-       (atom? (cup fs)) (. (op-core (cap fs)) ())        ; a lone form is the body
+       (atom? (cup fs)) (. (op-core dn (cap fs)) ())        ; a lone form is the body
        (: r (op-dpb (cap fs))                             ; define-sugar binds a \ too: lower its patterns
           (. (cap r)                                     ; the name: verbatim but for `_`, its params lowered
-                (. (op-core (op-wrap (cup r) (caup fs))) ; the value: wrapped where they were, then factored
-                      (op-colon (cuup fs))))))              ; the rest: pairs on
+                (. (op-core dn (op-wrap (cup r) (caup fs))) ; the value: wrapped where they were, then factored
+                      (op-colon dn (cuup fs))))))              ; the rest: pairs on
    ; a \ lambda is a binder too: the args stay verbatim, only the body factors.
    ; (\ x) -- one operand -- is quote, kept whole by op-core's first clause.
-   (op-lam fs)
-    (? (atom? (cup fs)) (. (op-core (cap fs)) ())        ; the last operand is the body
-       (. (cap fs) (op-lam (cup fs))))                    ; an arg: verbatim, recurse
+   (op-lam dn fs)
+    (? (atom? (cup fs)) (. (op-core dn (cap fs)) ())     ; the last operand is the body
+       (. (cap fs) (op-lam dn (cup fs))))                    ; an arg: verbatim, recurse
    ; a param that is not a nom is a pattern, and the body takes it apart: (\ [a b] x) is
    ; (\ v (@ v [a b] x)), v fresh. it emits the `@` symbol and stops -- pat expands it at the
    ; reader's own compile. it runs before the nested-lambda flatten, so that pass only ever sees
@@ -612,27 +615,33 @@
    ; a list with no operator at its top is its elements factored, in place: the walk below
    ; would rebuild it element by element and answer the same list
    (op-mapi f x) (? (atom? x) x (: e (f (cap x)) r (op-mapi f (cup x)) (? (&& (== e (cap x)) (== r (cup x))) x (. e r))))
-   (op-core x)
+   ; dn: subtrees already factored, met by identity and kept whole
+   (op-done? x dn) (? (atom? dn) 0 (== x (cap dn)) 1 (op-done? x (cup dn)))
+   (op-core dn x)
     (? (atom? x) x
+       (op-done? x dn) x
        (: h (cap x)
           (? (&& (== h '\) (atom? (cuup x))) x              ; (\) / (\ x): quote, verbatim
              (op-cm? (cup x))                                ; the comma layer (helpers above)
               (: cs (op-split x)
                  (? (atom? cs) ()                            ; commas alone: nothing
-                    (atom? (cup cs)) (op-core (cap cs))      ; one clause: the commas composed away
-                    (. (nom ",") (map op-core cs))))
-             (== h '\) (. '\ (op-lam (op-flat-ol (op-depat (cup x) ()) ())))   ; (\ a.. body): patterns to noms, flatten nested lambdas, factor the body
-             (== h ':) (. ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
+                    (atom? (cup cs)) (op-core dn (cap cs))      ; one clause: the commas composed away
+                    (. (nom ",") (map (op-core dn) cs))))
+             (== h '\) (. '\ (op-lam dn (op-flat-ol (op-depat (cup x) ()) ())))   ; (\ a.. body): patterns to noms, flatten nested lambdas, factor the body
+             (== h ':) (. ': (op-colon dn (cup x)))         ; (: n v ..): binders verbatim
              ; the reader's glued-run emission (mono (run d)): factor the run monadically around
              ; the (recursively opfixed) datum; an unfactorable run is the plain application (run d)
              (&& (== h 'mono) (two? (cup x)) (two? (caup x)))
-              (: p (caup x) r (cap p) d (op-core (caup p))
+              (: p (caup x) r (cap p) d (op-core dn (caup p))
                  fs (? (nom? r) (monofactor r) 0)
                  (? (two? fs) (op-fin fs d) (. r (. d ()))))
-             (nil? (has-top-op? x)) (op-mapi op-core x)
-             (: res (op-w x 0 0)                        ; an operator at the top: walk, and splice a lone folded operand up
+             (nil? (has-top-op? x)) (op-mapi (op-core dn) x)
+             (: res (op-w dn x 0 0)                        ; an operator at the top: walk, and splice a lone folded operand up
                 (? (&& (two? res) (atom? (cup res)) (two? (cap res))) (cap res) res))))) ; (a = b) -> (= a b), not ((= a b))
-   (opfix x) (op-core x)
+   (opfix x) (op-core () x)
+   ; x factored where dn's subtrees, already factored, stand: a macro's expansion, whose
+   ; operands came in factored, costs only its own cells
+   (opfix-past x dn) (op-core dn x)
 
    ; the grip door: the one sanctioned write into the compile table, and the only reach to
    ; `operators` once birth mops the nom. (grip ar nm v) answers the row it replaced in the shape
@@ -658,9 +667,11 @@
    ; opfix and grip are the door. `operators` and `pureset` stay global-and-mopped instead:
    ; ev.l holds them, and a cross-file capture has only the book to go through.
    _ (pin book 'grip grip)
+   _ (pin book 'opfix-past opfix-past)
    (pin book 'opfix opfix))
 ; the last seal: opfix joins the other four in g's hooks, so no later rebind can reach it.
 (seal-hook 3 opfix)
+(seal-hook 9 (\ p (opfix-past (cap p) (filter two? (cup p)))))
 ; the ops ev's jotin splices into a loop, as values: none a loop's body can shadow
 (pin jotfuse 'ops [two? saturate (<) (+) (.) rev tally])
 

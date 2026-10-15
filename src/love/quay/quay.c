@@ -664,6 +664,7 @@ void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols,
 // 256 cells); rows are cleared as bands first reach them. a pixel set is 0xff over its rgb.
 static void cb_six_open(struct cb *c) {
   c->sslot = 0;
+  c->kopen = 0;   // a kitty transfer still open gives way: its slot and room are not its own till it ends
   if (!cb_words(c)) return;
   cb_sweep(c, 1);
   uint32_t k = 1;

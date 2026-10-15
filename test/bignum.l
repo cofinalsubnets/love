@@ -18,7 +18,11 @@
    KL 150  KE (64 * KL)  KHE (64 * (KL // 2))
    KA (KE 2 - 1)  KBb (KE 2 - 7)  KHB (KHE 2)   ; (KE 2) = 2^ke via exact power (no deep recursion)
    KP (KA * KBb)
-   Kref (((KA % KHB) * KBb) + (((KA // KHB) * KBb) * KHB)))
+   Kref (((KA % KHB) * KBb) + (((KA // KHB) * KBb) * KHB))
+   ; near-equal lengths take it too, the shorter zero-padded: 200 limbs by 150, against
+   ; KC's 100-limb halves by KBb, each one-shot schoolbook
+   KC ((64 * 200) 2 - 3)  KHC ((64 * 100) 2)
+   KCref (((KC % KHC) * KBb) + (((KC // KHC) * KBb) * KHC)))
 
 (test
  ; --- overflow promotion + exact value, read round-trip against a literal ---
@@ -36,6 +40,7 @@
  (KA = KP // KBb) ; divides back exactly (cross-checks against Knuth-D)
  (0 = KP % KBb)
  (KA * KA = KA * KA)                  ; squaring is stable (the na==nb self-multiply lane)
+ (KC * KBb = KCref) (KBb * KC = KCref) (KC = (KC * KBb) // KBb)
 
  ; --- a bignum is its own tier: not a fixnum, truthy, not falsy, not a chain ---
  !(charm? B100) ; (charm? bignum) is false
@@ -136,3 +141,22 @@
  (aall (star-tray '(3) '(1 2 3) > -B100)) ; every int > -2^100
  (aall (-B100 < star-tray '(3) '(1 2 3))) ; bignum on the left, too
  !(aall (star-tray '(2) '(0 0) = B100)))       ; 0 != 2^100 (low word is 0!)
+
+; --- bitlen: the bits of the magnitude, 2^(n-1) <= |x| < 2^n ---
+(test (0 = bitlen 0) (1 = bitlen 1) (1 = bitlen -1) (10 = bitlen 1023) (11 = bitlen 1024)
+      (62 = bitlen (62 2 - 1)) (63 = bitlen (62 2)) (64 = bitlen (0 - 63 2)) (65 = bitlen (64 2))
+      (100 = bitlen (100 2 - 1)) (101 = bitlen (100 2)) (101 = bitlen (0 - 100 2))
+      (() = bitlen 1.5) (() = bitlen "10") (() = bitlen ()))
+
+; --- show by halves: a big prints by its levels, 10^(18 2^j), each with a barrett reciprocal past
+; 8192 bits. the digits at every level's edge, the runs of zeros a half pads, and big ones read back
+(: (bn-ones d k) (string (map (_ \ d) (jot k)))
+   (bn-back x) (x = <(sound (show x)))
+   ks [77 78 144 145 288 576 1152 2304 4608 4609 9216 18432]
+   (test (all (k \ show (k 10) = "1" + bn-ones 48 k) ks)
+         (all (k \ show (k 10 - 1) = bn-ones 57 k) ks)
+         (all (k \ show (k 10 + 1) = "1" + bn-ones 48 (k - 1) + "1") ks)
+         (all (k \ show (0 - k 10) = "-1" + bn-ones 48 k) ks)
+         (show (300 10 * (300 10 + 7)) = "1" + bn-ones 48 299 + "7" + bn-ones 48 300)
+         (all bn-back [(40000 3) (20000 7) (0 - 30000 3) (70000 2 - 1) (70000 2) ((5000 10 + 1) * (9000 10 - 1))])))
+

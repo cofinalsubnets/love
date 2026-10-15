@@ -166,7 +166,7 @@ static struct { short v; char n[16]; } const errnames[] = {
 static struct g *ini_0(struct g*g, uintptr_t len0) {
  memset(g, 0, sizeof(struct g));
  g->len = len0;
- g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
+ g->scare_a = g->scare_b = g->scare_c = zero;   // v0..end is GC-walked: raw 0 is not a value
  for (int i = 0; i < hook_n; i++) g->hook[i] = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  // the rem set + major pool ride alloc: a seat whose heap cannot supply them cannot run

@@ -13,7 +13,7 @@
    ; ..and on another day of 2026, at noon
    (on m d) (court-new 80 48 [(86400.0 * (cite 'cal 'epoch-days) 2026 m d + 12.0 * 3600.0) 3600])
    (near? a b) (a - b @ d (d * d < 0.0001))
-   (keys! st ks) (each ks (k \ court-step st k)))
+   (keys! st ks) (each ks (k \ court-step st (court-kb k))))
 
 ; --- the frame: half the pixel rows in cells, the same state the same frame, in the 256
 ; --- palette and in 24 bits; the clock in the corner at the start and gone after
@@ -34,6 +34,8 @@
 ; --- the stars by night: each one pixel, never a patch -- looking straight up from the
 ; --- middle of the yard on a clear night some show, each alone among dark ones; none by day
 (borrow 'sky)
+(borrow 'view)     ; the keys' actions
+(: court-kb (view-bind view-binds court-binds))   ; a key's code -> its action
 (: (up hr) (: st (pins (at hr) 'px 0.0 'pz 0.0 'ph 1.5 'wx (sky-weather 0 'smooth)) c (mesh-flat (court-pens st))
               l (c 0 + c 1 + c 2) w (st 'w) n #l b (net l / n * 4.0 + 0.05 < l) i (iota n)
               (at k) (peep b k 0)
@@ -228,8 +230,8 @@
    _ (each ^400 (k \ court-move st)) s1 (st 'snow)
    _ (pin st 'wx (wxf 3 0)) _ (each ^200 (k \ court-move st)) s2 (st 'snow)
    rn (on 7 4) _ (pins rn 'drift 0 'wx (wxf 3 1) 'wet 0.0 'pace 1) _ (each ^100 (k \ court-move rn)) w1 (rn 'wet)
-   ky (on 7 4) _ (pins ky 'wx (wxf 2 0) 'drift 1) _ (court-step ky 112) kp (sky-fall (ky 'wx)) kd (ky 'drift)
-   _ (court-step ky 99) kc (sky-fall (ky 'wx))
+   ky (on 7 4) _ (pins ky 'wx (wxf 2 0) 'drift 1) _ (court-step ky (court-kb 112)) kp (sky-fall (ky 'wx)) kd (ky 'drift)
+   _ (court-step ky (court-kb 99)) kc (sky-fall (ky 'wx))
    (mean x) (mesh-flat (court-pens x) @ c (net (c 0) / #(c 0)))
    (look w sn f) (pins (on 1 15) 'ph -0.9 'wet w 'snow sn 'wx (wxf 3 f) 't 37)
    o (court-opts ["--fall" "snow"]) r (court-opts ["rain" "partly"])

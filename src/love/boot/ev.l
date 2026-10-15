@@ -441,7 +441,7 @@
    (pure-ap? v k) (string? v || two? v || nom? v || v == () || constellation? v || pure-fn? v k)
    (allp as se) (all (a \ purep a se) as)                                  ; all args effect-free?
    (purep a se) (: h <a (?                                                                     ; effect-free -> duplicable/droppable
-    (h = '\ || h = a) 1                                                                         ; nom / number / string
+    (h = '\ || atom? a) 1                                                                         ; nom / number / string
     (h = '?) (allp >a se)                                                  ; cond: pure iff every limb is
     (nom? h) (: e (assq h se)                                               ; a known pure lambda or a pure fn, applied to pure args
      (? (two? e && lambp <>e) (allp >a se) (pure-head? h >a) (allp >a se)))))
@@ -558,14 +558,14 @@
    ; stand in -- absence from se doesn't distinguish local from global).
    ; the atom test stays out of the @ chain: as a pattern it would be the pin ^x, and a pin
    ; compiles to `=` -- a deep structural walk where this is one cheap test per node.
-   (cprop x se fl op bnd pb) (<x = x ?
+   (cprop x se fl op bnd pb) (atom? x ?
     (nom? x ? (assq x se @ (_ . e . _) e x) x)               ; const/known-lambda var -> value
     (<x @
     '\ (cplam x se fl op bnd pb)
     ': (ln >x @ ns (keep x (cpbinds >x (rmkeys ns se) fl op (ns + bnd) pb) ':))
     '? (keep x (mapi (e \ cprop e se fl op bnd pb) >x) '?)              ; no prune here -- wxc does it
     h (: m (nom? h ? (macros h) 0)                                          ; macro head, not shadowed? expand on raw args -- a
-       (m && !(elem h bnd) ? (cprop (opfix (m >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns                  ; structural macro (a two?/cap probe) must see them
+       (m && !(elem h bnd) ? (cprop (opfix-past (m >x) (filter two? >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns                  ; structural macro (a two?/cap probe) must see them
           (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
              hr (nom? h ? (: e (assq h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
              h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; the emitted head: a const-bound nom is its value -- a closure stays a nom (the frame imports the name and the glaze reads it)
@@ -626,10 +626,13 @@
       (: s (c 'stk) k (apr2l c as) (pin c 'stk s, k * em1 op)))) ; n-ary, r2l args
   ; falook: walk the scope chain for head's fixed arity, recorded by ale in each enclosing let's
   ; 'far map. > 0 = a multi-arg lambda sibling of that arity; 0 = a binding of that name that is
-  ; not one -- it shadows outer fars, so stop; -1 = not bound in this scope, keep walking.
+  ; not one -- it shadows outer fars, so stop; -1 = not bound in this scope, keep walking, unless
+  ; the name is this scope's own arg or stack local, which shadows the same way.
   (falook c h) (?- 0 c
    (: far (c 'far) a (tablet? far ? (peep far h -1) -1)
-    (? (0 < a) a (-1 = a) (falook (c 'par) h) 0)))
+    (? (0 < a) a
+       (-1 = a && !(elem h (c 'arg) || elem h (c 'stk))) (falook (c 'par) h)
+       0)))
   ; apxh: (apx n head . args) -> apply. n > 1 -> r2l eval of the leading n args and one n-ary
   ; apply, surplus args curried onto the answer l2r; n = 0 -> the plain 1-ary chain. the width
   ; comes from fold/napof (a book global) or falook (a letrec lambda sibling the args saturate).

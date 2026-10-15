@@ -28,7 +28,9 @@ test/proof/rocq/.*.aux
 # test/proof/rocq/extract.v EXTRACTS this (test_extract); oracle_drive.ml is the source driver
 test/proof/rocq/normalizer.ml
 test/proof/rocq/normalizer.mli
-test/proof/rocq/oracle_drive
+test/proof/rocq/bigref.ml*
+test/proof/rocq/*_ref.ml*
+test/proof/rocq/*_drive
 *.cmi
 *.cmx
 *.cmo

@@ -94,7 +94,10 @@
 
  ; --- arithmetic under GC pressure: bignum products survive collection ---
  (0 = oa-churn 40)
- (2 * 80 2 = +(oa-oar * oa-oar)))    ; [2^80 2^80] summed = 2^81
+ (2 * 80 2 = +(oa-oar * oa-oar))     ; [2^80 2^80] summed = 2^81
+ ; a numeric operand widens first, and may collect: the fresh object one beside it moves
+ (@(1 2) + (top-tray '(2) '(10 20)) @ s (11 = peep s 0 0 && 22 = peep s 1 0))
+ ((top-tray '(2) '(10 20)) + @(1 2) @ s (11 = peep s 0 0 && 22 = peep s 1 0)))
 
 ; --- the `array` constructor: ergonomic front-end over the *-tray ctors -----
 ; no type code (inferred as the highest of z<r<o present), shape may be a

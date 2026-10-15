@@ -29,6 +29,17 @@ test/proof/rocq/gen.v
 test/proof/rocq/uugen.v
 test/proof/lean/uugen.lean
 
+# what the extraction gates lay beside their sources and remove when done: a cut taken
+# while one runs must not pack them
+test/proof/rocq/normalizer.ml*
+test/proof/rocq/bigref.ml*
+test/proof/rocq/*_ref.ml*
+test/proof/rocq/*_drive
+*.cmi
+*.cmx
+*.cmo
+test/proof/rocq/*.o
+
 # what the project's web page alone links: generated, committed for github pages,
 # never shipped (the machine's pair is `make site-wasm`'s copy out of out/). the page,
 # index.html, and its stylesheet, web/style.css, are written by hand and ship with the source

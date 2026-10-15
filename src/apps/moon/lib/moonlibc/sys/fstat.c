@@ -1,13 +1,56 @@
 #include "../impl.h"
 
-#ifdef __i386__
-/* i386 asks statx and lays its answer across: no stat64 call fills a 64-bit time */
+#ifdef __ILP32__
+/* a 32-bit target asks statx and lays its answer across: no stat64 call fills a 64-bit time */
 static dev_t lxdev(unsigned int ma, unsigned int mi) {
   return (dev_t) ((mi & 0xff) | (ma << 8) | ((mi & ~0xffu) << 12)); }
 
+#ifdef __ARM_EABI__
+/* ..but a kernel before 4.11 has no statx, and arm asks fstatat64 there: its long longs
+ * sit on 8, so the record pads where i386's does not */
+struct __arm_stat64 {
+  unsigned long long st_dev;
+  unsigned char __pad0[4];
+  unsigned long __st_ino;
+  unsigned int st_mode, st_nlink;
+  unsigned long st_uid, st_gid;
+  unsigned long long st_rdev;
+  unsigned char __pad3[4];
+  long long st_size;
+  unsigned long st_blksize;
+  unsigned long long st_blocks;
+  unsigned long at, atn, mt, mtn, ct, ctn;   /* not st_atime: stat.h spells that a macro */
+  unsigned long long st_ino;
+};
+_Static_assert(sizeof(struct __arm_stat64) == 104, "arm's stat64 is 104 bytes");
+
+static int stat64(int dirfd, char const *p, int fl, struct stat *st) {
+  struct __arm_stat64 k;
+  if (er(sc4(NR_fstatat64, dirfd, (long) p, (long) &k, fl)) < 0) return -1;
+  memset(st, 0, sizeof *st);
+  st->st_dev = k.st_dev;
+  st->st_ino = k.st_ino;
+  st->st_nlink = k.st_nlink;
+  st->st_mode = k.st_mode;
+  st->st_uid = k.st_uid;
+  st->st_gid = k.st_gid;
+  st->st_rdev = k.st_rdev;
+  st->st_size = k.st_size;
+  st->st_blksize = (blksize_t) k.st_blksize;
+  st->st_blocks = (blkcnt_t) k.st_blocks;
+  st->st_atim.tv_sec = k.at;  st->st_atim.tv_nsec = (long) k.atn;
+  st->st_mtim.tv_sec = k.mt;  st->st_mtim.tv_nsec = (long) k.mtn;
+  st->st_ctim.tv_sec = k.ct;  st->st_ctim.tv_nsec = (long) k.ctn;
+  return 0; }
+#endif
+
 int __love_statx(int dirfd, char const *p, int fl, struct stat *st) {
   struct __lx_statx sx;
-  if (er(sc5(NR_statx, dirfd, (long) p, fl, STATX_BASIC_STATS, (long) &sx)) < 0) return -1;
+  long r = sc5(NR_statx, dirfd, (long) p, fl, STATX_BASIC_STATS, (long) &sx);
+#ifdef __ARM_EABI__
+  if (r == -38) return stat64(dirfd, p, fl, st);
+#endif
+  if (er(r) < 0) return -1;
   memset(st, 0, sizeof *st);
   st->st_dev = lxdev(sx.stx_dev_major, sx.stx_dev_minor);
   st->st_ino = sx.stx_ino;

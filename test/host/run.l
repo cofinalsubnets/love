@@ -133,3 +133,20 @@
 
 (test_fin ())
 (puts "run dns: ok\n")
+
+; --- a wait nothing left could wake: no clock, no fd, and the waiting op comes back to
+; itself -- catch, a task's end. it scares (deadlock) and the run stops, where it spun.
+; each its own process, under a timeout, since the regression is a hang: main running a
+; continuation a twirled task captured, two tasks catching each other, a child that
+; freezes or pauses main and ends
+(: (dead e) (hark ["sh" "-c" ("timeout 10 out/love -e '" + e + "' 2>&1")])
+   (scared? r) (<r = 1 && 2 = #(split ";; deadlock" >r))
+   cont (dead """(: t {} p (twirl (\ _ (call-cc (c \ (pin t 0 c)))) 0) _ (catch p) ((t 0) 1))""")
+   pair (dead """(: t {} a (twirl (\ _ (catch (t (quote b)))) 0) b (twirl (\ _ (catch a)) 0) _ (pin t (quote b) b) (putx (catch a)))""")
+   frz (dead """(: m (myself 0) p (twirl (\ _ (putx (freeze m))) 0) _ (catch p) (putx (quote back)))""")
+   pse (dead """(: m (myself 0) p (twirl (\ _ (putx (pause m))) 0) _ (catch p) (putx (quote back)))""")
+   ; ..and a catch whose task sleeps is no deadlock: the clock wakes it
+   slept (dead """(: p (twirl (\ _ (rest 50, 7)) 0) (putx (catch p)))""")
+   _ (test (scared? cont) (scared? pair) (scared? frz) (scared? pse)
+           (<slept = 0) (>slept = "77\n"))
+   (puts "run deadlock: ok\n"))

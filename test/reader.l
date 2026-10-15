@@ -28,7 +28,11 @@
  ('torn = sound '(40))                              ; the text ran out inside a shape
  (sound '(49 32 50) @ r                               ; ...and the residue reads the next
   (1 = <r && 2 = <(sound >r)))
- (sound '(40 41) @ r (two? r && !<r)))                  ; the datum () is still a datum
+ (sound '(40 41) @ r (two? r && !<r))                   ; the datum () is still a datum
+ ; a charlist whose tail is a number: the tail is its residue as it stands, as a name's is
+ (sound (cons 97 5) @ r ('a = <r && 5 = >r))
+ (sound (cons 97 0) @ r ('a = <r && 0 = >r && charm? >r))
+ (sound (cons 97 (cons 32 1)) @ r ('a = <r && 1 = >>r)))
 
 ; --- the string door -----------------------------------------------------------
 ; text is a string or a charlist and the reader spreads the first itself -- every
@@ -74,6 +78,19 @@
  (rdr-doors "; comment\n(a . b) {1 2} @(3) (0 ~ 1)")
  (rdr-doors "map (+ 1) '(1 2 3)")                   ; an operator run, glued and spaced
  (rdr-doors "1.5e3 -2 0xff 1/2 [a b] {c d}"))
+
+; --- a run over many forces ---------------------------------------------------------
+; a charlist with a promise at every position, a byte a force: a token, a text and a
+; comment each cross one per byte, and read what the string door reads. the walk forces on
+; until its run's end has arrived and lays the chunks out once, so a run costs its length
+(: (rdr-drip s i) (i < #s ? (s i . (u \ rdr-drip s (i + 1))))
+   (rdr-dripped s) (<(sound (rdr-drip s 0)) = <(sound s))
+ (test (rdr-dripped "abc-def 7") (rdr-dripped "2?<>x") (rdr-dripped "\"a \\x41\\u{e9} \\(1 + 2) b\" 3")
+       (rdr-dripped "\"\"\"raw \" text\"\"\"") (rdr-dripped "; a comment\n(a . b)")
+       (rdr-dripped "#!/usr/bin/env love\n(a b)")
+       (test-linear (n \ sound (rdr-drip ("a" * n) 0)) 16000)
+       (test-linear (n \ sound (rdr-drip ("\"" + "a b " * n + "\"") 0)) 4000)
+       (test-linear (n \ sound (rdr-drip ("; " + "c" * n + "\n7") 0)) 16000)))
 
 ; --- the lexer law -------------------------------------------------------------
 ; the leading character splits the token. a name token (alnum/_) keeps - ? ! and

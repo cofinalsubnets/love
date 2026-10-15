@@ -531,7 +531,7 @@ static struct g *bmul_setup(struct g *g) {
 // yieldable VM instruction. the whole computation lives in one pinned cask
 // [hdr | job stack | A(n) | B(n) | R(2n) | scratch], re-read by offset each
 // dispatch. a job either splits (push the three half-size children, LIFO) or
-// combines (z1 -= z0; z1 -= z2; r += z1<<m). only na==nb routes here.
+// combines (z1 -= z0; z1 -= z2; r += z1<<m). a shorter operand rides zero-padded to n.
 #define kmul_chunk (1 << 14)   // leaf limb-mults folded per dispatch before a yield check
 #define KmulHdr 8             // ws header limbs: [0]=n [1]=top (stack ptr) [2]=sign [3]=r_off
 #define KmulJw  6             // job record limbs: ar, br, n, rr, sr, state
@@ -539,8 +539,8 @@ static union u const kmul_loop[1] = { { .ap = lvm_kmul } };
 
 static struct g *kmul_setup(struct g *g) {
  word a = g->sp[0], b = g->sp[1];
- // caller contract: bigp(a)&&bigp(b), na==nb==n, n>=kara_cutoff
- int n = big_nlimbs(a), d = 0;
+ // caller contract: bigp(a)&&bigp(b), n = the longer's limbs >= kara_cutoff
+ int n = max(big_nlimbs(a), big_nlimbs(b)), d = 0;
  for (int t = n; t >= kara_cutoff; t = (t + 1) / 2) d++;   // karatsuba depth
  uintptr_t njob = (uintptr_t) 8 * d + 32,                 // job-stack capacity (~3d live, generous)
            scrn = (uintptr_t) 6 * n + 16 * (uintptr_t) d + 256,      // O(n) scratch, with margin
@@ -555,14 +555,13 @@ static struct g *kmul_setup(struct g *g) {
  if (!ok(g = have(g, sreq + breq + 3))) return g;
  a = g->sp[0], b = g->sp[1];                              // re-fetch (have may have GC'd)
  love_limb sa[wlimbs], sb[wlimbs]; love_limb const *la, *lb; bool nega, negb;
- (void) load_int_mag(a, sa, &la, &nega);
- (void) load_int_mag(b, sb, &lb, &negb);
+ int na = load_int_mag(a, sa, &la, &nega), nb = load_int_mag(b, sb, &lb, &negb);
  struct str *ws_s = ini_str(str(g->hp), wslimbs * sizeof(love_limb));
  g->hp += sreq;
  love_limb *ws = (love_limb*) txt(ws_s);
  memset(ws, 0, wslimbs * sizeof(love_limb));
- memcpy(ws + a_off, la, (size_t) n * sizeof(love_limb));
- memcpy(ws + b_off, lb, (size_t) n * sizeof(love_limb));
+ memcpy(ws + a_off, la, (size_t) na * sizeof(love_limb));          // the rest stays the memset's zeros
+ memcpy(ws + b_off, lb, (size_t) nb * sizeof(love_limb));
  ws[0] = (love_limb) n, ws[1] = 1, ws[2] = (love_limb) (nega != negb), ws[3] = r_off;   // n, top=1, sign, r_off
  love_limb *j0 = ws + jobs_off;                             // the root job: multiply a x B -> R
  j0[0] = a_off, j0[1] = b_off, j0[2] = (love_limb) n, j0[3] = r_off, j0[4] = scr_off, j0[5] = 0;
@@ -641,9 +640,9 @@ lvm(lvm_bmul_start) {
  word a = Sp[0], b = Sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
  if (na <= bmul_chunk / nb) LvmResume(g, big_binop, vop_mul)
- if (bigp(a) && bigp(b) && na == nb) {           // equal-length large: subquadratic Karatsuba
+ if (bigp(a) && bigp(b) && 2 * min(na, nb) >= max(na, nb)) {   // near-equal large: subquadratic Karatsuba
   LvmResume(g, kmul_setup) }
- LvmResume(g, bmul_setup) }   // unequal-length large: chunked schoolbook
+ LvmResume(g, bmul_setup) }   // lopsided large: chunked schoolbook
 
 static lvm(lvm_bmul) {
  int i = (int) getcharm(Sp[0]);
@@ -860,6 +859,17 @@ lvm(lvm_alen) {
  word x = Sp[0];
  if (!packp(x)) love_musttail return Answer(ZeroPoint);
  love_musttail return Answer(putcharm(tray_nelem(tray(x)))); }
+
+// the bits of an integer's magnitude, 0 for 0: 2^(n-1) <= |x| < 2^n. zero for a non-integer
+lvm(lvm_bitlen) {
+ word x = Sp[0];
+ if (charmp(x)) {
+  intptr_t v = getcharm(x);
+  uintptr_t m = v < 0 ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
+  love_musttail return Answer(putcharm(m ? 64 - __builtin_clzll((unsigned long long) m) : 0)); }
+ if (!bigp(x)) love_musttail return Answer(ZeroPoint);
+ int n = big_nlimbs(x);                                  // canonical: the top limb is nonzero
+ love_musttail return Answer(putcharm((intptr_t) (n - 1) * limb_bits + limb_bits - limb_clz(big(x)->limb[n-1]))); }
 
 // dimensions as a list (allocates rank link cells), zero for a non-tray.
 lvm(lvm_shape) {
@@ -1107,10 +1117,10 @@ lvm(lvm_inner) {
  uintptr_t K = va->shape[va->rank - 1];
  if (K != vb->shape[0]) love_musttail return Push(ZeroPoint);   // contracted axes must agree
  uintptr_t M = 1, N = 1;
- for (uintptr_t i = 0; i + 1 < va->rank; i++) M *= va->shape[i];
- for (uintptr_t i = 1; i < vb->rank; i++) N *= vb->shape[i];
+ for (uintptr_t i = 0; i + 1 < va->rank; i++) M = mulsat(M, va->shape[i]);
+ for (uintptr_t i = 1; i < vb->rank; i++) N = mulsat(N, vb->shape[i]);
  uintptr_t rank = (va->rank - 1) + (vb->rank - 1), n = mulsat(M, N);
- if (rank > maxrank) love_musttail return Push(ZeroPoint);
+ if (rank > maxrank || n > words_max) love_musttail return Push(ZeroPoint);   // no heap holds it
  bool fdom = va->type == love_R || vb->type == love_R, ar = va->type == love_R, br = vb->type == love_R;
  if (n == 1) {                                  // 1D·1D dot, or any 1-cell contraction -> scalar (invariant)
   word _res;

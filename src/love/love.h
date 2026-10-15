@@ -102,6 +102,12 @@ static love_inline size_t b2w(size_t b) {
 #ifndef love_budget
 # define love_budget 0
 #endif
+// the C stack a compile (ev.c's c0) may take below its outermost frame, in bytes, where the
+// seat says no more: inle's boot stack is a MiB with the page tables under it; a device sets
+// its own (-Dlove_cstack=...), and a host takes three quarters of its rlimit
+#ifndef love_cstack
+# define love_cstack (768u << 10)
+#endif
 
 // --- status ---
 // status rides the 2 pointer tag bits: bit 0 scare, bit 1 more input wanted; eof = both
@@ -277,6 +283,7 @@ enum hook {
  hook_flow,      // a port as a charlist (post.l's `flow`), the reader's port door
  hook_cats,      // cats over a list no fast lane takes (prel's foldr of +)
  hook_obin,      // an object tray's cells no C lane takes: a tray, a coin, a twin (prel's)
+ hook_opfixp,    // the factor pass over a macro's (expansion . operands), the operands kept whole
  hook_n };
 
 struct g {
@@ -336,6 +343,8 @@ struct g {
                                             // rule the nursery gets what the major pool leaves
    minor0, major0, ratio;         // nursery floor, major grow/shrink step, copy-overhead setpoint;
                                           // seeded at ini, moved by `tune`. untraced: a bake drops them.
+ uintptr_t cbase, croom;          // a compile's outermost C frame (ev.c's c0), 0 outside one, and the stack it may take
+ uintptr_t ask;                   // the words the collector was asked for while it works: an oom's first datum
  union {
   intptr_t v0;
   struct {
@@ -343,6 +352,7 @@ struct g {
      stack,  // the books checked out, ours on top; the macro table is stack[zero]'s, and
              // love's `book` is this one's head. GC-forwarded in v0..end.
      scare_a, scare_b, // the last scare's condition data, stashed at the raise for
+     scare_c,    // a C lane's reason, (tag . datum), for the scare it fails with: the re-raise takes it
      hook[hook_n], // the hooks (enum hook)
      lib,        // the library: name -> book. `borrow` takes one onto the stack, `cite`
                  // reads one where it stands, `leave` checks the written one back in.
@@ -453,6 +463,12 @@ int k_horn_open(int rate);
 intptr_t k_horn_write(unsigned char const*, uintptr_t);
 uintptr_t k_horn_lag(void);
 void k_horn_close(void);
+// the seat's mic, the caller's channels of 16-bit: open -> 0 | -1 none; read -> bytes of
+// whole frames, 0 dry, -1 gone; lag -> frames heard and unread
+int k_horn_in_open(int rate, int chans);
+intptr_t k_horn_read(unsigned char*, uintptr_t);
+uintptr_t k_horn_in_lag(void);
+void k_horn_in_close(void);
 // ..and the same face on whichever seat this is: k_horn_* under inle, the host's own
 // card otherwise (src/love/horn.c keeps that one open). what src/inle/doomsnd.c calls.
 int love_horn_open(int rate);
@@ -606,7 +622,7 @@ void image_warm(void);
 void code_warm(struct g *g);
 
 // the terminal scare face: ";; a b\n" (show forms) to the err port from the stashed
-// condition data; the bare oom prints ";; oom@len=N\n".
+// condition data; the bare scare prints ";; oom (ask nursery major)\n".
 void scare_face(struct g*);
 
 extern struct fio love_stdin, love_stdout, love_stderr;
@@ -785,11 +801,12 @@ lvm_t lvm_kcall,
  lvm_argcap, lvm_argcup, lvm_argtwo, lvm_argcond,
  lvm_argtwocond,                                  // load + predicate + cond
  lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_twirl, lvm_wait,
- lvm_sleep, lvm_donep, lvm_scoop, lvm_hush,
+ lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_deadlock,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound, lvm_sounds,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
+ lvm_bitlen,
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_aany, lvm_max2, lvm_min2, lvm_floor, lvm_inner, lvm_outer,
  lvm_litp, lvm_hotp,
  lvm_nif,         // codegen backend: emitted bytes -> applicable native value (1-arg / multi-arg)
@@ -1214,6 +1231,7 @@ int code_in(struct g *g, uintptr_t v);
 // the instruction table (src/love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. nif_cell draws the line against a nif's run.
 intptr_t op_index(intptr_t ap), op_resolve(intptr_t i), def_index(intptr_t x), fn_nif(intptr_t f);
+intptr_t image_seat(word v);   // an out-of-pool word's image index, -1 for none (snap.c)
 
 // what a cell hands back as a value, or (). the three refusals are all the machine's own
 // words, never love's: a terminator (the heap's bookkeeping), an instruction the op table

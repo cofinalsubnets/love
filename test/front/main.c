@@ -472,6 +472,6 @@ int main(int argc, char const **argv) {
   g = evals_(g, "(borrow 'cli)");
   g = love_open(g);                   // the session layer: one load, one layer
   for (int i = 1; i < argc && ok(g); i++) g = evals_(g, slurp(argv[i]));
-  if (code_of(g) == status_scare) scare_face(g);    // the honest face: ";; a b", or ";; oom@len=N" bare
+  if (code_of(g) == status_scare) scare_face(g);    // the honest face: ";; a b", or ";; oom (ask nursery major)" bare
   fflush(stdout);
   return fin(g); }

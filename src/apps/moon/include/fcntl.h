@@ -31,6 +31,8 @@
 #define O_CLOEXEC   524288
 #ifdef __i386__
 #define O_LARGEFILE 32768  /* 0100000: off_t is 64-bit, so every open asks for it */
+#elif defined(__ARM_EABI__)
+#define O_LARGEFILE 131072 /* arm's 0400000 */
 #else
 #define O_LARGEFILE 0      /* glibc's on 64-bit: every open is large already */
 #endif

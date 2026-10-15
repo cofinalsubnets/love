@@ -76,5 +76,23 @@
   ; worklist compares above the pending pairs, so the differing tail still tells
   !((. (a \ (\ 5)) (. 5 6)) = (. (b \ (\ 5)) (. 5 7)))
   ((. (a \ (\ 5)) (. 5 6)) = (. (b \ (\ 5)) (. 5 6)))
+  ; the pairs taken as equal grow with the walk: 2000 equal threads built apart, one pair each
+  ((map (_ \ ev '(\ x (+ x 1))) ^2000) = (map (_ \ ev '(\ x (+ x 1))) ^2000))
   (string? (show map))
   (10 < #(show map))))
+
+; a source application n deep compiles in its length: ((((1)))) peels at every level. the two
+; compile laws here time hosted seats only: on the inle kernel they read a ratio the hosted
+; seats do not, unsettled yet whether that is its compile or its clock
+(: (fnq-nest n) (n = 0 ? 1 [(fnq-nest (n - 1))])
+ (test (1 = ev (fnq-nest 50)) (test-linear (n \ ev ['\ 'u (fnq-nest n)]) 1500)))
+
+; opfix twice is opfix once: an operator symbol it makes an operand is spelled by value
+(: (fnq-fix s) (opfix <(sound s) @ a (opfix a = a))
+ (test (fnq-fix "(. = (.))") (fnq-fix "(c ? + -)") (fnq-fix "(a < b <= c)") (fnq-fix "(map (+) l)")
+       (fnq-fix "(x @ [a b] (a + b))") (fnq-fix "(: a 1 b (a + 1) (\\ q (q * b)))")
+       (1 = ev <(sound "(. = (.))"))))
+; text holes nested n deep compile in their length: each macro's operands come in factored
+(: (fnq-holes k) (k = 0 ? "\"x\"" ("\"a \\(" + fnq-holes (k - 1) + ") b\""))
+ (test ("a a x b b" = ev <(sound (fnq-holes 2)))
+       (test-linear (n \ ev ['\ 'u <(sound (fnq-holes n))]) 250)))

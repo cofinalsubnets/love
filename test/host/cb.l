@@ -544,6 +544,22 @@
    _ (scribe s4 (frame 59 "/wAA"))
    _ (test (pic? s4 0) (pic? s4 39) (red = tilepx s4 0 0 0) (red = tilepx s4 39 7 15)
            (59 = picture s4 (sl s4) 0))
+   ; a PNG sent again larger under its id lands above its neighbour, which stays as it was
+   p1 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC"
+   p4 "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAD0lEQVR4nGNg+M+AQMRxAJ6jD/Flt2QIAAAAAElFTkSuQmCC"
+   p8 "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEElEQVR4nGNg+M+AHQ0tCQDpMD/B9YBzjgAAAABJRU5ErkJggg=="
+   s5 (mkscr 4 10)
+   _ (scribe s5 ("\e_Ga=T,f=100,i=1,q=2;" + p4 + "\e\\\e[2;1H\e_Ga=T,f=100,i=2,q=2;" + p1 + "\e\\"))
+   _ (test (green = tilepx s5 0 3 3) (blue = tilepx s5 10 0 0) (4 = picture s5 (sl s5) 0))
+   _ (scribe s5 ("\e[3;1H\e_Ga=T,f=100,i=1,q=2;" + p8 + "\e\\"))
+   _ (test (blue = tilepx s5 10 0 0) (green = tilepx s5 20 7 7))
+   ; ..and a transfer still open when a sixel lands gives way, the sixel's pixels kept from
+   ; the bytes that follow, a PNG's or raw
+   (late q b) (: t (mkscr 4 10)
+                _ (scribe t (q + "\e[2;1H\ePq#0;2;100;0;0!10~\e\\\e_Gm=0,q=2;" + b + "\e\\"))
+                [(tilepx t 10 0 0) (tilepx t 11 1 5)])
+   _ (test ([red red] = late "\e_Ga=T,f=100,i=5,q=2,m=1;\e\\" p8)
+           ([red red] = late "\e_Ga=T,f=24,s=2,v=1,i=6,q=2,m=1;\e\\" "AP8AAP8A"))
    ; a=d: every placement goes; d=i one image's
    _ (scribe s "\e_Ga=d,d=i,i=8\e\\")
    _ (test (pic? s 0) !(pic? s 10))

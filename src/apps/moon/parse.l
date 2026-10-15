@@ -248,6 +248,16 @@
           (!(elem s '("rsp" "sp" "esp" "%rsp" "%esp")) ?
              (blame >>>>ts ("a global register variable is taken on the stack pointer only, not '" + s + "'"))
              (pin (ps 'gregs) nm [s 'long], >>>>ts))))
+   ; a file-scope declarator's asm label, `void f(void) asm("g")`: the object's symbol is g, the
+   ; name the object writer lays (adjacent strings join, glibc's `__asm__ ("" "g")`); the C name
+   ; stays the program's. any other shape refuses, since a skip would rename it in silence
+   (plabel ps ts nm)
+    (? (atom? ts || !(asmid? <ts) || !(peekp >ts "(")) ts
+       !(strat? >>ts) (blame >ts "an asm label is a string")
+       (: (strs l acc) (strat? l ? (strs >l (acc + tkv <l)) [acc l])
+          (strs >>ts "" @ [lb r]
+             (!(peekp r ")") ? (blame r "an asm label is a string")
+                (pin (ps 'anames) nm lb, >r)))))
    ; `const` in the specifier run; it names the object only when the declarator adds no
    ; pointer of its own, which cobj? decides per declarator.
    (leadconst? ps ts) (leadkw? ps ts 'const)
@@ -311,7 +321,7 @@
    ; parenthesised constant expression folds (the kernel's `2 * sizeof(unsigned long)`), and one
    ; that will not fold asks nothing
    (palask ps ts)
-    (!(peekp ts "(") ? [(elem (ps 'tgt) '(thumb2 thumb2sp thumb1) ? 8 16) ts]   ; AAPCS32's 8; i386's SSE asks 16
+    (!(peekp ts "(") ? [(elem (ps 'tgt) '(thumb2 thumb2sp arm thumb1) ? 8 16) ts]   ; AAPCS32's 8; i386's SSE asks 16
        (thenw (pexpr ps >ts) ")" @ er
           (atom? er ? [0 ts]
              (cfold (pw64 ps) <er @ v [(charm? v ? v 0) <>er]))))
@@ -367,6 +377,7 @@
                  pin t 'consts {},        ; global name -> 1 when `const` names the object and it has an initializer
                  pin t 'rstrs {},         ; fn name -> its `T *restrict` param names (the alias promise, out of band)
                  pin t 'gregs {},         ; a file-scope `register T nm asm("R")`: nm -> (R ty), no storage laid
+                 pin t 'anames {},        ; a file-scope declarator's asm label: nm -> the symbol it is laid as
                  pin t 'currstr (),               ; ...accumulating for the declaration being parsed, like curweak
                  pin t 'aligns {},        ; global name -> its __attribute__((aligned(N))) boundary
                  pin t 'locals {},        ; local/param name -> its declared type (for parse-time sizeof folding)
@@ -432,12 +443,12 @@
    (ptyat? ps ts) (peekp ts "(" && tyat? ps >ts)       ; ..inside a `(`: a cast, a type-name operand
    ; -- the type floor rides src/apps/moon/floor.l (shapes, sizes, the typing door), read from
    ; gen too. ps carries the two things it takes as parameters: the word and the tag table --
-   (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp thumb1 i386 i386m16))   ; the 32-bit word: long 4 bytes, long long the pair
+   (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp arm thumb1 i386 i386m16))   ; the 32-bit word: long 4 bytes, long long the pair
    ; char is three types (C11 6.2.5p15): 'schar and 'uchar, and plain char -- 'char where the ABI makes it
    ; signed (x86-64, wasm's C conventions), 'cchar where unsigned (AAPCS64, AAPCS32, RISC-V). each
    ; symbol's sign is its own, so nothing past here asks the target
-   (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp))   ; a64 and the thumbs lay bit-fields by AAPCS
-   (pchar ps) (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp) ? 'cchar 'char)
+   (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp arm))   ; a64 and the thumbs lay bit-fields by AAPCS
+   (pchar ps) (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp arm) ? 'cchar 'char)
    (pw64 ps) !(pst32? ps)                          ; is long 8 bytes? the const folder's one question
    (psword ps) (pst32? ps ? 4 8)
    (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t: sizeof folds wear this coat
@@ -1253,7 +1264,7 @@
              (elem (tkk t) '(wstr str16 str32))
               (: ety (? (tkk t = 'str16 || ps 'swch) 'ushort
                         (tkk t = 'str32) 'uint
-                        (elem (ps 'tgt) '(a64 thumb2 thumb2sp thumb1)) 'uint
+                        (elem (ps 'tgt) '(a64 thumb2 thumb2sp arm thumb1)) 'uint
                         'int)
                  (s16 l) (? (atom? l) ()
                             (65536 <= <l) (<l - 65536 @ v
@@ -2762,7 +2773,7 @@
                              (? (peekp ts3 "[")
                                 (adims ps ts3 () @ dr  ; one or more [n]/[] dims (enum consts fold)
                                    (atom? dr ? ()
-                                      (: dims <dr rest0 (patt <>dr)   ; an array declarator carries trailing attributes too
+                                      (: dims <dr rest0 (patt (plabel ps <>dr nm))   ; an array declarator carries trailing attributes too
                                          (atom? >dims && <dims = 0 ?      ; a lone [] -- size from init, or 0 (extern)
                                              (!(peekp rest0 "=") ? [[nm ['arr t2 0] ()] rest0]      ; no init: incomplete, size 0
                                                 (pinit ps >rest0 @ ir
@@ -2795,7 +2806,7 @@
                                 (peekp ts3 "," ?
                                    (pdtor ps >ts3 base @ dr
                                       (atom? dr ? ()
-                                         (one (patt (pgreg ps <>dr <<dr (leadregister? ps ts))) <<dr <><dr @ r
+                                         (one (patt (plabel ps (pgreg ps <>dr <<dr (leadregister? ps ts)) <<dr)) <<dr <><dr @ r
                                             (two? r ? (more <>r (<r . acc))))))
                                    ; a declarator whose type is a function type (a function-type
                                    ; typedef) declares a function -- register its sig, lay no
@@ -2844,7 +2855,7 @@
                                (: rp (krhead? ps >ts2 ? (pkr ps >ts2) (pparams ps >ts2 ()))
                                   (atom? rp ? ()
                                      (: _ (pin (ps 'sigs) name (mksig rty rp))
-                                        aft (patt <>rp)                     ; a trailing __attribute__((..)) after the proto/fn declarator
+                                        aft (patt (plabel ps <>rp name))    ; a trailing __attribute__((..)) after the proto/fn declarator
                                         (? (peekp aft ";") [['proto name] >aft]
                                            ; more comma-separated declarators sharing base -- each
                                            ; `* nm (params)` is another prototype, ending at `;`. a
@@ -2859,11 +2870,11 @@
                                (fn? fpty)                                ; the declarator is a function (returns a fn-ptr):
                                                                          ; the return type is <>fpty, the params rode fprm out of pdtor
                                 (: _ (pin (ps 'sigs) name (mksig <>fpty fprm))
-                                   aft (patt ts2)
+                                   aft (patt (plabel ps ts2 name))
                                    (peekp aft ";" ? [['proto name] >aft]
                                       (pfbody ps name <fprm aft)))
                                ; a global declaration; the first declarator's stars came off `sr`
-                               (one (patt (pgreg ps ts2 name (leadregister? ps ts))) name (two? fpty ? fpty rty) @ first
+                               (one (patt (plabel ps (pgreg ps ts2 name (leadregister? ps ts)) name)) name (two? fpty ? fpty rty) @ first
                                   (two? first ? (more <>first [<first]))))))))))))
    ; a parse refusal names where it stood. the first pass ran unstamped and left no trail, so
    ; stamp just this form and run it through ptop again, marking as it goes. the furthest token
@@ -2984,7 +2995,7 @@
            (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
                       [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol])
+                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames)])
            (ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why

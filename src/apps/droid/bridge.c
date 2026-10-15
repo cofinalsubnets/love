@@ -6,17 +6,21 @@
      love -> bridge  'F' u16 w u16 h u16 y u16 n, then n*w words 0x00rrggbb: rows y.. of a
                      w by h frame, scaled to what the window shows
                      'I' u8 on: the soft keyboard up, then toggled at each touch, or down
+                     'C' u32 n, then n bytes: a selection's text for the clipboard
+                     'V': the clipboard's text asked for, as 'P' records
      bridge -> love  12-byte records (u8 kind, u8 a, u16 0, i32 b, i32 c):
                      'S' the window's visible part, b by c pixels
                      'K' key a=down, b=android keycode, c=the character it types or 0
                      'T' touch a=action (0 down 1 up 2 move), b c in frame pixels
+                     'P' a paste's piece, a=its length, up to ten bytes from the third; a=0 ends it
    sound is a second socket: love's horn (HORN=sock:PATH) says the rate as a u32, then
    s16 stereo frames, which a thread of their own plays through AAudio. the mic is a
    third (HORN_IN=sock:PATH): the rate word's top byte asks the channels, and an AAudio
    input stream's s16 frames go back. assets/perms names the permissions to ask for at
    start (RECORD_AUDIO for the mic), NUL-separated; the input stream waits on the grant.
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
-   directory before each start, which is love's cwd and HOME. */
+   directory before each start, which is love's cwd and HOME. when love ends it is started
+   again; the app ends as android ends it. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
 
@@ -42,7 +46,6 @@ int ANativeWindow_setBuffersGeometry(void *, int, int, int);
 int ANativeWindow_getWidth(void *); int ANativeWindow_getHeight(void *);
 int ANativeWindow_lock(void *, ANativeWindow_Buffer *, void *);
 int ANativeWindow_unlockAndPost(void *);
-void ANativeActivity_finish(void *);
 void *ALooper_prepare(int); int ALooper_addFd(void *, int, int, int, void *, void *);
 int ALooper_removeFd(void *, int); int ALooper_pollOnce(int, int *, int *, void **); void ALooper_wake(void *);
 void AInputQueue_attachLooper(void *, void *, int, void *, void *); void AInputQueue_detachLooper(void *);
@@ -54,7 +57,7 @@ void *AAssetManager_open(void *, char const *, int); void const *AAsset_getBuffe
 long AAsset_getLength(void *); void AAsset_close(void *);
 void *AAssetManager_openDir(void *, char const *); char const *AAssetDir_getNextFileName(void *); void AAssetDir_close(void *);
 int dladdr(void const *, Dl_info *);
-pid_t fork(void); int execve(char const *, char *const[], char *const[]); int pipe2(int[2], int);
+pid_t fork(void); int execve(char const *, char *const[], char *const[]); int pipe2(int[2], int); int fcntl(int, int, ...);
 int dup2(int, int); int close(int); ssize_t read(int, void *, size_t); ssize_t write(int, void const *, size_t);
 void _exit(int); pid_t waitpid(pid_t, int *, int); int kill(pid_t, int); int chdir(char const *);
 int open(char const *, int, ...); int unlink(char const *);
@@ -74,7 +77,7 @@ void *dlsym(void *, char const *); int usleep(unsigned); ssize_t send(int, void 
 struct pollfd { int fd; short events, revents; }; int poll(struct pollfd *, unsigned long, int);
 
 enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR };
-enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_CLOEXEC = 02000000 };
+enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOEXEC = 02000000 };
 
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
@@ -100,6 +103,12 @@ static void put(br *b, int kind, int a, int x, int y) {
   pthread_mutex_lock(b->mu);
   if (b->csock >= 0) write(b->csock, r, 12);
   pthread_mutex_unlock(b->mu);
+}
+
+static int writeall(int fd, void const *p, size_t n) {
+  char const *c = p;
+  while (n) { ssize_t k = write(fd, c, n); if (k <= 0) return -1; c += k; n -= (size_t) k; }
+  return 0;
 }
 
 static int vis(br *b) { return b->vh > 0 && b->vh < b->wh ? b->vh : b->wh; }
@@ -241,10 +250,113 @@ static void input(br *b) {
   }
 }
 
+/* the clipboard service, under a local frame the caller pops */
+static void *clipboard(br *b, void *e) {
+  void *const *t = *(void *const **) e;
+  void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
+  void *(*callo)(void *, void *, void *, ...) = t[34]; void *(*str)(void *, char const *) = t[167];
+  void *ac = b->a->clazz;
+  return callo(e, ac, mid(e, cls(e, ac), "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;"), str(e, "clipboard"));
+}
+
+/* n bytes of utf-8 as the clipboard's text: new String(bytes, "UTF-8") into
+   ClipData.newPlainText, which takes a whole code point where modified utf-8 would not */
+static void copied(br *b, char const *s, size_t n) {
+  void *e = b->env; if (!e) return;
+  void *const *t = *(void *const **) e;
+  void *(*find)(void *, char const *) = t[6]; void (*clear)(void *) = t[17];
+  int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
+  void *(*newo)(void *, void *, void *, ...) = t[28]; void *(*cls)(void *, void *) = t[31];
+  void *(*mid)(void *, void *, char const *, char const *) = t[33]; void (*callv)(void *, void *, void *, ...) = t[61];
+  void *(*smid)(void *, void *, char const *, char const *) = t[113]; void *(*cso)(void *, void *, void *, ...) = t[114];
+  void *(*str)(void *, char const *) = t[167]; void *(*bytes)(void *, int) = t[176];
+  void (*setb)(void *, void *, int, int, void const *) = t[208];
+  if (push(e, 16)) { clear(e); return; }
+  void *cm = clipboard(b, e), *ba = cm ? bytes(e, (int) n) : 0;
+  if (ba) setb(e, ba, 0, (int) n, s);
+  void *sc = ba ? find(e, "java/lang/String") : 0, *ni = sc ? mid(e, sc, "<init>", "([BLjava/lang/String;)V") : 0;
+  void *js = ni ? newo(e, sc, ni, ba, str(e, "UTF-8")) : 0;
+  void *cd = js ? find(e, "android/content/ClipData") : 0;
+  void *np = cd ? smid(e, cd, "newPlainText", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Landroid/content/ClipData;") : 0;
+  void *clip = np ? cso(e, cd, np, str(e, "love"), js) : 0;
+  void *set = clip ? mid(e, cls(e, cm), "setPrimaryClip", "(Landroid/content/ClipData;)V") : 0;
+  if (set) callv(e, cm, set, clip);
+  clear(e); pop(e, 0);
+}
+
+/* a selection from love: its length, then its bytes; one past 16M is read and let go */
+static int copy(br *b) {
+  unsigned char h[4]; char sink[4096];
+  if (readall(b->csock, h, 4)) return -1;
+  size_t n = h[0] | h[1] << 8 | h[2] << 16 | (size_t) h[3] << 24;
+  char *s = n && n < 1 << 24 ? mmap(0, n, 3, 0x22, -1, 0) : 0;
+  if (s == (void *) -1) s = 0;
+  if (s) {
+    if (readall(b->csock, s, n)) return munmap(s, n), -1;
+    copied(b, s, n); munmap(s, n);
+    return 0;
+  }
+  for (size_t k; n; n -= k) { k = n < sizeof sink ? n : sizeof sink; if (readall(b->csock, sink, k)) return -1; }
+  return 0;
+}
+
+/* the clipboard's first item as text to love, ten bytes a record and an empty one to end,
+   at most 64K and cut where a character begins: the socket holds it all without waiting */
+static void paste(br *b) {
+  enum { most = 1 << 16 };
+  void *e = b->env; char *s = 0; int n = 0, got = 0;
+  if (e) {
+    void *const *t = *(void *const **) e;
+    void (*clear)(void *) = t[17]; int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
+    void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
+    void *(*callo)(void *, void *, void *, ...) = t[34]; int (*calli)(void *, void *, void *, ...) = t[49];
+    void *(*str)(void *, char const *) = t[167]; int (*alen)(void *, void *) = t[171];
+    void (*getb)(void *, void *, int, int, void *) = t[200];
+    if (!push(e, 16)) {
+      void *cm = clipboard(b, e);
+      void *gp = cm ? mid(e, cls(e, cm), "getPrimaryClip", "()Landroid/content/ClipData;") : 0;
+      void *cd = gp ? callo(e, cm, gp) : 0;
+      void *gc = cd ? mid(e, cls(e, cd), "getItemCount", "()I") : 0;
+      void *it = gc && calli(e, cd, gc) > 0 ? callo(e, cd, mid(e, cls(e, cd), "getItemAt", "(I)Landroid/content/ClipData$Item;"), 0) : 0;
+      void *ct = it ? mid(e, cls(e, it), "coerceToText", "(Landroid/content/Context;)Ljava/lang/CharSequence;") : 0;
+      void *cs = ct ? callo(e, it, ct, b->a->clazz) : 0;
+      void *js = cs ? callo(e, cs, mid(e, cls(e, cs), "toString", "()Ljava/lang/String;")) : 0;
+      void *gb = js ? mid(e, cls(e, js), "getBytes", "(Ljava/lang/String;)[B") : 0;
+      void *ba = gb ? callo(e, js, gb, str(e, "UTF-8")) : 0;
+      n = ba ? alen(e, ba) : 0;
+      if (n > most) n = most;
+      s = n ? mmap(0, (size_t) n, 3, 0x22, -1, 0) : 0;
+      if (s == (void *) -1) s = 0, n = 0;
+      if (s) getb(e, ba, 0, n, s), got = n;
+      if (s && n == most) {
+        while (n && (s[n - 1] & 0xc0) == 0x80) n--;
+        if (n && (s[n - 1] & 0xc0) == 0xc0) n--;
+      }
+      clear(e); pop(e, 0);
+    } else clear(e);
+  }
+  size_t rn = ((size_t) n + 9) / 10 * 12 + 12;
+  unsigned char *r = mmap(0, rn, 3, 0x22, -1, 0);
+  if (r == (void *) -1) r = 0;
+  if (r) {
+    for (int i = 0, k = 0; i < n; i += 10, k += 12) {
+      r[k] = 'P'; r[k + 1] = (unsigned char) (n - i < 10 ? n - i : 10);
+      for (int j = 0; j < r[k + 1]; j++) r[k + 2 + j] = (unsigned char) s[i + j];
+    }
+    r[rn - 12] = 'P';
+    pthread_mutex_lock(b->mu);
+    if (b->csock >= 0) writeall(b->csock, r, rn);
+    pthread_mutex_unlock(b->mu);
+    munmap(r, rn);
+  }
+  if (s) munmap(s, (size_t) got);
+}
+
 /* love's stdout and stderr, a line at a time, to logcat */
 static int logs(br *b) {
   ssize_t k = read(b->logfd, b->line + b->nline, sizeof b->line - 1 - (size_t) b->nline);
-  if (k <= 0) return -1;
+  if (k == 0) return -1;                       /* its end; a read that would wait is a stale wake */
+  if (k < 0) return 0;
   b->nline += (int) k;
   int s = 0;
   for (int i = 0; i < b->nline; i++)
@@ -338,11 +450,17 @@ static void *loop(void *p) {
       if (!bad && k == 'I') {
         bad = readall(b->csock, &on, 1);
         if (!bad) keyboard(b, b->env, b->typing = on);
-      } else if (!bad) bad = k != 'F' || frame(b);
-      if (bad) {
+      } else if (!bad && k == 'C') bad = copy(b);
+      else if (!bad && k == 'V') paste(b);
+      else if (!bad) bad = k != 'F' || frame(b);
+      if (bad) {                                  /* love ended: it starts again, as a page boots its line */
         ALooper_removeFd(b->looper, b->csock);
         pthread_mutex_lock(b->mu); close(b->csock); b->csock = -1; pthread_mutex_unlock(b->mu);
-        ANativeActivity_finish(b->a);
+        if (b->pid > 0) waitpid(b->pid, 0, 0);
+        if (b->logfd >= 0) ALooper_removeFd(b->looper, b->logfd), close(b->logfd);
+        b->nline = 0;
+        spawn(b);
+        ALooper_addFd(b->looper, b->logfd, LOG, 1, 0, 0);
       }
     } else if (id == HORN) {
       long t; int c = accept4(b->hsock, 0, 0, O_CLOEXEC);
@@ -383,7 +501,7 @@ static void spawn(br *b) {
   int p[2]; pipe2(p, O_CLOEXEC);
   b->pid = fork();
   if (!b->pid) { dup2(p[1], 1); dup2(p[1], 2); chdir(b->data); execve(exe, av, ev); _exit(127); }
-  close(p[1]); b->logfd = p[0];
+  close(p[1]); b->logfd = p[0]; fcntl(p[0], 4, O_NONBLOCK);     /* F_SETFL: the loop never waits on it */
   if (as) AAsset_close(as);
 }
 
