@@ -7,7 +7,7 @@ typedef unsigned int uid_t;
 typedef unsigned int gid_t;
 typedef unsigned int id_t;
 typedef unsigned int mode_t;
-#ifdef __i386__                 /* the 64-bit file and time words a 32-bit long cannot hold */
+#ifdef __ILP32__                /* the 64-bit file and time words a 32-bit long cannot hold */
 typedef long long off_t;
 typedef unsigned long long dev_t;
 typedef unsigned long long ino_t;

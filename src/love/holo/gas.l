@@ -97,7 +97,7 @@
                 (foldl (\ _ i (pin t (name ("r" + show i)) (name ("r" + show i)))) 0 ^13,
                  pin t 'sp 'sp, pin t 'lr 'lr,
                  t))
-   (gthumb? tgt) (elem tgt '(thumb2 thumb2sp thumb1))
+   (gthumb? tgt) (elem tgt '(thumb2 thumb2sp arm thumb1))
    (gx86? tgt) (elem tgt '(x64 i386 i386m16))
    ; a line `name = expr`: an identifier, one `=` (not `==`), something after it
    (gf-eqset? t) (: e (xa-idx t 61)

@@ -11,13 +11,13 @@ typedef struct { unsigned long long __v[16]; } sigset_t;   /* 128 bytes, glibc-s
  * i386's union follows at 12. */
 typedef struct {
   int si_signo, si_errno, si_code;
-#ifndef __i386__
+#ifndef __ILP32__
   int __si_pad;
 #endif
   union {
     void *__addr;
     struct { int __pid; unsigned __uid; int __status; } __chld;
-#ifdef __i386__
+#ifdef __ILP32__
     char __pad[116];
 #else
     char __pad[112];

@@ -29,7 +29,7 @@ case $arch in
            ccnames="aarch64-linux-gnu-gcc a64-nerves-linux-gnu-gcc"
            ccglob="/usr/local/data/*/.nerves/artifacts/nerves_toolchain_a64*/bin/a64-nerves-linux-gnu-gcc"
            ccvar=AARCH64_CC
-           unsupported="100-complex 280-cxf-fuzz 117-vastruct" ;;
+           unsupported="117-vastruct" ;;
   rv64) name=test_ccrv64 ; qemu=qemu-riscv64 ; pretty=rv64
            ccenv=${RISCV64_CC:-}
            ccnames="riscv64-linux-gnu-gcc riscv64-unknown-linux-gnu-gcc riscv64-unknown-elf-gcc"

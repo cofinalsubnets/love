@@ -311,12 +311,13 @@
                'wasm 'wasm  'wasm64 'wasm
                'thumb1 'thumb1  'cortex-m0 'thumb1
                'thumb2 'thumb2  'cortex-m7 'thumb2
+               'arm 'arm  'armv7l 'arm  'armv8l 'arm  'armhf 'arm
                'thumb2sp 'thumb2sp  'playdate 'thumb2sp
                'i386 'i386  'i686 'i386  'ia32 'i386  'x86 'i386
                'i386m16 'i386m16}
    ; the word the world outside says: uname's machine, and the head of a gnu triple. the
    ; embedded targets answer () -- no kernel is ever asked their name.
-   arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64"}
+   arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}
    ; and the same for the kernel -- only the respelling. main.c pins `love-os` per run off
    ; __love_osv: one binary meets four, and the compile that made it cannot say which.
    os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'inle "Inle"}
@@ -727,7 +728,51 @@
 
   ; --- integers: the digits of a non-negative charm/sun/big, most significant first
   (dch n a) (: q (n // 10) d (48 + (n - q * 10)) (0 < q ? (dch q (d . a)) (d . a)))
-  (dstr n) (string (dch n ()))
+  (dstr n) (n < (1 << 256) ? (string (dch n ())) (jug 0 @ o (dsay o n (dlevels n) 0, slurp o)))
+  ; a big's digits by halves: x = q 10^k + r, each half alone, so a print costs products, not
+  ; a division a digit. a level is [10^k bits inv k], inv its reciprocal; the top's is laid
+  ; as the top split needs it, at the quotient's width
+  (dpad w s) (#s < w ? ("0" * (w - #s) + s) s)
+  ; a lopsided product as products of the shorter's width: the longer cut into pieces of it
+  (dmul a b) (: la (bitlen a) lb (bitlen b)
+                (? (lb < la) (dmul b a)
+                   (la < 8192 || lb < 2 * la) (a * b)
+                   (: mk ((1 << la) - 1)
+                      (go b i acc) (b = 0 ? acc (go (b >> la) (i + la) (acc + ((a * (b & mk)) << i))))
+                      (go b 0 0))))
+  ; floor(4^b / p), 2^(b-1) <= p < 2^b: newton from the top half's, its correction from the
+  ; top k bits of each factor, then a fix by the residue
+  (drecip p b) (? (b <= 8192) ((1 << (2 * b)) // p)
+                  (: h (b // 2 + 64) w (1 << (2 * b))
+                     x ((drecip (p >> (b - h)) h) << (b - h))
+                     e (w - p * x)
+                     k (b - h + 64) t (b + 1 - k) u (max 0 (bitlen e - k))
+                     y (x + (((x >> t) * (e >> u)) >> (2 * b - t - u)))
+                     r (w - p * y)
+                     (r < 0 ? (y - ((p - r - 1) // p)) (y + (r // p)))))
+  (dlevels n) (: nb (bitlen n)
+                 (lay l) [<l (l 1) (l 1 > 8192 ? (drecip <l (l 1)) 0) (l 2)]
+                 (go p k acc) (: b (bitlen p) (top _) ([p b 0 k] . map lay acc)
+                                 (2 * b - 2 >= nb ? (top 0)
+                                    (: pp (p * p) (pp > n ? (top 0) (go pp (2 * k) ([p b k] . acc))))))
+                 (go 1000000000000000000 18 ()))                           ; most first
+  ; [q r] of x by p, b its bits, inv its reciprocal or 0. q's m bits are all a product needs:
+  ; the estimate takes inv's top m + 64, or with none divides p's top m + 64 bits into x's
+  (ddiv x p b inv) (: m (bitlen x - b + 1)
+                      (adj q r) (? (r < 0) (adj (q - 1) (r + p)) (r >= p) (adj (q + 1) (r - p)) [q r])
+                      (? (m < 1) [0 x]
+                         (m < 2048 || b <= 8192) [(x // p) (x % p)]
+                         (: q (? (inv != 0) (: s (max 0 (b + 1 - m - 64))
+                                               (((x >> (b - 1)) * (inv >> s)) >> (b + 1 - s)))
+                                 (b - m - 64 > 0) (: s (b - m - 64) ph (p >> s)
+                                                    <(ddiv (x >> s) ph (b - s) (drecip ph (b - s))))
+                                 <(ddiv x p b (drecip p b)))
+                            (adj q (x - dmul q p)))))
+  ; x's digits, w of them (0: as many as it has)
+  (dsay o x ls w) (? (atom? ls) (say o (dpad w (string (dch x ()))))
+                     (: l <ls k (l 3)
+                        (w = 0 && x < <l ? (dsay o x >ls 0)
+                           (: qr (ddiv x <l (l 1) (l 2)) (dsay o <qr >ls (w ? (w - k) 0), dsay o (qr 1) >ls k)))))
   (ndig n) (n // 10 @ q (0 < q ? (1 + ndig q) 1))          ; the count, without building the list
   (pnum o n) (n < 0 ? (put o 45, say o (dstr (0 - n))) (say o (dstr n)))
 
@@ -824,14 +869,16 @@
        (say o "(array '(", gs sh 1, put o 41, each ^n (i \ (put o 32, pel i)), put o 41)))
 
   ; --- maps print {k v …}, the empty one {}; both read straight back. a map is
-  ; mutable and can hold itself, so the path is carried and matched by identity.
-  (onpath? x l) (? (atom? l) 0 (x == <l) 1 (onpath? x >l))
-  (pmap o m sn) (onpath? m sn ? (say o "<cycle>")
-    (: ks (keys m) s2 (m . sn)
+  ; mutable and can hold itself, so the path is carried as [maps depth mark] and matched
+  ; by identity: the nearest 64 maps, and the mark, the map at the last power of two deep,
+  ; which a longer cycle comes back to within twice its length
+  (onpath? x l k) (? (atom? l || k = 0) 0 (x == <l) 1 (onpath? x >l (k - 1)))
+  (pmap o m sn) (: p (sn 0) d (peep sn 1 0) (m == sn 2 || onpath? m p 64 ? (say o "<cycle>")
+    (: ks (keys m) s2 [(m . p) (d + 1) (d + 1 & d = 0 ? m (sn 2))]
        (go l f) (two? l ? ((f ? 0 (put o 32)),
                            px o <l s2, put o 32, px o (m <l) s2,
                            go >l 0) 0)
-       (atom? ks ? (say o "{}") (put o 123, go ks 1, put o 125))))
+       (atom? ks ? (say o "{}") (put o 123, go ks 1, put o 125)))))
 
   ; --- coins show as (name 'payload), so the form evals back to an equal coin where the name
   ; is a bound ctor. the payload is quoted where it would otherwise re-evaluate -- a chain
@@ -2784,9 +2831,9 @@
         (edbr loop))
    ; evaluate a single parsed datum cooperatively.
    (do_eval v)
-     (: pid (twirl ev v)
+     (: pid (twirl (v \ show (ev v)) v)              ; shown aboard: ^C stops a long print too
         (poll _)
-          (? (landed? pid) (putx (catch pid), -1)   ; the answer
+          (? (landed? pid) ((catch pid @ s (string? s ? (puts s) (putx s))), -1)   ; the answer; a raise's ()
              (cue? 0) 
              (getc 0 @ 3 (puts "^C", freeze pid, -1) (poll ()))
              (rest 0, poll ()))

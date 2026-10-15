@@ -305,10 +305,17 @@
          (u <= 1020 ?
           (t32 (((off < 0 ? nbase pbase) | bn) << 16 | (tn << 12 | (lo | u >> 2))))
           (thumb-mem-far bn off + t32 ((pbase | 12) << 16 | (tn << 12 | lo)))))
-   (thumb-stsd base off s) (thumb-fmem 0xED80 0xED00 0xB00 (frn s) (rn base) off)   ; vstr Ds
-   (thumb-ldsd d base off) (thumb-fmem 0xED90 0xED10 0xB00 (frn d) (rn base) off)   ; vldr Dd
-   (thumb-stss base off s) (thumb-fmem 0xED80 0xED00 0xA00 (frn s) (rn base) off)   ; vstr S[2s]
-   (thumb-ldss d base off) (thumb-fmem 0xED90 0xED10 0xA00 (frn d) (rn base) off)   ; vldr S[2d]
+   ;; ..a packed one off the word: its words through r12 (ldr/str take any byte), each to its
+   ;; single by vmov. a store's far offset would want r12 twice, so it keeps to the near range
+   (thumb-fmemu ld? n f base off)
+      (catall (map (k \ (ld? ? (thumb-ld 'r12 base (off + 4 * k) + thumb-movsnxr (2 * frn f + k) 'r12)
+                           (: _ (-255 <= off && off + 4 * k <= 4095 ? 0 (scare 'fmem-align off))
+                              (thumb-movsnrx 'r12 (2 * frn f + k) + thumb-st base (off + 4 * k) 'r12))))
+                   ^n))
+   (thumb-stsd base off s) (0 != off % 4 ? (thumb-fmemu () 2 s base off) (thumb-fmem 0xED80 0xED00 0xB00 (frn s) (rn base) off))   ; vstr Ds
+   (thumb-ldsd d base off) (0 != off % 4 ? (thumb-fmemu 1 2 d base off) (thumb-fmem 0xED90 0xED10 0xB00 (frn d) (rn base) off))   ; vldr Dd
+   (thumb-stss base off s) (0 != off % 4 ? (thumb-fmemu () 1 s base off) (thumb-fmem 0xED80 0xED00 0xA00 (frn s) (rn base) off))   ; vstr S[2s]
+   (thumb-ldss d base off) (0 != off % 4 ? (thumb-fmemu 1 1 d base off) (thumb-fmem 0xED90 0xED10 0xA00 (frn d) (rn base) off))   ; vldr S[2d]
    (thumb-cvtss2sd d s) (: dn (frn d) sn (frn s) (t32 (0xEEB7 << 16 | (dn << 12 | (0xAC0 | sn)))))   ; vcvt.F64.F32 Dd, S[2s]
    (thumb-cvtsd2ss d s) (: dn (frn d) sn (frn s) (t32 (0xEEB7 << 16 | (dn << 12 | (0xBC0 | sn)))))   ; vcvt.F32.F64 S[2d], Ds
    ;; the numbered single view: an AAPCS-VFP argument slot is any of s0..s15, odd ones
@@ -437,5 +444,6 @@
            'refix thumb-refix
            'nop '(0 191)}                ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    (defbackend 'thumb2 thumb2,
-    defbackend 'thumb2sp thumb2))   ; the SP-only-fpu face (playdate): same encoder, gen softens f64
+    defbackend 'thumb2sp thumb2,    ; the SP-only-fpu face (playdate): same encoder, gen softens f64
+    defbackend 'arm thumb2))        ; linux's arm (armv7-a and up, aarch32): the same thumb-2
 ) ; module 'holo

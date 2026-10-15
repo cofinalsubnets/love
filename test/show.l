@@ -62,3 +62,16 @@
   (: (loop n) (n = 0 ? (show (1 . 2 . 3 . 0))
                  (show "stress", loop (n - 1)))
    ("(1 2 3)" = loop 500)))
+
+; a map that holds itself prints <cycle> where it comes back: a near one at its first
+; return, a ring of a hundred within twice around; one map twice in a map is no cycle.
+; and a nest of maps prints in its length
+(: shm-t {} _ (pin shm-t 'a shm-t)
+   shm-a {} shm-b {} _ (pins shm-a 'b shm-b) _ (pins shm-b 'a shm-a)
+   (shm-ring n) (: ms (map (u \ {}) ^n) _ (each ^n (i \ pin (ms i) 'n (ms ((i + 1) % n)))) <ms)
+   shm-x {1 2} shm-y {'a shm-x 'b shm-x}
+   (shm-nest n x) (n = 0 ? x (shm-nest (n - 1) {'k x}))
+ (test ("{a <cycle>}" = show shm-t) ("{b {a <cycle>}}" = show shm-a)
+       (0 <= fsub (show (shm-ring 100)) "<cycle>" 0) (tally (show (shm-ring 100)) < 4000)
+       !(0 <= fsub (show shm-y) "<cycle>" 0)
+       (test-linear (n \ show (shm-nest n 1)) 1500)))

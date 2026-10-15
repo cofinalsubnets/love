@@ -15,7 +15,8 @@
 # a cell is a compile, not a run: `ok` says the lane exists, not that it is right --
 # test_cts and the cross gates say that.
 # thumb2sp is its own column: its SP-only FPU (the Playdate's STM32F746) softens f64 to
-# __aeabi_* where thumb2's fpv5-d16 does it in hardware.
+# __aeabi_* where thumb2's fpv5-d16 does it in hardware. arm is thumb2's code hosted on
+# linux (-t arm), its own column for the lanes a hosted link alone reaches.
 #
 # usage: moon-parity.sh [table | check | why]
 #   table  (default) the markdown table, ready to paste into doc/misc/moon-c-gaps.md
@@ -36,7 +37,7 @@ d=${TMPDIR:-/tmp}/moon-parity.$$
 mkdir -p "$d"
 trap 'rm -rf "$d"' EXIT
 
-targets='x64 a64 rv64 thumb2 thumb2sp thumb1'
+targets='x64 a64 rv64 thumb2 thumb2sp thumb1 arm'
 
 # p LABEL SOURCE [DECLARED..] -- one feature, compiled on every target. LABEL is the
 # doc's row spelling and the join key; keep the two identical or `check` reports drift
@@ -117,14 +118,14 @@ fi
 cell() { v=$(cat "$d/p$1.$2.v"); [ "$v" = ok ] && printf '✓' || printf '%s' "$v"; }
 
 emit_table() {
-  echo '| lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 |'
-  echo '|---|:-:|:-:|:-:|:-:|:-:|:-:|'
+  echo '| lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 | arm |'
+  echo '|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|'
   i=0
   while [ $i -lt $n ]; do
     i=$((i+1))
-    printf '| %s | %s | %s | %s | %s | %s | %s |\n' "$(cat "$d/p$i.label")" \
+    printf '| %s | %s | %s | %s | %s | %s | %s | %s |\n' "$(cat "$d/p$i.label")" \
       "$(cell $i x64)" "$(cell $i a64)" "$(cell $i rv64)" \
-      "$(cell $i thumb2)" "$(cell $i thumb2sp)" "$(cell $i thumb1)"
+      "$(cell $i thumb2)" "$(cell $i thumb2sp)" "$(cell $i thumb1)" "$(cell $i arm)"
   done
 }
 
@@ -155,7 +156,7 @@ check)
   awk '/^\| lane \| x64 \|/{on=1} on && !/^\|/{exit} on' "$doc" > "$d/doc.md"
   [ -s "$d/doc.md" ] || { echo "moon-parity: no parity table found in $doc"; exit 1; }
   if diff -u "$d/doc.md" "$d/measured.md" > "$d/drift.txt"; then
-    echo "moon-parity: $doc matches the compiler on $n lanes × 6 targets."
+    echo "moon-parity: $doc matches the compiler on $n lanes × 7 targets."
   else
     echo "moon-parity: DRIFT -- $doc disagrees with the compiler."
     echo "             -doc  +measured; regenerate with 'src/tools/moon-parity.sh table'."

@@ -15,16 +15,6 @@
 # N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary.
 set -u
 
-# lanes that share scratch or sub-build the same tree: each chain runs in this order
-chains="test_extract,test_big,test_encver
-test_inle,test_kernel_vmx,test_disk,test_uefi,test_kboot,test_kmitty,test_kverb,test_kernel_uproc,test_kernel_a64,test_uefi_a64,test_kernel_rv64,test_kernel_wasm,test_seedwasm,test_nestwasm
-test_doomx,test_doomwasm
-test_elf32,test_mps2_build,test_virt_build,test_mps2,test_mps2_t1,test_mps2_wake,test_virt,test_nucleo446,test_nucleo446_smoke,test_teensy41,test_playdate,test_rp2040,test_boards,test_objcopy,test_links
-test_freebsd,test_netbsd,test_freebsd_a64,test_netbsd_a64"
-# lanes that rebuild out/0 and love0 with a foreign cc, or run their own fleet of processes:
-# nothing may run beside them
-alone="test_hdiff test_ccwarn test_gcstress test_gcstress_full"
-
 MAKE=${MAKE:-make}
 
 # a lane starts only while the box has LANES_MEM_GB (8) available: a shared box runs out of
@@ -105,6 +95,15 @@ if [ -n "$pre" ]; then
   $MAKE -k -j"$j" $pre > "$d/pre.log" 2>&1 || { echo "FAIL the prerequisites -- $d/pre.log"; tail -20 "$d/pre.log"; exit 1; }
 fi
 for l in $dep; do echo "0 0" > "$d/$l.rc"; echo "(made as a prerequisite, $d/pre.log)" > "$d/$l.log"; done
+
+# the lanes that share scratch or sub-build one tree (a chain runs in its order), and the ones that
+# rebuild love0 under another cc or run their own fleet (nothing beside them): the lane map's,
+# src/apps/lanemap.l, asked of the tree's own love
+[ -x out/love ] || $MAKE -s host >> "$d/pre.log" 2>&1
+map=$(out/love bee --lanes-map) || { echo "FAIL out/love bee --lanes-map"; exit 1; }
+chains=$(echo "$map" | sed -n 's/^chain //p')
+alone=$(echo "$map" | sed -n 's/^alone //p')
+[ -n "$chains" ] && [ -n "$alone" ] || { echo "FAIL the lane map has no chains or no alone set"; exit 1; }
 
 # step 2: the builds lanes would otherwise race from their recipes
 case $(uname -m) in aarch64|arm64) ha=a64 ;; riscv64) ha=rv64 ;; *) ha=x64 ;; esac
