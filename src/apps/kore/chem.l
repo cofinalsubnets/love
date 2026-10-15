@@ -1,10 +1,6 @@
-; src/apps/kore/chem.l -- chem, bentley, jelinski and kernighan's language for chemical
-; structure diagrams: a troff preprocessor whose diagrams, each between .cstart and .cend (or
-; begin chem and end inside a picture), become pic over groff's chem.pic macros for gpic.l
-; to draw. held to groff's chem byte for byte (test/gate/chem.sh).
-;
-;   chem [FILE..]
-;
+; src/apps/kore/chem.l -- chem, the troff preprocessor for chemical structure diagrams: each
+; between .cstart and .cend (or begin chem / end inside a picture) becomes pic over groff's
+; chem.pic macros, for gpic.l to draw; held to groff's chem byte for byte.
 ; a line is one thing, or several split at a lone semicolon: a bond, a ring, a moiety, a
 ; quoted string, a setting, or pic, which goes through. each is placed against the last
 ; thing drawn, in the direction the last bond took.
