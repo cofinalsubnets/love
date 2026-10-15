@@ -80,3 +80,17 @@
   ((map (_ \ ev '(\ x (+ x 1))) ^2000) = (map (_ \ ev '(\ x (+ x 1))) ^2000))
   (string? (show map))
   (10 < #(show map))))
+
+; a source application n deep compiles in its length: ((((1)))) peels at every level
+(: (fnq-nest n) (n = 0 ? 1 [(fnq-nest (n - 1))])
+ (test (1 = ev (fnq-nest 50)) (test-linear (n \ ev ['\ 'u (fnq-nest n)]) 1500)))
+
+; opfix twice is opfix once: an operator symbol it makes an operand is spelled by value
+(: (fnq-fix s) (opfix <(sound s) @ a (opfix a = a))
+ (test (fnq-fix "(. = (.))") (fnq-fix "(c ? + -)") (fnq-fix "(a < b <= c)") (fnq-fix "(map (+) l)")
+       (fnq-fix "(x @ [a b] (a + b))") (fnq-fix "(: a 1 b (a + 1) (\\ q (q * b)))")
+       (1 = ev <(sound "(. = (.))"))))
+; text holes nested n deep compile in their length: each macro's operands come in factored
+(: (fnq-holes k) (k = 0 ? "\"x\"" ("\"a \\(" + fnq-holes (k - 1) + ") b\""))
+ (test ("a a x b b" = ev <(sound (fnq-holes 2)))
+       (test-linear (n \ ev ['\ 'u <(sound (fnq-holes n))]) 250)))

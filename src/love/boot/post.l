@@ -824,14 +824,16 @@
        (say o "(array '(", gs sh 1, put o 41, each ^n (i \ (put o 32, pel i)), put o 41)))
 
   ; --- maps print {k v …}, the empty one {}; both read straight back. a map is
-  ; mutable and can hold itself, so the path is carried and matched by identity.
-  (onpath? x l) (? (atom? l) 0 (x == <l) 1 (onpath? x >l))
-  (pmap o m sn) (onpath? m sn ? (say o "<cycle>")
-    (: ks (keys m) s2 (m . sn)
+  ; mutable and can hold itself, so the path is carried as [maps depth mark] and matched
+  ; by identity: the nearest 64 maps, and the mark, the map at the last power of two deep,
+  ; which a longer cycle comes back to within twice its length
+  (onpath? x l k) (? (atom? l || k = 0) 0 (x == <l) 1 (onpath? x >l (k - 1)))
+  (pmap o m sn) (: p (sn 0) d (peep sn 1 0) (m == sn 2 || onpath? m p 64 ? (say o "<cycle>")
+    (: ks (keys m) s2 [(m . p) (d + 1) (d + 1 & d = 0 ? m (sn 2))]
        (go l f) (two? l ? ((f ? 0 (put o 32)),
                            px o <l s2, put o 32, px o (m <l) s2,
                            go >l 0) 0)
-       (atom? ks ? (say o "{}") (put o 123, go ks 1, put o 125))))
+       (atom? ks ? (say o "{}") (put o 123, go ks 1, put o 125)))))
 
   ; --- coins show as (name 'payload), so the form evals back to an equal coin where the name
   ; is a bound ctor. the payload is quoted where it would otherwise re-evaluate -- a chain
