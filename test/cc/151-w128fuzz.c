@@ -11,10 +11,10 @@
  *   - the shifts by a REGISTER count, where a shift reads its count mod 64 and
  *     the answer for counts 0, 64 and 127 is built rather than executed.
  *
- * so: a fixed seed, 20000 rounds, every operation folded into one hash, and the
- * hash printed. the battery compares stdout, so a single disagreeing bit in any
- * of ~600000 operations moves the one line this prints. the division algebra is
- * asserted inline as well, which names the lane when it is the one that broke.
+ * so: a fixed seed, 20000 rounds, every operation folded into one hash, printed and
+ * folded into the exit: the cross batteries compare stdout and x64's the exit, so a
+ * single disagreeing bit in any of ~600000 operations moves both. the division algebra
+ * is asserted inline as well, which names the lane when it is the one that broke.
  *
  * refused off the d128 targets (ccarch.sh expects that, like 111-int128). */
 
@@ -65,4 +65,5 @@ int main(void) {
   mix((u128) ((s128) n <= (s128) d)); mix((u128) ((s128) n >= (s128) d)); }
 
  printf("%016lx%016lx\n", (unsigned long) (h >> 64), (unsigned long) h);
- return 0; }
+ unsigned long f = (unsigned long) (h >> 64) ^ (unsigned long) h;
+ return (int) ((f ^ f >> 7 ^ f >> 14 ^ f >> 21) & 127); }   /* under 128: no exit reads as a signal */
