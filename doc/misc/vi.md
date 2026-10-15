@@ -32,7 +32,7 @@ regex door, post.l's re):
   The file name picks one — `.c .h .js .mjs .awk .html .css .sh .mk .json .diff .patch .s .S
   .asm .md .man .1`–`.9`, `Makefile`, `Cookfile` — else a `#!` naming a shell or an awk; `:hl`
   on anything else paints it as .l.
-* **src/apps/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
+* **src/apps/vi/config.l** — the theme (molokai, two hues our own) as plain data, keyed by vim highlight group, so
   the generated syntax file can emit `hi def link` lines rather than hardcoded colours.
 * **test/law/vi.l** — the gate.
 
