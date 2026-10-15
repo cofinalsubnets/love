@@ -1,7 +1,5 @@
-; test/host/evback.l -- ev read back off its own show, a demo that keeps: the show of ev (the
-; evaluator and its glaze), read and evaluated, is an ev whose show is one again, each generation
-; answering every form below as ev does; the bare interpreter likewise. ev closes over cell doors
-; the mop drops, so this runs unmopped:
+; test/host/evback.l -- ev's show, read and evaluated, is an ev that agrees with ev, for two
+; generations; the bare interpreter too. unmopped, as ev closes over doors the mop drops:
 ;   cat test/00-init.l test/host/evback.l | LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 out/love
 
 (: forms ['5 '(+ 1 2) '(* 3 4) '(cap [7 8]) '((\ x (x + 1)) 4) '(map (+ 1) [1 2])

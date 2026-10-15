@@ -1,7 +1,4 @@
-; --- test/host/hosts.l: the host registry and bee --on (src/apps/hosts.l) ----------------------
-; a registry, a lock root and a stand-in ssh of its own under out/: the stand-in runs the
-; command it is given here, as the far side would, and a down host's answers 255 the way ssh
-; does. run standalone from the repo root:
+; test/host/hosts.l -- the host registry and bee --on (src/apps/hosts.l), with a stand-in ssh
 ;   cat test/00-init.l test/host/hosts.l | out/love
 
 (borrow 'hosts)
@@ -18,7 +15,7 @@
                       + "name bsd\nreach sh " + ht-d + "/ssh bsd\ncaps freebsd-x64\nos freebsd\n"))
    _ (setenv "BEE_HOSTS" (ht-d + "/hosts"))
    _ (setenv "BEE_LOCKS" (ht-d + "/locks"))
-   ; hermetic: no host the gate's env names (osbox-env's) takes a cap over this registry
+   ; hermetic: no host the gate's env names takes a cap over this registry
    _ (map (k \ setenv k "") ["KTEST_A64_HOSTS" "KTEST_A64_HOST" "KTEST_VMX_HOSTS"
                               "FBSD_SSH" "NBSD_SSH" "FBSD_ARM64_SSH" "NBSD_ARM64_SSH"])
    (ht-names hs) (map (h \ h "name") hs)
@@ -28,7 +25,6 @@
    live (hosts-live a64)
    p16 (hosts-with "a64-exec" "page=16384")
    p4 (hosts-live (hosts-with "a64-exec" "page=4096"))
-   ; --on: a probe, a cap no host has, and a run that ships a dir and answers its status
    probe (hosts-on ["--on" "a64-exec" "--probe"])
    none (hosts-on ["--on" "vt-x" "--probe"])
    _ (mkdir (ht-d + "/ship") 493)
@@ -38,12 +34,11 @@
    got (ht-get (ht-d + "/got"))
    env (ht-get (ht-d + "/env"))
    gone (two? (stat ("/tmp/bee-on-" + show (getpid 0))))
-   ; two holders take up's two slots, each its own lock, and give them back (pid 1 stands in
-   ; for a second live holder, as in test/host/locks.l)
+   ; pid 1 stands in for a second live holder
    s1 (hosts-take [<live] (getpid 0) "one")
    s2 (hosts-take [<live] 1 "two")
    _ (hosts-free s1 (getpid 0)) _ (hosts-free s2 1)
-   ; the env names hosts for a release, and takes the cap over the registry
+   ; the env's hosts take the cap over the registry
    _ (setenv "KTEST_A64_HOSTS" "far.lan:3 near.lan")
    ev (hosts-with "kvm-a64" ())
    _ (setenv "KTEST_A64_HOSTS" "")

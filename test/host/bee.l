@@ -1,9 +1,6 @@
-; --- test/host/bee.l: bee, the coding agent, against a model played here -----------
-; a twirled listener plays the model on loopback, each connection answered by the next
-; canned stream, and bee runs as a child of its own in a scratch directory with HOME
-; there too, so no one's ~/.love/etc/bee.l speaks. the wire is plain http to this
-; machine, which bee allows and carries no key over.
-;   cat test/00-init.l test/host/bee.l | out/love
+; test/host/bee.l -- bee against a model played here on loopback; bee runs as a child in a
+; scratch dir with HOME there too, so no one's ~/.love/etc/bee.l speaks
+; run: cat test/00-init.l test/host/bee.l | out/love
 (borrow 'json)
 
 (: cr-home (cwd 0)
@@ -21,7 +18,7 @@
    (cr-dir nm cfg) (: d (cr-root + "/" + nm) _ (mkdir d 493) _ (mkdir (d + "/.love") 448) _ (mkdir (d + "/.love/etc") 448)
                       _ (cr-put (d + "/.love/etc") "bee.l" cfg) d)
 
-   ; --- the model: 'q the answers still to give, 'got the requests heard, newest first ---
+   ; the model: 'q the answers still to give, 'got the requests heard, newest first
    cr-box {'q () 'got ()}
    cr-pl (test-listen 0)                                  ; a port of this run's own
    cr-port <cr-pl
@@ -60,8 +57,7 @@
                          (go (i + 29) (a + (cr-hex #d) + "\r\n" + d + "\r\n"))))
           (go 0 "")))
 
-   ; bee in its directory -> [exit output], its stdout and err one pipe. the model is
-   ; served meanwhile: see parks only this task, gather never blocks
+   ; bee in its directory -> [exit output], stdout and err one pipe; gather never blocks
    (cr-reap p) (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 5) (cr-reap p))))
    (cr-run d env args)
     (: pp (pipe 0) nul (openfd "/dev/null" 0)
@@ -77,9 +73,8 @@
    (cr-heard _) (rev (cr-box 'got))
    cr-url ("http://127.0.0.1:" + show cr-port))
 
-; --- chat completions: a thought, a shell call in our lush, then the answer ----------
-; the call's arguments come in two pieces, the first stream chunked; the tool runs in
-; this binary's lush, and its output goes back as a tool message on the call's id
+; chat completions: a thought, a shell call in our lush, then the answer
+; the call's arguments come in two pieces, the first stream chunked
 (: cr-a (cr-dir "oai" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
    _ (cr-put cr-a "AGENTS.md" "the frog rule: always croak twice\n")
    _ (cr-put cr-a "CLAUDE.md" "the toad rule: hop once\n@AGENTS.md\n")
@@ -126,8 +121,7 @@
       !(cr-in (h 0) "sk-never-sent") !(cr-in (h 1) "sk-never-sent"))
    0)
 
-; --- the messages api: thinking, an edit, and the answer ------------------------------
-; the thinking block goes back as it came, signature and all, ahead of the tool_use
+; the messages api: thinking goes back as it came, signature and all, ahead of the tool_use
 (: cr-b (cr-dir "anth" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    _ (cr-put cr-b "notes.txt" "one\ntwo\nthree\n")
    ed (json-show {"path" "notes.txt" "old_text" "two" "new_text" "TWO"})
@@ -173,10 +167,8 @@
       !(cr-in (h 0) "sk-never-sent") !(cr-in (h 1) "sk-never-sent"))
    0)
 
-; --- sessions and messages -----------------------------------------------------------------
-; a session named by BEE_NAME settles in HOME's hive for its run. its shell sends it a
-; message through the verb, and list_sessions finds it; the message rides the next request
-; beside the tool results, and the cell is gone once the run ends
+; sessions and messages: a BEE_NAME session settles in HOME's hive for its run; a message
+; rides the next request beside the tool results
 (: cr-m (cr-dir "talk" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    (ev t x) (pin x "type" t)
    (use i id nm in)
@@ -220,9 +212,7 @@
       (cr-in (after 1) "no bee sessions are running"))
    0)
 
-; --- jobs and workers -----------------------------------------------------------------------
-; a job starts at once and runs in its own group; check_job sees it running and stop_job ends
-; it. a worker spawned from a shell settles in its own directory, serves, and stops
+; jobs and workers: check_job and stop_job; a worker spawned from a shell settles, serves, stops
 (: cr-j (cr-dir "jobs" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    (ev t x) (pin x "type" t)
    (one id nm in)
@@ -258,9 +248,7 @@
       !(cr-in (gone 1) "w1"))
    0)
 
-; --- queue watching ---------------------------------------------------------------------------
-; a serving bee with a row in its hub's queue hears the row it stacks on move and the leader
-; change, and hears nothing of its own edits
+; queue watching: a row it stacks on moving, and the leader changing, are heard; its own edits not
 (: cr-w (cr-dir "watch" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    hub (cr-w + "/hub") wt (cr-w + "/wt")
    _ (mkdir hub 493) _ (mkdir wt 493)
@@ -289,7 +277,7 @@
       (0 = <st))
    0)
 
-; --- the watchdog: a queue whose head's owner has no live session rings the leader, once ---------
+; the watchdog: a queue whose head's owner has no live session rings the leader, once
 (: cr-wd (cr-dir "wdog" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    hub (cr-wd + "/hub") wt (cr-wd + "/wt")
    _ (mkdir hub 493) _ (mkdir wt 493)
@@ -311,9 +299,7 @@
       (0 = <st))
    0)
 
-; --- queue_row: a row written by field, the rest of the queue untouched --------------------
-; ant joins gating, goes green naming only the state, and is refused another's row; queen,
-; the leader, drops ant's row and moves the base line. the header survives every write
+; queue_row: a row written by field, the rest of the queue and the header untouched
 (: cr-q (cr-dir "qrow" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    (g as) (hark (["git" "-C" cr-q "-c" "user.name=t" "-c" "user.email=t@t"] + as))
    _ (g ["init" "-q" "-b" "main"]) _ (cr-put cr-q "f" "one\n") _ (g ["add" "f"]) _ (g ["commit" "-q" "-m" "one"])
@@ -354,9 +340,8 @@
       (cr-in qq "# the rules: one row each") (cr-in qq "main c0ffee1") !(cr-in qq " ant "))
    0)
 
-; --- a row per branch: a session's second branch joins a row of its own, so a fold it already made
-; stays put; a write that cannot say which row is refused, as is pulling a folded row onto another
-; branch; the leader moves the base line through queue_lead, touching no row
+; a row per branch: a write that cannot say which row is refused, as is pulling a folded row
+; onto another branch; queue_lead moves the base line, touching no row
 (: cr-rb (cr-dir "rows" "")
    (g as) (hark (["git" "-C" cr-rb "-c" "user.name=t" "-c" "user.email=t@t"] + as))
    _ (g ["init" "-q" "-b" "main"]) _ (g ["commit" "-q" "--allow-empty" "-m" "one"])
@@ -395,8 +380,7 @@
       (cr-in (text "10") "no commit deadbee in this repository: paste it from git rev-parse") !(cr-in q " e "))
    0)
 
-; --- the leader hears every row -----------------------------------------------------------
-; queen leads with no row of her own, and hears a row join
+; the leader hears every row
 (: cr-lw (cr-dir "leadwatch" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    hub (cr-lw + "/hub") wt (cr-lw + "/wt")
    _ (mkdir hub 493) _ (mkdir wt 493)
@@ -420,11 +404,8 @@
       (0 = <st))
    0)
 
-; --- bee --mcp: the server a claude child runs, one JSON-RPC message a line -----------------
-; initialize answers request 0 (an id is presence, not truth); the initialized notification
-; gets no answer; tools/list names approve and the hive tools; approve allows under BEE_YES and
-; denies when no screen answers; a bad line is dropped, an unknown method and a nameless call
-; are JSON-RPC errors
+; bee --mcp: one JSON-RPC message a line; request 0 is answered (an id is presence, not truth);
+; approve allows under BEE_YES and denies when no screen answers
 (: cr-m2 (cr-dir "mcp" "")
    (msgs ls) (foldl (\ a m (a + (string? m ? m (json-show m)) + "\n")) "" ls)
    _ (cr-put cr-m2 "in" (msgs [{"jsonrpc" "2.0" "id" 0 "method" "initialize"
@@ -458,8 +439,7 @@
       (cr-in (r2 1) "behavior") (cr-in (r2 1) "deny") (cr-in (r2 1) "no answer came"))  ; raw, so escaped
    0)
 
-; --- the bell: a claude code session's server declares claude/channel and rings once for mail that
-; comes while it waits; the notice names the sender, and the mail stays for inbox to take
+; the bell: a claude/channel server rings once for mail that comes while it waits
 (: cr-b2 (cr-dir "bell" "")
    (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
    _ (cr-put cr-b2 "in" (msgs [{"jsonrpc" "2.0" "id" 0 "method" "initialize" "params" {}}
@@ -487,16 +467,14 @@
       (cr-in ((res 1) "content" 0 "text") "hello from pal"))       ; the bell took nothing
    0)
 
-; --- the way back: a claude code session's server keeps its claude session id and directory past
-; its card, and --resume lists it and says how to relaunch it, ringing, under the same name
+; the way back: --resume lists a claude code session past its card and how to relaunch it
 (: cr-r2 (cr-dir "resume" "")
    _ (cr-put cr-r2 "in" (json-show {"jsonrpc" "2.0" "id" 0 "method" "initialize" "params" {}} + "\n"))
    m (cr-run cr-r2 "BEE_NAME=back CLAUDE_CODE_SESSION_ID=sid-42" ("--mcp < '" + cr-r2 + "/in'"))
    ls (cr-run cr-r2 "" "--resume")
    c (cr-run cr-r2 "" "--resume back --cmd go on")
    no (cr-run cr-r2 "" "--resume nobody")
-   ; back's card held by a backgrounded claude: alive, its parent under --bg-pty-host. --resume
-   ; says how to attach or stop it, and the list marks it
+   ; back's card held by a backgrounded claude (--bg-pty-host): --resume says how to attach or stop it
    bgp (spawn ["sh" "-c" "sleep 30; :" "--bg-pty-host"])
    _ (mkdir (cr-r2 + "/.love/run") 448) _ (mkdir (cr-r2 + "/.love/run/hive") 448) _ (mkdir (cr-r2 + "/.love/run/hive/back") 448)
    _ (cr-put (cr-r2 + "/.love/run/hive/back") "card"
@@ -514,11 +492,8 @@
       (1 = <no) (cr-in (no 1) "no session to resume named nobody"))
    0)
 
-; --- locks through bee, on src/apps/locks.l ------------------------------------------------------
-; the test holds the one heavy ticket (heavy-max 1) under its own pid, so bee's ask queues behind
-; a live holder; an exclusive lock is granted, listed and released; releasing what it does not
-; hold is refused; --lock runs a command once the ticket is free and answers its status. the
-; locks live in a scratch root (BEE_LOCKS), so no one's real locks are touched
+; locks through bee (src/apps/locks.l), in a scratch BEE_LOCKS root; the test holds the one heavy
+; ticket (heavy-max 1), so bee's ask queues behind it
 (: cr-l2 (cr-dir "locks" "(mem-floor 1)\n(heavy-max 1)\n")
    lroot (cr-l2 + "/locks")
    (L nm) (cite 'locks nm)
@@ -557,9 +532,7 @@
       (3 = <lr))                                                   ; --lock answers the command's status
    0)
 
-; --- the claude-code backend, against a claude played here ---------------------------------
-; a fake claude on PATH records its argv and each line it is sent, and answers every line with
-; one turn of stream-json: text in pieces, a Bash call and its result, a result with a cost
+; the claude-code backend, against a fake claude on PATH that records its argv and lines
 (: cr-c2 (cr-dir "cc" "(backend claude-code)\n")
    fk (cr-c2 + "/fake")
    _ (mkdir fk 493)
@@ -593,9 +566,7 @@
       !(cr-in (r 1) "set ANTHROPIC_API_KEY"))                    ; claude brings its own key
    0)
 
-; --- what bee will not do ---------------------------------------------------------------
-; plain http off this machine is refused before any dial; a model that says no is told;
-; a remote endpoint wants its key before anything is sent
+; what bee will not do: plain http off this machine; a remote endpoint without its key
 (: cr-c (cr-dir "far" "(api openai)\n(url \"http://192.0.2.1:9/v1/chat/completions\")\n(model m)\n")
    rf (cr-run cr-c "OPENAI_API_KEY=sk-never-sent" "'hello'")
    cr-d (cr-dir "no" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model m)\n"))
@@ -609,7 +580,7 @@
       (1 = <rk) (cr-in (rk 1) "set BEE_TEST_NO_KEY"))
    0)
 
-; --- what a tree, a model or a peer cannot make bee do ------------------------------------
+; what a tree, a model or a peer cannot make bee do
 ; the model's calls, one message of them, then an end; each tool's answer from the second request
 (: cr-cfg ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n")
    (cr-ev t x) (pin x "type" t)
@@ -638,8 +609,7 @@
            !(two? (stat (d + "/pwned"))))
    0)
 
-; send_message asks, so a session that asks cannot start a turn in a peer that does not.
-; the ask shows the whole message
+; send_message asks, so a session that asks cannot start a turn in a peer that does not
 (: d (cr-dir "mail" cr-cfg)
    hv (d + "/.love/run/hive/peer")
    _ (map (\ p (mkdir p 448)) [(d + "/.love/run") (d + "/.love/run/hive") hv (hv + "/inbox") (hv + "/read")])
@@ -659,8 +629,7 @@
            (0 = <r2) (1 = #ib1))
    0)
 
-; read_file asks outside the working tree, a link out of it included: whoever answers on the
-; model's port reads only the tree unasked
+; read_file asks outside the working tree, a link out of it included
 (: d (cr-dir "reads" cr-cfg)
    _ (cr-put d "inside.txt" "INSIDE-TEXT")
    _ (cr-put cr-root "outside.txt" "OUTSIDE-SECRET")
@@ -676,8 +645,7 @@
            !(cr-in (h 1) "OUTSIDE-SECRET"))
    0)
 
-; an ask shows all of what runs: a tail past a run of spaces, a second line, and a control
-; character as ^X, never raw
+; an ask shows all of what runs: a tail past spaces, a second line, a control char as ^X
 (: d (cr-dir "askshow" cr-cfg)
    cmd ("echo ok" + foldl (\ a _ (a + " ")) "" ^100 + "; echo hidden-tail\necho " + string 27 + "[2Kline2" + string 13 + "x")
    _ (cr-serves (cr-uses [["shell" {"command" cmd}] ["queue_row" {"queue" "refs/queue/t" "state" "waiting" "note" ("a" + string 27 + "b")}]]))
@@ -712,8 +680,7 @@
            ("leader boss\nmain abc\n1 alice alice-br - - green\n" = qq))
    0)
 
-; the avatars: each four rows of eight cells, its sgr well formed in truecolor and in 256, the
-; accent from its pixels; --avatar kept in HOME's config beside the rest, a name unknown refused
+; the avatars: four rows of eight cells each, sgr well formed in truecolor and 256
 (: d (cr-dir "avatar" "(model keep-me)\n(avatar bee)\n")
    ; [cells params]: the visible cells, and each escape's numbers, 'bad for a torn one
    (av-end s j) (? (#s <= j) -1 (s j = 109) j (s j = 59 || 48 <= s j && s j < 58) (av-end s (j + 1)) -1)
@@ -761,9 +728,7 @@
            ("(model keep-me)\n(avatar hare)\n" = cr-get (d + "/.love/etc/bee.l")))
    0)
 
-; --- the stage: bee's full screen as a mitty's pane, in this process. it settles in the
-; hive, shows its frame at the size it is asked, takes keys as steps, runs a turn on its
-; own task, and leaves the hive when shut ---
+; the stage: bee's full screen as a mitty pane, in this process
 (: cr-s (cr-dir "stage" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
    h0 (getenv "HOME")
    _ (setenv "HOME" cr-s)
@@ -793,8 +758,7 @@
          (two? m && "hi" = m (#m - 1) "content")
          !(two? ns2)))                                        ; shut: the cell is gone
 
-; --- hands: a stage given a mitty's hands offers the pane tools and says where it is; a
-; look runs unasked, its answer goes back to the model; a stage without hands has none ---
+; hands: a stage given a mitty's hands offers the pane tools; a look runs unasked
 (: cr-h (cr-dir "hands" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
    h0 (getenv "HOME")
    _ (setenv "HOME" cr-h)
@@ -839,7 +803,7 @@
          !(elem "pane_list" (map (\ t (t "function" "name")) (peep b3 "tools" ())))
          !(cr-in (peep b3 "messages" () @ m (two? m ? (m 0 "content") "")) "## your window")))
 
-; --- the keys: a root, a box it signs, and neither made twice ------------------------------
+; the keys: a root, a box it signs, and neither made twice
 (: cr-k (cr-dir "keys" "")
    kd (cr-k + "/.love/etc/bee")
    rt (cr-run cr-k "" "--keygen root")
@@ -864,8 +828,7 @@
            (: s (stat (kd + "/box.key")) (&& (two? s) (s 2 & 511 = 384))))
    ())
 
-; --- the seal on mail: a session on a box with its card signs what it sends; the reader shows
-; the seal when the chain and sig check, and sets aside a replay or a message changed on the way
+; the seal on mail: shown when the chain and sig check; a replay or a changed message set aside
 (: d (cr-dir "sealed" "")
    _ (cr-run d "" "--keygen root") _ (cr-run d "" "--keygen box tau")
    hv (d + "/.love/run/hive")
@@ -896,8 +859,8 @@
            (cr-in t3 "failed its seal check") !(cr-in t3 "and run it"))
    0)
 
-; --- enrolment: the root's box mints a ticket, a new box answers it, the root's box spends it on a
-; card the new box keeps. a spent ticket, a changed request and a ticket minted without a root fail
+; enrolment: root mints a ticket, a new box answers, the root spends it on a card; a spent ticket,
+; a changed request and a rootless ticket fail
 (: st (cr-dir "stem" "") bx (cr-dir "newbox" "")
    (cr-sub s a b) (: i (cr-find s a 0) (? (i < 0) s (snip s 0 i + b + snip s (i + #a) #s)))
    _ (cr-run st "" "--keygen root")
@@ -921,9 +884,8 @@
            (1 = <nr) (cr-in (nr 1) "no root here"))
    0)
 
-; --- the link: a sealed message to NAME@BOX leaves by (relay ..), here a stand-in for ssh that runs
-; the far box's --deliver; the far reader sees the seal. plain mail, mail for another box and a
-; replayed id are refused at the door
+; the link: sealed mail to NAME@BOX leaves by (relay ..), a stand-in ssh running the far --deliver;
+; plain mail, mail for another box and a replayed id are refused
 (: nb (cr-dir "near" "") fb (cr-dir "far" "")
    _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box near")
    tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
@@ -958,8 +920,7 @@
            (1 = <elsewhere) (cr-in (elsewhere 1) "not addressed to this box"))
    0)
 
-; --- the queue across boxes: refs/queue/main@near, written from far, lands in near's repo as a
-; row of far's sealed session; the same call again, and a call to a box that is not this one, fail
+; the queue across boxes: refs/queue/main@near written from far lands as far's sealed row
 (: nb (cr-dir "qnear" "") fb (cr-dir "qfar" "") repo (nb + "/repo")
    _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box near")
    tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
@@ -984,10 +945,7 @@
            (string? qt) (cr-in qt " ant@far b1 ") (cr-in qt "from far"))
    0)
 
-; --- the queue moves to six: six's standby takes the lead of bee's git queue and writes that the
-; queue lives on six; bee, back, takes six's copy and refuses every write to its own, saying where
-; the queue lives; six hands it back (the leader bee's g, the queue living on bee), bee takes that
-; and leads again, and six's copy refuses writes in turn
+; the queue moves to six and back: whichever copy does not live there refuses writes, saying where
 (: ba (cr-dir "lbee" "(box bee)\n(beat 0)\n") bb (cr-dir "lsix" "(box six)\n(beat 0)\n")
    _ (hark ["git" "-C" ba "init" "-q"]) _ (hark ["git" "-C" bb "init" "-q"])
    (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
@@ -1021,9 +979,8 @@
            (cr-in (m4 1) "pushed refs/queue/main") (cr-in x5 "sync on bee again"))
    0)
 
-; --- a signed queue: on a box with a card, an sb queue's every write is an entry by its writer's
-; own seal. a call from another box comes back a proposal, which the caller signs and commits; a
-; session on the hub's box signs its own; a plain write is refused once the queue is signed
+; a signed queue: every write an entry by its writer's seal; a call from another box comes back a
+; proposal the caller signs; a plain write is refused
 (: nb (cr-dir "lnear" "") fb (cr-dir "lfar" "") hub (nb + "/hub")
    _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box lnear")
    tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
@@ -1050,7 +1007,7 @@
    id (: p (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --id > '" + nb + "/id'")]) (cr-get (nb + "/id")))
    _ (cr-put nb "plain" "leader bob\n")
    pl (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --was " + snip id 0 64 + " '" + nb + "/plain' 2>/dev/null")])
-   ; what reads queues the way queue-watch does -- the hud here -- sees the text, not the entry
+   ; a reader like queue-watch sees the text, not the entry
    hud (cr-run nb ("SB_HUB=" + hub) "--hud")
    _ (test (0 = <r1) (cr-in (r1 1) "row now:") (cr-in (r1 1) "ant@lfar b1")
            (string? e1) (starts? e1 "(entry ") (cr-in e1 "(by \"ant@lfar\")") (cr-in e1 "(seq \"0\")")
@@ -1061,8 +1018,7 @@
            (cr-in (hud 1) "ant@lfar") !(cr-in (hud 1) "(entry "))
    0)
 
-; --- revocation: the root's box revokes a box by name and carries the list to the others; a box
-; takes only a newer list its root signed, and a sealed message from the revoked box is refused
+; revocation: a box takes only a newer list its root signed; sealed mail from a revoked box is refused
 (: st (cr-dir "rstem" "") b1 (cr-dir "rb1" "") b2 (cr-dir "rb2" "")
    _ (cr-run st "" "--keygen root") _ (cr-run st "" "--keygen box stem")
    (join b nm) (: tk (snip ((cr-run st "" "--ticket") 1) 0 129)
@@ -1092,10 +1048,8 @@
            (cr-in (after 1) "seal does not check") !(cr-in (after 1) "sent to peer@two"))
    0)
 
-; --- across boxes, live: wnear keeps refs/queue/main and wfar's ant owns a row there. a write on
-; wnear tells ant@wfar what it moves, as queue-watch sealed at wnear; a shell's mail crosses both
-; ways sealed by its box; a beat makes a session read as live on the far box, an old one is
-; refused, and a stale one reads as gone, as does a leader known only by it
+; across boxes, live: a write on wnear tells ant@wfar what it moves, sealed; mail crosses both
+; ways; a beat makes a session live on the far box, an old one is refused, a stale one gone
 (: nb (cr-dir "wnear" "") fb (cr-dir "wfar" "")
    _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box wnear")
    tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
@@ -1156,8 +1110,7 @@
            !(cr-in (old 1) "zed@wnear"))
    0)
 
-; --- the hud: --hud prints it once. a fixture queue with a fold: the fold sits under the row it
-; joins, the head is marked, the long queue said; no model is named and no session is settled
+; the hud: --hud prints it once; a fold sits under the row it joins; no session is settled
 (: d (cr-dir "hud" "")
    _ (hark ["git" "-C" d "init" "-q"])
    _ (cr-put d "q.txt" ("# a queue\nleader g\nmain abc1234\n31 ant hearts abc1234 def5678 gating  # a\n"
@@ -1176,10 +1129,8 @@
            !(two? (readdir (d + "/.love/run/hive"))))
    0)
 
-; --- the user's card. --state moves a claude code session's card, found by the parent it names. the
-; hud on a terminal holds a card at the login's name, kind user: c talks to a session as the user,
-; the mail marked kind user, and an answer to that name shows there. closed, the card stays away
-; and mail to it waits. kind="user" reaches a model only from a user's card, and no agent takes the name
+; the user's card: --state moves a session's card; the hud holds a card at the login's name, kind
+; user. kind="user" reaches a model only from a user's card
 (: d (cr-dir "user" "")
    hv (d + "/.love/run/hive")
    _ (map (\ p (mkdir p 448)) [(d + "/.love/run") hv])
@@ -1242,8 +1193,7 @@
    0)
 
 
-; --- a worker nest: --nest DIR makes DIR from the hub SB_HUB names -- its store deposited, its
-; head taken, out/ seeded from its build -- and refuses a DIR that is there or a hub that is not ---
+; a worker nest: --nest DIR from SB_HUB; a DIR that is there or a hub that is not is refused
 (: nn-hub (cr-root + "/nhub") nn-wk (cr-root + "/nwork")
    (nn-sb d as) (hark ([cr-love "sb" "-C" d] + as))
    (nn-run env args) (hark ["sh" "-c" ("cd '" + cr-root + "' && exec env " + env + " '" + cr-love + "' '" + cr-app + "' " + args + " 2>&1")])
@@ -1256,8 +1206,7 @@
    nn-wp (snip >(nn-sb nn-wk ["psid"]) 0 64)
    nn-again (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-wk + "'"))
    nn-plain (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-hub + "/out'"))
-   ; the nest's verbs: sb laid (no host has it), sh not (every host has it); the shim runs
-   ; love's sb, here the test's love put first on PATH as `love`
+   ; sb laid (no host has it), sh not; the shim runs the test's love first on PATH
    _ (mkdir (cr-root + "/nlove") 493) _ (hark ["ln" "-s" cr-love (cr-root + "/nlove/love")])
    nn-shp (hark ["env" ("PATH=" + cr-root + "/nlove:/usr/bin:/bin") (nn-wk + "/.sb/bin/sb") "-C" nn-wk "psid"])
    nn-nohub (nn-run "SB_HUB=" ("--nest '" + cr-root + "/nother'"))
@@ -1274,8 +1223,7 @@
       (<nn-nohub = 2) (cr-in >nn-nohub "no hub: SB_HUB"))
    0)
 
-; --- the door: the line that holds a key to it, its hello, the hub's sb serve as @hub, and a
-; refusal; --node on an empty home names the first step ---
+; the door: a key's line, its hello, the hub's sb serve as @hub, a refusal; --node on an empty home
 (: dr-home (cr-dir "door" ("(hub " + cr-root + "/nhub)\n"))
    dr-hp (snip >(hark [cr-love "sb" "-C" (cr-root + "/nhub") "psid"]) 0 64)
    dr-line (cr-run dr-home "" "--door ssh-ed25519 AAAAk me@x")
@@ -1294,8 +1242,8 @@
       (<nd = 1) (cr-in (nd 1) "next  love, nested in ~/.love/bin"))
    0)
 
-; --- the lane map (src/apps/lanemap.l): AGENTS.md's table is laid from it, so the two agree, and
-; lanes.sh asks bee for its chains and alone set
+; the lane map (src/apps/lanemap.l): AGENTS.md's table agrees with it; test/gate/lanes.sh asks bee
+; for its chains and alone set
 (: lm-doc ((cite 'lanemap 'lanes-doc) 0)
    (lm-block ls on acc)
     (? (atom? ls) ()
@@ -1312,8 +1260,8 @@
       (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcstress"))
    0)
 
-; the projection: a rule owes its lanes to each path it matches (a star crosses `/`), a lane another
-; owed lane runs drops out, light before heavy, test heads the list and test_slow closes it
+; the projection: a star crosses `/`, a lane another owed lane runs drops out, light before heavy,
+; test first and test_slow last
 (: lp-db "test_quick: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\n"
    lp-cov ((cite 'lanemap 'lanes-covers) lp-db)
    lp-plan ((cite 'lanemap 'lanes-plan) ["src/love/gc.c" "src/apps/moon/gen.l" "src/apps/kore/a/b.l" "doc/x.md"]

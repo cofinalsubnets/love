@@ -1,24 +1,18 @@
-; test/host/overlay.l -- the lux type overlay and the baked uu book, end to end: sigs.l checks
-; clean over core.l and layout.l read as data, and a wounded def is flagged by name; the gradual
-; laws; the uu book computes; test/uu.l's StackSet model agrees with core.l's, stepwise and under
-; a seeded fuzz; and wm2uu's translation of core.l is certified and bridged to the model.
-; not in the corpus: the overlay rides the host binary only. run: cat test/00-init.l test/host/overlay.l | out/love
+; test/host/overlay.l -- the lux type overlay (src/apps/lux/sigs.l) and the baked uu book, end to end
+; run: cat test/00-init.l test/host/overlay.l | out/love
 
 (reads (open "src/apps/lux/sigs.l" "r"))
 (reads (open "src/apps/lux/core.l" "r"))
 
 (:    chk1 (overlay 'ov-check)
-   ; opfix first, then unglue: `forms` reads the surface, the domain checker reads
-   ; the core shapes -- and a glued sigil factors to a VALUE, which no checker matches
-   ; by name. the two passes are the one door between them (src/tools/uuwmgen.l too).
+   ; opfix then unglue: a glued sigil factors to a value, which no checker matches by name
    (fix1 f) (unglue (opfix f))
    (sweep path) (foldl (a \ f \ (cat a (chk1 lux-dom lux-sigs (fix1 f)))) () (forms (open path "r")))
 
  ; leg 1: the shipped sources check clean...
  _ (test !(sweep "src/apps/lux/core.l")
            !(sweep "src/apps/lux/layout.l"))
- ; ...and a known kind in the wrong seat is caught: zins wants (window zipper),
- ; the wound hands it a tag and a sheaf
+ ; ...and a wrong kind is caught: zins wants (window zipper), the wound hands it a tag and a sheaf
  hurt (chk1 lux-dom ('(oops (sheaf tag) top) . lux-sigs)
             '(: (oops s t) (zins (wstagof s t) s)))
  _ (test (two? hurt) ('oops = <<hurt))
@@ -35,15 +29,12 @@
   test (3 = (uu 'vof) () '(boot-add 2 1))
          (5 = (uu 'vof) () '(boot-add 2 3))))
 
-; the kernel refuses through the help cell -- install the escape (test/uu.l's
-; own tail move; the kernel span rightly bakes no global help), probe, uninstall
+; the kernel refuses through the help cell: install the escape, probe, uninstall
 (hear (p \ e \ (peep (uu 'HELPC) () 0 @ h (h ? (h p e) 0))))
 (test ('rejected = uu 'rejects (z \ (uu 'defn) 'boot-bad 'nat '(lam x x))))
 (hear 0)
 
-; leg 4: load the whole uu corpus (kernel + the StackSet model + its theorems,
-; every defn re-certified right here), then run the model against core.l's
-; implementation on concrete stacks -- encode, vof, decode, compare
+; leg 4: the uu corpus, re-certified here, run against core.l on concrete stacks
 (reads (open "test/uu.l" "r"))
 (reads (open "test/uulay.l" "r"))
 (reads (open "test/uuwm.l" "r"))
@@ -69,12 +60,8 @@
     (zdel 5 z0 = decz (vof 0 ['zdel 5 (encz z0)] 1))
     (zswapup z0 = decz (vof 0 ['zswapup (encz z0)]))))
 
-; leg 5: the seeded fuzz -- the whole op vocabulary, random walks through
-; both worlds, the zippers compared after every step, and the proved
-; invariant watched live: fresh ids keep the row duplicate-free, so the
-; model's zsane must answer true at every tenth stack. one op per step
-; runs on the model side too (the previous CORE state encodes, the model
-; moves, the result decodes) -- so a divergence names its op and its step.
+; leg 5: seeded random walks through both worlds, compared each step; zsane checked
+; every tenth stack. the model steps from the encoded core state, so a divergence names its op
 (: (rnd s) ((s * 1103515245 + 12345) % 2147483648)
    (encl l) (two? l ? ['ncons <l (encl >l)] 'nnil)
    (encz z) ['zmk <z (encl <>z) (encl <>>z)]
@@ -110,12 +97,8 @@
  (test (fuzz 150 20260705 (zmk 0 () ()) 1),
   puts "overlay leg 5: ok"))
 
-; leg 6 (stage 3 of the translator ladder): src/tools/wm2uu.l reads core.l's ops
-; as data, kind-directed by the sig table, and emits uu terms -- which the
-; kernel then defn-certifies right here (dependency order: certify in the
-; order gens answers), and which must answer the fuzz exactly as core.l
-; does. the translated terms live in the model's vocabulary, so stage 4's
-; idpath bridges can tie gen-* to the proved ops.
+; leg 6: src/tools/wm2uu.l translates core.l's ops to uu terms, certified in gens' order,
+; which must answer the fuzz exactly as core.l does
 (reads (open "src/tools/wm2uu.l" "r"))
 (:    cforms (map (f \ unglue (opfix f)) (forms (open "src/apps/lux/core.l" "r")))   ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
@@ -123,12 +106,8 @@
  _ (map (g \ (uu 'defn) <g (g 1) (g 2)) gens)   ; the function: these args are computed
  _ (puts "overlay leg 6: translated + certified ")
 
- ; stage 4: the idpath bridges. for every op, the theorem
- ;   paths res (gen-op args..) (op args..)
- ; proved by (idpath (op args..)) -- which checks if and only if the
- ; translator's output is convertible with the hand-proved model. the kernel
- ; itself certifies compiled-from-source == proved, and every theorem about
- ; the model transfers to the generated terms for free.
+ ; the idpath bridges: paths res (gen-op args..) (op args..), proved by (idpath (op args..)),
+ ; checks iff the translation is convertible with the proved model
  amap '((zrow agree-zrow) (zrev agree-zrev)
         (zfocup agree-zfocup) (zfocdn agree-zfocdn) (zswapup agree-zswapup)
         (zswapdn agree-zswapdn) (zmaster agree-zmaster) (zins agree-zins)
@@ -182,11 +161,8 @@
        (znub 7 (zrow z0) = decl (vof 0 ['gen-znub 7 ['gen-zrow (encz z0)]])),
   puts "overlay: ok"))
 
-; leg 7 (the layout rung): test/uulay.l's tiling-ledger model vs the real
-; src/apps/lux/layout.l rt-tile -- for seeded random rows and master counts, the
-; window column of the actual placements, the model's rtwins, and the row
-; itself must be one list (rtwinsrow, watched live against the implementation
-; the model mirrors). geometry stays law.l's business; this leg pins the ledger.
+; leg 7: test/uulay.l's tiling ledger vs layout.l's rt-tile on seeded rows: the placed
+; windows, rtwins, and the row must be one list (rtwinsrow); geometry is not checked here
 (reads (open "src/apps/lux/layout.l" "r"))
 (: (rnd s) ((s * 1103515245 + 12345) % 2147483648)
    (encl l) (two? l ? ['ncons <l (encl >l)] 'nnil)

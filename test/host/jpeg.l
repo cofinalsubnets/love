@@ -1,8 +1,6 @@
-; test/host/jpeg.l -- src/apps/jpeg.l and src/love/picture/jpeg.c's jpeg-pixels
-; jpeg-encode's own output read back near its source, cmyk and ycck near their source and
-; PIL, exif's turns, and the refusals; where magick is
-; here, a picture written every way it writes one -- baseline and progressive, each
-; sampling, grey, restart markers, one pixel -- and each decode held to magick's.
+; test/host/jpeg.l -- src/apps/jpeg.l and src/love/picture/jpeg.c's jpeg-pixels: our own round
+; trip, cmyk and ycck, exif's turns and the refusals, then where magick is, each of its encodings
+; decoded against its own
 ;   cat test/00-init.l test/host/jpeg.l | out/love
 (borrow 'posix)
 (borrow 'jpeg)
@@ -29,7 +27,7 @@
                 (go 0 0))
    (enc im q) (jpeg-encode (im 0) (im 1) (im 2) q)
 
-   ; -- its own, and the refusals -------------------------------------------------------
+   ; its own, and the refusals
    g95 (jpeg-decode (enc grad 95))
    o90 (jpeg-decode (enc odd 90))
    j (enc grad 90)
@@ -44,7 +42,7 @@
            ; the entropy data cut halfway still draws, the rest of it grey
            (2000 < #jn) (two? (jpeg-decode (snip jn 0 (#jn // 2)))))
 
-   ; -- exif's orientation ----------------------------------------------------------------
+   ; exif's orientation
    ; s with an app1 after its soi whose tiff header, mm or ii, says orientation o
    (exif s o mm)
     (: (w2 v) (mm ? [(v >> 8) (v & 255)] [(v & 255) (v >> 8)])
@@ -95,7 +93,7 @@ for o in range(1, 9):
    _ (pil? ? (: r (hark ["python3" (dir + "/or.py") dir]) (test (<r = 0) (atom? (filter (o \ !(near-pil o)) os))))
         (gate-partly "jpeg: no python3 PIL, its turns skipped"))
 
-   ; -- cmyk ----------------------------------------------------------------------------
+   ; cmyk
    ; adobe's cmyk, stored inverted, and its ycck, turbojpeg's from one 16x12 source: c m y
    ; across and down, k 255 (no ink) on the left half, 120 on the right. a pixel shows
    ; k - (255 - v) k / 255 of each v, near the source; where PIL is, near PIL's own and
@@ -167,7 +165,7 @@ for n in ('cmpil', 'cmyk', 'ycck'):
                 (test (<r = 0) (near-cm "cmyk") (near-cm "ycck") (near-cm "cmpil")))
         (gate-partly "jpeg: no python3 PIL, cmyk against it skipped"))
 
-   ; -- against magick ------------------------------------------------------------------
+   ; against magick
    magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))
    src (dir + "/src.rgba")
    _ (put src (grad 2))
@@ -195,9 +193,8 @@ for n in ('cmpil', 'cmyk', 'ycck'):
               (near "q10" ["-quality" "10"] 1)
               (near "one" ["-resize" "1x1!"] 1))
         (gate-partly "jpeg: no magick, decodes against it skipped"))
-   ; scans that carry no data stop at once, and past a thousand scans the rest are left:
-   ; 1100 empty dc scans over 2048x2048 once cost a whole frame walk each. then a dc scan
-   ; shifted by 13 whose predictor climbs past what an int holds after the shift
+   ; empty scans stop at once and past a thousand the rest are left; a dc scan shifted by 13
+   ; whose predictor climbs past an int
    (by l) (cask #l @ c (map (i \ pin c i (l i)) (jot #l), string c))
    (seg m b) (by [255 m (#b + 2 >> 8) (#b + 2 & 255)] + b)
    (frame w h dc) (by [255 216] + seg 219 (by (0 . map (_ \ 1) (jot 64)))

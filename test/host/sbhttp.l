@@ -1,19 +1,6 @@
-; --- test/host/sbhttp.l: svalbard pulling a store over a real socket ---
-; not in the test/*.l corpus: the socket nifs live in src/love/sock.c, which love0 does
-; not link, and this loads two crew files and splices their modules.
-;
-; the whole thing runs in one process, test/host/kiosko.l's shape: kiosko twirled
-; onto a listener over the origin nest's .sb/, svalbard.s client in the main task,
-; the two interleaving through the cooperative scheduler. so this is a real HTTP
-; pull off a real socket, and the two crew members meet the way they would in
-; anger -- love serving love.
-;
-; what it proves is the claim the design rests on: an sb remote needs no server
-; logic. the store is content-addressed and immutable, there is no listing
-; endpoint, and the walk discovers everything by reading what it already fetched
-; -- /tips names the heads, each patch names its `deps` and its `hunks`. an
-; empty blob rides through too, which is the case that found kiosko's 404.
-(borrow 'sb)                                 ; the baked module: the whole stack, spliced
+; test/host/sbhttp.l -- sb pulling a store over a real socket from kiosko, in one process
+; an sb remote needs no server logic: the walk finds everything from /tips, deps and hunks
+(borrow 'sb)
 (borrow 'kiosko)
 (borrow 'hashes)
 
@@ -26,10 +13,9 @@
    _ (mkdir root 493)
    _ (mkdir (root + "/origin") 493) _ (mkdir (root + "/clone") 493)
    home (cwd 0)
-   ; the server task shares this process's cwd, and the client chdirs into the
-   ; clone before pulling -- so the root it serves must be absolute
+   ; absolute: the server shares this cwd and the client chdirs into the clone
    oroot (home + "/" + root + "/origin/.sb")
-   ; --- the origin nest: a nested path and an empty file, then a release ---
+   ; the origin nest: a nested path and an empty file, then a release
    _ (chdir (root + "/origin"))
    _ (mkdir "sub" 493)
    _ (lay "a.txt" "v1\n") _ (lay "sub/b.txt" "nested\n") _ (lay "empty.txt" "")
@@ -38,7 +24,7 @@
    _ (bank '("v1"))
    nblob (#(readdir ".sb/blob") + #(readdir ".sb/z"))
    _ (chdir home)
-   ; --- kiosko over the origin's .sb/, in a task ---
+   ; kiosko over the origin's .sb/, in a task
    pl (test-listen 0)
    port <pl
    l (pl 1)
@@ -47,7 +33,7 @@
                                 _ (hot? c ? (cite 'kiosko 'serve1 oroot () c, close c))
                                 (g k)))
                     0)) 0)
-   ; --- the pull, from a nest that has never seen the origin ---
+   ; the pull, from a nest that has never seen the origin
    _ (chdir (root + "/clone"))
    got (sync ("http://127.0.0.1:" + show port + "/"))
    a (look "a.txt") b (look "sub/b.txt") e (look "empty.txt")
@@ -72,9 +58,8 @@
  (two? ref)                                                          ; the ref rode along
  (0 = clean))                                                        ; the tree matches the snap
 
-; --- a hostile mirror: every object hashes honestly, but each tip's patch aims at the
-;     puller's git config, sb's own store, or out through a symlink in the tree. the one
-;     plain patch lands; the rest are refused, and git's config is never touched ---
+; a hostile mirror: honest hashes, but patches aimed at git's config, sb's store, or through a
+; symlink; only the plain patch lands
 (: SD (cite 'sb)
    sync (SD 'sb-sync) look (SD 'look) lay (SD 'lay) mk (SD 'mk) refof (SD 'refof)
    root ("out/.sbevil-" + show (getpid 0))
@@ -127,8 +112,7 @@
  !(two? srefs) !ref                                                ; the malformed ref was dropped
  !got)                                                             ; and the pull says it was refused
 
-;; --- a packed origin: its texts in one pack, none loose, so the pull reads /packs, an idx and
-;     the pack. then a byte turned in the pack, its idx (and so its name) kept: refused ---
+; a packed origin, pulled through /packs; then a byte turned in the pack, its idx kept: refused
 (: SD (cite 'sb)
    record (SD 'sb-record) sync (SD 'sb-sync) pack (SD 'sb-pack)
    look (SD 'look) lay (SD 'lay) mk (SD 'mk) dirty (SD 'dirty)

@@ -1,23 +1,16 @@
-; test/host/score.l -- a tune as text, read back as harp's bars
-; not in the test/*.l corpus (it loads a crew module). the reader is pure: the built-in
-; score of grass parses clean, every kind of slip is named by its line, a key line
-; sharpens the bare letters and a beats line lengthens the bar, and the strings come
-; out shaped the way harp plays them.
+; test/host/score.l -- a tune as text, read back as harp's bars (src/apps/harp/score.l)
+; host-side: it loads a crew module.
 ;   cat test/00-init.l test/host/score.l | out/love
 
 (borrow 'score)
-(borrow 'grass)   ; for its score, the placeholder tune
+(borrow 'grass)   ; for its score
 
-; --- the reader ---
 (: bs (score-parse score)
    two (score-parse '("B4 1 - 3 | C4 2 [G/D] D4 2" "" "; a comment"))
    bad (score-parse '("B4 1 G4 1" "H4 1 - 3" "B4 1 - 2.9 C4 .1" "B4 x - 3" "[Xm] - 4" "B4 1.5 [Em] G4 2.5 ; and a word"))
    keyed (score-parse '("key F# C# G# D#" "F4 1 C4 1 G4 1 D4 1" "key" "F4 1 C4 1 G4 1 D4 1"))
    long (score-parse '("beats 8" "C4 2 B4 2 E4 4" "beats 4" "E4 4"))
- (test (0 < #bs) (all (b \ !(b 'err)) bs)                                          ; the shipped tune parses clean, whatever it is:
-                                                                                  ; it is placeholder data, so its bars are not pinned here.
-                                                                                  ; notes, legs, bass, chords and the key line are all pinned
-                                                                                  ; below against fixtures this file owns
+ (test (0 < #bs) (all (b \ !(b 'err)) bs)    ; placeholder tune: parses clean, bars unpinned
        (score-note "C4" {} = 0) (score-note "B3" {} = -1) (score-note "F#4" {} = 6) (score-note "Bb4" {} = 10) (score-note "e5" {} = 16)
        (score-note "H4" {} = ()) (score-note "4" {} = ())
        (score-note "F4" {5 1} = 6) (score-note "Fn4" {5 1} = 5) (score-note "Fb4" {5 1} = 4) (score-note "G4" {5 1} = 7)

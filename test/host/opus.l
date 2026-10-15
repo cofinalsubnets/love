@@ -1,9 +1,6 @@
-; test/host/opus.l -- src/love/audio/opus.c and ogg.l's opus. the rfc 8251 test vectors (make
-; dl/opus-vectors) decoded at 48 kHz: stereo held to their reference decode by 11172-4's full
-; accuracy on s16 (every sample within two steps, the rms under 1/sqrt 12 of one), mono 60 dB
-; clear of its downmix, and the head's output gain scaling each sample. then, where ffmpeg is, libopus streams through the door: lengths
-; ffmpeg's to the sample (pre-skip off the front, the end page's granule off the back), a
-; chain's second title, and flipped bytes that never fall over.
+; test/host/opus.l -- src/love/audio/opus.c and ogg.l's opus: the rfc 8251 vectors (make
+; dl/opus-vectors) held to 11172-4 full accuracy on s16; where ffmpeg is, libopus streams
+; through the door, lengths matched to the sample
 ;   cat test/00-init.l test/host/opus.l | out/love
 (borrow 'posix)
 (borrow 'ogg)
@@ -42,7 +39,7 @@
                (: b (av-t-rd (vd + "/testvector01.bit")) (op-half (op-vec b 2 0) (op-vec b 2 -1536))))
         (gate-partly "opus: no dl/opus-vectors (make dl/opus-vectors), the rfc's test vectors skipped"))
 
-   ; -- libopus's streams through the door -------------------------------------------------
+   ; libopus's streams through the door
    ref? (<(hark ["sh" "-c" "command -v ffmpeg >/dev/null"]) = 0)
    (sh c) (hark ["sh" "-c" ("cd " + dir + " && " + c)])
    tone "0.5*sin(440*2*PI*t)*lt(mod(t\\,0.25)\\,0.02)+0.2*random(0)*lt(mod(t\\,0.5)\\,0.01)+0.3*sin(3000*2*PI*t)|0.4*sin(660*2*PI*t)+0.2*random(1)"
