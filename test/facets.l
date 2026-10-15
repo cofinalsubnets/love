@@ -11,6 +11,7 @@
    ; a vertex: x y z, u v, r g b
    (fc-vx x y z u v r g b) [(1.0 * x) (1.0 * y) (1.0 * z) (1.0 * u) (1.0 * v) (1.0 * r) (1.0 * g) (1.0 * b)]
    (fc-n f c) (net (f = c))
+   (fc-flatten fl) (shape fl = [48] && aall (fl = peep ab (iota 48) 0))
    red 16711680 blue 255
    ; the screen as two halves, red and blue, and the same drawn blue first
    sq (fc-g [(fc-vx -1 -1 0 0 0 1 0 0) (fc-vx 1 -1 0 0 0 1 0 0) (fc-vx 1 1 0 0 0 1 0 0)
@@ -92,4 +93,6 @@
       (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]) () ()) 255 = 16)
       (shape near = [4 4]) (peep near [1 2] 0.0 = -0.5) (peep none [3 3] 0.0 = 2.0)
       (fc-n (sunlit none) red = 16) (fc-n (sunlit near) 0 = 16) (fc-n (sunlit ()) red = 16)
-      (fc-go 100 () 0 = 0)))
+      (fc-go 100 () 0 = 0)
+      ; flag 64 answers the same colours as one row
+      (fc-flatten (facets 8 6 7 fc-id sq (fc-z [[0 1 2 -1] [3 4 5 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 64.0]])))))
