@@ -9260,10 +9260,13 @@
                        (into e) (cv e rt @ v [['expr ['asn ['var rv] (mode 2 ? ['cast (mode 2) v] v)]]])
                        ; a test pushed down: each return's value decides the caller's if in place -- the
                        ; arms copied under armk, the caller's own code, walked one level up (hs)
+                       ; an arm pushed down again is still absent under its armk (a missing else, then a `!`)
+                       (arm? a) (two? a && (<a != 'armk || arm? <>a))
                        (pt e) (: v (cv e rt) kc (cnum g v)
                                  (two? kc ?                    ; a constant return is its arm
-                                     (: a ((<kc = 0) = (<>mode = 1) ? (mode 2) (mode 3)) (two? a ? [['armk a]]))
-                                    [['if (<>mode = 1 ? ['un 'not v] v) ['armk (mode 2)] ['armk (mode 3)]]]))
+                                     (: a ((<kc = 0) = (<>mode = 1) ? (mode 2) (mode 3)) (arm? a ? [['armk a]]))
+                                    [['if (<>mode = 1 ? ['un 'not v] v) (arm? (mode 2) ? ['armk (mode 2)] ['blk ()])
+                                        (arm? (mode 3) ? ['armk (mode 3)])]]))
                        ; the jump lane: the body's labels take this splice's suffix (asm goto's list
                        ; too), each return stores the value and jumps to the splice's end label
                        lm (: t {} (lb x) (!(two? x) ? 0 (x @ ('lbl v) (pin t v (v + "." + snip sfx 1 #sfx), 0) (lb <x, lb >x)))   ; `.`: no C label has one, and gas reads it
