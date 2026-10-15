@@ -7,10 +7,11 @@
 // workers run C only: no love code, no heap, no allocation. the caller sits in its nif until
 // the join, so the collector cannot run and nothing moves under them. a chunk is a fixed
 // piece of the work, never n / width, so the answer is the same at any width.
-// the width: min(LOVE_THREADS, cores online, chunks, cores idle). idle is the cores less
-// what /proc/loadavg says is runnable now (R of R/T, ours counted), read at most every
-// 50 ms; it drops at once and grows only when two reads in a row allow it, so a loaded box
-// runs serial. LOVE_THREADS is read each call: 1 is off, N a cap, N! exactly N whatever the
+// the width: min(LOVE_THREADS, physical cores, chunks, cpus spare). spare is what the box
+// left idle over the window since the last read (/proc/stat's idle and iowait), plus what
+// we took ourselves, in whole cpus; and 1 whenever /proc/pressure/cpu says tasks waited for a
+// cpu over more than PoolPsi of the window. read at most every 50 ms through held fds; it
+// drops at once and grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is read each call: 1 is off, N a cap, N! exactly N whatever the
 // load (the laws, and the measure's forced widths). where it is unset, the row (threads N)
 // in ~/.love/etc/love.l says the same, read on the load's tick: the salt pattern, data only.
 // serial where there are no threads (inle, wasm, the BSDs, love0), inside a worker, and in
@@ -24,16 +25,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 #else
 #define PoolThreads 0
 #endif
 
-enum { PoolMax = 16, PoolTick = 50000000 };   // the most workers; ns between two reads of the load
+// the most workers; ns between two reads of the load; the share of a window (in thousandths)
+// tasks may wait for a cpu before we take none: an idle box shows well under 1%, and past
+// 5% someone already queues, so a thread of ours would lengthen a queue rather than fill a gap
+enum { PoolMax = 16, PoolTick = 50000000, PoolPsi = 50 };
 
 struct pool {
- int pid, ncpu, fd;              // the process it was made in, cores online, /proc/loadavg
+ int pid, ncpu, ncore, fd, fp;   // the process it was made in, cpus online, physical cores,
+                                 // /proc/stat, /proc/pressure/cpu (-1 where the kernel has none)
+ uint64_t idle0, tot0, psi0, self0;   // at the last read: idle and all jiffies, stall us, our cpu us
  int width, ask0, busy;          // the width the load allows, the last read's ask; a job is out
  uint64_t at;                    // when the load was last read, 0 never
  char salt[16];                  // (threads ..) from ~/.love/etc/love.l as last read, "" none
@@ -59,21 +66,74 @@ static uint64_t pool_ns(void) {
  struct timespec t;
  clock_gettime(CLOCK_MONOTONIC, &t);
  return (uint64_t) t.tv_sec * 1000000000u + (uint64_t) t.tv_nsec; }
-// the tasks runnable now, the R of loadavg's R/T, or -1
-static int pool_runnable(struct pool *p) {
- char b[96];
- if (p->fd < 0 || lseek(p->fd, 0, SEEK_SET) != 0) return -1;
- long k = read(p->fd, b, sizeof b - 1);
- if (k <= 0) return -1;
+// the first unsigned number after `at` in fd's text from its start, or 0 with *ok cleared
+static uint64_t pool_num(int fd, char const *at, int skip, int *ok) {
+ char b[256];
+ if (fd < 0 || lseek(fd, 0, SEEK_SET) != 0) return *ok = 0, 0;
+ long k = read(fd, b, sizeof b - 1);
+ if (k <= 0) return *ok = 0, 0;
  b[k] = 0;
- char *s = b;
- for (int f = 0; f < 3; f++) {                 // past the three averages
-  while (*s && *s != ' ') s++;
-  while (*s == ' ') s++; }
- int r = 0;
- if (*s < '0' || *s > '9') return -1;
- while (*s >= '0' && *s <= '9') r = r * 10 + (*s++ - '0');
- return r; }
+ char *s = strstr(b, at);
+ if (!s) return *ok = 0, 0;
+ s += strlen(at);
+ uint64_t v = 0;
+ for (int f = 0; ; f++) {                      // past `skip` numbers to the one wanted
+  while (*s == ' ') s++;
+  if (*s < '0' || *s > '9') return *ok = 0, 0;
+  for (v = 0; *s >= '0' && *s <= '9'; s++) v = v * 10 + (uint64_t) (*s - '0');
+  if (f == skip) return v; } }
+// /proc/stat's first line: the idle and iowait jiffies, and all of them through steal
+static int pool_stat(int fd, uint64_t *idle, uint64_t *tot) {
+ char b[256];
+ if (fd < 0 || lseek(fd, 0, SEEK_SET) != 0) return 0;
+ long k = read(fd, b, sizeof b - 1);
+ if (k <= 4 || strncmp(b, "cpu ", 4)) return 0;
+ b[k] = 0;
+ char *s = b + 4;
+ uint64_t v[8] = {0};
+ for (int f = 0; f < 8; f++) {
+  while (*s == ' ') s++;
+  if (*s < '0' || *s > '9') return 0;
+  while (*s >= '0' && *s <= '9') v[f] = v[f] * 10 + (uint64_t) (*s++ - '0'); }
+ *idle = v[3] + v[4], *tot = 0;
+ for (int f = 0; f < 8; f++) *tot += v[f];
+ return 1; }
+static uint64_t pool_self(void) {
+ struct rusage u;
+ if (getrusage(RUSAGE_SELF, &u)) return 0;
+ return (uint64_t) (u.ru_utime.tv_sec + u.ru_stime.tv_sec) * 1000000u + (uint64_t) (u.ru_utime.tv_usec + u.ru_stime.tv_usec); }
+// the whole cpus the box can spare now, from the window since the last read; 1 at the first
+static int pool_ask(struct pool *p, uint64_t t) {
+ uint64_t idle, tot, self = pool_self(), psi;
+ int ok = 1, ask = 1;
+ if (!pool_stat(p->fd, &idle, &tot)) return 1;
+ psi = pool_num(p->fp, "total=", 0, &ok);   // the first line is "some": its total, us of stall
+ if (p->tot0 && tot > p->tot0 && t > p->at) {
+  uint64_t win = (t - p->at) / 1000,           // us
+           spare = (idle - p->idle0) * 1000 * (uint64_t) p->ncpu / (tot - p->tot0)   // thousandths of a cpu
+                   + (self - p->self0) * 1000 / (win ? win : 1);
+  ask = (int) (spare / 1000);
+  if (ok && p->fp >= 0 && p->psi0 && (psi - p->psi0) * 1000 > PoolPsi * win) ask = 1; }
+ p->idle0 = idle, p->tot0 = tot, p->self0 = self, p->psi0 = ok ? psi : 0;
+ return ask < 1 ? 1 : ask; }
+// the physical cores: the cpus online over the cpus sharing cpu0's core
+static int pool_cores(int ncpu) {
+ char b[128];
+ int fd = open("/sys/devices/system/cpu/cpu0/topology/core_cpus_list", O_RDONLY | O_CLOEXEC);
+ if (fd < 0) fd = open("/sys/devices/system/cpu/cpu0/topology/thread_siblings_list", O_RDONLY | O_CLOEXEC);
+ if (fd < 0) return ncpu;
+ long k = read(fd, b, sizeof b - 1);
+ close(fd);
+ if (k <= 0) return ncpu;
+ b[k] = 0;
+ int n = 0;
+ for (char *s = b; *s >= '0' && *s <= '9'; ) {   // "0-1" or "0,8": count the cpus it names
+  long a = strtol(s, &s, 10), z = a;
+  if (*s == '-') z = strtol(s + 1, &s, 10);
+  n += (int) (z - a + 1);
+  if (*s != ',') break;
+  s++; }
+ return n > 0 && ncpu / n > 0 ? ncpu / n : ncpu; }
 
 // the operand of a (threads ..) row in ~/.love/etc/love.l into p->salt, or "": a form is
 // read only where it starts a line, past a comment's ;
@@ -134,8 +194,10 @@ static struct pool *pool_of(struct g *g) {
   if (!(p = alloc(NULL, sizeof *p))) return NULL;
   memset(p, 0, sizeof *p);
   long c = sysconf(_SC_NPROCESSORS_ONLN);
-  p->ncpu = c < 1 ? 1 : c > PoolMax ? PoolMax : (int) c;
-  p->fd = open("/proc/loadavg", O_RDONLY | O_CLOEXEC);
+  p->ncpu = c < 1 ? 1 : (int) c;
+  p->ncore = pool_cores(p->ncpu);
+  p->fd = open("/proc/stat", O_RDONLY | O_CLOEXEC);
+  p->fp = open("/proc/pressure/cpu", O_RDONLY | O_CLOEXEC);
   p->width = 1;
   pool_fresh(p);
   g->pool = p; }
@@ -157,13 +219,14 @@ intptr_t par_width(struct g *g, intptr_t n) {
  if (cap < 2) return 1;
  if (x && *x == '!') return cap < n ? (cap < PoolMax + 1 ? cap : PoolMax + 1) : n;
  if (tick) {
-  int r = pool_runnable(p), ask = r < 0 ? 1 : p->ncpu - r + 1;   // the caller's own core is ours
+  int ask = pool_ask(p, t);
   // drop at once; grow on two reads in a row, to the lesser; the first read stands alone
   p->width = !p->at || ask < p->width ? ask : p->ask0 > p->width ? (ask < p->ask0 ? ask : p->ask0) : p->width;
   p->ask0 = ask, p->at = t; }
  intptr_t w = p->width;
  if (w > cap) w = cap;
- if (w > p->ncpu) w = p->ncpu;
+ if (w > p->ncore) w = p->ncore;
+ if (w > PoolMax + 1) w = PoolMax + 1;
  if (w > n) w = n;
  return w < 1 ? 1 : w;
 #else
