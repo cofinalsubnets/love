@@ -6,7 +6,7 @@
 (module (grass grass-run grass-look grass-main grass-new grass-key grass-tick grass-frame grass-hud
          grass-bar grass-rows grass-paint grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
          grass-tune grass-song-new grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
-         daylight sky-pen compass fx1 week-hours dh fps dance-cost)
+         daylight sky-pen compass fx1 week-hours dh fps)
 (borrow 'rove)
 (borrow 'harp)                          ; the cycle algebra the song is scheduled by
 (borrow 'score)                         ; the tune as text

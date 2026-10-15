@@ -127,7 +127,7 @@
                    ; each leaves the screen and the tty as it found them, so this one re-arms
                    (visit f) (save d, f (), ttytake ())
                    (step c) (design-key d c,
-                             d 'want @ 'vi (pin d 'want (), vi ? (visit (_ \ vi [p]), reload d) (tell d "no editor on this seat"))
+                             d 'want @ 'vi (pin d 'want (), vi ? (visit (_ \ vi [p]), reload d) (tell d "no editor"))
                                        'play (pin d 'want (), visit (_ \ story-run (d 'lvl))))
                    (stage (w \ h \ design-frame d w h) step (_ \ (d 'over))))
  design-usage "usage: love lore design [LEVEL.l]"
