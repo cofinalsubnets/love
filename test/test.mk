@@ -1124,9 +1124,9 @@ test_uugen: host
 # src/love/mx.l is the +/* dispatch matrices; src/love/mx.h is laid from it through clay and src/tools/mx2coq.l models
 # it in Rocq -- two derivations of one datum.
 test_mx: host
+	@echo 'LOVE	'test/proof/rocq/mx.v "(src/tools/mx2coq.l on $m)"
+	@cat src/love/mx.l src/tools/mx2coq.l | $m > test/proof/rocq/mx.v
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat src/love/mx.l src/tools/mx2coq.l | $m > out/.mx.v.tmp
-	@cmp -s out/.mx.v.tmp test/proof/rocq/mx.v || mv out/.mx.v.tmp test/proof/rocq/mx.v
 	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif
