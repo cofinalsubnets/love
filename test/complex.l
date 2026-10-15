@@ -1,12 +1,5 @@
-; step 7: complex arithmetic.
-; - a complex is a rank-0 scalar (twin?), the widest numeric tier: complex >
-;   float > int/bignum. (re ~ im) builds one (`~` is infix twin, the tightest band);
-;   `i` = (0 ~ 1) is the unit.
-; - + - * / promote a real operand to (r, 0); % is undefined (-> nil).
-; - sticky: never demotes to a real, even when im is 0 (eql-distinct keys).
-; - ordered: < <= > >= sort a complex lexicographically by (re, im); a real r is
-;   (r, 0). `=` bridges to reals. (a rank-N c array operand stays elementwise.)
-; - accessors re / im / conj / abs / arg; abs is type-aware.
+; complex arithmetic: the widest numeric tier, sticky (never demotes to a real),
+; ordered by (re, im), and `=` bridges to reals
 
 (: (near? a b eps) (((a < b ? (b - a) (a - b)) - 0) < eps)
    (near a b)       (near? a b 1e-12)
@@ -40,14 +33,12 @@
  !(im 7)                                   ; im of a real is 0
  (5 = conj 5)                              ; conj lifts a real to (r ~ 0) = r (the tower bridges)
 
- ; --- the two lanes of `~`, the valence law: glued it is conj, spaced it is twin.
- ;     glued ~x lifts a real to (r, 0) and conjugates a complex ---
+ ; --- glued ~x is conj (lifting a real to (r, 0)), spaced it is twin ---
  ((5 ~ 0) = ~5)                              ; ~r lifts a real to (r, 0) -- a true complex
  ((-3.5 ~ 0) = ~-3.5)                       ; lift works on a negative real
  ((2 ~ -3) = ~(2 ~ 3))   (i = ~(0 ~ -1))     ; ~(r ~ i) = (r ~ -i)
 
- ; --- the band is the tightest there is, above house, so a twin binds before any
- ;     operator, coined ones too: its parts are atoms and a compound part owes parens ---
+ ; --- twin binds tightest of all: a compound part owes parens ---
  ((9.0 ~ 12.0) = (1 + 2 ~ 3 * 4))               ; (2~3) first, then * 4, then 1 +
  ((1 ~ 2) = (1 ~ 2))   !((1 ~ 2) < (1 ~ 2))
 
@@ -64,21 +55,17 @@
  (near pi (arg -1))
  (near 0 (arg 5))
 
- ; --- ordered lexicographically by (re, im); a real r is (r, 0). i = (0,1) and
- ;     1 = (1,0): re 0 < 1, so i < 1; equal re falls back to im ---
+ ; --- ordered by (re, im), a real r as (r, 0): so i < 1 ---
  !(i > 1)   (i <= 1)   !(i >= 1)
  ((1 ~ 1) < (2 ~ 2))   ((1 ~ 1) <= (2 ~ 2))
  ((2 ~ 1) < (2 ~ 5))   !((2 ~ 5) < (2 ~ 1))
 
- ; --- % is undefined on complex; sine stays real-domain (-> nil); sqrt is ((/ 1 2) x)
- ;     and now works on a complex (via power); twin rejects a complex part ---
+ ; --- % undefined, sine real-domain only, sqrt via power; twin rejects a complex part ---
  !(i % 2)
  !(sine i)   (near 0.7071067811865476 (re ((1 / 2) i)))   !(twin 1 i)
  ; power is defined on complex: w^z = exp(z Log w). i^2 = -1, i^i = e^(-pi/2) (real)
  (near -1 (re (2 i)))   (word ? (near 0 (im (2 i))) 1)   ; im residue exceeds near's tol under f32 powf
  (near 0.20787957635076193 (re (i i)))   (near 0 (im (i i)))
-
- ; --- the truth gate is the real part, not the total order (the pure-phase law): spec.l ---
 
  ; --- complex meets bignum: the bignum narrows to double (floating domain) ---
  (twin? (i + B100))
@@ -90,14 +77,8 @@
  ('miss = peep (pin {} (2 ~ 0) 'hit) 2 'miss)            ; 2 and 2+0i are different keys
  ('iv = peep (pin {} i 'iv) i 'miss))
 
-; --- step 7b: full-rank complex arrays (packed (re,im) g_C tuples) -----------
-; a complex value packs two floats per element into a `c` array (type code c = 2,
-; the tier between r and o). twin-tray/array/@ all build them (a-type infers c);
-; `get` returns a (re ~ im) box; + - * / broadcast in the complex domain; `=` is
-; whole-array (a boolean) and the orderings broadcast to a 0/1 mask by the same
-; (re,im) lexicographic order the scalars sort by; % and // stay undefined on
-; complex; net/prod fold complex; aall/aany lift the
-; 0+0i-is-falsy rule. (body-less `:` -> ca-* leak to global, reused in roundtrip.l)
+; --- complex arrays, two floats per element ---
+; body-less `:`, so ca-* stay global: roundtrip.l reads them
 (: ca-z (twin-tray '(3) 0)                             ; zero-filled: three 0+0i
    ca-v (twin-tray '(2) [(1 ~ 2) (3 ~ 4)])       ; explicit packed chain
    ca-a (array 3 (1 ~ 1) (2 ~ 2) (3 ~ 3))     ; `array` infers c from its args
@@ -132,8 +113,7 @@
  ((11 ~ 2) = peep (@(10 20) + ca-v) 0 0)         ; z @(10 20) lifts to (10,0)/(20,0)
  ((23 ~ 4) = peep (ca-v + @(10 20)) 1 0)
 
- ; --- the accessors, elementwise over an array: re/im/arg drop to the real tier,
- ;     conj stays complex; a real array is its own real part and its own conjugate ---
+ ; --- accessors elementwise: re/im/arg go real, conj stays complex ---
  (@(1.0 3.0) = re ca-v)   (@(2.0 4.0) = im ca-v)
  (aall (ca-v = conj (conj ca-v)))                ; conj is an involution on the array too
  ((1 ~ -2) = peep (conj ca-v) 0 0)   ((3 ~ -4) = peep (conj ca-v) 1 0)
@@ -146,8 +126,7 @@
  !(aall (ca-v = twin-tray '(2) [(9 ~ 9) (3 ~ 4)]))   ; one cell differs: the mask has a 0, and aall says so
  (aany (ca-v = twin-tray '(2) [(9 ~ 9) (3 ~ 4)]))
  (aall (ca-v = ca-v))                           ; aall is the identity on the boolean
- ; a complex tray orders exactly as its cells do -- (re,im) lexicographic, the order that
- ; makes `sort` total (cmp3). a tray follows its scalar; these once answered nil.
+ ; a complex tray orders as its cells do, by (re, im)
  (aall (@(1 0) = (ca-v < twin-tray '(2) [(1 ~ 5) (0 ~ 0)])))    ; re tie -> im 2<5 ; 3>0
  (aall (@(0 1) = (ca-v > twin-tray '(2) [(1 ~ 5) (0 ~ 0)])))
  (aall (ca-v <= ca-v))   (aall (ca-v >= ca-v))

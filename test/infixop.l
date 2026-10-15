@@ -1,19 +1,12 @@
-; infix -- an entry in a spaced lane of the `operators` table (arity 2, or -1 for no
-; bound). in operand position with a left operand available, the sigil captures it and collects one more datum,
-; nesting right-associatively (a following operator steals the nearest operand).
-; with no left operand it reads as the plain symbol, so (+ 1 2) prefix, '+ quote,
-; and (+)-as-a-value all keep working. parenthesized infix double-wraps -- (1 + 2)
-; factors to ((+ 1 2)) -- and evaluates via (f)==f. the factoring happens at
-; compile time (opfix); reading is structural.
-; (the table itself is book-private since birth -- test/operator.l has the story;
-; every entry's law reads through behavior below.)
+; infix: with a left operand the sigil captures it and one more datum, right-associatively;
+; with none it is the plain symbol. opfix factors at compile time, reading is structural
 (test
  ; basics, every seeded operator
  (-1 = (1 - 2)) (6 = (2 * 3)) (2.5 = (5 / 2))
  (1 = (3 = 3.0)) (0 = (3 = 4))
  (1 = (1 < 2)) (1 = (1 <= 1)) (1 = (2 > 1)) (1 = (2 >= 2)) (0 = (2 < 1))
  (15 = (8 | 4 | 2 | 1)) (0 = (5 & 2)) (7 = (5 | 2))
- (1 = (5 % 2)) ('% = <>'(5 % 2))               ; % is plain infix at two (mod is gone); quotes stay data
+ (1 = (5 % 2)) ('% = <>'(5 % 2))               ; quotes stay data
 
  ; right-associativity; parens override
  (7 = (1 + 2 * 3))                              ; (+ 1 (* 2 3))
@@ -21,17 +14,14 @@
  (10 = (1 + 2 + 3 + 4))
  (1 = (5 = 2 + 3))                              ; (= 5 (+ 2 3))
 
- ; ? is dyadic like every other row -- infix it is the one-armed cond, and its
- ; band (10, the loosest declared) still decides what the condition is
+ ; infix ? is the one-armed cond, its loose band deciding what the condition is
  ('a = (1 ? 'a)) (() = (0 ? 'a))
  ('big = ((1 < 2) ? 'big))
  ('big = (1 < 2 ? 'big))                        ; (1 < 2) binds first -> (? (< 1 2) 'big)
- ; an else arm is the prefix cond -- which is n-ary, where the infix form takes one arm
+ ; an else arm is the prefix cond, which is n-ary
  ('small = (? (2 < 1) 'big 'small)) ('c = (? 0 'a 0 'b 'c))
 
- ; application binds tighter than infix: a run on either side of an operator is
- ; one operand (juxtaposition first), so parenthesize to seat a folded infix form
- ; as a list element. (1 + 2 3) is (+ 1 (2 3)), not ((+ 1 2) 3).
+ ; application binds tighter than infix: (1 + 2 3) is (+ 1 (2 3))
  ('(3 3) = [(1 + 2) 3])                         ; two elements: (+ 1 2) and 3
  ('(3 9) = [(1 + 2) (4 + 5)])
  ("(+ 1 (2 3))" = show (opfix '(1 + 2 3)))  ; 2 3 is one operand, the whole to the right of +
@@ -41,35 +31,26 @@
  ('(1 2 3) = sort '(3 1 2))
  (nom? '+) (7 = (+) 3 4))
 
-; structural incompleteness still pends: an unclosed list comes back torn.
-; a trailing operator does not pend -- "1 +" is two complete datums whose factor
-; folds to the partial (+ 1) at compile time, not a reader state.
+; an unclosed list is torn; a trailing operator is not, "1 +" being two datums
 (test ('torn = sound '(40 49 32 43)))              ; "(1 +" -> torn
 (: r (sound '(49 32 43))                                 ; "1 +"  -> 1, then +
    (test (1 = <r) ('+ = <(sound >r))))
 
-; a fresh dyadic operator needs no table at all -- define-then-use (the DEFAULT
-; infix section below); ** here rides the default, right-associatively
+; a fresh dyadic operator needs no table: define, then use
 (: ** (b \ n \ n b)
  (test (8.0 = (2 ** 3)) (512.0 = (2 ** 3 ** 2))))  ; right-assoc: 2^(3^2)
 
-; default infix: any all-punct symbol acts dyadic (arity two) with no table pin --
-; the table holds only the exceptions -- the other grips and hands.
-; a fresh punct symbol, never registered, reads infix all the same.
+; any all-punct symbol is dyadic infix by default; the table holds only the exceptions
 (: . (a \ b \ [a b])                            ; a fresh punct op, never registered
  (test
   ('(3 5) = (3 . 5))                             ; infix: captures the left operand
   ('(7 (3 5)) = (7 . 3 . 5))                    ; nests right-associatively
   ('(9 (3 5)) = [9 (3 . 5)])                    ; works inside a list
   (nom? '.) (= . (.))                          ; no left operand / escaped: the plain symbol
-  ("(. 3 5)" = (show (opfix '(3 . 5))))))      ; a folded infix form is the clause -- splices up, no wrapper (like (1 + 2))
+  ("(. 3 5)" = (show (opfix '(3 . 5))))))      ; a folded infix form splices up, no wrapper
 
-; opfix does not rearrange a binding form: a `:` keeps its binder names (a symbol
-; or a define-sugar header) verbatim -- only each pair's value and the trailing
-; body factor -- and a `\` keeps its args, factoring only the body. so a punct
-; binder survives (define-then-use needs no pin) and the sequence law is untouched.
-; (compared through show: opfix threads its spines with the 0-nil terminator, the
-; reader with (); show renders both the same reparsable form, so the factor shows.)
+; opfix keeps a binding form's binders verbatim and factors only values and body.
+; compared through show, since opfix ends spines with 0 and the reader with ()
 (test
  ((show '(: . (\ a b [a b]) (. 3 5))) = (show (opfix '(: . (\ a b [a b]) (3 . 5)))))      ; explicit binder kept
  ((show '(: (. a b) [a b] (. 3 5))) = (show (opfix '(: (. a b) [a b] (3 . 5)))))          ; sugar header kept
@@ -77,13 +58,8 @@
  ((show '(: a 1 b 2 (+ a b))) = (show (opfix '(: a 1 b 2 (a + b)))))                          ; : values/body factored, names kept
  (2 = (: x 1 x (x + 1) x)))                                                                     ; the sequence law, intact
 
-; --- and the two binders read infix too. `\` is dyadic and sits with $; `:` is n-ary at the
-; loosest band there is, so every operand stays one and a lambda value needs no parens. both
-; fold back through the lowering above -- patterns lower, a nested lambda flattens, the body
-; factors -- so an infix spelling is the same form as the prefix one, never a lookalike, and
-; nothing is added: (a : b) is the plain body-less (: a b). `:=` is an alias row on `:`, the
-; same word by another spelling. the one rule the infix spelling owns is that a `:` chain is
-; one scope -- the nest op-steal builds is spliced flat, never left standing.
+; --- the binders infix: `\` dyadic, `:` n-ary at the loosest band, `:=` its alias.
+; each is the same form as the prefix one, and a `:` chain is spliced flat into one scope
 (test
  (show '(\ a b c)           = show (opfix '(a \ b \ c)))             ; the chain flattens: one closure, not two
  (show '(\ x (+ x 1))       = show (opfix '(x \ x + 1)))             ; the body extends right, under every tighter op
@@ -99,18 +75,14 @@
  (3 = (x \ x + 1) 2) (7 = (x \ y \ x + y) 3 4)
  (9 = (a : 4 b : 5 (a + b))))                                            ; a body-having : is one scope and pins nothing
 
-; so an infix definition at top level pins, which is what a file of them is for. distinct
-; names: a body-less `:` leaks to the global book, and the corpus is one scope.
+; a top-level infix definition pins to the global book, so the names are prefixed
 (ifx-sq x := x * x)
 (ifx-hyp a b : (ifx-sq a + ifx-sq b))
 (ifx-fst [a b] := a)                                    ; a define-sugar param is a pattern here too
 (test (9 = ifx-sq 3) (25 = ifx-hyp 3 4) (5 = ifx-fst '(5 7))
         (7 = (ifx-z : 7)))                            ; ..and the form answers what it bound
 
-; a param that is not a nom is a pattern wherever it sits: infix, prefix, or merged up out of
-; a nested lambda -- that last one used to carry it up as a param, where it bound nothing.
-; these read through behaviour and not through show: each lowering mints its own fresh nom,
-; so two spellings of one form never print the same text however identical they are.
+; a non-nom param is a pattern wherever it sits; checked by behaviour, since each lowering mints a fresh nom
 (test
  (7 = (\ x [a b] (x + a + b)) 0 '(3 4))                                ; prefix
  (7 = (x \ [a b] \ x + a + b) 0 '(3 4))                                ; ..infix

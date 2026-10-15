@@ -49,17 +49,14 @@
   (: s (snip ((iota 6) * 1.5) 2 4) z (snip (iota 6) 4 9)
    (tray? s && 2 = #s && 3.0 = peep s 0 0 && 4.5 = peep s 1 0 && tray? z && 2 = #z && 4 = peep z 0 0
     && 0 = #(snip (iota 6) 9 12)))
-  ; applying a string indexes it: a byte 0..255, or 1 when out of range --
-  ; matching the empty string, where ("" k) is Church-numeral k**0 == 1
+  ; applying a string indexes it: a byte, or 1 out of range (as ("" k) is k**0)
   (104 = ("hi" 0))         ; 'h'
   (105 = ("hi" 1))         ; 'i'
   !("hi" 2)                ; past the end -> 1
   !("hi" -1) !("hi" -2)    ; a negative index is out of range, like one past the end
   ("hix" = ("hi" 'x))      ; a point operand is text: it juxtaposes
   (255 = string 255 0) ; high byte returns unsigned 0..255
-  ; apply and peep coincide on the sequence kinds -- the same index action, apply answering
-  ; () where peep answers the caller default. a rule the tree keeps, not a law it promises:
-  ; a tray towers instead of indexing. snip still reads a negative, clamping to the front.
+  ; apply and peep agree on sequences, apply missing where peep answers the default
   (peep "vaporeon" 3 0 = ("vaporeon" 3))
   (0 = peep "vaporeon" -1 0) !("vaporeon" -1)
   ; pin writes exactly where peep reads, and text has no cell, so it answers a fresh string
@@ -73,9 +70,7 @@
   = rep (alt (lit "r") (lit "R")) (.) 0 "Rrrq")))
 
 
-; snip is one knife over both spellings of a sequence, text and its charlist. the grid
-; below cuts every window of a six-byte word both ways and wants the same answer back,
-; overshoots and negatives included -- that equation IS the hom.
+; snip cuts text and its charlist alike: every window of a word, both ways, agrees
 (:
  snip-s "forbid"
  snip-l (map snip-s (jot #snip-s))

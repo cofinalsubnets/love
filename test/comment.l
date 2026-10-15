@@ -2,7 +2,7 @@
 ; there are no block comments -- every comment ends at the newline.
 ; a plain `;` line comment (this line) is skipped.
 ;; two semicolons: still just a line comment.
-;;; three semicolons: also just a line comment now (the old block form is gone).
+;;; three semicolons: also just a line comment.
 ;;; (putx "if this printed, ;;; still started a block") (putc 10)
 #! a `#!` shebang line is skipped too -- ) ) ( ( " weird tokens are fine here
 (: cmt-after 7)  ;;; a trailing ;;; is an ordinary line comment

@@ -1,5 +1,4 @@
-; test/cats.l -- cats is the foldr of + over a list, whatever the list holds: the nif's
-; fast lanes (all strings, all lists) and its fold for the rest, held to that fold.
+; cats is the foldr of + over a list: its fast lanes held to that fold
 (: cats-ref (l \ foldr (+) () l)
    cats-s "ab" cats-b [2 3]
    cats-pieces ["" "a" "bc" () [1] [2 3] '(97 98) 5 0.5 (iota 2) 'q {} "\0x"]
