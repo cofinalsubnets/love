@@ -1,8 +1,9 @@
 // src/love/picture/webp.c
 // (webp-pixels s) -> the w*h*4 rgba of a webp -- an animation's first frame, laid on its
-// canvas -- | why not: 1 not a webp, 2 cut short, 3 a kind it can't read (an interframe),
-// 4 a bad stream, 5 past 2^24 pixels, 6 no room. lossy (vp8, rfc 6386) with or without an
-// ALPH plane, and lossless (vp8l, rfc 9649); the pixels are libwebp's WebPDecodeRGBA's.
+// canvas; webp-frame below lays the rest -- | why not: 1 not a webp, 2 cut short, 3 a kind it
+// can't read (an interframe), 4 a bad stream, 5 past 2^24 pixels, 6 no room. lossy (vp8,
+// rfc 6386) with or without an ALPH plane, and lossless (vp8l, rfc 9649); the pixels are
+// libwebp's WebPDecodeRGBA's.
 #include "love.h"
 #include "bytes.h"
 #include "compress/prefix.h"
@@ -1074,3 +1075,59 @@ love_noinline static struct g *host_webpd(struct g *g) {
  return g; }
 static lvm(lvm_webpd) LvmCall(g, host_webpd)
 LvDef("webp-pixels", webpd, 1, "webp");
+
+// s over d, neither premultiplied, in libwebp's animation decoder's integers: an opaque pixel
+// is copied, a clear one leaves d
+static void wp_over(uint8_t *d, const uint8_t *s) {
+ unsigned sa = s[3];
+ if (sa == 255) { memcpy(d, s, 4); return; }
+ if (!sa) return;
+ unsigned fa = (d[3] * (256 - sa)) >> 8, ba = sa + fa;
+ uint64_t sc = (1u << 24) / ba;
+ for (int k = 0; k < 3; k++) d[k] = (uint8_t) (((uint64_t) s[k] * sa + (uint64_t) d[k] * fa) * sc >> 24);
+ d[3] = (uint8_t) ba; }
+
+// (webp-frame s at canvas key prev) -> canvas with the ANMF chunk at s[at] laid on it | why not,
+// as webp-pixels says. a key frame clears the canvas and is copied; past it a frame that blends
+// lays its pixels over what is there, and one that does not overwrites its box. prev is the
+// ANMF before it when that one was cleared away, else 0: inside its box nothing is blended
+love_noinline static struct g *host_webpf(struct g *g) {
+ struct wp_mem m;
+ struct wp_info f;
+ if (!strp(g->sp[0]) || !oddp(g->sp[1]) || !strp(g->sp[2])) return g->sp[4] = putcharm(1), g->sp += 4, g;
+ const uint8_t *s = (const uint8_t*) txt(g->sp[0]);
+ uintptr_t n = len(g->sp[0]), at = (uintptr_t) getcharm(g->sp[1]);
+ int key = oddp(g->sp[3]) && getcharm(g->sp[3]), why = wp_info(s, n, &f);
+ uintptr_t pv = oddp(g->sp[4]) ? (uintptr_t) getcharm(g->sp[4]) : 0;
+ uintptr_t k = (uintptr_t) f.w * f.h * 4;
+ if (!why && len(g->sp[2]) != k) why = 4;
+ if (!why && (at < 12 || at > n || n - at < 32 || memcmp(s + at, "ANMF", 4))) why = 4;
+ uintptr_t sz = why ? 0 : ld32le(s + at + 4);
+ if (!why && (sz < 16 || sz > n - at - 8)) why = 2;
+ if (why) return g->sp[4] = putcharm(why), g->sp += 4, g;
+ unsigned fx = ld24le(s + at + 8) * 2, fy = ld24le(s + at + 11) * 2;
+ unsigned fw = ld24le(s + at + 14) + 1, fh = ld24le(s + at + 17) + 1, blend = !(s[at + 23] & 2);
+ if (fx + fw > f.w || fy + fh > f.h) return g->sp[4] = putcharm(4), g->sp += 4, g;
+ unsigned hx = 0, hy = 0, hw = 0, hh = 0;          // the box cleared before this frame
+ if (pv >= 12 && pv < n && n - pv >= 24 && !memcmp(s + pv, "ANMF", 4))
+  hx = ld24le(s + pv + 8) * 2, hy = ld24le(s + pv + 11) * 2, hw = ld24le(s + pv + 14) + 1, hh = ld24le(s + pv + 17) + 1;
+ m.n = 0;
+ uint8_t *fr = wp_new(&m, (uintptr_t) fw * fh * 4);
+ if (!fr) why = 6;
+ else why = wp_frame(&m, s + at + 24, s + at + 8 + sz, fw, fh, fr);
+ if (why) return wp_free(&m), g->sp[4] = putcharm(why), g->sp += 4, g;
+ if (!ok(g = str0(g, k))) return wp_free(&m), g;   // pushes: the new canvas over the five
+ uint8_t *o = (uint8_t*) txt(g->sp[0]);
+ if (key) memset(o, 0, k); else memcpy(o, txt(g->sp[3]), k);
+ for (unsigned y = 0; y < fh; y++)
+  for (unsigned x = 0; x < fw; x++) {
+   uint8_t *d = o + ((uintptr_t) (fy + y) * f.w + fx + x) * 4;
+   const uint8_t *c = fr + ((uintptr_t) y * fw + x) * 4;
+   unsigned cx = fx + x, cy = fy + y;
+   int hole = cx >= hx && cx < hx + hw && cy >= hy && cy < hy + hh;
+   if (key || !blend || hole) memcpy(d, c, 4); else wp_over(d, c); }
+ wp_free(&m);
+ g->sp[5] = g->sp[0], g->sp += 5;
+ return g; }
+static lvm(lvm_webpf) LvmCall(g, host_webpf)
+LvDef("webp-frame", webpf, 5, "webp");

@@ -705,6 +705,82 @@
       (twin '("(a really quite long line that clips at the view edge)") "$")
       (twin '("") ""))
 
+; --- the named themes: each paints every class, its rows are rows, a ground comes with a
+; selection, and a theme with a ground paints and moves nothing ---
+   (hcol? n) (charm? n && 0 <= n && n < 256)
+   (hhex? h) (string? h && #h = 7 && h 0 = 35)
+   (hrow? r) (#r @ n (? (n != 4 && n != 6) 0
+                        !(name? <r && hcol? (r 1) && hhex? (r 2) && all (f \ elem f '(bold italic)) (r 3)) 0
+                        (n = 6) (hcol? (r 4) && hhex? (r 5))
+                        1))
+   (hgrp? g) (elem g '(Normal Visual) || any (c \ hue-grp c = g) hue-classes
+              || any (c \ hue-grp c = g) hues-classes)
+   (hgot rs g) (two? (filter (r \ <r = g) rs))
+   (hthm? t) (: rs <>t ps (hues-pens rs ())
+                (all hrow? rs && all (r \ hgrp? <r) rs
+                 && all (c \ string? (ps (hue-cls c))) hue-classes
+                 && all (c \ string? (ps (hue-cls c))) hues-classes
+                 && hgot rs 'Normal = hgot rs 'Visual))
+   hpaper (hue-theme-of "paper")
+   (hlit st nm) (pin st 'pens (hues-pens (hue-theme-of nm) ()), pin st 'hl 1, pin st 'theme nm, st)
+   (htwin nm ls ks) (: a (vgo ls ks) b (vgo ls ks)
+                       (pin a 'w 30, pin a 'h 5, pin b 'w 30, pin b 'h 5,
+                        hlit b nm,
+                        bare (vframe b) = bare (vframe a)))
+   _ (test
+      (all hthm? hue-themes)
+      (5 <= #hue-themes)
+      ((hue-theme-of "molokai") = hue-theme) ((hue-theme-of 'nord) = hue-theme-of "nord")
+      ((hue-theme-of "nope") = ())
+      ; a ground rides a pen as its fifth and sixth columns, either depth
+      (hue-pen '(Normal 234 "#1f1c19" () 231 "#fffdf9") () = "\e[38;5;234;48;5;231m")
+      (hue-pen '(Normal 234 "#1f1c19" () 231 "#fffdf9") 1 = "\e[38;2;31;28;25;48;2;255;253;249m")
+      ; molokai leaves the terminal its ground; paper owns one, ends a run back on it, and
+      ; paints the selection itself
+      (hues-pens hue-theme () @ ps (peep ps 'ground () = () && peep ps 'sel () = ()))
+      (hues-pens hpaper () @ ps (string? (ps 'ground) && ps 'off = "\e[0m" + ps 'ground
+                                && string? (ps 'sel)))
+      ; every row, status line included, starts on the ground, and the frame hands the
+      ; terminal back its own
+      (: st (small '("(map f)" "x") "") _ (hlit st "paper") f (vframe st) g (vpen st 'ground "")
+         (fsub f ("\e[H" + g) 0 = 0 && snip f (#f - 4) #f = "\e[0m"
+          && fsub f (g + "~") 0 > 0 && fsub f (g + "t ") 0 > 0))
+      (htwin "paper" '("(map (+ 1) '(1 2 3)) ; hi" "(: x 2)") "")
+      (htwin "solarized-light" '("(: css \"a" "b\" 1)") "j")
+      (htwin "nord" '("(f a, b)") "vl")
+      (htwin "tokyo-night" '("(a really quite long line that clips at the view edge)") "$"))
+
+; --- :colorscheme: the face's door swaps the pens; bare, it names the theme in force ---
+   (rth st) (pin st 'retheme (n \ hue-theme-of n @ r (two? r ? (hues-pens r ()) ())), st)
+   (colo st s) (vfeed st ((bytes (":" + s)) + [CR]))
+   _ (test
+      (: st (colo (rth (vgo '("x") "")) "colo paper")
+         (st 'theme = "paper" && st 'msg = "colorscheme paper" && string? (vpen st 'ground ())))
+      ((colo (rth (vgo '("x") "")) "colorscheme nord") 'theme = "nord")
+      ((colo (rth (vgo '("x") "")) "col tokyo-night") 'theme = "tokyo-night")
+      ((colo (rth (vgo '("x") "")) "colo nope") 'msg = "no theme: nope")
+      ((colo (rth (vgo '("x") "")) "colo") 'msg = "molokai")
+      ((colo (vgo '("x") "") "colo paper") 'msg = "no themes in this editor")
+      (lns (ex '("a" "b") "1co$") = '("a" "b" "a")))              ; co is still copy
+
+; --- the theme file: a bare name picks the theme, its rows fold over it, the last name wins;
+; no file is molokai ---
+
+   hh0 (getenv "HOME")
+   hhd ((cwd 0) + "/out/.vihue-" + show (getpid 0))
+   _ (mkdir hhd 448) _ (mkdir (hhd + "/.love") 448)
+   _ (setenv "HOME" hhd)
+   hn0 (hue-name ()) hr0 (hue-rows ())
+   _ (: q (open (hhd + "/.love/hue.l") "w")
+        _ (say q "nord\n(Comment 1 \"#000001\" (bold))\npaper\n") (close q))
+   hn1 (hue-name ()) hr1 (hue-rows ()) hr2 (hue-rows "nord")
+   _ (setenv "HOME" hh0) _ (hark ["rm" "-rf" hhd])
+   _ (test (hn0 = "molokai") (hr0 = hue-theme)
+           (hn1 = "paper") (<(filter (r \ <r = 'Comment) hr1) = '(Comment 1 "#000001" (bold)))
+           (<(filter (r \ <r = 'Normal) hr1) = <(filter (r \ <r = 'Normal) hpaper))
+           (<(filter (r \ <r = 'Normal) hr2) = <(filter (r \ <r = 'Normal) (hue-theme-of "nord")))
+           (hue-name "nord" = "nord"))
+
 ; --- the other languages (hues.l): the name, else a shell #!, picks the lexer; hue-lex's shape ---
    (hk g s in) (map (r \ <r) <(hues-lexer g s in 1))
    (hc g ls) (hue-carry (hues-lexer g) ls)
@@ -873,4 +949,4 @@
         (<>>L = 2 && <>>>L = 3))),
 
     test_fin (),                                      ; no zz-fin here: quit before claiming ok
-    say err "test/law/vi: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue + hues ok", put err 10, 0))
+    say err "test/law/vi: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue + themes + hues ok", put err 10, 0))
