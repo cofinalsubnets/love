@@ -83,9 +83,9 @@
    ; walked: free in the room, not at the wall; north stops short of the barrel, and beside it
    ;   short of the wall
    _ (test (wad-free? st 128.0 128.0) !(wad-free? st 128.0 250.0) !(wad-free? st 4.0 128.0))
-   s (foldl (\ s _ (wad-step s 'forward)) (pin st 'dt 0.25) ^40)
+   s (foldl (\ s _ (wad-tics (wad-step s 'forward) 1)) (pin st 'dt 0.25) ^40)
    _ (test (s 'pz > 150.0) (s 'pz < 167.0) (s 'px = 128.0))
-   s (foldl (\ s _ (wad-step s 'forward)) (pins (wad-new 64 40 wd M) 'dt 0.25 'px 40.0) ^40)
+   s (foldl (\ s _ (wad-tics (wad-step s 'forward) 1)) (pins (wad-new 64 40 wd M) 'dt 0.25 'px 40.0) ^40)
    _ (test (s 'pz > 200.0) (s 'pz < 241.0))
 
    ; the door: the bonus taken on the way to it, the door shut, the zombieman behind it asleep
@@ -94,7 +94,7 @@
    d (pins (wad-new 64 40 wd M2) 'w 64 'h 40 'kp 1 'dt 0.25)
    (zom s) <(filter (o \ o 't = 3004) (s 'objs))
    _ (test (#(d 'objs) = 2) (zom d 'st = 'idle) (d 'hp = 100) (d 'bul = 50))
-   d (wad-tics (foldl (\ s _ (wad-step s 'forward)) d ^40) 35)
+   d (wad-tics (foldl (\ s _ (wad-tics (wad-step s 'forward) 1)) d ^40) 35)
    _ (test (d 'hp = 101) (d 'pz > 200.0) (d 'pz < 241.0) (zom d 'st = 'idle))
    ; ..used, it opens to its neighbour's ceiling less 4, and the zombieman wakes to the player
    d (wad-tics (wad-step d 'use) 70)
@@ -104,7 +104,34 @@
    ; ..and the pistol puts it down, a bullet a shot
    (shoot s k) (k = 0 || zom s 'st = 'die ? s (shoot (wad-tics (wad-step s 'fire) 15) (k - 1)))
    d (shoot d 12)
-   ((test (zom d 'st = 'die) (d 'bul < 50) (d 'hp > 0)),
+   _ (test (zom d 'st = 'die) (d 'bul < 50) (d 'hp > 0))
+
+   ; a rocket instead, into the zombieman behind the door: a burst, a rocket the fewer
+   r (wad-tics (wad-step (pins (wad-new 64 40 wd (wad-map wd "E1M2")) 'px 128.0 'pz 230.0) 'use) 70)
+   r (wad-tics (wad-step (pins r 'has [0 1 4] 'rkt 2 'gun 4) 'fire) 20)
+   _ (test (zom r 'st = 'die) (r 'rkt = 1) (any (o \ o 'proj = 1 && o 'boom > 0) (r 'objs)))
+
+   ; the body: a push glides on and slows; a strafe goes sideways; a gun changed comes down, then up
+   ; (the state is one tablet, ticked in place: what to compare is read off first)
+   g (wad-tics (wad-step (wad-new 64 40 wd M) 'forward) 1) z1 (g 'pz) v1 (g 'vz)
+   g (wad-tics g 10)
+   _ (test (z1 > 64.0) (g 'pz - z1 > 8.0) (g 'vz < v1))
+   g (wad-tics (wad-step (wad-new 64 40 wd M) 'strafe-right) 4)
+   _ (test (g 'px > 140.0) (g 'pz = 64.0))
+   g (wad-tics (wad-step (wad-new 64 40 wd M) 'gun1) 8)
+   _ (test (g 'gun = 1) (g 'gy > 0))
+   g (wad-tics g 40)
+   _ (test (g 'gun = 0) (g 'gy = 0))
+
+   ; the floor and the light, by the sector's type: 7 hurts 5 each 32 tics, 9 is a secret, 3 a slow strobe
+   (typed k) (: m (wad-map wd "E1M1") (pins m 'secs [[0 128 "FLR" "F_SKY1" 255 k 0]]))
+   f (wad-tics (wad-new 64 40 wd (typed 7)) 70)
+   _ (test (f 'hp = 90))
+   f (wad-tics (wad-new 64 40 wd (typed 9)) 1)
+   _ (test (f 'secrets = 1) (f 'msg = "a secret") (f 'M 'secs 0 5 = 0))
+   f (wad-new 64 40 wd (typed 3))
+   seen (keys (foldl (\ t v (pin t v 1)) {} (map (_ \ (: _ (wad-tics f 1) (peep (wad-pens f) (20 * 64 + 8) -1))) ^40)))
+   ((test (#(f 'lights) = 1) (#seen >= 2)),
     unlink path,
     test_fin (),
     puts "wad: ok\n"))
