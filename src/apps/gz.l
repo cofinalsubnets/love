@@ -1,26 +1,7 @@
-; src/apps/gz.l -- gzip in love, both ways: the RFC 1952 container, the RFC 1951 deflate
-; stream inside it, and the crc32 underneath. `(borrow 'gz)`, then:
-;
-;   (gz-crc32 s)           -> the IEEE crc32 of a string, a charm
-;   (gz-deflate s)         -> raw deflate bytes
-;   (gz-inflate s n)       -> (1 bytes) | () | 'big    n a size hint, 0 when unknown
-;   (gz-puff s n)          -> the same, in love, and the oracle the C twin answers to
-;   (gz-zip s nom stamp)   -> a .gz member; nom "" for no name, stamp 0 for no time
-;   (gz-deflate-best s) (gz-zip9 s nom stamp)  the same, deflated harder: a lazy parse down a
-;                          long chain
-;   (gz-unzip s)           -> (1 bytes) | () | 'big
-;   (gz-head s)            -> (1 stamp name body-seat) | (), the header walked
-;   (gz-pull rd)           -> g, a reader: (gz-next g) the next piece inflated, "" at the end
-;   (gz-unzipf rd mk)      -> (1 stamp name n seat) | ('trail ..) | 'nogz | 'no | () | 'big
-;                             the members streamed: rd _ is the next piece ("" the end), mk
-;                             (stamp name) -> (1 w), w the writer the bytes go through, or ()
-;
-; every decode answers (1 _): an empty member is legitimate, so test with two?.
-;
-; the coder is greedy LZ77 in 16k-symbol blocks, each written the cheapest of stored,
-; fixed or dynamic Huffman; the decoder takes all three.
-; gz-inflate is a door onto src/love/compress/gz.c's nif, falling back to
-; gz-puff (test/host/gzc.l fuzzes the pair).
+; src/apps/gz.l -- gzip in love: the RFC 1952 container, the RFC 1951 deflate inside, crc32.
+; a decode answers (1 _) on success: an empty member is legitimate, so test with two?.
+; the coder is greedy LZ77 in 16k-symbol blocks, each the cheapest of stored, fixed or
+; dynamic. the love coder and gz-puff are the oracles for the C twins in src/love/compress/gz.c.
 ; a cask is mutable bytes; a tray's pin answers a copy, so trays hold constant tables only.
 ; the wrap registers module 'gz in the dist cat too, so the bake compiles it once.
 (module 'gz
@@ -28,22 +9,18 @@
 (borrow 'hashes)
 (:
    ; --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -----------------
-   ; built once at load into a tray, read with peep. the final xor is the same
-   ; 0xffffffff the register starts at.
+   ; table built once at load; the final xor is the starting 0xffffffff
    (gz-crcrow n) (foldl (\ c k (c & 1 ? (c >> 1 ^ 3988292384) (c >> 1))) n ^8)
    gz-crctab (star-tray '(256) (map gz-crcrow (jot 256)))
    (gz-crcwalk s) (foldl (\ c i (peep gz-crctab ((c ^ s i) & 255) 0 ^ c >> 8)) 4294967295 ^#s ^ 4294967295)
 
-   ; src/love/crypto/hash.c's; the walk above states the polynomial and is the oracle
-   ; test/host/gzc.l holds the C to.
-   ; `charm?`, not `?`: the crc of "" is 0, a true answer a truth test calls absent.
+   ; hash.c's nif, else the walk above. `charm?`, not `?`: the crc of "" is 0
    (gz-crc32 s)
     (crc32 s @ r (charm? r ? r (gz-crcwalk s)))
 
    ; --- the bit sink ---------------------------------------------------------
-   ; deflate packs bits into bytes LSB-first, but a Huffman code is stored
-   ; MSB-first, so a code is reversed on the way in and its extra bits are not.
-   ; the cursor is a tablet: 0 the accumulator, 1 how many bits it holds.
+   ; bits pack LSB-first but a Huffman code is MSB-first, so codes go in reversed and
+   ; extra bits do not. the cursor tablet: 0 the accumulator, 1 its bit count
    (gz-put j t v k)
     (: (go a n) (n < 8 ? (pin t 0 a, pin t 1 n, 0)
                     (say j (string (a & 255)), go (a >> 8) (n - 8)))
@@ -61,15 +38,12 @@
    gz-dbase (star-tray '(30) '(1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769
                                1025 1537 2049 3073 4097 6145 8193 12289 16385 24577))
    gz-dext  (star-tray '(30) '(0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13))
-   ; the ladders are short and walked from the top, so the first base at or below
-   ; the value is its code -- no search structure earns its keep at 30 rows.
+   ; walked from the top: the first base at or below the value is its code
    (gz-lcode v) (: (go i) (? (i < 1) 0 (peep gz-lbase i 0 <= v) i (go (i - 1))) (go 28))
    (gz-dcode v) (: (go i) (? (i < 1) 0 (peep gz-dbase i 0 <= v) i (go (i - 1))) (go 29))
 
    ; --- 32-bit cells in a cask ----------------------------------------------
-   ; the match finder's two arrays hold positions, which outgrow a byte and outgrow
-   ; 16 bits on any file over 64k. a cask is the only mutable array here, so a cell
-   ; is four of its bytes.
+   ; positions outgrow 16 bits, and a cask is the only mutable array, so a cell is four bytes
    (gz-c32 c i) (i * 4 @ o
                    (peep c o 0 + (peep c (o + 1) 0 << 8)
                     + (peep c (o + 2) 0 << 16) + (peep c (o + 3) 0 << 24)))
@@ -78,17 +52,13 @@
                        pin c (o + 2) (v >> 16 & 255), pin c (o + 3) (v >> 24 & 255), 0))
 
    ; --- a Huffman code, built from frequencies -------------------------------
-   ; sort the used symbols by count, then merge the two lightest live nodes until one is
-   ; left; a leaf's depth is its code length. the candidates come off two queues -- sorted
-   ; leaves, and the internal nodes the merge makes, ascending for free -- so nothing is
-   ; searched or re-sorted. a symbol rides its count as one number, count:sym, so `sort`
-   ; needs no comparator and the tie goes to the lower symbol.
+   ; merge the two lightest nodes off two queues (sorted leaves, and internal nodes, which
+   ; come out ascending); a leaf's depth is its length. a key is count:sym, so ties go low
    (gz-hkeys f i a) (i < 0 ? a
                        (gz-c32 f i @ c (gz-hkeys f (i - 1) (c ? (((c << 9) + i) . a) a))))
    (gz-hcopy f nsym) (cask (nsym * 4) @ c (each ^nsym (i \ gz-c32! c i (gz-c32 f i)), c))
    (gz-hdep pa i d) (gz-c32 pa i @ p (p ? (gz-hdep pa (p - 1) (d + 1)) d))
-   ; halving the counts and rebuilding walks a code back under the depth the format allows,
-   ; and always terminates: all-ones is a balanced tree, nine deep over the literal alphabet.
+   ; halving the counts brings a code under the depth limit; all-ones is balanced, so it ends
    (gz-hhalve f nsym i) (nsym <= i ? 0
                            (gz-c32 f i @ c
                               ((c ? (gz-c32! f i (c >> 1 @ h (h ? h 1))) 0),
@@ -120,8 +90,7 @@
        mx (foldl (\ m i (gz-hdep pa i 0 @ d (pin lens (gz-c32 sy i) d, m < d ? d m))) 0 ^nl)
        ((lim < mx) & (pass < 32) ? (gz-hhalve f nsym 0, gz-hpass f nsym lim (pass + 1))
           [lens mx]))
-   ; a code needs two symbols even where the block used one or none: a lone symbol wants a
-   ; zero-bit code and the format cannot spell one. the two cheapest are conjured at count 1.
+   ; a code needs two symbols (a lone one would be zero bits): symbols 0 and 1 get count 1
    (gz-hlens f nsym lim)
     (: c (gz-hcopy f nsym)                  ; halving is destructive; the caller's
        u (foldl (\ k i (gz-c32 c i ? (k + 1) k)) 0 ^nsym)   ; counts are still owed to the cost sums
@@ -129,8 +98,7 @@
            ((gz-c32 c 0 ? 0 (gz-c32! c 0 1)),
             (gz-c32 c 1 ? 0 (gz-c32! c 1 1)), 0)),
         gz-hpass c nsym lim 0))
-   ; canonical: shortest codes first, ties by symbol. the code goes in reversed, since
-   ; a Huffman code is stored MSB-first and gz-put spends bits the other way.
+   ; canonical: shortest first, ties by symbol; stored reversed for gz-put
    (gz-hcodes lens nsym mx)
     (: cnt {}
        _ (each ^nsym (i \ (peep lens i 0 @ l (l ? (pin cnt l (peep cnt l 0 + 1)) 0))))
@@ -143,9 +111,7 @@
                             (l ? (peep nxt l 0 @ c (pin code i (gz-rev c l), pin nxt l (c + 1), 0)) 0))),
         code))
 
-   ; the fixed code (RFC 1951 3.2.6) is canonical over four runs of length, so it is
-   ; those lengths handed to the same builder -- and the decoder reads its tables off
-   ; the same two rows.
+   ; the fixed code (RFC 1951 3.2.6) is these lengths through the same builder; the decoder reads them too
    gz-fixlenl (star-tray '(288) (map (i \ (? (i < 144) 8 (i < 256) 9 (i < 280) 7 8))
                                      ^288))
    gz-fixlend (star-tray '(30) (map (i \ 5) ^30))
@@ -153,10 +119,8 @@
    gz-fixcodd (gz-hcodes gz-fixlend 30 5)
 
    ; --- the match finder -----------------------------------------------------
-   ; deflate's window is 32k and its match 258 bytes, both the format's numbers.
-   ; `head` maps a 3-byte hash to the most recent position + 1, 0 being "none". `prev`
-   ; chains older positions indexed by position & the window mask, which is why a chain
-   ; walk must STOP past the window -- beyond it the cell belongs to a newer position.
+   ; `head` maps a 3-byte hash to the latest position + 1 (0 none); `prev` chains by position
+   ; & the window mask, so a walk stops past the window, where a cell is a newer position's
    gz-wsize 32768   gz-wmask 32767   gz-hmask 32767
    gz-maxmatch 258  gz-minmatch 3
    gz-chain 32      ; how far down a chain to look before taking what we have
@@ -190,18 +154,11 @@
     (each ^l (k \ gz-ins s n (i + k) head prev))
 
    ; --- the token buffer -----------------------------------------------------
-   ; a block is tokenized first and coded second, because a code of the block's own
-   ; cannot be built until the block's frequencies are known. a literal is its own
-   ; byte; a match packs the two codes and the two extra values that spell it, so the
-   ; ladders are walked here and not again at write time.
+   ; tokenize first, code second: a block's code needs its frequencies. a match packs its
+   ; two codes and two extra values, so the ladders are walked once
    gz-tokmax 16384                          ; zlib's block, measured in symbols
-   ; a three-byte match spends a length code and a distance code -- thirteen bits and
-   ; up, against the fifteen or so three literals cost -- so past some reach it is a
-   ; loss, and a greedy parse takes it anyway and blocks the longer match one byte on.
-   ; refusing them past 4096 pays everywhere measured: the source tarball 2984599 ->
-   ; 2960320, this tree's .l files 32094 -> 31862, out/love 1225045 -> 1216277.
-   ; and refusing them outright does not. text likes it (the tarball goes on to
-   ; 2949504) and binaries do not -- out/love swells to 1275300, 4.6% worse.
+   ; a 3-byte match this far back costs more than three literals and blocks a longer match
+   ; one byte on; refusing it past here pays, refusing all of them hurts binaries. measured
    gz-toofar 4096
    (gz-tok s n head prev tok fl fd i k xb)  ; -> (i tokens extra-bits)
     (? (n <= i) [i k xb]
@@ -226,13 +183,9 @@
                  gz-tok s n head prev tok fl fd (i + l) (k + 1) (xb + le + de))))))
 
    ; --- the block's own code, written out as code lengths ---------------------
-   ; the lengths go through a third Huffman code, run-length coded first: 16 repeats
-   ; the previous length three to six times, 17 and 18 are runs of zero, three to ten
-   ; and eleven to a hundred and thirty-eight. a value is always spelled once before
-   ; 16 may repeat it.
-   ; the order is the format's, not ours: the code-length code declares its own
-   ; lengths in this permutation so the rarely-used ones sit at the tail and can be
-   ; trimmed off. both sides read the same row.
+   ; run-length coded through a third code: 16 repeats the previous length 3-6 times, 17
+   ; and 18 are zero runs of 3-10 and 11-138; a value is spelled once before 16 repeats it.
+   ; the permutation is the format's, rare lengths last so the tail trims
    gz-clord (star-tray '(19) '(16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15))
    (gz-clx sy) (sy @ 16 2 17 3 18 7 0)
    (gz-trim lens k lo) (? (k <= lo) lo (peep lens (k - 1) 0) k (gz-trim lens (k - 1) lo))
@@ -281,9 +234,7 @@
         gz-put j t ((len ^ 65535) >> 8 & 255) 8,
         each ^len (k \ gz-put j t (s (i0 + k)) 8)))
 
-   ; three ways to spell one block, and the cheapest in bits wins. the tree the third
-   ; must declare ahead of itself is the only reason the other two still win anything:
-   ; a block of noise pays it for nothing, and a short one cannot amortize it.
+   ; stored, fixed or dynamic: the cheapest in bits wins
    (gz-flush s j t tok k fl fd i0 i1 last xb)
     (: _ (gz-c32! fl 256 (gz-c32 fl 256 + 1))          ; end-of-block, always sent
        rl (gz-hlens fl 286 15)   lenl <rl   mxl <>rl
@@ -319,8 +270,7 @@
                                 (gz-clx sy @ b (b ? (gz-put j t (v & 127) b) 0))))),
               gz-wtoks j t tok k codl lenl codd lend 0))))
 
-   ; the window and the chains outlive the block: a match may reach back into any
-   ; block already written, which is what makes many blocks cost only their trees.
+   ; the window and chains outlive the block: a match may reach into earlier blocks
    (gz-blocks s n j t head prev i)
     (: tok (cask (gz-tokmax * 4))
        fl (cask (286 * 4))   fd (cask (30 * 4))
@@ -336,8 +286,7 @@
        (gz-blocks s n j t head prev 0,
         gz-align j t,
         slurp j + ""))
-   ; src/love/compress/gz.c's, a twin held to the bytes of the coder above: the love lane is the
-   ; oracle test/host/gzc.l holds it to.
+   ; gz.c's twin, held to the bytes of the coder above
    (gz-deflate s)
     (deflate s @ r (string? r ? r (gz-deflatel s)))
    ; the harder coder has no love twin: it is the image lane's, and any deflate reads it
@@ -345,9 +294,7 @@
     (deflate-best s @ r (string? r ? r (gz-deflate s)))
 
    ; --- the growing byte buffer ---------------------------------------------
-   ; inflate writes bytes and reads them back (a match copies out of what it has
-   ; already produced), so its sink cannot be a jug -- a jug pours out, it does not
-   ; index. a cask that doubles, then one exact copy at the end.
+   ; a match reads back what inflate wrote, so not a jug: a doubling cask, copied exact at the end
    (gz-buf n) ({} @ b (pin b 0 (cask (n < 64 ? 64 n)), pin b 1 0, b))
    (gz-room b k)
     (: c (peep b 0 0) cap #c len (peep b 1 0)
@@ -356,10 +303,7 @@
              c2 (cask big)
              ((len ? (pour c2 0 (string c) 0 len) 0),
               pin b 0 c2, 0))))
-   ; the room check is inline, and that is not tidiness: `gz-room` reads the cask
-   ; and its length again for a test the pushing path has already made, and this
-   ; runs once per output byte -- nine and a half million of them for the source
-   ; the artifact carries.
+   ; the room check is inline: this runs once per output byte
    (gz-push b v)
     (: c (peep b 0 0) len (peep b 1 0)
        (len < #c ? (pin c len v, pin b 1 (len + 1), 0)
@@ -368,13 +312,8 @@
    (gz-take b)
     (: c (peep b 0 0) len (peep b 1 0)
        (len ? (cask len @ c2 (pour c2 0 (string c) 0 len, string c2)) ""))
-   ; a match copies byte by byte on purpose: deflate lets a run overlap its own
-   ; source (dist 1, len 100 is a hundred of one byte), so a bulk move would be wrong.
-   ; 1 for the clean end, never 0 -- the caller asks `(! r)`, and 0 is nothing.
-   ; the room is taken once, before the loop, so the cask cannot be replaced
-   ; under it and the walk holds `c` and the write cursor in hand -- two tablet
-   ; reads for the whole match instead of nine per byte. the copy stays byte by
-   ; byte: deflate lets a run overlap its own source and a bulk move would be wrong.
+   ; byte by byte: a run may overlap its own source (dist 1, len 100). room is taken first,
+   ; so `c` stays the cask. answers 1 at the clean end, never 0: the caller asks `(! r)`
    (gz-copy b dist len)
     (: _ (gz-room b len)
        c (peep b 0 0)
@@ -384,18 +323,13 @@
        (go 0 (peep b 1 0)))
 
    ; --- the bit source -------------------------------------------------------
-   ; the cursor is a tablet again: 0 the bit position, 1 the torn flag. reading past
-   ; the end sets torn and answers 0 rather than scaring, so a torn stream unwinds
-   ; through the ordinary return path and the caller reads presence at the end.
+   ; the cursor tablet: 0 the bit position, 1 torn. past the end sets torn and answers 0,
+   ; no scare, so a torn stream unwinds by ordinary returns
    (gz-bit s n t)
     (peep t 0 0 @ p
        (n <= p >> 3 ? (pin t 1 1, 0)
           (pin t 0 (p + 1), s (p >> 3) >> (p & 7) & 1)))
-   ; the position rides a local, read once and written back once. `gz-bit` pays a
-   ; peep and a pin per bit because the cursor is a tablet, and a deflate stream is
-   ; twenty-seven million bits -- so the cursor is taken in hand for the length of a
-   ; run and put back at the end. the semantics are gz-bit's exactly, torn flag and
-   ; all: past the end sets torn, answers a 0 bit, and does not advance.
+   ; gz-bit's semantics exactly, with the position held in a local for the run
    (gz-bits s n t k)
     (: (go i a p)
         (k <= i ? (pin t 0 p, a)
@@ -406,9 +340,7 @@
        (go 0 0 (peep t 0 0)))
 
    ; --- canonical Huffman, built from code lengths --------------------------
-   ; the shape is puff's: a count of codes per length and the symbols in canonical
-   ; order. decoding walks one bit at a time -- no lookup table, which is slower per
-   ; symbol and is the whole of the algorithm rather than an index over it.
+   ; puff's shape: codes per length and symbols in canonical order, decoded a bit at a time
    (gz-huff lens nsym)
     (: cnt {}
        _ (each ^nsym (i \ (peep lens i 0 @ l (pin cnt l (peep cnt l 0 + 1)))))
@@ -419,9 +351,7 @@
        sym {}
        (each ^nsym (i \ (peep lens i 0 @ l (l ? (peep ofs l 0 @ o (pin sym o i, pin ofs l (o + 1), 0)) 0))),
         [cnt sym]))
-   ; ..and the decode walks up to fifteen bits for one symbol, which is where the
-   ; per-bit cursor cost lands hardest -- so it takes the position in hand too, and
-   ; writes it back on every way out, the failing one included.
+   ; the position is held in a local too, written back on every way out
    (gz-dec s n t h)                          ; -> (1 symbol) | ()
     (: cnt <h sym (<(>h))
        (go l code first index p)
@@ -470,9 +400,7 @@
                                    ((! r) ? () (go ())))))))))))
        (go ()))
 
-   ; the dynamic block's own code, read as code lengths through a third Huffman code
-   ; -- the one place the format describes itself. 16/17/18 are runs, and 16 repeats
-   ; the previous length, so the walk carries it.
+   ; code lengths through a third code; 16 repeats the previous length, so the walk carries it
    (gz-dynamic s n t b)
     (: hlit (gz-bits s n t 5 + 257)
        hdist (gz-bits s n t 5 + 1)
@@ -495,8 +423,7 @@
                            18 (11 + gz-bits s n t 7 @ r (rep i r 0, rd (i + r) 0))))))))
        ok (rd 0 0)
        (!ok ? ()
-          ; the distance lengths sit after the literal ones in the same run, and
-          ; gz-huff counts from 0, so they are carried down into a table of their own.
+          ; the distance lengths follow the literal ones; gz-huff counts from 0, so copy them down
           (: dl {}
              _ (each ^hdist (k \ pin dl k (peep lens (hlit + k) 0)))
              lit (gz-huff lens hlit)
@@ -518,9 +445,7 @@
                (? (!r || peep t 1 0) ()
                   <>r [1 (gz-take b)]
                   (go ()))))
-   ; src/love/compress/gz.c's, gz-puff wherever it declines -- a torn stream declines, so a torn one
-   ; is read twice and answers () both times. `string?`, never `?`: a string of NULs sums to
-   ; zero and would read as absent.
+   ; gz.c's nif, else gz-puff (a torn stream is read by both). `string?`, never `?`: NULs sum to 0
    (gz-inflate s hint)
     (inflate s hint @ r (? (string? r) [1 r] (r = 1) 'big (gz-puff s hint)))
 
@@ -538,9 +463,7 @@
         string h + (named ? (nom + string 0) "") + def txt
         + wrle (gz-crc32 txt) 4 + wrle (#txt & 4294967295) 4))
 
-   ; the header's optional fields are four flags, and every one of them must be
-   ; stepped over even though we write none of them -- the far side is gzip, and
-   ; `gzip -N` writes a name. ftext (bit 0) carries no bytes.
+   ; every optional field is stepped over, though we write only fname. ftext carries no bytes
    (gz-head s)                                ; -> (1 stamp name body-seat) | ()
     (: n #s
        (skip i) (? (n <= i) () (s i = 0) (i + 1) (skip (i + 1)))       ; a NUL-ended field
@@ -559,27 +482,18 @@
           (: i4 <>>>h
              isize (rdle s (n - 4) 4)
              crc (rdle s (n - 8) 4)
-             ; `pour`'s last argument is a count, not an end offset, and the nif
-             ; clamps it to the shorter of the two arrays -- so an end offset can
-             ; answer right off the destination's size alone, silently, and move
-             ; the whole tail to do it. spell the count.
+             ; pour's last argument is a count, not an end offset, and it clamps silently
              body (cask (n - i4 - 8) @ c (pour c 0 s i4 (n - i4 - 8), string c))
              r (gz-inflate body isize)
              out <>r
-             ; the trailer is the whole point of the container: a stream
-             ; that inflated cleanly and hashes wrong is a corrupt one,
-             ; and saying so is the only thing the crc is for.
+             ; a stream that inflates cleanly but fails the crc or size is corrupt
              (? (r = 'big) 'big
                 r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out])))))
 
    ; --- the container, streamed ---------------------------------------------
-   ; (gz-pull rd) is a reader over the members: (gz-next g) answers the next piece inflated,
-   ; "" once the stream is done, and then g's 'ans says how it ended. nothing holds a whole
-   ; member: the header is read as far as it runs, the body fed as it comes with the crc
-   ; carried on, and each trailer checked where its member ends. members that follow are read
-   ; on, as gzip reads `cat a.gz b.gz`; bytes behind the last that are no member are 'trail.
-   ; 'ans: (1 stamp name n seat) of the first header and every byte out | ('trail ..) |
-   ; 'nogz a first header that is not one | () torn or a crc wrong | 'big
+   ; (gz-next g) answers the next piece inflated, "" at the end; then g's 'ans is
+   ; (1 stamp name n offset) of the first header | ('trail ..) bytes past the last member |
+   ; 'nogz | () torn or a crc wrong | 'big. no member is held whole; members concatenate
    (gz-pull rd) {'rd rd 'buf "" 'mode 'head 'first 1 'tot 0}
    (gz-fin g a) (pins g 'mode 'end 'ans a, "")
    (gz-more g k)                                 ; buf grown to k bytes, or as far as the input goes
@@ -615,9 +529,7 @@
        (#t < 8 || !(rdle t 0 4 = peep g 'crc 0) || !(rdle t 4 4 = n & 4294967295) ? (gz-fin g ())
           (pins g 'buf (snip t 8 #t) 'tot (peep g 'tot 0 + n) 'mode 'head,
            gz-next g))))
-   ; the same members written out: mk (stamp name) of the first header answers (1 w), w
-   ; the writer every piece goes through, or () for 'no. what came out before a failure
-   ; came out.
+   ; mk (stamp name) of the first header answers (1 w), w the writer, or () for 'no
    (gz-unzipf rd mk)
     (: g (gz-pull rd)   p (gz-next g)   hd (peep g 'hd ())
        (!(two? hd) ? (peep g 'ans ())
@@ -629,34 +541,10 @@
 
 ) ; module 'gz
 
-; --- the face -----------------------------------------------------------------------
-; `love gzip`, `love gunzip` and `love zcat`: GNU's flag spelling over the two doors
-; above. the module above is the codec; this one is the face -- the options, the suffix
-; rules, and the in-place replace that carries the mode and the mtime across.
-;
-;   gzip [-cdfklnNqrtv] [-1..-9] [-S suf] [file..]    file.gz written, file removed
-;   gunzip [..]  = gzip -d          zcat [..] = gzip -dc
-;   -c stdout   -d decompress   -f overwrite an existing output   -k keep the input
-;   -l list     -n write no name or time into the header   -N take both back out of it
-;   -q quiet    -r walk directories   -t test only   -v say what happened   -S suf
-;
-; no file (or a bare `-`) is the filter: stdin -> stdout, which is what a pipe wants.
-; a status like GNU's: 0 clean, 1 something failed, 2 a warning (a name refused).
-;
-; decompressing streams through gz-unzipf: a piece of the file at a time, out as it inflates,
-; so no member is held whole. members that follow are read on (`cat a.gz b.gz`), a tail that
-; is no member is GNU's warning and a 2, and a file whose crc fails loses its partial output.
-; compressing still reads the file whole. -9 (--best) deflates harder, a lazy parse down a
-; long chain; the other levels are taken and change nothing -- the coder costs every block
-; three ways and writes the cheapest, which is one level.
-;
-; -l's ratio is the deflate payload's and not the file's, GNU taking the header and the
-; trailer out before it divides, which is why a small file lists a ratio its bytes on
-; disk do not show. the (totals) row is ours: GNU's own adds the first file's whole size
-; to the others' payloads.
-;
-; gz rides module 'gz, so the codec's names are asked for and the ask lands in a layer
-; of our own rather than on the dist cat's shared one.
+; --- the face: `love gzip`, `gunzip`, `zcat` with GNU's flags; status 0 clean, 1 failed,
+; 2 a warning. decompressing streams, and a crc failure removes the partial output;
+; compressing reads whole. -l's ratio is the payload's, as GNU's is.
+; a module of its own, so the borrow of 'gz lands in this layer, not the dist cat's
 (module 'gzcmd
 (borrow 'gz)
 (borrow 'bytes)
@@ -757,10 +645,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
                                      + dst),
                        0)))))))
 
-   ; --- one file, decompressed (and -t, which is the same read and no write) --
-   ; the members stream from the file to the output a piece at a time, so a member's size is
-   ; no one's memory. the output is named, and opened, once the header says what it is (-N
-   ; takes its name from there); a stream that fails partway takes the partial output away.
+   ; --- one file, decompressed (and -t, the same read with no write) --
+   ; the output is opened once the header names it (-N); a failure partway removes it
    (gzc-rd q) (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q))))
    (gzc-dstat t nm u)                  ; the answer of gz-unzipf, said
     (? (u = 'big) (gzc-moan t (nm + gzc-big), 1)
@@ -772,9 +658,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-unzip1 t p)
     (: suf (peep t 'suf ".gz")
        stem0 (gzc-stem p suf)
-       ; the suffix is asked before the bytes are: a name with nothing to strip is a
-       ; warning and not an error, so a `gunzip *` over a mixed directory walks on --
-       ; reading first would call every plain file "not in gzip format" instead
+       ; the suffix first: no suffix is a warning, so `gunzip *` over a mixed directory walks on
        (!(peep t 'c 0) && !(peep t 't 0) && !stem0 && !(peep t 'N 0) ?
           (gzc-moan t (p + ": unknown suffix -- ignored"), 2)
        (open p "r" @ q
@@ -804,9 +688,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                 (: dst (peep k 'dst "")
                    st (stat p)
                    (two? st && chmod dst (<>>st & 4095),
-                   ; without -N the output keeps the .gz's own mtime and not the one in
-                   ; the header: gzip restores the stored stamp only when asked, which is
-                   ; what -N means on this side
+                   ; the header's stamp only with -N, else the .gz's own mtime
                     (? (peep k 'N 0) (utime dst (peep k 'stamp 0 * 1000))
                        (two? st) (utime dst <>st)
                        0),
@@ -833,9 +715,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (slurp in @ s (say out (gzc-zip t (s + "") "" 0), flush out, 0)))
 
    ; --- the options ----------------------------------------------------------
-   ; the cli walker in gnu order: clustered shorts, the long names beside them, and -S's
-   ; suffix glued or next. a digit is a level and not a flag: the last one said is kept, and
-   ; only 9 (or --best) changes anything -- the harder coder
+   ; a digit is a level, the last one kept; only 9 (--best) changes the coder
    gzc-longs {"stdout" 99 "to-stdout" 99 "decompress" 100 "uncompress" 100 "force" 102
               "keep" 107 "list" 108 "no-name" 110 "name" 78 "quiet" 113 "recursive" 114
               "test" 116 "verbose" 118 "fast" 49 "best" 57 "help" 104 "version" 86 "suffix" 83}
