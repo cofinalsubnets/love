@@ -1,18 +1,13 @@
 #!/bin/sh
-# test/kore/sort.sh -- kore's sort against GNU's, byte for byte, over a flag matrix.
-# one file because the matrix is the test and a matrix reads badly inlined.
-#
-# LC_ALL=C on BOTH sides. GNU's default collation ignores punctuation and case,
-# ours is byte order, and without this every row disagrees for a reason that has
-# nothing to do with the code.
+# test/kore/sort.sh -- kore's sort against gnu's, byte for byte, over a flag matrix.
+# LC_ALL=C on both sides: gnu collates, ours is byte order
 set -u
 m=${2:-./out/love}                   # (OUTDIR LOVE), as every subject here takes
 LC_ALL=C; export LC_ALL
 w=${TMPDIR:-/tmp}/kore-sort.$$; mkdir -p "$w"; trap 'rm -rf "$w"' EXIT
 fail=0; ran=0
 
-# the corpus: three shapes, because one input cannot exercise a numeric key, a
-# field key and the last-resort compare at once.
+# three shapes: a numeric key, a field key and the last-resort compare
 cat > "$w/a" <<'EOF'
 10 pear   3.5
 2 apple   -1
@@ -64,7 +59,7 @@ for k in 1 2 3 1,1 2,2 1,2 2,3; do
   try a -k "$k" -r
   try a -k "$k" -u
 done
-# the per-key letters, which must beat the globals rather than add to them
+# per-key letters beat the globals rather than add to them
 try a -k 2,2n
 try a -k 1,1n -k 2,2
 try a -k 2,2 -k 1,1n
@@ -81,8 +76,8 @@ try c -t: -k1,1 -k2,2n
 try c -t: -k3
 try c -t: -u -k1,1
 
-# -h by the unit first, -V by runs, both as keys too; -c -C -cu, their status and -c's
-# sentence; long names; -m over a sorted input; -z; -o onto its own input
+# -h by unit, -V by runs, both as keys; -c -C -cu with status and sentence; long names; -m;
+# -z; -o onto its own input
 printf '10K\n2M\n1500K\n3\n1.5G\n512\n0\n1k\n-2K\n' > "$w/h"; printf 'v1.10\nv1.9\nv1.2.3\nv1.2\nfoo-2.0\nfoo-10.1\n1.0\n1.0.1\n' > "$w/v"
 printf 'b\na\nc\na\n' > "$w/u"; printf 'a\nb\nc\n' > "$w/s"; printf 'x 3\ny 10K\nz 2M\n' > "$w/kh"
 try h -h; try h -hr; try v -V; try v -Vr; try kh -k2h; try kh -k2,2h -r; try s -c; try u -C; try u --reverse; try s -m; try u -n --unique

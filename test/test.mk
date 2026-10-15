@@ -407,10 +407,10 @@ test_forge: host
 # every test/cc/*.c by `mooncc -t $*` under qemu-user, held to x64; unbuildable ones must refuse
 test_cca64 test_ccrv64: test_cc%: host
 	@$(gsh) test/gate/ccarch.sh $* $(ho) $m
-# test_cci386 -- the battery on i386 (moonlibc), native, against gcc -m32
-gate_hm += test_cci386
-# test_ccarm -- the battery on arm linux under qemu-arm, against arm-none-eabi-gcc's newlib build
-gate_hm += test_ccarm
+# test_cci386 test_ccarm -- the battery on a 32-bit linux target: gcc -m32 natively, or
+# arm-none-eabi-gcc's newlib under qemu-arm (cc32.sh)
+test_cci386 test_ccarm: test_cc%: host
+	@$(gsh) test/gate/cc32.sh $* $(ho) $m
 # test_ccwasm -- the battery on wasm, node as the machine
 gate_hm += test_ccwasm
 # the battery on M-profile: no qemu-user, ILP32, so arm-none-eabi-gcc's build is the oracle

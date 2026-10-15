@@ -1,47 +1,18 @@
 #!/bin/sh
-# test/gate/vec.sh -- the INTERRUPT gate.
-#
-# src/inle/mkvec.l lays the exception and IRQ entry points that used to be
-# x64/x64.S and a64/a64.S. a green `make test_disk` already
-# proves most of that lay by running it: nothing boots without archinit's IDT,
-# and the corpus is FED over the serial line and CLOCKED by the timer, so
-# uart_isr and timer_isr run thousands of times per gate. what a green boot
-# never touches is the part that only runs when something goes wrong --
-# the 32 exception stubs, the common tail, and a64's fault vector.
-#
-# so this gate makes something go wrong, on purpose, and reads the report:
-#
-#   1. THE FAULT PATH, BOOTED. `(fault n)` (kmain.c's nif -> k_fault_trigger in
-#      each arch.c) raises a real CPU exception. the kernel dispatches it
-#      through the vector table we laid, and prints what it caught. the vectors
-#      below are chosen to cover BOTH stub shapes: the CPU pushes an error code
-#      for 8, 10..14, 17, 21, 29 and 30 and for nothing else, so those stubs
-#      push one word and the other twenty-two push a dummy zero first. #PF is
-#      the load-bearing case -- it is an error-code vector AND it reports both
-#      `err` and `cr2`, so a stub on the wrong side of that split would shift
-#      the whole frame and misreport all three fields.
-#   2. THE STUBS THE FAULT PATH CANNOT REACH. five vectors are booted above;
-#      the other twenty-seven come off the same loop, and a loop is exactly the
-#      thing that goes wrong at one end. so the laid object is read back and
-#      the error-code split is checked stub by stub against the architecture's
-#      own list -- and on a64, that the vector table is 2 KiB-aligned with
-#      one entry every 0x80 and exactly one of the sixteen (index 5, current EL
-#      with SP_ELx, IRQ) going somewhere different from the rest.
-#
-# a faulted kernel HALTS by design (k_exception does not return), so each boot
-# is stopped as soon as its report lands rather than waited out.
-#
+# test/gate/vec.sh -- the exception vectors a clean boot never reaches.
+# boots, raises real faults with (fault n) and reads each report; then reads the laid
+# object back: x64's error-code split stub by stub, a64's table alignment and spacing,
+# rv64's save/restore symmetry. a faulted kernel halts, so each boot stops at its report.
 # usage: vec.sh ARCH ELF OBJ
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 arch=$1; elf=$2; obj=$3
 work=${TMPDIR:-/tmp}/vec.$$
 mkdir -p "$work"
 trap 'rm -rf "$work"' EXIT
-# a `while read` on the end of a pipe is its own process, so a failure raised
-# in one cannot set a variable here -- it leaves a mark on the filesystem instead.
+# a piped `while read` is a subshell: a failure marks the filesystem
 fail() { echo "FAIL test_vec($arch): $*" >&2; : > "$work/failed"; }
-have() { command -v "$1" >/dev/null 2>&1; }
 
 case $arch in
   x64)  qemu=qemu-system-x86_64;  mach="-M q35" ;;
@@ -50,9 +21,7 @@ case $arch in
   *) echo "FAIL test_vec: unknown arch $arch" >&2; exit 1 ;;
 esac
 
-# KVM where the host can back it; without /dev/kvm this falls to TCG and the
-# faults report the same. x64-on-x64 only -- `virt` is asked for
-# gic-version=2 above, which an arm host with no v2 backing refuses outright.
+# kvm for x64 on x64 only: an arm host may lack gic v2 backing
 if [ "$arch" = x64 ] && [ -e /dev/kvm ] && [ "$(uname -m)" = x86_64 ]; then
   mach="$mach -enable-kvm -cpu host"
 fi
@@ -60,28 +29,18 @@ fi
 if ! have "$qemu"; then
   gate_partly "  (vec $arch: fault boots skipped, no $qemu)"
 else
-  # only a NEWLINE-TERMINATED report counts: rip=/err=/cr2= land after the marker,
-  # so waking on the marker alone kills qemu mid-line and the gate reads a PREFIX of
-  # the address it asked for -- a failure that only shows under load. wc -l counts
-  # terminators, so head -n that many is exactly the complete lines.
+  # only complete lines count: the fields land after the marker
   said() {
     n=$(tr -d '\0' < "$work/out" | wc -l | tr -d ' ')
     [ "${n:-0}" -gt 0 ] && tr -d '\0' < "$work/out" | head -n "$n" | grep -qa '\*\*\* CPU exception'
   }
-  # boot, type one expression AT THE PROMPT, stop as soon as the report lands whole.
-  # the kernel is halted at that point and would otherwise sit until a timeout.
-  # the line goes in after the prompt, never with the boot: a byte queued on the
-  # UART before the console is up is the firmware's and the FIFO reset's to drop
-  # (OpenSBI reads one off the 16550 at init), so stdin is a fifo this loop writes
-  # once the shell has spoken. the ceiling is the prompt's: an egg baked under TCG
-  # takes riscv ~60s to reach it, and the loop leaves as soon as the report lands.
+  # boot, type at the prompt (an early uart byte is dropped by firmware), stop at the
+  # report. the ceiling is for rv64 under tcg, ~60s to a prompt
   fault_report() {
     : > "$work/out"
     rm -f "$work/in"; mkfifo "$work/in"
-    # 768M like src/tools/ktest.l: a major takes a contiguous 2x pool beside the old one,
-    # and whether it fits is a placement lottery -- 512M loses it and the boot says nothing.
+    # 768M: a major wants a contiguous 2x pool. `love` asks for the plain console
     # shellcheck disable=SC2086
-    # the boot line `love` asks for the plain console: an empty one is a mitty, no `> ` prompt
     $qemu $mach -m 768M -serial stdio -display none -no-reboot \
           -kernel "$elf" -append love < "$work/in" > "$work/out" 2>/dev/null &
     qp=$!
@@ -89,7 +48,6 @@ else
     typed=0 i=0
     while [ $i -lt 3000 ]; do
       said && break
-      # the prompt, with or without its colour wrap
       if [ $typed = 0 ] && grep -qa -e '^> ' -e 'm> ' "$work/out"; then
         printf '(fault %s)\n' "$1" >&3; typed=1
       fi
@@ -103,22 +61,17 @@ else
     tr -d '\0' < "$work/out" | head -n "${n:-0}" | grep -a '\*\*\* CPU exception' | head -1
   }
 
-  # vector -> every string its report must contain. the x86 set covers a
-  # no-error-code stub (0, 3, 6), an error-code stub whose code happens to be
-  # zero (13), and the one that reports all three fields (14).
+  # vector:strings its report holds. x64: no error code (0 3 6), a zero one (13), all fields (14)
   case $arch in
     x64) cases='0:exception 0 (#DE)
 3:exception 3 (#BP)
 6:exception 6 (#UD)
 13:exception 13 (#GP)
 14:exception 14 (#PF)|err=2|cr2=600000000000' ;;
-    # a64 has no error-code split: every fault reaches the sync vector and
-    # a_fault reads ESR/ELR/FAR itself. esr 0x2000000 is EC=0 (unknown
-    # instruction, the udf), 0x96000044 EC=0x25 (data abort at the current EL).
+    # a64: one sync vector; esr 2000000 is the udf
     a64) cases='6:esr=2000000
 14:data abort|far=600000000000' ;;
-    # riscv has one entry and k_trap reads scause/sepc/stval itself: cause 2 is the
-    # illegal instruction, 3 the breakpoint, 15 a store page fault with the address.
+    # rv64: one entry; cause 2 illegal, 3 breakpoint, f store page fault
     rv64) cases='6:illegal instruction|cause=2
 3:breakpoint|cause=3
 14:store page fault|cause=f|tval=ffffffc100000000' ;;
@@ -137,7 +90,7 @@ else
   done
 fi
 
-# -- the static half: the stubs no boot reaches ------------------------------
+# the stubs no boot reaches
 if ! have llvm-objdump; then
   gate_partly "  (vec $arch: object checks skipped, no llvm-objdump)"
 elif [ ! -f "$obj" ]; then
@@ -145,9 +98,7 @@ elif [ ! -f "$obj" ]; then
 else
   case $arch in
     x64)
-      # the ARCHITECTURE's list, not a restatement of mkvec.l: these are the
-      # vectors for which the CPU itself pushes an error code (Intel SDM
-      # vol.3 6.3.1 -- #DF #TS #NP #SS #GP #PF #AC #CP #VC #SX).
+      # the vectors the cpu pushes an error code for (sdm vol.3 6.3.1)
       errset=" 8 10 11 12 13 14 17 21 29 30 "
       d=$(llvm-objdump -d --no-show-raw-insn "$obj")
       v=0
@@ -161,24 +112,20 @@ else
           *)        wantn=2; kind="must push a dummy error code" ;;
         esac
         [ "$n" = "$wantn" ] || fail "exc_stub_$v $kind, so it should push $wantn word(s); it pushes $n"
-        # the last stub is followed by the align's nop filler, which the symbol
-        # span picks up -- it is padding, never executed, so drop it first.
+        # drop the align's nop filler after the last stub
         echo "$body" | grep -v 'nop' | tail -1 | grep -q 'jmp.*exc_common' ||
           fail "exc_stub_$v does not end in a jump to exc_common"
         v=$((v + 1))
       done
       ;;
     a64)
-      # VBAR_EL1 ignores the low 11 bits, so a table off its 2 KiB boundary
-      # would dispatch into the middle of another entry. sh_addralign is the
-      # last column of the section header, and it is the linker's instruction.
-      # the index column is "[ 1]" or "[10]", so the name's field NUMBER moves --
-      # find the field that IS the name (which also skips .rela.text.vectors).
+      # VBAR_EL1 ignores the low 11 bits; the align is the header's last column,
+      # and the name's field number moves with the index's width
       al=$(llvm-readelf -S "$obj" |
            awk '{ for (i = 1; i <= NF; i++) if ($i == ".text.vectors") { print $NF; exit } }')
       [ "$al" = 2048 ] ||
         fail ".text.vectors must ask the linker for 2048-byte alignment; it asks for ${al:-nothing}"
-      # one entry every 0x80, sixteen of them, and exactly one different.
+      # sixteen entries 0x80 apart, exactly one (slot 5) different
       br=$(llvm-objdump -d --no-show-raw-insn "$obj" |
            awk '/^ +[0-9a-f]+:/ { off = strtonum("0x" substr($1, 1, length($1) - 1))
                                   if (off < 2048 && off % 128 == 0) print off, $2, $3 }')
@@ -190,10 +137,7 @@ else
         fail "exactly one of the sixteen vectors (slot 5, current EL SP_ELx IRQ) must differ; the odd one out is entry$odd"
       ;;
     rv64)
-      # one entry, one return: every register the entry saves against sp comes back
-      # off the same slot -- the two unnamed scratches included -- and the sret is
-      # the last word laid, so nothing runs past the restore. a0 is stored twice:
-      # itself, and fcsr carried through it. +d to read the float file's c.fsdsp.
+      # every register saved comes back, fcsr rides a0, and sret is the last word
       d=$(llvm-objdump -d --no-show-raw-insn --mattr=+c,+d "$obj")
       sd=$(echo "$d" | awk '$2 == "sd" { print $3 }' | sort)
       ld=$(echo "$d" | awk '$2 == "ld" { print $3 }' | sort)
