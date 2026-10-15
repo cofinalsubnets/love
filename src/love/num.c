@@ -591,7 +591,7 @@ static struct g *kmul_setup(struct g *g) {
 // FIXME can we choose different types to reduce the amount of explicit casting in this function?
 static lvm(lvm_kmul) {
  love_limb *ws = (love_limb*) txt(cask(Sp[0])->str);
- int n = (int) ws[0], top = (int) ws[1];
+ int top = (int) ws[1];
  love_limb *jobs = ws + KmulHdr;
  long budget = kmul_chunk;
  while (top > 0 && budget > 0) {
