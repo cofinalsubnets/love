@@ -1351,6 +1351,15 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   callee-saved register the prologue never saved (`cs-unsaved r19` on a64, `r15` on rv64; x64
   laid the dead loop and kept quiet). A label now lives only if code reached from the entry
   names it, so a block reached by a later jump stays. Three tinyconfig units; law 293-deadloop.c.
+- **an asm label on a file-scope declaration is the symbol's name** (`void f(void) asm("g")`,
+  glibc's `__REDIRECT`, the kernel's `ret_from_fork`): the object's symbol table spells the
+  label, definitions and references alike, so two C names under one label are one object; the
+  forms keep the C name. `asm`, `__asm__`, `__asm`, and adjacent strings. The plain `asm`
+  spelling had refused (`parse error near asm`, which stopped process.c); the other two had
+  dropped the label in silence, so the symbol kept its C name and a caller naming the label
+  missed it. A label that renames refuses on wasm, which lays no symbol table. Two C names on
+  one label in one file lay the label defined and undefined, which ld and lld bind as one.
+  Law 294-asmlabel.c.
 
 Still open on this side (g-21's probes):
 

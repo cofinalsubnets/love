@@ -463,7 +463,7 @@
    ; the TU used, appended in declaration order (cgen-obj's tail): a named section's address
    ; is the point -- src/inle/rp2040's .vectors is read by the core before an instruction runs --
    ; so both its existence and its order are the program's to fix, never ours.
-   ; the two wide tuples are named once, here: parse.l's `tops` answers fifteen fields and
+   ; the two wide tuples are named once, here: parse.l's `tops` answers sixteen fields and
    ; gen.l's cgen-obj thirteen, and `[]` is the strict arity, so a shape that gains a member is
    ; a refusal naming the file rather than every site quietly reading its neighbour.
    ; the marks a -mbranch-protection object carries, clang's bytes: the gnu property note (a
@@ -479,7 +479,7 @@
                      + [0 1 0 0 b 1 p 2 0])]]]]))                              ; optional, uleb; bti pac gcs
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames]
        ; wasm rides gen's rv64 lane whole (src/love/holo/wasmfn.l is the machine under it) and
        ; lays no ELF: its object is the gen tuple as text, read back by the wasm link. gen
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
@@ -502,13 +502,15 @@
                  ; the TU named. arm32 has no .image lane and no local func symbols for
                  ; statics -- objsecs3 refuses the first, and `lnames` does not ride.
                  (? (tgt = 'wasm)
-                    (two? <at ? (udie 1 ("cc: a file-scope asm has no wasm lane, in " + src))
+                    (? (two? <at) (udie 1 ("cc: a file-scope asm has no wasm lane, in " + src))
+                       (two? (filter (k \ anames k != k) (keys anames)))
+                        (udie 1 ("cc: an asm label that renames has no wasm lane, in " + src))
                        (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                     (elf32? tgt)
-                    (objsecs32 tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
-                               fns gns wks)
-                    (objsecs tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
-                             fns gns wks lnames)))
+                    (objsecs32n tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
+                                fns gns wks anames)
+                    (objsecsn tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
+                              fns gns wks lnames anames)))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:

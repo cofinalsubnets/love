@@ -791,7 +791,7 @@ lvm_t lvm_kcall,
  lvm_argcap, lvm_argcup, lvm_argtwo, lvm_argcond,
  lvm_argtwocond,                                  // load + predicate + cond
  lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_twirl, lvm_wait,
- lvm_sleep, lvm_donep, lvm_scoop, lvm_hush,
+ lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_deadlock,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound, lvm_sounds,
