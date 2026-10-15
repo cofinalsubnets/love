@@ -1,16 +1,12 @@
-; the gate for src/love/holo/dialect.l against gcc: test/gate/dialect.sh compiles every test/cc
-; file with -masm=att and -masm=intel, and both spellings of one program must read to one value
-; -- labels, .globl and every instruction. the other directives compare by name only (gcc quotes
-; symbols in its Intel output and not in its at&T). @PAIRS@ is the list the shell lays, one
-; `att.s intel.s` pair per line; a miss prints the first differing item of the pair.
+; gcc's -masm=att and -masm=intel of one program read to one value: labels, .globl and every
+; instruction; other directives by name only (gcc quotes intel symbols). @PAIRS@: `att.s intel.s` lines.
 (borrow 'holo)
 
 (borrow 'posix)
 (: (slurpf f) (open f "r" @ q (slurp q))
    (strip its) (map (it \ <it = 'dir ? ['dir <>it] it) its)
    (words s) (filter (w \ #w > 0) (xa-split s 32))
-   ; an inline asm's template lands verbatim, in its author's one dialect, under both flags:
-   ; gcc brackets it #APP .. #NO_APP, and those lines are the author's, not the compiler's
+   ; inline asm lands verbatim in its author's dialect under both flags: drop #APP .. #NO_APP
    (noapp s) (: (go l in acc) (atom? l ? (rev acc)
                                  (xa-trim <l @ t
                                   (? (t = "#APP") (go >l 1 acc)
