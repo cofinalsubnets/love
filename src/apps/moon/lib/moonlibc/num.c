@@ -215,23 +215,27 @@ void *bsearch(void const *key, void const *base, size_t n, size_t sz,
     if (r < 0) hi = mid; else lo = mid + 1; }
   return 0; }
 
-/* exec's variadic pair: gather (arg0, .., NULL) off the stack, then execv[p]. */
+/* exec's variadic pair: count (arg0, .., NULL) off the stack, gather them into an
+ * argv that holds them all, then execv[p]. */
+static int __execl(char const *p, char const *a0, va_list ap, int path) {
+  va_list c; va_copy(c, ap);
+  size_t n = 1;
+  while (va_arg(c, char *)) n++;
+  va_end(c);
+  char *av[n + 1];
+  av[0] = (char *) a0;
+  for (size_t i = 1; i <= n; i++) av[i] = va_arg(ap, char *);   /* the last is the NULL */
+  return path ? execvp(p, av) : execv(p, av); }
 int execl(char const *p, char const *a0, ...) {
-  char *av[256]; int n = 0;
   va_list ap; va_start(ap, a0);
-  av[n++] = (char *) a0;
-  while (n < 255 && (av[n] = va_arg(ap, char *))) n++;
-  av[n] = 0;
+  int r = __execl(p, a0, ap, 0);
   va_end(ap);
-  return execv(p, av); }
+  return r; }
 int execlp(char const *f, char const *a0, ...) {
-  char *av[256]; int n = 0;
   va_list ap; va_start(ap, a0);
-  av[n++] = (char *) a0;
-  while (n < 255 && (av[n] = va_arg(ap, char *))) n++;
-  av[n] = 0;
+  int r = __execl(f, a0, ap, 1);
   va_end(ap);
-  return execvp(f, av); }
+  return r; }
 /* system: fork, /bin/sh -c, wait. no signal juggling (love is single-threaded). */
 int system(char const *cmd) {
   if (!cmd) return 1;                          /* a shell is available */

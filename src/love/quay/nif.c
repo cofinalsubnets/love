@@ -15,10 +15,13 @@
 //                         | ()   misuse: cask too small, or silly geometry
 //   (scribe scr x)       -> scr  feed x through the VT parser: a byte charm,
 //                                or every byte of a string/cask; () misuse
+//                         | n    a screen whose replies are drained: only the first n
+//                                went in, its queue full -- reply, then scribe the rest
 //   (regrid scr b rows cols) -> b  scr laid across into cask b as a rows x cols
 //                                screen (cb_regrid): text, clusters, and pictures
 //                                while the store holds them; b not a cask answers
-//                                the byte count, as screen's does; () misuse
+//                                the byte count, as screen's does, with scr's cluster
+//                                pool as it has grown; () misuse
 //   (glass scr i k)      -> w    word k of cell i, or (): 0 the glyph (codepoint,
 //                                width, picture, face), 1 the fg, 2 the bg
 //                                (the layout is quay.h's struct cb_cell); a
@@ -80,6 +83,7 @@ static struct cb *scr_ok(word x) {
  if (cb_size(c->rows, c->cols, c->sn) + cb_hsize(c->hl, c->cols) > s->len) c->hl = 0;
  if (c->twin && cb_size(c->rows, c->cols, c->sn) + cb_hsize(c->hl, c->cols) + cb_tsize(c->rows, c->cols) > s->len)
   c->twin = 0;
+ if (c->cx > cb_clumax - cb_nclu || cb_laid(c) > s->len) c->cx = 0;
  if (c->hn > c->hl) c->hn = c->hl;
  if (c->hh >= c->hl) c->hh = 0;
  if (c->view > c->hn) c->view = c->hn;
@@ -93,7 +97,8 @@ static struct cb *scr_ok(word x) {
  if (c->esc > 15) c->esc = 0;
  if (c->kslot >= cb_nimg) c->kslot = 0, c->kopen = 0;
  if (c->kf != 24 && c->kf != 32 && c->kf != 100) c->kf = 32;
- if (c->pn > 8) c->pn = 8;
+ if (c->pn > cb_pmax) c->pn = cb_pmax;
+ if (c->ps > 5) c->ps = 0;
  if (c->on > cb_outn) c->on = 0;
  if (c->un > 3) c->un = 0;
  if (c->ol > 6) c->ol = 6;
@@ -139,7 +144,7 @@ static lvm(lvm_regrid) {
  if (c && sn != ~0u) {
   uint16_t const r = (uint16_t) getcharm(Sp[2]), k = (uint16_t) getcharm(Sp[3]);
   uint32_t const hl = scr_hl(k);
-  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k);
+  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k) + cb_xsize(c->cx);
   if (!caskp(b)) out = putcharm(need);
   else {
    struct str *s = ((struct cask*) b)->str;
@@ -149,23 +154,52 @@ static lvm(lvm_regrid) {
  Sp[3] = out;
  Sp += 3; Ip += 1; love_musttail return Continue(); }
 
-// (scribe scr x): the feed. A charm is one byte; a string or cask pours every
-// byte through cb_putc (the hot path: one nif call per pty read). Returns the
-// screen back so feeds chain. No allocation, so the pointer holds throughout.
+// the cluster pool of the screen at sp[0] grown: twice the slots past the header's (cb_nclu
+// at first), the cask's bytes laid again when its own do not reach. g Packed; a pool at
+// cb_clumax stays as it is
+love_noinline static struct g *scr_grow(struct g *g) {
+ struct cb *c = scr_ok(g->sp[0]);
+ uint32_t const most = cb_clumax - cb_nclu, add = c->cx ? c->cx : cb_nclu,
+                cx = add < most - c->cx ? c->cx + add : most;
+ uintptr_t const n = cb_laid(c) + cb_xsize(cx - c->cx), len = cask(g->sp[0])->str->len;
+ if (n > len) {
+  if (!ok(g = have(g, str_width(n)))) return g;
+  struct str *o = cask(g->sp[0])->str, *s = ini_str(str(g->hp), n);
+  g->hp += str_width(n);
+  memcpy(s->bytes, o->bytes, len);
+  cask(g->sp[0])->str = s;
+  gen_wb(g, g->sp[0], word(s)); }
+ cb_xclu(scr_ok(g->sp[0]), cx);
+ return g; }
+
+// the feed's workhorse, g Packed with [scr x] at sp: x's bytes from the first through
+// cb_putc, the pool grown whenever it fills. answers at sp[1]: the screen when every byte
+// went in, the count that did when the reply queue waits to be drained, () for misuse
+love_noinline static struct g *scr_pour(struct g *g) {
+ struct cb *c = scr_ok(g->sp[0]);
+ word x = g->sp[1];
+ struct str *s = !c || (x & 1) ? 0 : strp(x) ? str(x) : ((union u*) x)->ap == lvm_cask ? cask(x)->str : 0;
+ uintptr_t const n = (x & 1) ? 1 : s ? s->len : 0;
+ if (!c || (!(x & 1) && !s)) return g->sp[1] = ZeroPoint, g;
+ uintptr_t i = 0;
+ for (; i < n && !cb_full(c); i++) {
+  cb_putc(c, (char) ((x & 1) ? getcharm(x) & 0xff : s->bytes[i]));
+  if (c->cfull && c->cx < cb_clumax - cb_nclu) {
+   if (!ok(g = scr_grow(g))) return g;
+   c = scr_ok(g->sp[0]), x = g->sp[1];
+   if (!(x & 1)) s = strp(x) ? str(x) : cask(x)->str; } }
+ g->sp[1] = i == n ? g->sp[0] : putcharm(i);
+ return g; }
+
+// (scribe scr x): the feed. A charm is one byte; a string or cask pours every byte through
+// cb_putc (the hot path: one nif call per pty read). Returns the screen back so feeds
+// chain -- or, on a screen whose replies are drained, the count poured when its queue
+// would not hold another: drain it, and scribe the rest
 static lvm(lvm_scribe) {
- struct cb *c = scr_ok(Sp[0]);
- word x = Sp[1], out = ZeroPoint;
- if (c) {
-  out = Sp[0];
-  if (x & 1) cb_putc(c, (char) (getcharm(x) & 0xff));
-  else if (strp(x)) {
-   struct str *s = str(x);
-   for (uintptr_t i = 0; i < s->len; i++) cb_putc(c, s->bytes[i]); }
-  else if (((union u*) x)->ap == lvm_cask) {
-   struct str *s = ((struct cask*) x)->str;
-   for (uintptr_t i = 0; i < s->len; i++) cb_putc(c, s->bytes[i]); }
-  else out = ZeroPoint; }
- Sp[1] = out;
+ Pack(g);
+ g = scr_pour(g);
+ if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
 // (glass scr i k): look through to one word of one cell.

@@ -1000,7 +1000,8 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
   else { for (uintptr_t i = 1; i < sz; i++)                                                  // thread interior + terminator;
           blob[off + i] = img_encode(x, ptr(p)[i] == (word) lvm_lazy ? ptr(p)[0] : ptr(p)[i]);  // a woken entry is its header
          if (p->ap == lvm_map_lookup) {                                                // a tablet's serial, a charm
-          if (nslot < ncap) slots[nslot++] = (off + 2) | SlotCharm; else slotover = true; } }
+          if (nslot < ncap) slots[nslot++] = (off + __builtin_offsetof(struct tablet, serial) / sizeof(word)) | SlotCharm;
+          else slotover = true; } }
   p = cell(ptr(p) + sz); }
  if (x->ob)                                        // chunk starts in the laid order
   for (uintptr_t q = 0; q < x->nobj; q++) { uintptr_t no = x->nob[x->ord[q]]; if (no >= nextk) cb[ncb++] = no, nextk = (no / kw + 1) * kw; }
