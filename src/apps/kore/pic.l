@@ -1,6 +1,6 @@
 ; src/apps/kore/pic.l -- pictures on a terminal and between formats: png, jpeg, gif, webp,
-; bmp, ico and netpbm's read (src/apps/png.l, jpeg.l, gif.l, webp.l, bmp.l, pnm.l); png, jpeg,
-; gif, ppm, pam and sixel written.
+; bmp, ico, netpbm's and qoi read (src/apps/png.l, jpeg.l, gif.l, webp.l, bmp.l, pnm.l, qoi.l);
+; png, jpeg, gif, webp (lossless), qoi, ppm, pam and sixel written.
 ; the default draw is blocks, two pixels a cell (▀ fg over bg), 24-bit where COLORTERM says so,
 ; else the 256-colour cube; never enlarged. convert keeps a gif's first frame.
 ; a bare pic may be classic pic, the troff preprocessor (gpic.l): see pic-route.
@@ -13,7 +13,7 @@
 (:
    pic-usage (cats ["usage: pic [cat] [-g block|sixel|kitty|auto] [-w COLS] [-h ROWS] [FILE..]\n"
                     "       pic less [-g block|sixel|kitty|auto] FILE..\n"
-                    "       pic convert [-q QUALITY] [-t png|gif|jpeg|ppm|pam|sixel|ans] IN OUT\n"
+                    "       pic convert [-q QUALITY] [-t png|gif|jpeg|webp|qoi|ppm|pam|sixel|ans] IN OUT\n"
                     "       pic pixelize [-w COLS] [-h ROWS] [-s PX] [-c 256] [-q QUALITY] [-t TYPE] IN OUT"])
    picless-usage "usage: pic less [-g block|sixel|kitty|auto] FILE.."
    pic-swig (cite 'posix 'swig)
@@ -22,7 +22,7 @@
    ; -- reading -----------------------------------------------------------------
    (pic-le16 b i) (b i + 256 * b (i + 1))
    (pic-be32 b i) (((b i * 256 + b (i + 1)) * 256 + b (i + 2)) * 256 + b (i + 3))
-   ; bytes -> 'png 'jpeg 'gif 'webp 'bmp 'ico 'pnm | ()
+   ; bytes -> 'png 'jpeg 'gif 'webp 'bmp 'ico 'pnm 'qoi | ()
    (pic-kind b)
     (? !(string? b && 8 <= #b) ()
        (snip b 1 4 = "PNG") 'png
@@ -32,6 +32,7 @@
        (snip b 0 2 = "BM") 'bmp
        (b 0 = 0 && b 1 = 0 && (b 2 = 1 || b 2 = 2) && b 3 = 0 && 0 < b 4 + b 5) 'ico
        (b 0 = 80 && 49 <= b 1 <= 55 && elem (b 2) [9 10 13 32]) 'pnm
+       (snip b 0 4 = "qoif") 'qoi
        ())
    ; -> [w h] off the header | why not
    (pic-size b)
@@ -43,6 +44,7 @@
           (k = 'bmp) (cite 'bmp 'bmp-size b)
           (k = 'ico) (cite 'bmp 'ico-size b)
           (k = 'pnm) (cite 'pnm 'pnm-size b)
+          (k = 'qoi) (cite 'qoi 'qoi-size b)
           "not a picture"))
    ; -> [w h rgba] | why not; a gif's or an animated webp's first frame, an apng's default image
    (pic-decode b)
@@ -54,6 +56,7 @@
           (k = 'bmp) (cite 'bmp 'bmp-decode b)
           (k = 'ico) (cite 'bmp 'ico-decode b)
           (k = 'pnm) (cite 'pnm 'pnm-decode b)
+          (k = 'qoi) (cite 'qoi 'qoi-decode b)
           "not a picture"))
    ; -> [w h [[rgba ms] ..]] | why not: a gif's or a webp's frames, as many as fit 128 MB, and
    ; a still one frame of no time
@@ -213,13 +216,15 @@
    (pic-type nm)
     (: (dot i) (? (i < 0) -1 (nm i = 46) i (dot (i - 1)))
        x (wg-lower (snip nm (dot (#nm - 1) + 1) #nm))
-       (x @ "png" 'png "gif" 'gif "jpg" 'jpeg "jpeg" 'jpeg "ppm" 'ppm "pnm" 'ppm "pam" 'pam "six" 'sixel
+       (x @ "png" 'png "gif" 'gif "jpg" 'jpeg "jpeg" 'jpeg "webp" 'webp "qoi" 'qoi "ppm" 'ppm "pnm" 'ppm "pam" 'pam "six" 'sixel
             "sixel" 'sixel "ans" 'ans ()))
    ; -> the picture's bytes as ty | why not
    (pic-encode ty im q)
     (? (ty = 'png) (cite 'png 'png-encode (im 0) (im 1) (im 2))
        (ty = 'gif) (cite 'gif 'gif-encode (im 0) (im 1) (im 2))
        (ty = 'jpeg) (jpeg-encode (im 0) (im 1) (im 2) q @ r (string? r ? r "cannot encode a jpeg"))
+       (ty = 'webp) (cite 'webp 'webp-encode (im 0) (im 1) (im 2) @ r (string? r ? r "cannot encode a webp"))
+       (ty = 'qoi) (cite 'qoi 'qoi-encode (im 0) (im 1) (im 2) @ r (string? r ? r "cannot encode a qoi"))
        (ty = 'ppm) (cite 'pnm 'pnm-encode (im 0) (im 1) (im 2))
        (ty = 'pam) (cite 'pnm 'pam-encode (im 0) (im 1) (im 2))
        (ty = 'sixel) (pic-sixel im)
@@ -235,7 +240,7 @@
    (pic-otype who t p dflt)
     (: v (uoptv t 116) ty (string? v ? (pic-type ("." + v)) (pic-type p))
        (? (ty != ()) ty (dflt != () && !(string? v)) dflt
-          (udie 2 (who + ": " + (string? v ? ("no type " + v) ("no type for " + p)) + "; png gif jpeg ppm pam sixel or ans"))))
+          (udie 2 (who + ": " + (string? v ? ("no type " + v) ("no type for " + p)) + "; png gif jpeg webp qoi ppm pam sixel or ans"))))
    (pic-num t k d) (uoptv t k @ v (string? v ? (uatoi v @ n (0 < n ? n d)) d))
    (pic-decoded who nm b)
     (pic-decode b @ im (two? im ? im (udie 1 (who + ": " + nm + ": " + im))))

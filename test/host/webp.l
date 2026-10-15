@@ -4,7 +4,8 @@
 ; sits inside its canvas -- each decoded to the rgba libwebp gives, by its sha-256. then,
 ; where python3's PIL writes webp, more of them, each held to PIL's own decode byte for byte;
 ; animations composed frame by frame, one muxed by hand and PIL's own, held to PIL's frames
-; (libwebp's animation decoder); last the refusals.
+; (libwebp's animation decoder); the lossless encoder read back exactly, here and by PIL;
+; last the refusals.
 ;   cat test/00-init.l test/host/webp.l | out/love
 (borrow 'posix)
 (borrow 'hashes)
@@ -177,6 +178,36 @@ open(d + '/anims', 'w').write(chr(10).join(man) + chr(10))
                 ls (filter (l \ 0 < #l) (split "\n" (rd (dir + "/anims"))))
                 (test (<r = 0) (6 < #ls) (atom? (filter (l \ !(anim-same l)) ls))))
         (gate-partly "webp: no python3 PIL with webp, its animations skipped"))
+
+   ; -- the lossless encoder -------------------------------------------------------------
+   ; palettes of 2, 3, 5, 17 and 256 colours (packed 8, 4, 2 to a pixel, then one), alpha, a
+   ; gradient, noise, one pixel and a long row: each read back exactly, here and where PIL is
+   ; by libwebp; a flat picture in a few dozen bytes
+   (image w h f)
+    (cask (4 * w * h) @ c
+     (map (i \ (: p (f (i % w) (i // w)) o (4 * i)
+                  (pins c o (p 0) (o + 1) (p 1) (o + 2) (p 2) (o + 3) (p 3))))
+          (jot (w * h)),
+      [w h (string c)]))
+   (pal k) (image 37 23 (x \ y \ (: i ((x * 7 + y * 3) % k) [((i * 53) % 256) ((i * 97) % 256) (i % 256) 255])))
+   encs [(pal 2) (pal 3) (pal 5) (pal 17) (pal 256)
+         (image 40 30 (x \ y \ [((x * 3) % 256) ((y * 4) % 256) ((x * y) % 256) (((x + y) * 5) % 256)]))
+         (image 33 17 (x \ y \ (: v (((y * 33 + x) * 2654435761) >> 7)
+                                  [(v & 255) ((v >> 8) & 255) ((v >> 16) & 255) 255])))
+         (image 1 1 (x \ y \ [9 8 7 6])) (image 700 1 (x \ y \ [(x % 7) 2 3 255]))]
+   enc-out (map (im \ webp-encode (im 0) (im 1) (im 2)) encs)
+   _ (test (atom? (filter (k \ !(webp-decode (enc-out k) = encs k)) (jot #encs)))
+           (#(webp-encode 300 200 (string (cask 240000))) < 60)
+           (webp-encode 2 2 "abc" = ()) (webp-encode 0 1 "" = ()) (webp-encode 20000 1 (string (cask 80000)) = ()))
+   _ (each (jot #encs) (k \ (put (dir + "/e" + show k + ".rgba") (encs k 2), put (dir + "/e" + show k + ".webp") (enc-out k))))
+   _ (put (dir + "/enc.py") """
+     import sys
+     from PIL import Image
+     d, n = sys.argv[1], int(sys.argv[2])
+     sys.exit(sum(Image.open('%s/e%d.webp' % (d, k)).convert('RGBA').tobytes() != open('%s/e%d.rgba' % (d, k), 'rb').read() for k in range(n)))
+     """)
+   _ (pil? ? (: r (hark ["python3" (dir + "/enc.py") dir (show #encs)]) (test (<r = 0)))
+        (gate-partly "webp: no python3 PIL with webp, its reading of our encoder skipped"))
 
    ; -- the refusals --------------------------------------------------------------------
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
