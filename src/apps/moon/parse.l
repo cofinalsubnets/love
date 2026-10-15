@@ -1849,14 +1849,13 @@
           "__builtin_popcountll" '(pop ullong)
           "__builtin_ffs" '(ffs uint) "__builtin_ffsl" '(ffs ulong) "__builtin_ffsll" '(ffs ullong)
           ())
-   (blen v) (v = 0 ? 0 (1 + blen (v >> 1)))
    (bctz v) (v & 1 = 1 ? 0 (1 + bctz (v >> 1)))
    (bpop v) (v = 0 ? 0 ((v & 1) + bpop (v >> 1)))
    (bswp v n) (n = 0 ? 0 ((v & 255) * (2 ** (8 * (n - 1))) + bswp (v >> 8) (n - 1)))
    ; v already in ty, unsigned -> (value type) | (); clz and ctz of 0 are undefined, no fold
    (bfold w64 op ty v)
     (op @ 'bswap [(bswp v (tbits w64 ty // 8)) ty]
-          'clz (v = 0 ? () [(tbits w64 ty - blen v) 'int])
+          'clz (v = 0 ? () [(tbits w64 ty - bitlen v) 'int])
           'ctz (v = 0 ? () [(bctz v) 'int])
           'pop [(bpop v) 'int]
           'ffs [(v = 0 ? 0 (bctz v + 1)) 'int]
