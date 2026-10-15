@@ -42,7 +42,7 @@
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"
       "test_nucleo446" "test_nucleo446_smoke" "test_teensy41" "test_playdate" "test_rp2040" "test_boards"
       "test_objcopy" "test_links"]
-     ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64"]]
+     ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64" "test_freebsd_rv64" "test_netbsd_rv64"]]
    lanes-alone ["test_hdiff" "test_ccwarn" "test_gcstress" "test_gcstress_full"]
 
    (lm-tick s) ("`" + s + "`")

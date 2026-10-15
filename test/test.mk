@@ -13,11 +13,11 @@
   test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
-  test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
+  test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_hearts_boot test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kernel_droid test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
-  test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
+  test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_quick test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
@@ -64,7 +64,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_raw_a64 test_raw_rv64 test_love_a64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_links \
-	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 \
+	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
 
 # $m is the warm love -- the baked image woken, what ships. a gate whose subject is
@@ -728,7 +728,7 @@ test_fat: dist-fat
 # freebsd-x64 or netbsd-x64 (doc/bee.md, HOSTS), or FBSD_SSH / NBSD_SSH for a release, and
 # without one the gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
 # NBSD_SEED=1 adds the on-box `love seed` trophy leg (minutes).
-.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64
+.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64
 test_freebsd test_netbsd: test_%: host $(love0) out/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $*
 # the second ISA: freebsd-a64 and netbsd-a64 hosts are aarch64 boxes, and the local half of each
@@ -736,6 +736,10 @@ test_freebsd test_netbsd: test_%: host $(love0) out/mooncc0.image
 # machine is not. the door netbsd needs there is the svc immediate. skips loudly without.
 test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) out/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* a64
+# the third ISA: freebsd-rv64 and netbsd-rv64 hosts are riscv64 guests, the local half under
+# qemu-riscv64. the doors there are each kernel's number register: linux a7, freebsd t0, netbsd t6.
+test_freebsd_rv64 test_netbsd_rv64: test_%_rv64: host $(love0) out/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* rv64
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the whole corpus. Opt-in: needs the -pie toolchain, x86-64 only.

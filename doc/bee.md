@@ -192,7 +192,7 @@ Work this box cannot do, or should not, runs on another: an a64 binary on an arm
 :   How many pieces of work it takes at once, 1 unless given. Each slot is an exclusive lock, **host-***name***-***n*, so two lanes never crowd one box.
 
 **caps**
-:   What it can do, as words: **a64-exec** (runs linux/arm64 binaries), **kvm-a64** (boots an a64 guest under kvm), **vt-x** (boots an x64 guest that uses VT-x), **freebsd-x64**, **netbsd-x64**, **freebsd-a64**, **netbsd-a64** (that system, to test against).
+:   What it can do, as words: **a64-exec** (runs linux/arm64 binaries), **kvm-a64** (boots an a64 guest under kvm), **vt-x** (boots an x64 guest that uses VT-x), **freebsd-x64**, **netbsd-x64**, **freebsd-a64**, **netbsd-a64**, **freebsd-rv64**, **netbsd-rv64** (that system, to test against).
 
 Any other line is a *fact*, such as **isa**, **os** or **page** (its page size in bytes). For example:
 
