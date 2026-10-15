@@ -1084,7 +1084,8 @@
        ; a mach-o: static, fixed-base, its entry knowing the kernel
        mac? (os = 'macos)
        _ (mac? && tgt != 'x64 && udie 1 "cc: -os macos links on x64 only")
-       _ (mac? && (pie || so || charm? org) && udie 2 "cc: -os macos lays a fixed-base executable: no -pie, -shared or -Ttext")
+       ; -pie lays the fixed base there: a static mach-o has no auxv to read its slide from
+       _ (mac? && (so || charm? org) && udie 2 "cc: -os macos lays an executable: no -shared or -Ttext")
        ars (filter dota? ins)
        srcs (map (f \ (? (dotsrc? f) [f (string (cc-objbytes f t))]
                          (doto? f) (uread f @ r
