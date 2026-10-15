@@ -816,6 +816,7 @@ lvm_t lvm_kcall,
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reaches them through g->reach)
  lvm_reach_offset,       // (reach-offset x): g->reach' byte offset, what the emitter's `reach` law loads from
  lvm_natp,        // (nat? f): is f a native closure -- its code in the arena
+ lvm_arena,       // (arena 0): the code arena's [mapped bumped free spans]
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
  lvm_deferfwd;    // a deferred native's code slot until its compile patches it (tablet.c)
 // the attributes are the declaration: `lvm(n)` is `love_noinline noicf _lvm(n)`, so these
@@ -1241,7 +1242,7 @@ char *code_install(struct g *g, char const *src, size_t n), *code_adopt(struct g
                 unsigned char const *dz, size_t ndz, size_t nd, int kept);
 int code_seat(struct g *g, char const *a);
 char *code_window(char *p);
-void code_free(struct g *g, char *code), code_fin(struct g *g);
+void code_free(struct g *g, char *code), code_fin(struct g *g), code_stats(struct g *g, uintptr_t s[4]);
 int code_in(struct g *g, uintptr_t v);
 // the instruction table (src/love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. nif_cell draws the line against a nif's run.
