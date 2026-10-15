@@ -15,8 +15,8 @@
 ; change owes `make test` besides, and test_slow runs last on the tree that lands
 (module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-doc lanes-map)
 
-(: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_ccrv64" "test_ccwasm" "test_ccthumb1"
-               "test_ccthumb2" "test_fixpoint" "test_moonfuzz" "test_inle"]
+(: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_ccarm" "test_ccrv64" "test_ccwasm"
+               "test_ccthumb1" "test_ccthumb2" "test_fixpoint" "test_moonfuzz" "test_inle"]
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l"] ["test_hostnif"] ""]
