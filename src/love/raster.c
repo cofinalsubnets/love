@@ -134,8 +134,12 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
   ex[i] = -dy * 16, ey[i] = dx * 16;
   ec[i] = dx * (8 - Y[i]) - dy * (8 - X[i]) - (dy < 0 || (dy == 0 && dx > 0) ? 0 : 1); }
  flo_t const fn = r->fog[3], ff = r->fog[4], fs = ff > fn ? 1 / (ff - fn) : 0;
- int shade = 0, under = r->flags & rz_under;   // the sun's view is asked only where some of the sun falls
- for (int i = 0; r->sm && i < 3; i++) shade |= P[i]->a[5] != 0 || P[i]->a[6] != 0 || P[i]->a[7] != 0;
+ int lit = 0, under = r->flags & rz_under;   // the sun's view is asked only where some of the sun falls
+ for (int i = 0; i < 3; i++) lit |= P[i]->a[5] != 0 || P[i]->a[6] != 0 || P[i]->a[7] != 0;
+ int const shade = lit && r->sm,
+           // ..and a pixel steps only the planes it reads: up to the colours, then the
+           // sun's colours, then the place as the sun sees it; the rest stay as set
+           nk = shade ? 2 + rz_na : lit ? 10 : 7;
  for (intptr_t y = y0; y < y1; y++) {
   // the row's run inside all three edges: each is c + ex x, exact, so where it turns is a
   // whole x found by division, and the pixels of the box outside it are never walked
@@ -195,7 +199,9 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
                          | rz_ch(c[2] + (flo_t) (q & 255), 0); }
      else o[x] = rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d), dz[x] = a[0]; } } }
    for (int i = 0; i < 3; i++) e[i] += ex[i];
-   for (int k = 0; k < 2 + rz_na; k++) a[k] += vx[k]; } } }
+   for (int k = 0; k < 7; k++) a[k] += vx[k];
+   if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];
+   if (nk > 10) for (int k = 10; k < 2 + rz_na; k++) a[k] += vx[k]; } } }
 
 // clip space to pixels; snapped to whole ones on request
 static void rz_project(struct rz const *r, struct rz_v *v) {
