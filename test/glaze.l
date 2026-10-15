@@ -192,3 +192,12 @@
    _ (test (gzfm-s [1 2 3] 0 = 14) (gzfm-s [1.5] 0 = 2.25) ((gzfm-t gzfm-s) = 1)
            (gzfm-w ["ab" [1 2] "c"] 0 = 8))
    0)
+; a 3-arg peep as a ? predicate beside a pin on that same tablet, the tablet the other branch,
+; answers the tablet: the glaze lays it as the interpreter does, in either order and in a loop
+(: (gzpp-put t k v) (? (peep t k 0) t (pin t k v))
+   (gzpp-swap t k v) (? (peep t k 0) (pin t k v) t)
+   (gzpp-fill i t) (? (i = 300) t (gzpp-fill (i + 1) (gzpp-put t (i % 7) i)))
+   _ (test (show (gzpp-put {} 5 9) = "{5 9}") (show (gzpp-put {5 1} 5 9) = "{5 1}")
+           (show (gzpp-swap {} 5 9) = "{}") (show (gzpp-swap {5 1} 5 9) = "{5 9}")
+           (sort (keys (gzpp-fill 0 {})) = [0 1 2 3 4 5 6]) (gzpp-fill 0 {} 0 = 7))
+   0)
