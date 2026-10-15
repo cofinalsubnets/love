@@ -227,7 +227,11 @@
  _ (scribe s "\e[1;22mu")
  _ (test (0 = cface s 11))                       ; 22 ends bold and dim both
  _ (scribe s "\e[38;2;10;20;30;48;2;40;50;60m▀")    ; two rgb pens in one SGR: ten parameters
- _ (test ([10 20 30] = cfg s 12) ([40 50 60] = cbg s 12)))
+ _ (test ([10 20 30] = cfg s 12) ([40 50 60] = cbg s 12))
+ _ (scribe s ("\e[" + cats (map (\ i "0;") (jot 18)) + "1;38;5;100mv"))   ; twenty-two parameters, all heard
+ _ (test (1 = cface s 13) (100 = cfg s 13) ('def = cbg s 13))
+ _ (scribe s "\e[>4;2m\e[?4mw")                   ; a marked m is a keyboard mode, not the pen
+ _ (test (1 = cface s 14) (100 = cfg s 14)))
 
 ; --- 12. save/restore (ESC 7/8 and CSI s/u carry cursor + pen) ---
 (: s (mkscr 4 10)
@@ -281,7 +285,18 @@
  _ (scribe s "\eZ")                              ; DECID: the vt102 answer it always gave
  _ (test ([27 91 63 54 99] = reply s))
  _ (scribe s "\e[5n")
- _ (test ([27 91 48 110] = reply s)))          ; "\e[0n": all well
+ _ (test ([27 91 48 110] = reply s))           ; "\e[0n": all well
+ ; a burst of asks in one write: a screen whose replies are drained stops the feed when its
+ ; queue would not hold another, answering the bytes it took; one never drained takes all
+ q (cats (map (\ i "\e[6n") (jot 20)))
+ (said _) (: r (reply s) (two? r ? (string r) ""))
+ (feed x a) (: r (scribe s x) a2 (a + said 0)
+               (charm? r ? (feed (snip x r #x) a2) a2))
+ _ (scribe s "\e[2;1H")
+ _ (test (20 = scribe s q) ((cats (map (\ i "\e[2;1R") (jot 5))) = said 0))   ; five fit
+ _ (test ((cats (map (\ i "\e[2;1R") (jot 15))) = feed (snip q 20 #q) ""))
+ t (mkscr 4 10)
+ _ (test !(charm? (scribe t q))))
 
 ; --- 15b. the asks a line editor waits on: colour queries, secondary da ---
 ; (silence here cost a real second of buffered keystrokes at zsh startup)
@@ -391,7 +406,8 @@
  _ (test (foldl (\ a cp (&& a (step cp = max 0 (wcwidth cp)))) 1 cps)))
 
 ; --- 17f. a mark joins the cell before the cursor: glass answers the base, and 3 4 5 the
-;     marks; a pool of 128 clusters, a slot no cell names taken back when it is full ---
+;     marks; a pool of clusters that grows past the header's 128, a slot no cell names
+;     taken back first, and a regrid that carries the grown pool ---
 (: (marks s i) (filter (< 0) (map (glass s i) [3 4 5]))
  s (mkscr 3 4)
  _ (scribe s "e\u{301}\u{4e16}\u{300}")           ; é, then 世 with a grave
@@ -408,11 +424,13 @@
  w (mkscr 1 200)
  (clus i) (utf8 (65 + (i // 100)) + utf8 (768 + (i % 100)))   ; 200 distinct clusters
  _ (scribe w (cats (map clus (jot 200))))
- _ (test ([795] = marks w 127) (() = marks w 128)   ; the pool's 128, then bare bases
-         (66 = chat w 128) (200 = #(filter (\ i (0 < chat w i)) (jot 200))))
+ _ (test ([795] = marks w 127) ([796] = marks w 128)   ; the header's 128, then the grown pool's
+         ([867] = marks w 199) (66 = chat w 199) (200 = #(filter (\ i (0 < chat w i)) (jot 200))))
  _ (scribe w ("\e[1;1H" + cats (map (\ i "x") (jot 64))))   ; 64 slots no longer named
  _ (scribe w ("\e[1;130H" + clus 150))              ; ..so a new one finds room
- _ (test ([818] = marks w 129) ([867] = marks w 99)))
+ _ (test ([818] = marks w 129) ([867] = marks w 99))
+ r (regrid w (cask (regrid w () 1 200)) 1 200)       ; the count carries the grown pool
+ _ (test ([867] = marks r 199) ([818] = marks r 129) !(regrid w (cask (screen () 1 200)) 1 200)))
 
 ; --- 20. sixel: a picture decoded into the store, its tiles laid in cells at the cursor ---
 ; a 10x12 picture: red, with blue over the first five columns of the first band. 8x16
@@ -459,7 +477,9 @@
 
 ; --- 20c. the sizes a picture is fitted to, and the graphics asks ---
 (: s (mkscr 4 10)
- (ask q) (: _ (scribe s q) (string (reply s)))
+ (ask q) (: (go x a) (: r (scribe s x) a2 (a + string (reply s))      ; a pause answers a count: the rest
+                          (charm? r ? (go (snip x r #x) a2) a2))
+             (go q ""))
  _ (test ("\e[6;16;8t" = ask "\e[16t")                    ; a cell in pixels
          ("\e[4;64;80t" = ask "\e[14t")                   ; the grid in pixels
          ("\e[8;4;10t" = ask "\e[18t")                    ; the grid in cells
@@ -469,7 +489,9 @@
 
 ; --- 21. kitty graphics: APC G key=value,..;base64 ST, a subset -- raw pixels, direct ---
 (: (pic? s i) (1 = (glass s i 0 >> 23 & 1))
-   (ask s q) (: _ (scribe s q) (string (reply s)))
+   (ask s q) (: (go x a) (: r (scribe s x) a2 (a + string (reply s))     ; a pause answers a count: the rest
+                            (charm? r ? (go (snip x r #x) a2) a2))
+               (go q ""))
    red 4294901760 blue 4278190335 green 4278255360
    ; a=T: a 2x2 red placed at the cursor, which then stands beside it on its last row
    s (mkscr 4 10)

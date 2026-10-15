@@ -219,9 +219,24 @@ static intptr_t kb_readn(int fd, unsigned char *dst, uintptr_t n) {
 
 static bool kb_ready(int fd) { return k_kb_poll(), kkb.qh != kkb.qt; }
 
+// the console's cluster pool grown when it fills: twice the slots past the header's, the
+// screen laid again in a bigger block. a program's write grows it; kputc, which may run
+// from a fault, keeps what there is
+static void k_cb_grow(void) {
+  uint32_t const most = cb_clumax - cb_nclu, add = kcb->cx ? kcb->cx : cb_nclu,
+                 cx = add < most - kcb->cx ? kcb->cx + add : most;
+  uintptr_t const n = cb_laid(kcb);
+  struct cb *c = kmallocw(b2w(n + cb_xsize(cx - kcb->cx)));
+  if (!c) return;
+  memcpy(c, kcb, n);
+  cb_xclu(c, cx);
+  struct cb *const old = kcb;
+  kcb = c, kfree(old); }   // published whole before the old goes, as k_cb_remake does
+
 // slot 1: serial console -- the framebuffer when there is one, always mirrored to COM1.
 static void serial_putc1(int fd, int c) {
   if (kcb) cb_putc(kcb, c);
+  if (kcb && kcb->cfull && kcb->cx < cb_clumax - cb_nclu) k_cb_grow();
   serial_putc(c); }
 
 // kq's drops, said before the frame goes up.
@@ -1857,8 +1872,9 @@ static bool k_cb_remake(void) {
   uint16_t const orows = old->rows, ocols = old->cols;
   if (rows == orows && cols == ocols) return fbwash(), true;  // same grid, new pixels
   uint32_t sn = k_sn(rows, cols), hl = k_hl(cols), tw = 1;
-  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols) + cb_tsize(rows, cols)));
-  if (!c) sn = hl = tw = 0, c = kmallocw(b2w(cb_size(rows, cols, 0)));   // no room: the grid alone
+  uintptr_t const xs = cb_xsize(old->cx);   // the grown cluster slots come along
+  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols) + cb_tsize(rows, cols) + xs));
+  if (!c) sn = hl = tw = 0, c = kmallocw(b2w(cb_size(rows, cols, 0) + xs));   // no room: the grid alone
   if (!c) return false;
   cb_regrid(c, old, (uint16_t) rows, (uint16_t) cols, sn, hl, tw);
   kcb = c;
