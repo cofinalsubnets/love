@@ -641,17 +641,19 @@
   ; lambda sibling) refines an unknown one.
   (apxh c b) (: nary <b head <>b args >>b
               ; lvm_apn enters the callee at cell+2, past the lvm_cur prologue, so `apn n` is sound
-              ; only where n is the callee's arity, which napof reads off the value itself. a width
-              ; that is a guess -- falook's, read out of a compile-time far map that can answer an
-              ; enclosing binding where an inner scope rebinds the name, or none at all -- rides
-              ; apo, which checks the callee and lays the l2r chain when it misses.
+              ; only where n is the callee's arity: napof reads it off the value itself, and falook
+              ; reads a name out of a compile-time far map, which can answer an enclosing binding
+              ; where an inner scope rebinds the name -- so apn takes its guess only exactly
+              ; saturated, where a wrong one scares. any other width, or none at all, rides apo,
+              ; which checks the callee and lays the l2r chain when it misses.
               fa (nary || !(nom? head) ? 0 (falook c head))
+              ex (1 < nary || (1 < fa && fa = #args))         ; a width apn has always taken
               n2 (? (1 < nary) nary
                     (1 = nary || 1 = fa || atom? >args) 0      ; a one-arg head, or one arg: the chain
                     (1 < fa && fa <= #args) fa
                     #args)
               f (ana c head) s (c 'stk) _ (push c 'stk 0) s2 (c 'stk)
-              g (n2 ? (napn c args n2 s2 (1 < nary ? 0 1)) (apl2r c args))
+              g (n2 ? (napn c args n2 s2 (ex ? 0 1)) (apl2r c args))
               (pin c 'stk s, f * g))
   ; napn: the n-ary apply, then the surplus. the pin puts the compile-time stack back at the head
   ; slot -- apn consumes its arg slots and leaves the answer there, which is where l2r addresses from.
