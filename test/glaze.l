@@ -32,6 +32,26 @@
     (7  = (ev '(: tw (\ h (h 1))  (g tw) (tw (\ y (+ y 5)))  (g (\ k 7)))))   ; dehof's lamc fold holds the same law
     (12 = (ev '(: m 7  (g x) (+ x m)  (g 5)))))                                ; ..and an unshadowed const still folds
 
+; --- the named-let lift's inline respects the fn's own params -------------------------
+; norm-let inlines a let's cheap values into its one fn's body before lift takes it; a
+; param of that fn, or of a lambda inside it, spelling a value's name binds it there
+(test
+    (3 = (ev '(: (f n) (: k 0  (g k) k  (g n))  (f 3))))
+    (1 = (ev '(: (f n) (: k 0  (g k x) ((\ i (? (< i k) 1 2)) x)  (g n 1))  (f 3))))
+    (4 = (ev '(: (f n) (: k 0  (g x) ((\ k (+ k x)) 1)  (g n))  (f 3))))
+    (5 = (ev '(: (f n) (: m 2  (g x) (+ x m)  (g n))  (f 3)))))                  ; ..and an unshadowed value still inlines
+
+; --- a hoisted loop's captures, and a helper's own params, past a same-named let value ------
+; plift lifts a read-only loop out of a fn's `:` with the let values it reads as leading
+; params, rewriting each call to pass them by name; a call inside a helper whose param spells
+; one would pass the helper's. and the weave's by-name captures must not shadow that param
+(test
+    (4 = (ev '(: (p n vs) (: k #vs  (helper x i) (? (< i 1) (+ x k) (helper x (- i 1)))
+                              (along k x) (helper (+ x k) 2)  (along n 1))  (p 3 []))))
+    (3 = (ev '(: (p n vs) (: k #vs  (helper x i) (? (< i 1) (+ x k) (helper x (- i 1)))
+                              (along k x) (: (step i) (? (< i k) (step (+ i 1)) (helper i 1)) (step x))
+                              (caller y) (along y 0)  (caller n))  (p 3 [])))))
+
 ; --- the desugar declines a word an enclosing letrec rebinds ---
 ; each local answers 7; the bodies compute, or a fold would beat the desugar to them
 (: (one? e)  (charm? e ? 7 9)
