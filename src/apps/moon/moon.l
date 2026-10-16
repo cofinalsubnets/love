@@ -1079,15 +1079,18 @@
         0))
    (cc-link ins dst t) (t 'tgt @ 'wasm (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
-                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs 'fws fws}))
+                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs 'fws fws 'static static}))
     ; a BSD links where mksys lays the translation tail (impl.h's LvOsTranslate):
     ; x64, a64 and rv64. elsewhere os.c has no tables for it, so it is refused here
     (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64 rv64))
           && udie 1 "cc: -os \(os) links on x64, a64 and rv64 only")
        ; a mach-o: static, fixed-base, its entry knowing the kernel
        mac? (os = 'macos)
-       ; ..dyld's when it names a framework or a library past libSystem's own: those load,
-       ; and what the runtime does not define is imported from them
+       ; ..dyld's, as apple's own toolchain lays every exe: libSystem and what -framework and -l
+       ; name load, and what the runtime does not define is imported from them. -static keeps
+       ; the raw one, xnu's calls alone and no dyld
+       dyld? (mac? && !static)
+       _ (mac? && static && (two? fws || two? libs) && udie 2 "cc: -static on macos loads no framework or library")
        dylibs (mac? ? (map (f \ "/System/Library/Frameworks/" + f + ".framework/Versions/A/" + f) fws
                        + map (l \ "/usr/lib/lib" + l + ".dylib") (filter (l \ !(elem l ["c" "m" "dl" "pthread" "System"])) libs)) ())
        _ (mac? && tgt != 'x64 && udie 1 "cc: -os macos links on x64 only")
@@ -1129,10 +1132,10 @@
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        ; a shared object pulls no runtime: what it owes it imports, from the -l libraries
-       set (so ? lib (lib + rtpull lib tgt os nostd vb (two? dylibs)))
+       set (so ? lib (lib + rtpull lib tgt os nostd vb dyld?))
        prod ("love " + <(usplit 43 love-version))
        ps (? arm? (ldbare32 tgt runs set () relo)
-             mac? (macholink tgt set dylibs)
+             mac? (macholink tgt set dyld? dylibs)
              so (ldshared tgt (last (usplit 47 dst)) (map (l \ "lib" + l + ".so") libs) set prod)
              (ldlink tgt pie org set prod rdme))
        ; the ei_osabi = 9 brand (rung UV3) is ldlink's, laid where the header is made:
@@ -1240,7 +1243,7 @@
    ; would answer the zero point. the literal has to be complete and is wanted at two sites,
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
@@ -1267,6 +1270,8 @@
           ; -framework NAME: a macos framework, dyld's to load; what no object defines is
           ; imported from it (or from libSystem, always loaded)
           ("-framework" . w . r) (flags r (fpush t 'fws w))
+          ; -static: the output already is, but on macos, where dyld's exe is the default
+          ("-static" . r) (flags r (pin t 'static 1))
           ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
           ; linked image, so a loader placing it at a base of its own can slide them.
           ; the arm32 lane only -- ldlink's -pie answers this on the 64-bit seats.

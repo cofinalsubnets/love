@@ -221,19 +221,26 @@ static int bake_tail(struct g *g, int src, char const *tmp, void const *buf, uin
   alloc(sh, 0), alloc(ph, 0), alloc(str, 0), alloc(win, 0);
   return rc; }
 
-// a mach-o (mooncc -os macos) carries .image as its __IMAGE segment, laid last in the file
-// and in memory: the blob lands where the symbol sits and the segment grows to hold it. the
-// link is fixed-base, so the file's own segments map a live address to its offset. 0 done,
-// >0 not a mach-o or not laid for growth, <0 a real failure.
+// a mach-o (mooncc -os macos) carries .image as its __IMAGE segment, laid last of what the
+// program maps: the blob lands where the symbol sits and the segment grows to hold it. dyld's
+// exe keeps __LINKEDIT after it, last in the file and in memory as dyld insists, so the bake
+// moves that past the grown image and every offset into it by the same distance. the link is
+// fixed-base, so the file's own segments map a live address to its offset. 0 done, >0 not a
+// mach-o or not laid for growth, <0 a real failure.
 struct macho_seg { uint32_t cmd, size; char name[16]; uint64_t addr, vsz, off, fsz;
                    uint32_t maxp, initp, nsect, flags; };
+static void macho_slide(char *c, uint32_t lo, uint32_t hi, uint64_t from, uint64_t d) {
+  for (uint32_t k = lo; k + 4 <= hi; k += 8) {        // (offset, size) pairs: one into it moves
+    uint32_t o;
+    memcpy(&o, c + k, 4);
+    if (o && o >= from) o += (uint32_t) d, memcpy(c + k, &o, 4); } }
 static int bake_macho(int src, char const *tmp, void const *buf, uintptr_t len,
                       uintptr_t lenaddr, uintptr_t imgaddr, mode_t mode) {
   uint32_t h[8];
   if (pread(src, h, sizeof h, 0) != (ssize_t) sizeof h || h[0] != 0xfeedfacfu) return 1;
-  struct macho_seg is;
+  struct macho_seg is, ls;
   uint64_t lenoff = 0, imgoff = 0, last = 0;
-  long si = -1;
+  long si = -1, li = -1;
   int dst = -1, rc = -6;
   char *cmds = alloc(NULL, h[5]), *win = alloc(NULL, BakeScratch);
   if (!cmds || !win || pread(src, cmds, h[5], 32) != (ssize_t) h[5]) goto out;
@@ -243,17 +250,33 @@ static int bake_macho(int src, char const *tmp, void const *buf, uintptr_t len,
     if (c[0] != 25 || at + sizeof is > h[5]) continue;    // lc_segment_64
     struct macho_seg sg;
     memcpy(&sg, cmds + at, sizeof sg);
+    if (!strncmp(sg.name, "__LINKEDIT", sizeof sg.name)) { li = at, ls = sg; continue; }
     if (lenaddr >= sg.addr && lenaddr < sg.addr + sg.fsz) lenoff = sg.off + (lenaddr - sg.addr);
     if (imgaddr >= sg.addr && imgaddr < sg.addr + sg.fsz) imgoff = sg.off + (imgaddr - sg.addr);
     if (!strncmp(sg.name, "__IMAGE", sizeof sg.name)) si = at, is = sg;
     if (sg.off + sg.fsz > last) last = sg.off + sg.fsz; }
   rc = 1;
-  if (si < 0 || !lenoff || !imgoff || imgoff < is.off || is.off + is.fsz != last) goto out;
+  if (si < 0 || !lenoff || !imgoff || imgoff < is.off || is.off + is.fsz != last
+      || (li >= 0 && ls.off < last)) goto out;
   if ((dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700)) < 0) { rc = -6; goto out; }
   if ((rc = bake_move(src, dst, 0, 0, imgoff, win))) goto out;
   is.fsz = imgoff - is.off + len;
   is.vsz = (is.fsz + 4095) & ~(uint64_t) 4095;
   memcpy(cmds + si, &is, sizeof is);
+  if (li >= 0) {                                        // __LINKEDIT on past the image
+    uint64_t off = (is.off + is.fsz + 4095) & ~(uint64_t) 4095, from = ls.off, d = off - ls.off;
+    if ((rc = bake_move(src, dst, ls.off, off, ls.fsz, win))) goto out;
+    ls.off = off, ls.addr = is.addr + is.vsz;
+    memcpy(cmds + li, &ls, sizeof ls);
+    for (uint32_t i = 0, at = 0, c[2]; i < h[4] && at + 8 <= h[5]; i++, at += c[1]) {
+      memcpy(c, cmds + at, sizeof c);
+      if (!c[1]) break;
+      if (c[0] == 0x80000022 || c[0] == 0x22) macho_slide(cmds + at, 8, 48, from, d);   // dyld_info: five pairs
+      else if (c[0] == 2) macho_slide(cmds + at, 8, 24, from, d);                      // symtab: (sym n) (str size)
+      else if (c[0] == 11) {                                                           // dysymtab: six (off n) from 32
+        for (uint32_t k = 32; k + 8 <= 80; k += 8) macho_slide(cmds + at, k, k + 8, from, d); }
+      else if (c[0] == 0x1d || c[0] == 0x26 || c[0] == 0x29 || c[0] == 0x80000033 || c[0] == 0x80000034)
+        macho_slide(cmds + at, 8, 16, from, d); } }   // linkedit_data: signature, starts, data in code, fixups
   { uintptr_t l = len;
     if (pwrite(dst, buf, len, (off_t) imgoff) != (ssize_t) len
         || pwrite(dst, cmds, h[5], 32) != (ssize_t) h[5]

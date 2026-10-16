@@ -20,6 +20,8 @@
 //     syscalls only
 //   - freebsd: /dev/dsp, the three OSS ioctls and write(2) or read(2)
 //   - netbsd: /dev/sound, audio(4)'s one SETINFO and write(2) or read(2)
+//   - macos: an AudioQueue in this process, AudioToolbox loaded by dyld at the first open
+//     (playback only; a static link, with no dyld under it, answers ENODEV)
 //   - HORN=sock:PATH: a unix socket's listener plays it (the droid bridge, AAudio under
 //     it): the rate as a little-endian u32, then the stereo frames. HORN_IN=sock:PATH
 //     the same way round: the u32's top byte asks the channels, and the frames come back
@@ -49,12 +51,12 @@ intptr_t k_horn_write(unsigned char const *src, uintptr_t n);
 uintptr_t k_horn_lag(void);
 void k_horn_close(void);
 
-enum { horn_sink, horn_dev, horn_seat, horn_sock, horn_seat_in };
+enum { horn_sink, horn_dev, horn_seat, horn_sock, horn_seat_in, horn_aq };
 // the port: the bio, then the device's words, all charms. wpos and t0 are the sink's
 // clock (frames landed or handed out, and the ms the drain is reckoned from); dir is 0 out
 // and 1 in, dchans and dwid the device's own channel count and bytes a sample; the others
 // hold the open.
-struct horn { struct bio b; word kind, rate, chans, wpos, t0, dir, dchans, dwid; };
+struct horn { struct bio b; word kind, rate, chans, wpos, t0, dir, dchans, dwid, aq; };
 
 // the sink keeps a quarter second: what a small card's ring holds
 #define sink_ms 250
@@ -363,6 +365,88 @@ static void sock_shut(int fd) { (void) fd; }
 #endif
 static int horn_sock_name(char const *dev) { return horn_sockdoor && dev && !strncmp(dev, "sock:", 5); }
 
+// --- macos: an AudioQueue in this process -----------------------------------------
+// AudioToolbox comes through dlopen at the first open: the references are weak, so an
+// ELF link (where nothing answers them) and a static mach-o read 0 and refuse, and only
+// dyld's exe (mooncc -lSystem) reaches it. the queue's own thread calls back for each
+// buffer and takes what the ring holds, silence for the rest, so the queue never starves
+// to a stop; love's thread fills the ring and a full one answers 0, the door's backpressure.
+// one writer and one reader, each counter written by its side alone, and x86 keeps stores
+// in order: the ring wants no lock. it lives outside the heap, where no collection moves it.
+#if defined(__moonlibc__) && defined(__x86_64__) && !love_horn_seat
+#define horn_mac 1
+void *dlopen(char const *path, int mode) __attribute__((weak));
+void *dlsym(void *lib, char const *name) __attribute__((weak));
+typedef struct { double rate; uint32_t fmt, flags, bpp, fpp, bpf, ch, bits, res; } aq_fmt;
+typedef struct { uint32_t cap; void *data; uint32_t size; } aq_buf;   // AudioQueueBuffer's head
+enum { aq_nbuf = 3, aq_frames = 1024, aq_ring = 4096 };              // ~64 ms queued, ~85 more in the ring
+struct aq {
+ void *q;
+ int (*enqueue)(void *, aq_buf *, uint32_t, void const *);
+ int (*dispose)(void *, unsigned char);
+ uintptr_t volatile w, r;                       // bytes written and read, ever
+ unsigned char ring[aq_ring * 4]; };
+
+static void aq_fill(void *u, void *q, aq_buf *b) {
+ struct aq *a = u;
+ uintptr_t r = a->r, n = a->w - r, cap = sizeof a->ring, at = r % cap;
+ if (n > b->cap) n = b->cap;
+ uintptr_t k = n < cap - at ? n : cap - at;
+ memcpy(b->data, a->ring + at, k);
+ memcpy((unsigned char*) b->data + k, a->ring, n - k);
+ memset((unsigned char*) b->data + n, 0, b->cap - n);
+ a->r = r + n;
+ b->size = b->cap;
+ a->enqueue(q, b, 0, NULL); }
+
+static intptr_t aq_open(int rate, int *err) {
+ void *lib = dlopen ? dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", 2) : NULL;
+ int (*mk)(aq_fmt const *, void (*)(void *, void *, aq_buf *), void *, void *, void *, uint32_t, void **) =
+  lib ? (int (*)(aq_fmt const *, void (*)(void *, void *, aq_buf *), void *, void *, void *, uint32_t, void **)) dlsym(lib, "AudioQueueNewOutput") : NULL;
+ int (*mkbuf)(void *, uint32_t, aq_buf **) = lib ? (int (*)(void *, uint32_t, aq_buf **)) dlsym(lib, "AudioQueueAllocateBuffer") : NULL;
+ int (*start)(void *, void const *) = lib ? (int (*)(void *, void const *)) dlsym(lib, "AudioQueueStart") : NULL;
+ struct aq *a = mk && mkbuf && start ? alloc(NULL, sizeof *a) : NULL;
+ if (!a) return *err = ENODEV, -1;
+ memset(a, 0, sizeof *a);
+ a->enqueue = (int (*)(void *, aq_buf *, uint32_t, void const *)) dlsym(lib, "AudioQueueEnqueueBuffer");
+ a->dispose = (int (*)(void *, unsigned char)) dlsym(lib, "AudioQueueDispose");
+ aq_fmt f = { rate, 0x6c70636d, 12, 4, 1, 4, 2, 16, 0 };          // lpcm, signed and packed: s16 stereo
+ if (!a->enqueue || !a->dispose || mk(&f, aq_fill, a, NULL, NULL, 0, &a->q)) return alloc(a, 0), *err = ENODEV, -1;
+ for (int i = 0; i < aq_nbuf; i++) {
+  aq_buf *b;
+  if (!mkbuf(a->q, aq_frames * 4, &b)) aq_fill(a, a->q, b); }
+ if (start(a->q, NULL)) return a->dispose(a->q, 1), alloc(a, 0), *err = EIO, -1;
+ return (intptr_t) a; }
+
+static intptr_t aq_land(intptr_t p, unsigned char const *src, uintptr_t n) {
+ struct aq *a = (struct aq*) p;
+ uintptr_t w = a->w, cap = sizeof a->ring, room = cap - (w - a->r), at = w % cap;
+ n &= ~(uintptr_t) 3;
+ if (n > room) n = room & ~(uintptr_t) 3;
+ uintptr_t k = n < cap - at ? n : cap - at;
+ memcpy(a->ring + at, src, k);
+ memcpy(a->ring, src + k, n - k);
+ a->w = w + n;
+ return (intptr_t) n; }
+
+// the ring's frames, and the queue's buffers, which always hold a buffer's worth each
+static uintptr_t aq_lag(intptr_t p) {
+ struct aq *a = (struct aq*) p;
+ return (a->w - a->r) / 4 + aq_nbuf * aq_frames; }
+
+// dispose waits out the queue's thread, so nothing calls back into the ring once it is gone
+static void aq_shut(intptr_t p) {
+ struct aq *a = (struct aq*) p;
+ a->dispose(a->q, 1);
+ alloc(a, 0); }
+#else
+#define horn_mac 0
+static intptr_t aq_open(int rate, int *err) { return *err = ENODEV, -1; }
+static intptr_t aq_land(intptr_t p, unsigned char const *src, uintptr_t n) { return -1; }
+static uintptr_t aq_lag(intptr_t p) { return 0; }
+static void aq_shut(intptr_t p) { (void) p; }
+#endif
+
 // --- the door, chosen on the kernel we woke on ------------------------------------
 // linux takes ALSA, freebsd OSS and netbsd audio(4); a kernel with none answers ENODEV.
 // the fd carries no flavour, so land, take and lag ask the same question open did;
@@ -520,15 +604,17 @@ void love_horn_close(void) {
 // --- the door -------------------------------------------------------------------
 // a stereo run goes down as it is; a mono one is doubled through a stack frame,
 // and what the device took is answered in the caller's bytes.
+static intptr_t horn_put(struct horn *h, int kind, int fd, unsigned char const *src, uintptr_t n) {
+ return kind == horn_dev ? dev_land(fd, src, n) : kind == horn_sock ? sock_land(fd, src, n)
+      : kind == horn_aq ? aq_land(getcharm(h->aq), src, n) : k_horn_write(src, n); }
 static intptr_t horn_land(struct horn *h, unsigned char const *src, uintptr_t n) {
  int kind = (int) getcharm(h->kind), fd = (int) getcharm(h->b.f.fd);
- if (getcharm(h->chans) == 2)
-  return kind == horn_dev ? dev_land(fd, src, n) : kind == horn_sock ? sock_land(fd, src, n) : k_horn_write(src, n);
+ if (getcharm(h->chans) == 2) return horn_put(h, kind, fd, src, n);
  unsigned char t[4096];
  if (n > sizeof t / 2) n = sizeof t / 2;
  for (uintptr_t i = 0; i < n; i += 2)
   t[2 * i] = t[2 * i + 2] = src[i], t[2 * i + 1] = t[2 * i + 3] = src[i + 1];
- intptr_t k = kind == horn_dev ? dev_land(fd, t, 2 * n) : kind == horn_sock ? sock_land(fd, t, 2 * n) : k_horn_write(t, 2 * n);
+ intptr_t k = horn_put(h, kind, fd, t, 2 * n);
  return k > 0 ? k / 2 : k; }
 
 struct g *love_horn_writen(struct g *g, unsigned char const *src, uintptr_t n) {
@@ -595,6 +681,7 @@ static void horn_fin(struct g *g, void *p) {
  else if (kind == horn_sock && fd >= 0) sock_shut((int) fd);
  else if (kind == horn_seat) k_horn_close();
  else if (kind == horn_seat_in) k_horn_in_close();
+ else if (kind == horn_aq) aq_shut(getcharm(h->aq));
  h->b.f.fd = putcharm(-1);
  h->kind = putcharm(horn_sink); }
 
@@ -618,6 +705,7 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
  if (rate < 8000 || rate > 192000 || chans < 1 || chans > 2)
   return g->sp[1] = badarg(g), g->sp += 1, g;
  int kind = horn_sink, fd = -1, dchans = dir ? (int) chans : 2, dwid = 2;
+ intptr_t aq = -1;
  if (horn_at_seat) {
   kind = dir ? horn_seat_in : horn_seat;
   if ((dir ? k_horn_in_open((int) rate, (int) chans) : k_horn_open((int) rate)) < 0)
@@ -633,6 +721,9 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
    fd = sock_open(dev + 5, (int) rate, dir ? (int) chans : 0, &err);
    if (fd < 0) return g->sp[1] = love_err(g, err), g->sp += 1, g;
    kind = horn_sock; }
+  else if (horn_mac && __love_osv == 4 && !none) {
+   if (dir || (aq = aq_open((int) rate, &err)) < 0) return g->sp[1] = love_err(g, dir ? ENODEV : err), g->sp += 1, g;
+   kind = horn_aq; }
   else if (dir && horn_doorless && !none) return g->sp[1] = love_err(g, ENODEV), g->sp += 1, g;
   else if (!horn_doorless && !none) {
    fd = dev_open(dev, (int) rate, dir, &dchans, &dwid, &err);
@@ -643,6 +734,7 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
  if (!ok(g = have(g, n + Width(struct tag) + Width(struct fz) + 1))) {
   if (kind == horn_dev) dev_shut(fd); else if (kind == horn_sock) sock_shut(fd); else if (kind == horn_seat) k_horn_close();
   else if (kind == horn_seat_in) k_horn_in_close();
+  else if (kind == horn_aq) aq_shut(aq);
   return g; }
  union u *k = bump(g, n + Width(struct tag));
  struct horn *h = (struct horn*) k;
@@ -658,6 +750,7 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
  h->dir = putcharm(dir);
  h->dchans = putcharm(dchans);
  h->dwid = putcharm(dwid);
+ h->aq = putcharm(aq);
  h->wpos = putcharm(0);
  h->t0 = putcharm((intptr_t) love_clock());
  *--g->sp = (word) tagthread(k, n);
@@ -693,6 +786,7 @@ static lvm(lvm_horn_lag) {
                               (uintptr_t) getcharm(h->dwid) * (uintptr_t) getcharm(h->dchans)); break;
   case horn_sock: lag = sock_lag((int) getcharm(h->b.f.fd), dir, dir ? fb : 4); break;
   case horn_seat_in: lag = k_horn_in_lag(); break;
+  case horn_aq: lag = aq_lag(getcharm(h->aq)); break;
   default: lag = k_horn_lag(); }
  if (dir) lag += h->b.rbuf && !charmp(h->b.rbuf) ? (uintptr_t) (getcharm(h->b.rlen) - getcharm(h->b.rpos)) / fb : 0;
  else lag += io_wpending(g, (struct io*) h) / fb;

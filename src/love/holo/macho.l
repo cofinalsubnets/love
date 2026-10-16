@@ -4,9 +4,9 @@
 ; LC_SEGMENT_64 per lane and LC_UNIXTHREAD naming the entry. xnu maps a segment from a
 ; page-aligned file offset, so the lanes land page-apart in the file as in memory (ldlay's
 ; dense 0), and .image, past .bss, opens the next page of each.
-; with dylibs named the exe is dyld's: what no object defines is imported, each through a
-; stub after the text and a slot after the data that dyld binds by name, flat, off the
-; bind opcodes in __LINKEDIT. dyld still enters an LC_UNIXTHREAD exe on the kernel's stack,
+; dyld's exe imports what no object defines, each through a stub after the text and a slot
+; after the data that dyld binds by name, flat, off the bind opcodes in __LINKEDIT -- a weak
+; reference as a weak import, its slot left 0 where nothing answers it. dyld still enters an LC_UNIXTHREAD exe on the kernel's stack,
 ; libSystem's initializers run first, and crt0 is none the wiser.
 
 (module 'holo
@@ -33,21 +33,31 @@
    (macho-fnv h s) (foldl (\ a b ((a ^ b) * 1099511628211 & 18446744073709551615)) h (map s ^#s))
    (macho-uuid s) (catall [(le32 27) (le32 24) (le64 (macho-fnv 14695981039346656037 s)) (le64 (macho-fnv 1469598103934665603 s))])
 
-   ; link a set -- ((id bytes)..), crt0 first -- into a mach-o's piece list; dylibs the
-   ; paths dyld loads, none for a static exe
-   (macholink target srcs dylibs)
+   ; the weak undefined names no object defines: a dyld exe's weak imports
+   (macho-weak-undefs objs)
+    (: defs {}
+       (syms ob) (map (i \ peep (peep ob 'syms 0) i ()) ^(peep ob 'nsym 0))
+       _ (map (ob \ map (sy \ two? sy && 0 < sy 3 && elem (sy 1) '(1 2) ? (pin defs <sy 1)) (syms ob)) objs)
+       (foldl (\ a ob (foldl (\ a2 sy (two? sy && sy 1 = 2 && sy 3 = 0 && !(defs <sy) && !(elem <sy a2)
+                                         && !(elem <sy ldsynth) && !(ld-bracket? <sy)
+                                         ? (a2 + [<sy]) a2))
+                             a (syms ob)))
+              () objs))
+
+   ; link a set -- ((id bytes)..), crt0 first -- into a mach-o's piece list. dyn? lays dyld's
+   ; exe, loading libSystem and the paths in dylibs; else it is static
+   (macholink target srcs dyn? dylibs)
     (: cpu (peep macho-cpus target ())
        _ (two? cpu || scare 'macho-target target)
        objs0 (map (p \ ld-read <p <>p (peep elf-machines target 0)) srcs)
-       dyn? (two? dylibs)
-       imps (dyn? ? (ld-imports objs0) ()) ni #imps
+       wimps (dyn? ? (macho-weak-undefs objs0) ())
+       imps (dyn? ? (ld-imports objs0 + wimps) ()) ni #imps
        plt {'id "<stubs>" 'src "" 'secs {1 ['text 0 (16 * ni) 16 'text]} 'lanes {'text [1]}
             'drops {} 'syms {} 'nsym 0 'relas () 'named () 'base {}}
        objs (dyn? ? (objs0 + [plt]) objs0)
        pg 4096
        base elf-base
        img? (0 < foldl (\ a ob (a + ld-lanesz ob 'image)) 0 objs)
-       _ (dyn? && img? && scare 'macho-dyld-image target)   ; .image must end the file, and __LINKEDIT would
        dycmds (dyn? ? (catall ([macho-dyld] + map macho-dylib ("/usr/lib/libSystem.B.dylib" . dylibs)
                                + [macho-plat (macho-uuid (join " " (imps + dylibs + [(show (map (ob \ ob 'id) objs0))])))])) ())
        nseg (4 + ?img? + ?dyn?)          ; pagezero text rodata data, the image's or the linkedit
@@ -57,21 +67,24 @@
        dend (ld-align 16 end)
        gend (dend + 8 * ni)               ; the import slots, which dyld fills
        bend (ldlayn 'bss (ldlay1 'bss gend objs) objs)
-       ioff (ld-align pg (gend - base))
-       iaddr (ld-align pg bend)
+       ioff (ld-align pg (gend - base))   ; .image past the data, and __LINKEDIT past that: dyld
+       iaddr (ld-align pg bend)           ; wants it last, so a bake that grows the image moves it on
        iend (img? ? (ldlay1 'image iaddr objs) iaddr)
-       glo (ldsyms objs)
-       p0 (peep (plt 'base) 1 0)
-       _ (each ^ni (k \ pin glo (imps k) [(p0 + 16 * k) 0]))
-       _ (pin plt 'src (string (catall (map (k \ ld-plt-x64 (p0 + 16 * k) (dend + 8 * k)) ^ni))))
        ; the bind opcodes: flat lookup, pointers, then a name and its slot apiece
        binds (catall ([[62 81]]                              ; dylib special -2, type pointer
                       + map (k \ (: n ("_" + imps k)
-                                     (catall [[64] (map n ^#n) [0] [115] (macho-uleb (dend - d0 + 8 * k)) [144]]))) ^ni
+                                     (catall [[(elem (imps k) wimps ? 65 64)] (map n ^#n) [0]   ; 1: a weak import
+                                              [115] (macho-uleb (dend - d0 + 8 * k)) [144]]))) ^ni
                       + [[0]]))
        bsz (ld-align 8 #binds)
        lesz (bsz + 8)                     ; ..and an empty string table after
        le (catall [binds (ld-zeros (lesz - #binds))])
+       loff (ld-align pg (ioff + (iend - iaddr)))
+       laddr (ld-align pg iend)
+       glo (ldsyms objs)
+       p0 (peep (plt 'base) 1 0)
+       _ (each ^ni (k \ pin glo (imps k) [(p0 + 16 * k) 0]))
+       _ (pin plt 'src (string (catall (map (k \ ld-plt-x64 (p0 + 16 * k) (dend + 8 * k)) ^ni))))
        ent (: e (glo "_start")
               o1 <objs
               (two? e ? <e
@@ -88,11 +101,11 @@
                       (macho-seg "__RODATA" o0 (up (o1 - o0)) (o0 - base) (o1 - o0) 1)
                       (macho-seg "__DATA" d0 (up (bend - d0)) (d0 - base) (gend - d0) 3)]
                      + (img? ? [(macho-seg "__IMAGE" iaddr (up (iend - iaddr)) ioff (iend - iaddr) 3)])
-                     + (dyn? ? [(macho-seg "__LINKEDIT" iaddr (up lesz) ioff lesz 1)
-                                (catall [(le32 2147483682) (le32 48) (ld-zeros 8)       ; lc_dyld_info_only: no rebase
-                                         (le32 ioff) (le32 #binds) (ld-zeros 24)])
-                                (catall [(le32 2) (le32 24) (le32 ioff) (le32 0)       ; lc_symtab: none
-                                         (le32 (ioff + bsz)) (le32 8)])
+                     + (dyn? ? [(macho-seg "__LINKEDIT" laddr (up lesz) loff lesz 1)])
+                     + (dyn? ? [(catall [(le32 2147483682) (le32 48) (ld-zeros 8)       ; lc_dyld_info_only: no rebase
+                                         (le32 loff) (le32 #binds) (ld-zeros 24)])
+                                (catall [(le32 2) (le32 24) (le32 loff) (le32 0)       ; lc_symtab: none
+                                         (le32 (loff + bsz)) (le32 8)])
                                 (catall [(le32 11) (le32 80) (ld-zeros 72)])          ; lc_dysymtab: none
                                 dycmds])
                      + [(macho-thread ent)]))
@@ -102,5 +115,5 @@
        (hdrsz != #hdr ? (scare 'macho-headers #hdr),
         (hdr . (>en + [(ld-zeros (gend - <en))]
                 + (img? ? ([(ld-zeros (ioff - (gend - base)))] + >ei))
-                + (dyn? ? [(ld-zeros (ioff - (gend - base))) le]))))))
+                + (dyn? ? [(ld-zeros (loff - (img? ? (ioff + (iend - iaddr)) (gend - base)))) le]))))))
 ) ; module 'holo
