@@ -56,8 +56,8 @@
       "test_nucleo446" "test_nucleo446_smoke" "test_teensy41" "test_playdate" "test_rp2040" "test_boards"
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64" "test_freebsd_rv64" "test_netbsd_rv64"]]
-   ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot
-   lanes-alone ["test_hdiff" "test_ccwarn" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
+   ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot; gcheck and tco0 build whole variant trees
+   lanes-alone ["test_hdiff" "test_ccwarn" "test_gcheck" "test_tco0" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
 
    (lm-tick s) ("`" + s + "`")
    (lanes-doc _)

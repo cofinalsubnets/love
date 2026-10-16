@@ -171,8 +171,8 @@ $(ho)/o/love/main.o $(ho)/o/love/archive/srctree.o $(ho)/o/love/lovefs.o $(ho)/o
 # src/love/cb.c rides the src/love/quay sources by unity include -- recompile when they move.
 $(ho)/o/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 
-moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
-moon0_dep = out/mooncc0.image
+moon0 = $(love0) wake $(ho)/mooncc0.image mooncc $(GCDBG)
+moon0_dep = $(ho)/mooncc0.image
 # A DRIVING LOVE (`love doom` names itself in LOVE): the artifact IS the bootstrap. love0
 # becomes a two-line script onto it at out/drive0 (image awake: every cat a recipe preloads
 # reopens modules the image carries, the kernel verb's own shape), its own mooncc is the
@@ -206,8 +206,8 @@ $(love0): force_src
 	 $(note)
 else
 mdep = $(ho)/love
-rtlove = $(love0) wake out/mooncc0.image
-rtlove_dep = out/mooncc0.image
+rtlove = $(love0) wake $(ho)/mooncc0.image
+rtlove_dep = $(ho)/mooncc0.image
 $(love0): $(love0_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
@@ -359,9 +359,9 @@ $(ho)/sb $(ho)/lush $(ho)/helm:
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
 	@chmod 755 $@
-# pinned to out/ as love0 is, from the cat this tree lays: the same bytes whatever HCC says,
-# and under HCC the only one a clean tree has
-out/mooncc0.image: $(ho)/.mooncc-cat.l $(love0)
+# each tree its own, baked by the one love0 from that tree's cat: a variant never stales the
+# plain tree's moon objects
+$(ho)/mooncc0.image: $(ho)/.mooncc-cat.l $(love0)
 	@echo 'BAKE	'$@
 	@$(love0) -l $< -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 

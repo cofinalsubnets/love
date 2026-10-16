@@ -484,7 +484,7 @@ test_raw: host
 	@$(raw_env) $(gsh) test/gate/raw.sh x64 $(ho) $m $t
 # test_tco0 -- the full love at tco=0 (love0 never reaches the glaze's lvm shape): build,
 # bake, corpus, in its own hsuf'd tree. no vmret: at tco=0 an lvm returns
-test_tco0: host $(love0) out/mooncc0.image
+test_tco0: host $(love0) $(ho)/mooncc0.image
 	@$(MAKE) --no-print-directory tco=0 host
 	@$(MAKE) --no-print-directory tco=0 test_host
 	@echo "test_tco0: the trampoline builds, bakes and passes the host corpus"
@@ -548,7 +548,7 @@ vec-%:
 	   > out/vec/$*.log 2>&1; r=$$?; cat out/vec/$*.log; exit $$r
 # the fixpoint: love1 bakes its compiler, recompiles every TU, links love2, byte-identical to
 # love1. the link list is make's objects, never a glob. test_extra only
-test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
+test_fixpoint: host $(moon_seat_o) $(love0) $(ho)/mooncc0.image
 	@$(MAKE) -s a=$(hosta) $(ko)/$(hosta)/mkvec.l
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  gate_kern_c='$(k_free_c)' gate_seat_c='$(S)/love/noblob.c' \
@@ -556,7 +556,7 @@ test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
 # the cross fixpoint: love1 linked from the twin objects rebuilds itself under qemu-user and
 # must match. opt-in (`make xa=rv64 test_xfixpoint` for rv64); skips without qemu
 .PHONY: test_xfixpoint
-test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
+test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) $(ho)/mooncc0.image
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $S/inle/$(xa)/*.c)' \
 	  gate_kern_c='$(k_free_c)' gate_seat_c='$(S)/love/noblob.c' \
 	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xod) $(xa) $(x_o) $(x_seat_o) $(xkart_o)
@@ -567,14 +567,14 @@ test_fat: dist-fat
 # one binary answers every kernel alike, on a bee host with cap freebsd-x64/netbsd-x64 (-a64, -rv64 likewise) (or
 # FBSD_SSH/NBSD_SSH); skips without. FBSD_SEED=1/NBSD_SEED=1 adds `love seed` there
 .PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64
-test_freebsd test_netbsd: test_%: host $(love0) out/mooncc0.image
+test_freebsd test_netbsd: test_%: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $*
 # ..and on aarch64 boxes, the local half under qemu-aarch64
-test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) out/mooncc0.image
+test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* a64
 # the third ISA: freebsd-rv64 and netbsd-rv64 hosts are riscv64 guests, the local half under
 # qemu-riscv64. the doors there are each kernel's number register: linux a7, freebsd t0, netbsd t6.
-test_freebsd_rv64 test_netbsd_rv64: test_%_rv64: host $(love0) out/mooncc0.image
+test_freebsd_rv64 test_netbsd_rv64: test_%_rv64: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* rv64
 # test_raw_bake -- the mooncc PIE bakes and wakes its own image; x64 only, opt-in
 test_raw_bake: test_raw
@@ -753,17 +753,17 @@ test_tools: host out$(hsuf)/lush
 	@$(MAKE) -C src/tools
 # test_gcheck: LvGcCheck traps if a re-driven minor scan copies again. GCDBG, not EXTRA_CFLAGS;
 # shared prerequisites named here so two sub-makes never race to write them
-test_gcheck: host $(love0) out/mooncc0.image
+test_gcheck: host $(love0) $(ho)/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_host
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_hostegg
 # test_gcstress: LvGcStress collects every time and poisons the nursery, the corpus in
 # GCS_SHARDS shards a half; _bake also bakes under stress, _full runs it whole (hours)
 GCS_SHARDS ?= 4
-test_gcstress: host $(love0) out/mooncc0.image
+test_gcstress: host $(love0) $(ho)/mooncc0.image
 	@MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
-test_gcstress_bake: host $(love0) out/mooncc0.image
+test_gcstress_bake: host $(love0) $(ho)/mooncc0.image
 	@GCS_BAKE=1 MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
-test_gcstress_full: host $(love0) out/mooncc0.image
+test_gcstress_full: host $(love0) $(ho)/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---
