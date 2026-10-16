@@ -261,6 +261,9 @@
            "and $~(1 << 2), %rax // clear\n or $((1 << 9) | (1 << 10)), %rax")
    ; sha256rnds2's three-operand spelling names the implied xmm0; it reads back as the two
    _ (chk "sha.sha256rnds2.xmm0" "0f38cbca" "sha256rnds2 %xmm0, %xmm2, %xmm1")
+   ;; ah..bh where no REX is needed lay as gas lays them (beside one, asrefuse.sh)
+   _ (chk "highbyte.sib" "887c5808" "movb %bh, 8(%rax,%rbx,2)")
+   _ (chk "highbyte.movz" "0fb6c4" "movzbl %ah, %eax")
    _ (law2 "lens.semi" '((op xor 4 ((rg 2 4) (rg 2 4))) (op mov 4 ((rg 0 4) (im 1))) (op div 4 ((rg 1 4))))
            "xorl %edx,%edx; movl $1,%eax; divl %ecx;")
    ;; -- the decoder (src/love/holo/decode.l) over the same battery: the golden bytes read back
