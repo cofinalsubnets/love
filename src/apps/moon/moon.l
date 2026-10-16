@@ -589,8 +589,11 @@
           (pop r6)
           (ret))
    ; the macos entry: a mach-o meets one kernel, so the second word says which and nothing
-   ; is probed. xnu lays argc at [rsp] as linux does; exit is 1 in the unix class
+   ; is probed. xnu lays argc at [rsp] as linux does; exit is 1 in the unix class. dyld hands
+   ; an LC_UNIXTHREAD exe that stack on 8 alone, so it is aligned here, as crt1.o does: a
+   ; framework's sse spills fault on anything less
    crt0-macos '((mov r6 sp)
+                (and sp sp -16)
                 (li r5 4)
                 (call __love_start)
                 (mov r6 r0) (li r0 33554433) (sys)
@@ -988,7 +991,7 @@
                     (string (cc-objbytes src (rtflags tgt os vb is))))])
    ; every member compiled, ready to index -- our own sources reaching only our own headers.
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
-   (rtpull srcs tgt os nostd vb)
+   (rtpull srcs tgt os nostd vb imp?)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
        ; -nostdlib and friends: no runtime by request, so an owed nom is undefined, full stop
@@ -1007,7 +1010,7 @@
              ; the owe at termination is the answer: exactly the set nothing anywhere
              ; defines, said here whole rather than one nom at a time by whichever holo
              ; scares about first.
-             (two? <>pr && undie <>pr,
+             (two? <>pr && !imp? && undie <>pr,
               <pr))))
    ; -- the wasm link (src/love/holo/wasmfn.l): the objects are gen tuples as text, the
    ; runtime the same members compiled for wasm and pulled by need, and one function
@@ -1076,13 +1079,17 @@
         0))
    (cc-link ins dst t) (t 'tgt @ 'wasm (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
-                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs}))
+                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs 'fws fws}))
     ; a BSD links where mksys lays the translation tail (impl.h's LvOsTranslate):
     ; x64, a64 and rv64. elsewhere os.c has no tables for it, so it is refused here
     (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64 rv64))
           && udie 1 "cc: -os \(os) links on x64, a64 and rv64 only")
        ; a mach-o: static, fixed-base, its entry knowing the kernel
        mac? (os = 'macos)
+       ; ..dyld's when it names a framework or a library past libSystem's own: those load,
+       ; and what the runtime does not define is imported from them
+       dylibs (mac? ? (map (f \ "/System/Library/Frameworks/" + f + ".framework/Versions/A/" + f) fws
+                       + map (l \ "/usr/lib/lib" + l + ".dylib") (filter (l \ !(elem l ["c" "m" "dl" "pthread" "System"])) libs)) ())
        _ (mac? && tgt != 'x64 && udie 1 "cc: -os macos links on x64 only")
        ; -pie lays the fixed base there: a static mach-o has no auxv to read its slide from
        _ (mac? && (so || charm? org) && udie 2 "cc: -os macos lays an executable: no -shared or -Ttext")
@@ -1122,10 +1129,10 @@
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        ; a shared object pulls no runtime: what it owes it imports, from the -l libraries
-       set (so ? lib (lib + rtpull lib tgt os nostd vb))
+       set (so ? lib (lib + rtpull lib tgt os nostd vb (two? dylibs)))
        prod ("love " + <(usplit 43 love-version))
        ps (? arm? (ldbare32 tgt runs set () relo)
-             mac? (macholink tgt set)
+             mac? (macholink tgt set dylibs)
              so (ldshared tgt (last (usplit 47 dst)) (map (l \ "lib" + l + ".so") libs) set prod)
              (ldlink tgt pie org set prod rdme))
        ; the ei_osabi = 9 brand (rung UV3) is ldlink's, laid where the header is made:
@@ -1233,7 +1240,7 @@
    ; would answer the zero point. the literal has to be complete and is wanted at two sites,
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
@@ -1242,7 +1249,7 @@
           (pins t 'is (rev (t 'is))
                   'ds (rev (t 'ds))
                   'ins (rev (t 'ins))
-                  'libs (rev (t 'libs)))
+                  'libs (rev (t 'libs)) 'fws (rev (t 'fws)))
           ("-c" . r) (flags r (pin t 'c 1))
           ("-E" . r) (flags r (pin t 'E 1))
           ; the same string love answers, because they are one artifact: mooncc is a
@@ -1257,6 +1264,9 @@
           ; library each comes from (a DT_NEEDED libNAME.so). without -shared, -l rides through
           ("-shared" . r) (flags r (pin t 'so 1))
           ((("-l" + w) . r) && #w) (flags r (fpush t 'libs w))
+          ; -framework NAME: a macos framework, dyld's to load; what no object defines is
+          ; imported from it (or from libSystem, always loaded)
+          ("-framework" . w . r) (flags r (fpush t 'fws w))
           ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
           ; linked image, so a loader placing it at a base of its own can slide them.
           ; the arm32 lane only -- ldlink's -pie answers this on the 64-bit seats.
