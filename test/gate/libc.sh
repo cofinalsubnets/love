@@ -59,7 +59,7 @@ for f in test/libc/*.c; do
 
   # -w: the battery is about the ANSWERS, and gcc warns about deliberate edges
   # (a snprintf that is meant to truncate, a memset of length 0)
-  $cc_g -O0 -w -Itest/libc -o "$d/$b.g" "$f" 2> "$d/$b.gbuild" \
+  $cc_g -O0 -w -Itest/libc -o "$d/$b.g" "$f" -lm 2> "$d/$b.gbuild" \
     || { cat "$d/$b.gbuild" >&2; fail "$b: the system cc could not build it"; }
   "$d/$b.g" > "$d/$b.theirs" 2>&1
   rg=$?
