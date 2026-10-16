@@ -58,6 +58,15 @@
     (7  = (ev '(: tw (\ h (h 1))  (g tw) (tw (\ y (+ y 5)))  (g (\ k 7)))))   ; dehof's lamc fold holds the same law
     (12 = (ev '(: m 7  (g x) (+ x m)  (g 5)))))                                ; ..and an unshadowed const still folds
 
+; --- the named-let lift's inline respects the fn's own params -------------------------
+; norm-let inlines a let's cheap values into its one fn's body before lift takes it; a
+; param of that fn, or of a lambda inside it, spelling a value's name binds it there
+(test
+    (3 = (ev '(: (f n) (: k 0  (g k) k  (g n))  (f 3))))
+    (1 = (ev '(: (f n) (: k 0  (g k x) ((\ i (? (< i k) 1 2)) x)  (g n 1))  (f 3))))
+    (4 = (ev '(: (f n) (: k 0  (g x) ((\ k (+ k x)) 1)  (g n))  (f 3))))
+    (5 = (ev '(: (f n) (: m 2  (g x) (+ x m)  (g n))  (f 3)))))                  ; ..and an unshadowed value still inlines
+
 ; --- a word an enclosing letrec rebinds is not the word the desugar owns --------------
 ; adesug rewrites (list a..), (one? x), (nil? x), (atom? x), (!= a b) and (!== a b) into
 ; the shapes amble compiles, by the head's name -- and the frame's binders are not the only

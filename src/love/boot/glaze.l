@@ -1595,10 +1595,21 @@
                               && two? >>nl && atom? >>>nl               ; (: (g q..) GBODY), body-less (one binding)
                               && #>e = #>gnf)))))                       ; inits arity == g's arity
    (subst-sym nm val e) (? (e = nm) val (two? e) (map (x \ subst-sym nm val x) e) e)            ; symbol nm -> val in e
+   ; ..nm -> val where nm is free: never under a \ whose params or a `:` whose names bind it, nor into a define whose params do
+   (hname h) (two? h ? (hname <h) h)
+   (subst-free nm val e)
+    (? (e = nm) val
+       (atom? e) e
+       (<e = '\) (any (p \ p = nm) (rev >(rev >e)) ? e (map (x \ subst-free nm val x) e))
+       (<e = ':) (: ps (anat-defs >e) pairs <ps
+                   (any (pr \ hname <pr = nm) pairs ? e
+                      (: sub (map (pr \ <pr . (two? <pr && occurs? nm <pr ? >pr (subst-free nm val >pr))) pairs)
+                         (': . (1 = #>e % 2 ? (unpair sub (subst-free nm val <>ps)) (cbflat sub))))))
+       (map (x \ subst-free nm val x) e))
    ; norm-let: (: aux.. (g q..) GBODY (g inits..)) -> the named-let ((: (g q..) GBODY[aux inlined]) inits..) lift handles. the
    ; aux values close against each other left to right and every use is a copy, so only a dcheap? value goes: a call would recompute per use
-   (auxclose aps) (foldl (\ acc ap (acc + [(<ap . (foldl (\ b q (subst-sym <q >q b)) >ap acc))])) () aps)
-   (auxinl aps x) (foldl (\ b ap (subst-sym <ap >ap b)) x (auxclose aps))
+   (auxclose aps) (foldl (\ acc ap (acc + [(<ap . (foldl (\ b q (subst-free <q >q b)) >ap acc))])) () aps)
+   (auxinl aps x) (foldl (\ b ap (subst-free <ap >ap b)) x (auxclose aps))
    (norm-let body)
     (!(two? body && <body = ': && !(atom? >body)) ? body
        (: parsed (anat-defs >body) pairs <parsed result <>parsed
@@ -1607,8 +1618,9 @@
              !(all (dcheap? * cup) auxps) body                                          ; a call-valued aux does not copy -> leave the let alone
              (: g <<<fnps q ><<fnps gbody ><fnps
                 (!(<result = g && #>result = #q) ? body            ; result must be (g inits..) matching arity
-                   (: inl (auxinl auxps)                                             ; inline every aux name -> its closed value
-                      ([': (g . q) (inl gbody)] . map inl >result)))))))
+                   (: inl (auxinl auxps)                                             ; inline every aux name -> its closed value,
+                      gl (inl ('\ . q + [gbody]))                                    ; in gbody as a lambda over q, so g's own params stay g's
+                      ([': (g . q) <(rev gl)] . map inl >result)))))))
    (lift-pair p)                                                                                  ; (nameform . body) -> (rewritten-pair newdefs)
     (: nf <p pb0 (norm-let >p)
        gd (two? pb0 && 4 = #pb0 && <pb0 = '? && two? (pb0 1) && <(pb0 1) = 'whole?)          ; (? (whole? N) LOOP FOLD), defoliate's guard: the loop lifts
