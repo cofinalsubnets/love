@@ -3,7 +3,8 @@
 //                           too; back once all are done
 //   par_width(g, n)         the width a run of n chunks takes now, for a kernel whose chunks
 //                           cost more split than whole: at 1 it runs whole instead
-//   (par-width n)           the same from love, for the laws
+//   (par-width n)           the same from love, for the laws, and (par-cpus m) the rounding
+//                           (module pool)
 // workers run C only: no love code, no heap, no allocation. the caller sits in its nif until
 // the join, so the collector cannot run and nothing moves under them. a chunk is a fixed
 // piece of the work, never n / width, so the answer is the same at any width.
@@ -32,10 +33,11 @@
 #define PoolThreads 0
 #endif
 
-// the most workers; ns between two reads of the load; the share of a window (in thousandths)
+// the most workers; ns between two reads of the load; the margin a spare's whole cpus are rounded
+// with (thousandths: 1.98 spare is two, not one); the share of a window (in thousandths)
 // tasks may wait for a cpu before we take none: an idle box shows well under 1%, and past
 // 5% someone already queues, so a thread of ours would lengthen a queue rather than fill a gap
-enum { PoolMax = 16, PoolTick = 50000000, PoolPsi = 50 };
+enum { PoolMax = 16, PoolTick = 50000000, PoolPsi = 50, PoolMargin = 250 };
 
 struct pool {
  int pid, ncpu, ncore, fd, fp;   // the process it was made in, cpus online, physical cores,
@@ -60,6 +62,10 @@ struct pool {
 
 static void pool_serial(intptr_t n, void (*fn)(void *, intptr_t), void *ctx) {
  for (intptr_t i = 0; i < n; i++) fn(ctx, i); }
+
+// the whole cpus a spare of m thousandths allows: rounded down past a margin, so a box that left
+// two cores idle all but a hair reads as two
+static int pool_cpus(uint64_t m) { return (int) ((m + PoolMargin) / 1000); }
 
 #if PoolThreads
 static uint64_t pool_ns(void) {
@@ -112,7 +118,7 @@ static int pool_ask(struct pool *p, uint64_t t) {
   uint64_t win = (t - p->at) / 1000,           // us
            spare = (idle - p->idle0) * 1000 * (uint64_t) p->ncpu / (tot - p->tot0)   // thousandths of a cpu
                    + (self - p->self0) * 1000 / (win ? win : 1);
-  ask = (int) (spare / 1000);
+  ask = pool_cpus(spare);
   if (ok && p->fp >= 0 && p->psi0 && (psi - p->psi0) * 1000 > PoolPsi * win) ask = 1; }
  p->idle0 = idle, p->tot0 = tot, p->self0 = self, p->psi0 = ok ? psi : 0;
  return ask < 1 ? 1 : ask; }
@@ -272,3 +278,10 @@ love_noinline static struct g *host_par_width(struct g *g) {
  return g; }
 static LvmWrap(lvm_par_width, host_par_width)
 LvDef("par-width", par_width, 1, NULL);
+// (par-cpus m) the whole cpus a spare of m thousandths allows, the rounding the width takes: the laws'
+love_noinline static struct g *host_par_cpus(struct g *g) {
+ word mw = g->sp[0];
+ g->sp[0] = putcharm(oddp(mw) && getcharm(mw) >= 0 ? pool_cpus((uint64_t) getcharm(mw)) : 0);
+ return g; }
+static LvmWrap(lvm_par_cpus, host_par_cpus)
+LvDef("par-cpus", par_cpus, 1, "pool");
