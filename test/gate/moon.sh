@@ -141,6 +141,47 @@ DEAD
 moonrun -c "$ho/.dead.c" -o "$ho/.dead.o" || fail "mooncc: the dead-call program"
 ! grep -qa 'dax_del\|huge\|zdev\|ia32\|conv\|reclaim\|invalid\|sites' "$ho/.dead.o" || fail "a call only dead code makes is still named in the object"
 echo "mooncc: dead stubs, absorbed tests and a cleared flag name nothing ok"
+# scoped_seqlock_read: its step splices (a typecheck() in it does nothing), and the loop's test
+# `s.state != ss_done` holds at the step's switch, so its ss_done arm names no canary. a twin that
+# writes the member first keeps the call
+cat > "$ho/.sqlk.c" <<'SQLK'
+enum ss_state { ss_done = 0, ss_lock, ss_lock_irqsave, ss_lockless };
+struct ss_tmp { enum ss_state state; unsigned long data; int *lock; };
+extern void __scoped_seqlock_bug(void); extern void kept(void);
+extern unsigned long rbegin(void); extern int rretry(unsigned long); extern unsigned long lk(int *);
+extern void ulk(int *); extern void work(long *); extern int pick(void);
+#define typecheck(t, x) ({ t __d; __typeof__(x) __d2; (void) (&__d == &__d2); 1; })
+static inline __attribute__((always_inline)) void cln(struct ss_tmp *s) { if (s->lock) ulk(s->lock); }
+static inline __attribute__((always_inline)) void nxt(struct ss_tmp *s, int *l, enum ss_state t) {
+  switch (s->state) {
+  case ss_done: __scoped_seqlock_bug(); return;
+  case ss_lock: case ss_lock_irqsave: s->state = ss_done; return;
+  case ss_lockless: if (!rretry(s->data)) { s->state = ss_done; return; } break;
+  }
+  switch (t) {
+  case ss_done: return;
+  case ss_lock: case ss_lock_irqsave: s->lock = l; typecheck(unsigned long, s->data); s->data = lk(l); s->state = t; return;
+  case ss_lockless: s->data = rbegin(); return;
+  }
+}
+void f(int *l, long *out) {
+  for (struct ss_tmp s __attribute__((cleanup(cln))) = { .state = ss_lockless, .data = rbegin() };
+       s.state != ss_done; nxt(&s, l, ss_lock_irqsave))
+    work(out);
+}
+int g(int *l) {
+  struct ss_tmp s = { .state = ss_lock };
+  if (s.state != ss_done) {
+    s.state = pick();
+    switch (s.state) { case ss_done: kept(); return 1; default: return 2; }
+  }
+  return 0;
+}
+SQLK
+moonrun -c "$ho/.sqlk.c" -o "$ho/.sqlk.o" || fail "mooncc: the scoped seqlock program"
+! grep -qa '__scoped_seqlock_bug' "$ho/.sqlk.o" || fail "a switch arm the loop's test excludes still names its call"
+grep -qa 'kept' "$ho/.sqlk.o" || fail "a switch arm reached after the member's write lost its call"
+echo "mooncc: a test's not-equal fact prunes the step's switch, a write ends it ok"
 # pushq $sym: the dword the cpu sign-extends links as R_X86_64_32S (the kernel lives at -2 GiB)
 cat > "$ho/.p32s.c" <<'P32S'
 void f(void) { unsigned long t; asm volatile("pushq $1f\n\tpopq %0\n1:" : "=r"(t)); }
@@ -1225,11 +1266,18 @@ for os in linux freebsd netbsd; do
   [ $(( $(date +%s) - s0 )) -lt 5 ] \
     || fail "carried runtime: -os $os took the member-compile lane (it refused the carried archive)"
 done
-# ..and where the arch has NO translation tables the refusal must stand: riscv's os.c
+for os in linux freebsd netbsd; do
+  s0=$(date +%s)
+  moonrun -t rv64 -os $os "$ho/.os.c" -o "$ho/.os.rv$os" > /dev/null 2>&1 \
+    || fail "carried runtime: -t rv64 -os $os did not link"
+  [ $(( $(date +%s) - s0 )) -lt 5 ] \
+    || fail "carried runtime: -t rv64 -os $os took the member-compile lane (it refused the carried archive)"
+done
+# ..and where the arch has NO translation tables the refusal must stand: i386's os.c
 # reads -os and only linux has an answer, so a BSD there owes a compile that #errors.
 # handing it the carried (linux-built) archive would link linux's numbers in silence.
-moonrun -t rv64 "$ho/.os.c" -o "$ho/.os.rv" > /dev/null 2>&1 \
-  || fail "carried runtime: -t rv64 did not link"
-moonrun -t riscv64 -os netbsd "$ho/.os.c" -o "$ho/.os.rvnb" > /dev/null 2>&1 \
-  && fail "carried runtime: -t riscv64 -os netbsd linked -- it took linux's archive for a BSD"
-echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it; riscv's BSDs still refuse) ok"
+moonrun -t i386 "$ho/.os.c" -o "$ho/.os.i386" > /dev/null 2>&1 \
+  || fail "carried runtime: -t i386 did not link"
+moonrun -t i386 -os netbsd "$ho/.os.c" -o "$ho/.os.i386nb" > /dev/null 2>&1 \
+  && fail "carried runtime: -t i386 -os netbsd linked -- it took linux's archive for a BSD"
+echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it on x64, a64 and rv64; i386's BSDs still refuse) ok"

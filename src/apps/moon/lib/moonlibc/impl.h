@@ -48,15 +48,15 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 /* WHERE THE TRANSLATION LAYER COMPILES. moonlibc's C is written in one kernel's
  * spelling -- linux's, because that is where we started and NOT because it is a
  * default -- and os.c translates the others into it. The tables compile where
- * the machine tail they call has been laid: x64 and a64 have it, riscv
- * takes os.c's identity stubs and speaks whichever kernel -os named. This is a
+ * the machine tail they call has been laid: x64, a64 and rv64 have it, i386
+ * and arm take os.c's identity stubs and speak whichever kernel -os named. This is a
  * claim about mksys leaves, never a roster of kernels we are willing to run on.
  * AND THE NETBSD RETURN PATH IS ITS OWN CLAIM -- narrower in principle, though
  * the same arches carry both today: __love_nb_sigtramp is per-arch asm (mksys.l
- * lays x64 and arm64). Where it is absent netbsd's sigaction refuses BY NAME
+ * lays x64, arm64 and riscv). Where it is absent netbsd's sigaction refuses BY NAME
  * rather than register a trampoline that is not there; freebsd on the same arch
  * is unaffected. */
-#if !defined(__riscv) && !defined(__wasm__) && !defined(__ILP32__)   /* wasm's one kernel is the page's loader; i386 and arm are linux's alone */
+#if !defined(__wasm__) && !defined(__ILP32__)   /* wasm's one kernel is the page's loader; i386 and arm are linux's alone */
 # define LvOsTranslate 1        /* os.c's tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
@@ -746,6 +746,8 @@ typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in
 #define __MLive ((__mhdr *) 3)     /* ..an arena block */
 #define __MAlign ((__mhdr *) 5)    /* ..a stand-in before an aligned pointer: size is the units back to the block's payload */
 #define __MArena ((__mhdr *) 7)    /* an arena's first unit, never handed out: size is the arena's units, its last a sentinel (__MLive, 1) */
+#define __MSlot ((__mhdr *) 9)     /* ..a size class's slot: size is its units, and its index in its slab << 16 */
+static size_t __munits(__mhdr const *b) { return b->next == __MSlot ? b->size & 0xffff : b->size; }
 __mhdr *__mblock(void *p, char const *who);   /* the block behind p, or an abort naming who */
 int __mgrow(__mhdr *b, size_t nu);            /* realloc's growth in place: 1 when b now holds nu units */
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
@@ -866,7 +868,7 @@ extern void __love_nbstat(struct __nb_stat const *f, struct stat *st);
 #ifdef LvNbTramp
 extern void __love_nb_sigtramp(void);   /* mksys: the ucontext register; setcontext */
 #endif
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__riscv)
 /* THE PROBE CANNOT USE __love_sys HERE. netbsd/aarch64 takes the number from
  * the SVC IMMEDIATE and SIGSYSes the register form, so asking which kernel we
  * are on with the register form would die on the very kernel it is asking
@@ -874,7 +876,8 @@ extern void __love_nb_sigtramp(void);   /* mksys: the ucontext register; setcont
  * ignores the immediate and runs x8, netbsd reads it. 20 = getpid on netbsd,
  * epoll_create1 on linux/arm64. freebsd hears NEITHER -- it signals SIGILL
  * for any immediate but zero -- and is already out when these run: crt0 knows
- * it by the entry protocol and hands __love_start the answer. */
+ * it by the entry protocol and hands __love_start the answer. riscv's leaves
+ * set a7 (linux) and t6 (netbsd) alike. */
 extern long __love_nbp20(long);
 extern long __love_nbp202(long, long, long, long, long, long);
 #endif

@@ -24,6 +24,8 @@ enum { O_CHAR, O_ANY, O_SET, O_BOL, O_EOL, O_ASSERT, O_SPLIT, O_JMP, O_SAVE, O_B
 #define REP_INF (-1)
 #define DUP_MAX 0x7fff
 #define PROG_MAX (1 << 16)
+#define RE_DEEP 256                     /* groups nested past this are refused, as pcre's limit */
+#define GEN_DEEP 1024                   /* groups and repeats nested in the tree past this */
 
 /* a set: a bitmap of bytes -- in utf-8 mode ascii's only -- and past it the code-point ranges
  * and the classes (wctype's, a bit each) a character falls in, negated or not */
@@ -259,6 +261,7 @@ static node *atom(parser *P, int depth, int *anchor) {
   if (P->ext && c == '(') {
     P->s++;
   group:;
+    if (depth >= RE_DEEP) { P->err = REG_ESPACE; return 0; }
     int g = ++P->ngroup;
     node *in = alt(P, depth + 1);
     if (P->err) return 0;
@@ -361,7 +364,7 @@ static node *alt(parser *P, int depth) {
   return a; }
 
 /* ---- the program ---- */
-typedef struct { ins *p; int np, cp, nregs, err; } emitter;
+typedef struct { ins *p; int np, cp, nregs, err, deep; } emitter;
 
 static int emit(emitter *E, int op, int x, int y, unsigned char *set) {
   if (E->err) return 0;
@@ -374,10 +377,37 @@ static int emit(emitter *E, int op, int x, int y, unsigned char *set) {
   E->p[E->np] = (ins) {op, x, y, set};
   return E->np++; }
 
+static void gen(emitter *E, node *n, int icase);
+/* a cat or alt is left-deep, a node per atom or branch: its spine is walked, not recursed */
+static void genspine(emitter *E, node *n, int icase) {
+  int t = n->t, k = 0, i;
+  node *m;
+  for (m = n; m && m->t == t; m = m->a) k++;
+  node **sp = malloc(k * sizeof *sp);
+  int *ix = t == N_ALT ? malloc(k * sizeof *ix) : 0;
+  if (!sp || (t == N_ALT && !ix)) { E->err = REG_ESPACE; goto out; }
+  for (i = 0, m = n; m && m->t == t; m = m->a) sp[i++] = m;
+  if (t == N_ALT)
+    for (i = 0; i < k; i++) { ix[i] = emit(E, O_SPLIT, 0, 0, 0); if (E->err) goto out; E->p[ix[i]].x = E->np; }
+  gen(E, m, icase);
+  for (i = k - 1; i >= 0 && !E->err; i--) {
+    if (t == N_CAT) { gen(E, sp[i]->b, icase); continue; }
+    int j = emit(E, O_JMP, 0, 0, 0);
+    if (E->err) break;
+    E->p[ix[i]].y = E->np; gen(E, sp[i]->b, icase);
+    E->p[j].x = E->np; }
+ out:
+  free(sp); free(ix); }
+
+static void gen1(emitter *E, node *n, int icase);
 static void gen(emitter *E, node *n, int icase) {
   if (!n || E->err) return;
+  if (n->t == N_CAT || n->t == N_ALT) { genspine(E, n, icase); return; }
+  if (E->deep >= GEN_DEEP) { E->err = REG_ESPACE; return; }
+  E->deep++, gen1(E, n, icase), E->deep--; }
+static void gen1(emitter *E, node *n, int icase) {
   switch (n->t) {
-  case N_EMPTY: return;
+  case N_EMPTY: case N_CAT: case N_ALT: return;   /* the last two are genspine's */
   case N_CHAR:
     if (icase && n->c < 128 && isalpha(n->c)) {
       emit(E, O_SPLIT, E->np + 1, E->np + 3, 0);
@@ -390,19 +420,9 @@ static void gen(emitter *E, node *n, int icase) {
   case N_EOL: emit(E, O_EOL, n->n, 0, 0); return;
   case N_ASSERT: emit(E, O_ASSERT, n->c, 0, 0); return;
   case N_BREF: emit(E, O_BREF, n->n, 0, 0); return;
-  case N_CAT: gen(E, n->a, icase); gen(E, n->b, icase); return;
   case N_GROUP:
     emit(E, O_SAVE, 2 * n->n, 0, 0); gen(E, n->a, icase); emit(E, O_SAVE, 2 * n->n + 1, 0, 0);
     return;
-  case N_ALT: {
-    int sp = emit(E, O_SPLIT, 0, 0, 0);
-    if (E->err) return;
-    E->p[sp].x = E->np; gen(E, n->a, icase);
-    int j = emit(E, O_JMP, 0, 0, 0);
-    if (E->err) return;
-    E->p[sp].y = E->np; gen(E, n->b, icase);
-    E->p[j].x = E->np;
-    return; }
   case N_REP: {
     for (int i = 0; i < n->min; i++) gen(E, n->a, icase);
     if (n->max == REP_INF) {

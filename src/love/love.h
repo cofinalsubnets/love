@@ -615,7 +615,7 @@ struct image_opt { uintptr_t chunk; uint64_t const *hot; uintptr_t nhot; };
 void *image_save2(struct g*, uintptr_t *outlen, struct image_bad*, struct image_opt const*);
 struct g
  *love_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session; 2: and the image may wake lazily
-int image_why(void const *buf, uintptr_t len);   // a header refused: 0 no, 1 another format, 2 another binary's, 3 other C
+int image_why(void const *buf, uintptr_t len);   // a header refused: 0 no, 1 another format, 2 another binary's, 3 other C, 4 damaged
 uint64_t image_carried_c(void);                  // the carried C's crc and length, 0 for none
 // a lazy image's pool given up (a major's copy done, a session's end): its pages open, its state gone
 void image_drop(word const *pool);
@@ -898,6 +898,7 @@ intptr_t love_mint_cmp(struct g*, word, word); // -1/0/1 over two points: () < b
 // the number band's order, for arr.c's equality lane: what seats there compares by value
 bool numband(struct g*, word);            // x orders as a number (cmp_rank 2)
 intptr_t love_cmp3(struct g*, word, word);     // -1/0/1, the order sort and < share
+void love_fault_note(int, void*);              // a fault no handler owns (main.c): a stack's said so
 struct g
  *big_binop(struct g*, int vop),  // vop_add..vop_rem, packed; pops one operand
  *big_bitop(struct g*, int vop),  // vop_band..vop_bxor, two's complement; pops one operand
@@ -1240,6 +1241,7 @@ char *code_install(struct g *g, char const *src, size_t n), *code_adopt(struct g
      *code_lazy(struct g *g, size_t n, unsigned char const *z, size_t nz, unsigned char const *tab, uintptr_t nch,
                 unsigned char const *dz, size_t ndz, size_t nd, int kept);
 int code_seat(struct g *g, char const *a);
+uint64_t image_sum(void const *p, uintptr_t n, uint64_t h);   // the image's digest (snap.c)
 char *code_window(char *p);
 void code_free(struct g *g, char *code), code_fin(struct g *g);
 int code_in(struct g *g, uintptr_t v);

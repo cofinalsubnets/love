@@ -62,6 +62,19 @@ what `test_gcstress` does -- and an edited or foreign binary refuses it, saying 
 Two bakes of one tree are then one byte string, header included: no address and no ASLR base
 rides it. `test_bakerep` holds that, and that each of two such builds wakes the other's image.
 
+## the digests
+
+The header's `sum` covers the head: the header with `sum` zeroed, the dictionary, each segment's
+head and chunk table, and a segment stored whole. Each deflated chunk, stream or code, carries
+its own digest in its table row, checked before it inflates. A damaged head refuses the wake:
+`love wake FILE` exits 2 and says "damaged" (`image_why` 4), and a damaged `.image` section
+boots the egg. A damaged chunk refuses an eager wake. Under a lazy wake it ends the
+process at the chunk's first touch, with a message (exit 70) and no fault. A code chunk scares
+instead, because its first touch is a call. The roots, the cold decode lanes and a data
+object's length words are bounded too, but the hot lanes (a heap offset, an `lvm_` index) are
+not: past the digest, a word is trusted as the bake wrote it. `test/host/imgcheck.l` damages
+each kind and truncates at its edges.
+
 ## the section carries an ARRAY
 
 `.image` holds one image; its first word is the codec's own magic, and every verb wakes it

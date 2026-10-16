@@ -23,17 +23,17 @@ typedef __int128 s128;
 
 int printf(const char *, ...);
 
-static unsigned long st = 0x243f6a8885a308d3UL;
-static unsigned long rnd(void) {
+static unsigned long long st = 0x243f6a8885a308d3ULL;
+static unsigned long long rnd(void) {
  st ^= st << 13; st ^= st >> 7; st ^= st << 17; return st; }
 
 /* a macro, not a call: a wide value is not carried as a parameter on any target */
-#define mix(v) do { u128 v_ = (v); h = (h ^ v_) * (u128) 0x9e3779b97f4a7c15UL + 1; } while (0)
+#define mix(v) do { u128 v_ = (v); h = (h ^ v_) * (u128) 0x9e3779b97f4a7c15ULL + 1; } while (0)
 
 int main(void) {
  u128 h = 0;
  for (int i = 0; i < 20000; i++) {
-  unsigned long a = rnd(), b = rnd(), d = rnd();
+  unsigned long long a = rnd(), b = rnd(), d = rnd();
   u128 n = ((u128) a << 64) | b;
   if (d == 0) d = 1;
 
@@ -43,7 +43,7 @@ int main(void) {
   if (q * (u128) d + r != n) { printf("DIVFAIL %d\n", i); return 1; }
   if (r >= (u128) d) { printf("REMFAIL %d\n", i); return 1; }
   /* a small divisor is the wide-quotient path (the high half divides too) */
-  unsigned long sd = (b & 63) + 1;
+  unsigned long long sd = (b & 63) + 1;
   mix(n / (u128) sd); mix(n % (u128) sd);
 
   /* the v-forms: a random count, then all three boundaries by hand */
@@ -64,5 +64,5 @@ int main(void) {
   mix((u128) ((s128) n < (s128) d));  mix((u128) ((s128) n > (s128) d));
   mix((u128) ((s128) n <= (s128) d)); mix((u128) ((s128) n >= (s128) d)); }
 
- printf("%016lx%016lx\n", (unsigned long) (h >> 64), (unsigned long) h);
+ printf("%016llx%016llx\n", (unsigned long long) (h >> 64), (unsigned long long) h);
  return 0; }

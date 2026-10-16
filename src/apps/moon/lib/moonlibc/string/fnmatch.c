@@ -38,30 +38,39 @@ static int __fnbracket(char const *p, int c, int fl, char const **end) {
 static int __fnlead(char const *n0, char const *s, int fl) {
   return (fl & FNM_PERIOD) && *s == '.' && (s == n0 || ((fl & FNM_PATHNAME) && s[-1] == '/')); }
 
+/* only the last star backtracks: a later star's starts are a superset of what an earlier
+ * one's moving would give, and under FNM_PATHNAME none crosses a '/' */
 static int __fnm(char const *p, char const *s, char const *n0, int fl) {
-  for (;; p++, s++) {
+  char const *sp = 0, *ss = 0;                       /* past the last star, and where it ends */
+  for (;;) {
     int c = (unsigned char) *p;
-    if (!c) return *s == 0 || ((fl & FNM_LEADING_DIR) && *s == '/') ? 0 : FNM_NOMATCH;
     if (c == '*') {
       while (p[1] == '*') p++;
       if (__fnlead(n0, s, fl)) return FNM_NOMATCH;
       if (!p[1]) {                                   /* a trailing star */
         if (!(fl & FNM_PATHNAME) || (fl & FNM_LEADING_DIR)) return 0;
         return strchr(s, '/') ? FNM_NOMATCH : 0; }
-      for (char const *t = s; ; t++) {
-        if (!__fnm(p + 1, t, n0, fl)) return 0;
-        if (!*t || ((fl & FNM_PATHNAME) && *t == '/')) return FNM_NOMATCH; } }
-    if (!*s) return FNM_NOMATCH;
-    if ((fl & FNM_PATHNAME) && *s == '/' && c != '/') return FNM_NOMATCH;
-    if (c == '?') { if (__fnlead(n0, s, fl)) return FNM_NOMATCH; continue; }
+      sp = ++p, ss = s;
+      continue; }
+    if (!c) {
+      if (*s == 0 || ((fl & FNM_LEADING_DIR) && *s == '/')) return 0;
+      goto back; }
+    if (!*s) goto back;
+    if ((fl & FNM_PATHNAME) && *s == '/' && c != '/') goto back;
+    if (c == '?') { if (__fnlead(n0, s, fl)) goto back; p++, s++; continue; }
     if (c == '[') {
       char const *end;
-      if (__fnlead(n0, s, fl)) return FNM_NOMATCH;
+      if (__fnlead(n0, s, fl)) goto back;
       int m = __fnbracket(p + 1, (unsigned char) *s, fl, &end);
-      if (m >= 0) { if (!m) return FNM_NOMATCH; p = end - 1; continue; } }   /* unclosed: a literal [ */
-    if (c == '\\' && !(fl & FNM_NOESCAPE)) {        /* an escape with nothing after it matches nothing */
-      if (!p[1]) return FNM_NOMATCH;
+      if (m >= 0) { if (!m) goto back; p = end, s++; continue; } }   /* unclosed: a literal [ */
+    if (c == '\\' && !(fl & FNM_NOESCAPE)) {       /* an escape with nothing after it matches nothing */
+      if (!p[1]) goto back;
       c = (unsigned char) *++p; }
-    if (__fnfold(c, fl) != __fnfold((unsigned char) *s, fl)) return FNM_NOMATCH; } }
+    if (__fnfold(c, fl) != __fnfold((unsigned char) *s, fl)) goto back;
+    p++, s++;
+    continue;
+   back:                                             /* the last star takes one more character */
+    if (!sp || !*ss || ((fl & FNM_PATHNAME) && *ss == '/')) return FNM_NOMATCH;
+    p = sp, s = ++ss; } }
 
 int fnmatch(char const *pat, char const *name, int fl) { return __fnm(pat, name, name, fl); }
