@@ -1,31 +1,27 @@
-; wasmfn -- holo IR to wasm: the lowering of one function, and the whole-program link
-; (rungs 1, 2 and 4). the IR is what gen.l emits for rv64 -- the
-; a8 argument shape, the sp/fp/lr frame, la for every address, a compare chain for switch --
-; and none of it changes: this file is the machine under that lane.
+; wasmfn -- holo IR to wasm: one function's lowering, and the whole-program link. the IR is
+; what gen.l emits for rv64 (the a8 argument shape, the sp/fp/lr frame, la for every address).
 ;
-; the machine. every abstract register is an i64 local and every f-register an f64 local;
-; sp is global 0, the shadow stack in linear memory, so push/pop and the frame are stores.
-; control flow is structured wherever the graph is reducible -- block, loop and br_if, so an
-; engine sees a loop as a loop -- and one loop over a br_table on a label local where it is
-; not: every (label l) opens a segment, the entry is segment 0, falling out of block j runs
-; segment j and its tail falls into j+1 as the IR does; a jmp sets the local and branches to
-; the loop at depth k-j, a br the same under an if, one deeper. the flags are locals
-; (rung 2): A B the last cmp's operands, V the overflow sign adds/subs leave, FA FB the
-; last ucomisd's, with rv64's float law and which compare came last read in emission
-; order. a narrowed f-register holds the single's bits in its low word (x64's law); the
-; conversions saturate.
+; every abstract register is an i64 local and every f-register an f64 local; sp is global 0,
+; the shadow stack in linear memory. control flow is structured wherever the graph is
+; reducible, and one loop over a br_table on a label local where it is not: every (label l)
+; opens a segment, the entry is segment 0, falling out of block j runs segment j, whose tail
+; falls into j+1; a jmp sets the local and branches to the loop at depth k-j, a br the same
+; under an if, one deeper. the flags are locals: A B the last cmp's operands, V the overflow
+; sign adds/subs leave, FA FB the last ucomisd's (rv64's float law); which compare came last
+; is read in emission order. a narrowed f-register holds the single's bits in its low word;
+; the conversions saturate.
 ;
-; the convention (rung 4): ONE function type for the whole program, (i64 x 8, f64 x 8) ->
+; the convention: ONE function type for the whole program, (i64 x 8, f64 x 8) ->
 ; (i64 i64 f64 f64) -- r0..r7 and f0..f7 in, r0 r1 f0 f1 out (a 16-byte aggregate rides a
 ; pair) -- because a callr carries no arity and C lets a call disagree with its callee
-; anyway. so every function is in the table at its own index, a function's address IS its
-; index, callr is call_indirect and a jmpr (gen.l's tail call) return_call_indirect. a call
-; clobbers only the four answer registers: a callee's locals are its own.
-; the hand lane (test/holo/wasm.l) keeps a per-arity layout, mode n instead of 'uni.
+; anyway. so every function is in the table at its own index, a function's address encodes
+; that index (w-fnaddr), callr is call_indirect and a jmpr (gen.l's tail call)
+; return_call_indirect. a call clobbers only the four answer registers.
+; the hand lane (wasm-program) keeps a per-arity layout, mode n instead of 'uni.
 
 (module 'holo
-(: ;; -- the layout: register -> local. uni: r0..r7 0..7, f0..f7 8..15, then r8..r26 fp lr,
-   ;;    lab (i32), A B V, f8..f19, FA FB. per-arity n: r0..r26 fp lr, lab, A B V, f0..f19, FA FB. --
+(: ;; register -> local. uni: r0..r7 0..7, f0..f7 8..15, then r8..r26 fp lr, lab (i32),
+   ;; A B V, f8..f19, FA FB. per-arity n: r0..r26 fp lr, lab, A B V, f0..f19, FA FB
    w-st {}                                   ; 'uni 'fl (1 after ucomisd) 'labs 'env 'k
    (w-uni? _) (peep w-st 'uni 0)
    w-regs {'r0 0 'r1 1 'r2 2 'r3 3 'r4 4 'r5 5 'r6 6 'r7 7
@@ -36,7 +32,7 @@
    w-fregs {'f0 0 'f1 1 'f2 2 'f3 3 'f4 4 'f5 5 'f6 6 'f7 7
             'f8 8 'f9 9 'f10 10 'f11 11 'f12 12 'f13 13 'f14 14
             'f15 15 'f16 16 'f17 17 'f18 18 'f19 19}
-   (w-reg r) (: n (peep w-regs r -1)                 ; r0 is 0, and 0 is falsy: a sentinel, never nil?
+   (w-reg r) (: n (peep w-regs r -1)                 ; r0 is 0, so the miss is -1
                 (? (n < 0) (scare 'wasm-badreg r) (w-uni? 0) (n < 8 ? n (n + 8)) n))
    (w-freg r) (peep w-fregs r -1 @ n
                  (? (n < 0) (scare 'wasm-badfreg r) (w-uni? 0) (n < 8 ? (n + 8) (n + 33)) (n + 33)))
@@ -50,7 +46,6 @@
    (w-fval r) [['local.get (w-freg r)]]
    (w-fset r) [['local.set (w-freg r)]]
 
-   ;; -- the ALU and the conditions --
    w-alu {'add 'i64.add 'sub 'i64.sub 'and 'i64.and 'or 'i64.or
           'xor 'i64.xor 'imul 'i64.mul 'div 'i64.div_s 'udiv 'i64.div_u
           'rem 'i64.rem_s 'urem 'i64.rem_u
@@ -74,7 +69,7 @@
          'np [['local.get w-FA] ['local.get w-FA] '(f64.eq) ['local.get w-FB] ['local.get w-FB] '(f64.eq) '(i32.and)]
          'p  [['local.get w-FA] ['local.get w-FA] '(f64.eq) ['local.get w-FB] ['local.get w-FB] '(f64.eq) '(i32.and) '(i32.eqz)]
              (scare 'wasm-badfcond c))
-   (w-cond c)                                        ; the condition as an i32 on the stack
+   (w-cond c)                                        ; -> an i32 on the stack
     (peep w-st 'fl 0 ? (w-fcond c)
        (c @ 's  [['local.get (w-A 0)] ['local.get (w-B 0)] '(i64.sub) '(i64.const 0) '(i64.lt_s)]
             'ns [['local.get (w-A 0)] ['local.get (w-B 0)] '(i64.sub) '(i64.const 0) '(i64.ge_s)]
@@ -94,7 +89,7 @@
      + w-flags d 0)
    ;; mulo: d = a*b, the branch on signed overflow -- no wide multiply, so the quotient check,
    ;; guarded where the division itself would trap (-1 against the minimum)
-   (w-mulo-cond d a b)                               ; the overflow as an i32 on the stack
+   (w-mulo-cond d a b)                               ; -> an i32 on the stack
     (w-flags a b
      + [['local.get (w-A 0)] ['local.get (w-B 0)] '(i64.mul)] + w-set d
      + [['local.get (w-A 0)] '(i64.eqz) '(if i32) '(i32.const 0) '(else)
@@ -103,7 +98,7 @@
      + w-val d + [['local.get (w-A 0)] '(i64.div_s) ['local.get (w-B 0)] '(i64.ne) '(end) '(end)])
    (w-mulo d a b lbl dep) (w-mulo-cond d a b + '((if)) + w-jump lbl (dep + 1) + '((end)))
 
-   ;; -- memory: (forms . memarg-offset); a negative displacement folds into the address --
+   ;; memory: (forms . memarg-offset); a negative displacement folds into the address
    (w-mem base off) (off < 0 ? ((w-val base + [['i64.const off] '(i64.add)]) . 0) ((w-val base) . off))
    (w-memx base ix sc dp)
     (: a (w-val base + w-val ix + [['i64.const sc] '(i64.mul) '(i64.add)])
@@ -113,8 +108,8 @@
    w-st-ops {'st '(i64.store 3) 'st1 '(i64.store8 0) 'st2 '(i64.store16 1) 'st4 '(i64.store32 2)}
    (w-load op m d) (w-ld op @ r (<m + [[<r (r 1) >m]] + w-set d))
    (w-store op m s) (w-st-ops op @ r (<m + w-val s + [[<r (r 1) >m]]))
-   ;; the shadow stack: push and pop move sp by 16, the arm family's law (the frame stays
-   ;; 16-aligned; the word sits at the low end), and gen.l's frame offsets count on it
+   ;; push and pop move sp by 16, the word at the low end: the frame stays 16-aligned, and
+   ;; gen.l's frame offsets count on it
    (w-push s) ('((global.get 0) (i64.const 16) (i64.sub) (global.set 0) (global.get 0)) + w-val s + '((i64.store 3 0)))
    (w-pop d) ('((global.get 0) (i64.load 3 0)) + w-set d + '((global.get 0) (i64.const 16) (i64.add) (global.set 0)))
    ;; r0 <-> [r1], w bytes: the old value (sign-extended) lands in r0
@@ -123,13 +118,10 @@
      + w-val 'r1 + w-val 'r0 + [[(w = 4 ? 'i64.store32 'i64.store) (w = 4 ? 2 3) 0]]
      + [['local.get (w-A 0)]] + w-set 'r0)
 
-   ;; -- symbols and calls. env: name -> (fn idx [n]) | (data addr). a call under uni hands
-   ;;    every argument local and takes both answers back; the per-arity lane counts. --
-   ;; a function's ADDRESS is not its table index: base + 8i, so it is word-aligned and far
-   ;; above any address this memory holds -- what every other target's fn address already is.
-   ;; love reads a word's low bits as its tag, and a bare index made half the functions look
-   ;; like fixnums and a quarter of them like thread terminators. w-indirect takes the index
-   ;; back out; nothing else looks inside one.
+   ;; env: name -> (fn idx [n]) | (data addr) | (null). a call under uni hands every argument
+   ;; local and takes all four answers back; the per-arity lane counts.
+   ;; a function's address is base + 8i, not its table index: word-aligned and above any data
+   ;; address, since love reads a word's low bits as its tag. w-indirect takes the index back out
    w-fnbase (1 << 40)
    (w-fnaddr i) (w-fnbase + 8 * i)
    (w-sym x) (peep (peep w-st 'env {}) x ())
@@ -160,8 +152,8 @@
                     (w-args e + [['call (e 1)]] + w-rets 0)))
    (w-ret _) (w-uni? 0 ? '((local.get 0) (local.get 1) (local.get 8) (local.get 9) (return)) '((local.get 0) (return)))
 
-   ;; -- one IR form, in segment depth d. what stays refused: sys (the wasm kernel is an import,
-   ;;    __love_sys, and nothing here issues it), tp, raw (inline asm), the 128-bit lane. --
+   ;; one IR form, at segment depth d. refused: sys (the kernel is an import, __love_sys), tp,
+   ;; raw, the 128-bit lane
    (w-ins f d)
     (<f @
      'li   (w-val (f 2) + w-set (f 1))
@@ -185,7 +177,7 @@
      'zx4  (w-val (f 1) + '((i64.const 4294967295) (i64.and)) + w-set (f 1))
      'clz  (w-val (f 2) + '((i64.clz)) + w-set (f 1))
      'cmp  (w-flags (f 1) (f 2))
-     'test (pin w-st 'fl 0,                         ; the flags are the ALU's again
+     'test (pin w-st 'fl 0,
             w-val (f 1) + w-val (f 2) + [['i64.and] ['local.set (w-A 0)] ['i64.const 0] ['local.set (w-B 0)]])
      'set  (w-cond (f 1) + '((i64.extend_i32_u)) + w-set (f 2))
      ('jmp || 'jmp8) (w-jmp (f 1) d)
@@ -205,9 +197,8 @@
      'callr (w-indirect (f 1) 'call_indirect + w-rets 0)
      'jmpr  (w-indirect (f 1) 'return_call_indirect)
      'ret  (w-ret 0)
-     ;; raw bytes are inline asm, refused -- except gen.l's own two rv64 idioms for the sync
-     ;; builtins, which this one-thread machine lowers: the fence is nothing, the atomic
-     ;; swap (amoswap.w/d.aq a0,a0,(a1)) an exchange through A
+     ;; raw bytes are refused but for gen.l's rv64 sync idioms, on one thread: the fence is
+     ;; nothing, amoswap.w/d.aq a0,a0,(a1) an exchange through A
      'raw (f 1 @ bs
              (? (bs = '(15 0 16 3)) ()
                 (bs = '(47 165 165 12)) (w-xchg 4)
@@ -215,13 +206,12 @@
                 (scare 'wasm-noasm bs)))
      'trap '((unreachable))
      ('nop || 'align) ()
-     ;; the double lane
      ('movsd || 'movapd || 'movss) (w-fval (f 2) + w-fset (f 1))
      ('addsd || 'subsd || 'mulsd || 'divsd)
            (w-fval (f 1) + w-fval (f 2) + [[(w-fp3 <f)]] + w-fset (f 1))
      'xorpd (w-fval (f 1) + '((i64.reinterpret_f64)) + w-fval (f 2) + '((i64.reinterpret_f64) (i64.xor) (f64.reinterpret_i64)) + w-fset (f 1))
      'ucomisd (pin w-st 'fl 1, w-fval (f 1) + [['local.set w-FA]] + w-fval (f 2) + [['local.set w-FB]])
-     'ucomiss (pin w-st 'fl 1,                                     ; promoted to f64: exact, the same order
+     'ucomiss (pin w-st 'fl 1,                                     ; promotion is exact
                w-fval (f 1) + w-unss + [['f64.promote_f32] ['local.set w-FA]]
                + w-fval (f 2) + w-unss + [['f64.promote_f32] ['local.set w-FB]])
      ('addss || 'subss || 'mulss || 'divss)
@@ -254,12 +244,10 @@
               (<ins = 'label ? (pin labs (ins 1) (k + 1), go >l () ((rev cur) . segs) (k + 1))
                  (go >l (ins . cur) segs k))))
        ((go prog () () 0) . labs))
-   ;; -- the relooper (rung 5b): the function as basic blocks and their graph, and structured
-   ;;    control -- block, loop, br_if -- wherever the graph is reducible, so an engine sees a
-   ;;    loop as a loop. the dispatch loop stays for the irreducible rest, and whole under
-   ;;    MOON_ABLATE=reloop. the shape is Ramsey's (Beyond Relooper, 2022): a node's merge
-   ;;    children wear blocks, a loop header a loop, a branch to either is a br and any other
-   ;;    branch inlines its target, which only that branch reaches. --
+   ;; the relooper: structured block, loop, br_if wherever the graph is reducible, else the
+   ;; dispatch loop (always, under MOON_ABLATE=reloop). the shape is Ramsey's (Beyond
+   ;; Relooper): a node's merge children wear blocks, a loop header a loop, a branch to either
+   ;; is a br, and any other branch inlines its target, which only that branch reaches.
    ;; pass 1, in the IR's order -- the flags mode reads emission order, so every form is
    ;; lowered here and the emission below only arranges. a block is [code kind target cond]:
    ;; kind 'jmp (to a label), 'br (to a label on cond, an i32, else on to the next block),
@@ -279,7 +267,7 @@
                  (go >l (rev (w-ins f 0) + cur) acc))))
        bs (go prog () ())
        ((map (b \ [<b (b 1) ((b 1) @ ('jmp || 'br) (labs (b 2)) ()) (b 3)]) bs) . labs))
-   (w-abl? nm) (: s (getenv "MOON_ABLATE") t (show nm) n (string? s ? #s 0) m #t   ; gen's knob, its spelling
+   (w-abl? nm) (: s (getenv "MOON_ABLATE") t (show nm) n (string? s ? #s 0) m #t   ; nm anywhere in it
                   (go i) (? (n < i + m) 0 (snip s i (i + m) = t) 1 (go (i + 1)))
                   (n ? (go 0) 0))
    ;; the body, or () where the graph is irreducible
@@ -358,9 +346,9 @@
                 + catall (map (j \ ('((end)) + seg j)) ^(k + 1))
                 + '((end) (unreachable))))))
 
-   ;; -- the hand lane's program: functions by name, one type per arity in use. --
-   ;;    p: {'imports ((mod name n) ..) 'fns ((name n prog) ..) 'exports (name ..)
-   ;;        'memory (min [max]) 'data .. 'start name}
+   ;; the hand lane's program: functions by name, one type per arity in use.
+   ;; p: {'imports ((mod name n) ..) 'fns ((name n prog) ..) 'exports (name ..)
+   ;;     'memory (min [max]) 'data .. 'start name}
    (wasm-program p)
     (: imps (peep p 'imports ())  fns (peep p 'fns ())
        ars ({} @ t (map (i \ (pin t (i 2) 1)) imps, map (f \ (pin t (f 1) 1)) fns, sort (keys t)))
@@ -382,9 +370,9 @@
         'exports (map (e \ [(show e) 'func (idx e)]) (peep p 'exports ()) + '(("mem" memory 0)))
         'start (start = () ? -1 (idx start))})
 
-   ;; -- the whole program, off gen.l's objects (rung 4). a tu is cgen-obj's tuple with the
-   ;;    weak names appended: (tforms dforms fnames gnames nforms iforms lnames xsecs bforms
-   ;;    rforms xfns weaks). the names are strings, the labels in the forms noms. --
+   ;; the whole program, off gen.l's objects. a tu is cgen-obj's tuple with the weak names
+   ;; appended: (tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns
+   ;; weaks). the names are strings, the labels in the forms noms.
    ;; the symbol positions: where a nom in a form is a label and not a register or an op
    (w-symap f ren)
     (: (m x) (peep ren x x)
@@ -405,8 +393,7 @@
                                       ('la || 'lar)                       (pin a <>n 1)
                                       'raw                                (foldl f2 a <n))))
    (w-tu-streams tu) (<tu + <>tu + tu 4 + tu 5 + tu 8 + tu 9 + catmap caup (tu 7 + tu 10))
-   ;; the ledger of one tu: (defs . refs), the global names it defines and the names it
-   ;; wants from outside -- for a driver pulling a runtime by need
+   ;; one tu's (defs . refs): the global names it defines and the names it wants from outside
    (wasm-tu-syms tu)
     (: defs (map nom $ <>>tu + <>>>tu)
        labs (w-labels (w-tu-streams tu))
@@ -428,9 +415,7 @@
                  (go >l (f . cur) name acc))))
        (go forms () () () . als))
    ;; a data stream laid at addr: (addr' items) with items ((addr . bytes) | (addr fix-sym aux)),
-   ;; where bytes is one byte or a BLOB -- a string standing for every byte in it, which is
-   ;; what holo.l's item-len already reads a raw operand's string as. a megabyte of archive
-   ;; is one item here and not a cons and an address per byte.
+   ;; where bytes is one byte or a string standing for every byte in it
    (w-lay-data forms addr syms items)
     (forms @- [addr items] (f . fs)
      (<f @ 'label (pin syms <>f ['data addr], w-lay-data >forms addr syms items)
@@ -445,9 +430,8 @@
                                  (go xs (a + 1) acc (x . run) (two? run ? r0 a))))))
            x (scare 'wasm-data-form x)))
    ;; an object off disk: the gen tuple as text, or a container -- `wo1 TEXTLEN BLOBLEN..` on
-   ;; the first line, the text, then the blobs (a carried archive, a wad) behind it, each
-   ;; standing as (blob k) in its raw form: a megabyte of string literal is what the reader
-   ;; would cons per byte. () when the text is not an object.
+   ;; the first line, the text, then the blobs, each standing as (blob k) in its raw form, so
+   ;; the reader never conses a big literal per byte. () when the text is not an object.
    (wo-head text)                                   ; -> [(textlen bloblen ..) start]
     (:- (go 4 0 () 0) (go i n acc any)
      (text i @ c
@@ -465,8 +449,8 @@
        r (sound (two? h ? (snip text <>h (<>h + <<h)) text))
        (? !(two? r && two? <r) () (two? h) (wo-fill <r (wo-blobs text >(<h) (<>h + <<h))) <r))
    ;; opts: 'imports (name ..) the functions the environment supplies; 'exports (name ..) | 'all;
-   ;; 'stack bytes; 'base addr. an input is a tu, or its text -- read here, so nothing holds
-   ;; the forms but the functions they split into: the link's live set is one copy of the program
+   ;; 'stack bytes; 'base addr. an input is a tu, or its text -- read here, so the link holds
+   ;; one copy of the program
    (wasm-link tus0 opts)
     (: ntu #tus0
        ;; 1. per object: every tu-local label wears the tu's number, so two statics never meet,
@@ -519,11 +503,10 @@
        base (peep opts 'base 4096)
        (lay st forms) (w-lay-data forms (aup <st 16) syms (st 1) @ r [<r (r 1)])
        (lane st forms) (foldl lay st forms)
-       ;; a bracketed lane is read as an ARRAY of one struct, so its tus must BUTT: a
-       ;; 16-align between two of them is a gap the stride knows nothing about, and the
-       ;; drain then walks past the end. an explicit aligned(N) still lands, as its own form.
+       ;; a bracketed lane is read as an array of one struct, so its tus butt, with no 16-align
+       ;; between them; an explicit aligned(N) still lands, as its own form
        (snug st forms) (w-lay-data forms <st syms (st 1) @ r [<r (r 1)])
-       (bracket nm st forms)                          ; the pair around one lane's whole
+       (bracket nm st forms)
         (: a (aup <st 16) r (foldl snug [a (st 1)] forms)
            (pin syms (nom ("__start_" + nm)) ['data a],
             pin syms (nom ("__stop_" + nm)) ['data <r],
@@ -555,7 +538,7 @@
        owed0 (filter (x \ !(peep defd x 0) && atom? (peep syms x ())) refs)   ; a bracket is the link's
        ;; a weak reference nothing defines is null, as at a static link; the rest are imports
        wkall (foldl (\ a p (map (s \ pin a (nom s) 1) (p 3), a)) {} parts)
-       _ (pin wkall 'main 1)                            ; a module with a face of its own has no main; the runtime's start never runs
+       _ (pin wkall 'main 1)                            ; a module with its own exports has no main
        _ (map (x \ (peep wkall x 0 ? (pin syms x '(null)) 0)) owed0)
        owed (filter (x \ !(peep wkall x 0)) owed0)
        allowed (map nom (peep opts 'imports ()))
@@ -591,7 +574,7 @@
                   seen {}                                 ; a weak twin names the same export once
                   (ff s) (seen s @ () (pin seen s 1, two? (syms (nom s))))
                   (e = 'all ? (catmap (p \ filter ff (p 1)) parts) e))
-       ;; each function lowered and encoded as it comes: a body is a string from here on
+       ;; each function lowered and encoded as it comes, a body a string from here on
        funcs (map (f \ (wasm-fn (f 1) 'uni syms @ r [0 (wentry <r >r)])) fns)
        {'types '(((i64 i64 i64 i64 i64 i64 i64 i64 f64 f64 f64 f64 f64 f64 f64 f64) (i64 i64 f64 f64)))
         'imports (map (x \ ["env" (show x) '(func 0)]) imps)

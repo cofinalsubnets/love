@@ -1,40 +1,30 @@
-; dialect -- the x86-64 assembler-text lens: AT&T and Intel are two spellings of one parsed
-; instruction, and this file is a reader and a shower for each over that one value. nothing here
-; encodes: src/love/holo/as.l is the physical encoder and reads the value this file produces,
-; so `as` takes either dialect and the two spellings can be converted through the middle
-; (src/apps/lapiz.l lists both under the 'x86 hub).
+; dialect -- AT&T and Intel x86-64 text as two spellings of one parsed instruction: a reader
+; and a shower for each. nothing here encodes; as.l encodes the value.
 ;
 ;   (att-read s)  (att-show items)  (intel-read s)  (intel-show items)
 ;
-; --- the middle ---
-; a file is a list of items, one per non-blank line:
+; a file is a list of items, one per non-blank statement:
 ;   ('op mn w ops)        an instruction: the canonical stem, the operand size in bytes (0 = unstated),
 ;                         the operands DESTINATION FIRST -- Intel's order, the manual's, and holo's
 ;   ('label sym)  ('globl sym)  ('dir name rest)     -- rest is the directive's tail, verbatim
 ; an operand:
 ;   ('rg enc w)   a register, w in 1/2/4/8 (16 = an xmm register; ah..bh sit at 20..23)   ('cr n) ('dr n)
-;   ('im n)  ('ims sym)  ('lbl sym)  ('rip sym off)  ('ind o)  ('mem base index scale disp)
+;   ('im n)  ('ims sym)  ('lbl sym)  ('rip sym off)  ('ind o)  ('sr n)
+;   ('mem base index scale disp [sym])   an absent register is -1
 ; a statement ends at a newline or a `;`, a comment starts at `#` or `//`, and an immediate may
-; be a C expression over numbers (`$~(1 << 2)`) -- the GNU rules, so an inline-asm template
-; (src/love/holo/gas.l) reads through the same door as a whole .s file.
+; be a C expression over numbers (`$~(1 << 2)`) -- the GNU rules.
 ; a memory operand under a segment override is ('seg fs o); lock/rep/repne are items of their own
-; ahead of the instruction they prefix. a memory operand's absent register is -1. the stem folds
-; away what the dialects disagree on:
-; the at&T size suffix (movl -> mov, w 4), the sign/zero-extend family (movzbl / movzx eax, BYTE
-; PTR -> movzb, w = the destination's), and the nullaries at&T names c<from>t<to> (cltq -> cdqe).
+; ahead of the instruction they prefix. the stem folds away what the dialects disagree on: the
+; AT&T size suffix (movl -> mov, w 4), the extend family (movzbl / movzx eax, BYTE PTR -> movzb,
+; w the destination's), and AT&T's c<from>t<to> nullaries (cltq -> cdqe).
 ;
-; --- the laws (test/holo/as.l proves them over the golden battery, test/gate/dialect.sh over
-; gcc's own two outputs of every test/cc file) ---
-;   (att-read (att-show v)) = v   and   (intel-read (intel-show v)) = v
-; so intel = intel-show * att-read is a conversion, and it encodes to the same bytes. reading is
-; a retraction: a suffix a register already carries, a PTR an SSE mnemonic already implies, the
-; spaces inside a bracket, gcc's quoted symbols, `-12[rbp]` against `[rbp - 12]` all land on one
-; value, and the shower picks one spelling. what neither surface carries -- a symbolic
-; displacement off anything but rip -- scares in the reader, so a typo never drops out.
+; the laws: (att-read (att-show v)) = v and (intel-read (intel-show v)) = v, so intel-show *
+; att-read converts. reading is a retraction: a redundant suffix or PTR, spacing, gcc's quoted
+; symbols, `-12[rbp]` against `[rbp - 12]` all land on one value. a symbolic displacement off a
+; base or index scares in the Intel reader; AT&T reads it as mem's sym, which neither shower spells.
 
 (module 'holo
-(: ;; --- the physical register file, both ways: a name -> (enc w), and (enc w) -> the name. the
-   ;; low 8 have irregular byte/word names, so spell the rows; r8..r15 and xmm0..15 are uniform. ---
+(: ;; the register file both ways: a name -> (enc w), and (enc w) -> the name
    xa-regs  {}
    xa-names {}
    ;; the prefix words a line may open with, each its own item ahead of the instruction
@@ -55,20 +45,19 @@
                    xa-reg! (n + "w") i 2, xa-reg! (n + "b") i 1, 0)))
         0 '(8 9 10 11 12 13 14 15))
    _ (foldl (\ _ i (xa-reg! ("xmm" + show i) i 16, 0)) 0 ^16)
-   ;; the high bytes ah/ch/dh/bh share slots 4..7 with spl/bpl/sil/dil (REX tells them apart), so
-   ;; they sit 16 above -- a value the encoder can see is not a byte it lays
+   ;; ah/ch/dh/bh share 4..7 with spl/bpl/sil/dil (REX tells them apart), so they sit 16 above
    _ (foldl (\ _ r (xa-reg! <r <>r 1, 0)) 0 '(("ah" 20) ("ch" 21) ("dh" 22) ("bh" 23)))
-   (xa-reg nm) (xa-regs (name nm) @ r (two? r ? ['rg <r <>r]))    ; a register operand, or ()
+   (xa-reg nm) (xa-regs (name nm) @ r (two? r ? ['rg <r <>r]))    ; or ()
    (xa-regname o) (xa-names (<>o * 32 + <>>o))
    (xa-gpr? o) (<o = 'rg && <>>o < 16)
-   (xa-cr s) (#s = 3 && s 0 = 99 && s 1 = 114 && digit? (s 2) ? ['cr (s 2 - 48)] ())   ; a control register
-   (xa-dr s) (#s = 3 && s 0 = 100 && (s 1 = 98 || s 1 = 114) && 48 <= s 2 <= 55 ? ['dr (s 2 - 48)] ())   ; a debug register, db or dr
-   (xa-sr s) (: (go l i) (? !(two? l) () (<l = s) ['sr i] (go >l (i + 1)))   ; a segment register, es..gs = 0..5
+   (xa-cr s) (#s = 3 && s 0 = 99 && s 1 = 114 && digit? (s 2) ? ['cr (s 2 - 48)] ())
+   (xa-dr s) (#s = 3 && s 0 = 100 && (s 1 = 98 || s 1 = 114) && 48 <= s 2 <= 55 ? ['dr (s 2 - 48)] ())   ; db or dr
+   (xa-sr s) (: (go l i) (? !(two? l) () (<l = s) ['sr i] (go >l (i + 1)))   ; es..gs = 0..5
               (go '("es" "cs" "ss" "ds" "fs" "gs") 0))
-   ;; an immediate written as a C expression, `~(1 << 2)` -- the lexer and gimm below evaluate it
+   ;; an immediate written as a C expression, `~(1 << 2)`
    (xa-expr? v) (#v > 0 && (v 0 = 40 || v 0 = 126 || ((v 0 = 45 || v 0 = 43) && #v > 1 && (v 1 = 40 || v 1 = 126))))
 
-   ;; --- numerals: decimal, 0x-hex, optionally signed -- every byte, or it is not one. ---
+   ;; numerals: decimal or 0x-hex, optionally negative -- every byte, or it is not one
    (xa-hexd c) (hexv c @ v (v < 0 ? (scare 'as-hexdigit c) v))
    (xa-decv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
    (xa-hexv s) (foldl (a \ i \ a * 16 + xa-hexd (s i)) 0 ^#s)
@@ -81,7 +70,7 @@
    (xa-num? s) (? (xa-neg? s) (xa-num? (snip s 1 #s))
                   (xa-hex? s) (xa-allof? s ghex? 2)
                   (xa-allof? s digit? 0))
-   (xa-imm s) (xa-num? s ? (xa-num s) (scare 'as-badnum s))       ; a number where one is required
+   (xa-imm s) (xa-num? s ? (xa-num s) (scare 'as-badnum s))
    ;; a symbol, or a symbol with an offset either side: sym, sym+4, sym-8, 4+sym -> (sym . off)
    (xa-symoff s) (: i ((: (g i) (? (i >= #s) -1 (s i = 43 || s i = 45) i (g (i + 1)))) 1)
                     (? (i < 0) ((name (xa-unquote s)) . 0)
@@ -89,7 +78,7 @@
                        ((name (xa-unquote (snip s (i + 1) #s))) . (xa-num (snip s 0 i)))
                        ((name (xa-unquote (snip s 0 i))) . (xa-imm (snip s (s i = 43 ? (i + 1) i) #s)))))
 
-   ;; -- the lexer: one line -> tokens (sym "s") (num n) (pct "reg") (lref n dir) (ch c) (op "<<"). --
+   ;; the lexer: one line -> tokens (sym "s") (num n) (pct "reg") (lref n dir) (ch c) (op "<<")
    (galpha? c) (alpha? c || c = 95 || c = 46)
    (gidc? c) (galpha? c || digit? c)
    (ghex? c) (hexv c >= 0)
@@ -122,8 +111,7 @@
                 (go (i + 1) (['ch c] . acc)))))
       (go 0 ()))
 
-   ;; -- immediate expressions: C's operators over numbers, the way `$~(1 << 2)` and `#(3 << 20)`
-   ;; are written. each level answers (value . rest) | 'bad. --
+   ;; immediate expressions, `$~(1 << 2)` and `#(3 << 20)`: each level answers (value . rest) or 'bad
    (gbad? x) (x = 'bad)
    (gprim ts) (!(two? ts) ? 'bad
        (<ts @ t
@@ -160,7 +148,6 @@
    (gexpr ts) (gprim ts @ r (gbad? r ? 'bad (gclimb <r >r 1)))
    (gimm ts) (gexpr ts @ r (gbad? r || two? >r ? (scare 'gas-immediate ts) <r))   ; the whole run, or nothing
 
-   ;; --- string helpers over the byte string. ---
    (xa-has? s c) ((: (g i) (? (i >= #s) 0 (s i = c) 1 (g (i + 1)))) 0)
    (xa-idx s c)  ((: (g i) (? (i >= #s) -1 (s i = c) i (g (i + 1)))) 0)
    (xa-trim s)   (: n #s
@@ -197,16 +184,14 @@
                            (s i = 44 && d = 0) (g (i + 1) (i + 1) 0 (xa-trim (snip s st i) . acc))
                            (g (i + 1) st d acc))) 0 0 0 ()))
    (xa-ops rest) (0 = #rest ? () (xa-oplist rest))
-   ;; the head word and the tail of a line
    (xa-cut s)   (: i (xa-idx s 32) j (xa-idx s 9)
                    (? (i < 0) j (j < 0) i (i < j) i j))
    (xa-mnem s)  (xa-cut s @ k (k < 0 ? s (snip s 0 k)))
    (xa-rest s)  (xa-cut s @ k (k < 0 ? "" (xa-trim (snip s k #s))))
    (xa-join sep l) (!(two? l) ? "" (foldl (\ a s (a + sep + s)) <l >l))
 
-   ;; --- the operand size. stated by an at&T suffix or an Intel PTR; else read off the
-   ;; destination's GPR, else the first GPR's; 0 when nothing says. a stated size that disagrees
-   ;; with that register is a clash, not a choice. ---
+   ;; the operand size: stated by an AT&T suffix or an Intel PTR, else the first GPR's (the
+   ;; destination's when it is one), else 0. a stated size that disagrees with it is a clash
    (xa-sfxw c) (c @ 98 1 119 2 108 4 113 8 0)
    (xa-wsfx w) (w @ 1 "b" 2 "w" 4 "l" 8 "q" "")
    (xa-gprw ops) (foldl (\ a o (a > 0 ? a (xa-gpr? o ? <>>o 0))) 0 ops)
@@ -215,20 +200,20 @@
          (? (sw = 0) rw
             (rw > 0 && rw != sw) (scare 'as-widthclash [sw rw])
             sw))
-   ;; the stems that take an at&T size suffix
+   ;; the stems that take an AT&T size suffix
    xa-sfxable '(mov add or and sub xor cmp test neg not inc dec push pop lea
                 imul mul div idiv adc sbb sal shl shr sar rol ror shld shrd xchg bswap bsr bsf
                 xadd cmpxchg bt bts btr btc tzcnt lzcnt popcnt movnti
                 movabs cvttsd2si cvttss2si cvtsd2si cvtss2si cvtsi2sd cvtsi2ss)
-   ;; the nullaries at&T spells c<from>t<to>, and Intel c<from><to>; the middle keeps Intel's
+   ;; the nullaries AT&T spells c<from>t<to>, and Intel c<from><to>; the middle keeps Intel's
    xa-att-nil {'cltq 'cdqe  'cltd 'cdq  'cqto 'cqo  'cwtl 'cwde  'cbtw 'cbw  'cwtd 'cwd
                'retq 'ret  'leaveq 'leave  'xlatb 'xlat}
    xa-nil-att {'cdqe 'cltq  'cdq 'cltd  'cqo 'cqto  'cwde 'cwtl  'cbw 'cbtw  'cwd 'cwtd}
-   ;; the memory operand size an SSE mnemonic (and an indirect branch) implies: Intel spells it
-   ;; as a PTR, at&T not at all, and neither makes it the operand size
-   ;; the string ops: Intel's names in the middle; at&T spells the 4-byte ones with an l
+   ;; the string ops: Intel's names in the middle; AT&T spells the 4-byte ones with an l
    xa-strl {'movsl 'movsd 'cmpsl 'cmpsd 'stosl 'stosd 'lodsl 'lodsd 'scasl 'scasd 'insl 'insd 'outsl 'outsd}
    xa-strd {'movsd 'movsl 'cmpsd 'cmpsl 'stosd 'stosl 'lodsd 'lodsl 'scasd 'scasl 'insd 'insl 'outsd 'outsl}
+   ;; the memory operand size an SSE mnemonic (and an indirect branch) implies: Intel spells it
+   ;; as a PTR, AT&T not at all, and neither makes it the operand size
    xa-ptrfix {'movsd 8 'movss 4 'movq 8 'movd 4 'movaps 16 'movapd 16
           'movdqa 16 'movdqu 16 'movups 16 'movupd 16
           'addsd 8 'subsd 8 'mulsd 8 'divsd 8 'sqrtsd 8 'maxsd 8 'minsd 8
@@ -238,7 +223,7 @@
           'cvtss2sd 4 'cvtsd2ss 8 'cvttsd2si 8 'cvttss2si 4 'cvtsd2si 8 'cvtss2si 4
           'call 8 'jmp 8}
    (xa-branch? mn) (elem mn '(call jmp))
-   ;; push/pop of an immediate or memory are 64-bit unless sized: at&T writes pushq $5, Intel push 5
+   ;; push/pop of an immediate or memory are 64-bit unless sized: AT&T writes pushq $5, Intel push 5
    (xa-w64 mn w) (w = 0 && elem mn '(push pop) ? 8 w)
    (xa-xmm? ops) (foldl (\ a o (a > 0 ? a (<o = 'rg && <>>o = 16))) 0 ops)
    ;; the sign/zero-extend family: stem movs<src>/movz<src>, w the destination's
@@ -247,8 +232,8 @@
    (xa-ptrword w) (w @ 1 "BYTE" 2 "WORD" 4 "DWORD" 8 "QWORD" 16 "XMMWORD" "")
    (xa-ptrsz s) (s @ "byte" 1 "word" 2 "dword" 4 "qword" 8 "xmmword" 16 0)
 
-   ;; --- the line shapes both dialects share: blank, `name:`, `.directive tail`. a line answers
-   ;;     its items: none, one, or a prefix word's and then the instruction's ---
+   ;; the line shapes both dialects share: blank, `name:`, `.directive tail`. a line answers
+   ;; its items: none, one, or prefix words' and then the instruction's
    (xa-line raw insn)
       (xa-trim (xa-decomment raw) @ s
          (? (0 = #s) ()
@@ -258,7 +243,6 @@
                (? (mn = ".globl" || mn = ".global") [['globl (name (xa-unquote rest))]]
                   (mn = ".intel_syntax" || mn = ".att_syntax") ()
                   [['dir mn rest]]))
-            ;; the prefix words peel off the front, each its own item ahead of the instruction
             (: (pre mn rest acc)
                  (xa-prefix (name mn) @ pfx
                     (? !(nom? pfx) (rev ((insn mn rest) . acc))
@@ -273,10 +257,9 @@
                                 (line it))))
              "" items)
 
-   ;; ================================================================ at&T
-   ;; --- operands: %reg, $imm, $sym, disp(base,index,scale), sym(%rip), sym+4(%rip), *ind, label ---
+   ;; AT&T operands: %reg, $imm, $sym, disp(base,index,scale), sym(%rip), sym+4(%rip), *ind, label
    (at-reglook nm) (xa-reg nm @ r (two? r ? r (scare 'as-badreg nm)))
-   ; a %reg field, or absent; a 16-bit one (bx bp si di, 16-bit addressing) is marked +32
+   ; a %reg field, or absent; a 16-bit one (bx bp si di) is marked +32
    (at-mreg f) (0 = #f ? -1 (at-reglook (snip f 1 #f) @ r (<>>r = 2 ? (<>r + 32) <>r)))
    (xa-mregname n) (n >= 32 ? (xa-names ((n - 32) * 32 + 2)) (xa-names (n * 32 + 8)))
    (at-operand t)
@@ -315,7 +298,7 @@
    (xa-abs mn o) (? !(<o = 'abs) o
                     (xa-branch? mn || xa-cc? mn) ['lbl <>o]
                     ['mem -1 -1 1 <>o])
-   ;; --- the mnemonic: a size suffix off a suffixable stem, the extend family, the nullaries ---
+   ;; the mnemonic: a size suffix off a suffixable stem, the extend family, the nullaries
    (at-mnw s) (: n #s l (name s)
       (? (xa-att-nil l) [(xa-att-nil l) 0]
          (n = 6 && (starts? s "movs" || starts? s "movz")
@@ -332,7 +315,6 @@
             ['op st (xa-w64 st (xa-width (mw 1) ops)) ops]))
    (att-read s) (xa-read s at-insn)
 
-   ;; --- the shower ---
    (at-off n) (n = 0 ? "" ((n > 0 ? "+" "") + show n))
    (at-op o)
       (<o @ 'rg ("%" + xa-regname o)
@@ -362,9 +344,8 @@
                              ("\t" + at-mn mn w ops
                               + (two? ops ? ("\t" + xa-join ", " (map at-op (rev ops))) "") + "\n"))))
 
-   ;; ================================================================ Intel
-   ;; --- operands: reg, imm, OFFSET [FLAT:]sym, [SIZE PTR] disp[base+index*scale], sym[rip],
-   ;;     [rip+sym+4], label. an operand comes back as (ptr-size . operand), size 0 when no PTR. ---
+   ;; Intel operands: reg, imm, OFFSET [FLAT:]sym, [SIZE PTR] disp[base+index*scale], sym[rip],
+   ;; [rip+sym+4], label. an operand comes back as (ptr-size . operand), size 0 when no PTR
    (in-ptr l)                                   ; -> (size . rest), from the lowercased text
       (: k (xa-cut l)
          sz (k < 0 ? 0 (xa-ptrsz (snip l 0 k)))
@@ -426,7 +407,7 @@
    (in-insn mn rest)
       (: l (name (lower mn)) prs (map (t \ in-operand l t) (xa-ops rest))
          ops (map (p \ >p) prs)
-         psz (foldl (\ a p (a > 0 ? a <p)) 0 prs)          ; the PTR size, if one operand said
+         psz (foldl (\ a p (a > 0 ? a <p)) 0 prs)
          (? (xa-att-nil l) ['op (xa-att-nil l) 0 ops]
             (xa-branch? l) ['op l 0 (map (o \ (<o = 'rg || <o = 'mem || <o = 'rip) ? ['ind o] o) ops)]
             (elem l '(movsx movzx movsxd))
@@ -438,7 +419,6 @@
             ['op l (xa-w64 l (xa-width (l = 'lea ? 0 psz) ops)) ops]))
    (intel-read s) (xa-read s in-insn)
 
-   ;; --- the shower ---
    (in-mem-op o)
       (<o @ 'rip ("[rip" + (nom? <>o ? ("+" + show <>o + at-off <>>o) (<>>o < 0 ? show <>>o ("+" + show <>>o))) + "]")
             (: b (o 1) ix (o 2) sc (o 3) d (o 4) sy (5 < #o ? (o 5) ())

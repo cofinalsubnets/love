@@ -1,26 +1,18 @@
-; elf -- a minimal static-executable linker: it wraps assembled bytes in a Linux ELF so the kernel
-; will load and run them. one PT_LOAD segment maps the whole file (headers included) at a fixed base;
-; the entry point is the first byte of code. it is the smallest thing that turns the assembler's
-; output into a file you can chmod +x and run -- the literal "probe the binary" proof. it is target-
-; aware: pass 'x64 or 'a64 and it assembles with that backend and stamps the matching e_machine
-; (the rest of the ELF is identical across both -- 64-bit LSB ET_EXEC).
+; elf -- a minimal static-executable writer: assembled bytes in an ELF whose one PT_LOAD maps
+; the whole file (headers included) at a fixed base, entry at the first code byte. the target
+; picks the backend and e_machine.
 ;
-; `elf64` takes a target and a program-builder (\ dataddr -> IR): the builder is handed the absolute
-; address its trailing data will live at, so a program can `li` a pointer to its own string. the
-; round trip: assemble once with a placeholder to measure the code (every address here is < 2^31, so
-; the immediate-load is the stable short form and the length doesn't move), place the data just past
-; it, then assemble for real. load after holo.l + the backend(s).
+; `elf64` takes a target and a program-builder (\ dataddr -> IR), handed the address its
+; trailing data will live at. it assembles once with a placeholder to measure the code (every
+; address is < 2^31, so the length does not move), then for real. load after holo.l + the backend(s).
 
 (module 'holo
 (borrow 'posix)
 
 (: elf-base 4194304                                            ; 0x400000, the classic et_exec base
-   elf-hdr  120                                                ; 64-byte ELF header + 56-byte phdr (catall is in holo.l)
-   ; canonical keys only (src/love/boot/prel.l's arch-canon): every spelling anyone types is
-   ; already one of these by the time a target reaches holo, so a second alias here would
-   ; be a second place to keep in step.
-   ;; the table records: Elf64_Sym (24 bytes) and Elf64_Shdr (64), and the elf32 twins (16
-   ;; and 40). Elf32_Sym puts st_value and st_size ahead of st_info/st_other/st_shndx.
+   elf-hdr  120                                                ; 64-byte ELF header + 56-byte phdr
+   ;; Elf64_Sym (24 bytes) and Elf64_Shdr (64), and the elf32 twins (16 and 40).
+   ;; Elf32_Sym puts st_value and st_size ahead of st_info/st_other/st_shndx.
    (elf-sym nameoff bind typ shndx value size)
     (catall [(le32 nameoff) [(bind << 4 | typ) 0] (le16 shndx) (le64 value) (le64 size)])
    (elf-shdr nm ty fl ad off sz lk inf al es)
@@ -31,22 +23,19 @@
    (elf-shdr32 nm ty fl ad off sz lk inf al es)
     (catall [(le32 nm) (le32 ty) (le32 fl) (le32 ad) (le32 off) (le32 sz)
              (le32 lk) (le32 inf) (le32 al) (le32 es)])
-   elf-machines {'x64 62 'a64 183
+   elf-machines {'x64 62 'a64 183                              ; canonical keys only (prel.l's arch-canon)
                  'thumb1 40 'thumb2 40 'thumb2sp 40 'arm 40    ; EM_ARM
                  'i386 3 'i386m16 3                            ; EM_386, the 16-bit face's code too
-                 'rv64 243}                                  ; em_rv64
+                 'rv64 243}                                  ; EM_RISCV
 
-   ;; one 56-byte program header. p_paddr is p_vaddr's twin on every hosted target -- the
-   ;; kernel lane is where they part (a high virtual address loaded at a low physical one).
+   ;; one 56-byte program header. p_paddr differs from p_vaddr only for a kernel loaded low.
    (elf64-phdr ty fl off va pa fsz msz al)
     (catall [(le32 ty) (le32 fl) (le64 off) (le64 va) (le64 pa)
              (le64 fsz) (le64 msz) (le64 al)])
 
-   ;; the 64-byte ELF header + N program headers (each already 56 bytes of elf64-phdr).
-   ;; etype = 2 (ET_EXEC, fixed base) or 3 (ET_DYN, a static-PIE the kernel loads at a random
-   ;; base -- the mooncc `-pie` path, whose data pointers self-relocate at startup).
-   ;; sh is () for a headerless image, or (shoff shnum shstrndx) to point at a section-header
-   ;; table -- the symbol table rides there, past p_filesz, mapped by nothing and read by nm/gdb.
+   ;; the 64-byte ELF header + N elf64-phdrs. etype 2 ET_EXEC, or 3 ET_DYN (a static-pie that
+   ;; self-relocates at startup). sh is () for no section headers, or (shoff shnum shstrndx):
+   ;; that table lies past p_filesz, mapped by nothing, for nm/gdb.
    (elf64-hdrn etype entry machine sh phs)
     (: shoff (two? sh ? <sh 0) shnum (two? sh ? <>sh 0) shstrx (two? sh ? <>>sh 0)
        rv64? (machine = 243)
@@ -58,26 +47,21 @@
         (le16 #phs) (le16 (two? sh ? 64 0)) (le16 shnum) (le16 shstrx)
         (catall phs)]))
 
-   ;; the 120-byte header for a single R+X+W load segment at `base` covering the whole file.
-   ;; memsz >= filesz: the excess is .bss, address space the kernel hands over already
-   ;; zeroed. an image with no .bss passes filesz for both, and the segment is exactly its file.
+   ;; the 120-byte header for one rwx load segment at `base` covering the whole file;
+   ;; memsz past filesz is .bss, zeroed by the kernel.
    (elf64-hdr etype base entry filesz memsz machine sh)
     (elf64-hdrn etype entry machine sh
-                ; globals ride the one segment as labeled raw data (cc stage 3)
                 [(elf64-phdr 1 7 0 base base filesz memsz 4096)])
 
-   ;; build a complete executable image for target, loaded at `base`. `mkprog` is (\ dataddr -> IR);
-   ;; `data` is the byte list appended after the code. returns a tablet { 'bytes 'entry 'dataddr }.
-   ;; (the classic ET_EXEC base 0x400000 suits a Linux userland binary; a qemu-virt bare-metal image
-   ;; wants 0x40000000, the start of that board's RAM.)
+   ;; an executable image for target loaded at `base`; `data` is the bytes after the code.
+   ;; -> { 'bytes 'entry 'dataddr }
    (elf64-at base target mkprog data)
       (: machine (elf-machines target)
          _ (!machine ? (scare 'no-elf-machine target))
-         org (base + elf-hdr)                                          ; the vaddr of the first code byte
-         probe-len #(holo-bytes-at target (mkprog (base + 65536)) org)  ; measure the code (length stable)
+         org (base + elf-hdr)
+         probe-len #(holo-bytes-at target (mkprog (base + 65536)) org)
          dataddr (base + elf-hdr + probe-len)
-         ;; assemble at org so labels carry absolute load addresses -- pc-relative fixups are
-         ;; unchanged; an abs64 data pointer (cc's static char*/fn-ptr tables) resolves outright.
+         ;; at org, labels carry load addresses, so an abs64 data pointer resolves outright
          code (holo-bytes-at target (mkprog dataddr) org)
          filesz (elf-hdr + #code + #data)
          entry (base + elf-hdr)
@@ -87,23 +71,15 @@
 
    elf-hdr32 84                                                ; 52-byte ELF32 header + 32-byte phdr
 
-   ;; -- the elf32 twins. not one shape at two widths, which is why they are their own
-   ;; doors: an Elf32_Phdr keeps p_flags seventh where an Elf64_Phdr keeps it second (64
-   ;; bits moved it up to close an alignment hole), so no width knob reaches it. the file
-   ;; header and the section header do hold their order, but nothing yet asks either for a
-   ;; class-generic door -- when the 32-bit link does, link.l's field table is where it
-   ;; comes from. obj.l's objsecs/objsecs32 is the same split for the same reason.
-
+   ;; -- the elf32 twins: an Elf32_Phdr keeps p_flags seventh, an Elf64_Phdr second,
+   ;; so no width knob covers both.
    ;; one 32-byte program header.
    (elf32-phdr ty fl off va pa fsz msz al)
     (catall [(le32 ty) (le32 off) (le32 va) (le32 pa)
              (le32 fsz) (le32 msz) (le32 fl) (le32 al)])
 
-   ;; the 52-byte ELF32 header + N program headers (each already 32 bytes of elf32-phdr).
-   ;; e_entry carries the thumb bit on em_arm -- bit 0 is how a loader knows to enter in
-   ;; Thumb state, and an M-profile part has no other state to enter. every EM_ARM backend
-   ;; here is a Thumb one, so the machine number is the whole test. e_flags says eabi
-   ;; version 5, the tag an arm reader checks first (obj.l stamps the same on its .o).
+   ;; the 52-byte ELF32 header + N elf32-phdrs. on EM_ARM, e_entry carries the thumb bit
+   ;; (every arm backend here emits thumb) and e_flags is the caller's eflags.
    (elf32-hdrn etype entry machine eflags sh phs)
     (: shoff (two? sh ? <sh 0) shnum (two? sh ? <>sh 0) shstrx (two? sh ? <>>sh 0)
        arm? (machine = 40)
@@ -115,20 +91,16 @@
         (le16 #phs) (le16 (two? sh ? 40 0)) (le16 shnum) (le16 shstrx)
         (catall phs)]))
 
-   ;; the 84-byte header for a single R+X+W load segment at `base` covering the whole file.
+   ;; the 84-byte header for one rwx load segment at `base` covering the whole file
    (elf32-hdr etype base entry filesz memsz machine eflags sh)
     (elf32-hdrn etype entry machine eflags sh
                 [(elf32-phdr 1 7 0 base base filesz memsz 4096)])
 
-   ;; e_flags for an EM_ARM EXECUTABLE. eabi version 5 is the tag every arm reader checks
-   ;; first; the float-abi bit beside it says how a float crosses a call, and it belongs to
-   ;; the LINK -- an .o carries 0x05000000 whatever its abi, gcc's included, and ld derives
-   ;; the executable's bit from the inputs' attributes. a seat with an fpu is hard-float
-   ;; here, since mooncc has no softfp lane.
+   ;; e_flags for an EM_ARM executable: eabi 5 (0x05000000), plus ABI_FLOAT_HARD (0x400) for
+   ;; a target with an fpu, mooncc having no softfp lane. a .o carries plain 0x05000000.
    (arm-eflags target) (elem target '(thumb2 thumb2sp arm) ? 83887104 83886080)
 
-   ;; elf64-at's twin at 32 bits. `entry` answers the code address, even -- the thumb bit
-   ;; is the header's business, not an address you can compare or disassemble at.
+   ;; elf64-at's twin at 32 bits. 'entry is the even code address; the thumb bit is the header's.
    (elf32-at base target mkprog data)
       (: machine (elf-machines target)
          _ (!machine ? (scare 'no-elf-machine target))
@@ -141,19 +113,14 @@
          res {'bytes img 'entry org 'dataddr dataddr})
    (elf32 target mkprog data) (elf32-at elf-base target mkprog data)
 
-   ;; write a byte list to a file. the bytes ride a cask, not a string: a cask is the
-   ;; byte array and says raw, where a string is text that merely happens to be bytes
-   ;; today. a BLOB item (holo.l's item-len) is already those bytes, so it goes to the
-   ;; port whole -- casking it would rebuild the list the blob exists to avoid.
+   ;; write a byte list to a file, as casks; a string item (holo.l's blob) goes out whole.
    (write-bytes path bs)
     (: q (open path "w")
-       ;; the runs between blobs: short by construction (a header, a length word), so the
-       ;; copy `rev` makes is bounded by them and not by the object
+       ;; the runs between blobs are short, so the `rev` copy stays small
        (go l acc) (? !(two? l) (say q (cask (rev acc)))
                      (string? <l) (say q (cask (rev acc)), say q <l, go >l ())
                      (go >l (<l . acc)))
-       ;; ..and an object with no blob in it goes out in one cask, untouched. the walk
-       ;; that asks costs no cell, where running it through `go` would copy the lot twice.
+       ;; a list with no blob goes out in one cask, uncopied
        (any string? bs ? (go bs ()) (say q (cask bs)),
         close q)))
 ) ; module 'holo
