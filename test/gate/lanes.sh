@@ -2,7 +2,7 @@
 # test/gate/lanes.sh -- run a gate's lanes at once: one make, its jobserver the gate's budget,
 # so a gate takes about its slowest lane instead of the sum. a log and an exit per lane.
 #
-# usage: lanes.sh [-j N] [-d DIR] [--slow] LANE|test_extra|test_core ...
+# usage: lanes.sh [-j N] [-d DIR] [--slow] [--remote] LANE|test_extra|test_core ...
 #
 #   1. the lanes' own prerequisites (host, love0, a lane another lane names) build once, first
 #   2. what lanes otherwise build from inside their recipes (kernels, the wasm seat) builds once
@@ -11,6 +11,11 @@
 #   4. the lanes that rebuild love0 under another cc, alone
 #   5. --slow: test_slow last and alone, on the same tree, only after every lane is green,
 #      taking the lanes this run just passed as passed
+#
+# --remote: the lanes the lane map places off this box go to the lanes hosts (love bee --on
+# lanes): each host's kept tree is synced and its prerequisites made there once, then its slots
+# take those lanes longest first. this box takes them too once its own are done, and a host that
+# drops gives its lane back to run here, never skipped. a lane's .rc names where it ran
 #
 # heavy slots are the caller's: `love bee --lock --heavy --out out -- sh test/gate/lanes.sh ..`.
 # N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary; the last run's in DIR.prev.
@@ -46,12 +51,13 @@ if [ "${1:-}" = --chain ]; then
   exit $st
 fi
 
-j= d=out/lanes slow= args=
+j= d=out/lanes slow= remote=${LANES_REMOTE:-} args=
 while [ $# -gt 0 ]; do
   case $1 in
     -j) j=$2; shift 2 ;;
     -d) d=$2; shift 2 ;;
     --slow) slow=1; shift ;;
+    --remote) remote=1; shift ;;
     -*) echo "lanes.sh: unknown flag $1" >&2; exit 2 ;;
     *) args="$args $1"; shift ;;
   esac
@@ -111,6 +117,89 @@ chains=$(echo "$map" | sed -n 's/^chain //p')
 alone=$(echo "$map" | sed -n 's/^alone //p')
 [ -n "$chains" ] && [ -n "$alone" ] || { echo "FAIL the lane map has no chains or no alone set"; exit 1; }
 
+# the remote half: a queue of the placed lanes, dearest first, that the hosts' slots and then
+# this box take from; a take is a rename, so no lane is taken twice
+places=$(echo "$map" | sed -n 's/^place //p')
+costs=$(echo "$map" | sed -n 's/^cost //p')
+mkdir -p "$d/q" "$d/qt"
+# a place may name isas after its class (`place test_libc source x64`): pop ISA EXACT takes
+# only a lane that isa may run, a bare pop any
+# lane, an exact one only where EXACT is 1: a host whose own build is this box's, byte for byte
+isas() { echo "$places" | awk -v l="$1" '$1 == l { for (i = 3; i <= NF; i++) print $i }'; }
+class() { echo "$places" | awk -v l="$1" '$1 == l { print $2 }'; }
+pop() {
+  for f in $(ls "$d/q"); do
+    l=${f#*-}
+    if [ -n "${1:-}" ]; then
+      a=$(isas "$l")
+      [ -z "$a" ] || echo "$a" | grep -qx "$1" || continue
+      [ "$(class "$l")" != exact ] || [ "${2:-}" = 1 ] || continue
+    fi
+    mv "$d/q/$f" "$d/qt/$f" 2>/dev/null && { echo "$l"; return 0; }
+  done
+  return 1
+}
+rlanes=
+if [ -n "$remote" ]; then
+  for l in $run; do
+    has "$l" "$alone" && continue
+    echo "$chains" | tr , '\n' | grep -qx "$l" && continue
+    case $(class "$l") in source|exact) ;; *) continue ;; esac
+    c=$(echo "$costs" | awk -v l="$l" '$1 == l { print $2 }')
+    touch "$d/q/$(printf '%06d' $(( 999999 - ${c:-900} )))-$l"
+    rlanes="$rlanes $l"
+  done
+fi
+rd=.love/run/lanes/$(basename "$PWD")
+rpre=
+for l in $rlanes; do for p in $(deps "$l"); do has "$p" "$rpre" || rpre="$rpre $p"; done; done
+roflags=
+for p in $rpre; do roflags="$roflags -o $p"; done
+# a strict box's lanes are strict there too: its env does not cross
+. test/gate/skip.sh
+rst=
+gate_strict && rst=LOVE_GATE_STRICT=1
+# a slot on host h: lanes until the queue is dry. a host that cannot be reached (75, or ssh's
+# 255) puts its lane back for this box and takes no more
+worker() {
+  while l=$(pop "$2" "$3"); do
+    s=$(date +%s)
+    out/love bee --on lanes --where "name=$1" --in "$rd" -- env $rst make --no-print-directory $roflags "$l" > "$d/$l.log" 2>&1
+    r=$?
+    if [ $r -eq 75 ] || [ $r -eq 255 ]; then
+      echo "lanes: $1 dropped $l ($r); it runs here" >> "$d/remote.log"
+      echo "$l" >> "$d/back"
+      return
+    fi
+    echo "$r $(( $(date +%s) - s )) $1" > "$d/$l.rc"
+  done
+}
+# a host: room enough (LANES_HOST_MEM_GB, 3, available there), its tree synced, its
+# prerequisites made, then a worker a slot
+rhost() {
+  k=$(out/love bee --on lanes --where "name=$1" -- awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)
+  [ -n "$k" ] && [ "$k" -ge $(( ${LANES_HOST_MEM_GB:-3} * 1048576 )) ] \
+    || { echo "lanes: $1 has ${k:-no} kB available, under ${LANES_HOST_MEM_GB:-3} GB; it takes no lanes" >> "$d/remote.log"; return; }
+  out/love bee --on lanes --where "name=$1" --in "$rd" --sync "$PWD" -- env $rst make -k -j4 $rpre > "$d/host-$1.log" 2>&1 \
+    || { echo "lanes: $1 could not make the prerequisites -- $d/host-$1.log" >> "$d/remote.log"; return; }
+  # exact lanes read the binary: this host's build must be this box's, byte for byte
+  x=0
+  case $(uname -m) in aarch64|arm64) me=a64 ;; riscv64) me=rv64 ;; *) me=x64 ;; esac
+  if [ "$3" = "$me" ]; then
+    [ "$(out/love bee --on lanes --where "name=$1" --in "$rd" -- sha256sum out/love out/love.raw 2>/dev/null)" = "$(sha256sum out/love out/love.raw)" ] && x=1
+    [ $x = 1 ] || echo "lanes: $1's love is not this box's; it takes no exact lanes" >> "$d/remote.log"
+  fi
+  i=0
+  while [ $i -lt "$2" ]; do worker "$1" "$3" "$x" & i=$((i + 1)); done
+  wait
+}
+if [ -n "$rlanes" ]; then
+  hl=$(out/love bee --on lanes --list 2>/dev/null)
+  echo "remote:$rlanes on $(echo "$hl" | awk '{ printf "%s%s(%s)", (NR > 1 ? " " : ""), $1, $2 }')"
+  echo "$hl" | { while read -r h n a; do [ -n "$h" ] && rhost "$h" "$n" "$a" & done; wait; } &
+  rpid=$!
+fi
+
 # step 2: the builds lanes would otherwise race from their recipes
 case $(uname -m) in aarch64|arm64) ha=a64 ;; riscv64) ha=rv64 ;; *) ha=x64 ;; esac
 any() { for x in "$@"; do has "$x" "$run" && return 0; done; return 1; }
@@ -134,7 +223,10 @@ done || exit 1
 # step 3: one make over the chains and the lone lanes
 mk=$d/lanes.mk
 par= late=
-for l in $run; do has "$l" "$alone" && late="$late $l" || par="$par $l"; done
+for l in $run; do
+  has "$l" "$rlanes" && continue
+  has "$l" "$alone" && late="$late $l" || par="$par $l"
+done
 {
   echo "all:"
   n=0
@@ -170,6 +262,19 @@ newer
 $MAKE -k -j"$j" -f "$mk" all > "$d/make.log" 2>&1
 moved "during the parallel phase"
 
+# the placed lanes no host has taken yet, here, j at a time; then the hosts' last, and any
+# lane a host gave back
+if [ -n "$rlanes" ]; then
+  steal() { while l=$(pop); do MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" $oflags -- "$l"; done; }
+  i=0
+  while [ $i -lt "$j" ]; do steal & i=$((i + 1)); done
+  wait
+  wait $rpid 2>/dev/null
+  [ -f "$d/back" ] && for l in $(cat "$d/back"); do MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" $oflags -- "$l"; done
+  while l=$(pop); do MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" $oflags -- "$l"; done
+  [ -f "$d/remote.log" ] && cat "$d/remote.log"
+fi
+
 # step 4: alone, in turn, step 1's targets old as in step 3: a lane's own make of host packs the
 # tree again and moves out/love
 for l in $late; do
@@ -193,12 +298,12 @@ done
 red=0
 sum() {
   if [ -f "$d/$1.rc" ]; then
-    read -r r s < "$d/$1.rc"
+    read -r r s w < "$d/$1.rc"
   else
-    r=missing s=0
+    r=missing s=0 w=
   fi
   [ "$r" = 0 ] || red=1
-  echo "$1 exit=$r secs=$s"
+  echo "$1 exit=$r secs=$s${w:+ on=$w}"
 }
 { for l in $lanes $groups; do sum "$l"; done; [ -f "$d/love-moved.rc" ] && sum love-moved; } > "$d/summary"
 grep -v 'exit=0 ' "$d/summary" > /dev/null && red=1

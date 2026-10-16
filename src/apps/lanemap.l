@@ -7,8 +7,12 @@
 ;   lanes-cost      lane -> its wall seconds on a shared box, measured; it only orders lanes
 ;   lanes-chains    the lanes that share scratch or sub-build one tree, each chain run in its order
 ;   lanes-alone     the lanes that rebuild love0 under another cc or run their own fleet: alone
+;   lanes-place     lane -> where it may run: "source" (a lanes host, built there) or "exact" (an
+;                   x64 one, on this box's pinned binary), then the isas it is held to, if any;
+;                   unnamed is local, here only. a lane is named once it has answered there as here
 ;   (lanes-doc _)   AGENTS.md's table, its lines (love bee --lanes-doc)
-;   (lanes-map _)   lanes.sh's chains and alone set, `chain A,B,..` and `alone A B ..` lines
+;   (lanes-map _)   lanes.sh's chains, alone set, places and costs: `chain A,B,..`, `alone A B ..`,
+;                   `place LANE CLASS` and `cost LANE SECS` lines
 ;                   (love bee --lanes-map)
 ;   (lanes-covers mk) test/test.mk's text -> lane -> the lanes it runs: its prerequisites and the
 ;                   targets of its recipe's $(MAKE) lines, read as written; and a path in the tree
@@ -21,7 +25,7 @@
 ;
 ; a glob's `*` crosses `/`; "baked" is the crew roster ($(ho)/.dist.list), not a glob. every
 ; change owes `make test` besides, and test_slow runs last on the tree that lands
-(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-doc lanes-map
+(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-place lanes-doc lanes-map
                  lanes-covers lanes-plan lanes-lines)
 
 (: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_ccarm" "test_ccrv64" "test_ccwasm"
@@ -77,13 +81,17 @@
    ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot; gcheck and tco0 build whole variant trees
    lanes-alone ["test_hdiff" "test_ccwarn" "test_gcheck" "test_tco0" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
 
+   lanes-place {"test" "source"}
+
    (lm-tick s) ("`" + s + "`")
    (lanes-doc _)
     (map (r \ r @ [label globs ls tail]
                 ("- " + (#label > 0 ? label (join ", " (map lm-tick globs))) + " -> " + join " " (map lm-tick ls) + tail))
          lanes-rules)
    (lanes-map _)
-    (map (c \ "chain " + join "," c) lanes-chains + [("alone " + join " " lanes-alone)])
+    (map (c \ "chain " + join "," c) lanes-chains + [("alone " + join " " lanes-alone)]
+     + map (l \ "place " + l + " " + lanes-place l) (sort (keys lanes-place))
+     + map (l \ "cost " + l + " " + show (lanes-cost l)) (sort (keys lanes-cost)))
 
    ; a glob's stars cross `/`: the first piece a prefix, the last a suffix, the rest in order between
    (lm-from s p i) (? (#s < i + #p) -1 (snip s i (i + #p) = p) i (lm-from s p (i + 1)))
