@@ -206,8 +206,8 @@ $(love0): force_src
 	 $(note)
 else
 mdep = $(ho)/love
-rtlove = $(love0) wake $(ho)/mooncc0.image
-rtlove_dep = $(ho)/mooncc0.image
+rtlove = $(love0) wake out/mooncc0.image
+rtlove_dep = out/mooncc0.image
 $(love0): $(love0_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
@@ -339,11 +339,14 @@ korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net
 # `cc` on inle are this line. the backends ride because the baked set is x64/a64/rv64.
 kcrewfiles = $(holo_be) src/love/holo/as.l src/love/holo/gas.l $(moon_mid) $(crewfiles)
 moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l $(holo_be) src/love/holo/as.l src/love/holo/gas.l $(holo_obj) $(moon_mid)
-$(ho)/.mooncc-cat.list: force_dist_list
+# the plain tree's cat and image beside this tree's: out/rt and moonlibc.o are pinned to out/
+# as love0 is, and take its image whatever hsuf says
+mcc_trees = $(sort out $(ho))
+$(addsuffix /.mooncc-cat.list,$(mcc_trees)): force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(moonfiles)' > $$tf; \
 	 $(note)
-$(ho)/.mooncc-cat.l: $(moonfiles) $(ho)/.mooncc-cat.list
+$(addsuffix /.mooncc-cat.l,$(mcc_trees)): %/.mooncc-cat.l: $(moonfiles) %/.mooncc-cat.list
 	@echo '$(t_cat)	'$@
 	@mkdir -p $(dir $@)
 	@cat $(moonfiles) > $@
@@ -361,7 +364,7 @@ $(ho)/sb $(ho)/lush $(ho)/helm:
 	@chmod 755 $@
 # each tree its own, baked by the one love0 from that tree's cat: a variant never stales the
 # plain tree's moon objects
-$(ho)/mooncc0.image: $(ho)/.mooncc-cat.l $(love0)
+$(addsuffix /mooncc0.image,$(mcc_trees)): %/mooncc0.image: %/.mooncc-cat.l $(love0)
 	@echo 'BAKE	'$@
 	@$(love0) -l $< -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
