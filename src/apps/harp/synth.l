@@ -30,6 +30,7 @@
 (borrow 'posix)    ; close, for the horn
 (borrow 'window)   ; -w: the qwerty rows held, in a window of its own
 (borrow 'opl)      ; --fm: the FM instruments
+(borrow 'ops)      ; a held note's operators
 (:
  esc (string 27)
  synth-digits "1234567890-="           ; the row, a semitone a key
@@ -282,13 +283,11 @@
                16 0 3 1 17 2 4 3 18 4 19 5 6 6 20 7 7 8 21 9 8 10 22 11 23 12 10 13 24 14
                11 15 25 16 26 17 13 18 27 19}
  (synth-hold st k s)
-  (: tm (synth-tims st (st 'tim)) at (st 'fpos) d (tm 1) r (1.0 / song-rate)
+  (: tm (synth-tims st (st 'tim)) at (st 'fpos) d (tm 1)
      f (261.6255653005986 * exp (s * ln2-12))
-     (fn sh) (ix \ (: t ((ix - at) * r) tp (t * (t > 0.0))
-                (sh tp ix (vphase tp f 0.0) * (1.0 - exp (tp * -420.0))
-                 * (0.5 + 0.5 * exp (tp / d * -2.6)) * (t >= 0.0))))
      ; ..an FM note is let go by its own release, so it keeps what to sound again from
-     h (fm? st ? [k s (fmv st s at ()) (st 'fm (st 'prog)) at] [k s [(at + 3600 * song-rate) (fn (instr (tm 0) 2)) 0.4 0.4]])
+     h (fm? st ? [k s (fmv st s at ()) (st 'fm (st 'prog)) at]
+                 [k s (ops-voice (held-ops (tm 0) f d) at (at + 3600 * song-rate) 0.4 0.4 song-rate)])
      (pins st 'hv (h . st 'hv) 'last (synth-name s) 'dirty 1))
  (fade [e f gl gr] at rl)
   [(at + rl) (ix \ (: g ((at + rl - ix) * (1.0 / rl)) c (g * (g > 0.0))

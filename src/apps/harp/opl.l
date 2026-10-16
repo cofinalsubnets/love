@@ -1,16 +1,17 @@
 ; opl -- two-operator FM instruments, as doom's GENMIDI bank lays them, played as harp's voices.
 ; written from the YM3812 (OPL2) application manual's register meanings and the doom wiki's
-; GENMIDI layout; every sample a closed form of time, so a voice is play's [end fn left right],
-; fn over a tray of frame numbers, and one chunk is a handful of tray passes.
+; GENMIDI layout; a voice is play's [end fn left right], its operators run by tones (ops.l).
 ;   (opl-bank b)     the 175 instruments of an op2 file's bytes ("#OPL_II#") or of a wad's
 ;                    GENMIDI lump, or () where b holds neither
 ;   (opl-voice ins n vel pan at off rate)  instrument ins sounding midi note n (a float bends),
 ;                    velocity 0..127, pan 0..1, from frame at; let go at frame off, () while held
+;   (opl-ops ins n vel pan at off rate)  the same voice's operators for tones, and its end: [os end]
 ;   (opl-drum bank n)  the percussion instrument for midi note n, 35..81, or ()
 ;   an instrument: {'name 'fixed 'note 'tune 'two 'vs}; 'vs one or two voices {'m 'c 'fb 'conn 'off},
 ;   'm and 'c operators {'am 'vib 'egt 'ksr 'mul 'ar 'dr 'sl 'rr 'wave 'ksl 'tl}
-(module (opl opl-bank opl-voice opl-drum opl-freq)
+(module (opl opl-bank opl-voice opl-ops opl-drum opl-freq)
 (borrow 'bytes)                         ; rdle
+(borrow 'ops)                           ; the voices, as tones' operators
 (:
  (max2 a b) (a < b ? b a)
  (min2 a b) (a < b ? a b)
@@ -54,55 +55,36 @@
    up (log (max (t / max2 a 1e-9) 1e-5) * -8.685889638065035)
    d ((t - a) * dd) on (s + (t - a - s / dd) * E 'rd)
    ((t < a) * up + (t >= a) * ((d < s) * d + (d >= s) * (E 'egt = 1 ? s on))))
- ; ..and let go at off seconds: from where it stood, down at the release rate
- (env E t off) (: h (held E off) ((t <= off) * held E t + (t > off) * (h + (t - off) * E 'rd)))
- ; ..key scaling of level: 3, 1.5 or 6 dB an octave over c3; tremolo 1 dB at 3.7 Hz
+ ; ..key scaling of level: 3, 1.5 or 6 dB an octave over c3
  ksl-db [0.0 3.0 1.5 6.0]
- (amp o E n t off vdb) (: k (ksl-db (o 'ksl) * max2 0.0 ((n - 48.0) / 12.0))
-   am (o 'am ? (0.5 - 0.5 * cos (t * 23.247785636564613)) 0.0)
-   db (max (env E t off) 0.0 + (o 'tl * 0.75 + k + vdb) + am)
-   ((db < 95.9) * exp (db * -0.11512925464970229)))
-
- ; --- the sound: a wave of the phase in cycles, one of the chip's four ---
- (wave x k) (: s (sin (x * 6.283185307179586))
-   (k @ 0 s 1 (s * (s > 0.0)) 2 (s * ((s > 0.0) * 2.0 - 1.0))
-        _ (s * ((s > 0.0) * 2.0 - 1.0) * ((x - floor x) % 0.5 < 0.25))))
  (opl-freq n) (440.0 * exp ((n - 69.0) * ln2 / 12.0))
  mults [0.5 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 10.0 12.0 12.0 15.0 15.0]
- ; ..vibrato 7 cents at 6.1 Hz, as the phase it adds; feedback's depth by its three bits, from
- ;   none to 4 pi, in cycles; the modulator's whole output moves the carrier 2 cycles
- (vibr o g t) (o 'vib ? (g * 0.00405 / 38.33 * (1.0 - cos (t * 38.32743037961115))) 0.0)
- ; ..what moves slowly, an envelope or a vibrato, is worked out every 32 frames and drawn between:
- ;   C holds the times there 'tg, and each frame's step 'k and how far along it 'fr
- (slow C y) (: a (peep y (C 'k) 0.0) b (peep y (C 'k + 1) 0.0) (a + (b - a) * C 'fr))
+ ; ..feedback's depth by its three bits, none to 4 pi, in cycles of the mean of the last two
+ ;   outputs; the modulator's whole output moves the carrier 2 cycles
  fbs [0.0 0.03125 0.0625 0.125 0.25 0.5 1.0 2.0]
  fm-depth 2.0
- ; ..one voice of an instrument at note n: the modulator fed back on itself, settled by a second
- ;   passes, into the carrier's phase, or beside it where the two are added
- (part V n vdb t C off Em Ec) (: m (V 'm) c (V 'c) f (opl-freq n) tg (C 'tg)
-   Am (slow C (amp m Em n tg off (V 'conn = 1 ? vdb 0.0))) Ac (slow C (amp c Ec n tg off vdb))
-   gm (f * mults (m 'mul)) gc (f * mults (c 'mul))
-   pm (gm * t + (m 'vib ? (slow C (vibr m gm tg)) 0.0)) pc (gc * t + (c 'vib ? (slow C (vibr c gc tg)) 0.0))
-   b (fbs (V 'fb))
-   (fed y k) (k = 0 || b = 0.0 ? y (fed (Am * wave (pm + b * y) (m 'wave)) (k - 1)))
-   y (fed (Am * wave pm (m 'wave)) 1)
-   (V 'conn = 1 ? (y + Ac * wave pc (c 'wave)) (Ac * wave (pc + fm-depth * y) (c 'wave))))
+ ; ..an operator's envelope as tones' segments: the attack's rise, the decay down to the
+ ;   sustain level, held there or on down at the release rate; let go at to seconds (past
+ ;   1e8, held), down from where it stood
+ (segs E to) (: a (E 'ta) s (E 'sl) dd (E 'dd) t1 (a + s / dd)
+   hs ((a > 0.0 ? [[0.0 1 0.0 (1.0 / a) 0.0]] ()) + [[a 0 0.0 dd 0.0] [t1 0 s (E 'egt = 1 ? 0.0 (E 'rd)) 0.0]])
+   (to >= 1e8 ? hs (filter (q \ q 0 < to) hs + [[to 0 (held E to) (E 'rd) 0.0]])))
 
  ; --- a voice: each of the instrument's one or two, its note moved by the voice's offset, the
- ;     second detuned by the tune byte (128 none, 64 a semitone); its end once let go is when
- ;     what is heard has fallen 96 dB, at most 10 s on ---
- (opl-voice I n vel pan at off rate) (: nb (I 'fixed = 1 ? (1.0 * I 'note) (1.0 * n))
+ ;     second detuned by the tune byte (128 none, 64 a semitone), a modulator and a carrier for
+ ;     tones (ops.l); its end once let go is when what is heard has fallen 96 dB, at most 10 s on ---
+ (opl-ops I n vel pan at off rate) (: nb (I 'fixed = 1 ? (1.0 * I 'note) (1.0 * n))
    vdb (vel <= 0 ? 200.0 (log (vel / 127.0) * -17.37177927613007))
-   ps (map (k \ (: V (I 'vs k) nk (nb + V 'off + (k = 1 ? ((I 'tune - 128) / 64.0) 0.0))
-                  [V nk (times (V 'm) nk) (times (V 'c) nk)]))
-           ^#(I 'vs))
    to (off = () ? 1e9 ((off - at) * 1.0 / rate))
-   (tail p) (: E (p 3) ((96.0 - held E to) / E 'rd))
-   end (off = () ? (at + 3600 * rate) (off + int (rate * min2 10.0 (foldl max2 0.0 (map tail ps))) + 2))
-   ; ..ix a run of frames, the slow parts laid every 32 of them from its first
-   fn (ix \ (: n #ix i0 (peep ix 0 0) r (1.0 / rate) t ((ix - at) * r) tp (t * (t > 0.0))
-              d (ix - i0) G (iota (n // 32 + 2) * 32 + i0) g0 ((G - at) * r)
-              C {'k (d // 32) 'fr ((d % 32) / 32.0) 'tg (g0 * (g0 > 0.0))}
-              (foldl (\ acc p (acc + part (p 0) (p 1) vdb tp C to (p 2) (p 3))) (tp * 0.0) ps * (t >= 0.0))))
-   [end fn (1.0 - pan) pan])
+   (pair j) (: V (I 'vs j) nk (nb + V 'off + (j = 1 ? ((I 'tune - 128) / 64.0) 0.0)) f (opl-freq nk) add (V 'conn = 1)
+     (one o v) (: E (times o nk) k (ksl-db (o 'ksl) * max2 0.0 ((nk - 48.0) / 12.0))
+                 {'f (f * mults (o 'mul)) 'wave (o 'wave) 'lvl (o 'tl * 0.75 + k + v @ d (d >= 96.0 ? 0.0 (exp (d * -0.11512925464970229))))
+                  'segs (segs E to) 'vib (o 'vib ? 0.00405 0.0) 'vrate 6.1 'trem (o 'am ? 1.0 0.0) 'trate 3.7 'E E})
+     [(pins (one (V 'm) (add ? vdb 0.0)) 'fb (fbs (V 'fb)) 'l (add ? 1.0 0.0))
+      (pins (one (V 'c) vdb) 'mod (add ? -1 (2 * j)) 'depth fm-depth 'l 1.0)])
+   os (cats (map pair ^#(I 'vs)))
+   (tail o) (: E (o 'E) ((96.0 - held E to) / E 'rd))
+   end (off = () ? (at + 3600 * rate) (off + int (rate * min2 10.0 (foldl max2 0.0 (map tail os))) + 2))
+   [os end])
+ (opl-voice I n vel pan at off rate) (opl-ops I n vel pan at off rate @ [os end] (ops-voice os at end (1.0 - pan) pan rate))
 )) ; module opl
