@@ -38,6 +38,11 @@ echo "OBJCOPY $d"
       src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l test/gate/objcopy.l
   echo "(mkfix \"$d\")"; } | "$ho/love" || { echo "FAIL objcopy fixtures"; exit 1; }
 
+# ldbare32 past the arm family: an i386 object linked bare takes i386's relocs
+{ cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/love/holo/holo.l src/love/holo/i386.l \
+      src/love/holo/thumb2.l src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l test/gate/ldbare.l
+} | "$ho/love" 2>&1 | grep -q 'ldbare: ok' || { echo "FAIL objcopy: ldbare32 on i386"; exit 1; }
+
 n=0
 chk() {
   for f in ihex binary; do
@@ -65,4 +70,4 @@ fi
 "$ho/love" "$d/ocopy.l" -O binary test/gate/objcopy.sh "$d/mine.out" 2>/dev/null \
   && { echo "FAIL objcopy took a non-ELF"; exit 1; }
 
-echo "$name: $n flattens byte-identical to $oc, and two refusals held"
+echo "$name: $n flattens byte-identical to $oc, two refusals held, i386 linked bare"
