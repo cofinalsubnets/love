@@ -104,13 +104,13 @@ host_o = $(host_c:$(S)/%.c=$(ho)/o/%.o)
 # weak one wherever moonlibc's os.c is not in the link.
 # wants none of them; the HCC flavour is gcc and glibc alone, so it takes all three.
 seat_o = $(ho)/o/love/user/nokern.o $(ho)/o/love/noblob.o
-hcc = LOVE_NO_IMAGE= $(CC) $(cflags) $(GCDBG) -Dtco=$(tco) -fpic -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib
+hcc = LOVE_NO_IMAGE= $(CC) $(cflags) $(GCDBG) -Dtco=$(htco) -fpic -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
 force_hostcc: ;
 $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
-	@tf=$@.$$$$.tmp; printf '%s\n' '$(CC) $(image_ldflags)' > $$tf; \
+	@tf=$@.$$$$.tmp; printf '%s\n' '$(CC) $(image_ldflags) tco=$(htco)' > $$tf; \
 	 $(note)
 # macho.o for its compile alone: no link here takes it
 host: $(macho_o) $(ho)/love $(ho)/love.1 $(ho)/cook.1
