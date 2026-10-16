@@ -1,5 +1,5 @@
 ; test/host/corridor.l -- the indoor level and its file, headless: reading, drawing, light,
-; doors, walls, reload on change, the sign.
+; doors, walls, reload on change, the car, the sign.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/corridor.l | out/love
 
 (borrow 'corridor)
@@ -51,6 +51,8 @@
        (lt "(room [0 0 0] [2 2 2]) (skin {'all rust} (solid (box [0 0 0] [1 2 1])))" 'brushes 1 'skin
         = [['wall 0] ['floor 0] ['ceiling 0]])
        (map (t \ t 'name) (two 'textures) = [0 1]) (two 'brushes 1 'skin = [['wall 0] ['floor 1]])
+       ; ..each face drawn with the texture its skin names: moss on the second room's floor
+       (: ts (corridor-new 8 8 two "" 'sc 'hall 'tris) (aany (peep ts (iota (#ts // 4) * 4 + 3) -1 = 1)))
        (has? (lv "(skin {'walls (texture 32 32 1 '((fill 1) (stripes 4 2 (grey 0.5))))} (room [0 0 0] [2 2 2]))")
              "in a texture, (stripes 4 2 (grey 0.5)) -- it reads (stripes every w slant PAINT)")
        (has? (lv "(skin {'walls (texture 32 32 0 '((fill 1)))} (room [0 0 0] [2 2 2]))") "(texture width height metres LAYERS)")
@@ -120,6 +122,39 @@
        (brush-medium (rs 'sc 'brushes) [-4.85 2.0 1.6] = 0) (brush-medium (rs 'sc 'brushes) [-4.6 3.3 1.6] = 1)
        (up 'py = 0.5 + eye-h) (mag (up 'ph - 10.0 * pi / 180.0) < 1e-9) (mag (up 'th - pi / 2.0) < 1e-9)
        (has? pos "(start [0.0 0.0 1.0] 0.0 0.0)") (tablet? (corridor-load "src/apps/lore/levels/station.l"))))
+; a car: its door opens at the start and stays open while the player is in; walls and the shut
+; door stop a walk; out, it shuts, reopening for a step back; then it leaves, and the edge stops
+; a walk; each change cried, the car drawn only while it stands, its sounds in range
+(: cl "(room [-30 0 -3.2] [30 3 6]) (start [0 0 -1.5] 0 0) (strip-light [0 3 3])
+       (train [-5 0 -2.8] [5 2.3 -0.2] (door [0 0 -0.2] 1.2 2) -40)"
+   L (lv cl) c (L 'cars 0)
+   (car-st _) (corridor-new 40 24 (lv cl) "")
+   (moves st n) (each ^n (_ \ corridor-move st), st)
+   (ph st) (st 'cars 0 'ph)
+   shut (steps (car-st ()) 107 20)
+   west (steps (pins (moves (car-st ()) 40) 'th (0.0 - pi / 2.0)) 107 120)
+   opened (moves (car-st ()) 40)
+   inside (ph opened)
+   out (steps (moves (car-st ()) 40) 107 20)
+   closing (ph out)
+   back (corridor-move (pins (moves (steps (moves (car-st ()) 40) 107 20) 3) 'pz -0.15))
+   gone (moves (steps (moves (car-st ()) 40) 107 20) 300)
+   edge (steps (pins gone 'th pi) 107 80)
+   cries (map (q \ q 0) (peep gone 'sfx ()))
+   (seen st) (corridor-pens (pins st 'px 0.0 'pz 3.0 'th pi 'ph 0.0))
+   snd (map corridor-sound ["chime" "hiss" "thud" "motor"])
+ (test (#(L 'cars) = 1) (c 'ax = 'z) (c 'side = -0.2) (c 'out = 1.0) (c 'leave = -40.0)
+       (has? (lv "(room [-30 0 -3.2] [30 3 6]) (train [-5 0 -2.8] [5 2.3 -0.2] (door [0 0 -1.5] 1.2 2) 40)") "a car's door")
+       (has? (lv "(room [0 0 0] [1 1 1]) (train [0 0 0] [4 2 2] 3 10)") "(train [x y z]")
+       (ph (car-st ()) = 'wait) (inside = 'open) (opened 'cars 0 'door = 1.0)
+       (shut 'pz < -0.2 - body-r + 0.01) (west 'px > -5.0 + body-r - 0.01) (west 'px < -4.5)
+       (out 'pz > 0.2) (closing = 'shut)
+       (ph back = 'open)
+       (ph gone = 'gone) (gone 'cars 0 'o = -40.0)
+       (edge 'pz >= -0.12 + body-r - 0.01) (edge 'pz < 0.3)
+       (elem "chime" cries) (elem "hiss" cries) (elem "thud" cries) (elem "motor" cries)
+       (seen opened != seen gone)
+       (all (s \ two? s && #(s 0) > 1000 && amax (s 0) <= 1.0 && amin (s 0) >= -1.0) snd) (atom? (corridor-sound "none"))))
 ; the sign: its strokes, a space between words, its width by its letters
 (: hi (neon-strokes "HI") sp (neon-strokes "H I") s (neon-sign "OK" [0.0 0.0 0.0] [1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 -1.0] 0.3 [1.0 0.2 0.6])
  (test (#(hi 0) = 6) (#(sp 0) = 6) (hi 1 < sp 1) (0 < s 'tube 'n) (0 < s 'halo 'n) (two? (s 'lamp 'at))
