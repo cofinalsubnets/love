@@ -16,6 +16,10 @@
    wad-t-pal (wad-t-cat (map (i \ (i @ 10 "\xc8\x1e\x1e" 20 "\x1e\x1e\xc8" 30 "\x1e\xc8\x1e" 40 "\xdc\xdc\x28"
                                      _ (wad-t-cat [(string i) (string i) (string i)])))
                              ^256))
+   ; ..and a second palette, the first's halfway to red: a hurt's
+   wad-t-pal2 (wad-t-cat (map (i \ (: c (wad-t-pal (3 * i)) g (wad-t-pal (3 * i + 1)) b (wad-t-pal (3 * i + 2))
+                                     (wad-t-cat [(string ((c + 255) // 2)) (string (g // 2)) (string (b // 2))])))
+                              ^256))
    wad-t-t1 (: a (wad-t-tex "WALL" 64 64) b (wad-t-tex "SKY1" 256 128)
               (wad-t-cat [(wrle 2 4) (wrle 12 4) (wrle (12 + #a) 4) a b]))
    ; ..the room: four walls, each its right side in, one sector, one subsector, no nodes
@@ -49,7 +53,7 @@
    ; ..a shot's sound: format 3, 11025 a second, a tenth of a second of square wave padded 16 either end
    wad-t-snd (: pd (wad-t-cat (map (_ \ string 128) ^16))
                (wad-t-cat [(wad-t-w16 3) (wad-t-w16 11025) (wrle 1135 4) pd (wad-t-cat (map (i \ string (i // 25 % 2 ? 64 192)) ^1103)) pd]))
-   lumps ([["PLAYPAL" wad-t-pal] ["DSPISTOL" wad-t-snd] ["PNAMES" (wrle 2 4 + wad-t-name "WALLP" + wad-t-name "SKYP")] ["TEXTURE1" wad-t-t1]
+   lumps ([["PLAYPAL" (wad-t-pal + wad-t-pal2)] ["DSPISTOL" wad-t-snd] ["PNAMES" (wrle 2 4 + wad-t-name "WALLP" + wad-t-name "SKYP")] ["TEXTURE1" wad-t-t1]
            ["WALLP" (wad-t-patch 64 64 10 0 0)] ["SKYP" (wad-t-patch 256 128 20 0 0)]
            ["F_START" ""] ["FLR" (wad-t-cat (map (_ \ string 30) ^4096))] ["F_END" ""]
            ["S_START" ""] ["BAR1A0" (wad-t-patch 16 32 40 8 32)] ["S_END" ""] ["E1M1" ""]] + wad-t-map + [["E1M2" ""]] + wad-t-map2)
@@ -86,6 +90,11 @@
    _ (test (most (px 8 20) 0))                                    ; the wall, red
    _ (test (px 32 0 = 1973960))                                   ; the sky's own blue, 0x1e1ec8, unlit
    _ (test (most (px 32 39) 1))                                   ; the floor, green
+   ; ..hurt, the frame takes the red palette for a while, a tic less each tic
+   _ (pin st 'dc 5) red (rgb (peep (wad-pens st) (39 * 64 + 32) 0)) g0 (rgb (px 32 39))
+   _ (test (#(st 'sc 'tints) = 2) (red 0 > g0 0 + 60) (red 1 < g0 1))
+   _ (wad-tics st 5)
+   _ (test (st 'dc = 0) (rgb (peep (wad-pens st) (39 * 64 + 32) 0) = g0))
 
    ; walked: free in the room, not at the wall; north stops short of the barrel, and beside it
    ;   short of the wall
