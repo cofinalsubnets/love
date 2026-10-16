@@ -145,4 +145,29 @@ if [ -n "$gg" ]; then
   done < "$d/regrep.ours"
 fi
 
-echo "test_libc: moonlibc agrees with $cc_g's libc over$fams ($n families), defines all $nref names its headers declare, and reads $ng patterns as gnu grep does"
+# ---------------------------------------------------------------------------
+# phase 4: the waits on a weak memory. x86's exchange is a full barrier and hides an unlock
+# that only acquires, so pthsync.c goes to an a64 host too: built for a64, run five times,
+# and each run must print what the x64 build printed -- a mutex that leaks its holder's
+# stores loses counts there. qemu orders as this machine does and proves nothing, so the leg
+# wants a host.
+. test/gate/a64run.sh
+a64_how "$m"
+nw=0
+if [ "$a64_via" = host ]; then
+  moonrun -t a64 -Itest/libc -o "$d/pthsync.a64" test/libc/pthsync.c > "$d/pthsync.a64.build" 2>&1 \
+    || { cat "$d/pthsync.a64.build" >&2; fail "pthsync: mooncc could not build it for a64"; }
+  a64_jobs "$d/wm"
+  cp "$d/pthsync.a64" "$d/wm/pthsync"
+  for i in 1 2 3 4 5; do a64_job "pt$i" '$RUN ./pthsync'; done
+  a64_run "$d/wm" || fail "pthsync: the a64 host could not run it"
+  for i in 1 2 3 4 5; do
+    cmp -s "$d/wm/res/pt$i.out" "$d/pthsync.ours" || {
+      diff "$d/pthsync.ours" "$d/wm/res/pt$i.out" | head -10 >&2
+      fail "pthsync: run $i on the a64 host answered otherwise than x64"; }
+    nw=$((nw + 1)); done
+else
+  gate_partly "test_libc: no a64 host for the weak-memory leg; skipped"
+fi
+
+echo "test_libc: moonlibc agrees with $cc_g's libc over$fams ($n families), defines all $nref names its headers declare, reads $ng patterns as gnu grep does, and waits alike on a weak memory ($nw a64 runs)"
