@@ -1,15 +1,10 @@
 ; meadow -- the grass game's field in three dimensions: the eye a few inches off the dirt
-; behind your blade, looking south along the row, the meadow running on behind it to green
-; hills paling into the air, the sky over all of it, the sun and the moon crossing it. the
-; game is grass's and unchanged: its state is drawn here as it stands, each blade bent by
-; its own lean, stretch and bow, the field behind swaying on the same wind, the shadows
-; thrown along the sun, and the day's cover as the sky's weather. new york's sky, seen in
-; a mirror: east on the right, as the flat field has it.
-;
-; a frame is trays a picture wide: the land or the sky behind every pixel -- where each ray
-; meets the land is found once, the eye and the hills holding still -- then the
-; blades drawn over it far to near, a point a pixel -- a scatter's later write wins, so
-; the order is the depth.
+; behind your blade, looking south down the row, the meadow and hills beyond, sun and moon
+; crossing the sky. it only draws grass's state. new york's sky seen in a mirror: east on the
+; right, as the flat field has it.
+; a frame is trays a picture wide: the land or sky behind each pixel (each ray's hit found
+; once, since the eye and hills hold still), then the blades far to near, a point a pixel --
+; a scatter's later write wins, so the order is the depth.
 (module (meadow meadow-new meadow-size meadow-pens meadow-frame meadow-sky meadow-light
          meadow-weather meadow-bodies cellm eye)
 (borrow 'view)
@@ -28,9 +23,8 @@
  near-z 0.12                           ; the bare dirt behind the row, before the meadow
  deep-z 2.6                             ; how far the meadow's own blades run
  field-n 700
- ; --- the screen: w by h pixels, and each pixel's ray, and where it meets the dirt. the
- ; land takes the rows under the middle up to land-r of the width; a screen taller than
- ; that gives the rest to the sky, as the flat field does ---
+ ; --- the screen: w by h pixels, each pixel's ray and where it meets the dirt. the land
+ ; takes the rows under the middle up to land-r of the width; the rest is sky ---
  land-r 0.3
  (meadow-size st w h) (: n (w * h) i (iota n) x (i % w) y (i // w)
    cy (h - min2 (h / 2.0) (land-r * w))
@@ -46,10 +40,9 @@
    e 0.05 hy0 (hill gx gz)
    nrm (unit [(hy0 - hill (gx + e) gz) e (hy0 - hill gx (gz + e))])
    _ (pins st 'nx (nrm 0) 'ny (nrm 1) 'nz (nrm 2) 'dist t)
-   ; ..and the sky through a lens: in each column, the sky from the land's edge up to the
-   ; picture's top shows the whole of it from the horizon to overhead, and across, the
-   ; sky from sunrise to sunset -- so the clouds stand large, the sun comes up off the
-   ; hilltops and crosses the picture, as on the flat field. k the column's sky rows
+   ; ..and the sky through a lens: each column's sky rows span horizon to overhead, and across,
+   ; sunrise to sunset, so the sun rises off the hilltops and crosses the picture. kc the
+   ; column's sky rows
    sky (1 - gnd)
    kc (gem-tray [w] (map (c \ 1.0 * net (peep sky (iota h * w + c) 0)) ^w))
    kx (max (peep kc x 0.0) 1.0) f ((kx - y - 0.5) / kx)
@@ -58,8 +51,7 @@
    (pins st 'w w 'h h 'cy cy 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
             'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd)) 'stars-h -99.0
             'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)]))
- ; the stars: sky's ss, each one pixel where the lens shows it and the land does not -- a
- ; tray of their pixels, -1 for one not seen
+ ; the stars: sky's ss, each a pixel where the lens shows it and the land does not; -1 unseen
  (lay-stars st ss) (: w (st 'w) h (st 'h) X (ss 'x) Y (ss 'y) Z (ss 'z)
    (one k) (on-screen st [(peep X k 0.0) (peep Y k 0.0) (peep Z k 0.0)] @ p
               (two? p ? (: x (int (p 0)) y (int (p 1)) i (y * w + x)
@@ -102,14 +94,13 @@
          du ((px + 0.5 - c 0) / r) dv ((c 1 - py - 0.5) / r)
          in ((du * du + dv * dv < 1.0) * (1 - peep (st 'gnd) idx 1))
          [(int (over -1 in idx)) du dv])))              ; the land's mask is a float: an index must not be
- ; --- the land: flat about the row and the meadow, then gentle hills, broad crests a few
- ; metres high some tens of metres off, rising out of the flat by a smooth step ---
+ ; --- the land: flat about the row and meadow, then hills a few metres high some tens of
+ ; metres off, rising by a smooth step ---
  (hill x z) (: r (sat ((z - 8.0) / 38.0)) a (r * r * (3.0 - 2.0 * r))
    (a * max 0.0 (4.2 + 2.0 * sin (x * 0.03 + 0.3) * cos (z * 0.02) + 1.0 * sin (x * 0.06 - z * 0.035 + 1.1)
                  + 0.5 * cos (z * 0.08 + x * 0.015))))
- ; a ray against the land: stepped out geometrically to some hundreds of metres, the first
- ; step under the land bracketing the meeting, and the bracket halved down to it. answers
- ; [met t]: met 0 is the sky
+ ; a ray against the land: stepped out geometrically, the first step under the land bracketing
+ ; the hit, then bisected. answers [met t], met 0 the sky
  march-n 70 march-k 1.14 march-t0 0.05
  (march dx dy dz) (:
    (under t) (eye 1 + t * dy < hill (eye 0 + t * dx) (eye 2 + t * dz))
@@ -120,8 +111,8 @@
    b (go 0 march-t0 z0 (z0 + 1e9) (z0 * 0))
    (halve k lo hi) (k < 10 ? (: m ((lo + hi) / 2.0) u (under m) (halve (k + 1) (over m u lo) (over hi u m))) hi)
    [(b 2) (over 1e9 (b 2) (halve 0 (b 0) (over 1.0 (b 2) (b 1))))])
- ; --- the meadow behind the row: blades thrown once, each as the points it is drawn by,
- ; more of them the nearer it stands, the whole far to near ---
+ ; --- the meadow behind the row: blades thrown once as the points they are drawn by, more the
+ ; nearer, ordered far to near ---
  (field seed foc) (: g (rnd-new seed)
    bl (map (_ \ (: z (near-z + sq (rnd g) * (deep-z - near-z)) hw ((z - eye 2) * 1.15)
                    [(rnd g * 2.0 * hw - hw) z ((1.5 + 2.0 * rnd g) * inch) (rnd g * 6.283) (rnd g)]))
@@ -139,10 +130,8 @@
  ; the sky's [east up north] seen facing south in the mirror: [right up ahead]
  (mirror v) [(v 0) (v 1) (0.0 - v 2)]
  (meadow-sun g) (mirror (sky-sun (day0 + (g 'h % 24.0) * 3600.0) 0.0 lat))
- ; the moon: a phase thrown with the week ('moon0 on g in its place, if said), and a round
- ; of it every 29.53 calendar days, 'cal of them to a game day (1 unless said): at 0 it
- ; keeps its phase, and the sky comes round to itself each day. it rides the sun's
- ; track, as many hours behind it as its phase is of a day
+ ; the moon: a phase thrown with the seed ('moon0 overrides) advancing 'cal lunar-calendar days
+ ; per game day (default 1; 0 freezes it); it rides the sun's track, behind it by its phase
  (meadow-phase st g) (frac (peep g 'moon0 (st 'seed * 0.6180339) + peep g 'cal 1.0 * g 'h / 24.0 / 29.530588))
  (meadow-moon st g) (: p (meadow-phase st g)
    (mirror (sky-body (day0 + (g 'h % 24.0) * 3600.0) lat (-24.0 * p) (365.2422 * p))))
@@ -151,8 +140,8 @@
  (meadow-weather g style) (: d (int (g 'h / 24.0) @ v (6 < v ? 6 v)) c (g 'covers d)
    (sky-weather (? (c < 0.2) 0 (c < 0.5) 1 (c < 0.8) 2 3) style))
  (meadow-light g wx) (sky-light (meadow-sun g) wx (cloud-sim g))
- ; --- a blade as points: base x0 z0, length L, its lean A at the tip and its bow, at u
- ; along it. the lean grows along the blade, so it curves as a stem does ---
+ ; --- a blade as points: base x0 z0, length L, lean A at the tip, bow bw, at u along it. the
+ ; lean grows along the blade, so it curves as a stem does ---
  (bent x0 z0 L A bw u) (: a (A + 1e-4) au (a * u)
    [(x0 + L * (1.0 - cos au) / a + bw * sin (pi * u)) (L * sin au / a) z0])
  ; ..each point to the screen: its pixel, -1 off it, and its distance
@@ -233,8 +222,7 @@
    sl (meadow-stars st g)
    col00 (sky-stars! (sl 0) colg lt wx (eye 0) (eye 2) sim t0 (sl 1))
    ; --- the sun and the moon, discs where the lens shows them, the land in front of them ---
-   ; the sun: hot at the middle, its colour the light's. behind a cloud it softens and pales
-   ; but shows, and the cloud round it glows, so where it is can be told
+   ; the sun: hot at the middle, its colour the light's; behind a cloud it pales but shows
    sc (on-screen st s) cs (lt 'csun) sd (s 1 < -0.03 || !sc ? () (disc st sc 2.4))
    core (c* 1.4 (cmix (cmix [1.0 0.42 0.08] [1.0 0.8 0.28] (sat ((s 1 - 0.02) / 0.3))) [1.0 0.95 0.86] (0.6 * cs)))
    hd (cs < 0.05 || s 1 < -0.03 || !sc ? () (disc st sc 7.0))
@@ -243,9 +231,8 @@
    col01 (two? sd ? (: rr (sd 1 * sd 1 + sd 2 * sd 2) fall (sat ((1.0 - rr) * (3.0 - 1.5 * cs)) * (1.0 - 0.45 * cs))
                        (put colh sd (cmix (behind colh sd) core fall)))
               colh)
-   ; the moon: its lit side toward the sun and as wide as the phase, seas on it, pale by day,
-   ; behind a cloud dimmed. it hides what lies past it -- the stars, and the sun -- and no
-   ; more: its dark side shows the sky nearer than it, the twilight and the cloud
+   ; the moon: lit toward the sun as wide as the phase, seas on it, dimmed by cloud. it hides
+   ; only what is past it (stars, the sun): its dark side shows the twilight and cloud nearer
    mcs (on-screen st mo) md (mo 1 < -0.03 || !mcs ? () (disc st mcs 2.8))
    col0 (two? md ? (: du (md 1) dv (md 2) ix (md 0) (dir v) (peep v ix 0.0)
                      sg (? (0.0 < wrap (at2 (s 0) (s 2) - at2 (mo 0) (mo 2))) 1.0 -1.0)
@@ -275,7 +262,7 @@
    ri2m (over -1 (rf rme > 0.5) ri2)
    col1 (map (k \ pin (pin (pin (col0 k) fi (fcol k)) ri (rcol k)) ri2m (rcol k)) ^3)
    (sky-tone lt col1))
- ; the picture: 24-bit where the seat says so, else the palette dithered
+ ; the picture: 24-bit where the terminal takes it, else the palette dithered
  (meadow-frame st g wx deep) (: w (st 'w) h (st 'h) c (meadow-pens st g wx)
    px (deep ? (view-deep-pens c) (view-cube-pens c (st 'bay * 0.5 + 0.25)))
    (deep ? (view-deep-frame w h px {}) (view-frame w h (y \ peep px (iota w + w * y) 0) {})))

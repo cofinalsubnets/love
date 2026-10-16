@@ -44,22 +44,7 @@
 #include "entdec.h"
 #include "rate.h"
 
-/** Compute the amplitude (sqrt energy) in each of the bands
- * @param m Mode data
- * @param X Spectrum
- * @param bands Square root of the energy for each band (returned)
- */
-void compute_band_energies(const CELTMode *m, const celt_sig *X, celt_ener *bandE, int end, int C, int M);
-
 /*void compute_noise_energies(const CELTMode *m, const celt_sig *X, const opus_val16 *tonality, celt_ener *bandE);*/
-
-/** Normalise each band of X such that the energy in each band is
-    equal to 1
- * @param m Mode data
- * @param X Spectrum (returned normalised)
- * @param bands Square root of the energy for each band
- */
-void normalise_bands(const CELTMode *m, const celt_sig * restrict freq, celt_norm * restrict X, const celt_ener *bandE, int end, int C, int M);
 
 /** Denormalise each band of X to restore full amplitude
  * @param m Mode data
@@ -72,10 +57,6 @@ void denormalise_bands(const CELTMode *m, const celt_norm * restrict X, celt_sig
 #define SPREAD_LIGHT      (1)
 #define SPREAD_NORMAL     (2)
 #define SPREAD_AGGRESSIVE (3)
-
-int spreading_decision(const CELTMode *m, celt_norm *X, int *average,
-      int last_decision, int *hf_average, int *tapset_decision, int update_hf,
-      int end, int C, int M);
 
 #ifdef MEASURE_NORM_MSE
 void measure_norm_mse(const CELTMode *m, float *X, float *X0, float *bandE, float *bandE0, int M, int N, int C);

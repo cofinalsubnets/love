@@ -92,7 +92,10 @@
             (: i (lm-from l ":" 0) ns (words (snip l 0 (i < 0 ? 0 i)))
                (? ((i < 0) || !(two? ns) || any (n \ !(starts? n "test")) ns || (0 <= lm-from l "=" 0)) [t ()]
                   [(add t ns (snip l (i + 1) #l)) ns]))))
-       <(foldl step [{} ()] (lm-joined (lines mk))))
+       ; ..and what a recipe runs through a script, where no $(MAKE) says so: gcshard.sh under
+       ; GCS_BAKE runs test_gcstress's shards, so owing both runs the bake alone
+       cv (<(foldl step [{} ()] (lm-joined (lines mk))))   b (peep cv "test_gcstress_bake" ())
+       (pin cv "test_gcstress_bake" (elem "test_gcstress" b ? b (b + ["test_gcstress"]))))
    ; every lane l runs, through its members' members too
    (lm-under covers l)
     (:- (go [l] ()) (go todo seen)

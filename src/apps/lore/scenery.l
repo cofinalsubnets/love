@@ -17,6 +17,10 @@
 ;                                      three points from its middle: a slope, a bevel
 ;   (door [x y z] width height)        a sliding door in the wall between two rooms, the
 ;                                      middle of its foot at x y z
+;   (train [x y z] [x y z] DOOR leave) a car on rails, its inside between two corners and a
+;                                      (door ..) in a long wall: it opens as the level starts,
+;                                      shuts once the player is out, and the car goes leave
+;                                      metres along its length, the sign its way, and is gone
 ;   (strip-light [x y z])              a light strip along z, its face at y
 ;   (bulb [x y z] (rgb r g b))         a bare bulb, its light
 ;   (poster [x y z] width height FILE) on the wall nearest, the middle of its foot at x y z;
@@ -29,12 +33,12 @@
 ;                                      on a surface, painted by its layers (swatch.l), quoted
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
-;   (textures {'wall T 'floor T 'ceiling T 'door T})  the textures where no skin says
+;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
 ;   (repeat n [dx dy dz] PARTS)        the parts n times, each that far on from the last
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of start room air solid box prism cut door strip-light bulb poster sign
+(module (scenery level-of start room air solid box prism cut door train strip-light bulb poster sign
          across stammer buzz breathe texture skin textures repeat mirror-x mirror-z rgb)
 (borrow 'view)                          ; min2 max2
 (borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
@@ -64,6 +68,8 @@
  (cut p q r b) (: u "(cut [x y z] [x y z] [x y z] BRUSH)"
    (? (!(brush? b)) (no u b) (with b 'cuts (b 'cuts + [[(P p u) (P q u) (P r u)]]))))
  (door at w h) (: u "(door [x y z] width height)" (part 'door [['at (P at u)] ['w (N w u)] ['h (N h u)]]))
+ (train lo hi d leave) (: u "(train [x y z] [x y z] (door [x y z] width height) leave)"
+   (kind? d ['door] ? (part 'car [['lo (P lo u)] ['hi (P hi u)] ['door d] ['leave (N leave u)]]) (no u d)))
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
  (bulb at c) (: u "(bulb [x y z] (rgb r g b))" (colour? c ? (part 'bulb [['at (P at u)] ['c c] ['how ()]]) (no u c)))
  (poster at w h file) (: u "(poster [x y z] width height FILE)"
@@ -87,14 +93,15 @@
    (? (!(brush? b)) (no u b) (!(tablet? s)) (no u s)
       (any (k \ !(elem k ['walls 'floor 'ceiling 'all]) || !(texture? (s k))) (keys s)) (no u s)
       (with b 'skin s)))
- (textures s) (: u "(textures {'wall T 'floor T 'ceiling T 'door T})"
-   (tablet? s && all (k \ elem k ['wall 'floor 'ceiling 'door] && texture? (s k)) (keys s) ? (part 'textures [['set s]]) (no u s)))
+ (textures s) (: u "(textures {'wall T 'floor T 'ceiling T 'door T 'train T})"
+   (tablet? s && all (k \ elem k ['wall 'floor 'ceiling 'door 'train] && texture? (s k)) (keys s) ? (part 'textures [['set s]]) (no u s)))
  ; --- repeat and mirror: copies with every point moved, and a start's bearing turned ---
  (flat x) (? (tablet? x) [x] (atom? x) () (cats (map flat x)))
  (re g b p) (: q (foldl (\ q k (with q k (g (p k)))) p (filter (k \ elem k (keys p)) ['at 'lo 'hi]))
    q2 (elem 'pts (keys q) ? (with q 'pts (map g (q 'pts))) q)
    q3 (elem 'cuts (keys q2) ? (with q2 'cuts (map (c \ map g c) (q2 'cuts))) q2)
-   (elem 'deg (keys q3) ? (with q3 'deg (b (q3 'deg))) q3))
+   q4 (elem 'door (keys q3) ? (with q3 'door (re g b (q3 'door))) q3)
+   (elem 'deg (keys q4) ? (with q4 'deg (b (q4 'deg))) q4))
  (repeat n d ps) (: u "(repeat n [dx dy dz] PARTS)" dd (P d u)
    (charm? n ? (cats (map (i \ map (re (p \ [(p 0 + i * dd 0) (p 1 + i * dd 1) (p 2 + i * dd 2)]) (b \ b)) (flat ps)) ^n)) (no u n)))
  (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b)) l))
@@ -105,7 +112,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; ..the textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'strip 'bulb 'poster 'sign 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -123,11 +130,13 @@
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
        'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b)}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1)])) (of 'door))
+       'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
+                                           'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
        'strips (map (s \ (: a (s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'across (s 'across) 'how (s 'how)})) (of 'strip))
        'bulbs (map (b \ {'at (b 'at) 'c (b 'c) 'how (b 'how)}) (of 'bulb))
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
        'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'text (s 'text) 'c (s 'c) 'how (s 'how)})) (of 'sign))
-       'textures (map (k \ tex k (dflt k)) (filter (k \ elem k (keys dflt)) ['wall 'floor 'ceiling 'door])
+       'textures (map (k \ tex k (dflt k)) (filter (k \ elem k (keys dflt)) ['wall 'floor 'ceiling 'door 'train])
                   + map (i \ tex (tname (used i)) (used i)) ^#used)})))
 (:: 'level (\ l ['level-of <l ('list . >l)]))
 ) ; module scenery

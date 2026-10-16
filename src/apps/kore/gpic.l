@@ -1,15 +1,8 @@
-; src/apps/kore/gpic.l -- classic pic: kernighan's picture language as GNU pic speaks it, a troff
-; (or TeX) preprocessor. a document's text goes through; each picture between .PS and .PE (or
-; .PF .PY) becomes troff's \D drawing, or with -t tpic's \specials. held to groff's own pic
-; byte for byte (test/gate/gpic.sh).
-;
-;   pic [-nCSU] [FILE..]       troff, -n without groff's extensions to \D
-;   pic -t [-cCSUz] [FILE..]   TeX: a box \graph of tpic specials
-;
-; pic.l's dispatch sends a bare pic here unless its input is a picture (png, jpeg, gif).
-; a picture is read, run and drawn statement by statement as groff's is: the lexer expands
-; macros, copy and the bodies of for and if as text; the parser reads one statement ahead
-; of nothing, so what a statement does to the lexer lands before the next token is read.
+; src/apps/kore/gpic.l -- classic pic as GNU pic speaks it, a troff (or TeX) preprocessor:
+; each picture between .PS and .PE (or .PF .PY) becomes troff's \D drawing, or with -t tpic's
+; \specials; held to groff's pic byte for byte. the lexer expands macros, copy and for/if
+; bodies as text; the parser reads no token ahead, so a statement's effect on the lexer lands
+; before the next token is read.
 (module 'kore
 (borrow 'posix)
 
@@ -62,9 +55,8 @@
    (gp-err g m) (scare 'gp-err m)
 
    ; -- the lexer: sources -----------------------------------------------------------
-   ; a source is text read left to right: 'file the picture's own lines (counted, and a
-   ; line opening with a dot is troff's), 'text a macro's or a body's expansion, 'for a
-   ; loop's body, which runs again while the loop holds
+   ; 'file the picture's lines (counted; a line opening with a dot is troff's), 'text a
+   ; macro's or body's expansion, 'for a loop body, rerun while the loop holds
    (gp-src t k ln) {'t t 'i 0 'k k 'ln ln 'bol 1}
    (gp-top g) (g 'srcs @ s (two? s ? <s))
    (gp-push g s) (pin g 'srcs (s . g 'srcs))
@@ -601,9 +593,8 @@
    (gp-interp e a b) [(<a + (<b - <a) * e) (a 1 + (b 1 - a 1) * e)]
 
    ; -- objects --------------------------------------------------------------------
-   ; an object is a tablet: 'ty box circle ellipse arc line spline move text block troff,
-   ; 'kw what last and nth call it (arrow for a line with a head), 'c the centre, 'w 'h
-   ; 'r, 'pts a path's points, 'st 'en, and how it is drawn
+   ; an object is a tablet: 'ty its kind, 'kw what last and nth call it (arrow for a headed
+   ; line), 'c the centre, 'w 'h 'r, 'pts a path's points, 'st 'en, and how it is drawn
    ; a corner's offset from the centre of a thing w by h, round (divided by root 2) or square
    (gp-off round w h c)
     (: x (w / 2) y (h / 2) dx (round ? (x / gp-rt2) x) dy (round ? (y / gp-rt2) y)
@@ -1147,10 +1138,9 @@
     (o 'ty @ ty
      (? (ty = 'move) (o 'en) (elem ty ['line 'spline]) (gp-mid (o 'st) (o 'en))
         (o 'c)))
-   ; an arrowhead with its tip at p, pointing along u
-   ; an arrowhead with its tip at p, pointing along u: solid, filled in the stroke's colour
-   ; under a hairline, or two strokes whose tip stands back a quarter of the line's width
-   ; with an outline colour a solid head is filled in it, and all but the last let it go
+   ; an arrowhead with its tip at p, pointing along u: solid (filled in the stroke's colour,
+   ; or the outline colour, under a hairline) or two strokes whose tip stands back a quarter
+   ; of the line's width; all but the last let the outline colour go
    (gp-head g o p u last) (gp-head2 g o p u last (gp-retreat o))
    ; ..an open one's tip already k back
    (gp-head2 g o p u last k)

@@ -282,7 +282,7 @@ struct img_ctx {
  uintptr_t cur_off, cur_ap;       // the object being encoded: offset + its hot
  int fail;                        // sticky: any refusal ends the dump
  uintptr_t bad[3 * 2]; int nbad;  // (offset, value, ap) of the first refusals
- // the code segment: the live natives' blobs packed in walk order, each [len, pad, code..]
+ // the code segment: the live natives' blobs packed in walk order, each [len, 0, code..]
  // rounded to 16 as the arena lays them, and the table of what landed where
  char *cseg; uintptr_t cn, ccap;
  struct img_code { uintptr_t a, off, h, n; } *ct; uintptr_t ctn, ctcap;
@@ -337,6 +337,7 @@ static intptr_t img_code_off(struct img_ctx *x, uintptr_t a) {
  else {
   off = x->cn + hd;
   memcpy(x->cseg + x->cn, (char*) a - hd, hd + n + 1);
+  memset(x->cseg + x->cn + sizeof(uintptr_t), 0, sizeof(uintptr_t));   // the span is the arena's, not the image's
   memset(x->cseg + x->cn + hd + n + 1, 0, span - hd - n - 1);
   x->cn += span; }
  x->ct[x->ctn].a = a, x->ct[x->ctn].off = off, x->ct[x->ctn].h = hv, x->ct[x->ctn].n = n, x->ctn++;

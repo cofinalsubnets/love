@@ -1,6 +1,5 @@
-; test/host/mesh.l -- src/apps/lore/mesh.l: the camera's sense of left and up, which faces a
-; shape shows from where, a texture's levels, the sun on a face, the sky behind, and the
-; frame out as half blocks and as kitty's pixels read back off a quay screen.
+; test/host/mesh.l -- src/apps/lore/mesh.l: camera, faces, textures, sun, sky, lamps, and the
+; frame as half blocks and as kitty pixels read back off a quay screen.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/mesh.l | out/love
 (borrow 'mesh)
 (borrow 'view)     ; pi
@@ -53,8 +52,7 @@
    skf (mesh-sky (sky-stars noon 0.0 0.65) sl wx [0.0 0.0 0.0] noon 0.0 1)
    sk (skf v0 (iota (W * H)))
    fs (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 skf)
-   ; by night, looking straight up: the stars change no more pixels than there are stars
-   ; in view -- none of them a patch
+   ; by night, looking up: the stars change at most one pixel each
    night (1.0 * 1790812800 + 1.0 * 3600.0) nl (sky-light (sky-sun night 0.0 0.65) wx night) ns (sky-stars night 0.0 0.65)
    vu (mesh-view W H [0.0 0.0 0.0] 0.0 1.5 1.4 0.1 100.0)
    zen (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 1))
@@ -63,12 +61,11 @@
    seen (net (-1 < mesh-spot vu (ns 'x) (ns 'y) (ns 'z)))
    lit-m (zen != bare) hot (iota lit-m)
    ; the sky asked every 4 pixels and shaded between: near the sky asked at each, the box
-   ; the same, the rest near on the mean; by night the stars a pixel each over it, as many
-   ; as there are in view, against the same sky with every star turned under the ground
+   ; the same; by night still a pixel per star in view
    fg (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars noon 0.0 0.65) sl wx [0.0 0.0 0.0] noon 0.0 4))
    (gap a b) (: p (mesh-flat a) q (mesh-flat b) (+(map (k \ net (max (p k - q k) (q k - p k))) ^3) / (3.0 * #a)))
-   ; a box over a sheet, the sun overhead: seen from above, the sheet dark under the box by
-   ; the sun's view of it, and lit as before away from it; without the view, lit throughout
+   ; a box over a sheet, the sun overhead: the sheet shadowed under the box by the sun's
+   ; view, lit away from it; without the view, lit throughout
    shs (mesh-bake-sun (mesh-pack sheet) lt mesh-open 1.0)
    cb (mesh-bake-sun (mesh-pack (mesh-box [0.0 0.0 0.0] [0.5 0.5 0.5] 0.0 -1 white 1.0)) lt mesh-open 1.0)
    sv (mesh-sun-view lt [0.0 0.0 0.0] 5.0 5.0) mp (mesh-sun-map sv cb 64)
@@ -105,8 +102,8 @@
        (at fg mid cen = at f0 mid cen) (two? gk) (gap fg fs < 0.01) (0.9 * seen <= #hot4) (#hot4 <= seen)
        (0 < net (-1 < mesh-spot vu (ds 'x) (ds 'y) (ds 'z))) (net (dk ds != dk ds0) = 0)
        (shape mp = [64 64]) (at fsh mid cen < at fno mid cen) (at fsh (mid + 6) cen = at fno (mid + 6) cen)))
-; --- a picture's texture: any size, its levels halved each way to a side of one; from rgba
-; --- bytes, each texel the mean under it, a hole where they are mostly clear
+; --- a picture's texture: levels halved down to a side of one; from rgba bytes, each texel the
+; mean under it, a hole where mostly clear
 (: white [1.0 1.0 1.0]
    pc (mesh-pic 8 4 (\ x y (x < 4 ? [1.0 0.0 0.0] [0.0 0.0 1.0])))
    px "\xff\x00\x00\xff\x00\xff\x00\xff\x00\x00\xff\xff\x00\x00\x00\x00"
@@ -115,8 +112,7 @@
    (up? m) (all (v \ v 6 > 0.99) (m 0))
    sa (mesh-sheet [0.0 0.0 0.0] [1.0 0.0 0.0] [0.0 0.0 1.0] 2 2 [0.0 1.0 0.0] (p \ [0.0 0.0]) -1 white)
    sb (mesh-sheet [0.0 0.0 0.0] [0.0 0.0 1.0] [1.0 0.0 0.0] 2 2 [0.0 1.0 0.0] (p \ [0.0 0.0]) -1 white)
-   ; ..lamps over a floor 4 by 4: brightest under the lamp, none past its reach, none from a
-   ; lamp facing away, none where it is kept from
+   ; ..lamps over a 4 by 4 floor: brightest under, none past reach, facing away, or kept from
    fl (mesh-pack (mesh-sheet [-2.0 0.0 -2.0] [4.0 0.0 0.0] [0.0 0.0 4.0] 4 4 [0.0 1.0 0.0] (p \ [0.0 0.0]) -1 white))
    mid 12                             ; the vertex at the middle, under the lamp
    lp {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 2.5}
@@ -125,11 +121,11 @@
    short (mesh-lamp fl {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 1.2})
    kept (mesh-lamp fl {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 2.5 'keep (\ X Y Z (Z < 0.5))})
    (texs t) (peep t (iota (#t // 4) * 4 + 3) 0)
-   ; ..and lit by them, each channel by its own brightness; what shines its colour alone
+   ; ..lit by them, per channel; what shines its colour alone
    lm (mesh-lamps fl [0.0 0.0 0.0] [ch] [2.0] 1.0)
    sh (mesh-shine fl 0.5)
    gl (mesh-glow sh)
-   ; ..relit in place: one buffer, its places kept and its colours the latest
+   ; ..relit in place: one buffer, colours the latest
    b1 (mesh-lamps! fl [0.0 0.0 0.0] [ch] [1.0] 1.0) c1 (peep (b1 0) (mid * 8 + 5) 0.0)
    b2 (mesh-lamps! fl [0.0 0.0 0.0] [ch] [3.0] 1.0)
  (test (map shape pc = [[4 8] [2 4] [1 2]]) (peep (pc 1) [0 0] 0 = 16711680) (peep (pc 1) [0 3] 0 = 255)

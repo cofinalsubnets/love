@@ -1,11 +1,5 @@
-; a cask is a mutable flat byte array -- the one collection whose pin lands in place, so a
-; second holder sees the write. its surface laws (tally, $, the byte pin, the charlist ctor,
-; identity equality) are spec.l's; what lives here are the doors that take a range.
-; `pour` blits a byte run between casks and strings -- a dst offset, a src offset, a count --
-; and answers dst; an oversized count clamps to the room there is rather than trampling the
-; heap. `snip` reads a range back out as a string, clamping its bounds the way a string snip
-; does, and it snapshots: the bytes are copied, so a later pin cannot reach what was read.
-; out of range, either door is a silent no-op.
+; casks, the mutable byte arrays: the doors that take a range. pour blits and clamps,
+; snip copies a range out; out of range either is a silent no-op
 (test
  ; --- a cask is its own kind ---
  !(string? (cask 4)) !(charm? (cask 4))
@@ -34,16 +28,11 @@
  ; ... and the snapshot is taken, not aliased
  (: b (cask 2) _ (pour b 0 "AB" 0 2) s (snip b 0 2) (pin b 0 90, "AB" = s))
 
- ; --- a cask equals itself; law.l's =-total corpus carries no cask, so it is said here ---
+ ; --- a cask equals itself ---
  (cask 2 @ b (b = b)))
 
-; --- peepv / pinv: a whole tray in or out, at a width and a stride -------------------
-; the range doors above move bytes; these move ELEMENTS, and carry the two numbers a byte
-; run cannot -- how wide one is and how far apart they sit. a stride wider than the width
-; is an interleave, which is the shape a frame of stereo PCM has (src/apps/harp/play.l's pack
-; lays each channel with one call). they sit in `guts` beside peepw/pinw and are read the
-; same way: through cite, never a (borrow 'guts) splice, the corpus being one scope. the
-; bootstrap egg never mops, so ask the module first and the book after.
+; --- peepv / pinv: a whole tray in or out, at a width and a stride ---
+; cited, never borrowed (the corpus is one scope); the egg never mops, so the book is the fallback
 (: bufv-G (cite 'guts)
    (bufv k) (bufv-G k || book k)
    lay (bufv 'pinv)  see (bufv 'peepv)
@@ -59,16 +48,14 @@
     (cask 4 @ c (lay c 0 4 4 (iota 1 + 16909060),
                  (test (4 = peep c 0 0) (3 = peep c 1 0) (2 = peep c 2 0) (1 = peep c 3 0)))),
 
-    ; a stride wider than the width INTERLEAVES: two channels into one frame run, and each
-    ; reads back on its own -- which is the whole reason the door carries a stride
+    ; a stride wider than the width interleaves: two channels, each read back on its own
     (: c (cask 16) l (iota 4 + 10) r (iota 4 + 20)
        _ (lay c 0 2 4 l)  _ (lay c 2 2 4 r)
        gl (see c 0 2 4 4)  gr (see c 2 2 4 4)
        (test (10 = peep gl 0 0) (13 = peep gl 3 0)
              (20 = peep gr 0 0) (23 = peep gr 3 0))),
 
-    ; a float element truncates TOWARD ZERO, the answer `int` gives -- so a tray of samples
-    ; goes down with no pass to round it, and the low bytes are what a narrow width keeps
+    ; a float truncates toward zero, as `int`; a narrow width keeps the low bytes
     (: c (cask 8) t ((iota 4 - 2) * 1.5)            ; -3.0 -1.5 0.0 1.5
        _ (lay c 0 2 2 t)
        g (see c 0 2 2 4)

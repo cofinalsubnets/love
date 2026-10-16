@@ -1,7 +1,5 @@
-/* stage 7c-iii part 2: multidimensional arrays -- nested (arr (arr T n) m)
-   types, row-major layout, [i][j] indexing scaled by the element stride, and
-   nested-brace initializers for a global 2D table. exit = a mix that only
-   agrees with gcc if the layout and the pointer arithmetic both match. */
+/* multidimensional arrays: nested array types, row-major layout, [i][j] scaled by
+   the element stride, nested-brace init of a global 2D table. */
 int g[3][4] = { {1,2,3,4}, {10,20,30,40}, {100,101,102,103} };
 int gi[][2] = { {1,1}, {2,2}, {3,3} };   /* outer dim inferred from the init: 3 */
 

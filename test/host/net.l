@@ -1,11 +1,8 @@
-; test/host/net.l -- kore's telnet and httpd
-; telnet's option talk byte by byte, then the whole client on a pty against a server task
-; in this process: it agrees to the echo, goes to character mode, sends a key as typed and
-; a return as CR LF, and leaves when the server closes. httpd is kiosko under busybox's
-; flags: a page served off -h on -p, and the flags it will not half obey refused.
-;   cat test/00-init.l test/host/net.l | out/love
+; test/host/net.l -- kore's telnet, telnetd, microcom, nslookup, ping, traceroute and httpd.
+; a server is a process of its own: a pty read holds this whole process.
+;   cat test/00-init.l test/host/00-host.l test/host/net.l | out/love
 (borrow 'posix)
-; every path this lays is the pid's own, so two runs over one out/ keep apart
+; paths are the pid's own, so two runs over one out/ keep apart
 (: net-dir ("out/.nettest-" + show (getpid 0)))
 (: net-root ("out/.httpd-" + show (getpid 0)))
 
@@ -15,8 +12,7 @@
                   (go 0 "" ""))
    (iac v x) (string 255 + string v + string x)
    st (new 0)
-   ; the server may echo and suppress go-ahead, and asking again answers nothing; any
-   ; other offer is refused, and so is any request but go-ahead's
+   ; the server may echo and suppress go-ahead, once; any other offer or request is refused
    _ (test (feed st (iac 251 1) = ["" (iac 253 1)]) (K 'tn-echo? st)
            (feed st (iac 251 1) = ["" ""])
            (feed st (iac 251 3) = ["" (iac 253 3)])
@@ -32,16 +28,12 @@
             = ["ab" ""])
            ; IAC IAC is a data 255, a command with no option is nothing, CR NUL is a CR
            (feed st ("x" + string 255 + string 255 + "y" + string 255 + string 241 + "\r\x00\r\n") = [("x" + string 255 + "y\r\r\n") ""]))
-   ; the other way: a 255 doubled, return as CR LF in character mode, a line's 10 in line
-   ; mode, and a stray 13 there dropped
+   ; sending: 255 doubled, CR LF for return in character mode, a stray 13 in line mode dropped
    _ (test (send 255 0 = string 255 + string 255) (send 13 1 = "\r\n") (send 97 1 = "a")
            (send 10 0 = "\r\n") (send 13 0 = "") (send 97 0 = "a"))
 
-   ; -- the client on a pty ----------------------------------------------------------
-   ; the server is a process of its own: this one reads the pty, and a read there holds
-   ; the whole process, so a server task beside it would never be run. it offers the
-   ; echo, waits for it taken, greets, reads a line, answers it and closes, and leaves
-   ; what it read in a file
+   ; the client on a pty: the server offers the echo, greets, answers a line and closes,
+   ; leaving what it read in a file
    love <cmdline
    port (test-free 0)
    dir net-dir
@@ -62,7 +54,6 @@
    0)
 "),
        close p))
-   (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    srv (tether [love sfile])
    _ (test-until (s \ !(two? s)) (_ \ (stat (dir + "/up"))))   ; its listen, before our connect
    r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
@@ -77,27 +68,23 @@
    _ (say m "x\r", flush m)
    more (slurp m)
    txt (seen + more)
-   st2 (waitfor <r)
+   st2 (h-waitfor <r)
    _ (slurp >srv)
-   _ (waitfor <srv)
+   _ (h-waitfor <srv)
    got (open (dir + "/got") "r" @ q (hot? q ? (slurp q @ g (close q, g)) ""))
    _ (test (got = iac 253 1 + "x\r\n")
            (0 <= fsub txt "Connected to 127.0.0.1." 0)
            (0 <= fsub txt "got it" 0)
            (0 <= fsub txt "Connection closed by foreign host." 0)
            (<st2 = 0))
-   ; nothing listening: a refusal and exit 1; a bad port is a usage error
    r2 (tether [love "kore" "telnet" "127.0.0.1" "1"])
    t2 (slurp >r2)
-   _ (test (0 <= fsub t2 "telnet: cannot connect to 127.0.0.1 port 1" 0) (<(waitfor <r2) = 1))
+   _ (test (0 <= fsub t2 "telnet: cannot connect to 127.0.0.1 port 1" 0) (<(h-waitfor <r2) = 1))
    r3 (tether [love "kore" "telnet" "127.0.0.1" "http"])
-   (test (0 <= fsub (slurp >r3) "telnet: not a port: http" 0) (<(waitfor <r3) = 2),
+   (test (0 <= fsub (slurp >r3) "telnet: not a port: http" 0) (<(h-waitfor <r3) = 2),
     0))
 
-; -- telnetd -------------------------------------------------------------------------------
-; the input side byte by byte: a CR's LF or NUL is part of it, IAC IAC is a 255, an unasked
-; will is refused and what was asked or offered answers nothing, a subnegotiation is kept
-; out of the data. then kore's telnet against kore's telnetd running /bin/sh on loopback
+; telnetd's input byte by byte, then kore's telnet against it running /bin/sh on loopback
 (: K (cite 'kore)
    st (K 'td-new 0)
    (ch s) (K 'td-chunk st s ())
@@ -110,7 +97,6 @@
            (K 'td-esc ("q" + string 255) = "q" + string 255 + string 255))
    love <cmdline
    port (test-free 0)
-   (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    srv (tether [love "kore" "telnetd" "-p" (show port) "-b" "127.0.0.1" "-l" "/bin/sh" "-f" "/dev/null"])
    _ (test-up port)
    r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
@@ -118,20 +104,16 @@
    _ (rest 500)                                  ; the options settled, the shell's prompt up
    _ (say m "echo td-$((6*7))\rexit\r", flush m)
    txt (slurp m)
-   st2 (waitfor <r)
+   st2 (h-waitfor <r)
    _ (still <srv 15)
    log (slurp >srv)
-   (waitfor <srv,
+   (h-waitfor <srv,
     test (0 <= fsub txt "td-42" 0)
          (0 <= fsub txt "Connection closed by foreign host." 0) (<st2 = 0)
          (0 <= fsub log ("no login: whoever reaches port " + show port + " runs /bin/sh") 0)))
 
-; -- microcom ------------------------------------------------------------------------------
-; the serial line is a pty whose far end is a sleeping sh, its path off sh's tty; microcom
-; runs on a pty of its own. keys typed at microcom reach the line, the line's bytes reach
-; microcom's screen, and ^X leaves with 0
+; microcom: the serial line is a pty held by a sleeping sh; keys and bytes cross, ^X leaves 0
 (: love <cmdline
-   (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (upto m n a) (n <= #a ? a (see m @ c (c < 0 ? a (upto m n (a + string c)))))
    dv (tether ["sh" "-c" "tty; exec sleep 20"])
    dm >dv
@@ -145,27 +127,22 @@
    _ (say dm "pong", flush dm)
    shown (upto mm 4 "")
    _ (say mm (string 24), flush mm)
-   st (waitfor <mc)
+   st (h-waitfor <mc)
    _ (still <dv 15)
-   _ (waitfor <dv)
-   bad (: r (tether [love "kore" "microcom" "-d" "5" path]) t (slurp >r) [t <(waitfor <r)])
+   _ (h-waitfor <dv)
+   bad (: r (tether [love "kore" "microcom" "-d" "5" path]) t (slurp >r) [t <(h-waitfor <r)])
    (test (got = "ping") (shown = "pong") (<st = 0)
          (0 <= fsub <bad "microcom: -d is not supported" 0) (bad 1 = 1)))
 
-; -- nslookup and ping --------------------------------------------------------------------
-; nslookup against a nameserver that is a process of its own (the pty read holds this one):
-; four queries, box.test's a and aaaa -- one address, then an empty yes -- and nosuch.test's
-; two, both NXDOMAIN. it tells them apart by the first letter of the name and finds the
-; type just past it. ping sends two echoes to loopback, where the kernel lets it, and ping6
-; (and ping -6) to ::1 where the host has ipv6; then both again in a fresh user and network
-; namespace: there ping_group_range shuts the echo socket and the namespace's root may open
-; a raw one, the socket the bsds ping through.
+; nslookup against a fake nameserver: box.test's a and aaaa (one address, then an empty yes),
+; nosuch.test NXDOMAIN. ping on the echo socket where allowed, then in a fresh namespace,
+; whose root may open the raw socket the bsds ping through
 (: K (cite 'kore)
    love <cmdline
    dir net-dir
    _ (hark ["rm" "-rf" dir], mkdir dir 493)
    nfile (dir + "/ns.l")
-   np (test-bind 0 @ q (close (q 1), <q))      ; a udp port of ours, its socket gone
+   np (test-bind 0 @ q (close (q 1), <q))
    _ (open nfile "w" @ p
       (say p ("(borrow 'posix)
 (borrow 'bytes)
@@ -183,20 +160,17 @@
    0)
 "),
        close p))
-   (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
-   (run args) (: r (tether (love . "kore" . args)) t (slurp >r) [t <(waitfor <r)])
-   (has? t s) (0 <= fsub t s 0)
+   (run args) (: r (tether (love . "kore" . args)) t (slurp >r) [t <(h-waitfor <r)])
    srv (tether [love nfile])
    _ (test-until (s \ !(two? s)) (_ \ (stat (nfile + ".up"))))   ; its bind, before our queries
    a (run ["nslookup" ("-port=" + show np) "box.test" "127.0.0.1"])
    b (run ["nslookup" ("-port=" + show np) "nosuch.test" "127.0.0.1"])
-   _ (slurp >srv, waitfor <srv)
+   _ (slurp >srv, h-waitfor <srv)
    c (run ["nslookup" "-type=bogus" "box.test"])
    _ (test (has? <a ("Address:\t127.0.0.1:" + show np)) (has? <a "Name:\tbox.test") (has? <a "Address: 10.1.2.3")
            !(has? <a "can't find") (a 1 = 0)
            (has? <b "** server can't find nosuch.test: NXDOMAIN") (b 1 = 1)
            (has? <c "nslookup: unknown option -type=bogus") (c 1 = 2))
-   ; ping: two echoes and the summary, or the socket refused and said so
    ; two echoes to h and the summary, or the socket refused and said so
    (echoes r h) (has? <r " echo socket here" ? (test (r 1 = 2))
                  (test (has? <r ("PING " + h + " (" + h + "): 56 data bytes"))
@@ -206,11 +180,11 @@
    v6? (open "/proc/net/if_inet6" "r" @ q (hot? q ? (close q, 1) 0))
    _ (echoes (run ["ping" "-c" "2" "-i" "0.2" "127.0.0.1"]) "127.0.0.1")
    _ (v6? ? (echoes (run ["ping6" "-c" "2" "-i" "0.2" "::1"]) "::1", echoes (run ["ping" "-6" "-c" "2" "-i" "0.2" "::1"]) "::1") 0)
-   ; the raw sockets, where unshare and ip are there to make the namespace (99 when not)
+   ; the raw sockets, in a namespace where unshare and ip can make one (99 when not)
    (inns cmd) (: r (tether ["/bin/sh" "-c" ("unshare -rn sh -c 'ip link set lo up' 2>/dev/null || exit 99; "
                                            + "exec unshare -rn sh -c 'ip link set lo up && exec " + love
                                            + " kore " + cmd + "'")])
-                 t (slurp >r) [t <(waitfor <r)])
+                 t (slurp >r) [t <(h-waitfor <r)])
    rw (inns "ping -c 2 -i 0.2 127.0.0.1")
    _ (rw 1 = 99 ? 0
       (test (has? <rw "64 bytes from 127.0.0.1: seq=1 ttl=")
@@ -226,13 +200,9 @@
          (K 'ping-ms "1" = 1000) (K 'ping-ms "0.2" = 200) (K 'ping-ms "2.5" = 2500)
          (K 'ping-ms "x" = ()) (K 'ping-t 84000 = "0.084") (K 'ping-t 11331000 = "11.331")))
 
-; -- traceroute ---------------------------------------------------------------------------
-; a small internet in namespaces, where unshare, ip and nsenter can make one: ours, a router
-; (its icmp rate limits off) and a target behind it, v4 and v6. each traceroute runs twice,
-; first on a raw socket (a fresh namespace shuts ping_group_range) and then on the echo
-; socket with its error queue: the router at hop 1, the target at 2, and !N for a network
-; the router has no route to. a ping6 first, so neighbour discovery is done before timing.
-; the unreachable marks off tr-mark, and the loopback trace, run everywhere
+; traceroute through a router to a target in namespaces, v4 and v6, raw then echo socket:
+; router at hop 1, target at 2, !N with no route. a ping6 first settles neighbour discovery.
+; tr-mark and the loopback trace run everywhere
 (: K (cite 'kore)
    love <cmdline
    dir net-dir
@@ -268,12 +238,10 @@ done
 kill $R $D
 ",
        close p))
-   (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
-   (has? t s) (0 <= fsub t s 0)
    (count t s) ((: (g i k) (fsub t s i @ j (j < 0 ? k (g (j + 1) (k + 1))))) 0 0)
    r (tether ["/bin/sh" "-c" ("unshare -rn true 2>/dev/null || exit 99; exec unshare -rn sh " + sfile + " " + love)])
    txt (slurp >r)
-   st <(waitfor <r)
+   st <(h-waitfor <r)
    k (fsub txt "== echo" 0)
    halves (0 <= k ? [(snip txt 0 k) (snip txt k #txt)] ["" ""])
    _ (st = 99 ? 0
@@ -283,20 +251,18 @@ kill $R $D
    ; the marks: v4's unreachable codes, v6's, and a time exceeded that marks nothing
    _ (test (K 'tr-mark 0 3 1 = " !H") (K 'tr-mark 0 3 3 = "") (K 'tr-mark 0 11 0 = "")
            (K 'tr-mark 1 1 0 = " !N") (K 'tr-mark 1 1 4 = "") (K 'tr-mark 1 3 0 = ""))
-   lo (: r (tether [love "kore" "traceroute" "-n" "-q" "1" "127.0.0.1"]) t (slurp >r) [t <(waitfor <r)])
+   lo (: r (tether [love "kore" "traceroute" "-n" "-q" "1" "127.0.0.1"]) t (slurp >r) [t <(h-waitfor <r)])
    (has? <lo "no icmp echo socket" ? (test (lo 1 = 2))
     (test (has? <lo "traceroute to 127.0.0.1 (127.0.0.1), 30 hops max, 60 byte packets")
           (has? <lo " 1  127.0.0.1  ") (lo 1 = 0))))
 
-; -- httpd -------------------------------------------------------------------------------
+; httpd: kiosko under busybox's flags
 (: K (cite 'kore)
    love <cmdline
    root net-root
    _ (hark ["rm" "-rf" root], mkdir root 493)
    _ (open (root + "/index.html") "w" @ p (say p "<p>served</p>", close p))
-   (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
-   (run args) (: r (tether (love . "kore" . "httpd" . args)) t (slurp >r) [t <(waitfor <r)])
-   ; the refusals, each by name
+   (run args) (: r (tether (love . "kore" . "httpd" . args)) t (slurp >r) [t <(h-waitfor <r)])
    a (run ["-p" "nohost:8080" "-h" root])
    b (run ["-c" "/etc/httpd.conf"])
    c (run ["-h" (root + "/none")])
@@ -313,7 +279,7 @@ kill $R $D
    g (try 100)
    _ (test (two? g) (<g = 200) (g 2 = "<p>served</p>"))
    _ (still <srv 15)
-   _ (waitfor <srv)
+   _ (h-waitfor <srv)
    ; a bare port is loopback's alone: 127.0.0.2 reaches every address on linux, not 127.0.0.1
    p2 (test-free 0)
    srv2 (tether [love "kore" "httpd" "-f" "-p" (show p2) "-h" root])
@@ -321,7 +287,7 @@ kill $R $D
    g2 (try2 100)
    (test (two? g2) (<g2 = 200) (atom? (K 'wg-once 0 "127.0.0.2" p2 "/")),
     still <srv2 15,
-    waitfor <srv2,
+    h-waitfor <srv2,
     0))
 
 (hark ["rm" "-rf" net-dir net-root])

@@ -1,17 +1,9 @@
-; src/apps/kore/sed.l -- sed-lite over the re.l engine: the stream editor's useful
-; core. a toolbox file, no seat -- kore is its door; loads after re.l in the cat.
-;
-;   sed [-n] [-E] [-i] [-e script].. script [file..]
-;
-; commands split by ; or newlines, each [addr[,addr]] verb. addresses: N, $, /re/ (BRE, or
-; ERE under -E). verbs: p d q, and s/re/repl/[g][p] with any delimiter; the replacement
-; knows &, \1..\9 and \x; y/abc/xyz/ maps bytes; addr{ .. } groups; # comments. -e stacks scripts; once any -e is given every word is a file.
-; -i makes each file its own stream (numbers restart, $ per file); `srun` takes its output
-; port, which is the whole of how -i captures. not here: empty-pattern reuse, \n in a
-; replacement, the hold space.
-;
-; the pure floor (lawed in test/law/kore.l): (sparse sc ere?) -> (1 cmds) | (),
-; and (usub nodes repl ln g?) -> (changed text), the one substitution walk.
+; src/apps/kore/sed.l -- sed-lite over the re.l engine, the stream editor's useful core;
+; loads after re.l in the cat. verbs p d q s y and { }; -i makes each file its own stream
+; (numbers restart, $ per file) by handing `srun` its output port. not here: empty-pattern
+; reuse, \n in a replacement, the hold space.
+; the pure floor: (sparse sc ere?) -> (1 cmds) | (), and (usub nodes repl ln g?) ->
+; (changed text), the one substitution walk.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -180,12 +172,9 @@
               ()))))
        (rcmd 0 ()))
 
-   ; -- the cycle. op is the output port, which is how -i captures a file's own
-   ; edit instead of saying it into out --
-   ; (srun cmds rd n? op) -> the exit remembered, 0. rd is a `urdj`, and its
-   ; [line term? last?] is all the cycle ever needed of the whole text: `$` is last?,
-   ; and the missing final newline is term?. the read is a line at a time now -- sed
-   ; of 50 MB held 8.1 GB when the cycle was handed `(lines txt)`.
+   ; -- the cycle. (srun cmds rd n? op) -> the exit remembered, 0. op is the output port,
+   ; which is how -i captures a file's edit. rd is a `urdj`: its [line term? last?] is all
+   ; the cycle needs, `$` being last? and a missing final newline term?, a line at a time
    (srun cmds rd n? op)
     (: t {}                                  ; the range toggles, keyed by command index
        (amatch a no ln last?)
@@ -227,11 +216,9 @@
                        (<r && <>pr ? (say q ps2, put q 10),
                         rline more (idx + 1) ps2 no q last?)))))
            [0 ps])
-       ; the last line of an unterminated source rides a jug. the newline goes missing
-       ; after the last write and not after every one -- `sed -n 'p;p'` keeps the inner
-       ; one -- so the line is rendered whole and chomped once, whatever the commands did.
-       ; and only the last line of the whole stream can lose it: an unterminated file
-       ; in the middle of the join is followed by more output, so it keeps its newline.
+       ; the last line of an unterminated source rides a jug: its newline goes missing after
+       ; the last write only (`sed -n 'p;p'` keeps the inner one), so the line is rendered
+       ; whole and chomped once. only the stream's last line can lose it, not a mid-join file's
        (mline no)
         (urdj-line rd @ [x term? last?]
            (: hold ((last? ? term? 1) ? () (jug 0))
@@ -243,10 +230,9 @@
        (mline 1))
 
    ; -- sed: the flags, then one of the two stream models --
-   ; before uopt reads the words, two of GNU's shapes it has no way to say: -i's suffix
-   ; rides glued or not at all (-i.bak, --in-place=.bak; -in is -i with suffix n, as
-   ; GNU's), and -f FILE is its script in place, so -e and -f keep their order. a
-   ; cluster ending in f (-nf FILE) keeps its other letters. -> [words suffix]
+   ; two GNU shapes uopt cannot say: -i's suffix rides glued or not at all (-in is -i with
+   ; suffix n), and -f FILE keeps its order among the -e's; a cluster ending in f (-nf FILE)
+   ; keeps its other letters. -> [words suffix]
    (sed-pre as)
     (: box {'sfx ()}
        (script f) (uread f @ r (two? r ? (chomp <>r) (udie 4 ("sed: couldn't open file " + f + ": No such file or directory"))))   ; 4, GNU's i/o status
@@ -284,11 +270,9 @@
        cmds <>pc
        ; GNU's own sentence for an unreadable operand, and the one the gate pins
        (sed-miss f) (say err ("sed: can't read " + f + ": No such file or directory"), put err 10, 0)
-       ; -i: each file its own stream, edited and written back. a file that will
-       ; not open complains and the rest still flow, exactly as the joined lane.
-       ; the answer is still held whole, and must be: it overwrites its own input.
-       ; with a suffix the file as it was is kept beside it first. -s is the same
-       ; walk with each file's stream said on out
+       ; -i: each file its own stream, edited and written back; one that will not open
+       ; complains and the rest flow. the answer is held whole, since it overwrites its input;
+       ; a suffix keeps the old file beside it first. -s is the same walk said on out
        (inplace a bad)
         (a @ (f . more)
            (: rd (urdj sed-miss [f])

@@ -1,26 +1,10 @@
 #!/bin/sh
-# test/gate/caja.sh -- caja, TeX's engine in love, held to TeX itself: its DVI byte for byte.
-#
-# boxes (src/apps/caja/box.l, tex.web parts 10, 32, 33): test/caja/boxes.l writes the same
-# pages twice, as -ini TeX input and as caja's nodes; TeX's DVI and caja's must be the same
-# file. the fixed pages each pin a case (glue set both ways and at every order, leaders of
-# every kind in both directions, shifted and nested boxes, rules, fonts at sizes, codes past
-# 127), then seeded random pages from a small grammar, enough of them that the file passes
-# TeX Live's 16384-byte DVI buffer and the w/x/y/z reuse meets its flushed half.
-#
-# paragraphs (src/apps/caja/par.l, tex.web parts 38-43 and the main loop): test/caja/pars.l says
-# its pages as -ini TeX with hyphen.tex's patterns and as caja's tokens, the same way. fixed
-# pages pin plain TeX's settings, raggedright, looseness, hanging indentation, \parshape and
-# the emergency pass; seeded random pages draw the parameters and the text, which mixes
-# English, punctuation, explicit hyphens and discretionaries, penalties, kerns, glue, rules
-# and font changes. cajalig (test/caja/cajalig.pl, through pltotf) has every ligature op,
-# kerns and both boundary characters.
-#
-# documents (src/apps/caja/doc.l, with page.l's \vsplit): test/caja/docs.l lays a whole document
-# out -- every markdown file in the tree, and a few man pages where the host has them --
-# and says the shower's tokens both ways, paged by \vsplit with a number under each page.
-#
-# skips where TeX Live is missing; takes the love binary as $1.
+# test/gate/caja.sh -- caja, TeX's engine in love, held to TeX's DVI byte for byte.
+# each script writes its pages twice, as -ini TeX input and as caja's own: boxes.l (fixed
+# cases, then enough seeded pages to pass TeX's 16 KiB DVI buffer), pars.l (paragraphs with
+# hyphen.tex; cajalig.pl has every ligature op), and docs.l (the tree's markdown and a few
+# man pages, paged by \vsplit). skips without TeX Live.
+# usage: caja.sh LOVE
 . test/gate/skip.sh
 set -e
 
@@ -80,7 +64,7 @@ doc() {
   [ -s "$w/d.dvi" ] || fail "TeX wrote no DVI for $1"
   cmp -s "$w/d.dvi" "$w/doc.dvi" || { cmp "$w/d.dvi" "$w/doc.dvi" || true; fail "caja's DVI differs from TeX's on $1"; }
 }
-# the tree's own listing (selfpack -l, sb's law): an empty one is a refusal, never a pass
+# the tree's own listing: an empty one is a refusal, never a pass
 mds=$("$L" src/tools/selfpack.l -l | grep '\.md$')
 [ -n "$mds" ] || fail "no markdown files listed (src/tools/selfpack.l -l)"
 nd=0

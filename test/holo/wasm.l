@@ -1,11 +1,6 @@
-; test/holo/wasm.l -- rung 0 of the wasm lane: a module laid by
-; src/love/holo/wasm.l off hand-built forms, written to out/.holo.wasm for test/holo/wasm.mjs
-; to validate and RUN under an engine that is not ours. what it claims: a memory64 module with
-; an import, a table, a data segment, i64 arithmetic, a 64-bit address store and load, a
-; call_indirect -- one function laid by hand the way rung 1 lays every function (a label
-; local, one loop, one br_table, each label's body ending in a branch back to the top), and
-; five lowered from holo's IR by wasm-fn, rung 1 itself.
-; run: cat src/love/holo/holo.l src/love/holo/wasm.l test/holo/wasm.l | out/love
+; wasm modules laid by holo for wasm.mjs and loader.mjs to validate and run under node: a
+; memory64 module with an import, a table, a data segment, i64 arithmetic, 64-bit loads and
+; stores, call_indirect, one dispatch-loop function by hand and five lowered by wasm-fn.
 
 (borrow 'holo)
 
@@ -27,10 +22,8 @@
       (i32.const 1) (local.set 1) (br 0)
       (end) (end)
       (local.get 2))
-   ;; rung 1: the same shapes off holo's IR through wasm-fn -- a counted loop, recursion
-   ;; through call (r3 and r4 survive the calls: a callee's locals are its own), labels that
-   ;; fall through, the sized memory ops with a negative displacement and a scaled index,
-   ;; and the flags: signed and unsigned sets, test, and a compare of two computed values.
+   ;; off holo's ir through wasm-fn: a counted loop, recursion (r3, r4 survive calls), fall-through
+   ;; labels, sized memory ops with a negative displacement and a scaled index, and the flags.
    isum-ir '((li r1 0) (li r2 0)
              (label top) (cmp r2 r0) (br gt done) (add r1 r1 r2) (inc r2) (jmp top)
              (label done) (mov r0 r1) (ret))
@@ -76,10 +69,8 @@
    _ (wasm-write "out/.holo.wasm" m)
    _ (puts ("test/holo/wasm: wrote out/.holo.wasm, " + show #(wasm-emit m) + " bytes\n"))
 
-   ;; rung 2, the type law, as a second module laid whole by wasm-program: the double lane
-   ;; (doubles travel as their bits through r0), the float conditions after ucomisd packed as
-   ;; bits, a float image narrowed and stored, the saturating conversions, and the overflow
-   ;; flags -- adds/subs with vs, and mulo's branch. every answer is checked under node.
+   ;; a second module by wasm-program: doubles as their bits through r0, the ucomisd conditions
+   ;; packed as bits, a narrowed float image, saturating conversions, the overflow flags.
    dsum-ir '((xorpd f0 f0) (li r2 0)                                  ; sum 0..n as doubles, the bits back
              (label top) (cmp r2 r0) (br gt done) (cvtsi2sd f1 r2) (addsd f0 f1) (inc r2) (jmp top)
              (label done) (movqrx r0 f0) (ret))
@@ -109,11 +100,9 @@
    _ (wasm-write "out/.holo2.wasm" m2)
    _ (puts ("test/holo/wasm: wrote out/.holo2.wasm, " + show #(wasm-emit m2) + " bytes\n"))
 
-   ;; rung 3, the environment: a mock of the artifact's face for src/inle/wasm/loader.js --
-   ;; the verbs the page calls, over the one import, __love_sys with linux's numbers. [16] is the
-   ;; out buffer's length and 4096 the buffer; [24] the bump pointer malloc rides; init asks
-   ;; the clock (228) and the kernel probe (20, which must say linux: -EBADF); eval copies
-   ;; its text into the buffer and write(1)s it; grow mmaps a page and lands a word on it.
+   ;; a mock artifact for the loader, over __love_sys with linux's numbers. [16] the out buffer's
+   ;; length, 4096 the buffer, [24] malloc's bump pointer; init asks the clock (228) and probes
+   ;; (20 must answer -EBADF); eval write(1)s its text; grow mmaps a page and stores a word.
    malloc-ir '((li r1 24) (ld r2 r1 0) (add r3 r2 r0) (add r3 r3 15) (and r3 r3 -16) (st r1 0 r3) (mov r0 r2) (ret))
    free-ir '((ret))
    init-ir '((li r0 228) (li r1 1) (li r2 32) (call __love_sys) (mov r3 r0)

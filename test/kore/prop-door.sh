@@ -1,10 +1,9 @@
 #!/bin/sh
-# test/kore/door.sh -- --help and --version at the door
+# test/kore/prop-door.sh -- --help and --version at the door
 . "$(dirname "$0")/common.sh"
 
-# src/apps/kore/kore.l's koredoor answers the two flags for every applet, on BOTH dispatch
-# lanes -- `hv` is common.sh's, the archives use it too.
-# the nested lane (`kore TOOL`) and the verb lane (`love TOOL`) must agree
+# the door answers both flags for every applet, and the nested lane (`kore TOOL`) and the
+# verb lane (`love TOOL`) agree
 hv "awk -h"          '^usage: awk'   korerun awk -h
 hv "awk --help"      '^usage: awk'   korerun awk --help
 hv "awk --version"   '^awk / love ' korerun awk --version
@@ -16,8 +15,7 @@ hv "bc --version"    '^bc / love '  korerun bc --version
 hv "ls -l --help"    '^usage: ls'    korerun ls -l --help
 hv "kore --help"     '^kore -- the'  "$m" kore --help
 hv "kore --version"  '^kore / love ' "$m" kore --version
-# ..and the letters that are NOT the door's: grep -h suppresses the filename (GNU says
-# what it says), ls -h is ls's own human sizes, echo hands back the word it was given
+# ..and letters that are not the door's: grep -h, ls -h's sizes, echo's word back
 printf 'a\nb\n' > "$ho/.hv1"; printf 'a\nX\n' > "$ho/.hv2"
 both "grep -h is grep's own" grep -h a "$ho/.hv1" "$ho/.hv2"
 korerun ls -h "$ho/.hv1" > "$o" 2>&1; r=$?

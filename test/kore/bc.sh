@@ -2,14 +2,8 @@
 # test/kore/bc.sh -- bc: the scale rules, the bases both ways, the language, the wrap, -l
 . "$(dirname "$0")/common.sh"
 
-# bc SAYS EVERYTHING ON STDOUT and complains only on stderr, so the printed run IS
-# the check. every digit under it is exact (a number is an integer over a power of
-# ten, in love's own bigints), which is why the math library can be asked for the
-# same bytes GNU prints rather than for a tolerance.
-# THE LIBRARY IS ASKED AT SCALE 10 AND UP. below that the two part company on 29
-# of 735 sampled calls, every one of them a place where GNU's series has run out of
-# guard digits and ours has not -- ours is the correctly truncated value each time
-# (checked against GNU's own answer at scale 40), so agreeing there would be wrong.
+# bc says everything on stdout, and every digit is exact, so the library answers gnu's bytes.
+# it is asked at scale 10 and up: below that gnu's series runs out of guard digits
 bcp=$ho/.kore-bc.p
 # NAME [FLAG..]: the program arrives on stdin, both bcs run it, stdout must match
 bck() { n=$1; shift; cat > "$bcp"
@@ -238,9 +232,8 @@ j(2,3)
 j(-3,8)
 E
 
-# a runtime error costs its own statement and the source walks on -- and both bcs
-# leave with 0 either way, which is GNU's reading and not POSIX's
-# ... and a frame comes back even when the body it belongs to dies partway
+# a runtime error costs its statement and the source walks on, exiting 0 (gnu's reading);
+# a frame comes back even when its body dies partway
 printf 'x = 5\ndefine fd(x) { auto y; y = 3; return (1/0) }\ny = 99\nfd(9)\nx\ny\n' > "$bcp"
 bc < "$bcp" > "$g" 2>/dev/null
 korerun bc < "$bcp" > "$o" 2>/dev/null
@@ -249,18 +242,14 @@ printf '1/0\n7\nsqrt(-1)\n8\n' > "$bcp"
 bc < "$bcp" > "$g" 2>/dev/null; a=$?
 korerun bc < "$bcp" > "$o" 2>/dev/null; b=$?
 cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore bc after a runtime error (gnu $a ours $b)"
-# the files come first and stdin after them, and a missing one only costs the status
+# files first, then stdin; a missing one costs only the status
 printf 'x = 6\n' > "$ho/.kore-bc1"; printf 'y = 7\n' > "$ho/.kore-bc2"
 printf 'x*y\n' | bc "$ho/.kore-bc1" "$ho/.kore-bc2" > "$g" 2>/dev/null
 printf 'x*y\n' | korerun bc "$ho/.kore-bc1" "$ho/.kore-bc2" > "$o" 2>/dev/null
 same "bc files then stdin"
-printf '' | bc "$ho/.kore-bc-nope" > /dev/null 2>&1; a=$?
-printf '' | korerun bc "$ho/.kore-bc-nope" > /dev/null 2>&1; b=$?
-[ $a -eq $b ] || fail "kore bc missing file (gnu $a ours $b)"
-# dc: GNU's, stdout and stderr, over the arithmetic and its scale, the bases, the
-# registers and arrays, macros and their exits, and every complaint
-# read(): the program from a file, its number from stdin's next line, in ibase (one read and one
-# line: GNU's blocks on a second read, and its first swallows the rest of stdin)
+bothrc "bc missing file" bc "$ho/.kore-bc-nope" < /dev/null
+# dc: gnu's stdout and stderr over arithmetic, scale, bases, registers, arrays, macros, complaints.
+# read(): the program from a file, its number from stdin's next line in ibase, one read only
 printf 'ibase = 16; a = read()\na * 2\n' > "$ho/.kore-bc-rd"
 for i in '1A\n' '-2.5\n' '0\n'; do
   pipe "bc read() of $i" "$(printf -- "$i")
@@ -314,8 +303,7 @@ _4v
 1 2 ]
 e
 EOF
-  # a line at a time by number, not a while read: under lush dc is the in-image verb,
-  # and a verb in a read loop drinks the loop's own buffered input before its pipe
+  # a line at a time by number: under lush dc is a verb, and a verb in a read loop drinks its input
   nc=$(wc -l < "$ho/.kore-dc.cases"); i=1
   while [ $i -le $nc ]; do
     p=$(sed -n "${i}p" "$ho/.kore-dc.cases"); i=$((i + 1))

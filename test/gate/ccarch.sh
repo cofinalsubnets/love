@@ -1,22 +1,12 @@
 #!/bin/sh
 # test/gate/ccarch.sh -- the C battery on a cross target: every test/cc/*.c built by
-# `mooncc -t <arch>`, run under qemu-user or on an a64 host (test/gate/a64run.sh), must
-# answer what the same source answers on x86-64. the targets share mooncc's front end and most of gen.l, so a fault in the
-# shared model can hide behind a lane one target has and another lacks.
-#
-# the reference is the x86-64 build, which test_moon pins against gcc: gcc pins x64 and
-# x64 pins the rest, with no cross gcc needed. where one exists (a64, via AARCH64_CC or
-# the local nerves toolchain) it is an extra oracle, since agreeing with x64 cannot
-# catch a fault both share. stdout is compared, not just the exit code.
-#
-# the exclusions are per target and asserted: a program using a feature the target has
-# no lane for must be refused (nonzero exit, no signal, a diagnostic naming the file).
-# the day the target grows the lane this fails, and the name comes off its list.
-#
-# skips whole with neither a host nor the target's qemu. not set -e: the checks report their own failures.
+# `mooncc -t ARCH`, run under qemu-user or on an a64 host, must answer stdout and exit as
+# our x86-64 build does; a cross gcc, where the box has one, is a second oracle.
+# $unsupported must refuse, by name, without a signal. skips with no host and no qemu
 # usage: ccarch.sh ARCH OUTDIR LOVE     (ARCH: a64 | rv64)
 . test/gate/skip.sh
 . test/gate/a64run.sh
+. test/gate/cclib.sh
 set -u
 
 arch=$1
@@ -39,20 +29,13 @@ case $arch in
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
-# cleared at the start, not the end: the last run stays for a post-mortem, and the pile
-# never grows past one run
+# cleared at the start: the last run stays for a post-mortem
 d=$ho/cc-$arch
 rm -rf "$d"
 mkdir -p "$d"
 
-fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
-# a law's own flags for this target, off its first line: /* mooncc -t ARCH: FLAGS */. the x86-64
-# reference builds without them, so a flagged build must answer what the plain one does
+# a program's own flags, off its first line: /* mooncc -t ARCH: FLAGS */; x64 builds without
 tflags() { sed -n "1s|^/\* mooncc -t $arch: \(.*\) \*/\$|\1|p" "$1"; }
-
-# $unsupported comes from the case above: the features THIS target has no lane
-# for yet -- refusal is the asserted behaviour, per target, not per gate.
 
 # a64 runs on a host where one answers; rv64 only ever under its qemu
 if [ "$arch" = a64 ]; then a64_how "$m"
@@ -63,7 +46,7 @@ if [ "$(uname -m)" != x86_64 ]; then
   gate_skip "$name: skipped (the reference build is native x86-64)"
 fi
 
-# the OPTIONAL extra oracle: a cross gcc with a static libc, if this box has one
+# the optional second oracle: a cross gcc with a static libc
 GCC="$ccenv"
 for c in $ccnames; do
   [ -n "$GCC" ] && break
@@ -73,8 +56,7 @@ if [ -z "$GCC" ] && [ -n "$ccglob" ]; then
   GCC=$(ls $ccglob 2>/dev/null | head -1)
 fi
 
-# three passes: build every program (and run the x86-64 reference here), run the target
-# binaries as one batch, then compare. a batch is one ssh on a host, not one per program
+# build all (running the x64 reference here), run the target binaries as one batch, compare
 r=$d/run
 a64_jobs "$r"
 nref=0
@@ -84,18 +66,11 @@ for f in test/cc/*.c; do
 
   case " $unsupported " in
     *" $b "*)
-      if moonrun -t "$arch" -o "$d/$b.t" "$f" > "$d/$b.tlog" 2>&1; then
-        fail "$b: mooncc -t $arch BUILT a program listed as unsupported -- take it off the list in this script"
-      fi
-      st=$?
-      [ $st -lt 128 ] || fail "$b: mooncc died on a signal ($st) where a refusal was expected"
-      grep -q "$f" "$d/$b.tlog" \
-        || { cat "$d/$b.tlog" >&2; fail "$b: the refusal does not name the file"; }
+      refused "$d/$b.tlog" "$f" -t "$arch" -o "$d/$b.t" "$f"
       nref=$((nref + 1))
       continue ;;
   esac
 
-  # the reference: the SAME source on x86-64, which test_moon pins against gcc
   moonrun -o "$d/$b.x" "$f" > "$d/$b.xlog" 2>&1 \
     || { cat "$d/$b.xlog" >&2; fail "$b: mooncc could not build the x86-64 reference"; }
   timeout 60 "$d/$b.x" > "$d/$b.xout" 2>&1; echo $? > "$d/$b.xrc"
@@ -104,8 +79,7 @@ for f in test/cc/*.c; do
     || { cat "$d/$b.tlog" >&2; fail "$b: mooncc -t $arch could not build it"; }
   a64_job "$b.t" "timeout 60 \$RUN ./$b.t"
 
-  # and a real cross gcc where the box has one (catches a shared fault, which agreeing
-  # with x64 cannot). -w: the battery is about the ANSWERS, and gcc warns about deliberate edges
+  # -w: gcc warns about the battery's deliberate edges
   if [ -n "$GCC" ]; then
     $GCC -O0 -w -static -o "$r/$b.g" "$f" 2> "$d/$b.glog" \
       || { cat "$d/$b.glog" >&2; fail "$b: the cross gcc could not build it"; }
@@ -114,15 +88,14 @@ for f in test/cc/*.c; do
   progs="$progs $b"
 done
 
-# a64: the packed program again under -mstrict-align, its misaligned members by their chunks
+# a64: the packed program again under -mstrict-align
 if [ "$arch" = a64 ]; then
   moonrun -t a64 -mstrict-align -o "$r/sa279.t" test/cc/279-packed-bitfield.c > "$d/sa279.log" 2>&1 \
     || { cat "$d/sa279.log" >&2; fail "strict-align: mooncc could not build 279-packed-bitfield.c"; }
   a64_job sa279.t "timeout 60 \$RUN ./sa279.t"
 fi
 
-# a64: the ABI across compilers -- mooncc's half (test/cc/abi64/host.c) linked with clang's
-# (peer.c), each calling the other with AAPCS64's memory-class composites
+# a64: abi64/host.c by mooncc linked with clang's peer.c, each calling the other
 if [ "$arch" = a64 ]; then
   command -v clang > /dev/null 2>&1 || gate_skip "$name: no clang for the abi64 half"
   clang --target=aarch64-linux-gnu -O2 -ffreestanding -fno-stack-protector -c -o "$d/peer.o" test/cc/abi64/peer.c 2> "$d/peer.log" \
@@ -130,18 +103,15 @@ if [ "$arch" = a64 ]; then
   moonrun -t a64 -o "$r/abi64.t" test/cc/abi64/host.c "$d/peer.o" > "$d/abi64.log" 2>&1 \
     || { cat "$d/abi64.log" >&2; fail "abi64: mooncc could not build or link host.c"; }
   a64_job abi64.t "timeout 60 \$RUN ./abi64.t"
-  # __int128 across them: the even register pair, the 16-aligned stack pair, x0:x1 answers
+  # __int128 across them: the even register pair, the 16-aligned stack pair
   clang --target=aarch64-linux-gnu -O2 -ffreestanding -fno-stack-protector -c -o "$d/peer128.o" test/cc/abi128/peer.c 2> "$d/peer128.log" \
     || { cat "$d/peer128.log" >&2; fail "abi128: clang could not build peer.c"; }
   moonrun -t a64 -o "$r/abi128.t" test/cc/abi128/host.c "$d/peer128.o" > "$d/abi128.log" 2>&1 \
     || { cat "$d/abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
   a64_job abi128.t "timeout 60 \$RUN ./abi128.t"
 
-  # the landing law: -mbranch-protection and -mstrict-align held to clang's objects for the
-  # same units (test/cc/protect/units.c) -- each fn's landing (bti c, paciasp or neither),
-  # autiasp right before every exit of a pac-ret fn and after every frame record's ldp, no
-  # packed access wider than clang's, and the property note and build attributes byte for
-  # byte. the clang the hearts lanes pin where this box has it, else the one on PATH
+  # the landing law, against clang on protect/units.c: each fn's landing, autiasp before
+  # every exit and after every frame record's ldp, no packed access wider, the notes equal
   hc=${HEARTS_CLANG:-$HOME/.cache/hearts/llvm-22.1.8}/bin/clang
   [ -x "$hc" ] || hc=clang
   command -v llvm-objdump > /dev/null 2>&1 && command -v llvm-readelf > /dev/null 2>&1 \
@@ -230,8 +200,7 @@ for b in $progs; do
     ngcc=$((ngcc + 1))
   fi
 
-  # a passed case agreed on every leg and its diffs were never needed; its static .g
-  # binaries are ~3 MB each. a failing case keeps everything
+  # a passed case's files go (a static .g is ~3 MB); a failing one keeps them
   rm -f "$r/$b.g" "$r/$b.t" "$r/res/$b".* "$d/$b.tout" "$d/$b.glog" \
         "$d/$b.x" "$d/$b.xout" "$d/$b.xrc" "$d/$b.xlog" "$d/$b.tlog"
   n=$((n + 1))

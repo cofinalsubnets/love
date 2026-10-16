@@ -1,10 +1,7 @@
 ; test/host/kitpng.l -- kitty's f=100, a PNG laid into quay's store (src/love/quay/png.c)
-; one 13x7 picture, its alpha either side of half, written by magick every way a PNG is
-; -- each colour type, 1 to 16 bits, a palette with tRNS, Adam7 -- sent as kitty sends it,
-; and every pixel held to magick's own read of the same file: set where its alpha is half
-; or past, its rgb then exact. a torn file is refused, and a chunked one lands whole.
-; no magick on the box -> a polite skip.
-;   cat test/00-init.l test/host/kitpng.l | out/love
+; one 13x7 picture written by magick every way a PNG is, each pixel held to magick's read:
+; set where alpha >= half, rgb then exact. skips without magick
+;   cat test/00-init.l test/host/00-host.l test/host/kitpng.l | out/love
 (borrow 'posix)
 (: magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))
    _ (magick? ? 0 (gate-skip "kitpng: ok (no magick, skipped)"))
@@ -12,7 +9,6 @@
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (put p s) (open p "w" @ q (say q s, close q))
    (rd p) (uread p @ r (two? r ? <>r ""))
-   ; base64, rfc 4648
    abc "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
    (b64 s) (: n #s
               (go i acc) (n <= i ? (cats (rev acc))
@@ -38,13 +34,11 @@
                (map (i \ (o (4 * i + 3) @ a
                             (a < 128 ? 0 (255 << 24 | o (4 * i) << 16 | o (4 * i + 1) << 8 | o (4 * i + 2)))))
                     (jot (W * H))))
-   (mkscr r c) (screen (cask (screen () r c)) r c)
    ; the file through kitty onto a fresh screen: its pixels as tilepx reads them, and the reply
-   (got f) (: s (mkscr 4 10)
+   (got f) (: s (h-mkscr 4 10)
               _ (scribe s ("\e_Ga=T,f=100,i=1;" + b64 (rd f) + "\e\\"))
               rep (string (reply s))
               [rep (map (i \ (: x (i % W) y (i // W) (tilepx s (x // 8) (x % 8) y))) (jot (W * H)))])
-   ; (name flags), each a way magick writes a PNG
    ways [["rgba8" ["-define" "png:color-type=6"]]
          ["rgb8" ["-alpha" "off" "-define" "png:color-type=2"]]
          ["grey8" ["-colorspace" "gray" "-alpha" "off" "-define" "png:color-type=0"]]
@@ -62,13 +56,13 @@
                  (puts ("kitpng: " + <w + " differs: " + show <g + "\n"), 0)))
    _ (test (foldl (a \ w \ (&& a (check w))) 1 ways))
    ; a torn file: refused, and nothing placed
-   s (mkscr 4 10)
+   s (h-mkscr 4 10)
    torn (rd (dir + "/rgba8.png") @ b (snip b 0 (#b - 20)))
    _ (scribe s ("\e_Ga=T,f=100,i=3;" + b64 torn + "\e\\"))
    _ (test ("\e_Gi=3;EBADPNG:png\e\\" = string (reply s))
            !(tilepx s 0 0 0))
    ; the same file in chunks cut on a base64 quantum: m=1 then m=0
-   s2 (mkscr 4 10)
+   s2 (h-mkscr 4 10)
    e (b64 (rd (dir + "/pal8.png")))
    k (4 * (#e // 8))
    (scribe s2 ("\e_Ga=T,f=100,i=4,m=1;" + snip e 0 k + "\e\\"),

@@ -1,42 +1,11 @@
 #!/bin/sh
-# test/gate/ulp.sh -- the MATH FLOOR differential: src/apps/moon/lib/moonlibc/math/lm.c
-# measured against the host libm, and -- the half that matters -- measured
-# TWICE, once compiled by mooncc and once by the system cc, with the two
-# reports required to agree BYTE FOR BYTE.
-#
-# WHY THE SECOND HALF EXISTS. `make ulp` has measured lm.c since it was
-# written, but always the $(CC) build of it, so it answered "is the ALGORITHM
-# accurate" and never "does OUR COMPILER build it". lm.c's own header claimed
-# "the mooncc-compiled object measures IDENTICAL to gcc's" -- true when a hand
-# check made it so, and quietly false afterwards. two mooncc bugs were living
-# in that gap on 2026-07-29, both invisible to a green test_slow:
-#
-#   * the 4th integer parameter could be lost outright (its arrival register
-#     taken as scratch after the ride analysis licensed it). lm.c's mul64 lost
-#     its `lo` out-pointer, so lm_sin/lm_cos SEGFAULTED for every |x| >= 2^19
-#     -- reachable from the shipping binary as `(sine 1e20)`.
-#   * an unsigned 64-bit value converted to double SIGNED, so (double)~0ull
-#     was -1. rbig's G1 word crosses 2^63 on most inputs and sin/cos drifted
-#     to 1609 ulp past the Payne-Hanek handoff -- while every argument BELOW
-#     the handoff stayed exact, which is why nothing else noticed.
-#
-# neither is a math bug and neither shows in a value the corpus asserts. float
-# BITS are where a codegen fault hides best: an ordinary C test compares ints
-# and a wrong low mantissa bit still prints "0.1". so the differential is the
-# instrument, and the mooncc side is the point of it.
-#
-# the ACCURACY half is gated too, against lm.c's documented stance -- so a
-# change to the algorithm that loses precision fails here rather than being
-# discovered by a later differential. the bounds are the measured maxima; they
-# are a CEILING, and beating one is free (lower the bound in the same commit).
-#
-# hosted only: the oracle IS the system libm, so this cannot run on the kernel
-# or wasm -- exactly like `make ulp`, whose procedure this owns.
-# make owns the dependency graph; this owns the procedure.
-# NOT set -e: the checks report their own failures with context.
-#
+# test/gate/ulp.sh -- the math floor: lm.c built by mooncc and by the system cc, each
+# measured against the host libm, and the two reports must agree byte for byte (float bits
+# are where a codegen fault hides). each function also holds its ulp ceiling, the measured
+# maximum; lower one when beaten. hosted only: the oracle is the system libm.
 # usage: ulp.sh OUTDIR LOVE
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 
 ho=$1
@@ -44,8 +13,7 @@ m=$2
 d=$ho/ulpgate            # NOT $ho/ulp -- that name is `make ulp`'s binary
 mkdir -p "$d"
 
-fail() { echo "FAIL test_ulp: $*" >&2; exit 1; }
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
+name=test_ulp
 
 arch=$(uname -m)
 if [ "$arch" != x64 ] && [ "$arch" != x86_64 ]; then
@@ -58,22 +26,19 @@ fi
 
 lm=src/apps/moon/lib/moonlibc/math/lm.c
 
-# -- the two objects: same source, same harness, different compiler --
+# the two objects: one source, two compilers
 moonrun -c -o "$d/lm_moon.o" "$lm" > "$d/moon.build" 2>&1 \
   || { cat "$d/moon.build" >&2; fail "mooncc could not build $lm"; }
 $cc_g -O2 -c -o "$d/lm_sys.o" "$lm" 2> "$d/sys.build" \
   || { cat "$d/sys.build" >&2; fail "$cc_g could not build $lm"; }
 
-# the HARNESS is always the system cc's: it calls the libm oracle, and holding
-# it fixed keeps the comparison about lm.c's object and nothing else.
+# the harness is always the system cc's, so only lm.c's object differs
 for w in moon sys; do
   $cc_g -O2 -o "$d/ulp_$w" src/tools/ulp.c "$d/lm_$w.o" -lm 2> "$d/link_$w" \
     || { cat "$d/link_$w" >&2; fail "could not link the $w harness"; }
 done
 
-# -- both modes. `reduce` is the Payne-Hanek scan (|x| up to 2^1020); it is
-# what caught the u64->double fault, since the default sweep stops at 2^8 and
-# never reaches the reduction at all. --
+# `reduce` reaches the Payne-Hanek reduction (|x| up to 2^1020); the sweep stops at 2^8
 for mode in sweep reduce; do
   case $mode in sweep) a= ;; reduce) a=reduce ;; esac
   for w in moon sys; do
@@ -88,11 +53,7 @@ for mode in sweep reduce; do
   fi
 done
 
-# -- the accuracy ceiling: lm.c's documented stance, per function.
-# `pow` sweeps x in [2^-40, 2^40] against y up to 2^8, so |y ln x| reaches
-# the representable rim and its 7 is NOT the header's "<= 2 ulp typical" --
-# that claim is about small |y ln x| and this sweep does not isolate it.
-# `powrim` is deliberately at the rim and carries the documented ~40. --
+# the ceilings. pow's sweep reaches the representable rim of |y ln x|; powrim sits on it
 nf=0
 while read -r fn lim; do
   [ -n "$fn" ] || continue

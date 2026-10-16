@@ -1,35 +1,13 @@
-; shaft -- an elevator shaft in half blocks, first person, climbed: the level after the
-; garage. the shaft is square, its walls iron plate, and a ledge of rust runs
-; round it at every floor, with stretches missing that have to be jumped; a ladder from
-; each floor to the next stands against a wall. on every floor the two walls that face
-; each other across the shaft from the door wall carry a small red light, and the lights
-; blink slowly together as a mast's do, with a halo on the plates around each when it
-; is on; the door wall carries a lift door, shut -- all but the top one, which opens when
-; the player stands at it, and that ends the level: the courtyard (src/apps/lore/court.l)
-; takes the screen. the player walks the floor and the ledges as they like, jumps with the space bar and comes down under gravity; off a
-; ledge's edge they fall to whatever is under them, the floor at worst, and are not
-; hurt, but the screen flashes red, the harder the landing the more opaque and the
-; slower it fades.
-;
-; the screen is the terminal, two pixels to a cell: the upper half block, the top pixel
-; in the pen and the bottom in the ground; the view is ninety degrees wide whatever the
-; width. the walls, floor, lights, doors and ladders are a row at a time in trays: a
-; row's rays end on one of four planes, and what is painted is a function of where.
-; the ledges are laid over that a column at a time: each ledge a ray passes projects to
-; a few spans of rows -- its face, its top or its underside -- nearest first, and the
-; walls are always behind them. the red flash and the lights' halos are one thing: the
-; palette pulled toward red in four steps, each a tray a pen indexes, made once.
-;
-; the scene is pure love -- shaft-new, shaft-step, shaft-move and shaft-frame are state in
-; and state out, and the song feeds any port -- gated headless by test/host/shaft.l;
-; only shaft-walk and shaft-run tie the tty and the horn. shaft-walk takes a stage
-; already raised, which is how the garage hands over on the same screen.
-;
-; run: love lore shaft   h l or the arrows turn, k or up steps forward, j or down back -- a
-;                   held key repeats, which is a walk; space jumps, or at a ladder takes
-;                   hold of it, and then k and j climb it and space lets go; u n look up
-;                   and down; ? the keys, q or esc leaves.
-;                   HORN=none plays silent on a seat with no sound device
+; shaft -- an elevator shaft, first person, climbed: the level after the garage. a square
+; shaft of iron plate, a rusted ledge round it at every floor with gaps to jump, a ladder
+; floor to floor, red lights blinking on the side walls, and a shut lift door each floor
+; but the top, which opens when stood at and hands over to court. a fall does not hurt, but
+; flashes the screen red, the harder the landing the stronger and slower to fade.
+; the background is a row at a time in trays, each ray ending on one of four wall planes;
+; the ledges are laid over it a column at a time, nearest first. the flash and the lights'
+; halos are one thing: the palette pulled toward red in four steps, made once.
+; shaft-new, shaft-step, shaft-move and shaft-frame are pure; only shaft-walk and shaft-run
+; tie the tty and the horn, and shaft-walk takes a stage already raised.
 (module (shaft shaft-run shaft-walk shaft-main shaft-new shaft-size shaft-lay shaft-step shaft-binds shaft-move
          shaft-jump shaft-land shaft-frame shaft-song-new shaft-song-feed shaft-sfx blink
          ledge? ledge-under? ground-at land-at ladder-at ring-pt wall-of wall-s wall-q wrap-s s-apart
@@ -45,17 +23,16 @@
 (borrow 'posix)    ; close, for the horn
 (:
  fps 30
- ; --- the shaft, in the world's units: x and z across it, y up, the middle of the
- ; floor the origin. s runs round the walls from the corner at (-r -r): along the wall
- ; at z = -r first, then x = r, z = r and x = -r, each of them twice r long ---
+ ; --- the shaft: x and z across, y up, the floor's middle the origin. s runs round the walls
+ ; from the corner at (-r -r): along z = -r first, then x = r, z = r and x = -r, each 2r long ---
  shaft-r 3.0 perim (8.0 * shaft-r)
  floors 3 floor-h 4.0                 ; floors, and the height of one; a floor's ledge is at its height
  ceil-h 3.0                           ; the roof above the top ledge
  ledge-d 1.4 ledge-t 0.25             ; a ledge: how far it stands out from the wall, and how thick
  walk-q 0.7 eye-h 1.3                 ; the player starts this far in from the wall, eyes this high off their feet
  body-r 0.3                           ; ..and comes no nearer a wall than this
- ; the ladders, [s from to] each: one a floor, up the wall at z = -r for the even floors
- ; and beside the door for the odd; and the hole in the ledge each comes up through, by ring
+ ; the ladders, [s from to] each, one a floor: on the wall at z = -r for even floors, beside
+ ; the door for odd; and the hole in the ledge each comes up through, by ring
  door-s (5.0 * shaft-r) door-w 0.6 door-h 2.2 door-edge 0.08   ; the doors, in the middle of the wall at z = r
  ladders (map (f \ [(f % 2 = 0 ? shaft-r (door-s - 1.6)) (f * floor-h) ((f + 1) * floor-h)]) ^(floors - 1))
  ladder-w 0.35                        ; ..how near a ladder is at it
@@ -100,8 +77,8 @@
  (wall-q i x z) (shaft-r @ r (i @ 0 (z + r) 1 (r - x) 2 (r - z) (x + r)))
  tangents [(pi / 2.0) 0.0 (0.0 - pi / 2.0) pi]
  (tangent-of s) (tangents (wall-of s))
- ; --- the lay: the gaps in the ledges, [s0 s1] each by ring, off the die -- each within
- ; one wall and clear of its corners, of a ladder and its hole, of the door and of another gap ---
+ ; --- the lay: the gaps in the ledges, [s0 s1] each by ring, off the die; each within one
+ ; wall, clear of its corners, a ladder and its hole, the door and another gap ---
  (shaft-lay sb) (: keep (map (l \ l 0) ladders + [door-s])
    (clear? s0 gs) (: w2 (2.0 * shaft-r) c (s0 - w2 * flo (s0 / w2)) s1 (s0 + gap-l)
                      (off p) (p < s0 - gap-margin || s1 + gap-margin < p)
@@ -113,8 +90,7 @@
                                            (ring gs n (tries - 1)))))
    gaps (foldl (t \ f \ pin t f (ring () gaps-a-ring 80)) {} (map (+ 1) ^(floors - 1)))
    {'gaps gaps})
- ; a ledge under s on ring f: the floor is one everywhere, and a ring above it wherever
- ; no gap is
+ ; a ledge under s on ring f: the floor is one everywhere, a ring above it wherever no gap is
  (ledge? lay f s) (? (f <= 0) 1 (floors <= f) 0
                      (wrap-s s @ ss (!(any (g \ g 0 <= ss < g 1) (peep (lay 'gaps) f ())))))
  ; the wall a point stands nearest, [i s q]: which, how far round the shaft, and how far in
@@ -134,13 +110,10 @@
                                         && l 1 - 0.2 <= y <= l 2 + 0.2))
                           ls (filter near? ladders)
                           (two? ls ? <ls ()))
- ; --- the state: the screen, where the player stands and looks, how they move, and
- ; the lay ---
- ; the screen as view lays it; 'px 'pz where the player stands, 'y the feet's height, 'th the way they face as a bearing; 'vx 'vz 'vy
- ; the speed across and up, kept in the air; 'kx 'kz the last step a key pushed and
- ; 'kt when, for a jump to carry it; 'ground standing on something, 'rung the ladder
- ; held or (); 'flash the red on the screen and 'flash-k what is left of it a frame on,
- ; 'sfx sounds due, 'done the top door open
+ ; --- the state: view's screen; 'px 'pz where the player stands, 'y the feet, 'th the bearing;
+ ; 'vx 'vz 'vy the speed, kept in the air; 'kx 'kz 'kt the last key push and when, for a jump
+ ; to carry; 'ground, 'rung the ladder held or (); 'flash and 'flash-k its decay a frame;
+ ; 'sfx sounds due, 'done the top door open ---
  ; the horizon starts a little above the middle: the view pitched down a touch, to the ledge ahead
  (shaft-new w h st) (: sb {st} e (ring-pt 1.0 walk-q)
    (view! {'px (e 0) 'pz (e 1) 'y 0.0 'th (tangents 0) 'vx 0.0 'vz 0.0 'vy 0.0 'kx 0.0 'kz 0.0 'kt -999
@@ -150,16 +123,15 @@
  ; the screen's shape: w cells across and r rows, the horizon off the top and bottom eighth
  (shaft-size st w r) (view-size st w r 8)
  ; --- a frame of motion ---
- ; a landing on a ledge at g, coming down at v: the feet on it, the flash by how hard --
- ; nothing under flash-v0, and both more opaque and slower to fade the harder -- and a thud
+ ; a landing at g coming down at v: nothing under flash-v0, harder is more opaque and slower
+ ; to fade; and a thud
  (shaft-land st g v) (: a (clamp ((v - flash-v0) / flash-span) 0.0 1.0)
    tau (flash-hold + flash-slow * a)
    (pins st 'y g 'vy 0.0 'ground 1
             'flash (max2 a (st 'flash))
             'flash-k (a <= 0.0 ? (st 'flash-k) (exp (0.0 - 1.0 / (fps * tau))))
             'sfx (v < 1.0 ? (st 'sfx) (st 'sfx + [['thud (0.3 + 0.7 * clamp (v / 12.0) 0.0 1.0)]]))))
- ; the push the keys last gave, if it was within a few frames, else none: what a jump
- ; or a fall carries, a second's worth
+ ; the push the keys last gave, if within coyote frames, else none: what a jump or fall carries
  (carried st) (st 't - st 'kt <= coyote ? [(st 'kx * fps) (st 'kz * fps)] [0.0 0.0])
  ; a jump, from the ground or within a few frames of leaving it, carrying the walk
  (shaft-jump st) (? (st 'rung) st
@@ -168,11 +140,9 @@
                     st)
  ; a step to x z, kept inside the walls
  (put! st x z) (shaft-r - body-r @ m (pins st 'px (clamp x (0.0 - m) m) 'pz (clamp z (0.0 - m) m)))
- ; the frame's motion: on a ladder, nothing but what the keys do; on the ground, the
- ; step the keys pushed, and off a ledge's edge into the air; in the air, on at the speed
- ; the ground was left at and down under gravity, until a ledge or the floor is crossed
- ; on the way down, which is a landing. the flash fades; and standing at the top door
- ; opens it, which is the level done
+ ; the frame's motion: on a ladder only the keys move you; on the ground the keys' step, off an
+ ; edge into the air; in the air ballistic until a ledge is crossed going down. standing at
+ ; the top door opens it, which is the level done
  (shaft-move st) (: lay (st 'lay) y (st 'y) dt (1.0 / fps)
    _ (? (st 'rung) st
         (st 'ground)
@@ -191,11 +161,8 @@
         && nw 0 = wall-of door-s && nw 2 <= ledge-d && s-apart (nw 1) door-s <= door-w + 0.2)
        (pins st 'done 1 'sfx (st 'sfx + ['door]))),
     st))
- ; a key: h l or the arrows turn, k or up steps forward and j or down back -- a tty
- ; tells of keys pressed and never of keys let go, and repeats a held one, so a held key
- ; is a walk, a step a frame -- u n tilt the look; space jumps, or at a ladder takes hold
- ; of it: then k and j climb, off at the top onto the ledge or at the foot onto the
- ; ground, and space lets go
+ ; a tty tells of keys pressed and never let go, and repeats a held one, so a held key is a
+ ; walk; space at a ladder takes hold, then forward and back climb, off at either end
  shaft-binds {32 'jump}                  ; the shaft's own key, over view's
  (shaft-step st a) (: turn (a @ 'turn-left (0.0 - turn-step) 'turn-right turn-step 0.0)
    h (st 'h) tilt (a @ 'look-up (h // 16) 'look-down (0 - h // 16) 0)
@@ -216,18 +183,15 @@
       (fwd != 0.0) (l ? (climb fwd) (step fwd))
       st))
  ; --- the frame ---
- ; the flash: the screen's pens pulled toward red, in four steps of opacity, each a
- ; tray a pen indexes, made once
+ ; the flash: the pens pulled toward red in four steps of opacity, each a tray a pen indexes
  (tint a) (star-tray [256] (map (c \ (pen-rgb c @ q
                                         (rgb-pen (int (q 0 + a * (255 - q 0))) (int (q 1 * (1.0 - a))) (int (q 2 * (1.0 - a))))))
                                 ^256))
  flashes (map (i \ tint ((i + 1) / 4.0)) ^4)
- ; a floor's lights' brightness at tick t, 0 to 1: on for light-on of every period, up
- ; and down over light-edge; each floor's period a little longer than the one below
+ ; a floor's lights' brightness at tick t, 0 to 1; each floor's period a little longer
  (blink t f) (flicker-blink (t / (1.0 * fps)) (light-period + f * light-drift) light-on light-edge)
- ; a row of the background: every column's ray at the row's slope, and what it meets:
- ; the wall it ends on, its plates in seams and a speckle, the lights, the doors and
- ; the ladders on it by where it is hit; or the floor, or the roof
+ ; a row of the background: every column's ray at the row's slope, and what it meets on its
+ ; wall (plates, lights, doors, ladders), or the floor, or the roof
  (bg-row y st tb) (: hz (st 'hz) foc (st 'foc) ey (tb 'ey) lay (st 'lay) r shaft-r
    dw (tb 'dw) iw (tb 'iw) sw (tb 'sw) sg (tb 'sg) bd (tb 'bd) vx (tb 'vx) vz (tb 'vz)
    m ((hz - y - 0.5) / foc)
@@ -238,8 +202,7 @@
    spk (0 = throw (floor (sg * 4.0)) (floor (yh * 4.0)) 3 5)
    iron (peep irons bd 236)
    c1 (over (over iron seam (peep seams bd 233)) spk (iron - 1))
-   ; the lights, on the walls at x = r and x = -r, one a floor: a lamp, and when lit a
-   ; halo on the plates round it, the palette pulled toward red by more the nearer
+   ; the lights on the walls at x = r and -r: a lamp, and when lit a halo, redder nearer
    side ((iw = 1) + (iw = 3))
    ds (sw - r)
    (light c f) (: dy (yh - (f * floor-h + light-h)) r2 (ds * ds + dy * dy)
@@ -269,15 +232,10 @@
    fbd (band-of df)
    flr (over (peep floorings fbd 232) fspk (peep floorings fbd 232 + 1))
    (over (over c4 (yh < 0.0) flr) (tb 'ceil < yh) ceil-pen))
- ; the ledges, a column at a time into ov, a cask of bytes, a pen a pixel and 0 for none -- with
- ; the hole over each ladder left out, which the feet do not know of: the ray's
- ; stretch through each wall's band -- where it is both within a ledge's depth of the
- ; wall and along it, the square at a corner going to the wall that starts there and
- ; not the one that ends -- nearest band first; on each, every ring's ledge where no
- ; gap is, the ring whose plane is nearest the eye first and nearest stretch first, as
- ; spans of rows: its face where the ray comes at it across the band's inner edge or
- ; out of a gap, its top if the eye is above it, its underside if below; a pixel
- ; painted stays painted
+ ; the ledges, a column at a time into ov, a pen a pixel and 0 for none, the hatches left out
+ ; (drawn, not fallen through): each wall's band nearest first, each ring nearest the eye
+ ; first, as row spans -- its face, its top if the eye is above, its underside if below. a
+ ; corner square goes to the wall that starts there. a pixel painted stays painted
  (ledges! st tb ov) (: w (st 'w) h (st 'h) hz (st 'hz) foc (st 'foc) lay (st 'lay)
    ey (tb 'ey) ex (tb 'ex) ez (tb 'ez) r shaft-r w2 (2.0 * shaft-r)
    (rowof d yy) (flo (hz - foc * (yy - ey) / (d < 0.02 ? 0.02 d)))
@@ -311,8 +269,7 @@
      rings (map (p \ p 1) (sort (map (f \ (f * floor-h - ey @ dy [(dy * dy) f])) (map (+ 1) ^(floors - 1)))))
      (each bands (each rings * ring)))
    (each ^w col))
- ; a frame, as view lays it: the background rows are trays and the ledges a cask over
- ; them, a pixel row a cask of the two, and the flash tints both
+ ; a frame: the background rows are trays and the ledges a cask over them; the flash tints both
  (shaft-frame st) (: w (st 'w) h (st 'h) r shaft-r
    ex (st 'px) ez (st 'pz) ey (st 'y + eye-h)
    rs (view-rays st) vx0 (rs 0) vz0 (rs 1)
@@ -337,8 +294,8 @@
                                  go (x + 1))))
               (go 0, px))
    (view-frame w h src {}))
- ; --- the song: nothing but what happens -- a thud on landing, the harder the louder,
- ; and two notes when the top door opens; out any port a frame's worth at a time ---
+ ; --- the song: a thud on landing, the harder the louder, and two notes when the top door
+ ; opens; a frame's worth at a time ---
  song-chunk (song-rate // fps)
  song-gain 11000.0
  (shaft-song-new h st) {'h h 'sb {st} 'fpos 0 'vs ()}
@@ -351,9 +308,7 @@
    (pin st 'sfx (),
     pin s 'vs (s 'vs + filter (p \ two? (p 1)) vs)))
  (shaft-song-feed s) (song-out s song-chunk song-gain)
- ; --- the walk, on view's loop: a frame's motion after the key, the sounds it made fed to
- ; the song -- or let go, on a seat with no horn. shaft-walk takes a stage already
- ; raised, and shaft-run raises one ---
+ ; --- the walk, on view's loop: each frame's sounds fed to the song, or dropped with no horn ---
  (shaft-walk _) (view-walk {'new (w \ h \ shaft-new w h (wheel (clock 0))) 'size shaft-size
                             'frame shaft-frame 'key shaft-step 'tick shaft-move 'fps fps
                             'binds (view-bind view-binds shaft-binds) 'listed (view-listed ['jump])

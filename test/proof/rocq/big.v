@@ -1,24 +1,5 @@
-(* big.v -- the bignum lane's reference: Coq's binary Z, EXTRACTED, with a
-   PROVEN decimal codec to carry values across the process boundary.
-
-   love's big rep (native limbs, Karatsuba, Knuth-D -- the scariest pure
-   arithmetic in love.c) is held here against an independent, machine-checked
-   implementation: stdlib Z, whose ring, quot/rem and gcd laws are theorems
-   (two are restated below as named witnesses for the audit). The one piece
-   this file must PROVE rather than import is the seam itself: the decimal
-   print/parse pair the oracle speaks through. parse_print closes it, so a
-   value crossing the boundary in either direction is exact -- the extracted
-   reference computes on precisely the numbers love printed, and the strings
-   it emits re-read to precisely the Z it computed.
-
-   big_drive.ml generates operands (edge charms/suns/bigs + random digit
-   strings crossing the limb, Karatsuba and Knuth-D thresholds), computes each
-   op with the extracted reference, and emits a love program of decimal string
-   comparisons -- so love's READER, limb arithmetic, and PRINTER are all three
-   under test against the proven codec. love's conventions, probed and
-   matched: // is Z.quot (truncated), % is Z.rem (the dividend's sign), gcd is
-   nonnegative, < answers 1|0; division by zero escapes to the float lane and
-   stays out of the cases. *)
+(* big.v -- the bignum lane's reference: stdlib Z, extracted, with a proven
+   decimal codec across the process boundary. love: // is Z.quot, % is Z.rem *)
 
 From Stdlib Require Import ZArith Decimal DecimalString DecimalZ String Ascii.
 Open Scope Z_scope.
@@ -27,8 +8,7 @@ Definition print (z : Z) : string := DecimalString.NilZero.string_of_int (Z.to_i
 Definition parse (s : string) : option Z :=
   option_map Z.of_int (DecimalString.NilZero.int_of_string s).
 
-(* Z.to_int lands in normal form (DecimalZ.to_of + of_to), and a normal form
-   always carries at least one digit -- the side conditions NilZero.isi wants *)
+(* Z.to_int is normal, so never digitless: NilZero.isi's side conditions *)
 Lemma to_int_no_nil (z : Z) :
   Z.to_int z <> Decimal.Pos Decimal.Nil /\ Z.to_int z <> Decimal.Neg Decimal.Nil.
 Proof.
@@ -39,7 +19,7 @@ Proof.
     destruct (Decimal.nzhead u); split; discriminate.
 Qed.
 
-(* the SEAM theorem: what the oracle prints, it re-reads, exactly *)
+(* what the oracle prints, it re-reads exactly *)
 Theorem parse_print (z : Z) : parse (print z) = Some z.
 Proof.
   unfold parse, print.
@@ -48,8 +28,7 @@ Proof.
   now rewrite DecimalZ.of_to.
 Qed.
 
-(* witnesses that the reference ops carry their laws (stdlib theorems, named
-   here so the audit below covers the op suite, not just the codec) *)
+(* stdlib laws, named so the audit covers the ops too *)
 Theorem quot_rem_law : forall a b, b <> 0 -> a = b * Z.quot a b + Z.rem a b.
 Proof. intros a b Hb. now apply Z.quot_rem. Qed.
 
@@ -64,8 +43,7 @@ Print Assumptions parse_print.   (* must stay "Closed under the global context" 
 Print Assumptions quot_rem_law.
 Print Assumptions gcd_law.
 
-(* --- extraction --- Z stays the binary inductive (no native-int mapping: the
-   whole point is an independent rep); strings extract to OCaml char lists *)
+(* --- extraction --- Z stays binary, no native-int mapping: an independent rep *)
 From Stdlib Require Import Extraction ExtrOcamlString.
 Extraction Language OCaml.
 Set Extraction Output Directory ".".

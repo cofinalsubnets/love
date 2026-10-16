@@ -1,12 +1,8 @@
-; rove -- lore's roguelike engine (src/apps/lore/lore.l): the parts any game on the console rides.
-;
-; a floor is tiles in a cask carved by delve, with a seen cask for what the player has
-; been shown; fov is line-of-sight over bresenham strides; the painter says a frame of
-; painted cells into any port, each cell's face the game's own function, so frames gate
-; headless; the helm turns a key into a steer; the sign is a box over the frame; the
-; words machine fills a line's ~ and {braces}; the keys are paced, so a key held
-; down is not a key pressed again; and the horn's lead is paced by the frame gap. the tower (src/apps/lore/tower.l) and the slop
-; (src/apps/lore/slop.l) borrow it; it gates headless in test/host/rove.l.
+; rove -- lore's roguelike engine: the parts any game on the console rides. a floor is tiles
+; in a cask carved by delve, with a seen cask for what the player has been shown; fov is
+; line of sight; the painter says a frame into any port, each cell's face the game's own, so
+; frames run headless; then the helm, the sign box, the ~ and {brace} words, paced keys, and
+; the horn's lead paced by the frame gap.
 (module (rove cell-of cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
          fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap legible-lum lim lit? mix mob-at note
          nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
@@ -21,12 +17,10 @@
  ; the bake, where a literal would fold
  choice-fg (x11-256 "honeydew")                         ; a choice's button: text on ground
  choice-bg (x11-256 "darkslategray")
- ; 4 a building's floor, 5 a door, 6 glass -- looked through and never entered: a road's
- ; end off the map, heaven's void -- 7 a step and 8 a platform; the vale's 9 dirt, 10 the
- ; bare spot, 11 timber -- the cottage seen from outside, a wall -- 12 garden, 13 a stair down
+ ; tiles past the engine's: 4 a building's floor, 5 a door, 6 glass (looked through, never
+ ; entered), 7 a step, 8 a platform, 9 dirt, 10 a bare spot, 11 timber, 12 garden, 13 a stair down
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + d 'w * y) 0) 0)
- ; walked: anything laid, but for the tiles this floor calls solid. the engine lays 1 and
- ; 2 and knows no other number -- a floor that lays a wall of its own names it in 'solid
+ ; walked: anything laid but the tiles this floor names in 'solid; the engine itself lays only 1 and 2
  (open? d x y) (dat d x y @ t (0 < t && nelem t (d 'solid)))
  (lit? d x y) (0 < dat d x y)                           ; looked through
  (dput d x y v) (pin (d 't) (x + d 'w * y) v)
@@ -35,12 +29,9 @@
  (roll sb n) (random (peep sb () 0) n @ p (pin sb () >p, <p))
 
  ; --- delve: carve rooms, lash them with corridors ---
- ; a room is [x y rw rh]; its center anchors the corridors. rooms keep a
- ; one-cell gap so no two merge; each new room tunnels to the previous one,
- ; so the whole floor is connected by construction. answers (floor . st').
- ; the plan is the tier's own -- wide from, wide by, tall from, tall by, and one
- ; try per so many cells -- which is what makes the garden a patch of small beds
- ; and heaven a few long blocks.
+ ; a room is [x y rw rh], its center anchoring the corridors; rooms keep a one-cell gap and
+ ; each tunnels to the previous one, so the floor is connected. pl, the tier's plan: wide
+ ; from, wide by, tall from, tall by, one try per so many cells. answers (floor . st')
  (delve w h st pl) (:
    d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ()}
    sb {st}
@@ -60,10 +51,7 @@
    (try n) (0 < n ?
             (: rw (pl 0 + roll sb (pl 1)) rh (pl 2 + roll sb (pl 3))
                (w <= rw + 2 || h <= rh + 2 ? (try (n - 1))
-                ; the span a room of width rw can start at, keeping a 1-cell border: x is
-                ; 1 + roll(w - rw - 1), so the far edge lands at w-2 at worst. (this read `+ 1`
-                ; while the additive band folded right and w - (rw + 1) is the same number --
-                ; the hand made the arithmetic say what it means.)
+                ; ..x is 1 + roll (w - rw - 1), keeping a one-cell border
                 (: x (1 + roll sb (w - rw - 1)) y (1 + roll sb (h - rh - 1))
                    rm [x y rw rh]
                  (? !(apart? rm (d 'rooms)) (try (n - 1))
@@ -92,8 +80,8 @@
  (first-n n l) (0 < n && two? l ? (<l . first-n (n - 1) >l))
 
  ; --- the lantern: line-of-sight fov over bresenham strides ---
- ; a stride is clear when every cell strictly between the ends is looked through; the
- ; endpoint itself may be rock -- that is how a wall catches the light.
+ ; a stride is clear when every cell strictly between the ends is looked through; the end
+ ; may be rock, so a wall catches the light
  (clear? d x0 y0 x1 y1) (:
    dx |(x1 - x0) dy -|(y1 - y0)
    sx (x0 < x1 ? 1 -1) sy (y0 < y1 ? 1 -1)
@@ -107,10 +95,8 @@
                      0)))
    (go x0 y0 (dx + dy)))
 
- ; the visible set: a tablet of cell indices, radius-bounded and stride-clear;
- ; each visible cell is also pinned into the floor's seen cask (the memory).
- ; a closing pass glows the rock beside every lit floor cell, so corridors
- ; wear their walls (a bare stride only catches rock end-on)
+ ; the visible set: a tablet of cell indices, radius-bounded and stride-clear, each pinned in
+ ; the seen cask too; a closing pass glows the rock beside every lit floor cell
  (fov d px py r) (:
    vis {} w (d 'w) h (d 'h) sn (d 'seen) r2 (1 + r * r)
    (glow x y) (x + w * y @ i (pin vis i 1, pin sn i 1, ()))
@@ -126,11 +112,8 @@
             (1 0) (-1 1) (0 1) (1 1))))),
     vis))
 
- ; --- the painter: one frame said into a port as painted cells ---
- ; a cell's face is the game's: cell takes a cell's index and answers (glyph hue), and
- ; the hue is a pen or (fg bg), a glyph on a ground -- a mob standing on a block wears
- ; the block's colour under it. one SGR per hue change, threaded down the frame, and the ground is
- ; put off right after the glyph it was under; the port is any jug, so frames gate headless.
+ ; --- the painter: one frame said into a port as painted cells. cell answers (glyph hue) for
+ ; an index, the hue a pen or (fg bg); one SGR per hue change, a ground put off after its glyph ---
  pens {}
  (pen n) (two? n ? ("\e[38;5;" + show <n + ";48;5;" + show <>n + "m")
           (pens n @ s (string? s ? s
@@ -146,10 +129,8 @@
                     gy (232 + (? (n < 0) 0 (23 < n) 23 n))
                     (dist p) (pen-rgb p @ q (2 (q 0 - r) + 2 (q 1 - g) + 2 (q 2 - b)))
                     (dist gy < dist cb ? gy cb))
- ; how far apart two pens are, in rgb squared and in luminance -- hues apart in rgb can
- ; still be as bright as each other, which is what the eye goes by; and a fg that reads
- ; over a bg: the hue itself when the two are far enough apart both ways, else its
- ; inverse, else black or white, whichever the bg is not
+ ; how far apart two pens are, in rgb squared and in luminance; and a fg that reads over a bg:
+ ; itself if far enough both ways, else its inverse, else black or white
  (pen-gap a b) (: p (pen-rgb a) q (pen-rgb b) (2 (p 0 - q 0) + 2 (p 1 - q 1) + 2 (p 2 - q 2)))
  (pen-lum c) (pen-rgb c @ q (int (0.2126 * q 0 + 0.7152 * q 1 + 0.0722 * q 2)))
  legible-gap 14400                                       ; a hundred and twenty of rgb, squared
@@ -157,16 +138,14 @@
  (legible fg bg) (: (far? a) (legible-gap <= pen-gap a bg && legible-lum <= |(pen-lum a - pen-lum bg))
                     q (pen-rgb fg) inv (rgb-pen (255 - q 0) (255 - q 1) (255 - q 2))
                     (? (far? fg) fg (far? inv) inv (128 <= pen-lum bg) 16 231))
- ; two multiply-shift rounds masked to 32 bits: the dice a cell throws for itself,
- ; so the same cell of the same floor always throws the same number.
+ ; the dice a cell throws for itself: the same cell of the same floor throws the same number
  lim 4294967296
  (mix a) (: h (a * 2654435761 % lim)
             h2 ((h ^ h >> 15) * 2246822519 % lim)
             (h2 ^ h2 >> 13))
  (dice x y s k) (mix (y * 374761393 + x * 668265263 + s * 2654435761 + 1) % k)
- ; a piece with a book opens it a page at a time: every page is a sign under the book's
- ; title, and the key that takes one down puts the next up. the foot is read here and
- ; not in the words below: a lambda reads a value bound above it, never one below
+ ; a book opens a page at a time, each a sign under its title, the key that takes one down
+ ; putting the next up. page-foot is bound here: a lambda reads a value bound above it, not below
  page-foot "-- ~ of ~, any key --"
  (open-book g bk) (: n #>bk
                       (page i) (<bk . (>bk i + ["" (fill page-foot [(i + 1) n])]))
@@ -174,22 +153,18 @@
                       (pins g 'sign <pgs 'pages >pgs))
  (paint j d cell msg bar) (:
    w (d 'w) h (d 'h)
-   ; the screen's rows of a floor taller than it: from the view's top, and a row past
-   ; the floor's foot is blank. a floor smaller than the screen sits in the middle of
-   ; it, padded left and the rows above and below it blank
+   ; the screen's rows of a floor taller than it from 'vy, past its foot blank; a smaller floor
+   ; sits padded in the middle
    rows-n (peep d 'rows h) vy (peep d 'vy 0)
    vx (peep d 'vx 0) padding (vx (t \ t + " ") "")
-   ; the note row through `fit`: a message may carry the token's braces, and an
-   ; escape is no width, so the cut is made in what a reader sees. a long one wraps
-   ; onto a second and a third row, each covering a floor row: the floor does not move.
-   ; d 'top is the rows it took, for the live painter to keep under
+   ; the note row through fit, cut in what a reader sees; a long one wraps to three rows over
+   ; the floor, which does not move. d 'top is the rows it took, for paint-live
    cols (peep d 'cols w)
    wr (cite 'story 'wrap)
    notes ((wr && cols < vlen msg ? (wr msg cols) [msg]) @ ls (first-n 3 ls))
    _ (pin d 'top #notes)
    _ (say j "\e[H")
-   ; an erase under a pending wrap takes the glyph that raised it, so a row that
-   ; reached the screen's edge ends bare and only a short one is cleared
+   ; an erase under a pending wrap takes the glyph that raised it, so a full row is not cleared
    (end n) (n < cols ? "\e[K\r\n" "\r\n")
    _ (each notes (l \ say j ("\e[0m" + fit l cols + end (vlen l))))
    (row y x i p) (x >= w ? p
@@ -200,20 +175,18 @@
                     ; a ground goes no further than its glyph, and the next pen is said whole
                     two? p2 ? (say j "\e[49m"),
                     row y (x + 1) (i + 1) (two? p2 ? -1 p2))))
-   ; a short row ends on \e[K: a floor narrower than the screen leaves nothing of the
-   ; last floor past its edge
+   ; a short row ends on \e[K, so nothing of the last floor shows past its edge
    (rows y p) (y >= vy + rows-n ? p
                (rows (y + 1) (: on (0 <= y < h)
                                 p2 (on ? (say j padding, row y 0 (w * y) p) p)
                                 (say j (end (on ? (vx + w) 0)),
                                  p2))))
-   ; ..and the bar a column short of the screen: a console that wraps at its edge would
-   ; scroll the floor for a bar that reached it
+   ; ..and the bar a column short of the screen, so a console that wraps does not scroll
    (rows (vy + #notes - 1) -1,
     say j "\e[0m", say j (fit bar (cols - 1)), say j "\e[K",
     j))
- ; some cells alone, each under a cursor move, as the last frame laid the floor: a
- ; cell off the screen, under the note, unlit or under a sign's box is left be
+ ; some cells alone, each under a cursor move: one off the screen, under the note, unlit or
+ ; under a sign's box is left be
  (paint-live j d vis cell cells) (:
    w (d 'w) h (d 'h) rows (peep d 'rows h) vy (peep d 'vy 0) vx (peep d 'vx 0)
    top (peep d 'top 1) box (d 'box)
@@ -234,16 +207,13 @@
        (121 || 377) '(-1 -1) (117 || 373) '(1 -1) (98 || 354) '(-1 1) (110 || 366) '(1 1)
        k)
 
- ; ..and a tap is a place rather than a letter: the step of the eight toward a cell ex
- ; across and ey down -- the nearest as the screen shows them, a cell being twice as tall
- ; as it is wide, so a tap a little off a row is still along it: within 22.5 degrees,
- ; tan 5/12. [0 0] for the cell itself
+ ; ..and a tap is a place: the step of the eight toward a cell ex across, ey down; a cell is
+ ; twice as tall as wide, so within 22.5 degrees (tan 5/12) is along. [0 0] for the cell itself
  (toward a b) (a < b ? 1 (a > b ? -1 0))
  (tap-dir ex ey) (: ax (abs ex) ay (2 * abs ey)          ; in cell widths
                     [(12 * ax < 5 * ay ? 0 (toward 0 ex)) (12 * ay < 5 * ax ? 0 (toward 0 ey))])
- ; a floor's tap: on the cell you stand on it is the stair; standing on one, so are the
- ; eight about it, a finger being wider than a cell. the note row is the screen's first,
- ; so a screen y is a floor y and one. c is [x y], cli's edtap.
+ ; a floor's tap: on your own cell, or near when you stand on a stair, it is the stair (60).
+ ; the note row is the screen's first, so a screen y is a floor y and one. c is [x y], cli's edtap
  (tap-steer g c) (: p (g 'p) d (g 'd)
                     ex (<c - peep d 'vx 0 - p 'x)
                     ey (<>c - 1 + peep d 'vy 0 - p 'y)
@@ -251,8 +221,7 @@
                     (? (st = [0 0]) 60
                        (abs ex <= 1 && abs ey <= 1 && 2 = dat d (p 'x) (p 'y)) 60
                        st))
- ; ..but a tap on a standing sign is the choice it lands on: the digit that picks it, or
- ; 0, which a page takes as any other key -- shown again, or taken down
+ ; ..but a tap on a standing sign is the choice it lands on: its digit, or 0, any other key
  (tap-key g c) (: sg (g 'sign) d (g 'd)
                   (two? sg ?
                      (: j (sign-line <sg >sg 1 (peep d 'rows (d 'h)) (peep d 'cols (d 'w)) <>c)
@@ -264,23 +233,19 @@
  ; ..and the tty a floor is played on, for ttytake and ttygive: a tap's press, no cursor
  rove-modes '(hide tap)
 
- ; a line and its holes: each ~ takes the next value, a string as itself and anything
- ; else as show, so a table line reads as the line it prints.
+ ; a line and its holes: each ~ takes the next value, a string as itself, else as show
  (hole v) (string? v ? v (show v))
  (fill s vs) (:- (go 0 "" vs) (go i acc vs)
               (i >= #s ? acc
                (s i @ c
                 (c = 126 && two? vs ? (go (i + 1) (acc + hole <vs) >vs)
                  (go (i + 1) (acc + string c) vs)))))
- ; a cell is a character and not a byte: the face's blocks and arrows are three bytes
- ; each, and only the first of them is a cell -- the tails ride along with it
+ ; a cell is a character, not a byte: a utf-8 tail rides with its lead
  (tail? c) (128 <= c < 192)
  (lead c) (tail? c ? 0 1)
  (cw s i) (max 0 (wcwidth (cpat s i)))                  ; the cells of the character at i
- ; ..and its braces, put on at the port, and a choice between the bytes 1 and 2 on its
- ; own ground. an escape is no width, so this is also where a line is cut to fit: the
- ; row's span is what a reader sees, not what a cask holds. off is what comes back
- ; after either, the pen the line was in
+ ; ..and its braces put on at the port, and a choice between the bytes 1 and 2 on its own
+ ; ground; escapes have no width, so the cut is in what a reader sees. off restores the pen after
  token-pen 201                                          ; the pen a {braced} word is named in
  (fit-in s w off) (: on ("\e[38;5;" + show token-pen + "m")
                      on2 ("\e[48;5;" + show choice-bg + ";38;5;" + show choice-fg + "m")
@@ -296,8 +261,7 @@
               (go 0 0 ""))
  (fit s w) (fit-in s w "\e[0m")
 
- ; --- the sign: a box over the frame, story's lighthouse way. braces cost no width, so
- ; it is measured in what a reader sees, and it runs to the row's end so no pen meets.
+ ; --- the sign: a box over the frame, measured in what a reader sees, running to the row's end ---
  sign-pen (x11-256 "lavender")                          ; the frame, and the title in its own
  sign-tpen (x11-256 "honeydew")
  (vlen s) (:- (go 0 0) (go i n) (i >= #s ? n
@@ -309,12 +273,10 @@
    top ("+-" + pad (ttl + " ") (ww - 3) "-" + "+")
    bot ("+" + ((ww - 2) (t \ t + "-") "") + "+")
    ([top] + map (l \ "| " + pad l (ww - 4) " " + " |") ls + [bot]))
- ; the first n cells of a painted row: an SGR has no width, so the count is of glyphs,
- ; and a glyph's tail bytes belong to the cell its lead began -- k is the leads so far.
- ; a painted row ends on \e[K, an escape with no m, so the skip stops at the end too
+ ; the first n cells of a painted row: SGRs have no width, a tail byte belongs to its lead's
+ ; cell, k the leads so far; \e[K has no m, so the skip stops at the row's end too
  (cell-of c k) (tail? c ? (k - 1) k)
- ; ..and a row shorter than n cells -- a blank one beside a small room -- is padded
- ; out to n, so what is laid after it lands where it was measured to
+ ; ..a row shorter than n cells is padded out to n, so what follows lands where measured
  (cells-cut r n) (:- (go 0 0 "")
                   (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
                   (go i k acc)
@@ -323,19 +285,15 @@
                        (? (n <= cell-of c k) acc
                           (c = 27) (past i @ e (go e k (acc + snip r i e)))
                           (go (i + 1) (k + lead c) (acc + string c))))))
- ; ..and the other side of the same cut: the cells from n on. EVERY escape is kept, from
- ; the row's start and not from n, because a colour is a state and the one in force at
- ; cell n was set somewhere to its left -- drop those and the tail wears whatever the
- ; caller happened to leave on.
+ ; ..and the cells from n on. every escape is kept from the row's start: the colour in force
+ ; at n was set to its left
  (cells-from r n) (:- (go 0 0 "")
                    (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
                    (go i k acc)
                     (i >= #r ? acc
                      (r i @ 27 (past i @ e (go e k (acc + snip r i e)))
                        c (go (i + 1) (k + lead c) (n <= cell-of c k ? (acc + string c) acc)))))
- ; a line wider than the screen is reflowed at its words -- story's own wrap -- to a
- ; few cells short of the edge either side, so no row runs full and a word never sits
- ; against the frame. one list of rows per line
+ ; a line wider than the screen is reflowed at its words, ten cells short of the edge
  (sign-flow ls w) ((cite 'story 'wrap) @ wr
                    (map (l \ wr && (w - 10) < vlen l ? (wr l (w - 10)) [l]) ls))
  ; the screen row the box's top takes, for a box of nb rows
@@ -358,14 +316,11 @@
    ww (vlen <box)
    x0 ((w - ww) // 2 @ q (0 < q ? q 0))
    y0 (sign-top a n #box)
-   ; ..and never past the rows it was given: a box too tall for the screen loses its
-   ; foot, which is the screen's doing, but the bar under it is not the box's to take
+   ; ..never past the rows it was given: a box too tall loses its foot, not the bar under it
    (lay i) (rs i @ r
             (!(y0 <= i < y0 + #box && i < a + n) ? r
-             ; the field either side of the box, and the box between them. the tail is
-             ; not decoration: a row that stops at the box leaves the cells past it
-             ; holding whatever the LAST frame put there, and the floor before this one
-             ; is where that comes from.
+             ; the field either side and the box between; the tail is needed, or the cells past the box
+             ; keep what the last frame put there
              (cells-cut r x0 + "\e[0m" + pen sign-pen + fit-in (row i) 400 ("\e[0m" + pen sign-pen)
               + "\e[0m" + cells-from r (x0 + ww))))
    ; the top row's tab, +-title, wears its own pen; the cells were counted before the pens went in
@@ -373,21 +328,18 @@
               (i = y0 && 0 < #ttl ? (pen sign-tpen + snip s 0 (3 + #ttl) + pen sign-pen + snip s (3 + #ttl) #s) s))
    (go i acc) (i >= #rs ? acc (go (i + 1) (acc + (0 < i ? "\r\n" "") + lay i))))
 
- ; --- the keys: what a held key means, for any game on the stage ---------------------
- ; a key held down is not a key pressed again: the same key within a short gap of the
- ; last one taken is dropped, and a longer gap while a sign stands, so a held key cannot
- ; run through a scene's pages or a valley. a different key passes at once
+ ; --- the keys: the same key again within a gap of the last is dropped, a longer gap while a
+ ; sign stands, so a held key cannot run through pages. a different key passes at once ---
  repeat-gap 120                                         ; ms a held key's repeats are dropped for
  sign-gap 600                                           ; ..and while a sign stands
- ; the blocking shape: wait for a key, running idle between polls -- last is the key
- ; the last turn took and t0 when; answers the key to turn on. a tap's release (cli's 0)
- ; is no key
+ ; the blocking shape: wait for a key, idle between polls; last the key the last turn took
+ ; and t0 when. a tap's release (cli's 0) is no key
  (key-wait t0 last gap idle) (cue? 0 ?
                                 (edkey in @ k
                                    (k = 0 || k = last && clock t0 < gap ? (key-wait t0 last gap idle) k))
                                 (idle (), key-wait t0 last gap idle))
- ; the polling shape: every key waiting handed to take under the same rule, the last
- ; key taken and its time riding g as 'lk and 'lt; answers how many were taken
+ ; the polling shape: every waiting key handed to take under the same rule, the last key and
+ ; its time riding g as 'lk and 'lt; answers how many were taken
  (key-drain g gap take)
   (:- (go 0) (go n)
    (cue? 0 ?
@@ -395,19 +347,14 @@
          (k = g 'lk && clock (g 'lt) < gap ? (go n)
             (take k, pins g 'lk k 'lt (clock 0), go (n + 1))))
       n))
- ; the queue eaten: keys typed at what stood before are not typed at what stands now --
- ; and no further at the end of the input, which a hung-up fd reads as ready
+ ; the queue eaten: keys typed at what stood before are not for what stands now; stops at end of input
  (drain-keys _) (cue? 0 ? (see in @ -1 () _ (drain-keys ())))
 
- ; --- the horn: the rate a game plays at, and how far ahead of the speaker it feeds ----
- ; every sample is a closure call, so the wasm seat -- slower, and its page resamples
- ; any rate -- plays at a third of the 48k every card takes
+ ; --- the horn: every sample is a closure call, so wasm plays at a third of the 48k ---
  song-rate (love-arch @ 'wasm 16000 48000)
- ; THE QUEUE MUST OUTLAST THE GAP BETWEEN FEEDS, and on a slow seat that gap is one
- ; frame's painting: a fifth of a second is a desktop's answer and a phone's silence. so
- ; the gap is measured -- a pacer, asked once a feed, holds it at its recent worst,
- ; halving every two seconds by the clock and not by calls -- and the lead follows it:
- ; two and a half gaps, never under the fifth, never over the second a card's ring holds
+ ; the queue must outlast the gap between feeds, which on a slow machine is a frame's paint;
+ ; the pacer holds the gap at its recent worst, halving every two seconds of clock, and the
+ ; lead is two and a half gaps, clamped to song-lead .. song-lead-max
  song-lead (6 * (song-rate // 30))
  song-lead-max (20 * (song-rate // 30))
  (pacer _) {'t (clock 0) 'gap 0.0}
@@ -418,16 +365,12 @@
                p 'gap))
  (song-lead-of gap) (int (2.5 * gap * song-rate / 1000.0) @ n
                        (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))
- ; the horn fed up to a lead: feed while the lag is under it AND EACH FEED RAISES IT.
- ; the lag counts the card's ring and the port's run behind it, but a full ring takes
- ; nothing and a say on a full run waits, so a lead past the two together can never
- ; be reached, and a feed slower than the frames it makes loses ground every time:
- ; either way the lag stops rising, and the filler stops with it rather than loop, so
- ; the keys are read and the sound merely gaps. answers the feeds made
+ ; the horn fed up to a lead, while each feed raises the lag: a full ring or run takes nothing,
+ ; so a lead past them is never reached and the filler stops rather than loop. answers the feeds
  (song-fill hn lead feed) (:- (go (horn-lag hn) 0) (go l0 k)
                             (l0 < lead ? (: _ (feed ()) l1 (horn-lag hn) (l0 < l1 ? (go l1 (k + 1)) (k + 1)))
                                k))
- ; ..and for a while: a box that goes up over what the keys were typed at
+ ; ..and a settle: keys drained for a while, under a box that goes up over what they were typed at
  settle-slice 25
  (settle ms) (0 < ms ? (drain-keys (), rest settle-slice, settle (ms - settle-slice)))
 
@@ -436,22 +379,22 @@
  ; a mob stirs on the turns its pace divides, so heaven moves at half a climber's rate
  (due? g m) (0 = g 'tn % m 'pc)
  ; --- a turn on a floor: the walk's key, the turn it makes, the mobs after it ---
- ; ..the mobs that move (moves? m) wander a step a turn, sb's dice for each way, to a
- ; cell (free? x y) holds and no mob stands on
+ ; ..the mobs that move (moves? m) wander a step a turn by sb's dice, to a cell free? holds and
+ ; no mob stands on
  (rove-wander ms sb moves? free?) (: (taken? x y) (any (m \ m 'x = x && m 'y = y) ms)
    (each ms (m \ (moves? m ? (: nx (m 'x + roll sb 3 - 1) ny (m 'y + roll sb 3 - 1)
                                  (? (free? nx ny && !(taken? nx ny)) (pins m 'x nx 'y ny)))))))
- ; ..a turn: the note cleared and the turn counted; a standing sign takes the key
- ; (sign g k), an ended walk takes none, and a steer is a step (step g k)
+ ; ..a turn: the note cleared and the turn counted; a standing sign takes the key (sign g k),
+ ; an ended walk none, and a steer is a step (step g k)
  (rove-turn g k sign step) (: _ (pins g 'msg "" 'tn (1 + g 'tn))
    ((? (g 'sign) (sign g k) (g 'over) () (two? k) (step g k) ()),
     g))
- ; ..a key as the walk takes it: escape at a standing sign takes the sign down (down g),
- ; q or escape ends the walk as how, and any other is a turn (turn g k) on its steer
+ ; ..a key: escape at a standing sign takes it down (down g), q or escape ends the walk as how,
+ ; any other is a turn (turn g k) on its steer
  (rove-press g k how down turn) (k = 27 && g 'sign ? (down g)
    (k @ (113 || 27 || -7) (pin g 'over how) (turn g (rove-key g k))))
- ; ..and the walk's loop: the frame said, a key waited for, paced -- (idle) while none
- ; comes -- and handed on (press k), until the walk is over
+ ; ..and the walk's loop: frame said, a key waited for and paced, (idle) while none comes,
+ ; handed on (press k), until the walk is over
  (rove-loop g frame idle press) (: (go last t0) (g 'over ? ()
                                    (: _ (say out (frame g), flush out)
                                       k (key-wait t0 last (g 'sign ? sign-gap repeat-gap) idle)

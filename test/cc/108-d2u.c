@@ -1,25 +1,6 @@
-/* a double converts to an unsigned 64-bit value UNSIGNED.
- *
- * the mirror of 107-u2d.c, and it was the same hole from the other side.
- * cvttsd2si is a SIGNED truncation, so every double at or above 2^63 saturated
- * to 0x8000000000000000: (unsigned long)1.0e19 answered 9223372036854775808
- * instead of 10000000000000000000. t32 rides its own cvttsd2ui and the pair lane
- * peels bits by hand; the 64-bit targets have exactly one truncating instruction
- * and it only speaks signed.
- *
- * gen.l now biases around 2^63 -- under it convert straight, at or above it
- * subtract 2^63 first and put the bit back. the subtract is EXACT (a d >= 2^63
- * has an ulp of at least 2^11 and d - 2^63 is a multiple of it, landing under
- * 2^63), so no rounding enters and the values below are exact, not approximate.
- *
- * the conversion happens at every context that has a destination type, not
- * just a cast -- so this exercises the cast, a store, an initializer, an
- * argument and a return, which are the five places gen.l routes through asintt.
- * fixing only the cast would leave `unsigned long v = d;` wrong.
- *
- * NOT asserted: negative, out-of-range and NaN sources. C leaves all three
- * undefined, and a test that pins them would be pinning whatever two compilers
- * happen to share rather than a law. */
+/* a double converts to unsigned 64-bit unsigned at or above 2^63, exactly, at
+ * every site with a destination type: cast, store, initializer, argument, return.
+ * negative, out-of-range and NaN sources are undefined and not asserted. */
 
 static unsigned long d2u(double d)          /* through a call, so nothing folds */
 {

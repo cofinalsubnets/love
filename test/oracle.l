@@ -1,11 +1,5 @@
-; --- differential oracle: ev's reduction vs a reference normalizer ---
-; test/proof/rocq/spec.v proves the de Bruijn calculus (shift/subst/step) consistent; this
-; checks the binary against a direct transcription of it, over thousands of random closed
-; affine terms (so both terminate), under love's strategy: n-ary closures, cbv, weak, and
-; saturating (an under-applied closure is held, as ev holds (B A)). results are compared
-; extensionally, applied to distinct marker symbols, which grounds away love's lazy
-; partials. a wrong subst index drops the rate well below 100%. subst's free-variable
-; shift is unreachable here (weak cbv on closed terms) and is spec.v's alone.
+; --- ev against a transcription of spec.v's de bruijn calculus, on random closed affine terms ---
+; love's strategy: n-ary, cbv, weak, saturating; compared applied to marker symbols
 (: ; de Bruijn terms as tagged chains: (0 n) Var | (1 b) Lam | (2 f a) App
  (dvar n) [0 n]   (dlam b) [1 b]   (dapp f a) [2 f a]
  (dtag t) <t   (dn t) <>t   (dbody t) <>t
@@ -37,7 +31,7 @@
       (rebuild t args))
  (teval t) (evs 4000 t ())
 
- ; render de Bruijn -> love \-expression (binder names = de Bruijn LEVELS, capture-free)
+ ; render de Bruijn -> love \-expression named by level
  lam-sym (cap '(\ x))
  (vname i) (intern ("v" + show i))
  (render d t)

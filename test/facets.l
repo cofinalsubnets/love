@@ -1,9 +1,6 @@
-; src/love/raster.c's facets: triangles onto a frame. a shared edge is drawn once, the nearer
-; face stands whichever comes first, a texture laid a texel a pixel comes back as it was, and
-; its level follows how many texels a pixel crosses. the loop holds more each round, so the
-; collections the frame asks for move it under the heap (make test_gcstress). frame-bytes
-; spells a frame for a window or a terminal, and frame-paint lays it on a window's paper; an
-; exposure rolls the light off as lore's eye does
+; facets: triangles onto a frame. a shared edge drawn once, the nearer face standing,
+; textures and their levels; frame-bytes and frame-paint lay a frame out; an exposure rolls
+; the light off; a big frame drawn in bands over the pool comes out the same at widths 1, 2, 8
 (: (fc-flat l) (foldr (+) () l)
    (fc-g l) (fc-flat l @ f (gem-tray [(tally f)] f))
    (fc-z l) (fc-flat l @ f (star-tray [(tally f)] f))
@@ -11,6 +8,9 @@
    ; a vertex: x y z, u v, r g b
    (fc-vx x y z u v r g b) [(1.0 * x) (1.0 * y) (1.0 * z) (1.0 * u) (1.0 * v) (1.0 * r) (1.0 * g) (1.0 * b)]
    (fc-n f c) (net (f = c))
+   (fc-by k vs ts) (: _ (setenv "LOVE_THREADS" k) f (facets 512 320 7 fc-id vs ts () ())
+                      _ (setenv "LOVE_THREADS" ()) f)
+   (fc-shared vs ts) (: f1 (fc-by "1" vs ts) (aall (f1 = fc-by "2!" vs ts) && aall (f1 = fc-by "8!" vs ts)))
    (fc-flatten fl) (shape fl = [48] && aall (fl = peep ab (iota 48) 0))
    red 16711680 blue 255
    ; the screen as two halves, red and blue, and the same drawn blue first
@@ -30,9 +30,8 @@
    qt (fc-z [[0 3 2 0] [0 2 1 0]])
    (laid s texs fl) (facets 4 4 7 fc-id (quad s) qt texs (fc-g [[0.0 0.0 0.0 0.0 0.0 fl]]))
    (flat f) (map (k \ peep f [(k // 4) (k % 4)] 0) ^16)
-   ; the depth alone: the near face's, 2 where nothing was drawn; and a face lit only by the
-   ; sun (11 a vertex, its sun red), whole where the sun's view of it is clear, dark where
-   ; that view saw something nearer
+   ; the depth alone (2 where nothing was drawn); and a face lit only by the sun, dark
+   ; where the sun's view saw something nearer
    dop (fc-g [[0.0 0.0 0.0 0.0 0.0 16.0]])
    near (facets 4 4 7 fc-id nf (fc-z [[0 1 2 -1]]) () dop) none (facets 4 4 7 fc-id nf (fc-z []) () dop)
    (sv x y z) [(1.0 * x) (1.0 * y) (1.0 * z) 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0]
@@ -85,8 +84,7 @@
       (frame-bytes px2 2 1 = "EjRW////")
       (frame-bytes px2 0 2 = "\x12\x34\x56\x12\x34\x56\xff\xff\xff\xff\xff\xff\x12\x34\x56\x12\x34\x56\xff\xff\xff\xff\xff\xff")
       (frame-bytes px2 3 1 = ())
-      ; ..or paints it onto a window's paper, here 3 wide and 3 high: px2 a column, each pixel
-      ; 2 by 2, clipped at the paper's right and its bottom
+      ; ..or paints it onto a 3x3 paper, each pixel 2 by 2, clipped right and bottom
       (string (frame-paint px2 1 2 (cask 36) 3) = "\x56\x34\x12\x00\x56\x34\x12\x00\x00\x00\x00\x00\x56\x34\x12\x00\x56\x34\x12\x00\x00\x00\x00\x00\xff\xff\xff\x00\xff\xff\xff\x00\x00\x00\x00\x00")
       (string (frame-paint px2 0 1 (cask 4) 1) = "\x00\x00\x00\x00")
       ; an exposure of 1 shows white as 255 (1 - 1/e)
@@ -99,5 +97,8 @@
       (shape near = [4 4]) (peep near [1 2] 0.0 = -0.5) (peep none [3 3] 0.0 = 2.0)
       (fc-n (sunlit none) red = 16) (fc-n (sunlit near) 0 = 16) (fc-n (sunlit ()) red = 16)
       (fc-go 100 () 0 = 0)
+      ; a frame big enough to share comes out the same at widths 1, 2 and 8
+      (fc-shared sq (fc-z [[0 1 2 -1] [3 4 5 -1]]))
+      (fc-shared (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]))
       ; flag 64 answers the same colours as one row
       (fc-flatten (facets 8 6 7 fc-id sq (fc-z [[0 1 2 -1] [3 4 5 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 64.0]])))))

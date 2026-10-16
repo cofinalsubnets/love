@@ -1,24 +1,7 @@
 #!/bin/sh
-# test/gate/targz.sh -- src/apps/tar.l + src/apps/gz.l against the two programs they replace.
-#
-# test/host/gz.l proves the laws that need nothing outside the tree: crc32 against
-# its published vector, both coders against each other, the ustar header field by
-# field. THIS gate proves the half that only the outside world can say -- that GNU
-# tar and GNU gzip AGREE with us, in both directions, over a real tree.
-#
-# AGREEING WITH OURSELVES PROVES NOTHING HERE. A coder and a decoder written by
-# one hand share a model, and a round trip through both is green for any pair of
-# functions that invert each other -- including a pair that agree on a format
-# nobody else speaks. The system tools are the only oracle that can catch that,
-# which is why this gate exists separately rather than as more asserts.
-#
-# The tree is chosen for what it puts in the header rather than for size: a
-# SYMLINK (typeflag 2, and a target in the linkname field), a file with a MODE
-# that is not the default (0600), an EMPTY file, a file whose size is an exact
-# multiple of 512 (so the body padding is zero bytes -- the off-by-one lives
-# there), a deep path, and incompressible bytes beside compressible ones.
-#
-# Skips cleanly where either tool is missing, and takes the love binary as $1.
+# test/gate/targz.sh -- src/apps/tar.l and gz.l against GNU tar and gzip, both directions,
+# over a tree of header shapes: a symlink, mode 0600, an empty file, an exact 512, a deep path.
+# usage: targz.sh LOVE; skips without tar or gzip
 . test/gate/skip.sh
 set -e
 
@@ -37,9 +20,7 @@ printf 'alpha\n'                        > "$w/tree/a.txt"
 printf 'beta beta beta beta beta beta\n' > "$w/tree/sub/b.txt"
 head -c 512  /dev/urandom               > "$w/tree/sub/exact512.bin"
 head -c 4096 /dev/urandom               > "$w/tree/sub/deep/blob.bin"
-# bigger than tar-hash's 64 KB read buffer, so its chunk loop takes more than one
-# turn on a single body -- the only shape here that is about the STREAM and not
-# about the header.
+# past tar-hash's 64 KB read buffer: one body, several chunks
 head -c 200000 /dev/urandom             > "$w/tree/sub/deep/big.bin"
 cat src/apps/gz.l src/apps/tar.l                  > "$w/tree/text.l"
 ln -s a.txt "$w/tree/link"
@@ -47,7 +28,7 @@ chmod 0600 "$w/tree/sub/b.txt"
 
 fail() { echo "FAIL targz: $*"; exit 1; }
 
-# ---- 1. we WRITE, they READ ------------------------------------------------
+# ---- 1. we write, they read ------------------------------------------------
 cat > "$w/pack.l" <<EOF
 (borrow 'posix)
 (borrow 'tar)
@@ -75,7 +56,7 @@ m=$(stat -c %a "$w/theirs/sub/b.txt")
 [ "$m" = 600 ] || fail "mode not preserved through our writer (got $m, want 600)"
 echo "  OK we write, GNU tar + gzip read -- tree identical, symlink and mode intact"
 
-# ---- 2. they WRITE, we READ ------------------------------------------------
+# ---- 2. they write, we read ------------------------------------------------
 ( cd "$w/tree" && tar czf "$w/theirs.tar.gz" . )
 mkdir -p "$w/ours"
 cat > "$w/unpack.l" <<EOF
@@ -93,10 +74,7 @@ cat > "$w/unpack.l" <<EOF
 EOF
 "$love" "$w/unpack.l" || fail "love could not read the system's .tar.gz"
 diff -r "$w/tree" "$w/ours" || fail "our extraction of the system archive differs"
-# diff -r COMPARES BYTES, NOT MODES, and that blind spot shipped a real bug: our
-# extractor read the mode out of every header and never applied it, so everything
-# landed 0644 and an extracted BINARY would not run. Content-identical and useless.
-# So the modes are compared as their own list, both directions.
+# diff -r compares bytes, not modes: the modes are their own list
 ( cd "$w/tree" && find . -type f | sort | xargs stat -c '%a %n' ) > "$w/modes.want"
 ( cd "$w/ours" && find . -type f | sort | xargs stat -c '%a %n' ) > "$w/modes.got"
 diff "$w/modes.want" "$w/modes.got" || fail "our extraction did not preserve file modes"
@@ -115,9 +93,7 @@ for f in tree/text.l tree/sub/deep/blob.bin tree/empty; do
 EOF
   "$love" "$w/one.l" || fail "love could not gzip $f"
   gzip -dc "$w/one.gz" | cmp - "$src" || fail "system gunzip disagrees on $f"
-  # ..and the reverse, at -9: two coders that both build a code from a block's own
-  # frequencies still choose different codes, so this is the branch where a decoder
-  # reading only its own writer's output has never been asked anything.
+  # ..and the reverse at -9, where gzip's dynamic codes differ from ours
   gzip -9 -c "$src" > "$w/theirs.gz"
   cat > "$w/one2.l" <<EOF
 (borrow 'posix)
@@ -134,8 +110,7 @@ done
 echo "  OK gzip container both ways (text, incompressible, empty; -9 dynamic codes read)"
 
 # ---- 4. the command faces: gzip, gunzip, zcat (src/apps/gz.l) --------------
-# the engine is section 3's; what is asked here is the FACE -- the suffix rules, the
-# in-place replace, the mode and the mtime carried across, the flags and the statuses.
+# the suffix rules, the in-place replace, mode and mtime carried, the flags, the statuses
 c="$w/cmd"; mkdir -p "$c"
 head -c 20000 /etc/services > "$c/f.txt" 2>/dev/null || cat src/apps/gz.l > "$c/f.txt"
 cp "$c/f.txt" "$c/g.txt"
@@ -151,8 +126,7 @@ gunzip -c "$c/f.txt.gz" | cmp - "$c/g.txt" || fail "system gunzip disagrees with
 [ "$(stat -c %Y "$c/f.txt.gz")" = "$(date -d '2021-02-03 04:05:06' +%s)" ] \
   || fail "gzip did not carry the mtime over"
 
-# GNU out, ours in -- -k so the .gz stays for the checks below, and the bytes are
-# compared against a copy taken before GNU ate the original
+# GNU out, ours in -- -k keeps the .gz for the checks below
 cp "$c/g.txt" "$c/gsave.txt"
 gzip -9 "$c/g.txt"
 ( cd "$c" && "$r/$love" gunzip -k g.txt.gz ) || fail "gunzip exit"
@@ -164,15 +138,12 @@ cat "$c/g.txt" | "$love" gzip | gunzip -c | cmp - "$c/g.txt" || fail "gzip filte
 gzip -c "$c/g.txt" | "$love" zcat | cmp - "$c/g.txt" || fail "zcat"
 "$love" gzip -c "$c/g.txt" | "$love" gunzip -c | cmp - "$c/g.txt" || fail "our own round trip"
 
-# -l, byte-identical to GNU's over a file GNU wrote (the ratio is the PAYLOAD's, and
-# its tenth is rounded -- two chances to differ in one line)
+# -l, byte-identical to GNU's over a file GNU wrote
 gzip -l "$c/g.txt.gz" > "$w/l.want" 2>/dev/null
 "$love" gzip -l "$c/g.txt.gz" > "$w/l.got" 2>/dev/null
 cmp -s "$w/l.want" "$w/l.got" || { diff "$w/l.want" "$w/l.got"; fail "gzip -l vs GNU"; }
 
-# -t says nothing about a good member and 1 about a torn one.
-# set -e is ON in this gate, so a status is caught with `|| e=$?` and never with a
-# bare run followed by $? -- a failing command on its own line ends the script silently
+# -t: quiet on a good member, 1 on a torn one. under set -e a status is caught with `|| e=$?`
 run() { e=0; "$@" > /dev/null 2>&1 || e=$?; }
 "$love" gzip -t "$c/g.txt.gz" || fail "gzip -t on a good member"
 head -c 200 "$c/g.txt.gz" > "$c/torn.gz"
@@ -198,8 +169,7 @@ cp "$c/g.txt" "$c/named.txt"
 mv "$c/named.txt.gz" "$c/other.gz"
 ( cd "$c" && "$r/$love" gunzip -N other.gz ) || fail "gunzip -N"
 [ -e "$c/named.txt" ] || fail "gunzip -N did not take the stored name back"
-# ..and again from somewhere else, which is the half standing in $c cannot see: the
-# stored name is restored BESIDE the archive, as GNU does, not into the cwd
+# ..and from elsewhere: the stored name lands beside the archive, not in the cwd
 mkdir -p "$c/nd" "$c/elsewhere"
 cp "$c/g.txt" "$c/nd/stored.txt"
 "$love" gzip -N "$c/nd/stored.txt" || fail "gzip -N"
@@ -214,12 +184,7 @@ mkdir -p "$c/tree/in"; cp "$c/g.txt" "$c/tree/in/r1.txt"; cp "$c/g.txt" "$c/tree
 cmp "$c/tree/in/r1.txt" "$c/g.txt" || fail "gunzip -r differs"
 echo "  OK the command faces -- gzip/gunzip/zcat, the suffixes, the statuses, -l vs GNU"
 
-# ---- 5. the archive as a STREAM equals the archive as a THING ---------------
-# tar-hash walks thin entries and feeds a resumable sha-256 the header, the body off
-# disk, and the pad -- so it names an archive that was never built. The claim is that
-# it answers exactly what hashing the packed bytes answers, over this same tree: the
-# symlink (no body), the empty file (no pad), the exact-512 body (a zero-length pad,
-# where an off-by-one lives), and a body that outruns the read buffer.
+# ---- 5. tar-hash's streamed digest equals sha256 of the packed archive -------
 cat > "$w/hash.l" <<EOF
 (borrow 'tar)
 (borrow 'hashes)
@@ -237,13 +202,7 @@ EOF
 "$love" "$w/hash.l" || fail "tar-hash disagrees with sha256 of tar-pack"
 echo "  OK the streamed archive digest equals the packed one"
 
-# ---- 6. THE UMASK IS NOT CONTENT -------------------------------------------
-# Section 2 compares modes over `find -type f`, and the DIRECTORIES are the blind
-# spot that hides in: `mkdir` wears the umask exactly as `open` does, so a lay that
-# chmods its files and not its dirs answers every file right and every directory
-# 0700 under 077. Invisible on a dev box, where 022 is the only umask anyone has.
-# The second leg is the seed's own fixpoint in miniature -- lay an archive down and
-# pack it again, and the packer must answer the tree rather than its own umask.
+# ---- 6. a lay under umask 077 keeps every mode, dirs too, and re-packs to the same sha
 mkdir -p "$w/um"
 cat > "$w/unpack6.l" <<EOF
 (borrow 'posix)

@@ -1,17 +1,5 @@
-; --- test/init.l: smoke test for the init (pid1 supervisor) nifs (src/love/posix.c) ---
-; spawn/glean/wait/still link into love0 as well as `love`, so these are corpus laws.
-; it still reads standalone (test comes from test/00-init.l):
-;   cat test/00-init.l test/init.l | out/love
-; the full pid-1 story -- mounting proc, reaping a reparented orphan -- needs love to
-; actually be pid 1: `make init-container` (a pid+user+mount namespace). Here we
-; cover the glean nif's three distinct returns and the spawn/wait pair.
-
-; glean is waitpid(-1, WNOHANG), with three returns the supervisor tells apart:
-;   (pid . status)  a child was reaped
-;   ()              none pending (children alive) -- the real zero point, not charm 0
-;   -echild         no children remain -- a negative charm (nil?-true), distinct from ()
-; spawn/glean/wait/still are the OS's own, and inle has no processes: skip the whole
-; file where there is no kernel underneath (hosted, test/00-init.l), as run.l does.
+; --- the init nifs, host only: spawn/wait, and glean, which is waitpid(-1, WNOHANG):
+; (pid . status) reaped, () none pending, 'echild no children left ---
 (hosted ? (do
   (: (glean-until n)                                   ; glean, paced, to a (pid . status) pair (or steps out)
        (glean 0 @ ev (? (two? ev) ev (n < 1) () (rest 2, glean-until (n - 1))))
@@ -21,7 +9,7 @@
           (charm? p && 0 < p
               ; a child alive, none exited -> glean is the real () (not charm 0), nil?-true
            && glean 0 = () && !(glean 0) && !(charm? (glean 0))
-              ; kill it (bao's `still`), then glean the zombie -> (pid . 128+sig)
+              ; kill it, then glean the zombie -> (pid . 128+sig)
            && (: _ (still p 9) r (glean-until 200)
                  (two? r && <r = p && >r = 137))))
          ; no children left -> 'echild: a nom, truthy, and not the () above
@@ -29,14 +17,13 @@
          ; the blocking foreground wait: spawn then wait -> the child's exit status
          (0 = wait (spawn ["true"]))
          (3 = wait (spawn ["sh" "-c" "exit 3"]))
-         ; the "()"-returns are the real zero point, not charm 0:
-         ; (x = ()) holds and (charm? x) is false -- charm 0 would fail both.
+         ; the () answers are the zero point, not charm 0
          !(close -1)                                         ; closing nothing still answers ok
          ((getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY") = ())             ; getenv absent -> the real ()
          !(charm? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY"))))
 
 
-  ; --- the fs nifs: stat readdir unlink lseek (the posix_ lane in src/love/posix.c) -----
+  ; --- the fs nifs: stat readdir unlink lseek ---
   (: d ("out/.fs-nif-probe." + show (getpid 0)) f (d + "/x")   ; per process: shards run at once
      _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
      _ (unlink f)                                     ; a clean slate, tolerated if absent
@@ -59,21 +46,17 @@
        (5 = lseek fd 0 2 && 1 = lseek fd 1 0 && 3 = lseek fd 2 1
         && !(close fd)))
       ('ebadf = (lseek -1 0 0))                     ; a bad fd is its nom
-      ; a whence no seat knows is the row's 'einval and moves nothing -- read as SET
-      ; it would have seeked to 0 and called that success
+      ; an unknown whence is 'einval and moves nothing
       (openfd f 0 @ fd
        (2 = lseek fd 2 0 && 'einval = lseek fd 0 7 && 'einval = lseek fd 0 -3
         && 2 = lseek fd 0 1 && !(close fd)))
-      ; stat takes a charm as an fd, which is fstat under another name: the same
-      ; tuple the path answers, and nothing for a row that is not there
+      ; stat of a charm is fstat
       (: fd (openfd f 0) r (stat fd = stat f) (close fd, r))
       ((stat 4096) = 'ebadf) !(charm? (stat 4096))
-      ; and stat reads a row's kind off the fd: a file, and a directory, which
-      ; opens read-only by POSIX's own rule
+      ; the kind off the fd: a file, and a directory opened read-only
       (: fd (openfd f 0) s (stat fd) (close fd, 32768 = 61440 & <>>s))
       (: fd (openfd d 0) s (stat fd) (close fd, 16384 = 61440 & <>>s))
-      ; close wears the errno convention: a stranger row is 'ebadf, and so is the
-      ; second close of a real one -- the row is gone, which is what it says
+      ; close of a stranger, or a second close, is 'ebadf
       (: fd (openfd f 0) a (close fd) b (close fd) (!a && 'ebadf = b))
       ('ebadf = (close 4096))
       ; unlink: () ok, then the file really is gone, and a re-unlink says so
@@ -82,17 +65,13 @@
       ('enoent = (unlink f))
       !(rmdir d)))
 
-  ; --- the raw-fd lane: the port ops with a charm where the port goes ------------
-  ; an fd carries no buffer of love's and no seat, so each op is one motion on the
-  ; row -- and the answers are the port arm's, so the two spellings compose.
+  ; --- the raw-fd lane: the port ops on a charm, unbuffered, answering as the port arm does ---
   (: pp (pipe 0) rfd <pp wfd >pp
      _ (say wfd "through the door") _ (put wfd 33) _ (close wfd)
      s (slurp rfd) (close rfd,
                     (test ("through the door!" = s))))
 
-  ; see draws one byte, chug takes what the row still has in hand, and both answer
-  ; the empty end -- see is the door that tells a quiet row from an ended one, so it
-  ; is what a drain leans on
+  ; see draws one byte, chug what is in hand; see tells a quiet row from an ended one
   (: pp (pipe 0) rfd <pp wfd >pp
      _ (say wfd "abcdef")
      a (see rfd)
@@ -112,8 +91,7 @@
                                  unlink f, rmdir d,
                                  (test (a = b) (16000 = #a))))
 
-  ; a row that is not there swallows and reads as the end: a closed seat's output
-  ; must not fault a task that cannot know it is closed
+  ; a row that is not there swallows and reads as the end, so a closed output never faults
   (test ("into the void" = say 4096 "into the void")
           (-1 = see 4096) ("" = slurp 4096)
           (4096 = flush 4096))                      ; nothing of love's is pending

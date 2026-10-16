@@ -1,20 +1,6 @@
-(* encli.v -- the IMMEDIATE-LOAD slice of the machine-checked x86-64 encoder
-   (rung 2c of the holo encoder ladder; enc.v = reg-direct, encmem.v = memory).
-
-   `li d imm` loads a 64-bit signed immediate into a register. holo picks the
-   SHORTEST of three forms by value range -- this is the interesting part, a
-   CHOICE the encoder must get right (and the theorem below proves it round-trips):
-     * imm in [0, 2^32-1]   -> `b8+r imm32`         5 bytes (+REX.B), NO REX.W;
-                               the 32-bit mov zero-extends to 64 bits.
-     * imm in [-2^31, -1]   -> `REX.W C7 /0 imm32`  7 bytes; imm32 sign-extends.
-     * else (>= 2^32 or < -2^31) -> `REX.W B8+r imm64` (movabs) 10 bytes.
-
-   `li_roundtrip_ok` proves `decode_li (encode_li d imm) = Some (d,imm)` over every
-   dest<16 x a curated immediate set hitting all three forms and their boundaries
-   (0, 2^31-1/2^31, 2^32-1/2^32, -1, -2^31, -2^31-1, +-2^63-1) -- by vm_compute
-   (axiom-free). The form-selection logic is thus exhaustively covered over the reg
-   dimension and at every range boundary. `encode_li` extracts to OCaml so
-   encli_drive.ml validates holo BYTE-FOR-BYTE (test_encver). *)
+(* encli.v -- the immediate-load slice of the x86-64 encoder. `li d imm` takes
+   the shortest form: b8+r imm32 (zero-extends), REX.W C7 /0 imm32 (sign-extends),
+   else movabs imm64; round-trips over dest<16 x the range boundaries *)
 
 From Stdlib Require Import List Bool ZArith.
 Import ListNotations.
@@ -73,7 +59,7 @@ Definition decode_li (bs:list byte) : option (reg * Z) :=
 
 Definition regs16 : list reg := map Z.of_nat (seq 0 16).
 
-(* immediate boundary set: all three forms and their edges + a couple mid values *)
+(* every form and its edges *)
 Definition imms : list Z :=
   [ 0; 1; 60; 1000000; 2147483647; 2147483648; 4294967295;   (* form A *)
     -1; -128; -1000000; -2147483648;                          (* form B *)

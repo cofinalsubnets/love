@@ -1,12 +1,6 @@
-; test/host/showbig.l -- show over a graph of helpers
-; moon's parser is one letrec of helpers the module does not export, each quoted as a
-; constant in many places. read in place wherever it is quoted, the graph reads as a tree;
-; the reading counts the bodies it reads, and past its lim a function with a name is its
-; name. a small one still reads in place.
-;
+; test/host/showbig.l -- show over moon's unexported helper graph: past its lim a named
+; function shows as its name, a small one in place. host-side for its time.
 ;   cat test/00-init.l test/host/showbig.l | out/love
-;
-; host-side and not a corpus member for its time: each big reading runs to lim first.
 
 (: m (cite 'moon)
    ks ['adims 'specask]
