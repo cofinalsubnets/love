@@ -2278,7 +2278,7 @@
    (srcrec form0)
     (two? form0 && <form0 = ': && !(atom? >form0) && 0 = #>form0 % 2 ?                                   ; body-less `:` only -> a global-leaking define
      ({'form form0} @ cell (foldl (\ _ n (pin srcreg n cell)) () (swbnds form0))))
-   (swlow c) (peep c 'low 0 ? 0
+   (swlow c) (peep c 'low 0 || dupbind? (c 'form) ? 0
       (: _ (pin c 'low 1)
          low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix (c 'form))))))))))))   ; autogroup's full lowering: church/hof/&& + structural (lift/loops/value-lets)
          (foldl (\ _ pr (swfnpair? pr && (: cur (peep srcreg <<pr 0) (cur = 0 || (cur = c))) ?
@@ -2290,6 +2290,11 @@
         (: d2 (peep srcreg h 0) (tablet? d2 ? (pin srcreg h 0, 0) d2)))))
    (swuniq l) (? (atom? l) () (elem <l >l) (swuniq >l) (<l . swuniq >l))
    (swbnds e) (map (p \ two? <p ? <<p <p) <(anat-defs >e))                       ; a `:`'s binding names
+   ; a `:` anywhere in e binding one name twice (`_` aside, never read): a rebinding shadows the
+   ; earlier one past it, but the passes below key bindings by name, so it is left to the interpreter
+   (dupbind? e) (? (atom? e) 0
+                   (<e = ':) (!(distinctp (filter (n \ n != '_) (swbnds e))) || any dupbind? >e)
+                   (any dupbind? e))
    ; collect call heads, skipping a `\` subform whole (its params never leak). the walk reads opfixed source, so an infix
    ; operand never masquerades as a head; bnd = the `:` names + params that filter local heads
    (swwalk e bnd acc) (? (atom? e) acc  (two? e && <e = '\) acc
@@ -2318,6 +2323,7 @@
        ; only a few one-line integer predicates survive grpfix there, so the whole file would pay the lifting. srcrec still lowers these for the swallow
        (0 = #>form0 % 2) form0
        (memo-leak? form0) form0                                                                ; a `:`-sibling map memo (fact/bell) -> interp, sound
+       (dupbind? form0) form0                                                                  ; a name bound twice in one `:` -> interp
        ; opfixed at the head: every pass below reads a call as a list with a head; raw source leaves a bare symbol in infix operand position
        (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix form0)))))))))))
           parsed (anat-defs >form) pairs <parsed

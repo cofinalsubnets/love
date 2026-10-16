@@ -257,10 +257,12 @@ test_doc: host
 # (the SSE emitter) + auto (ev's source-recognizer), cats the holo backends ahead of
 # itself, and runs each block through base-ev. Needs the `nat` nif; x86-64 only.
 ifeq ($a,x64)
-test_glaze: host
+test_glaze: host $(love0)
 	@echo TEST test/glaze-x86.l "(emit + auto)"
 	@{ echo "(borrow 'holo)"; cat src/love/holo/x64.l src/love/holo/a64.l test/glaze-x86.l; } \
 	  | $(gsh) test/gate/run.sh glaze "env LOVE_NO_IMAGE=1 $m" "test/glaze-x86:"
+	@echo TEST test/gate/rebind.sh "(a rebinding, glazed, unglazed and in love0)"
+	@$(gsh) test/gate/rebind.sh "$m" $(love0)
 else
 test_glaze:
 	@sh test/gate/skip.sh gate-skip "test_glaze: skipped (host arch $a is not x64)"
