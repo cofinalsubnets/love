@@ -62,16 +62,23 @@
  (view-bayer w h) (: i (iota (w * h)) (peep bayer (i // w % 4 * 4 + i % w % 4) 0 / 16.0 + 1.0 / 32.0))
  ; 24-bit, six bits a channel packed
  (view-deep-pens c) (: (q v) (int (sat1 v * 63.0 + 0.5)) (q (c 0) * 4096 + q (c 1) * 64 + q (c 2)))
- ; ..or the 256 palette's cube or grey ramp, dithered between its steps by bay
- (view-cube-pens c bay) (: (lv v) (sat1 v * 255.0 @ u (over (u / 95.0) (95.0 <= u) (1.0 + (u - 95.0) / 40.0)))
-   (ix v) (max 0 (min 5 (floor (lv v + bay))))
+ ; ..or the 256 palette's cube or grey ramp, dithered between the two steps round each part
+ ; by bay. the upper step's share is the one that mixes to the part's light (its square,
+ ; near enough to the eye's), not its code: the cube's first step is 0 to 95, and a code
+ ; half way there dithered half and half reads far too bright
+ (cube-lvl k) (over (0.0 * k) (0 < k) ((55.0 + 40.0 * k) / 255.0))
+ (dith a b v bay) (: a2 (a * a) (over 0 (bay < (v * v - a2) / (b * b - a2)) 1))
+ (view-cube-pens c bay) (: (ix v) (: u (sat1 v)
+     lo (max 0 (min 4 (floor (over (u * 255.0 / 95.0) (95.0 / 255.0 <= u) (1.0 + (u * 255.0 - 95.0) / 40.0)))))
+     (lo + dith (cube-lvl lo) (cube-lvl (lo + 1)) u bay))
    r (c 0) g (c 1) bl (c 2)
    chroma (max r (max g bl) - min r (min g bl))
-   y (sat1 (0.299 * r + 0.587 * g + 0.114 * bl) * 255.0)
-   gi (floor ((y - 8.0) / 10.0 + bay))
-   grey (over (232 + max 0 (min 23 gi)) (gi < 0) 16)
+   y (sat1 (0.299 * r + 0.587 * g + 0.114 * bl))
+   gl (max -1 (min 22 (floor ((y * 255.0 - 8.0) / 10.0))))          ; -1 the black below the ramp
+   d (dith (over ((8.0 + 10.0 * gl) / 255.0) (gl < 0) 0.0) ((18.0 + 10.0 * gl) / 255.0) y bay)
+   grey (over (232 + gl + d) ((gl + d) < 0) 16)
    cube (16 + 36 * ix r + 6 * ix g + ix bl)
-   (over cube (chroma < 0.05) grey))
+   (over cube (chroma < 0.08) grey))
  ; a frame of 24-bit pens, px a tray a screen wide: view-frame's, each pen's words kept
  ; once said, and only the half that changed said again
  tints {}

@@ -1,8 +1,9 @@
 #!/bin/sh
 # test/gate/osbox.sh -- the multi-os gate: one default-lane binary answers linux and a bsd
 # box with the same text and status, leg by leg; *_SEED=1 adds `love seed` on the box.
+# macos meets no ELF: each leg links a mach-o twin for the box, and the two answer alike.
 # the box: *_SSH, else bee's host with the cap OS-ARCH; skips without one
-# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64|rv64]
+# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd|macos [x64|a64|rv64|arm|i386]
 . test/gate/skip.sh
 set -u
 
@@ -17,9 +18,18 @@ case "$os-$arch" in
   netbsd-a64)  box=${NBSD_ARM64_SSH:-}; sd=${NBSD_ARM64_SEED:-} ;;
   freebsd-rv64) box=${FBSD_RV64_SSH:-}; sd= ;;    # the trophy ships an x64 love; none for rv64 yet
   netbsd-rv64)  box=${NBSD_RV64_SSH:-}; sd= ;;
+  freebsd-arm) box=${FBSD_ARM_SSH:-${FBSD_ARM64_SSH:-}}; sd= ;;
+  netbsd-arm)  box=${NBSD_ARM_SSH:-${NBSD_ARM64_SSH:-}}; sd= ;;
+  freebsd-i386) box=${FBSD_I386_SSH:-${FBSD_SSH:-}}; sd= ;;
+  netbsd-i386)  box=${NBSD_I386_SSH:-${NBSD_SSH:-}}; sd= ;;
+  macos-x64)    box=${MAC_SSH:-}; sd= ;;
   *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
 esac
 [ -n "$box" ] || box=$("$ho/love" bee --on "$os-$arch" --ssh 2>/dev/null) || box=
+# an arm64 BSD runs armv7 binaries in its 32-bit lane, so an a64 box answers for arm too, and
+# an amd64 one for i386
+[ -n "$box" ] || [ "$arch" != arm ] || box=$("$ho/love" bee --on "$os-a64" --ssh 2>/dev/null) || box=
+[ -n "$box" ] || [ "$arch" != i386 ] || box=$("$ho/love" bee --on "$os-x64" --ssh 2>/dev/null) || box=
 t=test_$os; [ "$arch" = x64 ] || t=test_${os}_${arch}
 d=$ho/$os-$arch
 
@@ -34,6 +44,9 @@ if [ "$arch" = a64 ]; then
 elif [ "$arch" = rv64 ]; then
   command -v qemu-riscv64 > /dev/null || gate_skip "$t: skipped (no qemu-riscv64 for the local half)"
   run() { qemu-riscv64 "$@"; }
+elif [ "$arch" = arm ]; then
+  command -v qemu-arm >/dev/null 2>&1 || gate_skip "$t: skipped (no qemu-arm for the local half)"
+  run() { qemu-arm "$@"; }
 else
   run() { "$@"; }
 fi
@@ -139,6 +152,9 @@ int main(void) {
 EOF
 
 moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
+# a leg's binary for the box: the local one, or its mach-o twin linked beside it
+twin() { [ "$os" != macos ] || moon0 -os macos "$d/$1.c" -o "$d/$2.mac"; }
+boxbin() { if [ "$os" = macos ]; then echo "$d/$1.mac"; else echo "$d/$1"; fi; }
 
 # uv1: entry, errno, sigsetjmp, and the EI_OSABI=9 brand freebsd's loader needs.
 # run four times: a crt0 reading argv wrong flips by stack address
@@ -164,10 +180,11 @@ int main(int argc, char **argv) {
   return 42; }
 EOF
 moon0 -t "$arch" "$d/uv1.c" -o "$d/uv1" || fail "uv1: the default-lane compile"
+twin uv1 uv1 || fail "uv1: the mach-o compile"
 [ "$(dd if="$d/uv1" bs=1 skip=7 count=1 2>/dev/null | od -An -tu1 | tr -d ' ')" = 9 ] \
   || fail "uv1: not born branded EI_OSABI=9"
 lout=$(for i in 1 2 3 4; do run "$d/uv1" one two; echo "rc=$?"; done)
-fout=$($box 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$d/uv1") \
+fout=$($box 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$(boxbin uv1)") \
   || fail "uv1: the box could not take or run it"
 [ "$lout" = "$fout" ] || fail "uv1: the kernels disagree -- linux[$lout] $os[$fout]"
 echo "$lout" | grep -q "uv1: argc=3 jmp=7 ebadf=ok kill=ok" || fail "uv1 body -- got: $lout"
@@ -177,8 +194,9 @@ echo "$t: UV1 -- ONE default-lane binary answered both kernels the same"
 
 # uv2: rung2.c -- open flags, stat, dirent, mmap, signals, fork, translated at runtime
 moon0 -t "$arch" "$d/rung2.c" -o "$d/uv2" || fail "uv2: the default-lane compile"
+twin rung2 uv2 || fail "uv2: the mach-o compile"
 l2=$(run "$d/uv2" < /dev/null; echo "rc=$?")   # rung2.c asserts isatty(0)==0
-f2=$($box 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$d/uv2") \
+f2=$($box 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$(boxbin uv2)") \
   || fail "uv2: the box could not take or run it"
 [ "$l2" = "$f2" ] || fail "uv2: the kernels disagree -- linux[$l2] $os[$f2]"
 echo "$l2" | grep -q "rc=42" || fail "uv2 exit -- got: $l2"
@@ -295,8 +313,9 @@ int main(void) {
 }
 EOF
 moon0 -t "$arch" "$d/uvnet.c" -o "$d/uvnet" || fail "uvnet: the default-lane compile"
+twin uvnet uvnet || fail "uvnet: the mach-o compile"
 ln=$(run "$d/uvnet" < /dev/null; echo "rc=$?")
-fn=$($box 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$d/uvnet") \
+fn=$($box 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$(boxbin uvnet)") \
   || fail "uvnet: the box could not take or run it"
 [ "$ln" = "$fn" ] || fail "uvnet: the kernels disagree -- linux[$ln] $os[$fn]"
 echo "$ln" | grep -q "net all" || fail "uvnet battery -- got: $ln"
@@ -363,8 +382,9 @@ int main(void) {
 }
 EOF
 moon0 -t "$arch" "$d/uvsig.c" -o "$d/uvsig" || fail "uvsig: the default-lane compile"
+twin uvsig uvsig || fail "uvsig: the mach-o compile"
 ls2=$(run "$d/uvsig" < /dev/null; echo "rc=$?")
-fs2=$($box 'cat > /tmp/uvsig && chmod +x /tmp/uvsig && /tmp/uvsig; echo "rc=$?"' < "$d/uvsig") \
+fs2=$($box 'cat > /tmp/uvsig && chmod +x /tmp/uvsig && /tmp/uvsig; echo "rc=$?"' < "$(boxbin uvsig)") \
   || fail "uvsig: the box could not take or run it"
 [ "$ls2" = "$fs2" ] || fail "uvsig: the kernels disagree -- linux[$ls2] $os[$fs2]"
 echo "$ls2" | grep -q "uvsig: usr1=10 chld=17 canonical" || fail "uvsig body -- got: $ls2"
@@ -406,8 +426,9 @@ int main(void) {
 }
 EOF
 moon0 -t "$arch" "$d/uvpty.c" -o "$d/uvpty" || fail "uvpty: the default-lane compile"
+twin uvpty uvpty || fail "uvpty: the mach-o compile"
 lp=$(run "$d/uvpty" < /dev/null; echo "rc=$?")
-fp=$($box 'cat > /tmp/uvpty && chmod +x /tmp/uvpty && /tmp/uvpty; echo "rc=$?"' < "$d/uvpty") \
+fp=$($box 'cat > /tmp/uvpty && chmod +x /tmp/uvpty && /tmp/uvpty; echo "rc=$?"' < "$(boxbin uvpty)") \
   || fail "uvpty: the box could not take or run it"
 [ "$lp" = "$fp" ] || fail "uvpty: the kernels disagree -- linux[$lp] $os[$fp]"
 echo "$lp" | grep -q "pty all" || fail "uvpty battery -- got: $lp"
@@ -500,9 +521,16 @@ int main(void) {
   return 42; }
 EOF
 moon0 -t "$arch" "$d/uvsi.c" -o "$d/uvsi" || fail "uvsi: the default-lane compile"
+twin uvsi uvsi || fail "uvsi: the mach-o compile"
 lout=$(run "$d/uvsi"; echo "rc=$?")
-fout=$($box 'cat > /tmp/uvsi && chmod +x /tmp/uvsi && /tmp/uvsi; echo "rc=$?"' < "$d/uvsi") \
+fout=$($box 'cat > /tmp/uvsi && chmod +x /tmp/uvsi && /tmp/uvsi; echo "rc=$?"' < "$(boxbin uvsi)") \
   || fail "uvsi: the box could not take or run it"
+# xnu fills a sent SIGBUS as a fault of its own (BUS_ADRERR, no sender), its libc's
+# handlers reading the same: there is no sender to give back, so that line is not compared
+if [ "$os" = macos ]; then
+  echo "$fout" | grep -q "uvsi: sbus signo=7 code=2 pid=0" || fail "uvsi: xnu's sent bus fault -- got: $fout"
+  lout=$(echo "$lout" | grep -v "uvsi: sbus"); fout=$(echo "$fout" | grep -v "uvsi: sbus")
+fi
 [ "$lout" = "$fout" ] || fail "uvsi: the kernels disagree -- linux[$lout] $os[$fout]"
 echo "$lout" | grep -q "uvsi: chld signo=17 code=1 status=7 pid=1" \
   || fail "uvsi child lane -- got: $lout"
@@ -510,11 +538,77 @@ echo "$lout" | grep -q "uvsi: usr1 signo=10 code=0 pid=1" \
   || fail "uvsi sender band -- got: $lout"
 echo "$lout" | grep -q "uvsi: segv signo=11 code=1 addr=0x12340000" \
   || fail "uvsi fault lane -- got: $lout"
-echo "$lout" | grep -q "uvsi: sbus signo=7 code=0 pid=1" \
+[ "$os" = macos ] || echo "$lout" | grep -q "uvsi: sbus signo=7 code=0 pid=1" \
   || fail "uvsi sent-fault lane -- got: $lout"
 echo "$lout" | grep -q "rc=42" || fail "uvsi exit -- got: $lout"
 
 echo "$t: UV-siginfo -- one SA_SIGINFO record read the same on both kernels"
+
+# uvth: threads -- thr_new and _umtx_op on freebsd, _lwp_create and __futex on netbsd, clone
+# on linux: four threads count under a mutex and a condition, each its own self, joined, and a
+# timed wait that times out. the BSDs thread on the 64-bit ISAs; macos does not yet
+case "$os-$arch" in
+  *-x64|*-a64|*-rv64) [ "$os" = macos ] || {
+cat > "$d/uvth.c" <<'EOF'
+#include <pthread.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>
+
+static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+static int count, ready;
+static pthread_t self[4];
+
+static void *work(void *a) {
+  int i = (int) (long) a;
+  self[i] = pthread_self();
+  pthread_mutex_lock(&mu);
+  while (!ready) pthread_cond_wait(&cv, &mu);
+  pthread_mutex_unlock(&mu);
+  for (int k = 0; k < 20000; k++) { pthread_mutex_lock(&mu); count++; pthread_mutex_unlock(&mu); }
+  return (void *) (long) (i * 7); }
+
+int main(void) {
+  pthread_t t[4];
+  for (long i = 0; i < 4; i++) if (pthread_create(&t[i], 0, work, (void *) i)) { puts("uvth: no thread"); return 1; }
+  usleep(20000);
+  pthread_mutex_lock(&mu); ready = 1; pthread_cond_broadcast(&cv); pthread_mutex_unlock(&mu);
+  long sum = 0;
+  for (int i = 0; i < 4; i++) { void *r; pthread_join(t[i], &r); sum += (long) r; }
+  int distinct = 1;
+  for (int i = 0; i < 4; i++) for (int j = 0; j < i; j++) if (pthread_equal(self[i], self[j])) distinct = 0;
+  for (int i = 0; i < 4; i++) if (pthread_equal(self[i], pthread_self())) distinct = 0;
+  struct timespec ab;
+  clock_gettime(CLOCK_REALTIME, &ab);
+  ab.tv_nsec += 50000000; if (ab.tv_nsec >= 1000000000) ab.tv_sec++, ab.tv_nsec -= 1000000000;
+  pthread_mutex_lock(&mu);
+  int to = pthread_cond_timedwait(&cv, &mu, &ab);
+  pthread_mutex_unlock(&mu);
+  printf("uvth: count=%d sum=%ld distinct=%d timedout=%d\n", count, sum, distinct, to == ETIMEDOUT);
+  return 42; }
+EOF
+moon0 -t "$arch" "$d/uvth.c" -o "$d/uvth" || fail "uvth: the default-lane compile"
+lout=$(run "$d/uvth"; echo "rc=$?")
+fout=$($box 'cat > /tmp/uvth && chmod +x /tmp/uvth && /tmp/uvth; echo "rc=$?"' < "$d/uvth") \
+  || fail "uvth: the box could not take or run it"
+[ "$lout" = "$fout" ] || fail "uvth: the kernels disagree -- linux[$lout] $os[$fout]"
+echo "$lout" | grep -q "uvth: count=80000 sum=42 distinct=1 timedout=1" || fail "uvth body -- got: $lout"
+echo "$lout" | grep -q "rc=42" || fail "uvth exit -- got: $lout"
+echo "$t: UV-threads -- four threads counted, joined and timed out alike on both kernels"
+# ..and love's own pool there, x64's love being the binary that goes: its widths, and the
+# frame the same at every width (test/host/pool.l)
+if [ "$arch" = x64 ]; then
+  pout=$($box 'rm -rf /tmp/uvpool && mkdir /tmp/uvpool && cd /tmp/uvpool && cat > love && chmod +x love' < "$ho/love" \
+    && cat test/00-init.l test/host/pool.l test/zz-fin.l | $box 'cd /tmp/uvpool && ./love; echo "rc=$?"; cd / && rm -rf /tmp/uvpool') \
+    || fail "uvpool: the box could not run the pool's law -- got: $pout"
+  echo "$pout" | grep -q "rc=0" || fail "uvpool: the pool's law on $os -- got: $pout"
+  echo "$t: UV-pool -- love's pool took its widths, and drew one frame at each"
+fi
+} ;;
+esac
 
 # the seed leg (*_SEED=1, minutes): the seed builds itself on the box to the tree's bytes
 if [ -n "$sd" ]; then

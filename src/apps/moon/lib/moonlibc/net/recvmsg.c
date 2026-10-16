@@ -21,21 +21,24 @@ long recvmsg(int fd, struct msghdr *m, int fl) {
     __love_saout(&sa, n);
     memcpy(m->msg_name, &sa, n > m->msg_namelen ? m->msg_namelen : n);
     m->msg_namelen = n; }
+  int trunc = 0;
   if (f.control) {
-    unsigned long cn = f.controllen, at = 0;
+    unsigned long cn = f.controllen, at = 0, bt = 0, cap = m->msg_controllen;
+    unsigned long ch = CMSG_ALIGN(sizeof(struct cmsghdr)), bh = __love_cmh(), bal = __love_cma() - 1;
     unsigned char *o = m->msg_control;
-    while (at + 12 <= cn) {
-      unsigned long l = *(unsigned int*) (cb + at);
-      int lv = *(int*) (cb + at + 4), ty = *(int*) (cb + at + 8);
-      if (l < 12 || l > cn - at) break;
+    while (bt + 12 <= cn) {
+      unsigned long l = *(unsigned int*) (cb + bt), dl = l - bh;
+      int lv = *(int*) (cb + bt + 4), ty = *(int*) (cb + bt + 8);
+      if (l < bh || l > cn - bt) break;
+      if (at + ch + dl > cap) { trunc = 1; break; }
       if (lv == 0xffff) lv = 1;
       if (lv == 41 && ty == 47) ty = 52;  /* IPV6_HOPLIMIT */
-      *(unsigned long*) (o + at) = l;
-      *(int*) (o + at + 8) = lv;
-      *(int*) (o + at + 12) = ty;
-      if (l > 16) memcpy(o + at + 16, cb + at + 16, l - 16);
-      at += (l + 7) & ~7UL; }
-    m->msg_controllen = cn; }
+      struct cmsghdr *h = (struct cmsghdr*) (o + at);
+      h->cmsg_len = ch + dl; h->cmsg_level = lv; h->cmsg_type = ty;
+      memcpy(o + at + ch, cb + bt + bh, dl);
+      at += CMSG_ALIGN(ch + dl);
+      bt += (l + bal) & ~bal; }
+    m->msg_controllen = at; }
   else m->msg_controllen = 0;
-  m->msg_flags = (int) __love_msgcan(f.flags);
+  m->msg_flags = (int) __love_msgcan(f.flags) | (trunc ? MSG_CTRUNC : 0);
   return r; }

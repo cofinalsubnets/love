@@ -7,9 +7,14 @@
  * release, or on arm64 and riscv what the holder wrote lands after the next holder reads it */
 #define FxWait 128
 #define FxWake 129
+/* netbsd's __futex speaks linux's (os.c's row); freebsd's word is _umtx_op's private
+ * WAIT_UINT and WAKE, its timeout the size of a timespec and then the timespec */
 static int __fx_wait(int *w, int v, struct timespec const *rel) {
+  if (__love_osv == 2) return (int) fb6(454, (long) w, 15, v, rel ? (long) sizeof *rel : 0, (long) rel, 0);
   return (int) sc4(NR_futex, (long) w, FxWait, v, (long) rel); }
-static void __fx_wake(int *w, int n) { sc4(NR_futex, (long) w, FxWake, n, 0); }
+static void __fx_wake(int *w, int n) {
+  if (__love_osv == 2) fb6(454, (long) w, 16, n, 0, 0, 0);
+  else sc4(NR_futex, (long) w, FxWake, n, 0); }
 
 /* abstime (CLOCK_REALTIME) as the time left, or 0 when it has passed */
 static int __pt_left(struct timespec const *abs, struct timespec *rel) {

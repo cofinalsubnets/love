@@ -569,9 +569,16 @@ static lvm(lvm_cwd) {
 // (selfpath _) -> the path of the running binary, or () where the seat cannot say.
 // no argv[0] fallback: a bare `cmdline` read from baked code folds to the bake's line,
 // and the callers here are baked, so the operand would arrive already wrong.
+#if defined(__moonlibc__)
+unsigned long __love_selfpath(char *b, unsigned long n);   // moonlibc's: macos's proc_info
+#endif
 love_noinline size_t host_selfpath(char *b, size_t n) {
- // a runtime ladder, one binary meeting more than one kernel: linux's link, netbsd's
- // spelling of it, then freebsd's sysctl door -- each try answers only on its kernel.
+ // a runtime ladder, one binary meeting more than one kernel: macos's proc_info, linux's
+ // link, netbsd's spelling of it, then freebsd's sysctl door -- each answers only on its kernel.
+#if defined(__moonlibc__)
+ size_t k = __love_selfpath(b, n);
+ if (k) return k;
+#endif
  ssize_t r = readlink("/proc/self/exe", b, n - 1);
  if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
  if (r > 0) {

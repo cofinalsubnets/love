@@ -2,13 +2,17 @@
 #include <sys/sysctl.h>
 #include "../impl.h"
 
-/* one kern.* or hw.* string into a field. freebsd's version ends in a newline and
- * carries tabs, which its own libc turns to spaces; so does this */
+/* one kern.* or hw.* string into a field, cut to its 64. freebsd's version ends in a
+ * newline and carries tabs, which its own libc turns to spaces; so does this. macos's
+ * runs past the field, and a short buffer would answer nothing at all */
 static void uts_mib(int a, int b, char *out) {
   int mib[2] = { a, b };
-  size_t n = 64;
-  if (sysctl(mib, 2, out, &n, 0, 0)) n = 0;
-  out[n < 64 ? n : 64] = 0;
+  char t[256];
+  size_t n = sizeof t;
+  if (sysctl(mib, 2, t, &n, 0, 0)) n = 0;
+  if (n > 64) n = 64;
+  memcpy(out, t, n);
+  out[n] = 0;
   for (char *p = out; *p; p++) if (*p == '\n' || *p == '\t') *p = ' ';
   for (size_t k = strlen(out); k && out[k - 1] == ' '; k--) out[k - 1] = 0; }
 

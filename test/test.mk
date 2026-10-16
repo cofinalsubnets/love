@@ -564,9 +564,9 @@ test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) $(ho)/mooncc0.image
 .PHONY: test_fat
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd) $(uname_$(xa))
-# one binary answers every kernel alike, on a bee host with cap freebsd-x64/netbsd-x64 (-a64, -rv64 likewise) (or
-# FBSD_SSH/NBSD_SSH); skips without. FBSD_SEED=1/NBSD_SEED=1 adds `love seed` there
-.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64
+# one binary answers every kernel alike, on a bee host with cap freebsd-x64/netbsd-x64 (-a64, -rv64,
+# -arm, -i386 likewise) (or FBSD_SSH/NBSD_SSH); skips without. FBSD_SEED=1/NBSD_SEED=1 adds `love seed` there
+.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 test_freebsd_arm test_netbsd_arm test_freebsd_i386 test_netbsd_i386 test_macos test_macos_love
 test_freebsd test_netbsd: test_%: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $*
 # ..and on aarch64 boxes, the local half under qemu-aarch64
@@ -576,6 +576,18 @@ test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) $(ho)/mooncc0.image
 # qemu-riscv64. the doors there are each kernel's number register: linux a7, freebsd t0, netbsd t6.
 test_freebsd_rv64 test_netbsd_rv64: test_%_rv64: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* rv64
+# ..armv7 in the arm64 boxes' 32-bit lane, the local half under qemu-arm
+test_freebsd_arm test_netbsd_arm: test_%_arm: host $(love0) $(ho)/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* arm
+# ..i386 in the amd64 boxes' 32-bit lane, and here
+test_freebsd_i386 test_netbsd_i386: test_%_i386: host $(love0) $(ho)/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* i386
+# macos: a mach-o for the box (cap macos-x64) beside each leg's ELF, the two answering alike
+test_macos: host $(love0) $(ho)/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) macos x64
+# love itself there: linked here as a mach-o, baked and run on the box
+test_macos_love: host $(ho)/love-macos.raw $(ho)/.dist-cat.l
+	@$(gsh) test/gate/maclove.sh $(ho)
 # test_raw_bake -- the mooncc PIE bakes and wakes its own image; x64 only, opt-in
 test_raw_bake: test_raw
 	@sh test/gate/raw-bake.sh $(ho) $t

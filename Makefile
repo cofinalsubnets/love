@@ -283,6 +283,13 @@ $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootf
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+# love for macos: the same objects as dyld's mach-o (the horn reaches AudioToolbox through
+# libSystem's dlopen), unbaked -- the image is its own binary's, so the bake runs on the box
+# (test_macos_love)
+$(ho)/love-macos.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
+	@echo 'MOON	'$@
+	@mkdir -p $(dir $@)
+	@$(moon0) -os macos $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
@@ -309,7 +316,7 @@ kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
 holo_be = src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l src/love/holo/rv64.l \
   src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/wasm.l src/love/holo/wasmfn.l src/love/holo/text.l src/love/holo/dialect.l
 # the object floor every reader of a backend goes out through
-holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l
+holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/macho.l
 # the compiler over them
 moon_mid = src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
   src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
