@@ -258,3 +258,20 @@
  (11 = (: (g x [a b]) (x + a) (g 10 '(1 2))))
  ('(1 2 3 4) = (: ((k [a b]) [c d]) [a b c d] (k '(1 2) '(3 4))))
  (7 = (: ((k a) b) (a + b) (k 3 4))))                    ; ..and an all-nom binder is untouched
+
+; the decision dag: a test is asked once and every clause hears it. order still wins, a guard
+; that fails falls through to the next fitting clause, and a guard runs exactly where the flat
+; chain would run it -- once per clause whose shape fits, never for a clause its tag rules out
+(: patd-n (pin {} 0 0)
+   (patd-g x) (: _ (pin patd-n 0 (patd-n 0 + 1)) (x > 2))
+   (patd-m e) (e @ ('a x) x
+                   ('b x && patd-g x) 'big
+                   ('b x) 'small
+                   (('c || 'd) . _) 'cd
+                   ('a . _) 'along
+                   ('b x && patd-g x) 'never
+                   _ 'other)
+   got (map patd-m ['(a 1) '(a 1 2) '(b 5) '(b 1) '(c) '(d 1 2) 5 '(b) () '(e 1)])
+   _ (test (got = [1 'along 'big 'small 'cd 'cd 'other 'other 'other 'other])
+           (patd-n 0 = 2))        ; (b 5) and (b 1) ask the first guard; the sixth arm is never reached
+   0)
