@@ -1084,6 +1084,10 @@
       ("t2.shl"     "4feac000"          ((shl r0 3)))                 ; lsl.w r0, r0, #3
       ("t2.shr"     "4fead000"          ((shr r0 3)))                 ; lsr.w r0, r0, #3
       ("t2.sar"     "4feae000"          ((sar r0 3)))                 ; asr.w r0, r0, #3
+      ("t2.ror"     "4fea7212"          ((ror r2 5)))                 ; ror.w r2, r2, #5
+      ("t2.rol"     "4fea3060"          ((rol r0 8)))                 ; ror.w r0, r0, #24 (rol is ror the other way)
+      ("t2.rol.1"   "4feaf373"          ((rol r3 1)))                 ; ror.w r3, r3, #31
+      ("t2.rol.32"  ""                  ((rol r0 32)))                ; a whole word: no change, never ror #0 (rrx)
       ("t2.shlv"    "00fa01f0"          ((shlv r0 r1)))               ; lsl.w r0, r0, r1 (count in r1)
       ("t2.sdiv"    "91fbf2f0"          ((div r0 r1 r2)))             ; sdiv r0, r1, r2
       ("t2.udiv"    "b1fbf2f0"          ((udiv r0 r1 r2)))            ; udiv r0, r1, r2
@@ -1249,6 +1253,11 @@
       ("t1.ld.far"  "802008440068"      ((ld r0 r1 128)))            ; movs r0,#128 ; add r0,r1 ; ldr r0,[r0]
       ("t1.ld.hi"   "01b4082020440068844601bc" ((ld r12 r4 8)))      ; push{r0};movs r0,#8;add r0,r4;ldr r0,[r0];mov r12,r0;pop{r0}
       ("t1.st.far"  "04b4c8220a44106004bc" ((st r1 200 r0)))          ; push{r2};movs r2,#200;add r2,r1;str r0,[r2];pop{r2}
+      ;; byte and half have no sp form: sp rides the far lane, the push's word added back
+      ("t1.ldb.sp"  "052068440078"      ((ldu1 r0 sp 5)))            ; movs r0,#5 ; add r0,sp,r0 ; ldrb r0,[r0]
+      ("t1.stb.sp"  "01b40a206844017001bc" ((st1 sp 6 r1)))          ; push{r0};movs r0,#10;add r0,sp,r0;strb r1,[r0];pop{r0}
+      ("t1.ldh.sp"  "08226a441288"      ((ldu2 r2 sp 8)))            ; movs r2,#8 ; add r2,sp,r2 ; ldrh r2,[r2]
+      ("t1.sth.sp"  "01b40e206844038001bc" ((st2 sp 10 r3)))         ; push{r0};movs r0,#14;add r0,sp,r0;strh r3,[r0];pop{r0}
       ("t1.jmpr"    "1847"              ((jmpr r3)))                  ; bx r3
       ("t1.callr"   "9847"              ((callr r3)))                 ; blx r3
       ("t1.ret"     "7047"              ((ret)))                      ; bx lr

@@ -359,7 +359,17 @@
    ;; take at&T's order. movabs is mov by range here; a high-byte register (ah.., slot 16 up)
    ;; has no encoding in this front.
    (as-instr it) (as-instrm 64 it)
+   ;; ah..bh share their slots with spl..dil, which a REX selects: one beside a REX is refused,
+   ;; as gas refuses it, where laying it would name the other register
+   (as-hb? o) (two? o && <o = 'rg && <>>o = 1 && <>o >= 16)
+   (as-rexed? bs) (: (go l) (? (atom? l) 0 !(charm? <l) 0
+                                (elem <l [38 46 54 62 100 101 102 103 240 242 243]) (go >l)
+                                (64 <= <l <= 79))
+                     (go bs))
    (as-instrm md it)
+    (as-instrm1 md it @ bs
+       (? (md = 64 && any as-hb? (it 3) && as-rexed? bs) (scare 'as-highbyte-rex (it 1)) bs))
+   (as-instrm1 md it)
     (: mn (it 1 = 'movabs ? 'mov (it 1)) w (it 2) ops0 (it 3)
      ; a %fs:/%gs: operand: the override byte ahead of the same instruction over the bare operand
      sg (foldl (\ a o (? (two? a) a (two? o && <o = 'seg) o ())) () ops0)
@@ -367,7 +377,7 @@
      br? (xa-branch? mn || xa-cc? mn || elem mn '(calll callw jmpl jmpw))
      ops (md = 64 ? ops0 (map (o \ (<o = 'lbl && !br? ? ['mem -1 -1 1 0 <>o] o)) ops0))
      (? (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
-                   + as-instrm md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
+                   + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
         (md < 64 && two? (as-sys md mn w ops)) (as-sys md mn w ops)
         (as-more md mn w ops @ x
            (two? x ? x

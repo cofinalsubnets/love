@@ -168,6 +168,7 @@
    r-386-pc8 23                                     ; R_386_PC8   S + A - P in one byte
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
    r-thm-jump24 30                                  ; R_ARM_THM_JUMP24 same math      (a thumb2 B.W tail-jump)
+   r-thm-jump19 51                                  ; R_ARM_THM_JUMP19 same math      (a thumb2 Bcc.W)
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
    r-thm-movw 47                                    ; R_ARM_THM_MOVW_ABS_NC  (S+A)|T, low 16   (thumb2 la)
    r-thm-movt 48                                    ; R_ARM_THM_MOVT_ABS     S+A, high 16
@@ -327,6 +328,7 @@
                'pc8 (o-rel32 off (fnsym lbl) r-386-pc8)
                'bl (o-rel32 off (fnsym lbl) r-thm-call)
                'b  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
+               'bcc (o-rel32 off (fnsym lbl) r-thm-jump19)  ; a Bcc.W into another section
                'abs32 (a32loc lbl aux @ sl (o-rel32 off <sl (x86 ? r-386-32 r-arm-abs32)))
                'abs16 (a32loc lbl aux @ sl (o-rel32 off <sl r-386-16))
                'abs8 (a32loc lbl aux @ sl (o-rel32 off <sl r-386-8))
