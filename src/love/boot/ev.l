@@ -657,13 +657,9 @@
               (pin c 'stk s, f * g))
   ; napn: the n-ary apply, then the surplus. the pin puts the compile-time stack back at the head
   ; slot -- apn consumes its arg slots and leaves the answer there, which is where l2r addresses from.
-  ; o: the apo lane, whose args keep call order -- r2l where at most one of them is a form that
-  ; can act (a load or a lambda cannot), else l2r and reversed into the frame
-  (napn c args n s o) (: r (drop n args) as (take n args)
-                       (act? a) (two? a && !(<a == '\ ))
-                       g (? !o (apr2l c as * kap n)
-                            (#(filter act? as) < 2) (apr2l c as * kapo n)
-                            (apl2rp c as * em2 lvm_rev n * kapo n))
+  ; o: the apo lane, the width a guess apo checks
+  (napn c args n s o) (: r (drop n args)
+                       g (apr2l c (take n args) * (o ? kapo kap) n)
                      (pin c 'stk s,
                       atom? r ? g (g * apl2r c r)))
   (app c a b) (: f (ana c a)
@@ -673,13 +669,13 @@
                (pin c 'stk s, f * g))
  (apl2r c b) (?- id (two? b) (: f (ana c <b) g (apl2r c >b) (f * kap 1 * g)))
  ; apimp: a closure's entry applied to its imports, which are loads and leave it short -- two
- ; or more lay one partial through apo's miss, an uncn cell, where the chain lays one a name
+ ; or more lay one partial, an uncn cell, where the chain lays one a name
  (apimp c b) (? (atom? b || atom? >b || !(all nom? b)) (apl2r c b)
-                (: s (c 'stk) g (apr2l c b * kapo #b) (pin c 'stk s, g)))
+                (: s (c 'stk) g (apr2l c b * kpart #b) (pin c 'stk s, g)))
  (apr2l c b) (?- id (two? b) (: g (apr2l c >b) f (ana c <b) (push c 'stk 0, g * f)))
- (apl2rp c b) (?- id (two? b) (: f (ana c <b) _ (push c 'stk 0) g (apl2rp c >b) (f * g)))
  (kap n k m) (kapv lvm_apn lvm_tapn n k m)
  (kapo n k m) (kapv lvm_apo lvm_tapo n k m)
+ (kpart n k m) (kapv lvm_part lvm_tpart n k m)
  (kapv a t n k m)
   (:- (p j)
     j (k (2 + m))

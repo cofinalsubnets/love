@@ -1223,7 +1223,7 @@ lvm(lvm_tapn) {
 // the optimistic n-ary apply, for a call whose width the compiler could not prove: the
 // apn frame is laid anyway, a cur of exactly n enters it, and anything else misses to
 // apo_miss, which answers what the l2r chain would have
-static lvm(lvm_apo_miss);
+lvm(lvm_apo_miss);
 lvm(lvm_apo) {
  size_t n = getcharm(Ip[1].x);
  if (__builtin_expect(!apn_ok(Sp[n], n), 0)) love_musttail return Ap(lvm_apo_miss, g);
@@ -1243,13 +1243,6 @@ lvm(lvm_tapo) {
  YieldCheck();
  love_musttail return Continue(); }
 
-// the top n slots reversed: an apo whose args ran l2r, their order observable, takes them
-// into the apn frame's r2l
-lvm(lvm_rev) {
- size_t n = getcharm(Ip[1].x);
- for (size_t i = 0, j = n - 1; i < j; i++, j--) { word x = Sp[i]; Sp[i] = Sp[j], Sp[j] = x; }
- love_musttail return Next(2); }
-
 // a partial over many args at once: [uncn n x1..xn k] pushes them, x1 on top, and enters
 // k -- the frame a chain of n unc cells lays one cell at a time
 lvm(lvm_uncn) {
@@ -1260,11 +1253,17 @@ lvm(lvm_uncn) {
  Ip = Ip[2 + n].m;
  love_musttail return Continue(); }
 
+// a closure's entry applied to its imports: the compiler knows the call is short, so it
+// skips apo's check and goes straight to the partial (or, should the head surprise it, to
+// whatever the miss answers)
+lvm(lvm_part) { love_musttail return Ap(lvm_apo_miss, g); }
+lvm(lvm_tpart) { love_musttail return Ap(lvm_apo_miss, g); }
+
 // an apo whose callee is not a cur of n, its frame [a1..an f]. a cur of more is one
 // partial, [cur m-n]? [uncn n a1..an f+2]; anything else runs the l2r chain from a
 // thread laid over the values, which jumps back past the apo or, for a tapo, tail calls
-static lvm(lvm_apo_miss) {
- bool tail = Ip[0].ap == lvm_tapo;
+lvm(lvm_apo_miss) {
+ bool tail = Ip[0].ap == lvm_tapo || Ip[0].ap == lvm_tpart;
  size_t n = getcharm(Ip[1].x), drop = tail ? getcharm(Ip[2].x) : 0;
  word f = Sp[n];
  size_t m = evenp(f) && cell(f)[0].ap == lvm_cur ? getcharm(cell(f)[1].x) : 0;

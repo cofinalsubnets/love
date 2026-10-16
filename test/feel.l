@@ -121,7 +121,7 @@
 ; --- the read-once refinement (sl-sub-1) --- the last effectful arg substitutes when its
 ; param is read exactly once, unconditionally, in an otherwise-pure body -- the call is
 ; gone with no let. read-many still binds; a read under ? or \ declines the substitution
-; (it could run zero or many times); order holds across a bind + a substitution.
+; (it could run zero or many times); a bind + a substitution fire each effect once.
 (: r1-c1 (cask 1) r1-c2 (cask 1)
    (r1-b1 _) (peep r1-c1 0 0 @ v (pin r1-c1 0 (v + 1), v + 1))
    (r1-b2 x) (peep r1-c2 0 0 @ v (pin r1-c2 0 (v + 1), x + v))      ; answers x + own pre-count
@@ -132,11 +132,11 @@
     ; read-once: the effect still fires exactly once, value as the call
     (: _ (pin r1-c1 0 0) r (r1-mix 3 (r1-b1 0) 4)
        (8 = r && 1 = peep r1-c1 0 0))
-    ; bind + substitution: a's binding fires before b's substituted read (call order) --
-    ; b's expression reads a's counter, so a flip changes the VALUE, not just the trace
+    ; bind + substitution: each effect fires once. b's expression reads a's counter, and
+    ; the args run in no promised order, so the value is either order's -- 3 a first, 2 b
     (: _ (pin r1-c1 0 0) _ (pin r1-c2 0 0)
        r (r1-two (r1-b1 0) (r1-b2 (peep r1-c1 0 0)))
-       (3 = r && 1 = peep r1-c1 0 0 && 1 = peep r1-c2 0 0))
+       ((r = 2 || r = 3) && 1 = peep r1-c1 0 0 && 1 = peep r1-c2 0 0))
     ; conditional read: the strict call evaluates b always -- substitution under the
     ; branch would drop the effect on the false arm, so it must bind instead
     (: _ (pin r1-c1 0 0) r (r1-iff 0 (r1-b1 0))
@@ -198,8 +198,8 @@
 ; and a cur of exactly that many enters it; anything else misses into what the l2r chain
 ; answers: a cur of more is one partial over all the args at once, `=` and hashed as the
 ; chain's (show.l shows it), and a head of fewer, or no cur at all, runs the chain off the
-; values in hand. args keep call order: r2l only where at most one can act. the heads
-; arrive as params, so no fold knows them, and they recurse, so the inliner declines them.
+; values in hand. the heads arrive as params, so no fold knows them, and they recurse, so
+; the inliner declines them.
 ; ap-t* call in tail position, over a frame of their own; ap-n* do not.
 (: (ap-k3 a b c) (a < 1 ? [a b c] (ap-k3 (a - 1) b c))
    (ap-k4 a b c d) (a < 1 ? [a b c d] (ap-k4 (a - 1) b c d))
@@ -209,10 +209,6 @@
    (ap-t3 f a b c n) (n < 1 ? (f a b c) (ap-t3 f a b c (n - 1)))
    (ap-n2 f a b n) (n < 1 ? [(f a b)] (ap-n2 f a b (n - 1)))
    (ap-n3 f a b c n) (n < 1 ? [(f a b c)] (ap-n3 f a b c (n - 1)))
-   (ap-pr a b) (a < 0 ? 0 [a b])
-   ap-c (cask 1)
-   (ap-b _) (peep ap-c 0 0 @ v (pin ap-c 0 (v + 1), v + 1))
-   (ap-o2 f n) (n < 1 ? (f (ap-b 0) (peep ap-c 0 0)) (ap-o2 f (n - 1)))      ; two args that act
    (test
     ([0 2 3] = ap-t3 ap-k3 0 2 3 1) ([[0 2 3]] = ap-n3 ap-k3 0 2 3 1)        ; saturated
     ([0 2 3] = ap-t2 ap-k3 0 2 1 3) ([0 2 3] = cap (ap-n2 ap-k3 0 2 1) 3)    ; short: a partial
@@ -225,5 +221,4 @@
     ([2 3] = ap-t3 ap-k2 0 2 3 1) ([[2 3]] = ap-n3 ap-k2 0 2 3 1)          ; long: the surplus curries
     (-2 = ap-t2 ap-k1 1 2 1) ([-2] = ap-n2 ap-k1 1 2 1)                     ; no cur
     (5 = ap-t2 {1 (x \ x + 4)} 1 1 1) ([5] = ap-n2 {1 (x \ x + 4)} 1 1 1)  ; a tablet
-    (7 = ap-t2 1 (+ 3) 4 1) ([7] = ap-n2 1 (+ 3) 4 1)                     ; a number: the tower
-    (: _ (pin ap-c 0 0) ([1 1] = ap-o2 ap-pr 1))))                         ; args that act keep call order
+    (7 = ap-t2 1 (+ 3) 4 1) ([7] = ap-n2 1 (+ 3) 4 1)))                    ; a number: the tower
