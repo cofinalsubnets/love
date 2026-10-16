@@ -71,17 +71,21 @@
  mults [0.5 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 10.0 12.0 12.0 15.0 15.0]
  ; ..vibrato 7 cents at 6.1 Hz, as the phase it adds; feedback's depth by its three bits, from
  ;   none to 4 pi, in cycles; the modulator's whole output moves the carrier 2 cycles
- (phase o f t) (: g (f * mults (o 'mul))
-   (g * t + (o 'vib ? (g * 0.00405 / 38.33 * (1.0 - cos (t * 38.32743037961115))) 0.0)))
+ (vibr o g t) (o 'vib ? (g * 0.00405 / 38.33 * (1.0 - cos (t * 38.32743037961115))) 0.0)
+ ; ..what moves slowly, an envelope or a vibrato, is worked out every 32 frames and drawn between:
+ ;   C holds the times there 'tg, and each frame's step 'k and how far along it 'fr
+ (slow C y) (: a (peep y (C 'k) 0.0) b (peep y (C 'k + 1) 0.0) (a + (b - a) * C 'fr))
  fbs [0.0 0.03125 0.0625 0.125 0.25 0.5 1.0 2.0]
  fm-depth 2.0
- ; ..one voice of an instrument at note n: the modulator fed back on itself, settled by a few
+ ; ..one voice of an instrument at note n: the modulator fed back on itself, settled by a second
  ;   passes, into the carrier's phase, or beside it where the two are added
- (part V n vdb t off Em Ec) (: m (V 'm) c (V 'c) f (opl-freq n)
-   Am (amp m Em n t off (V 'conn = 1 ? vdb 0.0)) Ac (amp c Ec n t off vdb)
-   pm (phase m f t) pc (phase c f t) b (fbs (V 'fb))
+ (part V n vdb t C off Em Ec) (: m (V 'm) c (V 'c) f (opl-freq n) tg (C 'tg)
+   Am (slow C (amp m Em n tg off (V 'conn = 1 ? vdb 0.0))) Ac (slow C (amp c Ec n tg off vdb))
+   gm (f * mults (m 'mul)) gc (f * mults (c 'mul))
+   pm (gm * t + (m 'vib ? (slow C (vibr m gm tg)) 0.0)) pc (gc * t + (c 'vib ? (slow C (vibr c gc tg)) 0.0))
+   b (fbs (V 'fb))
    (fed y k) (k = 0 || b = 0.0 ? y (fed (Am * wave (pm + b * y) (m 'wave)) (k - 1)))
-   y (fed (Am * wave pm (m 'wave)) 3)
+   y (fed (Am * wave pm (m 'wave)) 1)
    (V 'conn = 1 ? (y + Ac * wave pc (c 'wave)) (Ac * wave (pc + fm-depth * y) (c 'wave))))
 
  ; --- a voice: each of the instrument's one or two, its note moved by the voice's offset, the
@@ -95,7 +99,10 @@
    to (off = () ? 1e9 ((off - at) * 1.0 / rate))
    (tail p) (: E (p 3) ((96.0 - held E to) / E 'rd))
    end (off = () ? (at + 3600 * rate) (off + int (rate * min2 10.0 (foldl max2 0.0 (map tail ps))) + 2))
-   fn (ix \ (: t ((ix - at) * (1.0 / rate)) tp (t * (t > 0.0))
-              (foldl (\ acc p (acc + part (p 0) (p 1) vdb tp to (p 2) (p 3))) (tp * 0.0) ps * (t >= 0.0))))
+   ; ..ix a run of frames, the slow parts laid every 32 of them from its first
+   fn (ix \ (: n #ix i0 (peep ix 0 0) r (1.0 / rate) t ((ix - at) * r) tp (t * (t > 0.0))
+              d (ix - i0) G (iota (n // 32 + 2) * 32 + i0) g0 ((G - at) * r)
+              C {'k (d // 32) 'fr ((d % 32) / 32.0) 'tg (g0 * (g0 > 0.0))}
+              (foldl (\ acc p (acc + part (p 0) (p 1) vdb tp C to (p 2) (p 3))) (tp * 0.0) ps * (t >= 0.0))))
    [end fn (1.0 - pan) pan])
 )) ; module opl

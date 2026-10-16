@@ -15,6 +15,8 @@
 (borrow 'walk)
 (borrow 'vec)                           ; sq
 (borrow 'mixer)
+(borrow 'opl)                           ; the music's instruments
+(borrow 'mus)                           ; ..and its scores
 (:
  fps 35
  eye-h 41 body-r 16 step-h 24 body-h 56
@@ -360,7 +362,7 @@
                                           (elem T [1 2 3 4 8 12 13 17]
                                            ? {'s s 'T T 'hi (S 4) 'lo (m < S 4 ? m 0) 'ph (T = 12 || T = 13 ? 0 (rand 64)) 'now (S 4)} ())))
                                  ^#(M 'secs)))
-        'px x 'pz z 'py (1.0 * (M 'secs (wad-sector M x z) 0) + eye-h) 'th ((90 - p 2) * pi / 180.0) 'ph 0.0 'msg (M 'name)))
+        'px x 'pz z 'py (1.0 * (M 'secs (wad-sector M x z) 0) + eye-h) 'th ((90 - p 2) * pi / 180.0) 'ph 0.0 'msg (M 'name) 'mus (tune wd M)))
  (fresh st) (pins st 'hp 100 'ar 0 'ac 0 'bul 50 'shl 0 'rkt 0 'cel 0 'has [0 1] 'gun 1 'keys () 'gcd 0 'frac 0.0
                      'vx 0.0 'vz 0.0 'gy 0 'gnext -1 'run 0 'suit 0 'sfx () 'hk {} 'tt 0 'dc 0 'bc 0)
  (wad-new w h wd M) (wad-size (enter (fresh {'deep 0 'kitty 0 'kp 1 't 0}) wd M) w (h // 2))
@@ -507,7 +509,13 @@
                        _ (pin c nm v) v)
                   v v))
  ; ..the mixer into horn hn, the player the ear, by doom's distances
- (wad-mixer hn wd) (mix-new hn (nm \ noise wd nm) (st \ [(st 'px) (st 'pz) (st 'th)]) {'near 200.0 'far 1200.0 'fps fps})
+  (wad-mixer hn wd) (mix-new hn (nm \ noise wd nm) (st \ [(st 'px) (st 'pz) (st 'th)])
+                     {'near 200.0 'far 1200.0 'fps fps 'bus (st \ n \ music st n)})
+ ; ..the music: a map's score by the doom wiki's table on the wad's GENMIDI, under the sounds
+ (bank wd) (peep wd 'opl () @ () (pin wd 'opl (opl-bank (wd 's)) 'opl) b b)
+ (tune wd M) (: t (mus-track (M 'name)) sc (string? t ? (mus-read (lump wd t)) ()) B (bank wd)
+   (tablet? sc && two? B ? (mus-new sc B song-rate) ()))
+ (music st n) (peep st 'mus () @ () () p (mus-feed p n @ r ((<r * 0.35) . (>r * 0.35))))
  ; --- the fight: monsters wake, chase and shoot, each other too once hurt by one; missiles fly
  ;     and burst; the player is hurt, takes what lies about, and shoots back ---
  (hurt st d) (: take (min2 (st 'ar) (st 'ac = 2 ? (d // 2) (d // 3))) hp (max2 0 (st 'hp - d + take))
