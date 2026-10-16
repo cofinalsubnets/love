@@ -669,9 +669,13 @@
   (app c a b) (: f (ana c a)
                  s (c 'stk)
                  g (push c 'stk 0,
-                    apl2r c b)
+                    apimp c b)
                (pin c 'stk s, f * g))
  (apl2r c b) (?- id (two? b) (: f (ana c <b) g (apl2r c >b) (f * kap 1 * g)))
+ ; apimp: a closure's entry applied to its imports, which are loads and leave it short -- two
+ ; or more lay one partial through apo's miss, an uncn cell, where the chain lays one a name
+ (apimp c b) (? (atom? b || atom? >b || !(all nom? b)) (apl2r c b)
+                (: s (c 'stk) g (apr2l c b * kapo #b) (pin c 'stk s, g)))
  (apr2l c b) (?- id (two? b) (: g (apr2l c >b) f (ana c <b) (push c 'stk 0, g * f)))
  (apl2rp c b) (?- id (two? b) (: f (ana c <b) _ (push c 'stk 0) g (apl2rp c >b) (f * g)))
  (kap n k m) (kapv lvm_apn lvm_tapn n k m)
@@ -728,7 +732,7 @@
                          (pin scope 'sites (site . scope 'sites),
                           qsite site)))
                    q (push c 'stk 0,
-                      apl2r c >(cof lfd))
+                      apimp c >(cof lfd))
                  (pop c 'stk,
                   p * q))
   (ava c x) (avw c c x)
