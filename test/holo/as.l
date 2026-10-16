@@ -274,7 +274,9 @@
    (law3 name want src)
       (x64-disasm (unhex want) 0 @ rows
        ((has? src ":" ? 0 (chk-eq (name + ".decode") (att-read src) (catmap (r \ r 2) rows))),
-        chk-eq (name + ".decode.hex") want (as-hexv (x64-relabel rows))))
+        chk-eq (name + ".decode.hex") want (as-hexv (x64-relabel rows 0)),
+        ; read at an address of its own, the targets relabel the same and re-encode alike
+        chk-eq (name + ".decode.base") want (as-hexv (x64-relabel (x64-disasm (unhex want) 4198400) 4198400))))
    _ (foldl (_ \ t \ law3 (t 0) (t 1) (t 2)) 0 tests)
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln $ "test/holo/as: " + show np + " passed, " + show nf + " failed\n")

@@ -7,7 +7,7 @@
 ;                            its length and its items (one, or a prefix item -- lock, rep -- first)
 ;   (x64-disasm s base)      the whole string -> ((off n items) ..), a branch or rip target an
 ;                            absolute number (base + where it points)
-;   (x64-relabel rows)       the same rows with every in-range target a symbol L<addr> and a
+;   (x64-relabel rows base)  the same rows with every in-range target a symbol L<addr> and a
 ;                            (label L<addr>) row laid where it lands -- what as.l re-encodes
 ;
 ; a decoded operand is the value's: (rg enc w), (im n), (mem base index scale disp), a rip form
@@ -355,11 +355,10 @@
          its (map (it \ (<it = 'op ? ['op (it 1) (it 2) (map (o \ dc-abs base off ln o) (it 3))] it)) >r)
        (go (off + ln) ([off ln its] . acc)))))
    ;; a target inside the stream, on an instruction boundary, becomes the symbol L<addr> and a
-   ;; label row is laid there; a rip form keeps its address as (rip L<addr> 0). base is the first
-   ;; row's address, so the symbol names an address, and the encoder's fixups resolve.
-   (x64-relabel rows)
-    (: base (two? rows ? <<rows 0)
-       starts (foldl (t \ r \ pin t (<r + base) 1) {} rows)
+   ;; label row is laid there; a rip form keeps its address as (rip L<addr> 0). base is the one
+   ;; x64-disasm read the rows at, so a row's address is its offset past it
+   (x64-relabel rows base)
+    (: starts (foldl (t \ r \ pin t (<r + base) 1) {} rows)
        (sym a) (name ("L" + show a))
        (tgt a) (peep starts a 0)
        (fix o) (<o @- o

@@ -41,7 +41,7 @@ echo "OBJCOPY $d"
 # ldbare32 and obj.l past a board link: i386 relocs, and a thumb2 bcc across sections
 { cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/love/holo/holo.l src/love/holo/i386.l \
       src/love/holo/thumb2.l src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l test/gate/ldbare.l
-} | "$ho/love" 2>&1 | grep -q 'ldbare: ok' || { echo "FAIL objcopy: ldbare32 on i386"; exit 1; }
+} | "$ho/love" 2>&1 | grep -q 'ldbare: ok' || { echo "FAIL objcopy: test/gate/ldbare.l"; exit 1; }
 
 n=0
 chk() {
