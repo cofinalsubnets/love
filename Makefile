@@ -139,8 +139,8 @@ $(ho)/liblove.a: $(h_o)
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # src/love/user/main0.c, which host_c holds back because only this link has a use for it.
 love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/user/nokern.c $(S)/love/noblob.c $(love_c))
-out/0/love/user/main0.o: out/lib/boot0.h
-out/0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+out/0/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
+out/0/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 boot_cc = $(CCACHE) $(CC) $(cflags) -fPIE -DLove0 -Dtco=0 -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
@@ -152,6 +152,17 @@ out/0/%.o: $(S)/%.c $(love_h) out/0/.love0cc
 	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
+# love0 under LvGcStress, for test_gcstress: boot_cc carries no GCDBG, so the stress lane's
+# bootstrap is this twin, its objects beside out/0's and its link the same
+love0s_o = $(patsubst out/0/%,out/gcs0/%,$(love0_o))
+out/gcs0/%.o: $(S)/%.c $(love_h) out/0/.love0cc
+	@echo '$(t_cc)	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(boot_cc) -DLvGcStress -c $< -o $@
+out/gcs0/love0: $(love0s_o)
+	@echo '$(t_ld)	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(CC) $(cflags) -pie -o $@ $(love0s_o)
 # src/love/love.c -> out/o/love/love.o: the mirror under o/, since out/love is the binary
 $(ho)/o/%.o: $(S)/%.c $(love_h) $(ho)/.hostcc
 	@echo '$(t_cc)	'$@

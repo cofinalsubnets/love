@@ -36,9 +36,10 @@ el() { echo "gcshard: $1 ($(( $(date +%s) - t0 )) s)"; }
 if [ -z "${GCS_NOBUILD:-}" ]; then
   ${MAKE:-make} --no-print-directory host love0 out/mooncc0.image out/love.raw || fail "the normal build"
   ${MAKE:-make} --no-print-directory hsuf=$gs GCDBG=-DLvGcStress out$gs/love.raw out$gs/.dist-cat.l || fail "the stress runtime"
+  ${MAKE:-make} --no-print-directory out/gcs0/love0 out/lib/corpus.list || fail "the stress love0"
   el built
 fi
-for b in out/love out/love.raw out$gs/love.raw; do [ -x $b ] || fail "no $b"; done
+for b in out/love out/love.raw out$gs/love.raw out/gcs0/love0; do [ -x $b ] || fail "no $b"; done
 for b in out/.dist-cat.l out$gs/.dist-cat.l; do [ -s $b ] || fail "no $b"; done
 mkdir -p $w/bn $w/bs
 
@@ -53,6 +54,13 @@ hot=$PWD/src/tools/hot.prof
 bake() { ( cd $w/$1 && { env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT=$hot "$2" bake -l "$3" love.img > out 2>&1 < /dev/null &
                          echo $! > pid; wait $!; echo $? > rc; } ) & }
 [ "$sbake" = 1 ] && { bake bs $PWD/out$gs/love.raw $PWD/out$gs/.dist-cat.l; bsp=$!; }
+# the stress love0 beside the bakes: its boot, then both its passes -- c0, then the egg it
+# bootstraps -- over the harness and one file. its whole corpus joins once eqv stops trapping
+# on a stressed heap, where a printer probe collides a closure key with a thread key
+mkdir -p $w/l0/out/lib
+ln -s $PWD/test $w/l0/test; ln -s $PWD/src $w/l0/src
+printf './test/00-init.l ./test/spec.l ./test/uu.l ./test/bell.l ./test/zz-fin.l' > $w/l0/out/lib/corpus.list
+l0=$PWD/out/gcs0/love0; ( cd $w/l0 && { $l0 > run.log 2>&1 < /dev/null; echo $? > rc; } ) & l0p=$!
 bake bn $PWD/out/love.raw $PWD/out/.dist-cat.l; bnp=$!
 cnt() { sed -n 's/^\([0-9][0-9]*\) tests pass in .*/\1/p' $w/$1.out | tail -1; }
 # a failed run's tail, its green dots dropped
@@ -197,4 +205,9 @@ if [ "$sbake" = 1 ]; then
                                       $w/dn.out $w/ds.out | sort | head -8 | tr '\n' ' ')"
   el "the stress image: it answers, and its heap is the normal image's"
 fi
+# the stress love0: both passes of its small corpus, each answering in full
+wait $l0p
+[ "$(cat $w/l0/rc)" = 0 ] && [ "$(grep -c 'tests pass' $w/l0/run.log)" = 2 ] \
+  || { sed "s/$esc\[32m\.$esc\[0m//g" $w/l0/run.log | tail -15; fail "the stress love0"; }
+el "the stress love0: boot, c0 and the egg over its small corpus"
 echo "gcshard: ok"
