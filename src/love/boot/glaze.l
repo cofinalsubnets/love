@@ -1677,6 +1677,14 @@
                       && (: v >pr (two? v && <v = g))
                       && !(other-use? <pr pr ipairs ibody)) ipairs)
    (subst-pairs g gn fv pairs) (map (pr \ <pr . subst-call g gn fv >pr) pairs)    ; rewrite (g A..) in every pair's value
+   ; ..a name of ns bound in e: a \'s params, a `:`'s names, a define's params. a call rewritten under such a binder
+   ;   would hand the hoisted loop the inner value for its capture
+   (rebinds? ns e) (? (atom? e) 0
+                      (<e = '\) (any (p \ elem p ns) (rev >(rev >e)) || rebinds? ns (last e))
+                      (<e = ':) (: ps (anat-defs >e)
+                                  (any (pr \ (: h <pr (elem (hname h) ns || (two? h && rebinds? ns ['\ . >h + [0]]))
+                                                       || rebinds? ns >pr)) <ps || rebinds? ns <>ps))
+                      (any (rebinds? ns) e))
    (plift-fn Fpair)                                                                               ; ((F P..) . FBODY) -> `(Fpair' newdefs)
     (: nf <Fpair FBODY >Fpair
        (!(two? nf && nom? <nf && two? FBODY && <FBODY = ': && two? >FBODY) ? [Fpair ()]
@@ -1689,12 +1697,15 @@
                             cnd (two? bd && <bd = '? ? (opd bd 0))
                             N (two? cnd && <cnd = '< ? (opd cnd 1))                   ; cond (i < N) -> the bound
                             (nom? H && N != () ? ((H . N) . m) m))) () wlifts)       ; so `(tablet 0)` -> `(tablet N)`: the native inserts never grow
-             lifts (filter (pr \ roloop? pr sibnames) ipairs + wlifts)
+             (caps pr) (filter (s \ !(s = '_) && !(elem s ><pr) && occurs? s >pr) (P + valnames))
+             (site-ok? pr) (: g <<pr cs (caps pr)                                               ; no call to g sits under a rebinding of a capture
+                              (all (q \ q = pr || !(occurs? g >q) || !(rebinds? cs [': <q >q 0])) ipairs
+                               && (!(occurs? g ibody) || !(rebinds? cs ibody))))
+             lifts (filter site-ok? (filter (pr \ roloop? pr sibnames) ipairs + wlifts))
              (atom? lifts ? [Fpair ()]
                 (: remain (filter (pr \ !(any (lp \ (pr = lp)) lifts)) ipairs)                ; the non-lifted inner bindings (by identity)
                    specs (map (pr \ <<pr                                               ; per lift a spec (g gn fv..): name, hoisted name F_g, captures
-                               . ((name (string F + "_" + string <<pr))
-                                     . (filter (s \ !(s = '_) && !(elem s ><pr) && occurs? s >pr) (P + valnames)))) lifts)   ; `_` is rebound locally by the loop's pin slot, never a capture
+                               . ((name (string F + "_" + string <<pr)) . caps pr)) lifts)   ; `_` is rebound locally by the loop's pin slot, never a capture
                    (presz pr) (fnpair? pr ? pr (: ms (afind (x \ (<x = <pr)) mapsz) v >pr   ; a map binding `(H (tablet 0))` -> `(H (tablet N))`
                                 (two? ms && two? v && <v = 'tablet ? (<pr . ['tablet >ms]) pr)))    ; presize `(tablet N)` so the N native inserts never grow
                    rwp (map presz (foldl (\ ps sp (subst-pairs <sp <>sp >>sp ps)) remain specs))   ; rewrite (g A..) calls through every spec, then presize the maps

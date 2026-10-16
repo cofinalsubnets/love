@@ -533,9 +533,9 @@
          (: f2 (atom? <sp ? bd (': . (<sp + [bd])))                          ; no binding left -> no let: the call is gone
             (cprop (two? rest ? (f2 . rest) f2) se (burn fl) op bnd pb))
          (keep2 x h2 as)))))                                                     ; a lambda body escaping at a value position -> decline (the escape law)
-   ; a param that shadows an enclosing lambda param renames to a fresh mint (with its like-named
-   ; inners: one cluster, so a pre-pin read still sees the outer) -- ana's letrec loads a
-   ; sibling's captures by name at each reference site, and a shadow would hand it its own value.
+   ; a param that shadows an enclosing lambda param or let name renames to a fresh mint (with its
+   ; like-named inners: one cluster, so a pre-pin read still sees the outer) -- ana's letrec loads
+   ; a sibling's captures by name at each reference site, and a shadow would hand it its own value.
    (cplam x se fl op bnd pb) (atom? >>x ? x                                       ; (\ v) quote -> leave
     (: r (lp x)
      (any (p \ p != '_ && elem p pb) <r ?
@@ -575,7 +575,7 @@
     (nom? x ? (seget x se @ (_ . e . _) e x) x)              ; const/known-lambda var -> value
     (<x @
     '\ (cplam x se fl op bnd pb)
-    ': (ln >x @ ns (keep x (cpbinds >x (sehide ns se) fl op (ns + bnd) pb) ':))
+    ': (ln >x @ ns (keep x (cpbinds >x (sehide ns se) fl op (ns + bnd) (ns + pb)) ':))
     '? (keep x (mapi (e \ cprop e se fl op bnd pb) >x) '?)              ; no prune here -- wxc does it
     h (: m (nom? h ? (macros h) 0)                                          ; macro head, not shadowed? expand on raw args -- a
        (m && !(elem h bnd) ? (cprop (opfix-past (m >x) (filter two? >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns                  ; structural macro (a two?/cap probe) must see them
