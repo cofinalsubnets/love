@@ -3,6 +3,7 @@
 ; on a pool of its own
 ;   run:  cat test/00-init.l test/host/pool.l | out/love
 (borrow 'posix)
+(borrow 'pool)
 (: (pl-w k n) (: _ (setenv "LOVE_THREADS" k) w (par-width n) _ (setenv "LOVE_THREADS" "") w)
    ; a frame big enough to share: two big squares, red and blue, one over the other
    (pl-g l) (: f (foldr (+) () l) (gem-tray [(tally f)] f))
@@ -36,6 +37,8 @@
    said (uread pl-out @ r (two? r ? <>r ""))
    _ (unlink pl-out))
 (test
+ ; the spare in whole cpus, rounded past a quarter's margin: 1.98 idle is two, 1.7 is one
+ (par-cpus 1980 = 2) (par-cpus 1750 = 2) (par-cpus 1749 = 1) (par-cpus 999 = 1) (par-cpus 0 = 0) (par-cpus 3740 = 3)
  ; off, a width of one chunk, a cap, and forced
  (pl-w "1" 64 = 1)
  (pl-w "" 1 = 1)
