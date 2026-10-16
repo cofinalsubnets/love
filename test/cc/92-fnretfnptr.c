@@ -1,10 +1,5 @@
-/* a function returning a function pointer -- int (*g(void))(void) : g is a
-   function whose RETURN type is a pointer-to-function. the parenthesized
-   declarator (*g(void)) makes g a function; the trailing (void) makes the
-   pointee a function; the leading * makes g return the pointer to it. the
-   inner params are parsed and bound in the body (pick reads k). exit agrees
-   with gcc only if the declarator, the sig's return type, and the two nested
-   calls all line up. */
+/* a function returning a function pointer, int (*g(void))(void): the declarator,
+   the sig's return type, the inner params bound in the body, two nested calls. */
 int inc(int x) { return x + 1; }
 int dbl(int x) { return x * 2; }
 

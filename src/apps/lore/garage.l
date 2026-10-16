@@ -1,14 +1,8 @@
-; garage -- the level after the desert: the dry riverbed runs through a mall's parking
-; garage, east wall to west. lanes, islands of bays, columns, wrecked cars; the middle
-; where the bed runs is bare. rats wander, never hostile: bumping one is rat-interaction.
-; the way on is west along the bed, to the shaft (src/apps/lore/shaft.l).
-;
-; a roguelike floor on rove, laid rather than delved; the painter and the keys are rove's,
-; a tap included. garage-new/turn/frame are pure, gated by test/host/garage.l; garage-walk takes
-; a raised stage, so the dusk hands over on the same screen. the music is a harp loop,
-; garage-tune, pulled a cycle at a time.
-;
-; run: love lore garage    h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves
+; garage -- the level after the desert: the dry riverbed runs east to west through a mall's
+; parking garage of lanes, bays, columns and wrecked cars, the bed's middle bare. rats wander,
+; never hostile; the way on is west along the bed, to the shaft.
+; a rove floor, laid rather than delved. garage-new/turn/frame are pure; garage-walk takes a
+; stage already raised. the music is a harp loop, garage-tune, pulled a cycle at a time.
 (module (garage garage-run garage-walk garage-main garage-new garage-turn garage-frame
          garage-bar garage-lay garage-face garage-stride garage-stir rat-interaction
          car-cells bay-w bay-d bed-h rat-glyph garage-tune garage-song-new garage-song-feed
@@ -18,9 +12,8 @@
 (borrow 'play)                          ; the voices, the mix
 (:
  esc (string 27)
- ; --- the garage: tiles in a cask, (x y) indexed. 0 concrete wall, 1 the floor, 2 a
- ; column, 3 a pilaster -- the wall thickened along its inner face -- 4 a painted line,
- ; 5 the dry riverbed, and 6 a wreck's cell
+ ; --- the garage: tiles in a cask, (x y) indexed. 0 concrete wall, 1 the floor, 2 a column,
+ ; 3 a pilaster, 4 a painted line, 5 the dry riverbed, 6 a wreck's cell
  bed-h 3
  bay-w 5                                ; a bay: four cells of car and a line
  bay-d 2                                ; ..two rows deep, a car's height
@@ -82,10 +75,9 @@
                                       (0 < x < w - 1 ? (dput d x 1 3, dput d x (h - 2) 3)))))
    _ (each ^(h // pilaster-y) (k \ (pilaster-y // 2 + k * pilaster-y @ y
                                       (0 < y < h - 1 ? (dput d 1 y 3, dput d (w - 2) y 3)))))
-   ; the plan: the river's zone through the middle, bare; above it and below, from the
-   ; wall in, a lane, then two bands of bays back to back and a lane, as far as they
-   ; fit, and one band alone where two will not -- the zone or the wall's lane is the
-   ; lane it faces
+   ; the plan: the river's zone through the middle, bare; above and below it, from the wall in,
+   ; a lane, then two bands of bays back to back and a lane as far as they fit, one band where
+   ; two will not
    cy (h // 2)
    zt (cy - zone-margin) zb (cy + bed-h + zone-margin)
    (bands-down a b) (:- (go (a + edge-rows) ()) (go y acc)
@@ -97,11 +89,9 @@
         (a <= y - bay-d) (acc + [(y - bay-d)])
         acc))
    bands (bands-down 2 zt + bands-up zb (h - 2))
-   ; a band across: between the lanes inside the west wall and the east, as many whole
-   ; sections as fit with a lane between each two, the lot centred -- or one section of
-   ; fewer bays where a whole one will not fit, or none at all on a screen too narrow. a
-   ; line at each bay's start and one closing the section, the middle line of a section
-   ; a column. the bays are noted for the cars
+   ; a band across: whole sections between the side lanes, a lane between each two, centred;
+   ; or one short section, or none on a narrow screen. a line at each bay's start and one
+   ; closing the section, its middle line a column. the bays are noted for the cars
    left (1 + edge-cols) right (w - 1 - edge-cols)
    span (right - left)
    sec-w (section-bays * bay-w + 1)
@@ -118,12 +108,10 @@
                                                  pin bays () ([(x + 1) y0] . bays ())))),
                                mark (sx + nb * bay-w) y0 4))))
    _ (each bands band)
-   ; the bed: through the east wall and out through the west, so many rows deep,
-   ; wandering on two sines, over everything in its way
+   ; the bed: east wall to west, bed-h rows deep, wandering on two sines, over everything
    bed (map (x \ cy + int (1.5 * sin (x * 0.11) + 1.0 * sin (x * 0.037))) ^w)
    _ (each ^w (x \ each ^bed-h (j \ dput d x (bed x + j) 5)))
-   ; the cars: in the bays the die fills, never over the bed; each its place, its pen
-   ; and the cells of it that are crumpled
+   ; the cars: in the bays the die fills, never over the bed; each its place, pen and dents
    (bay-free? x y) (all (i \ all (j \ 1 = dat d (x + i) (y + j)) ^bay-d) ^(bay-w - 1))
    (car x y) {'x x 'y y 'hue (car-pens (roll sb #car-pens)) 'dents (map (i \ roll sb (bay-d * (bay-w - 1))) ^(1 + roll sb 2))}
    cars (foldl (acc \ b \ (: x <b y0 <>b
@@ -144,8 +132,7 @@
                                   (elem k ds ? wreck-pen hue)]))
                          ^(bay-d * (bay-w - 1))))
 
- ; a fresh level: the garage laid from the seed, you on the bed at the east wall, and
- ; the rats wherever the floor is bare
+ ; a fresh level: you on the bed at the east wall, the rats wherever the floor is bare
  (garage-new w h st) (:
    sb {st}
    d (garage-lay w h sb)
@@ -162,8 +149,8 @@
     g))
 
  ; --- a turn: a sign standing takes the key, else a step ------------------------------
- ; a rat bumped is rat-interaction; concrete and a wreck hold; the west edge along the
- ; bed is the way out, and the east edge is where you came in
+ ; a rat bumped is rat-interaction; concrete and a wreck hold; the west edge along the bed
+ ; is the way out, the east edge where you came in
  (garage-stride g mv) (: p (g 'p) d (g 'd) w (d 'w) nx (p 'x + <mv) ny (p 'y + <>mv)
                          t (dat d nx ny) r (mob-at g nx ny)
    (? r (note g (rat-interaction (g 'sb) r))
@@ -205,12 +192,9 @@
    (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()),
     two? sg ? (sign-over f <sg >sg 1 rows cols) f))
 
- ; --- the tune: machinery -- a plant throbbing under a compressor, a servo, a ratchet, a
- ; scrape and a bin lid. every layer a line of the stack: a ; at its front silences one,
- ; and the lines under the stack are spares to swap in. heard alone: the stack pasted
- ; into love synth, :cps 0.55 and :send.
- ; harp is cited by name, never borrowed: borrowing it would put its note and rev over
- ; rove's and prel's for everything below.
+ ; --- the tune: machinery, a layer a line of the stack; a ; at a line's front silences it,
+ ; and the lines under the stack are spares to swap in. harp is cited, never borrowed:
+ ; borrowing it would put its note and rev over rove's and prel's for everything below
  (garage-tune _) (:
    (h w) (cite 'harp w)
    stack (h 'stack) pset (h 'pset) hush (h 'hush) every (h 'every) whenmod (h 'whenmod)
@@ -222,8 +206,7 @@
     (psets (hit "saw*8") (note "[-31, -30.9]") (legato 0.32) (gain 0.14))
     ; the compressor: a long hiss let go on the one, a shorter one answering off the beat
     (psets (hit "oh?0.7 ~ ~ [~ oh?0.3]") (speed "0.12 ~ ~ [~ 0.3]") (gain "0.5 ~ ~ [~ 0.3]"))
-    ; the servo: one square note whining up two octaves on the third beat, and every
-    ; third cycle down them from the top
+    ; the servo: a square note whining up two octaves on the third beat, every third cycle down
     ;(degby 0.7 (every 3 (\ q (psets q (note 14) (slide -24)))
     ; (psets (hit "~ ~ sqr ~") (note -10) (slide 24) (legato 1.4) (gain 0.26))))
     ; the ratchet: rim pings, the pitch set by speed -- low is a bolt, high a tick
@@ -234,7 +217,7 @@
    ; (psets (hit "~ chime ~ ~ ~ ~ [chime ~ chime] ~") (note "~ 19 ~ ~ ~ ~ [26 ~ 23] ~") (legato 0.35) (gain 0.22))
    ]))
  ; spares --
- ; the servo as it was: twelve short square notes stepping up a ramp
+ ; the servo, stepped: twelve short square notes up a ramp
  ;  (psets (hit "~ ~ sqr*12 ~") (note (range -10 14 (fast 4 saw))) (legato 0.045) (gain 0.26))
  ; the press: a kick slowed to a stamp, every other cycle, the plate stuttered after it
  ;  (psets (hit "<bd ~> ~ ~ ~") (speed 0.55) (gain 0.7))
@@ -248,13 +231,12 @@
  song-cps 0.55                          ; cycles a second
  song-chunk (song-rate // 30)
  song-gain 5200.0
- ; the song: its port, the tune, a spun die, the next cycle to pull and the frame it
- ; starts on, the frames written, and the voices as [start voice] -- a whole cycle is
- ; scheduled at once, and a voice not begun is silent but not free, its closure runs
- ; over every frame of a chunk, so the start keeps it out of the mix until it comes
+ ; the song: its port, the tune, a die, the next cycle and its start frame, frames written,
+ ; and voices as [start voice]. a whole cycle is scheduled at once, and a voice not begun
+ ; still runs over every frame of a chunk, so its start keeps it out of the mix until due
  (garage-song-new tune h st) {'h h 'tune tune 'sb {st} 'fpos 0 'cyc 0 'next 0 'vs ()}
- ; one cycle's onsets as voices, the cycle starting at frame st and spc frames long.
- ; cycle time is a rational and frame time an integer: qnum is the one crossing
+ ; one cycle's onsets as voices, the cycle starting at frame st and spc frames long; qnum
+ ; crosses from rational cycle time to integer frames
  (song-voices s c st spc)
   (: p (s 'tune) evwb (cite 'harp 'evwb) evv (cite 'harp 'evv) onset? (cite 'harp 'onset?)
      qi (cite 'harp 'qi) qnum (cite 'harp 'qnum)
@@ -262,8 +244,7 @@
                              v (mkvoice at (evv x) song-rate)
                            (two? v ? [at v])))
                      (filter onset? (p (qi c) (qi (c + 1)))))))
- ; one chunk out the port: the cycles reaching into it pulled in, the voices begun taken
- ; up, the voices ringing summed. the port is any jug, so the song gates headless
+ ; one chunk out the port: the cycles reaching into it pulled in, the voices summed
  (garage-song-feed s) (: base (s 'fpos) lim (base + song-chunk) spc (int (song-rate / song-cps))
    (pull _) (? (!(s 'tune) || lim <= s 'next) ()
                (pin s 'vs (s 'vs + song-voices s (s 'cyc) (s 'next) spc),
@@ -272,7 +253,7 @@
    (pull (),
     song-out s song-chunk song-gain))
 
- ; --- the walk: on a stage already raised, the tower's way -- the wait is the song ---
+ ; --- the walk, on a stage already raised; the wait is the song ---
  (garage-walk _) (: ws (ttysize 7 19)
    r (<ws - 2) c <>ws
    g (garage-new (c < 100 ? c 100) r (wheel (clock 0)))

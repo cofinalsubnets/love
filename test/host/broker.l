@@ -1,7 +1,5 @@
-; --- test/host/broker.l: the wild hive's broker stub (src/apps/broker.l) ----------------------
-; a root, three voting nodes and an intruder; a policy that hands `node` decisions to a quorum
-; of two; a fake renter, so nothing touches a host. every way a request is refused, the quorum
-; kept inside the envelope, and the log. run standalone from the repo root:
+; test/host/broker.l -- src/apps/broker.l: a root, three voters, an intruder, a quorum of two for
+; `node`, a fake renter. every refusal, the envelope, the log. run from the repo root:
 ;   cat test/00-init.l test/host/broker.l | out/love
 
 (borrow "src/apps/broker.l")
@@ -35,18 +33,18 @@
    b (broker-open br-t-dir)
    (refused? r) (string? r))
 
-; --- the state: outside any hive tree, and read back as it was left ---------------------------
+; --- the state: outside any hive tree, read back as left
 (test (tablet? b) (b 'spent = 0)
       (string? (broker-open "out")))                     ; out/ sits in this tree: refused
 
-; --- refused at the ask -----------------------------------------------------------------------
+; --- refused at the ask
 (test (refused? (broker-request b (br-t-req "gpu-huge" 1 "n1") 100))     ; off the allowlist
       (refused? (broker-request b (br-t-req "x64-small" 1 "stranger") 100)) ; no such node
       (refused? (broker-request b (br-t-req "budget" 1 "n1") 100))       ; the envelope is not a request
       (refused? (broker-request b (br-t-req "x64-small" 11 "n1") 100))   ; 1100 > 1000: over budget
       (refused? (broker-request b (br-t-req "x64-small" 0 "n1") 100)))   ; no hours
 
-; --- unanswered, wrongly answered, a voter counted once, too late -----------------------------
+; --- unanswered, wrongly answered, a voter counted once, too late
 (: d1 (broker-request b (br-t-req "x64-small" 3 "n1") 100) id (d1 'id)
    _ (test (tablet? d1) (d1 'class = "node") (d1 'deadline = 160))
    _ (test (refused? (broker-answer b id () 110 br-t-rent)))             ; no answer: unanswered
@@ -67,7 +65,7 @@
            (br-t-calls 'rent = 0) (b 'spent = 0))
    0)
 
-; --- a quorum's yes rents, and spends inside the purse ----------------------------------------
+; --- a quorum's yes rents, and spends inside the purse
 (: d (broker-request b (br-t-req "x64-small" 3 "n2") 200)
    l (broker-answer b (d 'id) [(br-t-vote br-t-n1 "n1" (d 'id) "yes") (br-t-vote br-t-n3 "n3" (d 'id) "yes")] 210 br-t-rent)
    _ (test (tablet? l) (l 'cost = 300) (b 'spent = 300) (br-t-calls 'rent = 1)
@@ -80,7 +78,7 @@
    _ (test (refused? f))
    0)
 
-; --- the envelope: no quorum, and no node, moves it -------------------------------------------
+; --- the envelope: no quorum, and no node, moves it
 (: raise (broker-sign br-t-n1 ["serial 9" "budget 999999" "max 9" "allow x64-small lab 100"
                                ("voter n1 " + br-t-hex (br-t-n1 1)) "decide node quorum 1"])
    _ (test (refused? (broker-policy b raise)) ((b 'policy) 'budget = 1000))   ; a node's policy is no policy
@@ -103,7 +101,7 @@
    _ (test (1 = broker-tick b (310 + 4 * 3600) br-t-free) (#(b 'leases) = 0) (br-t-calls 'free = 2))
    0)
 
-; --- the log holds every request and answer; the creds reach none of it -----------------------
+; --- the log holds every request and answer; the creds reach none of it
 (: log (br-t-read (br-t-dir + "/log"))
    ls (lines log)
    reqs (filter (l \ starts? l "request ") ls)
@@ -114,7 +112,7 @@
            (fsub log br-t-cred 0 < 0)
            (fsub (br-t-read (br-t-dir + "/leases")) br-t-cred 0 < 0)
            (fsub (br-t-read (br-t-dir + "/ledger")) br-t-cred 0 < 0))
-   ; reopened, it is the broker it was: the spend, the leases, the policy
+   ; reopened: the same spend, leases, policy
    _ (test (tablet? b2) (b2 'spent = 500) (#(b2 'leases) = 0) ((b2 'policy) 'serial = 2) (b2 'nreq = 15))
    _ (each ["root.pub" "creds" "policy" "ledger" "leases" "log"] (f \ unlink (br-t-dir + "/" + f)))
    _ (rmdir br-t-dir)

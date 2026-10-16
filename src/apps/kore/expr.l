@@ -1,17 +1,8 @@
-; src/apps/kore/expr.l -- expr, the little arithmetic-and-matching language POSIX hands a
-; shell script. it rides re.l's BRE engine for `:`, so it loads after re.l. a toolbox of
-; one: an expr-main, no seat, kore.l is its door.
-;
-; the grammar, loosest binding first:
-;   |   &   < <= = == != >= >   + -   * / %   :
-; then the primaries: ( E ), length S, substr S pos len, index S chars, match S re,
-; `+ TOKEN` (the quote that makes a keyword an ordinary word), and a bare word.
-;
-; every value is a text; one that reads as a whole number is a number where one is wanted
-; (`2 < 10` is 1, `2 < 10a` is 0). exit: 0 the answer is neither "" nor "0", 1 it is,
-; 2 a malformed expression or arithmetic that will not do.
-;
-; a body-less top-level `:` -- expr-main leaks, the rest is the parser.
+; src/apps/kore/expr.l -- expr, POSIX's arithmetic-and-matching language. `:` rides re.l's
+; BRE engine, so this loads after re.l. grammar, loosest first:
+;   |   &   < <= = == != >= >   + -   * / %   :   then ( E ) length substr index match, + TOKEN
+; a text that reads as a whole number is a number where one is wanted (`2 < 10a` is 0).
+; exit 0 the answer is neither "" nor "0", 1 it is, 2 malformed or bad arithmetic.
 (module 'kore
 (:
    ; the operators by level, loosest first; the walk below indexes this list by depth
@@ -29,9 +20,8 @@
        (n <= st ? () (go st 0 @ r (two? r ? [1 (neg ? (0 - <>r) <>r)]))))
    (ex-true? v) (!(v = "") && !(v = "0"))
    (ex-bool b) (b ? "1" "0")
-   ; the division truncates toward zero and the remainder wears the dividend's sign,
-   ; which is C's rule and expr's -- love's // floors, so the sign is taken out and put
-   ; back rather than divided with
+   ; division truncates toward zero, the remainder wears the dividend's sign (C's rule and
+   ; expr's), computed on magnitudes with the sign put back
    (ex-arith op a b)
     (: x (ex-num a) y (ex-num b)
        _ (two? x && two? y ? () (ex-die "non-integer argument"))
@@ -52,9 +42,8 @@
                    (op = "!=") !eq
                    (op = ">=") !lt
                    (!lt && !eq))))
-   ; S : re -- the BRE anchored at the head. a pattern carrying \( \) answers group 1's
-   ; text (empty on a miss), a pattern without one answers the match's length ("0" on a
-   ; miss). a match at the head is the leftmost one, so the anchor is a check on its start.
+   ; S : re -- the BRE anchored at the head: group 1's text with \( \), else the match's
+   ; length. the leftmost match, so the anchor is a check on its start
    (ex-match a b)
     (: r (rebre b)
        _ (two? r ? () (ex-die ("invalid regular expression: " + b)))
@@ -87,9 +76,8 @@
        (op = ":") (ex-match a b)
        (elem op '("+" "-" "*" "/" "%")) (ex-arith op a b)
        (ex-cmp op a b))
-   ; the whole descent is one function taking its own depth, so the primary can call
-   ; back into the loosest level for a parenthesis without any two names needing to
-   ; know each other -- a body sees its own name, and nothing after it
+   ; the whole descent is one function taking its depth, so a primary can call back into the
+   ; loosest level: a body sees its own name, and nothing after it
    (ex-parse lv ts)
     (: (prim m)
         (atom? m ? (ex-die "syntax error: missing operand")

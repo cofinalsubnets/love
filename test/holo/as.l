@@ -1,17 +1,8 @@
-; the gate for src/love/holo/as.l, the real at&T x86-64 front. each golden below is the exact
-; .text hex `/usr/bin/as` emits for the same source (assemble, `objcopy -O binary --only-section=.text`,
-; hexdump) -- so this file is the frozen record of that byte-for-byte round-trip against the system
-; assembler. if a golden drifts, either as.l broke or gas changed, and either is worth a look.
-; regenerate a golden: printf '%s\n' 'src' | as --64 -o t.o - && objcopy -O binary -j .text t.o t.bin && xxd -p t.bin
-; run: cat src/love/holo/{holo,x64,dialect,as}.l test/holo/as.l | out/love  (nonzero exit on any miss)
-;
-; scope: the straight-line battery -- register, immediate and memory operands at all four widths,
-; the size suffix where a register carries none. branch relaxation (jmp/jcc to a near label) and the
-; accumulator short forms (add $imm8,%al -> 04) are gas optimizations as.l does not do, so they are
-; byte-different-but-correct and stay out of this battery (they are the M2 items); external-symbol
-; call/lea need the reloc-preserving .o path, so the symbol tests below define their target
-; in-snippet where as-hex resolves the rel32 in place.
-(borrow 'holo) ; the cat's wrapped sources just registered the module
+; the at&t x86-64 front's goldens: each hex is the .text gas emits for the same source.
+; regenerate: printf '%s\n' 'src' | as --64 -o t.o - && objcopy -O binary -j .text t.o t.bin && xxd -p t.bin
+; straight-line only: branch relaxation and the accumulator short forms are gas choices as.l
+; does not make, and call/lea targets are defined in-snippet so the rel32 resolves in place.
+(borrow 'holo)
 
 (borrow 'posix)
 (: pass {0 0} fail {0 0}
@@ -23,7 +14,7 @@
         sayln $ "FAIL " + name + ": want " + show want + " got " + show got + "\n"))
    (chk name want src) (chk-eq name want (as-hex src))
 
-   ;; -- the golden table: (name  expected-hex  AT&T-source). byte-identical to /usr/bin/as. --
+   ;; -- the golden table: (name  expected-hex  at&t-source) --
    tests '(
       ;; mov: immediate (width from the destination), movabs by range, register-to-register
       ("mov.imm.q"   "48c7c001000000"        "mov $1, %rax")
@@ -239,18 +230,15 @@
       ("rip.cmpb.imm" "803d0000000001c3" "cmpb $1, t(%rip)\nt:\n ret"))
 
    _ (foldl (_ \ t \ chk (t 0) (t 1) (t 2)) 0 tests)
-   ;; -- the lens laws over the same battery (src/love/holo/dialect.l): each source reads to a
-   ;;    value both dialects show and read back unchanged, and the Intel spelling assembles to
-   ;;    the golden bytes -- the conversion is byte-exact. --
+   ;; -- the lens laws: each source reads to a value both dialects show and read back
+   ;;    unchanged, and the intel spelling assembles to the golden bytes --
    (law name want src)
       (att-read src @ v
        (chk-eq (name + ".att") v (att-read (att-show v)),
         chk-eq (name + ".intel") v (intel-read (intel-show v)),
         chk-eq (name + ".intel.hex") want (as-hexv (intel-read (intel-show v)))))
    _ (foldl (_ \ t \ law (t 0) (t 1) (t 2)) 0 tests)
-   ;; ..and the template shapes gas.l reads through the same door: a control register, an
-   ;; immediate expression, `;`-joined statements, a `//` comment -- law 1 on both surfaces, and
-   ;; the reading the lowering counts on
+   ;; ..and template shapes: a control register, an immediate expression, `;` joins, a `//` comment
    (law2 name want src)
       (att-read src @ v
        (chk-eq name want v,
@@ -263,9 +251,8 @@
    _ (chk "sha.sha256rnds2.xmm0" "0f38cbca" "sha256rnds2 %xmm0, %xmm2, %xmm1")
    _ (law2 "lens.semi" '((op xor 4 ((rg 2 4) (rg 2 4))) (op mov 4 ((rg 0 4) (im 1))) (op div 4 ((rg 1 4))))
            "xorl %edx,%edx; movl $1,%eax; divl %ecx;")
-   ;; -- the decoder (src/love/holo/decode.l) over the same battery: the golden bytes read back
-   ;;    to the value the source reads to (labels aside -- a decoded target is an address), and
-   ;;    re-encode to the golden bytes through the relabelled rows. --
+   ;; -- the decoder: golden bytes read back to the source's value (labels aside: a decoded
+   ;;    target is an address) and re-encode to the golden bytes through relabelled rows --
    (hexv c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (c - 55))
    (unhex h) (string (map (i \ hexv (h (2 * i)) * 16 + hexv (h (2 * i + 1))) ^(#h // 2)))
    (law3 name want src)

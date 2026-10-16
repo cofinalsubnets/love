@@ -2,8 +2,7 @@
 # test/kore/awk.sh -- awk against gawk
 . "$(dirname "$0")/common.sh"
 
-# gawk is the oracle and every check is byte-identical stdout. the input is a
-# small table so fields, numbers and text all have something to bite on.
+# gawk is the oracle, byte-identical stdout over a small table
 awkin=$ho/.kore-awkin
 printf 'alice 30 engineer\nbob 25 baker\ncarol 41 engineer\n' > "$awkin"
 aw() { n=$1; shift
@@ -22,10 +21,7 @@ aw rebuild  'BEGIN{OFS="-"}{$1=$1; print}'
 aw setfield '{$2="X"; print}'
 aw nf-set   '{NF=2; print; print NF}'
 aw fs       -F' ' '{print NF}'
-# -F and -v take their value through awk's own string escapes, so a BACKSLASH in one
-# has to survive the walk. it used to reach a second aw-esc -- the SIGNAL escaper, a
-# duplicate name later in the same letrec -- and every such run died `;; awk-exit ()`.
-# -F'\t' is how the flag is nearly always written, and no check here ever held one.
+# -F and -v read awk's string escapes, so a backslash (-F'\t') survives
 awktab=$ho/.kore-awktab
 printf 'a\tb\tc\nd\te\tf\n' > "$awktab"
 for spelling in '-F\t' '-F	'; do
@@ -64,7 +60,7 @@ aw convfmt  'BEGIN{CONVFMT="%.2g"; x=3.14159; print (x "")}'
 aw vflag    -v x=7 'BEGIN{print x, x+1}'
 aw dynre    'BEGIN{r="^b"; if("bob" ~ r) print "dyn-ok"}'
 aw endonly  'END{print NR, $0}'
-# the exit code is awk's own, and exit outside END still runs the END rules
+# the exit code is awk's, and exit outside END still runs END
 korerun awk '{exit 3} END{print "end ran"}' < "$awkin" > "$o" 2>/dev/null; r=$?
 [ $r -eq 3 ] && [ "$(cat "$o")" = "end ran" ] || fail "kore awk exit (exit $r): $(cat "$o")"
 # a bad program is a diagnosed refusal, not a crash and not silence
@@ -75,8 +71,7 @@ printf 'BEGIN{x=1}\n' > "$ho/.kore-awk1"; printf 'BEGIN{print x+1}\n' > "$ho/.ko
 awk -f "$ho/.kore-awk1" -f "$ho/.kore-awk2" < "$awkin" > "$g" 2>/dev/null
 korerun awk -f "$ho/.kore-awk1" -f "$ho/.kore-awk2" < "$awkin" > "$o" 2>/dev/null
 same "awk -f"
-# case by character: gawk's answers under a utf-8 locale, spelled out so the gate's own
-# locale cannot move them; a byte no character wears goes through as is
+# case by character: gawk's utf-8 answers spelled out; a byte no character wears passes as is
 ac() { want=$1; got=$(printf '%s\n' "$2" | korerun awk "{print $3}")
        [ "$got" = "$want" ] || fail "kore awk $3 on $2: got [$got] want [$want]"; }
 ac 'ÉAßÉ日X ǄSIİ ΣΣΣΩ' 'éaßÉ日x ǅſıİ ΣσςΩ' 'toupper($0)'

@@ -1,8 +1,6 @@
-/* static initializers the kernel's lock and trace macros write, held to gcc: a compound literal
- * as the whole initializer (DEFINE_SPINLOCK) and as a member's (a mutex's wait_lock), braces
- * opening on an anonymous member -- a union of a struct and bytes (qspinlock's `{ { .val = ..
- * } }`) and a tracepoint event's `{ .tp = &x }` -- and an array member's element address
- * (srcu's `&data.ctrs[1]`). the same at block scope. */
+/* static initializers held to gcc: a compound literal as the whole and as a member's, braces
+ * opening on an anonymous member (union of struct and bytes, `{ .tp = &x }`), an array member's
+ * element address; the same at block scope. */
 
 typedef struct { int counter; } atomic_t;
 typedef struct { long counter; } atomic_long_t;

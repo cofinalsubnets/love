@@ -1,12 +1,7 @@
 ; src/apps/kore/grap.l -- grap, kernighan and bentley's language for graphs: a troff
-; preprocessor whose graphs, each between .G1 and .G2, become classic pic for gpic.l to
-; draw. held to plan 9's grap byte for byte (test/gate/grap.sh).
-;
-;   grap [FILE..]
-;
-; a graph is read and run statement by statement: the lexer expands macros, copy and the
-; bodies of for and if as text. what a graph draws goes out in order, after its coordinate
-; systems' macros, its frame and its automatic ticks, which wait for the graph's end.
+; preprocessor turning each .G1/.G2 graph into classic pic for gpic.l, held to plan 9's grap
+; byte for byte. the lexer expands macros, copy and for/if bodies as text. a graph's draws
+; go out in order after its coordinate macros, frame and automatic ticks, made at its end.
 (module 'kore
 (borrow 'posix)
 
@@ -123,9 +118,8 @@
    (gr-err g m) (scare 'gr-err m)
 
    ; -- the lexer: sources -----------------------------------------------------------
-   ; a source is text read left to right: 'file the graph's own lines (a line opening with
-   ; a dot not before a figure is troff's), 'text a macro's or a body's expansion, 'for a
-   ; loop's body, which runs again while the loop holds
+   ; a source: 'file the graph's own lines (a dot not before a figure opens a troff line),
+   ; 'text a macro's or a body's expansion, 'for a loop's body, run again while the loop holds
    (gr-src t k) {'t t 'i 0 'k k 'bol 1 'ln 0}
    (gr-top g) (g 'srcs @ s (two? s ? <s))
    (gr-push g s) (pin g 'srcs (s . g 'srcs))
@@ -799,8 +793,8 @@
                    (rev acc))
        (go (c * q) ()))
    (gr-ceil x) (: f (gr-fl (floor x)) c (f = x ? f (f + 1.0)) (c = 0 && x < 0 ? -0.0 c))
-   ; a log axis's: 1, 2, 5 a decade over a range under a hundredfold, else the decades, and
-   ; steps as a line's when it spans under five
+   ; a log axis's ticks: 1, 2, 5 a decade under a hundredfold, else the decades,
+   ; and steps as a line's when it spans under five.
    ; the power of ten at or under v, a whole one over it counting as under
    (gr-decade v) (: (u q) (q * 10 < v ? (u (q * 10)) q) (d q) (q > v ? (d (q / 10)) q) (d (u 1.0)))
    ; 1, 2, 5 or 10 times it: the most at or under v, the least at or over it

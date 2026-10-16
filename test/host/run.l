@@ -1,46 +1,26 @@
-; --- test/host/run.l: smoke test for the hark / herald nifs (src/love/main.c) ---
-; (hark argv) forks, captures the child's stdout into a string, and answers
-; (status . output). (herald argv) is the same answer, but relays each chunk to our
-; stdout as it is read instead of holding it to the exit -- what make does, and
-; what lets a long cook step show progress. The tee must not disturb the capture.
-; host-only (the nifs are src/love/*.c), so it runs standalone against the built
-; binary like test/host/bake.l:
+; test/host/run.l -- the hark / herald nifs (src/love/main.c), process and fd laws
 ;   cat test/00-init.l test/host/run.l | out/love
-;
-; The payloads are deliberately tiny: herald echoes what it captures, so anything
-; big would flood the gate log. The >64KB lane -- where the capture string
-; outgrows its buffer and moves mid-drain -- is checked by hand instead:
+; herald tees what it captures: payloads stay tiny. the >64KB lane is checked by hand:
 ;   (: c `("sh" "-c" "i=0; while [ $i -lt 20000 ]; do echo abcdefgh; i=$((i+1)); done")
 ;      (test ((>(hark c)) = (>(herald c)))))
 (: cmd ["sh" "-c" "printf 'tee-me\n'"]
 
-   ; the two agree on both halves of the answer: teeing changes when the bytes
-   ; reach stdout, never what the caller is handed.
+   ; teeing changes when the bytes reach stdout, never what the caller is handed
    a (hark cmd) b (herald cmd)
    _ (test (two? a) (two? b))
    _ (test (<a = <b) (<a = 0))
    _ (test (>a = >b) (>a = "tee-me\n"))
 
-   ; a nonzero exit still rides back through the tee path
    bad (herald ["sh" "-c" "printf 'nope\n'; exit 3"])
    _ (test (two? bad) (<bad = 3) (>bad = "nope\n"))
 
-   ; no output -> the EmptyString singleton, tee or not
    quiet (herald ["sh" "-c" "exit 0"])
    _ (test (two? quiet) (<quiet = 0) !>quiet)
 
    (puts "run: ok\n"))
 
-; --- rung 4: a write to a device that will not take it does not stop the vm ----
-; `sleep 1; cat` reads nothing for a second, so the pipe's 64K of kernel buffer
-; fills and stays full. before the write door went nonblocking that was a write(2)
-; that waited -- the whole vm, not the one task writing -- until the child got
-; round to reading. the residue rides the port's write run now and the op comes
-; straight back, so the wall clock is the law.
-; the peer must be another process. an in-process reader task cannot drain the
-; pipe while the writer sits inside a blocking write(2) -- the scheduler is
-; cooperative and never gets the turn -- so the control would deadlock instead of
-; reddening, and a gate that hangs is worse than one that fails.
+; a write to a full pipe does not stop the vm: the residue rides the port, the wall clock is the law
+; the peer is another process: an in-process reader would deadlock a blocking writer, not redden
 (: pr (pipe 0)
    rfd <pr wfd >pr
    pid (spawnio ["sh" "-c" "sleep 1; cat >/dev/null"] rfd 1 2 [wfd] -1 0)
@@ -56,21 +36,8 @@
 
 (puts "run rung4: ok\n")
 
-; --- the sigpipe pair: the console still dies, a child never inherits the ignore -
-; love ignores sigpipe so a write to a hung-up peer answers instead of killing the
-; runtime (test/net.l has that half). two things must survive that:
-; 1. A SHELL tool must still die on a closed PIPE, or `love ... | head` runs to
-;   completion writing into nothing. the console re-raises by hand, so the wait
-;   status stays a signal death and every downstream $? is unchanged. the spewer
-;   below is bounded (300000 lines) on purpose: under a regression it finishes
-;   rather than hanging, so this reddens as a slow run, not a wedged gate.
-; 2. an ignored disposition survives exec, so a child that inherited it is a
-;   `yes | head` that never stops. every fork site resets it: main.c's two exec
-;   sites by hand, and src/love/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/tether.
-;   the law below reaches `hark`'s door only -- the posix.c half is lush's, and
-;   shares the one line.
-; the status has to come out of the pipeline, and $? there is head's, so love's
-; own goes to a file from inside the subshell -- POSIX, no pipestatus.
+; love ignores sigpipe, yet the console still dies on a closed pipe and a child never inherits
+; the ignore. the spewer is bounded so a regression is slow, not wedged; $? goes to a file
 (: spew "( echo '(: (go n) (? (n = 0) 0 (: _ (putc 120) _ (putc 10) (go (n - 1)))) _ (go 300000) 0)' | out/love; echo $? > out/.sigst ) | head -1 > /dev/null; cat out/.sigst; rm -f out/.sigst"
    st >(hark ["sh" "-c" spew])
    sig >(hark ["sh" "-c" "grep SigIgn /proc/self/status"])
@@ -80,9 +47,7 @@
 
 (puts "run sigpipe: ok\n")
 
-; --- close-on-exec: a child sees its 0/1/2 and what it was handed, nothing love holds ---
-; a file, a raw fd, a pipe, a dup and a pty master held here; the child's fd list is the
-; one it had before any of them. spawnmap's fdmap hands on two fds, one onto itself.
+; close-on-exec: a child sees its 0/1/2 and what it was handed, nothing love holds
 (: (fdls _) (: r (hark ["ls" "/proc/self/fd"]) (lines >r))
    base (fdls 0)
    q (open "test/host/run.l" "r")
@@ -102,50 +67,33 @@
 
 (puts "run cloexec: ok\n")
 
-; --- rung 6: seventeen parked tasks, and the wake reaches the last of them ------
-; the law and the shape live in test/host/parked.l -- driven from here, under a
-; timeout, because its regression is a hang (the scheduler sleeping on a fd set
-; the ninth parked task never got into) and a wedged gate is worse than a red one.
-; it must be a subprocess for that reason alone; nothing about it needs one.
+; test/host/parked.l, seventeen parked tasks, under a timeout: its regression is a hang
 (: rc <(hark ["sh" "-c" "timeout 20 out/love test/host/parked.l"])
-   _ (test (rc = 0)))                    ; 124 is the timeout: the old cap's hang
+   _ (test (rc = 0)))                    ; 124 is the timeout
 
 (puts "run parked: ok\n")
 
-; --- the nif floor: accept / recv / wait all park --------------------------
-; the laws and the shapes live in test/host/nifpark.l -- driven from here for the
-; same reason parked.l is: two of its three regressions are hangs (a blocking accept
-; waits for a connection only the wedged vm could still make), and a wedged gate is
-; worse than a red one. 124 is the control's answer, and each law was verified by
-; putting its own blocking call back.
+; test/host/nifpark.l, accept / recv / wait all park, under a timeout for the same reason
 (: rc <(hark ["sh" "-c" "cat test/00-init.l test/host/nifpark.l | timeout 20 out/love"])
    _ (test (rc = 0)))
 
 (puts "run nifpark: ok\n")
 
-; --- the resolver: a lookup parks, and a deadline is a park too -----------------
-; test/host/dns.l stands up a fake nameserver as a love task, so nothing leaves
-; the loopback. driven from here for the usual reason: a resolver whose deadline
-; stops working does not redden, it hangs -- there is no answer coming and nothing
-; to wake the caller.
+; test/host/dns.l, a lookup and its deadline park, against a loopback nameserver, under a timeout
 (: rc <(hark ["sh" "-c" "cat test/00-init.l test/host/dns.l | timeout 20 out/love"])
    _ (test (rc = 0)))
 
 (test_fin ())
 (puts "run dns: ok\n")
 
-; --- a wait nothing left could wake: no clock, no fd, and the waiting op comes back to
-; itself -- catch, a task's end. it scares (deadlock) and the run stops, where it spun.
-; each its own process, under a timeout, since the regression is a hang: main running a
-; continuation a twirled task captured, two tasks catching each other, a child that
-; freezes or pauses main and ends
+; a wait nothing could wake scares (deadlock); each its own process under a timeout
 (: (dead e) (hark ["sh" "-c" ("timeout 10 out/love -e '" + e + "' 2>&1")])
    (scared? r) (<r = 1 && 2 = #(split ";; deadlock" >r))
    cont (dead """(: t {} p (twirl (\ _ (call-cc (c \ (pin t 0 c)))) 0) _ (catch p) ((t 0) 1))""")
    pair (dead """(: t {} a (twirl (\ _ (catch (t (quote b)))) 0) b (twirl (\ _ (catch a)) 0) _ (pin t (quote b) b) (putx (catch a)))""")
    frz (dead """(: m (myself 0) p (twirl (\ _ (putx (freeze m))) 0) _ (catch p) (putx (quote back)))""")
    pse (dead """(: m (myself 0) p (twirl (\ _ (putx (pause m))) 0) _ (catch p) (putx (quote back)))""")
-   ; ..and a catch whose task sleeps is no deadlock: the clock wakes it
+   ; a catch whose task sleeps is no deadlock: the clock wakes it
    slept (dead """(: p (twirl (\ _ (rest 50, 7)) 0) (putx (catch p)))""")
    _ (test (scared? cont) (scared? pair) (scared? frz) (scared? pse)
            (<slept = 0) (>slept = "77\n"))

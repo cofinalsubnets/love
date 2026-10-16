@@ -1,26 +1,8 @@
-; --- test/host/ssh.l: ssh's crypto and wire floor, against published numbers ---
-; not in the test/*.l corpus: this loads a crew file and splices its module.
-;
-;   sha512   FIPS 180-4's "abc", the empty string, and the lengths either side of
-;            both padding edges (111/112, 127/128, 239/240) -- the digests off
-;            python's hashlib, over bytes (7i + 1) & 255.
-;   ed25519  RFC 8032 §7.1 tests 1-3: the public key, the signature, and verify's
-;            answer on it and on each way of spoiling it; signing's walk traced to one
-;            schedule whatever the scalar.
-;   wire     RFC 4251 §5's mpint examples, and base64 both ways on a key blob.
-;   aes      FIPS 197 appendix C's three key sizes, and SP 800-38A F.5.5's ctr blocks.
-;   locked   a key ssh-keygen locked (aes256-ctr, bcrypt 4 rounds, "hunter2 pass"):
-;            the seed and public key come out as the bare key's, a wrong passphrase
-;            and none are told apart, and bcrypt-hash refuses a short state.
-;   known_hosts  hashed names (ssh-keygen -H's lines), [host]:port, name lists and case,
-;            @revoked, another key type, @cert-authority skipped.
-;   clean    banner and disconnect text: controls, c1 and malformed utf-8 dropped.
-;   verdict  the host key under each StrictHostKeyChecking: ask, accept-new, yes, no.
-;   strict   strict kex ends on an ignore before newkeys; sequence numbers never wrap.
-;
-; the transport runs against a live sshd, which no gate stands up; see src/apps/ssh/ssh.l.
-;
-; run:  cat test/00-init.l test/host/ssh.l | out/love
+; test/host/ssh.l -- ssh's crypto and wire floor (src/apps/ssh/ssh.l) against published numbers:
+; sha512 FIPS 180-4 and python's hashlib over bytes (7i + 1) & 255 at the padding edges;
+; ed25519 RFC 8032 7.1 tests 1-3; mpint RFC 4251 5; aes FIPS 197 C and SP 800-38A F.5.5;
+; a key ssh-keygen locked (aes256-ctr, bcrypt 4 rounds, "hunter2 pass"). no live sshd here.
+; host-side: it loads a crew file. run:  cat test/00-init.l test/host/ssh.l | out/love
 
 (borrow "src/apps/ssh/ssh.l")
 (borrow 'posix)
@@ -30,7 +12,7 @@
 
 (: ssht-run (\ n (bytes n (i \ (i * 7 + 1) & 255))))
 
-; --- sha512 -----------------------------------------------------------------------
+; sha512
 (test
  ((hex (sha512 "abc")) = "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f")
  ((hex (sha512 "")) = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e")
@@ -41,7 +23,7 @@
  ((hex (sha512 (ssht-run 239))) = "d5e023834c68aeb6e8eef9619ed5fb6fd8b3df796b49d18dce5f6fae76f3f6cae8ddf055611c4031bf5fe6aa68708360f5de1fe69a77055eb55612c5509d5e19")
  ((hex (sha512 (ssht-run 240))) = "67b19552bd96d84b251b262b7eef6fe73b2fdeabc4a4a0e4de2c8c621ee395729b3877c85c2b0fa79e379ca718f1a00d7508d8a5c04967fe240d4608edf05c10"))
 
-; --- ed25519 ----------------------------------------------------------------------
+; ed25519
 (: ssht-ed [["9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
              "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a" ""
              "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"]
@@ -66,8 +48,8 @@
 ; an S at or past the group order is refused, not reduced
 (: ssht-s (le-bytes (le-num (snip (unhex (ssht-ed 0 3)) 32 64) + ed-l)))
 (test !(ed-verify (unhex (ssht-ed 0 1)) "" (snip (unhex (ssht-ed 0 3)) 0 32 + ssht-s)))
-; signing's walk keeps one schedule: on a trace curve, the integers, every scalar takes 256
-; doublings and 64 additions and lands on itself; the ends of the scalar range land right
+; signing keeps one schedule: on the integers as a trace curve every scalar takes 256
+; doublings and 64 additions and lands on itself
 (: ssht-walk
     (\ v (: n {} (bump k) (pin n k (peep n k 0 + 1))
             r (p2-walk (\ a b (: _ (bump 'a) s (a 0 0 + b 0 0) [[s]])) (a \ (: _ (bump 'd) s (2 * a 0 0) [[s]]))
@@ -79,7 +61,7 @@
       ((ed-lenc (ed-mulb (p2-limbs (ed-l - 1)))) = ed-enc [(ed-q - ed-b 0) (ed-b 1) 1 0])
       ((ed-lenc (ed-mulb (p2-limbs 5))) = ed-enc (ed-scale 5 ed-b)))
 
-; --- wire -------------------------------------------------------------------------
+; wire
 (test
  ((hex (mpint "")) = "00000000")
  ((hex (mpint (unhex "09a378f9b2e332a7"))) = "0000000809a378f9b2e332a7")
@@ -90,7 +72,7 @@
  ((b64d "YWJj\nZA==") = "abcd")
  ((split "a,b,,c" 44) = ["a" "b" "" "c"]))
 
-; --- aes ---------------------------------------------------------------------------
+; aes
 (: ssht-pt (unhex "00112233445566778899aabbccddeeff")
    ssht-k (\ n (bytes n (i \ i))))
 (test
@@ -102,7 +84,7 @@
                 (unhex "6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e5130c8")))
   = "601ec313775789a5b7a7f504bbf3d228f443e3ca4d62b59aca84e990cacaf5c52b09"))
 
-; --- locked ------------------------------------------------------------------------
+; locked
 (: ssht-locked "-----BEGIN OPENSSH PRIVATE KEY-----
 b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABAq+kveuN
 Z17BsmPa1Md8wXAAAABAAAAAEAAAAzAAAAC3NzaC1lZDI1NTE5AAAAIDcERXZe0kI6eIjy
@@ -121,9 +103,9 @@ fW2MNFrwA/N0XZFA==
  ((ssht-open ()) = "k: no passphrase")
  (nil? (bcrypt-hash (zeros 4167) (zeros 64) (zeros 64))))
 
-; --- known_hosts --------------------------------------------------------------------
-; A and B are ed25519 host keys, E an ecdsa one. the two |1| lines are ssh-keygen -H's
-; hashing of host.example -> A and [host.example]:2222 -> B
+; known_hosts
+; A and B ed25519 host keys, E ecdsa; the |1| lines are ssh-keygen -H's for
+; host.example -> A and [host.example]:2222 -> B
 (: ssht-A "AAAAC3NzaC1lZDI1NTE5AAAAIO0TSO+AKyQIW+nLyBH5ShJuGY9aA5HGVvldHbw3RevU"
    ssht-B "AAAAC3NzaC1lZDI1NTE5AAAAIIjzN8j24WQCC+Qs/RdwB9LO3iYAyiLrElD/19WgjBxv"
    ssht-E "AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBNcFYQ2uU1waR/grVojE4yexgKia8zmbjtoLtjWz2EPYJmuAMEJ/K1acW7Lwr6TcxtrksKjMzZ5H8I7oE4IVM1I="
@@ -153,8 +135,8 @@ fW2MNFrwA/N0XZFA==
  ((ssht-kh ("host.example ssh-ed25519 " + ssht-B + "\nhost.example ssh-ed25519 " + ssht-A + "\n") "host.example" ssht-A)
   = ['ok 2 "ssh-ed25519" 0]))
 
-; --- clean -------------------------------------------------------------------------
-; a peer's banner and disconnect text: c0 but tab and newline, del, c1 and malformed utf-8 go
+; clean
+; banner and disconnect text: c0 but tab and newline, del, c1 and malformed utf-8 go
 (test
  ((ssh-clean "d\xe2\x80\x94e") = "d\xe2\x80\x94e")
  ((ssh-clean "a\x1b[31mb\tc\r\nz") = "a[31mb\tc\nz")
@@ -162,10 +144,8 @@ fW2MNFrwA/N0XZFA==
  ((ssh-clean "p\x80q\x9br\x7fs\xffu\xe0\x80\x80v\xed\xa0\x80w\xf0\x9f\x98\x80") = "pqrsuvw\xf0\x9f\x98\x80")
  ((ssh-clean "\xe2\x80") = ""))
 
-; --- verdict ------------------------------------------------------------------------
-; the host key's verdict under each StrictHostKeyChecking. ask (the default) asks about an
-; unknown host and one known under another type: yes adds, no or no terminal refuses.
-; accept-new adds an unknown host unasked, yes refuses it unasked, no skips the check
+; verdict
+; the host key under each StrictHostKeyChecking
 (: ssht-kv (cite 'ssh-cli 'kh-verdict)
    ssht-opts (\ k (: o (tablet 4) (pin o 'shk k, o)))
    ssht-asked (tablet 2)
@@ -194,14 +174,13 @@ fW2MNFrwA/N0XZFA==
  ((ssht-v "accept-new" "new.example" (ssht-ask "no")) = 'add)
  (ssht-pre "No ssh-ed25519 host key is known for new.example" (ssht-v "yes" "new.example" (ssht-ask "yes")))
  ((ssht-n 0) = 7)
- ; no check at all
  ((ssht-v "no" "host.example" (ssht-ask "no")) = 'go)
  ((ssht-v "no" "new.example" (ssht-ask "no")) = 'go)
  ((ssht-n 0) = 7))
 
-; --- strict ---------------------------------------------------------------------------
-; a pipe as the transport, framed by ssh-send and read by ssh-next: under strict kex an
-; ignore ends the read, otherwise it is passed over; a sequence number never wraps
+; strict
+; a pipe as transport: under strict kex an ignore ends the read, otherwise it is passed
+; over; a sequence number never wraps
 (: ssht-m32 ((1 << 32) - 1)
    ssht-ends (\ _ (: p (pipe 0) r (tablet 8) w (tablet 8)
                       (pins r 's (fdopen <p) 'pend "" 'rseq 0 'sseq 0 'busy 0,

@@ -33,10 +33,9 @@
 (level "the station"
   (textures {'wall wall 'floor tiles 'ceiling panels 'door steel})
   (start [0 0 2] 0 0)
-  ; the hall, ten metres across, five high and thirty-two long
+  ; the hall, 38 metres across, five high and 16 long
   (room [-19 0 0] [19 5 16])
-  ; the pilasters, ten a side: each a column 0.6 wide standing 0.3 out from the wall, and
-  ; over it from 3.2 up a buttress whose underside slopes out to 0.9 at the ceiling
+  ; solid blocks standing in from the side walls, mirrored about x 0
   (mirror-x 0
    [(solid (box [-19 0 0] [-11 5 4]))
     (solid (box [-7 0 0] [-3 5 4]))
@@ -47,11 +46,9 @@
   ; the way out north: a door, and a corridor beyond
   ;(room [-1.2 0 32.2] [1.2 2.6 40])
   ;(door [0 0 32.1] 1.2 2.2)
-  ; the light: strips across the ceiling between the buttresses, one failing; a bulb at
-  ; the corridor's end; a sign over the way out
+  ; the light: strips across the ceiling, one failing at the north end; a sign on the
+  ; north wall
   (repeat 5 [2 0 0] [(across (strip-light [0 5 4]))])
-  (stammer (across (strip-light [0 5 22.4])))
-  (strip-light [0 2.6 36])
-  (bulb [0 2.1 39.85] (rgb 1.4 1.1 0.7))
-  (buzz (sign [0 3.2 32] 0.45 "EXIT" (rgb 0.2 1 0.35)))
+  (stammer (across (strip-light [0 5 12])))
+  (buzz (sign [0 3.2 15.9] 0.45 "EXIT" (rgb 0.2 1 0.35)))
   (poster [-4.7 1.2 6.4] 0.7 1.0 ()))

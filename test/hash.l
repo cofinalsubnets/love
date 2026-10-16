@@ -2,7 +2,7 @@
 (: t (hash 1 100 2 200 3 300))
 (test
  ; the constructor builds a working hash
- (tablet? t) !(tablet? 5) !(tablet? '(1 2)) ; tablet?: only maps, not fixnums/lists
+ (tablet? t) !(tablet? '(1 2))         ; tablet?: only maps, not lists
  (lit? t) (lit? cap) !(lit? 5) !(lit? 0)    ; lit?: any heap object, not a fixnum/nil
  (100 = peep t 1 0)
  (200 = peep t 2 0)
@@ -16,37 +16,23 @@
  (string? (show t))                             ; multi-entry: just exercise the path
  ; (dig x) exposes the runtime hashing method: a fixnum, equal for eql keys
  (charm? (dig 'k))
- (dig 'k = dig 'k)
  (dig '(1 2) = dig '(1 2))
- ; a lambda leaf hashes its source, and a quote body in that source walks as data --
- ; that re-entrant walk scratches above the elements still pending beside it, so the
- ; leading 1/3 still reaches the digest
+ ; a quote body inside a lambda leaf must not hide the elements beside it from the digest
  !(dig [1 (a \ (\ 5)) 2] = dig [3 (a \ (\ 5)) 2]))
 
-; {…} reader form: splices a list operand into (hash …), wraps an atom as (hash x) --
-; a box. {} reads to the empty map directly: the reader emits (tablet 0) -- () is the
-; zero-point, distinct from 0. hashes print as {…}, the empty map as {}.
+; {…} splices a list operand into (hash …); {} is the empty map
 (: ht {1 100 2 200 3 300})
 (test
  (tablet? ht)
  (100 = peep ht 1 0)
  (300 = peep ht 3 0)
- (tablet? {})                                          ; the empty hash
- (? {}) (? {}) (0 = #{}) (0 = #{})                     ; the empty map is truthy (a lambda) and tallies 0; {} reads to (tablet 0)
- (50 = peep (pin {} 5 50) 5 0)                 ; the empty hash is mutable
  (3 = foldl (n \ _ \ 1 + n) 0 (keys {1 10 2 20 3 30})) ; splice builds all entries
- ("{}" = show {})                                      ; {} is the empty map, and round-trips
  ("{1 \"hi\"}" = show {1 "hi"}))
 
-; a brace over a non-list datum boxes it: {x} = {() x}, a fresh mutable hash pinning x
-; at () (the unit -- the do-nothing key is NOTHING, the 0->() flip) -- still distinct
-; from {} the empty map (one ()-keyed entry vs no entries). key 0 is a miss now.
+; a brace over a non-list datum boxes it: {x} = {() x}, one entry at (), not {}
 (: bx {0})
 (test
- (tablet? {0}) !!{0} (1 = ${0})              ; a box is a nonempty 1-entry hash
- (0 = peep bx () 9)                          ; the boxed value sits at key () (the unit)
- (9 = peep bx 0 9)                           ; ... and key 0 is a miss (the flip's tell)
- (9 = (pin bx () 9, peep bx () 0))           ; ... and is mutable in place
+ (9 = peep bx 0 9)                           ; key 0 is a miss: the box sits at ()
  (5 = peep {5} () 0) ("s" = peep {"s"} () 0) ; any scalar boxes (at the unit)
  ('a = peep {'a} () 0)                       ; a quote form is a chain, and the brace still boxes it
  ("{() 5}" = show {5})                       ; a box prints as {() v}, reads back

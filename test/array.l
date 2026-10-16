@@ -1,16 +1,4 @@
-; step 5a: typed multi-rank arrays.
-; - (star-tray shape 0) zero-fills; (star-tray shape vals) fills row-major (gem-/twin-/top-tray for r/c/o)
-; - get: fixnum index (rank 1), shape-list index (rank N), oob -> default
-; - rank / tally / shape / tier accessors
-; - elementwise + - * / over arrays + scalar broadcast + numpy broadcasting
-; - mixed element-type promotes to the widest type
-; - < <= > >= = elementwise -> 0/1 bool array
-; - reductions net prod amax amin aall aany; identity on scalars
-; - the apl rule: every numeric word is elementwise with broadcast, = and != too;
-;   a whole question is a reduction; max and min are the binary pair
-; - vector falsiness: a tuple is false iff every element is 0
-; - elementwise transcendentals (sqrt) over an array
-; - print round-trip; non-conforming / non-numeric -> nil
+; typed multi-rank arrays (trays): construction, indexing, broadcast, reductions, printing
 
 (test
  ; --- constructor + accessors ---
@@ -22,10 +10,7 @@
  !(rank 5)                     ; non-tuple -> nil
  !(tier "x")
 
- ; --- only a rank-0 point demotes to its lone scalar star (no rank-0 vec exists,
- ; which is what keeps the float/wide/complex boxes lean). a rank-1 length-1 array
- ; stays an array: the invariant is rank, not count, so the surface is continuous
- ; across every tally rather than an array / scalar / array staircase ---
+ ; --- only rank 0 demotes to a scalar; a rank-1 length-1 array stays an array ---
  (0 = star-tray 0 0)                        ; empty shape, zero-filled -> the fixnum 0
  (gem? (gem-tray 0 0)) (0.0 = gem-tray 0 0) ; -> a boxed 0.0
  (tray? (star-tray '(1) '(5)))              ; rank-1 len-1 -> a one-cell array, not the fixnum 5
@@ -127,9 +112,7 @@
  (aall (gem-tray '(2) '(2.0 3.0) = ((1 / 2) (gem-tray '(2) '(4.0 9.0)))))
  (gem-tray = tier ((1 / 2) (star-tray '(3) 0)))  ; result is a float array
 
- ; --- print as constructor forms ---
- ; rank-1 -> the @(…) sugar (@ reader splices into (tuple …)); rank>=2 ->
- ; (array '(shape) elem …) -- always a surface form, the type re-inferred
+ ; --- print: rank 1 as @(…), rank 2+ as (array '(shape) elem …) ---
  ("@(10 20 30)" = show (star-tray '(3) '(10 20 30)))
  ("(array '(2 2) 1 2 3 4)" = show (star-tray '(2 2) '(1 2 3 4)))
  ("@(1.5 2.5)" = show (gem-tray '(2) '(1.5 2.5)))
@@ -148,12 +131,8 @@
  ("x" = (star-tray '(3) 0 + "x"))       ; a tray is number-band: against a string it degenerates
  !(star-tray '(3) 0))                   ; (sanity) zero array is falsy
 
-; --- empty arrays: the first stone of the apl buildout. a shape-(0) array
-; prints the (array '(shape)) surface form (@ has no empty spelling and @0
-; used to collide with the one-element zero array), broadcast keeps a
-; 0-axis empty (a 1-axis takes the OTHER size including 0 -- max here once
-; filled one element out of an empty operand), and empty reductions answer
-; their monoid units: the floor appears as the values of empty reductions.
+; --- empty arrays: broadcast keeps a 0-axis empty (a 1-axis takes the other size, 0
+; included), and empty reductions answer their monoid units ---
 (star-tray '(0) 0 @ e
  (test
   ("@()" = (show e)) ('(0) = (shape e)) (1 = (rank e)) (0 = #e) ; empty rank-1 prints @()
@@ -169,8 +148,7 @@
   (@() @ rt                                    ; the printed form (@()) reads back
    (0 = #rt && '(0) = shape rt && star-tray = tier rt))))
 
-; --- the apl rule: `=` and `!=` are masks, the whole question a reduction; max and min
-; are binary and elementwise, the operand itself; floor and int take a float tray to an int tray ---
+; --- the apl rule: `=` and `!=` are masks, a whole question a reduction; max/min binary ---
 (test
  (aall (@(1 0 1) = (@(1 2 3) = @(1 5 3))))
  (aall (@(0 1 0) = (@(1 2 3) != @(1 5 3))))
@@ -192,15 +170,13 @@
  (star-tray = tier (floor @(1.5 -2.5))) (star-tray = tier (floor @(1 2)))   ; ..to an int tray, as the scalar
  (aall (@(1 -2) = int @(1.5 -2.5))) (star-tray = tier (int @(1.5 -2.5)))   ; int truncates the same way
  (aall (@(1 2) = int @(1 2)))
- ; the gather: peep by a tray of indices, the answer in the indices' shape and the tray's
- ; kind, a miss the default
+ ; gather: peep by an index tray, in the indices' shape and the tray's kind
  (aall (@(30 10 -1) = peep @(10 20 30) @(2 0 5) -1))
  (aall (@(1.5 0.5) = peep @(0.5 1.5) @(1 0) 0)) (gem-tray = tier (peep @(0.5 1.5) @(1 0) 0))
  ('(2 2) = shape (peep @(7 8 9) (star-tray '(2 2) '(0 1 2 0)) 0))
  (star-tray = tier (peep @(7 8 9) @(1) 0.5))
  ('x = peep @(1 2) @(0) 'x) ('x = peep @(1 2) @(0.0) 'x)
- ; the scatter: pin by a tray of indices, a fresh tray of the same kind with the values
- ; stored in order -- a later index wins -- a number filling, a miss skipped
+ ; scatter: pin by an index tray into a fresh tray; a later index wins, a miss skipped
  (aall (@(10 9 30) = pin @(10 20 30) @(1) @(9)))
  (aall (@(1 7 7) = pin @(1 2 3) @(2 1) 7))
  (aall (@(0.0 2.5) = pin @(0.0 1.0) @(1) @(2.5))) (gem-tray = tier (pin @(0.0 1.0) @(1) 2))
@@ -209,7 +185,7 @@
  (star-tray = tier (pin @(1 2) @(0) @(3.5))) (aall (@(3 2) = pin @(1 2) @(0) @(3.5)))
  (aall (@(1 2) = pin @(1 2) @(0 1) @(5)))                    ; values the wrong length: untouched
  (: a @(1 2) _ (pin a @(0) 9) (aall (a = @(1 2))))           ; the tray pinned is left as it was
- ; where: iota of a mask, the flat indices it holds at -- the index tray of both
+ ; where: iota of a mask, the flat indices it holds at
  (aall (@(1 2 4) = iota @(0 1 1 0 3))) (aall (@(0 2) = iota @(0.5 0.0 -1.0)))
  (0 = #(iota @(0 0))) (star-tray = tier (iota (@(1.0 2.0) < 1.5)))
  (aall (@(1 3) = iota (star-tray '(2 2) '(0 1 0 1))))

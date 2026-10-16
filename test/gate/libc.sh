@@ -1,31 +1,10 @@
 #!/bin/sh
-# test/gate/libc.sh -- the LIBC differential: our own C library against the
-# system's, function by function, with gcc+glibc as the second opinion.
-#
-# each test/libc/*.c is built twice -- once by mooncc, which pulls
-# src/apps/moon/lib/moonlibc/ by need, and once by gcc against glibc -- run, and the
-# two OUTPUTS compared byte for byte. gcc is never trusted to be right, only to
-# be a second opinion; where the standard leaves a choice (the magnitude of a
-# comparison, an address, strerror's wording) the programs report the part that
-# IS fixed, so a legitimate difference never fails the gate. see test/libc/say.h.
-#
-# it compares OUTPUT, not the exit code the mooncc battery compares. an exit
-# code is eight bits and says only THAT something drifted; a diff of the output
-# names the function and the case. that is the whole reason this is its own gate
-# and not more programs in test/cc.
-#
-# WHY IT EXISTS: the tree carries two libcs, and they drifted --
-# moonlibc's strtol wrapped on overflow where glibc saturates, so one source text
-# read as two different numbers depending on which binary carried it. it went
-# unnoticed because nothing gated the pure floor against anything. this is that
-# gate, and it is rung 0 of for a reason: it is worth having whether
-# or not the two libcs are ever merged.
-#
-# make owns the dependency graph; this owns the procedure.
-# NOT set -e: the checks report their own failures with context.
-#
+# test/gate/libc.sh -- moonlibc against the system libc: each test/libc/*.c built by mooncc
+# and by gcc, run, the outputs equal byte for byte. where the standard leaves a choice the
+# programs print only the fixed part. then the headers' completeness, and REG_GREP vs gnu grep
 # usage: libc.sh OUTDIR LOVE
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 
 ho=$1
@@ -33,12 +12,10 @@ m=$2
 d=$ho/libc
 mkdir -p "$d"
 
-fail() { echo "FAIL test_libc: $*" >&2; exit 1; }
-# the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
+name=test_libc
 
 arch=$(uname -m)
-# uname's spelling, not the tree's `x64` -- the two part company here
+# uname's spelling, not the tree's x64
 if [ "$arch" != x86_64 ]; then
   gate_skip "test_libc: x86-64 only (mooncc emits x64), skipped on $arch"
 fi
@@ -57,8 +34,7 @@ for f in test/libc/*.c; do
   "$d/$b" > "$d/$b.ours" 2>&1
   ra=$?
 
-  # -w: the battery is about the ANSWERS, and gcc warns about deliberate edges
-  # (a snprintf that is meant to truncate, a memset of length 0)
+  # -w: gcc warns about deliberate edges (a truncating snprintf, a zero-length memset)
   $cc_g -O0 -w -Itest/libc -o "$d/$b.g" "$f" 2> "$d/$b.gbuild" \
     || { cat "$d/$b.gbuild" >&2; fail "$b: the system cc could not build it"; }
   "$d/$b.g" > "$d/$b.theirs" 2>&1
@@ -78,26 +54,12 @@ done
 [ $n -gt 0 ] || fail "no programs found in test/libc/"
 
 # ---------------------------------------------------------------------------
-# phase 2: the headers must not PROMISE what the library cannot deliver.
-#
-# every function src/apps/moon/include/{stdio,stdlib,string,ctype}.h declares is
-# referenced by a generated program; a name with no definition anywhere fails
-# the LINK and the gate says which. generated rather than listed, so it cannot
-# rot as the headers grow -- adding a declaration and forgetting the body is
-# exactly the failure this catches.
-#
-# it is a real failure mode, not a hypothetical: twelve names were declared with
-# no body when this was first run (putchar puts fgetc getchar scanf isblank
-# mempcpy rawmemchr reallocarray bsearch strtoll getprogname), so a program
-# calling any of them built happily under gcc and died at the link under
-# CC=mooncc. gnulib's progname module reaches getprogname exactly that way.
+# phase 2: every function the headers declare is referenced by a generated program,
+# so a declaration without a body fails the link
 hdr=src/apps/moon/include
 gen=$d/decls.c
-# a declaration is a line STARTING with a lowercase type word and naming
-# `ident(` -- which skips the #defines, the struct bodies and the extern data.
-# the NAME is the identifier just before the first paren: cut the line there,
-# then take what follows the last space or star. (matching the name in one
-# regex is ambiguous -- the capture can slide onto a parameter.)
+# a declaration starts with a lowercase type word and names `ident(`; the name is what
+# follows the last space or star before the first paren
 names=$(grep -hE '^[a-z][a-zA-Z_0-9 ]*[ *][a-z_][a-z_0-9]*\(' \
           "$hdr/stdio.h" "$hdr/stdlib.h" "$hdr/string.h" "$hdr/ctype.h" "$hdr/signal.h" \
         | sed -E 's/\(.*//' | sed -E 's/.*[ *]//' | sort -u)
@@ -122,8 +84,7 @@ moonrun -o "$d/decls" "$gen" > "$d/decls.build" 2>&1 || {
 }
 
 # ---------------------------------------------------------------------------
-# phase 3: REG_GREP, gnu grep's dialect, held to gnu grep itself: each seeded pattern's
-# matching lines, numbered, against grep -n's over the same lines. no gnu grep, no phase.
+# phase 3: REG_GREP's matching lines per seeded pattern, against gnu grep -n's. no gnu grep, no phase
 gg=
 for x in /usr/bin/grep /bin/grep; do "$x" --version 2>/dev/null | grep -q GNU && { gg=$x; break; }; done
 ng=0

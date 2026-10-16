@@ -62,13 +62,6 @@ extern "C" {
 #endif
 #endif
 
-/** Contains the state of an encoder. One encoder state is needed
-    for each stream. It is initialised once at the beginning of the
-    stream. Do *not* re-initialise the state for every frame.
-   @brief Encoder state
- */
-typedef struct OpusCustomEncoder OpusCustomEncoder;
-
 /** State of the decoder. One decoder state is needed for each stream.
     It is initialised once at the beginning of the stream. Do *not*
     re-initialise the state for every frame */
@@ -96,72 +89,6 @@ OPUS_CUSTOM_EXPORT OpusCustomMode *opus_custom_mode_create(opus_int32 Fs, int fr
  @param mode Mode to be destroyed
 */
 OPUS_CUSTOM_EXPORT void opus_custom_mode_destroy(OpusCustomMode *mode);
-
-/* Encoder */
-
-OPUS_CUSTOM_EXPORT_STATIC int opus_custom_encoder_get_size(const OpusCustomMode *mode, int channels);
-
-/** Creates a new encoder state. Each stream needs its own encoder
-    state (can't be shared across simultaneous streams).
- @param mode Contains all the information about the characteristics of
- *  the stream (must be the same characteristics as used for the
- *  decoder)
- @param channels Number of channels
- @param error Returns an error code
- @return Newly created encoder state.
-*/
-OPUS_CUSTOM_EXPORT OpusCustomEncoder *opus_custom_encoder_create(const OpusCustomMode *mode, int channels, int *error);
-
-OPUS_CUSTOM_EXPORT_STATIC int opus_custom_encoder_init(OpusCustomEncoder *st, const OpusCustomMode *mode, int channels);
-
-/** Destroys a an encoder state.
- @param st Encoder state to be destroyed
- */
-OPUS_CUSTOM_EXPORT void opus_custom_encoder_destroy(OpusCustomEncoder *st);
-
-/** Encodes a frame of audio.
- @param st Encoder state
- @param pcm PCM audio in float format, with a normal range of +/-1.0.
- *          Samples with a range beyond +/-1.0 are supported but will
- *          be clipped by decoders using the integer API and should
- *          only be used if it is known that the far end supports
- *          extended dynmaic range. There must be exactly
- *          frame_size samples per channel.
- @param compressed The compressed data is written here. This may not alias pcm or
- *                 optional_synthesis.
- @param nbCompressedBytes Maximum number of bytes to use for compressing the frame
- *          (can change from one frame to another)
- @return Number of bytes written to "compressed". Will be the same as
- *       "nbCompressedBytes" unless the stream is VBR and will never be larger.
- *       If negative, an error has occurred (see error codes). It is IMPORTANT that
- *       the length returned be somehow transmitted to the decoder. Otherwise, no
- *       decoding is possible.
-*/
-OPUS_CUSTOM_EXPORT int opus_custom_encode_float(OpusCustomEncoder *st, const float *pcm, int frame_size, unsigned char *compressed, int maxCompressedBytes);
-
-/** Encodes a frame of audio.
- @param st Encoder state
- @param pcm PCM audio in signed 16-bit format (native endian). There must be
- *          exactly frame_size samples per channel.
- @param compressed The compressed data is written here. This may not alias pcm or
- *                         optional_synthesis.
- @param nbCompressedBytes Maximum number of bytes to use for compressing the frame
- *                        (can change from one frame to another)
- @return Number of bytes written to "compressed". Will be the same as
- *       "nbCompressedBytes" unless the stream is VBR and will never be larger.
- *       If negative, an error has occurred (see error codes). It is IMPORTANT that
- *       the length returned be somehow transmitted to the decoder. Otherwise, no
- *       decoding is possible.
- */
-OPUS_CUSTOM_EXPORT int opus_custom_encode(OpusCustomEncoder *st, const opus_int16 *pcm, int frame_size, unsigned char *compressed, int maxCompressedBytes);
-
-/** Query and set encoder parameters
- @param st Encoder state
- @param request Parameter to change or query
- @param value Pointer to a 32-bit int value
- @return Error code
-*/
-OPUS_CUSTOM_EXPORT int opus_custom_encoder_ctl(OpusCustomEncoder * restrict st, int request, ...);
 
 /* Decoder */
 

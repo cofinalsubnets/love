@@ -1,47 +1,42 @@
-; test/host/pty.l -- a smoke test for the pty nifs (src/love/posix.c). gather does not block: a
-; child can EOF its master just before it is a zombie, so a poll then reads "still running" --
-; hence the pair; waitfor blocks. exited is told from running by two?, never by net: the status
-; pair (0) nets to nothing. not in the corpus: it does not survive love0's second run.
+; the pty nifs (src/love/posix.c). a master can EOF before its child is a zombie, so waitfor polls
+; gather; exited is told by two?, never net: (0) nets to nothing. love0 can't run it twice, so no corpus
 ; run: cat test/00-init.l test/host/pty.l | out/love
 (: (waitfor pid)
  (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid))))
 
-; --- (tether argv): spawn `echo hello` on a pty, read its output off the master ---
 (: r (tether ["echo" "hello"])
  _ (test
-    (two? r)            ; (pid . master-port)
-    (charm? <r)        ; pid is a fixnum
-    (0 < <r)         ; ... a real one
-    (lit? >r))       ; the master is a heap port
- out (slurp >r)      ; drain the master to EOF (echo exits -> slave closes)
+    (two? r)
+    (charm? <r)
+    (0 < <r)
+    (lit? >r))
+ out (slurp >r)
  _ (test
-    (0 < #out))    ; got bytes ("hello" + the pty's \n -> \r\n)
- st (waitfor <r)     ; gather the child
- _ (test
-    (two? st)           ; reaped: a pair, not () "still running"
-    (0 = <st)      ; echo exited 0 -- the pair keeps 0 truthy/present
-    (st = [0])))        ; ... a real ()-tailed list (not the charm-0 dotted fossil)
-
-; --- (still pid sig) + signal-death gather: cat waits forever; sigkill it ---
-(: r (tether ["cat"])
- _ (test (two? r))
- _ (still <r 9)       ; sigkill -- a positive pid, the process (not the group)
- _ (slurp >r)        ; drain to EOF (the killed cat's slave closes)
+    (0 < #out))
  st (waitfor <r)
  _ (test
-    (two? st)           ; reaped
-    (137 = <st)))    ; 128 + 9: the signal-death encoding
+    (two? st)
+    (0 = <st)
+    (st = [0])))
 
-; --- (settty port r c): ok on a live master, an errno nom on a non-port ---
+; signal death
+(: r (tether ["cat"])
+ _ (test (two? r))
+ _ (still <r 9)   ; a positive pid: the process, not the group
+ _ (slurp >r)
+ st (waitfor <r)
+ _ (test
+    (two? st)
+    (137 = <st)))    ; 128 + 9
+
 (tether ["cat"] @ r
- (test !(settty >r 24 80)          ; () = ok
-       ('ebadf = settty 5 24 80), ; a bare fixnum (not a port)
+ (test !(settty >r 24 80)
+       ('ebadf = settty 5 24 80),
   still <r 9,
   slurp >r,
   waitfor <r))
 
-; --- (ttypg port): the group that owns the terminal -- a tethered child leads its own. the
-; echo back first, so the child is surely past taking the pty as its terminal ---
+; ttypg: a tethered child leads its own group; the echo back first, so it has taken the pty
 (tether ["cat"] @ r
  (put >r 120, put >r 10, flush >r, see >r,
   test ((<r) = ttypg >r)
@@ -50,58 +45,37 @@
   still <r 9,
   waitfor <r))
 
-; --- (still pid sig) on a dead pid -> its errno nom, never () ---
-(: dead <(tether ["true"])       ; exits immediately
- (waitfor dead,                        ; gather it so the pid is truly gone (not a zombie)
-  test ('esrch = still dead 0)))  ; sig 0 probes existence
+(: dead <(tether ["true"])
+ (waitfor dead,   ; reaped, not a zombie
+  test ('esrch = still dead 0)))
 
-; --- bidirectional pty I/O: write to the master, read the child's echo back ---
-; the foundation of bao's wrapper -- a host process and bao talk over the master
-; port. cat echoes its input, and the pty's own line discipline echoes the typed
-; bytes too, so the literal input comes straight back; read it byte by byte (a
-; bounded read, not slurp -- cat never EOFs). proves the write and read lanes of
-; the master port in one round trip; the full stdin<->stdout pump (bao's `wrap`)
-; rides real tty fds, so it is verified manually, like nc's `make nettest`.
+; a round trip over the master, read byte by byte: cat never EOFs
 (: r (tether ["cat"])
  m >r
- _ (put m 110, put m 101, put m 107, put m 111, put m 10)              ; "neko\n"
+ _ (put m 110, put m 101, put m 107, put m 111, put m 10)
  _ (flush m)
- a (see m) b (see m) c (see m) d (see m)    ; the first 4 bytes back off the master
- _ (test (a = 110) (b = 101) (c = 107) (d = 111)) ; n e k o -- the round trip over the pty
+ a (see m) b (see m) c (see m) d (see m)
+ _ (test (a = 110) (b = 101) (c = 107) (d = 111))
  _ (still <r 9)
  _ (waitfor <r))
 
-; --- (ptyecho port on): silence the pty's input echo so bao's edraw owns it ---
-; with echo off, a child whose output differs from its input shows only the output:
-; `tr a-z A-Z` turns "hi" into "hi", so the lowercase line-discipline echo is gone.
-; (this is what stops wrap doubling each edited line.) tr's stdout is the slave tty,
-; so it line-buffers and flushes "hi\n" on the newline.
+; ptyecho off: only tr's uppercase comes back, not the line discipline's echo
 (: r (tether ["tr" "a-z" "A-Z"])
  m >r
- _ (test !(ptyecho m 0))                        ; echo off -> ok
- _ (put m 104, put m 105, put m 10)        ; "hi\n"
+ _ (test !(ptyecho m 0))
+ _ (put m 104, put m 105, put m 10)
  _ (flush m)
- a (see m) b (see m)                          ; first bytes back are tr's output
- _ (test (a = 72) (b = 73))                     ; "hi" -- the "hi" echo is suppressed
+ a (see m) b (see m)
+ _ (test (a = 72) (b = 73))
  _ (still <r 9)
  _ (waitfor <r))
-(: _ (test ('ebadf = ptyecho 5 0)))           ; non-port
+(: _ (test ('ebadf = ptyecho 5 0)))
 
 (test_fin ())
 (puts "pty: ok\n")
 
-; --- the two-task editor + pump topology ---
-; bao's rlwrap upgrade was built and reverted because this hung after one
-; keystroke: `feedlines` (edraw on one port, rendering to out) in one task while
-; `pump` reads a different port in a second. the diagnosis was defect 1 -- a task
-; parked with the byte it needed already sitting in ungetc_buf. that is fixed
-; (love.c:3997 consults the pushback AND the buffered run before the fd), and
-; today's `besc` does not push back at all, it discards. re-tested green
-; 2026-07-31; this pins it. no commit ever carried `feedlines`: the
-; reconstruction below is the only copy of it there is.
-; scriptable with two ptys: one plays the keyboard (echo OFF so escape bytes
-; arrive raw -- with echo on, the line discipline renders ESC as `^[` and the
-; arrow never decodes), one is the child.
+; edraw in one task, a pump on another port in a second: a parked task must see its buffered byte
+; the keyboard pty has echo off, else ESC renders as `^[` and the arrow never decodes
 (: edraw (cite 'cli 'edraw)
    (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
    (feedlines ip m)
@@ -111,19 +85,19 @@
            put m 10,
            flush m,
            feedlines ip m)))
-   rk (tether ["cat"]) mk >rk                   ; the keyboard: what we write comes back
-   rc (tether ["tr" "a-z" "A-Z"]) mc >rc        ; the child: output differs from input
+   rk (tether ["cat"]) mk >rk
+   rc (tether ["tr" "a-z" "A-Z"]) mc >rc
    _ (ptyecho mk 0, ptyecho mc 0)
    sink (jug 0)
-   a (twirl (_ \ feedlines mk mc) 0)             ; task A: reads mk, renders to out
-   b (twirl (_ \ pump mc sink) 0)                ; task B: parks on its own fd
-   _ (each [97 98 27 91 68 88 10] (put mk))    ; "ab", left, "X", Enter -> "aXb"
+   a (twirl (_ \ feedlines mk mc) 0)
+   b (twirl (_ \ pump mc sink) 0)
+   _ (each [97 98 27 91 68 88 10] (put mk))   ; ab, left, X, enter
    _ (flush mk)
    _ (rest 300)
    got (slurp sink)
    (still <rk 9, still <rc 9,
     (landed? a ? (catch a) (freeze a)),
     (landed? b ? (catch b) (freeze b)),
-    test (string? got)                    ; slurp of a jug is TEXT -- two? is false for a string
-         (got = "AXB\r\n")))              ; the whole chain: left decoded, X inserted before b, tr answered
+    test (string? got)
+         (got = "AXB\r\n")))
 

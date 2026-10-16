@@ -1,7 +1,5 @@
-/* push of an immediate and of a label's address: the kernel's iret_to_self pushes `$1f`,
- * the address it returns to. the pushed address matches a rip-relative lea of the same
- * label, and a pushed constant pops back whole, sign-extended. the asm is x64's; the label's
- * push wants a non-pie link (a sign-extended dword), which ours always is. held to gcc. */
+/* push of an immediate and of a label's address (`$1f`): it matches a rip-relative lea, and a
+ * constant pops back sign-extended. needs a non-pie link. x64 asm. held to gcc. */
 
 #if defined(__x86_64__) && !defined(__PIE__)
 static int same(void) {

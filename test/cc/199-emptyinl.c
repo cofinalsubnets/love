@@ -1,7 +1,5 @@
-/* a call to a function whose body is empty, alone as an if's arm: the inliner lays only its
- * parameters, which must stay a block (an arm takes no declaration), and a parameter that
- * propagates away leaves no empty declaration behind. the kernel's disabled tracepoint and
- * userfaultfd stubs are the shape. arguments still evaluate, side effects and all. held to gcc. */
+/* an empty-bodied callee alone as an if's arm: the inlined params stay a block, a propagated
+ * param leaves no empty declaration, and arguments still evaluate. held to gcc. */
 
 struct s { int a; long b; };
 

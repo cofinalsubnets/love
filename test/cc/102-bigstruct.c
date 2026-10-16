@@ -1,15 +1,6 @@
-/* SysV MEMORY-class aggregates (x64): a struct PAST 16 bytes passes wholly
- * on the stack and returns through a hidden pointer. musl's fopencookie takes
- * a 32-byte cookie_io_functions_t by value; the return half completes the
- * pairing (the v6-M base ABI already did it past 4 bytes -- one gate now).
- *
- * covered: a MEMORY param behind register args, one that overflows LATE
- * (6 gp args ahead of it, so it lands deep in the block), several in one
- * call (the block's slot arithmetic), a MEMORY return, a return fed straight
- * into another call, a MEMORY return through a function pointer -- and one
- * answered straight from such a call (gnulib's gl_oset_iterator), and the by-value COPY semantics (a callee mutating its
- * parameter must not touch the caller's object). freestanding, exit-code
- * only -- the cross-toolchain ABI check lives in the moon-* package gates. */
+/* SysV memory-class aggregates (x64, past 16 bytes): passed on the stack, returned
+ * through a hidden pointer. behind register args, overflowing late, several per
+ * call, returned via a fn pointer and fed to another call, by-value copy semantics. */
 
 typedef int (readfn)(void *, char *, unsigned long);
 typedef struct { readfn *read; readfn *write; void *seek; void *close; } iofn_t;

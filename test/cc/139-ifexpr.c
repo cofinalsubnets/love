@@ -1,18 +1,6 @@
-/* #if arithmetic is intmax_t/uintmax_t (C11 6.10.1) -- so a value is a 64-bit bit
- * pattern PLUS a signedness, and love's exact unbounded integers give neither for
- * free. Three separate wrongs lived here:
- *
- *   1. TRUTH was read as `0 <` rather than `!= 0`, so `#if -1` was FALSE and so was
- *      `#if -1 && 1`. Any header branching on a negative constant took the wrong arm,
- *      in silence. This is the one that could cost a right answer.
- *   2. No signedness, so `1UL - 2` answered -1 where C wraps it to a huge unsigned,
- *      and `-1 < 1U` read true where C reads false.
- *   3. `&`, `|`, `^` answered nothing on a big -- love's bit ops stop at the fixnum,
- *      and every pattern past 2^62 is a big. (`<<`/`>>` already routed around it.)
- *
- * Each check drives a runtime value rather than an #error, so a disagreement shows up
- * as this program's exit code and the battery names the number.
- */
+/* #if arithmetic is intmax_t/uintmax_t (C11 6.10.1): truth is != 0 (#if -1 holds),
+ * unsigned wraps (1UL - 2, -1 < 1U), & | ^ past 2^62. checks drive runtime values,
+ * so a miss shows as the exit code. */
 
 static int n;
 

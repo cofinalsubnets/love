@@ -19,16 +19,14 @@ pipe "tr -d"     'hello world
 '                tr -d aeiou
 pipe "tr -s"     'aa  bb   cc
 '                tr -s ' '
-# -c reads SET1 as its COMPLEMENT. an unknown dash word used to be read as a set, so
-# `tr -c a-z .` translated the literal two-charm set "-c" and answered in silence.
+# -c reads SET1 as its complement; an unknown dash word is no set
 pipe "tr -c"     'hi there 42
 '                tr -c 'a-z' .
 pipe "tr -cd"    'hi there 42
 '                tr -cd 'a-z\n'
 pipe "tr -cs"    'one two  three
 '                tr -cs '[:alnum:]' '\n'
-# -ds deletes SET1 and then squeezes SET2 in what is left; -d took no -s and answered
-# the delete alone. a SET2 beside a bare -d, or none beside -ds, is GNU's refusal (1)
+# -ds deletes SET1 then squeezes SET2; SET2 beside a bare -d, or none beside -ds, is refused (1)
 pipe "tr -ds"    'aabbccaab
 '                tr -ds a b
 pipe "tr -cds"   'aabbccaab
@@ -38,8 +36,7 @@ for c in "-d a b" "-ds a"; do
   echo ab | korerun tr $c > /dev/null 2>&1; r=$?
   [ $r -eq 1 ] || fail "kore tr $c must refuse with 1 (got $r)"
 done
-# the classes past the three that were spelled: a [:name:] uset does not know stays
-# LITERAL, so `tr -d [:space:]` quietly deleted a, c, e, p, s and the colon instead
+# an unknown [:name:] stays literal
 for c in space alpha alnum punct blank xdigit cntrl print graph; do
   pipe "tr -d [:$c:]" 'a b,c	1F!
 '                     tr -d "[:$c:]"
@@ -63,8 +60,7 @@ de
   || fail "kore tr: sets are characters, and a stray byte passes as itself"
 [ "$(printf 'a日\xffb\n' | korerun tr -cd a-z)" = "ab" ] \
   || fail "kore tr -c: the complement takes a whole character, and a stray byte"
-# cut's --complement, --output-delimiter (between fields, and between -c/-b's runs), -z,
-# -n, --only-delimited and the long names
+# cut --complement, --output-delimiter (between fields and -c/-b runs), -z, -n, -s, long names
 C=$ho/.cutf; printf 'a:b:c:d\ne:f:g:h\nnodelim\n' > "$C"; printf 'a:b\0c:d\0' > "$C.z"
 for c in "-d: -f2 --complement" "-d: -f1,3 --output-delimiter=-" "-d: -f2- --complement --output-delimiter=::" "-c2-3 --complement" \
          "-c1,3-4 --output-delimiter=." "-b1-2,4 --output-delimiter=," "--delimiter=: --fields=2" "--characters=1-2" "--bytes=3" \
@@ -79,8 +75,7 @@ for c in "-t abc xy" "abc xy" "-t a-z A-C" "-ts ab xy"; do
   # shellcheck disable=SC2086
   printf 'aabbccdd\n' | tr $c > "$g"; printf 'aabbccdd\n' | korerun tr $c > "$o"; same "tr $c"
 done
-# nl's styles, formats, width, separator, start and step, against GNU over blank and
-# blank-looking lines
+# nl's styles, formats, width, separator, start and step, over blank and blank-looking lines
 printf 'one\n\ntwo\n  \nthree\n' > "$ho/.nli"
 for c in "-ba" "-bn" "-n ln" "-n rz -w 4" "-w 3 -s ::" "-v 5 -i 2" "-ba -v 0 -i 10 -n rz"; do
   # shellcheck disable=SC2086

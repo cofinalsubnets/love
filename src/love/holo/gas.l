@@ -908,6 +908,29 @@
                             (all (j \ rs j 0 = (rs 0 0 + j) % 32 && rs j 3 = rs 0 3) ^#rs) [(rs 0 0) #rs (rs 0 1) (rs 0 2)]
                             ()))))
                 _ ())
+   ;; scalar floating point on h s d registers, as llvm-mc lays it: the type at bit 22 (s 0,
+   ;; d 1, h 3), m << 16 | n << 5 | d; fcvt names its two types, fmov to or from a gp register
+   ;; takes sf at bit 31 from an x
+   ga-fty {115 0 100 1 104 3}
+   ga-f1 {'fmov 0x1E204000 'fabs 0x1E20C000 'fneg 0x1E214000 'fsqrt 0x1E21C000}
+   ga-f2 {'fadd 0x1E202800 'fsub 0x1E203800 'fmul 0x1E200800 'fdiv 0x1E201800 'fmax 0x1E204800 'fmin 0x1E205800}
+   (ga-fs o) (o @ ('sym s) (: t (show s) ty (peep ga-fty (t 0) ()) n (ga-fr o (t 0)) (charm? ty && charm? n ? [ty n] ())) _ ())
+   (ga-fp? m os) ((m = 'fcvt || charm? (peep ga-f1 m ()) || charm? (peep ga-f2 m ())) && any (o \ two? (ga-fs o)) os)
+   (ga-fp m os)
+    (: fs (map ga-fs os) k #os
+       (gw o) (o @ ('reg r w) (r != 'sp ? [(ga-hw r) w]) _ ())
+       (same? l) (all (f \ two? f && <f = <<l) l)
+       (? (m = 'fcvt && k = 2 && all two? fs && <<fs != <(fs 1))
+           (ga-raw (0x1E224000 | <(fs 1) << 22 | <<fs << 15 | <>(fs 1) << 5 | <>(fs 0)))
+          (m = 'fmov && k = 2 && two? (fs 0) && two? (gw (os 1)))
+           (: g (gw (os 1)) (ga-raw (0x1E270000 | (<>g = 8 ? 0x80000000 0) | <<fs << 22 | <g << 5 | <>(fs 0))))
+          (m = 'fmov && k = 2 && two? (fs 1) && two? (gw (os 0)))
+           (: g (gw (os 0)) (ga-raw (0x1E260000 | (<>g = 8 ? 0x80000000 0) | <(fs 1) << 22 | <>(fs 1) << 5 | <g)))
+          (charm? (peep ga-f1 m ()) && k = 2 && same? fs)
+           (ga-raw (ga-f1 m | <<fs << 22 | <>(fs 1) << 5 | <>(fs 0)))
+          (charm? (peep ga-f2 m ()) && k = 3 && same? fs)
+           (ga-raw (ga-f2 m | <<fs << 22 | <>(fs 2) << 16 | <>(fs 1) << 5 | <>(fs 0)))
+          (scare 'gas-a64-operand [m os])))
    (ga-vec? m os) (!(two? (peep ga-simd m ())) &&
                    (any (o \ two? (ga-vt o) || (o @ ('vel _ _) 1 ('vlist _) 1 _ 0)) os
                     || (elem m '(add sub) && #os = 3 && all (o \ charm? (ga-fr o 100)) os)
@@ -1039,6 +1062,7 @@
    (ga-ins m os)
     (#os @ k
        (? (charm? (peep ga-movw m ())) (ga-movw-ins m os)
+          (ga-fp? m os) (ga-fp m os)
           (ga-vec? m os) (ga-neon m os)
           ; a literal load: the word at a label, pc-relative (gas-top's pools land here too)
           (elem m '(ldr ldrsw) && k = 2 && ((os 1) @ ('sym _) 1 ('symk _ _) 1 _ 0) && ((os 0) @ ('reg r _) (r != 'sp) _ 0))

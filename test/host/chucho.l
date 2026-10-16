@@ -1,8 +1,4 @@
-; test/host/chucho.l -- the mail reader, headless: mime's decodings, the two mailbox kinds and
-; their round trips, smtp's wire form, imap's urls and responses, and chucho's steps -- the
-; threads, the index and pager frames, the keys, the drafts a reply and a forward start from,
-; and a message built and handed to a sendmail. the tty runner and live smtp and imap servers
-; stay live probes.
+; test/host/chucho.l -- the mail reader, headless: mime, mailboxes, smtp, imap and chucho's steps
 ; run: cat test/00-init.l test/host/chucho.l | out/love
 
 (borrow 'posix)
@@ -25,7 +21,7 @@
    _ (cht-rm R)
    _ (mkdir R 493)
 
-   ; --- mime: the head, encoded words, the transfer encodings, charsets ----------------------
+   ; mime: the head, encoded words, the transfer encodings, charsets
    m1 ("From: =?utf-8?Q?Ren=C3=A9e?= <renee@x.org>\r\nTo: a@b.c, \"Doe, J\" <j@d.e>\r\n"
        + "Subject: =?iso-8859-1?q?caf=E9?= =?utf-8?B?IOKcqA==?=\r\n folded\r\n"
        + "Date: Thu, 30 Sep 2026 20:22:55 -0400\r\n"
@@ -56,7 +52,7 @@
    _ (mime-ctype "text/plain; charset=\"utf-8\"; name*=utf-8''caf%C3%A9.txt" @ [t pm]
         (test ("text/plain" = t) ("utf-8" = pm "charset") ("café.txt" = pm "name")))
 
-   ; --- a maildir: written, read in date order, its flags in the names, synced ---------------
+   ; a maildir: written, read in date order, its flags in the names, synced
    md (R + "/md")
    ma ("From: Ann <ann@x.org>\nTo: me@here.org\nSubject: lunch?\nMessage-ID: <a1@x>\n"
        + "Date: Mon, 28 Sep 2026 10:00:00 +0000\n\nshall we?\nFrom the start\n")
@@ -81,7 +77,7 @@
            (["S" "FS" "RS"] = map (m \ m 'flags) (b2 'msgs))
            !(any (m \ !(has? (m 'file) "/cur/")) (b2 'msgs)))  ; synced, the new are moved to cur
 
-   ; --- an mbox: From lines quoted and unquoted, the flags in Status, rewritten whole --------
+   ; an mbox: From lines quoted and unquoted, the flags in Status, rewritten whole
    mx (R + "/mbox")
    _ (test (1 = mb-append mx ma "") (1 = mb-append mx mb "S") ('mbox = mb-kind mx))
    x1 (mb-open mx)
@@ -97,13 +93,13 @@
    _ (pin <(x2 'msgs) 'del 1, mb-append mx md2 "")
    _ (test (string? (mb-sync x2)) (2 = #(mb-open mx 'msgs)))
 
-   ; --- smtp: the wire and the url ------------------------------------------------------------
+   ; smtp: the wire and the url
    _ (test ("..a\r\nb\r\n" = smtp-wire ".a\nb\n") ("x\r\n" = smtp-wire "x")
            ([1 "mail.x.org" 465] = smtp-url "smtps://me@mail.x.org")
            ([0 "h" 2525] = smtp-url "smtp://h:2525") ([0 "h" 587] = smtp-url "smtp://h/")
            !(smtp-url "imap://h"))
 
-   ; --- imap: the url, and a response with a literal in it read as a tree ---------------------
+   ; imap: the url, and a response with a literal in it read as a tree
    _ (test ([1 "me@x.org" "mail.x.org" 993 "Archive"] = imap-url "imaps://me%40x.org@mail.x.org/Archive")
            ([0 "" "h" 143 "INBOX"] = imap-url "imap://h") !(imap-url "smtp://h")
            ('imap = mb-kind "imaps://h/INBOX") ("\"a\\\\b\\\"\"" = imap-quote "a\\b\""))
@@ -111,7 +107,7 @@
             = imap-parse ["* 3 FETCH (UID 5 FLAGS (\\Seen \\Answered) BODY[HEADER]" ["Subject: x\r\n\r\n"] ")"])
            (["*" "OK" "[UIDVALIDITY 7]" "quo\"ted" ()] = imap-parse ["* OK [UIDVALIDITY 7] \"quo\\\"ted\" NIL"]))
 
-   ; --- chucho: the threads, and the index -----------------------------------------------------
+   ; chucho: the threads, and the index
    mdc (R + "/mdc")
    _ (each [[ma "S"] [mb ""] [mc ""] [md2 "RS"]] (p \ mb-append (mdc + "/") (p 0) (p 1)))
    cfg {'from ["Me <me@here.org>"] 'sendmail [(R + "/sendmail.sh")] 'record [(R + "/sent")]}
@@ -139,7 +135,7 @@
    _ (chucho-key s 47, chucho-key s 21, each (chars "nobody") (c \ chucho-key s c), chucho-key s 10)
    _ (test (3 = s 'cur) (has? (s 'msg) "not found"))
 
-   ; --- the pager: the headers in order, the body safe, html through lapiz, the end ------------
+   ; the pager: the headers in order, the body safe, html through lapiz, the end
    _ (chucho-key s 61, chucho-key s 106, chucho-key s 10)
    _ (test ('pager = s 'view) !(mb-new? (s 'pm)) ("yes!" = cht-plain (s 'pl 6)))
    _ (test (["Date: Tue, 29 Sep 2026 10:00:00 +0000" "From: Bob <bob@y.org>" "To: ann@x.org, me@here.org"
@@ -154,7 +150,7 @@
    _ (test (["one two" "three"] = chucho-wrap "one two three" 9) (["abcdefgh" "ij"] = chucho-wrap "abcdefghij" 8))
    _ (test ("one     " = chucho-vis ("one" + string 9)) ("^A^?" = chucho-vis (string 1 + string 127)))
 
-   ; --- drafts: reply, group reply, forward ---------------------------------------------------
+   ; drafts: reply, group reply, forward
    bob (s 'order 1 0)
    r1 (chucho-reply s bob 0)
    _ (test ("Bob <bob@y.org>" = mime-get (r1 'hs) "to") ("Re: lunch?" = mime-get (r1 'hs) "subject")
@@ -171,7 +167,7 @@
    _ (chucho-key s 61, chucho-key s 106, chucho-key s 114, test ('compose = <(s 'act)) ("Re: lunch?" = mime-get (s 'act 1 'hs) "subject"))
    _ (pin s 'act ())
 
-   ; --- a message built: headers encoded, bcc kept off, an attachment, and sent -----------------
+   ; a message built: headers encoded, bcc kept off, an attachment, and sent
    _ (uwrite (R + "/att.txt") "attached\n")
    d1 (pins (chucho-draft s "Zoë <zoe@x.org>, dan@x.org" "" "héllo" "a body\n" () "")
             'atts [(R + "/att.txt")])
@@ -198,7 +194,7 @@
            (has? (uread (R + "/got") 1) "In-Reply-To: <b1@y>")
            (1 = #(mb-open (R + "/sent") 'msgs)) (mb-has? <(mb-open (R + "/sent") 'msgs) 83))
 
-   ; --- q asks before it purges, with one key ---------------------------------------------------
+   ; q asks before it purges, with one key
    s2 (chucho-new (mb-open mdc) cfg)
    _ (chucho-key s2 100, chucho-key s2 113)
    _ (test (has? (s2 'prompt 0) "Purge 1 deleted") (0 = s2 'over))

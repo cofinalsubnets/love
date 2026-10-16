@@ -23,14 +23,14 @@ chk('call_indirect', e.call2(40n, 2n) === 42n);
 // a 64-bit memory's grow speaks BigInt: the engine's own word that the address type is i64
 chk('memory64 grow answers pages as i64', e.mem.grow(1n) === 1n && e.mem.buffer.byteLength === 131072);
 
-// rung 1: functions lowered from holo's IR by wasm-fn
+// functions lowered from holo's IR by wasm-fn
 chk('ir loop: isum', e.isum(100n) === 5050n && e.isum(0n) === 0n);
 chk('ir recursion: fib through call', e.fib(20n) === 6765n && e.fib(1n) === 1n);
 chk('ir labels fall through: classify', e.classify(-7n) === -1n && e.classify(0n) === 0n && e.classify(9n) === 1n);
 chk('ir sized memory ops', e.memops(8192n) === 8589934689n);
 chk('ir flags: set, test, unsigned', e.bits(-1n, 1n) === 1110n && e.bits(1n, 2n) === 1011n);
 
-// rung 2: the second module, laid whole by wasm-program -- doubles ride as their bits
+// the second module, by wasm-program: doubles ride as their bits
 const path2 = process.argv[3] ?? 'out/.holo2.wasm';
 const m2 = (await WebAssembly.instantiate(readFileSync(path2), {})).instance.exports;
 const f64 = new Float64Array(1), i64 = new BigInt64Array(f64.buffer);
