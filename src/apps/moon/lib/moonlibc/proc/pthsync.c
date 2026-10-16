@@ -2,8 +2,9 @@
 #include <pthread.h>
 
 /* the waits: a futex word, process-private. a mutex word is 0 free, 1 held, 2 held with waiters
- * maybe; the exchange alone moves it (the one atomic mooncc speaks), so a lock that finds it
- * taken marks it 2 before sleeping, and an unlock that takes a 2 back wakes one */
+ * maybe; an exchange alone moves it, so a lock that finds it taken marks it 2 before sleeping,
+ * and an unlock that takes a 2 back wakes one. the lock's exchange acquires; the unlock's must
+ * release, or on arm64 and riscv what the holder wrote lands after the next holder reads it */
 #define FxWait 128
 #define FxWake 129
 /* netbsd's __futex speaks linux's (os.c's row); freebsd's word is _umtx_op's private
@@ -34,7 +35,7 @@ static int __pt_taketill(int *w, struct timespec const *abs) {
     if (!__pt_left(abs, &rel)) return ETIMEDOUT;
     __fx_wait(w, 2, &rel); }
   return 0; }
-static void __pt_give(int *w) { if (__sync_lock_test_and_set(w, 0) == 2) __fx_wake(w, 1); }
+static void __pt_give(int *w) { if (__atomic_exchange_n(w, 0, __ATOMIC_RELEASE) == 2) __fx_wake(w, 1); }
 
 int pthread_mutexattr_init(pthread_mutexattr_t *a) { a->__kind = PTHREAD_MUTEX_DEFAULT; return 0; }
 int pthread_mutexattr_destroy(pthread_mutexattr_t *a) { return 0; }
@@ -130,12 +131,13 @@ int pthread_rwlock_unlock(pthread_rwlock_t *l) {
   __fx_wake(&l->__seq, 0x7fffffff);
   return 0; }
 
-/* once: 0 not yet, 1 running, 2 done. the exchange that claims it may land on a 2, and puts it back */
+/* once: 0 not yet, 1 running, 2 done. the exchange that claims it may land on a 2, and puts it
+ * back; done is said with a release and read with an acquire, so what fn wrote is seen with it */
 int pthread_once(pthread_once_t *o, void (*fn)(void)) {
-  while (*o != 2) {
+  while (__atomic_load_n(o, __ATOMIC_ACQUIRE) != 2) {
     int was = __sync_lock_test_and_set(o, 1);
-    if (was == 0) { fn(); __sync_lock_test_and_set(o, 2); __fx_wake(o, 0x7fffffff); return 0; }
-    if (was == 2) { __sync_lock_test_and_set(o, 2); __fx_wake(o, 0x7fffffff); return 0; }
+    if (was == 0) { fn(); __atomic_exchange_n(o, 2, __ATOMIC_RELEASE); __fx_wake(o, 0x7fffffff); return 0; }
+    if (was == 2) { __atomic_exchange_n(o, 2, __ATOMIC_RELEASE); __fx_wake(o, 0x7fffffff); return 0; }
     __fx_wait(o, 1, 0); }
   return 0; }
 
