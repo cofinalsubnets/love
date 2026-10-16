@@ -87,23 +87,7 @@ double sinh(double x) { double e = lm_exp(x); return (e - 1.0 / e) / 2.0; }
 double cosh(double x) { double e = lm_exp(x); return (e + 1.0 / e) / 2.0; }
 double tanh(double x) { double e = lm_exp(2.0 * x); return (e - 1.0) / (e + 1.0); }
 double fabs(double x) { return x <= 0 ? 0.0 - x : x; }
-static double __trunc9(double x) {                 /* |x| < 2^52 assumed */
-  double t = (double) (long long) x;
-  return t; }
-double floor(double x) {
-  if (x != x || x >= 9007199254740992.0 || x <= -9007199254740992.0) return x;
-  double t = __trunc9(x);
-  return t > x ? t - 1.0 : t; }
-double ceil(double x) {
-  if (x != x || x >= 9007199254740992.0 || x <= -9007199254740992.0) return x;
-  double t = __trunc9(x);
-  return t < x ? t + 1.0 : t; }
-double fmod(double x, double y) {
-  if (y == 0.0 || x != x || y != y) return 0.0 / 0.0;
-  double q = x / y;
-  if (q >= 9007199254740992.0 || q <= -9007199254740992.0) return 0.0;   /* quotient past exact-int: stance */
-  double r = x - __trunc9(q) * y;
-  return r; }
+double floor(double), ceil(double), fmod(double, double); /* fp.c's, on the bits */
 /* the C99 float twins: the double face, narrowed once at the return. a dedicated
  * binary32 kernel would be faster and no more accurate -- the double result is
  * already correct past float's 24 bits for every one of these. */

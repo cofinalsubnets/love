@@ -35,7 +35,7 @@ for f in test/libc/*.c; do
   ra=$?
 
   # -w: gcc warns about deliberate edges (a truncating snprintf, a zero-length memset)
-  $cc_g -O0 -w -Itest/libc -o "$d/$b.g" "$f" 2> "$d/$b.gbuild" \
+  $cc_g -O0 -w -Itest/libc -o "$d/$b.g" "$f" -lm 2> "$d/$b.gbuild" \
     || { cat "$d/$b.gbuild" >&2; fail "$b: the system cc could not build it"; }
   "$d/$b.g" > "$d/$b.theirs" 2>&1
   rg=$?

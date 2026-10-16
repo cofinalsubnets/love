@@ -1060,8 +1060,8 @@
    (flo9? g env e)
     (e @ ('flo . _) 1
          ('var nm) (vent g env nm @ en (two? en && flo? <>>en))
-         ('cast ty . _) (flo? ty)
-         ('call ('var nm) . _) (: sig (bad? (vent g env nm) ? (g 'sigs nm)) (two? sig && flo? <sig))
+         ('cast . ty . _) (flo? ty)
+         ('call . ('var nm) . _) (: sig (bad? (vent g env nm) ? (g 'sigs nm)) (two? sig && flo? <sig))
          ('bin o a b && elem o '(+ - * /)) (flo9? g env a || flo9? g env b)
          ('un 'neg x) (flo9? g env x)
          ('cond _ a b) (flo9? g env a || flo9? g env b)
@@ -2815,17 +2815,15 @@
                      (cxout g (cxb (vty r) @ 'float (vty r) cxdty)
                         ; each component's sign bit flips, a nan's too; r0 is free, cxout writes it last
                         (<>pa + [['ldsd 'f0 'r4 <pa] ['ldsd 'f1 'r4 (<pa + 8)]] + dneg g 'f0 + dneg g 'f1))))
-              (vty r = 'float && f32v? g)           ; unary on a native float: -f flips through minus zero's single
-               (op @ 'neg (mkv 'float 'r0 (vfs r + '((li r1 0x80000000) (movdxr f1 r1) (subss f1 f0) (movsd f0 f1))))
+              (vty r = 'float && f32v? g)           ; unary on a native float: -f flips the sign bit, a nan's too
+               (op @ 'neg (mkv 'float 'r0 (vfs r + '((movdrx r0 f0) (li r1 0x80000000) (xor r0 r0 r1) (movdxr f0 r0))))
                      'not (mkv 'long 'r0 (asflo g r + '((li r1 0) (movqxr f1 r1) (ucomisd f0 f1)) + fsete))
                      'bad)
               (flo? (vty r))                        ; unary on a double
                (: z1 (ilp32? g ? '((li r0 0) (li r1 0) (movqxr f1 r0))           ; 0.0 (the 32-bit pair)
                                '((li r0 0) (movqxr f1 r0)))
-                  ; -0.0: 0.0 - 0.0 is +0.0, so negation subtracts from minus zero
-                  n0 (mz0 g 'f1)
-                  (op @ 'neg                 ; -d = (-0.0) - d
-                         (mkv 'double 'r0 (vfs r + (n0 + '((subsd f1 f0) (movsd f0 f1)))))
+                  (op @ 'neg                 ; -d flips the sign bit, a nan's too
+                         (mkv 'double 'r0 (vfs r + dneg g 'f0))
                         'not                 ; !d = (d == 0.0), NaN-honest: !NaN is false -- fsete
                          (mkv 'long 'r0 (vfs r + (z1 + ('((ucomisd f0 f1)) + fsete))))
                         'bad))                           ; ~ on a double is invalid
@@ -3589,9 +3587,6 @@
    ; a double's sign bit flipped in place, through r0 (ilp32: the pair's high word)
    (dneg g fr) (ilp32? g ? [['movqrx 'r0 fr] '(li r2 0x80000000) '(xor r1 r1 r2) ['movqxr fr 'r0]]
                  [['movqrx 'r0 fr] '(li r1 0x8000000000000000) '(xor r0 r0 r1) ['movqxr fr 'r0]])
-   ; -0.0 into fr (ilp32 builds the pair in r0:r1)
-   (mz0 g fr) (ilp32? g ? ['(li r0 0) ['li 'r1 0x80000000] ['movqxr fr 'r0]]
-                 [['li 'r0 0x8000000000000000] ['movqxr fr 'r0]])
    ; the C99 VLA type ('varr elt dim-expr [idx]): a local carries its parse-stamped idx into g 'vslots -> (ptrslot sizeslot);
    ; a pointee (char (*p)[width]) carries just the expr, re-evaluated at each scale site
    (gvarr? ty) (two? ty && <ty = 'varr)
@@ -9998,7 +9993,7 @@
        (nogo? x k)                                  ; something a copy may not repeat, or k may not suffer
         (? (atom? x) ()
            (elem <x '(brk cont goto lbl case dflt switch asm sexpr sdecl)) 1
-           (x @ (('asn || 'post || 'rmw) ('var n) . _) (n = k)
+           (x @ (('asn || 'post || 'rmw) . ('var n) . _) (n = k)
                 ('rmw _ ('var n) _) (n = k)
                 ('addr ('var n)) (n = k)
                 ())
