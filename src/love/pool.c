@@ -9,14 +9,15 @@
 // the join, so the collector cannot run and nothing moves under them. a chunk is a fixed
 // piece of the work, never n / width, so the answer is the same at any width.
 // the width: min(LOVE_THREADS, physical cores, chunks, cpus spare). spare is what the box
-// left idle over the window since the last read (/proc/stat's idle and iowait), plus what
+// left idle over the window since the last read (/proc/stat's idle and iowait, a BSD's
+// kern.cp_time idle), plus what
 // we took ourselves, in whole cpus; and 1 whenever /proc/pressure/cpu says tasks waited for a
 // cpu over more than PoolPsi of the window. read at most every 50 ms through held fds; it
 // drops at once and grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is read each call: 1 is off, N a cap, N! exactly N whatever the
 // load (the laws, and the measure's forced widths). where it is unset, the row (threads N)
 // in ~/.love/etc/love.l says the same, read on the load's tick: the salt pattern, data only.
-// serial where there are no threads (inle, wasm, the BSDs, love0), inside a worker, and in
-// a fork's child until the pool is made again there.
+// serial where there are no threads (inle, wasm, macos, love0, a 32-bit BSD), inside a
+// worker, and in a fork's child until the pool is made again there.
 #include "love.h"
 #if defined(__mooncc__) && !defined(__wasm__)
 #define PoolThreads 1
@@ -27,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <sys/sysctl.h>
 #include <time.h>
 #include <unistd.h>
 #else
@@ -104,6 +106,31 @@ static int pool_stat(int fd, uint64_t *idle, uint64_t *tot) {
  *idle = v[3] + v[4], *tot = 0;
  for (int f = 0; f < 8; f++) *tot += v[f];
  return 1; }
+// ..and a BSD's kern.cp_time: user nice sys intr idle, in ticks. netbsd's mib is fixed,
+// freebsd's found by name (sysctl.name2oid), and its words are longs
+static int pool_cptime(uint64_t *idle, uint64_t *tot) {
+#if PoolThreads
+ uint64_t v[5] = {0};
+ size_t n = sizeof v;
+ if (__love_osv == 3) {
+  int mib[2] = {1, 51};                         // CTL_KERN, KERN_CP_TIME
+  if (sysctl(mib, 2, v, &n, 0, 0) || n != sizeof v) return 0; }
+ else {
+  int q[2] = {0, 3}, mib[8];
+  long fv[5];
+  size_t m = sizeof mib;
+  char const nm[] = "kern.cp_time";
+  if (sysctl(q, 2, mib, &m, nm, sizeof nm - 1)) return 0;
+  n = sizeof fv;
+  if (sysctl(mib, (unsigned) (m / sizeof *mib), fv, &n, 0, 0) || n != sizeof fv) return 0;
+  for (int i = 0; i < 5; i++) v[i] = (uint64_t) fv[i]; }
+ *idle = v[4], *tot = v[0] + v[1] + v[2] + v[3] + v[4];
+ return 1;
+#else
+ (void) idle, (void) tot;
+ return 0;
+#endif
+}
 static uint64_t pool_self(void) {
  struct rusage u;
  if (getrusage(RUSAGE_SELF, &u)) return 0;
@@ -112,7 +139,7 @@ static uint64_t pool_self(void) {
 static int pool_ask(struct pool *p, uint64_t t) {
  uint64_t idle, tot, self = pool_self(), psi;
  int ok = 1, ask = 1;
- if (!pool_stat(p->fd, &idle, &tot)) return 1;
+ if (!(__love_osv == 1 ? pool_stat(p->fd, &idle, &tot) : pool_cptime(&idle, &tot))) return 1;
  psi = pool_num(p->fp, "total=", 0, &ok);   // the first line is "some": its total, us of stall
  if (p->tot0 && tot > p->tot0 && t > p->at) {
   uint64_t win = (t - p->at) / 1000,           // us
@@ -195,7 +222,7 @@ static void pool_fresh(struct pool *p) {
 // g's pool, made at the first ask; NULL off linux or with no memory
 static struct pool *pool_of(struct g *g) {
  struct pool *p = g->pool;
- if (__love_osv != 1) return NULL;             // linux alone: moonlibc's threads are clone's
+ if (__love_osv < 1 || __love_osv > 3) return NULL;   // threads are clone's, thr_new's and _lwp_create's
  if (!p) {
   if (!(p = alloc(NULL, sizeof *p))) return NULL;
   memset(p, 0, sizeof *p);

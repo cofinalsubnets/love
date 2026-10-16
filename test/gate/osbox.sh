@@ -544,6 +544,72 @@ echo "$lout" | grep -q "rc=42" || fail "uvsi exit -- got: $lout"
 
 echo "$t: UV-siginfo -- one SA_SIGINFO record read the same on both kernels"
 
+# uvth: threads -- thr_new and _umtx_op on freebsd, _lwp_create and __futex on netbsd, clone
+# on linux: four threads count under a mutex and a condition, each its own self, joined, and a
+# timed wait that times out. the BSDs thread on the 64-bit ISAs; macos does not yet
+case "$os-$arch" in
+  *-x64|*-a64|*-rv64) [ "$os" = macos ] || {
+cat > "$d/uvth.c" <<'EOF'
+#include <pthread.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>
+
+static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+static int count, ready;
+static pthread_t self[4];
+
+static void *work(void *a) {
+  int i = (int) (long) a;
+  self[i] = pthread_self();
+  pthread_mutex_lock(&mu);
+  while (!ready) pthread_cond_wait(&cv, &mu);
+  pthread_mutex_unlock(&mu);
+  for (int k = 0; k < 20000; k++) { pthread_mutex_lock(&mu); count++; pthread_mutex_unlock(&mu); }
+  return (void *) (long) (i * 7); }
+
+int main(void) {
+  pthread_t t[4];
+  for (long i = 0; i < 4; i++) if (pthread_create(&t[i], 0, work, (void *) i)) { puts("uvth: no thread"); return 1; }
+  usleep(20000);
+  pthread_mutex_lock(&mu); ready = 1; pthread_cond_broadcast(&cv); pthread_mutex_unlock(&mu);
+  long sum = 0;
+  for (int i = 0; i < 4; i++) { void *r; pthread_join(t[i], &r); sum += (long) r; }
+  int distinct = 1;
+  for (int i = 0; i < 4; i++) for (int j = 0; j < i; j++) if (pthread_equal(self[i], self[j])) distinct = 0;
+  for (int i = 0; i < 4; i++) if (pthread_equal(self[i], pthread_self())) distinct = 0;
+  struct timespec ab;
+  clock_gettime(CLOCK_REALTIME, &ab);
+  ab.tv_nsec += 50000000; if (ab.tv_nsec >= 1000000000) ab.tv_sec++, ab.tv_nsec -= 1000000000;
+  pthread_mutex_lock(&mu);
+  int to = pthread_cond_timedwait(&cv, &mu, &ab);
+  pthread_mutex_unlock(&mu);
+  printf("uvth: count=%d sum=%ld distinct=%d timedout=%d\n", count, sum, distinct, to == ETIMEDOUT);
+  return 42; }
+EOF
+moon0 -t "$arch" "$d/uvth.c" -o "$d/uvth" || fail "uvth: the default-lane compile"
+lout=$(run "$d/uvth"; echo "rc=$?")
+fout=$($box 'cat > /tmp/uvth && chmod +x /tmp/uvth && /tmp/uvth; echo "rc=$?"' < "$d/uvth") \
+  || fail "uvth: the box could not take or run it"
+[ "$lout" = "$fout" ] || fail "uvth: the kernels disagree -- linux[$lout] $os[$fout]"
+echo "$lout" | grep -q "uvth: count=80000 sum=42 distinct=1 timedout=1" || fail "uvth body -- got: $lout"
+echo "$lout" | grep -q "rc=42" || fail "uvth exit -- got: $lout"
+echo "$t: UV-threads -- four threads counted, joined and timed out alike on both kernels"
+# ..and love's own pool there, x64's love being the binary that goes: its widths, and the
+# frame the same at every width (test/host/pool.l)
+if [ "$arch" = x64 ]; then
+  pout=$($box 'rm -rf /tmp/uvpool && mkdir /tmp/uvpool && cd /tmp/uvpool && cat > love && chmod +x love' < "$ho/love" \
+    && cat test/00-init.l test/host/pool.l test/zz-fin.l | $box 'cd /tmp/uvpool && ./love; echo "rc=$?"; cd / && rm -rf /tmp/uvpool') \
+    || fail "uvpool: the box could not run the pool's law -- got: $pout"
+  echo "$pout" | grep -q "rc=0" || fail "uvpool: the pool's law on $os -- got: $pout"
+  echo "$t: UV-pool -- love's pool took its widths, and drew one frame at each"
+fi
+} ;;
+esac
+
 # the seed leg (*_SEED=1, minutes): the seed builds itself on the box to the tree's bytes
 if [ -n "$sd" ]; then
   $box 'rm -rf /tmp/seedrun && mkdir /tmp/seedrun && cd /tmp/seedrun \

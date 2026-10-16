@@ -314,6 +314,8 @@ static short const os_nr[][4] = {
   {NR_ppoll,         NR_fb_ppoll,       437,   -1},   /* __pollts50: same first four args */
   {NR_utimensat,     NR_fb_utimensat,   467,   -1},
   {NR_pipe2,         NR_fb_pipe2,       453,   -1},
+  {NR_futex,         -1,                166,   -1},   /* netbsd's __futex speaks linux's; freebsd's is _umtx_op's, the member's */
+  {NR_sched_yield,   331,               350,   -1},
 };
 
 /* A PLAIN SCAN, and it must be: the rows are keyed by OUR NR_*, which impl.h
