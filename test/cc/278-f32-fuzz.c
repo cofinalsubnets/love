@@ -1,11 +1,6 @@
-/* float arithmetic under a RANDOMIZED differential: C evaluates a float expression in
- * float (FLT_EVAL_METHOD 0 on every target we have), so a chain like a * b + c rounds
- * twice to binary32. carried in double and narrowed once, the answer differs in the
- * last bit now and then -- an example rarely lands there, a random walk does.
- *
- * a fixed seed, every result's bits folded into one hash, the hash's bytes folded into the
- * exit code (the bare-metal boards have no printf): one disagreeing bit moves it. operands are finite binary32 with
- * moderate exponents, so the chains stay clear of overflow and NaN payloads. */
+/* float arithmetic under a seeded random differential: float expressions evaluate in float
+ * (FLT_EVAL_METHOD 0), so a * b + c rounds twice to binary32, not once from double. result bits
+ * hash into the exit code; operands stay clear of overflow and nan. */
 
 static unsigned st = 0x9e3779b9u;
 static unsigned rnd(void) { st ^= st << 13; st ^= st >> 17; st ^= st << 5; return st; }

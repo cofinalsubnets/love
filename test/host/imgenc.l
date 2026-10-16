@@ -1,7 +1,4 @@
-; test/host/imgenc.l -- gif.l (one frame, and a run of them), png.l's png-encode and jpeg.c's jpeg-encode over a checker, a keyed
-; run, one pixel, noise that refills lzw's table, and a gradient the median cut must choose among.
-; each png reads back exact. where magick is here, gifs are held to the source (exact to 256
-; colours), and jpegs near it; without magick, the markers alone.
+; gif, png and jpeg encoders; pngs read back exact, gifs and jpegs held to magick when present
 ; run: cat test/00-init.l test/host/imgenc.l | out/love
 (borrow 'posix)
 (borrow 'jpeg)
@@ -10,7 +7,7 @@
 (: dir (cwd 0 + "/out/.imgenc")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (put p s) (open p "w" @ q (say q s, close q))
-   ; a w*h image from f x y -> [r g b a]
+   ; f x y -> [r g b a]
    (image w h f)
     (cask (4 * w * h) @ c
      (map (i \ (: p (f (i % w) (i // w)) o (4 * i)
@@ -24,11 +21,10 @@
                                     [v (255 - v) (v // 2) 255])))
    grad (image 64 48 (x \ y \ [(x * 4) (y * 5) ((x + y) * 2) 255]))
 
-   ; -- markers, and the refusals -------------------------------------------------------
+   ; markers and refusals
    (gif im) (gif-encode (im 0) (im 1) (im 2))
    (jpeg im q) (jpeg-encode (im 0) (im 1) (im 2) q)
    (png im) (png-encode (im 0) (im 1) (im 2))
-   (has s p) (#p @ n (: (go i) (? (#s - n < i) 0 (snip s i (i + n) = p) 1 (go (i + 1))) (go 0)))
    (ends s a z) (snip s 0 #a = a && snip s (#s - #z) #s = z)
    soi (string 255 + string 216)
    eoi (string 255 + string 217)
@@ -39,26 +35,25 @@
    _ (test (ends (png dot) "\x89PNG\r\n\x1a\n" "IEND\xaeB`\x82")
            (png-decode (png checker) = checker) (png-decode (png keyed) = keyed)
            (png-decode (png dot) = dot) (png-decode (png noise) = noise) (png-decode (png grad) = grad)
-           ; depth and colour type: two colours a 1-bit palette, 256 an 8-bit one, past that rgba
+           ; two colours a 1-bit palette, 256 an 8-bit one, past that rgba
            (png checker 24 = 1) (png checker 25 = 3) (png noise 24 = 8) (png noise 25 = 3)
-           (png grad 25 = 6) (has (png keyed) "tRNS") !(has (png checker) "tRNS"))
+           (png grad 25 = 6) (has? (png keyed) "tRNS") !(has? (png checker) "tRNS"))
 
-   ; -- a run of frames: gif-anim, read back by gif-frames -- each as given, its delay kept
+   ; gif-anim read back by gif-frames, delays kept
    flip (image 9 4 (x \ y \ ((x + y) % 2 ? [255 255 255 255] [0 0 0 255])))
    one (image 9 4 (x \ y \ [7 8 9 255]))
    run [[keyed 100] [flip 250] [one 40] [keyed 30]]
    anim (gif-anim 9 4 (map (f \ [(f 0 2) (f 1)]) run))
    got (gif-frames anim 10)
-   _ (test (ends anim "GIF89a" ";") (has anim "NETSCAPE2.0")
+   _ (test (ends anim "GIF89a" ";") (has? anim "NETSCAPE2.0")
            (got 0 = 9) (got 1 = 4) (#(got 2) = 4)
            ('(100 250 40 30) = map (f \ f 1) (got 2))
            (all (i \ got 2 i 0 = run i 0 2) ^4))
 
-   ; -- against magick ------------------------------------------------------------------
    magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))
-   ; decode a file with magick -> its rgba | ()
+   ; -> rgba | ()
    (back f) (hark ["magick" f "-depth" "8" "rgba:-"] @ r (two? r && <r = 0 ? >r))
-   ; the mean squared error of two rgba strings over r g b
+   ; over r g b
    (mse a b) (: n (#a // 4)
                 (go i acc) (? (i = #a) (acc / (3 * n))
                               (i % 4 = 3) (go (i + 1) acc)

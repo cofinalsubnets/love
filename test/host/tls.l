@@ -22,13 +22,16 @@
 ; run:  cat test/00-init.l test/host/tls.l | out/love
 
 (borrow "src/apps/tls/tls.l")
+(borrow "test/host/chacha.l")              ; the oracles, spliced into module 'tls
+(borrow "test/host/poly1305.l")
 (borrow 'hashes)
 
 (test
  (elem 'tls (cite ()))
  (elem 'cc-block (keys (cite 'tls)))
  (elem 'po-mac (keys (cite 'tls)))
- (lit? (cite 'tls 'cc-xor)))
+ (lit? (cite 'tls 'cc-xor))
+ (lit? chacha20) (lit? poly1305))
 
 ; --- bytes ------------------------------------------------------------------------
 (test
@@ -59,7 +62,9 @@
  ((snip (cc-stream rfckey n232 1 4) 64 128) = (cc-stream rfckey n232 2 1))
  ((snip (cc-stream rfckey n232 1 4) 192 256) = (cc-stream rfckey n232 4 1))
  ; ..and distinct blocks are distinct, so the above is not two copies of nothing
- !((cc-stream rfckey n232 1 1) = (cc-stream rfckey n232 2 1)))
+ !((cc-stream rfckey n232 1 1) = (cc-stream rfckey n232 2 1))
+ ; the nif's keystream is the same blocks
+ ((chacha20 rfckey n232 1 (zeros 256)) = (cc-stream rfckey n232 1 4)))
 
 ; --- cipher: §2.4.2, the sunscreen paragraph ---------------------------------------
 (: pt242 ("Ladies and Gentlemen of the class of '99: If I could offer you only "
@@ -74,7 +79,9 @@
     ; xor is its own inverse, so decryption is the same act
     (pt242 = (cc-xor rfckey n242 1 ct242))
     ; ..and the keystream is what did it
-    !(ct242 = pt242)))
+    !(ct242 = pt242)
+    ; the nif, both ways
+    ((chacha20 rfckey n242 1 pt242) = ct242) ((chacha20 rfckey n242 1 ct242) = pt242)))
 
 ; --- mac: §2.5.2, and the block edges ---------------------------------------------
 (: k252 (unhex "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b")
@@ -89,7 +96,10 @@
     ((hex (po-mac rfckey "A")) = "245295d81b5fa2e5286caff23579bcff")
     ((hex (po-mac rfckey (bytes 16 (\ i i)))) = "a2291a363def0b53845fa4126a6ad364")
     ((hex (po-mac rfckey (bytes 17 (\ i i)))) = "f735c97f7308fd79222447fe76a96872")
-    ((hex (po-mac rfckey (bytes 100 (\ i i)))) = "2c48db4b08964d7e67950fbd89760c4d")))
+    ((hex (po-mac rfckey (bytes 100 (\ i i)))) = "2c48db4b08964d7e67950fbd89760c4d")
+    ; the nif on the same vectors
+    ((hex (poly1305 k252 "Cryptographic Forum Research Group")) = "a8061dc1305136c6c22b8baf0c0127a9")
+    (all (m \ poly1305 rfckey m = po-mac rfckey m) ["" "A" (bytes 16 (\ i i)) (bytes 17 (\ i i)) (bytes 100 (\ i i))])))
 
 ; --- the reduction boundary -------------------------------------------------------
 ; no message reaches this. the final conditional subtract fires only when the
@@ -430,20 +440,20 @@
            ((tc "127.0.0.1" ["leafr" "interr"]) = 1)                 ; an address against iPAddress
            ((tc "good.test" ["leafr" "rootr" "interr"]) = 1)         ; out of order, its root sent
            ((tc "good.test" ["deep" "inter1" "inter0"]) != 1)
-           (tc-has (tc "good.test" ["expired" "interr"]) "\"expired\": it has expired")
-           (tc-has (tc "good.test" ["notyet" "interr"]) "\"notyet\": it is not valid yet")
+           (tc-has (tc "good.test" ["expired" "intere"]) "\"expired\": it has expired")
+           (tc-has (tc "good.test" ["notyet" "intere"]) "\"notyet\": it is not valid yet")
            (tc-has (tc "bad.test" ["leafr" "interr"]) "\"leafr\": it does not name bad.test")
            (tc-has (tc "127.0.0.2" ["leafr" "interr"]) "does not name")
            (tc-has (tc "a.b.wild.test" ["leafr" "interr"]) "does not name")   ; one label only
            (tc-has (tc "wild.test" ["leafr" "interr"]) "does not name")        ; not the bare name
-           (tc-has (tc "foo.wild.test" ["partial" "interr"]) "does not name")  ; no f*.wild.test
-           (tc-has (tc "x.test" ["partial" "interr"]) "does not name")         ; no *.test
-           (tc-has (tc "good.test" ["undernoca" "noca" "interr"]) "\"noca\": it is not a certificate authority")
+           (tc-has (tc "foo.wild.test" ["partial" "intere"]) "does not name")  ; no f*.wild.test
+           (tc-has (tc "x.test" ["partial" "intere"]) "does not name")         ; no *.test
+           (tc-has (tc "good.test" ["undernoca" "noca" "intere"]) "\"noca\": it is not a certificate authority")
            (tc-has (tc "good.test" ["deep" "inter1" "inter0"]) "\"inter0\": its pathLen is exceeded")
-           (tc-has (tc "good.test" ["crit" "interr"]) "\"crit\": a critical extension it does not know")
-           (tc-has (tc "good.test" ["client" "interr"]) "\"client\": it is not for serving tls")
+           (tc-has (tc "good.test" ["crit" "intere"]) "\"crit\": a critical extension it does not know")
+           (tc-has (tc "good.test" ["client" "intere"]) "\"client\": it is not for serving tls")
            (tc-has (tc "good.test" ["undernosign" "nosign"]) "\"nosign\": its keyUsage does not allow")
-           (tc-has (tc "good.test" ["nosan" "interr"]) "\"nosan\": it does not name good.test")
+           (tc-has (tc "good.test" ["nosan" "intere"]) "\"nosan\": it does not name good.test")
            (tc-has (tc "good.test" ["leafr"]) "\"leafr\": no issuer for it is known")
            (tc-has (chain-ok? [(tc-ld "leafr") (tc-ld "interr")] () "good.test" tc-now) "no issuer")
            (tc-has (chain-ok? [] tc-roots "good.test" tc-now) "no certificate"))

@@ -1,7 +1,5 @@
-; test/host/ptui.l -- src/apps/player/tui.l: the player in cells, over a core in process on
-; HORN=none. its frames at two sizes, and its keys and taps as the core's commands, read back
-; off the core's own state.
-;   cat test/00-init.l test/host/ptui.l | out/love
+; test/host/ptui.l -- src/apps/player/tui.l over an in-process core on HORN=none
+; run: cat test/00-init.l test/host/ptui.l | out/love
 (borrow 'posix)
 (borrow 'pcore)
 (borrow 'ptui)
@@ -31,7 +29,7 @@
    (pt-st k) (peep (pt-d 'st) k ())
    (pt-q _) (map (it \ peep it 'uri "" @ u (snip u (#pt-dir + 1) #u)) (pt-d 'q)))
 
-; --- the frame: every panel at 80 by 24, and a small screen does not break it -------------
+; the frame: every panel at 80 by 24, and a small screen does not break it
 (: f (pt-plain (ptui-frame pt-d 80 24)) ls (lines f)
    small (ptui-frame pt-d 40 12)
    tiny (ptui-frame pt-d 20 6)
@@ -42,7 +40,7 @@
            (24 >= #ls) (string? small) (string? tiny))
    0)
 
-; --- transport and the mixer, as the core hears them -------------------------------------
+; transport and the mixer, as the core hears them
 (: _ (ptui-key pt-d 32) a (pt-st 'state)                    ; space: play
    _ (ptui-key pt-d 99) b (pt-st 'state)                    ; c: pause
    _ (ptui-key pt-d 118) c (pt-st 'state)                   ; v: stop
@@ -54,7 +52,7 @@
            (v = 95) (bl = -10) (rp = 1))
    0)
 
-; --- the eq: a band chosen and moved, flat, a preset, off ---------------------------------
+; the eq: a band chosen and moved, flat, a preset, off
 (: _ (ptui-key pt-d 9) fo (pt-d 'focus)                      ; tab: the eq
    _ (ptui-key pt-d -2) _ (ptui-key pt-d -2)                 ; right twice: 170 Hz
    _ (ptui-key pt-d -8) _ (ptui-key pt-d -8) _ (ptui-key pt-d -8)
@@ -68,7 +66,7 @@
            (e2 = (ptui-presets 1) 1) (e3 = [0 0 0 0 0 0 0 0 0 0]) (on = 0) (fo2 = 'list))
    0)
 
-; --- the playlist: chosen, moved, sorted, dropped, played ---------------------------------
+; the playlist: chosen, moved, sorted, dropped, played
 (: _ (ptui-key pt-d -9) s1 (pt-d 'sel)                        ; down: the second
    _ (ptui-key pt-d 75) q1 (pt-q ()) s2 (pt-d 'sel)          ; K: up a place
    _ (ptui-key pt-d 111) q2 (pt-q ())                         ; o: sort by title
@@ -78,7 +76,7 @@
            (q2 = ["alpha.wav" "bravo.wav"]) (song = 1) (q3 = ["alpha.wav"]))
    0)
 
-; --- the visualizer, a tap, and leaving ---------------------------------------------------
+; the visualizer, a tap, and leaving
 (: _ (ptui-key pt-d 109) vm (pt-d 'vis) f (ptui-frame pt-d 80 24)
    _ (ptui-key pt-d 109) vm2 (pt-d 'vis)
    _ (ptui-key pt-d 63) hf (pt-plain (ptui-frame pt-d 80 24)) _ (ptui-key pt-d 63)   ; ?: the keys

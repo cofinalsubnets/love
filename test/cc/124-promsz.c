@@ -1,10 +1,6 @@
-/* the typing door (parse.l pprom/puac): sizeof over PROMOTED arithmetic answers
- * C's type, not the register's -- char+int is an int (4), shorts promote, ~ and
- * unary minus promote, a shift wears its promoted left type alone, ?: arms meet
- * by the usual conversions, float wins its lane. gen's cmpu consumes the same
- * door, so compare/divide signedness and these sizes cannot drift apart.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* sizeof over promoted arithmetic answers C's type: char+int is 4, shorts, ~ and
+ * unary minus promote, a shift takes its left type, ?: arms meet, float wins.
+ * each check adds 1: the exit code is the pass count. */
 
 char c; short s; unsigned short us; int x; unsigned u; long l; float f;
 

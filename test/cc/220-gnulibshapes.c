@@ -1,7 +1,5 @@
-/* shapes gnulib leans on: a macro parameter spelled like a keyword (its stdint.h names one
- * `signed`), a constant 0.0/0.0 in a static initializer (isnan's probe) laid as the IEEE quiet
- * nan with its sign, a parameter of function type, which is a pointer to one, a scalar
- * initializer in braces (PTHREAD_ONCE_INIT's), and unary + promoting (INT_PROMOTE's _Generic) */
+/* a macro parameter spelled like a keyword, a static 0.0/0.0 laid as a signed quiet nan, a
+ * function-typed parameter, a braced scalar initializer, and unary + promoting under _Generic */
 typedef unsigned long long u64;
 typedef unsigned int u32;
 

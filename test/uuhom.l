@@ -1,20 +1,14 @@
-; test/uuhom.l's monoid, checked: the composition band of love's `*`
-; (prel's compose, End(R)'s multiplication) as a uu term, its monoid laws by idpath.
-; at the binary `=` is alpha+structural, so ((1 * f) = f) and assoc read false and the
-; laws hold only applied; here conv is NbE with pi-eta, so the same laws check
-; definitionally -- the quotient hom.md gestures at, made a checker's equality. the
-; differential foot ties homcomp to the binary's `*` at a numeral (vof/lof, the
-; corpus's own gate). exports to Rocq + Lean with the corpus (uu2coq/uu2lean).
-; guard: the uu kernel (test/uu.l) must load first -- $t front-loads it; fail by name if not.
+; test/uuhom.l -- the composition band of love's `*` as a uu term, its monoid laws by idpath
+; the binary's `=` is structural, so these laws hold there only applied; here conv is NbE.
+; guard: the uu kernel must load first; fail by name if not.
 (test (elem 'vof (names ())))
 
 (test
- ; love's `*` on the top band, spelled in uu: (homcomp f g) x = f (g x) -- prel.l's
- ; (compose f g x) (f (g x)), argument order and all (funcomp is the diagram-order twin)
+ ; love's `*` on the top band: (homcomp f g) x = f (g x), prel's compose order
  (defn homcomp
    (pi X UU (pi Y UU (pi Z UU (pi f (pi y Y Z) (pi g (pi x X Y) (pi x X Z))))))
    (lam X (lam Y (lam Z (lam f (lam g (lam x (f (g x)))))))))
- ; the monoid laws, each by idpath: the units ride pi-eta on the neutral f, assoc rides NbE
+ ; the monoid laws by idpath: units by pi-eta on the neutral f, assoc by NbE
  (defq hom-lunit
    (pi X UU (pi Y UU (pi f (pi x X Y) (paths (pi x X Y) (homcomp X Y Y (idfun Y) f) f))))
    (lam X (lam Y (lam f (idpath f)))))
@@ -29,19 +23,15 @@
    (lam X (lam Y (lam Z (lam W (lam f (lam g (lam h
       (idpath (homcomp X Z W f (homcomp X Y Z g h))))))))))))
 
-; the differential foot: one composite, three lanes -- vof, lof, the binary's `*` --
-; meeting at a numeral
+; one composite, three lanes (vof, lof, the binary's `*`) meeting at a numeral
 ('(homcomp nat nat nat (lam y (succ y)) (lam x (succ (succ x))) 3) @ hc
  (test
   (6 = (vof 0 hc))
   ((vof 0 hc) = (lof hc))
   ((vof 0 hc) = (((y \ y + 1) * (x \ x + 2)) 3))))
 
-; --- the skeleton, worn: an object is a location (a nat), the state one map,
-; --- a morphism a state transformer. hmov is the relocation the design declines
-; --- to pay; the laws say why it may decline: every object is iso to R on the
-; --- carried value (carry + retract), a mov is invisible off its endpoints
-; --- (frame), and composition in the skeleton is homcomp -- one monoid, worn twice.
+; --- the skeleton: an object a location, the state one map; hmov carries, retracts,
+; --- is invisible off its endpoints, and composes by homcomp ---
 (test
  (defn hst UU (pi l nat nat))
  (defn hupd (pi l nat (pi v nat (pi s hst hst)))
@@ -58,10 +48,8 @@
    (pi s hst (paths nat (homcomp hst hst hst (hmov 1 2) (hmov 0 1) s 2) (s 0)))
    (lam s (idpath (s 0)))))
 
-; --- the machine: dest.l's IR denoted, so its laws can be theorems. state =
-; --- (regs, frame, stack cells, sp) -- sp concrete (starts 0, moves by
-; --- push/pop only), which is what lets a balanced shuttle compute under a
-; --- neutral state. an operand is parity-tagged: reg r = 2r, imm k = 2k+1.
+; --- dest.l's IR denoted: state (regs, frame, stack, sp), sp concrete so a balanced
+; --- shuttle computes under a neutral state. operands: reg r = 2r, imm k = 2k+1 ---
 (test
  (defn isodd (pi n nat bool)
    (lam n (nat_rect (lam q bool) false (lam k (lam r (negb r))) n)))
@@ -86,9 +74,8 @@
  (defn mpop (pi d nat (pi s mst mst))
    (lam d (lam s (mmk (hupd d (mk s (npred (msp s))) (mrg s)) (mf s) (mk s) (npred (msp s)))))))
 
-; --- one step, then the walker. opcodes: li 0, mov 1, ld 2, st 3, si 4, add 5,
-; --- push 14, pop 15; anything else (the control ops) denotes the identity --
-; --- a program holding one is only ever read syntactically (opsof).
+; --- opcodes: li 0, mov 1, ld 2, st 3, si 4, add 5, push 14, pop 15; the control
+; --- ops denote the identity and are read only syntactically (opsof) ---
 (test
  (defn istep (pi o nat (pi d nat (pi a nat (pi b nat (pi s mst mst)))))
    (lam o (lam d (lam a (lam b (lam s
@@ -104,9 +91,7 @@
             (orb (nateqb o 3) (nateqb o 4)))
           (nateqb o 2))
         (orb (nateqb o 0) (nateqb o 1)))))))))
- ; one recursive call per level (the nateqb lesson, test/uu.l): under the
- ; eager NbE a bool_rect arm holding IH multiplies -- the acc slots branch on
- ; values instead, and the one exec rides a let
+ ; one recursive call per level: a bool_rect arm holding IH multiplies under NbE
  (defn dgo
    (pi q nat (pi v (nvec q) (pi m nat (pi o nat (pi p nat (pi a nat (pi s mst mst)))))))
    (lam q (nat_rect (lam n (pi v (nvec n) (pi m nat (pi o nat (pi p nat (pi a nat (pi s mst mst)))))))
@@ -131,8 +116,7 @@
              q)))
  (defn opsof (pi l nlist nlist) (lam l (opsgo (pr1 l) (pr2 l) 0))))
 
-; --- the machine pinned before the corpus rides it: li lands its immediate,
-; --- and the push/pop shuttle carries r0 to r1 forall states
+; --- pinned: li lands its immediate; the push/pop shuttle carries r0 to r1 forall states
 (test
  (defq drun-li
    (pi R hst (pi F hst (pi K hst
@@ -147,12 +131,9 @@
         (R 0)))))
    (lam R (lam F (lam K (idpath (R 0)))))))
 
-; --- the stack machine (ev's shape; the model: test/proto/spl.l): state =
-; --- (stack cells, sp, locals, seats, trace cells, trace count) -- sp and the
-; --- trace count concrete, the maps neutral, same discipline as mst. ops are
-; --- 2 nats (op x): pushk 0, pusha 1, pushl 2, pushs 3, setl 4, sets 5,
-; --- add 6, emit 7 -- emit appends tos to the trace and keeps the stack, so
-; --- an effect is visible only in the trace: the observation R cannot carry.
+; --- the stack machine: state (stack, sp, locals, seats, trace, trace count), sp and
+; --- count concrete. ops (op x): pushk 0, pusha 1, pushl 2, pushs 3, setl 4, sets 5,
+; --- add 6, emit 7 -- emit appends tos to the trace, its effect seen only there ---
 (test
  (defn sst UU (total2 s hst (total2 p nat (total2 l hst (total2 e hst (total2 t hst nat))))))
  (defn smk (pi s hst (pi p nat (pi l hst (pi e hst (pi t hst (pi n nat sst))))))
@@ -185,7 +166,7 @@
             (nateqb o 2))
           (nateqb o 1))
         (nateqb o 0)))))))))))))
- ; one recursive call per level, the dgo discipline
+ ; one recursive call per level, as dgo
  (defn sgo (pi q nat (pi v (nvec q) (pi m nat (pi o nat (pi A hst (pi st sst sst))))))
    (lam q (nat_rect (lam n (pi v (nvec n) (pi m nat (pi o nat (pi A hst (pi st sst sst))))))
              (lam v (lam m (lam o (lam A (lam st st)))))
@@ -200,8 +181,7 @@
  (defn srun (pi l nlist (pi A hst (pi st sst sst)))
    (lam l (lam A (lam st (sgo (pr1 l) (pr2 l) 0 0 A st))))))
 
-; --- pinned before the corpus rides it: a push lands at tos, and emit writes
-; --- the trace without moving the stack
+; --- pinned: a push lands at tos; emit writes the trace without moving the stack
 (test
  (defq srun-push
    (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst

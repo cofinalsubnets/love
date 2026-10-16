@@ -9,8 +9,8 @@
 ;                              piece, "" once done, and g's 'ans then (1 n) | the word
 ;   (xz-unf rd mk)          -> (1 n) | the word | 'no: .xz or .lzma off rd, out through the
 ;                              writer mk answers (1 w), or () for 'no
-; the codec is C (lzma2e lzma2d lzma2len lzmad crc64, and lzma2-new lzma2-chunk crc64-on
-; for a stream a chunk at a time); the container is here, where
+; the codec is C (lzma2e lzma2d lzma2len crc64, and lzma2-new lzma2-chunk crc64-on lzma-new
+; lzma-feed for a stream a piece at a time); the container is here, where
 ; its fields are plain to read. the xz spec is tukaani's .xz file format 1.2.
 (module 'xz
 (borrow 'posix)
@@ -143,17 +143,18 @@
                  ((f | f >> 16) + 1))
        (13 <= #s && s 0 < 225 && (d = 4294967295 || up d = d)
         && (us <= 274877906944 || us = 18446744073709551615)))
-   (xz-unlzma s)
-    (: us (rdle s 5 8)
-       u (lzmad (snip s 13 #s) (s 0) (rdle s 1 4) (us = 18446744073709551615 ? -1 us))
-       (? (string? u) [1 u] (u = 1) 'big 'corrupt))
-
    ;; --- reading as it comes ---
    ; xz-unpack's walk over a source (src/apps/tar.l's tar-src) instead of a string: a block's
    ; LZMA2 is decoded a chunk at a time into a window its dictionary wide (its size where the
    ; header says it, if less), the check carried on as the bytes go by, and each index held
    ; to the blocks read. the words are xz-unpack's
    (xz-pull rd) {'src (tar-src rd) 'mode 'stream 'n 0}
+   ; a .lzma off raw, past its 13-byte head: lzma-feed's pieces until it hands back ("" . rest)
+   (xz-lzpull raw)
+    (: hd (tar-take raw 13)   us (rdle hd 5 8)
+       st (lzma-new (hd 0) (rdle hd 1 4) (us = 18446744073709551615 ? -1 us))
+       g {'rd (tar-rd raw) 'in "" 'n 0 'st st 'mode 'lzma}
+       (? (st = 1) (xz-fin g 'big) (st = ()) (xz-fin g 'corrupt) 0, g))
    (xz-fin g a) (pins g 'mode 'end 'ans a, "")
    (xz-ck0 cid) (? (cid = 1) 0 (cid = 4) (crc64 "") (cid = 10) (cask 105 @ c (sha256-init c, c)) ())
    (xz-ckon cid c u) (? (cid = 1) (crc32-on c u) (cid = 4) (crc64-on c u) (cid = 10) (sha256-feed c u, c) c)
@@ -170,6 +171,12 @@
    (xz-next g)
     (: m (peep g 'mode 'end)   src (g 'src)
        (? (m = 'end) ""
+          (m = 'lzma)
+           (: p (#(g 'in) ? (g 'in) ((g 'rd) 0))   u (lzma-feed (g 'st) p)
+              (? (u = ()) (xz-fin g 'corrupt)
+                 (string? u) (pins g 'in "" 'n (g 'n + #u), (#u ? u (#p = 0 ? (xz-fin g 'end) (xz-next g))))
+                 (#<u = 0) (xz-fin g [1 (g 'n)])
+                 (pins g 'in >u 'n (g 'n + #<u), <u)))
           (m = 'stream)
            (: h (tar-take src 12)   fl (snip h 6 8)
               (? (#h < 12) (xz-fin g 'end)
@@ -238,21 +245,18 @@
                 (p = zbytes 4) (tar-take src 4, xz-next g)
                 (#p < 4) (xz-fin g 'corrupt)
                 (pin g 'mode 'stream, xz-next g)))))
-   ; .xz streamed, or a .lzma read whole: mk is asked for the writer before the first byte out,
-   ; and a stream that fails before any is said without it
+   ; .xz or .lzma streamed: mk is asked for the writer before the first byte out, and a stream
+   ; that fails before any is said without it
    (xz-unf rd mk)
     (: raw (tar-src rd)   h (tar-peek raw 13)
-       (all r a) (r 0 @ p (#p = 0 ? (cats (rev a)) (all r (p . a))))
-       (xz-lzma? h && snip h 0 6 != xz-magic ?
-          (xz-unlzma (all (tar-rd raw) ()) @ u
-             (atom? u ? u (mk 0 @ m (!(two? m) ? 'no ((<>m <>u), [1 #<>u])))))
-          (: g (xz-pull (tar-rd raw))   p (xz-next g)
-             (#p = 0 && atom? (g 'ans) ? (g 'ans)
-                (mk 0 @ m
-                   (!(two? m) ? 'no
-                      (: w <>m
-                         (go p) (#p = 0 ? (g 'ans) (w p, go (xz-next g)))
-                         (go p))))))))
+       g (xz-lzma? h && snip h 0 6 != xz-magic ? (xz-lzpull raw) (xz-pull (tar-rd raw)))
+       p (xz-next g)
+       (#p = 0 && atom? (g 'ans) ? (g 'ans)
+          (mk 0 @ m
+             (!(two? m) ? 'no
+                (: w <>m
+                   (go p) (#p = 0 ? (g 'ans) (w p, go (xz-next g)))
+                   (go p))))))
 )
 ) ; module 'xz
 

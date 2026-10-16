@@ -1,9 +1,6 @@
-; test/host/roost.l -- the nest as a floor (src/apps/lore/roost.l), headless
-; the plan is spelled here as src/apps/source.l's nest-plan lays one, so nothing touches a
-; home: the opening sign, the perch asked both ways and by a tap, a shelf turned, the door stayed at
-; and then taken, and a frame that paints the room.
-;
-; run:  cat test/00-init.l test/host/roost.l | out/love
+; test/host/roost.l -- src/apps/lore/roost.l, headless
+; the plan is spelled as src/apps/source.l's nest-plan lays one, so no home is touched
+; run: cat test/00-init.l test/host/roost.l | out/love
 (borrow 'roost)
 (borrow 'rove)
 

@@ -1,7 +1,5 @@
-/* gcc's __label__: a label declared at the head of a block is that block's own, so a macro
- * that lays one can be used twice in a function (the kernel's unsafe_get_user), a block
- * inside sees it, and a function-level label of the same spelling stays apart. the kernel's
- * headers beside them spell __attribute short. held to gcc. */
+/* __label__: a block-local label, so a macro laying one can expand twice, an inner block sees it,
+ * and a function label of the same spelling stays apart; short __attribute spellings. held to gcc. */
 
 struct __attribute((packed)) pk { char a; int b; };
 static int __attribute((unused)) spare;

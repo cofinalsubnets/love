@@ -1,24 +1,5 @@
-/* ASSIGNING a double to an integer object truncates.
- *
- * this is the plainest C there is -- `long v; v = d;` -- and mooncc stored the
- * raw IEEE BIT PATTERN. v = 3.75 landed 4615626668101337088, which is
- * 0x400E000000000000. an `int` target was no better: the narrowing lane rides
- * tor0, which MOVES rather than converts, so it kept the low 32 bits of those
- * same bits and answered 0.
- *
- * the store-direct lane (a plain variable's address is a static frame offset, so
- * the value stores from wherever it sits) guarded against a float TARGET and
- * never looked at the float SOURCE.
- *
- * WHY IT SURVIVED THIS LONG: the DECLARING form was always right.
- * `long v = d;` goes through cgdecl's own store, which converts. only the
- * separated assignment was broken -- and the declaring form is the one everybody
- * writes, so the whole corpus, the 108-program battery and every gate stayed
- * green. both forms are asserted below, side by side, for exactly that reason.
- *
- * found while fixing the double->unsigned-64 conversion (108-d2u.c); the
- * signedness bug is what led to this lane, and this one was underneath it and
- * worse -- it hits every integer width, signed and unsigned alike. */
+/* assigning a double to an integer object truncates, at every width -- the
+ * separate assignment `v = d` as well as the declaring `long v = d`, side by side. */
 
 static long g_l;
 static unsigned long g_ul;
@@ -42,7 +23,7 @@ int main(void)
 {
 	int r = 0;
 
-	/* THE CASE THAT WAS BROKEN: a separated assignment, every width */
+	/* a separated assignment, every width */
 	r += asn_long(3.75) == 3L;
 	r += asn_ulong(3.75) == 3UL;
 	r += asn_int(3.75) == 3;

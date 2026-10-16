@@ -1,20 +1,6 @@
-/* _Generic over QUALIFIED types, held to gcc (C11 6.5.1.1 + DR481). Two rules
- * do all the work here and they pull opposite ways:
- *
- *   - the controlling expression is LVALUE-CONVERTED, so its TOP-level const or
- *     volatile is gone before any row is tried: `const int x` picks `int:`.
- *   - everything INSIDE a pointer survives, and compatibility is exact, so
- *     `const char *` and `char *` are two different rows.
- *
- * cc's type language carries no qualifier at all (a node for one would reach
- * every ptr dispatch site in gen), so parse keeps _Generic its own marked copy
- * -- ps 'qtys, beside 'locals and shadowed with it. This file is the battery
- * that says the copy tracks: locals, params, block scope, globals, typedefs,
- * struct members, array decay, & and *, and const told apart from volatile.
- *
- * the battery compares EXIT CODES, so every check folds into the status:
- * 0 is agreement, and the first failing check's number comes back instead.
- */
+/* _Generic over qualified types (C11 6.5.1.1, DR481): top-level qualifiers drop
+ * (`const int` picks int:), qualifiers inside a pointer stay exact -- across
+ * locals, params, globals, typedefs, members, decay, & and *. 0 is agreement. */
 
 typedef const char *ccp;                     /* the qualifier rides the TYPEDEF */
 typedef char *cp;                            /* ..and does not, here */

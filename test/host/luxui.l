@@ -1,10 +1,8 @@
-; test/host/luxui.l -- lux end to end under a headless X: an Xvfb, the real lux driver as one
-; child and test/host/luxui-probe.l as another, never sharing a socket so neither can desync the
-; other. no Xvfb -> a polite skip, the sentinel still printed.
+; test/host/luxui.l -- lux end to end under Xvfb: the lux driver and test/host/luxui-probe.l
+; as separate children, so neither can desync the other's socket. no Xvfb -> a skip
 ; run: cat test/00-init.l test/host/luxui.l | out/love
 
-; the display number off Xvfb's -displayfd stdout: take the first line that is
-; entirely digits (server chatter shares the pty).
+; the display number: the first all-digit line on the pty (server chatter shares it)
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
    camp {}
@@ -25,16 +23,13 @@
  _ (must 'display (charm? dn && atom? (gather <xv)))
  dpy ("/tmp/.X11-unix/X" + show dn)
 
- ; a dead moor socket -- what an exec'd restart or a dead Xephyr session leaves,
- ; bound and closed so it refuses connects -- must fall to lux's sweep at moor start
+ ; a dead moor socket, bound and closed so it refuses connects, must fall to lux's sweep
  rdir (getenv "XDG_RUNTIME_DIR" @ rd (1 < #rd ? rd "/tmp"))
  stale "lux-luxui-stale.sock"
  _ (listen ['unix (rdir + "/" + stale)] @ p (hot? p ? (close p)))
  _ (must 'stale-planted (any (= stale) (readdir rdir)))
 
- ; the real driver, the same modules bin/lux ships. HOME rides a scratch seat so
- ; the box's own ~/.love/etc/lux.l cannot reach a gate driving stock-layout chords
- ; every path this lays is the pid's own, so two runs over one out/ keep apart
+ ; a scratch HOME per pid: the box's ~/.love/etc/lux.l stays out, two runs keep apart
  luxhome ("out/.luxui-home-" + show (getpid 0))
  _ (mkdir luxhome 493)
  ph (tether ["env" ("DISPLAY=:" + show dn) ("HOME=" + luxhome)
@@ -45,8 +40,7 @@
  _ (must 'lux-up (two? ph))
  _ (enlist 'ph <ph)
 
- ; the probe: its own process and streams, waiting on _NET_SUPPORTED before it
- ; drives. its pty is echoed either way, so a red run tells its story here
+ ; the probe waits on _NET_SUPPORTED; its pty is echoed either way
  pr (tether ["out/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
            "-l" "src/apps/lux/wire.l" "-l" "test/host/luxui-probe.l"
            "-e" ("(probe \"" + dpy + "\")")])

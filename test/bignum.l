@@ -1,26 +1,17 @@
-; step 6: arbitrary-precision integers (bignums).
-; - the numeric tower closes: fixnum -> wide int -> bignum
-; - + - * overflow promotes to an exact bignum; / % are truncated division
-; - canonical demotion: any result that fits a smaller tier shrinks back to it
-;   (so = / eqv / hash keys stay well defined across tiers)
-; - reader parses oversized decimal literals exactly; printer is base-10
-; - mixed fixnum/box/bignum/float arithmetic, comparison, equality
+; bignums: overflow promotes, a result that fits a smaller tier demotes back
 
 (: (bfact n) (n < 2 ? 1 (n * bfact (n - 1)))
    (bpow2 n) (n < 1 ? 1 (2 * bpow2 (n - 1)))
    B100 (bpow2 100)
    F25 (bfact 25)
    F24 (bfact 24)
-   ; two dense, exactly-equal-length (KL-limb) operands: ka*KBb takes the resumable
-   ; subquadratic Karatsuba lane (equal length, KL^2 > the one-shot chunk). Cross-check
-   ; it against an independent schoolbook path -- split ka = Kahi*2^h + Kalo (each ~KL/2
-   ; limbs), so Kahi*KBb and Kalo*KBb are unequal length and stay on schoolbook.
+   ; equal-length KL-limb operands take karatsuba; Kref splits KA in halves, which
+   ; stay on schoolbook, as an independent check
    KL 150  KE (64 * KL)  KHE (64 * (KL // 2))
    KA (KE 2 - 1)  KBb (KE 2 - 7)  KHB (KHE 2)   ; (KE 2) = 2^ke via exact power (no deep recursion)
    KP (KA * KBb)
    Kref (((KA % KHB) * KBb) + (((KA // KHB) * KBb) * KHB))
-   ; near-equal lengths take it too, the shorter zero-padded: 200 limbs by 150, against
-   ; KC's 100-limb halves by KBb, each one-shot schoolbook
+   ; near-equal lengths take it too (200 limbs by 150), checked the same way
    KC ((64 * 200) 2 - 3)  KHC ((64 * 100) 2)
    KCref (((KC % KHC) * KBb) + (((KC // KHC) * KBb) * KHC)))
 
@@ -131,9 +122,7 @@
  (1 = modpow 7 0 100)
  (B100 % 1000000007 = modpow 2 100 1000000007)
 
- ; --- int array vs bignum scalar: ordered by the bignum's true magnitude/sign,
- ;     not its low bits. 2^100's low word is 0, so a low-bits comparison would
- ;     wrongly treat b100 as 0 -- these assertions pin the magnitude-exact path. ---
+ ; --- int array vs bignum: ordered by magnitude, not low bits (2^100's low word is 0) ---
  (aall (star-tray '(3) '(1 2 3) < B100))          ; every int < 2^100
  (aall (star-tray '(3) '(1 2 3) <= B100))
  !(aall (star-tray '(3) '(1 2 3) > B100))   ; nothing exceeds 2^100
@@ -148,8 +137,7 @@
       (100 = bitlen (100 2 - 1)) (101 = bitlen (100 2)) (101 = bitlen (0 - 100 2))
       (() = bitlen 1.5) (() = bitlen "10") (() = bitlen ()))
 
-; --- show by halves: a big prints by its levels, 10^(18 2^j), each with a barrett reciprocal past
-; 8192 bits. the digits at every level's edge, the runs of zeros a half pads, and big ones read back
+; --- show by halves at levels 10^(18 2^j): digits at each level's edge, zero runs, read-back
 (: (bn-ones d k) (string (map (_ \ d) (jot k)))
    (bn-back x) (x = <(sound (show x)))
    ks [77 78 144 145 288 576 1152 2304 4608 4609 9216 18432]
@@ -160,3 +148,50 @@
          (show (300 10 * (300 10 + 7)) = "1" + bn-ones 48 299 + "7" + bn-ones 48 300)
          (all bn-back [(40000 3) (20000 7) (0 - 30000 3) (70000 2 - 1) (70000 2) ((5000 10 + 1) * (9000 10 - 1))])))
 
+
+; --- read by halves: a long numeral lays 19 digits a limb and joins them in pairs, hi 10^(19 w)
+; + lo; hex and octal pack their bits. the joins' edges, signs, and a pattern
+; whose value arithmetic knows
+(: (bn-rd s) <(sound s)
+   (bn-ones d k) (string (map (_ \ d) (jot k)))
+   (bn-rep s r) (string (cats (map (_ \ s) (jot r))))
+   ks [1400 1463 1464 1520 1521 2432 2433 4864 4865 9728 20000]
+   (test (all (k \ bn-rd ("1" + bn-ones 48 k) = k 10) ks)
+         (all (k \ bn-rd (bn-ones 57 k) = k 10 - 1) ks)
+         (all (k \ bn-rd ("+1" + bn-ones 48 (k - 1) + "1") = k 10 + 1) ks)
+         (all (k \ bn-rd ("-7" + bn-ones 48 k) = 0 - 7 * k 10) ks)
+         (all (r \ bn-rd (bn-rep "123456789" r) = 123456789 * ((9 * r) 10 - 1) // 999999999) [160 167 333 1000])
+         (all (k \ bn-rd ("0x1" + bn-ones 48 k) = (4 * k) 2) [15 16 17 1000 4097])
+         (bn-rd ("0x" + bn-ones 102 3000) = 12000 2 - 1) (bn-rd ("0X" + bn-ones 70 3000) = 12000 2 - 1)
+         (bn-rd ("-0x" + bn-rep "f0" 1000) = 0 - (240 * (8000 2 - 1) // 255))
+         (all (k \ bn-rd ("01" + bn-ones 48 k) = (3 * k) 2) [21 22 23 1000 4097])
+         (bn-rd ("0" + bn-ones 55 4000) = 12000 2 - 1)
+         (all (x \ bn-rd ("0x" + radix x 16) = x) [(40000 3) (5000 7 + 1) (64 2) (64 2 - 1)])))
+
+; --- radix by halves, as show: a level is r^k, k0 the most a charm holds
+(: (bn-dv c) (c < 58 ? (c - 48) (c - 87))
+   (bn-ones d k) (string (map (_ \ d) (jot k)))
+   (bn-unradix s b) (foldl (a \ c \ a * b + bn-dv c) 0 (chars s))
+   x (3000 3)
+   (test (radix x 10 = show x) (radix (0 - x) 16 = "-" + radix x 16)
+         (#(radix x 2) = bitlen x) (#(radix (40000 3) 2) = bitlen (40000 3))
+         (all (b \ bn-unradix (radix x b) b = x) [2 3 7 8 10 16 36])
+         (all (k \ radix (k 16) 16 = "1" + bn-ones 48 k) [15 16 30 31 60 120 240 2048 2049 4096])
+         (all (k \ radix (k 16 - 1) 16 = bn-ones 102 k) [15 16 30 31 60 2048 2049])
+         (all (k \ radix (k 7) 7 = "1" + bn-ones 48 k) [22 23 44 45 88 1000 3001])
+         (all (k \ radix (k 2) 2 = "1" + bn-ones 48 k) [61 62 63 124 4096 4097])))
+
+; --- lopsided products: past twice the shorter's width the longer goes in pieces of it, each a
+; karatsuba; under the cutoff, schoolbook
+(: LA (40000 3) LB (3000 7)
+   (bn-pieces a b) (: w (bitlen b) mk (w 2 - 1)
+                      (go a i acc) (a = 0 ? acc (go (a >> w) (i + w) (acc + (((a & mk) * b) << i))))
+                      (go a 0 0))
+   P4 (64 * 528) P1 (64 * 132) P2 (64 * 265)
+   (test (LA * LB = bn-pieces LA LB) (LB * LA = LA * LB)
+         ((LA * LB) // LB = LA) ((LA * LB) % LB = 0)
+         ((0 - LA) * LB = 0 - LA * LB) (LA * (0 - LB) = 0 - LA * LB)
+         ((P4 2 - 1) * (P1 2 - 1) = (P4 + P1) 2 - P4 2 - P1 2 + 1)
+         ((P2 2 - 5) * (P1 2 - 7) = (P2 + P1) 2 - 7 * P2 2 - 5 * P1 2 + 35)
+         (LA * (1920 2 - 1) = (LA << 1920) - LA)
+         ((50000 3) * (2600 2 + 1) = ((50000 3) << 2600) + 50000 3)))

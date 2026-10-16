@@ -1,9 +1,5 @@
-; coins -- user-defined kinds that ride the generic +/*. a struck coin is a typed hot
-; (kind + payload) on the coin row, so every +/* combination routes to the coin lane where
-; it is intercepted and the kind's plus/times run over the loaded payloads. () stays the
-; +/* identity for free (the mint hoist sits above the matrix); net/=/</show default over
-; the payload in the C core. `strike`/`load`/`kind`/`kreg` are the raw primitives; `coin`
-; builds and registers a kind, `lift` a method, `kinds` reads the registry.
+; coins: user-defined kinds whose +/* run the kind's methods over the payloads.
+; () stays the identity; net, =, < and show default to the payload
 
 (: ; Z/5Z -- add and multiply the residues mod 5
    z5 (coin 'z5 (z \ {'+ (lift z (x \ y \ (x + y) % 5))
@@ -94,9 +90,7 @@
     (-4 = +(sm [1 -5]))      ; no 'net: the payload hom, signed, as ever
 
     ; --- rationals (///): a multi-field coin; +/*/=/show all work ---
-    ; this die is the one coin that is a NUMBER, and C knows nothing of it: its order is
-    ; its '<, its rungs 'int and 'ceil, its truth its 'net, and a whole rational is the
-    ; integer itself, so = is the integers' own. every other coin below stays an opaque newtype.
+    ; the one coin that is a number, through its own methods; a whole rational is the integer
     (5 /// 6 = 1 /// 2 + 1 /// 3)    ; 1/2 + 1/3 = 5/6
     (1 = 1 /// 2 + 1 /// 2)          ; a whole sum is the integer
     (charm? (4 /// 2))               ; ... and so is a whole quotient, at the strike
@@ -110,27 +104,21 @@
     (1 /// 6 = (1 /// 3) /// 2)  (2 = (4 /// 3) /// (2 /// 3))   ; a rational operand divides exactly
     !(1 /// 0)  !(/// [1 0])  !((1 /// 3) /// 0)  !((1 /// 3) /// (1 /// 0))   ; by zero -> ()
     !("ab" /// 2)  !(2 /// "ab")  !([1 2] /// 3)                 ; a non-number -> ()
-    ; show is reduced, and reparsable -- which wants the payload quoted: a bare (1 2)
-    ; in a form is an application, so the old (q (1 2)) read back as q applied to 2; now the
-    ; rational wears the operator, which reads back as itself.
+    ; show is reduced and reparsable: the rational wears the operator
     ("(1 /// 2)" = show (2 /// 4))
     (1 /// 2 = ev <(sound (show (2 /// 4))))   ; ..and that is the whole claim, checked
 
     ; --- a rational promotes across the tower, like every other numeric rung ---
-    ; the law that pins it: `=` has to agree with the order it is already given. a
-    ; value where (<= a b) and (>= a b) are both true and (= a b) is false is not a
-    ; number in an order, it is two answers -- which is what this used to be.
+    ; `=` agrees with the order: <= and >= both true means =
     (: a (4 /// 2) b 2  ((a <= b && a >= b) = (a = b)))
     (1 /// 1 = 1)   (1 = 1 /// 1)   (4 /// 2 = 2)   (0 /// 1 = 0)
     (7 /// 2 = 3.5) (3.5 = 7 /// 2) (1 /// 2 = 0.5)
     !(1 /// 2 = 1)  !(1 /// 1 = 2)
     (elem (1 /// 1) [1 2 3])  (nelem (9 /// 1) [1 2 3])
     ([0 (1 /// 1) 2] = sort [2 (1 /// 1) 0])
-    ; exact, never through a double: these two differ by a part f64 has no room
-    ; for, and the quotient of the second rounds to exactly 1.0
+    ; exact, never through a double, which would round these together
     (2 3 40 @ h (!(1 /// h = 1 /// (h + 1)) && !((h + 1) /// h = 1.0)))
-    ; ..and the promotion is the ratio die's alone: an ordinary newtype is opaque,
-    ; which is the whole point of striking one
+    ; ..an ordinary newtype stays opaque
     (coin 'metre (z \ {}) @ m (!(m 5 = 5) && !(5 = m 5) && (m 5 = m 5)))
 
     ; --- `-` rides slot 5: q pins it (cross-multiply, reduce); the unit still rides ---
@@ -161,8 +149,7 @@
     !(1 /// 2 - "s")                   ; nor text
     (1 /// 1 = 1 /// 2 + [1 2])           ; ... but a bare (n d) of stars reads as n/d
 
-    ; --- an open star (slot 7): q declares its coins numeric, so a numeral
-    ;     powers them through their own * (exact squaring) instead of composing ---
+    ; --- an open star (slot 7): a numeral powers the coin through its own * ---
     (1 /// 4 = 2 (1 /// 2))            ; (n x) = x**n, through the kind
     (8 /// 27 = 3 (2 /// 3))
     (1 /// 4 = 1 /// 2 ** 2)         ; the apply operator rides the same law
@@ -197,13 +184,12 @@
     (1 < 3 /// 2)
     (/// 3 2 >= 1)                     ; the reversed faces ride the same lane
     (/// 1 2 <= 2 /// 4)
-    (1 < 9007199254740993 /// 9007199254740992)   ; 1 + 2^-53: the double quotient ties at 1.0;
-                                       ; the exact cross-multiply tier does not
+    (1 < 9007199254740993 /// 9007199254740992)   ; 1 + 2^-53: a double would tie at 1.0
     ([(-1 /// 2) (1 /// 3) (1 /// 2) 1 (3 /// 2) 2] =
      (sort [2 (1 /// 2) 1 (3 /// 2) (1 /// 3) (-1 /// 2)]))    ; sort interleaves by value
     (/// 9 1 < cnt [1])             ; a coin without '< keeps the coin band, above the numbers
 
-    ; --- rung 2: a declared star self-nets, so the vocabulary follows the flag ---
+    ; --- a declared star self-nets, so the vocabulary follows the flag ---
     (1 /// 2 = +(1 /// 2))          ; net answers the coin itself (the fixpoint, by declaration)
     (star? (1 /// 2))                    ; ... so star? holds with no coin branch of its own
     !(star? a)                   ; an undeclared coin still nets its payload: no star

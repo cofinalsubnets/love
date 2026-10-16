@@ -1,11 +1,5 @@
-; test/host/mittywin.l -- the mitty in a window of its own, headless: an Xvfb, `love mitty
-; --window` on it with a child that paints cells as its input arrives, the pixels read back
-; through GetImage and the keys sent through XTEST. asserted in turn: the child's red cells on
-; the paper (it draws them when COLORTERM says truecolor), a line typed reaching it (the
-; green), a word chosen under shift taking the primary and pasted back with the middle button
-; (the blue), ctrl+shift+C taking the clipboard, C-a v splitting the window (the right half
-; lit by the new pane), and C-a x twice shutting both panes, the mitty ending with status 0.
-; no Xvfb -> a polite skip.
+; test/host/mittywin.l -- `love mitty --window` under Xvfb: pixels read by GetImage, keys
+; sent by XTEST; the child paints red, green, blue as its input arrives. no Xvfb -> a skip
 ; run: cat test/00-init.l test/host/mittywin.l | out/love
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
@@ -36,9 +30,8 @@
                      hdr (XW 'x-reply s)
                      (XW 'x-rbytes s (XW 'u32 hdr 4 * 4)))
    (px x y) (grab x y 1 1 @ bs [(bs 2) (bs 1) (bs 0)])
-   ; a pixel as it becomes c, or as it stands after n tries a tenth of a second apart
+   ; a pixel once it is c, or after n tries 100ms apart
    (until x y c n) (px x y @ v (v = c || n < 1 ? v (rest 100, until x y c (n - 1))))
-   ; how many of a piece's pixels are lit
    (lit x y w h) (grab x y w h @ bs (net (map (i \ (bs (4 * i) + bs (4 * i + 1) + bs (4 * i + 2) > 0)) ^(w * h))))
    qx (: _ (w8 s 98, w8 s 0, w16 s 4, w16 s 5, w16 s 0)
          _ (XW 'x-wpad s "XTEST", XW 'x-flush s)
@@ -52,19 +45,18 @@
    (tap kc) (fake 2 kc, fake 3 kc)
    (chord kc) (fake 2 37, tap kc, fake 3 37)                     ; under Control_L
    _ (fakeat 6 0 300 200)                                        ; no window manager: the keys go where the pointer is
-   _ (test ([128 0 0] = until 4 4 [128 0 0] 40))                 ; the child's red cells, top left
+   _ (test ([128 0 0] = until 4 4 [128 0 0] 40))                 ; red only when COLORTERM says truecolor
    _ (tap 38, tap 36)                                            ; a, Return
-   _ (test ([0 128 0] = until 4 20 [0 128 0] 40))                ; a row down: the green, the child read `a`
-   ; GetSelectionOwner: who holds a selection
+   _ (test ([0 128 0] = until 4 20 [0 128 0] 40))                ; green: the child read `a`
+   ; GetSelectionOwner
    (owner a) (: _ (w8 s 23, w8 s 0, w16 s 2, w32 s a, XW 'x-flush s) hdr (XW 'x-reply s) (XW 'u32 hdr 8))
-   ; under shift the pointer is the window's: a double click takes the echoed a as a word
-   ; and the primary with it, and the middle button pastes it, a line the child reads
+   ; under shift the pointer is the window's: a double click takes the primary, button 2 pastes
    _ (fake 2 50, fakeat 6 0 20 8, fake 4 1, fake 5 1, fake 4 1, fake 5 1, fake 3 50)
    _ (rest 300)
    _ (test (win = owner 1))
    _ (fake 2 50, fake 4 2, fake 5 2, fake 3 50, rest 300, tap 36)
-   _ (test ([0 0 128] = until 4 36 [0 0 128] 40))                ; the blue: the child read the paste
-   ; ctrl+shift+C: the selection onto the clipboard
+   _ (test ([0 0 128] = until 4 36 [0 0 128] 40))                ; blue: the child read the paste
+   ; ctrl+shift+C
    cb (XW 'x-intern s "CLIPBOARD")
    _ (fake 2 37, fake 2 50, tap 54, fake 3 50, fake 3 37, rest 300)
    _ (test (win = owner cb))
@@ -74,7 +66,7 @@
    (grew n) (lit 400 0 240 64 @ v (right0 < v || n < 1 ? v (rest 100, grew (n - 1))))
    right1 (grew 60)
    _ (test (right0 < right1))
-   _ (chord 38, tap 53)                                          ; C-a x: the new pane shut
+   _ (chord 38, tap 53)                                          ; C-a x
    _ (rest 1500)
    _ (chord 38, tap 53)                                          ; ..and the child's
    (wfn p n) (gather p @ g2 (two? g2 ? g2 (n < 1 ? () (rest 2, wfn p (n - 1)))))

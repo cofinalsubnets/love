@@ -1,8 +1,6 @@
 ; src/apps/kore/sum.l -- the checksum tools: cksum, sum, crc32, md5sum, sha1sum, sha224sum,
 ; sha256sum, sha384sum, sha512sum, b2sum, sha3sum, in GNU's faces, and the -c lane that reads
-; those lines back. the digests are src/love/crypto/hash.c's nifs.
-; loads after fs.l for udirp. a body-less top-level `:` -- the mains leak, kore.l
-; registers them.
+; those lines back. loads after fs.l for udirp.
 (module 'kore
 (borrow 'posix)
 (borrow 'hashes)
@@ -19,11 +17,8 @@
    (sum-b2d n)     [210 (b \ (blake2b-init b n)) blake2b-feed blake2b-done]
    (sum-sha3d n sh) [204 (b \ (sha3-init b n sh)) sha3-feed sha3-done]
 
-   ; one operand folded a gulp at a time -> [acc bytes] | 'dir | the open's nom. "-"
-   ; is stdin, as it is everywhere in kore. a 100 MB file goes past a gulp at a time
-   ; and is never held; the byte count rides out because cksum's and sum's lines say it.
-   ; 'dir is its own answer because a directory opens and reads empty -- digested, it
-   ; would be the digest of nothing, a plausible wrong number rather than a miss.
+   ; one operand folded a gulp at a time, never held -> [acc bytes] | 'dir | the open's nom.
+   ; a directory opens and reads empty, so it is caught first, not digested as nothing
    (sum-fold f step z)
     (udirp f ? 'dir
      ((f = "-" ? [in 0] (open f "r" @ q (hot? q ? [q 1] q))) @ p
@@ -42,8 +37,7 @@
        r (sum-fold f (\ c h (<>>d c h)) b)
        (atom? r ? r
         (<>>>d b @ v (v = () ? () [v <>r]))))
-   ; the -c list is read whole, and should be: it is a list of digests, never the thing
-   ; digested. one line a file, and nobody writes a gigabyte of them.
+   ; the -c list is read whole: it is digests, never the thing digested
    (sum-list f)
     (? (f = "-") [1 (slurp in + "")]
        (udirp f) 'dir
@@ -69,11 +63,8 @@
         (row "-" sn 1, flush out, 0)))
 
    ; --- the -c lane ----------------------------------------------------------
-   ; a line is n hex digits, two characters (two spaces, or " *" where the writer
-   ; called it binary), then the name. the shape is asked in full -- the digits
-   ; counted and read -- because a looser split takes any line with a space in it for
-   ; a checksum line, and a file of prose then reads as a list of failures instead of
-   ; the "no checksum lines here" it is. an upper-case list is a list.
+   ; a line is n hex digits, "  " or " *", then the name. the shape is checked in full, so a
+   ; file of prose reads as no checksum lines, not as failures. upper-case hex is accepted.
    (sum-lower s)
     (jug 0 @ o (each ^#s (k \ (s k @ c (put o (64 < c && c < 71 ? (c + 32) c)))), slurp o))
    (sum-hex? l n)
@@ -91,14 +82,8 @@
        c (n + 1 < t ? (l (n + 1)) 0)
        (n + 2 < t ? (l n = 32 && (c = 32 || c = 42) && sum-hex? l n ?
                          [(sum-lower (snip l 0 n)) (snip l (n + 2) t)])))
-   ; the lists read back. the state is [bad unread seen sour]: lines that did not match,
-   ; files named in a line that could not be read, lines that were checksum lines at
-   ; all, and lists that were no good. sour is its own count because it costs the
-   ; status and says nothing: the two warnings below are each a claim about lines, and
-   ; a list nobody could read has none to make a claim about.
-   ; o: --quiet drops the OK lines, --status every line and warning, --ignore-missing a
-   ; listed file that is not there, --strict fails on a line that is no checksum line
-   ; and -w says each such line, by its list and number
+   ; the lists read back. state [bad unread seen sour]: mismatches, unreadable files, checksum
+   ; lines, and bad lists -- sour costs the status but no warning, having no lines to claim about
    (sum-check who mk n as o)
     (: (row l st)
         (: p (sum-split l n)
@@ -139,8 +124,7 @@
           0 < bad ? (sum-warn who bad "computed checksum" " did NOT match") 0)),
         flush err,
         0 < bad || 0 < unread || 0 < sour || o 'strict && 0 < ill ? 1 0))
-   ; "1 listed file could not be read", "2 listed files could not be read" -- the noun
-   ; takes the s and the verb does not, which holds for both warnings GNU says here
+   ; the plural s goes on the noun only; a verb that agrees is in the caller's tail
    (sum-warn who n what tail)
     (say err (who + ": WARNING: " + show n + " " + what + (n = 1 ? "" "s") + tail), put err 10)
 

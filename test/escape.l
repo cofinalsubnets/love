@@ -1,7 +1,4 @@
-; string-literal escape sequences. the C reader (g.c:g_read1) parses this
-; source file at load time; the second block exercises the same reader via
-; the charlist port (g.c:ci_getc, used by the REPL submit path) so the
-; in-memory edit buffer agrees with file input.
+; string-literal escapes, read from this file and again through a charlist port
 
 (test
   ; --- C reader path: this file is parsed by it ---
@@ -16,7 +13,7 @@
   (1 = tally "\xff")         ("\xff" = string (. 255 0))
   ("\x41" = "A")             ("\x0a" = "\n")
   ("\xAB" = "\xab")          ; mixed case
-  ; \\ and \" still pass through via the take-next-char-as-is fallback.
+  ; \\ and \" take the next char as is.
   (1 = tally "\\")           ("\\" = string (. 92 0))
   (1 = tally "\"")           ("\"" = string (. 34 0))
   ; embedded mid-string
@@ -26,8 +23,7 @@
   (3 = tally "a\0b")         ("a\0b" = string (. 97 (. 0  (. 98 0))))
   (3 = tally "a\x42b")       ("a\x42b" = string (. 97 (. 66 (. 98 0)))))
 
-; --- charlist port path: feed the C reader a charlist of `"..."` source
-; through the ci synth port (the editor's submit path).
+; --- charlist port path: the reader fed a charlist of `"..."` source
 (:
  ; chars-of-source-with-quotes -> the parsed datum.
  (parse cl) <(sound cl)
@@ -65,9 +61,8 @@
   ("\u{0000041}" = "u{0000041}")  ("\u{4g}" = "u{4g}")            ; seven digits, a non-digit
   ('torn = sound '(34 92 117 123 52 49)))                         ; input ending inside one
 
-; raw texts: three or more quotes open one and as many close it, and nothing escapes.
-; when the opener ends its line the closer's indent comes off every line, and the
-; breaks beside the quotes are not the text's
+; raw texts: n quotes open and n close, nothing escapes; when the opener ends its line
+; the closer's indent comes off every line, and the breaks beside the quotes go
 (test
   ("""a\nb""" = "a\\nb")          ("""say "hi"""" = "say \"hi\"")
   (""""has """ in"""" = "has \"\"\" in")

@@ -1,10 +1,5 @@
-; test/feel.l -- the feel pre-pass: macro expansion (exercised throughout the suite)
-; and constant folding. Folding is semantics-preserving, so whether it fired is only
-; observable via baked-literal identity (a folded (X 1 2) is shared across calls) --
-; which differs between the feel compiler and the c0/l0 control, so those positive
-; "fires" checks can't live in this cross-compiler suite (they're verified out of band).
-; What can be asserted here: fold correctness, and that identity-minting heads stay
-; excluded -- (tablet 0) must yield a fresh hash on every call under both compilers.
+; the feel pre-pass: fold correctness, and identity-minting heads never folded.
+; whether a fold fired differs between compilers, so it is not asserted here
 (test
  ; --- impure / identity-minting heads are not folded (fresh each call) ---
  (: (f _) {} !(f 0 = f 0))                  ; `table` excluded -> distinct hashes
@@ -38,10 +33,8 @@
  !(: (f x) (() 5 x) (f 9))           ; () folds too -- nom? is false of it, so it is named apart
  (5 = (0 0 5)) (262144 = (2 3 4))    ; const of const is id; the tower, both charm-sized
  (1.0 = (: (f x) (2 1.5 x) (f 1)))   ; (2 1.5) is the gem 2.25 -- charm-sized, so it folds
- ; the bound is owed by both fold lanes. a pure-fn head cleared by pure-head? still reaches
- ; church application by over-application, and that is the unbounded one: (+ 1 200000 2) is
- ; ((200001) 2), a 60207-digit bignum. the safe prefix folds, the growing step residualizes.
- (sun? (: (f x) (+ 1 200000 2) (f 0)))          ; sun?, not (tally (show ..)) -- rendering 60207 digits cost the gate 2.5s
+ ; over-application can grow unbounded: (+ 1 200000 2) is a 60207-digit bignum, left residual
+ (sun? (: (f x) (+ 1 200000 2) (f 0)))          ; sun?, not (tally (show ..)): 60207 digits are slow to render
  ('(1 2 3 4) = (: (f x) ('(1 2) x) (f '(3 4)))) ; a chain joins like text, and folds the same way
  ; --- readset: peep and pin fold on an immutable container, never on a tablet ---
  ("aXcd" = (: (f x) (pin "abcd" 1 x) (f 88)))      ; pin on text -- the functional update, folded whole
@@ -50,8 +43,7 @@
  (: (f _) (pin {} 1 2) !(f 0 = f 0))               ; a tablet is mutable: pin there is a write, never folded
  (256 = (: (f x) ('(7 8 9) 1 x) (f 2)))            ; ... and indexes: ('(7 8 9) 1) folds to 8, leaving (8 x)
  !(: (f x) ((1 . 2) x) (f (a \ b \ a + b)))        ; a lambda operand takes the default action
- ; and a numeral whose answer outgrows a charm stays residual rather than baking into the image:
- ; a composition here, 2**200000 in test/task.l -- whose yieldable-multiply gate leans on it
+ ; a numeral whose answer outgrows a charm stays residual (test/task.l leans on it)
  (3 = (: (f x) (3 (y \ y + 1) x) (f 0)))
 
  ; --- currying: under-application yields a usable closure; prefix+unknown tail ---
@@ -74,13 +66,8 @@
  ('a = (: (f x) (? (5 < x) 'a !x 'c 'b) (f 9)))       ; ... first clause still wins
  (() = (: (f x) (? !x 'z) (f 5))))                    ; no-else cond falls to the zero point () (nil-ontology)
 
-; --- the purity gate on beta's arguments --- an inlined lambda substitutes only pure args:
-; a body naming a param twice would run an impure arg twice (the flip, test/uuspllaw.l's
-; sl-flip -- value equal, trace doubled, so the failure is silent: the answer is simply
-; wrong, no scare). `purep` is what forbids it; an impure arg takes the binding splice
-; below instead. this pins the gate itself.
-; it caught pure-head? being called under-applied -- a partial is truthy, so every purity
-; question answered yes and (dbl (bump 0)) bumped the counter twice. the arity is the protocol.
+; --- the purity gate: an inlined lambda substitutes only pure args, or a param named
+; twice runs an impure arg twice, silently ---
 (: pg-ctr (cask 1)
    (pg-bump _) (peep pg-ctr 0 0 @ v (pin pg-ctr 0 (v + 1), v + 1))
    (pg-dbl x) (x + x)                                ; names its param twice -- the duplication site
@@ -88,11 +75,8 @@
     (: _ (pin pg-ctr 0 0) r (pg-dbl (pg-bump 0))
        (2 = r && 1 = peep pg-ctr 0 0))))       ; evaluated once: 1+1, counter at 1
 
-; --- the binding splice (sl-lic/sl-ord, test/uuspllaw.l) --- an impure arg no longer
-; declines the inline whole: it binds once to a fresh nom, in call order, ahead of the
-; body, and the body reads the binding at every use site. pure args still substitute
-; around it. behavioral pins only (whether a splice FIRED is out of band, per the header);
-; each holds under both compilers and under decline, which is the point -- the license.
+; --- the binding splice: an impure arg binds once, in call order, ahead of the body.
+; behavioural only, so each holds under both compilers and under decline ---
 (: bs-ctr (cask 1)
    (bs-bump _) (peep bs-ctr 0 0 @ v (pin bs-ctr 0 (v + 1), v + 1))
    (bs-mix a b c) (a + b + c)
@@ -118,10 +102,8 @@
     (: _ (pin bs-ctr 0 0) h (bs-esc (bs-bump 0))
        (3 = h 2 && 1 = peep bs-ctr 0 0))))
 
-; --- the read-once refinement (sl-sub-1) --- the last effectful arg substitutes when its
-; param is read exactly once, unconditionally, in an otherwise-pure body -- the call is
-; gone with no let. read-many still binds; a read under ? or \ declines the substitution
-; (it could run zero or many times); order holds across a bind + a substitution.
+; --- read-once: an effectful arg read exactly once, unconditionally, substitutes;
+; read many times it binds, under ? or \ it declines ---
 (: r1-c1 (cask 1) r1-c2 (cask 1)
    (r1-b1 _) (peep r1-c1 0 0 @ v (pin r1-c1 0 (v + 1), v + 1))
    (r1-b2 x) (peep r1-c2 0 0 @ v (pin r1-c2 0 (v + 1), x + v))      ; answers x + own pre-count
@@ -132,30 +114,24 @@
     ; read-once: the effect still fires exactly once, value as the call
     (: _ (pin r1-c1 0 0) r (r1-mix 3 (r1-b1 0) 4)
        (8 = r && 1 = peep r1-c1 0 0))
-    ; bind + substitution: a's binding fires before b's substituted read (call order) --
-    ; b's expression reads a's counter, so a flip changes the VALUE, not just the trace
+    ; bind then substitution, in call order: b reads a's counter, so a flip changes the value
     (: _ (pin r1-c1 0 0) _ (pin r1-c2 0 0)
        r (r1-two (r1-b1 0) (r1-b2 (peep r1-c1 0 0)))
        (3 = r && 1 = peep r1-c1 0 0 && 1 = peep r1-c2 0 0))
-    ; conditional read: the strict call evaluates b always -- substitution under the
-    ; branch would drop the effect on the false arm, so it must bind instead
+    ; conditional read: the strict call runs b always, so it must bind
     (: _ (pin r1-c1 0 0) r (r1-iff 0 (r1-b1 0))
        (0 = r && 1 = peep r1-c1 0 0))))
 
-; --- the inliner's under-saturated beta --- a known lambda applied short of its params
-; substitutes the given args and answers a \ of the rest -- so curried hofs collapse
-; statically when consumed (op=1), and still revert at value position (the escape law).
+; --- under-saturated beta: a known lambda short of its params answers a \ of the rest ---
 (: (usadd a b) (a + b)
    (us3 a b c) (a + b + c)
    (ustw f x) (f (f x))
    (test
-    (15 = (: (g i) (ustw (usadd i) i) (g 5)))            ; the doc's promise: collapses to first-order
+    (15 = (: (g i) (ustw (usadd i) i) (g 5)))            ; collapses to first-order
     (7 = (ustw (us3 1 2) 1))                             ; two params short, then cascaded
     (9 = (usadd 4 @ h (h (h 1))))))                      ; value position: the partial reverts, still right
 
-; --- the body-position `:` splices into its parent (lflat) --- one frame where the source
-; nested two, and the same meaning either way. shadowing and capture are the gates: an inner
-; name that collides with an outer one, or that an outer def reads, keeps its own frame.
+; --- a body-position `:` splices into its parent's frame, unless a name collides or is captured ---
 (: (lf-h n) (n = 0 ? 4 (lf-h (n - 1)))           ; recursive, so cprop neither folds nor inlines it
    (test
     (3 = (1 @ a (2 @ b (a + b))))                   ; the plain splice
@@ -164,9 +140,8 @@
     (4 = (1 @ a (a @ b (3 @ a (b + a)))))           ; ... and the outer a is what b read
     (4 = (: (f _) (lf-h 1) ((y \ 99) @ lf-h (f 0))))))   ; an outer def reads the name -> no capture
 
-; --- an over-applied known-arity head splits (napof/napn) --- the n-ary apply takes the
-; arity prefix and the surplus curries onto its answer, so (f 1 2 3) is ((f 1 2) 3). the
-; heads recurse so the inliner declines them and the apply lane is what runs.
+; --- an over-applied known-arity head splits: (f 1 2 3) is ((f 1 2) 3). the heads
+; recurse so the inliner declines them ---
 (: (oa2 a b) (a = 0 ? (c \ b + c) (oa2 (a - 1) b))
    (oa3 a b c) (a = 0 ? [b c] (oa3 (a - 1) b c))
    (oan x) (x = 0 ? 3 (oan (x - 1)))                ; an operand no fold knows -- 3
@@ -177,15 +152,8 @@
     ; a curried nif splits the same way -- the tower is the surplus applied to its answer
     (4096 = (* (oan 0) 2 4)) (1024 = (+ (oan 0) 2 4)) (4 = (- (oan 0) 1 2))))
 
-; --- ..and a shadowed name is not the arity the outer one wore --- lvm_apn enters the
-; callee past its lvm_cur prologue, so `apn n` is sound only where n is that callee's
-; arity. falook answers by NAME out of a compile-time map, and its walk can reach an
-; enclosing binding where an inner scope rebinds the name -- so a guess may be spent only
-; on an exactly saturated call, never on a surplus. Guessing short here entered a 3-arity
-; body with two arguments and answered the partial.
-; the glaze hides this one. a native closure is compiled by its own emitter and never
-; runs the apn, so the corpus is green on any glazed lane; love0 carries no glaze and a
-; crew bake reverts its natives, which is where it surfaced (kore join, GNU-differential).
+; --- ..and a shadowed name does not wear the outer one's arity. the glaze masks this:
+; only an unglazed run (love0) exercises it ---
 (: (oas-w a b) (two? a ? (oas-w >a b) b)                ; the outer oas-w: arity 2
    (oas-in l) (: (oas-w x y z) (two? x ? (oas-w >x y z) (y + z))     ; shadows it at arity 3
                  (oas-w l 1 2))

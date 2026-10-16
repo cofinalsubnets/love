@@ -2,13 +2,9 @@
 # test/kore/sum.sh -- cksum, sum and the digest tools over the block boundaries, -c both ways round
 . "$(dirname "$0")/common.sh"
 
-# cksum, sum and the digest tools against GNU. these are the tools whose entire
-# output is one number, so a single wrong byte in src/love/crypto/hash.c is a wrong line here and
-# nowhere else. THE LENGTHS ARE THE POINT of the battery: a digest pads its last block
-# with the message length in the final 8 bytes, so 55/56 and 119/120 are where a pad
-# off by one shows (111/112 and 239/240 for sha-384/512's 128-byte block, 128 and 256
-# where blake2b holds its last block back), and 0 is where cksum's own length fold does
-# (an empty file is 4294967295 0, not 0 0).
+# the lengths are the point: a digest pads its last block with the length, so 55/56 and
+# 119/120 (111/112, 239/240 for sha-384/512; 128, 256 for blake2b's held block) show a pad
+# off by one, and 0 shows cksum's length fold (empty is 4294967295 0)
 ck=$ho/.kore-ck
 rm -rf "$ck"; mkdir -p "$ck"
 as() { i=0; s=; while [ "$i" -lt "$1" ]; do s=$s"a"; i=$((i + 1)); done; printf '%s' "$s"; }
@@ -26,54 +22,34 @@ for t in $tools; do
 world
 ' $t
 done
-# -c: the list one run writes is the list the other reads, both ways round -- which is
-# the only claim that matters for a checksum file, and it fails if either side's line
-# shape is off by a space. the mismatch lane carries its own exit code.
+# -c: each side's list read by the other, a space off in a line shape fails; the mismatch
+# lane has its own exit code
 ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore sha256sum a bin n64 > sums.ours )
 ( cd "$ck" && sha256sum a bin n64 > sums.gnu )
 cmp -s "$ck/sums.ours" "$ck/sums.gnu" || fail "sha256sum's list is not GNU's"
-for l in sums.ours sums.gnu; do
-  ( cd "$ck" && sha256sum -c "$l" ) > "$g" 2>/dev/null; rg=$?
-  ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore sha256sum -c "$l" ) > "$o" 2>/dev/null; ro=$?
-  same "sha256sum -c $l"
-  [ "$rg" -eq "$ro" ] || fail "sha256sum -c $l exit ($rg vs $ro)"
-done
+for l in sums.ours sums.gnu; do bothrc -C "$ck" "sha256sum -c $l" sha256sum -c "$l"; done
 ( cd "$ck" && md5sum a bin > m.ours ) && ( cd "$ck" && md5sum -c m.ours ) > "$g" 2>/dev/null
 ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore md5sum -c m.ours ) > "$o" 2>/dev/null
 same "md5sum -c"
-# the other shapes a list wears: the ` *` marker GNU writes under -b, and upper-case hex
+# a list's other shapes: -b's ` *` marker, and upper-case hex
 ( cd "$ck" && sha256sum -b a bin > b.list )
 awk '{ print toupper($1) "  " $2 }' "$ck/sums.gnu" > "$ck/up.list"
-for l in b.list up.list; do
-  ( cd "$ck" && sha256sum -c "$l" ) > "$g" 2>/dev/null; rg=$?
-  ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore sha256sum -c "$l" ) > "$o" 2>/dev/null; ro=$?
-  same "sha256sum -c $l"
-  [ "$rg" -eq "$ro" ] || fail "sha256sum -c $l exit ($rg vs $ro)"
-done
-# ..and the shapes that are NOT a list. a file of prose has no checksum line in it, and
-# saying so is the whole answer -- a looser reader takes every line with a space in it
-# for a checksum and reports a page of failures instead.
+for l in b.list up.list; do bothrc -C "$ck" "sha256sum -c $l" sha256sum -c "$l"; done
+# prose has no checksum line, and saying so is the whole answer
 printf 'not a checksum line\nnor this one\n' > "$ck/prose"
-( cd "$ck" && sha256sum -c prose ) > "$g" 2>/dev/null; rg=$?
-( cd "$ck" && LOVE_NO_IMAGE= "$K" kore sha256sum -c prose ) > "$o" 2>/dev/null; ro=$?
-same "sha256sum -c over prose"
-[ "$rg" -eq 1 ] && [ "$ro" -eq 1 ] || fail "sha256sum -c prose exit ($rg vs $ro)"
-# a corrupted line must FAIL, say so on stdout, and leave with 1
+bothrc -C "$ck" "sha256sum -c over prose" sha256sum -c prose
+[ $rg -eq 1 ] || fail "sha256sum -c prose exit $rg"
+# a corrupted line fails, says so on stdout, and exits 1
 printf '%s  a\n' 0000000000000000000000000000000000000000000000000000000000000000 > "$ck/bad"
-( cd "$ck" && sha256sum -c bad ) > "$g" 2>/dev/null; rg=$?
-( cd "$ck" && LOVE_NO_IMAGE= "$K" kore sha256sum -c bad ) > "$o" 2>/dev/null; ro=$?
-same "sha256sum -c mismatch"
-[ "$rg" -eq 1 ] && [ "$ro" -eq 1 ] || fail "sha256sum -c mismatch exit ($rg vs $ro)"
-# A DIRECTORY OPENS AND SLURPS EMPTY, so an unguarded digest of one is the digest of
-# nothing -- a plausible number, which is worse than none. GNU refuses it and so do we.
+bothrc -C "$ck" "sha256sum -c mismatch" sha256sum -c bad
+[ $rg -eq 1 ] || fail "sha256sum -c mismatch exit $rg"
+# a directory reads empty, so its unguarded digest is a plausible lie; it is refused
 mkdir -p "$ck/dir"
 for t in $tools; do
-  $t "$ck/dir" > "$g" 2>/dev/null; rg=$?
-  korerun $t "$ck/dir" > "$o" 2>/dev/null; ro=$?
-  same "$t on a directory"
-  [ "$rg" -eq 1 ] && [ "$ro" -eq 1 ] || fail "$t on a directory exit ($rg vs $ro)"
+  bothrc "$t on a directory" $t "$ck/dir"
+  [ $rg -eq 1 ] || fail "$t on a directory exit $rg"
 done
-# every digest tool's list read back by the other side, both ways round
+# every digest tool's list read back by the other side
 for t in md5sum sha1sum sha224sum sha384sum sha512sum b2sum; do
   ( cd "$ck" && $t a bin n128 > $t.gnu ) && ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore $t a bin n128 > $t.ours )
   cmp -s "$ck/$t.gnu" "$ck/$t.ours" || fail "$t's list is not GNU's"
@@ -82,13 +58,13 @@ for t in md5sum sha1sum sha224sum sha384sum sha512sum b2sum; do
   same "$t -c"
   [ "$rg" -eq 0 ] && [ "$ro" -eq 0 ] || fail "$t -c exit ($rg vs $ro)"
 done
-# sum's two algorithms and its name rule: a named operand, "-" included, is said
+# sum's two algorithms; a named operand, "-" too, is said
 for f in "-r" "-s" "-rs" "-sr"; do both "sum $f" sum $f "$ck/a" "$ck/bin"; done
 pipe "sum -s stdin" 'hello
 ' sum -s
 pipe "sum - " 'hello
 ' sum -
-# b2sum's shorter digests, and -c reading back whatever length a line carries
+# b2sum's shorter digests, and -c reading any length a line carries
 for l in 8 256 504; do both "b2sum -l $l" b2sum -l $l "$ck/a" "$ck/n129"; done
 ( cd "$ck" && b2sum -l 256 a bin > b2.256 )
 ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore b2sum -c b2.256 ) > "$o" 2>/dev/null; ro=$?
@@ -101,8 +77,7 @@ for l in 12 520 x; do
   same "b2sum -l $l refused"
   [ "$rg" -eq "$ro" ] || fail "b2sum -l $l exit ($rg vs $ro)"
 done
-# sha3sum and crc32 against busybox's (toybox's faces: sha3sum's -a is any length
-# 128..512, 224 by default), and each list read back
+# sha3sum and crc32 against busybox's (sha3sum -a any of 128..512, 224 by default), lists read back
 if command -v busybox >/dev/null 2>&1; then
   for a in 224 256 384 512; do
     for n in $lens; do
@@ -118,8 +93,8 @@ fi
 [ "$(printf abc | korerun sha3sum -a 256 -b)" = 3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532 ] \
   || fail "kore sha3sum -a 256 of abc (fips 202)"
 korerun sha3sum -a 100 "$ck/a" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore sha3sum -a 100 is 1 (got $r)"
-# -c's companions: --quiet --status --ignore-missing --strict -w, the two warnings'
-# counts, a list with no good line; -b's star; b2sum the same; output and status
+# -c's --quiet --status --ignore-missing --strict -w, the warning counts, a list with no good
+# line; -b's star; b2sum the same; output and status
 D2=$PWD/$ho/.sumf; rm -rf "$D2"; mkdir "$D2"; echo a > "$D2/fa"; echo b > "$D2/fb"
 (cd "$D2" && md5sum fa fb > good && echo "d41d8cd98f00b204e9800998ecf8427e  nope" > good2 && cat good >> good2 && echo b2 > fb && printf 'junk line\n' >> good && b2sum fa > b2l)
 for c in "md5sum -c good" "md5sum -c --quiet good" "md5sum -c --status good" "md5sum -c --ignore-missing good2" "md5sum -c good2" \

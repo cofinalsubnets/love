@@ -1,16 +1,12 @@
-; rune -- the symbolic algebra engine (a wee CAS): exact multivariate polynomials over the
-; integers, plus univariate arithmetic in Q[x]/(m) riding the rational coin. pure love, no
-; nifs; the gate is test/host/rune.l, whose corpus verifies the 2026 jacobian-conjecture
-; disproof whole (det J symbolically, the collision certificates in exact arithmetic).
+; rune -- a small computer algebra system: exact multivariate polynomials over Q, Z inside it,
+; and univariate arithmetic in Q[x]/(m) on the rational coin. pure love, no nifs.
 ;
-; a poly is a list of monomials, each (c e0 e1 ..) -- a coefficient (a star: an integer or a
-; ratio coin, so the ring is Q[x..] with Z[x..] sitting inside it structurally) then one
-; exponent per variable. keys lex-descending, no zero coefficients, all polys in one
-; expression sharing an arity; the zero polynomial is (), the empty sum being nothing.
+; a poly is a list of monomials (c e0 e1 ..): a coefficient star (integer or ratio coin), then
+; one exponent per variable. keys lex-descending, no zero coefficients, one arity across an
+; expression; the zero polynomial is ().
 ;
-; no brackets here: the runtime supplies the layer. `(borrow "src/apps/rune.l")` loads this path
-; as one fresh layer and the splice serves the bare names; `(borrow 'rune)` rides a baked
-; registration; `(cite 'rune 'deriv)` takes one member through the accessor.
+; no brackets: (borrow "src/apps/rune.l") loads this path, (borrow 'rune) the baked module,
+; (cite 'rune 'deriv) one member.
 
 ; --- the polynomial ring ---------------------------------------------------
 (: (mco m) <m
@@ -113,8 +109,7 @@
 
 ; --- rational roots: factorization's first rung ------------------------------
 ; the rational root theorem over the squarefree split. a rootless remainder of degree 2 or 3
-; is thereby irreducible over Q -- a factor would be linear; degree 4 up it merely has no
-; rational roots, and says so honestly.
+; is irreducible over Q; from degree 4 it only has no rational roots.
 (: (pden c) (coin? c ? <>(load c) 1)
    (pint f) (filter (m \ coin? (mco m)) f @ cs ; clears denominators: roots are scale-blind
              (#cs @ 0 f (pint (pmul [(pden (mco <cs) . '(0))] f))))
@@ -148,12 +143,9 @@
                (sort (go 1 fs))))
 
 ; --- zassenhaus: factorization whole -----------------------------------------
-; a rootless remainder of degree 4 up factors into irreducibles the classical way. the monic
-; reduction carries the weight -- F(y) = L^(n-1) f(y/L) is monic over Z and its factors map
-; back by y -> Lx and pmonic -- so every stage below is monic.
-;
-; the vector kit: fv* are dense ascending integer vectors mod m, the modulus leading wherever
-; one is needed; iv* the same over Z, unreduced; tovec/topoly cross to the monomial lists.
+; a rootless remainder of degree 4 up, factored to irreducibles. F(y) = L^(n-1) f(y/L) is monic
+; over Z and its factors map back by y -> Lx and pmonic, so every stage below is monic.
+; fv* are dense ascending integer vectors mod m, the modulus first; iv* the same over Z.
 (: (zmod m x) (x % m @ r (r < 0 ? (r + m) r))
    (zcen m x) (zmod m x @ r (m < (r + r) ? (r - m) r))   ; centered: recombination divides over Z
    (vtrim v) (#v ? (vtrim >v @ r (0 = #r && 0 = <v ? () (<v . r))))
@@ -330,10 +322,9 @@
                (c @ 1 (go 1 (psff x)) (pconst 1 c . go 1 (psff x)))))
 
 ; --- bivariate factorization: monic in x, hensel in y ------------------------
-; zfac2 mirrors zassenhaus with the prime replaced by the point: shift y -> y+a to seat the
-; good point at the origin, and mod y^K falls out as monomial filtering, evaluation as the
-; e_y = 0 slice, the lift arithmetic as padd/pmul whole. f monic in x carries no y-content,
-; so yun's split rides mgcd/mdiv verbatim (msff).
+; zfac2 is zassenhaus with a point for the prime: y -> y+a puts a good point at the origin,
+; so mod y^K is monomial filtering and evaluation the e_y = 0 slice. f monic in x has no
+; y-content, so yun's split runs on mgcd/mdiv (msff).
 (: (mdegy f) (:- (go f 0) (go l m2) (#l @ 0 m2 (: e <>(mkey <l) (go >l (m2 < e ? e m2)))))
    (ytrunc K f) (filter (m2 \ <>(mkey m2) < K) f)   ; mod y^K, the shift having earned it
    (a2to1 f) (map (m2 \ mco m2 . [<(mkey m2)]) f)
@@ -445,11 +436,9 @@
                 cst (cnorm (mco <x * cinv (lcs all)))
                 (cst = 1 ? all (pconst 2 cst . all)))
 ; --- n variables: kronecker packs onto the bivariate engine ------------------
-; vpack folds the last variable into the one before it, D past that variable's degree: a ring
-; homomorphism whose exponent map e*D + e' is injective below D and order-preserving on lex
-; keys, so the packed poly is canonical as it stands. n variables pack down to two and the
-; bivariate engine factors the image whole. this trades eez's staged lifting for degree growth
-; in the image -- exact and complete either way, the honest choice at this scale.
+; vpack folds the last variable into the one before it, D past its degree: e*D + e' is
+; injective below D and keeps lex order, so the packed poly is canonical as it stands.
+; n variables pack down to two and the bivariate engine factors the image.
    (mrg D k) (0 = #>>k ? [(<k * D + <>k)] (<k . mrg D >k))
    (vpack x D) (map (m2 \ mco m2 . mrg D (mkey m2)) x)
    (vunpk g D) (map (m2 \ (: (go l) (0 = #>l ?
@@ -496,15 +485,10 @@
                    (bfac2 x))))
 
 ; --- the poly coin: polynomials first-class under the generic ops ----------
-; strike a canonical monomial list and the surface arrives whole: + - * run padd/psub/pmul
-; through the die, = compares canonical payloads, the die's 'net nets a poly
-; by its monomial count -- so ! reads "is the zero polynomial" even when the coefficients sum
-; red, where the raw-list layer needs (0 = tally p) -- and 'star declares polys stars, so a
-; numeral powers one through its own * (ipow's squaring, seeded at 1, lands on the zero-mul
-; face). pd/pdet work the raw layer: (load p) down, (poly ..) back.
-;
-; the zero polynomial is the coin over () -- never bare (), which rides + and * as the
-; do-nothing unit and would dodge annihilation.
+; + - * run padd/psub/pmul through the die; 'net is the monomial count, so ! reads "is the
+; zero polynomial"; 'star lets a numeral power one by its own *. pd/pdet work the raw layer:
+; (load p) down, (poly ..) back. the zero polynomial is the coin over (), never bare (),
+; which + and * treat as the do-nothing unit.
 
 ; a red star is a coefficient, not nothing: test the zero point by identity and value,
 ; never by net -- !(-1) is true, and such a gate reads -1 as the zero poly
@@ -550,11 +534,9 @@
    (pfn p syms) (ev ('\ . snocl syms (pemit p syms))))
 
 ; --- the matcher: rules over terms, riding the kanren unifier ---------------
-; a term is core source -- a star, a symbol, or a folded dyadic form ('+ a b), exactly what
-; pemit renders and ev compiles, so the rewrite layer and the eval bridge share one term
-; language. a pattern is a term with kanren logic vars at the open positions, matched by
-; `unify`: one var shared across two positions is a nonlinear pattern -- (- a a) matches only
-; when both sides agree, structurally, coins by value -- at no extra cost.
+; a term is core source: a star, a symbol, or a dyadic form ('+ a b), what pemit renders.
+; a pattern is a term with kanren vars, matched by `unify`; a var in two places makes it
+; nonlinear: (- a a) matches only when both sides agree.
 (: sew (cite 'kanren 'subst)
    mnil (cite 'kanren 'empty_dict)
    ; () on a miss. a var-less hit is the empty binding, whose truth is blue, so test a miss
@@ -584,12 +566,9 @@
                      (z = y ? y (rewrite rs z))))
 
 ; --- laws + fold: the shipped simplifier -------------------------------------
-; every rule here shrinks or keeps size once, so the fixpoint lands. the conditional laws ride
-; guards over the two certifiers, each taking an assumptions context c -- a list of fact terms
-; like ((pos x) (nz n)) -- as its first argument. laws = ulaws + (glaws ()), so bare simp
-; certifies only the manifest and x/x stays, while the c-family carries declared facts through
-; every driver: (simpc c t), spelled assume, and (expandc c t), (derivc c t v). the plain
-; simp/expand/deriv are their empty-context faces -- (assume '((nz x)) '(/ x x)) is 1.
+; every rule here shrinks or keeps size, so the fixpoint lands. the conditional laws guard on
+; nzc/posc over a context c of facts like ((pos x) (nz n)); simp/expand/deriv pass the empty
+; one, so x/x stays, while (assume '((nz x)) '(/ x x)) is 1.
 
 ; nonzero, by the square-sat test: $(t*t) > 0 forces t /= 0 -- sound for red stars and
 ; blind only toward blue, which is the safe direction
@@ -725,11 +704,8 @@
    assume simpc)
 
 ; --- collect: the commutative collect -----------------------------------------
-; + and * are commutative and associative and - is + wearing a sign, so collect canonicalizes
-; each +/-/* spine bottom-up: flatten, split every element into (c u) -- ground coefficient and
-; core -- sort, merge equal cores summing coefficients exactly, and refold. the orders are
-; structural and deterministic, so the binomial expand lands x^2 + 2xy + y^2 in that order and
-; (x+y)(x-y) cancels to x^2 - y^2. expand runs it; simp stays order-preserving.
+; collect canonicalizes each +/-/* spine bottom-up: flatten, split each element into a ground
+; coefficient and a core, sort, merge equal cores, refold. expand runs it; simp keeps order.
 (: (spine o t) (? (nom? t) [t]
                   (two? t && 3 = #t && o = <t) (spine o <>t + spine o <>(>t))
                   [t])
@@ -810,8 +786,7 @@
    (expand t) (expandc () t))
 
 ; --- symbolic d: the derivative as a rule set --------------------------------
-; the term head `d` -- (d t v) -- reduces by dlaws. a head with no rule keeps its (d ..) term:
-; a derivative rune cannot take stays symbolic, which is the honest answer.
+; (d t v) reduces by dlaws; a head with no rule keeps its (d ..) term, symbolic.
 (: (free? t v) (? (t = v) 0
                   (nom? t) 1
                   (two? t) (free? <t v && free? >t v ? 1 0)
@@ -837,10 +812,9 @@
    (deriv t v) (derivc () t v))
 
 ; --- unfix: terms back to the infix surface ----------------------------------
-; the inverse of opfix, as a form: unfix renders a core term as low-paren infix source -- a
-; value, not text; show prints it, ev runs it, and (opfix (unfix t)) = t is the round-trip law
-; the gate holds over a corpus. the grammar, probed: bands are C-like (* / above + -, ** above
-; both), arithmetic folds left within its band, ** folds right, application binds tightest.
+; the inverse of opfix: a core term as low-paren infix source, a form, not text, with
+; (opfix (unfix t)) = t. bands are C-like (** over * / over + -), arithmetic folds left,
+; ** right, application binds tightest.
 
 ; (band . hand), 1 = left. operators is mopped post-egg, so rune carries its own; an op
 ; off the table stays prefix, which reads back unchanged
