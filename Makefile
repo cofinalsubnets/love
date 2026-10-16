@@ -141,7 +141,15 @@ $(ho)/liblove.a: $(h_o)
 love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/user/nokern.c $(S)/love/noblob.c $(love_c))
 out/0/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
 out/0/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
-boot_cc = $(CCACHE) $(CC) $(cflags) -fPIE -DLove0 -Dtco=0 -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
+# love0's cc: the plain build's. an HCC build is a differential over the hosted vm, and love0,
+# pinned to out/0 and shared, keeps the compiler it was built with (L0CC, cc unless given)
+ifeq ($(HCC),)
+l0cc = $(CC)
+else
+L0CC ?= cc
+l0cc = $(L0CC)
+endif
+boot_cc = $(CCACHE) $(l0cc) $(cflags) -fPIE -DLove0 -Dtco=0 -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
 out/0/.love0cc: force_love0cc
@@ -162,7 +170,7 @@ out/gcs0/%.o: $(S)/%.c $(love_h) out/0/.love0cc
 out/gcs0/love0: $(love0s_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(CC) $(cflags) -pie -o $@ $(love0s_o)
+	@LOVE_NO_IMAGE= $(l0cc) $(cflags) -pie -o $@ $(love0s_o)
 # src/love/love.c -> out/o/love/love.o: the mirror under o/, since out/love is the binary
 $(ho)/o/%.o: $(S)/%.c $(love_h) $(ho)/.hostcc
 	@echo '$(t_cc)	'$@
@@ -222,7 +230,7 @@ rtlove_dep = out/mooncc0.image
 $(love0): $(love0_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(CC) $(cflags) -pie -o $@ $(love0_o)
+	@LOVE_NO_IMAGE= $(l0cc) $(cflags) -pie -o $@ $(love0_o)
 endif
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one odir, worn twice -- at
 # the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
