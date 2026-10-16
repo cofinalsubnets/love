@@ -19,13 +19,15 @@ case $arch in
            ccnames="aarch64-linux-gnu-gcc a64-nerves-linux-gnu-gcc"
            ccglob="/usr/local/data/*/.nerves/artifacts/nerves_toolchain_a64*/bin/a64-nerves-linux-gnu-gcc"
            ccvar=AARCH64_CC
-           unsupported="117-vastruct" ;;
+           unsupported="117-vastruct"
+           gnopie="181-asmaddr 242-asmprel64" ;;   # an address as an "i" operand: gcc wants no pie
   rv64) name=test_ccrv64 ; qemu=qemu-riscv64 ; pretty=rv64
            ccenv=${RISCV64_CC:-}
            ccnames="riscv64-linux-gnu-gcc riscv64-unknown-linux-gnu-gcc riscv64-unknown-elf-gcc"
            ccglob=""
            ccvar=RISCV64_CC
-           unsupported="100-complex 280-cxf-fuzz 111-int128 117-vastruct 151-w128fuzz 266-vaarg-struct 297-frameaddr" ;;
+           unsupported="100-complex 280-cxf-fuzz 111-int128 117-vastruct 151-w128fuzz 266-vaarg-struct 297-frameaddr"
+           gnopie= ;;
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
@@ -81,7 +83,8 @@ for f in test/cc/*.c; do
 
   # -w: gcc warns about the battery's deliberate edges
   if [ -n "$GCC" ]; then
-    $GCC -O0 -w -static -o "$r/$b.g" "$f" 2> "$d/$b.glog" \
+    case " $gnopie " in *" $b "*) gf="-fno-pie -no-pie" ;; *) gf= ;; esac
+    $GCC -O0 -w -static $gf -o "$r/$b.g" "$f" 2> "$d/$b.glog" \
       || { cat "$d/$b.glog" >&2; fail "$b: the cross gcc could not build it"; }
     a64_job "$b.g" "timeout 60 \$RUN ./$b.g"
   fi
