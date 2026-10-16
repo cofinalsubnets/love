@@ -69,7 +69,6 @@
        traw (aup tfsz pe-falign)
        dfsz (<en - d0)                    ; .data: data + nifs, and bss past it
        draw (aup dfsz pe-falign)
-       text-vsz (d0 - base)
        data-rva (d0 - pe-ibase)
        data-vsz (bend - d0)
        reloc-rva (aup (data-rva + data-vsz) 4096)

@@ -292,9 +292,8 @@
    ; amble-ok?: does e compile? env = visible names, shd = op names this frame may not claim, gn =
    ; resolvable global heads, go/k = the loop name and arity (0 outside), tl = tail position ((go ..) is a jump)
    (amble-ok? env shd gn go k tl e)
-    (? (nom? e) (elem e env)
+    (? (nom? e) (elem e env)                                                      ; a mint too: an inlined callee's let-bound arg
        (aconst? e) 1
-       (nom? e) (elem e env)                                                      ; a mint: an inlined callee's let-bound arg
        (aquote? e) 1
        (two? e)
         (: op <e  as >e  n #as  oop (elem op shd ? 0 op)      ; a name the frame took is a call
@@ -873,7 +872,6 @@
               (? (nom? e) [['ld A SP (voff e)]]
                  (whole? e) [['li A (2 * e + 1)]]
                  (e = amble-nil) [['ld A SP gbo]]
-                 (nom? e) [['ld A SP (voff e)]]
                  (aquote? e) [['ld A SP (gbo + 8 * (1 + #gn + #cn + aposq e qs 0))]]
                  (: op <e  as >e  oop (elem op shd ? 0 op)
                     (? (op = ':) ((: (gol l) (atom? >l ? (acg <l d)

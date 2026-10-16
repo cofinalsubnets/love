@@ -186,10 +186,6 @@
                  (atom? e) (. 1 e)
                  (== (cap e) '\) (? (atom? (cuup e)) (. 1 (caup e))))    ; (\ v), a quoted atom; a real lambda -> ()
    (cat a b) (foldr (.) b a))
-; deal l into its even and odd places, a merge sort's split; (sort l) itself is C's
-(: (sortsplit l) (? (atom? l) (. l ()) (atom? (cup l)) (. l ())
-                    (: r (sortsplit (cuup l)) (. (. (cap l) (cap r)) (. (caup l) (cup r)))))
-)
 ; cats is the foldr of + over a list, in C when its pieces are all strings or all lists and
 ; this fold for the rest. so catmap concatenates lists and joins strings; () is the unit of both.
 (seal-hook 7 (\ l (foldr (+) () l)))
@@ -797,9 +793,6 @@
                (: r (bpr >>fs) ((dsug <fs <>fs . <r) . >r)))
    (boxfix fs) (bodyless? fs ? fs <(boxfix-es fs (breads <(bpr fs)))))
 
-; --- scheme and common lisp spellings ---------------------------------------
-(: (assq x l)   (two? l ? (x == caap l ? <l (assq x >l)))
-)
 ; pat -- @ : pattern matching, one macro and no special form. laws in test/pat.l.
 ;
 ; (@ x pat body .. else) reads like `?` with a shape where the test goes: the first pattern

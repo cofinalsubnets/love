@@ -1070,7 +1070,7 @@
    (segs s) ((: (go i st acc)
                 (? (i >= #s) (rev (st < i ? (snip s st i . acc) acc))
                    (s i = 47) (go (1 + i) (1 + i) (st < i ? (snip s st i . acc) acc))
-                   (go (1 + i) st acc))) 0 0 0)
+                   (go (1 + i) st acc))) 0 0 ())
    ; lexical: '..' pops without asking the filesystem. lim bounds the leading '..' kept:
    ; () unbounded, n at most n, past that () -- refused, not clamped. a kept '..' is not
    ; popped by the next: "a/../../b" -> (".." "b"). () is both a refusal and an empty path.
@@ -2062,7 +2062,7 @@
           joinln splitat parseall)
 (borrow 'text)
 (: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev 'ev x)))
-; (ev 'ev a) late-binds: post is baked before the glaze rebinds ev
+; (ev 'ev a) late-binds: post is evaluated before the glaze rebinds ev (and LOVE_NO_GLAZE re-pins it)
 (: (reads p)
    (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
                               (a . b) (walk b (ev 'ev a))
@@ -2096,7 +2096,7 @@
                     ; one byte short on purpose: the reader has read one ahead
                     _ (drop (0 < rem ? (rem - 1) 0))
                     h (inhand p)
-                    v (ev 'ev a) ;;; FIXME i think this should be safe to drop to just (ev a), post evals 100% after ev is rebound, right?
+                    v (ev 'ev a)
                     (h = inhand p ? (drop 0, step b w2 v)
                                     (start (two? b ? [<b]) v)))
          (drop 0, z))
