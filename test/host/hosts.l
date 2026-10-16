@@ -4,12 +4,14 @@
 (borrow 'hosts)
 
 (: ht-locks (cite 'locks 'locks-list)
+   ht-num (cite 'kore 'wg-digits)
    ht-home (cwd 0)
    ht-d (ht-home + "/out/.hosts-" + show (getpid 0))
    _ (mkdir ht-d 493)
    (ht-put nm s) (: p (open (ht-d + "/" + nm) "w") _ (say p s) (close p))
    (ht-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
-   _ (ht-put "ssh" "for a; do l=$a; done; exec sh -c \"$l\"\n")      ; the last word is the line
+   ; past the options and the host: one word is a line, more an argv (rsync's far end)
+   _ (ht-put "ssh" "while [ \"$1\" = -o ]; do shift 2; done; shift; [ $# -eq 1 ] && exec sh -c \"$1\"; exec \"$@\"\n")
    _ (ht-put "down" "exit 255\n")
    _ (ht-put "hosts" ("# a test registry\nname up\nreach sh " + ht-d + "/ssh up\nslots 2\ncaps a64-exec kvm-a64 lanes\nslots-lanes 1\napart-lanes bsd\npage 16384\n\n"
                       + "name gone\nreach sh " + ht-d + "/down gone\ncaps a64-exec\n\n"
@@ -44,6 +46,17 @@
    held (map cap (ht-locks (ht-d + "/locks") "exclusive"))
    _ (hosts-free l1 (getpid 0))
    after (map cap (ht-locks (ht-d + "/locks") "exclusive"))
+   ; a kept directory: --sync fills it by content, out/ left behind, and it outlives the run;
+   ; a second sync leaves an unchanged file's time alone and carries the changed one
+   kd (ht-d + "/kept")
+   _ (mkdir (ht-d + "/src") 493) _ (mkdir (ht-d + "/src/out") 493)
+   _ (ht-put "src/a.txt" "a\n") _ (ht-put "src/b.txt" "b\n") _ (ht-put "src/out/x" "x\n")
+   kin (hosts-on ["--on" "lanes" "--in" kd "--sync" (ht-d + "/src") "--" "sh" "-c" "cat a.txt b.txt > got; test ! -e out"])
+   k1 (ht-get (kd + "/got"))
+   _ (hark ["touch" "-d" "@1000" (kd + "/a.txt")])
+   _ (ht-put "src/b.txt" "c\n")
+   ks (hosts-on ["--on" "lanes" "--in" kd "--sync" (ht-d + "/src")])
+   (ht-mt f) (hark ["stat" "-c" "%Y" f] @ r (<r = 0 ? (ht-num >r) ()))
    ; the env names hosts for a release, and takes the cap over the registry
    _ (setenv "KTEST_A64_HOSTS" "far.lan:3 near.lan")
    ev (hosts-with "kvm-a64" ())
@@ -60,6 +73,7 @@
            (1 = all 0 "slots-lanes") (ht-seq (all 0 "apart-lanes") ["bsd"])
            (ht-seq l1 [<l1 "host-up-lanes-1" "host-bsd-1"]) (ht-seq (sort held) ["host-bsd-1" "host-up-lanes-1"])
            !(two? after)
+           (0 = kin) (k1 = "a\nb\n") (0 = ks) (1000 = ht-mt (kd + "/a.txt")) (ht-get (kd + "/b.txt") = "c\n")
            (ht-seq (ht-names ev) ["far.lan" "near.lan"]) (ht-seq (map (h \ h "slots") ev) [3 1])
            (ht-seq (ev 0 "reach") ["ssh" "far.lan"]))
    _ (setenv "BEE_HOSTS" "") _ (setenv "BEE_LOCKS" "")
