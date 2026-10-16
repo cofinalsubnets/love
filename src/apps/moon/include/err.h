@@ -1,7 +1,6 @@
 #ifndef _LOVE_ERR_H
 #define _LOVE_ERR_H
-/* BSD's message-and-exit calls, glibc's way: "prog: msg: strerror", the x ones without the
-   strerror, and a null format leaving just the strerror */
+/* "prog: msg: strerror", the x ones without the strerror, as glibc's */
 #include <stdarg.h>
 void warn(char const *, ...);
 void warnx(char const *, ...);

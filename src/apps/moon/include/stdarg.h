@@ -1,22 +1,9 @@
-/* stdarg.h -- src/apps/moon's own, for `mooncc`. cc implements the three __builtin_va_*
- * forms directly, over the target's real va_list -- the System V AMD64 24-byte
- * struct or the AAPCS64 32-byte one -- fed by cc's variadic prologue from a
- * register save area. both are an array of one so a va_list DECAYS to a pointer
- * when passed to another function (the C `va_list` habit -- love.c's gvzprintf/
- * pushr take one), and va_arg mutates the shared state. the field LAYOUT
- * matches gcc's on each target, so a cc-compiled variadic function (push) is
- * callable from gcc-built objects and vice versa. (on a64 gcc's va_list is
- * a bare struct passed by reference -- a composite > 16 bytes -- which is the
- * same wire as the array's decay: one pointer at the 32-byte struct.) the
- * offset fields are `int`: SysV's run 0..176, AAPCS64's are NEGATIVE -- counted
- * back from the top of each save area, rising toward 0. */
+/* stdarg.h for mooncc: the target's real va_list, laid as gcc's so variadics link across
+ * compilers. an array of one, so it decays to a pointer; aapcs64's offsets are negative. */
 #ifndef _CC_STDARG_H
 #define _CC_STDARG_H
 
-/* under a real gcc/clang (the freestanding kernel lane rides these headers too)
- * the va_list type is the COMPILER'S: its __builtin_va_* insist on their own
- * __va_list_tag, so the hand layouts below would be rejected, not just wrong.
- * mooncc claims __GNUC__ but lays its own, so it asks for __mooncc__ first. */
+/* gcc/clang's builtins insist on their own va_list; mooncc claims __GNUC__ but lays its own */
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(__mooncc__)
 typedef __builtin_va_list __gnuc_va_list;
 #else
@@ -29,15 +16,11 @@ typedef struct {
   int __vr_offs;                 /* -(unnamed vr slots)*16, rising by 16 to 0 */
 } __va_list_tag;
 #elif defined(__arm__) || defined(__i386__)
-typedef struct {                 /* AAPCS32: one running pointer -- the prologue
-                                  * pushed r0-r3 contiguous with the caller's
-                                  * stack args, so anonymous WORDS just walk */
+typedef struct {                 /* aapcs32: one pointer; r0-r3 pushed contiguous with stack args */
   void *__ap;
 } __va_list_tag;
 #elif defined(__riscv)
-typedef struct {                 /* LP64: one running pointer, 8-byte slots --
-                                  * anonymous args ride the GP registers only,
-                                  * laid contiguous with the caller stack args */
+typedef struct {                 /* lp64: one pointer, 8-byte slots, gp registers only */
   void *__ap;
 } __va_list_tag;
 #else
@@ -52,10 +35,7 @@ typedef struct {
 typedef __va_list_tag __gnuc_va_list[1];
 #endif
 
-/* every glibc header we do not carry spells the type __gnuc_va_list (it asks
- * gcc's stdarg.h for that name alone with __need___va_list), so a fallen-through
- * <sys/syslog.h> declares vsyslog with it. name it here or the declaration is a
- * parse error in a header the program never wrote. */
+/* glibc headers we do not carry spell the type __gnuc_va_list */
 #ifndef __GNUC_VA_LIST
 #define __GNUC_VA_LIST
 #endif

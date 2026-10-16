@@ -1,8 +1,7 @@
 #ifndef _LOVE_WCTYPE_H
 #define _LOVE_WCTYPE_H
 #include <wchar.h>
-/* C11 7.30 in the C locale: a wide character classifies as its ascii byte does, and past
-   ascii it is no class at all, as glibc's C locale answers */
+/* the c locale: past ascii a wide character has no class, as in glibc */
 typedef int wctype_t;
 typedef int wctrans_t;
 int iswalnum(wint_t);

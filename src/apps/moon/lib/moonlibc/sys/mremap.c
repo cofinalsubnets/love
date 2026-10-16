@@ -1,6 +1,5 @@
 #include "../impl.h"
-/* linux's mechanism; off the map, so a bsd kernel answers ENOSYS (sqlite falls back to
-   unmap and map again). MREMAP_FIXED's fifth operand rides the varargs */
+/* linux only; a BSD answers ENOSYS. MREMAP_FIXED's target rides the varargs */
 #include <stdarg.h>
 void *mremap(void *a, unsigned long old, unsigned long n, int fl, ...) {
   va_list ap; void *to;

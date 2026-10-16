@@ -10,8 +10,7 @@ struct option { char const *name; int has_arg; int *flag; int val; };
 int getopt_long(int, char *const *, char const *, struct option const *, int *);
 int getopt_long_only(int, char *const *, char const *, struct option const *, int *);
 
-/* moonlibc's: a parse's whole state, for the reentrant calls. start it from GETOPT_DATA_INIT
- * (or set optind to 0); optind optarg opterr optopt read as posix's globals do */
+/* moonlibc's reentrant parse state: start from GETOPT_DATA_INIT, or optind 0 */
 struct getopt_data { int optind, opterr, optopt; char *optarg; char *next; int first, last; };
 #define GETOPT_DATA_INIT {1, 1, 0, 0, 0, 1, 1}
 int getopt_r(int, char *const *, char const *, struct getopt_data *);

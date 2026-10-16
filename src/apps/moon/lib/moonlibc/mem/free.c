@@ -1,26 +1,17 @@
 #include "../impl.h"
 
-/* a block worth its own mapping gets one, and free hands that back whole: the
-   arena list below never returns a page, so a heap that peaks through a few
-   large blocks would keep every one of them resident for the run. the tag
-   rides `next', which an allocated block does not otherwise use -- so malloc
-   writes it on EVERY block, or free reads whatever the old payload left there.
-   __MDirect names it in impl.h, where calloc reads it too. */
+/* a big block gets its own mapping, handed back whole. an allocated block's `next' is
+ * a tag, written on every block */
 #define MBig ((size_t) 128 * 1024)
 
 static __mhdr __mbase;
 static __mhdr *__mfree;
-/* the process's thread state, the one place threads keep any: whether a second thread exists
- * (pthread_create sets it, nothing clears it) and the arena lock that switches on with it. here
- * rather than beside pthread_create so a link that allocates never pulls the thread member */
+/* thread state lives here so a link that allocates never pulls in pthread.o */
 struct __love_mt __love_mt;
 static void __mtake(void) { if (__love_mt.threads) while (__sync_lock_test_and_set(&__love_mt.lock, 1)) sc0(NR_sched_yield); }
 static void __mgive(void) { if (__love_mt.threads) __sync_lock_release(&__love_mt.lock); }
-/* a small block is a slot of its size class, carved from a slab: one 64 KiB arena block,
-   [slab, slots], a bit per slot held. malloc and free there flip a bit, no list walk; the
-   scan resumes where it stopped, so a freed slot is not handed straight back. an empty
-   slab goes back to the arena at once (the arenas keep one spare). the slot's header
-   stays, tagged __MSlot, its size the units and its index << 16 */
+/* a small block is a slot in a 64 KiB slab of its size class, a bit per slot held. a
+ * slot's header is tagged __MSlot, its size the units | index << 16 */
 #define SlabU (65536 / sizeof(__mhdr))
 #define NCls 24
 static unsigned char const __mcls[NCls] = {2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160};
@@ -43,9 +34,7 @@ static void __munlink(__mslab *s) {
   if (s->prev) s->prev->next = s->next; else __mslabs[s->cls] = s->next;
   if (s->next) s->next->prev = s->prev;
   s->next = s->prev = 0; }
-/* an allocated block's `next' is a tag (impl.h), never a list pointer, and the free list
-   writes a pointer there; so a word free never handed out, or a block freed already, reads
-   as neither tag and aborts -- a corrupted list is worse than a crash */
+/* a pointer never handed out, or freed already, reads as no tag and aborts */
 __mhdr *__mblock(void *p, char const *who) {
   __mhdr *b = (__mhdr *) p - 1;
   if (b->next == __MAlign) b = (__mhdr *) p - b->size - 1;
@@ -54,10 +43,8 @@ __mhdr *__mblock(void *p, char const *who) {
     write(2, ": not a live block (freed already, or never malloc's)\n", 54);
     abort(); }
   return b; }
-/* an arena is laid [header, its span, sentinel]: the sentinel stops a free span coalescing
-   into the next arena, so a span that fills its arena whole is the arena empty again, and
-   its pages go back -- but one empty arena is kept, so a program that churns does not map
-   and unmap the same megabyte */
+/* an arena is [header, span, sentinel], so a span filling its arena is the arena empty;
+ * one empty arena is kept, the rest unmapped */
 static __mhdr *__mspare;
 static __mhdr *__mwhole(__mhdr *f) {                    /* f a whole arena's span: its header */
   __mhdr *h = f - 1, *e = f + f->size;
@@ -77,8 +64,7 @@ static void __mput(__mhdr *b) {                        /* the arena's own free, 
   if (q + q->size == b) { q->size += b->size; q->next = b->next; }
   else q->next = b;
   __mfree = q; }
-/* the free block right after b, when there is one and it holds the rest, joins b -- split
-   when it holds more. love's strings grow their buffers a great deal */
+/* grow b in place into the free block after it */
 int __mgrow(__mhdr *b, size_t nu) {
   int ok = 0;
   __mtake();
@@ -162,8 +148,7 @@ static void *__mslot(unsigned c) {                     /* lock held */
   b->next = __MSlot, b->size = u | (size_t) i << 16;
   return (void *) (b + 1); }
 void *malloc(size_t n) {
-  /* no object passes PTRDIFF_MAX, and past it the units and the page rounding below wrap
-     to a small block handed back as the large one asked for */
+  /* past PTRDIFF_MAX the rounding below wraps */
   if (n > ((size_t) -1 >> 1) - 65536) { __errno_v = ENOMEM; return 0; }
   size_t nu = (n + sizeof(__mhdr) - 1) / sizeof(__mhdr) + 1;
   if (n >= MBig) return __mbig(nu);

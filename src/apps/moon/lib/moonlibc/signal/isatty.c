@@ -1,8 +1,6 @@
 #include "../impl.h"
 
-/* the probe wants only the verdict, so it asks the kernel straight and keeps
- * struct termios out of it: freebsd's TIOCGETA reads 44 bytes, linux's
- * TCGETS its own -- either way 0 means a tty answered. */
+/* freebsd's termios is 44 bytes */
 int isatty(int fd) {
   if (__love_osv >= 2) {
     char t[44];

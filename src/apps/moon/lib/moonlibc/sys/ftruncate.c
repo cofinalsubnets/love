@@ -6,7 +6,7 @@ int ftruncate(int fd, off_t n) {
 #elif defined(__ARM_EABI__)
   return (int) er(sc4(NR_ftruncate, fd, 0, (long) n, (long) (n >> 32)));   /* eabi lays a 64-bit arg on an even pair */
 #else
-  if (__love_osv == 3) return (int) er(sc3(NR_ftruncate, fd, 0, n));   /* the classic PAD */
+  if (__love_osv == 3) return (int) er(sc3(NR_ftruncate, fd, 0, n));   /* netbsd pads before a 64-bit arg */
   return (int) er(sc2(NR_ftruncate, fd, n));
 #endif
 }

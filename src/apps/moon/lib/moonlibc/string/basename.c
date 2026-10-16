@@ -1,7 +1,7 @@
 #include "../impl.h"
 #include <libgen.h>
 
-/* ---- basename: posix's, which may write into its argument ---- */
+/* posix's basename, which may write into its argument */
 char *basename(char *p) {
   if (!p || !*p) return ".";
   size_t n = strlen(p);

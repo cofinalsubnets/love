@@ -1,6 +1,5 @@
 #ifndef _LOVE_STRINGS_H
 #define _LOVE_STRINGS_H
-/* POSIX strings.h -- the case-blind compares, which string.h already declares.
- * the header exists because portable code includes it by name. */
+/* string.h already declares the case-blind compares */
 #include <string.h>
 #endif

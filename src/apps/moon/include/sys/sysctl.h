@@ -1,7 +1,6 @@
 #ifndef _LOVE_SYS_SYSCTL_H
 #define _LOVE_SYS_SYSCTL_H
-/* the BSDs' kernel mib walk; linux has none, and the member answers ENOSYS there.
- * the kern.* and hw.* numbers below are the same on freebsd and netbsd */
+/* bsd only (linux answers ENOSYS); these numbers agree on freebsd and netbsd */
 #include <stddef.h>
 #define CTL_KERN            1
 #define KERN_OSTYPE         1

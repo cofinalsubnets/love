@@ -2,8 +2,7 @@
 
 int sigprocmask(int how, sigset_t const *s, sigset_t *o) {
   if (__love_osv >= 2) {
-    /* freebsd sigprocmask(340): 3 args, a 16-byte set, how 1/2/3 (ours + 1);
-     * the mask bits carry signal numbers, so they translate bit by bit. */
+    /* the BSDs: a 16-byte set, how is ours + 1, and the bits translate */
     unsigned long ks[2] = {0, 0}, ko[2] = {0, 0};
     if (s) ks[0] = __love_maskfb((unsigned long) s->__v[0]);
     long r = sc3(NR_rt_sigprocmask, how + 1, s ? (long) ks : 0, o ? (long) ko : 0);

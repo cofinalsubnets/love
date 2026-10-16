@@ -1,6 +1,6 @@
 #include "../impl.h"
 
-/* glibc's: a null buffer is allocated -- size bytes, or as many as the name needs when size is 0 */
+/* as glibc: a null buffer is allocated, size bytes, or just enough when size is 0 */
 char *getcwd(char *b, unsigned long n) {
   if (!b) {
     char *m = malloc(n ? n : 4096);

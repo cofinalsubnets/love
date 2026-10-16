@@ -1,8 +1,8 @@
 #include "../impl.h"
 #include <sys/resource.h>
 
-/* linux's raw call answers 20 - nice so no answer looks like an error; a BSD answers the
- * nice itself, which may be negative, so its carry is read here rather than through er. */
+/* linux answers 20 - nice; a BSD answers the nice itself, maybe negative, so its error
+ * is read here rather than through er */
 int getpriority(int w, id_t who) {
   if (__love_osv >= 2) {
     long r = __love_sys(NR_fb_getpriority, w, (long) who, 0, 0, 0, 0);

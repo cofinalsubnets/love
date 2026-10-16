@@ -1,7 +1,7 @@
 #include "../impl.h"
 #include <stdio_ext.h>
 
-/* ---- stdio_ext: a stream's state, as glibc and musl answer it ---- */
+/* stdio_ext: a stream's state, as glibc and musl answer it */
 size_t __fbufsize(FILE *f) { return (size_t) (f->wr ? f->cap : f->rcap); }
 size_t __fpending(FILE *f) { return f->wr ? (size_t) f->len : 0; }
 size_t __freadahead(FILE *f) { return (size_t) __rahead(f); }

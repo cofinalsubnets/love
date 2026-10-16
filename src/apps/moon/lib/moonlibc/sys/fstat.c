@@ -1,13 +1,12 @@
 #include "../impl.h"
 
 #ifdef __ILP32__
-/* a 32-bit target asks statx and lays its answer across: no stat64 call fills a 64-bit time */
+/* a 32-bit target asks statx: no stat64 call fills a 64-bit time */
 static dev_t lxdev(unsigned int ma, unsigned int mi) {
   return (dev_t) ((mi & 0xff) | (ma << 8) | ((mi & ~0xffu) << 12)); }
 
 #ifdef __ARM_EABI__
-/* ..but a kernel before 4.11 has no statx, and arm asks fstatat64 there: its long longs
- * sit on 8, so the record pads where i386's does not */
+/* a kernel before 4.11 has no statx; arm falls back to fstatat64, long longs aligned to 8 */
 struct __arm_stat64 {
   unsigned long long st_dev;
   unsigned char __pad0[4];
@@ -70,8 +69,7 @@ int __love_statx(int dirfd, char const *p, int fl, struct stat *st) {
 int fstat(int fd, struct stat *st) { return __love_statx(fd, "", AT_EMPTY_PATH, st); }
 #else
 
-/* the freebsd branch fills the ino64 twin and translates -- shared with
- * stat.c/lstat.c through __love_fbstat (this member is their floor). */
+/* freebsd's ino64 stat into ours, shared with stat.c and lstat.c */
 void __love_fbstat(struct __fb_stat const *f, struct stat *st) {
   memset(st, 0, sizeof *st);
   st->st_dev = f->st_dev;
@@ -88,7 +86,7 @@ void __love_fbstat(struct __fb_stat const *f, struct stat *st) {
   st->st_mtim = f->st_mtim;
   st->st_ctim = f->st_ctim; }
 
-/* ..and the netbsd twin (__fstat50's shape), same sharing */
+/* netbsd's __fstat50 record into ours */
 void __love_nbstat(struct __nb_stat const *f, struct stat *st) {
   memset(st, 0, sizeof *st);
   st->st_dev = f->dev;

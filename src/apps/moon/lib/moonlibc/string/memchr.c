@@ -1,11 +1,7 @@
 #include "../impl.h"
 
-/* the needle, a word at a time: xor'ing the text with the needle in every lane
- * turns "is this byte the needle" into "is this byte zero", which is the same
- * (w - ones) & ~w & highs test strlen uses. a word that answers yes falls to the
- * byte loop, which then runs at most sizeof(long) more times.
- * n bounds every load here, so the alignment step is for speed and not for
- * safety -- strlen.c is where it is load-bearing. */
+/* xor with the needle in every lane turns its bytes to zeros, found by strlen's
+ * (w - ones) & ~w & highs test; n bounds every load, so aligning is only for speed */
 void *memchr(void const *p, int c, size_t n) {
   unsigned char const *s = p;
   unsigned char ch = (unsigned char) c;

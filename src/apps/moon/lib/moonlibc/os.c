@@ -1,30 +1,21 @@
-/* src/apps/moon/lib/moonlibc/os.c -- the kernel under one binary (seed-universal
- * rungs UV1-UV2). one build runs linux, freebsd and netbsd: __love_osdetect asks
- * the kernel which it is (once, at entry or lazily under __love_call), and
- * numbers, errnos, signals, masks and flag words translate through the tables
- * here. x64, a64 and rv64 carry them; i386 and arm take the identity stubs
- * below and answer whichever kernel -os named. */
+/* os.c -- one binary on linux, freebsd and netbsd: numbers, errnos, signals and flags
+ * translate through these tables. i386 and arm take identity stubs */
 #include "impl.h"
 
-long __love_osv;         /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd; -1 inle,
-                        * written at its entry: we ARE the kernel, nothing to probe */
+long __love_osv;         /* 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, -1 inle */
 
-/* the inle door's default, for a link that carries no src/inle/sys.c: refuse, and
- * name the protocol. a negative osv is only ever written by inle's own entry,
- * so a hosted binary never takes __love_call's arm and this body is dead weight
- * the dead-static sweep cannot drop -- one line, kept for the symbol. */
+/* inle's door, for a link without the kernel: ENOSYS */
 __attribute__((weak))
 long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
   return -38; }
 
-/* a refused address the program can make good (love's lazy image wakes what sleeps
- * there): 1 and the call goes once more. the default has nothing to wake */
+/* a refused address the program can make good: 1 retries the call */
 __attribute__((weak))
 int __love_efault(void) { return 0; }
 
 #ifdef __ARM_EABI__
-/* arm's *_time64 calls are linux 5.1's: before it the 32-bit twin answers, each record
- * narrowed going in and widened coming back. a time past 2038 cannot be said, EOVERFLOW */
+/* arm's *_time64 calls need linux 5.1: before it the 32-bit twin answers, records
+ * narrowed and widened. a time past 2038 is EOVERFLOW */
 int __love_t32k;
 
 struct __ts32 { long s, ns; };
@@ -70,11 +61,7 @@ long __love_t32(long n, long a, long b, long c, long d, long e, long f) {
 
 long __love_osdetect(void) {
 #ifndef LvOsTranslate
-  /* no tables on this arch: the kernel is whichever one the build was compiled
-   * for, and nothing at runtime can contradict it. READ OFF -os, never
-   * assumed -- linux is where we started, not a default, and a build naming a
-   * kernel this arch has no tail for owes a diagnostic and not another
-   * kernel's numbers. */
+  /* no tables on this arch: the kernel is whichever -os named */
 # if defined(__linux__)
   return 1;
 # elif defined(__FreeBSD__)
@@ -85,21 +72,8 @@ long __love_osdetect(void) {
 #  error "moonlibc: no OS predefine -- -os named a kernel os.c cannot speak for"
 # endif
 #else
-  /* 20 is getpid on both BSDs and writev on linux: writev(-1, NULL, 0) is
-   * -EBADF, a pid is positive, and no kernel is disturbed by asking. a
-   * positive answer says BSD; kern.ostype's first byte parts the two
-   * (__sysctl is 202 and {CTL_KERN, KERN_OSTYPE} is {1, 1} on both).
-   * on aarch64 the two doors are mksys leaves, not __love_sys: netbsd there
-   * SIGSYSes the register form, so the question has to be asked in the svc
-   * IMMEDIATE the kernel being asked about reads. 20 is epoll_create1 on
-   * linux/arm64, which refuses -EINVAL -- the same negative the writev door
-   * gives. and that immediate is ILLEGAL on freebsd/arm64, whose svc handler
-   * signals SIGILL/ILL_ILLOPN for any but zero -- asking blind kills the
-   * process before it can hear an answer. So freebsd is already OUT by the
-   * time this runs: crt0 parts it from the rest by the entry protocol alone
-   * and hands 2 down, and this branch only ever asks linux from netbsd.
-   * on riscv the doors are leaves too: linux reads the number in a7 and netbsd
-   * in t6, so each leaf sets both; freebsd is out by the same entry protocol. */
+  /* 20 is getpid on the BSDs and a refusal on linux; kern.ostype parts the BSDs
+   * (__sysctl 202, {CTL_KERN, KERN_OSTYPE}). a64 and rv64 ask through impl.h's leaves */
 # if defined(__aarch64__) || defined(__riscv)
   long r = __love_nbp20(-1);
   if (r <= 0) return 1;
@@ -145,16 +119,8 @@ int __love_sofb(long *lv, long *op) { return 0; }
 unsigned int __love_sain(void const *a, unsigned int n, void *out) { memcpy(out, a, n); return n; }
 void __love_saout(void *a, unsigned int n) { }
 #else
-/* canonical (linux x86_64) -> {freebsd, netbsd}, sorted by canonical. a row
- * rides here only when the members speak the call correctly on that kernel --
- * same shape, or a body whose BSD branch builds the BSD shape and hands the
- * number through this door; -1 in a column refuses that kernel (ENOSYS,
- * loudly). unmapped stay unmapped: mount, sendfile, and linux's own
- * mechanisms (clone, dup3, signalfd4, memfd_create, mremap, unshare). netbsd's
- * classic band matches freebsd number for number; its versioned calls
- * (__fstat50 440, __getdents30 390, __wait450 449 ..) part company, and the
- * pad-carrying classics (lseek, pread, pwrite, ftruncate, mmap) keep their
- * numbers while the members slide the args. */
+/* canonical -> {freebsd, netbsd}; -1 refuses (ENOSYS), an absent call is linux's own.
+ * netbsd's padded classics keep their numbers while the members slide the args */
 static short const os_nr[][3] = {
   {NR_read,          NR_fb_read,          3},
   {NR_write,         NR_fb_write,         4},
@@ -164,8 +130,8 @@ static short const os_nr[][3] = {
   {NR_mmap,          NR_fb_mmap,        197},   /* nb: 7 args, pos on the stack */
   {NR_mprotect,      NR_fb_mprotect,     74},
   {NR_munmap,        NR_fb_munmap,       73},
-  {NR_rt_sigaction,  NR_fb_rt_sigaction, -1},   /* the member builds the OS shape; nb rides __sigaction_sigtramp */
-  {NR_rt_sigprocmask, NR_fb_rt_sigprocmask, 293},/* ..the 16-byte set + how+1, both BSDs */
+  {NR_rt_sigaction,  NR_fb_rt_sigaction, -1},   /* the member builds the OS shape */
+  {NR_rt_sigprocmask, NR_fb_rt_sigprocmask, 293},/* 16-byte set, how+1 */
   {NR_ioctl,         NR_fb_ioctl,        54},   /* the member translates requests */
   {NR_pread64,       NR_fb_pread64,     173},   /* nb: (fd buf n PAD off) */
   {NR_pwrite64,      NR_fb_pwrite64,    174},
@@ -190,18 +156,12 @@ static short const os_nr[][3] = {
   {NR_getpeername,   NR_fb_getpeername,  31},
   {NR_setsockopt,    NR_fb_setsockopt,  105},
   {NR_getsockopt,    NR_fb_getsockopt,  118},
-  {57,               NR_fb_fork,          2},   /* fork: linux's fork.c rides clone (56,
-                                                 * unmapped); a BSD branch calls 57 */
+  {57,               NR_fb_fork,          2},   /* fork: a BSD branch calls 57 */
   {NR_execve,        NR_fb_execve,       59},
-  {NR_execveat,      NR_fb_fexecve,     465},   /* the member builds the OS shape: the BSDs
-                                                 * have fexecve(fd av ev), linux wants the
-                                                 * empty path and AT_EMPTY_PATH */
+  {NR_execveat,      NR_fb_fexecve,     465},   /* the member builds fexecve(fd av ev) */
   {60,               NR_fb_exit,          1},   /* exit and exit_group are one act here */
   {NR_wait4,         NR_fb_wait4,       449},
-  /* getrusage: freebsd's struct agrees through the two timevals, which is the whole
-   * of what the member reads. netbsd versioned the call away (__getrusage50) and
-   * narrowed suseconds_t with it, so it stays off the map until a box says otherwise.
-   * statfs has no row at all: all three shapes disagree past the first field. */
+  /* getrusage: netbsd's __getrusage50 narrows suseconds_t. statfs: no row, the shapes disagree */
   {NR_getrusage,     NR_fb_getrusage,    -1},
   {NR_getrlimit,     NR_fb_getrlimit,   194},
   {NR_setrlimit,     NR_fb_setrlimit,   195},
@@ -211,7 +171,7 @@ static short const os_nr[][3] = {
   {NR_fsync,         NR_fb_fsync,        95},
   {NR_fdatasync,     NR_fb_fdatasync,   241},
   {NR_ftruncate,     NR_fb_ftruncate,   201},   /* nb: (fd PAD len) */
-  {NR_getcwd,        NR_fb_getcwd,      296},   /* __getcwd fills and answers 0; all faces fill */
+  {NR_getcwd,        NR_fb_getcwd,      296},   /* __getcwd answers 0 */
   {NR_chdir,         NR_fb_chdir,        12},
   {NR_fchmod,        NR_fb_fchmod,      124},
   {NR_fchown,        NR_fb_fchown,      123},
@@ -253,21 +213,14 @@ static short const os_nr[][3] = {
   {NR_pipe2,         NR_fb_pipe2,       453},
 };
 
-/* A PLAIN SCAN, and it must be: the rows are keyed by OUR NR_*, which impl.h
- * defines per arch, so the written order is ascending on x64 (read 0, write
- * 1, close 3 ..) and is NOT on the asm-generic arches (read 63, write 64, close
- * 57 ..). An early exit on a passed key would answer ENOSYS to almost every
- * call the moment this lane opens on arm64. 71 rows, and only on a BSD. */
+/* a plain scan: the keys ascend on x64 but not on the asm-generic arches */
 long __love_nrfb(long n) {
   int col = __love_osv == 3 ? 2 : 1;
   for (unsigned i = 0; i < sizeof os_nr / sizeof *os_nr; i++)
     if (os_nr[i][0] == n) return os_nr[i][col];
   return -1; }
 
-/* freebsd errno -> canonical, indexed by freebsd's value (ELAST 97). rows
- * with no canonical concept (the rpc/auth/capsicum family) map to 41, a blank
- * in the canonical numbering, so no canonical name can misread one -- upstairs
- * love_err answers 'eunknown, and a numeric reader matches no errno.h define. */
+/* freebsd errno -> canonical. one with no canonical twin maps to 41, a blank in linux's numbering */
 static unsigned char const os_err[] = {
   0,   1,   2,   3,   4,   5,   6,   7,   8,   9,     /* 0..9 as linux */
   10,  35,  12,  13,  14,  15,  16,  17,  18,  19,    /* 11 EDEADLK */
@@ -290,21 +243,15 @@ static unsigned char const os_err[] = {
                                                        * 96 EOWNERDEAD */
 };
 
-/* ..and netbsd rewrites only the tail: 85..98 in its own order (ENOATTR has
- * no canonical concept and takes the 41 blank). below 85 the two BSDs agree
- * to the number. */
+/* netbsd's errnos part from freebsd's only at 85..98 */
 static unsigned char const os_err_nb[] = {
   84, 95, 125, 74, 61, 63, 60, 62, 41, 72, 67, 71, 130, 131 };
 long __love_errfb(long e) {
   if (__love_osv == 3 && e >= 85 && e <= 98) return os_err_nb[e - 85];
   return (e > 0 && e < (long) (sizeof os_err)) ? os_err[e] : e; }
 
-/* the signal permutation, canonical <-> freebsd. same through 6, 8..9, 11,
- * 13..15, 21..22, 24..28; the parted ones swap in pairs; -1 = no twin
- * (STKFLT and PWR have no freebsd number; EMT and INFO no canonical one, and
- * ride raw -- nothing upstairs names them). the overlap is adversarial:
- * freebsd 17 IS canonical SIGCHLD's number and means SIGSTOP there -- a lost
- * translation stops a child where it meant to reap it. */
+/* signals, canonical <-> freebsd; -1 has no twin. freebsd 17 is SIGSTOP, canonical
+ * SIGCHLD's number: a lost translation stops a child */
 static signed char const os_sigfb[32] = {
    0,  1,  2,  3,  4,  5,  6, 10,  8,  9, 30, 11, 31, 13, 14, 15,
   -1, 20, 19, 17, 18, 21, 22, 16, 24, 25, 26, 27, 28, 23, -1, 12 };
@@ -314,30 +261,15 @@ static signed char const os_sigcan[32] = {
 long __love_sigfb(long s) { return (s >= 0 && s < 32) ? os_sigfb[s] : -1; }
 long __love_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
 
-/* the native siginfo heads. freebsd keeps linux's signo/errno/code order and
- * then lays every lane flat (pid uid status, then the address); netbsd swaps
- * code and errno and unions the lanes where linux does. neither is read past
- * what the canonical shape can hold. */
+/* native siginfo heads: freebsd lays the lanes flat; netbsd swaps code and errno */
 struct __fb_siginfo { int signo, err, code, pid; unsigned uid; int status; void *addr; };
 struct __nb_siginfo { int signo, code, err, pad;
   union { void *addr; struct { int pid; unsigned uid; int status; } chld; } u; };
-/* which lane a record carries. the lanes overlap on two of the three kernels, so
- * the question is asked once here rather than by every handler downstairs -- and
- * it takes BOTH halves: the signal names the pair, the code picks between them.
- * a fault signal SENT by a process carries its sender and no address at all, so
- * the address lane is the kernel's own codes only, above SI_USER and below
- * SI_KERNEL. that is linux's own rule, and where the lanes are unioned the other
- * reading hands a handler the sender's pid punned as a pointer. */
+/* the address lane: a fault signal with a kernel code; a sent one carries its sender */
 static int os_faultlane(int s, long code) {
   return (s == SIGILL || s == SIGTRAP || s == SIGFPE || s == SIGBUS || s == SIGSEGV)
          && code > 0 && code < 0x80; }
-/* si_code's SENDER band. the per-signal fault codes (ILL_ILLOPC, SEGV_MAPERR,
- * CLD_EXITED ..) are small positives and mean the same on all three kernels, so
- * they ride. who SENT a signal does not: freebsd numbers that band from 0x10001
- * and netbsd from -1 -- and netbsd is not linux either, ASYNCIO and MESGQ being
- * swapped. a code with no canonical twin rides rather than being invented:
- * freebsd's SI_NOINFO is 0, which IS linux's SI_USER and cannot be told from it,
- * and netbsd's is 32767, which nothing upstairs names. */
+/* si_code's sender band; the fault codes agree on all three kernels */
 static long os_sicode(long c) {
   if (__love_osv == 2) switch (c) {
     case 0x10001: return 0;      /* SI_USER */
@@ -372,8 +304,7 @@ void __love_sicanon(void const *n, siginfo_t *o) {
            if (o->si_signo == SIGCHLD) o->si_status = b->u.chld.status; } }
   else memcpy(o, n, sizeof *o); }         /* linux: the native record IS canonical */
 
-/* a mask, bit (sig-1), both spellings in the low word (signals 1..31); the
- * canonical rt band above 31 has no freebsd twin and drops. */
+/* a mask, bit (sig-1), signals 1..31; the rt band has no freebsd twin and drops */
 unsigned long __love_maskfb(unsigned long m) {
   unsigned long o = 0;
   for (int s = 1; s < 32; s++)
@@ -385,11 +316,7 @@ unsigned long __love_maskcan(unsigned long m) {
     if (m & (1UL << (s - 1))) { long t = os_sigcan[s]; if (t > 0) o |= 1UL << (t - 1); }
   return o; }
 
-/* open flags: the access mode rides; the named bits translate; the rest drop.
- * both BSDs (stable/14, netbsd-10 sys/fcntl.h): NONBLOCK 4, APPEND 8,
- * NOFOLLOW 0x100, CREAT 0x200, TRUNC 0x400, EXCL 0x800, NOCTTY 0x8000 --
- * only DIRECTORY and CLOEXEC part company (fb 0x20000/0x100000, nb
- * 0x200000/0x400000). */
+/* open flags: the access mode rides, named bits translate, the rest drop */
 long __love_ofb(long f) {
   long o = f & 3, nb = __love_osv == 3;
   if (f & O_CREAT)     o |= 0x200;
@@ -422,8 +349,7 @@ long __love_mapfb(long f) {
   if (f & MAP_ANON) o |= 0x1000;
   return o; }
 
-/* sa_flags (stable/14: ONSTACK 1, RESTART 2, RESETHAND 4, NOCLDSTOP 8,
- * NODEFER 16, NOCLDWAIT 32, SIGINFO 64) */
+
 long __love_safb(long f) {
   long o = 0;
   if (f & SA_ONSTACK)   o |= 1;
@@ -445,12 +371,7 @@ long __love_sacan(long f) {
   if (f & 64) o |= SA_SIGINFO;
   return o; }
 
-/* termios, whole (stable/14 sys/termios.h vs linux's asm-generic). each row
- * is {canonical bit, freebsd bit}; a bit in neither table DROPS on the way
- * through -- the exotic locals do not round-trip, the named surface does.
- * cc[] moves by the index row (VMIN/VTIME are counts and ride the same map);
- * the speed words copy verbatim (freebsd speaks plain baud, nothing here
- * reads them, and a round trip through one kernel preserves them). */
+/* termios rows are {canonical bit, freebsd bit}; an unnamed bit drops. speeds copy verbatim */
 static unsigned int const os_tio_i[][2] = {   /* c_iflag */
   {1, 1}, {2, 2}, {4, 4}, {8, 8}, {16, 16}, {32, 32}, {64, 64}, {128, 128},
   {256, 256}, {0x400, 0x200} /* IXON */, {0x1000, 0x400} /* IXOFF */,
@@ -508,11 +429,7 @@ void __love_tiocan(struct __fb_termios const *f, struct termios *t) {
       t->c_cc[i] = c == 0xff && i != 5 && i != 6 ? 0 : c; }
   t->c_ispeed = f->c_ispeed; t->c_ospeed = f->c_ospeed; }
 
-/* the socket family: unix and inet agree, inet6 moves (10 -> 28). the BSD
- * sockaddr fronts a length byte where linux's 16-bit family sits: __love_sain
- * rebuilds the head into the caller's scratch, __love_saout folds a kernel-
- * filled head back in place. freebsd's copyin rewrites sa_len from the
- * syscall's namelen, so the length byte is set only for form. */
+/* inet6 moves; the BSD sockaddr fronts a length byte where linux's 16-bit family sits */
 long __love_affb(long a) { return a == 10 ? (__love_osv == 3 ? 24 : 28) : a; }
 long __love_afcan(long a) { return (a == 28 || a == 24) ? 10 : a; }
 unsigned int __love_sain(void const *a, unsigned int n, void *out) {
@@ -521,9 +438,7 @@ unsigned int __love_sain(void const *a, unsigned int n, void *out) {
   memcpy(out, a, n);
   if (n >= 2) {
     long fam = s[0] | s[1] << 8;
-    /* a unix name is as long as its path: linux's 110-byte struct rides whole,
-     * freebsd refuses anything past its own 106 -- so the length follows the
-     * string, the portable spelling both kernels take. */
+    /* a unix name's length follows its path: freebsd refuses past its 106 bytes */
     if (fam == 1 && n > 2) {
       unsigned int k = 2;
       while (k < n && b[k]) k++;
@@ -537,8 +452,7 @@ void __love_saout(void *a, unsigned int n) {
     unsigned int fam = (unsigned int) __love_afcan(b[1]);
     b[0] = (unsigned char) (fam & 255);
     b[1] = (unsigned char) (fam >> 8); } }
-/* socket type: STREAM/DGRAM agree; the two flag bits move high
- * (stable/14: SOCK_CLOEXEC 0x10000000, SOCK_NONBLOCK 0x20000000) */
+/* socket type: CLOEXEC and NONBLOCK move high */
 long __love_sotype(long t) {
   long o = t & 0xff;
   if (t & 0x800)   o |= 0x20000000;
@@ -558,11 +472,8 @@ long __love_msgcan(long f) {
   if (f & 0x10) o |= 0x20;              /* MSG_TRUNC */
   if (f & 0x20) o |= 0x8;               /* MSG_CTRUNC */
   return o; }
-/* sockopt: SOL_SOCKET moves whole (1 -> 0xffff) and its names permute, and
- * so do IPPROTO_IP's and IPPROTO_IPV6's (the bsds share kame's numbers there);
- * the other IPPROTO_* levels ride (TCP_NODELAY 1 = 1). only what the headers
- * spell has a row; an unmapped name refuses loudly upstream, never a silently
- * different option -- linux's IP_TTL is a bsd's IP_HDRINCL. 0 ok, -1 unknown. */
+/* sockopt: SOL_SOCKET, IP and IPV6 names permute, other levels ride. 0 ok, -1 unmapped,
+ * never a different option: linux's IP_TTL is a bsd's IP_HDRINCL */
 int __love_sofb(long *lv, long *op) {
   if (*lv == 0) switch (*op) {
     case 2: *op = 4; return 0;          /* IP_TTL */

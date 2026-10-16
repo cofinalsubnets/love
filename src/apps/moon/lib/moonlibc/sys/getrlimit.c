@@ -1,9 +1,8 @@
 #include "../impl.h"
 #include <sys/resource.h>
 
-/* the resource numbers are linux's: the BSDs part after RSS (memlock 6, nproc 7, nofile 8,
- * as 10) and spell infinity as the top signed value where linux has the top unsigned; both
- * translate here, so a caller reads one shape whichever kernel answers. */
+/* linux's numbering; the BSDs differ after RSS (memlock 6, nproc 7, nofile 8, as 10)
+ * and spell infinity as the top signed value */
 int __love_rlres(int r) {
   if (__love_osv < 2) return r;
   switch (r) { case RLIMIT_MEMLOCK: return 6; case RLIMIT_NPROC: return 7;

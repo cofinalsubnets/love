@@ -14,7 +14,7 @@ void *reallocarray(void*, size_t, size_t);
 void  free(void*);
 void *aligned_alloc(size_t, size_t);
 int   posix_memalign(void**, size_t, size_t);
-const char *getprogname(void);   /* glibc >= 2.33 home (gnulib also reaches unistd.h for it) */
+const char *getprogname(void);
 void  exit(int);
 void  abort(void);
 int   atexit(void (*)(void));
@@ -36,20 +36,18 @@ double strtod(char const*, char**);
 int   system(char const*);
 int   abs(int);
 long  labs(long);
-/* the pty quartet lives here in glibc (stdlib.h, not pty.h) */
+/* the pty quartet lives here in glibc */
 int   posix_openpt(int);
 int   grantpt(int);
 int   unlockpt(int);
 char *ptsname(int);
-/* the two pseudo-random streams. OURS, not glibc's -- a program that seeds and
- * expects a particular sequence gets a different one; nothing here promises that. */
+/* our own generators: a seed does not give glibc's sequence */
 #define RAND_MAX 32767
 int  rand(void);
 void srand(unsigned int);
 long random(void);
 void srandom(unsigned int);
-/* the multibyte face: one byte a character, ascii only, until setlocale names a UTF-8
- * LC_CTYPE (num.c), when it is utf-8 */
+/* multibyte: one byte a character until setlocale names a utf-8 LC_CTYPE */
 extern int __love_utf8;
 #define MB_CUR_MAX ((size_t) (__love_utf8 ? 6 : 1))
 int mblen(char const *, size_t);

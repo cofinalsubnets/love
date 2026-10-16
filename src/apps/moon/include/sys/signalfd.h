@@ -3,7 +3,7 @@
 #include <signal.h>
 #define SFD_CLOEXEC  524288
 #define SFD_NONBLOCK   2048
-/* 128 bytes on the wire; the head fields + a pad to size */
+/* 128 bytes on the wire */
 struct signalfd_siginfo {
   unsigned int  ssi_signo;
   int           ssi_errno;

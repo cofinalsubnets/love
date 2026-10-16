@@ -1,5 +1,4 @@
-/* freestanding assert.h for cc. no include guard by design: assert.h is meant to
- * be re-includable with NDEBUG toggling the macro. */
+/* no include guard: re-included, it follows NDEBUG anew */
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -15,7 +14,6 @@
 
 #ifndef _LOVE_ASSERT_H
 #define _LOVE_ASSERT_H
-/* static_assert is a keyword-level facility; expose the C11 macro spelling. */
 #ifndef static_assert
 #define static_assert _Static_assert
 #endif

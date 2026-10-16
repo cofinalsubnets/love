@@ -1,8 +1,7 @@
 #include "../impl.h"
 #include <sys/vfs.h>
 
-/* linux's, and linux's alone: the struct is off the map on both BSDs, so this asks
- * by the canonical number and a BSD hears the map's ENOSYS back. */
+/* linux only; a BSD answers ENOSYS */
 int statfs(char const *p, struct statfs *b) {
 #ifdef __ILP32__
   return (int) er(sc3(NR_statfs64, (long) p, sizeof *b, (long) b));

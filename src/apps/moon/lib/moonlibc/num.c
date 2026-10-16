@@ -1,22 +1,14 @@
-/* src/apps/moon/lib/moonlibc/num.c -- strtol/strtod, and the stdio odds and ends the
- * HEADERS promised (sscanf, ferror, popen). */
+/* moonlibc's numbers, math faces, process and stdio odds and ends */
 #include "impl.h"
 #include <inttypes.h>
 
-/* ---- strtol / strtod: the reader's number path. SATURATION INCLUDED (the
- * kernel corpus runs them; the naive
- * strtod measured corpus-green against glibc's in the rung-4 differential). ---- */
 static int __digval(int c) {
   if (c >= 48 && c <= 57) return c - 48;
   if (c >= 97 && c <= 122) return c - 87;
   if (c >= 65 && c <= 90) return c - 55;
   return 99; }
-/* the walk under every strto* integer: white space, a sign, the base's prefix, then digits
- * accumulated UNSIGNED up to the magnitude mx (so LONG_MIN's is reachable without signed
- * overflow on the way). OVERFLOW SATURATES -- it does not wrap. the standard says so, and
- * every strtol we sit beside (glibc, musl, newlib) does it; a wrapping accumulator reads one
- * source text as two numbers depending on which libc the binary carried. *over says it
- * saturated, *neg that a minus led; the answer is the magnitude, mx when over. */
+/* every strto* integer: the magnitude accumulates unsigned and saturates at the limit,
+ * as the standard asks; *neg says a minus led, *over that it saturated */
 static unsigned long long __strtom(char const *s, char **endptr, int base, unsigned long long mx,
                                    unsigned long long mxneg, int *neg, int *over) {
   char const *p = s;
@@ -46,13 +38,12 @@ static unsigned long long __strtom(char const *s, char **endptr, int base, unsig
   if (!any) return 0;
   if (*over) { errno = ERANGE; return lim; }
   return rc; }
-/* signed: the minus reaches one further, and a saturated answer keeps its sign */
+/* the minus reaches one further */
 static long long __strtoi(char const *s, char **endptr, int base, unsigned long long mx) {
   int neg, over;
   unsigned long long m = __strtom(s, endptr, base, mx, mx + 1, &neg, &over);
   return (long long) (neg ? 0ULL - m : m); }
-/* unsigned: the ONE wrap the standard does ask for -- a leading minus negates the
- * magnitude modulo the width rather than refusing; a saturated answer is the max */
+/* a leading minus negates modulo the width, as the standard asks */
 static unsigned long long __strtou(char const *s, char **endptr, int base, unsigned long long mx) {
   int neg, over;
   unsigned long long m = __strtom(s, endptr, base, mx, mx, &neg, &over);
@@ -64,10 +55,7 @@ unsigned long strtoul(char const *s, char **endptr, int base) { return (unsigned
 unsigned long long strtoull(char const *s, char **endptr, int base) { return __strtou(s, endptr, base, ULLONG_MAX); }
 uintmax_t strtoumax(char const *s, char **endptr, int base) { return __strtou(s, endptr, base, ULLONG_MAX); }
 double atof(char const *s) { return strtod(s, 0); }
-/* the libc math faces over the lm floor (lm.c's seven transcendentals ride
- * m_am.o in every ladder link); the rest are exact derivations. tan and the
- * arc trio are DERIVED (a few ulp looser than a dedicated kernel) -- enough
- * for the ladder; a consumer that measures gets its own lm kernel. */
+/* libc math over lm.c; tan, the arcs and the hyperbolics are derived, a few ulp looser */
 double lm_sqrt(double), lm_exp(double), lm_log(double);
 double lm_sin(double), lm_cos(double), lm_atan2(double, double), lm_pow(double, double);
 double sqrt(double x) { return lm_sqrt(x); }
@@ -87,7 +75,7 @@ double sinh(double x) { double e = lm_exp(x); return (e - 1.0 / e) / 2.0; }
 double cosh(double x) { double e = lm_exp(x); return (e + 1.0 / e) / 2.0; }
 double tanh(double x) { double e = lm_exp(2.0 * x); return (e - 1.0) / (e + 1.0); }
 double fabs(double x) { return x <= 0 ? 0.0 - x : x; }
-static double __trunc9(double x) {                 /* |x| < 2^52 assumed */
+static double __trunc9(double x) {   /* |x| < 2^53 assumed */
   double t = (double) (long long) x;
   return t; }
 double floor(double x) {
@@ -101,12 +89,10 @@ double ceil(double x) {
 double fmod(double x, double y) {
   if (y == 0.0 || x != x || y != y) return 0.0 / 0.0;
   double q = x / y;
-  if (q >= 9007199254740992.0 || q <= -9007199254740992.0) return 0.0;   /* quotient past exact-int: stance */
+  if (q >= 9007199254740992.0 || q <= -9007199254740992.0) return 0.0;   /* chosen: 0, not the exact remainder */
   double r = x - __trunc9(q) * y;
   return r; }
-/* the C99 float twins: the double face, narrowed once at the return. a dedicated
- * binary32 kernel would be faster and no more accurate -- the double result is
- * already correct past float's 24 bits for every one of these. */
+/* float twins: the double result narrowed once */
 float sinf(float x) { return (float) sin(x); }
 float cosf(float x) { return (float) cos(x); }
 float tanf(float x) { return (float) tan(x); }
@@ -124,7 +110,6 @@ float ceilf(float x) { return (float) ceil(x); }
 float atan2f(float y, float x) { return (float) atan2(y, x); }
 float powf(float x, float y) { return (float) pow(x, y); }
 float fmodf(float x, float y) { return (float) fmod(x, y); }
-/* frexp/ldexp: exact exponent surgery on the IEEE bits (no math floor needed) */
 double frexp(double x, int *e) {
   union { double d; unsigned long long u; } b;
   b.d = x;
@@ -147,23 +132,8 @@ double ldexp(double x, int n) {                    /* x * 2^n, clamped through t
   else if (n < -1022) { x *= __e2d(-969); n += 969;
     if (n < -1022) { x *= __e2d(-969); n += 969; if (n < -1022) n = -1022; } }
   return x * __e2d(n); }
-/* the math floor's exact reader (src/apps/moon/lib/moonlibc/math/lm.c -- linked wherever
-   moonlibc is: the raw love build and the whole moon userland): correctly
-   rounded, so read(show x) = x holds off-glibc too. The naive accumulator
-   that lived here parsed "0.3" one ulp off -- masked until love's printer
-   went shortest-roundtrip, then loud in test_raw. */
-double lm_strtod(char const *, char **);
-/* THE LIBC FACE IS NOT lm_strtod's FACE, and the wrapper is where they part:
- * lm_strtod is love's float reader, and the reader hands it a whole TOKEN, so
- * it skips no leading space. C's strtod owes that, and owes endptr = the
- * ORIGINAL nptr when nothing converts. doing it here keeps lm.c exactly what
- * love wants -- correctly rounded and nothing else. found by test/libc/num.c.
- * the SIGN of a zero needs nothing: lm_strtod gets -0.0 right on its own.
- * it did not while mooncc lowered -d as 0.0 - d (src/apps/moon/gen.l), and a
- * wrapper that "fixed" it here would now flip the sign BACK, since -0.0 == 0.0
- * tests true. */
-/* inf, infinity and nan (with an optional (chars) tail), any case, after an optional sign:
- * the bits themselves, so a minus reaches nan's sign too. 0 when p spells neither */
+double lm_strtod(char const *, char **);   /* correctly rounded; reads a bare token, no leading space */
+/* inf, infinity, nan(chars) in any case after a sign, as bits so a minus signs nan too; 0 if neither */
 static char const *__strtospecial(char const *p, double *v) {
   int neg = *p == '-';
   if (*p == '-' || *p == '+') p++;
@@ -190,11 +160,10 @@ double strtod(char const *s, char **end) {
   if (sp) { if (end) *end = (char *) sp; return sv; }
   char *e = (char *) p;
   double v = lm_strtod(p, &e);
-  if (e == p) { if (end) *end = (char *) s; return 0.0; }   /* no conversion: the ORIGINAL s */
+  if (e == p) { if (end) *end = (char *) s; return 0.0; }   /* no conversion: the original s */
   if (end) *end = e;
   return v; }
-/* qsort: shellsort (Ciura-ish 3x gaps would be nicer, but n/2 halving is small
- * and tar's arrays are short). in-place byte swap of size-sz elements. */
+/* shellsort with halving gaps */
 void qsort(void *base, size_t n, size_t sz, int (*cmp)(void const *, void const *)) {
   char *a = base;
   for (size_t gap = n / 2; gap > 0; gap /= 2)
@@ -202,8 +171,6 @@ void qsort(void *base, size_t n, size_t sz, int (*cmp)(void const *, void const 
       for (size_t j = i; j >= gap && cmp(a + (j - gap) * sz, a + j * sz) > 0; j -= gap) {
         char *x = a + (j - gap) * sz, *y = a + j * sz;
         for (size_t k = 0; k < sz; k++) { char t = x[k]; x[k] = y[k]; y[k] = t; } } }
-/* qsort's twin, and the headers already named it: a plain binary search over
- * the half-open span, answering the ELEMENT or null. */
 void *bsearch(void const *key, void const *base, size_t n, size_t sz,
               int (*cmp)(void const *, void const *)) {
   char const *a = base;
@@ -215,8 +182,6 @@ void *bsearch(void const *key, void const *base, size_t n, size_t sz,
     if (r < 0) hi = mid; else lo = mid + 1; }
   return 0; }
 
-/* exec's variadic pair: count (arg0, .., NULL) off the stack, gather them into an
- * argv that holds them all, then execv[p]. */
 static int __execl(char const *p, char const *a0, va_list ap, int path) {
   va_list c; va_copy(c, ap);
   size_t n = 1;
@@ -236,7 +201,7 @@ int execlp(char const *f, char const *a0, ...) {
   int r = __execl(f, a0, ap, 1);
   va_end(ap);
   return r; }
-/* system: fork, /bin/sh -c, wait. no signal juggling (love is single-threaded). */
+/* no signal juggling: love is single-threaded */
 int system(char const *cmd) {
   if (!cmd) return 1;                          /* a shell is available */
   int pid = fork();
@@ -248,8 +213,7 @@ int system(char const *cmd) {
   int st = 0;
   while (waitpid(pid, &st, 0) < 0) if (errno != EINTR) return -1;
   return st; }
-/* popen: system's shape with a pipe spliced onto the child's stdout ("r") or
- * stdin ("w"); the child pid rides the FILE for pclose's wait (m4 esyscmd). */
+/* the child pid rides the FILE for pclose's wait */
 FILE *popen(char const *cmd, char const *mode) {
   int fds[2];
   int rd = mode[0] == 'r';
@@ -280,8 +244,7 @@ int pclose(FILE *f) {
   if (r == EOF) return -1;
   while (waitpid(pid, &st, 0) < 0) if (errno != EINTR) return -1;
   return st; }
-/* tmpfile: a mktemp'd /tmp file opened w+ and unlinked at once, so it lives
- * exactly as long as the FILE (m4's diversions write it, rewind, read back). */
+/* unlinked at once, so it lives as long as the FILE */
 FILE *tmpfile(void) {
   char buf[16];
   strcpy(buf, "/tmp/aiXXXXXX");
@@ -290,17 +253,16 @@ FILE *tmpfile(void) {
   FILE *f = fopen(buf, "w+");
   if (f) unlink(buf);
   return f; }
-int remove(char const *p) {                        /* the ISO face: unlink, a directory falls to rmdir */
+int remove(char const *p) {                        /* a directory falls to rmdir */
   int r = unlink(p);
   return r == 0 ? 0 : rmdir(p); }
-char *tmpnam(char *s) {                            /* the ISO face over mktemp (lua's os.tmpname) */
+char *tmpnam(char *s) {                         
   static char b[20];
   if (!s) s = b;
   strcpy(s, "/tmp/aiXXXXXX");
   mktemp(s);
   return s[0] ? s : 0; }
-/* mktemp: fill the trailing XXXXXX from the pid and bump until the name is
- * free (racy by design -- the caller opens it; m4's diversion files). */
+/* racy by design: the caller opens the name */
 char *mktemp(char *tmpl) {
   size_t n = strlen(tmpl);
   if (n < 6 || strcmp(tmpl + n - 6, "XXXXXX")) { tmpl[0] = 0; return tmpl; }
@@ -312,7 +274,7 @@ char *mktemp(char *tmpl) {
     if (access(tmpl, 0) < 0) return tmpl; }
   tmpl[0] = 0;
   return tmpl; }
-/* mkstemp: mktemp's names, but the open is the test -- O_EXCL takes a free one, 0600 */
+/* O_EXCL is the test; 384 = 0600 */
 int mkstemp(char *tmpl) {
   size_t n = strlen(tmpl);
   if (n < 6 || strcmp(tmpl + n - 6, "XXXXXX")) { errno = EINVAL; return -1; }
@@ -324,9 +286,8 @@ int mkstemp(char *tmpl) {
     int fd = open(tmpl, O_RDWR | O_CREAT | O_EXCL, 384);
     if (fd >= 0 || errno != EEXIST) return fd; }
   return -1; }
-/* every category is C, but LC_CTYPE may be utf-8: a name ending .UTF-8 or .utf8 (C.UTF-8,
- * or any language's, which reads the same here). "" names the environment's, LC_ALL then
- * the category's then LANG; a name of neither kind is refused. each category keeps its name; LC_ALL answers LC_CTYPE's */
+/* every category is C, but LC_CTYPE may be utf-8 (a name ending .UTF-8 or .utf8).
+ * "" reads LC_ALL, then the category's variable, then LANG */
 int __love_utf8;
 static int lc_utf8(char const *n) {
   char const *d = strrchr(n, '.');
@@ -347,13 +308,13 @@ char *setlocale(int cat, char const *loc) {
     for (int k = lo; k < hi; k++) strcpy(names[k], want[k]);
     __love_utf8 = lc_utf8(names[LC_CTYPE]); }
   return names[lo]; }
-struct lconv *localeconv(void) {                   /* the C locale's table: "." and empties */
+struct lconv *localeconv(void) {                
   static struct lconv c = { (char *) ".", (char *) "", (char *) "",
     (char *) "", (char *) "", (char *) "", (char *) "", (char *) "",
     (char *) "", (char *) "", 127, 127, 127, 127, 127, 127, 127, 127 };
   return &c; }
 
-/* getc/fputs/ferror; a read-write stream reads unbuffered */
+/* a read-write stream reads unbuffered */
 int getc(FILE *f) {
   unsigned char c;
   if (f->un) { int r = f->un - 1; f->un = 0; return r; }
@@ -369,13 +330,6 @@ int ungetc(int c, FILE *f) {
   f->eof = 0;
   return c & 255; }
 int fputs(char const *s, FILE *f) { size_t n = strlen(s); return fwrite(s, 1, n, f) == n ? 0 : EOF; }
-/* ---- the stdout/stdin shorthands and the odds and ends the HEADERS already
- * promised. every one of these was declared in src/apps/moon/include/ with no body
- * anywhere, so a program calling it compiled and then died at the LINK under
- * CC=mooncc while building fine against glibc -- gnulib's progname module
- * reaches getprogname exactly that way. test/libc/'s header-completeness phase
- * (test/gate/libc.sh) is what found them and is what keeps the promise honest
- * from here: a name the headers declare must have a definition. ---- */
 int putchar(int c) { return fputc(c, stdout); }
 int puts(char const *s) { return fputs(s, stdout) == EOF || fputc('\n', stdout) == EOF ? EOF : 0; }
 int fgetc(FILE *f) { return getc(f); }
@@ -383,8 +337,7 @@ int getchar(void) { return getc(stdin); }
 int ferror(FILE *f) { return f->err; }
 int feof(FILE *f) { return f->eof; }
 void clearerr(FILE *f) { f->err = 0; f->eof = 0; }
-/* no name database yet: every passwd/group lookup misses, so tar prints numeric
- * owner/group (its own fallback). a real /etc/passwd walk is a later rung. */
+/* no name database: every lookup misses, so callers fall back to numeric ids */
 struct passwd *getpwuid(uid_t u) { return 0; }
 struct passwd *getpwnam(char const *n) { return 0; }
 struct group *getgrgid(gid_t g) { return 0; }

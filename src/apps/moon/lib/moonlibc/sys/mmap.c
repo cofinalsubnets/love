@@ -4,8 +4,7 @@ void *mmap(void *a, long n, int prot, int fl, int fd, off_t off) {
   long r;
 #ifdef LvOsTranslate
   if (__love_osv == 3)
-    /* netbsd keeps the classic pad: (addr len prot flags fd PAD pos), the
-     * seventh riding the stack through the wide door */
+    /* netbsd pads before pos, so pos is a seventh arg */
     r = __love_fb7(197, (long) a, n, prot, (int) __love_mapfb(fl), fd, 0, off);
   else
 #endif

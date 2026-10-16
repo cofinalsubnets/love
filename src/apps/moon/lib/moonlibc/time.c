@@ -1,15 +1,12 @@
-/* src/apps/moon/lib/moonlibc/time.c -- the calendar: no timezone database, so
- * localtime IS gmtime (UTC). */
+/* the calendar: no timezone database, so localtime is gmtime */
 #include "impl.h"
 
-/* ---- the calendar: no timezone database, so localtime IS gmtime (UTC). the
- * civil-from-days is Hinnant's exact integer algorithm (1970-01-01 = Thursday,
- * wday 4). asctime lays glibc's fixed 26-byte "Www Mmm dd hh:mm:ss yyyy\n". ---- */
+/* civil-from-days is Hinnant's integer algorithm; asctime is glibc's fixed 26 bytes */
 static char __tzutc[4] = "UTC";
 char *tzname[2] = { __tzutc, __tzutc };
 long timezone = 0;
 int daylight = 0;
-void tzset(void) { }                               /* the zone is UTC and always was */
+void tzset(void) { }
 struct tm *gmtime(time_t const *tp) {
   static struct tm tm;
   time_t t = *tp;
@@ -40,7 +37,7 @@ struct tm *gmtime(time_t const *tp) {
 struct tm *localtime(time_t const *tp) { return gmtime(tp); }
 static void __d2(char *p, int v) { p[0] = (char) (48 + v / 10 % 10); p[1] = (char) (48 + v % 10); }
 double difftime(time_t a, time_t b) { return (double) (a - b); }
-time_t mktime(struct tm *tm) {                     /* the exact inverse of gmtime (UTC -- no tz, like localtime) */
+time_t mktime(struct tm *tm) {   /* the inverse of gmtime */
   long y = tm->tm_year + 1900, m = tm->tm_mon + 1, d = tm->tm_mday;
   y -= m <= 2;
   long era = (y >= 0 ? y : y - 399) / 400;
@@ -70,8 +67,7 @@ char *asctime(struct tm const *tm) {
   b[24] = 10; b[25] = 0;
   return b; }
 char *ctime(time_t const *tp) { return asctime(gmtime(tp)); }
-/* strftime: the everyday conversions (lua's os.date; %c is the asctime lay).
- * unknown specifiers echo literally; answers 0 when the buffer runs out. */
+/* the everyday conversions; an unknown one echoes, 0 when the buffer runs out */
 size_t strftime(char *s, size_t max, char const *fmt, struct tm const *tm) {
   static char const *wdl = "Sunday\0   Monday\0   Tuesday\0  Wednesday\0Thursday\0 Friday\0   Saturday";
   static char const *mol = "January\0  February\0 March\0    April\0    May\0      June\0     "

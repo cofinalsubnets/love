@@ -5,10 +5,8 @@ int ioctl(int fd, unsigned long req, ...) {
   long arg = va_arg(ap, long);
   va_end(ap);
   if (__love_osv >= 2) {
-    /* the encodings part wholesale; the requests whose PAYLOAD agrees
-     * translate here, and an unknown one refuses loudly rather than firing
-     * a foreign encoding at the kernel. termios rides its own members
-     * (another struct, not just another number). */
+    /* the BSDs encode requests otherwise: those whose payload agrees translate, the
+     * rest refuse rather than fire a foreign encoding */
     unsigned long fq;
     switch (req) {
       case 21523: fq = 0x40087468UL; break;   /* TIOCGWINSZ: struct winsize agrees */
@@ -17,9 +15,8 @@ int ioctl(int fd, unsigned long req, ...) {
       case 21519: fq = 0x40047477UL; break;   /* TIOCGPGRP: int */
       case 21520: fq = 0x80047476UL; break;   /* TIOCSPGRP: int */
       case 21531: fq = 0x4004667fUL; break;   /* FIONREAD: int */
-      /* the sound doors (src/love/horn.c): OSS's ints on freebsd, where _IOWR spells
-       * alike and _IOR/_IOW swap their direction bits; audio(4)'s info on netbsd,
-       * which linux lacks, so its linux _IOC spelling is the canonical face */
+      /* sound: OSS on freebsd, where _IOR/_IOW swap direction bits; netbsd's audio(4),
+       * spelled as linux's _IOC would */
       case 0xc0045002UL: case 0xc0045005UL: case 0xc0045006UL:   /* SNDCTL_DSP_SPEED, SETFMT, CHANNELS */
         fq = __love_osv == 2 ? req : 0; break;
       case 0x80045017UL: fq = __love_osv == 2 ? 0x40045017UL : 0; break;   /* SNDCTL_DSP_GETODELAY */

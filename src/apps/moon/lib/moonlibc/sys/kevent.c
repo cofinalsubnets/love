@@ -1,18 +1,14 @@
 #include <sys/event.h>
 #include "../impl.h"
 
-/* the canonical record is freebsd's; netbsd repacks to __kevent50's 40 bytes
- * with the positive filter (= -canon - 1, an involution). EVFILT_SIGNAL is
- * the one filter whose ident is a signal number, so it alone rides the
- * permutation -- in through sigfb, out through sigcan; a signal with no BSD
- * twin (STKFLT, PWR) refuses EINVAL. */
+/* the record is freebsd's; netbsd repacks to __kevent50 with filter -f - 1. a signal
+ * ident translates, and one with no BSD twin (STKFLT, PWR) is EINVAL */
 int kevent(int kq, struct kevent const *ch, int nch,
            struct kevent *ev, int nev, struct timespec const *ts) {
   if (__love_osv < 2) { __errno_v = ENOSYS; return -1; }
   int nb = __love_osv == 3;
   long nr = nb ? 435 : NR_fb_kevent;   /* __kevent50 */
-  /* changes first (chunked through the translation buffer, no timeout leg),
-   * then the wait -- the order one kernel call keeps. */
+  /* changes first, 8 a call, then the wait */
   for (int at = 0; at < nch; at += 8) {
     struct kevent fc[8]; struct __nb_kevent nc[8];
     int k = nch - at > 8 ? 8 : nch - at;
@@ -38,8 +34,7 @@ int kevent(int kq, struct kevent const *ch, int nch,
       if (ev[i].filter == EVFILT_SIGNAL)
         ev[i].ident = (unsigned long) __love_sigcan((long) ev[i].ident); }
   else {
-    /* through the repack buffer: up to 8 a call (fewer than asked is a legal
-     * kevent answer; a hungrier caller loops) */
+    /* up to 8 a call: a short answer is legal */
     struct __nb_kevent no[8];
     got = er(fb6(nr, kq, 0, 0, (long) no, nev > 8 ? 8 : nev, (long) ts));
     if (got < 0) return -1;

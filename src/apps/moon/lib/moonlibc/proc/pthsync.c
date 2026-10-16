@@ -1,9 +1,8 @@
 #include "../impl.h"
 #include <pthread.h>
 
-/* the waits: a futex word, process-private. a mutex word is 0 free, 1 held, 2 held with waiters
- * maybe; the exchange alone moves it (the one atomic mooncc speaks), so a lock that finds it
- * taken marks it 2 before sleeping, and an unlock that takes a 2 back wakes one */
+/* a mutex word is 0 free, 1 held, 2 held maybe with waiters; only exchange moves it, the
+ * one atomic mooncc has, so an unlock that takes back a 2 wakes one */
 #define FxWait 128
 #define FxWake 129
 static int __fx_wait(int *w, int v, struct timespec const *rel) {
@@ -43,7 +42,6 @@ int pthread_mutex_init(pthread_mutex_t *m, pthread_mutexattr_t const *a) {
   return 0; }
 int pthread_mutex_destroy(pthread_mutex_t *m) { return m->__lock ? EBUSY : 0; }
 
-/* a normal mutex keeps no owner; the other two know theirs, and a recursive one counts */
 static int __pt_mine(pthread_mutex_t *m) {
   if (m->__kind == PTHREAD_MUTEX_NORMAL || m->__owner != pthread_self()) return -1;
   if (m->__kind == PTHREAD_MUTEX_ERRORCHECK) return EDEADLK;
@@ -64,7 +62,7 @@ int pthread_mutex_timedlock(pthread_mutex_t *m, struct timespec const *abs) {
 int pthread_mutex_trylock(pthread_mutex_t *m) {
   int r = __pt_mine(m);
   if (r >= 0) return r == EDEADLK ? EBUSY : r;
-  if (m->__lock || __sync_lock_test_and_set(&m->__lock, 2) != 0) return EBUSY;   /* a 2 on a held word only costs a wake */
+  if (m->__lock || __sync_lock_test_and_set(&m->__lock, 2) != 0) return EBUSY;
   return __pt_got(m); }
 int pthread_mutex_unlock(pthread_mutex_t *m) {
   if (m->__kind != PTHREAD_MUTEX_NORMAL) {
@@ -74,8 +72,7 @@ int pthread_mutex_unlock(pthread_mutex_t *m) {
   __pt_give(&m->__lock);
   return 0; }
 
-/* a condition is a sequence word: a wait sleeps while it still reads what it read before letting
- * the mutex go, and a signal moves it. waking early is allowed, and the caller's loop rechecks */
+/* a condition is a sequence word that a signal moves; waking early is allowed */
 int pthread_condattr_init(pthread_condattr_t *a) { a->__unused = 0; return 0; }
 int pthread_condattr_destroy(pthread_condattr_t *a) { return 0; }
 int pthread_cond_init(pthread_cond_t *c, pthread_condattr_t const *a) { c->__seq = 0; return 0; }
@@ -96,7 +93,6 @@ int pthread_cond_timedwait(pthread_cond_t *c, pthread_mutex_t *m, struct timespe
 int pthread_cond_signal(pthread_cond_t *c) { c->__seq++; __fx_wake(&c->__seq, 1); return 0; }
 int pthread_cond_broadcast(pthread_cond_t *c) { c->__seq++; __fx_wake(&c->__seq, 0x7fffffff); return 0; }
 
-/* an rwlock: readers and a writer counted under its own word, and a sequence to wait on */
 int pthread_rwlockattr_init(pthread_rwlockattr_t *a) { a->__unused = 0; return 0; }
 int pthread_rwlockattr_destroy(pthread_rwlockattr_t *a) { return 0; }
 int pthread_rwlock_init(pthread_rwlock_t *l, pthread_rwlockattr_t const *a) {
@@ -125,7 +121,7 @@ int pthread_rwlock_unlock(pthread_rwlock_t *l) {
   __fx_wake(&l->__seq, 0x7fffffff);
   return 0; }
 
-/* once: 0 not yet, 1 running, 2 done. the exchange that claims it may land on a 2, and puts it back */
+/* once: 0 not yet, 1 running, 2 done; a claim that lands on a 2 puts it back */
 int pthread_once(pthread_once_t *o, void (*fn)(void)) {
   while (*o != 2) {
     int was = __sync_lock_test_and_set(o, 1);
@@ -134,7 +130,6 @@ int pthread_once(pthread_once_t *o, void (*fn)(void)) {
     __fx_wait(o, 1, 0); }
   return 0; }
 
-/* keys: a slot taken in __love_mt, its value in each thread's own row */
 void **__pt_tsd(void);
 int pthread_key_create(pthread_key_t *k, void (*dtor)(void *)) {
   __pt_take(&__love_mt.klock);

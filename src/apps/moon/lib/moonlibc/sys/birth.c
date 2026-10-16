@@ -1,10 +1,7 @@
 #include "../impl.h"
 
-
-/* the birth time, which no struct stat here has a seat for: the BSDs carry it in the
- * stat they already do, linux needs statx. 0 filled | 1 none kept | -1, errno set.
- * "none" READS AS A DATE on both BSDs -- freebsd VNOVAL (-1, 1969), netbsd 0 (1970, an
- * FFSv1 inode having no field) -- and nofollow is 0x200 there where linux's is 0x100. */
+/* birth time: 0 filled | 1 none kept | -1, errno set. the BSDs keep it in stat, where
+ * none reads as a date (freebsd -1, netbsd 0); linux needs statx */
 int __love_birth(char const *p, int follow, struct timespec *out) {
 #ifdef LvOsTranslate
   if (__love_osv == 2) {
@@ -19,7 +16,7 @@ int __love_birth(char const *p, int follow, struct timespec *out) {
     out->tv_sec = f.btime, out->tv_nsec = f.btimensec;
     return 0; }
 #endif
-  { struct __lx_statx sx;                 /* linux; a seat whose door lacks the number refuses */
+  { struct __lx_statx sx;
     long fl = follow ? 0 : AT_SYMLINK_NOFOLLOW;
     if (er(sc5(NR_statx, AT_FDCWD, (long) p, fl | AT_STATX_SYNC_AS_STAT,
                STATX_BTIME, (long) &sx)) < 0) return -1;

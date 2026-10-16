@@ -6,9 +6,9 @@ long read(int, void*, long);
 long write(int, void const*, long);
 int close(int);
 off_t lseek(int, off_t, int);
-int open(char const*, int, ...);   /* fcntl.h's shape, repeated for the lone-include habit */
+int open(char const*, int, ...);   /* repeated from fcntl.h */
 long sysconf(int);
-const char *getprogname(void);   /* mirrors stdlib.h; gnulib's progname reaches either */
+const char *getprogname(void);
 #define _SC_PAGESIZE 30
 #define _SC_NPROCESSORS_CONF 83
 #define _SC_NPROCESSORS_ONLN 84
@@ -17,7 +17,6 @@ const char *getprogname(void);   /* mirrors stdlib.h; gnulib's progname reaches 
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2
-/* the POSIX tail the host seam rides (rung 2) */
 int  unlink(char const*);
 int  rmdir(char const*);
 int  link(char const*, char const*);
@@ -48,7 +47,7 @@ int  execvp(char const*, char *const*);
 int  execv(char const*, char *const*);
 int  execve(char const*, char *const*, char *const*);
 int  fexecve(int, char *const*, char *const*);
-extern char **environ;   /* posix keeps it here; moonlibc's own members read impl.h's */
+extern char **environ;
 extern char *optarg;
 extern int optind, opterr, optopt;
 int getopt(int, char *const *, char const *);

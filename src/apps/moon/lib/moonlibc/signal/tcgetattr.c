@@ -1,6 +1,5 @@
 #include "../impl.h"
 
-/* ---- the terminal ---- */
 int tcgetattr(int fd, struct termios *t) {
   if (__love_osv >= 2) {
     struct __fb_termios f;
