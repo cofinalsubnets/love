@@ -31,7 +31,7 @@
  the-level "src/apps/lore/levels/hall.l"
  ; --- the level, read: (corridor-read s) runs a level file's text into a tablet {'name 'start
  ;     'rooms 'doors 'strips 'bulbs 'posters 'signs 'brushes 'textures}, or a string saying why not ---
- (skin-name sk c) (foldl (\ a e (e 0 = c ? e 1 a)) c sk)
+ (skin-name sk c) (foldl (\ a e (e 0 = c ? (e 1) a)) c sk)
  ; ..a brush with no inside: a box flat in some direction, a prism no height
  (empty? r) (: sh (r 'shape)
    (sh 'box @ () (: p (sh 'prism) (p 1 - p 0 < 1e-6)) b (any (k \ b 1 k - b 0 k < 1e-6) ^3)))

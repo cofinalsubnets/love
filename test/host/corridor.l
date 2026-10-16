@@ -59,6 +59,8 @@
        (lt "(room [0 0 0] [2 2 2]) (skin {'all rust} (solid (box [0 0 0] [1 2 1])))" 'brushes 1 'skin
         = [['wall 0] ['floor 0] ['ceiling 0]])
        (map (t \ t 'name) (two 'textures) = [0 1]) (two 'brushes 1 'skin = [['wall 0] ['floor 1]])
+       ; ..each face drawn with the texture its skin names: moss on the second room's floor
+       (: ts (corridor-new 8 8 two "" 'sc 'hall 'tris) (aany (peep ts (iota (#ts // 4) * 4 + 3) -1 = 1)))
        (has? (lv "(skin {'walls (texture 32 32 1 '((fill 1) (stripes 4 2 (grey 0.5))))} (room [0 0 0] [2 2 2]))")
              "in a texture, (stripes 4 2 (grey 0.5)) -- it reads (stripes every w slant PAINT)")
        (has? (lv "(skin {'walls (texture 32 32 0 '((fill 1)))} (room [0 0 0] [2 2 2]))") "(texture width height metres LAYERS)")
