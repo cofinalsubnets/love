@@ -747,10 +747,14 @@ static love_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
 
  // ndef is def with each closure standing where its source did. built by consing over a
  // def that is still in reverse order, so ndef lands in literal order and needs no rev.
+ // lam runs in that order too, one entry a lambda: matched by place, since a let may
+ // bind one name twice and each binding's row is its own
+ word dl = lam;
+ mm(g, &dl);
  for (e = nom, v = def; ok(g) && chainp(e); e = B(e), v = B(v)) {
   word nv;
   if (lambp(g, A(v))) {
-   d = assq(g, lam, A(e));
+   d = A(dl), dl = B(dl);
    size_t nb = llen(lget(g, d, LImps)); // the import row is frozen here: sites already applied it
    g = c0_lambda(g, c, lget(g, d, LImps), BA(v));
    if (!ok(g)) return forget();

@@ -53,3 +53,8 @@
    lr-f (ev (': . lr-defs 14 + [(lr-hn 14)]))
    lr-t ((cite 'guts 'threadir) lr-f 0)
  (test (16384 = lr-f 0) (lr-nodes (lr-t 1) < 1000)))
+
+; a let binding one name twice: the later binding is the name's, and each compiles with its
+; own captures -- the first reads k and the second does not
+(test (2 = ((\ k (: (f x) (x + k)  (f x) 2  (f 0))) 5))
+      (5 = ((\ k (: (f x) 2  (f x) (x + k)  (f 0))) 5)))
