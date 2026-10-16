@@ -1,18 +1,6 @@
-/* where an __attribute__ run may sit, held to gcc. The LEADING position on a local
- * was always skipped (pquals drops the whole qualifier/attribute run); the three
- * TRAILING ones -- a local declarator, a parameter, a struct member -- are the same
- * skip, one door over, and the kernel's __maybe_unused / __packed / __aligned are
- * written in all four.
- *
- * what is skipped is dropped: an `aligned` ask on a local or a member aligns
- * NOTHING, exactly as the leading spelling has always dropped it. The rows below
- * ask only for the layout the types themselves give.
- * the skip takes __attribute__ ALONE. `int x __asm__("y")` still refuses, because
- * dropping an asm name would rename an object in silence.
- *
- * `__label__` at a block head declares local labels; it is parsed and dropped, since
- * a label already mangles to fn.NAME.
- */
+/* __attribute__ after a local declarator, a parameter and a member is skipped, so
+ * an `aligned` there aligns nothing; `int x __asm__("y")` still refuses. `__label__`
+ * at a block head is parsed and dropped. */
 
 struct S {
 	int a __attribute__((deprecated));

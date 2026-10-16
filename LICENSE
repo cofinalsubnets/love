@@ -74,6 +74,18 @@ src/apps/vi/config.l, the `hue-theme` values but Identifier's and Special's
   based on the Monokai theme for TextMate by Wimer Hazenberg and its darker variant
   by Hamish Stuart Macpherson. MIT License.
 
+src/apps/vi/config.l, the `nord` theme's values
+  From Nord (https://github.com/nordtheme/vim),
+  Copyright (c) 2016-present Sven Greb. MIT License.
+
+src/apps/vi/config.l, the `tokyo-night` theme's values and the `tokyo-night` page palette
+  From Tokyo Night (https://github.com/enkia/tokyo-night-vscode-theme),
+  Copyright (c) 2018-present Enkia. MIT License.
+
+src/apps/vi/config.l, the `solarized-light` theme's values
+  From Solarized (https://github.com/altercation/vim-colors-solarized),
+  Copyright (c) 2011 Ethan Schoonover. MIT License.
+
 
 --- fonts ---
 

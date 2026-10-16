@@ -1,7 +1,5 @@
-; --- test/host/locks.l: the machine's locks (src/apps/locks.l) ---------------------------
-; a root of its own under out/, so a run never meets the box's real locks. pid 1 stands in
-; for a second live holder (always alive, its stat readable); a child spawned and reaped
-; stands in for a dead one. run standalone from the repo root:
+; test/host/locks.l -- the machine's locks (src/apps/locks.l), under a root of its own in out/.
+; pid 1 stands in for a second live holder, a reaped child for a dead one.
 ;   cat test/00-init.l test/host/locks.l | out/love
 
 (borrow 'locks)
@@ -10,12 +8,11 @@
    lk-me (getpid 0)
    lk-dead (: p (spawn ["true"]) _ (wait p) p))
 
-; --- exclusive: one holder, itself again, the next queued behind it ---------------------
+; exclusive: one holder, itself again, the next queued behind it
 (test (peep (locks-acquire lk-root "out-a" 'exclusive lk-me "gate" () 2) "granted" 0)
       (peep (locks-acquire lk-root "out-a" 'exclusive lk-me "gate" () 2) "granted" 0)
       (: a (locks-acquire lk-root "out-a" 'exclusive 1 "other" () 2)
          (&& (0 = peep a "granted" 1) (lk-me = peep (peep a "holder" {}) "pid" 0))))
-; only the holder lets go, and then the next one takes it
 (test (() = locks-release lk-root "out-a" 'exclusive 1)
       (1 = locks-release lk-root "out-a" 'exclusive lk-me)
       (peep (locks-acquire lk-root "out-a" 'exclusive 1 "other" () 2) "granted" 0)
@@ -24,12 +21,12 @@
 (test (peep (locks-acquire lk-root "out-b" 'exclusive lk-dead "gone" () 2) "granted" 0)
       (peep (locks-acquire lk-root "out-b" 'exclusive lk-me "gate" () 2) "granted" 0)
       (1 = locks-release lk-root "out-b" 'exclusive lk-me))
-; a name any string can be: its slug is the file
+; any string names a lock: its slug is the file
 (test (peep (locks-acquire lk-root "/home/x/.claude/out" 'exclusive lk-me "gate" () 2) "granted" 0)
       (1 = #(peep (locks-list lk-root) "exclusive" ()))
       (1 = locks-release lk-root "/home/x/.claude/out" 'exclusive lk-me))
 
-; --- heavy: first asked, first granted, at most max at once --------------------------
+; heavy: first asked, first granted, at most max at once
 (test (peep (locks-acquire lk-root "slow" 'heavy lk-me "test_slow" () 1) "granted" 0)
       (: a (locks-acquire lk-root "inle" 'heavy 1 "test_inle" () 1)
          (&& (0 = peep a "granted" 1) (1 = peep a "position" 0) (1 = peep a "held" 0)))
@@ -51,15 +48,13 @@
          (peep (locks-acquire lk-root "e" 'heavy lk-me "gate" () 1) "granted" 0))
       (1 = locks-release lk-root "e" 'heavy lk-me))
 
-; --- the wrapper: the child's status, and the locks gone after it ---------------------
+; the wrapper: the child's status, and the locks gone after it
 (test (0 = locks-run lk-root [["out-c" 'exclusive] ["run" 'heavy]] "w" () 2 ["true"])
       (3 = locks-run lk-root [["out-c" 'exclusive]] "w" () 2 ["sh" "-c" "exit 3"])
       (0 = #(peep (locks-list lk-root) "exclusive" ()))
       (0 = #(peep (locks-list lk-root) "heavy" ())))
 
-; --- a wrapper under a wrapper: the locks its ancestor holds pass through, neither waited for
-; nor let go. this process holds out-n and the one heavy slot; a child love's wrapper on both
-; runs at once, and both are still this process's after ---
+; a nested wrapper: locks its ancestor holds pass through, neither waited for nor let go
 (: ln-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
    ln-kid (lk-root + ".nest.l")
    _ (: f (open ln-kid "w")
@@ -78,8 +73,7 @@
 
 (test (string? (locks-root 0)))
 
-; --- races: n processes at a barrier, each a kid file of its own run under this love ---
-; a kid waits for ROOT.go, runs body, writes its answer to ROOT.res/PID, waits for ROOT.done
+; races: a kid waits for ROOT.go, runs body, writes its answer to ROOT.res/PID, waits for ROOT.done
 (: lr-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
    (lr-put p s) (: f (open p "w") _ (say f s) (close f))
    (lr-names d) (: ns (readdir d) (? (two? ns) (filter (n \ n 0 != 46) ns) ()))
@@ -115,8 +109,7 @@
    _ (test (all (\ r (r = [16 1])) (map round ^4)))
    0)
 
-; twelve pollers on a pool of one, each holding a moment when granted: never two in h/ at once,
-; and every one served in turn
+; twelve pollers on a pool of one: never two in h/ at once, every one served
 (: lr-h (lk-root + "-h")
    ps (lr-kids lr-h 12 ("(: (poll k) (: a (locks-acquire rt \"heavy\" 'heavy me \"race\" () 1)\n"
                         + "  (? (peep a \"granted\" 0) (: _ (rest 100) _ (locks-release rt \"heavy\" 'heavy me) 1)\n"

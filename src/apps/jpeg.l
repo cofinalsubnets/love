@@ -5,7 +5,7 @@
 ;   (jpeg-decode s)  -> (w h rgba) | a string saying why not
 ;   (jpeg-orient s)  -> exif's orientation, 1..8, 1 where there is none
 ;
-; rgba is w*h*4 bytes, alpha all 255. baseline and progressive, grey and ycbcr; where the
+; rgba is w*h*4 bytes, alpha all 255. baseline and progressive, grey, ycbcr and cmyk; where the
 ; artifact carries no nif, every jpeg is "no decoder here". a picture is laid upright by its
 ; exif orientation, as a viewer shows it: 5 to 8 turn it on its side, swapping w and h.
 (module (jpeg jpeg-size jpeg-decode jpeg-encode jpeg-pixels jpeg-orient)

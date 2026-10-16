@@ -1,9 +1,6 @@
-/* the str* family: nineteen functions, the widest part of the floor and the
- * part most likely to drift, because every one of them has an edge (the n= cases
- * that do NOT terminate, the ones that pad, the ones that answer a pointer into
- * their own argument, and strtok's hidden state).
- *
- * comparisons report a SIGN and pointers report an OFFSET -- see say.h. */
+/* the str* family: nineteen functions and their edges (the n= cases that do not
+ * terminate, the ones that pad, pointers into their argument, strtok's hidden state).
+ * comparisons report a sign and pointers an offset (say.h). */
 #include <string.h>
 #include <stdlib.h>
 #include "say.h"
@@ -17,10 +14,8 @@ int main(void) {
  say_u("strlen", strlen(s));
  say_u("strlen.empty", strlen(e));
  say_u("strlen.one", strlen("x"));
- /* the WORD LOOP and its corners: strlen reads a word at a time, so every
-  * alignment of the start and every length modulo the word must answer the
-  * same as a byte walk. one length short of the sweep never leaves the align
-  * loop; one past it exercises the drain. */
+ /* the word loop's corners: every start alignment and length mod the word answers as a
+  * byte walk; one short of the sweep stays in the align loop, one past it drains */
  static char big[160];
  unsigned i, off;
  for (i = 0; i < sizeof big - 1; i++) big[i] = 'a' + (i % 23);
@@ -38,7 +33,7 @@ int main(void) {
  say_c("strcmp.prefix", strcmp("ab", "abc"));
  say_c("strcmp.empty", strcmp("", "a"));
  say_c("strcmp.both", strcmp("", ""));
- /* char compares UNSIGNED here: "\x80" is ABOVE "\x7f" */
+ /* char compares unsigned here: "\x80" is above "\x7f" */
  say_c("strcmp.high", strcmp("\x80", "\x7f"));
  say_c("strncmp.cut", strncmp("abcXX", "abcYY", 3));
  say_c("strncmp.at", strncmp("abcX", "abcY", 4));
@@ -50,12 +45,11 @@ int main(void) {
  say_c("strcasecmp.lt", strcasecmp("abc", "ABD"));
  say_c("strcasecmp.digit", strcasecmp("a1", "A1"));
  say_c("strncasecmp.cut", strncasecmp("ABCxx", "abcyy", 3));
- say_c("strcoll.eq", strcoll("abc", "abc"));       /* the C locale IS strcmp */
+ say_c("strcoll.eq", strcoll("abc", "abc"));       /* the C locale is strcmp */
  say_c("strcoll.lt", strcoll("abc", "abd"));
 
- /* --- strcpy / strncpy.
-    strncpy is the trap: it PADS with NULs to n and does NOT terminate
-    when the source fills n exactly. both halves are asserted. --- */
+ /* --- strcpy / strncpy: strncpy pads with NULs to n and does not terminate when the
+    source fills n exactly --- */
  memset(buf, '.', sizeof buf);
  strcpy(buf, "abc");
  say_b("strcpy", buf, 8);
@@ -67,7 +61,7 @@ int main(void) {
  say_b("strncpy.pad", buf, 10);                    /* pads to 8 with NULs */
  memset(buf, '.', sizeof buf);
  strncpy(buf, "abcdefgh", 4);
- say_b("strncpy.cut", buf, 6);                     /* NO terminator */
+ say_b("strncpy.cut", buf, 6);                     /* no terminator */
  memset(buf, '.', sizeof buf);
  strncpy(buf, "abcd", 4);
  say_b("strncpy.exact", buf, 6);                   /* still no terminator */
@@ -75,9 +69,7 @@ int main(void) {
  strncpy(buf, "abc", 0);
  say_b("strncpy.0", buf, 4);
 
- /* --- strcat / strncat.
-    strncat is NOT strncpy's twin: n bounds the SOURCE, and it always
-    terminates. --- */
+ /* --- strcat / strncat: n bounds the source, and strncat always terminates --- */
  strcpy(buf, "abc");
  strcat(buf, "def");
  say_s("strcat", buf);
@@ -164,10 +156,8 @@ int main(void) {
  say_u("strnlen.past", strnlen("abc", 99));
  say_u("strnlen.zero", strnlen("abc", 0));
 
- /* --- strerror: the TEXT is not compared. ours is the canonical POSIX
-    wording (m4's check suite string-compares it) and glibc's mostly agrees,
-    but that agreement is not a law worth gating -- what is gated is that
-    every errno in the classic range answers something non-empty. --- */
+ /* --- strerror: the text is not compared, only that every classic errno answers
+    something non-empty --- */
  int ok = 1;
  for (int i = 1; i <= 34; i++) { char const *m = strerror(i); if (!m || !*m) ok = 0; }
  say_n("strerror.nonempty", ok);

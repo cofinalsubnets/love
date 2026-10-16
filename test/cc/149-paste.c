@@ -1,13 +1,5 @@
-/* C11 6.10.3.3 -- ## with an EMPTY operand. An argument with no preprocessing tokens
- * becomes a placemarker: it pastes to whatever it meets, two of them paste to another,
- * and every one left over is deleted before the result is rescanned.
- *
- * Ours had no placemarker, so an empty operand left the ## unfolded. `A ## B` with B
- * empty emitted a literal ## into the C stream, and `A ## B ; bob` pasted A with the
- * `;` -- a join that cannot relex, which kept A and ATE the semicolon. The macros with
- * tokens on either side of the paste are the ones that hold that second half.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* C11 6.10.3.3: ## with an empty operand pastes a placemarker; leftovers vanish
+ * before rescan, so `A ## B ; bob` with B empty keeps the `;`. each check adds 1: the exit code is the pass count. */
 
 extern int printf(const char *, ...);
 

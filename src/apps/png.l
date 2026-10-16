@@ -1,8 +1,10 @@
-; src/apps/png.l -- png decoding: every colour type and depth, palettes, transparency, adam7;
-; and encoding.
+; src/apps/png.l -- png decoding: every colour type and depth, palettes, transparency, adam7,
+; apng's frames; and encoding.
 ; `(borrow 'png)`, then:
 ;
 ;   (png-decode s)              -> (w h rgba) | a string saying why not
+;   (png-frames s most)         -> (w h ((rgba ms) ..)), up to most frames composed on the
+;                                  canvas; a still png one frame of 0 ms | why not
 ;   (png-encode w h rgba)       -> the png's bytes: a palette to 256 colours, else rgba
 ;   (png-walk c o rows n bpp)   -> the unfilter in love, in place in a cask, which the
 ;                                  nif (png-unfilter s o rows n bpp) answers to
@@ -10,7 +12,7 @@
 ; rgba is w*h*4 bytes, 8 bits a sample: a 16-bit sample rounds to its nearest 8-bit one,
 ; a low-depth grey scales to the full range. ancillary chunks past tRNS are skipped, so
 ; gamma and colour space are the viewer's to ignore.
-(module (png png-decode png-encode png-walk png-unfilter)
+(module (png png-decode png-frames png-encode png-walk png-unfilter)
 (borrow 'bytes)
 (borrow 'gz)
 (:
@@ -18,7 +20,8 @@
    png-adam7 [[0 0 8 8] [4 0 8 8] [0 4 4 8] [2 0 4 4] [0 2 2 4] [1 0 2 2] [0 1 1 2]]
 
    ; --- chunks ---------------------------------------------------------------------------
-   ; IHDR, PLTE and tRNS land in t, the IDATs pour into one jug. -> 0 | why not
+   ; IHDR, PLTE, tRNS and acTL land in t, the IDATs pour into one jug. each fcTL heads t's
+   ; 'fr, latest first, as [fcTL before-any-IDAT jug], its fdATs poured into the jug -> 0 | why not
    (png-chunks s p t)
     (#s < p + 12 ? "truncated"
        (: n (rdbe s p 4) ty (snip s (p + 4) (p + 8))
@@ -28,7 +31,11 @@
                    (p = 8 && ty != "IHDR") "no IHDR"
                    (ty = "IEND") 0
                    ((ty @ "IHDR" (pin t 'ihdr body) "PLTE" (pin t 'plte body)
-                         "tRNS" (pin t 'trns body) "IDAT" (say (t 'idat) body) 0),
+                         "tRNS" (pin t 'trns body) "acTL" (pin t 'actl body)
+                         "IDAT" (say (t 'idat) body, pin t 'seen 1)
+                         "fcTL" (pin t 'fr ([body !(t 'seen) (jug 0)] . peep t 'fr ()))
+                         "fdAT" (t 'fr @ fr (fr != () && 4 <= #body ? (say (<fr 2) (snip body 4 #body)) 0))
+                         0),
                     (!(elem ty ["IHDR" "PLTE" "tRNS" "IDAT"]) && ty 0 < 97
                      ? ("unknown critical chunk " + ty)
                        (png-chunks s (p + 12 + n) t))))))))
@@ -211,33 +218,65 @@
              trns (foldl (a \ v \ a && v = 255) 1 al ? "" (png-chunk "tRNS" (cats (map string al))))
              (png-file w h dep 3 (png-chunk "PLTE" plte + trns) (png-filter (rows 0 "" "" ()) n 0)))))
 
-   (png-decode s)
+   ; the chunks read and the header laid -> t, the header its 'hd | why not
+   (png-parse s)
     (pin {} 'idat (jug 0) @ t
        (#s < 8 || snip s 0 8 != png-sig ? "not a png"
           (png-chunks s 8 t @ e
              (? (string? e) e
                 !(t 'ihdr) "no IHDR"
-                (png-header (t 'ihdr) @ hd
-                   (string? hd ? hd
-                      (: _ (pin hd 'trns (peep t 'trns ""))
-                         _ (pin hd 'plte (peep t 'plte ""))
-                         z (slurp (t 'idat))
-                         (? (hd 'ty = 3 && #(hd 'plte) = 0) "no palette"
-                            (#z < 2 || (z 0 * 256 + z 1) % 31 != 0 || z 0 & 15 != 8 || z 1 & 32)
-                             "bad zlib header"
-                            (: need (png-need hd)
-                               r (gz-inflate (snip z 2 #z) need)
-                               (? (atom? r) "bad deflate stream"
-                                  (#<>r < need) "short image data"
-                                  (: raw <>r
-                                     ; the nif reads the string, the walk writes a cask
-                                     c raw
-                                     w (hd 'w) h (hd 'h) out (cask (4 * w * h))
-                                     passes (hd 'lace ? png-adam7 [[0 0 1 1]])
-                                     (go ps o) (!ps ? 0
-                                                  (png-pass c o hd out <ps @ e
-                                                     (string? e ? e (go >ps e))))
-                                     e (go passes 0)
-                                     (string? e ? e [w h (string out)])))))))))))))
+                (png-head t (t 'ihdr) @ hd
+                   (? (string? hd) hd
+                      (hd 'ty = 3 && #(hd 'plte) = 0) "no palette"
+                      (pin t 'hd hd)))))))
+   (png-head t ih)
+    (png-header ih @ hd (string? hd ? hd (pin (pin hd 'trns (peep t 'trns "")) 'plte (peep t 'plte ""))))
 
+   ; the zlib stream z of the image hd heads -> [w h rgba] | why not
+   (png-pixels hd z)
+    (? (#z < 2 || (z 0 * 256 + z 1) % 31 != 0 || z 0 & 15 != 8 || z 1 & 32) "bad zlib header"
+       (: need (png-need hd)
+          r (gz-inflate (snip z 2 #z) need)
+          (? (atom? r) "bad deflate stream"
+             (#<>r < need) "short image data"
+             (: c <>r
+                w (hd 'w) h (hd 'h) out (cask (4 * w * h))
+                passes (hd 'lace ? png-adam7 [[0 0 1 1]])
+                (go ps o) (!ps ? 0
+                             (png-pass c o hd out <ps @ e
+                                (string? e ? e (go >ps e))))
+                e (go passes 0)
+                (string? e ? e [w h (string out)])))))
+
+   (png-decode s) (png-parse s @ t (string? t ? t (png-pixels (t 'hd) (slurp (t 'idat)))))
+
+   ; --- apng -----------------------------------------------------------------------------
+   ; a frame's fcTL: sequence, w h x y, the delay's numerator and denominator, dispose (0
+   ; none, 1 cleared, 2 the canvas before it) and blend (0 overwrite, 1 over). the canvas
+   ; starts clear; a first frame disposing to the one before is cleared. a later frame that
+   ; fails ends the walk with the frames so far
+   (png-frames s most)
+    (png-parse s @ t
+       (? (string? t) t
+          (: hd (t 'hd) w (hd 'w) h (hd 'h) ih (t 'ihdr)
+             frs (rev (peep t 'fr ()))
+             (fail why acc) (acc = () ? why [w h (rev acc)])
+             (go fs c n acc)
+              (? (fs = () || most <= n) [w h (rev acc)]
+                 (: f <fs fc (f 0)
+                    (? (#fc < 26 || 2 < fc 24 || 1 < fc 25) (fail "a bad fcTL" acc)
+                       (: fw (rdbe fc 4 4) fh (rdbe fc 8 4) x (rdbe fc 12 4) y (rdbe fc 16 4)
+                          dd (rdbe fc 22 2) ms ((rdbe fc 20 2 * 1000 + (dd = 0 ? 100 dd) // 2) // (dd = 0 ? 100 dd))
+                          sub (png-head t (wrbe fw 4 + wrbe fh 4 + snip ih 8 13))
+                          r (string? sub ? sub (png-pixels sub (slurp (f 1 ? (t 'idat) (f 2)))))
+                          out (string? r ? () (png-lay c w (r 2) fw x y (fc 25)))
+                          (? (string? r) (fail r acc)
+                             (out = ()) (fail "a frame past the canvas" acc)
+                             (go >fs (? (fc 24 = 1 || fc 24 = 2 && acc = ()) (png-lay out w (string (cask (4 * fw * fh))) fw x y 0)
+                                        (fc 24 = 2) c
+                                        out)
+                                 (n + 1) ([out ms] . acc)))))))
+             (? (!(t 'actl) || frs = ())
+                 (png-pixels hd (slurp (t 'idat)) @ r (string? r ? r [w h [[(r 2) 0]]]))
+                (go frs (string (cask (4 * w * h))) 0 ()))))))
 ) ; module png

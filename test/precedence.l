@@ -1,16 +1,7 @@
-; precedence (band) and associativity (hand) -- infix that binds like schoolbook math
-; (the table is src/love/boot/prel.l's). each operator's table entry carries a band and a hand; an incoming operator
-; steals a pending filled operand iff its band beats the frame's, so a tighter operator climbs in,
-; and equal band goes to the incomer's hand: right-handed steals (its band folds right), left-handed
-; yields (its band folds left). arithmetic is left-handed -- (1 - 2 - 3) is -4, as everywhere else --
-; and so are the shifts and the bitwise ops; everything else stays right, which is the flat fold
-; the surface started with. src/love/boot/prel.l holds the numbers and the asserts below hold the order,
-; which is all a band means. we assert both the factored tree (via the live `opfix`, the source pass both
-; compilers run -- op-core proper is book-private) and the VALUE, on cases where the grouping is
-; observable in the result.
+; precedence (band) and associativity (hand): a tighter incoming operator steals the pending operand,
+; an equal one goes by its hand. arithmetic, shifts and bitwise fold left, the rest right. tree and value
 (test
- ; --- the tree: opfix factors a quoted form; quote interiors stay data, so '(2 * 3 + 4) is the raw
- ; datum list and (opfix ..) is the factored tree itself (a lone folded clause splices up, no wrapper). ---
+ ; --- the tree: opfix factors a quoted form ---
  ((opfix '(2 * 3 + 4)) = '(+ (* 2 3) 4))            ; * tighter than + -- schoolbook
  ((opfix '(a * b + c)) = '(+ (* a b) c))            ; the tighter op on the left climbs in
  ((opfix '(a + b * c)) = '(+ a (* b c)))            ; and on the right steals
@@ -19,13 +10,13 @@
  ((opfix '(a / b / c)) = '(/ (/ a b) c))            ; the multiplicative band is left-handed too
  ((opfix '(a . b . c)) = '(. a (. b c)))        ; but cons stays right-handed -- a builder folds right
  ((opfix '(a <+> b <+> c)) = '(<+> a (<+> b c)))    ; and a coined operator defaults to the right hand at house band
- ((opfix '(3 = 1 + 2)) = '(= 3 (+ 1 2)))            ; + over = : the spec.l infix-assert law holds
+ ((opfix '(3 = 1 + 2)) = '(= 3 (+ 1 2)))            ; + over =
  ((opfix '(a < b && c < d)) = '(&& (< a b) (< c d))) ; && below comparison
  ((opfix '(a < b || c < d)) = '(|| (< a b) (< c d))) ; || likewise, and a rung under &&
  ((opfix '(a && b || c && d)) = '(|| (&& a b) (&& c d)))   ; ..so a mix is the disjunction it reads as
  ((opfix '(c && 0 < c && c < 10))                   ; ..and a guard chain nests for pat.l to flatten
   = '(&& c (&& (< 0 c) (< c 10))))
- ; the bitwise ops and the shifts sit between comparison and arithmetic, in C's order.
+ ; the bitwise ops and the shifts sit between comparison and arithmetic, in c's order
  ((opfix '(a + b & c)) = '(& (+ a b) c))            ; + over & -- an align-up owes no parens
  ((opfix '(a | b + c)) = '(| a (+ b c)))            ; ..and over | the same way
  ((opfix '(a & b | c ^ d)) = '(| (& a b) (^ c d)))  ; & tighter than ^ tighter than |
@@ -37,19 +28,15 @@
  ((opfix '(x << 8 + y)) = '(<< x (+ 8 y)))          ; ..and under additive, so a shifted sum owes parens
  ((opfix '(a << b << c)) = '(<< (<< a b) c))        ; the shift band folds left
  ((opfix '(1 < 2 ? x)) = '(? (< 1 2) x))            ; ? loosest -> the whole comparison is the condition
- ; the N-ARY arity: a clause form collects its arms flat where a dyadic spans them into one, so
- ; the infix spelling reaches the same form the prefix one does -- an else arm included.
+ ; the n-ary arity: a clause form collects its arms flat, the same form as the prefix spelling
  ((opfix '(1 < 2 ? x y)) = '(? (< 1 2) x y))        ; ...and every further arm is another operand
  ((opfix '(c ? a b d e)) = '(? c a b d e))          ; t/result pairs then the else, as `?` always took them
  ((opfix '(x @ p1 b1 p2 b2)) = '(@ x p1 b1 p2 b2))  ; @ likewise: the scrutinee left, the clauses flat
  ((opfix '(f y z @ p b)) = '(@ (f y z) p b))        ; ..and the whole leading span is the scrutinee -- no parens owed
  ((opfix '(c ? x @ p b)) = '(? c (@ x p b)))        ; equal band, right hand: the inner clause form folds first
  ((opfix '(c ? a x @ p b)) = '(? c a (@ x p b)))    ; ..so a match nests in a cond's else ..
- ((opfix '(x @ p c ? a b)) = '(@ x p (? c a b)))    ; ..and a cond in a match's arm. equal is the fixed point:
-                                                    ;   ranking either one over the other breaks the other line
- ; an n-ary form takes everything after it, so a clause form inside another of its own kind owes
- ; parens -- no band can help, the two are one operator. cond survives it, a nested ? meaning what the
- ; flat one means; match does not, the inner one eating arms that belonged to the outer.
+ ((opfix '(x @ p c ? a b)) = '(@ x p (? c a b)))    ; ..and a cond in a match's arm
+ ; a clause form inside one of its own kind owes parens: a nested @ eats the outer's arms
  ((opfix '(x @ p1 y @ q c p2 b2)) = '(@ x p1 (@ y q c p2 b2)))
  ((opfix '(x @ p1 (y @ q c) p2 b2)) = '(@ x p1 (@ y q c) p2 b2))
  ((opfix '(c1 ? a1 c2 ? a2 e)) = '(? c1 a1 (? c2 a2 e)))
@@ -60,22 +47,19 @@
  (: r (grip -1 '? ()) (grip -1 '? r, r = 10))         ; the arity is the lane, so the door names it and restores exactly
  ((opfix '(a + b . c)) = '(. (+ a b) c))          ; . the loosest builder, below arithmetic
  ((opfix '(a :+ b . c)) = '(. (:+ a b) c))         ; a coined op at house band beats .
- ((opfix '(a :+ b + c)) = '(+ (:+ a b) c))          ; ..and arithmetic, and every other band:
- ((opfix '(a :+ b ** c)) = '(** (:+ a b) c))        ;   house is the tightest, so an undeclared
- ((opfix '(a :+ b && c)) = '(&& (:+ a b) c))        ;   operator groups before anything can steal
- ((opfix '(a + b :+ c)) = '(+ a (:+ b c)))          ;   from it, on either side
+ ((opfix '(a :+ b + c)) = '(+ (:+ a b) c))          ; ..house is the tightest band
+ ((opfix '(a :+ b ** c)) = '(** (:+ a b) c))
+ ((opfix '(a :+ b && c)) = '(&& (:+ a b) c))
+ ((opfix '(a + b :+ c)) = '(+ a (:+ b c)))
 
- ; --- the two apply operators: ** flip-applies (a ** b = (b a)) at the tightest band, $ weak-
- ; applies (a $ b = (a b), the haskell $) near the loose end -- the infix lambda alone is looser.
- ; glued $x is saturate, a separate valence. ---
+ ; --- ** flip-applies at the tightest band, $ weak-applies near the loosest; glued $x is saturate ---
  ((opfix '(a ** b * c)) = '(* (** a b) c))          ; ** tighter than *: folds before the multiply steals
  ((opfix '(a * b ** c)) = '(* a (** b c)))          ; on the right too
  ((opfix '(f $ a + b)) = '($ f (+ a b)))            ; $ below arithmetic: the sum groups, then weak-applies
  ((opfix '(f $ g $ x)) = '($ f ($ g x)))            ; equal band -> right-assoc, exactly haskell's $
  ((opfix '(a ** b $ c)) = '($ (** a b) c))          ; ** binds, $ is the loose outer apply
 
- ; --- the infix lambda is looser than $, so a body runs to the end of the form and swallows the
- ; $, which is the reading haskell's lambda has. handing a lambda to $ spends the parens. ---
+ ; --- the infix lambda is looser than $, so a body runs to the end of the form ---
  ((opfix '(x \ f $ g x)) = '(\ x ($ f (g x))))      ; the body takes the $ ..
  ((opfix '(x \ a + b)) = '(\ x (+ a b)))            ; ..and everything tighter, which is all of them
  ((opfix '((x \ x + 1) $ 9)) = '($ (\ x (+ x 1)) 9))  ; ..so applying one owes its parens
@@ -84,7 +68,7 @@
  ((opfix (opfix '(a * b + c))) = (opfix '(a * b + c)))
 
  ; --- the value: pick numbers where the grouping shows in the result ---
- (10 = (2 * 3 + 4))                                   ; (+ (* 2 3) 4); the old flat read was (* 2 (+ 3 4)) = 14
+ (10 = (2 * 3 + 4))                                   ; (+ (* 2 3) 4)
  (14 = (2 * (3 + 4)))                                 ; parens override
  (7 = (1 + 2 * 3))
  (5 = (10 - 2 - 3))                                   ; left hand: ((10 - 2) - 3); the right hand would read 11
@@ -101,12 +85,8 @@
  (13 = ((+ 1) $ (+ 2) $ 10))                          ; right-assoc: ((+ 1) ((+ 2) 10)) = ((+ 1) 12)
  (0 = $-5) (3 = $2.9)                                 ; glued $x is unchanged -- saturate, not weak-apply
 
- ; --- the grip door: (grip ar nm v) declares an operator's shape at run time and answers the
- ; row it replaced, in the shape it takes -- so (grip ar nm (grip ar nm new)) restores exactly.
- ; `ar` is the lane, the operands the sigil takes from the form around it: 0 glued, 2 spaced, -1
- ; spaced with no bound. every test here restores inside its own form: the corpus is read form by
- ; form, so a live row would change how the next form parses. the table is read live, so `opfix`
- ; shows the change at once. ---
+ ; --- (grip ar nm v) sets an operator's row and answers the one it replaced.
+ ; each test restores inside its own form, or the next form would parse differently ---
  (: was (grip 2 '<+> -60)                           ; haskell's `infixl 7 <+>` -- the minus is the left hand
     tree (opfix '(a <+> b <+> c))
     (grip 2 '<+> was,
@@ -127,8 +107,7 @@
     tree (opfix '(a + b * c))
     (grip 2 '+ was,                                   ; .. and put back
      tree = '(* (+ a b) c) && ((opfix '(a + b * c)) = '(+ a (* b c)))))
- ; a shape op-ent refuses is rolled back and scared -- never pinned, because a bad row does not
- ; error, it silently demotes its operator to the fresh-punct default.
+ ; a bad shape is refused with a scare, never pinned: it would silently demote its operator
  (!(catch (_ \ grip 2 '^^ 0)))                        ; band 0 -- a table miss answers 0, so zero can never be a row
  (!(catch (_ \ grip 2 '^^ '(a b))))                   ; a shape that is neither charm, nom nor (nom band)
  (!(catch (_ \ grip 2 '^^ 'zzz)))                     ; an alias to a word with no row of its own
@@ -136,22 +115,13 @@
  ((opfix '(x ^^ y ^^ z)) = '(^^ x (^^ y z))))         ; the table survived all four intact
 
 (test
- ; --- chaining, arity -2: a comparison run is the conjunction of its links, and the operand two
- ; links share is evaluated once. the binds nest inside the && rather than sitting in front of it,
- ; so all three of python's promises hold together -- left to right, once each, and the && still
- ; short-circuits, so a false link never reaches what follows it. each link carries its own
- ; operator, so a run may mix them. the escape hatch is the parens: (a < (b < c)) arrives as one
- ; folded datum and never enters the operator list, so it stays the nested comparison -- and the
- ; factored form cannot tell the two apart, which is why the join lives in the walk and could
- ; never have been a rewrite over op-core's output. ---
+ ; --- chaining: a comparison run is the && of its links, left to right, each operand once,
+ ; short-circuiting; parens opt out ---
  (1 < 2 < 3) !(2 < 1 < 3) !(1 < 3 < 2)                ; every link must hold
  (1 < 2 <= 2 < 5)                                     ; ..and they may differ, link by link
- (3 > 2 > 1) !(0 = 1 = 2)                             ; the two that used to be right by accident
+ (3 > 2 > 1) !(0 = 1 = 2)
  (1 < 1 + 1 < 3)                                      ; a tighter frame between links folds first
- ; a link may be a span. juxtaposition binds tighter than any operator, so the link is the whole
- ; application -- the frame's right operand has grown, and the join must read that as filled the
- ; same way a lone datum is. reading only the head instead is silent: the chain answers a bit
- ; either way, and (97 <= s 0 <= 122) quietly compared 97 to the string.
+ ; a link may be a span: juxtaposition binds tighter, so the link is the whole application
  (: s "a1" (97 <= s 0 <= 122))                        ; the letter, not the string it sits in
  (: s "a1" !(48 <= s 0 <= 57))                        ; ..and the digit test on that same letter fails
  (: s "ab" (s 0 < s 1 < 99))                          ; both ends span too -- the leading one already did
@@ -173,20 +143,16 @@
 (test
  (!(catch (_ \ grip 7 '^^ 60)))                     ; ..and a lane with no key is refused, never minted
 
- ; --- the glued lane through the same door: arity 0, where a row is the word the sigil names.
- ; one nom lives in as many lanes as it has faces, and `?` is the pair:
- ; `bit` glued, cond spaced -- the valence law as two keys of one table. ---
+ ; --- the glued lane, arity 0: `?` is `bit` glued and cond spaced ---
  (: r (grip 0 '? ()) (grip 0 '? r, opnom r = 'bit))     ; a clear-and-restore is the non-destructive read
- ; the fixture needs a sigil whose glued row is empty -- `was = ()` is half the law. it was
- ; `^` until ^ became jot; `&` and `=` are what is left free. fill one and move this.
+ ; the fixture needs a sigil with no glued row; `&` and `=` are free
  (: was (grip 0 '& 'cup)                            ; coin a glued sigil ..
     tree (opfix '&x)
     (grip 0 '& was,
      was = () && tree = '(cup x))) ; .. it factors, then clears
  ((unglue (opfix '?5)) = '(bit 5)) ; the glued lane survived intact
 
- ; --- && / || stay lazy: the macro rides ?/: , so the right arm never fires when the left decides it.
- ; a mutable tablet witnesses the non-evaluation (kept LOCAL in a body-having `:`). ---
+ ; --- && and || stay lazy: a tablet witnesses the right arm never firing ---
  (: t (tablet 0) _ (pin t 0 0)
     r (1 || (pin t 0 999))                            ; 1 is truthy -> the pin never runs
     (r = 1 && (0 = (peep t 0 0))))

@@ -1,7 +1,6 @@
-/* a64's inline asm as the kernel spells it: Q/Qo/+Q/=Q memory operands, "rZ", cbnz in an
- * exclusive loop and to an asm goto's label, bic/rbit/adc, the unprivileged store, .inst, a
- * sysreg EL0 may read, and an alternative's out-of-line replacement in .subsection 1 under
- * its .org size checks. a target with no template here computes the same in C. */
+/* a64 inline asm: Q/Qo/+Q/=Q operands, "rZ", cbnz in an exclusive loop and to an asm goto label,
+ * bic/rbit/adc, unprivileged store, .inst, an EL0 sysreg, .subsection 1 under .org checks.
+ * targets without a template compute the same. */
 typedef unsigned int u32;
 typedef unsigned long u64;
 

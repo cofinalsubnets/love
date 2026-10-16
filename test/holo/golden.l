@@ -1,12 +1,6 @@
-; the gate for src/love/holo/ -- the neutral assembler and every backend, the text front-end, and the
-; ELF linker. each golden is the exact hex the assembler emits, and every one was checked against
-; the real toolchain (objdump / llvm-mc, the mnemonic in the trailing comment): this file is the
-; frozen record of that round-trip, so a drifted golden is a broken encoder or a disagreeing
-; disassembler. the sources are cat'd in rather than `borrow`d because the host bakes its native
-; backend only -- the other four reach these goldens no other way (test/holo.l is the in-corpus
-; smoke over the baked module).
-; run: cat src/love/holo/{holo,x64,a64,thumb2,riscv,thumb1,i386,text,gas,elf}.l test/holo/golden.l
-;      | out/love   (nonzero exit on any miss)
+; the neutral assembler, every backend, the text and gas fronts and the elf linker. each golden is
+; the exact hex, checked against objdump or llvm-mc (the mnemonic trails the row). the sources are
+; cat in, not borrowed: the host bakes its native backend only.
 
 (borrow 'holo) ; the cat's wrapped sources just registered the module
 
@@ -80,8 +74,7 @@
       ("io.strout"   "6e666ff26f"            ((str outs 1) (str outs 2) (repne) (str outs 4)))
       ("str.movs"    "a466a5a548a5"          ((str movs 1) (str movs 2) (str movs 4) (str movs 8)))
       ("str.rest"    "a6ab48adae"            ((str cmps 1) (str stos 4) (str lods 8) (str scas 1)))
-      ;; the system lane -- the kernel's own vocabulary: the flag/halt nullaries, the MSR pair,
-      ;; the interrupt return, the vectored int (int3 is `trap`, CC, already above)
+      ;; the system lane: flag/halt nullaries, the msr pair, the interrupt return, int n (int3 is `trap`)
       ("sys.flags"   "fafbf4"                ((cli) (sti) (hlt)))
       ("sys.smap"    "0f01cb0f01ca"          ((stac) (clac)))
       ("sys.pkru"    "0f01ee0f01ef"          ((rdpkru) (wrpkru)))
@@ -144,13 +137,11 @@
       ;; the segment registers, ldcr's twin: 8C /r with the sreg number in Modrm.reg.
       ;; REX.W widens the destination to the whole register, zero-extended -- no movzx.
       ("sys.ldseg"   "488cc8498cc9"          ((ldseg r0 1) (ldseg r8 1)))    ; mov rax,cs ; mov r9,cs
-      ;; push takes an immediate as well as a register -- 6A ib / 68 id, both
-      ;; sign-extended into the 64-bit slot. the exception stubs are the caller.
+      ;; push imm: 6A ib / 68 id, sign-extended into the 64-bit slot
       ("push.imm"    "6a006a1f682c010000"    ((push 0) (push 31) (push 300)))
       ("push.reg"    "504150"                ((push r0) (push r7)))
-      ;; lia: the label's absolute (linked) address, movabs b8+rd io -- never resolvable in a .o,
-      ;; the eight zeros being the abs64 placeholder a relocation overwrites. `la` answers where
-      ;; the label runs; the two part company exactly where a kernel is linked high and runs low.
+      ;; lia: the label's linked address, movabs b8+rd io, the eight zeros an abs64 placeholder.
+      ;; `la` answers where it runs; the two differ where code is linked high and runs low.
       ("lia"         "48b8000000000000000049b90000000000000000"
                                              ((label k) (lia r0 k) (lia r8 k)))
       ;; tp: the thread pointer -- mov d, fs:[0]
@@ -163,8 +154,8 @@
       ("cas4.rbp"    "f0440fb15500"          ((cas4 r0 r9 r4)))     ; lock cmpxchg DWORD [rbp], r10d (forced 0 disp)
       ("udiv"        "524889d831d248f7f65a4889c3"              ((udiv r3 r3 r5)))    ; xor rdx + div (unsigned)
       ("urem"        "524889d831d248f7f64889d05a4889c3"        ((urem r3 r3 r5 r2)))   ; unsigned rem (rdx; the scratch t is rdx's job here, ignored)
-      ;; the divisor's two homes that cannot be a div operand: rax is about to hold the dividend,
-      ;; rdx the high half. each divides from a stack cell -- rax needs one pushed, rdx already is.
+      ;; the divisor's homes that cannot be a div operand (rax the dividend, rdx the high half)
+      ;; divide from a stack cell: rax pushes one, rdx already has one
       ("udiv.rax"    "52504889d831d248f734244883c4085a4889c3"  ((udiv r3 r3 r0)))    ; push rax ; div [rsp] ; add rsp,8
       ("udiv.rdx"    "524889d831d248f734245a4889c3"            ((udiv r3 r3 r2)))    ; the saved rdx IS the cell; pop balances
       ("shlv"        "48d3e0"                ((shlv r0 r1)))        ; shl rax, cl
@@ -173,8 +164,7 @@
       ;; la: rip-relative lea onto a data label laid with (label)+(raw ..)
       ("la.data"     "488d05070000004c8d050000000041424300"
                       ((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))   ; lea rax/r8, [rip -> x]
-      ;; abs64: an 8-byte absolute address of a label baked into data (a static pointer). at org 0,
-      ;; tgt sits at offset 8 (just past the fixup), so the word reads 8, then ret.
+      ;; abs64: a label's 8-byte address baked into data; at org 0 tgt sits at 8, so the word reads 8
       ("abs64.data"  "0800000000000000c3"
                       ((raw ((fix 8 abs64 tgt 0))) (label tgt) (ret)))
       ("st.sib"      "4889442410"            ((st sp 16 r0)))     ; rsp base needs a SIB byte
@@ -220,8 +210,7 @@
       ("jcc.all"
         "0f8c240000000f851e0000000f8f180000000f8d120000000f8e0c0000000f87060000000f8200000000c3"
         ((br lt a) (br ne a) (br gt a) (br ge a) (br le a) (br above a) (br below a) (label a) (ret)))
-      ;; the p0 glaze ops -- indirect jump, flag-setting add/sub (+ the vs/vc conds), overflow-checked
-      ;; multiply, condition->0/1. each objdump-verified (-M intel).
+      ;; indirect jump, flag-setting add/sub (+ vs/vc), overflow-checked multiply, condition -> 0/1
       ("jmpr.rax"    "ffe0"                  ((jmpr r0)))               ; jmp rax  (Continue/deopt tail)
       ("jmpr.r8"     "41ffe0"                ((jmpr r7)))               ; jmp r8
       ("callr.rax"   "ffd0"                  ((callr r0)))             ; call rax (through a fn pointer)
@@ -311,9 +300,8 @@
    _ (chk-eq "addr.top"  0  (label-at loopres 'top))
    _ (chk-eq "addr.done" 17 (label-at loopres 'done))
 
-   ;; -- the relaxing layout (laylax): the object writer's entry. in-range jmp/br land as the
-   ;; 2-byte short forms (EB rel8 / 7x rel8); an external or weak-marked target stays rel32.
-   ;; same (items . labels) shape as lay, resolved the same way.
+   ;; -- the relaxing layout (laylax): in-range jmp/br take the 2-byte short forms (EB / 7x rel8);
+   ;; an external or weak-marked target stays rel32. the same (items . labels) shape as lay.
    rx-be (peep backends 'x64 ())
    (rx prog longs)
       (laylax prog rx-be 0 {} longs @ p
@@ -332,17 +320,15 @@
                 rx-be 0 {} {} @ p
          (peep >p 'done ())))
 
-   ;; -- the encoder refuses a three-way alias it cannot honestly encode (d <- a OP d, d != a,
-   ;; non-commutative), raising 'alias-dst rather than emitting subtly wrong bytes. the help traps
-   ;; that scare and delegates everything else back to welp. --
+   ;; -- d <- a OP d with d != a, non-commutative, cannot be encoded: it raises 'alias-dst.
+   ;; the help traps that scare and hands the rest back to welp. --
    caught {} _ (pin caught 0 0)
    _ (hear (a \ b \ a = 'alias-dst ? (pin caught 0 1, ()) (welp a b)))
    _ (holo-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
-   ;; -- the same principle one target over: a64's register-form ALU is the shifted-register
-   ;; one, where encoding 31 is XZR in every slot -- so `(sub sp sp r0)` has honest-looking bytes
-   ;; (`neg xzr, x0`) that leave sp alone. it raises instead; moving sp is `lea`'s job. --
+   ;; -- a64's register-form alu reads 31 as xzr in every slot, so `(sub sp sp r0)` would lay
+   ;; `neg xzr, x0` and leave sp alone: it raises; moving sp is `lea`'s job. --
    spcaught {} _ (pin spcaught 0 0)
    _ (hear (a \ b \ a = 'a64-alu-sp ? (pin spcaught 0 1, ()) (welp a b)))
    _ (holo-bytes 'a64 '((sub sp sp r0)))
@@ -387,9 +373,8 @@
    _ (chk-eq "text.full"
         (holo-hex 'x64 '((add r0 r0 r1) (label loop) (dec r0) (br ne loop) (ret)))
         (holo-hex 'x64 (asm-text "add r0, r0, r1   ; with a comment\nlabel loop\n  dec r0\n  br ne, loop\n\n  ret\n")))
-   ;; the system lane rides the text front-end with no grammar change -- an operation name and a
-   ;; system register are ordinary symbols, underscores and all. this is the seam mooncc's inline
-   ;; asm parses through, so the kernel's templates land here.
+   ;; the system lane rides the text front-end unchanged: an operation name and a system
+   ;; register are ordinary symbols, underscores and all
    _ (chk-eq "text.sys.x64" (holo-hex 'x64 '((cli) (ldcr r0 2) (lidt r6 0) (iretq)))
                             (holo-hex 'x64 (asm-text "cli\nldcr r0, 2\nlidt r6, 0\niretq")))
    _ (chk-eq "text.sys.a64"
@@ -399,9 +384,8 @@
         (holo-hex 'rv64 '((csrr r0 mstatus) (csrw stvec r0) (sfence zr zr) (fencei) (sret)))
         (holo-hex 'rv64 (asm-text "csrr r0, mstatus\ncsrw stvec, r0\nsfence zr, zr\nfencei\nsret")))
 
-   ;; -- the GNU-dialect front (src/love/holo/gas.l) lowers what clang and gcc read -- AT&T, ARM,
-   ;; riscv, thumb -- to the same IR, so every line here is a form the tables above already froze.
-   ;; this is the seam mooncc's inline asm parses through: the kernel's asmops.h templates land here.
+   ;; -- the gnu-dialect front (gas.l) lowers at&t, arm, riscv and thumb to the same ir, so every
+   ;; line here is a form the tables above already froze. inline asm parses through it.
    _ (chk-eq "gas.x64.cr"
         '((ldcr r0 0) (and r0 r0 -5) (or r0 r0 1536) (stcr 0 r0))
         (gas-text 'x64 "mov %cr0, %rax\n and $~(1 << 2), %rax\n or $((1 << 9) | (1 << 10)), %rax\n mov %rax, %cr0"))
@@ -668,40 +652,37 @@
    ;; a macro call's arguments split at a space as at a comma, unless an operator sits beside it
    _ (chk-eq "gas.macro.space" '("add x0, x1, #8" "add x0, x1, #(1 + 2)" "add x0, x1, #(1) | (2)" "add x0, x1, #3" "add x0, x1, #1 + 2")
         (gf-expand 'a64 (gf-lines 'a64 ".macro m a, b, c\nadd \\a, \\b, \\c\n.endm\nm x0 x1 #8\nm x0, x1, #(1 + 2)\nm x0 x1 #(1) | (2)\nm x0, x1 , #3\nm x0 x1 #1 + 2")))
-   ;; a parameter's default with its `=` spaced or not, taken for an argument left off or empty,
-   ;; as llvm-mc expands them (entry.S's `regsize = 64`)
+   ;; a parameter's default with its `=` spaced or not, taken for an argument left off or empty
    _ (chk-eq "gas.macro.default" '("mov x1, x2" "mov x3, #1" "mov w0, w0" "mov x3, #2" "mov w0, w0" "mov x3, #3" "mov x0, #1" "mov x1, #2" "mov x2, #3" "mov x3, #4" "mov x0, #12" "mov x0, #5" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro m, el, regsize = 64\n.if \\regsize == 32\nmov w0, w0\n.else\nmov x1, x2\n.endif\nmov x3, #\\el\n.endm\nm 1\nm 2, 32\nm 3, regsize=32\n.macro n a=1, b =2, c= 3, d\nmov x0, #\\a\nmov x1, #\\b\nmov x2, #\\c\nmov x3, #\\d\n.endm\nn , , , 4\n.macro p a=, b\nmov x0, #1\\a\\b\n.endm\np , 2\n.macro q a = 5\nmov x0, #\\a\n.endm\nq\n")))
-   ;; a register form beside sp is the extended word at uxtx/uxtw #0 (entry.S's `add sp, sp, x0`), a
-   ;; W mov beside wsp add #0, and cmn/negs by register; sp as rm, a flag-setting sp, a logical on
-   ;; sp, a shift past 4 beside it, a W rm beside sp and zr beside wsp refuse
+   ;; a register form beside sp is the extended word at uxtx/uxtw #0, a w mov beside wsp add #0,
+   ;; and cmn/negs by register; sp as rm, a flag-setting sp, a logical on sp, a shift past 4
+   ;; beside it, a w rm beside sp and zr beside wsp refuse
    _ (chk-eq "gas.a64.spreg" "ff63208bff6320cbe063218b9f60258be06321abff6321ebff6322abff43200be143224bef0300113f0000113f0002abe903036b"
         (holo-hex 'a64 (gas-text 'a64 "add sp, sp, x0\n sub sp, sp, x0\n add x0, sp, x1\n add sp, x4, x5\n adds x0, sp, x1\n cmp sp, x1\n cmn sp, x2\n add wsp, wsp, w0\n sub w1, wsp, w2\n mov w15, wsp\n mov wsp, w1\n cmn x1, x2\n negs w9, w3")))
    _ (chk-eq "gas.a64.spreg.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["add sp, sp, x0, lsl #5" "add sp, sp, sp" "adds sp, x0, x1" "and sp, sp, x0" "add sp, sp, w0" "mov wsp, wzr"]))
-   ;; msr and mrs move a system register through an x register or xzr (entry.S's
-   ;; `msr tpidrro_el0, xzr`); sp, whose 31 would read as xzr, and a w register refuse
+   ;; msr and mrs through an x register or xzr; sp (31 would read as xzr) and a w register refuse
    _ (chk-eq "gas.a64.msrzr" "7fd01bd55fd03bd51ff218d543d01bd525003bd5df4203d59ed038d51d4118d5"
         (holo-hex 'a64 (gas-text 'a64 "msr tpidrro_el0, xzr\n mrs xzr, tpidr_el0\n msr s3_0_c15_c2_0, xzr\n msr tpidr_el0, x3\n mrs x5, ctr_el0\n msr daifset, #2\n mrs x30, tpidr_el1\n msr sp_el0, x29\n")))
    _ (chk-eq "gas.a64.msrzr.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["msr tpidr_el0, sp" "mrs sp, tpidr_el0" "msr tpidr_el0, wzr" "mrs w0, tpidr_el0" "msr tpidr_el0, w3"]))
-   ;; the advanced simd lane, one line of each form as llvm-mc lays it (vgetrandom-chacha's
-   ;; NEON body), a register split from its arrangement glued; each refusal is llvm-mc's but
-   ;; ext's wider index, which llvm-mc masks in silence
+   ;; the advanced simd lane, one line of each form, a register glued to its arrangement; each
+   ;; refusal is llvm-mc's but ext's wider index, which llvm-mc masks in silence
    _ (chk-eq "gas.a64.neon" "6c85fe7e3379450e4e86ff5e51bb200ed80f014e6d1c790e021a0f0e8308206ec457270fd506374fe1bbe06e18e4002f1f3f1e0e871fbc0ee1c7070f4ce5056fe8239f4cbc0aa04e3a58904e2c85720eacbaa06e7618ce4ee11f074e303a150efa239f0cfd0d096ed32ad14eefaf400c0b180d2e2226d24c237e000c27a4000ff61daf4e5a27096f370d084e3017416f36477a6fc91df72e7d6b1d4ed605134ec305084e27aed40c1820004c305a202e2327370f5f84e44efe1cf84ef4577c6f257a400cef5bd44ef81c3b4e8c78ca4e9e59204e8826724fc81e726e95440a6fca285c4ee5876a6e4714220f45540a6f172c404c2159206e071fb20ee726456fac1b200e5917392f25a8404c"
         (holo-hex 'a64 (gas-text 'a64 "sub d12, d11, d30\n zip2 v19.4h, v9.4h, v5.4h\n add d14, d18, d31\n abs v17.8b, v26.8b\n dup v24.16b, w30\n bic v13.8b, v3.8b, v25.8b\n uzp1 v2.8b, v16.8b, v15.8b\n rev32 v3.16b, v4.16b\n shl v4.2s, v30.2s, #7\n sshr v21.4s, v22.4s, #9\n neg v1.2d, v31.2d\n movi d24, #0\n umov wzr, v24.h[7]\n mov v7.2s, v28.2s\n movi v1.2s, #255, msl #8\n movi v12.2d, #0xff00ff00ff00ff00\n st1 { v8.16b, v9.16b, v10.16b, v11.16b }, [sp], xzr\n rev64 v28.4s, v21.4s\n uzp2 v26.4s, v1.4s, v16.4s\n add v12.4h, v9.4h, v18.4h\n neg v12.4s, v21.4s\n uzp1 v22.2d, v3.2d, v14.2d\n ins v1.b[3], wzr\n zip1 v16.8b, v17.8b, v21.8b\n st1 { v26.8b - v29.8b }, [sp], xzr\n mov v29.b[4], v15.b[1]\n trn1 v19.2d, v22.2d, v17.2d\n ld1 { v15.1d - v16.1d }, [sp]\n ext v11.8b, v0.8b, v13.8b, #3\n ld1 { v2.8h - v5.8h }, [x17], x18\n st1 { v3.1d }, [x17]\n movi v7.4h, #1, lsl #8\n mov v22.2d, v15.2d\n urshr v26.16b, v26.16b, #7\n dup v23.2d, x9\n usra v16.2d, v25.2d, #63\n sri v22.2d, v25.2d, #6\n bif v9.8b, v14.8b, v23.8b\n trn2 v29.16b, v27.16b, v29.16b\n dup v22.16b, v14.b[9]\n dup v3.2d, v14.d[0]\n ld1 { v7.1d, v8.1d }, [x17], x20\n st1 { v24.16b - v27.16b }, [x0]\n not v16.8b, v17.8b\n srshr v3.2s, v25.2s, #9\n add v31.2d, v2.2d, v4.2d\n orn v30.16b, v7.16b, v24.16b\n sli v20.2d, v31.2d, #60\n ld1 { v5.2s }, [x17]\n uzp2 v15.2d, v31.2d, v20.2d\n and v24.16b, v7.16b, v27.16b\n zip2 v12.2d, v4.2d, v10.2d\n cnt v30.16b, v12.16b\n srshr v8.2d, v20.2d, #14\n bsl v8.16b, v22.16b, v18.16b\n sri v21.16b, v4.16b, #6\n trn1 v10.8h, v6.8h, v28.8h\n sub v5.8h, v31.8h, v10.8h\n ssra v7.2s, v2.2s, #30\n sli v5.16b, v2.16b, #2\n ld1 { v23.2d - v26.2d }, [x0]\n mvn v1.16b, v9.16b\n orr v7.8b, v24.8b, v18.8b\n urshr v7.2d, v23.2d, #59\n rev16 v12.8b, v29.8b\n usra v25.2s, v26.2s, #7\n ld1 { v5 .4s, v6 .4s }, [x1]\n")))
    _ (chk-eq "gas.a64.neon.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["movi v0.1d, #0" "ushr v15.8b, v1.8b, #58" "mov xzr, v6.s[12]" "not v17.1d, v21.1d" "uzp2 v15.1d, v6.1d, v0.1d" "ext v26.8h, v24.8h, v7.8h, #11" "ins v19.b[0], wsp" "sshr v13.16b, v28.16b, #32" "dup v24.8b, v4.s[2]" "umov xzr, v4.d[4]" "shl v11.8h, v18.8h, #46" "cnt v8.4h, v28.4h" "rev64 v19.2d, v5.2d" "bic v7.2d, v31.2d, v31.2d" "orn v19.2s, v9.2s, v12.2s" "sli v28.4h, v6.4h, #46" "ext v1.8b, v2.8b, v3.8b, #8" "ld1 { v30.8b - v30.8b }, [x0]"]))
-   ;; a64's `ldr rt, =expr`: a constant one movz holds is that movz, else a word in the section's
-   ;; pool, one per width and expression, laid at .ltorg or the section's end, and a literal load
-   ;; of it; a .set read before it is made reads its first value (head.S's .Lpe_header_offset)
+   ;; `ldr rt, =expr`: a constant one movz holds is that movz, else a word in the section's pool,
+   ;; one per width and expression, laid at .ltorg or the section's end, and a literal load of it;
+   ;; a .set read before it is made reads its first value
    _ (chk-eq "gas.a64.litpool" "((((\".text\" 1 6 ((raw (128 70 130 210)) (afix ld19 1476395009 .Llit0 0) (afix ld19 1476395010 .Llit1 0) (afix ld19 1476395011 .Llit1 0) (afix ld19 402653188 .Llit2 0) (nop) (dalign 8) (label .Llit0) (raw (69 35 1 0 0 0 0 0)) (dalign 8) (label .Llit1) (raw ((fix 8 abs64 foo 0))) (dalign 4) (label .Llit2) (raw ((fix 4 abs32 foo 4))) (afix ld19 1476395013 l1.1 0) (label l1.1) (raw ((fix 4 abs32 bar 0))))) (\".x\" 1 6 ((afix ld19 1476395014 .Llit3 0) (dalign 8) (label .Llit3) (raw (255 255 255 255 255 255 255 255))))) () () ()) (((\".text\" 1 6 ((raw (2 0 0 0)) (raw (3 0 0 0))))) () () ()))"
         (show [(gas-top 'a64 " ldr x0, =0x1234\n ldr x1, =0x12345\n ldr x2, =foo\n ldr x3, =foo\n ldr w4, =foo + 4\n nop\n .ltorg\n ldr x5, 1f\n1: .long bar\n.section .x, \"ax\"\n ldr x6, =-1\n")
                (gas-top 'a64 ".long .La\n.set .La, 2\n.set .La, 3\n.long .La\n")]))
-   ;; a64's `//` starts a comment outside a string only (vdso-wrap.S's .incbin, laid as .base64)
+   ;; a64's `//` starts a comment outside a string only
    _ (chk-eq "gas.a64.cutquote" '(".ascii \"a//b\" " ".ascii \"q\\\"//\" " "nop ")
         (gf-lines 'a64 ".ascii \"a//b\" // c\n.ascii \"q\\\"//\" //x\nnop // d"))
    ;; fp and lr, llvm-mc's names for x29 and x30, in every X operand, as llvm-mc lays them
@@ -721,37 +702,35 @@
         [(holo-hex 'a64 (gas-text 'a64 "madd x0, x1, x2, x3\n umaddl x0, w1, w2, x3\n smnegl x0, w1, w2\n smulh x0, x1, x2\n orr x0, xzr, #0xff\n ldr xzr, [x0]\n strb wzr, [x1, #1]\n adds x8, x30, #4096\n"))
          (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
               ["str x0, [x0, #-8]!" "ldr x0, [x0], #8" "ldr sp, [x1]" "smull x0, x1, w2" "sub x27, x4, #21845"])])
-   ;; the exclusive pairs and casp (atomic_ll_sc.h's and atomic_lse.h's cmpxchg128), and w31 as
-   ;; llvm-mc reads it; a status that is a data register or the base refuses, as casp's odd pair
+   ;; the exclusive pairs and casp, and w31 as llvm-mc reads it; a status that is a data register
+   ;; or the base refuses, as casp's odd pair
    _ (chk-eq "gas.a64.xp" '("40047fc840847f88400423c8eaaf29c8827c2048feff6608e0073fc8ff03002a"
                            (gas-a64-unpredictable gas-a64-unpredictable gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-register))
         [(holo-hex 'a64 (gas-text 'a64 "ldxp x0, x1, [x2]\n ldaxp w0, w1, [x2, #0]\n stxp w3, x0, x1, [x2]\n stlxp w9, x10, x11, [sp]\n casp x0, x1, x2, x3, [x4]\n caspal w6, w7, w30, wzr, [sp]\n stxp wzr, x0, x1, [sp]\n mov w31, w0\n"))
          (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
               ["stxp w0, x0, x1, [x2]" "stxp w2, x0, x1, [x2]" "ldxp x0, w1, [x2]" "ldxp x0, x1, [xzr]" "casp x1, x2, x3, x4, [x5]" "mov w32, w0"])])
-   ;; a register variable's or clobber's name takes gcc's r0..r30 for x0..x30 (arm-smccc.h's
-   ;; asm("r0")); asm text keeps llvm-mc's names, where r0 refuses
+   ;; a register variable's or clobber's name takes gcc's r0..r30 for x0..x30; asm text keeps
+   ;; llvm-mc's names, where r0 refuses
    _ (chk-eq "gas.a64.ccnames" '((r0 r28 fp lr () r0) gas-a64-register)
         [(map (s \ gas-regname 'a64 s) ["r0" "r28" "r29" "r30" "r31" "x0"])
          (trap (x \ gas-text 'a64 x) "mov r0, r1" (\ a b a))])
-   ;; a note section (vdso's .note.Linux) is sht_note; an alias of an alias follows the chain to
-   ;; its label, whichever was set first (memcpy.S's __memmove), and a cycle refuses; .weak
-   ;; exports and answers its names, a name .globl also says exported once
+   ;; a note section is sht_note; an alias of an alias follows the chain to its label, whichever
+   ;; was set first, and a cycle refuses; .weak exports and answers its names, .globl too, once
    _ (chk-eq "gas.note.weak" """((((".note.L" 7 2 ((raw (1 0 0 0))))) () () ()) (((".text" 1 6 ((label f) (label h) (label g) (label w) (ret) (raw ((fix 8 abs64 u 0)))))) ("f" "g" "w") () ("w" "u" "f")) gas-alias)"""
         (show [(gas-top 'a64 ".pushsection .note.L, \"a\", @note\n.long 1\n.popsection\n")
                (gas-top 'a64 ".globl f\nf: ret\n.globl g\n.set g, h\n.weak w\n.set w, g\n.set h, f\n.weak u\n.quad u\n.weak f\n")
                (trap (x \ gas-top 'a64 x) ".set a, b\n.set b, a\n.globl a\n" (\ a b a))]))
-   ;; a binary literal, 0b or 0B and binary digits (proc.S's `0b01`), as llvm-mc reads it; a bare
-   ;; 0b is still the label behind, and a digit or letter glued past the bits refuses
+   ;; a binary literal, 0b or 0B and binary digits; a bare 0b is still the label behind, and a
+   ;; digit or letter glued past the bits refuses
    _ (chk-eq "gas.a64.binlit" "((((\".text\" 1 6 ((raw (1 0 0 0 0 0 0 0 3 0 0 0 0 0 0 0 11 0 0 0 0 0 0 0)) (raw (160 0 128 210)) (raw (255)) (raw (18 0 0 0 0 0 0 0))))) () () ()) \"1f2003d5ffffff1701000014\" (gas-data gas-data gas-data gas-data gas-immediate))"
         (show [(gas-top 'a64 ".quad 0b01, 0B11, 0b1011\nmov x0, #0b101\n.byte 0b11111111\n.quad (0b1 << 4) | 0b10\n")
                (holo-hex 'a64 (gas-text 'a64 "0:\n nop\n b 0b\n b 0f\n0:\n"))
                (map (l \ trap (x \ gas-top 'a64 x) l (\ a b a)) [".quad 0b2\n" ".quad 0b1x\n" ".quad 0b_1\n" ".quad 0b1_0\n" "mov x0, #0b12\n"])]))
-   ;; an argument that is one quoted string passes its inside, positional or by name, as llvm-mc
-   ;; expands it (entry.S's `alternative_insn nop, "dmb sy", 90`)
+   ;; an argument that is one quoted string passes its inside, positional or by name
    _ (chk-eq "gas.macro.quote" '("nop" "dmb sy" ".ascii \"x y\"" "mov x0, x1" "mov x0, x1" "mov x2, x3" "nop" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro alt insn1, insn2, cap, enable = 1\n\\insn1\n\\insn2\n.endm\nalt nop, \"dmb sy\", 90\n.macro s a\n.ascii \"\\a\"\n.endm\ns \"x y\"\n.macro t a, b\nmov \\a, \\b\n.endm\nt \"x0\", \"x1\"\nt x0 \"x1\"\nt a=\"x2\", b=x3\n.macro w a\n.ifc \\a,dmb sy\nnop\n.endif\n.endm\nw \"dmb sy\"\n")))
-   ;; .org to a label with instructions between (entry.S's `.org .Lventry_start\@ + 128`): zeros
-   ;; up to it once layout holds, as llvm-mc lays them; one behind where it stands refuses
+   ;; .org to a label with instructions between: zeros up to it once layout holds; one behind
+   ;; where it stands refuses
    _ (chk-eq "gas.a64.org" "((((\".text\" 1 6 ((label a) (nop) (jmp a) (mov r0 r1) (label .Lorg0) (raw (0 0 0 0)) (nop)))) () () ()) (((\".text\" 1 6 ((label .Ls0) (nop) (jmp .Ls0) (label .Lorg0) (raw (0 0 0 0 0 0 0 0)) (label .Ls1) (nop) (jmp .Ls1) (label .Lorg1) (raw (0 0 0 0 0 0 0 0))))) () () ()) gas-org-back)"
         (show (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
                    ["a: nop\n b a\n mov x0, x1\n .org a + 16\n nop\n"
@@ -810,10 +789,8 @@
    _ (chk-eq "elf.size"    (120 + (#(holo-bytes 'x64 elfprog) + 3)) #elfimg)
    _ (chk-eq "elf.a64-machine" 183 (peep (elf64 'a64 (a \ elfprog) ()) 'bytes 0 18))
 
-   ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
-   ;; would have gotten wrong are pinned here -- p_flags sits seventh in an Elf32_Phdr (at 76,
-   ;; where 56 holds p_offset and an Elf64_Phdr would hold the flags), and e_entry carries the
-   ;; thumb bit. test_elf32 puts the same image in front of a real loader.
+   ;; ..and the elf32 twin: a 52-byte header and a 32-byte phdr; p_flags sits seventh in an
+   ;; Elf32_Phdr (at 76, where an Elf64_Phdr has p_offset), and e_entry carries the thumb bit
    t32prog '((li r0 42) (li r7 1) (sys))
    e32     (elf32 'thumb2 (a \ t32prog) ())
    e32img  (peep e32 'bytes 0)
@@ -827,36 +804,30 @@
    _ (chk-eq "elf32.p-flags"    7  (e32img 76))         ; ..and it sits here instead
    _ (chk-eq "elf32.size" (84 + #(holo-bytes 'thumb2 t32prog)) #e32img)
 
-   ;; -- `refix`, the linker's door onto the same encoders (link.l's ldarm goes through it and
-   ;; knows no instruction format). arm is rel: the field it hands back carries both the addend
-   ;; and the aux the encoding hides. the four kinds a thumb2 object mints, and one law each. --
+   ;; -- `refix`, the linker's door onto the encoders. arm is rel: the field it hands back carries
+   ;; the addend and the aux the encoding hides. the four thumb2 kinds, one law each. --
    t2be (peep backends 'thumb2 ())
    (rfx k bs t s) (hexs (refix-with t2be k bs t s 4))
-   ;; the four placeholders obj.l leaves in a .o for an unresolved target: the branches hold
-   ;; their base encoding with the -4 pipeline addend baked in (gas writes fff7feff for `bl
-   ;; sym` too), the movw/movt pair holds Rd and a zero imm16.
+   ;; the placeholders left in a .o: branches hold their base encoding with the -4 pipeline
+   ;; addend baked in (gas's fff7feff for `bl sym`), movw/movt hold rd and a zero imm16
    base-bl '(255 247 254 255)  base-b '(255 247 254 191)
    base-mw '(64 242 0 2)       base-mt '(192 242 0 2)             ; movw/movt r2, #0
-   ;; a resolved branch is the same bytes `patch` would have laid for the same pair -- there
-   ;; is one scatter, and this is it seen through the linker's door.
+   ;; a resolved branch is the bytes `patch` lays for the same pair: one scatter
    _ (chk-eq "refix.bl" (hexs (patch-with t2be 'bl 4096 256 4 0)) (rfx 'bl base-bl 4096 256))
    _ (chk-eq "refix.b"  (hexs (patch-with t2be 'b  4096 256 4 0)) (rfx 'b  base-b  4096 256))
-   ;; the thumb bit rides in the target and every branch field shifts by at least one, so an
-   ;; odd address encodes identically to its even twin -- which is why nothing masks it out.
+   ;; the thumb bit rides in the target and every branch field shifts it out, so odd and even agree
    _ (chk-eq "refix.thumb-bit" (rfx 'bl base-bl 4096 256) (rfx 'bl base-bl 4097 256))
-   ;; movw16/movt16 read their Rd back out of hw2 -- an R_ARM_THM_MOVW_ABS_NC never carried it.
+   ;; movw16/movt16 read their rd back out of hw2
    _ (chk-eq "refix.movw" (hexs (patch-with t2be 'movw16 2271560481 0 4 2)) (rfx 'movw16 base-mw 2271560481 0))
    _ (chk-eq "refix.movt" (hexs (patch-with t2be 'movt16 2271560481 0 4 2)) (rfx 'movt16 base-mt 2271560481 0))
-   ;; ..and a field carrying an addend this backend never bakes refuses, rather than quietly
-   ;; linking somewhere plausible: the base encoding is rebuilt and compared, so no inverse
-   ;; scatter has to exist for the check to be honest.
+   ;; ..and a field carrying an addend this backend never bakes refuses: the base encoding is
+   ;; rebuilt and compared, so no inverse scatter is needed
    rfcaught {} _ (pin rfcaught 0 0)
    _ (hear (a \ b \ a = 'thumb-refix-addend ? (pin rfcaught 0 1, ()) (welp a b)))
    _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same bl two bytes further on
    _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
 
-   ;; -- the a64 backend (src/love/holo/a64.l): the same neutral IR, a second target. fixed 32-bit
-   ;; little-endian words; every golden checked vs llvm-mc / llvm-objdump. --
+   ;; -- the a64 backend: fixed 32-bit little-endian words, checked vs llvm-mc / llvm-objdump. --
    a64tests '(
       ("a64.li"     "800780d2"          ((li r0 60)))
       ("a64.movk"   "00cf8ad28046a2f2"  ((li r0 305419896)))     ; 0x12345678: movz + movk
@@ -889,8 +860,7 @@
       ("a64.brk"    "000020d4"          ((trap)))
       ("a64.loop"   "1f0001eb60000054000400d1fdffff17c0035fd6"
                      ((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
-      ;; the p0 glaze ops -- each llvm-mc-verified (--triple=aarch64). adds/subs are the S-variant
-      ;; (set NZCV); set is cset; mulo is the smulh+cmp-vs-asr#63 overflow idiom (no flag-setting mul).
+      ;; adds/subs are the s-variants (set nzcv); set is cset; mulo is smulh + cmp vs asr #63
       ("a64.jmpr"   "00001fd6"          ((jmpr r0)))                  ; br x0
       ("a64.callr"  "00003fd6"          ((callr r0)))                 ; blr x0  (through a fn pointer)
       ("a64.abs64"  "0800000000000000c0035fd6"                        ; an 8-byte absolute label address, then ret
@@ -901,7 +871,7 @@
       ("a64.subs"   "600007eb"          ((subs r0 r3 r7)))            ; subs x0,x3,x7
       ("a64.mulo.prog" "047c479b007c079b9ffc80eb4100005402000014a0001fd6c0035fd6"   ; smulh x4,x0,x7; mul x0,x0,x7; cmp x4,x0,asr#63; b.ne ovf; b done; br x5; ret
                       ((mulo r0 r0 r7 r4 ovf) (jmp done) (label ovf) (jmpr r5) (label done) (ret)))
-      ;; p1: shifts/test/div/rem/indexed -- the integer + map lanes on a64. llvm-mc-verified.
+      ;; shifts, test, div/rem, indexed
       ("a64.sar"    "00fc4193"          ((sar r0 1)))                 ; asr x0,x0,#1   (untag)
       ("a64.shr"    "e7fc41d3"          ((shr r7 1)))                 ; lsr x7,x7,#1
       ("a64.shl"    "00f07dd3"          ((shl r0 3)))                 ; lsl x0,x0,#3
@@ -926,20 +896,18 @@
       ("a64.pop.lr"  "fe0741f8"         ((pop lr)))                  ; ldr x30, [sp],#16
       ("a64.grpfn"  "fe0f1ff8040000940000038bfe0741f8c0035fd6e00303aac0035fd6"   ; the nested-call shape: save lr; bl sib; work; restore lr; ret; sib: ...
                       ((push lr) (call sib) (add r0 r0 r3) (pop lr) (ret) (label sib) (mov r0 r3) (ret)))
-      ;; the OVF-anchor idiom -- mov to/from sp must be `lea` (add #0), not the ORR-based `mov` (which
-      ;; reads/writes XZR for reg 31, never sp). set anchor = sp ; deopt abandons frames with sp = anchor.
+      ;; sp moves are `lea` (add #0): orr's `mov` reads and writes xzr for 31. the deopt anchor:
       ("a64.anchor"  "f7030091"          ((lea r23 sp 0)))            ; mov x23, sp
       ("a64.abandon" "ff020091"          ((lea sp r23 0)))            ; mov sp, x23
-      ;; a whole glaze leaf for (\ x (x + 1)) -- the integer leaf ABI end to end: g/Ip/Hp/Sp kept in
-      ;; x0..x3, acc=x4, temp=x5. fetch+fixnum-guard Sp[0]; untag; +1 with overflow->deopt; putfix;
-      ;; store Sp[0]; Continue (Ip+=16; br [Ip]); deopt tail-applies interp (value[1] at [Ip+8]).
+      ;; a whole glaze leaf for (\ x (x + 1)): g/Ip/Hp/Sp in x0..x3, acc x4, temp x5. guard and
+      ;; untag Sp[0]; +1 with overflow -> deopt; putfix; store; continue (Ip += 16; br [Ip]); deopt
+      ;; tail-applies interp (value[1] at [Ip+8]).
       ("a64.glaze.leaf"
         "640040f99f0040f26001005484fc4193840400b106010054840004abc6000054840040b2640000f921400091250040f9a0001fd6250440f9e10305aa250040f9a0001fd6"
         ((ld r4 r3 0) (test r4 1) (br eq deopt) (sar r4 1) (adds r4 r4 1) (br vs deopt)
           (adds r4 r4 r4) (br vs deopt) (or r4 r4 1) (st r3 0 r4) (add r1 r1 16) (ld r5 r1 0) (jmpr r5)
           (label deopt) (ld r5 r1 8) (mov r1 r5) (ld r5 r1 0) (jmpr r5)))
-      ;; scalar-double fp (the float glaze lane): f0..f15 -> d0..d15. SSE-named IR, two-address, mapped to
-      ;; the a64 scalar-double form. each golden checked vs llvm-objdump (mnemonics in the trailing comment).
+      ;; scalar double: f0..f15 -> d0..d15, the sse-named two-address ir on a64's scalar-double forms
       ("a64.cvttsd2si" "0400789e"        ((cvttsd2si r4 f0)))           ; fcvtzs x4, d0 (toward zero)
       ("a64.cvtsi2sd" "8000629e"          ((cvtsi2sd f0 r4)))           ; scvtf d0, x4
       ("a64.movqxr"   "8100679e"          ((movqxr f1 r4)))             ; fmov  d1, x4  (gpr bits -> fpr)
@@ -986,9 +954,9 @@
       ("a64.shlv"     "0020c19a"          ((shlv r0 r1)))               ; lsl x0, x0, x1
       ("a64.shrv"     "e724c19a"          ((shrv r7 r1)))               ; lsr x7, x7, x1
       ("a64.sarv"     "6328c19a"          ((sarv r3 r1)))               ; asr x3, x3, x1
-      ;; the cc-rung lanes (mooncc -t a64): lean; the 24-bit add/sub split; the far memory
-      ;; lane (movz x16 + add/sub off the base); fp LDUR/STUR + far (frame slots run negative);
-      ;; f16+ registers; cmp's cmn flip; p/np as vs/vc (FCMP parks unordered in V). llvm-mc-verified.
+      ;; lean; the 24-bit add/sub split; the far memory lane (movz x16 + add/sub off the base); fp
+      ;; ldur/stur + far (frame slots run negative); f16+; cmp's cmn flip; p/np as vs/vc (fcmp
+      ;; parks unordered in v)
       ("a64.lean"     "808000d1"          ((lean r0 r4 -32)))           ; sub x0, x4, #32 (lea's alias)
       ("a64.addi.24"  "2040409100100091"  ((add r0 r1 65540)))          ; add x0,x1,#16,lsl#12 ; add x0,x0,#4
       ("a64.far.ld"   "30b004d1000240f9" ((ld r0 r1 -300)))             ; sub x16, x1, #300 ; ldr x0, [x16]
@@ -1000,9 +968,8 @@
       ("a64.set.np"   "e0679f9a"          ((set np r0)))                ; cset x0, vc (np aliases vc)
       ("a64.la"       "000000900040009107000090e740009141424300"
                        ((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))   ; adrp+add pair: x at +16, page delta 0, lo12 16
-      ;; the system lane -- the kernel's own vocabulary, every golden from llvm-mc
-      ;; --show-encoding. MRS/MSR and the sys family share one encoding; these goldens
-      ;; walk both op0 banks (el1 at op1=0, el0 at op1=3) and both L directions.
+      ;; the system lane: mrs/msr and the sys family share one encoding; these walk both op0 banks
+      ;; (el1 at op1=0, el0 at op1=3) and both l directions
       ("a64.mrs"      "091038d5007438d523003bd5"
                        ((mrs r9 sctlr_el1) (mrs r0 par_el1) (mrs r3 ctr_el0)))
       ("a64.mrs.lr"   "be0038d5"          ((mrs lr mpidr_el1)))         ; mrs x30, mpidr_el1
@@ -1022,24 +989,20 @@
       ("a64.cache"    "1f7508d520750bd5217b0bd5227e0bd5237608d524740bd5"
                        ((ic iallu zr) (ic ivau r0) (dc cvau r1) (dc civac r2) (dc ivac r3) (dc zva r4)))
       ("a64.at"       "217808d5007808d5"  ((at s1e1w r1) (at s1e1r r0)))
-      ;; exception generation. `dbrk` is a64's hlt -- the debugger halt (hlt #0xf000 is the
-      ;; semihosting call), a different instruction from x86's `hlt`, which stops the core.
+      ;; exception generation. `dbrk` is a64's hlt, the debugger halt (hlt #0xf000 is semihosting),
+      ;; not x86's `hlt`, which stops the core
       ("a64.exc"      "000020d4409a20d400005ed4020000d4030000d400000000"
                        ((brk 0) (brk 1234) (dbrk 61440) (hvc 0) (smc 0) (udf 0)))
       ("a64.wait"     "7f2003d55f2003d5e0039fd6"  ((wfi) (wfe) (eret)))
-      ;; the sp move, which kernel code makes by name. `mov` cannot say it -- ORR reads encoding
-      ;; 31 as XZR -- so it is `lea .. 0`, add #0, and `mov` scares on sp rather than answer XZR.
+      ;; the sp move: orr reads 31 as xzr, so it is `lea .. 0` (add #0), and `mov` scares on sp
       ("a64.sp.read"  "e9030091"          ((lea r9 sp 0)))              ; mov x9, sp
       ("a64.sp.write" "3f010091"          ((lea sp r9 0)))              ; mov sp, x9
-      ;; lia: the absolute (linked) address, which no a64 immediate can hold -- so an inline
-      ;; literal, exactly what `ldr xd, =sym` assembles to:
-      ;;   ldr xd, .+8 ; b .+12 ; .quad <the abs64 placeholder a reloc overwrites>
-      ;; both offsets are constants of the shape, so it needs no label of its own.
+      ;; lia: the linked address, as `ldr xd, =sym` assembles it, a literal inline:
+      ;;   ldr xd, .+8 ; b .+12 ; .quad <the abs64 placeholder>
       ("a64.lia"      "4900005803000014000000000000000040000058030000140000000000000000"
                                           ((label k) (lia r9 k) (lia r0 k)))
-      ;; x16/x17/x18 are sayable now -- the kernel's irq path saves x0..x18 because
-      ;; the interrupted code may hold a live value in any of them. x16 stays the
-      ;; borrowed scratch of the indexed/far accesses; these plain stores are in range.
+      ;; x16/x17/x18 by name (an irq path saves x0..x18); x16 is also the indexed/far scratch,
+      ;; these plain stores are in range
       ("a64.ip.regs"  "f00300f9f10700f9f20b00f9"
                                           ((st sp 0 r16) (st sp 8 r17) (st sp 16 r18)))
       ;; the 128-bit pair kit (hi x2 : lo x0, the left operand at [sp] lo / [sp+8] hi or -- the
@@ -1077,18 +1040,16 @@
       ("a64.sar128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15028d09a3f0001f10022919a51fc7f934228c19a2222829a" ((sar128v))))
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'a64 (t 2)) 0 a64tests)
 
-   ;; -- the thumb2 backend: the same neutral IR, a third target -- armv7e-m (Cortex-M7, the Teensy
-   ;; 4.1 / Playdate device CPU). mixed 16/32-bit little-endian, a 32-bit word laid hi-halfword
-   ;; first. goldens from `llvm-mc --disassemble --triple=thumbv7em-none-eabi`; the branch-offset
-   ;; scrambling (S/J1/J2/I1/I2) was cross-checked over spans across the imm11 boundary. --
+   ;; -- the thumb2 backend: armv7e-m, mixed 16/32-bit little-endian, a 32-bit word laid hi-halfword
+   ;; first. goldens from llvm-mc --triple=thumbv7em-none-eabi; the branch scrambling (s/j1/j2/i1/i2)
+   ;; checked over spans across the imm11 boundary. --
    t2tests '(
       ("t2.li"      "40f20500"          ((li r0 5)))                  ; movw r0, #5
       ("t2.movt"    "45f27861c1f23421"  ((li r1 305419896)))          ; 0x12345678: movw + movt
       ("t2.li.neg"  "4ff6ff72cff6ff72"  ((li r2 -1)))                 ; movw #0xffff ; movt #0xffff
       ("t2.mov"     "4fea0300"          ((mov r0 r3)))                ; mov.w r0, r3
-      ;; ..but mov.W is ORR with Rn=15 and cannot name sp or pc, so those take the 16-bit
-      ;; hi-register t1 instead. unpredictable is not a fault: the core may well do what you
-      ;; meant, which is how a wrong encoding here rides a green board for months.
+      ;; ..but mov.w is orr with rn=15 and cannot name sp or pc, so those take the 16-bit hi-register
+      ;; t1. unpredictable is not a fault: a wrong encoding here can run green on a board.
       ("t2.movfromsp" "6846"            ((mov r0 sp)))                ; mov r0, sp
       ("t2.movtosp"   "8d46"            ((mov sp r1)))                ; mov sp, r1
       ("t2.add"     "01eb0200"          ((add r0 r1 r2)))             ; add.w r0, r1, r2
@@ -1150,8 +1111,8 @@
       ;; movw #16 ; movt #0, twice (r0 then r7). the thumb2 answer to a64's adrp+add.
       ("t2.la"      "40f21000c0f2000040f21007c0f2000741424300"
                      ((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))
-      ;; the 64-bit pair lanes (moon rung 3): the carry ALU family, the widening multiply
-      ;; family, clz, and a variable shift whose count is not r1 (T32 takes any count reg).
+      ;; the 64-bit pair lanes: the carry alu family, the widening multiplies, clz, and a variable
+      ;; shift whose count is not r1
       ("t2.adc"     "43eb0101"          ((adc r1 r3 r1)))             ; adc.w r1, r3, r1
       ("t2.adcs"    "53eb0303"          ((adcs r3 r3 r3)))            ; adcs.w r3, r3, r3
       ("t2.sbc"     "63eb0101"          ((sbc r1 r3 r1)))             ; sbc.w r1, r3, r1
@@ -1168,8 +1129,8 @@
       ("t2.ldx"     "51f82200"          ((ldx r0 r1 r2 4 0)))         ; ldr.w r0, [r1, r2, lsl #2]
       ("t2.ldxb"    "11f80250"          ((ldxb r5 r1 r2 1 0)))        ; ldrb.w r5, [r1, r2]
       ("t2.ldx.d"   "00eb0300d0f80400"  ((ldx r0 r0 r3 1 4)))         ; disp!=0: add.w r0,r0,r3 ; ldr.w r0,[r0,#4]
-      ;; the scalar-double vfp lane (moon rung 4): f0..f15 -> d0..d15, S[2n] the single views,
-      ;; movqxr/movqrx move a gp pair (named reg = lo, +1 = hi). llvm-mc (eabihf, +vfp4d16).
+      ;; the scalar-double vfp lane: f0..f15 -> d0..d15, s[2n] the single views; movqxr/movqrx move
+      ;; a gp pair (named reg lo, +1 hi). llvm-mc (eabihf, +vfp4d16).
       ("t2.addsd"   "30ee010b"          ((addsd f0 f1)))              ; vadd.f64 d0, d0, d1
       ("t2.subsd"   "32ee432b"          ((subsd f2 f3)))              ; vsub.f64 d2, d2, d3
       ("t2.mulsd"   "20ee010b"          ((mulsd f0 f1)))              ; vmul.f64 d0, d0, d1
@@ -1198,8 +1159,7 @@
       ("t2.cvtss2sd" "b7eec11a"         ((cvtss2sd f1 f1)))           ; vcvt.f64.f32 d1, s2
       ("t2.cvtsd2ss" "b7eec11b"         ((cvtsd2ss f1 f1)))           ; vcvt.f32.f64 s2, d1
       ("t2.smull"   "80fb0102"          ((smull r0 r2 r0 r1)))        ; smull r0, r2, r0, r1
-      ;; the system lane -- what the boot lay says that C cannot. M-profile draws one
-      ;; shareability domain, so `sy` is the only barrier option there is to name.
+      ;; the system lane. m-profile has one shareability domain, so `sy` is the only barrier option
       ("t2.dsb"     "bff34f8f"          ((dsb sy)))                   ; dsb sy
       ("t2.isb"     "bff36f8f"          ((isb)))                      ; isb sy
       ("t2.brk"     "abbe"              ((brk 171)))                  ; bkpt 0xab -- the semihosting call
@@ -1208,20 +1168,17 @@
       ;; MRS: the two stack pointers, which a fault handler asks after to find the frame.
       ("t2.mrsmsp"  "eff30880"          ((mrs r0 msp)))               ; mrs r0, msp
       ("t2.mrspsp"  "eff30983"          ((mrs r3 psp)))               ; mrs r3, psp
-      ;; the 64-bit unsigned divide/remainder expansions: dividend r2:r3 / divisor r0:r1 ->
-      ;; r0:r1. 64-step restoring loop, fixed narrow branches (bhs +8 / blo +10 / bne -52),
-      ;; r4-r7 saved. disassembly-verified whole (llvm-mc); the qemu gate proves the values.
+      ;; the 64-bit unsigned divide/remainder: r2:r3 / r0:r1 -> r0:r1, a 64-step restoring loop,
+      ;; fixed narrow branches (bhs +8 / blo +10 / bne -52), r4-r7 saved
       ("t2.udivll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1104619465df8047b5df8046b5df8045b5df8044b"
                      ((udivll)))
       ("t2.uremll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1204629465df8047b5df8046b5df8045b5df8044b"
                      ((uremll))))
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'thumb2 (t 2)) 0 t2tests)
 
-   ;; -- the thumb1 backend: the same neutral IR, a fourth target -- armv6-M (Cortex-M0/M0+, the
-   ;; rp2040 CPU). 16-bit Thumb-1: two-address, low-registers, no MOVW/MOVT (so `li` byte-builds
-   ;; the constant), no wide ALU, no it (so `set` branches over), no hardware divide. goldens from
-   ;; `llvm-mc --triple=thumbv6m-none-eabi`; the halfword-scaled pc-relative offset was
-   ;; cross-checked forward and backward. --
+   ;; -- the thumb1 backend: armv6-m. 16-bit thumb-1, two-address, low registers, no movw/movt (`li`
+   ;; byte-builds), no wide alu, no it (`set` branches over), no divide. goldens from llvm-mc
+   ;; --triple=thumbv6m-none-eabi; the halfword-scaled offset checked forward and backward. --
    t1tests '(
       ("t1.li"      "0520"              ((li r0 5)))                  ; movs r0, #5
       ("t1.li.neg1" "0020c043"          ((li r0 -1)))                 ; movs r0,#0 ; mvns r0,r0
@@ -1307,8 +1264,8 @@
       ("t1.call.fwd" "00f001f800bf"     ((call l) (nop) (label l)))   ; bl #2
       ;; a whole trivial leaf end to end: r0 = r0 + r1 ; return.
       ("t1.leaf"    "40187047"          ((add r0 r0 r1) (ret)))       ; adds r0,r0,r1 ; bx lr
-      ;; div/rem: v6-M has no hardware divide -> the inline restoring shift-subtract blob (t1-udivmod)
-      ;; plus, for the signed pair, the abs-and-refix sleeve. fixed self-contained branches (blo/bne).
+      ;; div/rem: no hardware divide, so the inline restoring shift-subtract (t1-udivmod), and for the
+      ;; signed pair the abs-and-refix sleeve; fixed self-contained branches (blo/bne)
       ("t1.udiv" "0022202349005241824201d3121a491c5b1ef7d1"
                  ((udiv r1 r1 r0)))                                   ; the 32-step unsigned core
       ("t1.urem" "0022202349005241824201d3121a491c5b1ef7d11100"
@@ -1319,18 +1276,12 @@
                  ((rem r1 r1 r0 r3))))                                ; |a|,|b| ; core ; sign=sa ; refix
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'thumb1 (t 2)) 0 t1tests)
 
-   ;; -- the riscv backend: the same neutral IR, a fifth target -- rv64imfd (the pine64 ox64's
-   ;; c906, qemu -M virt). fixed 32-bit little-endian, three-address, and no flags register:
-   ;; cmp/test/ucomisd emit nothing (or materialize an immediate into x30) and remember their
-   ;; operands, which br/set fuse into beq/blt/slt/feq -- so the flag goldens pair the compare with
-   ;; its consumer. label branches are wide (thumb1's shape); call/la are the auipc pair.
-   ;; these are the compressed forms: the squeeze walks a lowered chunk word by word and takes
-   ;; every rvc shape it finds, so a row's byte count is no longer four times its instruction
-   ;; count, and decoding needs +c. the trailing comments name what a disassembler prints, which
-   ;; is the alias (`mv a0, a3`) -- the same word either width spells.
-   ;; goldens from `llvm-mc --disassemble --triple=riscv64 --mattr=+m,+f,+d,+c`, every one read
-   ;; back through riscv64-linux-gnu-objdump as well: a torn instruction desynchronizes a stream
-   ;; rather than failing, and one disassembler agreeing with itself cannot tell you that. --
+   ;; -- the riscv backend: rv64imfd, three-address, no flags register: cmp/test/ucomisd emit
+   ;; nothing (or an immediate into x30) and br/set fuse them into beq/blt/slt/feq, so flag goldens
+   ;; pair the compare with its consumer. label branches are wide; call/la are the auipc pair.
+   ;; the rows are compressed (rvc taken wherever it fits), so decoding needs +c, and the trailing
+   ;; text is the disassembler's alias. goldens from llvm-mc --triple=riscv64 --mattr=+m,+f,+d,+c,
+   ;; each read back by riscv64 objdump too: a torn instruction desyncs a stream, it does not fail. --
    rvtests '(
       ;; immediates: addi / lui+addiw (the 32-bit wraparound pair) / the shift-add chunk chain
       ("rv.li"       "1305c003"          ((li r0 60)))                 ; li a0, 60
@@ -1456,9 +1407,8 @@
       ("rv.mret"     "73002030"          ((mret)))                     ; mret
       ("rv.fence"    "0f00f00f"          ((fence)))                    ; fence iorw, iorw
       ("rv.fencei"   "0f100000"          ((fencei)))                   ; fence.i
-      ;; the pad after a compressed ret: 2 bytes laid, 6 to the boundary -- so the filler unit
-      ;; has to be c.nop. a torn wide nop leaves 0013, whose low bits say 32-bit, and a decoder
-      ;; eats the ret standing behind it.
+      ;; the pad after a compressed ret: 2 bytes laid, 6 to the boundary, so the filler is c.nop; a
+      ;; torn wide nop leaves 0013, which says 32-bit and eats the ret behind it
       ("rv.align"    "82800100010001008280"     ((ret) (align 8) (label x) (ret)))    ; ret ; 3x c.nop ; ret
       ;; scalar-double fp (D): f0..f7 -> fa0..fa7, f8..f15 -> ft0..ft7. SSE-named IR two-address;
       ;; ucomisd joins the flag memory (feq/flt/fle compute the predicate at the br/set)
@@ -1495,9 +1445,8 @@
       ("rv.tp"       "1285"              ((tp r0))))                   ; mv a0, tp (the thread pointer)
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'rv64 (t 2)) 0 rvtests)
 
-   ;; -- the i386 backend: the same IR on 32-bit x86, and its 16-bit twin (gcc -m16's
-   ;;    .code16gcc). each row's bytes are gas's for the trailing text (`as --32`), or
-   ;;    disassemble to the same words under objdump where gas picks another encoding. --
+   ;; -- the i386 backend and its 16-bit twin (.code16gcc). bytes are gas's for the trailing text
+   ;; (`as --32`), or disassemble to the same words where gas picks another encoding. --
    i3tests '(
       ("i3.li" "b83c000000" ((li r0 60)))                      ; mov $60,%eax
       ("i3.li.neg" "bbffffffff" ((li r3 -1)))                  ; mov $-1,%ebx
@@ -1678,9 +1627,7 @@
    _ (pin i3caught 0 0, holo-bytes 'i386 '((mov r0 r7)))
    _ (chk-eq "i3.r7.refused" 'i386-badreg (peep i3caught 0 0))
 
-   ;; -- the wasm module writer (src/love/holo/wasm.l): instruction forms -> bytes, each row the
-   ;;    bytes binaryen's wasm-as lays for the same text (memory64 on). the whole-module shape is
-   ;;    test/holo/wasm.l's, run under node by test_holowasm. --
+   ;; -- the wasm module writer: each row the bytes binaryen's wasm-as lays for the text (memory64). --
    wtests '(
       ("w.i64.const.-1"   "427f"                   ((i64.const -1)))
       ("w.i64.const.128"  "428001"                 ((i64.const 128)))

@@ -1,8 +1,6 @@
-/* a block-scope static's initializer names statics by address -- itself (the kernel's
-   static DEFINE_MUTEX: a list head pointing at itself beside a spinlock compound literal)
-   and one declared before it -- and a scalar compound literal stands as a static's value,
-   and at file scope behind an address. the answer is the exit status: no libc, so the
-   bare-metal lanes run it too */
+/* a block static's initializer names statics by address (itself, an earlier one), and a scalar
+   compound literal stands as a static's value, and at file scope behind an address. exit-code
+   only, no libc */
 
 struct list_head { struct list_head *next, *prev; };
 typedef struct { int counter; } atomic_t;

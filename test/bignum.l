@@ -1,26 +1,17 @@
-; step 6: arbitrary-precision integers (bignums).
-; - the numeric tower closes: fixnum -> wide int -> bignum
-; - + - * overflow promotes to an exact bignum; / % are truncated division
-; - canonical demotion: any result that fits a smaller tier shrinks back to it
-;   (so = / eqv / hash keys stay well defined across tiers)
-; - reader parses oversized decimal literals exactly; printer is base-10
-; - mixed fixnum/box/bignum/float arithmetic, comparison, equality
+; bignums: overflow promotes, a result that fits a smaller tier demotes back
 
 (: (bfact n) (n < 2 ? 1 (n * bfact (n - 1)))
    (bpow2 n) (n < 1 ? 1 (2 * bpow2 (n - 1)))
    B100 (bpow2 100)
    F25 (bfact 25)
    F24 (bfact 24)
-   ; two dense, exactly-equal-length (KL-limb) operands: ka*KBb takes the resumable
-   ; subquadratic Karatsuba lane (equal length, KL^2 > the one-shot chunk). Cross-check
-   ; it against an independent schoolbook path -- split ka = Kahi*2^h + Kalo (each ~KL/2
-   ; limbs), so Kahi*KBb and Kalo*KBb are unequal length and stay on schoolbook.
+   ; equal-length KL-limb operands take karatsuba; Kref splits KA in halves, which
+   ; stay on schoolbook, as an independent check
    KL 150  KE (64 * KL)  KHE (64 * (KL // 2))
    KA (KE 2 - 1)  KBb (KE 2 - 7)  KHB (KHE 2)   ; (KE 2) = 2^ke via exact power (no deep recursion)
    KP (KA * KBb)
    Kref (((KA % KHB) * KBb) + (((KA // KHB) * KBb) * KHB))
-   ; near-equal lengths take it too, the shorter zero-padded: 200 limbs by 150, against
-   ; KC's 100-limb halves by KBb, each one-shot schoolbook
+   ; near-equal lengths take it too (200 limbs by 150), checked the same way
    KC ((64 * 200) 2 - 3)  KHC ((64 * 100) 2)
    KCref (((KC % KHC) * KBb) + (((KC // KHC) * KBb) * KHC)))
 
@@ -131,9 +122,7 @@
  (1 = modpow 7 0 100)
  (B100 % 1000000007 = modpow 2 100 1000000007)
 
- ; --- int array vs bignum scalar: ordered by the bignum's true magnitude/sign,
- ;     not its low bits. 2^100's low word is 0, so a low-bits comparison would
- ;     wrongly treat b100 as 0 -- these assertions pin the magnitude-exact path. ---
+ ; --- int array vs bignum: ordered by magnitude, not low bits (2^100's low word is 0) ---
  (aall (star-tray '(3) '(1 2 3) < B100))          ; every int < 2^100
  (aall (star-tray '(3) '(1 2 3) <= B100))
  !(aall (star-tray '(3) '(1 2 3) > B100))   ; nothing exceeds 2^100
@@ -148,8 +137,7 @@
       (100 = bitlen (100 2 - 1)) (101 = bitlen (100 2)) (101 = bitlen (0 - 100 2))
       (() = bitlen 1.5) (() = bitlen "10") (() = bitlen ()))
 
-; --- show by halves: a big prints by its levels, 10^(18 2^j), each with a barrett reciprocal past
-; 8192 bits. the digits at every level's edge, the runs of zeros a half pads, and big ones read back
+; --- show by halves at levels 10^(18 2^j): digits at each level's edge, zero runs, read-back
 (: (bn-ones d k) (string (map (_ \ d) (jot k)))
    (bn-back x) (x = <(sound (show x)))
    ks [77 78 144 145 288 576 1152 2304 4608 4609 9216 18432]

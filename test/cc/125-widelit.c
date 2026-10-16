@@ -1,10 +1,6 @@
-/* wide literals carry their element type (cts 00220): the lexer keeps the prefix
- * as the token kind with a canonical-UTF-8 value, parse desugars to a BOUNDED
- * compound literal of the element type (L -> wchar, u -> char16 + surrogate
- * pairs, U -> char32, u8 stays bytes), and the ordinary init machinery lays
- * elements -- so globals, locals, braces, elision and sizeof all agree with gcc.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* wide string literals carry their element type (L wchar, u char16 + surrogates,
+ * U char32, u8 bytes): globals, locals, braces, elision and sizeof agree with gcc.
+ * each check adds 1: the exit code is the pass count. */
 
 extern int printf(const char *, ...);
 typedef __WCHAR_TYPE__ wchar_t;

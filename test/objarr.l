@@ -1,8 +1,4 @@
-; object arrays (type code `o` = g_O): rank-N containers of live l *values*.
-; the numeric tuple types (z..r) fold to a flat word/float payload the GC moves
-; by memcpy; an o-array instead holds tagged words, so it can carry bignums,
-; strings, symbols and nested arrays -- and is the one tuple type the collector
-; traces element-by-element. a one-cell array demotes to its value (a boxed scalar is just a value).
+; object trays: rank-N containers of any values, traced cell by cell; one cell demotes to its value
 
 (: (oa-list n acc) (n < 1 ? acc (oa-list (n - 1) (. n acc)))            ; build (1 .. n)
    (oa-churn n)    (n < 1 ? 0 (oa-list 300 @ g (oa-churn (n - 1))))     ; alloc + discard
@@ -36,21 +32,16 @@
  (oa-z ? 0 1)                                    ; oa-z all nil -> falsy -> 1
  (oa-a ? 1 0)                                     ; oa-a has truthy elems -> 1
 
- ; --- print: an object array prints as the @(…)/(array …) surface form like any
- ;     other; the type is re-inferred on read-back, so an o array of plain
- ;     numbers re-reads at its natural tier (z) -- inferred, not pinned ---
+ ; --- print: the surface form; the tier is inferred again on read-back ---
  ("@(10 20 30)" = show (top-tray '(3) '(10 20 30)))
 
- ; --- GC stress: oa-a stays live (global root) across many collections; the
- ;     bignum element pointers must be forwarded, not dropped or truncated ---
+ ; --- gc stress: the bignum cells are forwarded across collections ---
  (0 = oa-churn 80)
  (oa-big = peep oa-a 0 0)
  (oa-big * oa-big = peep oa-a 1 0)
  ('sym = peep oa-a 4 0))
 
-; --- elementwise arithmetic: transparent bignums, full broadcasting ----------
-; the whole point of g_O: ops route through the promoting scalar dispatch, so a
-; bignum array adds/multiplies exactly where an z array would wrap.
+; --- elementwise arithmetic through the promoting scalar ops: exact where an int tray wraps ---
 (: oa-x   (top-tray '(3) [(100 2) 2 3])
    oa-y   (top-tray '(3) [1 (100 2) 4])
    oa-sum (oa-x + oa-y)
@@ -60,7 +51,7 @@
    oa-oar (top-tray   '(2) [oa-w oa-w]))          ; object array   -> exact
 
 (test
- ; result of an op on a g_O array is itself g_O
+ ; an op on an object tray answers one
  (top-tray = tier oa-sum)
  ; exact elementwise results (no wrap, no float rounding)
  (((100 2) + 1) = peep oa-sum 0 0)
@@ -99,17 +90,12 @@
  (@(1 2) + (top-tray '(2) '(10 20)) @ s (11 = peep s 0 0 && 22 = peep s 1 0))
  ((top-tray '(2) '(10 20)) + @(1 2) @ s (11 = peep s 0 0 && 22 = peep s 1 0)))
 
-; --- the `array` constructor: ergonomic front-end over the *-tray ctors -----
-; no type code (inferred as the highest of z<r<o present), shape may be a
-; number (rank-1 of length |n|) or a list, and the elements are trailing args
-; (the shape fixes the count, so it curries them one at a time). bignum/complex/
-; non-number data lifts the whole array to o automatically -> exact, never lossy.
+; --- `array`: the tier inferred, a number or list shape, the elements curried in after it ---
 (: oa-q (array 2 'hello 'world)                  ; symbols -> object array
    oa-bn (array 2 (100 2) 5)                  ; bignum -> o, stored exactly
    oa-m  (array [2 2] 1 2 3 4))                 ; rank-2 from a shape list
 (test
- ; type inference: pure ints -> z, any float -> r, anything past the real
- ; 64-bit tower (bignum/symbol/...) -> o
+ ; ints -> z, any float -> r, anything past the 64-bit tower -> o
  (star-tray = tier (array 3 1 2 3))
  (gem-tray = tier (array 3 1 2.0 3))
  (top-tray = tier oa-q)
@@ -136,10 +122,7 @@
  (top-tray = tier @((100 2) 1))                    ; bignum element -> object array
  (aall (@(1 2 3) = array 3 1 2 3)))
 
-; --- the measure across tuple types: g_len recurses into each element's own magnitude,
-; so an all-zero array nets 0 and not the garbage a raw word-bits L2 norm would give.
-; a bignum element forces an o array; a complex element packs into a c array. (the
-; invariant !x == (0 = $x) itself is law.l's, quantified over its whole corpus.)
+; --- the measure recurses into each element, so an all-zero tray nets 0 ---
 (: oa-z2 (array 2 (0 ~ 0) (0 ~ 0))             ; two zero complexes -> packed c array
    oa-c2 (array 2 (0 ~ 0) (3 ~ 4))               ; nets sum: (0 ~ 0)+(3 ~ 4) -> re 3 -> ceil 3
    oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates pin, forces o
@@ -151,9 +134,7 @@
  (0 = $(top-tray '(2 2) 0)) ; all-nil object array -> pin 0
  !!(array 2 'a 'b))            ; symbol elements -> truthy
 
-; --- a cell holds a value, so `=` reads through to it and hashing has to as well:
-; two object arrays built apart hold one set of values behind two sets of pointers,
-; and a tablet that keyed them by those pointers would miss what `=` calls equal.
+; --- `=` reads through a cell to its value, so the hash does too, never the pointers
 (: oa-k1 @(("a" + "b") [1 2] 'sym)
    oa-k2 @(("a" + "b") [1 2] 'sym)
    oa-t (pin (pin {} oa-k1 1) oa-k2 2))
@@ -166,12 +147,10 @@
  (0 = (oa-k1 = @("ab" [1 2])))      ; ..and so is a shape apart: no mask, a 0
  (aall (array [2 2] "a" "b" "c" "d" = array [2 2] ("" + "a") "b" "c" "d"))   ; rank-N alike, cell by cell
  (dig (array [2 2] "a" "b" "c" "d") = dig (array [2 2] ("" + "a") "b" "c" "d"))
- ; the cells move and the key stays findable: a probe rehashes, so a hash that read
- ; the pointers would lose its own entry at the first collection
+ ; the cells move and the key stays findable
  (0 = oa-churn 80) (2 = peep oa-t oa-k1 0) (dig oa-k1 = dig oa-k2))
 
-; --- a cell that is not a plain number -- a tray, a ratio, a text -- takes the whole op, so an
-; object tray of trays is arithmetic all the way down, broadcast as a numeric tray's is
+; --- a cell that is a tray, a ratio or a text takes the whole op, all the way down
 (: oa-tt   @(@(1 2) @(3 4))
    oa-deep @(@(@(1 2) @(3 4)) @(@(5 6) @(7 8))))
 (test
@@ -199,8 +178,7 @@
  (aall ((@(7 9) // @(2 3)) = @(3 3)))                    ; ..and stays int when no divisor is 0
  (!(gem? (peep (@(7 9) // 2) 0 0))))
 
-; ordering object trays hashes them, a walk with scratch of its own: sort, < and max leave
-; the trays as they were, and answer one order both ways round
+; ordering object trays leaves them as they were, and answers one order both ways round
 (: oa-o1 (top-tray '(2) ["a" "b"]) oa-o2 (top-tray '(2) ["c" "d"])
    oa-os (sort [oa-o2 oa-o1 oa-o2 oa-o1]))
 (test

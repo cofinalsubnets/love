@@ -1,7 +1,5 @@
-/* gen tail: mproto siblings are callable (a comma-list proto registers EVERY
-   name, not just the first), &f is a function's address (same as the bare
-   use) -- in a global image, a local initializer, and an argument -- and an
-   INDIRECT call knows a double result (the fn-pointer type carries its return). */
+/* a comma-list proto registers every name; &f is f's address (global image, local
+   init, argument); an indirect call through a fn pointer knows a double result. */
 int one(int), two(int), three(int);          /* siblings: two and three have no proto form of their own */
 
 int one(int x) { return x + 1; }

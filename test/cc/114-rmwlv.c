@@ -1,26 +1,11 @@
-/* an lvalue that steps must step ONCE.
- *
- * `++x` desugars by duplicating x -- (asn x (bin + x 1)) -- which is exact for
- * an lvalue whose evaluation leaves no trace and WRONG for any other: the
- * effect runs twice and the store lands where the load did not. `++*p++` on a
- * buffer holding '8' incremented the byte p had already left and advanced p by
- * two, so the byte the caller wanted was untouched.
- *
- * It answers rather than faults, and the damage is one character wide.
- * pdclib's %f found it: _PDCLIB_print_fp_deci rounds its last digit with
- * `++*current++`, so 3.14159 printed as 3.14150 -- the 9 written and then
- * erased by the '\0' that a pointer left one short put over it. Every other
- * value in a 400-double sweep agreed with gcc, and the whole 232-file pdclib
- * driver suite passed, because the shape is rare and its blast radius is one
- * byte.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* an lvalue that steps steps once under ++/--: `++*p++` bumps the byte p points
+ * at and advances p by one. each check adds 1: the exit code is the pass count. */
 
 #include <stdio.h>
 
 static char buf[8];
 
-/* the pdclib shape verbatim: carry into a digit string, right to left */
+/* carry into a digit string, right to left */
 static void carry(char *s, int n)
 {
 	char *p = s + n;
@@ -84,7 +69,7 @@ int main(void)
 
 	buf[0] = '3'; buf[1] = '1'; buf[2] = '4'; buf[3] = '8'; buf[4] = '\0';
 	carry(buf, 4);
-	r += buf[3] == '9';          /* pdclib's rounding, in miniature */
+	r += buf[3] == '9';          /* rounding the last digit */
 	r += buf[4] == '\0';
 	printf("%s\n", buf);
 

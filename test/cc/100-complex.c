@@ -1,12 +1,6 @@
-/* C99 _Complex, the musl-shaped surface: the type ({float|double} _Complex,
- * a seeded two-member struct inside cc -- SysV (sse sse) / one-sse by value),
- * the imaginary literal (1.0fi), the cast lanes (creal IS (double)(z);
- * (_Complex t)(x) lifts a real), musl's union puns verbatim (CMPLX/__CIMAG),
- * arithmetic (+ - * / and unary -, componentwise through the double lanes,
- * reals promoting on either side), and the implicit conversions (real ->
- * complex at assignment, complex -> real in a scalar slot -- catan's shapes).
- * divisions stay away from overflow edges (gcc's __divdc3 adds Smith
- * recovery; the textbook formula agrees on tame values). */
+/* C99 _Complex: the types, the imaginary literal, casts (creal is (double)z),
+ * union puns, + - * / and unary -, real<->complex implicit conversions. divisions
+ * stay off overflow edges, where gcc's __divdc3 differs from the textbook formula. */
 
 #define complex _Complex
 #define __CMPLX(x, y, t) \

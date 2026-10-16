@@ -1,25 +1,6 @@
-(* encmem.v -- the MEMORY-OPERAND slice of the machine-checked x86-64 encoder
-   (rung 2b of the holo encoder ladder; enc.v is the register-direct core 2a).
-
-   Covers the 64-bit base+displacement load/store: `ld d base off` (mov r64,[mem],
-   opcode 8B /r) and `st base off s` (mov [mem],r64, 89 /r). This is where the
-   fiddly encoding lives -- the ModRM r/m = memory form, with all of x86's quirks:
-     * rsp / r12 (rm low 3 = 100) cannot sit in ModRM.rm directly -> a SIB byte
-       (scale 0, index 100 = none, base = the reg) must follow;
-     * rbp / r13 (rm low 3 = 101) has no mod=00 form (that slot means RIP-relative)
-       -> a displacement is FORCED even when off = 0 (mod=01, disp8 = 0);
-     * mod / disp size is chosen minimally: none (off=0, non-bp), disp8 (-128..127),
-       else disp32 little-endian;
-     * REX.R extends the data register, REX.B extends the base (whichever of
-       ModRM.rm or SIB.base holds it).
-
-   `mem_roundtrip_ok` proves `decode_mem (encode_mem o d b off) = Some (o,d,b,off)`
-   over every op x data<16 x base<16 x a boundary offset set that exercises each
-   mod class and the bp/sib interactions -- by vm_compute (gen.v style, axiom-free).
-   The base x reg selection logic is thus exhaustively covered; offsets are sampled
-   at the encoding boundaries (0, +-1, +-127/128/129, 255, disp32 limbs). `encode_mem`
-   extracts to OCaml so encmem_drive.ml validates holo BYTE-FOR-BYTE over a wide
-   offset range (test_encver). *)
+(* encmem.v -- the memory-operand slice of the x86-64 encoder: base+disp mov
+   load/store, with rsp/r12 needing a SIB and the minimal disp; round-trips over
+   every op x data<16 x base<16 x the offset boundaries *)
 
 From Stdlib Require Import List Bool ZArith.
 Import ListNotations.
@@ -39,8 +20,7 @@ Definition rexb (data base:reg) : byte :=
 
 Definition low3 (r:reg) : Z := r mod 8.
 
-(* mod field: 0 (no disp) only when off=0 and base is not rbp-like; else disp8 if
-   it fits, else disp32. bp-like bases force >=1. *)
+(* mod=00 means rip-relative for rbp/r13, so they force a disp *)
 Definition modsel (bp_like:bool) (off:Z) : Z :=
   if (off =? 0) && negb bp_like then 0
   else if (-128 <=? off) && (off <=? 127) then 1
@@ -62,7 +42,7 @@ Definition encode_mem (o:memop) (data base:reg) (off:Z) : list byte :=
     ++ (if sib_needed then [ 4 * 8 + l ] else [])   (* SIB: scale0 index100 base=l *)
     ++ disp_bytes m off.
 
-(* --- decoder: a small auditable model of the same rules --- *)
+(* --- decoder --- *)
 Definition decode_mop (b:byte) : option memop :=
   if b =? 139 then Some Mld else if b =? 137 then Some Mst else None.
 
@@ -98,7 +78,7 @@ Definition decode_mem (bs:list byte) : option (memop * reg * reg * Z) :=
   | _ => None
   end.
 
-(* boundary offset set: hits mod0 / mod1 / mod2, both signs, byte edges, disp32 limbs *)
+(* every mod class, both signs, the byte edges *)
 Definition offs : list Z :=
   [ 0; 1; -1; 8; -8; 100; -100; 127; -127; 128; -128; -129;
     255; -256; 4096; -4096; 100000; -100000; 2000000000; -2000000000 ].
@@ -121,7 +101,7 @@ Proof. vm_compute. reflexivity. Qed.
 
 Print Assumptions mem_roundtrip_ok.   (* must stay "Closed under the global context" *)
 
-(* --- extraction: Z -> OCaml int (ExtrOcamlZInt); only encode_mem is needed --- *)
+(* --- extraction --- *)
 From Stdlib Require Import Extraction ExtrOcamlZInt.
 Extraction Language OCaml.
 Set Extraction Output Directory ".".

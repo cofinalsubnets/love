@@ -96,9 +96,9 @@ hsuf := $(if $(HCC),/cc,)$(if $(DOOM),/doom,)$(if $(filter 0,$(tco)),/tco0,)
 
 # the corpus: the harness first, the spec second, then uu.l -- front-loaded EXPLICITLY so its
 # dependents (uukind*, uulay, uupatch, uuwm*) see it whatever the collation orders, a locale
-# `ls` putting uukind* first. glaze-x86 and glaze-hook execute native machine code, so they
+# `ls` putting uukind* first. glaze-x86, glaze-hook and glaze-tail execute native machine code, so they
 # ride their own arch-guarded targets, never the arch-neutral corpus.
-t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
+t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/glaze-tail.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
 # the runtime's own headers, and src/love/ is the roster: kernel mode's k.h and the per-ISA
 # asmops sit under src/inle/, so a touch on one of those rebuilds no love object.

@@ -1,8 +1,6 @@
-/* an "i" operand that is an address, held to gcc: the kernel's bug table names a string by
- * `%c[msg] - .` and pads its entry with `.org 2b + %c[size]`, a percpu read names a global,
- * a static call a function. a const local folds into an "i" as gcc -O2 folds it; an asm's
- * output and memory input are writes and takes, so those locals never fold. a target with
- * no template here computes the same. */
+/* "i" operands that are addresses, held to gcc: `%c[msg] - .`, `.org 2b + %c[size]`, a global
+ * and a function; a const local folds into "i", but not one an asm writes or takes. targets without
+ * a template compute the same. */
 
 struct ent { int at, msg; short line, fl; };
 long cell[4];

@@ -1,25 +1,6 @@
-/* STRUCT LABELS -- a `name:` where a member declaration would start, naming an OFFSET.
- * A moon extension (-std=moon, the default; -std=c refuses it), borrowed from HolyC.
- *
- * GUARDED ON __moon__, NOT __mooncc__. The first says which DIALECT is live, the second
- * only which compiler: under -std=c this is still mooncc and the label is still a syntax
- * error, so a source asking for an extension must ask the dialect. gcc sees neither macro
- * and compiles the plain half, which is what lets this file ride the battery -- every
- * program in test/cc/ is built by BOTH and their exit codes must agree.
- *
- * A label is a zero-length char array at that offset, so it decays to the ADDRESS with no
- * `&` to write -- which is the point of naming a position -- while staying an lvalue, so
- * offsetof still answers. It takes no space and does not perturb the layout: the checks
- * below hold the labelled struct to the same size and offsets as its label-free twin,
- * which is what gcc compiles.
- *
- * THE ALIGNMENT IS THE WHOLE FEATURE. `char hdr[0];` -- the GCC idiom this replaces --
- * has alignment 1 and lands where the LAST field ended, so it names the padding -- for the
- * struct below gcc puts it at 1, where the long sits at 8. A label aligns as the member it
- * precedes, and a
- * TRAILING one aligns as the struct, so it is one past the OBJECT (== sizeof, end()'s
- * convention) rather than one past the data.
- */
+/* struct labels (-std=moon): a `name:` among members is a zero-size char array at
+ * that offset, aligned as the member it precedes (a trailing one as the struct).
+ * guarded on __moon__, the dialect; gcc compiles the label-free twin. */
 #include <stddef.h>
 
 struct Plain { char a; long b; int c; };

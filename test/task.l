@@ -1,27 +1,13 @@
-; tests for cooperative multitasking: hatch / yield / wait / sleep / done?.
-; (twirl fn x)  -> pid (positive integer); starts a new task running (fn x).
-;                  the main task has reserved pid 0.
-; (rest 0)     -> nil; cooperatively suspends so other ready tasks can run.
-;                  (yield) is just `yield` since (x)=x in l — call with an arg.
-; (catch pid)    -> if pid is unknown / non-numeric / refers to the caller, 0.
-;                  if the task is dormant (its fn has returned), collect it
-;                  from the ring and return its return value.
-;                  if the task is still running, yield until it becomes dormant.
-; (rest n)     -> nil; blocks the current task for at least n g_clock ticks.
-;                  n <= 0 returns immediately. Other tasks run during the wait.
-; (landed? pid) -> 1 if (catch pid) would not yield (pid unknown, self, dormant),
-;                  nil if pid refers to a runnable task.
-; (scoop _)    -> (pid . retval) of one task that has finished, or () when none
-;                  have. no pid needed and it never yields; the pair carries the
-;                  presence, since a retval of () is a perfectly ordinary answer.
+; cooperative tasks: twirl starts one (main is pid 0), rest yields or sleeps, catch collects,
+; landed? asks whether catch would not wait, scoop harvests any finished task
 
 (test
- ; hatch-wait round trip: fn is applied to x; the result flows back through wait.
+ ; twirl-catch round trip
  (42 = (twirl (x \ x) 42 @ p (catch p)))
  (43 = (twirl (x \ x + 1) 42 @ p (catch p)))
  (49 = (twirl (x \ x * x) 7 @ p (catch p)))
 
- ; hatch returns a positive integer pid (main reserves pid 0).
+ ; a pid is a positive integer
  (twirl (_ \ 0) 0 @ p (catch p, charm? p && p > 0))
 
  ; pids are monotonically increasing within a VM.
@@ -53,7 +39,7 @@
  (twirl (x \ do (rest 0) (rest 0) (rest 0) (x + 1)) 41 @ p
   (42 = catch p))
 
- ; nested hatch: a worker can hatch and wait on its own subtask.
+ ; a worker can twirl and catch its own subtask
  (twirl (_ \ twirl (x \ x + 1) 10 @ q (catch q)) 0 @ p
   (11 = catch p))
 
@@ -63,9 +49,7 @@
     (catch p,
      'done = peep t 'key 0))
 
- ; waiting on a still-running task blocks until it finishes.
- ; here the worker only completes after several yields; main's wait yields
- ; alongside it and eventually returns the result.
+ ; catching a running task waits until it finishes
  (: t {}
     _ (pin t 'n 0)
     p (twirl (_ \ (: (loop _) (? (peep t 'n 0 < 3)
@@ -83,7 +67,7 @@
  (1 = landed? 99999)
  ; landed? on a non-numeric pid is true.
  (1 = landed? ())
- ; landed? on the caller's own pid (main = 0) is true — wait skips self.
+ ; landed? on the caller's own pid is true
  (1 = landed? 0)
 
  ; landed? on a freshly spawned task is false: the task hasn't completed.
@@ -92,18 +76,11 @@
  ; after yielding, the worker completes and landed? becomes true.
  (: p (twirl (_ \ 42) 0) _ (rest 0) r (landed? p) (catch p, 1 = r))
 
- ; after wait collects the task, landed? is again true (pid is gone).
+ ; after catch collects the task, landed? is again true
  (twirl (_ \ 42) 0 @ p (catch p, 1 = landed? p))
 
- ; --- scoop: harvest one finished task, whichever it turns out to be ---
- ; `catch` names a pid and blocks until that one is done; `scoop` names none and
- ; never waits. it answers (pid . retval) for one task that has finished, or ()
- ; when none have -- the task-side twin of `glean`, which does this for a finished
- ; child process. a server twirling a task per client wants exactly this: without
- ; it, the only way to collect is to keep a roster of live pids and ask about each
- ; one, and since every ask is itself a ring search the two costs multiply.
- ; every law here drains first: the corpus runs concatenated in one scope, so a
- ; task some earlier section left dormant is a task scoop would rightly hand back.
+ ; --- scoop: (pid . retval) of any finished task, or (); never waits ---
+ ; every law drains first: an earlier file may have left a task dormant
 
  ; an empty ring answers the zero point.
  (: (drain _) (two? (scoop 0) ? (drain ()) 0)
@@ -118,10 +95,7 @@
     s (scoop 0)
     (p = <s && 42 = >s))
 
- ; presence rides the pair, never the net. a task run for its effect answers ()
- ; -- most of them do -- and it is still handed back as a pair. a drain that tested
- ; the value rather than the shape would stop dead on the first such task and leave
- ; the ring full while reporting it empty.
+ ; presence rides the pair, never the net: a task answering () still comes back
  (: (drain _) (two? (scoop 0) ? (drain ()) 0)
     _ (drain ())
     p (twirl (_ \ ()) ())
@@ -160,8 +134,7 @@
  !(rest -1)
  !(rest ())
 
- ; sleep takes at least n ticks (g_clock ms on this frontend).
- ; allow generous slack for slow ci.
+ ; sleep takes at least n ms
  (: t0 (clock 0)
     _ (rest 30)
     elapsed (clock t0)
@@ -175,10 +148,7 @@
     elapsed (clock t0)
     (elapsed >= 30 && elapsed < 60))
 
- ; a peer waking mid-wait must not cut short main's longer sleep.
- ; (rest 0) forces peer to reach its (rest 30) before main starts its (rest 80),
- ; so main's yield_sw enters the deadline-coalesce wait with peer's 30 as min_wake.
- ; When peer wakes at ~30, main's pending wake_at must be preserved across the snapshot.
+ ; a peer waking mid-wait must not cut short main's longer sleep
  (: t0 (clock 0)
     p (twirl (_ \ rest 30) 0)
     _ (rest 0)
@@ -204,15 +174,14 @@
  ; freeze on self (main = 0): 0 (self-freeze impossible by construction).
  (0 = freeze 0)
 
- ; freeze a running task: returns 1. The task is gone from the ring, so
- ; wait on its pid returns 0 (unknown).
+ ; freeze a running task: 1, and catch then answers 0
  (: t {}
     _ (pin t 'flag 0)
     p (twirl (_ \ (: (loop _) (rest 0, pin t 'flag 1, loop 0) (loop 0))) 0)
     r (freeze p)
     (1 = r && 0 = catch p))
 
- ; freeze a dormant task (already finished): also returns 1, then wait sees 0.
+ ; freeze a finished task: also 1, then catch sees 0
  (twirl (_ \ 42) 0 @ p
   (rest 0,
    ; p is dormant now (landed? would be 1).
@@ -252,14 +221,8 @@
 
  ; --- yieldable bignum multiply ---
 
- ; a big bignum multiply can be long-running yet yields cooperatively: it does a
- ; bounded slice of work per VM dispatch (a yield check per Karatsuba job for an
- ; equal-length product, per schoolbook chunk otherwise), so a peer task runs
- ; *during* the product. This is what lets the repl's Ctrl-C poller interrupt a
- ; hung eval like (3 3 3 3) (see g/repl.l do_eval). Here a worker squares a ~200k-bit
- ; number once; a ticker peer counts how often it gets scheduled mid-multiply.
- ; Before chunking, the worker held the CPU for the whole product and the ticker
- ; (capped so it can't wrap the 1-byte cask) never ran -- now it runs many times.
+ ; a long bignum multiply yields in slices, so a ticker peer runs during it
+ ; (capped so it cannot wrap the 1-byte cask)
  (: big (200000 2)
     ticks (cask 1)
     w (twirl (_ \ big * big) 0)
@@ -271,24 +234,21 @@
     (catch w, catch t,
      5 < peep ticks 0 0))
 
- ; a peer can chill a task while it is mid-multiply, not only once it finishes:
- ; the worker parks at a yield inside the product, so chill finds it runnable.
+ ; a task can be frozen mid-multiply
  (twirl (_ \ (200000 2) * (200000 2)) 0 @ w
   (rest 0,
    (1 = freeze w) && (0 = catch w)))
 
- ; --- wake_at scheduler behavior ---
+ ; --- sleeping tasks and the scheduler ---
 
- ; wait on a sleeping task: main has to sleep deeply alongside it, then
- ; collect the result. Elapsed should be ~30ms, not 0 or much more.
+ ; catching a sleeping task takes about its sleep
  (: t0 (clock 0)
     p (twirl (_ \ do (rest 30) 'done) 0)
     r (catch p)
     elapsed (clock t0)
     ('done = r && elapsed >= 30 && elapsed < 80))
 
- ; tasks with different sleep durations wake in order: shorter sleep
- ; finishes first, longer still sleeping when we check, then completes.
+ ; sleeps wake in order
  (: a (twirl (_ \ do (rest 10) 1) 0)
     b (twirl (_ \ do (rest 80) 2) 0)
     ra (catch a)               ; ~10ms; b still sleeping
@@ -296,14 +256,12 @@
     rb (catch b)               ; ~70ms more
     (1 = ra && !db && 2 = rb))
 
- ; chill a sleeping task: scheduler skips it via wake_at, but chill walks the
- ; ring directly and finds it regardless of state.
+ ; a sleeping task can be frozen
  (: p (twirl (_ \ do (rest 10000) 'never) 0)
     r (freeze p)
     (1 = r && 0 = catch p))
 
- ; sleep tasks coexist with non-sleeping ones: a worker that yields ap
- ; gets time while another sleeps.
+ ; a yielding worker gets time while another sleeps
  (: t {}
     _ (pin t 'n 0)
     a (twirl (_ \ rest 30) 0)
@@ -316,10 +274,7 @@
     (catch a, catch b,
      5 = peep t 'n 0))
 
- ; --- what a task wears: in/b/err are names, and each task seats its own ---
- ; (wear (i o e)) re-seats them for the running task, (wear ()) hands the console
- ; back, (worn ()) answers what is worn. an element that is not a port keeps the
- ; console, so a lone stdout re-seat says (() o ()).
+ ; --- (wear [i o e]) sets a task's own ports, () keeps the console; (worn ()) reads them ---
 
  ; a worn jug takes what the task says, and the console comes back after
  (jug 0 @ j

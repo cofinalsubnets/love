@@ -13,7 +13,7 @@ pipe "xargs -n 2" '1
 5
 '                 xargs -n 2 echo
 pipe "xargs empty" '' xargs echo
-# GLUED -n: every script writes -n1, and the word used to reach spawn as the COMMAND
+# a glued -n1 is the count, not the command
 pipe "xargs -n1" '1
 2
 3
@@ -52,9 +52,7 @@ printf 'x\n' | korerun xargs /no/such/cmd 2>/dev/null; r=$?
 [ $r -eq 127 ] || fail "kore xargs 127 (rc $r)"
 env AUP=44 sh -c 'printf %s "$AUP"' > "$g"
 korerun env AUP=44 sh -c 'printf %s "$AUP"' > "$o"; same "env assign"
-# _= is the shell's own last-argument variable and differs by who was exec'd
-# the oracle wears korerun's own LOVE_NO_IMAGE= prefix, so the two children
-# compare the same environment
+# _= differs by who was exec'd; the oracle wears korerun's LOVE_NO_IMAGE= so both see one environment
 LOVE_NO_IMAGE= env | grep -v '^_=' | LC_ALL=C sort > "$g"
 korerun env | grep -v '^_=' | LC_ALL=C sort > "$o"; same "env print"
 korerun env sh -c 'exit 3'; r=$?; [ $r -eq 3 ] || fail "kore env child exit (rc $r)"
@@ -64,9 +62,8 @@ sleep 3 & sp=$!
 korerun kill -9 $sp || fail "kore kill send"
 wait $sp; r=$?; [ $r -eq 137 ] || fail "kore kill effect (rc $r)"
 korerun kill -0 999999 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore kill dead pid (rc $r)"
-# printenv and the three one-line answers. `arch` is not a program on every distro
-# (Arch ships none), so uname -m is its oracle -- and nproc's is --all: nothing here
-# reads an affinity mask, so the count is the machine's and not this process's
+# arch is not a program everywhere, so uname -m is its oracle; nproc's is --all, since no
+# affinity mask is read
 [ "$(KAUP=7 korerun printenv KAUP)" = 7 ] || fail "kore printenv"
 korerun printenv NO_SUCH_VAR_HERE > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "kore printenv miss (rc $r)"
@@ -75,12 +72,9 @@ korerun printenv | grep -v '^_=' | LC_ALL=C sort > "$o"; same "printenv print"
 [ "$(korerun whoami)" = "$(whoami)" ] || fail "kore whoami"
 [ "$(korerun groups)" = "$(groups)" ] || fail "kore groups"
 [ "$(korerun arch)" = "$(uname -m)" ] || fail "kore arch"
-# uname -s comes off love-os, not off /proc/sys -- that path is linux's spelling of
-# sysctl and the other three kernels have none, so a file read answered "Linux"
-# everywhere. This box is the linux arm of that; the inle arm is test/kernel/wfs.l.
+# uname -s comes off love-os, not /proc/sys, which only linux has
 [ "$(korerun uname -s)" = "$(uname -s)" ] || fail "kore uname -s"
-# the letters combine, -a is posix's five in posix's order, a stranger refuses with 2.
-# -n -r -v read /proc, which is linux's
+# the letters combine, -a is posix's five in order, an unknown one refuses with 2; -n -r -v read /proc
 if [ "$(uname -s)" = Linux ]; then
   [ "$(korerun uname -srm)" = "$(uname -s -r -m)" ] || fail "kore uname -srm"
   [ "$(korerun uname -a)" = "$(uname -snrvm)" ] || fail "kore uname -a"
@@ -88,8 +82,8 @@ fi
 korerun uname -x 2>/dev/null; r=$?
 [ $r -eq 2 ] || fail "kore uname -x (exit $r)"
 [ "$(korerun nproc)" = "$(nproc --all)" ] || fail "kore nproc"
-# nohup: HUP ignored across the exec, the command's own status back, 125/126/127 for its
-# own trouble; under a terminal (script(1) makes one) output lands in nohup.out, 0600
+# nohup: HUP ignored across the exec, the status passed back, 125/126/127 its own; under a
+# terminal (script(1)) output lands in nohup.out, 0600
 [ "$(korerun nohup sh -c 'kill -HUP $$; echo survived')" = survived ] || fail "kore nohup: HUP must be ignored"
 korerun nohup sh -c 'exit 3'; r=$?; [ $r -eq 3 ] || fail "kore nohup: the command's status (got $r)"
 korerun nohup /nonexistent/cmd 2>/dev/null; r=$?; [ $r -eq 127 ] || fail "kore nohup: no such command is 127 (got $r)"
@@ -103,9 +97,8 @@ if script -qec true /dev/null > /dev/null 2>&1; then
 errline" ] || fail "kore nohup: stdout and stderr land in nohup.out"
   [ "$(stat -c %a "$N/nohup.out")" = 600 ] || fail "kore nohup: nohup.out is made 0600"
 fi
-# nice: bare it says the niceness; -n N runs the command N lower (capped at 19); 125 its
-# own trouble, 127 no such command. renice aims only at a child of this script, and at
-# 19, which any caller may reach
+# nice: bare says the niceness; -n N runs N lower, capped at 19; 125 its own trouble, 127 no
+# command. renice aims only at a child of this script, at 19, which anyone may reach
 n0=$(korerun nice); [ "$n0" = "$(nice)" ] || fail "kore nice: bare"
 w=$((n0 + 3)); [ $w -gt 19 ] && w=19
 [ "$(korerun nice -n 3 "$K" kore nice)" = $w ] || fail "kore nice -n 3"
@@ -118,8 +111,8 @@ sleep 5 & sp=$!
 korerun renice 19 -p 2147483646 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore renice: no such pid is 1 (got $r)"
 korerun renice x -p $sp 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore renice: a bad priority is 1 (got $r)"
 kill $sp 2>/dev/null
-# stty: GNU's three views to the byte under a terminal script(1) makes, and settings
-# GNU's own stty then reads back; off a terminal, GNU's refusal
+# stty: gnu's three views under a script(1) terminal, settings gnu's stty reads back; off a
+# terminal, gnu's refusal
 korerun stty < /dev/null 2> "$o"; r=$?
 [ $r -eq 1 ] || fail "kore stty off a terminal is 1 (got $r)"
 grep -q "stty: 'standard input': Inappropriate ioctl for device" "$o" || fail "kore stty: the refusal's words"
@@ -129,15 +122,13 @@ if command -v stty >/dev/null 2>&1 && script -qec true /dev/null > /dev/null 2>&
     script -qec "$K kore stty $v" /dev/null 2>&1 | tr -d '\r' > "$o"; same "stty $v"
   done
   for v in "-echo intr ^A" "raw" "sane" "cbreak min 3 time 2" "evenp" "nl -ixon" "erase 0x8 kill undef"; do
-    # script(1) echoes its eof as ^D, on a line of its own or glued to the next as it races
+    # script(1) echoes eof as ^D, on its own line or glued to the next
     script -qec "stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | sed 's/^^D//' | grep -v '^$' > "$g"
     script -qec "$K kore stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | sed 's/^^D//' | grep -v '^$' > "$o"; same "stty $v"
   done
 fi
-# who, users: one set of records -- a boot, a user, a session that ended, a getty --
-# laid in the three shapes the hosts write. GNU reads the glibc one as we do, and the
-# freebsd and netbsd files must say exactly what the glibc one says
-# the bytes are love's to lay: printf's octal escapes are not in every shell's printf
+# who, users: one set of records in the three utmp shapes (glibc, freebsd, netbsd), each
+# read the same as gnu reads glibc's; love lays the bytes, as printf's octal is not portable
 cat > "$ho/.who-fix.l" <<EOF
 (borrow 'posix)
 (: (zb n) (? (n < 1) "" (string 0 + zb (n - 1)))
@@ -175,13 +166,13 @@ korerun who "$ho/.who-none" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore who: n
 if command -v who >/dev/null 2>&1 && [ -r /run/utmp -o -r /var/run/utmp ]; then
   [ "$(korerun users)" = "$(users)" ] || fail "kore users vs the host's"
 fi
-# hostid and dnsdomainname: what the host's own name resolves to, as glibc reads it here
+# hostid and dnsdomainname: what the host's own name resolves to, as glibc reads it
 command -v hostid >/dev/null 2>&1 && { [ "$(korerun hostid)" = "$(hostid)" ] || fail "kore hostid vs GNU"; }
 korerun hostid | grep -qx '[0-9a-f]\{8\}' || fail "kore hostid's shape"
 command -v dnsdomainname >/dev/null 2>&1 \
   && { [ "$(korerun dnsdomainname)" = "$(dnsdomainname 2>/dev/null)" ] || fail "kore dnsdomainname vs the host's"; }
-# setsid: the command leads a session of its own -- forked first where kore leads its
-# group, straight through where it does not -- and the statuses are util-linux's
+# setsid: the command leads its own session, forked first when kore leads its group;
+# util-linux's statuses
 lead='set -- $(cat /proc/$$/stat); [ "$1" = "$6" ]'
 if [ -r /proc/self/stat ]; then
   korerun setsid sh -c "$lead" || fail "kore setsid: not a session leader"
@@ -193,15 +184,14 @@ korerun setsid nosuchcommand 2>/dev/null; r=$?; [ $r -eq 127 ] || fail "kore set
 : > "$ho/.setsid-noexec"; chmod 644 "$ho/.setsid-noexec"
 korerun setsid "$ho/.setsid-noexec" 2>/dev/null; r=$?; [ $r -eq 126 ] || fail "kore setsid: not executable is 126 (got $r)"
 korerun setsid 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore setsid: no command is 1 (got $r)"
-# watch: the title procps lays, -g leaving once the output moves, -e on a failure, -x
-# the words execed rather than sh -c'd
+# watch: procps's title, -g leaving once the output moves, -e on a failure, -x execing the words
 COLUMNS=60 korerun watch -g -n 0.1 'date +%s%N' > "$o" || fail "kore watch -g"
 head -1 "$o" | grep -q 'Every 0\.1s: date +%s%N  *[^ ]*: ' || fail "kore watch's title"
 COLUMNS=60 korerun watch -t -e -n 0.1 'echo hi; exit 2' > "$o"; r=$?
 [ $r -eq 1 ] && grep -q hi "$o" && ! grep -q Every "$o" || fail "kore watch -te (got $r)"
 COLUMNS=60 korerun watch -t -g -x -n 0.1 date +%N > /dev/null || fail "kore watch -x"
 korerun watch 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore watch: no command is 1 (got $r)"
-# pinky: GNU's two faces over the host's own utmp and passwd (TZ=UTC: ours keeps no zones)
+# pinky: gnu's two faces over the host's utmp and passwd (TZ=UTC: ours keeps no zones)
 if command -v pinky >/dev/null 2>&1; then
   me=$(id -un)
   for v in "" -f -w -i -q "-s $me" nobody "-l $me" "-lb $me" "-lhp $me" "-l nosuchuser" -l; do
@@ -210,8 +200,7 @@ if command -v pinky >/dev/null 2>&1; then
     same "pinky $v"; [ $rg -eq $ro ] || fail "kore pinky $v exit ($ro vs $rg)"
   done
 fi
-# ts: each line stamped, toybox's formats; since the start and between lines, the
-# stamps are the elapsed time, zero here
+# ts: each line stamped in toybox's formats; the elapsed stamps are zero here
 [ "$(printf 'a\nb\n' | korerun ts -s)" = "00:00:00 a
 00:00:00 b" ] || fail "kore ts -s"
 printf 'a\n' | korerun ts -m -i | grep -qx '00:00:00\.[0-9][0-9][0-9] a' || fail "kore ts -m -i"
@@ -223,15 +212,13 @@ korerun usleep x 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore usleep x is 1 (go
 [ "$(korerun reset < /dev/null | od -An -c | tr -d ' ')" = '033c' ] || fail "kore reset's RIS"
 : > "$ho/.kore-fsync"; korerun fsync "$ho/.kore-fsync" || fail "kore fsync"
 korerun fsync -d "$ho/.kore-fsync" "$ho/.kore-nosuch" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore fsync of no file is 1 (got $r)"
-# kill -l's names both ways (a status past 128 its signal), -s SIG, -SIGNAME, a group by
-# -PGID, and a dash word that is no signal refused
+# kill -l both ways (past 128 its signal), -s SIG, -SIGNAME, -PGID; a dash word that is no signal refused
 [ "$(korerun kill -l 9 15 137 KILL SIGTERM | tr '\n' ' ')" = "KILL TERM KILL 9 15 " ] || fail "kore kill -l"
 [ "$(korerun kill -l | wc -l)" -ge 31 ] || fail "kore kill -l lists the table"
 sleep 30 & kp=$!; korerun kill -s KILL $kp; wait $kp; r=$?; [ $r -eq 137 ] || fail "kore kill -s KILL ($r)"
 sleep 30 & kp=$!; korerun kill -SIGTERM $kp; wait $kp; r=$?; [ $r -eq 143 ] || fail "kore kill -SIGTERM ($r)"
 korerun kill -x 1 > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore kill -x ($r)"
-# env lists in the environment's own order (it said it last first); -0, -C DIR, -S STRING
-# split into words, and -C with no command refused; printenv's order too
+# env lists in the environment's order; -0, -C DIR, -S split, -C with no command refused; printenv's order too
 [ "$(env -i A=1 B=2 C=3)" = "$(korerun env -i A=1 B=2 C=3)" ] || fail "kore env's order"
 [ "$(env -i A=1 B=2 LOVE_NO_IMAGE= printenv)" = "$(env -i A=1 B=2 LOVE_NO_IMAGE= "$m" kore printenv)" ] || fail "kore printenv's order"
 env -0 -i A=1 B=2 > "$g"; korerun env -0 -i A=1 B=2 > "$o"; same "env -0"

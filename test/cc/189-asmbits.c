@@ -1,7 +1,6 @@
-/* the kernel's bit scans and counts, held to gcc: fls's `bsrl %1,%0` beside a "0"(-1) tie,
- * __fls's `bsr`, __ffs's `tzcnt`, hweight's `popcntl`/`popcntq`, and cpu_relax's `pause`
- * and mb's `mfence` -- a 32-bit scan reads only the low half, so an int holding a negative
- * value answers 31, never 63. a target with no template here computes the same. */
+/* bit scans and counts, held to gcc: bsrl with a "0"(-1) tie, bsr, tzcnt, popcntl/q, pause,
+ * mfence; a 32-bit scan reads the low half only (a negative int answers 31). targets without a
+ * template compute the same. */
 
 static int fls(int x) {
 #if defined(__x86_64__)

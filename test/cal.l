@@ -1,5 +1,4 @@
-; 'cal: civil-from-days and its inverse are exact by construction, and the round trip is
-; what holds them -- a leap-year slip would only show on one day a year
+; 'cal: civil-from-days and its inverse, held by the round trip
 (: civil (cite 'cal 'civil) epoch-days (cite 'cal 'epoch-days)
    wday (cite 'cal 'wday) mdays (cite 'cal 'mdays)
    mon3 (cite 'cal 'mon3) monl (cite 'cal 'monl) wd3 (cite 'cal 'wd3) wdl (cite 'cal 'wdl)

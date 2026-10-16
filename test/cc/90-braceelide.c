@@ -1,8 +1,6 @@
-/* brace elision (C 6.7.9): a flat initializer run fills nested subaggregates
-   whose braces were omitted -- int a[2][2] = {1,2,3,4} means {{1,2},{3,4}}.
-   global + local, arrays + structs, deep nesting, [] row inference, and a
-   partial run (the tail zero-fills). exit agrees with gcc only if every
-   elided layout matches the reference. */
+/* brace elision (C 6.7.9): a flat run fills nested subaggregates, {1,2,3,4} is
+   {{1,2},{3,4}}. global + local, arrays + structs, deep nesting, [] inference,
+   a partial run zero-filling the tail. */
 int ga[2][2] = { 1, 2, 3, 4 };                 /* {{1,2},{3,4}} */
 int gd[][2] = { 1, 2, 3, 4, 5, 6 };            /* 3 rows inferred */
 int gt[2][2][2] = { 1, 2, 3, 4, 5, 6, 7, 8 };  /* deep nesting */

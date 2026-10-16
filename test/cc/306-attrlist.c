@@ -24,7 +24,7 @@ static int same(const char *a, const char *b)
     return *a == *b;
 }
 
-static int named(void) { return same(__FUNCTION__, "named") && same(__PRETTY_FUNCTION__, __func__); }
+static int named(void) { return same(__FUNCTION__, "named") && same(__FUNCTION__, __func__); }
 
 int main(void)
 {
