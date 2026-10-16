@@ -1154,39 +1154,12 @@ static uint32_t we_sub(uint32_t a, uint32_t b) {
  return ((0x00ff00ffu + (a & 0xff00ff00u) - (b & 0xff00ff00u)) & 0xff00ff00u)
       | ((0xff00ff00u + (a & 0x00ff00ffu) - (b & 0x00ff00ffu)) & 0x00ff00ffu); }
 
-// lengths for counts f, none past lim: two queues over the sorted leaves, every count halved
-// while the code is too deep. a symbol alone gets 1; 0 when there is no room
+// lengths for counts f, none past lim (prefix.h's pfx_lens); 0 when there is no room
 static int we_lens(struct wp_mem *m, const uint32_t *f, unsigned n, unsigned lim, uint8_t *lens) {
  uint64_t *k = wp_new(m, (uintptr_t) n * 8), *w = wp_new(m, (uintptr_t) n * 16);
  uint32_t *pa = wp_new(m, (uintptr_t) n * 8), *hc = wp_new(m, (uintptr_t) n * 4);
  if (!k || !w || !pa || !hc) return 0;
- memcpy(hc, f, (uintptr_t) n * 4), memset(lens, 0, n);
- for (;;) {
-  unsigned nl = 0, mx = 0, i, li = 0, ii, top;
-  for (i = 0; i < n; i++) if (hc[i]) k[nl++] = (uint64_t) hc[i] << 12 | i;
-  if (nl == 1) lens[k[0] & 4095] = 1;
-  if (nl < 2) break;
-  for (unsigned gap = nl / 2; gap; gap /= 2)      // ascending, ties to the lower symbol
-   for (i = gap; i < nl; i++) {
-    uint64_t v = k[i]; unsigned j = i;
-    while (j >= gap && k[j - gap] > v) k[j] = k[j - gap], j -= gap;
-    k[j] = v; }
-  for (i = 0; i < nl; i++) w[i] = k[i] >> 12;
-  memset(pa, 0, (uintptr_t) (2 * nl) * 4), ii = nl;
-  for (top = nl; top < 2 * nl - 1; top++) {
-   unsigned a, b;
-#define WE_PICK(L, I) ((L) < nl && ((I) >= top || w[L] <= w[I]))
-   if (WE_PICK(li, ii)) a = li++; else a = ii++;
-   if (WE_PICK(li, ii)) b = li++; else b = ii++;
-#undef WE_PICK
-   w[top] = w[a] + w[b], pa[a] = pa[b] = top + 1; }
-  for (i = 0; i < nl; i++) {
-   unsigned d = 0;
-   for (uint32_t p = pa[i]; p; p = pa[p - 1]) d++;
-   lens[k[i] & 4095] = (uint8_t) d;
-   if (d > mx) mx = d; }
-  if (mx <= lim) break;
-  for (i = 0; i < n; i++) if (hc[i]) hc[i] = hc[i] >> 1 ? hc[i] >> 1 : 1; }
+ memcpy(hc, f, (uintptr_t) n * 4), pfx_lens(hc, n, lim, lens, k, w, pa);
  wp_drop(m, k), wp_drop(m, w), wp_drop(m, pa), wp_drop(m, hc);
  return 1; }
 
