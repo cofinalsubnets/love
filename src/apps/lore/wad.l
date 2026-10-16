@@ -212,7 +212,16 @@
                         (face (M 'secs (d 5)) [a b ((d 0 + t) . cup d) B l] (sc 'ti) (sc 'th))))
                  (filter (l \ l 3 = 48) (M 'lines))))
    (two? ws ? [(pack (join ws))] ()))
- (sector-mesh M ps s ti ski skc) (: F (M 'secs s) c (lit (F 4)) fp (filter (p \ p 0 = s && #(p 1) >= 3) ps)
+ ; ..a subsector's polygon, each edge pushed out a unit, its corners mitred: neighbours cut
+ ;   apart in floats, and a floor and the wall on its edge, overlap rather than leave pixels between
+ (grow P) (: n #P
+   ar (net (map (i \ (: a (P i) b (P ((i + 1) % n)) (a 0 * b 1 - b 0 * a 1))) ^n)) sg (ar < 0.0 ? -1.0 1.0)
+   (nrm a b) (: dx (b 0 - a 0) dy (b 1 - a 1) l (max2 1e-9 (sqrt (dx * dx + dy * dy))) [(sg * dy / l) (0.0 - sg * dx / l)])
+   (map (i \ (: v (P i) n1 (nrm (P ((i + n - 1) % n)) v) n2 (nrm v (P ((i + 1) % n)))
+                d (1.0 + n1 0 * n2 0 + n1 1 * n2 1) k (d < 0.2 ? 0.0 (1.0 / d))
+                [(v 0 + k * (n1 0 + n2 0)) (v 1 + k * (n1 1 + n2 1))]))
+        ^n))
+ (sector-mesh M ps s ti ski skc) (: F (M 'secs s) c (lit (F 4)) fp (map (p \ [(p 0) (grow (p 1))]) (filter (p \ p 0 = s && #(p 1) >= 3) ps))
    (cats (map (p \ [(fan (p 1) (F 0) (peep ti ("F:" + F 2) -1) c 0)
                     (F 3 = sky-flat ? (fan (p 1) (F 1) ski skc 1) (fan (p 1) (F 1) (peep ti ("F:" + F 3) -1) c 1))])
               fp)))
@@ -264,7 +273,8 @@
    n #rows K (iota (4 * n)) i (K // 4) c (K % 4) q (iota n)
    (col f) (peep (gem-tray [n] (map f rows)) i 0.0)
    side (1.0 * ((c = 1) + (c = 2))) low (1.0 * (c >= 2)) w (col (r \ 1.0 * r 1 1 0)) h (col (r \ 1.0 * r 1 1 1))
-   top (col (r \ (: o (r 0) (o 'hung ? (o 'ceil) (o 'y + r 1 1 3)))))
+   ; ..a sprite hung below its floor is lifted to stand on it, where depth would hide its foot
+   top (col (r \ (: o (r 0) (o 'hung ? (o 'ceil) (o 'proj = 1 ? (o 'y + r 1 1 3) (o 'y + max2 (r 1 1 3) (r 1 1 1)))))))
    d (side * w - col (r \ 1.0 * r 1 1 2)) k (col (r \ r 0 'k)) T (star-tray [n] (map (r \ r 1 0) rows))
    (n = 0 ? () [[(lace [(col (r \ r 0 'x) + d * cos th) (top - low * h) (col (r \ r 0 'z) - d * sin th) (side * w) (low * h) k k k])
                  (int (lace [(q * 4) (q * 4 + 2) (q * 4 + 1) T (q * 4) (q * 4 + 3) (q * 4 + 2) T]))]]))
