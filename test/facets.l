@@ -9,7 +9,7 @@
    (fc-vx x y z u v r g b) [(1.0 * x) (1.0 * y) (1.0 * z) (1.0 * u) (1.0 * v) (1.0 * r) (1.0 * g) (1.0 * b)]
    (fc-n f c) (net (f = c))
    (fc-by k vs ts) (: _ (setenv "LOVE_THREADS" k) f (facets 512 320 7 fc-id vs ts () ())
-                      _ (setenv "LOVE_THREADS" "") f)
+                      _ (setenv "LOVE_THREADS" ()) f)
    (fc-shared vs ts) (: f1 (fc-by "1" vs ts) (aall (f1 = fc-by "2!" vs ts) && aall (f1 = fc-by "8!" vs ts)))
    (fc-flatten fl) (shape fl = [48] && aall (fl = peep ab (iota 48) 0))
    red 16711680 blue 255
