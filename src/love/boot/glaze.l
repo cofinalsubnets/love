@@ -1600,11 +1600,11 @@
    (subst-free nm val e)
     (? (e = nm) val
        (atom? e) e
-       (<e = '\) (any (p \ p = nm) (rev >(rev >e)) ? e (map (x \ subst-free nm val x) e))
-       (<e = ':) (: ps (anat-defs >e) pairs <ps
-                   (any (pr \ hname <pr = nm) pairs ? e
-                      (: sub (map (pr \ <pr . (two? <pr && occurs? nm <pr ? >pr (subst-free nm val >pr))) pairs)
-                         (': . (1 = #>e % 2 ? (unpair sub (subst-free nm val <>ps)) (cbflat sub))))))
+       (<e = '\) ((any (p \ p = nm) (rev >(rev >e))) ? e (map (x \ subst-free nm val x) e))
+       (<e = ':) (: ps (anat-defs >e)
+                   ((any (pr \ hname <pr = nm) <ps) ? e
+                      (: sub (map (pr \ <pr . ((two? <pr && occurs? nm <pr) ? >pr (subst-free nm val >pr))) <ps)
+                         (': . ((1 = #>e % 2) ? (unpair sub (subst-free nm val <>ps)) (cbflat sub))))))
        (map (x \ subst-free nm val x) e))
    ; norm-let: (: aux.. (g q..) GBODY (g inits..)) -> the named-let ((: (g q..) GBODY[aux inlined]) inits..) lift handles. the
    ; aux values close against each other left to right and every use is a copy, so only a dcheap? value goes: a call would recompute per use
@@ -1679,12 +1679,12 @@
    (subst-pairs g gn fv pairs) (map (pr \ <pr . subst-call g gn fv >pr) pairs)    ; rewrite (g A..) in every pair's value
    ; ..a name of ns bound in e: a \'s params, a `:`'s names, a define's params. a call rewritten under such a binder
    ;   would hand the hoisted loop the inner value for its capture
-   (rebinds? ns e) (? (atom? e) 0
-                      (<e = '\) (any (p \ elem p ns) (rev >(rev >e)) || rebinds? ns (last e))
-                      (<e = ':) (: ps (anat-defs >e)
-                                  (any (pr \ (: h <pr (elem (hname h) ns || (two? h && rebinds? ns ['\ . >h + [0]]))
-                                                       || rebinds? ns >pr)) <ps || rebinds? ns <>ps))
-                      (any (rebinds? ns) e))
+   (rebinds? ns e)
+    (? (atom? e) 0
+       (<e = '\) ((any (p \ elem p ns) (rev >(rev >e))) || rebinds? ns (last e))
+       (<e = ':) (: ps (anat-defs >e)
+                   ((any (pr \ (any (p \ occurs? p <pr) ns) || rebinds? ns >pr) <ps) || rebinds? ns <>ps))
+       (any (rebinds? ns) e))
    (plift-fn Fpair)                                                                               ; ((F P..) . FBODY) -> `(Fpair' newdefs)
     (: nf <Fpair FBODY >Fpair
        (!(two? nf && nom? <nf && two? FBODY && <FBODY = ': && two? >FBODY) ? [Fpair ()]
