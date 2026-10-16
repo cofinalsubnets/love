@@ -1,7 +1,5 @@
-/* __builtin_offsetof over a runtime index, held to gcc: `n[i]` is the member's offset plus
- * i elements, an expression and not a constant, nested members and a second index ride
- * it, and linux's container_of over `node[idx]` finds its struct again. a constant index
- * still folds where a constant is owed. */
+/* __builtin_offsetof over a runtime index, held to gcc: nested members, a second index,
+ * container_of over `node[idx]`; a constant index still folds where a constant is owed. */
 
 struct In { char c; int b; short z[3]; };
 struct S { int a; int n[4]; struct In in[5]; };

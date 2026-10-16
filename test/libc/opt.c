@@ -1,14 +1,10 @@
 /* getopt, getopt_long, getopt_long_only: every answer of every call (the value, optind,
- * optarg, optopt, the long index, a flag) and the argv left behind, over the kernel
- * hostprogs' own argv shapes, the edges (clusters, glued and next-word values, optional
- * ones, `--`, a bare `-`, the '+' '-' ':' modes, ambiguous and unique prefixes, long_only's
- * fall back to short), optind set to 1 and to 0 mid-parse, then a seeded sweep with
- * POSIXLY_CORRECT off and on. the messages are part of the answer: stderr rides stdout,
- * both unbuffered, so they land in order.
- *
- * the reentrancy law: two parses interleaved step for step through getopt_long_r answer as
- * each does alone through getopt_long. glibc keeps its _r private, so its build reports the
- * lone answers twice -- and ours must then match them interleaved. */
+ * optarg, optopt, the long index, a flag) and the argv left behind, over real argv shapes
+ * and the edges (clusters, glued and next-word values, optional ones, `--`, a bare `-`, the
+ * '+' '-' ':' modes, prefixes, long_only's fall back to short), optind reset to 1 and 0, and a
+ * seeded sweep with POSIXLY_CORRECT off and on. stderr rides stdout, unbuffered, in order.
+ * reentrancy: two parses interleaved through getopt_long_r answer as each alone; glibc
+ * keeps its _r private, so its build reports the lone answers twice. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

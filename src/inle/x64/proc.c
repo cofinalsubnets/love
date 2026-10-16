@@ -11,7 +11,8 @@
 #include "asmops.h"
 
 extern uintptr_t khhdm;
-extern void *kmallocw(uintptr_t n), kfree(void *p);
+extern void *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
+extern void kfree(void *p), k_drop(void *p);
 extern long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long f);
 extern void k_kswap(uint64_t *save, uint64_t load), k_ufirst(void);
 extern void **k_proc_seat(long pid);
@@ -52,19 +53,18 @@ static uint64_t *k_va(uint64_t pa) { return (uint64_t*) (uintptr_t) (pa + khhdm)
 
 // n bytes, page-aligned and zeroed -> them, *raw what frees them; NULL when the heap refuses
 static void *k_uraw(uint64_t n, void **raw) {
-  if (!(*raw = kmallocw((uintptr_t) ((n + 4096 + 7) / 8)))) return NULL;
-  uint8_t *p = (uint8_t*) (((uintptr_t) *raw + 4095) & ~(uintptr_t) 4095);
-  memset(p, 0, (size_t) n);
-  return p; }
+  if (!(*raw = kmallocwa((uintptr_t) ((n + 7) / 8), 4096))) return NULL;
+  memset(*raw, 0, (size_t) n);
+  return *raw; }
 
 // ..kept on c's list, freed at the end
 static void *k_ublk(struct k_uctx *c, uint64_t n) {
   if (c->nblk == c->cblk) {
     int m = c->cblk ? 2 * c->cblk : 16;
-    void **t = kmallocw((uintptr_t) m);
+    void **t = k_grab((uintptr_t) m * sizeof *t);
     if (!t) return NULL;
     for (int i = 0; i < c->nblk; i++) t[i] = c->blk[i];
-    if (c->blk) kfree(c->blk);
+    k_drop(c->blk);
     c->blk = t, c->cblk = m; }
   void *raw, *p = k_uraw(n, &raw);
   if (p) c->blk[c->nblk++] = raw;
@@ -206,10 +206,10 @@ static long k_umem(struct k_uctx *c, long n, uint64_t a, uint64_t b, long d, lon
     if (hi > k_utop - k_ustack - 4096) return -ENOMEM;
     if (c->nmm == c->cmm) {
       int m = c->cmm ? 2 * c->cmm : 16;
-      struct k_umm *t = kmallocw((uintptr_t) m * sizeof *t / 8);
+      struct k_umm *t = k_grab((uintptr_t) m * sizeof *t);
       if (!t) return -ENOMEM;
       for (int i = 0; i < c->nmm; i++) t[i] = c->mm[i];
-      if (c->mm) kfree(c->mm);
+      k_drop(c->mm);
       c->mm = t, c->cmm = m; }
     void *raw;
     uint8_t *k = k_uraw(hi - lo, &raw);
@@ -367,10 +367,10 @@ static long k_uload_love(struct k_uctx *c, uint64_t *phdr, uint64_t *phn) {
 
 static void k_ufree(struct k_uctx *c) {
   for (int i = 0; i < c->nblk; i++) kfree(c->blk[i]);
-  if (c->blk) kfree(c->blk);
+  k_drop(c->blk);
   for (int i = 0; i < c->nmm; i++) kfree(c->mm[i].raw);
-  if (c->mm) kfree(c->mm);
-  kfree(c); }
+  k_drop(c->mm);
+  k_drop(c); }
 
 // the seat's door (sys.c): pid's program, the ELF in code, laid on argv av and environment ev
 // and kept in pid's record, its first turn yet to come -> 0; -errno where it cannot run. a
@@ -379,7 +379,7 @@ long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintpt
                   char const *code, uintptr_t cn) {
   void **seat = k_proc_seat(pid);
   if (!seat) return -ENOSYS;
-  struct k_uctx *c = kmallocw((sizeof *c + 7) / 8);
+  struct k_uctx *c = k_grab(sizeof *c);
   if (!c) return -ENOMEM;
   memset(c, 0, sizeof *c);
   c->pid = pid, c->mnext = k_umbase;

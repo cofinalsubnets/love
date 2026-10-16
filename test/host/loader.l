@@ -1,8 +1,6 @@
-; test/host/loader.l -- `borrow` of a path, the loader in src/love/boot/prel.l. a module comes by
-; a name already held (baked, catted, loaded) or a path the caller writes, never an invented path:
-; a name it lacks is a miss even with the file in the cwd. a path load is one fresh layer
-; registered under its basename. not in the corpus: the first law (zz-loadprobe absent) holds
-; once. fixtures are zz- names, removed at the foot. run from the repo root:
+; test/host/loader.l -- `borrow` (src/love/boot/prel.l): a module comes by a name already held or
+; a path written out, never an invented path. not in the corpus: the first law holds once.
+; fixtures are zz- names, removed at the foot. run from the repo root:
 ;   cat test/00-init.l test/host/loader.l | out/love
 
 (mkdir "lib" 493, mkdir "lib/zz-loadprobe" 493,
@@ -13,38 +11,30 @@
   (say p "(: (zz-probe-sub x) (* x 10))",
    close p)))
 
-; the NAME lane touches no filesystem. lib/zz-loadprobe.l is right there and the
-; symbol still misses: the loader has no path to invent, so the splice raises by
-; name and nothing registers.
+; a name touches no filesystem: lib/zz-loadprobe.l is right there and still misses
 (trap (_ \ (borrow 'zz-loadprobe)) () (a \ b \ 'caught) @ a
  (test (a = 'caught) !(cite 'zz-loadprobe)))
 
-; the path lane: one layer named for the basename, registered, spliced -- bare names
-; resolve in forms compiled after the use (the capture law: a use must precede its readers)
+; a path: one layer registered under its basename; bare names resolve in later forms only
 (borrow "lib/zz-loadprobe.l")
 (test (3 = zz-probe-hi 2)
         (41 = cite 'zz-loadprobe 'zz-probe-pin)
         (lit? (cite 'zz-loadprobe)))
 
-; the basename is the whole name: a nested path registers under `sub`, and the
-; directory it sat in is not part of it
+; the basename is the whole name: a nested path registers under `sub`
 (borrow "lib/zz-loadprobe/sub.l")
 (test (70 = zz-probe-sub 7)
         (lit? (cite 'sub))
         !(cite 'zz-loadprobe/sub))
 
-; a re-use hits the registry, never the file again -- by name or by the path that
-; named it: rewrite the file, use both ways, the module keeps its first reading
+; a re-use, by name or path, hits the registry: the module keeps its first reading
 (open "lib/zz-loadprobe.l" "w" @ p (say p "(: zz-probe-pin 999)", close p))
 (borrow 'zz-loadprobe)
 (borrow "lib/zz-loadprobe.l")
 (test (41 = cite 'zz-loadprobe 'zz-probe-pin))
 
-; a self-registering file -- its text is a (module 'nm ..) wrap (cook.l's shape) --
-; keeps its registration: the loader's empty wrapper layer must not pin over the
-; module the file made, and the name it registers need not be the basename. where
-; the two differ the wrapper was never written to, so the basename does not register
-; at all -- an empty tablet standing under it would answer a later use with nothing.
+; a file that is a (module 'nm ..) wrap keeps its own registration, under any name; when
+; that is not the basename, the basename does not register (an empty one would answer nothing)
 (open "lib/zz-pathprobe.l" "w" @ p
  (say p "(module 'zz-pathprobe (: zz-path-pin 78))", close p))
 (borrow "lib/zz-pathprobe.l")
@@ -55,22 +45,16 @@
 (test (79 = cite 'zz-othername 'zz-other-pin)
         !(cite 'zz-elsewhere))
 
-; a path that opens nothing is a miss, like any other
 (trap (_ \ (borrow "lib/zz-absent.l")) () (a \ b \ 'caught) @ a
  (test (a = 'caught)))
 
 (unlink "lib/zz-loadprobe.l", unlink "lib/zz-loadprobe/sub.l",
  unlink "lib/zz-pathprobe.l", unlink "lib/zz-elsewhere.l",
  rmdir "lib/zz-loadprobe",
- ; ..and lib/ itself, which this file made. rmdir refuses a directory with anything
- ; in it, so a real one is safe -- and without this the repo root grows an empty lib/
- ; on every run, which is a fixture the foot forgot rather than a thing the tree has.
+ ; ..and lib/, which this file made; rmdir leaves a non-empty one alone
  rmdir "lib", 0)
 
-; the seat rungs are retired (the modules arc, rung 3) and so is the cwd walk:
-; the loader reads no directory of its own, so a fixture beside the binary is as
-; invisible as one in lib/. this binary is out/love, so its old rungs were
-; out/lib/ and out/lib/love/ -- fixture there, and the use must miss.
+; the loader reads no directory of its own: a fixture in out/lib/ or out/lib/love/ misses
 (mkdir "out/lib/love" 493,
  (open "out/lib/zz-seatprobe.l" "w" @ p
   (say p "(: zz-seat-pin 51)",
@@ -86,9 +70,7 @@
  unlink "out/lib/love/zz-fhsprobe.l",
  rmdir "out/lib/love",
  0)
-; a path names its file, never a module that merely shares the basename: with a module
-; zz-shadow registered, a module-less out/zz-sub/zz-shadow.l borrowed by path answers its own
-; bindings, the module keeps its own, and a second borrow of the path reads nothing again
+; a path names its file, not a module sharing its basename; a second borrow reads nothing
 (module (zz-shadow zz-shadow-mod) (: zz-shadow-mod 7))
 (mkdir "out/zz-sub" 493)
 (open "out/zz-sub/zz-shadow.l" "w" @ p (say p "(: zz-shadow-file 42 (zz-shadow-f x) (x + 1))", close p))

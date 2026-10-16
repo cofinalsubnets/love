@@ -1,17 +1,9 @@
 ; dusk -- the level after the apartment: a dry river through the desert at sunset, first
-; person in half blocks. the sun arcs down ahead as the player walks the bed and sets
-; behind a parking garage; walking into the hole in its face ends the level, and the
-; garage (src/apps/lore/garage.l) takes the screen.
-;
-; the screen is view.l's, ninety degrees wide. nothing is stored: a bush is a hash of its
-; bank and place along the looping river, a mesa a hash of its bearing. the music is a
-; pelog pentatonic on a chime, a gong under it, out the horn a frame at a time.
-; dusk-new/step/move/frame are pure, gated by test/host/dusk.l; only dusk-walk and
-; dusk-run tie the tty and horn. dusk-walk takes a raised stage, so the apartment hands over.
-;
-; run: love lore dusk    h l or the arrows turn, k or up walks on, u n look up and down,
-;                   space walks on until pressed again; ? the keys, q or esc leaves.
-;                   HORN=none plays silent on a seat with no sound device
+; person. the sun arcs down ahead and sets behind a parking garage; walking into the hole in
+; its face ends the level, and the garage (garage.l) takes the screen.
+; nothing is stored: a bush hashes its bank and place along the looping river, a mesa its
+; bearing. dusk-new/step/move/frame are pure; only dusk-walk and dusk-run touch the tty and
+; horn. dusk-walk takes a raised stage, so the apartment hands over. HORN=none plays silent.
 (module (dusk dusk-run dusk-walk dusk-main dusk-new dusk-size dusk-step dusk-move dusk-settle
          dusk-frame dusk-tables dusk-song-new dusk-song-feed sun-at bush-of garage-top
          bed-w gz gw gh hole-w hole-h arc-z end-z done-ms sp loop fps pelog song-chunk
@@ -79,10 +71,9 @@
                 (0.8 + dice kk seed 9 100 / 100.0 * 1.4)]
             (pin bushes key b3, b3)))
    {'z (k * sp + b2 0) 'x (b2 1) 'ht (b2 2) 'wd (b2 3)})
- ; the frame's tables, the columns' trays: their middles, their rays and world bearings,
- ; their star and mesa cells and the mesa's top row; where each ray meets the garage's
- ; face, whether that is the face, its top and foot rows, and the hole's crown there; and
- ; the bushes' top and foot rows, near and far
+ ; the frame's tables, trays over the columns: rays and bearings, star and mesa cells, where
+ ; each ray meets the garage's face (its top and foot rows, the hole's crown), and the bushes'
+ ; top and foot rows, near and far
  (dusk-tables st) (: w (st 'w) hz (st 'hz) foc (st 'foc) px (st 'px) pz (st 'pz)
    xc (iota w + 0.5) us ((xc - st 'cx) / foc)
    rs (view-rays st) vx (rs 0) vz (rs 1)
@@ -94,8 +85,8 @@
    th (st 'th) ue ((iota (w + 1) - st 'cx) / foc)
    he (px + (gz - pz) / max (cos th - ue * sin th) 0.000001 * (sin th + ue * cos th))
    hxa (peep he (iota w) 0.0) hxb (peep he (iota w + 1) 0.0)
-   ; the hole's crown, broken: an arch, jagged by the place along the face -- once a
-   ; column is narrower than the jags, which would only shimmer otherwise
+   ; the hole's crown, an arch jagged along the face -- only once a column is narrower than the
+   ; jags, which would otherwise shimmer
    jag ((hxb - hxa < 0.4) * (throw (floor (hx * 2.5 + 1000.0)) 0 17 5 * 0.12 - 0.24))
    q (hx / hole-w)
    crown ((q * q < 1.0) * (hole-h * sqrt (max 0.0 (1.0 - q * q)) + jag))
@@ -130,9 +121,8 @@
    (go (flo ((pz - 2.0) / sp)) (flo ((pz + far) / sp)),
     pins tb 'tops (tray-of (tabs 'tops) 999.0) 'foots (tray-of (tabs 'foots) -999.0)
             'ntops (tray-of (tabs 'ntops) 999.0) 'nfoots (tray-of (tabs 'nfoots) -999.0)))
- ; the sky's row: the ramp by height, warmed toward the sun -- after it sets too, the
- ; afterglow -- and cooled by the dusk; a few stars high up once it is dark enough, and
- ; the disc
+ ; the sky's row: the ramp by height, warmed toward the sun (the afterglow too) and cooled by
+ ; the dusk; a few stars high up once dark enough, and the disc
  (sky-row y st tb) (: foc (st 'foc) e (atan ((st 'hz - y - 0.5) / foc)) dusk (tb 'dusk) sn (tb 'sun)
    i0 (2.0 + 14.0 * e + dusk * (1.5 + 6.0 * e))
    da (tb 'ab - sn 4) de (e - sn 3) dd (sqrt (da * da + de * de))
@@ -144,10 +134,9 @@
    dx (tb 'xc - sn 0) dy (y + 0.5 - sn 1) r (sn 2)
    disc (sun-pens (? (0.1 < sn 3) 0 (0.04 < sn 3) 1 2))
    (over c2 (dx * dx + dy * dy < r * r) disc))
- ; the sand and the bed at a row: where the row's rays meet the ground, by how far --
- ; near, middling or far -- the bed where the point is between the banks; near, the sand
- ; rippled and pebbled and the bed's mud cracked, and a bank's edge darker. a crack is a
- ; pixel wide at least, and gone where the cracks would stand closer than pixels
+ ; the sand and the bed at a row, by distance near, middling or far: near, sand rippled and
+ ; pebbled, the bed's mud cracked, a bank's edge darker. a crack is at least a pixel wide, and
+ ; gone where cracks would stand closer than pixels
  (ground-row y st tb) (: foc (st 'foc) t (foc * eh / (y + 0.5 - st 'hz))
    wx (st 'px + t * tb 'vx) wz (st 'pz + t * tb 'vz)
    be (bed-w + 0.35 * sin (0.23 * wz)) ax2 (wx * wx)
@@ -165,11 +154,9 @@
                ex (t / foc * 0.9) ez (t * t / (foc * eh) * 1.1)      ; a pixel's reach across each
                crack (inbed * (0 < (ex < 0.4) * (fx < max2 0.08 ex) + (ez < 0.4) * (fz < max2 0.08 ez)))
                (over (over c3 rip ripple-pen) crack crack-pen))))))
- ; the garage's face over a row: concrete by how far, in shadow with the sun behind it, a
- ; seam every lift of the formwork and every bay, the sun catching the parapet until it
- ; sets, and the hole. a seam is thinner than a pixel, so it is laid in the pixel whose
- ; stretch of the face holds it -- one pixel a line, wherever the walk puts it -- and only
- ; while the lines stand a few pixels apart
+ ; the garage's face over a row: concrete by distance, a seam every formwork lift and every
+ ; bay, the parapet lit until sunset, and the hole. a seam is thinner than a pixel, so it is
+ ; laid in the pixel whose stretch of the face holds it, and only while seams stand apart
  (wall-over c y st tb) (: foc (st 'foc) hz (st 'hz) tw (tb 'tw) hx (tb 'hx) dusk (tb 'dusk)
    on (tb 'win * (tb 'wt <= y) * (y < tb 'wf))
    (? !(aany on) c
@@ -211,23 +198,19 @@
  ; ..and in the hole, the view eased back to dead ahead and level, a frame at a time
  (dusk-settle st) (: h2 (st 'h // 2) hz (st 'hz)
                      (pins st 'th (0.8 * st 'th) 'hz (hz + (hz < h2) - (h2 < hz))))
- ; a key: h l or the arrows turn, within sixty degrees of ahead, k or up walks on -- there
- ; is no walking back -- u n look up and down, and space walks on by itself, the turns
- ; steering it
+ ; turns stay within facing of ahead; there is no walking back
  facing (pi / 3.0)
  (dusk-step st a) (walk-rail st a facing dusk-move)
  ; --- the song: a pelog chime now and then, and a gong under it ------------------------
  ; pelog bem, five of its seven uneven steps, in semitones from middle c
  pelog [0.0 1.2 2.7 6.7 7.85]
  song-chunk (song-rate // fps)                          ; a frame's worth
- ; ..two octaves down, the high one a time in three; a chime a hundred chunks or so; the
- ; gong a little under the low c, nine to fourteen seconds apart
+ ; ..two octaves down, the high one a time in three; the gong a little under the low c
  tune {'scale pelog 'down -24 'high 3 'gain 0.5 'odds 10 'gong -19.3 'gong-gain 0.8 'gong-legato 8.0 'gong-every 9}
  (dusk-song-new h st) (gamelan-new h st)
  (dusk-song-feed s) (gamelan-feed s tune)
- ; --- the walk, on view's loop: walking on by itself, or in the hole settling, a frame
- ; at a time, and the garage after it. dusk-walk takes a stage already raised, and
- ; dusk-run raises one ---
+ ; --- the walk, on view's loop: walking on by itself, or in the hole settling a frame at a
+ ; time, then the garage ---
  (dusk-walk _) (view-walk {'new dusk-new 'size dusk-size 'frame dusk-frame 'key dusk-step 'fps fps
                            'binds (view-bind view-binds walk-binds) 'listed walk-listed
                            'tick (st \ (? (st 'done) (dusk-settle st) (st 'walk) (dusk-move st 0.25)))

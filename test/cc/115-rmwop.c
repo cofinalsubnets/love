@@ -1,15 +1,5 @@
-/* `E1 op= E2` evaluates E1 ONCE -- the other half of 114-rmwlv.
- *
- * The desugar (asn lv (bin op lv rhs)) duplicates the lvalue, so a stepping one
- * runs its effect twice and the store lands where the load did not. parse keeps
- * an impure lvalue whole (rmw) and gen moors its address in a frame temp, so
- * every target shape still rides its own store lane: the narrowing store, the
- * pointer scale, a double, a bitfield.
- *
- * The two shapes that reach shipped code: sqlite3.c's `aOut[j++] += c` and
- * `p->a[k++] ^= x[j]`.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* `E1 op= E2` evaluates E1 once, through each store lane: narrowing, pointer
+ * scale, double, bitfield (`a[j++] += c`, `p->a[k++] ^= x`). each check adds 1: the exit code is the pass count. */
 
 #include <stdio.h>
 

@@ -10,6 +10,8 @@
 ;   (ssh-key path ask)            an openssh-key-v1 file -> [seed pub] | a reason string;
 ;                                 (ask path) -> the passphrase | (), asked only of a locked key
 ;   (ssh-keytext path txt ask)    the same over the file's text, path only naming it
+;   (ssh-keyparts path txt ask)   the same with the comment -> [seed pub comment] | a reason
+;   (ssh-keyhead path txt)        the cleartext half, no passphrase -> [cipher pub] | a reason
 ;
 ; the session is a tablet like tls's: the socket, a pending run, a sequence number and
 ; key pair each way, the session id. the chacha key is 64 bytes, the payload key first
@@ -163,6 +165,7 @@
              _ (pin t 's s) _ (pin t 'pend "") _ (pin t 'sseq 0) _ (pin t 'rseq 0) _ (pin t 'busy 0)
              _ (wr t (vc + "\r\n"))
              vs (server-version t)
+             _ (pin t 'peer vs)
              ic (kexinit 0)
              _ (ssh-send t ic)
              is (expect t 20)
@@ -226,13 +229,22 @@
     (open path "r" @ q
        (? !(hot? q) ("cannot read " + path)
           (slurp q @ txt (close q, ssh-keytext path txt ask))))
-   (ssh-keytext path txt ask)
+   (ssh-keytext path txt ask) (ssh-keyparts path txt ask @ k (two? k ? [<k (k 1)] k))
+   ; the file's body as a cursor past its magic, or a reason
+   (keybody path txt)
     (: body (join "" (filter (l \ !(0 < #l && l 0 = 45)) (split txt 10)))
        b (b64d body)
-       magic "openssh-key-v1"
-       (snip b 0 14 != magic ? (path + ": not an openssh private key")
-          (: c (cur b) _ (g-skip c 15)
-             ciph (g-str c) kdf (g-str c) ko (cur (g-str c)) _ (g-u32 c) _ (g-str c)
+       (snip b 0 14 != "openssh-key-v1" ? (path + ": not an openssh private key")
+          (cur b @ c (g-skip c 15, c))))
+   (ssh-keyhead path txt)
+    (keybody path txt @ c
+       (? (string? c) c
+          (: ciph (g-str c) _ (g-str c) _ (g-str c) _ (g-u32 c) kc (cur (g-str c))
+             (g-str kc = "ssh-ed25519" ? [ciph (g-str kc)] (path + ": not an ed25519 key")))))
+   (ssh-keyparts path txt ask)
+    (keybody path txt @ c
+       (? (string? c) c
+          (: ciph (g-str c) kdf (g-str c) ko (cur (g-str c)) _ (g-u32 c) _ (g-str c)
              enc (g-str c)
              kl (key-len ciph)
              (? (kl < 0) (path + ": keys under " + ciph + " are not supported")
@@ -240,10 +252,10 @@
                 ((0 < kl ? (ask path) "") @ pass
                    (? !(string? pass) (path + ": no passphrase")
                       (: pc (cur (0 < kl ? (unlock kl ko pass enc) enc))
-                         c1 (g-u32 pc) c2 (g-u32 pc) ty (g-str pc) pk (g-str pc) sk (g-str pc)
+                         c1 (g-u32 pc) c2 (g-u32 pc) ty (g-str pc) pk (g-str pc) sk (g-str pc) cm (g-str pc)
                          (? (c1 != c2) (path + (0 < kl ? ": incorrect passphrase" ": damaged key"))
                             (ty != "ssh-ed25519") (path + ": " + ty + " keys are not supported yet")
-                            [(snip sk 0 32) pk]))))))))
+                            [(snip sk 0 32) pk cm]))))))))
 
    ; --- the session channel (RFC 4254) ---
    lwin (1 << 21)

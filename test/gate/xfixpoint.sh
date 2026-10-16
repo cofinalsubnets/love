@@ -1,31 +1,13 @@
 #!/bin/sh
-# test/gate/xfixpoint.sh -- the CROSS-MACHINE fixpoint, in effigy. the x-lane's
-# twin objects -- this machine's mooncc,
-# -t the other arch -- link love1: machine A's bytes for machine B. Then love1
-# itself, under qemu-user standing in for machine B, bakes its own mooncc
-# image, rebuilds every TU natively (mooncc's default target is the ground it
-# stands on -- no -t below, an a64 machine would pass none), links love2,
-# and love1 must equal love2 TO THE BYTE. One cmp says two things at once:
-# the twin machine reproduces this machine's bytes (what "same fixpoint
-# everywhere" asks for), and mooncc's output does not depend on the arch
-# mooncc runs on.
-#
-# the TU flags MIRROR the Makefile's x-lane (LvHaveVersionH on love.o), the
-# fixpoint.sh drift trap wearing its cross face. this gate's first run caught the
-# version flag MISSING from the x-lane: the twin named itself "unknown".
-# AND THE LIST IS THE ARTIFACT'S, kernel objects included: a gate that links a
-# shorter binary than `make` does still answers love1 == love2, and answers it
-# about a binary nobody ships.
-#
-# only the FLAGS are spelled here. the object names are derived from the source paths
-# (mkobj below) and the rosters arrive in the environment -- gate_love_c / gate_host_c /
-# gate_arch_c / gate_kern_c -- so a rename in the Makefile cannot leave this behind.
-#
-# gate_seat_c is src/love/noblob.c: this pair lays no out/src.o, so it answers the carried
-# archives itself -- and rides the OBJ list, or the twin link cannot find the body.
+# test/gate/xfixpoint.sh -- the cross-machine fixpoint: this machine's mooncc -t XTGT links
+# love1; love1 under qemu-user bakes its own mooncc, rebuilds every TU natively (no -t) and
+# links love2, which must equal love1 to the byte. the TU flags mirror the Makefile's x-lane;
+# the rosters come in the environment, and the object list is the artifact's, kernel included.
 # usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
 #        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XOD XA OBJ...
 # XOD is the x-lane's object root, where make lays mkvec.l and the objects it passes
+# the TUs compile XFIX_J at a time (default 4), each its own process under qemu with a log of
+# its own; the link reads its list in make's order, so the order they finish in moves nothing
 . test/gate/skip.sh
 set -u
 
@@ -43,14 +25,15 @@ cat=$ho/.mooncc-cat.l
 
 command -v "$qemu" >/dev/null 2>&1 || gate_skip "test_xfixpoint: skipped (needs $qemu)"
 
-fail() { echo "FAIL test_xfixpoint: $*" >&2; exit 1; }
+# a red ends whatever still runs beside it: the pool's compiles, mksys, lay-vec
+fail() {
+  for x in ${q:-} ${sysp:-} ${vecp:-}; do kill "${x%%=*}" 2>/dev/null; done
+  echo "FAIL test_xfixpoint: $*" >&2; exit 1; }
 
 rm -rf "$d"
 mkdir -p "$d"
 
-# the object of a source is its PATH under $d, exactly as make lays it under the odir --
-# derived, never spelled, so a renamed, moved or newly-added TU cannot leave a stale name
-# here. moonlibc drops its src/apps/moon/lib/ stem, the one place make does too.
+# a source's object is its path under $d, as make lays it; moonlibc drops its lib stem
 mkobj() {                    # $1 = source -> $o
   o=${1#./}; o=${o#src/}
   case $o in apps/moon/lib/*) o=${o#apps/moon/lib/} ;; esac
@@ -58,51 +41,71 @@ mkobj() {                    # $1 = source -> $o
   mkdir -p "${o%/*}"
 }
 
-# love1: machine A's link of the twin -- exactly the dist link, before the bake
-# mutates it (the object list arrives FROM make, $(xobjs), never globbed).
+# love1: the dist link of the twin, before any bake
 moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
 moon0 -t "$xtgt" -pie "$@" -o "$d/love1" || fail "love1 cross link"
 
 echo "XFIX $d/love1 rebuilds itself under $qemu"
 
+# sys.o and the kernel's vectors want no compiler image: they lay beside the bake. an arch
+# with no seat carries no kernel, and $gate_arch_c is empty there -- the makefile draws that
+# line with its own wildcard.
+LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((cite 'moon '$mks) \"$d/sys.o\")" \
+  > "$d/sys.log" 2>&1 &
+sysp=$!
+vecp=
+if [ -n "$gate_arch_c" ]; then
+  LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xod/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
+    > "$d/kvec.log" 2>&1 &
+  vecp=$!
+fi
+
 # machine B: love1 bakes its own compiler image...
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (quit 0) (quit 1))" \
   || fail "love1 bakes mooncc1.image under $qemu"
 
-# ...and rebuilds every TU with it, natively, in the order make links them
-moon1() { "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
+# ...and rebuilds every TU with it, natively. q holds the running ones, pid=object=source
+jn=${XFIX_J:-4} q= n=0
+reap() {
+  set -- $q
+  p=${1%%=*} r=${1#*=}
+  shift
+  q="$*" n=$((n - 1))
+  wait "$p" || { cat "${r%%=*}.log"; fail "love1 mooncc -c ${r#*=}"; }
+}
+moon1() {
+  mkobj "$1"
+  f=$1
+  shift
+  "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc "$@" -c "$f" "$o" > "$o.log" 2>&1 &
+  q="$q $!=$o=$f" n=$((n + 1))
+  [ $n -lt $jn ] || reap
+}
 for f in $gate_love_c; do
-  mkobj "$f"
-  moon1 -D tco="$tco" -D LvHaveVersionH -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" \
-    || fail "love1 mooncc -c $f"
+  moon1 "$f" -D tco="$tco" -D LvHaveVersionH -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib
 done
 for f in $gate_host_c $gate_seat_c; do
-  mkobj "$f"
-  moon1 -D tco="$tco" -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 "$f" -D tco="$tco" -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib
 done
 for f in src/apps/moon/lib/moonlibc/math/*.c; do
-  mkobj "$f"
-  moon1 -Isrc/apps/moon/include -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 "$f" -Isrc/apps/moon/include
 done
-LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((cite 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
-test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
-
-# the kernel the artifact carries (the Makefile's $(xkart_o)), rebuilt native
-# and laid the same way. an arch with no seat carries none, and $gate_arch_c is
-# empty there -- the makefile draws that line with its own wildcard.
+# the kernel the artifact carries (the Makefile's $(xkart_o)), rebuilt native and laid the same way
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include"
   for f in $gate_kern_c $gate_arch_c; do
-    mkobj "$f"
-    moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
+    moon1 "$f" -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include
   done
-  LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xod/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
-    || fail "love1 lay-vec"
+fi
+while [ $n -gt 0 ]; do reap; done
+wait "$sysp" || { cat "$d/sys.log"; fail "love1 mksys"; }
+test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
+if [ -n "$vecp" ]; then
+  wait "$vecp" || { cat "$d/kvec.log"; fail "love1 lay-vec"; }
   test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
 fi
 
 o2=; for o in "$@"; do o2="$o2 $d/${o#$xod/}"; done
-moon1 -pie $o2 -o "$d/love2" || fail "love2 link"
+"$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc -pie $o2 -o "$d/love2" || fail "love2 link"
 
 cmp "$d/love1" "$d/love2" || fail "love2 differs from love1 -- machine B does not reproduce machine A's bytes"
 

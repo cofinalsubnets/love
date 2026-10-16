@@ -1,11 +1,8 @@
-; test/host/papel.l -- the static site, exactly: only what papel adds over lapiz and cook.
-; every href="#x" has its id="x" on the page, slugs are stable and deduped, a .md link becomes
-; .html iff its page is in the site (nothing else is rewritten), title falls head-1, meta, file
-; name, and a second build writes nothing while one touched source writes that page and the index.
-; not in the corpus: it writes under /tmp. run through stdin, as the gate does -- a file named
-; papel.l would fire papel's own seat: cat test/00-init.l test/host/papel.l | out/love
+; test/host/papel.l -- what papel adds over lapiz and cook: anchors, slugs, relinks, titles, freshness.
+; not in the corpus: it writes under /tmp. run through stdin, as a file named papel.l would run
+; papel itself: cat test/00-init.l test/host/papel.l | out/love
 
-; --- the module seam: three modules, and papel adds nothing to the book ----------
+; --- the module seam: three modules, and papel adds nothing to the book
 (elem 'parse (names ()) @ parse-before  ; the book before the load, for the leak delta
  ((borrow "src/apps/papel.l"),                ; the loader: papel wants lapiz + cook itself
   test (elem 'papel (cite ()))
@@ -14,10 +11,7 @@
        (elem 'build (keys (cite 'papel)))
        (lit? (cite 'papel 'papel-main))
        !(cite 'papyrus)                          ; a missing module answers ()
-       ; the combinators are a module nobody splices at boot: lapiz and cook each said (borrow 'peg),
-       ; so peg is loaded and reachable by key. `parse` itself can sit on the book -- the
-       ; crew layer (moon's front end) puts it there in the warm lane -- so the leak check is
-       ; a delta: loading papel must not have added it.
+       ; peg is loaded by lapiz and cook; `parse` may already be on the book, so the leak check is a delta
        (elem 'peg (cite ()))
        (lit? (cite 'peg 'seq))
        (parse-before = elem 'parse (names ()))))
@@ -25,8 +19,7 @@
 (: dir "/tmp/papeltest"
    (put-file f s) (open (dir + "/" + f) "w" @ q (say q s, close q))
    (get-file f)   (open (dir + "/" + f) "r" @ q (hot? q ? (slurp q) ""))
-   ; every attribute value introduced by `pre` and closed by a quote: the way to ask
-   ; the emitted html what it actually said, without re-parsing it.
+   ; every attribute value after `pre`, up to its closing quote
    (finds s pre)  (: m #pre n #s
                      ((: (g i acc)
                          (i + m <= n ? (snip s i (i + m) = pre ? (((: (f k) (k < n && !(s k = 34) ? (f (k + 1)) k)) (i + m)) @ j
@@ -34,13 +27,12 @@
    (has? l x)     (elem x l)
    (uniq? l)      ((: (g l) (? !(two? l) 1 (elem <l >l) 0 (g >l))) l)
 
-   ; from a clean slate: the freshness clauses below count files written, so a left-over
-   ; site from a previous run would make the first build a no-op and every count wrong.
+   ; a clean slate: the freshness clauses count files written
    _ (hark ["rm" "-rf" dir])
    _ (mkdir dir 493)
    _ (mkdir (dir + "/src") 493)
 
-   ; --- the fixture: small, and every clause below points at one line of it -------
+   ; --- the fixture: small, and every clause below points at one line of it
    _ (put-file "src/one.md" "# One
 
 The first page, whose opening paragraph becomes its line on the index.
@@ -86,28 +78,19 @@ Only a paragraph, so the title has to come from the meta block.
           pin t 'quiet 1,
           t))
 
-   ; --- the build, and freshness ---------------------------------------------------
-   ; 3 pages + the stylesheet + the index = 5 files; then nothing; then exactly the
-   ; touched page and the index, which depends on every source's title.
+   ; --- the build, and freshness
+   ; 3 pages + stylesheet + index; then nothing; then the touched page and the index
    n1 (build conf)
    n2 (build conf)
-   ; rewrite one source byte-for-byte, to advance its mtime. read it first: `open "w"`
-   ; truncates, so reading inside the `say` would write the empty file back.
-   ; and let the coarse clock tick first (rest 5): the kernel stamps files off a
-   ; ~ms-granular clock, so a rewrite microseconds after the build lands in the same
-   ; tick as the outputs and a strict-older mtime compare (cook's, exactly make's)
-   ; reads it fresh. the fork-free stat nif made cook fast enough to hit this; the
-   ; old shell-out date was ~ms per file, an accidental cushion.
+   ; rewrite one source as is to advance its mtime, read first as `open "w"` truncates; the
+   ; rest lets the coarse file clock tick, or cook's strict-older compare reads it fresh
    _ (rest 5)
    _ (: s (get-file "src/one.md") q (open (dir + "/src/one.md") "w") (say q s, close q))
    n3 (build conf)
    _ (test (n1 = 5) (n2 = 0) (n3 = 2))
 
-   ; --- and the dev-server gate over it -------------------------------------------
-   ; `refresh` is what the server calls per request: a source fingerprint, and `build`
-   ; only when it moved. it must never answer work for an untouched tree (that was the
-   ; 1.5s page load), and must never miss a real edit (that would be a dev server that
-   ; ignores you). the second is the one that matters, so it is checked both ways.
+   ; --- and the dev-server gate over it
+   ; `refresh`, per request: builds only when the source fingerprint moved, and never misses an edit
    box {}
    r1 (refresh conf box)                                 ; first look -- nothing remembered yet
    r2 (refresh conf box)
@@ -117,10 +100,7 @@ Only a paragraph, so the title has to come from the meta block.
    r4 (refresh conf box)
    _ (test (0 = r1) (0 = r2) (2 = r3) (0 = r4))
 
-   ; ..and re-registering must not grow the card. `build` declares its recipes every call,
-   ; and cook's merge used to append prerequisites each time -- so a dev server that
-   ; rebuilds per source change climbed 28 ingredients a rebuild, forever, and `prep`
-   ; walked all of them. unbounded memory and quadratic time out of a server sitting idle.
+   ; ..re-declaring recipes on every build must not grow the card
    cards (cite 'cook 'cards)
    (icount _) #<(cards (dir + "/site/index.html"))
    n0 (icount ())
@@ -132,17 +112,13 @@ Only a paragraph, so the title has to come from the meta block.
    three (get-file "site/three.html")
    idx (get-file "site/index.html")
 
-   ; --- anchors: every toc target exists as an id on the page ----------------------
-   ; the property that says "one parse, two uses". it holds for the fixture and for
-   ; every page of this tree's own docs, built below.
+   ; --- anchors: every toc target exists as an id on the page
    (anchored? h) (: ids (finds h "id=\"")
                     tgts (finds h "href=\"#")
                     (!(two? tgts) ? 1 (filter (t \ !(has? ids t)) tgts @ bad !(two? bad))))
    _ (test
       (anchored? one) (anchored? two) (anchored? three)
-      ; and it is not vacuous: page one really has a contents, with the head-1 left
-      ; out of it (it became the title) and both duplicate headings in.
-      ; slugs: deduped, stable, and never repeated on a page
+      ; not vacuous: page one has a contents, its head-1 left out, duplicate headings deduped
       (has? (finds one "id=\"") "one")
       (has? (finds one "id=\"") "shared-name")
       (has? (finds one "id=\"") "shared-name-1")
@@ -155,7 +131,7 @@ Only a paragraph, so the title has to come from the meta block.
       (has? (finds one "class=\"") "words")
       (#(finds one "href=\"#") = 4))                  ; 3 in the toc + the entry's link
 
-   ; --- relink: rewritten inside the site, untouched outside ------------------------
+   ; --- relink: rewritten inside the site, untouched outside
    hrefs (finds one "href=\"")
    _ (test
       (has? hrefs "two.html")                    ; in the site -> .html
@@ -163,29 +139,27 @@ Only a paragraph, so the title has to come from the meta block.
       (has? hrefs "https://example.com/x.md")    ; absolute -> left alone
       !(has? hrefs "two.md"))
 
-   ; --- title: the three sources, in order ------------------------------------------
+   ; --- title: the three sources, in order
    _ (test
       (0 < #(finds one "<h1 id=\""))             ; from the head-1
       (has? (finds two "content=\"") "Two From Meta")
       (cite 'papel 'ptitle (cite 'lapiz 'mdread (get-file "src/two.md")) "x") = "Two From Meta"
       (cite 'papel 'ptitle (cite 'lapiz 'mdread (get-file "src/three.md")) "three.md") = "three.md")
 
-   ; --- the index lists every page, each with its blurb ------------------------------
+   ; --- the index lists every page, each with its blurb
    _ (: ih (finds idx "href=\"")
         _ (test (has? ih "one.html") (has? ih "two.html") (has? ih "three.html")
                   ; the blurb is the first paragraph, clipped on a word boundary
                   (0 < #(cite 'papel 'blurb (cite 'lapiz 'mdread (get-file "src/one.md"))))))
 
-   ; --- the slug is a function of the text, and nothing else -------------------------
+   ; --- the slug is a function of the text, and nothing else
    _ (cite 'papel 'slug @ slug
         (test (slug "Hello, World!" = "hello-world")
                 (slug "  --- " = "section")            ; nothing left -> a name, never ""
                 (slug "A" = slug "a")))
 
-   ; --- the real thing: this tree's own docs -----------------------------------------
-   ; every markdown page in the tree through the whole pipe, and the anchor property has
-   ; to hold on all of them. readme.md is deliberately in: it is the widest markdown here.
-   ; mdsof does not recurse, so a directory that grows a subtree needs naming here.
+   ; --- the real thing: this tree's own docs
+   ; the anchor property on every page; mdsof does not recurse, so subdirectories are named
    rconf ({} @ t
           (pin t 'out (dir + "/love"),
            pin t 'title "love",

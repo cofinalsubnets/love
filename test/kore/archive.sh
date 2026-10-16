@@ -2,27 +2,22 @@
 # test/kore/archive.sh -- gzip, gunzip, zcat, xz, unxz, bzip2, bunzip2, zstd, unzstd, tar, cpio under kore's door
 . "$(dirname "$0")/common.sh"
 
-# gz.l, tar.l and the two cpio files are kore members now, not crew ones: the distro's
-# /bin IS the kore cat, so a userland that cannot open a tarball wants them here. all
-# three cmd modules leak their mains off a BODYLESS letrec (the trailing `_ (pins ..)`),
-# which is the whole of how the registry's cite reaches them -- drop the `_` and the
-# verb falls through to kore's usage screen, silently and with a 2.
+# the cmd modules leak their mains off a bodyless letrec (the trailing `_ (pins ..)`), which
+# is how the registry's cite reaches them; without it the verb is kore's usage, exit 2
 printf 'alpha\nbeta\ngamma\n' > "$ho/.arc1"
 korerun gzip -c < "$ho/.arc1" > "$ho/.arc1.gz" || fail "kore gzip"
 korerun gunzip < "$ho/.arc1.gz" > "$o" || fail "kore gunzip"
 cmp -s "$ho/.arc1" "$o" || fail "kore gzip | gunzip round trip"
 korerun zcat "$ho/.arc1.gz" > "$o" 2>/dev/null || fail "kore zcat"
 cmp -s "$ho/.arc1" "$o" || fail "kore zcat"
-# -v is gzip's own: the shared door answers --help and --version in their long spelling
-# alone, so -v reports the ratio on err and the file it replaced, and compresses
+# -v is gzip's own (the shared door takes only --help/--version long): the ratio on err, and compresses
 cp "$ho/.arc1" "$ho/.arcv"
 korerun gzip -v "$ho/.arcv" 2> "$ho/.arcv.say" || fail "kore gzip -v"
 grep -q 'replaced with' "$ho/.arcv.say" || fail "gzip -v was answered as --version"
 korerun gunzip "$ho/.arcv.gz" || fail "kore gunzip of gzip -v"
 cmp -s "$ho/.arc1" "$ho/.arcv" || fail "gzip -v did not compress"
-# gunzip streams: members that follow are read on, bytes behind the last that are no member
-# are a warning with the output whole, a wrong crc is an error that takes a file's partial
-# output away and keeps the .gz, and -t reads it all and writes nothing
+# gunzip: following members read on, trailing junk a warning with the output whole, a bad
+# crc an error that drops the partial output and keeps the .gz, -t writes nothing
 printf 'delta\n' > "$ho/.arc2"; korerun gzip -c < "$ho/.arc2" > "$ho/.arc2.gz"
 cat "$ho/.arc1.gz" "$ho/.arc2.gz" | korerun gunzip > "$o" || fail "kore gunzip of two members"
 cat "$ho/.arc1" "$ho/.arc2" | cmp -s - "$o" || fail "kore gunzip of two members: not both"
@@ -37,7 +32,7 @@ rm -f "$ho/.arcx"; korerun gunzip "$ho/.arcx.gz" 2> "$g"; r=$?
 korerun gunzip -t "$ho/.arc1.gz" > "$o" || fail "kore gunzip -t"
 [ ! -s "$o" ] && [ -e "$ho/.arc1.gz" ] || fail "kore gunzip -t wrote or removed"
 korerun gunzip -t "$ho/.arcx.gz" 2> /dev/null && fail "kore gunzip -t passed a wrong crc"
-# -9 is the harder coder: never longer than the default, and gzip's own gunzip reads it
+# -9: never longer than the default, and gzip's gunzip reads it
 dd if="$K" of="$ho/.arc9" bs=1024 count=300 2>/dev/null
 korerun gzip -c "$ho/.arc9" > "$ho/.arc96.gz"; korerun gzip -9 -c "$ho/.arc9" > "$ho/.arc99.gz"
 [ "$(wc -c < "$ho/.arc99.gz")" -le "$(wc -c < "$ho/.arc96.gz")" ] || fail "kore gzip -9 is longer than the default"
@@ -56,12 +51,10 @@ if command -v gzip >/dev/null 2>&1; then
   gunzip -c "$ho/.arc1.gz" > "$o" 2>/dev/null || fail "GNU gunzip of kore's gzip"
   cmp -s "$ho/.arc1" "$o" || fail "GNU gunzip of kore's gzip"
 fi
-# tar and cpio: that the verb RESOLVES is the thing this file can go wrong about --
-# each has its own gate for the format. a missing row prints kore's usage, so the
-# check is that the answer is the listing and not the screen.
+# tar and cpio: the verb resolves (each format has its own gate); a missing row prints usage
 rm -rf "$ho/.arcd"; mkdir -p "$ho/.arcd/sub"
 printf 'x\n' > "$ho/.arcd/one.txt"; printf 'y\n' > "$ho/.arcd/sub/two.txt"
-# the cd'd subshells want $K, the ABSOLUTE love: korerun's $m is relative to $PWD
+# the cd'd subshells want $K, the absolute love
 ( cd "$ho" && "$K" kore tar czf .arc.tgz .arcd ) || fail "kore tar czf"
 korerun tar tzf "$ho/.arc.tgz" > "$o" 2>&1 || fail "kore tar tzf"
 korerun tar tvzf "$ho/.arc.tgz" | grep -q ' 2 .*\.arcd/one\.txt$' || fail "kore tar tvzf: the size off the header"
@@ -72,9 +65,8 @@ grep -q 'one\.txt' "$o" || fail "kore tar: the verb fell through to the usage sc
 ( cd "$ho" && "$K" kore find .arcd | "$K" kore cpio -o --quiet > .arc.cpio ) || fail "kore cpio -o"
 korerun cpio -t < "$ho/.arc.cpio" > "$o" 2>/dev/null || fail "kore cpio -t"
 grep -q 'one\.txt' "$o" || fail "kore cpio: the verb fell through to the usage screen"
-# xz: the round trip, the empty stream (32 bytes, no block), each check, a torn stream
-# refused as xz refuses it, and both directions against xz-utils where it is there --
-# its streams read here whatever the preset, ours read there, and .lzma both ways in
+# xz: round trip, the empty stream (32 bytes, no block), each check, a torn stream refused
+# as xz does, and both directions against xz-utils where present, .lzma too
 korerun xz -c < "$ho/.arc1" > "$ho/.arc1.xz" || fail "kore xz"
 korerun unxz -c < "$ho/.arc1.xz" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore xz | unxz round trip"
 : > "$ho/.arc0"; korerun xz -c "$ho/.arc0" > "$ho/.arc0.xz"
@@ -91,7 +83,7 @@ grep -q 'Unexpected end of input' "$ho/.arct.say" || fail "kore xz: a torn strea
 cp "$ho/.arc1" "$ho/.arcx"; korerun xz "$ho/.arcx"; korerun xz "$ho/.arcx.xz" 2>/dev/null; r=$?
 [ $r -eq 2 ] || fail "kore xz: a .xz name is a warning, not a second layer (rc $r)"
 korerun unxz "$ho/.arcx.xz"; cmp -s "$ho/.arc1" "$ho/.arcx" || fail "kore unxz in place"
-# ..and a binary big enough to cross LZMA2's chunk bounds
+# ..and a binary crossing lzma2's chunk bounds
 dd if="$K" of="$ho/.arcb" bs=1024 count=600 2>/dev/null
 korerun xz -c "$ho/.arcb" | korerun xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore xz round trip, 600 KiB"
 if command -v xz >/dev/null 2>&1; then
@@ -100,7 +92,7 @@ if command -v xz >/dev/null 2>&1; then
     korerun xz -dc "$ho/.arcg.xz" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore unxz of xz $p"
   done
   xz -dc "$ho/.arc1.xz" > "$o" 2>/dev/null; cmp -s "$ho/.arc1" "$o" || fail "xz -d of kore's xz"
-  # blocks with their sizes in the header (xz -T2 --block-size), and noise LZMA2 stores whole
+  # blocks with sizes in the header (xz -T2 --block-size), and noise lzma2 stores whole
   xz -T2 --block-size=100000 -c "$ho/.arcb" > "$ho/.arcm.xz"
   korerun xz -dc "$ho/.arcm.xz" > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore unxz of xz's blocks"
   head -c 300000 /dev/urandom > "$ho/.arcr"; xz -c "$ho/.arcr" > "$ho/.arcr.xz"
@@ -108,7 +100,7 @@ if command -v xz >/dev/null 2>&1; then
   xz -t "$ho/.arc0.xz" || fail "xz -t of kore's empty stream"
   korerun xz -c "$ho/.arcb" | xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "xz -d of kore's xz, 600 KiB"
   xz -c "$ho/.arcb" | korerun xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore unxz of xz's, 600 KiB"
-  # ..and past the dictionary (-0's is 256 KiB): a window that slides keeps the position bits
+  # ..and past -0's 256 KiB dictionary: a sliding window keeps the position bits
   cat src/love/*.c src/apps/*.l src/apps/*/*.l | head -c 3000000 > "$ho/.arcw"
   xz -0 -T1 -c "$ho/.arcw" | korerun xz -dc > "$o"; cmp -s "$ho/.arcw" "$o" || fail "kore unxz of xz -0 past its dictionary"
   cat "$ho/.arcg.xz" "$ho/.arc1.xz" > "$ho/.arcs.xz"
@@ -121,9 +113,8 @@ if command -v xz >/dev/null 2>&1; then
   [ $r -eq 1 ] || fail "kore lzcat of a torn .lzma (rc $r)"
 fi
 hv "xz --help" '^xz -- the' korerun xz --help
-# bzip2: the round trip, the empty stream (14 bytes), a torn one and a stranger refused
-# with bzip2's statuses, tar's j, and both directions against bzip2 itself where it is
-# there -- the 600 KiB binary crosses a 100k block at -1
+# bzip2: round trip, the empty stream (14 bytes), torn and foreign streams with bzip2's
+# statuses, tar's j, both directions against bzip2 where present; 600 KiB crosses a block at -1
 korerun bzip2 -c < "$ho/.arc1" > "$ho/.arc1.bz2" || fail "kore bzip2"
 korerun bunzip2 -c < "$ho/.arc1.bz2" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore bzip2 | bunzip2 round trip"
 korerun bzip2 -c "$ho/.arc0" > "$ho/.arc0.bz2"
@@ -208,8 +199,8 @@ if command -v zstd >/dev/null 2>&1; then
   korerun zstdcat "$ho/.arcs.zst" > "$o"; cmp -s "$g" "$o" || fail "kore zstdcat of two frames"
 fi
 hv "zstd --help" '^zstd -- zstandard' korerun zstd --help
-# tar's spelling beyond the bundled key: dashed letters, -C, members, f - both ways, J,
-# the codec sniffed on a read that names none, --strip-components and -O
+# tar beyond the bundled key: dashed letters, -C, members, f - both ways, J, a sniffed codec,
+# --strip-components, -O
 T=$HO/.arctar; rm -rf "$T"; mkdir -p "$T/o"
 korerun tar -cJf "$T/a.txz" -C "$ho" .arcd || fail "kore tar -cJf -C"
 korerun tar tf "$T/a.txz" > "$o"; grep -q '^\.arcd/sub/two\.txt$' "$o" || fail "kore tar: a sniffed xz listing"
@@ -225,8 +216,7 @@ if command -v tar >/dev/null 2>&1 && command -v xz >/dev/null 2>&1; then
   tar cJf "$T/g.txz" -C "$ho" .arcd && korerun tar tf "$T/g.txz" > "$o"
   grep -q '^\.arcd/one\.txt$' "$o" || fail "kore tar: GNU's xz tarball, sniffed"
 fi
-# the coders read flags in gnu order (post.l's uoptp): a flag may follow a file, the later
-# of two levels or directions wins, and a bad flag names itself
+# the coders read flags in gnu order: a flag after a file, the later of two wins, a bad one named
 F=$HO/.arcflag; rm -rf "$F"; mkdir -p "$F"; cp "$ho/.arc1" "$F/a"; cp "$ho/.arc1" "$F/b"
 korerun gzip "$F/a" -k || fail "kore gzip FILE -k"
 [ -f "$F/a" ] && [ -f "$F/a.gz" ] || fail "kore gzip: -k after the file was not read"
@@ -246,9 +236,8 @@ hv "bzip2 -V" '^bzip2 / love ' korerun bzip2 -V
 korerun cpio -t --file="$F/c.cpio" > "$o" 2>/dev/null; grep -q '\.arc1' "$o" || fail "kore cpio --file=F"
 korerun cpio --format=odc -t < "$F/c.cpio" 2> "$o" && fail "kore cpio --format=odc was taken"
 grep -q 'format odc is not here' "$o" || fail "kore cpio --format=odc: the refusal"
-# a hostile archive stays under the root: a ".." member is refused, a leading / comes
-# off, a symlink laid a member ago is neither written through nor chmod'ed through nor
-# walked through, and a set-id bit is not laid. both wires, the same members.
+# a hostile archive stays under the root: ".." refused, a leading / dropped, a symlink member
+# never written, chmod'ed or walked through, no set-id bit. both wires
 E=$HO/.arcevil; rm -rf "$E"; mkdir -p "$E/tx" "$E/cx" "$E/out" "$E/tdir"
 printf 'orig\n' > "$E/target"; chmod 600 "$E/target"; chmod 700 "$E/tdir"
 cat > "$E/mk.l" <<EOF
@@ -303,17 +292,15 @@ evil tar "$E/tx"
 [ $r -eq 1 ] || fail "kore cpio: a hostile archive (rc $r)"
 grep -q "contains '..'" "$o" || fail "kore cpio: a '..' member not named"
 evil cpio "$E/cx"
-# an output past 1 GiB is refused with a word where it would land in memory, not grown into
-# the heap: 1100 MiB of zeros, a few MiB packed, through each decoder where the system coder
-# is here to pack it. gunzip streams to its port instead, all of it, under a 64 MiB heap
+# an output past 1 GiB is refused, not grown into the heap: 1100 MiB of zeros through each
+# decoder the system can pack for; gunzip streams to its port under a 64 MiB heap
 B=$HO/.arcbig; rm -rf "$B"; mkdir -p "$B"
 big() { dd if=/dev/zero bs=1048576 count=1100 2>/dev/null | "$@"; }
 if command -v gzip >/dev/null 2>&1; then
   big gzip -1 > "$B/z.gz"
   LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore gunzip -c "$B/z.gz" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore gunzip of 1100 MiB did not stream: $(cat "$g") bytes"; }
-  # ..and so does tar: zeros are an archive that ends at its first block, and the rest of
-  # the gzip stream is read to its crc all the same
+  # ..and tar: zeros end the archive at the first block, the rest still read to its crc
   LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar tzf "$B/z.gz" > "$g" 2> "$o"; r=$?
   [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tzf of 1100 MiB of zeros did not stream (rc $r)"; }
   # a member bigger than the heap is poured to its file: 300 MiB under 64 MiB
@@ -334,7 +321,7 @@ if command -v gzip >/dev/null 2>&1; then
   LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar xzf "$B/big.tgz" -C "$B/x" 2> "$o" || { cat "$o"; fail "kore tar xzf of a 300 MiB member did not stream"; }
   [ "$(wc -c < "$B/x/t/big" | tr -d ' ')" = 314572800 ] && [ "$(cat "$B/x/t/small")" = tail ] \
     || fail "kore tar xzf of a 300 MiB member: the files are not whole"
-  # ..and cpio -i the same, off an archive the system cpio packs
+  # ..and cpio -i, off an archive the system cpio packs
   if command -v cpio >/dev/null 2>&1; then
     ( cd "$B/x" && find t | cpio -o -H newc --quiet > "$B/big.cpio" ) || fail "cpio -o of a 300 MiB member"
     mkdir -p "$B/c"
@@ -351,7 +338,7 @@ if command -v xz >/dev/null 2>&1; then
   big xz --format=lzma -0 > "$B/z.lzma"
   LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore unlzma -c "$B/z.lzma" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore unlzma of a sizeless 1100 MiB did not stream: $(cat "$g") bytes"; }
-  # .xz streams a chunk at a time under a 64 MiB heap, through unxz and tar J alike
+  # .xz streams a chunk at a time under a 64 MiB heap, through unxz and tar J
   big xz -0 -T1 > "$B/z.xz"
   LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore unxz -c "$B/z.xz" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore unxz of 1100 MiB did not stream: $(cat "$g") bytes"; }
@@ -359,7 +346,7 @@ if command -v xz >/dev/null 2>&1; then
   [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tJf of 1100 MiB of zeros did not stream (rc $r)"; }
 fi
 if command -v bzip2 >/dev/null 2>&1; then
-  # .bz2 a block at a time, through bunzip2 and tar j alike
+  # .bz2 a block at a time, through bunzip2 and tar j
   big bzip2 -1 > "$B/z.bz2"
   LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore bunzip2 -c "$B/z.bz2" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore bunzip2 of 1100 MiB did not stream: $(cat "$g") bytes"; }

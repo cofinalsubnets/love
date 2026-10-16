@@ -317,12 +317,16 @@ struct g {
  // what a native reads off g instead of carrying: the kind sentinels and callout drives are
  // addresses of this binary, so a blob holding one could not ride an image. ini fills it.
  word reach[12];
+ intptr_t fair;   // right past reach, where the glaze reads it: native code's countdown, a loop
+                  // step or a call takes one, and at 0 it refills
+ uintptr_t ticks; // ..and counts the refills, with the vm's fairness yields: work in 64-step units
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied
  // the remembered set, the whole write barrier: old cells that took a young pointer,
  // rescanned by the next minor. any rem_miss forces the next collection major (force sets one).
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by LvRemCap, the fixed capacity
+ uint64_t child_ign;                      // bit n: signal n stays ignored in a spawned child (a shell's trap '')
  int8_t lean;                             // grow-stickiness streak; a grow needs lean >= 2
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
@@ -341,10 +345,12 @@ struct g {
    n_resize,                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
    budget,                     // total cap in words (minor + 2*major), 0 = unbounded; by appel's
                                             // rule the nursery gets what the major pool leaves
-   minor0, major0, ratio;         // nursery floor, major grow/shrink step, copy-overhead setpoint;
+   minor0, major0, ratio,         // nursery floor, major grow/shrink step, copy-overhead setpoint;
                                           // seeded at ini, moved by `tune`. untraced: a bake drops them.
+   push_gc;                       // a law's: the push this many pushes on collects, 0 none (guts' push-gc)
  uintptr_t cbase, croom;          // a compile's outermost C frame (ev.c's c0), 0 outside one, and the stack it may take
  uintptr_t ask;                   // the words the collector was asked for while it works: an oom's first datum
+ struct pool *pool;               // the threads C kernels share out over (pool.c), made at the first ask
  union {
   intptr_t v0;
   struct {
@@ -553,6 +559,9 @@ intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t)
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),     // ..l/bz2.c
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);  // ..l/xz.c
 uint32_t crc32(unsigned char const*, uintptr_t);                                    // ..l/hash.c
+// the thread pool (src/love/pool.c): fn(ctx, i) for chunks 0..n-1, C kernels only
+void par_run(struct g*, intptr_t, void (*)(void*, intptr_t), void*);
+intptr_t par_width(struct g*, intptr_t);
 // the carried source, a container src/love/archive/srctree.h reads
 extern unsigned char const srctree[];
 extern uintptr_t const srctree_len;
@@ -615,7 +624,7 @@ struct image_opt { uintptr_t chunk; uint64_t const *hot; uintptr_t nhot; };
 void *image_save2(struct g*, uintptr_t *outlen, struct image_bad*, struct image_opt const*);
 struct g
  *love_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session; 2: and the image may wake lazily
-int image_why(void const *buf, uintptr_t len);   // a header refused: 0 no, 1 another format, 2 another binary's, 3 other C
+int image_why(void const *buf, uintptr_t len);   // a header refused: 0 no, 1 another format, 2 another binary's, 3 other C, 4 damaged
 uint64_t image_carried_c(void);                  // the carried C's crc and length, 0 for none
 // a lazy image's pool given up (a major's copy done, a session's end): its pages open, its state gone
 void image_drop(word const *pool);
@@ -816,6 +825,7 @@ lvm_t lvm_kcall,
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reaches them through g->reach)
  lvm_reach_offset,       // (reach-offset x): g->reach' byte offset, what the emitter's `reach` law loads from
  lvm_natp,        // (nat? f): is f a native closure -- its code in the arena
+ lvm_arena,       // (arena 0): the code arena's [mapped bumped free spans]
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
  lvm_deferfwd;    // a deferred native's code slot until its compile patches it (tablet.c)
 // the attributes are the declaration: `lvm(n)` is `love_noinline noicf _lvm(n)`, so these
@@ -898,6 +908,7 @@ intptr_t love_mint_cmp(struct g*, word, word); // -1/0/1 over two points: () < b
 // the number band's order, for arr.c's equality lane: what seats there compares by value
 bool numband(struct g*, word);            // x orders as a number (cmp_rank 2)
 intptr_t love_cmp3(struct g*, word, word);     // -1/0/1, the order sort and < share
+void love_fault_note(int, void*);              // a fault no handler owns (main.c): a stack's said so
 struct g
  *big_binop(struct g*, int vop),  // vop_add..vop_rem, packed; pops one operand
  *big_bitop(struct g*, int vop),  // vop_band..vop_bxor, two's complement; pops one operand
@@ -1240,8 +1251,10 @@ char *code_install(struct g *g, char const *src, size_t n), *code_adopt(struct g
      *code_lazy(struct g *g, size_t n, unsigned char const *z, size_t nz, unsigned char const *tab, uintptr_t nch,
                 unsigned char const *dz, size_t ndz, size_t nd, int kept);
 int code_seat(struct g *g, char const *a);
+uint64_t image_sum(void const *p, uintptr_t n, uint64_t h);   // the image's digest (snap.c)
 char *code_window(char *p);
 void code_free(struct g *g, char *code), code_fin(struct g *g);
+uintptr_t code_stat(struct g *g, int i);
 int code_in(struct g *g, uintptr_t v);
 // the instruction table (src/love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. nif_cell draws the line against a nif's run.

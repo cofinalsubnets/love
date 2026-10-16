@@ -1,11 +1,5 @@
-/* __builtin_popcount/l/ll -- the bit-count trio. The lane is the SWAR fold
- * (pairs, nibbles, then the byte counts summed by shifts), so it assumes no ISA
- * feature: x64's POPCNT is SSE4.2 and a64's is SIMD, and neither is asked for.
- *
- * The 32-bit form MASKS FIRST -- its operand is an unsigned int, and the word
- * above bit 31 may carry a wider value's garbage, which is the `wide` row.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* __builtin_popcount/l/ll, assuming no popcnt instruction. the 32-bit form masks
+ * first: bits above 31 may hold garbage (the `wide` row). each check adds 1: the exit code is the pass count. */
 
 extern int printf(const char *, ...);
 

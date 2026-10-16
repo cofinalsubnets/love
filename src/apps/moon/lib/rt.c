@@ -383,3 +383,26 @@ int32_t __aeabi_fcmple(uint32_t a, uint32_t b) { return __aeabi_dcmple(__aeabi_f
 int32_t __aeabi_fcmpge(uint32_t a, uint32_t b) { return __aeabi_dcmpge(__aeabi_f2d(a), __aeabi_f2d(b)); }
 int32_t __aeabi_fcmpgt(uint32_t a, uint32_t b) { return __aeabi_dcmpgt(__aeabi_f2d(a), __aeabi_f2d(b)); }
 int32_t __aeabi_fcmpun(uint32_t a, uint32_t b) { return __aeabi_dcmpun(__aeabi_f2d(a), __aeabi_f2d(b)); }
+
+/* the 128-bit kit on a 32-bit target (gen.l's t32w lane): the right operand rides r0-r3 as two
+ * halves, the left the caller's 16-byte cell, which aapcs lays as this call's stack arguments
+ * (mooncc binds them in place). the answer goes back into that cell, where the caller reads it */
+void __moon_m128(uint64_t rlo, uint64_t rhi, uint64_t llo, uint64_t lhi) {
+  uint64_t volatile *c = &llo;
+  uint64_t hi, lo;
+  mul64(llo, rlo, &hi, &lo);
+  c[0] = lo;
+  c[1] = hi + llo * rhi + lhi * rlo; }
+
+/* the cell's u128 by the u64 divisor in the right's low half, a bit at a time below the high
+ * word's own divide: the quotient, or the remainder (its high half 0) */
+static void dv128(uint64_t d, uint64_t lo, uint64_t hi, uint64_t volatile *c, int32_t rem) {
+  uint64_t r, qh = udivmod64(hi, d, &r), ql = 0;
+  for (int32_t i = 63; i >= 0; i--) {
+    uint64_t top = r >> 63;
+    r = r << 1 | (sr64(lo, i) & 1);
+    if (top || r >= d) r -= d, ql |= sl64(1, i); }
+  if (rem) c[0] = r, c[1] = 0;
+  else c[0] = ql, c[1] = qh; }
+void __moon_dv128(uint64_t d, uint64_t x, uint64_t lo, uint64_t hi) { (void) x; dv128(d, lo, hi, &lo, 0); }
+void __moon_rm128(uint64_t d, uint64_t x, uint64_t lo, uint64_t hi) { (void) x; dv128(d, lo, hi, &lo, 1); }

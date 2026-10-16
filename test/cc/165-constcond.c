@@ -1,17 +1,5 @@
-/* a conditional whose condition is a constant is not control flow (C11 6.6: a ?: over
- * constant operands IS an integer constant expression), and a shift count that comes out
- * of one is an immediate. both used to arrive as a branch and a join, which is a wall
- * every straight-line fold stops at -- `1 << (sizeof(uintptr_t) == 8 ? 40 : 27)` reached
- * the machine as a register shift by a value no pass could see.
- *
- * so the rows here are not "does ?: work". they are: the arm CONVERSIONS surviving the
- * fold, which is the part a naive one loses -- C types the result from BOTH arms, so a
- * live int arm beside a dead double one still yields a double; the dead arm's side
- * effects not happening and the live arm's still happening; a count constant only after
- * the fold; and a genuinely variable shift, which must stay variable.
- *
- * the float and pair conversions carry that question here; test/cc/166-condconv.c holds the
- * arithmetic ones, where the two arms meet by rank and signedness. */
+/* a ?: over a constant condition folds (6.6), and a shift count out of one is an immediate:
+ * the arms still convert by both types, the dead arm's effects never run, a variable shift stays. */
 #include <stdio.h>
 #include <stdint.h>
 

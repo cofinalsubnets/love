@@ -1,7 +1,6 @@
-/* a file-scope asm, held to gcc: gas's sections, labels and data words, the way the
- * kernel's export, initcall and tracepoint rows write them -- a `sym - .` word read back
- * as an offset to a static only the asm names, numeric labels, a pushed section, and a
- * function the asm defines. a target with no template here computes the same. */
+/* a file-scope asm, held to gcc: sections, labels and data words, a `sym - .` offset to a static
+ * only the asm names, numeric labels, a pushed section, an asm-defined function. targets without a
+ * template compute the same. */
 
 static int hits;
 static int twice(int x) { hits++; return 2 * x; }

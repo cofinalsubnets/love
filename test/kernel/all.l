@@ -21,11 +21,11 @@
 (: (feed p) (open p "r" @ q
                  (port? q ? (reads q, close q) (scare 'no-corpus-member p)))
    ; the host corpus is common.mk's `t`, held back exactly where `t` holds back --
-   ; the three front-loads and the two glaze lanes -- plus zz-fin.l, which is the summary
+   ; the three front-loads and the three glaze lanes -- plus zz-fin.l, which is the summary
    ; and rides at the foot. NOTHING ELSE: a file a seat cannot run guards itself, in its
    ; own text where the reason is readable (run.l is one whole `(? hosted ..)`), never in
    ; a roster over here that goes stale without saying so.
-   apart '("00-init.l" "spec.l" "uu.l" "glaze-x86.l" "glaze-hook.l" "zz-fin.l")
+   apart '("00-init.l" "spec.l" "uu.l" "glaze-x86.l" "glaze-hook.l" "glaze-tail.l" "zz-fin.l")
    (law? n) (#n @ k (2 < k && ".l" = snip n (k - 2) k && nelem n apart))
    host (map (n \ ("test/" + n)) (filter law? (sort (readdir "test"))))
    roster (["test/00-init.l" "test/spec.l" "test/uu.l"] + host +
@@ -36,6 +36,9 @@
             "test/kernel/sh0.l"
             "src/apps/lush.l"
             "test/kernel/sh.l"
-            "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l" "test/kernel/vecirq.l"
-            "test/zz-fin.l"])
-   (each roster feed))
+            "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l" "test/kernel/vecirq.l"])
+   ; the free list after the busiest run there is: ffalloc's walk is linear, so its length
+   ; is what says whether a fit needs more than a list
+   (frees p) (open p "r" @ q (port? q ? (slurp q @ s (close q,
+     each (filter (l \ "free-" = snip l 0 5) (split "\n" s)) (l \ puts (l + "\n"))))))
+   (each roster feed, frees "/proc/meminfo", feed "test/zz-fin.l"))

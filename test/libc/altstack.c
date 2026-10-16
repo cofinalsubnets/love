@@ -1,6 +1,6 @@
 /* an alternate signal stack, and the context a handler is handed: a fault taken on the
- * alt stack reports the faulting stack pointer out of ucontext_t's register set, where
- * gnulib's c-stack reads it to tell a stack overflow from any other fault */
+ * alt stack reports the faulting stack pointer in ucontext_t's register set, which is how
+ * a handler tells a stack overflow from any other fault */
 #define _GNU_SOURCE
 #include <signal.h>
 #include <setjmp.h>

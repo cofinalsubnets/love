@@ -2,9 +2,8 @@
 # test/kore/time.sh -- time: the three lines, the status, the ordering, 127
 . "$(dirname "$0")/common.sh"
 
-# time: the clock is the subject, so the SHAPE and the status are the check -- three
-# lines on err, seconds to two places, after the command's own output, and a real no
-# shorter than the sleep it was handed
+# the clock is the subject, so the shape and status are the check: three lines on err,
+# seconds to two places, after the command's output, real no shorter than the sleep
 korerun time -p "$K" kore sleep 1 2> "$o"; r=$?
 [ $r -eq 0 ] || fail "kore time status (exit $r)"
 [ "$(wc -l < "$o")" -eq 3 ] || fail "kore time report is not three lines"

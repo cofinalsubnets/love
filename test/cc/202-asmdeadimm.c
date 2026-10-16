@@ -1,8 +1,6 @@
-/* an "i" operand only a dead arm lays: the kernel's `__builtin_constant_p(nr) ?
- * constant_test_bit(nr) : variable_test_bit(nr)` inlined with a runtime nr, and an if (0)
- * over an asm -- gcc prunes the arm a folded test cannot take before it reads the operand.
- * and a block static's address as "i", the jump-label key a DO_ONCE lays. a ?: whose arms
- * type apart, and a dead arm a label keeps, still compile. the asm is x64's. held to gcc. */
+/* an "i" operand only a dead arm lays (`__builtin_constant_p(nr) ? .. : ..`, if (0) over an asm)
+ * is pruned before it is read; a block static's address as "i"; mistyped and labelled dead arms
+ * still compile. x64 asm. held to gcc. */
 
 #if defined(__x86_64__)
 static inline __attribute__((__always_inline__)) int cbit(long nr, const unsigned long *w) {

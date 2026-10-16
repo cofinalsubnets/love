@@ -1,12 +1,6 @@
-; --- test/net.l: a smoke test for nc's socket nifs (src/love/sock.c), linked by love0 too ---
-; a whole loopback in one process: a server task echoes a line back to a client task, the
-; two interleaving through the scheduler (get on a not-ready fd yields, poll wakes it).
-; run: cat test/00-init.l test/net.l | out/love. the two-process gate is `make nettest`.
+; --- the socket nifs over loopback in one process, server and client as tasks; host only ---
 
-; read a \n-terminated line off port p; (string ch) spells the byte, + concats.
-; EOF (get -> -1) also ends the line.
-; the nifs link on every seat, but the answers below are the OS's -- errno lanes and a
-; real loopback. skip where there is no kernel underneath (hosted, test/00-init.l).
+; a line off p, ended by \n or eof
 (? hosted (do
   (: (rdline p) (:- (go "") (go acc)
                  (see p @ (10 || -1) acc ch (go (acc + string ch)))))
@@ -18,7 +12,7 @@
    _ (test
       (lit? l)                              ; the listener is a heap port
       (hot? l))                             ; ... an opaque hot, like any fd port
-   ; server task: accept one client, echo its line back, half-close, close.
+   ; server task: accept, echo a line, half-close, close
    srv (twirl (_ \ (: c (accept l)
                       ln (rdline c)
                       (say c (ln + "\n"),
@@ -32,7 +26,7 @@
    echo (rdline c)
    _ (test
       (echo = "neko"))                      ; the round trip: what went out came back
-   ; (seal s how) returns the port (chainable); a no-op on a non-port arg.
+   ; (seal s how) answers the port; a no-op on a non-port
    _ (test
       (lit? (seal c 1)) ; returns the port
       (5 = seal 5 1))   ; misuse: returns the arg unchanged
@@ -40,9 +34,7 @@
    _ (close c)
    _ (close l))
 
-  ; --- every failure lane answers the unit (never a stray fixnum / hang) ---
-  ; a failure is a nom, and the nom says which failure: refused is not a bad
-  ; argument, and the two operator problems a () could never part now read apart.
+  ; --- every failure answers a nom that says which ---
   (: none (test-free 0)   ; a port of ours, its listener gone
      _ (test
       ('badarg = listen -1)                       ; bad port: refused up here
@@ -58,16 +50,7 @@
       ; a peer's v6 text is read whole: a second :: is no address
       (: u (bind ['udp 0]) r (send u ["1::2::3" 9] "x") (close u, 'badarg = r))))
 
-  ; --- rung 5: seal lands the write run ------------------------------------------
-  ; the bug: `seal` shuts the write half and never flushed. love.h has always
-  ; said "close/seal call it first" and only close did -- harmless while a write
-  ; delivered by blocking (the run was empty by then), a silently truncated stream
-  ; the moment the door could answer short (rung 4). kiosko's own shape is exactly
-  ; `(say c body) (seal c 1) (close c)`.
-  ; `put` is what makes this cheap: it parks bytes in the port's write run without
-  ; a drain, so two of them are enough -- no need to out-run a socket buffer the
-  ; kernel auto-tunes into the megabytes. under the bug they are shut in behind the
-  ; half-close, close's write answers epipe, and the server counts none.
+  ; --- seal lands the write run first: put parks bytes undrained, and both must cross ---
   (: pl (test-listen 0)
    port <pl
    l (pl 1)
@@ -85,13 +68,7 @@
    _ (close c)
    _ (close l))
 
-  ; --- slurp over a port that parks is linear ------------------------------------
-  ; prel's slurp used to build the charlist on the way down -- (. c (rl i)) -- so
-  ; the stack depth was the byte count. on a file that is merely deep; on a socket
-  ; every would-block parks, and a park copies the task's stack, so the cost went
-  ; quadratic in the stream and fell over somewhere past 200K. measured on the
-  ; recursive form: 40K 1.75s, 80K 7.1s, 120K 15.0s, 160K 25.6s -- textbook n².
-  ; with the accumulator it is 17/34/58/53 ms, and 4 MB lands in 1.9s.
+  ; --- slurp over a port that parks is linear: a park copies the task's stack ---
   (: pl (test-listen 0)
    port <pl
    l (pl 1)
@@ -106,13 +83,9 @@
    _ (close l)
    _ (test
       (peep got 0 0 = 160000)             ; every byte
-      (ms < 3000)))                         ; the recursive form sat here for 25 seconds
+      (ms < 3000)))
 
-  ; --- a peer that hangs up mid-response does not kill the runtime ---------------
-  ; the ordinary thing a browser does to kiosko. love ignores sigpipe now, so the
-  ; write answers "the device is gone" (writen -1) and io_wdrain lets the run go;
-  ; before, the process died on the first byte after the hangup and took every other
-  ; task with it. the console keeps the old behaviour -- see test/host/run.l.
+  ; --- a peer that hangs up mid-response does not kill the runtime: sigpipe is ignored ---
   (: pl (test-listen 0)
    port <pl
    l (pl 1)
@@ -133,9 +106,8 @@
      (close c, close s, close l,
       (test (hot? l) (hot? c) (hot? s) ('badarg = listen ['tcp "1.2.3" (test-free 0)]))))
 
-  ; --- the other families: unix streams, udp's peer, an icmp echo -----------------
-  ; one listen and one connect for every stream family: a unix one echoes the same way
-  (: path ("/tmp/.love-net-unix-" + show (getpid 0) + ".sock")   ; short: a deep cwd runs past sun_path's 108
+  ; --- the other families: unix streams, udp's peer, an icmp echo ---
+  (: path ("/tmp/.love-net-unix-" + show (getpid 0) + ".sock")   ; short, under sun_path's 108
    l (listen ['unix path])
    srv (twirl (_ \ (: c (accept l) ln (rdline c) (say c (ln + "!\n"), close c, 1))) 0)
    c (connect ['unix path])
@@ -145,8 +117,7 @@
    miss (connect ['unix (path + ".none")])
    (unlink path,
     (test (hot? l) (echo = "neko!") ('enoent = miss))))
-  ; a listen clears a stale socket at its path and nothing else: a file there stays whole
-  ; and the bind says the name is taken. short and under /tmp, clear of sun_path's 108
+  ; a listen clears a stale socket at its path, but a file there stays whole
   (: path ("/tmp/.love-net-" + show (getpid 0) + ".sock")
    _ (unlink path)
    q (open path "w") _ (say q "keep me") _ (close q)
@@ -166,16 +137,14 @@
    e (recv b)
    (close a, close b,
     (test (<>d = "ping") (<(<d) = "127.0.0.1") (<d 1 = pb) (e = [["127.0.0.1" pa] "pong"]))))
-  ; an echo to loopback over icmp, its ttl asked for. linux lets a group in
-  ; ping_group_range open this socket unprivileged; where it may not, the bind says so
+  ; an icmp echo to loopback with its ttl; unprivileged it may be refused
   (bind ['icmp 'ttl] @ p
    (nom? p ? (test ('eacces = p || 'eperm = p || 'eprotonosupport = p))
       (: _ (send p ["127.0.0.1" 0] ("\x08\x00\x00\x00\x00\x00\x00\x01" + "love"))
          d (recv p)
          (close p,
           (test (<(<d) = "127.0.0.1") (<>d 0 = 0) (snip <>d 8 12 = "love") (0 < d 2 <= 255))))))
-  ; and over icmp6 to ::1, its hop limit asked for; a host with no v6 refuses the socket,
-  ; or the send, and then there is nothing to wait for
+  ; and icmp6 to ::1; a host with no v6 refuses the socket or the send
   (bind ['icmp6 'ttl] @ p
    (nom? p ? (test ('eacces = p || 'eperm = p || 'eprotonosupport = p || 'eafnosupport = p))
       (: w (send p ["::1" 0] ("\x80\x00\x00\x00\x00\x00\x00\x01" + "love"))

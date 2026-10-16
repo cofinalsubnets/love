@@ -102,12 +102,12 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
 | openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 3's spelling) |
-| src/apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
+| src/apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either), ssh-keygen, ssh-copy-id, ssh-keyscan |
 | src/apps/gz.l, src/apps/xz.l, src/apps/bz2.l, src/apps/zstd.l, src/apps/tar.l, src/apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (src/love/compress/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (src/love/compress/bz2.c), zstd unzstd zstdcat (src/love/compress/zstd.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
-| pic.l, over png.l, jpeg.l, gif.l and webp.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, a gif played) |
+| pic.l, over png.l, jpeg.l, gif.l, webp.l, bmp.l, pnm.l and qoi.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, an animation played) |
 | net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | src/apps/lush.l | sh / lush |
 
@@ -635,11 +635,12 @@ second what RFC 8446 has every server speak.
 ## pic (src/apps/kore/pic.l)
 
 `pic` is one command with four verbs. With none, it is `pic cat` when its first input is a
-PNG, JPEG or GIF (or a flag is one of cat's, `-g`, `-w`, `-h`) and classic pic otherwise
-(below).
+picture it reads (or a flag is one of cat's, `-g`, `-w`, `-h`) and classic pic otherwise
+(below). It reads PNG, JPEG (turned upright by its EXIF orientation), GIF, WebP, BMP, ICO and
+CUR, and netpbm's PBM, PGM, PPM and PAM.
 
-`pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]` prints each picture, PNG, JPEG or GIF (a
-GIF's first frame), as wide as the terminal (or `COLS`, or 80 when there is none) and no
+`pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]` prints each picture (an animation's first
+frame), as wide as the terminal (or `COLS`, or 80 when there is none) and no
 taller than `ROWS` cells, shrunk and never enlarged. With no FILE it reads stdin, and with
 several it names each above it. `MODE` picks how:
 
@@ -661,13 +662,14 @@ when the terminal does not say). `pngcat`, `jpegcat` and `gifcat` are `pic cat`.
 as `-g` says (the modes are `pic cat`'s). In sixel and kitty's a view is sampled by nearest
 pixel, so a redraw stays quick, and 100% is a source pixel to a screen pixel. `+` and `-`
 zoom (past the fit into single pixels, and back out below it), `0` fits it again, `h` `j` `k`
-`l` or the arrows pan a quarter of the view, `n` and `p` move between files. A GIF plays at
-its own delays; `space` pauses it and `.` and `,` step a frame. The status line holds the
+`l` or the arrows pan a quarter of the view, `n` and `p` move between files. A GIF, an
+animated WebP or an APNG plays at its own delays; `space` pauses it and `.` and `,` step a frame. The status line holds the
 name, the size, the zoom and the frame. `picless`, `pngless`, `jpegless` and `gifless` are
 the same tool.
 
 `pic convert [-q QUALITY] [-t TYPE] IN OUT` writes IN as OUT's type, from its extension
-(`.png`, `.gif`, `.jpg`/`.jpeg`, `.six`/`.sixel`, `.ans`) or `-t`. `ans` is the blocks
+(`.png`, `.gif`, `.jpg`/`.jpeg`, `.webp`, `.qoi`, `.ppm`/`.pnm`, `.pam`, `.six`/`.sixel`, `.ans`) or `-t`. A PPM
+drops alpha; a PAM keeps it. A WebP is written lossless. `ans` is the blocks
 `pic cat` prints, as text 80 cells wide, for `cat` to show again. `-` is stdin for IN and stdout for
 OUT. A GIF gives its first frame, except that a file already of the type goes across as it
 is (a GIF keeps its frames), unless `-q` asks for a JPEG to be written again. A JPEG has
@@ -721,14 +723,17 @@ subscripts and where a bond meets them, bonds of each kind by angle or compass w
 pic and troff lines through. It writes the copy of groff's own chem.pic it finds beside
 groff, and `chem.pic` where there is none.
 
-The decoders: src/apps/png.l (every colour type and depth, Adam7), src/love/picture/jpeg.c (baseline and
-progressive, any sampling), src/love/picture/gif.c (LZW, interlace, transparency, and the three
+The decoders: src/apps/png.l (every colour type and depth, Adam7, APNG's frames composed by the
+spec's blend and dispose), src/love/picture/jpeg.c (baseline and progressive, any sampling, grey,
+YCbCr, and Adobe's CMYK and YCCK), src/love/picture/gif.c (LZW, interlace, transparency, and the three
 disposals across frames), src/love/picture/webp.c (lossy with its alpha plane, lossless, and an
-animation's first frame; libwebp's pixels, byte for byte). A GIF keeps at most 1000 frames and
+animation's frames; libwebp's pixels, byte for byte), src/love/picture/qoi.c (QOI). A GIF keeps at most 1000 frames and
 128 MB of them. The encoders:
 src/apps/png.l (a palette of 1 to 8 bits a pixel up to 256 colours, else RGBA; a row that
 repeats the one above filtered up, others sub), src/love/picture/jpeg.c (baseline), src/apps/gif.l (one
-frame, the palette also sixel's).
+frame, the palette also sixel's), src/love/picture/webp.c (lossless: a palette to 256 colours,
+else green subtracted and a predictor a 16x16 tile; LZ77 and a colour cache), src/love/picture/qoi.c
+(the reference encoder's bytes).
 
 ## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (src/apps/kore/net.l)
 
@@ -796,7 +801,7 @@ ICMPv6, and its TTL is the reply's hop limit. A name is looked up by `resolve6` 
 src/apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` is at most
 1452 here, one datagram on a 1500-byte link.
 
-## ssh, sshd and scp (src/apps/ssh/)
+## ssh, sshd and scp (src/apps/ssh/), and the key tools
 
 One of everything, OpenSSH's first choices: curve25519-sha256 for the exchange, ssh-ed25519
 keys, chacha20-poly1305@openssh.com both ways, public-key authentication. The client came first
@@ -829,6 +834,25 @@ receiving or `scp -f` sending, whatever `scp` the remote shell finds, OpenSSH's 
 kore's answers both, so kore to kore, OpenSSH's `scp -O` to kore and kore to OpenSSH all
 work. A received name with a slash, or `.` or `..`, is refused. Two remote hosts, or none,
 are refused by name.
+
+`ssh-keygen` makes and reads ed25519 keys in OpenSSH's own file format, and OpenSSH's
+ssh-keygen reads them, as ours reads its own: `-t ed25519` (the only type, and the default),
+`-f` the file (asked on a terminal, else `~/.ssh/id_ed25519`), `-N` the passphrase (asked twice
+when not given; a locked key is aes256-ctr under bcrypt_pbkdf, `-a` rounds, 24 by default),
+`-C` the comment (user@host by default), `-q` quiet. `-y` prints a key's public line, `-l` the
+fingerprint (`SHA256:`) of a key or of each line of an authorized_keys or known_hosts file, `-p`
+a new passphrase (`-P` the old). `-F host` prints known_hosts' lines for a host and `-R host`
+removes them, keeping the file as `.old`, plain and hashed names alike.
+
+`ssh-copy-id [-fn] [-i identity_file] [-p port] [-o option=value] [-t target_path] [user@]host`
+logs in as ssh does, with its own identity (`-o IdentityFile=` picks another: there are no
+passwords here), and appends `-i`'s public line to the far authorized_keys by a shell there,
+making the directory 700 and the file 600. A key already there is skipped; `-f` skips the
+check, `-n` only says what it would do, and `-t` names another file than `.ssh/authorized_keys`.
+
+`ssh-keyscan [-Hq] [-f file] [-p port] [-t type] host ..` dials each host, checks its key's
+signature, and prints known_hosts lines, `-H` with hashed names; each host's version line goes
+to stderr unless `-q`. Only ed25519 keys are read, so another `-t` type is skipped and said.
 
 ## ed and ex (src/apps/kore/ed.l)
 

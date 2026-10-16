@@ -7,6 +7,8 @@
 ;                                       the listen's nom when the port cannot be taken
 ;   (ssh-keywrite path seed pub comment) an unencrypted openssh-key-v1 key, 0600, and its
 ;                                       .pub beside it -> 1 | a reason string
+;   (ssh-keyout seed pub comment pass rounds)  the key file's text, locked when pass is not ""
+;   (ssh-keyfile path txt)              txt in a new file, 0600 -> 1 | a reason string
 ;   (ssh-authorized path)               the ed25519 keys authorized_keys grants
 ;   (ssh-me _)                          this process's user off /etc/passwd: [name home shell]
 ;
@@ -28,21 +30,30 @@
    ; --- keys ---
    (ssh-publine pub comment)
     ("ssh-ed25519 " + b64e (sstr "ssh-ed25519" + sstr pub) 1 + (0 < #comment ? (" " + comment) "") + "\n")
-   ; openssh-key-v1 under no cipher: the private section padded 1, 2, 3.. to the block of 8
-   (sd-keytext seed pub comment)
+   ; openssh-key-v1: the private section padded 1, 2, 3.. to the cipher's block, 8 bare, and
+   ; locked 16 under aes256-ctr, whose key and iv bcrypt_pbkdf draws from pass and a salt
+   (ssh-keyout seed pub comment pass rounds)
     (: ck (rnd 4)
+       lock (0 < #pass)
+       bs (lock ? 16 8)
        body (ck + ck + sstr "ssh-ed25519" + sstr pub + sstr (seed + pub) + sstr comment)
-       padded (body + bytes ((8 - #body % 8) % 8) (i \ i + 1))
-       raw ("openssh-key-v1" + u8 0 + sstr "none" + sstr "none" + sstr "" + u32 1
-            + sstr (sstr "ssh-ed25519" + sstr pub) + sstr padded)
+       padded (body + bytes ((bs - #body % bs) % bs) (i \ i + 1))
+       salt (rnd 16)
+       kiv (lock ? (bcrypt-pbkdf pass salt rounds 48) "")
+       head (lock ? (sstr "aes256-ctr" + sstr "bcrypt" + sstr (sstr salt + u32 rounds)) (sstr "none" + sstr "none" + sstr ""))
+       enc (lock ? (aes-ctr (aes-keys (snip kiv 0 32)) (snip kiv 32 48) padded) padded)
+       raw ("openssh-key-v1" + u8 0 + head + u32 1 + sstr (sstr "ssh-ed25519" + sstr pub) + sstr enc)
        b (b64e raw 1)
        (lines i) (#b <= i ? "" (snip b i (min #b (i + 70)) + "\n" + lines (i + 70)))
        ("-----BEGIN OPENSSH PRIVATE KEY-----\n" + lines 0 + "-----END OPENSSH PRIVATE KEY-----\n"))
-   (ssh-keywrite path seed pub comment)
+   (ssh-keyfile path txt)
     (openfd path 3 @ fd
        (? !(charm? fd) ("cannot create " + path + " (" + show fd + ")")
-          (: p (fdopen fd) _ (say p (sd-keytext seed pub comment)) _ (close p)
-             q (open (path + ".pub") "w")
+          (: p (fdopen fd) _ (say p txt) (close p, 1))))
+   (ssh-keywrite path seed pub comment)
+    (ssh-keyfile path (ssh-keyout seed pub comment "" 0) @ w
+       (? (string? w) w
+          (: q (open (path + ".pub") "w")
              (hot? q ? (say q (ssh-publine pub comment), close q) 0,
               1))))
    ; lines whose first word is the key type; a line with options ahead of its type

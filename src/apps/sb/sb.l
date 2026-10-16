@@ -1,5 +1,5 @@
-; src/apps/sb/sb.l -- svalbard: the patch-set vcs (doc/misc/sb.md the interface,
-; the seat form at the tail is the only thing that fires as a program.
+; src/apps/sb/sb.l -- svalbard, the patch-set vcs. the form at the tail is the only one
+; that runs as a program.
 (module 'sb
 (borrow 'kore)
 (borrow 'posix)
@@ -11,9 +11,7 @@
    pks {}                                                ; a store's absolute dir -> (sig ((name idx) ..))
    pkr 93                                                ; one pack idx record's bytes
    ; --- files ---
-   ; an empty file slurps to (), so `+ ""` folds it back onto the string identity and a
-   ; 0-byte file hashes honestly. the port is minded, not closed at the tail: a torn read
-   ; raises, and the close has to leave that way too or the fd sits until a major compact.
+   ; an empty file slurps to (), so `+ ""` makes it "". mind closes the port when a torn read raises
    (look p) (: q (open p "r")                                            ; (1 text) | ()
                  (? (hot? q) (mind (_ \ (: s (slurp q) [1 (s + "")])) () (_ \ close q)) ()))
    (lay p s) (: q (open p "w") (? (hot? q) (mind (_ \ (say q s, 1)) () (_ \ close q)) 0))
@@ -25,7 +23,7 @@
                              () (_ \ close q))))
 
    ; --- the store ---
-   ; a new nest's head is empty; a nest from before heads has none, and realizes its whole store
+   ; a new nest's head is empty; a nest with no head file stands at its whole store (head-in)
    (mk _) (: new !(two? (stat ".sb"))
              _ (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/z" 493, mkdir ".sb/patch" 493)
              (? new (lay ".sb/head" "()") ()))
@@ -253,7 +251,8 @@
    (sb-refuse id) (say err ("sb: patch " + (? (string? id) (sh id) (show id)) + " refused -- an id that is not a hash,"
                             + " or a path sb may not write\n"))
 
-   ; --- ignores: one rule a line in .sbignore, over the built-ins. a rule holding
+   ; --- ignores: .sbignore, a rule a line (# comments): a glob, or a path and all under it.
+   ;     igsdir are the built-in ignored dirs ---
    igsdir '(".sb" ".git" "out")
    ig-glob? (cite 'glob 'anyglob)
    ig-match (cite 'glob 'match)
@@ -378,7 +377,7 @@
              (snap+ >sn hs pid (<sn . acc)))))
 
    ; --- log: the patches newest first; * marks a tip of the head ---
-   (ins e l) (? (atom? l) [e]                                 ; insert desc by time (seat 0)
+   (ins e l) (? (atom? l) [e]                                 ; insert desc by time
               (<<l <= <e) (e . l)
               (<l . ins e >l))
    ; the lines of (time id note nhunks) entries, * for a tip of tp
@@ -402,8 +401,7 @@
        _ (log-pr es tp)
        _ (: (pf m) (? (two? m)
                       (: e <m t <>e
-                         ; the psid: the name of this release's head DAG state.
-                         ; a banked ref stores its tips sorted, so the sort is a no-op here
+                         ; a bank: its name, psid and tip count
                          _ (puts ("  " + <e + "  " + sh (psid t) + "  "
                                   + show #t + " tip" + (? (1 = tally t) "" "s") + "\n"))
                          (pf >m)) ())
@@ -426,14 +424,12 @@
               (pr >m (n + 1))))
        (pr hunks 0))
 
-   ; --- sync: union a peer nest's store. blobs + patches are immutable and
+   ; --- sync: exchange stores with a peer nest ---
    (dirty _) #(wscan (snap ()))
-   ; one direction of the store exchange: the patches `to` lacks, walked back from the
-   ; source's tips through their deps. a store holds every patch's deps, so the walk stops
-   ; at a patch `to` already holds, and lays each patch after its deps and blobs, which keeps
-   ; that so: the cost goes with what differs, never with the store. pat and blb get a store
-   ; object by name, (1 text) | (); every one is checked against its name on the way.
-   ; -> {'laid 'bad 'read 'blobs 'ok}: read the patches fetched, ok when every tip arrived whole
+   ; one direction of the exchange: the patches `to` lacks, walked from the source's tips down
+   ; the deps. a store holds every patch's deps, so the walk stops at one `to` holds; each patch
+   ; lays after its deps and blobs to keep that so. pat and blb fetch by name, (1 text) | (),
+   ; each checked against its name. -> {'laid 'bad 'read 'blobs 'ok}, ok when every tip arrived
    (gap pat blb tips to)
     (: tp (to + "/.sb/patch/")
        seen {} n {'laid 0 'bad 0 'read 0 'blobs 0 'ids ()}
@@ -510,12 +506,10 @@
         (map (p \ (: e (cf p) [p <e <>e])) (sort (keys cf)))])
 
    ; --- the derive. a set's tree is the fold of its patches ordered by (depth, id), depth the
-   ;     longest dep chain beneath a patch, and each path folds on its own. the key is the
-   ;     patch's own, so a set derived once is a base the rest folds onto: a path the rest
-   ;     writes after the base's last writer of it takes the rest's hunks, and a path it writes
-   ;     under one folds again from its writers. .sb/derive/PSID keeps a derived set: its tips,
-   ;     members and depths, snap, conflicts, and each path's last writer and writers, a line
-   ;     apiece; settle keeps the head's, the one before it and the newest four banks' ---
+   ;     longest dep chain beneath, each path on its own. the key is the patch's own, so a
+   ;     derived set is a base the rest folds onto; a path the rest writes under the base's last
+   ;     writer of it refolds from its writers. .sb/derive/PSID keeps a derived set: tips,
+   ;     members and depths, snap, conflicts, each path's last writer and writers ---
    (dv-new _) {'tips () 'n 0 'raw "" 'probes 0 'mem {} 'add {} 'snap {} 'cf {} 'last {} 'hist {} 'new {} 'refold 0}
    (dv-path tp) (".sb/derive/" + psid tp)
    (dv-key< a b) (<a < <b || (<a = <b && a 1 < b 1))
@@ -748,15 +742,9 @@
                  _ (say err "sb: pulled only -- an http remote takes no push\n")
                  (? (<r && (0 = nleft) && (0 = nref)) <st 0))))))
 
-   ; sync is the exchange, and an exchange has two ends: pull what the peer has
-   ; that we lack, push what we have that it lacks, then settle both nests on the
-   ; union of their heads. the derive is a pure function of the patch set, so two
-   ; nests over one union land on the same snap -- after a sync the trees are
-   ; identical, which is the whole "distribution == cloning" claim made good. the
-   ; peer's half needs its tree clean and writable; when it is not we still pull
-   ; (always safe) and say so, leaving the peer's store untouched rather than
-   ; half-fed. --keep only deposits: both stores fill and neither head moves, so a
-   ; hub can hold work it has not taken
+   ; sync: pull what the peer has, push what it lacks, settle both on the union of the heads;
+   ; the derive is a pure function of the set, so both trees end identical. a dirty peer is
+   ; only pulled from. keep (a deposit) fills both stores and moves neither head
    (sb-sync peer) (sync-with peer 0)
    (sb-deposit peer) (sync-with peer 1)
    (sync-with peer keep)
@@ -773,8 +761,7 @@
                  ; the push: only onto a clean peer, and only if every write lands
                  go (pd @ 0 (gap (dir-pat ".") (dir-blb ".") (tips ()) peer) {'laid 0 'bad 0 'blobs 0})
                  pushed (0 = pd && 0 = go 'bad)
-                 ; the refs travel too -- a release is only "the unit you
-                 ; propagate" if the NAME reaches the other nest with it
+                 ; the refs travel too
                  theirs (form (peer + "/.sb/refs"))
                  ru (refadd (refs ()) theirs 1)
                  _ (two? <ru ? (lay ".sb/refs" (show <ru)))
@@ -811,7 +798,7 @@
                     (say err "sb: a banked name is immutable\n"))
                  (? (pushed && 0 = nleft && 0 = nref) <st 0))
 
-   ; --- apply: realize a dep-consistent subset of the store into the working
+   ; --- apply: realize a dep-consistent subset of the store in the tree ---
    (idpfx pfx)                                                   ; one patch from a prefix | ()
     (: n #pfx
        hits (filter (i \ #i = 64 && snip i 0 n = pfx) (readdir ".sb/patch"))
@@ -896,10 +883,11 @@
                                            (: _ (say err ("sb: missing blob " + h + "\n")) 0))))))
               1 (two? hs ? hs (map (e \ sd-h <>e) (snap ())))))
 
-   ; --- bank: freeze the current head under a NAME -- an immutable release, the
+   ; --- bank: freeze the head's tip set under an immutable NAME ---
    (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
    (refof nm) (refof-in (refs ()) nm)
-   ; --- the ref exchange. a ref is a single file, not a content-addressed one,
+   ; --- the ref exchange: extra's names join base; one banked to a different head is a clash
+   ;     -> [refs clashes] ---
    (refadd base extra loud)                                     ; loud: only one side tells it
     (: (go m acc n)
         (? (atom? m) [(sort acc) n]
@@ -981,11 +969,9 @@
                     (: r (sb-record ((? (two? >args) <>args "undo ") + sh id))
                        (? r 1 (puts "sb: nothing to undo -- that patch is already lifted\n", 0))))))))))
 
-; --- ledgers: a named value that moves only by compare-and-swap. a banked name never moves;
-;     a ledger is the one thing here that does, and even it only grows: .sb/ledger/NAME is
-;     a line per entry, `hash time who`, the last one standing, each hash a blob in the store.
-;     a ledger stays in its nest -- sync carries patches, blobs and refs, never a ledger --
-;     so sessions that share one name the same nest (sb -C DIR). ---
+; --- ledgers: a named value that moves only by compare-and-swap. .sb/ledger/NAME grows a line
+;     per entry, `hash time who`, the last one standing, each hash a blob in the store. sync
+;     carries only signed queues, so plain ledgers stay in their nest ---
 (:
    (lg-path nm) (".sb/ledger/" + nm)
    (lg-lock? nm) (: n #nm (4 < n && snip nm (n - 5) n = ".lock"))
@@ -1084,8 +1070,7 @@
                              (two? st && (61440 & <>>st) = 16384) (lg-names p (pre + e + "/"))
                              [(pre + e)])))
                   (sort es))))
-   ; the verb: no NAME lists them; NAME says what it holds; --id its hash (or none); --log
-   ; every entry; --was OLD FILE moves it. 1 when it took, 0 when not, 2 when malformed
+   ; the verb: 1 when it took, 0 when not, 2 when malformed
    (sb-ledger args)
     (: nm (? (two? args) <args "") r (? (two? args) >args ())
        (? (#nm = 0) (: _ (map (\ n (puts (n + " " + lg-now n + "\n"))) (lg-names ".sb/ledger" "")) 1)
@@ -1100,10 +1085,8 @@
           2)))                                             ; malformed: the dispatcher says the usage
 
 ; --- ssh: sync with a nest on another box. the far side is `sb serve DIR` on stdio, each
-;     word framed as a decimal length, a newline and the bytes. the near side drives: it
-;     learns what the far store lacks by asking, a level of its tip walk a round, and the
-;     far side walks its own tips down to what the near store holds, so the cost goes with
-;     what differs. the far nest is held for the whole talk ---
+;     word framed as a decimal length, a newline and the bytes. the near side asks a level of
+;     its tip walk a round; the far nest is held for the whole talk ---
 (:
    (ssh? p) (6 < #p && snip p 0 6 = "ssh://")
    (ssh-env k d) (: v (getenv k) (? (string? v && 0 < #v) v d))
@@ -1583,7 +1566,7 @@ usage: sb VERB ..
   ledger NAME --text            the text a signed queue's head names
   -C DIR VERB ..  the verb in the nest at DIR
 "
-   ; the same page two ways: asked for, it is the answer; reached by a miss, a complaint
+   ; usage on stderr, exit 2
    (usage _) (say err sb-usage, uleave 2)
    ; a verb answers its status: 0, or 1 when it did not take
    (sb-main as) (atom? as ? (usage ())
@@ -1623,14 +1606,8 @@ usage: sb VERB ..
            "diff" (0 < sb-diff ())
            (usage ()))))
 
-; the seat (cook.l's shape): fire sb-main, and quit with its answer, iff this file -- or the installed
-; `sb` binary -- sits in the program seat of the real command line (the
-; positional program or a -l preload), taking the args after the seat. cmdline
-; is the full C argv, never rebound, so the read is the same in both load orders
-; and the cat stays quiet under any other name -- which is why the gate can cat
-; this file and have nothing fire. sb-main reads bare: the module's layer holds
-; this file's binds and is still the head when this form compiles. body-having:
-; the seat leaks nothing.
+; run sb-main and quit with its answer only when `sb` or sb.l is the program on the command
+; line (fire answers () otherwise), so a cat of this file stays quiet
 (: door (udoor 'sb (urun sb-main) sb-usage 1 1)
    s ((cite 'verbs 'enlist) 'sb door (),
       cite 'verbs 'fire ["sb" "sb.l"])

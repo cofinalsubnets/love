@@ -1,22 +1,9 @@
 #!/bin/sh
-# test/gate/raw-bake.sh -- the WAKE half of the gcc-free image cycle. mooncc could
-# never bake before (an EXEC's low load address collides the codec's pointer/fixnum
-# index range); a -pie ET_DYN loads high and clears it. Reuses test_raw's objects,
-# links them PIE, bakes the post-warm image into the binary's OWN .image (src/love/image.c
-# self-patch), then WAKES that image and runs the corpus over the woken heap. This is
-# the ONLY gate that exercises love_image_load on a mooncc binary -- the seam where an
-# odd-addressed lvm_* ap mis-encodes as a fixnum, invisible to every egg-boot gate.
-#
-# The SPLIT: make owns the dependency graph and the file lists; this file owns the
-# PROCEDURE, which is why it is a file: a make
-# recipe would carry the same steps \-joined into one line with $$ throughout.
-#
-# NOT set -e: the corpus run captures $? to report the exit code in its own failure
-# message, and errexit would abort before the capture (that is also what rules out
-# .SHELLFLAGS := -ec for the tree as a whole -- 96 sites do this).
-#
+# test/gate/raw-bake.sh -- test_raw's objects linked -pie by mooncc (high load, clear of
+# the fixnum range), baked into the binary's own .image, woken, and the corpus run over it
 # usage: raw-bake.sh OUTDIR CORPUS.l ..
 . test/gate/skip.sh
+. test/gate/cclib.sh
 set -u
 
 ho=$1
@@ -27,8 +14,7 @@ if [ "$arch" != x86_64 ]; then                 # the kernel's spelling, not the 
   gate_skip "test_raw_bake: x86-64 only, skipped on $arch"
 fi
 
-fail() { echo "FAIL test_raw_bake: $*" >&2; exit 1; }
-moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
+name=test_raw_bake
 
 d=$ho/raw
 ls "$d"/*.o >/dev/null 2>&1 || fail "no objects in $d -- run test_raw first"
@@ -36,15 +22,14 @@ ls "$d"/*.o >/dev/null 2>&1 || fail "no objects in $d -- run test_raw first"
 echo "BAKE-WAKE $ho/love-raw-pie"
 moonc -pie "$d"/*.o -o "$ho/love-raw-pie" || fail "-pie link love-raw-pie"
 
-# bake a COPY, so the un-baked pie binary stays around
+# bake a copy: the unbaked pie binary stays
 cp "$ho/love-raw-pie" "$ho/love-raw-baked"
 "$ho/love-raw-baked" bake >/dev/null 2>&1 \
   || fail "bake (the mooncc-PIE binary refused to snapshot its own image)"
 
-# the corpus runs CONCATENATED in one global scope
+# the corpus runs concatenated in one scope
 out=$ho/.test_raw_bake.out
-# corpus as a FILE, stdin closed -- test_host's reason (test/test.mk): the corpus
-# TESTS stdin, and `reads` no longer drains it ahead of the first form.
+# the corpus as a file, stdin closed: the corpus tests stdin
 cat "$@" > "$ho/.corpus-baked.l"
 "$ho/love-raw-baked" "$ho/.corpus-baked.l" </dev/null > "$out" 2>&1
 s=$?

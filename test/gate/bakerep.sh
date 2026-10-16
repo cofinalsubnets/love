@@ -85,13 +85,18 @@ if [ "$praw" != "$ho/love.raw" ]; then
   # ..and each wakes the other's: the tables and the C are one tree's
   out=$(env -u LOVE_NO_IMAGE "$praw" wake "$w/ir" -e '(puts "woke")' 2>&1)
   case $out in *woke*) ;; *) fail "prof_raw will not wake love.raw's image: [$out]" ;; esac
-  # ..and a header naming other tables (bytes 32..39, fp) or other C (48..55, src) is refused, saying which
-  for f in 32:"tables differ" 48:"other C"; do
+  # ..and a header naming other tables (bytes 32..39, fp) or other C (48..55, src), or with another
+  # digest (80..87, sum), is refused, saying which
+  for f in 32:"tables differ" 48:"other C" 80:"damaged"; do
     o=${f%%:*}
     { head -c $o "$w/ir"; printf 'XXXXXXXX'; tail -c +$((o + 9)) "$w/ir"; } > "$w/ix"
     out=$("$praw" wake "$w/ix" -e '(puts "woke")' 2>&1)
     case $out in *"${f#*:}"*) ;; *) fail "a header with byte $o moved wakes or says the wrong thing: [$out]" ;; esac
   done
+  # ..and an image of the format before the digests (magic ..07) is another format
+  { head -c 7 "$w/ir"; printf 7; tail -c +9 "$w/ir"; } > "$w/ix"
+  out=$("$praw" wake "$w/ix" -e '(puts "woke")' 2>&1)
+  case $out in *"another format"*) ;; *) fail "an ..07 image wakes or says the wrong thing: [$out]" ;; esac
 fi
 
 # ..and the thing still has to WAKE: a bake that is reproducible and dead passes everything

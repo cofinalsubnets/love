@@ -146,7 +146,7 @@
                       (loop rest name watching lim (<ins . rets) flagged total)
                       (loop rest name watching lim rets flagged total)))))
           (close name watching rets flagged . total)))
-    ls 0 0 BIG 0 0 0))
+    ls 0 0 BIG () () 0))
 
 ; --- report helpers --------------------------------------------------
 (borrow 'path)

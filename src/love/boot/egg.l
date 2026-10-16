@@ -9,7 +9,9 @@
  ; global read. compiled code holds its own references, so once the boot has compiled
  ; the module keeps only the doors a run still asks for by name; the rest -- the cell
  ; doors, the stack and hook doors, the compiler's walkers over them -- leave for good.
- ; nomop leaves every one of them on the book and in the module.
+ ; nomop leaves every one of them on the book and in the module. the module fills here;
+ ; the names leave in `mop`, which a start that loads more first (main.c: the glaze, which
+ ; cites ev.l's walkers out of guts) finds under latemop and calls once.
  (ev '(:
    ; keep this list up to date
    m '(cellread seal-hook stack setstack lib enter leave gv trim peek poke pick place seek stem span
@@ -20,18 +22,20 @@
    ; those rows were bound at boot, before any of this. join them rather than replace.
    F (: e (M 'guts) (tablet? e ? e (tablet 0)))
    miss (mint 0)                       ; a roster name that never bound answers this, and is skipped
-   keep (book 'nomop)
-   (p k) (: v (peep book k miss)
-            (? (== v miss) 0
-               (: _ (pin F k v) (? keep 0 (pull book k k)))))
+   (p k) (: v (peep book k miss) (? (== v miss) 0 (pin F k v)))
    _ (each m p)
    _ (each n p)
-   ; what a baked run may still cite: the bounded byte doors (src/love/mem.c), the glaze's
-   ; reads of ev.l and post.l, and its deferred cells (tablet.c, checked: the glaze loads after
-   ; this) -- none reaches a word by address or writes a cell it did not lay
-   kept '(peepw pinw peepv pinv gv nifop letc opfixed threadir jotfuse defercell deferpatch)
-   _ (? keep 0 (each (filter (\ k (? (elem k kept) 0 1)) (keys F)) (\ k (pull F k k))))
-   ; raw code addresses: the natives read them through g->reach, not these
-   _ (? keep 0 (each '(calloutdrive calloutresume) (\ k (pull book k k))))
    _ (pin M 'guts F)
-   ()))))
+   ; what a run may still cite: the bounded byte doors (src/love/mem.c) and post.l's reading
+   ; of a thread -- none reaches a word by address or writes a cell it did not lay
+   kept '(peepw pinw peepv pinv threadir)
+   ; a book name goes only while it is still the one moved: a later file may bind its own
+   (off k) (: v (peep F k miss) (? (== v miss) 0 (== v (peep book k miss)) (pull book k k) 0))
+   (mop _) (: _ (pull book 'latemop 0)
+              (? (book 'nomop) ()
+                 (: _ (each m off) _ (each n off)
+                    _ (each (filter (\ k (? (elem k kept) 0 1)) (keys F)) (\ k (pull F k k)))
+                    ; raw code addresses: the natives read them through g->reach, not these
+                    _ (each '(calloutdrive calloutresume) (\ k (pull book k k)))
+                    ())))
+   (? (book 'latemop) (pin book 'latemop mop) (mop ()))))))

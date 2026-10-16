@@ -1,17 +1,14 @@
-; test/host/dns.l -- the resolver's laws, hermetic and offline: the nameserver is a love task on
-; a loopback UDP port answering canned responses, and nothing reads the machine's /etc. driven
-; from test/host/run.l under a timeout: a resolver that stops parking stops the whole vm. the
-; checks are `assert`, which stops the run; no test/00-init.l ahead, so posix is borrowed here.
+; test/host/dns.l -- the resolver, offline: the nameserver is a love task on loopback UDP, and
+; nothing reads the machine's /etc. run by test/host/run.l under a timeout, as a resolver that
+; stops parking stops the vm; checks are `assert`, with no test/00-init.l ahead.
 (cite 'posix ? (borrow 'posix) ())
 
 (: _ (borrow 'dns))
 (: _ (borrow 'bytes))
 
-; --- the fake nameserver -------------------------------------------------------
-; answer `q` (a query) with one a record for `addr`, or with the TC bit set and
-; no records at all. the NAME in the answer is a compression pointer (192, 12)
-; -- the two-byte form that ends a name -- which is what a real server sends and
-; what the parser's skip has to get right.
+; --- the fake nameserver
+; answer `q` with one a record for `addr`, or TC set and no records; the answer's name
+; is a compression pointer, as a real server sends
 (: (dns-reply q addr tc)
     (snip q 0 2                                     ; the id, echoed
      + wrbe (tc ? 33664 33152) 2                  ; qr|RD|ra, and TC if asked
@@ -24,15 +21,14 @@
            + string (addr >> 24 & 255) + string (addr >> 16 & 255)
            + string (addr >> 8 & 255) + string (addr & 255))))
 
-   ; serve exactly one query on the bound socket p, then exit. the recv parks -- this
-   ; task is the peer whose running proves the resolver gave up its turn.
+   ; serve one query on p, then exit; its recv running proves the resolver parked
    (nameserver p addr tc)
     (twirl (_ \ (recv p @ d
                  (send p <d (dns-reply <>d addr tc),
                   rest 20,                            ; let the datagram leave
                   close p, 1))) ()))
 
-; --- law 1: a query goes out, an answer comes back, the address is exact -------
+; --- law 1: a query goes out, an answer comes back, the address is exact
 (: sp (test-bind 0)
    port <sp
    s (nameserver (sp 1) 16909060 ())                    ; 1.2.3.4
@@ -43,11 +39,8 @@
              (<a = 16909060)
              !(two? >a)))                          ; exactly one a record
 
-; --- law 2: a nameserver that never answers gives up, and does not hang --------
-; the deadline is a park, not a poll -- the receiver waits on the socket, a
-; watchdog waits on the clock, and the freeze out from under the catcher is what
-; wakes the caller. this law pins that it wakes at all; the elapsed time pins
-; that it waited rather than answering at once.
+; --- law 2: a nameserver that never answers gives up, and does not hang
+; the deadline is a park, not a poll; the elapsed time pins that it waited
 (: none (test-free 0)      ; a port of ours, its socket gone
    t0 (clock 0)
    a (dns-ask 2130706433 none "ab.cd" 200)            ; nothing is bound there
@@ -56,19 +49,14 @@
              (200 <= ms)
              (ms < 2000)))
 
-; --- law 3: a truncated answer is torn, never a silent partial -----------------
-; this resolver does not speak TCP, so the honest answer to "it did not fit" is
-; to say so. the packet is built with the TC bit and no records: a parser that
-; read the count instead of the bit would answer () -- "no such host" -- which is
-; the lie.
+; --- law 3: a truncated answer is torn, never a silent partial
+; no TCP here, so TC with no records must not read as () ("no such host")
 (: q (dns-query 4660 "ab.cd")
    r (dns-reply q 0 1)
    _ (assert (dns-answers r 4660 = 'torn)))
 
-; --- law 4: /etc/hosts answers with no packet at all ---------------------------
-; and a fixture is the only way to say that: pointing at the machine's own file
-; would make the gate depend on the machine.
-; every path this lays is the pid's own, so two runs over one out/ keep apart
+; --- law 4: /etc/hosts answers with no packet at all
+; a fixture, not the machine's file; paths are the pid's own so two runs keep apart
 (: dns-dir ("out/.dns-t-" + show (getpid 0)))
 (: dir dns-dir
    _ <(hark ["mkdir" "-p" dir])
@@ -90,16 +78,13 @@
              (><ns = 53))                        ; ... and resolv.conf means 53
    _ (assert (dns-conf cp "search" = '("one.test" "two.test"))))
 
-; --- law 5: an empty resolv.conf still names a server --------------------------
-; musl's fallback and moonlibc's: 127.0.0.1, so a machine with no config reaches a
-; local stub instead of answering "no such host".
+; --- law 5: an empty resolv.conf still names a server
+; 127.0.0.1, as musl and moonlibc fall back
 (dns-servers (dns-dir + "/nope") @ ns
    (assert (two? ns) (<<ns = 2130706433)))
 
-; --- law 6: a whole answer read back, every record type nslookup shows ----------
-; one response carrying a cname, an a, two aaaas (one run of zeros to fold and one single
-; zero that stays), an mx, a txt of two strings, an ns and a ptr, their names pointers
-; into the question. a pointer to itself is no name, and an answer to another id is none.
+; --- law 6: a whole answer read back, every record type nslookup shows
+; cname, a, two aaaas (a zero run folds, a single zero stays), mx, a two-string txt, ns, ptr
 (: q0 (dns-qtype 4661 "ex.test" 1)
    ptr (string 192 + string 12)
    (rr ty rd) (ptr + wrbe ty 2 + wrbe 1 2 + wrbe 0 2 + wrbe 60 2 + wrbe #rd 2 + rd)
@@ -124,7 +109,7 @@
              (snip qe 12 #q0 = snip q0 12 #q0)
              (snip qe #q0 #qe = string 0 + wrbe 41 2 + wrbe 1232 2 + wrbe 0 2 + wrbe 0 2 + wrbe 0 2)))
 
-; --- law 7: resolve6's pieces -- an aaaa asked and read back as text, hosts' v6 lines ---
+; --- law 7: resolve6's pieces -- an aaaa asked and read back as text, hosts' v6 lines
 ; the query carries edns, so the question the reply echoes stops short of its 11-byte OPT
 (: sp (test-bind 0)
    port <sp
@@ -142,10 +127,8 @@
              (resolve6-in (dns-dir + "/conf") (dns-dir + "/hosts") "v6.only" = ["::1"])
              (resolve6 "fe80::1" = ["fe80::1"])))
 
-; --- law 8: only the nameserver's own answer to our own question is taken ------
-; ahead of the true answer come four that must be dropped: one from another address
-; (127.0.0.2, where the host has it), one from another port, one with another id and one
-; to another question. the resolver keeps waiting and takes the fifth
+; --- law 8: only the nameserver's own answer to our own question is taken
+; dropped ahead of it: another address, another port, another id, another question
 (: sp (test-bind 0)
    port <sp
    (rep q addr) (dns-reply q addr ())
@@ -166,7 +149,7 @@
    _ (catch s)
    _ (assert (a = [16909060])))
 
-; --- law 9: the matcher's own cases, and ids that are not the clock -------------
+; --- law 9: the matcher's own cases, and ids that are not the clock
 (: q (dns-query 4663 "ab.cd")
    r (dns-reply q 16909060 ())
    qe (dns-qedns 4663 "ab.cd" 1)

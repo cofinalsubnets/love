@@ -1,46 +1,9 @@
-; src/apps/kore/www.l -- www: a web page in a terminal, its links numbered.
-;
-;   www [-w COLS] URL|FILE        www en.wikipedia.org/wiki/Lisp     www index.html
-;
-; the three hard parts live elsewhere: wget's round trip fetches (wget.l), lapiz lays the page
-; out with every link as [n] (ttpage), and less's engine pages it (less.l). www owns the url
-; arithmetic, the history, and a few keys over less's:
-;
-;   N RETURN   follow link N          N U   link N's url      U   this page's url
-;   TAB        the next link on screen, shift-TAB the one before, RETURN follows it
-;   o URL      open a url             B  BACKSPACE   back     r   reload
-;   m          the page's content     h   the help            every other key is less's
-;
-; a form that sends by GET shows each text field as a link, [n][name____]: following it
-; asks for the text, and RETURN sends the form with it (lapiz lays the rest of the form's
-; controls into the link, as they stand). a form that POSTs shows no field.
-; a url without a scheme is https, unless it names a file here -- that opens as file:, and
-; its links resolve against it. not a terminal: the page is poured plain with its references
-; after it, as lynx -dump does, and a server's error status is the exit 8 wget gives it.
-;
-; a #name lands on the line lapiz laid that id on (ttpage's anchors): on this page as a step
-; in the history with no fetch, on another after it loads. a page opened without one opens
-; where its own content starts, past its menus (lapiz's " main" / " article" marks), and m
-; goes back there; g is still the top.
-;
-; a page asks for gzip and is unzipped (src/apps/gz.l); one in latin-1 or windows-1252, by its
-; header or its own <meta>, is re-spelled as utf-8, and any other charset is taken as utf-8.
-; a <base href> is what the links resolve against. an image is its alt text, and on a
-; terminal a png, jpeg, gif or webp is drawn under it as it comes near the screen, two pixels a
-; cell (src/apps/kore/pic.l). the window changing width lays the page again, the same link at
-; the top.
-;
-; gopher:// and gemini:// open too. a gopher menu lays its text lines as they are and its
-; items as links with their kind, (DIR) (TXT) (?) ..; a search item is a field, sent after a
-; tab. gemini's text/gemini is laid as a page, headings, lists, quotes and preformatted
-; blocks; its ask for input is a field, the answer sent back as the query. a gemini
-; server's key is pinned the first time and held to after -- the protocol's trust
-; on first use -- in ~/.love/gemini_hosts; a changed one is refused, and says which line
-; to delete to take it.
-;
-; out of scope, and said: forms that POST, scripts, cookies, pictures other than png, jpeg,
-; gif and webp, and an animation's motion. an https server is verified as wget's is (its
-; client: a root in the host's bundle, or a pin in ~/.love/tls_pins), and a refusal says why.
+; src/apps/kore/www.l -- www: a web page in a terminal, its links numbered [n].
+; wget.l fetches, lapiz lays the page out (ttpage), less.l pages it; www owns the url
+; arithmetic, the history and a few keys over less's (ww-help).
+; a url without a scheme is https, unless it names a file here. not a terminal: the page is
+; poured plain with its references after it, as lynx -dump does.
+; gopher:// and gemini:// open too. out of scope: forms that POST, scripts, cookies.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -152,8 +115,7 @@
                             !(string? b) [1 ("www: " + url + " sent a gzip body that does not open")]
                             [0 url k b code]))))))))
    ; -- gopher and gemini: each answer built into html lapiz reads, or text ---------
-   ; a page built here: html's own characters escaped, a url's bytes past the unreserved
-   ; percent-encoded, lines without their CR
+   ; html's own characters escaped, a url's bytes past the unreserved percent-encoded
    (ww-esc1 c) (? (c = 38) "&amp;" (c = 60) "&lt;" (c = 62) "&gt;" (c = 34) "&quot;" (string c))
    (ww-esc s) (: o (jug 0) _ (map (i \ say o (ww-esc1 (s i))) (jot #s)) (slurp o))
    (ww-alnum? c) ((47 < c < 58) || (64 < c < 91) || (96 < c < 123))
@@ -171,10 +133,8 @@
    ; the answer to a field, off a query this page's form made (?NAME=v), else ()
    (ww-answer q nm) (? (starts? q ("?" + nm + "=")) (ww-dec q (2 + #nm) #q 1) ())
 
-   ; gopher (RFC 1436; its urls, RFC 4266: gopher://host[:port]/Tselector). a menu's lines
-   ; are Tdisplay TAB selector TAB host TAB port, a lone "." after the last. i and 3 lines
-   ; are text, laid as they are; the rest are links, each with its kind; a search (7) is a
-   ; field to answer, sent after a TAB. h with a URL: selector goes to that url
+   ; gopher (RFC 1436, urls RFC 4266): menu lines are Tdisplay TAB selector TAB host TAB port,
+   ; "." after the last. i and 3 are text; the rest links; a search (7) is a field sent after a TAB
    (ww-gkind t) (? (t = 49) "(DIR)" (t = 48) "(TXT)" (t = 55) "(?)" (t = 104) "(HTML)"
                    (elem t '(57 53 115 103 73 100)) "(BIN)" (elem t '(56 84)) "(TEL)"
                    ("(" + string t + ")"))
@@ -218,14 +178,10 @@
                 (t = 104) [0 url 'html b 200]
                 [1 ("www: " + url + " is a gopher " + ww-gkind t + " item, not a page")]))))
 
-   ; gemini: the url alone on a line, over tls on 1965; the answer's first line a status and
-   ; a meta, then the body. 1x asks for input, a field that sends it back as the query; 2x
-   ; is the page, text/gemini laid as html and other text as it is; 3x goes elsewhere; the
-   ; rest are the server's refusals, said. the server's key is pinned the first time and held
-   ; to after (trust on first use, the protocol's own), host:port and "spki:" and the sha-256
-   ; of its SubjectPublicKeyInfo a line in ~/.love/gemini_hosts -- the key, so a renewed
-   ; certificate over it still holds; an older line without the prefix is a whole
-   ; certificate's hash, and holds as that. a changed one is refused and says how to take it
+   ; gemini: the url on a line over tls on 1965; the answer a status line, then the body.
+   ; the server's key is pinned on first use in ~/.love/gemini_hosts as "spki:" + sha-256 of
+   ; its SubjectPublicKeyInfo, so a renewed cert over it holds; a line without the prefix is a
+   ; whole certificate's hash
    (ww-pinfile _) (cite 'tls 'pin-path "gemini_hosts")
    (ww-pin key fp cfp)
     (: path (ww-pinfile 0)
@@ -363,8 +319,8 @@
        (wg-plain (usgr (unlines ls) + (? n ("\nReferences\n\n" + foldl (\ a i (a + ref i)) "" ^n) ""))))
 
    ; -- pictures -----------------------------------------------------------------
-   ; on a terminal a picture is drawn under the line lapiz laid its mark on (" img SRC"),
-   ; two pixels a cell: the upper the colour of a ▀, the lower its background. one is
+   ; drawn under lapiz's " img SRC" mark, two pixels a cell (▀ fg over bg); fetched when near
+   ; the screen, kept by url for the session
    ; fetched when it comes near the screen, and kept by url for the session
    (ww-marks p)
     (foldl (\ acc a (<a @ (" img " + s) ([(a 1) s] . acc) acc)) () (rev (p 2)))
@@ -381,7 +337,7 @@
                        (: to (ww-resolve url loc) (? (ww-hop? url to) (ww-fetch url to (hops - 1)) ()))
                       (200 <= code < 300) (r 2)
                       ()))))))
-   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png, jpeg, gif or webp (its first
+   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a picture pic reads (its first
    ; frame) of up to 4 megapixels
    (ww-picture b)
     (: d (pic-size b)

@@ -1,8 +1,6 @@
-/* the fpu's state doors: fninit/fnclex/fwait/emms, the control and status words (fldcw,
- * fnstcw, fnstsw), mxcsr (ldmxcsr/stmxcsr), fildl onto the stack, and the whole-state saves
- * (fnsave/frstor, fxsave/fxrstor and their q forms, xsave/xrstor where the os enables them)
- * each read back through the control word they carry at offset 0. the privileged xsaves and
- * xrstors, and xsaveopt/xsavec, are laid but not run. the asm is x64's. held to gcc. */
+/* fpu state: fninit/fnclex/fwait/emms, fldcw/fnstcw/fnstsw, ldmxcsr/stmxcsr, fildl, fnsave/
+ * fxsave/xsave and restores read back via the control word at offset 0; privileged forms laid,
+ * not run. x64 asm. held to gcc. */
 
 #if defined(__x86_64__)
 static unsigned short cw(void) {

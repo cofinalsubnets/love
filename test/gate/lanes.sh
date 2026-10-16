@@ -146,14 +146,17 @@ for l in $run; do has "$l" "$alone" && late="$late $l" || par="$par $l"; done
   done
 } > "$mk"
 # a lane that moves the tree mid-gate relinks love under its neighbours: the summary says so
-sums() { cksum out/love out/love.raw 2>/dev/null; }
+sums() { cksum out/love out/love.raw out/mooncc0.image 2>/dev/null; }
 before=$(sums)
+moved() { [ "$(sums)" = "$before" ] || [ -f "$d/love-moved.rc" ] || {
+  echo "1 0" > "$d/love-moved.rc"; echo "out/love, love.raw or mooncc0.image was rebuilt $1" > "$d/love-moved.log"; }; }
 $MAKE -k -j"$j" -f "$mk" all > "$d/make.log" 2>&1
-[ "$(sums)" = "$before" ] || { echo "1 0" > "$d/love-moved.rc"; echo "out/love or out/love.raw was rebuilt during the parallel phase" > "$d/love-moved.log"; }
+moved "during the parallel phase"
 
 # step 4: alone, in turn
 for l in $late; do
   MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -j"$j" -- "$l"
+  moved "by $l"
 done
 
 # the summary, in the order the lanes were named

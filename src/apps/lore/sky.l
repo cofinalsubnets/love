@@ -1,17 +1,9 @@
-; sky -- the sky over a scene, by two things: the hour and the weather. the hour is the
-; sun, by the day of the year, the solar hour and the latitude, and the light that
-; follows from it; the weather is how much cloud there is -- clear, partly cloudy, mostly
-; cloudy or overcast -- and how the sky is drawn: smooth, blue by day and warm toward the
-; sun at either end of it, the clouds soft on two winds; or pixel, the grass game's sky,
-; its colour stepped through the day by the sun's height and its clouds blocks on the
-; cloud deck, solid at the core and dithered at the edge. the cloud over the sun takes
-; the sun off the scene. the clouds are a map laid once a run and gathered from by every
-; frame; the stars are points, each laid by a scene a pixel where its eye sees it.
-;
-; a scene's time is local seconds 'sim and the summer offset 'dst; its rays are trays of
-; unit directions [east up north]. the weather is a tablet, (sky-weather cover style):
-; cover 0 to 3, style 'smooth or 'pixel; and what falls from it, 'fall 0 nothing, 1 rain,
-; 2 snow (nothing unless said), placed round the eye by sky-drops
+; sky -- the sky over a scene, by the hour and the weather: the sun from day of year, solar
+; hour and latitude, and its light; cloud cover drawn 'smooth or 'pixel (grass's stepped
+; sky, block clouds). cloud over the sun takes it off the scene. the cloud map is laid
+; once a run; stars are points a scene lays a pixel each.
+; time is local seconds 'sim and summer offset 'dst; rays are trays of unit [east up north].
+; weather (sky-weather cover style): cover 0 to 3; 'fall 0 none (default), 1 rain, 2 snow
 (module (sky sky-sun sky-body sky-light sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-near sky-tone
          sky-irr sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
 (borrow 'view)
@@ -87,11 +79,9 @@
                     lo (g (z0 + x0) @ q (q + ux * (g (z0 + x1) - q)))
                     hi (g (z1 + x0) @ q (q + ux * (g (z1 + x1) - q)))
                     (lo + uz * (hi - lo)))
- ; --- the clouds: a deck high over the eye, where a ray crosses it, in map tiles: two
- ; layers on two winds, and a broad swell that thickens and thins the cover from place
- ; to place. answers [u v] the place on the deck, and the cloud's thickness there. under
- ; three degrees the deck goes on away ever slower, so the rows by the horizon each reach
- ; a little further than the last ---
+ ; --- the clouds: a deck over the eye, two layers on two winds and a swell; deck-at
+ ; answers where a ray crosses it, in map tiles. under three degrees the deck recedes
+ ; ever slower, so each row by the horizon reaches a little further ---
  deck 1800.0 tile 400.0
  (deck-at dx dy dz ex ez sim) (: tc (deck / over dy (dy < 0.05) (0.025 + 0.025 * exp ((min dy 0.05 - 0.05) / 0.025)))
    [((ex + dx * tc) / tile) ((ez + dz * tc) / tile)])
@@ -213,12 +203,9 @@
  ; ..and the sky nearer than the moon: no sun's disc
  (sky-near lt wx dx dy dz ex ez sim)
   (wx 'style = 'pixel ? (pixel lt wx dx dy dz ex ez sim 0.0) (smooth-of lt wx dx dy dz ex ez sim 0.0))
- ; --- the stars: the bright star catalogue's to magnitude 4.5 (starmap.l), turned with the
- ; sidereal time over the latitude lat, as [east up north] trays 'x 'y 'z, each with its
- ; brightness 'b by its magnitude, fading into the horizon and nothing below it, a
- ; twinkle's phase 'ph and a tint 'tint [r g b] by its colour. a scene lays each one a
- ; pixel where its eye sees it: a star read off a map down every ray is stretched over the
- ; pixels near overhead and lost between them low down, so there is none ---
+ ; --- the stars: starmap.l's catalogue turned by sidereal time over latitude, trays 'x 'y
+ ; 'z [east up north] with brightness 'b, twinkle 'ph, 'tint. laid a pixel each, not read
+ ; off a map per ray, which would stretch them overhead and lose them low ---
  stars0 (: n (#star-cat // 4) (col j) (gem-tray [n] (map (i \ 1.0 * star-cat (4 * i + j)) ^n))
            ra (col 0 * (pi / 18000.0)) de (col 1 * (pi / 18000.0)) m (col 2 / 100.0)
            t (sat ((col 3 / 100.0 + 0.3) / 1.9)) u (sat (t * 2.13)) w (sat ((t - 0.47) * 1.89))
@@ -240,11 +227,8 @@
        v (wx 'style = 'pixel ? ((0.6 < tw) * (lt 'day < 0.1) * (cl < 0.5) * (0.0 < Y) * 1.6)
             (ss 'b * (0.75 + 0.25 * tw) * nt * (1.0 - cl)))
        (map (k \ peep (c k) ix 0.0 @ o (pin (c k) ix (o + (ss 'tint) k * v))) ^3))))
- ; --- what falls: rain in streaks and snow in flakes round the eye at e, at sec seconds
- ; of the scene's own clock, for a scene to draw: () for none, or {'x 'y 'z the foot of
- ; each, 'len how long it is, 'wd how wide, 'a how strongly it shows, 'c its colour}. no
- ; state: a drop is where its number and the clock put it, on a lattice fixed to the
- ; ground and wrapped round the eye, so walking through it is walking through weather ---
+ ; --- what falls round the eye e at sec: () or {'x 'y 'z foot, 'len 'wd 'a 'c}. no state:
+ ; a drop's place is its number and the clock, on a ground lattice wrapped round the eye ---
  fall-r 6.0 fall-h 9.0 rain-n 1600 snow-n 1400
  (sky-drops wx lt e sec) (: f (sky-fall wx)
    (f = 0 ? ()

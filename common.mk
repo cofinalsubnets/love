@@ -96,9 +96,9 @@ hsuf := $(if $(HCC),/cc,)$(if $(DOOM),/doom,)$(if $(filter 0,$(tco)),/tco0,)
 
 # the corpus: the harness first, the spec second, then uu.l -- front-loaded EXPLICITLY so its
 # dependents (uukind*, uulay, uupatch, uuwm*) see it whatever the collation orders, a locale
-# `ls` putting uukind* first. glaze-x86 and glaze-hook execute native machine code, so they
+# `ls` putting uukind* first. glaze-x86, glaze-hook and glaze-tail execute native machine code, so they
 # ride their own arch-guarded targets, never the arch-neutral corpus.
-t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
+t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/glaze-tail.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
 # the runtime's own headers, and src/love/ is the roster: kernel mode's k.h and the per-ISA
 # asmops sit under src/inle/, so a touch on one of those rebuilds no love object.
@@ -179,6 +179,8 @@ cflags = -std=$(cstd) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -falign-functions=16 -fno-stack-protector
 # -fcf-protection (Intel CET) is x86-only; the other seats take it as a no-op.
 cflags += -fcf-protection=none
+# the debug info names the tree as ., so love0's bytes do not hang on where it was checked out
+cflags += -fdebug-prefix-map=$(abspath $(R))=.
 # a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half, which src/love/main.c
 # owes clock_gettime and kill to, so the level is asked for by name. but it is GLIBC'S ask: a
 # BSD header defaults to its whole surface and reads this as a NARROWING -- freebsd drops

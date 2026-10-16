@@ -1,9 +1,6 @@
-/* an asm naming a parameter as an immediate compiles only where its function is spliced,
- * held to gcc: the kernel's jump label (`asm goto` over "i"(key), "i"(branch), the entry in
- * its own table, the label its goto reaches) and a cpu-feature test ("i"(bit) and an
- * address off it). each call site lays its own copy, labels and table entry; how many sites
- * the compiler splices is its own, so the table is read as a set. a target with no
- * template here computes the same. */
+/* an asm taking a parameter as "i" compiles only where its function is spliced, held to gcc:
+ * a jump label and a cpu-feature test; each site lays its own copy, so the table reads as a set.
+ * targets without a template compute the same. */
 
 struct key { int enabled; };
 struct key kx = {1}, ky = {0};

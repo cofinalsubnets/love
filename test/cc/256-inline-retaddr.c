@@ -1,7 +1,5 @@
-/* an always_inline body is spliced as gcc splices it at -O0, so a __builtin_return_address(0)
- * read inside it is the caller's own: kmalloc's _RET_IP_, and one under a switch holding returns
- * with more after it (255's shape). a real call would answer its own call site. freestanding,
- * exit-code only. */
+/* an always_inline body is spliced, so __builtin_return_address(0) inside it is the caller's,
+ * also under a switch with returns and a tail. a real call would answer its own site. exit-code only. */
 
 static inline __attribute__((__always_inline__)) void *pick(int x, void *other)
 {

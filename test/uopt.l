@@ -1,13 +1,7 @@
-; the option walk, which 105 kore applets and the crew's verbs read their flags through
-; and which had no test of its own. three doors: uopt1 explodes ONE word into the letters
-; it clusters, uopt walks a whole argv into a tablet, and uoptv reads a value back out.
-;
-; the answer shape is [tablet stacked rest]: read it with `two?` and never for truth,
-; because () is the one refusal -- a value flag left with nothing behind it -- and a
-; tablet of no flags nets 0. <o is that tablet and <>>o the operands.
+; the option walk: uopt1 splits one word, uopt walks argv into [tablet stacked rest], uoptv reads.
+; test the answer with `two?`, never for truth: () is the refusal, and an empty tablet nets 0
 (: keysof (sort * keys * cap)
-   ; the map a long name is read through: to a letter's key, so --width and -w are one
-   ; option with one reader, or to anything else where there is no letter to share
+   ; a long name maps to a letter's key (--width is -w) or a key of its own
    L {"width" 119 "text" 116 "no-build" 'nb "port" 112}
    (walk as) ({} @ t (uopt as t '(119 116 112) '(101) L))
    (short as) ({} @ t (uopt as t '(109) '(101) ())))
@@ -43,39 +37,34 @@
  ([112 119] = (keysof (walk ["--port" "80" "-w" "4"])))
 
  ; --- what the long lane refuses ------------------------------------------------------
- ; a name the map does not carry is not ours: that word ends the flags and is an operand,
- ; which is what an unknown long flag did here before there was a map at all
+ ; a name the map does not carry ends the flags and is an operand
  (["--nope" "f"] = <>>(walk ["--nope" "f"]))
  !(keysof (walk ["--nope" "f"]))
  ; a glued value on a flag that takes none, rather than a value silently dropped
  (["--no-build=7" "f"] = <>>(walk ["--no-build=7" "f"]))
  !(walk ["--width"])                                    ; and a value flag left empty
- ; an applet that carries no long flags is exactly what it was: () is no map
+ ; () is no map
  (["--width" "9" "f"] = <>>(short ["--width" "9" "f"]))
 
  ; --- uoptv, and the stacking lane ----------------------------------------------------
  !(uoptv <(walk ["-w" "4"]) 116)                        ; a flag that was never given
  !(uoptv <(walk ["--no-build"]) 'nb)                    ; a flag with no value is not one
- ; a key in `reps` stacks into the second slot instead of pinning, that being the option
- ; a tool spells more than once (sed -e, grep -e)
+ ; a key in `reps` stacks into the second slot (sed -e, grep -e)
  (["a" "b"] = <>({} @ t (uopt ["-e" "a" "-e" "b" "f"] t '(101) '(101) ())))
 
  ; --- the three readings an applet owes over the walk ---------------------------------
- ; the short lane takes ANY letter, so the alphabet is the applet's to state and the key
- ; it did not name comes back for the refusal to spell
+ ; the short lane takes any letter; uoptun answers the one the applet did not name
  (122 = (uoptun <(walk ["-w" "4" "-z" "f"]) '(119 116 112)))
  !(uoptun <(walk ["-w" "4" "f"]) '(119 116 112))
  !(uoptun <(walk ["f"]) '(119))                         ; nothing pinned is nothing unknown
  ('nb = (uoptun <(walk ["--no-build" "f"]) '(119)))     ; a long name's key, likewise
- ; uoptbad names uoptun's stranger as typed: -ba is b where the tablet says a, a value's
- ; text is never a letter it names, and a long key comes back as uoptun's
+ ; uoptbad names the stranger as typed: -ba is b where the tablet says a
  (98 = (["-ba" "f"] @ as (uoptbad as <(walk as) "w")))
  (97 = (uoptun <(walk ["-ba" "f"]) "w"))
  (122 = (["-w3" "-z" "f"] @ as (uoptbad as <(walk as) "w")))
  !(["-w3" "f"] @ as (uoptbad as <(walk as) "w"))
  ('nb = (["--no-build" "f"] @ as (uoptbad as <(walk as) '(119))))
- ; an operand that still looks like a flag, the walk having stopped at the first that is
- ; not one -- and nothing at all once `--` has been spelled
+ ; an operand that looks like a flag, and none after `--`
  ("-q" = (uoptstray ["f" "-q"] <>>(walk ["f" "-q"])))
  !(uoptstray ["f" "g"] <>>(walk ["f" "g"]))
  !(uoptstray ["--" "-q"] <>>(walk ["--" "-q"]))

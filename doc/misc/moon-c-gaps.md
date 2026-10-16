@@ -647,7 +647,7 @@ never silent**.
 
 | lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 | arm |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| `__int128` | ✓ | ✓ | — | — | — | — | — |
+| `__int128` | ✓ | ✓ | — | rt.c | rt.c | — | rt.c |
 | `_Complex` arithmetic | ✓ | ✓ | — | ✓ | — | — | ✓ |
 | variable-length array | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
@@ -672,6 +672,14 @@ reads the object's symbols, and only x64/a64/rv64 have running gates behind them
 these refusals arrive as `cannot compile 'f' (cause unnamed)` rather than a named cause —
 `__int128` and every composite-argument row among them. The refusal is real either way; what is
 missing is the sentence naming it.
+
+**`__int128` on thumb2's family wears `rt.c` for its product and its 128/64 divide.** the wide kit
+rides four words there, r0:r1:r2:r3 lo first, a binop's left in a 16-byte cell: add, subtract,
+compare, negate, step and the shifts are thumb2.l's own forms, a variable shift a bit at a time
+counted in r12; the product and the divide call `__moon_m128`/`__moon_dv128`/`__moon_rm128`, whose
+aapcs arguments are the kit's own (the right in r0-r3, the left the cell, the answer back through
+it). aapcs32 has no `__int128`, so its argument lane is ours: r0-r3 whole from an empty file, else
+the 8-aligned stack. `__SIZEOF_INT128__` stays off there, as gcc leaves it on 32-bit arm.
 
 **`rt.c` is a cell value, and the two targets wearing it call out for different reasons.**
 thumb1 (v6-M) has no UMULL, no long shifts and no FPU, so 64-bit `*`/shifts/divide, int↔double
