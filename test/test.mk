@@ -19,7 +19,7 @@
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
-  test_vec test_vi test_virt test_virt_build test_wake test_xfixpoint uuhomgen uukind uumx uusplgen \
+  test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits
 
 # the three gates: test (fast), test_slow (merge), test_extra (qemu, cross-arch, boards)
@@ -33,7 +33,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 
 
 # the core's gate: test_extra's local, unheavy lanes, about a minute
-test_quick: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
+test_quick: test_filemode test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
@@ -300,6 +300,8 @@ test_gates: host
 .PHONY: test_seat test_cli test_nest
 gate_m += test_seat   # the file-seat lane
 # the cli exit status: 0 working, 1 unopenable, 2 malformed, a verb's own charm
+gate_m += test_hashrun   # a hash across processes
+gate_m += test_walkroom   # a walk past the gap, and past the budget
 gate_m += test_cli   # the cli exit-status lane
 gate_m += test_nest   # love nest, in a HOME of its own
 # a waiting machine spends nothing: a spinning scheduler stays green everywhere else
