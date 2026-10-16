@@ -1105,33 +1105,46 @@
    ; nom read once. a second copy in this macro measured 3.5 M on a 32.5 G corpus -- noise.
    (bind bs body) (atom? bs ? body (('\ . map cap bs + [body]) . map caup bs))
 
-   ; --- the decision tree -------------------------------------------------------
-   ; a clause is [tests body]. compiled flat, every clause re-runs the tests it shares with
-   ; its neighbours, so the common prefix is factored: asked once outside the chain and
-   ; dropped from each clause. the else is then reached two ways and written twice, which is
-   ; why this only fires for a small else, and it is one level, never recursive.
+   ; --- the decision dag --------------------------------------------------------
+   ; a clause is [tests body guards]. compiled flat, every clause re-runs the tests it shares
+   ; with its neighbours. instead the first live clause's next test is asked once and every
+   ; clause hears the answer: yes drops it from the clauses that ask it and drops the clauses
+   ; it rules out, no drops the clauses that need it. a test is only ever asked where its own
+   ; clause's earlier tests have held, so its accessors are safe, and a clause keeps its order.
+   ; guards are never shared: one runs where the flat chain runs it, once its clause's tests hold.
+   ; a clause the test leaves alone rides both answers, so a body or the else can be written
+   ; twice -- every residual takes the smaller of its dag and its flat chain, under a fuel cap.
    (same? a b) (? (two? a) (two? b ? (same? <a <b ? (same? >a >b)))
                   (two? b) ()
                   (a == b))
-   ; --- factoring, and its one safe shape --------------------------------------
-   ; a full decision tree writes the fallthrough twice per level -- 21 distinct tags is 2^21
-   ; nodes -- so factoring pays only where the fallthrough does not branch: the prefix every
-   ; clause shares, whose failure fails the whole match, so one level and one extra copy.
-   (cpx cs)                                         ; the test-prefix common to every clause
-     (? (atom? cs) ()
-        (atom? <<cs) ()                        ; a clause with no tests left: stop
-        (: t <<<cs
-           (all (c \ two? <c && same? <<c t) cs ?
-              (t . cpx (map (c \ [><c <>c]) cs)))))
-   (nodes x) (atom? x ? 1 (foldl (\ n e (n + nodes e)) 1 x))
-   (flat cs els) ('? . (catmap (c \ [(pand <c) <>c]) cs) + [els])
-   ; two clauses or more, or there is nothing to discriminate: at one clause cpx eats all of
-   ; its tests, so factoring would read (? p (? 1 body els) els) -- vacuous, and the else twice.
-   (tree cs els)
-     (: p (cpx cs)
-        (two? >cs && two? p && nodes els < 40 ?   ; >=2 clauses, a prefix, a small else
-           ['? (pand p) (flat (map (c \ [(drop #p <c) <>c]) cs) els) els]
-           (flat cs els)))
+   ; a size in lowered nodes: each && operand past the first lowers to a let and a ?, (: b t (? b R b))
+   (cost x) (atom? x ? 1 (foldl (\ n e (n + cost e)) (<x = '&& ? 4 * #>x - 3 1) x))
+   (flat cs els) ('? . (catmap (c \ [(pand (<c + c 2)) <>c]) cs) + [els])
+   ; exclusive answers: x = 'a, x = 'b, x = () and two? x hold at most one at a time
+   (kon? c) (c == () || two? c && <c = '\ && two? >c && atom? >>c && nom? <>c)
+   (eqk? t) (two? t && <t = '= && two? >t && kon? <>t && two? >>t && atom? >>>t)
+   (two1? t) (two? t && <t = 'two? && two? >t && atom? >>t)
+   (excl? t u) (? (eqk? t) (? (eqk? u) (same? <>>t <>>u && !(same? <>t <>u))
+                               (two1? u) (same? <>>t <>u)
+                               ())
+                  (eqk? u) (excl? u t)
+                  ())
+   (dag cs els fu)
+     (? (atom? cs) els
+        (0 >= fu 0) (flat cs els)
+        (: _ (pin fu 0 (fu 0 - 1))
+           c <cs
+           (? (atom? <c) (two? (c 2) ? ['? (pand (c 2)) <>c (dag >cs els fu)] <>c)
+              (: t <<c
+                 yes (catmap (d \ (? (any (same? t) <d) [[(filter (x \ !(same? t x)) <d) <>d (d 2)]]
+                                     (any (excl? t) <d) ()
+                                     [d]))
+                             cs)
+                 no (filter (d \ !(any (same? t) <d)) cs)
+                 dg ['? t (dag yes els fu) (dag no els fu)]
+                 fl (flat cs els)
+                 (cost dg <= cost fl ? dg fl)))))
+   (tree cs els) (dag cs els (pin {} 0 4000))
    ; --- alternatives, and why they split two ways ------------------------------
    ; (p1 || p2) fits when either does -- `|` too. a nom sits somewhere else in every branch,
    ; so one access cannot serve two shapes. two lanes, both first-branch-wins:
@@ -1160,7 +1173,7 @@
                ff (n \ !(assoc n dd))
                bs (dd + map mf (filter ff uni))
                gs (map (bind bs) <>>w)
-               [(<w + <d + gs) (bind bs b)])
+               [(<w + <d) (bind bs b) gs])
           (clof w b) (clofu w () b)
           (arm p b)                                    ; the clauses one arm answers for
             (: qs (arms p)

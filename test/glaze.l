@@ -92,7 +92,7 @@
 ; below or is wordless, so an unclassified addition turns this red ---
 (: G (cite 'glaze)
    (? G (: gw (G 'gopword)
-           named [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep] [tally 'tally]
+           named [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep] [tally 'tally] [long? 'long?]
                   [(+) '+] [(-) '-] [(*) '*] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]
                   [(<) '<] [(<=) '<=] [(>) '>] [(>=) '>=] [(=) '=] [atom? 'atom?] [nil? 'nil?]]
            wordless '(list && || one? != !== mpeep)
@@ -155,4 +155,14 @@
    _ (test (show (gzpp-put {} 5 9) = "{5 9}") (show (gzpp-put {5 1} 5 9) = "{5 1}")
            (show (gzpp-swap {} 5 9) = "{}") (show (gzpp-swap {5 1} 5 9) = "{5 9}")
            (sort (keys (gzpp-fill 0 {})) = [0 1 2 3 4 5 6]) (gzpp-fill 0 {} 0 = 7))
+   0)
+; (long? k x) inlines as k chain checks down the cups, and a two? or long? above an access
+; proves it a chain, so its cap and cup are bare loads: both answer as the interpreter does
+(: (gzl-1 x) (long? 1 >x)   (gzl-2 x) (long? 2 x)   (gzl-3 x) (long? 3 >x)
+   (gzl-f x) (two? x && long? 3 >x && () == >>>>x && <>>x)
+   ins ['(1) '(1 2) '(1 2 3) '(1 2 3 4) () 5 'a "ab"]
+   _ (test (map gzl-1 ins = [0 1 1 1 0 0 0 0])
+           (map gzl-2 ins = [0 1 1 1 0 0 0 0])
+           (map gzl-3 ins = [0 0 0 1 0 0 0 0])
+           (map gzl-f ins = [0 0 0 3 0 0 0 0]))
    0)
