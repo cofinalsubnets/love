@@ -273,6 +273,10 @@
        ((has? src ":" ? 0 (chk-eq (name + ".decode") (att-read src) (catmap (r \ r 2) rows))),
         chk-eq (name + ".decode.hex") want (as-hexv (x64-relabel rows))))
    _ (foldl (_ \ t \ law3 (t 0) (t 1) (t 2)) 0 tests)
+   ; the operand-size prefix by mode: in a 16-bit segment the 32-bit width takes 66
+   _ (chk-eq "osz.m16.movl" [102 137 195] (as-instrm 16 <(att-read "movl %eax, %ebx")))
+   _ (chk-eq "osz.m16.movw" [137 195] (as-instrm 16 <(att-read "movw %ax, %bx")))
+   _ (chk-eq "osz.m32.movw" [102 137 195] (as-instrm 32 <(att-read "movw %ax, %bx")))
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln $ "test/holo/as: " + show np + " passed, " + show nf + " failed\n")
    _ (0 = nf ? 0 (quit 1)))
