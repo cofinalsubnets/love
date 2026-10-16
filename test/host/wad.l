@@ -95,6 +95,12 @@
    _ (test (most (px 8 20) 0))                                    ; the wall, red
    _ (test (px 32 0 = 1973960))                                   ; the sky's own blue, 0x1e1ec8, unlit
    _ (test (most (px 32 39) 1))                                   ; the floor, green
+   ; ..a wad with STBAR (here all blue, 20) draws the view over it: its rows 32 of 200 of the frame
+   wb (: b (wad-t-patch 320 32 20 0 0) s2 ((wd 's) + b)
+        (pins {} 's s2 'ls (wd 'ls + [["STBAR" #(wd 's) #b]]) 'ix (pin (foldl (\ t k (pin t k (wd 'ix k))) {} (keys (wd 'ix))) "STBAR" #(wd 'ls))))
+   sb (pins (wad-new 64 40 wb M) 'w 64 'h 40 'kp 1) fb (wad-pens sb)
+   _ (test (all (y \ peep fb (y * 64 + 32) 0 = 1973960) [34 35 36 37 38 39])   ; the bar: 40 * 32 // 200 = 6 rows
+           (most (peep fb (33 * 64 + 32) 0) 1))                                 ; the floor just over it
    ; ..hurt, the frame takes the red palette for a while, a tic less each tic
    _ (pin st 'dc 5) red (rgb (peep (wad-pens st) (39 * 64 + 32) 0)) g0 (rgb (px 32 39))
    _ (test (#(st 'sc 'tints) = 2) (red 0 > g0 0 + 60) (red 1 < g0 1))

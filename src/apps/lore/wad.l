@@ -296,35 +296,90 @@
              (I * 0))))
  ; ..a gun's picture on a w by h frame: where its texels fall, and what they are, its foot on the
  ;   frame's, as wide again as the frame is tall over 200
- (gun-px st w h key dx dy) (: e (peep (st 'sc 'stex) key ())
+ (gun-px st w h vh key dx dy) (: e (peep (st 'sc 'stex) key ())
    (atom? e ? [() ()]
       (: T (st 'sc 'texs (e 0)) d (e 1) s (h / 200.0) gw (int (d 0 * s)) gh (int (d 1 * s))
-         x0 (int ((dx - d 2) * s + (w - 320.0 * s) / 2.0)) y0 (int ((32 + dy - d 3) * s))
+         x0 (int ((dx - d 2) * s + (w - 320.0 * s) / 2.0)) y0 (int ((32 + dy - d 3 - (vh < h ? 16 0)) * s))
          J (iota (gw * gh)) sx (J % gw) sy (J // gw) c (peep T (int (sy / s) * d 0 + int (sx / s)) -1)
-         X (x0 + sx) Y (y0 + sy) ok (iota ((c >= 0) * (X >= 0) * (X < w) * (Y >= 0) * (Y < h)))
+         X (x0 + sx) Y (y0 + sy) ok (iota ((c >= 0) * (X >= 0) * (X < w) * (Y >= 0) * (Y < vh)))
          [(peep (Y * w + X) ok 0) (peep c ok 0)])))
  ; ..swung as the body moves, a gun's way, and lowered by 'gy
- (gun-over st f w h) (: g (guns (st 'gun)) v2 (sq (st 'vx) + sq (st 'vz)) bob (min2 16.0 (v2 / 4.0)) a (0.098 * st 't)
+ (gun-over st f w h vh) (: g (guns (st 'gun)) v2 (sq (st 'vx) + sq (st 'vz)) bob (min2 16.0 (v2 / 4.0)) a (0.098 * st 't)
    dx (int (bob * cos a) // 2 * 2) dy ((int (bob * mag (sin a)) + st 'gy) // 2 * 2)
    _ (#(keys (peep st 'gunc {})) > 256 ? (pin st 'gunc {}) 0)
    cache (peep st 'gunc () @ () (pin st 'gunc {} 'gunc) c c)
-   (px k) (: id (k + show w + "x" + show h + "@" + show dx + "," + show dy)
-            (peep cache id () @ () (: v (gun-px st w h k dx dy) _ (pin cache id v) v) v v))
+   (px k) (: id (k + show w + "x" + show h + "/" + show vh + "@" + show dx + "," + show dy)
+            (peep cache id () @ () (: v (gun-px st w h vh k dx dy) _ (pin cache id v) v) v v))
    (lay f k) (: p (px k) (#(p 0) > 0 ? (pin f (p 0) (p 1)) f))
    ; ..the tic of its firing it is at, its frame and its flash's then
    i (st 'gcd > 0 ? (#(g 7) - st 'gcd) -1) (at s) (i < 0 || i >= #s ? 46 (s i))
    f2 (lay f (g 0 + string (at (g 7) @ 46 65 c c) + "0"))
    (at (g 9) = 46 || !(string? (g 1)) ? f2 (lay f2 (g 1 + string (at (g 9)) + "0"))))
+ ; ..the view over the status bar where the wad has one, a 32nd of 200 of the frame's height each
  (wad-pens st) (: k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) sc (st 'sc)
-   v (mesh-eye w h [(st 'px) (st 'py) (st 'pz)] (st 'th) (st 'ph) 0.0 fov 2.0 8000.0)
+   bh (bar? st ? (h * 32 // 200) 0) vh (h - bh)
+   v (mesh-eye w vh [(st 'px) (st 'py) (st 'pz)] (st 'th) (st 'ph) 0.0 fov 2.0 8000.0)
    all (sc 'secs + scrolls st + sprites st)
-   f (peep (facets w h -1 (v 'cam) (map (b \ b 0) all) (map (b \ b 1) all) (sc 'texs) (gem-tray [8] [0.0 0.0 0.0 96.0 3000.0 8.0 0.0 0.0]))
-           (iota (w * h)) 0)
+   f (peep (facets w vh -1 (v 'cam) (map (b \ b 0) all) (map (b \ b 1) all) (sc 'texs) (gem-tray [8] [0.0 0.0 0.0 96.0 3000.0 8.0 0.0 0.0]))
+           (iota (w * vh)) 0)
    S (iota ((f = -1) + (f = sc 'mark)))
    f2 (#S = 0 ? f (pin f S (sky-of st v S)))
-   f3 (st 'hp > 0 ? (gun-over st f2 w h) f2)
+   f3 (st 'hp > 0 ? (gun-over st f2 w h vh) f2)
+   f4 (said st f3 w h vh)
+   f5 (bh = 0 ? f4 (pin (pin (iota (w * h) * 0) (iota (w * vh)) f4) (iota (w * bh) + w * vh) (bar-px st w bh)))
    k (flash st) T (peep (sc 'tints) k ())
-   (k > 0 && two? T ? (tinted f3 T) f3))
+   (k > 0 && two? T ? (tinted f5 T) f5))
+ ; --- the status bar: STBAR's 320 by 32 and what lies over it, placed by eye in its own artwork:
+ ;     the ammo's box 0-46, health's 48-104, the arms' panel 104-143 over the frags', the face's
+ ;     143-178, armor's 178-236, the keys' 236-249, the ammo counts' rows 5 11 17 23 ---
+ (bar? st) (string? (lump (st 'wd) "STBAR"))
+ ; ..a picture at x y, moved by its own offsets as doom places one
+ (at-pic st k x y) (: b (lump (st 'wd) k) (string? b ? [[(x - s16 b 4) (y - s16 b 6) b]] ()))
+ ; ..a number right-aligned at xr, its digits lumps nm0 to nm9
+ (num st nm n xr y gw) (: d (show n) (cats (map (i \ at-pic st (nm + string (d i)) (xr - (#d - i) * gw) y) ^#d)))
+ slots [[2 1 109 3] [3 2 122 3] [4 3 135 3] [5 4 109 14] [6 5 122 14] [7 6 135 14]]
+ (bar-parts st) (: g (guns (st 'gun)) a (g 2) hs (st 'has)
+   (cats [(at-pic st "STARMS" 104 0)
+          (a = () ? () (num st "STTNUM" (st a) 44 3 14))
+          (num st "STTNUM" (max2 0 (st 'hp)) 90 3 14) (at-pic st "STTPRCNT" 90 3)
+          (num st "STTNUM" (st 'ar) 221 3 14) (at-pic st "STTPRCNT" 221 3)
+          (cats (map (q \ at-pic st ((elem (q 1) hs ? "STYSNUM" "STGNUM") + show (q 0)) (q 2) (q 3)) slots))
+          (cats (map (k \ elem (k 0) (st 'keys) ? (at-pic st (k 1) 239 (k 2)) ()) [['b "STKEYS0" 3] ['y "STKEYS1" 13] ['r "STKEYS2" 23]]))
+          (cats (map (r \ num st "STYSNUM" (st (r 0)) 288 (r 1) 4 + num st "STYSNUM" (most (r 0)) 314 (r 1) 4)
+                     [['bul 5] ['shl 11] ['rkt 17] ['cel 23]]))
+          (at-pic st (mug st) 143 0)]))
+ ; ..the bar laid, once for each way it can look: STBAR beneath, what lies over it pinned on
+ (bar-pic st) (: sc (st 'sc) pal (palette (st 'wd))
+   base (peep sc 'stb () @ () (pin sc 'stb (compose pal 320 32 (at-pic st "STBAR" 0 0)) 'stb) b b)
+   ps (bar-parts st) id (show (map (p \ [(p 0) (p 1) (#(p 2))]) ps) + mug st)
+   _ (#(keys (peep sc 'barc {})) > 64 ? (pin sc 'barc {}) 0)
+   cache (peep sc 'barc () @ () (pin sc 'barc {} 'barc) c c)
+   (peep cache id () @ () (: O (compose pal 320 32 ps) I (iota (O != -1)) B (pin base I (peep O I 0)) _ (pin cache id B) B) B B))
+ ; ..and drawn w by bh, each pixel the bar's nearest
+ (bar-px st w bh) (: J (iota (w * bh)) (peep (bar-pic st) (J // w * 32 // bh * 320 + J % w * 320 // w) 0))
+ ; --- the face: hurt by how low health is, five ways; dead; a grin for a new gun, a wince at a
+ ;     big hit, a look toward what hurt it, a grimace hurt head on or firing on and on; else
+ ;     looking about ---
+ (mug st) (: t (st 't) p (show (min2 4 ((100 - min2 100 (max2 0 (st 'hp))) * 5 // 101)))
+   (? (st 'hp <= 0) "STFDEAD0"
+      (peep st 'fgrin 0 > t) ("STFEVL" + p)
+      (peep st 'fouch 0 > t) ("STFOUCH" + p)
+      (peep st 'fhurt 0 > t) (peep st 'fdir 'f @ 'l ("STFTL" + p + "0") 'r ("STFTR" + p + "0") _ ("STFKILL" + p))
+      (peep st 'ffl -99 >= t - 10 && t - peep st 'ffs t > 70) ("STFKILL" + p)
+      ("STFST" + p + show (peep st 'flook 1))))
+ ; ..a look about every half second or so
+ (glance st) (st 't >= peep st 'fnext 0 ? (pins st 'flook (rand 3) 'fnext (st 't + 17 + rand 35)) st)
+ ; --- what was said, top left in the wad's own font for four seconds: STCFN's glyphs by their
+ ;     codes, a space 4 wide ---
+ (said st f w h vh) (: m (peep st 'msg "") _ (m != peep st 'msgw "" ? (pins st 'msgw m 'msgt (st 't)) 0)
+   (? (m = "" || st 't - peep st 'msgt 0 >= 140 || !(bar? st)) f
+      (: s (h / 200.0) u (upper m) wd (st 'wd)
+         (glyph c) (: k ("STCFN" + (c < 100 ? "0" "") + show c) b (lump wd k) (string? b ? b ()))
+         (go i x acc) (? (i >= #u) acc (: b (glyph (u i)) (string? b ? (go (i + 1) (x + u16 b 0) ([x 1 b] . acc)) (go (i + 1) (x + 4) acc))))
+         O (compose (palette wd) 320 8 (go 0 1 ()))
+         J (iota (w * (int (8 * s) + 1))) sx (J % w) sy (J // w) X (int ((sx - (w - 320.0 * s) / 2.0) / s)) Y (int (sy / s))
+         c (peep O (Y * 320 + X) -1) ok (iota ((c >= 0) * (X >= 0) * (X < 320) * (Y < 8) * (sy < vh)))
+         (pin f (peep J ok 0) (peep c ok 0)))))
  ; ..which palette the frame takes: a hurt's red by how much is left of it, else a pickup's gold,
  ;   else the suit's green, flickering in its last 128 tics
  (flash st) (: dc (peep st 'dc 0) bc (peep st 'bc 0) u (st 'suit - st 't)
@@ -340,7 +395,8 @@
    (cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
    {(r - 1) [0 (cells s) (pen [240 240 240 255]) (pen [20 20 20 233])]})
  (wad-frame st) (: w (st 'w) r (st 'h // 2) s (snip (pad (" " + status st) w " ") 0 w)
-   (mesh-show st (wad-pens st) (esc + "[" + show r + ";1H" + esc + "[0;37;40m" + s + esc + "[0m") (band st s r)))
+   (bar? st ? (mesh-show st (wad-pens st) "" {})
+              (mesh-show st (wad-pens st) (esc + "[" + show r + ";1H" + esc + "[0;37;40m" + s + esc + "[0m") (band st s r))))
  ; --- the state: the map, its things, the movers, and the player: body, health, armor, guns, keys ---
  ; ..where a thing stands: its sector's floor, ceiling and light
  (place M o) (: S (M 'secs (wad-sector M (o 'x) (o 'z))) (pins o 'y (1.0 * S 0) 'ceil (1.0 * S 1) 'k (lit (S 4) 0)))
@@ -520,6 +576,10 @@
  ;     and burst; the player is hurt, takes what lies about, and shoots back ---
  (hurt st d) (: take (min2 (st 'ar) (st 'ac = 2 ? (d // 2) (d // 3))) hp (max2 0 (st 'hp - d + take))
    _ (st 'hp > 0 ? (pin st 'dc (min2 100 (peep st 'dc 0 + d))) 0)
+   ; ..the face: a look toward what hurt it, ahead or no one a grimace; a wince past 20
+   by (peep st 'hby ()) a (tablet? by ? (wrap (bearing (by 'x - st 'px) (by 'z - st 'pz) - st 'th)) 0.0)
+   _ (pins st 'hby () 'fhurt (st 't + 35) 'fdir (tablet? by && mag a > pi / 4.0 ? (a > 0.0 ? 'r 'l) 'f)
+           'fouch (d > 20 ? (st 't + 35) (peep st 'fouch 0)))
    _ (st 'hp > 0 ? (mix-cry st (hp = 0 ? "PLDETH" "PLPAIN") ()) 0)
    (pins st 'ar (st 'ar - take) 'hp hp 'msg (hp = 0 ? "dead -- e to begin the level again" (st 'msg))))
  ; ..a thing hit by by: a monster turned on its own kind's foe, a barrel bursting
@@ -551,12 +611,12 @@
                        (shut st i || y < max2 (g 'ff) (g 'bf) || y > min2 (g 'fc) (g 'bc))))
                 (crossed st (o 'x) (o 'z) x z))
       who (filter (q \ q 'solid = 1 && q 'gone = 0 && q 'id != mine && sq (q 'x - x) + sq (q 'z - z) < sq (q 'r + o 'r)) (st 'objs))
-      (? (by != 'player && sq (st 'px - x) + sq (st 'pz - z) < sq (1.0 * body-r + o 'r)) (: _ (hurt st (o 'dmg)) (burst st o))
+      (? (by != 'player && sq (st 'px - x) + sq (st 'pz - z) < sq (1.0 * body-r + o 'r)) (: _ (hurt (pin st 'hby by) (o 'dmg)) (burst st o))
          (two? who) (: q <who _ (tablet? by && q 'spr = by 'spr ? 0 (hit st q (o 'dmg) by)) (burst st o))
          (wall || t > 175) (burst st o)
          (pins o 'x x 'z z 'tic t 'fr (o 'spr = "MISL" || t // 4 % 2 = 0 ? "A" "B")))))
  (attack st o d) (: m (o 'm) T (target st o) q (T 2) close (d < 80.0 + o 'r) vis (sees st (o 'x) (o 'z) (T 0) (T 1))
-   (strike n) (tablet? q ? (hit st q n o) (hurt st n))
+   (strike n) (tablet? q ? (hit st q n o) (hurt (pin st 'hby o) n))
    _ (m 4 = 'ball && !close ? (vis ? (mix-cry st "FIRSHT" (spot o)) 0) (m 4 = 'shot || close ? (yell st o 4) 0))
    (m 4 @ 'shot (each ^(m 5) (_ \ (vis && randf 1.0 < max2 0.15 (0.8 - d / 1500.0) ? (strike (3 * (1 + rand 5))) 0)))
           'bite (close ? (strike (4 * (1 + rand 10))) 0)
@@ -595,7 +655,7 @@
  (gain st o) (: it (o 'it) k (it 0) n (it 1) top (it 2)
    (? (k = 'key) (: _ (pin o 'gone 1) (pins st 'keys (n . st 'keys) 'msg "a key"))
       (k = 'suit) (: _ (pin o 'gone 1) (pins st 'suit (st 't + n) 'msg "a radiation suit"))
-      (k = 'gun) (: _ (pin o 'gone 1) a (guns n 2)
+      (k = 'gun) (: _ (pin o 'gone 1) a (guns n 2) _ (elem n (st 'has) ? 0 (pin st 'fgrin (st 't + 70)))
                     (pick (pins st 'has (sort (uniq (n . st 'has))) a (min2 (most a) (st a + top)) 'msg (guns n 0)) n))
       (st k >= top) st
       (k = 'ar && n >= 100) (: _ (pin o 'gone 1) (pins st 'ar n 'ac (n >= 200 ? 2 1)))
@@ -612,7 +672,7 @@
  (fire st) (: g (guns (st 'gun)) a (g 2) th (st 'th) px (st 'px) pz (st 'pz)
    (? (st 'gcd > 0 || st 'hp <= 0 || st 'gy > 0 || st 'gnext >= 0) st
       (a != () && st a < 1) (pin st 'msg "no ammo")
-      (: _ (pins st 'gcd #(g 7) 'msg "")
+      (: _ (pins st 'gcd #(g 7) 'msg "" 'ffs (st 't - peep st 'ffl -99 > 12 ? (st 't) (peep st 'ffs (st 't))) 'ffl (st 't))
          _ (a = () ? 0 (pin st a (st a - 1)))
          _ (each (st 'objs) (o \ (two? (o 'm) && !(o 'deaf) && sq (o 'x - px) + sq (o 'z - pz) < 2560000.0 ? (pin o 'heard 1) 0)))
          _ (two? (g 10) ? (launch st 'player (px + 16.0 * sin th) (pz + 16.0 * cos th) (st 'py - 8.0) th (g 10))
@@ -638,7 +698,7 @@
    _ (pin s 'movers (filter (m \ move-tic s m = 1) (s 'movers)))
    _ (each (s 'objs) (o \ (o 'gone = 1 ? 0 (o 'proj = 1 ? (fly s o) (two? (o 'm) ? (think s o) 0)))))
    _ (pin s 'flips (filter (f \ (f 0 > s 't ? 1 (: _ (flip s (f 1)) 0))) (s 'flips)))
-   s2 (take (glide (drive (shine (gun-tic s)))))
+   s2 (take (glide (drive (shine (gun-tic (glance s))))))
    q (wad-sector (s2 'M) (s2 'px) (s2 'pz)) S (s2 'M 'secs q)
    _ (peep sore (S 5) 0 > 0 && s2 't % 32 = 0 && s2 'py - eye-h <= S 0 + 1 && s2 'suit < s2 't ? (hurt s2 (sore (S 5))) 0)
    _ (S 5 = 9 ? (secret s2 q) 0)
