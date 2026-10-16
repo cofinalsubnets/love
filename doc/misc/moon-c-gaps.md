@@ -1092,6 +1092,47 @@ the `.ARM.attributes` and `__OPTIMIZE__` artifacts above; 9 refuse where the cla
 
 ## linux on arm64
 
+### defconfig, measured 2026-10-16
+
+the 2026-10-06 census again on gwen f3f9357e1: every unit on clang's `-E`, ours on every 20th.
+the reference is a clang 22.1.8 build of 6.19.14 defconfig with the hearts lane's flags and
+identity, laid beside the source the census reads.
+
+| | units | same as clang | compiles, differs | refused | crash |
+|---|---|---|---|---|---|
+| 2026-10-06 (gwen 40be5708f) | 4439 | 1286 | 1692 | 1455 | 4 |
+| 2026-10-16 (gwen f3f9357e1) | 4439 | 2350 | 1938 | 147 | 0 |
+
+two units time out at 300 s (`.vmlinux.export.o`, pinctrl-rzg2l) and two are compat vdso
+(`--target=arm-linux-gnueabi`). our cpp on the 222 sampled units agrees with the clang leg on 213;
+8 the clang leg calls differing are the same as clang's under ours (the `__OPTIMIZE__` artifact
+below), and none refuses under one cpp and compiles under the other.
+
+refused, first stops:
+
+| units | first stop | area |
+|---|---|---|
+| 42 | a static initializer it cannot lay: a float in an integer field (the qcom clock tables' `F(f, s, 4.5, m, n)`, whose `2 * h - 1` is an arithmetic constant), or the object's own `sizeof` (acpica's dump tables) | frontend |
+| 36 | an enum used before its definition, whose type is not unsigned int (`enum pci_epc_interface_type;`, then `= -1` first) | frontend |
+| 25 | gas immediates and data over label arithmetic (`.Lframe_regcount`, `.Lsection_count`), `.irp` in an asm, `.extern` | asm |
+| 16 | system registers and operations it does not name: `isr_el1`, `spsr_und`, `aidr_el1`, `tlbi ipas2e1`, `msr SPsel` | asm |
+| 8 | arch/arm64/crypto's neon and crypto lines (`aese`, `sha512su0`, `ld1r`, `tbl`, `dup`, `crc32x`) and mte's `stgm` | asm |
+| 7 | a parse error | frontend |
+| 5 / 5 | an asm immediate input that is not a constant; a float, struct, array or bit-field asm output | asm |
+| 2 / 1 | a register variable in x30; an undeclared name | asm / frontend |
+
+compiles and differs, by cause: units it touches, and units it alone explains.
+
+| units | alone | cause | area |
+|---|---|---|---|
+| 1007 | 883 | **a `static` alias laid global**: `MODULE_DEVICE_TABLE` is `static typeof(name) __mod_device_table__..(..) __attribute__((used, alias(..)))`, which clang lays as a local and mooncc as a global. Wrong code, though it collides only where two units share a name | frontend |
+| 488 | 279 | a string or memory builtin called (`memset`, `memcmp`, `strlen`, `memcpy`) where clang expands or folds it: links, slower | gen |
+| 310 | 127 | a call clang folds away: `seq_puts`'s `__builtin_constant_p` arm (`__seq_puts`), `__udelay`, `__kmalloc_noprof`, `sprintf` | frontend |
+| 277 | 157 | `__compiletime_assert_N` kept: the clang leg's `__OPTIMIZE__`, as on 2026-10-06; our cpp defines none | frontend |
+| 233 | 152 | no `.bss`: an explicitly zeroed static (`DEFINE_RAW_SPINLOCK`) lays in `.data` | gen |
+
+the static alias alone holds back 883 units: with it, about 3230 of 4437 would be clang's.
+
 **measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,
 `mooncc -t a64 -c`): of 474 units, 117 compiled, 149 crashed and 183 refused. With the rows
 below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by name. What landed on the inline-asm and assembler side, each held by a law:

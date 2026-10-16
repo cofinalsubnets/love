@@ -553,8 +553,9 @@
        dsz (o-dsizes secs)
        (o-size nm) (peep dsz (string? nm ? nm (show nm)) 0)
        symbytes
-        (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local func
-                                            (elf-sym (stroffs i) 0 2 <w <>w 0)))
+        (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data
+                                            x (exec? (secs (<w - 1)))
+                                            (elf-sym (stroffs i) 0 (x ? 2 1) <w <>w (x ? 0 (o-size ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym (stroffs (nloc + i))

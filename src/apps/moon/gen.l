@@ -11414,6 +11414,8 @@
                         peep sects nm () = "love_nifs")     ; a nif entry is static by shape; any other
                                                                  ; named section stays exported (.image is read by symbol)
              als (two? xtra && 3 < #xtra ? (xtra 3) {})
+             ; a `static` alias (MODULE_DEVICE_TABLE's) is a local symbol at its target's place
+             (sal? a) (loc? a || peep sfns a 'no != 'no)
              fnames (: (go fs acc) (!(two? fs) ? (rev acc)
                                       (<fs @ f
                                          (go >fs (<f = 'fn && peep sfns <>f 'no = 'no ?
@@ -11426,7 +11428,7 @@
                                (go2 <>ast ()))
                        (: base (go <>ast ())
                           (go3 l a2) (!(two? l) ? a2
-                                        (go3 >l (elem (als <l) defd ? (<l . a2) a2)))
+                                        (go3 >l (elem (als <l) defd && !(sal? <l) ? (<l . a2) a2)))
                           (base + go3 (keys als) ())))
              gnames (: (go gs acc) (!(two? gs) ? (rev acc)
                                       (go >gs (loc? <gs ? acc (<gs . acc))))
@@ -11435,7 +11437,7 @@
                        dgl (revcat (<r 'globs) $ rev (<r 'statics))
                        (: base (go (rev (<r 'globs)) ())
                           (go2 l a2) (!(two? l) ? a2
-                                        (go2 >l (elem (als <l) dgl ? (<l . a2) a2)))
+                                        (go2 >l (elem (als <l) dgl && !(sal? <l) ? (<l . a2) a2)))
                           (base + go2 (keys als) ())))
              ; minus the swept: a local func symbol with no body would name whatever followed it
              gone (<r 'dropped)
@@ -11445,6 +11447,8 @@
                                                   && nelem <>f gone ?
                                                          (<>f . acc) acc))))
                        (go <>ast ()))
+             laid ((map (f \ <>f) (filter (f \ <f = 'fn && nelem <>f gone) <>ast)) + (<r 'globs) + (<r 'statics))
+             lals (filter (a \ sal? a && elem (als a) laid) (sort (keys als)))
              dat <>>r
              ; the sectioned fns folded to (name forms align) per section, in declaration order; the grain is the widest asked
              xfns (: (noms l acc) (!(two? l) ? (rev acc)
@@ -11459,6 +11463,6 @@
                      (rev (<r 'xfns) @ src
                         (map (nm \ [nm (forsec nm src) (grain nm src)]) (noms src ()))))
              [1 <>r <dat fnames gnames
-                <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat
+                <>dat <>>dat (lnames + lals) <>>>dat <>>>>dat <>>>>>dat
                 xfns (asecs-live <r [<>r (map (x \ x 1) xfns)])]))))
 ) ; module 'moon
