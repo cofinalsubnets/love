@@ -84,7 +84,7 @@
    ; abs32 is ((S+A)|T), rel32 that minus P (gcc's `.word handler - .`).
    ; the numbers are obj.l's plus rel32, and a kind outside the set refuses: they collide
    ; with the x86-64 and riscv numbers, which is why the machine picks the lane first.
-   ldarm-kinds (ld-cls '((2 abs32) (3 rel32) (10 bl) (30 b) (47 movw16) (48 movt16)))
+   ldarm-kinds (ld-cls '((2 abs32) (3 rel32) (10 bl) (30 b) (47 movw16) (48 movt16) (51 bcc)))
    ; the a64 and riscv instruction fields, by relocation number, in the backend's own names.
    ; rela: S+a arrives whole, and the backend ors its field into the word already there
    lda64-kinds (ld-cls '((273 ld19) (274 adr21) (275 adrp21) (277 addlo12) (278 addlo12) (279 b14) (280 b19) (282 b26) (283 b26)
