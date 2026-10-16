@@ -1,34 +1,17 @@
-// src/love/compress/gz.c -- DEFLATE, both directions. one translation unit because the two halves are
-// one format: RFC 1951 §3.2.5's code tables are read by the coder and the decoder alike,
-// and a coder and a decoder that disagree there disagree about the format. src/apps/gz.l's
-// gz-lbase/gz-lext/gz-dbase/gz-dext say the same numbers in love.
+// gz.c -- DEFLATE, both directions, over one copy of RFC 1951 §3.2.5's tables (gz.l's
+// gz-lbase and kin say the same numbers)
 #include "love.h"
 #include "bytes.h"
 #include "inflate.h"
 #include <stdint.h>
 #include <string.h>
 
-// ===== inflate -- the C twin of src/apps/gz.l's inflate, LvNif-registered =====
-// the tls.c discipline: (inflate s n) -> the bytes | () | 1 past INF_MAX, s a raw DEFLATE
-// stream and n its inflated size or 0. `gz-inflate` reaches for this and falls back to gz-puff.
-// a twin, not a replacement: gz-puff stays the readable statement of RFC 1951 and the
-// differential oracle (test/host/gzc.l holds the two to the same bytes over corpora and
-// over torn and doctored streams). the algorithms differ on purpose -- gz-puff walks the
-// canonical code a bit at a time, this reads a 64-bit window into a per-block table --
-// so the two are held to the same bytes, never to the same shape.
-// malformed streams answer alike too. gz-huff does not check that the code lengths
-// describe a code, so an over-subscribed one decodes to nonsense there, and this
-// reproduces that nonsense: the table is first-writer-wins, so a doubly-claimed slot
-// answers the shortest code, and the zeroed symbol array reads 0 past its end, which is
-// what `peep` answers. checking would be better engineering and a differential failure.
-// the size argument is a hint and a bound -- nothing grows here, so the output is
-// allocated once. a positive n is believed and verified; a wrong or absent one costs a
-// counting pass first, which is the decode with the stores dropped.
-// str0 collects, so the stream is re-read off the stack after it: a C local's pointer
-// into the heap is stale across the bump. tls.c pays the same toll.
+// (inflate s n) -> the bytes | () | 1 past INF_MAX; n the inflated size or 0, believed and
+// verified, else a counting pass first. gz-puff's twin, held to its bytes by test/host/gzc.l,
+// malformed streams too: an over-subscribed code is not refused, first writer wins, and the
+// zeroed symbols read 0 past the end as peep does. str0 collects: reread the stream after it
 
-// the output is one string in the heap, so a stream inflating past this answers 1 and
-// is not grown into
+// the output is one heap string, never grown
 #define INF_MAX ((uintptr_t) 1 << 30)
 
 static love_inline struct g *host_inflate(struct g *g) {
@@ -61,14 +44,10 @@ static lvm(lvm_inflate) {
 
 LvDef("inflate", inflate, 2, "gz");
 
-// ===== inflate, resumable: the stream fed a piece at a time =====
 // (inflate-new 0) -> a state cask. (inflate-feed st s) -> what s inflated to while the stream
-// wants more; (out . rest) once it ends inside s, rest the bytes behind it; () malformed; 1 past
-// INF_MAX in one feed. an empty s says the input is over: a symbol near the end is read against
-// zeros then, as inf_run reads one past its last byte, and a stream still open is torn, ().
-// the codes, tables and walk are inf_run's, so the two answer alike for every cut of a stream.
-// a symbol waits for 15 bits while more may come: an over-subscribed table answers by its
-// first writer, and a short read could land on a slot the full one would not.
+// wants more; (out . rest) once it ends in s; () malformed; 1 past INF_MAX in one feed. an empty
+// s ends the input: the tail reads against zeros as inf_run's does, an open stream is torn.
+// a symbol waits for 15 bits while more may come, so every cut answers as inf_run
 #define IS_HIST 32768u
 #define IS_MAGIC 0x6c6f76656966u
 enum { IM_HEAD, IM_STLEN, IM_STORED, IM_TABLE, IM_CLENS, IM_LENS, IM_SYM, IM_DONE };
@@ -111,14 +90,9 @@ static int inf_sym1(const struct inf_code *c, unsigned root, uint64_t *bb, uint3
  if (*bc < u) return -1;                         // eof, and the code runs past it
  return *bb >>= u, *bc -= u, 1; }
 
-// the fast lane of IM_SYM, inf_fast_run's shape: a literal is 15 bits at most, so the buffer is
-// topped only when it holds fewer, and before a length is taken to the 48 its pair may take,
-// one wide load serving several literals while eight input bytes remain. the output grows
-// ahead of the lane, 266 bytes of room at a time, so a match copies whole words and may run
-// over into room a later byte takes; a reach behind this feed reads the ring a byte at a
-// time. a code past its table's root leaves the lane untaken, so the loop makes no call.
-// 1 at the block's end, 0 short of input, table or room, -1 malformed. the load leaves
-// bits above bc from a byte ip has not passed; they go before a feed returns
+// IM_SYM's fast lane: topped below 15 bits, to 48 before a pair; 266 bytes of room ahead so a
+// match copies whole words; a code past the root leaves the lane. 1 the block's end, 0 short,
+// -1 malformed. bits above bc are a byte ip has not passed: masked before a feed returns
 static int inf_fast(struct inf_st *S, const uint8_t *in, uintptr_t n, uintptr_t *ipp,
                     uint64_t *bbp, uint32_t *bcp, struct inf_acc *A) {
  const uint8_t *ip = in + *ipp, *ie = in + n - 8;
@@ -331,20 +305,8 @@ static LvmWrap(lvm_inflate_feed, host_inflate_feed)
 LvDef("inflate-new", inflate_new, 1, "gz");
 LvDef("inflate-feed", inflate_feed, 2, "gz");
 
-// ===== deflate -- the C twin of src/apps/gz.l's DEFLATE coder, LvNif-registered =====
-// the same discipline as inflate above: (deflate s) -> the raw stream | ().
-// a twin held to the bytes: same greedy parse (chain 32, min match 3, the far-3
-// refusal at 4096), same 16384-symbol blocks each costed stored/fixed/dynamic, same
-// two-queue Huffman merge with its leaf-wins tie, same halving walk back under the
-// depth limit -- so `cmp` over any input is the differential. gz-deflate stays the
-// readable statement; test/host/gzc.l holds the two to the same bytes.
-// why it exists: the love coder is 35x-to-13x off C, but its real cost is the heap.
-// interpreted DEFLATE churns cells per symbol, and on the love0 egg that runs selfpack
-// the heap grows toward the budget before a collection pays. this is a fixed window
-// and some tables.
-// scratch is not the heap: one alloc block, held across both passes. the shape is
-// inflate's counting pass twice over -- count, str0 the exact answer, re-derive and emit --
-// because str0 may collect, which moves the source.
+// (deflate s) -> the raw stream | (): gz-deflate's twin to the byte (gzc.l), every choice its
+// own. scratch is one alloc block; count, str0 the answer, emit again, as str0 moves the source
 #define DF_WSIZE 32768u
 #define DF_WMASK 32767u
 #define DF_HMASK 32767u
@@ -352,8 +314,7 @@ LvDef("inflate-feed", inflate_feed, 2, "gz");
 #define DF_TOKMAX 16384u
 #define DF_TOOFAR 4096u
 
-// the bit sink: LSB-first bytes, codes handed in already reversed (gz-put's law).
-// with no out it counts, which is the whole first pass.
+// lsb-first, codes handed in reversed (gz-put); with no out it counts
 struct df_sink { uint8_t *out; uintptr_t op, cap; uint64_t acc; unsigned nb; int err; };
 
 static void df_put(struct df_sink *t, uint32_t v, unsigned k) {
@@ -377,9 +338,7 @@ static uint32_t df_rev(uint32_t v, unsigned k) {
 static unsigned df_lcode(unsigned v) { for (unsigned i = 28; i >= 1; i--) if (gz_lbase[i] <= v) return i; return 0; }
 static unsigned df_dcode(unsigned v) { for (unsigned i = 29; i >= 1; i--) if (gz_dbase[i] <= v) return i; return 0; }
 
-// --- the Huffman lengths: sorted leaves + the internal queue, ties to the leaf,
-// --- and the halving walk when the code outgrows the format (gz-hpass exactly).
-// scratch rows are the caller's; pa is zeroed here because depth chases it to 0.
+// gz-hpass exactly: two queues, ties to the leaf, halving past lim; pa zeroed, depth chases it to 0
 static unsigned df_hlens(uint32_t *f, unsigned nsym, unsigned lim, uint8_t *lens,
                          uint32_t *hc, uint32_t *keys, uint32_t *w, uint32_t *sy, uint32_t *pa) {
  unsigned i, u = 0, pass;
@@ -421,8 +380,7 @@ static void df_hcodes(const uint8_t *lens, unsigned nsym, unsigned mx, uint32_t 
  for (l = 1; l <= mx && l < 16; l++) { nxt[l] = c; c = (c + cnt[l]) << 1; }
  for (i = 0; i < nsym; i++) if (lens[i]) { code[i] = df_rev(nxt[lens[i]], lens[i]); nxt[lens[i]]++; } }
 
-// the code lengths, run-length coded: a value once before 16 may repeat it,
-// 17 and 18 the zero runs (gz-run); an entry is (sym << 7) + extra.
+// gz-run: 16 repeats the value before it, 17 and 18 zero runs; an entry is (sym << 7) + extra
 static unsigned df_run(const uint8_t *cl, unsigned tot, uint32_t *rl) {
  unsigned i = 0, j = 0;
  while (i < tot) {
@@ -474,8 +432,7 @@ static void df_wstored(struct df_sink *t, const uint8_t *s, uintptr_t i0, uintpt
  df_put(t, (uint32_t) ((len ^ 65535) & 255), 8); df_put(t, (uint32_t) (((len ^ 65535) >> 8) & 255), 8);
  for (k = 0; k < len; k++) df_put(t, s[i0 + k], 8); }
 
-// the arena, carved once: the finder's two windows outlive every block, the rest
-// is per block or per code and merely reused.
+// carved once: the finder's windows outlive every block, the rest is reused
 struct df_ar {
  uint32_t *head, *prev, *tok, *fl, *fd,
           *hc, *keys, *w, *sy, *pa, *rlb, *fc,
@@ -611,8 +568,7 @@ static int64_t df_go(const uint8_t *s, uintptr_t i0, uintptr_t n, uint8_t *out, 
  df_align(&t);
  return t.err ? -2 : (int64_t) t.op; }
 
-// the image lane: deflate raw bytes into the caller's buffer, one pass, no love stack.
-// it is no twin: a lazy parse down a 4096 chain, zlib -9's, a bake-time cost for bytes.
+// the image lane, no twin: one pass into the caller's buffer, zlib -9's lazy parse
 intptr_t deflate_raw(struct g *g, unsigned char const *in, uintptr_t n,
                         unsigned char *out, uintptr_t cap) {
  uint8_t *m = alloc(NULL, DF_ARENA);
@@ -621,7 +577,7 @@ intptr_t deflate_raw(struct g *g, unsigned char const *in, uintptr_t n,
  got = df_go(in, 0, n, out, cap, m, 1);
  alloc(m, 0);
  return (intptr_t) got; }
-// ..and against a preset dictionary, which the inflater is handed as inflate_dict's dic
+// against a preset dictionary, inflate_dict's dic
 intptr_t deflate_dict(struct g *g, unsigned char const *in, uintptr_t n,
                          unsigned char const *dic, uintptr_t nd, unsigned char *out, uintptr_t cap) {
  uint8_t *m = alloc(NULL, DF_ARENA), *s = m ? alloc(NULL, nd + n) : NULL;
@@ -645,10 +601,7 @@ love_noinline static struct g *host_deflate(struct g *g) {
  g->sp[1] = got != want ? ZeroPoint : g->sp[0];
  return g->sp++, g; }
 
-// (deflate-best s) -> the raw stream | (): the image lane's coder, no twin of the love one --
-// a lazy parse down a 4096 chain, zlib -9's, for bytes that are written once and read often
-// (the dist tarball, gzip -9). the parse is dear, so it runs once, into a buffer at
-// deflate's own bound (stored blocks: five bytes a block over the input), then the string
+// (deflate-best s) -> the raw stream | (): the image lane once, into a buffer at the stored bound
 love_noinline static struct g *host_deflate_best(struct g *g) {
  word sw = g->sp[0];
  if (!strp(sw)) return g->sp[0] = ZeroPoint, g;
@@ -663,7 +616,6 @@ love_noinline static struct g *host_deflate_best(struct g *g) {
 static LvmWrap(lvm_deflate, host_deflate)
 static LvmWrap(lvm_deflate_best, host_deflate_best)
 
-// one operand, so the run is {impl, ret0} -- src/love/nifs.l states the law and lvm_cur
-// curries once unconditionally, which at arity one hands the body an operand too many.
+// arity one runs {impl, ret0}: lvm_cur would hand one operand too many (nifs.l)
 LvDef("deflate", deflate, 1, "gz");
 LvDef("deflate-best", deflate_best, 1, "gz");

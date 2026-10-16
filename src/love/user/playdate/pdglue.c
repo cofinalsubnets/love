@@ -1,8 +1,5 @@
-// the SDK half: the only file that includes pd_api.h. every crossing flattens
-// to ints and pointers here, so the seam stays word-only -- which buys the
-// variadic logToConsole, whose `...` no pointer type carries. floats need no
-// flattening either way: a pointer's own parameter list places an argument and
-// a result is read from s0, so getCrankAngle answers straight.
+// the SDK half, the only file that includes pd_api.h: every crossing flattens to ints and
+// pointers, so the seam stays word-only (logToConsole's `...` needs that); floats pass straight
 #include "pd_api.h"
 #include "../../love.h"                   // alloc, the runtime's one heap door
 #include "pdglue.h"
@@ -24,8 +21,7 @@ void pdg_log(const char *s) { PD->system->logToConsole("%s", s); }
 unsigned char *pdg_frame(void) { return PD->graphics->getFrame(); }
 void pdg_mark_updated(void) { PD->graphics->markUpdatedRows(0, LCD_ROWS); }
 void pdg_set_update(int (*cb)(void *)) { PD->system->setUpdateCallback(cb, NULL); }
-// read a whole bundled data file into buf (<= cap bytes); -1 = no file.
-// the wake image rides the pdx this way (kFileRead reads the bundle).
+// a whole bundled file into buf (<= cap bytes), -1 none: how the wake image rides the pdx
 int pdg_file_read(const char *path, void *buf, unsigned cap) {
   SDFile *f = PD->file->open(path, kFileRead);
   if (!f) return -1;
@@ -33,15 +29,8 @@ int pdg_file_read(const char *path, void *buf, unsigned cap) {
   PD->file->close(f);
   return n; }
 
-// --- the horn's device -----------------------------------------------------------
-// the SDK PULLS -- an AudioSourceFunction, one buffer per channel, as many frames as it
-// wants -- and the horn PUSHES interleaved stereo. src/love/hornring.h is the ring between
-// them, shared with the test frontend so the awkward half is lawed off the device
-// (test/front/hornseat.l); what is here is only the SDK's own shape.
-//
-// the pull runs on the audio side -- a thread in the simulator, a DMA refill on the
-// device -- and the push on love's, which is the single-producer/single-consumer the
-// ring is written for.
+// the horn: the SDK pulls on its audio side, love pushes; hornring.h between them (lawed off
+// the device by test/front/hornseat.l)
 enum { pdg_hn = 1 << 14 };                // 16384 frames, ~370 ms at 44.1k
 static int16_t h_buf[pdg_hn * 2];
 static struct horn_ring h_ring = { h_buf, pdg_hn, 0, 0 };
@@ -58,21 +47,11 @@ int pdg_horn_open(int rate) {
   return h_src ? 0 : -1; }
 int pdg_horn_push(const void *pcm, int n) { return hring_push(&h_ring, pcm, n); }
 int pdg_horn_lag(void) { return (int) hring_lag(&h_ring); }
-// the source stays added and plays silence: taking it out from under a callback that
-// may be mid-buffer buys nothing this seat needs.
+// the source stays added, playing silence: never removed from under a mid-buffer callback
 void pdg_horn_close(void) { h_ring.rd = h_ring.wr = 0; }
 
-// on device this file also replaces the SDK's setup.c, which did three things: name
-// the entry, capture the realloc, and answer malloc/free over it. the malloc trio
-// matters because moonlibc's own reaches for a heap this seat has no syscall to ask
-// for -- the SDK realloc IS the heap here, 16 MB of it. the SIMULATOR keeps setup.c
-// (it is an ordinary hosted .so), so there the shim and the trio are its.
-// the runtime's heap, named rather than inherited: the SDK's realloc IS the memory on
-// this seat, 16 MB of it, and the collector's pools have no other place to come from.
-// the malloc trio lands on the same realloc either way -- ours below on device, the SDK's
-// setup.c on the simulator -- but which translation unit happens to answer that name is
-// not a thing this seat should have to depend on, so it says so here and links no
-// src/love/alloc.c. (src/love/love.h names the door; src/love/alloc.c is what a malloc-heap seat links.)
+// the SDK's realloc is the whole heap, so alloc is defined here and alloc.c not linked. on
+// device this file replaces setup.c (the entry and the malloc trio); the simulator keeps it
 void *alloc(void *p, size_t n) {
   return n ? pdg_realloc(NULL, n) : (pdg_realloc(p, 0), NULL); }
 
@@ -85,8 +64,7 @@ static int pd_event(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
 #if TARGET_PLAYDATE
 int eventHandlerShim(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
   return pd_event(pd, event, arg); }
-// ldbare32 takes _start for e_entry and the SDK's link script names eventHandlerShim;
-// a loader may read either, so both are true here and the named one is the real function.
+// ldbare32 enters at _start, the SDK's link script names eventHandlerShim: both hold
 int _start(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
   return eventHandlerShim(pd, event, arg); }
 void *malloc(size_t n) { return pdg_realloc(NULL, n); }

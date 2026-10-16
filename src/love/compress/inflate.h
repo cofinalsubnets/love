@@ -1,7 +1,5 @@
-// src/love/compress/inflate.h -- RFC 1951's DEFLATE, decoded: the code tables, and inf_run over them.
-// compress/gz.c builds love's inflate on it, and src/inle/uefi/slot.c, which has no love, inflates a
-// gzipped kernel with it. an includer that has bytes.h gets its one-load ld64; one that has
-// not reads eight bytes by gathering them.
+// inflate.h -- RFC 1951 DEFLATE decoded, for gz.c and for uefi/slot.c, which has no love.
+// an includer with bytes.h gets its one-load ld64, else a byte gather
 #ifndef INFLATE_H
 #define INFLATE_H
 #include "prefix.h"
@@ -29,36 +27,26 @@ static const uint8_t gz_dext[30] = {
 static const uint8_t gz_clord[19] = {
  16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
-// eight unaligned bytes as a word, little-endian by construction, once per symbol --
-// bytes.h's ld64 where the machine takes one load, the byte gather where it does not.
 #if wideld
 #define LD64(p) ld64(p)
 #else
 #define LD64(p) ld64le(p)
 #endif
 
-// the table roots. a code longer than its root falls through to the bit walk, so these
-// only trade build cost against how often that happens: 12 bits leaves ~1% of symbols
-// walking, and the fill is 2^root writes per block whatever the symbol count.
+// table roots: a longer code walks bits, so these trade 2^root fill writes against walks
 #define LROOT 12
 #define DROOT 9
 #define CROOT 7
 
-// one block's decode tables: the three canonical codes and the table each indexes.
-// per-call scratch on inf_run's frame, 10 KB of it -- the tightest stack under that is
-// the kernel's 64 KiB boot one, where kmain inflates the source blob into its initrd.
+// one block's decode tables, 10 KB on inf_run's frame: the kernel's 64 KiB boot stack inflates with it
 struct inf_tabs {
  uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT], lsym[288], dsym[32], csym[19];
  struct inf_code lit, dst, cl;
  const uint8_t *dic; uintptr_t nd; };            // the preset dictionary behind the output, nd 0 for none
 
-// inf_run's fast lane. a literal is 15 bits at most, so the buffer is topped only when it
-// holds fewer, and a length, before it is taken, to the 48 a whole pair may take: one wide
-// load then serves several literals. the load wants eight bytes on; while 266 bytes of room
-// remain a match never nears cap, so the copy moves whole words and lets the last run over
-// into room a later byte takes. a code past its table's root leaves the lane untaken, the
-// distance's looked at before its length goes, so the loop makes no call and mooncc keeps
-// its state in registers. 1 at the block's end, 0 short of margin or table, -1 malformed.
+// the fast lane: topped up below 15 bits, and to 48 before a pair. with 266 bytes of room a
+// copy may overrun in whole words. a code past its root (the distance's peeked before the
+// length is taken) leaves the lane, so it makes no call. 1 block end, 0 short of margin, -1 malformed
 static int inf_fast_run(const uint8_t *in, uintptr_t n, uintptr_t *ipp, uint64_t *bbp,
                         unsigned *bcp, uint8_t *out, uintptr_t *opp, uintptr_t cap,
                         struct inf_tabs *t) {
@@ -106,10 +94,8 @@ static int inf_fast_run(const uint8_t *in, uintptr_t n, uintptr_t *ipp, uint64_t
  *ipp = (uintptr_t) (ip - in), *opp = (uintptr_t) (op - out), *bbp = bb, *bcp = (unsigned) bc;
  return r; }
 
-// -1 where the twin answers (), -2 where the output outruns cap. out may be NULL, and
-// then nothing is stored and the answer is only how long the stream inflates to --
-// which is exact, because nothing the buffer holds ever reaches a branch.
-// dic is the nd bytes that come before the output, a preset dictionary (nd 0 for none)
+// -1 where the twin answers (), -2 past cap. out NULL answers the exact inflated length;
+// dic is a preset dictionary of nd bytes before the output (nd 0 for none)
 static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap,
                         const uint8_t *dic, uintptr_t nd) {
  uintptr_t ip = 0, op = 0;
@@ -119,10 +105,7 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
  struct inf_tabs t;
  t.dic = dic, t.nd = nd;
 
-// one unaligned load where there is room. the byte loop below is the same act and
-// eight times the work; the arithmetic is libdeflate's -- absorb what fits, step by the
-// bytes that wholly landed, and round the count up to 56 or 63. what spilled off the top
-// belongs to a byte `ip` has not passed, so it is read again and not lost.
+// libdeflate's refill: step ip by the bytes that wholly landed; a spilled top is read again
 #define FILL() do { \
    if (ip + 8 <= n) { bb |= LD64(in + ip) << bc; ip += 7 - (bc >> 3); bc |= 56; } \
    else while (bc <= 56 && ip < n) { bb |= (uint64_t) in[ip++] << bc; bc += 8; } } while (0)
@@ -169,8 +152,7 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
    inf_build(&t.cl, cl, 19, t.csym, t.ctab, CROOT);
    memset(lens, 0, sizeof lens);
    tot = hlit + hdist;
-   // a run may overshoot `tot` and the twin lets it: it writes into a tablet, which has
-   // no end, and stops on the next look. so the write is clamped and the cursor is not.
+   // a run may overshoot tot, as the twin's does: the write is clamped, the cursor not
    for (i = 0; i < tot; ) {
     unsigned sy, r, v, k;
     SYM(t.cl, t.ctab, CROOT, sy);
@@ -211,12 +193,8 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
     memcpy(out + op, dic + nd - (d - op), h);
     for (uintptr_t k = h; k < l; k++) out[op + k] = out[op + k - d]; }
    else if (out) {
-    // deflate lets a run overlap its own source -- dist 1 len 100 is a hundred of one
-    // byte -- so the bytes go out in order and read each other back as they go, which is
-    // right at every distance. eight or more apart, no byte of a word is read back inside
-    // that word, and the wide move says the same thing: mooncc spends ten instructions a
-    // byte on the narrow one here, so the guard pays for itself well under the old
-    // 8.5-byte mean match.
+    // a run overlaps its source and reads itself back in order; eight or more apart,
+    // no byte of a word reads back inside it, so the word move agrees
     uint8_t *dp = out + op, *sp = dp - d;
     uintptr_t k = 0;
 #if wideld
@@ -233,8 +211,7 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
 static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap) {
  return inf_rund(in, n, out, cap, 0, 0); }
 
-// the raw-DEFLATE door for C callers with no g: src/inle/kmain.c inflates the
-// source blob into its initrd through this. same law as inf_run, exported.
+// raw DEFLATE for C callers with no g (kmain's initrd)
 intptr_t inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap) {
  return (intptr_t) inf_run(in, n, out, cap); }
 intptr_t inflate_dict(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap,

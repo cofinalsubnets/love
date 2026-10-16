@@ -198,7 +198,7 @@ static const uint8_t *const vp_cats[4] = { vp_cat3, vp_cat4, vp_cat5, vp_cat6 };
 static const int8_t vp_ytree[18] = { 0, 1, -1, 2, -2, 3, 4, 6, -3, 5, -4, -5, -6, 7, -7, 8, -8, -9 };
 static const uint8_t wl_clord[19] = { 17, 18, 0, 1, 2, 3, 4, 5, 16, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
-// ===== the allocations of one decode, all freed at its end =====
+// the allocations of one decode, all freed at its end
 struct wp_mem { void *p[48]; int n; };
 static void *wp_new(struct wp_mem *m, uintptr_t n) {
  if (m->n == 48) return NULL;
@@ -215,7 +215,7 @@ static void wp_free(struct wp_mem *m) { while (m->n) alloc(m->p[--m->n], 0); }
 
 static int wp_big(uintptr_t w, uintptr_t h) { return w * h > (1u << 24); }
 
-// ===== vp8l, the lossless image =====
+// vp8l, the lossless image
 struct wl_tr { unsigned type, bits, xs; uint32_t *data; };
 struct wl {
  const uint8_t *s; uintptr_t n, pos; uint64_t v, used; unsigned nb;
@@ -457,7 +457,7 @@ static int wl_decode(struct wp_mem *m, const uint8_t *s, uintptr_t n, unsigned w
  if (wl_eos(&d)) return 2;
  return (*out = wl_undo(&d, px, xs, h)) ? 0 : 6; }
 
-// ===== ALPH, the alpha plane under a lossy picture =====
+// ALPH, the alpha plane under a lossy picture
 static int wa_decode(struct wp_mem *m, const uint8_t *s, uintptr_t n, unsigned w, unsigned h, uint8_t *a) {
  if (n < 1) return 2;
  unsigned meth = s[0] & 3, filt = s[0] >> 2 & 3, pre = s[0] >> 4 & 3, x, y;
@@ -484,7 +484,7 @@ static int wa_decode(struct wp_mem *m, const uint8_t *s, uintptr_t n, unsigned w
     left = o[x] = (uint8_t) (o[x] + g), tl = top; } } }
  return 0; }
 
-// ===== vp8, the lossy frame =====
+// vp8, the lossy frame
 struct vp_br { const uint8_t *p, *e; uint64_t v; uint32_t range; int bits, eof; };
 static void vp_init(struct vp_br *b, const uint8_t *p, uintptr_t n) {
  b->p = p, b->e = p + n, b->v = 0, b->range = 254, b->bits = -8, b->eof = 0; }
@@ -571,7 +571,7 @@ static void vp_idct(const int16_t *in, uint8_t *dst) {
   dst[0] = vp_c1(dst[0] + ((a + d) >> 3)), dst[1] = vp_c1(dst[1] + ((b + cc) >> 3));
   dst[2] = vp_c1(dst[2] + ((b - cc) >> 3)), dst[3] = vp_c1(dst[3] + ((a - d) >> 3)); } }
 
-// ----- the intra predictions, over a BPS-wide work buffer with its borders laid -----
+// the intra predictions, over a BPS-wide work buffer with its borders laid
 #define DST(x, y) dst[(x) + (y) * BPS]
 #define AVG3(a, b, c) ((uint8_t) (((a) + 2 * (b) + (c) + 2) >> 2))
 #define AVG2(a, b) ((uint8_t) (((a) + (b) + 1) >> 1))
@@ -671,7 +671,7 @@ static void vp_pred4(uint8_t *dst, int mode) {
 #undef AVG3
 #undef AVG2
 
-// ----- the headers -----
+// the headers
 static int vp_headers(struct vp *v, const uint8_t *s, uintptr_t n) {
  uint32_t bits = ld24le(s), plen = bits >> 5;
  int i, t, b, c, p;
@@ -749,7 +749,7 @@ static int vp_headers(struct vp *v, const uint8_t *s, uintptr_t n) {
     f->hev = level >= 40 ? 2 : level >= 15 ? 1 : 0; } }
  return br->eof ? 2 : 0; }
 
-// ----- one macroblock: its modes, its tokens, its pixels -----
+// one macroblock: its modes, its tokens, its pixels
 static int vp_mb(struct vp *v, unsigned mbx, unsigned mby, uint8_t *yuv) {
  struct vp_br *br = &v->br, *tb = &v->parts[mby & (v->nparts - 1)];
  uint8_t modes[16], *top = v->intra_t + 4 * mbx, *left = v->intra_l;
@@ -845,7 +845,7 @@ static int vp_mb(struct vp *v, unsigned mbx, unsigned mby, uint8_t *yuv) {
   memcpy(v->V + (mby * 8 + (unsigned) j) * v->uvs + mbx * 8, vd + j * BPS, 8); }
  return 0; }
 
-// ----- the loop filter, over the whole frame in raster order -----
+// the loop filter, over the whole frame in raster order
 static int vp_sc1(int v) { return v < -128 ? -128 : v > 127 ? 127 : v; }
 static int vp_sc2(int v) { return v < -16 ? -16 : v > 15 ? 15 : v; }
 static int vp_abs(int v) { return v < 0 ? -v : v; }
@@ -906,7 +906,7 @@ static void vp_filter(struct vp *v) {
     for (k = 4; k < 16; k += 4) vp_loop(y + k * ys, ys, 1, 16, lim, il, hev, 0);
     vp_loop(u + 4 * uvs, uvs, 1, 8, lim, il, hev, 0), vp_loop(w + 4 * uvs, uvs, 1, 8, lim, il, hev, 0); } } }
 
-// ----- yuv 4:2:0 to rgba, the chroma upsampled as libwebp's "fancy" upsampler does -----
+// yuv 4:2:0 to rgba, the chroma upsampled as libwebp's "fancy" upsampler does
 static int vp_mh(int v, int c) { return (v * c) >> 8; }
 static uint8_t vp_c8(int v) { return (v & ~16383) == 0 ? (uint8_t) (v >> 6) : v < 0 ? 0 : 255; }
 static void vp_rgb(int y, int u, int v, uint8_t *o) {
@@ -977,7 +977,7 @@ static int vp_decode(struct wp_mem *m, const uint8_t *s, uintptr_t n, unsigned w
  wp_drop(m, v->Y), wp_drop(m, v->ytop), wp_drop(m, v->intra_t), wp_drop(m, v->fi), wp_drop(m, v);
  return 0; }
 
-// ===== the container =====
+// the container
 // one frame's chunks (an ALPH, then a VP8 or a VP8L) from p to e -> w*h rgba into o
 static int wp_frame(struct wp_mem *m, const uint8_t *p, const uint8_t *e, unsigned w, unsigned h, uint8_t *o) {
  const uint8_t *alph = NULL;

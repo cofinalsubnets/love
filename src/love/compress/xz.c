@@ -1,20 +1,16 @@
-// src/love/compress/xz.c -- LZMA and LZMA2, both directions, and xz's crc64. the codec only: src/apps/xz.l
-// holds the .xz container, the block headers and the index, and says which door to take.
+// xz.c -- LZMA and LZMA2 both directions, and xz's crc64; the .xz container is src/apps/xz.l
 //   (lzma2d s)               a raw LZMA2 chunk stream -> its bytes | () | 1 past XZ_MAX
 //   (lzma2len s)             the stream's length through its 0x00 end byte | ()
 //   (lzma2e s dict)          bytes -> a raw LZMA2 stream, dict the match window | ()
-//   (lzma2e-by s base)       s coded against base: the stream reaches into base as if it had
-//                            just been said, and carries only s | ()
+//   (lzma2e-by s base)       s coded against base, the stream carrying only s | ()
 //   (lzma2d-by z base)       such a stream with its base -> s | ()
 //   (lzmad s props dict n)   a .lzma body (after its 13-byte head) -> its bytes | () | 1 past
 //                            XZ_MAX; n -1 unknown
 //   (crc64 s)                CRC-64/XZ as the 8 little-endian bytes a check field holds
 //   (crc64-on c s)           the same carried on: c what crc64 said of the bytes before s
-//   (lzma2-new dict)         a state for LZMA2 a chunk at a time: the model, and a window of
-//                            dict bytes (and a chunk's room) in place of the whole output
+//   (lzma2-new dict)         a state for LZMA2 a chunk at a time, a dict-sized window
 //   (lzma2-chunk st c)       one whole chunk (control byte, header, data) -> its bytes | ()
-// the decoders read the output as their dictionary, so the window is everything said so far.
-// the coder prices its way: an optimal parse over a binary-tree match finder.
+// the decoders' dictionary is the output; the coder is an optimal parse over a binary-tree finder
 #ifndef XZ_STANDALONE
 #include "love.h"
 #include "bytes.h"
@@ -28,7 +24,7 @@
 #define LZ_TOP (1u << 24)
 #define LZ_MINLEN 2
 #define LZ_MAXLEN 273
-// the output is one string in the heap: past this a stream is refused, not grown into
+// the output is one heap string: past this a stream is refused
 #define XZ_MAX ((uintptr_t) 1 << 30)
 
 typedef uint16_t lzp;
@@ -71,17 +67,13 @@ static void rd_norm(struct lz_rd *r) {
   r->range <<= 8;
   if (r->p < r->e) r->code = r->code << 8 | *r->p++; else r->bad = 1, r->code <<= 8; } }
 
-// the decoder's steps, on locals (rg the range, cd the code, ip the input to ie), written in
-// place so mooncc keeps them in registers. word-wide, as a narrow one is a zero-extend after
-// every step; a range under LZ_TOP shifted still fits 32 bits. past the input's end ip counts on
-// over zeros, so a short stream is ip > ie, asked per symbol.
+// the decoder on locals (rg range, cd code, ip input to ie), word-wide to stay in registers.
+// past the end ip counts on over zeros: a short stream is ip > ie, asked per symbol
 #define LZ_NORM() if (rg < LZ_TOP) { rg <<= 8, cd = cd << 8 | (ip < ie ? *ip : 0), ip++; }
 #define LZ_BIT(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
  if (cd < q_) rg = q_, *p_ = (lzp) (w_ + ((LZ_ONE - w_) >> LZ_MOVE)), b = 0; \
  else rg -= q_, cd -= q_, *p_ = (lzp) (w_ - (w_ >> LZ_MOVE)), b = 1; }
-// ..and without a branch, for the bits of a tree, whose outcomes no predictor guesses: k_, the
-// sign of cd - q, is all ones for a 0. the range keeps its bound or loses it, the prob moves
-// toward the outcome.
+// branchless, for a tree's unpredictable bits: k_, the sign of cd - q, is all ones for a 0
 #define LZ_BITF(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_, k_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
  k_ = (uintptr_t) ((intptr_t) (cd - q_) >> 63), b = k_ + 1; \
  rg = q_ + ((rg - q_ - q_) & ~k_), cd -= q_ & ~k_; \
@@ -96,9 +88,7 @@ static void rd_norm(struct lz_rd *r) {
         if (!c_) { LZ_TREE((l)->mid[ps], 3, v) v += 8; } \
         else { LZ_TREE((l)->high, 8, v) v += 16; } } }
 
-// the trees and the literals as their own small functions: in lz_run's loop mooncc keeps a
-// tree's temporaries on the stack, here in registers (x64 +9%, a64 +37%). the coder in at s,
-// out back to it
+// out of lz_run's loop so mooncc keeps a tree's temporaries in registers; the coder in and out at s
 struct lz_cs { uintptr_t rg, cd; const uint8_t *ip, *ie; };
 static love_noinline uintptr_t lz_ftree(struct lz_cs *s, lzp *t_, uintptr_t top) {
  uintptr_t rg = s->rg, cd = s->cd, m_ = 1, b_; const uint8_t *ip = s->ip, *ie = s->ie;
@@ -129,10 +119,8 @@ static int out_room(struct lz_out *o, uintptr_t k) {
  if (o->b) alloc(o->b, 0);
  o->b = nb; o->cap = c; return 1; }
 
-// decode until `lim` bytes stand in the output or, with eopm, the end marker says so.
-// -> 1 done, 2 the marker seen, 0 corrupt. a match may not run past lim. the coder, the
-// state and rep0 ride locals, back in r and m at the end for the next chunk; the other reps
-// move only on a rep, and stay in m.
+// decode to lim bytes or, with eopm, the end marker: 1 done, 2 the marker, 0 corrupt.
+// coder, state and rep0 ride locals, back in r and m at the end; the other reps stay in m
 static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr_t lim, int eopm) {
  uintptr_t rg = r->range, cd = r->code, st = m->state, r0 = m->reps[0], n = o->n, b, len, d;
  const uint8_t *ip = r->p, *ie = r->e;
@@ -223,8 +211,7 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
  return rc; }
 
 // --- LZMA2: the chunk walk ------------------------------------------------------------------
-// the header pass alone sizes the output and finds the end byte; -> total bytes, *end the
-// offset past 0x00; -1 a malformed walk.
+// the header pass: total bytes, *end past the 0x00; -1 malformed
 static int64_t l2_walk(const uint8_t *s, uintptr_t n, uintptr_t *end) {
  uintptr_t i = 0;
  int64_t tot = 0;
@@ -245,8 +232,8 @@ static int64_t l2_walk(const uint8_t *s, uintptr_t n, uintptr_t *end) {
   if (n - i - h < k) return -1;
   tot += u; i += h + k; } }
 
-// decode the chunks into out (cap its exact size). -> 0 ok, -1 corrupt. the reset rules:
-// a dict reset first, props before the first LZMA chunk and after a 0x01.
+// the chunks into out (cap exact): 0 ok, -1 corrupt. a dict reset first, props before the
+// first LZMA chunk and after a 0x01
 static int l2_dec(const uint8_t *s, uint8_t *out, uintptr_t cap, struct lz_model *m, uintptr_t pre) {
  struct lz_out o = { out, pre, cap, 0, 0, 0 };        // pre bytes of out said already: a preset base
  struct lz_rd r;
@@ -371,9 +358,8 @@ static void xe_rep(struct lz_model *m, struct lz_rc *e, uintptr_t p, unsigned id
  m->state = st < 7 ? 8 : 11; }
 
 // --- the match finder: a binary tree over the whole input, the window its dict -------------
-// each position under a 4-byte hash roots a tree of the earlier ones sharing it, ordered by
-// what follows them, so one walk down finds the longest matches and re-roots the tree at the
-// new position. 2- and 3-byte heads find the nearest short ones. entries are position + 1.
+// a 4-byte hash roots a tree of earlier positions ordered by what follows: one walk finds the
+// longest matches and re-roots. 2- and 3-byte heads find short ones. entries are position + 1
 #define XE_H4BITS 20
 #define XE_DEPTH 48
 #define XE_SKIPDEPTH 8                          // a position indexed with no matches asked
@@ -396,8 +382,7 @@ static unsigned xe_mlen(const uint8_t *a, const uint8_t *b, unsigned lim) {
  while (k < lim && a[k] == b[k]) k++;
  return k; }
 
-// position p into the heads and its tree; with ls, every match longer than the nearer ones
-// (lengths rising in ls, distances less one in ds) -> how many. lim the bytes p may match.
+// index p; with ls, the matches longer than the nearer ones (ls rising, ds distance - 1) -> how many
 static unsigned xe_bt(struct xe_mf *f, uintptr_t p, unsigned lim, uint32_t *ls, uint32_t *ds) {
  const uint8_t *s = f->s, *sp = s + p;
  unsigned k = 0, best = 1;
@@ -507,10 +492,8 @@ static uint32_t xp_lit(const struct xe_px *x, const struct lz_model *m, unsigned
  return c; }
 
 // --- the optimal parse: the cheapest way through the next stretch, priced ---------------------
-// node i is the input i bytes on: its cheapest price from the plan's start, the op that reached
-// it (back: a rep 0..3, a match's distance + 4, XB_LIT or XB_SHORT) from node prev, and the
-// state and reps that path leaves. a plan runs until no op from a node reached so far reaches
-// further, or a match at nice length is taken whole, or XE_OPTS.
+// node i, i bytes on: its cheapest price, the op that reached it (back: rep 0..3, distance + 4,
+// XB_LIT, XB_SHORT) from prev, and the state and reps that leaves
 #define XE_OPTS 2048
 #define XB_LIT 0xffffffffu
 #define XB_SHORT 0xfffffffeu
@@ -590,8 +573,8 @@ static unsigned xe_plan(struct lz_model *m, struct xe_mf *f, struct xe_px *x, st
  for (uint32_t i = cur; i; i = nd[i].prev) k--, ops[k].back = nd[i].back, ops[k].len = nd[i].len;
  return n; }
 
-// the whole stream into out (cap bytes, sized by the caller for the worst case) -> its
-// length, or -1. a chunk is coded speculatively into cs; one that does not shrink goes raw.
+// the whole stream into out (cap the worst case) -> its length, or -1. a chunk that does not
+// shrink goes raw
 #define XE_CU (2u << 20)
 #define XE_CC 65536u
 #define XE_CSLACK 256u
@@ -658,8 +641,7 @@ static int64_t xe_go(const uint8_t *s, uintptr_t n, uint32_t dict, uint8_t *out,
 static uintptr_t xe_cap(uintptr_t n) { return n + 16 * (n / 65536 + 2); }
 
 // --- crc64 ----------------------------------------------------------------------------------
-// eight bytes at a time, as hash.c's crc32: eight independent lookups a step where one byte's
-// is a chain. the tables are built on the first call, write-once and idempotent as crc32's are
+// eight bytes a step, as hash.c's crc32; the tables are write-once and idempotent
 static uint64_t crc64_t[8][256];
 static int crc64_ready;
 static void crc64_init(void) {
@@ -683,12 +665,8 @@ static uint64_t xz_crc64_on(uint64_t c0, const uint8_t *p, uintptr_t n) {
 static uint64_t xz_crc64(const uint8_t *p, uintptr_t n) { return xz_crc64_on(0, p, n); }
 
 // --- LZMA2 a chunk at a time ---------------------------------------------------------------
-// the window holds the last dict bytes out and room past them: a chunk's (2 MiB at most), or the
-// dict's own up to 8 MiB, so a slide moves the dict once per as many bytes out. a chunk that
-// would not fit slides it down first, by a multiple of 16 so the position bits (pb, lp, at
-// most 4 each) read the same off the window as off the whole output. a match reaches no
-// further back than the window holds, which is every distance the dictionary allows. the
-// reset rules are l2_dec's.
+// the window: the last dict bytes and a chunk's room past them. a slide is by a multiple of 16,
+// so the position bits read the same off the window as off the whole output
 #define L2_CHUNK ((uintptr_t) 1 << 21)
 #define L2_ROOM(d) (((d) < L2_CHUNK ? L2_CHUNK : (d) < ((uintptr_t) 1 << 23) ? (d) : (uintptr_t) 1 << 23) + 16)
 #define L2_MAGIC 0x6c7a6d6132u
@@ -737,7 +715,7 @@ static struct lz_model *lz_new(unsigned lclp) {
  return m; }
 
 #ifndef XZ_STANDALONE
-// ===== the nifs: str0 may collect, so a string is re-read off the stack after it =====
+// the nifs: str0 may collect, so a string is re-read off the stack after it
 love_noinline static struct g *host_lzma2len(struct g *g) {
  word sw = g->sp[0];
  uintptr_t end;
@@ -745,8 +723,7 @@ love_noinline static struct g *host_lzma2len(struct g *g) {
             ? putcharm((intptr_t) end) : ZeroPoint;
  return g; }
 
-// a raw LZMA2 stream into exactly cap bytes of out, for a C caller with no g (src/love/archive/srctree.c)
-// -> cap, or -1 for one that is torn or says more or less than that
+// a raw LZMA2 stream into exactly cap bytes, for a caller with no g -> cap, or -1
 intptr_t lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
  uintptr_t end;
  if (l2_walk(s, n, &end) != (int64_t) cap) return -1;
