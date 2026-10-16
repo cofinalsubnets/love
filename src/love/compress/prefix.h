@@ -1,5 +1,5 @@
 // src/love/compress/prefix.h -- one canonical prefix code read lsb first, rfc 1951's and vp8l's alike:
-// compress/gz.c's inflate and picture/webp.c's lossless decoder build and read it the same way.
+// compress/gz.c and picture/webp.c build and read it the same way, and choose its lengths alike.
 #ifndef INF_H
 #define INF_H
 #include <stdint.h>
@@ -42,5 +42,38 @@ static int inf_walk(const struct inf_code *c, uint64_t bb) {
   if (code - cnt < first) return (int) c->sym[index + (code - first)] << 4 | (int) l;
   index += cnt; first = (first + cnt) << 1; code <<= 1; }
  return -1; }
+
+// lengths for the counts in hc, nsym of them (under 4096): the leaves sorted by count, ties to
+// the lower symbol, merged through a second queue; while the code is deeper than lim every
+// count halves in hc, for at most 32 passes. a lone symbol gets 1 -> the deepest length.
+// scratch is the caller's: keys nsym, w and pa 2 * nsym
+static unsigned pfx_lens(uint32_t *hc, unsigned nsym, unsigned lim, uint8_t *lens,
+                         uint64_t *keys, uint64_t *w, uint32_t *pa) {
+ memset(lens, 0, nsym);
+ for (unsigned pass = 0;; pass++) {
+  unsigned nl = 0, mx = 0, i, li = 0, ii, top;
+  for (i = 0; i < nsym; i++) if (hc[i]) keys[nl++] = (uint64_t) hc[i] << 12 | i;
+  if (nl < 2) { if (nl) lens[keys[0] & 4095] = 1; return nl; }
+  for (unsigned gap = nl / 2; gap; gap /= 2)
+   for (i = gap; i < nl; i++) {
+    uint64_t v = keys[i]; unsigned j = i;
+    while (j >= gap && keys[j - gap] > v) keys[j] = keys[j - gap], j -= gap;
+    keys[j] = v; }
+  for (i = 0; i < nl; i++) w[i] = keys[i] >> 12;
+  memset(pa, 0, (size_t) (2 * nl) * sizeof *pa), ii = nl;
+  for (top = nl; top < 2 * nl - 1; top++) {
+   unsigned a, b;
+#define PFX_PICK(L, I) ((L) < nl && ((I) >= top || w[L] <= w[I]))
+   if (PFX_PICK(li, ii)) a = li++; else a = ii++;
+   if (PFX_PICK(li, ii)) b = li++; else b = ii++;
+#undef PFX_PICK
+   w[top] = w[a] + w[b], pa[a] = pa[b] = top + 1; }
+  for (i = 0; i < nl; i++) {
+   unsigned d = 0;
+   for (uint32_t p = pa[i]; p; p = pa[p - 1]) d++;
+   lens[keys[i] & 4095] = (uint8_t) d;
+   if (d > mx) mx = d; }
+  if (mx <= lim || pass >= 32) return mx;
+  for (i = 0; i < nsym; i++) if (hc[i]) hc[i] = hc[i] >> 1 ? hc[i] >> 1 : 1; } }
 
 #endif
