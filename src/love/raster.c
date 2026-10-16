@@ -1,13 +1,12 @@
-// raster -- triangles onto a frame of pixels, the way a ps1 drew them: vertex colours, small
-// textures sampled nearest, a depth buffer, linear fog, and the era's quirks on request.
+// raster -- triangles onto a frame of pixels as a ps1 drew them: vertex colours, nearest
+// texels, a depth buffer, linear fog, the era's quirks on request
 // (facets w h base mat verts tris texs opts) answers an [h w] tray of 0xrrggbb.
 //  base   the ground: a tray of w*h colours, or one colour
 //  mat    16 numbers, row-major: clip = mat * [x y z 1], gl's clip box (-w <= x,y,z <= w)
 //  verts  8 numbers a vertex: x y z  u v (texels)  r g b (1.0 the texel as it is)
-//  tris   4 a triangle: three vertex indices and a texture's index, -1 for none, -2 for a
-//         glow: its colour added to what is behind it, hidden by what is nearer, hiding
-//         nothing (so drawn after what it lies over); verts
-//         and tris may be lists of batches, pairwise, each batch's tris its own verts
+//  tris   4 a triangle: three vertex indices and a texture's index, -1 none, -2 a glow
+//         (added to what is behind, hiding nothing: drawn after what it lies over);
+//         verts and tris may be lists of batches, pairwise
 //  texs   a list of textures, each an [h w] tray of colours (one below 0 is a hole) or a
 //         list of them, each level half the last
 //  opts   fog r g b, fog near, fog far (view depth), flags: 1 affine, 2 snap, 4 dither, 8 cull,
@@ -31,7 +30,7 @@ float lm_expf(float);
 enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_lv = 8 * sizeof(word), rz_tn = 256,
        rz_na = 11 };   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
                        // rz_lv: a level halves, so a word's bits hold every chain
-// a vertex in clip space with what rides on it; once projected x y are pixels and z ndc
+// a vertex in clip space and its riders; once projected x y are pixels and z ndc
 struct rz_v { flo_t x, y, z, w, a[rz_na]; };
 struct rz_tex { intptr_t const *px; intptr_t w, h; };
 struct rz {
@@ -73,8 +72,7 @@ static intptr_t rz_ch(flo_t c, int d) {
  k = k < 0 ? 0 : k > 255 ? 255 : k;
  return d ? (k & 0xf8) | (k >> 5) : k; }
 
-// how much of the sun a place reaches, as it sees it: four of its depths about the place,
-// each passed or not, eased between; off its edge, all of it
+// how much sun a place gets: four sun depths about it, eased between; off the edge, all
 static flo_t rz_lit(struct rz const *r, intptr_t i, intptr_t j, flo_t z) {
  return i < 0 || j < 0 || i >= r->SW || j >= r->SH || z <= r->sm[j * r->SW + i] ? 1 : 0; }
 static flo_t rz_vis(struct rz const *r, flo_t lx, flo_t ly, flo_t lz) {
@@ -86,8 +84,8 @@ static flo_t rz_vis(struct rz const *r, flo_t lx, flo_t ly, flo_t lz) {
              t1 = rz_lit(r, i, j + 1, z) + (rz_lit(r, i + 1, j + 1, z) - rz_lit(r, i, j + 1, z)) * fx;
  return t0 + (t1 - t0) * fy; }
 
-// one screen triangle. edges in sixteenths of a pixel, exact, so a shared edge's pixels fall
-// to one side of it only; the planes of z, 1/w and the riders (over w unless affine)
+// one screen triangle, edges exact in sixteenths so a shared edge's pixels fall to one side;
+// riders over w unless affine
 static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, struct rz_v const *p2,
                    struct rz_tex const *lv, int nlv) {
  struct rz_v const *P[3] = { p0, p1, p2 };
@@ -102,7 +100,7 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
   int64_t u = X[1]; X[1] = X[2], X[2] = u;
   u = Y[1], Y[1] = Y[2], Y[2] = u, A = -A; }
  p0 = P[0], p1 = P[1], p2 = P[2];
- // the pixels whose centres the box holds: none, and it is done before its planes are
+ // the pixels whose centres the box holds: none, and done before any plane
  int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
  for (int i = 1; i < 3; i++) {
   xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb;
@@ -139,12 +137,10 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  int lit = 0, under = r->flags & rz_under;   // the sun's view is asked only where some of the sun falls
  for (int i = 0; i < 3; i++) lit |= P[i]->a[5] != 0 || P[i]->a[6] != 0 || P[i]->a[7] != 0;
  int const shade = lit && r->sm,
-           // ..and a pixel steps only the planes it reads: up to the colours, then the
-           // sun's colours, then the place as the sun sees it; the rest stay as set
+           // ..and a pixel steps only the planes it reads
            nk = shade ? 2 + rz_na : lit ? 10 : 7;
  for (intptr_t y = y0; y < y1; y++) {
-  // the row's run inside all three edges: each is c + ex x, exact, so where it turns is a
-  // whole x found by division, and the pixels of the box outside it are never walked
+  // the row's run inside all three edges, found by exact division: the box outside is never walked
   intptr_t xs = x0, xe = x1;
   for (int i = 0; i < 3; i++) {
    int64_t const c = ec[i] + ey[i] * (int64_t) y;
@@ -220,8 +216,7 @@ static struct rz_v rz_lerp(struct rz_v const *a, struct rz_v const *b, flo_t t) 
  for (int k = 0; k < rz_na; k++) o.a[k] = a->a[k] + (b->a[k] - a->a[k]) * t;
  return o; }
 
-// the planes a triangle is cut at, as d = (x y z w) . p >= 0: the near one, and a guard
-// band far past the screen's edges, which keeps a pixel's sixteenths within an int64's reach
+// cut planes, d = (x y z w) . p >= 0: near, and a guard band that keeps sixteenths in an int64
 #define rz_guard 64
 #define rz_side_max ((intptr_t) 1 << 20)   // a frame's side: the edge sums, near 2^21 side^2, stay in reach
 static flo_t rz_side(struct rz_v const *v, int k) {
@@ -232,8 +227,7 @@ static flo_t rz_side(struct rz_v const *v, int k) {
   case 3: return rz_guard * v->w - v->y;
   default: return rz_guard * v->w + v->y; } }
 
-// a batch's vertices through the view and the sun's, each once, with the planes each is
-// outside of as bits
+// a batch's vertices through the view and the sun's, once each, outside planes as bits
 static void rz_verts(struct rz *r, struct tray *vt, intptr_t nv) {
  flo_t const *m = r->m, *l = r->lm;
  for (intptr_t i = 0; i < nv; i++) {
@@ -280,8 +274,7 @@ static void rz_draw(struct rz *r, struct tray *vt, intptr_t const ix[3], struct 
 static flo_t rz_opt(word o, uintptr_t i, flo_t d) {
  return galaxyp(o) && i < tray_nelem(tray(o)) ? tray_get_flo(tray(o), i) : d; }
 
-// a batch: verts and tris both trays, or both lists of them pairwise, each list's tris
-// counting from its own verts
+// a batch: verts and tris both trays, or lists of them pairwise
 static int rz_ok(word v, word t, uintptr_t st) {
  return galaxyp(v) && galaxyp(t) && !(tray_nelem(tray(v)) % st) && !(tray_nelem(tray(t)) % 4); }
 static int rz_batches(word v, word t, uintptr_t st) {
@@ -294,7 +287,7 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
  uintptr_t const nt = tray_nelem(tt) / 4;
  intptr_t ct = -1;   // the texture the last triangle used, its levels still in r->lv
  int seen = 0;   // its vertices put through once a triangle wants them
- r->nlv = 0, r->add = 0;   // ..none yet: what the last batch left is not this one's
+ r->nlv = 0, r->add = 0;   // not the last batch's
  for (uintptr_t i = 0; i < nt; i++) {
   intptr_t const ix[3] = { tray_get_int(tt, 4 * i), tray_get_int(tt, 4 * i + 1), tray_get_int(tt, 4 * i + 2) },
                  t = tray_get_int(tt, 4 * i + 3);
@@ -328,8 +321,7 @@ love_noinline static struct g *host_raster(struct g *g) {
  if (fr1 == 2) fr->shape[0] = (uintptr_t) H, fr->shape[1] = (uintptr_t) W;
  else fr->shape[0] = n;
  struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(fr), .depth = tray_data(dp), .pv = tray_data(pt) };
- // the opts, and the sun's view and depths where they come as a list; read after the
- // allocation, which may move them
+ // the opts, read after the allocation, which may move them
  word o = a[7], sv = ZeroPoint, sd = ZeroPoint;
  if (chainp(o)) {
   word const l = B(o);
@@ -416,9 +408,8 @@ static lvm(lvm_frame_paint) {
       row[4 * x] = (uint8_t) c, row[4 * x + 1] = (uint8_t) (c >> 8), row[4 * x + 2] = (uint8_t) (c >> 16), row[4 * x + 3] = 0; } } } }
  love_musttail return Answerp(4, P); }
 
-// (lace cols): a list of k columns laced into one float tray, row i the i-th of each --
-// facets's verts from their parts. a tray column n long, a number the same in every row;
-// () when the trays' lengths differ, or a column is neither
+// (lace cols): columns laced into one float tray, row i the i-th of each (facets's verts); a
+// column is a tray, or a number in every row; () when lengths differ or a column is neither
 love_noinline static struct g *host_lace(struct g *g) {
  uintptr_t k = 0, n = 0;
  int seen = 0;

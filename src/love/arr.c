@@ -1,8 +1,6 @@
-// arr.c -- generic-op lane, rng, eq, obin. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are src/love/love.h.
+// arr.c -- the generic-op lane, rng, eq, obin
 #include "love.h"
-// the math floor is ours on every frontend (src/apps/moon/lib/moonlibc/math/lm.c); the 32-bit
-// lane computes in binary64 and narrows.
+// the math floor is ours on every frontend (moonlibc's math/lm.c)
 #if Bits == 64
 double lm_sin(double), lm_cos(double), lm_atan2(double, double),
        lm_sqrt(double), lm_exp(double), lm_log(double), lm_pow(double, double);
@@ -46,9 +44,8 @@ static love_inline flo_t love_atan(flo_t x) { return love_atan2(x, (flo_t) 1); }
  emit_int(_res, toint(a) c_op toint(b));                                    \
  love_musttail return Push(_res); }
 #define mvm1(n) lvm(lvm_##n) { g->b = (word) (uintptr_t) (love_##n); love_musttail return Ap(lvm_math1, g); }
-#define m1(_) _(sin) _(cos) _(tan) _(atan)   // the real-only unaries; sqrt/exp/log widen to complex and have their own aps
-// RNG: a rank-1 i64 tray of length 4 (xoshiro256++), payload moved by memcpy -- tray_get/
-// put_int would truncate the limbs on 32-bit ports. fixed 8-byte limbs reproduce a seed.
+#define m1(_) _(sin) _(cos) _(tan) _(atan)   // the real-only unaries
+// rng state: a rank-1 tray of four 8-byte limbs, moved by memcpy (tray_put_int truncates on 32-bit)
 #define rng_state_len 4
 #define rng_payload_bytes (rng_state_len * 8)
 #define rng_tray_bytes (sizeof(struct tray) + sizeof(uintptr_t) + rng_payload_bytes)
@@ -58,39 +55,26 @@ static love_inline flo_t love_atan(flo_t x) { return love_atan2(x, (flo_t) 1); }
 static love_inline flo_t twin_mod(word x) {   // |z|
  flo_t re = twin_re(x), im = twin_im(x);
  return love_sqrt(re * re + im * im); }
-// this file's own, forward-declared so order within it does not matter.
 static int eqv_at(struct g *g, word a, word b, word *base, word *top);
-// the bit_slow trio takes its linkage here: the macro body carries no storage class.
 static lvm_t lvm_band_slow, lvm_bor_slow, lvm_bxor_slow, lvm_mul_cart, lvm_mul_rep;
-// ============================================================================
-// generic-op lane aps, the dispatch matrices, then the `+`/`*` dispatchers
-// ============================================================================
 
-// `*` repeat lane: a sequence times a scalar count n is n copies joined ("repeated
-// +"). the count law (the associativity arc): a count acts by |count| when it is an
-// exact integer -- magnitude is the one multiplicative hom that survives the sign
-// crossing ((-1)*(-2) re-enters the positives) -- and any inexact count (gem, twin,
-// tray) answers the absorbing () (those classes are closed under *, so the refusal
-// composes: (x * 2.5) * 2 and x * (2.5 * 2 = 5.0) both land ()).
+// `*` repeat lane: sequence * n is |n| copies joined; an inexact count answers (), which
+// composes since those classes are closed under *
 static lvm(lvm_mul_rep) {
  word a = Sp[0], b = Sp[1];
- bool aseq = strp(a) || chainp(a);                   // a string / list repeats
+ bool aseq = strp(a) || chainp(a);
  word seq = aseq ? a : b, cnt = aseq ? b : a;
  if ((!strp(seq) && !chainp(seq)) || (!charmp(cnt) && !bigp(cnt)))
-  love_musttail return Push(ZeroPoint);             // seq not a sequence, or count not exact
+  love_musttail return Push(ZeroPoint);
  uintptr_t n;
  if (charmp(cnt)) {
    intptr_t v = getcharm(cnt);
    n = (uintptr_t) (v < 0 ? -v : v); }
- else n = (uintptr_t) maxcharm;                      // |big|: past addressable, refused below
- // the apcap rule (prel.l) for the repeat lane: a count no heap could ever hold is
- // refused here rather than asked for. it cannot be refused downstream -- Have() is
- // pointer arithmetic, so Hp + n wraps at 2^61 words and reads as room, and an oom
- // raised inside gen_major reaches no help. () is this lane's answer to every count
- // it cannot use, so an impossible one lands there too
+ else n = (uintptr_t) maxcharm;                      // |big|: refused below
+ // the apcap rule (prel.l): refused here, as Hp + n in Have() can wrap and read as room
  if (n > ((uintptr_t) 1 << 40)) love_musttail return Push(ZeroPoint);
- if (chainp(seq)) {                                   // list -> n copies of the spine
-  if (!n) love_musttail return Push(ZeroPoint);   // 0 copies -> the empty list () (zero-ontology)
+ if (chainp(seq)) {
+  if (!n) love_musttail return Push(ZeroPoint);
   uintptr_t m = llen(seq), total = mulsat(m, n);
   if (total > words_max / Width(struct chain)) love_musttail return Push(ZeroPoint);
   Have(total * Width(struct chain));
@@ -99,12 +83,11 @@ static lvm(lvm_mul_rep) {
   Hp += total * Width(struct chain);
   for (uintptr_t i = 0; i < n; i++)
    for (word l = seq; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
-  (w - 1)->b = ZeroPoint;                            // list terminator () (zero-ontology)
+  (w - 1)->b = ZeroPoint;
   love_musttail return Push(word(base)); }
- // string -> repeat the bytes
  struct str *src = str(seq);
  uintptr_t sl = src->len, total = mulsat(sl, n);
- if (!total) love_musttail return Push(EmptyString);   // 0 copies: ""
+ if (!total) love_musttail return Push(EmptyString);
  if (total > words_max) love_musttail return Push(ZeroPoint);   // no heap holds it
  uintptr_t req = str_width(total);
  Have(req);
@@ -115,14 +98,12 @@ static lvm(lvm_mul_rep) {
  *++Sp = word(z);
  Ip++; love_musttail return Continue(); }
 
-// `*` cartesian lane: chain * chain -> the ordered cartesian product (tally is
-// the homomorphism; the outer loop ranges the left operand so right-
-// distributivity holds on the nose). 3*pairs chains total, one Have.
+// `*` cartesian lane: chain * chain, the outer loop over the left so right-distributivity holds
 static lvm(lvm_mul_cart) {
  word a = Sp[0], b = Sp[1];
- if (!chainp(a) || !chainp(b)) love_musttail return Push(ZeroPoint);   // chain*chain only
+ if (!chainp(a) || !chainp(b)) love_musttail return Push(ZeroPoint);
  uintptr_t m = llen(a), n = llen(b), pairs = mulsat(m, n);
- if (!pairs) love_musttail return Push(ZeroPoint);             // empty operand annihilates
+ if (!pairs) love_musttail return Push(ZeroPoint);
  if (pairs > words_max / (3 * Width(struct chain))) love_musttail return Push(ZeroPoint);
  Have(3 * pairs * Width(struct chain));
  a = Sp[0], b = Sp[1];                                               // re-read post-GC
@@ -138,18 +119,12 @@ static lvm(lvm_mul_cart) {
    ini_chain(spine + idx, word(p0), idx + 1 < pairs ? word(spine + idx + 1) : ZeroPoint); } }
  love_musttail return Push(word(spine)); }
 
-// --- apply lane (the data-value `(g x)` aps) ---
-// an applied data value's sentinel tail-jumps straight to its handler -- no table.
-// the sequences index and juxtapose -- text by byte, a chain by element, a named point by
-// its spelling -- numbers are church numerals. () is the default action: nothing is there
-// to answer with, which is what an anonymous point, an opaque handle, an out-of-range
-// index and a non-index operand all have in common.
+// the apply lane: sequences index and juxtapose, numbers are church numerals, and anything
+// with nothing to answer with answers ()
 
-// string x charm -> byte by index or ()
-// string x string -> concat
-// string x name -> concat
+// string x charm -> byte by index or (); x string or name -> concat
 lvm(data_string_apply) {
- bool pt = namep(word(Ip));                             // a point head can answer a point
+ bool pt = namep(word(Ip));
  struct str *na = pt ? nom_str(g, word(Ip)) : str(word(Ip)),
                *nb = strp(Sp[0]) ? str(Sp[0]) : namep(Sp[0]) ? nom_str(g, Sp[0]) : NULL;
  if (nb) {
@@ -158,9 +133,9 @@ lvm(data_string_apply) {
   if (!(m + n)) {
    Ip = cell(*++Sp);
    *Sp = mk ? ZeroPoint : EmptyString;
-   love_musttail return Continue(); }  // the empty spelling is the zero point; no empty string is ever allocated
+   love_musttail return Continue(); }  // no empty string is ever allocated
   Have(req + (mk ? intern_reserve(g) : 0));
-  na = pt ? nom_str(g, word(Ip)) : str(word(Ip));       // re-read: a GC in Have moved the roots
+  na = pt ? nom_str(g, word(Ip)) : str(word(Ip));       // re-read post-GC
   struct str *z = seq_cat(g, Hp, word(na), Sp[0]);
   Hp += req;
   word v = word(z);
@@ -175,17 +150,13 @@ lvm(data_string_apply) {
  Ip = cell(*++Sp), *Sp = v;
  love_musttail return Continue(); }
 
-// applying a point: a named point acts as its spelling, so it rides the text lane whole.
-// an anonymous point -- a gensym, and () -- has no spelling to act as, so nothing is
-// there to answer with: (). name? and mint? partition nom? and () is in neither.
-// (p x): a point is its own constant -- a name or a mint answers itself, () stays ()
+// (p x): a point is its own constant
 lvm(data_sym_apply) {
  word self = word(Ip);
  Ip = cell(*++Sp), *Sp = self;
  love_musttail return Continue(); }
 
-// (n x): church-numeral application for the boxed tower -- the same
-// [n, num-ap, x, ret] frame as lvm_numap
+// (n x): church numerals for the boxed tower, lvm_numap's frame
 lvm(data_num_apply) {
  Have(2);
  word h = hot_hook(g->hook[hook_numap]);
@@ -194,10 +165,7 @@ lvm(data_num_apply) {
  Sp = dst, Ip = cell(numap_drive);
  love_musttail return Continue(); }
 
-// (l k): index the spine -- the kth element, out of range () and a negative is out of range.
-// (l m): a chain operand juxtaposes -- the append, agreeing with (+ l m) on the nose
-// (add_seq's list+list lane, spelled here). the text law, one lattice rung up: a chain
-// indexes elements where text indexes bytes. every other operand answers ().
+// (l k): the kth element or (); (l m): the append, as (+ l m); else ()
 lvm(data_pair_apply) {
  if (chainp(Sp[0])) {
   uintptr_t n = llen(word(Ip));
@@ -205,7 +173,7 @@ lvm(data_pair_apply) {
   struct chain *base = two(Hp), *w = base;
   Hp += n * Width(struct chain);
   for (word l = word(Ip); chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
-  (w - 1)->b = Sp[0];                        // last cdr -> the operand (a chain is never empty)
+  (w - 1)->b = Sp[0];                        // a chain is never empty
   Ip = cell(*++Sp); *Sp = word(base); love_musttail return Continue(); }
  word v = ZeroPoint;
  if (oddp(Sp[0])) {
@@ -214,19 +182,10 @@ lvm(data_pair_apply) {
                 if (chainp(l)) v = A(l); } }
  Ip = cell(*++Sp); *Sp = v; love_musttail return Continue(); }
 
-// === the two generic-op dispatch matrices (+ and *), indexed by kind =====
-// lanes: *n numeric/broadcast (every star and tray kind routes identically), add_seq
-// a list anywhere, add_string strings and symbols (a number arrives as the unit),
-// mul_rep sequence * count, *l a lambda-or-map operand (church add / compose),
-// lvm_0 undefined -> zero. precedence: lambda > tablet > chain > text > number.
-// the tables are generated: one datum (mx.l) feeds this header and the rocq model
-// mx.v, so theorem and code cannot drift. edit mx.l, not mx.h; make relays it.
+// the + and * dispatch matrices, generated from mx.l with the rocq model mx.v: edit mx.l, not mx.h
 #include "mx.h"
 
-// any value -> the kind it dispatches as (enum q, love.h): fixnum -> KCharm,
-// non-data heap pointer -> KTablet/KHot, else the rep's kind. a tray is the one rep
-// that dispatches four ways, by element tier. exported so the apply sentinels share
-// it; it sits under mx.h for kind_of_d, the rep -> kind crossing.
+// any value -> the kind it dispatches as; a tray dispatches by element tier
 enum q kind(word x) {
  if (charmp(x)) return KCharm;
  if (!datp(x)) return tabp(x) ? KTablet : KHot;
@@ -234,18 +193,13 @@ enum q kind(word x) {
  if (r == DTray) return (enum q) (KTrayZ + tray(x)->type);
  return kind_of_d[r]; }
 
-// === the `+`/`*` dispatchers (fixnum fast path, then the matrix) ============
 lvm(lvm_add) {
  word a = Sp[0], b = Sp[1]; intptr_t t;
  if (charmp(a) && charmp(b)
      && !__builtin_add_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
      && t >= mincharm && t <= maxcharm)
   love_musttail return Push(putcharm(t));
- // a point -- (), a bare mint, a name -- is the identity on either side, and two points
- // join: the greater under love's order stands, () the bottom. a bounded semilattice, so
- // + is associative and commutative here (distinct points annihilating could not
- // associate). this must mirror lvm_bin_unit exactly -- it is that matrix lane's fast
- // path, nothing more.
+ // a point is the identity, two join to the greater: mirrors lvm_bin_unit exactly
  if (nomp(a)) love_musttail return Push(nomp(b) && love_mint_cmp(g, a, b) > 0 ? a : b);
  if (nomp(b)) love_musttail return Push(a);
  love_musttail return Ap(add_mx[kind(a)][kind(b)], g); }
@@ -256,16 +210,13 @@ lvm(lvm_mul) {
   if (!__builtin_mul_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
       && t >= mincharm && t <= maxcharm)
    love_musttail return Push(putcharm(t)); }
- // a point is absent, and * repeats: a sequence taken an absent number of times
- // is nothing, so it annihilates. the matrix says the same thing (lvm_0), so this
- // stays a fast path.
+ // a point annihilates, as the matrix's lvm_0 does
  if (nomp(a) || nomp(b)) love_musttail return Push(ZeroPoint);
  love_musttail return Ap(mul_mx[kind(a)][kind(b)], g); }
 
-avm_div(fquot, /)                               // `//` fixnum fast path: truncating quotient
+avm_div(fquot, /)
 avm_div(rem, %)
-// `/` fixnum fast path: stay exact only when b divides a; otherwise the slow lane
-// promotes to a float box. the INT_MIN/-1 guard precedes the `%` (it would be UB).
+// `/` stays exact only when b divides a; the INT_MIN/-1 guard precedes the UB `%`
 lvm(lvm_quot) {
  word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) {
@@ -277,11 +228,7 @@ lvm(lvm_quot) {
  if (coinp(a) || coinp(b)) love_musttail return Ap(lvm_quot_coin, g);   // the die's div method, slot 8
  love_musttail return Ap(lvm_quotn, g); }
 
-// the ordered comparisons (lvm_lt/le/gt/ge) and their total order are defined
-// after vcmp_int/vcmp_flo (the per-op trichotomy helpers), near lvm_vbin.
-
-// bitwise and/or/xor: the both-fixnum tag trick (two odds stay odd under & and |;
-// ^ clears the tag, re-set it). integer-only: any other operand yields zero.
+// bitwise and/or/xor: two odds stay odd under & and |, ^ clears the tag. integers only
 bit_slow(band, &, vop_band) bit_slow(bor, |, vop_bor) bit_slow(bxor, ^, vop_bxor)
 
 lvm(lvm_band) { word a = Sp[0], b = Sp[1];
@@ -301,11 +248,8 @@ lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
  avm_unit(a, b);
  if (trayp(a) || trayp(b)) { g->b = (word) (vop_bxor); love_musttail return Ap(lvm_vbin, g); }
  love_musttail return Ap(lvm_bxor_slow, g); }
-// (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `zerop`.)
 
-// >> : a floor shift. the fast path is two fixnums and a count the word can take;
-// everything else -- a big either side, a negative count, a count past the width --
-// goes to the lane that has the whole domain.
+// >> : a floor shift; a big, a negative count or one past the width takes the slow lane
 lvm(lvm_bsr) {
  word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) {
@@ -320,9 +264,7 @@ lvm(lvm_bsr) {
   love_musttail return Push(ZeroPoint);
  LvmResume(g, big_shift, vop_bsr) }
 
-// << : x * 2^k, so it promotes rather than dropping the bits off the top. the word
-// lane is taken only where shifting back gives x again -- that is the whole test for
-// "nothing was lost", and it lets 0 and every small shift stay cheap.
+// << : x * 2^k, promoting; the word lane only where shifting back gives x again
 lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  avm_unit(a, b);
  if (trayp(a) || trayp(b)) { g->b = (word) (vop_bsl); love_musttail return Ap(lvm_vbin, g); }
@@ -332,19 +274,16 @@ lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
    if ((r >> k) == x) { Have(box_req); emit_int(_res, r); love_musttail return Push(_res); } } }
  LvmResume(g, big_shift, vop_bsl) }
 
-op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : zero)   // (charm? x): a fixnum -- a charm, the tagged odd word
-// (nil? x): the falsy predicate, ($ x <= 0) -- every negative is nil, not just (). `?`,
-// argcond and aall ask it the same way (leaf_nilp), so the feel pass can drop a zerop wrapper.
+op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : zero)
+// (nil? x): ($ x <= 0), asked as ? and aall do (leaf_nilp)
 lvm(lvm_nilp) {
  if (__builtin_expect(!leafp(Sp[0]), 0)) love_musttail return Ap(lvm_measure, g);
  Sp[0] = leaf_nilp(Sp[0]) ? putcharm(1) : zero; Ip += 1; love_musttail return Continue(); }
 
-// unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.
-// non-numeric arg → zero. TCO-clean (no & escapes).
 static lvm(lvm_math1) {
  flo1 fn = (flo1) (uintptr_t) g->b;
  word a = Sp[0];
- if (trayp(a)) {                               // (sin a-tray) etc. -> gem tray; a twin tray is undefined
+ if (trayp(a)) {                               // a twin tray is undefined
   if (tray(a)->type == love_C) love_musttail return Answer(ZeroPoint);
   g->b = (word) (uintptr_t) (fn); love_musttail return Ap(lvm_vmap1, g); }
  if (!isnum(a)) love_musttail return Answer(ZeroPoint);
@@ -355,9 +294,9 @@ static lvm(lvm_math1) {
 static lvm(lvm_math2) {
  flo2 fn = (flo2) (uintptr_t) g->b;
  word a = Sp[0], b = Sp[1];
- if (trayp(a) || trayp(b)) {                               // (pow arr ..) etc. -> float array
+ if (trayp(a) || trayp(b)) {
   if ((trayp(a) && tray(a)->type == love_C) || (trayp(b) && tray(b)->type == love_C))
-   love_musttail return Push(ZeroPoint);                 // complex array undefined here
+   love_musttail return Push(ZeroPoint);
   g->b = (word) (uintptr_t) (fn); love_musttail return Ap(lvm_vmap2, g); }
  if (!isnum(a) || !isnum(b)) love_musttail return Push(ZeroPoint);
  flo_t ad = toflo(a), bd = toflo(b), rd = fn(ad, bd);
@@ -368,9 +307,7 @@ static lvm(lvm_math2) {
 m1(mvm1)
 lvm(lvm_atan2) { g->b = (word) (uintptr_t) (love_atan2); love_musttail return Ap(lvm_math2, g); }
 
-// (log x): a positive real stays float; a negative real or complex widens to the
-// complex principal value ~((log |z|) (arg z)) -- so (log -1) = (* i pi), euler in
-// the exact direction. arrays stay elementwise float.
+// (log x): a negative real or a complex widens to the principal value; a tray stays float
 lvm(lvm_log) {
  word a = Sp[0];
  flo_t m, th;
@@ -383,21 +320,13 @@ lvm(lvm_log) {
 
 op11(lvm_gemp, gemp(Sp[0]) ? putcharm(1) : zero)
 
-// ============================================================================
-// rng
-// ============================================================================
-// xoshiro256++ seeded by SplitMix64. C holds no RNG state and never draws: the
-// primitives are wheel (fresh state) and the functional steps turn/turnf, which
-// copy the state and answer (value . new-state) -- the input is never mutated.
-// the global rand/randf stream is prel lisp over the same steps. not a CSPRNG.
+// rng: xoshiro256++ seeded by SplitMix64, not a CSPRNG. C holds no state: turn/turnf copy
+// the state and answer (value . new-state)
 
 static uint64_t rotl64(uint64_t x, int k) {
  return (x << k) | (x >> (64 - k)); }
 
-// the uint64_t scratch lives in these love_noinline helpers, moved via memcpy:
-// taking &s in a VM ap defeats the sibcall, and memcpy is alignment-safe.
-
-// advance the 4-word state at `payload` and return one 64-bit draw
+// the scratch lives in these noinline helpers: a &s in an ap defeats the sibcall
 static love_noinline uint64_t rng_step(void *payload) {
  uint64_t s[4];
  memcpy(s, payload, sizeof s);
@@ -407,8 +336,7 @@ static love_noinline uint64_t rng_step(void *payload) {
  memcpy(payload, s, sizeof s);
  return result; }
 
-// fill the state from a seed via SplitMix64; the all-zero state is xoshiro's
-// fixed point, so substitute a nonzero word
+// SplitMix64; the all-zero state is xoshiro's fixed point
 static love_noinline void rng_seed_into(void *payload, uint64_t seed) {
  uint64_t s[4], x = seed;
  for (int i = 0; i < rng_state_len; i++) {
@@ -419,7 +347,6 @@ static love_noinline void rng_seed_into(void *payload, uint64_t seed) {
  if (!(s[0] | s[1] | s[2] | s[3])) s[0] = 1;
  memcpy(payload, s, sizeof s); }
 
-// map a 64-bit draw to a float in [0,1): keep the high mantissa bits and scale.
 static flo_t u64_to_unit(uint64_t u) {
 #if Bits >= 64
  return (flo_t) (u >> 11) * (flo_t) 0x1.0p-53;
@@ -428,18 +355,17 @@ static flo_t u64_to_unit(uint64_t u) {
 #endif
 }
 
-// shape v as a state tray and seed it; no &local, so an inlining caller keeps its tail call
+// no &local, so an inlining caller keeps its tail call
 static void rng_seed(struct tray *v, uint64_t seed) {
  ini_tray(v, rng_vt, 1);
  v->shape[0] = rng_state_len;
  rng_seed_into(tray_data(v), seed); }
 
-// is x a well-formed state tray (rank-1 i64, length 4)?
 static bool rng_state_p(word x) {
  return packp(x) && tray(x)->rank == 1 && tray(x)->type == rng_vt
         && tray(x)->shape[0] == rng_state_len; }
 
-// a fresh state tray at Hp copying src's limbs; caller holds Have(rng_tray_req)
+// caller holds Have(rng_tray_req)
 static struct tray *rng_copy(word **hp, struct tray *src) {
  struct tray *v = (struct tray*) *hp;
  *hp += rng_tray_req;
@@ -448,15 +374,13 @@ static struct tray *rng_copy(word **hp, struct tray *src) {
  memcpy(tray_data(v), tray_data(src), rng_payload_bytes);
  return v; }
 
-// canonicalize a 62-bit draw to the smallest integer tier. out-of-line so the
-// limb[] scratch never forces a frame in lvm_turn (make vmret); bump-only.
+// out of line, so limb[] never forces a frame in lvm_turn (make vmret)
 static love_noinline word rng_canon(struct g *g, uint64_t r) {
- love_limb limb[64 / limb_bits]; int nl = 0;               // split the 64-bit draw into native limbs (1 or 2)
+ love_limb limb[64 / limb_bits]; int nl = 0;
  for (int i = 0; (size_t) i * limb_bits < 64; i++) limb[i] = (love_limb) (r >> (i * limb_bits)), nl = i + 1;
  return big_canon(&g->hp, limb, nl, false); }
 
-// (wheel n): a fresh state tray deterministically seeded from fixnum n. A
-// non-fixnum seeds from 0.
+// (wheel n): a fresh state seeded from n, a non-fixnum from 0
 lvm(lvm_wheel) {
  word n = Sp[0];
  uint64_t seed = charmp(n) ? (uint64_t) (intptr_t) getcharm(n) : 0;
@@ -465,15 +389,14 @@ lvm(lvm_wheel) {
  rng_seed(v, seed);
  love_musttail return Answer(word(v)); }
 
-// (turn st): functional draw -> (value . st'), value a fixed 62 bits so a seed
-// yields the identical integer on every target; st is copied, never mutated
+// (turn st): (value . st'), value a fixed 62 bits so a seed answers alike on every target
 #define rng_draw_mask (((uint64_t) 1 << 62) - 1)              // 62 bits = 64-bit maxcharm
-#define rng_draw_req  (Width(struct big) + b2w((64 / limb_bits) * sizeof(love_limb)))  // worst case: the 62-bit draw split into native limbs
+#define rng_draw_req  (Width(struct big) + b2w((64 / limb_bits) * sizeof(love_limb)))
 lvm(lvm_turn) {
  word st = Sp[0];
  if (!rng_state_p(st)) love_musttail return Answer(ZeroPoint);
  Have(rng_tray_req + rng_draw_req + Width(struct chain));
- st = Sp[0];                                 // re-read post-Have
+ st = Sp[0];
  struct tray *v = rng_copy(&Hp, tray(st));
  uint64_t r = rng_step(tray_data(v)) & rng_draw_mask;
  Pack(g);
@@ -483,29 +406,23 @@ lvm(lvm_turn) {
  ini_chain(p, val, word(v));
  love_musttail return Answer(word(p)); }
 
-// (turnf st): functional draw -> (float . st'), float in [0,1).
+// (turnf st): (float in [0,1) . st')
 lvm(lvm_turnf) {
  word st = Sp[0], _res;
  if (!rng_state_p(st)) love_musttail return Answer(ZeroPoint);
  Have(rng_tray_req + box_req + Width(struct chain));
- st = Sp[0];                                 // re-read post-Have
+ st = Sp[0];
  struct tray *v = rng_copy(&Hp, tray(st));
  uint64_t r = rng_step(tray_data(v));
  flo_t u = u64_to_unit(r);
- emit_gem(_res, u);                                // box at Hp, into _res
+ emit_gem(_res, u);
  struct chain *p = (struct chain*) Hp; Hp += Width(struct chain);
  ini_chain(p, _res, word(v));
  love_musttail return Answer(word(p)); }
 
-// ============================================================================
-// eq
-// ============================================================================
-// two functions are equal when their threads are. names never reach a thread -- a param is
-// a stack slot and a constant a value -- so lambdas that differ in spelling alone compile to
-// the same words: from the value to the terminator they agree, a pointer back into its own
-// thread agrees by its offset from the value, and any other heap word is a value the
-// worklist settles. 1 so far (its pairs pushed at *wp), 0 not equal, -1 the region is spent.
-// a parked continuation is itself alone: a yield word ends the walk unequal
+// eq. two functions are equal when their threads are: a pointer back into its own thread by
+// its offset, other heap words pushed for the worklist. 1 so far, 0 unequal, -1 out of
+// region; a yield word (a parked continuation) is unequal
 static int fn_eq(struct g *c, word a, word b, word **wp, word *hi) {
  union u *ka = cell(a), *kb = cell(b);
  struct tag *ta = ttag(c, ka), *tb = ttag(c, kb);
@@ -519,36 +436,34 @@ static int fn_eq(struct g *c, word a, word b, word **wp, word *hi) {
    if (x == word(lvm_yield_sw) || x == word(lvm_yield_nif) || x == word(lvm_task_exit)
     || x == word(_lvm_yieldk)) return 0;
    continue; }
-  if ((x | y) & 1) return 0;                             // a charm, or a charm against a pointer
+  if ((x | y) & 1) return 0;
   bool sa = x >= ha && x <= ea, sb = y >= hb && y <= eb;
-  // a native whose twin is this thread is a pointer back into it too
+  // a native whose twin is this thread points back into it too
   if (!sa) { word m = fn_meaning(c, x); if (m >= ha && m <= ea) x = m, sa = 1; }
   if (!sb) { word m = fn_meaning(c, y); if (m >= hb && m <= eb) y = m, sb = 1; }
-  if (sa || sb) {                                        // back into its own thread: the same place?
+  if (sa || sb) {
    if (!sa || !sb || x - a != y - b) return 0;
    continue; }
-  if (!in_heap(c, x) || !in_heap(c, y)) return 0;        // an op, a nif, an immortal: the one word or none
+  if (!in_heap(c, x) || !in_heap(c, y)) return 0;        // an op, a nif, an immortal
   if (hi - w < 2) return -1;
   *w++ = x, *w++ = y; }
  return *wp = w, 1; }
 
-// a walk's worklist: the region it was lent, then, spent, a block of its own twice the size
-// with the pending words carried over, given back when the walk ends -- a lent region is the
-// lender's. a walk past every pool's words has met a cycle: that traps
+// a worklist outgrowing its lent region doubles into a block of its own; a walk past every
+// pool's words has met a cycle and traps
 static void walk_grow(struct g *g, word **base, word **w, word **hi, uintptr_t want, bool *own) {
  uintptr_t n = *base ? (uintptr_t) (*hi - *base) : 0, k = *base ? (uintptr_t) (*w - *base) : 0,
            n2 = n ? 2 * n : 64;
  while (n2 - k < want) n2 *= 2;
  if (n2 > 4 * ((uintptr_t) g->len + g->major_len) + ((uintptr_t) 1 << 20)) __builtin_trap();
  word *b = alloc(NULL, n2 * sizeof(word));
- if (!b) __builtin_trap();                                // no room to walk: the oom no reservation saw
+ if (!b) __builtin_trap();                                // the oom no reservation saw
  if (k) memcpy(b, *base, k * sizeof(word));
  if (*own) alloc(*base, 0);
  *own = true, *base = b, *w = b + k, *hi = b + n2; }
 
-// the value hash: a chain spines, its cars pending on the worklist under one running h, and
-// every leaf goes to tablet.c's hash_leaf -- a function among them hashed by its thread there,
-// which never recurs into a value -- and an object tray's cells fold like cars
+// the value hash: chains spine with their cars on the worklist, leaves go to hash_leaf, and
+// an object tray's cells fold like cars
 uintptr_t hash_at(struct g *g, intptr_t x0, word *base, word *end) {
  word *sw = base, x = x0, src = 0;
  uintptr_t h = mix, t = 0;
@@ -556,7 +471,7 @@ uintptr_t hash_at(struct g *g, intptr_t x0, word *base, word *end) {
  for (;;) {
   while (chainp(x)) {
    if (sw == end) walk_grow(g, &base, &sw, &end, 1, &own);
-   h = (h ^ mix) * mix;                                   // mark a chain node
+   h = (h ^ mix) * mix;
    *sw++ = A(x), x = B(x); }
   if (hash_leaf(g, x, &t, &src) == 3) {                   // an object tray: the header already in t
    struct tray *v = tray(src);
@@ -571,23 +486,20 @@ uintptr_t hash_at(struct g *g, intptr_t x0, word *base, word *end) {
    return h; }
   x = *--sw; } }
 
-// one non-descending step of the walk: eq_no and eq_yes settle it, and the four descents
-// name the parts a walker has to take apart.
+// one step of the walk: settled, or which descent it takes
 enum eqstep { eq_no, eq_yes, eq_chain, eq_coin, eq_fn, eq_tray };
 static enum eqstep eqv_leaf(struct g *g, word a, word b) {
  if (a == b) return eq_yes;
- if (coinp(a) || coinp(b))                                 // a coin: same die, then the payloads
+ if (coinp(a) || coinp(b))
   return coinp(a) && coinp(b) && coin_kind(a) == coin_kind(b) ? eq_coin : eq_no;
  if (evenp(a) && evenp(b) && !datp(a) && !datp(b)) return eq_fn;
- // a number never equals a closure: bridging 0/1 to their church lambdas would
- // break congruence, the order, and tower transitivity
+ // a number never equals a closure: bridging 0/1 to church lambdas breaks congruence
  if (((a | b) & 1) || !datp(a) || !datp(b) || typ(a) != typ(b)) return eq_no;
  switch (typ(a)) {
   default: return eq_no;
   case DChain: return eq_chain;
   case DTray: {
-   // an object tray holds values, so its cells decide: the payload words are pointers
-   // and two trays built apart never memcmp equal however equal their cells are
+   // an object tray's cells decide, never a memcmp of its pointers
    if (objtrayp(a) || objtrayp(b)) {
     struct tray *va = tray(a), *vb = tray(b);
     if (!objtrayp(a) || !objtrayp(b) || va->rank != vb->rank) return eq_no;
@@ -595,7 +507,7 @@ static enum eqstep eqv_leaf(struct g *g, word a, word b) {
     return eq_tray; }
    size_t la = love_tray_bytes(tray(a)), lb = love_tray_bytes(tray(b));
    return la == lb && !memcmp(tray(a), tray(b), la) ? eq_yes : eq_no; }
-  case DGem: return gem_get(a) == gem_get(b) ? eq_yes : eq_no;   // the float payload (parallels = / cmp)
+  case DGem: return gem_get(a) == gem_get(b) ? eq_yes : eq_no;
   case DTwin: return twin_re(a) == twin_re(b) && twin_im(a) == twin_im(b) ? eq_yes : eq_no;
   case DBig: { struct big *x = big(a), *y = big(b);
    size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(love_limb);
@@ -603,13 +515,9 @@ static enum eqstep eqv_leaf(struct g *g, word a, word b) {
   case DString:
    return len(a) == len(b) && !memcmp(txt(a), txt(b), len(a)) ? eq_yes : eq_no; } }
 
-// the pairs still to compare come up from base, over a table of the function pairs already
-// taken as equal: threads reach each other (a letrec's siblings, a closure through its own
-// captures), so a pair met again holds rather than walks forever. the walk never calls back
-// in, so this is the only frame of it the C stack ever holds.
-// ..eqv's region holds both: the pairs taken as equal at its base, nseen of them, and the
-// worklist over them. grown, both are carried over and the table grows with the region;
-// a region the caller lent is left to the caller, a block of the walk's own given back
+// the region holds the function pairs taken as equal at its base (nseen slots), so a pair met
+// again holds rather than walks forever, and the worklist over them; grown, both carry over.
+// the walk never recurs: this is its only C frame
 static bool eqv_grow(struct g *g, word **base, word **w, word **hi, uintptr_t *nseen,
                      uintptr_t ns, bool *own, uintptr_t want) {
  uintptr_t n = *base ? (uintptr_t) (*hi - *base) : 0,
@@ -642,14 +550,14 @@ static int eqv_at(struct g *g, word a, word b, word *base, word *top) {
     eqv_room(2);
     *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
     continue;
-   case eq_tray: {                         // an object tray: shape settled above, cells onto the worklist
+   case eq_tray: {                         // shape settled above
     struct tray *va = tray(a), *vb = tray(b);
     uintptr_t n = tray_nelem(va);
     eqv_room(2 * n);
     for (uintptr_t i = 0; i < n; i++) *w++ = tray_get_obj(va, i), *w++ = tray_get_obj(vb, i);
     break; }
-   // function values: a partial is its base and its captures, pairwise; any other is its
-   // thread (fn_eq). a carrier -- a tablet, a cask, a port -- is itself alone
+   // a partial is its base and captures pairwise, another function its thread; a carrier
+   // (tablet, cask, port) is itself alone
    case eq_fn: {
     a = fn_meaning(c, a), b = fn_meaning(c, b);
     if (a == b) break;
@@ -666,40 +574,36 @@ static int eqv_at(struct g *g, word a, word b, word *base, word *top) {
      for (int i = 0; i < na; i++) *w++ = fn_arg(ka, i, na), *w++ = fn_arg(kb, i, nb);
      a = (word) ba, b = (word) bb; continue; }
     for (word *s = base; s && s < base + 2 * ns; s += 2)
-     if (s[0] == a && s[1] == b) goto held;               // already taken as equal: it holds
-    if (ns == nseen                                       // the table is full: grown
+     if (s[0] == a && s[1] == b) goto held;
+    if (ns == nseen
         && (!eqv_grow(g, &base, &w, &hi, &nseen, ns, &own, 0) || ns == nseen)) { r = -1; goto out; }
     base[2 * ns] = a, base[2 * ns + 1] = b, ns++;
     { int f = fn_eq(c, a, b, &w, hi);
-      // fn_eq ran out of room: the pair comes off the table, the worklist grows, and the
-      // pair is asked again -- left on, it would read as already equal
+      // out of room: the pair comes off the table, or a retry reads it as equal
       if (f < 0) { ns--; if (!eqv_grow(g, &base, &w, &hi, &nseen, ns, &own, 64)) { r = -1; goto out; } continue; }
       if (f == 0) goto out; }
    held:
     break; } }
-  if (w == (base ? base + 2 * nseen : 0)) { r = 1; goto out; }   // drained: all equal
+  if (w == (base ? base + 2 * nseen : 0)) { r = 1; goto out; }   // drained
   b = *--w, a = *--w; }
 #undef eqv_room
  out:
  if (own) alloc(base, 0);
  return r; }
 
-// a map probe and a comparator both answer mid-reservation, where nothing may allocate on the
-// heap: the walk grows a worklist of its own off it.
+// for a map probe and a comparator, mid-reservation: nothing may allocate on the heap
 love_noinline bool eqv(struct g *g, word a, word b) {
  enum eqstep s = eqv_leaf(g, a, b);
- if (s == eq_yes || s == eq_no) return s == eq_yes;        // settled without a walk, so no scratch
+ if (s == eq_yes || s == eq_no) return s == eq_yes;
  word *top, *base = gap(g, &top);
  int r = eqv_at(g, a, b, base, top);
- if (r < 0) __builtin_trap();                            // no room to walk: the oom no reservation saw
+ if (r < 0) __builtin_trap();                            // the oom no reservation saw
  return r > 0; }
 
-// whole-array `=`: a boolean like every other kind (shapes match, every cell
-// equal), not the elementwise mask -- `<` and `>` are the mask makers. cells
-// compare across tiers (a z-tray equals a gem-tray of the same values); object
-// cells go through eqv; an object tray never equals a numeric one.
+// whole-tray equality, a boolean: same shape, cells equal across numeric tiers; an object
+// tray never equals a numeric one
 static love_noinline int tray_eq(struct g *g, word a, word b, word *base, word *top) {
- if (!trayp(a) || !trayp(b)) return 0;                // an array is never a scalar
+ if (!trayp(a) || !trayp(b)) return 0;
  struct tray *va = tray(a), *vb = tray(b);
  if (va->rank != vb->rank) return 0;
  for (uintptr_t k = 0; k < va->rank; k++)
@@ -729,15 +633,9 @@ static love_noinline int tray_eq(struct g *g, word a, word b, word *base, word *
   if (!same_flo(tray_get_flo(va, i), tray_get_flo(vb, i))) return 0;
  return 1; }
 
-// (= a b): value-equality with numeric promotion across the tower; falls through
-// to eql for non-numeric operands. strictly looser than eqv, which still rejects
-// mixed-type chains (table keys 3 and 3.0 stay distinct).
-// the whole of `=` as a question, so lvm_eq and lvm_elem cannot drift: a charm or a nom
-// is settled by identity, and a tray, a complex, a numeric coin and a float each read by
-// value before the structural fall-through. eql alone is NOT `=` -- it answers 0 for
-// (= (/// 1 1) 1), which the coin band below reads as equal.
-// 1 equal, 0 unequal, -1 the region ran out: eql's shape over the caller's region, since
-// the walk under it is what runs out
+// the whole of `=`, shared by lvm_eq and lvm_elem: numbers promote across the tower, then
+// eql -- looser than eqv, where keys 3 and 3.0 stay apart. eql alone is not `=`: it answers 0
+// for (= (/// 1 1) 1). -1 the region ran out
 static int eql_at(struct g *g, word a, word b, word *base, word *top) {
  return a == b ? 1 : (a & b & 1) || (nomp(a) && nomp(b)) ? 0 : eqv_at(g, a, b, base, top); }
 static int eq_value(struct g *g, word a, word b, word *base, word *top) {
@@ -754,18 +652,14 @@ static int eq_value(struct g *g, word a, word b, word *base, word *top) {
 
 lvm(lvm_eq) {
  word a = Sp[0], b = Sp[1];
- // the common case: identity settles two charms, and a point against anything
- // (a point equals only itself). both skip the dispatch below and fuse a
- // following `?` directly (then -> Ip+3, else -> Ip[2].m).
+ // identity settles two charms or a point, fusing a following `?`
  if (__builtin_expect((charmp(a) && charmp(b)) || nomp(a) || nomp(b), 1)) {
   bool r = a == b;
   if (Ip[1].ap == lvm_cond) { Sp += 2; Ip = r ? Ip + 3 : Ip[2].m; love_musttail return Continue(); }
   love_musttail return Answerp(1, r ? putcharm(1) : zero); }
- // a tray: elementwise with broadcast, a mask; the whole question is (aall (= a b))
+ // a tray: elementwise, a mask
  if (trayp(a) || trayp(b)) { g->b = (word) vop_eq; love_musttail return Ap(lvm_vbin, g); }
- // a coin whose kind spells '=: the method's ((f a) b) under numap_drive, either side, like +
- // (two coins of distinct kinds are unequal by payload). the structural walk below, which a
- // map probe and sort share, reads the payload regardless
+ // a coin whose kind spells '=: its method, either side; distinct kinds are unequal
  if (coinp(a) || coinp(b)) {
   word f = coinp(a) && coinp(b) && coin_kind(a) != coin_kind(b) ? ZeroPoint
          : kind_get(g, coin_kind(coinp(a) ? a : b), KnEq);
@@ -775,30 +669,23 @@ lvm(lvm_eq) {
    word *dst = Sp - 2;
    dst[0] = a, dst[1] = f, dst[2] = b, dst[3] = word(Ip + 1);
    Sp = dst; Ip = (union u*) numap_drive; love_musttail return Continue(); } }
- Pack(g);                                                 // the gap is the nursery's free room: true only packed
+ Pack(g);                                                 // the gap is true only packed
  word *top, *base = gap(g, &top);
  int r = eq_value(g, a, b, base, top);
- if (r < 0) love_musttail return Ap(_lvm_ghelp, g);         // no room to walk: the scare
+ if (r < 0) love_musttail return Ap(_lvm_ghelp, g);
  Sp[1] = r ? putcharm(1) : zero;
  love_musttail return Nextp(1, 1); }
 
-// (== a b): pointer/word identity, no structural recursion
+// (== a b): word identity
 lvm(lvm_same) {
  Sp[1] = Sp[0] == Sp[1] ? putcharm(1) : zero;
  love_musttail return Nextp(1, 1); }
 
-// (elem x l): x equal to some element of the sequence l -- a chain by link, a text by
-// byte, which is the lattice the index lane already spells (a chain indexes elements
-// where a text indexes bytes). the walk scratches off the heap and never collects, so l is
-// safe to hold across a compare.
-// a text's elements are CHARMS, so a 1-byte text is not one of them: (elem "b" "abc")
-// is 0, as `=` across kinds is, and the charm is the spelling that finds it.
-// a nom and a charm are each their own equality -- eql settles both by identity and
-// never reaches eqv -- so ask that ONCE rather than per link: the common
-// (elem nm '(a b c)) then walks at one pointer compare a link, which is assq's speed.
+// (elem x l): x `=` some element of a chain, or byte of a text -- a charm, never a 1-byte text.
+// the walk never collects, so l is safe across a compare. a nom is settled once, by identity
 lvm(lvm_elem) { word x = Sp[0], l = Sp[1];
- if (!chainp(l) && strp(l)) {                            // the chain path pays one test it already makes
-  if (!oddp(x)) love_musttail return Push(zero);          // only a charm can be a byte
+ if (!chainp(l) && strp(l)) {
+  if (!oddp(x)) love_musttail return Push(zero);
   word c = getcharm(x);
   if (c >= 0 && c < 256) {
    struct str *s = str(l);
@@ -809,72 +696,65 @@ lvm(lvm_elem) { word x = Sp[0], l = Sp[1];
   for (; chainp(l) && !nomp(l); l = B(l))
    if (A(l) == x) love_musttail return Push(putcharm(1));
   love_musttail return Push(zero); }
- Pack(g);                                                 // the gap is the nursery's free room: true only packed
+ Pack(g);                                                 // the gap is true only packed
  word *top, *base = gap(g, &top);
  for (; chainp(l) && !nomp(l); l = B(l)) {
   int r = eq_value(g, x, A(l), base, top);
-  if (r < 0) love_musttail return Ap(_lvm_ghelp, g);        // no room to walk: the scare
+  if (r < 0) love_musttail return Ap(_lvm_ghelp, g);
   if (r) love_musttail return Push(putcharm(1)); }
  love_musttail return Push(zero); }
 
-// (eleq x l): elem under `==` rather than `=` -- identity, so a pointer compare a link
-// and never a call. the two part company exactly where == and = do: a ratio coin, a
-// float, a tray, and any two chains built apart.
+// (eleq x l): elem under `==`
 lvm(lvm_eleq) { word x = Sp[0], l = Sp[1];
  for (; chainp(l) && !nomp(l); l = B(l))
   if (A(l) == x) love_musttail return Push(putcharm(1));
  love_musttail return Push(zero); }
 
-// ============================================================================
-// obin -- object-array elementwise lane (love_O)
-// ============================================================================
-// the typed lanes wrap on overflow; the object lane routes every element through
-// the promoting scalar dispatch, so a love_O array adds/multiplies exactly. the
-// inner loop allocates, so it runs Pack'd and re-fetches every live pointer.
+// obin, the object-tray elementwise lane: every cell through the promoting scalar ops, so it
+// is exact where the typed lanes wrap. it allocates, so it runs packed and re-fetches
 
-// one element op, allocating via *fp; zero for a non-numeric/complex operand
+// one element op, allocating via *fp; zero for a non-numeric or complex operand
 static word obin_elem(struct g **fp, int op, word a, word b) {
- if (op == vop_eq) {                            // a cell against a cell: the whole `=`, structural
+ if (op == vop_eq) {
   word *top, *base = gap(*fp, &top);
   int r = eq_value(*fp, a, b, base, top);
-  if (r < 0) return *fp = encode(*fp, status_scare), zero;      // no room to walk: the scare
+  if (r < 0) return *fp = encode(*fp, status_scare), zero;
   return r ? putcharm(1) : zero; }
- if (op >= vop_lt) {                            // comparison -> 1 / zero, no allocation
-  if (!isnum(a) || !isnum(b)) return zero;       // twinp not in isnum -> unordered -> zero
+ if (op >= vop_lt) {
+  if (!isnum(a) || !isnum(b)) return zero;       // a twin is unordered
   intptr_t t = (gemp(a) || gemp(b)) ? vcmp_flo(op, toflo(a), toflo(b))
              : (bigp(a) || bigp(b)) ? vcmp_int(op, big_cmp(a, b), 0)
                                     : vcmp_int(op, toint(a), toint(b));
   return t ? putcharm(1) : zero; }
  if (!isnum(a) || !isnum(b)) return zero;
  struct g *g = *fp;
- if (gemp(a) || gemp(b) || (op == vop_fquot && b == putcharm(0))) {   // float domain -> float box; // 0 as the scalar
-  flo_t r = vop_flo(op, toflo(a), toflo(b));  // both operands read first: a/b are raw words
-  if (!ok(g = have(g, gem_req))) return *fp = g, zero;   // and a float box is a heap object, so
-  *fp = g;                                                    // toflo after the have reads a moved one
+ if (gemp(a) || gemp(b) || (op == vop_fquot && b == putcharm(0))) {   // a float, or `// 0` as the scalar answers
+  flo_t r = vop_flo(op, toflo(a), toflo(b));  // read before the have, which moves a float box
+  if (!ok(g = have(g, gem_req))) return *fp = g, zero;
+  *fp = g;
   return mk_gem(&g->hp, r); }
- if (!bigp(a) && !bigp(b)) {                    // machine-int fast path, overflow-checked
+ if (!bigp(a) && !bigp(b)) {
   intptr_t av = toint(a), bv = toint(b), t; bool of;
   switch (op) {
-   case vop_fquot:                                        // `//` truncates; `/` is the hook's (lvm_obin)
+   case vop_fquot:                                        // `/` is the hook's (lvm_obin)
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av / bv; break;
-   case vop_rem:  if (bv == 0) return a;                     // a % 0 = a: no modulus, a whole
+   case vop_rem:  if (bv == 0) return a;                     // a % 0 = a
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av % bv; break;
    case vop_sub:  of = __builtin_sub_overflow(av, bv, &t); break;
    case vop_mul:  of = __builtin_mul_overflow(av, bv, &t); break;
    case vop_max:  of = false; t = av > bv ? av : bv; break;
    case vop_min:  of = false; t = av < bv ? av : bv; break;
    default:       of = __builtin_add_overflow(av, bv, &t); break; }   // vop_add
-  if (!of) {                                    // demote-or-box the result
+  if (!of) {
    if (t >= mincharm && t <= maxcharm) return putcharm(t);
    if (!ok(g = have(g, wbig_req))) return *fp = g, zero;
    *fp = g;
    return mk_wbig(&g->hp, t); } }
- if (op == vop_rem && b == putcharm(0)) return a;   // as the int lane above: a big divides by no limbs
- if (op == vop_max || op == vop_min) {          // an extreme is one of its operands: no arithmetic
+ if (op == vop_rem && b == putcharm(0)) return a;   // a big divides by no limbs
+ if (op == vop_max || op == vop_min) {
   intptr_t c = big_cmp(a, b);
   return (op == vop_max ? c >= 0 : c <= 0) ? a : b; }
- // bignum lane: big_binop computes sp[0] (op) sp[1], leaves it at sp[1],
- // pops one, and advances ip -- so save/restore ip and pop the net result.
+ // big_binop pops one and advances ip: restore ip, pop the result
  if (!ok(g = push(g, 2, a, b))) return *fp = g, zero;
  union u *ip0 = g->ip;
  avec(g, ip0, g = big_binop(g, op));
@@ -883,8 +763,7 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
  word r = g->sp[0]; g->sp++;
  return *fp = g, r; }
 
-// widen the numeric array at g->sp[slot] to a love_O copy (box each element);
-// allocates per element, everything re-fetched after every box
+// widen the numeric tray at g->sp[slot] to a love_O copy, re-fetching after every box
 static struct g *tray_to_obj(struct g *g, int slot) {
  struct tray *src = tray(g->sp[slot]);
  uintptr_t R = src->rank, n = tray_nelem(src);
@@ -894,26 +773,26 @@ static struct g *tray_to_obj(struct g *g, int slot) {
  struct tray *dst = (struct tray*) g->hp; g->hp += b2w(bytes);
  ini_tray(dst, love_O, R);
  for (uintptr_t i = 0; i < R; i++) dst->shape[i] = src->shape[i];
- for (uintptr_t i = 0; i < n; i++) tray_put_obj(dst, i, zero);   // safe pre-fill (GC may see it)
+ for (uintptr_t i = 0; i < n; i++) tray_put_obj(dst, i, zero);   // the gc may see it
  if (!ok(g = push(g, 1, word(dst)))) return g;             // sp[0]=dst, src now at slot+1
  for (uintptr_t i = 0; i < n; i++) {
   struct tray *s = tray(g->sp[slot + 1]);
   word v;
-  if (s->type >= love_R) {                                        // float -> float box
+  if (s->type >= love_R) {
    flo_t e = tray_get_flo(s, i);
    if (!ok(g = have(g, gem_req))) return g;
    v = mk_gem(&g->hp, e); }
-  else {                                                       // int -> fixnum or boxed
+  else {
    intptr_t e = tray_get_int(s, i);
    if (e >= mincharm && e <= maxcharm) v = putcharm(e);
    else { if (!ok(g = have(g, wbig_req))) return g;
     v = mk_wbig(&g->hp, e); } }
-  tray_put_obj(tray(g->sp[0]), i, v);                            // re-fetch dst post-box
-  gen_wb(g, g->sp[0], v); }                                    // ... and barrier it: see obin_run
- word d = g->sp[0]; g->sp++; g->sp[slot] = d;                  // install copy, drop the parked root
+  tray_put_obj(tray(g->sp[0]), i, v);
+  gen_wb(g, g->sp[0], v); }                                    // see obin_run
+ word d = g->sp[0]; g->sp++; g->sp[slot] = d;
  return g; }
 
-// Pack'd body of lvm_obin (operands at g->sp[0..1], >=1 is a love_O array).
+// lvm_obin's packed body: at least one operand a love_O tray
 static struct g *obin_run(struct g *g, int op) {
  word a = g->sp[0], b = g->sp[1];
  bool atray = trayp(a), btray = trayp(b);
@@ -921,7 +800,7 @@ static struct g *obin_run(struct g *g, int op) {
  if (btray && tray(g->sp[1])->type != love_O) { if (!ok(g = tray_to_obj(g, 1))) return g; }   // b may have moved
  a = g->sp[0], b = g->sp[1], atray = trayp(a), btray = trayp(b);
  uintptr_t R, n = bshape(a, b, &R), shp[maxrank];
- if (n == (uintptr_t) -1) {                                    // non-conforming -> zero
+ if (n == (uintptr_t) -1) {                                    // non-conforming
   g->sp[1] = zero, g->sp++, g->ip = (union u*) g->ip + 1; return g; }
  bshape_put(shp, R, a, b);
  uintptr_t bytes = tray_bytes(love_O, R, n);
@@ -929,7 +808,7 @@ static struct g *obin_run(struct g *g, int op) {
  struct tray *r = (struct tray*) g->hp; g->hp += b2w(bytes);
  ini_tray(r, love_O, R);
  for (uintptr_t k = 0; k < R; k++) r->shape[k] = shp[k];
- for (uintptr_t p = 0; p < n; p++) tray_put_obj(r, p, zero);     // zero-fill before any GC
+ for (uintptr_t p = 0; p < n; p++) tray_put_obj(r, p, zero);     // before any gc
  if (!ok(g = push(g, 1, word(r)))) return g;               // sp: [0]=r [1]=a [2]=b
  struct bcast w; bc_open(&w, atray ? tray(g->sp[1]) : 0, btray ? tray(g->sp[2]) : 0, R, shp);
  for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
@@ -938,26 +817,20 @@ static struct g *obin_run(struct g *g, int op) {
        be = btray ? tray_get_obj(tray(g->sp[2]), ob) : g->sp[2],
        res = obin_elem(&g, op, ae, be);
   if (!ok(g)) return g;
-  tray_put_obj(tray(g->sp[0]), p, res);                          // re-fetch result post-alloc
-  // and barrier it: a minor mid-loop promotes the result array while its
-  // elements stay young -- an edge the rem set must carry, or the next minor
-  // frees an element still in the array
-  gen_wb(g, g->sp[0], res); }
+  tray_put_obj(tray(g->sp[0]), p, res);
+  gen_wb(g, g->sp[0], res); }                                  // a minor mid-loop may tenure r
  g->sp[2] = g->sp[0], g->sp += 2, g->ip += 1;
  return g; }
 
-// a cell the C lane takes is a plain number; an object tray holding anything else goes whole
-// to hook_obin, which runs the op itself on every cell. so does `/`, whose cells answer as
-// the scalar `/` does: exact where it divides, else a float
+// the C lane takes plain numbers; anything else, and `/`, goes whole to hook_obin
 static bool obj_plain(word x) {
  if (!trayp(x) || tray(x)->type != love_O) return true;
  struct tray *v = tray(x);
  for (uintptr_t i = 0, n = tray_nelem(v); i < n; i++) if (!isnum(tray_get_obj(v, i))) return false;
  return true; }
 
-// hook_obin's frame over the two operands: [k hook as bs sh ret], the cells paired as C
-// broadcasts them in two lists and the result's shape in a third, so an object tray conforms
-// as a numeric one does. the operands conform: the caller asked
+// hook_obin's frame [k hook as bs sh ret]: the cells as C broadcasts them in two lists, the
+// shape in a third. the caller checked they conform
 static struct g *obin_frame(struct g *g, int op) {
  if (!ok(g = push(g, 4, zero, zero, zero, zero))) return g;   // operands now at sp[4], sp[5]
  if (trayp(g->sp[4]) && tray(g->sp[4])->type != love_O && !ok(g = tray_to_obj(g, 4))) return g;
@@ -983,17 +856,17 @@ lvm(lvm_obin) {
  int op = (int) g->b;
  if (op == vop_eq || (op != vop_quot && obj_plain(Sp[0]) && obj_plain(Sp[1]))) LvmResume(g, obin_run, op)
  uintptr_t R;
- if (bshape(Sp[0], Sp[1], &R) == (uintptr_t) -1) { Sp[1] = zero; love_musttail return Nextp(1, 1); }   // non-conforming -> zero, as obin_run
+ if (bshape(Sp[0], Sp[1], &R) == (uintptr_t) -1) { Sp[1] = zero; love_musttail return Nextp(1, 1); }   // as obin_run
  LvmPack(g, obin_frame, op);
  Unpack(g);
  Ip = (union u*) obin_drive;
  love_musttail return Continue(); }
 
-// love_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). g->sp[0] is the array.
+// love_O reduction (kind: 0 sum, 1 prod, 2 max, 3 min) of g->sp[0]
 struct g *ored(struct g *g, int kind) {
  struct tray *v = tray(g->sp[0]);
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
- if (kind >= 2) {                                              // max/min: pick an element, no alloc
+ if (kind >= 2) {                                              // no alloc
   if (!n) { g->sp[0] = zero, g->ip = (union u*) g->ip + 1; return g; }
   word acc = tray_get_obj(tray(g->sp[0]), 0);
   int cop = kind == 2 ? vop_gt : vop_lt;
@@ -1001,7 +874,7 @@ struct g *ored(struct g *g, int kind) {
    word e = tray_get_obj(tray(g->sp[0]), i);
    if (obin_elem(&g, cop, e, acc) == putcharm(1)) acc = e; }
   g->sp[0] = acc, g->ip = (union u*) g->ip + 1; return g; }
- word init = kind == 0 ? putcharm(0) : putcharm(1);               // sum/prod: fold with allocation
+ word init = kind == 0 ? putcharm(0) : putcharm(1);
  int aop = kind == 0 ? vop_add : vop_mul;
  if (!ok(g = push(g, 1, init))) return g;                 // sp[0]=acc, sp[1]=array
  for (uintptr_t i = 0; i < n; i++) {
@@ -1009,24 +882,22 @@ struct g *ored(struct g *g, int kind) {
   word acc = obin_elem(&g, aop, g->sp[0], e);
   if (!ok(g)) return g;
   g->sp[0] = acc; }
- word result = g->sp[0]; g->sp++, g->sp[0] = result;          // collapse acc into the array slot
+ word result = g->sp[0]; g->sp++, g->sp[0] = result;
  g->ip = (union u*) g->ip + 1;
  return g; }
 
-// (re, im) of an operand: a complex its parts, a real (value, 0); caller
-// guarantees twinp or isnum
+// caller guarantees twinp or isnum
 static void twin_parts(word x, flo_t *re, flo_t *im) {
  if (twinp(x)) *re = twin_re(x), *im = twin_im(x);
  else *re = toflo(x), *im = 0; }
 
-// (ar,ai) `vop` (br,bi) in components: the one set of complex formulas, shared
-// by the scalar lane (twin_fill) and the packed array lane (cbin_fill).
+// the one set of complex formulas, for twin_fill and cbin_fill
 static void twin_op(int vop, flo_t ar, flo_t ai, flo_t br, flo_t bi,
                              flo_t *re, flo_t *im) {
  switch (vop) {
   case vop_sub: *re = ar - br; *im = ai - bi; break;
   case vop_mul: *re = ar * br - ai * bi; *im = ar * bi + ai * br; break;
-  case vop_quot: { flo_t d = br * br + bi * bi;   // (ac+bd)/(c^2+d^2) + ...
+  case vop_quot: { flo_t d = br * br + bi * bi;
    *re = (ar * br + ai * bi) / d; *im = (ai * br - ar * bi) / d; break; }
   case vop_max: case vop_min: {                       // the (re, im) order the comparisons keep
    int c = ar < br ? -1 : ar > br ? 1 : ai < bi ? -1 : ai > bi ? 1 : 0;
@@ -1034,15 +905,14 @@ static void twin_op(int vop, flo_t ar, flo_t ai, flo_t br, flo_t bi,
    *re = pa ? ar : br; *im = pa ? ai : bi; break; }
   default: *re = ar + br; *im = ai + bi; } }          // vop_add
 
-// fill the complex box with a `vop` b; the &-taking lives here (the wrapper's tail call)
+// the &-taking lives here, for the wrapper's tail call
 static love_noinline void twin_fill(struct twin *v, word a, word b, int vop) {
  flo_t ar, ai, br, bi, re, im;
  twin_parts(a, &ar, &ai); twin_parts(b, &br, &bi);
  twin_op(vop, ar, ai, br, bi, &re, &im);
  twin_set(v, re, im); }
 
-// the complex arithmetic lane: a real operand promotes to (r, 0); non-numeric,
-// or % (undefined on complex), yields zero
+// the complex lane: a real promotes to (r, 0); % is undefined
 lvm(lvm_twin_bin) {
  int vop = (int) g->b;
  word a = Sp[0], b = Sp[1];
@@ -1053,8 +923,7 @@ lvm(lvm_twin_bin) {
  twin_fill(v, a, b, vop);
  love_musttail return Push(word(v)); }
 
-// --- complex-array elementwise lane (love_C): lvm_vbin's complex twin -- packed
-// (re,im) broadcast, a real element promoting to (v, 0)
+// lvm_vbin's complex twin (love_C), a real element promoting to (v, 0)
 static void cbin_part(bool istray, struct tray *v, flo_t sre, flo_t sim,
                                uintptr_t o, flo_t *re, flo_t *im) {
  if (!istray) { *re = sre; *im = sim; return; }
@@ -1075,9 +944,9 @@ static love_noinline void cbin_fill(struct tray *r, word a, word b, int op, bool
   flo_t ar, ai, br, bi, re, im;
   cbin_part(atray, va, sar, sai, oa, &ar, &ai);
   cbin_part(btray, vb, sbr, sbi, ob, &br, &bi);
-  if (cmp) {                                   // (re,im) lexicographic -- the same order
-   int t;                                      // cmp3's complex arm gives a scalar pair
-   if (op == vop_eq) t = same_flo(ar, br) && same_flo(ai, bi);   // ..and a NaN is () here too
+  if (cmp) {                                   // (re,im) lexicographic, as cmp3's complex arm
+   int t;
+   if (op == vop_eq) t = same_flo(ar, br) && same_flo(ai, bi);
    else {
     int c = ar < br ? -1 : ar > br ? 1 : ai < bi ? -1 : ai > bi ? 1 : 0;
     t = op == vop_lt ? c < 0 : op == vop_le ? c <= 0
@@ -1091,15 +960,14 @@ lvm(lvm_cbin) {
  int op = (int) g->b;
  word a = Sp[0], b = Sp[1];
  bool atray = trayp(a), btray = trayp(b);
- // % and // stay undefined on complex, but the orderings hold ((re,im)
- // lexicographic): a tray follows its scalar
+ // % and // are undefined on complex; the orderings hold
  if (!(atray || twinp(a) || isnum(a)) || !(btray || twinp(b) || isnum(b))
      || op == vop_rem || op == vop_fquot)
-  love_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
+  love_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean
  bool cmp = op >= vop_lt;
  uintptr_t R, n = bshape(a, b, &R);
- if (n == (uintptr_t) -1) love_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // non-conformant `=` -> 0
- enum tray_type rt = cmp ? love_Z : love_C;              // compare -> i64 mask, else packed complex
+ if (n == (uintptr_t) -1) love_musttail return Push(op == vop_eq ? zero : ZeroPoint);
+ enum tray_type rt = cmp ? love_Z : love_C;              // a compare answers a mask
  uintptr_t bytes = tray_bytes(rt, R, n);
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1];                                 // re-read post-Have
@@ -1118,8 +986,7 @@ static love_noinline void twin_pow_fill(struct twin *v, word wbase, word zexp) {
           e = love_exp(pr);
  twin_set(v, e * love_cos(pi), e * love_sin(pi)); }
 
-// sin/cos of pi*x, the angle reduced before multiplying by pi so a half-integer
-// lands exactly on the axis -- what makes ((/ 1 2) -1) = i bit-exact
+// sin/cos of pi*x, reduced before multiplying so ((/ 1 2) -1) = i bit-exact
 static flo_t love_sinpi(flo_t x) {
  intptr_t n = (intptr_t) x; flo_t r = x - (flo_t) n;
  if (r < 0) r += 1, n--;                              // x = n + r, r in (0,1)
@@ -1133,14 +1000,13 @@ static flo_t love_cospi(flo_t x) {
    : r < (flo_t) 0.5 ? love_cos((flo_t) 3.141592653589793 * r)
    : -love_cos((flo_t) 3.141592653589793 * (1 - r));
  return n & 1 ? -c : c; }
-// finite non-integer? everything at/past 2^mantissa is an integer; nan/inf out.
+// finite non-integer? at or past 2^mantissa everything is an integer
 static bool flo_fracp(flo_t x) {
  flo_t lim = (flo_t) (1ull << (Bits == 64 ? 53 : 24));
  return x > -lim && x < lim && (flo_t) (intptr_t) x != x; }
 
-// (power b e): complex operands take the complex lane; a finite negative real
-// base to a non-integer power widens to its principal root instead of nan (pow
-// climbs tiers like log). everything else keeps the IEEE real lanes.
+// (power b e): a complex operand, or a finite negative base to a non-integer power, widens
+// to the principal root instead of nan; the rest stays IEEE
 lvm(lvm_pow) {
  word a = Sp[0], b = Sp[1];
  if (twinp(a) || twinp(b)) {
@@ -1160,8 +1026,7 @@ lvm(lvm_pow) {
    *++Sp = mk_twin(&Hp, re, im); love_musttail return Next(1); } }
  g->b = (word) (uintptr_t) (love_pow); love_musttail return Ap(lvm_math2, g); }
 
-// (sqrt x): a complex operand or a negative real widens to the principal root,
-// as (** x 1/2) does; a non-negative real stays in the float lane.
+// (sqrt x): a complex or a negative real widens to the principal root, as (** x 1/2)
 lvm(lvm_sqrt) {
  word a = Sp[0];
  if (twinp(a)) {
@@ -1178,7 +1043,7 @@ lvm(lvm_sqrt) {
   love_musttail return Answer(mk_twin(&Hp, 0, m)); }
  g->b = (word) (uintptr_t) (love_sqrt); love_musttail return Ap(lvm_math1, g); }
 
-// (exp x): a complex operand takes the complex power lane, as (** e x) does.
+// (exp x): a complex operand as (** e x)
 lvm(lvm_exp) {
  word a = Sp[0];
  if (twinp(a)) {
@@ -1191,7 +1056,6 @@ lvm(lvm_exp) {
   love_musttail return Answer(word(v)); }
  g->b = (word) (uintptr_t) (love_exp); love_musttail return Ap(lvm_math1, g); }
 
-// fill a packed love_C array with (re = a-element, im = b-element) under broadcast
 static love_noinline void twin_build_fill(struct tray *r, word a, word b) {
  uintptr_t R = r->rank, n = tray_nelem(r);
  bool atray = trayp(a), btray = trayp(b);
@@ -1204,8 +1068,7 @@ static love_noinline void twin_build_fill(struct tray *r, word a, word b) {
   rf[2*p]   = atray ? tray_get_flo(va, oa) : sa;
   rf[2*p+1] = btray ? tray_get_flo(vb, ob) : sb; } }
 
-// (twin re im): scalars -> a complex box; a real array operand -> a packed love_C
-// array (so arg stays elementwise); complex/object array or non-numeric -> zero
+// (twin re im): real tray operands build a love_C tray; a complex or object tray answers ()
 lvm(lvm_twin) {
  word a = Sp[0], b = Sp[1];
  bool atray = trayp(a), btray = trayp(b);
@@ -1217,22 +1080,20 @@ lvm(lvm_twin) {
   if (n == (uintptr_t) -1) love_musttail return Push(ZeroPoint);
   uintptr_t bytes = tray_bytes(love_C, R, n);
   Have(b2w(bytes));
-  a = Sp[0], b = Sp[1];                                     // re-read post-Have
+  a = Sp[0], b = Sp[1];
   struct tray *r = ini_tray((struct tray*) Hp, love_C, R);
   Hp += b2w(bytes);
   bshape_put(r->shape, R, a, b);
   twin_build_fill(r, a, b);
   love_musttail return Push(word(r)); }
  if (!isnum(a) || !isnum(b)) love_musttail return Push(ZeroPoint);
- flo_t re = toflo(a), im = toflo(b);             // values extracted before alloc
+ flo_t re = toflo(a), im = toflo(b);             // before the alloc
  Have(twin_req);
  *++Sp = mk_twin(&Hp, re, im); love_musttail return Next(1); }
 
-// (twinp x): is x a complex scalar?
 op11(lvm_twinp, twinp(Sp[0]) ? putcharm(1) : zero)
 
-// fill r with component `off` (0 = re, 1 = im) of each element; off < 0 is the
-// (im realarr) lane -- all zeros
+// component off (0 re, 1 im) of each cell; off < 0 is im of a real tray, all zeros
 static love_noinline void cpart_fill(struct tray *r, struct tray *v, int off) {
  uintptr_t n = tray_nelem(r);
  if (off < 0) {
@@ -1242,7 +1103,6 @@ static love_noinline void cpart_fill(struct tray *r, struct tray *v, int off) {
  flo_t *rf = tray_data(r), *fp = tray_data(v);
  for (uintptr_t p = 0; p < n; p++) rf[p] = fp[2*p + off]; }
 
-// the array lane of re/im: result carries the operand's shape
 static lvm(lvm_cpart) {
  int off = (int) g->b;
  struct tray *v = tray(Sp[0]);
@@ -1250,14 +1110,13 @@ static lvm(lvm_cpart) {
  uintptr_t R = v->rank, n = tray_nelem(v),
            bytes = tray_bytes(rt, R, n);
  Have(b2w(bytes));
- v = tray(Sp[0]);                                           // re-read post-Have
+ v = tray(Sp[0]);
  struct tray *r = ini_tray((struct tray*) Hp, rt, R); Hp += b2w(bytes);
  for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
  cpart_fill(r, v, off);
  love_musttail return Answer(word(r)); }
 
-// (re z) / (im z): the parts, elementwise over an array (a real array is its own
-// real part; im of one is fresh zeros); object array or non-number -> zero
+// (re z) / (im z), elementwise over a tray; an object tray or non-number answers ()
 lvm(lvm_re) {
  word a = Sp[0], _res;
  if (twinp(a)) {
@@ -1267,10 +1126,10 @@ lvm(lvm_re) {
   love_musttail return Answer(_res); }
  if (trayp(a)) {
   enum tray_type t = tray(a)->type;
-  if (t == love_O) love_musttail return Answer(ZeroPoint);   // a tray is not a number
-  if (t != love_C) love_musttail return Next(1);          // a real array is its own real part
+  if (t == love_O) love_musttail return Answer(ZeroPoint);
+  if (t != love_C) love_musttail return Next(1);
   g->b = (word) (0); love_musttail return Ap(lvm_cpart, g); }
- if (isnum(a)) love_musttail return Next(1);            // re of a real is itself
+ if (isnum(a)) love_musttail return Next(1);
  love_musttail return Answer(ZeroPoint); }
 
 lvm(lvm_im) {
@@ -1283,26 +1142,23 @@ lvm(lvm_im) {
  if (trayp(a)) {
   enum tray_type t = tray(a)->type;
   if (t == love_O) love_musttail return Answer(ZeroPoint);
-  g->b = (word) (t == love_C ? 1 : -1); love_musttail return Ap(lvm_cpart, g); }   // real array -> zeros of its shape
- if (isnum(a)) love_musttail return Answer(putcharm(0));   // im of a real is 0
+  g->b = (word) (t == love_C ? 1 : -1); love_musttail return Ap(lvm_cpart, g); }
+ if (isnum(a)) love_musttail return Answer(putcharm(0));
  love_musttail return Answer(ZeroPoint); }
 
-// the array lane of conj: the operand's shape, each cell's imaginary negated
 static lvm(lvm_cconj) {
  struct tray *v = tray(Sp[0]);
  uintptr_t R = v->rank, n = tray_nelem(v),
            bytes = tray_bytes(love_C, R, n);
  Have(b2w(bytes));
- v = tray(Sp[0]);                                           // re-read post-Have
+ v = tray(Sp[0]);
  struct tray *r = ini_tray((struct tray*) Hp, love_C, R); Hp += b2w(bytes);
  for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
  flo_t *rf = tray_data(r), *fp = tray_data(v);
  for (uintptr_t p = 0; p < n; p++) rf[2*p] = fp[2*p], rf[2*p + 1] = -fp[2*p + 1];
  love_musttail return Answer(word(r)); }
 
-// (conj z): complex conjugate, elementwise over an array. conj lifts -- a real r
-// becomes ~(r 0), so a scalar always lands in C (the monadic `~`); a real array is
-// its own conjugate. object array or non-number -> zero.
+// (conj z): lifts, a real scalar to ~(r 0) (the monadic `~`); a real tray is its own conjugate
 lvm(lvm_conj) {
  word a = Sp[0];
  if (twinp(a)) {
@@ -1312,17 +1168,17 @@ lvm(lvm_conj) {
   love_musttail return Next(1); }
  if (trayp(a)) {
   enum tray_type t = tray(a)->type;
-  if (t == love_O) love_musttail return Answer(ZeroPoint);   // a tray is not a number
-  if (t != love_C) love_musttail return Next(1);             // a real array is its own conjugate
+  if (t == love_O) love_musttail return Answer(ZeroPoint);
+  if (t != love_C) love_musttail return Next(1);
   love_musttail return Ap(lvm_cconj, g); }
  if (isnum(a)) {
-  flo_t re = toflo(a);            // lift a real to ~(r 0)
+  flo_t re = toflo(a);
   Have(twin_req);
   Sp[0] = mk_twin(&Hp, re, 0);
   love_musttail return Next(1); }
  love_musttail return Answer(ZeroPoint); }
 
-// (abs z): magnitude in its own tier; a boxed integer copies with its sign word flipped.
+// (abs z): magnitude in its own tier
 lvm(lvm_abs) {
  word a = Sp[0], _res;
  if (charmp(a)) {
@@ -1342,28 +1198,27 @@ lvm(lvm_abs) {
   love_musttail return Answer(_res); }
  if (bigp(a)) {
   struct big *x = big(a);
-  if (x->slen > 0) love_musttail return Next(1);         // already non-negative
+  if (x->slen > 0) love_musttail return Next(1);
   uintptr_t bytes = big_bytes(x); Have(b2w(bytes));
-  x = big(Sp[0]);                         // re-read post-Have
+  x = big(Sp[0]);
   struct big *y = big(Hp);
   Hp += b2w(bytes);
-  memcpy(y, x, bytes); y->slen = -x->slen;           // flip the sign
+  memcpy(y, x, bytes); y->slen = -x->slen;
   love_musttail return Answer(word(y)); }
- if (trayp(a)) {                                       // vector -> scalar: the Euclidean (L2) norm
-  struct tray *v = tray(a); uintptr_t i, n = tray_nelem(v);   // sqrt(sum of squares); abs of a
-  flo_t s = 0;                                      // complex elem is its 2-vector modulus; love_C sums 2n floats
+ if (trayp(a)) {                                       // the L2 norm; love_C sums 2n floats
+  struct tray *v = tray(a); uintptr_t i, n = tray_nelem(v);
+  flo_t s = 0;
   if (v->type == love_C) { flo_t *fp = tray_data(v); for (i = 0; i < 2*n; i++) s += fp[i] * fp[i]; }
   else for (i = 0; i < n; i++) { flo_t e = tray_get_flo(v, i); s += e * e; }
   Have(box_req);
   emit_gem(_res, love_sqrt(s));
   love_musttail return Answer(_res); }
- if (tabp(a)) {                                       // table: its key count (so (int (abs t)) == (len t))
+ if (tabp(a)) {                                       // a tablet: its key count
   Have(box_req);
   emit_int(_res, (intptr_t) map_len(a));
   love_musttail return Answer(_res); }
  love_musttail return Answer(ZeroPoint); }
 
-// fill f64 array r with arg of each element of v
 static love_noinline void carg_fill(struct tray *r, struct tray *v) {
  uintptr_t n = tray_nelem(v);
  flo_t *rf = tray_data(r);
@@ -1371,7 +1226,7 @@ static love_noinline void carg_fill(struct tray *r, struct tray *v) {
   for (uintptr_t p = 0; p < n; p++) rf[p] = love_atan2(fp[2*p+1], fp[2*p]); }
  else for (uintptr_t p = 0; p < n; p++) rf[p] = love_atan2(0, tray_get_flo(v, p)); }
 
-// (arg z): phase angle atan2(im, re); elementwise over an array, () on a non-number
+// (arg z): atan2(im, re), elementwise over a tray
 lvm(lvm_carg) {
  word a = Sp[0], _res;
  if (twinp(a)) {
@@ -1381,16 +1236,16 @@ lvm(lvm_carg) {
   love_musttail return Answer(_res); }
  if (trayp(a)) {
   struct tray *v = tray(a);
-  if (v->type == love_O) love_musttail return Answer(ZeroPoint);   // object array -> zero
+  if (v->type == love_O) love_musttail return Answer(ZeroPoint);
   uintptr_t R = v->rank, n = tray_nelem(v);
   uintptr_t bytes = tray_bytes(love_R, R, n);
   Have(b2w(bytes));
-  v = tray(Sp[0]);                                           // re-read post-Have
+  v = tray(Sp[0]);
   struct tray *r = ini_tray((struct tray*) Hp, love_R, R); Hp += b2w(bytes);
   for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
   carg_fill(r, v);
   love_musttail return Answer(word(r)); }
- if (isnum(a)) {                    // 0 for a positive real, pi for a negative one
+ if (isnum(a)) {
   flo_t r = love_atan2(0, toflo(a));
   Have(box_req);
   emit_gem(_res, r);

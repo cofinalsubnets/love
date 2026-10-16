@@ -11,7 +11,7 @@
 #include <poll.h>
 #include <errno.h>
 #include <math.h>
-#include <stddef.h>      // offsetof (the struct wait_fd / struct pollfd assert)
+#include <stddef.h>      // offsetof
 #if defined(__moonlibc__)
 #endif
 #include <stdnoreturn.h>
@@ -21,8 +21,7 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 
-// love_clock lives in src/love/posix.c, one body for this frontend and the kernel's.
-// the fine clock's real source (the weak default in love.c degrades to ms*1e6)
+// the fine clock; love.c's weak default degrades to ms*1e6
 love_noinline intptr_t nclock(void) {
  struct timespec ts;
  return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
@@ -30,7 +29,7 @@ love_noinline intptr_t nclock(void) {
 
 static void stdin_give(struct g *g) {
  if (!g || !ok(g)) return;
- if (g->inflag)                                          // its blocking bit was ours: back it goes
+ if (g->inflag)                                          // the blocking bit was ours
   fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(g->inflag)), g->inflag = 0;
  if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
  uintptr_t n = io_pending(g, (struct io*) g->inport)
@@ -61,14 +60,14 @@ static bool on_inle(void) {
 #endif
 }
 
-// on inle, in a process as on the kernel, a twirled task is a process of the shell's
+// on inle a twirled task is a process of the shell's
 static lvm(lvm_exit) {
  if (__love_osv < 0) love_musttail return Ap(k_lvm_quit, g);
  union u *t = g->tasks;
  if (t && (t[2].x & 1) && getcharm(t[2].x) && on_inle()) love_musttail return Ap(lvm_task_quit, g);
  for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
 
-                                                                          //
+
 static void stdin_hand(struct g *g) {
  stdin_give(g);
  if (!g || !ok(g)) return;
@@ -79,7 +78,7 @@ static void stdin_hand(struct g *g) {
   res[n++] = (unsigned char) getcharm(love_stdin.io.ungetc_buf),
   love_stdin.io.ungetc_buf = putcharm(EOF);
  n += io_read_drain(g, (struct io*) g->inport, res + n, sizeof res - n);
- if (!n) return;                                                    // nothing owed: the fd is already exact
+ if (!n) return;                                                    // the fd is already exact
  int p[2];
  if (pipe(p)) return;
  pid_t pid = fork();
@@ -90,7 +89,7 @@ static void stdin_hand(struct g *g) {
    for (;;) {
     unsigned char buf[iobuf];
     ssize_t k = read(STDIN_FILENO, buf, sizeof buf);
-    if (k < 0 && errno == EINTR) continue;                          // a signal is not an end
+    if (k < 0 && errno == EINTR) continue;
     if (k <= 0 || love_fd_write_all(p[1], buf, (uintptr_t) k) < (uintptr_t) k) break; }
   _exit(0); }                                                       // _exit: no atexit, no flush, no love
  close(p[1]);
@@ -107,8 +106,7 @@ static struct g *host_harkst(struct g *g, intptr_t fd, intptr_t pid, int tee) {
  if (ok(g)) g->sp[3] = putcharm(tee);
  return g; }
 
-// the first ap: marshal argv, fork, and confirm the exec. called with g Packed;
-// argv is at sp[0]. returns a not-ok g only on oom.
+// the first ap: marshal argv at sp[0], fork, confirm the exec. g Packed; not ok only on oom
 love_noinline static struct g *host_harkstart(struct g *g, int tee) {
  char **cav;
  g = love_argv_marshal(g, &cav);
@@ -118,8 +116,7 @@ love_noinline static struct g *host_harkstart(struct g *g, int tee) {
   return push(g, 1, badarg(g)); }
 
  int op[2], ep[2];
- // errno into a local before every state push: the push may collect, and a collection
- // that grows the pool makes syscalls of its own.
+ // errno saved before each push: a collection that grows the pool makes syscalls
  if (pipe(op)) { int e = errno;
   g = host_harkst(g, -1, 0, tee);
   return push(g, 1, love_err(g, e)); }
@@ -133,7 +130,7 @@ love_noinline static struct g *host_harkstart(struct g *g, int tee) {
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
   g = host_harkst(g, -1, 0, tee);
   return push(g, 1, love_err(g, e)); }
- if (!pid) {                                              // child
+ if (!pid) {
   signal(SIGPIPE, SIG_DFL);                               // the ignore must not ride the exec
   dup2(op[1], STDOUT_FILENO);
   int nul = open("/dev/null", O_RDONLY);
@@ -142,11 +139,11 @@ love_noinline static struct g *host_harkstart(struct g *g, int tee) {
   execvp(argv_file(cav), cav);
   int e = errno; ssize_t w = write(ep[1], &e, sizeof e); (void) w;
   _exit(127); }
- close(op[1]); close(ep[1]);                              // parent
+ close(op[1]); close(ep[1]);
  int childerr = 0; ssize_t r;
  do r = read(ep[0], &childerr, sizeof childerr); while (r < 0 && errno == EINTR);
  close(ep[0]);
- if (childerr) {                                          // exec failed
+ if (childerr) {
   close(op[0]);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
   g = host_harkst(g, -1, 0, tee);
@@ -154,7 +151,7 @@ love_noinline static struct g *host_harkstart(struct g *g, int tee) {
 
  int fl = fcntl(op[0], F_GETFL);
  if (fl >= 0) fcntl(op[0], F_SETFL, fl | O_NONBLOCK);
- return str0(host_harkst(g, op[0], pid, tee), 1u << 16); }  // capture -> sp[0]
+ return str0(host_harkst(g, op[0], pid, tee), 1u << 16); }  // the capture at sp[0]
 
 love_noinline static struct g *host_harkdrain(struct g *g) {
  intptr_t fd = getcharm(g->sp[2]);
@@ -165,9 +162,9 @@ love_noinline static struct g *host_harkdrain(struct g *g) {
   uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
   for (;;) {
    uintptr_t lim = len(g->sp[0]);
-   if (n == lim) {                                        // full -> double it and retry
+   if (n == lim) {
     if (ok(g = grbufg(g, lim))) continue;
-    // oom mid-capture: close the pipe and kill the child rather than wait on it
+    // oom: kill the child rather than wait on it
     close((int) fd);
     kill(pid, SIGKILL);
     { int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {} }
@@ -182,16 +179,15 @@ love_noinline static struct g *host_harkdrain(struct g *g) {
    if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
     g->next_wait_fd = (int) fd;                           // the scheduler owns the wait
     return g; }
-   break; }                                               // EOF, or a read error we cannot use
+   break; }                                               // EOF, or an unusable error
   close((int) fd);
   g->sp[2] = putcharm(-2); }                              // drained; now reap
-                                                          //
  int st; pid_t w;
  do w = waitpid(pid, &st, WNOHANG); while (w < 0 && errno == EINTR);
  if (!w) { g->next_wake_at = love_clock() + 1; return g; }
  uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
- if (n) len(g->sp[0]) = n;                              // fix logical length
- else g->sp[0] = EmptyString;                           // empty output -> the singleton
+ if (n) len(g->sp[0]) = n;
+ else g->sp[0] = EmptyString;
  int status = w < 0 ? -1
             : WIFEXITED(st) ? WEXITSTATUS(st)
             : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1;
@@ -199,20 +195,17 @@ love_noinline static struct g *host_harkdrain(struct g *g) {
  struct chain *c = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                 putcharm(status), g->sp[0]);
  g->sp[0] = word(c);
- g->sp[2] = putcharm(-1);                             // done
+ g->sp[2] = putcharm(-1);
  return g; }
 
 static lvm(lvm_hark) {
  LvmCall(g, host_harkstart, 0) }
 
-// (herald argv) -- hark, teeing: identical to (hark argv), same (status . output)
-// answer, but the child's stdout is relayed as it arrives instead of only at
-// exit. for a caller that just reprints what it captured; see the `tee` note above.
+// (herald argv): hark, with the child's stdout relayed as it arrives
 static lvm(lvm_herald) {
  LvmCall(g, host_harkstart, 1) }
 
-// the shared second ap. it parks -- Ip unadvanced, so the whole op re-runs on
-// reschedule and reads its state back off the stack.
+// the shared second ap: it parks with Ip unadvanced, so the op re-runs off the stack's state
 static lvm(lvm_harkdrain) {
  Pack(g);
  g = host_harkdrain(g);
@@ -229,30 +222,24 @@ love_noinline static struct g *host_exec(struct g *g) {
  if (!cav) return push(g, 1, badarg(g));
  fflush(stdout);
  fflush(stderr);
- signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
+ signal(SIGPIPE, SIG_DFL);                                 // the ignore must not ride the exec
  stdin_hand(g);                                            // the child inherits fd 0: hand it over exact
  execvp(argv_file(cav), cav);
- return push(g, 1, love_err(g, errno)); }                  // exec failed -> its nom
+ return push(g, 1, love_err(g, errno)); }
 
 static lvm(lvm_exec) {
  LvmCallp(g, 1, host_exec) }
 
-// (fexec fd argv) -- exec an image by open fd rather than by name. a path is a
-// fact about the filesystem we are standing in; an fd is not, so this is the exec
-// that survives a chroot, an unlink or a mount move. the fd must be opened BEFORE
-// the root moves -- that is the caller's whole job, and why the fd is a parameter
-// and not something the runtime keeps.
-// posix puts environ in unistd.h and glibc puts it behind __USE_GNU, so the lane
-// built by the ambient cc has to say it here. moonlibc's own is the same type.
+// (fexec fd argv): exec by an fd the caller opened, which survives a chroot, unlink or mount move
+// glibc hides environ behind __USE_GNU
 extern char **environ;
 
 love_noinline static struct g *host_fexec(struct g *g) {
- // the fd is read BEFORE the marshal: a charm cannot move, and a port's fd is a
- // number once read, so neither needs rooting across a collection.
+ // the fd is read before the marshal, so it needs no root
  word x = g->sp[0];
  intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);    // a charm is a raw fd
  char **cav;
- g->sp[0] = g->sp[1];                       // argv over the fd -- the marshal's only root
+ g->sp[0] = g->sp[1];                       // argv over the fd
  g = love_argv_marshal(g, &cav);
  if (!cav || fd < 0) return push(g, 1, badarg(g));
  fflush(stdout);
@@ -260,13 +247,12 @@ love_noinline static struct g *host_fexec(struct g *g) {
  signal(SIGPIPE, SIG_DFL);
  stdin_hand(g);                                            // as host_exec: fd 0 exact
  fexecve((int) fd, cav, environ);
- return push(g, 1, love_err(g, errno)); }                 // returns only on failure
+ return push(g, 1, love_err(g, errno)); }
 
 static lvm(lvm_fexec) {
  LvmCallp(g, 2, host_fexec) }   // returns only on failure; the errno nom over argv
 
-// (getenv name) -> string, or zero if unset / misused. zero = absent, not an error.
-// the name goes to getenv where it lies: a love string's bytes[len] is always a NUL.
+// (getenv name): a string, or 0 if unset or misused. a love string is always NUL-terminated
 static lvm(lvm_getenv) {
  char const *v = cstrp(Sp[0]) ? getenv(txt(Sp[0])) : NULL;
  if (!v) { Sp[0] = ZeroPoint; love_musttail return Next(1); }
@@ -297,24 +283,14 @@ static struct g *env_budget(struct g *g) {
     if (pg > 0 && sz > 0) g->budget = (uintptr_t) pg * (uintptr_t) sz / 2 / sizeof(word); }
   return g; }
 
-// LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev and the natjit hook
-// cleared. a session knob like LOVE_NO_IMAGE: it governs a run, never the artifact.
+// LOVE_NO_GLAZE: a pure-interpreter session, never the artifact
 #ifdef LvGlazed
 static char const glaze_off[] = "(: ev (cite 'glaze 'base-ev) natjit ())";
 #else
 static char const glaze_off[] = "";
 #endif
 
-// the session layer: boot is over and the base is never the head again, so a top-level
-// definition lands here. never popped -- its lifetime is the session, which is what lets a
-// catted app's files share one vocabulary; the egg boot and the image wake both converge.
-// src/love/boot/post.l's `cli-line` is this tail entire, spliced with its module: the argv[0] verb
-// door, the positional rail, the repl, the stdin drink. the isatty answer is all C still owns.
-// both seats run this one: love0 is never interactive and never glazed, so replp is false
-// and glaze_off is the empty text there -- the seat shows in the ANSWERS, not in a fork.
-// the tty is one terminal, so its cooked baseline and its atexit live in posix.c, which the
-// (raw on) nif drives; the capture-once latch there is what makes a repl that raws after
-// bao already did restore the true baseline rather than a raw one.
+// the session tail of both the egg boot and the image wake, love0's too; the rest is post.l's cli-line
 static struct g *run_program(struct g *g, bool replp) {
   if (replp) (void) raw_mode(1);
   if (__love_osv > 0 && on_inle()) g = evals_(g, "(task-doors-on 0)");
@@ -323,10 +299,10 @@ static struct g *run_program(struct g *g, bool replp) {
   return evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
 #ifdef Love0
-// love0's seat is its own translation unit: inle/boot.c, linked only into love0.
+// love0's boot is inle/boot.c
 struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load, char const *bake_out);
 #else
-// the kernel's tasks text (src/inle/tasks.l), which a process on inle runs its own stages by
+// src/inle/tasks.l, by which a process on inle runs its own stages
 static char const src_tasks[] =
 #include "tasks.h"
  ;
@@ -336,20 +312,17 @@ static char const src_distlist[] =
 #include "distlist.h"
  ;
 
-// lay the roster cat from the carried source, beside `at`: the crew a binary bakes when
-// no -l names one, which is how a raw love emits its baked state with no tree to hand.
-// the roster is the tree's bake section, so that is the one decoded. 1 laid, 0 refused --
-// no source aboard, nowhere to write, or a roster name the tree does not carry.
-// per-process, for the reason the bake's scratch is (src/love/image.c).
+// lay the roster cat from the carried source beside `at`: the crew baked when no -l names one.
+// 1 laid, 0 refused; per-process, as image.c's bake scratch
 static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
-  char exe[4096];                                    // the kernel's own PATH_MAX, not a cap of ours
-  if (!srctree_len) return 0;                     // src/love/noblob.c's zero: this link carries no source
+  char exe[4096];                                    // the kernel's PATH_MAX
+  if (!srctree_len) return 0;                     // noblob.c: no source aboard
   if (!at && !(at = host_selfpath(exe, sizeof exe) ? exe : NULL)) return 0;
   struct tree *t = tree_carried();
   if (!t) return fprintf(stderr, "love: bake: the carried source will not open\n"), 0;
   snprintf(cat, n, "%s.bakecat.%ld.l", at, (long) getpid());
   int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-  if (fd < 0) {                                      // a read-only seat -- /usr/bin, a container layer
+  if (fd < 0) {                                      // a read-only install
     fprintf(stderr, "love: bake: %s is not writable\n", cat);
     return 0; }
   for (char const *p = src_distlist; *p;) {
@@ -361,8 +334,6 @@ static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
     intptr_t i = tree_find(t, w, wl);
     unsigned char const *m = i < 0 ? NULL : tree_bytes(t, t->rows + i);
     uintptr_t ml = i < 0 ? 0 : t->rows[i].len;
-    // a roster name the tree does not carry (a stale distlist), one that will not decode,
-    // or a full filesystem
     if (!m || (ml && write(fd, m, ml) != (ssize_t) ml)) {
       fprintf(stderr, "love: bake: %s %s\n", w,
               i < 0 ? "is not in the carried source" : m ? "would not write" : "will not decode");
@@ -370,10 +341,8 @@ static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
       return 0; } }
   return close(fd), 1; }
 
-// an egg a cross seed laid wears 2 where a fresh link's stub says 1 (src/apps/source.l,
-// seed-mark): its first run on the target bakes it in place -- `bake` as a child, the
-// adopt by rename -- then runs the same line again from the image it laid. a bake that
-// will not go (a read-only seat) is said, and the line runs from the egg as it is.
+// a cross seed's egg stub says 2 (source.l seed-mark): its first run bakes in place, then
+// re-runs the line from the image; a bake that will not go runs from the egg
 static void self_bake(char const **argv) {
   char exe[4096];
   if (baked_image_len != 16 || baked_image[0] != 2 || !host_selfpath(exe, sizeof exe)) return;
@@ -394,13 +363,8 @@ static void self_bake(char const **argv) {
 #define self_bake(argv) ((void) 0)
 #endif
 
-// read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
-// so a raise in it must end the bake rather than seal a half-built artifact.
-// the path is a value, never spliced into the source, so the text stays data whatever it
-// holds. q is closed, or its finalizer would still be reachable at the seal and carry an
-// fd into the image; and the name is rebound to () rather than pulled, since the seal has
-// already dropped the book. either way the name must stop holding the path, or an absolute
-// one bakes the baker's directory in.
+// read-eval a bake's cat: a raise ends the bake. the path is a value, never spliced. q is closed
+// or its finalizer bakes an fd in; bake-load is rebound to () or the path bakes in
 static struct g *bake_eval_file(struct g *g, char const *path) {
   uintptr_t xn = strlen(path);
   if (!ok(g = str0(g, xn))) return g;
@@ -415,16 +379,15 @@ static struct g *bake_eval_file(struct g *g, char const *path) {
     "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
   return ok(g) ? evals_(g, "(: bake-load ())") : g; }
 
-// FIXME waaaaaaaaaaaaaaaaaaaaay too much code in string literals
+// FIXME too much code in string literals
 static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
                        char const *bake_out) {
-  // leave the internal names in global scope and in `guts` too. only an unbaked boot
-  // reaches this; a mopped one keeps none of the cell or stack doors (egg.l).
+  // LOVE_NO_MOP keeps the internal names (egg.l)
   char const *nm = getenv("LOVE_NO_MOP");
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
   g = evals_(g, "(: latemop 1)");                   // the egg leaves its mop here, run past the glaze
   g = cats_egg(g);                                    // prel then ev's half, and the printer with `@`
-  g = cats_lib(g);                                   // register every baked module; the uses below are splices
+  g = cats_lib(g);                                   // register every baked module
   g = evals_(g,
     "(borrow 'kanren)"
     "(borrow 'overlay)"
@@ -437,13 +400,9 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   g = shelve(g);
   g = evals_(g, "(borrow 'cli)(borrow 'verbs)");
   g = shelve(g);
-  // kanren, overlay and uu come off: the latter two already have their accessor bound
-  // above, so the splice bought only ambient names -- `C`, `Q`, `src`, `glob`, `walk`,
-  // `var`, `con`, `est` are what this tree calls its locals. kanren keeps a named surface.
-  // unsplice drops one link at a time, so bao comes off with them and goes straight back
-  // on: read/reads for cli, `@` for every later compile.
+  // off, so their names don't shadow the tree's locals; bao comes off with them and goes back on
   for (int i = 0; i < 4; i++) g = shelve(g);        // bao, uu, overlay, kanren
-  // FIXME what is this even doing? we just used bao a couple of lines ago? what is "hoist"?
+  // FIXME what is this doing? bao was just used
   g = evals_(g, "(borrow 'cli)"
     "(transcribe 'kanren ())"                                 // \\\, &&&, |||, zz -- macros, not names
     "(: unify (cite 'kanren 'unify)  ufail (cite 'kanren 'ufail)"
@@ -454,7 +413,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
 #ifdef LvGlazed
   g = shelve(g);                                    // holo back to non-ambient
 #endif
-  g = evals_(g, "(latemop ())");                    // the egg's mop, now nothing reads what it takes
+  g = evals_(g, "(latemop ())");                    // the egg's mop
 
   g = evals_(g,
     "(: spawn0 spawn  spawnio0 spawnio  spawnmap0 spawnmap  wait0 wait"
@@ -474,8 +433,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
     "   (raw on) (peep seat-doors 8 0 on)"
     "   (ttyfg pg) (peep seat-doors 9 0 pg)"
     "   (ttypg fd) (peep seat-doors 10 0 fd))");
-  // a task as a process (src/inle/tasks.l), the kernel's text. a process on inle has no fork, so
-  // a shell's own stage (['thunk f]) runs in its heap as one; every other argv is a process
+  // inle has no fork: a shell's own stage (['thunk f]) runs as a task in its heap
   g = evals_(g, src_tasks);
   g = evals_(g,
     "(: (task-doors-on _)"
@@ -499,15 +457,13 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
     "                                   (charm? p && p < 0 && two? (task-members -p)) (task-still p s)"
     "                                   (still0 p s))))))");
 
-  // FIXME why are we pulling from book here, that's what mop is for
+  // FIXME why pull from book here? that's mop's job
   g = evals_(g, bake
     ? "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) _ (pull book 'born 0) (pull book 'book 0))"
     : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
-  if (bake) {                                            // the bake verb: snapshot the post-warm heap, then exit
-    // a bake egg-boots whatever this binary carries, so the crew is never aboard here.
-    // -l names it; with nothing named the carried source is the roster, which is the
-    // raw -> baked direction of the verb (`love bake -n` is the other).
+  if (bake) {                                            // snapshot the post-warm heap, then exit
+    // the crew is never aboard: -l names it, else the carried source's roster
     char cat[4096 + 40];                               // a path, and ".bakecat.<pid>.l"
     if (!bake_load && bsrc_lay_cat(cat, sizeof cat, bake_out)) bake_load = cat;
     if (bake_load) {
@@ -524,19 +480,11 @@ love_noinline static struct g *argv_chain(struct g *g, char const **v, int argc,
   int n = 0;
   if (argc > 0) g = strof(g, v[0]), n++;                  // argv[0] is always the program
   for (int i = 1 + skip; i < argc; i++) g = strof(g, v[i]), n++;
-  for (g = push(g, 1, ZeroPoint); n--; g = gxr(g));   // () terminates, as a love list does
+  for (g = push(g, 1, ZeroPoint); n--; g = gxr(g));
   return g; }
 
-// a __builtin_trap guard fired: `ud2` / `brk #0` / `ebreak`, so it lands here as
-// SIGILL (SIGTRAP on the arm and riscv seats) with si_addr at the instruction.
-// the kernel's k_exception prints this same line; hosted had only a bare 132.
-// it names the SIGNAL and not the cause: a jump into data raises SIGILL too, and
-// an address called a trap sends a reader hunting a guard that is not there --
-// where it really was one, the address says so.
-// write and raise only -- a handler may call nothing the VM or malloc owns, so
-// the address is spelled by hand. it does not resume: the default disposition
-// goes back on and the signal is re-raised, so the exit status and the core stay
-// what they were.
+// a trap guard or a jump into data: name the signal and address, as k_exception does, then
+// re-raise under the default. write only: a handler may call nothing the VM or malloc owns
 static void fault_line(char const *m, uintptr_t a) {
   char b[64], *p = b;
   for (; *m; m++) *p++ = *m;
@@ -552,9 +500,8 @@ static void trap_note(int s, siginfo_t *si, void *ctx) {
   signal(s, SIG_DFL);
   raise(s); }
 
-// a C walk past the stack: the fault lands below the stack, where no frame can run its
-// handler, so the handler runs on a stack of its own, whose base holds the main stack's
-// top and limit. a stack fault says so; any other goes back to the default and retries
+// a C walk past the stack: the handler runs on its own stack, whose base holds the main
+// stack's top and limit; any other fault goes back to the default and retries
 void love_fault_note(int s, void *v) {
   siginfo_t *si = v;
   stack_t o;
@@ -586,8 +533,7 @@ static void stack_note_on(void const *top) {
   sigaction(SIGSEGV, &sa, NULL);
   sigaction(SIGBUS, &sa, NULL); }
 
-// SIGTRAP only where the trap instruction raises it -- on x86 it is the
-// debugger's, and naming a breakpoint "love: trap" would be a lie.
+// SIGTRAP only where the trap instruction raises it; on x86 it is the debugger's
 static void trap_note_on(void) {
   struct sigaction sa;
   memset(&sa, 0, sizeof sa);
@@ -611,7 +557,7 @@ int main(int argc, char const **argv) {
   trap_note_on();
   stack_note_on(&argc);
   struct g *g = NULL;
-  char const *image_load_path = NULL, *bake = NULL,   // see boot(): "" = self-bake, a path = an image file
+  char const *image_load_path = NULL, *bake = NULL,   // bake: "" = self-bake, a path = an image file
              *bake_load = NULL,                      // bake -l CAT: read-eval it before the seal
              *bake_out = NULL;                       // bake -o OUT: a copy of the binary, not this one
   int skip = 0, bare = 0;                            // words that are the prime's, not the program's; bake -n
@@ -635,12 +581,9 @@ int main(int argc, char const **argv) {
 #endif
   if (argc >= 3 && !strcmp(argv[1], "wake"))
    image_load_path = argv[2], skip = 2;
-  // a leading wake with nothing to wake. the arity error is C's because the parse is:
-  // the registry's row would complain about the one thing this invocation got right.
   else if (argc == 2 && !strcmp(argv[1], "wake"))
    return fprintf(stderr, "love: wake needs an image path\n"), 2;
-  // a named image that will not wake is the run's error, never an egg boot in its place: a
-  // foreign build's image (its fingerprint or its C), a torn or damaged one, or none at all
+  // a named image that will not wake is an error, never an egg boot in its place
   int why = 0;
   if (image_load_path && !(g = image_load(image_load_path, &why))) {
    static char const *const says[] = { "torn", "another format, arch or word", "baked by a binary whose tables differ",
@@ -655,26 +598,25 @@ int main(int argc, char const **argv) {
    void const *bimg = NULL;
    if (baked_pick(&bimg, &blen) && (g = love_image_load(bimg, blen, 2)))
     woke_ms = love_clock() - t0,
-    image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
+    image_load_path = "<baked>"; }                                     // the booted state: no egg warm
 #ifndef Love0
   if (!g && !bake && !(noimg && *noimg)) self_bake(argv);
 #endif
   bool woke = g != NULL;
   if (!g) g = ini();
-  // -n lays the stub back and saves no heap, so it skips the warm outright: the strip is
-  // instant, and it answers for a binary whose own corpus would not boot.
+  // -n saves no heap, so it skips the warm: it works for a binary whose corpus will not boot
   if (bare) {
     int rc = image_bake(g, bake_out, 1);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
-  g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
+  g = env_budget(g);                               // on whichever g won
   bool argp = argc - skip > 1;
   if (!bake) g = argv_chain(g, argv, argc, skip);   // the line past the primes -- sp[0]
   if (ok(g)) {
     if (!woke) g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);   // a woken book has them, mopped
     if (!bake) {
       g = defv(g, "cmdline");
-      if (ok(g)) g->sp++; }          // the book holds it now
+      if (ok(g)) g->sp++; }
     if (image_load_path && ok(g = defv(strof(g, image_load_path), "love-image"))) g->sp++;
     if (!bake) {
       char const *osn =
@@ -697,12 +639,10 @@ int main(int argc, char const **argv) {
       g = defv(g, "born");
       if (ok(g)) g->sp++; }
     if (!bake) g = stdin_take(g);
-    // an egg warm, or a woken image straight to the program -- the wake skips the warm
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
                         : boot(g, argp, bake, bake_load, bake_out); }
   if (code_of(g) == status_scare) scare_face(g);
-  // the program's status is cli-line's answer, a charm, left at sp[0] by evals: the
-  // process answers with it. a scare answers 1 through fin, ahead of it.
+  // the status is cli-line's charm at sp[0]; a scare answers 1 through fin
   int rc = (image_load_path || argp) && ok(g) && charmp(g->sp[0])
          ? (int) (getcharm(g->sp[0]) & 255) : 0;
   stdin_give(g);

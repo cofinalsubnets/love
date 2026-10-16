@@ -1,8 +1,8 @@
-// tablet.c -- tablets, codegen backend. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are src/love/love.h.
+// tablet.c -- tablets (open-addressed maps), peep/pin over every collection, hashing,
+// and the native-install seam
 #include "love.h"
-// a tray key -> a row-major element offset: a fixnum on a rank-1 tray, else a shape-list of
-// `rank` fixnums; -1 = wrong rank or out of bounds. by value: an &local costs the tail jump.
+// a tray key -> a row-major offset, -1 for wrong rank or out of bounds. by value: an &local
+// costs the tail jump
 static love_inline intptr_t tray_off(struct tray *v, word k) {
  if (v->rank == 1 && charmp(k)) {
   intptr_t ix = getcharm(k);
@@ -16,20 +16,14 @@ static love_inline intptr_t tray_off(struct tray *v, word k) {
   intptr_t ix = getcharm(ki);
   if (ix < 0 || ix >= (intptr_t) v->shape[a]) return -1;
   o = o * v->shape[a] + (uintptr_t) ix, a++; } }
-#define map_hint_max (1u << 24)        // the `(tablet n)` size hint saturates to this bounded green charm
-// this file's own, forward-declared so order within it does not matter.
+#define map_hint_max (1u << 24)        // where (tablet n)'s hint saturates
 static love_noinline struct g *map_grow(struct g *g);
 static love_noinline word mapdel(struct g *g, word m, word k, word dflt);
-// ============================================================================
-// map (lookup-lambda backed by an open-addressed thread; see tabp comment)
-// ============================================================================
-// backing is internal -- only ever reached from a header[1], never applied as a
-// l value; its ap answers () like lvm_cask should it ever be applied (it won't).
-lvm(lvm_map_data) { // FIXME this seems to just return const (). what is this for? can we delete?
+// a backing's ap, reached only from a header, never applied: answers () if it ever is
+lvm(lvm_map_data) { // FIXME this just returns const (); can we delete it?
  Ip = cell(*++Sp); *Sp = ZeroPoint; love_musttail return Continue(); }
 
-// the backing slot of k, or -- if absent -- the first empty slot on its probe
-// chain. load is kept < 3/4 so an empty slot always terminates the sound.
+// k's slot, or the first empty one on its chain: load < 3/4 keeps an empty slot to stop at
 uintptr_t map_probe(struct g *g, word m, word k, bool *found) {
  uintptr_t mask = map_cap(m) - 1, i = hash(g, k) & mask;
  word *s = map_slots(m);
@@ -42,9 +36,8 @@ word mapget(struct g *g, word dflt, word k, word m) {
  bool found; uintptr_t i = map_probe(g, m, k, &found);
  return found ? map_slots(m)[2 * i + 1] : dflt; }
 
-// the layered global read: g->stack is a chain of books walked head-first. a
-// per-layer miss needs its own sentinel -- a stored () must shadow, never fall
-// through. the l twin is ev.l's gv; keep them in step.
+// the layered global read, books head-first; a sentinel miss, as a stored () must shadow.
+// ev.l's gv is the twin: keep them in step
 word stacklook(struct g *g, word dflt, word k) {
  static union u const miss[1];
  for (word c = g->stack; chainp(c); c = B(c)) {
@@ -52,8 +45,7 @@ word stacklook(struct g *g, word dflt, word k) {
   if (v != word(miss)) return v; }
  return dflt; }
 
-// the layered macro read: each layer's macro table rides its [zero] slot; miss
-// answers 0, the no-macro convention
+// each layer's macro table rides its [zero] slot; a miss answers 0
 word stacklook_macro(struct g *g, word k) {
  static union u const miss[1];
  for (word c = g->stack; chainp(c); c = B(c)) {
@@ -63,19 +55,18 @@ word stacklook_macro(struct g *g, word k) {
   if (v != word(miss)) return v; }
  return 0; }
 
-// fill an empty cap-slot backing at b (cap a power of two); caller reserves it.
+// an empty backing of cap slots (a power of two) at b, reserved by the caller
 union u *map_fill_back(union u *b, uintptr_t cap) {
  struct tablet_back *t = tablet_back(b);
  t->ap = lvm_map_data, t->len = putcharm(0), t->cap = putcharm(cap);
  for (uintptr_t i = 0; i < cap; i++) t->slot[2 * i] = map_gap, t->slot[2 * i + 1] = zero;
  return tagthread(b, map_back_words(cap) - 1); }
 
-// double the backing of the map at sp[2], rehash, swap into header[1]; the
-// header never moves, so aliased references stay valid
+// double the backing of the map at sp[2]; the header never moves, so aliases hold
 static love_noinline struct g *map_grow(struct g *g) {
  uintptr_t ncap = 2 * map_cap(g->sp[2]);
  if (!ok(g = have(g, map_back_words(ncap)))) return g;
- word m = g->sp[2];                                 // re-fetch header after GC
+ word m = g->sp[2];                                 // after GC
  union u *nb = map_fill_back((union u*) g->hp, ncap);
  g->hp += map_back_words(ncap);
  word *os = map_slots(m), *ns = tablet_back(nb)->slot;
@@ -87,31 +78,29 @@ static love_noinline struct g *map_grow(struct g *g) {
   while (ns[2 * i] != map_gap) i = (i + 1) & nmask;
   ns[2 * i] = k, ns[2 * i + 1] = os[2 * j + 1], nlen++; }
  tablet_back(nb)->len = putcharm(nlen);
- tablet(m)->back = (word) nb;                      // swap backing; header identity stable
- gen_wb(g, m, (word) nb);                          // barrier: old header now points at the fresh (young) backing
+ tablet(m)->back = (word) nb;
+ gen_wb(g, m, (word) nb);
  return g; }
 
-// (put k v map): mutate in place; grow (may GC) on a new key past the load
-// factor, re-reading k/v from the stack afterwards. leaves the map at sp[2].
+// (put k v map) in place; a new key past the load grows (may GC). leaves the map at sp[2]
 love_noinline struct g *mapput(struct g *g) {
  if (!ok(g)) return g;
  bool found;
  uintptr_t i = map_probe(g, g->sp[2], g->sp[0], &found);
  if (found) {
-  gen_wb(g, map_back(g->sp[2]), g->sp[1]);         // barrier: a young value into an old backing
+  gen_wb(g, map_back(g->sp[2]), g->sp[1]);
   return map_slots(g->sp[2])[2 * i + 1] = g->sp[1], g->sp += 2, g; }
  if ((map_len(g->sp[2]) + 1) * 4 >= map_cap(g->sp[2]) * 3) {
   if (!ok(g = map_grow(g))) return g;
-  i = map_probe(g, g->sp[2], g->sp[0], &found); }   // re-probe larger backing
+  i = map_probe(g, g->sp[2], g->sp[0], &found); }
  word *s = map_slots(g->sp[2]);
  s[2 * i] = g->sp[0], s[2 * i + 1] = g->sp[1];
- gen_wb(g, map_back(g->sp[2]), g->sp[0]);          // barrier: a young key ...
- gen_wb(g, map_back(g->sp[2]), g->sp[1]);          // ... or young value into an old backing
+ gen_wb(g, map_back(g->sp[2]), g->sp[0]);
+ gen_wb(g, map_back(g->sp[2]), g->sp[1]);
  map_len_set(g->sp[2], map_len(g->sp[2]) + 1);
  return g->sp += 2, g; }
 
-// mapdel: delete k, backward-shift the probe chain so no tombstone is
-// needed; v is the not-found result. no allocation. leaves the map at sp[2].
+// delete k by backward shift, no tombstones; dflt when absent. no allocation
 static love_noinline word mapdel(struct g *g, word m, word k, word dflt) {
  bool found;
  uintptr_t i = map_probe(g, m, k, &found);
@@ -121,17 +110,17 @@ static love_noinline word mapdel(struct g *g, word m, word k, word dflt) {
  for (uintptr_t j = i;;) {
   j = (j + 1) & mask;
   if (s[2 * j] == map_gap) break;
-  uintptr_t h = hash(g, s[2 * j]) & mask;            // ideal slot of the probed key
+  uintptr_t h = hash(g, s[2 * j]) & mask;            // its ideal slot
   bool gap = i <= j ? (h <= i || h > j) : (h <= i && h > j);   // h not in (i, j]
   if (gap) {
    s[2 * i] = s[2 * j], s[2 * i + 1] = s[2 * j + 1];
-   gen_wb(g, map_back(m), s[2 * i]), gen_wb(g, map_back(m), s[2 * i + 1]);  // delete shifts a (maybe young) k/v within an old backing
+   gen_wb(g, map_back(m), s[2 * i]), gen_wb(g, map_back(m), s[2 * i + 1]);
    i = j; } }
  s[2 * i] = map_gap, s[2 * i + 1] = zero;
  map_len_set(m, map_len(m) - 1);
  return m; }
 
-// C-callable fresh empty map, pushed on sp[0]. same shape as lvm_tablet.
+// a fresh empty map onto sp[0], lvm_tablet's shape
 struct g *map_new(struct g *g) {
  uintptr_t cap = map_min_cap, nb = map_back_words(cap);
  if (!ok(g = have(g, nb + map_head))) return g;
@@ -140,48 +129,44 @@ struct g *map_new(struct g *g) {
  g->hp += nb + map_head;
  return push(g, 1, h); }
 
-// (tablet n): a fresh empty map; n is a size hint (presized below the 0.75 load
-// factor, so inserting n known keys never rehashes). n<=0 keeps the min capacity.
+// (tablet n): a fresh map presized so n keys never rehash
 lvm(lvm_tablet) {
- intptr_t raw = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;          // saturate to a bounded green charm first
+ intptr_t raw = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;
  uintptr_t hint = raw <= 0 ? 0 : (uintptr_t) raw > map_hint_max ? map_hint_max : (uintptr_t) raw,
            cap = map_min_cap;
- while (cap * 3 <= hint * 4) cap *= 2;                        // grow to hold `hint` below the 0.75 load factor
+ while (cap * 3 <= hint * 4) cap *= 2;
  uintptr_t nb = map_back_words(cap);
  Have(nb + map_head);
  union u *b = map_fill_back(cell(Hp), cap);
  Sp[0] = ini_tablet(cell(Hp + nb), (word) b, putcharm(++g->next_serial));
  Hp += nb + map_head; love_musttail return Next(1); }
 
-// (m k): map application is lookup, () if absent; unwinds like self-quote
+// (m k): lookup, () if absent
 lvm(lvm_map_lookup) {
  Pack(g);                                            // packed: the probe's walks take the nursery's free room
- word v = mapget(g, ZeroPoint, Sp[0], (word) Ip);   // a map miss answers () (the zero point), not the number 0
+ word v = mapget(g, ZeroPoint, Sp[0], (word) Ip);   // a miss is (), not 0
  Ip = cell(*++Sp), *Sp = v;
  love_musttail return Continue(); }
 
 op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : zero)
 
 // FIXME this predicate is confusing, let's try and remove it
-// (lit? x): the upper segment of the lattice, kind >= KTablet -- tablets and the
-// tops above (closures, nifs, cask/port), never the fresh value-data below or a coin.
+// (lit? x): kind >= KTablet -- tablets, closures, nifs, casks, ports; never a coin
 lvm(lvm_litp) {
  word x = Sp[0];
- bool lit = !coinp(x) && kind(x) >= KTablet;                    // a coin is data
+ bool lit = !coinp(x) && kind(x) >= KTablet;
  Sp[0] = lit ? putcharm(1) : zero;
  love_musttail return Next(1); }
-// (hot? x): an opaque hot handle -- a cask or a port (a task is a fixnum id, not a handle)
+// (hot? x): a cask or a port
 op11(lvm_hotp, (caskp(Sp[0]) || iop(Sp[0])) ? putcharm(1) : zero)
 
-// (hash x) -- the general hashing method exposed to l as a fixnum.
 op11(lvm_dig, (Pack(g), putcharm(hash(g, Sp[0]))))   // packed: hash takes the nursery's free room
 
-// (peep tray idx d) with idx an int tray: the gather. the answer takes idx's shape and the
-// tray's kind, a miss the default; a complex or object tray, a float index or a default
-// that is not a number answer the default whole, as a miss would
+// (peep tray idx d), idx an int tray: the gather, idx's shape in the tray's kind, a miss d. a
+// complex or object tray, a float index or a non-number d answer d whole
 static love_noinline void gather_fill(struct tray *r, struct tray *v, struct tray *ki, flo_t zf, intptr_t zi) {
  uintptr_t n = tray_nelem(r), m = tray_nelem(v);
- intptr_t *k = tray_data(ki);                          // ki is love_Z, and r wears v's kind: asked once
+ intptr_t *k = tray_data(ki);                          // ki is love_Z
  if (r->type == love_R) { flo_t *d = tray_data(r), *s = tray_data(v);
   for (uintptr_t i = 0; i < n; i++) { intptr_t j = k[i]; d[i] = j >= 0 && (uintptr_t) j < m ? s[j] : zf; } }
  else { intptr_t *d = tray_data(r), *s = tray_data(v);
@@ -195,17 +180,15 @@ static lvm(lvm_gather) {
  int type = v->type == love_R ? love_R : love_Z;
  uintptr_t rank = ki->rank, n = tray_nelem(ki), bytes = tray_bytes(type, rank, n);
  Have(b2w(bytes));
- v = tray(Sp[0]), ki = tray(Sp[1]);             // re-read post-Have
+ v = tray(Sp[0]), ki = tray(Sp[1]);
  struct tray *r = (struct tray*) Hp;
  Hp += b2w(bytes);
  ini_tray(r, type, rank);
  for (uintptr_t i = 0; i < rank; i++) r->shape[i] = ki->shape[i];
  gather_fill(r, v, ki, zf, zi);
  love_musttail return Answerp(2, word(r)); }
-// (pin tray idx vals) with idx an int tray: the scatter, gather's mirror. a fresh copy of
-// the tray with vals stored at idx in order, so a later index wins; vals a number or a
-// numeric tray as long as idx, an index out of range skipped. a complex or object tray,
-// a float index or vals of another length answer the tray unchanged
+// (pin tray idx vals): the scatter into a fresh copy, a later index winning, out of range
+// skipped. vals a number or a numeric tray idx's length, else the tray unchanged
 static lvm(lvm_scatter) {
  struct tray *v = tray(Sp[0]), *ki = tray(Sp[1]);
  word z = Sp[2];
@@ -216,7 +199,7 @@ static lvm(lvm_scatter) {
  uintptr_t req = b2w(love_tray_bytes(v));
  Have(req);
  struct tray *r = (struct tray*) Hp; Hp += req;
- memcpy(r, tray(Sp[0]), love_tray_bytes(tray(Sp[0])));   // re-read post-Have
+ memcpy(r, tray(Sp[0]), love_tray_bytes(tray(Sp[0])));
  ki = tray(Sp[1]), z = Sp[2];
  uintptr_t n = tray_nelem(ki), m = tray_nelem(r);
  intptr_t *k = tray_data(ki);
@@ -232,29 +215,27 @@ static lvm(lvm_scatter) {
    d[j] = !zt ? zi : zr ? (intptr_t) ((flo_t*) tray_data(zv))[i] : ((intptr_t*) tray_data(zv))[i]; } }
  love_musttail return Answerp(2, word(r)); }
 
-lvm(lvm_peep) {                                // (peep coll key default): collection-first
+lvm(lvm_peep) {                                // (peep coll key default)
  word x = Sp[0], k = Sp[1], z = Sp[2], n;
- if (caskp(x)) {                                 // mutable byte string: byte index
+ if (caskp(x)) {
   struct str *s = cask(x)->str;
   if (charmp(k) && (n = getcharm(k)) >= 0 && n < (word) len(s))
    z = putcharm((unsigned char) txt(s)[n]); }
- else if (tabp(x)) Pack(g), z = mapget(g, z, k, x);   // map lookup (not a data sentinel), packed for the probe's walks
+ else if (tabp(x)) Pack(g), z = mapget(g, z, k, x);   // packed: the probe's walks take the free room
  else if (evenp(x) && datp(x)) switch (typ(x)) {
-  default: break;                               // a bare mint (DMint) is not indexable
-  case DGem:                                    // a rank-0 scalar float: a zero key derefs to itself
-  case DBig:                                    // ... same for a boxed integer
-  case DTwin:                                   // ... and a complex scalar
+  default: break;
+  case DGem:                                    // a scalar: a zero key derefs to itself
+  case DBig:
+  case DTwin:
    if (zerop(k)) z = x;
    break;
   case DTray: {
-   // array index: a fixnum (rank-1) or a row-major shape-list (rank-N);
-   // out-of-bounds or wrong rank falls through to the default
    struct tray *v = tray(x);
-   if (trayp(k)) love_musttail return Ap(lvm_gather, g);   // a tray of indices gathers
+   if (trayp(k)) love_musttail return Ap(lvm_gather, g);
    intptr_t o = tray_off(v, k); uintptr_t off = (uintptr_t) o; bool ok = o >= 0;
-   if (ok && v->type == love_O) z = tray_get_obj(v, off);   // object: the slot is the value
-   else if (ok && v->type == love_C) {                       // packed complex -> a (re,im) box
-    Have(twin_req); v = tray(Sp[0]);                      // re-read coll (Sp[0]) post-Have
+   if (ok && v->type == love_O) z = tray_get_obj(v, off);
+   else if (ok && v->type == love_C) {
+    Have(twin_req); v = tray(Sp[0]);
     flo_t *fp = tray_data(v);
     z = mk_twin(&Hp, fp[2*off], fp[2*off+1]); }
    else if (ok) { word _res; Have(box_req); v = tray(Sp[0]);
@@ -263,7 +244,7 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
     z = _res; }
    break; }
   case DString:
-   // byte as its unsigned value 0..255 (txt is signed char[]: cast, or a high byte sign-extends)
+   // txt is signed: the cast keeps a high byte from sign-extending
    if (charmp(k) && (n = getcharm(k)) >= 0 && n < (word) len(x))
     z = putcharm((unsigned char) txt(x)[n]);
    break;
@@ -273,29 +254,26 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
     if (chainp(x)) z = A(x); } }
  love_musttail return Answerp(2, z); }
 
-// (pin coll key val): a map or cask has a cell, so the write is in place and the same
-// collection answers; text, a chain and a tray have none and answer a fresh one, a tray
-// keyed by a tray of indices scattering into it (lvm_scatter). a rank-0
-// scalar is the one kind peep reads and pin cannot write. out-of-range or wrong-kind is a
-// silent no-op answering coll, the byte ops' misuse convention.
+// (pin coll key val): a map or cask in place; text, a chain or a tray answer a fresh one.
+// out of range or wrong kind answers coll unchanged
 lvm(lvm_pin) {
- word x = Sp[0], n;                              // coll
+ word x = Sp[0], n;
  if (tabp(x)) {
-  Sp[0] = Sp[1], Sp[1] = Sp[2], Sp[2] = x;       // mapput wants (sp0,sp1,sp2)=(key,val,coll)
+  Sp[0] = Sp[1], Sp[1] = Sp[2], Sp[2] = x;       // mapput's (key val coll)
   LvmCall(g, mapput) }
  if (caskp(x)) {
   if (charmp(Sp[1]) && charmp(Sp[2]) && (n = getcharm(Sp[1])) >= 0 && n < (word) len(cask(x)->str))
-   txt(cask(x)->str)[n] = (char) getcharm(Sp[2]);    // index = key = Sp[1], val = Sp[2]
+   txt(cask(x)->str)[n] = (char) getcharm(Sp[2]);
   love_musttail return Answerp(2, x); }
  if (evenp(x) && datp(x)) switch (typ(x)) {
-  default: break;                                // a mint, a scalar: nothing to pin into
-  case DString: {                                // one byte replaced in a fresh text
+  default: break;
+  case DString: {
    if (!charmp(Sp[1]) || !charmp(Sp[2])) break;
    if ((n = getcharm(Sp[1])) < 0 || n >= (word) len(x)) break;
    uintptr_t sz = len(x), req = str_width(sz);
    Have(req);
    struct str *s = ini_str(str(Hp), sz); Hp += req;
-   memcpy(s->bytes, txt(Sp[0]), sz);             // re-read coll: the Have may have moved it
+   memcpy(s->bytes, txt(Sp[0]), sz);             // re-read: the Have may move it
    s->bytes[n] = (char) getcharm(Sp[2]);
    love_musttail return Answerp(2, word(s)); }
   case DChain: {                                 // the prefix copied, the tail shared
@@ -303,56 +281,53 @@ lvm(lvm_pin) {
    Have((uintptr_t) (n + 1) * Width(struct chain));
    struct chain *w = (struct chain*) Hp, *base = w;
    Hp += (uintptr_t) (n + 1) * Width(struct chain);
-   word l = Sp[0];                               // re-read coll post-Have
+   word l = Sp[0];
    for (word i = 0; i < n; i++, w++, l = B(l)) ini_chain(w, A(l), word(w + 1));
    ini_chain(w, Sp[2], B(l));                    // the pinned cell, then the old tail
    love_musttail return Answerp(2, word(base)); }
-  case DTray: {                                  // the whole payload copied, one slot stored
-   if (trayp(Sp[1])) love_musttail return Ap(lvm_scatter, g);   // a tray of indices scatters
+  case DTray: {
+   if (trayp(Sp[1])) love_musttail return Ap(lvm_scatter, g);
    intptr_t o = tray_off(tray(x), Sp[1]);
    if (o < 0) break;
    uintptr_t req = b2w(love_tray_bytes(tray(x)));
    Have(req);
    struct tray *v = (struct tray*) Hp; Hp += req;
-   memcpy(v, tray(Sp[0]), love_tray_bytes(tray(Sp[0])));   // re-read coll post-Have
+   memcpy(v, tray(Sp[0]), love_tray_bytes(tray(Sp[0])));
    if (!tray_put(v, (uintptr_t) o, Sp[2])) { Hp -= req; break; }   // a non-number into a numeric tray
    love_musttail return Answerp(2, word(v)); } }
  love_musttail return Answerp(2, x); }
 
 // (pull coll key default): remove key from a map, answering its value or default
-// (symmetry with peep); a non-map coll yields default
 lvm(lvm_pull) {
- word coll = Sp[0], v = Sp[2];                   // default
+ word coll = Sp[0], v = Sp[2];
  if (tabp(coll)) {
   Pack(g);                                     // packed: the probe's walks take the nursery's free room
-  v = mapget(g, Sp[2], Sp[1], coll);           // value, or default if absent
-  mapdel(g, coll, Sp[1], Sp[2]); }             // remove in place (no-op if absent)
+  v = mapget(g, Sp[2], Sp[1], coll);
+  mapdel(g, coll, Sp[1], Sp[2]); }
  love_musttail return Answerp(2, v); }
 
 lvm(lvm_keys) {
- intptr_t list = ZeroPoint;                         // () terminator / empty-map result (zero-ontology)
+ intptr_t list = ZeroPoint;
  if (tabp(Sp[0])) {
   uintptr_t cap = map_cap(Sp[0]), n = map_len(Sp[0]);
   Have(n * Width(struct chain));
   struct chain *chains = (struct chain*) Hp;
   Hp += n * Width(struct chain);
-  word *s = map_slots(Sp[0]);                    // re-read after Have (GC may move the map)
+  word *s = map_slots(Sp[0]);                    // after Have
   for (uintptr_t i = cap; i;)
    if (s[2 * --i] != map_gap)
     ini_chain(chains, s[2 * i], list), list = (intptr_t) chains, chains++; }
  Sp[0] = list;
  love_musttail return Next(1); }
 
-// an out-of-pool word hashes by its seat in the image, as a bake encodes it, so a table keyed
-// by natives orders alike in every build of one source; one with no seat by its offset from
-// an anchor on its own side of .rodata, where the carried archives lie
+// an out-of-pool word hashes by its image seat, so native keys order alike in every build;
+// without one, by its offset from an anchor on its own side of .rodata
 static const char hash_base[1] = {0};
 static intptr_t oop_key(word x) {
  intptr_t s = image_seat(x);
  return s >= 0 ? s : (uintptr_t) x < (uintptr_t) hash_base ? (intptr_t) x - (intptr_t) hash_base
                                                          : (intptr_t) x - (intptr_t) __start_love_nifs; }
-// the walk-from-nothing entry; hash_at (src/love/arr.c) is the same walk continued above a live
-// worklist. a charm or other leaf settles here, so the hot keys never take scratch.
+// hash_at (arr.c) is this walk continued on a live worklist; a leaf settles here, no scratch
 uintptr_t hash(struct g *g, intptr_t x) {
  if (charmp(x)) return rot(x*mix);
  uintptr_t t; word src;
@@ -360,17 +335,9 @@ uintptr_t hash(struct g *g, intptr_t x) {
  word *top, *base = gap(g, &top);
  return hash_at(g, x, base, top); }
 
-// a leaf's own hash, nothing walked under it: -> 0 the answer is in *out; 3 fold the cells
-// of the object tray in *src over the header hash in *out. a chain never arrives -- hash_at
-// spines it.
-// a function hashes as `=` reads it (arr.c's fn_eq): its thread's words from the value to the
-// terminator, a pointer back into its own thread by its offset, any other heap word by being
-// one -- the worklist compares those, and a hash owes `=` only that what it joins hashes alike.
-// a partial folds its base and its captures, a native is its twin, a carrier its length (it
-// is equal to itself alone). out of the pool, its seat (oop_key). all GC-stable.
-// d levels of those heap words fold their own leaf hash, the rest a 2: threads alike in
-// shape but not in what they call part here, where the worklist would walk them deep.
-// the length and a prefix are read, which bounds a probe on a big thread
+// a function hashes as fn_eq (arr.c) reads it, GC-stable: its thread's words, a self-pointer
+// by offset, a partial its base and captures, a carrier its length, out of pool oop_key.
+// d levels of heap words fold their leaf hash, deeper a 2; only a prefix is read
 static uintptr_t fn_hash_d(struct g *g, word x, int d);
 static uintptr_t fn_word(struct g *g, word v, int d) {
  uintptr_t t; word src;
@@ -411,15 +378,11 @@ int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
  if (charmp(x)) return *out = rot(x*mix), 0;
  if (!datp(x)) return *out = fn_hash(g, x), 0;
  switch (typ(x)) {
-   case DChain: break;                            // hash_at spines a chain; one reaching here is a bug
+   case DChain: break;                            // hash_at spines a chain: a bug here
    case DMint: return *out = sym(x)->serial, 0;
-   case DNom: return *out = nom(x)->dig, 0;        // the cached spelling hash -- a serial would key
-                                                   // bucket order to intern history (a reproducible-
-                                                   // build leak); same-spelled noms collide, `=` separates
+   case DNom: return *out = nom(x)->dig, 0;        // the spelling's: a serial keys order to intern history
    case DTray: {
-    // an object tray's payload words are pointers, so only the header hashes here and
-    // hash_at folds the cells: two trays built apart hold one set of values behind two
-    // sets of pointers, and `=` reads through to the values
+    // an object tray's header only: answer 3 and hash_at folds the cells, as = reads through
     bool obj = objtrayp(x);
     uintptr_t len = obj ? (uintptr_t) ((uint8_t*) tray_data(tray(x)) - (uint8_t*) x)
                         : love_tray_bytes(tray(x)), h = mix;
@@ -429,11 +392,11 @@ int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
     uintptr_t len = big_bytes(big(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return *out = h, 0; }
-   case DGem: {                                 // hash the lean box (ap is GC-stable, payload is the value)
+   case DGem: {                                 // the lean box: ap is GC-stable
     uintptr_t len = gem_req * sizeof(word), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return *out = h, 0; }
-   case DTwin: {                                // same: hash the lean (ap, re, im) box bytes
+   case DTwin: {
     uintptr_t len = twin_req * sizeof(word), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return *out = h, 0; }
@@ -444,47 +407,35 @@ int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
     return *out = h, 0; } }
  __builtin_trap(); }
 
-// ============================================================================
-// codegen backend brick 1 -- the native-install seam (provisional; -> `ev`)
-// ============================================================================
-// the native finalizer: the cell's header duplicates its code address (dead = the
-// out-of-pool addr, live = a forward), and the arena takes the blob back
-// hosted here reads "not a bare board": mooncc predefines 1 and only src/inle/ passes 0.
-// wasm is hosted too and declines below, on __wasm__.
+// the native finalizer: the header duplicates the code address (dead = out of pool, live = a
+// forward). not hosted is a bare board alone
 #if __STDC_HOSTED__
 static void nat_free(struct g *g, void *p) { code_free(g, (char*) ((union u*) p)[0].ap); }
 #endif
 
 // FIXME doesn't belong in this file
-// (nif code interp arity): emitted bytes -> a transparent applicable native closure
-// (the lvm ABI: g=rdi Ip=rsi Hp=rdx Sp=rcx). the cell is [header code|cur (arity)
-// interp lvm_ret n (extras)] -- arity 1 enters the body directly, arity>=2 curries to
-// saturation through lvm_cur, and lvm_ret sits at the same offset in both so the emitted
-// body is layout-blind. value[1] is the interp twin, so a decline (bad args, no code
-// pages, inle) simply answers it and every caller falls back to bytecode. cell[0]
-// duplicates the code addr for run_finalizers' dead/live test; internal, the egg mops it.
-// nifx adds an extras word (value[3]+8 = Ip+32) for refs a native needs beyond the twin.
-// code is the arena's (hosted) or a heap string's (freestanding, where RAM runs as it is)
+// (nif code interp arity): emitted bytes -> a native closure, [hdr code|cur (ar) interp lvm_ret n
+// (extras)]: lvm_ret at one offset either way, so the body is layout-blind. a decline answers
+// the interp twin. nifx adds extras at Ip+32. code in the arena, or a heap string on a board
 lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=arity [Sp[3]=extras]
- int xtra = Ip->ap == lvm_nifx, nsp = xtra ? 3 : 2;   // entered at its own word (nif's tail-jumps here with Ip at nif's)
+ int xtra = Ip->ap == lvm_nifx, nsp = xtra ? 3 : 2;   // nif tail-jumps here with Ip at its own word
  word codebuf = Sp[0];
  intptr_t ar = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
  if (!(strp(codebuf) || caskp(codebuf)) || ar < 1) love_musttail return Answerp(nsp, Sp[1]);
  uintptr_t n = len(bytes_of(codebuf));
  if (n == 0) love_musttail return Answerp(nsp, Sp[1]);
-#ifdef __wasm__                                // wasm has no executable code pages: a jump to a data address traps.
- love_musttail return Answerp(nsp, Sp[1]);  //  decline unconditionally -> the interp twin runs
+#ifdef __wasm__                                // no executable pages
+ love_musttail return Answerp(nsp, Sp[1]);
 #endif
  char *code;
 #if __STDC_HOSTED__
- // inle declines: its heap rides the NX hhdm window and would move under the collector
- // besides, so the interp twin runs. a metal door would want low-window pages, which keep X.
+ // inle declines: its heap rides the NX hhdm window
  if (__love_osv < 0) love_musttail return Answerp(nsp, Sp[1]);
  Have(10 + Width(struct fz));              // 10 covers every cell (5..8 words) + tag + fz
- code = code_install(g, txt(bytes_of(Sp[0])), n);   // reload codebuf: a GC in Have may have moved it
+ code = code_install(g, txt(bytes_of(Sp[0])), n);   // reloaded: Have may move it
  if (!code) love_musttail return Answerp(nsp, Sp[1]);
 #else
- Have(str_width(n) + 10);                     // freestanding: RAM is executable, a heap copy runs
+ Have(str_width(n) + 10);                     // RAM is executable
  struct str *s = ini_str(str(Hp), n); Hp += str_width(n);
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
  __builtin___clear_cache(txt(s), txt(s) + n);
@@ -492,23 +443,23 @@ lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=a
 #endif
  union u *k = (union u*) Hp;
  uintptr_t w;
- if (ar == 1) {                               // direct-entry cell
-  k[0].ap = (lvm_t*) code;                    // header (== code, out-of-pool): finalizer dead-detect
-  k[1].ap = (lvm_t*) code;                    // code  (value[0]): the emitted body, the entry
-  k[2].x  = Sp[1];                            // interp(value[1]): deopt fallback
-  k[3].ap = lvm_ret;                          // value[2]: fast-path return
-  k[4].x  = putcharm(0);                      // ret n=1
+ if (ar == 1) {
+  k[0].ap = (lvm_t*) code;                    // header: the finalizer's dead test
+  k[1].ap = (lvm_t*) code;
+  k[2].x  = Sp[1];                            // interp
+  k[3].ap = lvm_ret;
+  k[4].x  = putcharm(0);
   w = 5;
- } else {                                     // lvm_cur cell
-  k[0].ap = (lvm_t*) code;                    // header (out-of-pool): finalizer dead-detect
-  k[1].ap = lvm_cur;                          // value[0]: curry to saturation
+ } else {
+  k[0].ap = (lvm_t*) code;                    // header
+  k[1].ap = lvm_cur;
   k[2].x  = putcharm(ar);
-  k[3].ap = (lvm_t*) code;                    // native body (lvm_cur resume Ip+2)
-  k[4].x  = Sp[1];                            // interp: deopt fallback
+  k[3].ap = (lvm_t*) code;                    // lvm_cur resumes at Ip+2
+  k[4].x  = Sp[1];                            // interp
   k[5].ap = lvm_ret;
-  k[6].x  = putcharm(ar - 1);                 // ret pops n=arity
+  k[6].x  = putcharm(ar - 1);
   w = 7; }
- if (xtra) k[w++].x = Sp[3];                  // extras at Ip+32 from the body entry, either arity
+ if (xtra) k[w++].x = Sp[3];                  // extras at Ip+32 from the body entry
  Hp += w + 1;
  tagthread(k, w);
 #if __STDC_HOSTED__
@@ -518,10 +469,8 @@ lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=a
  love_musttail return Answerp(nsp, word(k + 1)); }
 lvm(lvm_nif) { love_musttail return Ap(lvm_nifx, g); }   // the same build, no extras word
 
-// a deferred native: a cell of nifx's shape built before its compile can see every sibling,
-// patched once it can. until then, and for good if that compile declines, its code slot
-// forwards to the interp twin; a patch lays the native's code in the header and the code
-// slot, its extras beside them and the native itself past those, which keeps the code alive
+// a deferred native: nifx's shape, built before its compile sees every sibling; until patched
+// (or for good on a decline) its code forwards to interp. the native rides last, keeping its code alive
 //   ar 1: [hdr code interp lvm_ret 0 E N]    ar>1: [hdr cur ar code interp lvm_ret ar-1 E N]
 lvm(lvm_deferfwd) {                           // entered at the code slot, as a native is
  union u *e = cell(Ip[1].x);
@@ -531,7 +480,7 @@ lvm(lvm_deferfwd) {                           // entered at the code slot, as a 
 static lvm(lvm_defercell) {
  word f = Sp[0];
  intptr_t ar = oddp(Sp[1]) ? getcharm(Sp[1]) : 0;
- if (ar < 1 || oddp(f) || datp(f)                                         // deferfwd enters f, past its curry when ar>1
+ if (ar < 1 || oddp(f) || datp(f)                                         // deferfwd enters f past its curry
      || (ar > 1 && (cell(f)->ap != lvm_cur || cell(f)[1].x != putcharm(ar))))
   love_musttail return Answerp(1, ZeroPoint);
  Have(10);
@@ -545,9 +494,8 @@ static lvm(lvm_defercell) {
  tagthread(k, w);
  love_musttail return Answerp(1, word(k + 1)); }
 LvDef("defercell", defercell, 2, "guts");
-// (deferpatch cell native): a native of nif's shape (its header its code) and the cell's arity
-// patches the cell; the interp twin back, or anything else, leaves it forwarding. answers the
-// cell; a cell not deferred, or patched already, answers ()
+// (deferpatch cell native): a native of nif's shape and the cell's arity patches it, anything
+// else leaves it forwarding. the cell, or () for one not deferred or already patched
 static lvm(lvm_deferpatch) {
  word x = Sp[0], n = Sp[1];
  union u *v = evenp(x) && !datp(x) ? cell(x) : NULL,
@@ -563,8 +511,7 @@ static lvm(lvm_deferpatch) {
  love_musttail return Answerp(1, Sp[0]); }
 LvDef("deferpatch", deferpatch, 2, "guts");
 
-// (pour dst doff src soff n): copy n bytes of string-or-cask src into cask dst,
-// clamped to both backings (an out-of-range ask copies less, never tramples); answers dst
+// (pour dst doff src soff n): n bytes into cask dst, clamped to both; answers dst
 lvm(lvm_bcopy) {
  word dst = Sp[0], src = Sp[2];
  if (caskp(dst) && (strp(src) || caskp(src))) {
@@ -579,10 +526,8 @@ lvm(lvm_bcopy) {
   if (n > 0) memmove(txt(d) + doff, txt(s) + soff, n); }
  love_musttail return Answerp(4, dst); }
 
-// (xlat s tbl dst): every byte of s through a 512-byte table into cask dst, answering
-// the count written -- tbl[c] is c's image, tbl[256 + c] its mode: 0 dropped, 1
-// written, 2 written unless it repeats the byte written last. tr's three faces in one
-// loop, and any byte map's. () when the shapes are wrong; dst must hold #s.
+// (xlat s tbl dst): s through a 512-byte table into cask dst, the count written: tbl[c] c's
+// image, tbl[256 + c] its mode, 0 drop, 1 write, 2 squeeze. () on bad shapes; dst holds #s
 lvm(lvm_xlat) {
  word s = Sp[0], t = Sp[1], d = Sp[2];
  if (!(strp(s) || caskp(s)) || !(strp(t) || caskp(t)) || !caskp(d))

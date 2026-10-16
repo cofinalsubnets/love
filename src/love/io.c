@@ -1,12 +1,10 @@
-// io.c -- io. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are src/love/love.h.
+// io.c -- ports, their buffered lanes, the reader and the boot stitch
 #include "love.h"
 double lm_strtod(char const*, char**);   // correctly rounded read: the printer's twin
 #ifndef NAN
 #define NAN (__builtin_nanf(""))
 #endif
 #define love_digits "0123456789abcdefghijklmnopqrstuvwxyz"
-// this file's own, forward-declared so order within it does not matter.
 static love_noinline double str_flo(word x);
 static bool
  bio_wpending(struct bio *b),
@@ -35,17 +33,11 @@ static struct bio *rbio_of(struct g *g, struct io *i);
 static uintptr_t ci_athand(struct g *g, uintptr_t n);
 static union u *fn_unc0(union u *k);
 static void io_close(struct g *g, void *p);
-// ============================================================================
-// io
-// ============================================================================
-// the atomic-edge contract: every write can grow a backing (a GC), so an op spanning
-// more than one write parks its heap operand on g->sp and re-reads it across each --
-// never a raw pointer over an edge. the lam_* helpers are pure and open none.
+// every write can collect: an op spanning several parks its heap operand on g->sp and
+// re-reads it across each, never a raw pointer over the edge
 bool iop(word x) { return evenp(x) && cell(x)->ap == lvm_port_io; }
-// the port an op acts on. in/b/err are three names, not three devices: a task wearing
-// its own stdio (hook 6, the chain (i o e)) reaches them through here, routed in place so
-// the re-read across a GC edge finds the same port. op-level only -- ==, peek, hot? and
-// the image still answer the static, since prel's tap/jug read the head by index.
+// a task wearing its own stdio (hook 6, (i o e)) reaches it here. op-level only: ==, peek,
+// hot? and the image still answer the static, since prel's tap/jug read the head by index
 word io_route(struct g *g, word x) {
  word l = *task_io(g), s;
  if (l == ZeroPoint) return x;
@@ -54,20 +46,15 @@ word io_route(struct g *g, word x) {
  else if (x == (word) &love_stderr) s = chainp(B(l)) && chainp(BB(l)) ? A(BB(l)) : zero;
  else return x;
  return iop(s) ? s : x; }
-// the two doors whose port is a bio: the fd port, and the horn wearing its shape
 static love_inline bool bio_vt(struct port_vt const *vt) {
  return vt == &love_fd_port_vt || vt == &love_horn_vt; }
 
-// the descriptor, and the only way to it: the vt says whether there is one, so a
-// port whose door is not a device answers -1 and no cast is ever taken on faith.
+// -1 for a port whose door is not a device
 intptr_t io_fd(struct io const *i) {
  return bio_vt(i->vt) ? getcharm(((struct fio const*) i)->fd) : -1; }
 
-// --- the buffered lanes (generic, above the vt) ---
-// a heap fd port is an bio (love.h), dressed lazily; bio_of is the one guard, and
-// nothing reads past the head without it. zgetc serves ungetc -> the pending run -> one
-// readn gulp, and that order is the park law: a port holding bytes is readable however
-// quiet its fd is, a dry gulp answers IoWouldBlock. a read drains pending writes first.
+// the buffered lanes: bio_of is the one guard past the head. the park law: a port holding
+// bytes is readable however quiet its fd is; a dry gulp answers IoWouldBlock
 struct bio *bio_of(struct g *g, struct io *i) {
  return bio_vt(i->vt) && in_live_pool(core_of(g), (word const*) i)
       ? (struct bio*) i : NULL; }
@@ -78,17 +65,14 @@ bool bio_rpending(struct bio *b) {
 static love_inline bool bio_wpending(struct bio *b) {
  return b && b->wbuf && !charmp(b->wbuf) && getcharm(b->wlen) > 0; }
 
-// the scheduler's half of the park law above: is this parked task sitting on a port already
-// holding bytes? bytes live in the port, not the fd; a reader parks with Ip unadvanced, so its
-// port is the top of its saved stack. the ap guard is what makes reading x legal: only these
-// two ops park with a port at Sp[0]; every other parker answers false first.
+// the scheduler's half of the park law. only these two ops park with a port at Sp[0], so
+// the ap guard is what makes reading x legal
 bool wait_buffered(struct g *g, lvm_t *ap, word x, int fd) {
  return (ap == lvm_fgetc || ap == lvm_await) && iop(x)
      && io_fd((struct io*) x) == fd
      && bio_rpending(rbio_of(g, (struct io*) x)); }
 
-// the write run outgrew its backing: double it, pending bytes and all (only
-// reachable when a device took less than the whole run)
+// reachable only when a device took less than the whole run
 static struct g *bio_wgrow(struct g *g) {
  struct bio *b = (struct bio*) core_of(g)->io;
  uintptr_t n = getcharm(b->wlen), cap = len(str(b->wbuf));
@@ -101,8 +85,7 @@ static struct g *bio_wgrow(struct g *g) {
  g->sp += 1;
  return g; }
 
-// what did not land stays pending: the run slides down to the front and the next
-// drain carries it (zeroing wlen up front once dropped the tail on a mid-buffer EPIPE)
+// what did not land slides to the front for the next drain
 static struct g *io_wdrain(struct g *g, struct io *i) {
  if (!ok(g) || !bio_wpending(bio_of(g, i))) return g;
  struct port_vt const *vt = i->vt;
@@ -115,21 +98,14 @@ static struct g *io_wdrain(struct g *g, struct io *i) {
   avec(g, i, k = core_of(g = vt->writen(g, (unsigned char*) txt(str(b->wbuf)), n))->b);
   if (!ok(g)) return g;
   b = (struct bio*) i;                       // writen may allocate: re-derive
-  // the device is gone: drop the run -- keeping it parks a task forever
-  // (close and seal wait for an empty run)
-  if (k < 0) return b->wlen = putcharm(0), g;
+  if (k < 0) return b->wlen = putcharm(0), g;   // the device is gone: close and seal wait for an empty run
   if (!k) return g;
   char *w = txt(str(b->wbuf));
   if ((uintptr_t) k < n) memmove(w, w + k, n - (uintptr_t) k);
   b->wlen = putcharm(n - (uintptr_t) k); } }
-// io_refill's third answer, beside a byte and EOF: the device has nothing right
-// now. distinct on purpose; never escapes lvm_fgetc.
-#define IoWouldBlock (-2)
-// the three answers for every port. no read method = end; no buffer = ask for one byte.
-// which bio owns this port's read run: its own, or -- for the static input port on a seat
-// that lent it one -- the borrowed one in `inport`. same fd and same vt, so every lane
-// below reads it verbatim and `in` keeps the identity (== p in) that bao's `reads` folded
-// at egg-compile time. the fd offset the device runs ahead of is the frontend's to rewind.
+#define IoWouldBlock (-2)   // io_refill's third answer beside a byte and EOF; never escapes lvm_fgetc
+// the static stdin may read through a borrowed bio (`inport`), so `in` keeps the identity
+// bao's `reads` folded; the frontend rewinds the fd offset it ran ahead
 static love_inline struct bio *rbio_of(struct g *g, struct io *i) {
  struct bio *b = bio_of(g, i);
  return b ? b : i == &love_stdin.io ? (struct bio*) core_of(g)->inport : NULL; }
@@ -162,9 +138,7 @@ static struct g *io_refill(struct g *g) {                  // g is ok here: zget
   g->b = (unsigned char) txt(r)[0];
   return g; }
  if (k < 0) return g->b = EOF, g;
- // k == 0 is "would block", the ordinary answer. never wait here: a blocking poll under
- // lvm_fgetc stops the whole VM, not the reading task. hand it back and let the caller park.
- return g->b = IoWouldBlock, g; }
+ return g->b = IoWouldBlock, g; }   // never wait here: a poll under lvm_fgetc stops the whole vm
 
 static love_inline struct g *zgetc(struct g*g) {
  if (!ok(g)) return g;
@@ -180,7 +154,6 @@ static love_inline struct g *zgetc(struct g*g) {
   b->rpos = putcharm(p + 1);
   return g; }
  return io_refill(g); }
-// the pushback is the port's, not the device's: one head word for every kind of port
 static love_inline struct g *zungetc(struct g*g, int c) {
  if (!ok(g)) return g;
  g->io->ungetc_buf = putcharm(c);
@@ -190,10 +163,10 @@ struct g *ioputc(struct g*g, int c) {
  struct bio *b = bio_of(g, g->io);
  struct port_vt const *vt = g->io->vt;
  if (!vt->writen) return g;                      // no write door: the byte goes nowhere
- if (!b) {                                       // no buffer: the same lane at n = 1.
-  unsigned char x = (unsigned char) c;           // src is a C local, so a sink that
-  if (!core_of(g = vt->writen(g, &x, 1))->b && ok(g))   // grows on the first ask
-   g = vt->writen(g, &x, 1);                     // lands it on the second -- room now.
+ if (!b) {                                       // no buffer: the same lane at n = 1
+  unsigned char x = (unsigned char) c;
+  if (!core_of(g = vt->writen(g, &x, 1))->b && ok(g))   // a sink that grew on the first ask
+   g = vt->writen(g, &x, 1);
   return g; }
  if (!b->wbuf || charmp(b->wbuf)) {              // dress the write backing
   if (!ok(g = str0(g, iobuf))) return g;
@@ -203,21 +176,19 @@ struct g *ioputc(struct g*g, int c) {
   gen_wb(g, (word) b, b->wbuf);
   g->sp += 1; }
  uintptr_t n = getcharm(b->wlen);
- if (n >= len(str(b->wbuf))) {       // a drain the device short-changed left
-  if (!ok(g = bio_wgrow(g))) return g;        // no room: the residue keeps its place
+ if (n >= len(str(b->wbuf))) {       // a short-changed drain left a residue
+  if (!ok(g = bio_wgrow(g))) return g;
   b = (struct bio*) g->io; }
  struct str *w = str(b->wbuf);
  txt(w)[n] = (char) c;
  b->wlen = putcharm(n + 1);
  return n + 1 >= w->len ? io_wdrain(g, g->io) : g; }
-// flush means try, never wait: what the device would not take stays in the write
-// run and lands at the next write, at close, or through the finalizer's drain
+// try, never wait: the residue lands at the next write, at close, or in the finalizer
 struct g *zflush(struct g*g) {
  if (!ok(g)) return g;
  g = io_wdrain(g, g->io);
  return ok(g) ? g->io->vt->flush(g) : g; }
-// the exported faces (love.h): a host nif consults/drains the read run without
-// knowing the bio shape -- swig's first course rides these.
+// for host nifs that read the run without knowing the bio shape
 uintptr_t io_pending(struct g *g, struct io *i) {
  struct bio *b = rbio_of(g, i);
  return bio_rpending(b) ? (uintptr_t)(getcharm(b->rlen) - getcharm(b->rpos)) : 0; }
@@ -228,12 +199,8 @@ uintptr_t io_read_drain(struct g *g, struct io *i, unsigned char *dst, uintptr_t
  memcpy(dst, txt(str(b->rbuf)) + p, k);
  b->rpos = putcharm(p + k);
  return k; }
-// `unsee` over a count: move this port's position inside the run it holds, answering how
-// many bytes moved -- a short answer is the refusal and the caller's only check. n > 0
-// gives back, n < 0 takes; signed because relative does not compose. rbio_of, not bio_of:
-// the run borrowed under a static counts, which is what puts bytes back inside stdin's
-// seek-back. it reaches only the current run, so the clamp to [0, rlen] answers what is
-// really there rather than trusting n.
+// move the position inside the current run: n > 0 gives back, n < 0 takes; answers how many
+// moved, a short answer the refusal. rbio_of so stdin's borrowed run counts
 uintptr_t io_unread(struct g *g, struct io *i, intptr_t n) {
  struct bio *b = rbio_of(g, i);
  if (!b || !b->rbuf || charmp(b->rbuf)) return 0;
@@ -243,10 +210,8 @@ uintptr_t io_unread(struct g *g, struct io *i, intptr_t n) {
  uintptr_t want = (uintptr_t) -n, room = l > p ? l - p : 0, k = room < want ? room : want;
  b->rpos = putcharm(p + k);
  return k; }
-// (chug port): everything already readable, as one exact-length text -- the pushback byte
-// if there is one, then the run. it never touches the device and never parks, so the gulp
-// is: `see` the first byte (which refills and parks if it must), unsee it, chug the rest.
-// "" is the ordinary answer, so a caller draws with `see` rather than spinning here.
+// (chug port): the pushback byte and the run, never the device; "" is the ordinary answer,
+// so a caller draws with `see` first rather than spinning here
 static love_inline struct g *chug_str(struct g *g, struct io *i) {
  uintptr_t u = getcharm(i->ungetc_buf) != EOF ? 1 : 0;
  struct port_vt const *vt = i->vt;
@@ -258,15 +223,12 @@ static love_inline struct g *chug_str(struct g *g, struct io *i) {
  if (n) {
   char *d = txt(g->sp[0]);
   if (u) *d = (char) getcharm(i->ungetc_buf), i->ungetc_buf = putcharm(EOF);
-  // the fill splits where the count did: a bio drains its buffer, an at-hand source
-  // reads its own text. never a device -- for one, athand answered 0.
-  if (n - u) {
+  if (n - u) {                                // never a device: for one, athand answered 0
    if (rbio_of(g, i)) io_read_drain(g, i, (unsigned char*) d + u, n - u);
    else vt->readn(g, (unsigned char*) d + u, n - u); } }
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 
-// a charm is a raw fd: it holds nothing of ours, so one gulp off the row is the whole run.
-// "" for a busy row as for an ended one -- `see` is what tells those apart.
+// a raw fd holds nothing of ours: one gulp is the run, "" for busy as for ended
 love_noinline static struct g *chug_fd(struct g *g, intptr_t fd) {
  unsigned char buf[iobuf];
  intptr_t k = fd < 0 ? -1 : love_fd_readn(g, (int) fd, buf, sizeof buf);
@@ -280,17 +242,13 @@ lvm(lvm_chug) {
  if (!iop(Sp[0])) { Sp[0] = EmptyString; love_musttail return Next(1); }
  LvmCall(g, chug_str, (struct io*) Sp[0]) }
 
-// (inhand port): how many bytes this port holds ready -- the count `chug` would hand over.
-// the borrowed run counts, so a reader can ask whether anyone else has drawn on the port
-// since it last looked, which is the only way to know its own charlist is still the port's.
+// (inhand port): the count chug would hand over, borrowed run included
 lvm(lvm_inhand) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  Sp[0] = putcharm(iop(Sp[0]) ? (word) io_pending(g, (struct io*) Sp[0]) : 0);
  love_musttail return Next(1); }
 
-// (unchug port n): hand back up to n bytes of the run this port already gave out, so a
-// caller that chugged more than it used leaves the rest where the port's position sees it.
-// answers how many went back -- a short answer is the refusal (io_unread's notes).
+// (unchug port n): give back up to n bytes the port already gave out; see io_unread
 lvm(lvm_unchug) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  Sp[1] = putcharm(iop(Sp[0]) && charmp(Sp[1]) && getcharm(Sp[1]) != 0
@@ -298,10 +256,8 @@ lvm(lvm_unchug) {
                                            (intptr_t) getcharm(Sp[1])) : 0);
  love_musttail return Nextp(1, 1); }
 
-// (snug port n) -> 1 | 0. n = 1 has each refill ask the device for one byte, so the port
-// never holds bytes past what its reader took -- a shell's `read` on a pipe its children
-// share; any other n gives the full run back. 0 when the port holds read-ahead, which the
-// switch would strand, or keeps no run of its own.
+// (snug port n) -> 1 | 0. n = 1 refills a byte at a time, so no read-ahead (a shell's `read`
+// on a shared pipe); other n restores the full run. 0 when read-ahead would be stranded
 love_noinline static struct g *io_snug(struct g *g) {
  word p = *task_io(g) != ZeroPoint ? io_route(g, g->sp[0]) : g->sp[0];
  intptr_t n = charmp(g->sp[1]) ? getcharm(g->sp[1]) : 0;
@@ -327,9 +283,7 @@ struct ci { struct io io; word head; }; // charlist input
 struct to { struct io io; struct str *buf; word i; }; // lisp string output
 static struct g *noop_flush(struct g *g) { return g; }
 
-// the charlist source's read door: walks the spine, never blocks, so a spent list is the
-// end. no buffer -- no syscall to amortize, and the spine is the run athand counts.
-// a charm outside 0..255 lands as its low byte (test/io.l's tap section).
+// the charlist source: never blocks, so a spent list is the end; a charm past 255 lands as its low byte
 static uintptr_t ci_athand(struct g *g, uintptr_t n) {
  word h = ((struct ci*) g->io)->head;
  uintptr_t k = 0;
@@ -342,9 +296,8 @@ static intptr_t ci_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   dst[k++] = (unsigned char) getcharm(A(i->head)), i->head = B(i->head);
  return k ? (intptr_t) k : -1; }
 
-// the string sink's write door: land what fits, else double and answer 0 having
-// landed nothing. the grow and the copy cannot share a call: str0 collects, and
-// src may be the very string being printed -- the caller re-derives and comes back.
+// land what fits, else grow and answer 0: src may be the string being printed, which
+// str0 can move, so the caller re-derives and comes back
 static struct g *to_writen(struct g *g, unsigned char const *src, uintptr_t n) {
  struct to *o = (struct to*) g->io;
  uintptr_t i = getcharm(o->i), cap = len(o->buf);
@@ -354,11 +307,11 @@ static struct g *to_writen(struct g *g, unsigned char const *src, uintptr_t n) {
   o->i = putcharm(i + k);
   return g->b = (intptr_t) k, g; }
  if (!ok(g = str0(g, cap ? cap * 2 : iobuf))) return core_of(g)->b = 0, g;
- o = (struct to*) g->io;                  // GC may have moved it; g->io is GC-traced
+ o = (struct to*) g->io;                  // re-derived: g->io is traced
  struct str *nb = str(g->sp[0]);
  memcpy(txt(nb), txt(o->buf), i);
  o->buf = nb;
- gen_wb(g, (word) o, (word) nb);   // a tenured string-sink takes a fresh young backing -> remember it
+ gen_wb(g, (word) o, (word) nb);
  g->sp++;
  return g->b = 0, g; }
 
@@ -368,8 +321,7 @@ struct port_vt const
  ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand },  // a charlist: prel's `tap`
  love_horn_vt   = { noop_flush, love_horn_writen, love_horn_readn, NULL };   // PCM out and in: the horn
 
-// (fputc port byte) — write byte to port; return byte. a charm operand is a raw
-// fd and the byte goes straight at the row -- nothing to buffer, nothing to flush.
+// (fputc port byte) -> byte. a charm is a raw fd, written unbuffered
 lvm(lvm_fputc) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (charmp(Sp[0])) {
@@ -380,8 +332,7 @@ lvm(lvm_fputc) {
  if (iop(Sp[0])) {
   g->io = (struct io*) Sp[0];
   Pack(g);
-  // backpressure, as in lvm_fputs -- but the drain is behind the test: draining
-  // every put would turn a put loop into one write(2) per byte
+  // backpressure as in lvm_fputs, the drain behind the test or each put is a write(2)
   if (io_wpending(g, (struct io*) g->sp[0]) >= iobuf) {
    g = io_wdrain(g, (struct io*) g->sp[0]);
    if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
@@ -393,9 +344,8 @@ lvm(lvm_fputc) {
   Unpack(g); }
  love_musttail return Nextp(1, 1); }
 
-// (fflush port): flush means deliver -- a short-answering device parks the task
-// and the op re-runs (safe: a flush consumes nothing). a raw fd holds nothing of
-// love's, so a charm falls through with nothing to do and answers itself.
+// (fflush port): deliver -- a short-answering device parks the task and the op re-runs,
+// safe since a flush consumes nothing
 lvm(lvm_fflush) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
@@ -404,14 +354,12 @@ lvm(lvm_fflush) {
   if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_ghelp, g);
   if (io_wpending(g, (struct io*) g->sp[0])) {
    Unpack(g);
-   g->next_wake_at = love_clock() + 1;      // the write residue's poll -- see io_wdrain
+   g->next_wake_at = love_clock() + 1;      // the write residue's poll
    love_musttail return Ap(lvm_yield_sw, g); }
   Unpack(g); }
  love_musttail return Next(1); }
 
-// (fputs port s) — write every byte of string-or-cask s; no-op on misuse. bytes_of
-// re-reads each iteration so GC inside ioputc can forward it. a charm operand is a raw fd:
-// love_fd_say lands the run in one place and never touches love's heap.
+// (fputs port s): every byte of a string or cask; bytes_of re-reads past each collection
 lvm(lvm_fputs) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (charmp(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
@@ -422,16 +370,14 @@ lvm(lvm_fputs) {
  if (iop(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
   g->io = (struct io*) Sp[0];
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
-  // the bulk lane when the port has one; a 0 makes one byte of progress through ioputc.
-  // only for an empty buffer: going direct past a pending run would shuffle the stream.
+  // the bulk lane only past an empty run, or the stream shuffles; a 0 falls to ioputc
   struct g *(*wn)(struct g*, unsigned char const*, uintptr_t) = g->io->vt->writen;
   Pack(g);
   g = io_wdrain(g, (struct io*) g->sp[0]);   // buffered puts land before the bulk stroke
-  // backpressure: the write run is a buffer, not a queue -- an op that would push it past
-  // its own size waits for the device. the bound is one buffer plus one say.
+  // backpressure: the run is a buffer, not a queue
   if (ok(g) && io_wpending(g, (struct io*) g->sp[0]) >= iobuf) {
    Unpack(g);
-   g->next_wake_at = love_clock() + 1;            // the write residue's poll -- see io_wdrain
+   g->next_wake_at = love_clock() + 1;            // the write residue's poll
    love_musttail return Ap(lvm_yield_sw, g); }
   while (ok(g) && i < l) {
    intptr_t k = 0;
@@ -469,10 +415,8 @@ static struct g*ioputn(struct g *g, intptr_t n, uint8_t b) {
  if (q) g = ioputn(g, q, b);
  return ioputc(g, love_digits[r]); }
 
-// the terminal scare face's floor: post.l is the printer proper, but by here the VM has
-// stopped and there is nobody to run it. this spells the shapes a condition wears -- name,
-// text, number, list -- and hands every other kind its address. no allocation, so it is
-// safe on an exhausted heap.
+// the scare face's printer, with the vm stopped: no allocation, safe on an exhausted heap.
+// a kind it does not spell prints its address
 static struct g *facex(struct g *g, word x, int d) {
  if (charmp(x)) return ioputn(g, getcharm(x), 10);
  if (x == ZeroPoint) return ioputs(g, "()");
@@ -490,9 +434,7 @@ static struct g *facex(struct g *g, word x, int d) {
    if (!chainp(B(x))) return ioputc(g, ')'); } }
  return ioputn(ioputc(g, '\\'), (intptr_t) x, 36); }
 
-// the terminal scare face (love.h): stashed condition data prints ";; a b" on err; the bare
-// scare is the oom, ";; oom (ask nursery major)" in words: what the collector was asked for
-// (0 when the refusal was not its), the main pool and the major pool. best-effort.
+// ";; a b" on err, or the bare oom as ";; oom (ask nursery major)", ask 0 when the refusal was not the collector's
 void scare_face(struct g *g) {
  if (!(g = core_of(g))) return;
  g->io = &love_stderr.io;
@@ -516,10 +458,8 @@ void scare_face(struct g *g) {
 static love_inline struct g*gfputbn(struct g *g, intptr_t n, uint8_t b, struct io *o) {
  return g->io = o, ioputn(g, n, b); }
 
-// --- partial-application introspection ---
-// a partial-app closure is a thread headed lvm_unc (or [lvm_cur n][lvm_unc …]);
-// each unc cell holds a captured arg at [1] and a link at [2], so the base value
-// is terminal_link-2 and the args are the chain of [1] fields, newest first.
+// a partial is a thread headed lvm_unc (or [lvm_cur n][lvm_unc ..]); each unc cell holds an
+// arg at [1] and a link at [2], so the base is the last link - 2, args newest first
 bool fn_partialp(union u *k) {
  return k[0].ap == lvm_unc || (k[0].ap == lvm_cur && k[2].ap == lvm_unc); }
 static love_inline union u *fn_unc0(union u *k) {
@@ -533,12 +473,9 @@ word fn_arg(union u *k, int i, int nargs) { // i-th arg in application order
  union u *u = fn_unc0(k);
  for (int w = nargs - 1 - i; w > 0; w--) u = u[2].m;
  return u[1].x; }
-// what `=` and the hash read a function value as: a native is its bytecode twin (the code
-// is a copy of it, at an address of its own), anything else itself. a native is the one
-// cell whose code word is the arena's and repeats in the header one word ahead of the value
-// (tablet.c's nifx), and a twin may be a native again -- a lane that wraps another's answer --
-// so this unwraps to the bytecode. x may be any word a thread holds, a return address into
-// the middle of another included, so it is read at the value and never walked
+// what = and the hash read a function as: a native unwraps to its bytecode twin, which may be
+// native again. a native's code word is the arena's, repeated one word ahead (tablet.c's
+// nifx). x may be a return address mid-thread, so it is read at the value, never walked
 word fn_meaning(struct g *c, word x) {
  while (evenp(x) && in_heap(c, x)) {
   union u *k = cell(x), *cd = k[0].ap == lvm_cur ? k + 2 : k;
@@ -546,20 +483,16 @@ word fn_meaning(struct g *c, word x) {
   if ((e != lvm_deferfwd && !code_in(c, (uintptr_t) e)) || k[-1].ap != e) break;   // or a deferred one that declined
   x = cd[1].x; }
  return x; }
-// the threads that are carriers, not code: a tablet's two halves, a cask, a coin, a port.
-// they are what they are by identity, never by their words
+// threads that are carriers, not code: known by identity, never by their words
 bool fn_carrier(union u *k) {
  return k[0].ap == lvm_map_lookup || k[0].ap == lvm_map_data || k[0].ap == lvm_cask
      || k[0].ap == lvm_coin || k[0].ap == lvm_port_io; }
 
-// in_heap: the main pool or the major pool (tenured objects live there). the two are
-// independent mallocs, the major above or below, so each range is tested
+// the two pools are independent blocks, either above the other
 bool in_heap(struct g *c, word x) {
  return (ptr(x) >= ptr(c) && ptr(x) < ptr(c) + c->len) || (ptr(x) >= c->major_base && ptr(x) < c->major_hp); }
 
-// (nifnom f): a nif's roster spelling, or (). the book cannot answer this: two
-// names can share one nif value (. and ><, peep and ->), and def1 is which of
-// them is the name. the printer's other C-only question.
+// (nifnom f): a nif's roster spelling, or (); the book can't say, two names may share one nif
 lvm(lvm_nifnom) {
  char const *nm = nif_name(Sp[0]);
  if (!nm) love_musttail return Answer(ZeroPoint);
@@ -570,14 +503,12 @@ lvm(lvm_nifnom) {
  love_musttail return Answer(word(s)); }
 
 static love_inline bool lam_head(struct g *g, word a) {        // is a the symbol \ ?
- struct str *nm;                                          // a named sym (name . mint); nom_str is 0 for a bare mint / the core
+ struct str *nm;
  return (nm = nom_str(g, a)) && len(nm) == 1 && txt(nm)[0] == '\\'; }
 
 bool lam_isp(struct g *g, word x) {         // (\ b.. body): >=2 operands
  return chainp(x) && lam_head(g, A(x)) && chainp(B(x)) && chainp(BB(x)); }
-// (fgetc port): a non-port reads as an already-empty stream (EOF), so a read-until-(-1)
-// loop over a misused port is bounded. a charm is a raw fd, read a byte at a time off the
-// row: no pushback of its own, and a busy row parks the task exactly as a port's would.
+// (fgetc port): a non-port reads EOF, so a misused loop ends. a charm is a raw fd, no pushback
 lvm(lvm_fgetc) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (charmp(Sp[0])) {
@@ -596,37 +527,31 @@ lvm(lvm_fgetc) {
    Pack(g);
    if (!ok(g = io_wdrain(g, i))) love_musttail return Ap(_lvm_ghelp, g);
    Unpack(g); }
-  // no readiness pre-guard: zgetc already makes that test, and asking first
-  // lied on the kernel (reading an output fd parked forever where it now reads
-  // the end). cue?/await still ask -- they have no read to answer them.
+  // no readiness check first: zgetc's read answers it, and an output fd would park forever
   Pack(g);
   g->io = i;
   if (!ok(g = zgetc(g))) love_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   if (g->b == IoWouldBlock) {          // the refill raced and lost -- park, don't spin
    intptr_t fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
-   // a dry door with no fd to wait on (the horn's silence) takes the write residue's poll
-   if (fd < 0) g->next_wake_at = love_clock() + 1;
+   if (fd < 0) g->next_wake_at = love_clock() + 1;   // no fd to wait on (the horn): poll
    else g->next_wait_fd = (int) fd;
    love_musttail return Ap(lvm_yield_sw, g); }
   Sp[0] = putcharm(g->b); }
  else Sp[0] = putcharm(EOF);
  love_musttail return Next(1); }
 
-// (await port): cooperatively park until the port's fd is readable, then return
-// the port (so it chains into a read) -- for fds you can't drain a byte at a time
-// (signalfd, timerfd). Ip is unadvanced, so the task re-checks on reschedule.
+// (await port): park until readable, then answer the (routed) port -- for fds read whole
+// (signalfd, timerfd). Ip is unadvanced, so the task re-checks on reschedule
 lvm(lvm_await) {
- if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);   // and the routed port is what it answers -- the read that chains off it lands there too
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
   intptr_t fd = io_fd((struct io*) Sp[0]);
-  // the buffer counts: a port holding bytes is readable however quiet its fd is
   if (fd >= 0 && !bio_rpending(rbio_of(g, (struct io*) Sp[0])) && !ready(fd, wait_in)) {
    g->next_wait_fd = fd;
    love_musttail return Ap(lvm_yield_sw, g); } }
  love_musttail return Next(1); }
 
-// (fungetc port byte) — push back one byte, return the byte.
 lvm(lvm_fungetc) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
@@ -637,19 +562,17 @@ lvm(lvm_fungetc) {
   Unpack(g); }
  love_musttail return Nextp(1, 1); }
 
-// heap-port finalizer: runs inside GC (from-space readable); fd < 0 means
-// already closed or a non-OS fd
+// the heap port's finalizer, inside a collection with the from-space readable
 void io_close(struct g *g, void *p) {
- struct bio *b = p;                         // every finalized port is a bio (io_alloc made it)
+ struct bio *b = p;
  intptr_t fd = io_fd(&b->f.io);
  if (fd < 0) return;
- if (b->wbuf && !charmp(b->wbuf) && getcharm(b->wlen) > 0) // unflushed bytes ride out raw --
-  love_fd_drain((int) fd, txt(str(b->wbuf)), (uintptr_t) getcharm(b->wlen));   // from-space is readable here
+ if (b->wbuf && !charmp(b->wbuf) && getcharm(b->wlen) > 0)   // the residue rides out raw
+  love_fd_drain((int) fd, txt(str(b->wbuf)), (uintptr_t) getcharm(b->wlen));
  love_fd_close(fd); }
 
-// heap-allocate a stream port for an OS fd: push it on Sp[0], register io_close
 love_noinline struct g *io_alloc(struct g *g, int fd) {
- uintptr_t const n = Width(struct bio);     // a heap fd port carries the buffer lanes (love.h)
+ uintptr_t const n = Width(struct bio);
  if (ok(g = have(g, n + Width(struct tag) + Width(struct fz) + 1))) {
   union u *k = bump(g, n + Width(struct tag));
   struct bio *io = (struct bio*) k;
@@ -657,24 +580,22 @@ love_noinline struct g *io_alloc(struct g *g, int fd) {
   io->f.io.vt = &love_fd_port_vt;
   io->f.io.ungetc_buf = putcharm(EOF);
   io->f.fd = putcharm(fd);
-  io->rbuf = io->wbuf = 0;                     // never dressed (io_refill/ioputc dress lazily)
+  io->rbuf = io->wbuf = 0;                     // dressed lazily
   io->rpos = io->rlen = io->wlen = putcharm(0);
-  *--g->sp = (word) tagthread(k, n);            // stack slot reserved by the +1 in have()
+  *--g->sp = (word) tagthread(k, n);            // the +1 in have()
   struct fz *z = bump(g, Width(struct fz));
   z->p = k, z->fn = io_close, z->next = g->fz, g->fz = z; }
  return g; }
 
-// a token is a plain decimal integer iff it is [+-]?[0-9]+ with no leading-zero
-// prefix (a leading zero is octal's prefix; bare "0" parses as decimal).
+// [+-]?[0-9]+ with no leading zero but a bare 0
 static love_inline bool is_dec_int(char const *s, uintptr_t n) {
  uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0;
  if (i >= n) return false;                       // a lone sign is a symbol
- if (s[i] == '0' && n - i > 1) return false;     // leading zero -> octal's, below
+ if (s[i] == '0' && n - i > 1) return false;     // octal's
  for (; i < n; i++) if (s[i] < '0' || s[i] > '9') return false;
  return true; }
 
-// ..a hex integer iff it is [+-]?0[xX][0-9a-fA-F]+ -- at least one digit, so a
-// bare "0x" stays an honest symbol..
+// [+-]?0[xX][0-9a-fA-F]+, so a bare 0x is a symbol
 static love_inline bool is_hex_int(char const *s, uintptr_t n) {
  uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0;
  if (n - i < 3 || s[i] != '0' || (s[i+1] | 32) != 'x') return false;
@@ -682,9 +603,7 @@ static love_inline bool is_hex_int(char const *s, uintptr_t n) {
   if (!((s[i] >= '0' && s[i] <= '9') || ((s[i] | 32) >= 'a' && (s[i] | 32) <= 'f'))) return false;
  return true; }
 
-// ..and octal iff [+-]?0[0-7]+ ("08" keeps the strtod -> intern path). all three read at
-// full precision through big_read_*, so a literal is fixnum / box / bignum by its
-// value -- strtol overflowed differently per libc and read one source three ways.
+// [+-]?0[0-7]+; 08 falls to strtod. all three read at full precision through big_read_*
 static love_inline bool is_oct_int(char const *s, uintptr_t n) {
  uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0;
  if (n - i < 2 || s[i] != '0') return false;
@@ -698,9 +617,8 @@ struct g *grbufg(struct g *g, uintptr_t len) {
   g->sp++;
  return g; }
 
-// a string read as a decimal float where it lies, NAN unless the whole of it is one: its bytes
-// end in a NUL, and a parse that stops short of its length -- at a NUL inside it, or anything
-// else -- is not the whole string. out of line, so no vm op hands out a local's address
+// NAN unless the whole string parses, an inner NUL included. out of line, so no vm op hands
+// out a local's address
 static love_noinline double str_flo(word x) {
  struct str *s = str(x);
  if (!strp(x) || !s->len) return NAN;
@@ -708,8 +626,7 @@ static love_noinline double str_flo(word x) {
  double r = lm_strtod(s->bytes, &e);
  return e == s->bytes + s->len ? (flo_t) r : (flo_t) NAN; }
 
-// (gem s): parse a string as a decimal float -> a box if the whole string parses,
-// else zero (the l-side reader's twin of the C cascade)
+// (gem s): a float if the whole string parses, else zero
 lvm(lvm_gem) {
  word x = Sp[0];
  double d = str_flo(x);
@@ -718,12 +635,10 @@ lvm(lvm_gem) {
  Sp[0] = mk_gem(&Hp, (flo_t) d);
  love_musttail return Next(1); }
 
-// (string x): a charlist -> the string of those bytes; a named symbol -> its
-// name string; a fixnum -> the one-byte string of its low byte. identity on any
-// other type (strings, anonymous syms, zero, ...).
+// (string x): a charlist, a name or a charm's low byte as a string; other kinds through hook 7
 lvm(lvm_string) {
  word x = Sp[0];
- if (charmp(x)) {                                     // fixnum -> one-byte string
+ if (charmp(x)) {
   uintptr_t req = str_width(1);
   Have(req);
   struct str *s = (void*) Hp;
@@ -731,11 +646,11 @@ lvm(lvm_string) {
   ini_str(s, 1);
   txt(s)[0] = (char) getcharm(x);
   love_musttail return Answer(word(s)); }
- if (nomp(x)) {                                      // a named symbol (name . mint) -> its name string; a bare point -> identity
+ if (nomp(x)) {
   struct str *nm = nom_str(g, x);
   Sp[0] = nm ? word(nm) : word(EmptyString);
   love_musttail return Next(1); }
- if (chainp(x)) {                                      // charlist -> string
+ if (chainp(x)) {
   uintptr_t n = llen(x), req = str_width(n);
   Have(req);
   struct str *s = (void*) Hp;
@@ -743,7 +658,7 @@ lvm(lvm_string) {
   ini_str(s, n);
   for (uintptr_t i = 0; n--; x = B(x)) txt(s)[i++] = (char) getcharm(A(x));
   love_musttail return Answer(word(s)); }
- if (caskp(x)) {                                      // a cask -> a fresh string copy of its bytes
+ if (caskp(x)) {
   uintptr_t n = len(cask(x)->str), req = str_width(n);
   Have(req);
   struct str *src = cask(Sp[0])->str, *s = (void*) Hp;
@@ -751,38 +666,26 @@ lvm(lvm_string) {
   ini_str(s, n);
   memcpy(txt(s), txt(src), n);
   love_musttail return Answer(word(s)); }
- // `string` answers a string: a string is the only identity, every other kind coerces
- // through hook 7. px reaches `string` on chains and noms only, so show cannot recur.
+ // px reaches string on chains and noms only, so show cannot recur
  if (x == ZeroPoint) { Sp[0] = word(EmptyString); love_musttail return Next(1); }   // the empty charlist
- if (strp(x) || !evenp(g->hook[hook_show])) love_musttail return Next(1);   // ..or the boot window, where identity stands
- Have(2);                                               // the drive grows Sp by two
- { word *dst = Sp - 2;                                  // [x show ret] -- callout_drive's 1-arg shape
+ if (strp(x) || !evenp(g->hook[hook_show])) love_musttail return Next(1);   // or the boot window
+ Have(2);
+ { word *dst = Sp - 2;                                  // [x show ret]: callout_drive's 1-arg shape
    dst[0] = Sp[0], dst[1] = g->hook[hook_show], dst[2] = word(Ip + 1);
    Sp = dst; Ip = (union u*) callout_drive; }
  love_musttail return Continue(); }
 
-////
-/// " the reader "
-//
-// sound: one datum off a charlist -> (datum . residue), () at a clean end, `torn` where the
-// text ran out inside a shape. test/host/p1.l is the same grammar in love, and
-// test/host/rdiff.l holds the two readers to each other over the tree.
-//
-// a state machine the vm runs. each state in rd_k is an lvm_ that hands the stack to a C
-// helper, and the helper leaves the next state in g->ip. the reader's state is love data on
-// the stack, so a collection moves it and a deep form costs heap, never C stack:
-//   sp[0..3]  the registers: the position, the height of the open pile, a finished datum on
-//             its way out, and the text when it is a string -- read in place, its positions
-//             charms, and laid down as cells only for a residue
-//   then the pile -- the open list's datums, newest first -- its frame's header, and under
-//   that the enclosing pile and frame, down to the base frame, the ip to answer to, and the
-//   argument's slot. the entry is an op like any other, which the compiler may lay inline:
-//   it answers where the next instruction is, never through a return on the stack. a header
-//   is a charm, the frame's kind with the enclosing pile's height above it; a mono frame
-//   keeps its operator under its header.
-// a tail may be a promise. a helper that meets one it has not forced hands it to the vm
-// (rd_call) and is run again from the last position it committed, over a copy that holds
-// the answer, so a walk can always start over.
+// the reader. sound: one datum off a text -> (datum . residue), () at a clean end, `torn`
+// inside a shape; test/host/p1.l is the same grammar in love, test/host/rdiff.l the diff.
+// a state machine the vm runs: each rd_k state hands the stack to a C helper, which leaves
+// the next state in g->ip, so a deep form costs heap, never C stack. the stack:
+//   sp[0..3]  the registers: position, open pile height, a finished datum, the text when a
+//             string (read in place, positions as charms)
+//   then the pile (newest first), its frame's header, the enclosing piles and frames, down
+//   to the base frame, the ip to answer to, and the argument's slot. a header is a charm,
+//   the kind with the enclosing height above it; a mono frame keeps its operator under it.
+// a tail may be a promise: the helper hands it to the vm (rd_call) and runs again from its
+// last committed position over a copy holding the answer
 enum { RdCur, RdCnt, RdVal, RdSrc, RdRegs };
 enum { RkOne, RkAll, RkParen, RkList, RkHash, RkTuple, RkHole, RkWeave, RkQuote, RkLift, RkMono };
 enum { RsStart, RsRead, RsClose, RsDatum, RsAll, RsWeave };
@@ -790,12 +693,9 @@ enum { RsStart, RsRead, RsClose, RsDatum, RsAll, RsWeave };
 #define RdKind(h) ((int) (getcharm(h) & 15))
 #define RdUnder(h) ((uintptr_t) getcharm(h) >> 4)
 #define RdGo(s) (g->ip = (union u*) (rd_k + (s)), g)
-// what every state reserves before it reads a register: a frame, a call, a wrap's conses
-#define RdSlack 32
+#define RdSlack 32   // every state's reserve: a frame, a call, a wrap's conses
 
-// the char classes: whitespace, an operator char, the end of a name-led token, the
-// openers and closers, a numeral's sign, where a glued run stops, a digit.
-// 12 is form feed, spelled as a number here as in the love it was ported from
+// RcEnd ends a name-led token, RcStop a glued run; 12 is form feed
 enum { RcWs = 1, RcOp = 2, RcEnd = 4, RcOpen = 8, RcClose = 16, RcSign = 32, RcStop = 64, RcDig = 128 };
 #define RcW (RcWs | RcEnd | RcStop)
 #define RcO (RcEnd | RcOpen)
@@ -818,8 +718,7 @@ static union u const
  rd_call_k[] = { {lvm_ap}, {lvm_rd_called} },
  rd_reads_k[] = { {lvm_sounds}, {lvm_ret0} };   // the boot's, the same run as the nif's
 
-// a position's char: 256 for a cell that holds no byte (a name's, to every class), -1 at
-// the end. a charm is an index into the string src; () is src when there is none
+// a position's char: 256 for a cell holding no byte, -1 at the end. a charm indexes src
 static love_inline intptr_t rd_at(word src, word p) {
  if (charmp(p))
   return src != ZeroPoint && (uintptr_t) getcharm(p) < len(str(src)) ? (unsigned char) txt(str(src))[getcharm(p)] : -1;
@@ -827,7 +726,7 @@ static love_inline intptr_t rd_at(word src, word p) {
  word c = A(p);
  return charmp(c) && (uintptr_t) getcharm(c) < 256 ? getcharm(c) : 256; }
 static love_inline unsigned rd_c(word src, word p) { intptr_t c = rd_at(src, p); return c < 0 ? 0 : rd_cls[c]; }
-// what a position lays into a text: its byte, or a cell's own value, whose low byte it keeps
+// a cell's value keeps its low byte
 static love_inline intptr_t rd_raw(word src, word p) {
  return charmp(p) ? (unsigned char) txt(str(src))[getcharm(p)] : getcharm(A(p)); }
 static love_inline char rd_byte(word src, word p) { return (char) rd_raw(src, p); }
@@ -837,11 +736,10 @@ static love_inline bool rd_hex(intptr_t c) {
  return (c >= '0' && c <= '9') || (rd_low(c) >= 'a' && rd_low(c) <= 'f'); }
 static love_inline intptr_t rd_dval(intptr_t c) { return c >= '0' && c <= '9' ? c - '0' : rd_low(c) - 87; }
 
-// a promise: lit?'s upper segment of the lattice, which is what a tail gets called for.
-// the slow halves stay out of line: every step of every walk inlines the fast ones
+// a promise: lit?'s upper segment of the lattice. the slow half out of line, the fast inlined everywhere
 static love_noinline bool rd_hot(word x) { return evenp(x) && !coinp(x) && kind(x) >= KTablet; }
 static love_inline bool rd_lit(word x) { return evenp(x) && !chainp(x) && x != ZeroPoint && rd_hot(x); }
-// the position after a cell: its tail, which a promise is too, for the caller to hand to rd_call
+// a promise tail is the caller's to hand to rd_call
 static love_inline word rd_next(word p) { return charmp(p) ? putcharm(getcharm(p) + 1) : B(p); }
 
 // a string's positions hold no promise, so its walks are byte loops
@@ -861,13 +759,9 @@ static love_noinline uintptr_t rd_send(struct str const *s, uintptr_t i) {
  while (i < len(s) && !(rd_cls[t[i]] & RcEnd)) i++;
  return i; }
 
-// the vm calls f on a, and lvm_rd_called lays the answer in: the cells from the committed
-// position to the one whose tail was t are copied, the last copy's tail the answer, and the
-// asking state runs again over the copy. w is what the walk wants of the answer: a token's
-// end, a text's closing quote or a comment's line end. an answer with none of it in its
-// chunk is wanted whole, so its tail is forced too, and the chunks are copied once, behind
-// the committed run, so a run over many chunks costs its length once. the six words are
-// RdSlack's
+// the vm calls f on a; rd_called copies the committed run up to t with the answer as its
+// tail, and the state runs again. w is what the walk wants (a token's end, a quote, a line
+// end); a chunk without it is forced further, all copied once. the six words are RdSlack's
 enum { RwOne, RwTok, RwStr, RwLine };
 static struct g *rd_call(struct g *g, word f, word a, word t, int w) {
  g->sp -= 6;
@@ -882,15 +776,14 @@ static bool rd_wants(intptr_t w, word a) {
  intptr_t c = charmp(a) && (uintptr_t) getcharm(a) < 256 ? getcharm(a) : 256;
  return w == RwOne || c == 256 || (w == RwTok ? (rd_cls[c] & RcEnd) != 0 : w == RwStr ? c == '"'
       : c == '\n' || c == '\r'); }
-// the cells of a chunk up to the one whose tail is a promise, and that cell, in *last;
-// () in *last where the chunk ends or holds what w wants
+// cells up to the one whose tail is a promise, that one in *last; () where w is met or the chunk ends
 static uintptr_t rd_chunk(word v, intptr_t w, word *last) {
  uintptr_t k = 1;
  for (; chainp(v); v = B(v), k++) {
   if (rd_wants(w, A(v))) break;
   if (rd_lit(B(v))) return *last = v, k; }
  return *last = ZeroPoint, 0; }
-// k cells from p, copies onto c with the last's tail at v -> c's room past them
+// k cells from p copied onto c, the last's tail v
 static word *rd_lay(word *c, word p, uintptr_t k, word v) {
  for (; k--; p = B(p), c += chain_req) ini_chain((struct chain*) c, A(p), k ? word(c + chain_req) : v);
  return c; }
@@ -924,7 +817,7 @@ static struct g *rd_called(struct g *g) {             // [v acc w t ip regs ..]
  g->sp[5 + RdCur] = v, g->ip = cell(g->sp[4]), g->sp += 5;
  return g; }
 
-// the room is the caller's, from here down: a cons, and k words in under the registers
+// the room is the caller's, from here down
 static love_noinline word rd_cons(struct g *g, word a, word b) {
  return word(ini_chain(bump(g, chain_req), a, b)); }
 static love_inline void rd_open(struct g *g, uintptr_t k) {
@@ -958,8 +851,7 @@ static struct g *rd_enter(struct g *g, int k) {       // [x ..]
 static struct g *rd_one(struct g *g) { return rd_enter(g, RkOne); }
 static struct g *rd_many(struct g *g) { return rd_enter(g, RkAll); }
 
-// the doors: a string is read in place, a port flows (hook 9, post.l's flow, the one
-// lazy charlist there is), a promise is forced, and a charlist is read as it stands
+// a string is read in place, a port flows (hook 9), a promise is forced, a charlist read as it stands
 static struct g *rd_start(struct g *g) {
  if (!ok(g = have(g, RdSlack))) return g;
  word x = g->sp[RdCur];
@@ -969,11 +861,9 @@ static struct g *rd_start(struct g *g) {
  if (!iop(x)) return rd_call(g, x, ZeroPoint, x, RwOne);
  return rd_call(g, hot_hook(g->hook[hook_flow]), x, x, RwOne); }
 
-// a text's escapes: n t r e 0, \xhh as two chars hex or not, \u{h..} one to six hex
-// digits naming a code point outside the surrogates (else a plain u), any other char
-// itself. counts the bytes, and lays them too when d is given; -1 torn, -2 a promise to
-// force (in *end), else the count with *end past the closing quote, or past the ( of a
-// \( hole with *hole set
+// escapes: n t r e 0, \xhh (two chars, hex or not), \u{h..} of 1-6 digits outside the
+// surrogates (else a plain u), any other char itself. counts, and lays into d if given:
+// -1 torn, -2 a promise in *end, else *end past the quote, or past a \( with *hole set
 static intptr_t rd_strw(word src, word p, char *d, word *end, bool *hole) {
  intptr_t k = 0;
  word n, q;
@@ -1019,11 +909,9 @@ static intptr_t rd_strw(word src, word p, char *d, word *end, bool *hole) {
 #undef Over
 }
 
-// a raw text: three or more quotes open it and as many close it, with no escapes. one
-// line: a longer closing run keeps its extra quotes. many lines, when the opener ends its
-// line: it closes on a line of only spaces and the quotes, and that line's indent comes off
-// every line, at most that many spaces or tabs each; the breaks beside the quotes are not
-// the text's. *w is the indent, -1 until a walk finds it. counts as rd_strw does
+// a raw text: 3+ quotes each side. one line: a longer closer keeps its extras. an opener
+// ending its line closes on a line of indent and quotes, that indent off every line, the
+// breaks beside the quotes not the text's. *w the indent, -1 till found; counts as rd_strw
 static intptr_t rd_raww(word src, word p, char *d, intptr_t *w, word *end) {
  intptr_t k = 0, q = 0, c, r, lead;
  word s, t;
@@ -1079,9 +967,8 @@ static struct g *rd_rawstr(struct g *g) {
  g->sp[RdVal] = s ? word(s) : EmptyString, g->sp[RdCur] = e;
  return RdGo(RsDatum); }
 
-// a text's run up to its closing quote or a hole, from the position in the cursor: onto
-// the weave's pile, and the hole opened or the weave shut. a text with no hole is itself,
-// and one with holes (weave [run (hole) run ..]), each hole read as a list is
+// a run up to the quote or a hole, onto the weave's pile. no hole: the text itself; holes:
+// (weave [run (hole) run ..]), each hole read as a list
 static struct g *rd_weave(struct g *g) {
  word e;
  bool hole = false;
@@ -1111,9 +998,7 @@ static struct g *rd_str(struct g *g) {
   if (rd_at(src, e) == '"') return rd_rawstr(g); }
  return rd_frame(g, RkWeave), g->sp[RdCur] = n, RdGo(RsWeave); }
 
-// a token's text: an integer in any of the three bases, the named infinities, or a float
-// if it leads like one (a digit or a dot, past a sign) and parses whole. mk_gem's () for a
-// nan would lose the name, so that is no float either
+// a float leads with a digit or dot past a sign and parses whole; a nan stays a name
 static bool rd_float(char const *t, uintptr_t n, double *d) {
  if (n == 8 && !memcmp(t, "infinity", 8)) return *d = __builtin_inf(), true;
  if (n == 9 && !memcmp(t, "-infinity", 9)) return *d = -__builtin_inf(), true;
@@ -1126,7 +1011,6 @@ static bool rd_numeral(struct str *s) {
  double d;
  return is_dec_int(txt(s), len(s)) || is_hex_int(txt(s), len(s)) || is_oct_int(txt(s), len(s))
      || rd_float(txt(s), len(s), &d); }
-// the text at sp[0] -> what it spells, a numeral at full precision or else the name
 static struct g *rd_atom(struct g *g) {
  struct str *s = str(g->sp[0]);
  uintptr_t n = len(s);
@@ -1138,9 +1022,8 @@ static struct g *rd_atom(struct g *g) {
  if (!ok(g = have(g, gem_req))) return g;
  return g->sp[0] = mk_gem(&g->hp, (flo_t) d), g; }
 
-// a name-led token, whole. a digit-led one that is no numeral and carries an operator
-// run is cut one past the run, when a datum is glued there: 2?<>x is 2?<> around x. a
-// trailing - before a digit is the next numeral's sign, so the cut falls before it
+// a digit-led non-numeral with an operator run is cut past the run when a datum is glued
+// there (2?<>x is 2?<> around x); a trailing - before a digit is the next numeral's sign
 static struct g *rd_tok(struct g *g, bool split) {
  word src = g->sp[RdSrc], p = g->sp[RdCur], n;
  uintptr_t len = 0;
@@ -1171,9 +1054,8 @@ static struct g *rd_tok(struct g *g, bool split) {
  g->sp[1 + RdVal] = g->sp[0], g->sp++;
  return RdGo(RsDatum); }
 
-// an operator run: the longest run of operator chars, one plain name, and a monadic wrap
-// when a datum is glued after it. @ may lead a run but never extend one, a trailing -
-// before a digit is shed back to the numeral, and \ never wraps: it is form space
+// the longest operator run, a mono wrap when a datum is glued after. @ only leads a run,
+// a trailing - before a digit goes to the numeral, \ never wraps
 static struct g *rd_op(struct g *g) {
  word src = g->sp[RdSrc], p = g->sp[RdCur], last = p, n;
  uintptr_t len = 0;
@@ -1191,9 +1073,7 @@ static struct g *rd_op(struct g *g) {
  g->sp[1 + RdVal] = g->sp[0], g->sp++;
  return RdGo(RsDatum); }
 
-// the next datum's first char, past whitespace and comments -- ; and #! run through the
-// end of the line, and a comment is walked again from its start when a promise inside it
-// is forced -- and what that char opens
+// past whitespace, ; and #! comments (rewalked from their start past a forced promise), to the next datum
 static struct g *rd_read(struct g *g) {
  for (;;) {
   if (!ok(g = have(g, RdSlack))) return g;
@@ -1257,7 +1137,7 @@ static struct g *rd_close(struct g *g) {
   : rd_cons(g, g->rnom[k == RkList ? RnList : k == RkHash ? RnHash : RnTuple], l);
  return RdGo(RsDatum); }
 
-// a string's residue, the cells a caller threads: the text past the position
+// a string's residue, laid as cells
 static love_noinline word rd_rest(struct g *g) {
  struct str *s = str(g->sp[RdSrc]);
  word l = ZeroPoint;
@@ -1274,7 +1154,7 @@ static struct g *rd_datum(struct g *g) {
   int const k = RdKind(h);
   if (k == RkOne) {
    word r = g->sp[RdCur];
-   if (rd_in(g->sp[RdSrc], r)) {   // a string's position: a charlist's number tail is its rest as is
+   if (rd_in(g->sp[RdSrc], r)) {   // a charlist's tail is its rest as is
     if (!ok(g = have(g, (len(str(g->sp[RdSrc])) - getcharm(r) + 1) * chain_req))) return g;
     r = rd_rest(g); }
    return rd_done(g, rd_cons(g, g->sp[RdVal], r)); }
@@ -1297,8 +1177,7 @@ static struct g *rd_all(struct g *g) {
  return rd_done(g, l); }
 
 lvm(lvm_sound) LvmResume(g, rd_one)
-// (sounds text): every form of a text, in order, or `torn` -- sound's doors, and the boot's
-// reader. a stray closer ends the text
+// (sounds text): every form in order, or `torn`; a stray closer ends the text
 lvm(lvm_sounds) LvmResume(g, rd_many)
 static lvm(lvm_rd_start) LvmResume(g, rd_start)
 static lvm(lvm_rd_read) LvmResume(g, rd_read)
@@ -1308,13 +1187,9 @@ static lvm(lvm_rd_all) LvmResume(g, rd_all)
 static lvm(lvm_rd_weave) LvmResume(g, rd_weave)
 static lvm(lvm_rd_called) LvmResume(g, rd_called)
 
-////
-/// " the boot stitch "
-//
-// the egg's corpus is read whole and handed to the egg expression, which never learns.
+// the boot stitch: the egg's corpus is read whole and handed to the egg expression
 
-// a text -> the list of its forms, pushed. an unfinished shape answers `torn`, which the
-// egg would fold as an empty corpus and silently pin ev to 0: refuse it here
+// `torn` refused: the egg would fold it as an empty corpus and pin ev to 0
 static struct g *readtext(struct g *g, char const *s) {
  g = gxr(push0(strof(g, s)));                     // ("<text>")
  if (!ok(g = push(g, 1, word(rd_reads_k)))) return g;
@@ -1336,29 +1211,23 @@ static struct g *readonto(struct g *g, char const *s) {
 static struct g *qtop(struct g *g) {                // x on top -> 'x
  return gxl(pushq(gxr(push0(g)))); }                 // (x), then (\ x)
 
-// apply a one-form driver text to the quoted list on top of the stack: (<driver> '(list)),
-// the answer at sp[0]
+// (<driver> '(list)) of the list on top
 static struct g *applyq(struct g *g, char const *driver) {
  g = readonto(gxr(push0(qtop(g))), driver);          // ('(list)), then (driver '(list))
  return eval(g); }
 
-// the plain eval fold: run a list of forms in order, answer the last one's
-// value. `ev` is read late so one text drives both of love0's passes. the forms
-// left are asked two?, never their truth: that would net the rest of the text per form
+// ev is read late so one text drives both of love0's passes; two?, never truth, or each
+// step nets the rest of the text
 static char const evfold[] = "((: (e a b) (? (two? b) (e (ev 'ev (cap b)) (cup b)) a) e) 0)";
 
-// every top-level form of a text, evaluated in order -- the frontends' door for a
-// boot tail, a CLI driver, a corpus runner. evals keeps the last form's value at
-// sp[0] (a program's status, for the frontend to answer with); evals_ is the same
-// with the value dropped -- sequence and sequence_.
+// every form of a text in order; evals keeps the last value at sp[0], evals_ drops it
 love_noinline struct g *evals(struct g *g, char const *s) {
  return applyq(readtext(g, s), evfold); }
 love_noinline struct g *evals_(struct g *g, char const *s) {
  return pop(evals(g, s), 1); }
 
-// the egg takes two corpora: `corpus` is sat twice (ev compiles itself), `post`
-// once, after the hatch and before the mop -- the seat for love that needs the
-// runtime-internal noms (peek/seek) the mop is about to take off the book.
+// corpus runs twice (ev compiles itself); post once, after the hatch and before the mop
+// takes the internal noms (peek/seek) off the book
 love_noinline struct g *egg(struct g *g, char const *egg, char const *corpus, char const *post) {
  g = gxr(push0(qtop(readtext(g, post))));            // ('post), parked under the corpus
  g = readtext(g, corpus);                            // prel + ev

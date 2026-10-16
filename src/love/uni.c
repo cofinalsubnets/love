@@ -1,5 +1,4 @@
-// src/love/uni.c -- 'text's doors onto the unicode floor, moonlibc's ctype/ucd.c, the one copy
-// of the classes, case maps, column widths and emoji runs. a non-charm reads as past unicode.
+// uni.c -- module ucd, doors onto moonlibc's ctype/ucd.c; a non-charm reads as past unicode
 //   (width c) (in t c) (map up c) (moved c)   as ucd.h says, in module ucd
 #include "love.h"
 #include "../apps/moon/lib/moonlibc/ctype/ucd.h"

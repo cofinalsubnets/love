@@ -1,11 +1,6 @@
 // FIXME this file is too short
-// src/love/cb.c -- quay's screen nifs, wired up for this seat and nothing more.
-// the bodies are generic and live with the engine (src/love/quay/nif.c over quay.c);
-// what is host here is only the registration -- the love_nifs section glob is the
-// host's trick, and another seat wires the same bodies its own way (the kernel a
-// defs[] row, the playdate its own table). the quay sources ride along by unity
-// include, the painter and its two fonts with them: every seat that links this file
-// (the host, and each kernel through $(host_c)) has them once.
+// cb.c -- quay's screen nifs registered for the host; the bodies are quay/nif.c's, and the
+// quay sources ride along by unity include, so each link of this file has them once
 #include "love.h"
 #include "quay/quay.c"
 #include "quay/png.c"
