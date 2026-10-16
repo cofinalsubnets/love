@@ -51,7 +51,7 @@ egg="env LOVE_NO_IMAGE=1"
 pre="test/00-init.l test/spec.l test/uu.l"
 fin=test/zz-fin.l
 ls test/*.l | LC_ALL=C sort | grep -v -e '/00-init\.l$' -e '/spec\.l$' -e '/uu\.l$' \
-  -e '/glaze-x86\.l$' -e '/glaze-hook\.l$' -e '/zz-fin\.l$' > $w/rest
+  -e '/glaze-x86\.l$' -e '/glaze-hook\.l$' -e '/glaze-tail\.l$' -e '/zz-fin\.l$' > $w/rest
 mark='(do (putc 10) (puts "@@gcshard ") (putx (clock test_t0)) (putc 10))'
 { cat $pre; for f in $(cat $w/rest); do cat $f; echo; echo "$mark"; done; cat $fin; } > $w/timed.l
 cat $pre $(cat $w/rest) $fin > $w/full.l
