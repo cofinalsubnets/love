@@ -341,8 +341,9 @@ struct g {
    n_resize,                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
    budget,                     // total cap in words (minor + 2*major), 0 = unbounded; by appel's
                                             // rule the nursery gets what the major pool leaves
-   minor0, major0, ratio;         // nursery floor, major grow/shrink step, copy-overhead setpoint;
+   minor0, major0, ratio,         // nursery floor, major grow/shrink step, copy-overhead setpoint;
                                           // seeded at ini, moved by `tune`. untraced: a bake drops them.
+   push_gc;                       // a law's: the push this many pushes on collects, 0 none (guts' push-gc)
  uintptr_t cbase, croom;          // a compile's outermost C frame (ev.c's c0), 0 outside one, and the stack it may take
  uintptr_t ask;                   // the words the collector was asked for while it works: an oom's first datum
  union {
