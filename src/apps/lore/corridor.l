@@ -7,7 +7,7 @@
 ; corridor-watch reads the disk, and only corridor-walk and corridor-run touch the tty.
 (module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds
          corridor-move corridor-frame corridor-pens corridor-opts corridor-read corridor-load
-         corridor-watch corridor-free? corridor-ks fps eye-h body-r)
+         corridor-watch corridor-free? corridor-ks corridor-sound fps eye-h body-r)
 (borrow 'rove)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -18,11 +18,14 @@
 (borrow 'swatch)                        ; the textures, from their recipes
 (borrow 'flicker)                       ; how the lights stammer, buzz and breathe
 (borrow 'walk)                          ; the keys, and a step slid along a wall
+(borrow 'mixer)                         ; the sounds, mixed into the horn
 (:
  fps 20
  eye-h 1.6 body-r 0.25
  walk-v 1.8 turn-v 1.6 tilt-v 1.2         ; metres, and radians, a second
  door-v 1.4 door-near 2.4 door-t 0.03     ; the doors: their pace, how near opens one, half their thickness
+ car-t 0.08 car-wait 0.6 car-hold 1.5 car-acc 1.2  ; a car: its walls' thickness, the seconds before its door
+                                                  ; opens and after it shuts, how fast it gathers speed
  cell 0.25                                ; how fine the surfaces are cut, for the light
  watch-every 10                           ; frames between looks at the files
  the-level "src/apps/lore/levels/hall.l"
@@ -44,7 +47,7 @@
  (check lv) (: bs (lv 'brushes) hollow (filter (i \ empty? (bs i)) ^#bs)
    (? (two? hollow) "a brush with no inside: \(bs <hollow 'shape)"
       (atom? (lv 'rooms)) "a level needs a room"
-      (doors-of lv @ ds (string? ds ? ds (pin lv 'doors ds)))))
+      (doors-of lv @ ds (string? ds ? ds (cars-of (pin lv 'doors ds))))))
  ; ..a door's place among the rooms: the two walls it passes, on axis ax -- 'z when it
  ; spans x in a wall across z -- its middle c along them, a and b the walls' places
  (hits r x z) [(? (r 0 <= x <= r 2) (filter (w \ mag (w - z) < 0.5) [(r 1) (r 3)]) ())
@@ -56,6 +59,19 @@
                                     "a door must sit in the wall between two rooms: \('door . d)"))
    ps (map place (lv 'doors))
    (any string? ps ? <(filter string? ps) ps))
+ ; ..a car's shape on axis ax, as a door's: its inside a0 to a1 along and c0 to c1 across, y0
+ ; to y1 up; its door's wall at 'side, 'out away from the inside, the door 'dc along and
+ ; sliding 'slide, toward the longer wall beside it
+ (car-of c) (: lo (c 'lo) hi (c 'hi) ax ((hi 0 - lo 0) >= (hi 2 - lo 2) ? 'z 'x) d (c 'door)
+   (al p) (ax = 'z ? (p 0) (p 2)) (ac p) (ax = 'z ? (p 2) (p 0))
+   dal (ax = 'z ? (d 0) (d 1)) dac (ax = 'z ? (d 1) (d 0)) c0 (ac lo) c1 (ac hi) a0 (al lo) a1 (al hi)
+   far1 (mag (dac - c1) < mag (dac - c0)) d0 (dal - 0.5 * d 2) d1 (dal + 0.5 * d 2)
+   {'ax ax 'a0 a0 'a1 a1 'c0 c0 'c1 c1 'y0 (lo 1) 'y1 (hi 1) 'side (far1 ? c1 c0) 'out (far1 ? 1.0 -1.0)
+    'dc dal 'dw (d 2) 'dh (d 3) 'slide (a1 - d1 >= d0 - a0 ? 1.0 -1.0) 'leave (c 'leave)
+    'ok (mag (dac - (far1 ? c1 c0)) < 0.5 && a0 <= d0 && d1 <= a1 && max2 (a1 - d1) (d0 - a0) >= d 2 - 0.05
+         && d 3 <= hi 1 - lo 1)})
+ (cars-of lv) (: cs (map car-of (peep lv 'cars ())) bad (filter (i \ !(cs i 'ok)) ^#cs)
+   (two? bad ? "a car's door must sit in one of its long walls, under its roof, with wall beside it to slide into" (pin lv 'cars cs)))
  ; ..from a file: the level, or why not
  (slurp-file p) (: q (open p "r") (hot? q ? (slurp q @ s (close q, s)) ()))
  (corridor-load p) (slurp-file p @ () ("cannot read " + p) s (corridor-read s))
@@ -108,6 +124,32 @@
  (door-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) l0 (d 'c - 0.5 * d 'w) w (d 'w) h (d 'h)
    y0 (d 'y) p (P ax l0 y0 (m - door-t)) q (P ax (l0 + w) (y0 + h) (m + door-t)) i (tix tt 'door) t (tt i)
    (slab p q (s \ [(t 1 / w * ((s $ ax @ 'z 0 2) - l0)) (t 2 / h * (y0 + h - s 1))]) i white))
+ ; ..a car: its floor, roof, ends and long walls, the door's wall in three round the doorway,
+ ; car-t thick outside its inside; the texture along its walls and over its floor
+ (car-box c al0 y0 ac0 al1 y1 ac1 uv i) (: p (P (c 'ax) al0 y0 ac0) q (P (c 'ax) al1 y1 ac1)
+   (slab [(min2 (p 0) (q 0)) (min2 (p 1) (q 1)) (min2 (p 2) (q 2))] [(max2 (p 0) (q 0)) (max2 (p 1) (q 1)) (max2 (p 2) (q 2))] uv i white))
+ (car-mesh c tt) (: T car-t a0 (c 'a0) a1 (c 'a1) c0 (c 'c0) c1 (c 'c1) y0 (c 'y0) y1 (c 'y1)
+   s (c 'side) w (s + c 'out * T) f (c 'out > 0.0 ? c0 c1) fw (f - c 'out * T)
+   d0 (c 'dc - 0.5 * c 'dw) d1 (c 'dc + 0.5 * c 'dw) dh (y0 + c 'dh)
+   i (tix tt 'train) t (tt i) k (t 1 / t 3)
+   (wl q) [(k * (q 0 + q 2)) (k * (y1 - q 1))] (fl q) [(k * q 0) (k * q 2)]
+   (mesh-join [(car-box c (a0 - T) (y0 - T) (c0 - T) (a1 + T) y0 (c1 + T) fl i)
+               (car-box c (a0 - T) y1 (c0 - T) (a1 + T) (y1 + T) (c1 + T) fl i)
+               (car-box c (a0 - T) y0 c0 a0 y1 c1 wl i) (car-box c a1 y0 c0 (a1 + T) y1 c1 wl i)
+               (car-box c a0 y0 f a1 y1 fw wl i)
+               (car-box c a0 y0 s d0 y1 w wl i) (car-box c d1 y0 s a1 y1 w wl i) (car-box c d0 dh s d1 y1 w wl i)]))
+ ; ..its door, in the middle of its wall's thickness
+ (car-door c tt) (: m (c 'side + 0.5 * c 'out * car-t) d0 (c 'dc - 0.5 * c 'dw) y0 (c 'y0) h (c 'dh) w (c 'dw)
+   i (tix tt 'door) t (tt i)
+   (car-box c d0 y0 (m - door-t) (d0 + w) (y0 + h) (m + door-t) (q \ (: al ((c 'ax = 'z ? (q 0) (q 2)) - d0) [(t 1 / w * al) (t 2 / h * (y0 + h - q 1))])) i))
+ ; ..its strip down the roof, and the lamp it is, lighting only the car
+ (car-mask c) (: p (P (c 'ax) (c 'a0) 0.0 (c 'c0)) q (P (c 'ax) (c 'a1) 0.0 (c 'c1))
+   (inside [(min2 (p 0) (q 0)) (min2 (p 2) (q 2)) (max2 (p 0) (q 0)) (max2 (p 2) (q 2))]))
+ (car-bar c) (: m (0.5 * (c 'c0 + c 'c1)) y (c 'y1)
+   (car-box c (c 'a0 + 0.5) (y - 0.05) (m - 0.08) (c 'a1 - 0.5) y (m + 0.08) (_ \ [0.0 0.0]) -1))
+ (car-lamp c) (: m (0.5 * (c 'c0 + c 'c1)) y (c 'y1 - 0.06) n 6
+   {'at (map (j \ P (c 'ax) (c 'a0 + (j + 0.5) / n * (c 'a1 - c 'a0)) y m) ^n) 'n [0.0 -1.0 0.0]
+    'c [2.0 2.0 2.1] 'r 4.5 'soft 0.3 'keep (car-mask c)})
  ; --- the lights: {'lamps 'how 'shine 'glow} -- lamps summed as one channel, how it
  ;     behaves, and what shines and glows by it, [packed brightness] each ---
  (light ls how sh gl) {'lamps ls 'how how 'shine sh 'glow gl}
@@ -161,10 +203,11 @@
  (corridor-ks sc mt ds) (map (i \ bright (sc 'lights i 'how) mt i ds) ^#(sc 'lights))
  amb [0.025 0.025 0.03]
  ; --- the textures: the level's, then a grid for any of wall floor ceiling door it has
- ;     not, then the posters' ---
+ ;     not, and train where it has a car, then the posters' ---
  grid-layers '((fill 0.55) (grid 16 16 1 0.47) (grid 64 64 1 0.35))
  (textures lv) (: ts (lv 'textures) have (map (t \ t 'name) ts)
-   (ts + map (nm \ {'name nm 'w 64 'h 64 'm 1.0 'layers grid-layers}) (filter (nm \ !(elem nm have)) ['wall 'floor 'ceiling 'door])))
+   want (['wall 'floor 'ceiling 'door] + (two? (peep lv 'cars ()) ? ['train] ()))
+   (ts + map (nm \ {'name nm 'w 64 'h 64 'm 1.0 'layers grid-layers}) (filter (nm \ !(elem nm have)) want)))
  ; ..a poster drawn: a navy field, a pale ring round a star of four points, a red band
  ; across, and ENLIST in the letters the neon bends; a pale edge
  (poster-art _) (: w 48 h 72 sk (neon-strokes "ENLIST") k (40.0 / sk 1)
@@ -208,7 +251,12 @@
    (ch pk l) (foldl (a \ c+ a * mesh-lamp pk) [0.0 0.0 0.0] (l 'lamps))
    (lit pk) {'base (foldl (a \ c+ a * ch pk * ls) (c+ amb (c* 0.0 (pk 'cols 0 @ z [z z z]))) still)
              'chs (map (ch pk * ls) dyn)}
-   {'hall hall 'hall-lit (lit hall) 'doors drs 'doors-lit (map lit drs) 'lights ls 'dyn dyn 'brushes bs
+   ; ..a car lit where it stands, and by its own lamp, which goes with it
+   (clit lp pk) (: l (lit pk) (pin l 'base (c+ (l 'base) (mesh-lamp pk lp))))
+   cars (map (c \ (: b (mesh-pack (car-mesh c tt)) d (mesh-pack (car-door c tt)) lp (car-lamp c)
+                     {'body b 'body-lit (clit lp b) 'door d 'door-lit (clit lp d) 'bar (mesh-pack (car-bar c))}))
+             (peep lv 'cars ()))
+   {'hall hall 'hall-lit (lit hall) 'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs
     'texs (map (t \ swatch (t 'w) (t 'h) (t 'layers)) txs + ptex)})
  ; --- the frame: the rooms and doors lit by the lights as bright as they are now, then
  ;     what shines, then the glows; out as half blocks or kitty's pixels ---
@@ -226,9 +274,17 @@
                       ix (iota (pk 'n) * 8 + (d 'ax = 'z ? 0 2))
                       [(pin (b 0) ix (pk 'cols (d 'ax = 'z ? 0 2) + ds i * (d 'w - 0.05))) (b 1)]))
               ^#(lv 'doors))
+   ; ..each car where it has got to along its track, its door slid along its wall; none once gone
+   (moved b pk k o) [(pin (b 0) (iota (pk 'n) * 8 + k) (pk 'cols k + o)) (b 1)]
+   cars (cats (map (i \ (: c (lv 'cars i) s (st 'cars i) cs (sc 'cars i) k (c 'ax = 'z ? 0 2) o (s 'o)
+                         (s 'ph = 'gone ? ()
+                            [(moved (relit (cs 'body) (cs 'body-lit)) (cs 'body) k o)
+                             (moved (relit (cs 'door) (cs 'door-lit)) (cs 'door) k (o + c 'slide * s 'door * (c 'dw - 0.05)))
+                             (moved (mesh-shine (cs 'bar) 3.0) (cs 'bar) k o)])))
+               ^#(peep lv 'cars ())))
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (cats (map (i \ cats (map (q \ ((q 1 * ks i) @ 0.0 () b [(mesh-shine (q 0) b)])) (sc 'lights i key))) ^#ks))
-   all ([hall] + doors + by 'shine + map mesh-glow (by 'glow))
+   all ([hall] + doors + cars + by 'shine + map mesh-glow (by 'glow))
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) [0.0 0.0 0.0 30.0 60.0] 8 gain 0))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
@@ -251,19 +307,32 @@
  ;     stands and looks, the clock, the doors ---
  (corridor-new w h lv dir) (: s (lv 'start)
    (corridor-size {'px (s 'at 0) 'pz (s 'at 1) 'py (s 'y + eye-h) 'th (s 'deg * pi / 180.0) 'ph (s 'pitch * pi / 180.0) 't 0 'mt 0.0
-                   'lvl lv 'sc (scene lv dir) 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'deep 0 'kitty 0 'kp 1
+                   'lvl lv 'sc (scene lv dir) 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'deep 0 'kitty 0 'kp 1
                    'done 0 'msg () 'msg-t 0.0 'err 0}
                   w (h // 2)))
  (corridor-size st w r) (mesh-size st w r)
+ ; ..a car's state: 'ph waiting, its door opening, shutting, held shut, going and gone; 't the
+ ; seconds in it, 'door how open, 'o how far along its track, 'v how fast
+ (cars-new lv) (map (_ \ {'ph 'wait 't 0.0 'door 0.0 'o 0.0 'v 0.0}) (peep lv 'cars ()))
  ; --- moving: where the body's round, at its feet and at its head, is all air, and not
- ;     through a door that is not open ---
- (corridor-free? st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes)
+ ;     through a door that is not open. a car's track is its own: its inside while it
+ ;     stands, its doorway while the door is open, and nowhere else, so the platform's edge
+ ;     stops a walk once the car is gone ---
+ (car-track? c x z) (: ac (c 'ax = 'z ? z x) (c 'c0 - car-t < ac && ac < c 'c1 + car-t))
+ (car-stands? s) (elem (s 'ph) ['wait 'open 'shut 'hold])
+ (car-free? c s x z) (: al (c 'ax = 'z ? x z) ac (c 'ax = 'z ? z x) w (c 'side + c 'out * car-t)
+   (car-stands? s && ((c 'a0 < al && al < c 'a1 && c 'c0 < ac && ac < c 'c1)
+                      || (s 'door >= 0.85 && mag (al - c 'dc) < 0.5 * c 'dw
+                          && min2 (c 'side) w <= ac && ac <= max2 (c 'side) w))))
+ (corridor-free? st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes) cs (peep lv 'cars ())
    ring (map (k \ (: a (k * pi / 4.0) [(x + r * cos a) (z + r * sin a)])) ^8) pts ([x z] . ring)
    (shut? i) (: d (lv 'doors i) al (d 'ax = 'z ? x z) ac (d 'ax = 'z ? z x)
      (st 'doors i < 0.85 && mag (al - d 'c) < 0.5 * d 'w + r && d 'a - r < ac && ac < d 'b + r))
    fl (st 'py - eye-h)
-   (all (q \ brush-medium bs [(q 0) (fl + 0.3) (q 1)] = 1 && brush-medium bs [(q 0) (fl + 1.7) (q 1)] = 1) pts
-    && !(any shut? ^#(lv 'doors))))
+   (air q) (: on (filter (i \ car-track? (cs i) (q 0) (q 1)) ^#cs)
+     (two? on ? (all (i \ car-free? (cs i) (st 'cars i) (q 0) (q 1)) on)
+        (brush-medium bs [(q 0) (fl + 0.3) (q 1)] = 1 && brush-medium bs [(q 0) (fl + 1.7) (q 1)] = 1)))
+   (all air pts && !(any shut? ^#(lv 'doors))))
  (put! st x z) (walk-slide st x z corridor-free?)
  ; ..the corridor's own keys, over view's
  corridor-binds {112 'where}
@@ -272,12 +341,43 @@
    (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
     @ () (a = 'where ? (pin st 'pos (1 - peep st 'pos 0)) st)
       s s))
- ; a frame's motion: the clock, and each door toward open while the player is near it
+ ; a frame's motion: the clock, each door toward open while the player is near it, and the cars
  (corridor-move st) (: dt (peep st 'dt (1.0 / fps)) lv (st 'lvl) x (st 'px) z (st 'pz)
    (go i) (: d (lv 'doors i) o (st 'doors i) p (P (d 'ax) (d 'c) 0.0 (0.5 * (d 'a + d 'b)))
              want (sq (p 0 - x) + sq (p 2 - z) < sq door-near ? 1.0 0.0)
              (want < o ? (max2 want (o - door-v * dt)) (min2 want (o + door-v * dt))))
-   (pins st 'mt (st 'mt + dt) 'doors (map go ^#(lv 'doors))))
+   _ (pins st 'mt (st 'mt + dt) 'doors (map go ^#(lv 'doors)))
+   (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(peep lv 'cars ())))
+ ; ..a car's next moment: the door opens as the level starts and stays open while the player
+ ; is anywhere in its track; once they are out it shuts, opening again if they come back
+ ; before it is home; held shut a moment, the car gathers speed along its track and is gone
+ ; once it is leave along. each change cries its sound from the doorway
+ (car-at c o) (: p (P (c 'ax) (c 'dc + o) 0.0 (c 'side)) [(p 0) (p 2)])
+ (car-step st c s dt) (: in (car-track? c (st 'px) (st 'pz)) t (s 't + dt) dr (s 'door) at (car-at c (s 'o))
+   (s 'ph @ 'wait (t < car-wait ? (pin s 't t, st) (pins s 'ph 'open 't 0.0, mix-cry (mix-cry st "chime" at) "hiss" at))
+            'open (: d (min2 1.0 (dr + door-v * dt))
+                    (d = 1.0 && !in ? (pins s 'door d 'ph 'shut, mix-cry (mix-cry st "chime" at) "hiss" at) (pin s 'door d, st)))
+            'shut (? in (pin s 'ph 'open, mix-cry st "hiss" at)
+                     (: d (max2 0.0 (dr - door-v * dt))
+                        (d = 0.0 ? (pins s 'door d 'ph 'hold 't 0.0, mix-cry st "thud" at) (pin s 'door d, st))))
+            'hold (t < car-hold ? (pin s 't t, st) (pins s 'ph 'go 't 0.0, mix-cry st "motor" at))
+            'go (: v (s 'v + car-acc * dt) o (s 'o + v * dt * (c 'leave < 0.0 ? -1.0 1.0))
+                  (mag o >= mag (c 'leave) ? (pins s 'ph 'gone 'o (c 'leave), st) (pins s 'v v 'o o, st)))
+            st))
+ ; --- the sounds, made: a chime of two falling notes, the door's hiss and its thud home, and
+ ;     the motor rising as the car leaves; each [samples rate] for the mixer ---
+ snd-rate 11025
+ (snd-t secs) (iota (int (secs * snd-rate)) / (1.0 * snd-rate))
+ ; ..noise from a hash of each sample's time, about -1..1
+ (snd-noise t) (: h (sin (t * 12345.678 + 0.5) * 43758.5453) (2.0 * (h - floor h) - 1.0))
+ (corridor-sound nm) (nm @
+   "chime" (: t (snd-t 1.0) a (t < 0.42) (tone f u) (sin (tau * f * u) * exp (-5.0 * u))
+             [(0.35 * (a * tone 659.3 t + (1 - a) * tone 523.3 (t - 0.42))) snd-rate])
+   "hiss" (: t (snd-t 0.7) [(0.25 * snd-noise t * exp (-4.0 * t) * min (t * 40.0) 1.0) snd-rate])
+   "thud" (: t (snd-t 0.3) [(0.8 * sin (tau * 70.0 * t) * exp (-18.0 * t) + 0.15 * snd-noise t * exp (-40.0 * t)) snd-rate])
+   "motor" (: t (snd-t 6.0) f0 90.0 k 110.0 up (min (t / 1.5) 1.0) down (min ((6.0 - t) / 2.0) 1.0)
+             [(up * down * (0.3 * sin (tau * (f0 * t + 0.5 * k * t * t)) + 0.12 * snd-noise t)) snd-rate])
+   ())
  ; --- the files watched: the level and its pictures, each by its stat stamp. a change reads
  ;     the level again, keeping the player where they stand; one that will not read keeps the
  ;     last and says why ---
@@ -291,7 +391,8 @@
       (: lv (corridor-load (st 'path))
          (? (string? lv) (pins (seen! st) 'msg lv 'err 1 'msg-t (st 'mt))
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
-               (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir)) 'doors ds 'msg ("read " + st 'path + " again")
+               cs (#(peep lv 'cars ()) = #(peep st 'cars ()) ? (st 'cars) (cars-new lv))
+               (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir)) 'doors ds 'cars cs 'msg ("read " + st 'path + " again")
                                'err 0 'msg-t (st 'mt))))))))
  (dir-of p) (: (go i) (i < 0 ? "" (p i = 47 ? (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
  ; --- the walk, on view's loop; corridor-run raises the stage ---
@@ -305,7 +406,9 @@
                'tick (st \ (walk-dt st,
                             corridor-move st,
                             (st 't % watch-every = 0 ? (corridor-watch st))))
-               'fps fps 'linger 0 'next () 'song (_ \ ()) 'win (peep o 'win ())})
+               'fps fps 'linger 0 'next ()
+               'song (hn \ (hn ? (mix-new hn corridor-sound (st \ [(st 'px) (st 'pz) (st 'th)]) {'near 2.0 'far 40.0 'fps fps 'gain 12000.0}) ()))
+               'win (peep o 'win ())})
  ; ..the level named, else the tree's own on disk, else the one the binary carries
  (corridor-run o) (: p (o 'level @ () (two? (stat the-level) ? the-level ("/love/" + the-level)) q q)
                      lv (corridor-load p)
