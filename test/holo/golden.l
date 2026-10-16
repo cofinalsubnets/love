@@ -1292,6 +1292,11 @@
       ("t1.ld.far"  "802008440068"      ((ld r0 r1 128)))            ; movs r0,#128 ; add r0,r1 ; ldr r0,[r0]
       ("t1.ld.hi"   "01b4082020440068844601bc" ((ld r12 r4 8)))      ; push{r0};movs r0,#8;add r0,r4;ldr r0,[r0];mov r12,r0;pop{r0}
       ("t1.st.far"  "04b4c8220a44106004bc" ((st r1 200 r0)))          ; push{r2};movs r2,#200;add r2,r1;str r0,[r2];pop{r2}
+      ;; byte and half have no sp form: sp rides the far lane, the push's word added back
+      ("t1.ldb.sp"  "052068440078"      ((ldu1 r0 sp 5)))            ; movs r0,#5 ; add r0,sp,r0 ; ldrb r0,[r0]
+      ("t1.stb.sp"  "01b40a206844017001bc" ((st1 sp 6 r1)))          ; push{r0};movs r0,#10;add r0,sp,r0;strb r1,[r0];pop{r0}
+      ("t1.ldh.sp"  "08226a441288"      ((ldu2 r2 sp 8)))            ; movs r2,#8 ; add r2,sp,r2 ; ldrh r2,[r2]
+      ("t1.sth.sp"  "01b40e206844038001bc" ((st2 sp 10 r3)))         ; push{r0};movs r0,#14;add r0,sp,r0;strh r3,[r0];pop{r0}
       ("t1.jmpr"    "1847"              ((jmpr r3)))                  ; bx r3
       ("t1.callr"   "9847"              ((callr r3)))                 ; blx r3
       ("t1.ret"     "7047"              ((ret)))                      ; bx lr
