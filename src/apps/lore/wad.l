@@ -51,6 +51,13 @@
        'things (recs (L "THINGS") 10 (\ b o [(s16 b o) (s16 b (o + 2)) (s16 b (o + 4)) (u16 b (o + 6)) (u16 b (o + 8))]))}))
  ; --- the pictures: the palette; a patch's posts laid into a texture; flats; the textures
  ;     TEXTURE1 and 2 compose from PNAMES' patches ---
+ ; ..PLAYPAL's palettes past the first, each as how it moves the first's colours: per channel
+ ;   [scale offset], fitted over the 256 -- doom's hurt reds, pickup golds and the suit's green
+ (tints w) (: b (lump w "PLAYPAL") n (string? b ? (#b // 768) 0)
+   (ch k c) (gem-tray [256] (map (i \ 1.0 * b (768 * k + 3 * i + c)) ^256))
+   (fit X Y) (: mx (net X / 256.0) my (net Y / 256.0) v (net ((X - mx) * (X - mx))) cv (net ((X - mx) * (Y - my)))
+               a (v > 0.0 ? (cv / v) 1.0) [a (my - a * mx)])
+   (map (k \ map (c \ fit (ch 0 c) (ch k c)) ^3) ^n))
  (palette w) (: b (lump w "PLAYPAL") (star-tray [256] (map (i \ (b (3 * i) << 16) | (b (3 * i + 1) << 8) | b (3 * i + 2)) ^256)))
  ; ..a patch's texels as [index byte] at ox oy on a w by h texture
  ; ..a damaged one stops at the lump's end
@@ -252,7 +259,7 @@
    ti2 (foldl (\ t i (pin t ("F:" + fn i) (#wn + i))) ti ^#fn)
    th (foldl (\ t k (pin t k (defs k 2))) {} wn)
    mark (sky-mark pal)
-   sc {'ps (map (q \ [(sector-of-ss M (q 0)) (q 1)]) (polys M)) 'ti ti2 'th th 'ski #texs 'skc (sky-lit mark)
+   sc {'ps (map (q \ [(sector-of-ss M (q 0)) (q 1)]) (polys M)) 'ti ti2 'th th 'ski #texs 'skc (sky-lit mark) 'tints (tints w)
        'texs (texs + [(star-tray [1 1] [16777215])]) 'mark mark 'stex stex
        'sky (defs (wad-sky (M 'name)) @ () () d (texture w pal d))}
    (pin sc 'secs (map (s \ sector-batch M sc s) ^#(M 'secs))))
@@ -313,7 +320,15 @@
            (iota (w * h)) 0)
    S (iota ((f = -1) + (f = sc 'mark)))
    f2 (#S = 0 ? f (pin f S (sky-of st v S)))
-   (st 'hp > 0 ? (gun-over st f2 w h) f2))
+   f3 (st 'hp > 0 ? (gun-over st f2 w h) f2)
+   k (flash st) T (peep (sc 'tints) k ())
+   (k > 0 && two? T ? (tinted f3 T) f3))
+ ; ..which palette the frame takes: a hurt's red by how much is left of it, else a pickup's gold,
+ ;   else the suit's green, flickering in its last 128 tics
+ (flash st) (: dc (peep st 'dc 0) bc (peep st 'bc 0) u (st 'suit - st 't)
+   (? (dc > 0) (min2 8 ((dc + 7) // 8)) (bc > 0) (8 + min2 4 ((bc + 7) // 8)) (u > 128 || (u > 0 && st 't % 16 < 8)) 13 0))
+ (tinted f T) (: (q v t) (int (max (min (v * t 0 + t 1) 255.0) 0.0))
+   (q (f // 65536) (T 0) * 65536 + q (f // 256 % 256) (T 1) * 256 + q (f % 256) (T 2)))
  ; ..and under it the player's state, a row of the screen
  (status st) (: g (guns (st 'gun)) a (g 2)
    ("HP \(st 'hp)  AR \(st 'ar)  " + (a = () ? "" "AMMO \(st a)  ") + (g 0 @ "PUNG" "FIST" "PISG" "PISTOL" "SHTG" "SHOTGUN" "CHGG" "CHAINGUN" "MISG" "ROCKETS" _ "PLASMA") + (st 'run = 1 ? "  RUN" "")
@@ -347,7 +362,7 @@
                                  ^#(M 'secs)))
         'px x 'pz z 'py (1.0 * (M 'secs (wad-sector M x z) 0) + eye-h) 'th ((90 - p 2) * pi / 180.0) 'ph 0.0 'msg (M 'name)))
  (fresh st) (pins st 'hp 100 'ar 0 'ac 0 'bul 50 'shl 0 'rkt 0 'cel 0 'has [0 1] 'gun 1 'keys () 'gcd 0 'frac 0.0
-                     'vx 0.0 'vz 0.0 'gy 0 'gnext -1 'run 0 'suit 0 'sfx () 'hk {} 'tt 0)
+                     'vx 0.0 'vz 0.0 'gy 0 'gnext -1 'run 0 'suit 0 'sfx () 'hk {} 'tt 0 'dc 0 'bc 0)
  (wad-new w h wd M) (wad-size (enter (fresh {'deep 0 'kitty 0 'kp 1 't 0}) wd M) w (h // 2))
  (wad-size st w r) (mesh-size st w r)
  (restart st) (enter (fresh st) (st 'wd) (wad-map (st 'wd) (st 'M 'name)))
@@ -496,6 +511,7 @@
  ; --- the fight: monsters wake, chase and shoot, each other too once hurt by one; missiles fly
  ;     and burst; the player is hurt, takes what lies about, and shoots back ---
  (hurt st d) (: take (min2 (st 'ar) (st 'ac = 2 ? (d // 2) (d // 3))) hp (max2 0 (st 'hp - d + take))
+   _ (st 'hp > 0 ? (pin st 'dc (min2 100 (peep st 'dc 0 + d))) 0)
    _ (st 'hp > 0 ? (mix-cry st (hp = 0 ? "PLDETH" "PLPAIN") ()) 0)
    (pins st 'ar (st 'ar - take) 'hp hp 'msg (hp = 0 ? "dead -- e to begin the level again" (st 'msg))))
  ; ..a thing hit by by: a monster turned on its own kind's foe, a barrel bursting
@@ -577,7 +593,7 @@
       (k = 'ar && n >= 100) (: _ (pin o 'gone 1) (pins st 'ar n 'ac (n >= 200 ? 2 1)))
       (: _ (pin o 'gone 1) (pin st k (min2 top (st k + n))))))
  (take st) (foldl (\ s o (o 'gone = 1 || atom? (o 'it) || sq (o 'x - s 'px) + sq (o 'z - s 'pz) > 1296.0 ? s (got (gain s o) o))) st (st 'objs))
- (got st o) (o 'gone = 1 ? (mix-cry st (o 'it 0 @ 'gun "WPNUP" 'suit "GETPOW" _ "ITEMUP") ()) st)
+ (got st o) (o 'gone = 1 ? (mix-cry (pin st 'bc (peep st 'bc 0 + 6)) (o 'it 0 @ 'gun "WPNUP" 'suit "GETPOW" _ "ITEMUP") ()) st)
  ; ..the nearest thing a shot along a reaches: a monster up, or a barrel
  (aim st a reach) (: px (st 'px) pz (st 'pz)
    (ok o) (: dx (o 'x - px) dz (o 'z - pz) d (sqrt (dx * dx + dz * dz))
@@ -610,7 +626,7 @@
    (pins st 'msg "a secret" 'secrets (peep st 'secrets 0 + 1)))
  ; --- the tic, 35 a second: movers, monsters, missiles, switches, lights, the gun and the body,
  ;     what is taken, what the floor does; then what moved laid again ---
- (tic st) (: s (pins st 'sol () 'gcd (max2 0 (st 'gcd - 1)) 't (st 't + 1))
+ (tic st) (: s (pins st 'sol () 'gcd (max2 0 (st 'gcd - 1)) 't (st 't + 1) 'dc (max2 0 (peep st 'dc 0 - 1)) 'bc (max2 0 (peep st 'bc 0 - 1)))
    _ (pin s 'movers (filter (m \ move-tic s m = 1) (s 'movers)))
    _ (each (s 'objs) (o \ (o 'gone = 1 ? 0 (o 'proj = 1 ? (fly s o) (two? (o 'm) ? (think s o) 0)))))
    _ (pin s 'flips (filter (f \ (f 0 > s 't ? 1 (: _ (flip s (f 1)) 0))) (s 'flips)))
