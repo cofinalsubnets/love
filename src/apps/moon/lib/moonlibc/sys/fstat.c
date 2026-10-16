@@ -1,5 +1,5 @@
 #include "../impl.h"
-#ifdef LvOsTranslate
+
 /* the freebsd branch fills the ino64 twin and translates -- shared with
  * stat.c/lstat.c through __love_fbstat (this member is their floor). */
 void __love_fbstat(struct __fb_stat const *f, struct stat *st) {
@@ -34,8 +34,6 @@ void __love_nbstat(struct __nb_stat const *f, struct stat *st) {
   st->st_atim = __love_nbts(f->atim);
   st->st_mtim = __love_nbts(f->mtim);
   st->st_ctim = __love_nbts(f->ctim); }
-
-#endif
 
 #ifdef __ILP32__
 /* a 32-bit target asks statx and lays its answer across: no stat64 call fills a 64-bit time */
