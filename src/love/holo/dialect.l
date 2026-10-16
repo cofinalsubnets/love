@@ -345,9 +345,9 @@
             'rip ((nom? <>o ? (show <>o + at-off <>>o) (show <>>o)) + "(%rip)")
             'ind ("*" + at-op <>o)
             'seg ("%" + show <>o + ":" + at-op <>>o)
-            (: b (o 1) ix (o 2) sc (o 3) d (o 4)
-               (b < 0 && ix < 0 ? (show d)
-                  ((d = 0 && b >= 0 ? "" (show d))
+            (: b (o 1) ix (o 2) sc (o 3) d (o 4) sy (5 < #o ? (o 5) ())   ; sy: a symbol displacement
+               (b < 0 && ix < 0 ? (nom? sy ? (show sy + at-off d) (show d))
+                  ((? (nom? sy) (show sy + at-off d) (d = 0 && b >= 0) "" (show d))
                    + "(" + (b < 0 ? "" ("%" + xa-mregname b))
                    + (ix < 0 ? "" (",%" + xa-mregname ix + (sc = 1 ? "" ("," + show sc))))
                    + ")"))))
@@ -441,14 +441,15 @@
    ;; --- the shower ---
    (in-mem-op o)
       (<o @ 'rip ("[rip" + (nom? <>o ? ("+" + show <>o + at-off <>>o) (<>>o < 0 ? show <>>o ("+" + show <>>o))) + "]")
-            (: b (o 1) ix (o 2) sc (o 3) d (o 4)
+            (: b (o 1) ix (o 2) sc (o 3) d (o 4) sy (5 < #o ? (o 5) ())
                bs (b < 0 ? "" (xa-mregname b))
                xs (ix < 0 ? "" ((0 = #bs ? "" "+") + xa-mregname ix + (sc = 1 ? "" ("*" + show sc))))
                bare (0 = #bs && 0 = #xs)
                ds (? (d = 0 && !bare) ""
                      (d < 0 || bare) (show d)
                      ("+" + show d))
-               ("[" + bs + xs + ds + "]")))
+               ; a symbol leads the brackets, gas's table[rbx*8] (in-mem reads none back)
+               ((nom? sy ? (show sy) "") + "[" + bs + xs + ds + "]")))
    (in-ptrsz mn w k)                        ; the PTR a memory operand at slot k of mn takes
       (? (xa-ext? mn && k = 1) (xa-extsrc mn)
          (xa-ptrfix mn) (xa-ptrfix mn)

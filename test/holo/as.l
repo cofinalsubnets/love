@@ -261,6 +261,16 @@
            "and $~(1 << 2), %rax // clear\n or $((1 << 9) | (1 << 10)), %rax")
    ; sha256rnds2's three-operand spelling names the implied xmm0; it reads back as the two
    _ (chk "sha.sha256rnds2.xmm0" "0f38cbca" "sha256rnds2 %xmm0, %xmm2, %xmm1")
+   ;; a symbol displacement shows as it reads -- table(,%rbx,8) reads back to itself -- and in
+   ;; intel as gas's table[rbx*8], which gas lays with the same reloc (in-mem reads none back)
+   (law-sy src intel)
+      (att-read src @ v
+       (chk-eq (src + ".att") v (att-read (att-show v)),
+        chk-eq (src + ".intel") ("\t.intel_syntax noprefix\n\t" + intel + "\n") (intel-show v)))
+   _ (law-sy "movq table(,%rbx,8), %rax" "mov\trax, QWORD PTR table[rbx*8]")
+   _ (law-sy "jmp *table(,%rbx,8)" "jmp\tQWORD PTR table[rbx*8]")
+   _ (law-sy "movq table+16(%rbx), %rax" "mov\trax, QWORD PTR table[rbx+16]")
+   _ (law-sy "movq table-8(%rbx,%rcx,4), %rax" "mov\trax, QWORD PTR table[rbx+rcx*4-8]")
    ;; ah..bh where no REX is needed lay as gas lays them (beside one, asrefuse.sh)
    _ (chk "highbyte.sib" "887c5808" "movb %bh, 8(%rax,%rbx,2)")
    _ (chk "highbyte.movz" "0fb6c4" "movzbl %ah, %eax")
