@@ -20,14 +20,17 @@ case $arch in
            ccglob="/usr/local/data/*/.nerves/artifacts/nerves_toolchain_a64*/bin/a64-nerves-linux-gnu-gcc"
            ccvar=AARCH64_CC
            unsupported="117-vastruct"
-           gnopie="181-asmaddr 242-asmprel64" ;;   # an address as an "i" operand: gcc wants no pie
+           gnopie="181-asmaddr 242-asmprel64"   # an address as an "i" operand: gcc wants no pie
+           # gcc 16 lays a64's frame record under the locals, and its frame chain above level 0 is
+           # its own: these answer for our frames, held to our x86-64 alone
+           gnogcc="160-rangeinit 297-frameaddr" ;;
   rv64) name=test_ccrv64 ; qemu=qemu-riscv64 ; pretty=rv64
            ccenv=${RISCV64_CC:-}
            ccnames="riscv64-linux-gnu-gcc riscv64-unknown-linux-gnu-gcc riscv64-unknown-elf-gcc"
            ccglob=""
            ccvar=RISCV64_CC
            unsupported="100-complex 280-cxf-fuzz 111-int128 117-vastruct 151-w128fuzz 266-vaarg-struct 297-frameaddr"
-           gnopie= ;;
+           gnopie= gnogcc= ;;
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
@@ -82,7 +85,8 @@ for f in test/cc/*.c; do
   a64_job "$b.t" "timeout 60 \$RUN ./$b.t"
 
   # -w: gcc warns about the battery's deliberate edges
-  if [ -n "$GCC" ]; then
+  case " $gnogcc " in *" $b "*) G= ;; *) G=$GCC ;; esac
+  if [ -n "$G" ]; then
     case " $gnopie " in *" $b "*) gf="-fno-pie -no-pie" ;; *) gf= ;; esac
     $GCC -O0 -w -static $gf -o "$r/$b.g" "$f" 2> "$d/$b.glog" \
       || { cat "$d/$b.glog" >&2; fail "$b: the cross gcc could not build it"; }
@@ -193,7 +197,8 @@ for b in $progs; do
     diff "$d/$b.xout" "$d/$b.tout" 2>/dev/null | head -20 >&2
     fail "$b: our $pretty codegen disagrees with our x86-64"
   fi
-  if [ -n "$GCC" ]; then
+  case " $gnogcc " in *" $b "*) G= ;; *) G=$GCC ;; esac
+  if [ -n "$G" ]; then
     rg=$(cat "$r/res/$b.g.rc")
     [ "$rt" -eq "$rg" ] || fail "$b: exit ours $rt, $GCC $rg (on $pretty)"
     cmp -s "$d/$b.tout" "$r/res/$b.g.out" || {
