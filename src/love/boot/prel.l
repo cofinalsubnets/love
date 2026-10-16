@@ -889,6 +889,16 @@
                                         (wcat (wts [['two? v]])
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
                                         (wlist p v))
+              ; a text hole, (weave (list "x" (v) "y")), is the + chain of its pieces: a hole is a
+              ; singleton round its sub-pattern. holes side by side, nothing to cut between them,
+              ; are each as short as can be: all but the last of the run take ""
+              (weave? p)
+               (: sq (holerun (splat p))
+                  ps <sq
+                  (wcat (foldl wcat wnil (map (q \ pw q "") <>sq))
+                        (? (atom? ps) (pw "" v)
+                           (atom? >ps) (pw <ps v)
+                           (pw (foldr (\ q t ['+ q t]) (last ps) (init ps)) v))))
               (h = '+) (2 != #as ? (wlist p v)      ; a split: the left run, then the rest
                           (: l <as t <>as ps (splat p)
                              (? (wstr? ps) (wstr ps v)          ; a string literal among the pieces
@@ -901,6 +911,10 @@
                                  (widx as v 0))
               (wlist p v))))                               ; untagged: the form's own shape, exact
    (wq as v) (two? >as ? (wcat (wgd <as) (wq >as v)) (pw <as v))   ; guards, then the shape
+   ; [the pieces kept, the holes that take ""]: a free piece followed by a free piece goes
+   (holerun ps) (? (atom? ps) [() ()]
+                   (: r (holerun >ps)
+                      (two? >ps && !(anchor? <ps) && !(anchor? <>ps) ? [<r (<ps . <>r)] [(<ps . <r) <>r])))
    ; a nom's access across an alternative: the first branch that matches supplies every nom,
    ; and one it does not bind reads ()
    (across n bss ts) (atom? bss ? (lit ())
@@ -925,7 +939,11 @@
    ; an anchor, standing exactly there; every other piece is free and takes what the anchors
    ; leave. anchors are laid from both ends first; between two free pieces the anchors are one
    ; needle, found at its first occurrence, so each free piece is as short as it can be.
-   (splat p) ((two? p ? (<p = '+ ? (2 = #>p))) ? (splat <>p + splat <>>p) [p])
+   ; a text hole's pieces join the chain it sits in: (k && 0 < #k) + " \(v)" cuts at the " "
+   (splat p) (? (two? p && <p = '+ && 2 = #>p) (splat <>p + splat <>>p)
+                (weave? p) (catmap (q \ splat (two? q && atom? >q ? <q q)) (filter (q \ q != "") ><>p))
+                [p])
+   (weave? p) (two? p && <p = 'weave && 1 = #>p && two? <>p && <<>p = 'list)
    (wpin? q) (two? q ? (opword <q = 'jot ? (1 = #>q)))
    (anchor? q) (string? q || wpin? q)
    (atext q) (string? q ? q <>q)
