@@ -9521,7 +9521,7 @@
                 ('call fh as) (hxl as d @ ha [<ha ['call fh <>ha]])
                 ('bin op a b) (: ra (hx a d) rb (hx b d) [(<ra + <rb) ['bin op <>ra <>rb]])
                 ; a comma's right evaluates once its left has: the left is a statement, the right hoists
-                ('comma a b) (: ra (hx a d) rb (hx b d) [(<ra + [['expr <>ra]] + <rb) <>rb])
+                ('comma a b) (: sa (hs ['expr a] d) rb (hx b d) [(sa + <rb) <>rb])
                 ; a short-circuit or a select branches on its first operand, as cbranch lays it -- a
                 ; right operand of statements decides a temporary under nested ifs (its test pushes down)
                 (('land || 'lor) a b)
@@ -9604,6 +9604,7 @@
                           c2 ['call ['var <cx] <>ha]
                           (two? st ? (<ha + <st)
                              (<ha + [['expr ['asn ['var v] (cx 2 ? ['cast (cx 2) c2] c2)]]])))))
+                ('expr ('comma a b)) (hs ['expr a] d + hs ['expr b] d)   ; a, b; is two statements
                 ('expr e) (hx e d @ r (<r + [['expr <>r]]))
                 ('decl ps)
                  ; an init may name its own decl (sizeof *h): what hoists above it may not
