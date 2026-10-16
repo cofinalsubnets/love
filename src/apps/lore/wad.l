@@ -6,7 +6,7 @@
 ;
 ; run: love lore wad FILE [MAP] [--kitty|--cells|--window] [--scale 1|2|4|8]
 ;      view's walking keys, a d to strafe, r to run, e or space to use, f to fire, 1-6 the guns; q or esc leaves
-(module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-free? wad-size wad-sector wad-usage wad-mixer)
+(module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-free? wad-size wad-sector wad-usage wad-mixer wad-open)
 (borrow 'posix)
 (borrow 'rove)                          ; pad, for the status row
 (borrow 'bytes)                         ; rdle
@@ -22,7 +22,8 @@
  fov (pi / 2.0)
  ; --- the wad: its lumps, the last of a name winning; a map's ten by order after its marker ---
  (s16 b o) (rdle b o 2 @ v (v < 32768 ? v (v - 65536)))
- (nm b o) (: t (snip b o (o + 8)) (go k) (k < #t && t k != 0 ? (go (k + 1)) k) (snip t 0 (go 0)))
+ ; ..a name, 8 bytes or to its first 0; names are the same in either case
+ (nm b o) (: t (snip b o (o + 8)) (go k) (k < #t && t k != 0 ? (go (k + 1)) k) (upper (snip t 0 (go 0))))
  (wad-read p) (: r (uread p) s (two? r ? (r 1) "")
    (? (#s < 12 || !(elem (snip s 0 4) ["IWAD" "PWAD"])) ()
       (: n (rdle s 4 4) o (rdle s 8 4)
@@ -336,7 +337,7 @@
                                  ^#(M 'secs)))
         'px x 'pz z 'py (1.0 * (M 'secs (wad-sector M x z) 0) + eye-h) 'th ((90 - p 2) * pi / 180.0) 'ph 0.0 'msg (M 'name)))
  (fresh st) (pins st 'hp 100 'ar 0 'ac 0 'bul 50 'shl 0 'rkt 0 'cel 0 'has [0 1] 'gun 1 'keys () 'gcd 0 'frac 0.0
-                     'vx 0.0 'vz 0.0 'gy 0 'gnext -1 'run 0 'suit 0 'sfx ())
+                     'vx 0.0 'vz 0.0 'gy 0 'gnext -1 'run 0 'suit 0 'sfx () 'hk {} 'tt 0)
  (wad-new w h wd M) (wad-size (enter (fresh {'deep 0 'kitty 0 'kp 1 't 0}) wd M) w (h // 2))
  (wad-size st w r) (mesh-size st w r)
  (restart st) (enter (fresh st) (st 'wd) (wad-map (st 'wd) (st 'M 'name)))
@@ -603,7 +604,7 @@
    _ (pin s 'movers (filter (m \ move-tic s m = 1) (s 'movers)))
    _ (each (s 'objs) (o \ (o 'gone = 1 ? 0 (o 'proj = 1 ? (fly s o) (two? (o 'm) ? (think s o) 0)))))
    _ (pin s 'flips (filter (f \ (f 0 > s 't ? 1 (: _ (flip s (f 1)) 0))) (s 'flips)))
-   s2 (take (glide (shine (gun-tic s))))
+   s2 (take (glide (drive (shine (gun-tic s)))))
    q (wad-sector (s2 'M) (s2 'px) (s2 'pz)) S (s2 'M 'secs q)
    _ (peep sore (S 5) 0 > 0 && s2 't % 32 = 0 && s2 'py - eye-h <= S 0 + 1 && s2 'suit < s2 't ? (hurt s2 (sore (S 5))) 0)
    _ (S 5 = 9 ? (secret s2 q) 0)
@@ -624,18 +625,24 @@
    s2 (foldl (\ s c (peep (s 'spec) (c 1) 0 = 0 ? s (act s (c 1) 'w))) s (crossed s x0 z0 (s 'px) (s 'pz)))
    (take (pin s2 'py (1.0 * (s2 'M 'secs (wad-sector (s2 'M) (s2 'px) (s2 'pz)) 0) + eye-h))))
  (pick st k) (elem k (st 'has) && k != st 'gun ? (pins st 'gnext k 'gcd 0) st)
- ; ..a step a push: the body's speed along the way made a walk's 8 a tic, or a run's 16
- (push st a) (: sp (st 'run = 1 ? 16.0 8.0)
-   b (st 'th + (a @ 'back pi 'strafe-left (0.0 - pi / 2.0) 'strafe-right (pi / 2.0) _ 0.0))
-   ux (sin b) uz (cos b) add (max2 0.0 (sp - (st 'vx * ux + st 'vz * uz)))
-   (pins st 'vx (st 'vx + add * ux) 'vz (st 'vz + add * uz)))
+ ; ..a key held drives the body each tic, doom's way: held while its last press is within three
+ ;   tics; a thrust of 25 (walk) or 50 (run) over 32 a tic ahead, 24 or 40 aside; a turn of 640 or
+ ;   1280 of a 65536 turn, the slow one the first 6 tics unless running
+ drives ['forward 'back 'strafe-left 'strafe-right 'turn-left 'turn-right]
+ (held? st a) (st 't - peep (st 'hk) a -99 <= 3)
+ (drive st) (: run (st 'run = 1) (on a) (held? st a ? 1.0 0.0)
+   f (on 'forward - on 'back) s (on 'strafe-right - on 'strafe-left) r (on 'turn-right - on 'turn-left)
+   tt (r = 0.0 ? 0 (peep st 'tt 0 + 1))
+   th (wrap (st 'th + r * ((run || tt > 6) ? 0.12271846303085129 0.06135923151542565)))
+   fm (f * (run ? 1.5625 0.78125)) sm (s * (run ? 1.25 0.75))
+   (st 'hp <= 0 ? st (pins st 'tt tt 'th th 'vx (st 'vx + fm * sin th + sm * cos th) 'vz (st 'vz + fm * cos th - sm * sin th))))
  wad-binds {101 'use 32 'use 102 'fire 49 'gun1 50 'gun2 51 'gun3 52 'gun4 53 'gun5 54 'gun6
             97 'strafe-left 100 'strafe-right 44 'strafe-left 46 'strafe-right 114 'run}
  (wad-step st a) (: dt (peep st 'dt (1.0 / fps))
    (? (st 'hp <= 0) (a = 'use ? (restart st) st)
+      (elem a drives) (: _ (pin (st 'hk) a (st 't)) st)
       (a @ 'use (use st) 'fire (fire st) 'gun1 (pick st 0) 'gun2 (pick st 1) 'gun3 (pick st 2) 'gun4 (pick st 3)
            'gun5 (pick st 4) 'gun6 (pick st 5) 'run (pins st 'run (1 - st 'run) 'msg (st 'run = 1 ? "walk" "run"))
-           'forward (push st a) 'back (push st a) 'strafe-left (push st a) 'strafe-right (push st a)
            _ (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put! @ () st s s))))
  (wad-walk o M)
    (view-walk {'new (w \ h \ (wad-size (pins (wad-new w h (o 'wad) M) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
@@ -643,13 +650,14 @@
                                        w (h // 2)))
                'size wad-size 'frame wad-frame 'key wad-step
                'binds (view-bind view-binds wad-binds) 'listed (view-listed ['use 'fire 'strafe-left 'strafe-right 'run 'gun1 'gun2 'gun3 'gun4 'gun5 'gun6 'finer 'coarser])
-               'tick wad-tick
+               'tick wad-tick 'repeat [30 30]
                'fps fps 'linger 0 'next () 'song (hn \ (hn ? (wad-mixer hn (o 'wad)) ())) 'win (peep o 'win ())})
- (wad-run o) (: wd (wad-read (o 'file)) m (o 'map)
-   M (two? wd ? (wad-map wd m) ())
-   (? (atom? wd) (say err ("wad: " + o 'file + ": not a wad\n"), flush err, 1)
-      (atom? M) (say err ("wad: " + o 'file + ": no map " + m + "\n"), flush err, 1)
-      (view-stage (pin o 'wad wd) (o2 \ wad-walk o2 M) (_ \ (say out mesh-gone, flush out)))))
+ ; ..a file's wad and map, or why not
+ (wad-open f m) (: wd (wad-read f) M (tablet? wd ? (wad-map wd m) ())
+   (? !(tablet? wd) (f + ": not a wad") !(tablet? M) (f + ": no map " + m) [wd M]))
+ (wad-run o) (wad-open (o 'file) (o 'map) @
+   [wd M] (view-stage (pin o 'wad wd) (o2 \ wad-walk o2 M) (_ \ (say out mesh-gone, flush out)))
+   why (say err ("wad: " + why + "\n"), flush err, 1))
  wad-usage "usage: love lore wad FILE [MAP] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, a d strafe, r run, u n look, e or space use, f fire, 1-6 guns; ? the keys; q or esc leaves)"
  ; ..FILE and MAP first, then view's words
  (wad-opts as) (: pos (\ l (two? l && string? <l && #<l > 0 && <l 0 != 45))
