@@ -10,8 +10,8 @@
 // symbols and tab 1 << root entries, both the caller's storage.
 struct inf_code { uint16_t cnt[16], *sym, *tab; unsigned root; };
 
-static void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
-                      uint16_t *sym, uint16_t *tab, unsigned root) {
+static inline void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
+                             uint16_t *sym, uint16_t *tab, unsigned root) {
  unsigned ofs[16], l, i, code = 0, idx = 0, size = 1u << root;
  memset(c->cnt, 0, sizeof c->cnt);
  memset(sym, 0, (size_t) nsym * sizeof *sym);
@@ -33,7 +33,7 @@ static void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
 
 // the bit walk, for the codes the table does not hold: a table entry, (symbol << 4) |
 // length, or -1 where no code matches
-static int inf_walk(const struct inf_code *c, uint64_t bb) {
+static inline int inf_walk(const struct inf_code *c, uint64_t bb) {
  int code = 0, first = 0, index = 0, cnt;
  unsigned l;
  for (l = 1; l < 16; l++) {
@@ -47,8 +47,8 @@ static int inf_walk(const struct inf_code *c, uint64_t bb) {
 // the lower symbol, merged through a second queue; while the code is deeper than lim every
 // count halves in hc, for at most 32 passes. a lone symbol gets 1 -> the deepest length.
 // scratch is the caller's: keys nsym, w and pa 2 * nsym
-static unsigned pfx_lens(uint32_t *hc, unsigned nsym, unsigned lim, uint8_t *lens,
-                         uint64_t *keys, uint64_t *w, uint32_t *pa) {
+static inline unsigned pfx_lens(uint32_t *hc, unsigned nsym, unsigned lim, uint8_t *lens,
+                                uint64_t *keys, uint64_t *w, uint32_t *pa) {
  memset(lens, 0, nsym);
  for (unsigned pass = 0;; pass++) {
   unsigned nl = 0, mx = 0, i, li = 0, ii, top;

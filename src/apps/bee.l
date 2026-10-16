@@ -691,7 +691,7 @@
         "- cc (mooncc): a C11 compiler written in love; static executables for linux and freebsd on x64, a64 and rv64 (-t, -os), linked against its own libc. `cc -o hello hello.c && ./hello` works with an empty PATH. with it: as, ld, ar, nm, objcopy, readelf, size, strip, strings."
         "- make (cook): runs ordinary Makefiles, and Cookfiles written in love; -j works."
         "- sh (lush), vi, ed, sed, awk, grep, diff, patch, find, xargs, sort and the rest of a posix userland (kore). Flags are POSIX: a GNU-only option may be refused with status 2, and `VERB --help` shows what a verb takes."
-        "- archives: tar, gzip, gunzip, xz, bzip2, cpio. network: nc, wget (with tls), ssh, scp, sshd, httpd, telnet, ping, nslookup, traceroute. also bc, dc, less, man, xxd, hexdump, ps, top, and sb, a patch-set vcs."
+        "- archives: tar, gzip, gunzip, xz, bzip2, zstd, cpio. network: nc, wget (with tls), ssh, scp, sshd, httpd, telnet, ping, nslookup, traceroute. also bc, dc, less, man, xxd, hexdump, ps, top, and sb, a patch-set vcs."
         ("- every verb love carries:" + bee-verbs + ".")
         ""
         "## the love language"
