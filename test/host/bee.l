@@ -434,7 +434,8 @@
       (lm-agents = lm-doc)
       (<lm-map = 0)
       (cr-in >lm-map "chain test_extract,test_big,test_encver\n")
-      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress"))
+      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress")
+      (cr-in >lm-map "\nplace test source\n"))
    0)
 
 ; lanes.sh runs a group's members as lanes, and the group answers for them: green when every
