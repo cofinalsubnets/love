@@ -1,8 +1,5 @@
-; love spec -- the executable semantic spec and language reference: each section states its laws
-; in the comment and proves them in the asserts below, on every target. the workflow narrative --
-; how to work here, the traps, the vocabulary, the architecture -- lives in claude.md. it runs
-; second in the corpus (common.mk, right after test/00-init.l sets up the harness), so keep it
-; green -- `make test` (host + love0, which must print the zz-fin summary twice).
+; love spec -- the executable language reference: each section states its laws in the comment and
+; proves them in the asserts below, on every target. it runs right after test/00-init.l's harness.
 
 ; --- everything is a function --- (f x y) == ((f x) y), (f) == f; numbers are church
 ; numerals; data self-applies. asserts read infix, folding right-associatively (sound by (f) == f).
@@ -27,7 +24,7 @@
  ((:) = (? 0 'a)) ((:) = (map (+ 1) ()))          ; a no-match `?` (and `map` of nothing) falls to the zero point () (= the empty form (:)), not charm 0
  (2 = (: x 1 x (x + 1) x)))                      ; the sequence law: a rebind reads the previous value
 ; one scope: a forward read raises missing, and welp answers it with the zero point -- quiet only
-; inside a window like this one (file mode and the corpus both quit on it: 00-init.l's test-strict)
+; inside a window like this one (test-strict quits on it)
 (hear welp)
 (test ((:) = (: a b b 2 a)) (2 = (: a b b 2 b)))
 (hear test-strict)
@@ -40,9 +37,7 @@
 ; count -- how many, not how much -- is `tally` (text/cask charms, list spine, array cells, map
 ; keys), never $. every value wears a color by its net-sign: green nonnegative (what $ keeps), red
 ; negative, blue the zero floor -- true iff positive green. truth is a threshold on the net, not a
-; homomorphism: love takes the positive cone, so "negative is false" follows from truth being a
-; measure rather than being an extra clause. the logical connective is `&&`, which answers the
-; unit on failure, and never `*`.
+; homomorphism. the logical connective is `&&`, never `*`.
 (test
  !0 !"" !@0 !() !0.0 !(0 ~ 0)                    ; zero / empty -> false
  !-5 !-3.9 !(-3 ~ 4) !(0 ~ -1)                   ; <= 0 in the total order -> false (complex by re then im)
@@ -78,12 +73,9 @@
 
 ; --- types & predicates --- storage: charm? sun? gem? twin? tray? string? nom? name? mint? two? tablet?;
 ; derived constellation? whole? atom?; lit? = a top-region reference (tablet/fn/hot, kind>=KTablet); hot? the opaque cask/port subset.
-; a predicate answers a bit -- 0 on false, never the zero point. both are blue, so nothing that
-; tests one can tell them apart, which is why the sweep below is generic rather than a roster:
-; every `?`-named global takes four false-ish probes, and an answer equal to () is the failure
-; (`=` parts () from the 0 a predicate owes). a multi-arity name answers a closure and passes,
-; having said nothing. `&&`/`||` are not predicates -- they are value-preserving ((5 && 7) is 7,
-; (5 || 7) is 5), so the zero point is the right answer there and stays.
+; a predicate answers a bit -- 0 on false, never the zero point. the sweep below gives every
+; `?`-named global four false-ish probes; an answer equal to () fails. `&&`/`||` are not predicates
+; -- they are value-preserving ((5 && 7) is 7, (5 || 7) is 5).
 (test
  (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? {1 2})
  (sun? (100 2)) (sun? (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))   ; one boxed integer tier, whatever the word
@@ -105,8 +97,8 @@
                  (ok 'zz && ok 0 && ok "" && ok ()))
    bad (elem 'love-image (names ()) ? ()
           (filter (n \ !(q-bit? n)) (filter (n \ q-nom? n && !!(ev n)) (names ()))))
-   (two? bad ? (puts ("bit-law offenders: " + show bad + "\n"), 0) 0,     ; name them: the
-    (test (atom? bad))))                                         ; seat that fails is not always this one
+   (two? bad ? (puts ("bit-law offenders: " + show bad + "\n"), 0) 0,     ; name the offenders
+    (test (atom? bad))))
 (hear test-strict)
 
 ; --- arithmetic --- + - * / // % infix; charm fast path, overflow grows charm->sun->big;
@@ -133,14 +125,13 @@
  !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (word ? (1e308 < 1 / 0) 1) (() = 0 / 0)
  (infinity = 1 / 0) ("infinity" = show (1 / 0)) ("-infinity" = show (-1 / 0))
  (word ? ("1.7976931348623157e308" = show 1.7976931348623157e308) 1)  ; the whole finite range prints digits -- only true infinity wears infinity
- ; the printer is shortest-roundtrip (exact Steele & White), so (read (show x)) = x for every
- ; finite gem. the word guard: these faces are the double tier's -- a 32-bit flo_t's differ
+ ; the printer is shortest-roundtrip, so (read (show x)) = x for every finite gem.
+ ; the word guard: these faces are the double tier's -- a 32-bit flo_t's differ
  (word ? ("0.30000000000000004" = show (0.1 + 0.2)) 1) ("0.3" = show 0.3)
  (word ? ("5e-324" = show 5e-324) 1) (word ? ("1e23" = show 1e23) 1)
- ; ..and the read side is correctly rounded too (lm_strtod, no glibc): neighbors stay distinct
+ ; ..and the read side is correctly rounded too: neighbors stay distinct
  (word ? !(0.3 = 0.30000000000000004) 1) (word ? (0.5 = 0.49999999999999999999) 1)
- ; ..and C99's hex lane rides the same reader, exact by construction (the significand is already
- ; binary); the rows that catch a slip are the subnormal floor and the exact tie under it
+ ; ..and C99's hex floats ride the same reader, exact; the subnormal floor and the tie under it
  (word ? (0x1p4 = 16.0) 1) (word ? (0x1.8p1 = 3.0) 1) (word ? (-0x1p-1 = -0.5) 1)
  (word ? (0x1p-1074 = 5e-324) 1) (word ? (0x1p-1075 = 0.0) 1)
  (word ? (0x1.8p-1075 = 5e-324) 1)                      ; past the tie, it rounds up
@@ -158,11 +149,11 @@
  (100 2 = 200 2 // 100 2) ("1267650600228229401496703205376" = show (100 2))
  (-2 = 1 ^ -1) (15 = 8 | 4 | 2 | 1) (16 = 64 >> 2) (16 = 2 << 3)
  ((3 * (200 2)) = (3 << 200)) (0 = (0 << 500))   ; the count is exact -- never masked to the word
- ((63 2) = (1 << 63)) ((64 2) = (1 << 64))       ; ..and << promotes where it used to wrap the sign
+ ((63 2) = (1 << 63)) ((64 2) = (1 << 64))       ; ..and << promotes past the sign
  (-1 = -1 >> 1) (-4 = -8 >> 1)               ; >> is arithmetic: it sign-extends
  (0 = 5 >> 64) (-1 = -5 >> 64)               ; ..past the width it lands on the sign, not the value
  (2 = 8 << -2)                                 ; a negative count turns the shift round
- (255 = (200 2 + 255) & 255)                 ; a big rides the lane now, either sign
+ (255 = (200 2 + 255) & 255)                 ; a big rides the lane, either sign
  (0 - 1 = (0 - 200 2 | 0 - 1)))
 
 ; --- order & equality --- < <= > >= total over all values, the true-blue bands: points at the
@@ -206,10 +197,8 @@
  ?(_ \ 1) ?(_ \ 0))
 (hear test-strict)
 
-; --- reduction --- `=` stops at alpha (above); `ev` goes further -- it reduces. these are the
-; binary twins of test/proof/rocq/spec.v's reduction layer (step/subst): the proof says valid by
-; the calculus, the line here says the binary computes exactly this. eta stays unbridged (its de
-; Bruijn reduct shifts).
+; --- reduction --- `=` stops at alpha (above); `ev` goes further -- it reduces. eta stays
+; unbridged (its de Bruijn reduct shifts).
 (test
  (5 = (x \ x) 5)                               ; beta_id: (\ x x) a ~> a
  (1 = ((_ \ 1) 9))                             ; beta_const: (\ _ 1) a ~> 1 (drops its arg)
@@ -247,7 +236,7 @@
 (test
  ("abcd" = "ab" + "cd") ("x" = "x" + 66) ('ef = 'ef + 'ef) ('ef = 'ef + 'ab) ('ef = 'ab + 'ef) ("ab" = "ab" + 'ef)
  ('ef = 'ef + ()) ('ef = () + 'ef) ('ef = mint 0 + 'ef) ('ef = 'ef + mint 0)   ; () and a bare mint sit below every name
- (('ab + 'ab) + 'ef = 'ab + ('ab + 'ef)) (('ef + 'ab) + 'ab = 'ef + ('ab + 'ab))  ; the triples that annihilation could not close
+ (('ab + 'ab) + 'ef = 'ab + ('ab + 'ef)) (('ef + 'ab) + 'ab = 'ef + ('ab + 'ab))  ; associative on every triple
  ("x" = "x" + 66.0) ("x" = "x" + 1.5) ("x" = "x" + -66) ("x" = "x" + 256)   ; a number degenerates against text
  ('(1 2 3 4) = '(1 2) + '(3 4)) ('(1 2) = 5 + '(1 2)) !("a" - "b")
  ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))            ; a bare mint -- the zero point () too -- is +'s
@@ -307,7 +296,7 @@
  (5 = (abs -5)) (charm? (abs -5)) (5.0 = (abs (3 ~ 4))) (2 = (int 2.9))
  ((abs -9223372036854775808) = 9223372036854775808)   ; |sun min| overflows the word: the bignum lane
  (1024 = (10 2)) (21 = (gcd 1071 462)) (976371285 = (modpow 2 100 1000000007))
- (2.0 = ((1 / 2) 4)) (1024 = (10 2)) (1 = (0 e)) (2.718281828459045 = e))
+ (2.0 = ((1 / 2) 4)) (1 = (0 e)) (2.718281828459045 = e))
 
 ; --- a few identities --- tetration is the tower with one base; i*i = -1; euler holds in the
 ; exact direction ((log -1) = i * pi -- `=` is exact, so e^(i*pi) does not hold forward); power's
@@ -518,9 +507,9 @@
  (tablet? {}) (0 = #{}) (? {})                    ; {} is the empty map: 0 keys, and truthy (a lambda nets 1)
  ({1 10 2 20} @ t (20 = peep t 2 0 && 20 = t 2 && 99 = peep t 9 99))
  (: t {1 0} s (mint 0) (!(s = peep t 1 s) && s = peep t 9 s))              ; peep as the total presence test: a pinned 0 is present, an absent key is not
- (50 = (peep (pin {} 5 50) 5 0)) ({1 10 2 20} @ t (pull t 1 0, 1 = #t))
+ ({1 10 2 20} @ t (pull t 1 0, 1 = #t))
  (: t {1 10 2 20} v (pull t 2 0) (20 = v && 1 = #t && 99 = peep t 2 99 && -1 = pull t 9 -1))   ; pull: value or default, removes the key
- ('(1 2) = (sort (keys {1 10 2 20}))) ((dig 'k) = (dig 'k)) (tablet? {}) !(tablet? 5)
+ ('(1 2) = (sort (keys {1 10 2 20}))) ((dig 'k) = (dig 'k)) !(tablet? 5)
  ({1 10} != {1 10}) ({1 10} @ t (t = t))         ; mutable -> identity =
  (: t {} r (pins t 1 10 2 20) (r = t && 10 = t 1 && 20 = t 2 && 2 = #t))          ; pins: multi-pin onto a live tablet, returns it (the mutable twin of {..})
  (pins {} 1 10 2 @ t (10 = t 1 && 1 = #t)))                    ; an odd trailing key is dropped
@@ -544,7 +533,7 @@
 ; ride); peep/pin a byte 0..255; `$` nets the charms (a zeroed cask is nothing); pour; identity =.
 (test
  (cask 3 @ b (pin b 0 65, 65 = peep b 0 0)) (0 = $(cask 4)) (4 = #(cask 4))
- !(cask 3) (65 = (cask 1 @ b (pin b 0 65, $b)))     ; zeroed -> nothing; bytes are charms (lockstep at bufs)
+ !(cask 3) (65 = (cask 1 @ b (pin b 0 65, $b)))     ; zeroed -> nothing; bytes are charms
  (cask 1 @ b (pin b 0 257, 1 = (peep b 0 0))) (cask 4 @ b (pour b 0 "ABCD" 0 4, 68 = (peep b 3 0)))
  (cask 1 @ b (pin b 0 "x", 0 = (peep b 0 -1)))       ; a byte pin takes a charm: anything else writes nothing
  (cask 1 @ b (b = pin b 0 65))                       ; ...and a cask has a cell, so the pin is in place: the same buffer answers
@@ -572,7 +561,7 @@
 ; the egg mops it, and `grip` is the one door left onto it: (grip ar nm v) pins nm's row in lane ar
 ; and answers the row it replaced in the same shape, and () both clears a row and reports an absent
 ; one. a shape the table refuses is rolled back and scared, never pinned. the table is read live,
-; so a declaration governs every form compiled after it -- haskell's rule.
+; so a declaration governs every form compiled after it.
 ; a spaced sigil is one whole name: it carries a row or takes the default and never splits, so
 ; != && >>= :- ?- are each one operator. with a left operand it captures the whole application span
 ; on that side, because juxtaposition binds tighter than any infix operator ((a b = c d) is
@@ -591,12 +580,11 @@
 ; fused), the list split into clauses at top-level commas before factoring, the whole the `,`
 ; sequencing macro (do its word alias) -- effects in source order, the last clause answers, empty
 ; clauses drop; in a file the chain needs its outer parens, a repl line is one expression.
-; in anger: test/operator.l, test/infixop.l.
 (test
  ('(1 (\ x) 3) = [1 ''x 3]) ('(1 2 3 4) = ('(2 3) @ xs ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = (0 ~ 1)) ((2 ~ 3) = (twin 2 3)) ('~x = '(mono (~ x))) (~5 = (conj 5)) (5 = #"hello") (lit? dot)
- ("(# x)" = (show (opfix '(# x)))) ('! = (caup '(a ! b)))                      ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
+ ("(# x)" = (show (opfix '(# x)))) ('! = (caup '(a ! b)))                      ; a monadic-only sigil has no row: opfix hands the plain symbol on (compared via show); quotes stay data
  (: was (grip 2 '^ -60) t (opfix '(a ^= b)) back (grip 2 '^ was)               ; a spaced sigil is one whole
     (back = -60 && t = '(^= a b)))                                             ;   name: ^'s row never splits ^=
  (6 = ((x' \ x' + 1) 5)) (nom? 'ab') (7 = (7 @ n' n'))                         ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
@@ -634,9 +622,7 @@
  ('(mono (< x)) = (caup <(sound '(40 102 32 60 120 41)))) ; the emission, data-lane
  (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))      ; the comma layer: clauses in sequence, the last answers; empties drop
  (12 = (foldl (+) 0 '(3 4 5))))
-; the compile tables (operators/pureset) are off the book post-birth, mopped beside macros (a live
-; pin into one would poison every later compile); the guarded asserts ride the bootstrapping
-; section's welp window.
+; the compile tables (operators/pureset) are mopped at birth: a live pin into one would poison every later compile
 
 ; --- macros --- a macro maps an arg list to code; install with `::`. there is no quasiquote: the
 ; list ctor evaluates every element, so quote the literal positions instead of unquoting the
@@ -683,7 +669,6 @@
 ; jumps past every c between there and here. numeral compose counts are capped by the `apcap` box;
 ; the numeric power lane caps the result instead (~ exponent * log2|base| bits against the box as a
 ; word budget), so a size-fixed or growthless base runs free ((pin apcap 0 n) retunes both).
-; in anger: test/help.l, test/missing.l, test/apcap.l, test/task.l (the scoop ring), test/random.l.
 (test
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = call-cc (k \ k 41)) (42 = 1 + call-cc (k \ 41))
  ('(boom 7) = trap (_ \ scare 'boom 7) () (a \ b \ [a b])) (3 = (trap (+ 1) 2 welp))
@@ -751,7 +736,7 @@
 ; welp answers the miss with the zero point. `hatched` asks presence, never born's net: born is a
 ; duration, so a wake fast enough to answer 0 is blue and a net test would read the post-egg
 ; runtime as pre-egg and pass every law under it vacuously. which names the mop takes is
-; src/love/boot/egg.l's list and internal, so nothing here asserts them.
+; internal, so nothing here asserts them.
 (: hatched (elem 'born (names ())))
 (hear welp)
 (test (lit? ev) (hatched ? (charm? born) 1))
@@ -767,9 +752,7 @@
 ; walk -- the source declares its own (module 'x ..) and the boot evals it, so the name is
 ; registered before anything asks. a string is an explicit path (the module named by its basename);
 ; a slashed name ('x/y) includes lib/x/y.l into the current head instead, no new layer, no
-; registration. test/host/loader.l is the load law in anger (fs fixtures, so it lives outside this
-; corpus); here the boot-loaded modules prove the registry surface, since every corpus frontend
-; registers rng and kanren -- the wasm shim excepted, its harness feeding cli.l bare.
+; registration. here the boot-loaded modules prove the registry surface.
 ; (cite 'name) is the module's tablet -- currying reaches a member because a tablet indexes itself,
 ; `keys` introspects it like any other, a missing module answers () (the presence guard: `lit?` is
 ; true of a tablet even when empty and false of (), so it is the one honest test), and (cite ())
@@ -815,5 +798,5 @@
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; an opaque handle acts
 ; as a constant function. the VM's own instruments -- clock/nclock/gauge/please and gauge's write
-; twin `tune` -- are not the language: test/gauge.l.
+; twin `tune` -- are not the language.
 (test (string? (show @(1 2 3))) !(cask 4 'x))

@@ -1,7 +1,5 @@
-/* va_arg of a small by-value struct: a gp composite of 16 bytes or less takes its slots whole, from
- * the register save area while they last, else from the stack -- and on a64 a composite sent to the
- * stack closes the gp file behind it, so a later scalar comes from the stack too. linux's
- * p9pdu_vwritef reads kuid_t this way. every check contributes 1: the exit code is the count. */
+/* va_arg of a small struct: a gp composite of 16 bytes or less takes whole slots, registers then
+ * stack; on a64 one sent to the stack closes the gp file behind it. each check adds 1 to the exit code. */
 
 #include <stdarg.h>
 

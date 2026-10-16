@@ -1,13 +1,6 @@
-/* C11 6.2.1p7 -- a declarator's scope begins at the END OF ITS DECLARATOR, so the
- * initializers that follow it in the SAME declaration already see it. 78-enumshadow.c
- * covers the block case (a local hides an enum constant for the rest of its block);
- * this covers the declaration itself, which is a separate scope point and was the one
- * that broke: `unsigned long M = f(), N = g(), n = M * N;` folded N to the enum
- * constant and compiled `n = M * 4`. src/love/love.c has `enum { N = 4 }` in one function
- * and N as a local in another, so lvm_outer's outer product wrote 4*M of its M*N
- * elements and handed back a tray with uninitialized heap in the tail.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* C11 6.2.1p7: a declarator is in scope from the end of itself, so later
+ * initializers in the same declaration see it over an enum constant of that name.
+ * each check adds 1: the exit code is the pass count. */
 
 extern int printf(const char *, ...);
 

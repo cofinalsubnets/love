@@ -1,25 +1,16 @@
-; src/apps/kore/core.l -- the line tools of kore: cat tac shuf echo head tail wc sort uniq
-; tee seq yes true false basename dirname, cut tr nl rev, fold expand unexpand column,
-; base64 base32 tsort factor. each is a <name>-main (args -> exit status as a charm; udie
-; leaves from deep inside, urun catches it), dispatched by kore.l. a body-less top-level
-; `:`: the mains leak, the rest stays local. loads after text.l and u.l (its floor) and
-; before cook.l, so text.l's lines/unlines are the ones captured here.
-; GNU's faces are held to the byte (test_kore): wc pads every field to the byte total's
-; width, uniq -c wears width 7, head/tail banner several files with ==> name <==.
+; src/apps/kore/core.l -- the line tools of kore. each is a <name>-main (args -> exit status
+; as a charm; udie leaves from deep inside, urun catches it), dispatched by kore.l. loads after
+; text.l and u.l, its floor. GNU's output faces are held to the byte.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
 (borrow 'text)
 
 (:
-   ; -- cat: files (or -) onto out, verbatim -- and a DIRECTORY lists, the way ls does.
-   ; POSIX cat refuses one; this cat used to open it, read nothing, and exit 0, which is
-   ; the one answer of the three worth nobody's while.
+   ; -- cat: files (or -) onto out, verbatim; a directory lists, the way ls does
    (cat-dir? f) (stat f @ st (two? st && 16384 = 61440 & <>>st))
-   ; -n numbers every line and -b those with ink, the count running across files; -s
-   ; squeezes blank runs to one; -E ends a line with $, -T shows a tab as ^I, -v a control
-   ; as ^X, del as ^? and a high byte as M-; -A is -vET, -e -vE, -t -vT; -u is taken. any
-   ; of them reads by the line, and without them the bytes pour through untouched
+   ; -A is -vET, -e -vE, -t -vT; -u is taken. the -n/-b count runs across files. any flag
+   ; reads by the line; without them the bytes pour through untouched
    (cat-main as)
     (: fo (uflags "cat" as () "AbeEnstTuv")
        t <fo fs (fo 1)
@@ -55,20 +46,16 @@
                           (uchunks "cat" puts [f] @ 0 ok 0)))
                fs)))
 
-   ; -- tac: the lines back to front, a file at a time. the newline rides the line it
-   ; followed, so a last line arriving without one comes back first without one --
-   (utac t)                            ; text -> its records, last first
+   ; tac's pure face, the one the laws hold: text -> its records, last first, the newline
+   ; riding the line it followed
+   (utac t)
     (: n #t
        (go k st acc) (? (n <= k) (st < k ? (snip t st k . acc) acc)
                         (t k = 10) (go (k + 1) (k + 1) (snip t st (k + 1) . acc))
                         (go (k + 1) st acc))
        (go 0 0 ()))
-   ; tac is the one line tool that must hold its input -- nothing can be said until
-   ; the end is known. Reading it a line at a time still drops the whole-text copy and
-   ; the `lines` list over it, and prepending is the reversal, so there is no rev.
-   ; utac stays as the pure face test/law/kore.l holds.
    ; -- tac: each operand's records, last first. a record ends with its separator -- a
-   ; newline unsaid, -s SEP, a basic regex under -r -- or opens with it under -b; the
+   ; newline unsaid, -s SEP, an emacs-syntax regex under -r -- or opens with it under -b; the
    ; last keeps what it has, a separator or none, as GNU's does --
    (tac-cuts s sep rx)                 ; each separator's (start . end), left to right
     ; GNU's looks from the end back, each separator ending at or before the start of the
@@ -148,10 +135,8 @@
                     1)))
                fs))
 
-   ; -- shuf: the records in a random order; -e takes the operands as the records, -i
-   ; LO-HI the numbers, -n caps the count, -r draws with replacement, -z splits on NUL.
-   ; a partial Fisher-Yates over a tablet of swapped seats, a miss reading the seat's own
-   ; record, so -i never lays its range out and -n k costs k draws.
+   ; -- shuf: a partial Fisher-Yates over a tablet of swapped seats, a miss reading the seat's
+   ; own record, so -i never lays its range out and -n k costs k draws
    (ushuf n k seat dot)                ; the first k of a shuffle of seats 0..n-1, each to dot
     (: t {}
        (at i) (peep t i (seat i))
@@ -198,9 +183,8 @@
         flush q, string? of ? (close q) 0,
         0))
 
-   ; -- echo: the args back; -n holds the newline, -e lays the escapes (u.l's, printf's
-   ; %b's: \c ends it all), -E leaves them, the later winning; the letters cluster, and
-   ; the first word that is not all of them is text, as GNU's reads it --
+   ; -- echo: -e lays the escapes (\c ends it all), -E leaves them, the later winning. the
+   ; letters cluster, and the first word that is not all of them is text, as GNU's reads it
    (echo-main as)
     (: (flag? w) (1 < #w && w 0 = 45 && all (c \ elem c "neE") >(chars w))
        (go a n e) (two? a && flag? <a ?
@@ -214,15 +198,11 @@
         n? || <>x ? 0 (put out 10),
         flush out, 0))
 
-   ; -- head and tail: one driver, two clips; -n N (10 the default) --
-   ; `-5` is the obsolescent spelling and every script still writes it, so it is not
-   ; optional: a bare -digits is the count. `-` alone stays the stdin name, and a flag
-   ; that is neither reaches uread as a filename, exactly as it did before.
+   ; -- head and tail: one driver, two clips; -n N (10 the default). the obsolescent -5 is
+   ; still the count
    (digits? w) (:- (go 1) n #w (go k) (? (n <= k) (1 < n) (47 < w k < 58) (go (k + 1)) 0))
-   ; a count word -> [n sign], sign 1 for a written +, -1 for a written -, 0 for neither.
-   ; the sign is the clip's other reading: head -n -N drops the last N, tail -n +N opens
-   ; at line N. the digits may wear GNU's multipliers (b 512, k K KiB 1024, kB KB 1000,
-   ; M G T the same two ways); anything else is refused by name, not read as a number.
+   ; a count word -> [n sign], sign 1 for a written +, -1 for -, 0 for neither: head -n -N
+   ; drops the last N, tail -n +N opens at line N. GNU's multipliers; anything else refuses
    uclip-sfx '(("b" 512) ("k" 1024) ("K" 1024) ("KiB" 1024) ("kB" 1000) ("KB" 1000)
                ("M" 1048576) ("MiB" 1048576) ("MB" 1000000)
                ("G" 1073741824) ("GiB" 1073741824) ("GB" 1000000000)
@@ -238,10 +218,8 @@
        m (sf @ "" 1 (filter (p \ <p = sf) uclip-sfx @ r (two? r ? <><r)))
        (charm? v && charm? m ? [(v * m) sign]
         (udie 1 (who + ": invalid number of " + what + ": '" + w + "'"))))
-   ; the leading words: -n N / -nN / --lines=N, -c N / -cN / --bytes=N (the last given
-   ; wins, as GNU's), the obsolescent -N, -q or -v for never or always a header, and --
-   ; to end them; tail's -f, -F and -s SECS ride the header tablet. a word after them
-   ; that still looks like a flag refuses
+   ; the leading words, the last count given winning; tail's -f, -F and -s ride the header
+   ; tablet. a word after them that still looks like a flag refuses
    (uclip-args who as)                      ; -> (n files many? sign bytes? hd)
     (: (val w a k) (? (k < #w) [(snip w k #w) >a]
                       (two? >a) [<>a >>a]
@@ -273,9 +251,7 @@
    (uclip-hdr many first f)
     (many ? (say out (uhdr first (f @ "-" "standard input" f))) 0)
    (uclip-say l) (say out <l, <>l ? (put out 10) 0)   ; a read line, its own ending
-   ; head stops -- it used to `lines` the whole input and take n off the front, so
-   ; one line of a 100 MB file cost 7.2 GB. uhead is still the spec for where the
-   ; last newline goes (test/law/kore.l holds it); this answers the same text, a line at a time.
+   ; head stops reading once it is done; uhead is the pure spec for where the last newline goes
    (head-main as)
     (: p (uclip-args "head" as) n <p fs <>p many <>>p sign <>>>p bytes? <>>>>p
        ; -n -N is the other clip: hold a queue of N, and a line leaves only once N
@@ -410,9 +386,7 @@
        none !(<p || <>p || <>>p || <>>>p || p 4)
        l? (none ? 1 <p) w? (none ? 1 <>p) m? <>>p c? (none ? 1 <>>>p) x? (p 4)
        fs (ustray "wc" as (p 5))
-       ; -L: the widest line in columns, GNU's way -- a tab to the next stop of 8, a
-       ; newline, return or form feed ends one, a character its display width. the
-       ; state [col widest] runs across gulps
+       ; -L: the widest line in columns, GNU's way; the state [col widest] runs across gulps
        (xcnt st h) (!x? ? st
                     (: n #h
                        (go i col top) (n <= i ? [col top]
@@ -424,8 +398,7 @@
                                            (cpnext h i @ j (go j (col + swidth (snip h i j)) top)))))
                        (go 0 <st <>st)))
        (c3 x) <>>x (c4 x) <>>>x
-       ; a row is (name (l w b m)), name () for stdin. counted a gulp at a time --
-       ; nothing here needs the text, only the numbers off it
+       ; a row is (name counts), name () for stdin, counted a gulp at a time
        cnt (ucount-for l? w?)
        (mcnt st h) (m? ? (ucharc-go st h) st)
        st {} _ (pin st 'rows ()) _ (pin st 'ok 1)
@@ -442,10 +415,8 @@
        (sum sel a acc) (two? a ? (sum sel >a (acc + sel <><a)) acc)
        tl (sum cap rows 0) tw (sum caup rows 0) tb (sum c3 rows 0) tm (sum c4 rows 0)
        tx (foldl (m \ r \ max m (<>r 4)) 0 rows)                    ; -L's total is the widest
-       ; the GNU face: pad every column to the byte total's width, even where the
-       ; bytes are not printed (`wc -lw` of a 3001-byte file wears width 4).
-       ; one count over one input wears none -- `wc -l f` is "1 f", never "   1 f".
-       ; a one-digit byte count hides this, which is every fixture until .gs1.
+       ; the GNU face: every column padded to the byte total's width, printed or not; one
+       ; count over one input wears none (`wc -l f` is "1 f")
        wdt (!!l? + !!w? + !!m? + !!c? + !!x? = 1 && atom? >rows ?
             1 #(show tb))
        ; GNU's column order: lines words characters bytes, the widest line
@@ -467,19 +438,11 @@
         flush out, ok ? 0 1))
 
    ; -- sort ----------------------------------------------------------------------
-   ; the prel sort is byte order (the LC_ALL=C face) and `sortby` under it is a stable
-   ; merge, which is what lets -s mean anything. flags: -b -f -n -r -s -u, -t SEP, and
-   ; -k F[,M][bfnr] as often as wanted. a key carrying any ordering letter of its own
-   ; uses those instead of the global ones, which is GNU's rule and not an addition to
-   ; them. equal keys fall to the last-resort compare -- the whole line, bytewise --
-   ; unless -s or -u, neither of which wants it.
-   ; absent, and said so rather than half-done: -k's .CHAR offsets and the -M -g -R
-   ; orderings. a key is [F M b f n r h V], its letters' flags after its fields.
+   ; byte order (the LC_ALL=C face), over a stable sort, which is what lets -s mean anything.
+   ; absent: -k's .CHAR offsets and the -M -g -R orderings. a key is [F M b f n r h V]
    (usort-blank? c) (c = 32 || c = 9)
-   ; a line's fields as [start end] pairs. under the DEFAULT separator the blanks
-   ; before a run belong to the run -- GNU's rule, and the whole reason -b exists;
-   ; trailing blanks close no field. under -t the separator is one charm and belongs
-   ; to neither side, so an empty field is a real one.
+   ; a line's fields as [start end] pairs. by default the blanks before a run belong to it
+   ; (GNU's rule, why -b exists); under -t the separator belongs to neither side
    (usort-flds ln sep)
     (: n #ln
        (run j) (n <= j || usort-blank? (ln j) ? j (run (j + 1)))
@@ -501,9 +464,8 @@
          s2 (b? ? (sk st) st)
          (en <= s2 ? "" (snip ln s2 en)))))
    (usort-up s) (jug 0 @ o (each ^#s (k \ (s k @ c (put o (97 <= c <= 122 ? (c - 32) c)))), slurp o))
-   ; -n reads a VALUE, and reads it exactly: 10000000000000000001 sorts above ...0
-   ; and no double can say so. the reading is the digits -- sign, then the integer
-   ; part's length, then its digits, then the fractions padded against each other.
+   ; -n reads a value exactly, by its digits: no double could order 10000000000000000001
+   ; above ...0
    (usort-num s)                               ; -> [neg int frac], both parts trimmed
     (: n #s
        (sk i) (n <= i || !(usort-blank? (s i)) ? i (sk (i + 1)))
@@ -527,8 +489,7 @@
        (frc k) (#fa <= k && #fb <= k ? 0
                 (: ca (k < #fa ? (fa k) 48) cb (k < #fb ? (fb k) 48)
                    (? (ca < cb) -1 (cb < ca) 1 (frc (k + 1)))))
-       ; never `(? r r ..)` on a comparison: -1 is FALSY here (a predicate is the sign
-       ; of the net), so a "less than" would fall through to the next test as if equal.
+       ; a comparison is matched against 0, never truth-tested: -1 is falsy
        m (? (#ia < #ib) -1 (#ib < #ia) 1 (lex 0 @ r (r @ 0 (frc 0) r)))
        (? (sa < sb) -1 (sb < sa) 1 (sa < 0) (0 - m) m))
    (usort-cmpstr a b) (? (a < b) -1 (b < a) 1 0)
@@ -562,8 +523,7 @@
     ((usort-numk? k ? (usort-cmpnum ka kb) (usort-cmpstr ka kb)) @ c (k 5 ? -c c))
    (sort-main as)
     (: (sdie m) (udie 2 ("sort: " + m))
-       ; the flags in gnu order, a flag free to follow a file: -k takes a value and
-       ; stacks, -t a separator glued or not, -o a file; the long names ride the same keys
+       ; a flag is free to follow a file; -k stacks
        t {}
        o (uoptp as t '(107 116 111) '(107)
                 {"reverse" 114 "numeric-sort" 110 "human-numeric-sort" 104 "version-sort" 86
@@ -614,22 +574,16 @@
                     104 (opt2 (i + 1) B F N R 1 V)
                     86  (opt2 (i + 1) B F N R H 1)
                     c   (sdie ("unknown key letter -- " + string c))))
-               ; the two halves do not carry the same letters. n/r/f on either
-               ; half order the whole key, but `b` names a POSITION: on the start
-               ; spec it skips the field's leading blanks, on the end spec it is
-               ; about where the key stops. so -k1b,1 strips and -k1,1b does not,
-               ; and folding them together silently sorted `-k1,1b` on the wrong key.
-               ; the end spec's b is read and dropped -- trailing blanks are not
-               ; modelled here, and inventing a meaning for it would be worse.
+               ; n/r/f on either half order the whole key, but b names a position: the
+               ; start's skips leading blanks, the end's is read and dropped
                o2 (opt2 e2 0 (o1 2) (o1 3) (o1 4) (o1 5) (o1 6))
                [f m (o1 1) (o2 1) (o2 2) (o2 3) (o2 4) (o2 5)])))
        ; a key with no letters of its own takes the global ones; one with any letter
        ; takes only its own. that is GNU's rule, and it is why -k2,2 -n is not -k2,2n.
        (glob k) (k 2 || k 3 || k 4 || k 5 || k 6 || k 7 ? k [<k <>k b? f? n? r? h? V?])
        keys (two? kt ? (map (glob * kspec) kt) [[0 0 b? f? n? r? h? V?]])
-       ; the lines off the reading floor: prel's `lines` walks a charm at a time and
-       ; costs more than the sort does. a miss has said its piece; sort still leaves
-       ; -z's records end with a NUL, read whole and cut
+       ; the lines off the reading floor; a miss leaves 2. -z's records end with a NUL, read
+       ; whole and cut
        (rd fs) (z? ? (: t (cats (map (f \ (f = "-" ? (slurp in) (uread f @ r (two? r ? <>r (sdie ("cannot read: " + f)))))) (two? fs ? fs ["-"])))
                         ps (usplit 0 t)
                         (two? ps && <(rev ps) = "" ? (rev >(rev ps)) ps))
@@ -638,38 +592,28 @@
                    st (ulines "sort" dot fs)
                    (st @ 0 0 (uleave 2),
                     rev (box 'l))))
-       ; the comparison: every key in turn, then the last-resort whole-line compare.
-       ; -r is already inside each key (glob hands it down), so it must not also
-       ; reverse the output -- doing both is the identity, and the first draft of this
-       ; sorted correctly and then undid it. the last resort is the one place -r still
-       ; has to be applied by hand.
-       ; -s and -u BOTH drop the last resort -- -s because that is what stable means
-       ; here, and -u because a dedupe reading the whole line would keep two lines that
-       ; the keys call equal, which is the opposite of what was asked.
+       ; every key in turn, then the last-resort whole-line compare, the one place -r is
+       ; applied by hand (each key carries its own). -s and -u drop the last resort: -u
+       ; must call equal what the keys call equal
        (last a b) (usort-cmpstr a b @ c (r? ? -c c))
        ; a line rides decorated: [index line readings], one reading per key, taken once.
-       ; the same falsy trap as usort-cmpnum's: `(? c c (go >ks))` sends every
-       ; less-than on to the next key, and `!(cmp ..)` calls it equal. both readings
-       ; have to ask `= 0` out loud.
+       ; c is matched against 0: -1 is falsy
        (cmp da db) (: (go ks xa xb) (atom? ks ? (s? || u? ? 0 (last (da 1) (db 1)))
                                      (usort-cmp1 <xa <xb <ks @ c (c @ 0 (go >ks >xa >xb) c)))
                       (go keys (da 2) (db 2)))
-       ; an equal pair drops the SECOND, never the first: `(ded >a)` walks off the
-       ; head and leaves the run's LAST line standing, where GNU keeps its first.
+       ; an equal pair drops the second, so a run keeps its first, as GNU's
        (same? da db) (plain? ? (da 1 = db 1) (0 = cmp da db))
        (ded a) (? (atom? a) ()
                   (atom? >a) a
                   (same? <a <>a) (ded (<a . >>a))
                   (<a . ded >a))
        ls (rd fs)
-       ; no key and no letter is byte order, and that is prel's `sort` -- the C lane,
-       ; stable, and the whole line is the key so -r is the reverse; -u still dedupes
+       ; no key and no letter is prel's `sort`; the whole line is the key, so -r is the reverse
        plain? (atom? kt && !b? && !f? && !n? && !h? && !V?)
-       ; the keyed C lane: prel's sort orders lists lexicographically, exactly (bigs)
-       ; and stably, so a line decorated [reading.. tiebreak] sorts under every key at
-       ; once. one direction has to serve the lot -- a numeric reading reverses by
-       ; negation, a text cannot -- so the text keys and the last resort pick it, and a
-       ; text key against the grain takes the merge lane below instead.
+       ; the keyed C lane: prel's sort orders lists lexicographically and stably, so a line
+       ; decorated [reading.. tiebreak] sorts under every key at once. a numeric reading
+       ; reverses by negation, a text cannot, so the text keys pick the one direction; a text
+       ; key against it takes the merge lane
        tkeys (filter (k \ !(usort-numk? k)) keys)
        dir (? (two? tkeys) (<tkeys 5) (!(s? || u?)) r? 0)
        clane? (foldl (a \ k \ a && (k 5 = dir)) 1 tkeys &&
@@ -692,9 +636,7 @@
                        (map (creading <l) keys + [(s? || u? ? (dir ? -i i) <l) <l] . acc)))
                     (go l 0 ()))
        (clast p) (two? >p ? (clast >p) <p)
-       ; -u picks a representative of each equal run, and GNU picks the input's first:
-       ; the index rides along as the last tiebreak, which is stability stated outright
-       ; rather than hoped for from the sort underneath.
+       ; the index rides along as the last tiebreak, so -u keeps a run's first, as GNU's
        (deco l) (: (go l k acc)
                     (atom? l ? (rev acc)
                      (go >l (k + 1) ([k <l (map (key \ usort-keyof <l key sep) keys)] . acc)))
@@ -719,10 +661,7 @@
                  (sortby (x \ y \ cmp x y @ 0 (<x <= <y) c (c < 0)) (deco ls)))) @ s1
          (emit (u? ? (map (p \ p 1) (ded (deco s1))) s1)))))
 
-   ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7; -d says only
-   ; the runs of two or more, -u only the lone lines, -D every line of a run of two or
-   ; more; -i, -f N and -s N compare past N fields and then N characters, case aside, -w
-   ; N no more than N characters; -z lines end with a NUL. INPUT and OUTPUT --
+   ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7 --
    (uniq-main as)
     (: fo (uflags "uniq" as '(102 115 119) "cdDfisuwz")
        t <fo fs (fo 1)
@@ -745,9 +684,8 @@
        (emit line cnt) ((d? && cnt < 2) || (u? && 1 < cnt) ? ()
                         (c? ? (say o (upad 7 (show cnt) + " ")),
                          say o line, put o end))
-       ; adjacent runs, so one line of memory is the whole state -- the run's first,
-       ; its key, and how many have matched it; -D says each as it comes, a run's first
-       ; held back until a second shows it is a run
+       ; the state is the run's first, its key, and its count; -D holds a run's first back
+       ; until a second shows it is a run
        (step prev pk cnt x k)
         (? (cnt = 0) [x k 1]
            (k = pk) (D? ? (cnt = 1 ? (say o prev, put o end) 0, say o x, put o end) 0, [prev pk (cnt + 1)])
@@ -775,8 +713,7 @@
     (: fo (uflagsl "tee" as () "aip" {"append" 97 "ignore-interrupts" 105 "output-error" 112})
        t <fo a? (peep t 97 0) fs (fo 1)
        _ (t 105 ? (signal 2 1) 0)
-       ; every destination opens up front. tee is a pipe, and a pipe cannot wait
-       ; for the end of its input to start writing -- it used to slurp stdin whole.
+       ; every destination opens up front, and stdin streams through
        (opn l acc ok)
         (atom? l ? [(rev acc) ok]
          (open <l (a? ? "a" "w") @ q
@@ -791,11 +728,9 @@
        (clo qs,
         flush out, ok ? 0 1))
 
-   ; -- seq: FIRST INCR LAST, exact: each is an integer and its decimals, the walk runs
-   ; scaled by the most decimals any has, and each line wears as many as FIRST and INCR
-   ; do (GNU's rule: seq 0 0.5 1 is 0.0 0.5 1.0). -w pads to the widest with zeros, -s
-   ; puts SEP between, -f formats each through printf. a leading word that reads as a
-   ; number (-5, -.5) ends the flags, so a negative FIRST is not one --
+   ; -- seq: exact. each operand is an integer and its decimals, the walk scaled by the most
+   ; decimals any has; a line wears as many as FIRST and INCR do (seq 0 0.5 1 is 0.0 0.5 1.0).
+   ; a leading word that reads as a number ends the flags, so a negative FIRST is not one --
    (useqd w)                                   ; -> [int scale] | ()
     (: neg (0 < #w && w 0 = 45) b (0 < #w && (w 0 = 45 || w 0 = 43) ? (snip w 1 #w) w)
        pf (b @ (i + "." + f) [i f] [b ""]) ip <pf fp <>pf
@@ -846,11 +781,8 @@
    (true-main _) 0
    (false-main _) 1
 
-   ; -- test / [ : the POSIX condition. it must exist as a program. cook's in-image
-   ; lane execs a recipe's words directly, so `test` is no shell builtin there: a
-   ; `.. > $t && test -s $t && mv $t $@` recipe looks it up on PATH, and a missing one
-   ; fails the link with the tmp file already swept -- which is exactly how a 0-byte
-   ; lcat header reads as a broken bootstrap. 0 true, 1 false, 2 a bad expression.
+   ; -- test / [ : the POSIX condition, a program because cook's in-image lane execs a
+   ; recipe's words directly, with no shell builtin. 0 true, 1 false, 2 a bad expression
    t-fops '("-e" "-f" "-d" "-s" "-r" "-w" "-x" "-b" "-c" "-p" "-S" "-h" "-L" "-u" "-g" "-k")
    t-nops '("-eq" "-ne" "-lt" "-le" "-gt" "-ge")
    (t-int s)                                   ; "-12" -> (1 -12); anything else -> ()
@@ -961,10 +893,7 @@
      (0 = n || as (n - 1) != "]" ? (udie 2 "[: missing ]")
       (test-main (t-clip as))))
 
-   ; -- uname: -s -n -r -m, or -a for all four. the machine is love-arch respelled --
-   ; holo says x64 where uname says x86_64, and a build naming an artifact off the wrong
-   ; one names it for an arch nothing else calls. The other three come off /proc, so a
-   ; seat without one answers "unknown" rather than a guess.
+   ; -- uname: a field nothing can tell answers "unknown", never a guess --
    (u-1line p d)                               ; a proc file's first line, or the default
     (uread p @ r
      (atom? r ? d
@@ -972,19 +901,12 @@
          (go k) (? (n <= k) k (t k < 33) k (go (k + 1)))
          e (go 0)
          (e @ 0 d (snip t 0 e)))))
-   ; one of uname(2)'s five, by index (1 the host, 2 the release, 3 the version), or the
-   ; default -- the kernel's own answer, where a proc file is linux's alone
+   ; one of uname(2)'s five, by index (1 the host, 2 the release, 3 the version), or d
    (u-uts i d) (uname () @ u (two? u ? (u i @ s (0 < #s ? s d)) d))
-   ; the machine is love-arch respelled, and the prel owns the respelling (arch-uname):
-   ; uname says the world's word for this ISA where love-arch says ours.
+   ; the machine is love-arch respelled to the world's word (x64 -> x86_64)
    (u-mach _) (arch-mach love-arch @ m (string? m ? m (string love-arch)))
-   ; the kernel the same way, and it CANNOT be a file: /proc/sys is linux's spelling of
-   ; sysctl and the other three kernels have no such path, so the read below answered
-   ; "Linux" on freebsd, netbsd and inle alike. main.c pins `love-os` per run off
-   ; __love_osv, which is the only thing that knows. read as data, not as a bare ref: a
-   ; baked ref would fold the bake session's own answer in forever (moon's host-os
-   ; reads it the same way). nothing pinned falls to the file, then to a refusal --
-   ; uname owes a name it was told, never one it guessed.
+   ; the kernel off `love-os`, pinned per run; read as data, not a bare ref, or the bake
+   ; would fold its own answer in. /proc is linux's alone, so it is only the fallback
    (u-os _)
     (: n (elem 'love-os (names ()) ? (ev 'love-os))
        s (nom? n ? (os-uname n))
@@ -1038,10 +960,7 @@
        (atom? ops ? (udie 1 "usage: dirname NAME..")
         (ubn-say t ops udir)))
 
-   ; -- cut: -f list [-d C] [-s] over fields, -c list over characters, -b list over
-   ; bytes (flags glue or not, and GNU's long names); --complement the seats not listed,
-   ; --output-delimiter=S between fields, or between the runs of -c and -b; -z records
-   ; end with a NUL; -n is taken, the characters being whole already --
+   ; -- cut: fields, characters or bytes; -n is taken, the characters being whole already --
    (cut-args as)                       ; -> (delim fields chars b? s? files comp od z)
     (: st {'comp 0 'od () 'z 0}
        (fl a d f c b? s?)
@@ -1110,15 +1029,10 @@
         (ulines "cut" dot fs)))
 
    ; ---- the byte loops, natively -------------------------------------------------
-   ; the interpreter's byte loop is ~700 instructions a byte (src/love/boot/scan.l
-   ; prices it), and tr and base64 are nothing but that loop. tr's is the `xlat` nif:
-   ; any byte map through a 512-byte table, one C body on every target, with the
-   ; love walk below as the oracle test/law/kore.l holds it to. base64's group coder is its
-   ; own shape and used by nothing in the core, so it stays out of the roster: a holo
-   ; kernel, one IR for x64 and a64, with a twin that is the oracle and the engine
-   ; wherever the install declines (inle, wasm, rv64). the shape is scan.l's -- the
-   ; register roles, the deopt tail, the kind guards off g's reach so the blob
-   ; names no C address.
+   ; tr and base64 are nothing but a byte loop, too slow interpreted. tr's is the `xlat` nif,
+   ; the love walk below its oracle. base64's group coder is a holo kernel for x64 and a64,
+   ; its twin the oracle and the engine wherever the install declines. the shape is scan.l's:
+   ; the kind guards read off g's reach, so the blob names no C address
    ;                            g   ip  sp  scratch
    (kabi tgt) (tgt @ 'a64 '(r0 r1 r3 r4) '(r6 r5 r1 r0))
    ; Sp[k] is a heap object of reach kind `kind` (1 a string, 6 a cask), or the twin's;
@@ -1204,12 +1118,9 @@
        (mode c acc) (c < 0 ? acc (mode (c - 1) (<>(f c) . acc)))
        (string (cask (go 255 (mode 255 ())))))
 
-   ; -- tr: set1 set2 translates (SET2 pads with its last charm), -d deletes, -s
-   ; squeezes same-charm runs; stdin only, like the real one --
-   ; the flags cluster: -c (or -C) reads SET1 as its complement, -d deletes, -s
-   ; squeezes. a dash word that is none of them is refused and not read as a set --
-   ; `tr -c a-z .` used to translate the literal set "-c". `--` ends the walk.
-   ; -> [c? d? s? rest t?]; -t cuts SET1 to SET2's length, where it pads SET2
+   ; -- tr: SET2 pads with its last charm; stdin only, like the real one --
+   ; the flags cluster; a dash word that is none of them is refused, not read as a set
+   ; -> [c? d? s? rest t?]
    (tr-flags a c? d? s? t?)
     (? (atom? a) [c? d? s? a t?]
        (<a = "--") [c? d? s? >a t?]
@@ -1247,10 +1158,8 @@
        (image c) (? (atom? two) c  c? (in? c ? last2 c)  (peep mt c c))
        src (slurp in)
        n #src
-       ; the reading as kxlat's table: image, then mode -- 0 dropped, 1 written, 2
-       ; written unless it repeats. -s squeezes what SET1 names when it stands alone
-       ; and what SET2 names beside a translation, which is how GNU reads the pair.
-       ; -ds deletes SET1 and squeezes SET2, so -d takes a SET2 only beside -s
+       ; the reading as kxlat's [image mode]. -s squeezes SET1 alone, SET2 beside a
+       ; translation, as GNU's; -ds deletes SET1 and squeezes SET2
        _ (? !d? ()
             (s? && atom? two) (udie 1 "tr: -ds wants SET2, the charms to squeeze")
             (!s? && two? two) (udie 1 ("tr: extra operand " + <>rest))
@@ -1287,10 +1196,8 @@
            (walk out)),
         flush out, 0))
 
-   ; -- nl: number the lines -- -b t those with ink (the default), a all, n none; -n ln rn
-   ; rz the number left, right or zero-padded; -w its width (6), -s what follows it (a
-   ; tab), -v the first (1), -i the step (1). a line left unnumbered wears the width and
-   ; the separator's length in spaces, and the count carries across inputs --
+   ; -- nl: a line left unnumbered wears the width and the separator's length in spaces, and
+   ; the count carries across inputs --
    (nl-main as)
     (: fo (uflags "nl" as '(98 110 119 115 118 105) "bnwsvi")
        t <fo
@@ -1316,10 +1223,7 @@
        (ulines "rev" dot (uflags "rev" as () "" 1)))
 
    ; ---- the column tools: fold, expand, unexpand --------------------------------
-   ; all three count columns and not bytes -- a tab steps to the next stop, \b steps
-   ; back one, \r starts the line over, a character takes its wcwidth -- which is the
-   ; whole reason they are one section: `ucol` is the only thing they share and the only
-   ; thing they disagree with a byte count about. fold -b asks for the bytes instead.
+   ; all three count columns, not bytes (ucol); fold -b asks for the bytes instead
    (ucol col c stop)                   ; the column code point c leaves the cursor on
     (? (c = 9) (stop * (col // stop + 1))
        (c = 8) (0 < col ? (col - 1) 0)
@@ -1359,8 +1263,7 @@
        w (string? v ? (uatoi v) (charm? <p ? <p 80))
        _ (0 < w ? () (udie 2 "fold: width must be positive"))
        s? (peep t 115 0) b? (peep t 98 0)
-       ; the pieces are said as they are cut. The flatten this replaced was
-       ; `(foldl (\ a l (a + ..)) () ..)`, which copies the whole answer per line.
+       ; the pieces are said as they are cut
        (dot ln term?)
         (: (go m) (atom? m ? 1
                    (say out <m,
@@ -1369,13 +1272,9 @@
            (go (ufold w s? b? ln)))
        (ulines "fold" dot <>>o))
 
-   ; -- column: lines laid in columns, util-linux's and the BSDs' byte for byte. filling,
-   ; every column is one width, the widest entry's taken past the next tab stop, and the pad
-   ; is tabs; down the columns unless -x, across -c's width (the screen's, else 80), a name
-   ; a line when even two will not fit. -t makes a table: fields split on whitespace (a run
-   ; as one, the ends dropped) or on each of -s's characters (so an empty field stays), each
-   ; column as wide as its widest cell, -o between (two spaces), a short row padded to the
-   ; last column. blank lines are skipped; widths are screen columns, a wide character two
+   ; -- column: util-linux's and the BSDs' byte for byte. filling, every column is the widest
+   ; entry's width taken past the next tab stop, padded with tabs. -t makes a table: a
+   ; whitespace run splits as one, each of -s's characters alone (so an empty field stays)
    (col-sp n) (n < 1 ? "" (" " + col-sp (n - 1)))
    (col-vec l) (: t {} (go l j) (atom? l ? t (pin t j <l, go >l (j + 1))) (go l 0))
    ; tabs from screen column c up to the stop end, util-linux's loop
@@ -1493,11 +1392,8 @@
        (ulines "unexpand" dot <>>o))
 
    ; ---- the line endings: dos2unix, unix2dos, mac2unix -------------------------
-   ; three names and one walk; what separates them is which break goes in and which comes
-   ; out. the transform is the easy half -- `tr -d '\r'` is most of dos2unix -- and it is
-   ; not why this is a tool. the other half is: it converts IN PLACE, which is what every
-   ; caller of dos2unix means, and in place means keeping the mode, leaving a binary file
-   ; alone, and not rewriting a file that already reads the way it was asked to.
+   ; three names, one walk. in place keeps the mode, leaves a binary file alone, and does not
+   ; rewrite a file that already reads the way it was asked to
    (ucrlf s)                                  ; crlf -> lf
     (: n #s o (jug 0)
        (go i) (? (n <= i) (slurp o)
@@ -1517,8 +1413,7 @@
                  (s i = 13 && !(i + 1 < n && s (i + 1) = 10)) (put o 10, go (i + 1))
                  (put o (s i), go (i + 1)))
        (go 0))
-   ; a NUL says binary, and a binary file is left alone unless -f: an .exe walked into by
-   ; a `dos2unix *` over a mixed directory is the accident this is here to refuse
+   ; a NUL says binary, and a binary file is left alone unless -f
    (ubin? s) (: n #s (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
    d2u-usage "usage: dos2unix [-fkqn] [FILE..]   (unix2dos and mac2unix are the same door)"
    (ud2u nm fn as)
@@ -1555,23 +1450,12 @@
 
 
    ; ---- the encodings: base64 and base32 (RFC 4648, GNU's two faces) ------------
-   ; one coder, two alphabets: the group is 3 bytes -> 4 charms at 6 bits and 5 -> 8
-   ; at 5, the short tail padded with = to a whole group either way. -d reads it back
-   ; (a newline is ignored, anything else outside the alphabet is refused), -w wraps
-   ; the output at 76 unless told another width, 0 for one long line.
+   ; one coder, two alphabets: 3 bytes -> 4 charms at 6 bits, 5 -> 8 at 5, the short tail
+   ; padded with =. -d ignores a newline and refuses anything else outside the alphabet
    ub64set "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
    ub32set "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-   ; val and go are lifted OUT of grp on purpose. Written inside it -- which is the
-   ; obvious shape, and was this coder's for a long time -- they are two closures minted
-   ; per THREE INPUT BYTES, and love has no pass that hoists a loop lambda out of
-   ; another loop's body. That alone was 3.5x of this function (539 ms -> 155 ms over
-   ; 512 KB, byte-identical), and it is why `base64` used to read ~600x busybox on
-   ; bench/korebench.sh where `tr`, the same kind of per-byte transform, reads ~48x.
-   ; and it was not the two things it looked like: the tower computing 2^shift is
-   ; 5 ms per 3M, and the jug is 145 ms per 1.4M puts. Both were measured and neither
-   ; is the cost. `shf` below is still worth having -- one table beats gc towers a
-   ; group -- but it is the smaller half by far. the kore gauge carries the
-   ; numbers and the two dead ends.
+   ; val and go are lifted out of grp on purpose: inside it they are two closures minted per
+   ; group, and nothing hoists a loop lambda out of another loop's body
    ; base64 rides the kb64 kernel over the whole groups and the coder below over the
    ; tail; base32 (5 bits) is the coder's alone
    (ubenc set bits s)
@@ -1602,9 +1486,7 @@
             full ((have * 8 + bits - 1) // bits)   ; the charms carrying data
             (go k v full 0)))
        (grp 0))
-   ; -w 0 closes nothing: GNU wraps at a width and ends the last line, but one long
-   ; line arrives with no newline at all -- so a `base64 -w 0` piped into a compare is
-   ; a byte shorter than the obvious implementation makes it
+   ; -w 0 closes nothing: GNU ends a wrapped last line, but one long line gets no newline
    (ubwrap w s)                                 ; the coded text, wrapped and closed
     (: n #s o (jug 0)
        (go k) (n <= k ? (slurp o)
@@ -1845,10 +1727,8 @@
 
    ; ---- the two little computations: tsort and factor ---------------------------
 
-   ; -- tsort: the pairs' partial order made total. the answer is a topological
-   ; order, not GNU's: where the input pins one they agree, and where it does not both
-   ; are right -- so the gate asks only about inputs that pin one. a loop is named on
-   ; err, broken at the first node still standing, and leaves 1, as GNU's does --
+   ; -- tsort: a topological order, not always GNU's: they agree where the input pins one.
+   ; a loop is named on err, broken at the first node still standing, and leaves 1 --
    (tsort-main as0)
     (: as (uflags "tsort" as0 () "" 1)
        _ (two? >as ? (udie 1 "usage: tsort [FILE]"))
@@ -1883,9 +1763,7 @@
             go >l 1))))
        (go order 0))
 
-   ; -- factor: every number's primes, GNU's `N: p q r`. trial division by 2 and the
-   ; odd numbers -- exact for anything this tree spends, and a twenty-digit semiprime
-   ; will simply sit here (that is what GNU keeps a Pollard rho for) --
+   ; -- factor: trial division by 2 and the odd numbers; a big semiprime will sit here --
    (ufactor n0)
     (: (go n d acc)
         (? (n < 2) (rev acc)
@@ -1928,9 +1806,8 @@
     ((f @ "-" [1 (slurp in)] (uread f)) @ r
      (two? r ? (lines <>r) (udie 1 (who + ": cannot open " + f))))
 
-   ; -- paste: the files' lines side by side, a row at a time; the delimiters cycle
-   ; between the columns and start over each row (a tab when unsaid). -s lays a whole
-   ; file along one row instead, which is the transpose and not a variant --
+   ; -- paste: the delimiters cycle between the columns and start over each row; -s lays a
+   ; whole file along one row --
    (paste-main as)
     (: (fl a d s?)
         (atom? a ? [d s? a]
@@ -2008,9 +1885,6 @@
        m (? (c = 107 || c = 75) 1024 (c = 109 || c = 77) 1048576
             (c = 103 || c = 71) 1073741824 0)
        (m ? (m * uatoi (snip s 0 (n - 1))) (uatoi s)))
-   ; -n N makes N files of equal bytes, the last taking the rest (l/N the same, a line
-   ; never broken); -C SIZE fills each with whole lines up to SIZE, a longer line cut;
-   ; -x hex suffixes, --additional-suffix=S after each
    (split-main as)
     (: fo (uflagsl "split" as '(108 98 97 110 67 1001) (chars "abCdlnx" + [1001])
                    {"lines" 108 "bytes" 98 "suffix-length" 97 "number" 110 "line-bytes" 67 "numeric-suffixes" 100
@@ -2036,9 +1910,7 @@
                    ((k + by < #t ? (k + by) #t) @ e
                     (wr i (snip t k e),
                      bygo (i + 1) e)))
-       ; unlines terminates every line, so the last piece of a source that did not
-       ; end in a newline has to give the newline back -- the piece is where the
-       ; source's own end lands, and GNU keeps it there
+       ; the last piece of a source with no final newline gives back the one unlines added
        (lngo i ls) (atom? ls ? 0
                     (: rest (drop nl ls)
                        txt (unlines (take nl ls))
@@ -2067,19 +1939,14 @@
            (lngo 0 (lines t))),
         0))
 
-   ; the shape every option walk past this point rides: a word is -X and the value is
-   ; either glued to it or the next word. asked by tally: a text is no link, so a
-   ; `two?` here reads every glued value as absent (the bug that ate `grep -m2`).
+   ; a word is -X and its value glued or the next word. ask a glued value by tally: a text
+   ; is no link, so `two?` reads it as absent
    (uflag w)                            ; "-tx1" -> ("t" "x1"), a bare word -> ()
     (#w @ n (1 < n && w 0 = 45 ? [(snip w 1 2) (snip w 2 n)]))
 
-   ; -- join: two files sorted on their join field, merged into one. a row is the key,
-   ; then the first file's other fields, then the second's; a key repeated on either
-   ; side makes the whole cross product, which is what a relational join owes. -1/-2
-   ; pick the field, -t the separator (runs of blanks when unsaid, and then the output
-   ; rides one space), -a keeps a side's unpairable rows in their sorted place, -v keeps
-   ; only those (and drops the paired rows entirely). out of dialect, deliberately: -o
-   ; (an output template is its own little language), -e, -i.
+   ; -- join: a row is the key, then the first file's other fields, then the second's; a key
+   ; repeated on either side makes the whole cross product. without -t, runs of blanks split
+   ; and the output rides one space
    (ujfs sep ln)                       ; a row's fields: -t's charm, or runs of blanks
     (charm? sep ? (usplit sep ln)
      (: n #ln
@@ -2090,9 +1957,8 @@
             (go (i + 1) (st < 0 ? i st) acc))
         (go 0 -1 ())))
    (unth l k) (k < 1 ? () (l (k - 1)))
-   ; -o FORMAT lays each row as 0 (the key), 1.N or 2.N, comma or space apart, -o auto by
-   ; each file's first line; -e says a field that is not there; -i matches keys case aside,
-   ; each still said as its file spells it
+   ; -o auto reads each file's first line; -i matches keys case aside, each still said as its
+   ; file spells it
    (join-main as)
     (: fo (uflags "join" as '(49 50 116 97 118 111 101) "12aeiotv")
        tf <fo fs (fo 1)
@@ -2158,13 +2024,9 @@
        (go (grp n1 l1) (grp n2 l2),
         flush out, 0))
 
-   ; -- od: the byte dump, GNU's columns to the space. -A d|o|x|n picks the address
-   ; radix (octal, 7 wide, unsaid; -An drops the column AND the closing offset), -t
-   ; type the reading, -N a limit, -j a skip, -v every line even where it repeats
-   ; (a repeat is one `*` otherwise). the short spellings -a -b -c -d -o -x -s -i are
-   ; the -t's GNU gives them. one -t per run, the last given winning: GNU's
-   ; several-at-once lane re-widens every column to the widest type in the set, which
-   ; is a whole layout of its own and not another row.
+   ; -- od: the byte dump, GNU's columns to the space. -An drops the column and the closing
+   ; offset. one -t per run, the last winning: GNU's several-at-once lane re-widens every
+   ; column, a layout of its own
    uodnames '("nul" "soh" "stx" "etx" "eot" "enq" "ack" "bel" "bs" "ht" "nl" "vt"
               "ff" "cr" "so" "si" "dle" "dc1" "dc2" "dc3" "dc4" "nak" "syn" "etb"
               "can" "em" "sub" "esc" "fs" "gs" "rs" "us" "sp")
@@ -2215,10 +2077,7 @@
        kd <ty sz <>ty wd <>>ty
        byte? (kd = 'c || kd = 'a)
        step (byte? ? 1 sz)
-       ; the named operands are one stream, which is what makes the offsets run
-       ; through -- and a row at a time off it, never the stream itself. every
-       ; reading below indexes the row now, not a whole-file `src`: od held every
-       ; operand at once to dump 16 bytes of them.
+       ; the named operands are one stream, so the offsets run through; read a row at a time
        rd (urdb (f \ udie 1 ("od: cannot open " + f)) fs)
        ; the skip is read past, not indexed: a joined stream has no length to take
        ; it off, and running out mid-skip is the diagnostic GNU gives.
@@ -2262,8 +2121,7 @@
         flush out, 0))
 
    ; ---- the byte tools: xxd, strings, dd ---------------------------------------
-   ; od above can say all three things and nobody remembers how to ask it. these are
-   ; the spellings people actually type, and they share od's joined byte reader.
+   ; the spellings people type, over od's joined byte reader
 
    ; -- xxd: the canonical dump, and -r to read one back. 16 bytes a row, the offset
    ; in 8 hex digits, the bytes in pairs of two, then the ascii gutter --
@@ -2286,8 +2144,7 @@
        (go k acc hi)
         (n <= k ? (rev acc)
          (: c (ln k) v (hexv c)
-            ; two spaces in a row is the gutter, and the gutter is text: `ab.hello` past
-         ; it reads as hex to anything that only skips single spaces
+            ; two spaces in a row is the gutter, which is text, not hex
          (? (v < 0) (32 = c && !(charm? hi) ?
                      (k + 1 < n && ln (k + 1) = 32 ? (rev acc)
                       (go (k + 1) acc hi))
@@ -2295,9 +2152,7 @@
                (charm? hi) (go (k + 1) ((16 * hi + v) . acc) ())
                (go (k + 1) acc v))))
        (go s () ()))
-   ; -p the plain hex, 30 bytes a line; -i a C array named for the file; -c the bytes a
-   ; row, -g a group, -u capitals; -l stops after so many bytes and -s starts past so
-   ; many, the offsets counting from there. a count may be 0x hex
+   ; -s starts past so many bytes, the offsets counting from there. a count may be 0x hex
    (xxd-main as)
     (: fo (uflags "xxd" as '(99 103 108 115) "cgilprsu")
        t <fo fs (fo 1)
@@ -2329,11 +2184,8 @@
             (i? ? (say out ((end = sk ? "" "\n") + (nm ? ("};\nunsigned int " + nm + "_len = " + show (end - sk) + ";\n") ""))) 0,
              flush out, 0)))))
 
-   ; -- hexdump: the BSD dump, two faces. bare: a 7-digit hex offset and eight
-   ; little-endian 16-bit words a row; -C (and hd): an 8-digit offset, sixteen bytes
-   ; split eight and eight, the ascii gutter. a row equal to the one before is a `*`
-   ; until -v; -s skips, -n caps; the last line is the offset reached. the -e format
-   ; language and the one-letter faces past -C are not here --
+   ; -- hexdump: the BSD dump, bare (16-bit little-endian words) or -C (and hd). the -e
+   ; format language and the one-letter faces past -C are not here --
    (uhd-row C? off blk)
     (: n #blk o (jug 0)
        (hx v w) (say o (zpad w (radix v 16)))
@@ -2381,13 +2233,8 @@
    (hexdump-main as) (uhexdump "hexdump" as)
    (hd-main as) (uhexdump "hd" ("-C" . as))
 
-   ; -- getopt: util-linux's. -o SHORTS -l LONGS.. [--] PARAMS answers the options
-   ; parsed and quoted for `eval set --`, then --, then the operands; a first word
-   ; with no dash is the old face, `getopt SHORTS PARAMS`, answered unquoted.
-   ; operands are gathered behind -- unless SHORTS opens with + (stop at the first)
-   ; or - (answer them in place). a long may be abbreviated where unambiguous, and
-   ; under -a wear one dash. 1 a parse error (the rest still answered), 2 getopt's
-   ; own misuse, 4 for -T --
+   ; -- getopt: util-linux's; a first word with no dash is the old face, answered unquoted.
+   ; 1 a parse error (the rest still answered), 2 getopt's own misuse, 4 for -T --
    (getopt-main as)
     (: old? (two? as && !(0 < #<as && <as 0 = 45))
        t {}
@@ -2490,9 +2337,7 @@
         flush out,
         peep bad 'b 0 ? 1 0))
 
-   ; -- strings: the printable runs of 4 or more (-n changes the floor). a run ends
-   ; at the first byte outside print-or-tab, which is what makes it useful on an
-   ; object file: the noms come out and the code does not --
+   ; -- strings: the runs of print-or-tab, 4 or more (-n changes the floor) --
    (ustr-ink? c) ((32 <= c && c < 127) || c = 9)
    (strings-main as)
     (: (fl a n fs) (atom? a ? [n (rev fs)]
@@ -2524,16 +2369,9 @@
        (go (),
         flush out, 0))
 
-   ; -- dd: blocks in, blocks out. if=/of= default to the streams; bs= sizes both
-   ; blocks, ibs= and obs= each (512 unsaid); count= stops, skip= reads past that many
-   ; input blocks first, seek= puts the output that many blocks in; iflag=skip_bytes
-   ; count_bytes fullblock and oflag=seek_bytes append; conv= ucase lcase swab sync
-   ; notrunc excl nocreat fsync fdatasync noerror sparse -- one this dd does not do is
-   ; refused, never dropped. skip is read past, not sought, so it works on a pipe; a
-   ; seek, notrunc or append onto a file is laid by reading the file and writing it
-   ; back with the data in place (lseek here takes a raw fd, and a port's buffer
-   ; desyncs under one). the record report goes to err, GNU's shape; status=none
-   ; holds it, status=noxfer the byte line --
+   ; -- dd: a flag this dd does not do is refused, never dropped. a seek, notrunc or append
+   ; onto a file reads the file and writes it back with the data in place: lseek takes a
+   ; raw fd, and a port's buffer desyncs under one --
    (udd-eq w) (w @ (k + "=" + v) [k v] ())   ; "bs=512" -> ("bs" "512"), () for a bare word
    (dd-main as)
     (: t {'ibs 512 'obs 512 'count () 'skip 0 'seek 0 'if () 'of () 'quiet 0 'conv () 'iflag () 'oflag ()}
@@ -2568,8 +2406,7 @@
        _ (string? outf && cv? "excl" && two? (stat outf) ? (udie 1 ("dd: failed to open '" + outf + "': File exists")) 0)
        _ (string? outf && cv? "nocreat" && atom? (stat outf) ? (udie 1 ("dd: failed to open '" + outf + "': No such file or directory")) 0)
        rd (urdb (f \ (udie 1 ("dd: cannot open " + f))) (string? inf ? [inf]))
-       ; skip is READ past, not sought: it works the same on a pipe, which a seek
-       ; would not. a short input mid-skip is GNU's own diagnostic
+       ; skip is read past, not sought, so it works on a pipe
        sk (if? "skip_bytes" ? skip (skip * ibs))
        (drop k) (k <= 0 ? 1 (urdj-take rd (min k ibs) @ g (#g ? (drop (k - #g)) 0)))
        _ (drop sk ? 0 (udie 1 "dd: cannot skip past end of input"))
@@ -2609,8 +2446,7 @@
           (flush q, string? outf ? (close q) 0))
        _ (string? outf && (cv? "fsync" || cv? "fdatasync") ? (fsync outf (cv? "fdatasync")) 0)
        n (r 3)
-       ; the two record lines and the byte count. GNU adds a duration and a rate; no
-       ; two runs agree on those, so no gate could hold them and they are not spoken
+       ; the two record lines and the byte count; GNU's duration and rate are not spoken
        ((t 'quiet = 1 ? 0
          (say err (show <r + "+" + show (r 1) + " records in\n"),
           say err (show (n // obs) + "+" + show (0 < n % obs ? 1 0) + " records out\n"),

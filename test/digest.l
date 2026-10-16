@@ -1,17 +1,5 @@
-; --- test/digest.l: the digests in src/love/crypto/hash.c, held to what publishes them ---
-; (not hash.l: that is the tablet's.) test/kore/sum.sh holds kore's checksum tools to GNU;
-; this is the half that needs no other implementation.
-;   vectors   RFC 1321's md5 suite, fips 180-4's sha examples, RFC 7693's blake2b one.
-;   cksum     hash-ckwalk states the POSIX crc in love, from the standard not the C (poly
-;             0x04c11db7, seed 0, the byte count walked after the message low byte first,
-;             so an empty file is 4294967295), and the C is held to it at lengths 0..129.
-;   lengths   55/56 and 119/120 where the length rides the block's last 8 bytes (sha-384/512:
-;             111/112, 239/240; blake2b holds a block back: 128, 256).
-;   misuse    a wrong shape answers (), it does not digest.
-;   stream    <X>-init/feed/done must answer what the one-shot does, fed in chunks of every
-;             awkward size; agreement, not another vector. misuse feeds each nif its
-;             neighbours' casks, since the state's width is all that tells them apart.
-; run:  cat test/00-init.l test/digest.l | out/love
+; the digests, held to their published vectors, to love statements of the crcs, and
+; streamed against their own one-shots at every awkward chunk size
 (borrow 'hashes)
 (test
  (lit? sha256)
@@ -93,11 +81,8 @@
  !(charm? (cksum ()))
  !(charm? (cksum (cask 8))))
 
-; --- the three resumable digests: each stream against its own one-shot ---------------
-; the state is a cask the caller owns, and the width is the type -- 105 for sha-256,
-; 89 for md5, 12 for cksum. a cask of any other size, or a feed of anything that is not
-; a string, is a misuse and answers (); which is what stops one digest's state being
-; fed to another's nif and answering a number that looks like an answer.
+; --- the resumable digests: the state is a caller's cask whose width is its type
+; (105 sha-256, 89 md5, 12 cksum); any other width or a non-string feed answers () ---
 (: sha-st 105
    md5-st  89
    ck-st   12
@@ -114,14 +99,13 @@
    dig-sha (_ \ [sha-st sha256-init sha256-feed sha256-done])
    dig-md5 (_ \ [md5-st  md5-init    md5-feed    md5-done])
    dig-ck  (_ \ [ck-st   cksum-init  cksum-feed  cksum-done])
-   ; init and feed answer the cask itself: a value the collector can walk, held live
-   ; across a collection by whoever binds it
+   ; init and feed answer the cask itself, live across a collection
    (dig-gc d s) (cask <d @ b (<>d b, <>>d b s, please 1, <>>>d b))
    (sha-stream s k) (dig-stream (dig-sha 0) s k)
    (md5-stream s k) (dig-stream (dig-md5 0) s k)
    (ck-stream s k)  (dig-stream (dig-ck 0) s k)
-   ; every length across both padding boundaries (55/56 and 119/120), each fed whole
-   ; and in chunks that divide the block, straddle it, and outrun it
+   ; every length across both pad boundaries, whole and in chunks that divide,
+   ; straddle and outrun the block
    (dig-agree? n)
     (: s (hash-bytes n)
        (go ks) (atom? ks ? 1
@@ -162,12 +146,10 @@
  (md5-stream "abc" 1 = "900150983cd24fb0d6963f7d28e17f72")
  (md5-stream hash-112 7 = md5 hash-112)
  (md5-stream (hash-bytes 100000) 1000 = md5 (hash-bytes 100000))
- ; cksum folds the length in at the end, so the empty file is 4294967295 and not 0 --
- ; the one place a streamed digest could plausibly answer "nothing fed" and be wrong
+ ; cksum folds the length in at the end, so the empty file is 4294967295, not 0
  (ck-stream "" 4 = 4294967295) (ck-stream "" 4 = cksum "")
  (ck-stream (hash-bytes 100000) 1000 = cksum (hash-bytes 100000))
- ; misuse, and crosswise: a state of the wrong width is refused, which is the only
- ; thing between three digests that all take a cask and a string
+ ; misuse, crosswise: a state of the wrong width is refused
  !(md5-init (cask sha-st)) !(sha256-init (cask md5-st))
  !(cksum-init (cask sha-st)) !(md5-init (cask ck-st))
  !(md5-feed (cask md5-st) 7) !(cksum-feed (cask ck-st) 7)
@@ -188,10 +170,8 @@
  (blake2b "abc" = "ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923")
  !(string? (sha1 7)) !(string? (sha512 ())) !(string? (blake2b (cask 8))))
 
-; --- the four newer block digests and blake2b, streamed against their one-shots ---
-; sha-384/512 run a 128-byte block with a 16-byte length, so 111/112 and 239/240 are
-; their pad boundaries; blake2b holds a whole block back until it knows whether it was
-; the last, so 128, 256 and one either side are where it could slip
+; --- sha-1/224/384/512 and blake2b streamed: sha-384/512 pad at 111/112 and 239/240,
+; blake2b holds a block back, so 128 and 256 ---
 (: dig-sha1 (_ \ [93 sha1-init sha1-feed sha1-done])
    dig-sha224 (_ \ [106 sha224-init sha224-feed sha224-done])
    dig-sha384 (_ \ [202 sha384-init sha384-feed sha384-done])

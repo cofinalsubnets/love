@@ -1,7 +1,6 @@
-/* plain char's sign is the target's: unsigned under AAPCS64, AAPCS32 and the RISC-V psABI, signed
- * on x86-64 and under wasm's C conventions. every view of it must agree -- the codegen, __CHAR_UNSIGNED__,
- * limits.h, a string literal's bytes, a char parameter -- so this answers the same on every
- * target and every compiler. freestanding, exit-code only: each disagreement sets its bit. */
+/* plain char's sign is the target's (unsigned on aapcs64, aapcs32, riscv; signed on x64 and wasm):
+ * codegen, __CHAR_UNSIGNED__, limits.h, string bytes and char params agree. each disagreement sets
+ * a bit. */
 #include <limits.h>
 
 #ifdef __CHAR_UNSIGNED__

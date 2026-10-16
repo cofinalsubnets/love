@@ -1,4 +1,5 @@
-; src/apps/tls/bench.l -- the two ciphers, love against their C twins (src/love/crypto/tls.c).
+; src/apps/tls/bench.l -- the two ciphers, the love oracles (test/host/chacha.l, test/host/poly1305.l)
+; against the C nifs the aead runs (src/love/crypto/tls.c).
 ; test/host/tlsc.l proves they agree; this asks what the readable one costs. the ratio is
 ; the binary's: mooncc is weakest at indexed loops over arrays, so it moves most with the
 ; compiler that built love.
@@ -6,6 +7,8 @@
 ; not a gate: it prints numbers. run it by hand -- out/love src/apps/tls/bench.l
 (borrow 'tls)
 (borrow "src/apps/tls/tls.l")
+(borrow "test/host/chacha.l")              ; the love oracles, spliced into module 'tls
+(borrow "test/host/poly1305.l")
 
 (:
    size 65536                                      ; 64 KiB, 1024 chacha blocks

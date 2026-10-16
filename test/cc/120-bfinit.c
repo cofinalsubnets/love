@@ -1,19 +1,5 @@
-/* a brace initializer over a bitfield member lays the bits, not the unit.
- *
- * The fill reached a bitfield member with the member's own (bitfield uty bitoff w)
- * type and stored the whole declared unit flat -- unshifted, unmasked, and the
- * neighbours sharing that unit gone. `struct B { unsigned a:1, b:1; } g = {0,1}`
- * read back a=1 b=0. Assignment was always right, which is why it stood: nothing
- * in the tree braces a bitfield, it sets them.
- *
- * Both lanes were wrong and they are separate code: the frame fill emits a
- * read-modify-write now, and the static image merges the members of one unit into
- * that unit's VALUE -- two placements at one offset made the image lay the second
- * after the first, so a two-bitfield struct also imaged eight bytes wide.
- *
- * No corpus found this; it fell out of writing 118's regression.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* a brace initializer over bitfield members lays the bits, keeping neighbours
+ * sharing the unit -- in the frame and in the static image. each check adds 1: the exit code is the pass count. */
 
 struct B { unsigned a:1; unsigned b:1; };
 struct C { unsigned a:3; unsigned b:5; unsigned c:24; };

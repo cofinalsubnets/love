@@ -1,23 +1,21 @@
-; test/host/tlsc.l -- the C twins of the ciphers held to the love files, which are the oracle:
-; the RFC ciphertext and tag off the C side, every length 0..129, the block counter carried into
-; a batch, and misuse answering (). poly1305's conditional subtract is unreachable from a
-; message, so only test/host/tls.l reaches it.
+; test/host/tlsc.l -- the C twins of the ciphers held to the love files, the oracle
+; poly1305's conditional subtract is unreachable from a message: only test/host/tls.l reaches it
 ; not in the corpus: host nifs. run: cat test/00-init.l test/host/tlsc.l | out/love
 
 (borrow 'tls)
 (borrow "src/apps/tls/tls.l")
+(borrow "test/host/chacha.l")              ; the love oracles, spliced into module 'tls
+(borrow "test/host/poly1305.l")
 
 (test
  (lit? chacha20)
  (lit? poly1305))
 
-; the fixtures, leaked on purpose (a body-less `:`) so every assert below shares
-; them -- the shape test/host/tls.l wears.
+; a body-less `:` leaks the fixtures to every assert below
 (: ckey (bytes 32 (i \ i))
    cnon (bytes 12 (i \ (i = 7 ? 74 0)))            ; §2.4.2's nonce: ..4a
    (cmsg n) (bytes n (i \ (i * 7 + 11 & 255)))   ; a fixed pseudo-random run
-   ; the first length at which the twins disagree, or -1 if none does. a bare
-   ; false would say "somewhere"; this names the block edge it broke on.
+   ; the first length at which the twins disagree, or -1: names the block edge it broke on
    (cbad i n) (n < i ? -1 (cmsg i @ m
                     (? !(chacha20 ckey cnon 1 m = cc-xor ckey cnon 1 m) i
                        !(poly1305 ckey m = po-mac ckey m) i
@@ -42,24 +40,22 @@
     ; xor is its own inverse in C too, so the twin decrypts what it encrypted
     (pt242 = chacha20 ckey cnon 1 (chacha20 ckey cnon 1 pt242))))
 
-; --- lengths: the two twins agree at every length across both block edges ----------
+; lengths: the twins agree at every length across both block edges
 (test
  (-1 = cbad 0 129)
- ; ..and the run is not two piles of nothing: lengths differ, counters differ
+ ; the run is not two piles of nothing
  !(poly1305 ckey (cmsg 32) = poly1305 ckey (cmsg 33))
  !(chacha20 ckey cnon 1 (cmsg 64) = chacha20 ckey cnon 2 (cmsg 64)))
 
-; --- counters: love varies the counter down a galaxy, C walks it ------------------
+; counters: love varies the counter down a galaxy, C walks it
 (test
  (-1 = cctrbad 0 5)
- ; block 1 of a batch is what counter 2 gives on its own -- love's vectorised
- ; galaxy and C's loop, meeting on the same 64 bytes
+ ; block 1 of a batch is what counter 2 gives on its own
  (snip (chacha20 ckey cnon 1 (cmsg 512)) 64 128
   = cc-xor ckey cnon 2 (snip (cmsg 512) 64 128))
- ; a counter step really moves the keystream, so the above compares something
  !(chacha20 ckey cnon 1 (cmsg 512) = chacha20 ckey cnon 3 (cmsg 512)))
 
-; --- misuse: a value op, so a wrong shape answers () and encrypts nothing ----------
+; misuse: a wrong shape answers () and encrypts nothing
 (: shortk (bytes 31 (i \ i))
    longn (bytes 16 (i \ i))
    (test
@@ -69,14 +65,11 @@
     !(chacha20 ckey cnon -1 "hello")
     !(poly1305 shortk "hello")
     !(poly1305 ckey 'x)
-    ; ..and the empty message is a real answer, not a misuse: a 16-byte tag
+    ; the empty message is not a misuse
     (16 = #(poly1305 ckey ""))
     (poly1305 ckey "" = po-mac ckey "")))
 
-; --- aes-gcm: C alone, so the numbers are NIST's (the GCM spec's test cases 1-4, 13, 14,
-; 16) -- empty and one-block messages under zero keys, the 64-byte message, the 60-byte
-; one with 20 bytes of aad, and aes-256's. then a message round-trips at every length
-; 0..70 across the block edges, a flipped tag or byte is refused, and misuse answers ()
+; aes-gcm: C alone, so the numbers are the GCM spec's test cases 1-4, 13, 14, 16
 (: k0 (unhex "00000000000000000000000000000000") iv0 (unhex "000000000000000000000000")
    k3 (unhex "feffe9928665731c6d6a8f9467308308") iv3 (unhex "cafebabefacedbaddecaf888")
    p3 (unhex "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255")

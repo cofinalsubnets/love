@@ -1,20 +1,7 @@
-/* a by-value struct NAMED in a variadic function's parameter list.
- *
- * The variadic prologue lays a 176-byte register save area and addresses the named
- * params inside it -- and it classified them as scalars, so every aggregate shape
- * read the wrong bytes. c-testsuite's 00140 is the MEMORY-class one and segfaulted.
- *
- * The three answers a named aggregate can want, and they are not interchangeable:
- * a MEMORY-class one (past 16 bytes) binds STRAIGHT to the caller's overflow block;
- * one eightbyte is addressed where its register was saved; and a PAIR touching xmm
- * must be COPIED, because the save area steps the xmm slots 16 apart where a pair's
- * eightbytes must sit 8 apart. Only the all-INT pair is contiguous where it landed.
- *
- * va_arg rides on the same counting: the gp/xmm offsets va_start seeds are what the
- * named params left behind, so an aggregate consuming two registers where the walk
- * charged one hands the anonymous args out shifted.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* a by-value struct named in a variadic function's params: memory-class binds to
+ * the overflow block, one eightbyte reads its saved register, an xmm pair is copied
+ * (save slots sit 16 apart); va_arg's offsets follow what the named params used.
+ * each check adds 1: the exit code is the pass count. */
 
 #include <stdarg.h>
 

@@ -1,8 +1,6 @@
-/* the AST inliner: a call at a position its statement evaluates first becomes the callee's
- * body ahead of the statement, each param a fresh local (or the caller's own name, or *p its
- * x when the arg is &x), each return a store, a substituted expression, or -- at a return --
- * the caller's own return. every shape below is one of its lanes or one of its declines, and
- * main answers how many of them agree with the value C gives them (32). */
+/* the ast inliner: each shape is one of its lanes or declines (a param a fresh local, the
+ * caller's name, or *p for &x; a return a store, an expression or the caller's return).
+ * main answers how many agree with c (32). */
 
 static int sq(int x) { return x * x; }
 static char nar(int x) { return x; }                            /* a narrowing return */

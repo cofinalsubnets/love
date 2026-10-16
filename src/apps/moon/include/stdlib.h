@@ -36,6 +36,7 @@ double strtod(char const*, char**);
 int   system(char const*);
 int   abs(int);
 long  labs(long);
+long long llabs(long long);
 /* the pty quartet lives here in glibc (stdlib.h, not pty.h) */
 int   posix_openpt(int);
 int   grantpt(int);

@@ -1,22 +1,7 @@
-; Subprocess capability (host-only nifs `hark` and `getenv`).
-;
-; (hark argv) takes a list of strings and spawns the program named by its head
-; (PATH-resolved via execvp). It returns:
-;   (status . output)  -- a pair -- when the process ran: status is the exit
-;                         code (or 128+signal if killed), output is the child's
-;                         captured stdout as one string;
-;   an errno nom       -- 'enoent .. -- when the program couldn't be spawned;
-;   'badarg            -- our-side misuse (empty argv / a non-string element).
-; So `two?` is the success/failure discriminator. stderr is inherited, not
-; captured. (getenv name) -> string, or nil when unset.
-;
-; These children are chosen so none reads stdin: under the test harness the
-; child inherits l's stdin (the test-corpus pipe), and a reader would eat it.
-
-; hark/getenv are host-only (subprocess + environment); inle and the browser have
-; neither, so skip the whole file there (hosted, test/00-init.l).
+; hark and getenv, host only: (hark argv) answers (status . stdout), an errno nom, or 'badarg.
+; no child reads stdin: it inherits the corpus pipe and would eat it
 (hosted ? (test
-  ; --- ran successfully: a chain, exit 0, and (here) no output ---
+  ; --- ran: exit 0, no output ---
   (two? (hark ["true"]))
   (0 = cap (hark ["true"]))
   (0 = sat >(hark ["true"]))             ; `true` writes nothing
@@ -41,6 +26,6 @@
   ; --- output larger than the initial buffer exercises the grow path ---
   (hark ["seq" "20000"] @ r ((0 = cap r) && (65536 < sat >r)))
 
-  ; --- getenv: PATH is set (a string); a bogus name is unset -> () (the zero point) ---
+  ; --- getenv: PATH is set; an unset name answers () ---
   (string? (getenv "PATH"))
   !(getenv "GWEN_DEFINITELY_UNSET_12345")) 0)

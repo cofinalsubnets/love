@@ -1,7 +1,5 @@
-; test/host/player.l -- src/apps/player: the bus (eq.c's biquads and spectrum, fft.c's
-; transform, bus.l's coefficients) and the core, driven in process through its messages on
-; HORN=none, which keeps real time, so every track here is a fraction of a second. where sox is, one band of the eq
-; is held to sox's equalizer, the same rbj filter, within a sample's rounding.
+; test/host/player.l -- src/apps/player: the bus (eq.c, fft.c, bus.l) and the core, in process
+; on HORN=none, which keeps real time: every track is a fraction of a second
 ;   cat test/00-init.l test/host/player.l | out/love
 (borrow 'posix)
 (borrow 'bus)
@@ -30,11 +28,11 @@
                         (each ^n (i \ pinv c (2 * i) 2 2 (iota 1 + l i)),
                          pl-chan (string c) 1 0))
 
-   ; --- the bus --------------------------------------------------------------
+   ; the bus
    nz (pl-pcm [(pl-noise 4410 7) (pl-noise 4410 11)])
    flat (bus-co 44100 (map (_ \ 0) ^10) 0 100 0 1)
    (run1 co s ch) ((cite 'dsp 'biquads) s ch co "" @ (o . _) o w w)
-   _ (test (run1 flat nz 2 = nz)                                       ; flat and full: the same bytes
+   _ (test (run1 flat nz 2 = nz)
            (pl-chan (run1 (bus-co 44100 (map (_ \ 0) ^10) 0 50 0 1) nz 2) 2 0
               = (pl-chan nz 2 0 @ v (int (v * 0.5 + (v >= 0) * 0.5 - (v < 0) * 0.5))))
            (aall (pl-chan (run1 (bus-co 44100 (map (_ \ 0) ^10) 0 100 100 1) nz 2) 2 0 = 0))
@@ -43,14 +41,13 @@
            ; a filter blown past full scale (y = x + 4 y1) holds the rail it ran to
            (run1 (bus-q [1.0 1.0 1.0 0.0 0.0 -4.0 0.0]) (string (cats (map (_ \ [232 3]) ^200))) 1
               @ o (snip o (#o - 2) #o = string [255 127])))
-   ; memory carries: two halves through one bus equal the whole through another
+   ; memory carries: two halves equal the whole
    _ (: eq (map (k \ k % 3 * 4 - 4) ^10) a (bus-new ()) b (bus-new ())
         _ (pin a 'co (bus-co 44100 eq 0 100 0 1)) _ (pin b 'co (a 'co))
         h (#nz // 8 * 4)
         x (bus-run a (snip nz 0 h) 2) y (bus-run a (snip nz h #nz) 2) z (bus-run b nz 2)
         (test (x + y = z)))
-   ; a slider moved off 0 dB keeps the filters' memory: no cold start, so no click. the
-   ; difference just after the switch is no bigger than where it has settled
+   ; a slider moved off 0 dB keeps the filters' memory: no click at the switch
    _ (: A [-12 9 0 0 0 0 0 0 0 0] B [-12 9 0 0 0 0 0 0 0 1] h (#nz // 8 * 4)
         bq (cite 'dsp 'biquads)
         (run co s st) (bq s 2 co st @ (o . st2) [o st2] w w)
@@ -62,7 +59,6 @@
         (win k) (amax (peep ad (k + iota 500) 0))
         (test (#(r1 1) = #((run (bus-co 44100 B 0 100 0 0) nz "") 1))
               (win 0 <= 2 * win 1500 + 2)))
-   ; the spectrum: a 1 kHz sine at full scale tops its own band, silence is the floor
    sine (pl-pcm [(pl-sine 1000.0 44100 4096 32767.0) (pl-sine 1000.0 44100 4096 32767.0)])
    sp (bus-spec sine 2 44100 32)
    top (findsub sp [(foldl max 0 sp)])
@@ -72,16 +68,14 @@
            (6 <= #(uniq (snip (bus-spec nz 2 44100 32) 0 8)))           ; bars narrower than a bin
            (#(bus-scope sine 2 8) = 8)
            (bus-scope sine 2 1 = [[-128 127]]))
-   ; the transform: an impulse is flat, a cosine on bin 3 of 64 is n/2 there and at -3 and
-   ; nothing else, energy is kept n-fold, a complex input goes too, the inverse undoes it,
-   ; and a length short of a power of two is the next one, zeros past the end
+   ; fft: a length short of a power of two pads with zeros to the next
    fft (cite 'dsp 'fft) ifft (cite 'dsp 'ifft)
    (pw z) (re z * re z + im z * im z)
    (near a b) (amax ((a - b) * (a - b)) < 1e-18)
    imp (fft ((iota 8 = 0) * 1.0))
    cs (fft (cos (iota 64 * (2.0 * 3.14159265358979 * 3 / 64))))
    xr (iota 16 * iota 16 * 1.0 - 40.0)
-   xc (fft (fft xr))                                                   ; a complex tray in
+   xc (fft (fft xr))
    _ (test (near (re imp) (iota 8 * 0.0 + 1.0)) (near (im imp) (iota 8 * 0.0))
            (abs (peep (re cs) 3 0.0 - 32.0) < 1e-9) (abs (peep (re cs) 61 0.0 - 32.0) < 1e-9)
            (amax ((pw cs) * (1 - (iota 64 = 3) - (iota 64 = 61))) < 1e-18)
@@ -92,7 +86,7 @@
            (near (re (fft (iota 6 * 1.0))) (re (fft (iota 8 * (iota 8 < 6) * 1.0))))
            (fft [1.0 2.0] = 'badarg) (fft 3.0 = 'badarg))
 
-   ; --- one band against sox's equalizer --------------------------------------
+   ; one band against sox's equalizer, the same rbj filter, within a sample's rounding
    mono (pl-pcm [(pl-noise 22050 3)])
    _ (pl-lay (dir + "/n.wav") (pl-wav 44100 1 mono))
    _ (? (sh "command -v sox >/dev/null" @ (0 . _) 1 _ 0)
@@ -104,7 +98,7 @@
            (test (#ref = #ours) (amax (max (ref - ours) (ours - ref)) <= 1)))
         (gate-partly "player: no sox here, the eq is not held to its equalizer"))
 
-   ; --- the core, in process ---------------------------------------------------
+   ; the core
    tone (pl-pcm [(pl-sine 440.0 8000 4000 8000.0) (pl-sine 660.0 8000 4000 8000.0)])
    _ (pl-lay (dir + "/a.wav") (pl-wav 8000 2 tone))
    _ (pl-lay (dir + "/b.wav") (pl-wav 8000 2 tone))
@@ -152,8 +146,7 @@
    ; consume: what plays leaves the queue
    _ (test (core-send c ['consume 1] = ['ok]) (core-send c ['play 2] = ['ok]) (waits 'state 'stop 150)
            (ids () = [1 2]) (core-send c ['clear] = ['ok]) (ids () = []))
-   ; a station on loopback: an icy stream of a wav, its titles between the blocks. queued, it is
-   ; asked only its name; played, the item takes each StreamTitle as it comes
+   ; a loopback icy station: queued, asked only its name; played, retitled per StreamTitle
    (pl-block m) (: n ((#m + 15) // 16) (string [n] + m + string (cask (16 * n - #m))))
    (pl-icy s mi ts) (: (go i acc) (? (#s <= i * mi) (cats (rev acc))
                                     (: b (snip s (i * mi) (min #s (i * mi + mi)))
@@ -171,8 +164,7 @@
            (core-send c ['play 0] = ['ok]) (waits 'state 'stop 150)
            (titles () = ["two"]))
    _ (freeze srv)
-   ; an ogg chain: two flac --ogg links, TITLE=c1 then TITLE=c4. queued it says c1; played out,
-   ; the second link's tags retitle it
+   ; an ogg chain of two flac links: played out, the second link's tags retitle it
    _ (? (sh "command -v flac >/dev/null" @ (0 . _) 1 _ 0)
         (: f (\ n (dir + "/" + n))
            _ (sh ("flac -s -f --ogg --serial-number=101 -T TITLE=c1 " + f "a.wav" + " -o " + f "c1.oga"
@@ -183,8 +175,7 @@
                  (titles () = ["c4"])))
         (gate-partly "player: no flac here, the ogg chain's retitle is not run"))
    _ (core-close c)
-   ; served: one core on a socket, two clients attached; each sees the other's changes and
-   ; replies come back in order; kill ends it
+   ; served: one core, two clients, each seeing the other's changes; kill ends it
    _ (setenv "PLAYER_RUN" (dir + "/run"))
    sc (core-new "s") sp (dir + "/run/s.sock")
    srv2 (twirl (_ \ core-serve sc sp) 0)
@@ -208,7 +199,6 @@
    (pl-down n) (? (landed? srv2 || n = 0) (landed? srv2) (rest 20, pl-down (n - 1)))
    _ (test (pl-down 100) (core-send r1 ['ping] = ['err "the core has gone"]))
    _ (core-close r1)
-   ; the verb: --headless starts a core detached, queues, plays and leaves; --kill stops it
    (pl-reach2 n) (core-attach (dir + "/run/main.sock") @ () (? (n = 0) () (rest 20, pl-reach2 (n - 1))) r r)
    (pl-gone n) (connect ['unix (dir + "/run/main.sock")] @ q (? !(hot? q) 1 (n = 0) 0 (: _ (close q) _ (rest 20) (pl-gone (n - 1)))))
    _ (test (sh ("PLAYER_RUN=" + dir + "/run HORN=none out/love player --headless " + dir + "/a.wav") = (0 . ""))
@@ -216,7 +206,7 @@
            (sh ("PLAYER_RUN=" + dir + "/run out/love player --kill") = (0 . ""))
            (pl-gone 100)
            (sh ("PLAYER_RUN=" + dir + "/run out/love player --kill 2>&1") = (1 . "player: no core is served as main\n")))
-   ; the verb speaks the same messages on stdin and stdout
+   ; --pipe: the same messages on stdin and stdout
    _ (test (sh ("printf '(ping)\\n(bye)\\n' | HORN=none out/love player --pipe | tail -2")
               = (0 . "(ok)\n(ok)\n"))
            (sh ("printf '(nonsense\\n(bye)\\n' | HORN=none out/love player --pipe | sed -n 3p")

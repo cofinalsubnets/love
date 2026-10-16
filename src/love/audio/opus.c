@@ -92,7 +92,6 @@ static inline void *opus_alloc_scratch(size_t n) { (void) n; return NULL; }
 #include "opus/silk/decoder_set_fs.c"
 #include "opus/silk/gain_quant.c"
 #include "opus/silk/init_decoder.c"
-#include "opus/silk/lin2log.c"
 #include "opus/silk/log2lin.c"
 #include "opus/silk/pitch_est_tables.c"
 #include "opus/silk/resampler.c"

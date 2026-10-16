@@ -1,9 +1,6 @@
-/* the GNU spellings and folds the linux kernel's headers reach for, held to gcc:
- * __signed__ and the underscored qualifiers (a K&R parameter list holds NAMES, so
- * one of these opening the list is a prototype), __builtin_choose_expr,
- * __builtin_object_size, __builtin_prefetch, __auto_type -- and `case A ... B`.
- * the kernel spells __auto_type `auto`, through a macro named by a keyword, which
- * phase 4 must still expand. */
+/* GNU spellings held to gcc: __signed__ and underscored qualifiers (opening a
+ * prototype's list), __builtin_choose_expr, __builtin_object_size,
+ * __builtin_prefetch, __auto_type (also via a macro named `auto`), case A ... B. */
 #include <stdio.h>
 
 #define auto __auto_type

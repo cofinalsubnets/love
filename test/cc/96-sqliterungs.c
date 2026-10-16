@@ -1,11 +1,6 @@
-/* the sqlite rungs, gcc-differential and freestanding: sizeof over a GLOBAL
-   settles at parse (an array bound), the null-pointer offsetof idiom folds
-   ((int)((char*)&((T*)0)->F) -- sqlite carries its own macro), the
-   int-to-pointer constant ((void*)&((char*)0)[X]) images -- stride-scaled
-   for non-char pointees -- BLOCK-scope typedefs bind and shadow with C
-   scope, a string literal initializes a char-array MEMBER without starting
-   an elision run, and C's tentative-definition rule (6.9.2) lays ONE object
-   however the tentative and initialized forms are ordered. */
+/* sizeof over a global as an array bound; the null-pointer offsetof idiom; the
+   int-to-pointer constant (stride-scaled); block-scope typedefs; a string init of
+   a char-array member; one object however tentative and initialized forms order. */
 
 static const unsigned char magic[] = { 0xd9, 0xd5, 0x05, 0xf9, 0x20, 0xa1, 0x63, 0xd7 };
 struct parse { char zErr[11]; int rc; long mark; double r; };

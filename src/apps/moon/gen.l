@@ -2857,17 +2857,15 @@
                      (cxout g (cxb (vty r) @ 'float (vty r) cxdty)
                         ; each component's sign bit flips, a nan's too; r0 is free, cxout writes it last
                         (<>pa + [['ldsd 'f0 'r4 <pa] ['ldsd 'f1 'r4 (<pa + 8)]] + dneg g 'f0 + dneg g 'f1))))
-              (vty r = 'float && f32v? g)           ; unary on a native float: -f flips through minus zero's single
-               (op @ 'neg (mkv 'float 'r0 (vfs r + '((li r1 0x80000000) (movdxr f1 r1) (subss f1 f0) (movsd f0 f1))))
+              (vty r = 'float && f32v? g)           ; unary on a native float: -f flips the sign bit, a nan's too
+               (op @ 'neg (mkv 'float 'r0 (vfs r + '((movdrx r0 f0) (li r1 0x80000000) (xor r0 r0 r1) (movdxr f0 r0))))
                      'not (mkv 'long 'r0 (asflo g r + '((li r1 0) (movqxr f1 r1) (ucomisd f0 f1)) + fsete))
                      'bad)
               (flo? (vty r))                        ; unary on a double
                (: z1 (ilp32? g ? '((li r0 0) (li r1 0) (movqxr f1 r0))           ; 0.0 (the 32-bit pair)
                                '((li r0 0) (movqxr f1 r0)))
-                  ; -0.0: 0.0 - 0.0 is +0.0, so negation subtracts from minus zero
-                  n0 (mz0 g 'f1)
-                  (op @ 'neg                 ; -d = (-0.0) - d
-                         (mkv 'double 'r0 (vfs r + (n0 + '((subsd f1 f0) (movsd f0 f1)))))
+                  (op @ 'neg                 ; -d flips the sign bit, a nan's too
+                         (mkv 'double 'r0 (vfs r + dneg g 'f0))
                         'not                 ; !d = (d == 0.0), NaN-honest: !NaN is false -- fsete
                          (mkv 'long 'r0 (vfs r + (z1 + ('((ucomisd f0 f1)) + fsete))))
                         'bad))                           ; ~ on a double is invalid
@@ -3640,9 +3638,6 @@
    ; a double's sign bit flipped in place, through r0 (ilp32: the pair's high word)
    (dneg g fr) (ilp32? g ? [['movqrx 'r0 fr] '(li r2 0x80000000) '(xor r1 r1 r2) ['movqxr fr 'r0]]
                  [['movqrx 'r0 fr] '(li r1 0x8000000000000000) '(xor r0 r0 r1) ['movqxr fr 'r0]])
-   ; -0.0 into fr (ilp32 builds the pair in r0:r1)
-   (mz0 g fr) (ilp32? g ? ['(li r0 0) ['li 'r1 0x80000000] ['movqxr fr 'r0]]
-                 [['li 'r0 0x8000000000000000] ['movqxr fr 'r0]])
    ; the C99 VLA type ('varr elt dim-expr [idx]): a local carries its parse-stamped idx into g 'vslots -> (ptrslot sizeslot);
    ; a pointee (char (*p)[width]) carries just the expr, re-evaluated at each scale site
    (gvarr? ty) (two? ty && <ty = 'varr)
@@ -7741,6 +7736,9 @@
    ; the inline-asm register file (cgasm; cgdecl reads it for a register variable's pin)
    asmregs '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
    asmpick '(r10 r9 r8 r7 r6 r5 r2 r1 r0)
+   ; a64's "w": a v register, from the caller-saved top (a function with an asm homes no float)
+   asmfp '(f16 f17 f18 f19 f20 f21 f22 f23)
+   (freg? r9) (elem r9 asmfp)
    asmnames (foldl (t \ i \ "r" + show i @ s9 (pin t (name s9) s9)) {} ^11)
    (asmreg? g r9) (elem r9 (asmfile g) || a64? g && r9 = 'r4)
    (asmfile g) (ia32? g ? '(r0 r1 r2 r3 r5 r6) asmregs)      ; i386 has eight registers, esp and ebp aside
@@ -7913,6 +7911,7 @@
           (n = 1) (c0 @ 114 'pick 113 'pick 103 'pick 109 'mem
                       112 'pick                                ; "p": an address in a register, %a spells it as memory
                       81 (a64? g ? 'mem 'bad)                  ; a64's Q: a base register alone, [xN]
+                      119 (a64? g ? 'fpick 'bad)               ; a64's w: a v register
                       97 (x86 ? 'r0 'bad) 98 (x86 ? 'r3 'bad) 99 (x86 ? 'r1 'bad)
                       100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad)
                       (elem c0 asmimm ? 'imm 'bad))
@@ -7957,7 +7956,7 @@
               (? !(c = 37) (go (i + 1) (acc + string c))
                  (i + 1 < n)
                   (: d (tm (i + 1))
-                     md (elem d '(98 119 107 113 99 120 108 97 80) && i + 2 < n && 48 <= tm (i + 2) <= 57 ? d 0)
+                     md (elem d '(98 119 107 113 99 120 108 97 80 115 104 100) && i + 2 < n && 48 <= tm (i + 2) <= 57 ? d 0)
                      dx (md ? (tm (i + 2)) d)
                      (? (d = 37) (go (i + 2) (acc + "%"))
                         (48 <= dx <= 57)
@@ -8091,7 +8090,7 @@
        is9 (iconv <>>>s ())
        ; an input pinned where an output is ("=a"(n) : "a"(0), cpuid's) is that output's tie
        (oix l k j) (? !(two? l) () (elem <<l '(o x) && <><l = k) j (oix >l k (j + 1)))
-       (tieup e) (: j (<e = 'i && !(two? <>e) && <>e != 'pick ? (oix os <>e 0))
+       (tieup e) (: j (<e = 'i && !(two? <>e) && !(elem <>e '(pick fpick)) ? (oix os <>e 0))
                     (charm? j ? ['i ['tie j] <>>e <>>>e] e))
        (bad? os || bad? is9 ? 'bad
           (: ops9 (os + map tieup is9)
@@ -8099,7 +8098,7 @@
              (pinset l acc)
               (!(two? l) ? acc
                  (: e2 <l k <>e2
-                    (? (elem <e2 '(m k) || k = 'pick || two? k) (pinset >l acc)
+                    (? (elem <e2 '(m k) || elem k '(pick fpick) || two? k) (pinset >l acc)
                        !(asmreg? g k) 'bad
                        (elem k acc) 'bad
                        (pinset >l (k . acc)))))
@@ -8115,6 +8114,8 @@
                              (two? k) (<>k < #acc ? (rev acc <>k @ r9 (assign >l fr (r9 . acc))) 'bad)
                              (k = 'pick)
                               (two? fr ? (assign >l >fr (<fr . acc)) 'bad)
+                             (k = 'fpick)
+                              (#(filter freg? acc) @ j (j < #asmfp ? (assign >l fr ((asmfp j) . acc)) 'bad))
                              (assign >l fr (k . acc)))))
                    ; no operand takes a register the asm clobbers; past the scratch file, x64 seats
                    ; callee-saved ones, saved around the whole asm
@@ -8122,6 +8123,14 @@
                                            (filter (c \ !(c = "memory" || c = "cc" || vclob? g c)) <>>>>s)))
                    xcs (x64t? g ? '(r3 r11 r12 r13 r14) ())
                    asgn (assign ops9 (filter (r9 \ (nelem r9 pinned && nelem r9 ckill)) (asmpk g + xcs)) ())
+                   ; a v register's bits ride a free gp register in and out of it
+                   scr (bad? asgn ? () (filter (r9 \ nelem r9 asgn && nelem r9 pinned && nelem r9 ckill && nelem r9 '(r0 r1)) (asmpk g) @ l9 (two? l9 ? <l9)))
+                   (fmv w9) (w9 <= 4 ? 'movdxr 'movqxr)       ; gp bits -> v
+                   (gmv w9) (w9 <= 4 ? 'movdrx 'movqrx)       ; v bits -> gp
+                   ; a v output stores from its own register: s or d whole, a narrower one through a cell
+                   (fst w9 ty f9) (w9 >= 4 ? [[(w9 = 8 ? 'stsd 'stss) 'r0 0 f9]]
+                                     [['sub 'sp 'sp 16] ['stss 'sp 0 f9] [(w9 = 2 ? 'ldu2 'ldu1) 'r1 'sp 0] ['add 'sp 'sp 16]
+                                      [(stop ty) 'r0 0 'r1]])
                    (clobs l acc)
                     (!(two? l) ? (rev acc)
                        (<l @ c
@@ -8143,20 +8152,26 @@
                    tls (two? labs && outs? ? (map (_ \ nlab g (g 'fn + ".ag")) labs) labs)
                    (? (bad? saves) 'bad
                       (bad? asgn) (asmno g "more asm operands than registers to seat them")
+                      (any freg? asgn && !scr) (asmno g "no gp register free to carry a v operand")
                       (two? labs && two? saves) (asmno g "an asm goto with a callee-saved clobber")
                       (two? labs && two? csops) (asmno g "an asm goto with an esi or edi operand")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
-                         (rtext a9 w) (md \ (? (md = 108) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
-                         (itext v) (md \ (? (md = 108) 'bad neutral? (md || !(cint? v) ? 'bad (show v)) (gas-imm tgt v md)))
+                         (rtext a9 w) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
+                         (itext v) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad neutral? (md || !(cint? v) ? 'bad (show v)) (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? (peep asmnames a9 "r?" + ", 0") (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
+                         ; a v register: plain is v, s h d b q its scalar views
+                         (ftext a9) (md \ (? neutral? 'bad
+                                             (: n9 (snip (show a9) 1 #(show a9))
+                                                (md @ 0 ("v" + n9) 115 ("s" + n9) 104 ("h" + n9) 100 ("d" + n9)
+                                                      98 ("b" + n9) 113 ("q" + n9) 'bad))))
                          (optext l al acc)
                           (!(two? l) ? (rev acc)
                              (: e2 <l a9 <al
                                 (optext >l >al ((<e2 @ 'm (itext a9)
                                                        'b (mtext a9)
                                                        'f (md \ 'bad)       ; a flag output has no spelling
-                                                       (rtext a9 <>>>e2)) . acc))))
+                                                       (freg? a9 ? (ftext a9) (rtext a9 <>>>e2))) . acc))))
                          txt (asmsub tmpl (optext ops9 asgn () + map ltext tls))
                          (? (bad? txt) (asmno g "an asm operand the template spells with a modifier it has no lane for")
                             (!neutral? && nom? (gas-nolong tgt txt))
@@ -8164,22 +8179,28 @@
                             (: ; inputs (and in-out outputs) evaluate and push -- all but the last, which
                                ; stays in r0 and moves to its register ahead of the pops
                                nin #(filter (e2 \ elem <e2 '(x i b)) ops9)
-                               (loads l k acc)
+                               (loads l al k acc)
                                 (!(two? l) ? acc
                                    (<l @ e2
                                       (elem <e2 '(x i b) ?
                                           (cgexpr g env <>>e2 () @ r
                                              (? (bad? r) 'bad
+                                                (flo? (vty r) && freg? <al)
+                                                 (loads >l >al (k + 1) (acc + vfs r + [[(gmv (vty r = 'float ? 4 8)) 'r0 'f0]]
+                                                                        + (k + 1 = nin ? () (spush 'r0))))
                                                 (flo? (vty r) || stru? (vty r)) (asmno g "a float or struct asm operand")
-                                                (loads >l (k + 1) (acc + tor0 g r + (k + 1 = nin ? () (spush 'r0))))))
-                                         (loads >l k acc))))
-                               lf (loads ops9 0 ())
+                                                (loads >l >al (k + 1) (acc + tor0 g r + (k + 1 = nin ? () (spush 'r0))))))
+                                         (loads >l >al k acc))))
+                               lf (loads ops9 asgn 0 ())
                                (bad? lf ? 'bad
                                   (: ; ..then pop into their registers, reverse order
                                      (pops l al k acc)
                                       (!(two? l) ? acc
                                          (elem <<l '(x i b) ?
-                                            (pops >l >al (k + 1) ((k + 1 = nin ? (<al = 'r0 ? () [['mov <al 'r0]]) (spop <al)) + acc))
+                                            (pops >l >al (k + 1)
+                                                  ((? (freg? <al) (k + 1 = nin ? [[(fmv <>>><l) <al 'r0]] (spop scr + [[(fmv <>>><l) <al scr]]))
+                                                      (k + 1 = nin) (<al = 'r0 ? () [['mov <al 'r0]])
+                                                      (spop <al)) + acc))
                                             (pops >l >al k acc)))
                                      ; the body, the saved clobbers pushed around it
                                      body (map (r9 \ ['push r9]) saves
@@ -8194,7 +8215,7 @@
                                      (opush l al acc)
                                       (!(two? l) ? acc
                                          (elem <<l '(o x f) ?
-                                            (opush >l >al (acc + spush <al))
+                                            (opush >l >al (acc + (freg? <al ? () (spush <al))))
                                             (opush >l >al acc)))
                                      (ostores l al acc)
                                       (!(two? l) ? acc
@@ -8203,9 +8224,9 @@
                                                (matv g (clval g env <>>e2) @ lv
                                                   (bad? lv ? 'bad
                                                      (vty lv @ ty
-                                                        (flo? ty || stru? ty || arr? ty || bitf? ty ? (asmno g "a float, struct, array or bit-field asm output")
+                                                        (flo? ty && !(freg? <al) || stru? ty || arr? ty || bitf? ty ? (asmno g "a float, struct, array or bit-field asm output")
                                                            (ostores >l >al
-                                                            (vfs lv + spop 'r1 + [[(stop ty) 'r0 0 'r1]] + acc)))))))))
+                                                            (vfs lv + (freg? <al ? (fst <>>><l ty <al) (spop 'r1 + [[(stop ty) 'r0 0 'r1]])) + acc)))))))))
                                      osf (ostores ops9 asgn ())
                                      ; one register output into a plain memory lvalue (a local's slot, a home's
                                      ; face) stores straight from its register: no cell
@@ -8213,7 +8234,7 @@
                                      one? (1 = #(filter (e2 \ elem <e2 '(o x f)) ops9) && 0 <= oix9)
                                      olv (one? ? (clval g env <>>(ops9 oix9)))
                                      oreg (one? ? (asgn oix9))
-                                     direct (one? && vm? olv && !(two? (vfs olv)) && vmb olv != oreg
+                                     direct (one? && !(freg? oreg) && vm? olv && !(two? (vfs olv)) && vmb olv != oreg
                                              && !(vty olv @ ty (flo? ty || stru? ty || arr? ty || bitf? ty)))
                                      (post u9) (fsets ops9 asgn () + (direct ? [[(stop (vty olv)) (vmb olv) (vmo olv) oreg]]
                                                                          (opush ops9 asgn () + osf)))
@@ -10108,7 +10129,7 @@
        (nogo? x k)                                  ; something a copy may not repeat, or k may not suffer
         (? (atom? x) ()
            (elem <x '(brk cont goto lbl case dflt switch asm sexpr sdecl)) 1
-           (x @ (('asn || 'post || 'rmw) ('var n) . _) (n = k)
+           (x @ (('asn || 'post || 'rmw) . ('var n) . _) (n = k)
                 ('rmw _ ('var n) _) (n = k)
                 ('addr ('var n)) (n = k)
                 ())

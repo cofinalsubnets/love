@@ -1,7 +1,5 @@
-/* two anonymous-bitfield shapes the kernel's headers write, held to gcc: one over
- * a TYPEDEF (linux/timex.h's `s32:32;` padding, which reads exactly like a struct
- * label), and one continuing into a comma list (asm/cpuid/types.h's
- * `u32 : 31, invalid : 1;`, where only the second member is named). */
+/* anonymous bitfields over a typedef (`s32:32;`, read like a label) and in a comma list
+ * (`u32 : 31, invalid : 1;`), held to gcc. */
 #include <stdio.h>
 
 typedef int s32;

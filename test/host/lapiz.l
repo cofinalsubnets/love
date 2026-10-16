@@ -1,4 +1,4 @@
-; test/host/lapiz.l -- the document lens over a markdown corpus that touches every block and span.
+; test/host/lapiz.l -- the document lens over a markdown corpus that touches every block and span
 ;   law 1  the AST is the fixed point of each surface: (mdread (mdshow a)) = a, (htread (htshow a)) = a.
 ;   law 2  each surface round-trips through the other up to normalization; both normalizers idempotent.
 ; a new surface owes law 1 and nothing more.
@@ -7,15 +7,15 @@
 (borrow 'lapiz)                                ; the baked module, spliced
 (borrow 'text)                                 ; swidth, a line's cells
 
-; --- the module seam: lapiz registered, the splice + accessor both reach -------
+; the module seam
 (test
  (elem 'lapiz (cite ()))                   ; the registry lists it
- (elem 'md->ht (keys (cite 'lapiz)))        ; keys introspects the layer
+ (elem 'md->ht (keys (cite 'lapiz)))
  ("<h1>hi</h1>" = cite 'lapiz 'md->ht "# hi")     ; the opaque accessor reaches a face
- (lit? (cite 'lapiz))                         ; presence: the accessor is a closure
+ (lit? (cite 'lapiz))
  !(cite 'lapis))                           ; a missing module answers ()
 
-; --- the corpus: every block, every span, and the edges around them ------------
+; the corpus
 (: corpus
    ["" "# a title" "###### deep" "just a paragraph"
     "a wrapped paragraph
@@ -88,24 +88,23 @@ int main(void) { return 0; }
 
 the [end](e)."]
 
-   (nrm s) (mdshow (mdread s))                 ; the markdown normalizer: read then show
-   (hrm s) (htshow (htread s))                 ; ..and the html one
-   ; the 0 nil-tail fossil would fail law 1 on nothing but the terminator, and
-   ; `show` prints the two alike -- so probe the tail itself, everywhere in the AST.
+   (nrm s) (mdshow (mdread s))                 ; read then show
+   (hrm s) (htshow (htread s))
+   ; `show` prints a 0 nil-tail like (), so probe the tail itself
    (t0? x) (!(two? x) ? (0 = x) (t0? <x || t0? >x))
    (map (s \
              (: d (mdread s)  m (nrm s)  h (md->ht s)
                 (test
                    (d = mdread (mdshow d))          ; law 1, the markdown surface
                    (d = htread (htshow d))          ; law 1, the html surface
-                   (m = ht->md (md->ht s))          ; law 2: the lens closes, up to normalization
-                   (m = nrm m)                      ; ..and a normalizer is idempotent
+                   (m = ht->md (md->ht s))          ; law 2: up to normalization
+                   (m = nrm m)
                    (h = md->ht (ht->md h))
                    (h = hrm h)
                    !(t0? d)                        ; no 0 tail anywhere in the middle
                    !(t0? (htread h))))) corpus,
 
-    ; --- the shapes, spelled out: the middle is plain love data -------------------
+    ; the shapes, spelled out
     test (mdread "# hi" = '((head 1 ((text "hi")))))
          (mdread "*a*b" = '((para ((em ((text "a"))) (text "b")))))
          (mdread "- x\n- y\n" = '((bullets (((text "x")) ((text "y"))))))
@@ -131,29 +130,22 @@ the [end](e)."]
           = '((table (n) (((text "h"))) ((((text "v")))))))
          (mdread "t\n:   b\n" = '((deflist ((((text "t")) ((text "b")))))))
          (mdread "---\ntitle: L\n---\n" = '((meta ((title "L") (section "") (date "") (source "") (manual "")))))
-         ; two blank-separated lists of one kind are one list (markdown's loose-list rule,
-         ; and the only spelling roff has) -- `bmrg`, the block twin of `mrg`
+         ; two blank-separated lists of one kind are one list (`bmrg`)
          (mdread "- a\n\n- b\n" = '((bullets (((text "a")) ((text "b"))))))
-         ; a wrapped item is one item: a line that is neither blank nor a block opener
-         ; continues the item above it, and the wrap's indentation is not the text's.
+         ; a wrapped item is one item, its indentation dropped
          (mdread "- a\n  wrapped\n- b\n" = '((bullets (((text "a wrapped")) ((text "b"))))))
          (mdread "1. a\n   wrapped\n" = '((numbers (((text "a wrapped"))))))
-         ; ..and what does not continue one: a blank line, and every block opener
+         ; what does not continue one: a blank line, every block opener
          (mdread "- a\n\nb\n" = '((bullets (((text "a")))) (para ((text "b")))))
          (mdread "- a\n- b\n" = '((bullets (((text "a")) ((text "b"))))))
          (mdread "- a\n# b\n" = '((bullets (((text "a")))) (head 1 ((text "b")))))
          (mdread "- a\n```\nx\n```\n" = '((bullets (((text "a")))) (fence "" "x\n")))
-         ; the reader is total: a line `starter` claims but no block can parse -- a
-         ; `---` rule that is not one, a `:   ` body with no term over it -- is taken as
-         ; a paragraph of its own rather than stopping the block loop, which used to drop
-         ; the whole rest of the document in silence.
+         ; the reader is total: a line `starter` claims but no block parses is a paragraph
          (mdread ":   orphan\n" = '((para ((text ":   orphan")))))
          (mdread "--- the table ---\nbody\n"
           = '((para ((text "--- the table ---"))) (para ((text "body")))))
          (mdread "- a\n:   b\n" = '((bullets (((text "a")))) (para ((text ":   b")))))
-         ; ..and it never fires on what a shower writes, which is why law 1 does not feel
-         ; it: a real rule, a real deflist and a shielded paragraph all still read as they
-         ; are shown.
+         ; and never fires on what a shower writes
          (mdread "---\n" = '((rule)))
          (mdread "t\n:   b\n" = '((deflist ((((text "t")) ((text "b")))))))
          ; a paragraph that would re-read as a block wears one backslash; the escape leaf takes it off
@@ -170,10 +162,8 @@ the [end](e)."]
          (ht->md "<p>5 &lt; 6 &amp; 7</p>" = "5 < 6 & 7\n")
          (md->ht "5 < 6 & 7" = "<p>5 &lt; 6 &amp; 7</p>"),
 
-    ; --- the roff surface: law 1 on the man-page-shaped docs ---------------------
-    ; roff is a smaller surface, so its law is stated over its domain -- meta, head 1-2,
-    ; para, fence with no language, quote, bullets, numbers, deflist, and text/strong/
-    ; em/code inline. every one of those appears below.
+    ; the roff surface: law 1 over its domain -- meta, head 1-2, para, fence with no
+    ; language, quote, bullets, numbers, deflist, text/strong/em/code
     (: rfcorpus
      ["# NAME" "## OPTIONS" "plain paragraph text" "a *b* **c** `d`"
       "- one
@@ -219,38 +209,35 @@ some literal
                     (test (d = rfread (rfshow d))        ; law 1, the roff surface
                             !(t0? (rfread (rfshow d)))))) rfcorpus)
 
-     ; ..and outside the domain rfshow stays total while rfread normalizes. each loss is
-     ; pinned here, so it is a stated property of the surface and not a surprise.
+     ; outside the domain rfshow stays total while rfread normalizes, each loss pinned
      (rfrt s) (rfread (rfshow (mdread s)))
      (test (rfrt "### deep" = '((head 2 ((text "deep")))))              ; .SH/.SS and no more
            (rfrt "```c\nx\n```\n" = '((fence "" "x\n")))                ; .EX/.EE has no language slot
            (rfrt "---\n" = ())                                          ; a man page has no rule
            (rfrt "[t](u)" = '((para ((text "t ⟨u⟩")))))                 ; a link flattens to the man idiom
-           ; ..and the domain-shaped neighbours of each are untouched
+           ; the domain-shaped neighbours are untouched
            (rfrt "## deep" = '((head 2 ((text "deep")))))
            (rfrt "```\nx\n```\n" = '((fence "" "x\n"))),
 
-      ; the surface table is the whole of conversion: six pairings, no pairwise code
+      ; the surface table is the whole of conversion: no pairwise code
       test (convert 'md 'ht "# hi" = "<h1>hi</h1>")
            (convert 'md 'rf "# hi" = ".SH hi\n")
            (convert 'rf 'md ".SH hi\n" = "# hi\n")
            (convert 'ht 'rf "<h1>hi</h1>" = ".SH hi\n")
            (convert 'md 'ht "# hi" = md->ht "# hi")
            (md->rf "# NAME" = ".SH NAME\n")
-           ; ..and the one undefined spot: no row for a format, on either side
+           ; no row for a format, on either side
            (convert 'md 'png "# hi" = 'nolens)
            (convert 'png 'md "# hi" = 'nolens)
            (nom? (convert 'md 'png "# hi"))
-           ; the second hub: the two x86 dialects convert into each other, and not into a document
+           ; the two x86 dialects convert into each other, not into a document
            (convert 'att 'intel "\tmovl\t$5, -12(%rbp)\n" = "\t.intel_syntax noprefix\n\tmov\tDWORD PTR [rbp-12], 5\n")
            (convert 'intel 'att "\tmov\tDWORD PTR [rbp-12], 5\n" = "\tmovl\t$5, -12(%rbp)\n")
            (convert 'md 'att "# hi" = 'nolens),
       0)),
 
-    ; --- real documents through the lens, laws and all ---------------------------
-    ; readme.md, and the two man pages -- which are written in markdown and generated
-    ; into roff by this module (src/tools/mkman.l), so their law 1 is load-bearing: it is
-    ; what keeps doc/*.md and the shipped doc/*.1 from being able to disagree.
+    ; real documents: the man pages are generated into roff by src/tools/mkman.l, so law 1
+    ; keeps doc/*.md and doc/*.1 from disagreeing
     (: (slurpf f) (open f "r" @ q (slurp q))
        (map (f \ (mdread (slurpf f) @ d
                     (test
@@ -259,28 +246,19 @@ some literal
                        (d = htread (htshow d))
                        !(t0? d))))
             ["README.md" "doc/love.md" "doc/cook.md"],
-        ; ..and the roff law only on the man pages: readme.md is deliberately outside the
-        ; roff domain (deep headings, fence languages, links, rules), which is the domain
-        ; doing its job rather than a failure.
+        ; readme.md is outside the roff domain (deep headings, fence languages, links, rules)
         map (f \ (mdread (slurpf f) @ d
                     (test (d = rfread (rfshow d)))))   ; law 1 on the roff the build ships
             ["doc/love.md" "doc/cook.md"],
-        ; the man pages are man-page-shaped: every block is in the roff domain, so the
-        ; generated page loses nothing (verified against groff by hand, byte-identical
-        ; to the hand-written pages these replaced).
+        ; the man pages are wholly in the roff domain, so the generated page loses nothing
         map (f \ (mdread (slurpf f) @ d
                     (test ('meta = <<d)    ; a .th, and it leads
                             (nelem 'rule (map cap d))))) ["doc/love.md" "doc/cook.md"],
         0)),
 
-    ; --- the html surface outside its own output ---------------------------------
-    ; law 1 says htread reads what htshow writes. what `html2text` needs is the other half:
-    ; that it also reads a page nobody wrote with htshow -- attributes, containers, a head,
-    ; entities, and tags this middle has no node for. none of that is law 1 and none of it can
-    ; be, so it is stated here as what the scrub promises.
+    ; html outside its own output: what the scrub promises for pages htshow never wrote
     test
-    ; an attribute does not hide a block (an id is kept, as a mark), and the scrub drops
-    ; what is not prose
+    ; an attribute does not hide a block (an id is kept, as a mark); non-prose is dropped
     (htread "<h1 id=\"x\">hi</h1>" = '((head 1 ((mark "x") (text "hi")))))
     (htread "<h1 class=\"x\">hi</h1>" = '((head 1 ((text "hi")))))
     (htread "<!doctype html>\n<html><body><p>hi</p></body></html>" = '((para ((text "hi")))))
@@ -290,13 +268,12 @@ some literal
     ; a container is unwrapped -- what it held is still there, one level out
     (htread "<div class=\"a\"><p>hi</p></div>" = '((para ((text "hi")))))
     (htread "<div><div><p>hi</p></div></div>" = '((para ((text "hi")))))
-    ; ..and a nested kill does not end its parent early
+    ; a nested kill does not end its parent early
     (htread "<script><script></script>x</script><p>y</p>" = '((para ((text "y")))))
     ; the aliases: one font, so <b> is <strong> and <tt> is <code>
     (htread "<p><b>a</b> <i>c</i> <tt>d</tt></p>"
      = '((para ((strong ((text "a"))) (text " ") (em ((text "c"))) (text " ") (code "d")))))
-    ; text with no <p> around it is still a paragraph -- which is where a page's prose
-    ; lives once its containers are gone
+    ; text with no <p> around it is still a paragraph
     (htread "<div>bare text</div>" = '((para ((text "bare text")))))
     ; the entities a document spells, named and numeric
     (htread "<p>a&nbsp;b &amp; c&#65;d&#x42;e</p>" = '((para ((text "a b & cAdBe")))))
@@ -305,24 +282,20 @@ some literal
     ; a tag with no node here is dropped and its content kept, so nothing truncates
     (htread "<p>a</p><button>b</button><p>c</p>"
      = '((para ((text "a"))) (para ((text "b"))) (para ((text "c")))))
-    ; ..and the closers stay with the block waiting for them: a quote survives a stray tag
+    ; the closers stay with the block waiting for them
     (htread "<blockquote><p>q</p></blockquote>" = '((quote ((para ((text "q")))))))
     (htread "<blockquote><wat><p>q</p></blockquote>" = '((quote ((para ((text "q")))))))
     ; a page of nothing but furniture is empty, not garbage
     (htread "<!doctype html><html><head></head><body></body></html>" = ()),
 
-    ; --- the terminal surface: the circle the man pages travel ---------------------
-    ; the build writes doc/*.md, shows it as roff, ships that, and `kore man` reads it back.
-    ; so the property that matters is the round trip through the shipped form: every heading
-    ; the markdown has is still a heading after roff and the tty shower, at the column the
-    ; shower puts one. it is not law 1 -- a terminal keeps nothing and there is no ttread --
-    ; which is why 'tty is no row in `surfaces`: a row owes law 1 and this cannot pay it.
+    ; the terminal surface: every heading survives roff and the tty shower, at its column.
+    ; not law 1 -- there is no ttread -- so 'tty is no row in `surfaces`
     (: (slurpf f) (open f "r" @ q (slurp q))
        ; an inl down to its text -- lapiz keeps its own `plain` off the export list
        (flat l) (atom? l ? "" (<l @ x
                       ((<x @ 'text <>x 'code <>x 'strong (flat <>x) 'em (flat <>x)
                               'link (flat <>x) "") + flat >l)))
-       ; the line a heading should have become: a .SH flush left, a .SS indented three
+       ; a heading's line: a .SH flush left, a .SS indented three
        (heads d) (map (b \ (<>b < 2 ? "" "   ") + flat <>>b) (filter (b \ = <b 'head) d))
        (flush s) ((: (g i o) (? (#s <= i) (slurp o)
                                 (i + 1 < #s && s i = 27 && s (i + 1) = 91)
@@ -337,23 +310,20 @@ some literal
                     t (flush (ttyshow (rfread (rfshow d)) 80))
                     ls (lines t)
                     (test
-                       ; every heading survives the trip, and lands flush left the way
-                       ; a .SH does -- so a missing one is a missing section, not a wrap
+                       ; every heading survives, flush left as a .SH
                        (foldl (a \ h \ (a && elem h ls)) 1 (heads d))
                        ; nothing overruns the width it was given
                        (foldl (a \ l \ (a && swidth l <= 80)) 1 ls)
                        ; the .th became the header line, with the page either side of it
                        (<ls @ h0 (0 < #h0 && h0 0 != 32)))))
             ["doc/love.md" "doc/cook.md"],
-        ; a document of wide tables (the census) overruns neither straight to the terminal
-        ; nor by way of roff, where a table too wide for a page is laid a row at a time
+        ; a document of wide tables overruns neither straight nor through roff, laid a row at a time
         (: d (mdread (slurpf "doc/misc/kore.md"))
            ; the width is characters: a check mark is three bytes and one column
            (cols l) (flush l @ f #(filter (c \ !(128 <= c && c < 192)) (map (i \ f i) ^#f)))
            (test (foldl (a \ l \ (a && cols l <= 80)) 1 (lines (ttyshow d 80)))
                  (foldl (a \ l \ (a && cols l <= 80)) 1 (lines (ttyshow (rfread (rfshow d)) 80))))),
-        ; a roff page the tree did not write still lays out: the shower is total over the
-        ; middle, so every block kind renders and none of them widens past the width
+        ; a roff page the tree did not write still lays out, every block within the width
         (: d (rfread ".TH \"T\" \"1\" \"\" \"s\" \"m\"
 .SH NAME
 t \\- a thing
@@ -378,10 +348,7 @@ a display
                    (elem "     -v     be loud" ls)       ; a short term keeps its definition
                    (elem "     • a bullet" ls)
                    (elem "         a display" ls))),      ; a display sits inside the quote
-        ; the two ways a page's own furniture leaks into it. a .de body runs to a lone `..`
-        ; and to nothing else -- an indented request inside one names no macro, and ending
-        ; the body there spills the rest of the definition, terminator included. and `.if n`
-        ; is this device's branch, so its text is the page's; `.if t` belongs to the other one.
+        ; a .de body runs to a lone `..` only; `.if n` is this device's branch, `.if t` the other's
         (: d (rfread ".TH \"T\" \"1\" \"\" \"s\" \"m\"
 .de Q
 .ie \\n(.g \\(lq\\\\$1\\(rq
@@ -398,9 +365,8 @@ t \\- a thing
            ls (lines (flush (ttyshow d 40)))
            (test (nelem "     .." ls) (nelem "     .. .." ls)
                    (elem "     kept by nroff t - a thing" ls))),
-        ; the browser's view: every link with a url is [n] in reading order, through every
-        ; block that holds an inl, and n picks its url; an anchor is a mark and no number.
-        ; each [n] rides behind a mark named byte 3 and n, which ttpage lifts into the lines
+        ; every link with a url is [n] in reading order, n picks its url; an anchor is a mark and no
+        ; number. each [n] rides behind a mark named byte 3 and n, which ttpage lifts
         (: d (htread "<h2>see <a href=\"/h\">head</a></h2><p>a <a href=\"x/1\">one</a> and <em><a href=\"#f\">two <b>b</b></a></em>, <a name=\"n\">anchor</a></p><ul><li><a href=\"u3\">three</a></li></ul><blockquote><p><a href=\"q4\">four</a></p></blockquote><dl><dt><a href=\"d5\">term</a></dt><dd><a href=\"d6\">def</a></dd></dl><table><tr><th><a href=\"t7\">h</a></th></tr><tr><td><a href=\"t8\">c</a></td></tr></table>")
            r (ttlinks d)
            p (ttpage d 60)
@@ -419,12 +385,10 @@ t \\- a thing
                  (elem "     a [2]one and [3]two b, anchor" ls)
                  ; a page with no links answers none, and the doc unchanged
                  (ttlinks (mdread "a *b* `c`\n") = [(mdread "a *b* `c`\n") ()]))),
-        ; what a page carries that is not prose, read anyway: a get form's text field is a
-        ; link to form:ACTION?PAIRS -- every other control as it stands, the first submit
-        ; button, then its own name=value last -- and a post form, a <select>, a hidden or
-        ; unchecked control lay nothing. an image is its alt, a mark " img SRC" ahead of it
-        ; where it has a src; a bare & is itself; an
-        ; attribute may go unquoted, and a > inside a quoted one ends no tag
+        ; a form read anyway: a get form's text field links to form:ACTION?PAIRS, the other
+        ; controls as they stand, the first submit, its own name=value last; a post form, <select>,
+        ; hidden or unchecked control lays nothing. an image is its alt, " img SRC" ahead of it;
+        ; a bare & is itself; an attribute may go unquoted, and a > inside a quoted one ends no tag
         (htread "<form action=\"/w/i.php?old=1#f\"><input type=hidden name=t value=\"Special:S &amp; b\"><input name=q placeholder=\"Find\"><select name=k><option value=a>A<option selected>B b</select><input type=checkbox name=c checked><input type=checkbox name=d><input type=submit name=go value=Go><input type=submit name=no value=No><textarea name=n>x &lt; y</textarea></form><form method=POST><input name=p></form>" @ f
            (test (f = '((para ((link ((text "[Find________]")) "form:/w/i.php?t=Special%3AS+%26+b&k=B+b&c=on&n=x+%3C+y&go=Go&q=")
                                 (link ((text "[x < y_______]")) "form:/w/i.php?t=Special%3AS+%26+b&q=&k=B+b&c=on&go=Go&n=x+%3C+y")))))
@@ -433,8 +397,7 @@ t \\- a thing
                  (htread "<p>a <img alt=\"no src\"> b</p>" = '((para ((text "a ") (img "no src" "") (text " b")))))
                  (htread "<div><img src=\"a&amp;b.png\"></div>" = '((para ((img "" "a&b.png")))))
                  (htread "<p><img></p>" = htread "<p></p>")
-                 ; a picture a reader without scripts never sees is not laid: one hidden, or
-                 ; of a class a <noscript>'s <style> hides by a plain .name, in <head> or not
+                 ; a picture hidden, or of a class a <noscript>'s <style> hides by a plain .name, is not laid
                  (htread "<head><noscript><style>.ph { visibility: hidden }</style></noscript></head><p><img class=\"x ph\" src=a alt=A><img hidden src=h alt=H><img src=b alt=B></p>"
                   = '((para ((img "B" "b")))))
                  (htread "<noscript><style>@media (x){.m{display:none}} .c, .d > i {display: none}</style></noscript><p><img class=m src=m alt=M><img class=c src=c alt=C><img class=d src=d alt=D></p>"
@@ -443,11 +406,8 @@ t \\- a thing
                   = '((para ((text "fish & chips, ") (link ((text "q")) "q?a=1&b=2&c=3")))))
                  (htread "<p><a href=/u/v title=\"a > b\">u</a> <span id=s>s</span></p>"
                   = '((para ((link ((text "u")) "/u/v") (text " ") (mark "s") (text "s"))))))),
-        ; the places a link lands: every id a mark, inside a tag whose content is a line and
-        ; ahead of any other, and an <a> with no href only its mark and its text. html keeps
-        ; them (law 1); markdown and the terminal show nothing for them; ttpage answers each
-        ; one's line -- a paragraph of marks alone on the next block, a mark at the end of
-        ; one on its last word
+        ; every id a mark, inside a tag whose content is a line and ahead of any other; html keeps
+        ; them, markdown and the terminal show nothing; ttpage answers each one's line
         (: src "<div id=\"top\"></div><h2 id=\"History\">History</h2><p>see <a href=\"#cite_note-1\">[1]</a> and <a name=\"old\">old place</a> here</p><ol><li id=\"cite_note-1\"><span id=\"x\"></span>the note</li><li id=\"cite_note-2\">two</li></ol><section id=\"end\"><p>last</p></section><p>tail <a id=\"q&amp;a\"></a></p>"
            bare "<h2>History</h2><p>see <a href=\"#cite_note-1\">[1]</a> and old place here</p><ol><li>the note</li><li>two</li></ol><p>last</p><p>tail </p>"
            d (htread src)
@@ -464,8 +424,8 @@ t \\- a thing
                  (nelem 1 (map (i \ <p i) ^#(<p)))                ; no sentinel left behind
                  (p 2 = [["top" 0] ["History" 0] ["old" 1] ["cite_note-1" 3] ["x" 3]
                          ["cite_note-2" 4] ["end" 6] ["q&a" 8]]))),
-        ; where a page's own content starts: <main> or role=main is " main", an <article>
-        ; " article" -- a space in the name, which no id has -- beside the tag's own id
+        ; a page's content start: <main> or role=main is " main", an <article> " article" -- a space
+        ; in the name, which no id has -- beside the tag's own id
         (htread "<nav><p>menu</p></nav><main id=\"content\"><h1>t</h1></main>" @ d
            (test (d = '((para ((text "menu"))) (para ((mark "content") (mark " main"))) (head 1 ((text "t")))))
                  (htread (htshow d) = d)
@@ -474,16 +434,14 @@ t \\- a thing
                  (htread "<article><p>y</p></article>" = '((para ((mark " article"))) (para ((text "y")))))
                  ; a page's indenting leaves blank text beside the marks, and they still move on
                  (ttpage (htread "<nav><p>m</p></nav><main>\n    <p>x</p></main>") 60 2 = [[" main" 2]]))),
-        ; an image shows its [alt] and lays a mark " img SRC" on its line for a viewer; one
-        ; with no alt is its mark alone, carried onto the next block's line. ttpics lays the
-        ; same with the links left as ttyshow shows them, and roff says the [alt]
+        ; an image shows its [alt] and a mark " img SRC" on its line; one with no alt is its mark
+        ; alone, carried onto the next line; ttpics leaves links as ttyshow shows them
         (mdread "a ![logo](l.png) b\n\n![](bare.png)\n\nnext [x](u)\n" @ d
            (test (ttpage d 60 = ["     a [logo] b\n\n     next [1]x\n" ["u"] [[" img l.png" 0] [" img bare.png" 2]] [2]])
                  (ttpics d 60 = ["     a [logo] b\n\n     next x <u>\n" [[" img l.png" 0] [" img bare.png" 2]]])
                  (md->tty "![a](b)" 60 = "     [a]\n")
                  (md->rf "![a](b) c" = ".PP\n[a] c\n"))),
-        ; the fill counts cells: a wide character is two, and a bullet's text keeps one
-        ; column on every line though the bullet is three bytes
+        ; the fill counts cells: a wide character is two, a bullet three bytes and one column
         (mdread "- one two three four five six seven eight nine\n\n日本語 日本語 日本語 日本語\n" @ d
            (test (lines (flush (ttyshow d 30)) = ["     • one two three four five" "       six seven eight nine" ""
                                                   "     日本語 日本語 日本語" "     日本語"]))),

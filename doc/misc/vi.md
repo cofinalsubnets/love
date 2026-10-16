@@ -32,12 +32,17 @@ regex door, post.l's re):
   The file name picks one — `.c .h .js .mjs .awk .html .css .sh .mk .json .diff .patch .s .S
   .asm .md .man .1`–`.9`, `Makefile`, `Cookfile` — else a `#!` naming a shell or an awk; `:hl`
   on anything else paints it as .l.
-* **src/apps/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
-  the generated syntax file can emit `hi def link` lines rather than hardcoded colours.
+* **src/apps/vi/config.l** — the themes as plain data, keyed by vim highlight group, so the
+  generated syntax file can emit `hi def link` lines rather than hardcoded colours: molokai (the
+  default, two hues our own, on the terminal's own background), nord, tokyo-night,
+  solarized-light and paper (the tree's own light one, the web pages' palette). A theme with a
+  `Normal` row owns the background and paints the selection with its `Visual` row.
 * **test/law/vi.l** — the gate.
 
 The pens are the face's to hand over: they want `$COLORTERM` and the user's theme file, and the
-engine reads neither.
+engine reads neither. `~/.love/hue.l` holds rows that override the theme's, and a bare theme
+name in it picks the theme they fold over (`paper`, say). `:colorscheme NAME` (`:colo`) switches
+while editing; bare, it names the theme in force.
 
 ## the dialect
 

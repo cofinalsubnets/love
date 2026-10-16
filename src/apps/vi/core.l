@@ -1,14 +1,12 @@
 ; src/apps/vi/core.l -- the vi engine, pure: a state tablet stepped one byte at a time
 ; (vstep); vframe paints a whole screen, vfresh the difference. no port, tty or file io:
-; the face (src/apps/vi/vi.l) reads keys, blits frames and performs the requests the ex
-; commands leave on the state ('dow write, 'doe read, 'dos split, 'dox an unknown ex word).
+; the face (src/apps/vi/vi.l) reads keys, blits frames and performs the requests ex
+; commands leave on the state ('dow 'doe 'dos 'dof 'dex, 'dox an unknown word).
 ; search rides src/apps/kore/re.l, so re.l loads first in any cat.
 ;
-; 'lines is never empty (the vi invariant); 'row 'col are 0-based, 'col always a
-; character's first byte. 'hlgen is bumped by vput/vsplice/vrest alone, the only
-; mutators of 'lines, and every paint cache keys on it. 'hlcar is [gen lang states]:
-; the wrapper tells a cached gen 0 from no cache. 'pens is installed by the face, so
-; this file reads no env. the lexer also tells % and the bracket objects which ( is code.
+; 'lines is never empty; 'row 'col are 0-based, 'col always a character's first byte.
+; every mutator of 'lines (vput vsplice vrest vload) bumps 'hlgen, and every paint
+; cache keys on it. 'pens is installed by the face, so this file reads no env.
 (module 'vi
 (borrow 'kore) ; the text/u floors
 (borrow 'lint)  ; lint-scan, spliced for this module's compile
@@ -16,11 +14,7 @@
 (borrow 'text)  ; utf-8 read as characters, and their widths
 (:
    ; -- the small floor --
-   ; lists do not index by application (a number list would church-tower), so
-   ; the row walk is explicit; "" past the end keeps every reader total
-   ; the cursor's line. 'lines is a LIST, so asking for row r walks r pairs, and
-   ; one keystroke asks many times -- so it is cached against the row and the
-   ; generation, the two things that can make the answer stale
+   ; the cursor's line: 'lines is a list, so indexing walks; cached against row and generation
    (vln st)
     (st 'lncar @ c
        (two? c && <c = st 'row && <>c = st 'hlgen ? <>>c
@@ -53,8 +47,7 @@
    (vink ln) (: n #ln                       ; first non-blank column
                  (go i) (i < n && (ln i = 32 || ln i = 9) ? (go (i + 1)) i)
                  (go 0 @ k (? (k < n) k (0 < n) (n - 1) 0)))
-   ; every edit to 'lines bumps the generation, which is what lets the paint's
-   ; string carry be recomputed once per edit instead of once per keystroke
+   ; every edit to 'lines bumps the generation, so caches recompute once per edit
    (vgen st) (pin st 'hlgen (st 'hlgen + 1))
    (vput st r ln) (pins st 'lines (: (go l i) (two? l ?
                                                  ((i = r ? ln <l) . go >l (i + 1)))
@@ -118,11 +111,8 @@
    (vrest st fr) (pins st 'lines <fr 'row <>fr, vgen st,
                   vgole st <>>fr, pin st 'dirty 1)
 
-   ; the pure half of :e -- the face reads the file and hands the lines over, this
-   ; starts the buffer over on them: cursor home, no history, not dirty. the paint
-   ; is re-decided from the new name, so :e-ing a .l from a .txt lights up and the
-   ; other way round goes plain, and the generation bump drops the cached carry
-   ; along with the old buffer it described.
+   ; the pure half of :e: a fresh buffer on the face's lines, cursor home, no history.
+   ; the paint is re-decided from the new name
    (vload st ls nm)
     (pins st 'lines (? (two? ls) ls '("")) 'file nm 'row 0 'top 0 'tops 0 'left 0,
      vgole st 0,
@@ -185,19 +175,15 @@
              [r2 (run c2)])))
 
    ; -- the delimiter scan ------------------------------------------------------
-   ; % and the bracket objects want the delimiters that are code. in a buffer whose
-   ; language the paint knows, its lexer -- the only string-and-comment truth this
-   ; file has -- says which columns are inside a literal or a comment; anywhere
-   ; else the mask is empty and every column counts, the way classic vi's % does.
-   ; the language decides, not 'hl, so :hl moves the colour and nothing else.
+   ; % and the bracket objects count only delimiters that are code: a known language's
+   ; lexer masks strings and comments, else every column counts. the language decides,
+   ; not 'hl, so :hl changes colour only.
    (vlang st) (hues-lang (st 'file) <(st 'lines))
    (vlex st g)
     (st 'lex @ c
        (two? c && <c = g ? <>c
           (hues-lexer g @ k (pin st 'lex [g k], k))))
-   ; the per-line start states, folded once per generation and cached against it
-   ; and the language. the paint reads this too, so an edit pays for one fold and
-   ; a keystroke that only moves the cursor pays for none.
+   ; the per-line lexer start states, cached as [gen lang states]; the paint reads it too
    (vcarry st g lx)
     (st 'hlcar @ c
        (two? c && <c = st 'hlgen && <>c = g ? <>>c
@@ -273,11 +259,9 @@
        j (skip (b \ !b) (skip (b \ b) (st 'row + d)))
        (? (j < 0) 0 (nl <= j) (nl - 1) j))
 
-   ; -- motions: key (+ n) -> ('to r c) exclusive | ('toi r c) inclusive
-   ;             | ('lin r2) linewise target, the goal column kept | ('linb r2)
-   ;             the same, landing on the line's first ink | ('spn r1 c1 r2 c2)
-   ;             an absolute charwise span | ('linr r1 r2) an absolute linewise
-   ;             one, which is what a linewise text object answers | () --
+   ; -- motions: key (+ n) -> ('to r c) exclusive | ('toi r c) inclusive | ('lin r2)
+   ; linewise, goal column kept | ('linb r2) linewise, onto first ink | ('spn r1 c1 r2 c2)
+   ; absolute charwise | ('linr r1 r2) absolute linewise, a text object's | ()
    (vmot st c n raw)
     (: r (st 'row) col (st 'col) ln (vln st) len #ln nl (vnl st)
        (walk f cf k) (: (go i p) (i < 1 ? p (go (i - 1) (f st cf <p <>p)))
@@ -622,10 +606,7 @@
                  vhunt st dir)))))
 
    ; -- libra, on the buffer --------------------------------------------------
-   ; both weighings are pure functions over text, so they run here, and over the
-   ; BUFFER rather than the file: it answers for what you are looking at. one
-   ; scanner under libra's three faces and this one, so what pulchritude says is
-   ; what `make lint` refuses. lint counts line and col from one, the buffer from zero.
+   ; lint-scan over the buffer, not the file. lint counts line and col from one, the buffer from zero.
    (vlint st)
     (lint-scan (unlines (st 'lines)) @ ws
        (? !(two? ws) (vmsg st "balance clean")
@@ -640,10 +621,9 @@
 
    ; -- the ex line -----------------------------------------------------------
    ; a line reads [range] command [args]; `;` moves dot to the first address before
-   ; reading the second, and % is 1,$. rows answer 0-based, so address 0 is -1, the
+   ; reading the second, and % is 1,$. rows are 0-based, so address 0 is -1, the
    ; "before the first line" m and t take as a destination.
-   ; a search address that finds nothing answers 'bad, NOT (): "no address here" and
-   ; "an address that failed" must part company, or :/nomatch/d deletes the current line.
+   ; a failed search address answers 'bad, not (), or :/nomatch/d deletes the current line.
 
    (vexskip s i) (: n #s (go k) (k < n && (s k = 32 || s k = 9) ? (go (k + 1)) k) (go i))
    (vextrim s)
@@ -838,21 +818,15 @@
     (vexbad? st r1 r2 ? (vmsg st "out of range")
        (: _ (pin st 'row r1) n (r2 - r1 + 1) (vjoin st (n < 2 ? 2 n) 1)))
 
-   ; :e / :o -- put another file in the buffer. this file touches no io, so the
-   ; ex line leaves a request ('doe, uread's shape) exactly the way :w leaves
-   ; 'dow, and the face performs it and calls vload. `!` forces over a dirty
-   ; buffer. (vim's real `:o` is open mode -- a line-editor face we do not have
-   ; and would not want; `:o NAME` reads as `:e NAME` here, which is what the
-   ; hand reaching for it means.)
+   ; :e / :o -- leaves 'doe for the face, which reads and calls vload. `!` forces over
+   ; a dirty buffer. :o is :e here, not vim's open mode.
    (vedit st nm bang)
     (? (st 'dirty && !bang)
         (vmsg st "no write since last change (e! overrides)")
        (0 = tally nm) (vmsg st "no file name")
        (pin st 'doe [nm]))
 
-   ; :set sw=N / shiftwidth=N (bare :set sw reports), and :set wrap / nowrap.
-   ; two options: the number > and < move by, and how a line too long for the
-   ; view is shown -- folded onto more screen rows, or slid under a window
+   ; :set sw=N / shiftwidth=N (bare :set sw reports), and :set wrap / nowrap
    (vexset st arg)
     (: n #arg
        (eq k) (? (n <= k) () (arg k = 61) k (eq (k + 1)))
@@ -890,6 +864,7 @@
               ("q" "q") ("w" "w") ("wq" "wq") ("x" "x")
               ("e" "edit") ("o" "edit") ("edit" "edit")
               ("hl" "hl") ("set" "set") ("lint" "lint")
+              ("colo" "colorscheme") ("colorscheme" "colorscheme")
               ("sp" "split") ("split" "split") ("vs" "vsplit") ("vsplit" "vsplit")
               ("find" "find") ("grep" "grep") ("explore" "explore"))
    ; the word as typed when it is one, else the meaning of the one word it heads;
@@ -942,11 +917,21 @@
             (w = "explore") (pin st 'dex [arg])
             (w = "hl") (pin st 'hl (st 'hl ? () 1),
                         vmsg st (st 'hl ? "syntax on" "syntax off"))
-            ; :set knows one option, which is the one > and < need a number for
             (w = "set") (vexset st arg)
+            (w = "colorscheme") (vcolo st arg)
             (w = "lint") (vlint st)                    ; libra's scan, on the buffer
             ; unknown here, but left on the state: a face with more ex words takes it
             (pin st 'dox [w arg], vmsg st $ "not an ex command: " + w))))
+   ; :colorscheme NAME swaps the pens through the face's door; bare, it names the one in force.
+   ; the painted rows and the laid frame are keyed without the pens, so both caches go
+   (vcolo st nm)
+    (: f (st 'retheme)
+       (? (0 = #nm) (vmsg st (st 'theme @ t (string? t ? t "molokai")))
+          !(lit? f) (vmsg st "no themes in this editor")
+          (f nm @ p
+             (? !(tablet? p) (vmsg st ("no theme: " + nm))
+                (pin st 'pens p, pin st 'theme nm, pin st 'hlrow (tablet ()), pin st 'laycar (),
+                 vmsg st ("colorscheme " + nm))))))
    (vex st)
     (: s (edtext (st 'cmd))
        n #s
@@ -1202,18 +1187,14 @@
           st))
 
    ; -- the dot register ---------------------------------------------------------
-   ; `.` repeats the last CHANGE by keeping its keys. recording opens on a command
-   ; that changes text and runs until normal mode is quiet again -- no pending
-   ; operator or char argument, out of insert -- so `ciwfoo<esc>` is one entry.
-   ; the count is kept APART from the keys, being the half a count on `.` replaces:
-   ; `3dd` records as (3 "dd"), and `2.` feeds `2dd`.
+   ; `.` replays the last change's keys, recorded from a changing command until normal
+   ; mode is quiet again (no pending operator or argument, out of insert). the count is
+   ; kept apart, so `3dd` records as (3 "dd") and `2.` feeds `2dd`.
    (vchange? c) (elem c '(120 88 68 67 115 83 114 74 126 112 80
                           105 97 73 65 111 79 100 99 62 60 1 24))
    (vquiet? st) ((st 'mode = 'n) && !(st 'pc) && !(two? (st 'op)))
-   ; -- visual mode: the selection is the anchor 'va and the cursor, the motions
-   ; walk the cursor as in normal mode, o swaps the ends, v and V change the kind
-   ; or leave, and an operator takes the whole of it -- charwise both ends in, or
-   ; the lines -- and leaves. a search returns to it; anything else is nothing
+   ; -- visual mode: the selection runs from the anchor 'va to the cursor; o swaps the
+   ; ends, v and V switch kind or leave, an operator takes it all and leaves
    (vback st) (two? (st 'va) ? (st 'vkind) 'n)
    vmotions '(104 108 48 94 36 124 119 101 98 87 69 66 106 107 71 43 13 45 95 123 125
               72 76 77 37 102 70 116 84 103 59 44 110 78 6 2 4 21 377 373 354 366)
@@ -1290,9 +1271,7 @@
    (vfeed st bs) (bs @ (a . u) (vfeed (vstep st a) u) st)
 
    ; -- birth --
-   ; the paint is born on for a language hues-lang knows and off for everything
-   ; else, which is also why every frame law below still reads the plain bytes it
-   ; always did: they open their buffers as "t".
+   ; the paint starts on for a language hues-lang knows, off otherwise
    (vnew ls file)
     {'lines (two? ls ? ls '(""))
      'row 0 'col 0 'goal 0 'top 0 'tops 0 'left 0 'wrap ()
@@ -1317,10 +1296,8 @@
        cseg (: (go l i) (two? >l && <>l <= st 'col ? (go >l (i + 1)) [i <l])
                (wrap? ? (go (vsegs cln w) 0) [0 0]))
        cs <cseg
-       ; -- settle the view. unwrapped, 'top is the old row arithmetic and 'left
-       ; slides half a screen at a time, never further right than the line's end.
-       ; wrapped, the corner carries a segment offset too and the distance to the
-       ; cursor is a walk -- over a screenful of lines at most, each being a row.
+       ; -- settle the view. unwrapped, 'left slides half a screen, never past the
+       ; line's end; wrapped, the corner carries a segment offset 'tops too.
        _ (wrap? ?
             ((row - (body - 1) @ q (q < 0 ? 0 q)) @ lo
                (st 'top < lo ? (pins st 'top lo 'tops 0),
@@ -1349,25 +1326,16 @@
                q (adv l0 t0 (st 'tops) (cnt - body))
                (pins st 'top <q 'tops <>q)))
        top (st 'top) tops (st 'tops) left (st 'left)
-       ; the status line clips from the LEFT: its tail carries the news (row,col, the
-       ; ": 12 lines", the end of the : being typed), which a deep path would push off
-       ; the screen. `<` marks the cut.
+       ; the status line clips from the left, where a deep path sits; `<` marks the cut
        (clipl ln) (#ln @ k (w < k ? ("<" + snip ln (k - w + 1) k) ln))
-       ; -- the paint. escapes are zero width, so the window is cut in plain columns
-       ; and painted from there: every column worked out below is the plain one,
-       ; cursor included. off, this whole lane vanishes.
-       ; a language the name does not tell paints as .l, once :hl asks for it
+       ; -- the paint: the window is cut in plain columns, then painted, so every column
+       ; below is a plain one. a language the name does not tell paints as .l under :hl
        lg (st 'hl && tablet? (st 'pens) ? (vlang st @ g (nom? g ? g 'l)))
        lx (nom? lg ? (vlex st lg))
        paint (lit? lx)
        car (paint ? (vcarry st lg lx))
-       ; the painted window, cached against the text that made it, the carry it began
-       ; on and the columns it was cut to -- keyed by SCREEN row, so the table is the
-       ; height of the view and never the height of the file. typing moves one row;
-       ; the other twenty-odd are answered out of here without the lexer running
-       ; the selection, on a row of the file: its columns [s1 s2), or () off it. a
-       ; charwise one runs both ends in; a line takes one cell at least, so an empty
-       ; line still shows
+       ; the selection on a file row: its columns [s1 s2), or () off it. a line takes
+       ; one cell at least, so an empty line still shows
        vis? (st 'mode = 'v || st 'mode = 'V)
        va (st 'va)
        vr1 (vis? ? (<va < row ? <va row) 0) vr2 (vis? ? (<va < row ? row <va) 0)
@@ -1380,7 +1348,8 @@
                              (fr = vr1) [vc1 (vnx raw vc1 @ e (k < e ? e k))]
                              (fr = vr2) [0 (vnx raw vc2)]
                              [0 (k < 1 ? 1 k)])))
-       ; win is the row's [a b pad]: its bytes, and the blank a cut wide character leaves
+       ; win is the row's [a b pad]: its bytes, and the blank a cut wide character leaves.
+       ; the painted window caches in 'hlrow by screen row, keyed on text, carry and cut
        (lay raw in i win fr)
         (: k #raw a <win b (<>win @ e (k < e ? k e))
            s (sel fr raw)
@@ -1388,7 +1357,7 @@
            (? (two? s && (k = 0 || <s < b) && a < <>s)
                (: p (<s < a ? a <s) q (b < <>s ? b <>s)
                   pad (k < <>s && q = k ? " " "")       ; the cell past the end, a line's own
-                  (snip raw a p + "\e[7m" + snip raw p q + pad + "\e[0m" + snip raw q b))
+                  (snip raw a p + vpen st 'sel "\e[7m" + snip raw p q + pad + vpen st 'off "\e[0m" + snip raw q b))
               (b <= a) ""
               !paint (snip raw a b)
               (: rw (st 'hlrow) ky [raw in a b lg] c (peep rw i ())
@@ -1396,10 +1365,7 @@
                     (hue-win (st 'pens) lx raw in a b @ p
                        (pin rw i [ky p],
                         p)))))))
-       ; 'lines and the carry are LISTS: asking for row i by application walks i
-       ; pairs, so a screenful deep in a file walked the file forty times over --
-       ; 55% of a keystroke, and the whole of why moving around got slower the
-       ; further down you were. drop to the corner once and step from there
+       ; 'lines and the carry are lists: drop to the corner once and step from there
        (rows l cl i k acc fr)
         (? (body <= i) (rev acc)
            !(two? l) (rows l cl (i + 1) 0 ("~" . acc) fr)
@@ -1423,31 +1389,36 @@
                   wrap? (vcols cln <>cseg (st 'col) + 1)
                   (vcols cln 0 (st 'col) - left + 1))
              (w < k ? w k))
-       ; the body is a pure function of these, so when none of them moved the rows
-       ; are the ones we laid last time -- a keystroke that only walks the cursor
-       ; about lays nothing at all, which is the common keystroke
+       ; the body is a pure function of this key, so an unchanged key reuses the last rows
        key [(st 'hlgen) w top tops left body (paint ? 1 ()) (wrap? ? 1 ())
-            (vis? ? [(st 'mode) vr1 vc1 vr2 vc2])]
+            (vis? ? [(st 'mode) vr1 vc1 vr2 vc2]) (st 'theme)]
        lc (st 'laycar)
        rs (two? lc && <lc = key ? <>lc
              (rows (vdrop l0 (top - t0)) (vdrop car top) 0 tops () top @ k
                 (pin st 'laycar [key k],
                  k)))
-       [rs (clipl status) cr cc key])
+       ; a theme that owns the ground sets it at each row's head, so \e[K clears to it
+       g (vpen st 'ground "")
+       [(0 < #g ? (map (r \ g + r) rs) rs) (g + clipl status) cr cc key])
 
    ; -- the frame: one full redraw as a single text --
    (vframe st)
     (: e (string 27) L (vlay st)
        (go l acc) (atom? l ? acc (go >l (acc + <l + e + "[K" + "\r\n")))
        (e + "[H" + go <L "" + <>L + e + "[K"
-          + e + "[" + show <>>L + ";" + show <>>>L + "H"))
+          + e + "[" + show <>>L + ";" + show <>>>L + "H" + vgone st))
+   ; a frame that set a ground hands the terminal back its own
+   (vgone st) (0 < #(vpen st 'ground "") ? "\e[0m" "")
+   ; a pen off the face's table, or d when there is none such
+   (vpen st k d) (st 'pens @ p (tablet? p ? (peep p k d) d))
 
    ; -- the frame as a refresh: only what changed -------------------------------
    ; src/apps/tui.l does the diffing; what is vi's here is the geometry that says the view
    ; has not moved, and vlay's own key, which says the body cannot have changed
    (vfresh st)
     (: L (vlay st)
-       (tui-fresh st (st 'h)
-                  [(st 'w) (st 'h) (st 'top) (st 'tops) (st 'left)]
-                  (L 4) <L <>L <>>L <>>>L)))
+       ((tui-fresh st (st 'h)
+                   [(st 'w) (st 'h) (st 'top) (st 'tops) (st 'left)]
+                   (L 4) <L <>L <>>L <>>>L)
+        + vgone st)))
 ) ; module 'vi

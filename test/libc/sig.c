@@ -1,10 +1,6 @@
-/* the signal floor: the sets, the numbers, and the SHAPE of siginfo. moonlibc
- * lays its own canonical siginfo so a handler reads one layout on every kernel,
- * and on linux the native record is taken verbatim -- so every lane must land
- * exactly where glibc puts it. a SIGCHLD for a real child is what asks: the pid,
- * the status and the code all come from the kernel, and a lane at the wrong
- * offset reads its neighbour. the pid and uid are REPORTED AS A MATCH, never as
- * a value: they differ between two runs of the same program, the match does not. */
+/* the signal floor: the sets, the numbers, and siginfo's shape. every lane must land
+ * where glibc puts it; a SIGCHLD from a real child asks (pid, status, code from the
+ * kernel). pid and uid are reported as a match, never a value: they differ per run. */
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -48,9 +44,8 @@ int main(void)
 	say_n("SIGPWR", SIGPWR);
 	say_n("SIGSYS", SIGSYS);
 
-	/* --- the lanes, read off a real delivery. the handler runs before waitpid
-	   returns: a pending signal is delivered on the way out of the syscall, so
-	   the flags are set by the time the reap is in hand --- */
+	/* --- the lanes, off a real delivery: the handler runs on the way out of the syscall,
+	   before waitpid returns --- */
 	struct sigaction sa;
 	memset(&sa, 0, sizeof sa);
 	sa.sa_sigaction = on_chld;

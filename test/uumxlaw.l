@@ -1,22 +1,15 @@
-; test/uumxlaw.l -- the laws of love's `+` and `*` dispatch, proved of the generated table
-; (test/uumx.l, from src/love/mx.l by src/tools/mx2uu.l; loads after it and test/uu.l by
-; sort order). a dispatch edit that breaks the band quotient, the mirror symmetry or a
-; named cell fails a proof here, at `make test`. every proof is `idpath true`: a bounded
-; forall the kernel runs, where test/proof/rocq/mx.v uses vm_compute. what this cannot
-; see, and the fuzz must: that a lane nom names the C function it says it does.
+; test/uumxlaw.l -- the laws of love's `+` and `*` dispatch, proved of test/uumx.l's table
+; every proof is `idpath true` over a bounded forall; that a lane names its C function is the fuzz's.
 (test (elem 'vof (names ())))
 
-; --- the roster's shape, said once and nowhere else. every forall below ranges over
-; --- mxnk itself and names its subject with a predicate, so a kind added or a lane
-; --- merged moves these three numbers and nothing further down. a range written as a
-; --- count is the trap: too long fails loudly, too short is GREEN and says nothing ---
+; --- the roster's shape, said once: every forall below ranges over mxnk itself,
+; --- never a written count (too short a count passes green and says nothing) ---
 (test
  (14 = (vof 0 'mxnk))
  (12 = (vof 0 'mxnl))
  (5 = (vof 0 'mxnb)))
 
-; --- the band lattice: the 225-cell squares carry no information beyond the
-; --- quotient. a 5x5 band matrix plus the band assignment is the whole table ---
+; --- the band lattice: a 5x5 band matrix plus the band assignment is the whole table ---
 (test
  (defq mx-add-factors-through-bands
    (paths bool
@@ -45,30 +38,21 @@
 
 ; --- the partition, named: the numeric band, the text band, and kmint alone ---
 (test
- ; the two notions the claims here are about. a kind is a point if it lands in kmint's
- ; band; mxnumeric is mx.l's mx-numk, lifted, so neither claim counts to its subject
+ ; a point lands in kmint's band; mxnumeric is mx.l's mx-numk, lifted
  (defn mxiff (pi a bool (pi b bool bool))            ; uuval's beqb sorts after this file
    (lam a (lam b (orb (andb a b) (andb (negb a) (negb b))))))
  (defn mxpoint (pi k nat bool) (lam k (nateqb (mxband k) (mxband mxKMint))))
- ; the scalar gem tower and the parallel tray tower route identically -- and it is
- ; EXACTLY mx-numk that does. mx.l writes that roster and the row rosters (mx-add-of,
- ; mx-mul-of) separately, and the band quotient is derived from neither, so the iff is
- ; those three agreeing; counting a block off from KCharm asked none of it
+ ; exactly mx-numk is the numeric band: mx-numk, the row rosters and the quotient agree
  (defq mx-numerics-one-band
    (paths bool
      (mxall mxnk (lam k (mxiff (mxnumeric k) (nateqb (mxband k) (mxband mxKCharm)))))
      true)
    (idpath true))
- ; a symbol is a POINT, not text: it shares kmint's lane, is the identity under +
- ; and annihilates under *. the string algebra is reached by pulling the name out
- ; and re-interning with nom, never by a nom arriving where text is expected
+ ; a symbol is a point, not text: identity under +, annihilator under *
  (defq mx-nom-is-point
    (paths nat (mxband mxKNom) (mxband mxKMint)) (idpath (mxband mxKMint)))
- ; and the points are alone in that lane -- kmint and KNom and nothing else. this is
- ; a faithfulness guard on the model, not a fact about the algebra: the dispatchers
- ; early-out on a point BEFORE the table, so a kind sharing the point lane would be
- ; told apart by that early-out and not by the matrix this corpus models. alone, the
- ; matrix decides the whole lane and the early-out stays the fast path
+ ; kmint and KNom alone in the point lane: the dispatchers early-out on a point
+ ; before the table, so a third kind there would escape the matrix modelled here
  (defq mx-points-alone
    (paths bool
      (mxall mxnk (lam k (mxiff (mxpoint k) (orb (nateqb k mxKMint) (nateqb k mxKNom)))))
@@ -84,41 +68,33 @@
    (paths bool (mxall mxnk (lam b (nateqb (mxmul mxKMint b) mxL0))) true)
    (idpath true)))
 
-; --- the diagonal reads the lattice: one add/mul lane pair per band, the algebra
-; --- ladder. these five rows are the five bands ---
+; --- the diagonal: one add/mul lane pair per band, the five bands ---
 (test
  (defq mx-diag-mint-add (paths nat (mxadd mxKMint mxKMint) mxLbin_unit) (idpath mxLbin_unit))
  (defq mx-diag-mint-mul (paths nat (mxmul mxKMint mxKMint) mxL0) (idpath mxL0))
- ; kstring is the text band's representative -- KNom used to be, and is a point now
+ ; kstring represents the text band
  (defq mx-diag-text-add (paths nat (mxadd mxKString mxKString) mxLadd_string) (idpath mxLadd_string))
  (defq mx-diag-text-mul (paths nat (mxmul mxKString mxKString) mxL0) (idpath mxL0))
  (defq mx-diag-num-add (paths nat (mxadd mxKCharm mxKCharm) mxLaddn) (idpath mxLaddn))
  (defq mx-diag-num-mul (paths nat (mxmul mxKCharm mxKCharm) mxLmuln) (idpath mxLmuln))
  (defq mx-diag-chain-add (paths nat (mxadd mxKChain mxKChain) mxLadd_seq) (idpath mxLadd_seq))
- ; chain*chain is the cartesian product -- the one cell that makes the list lane a
- ; semiring rather than a monoid
+ ; chain*chain is the cartesian product: the list lane a semiring
  (defq mx-diag-chain-mul (paths nat (mxmul mxKChain mxKChain) mxLmul_cart) (idpath mxLmul_cart))
  (defq mx-diag-hot-add (paths nat (mxadd mxKTablet mxKTablet) mxLaddh) (idpath mxLaddh))
  (defq mx-diag-hot-mul (paths nat (mxmul mxKTablet mxKTablet) mxLmulh) (idpath mxLmulh)))
 
-; --- and the cells the narrative names one at a time ---
+; --- named cells ---
 (test
- ; mixed bands degenerate: a number against a string arrives as that band's unit
- ; and the other operand answers whole, positionally
+ ; mixed bands degenerate: the other operand answers whole, positionally
  (defq mx-num-str-degenerates (paths nat (mxadd mxKCharm mxKString) mxLbin_b) (idpath mxLbin_b))
  (defq mx-str-num-degenerates (paths nat (mxadd mxKString mxKCharm) mxLbin_a) (idpath mxLbin_a))
- ; a nom against text does not spell itself: it is a point, so it is the identity and
- ; the string answers whole. pull the name out and re-intern to reach the text algebra
+ ; a nom is a point: against text or a list it is the identity
  (defq mx-nom-str-is-unit (paths nat (mxadd mxKNom mxKString) mxLbin_unit) (idpath mxLbin_unit))
- ; and a nom against a list no longer adjoins either -- the same point lane, the list
- ; answering whole. these two cells are where "a name is text" used to be readable
  (defq mx-nom-chain-is-unit (paths nat (mxadd mxKNom mxKChain) mxLbin_unit) (idpath mxLbin_unit))
  ; str*str is the absorbing zero; a number against either repeats it
  (defq mx-str-str-is-zero (paths nat (mxmul mxKString mxKString) mxL0) (idpath mxL0))
  (defq mx-num-str-repeats (paths nat (mxmul mxKCharm mxKString) mxLmul_rep) (idpath mxLmul_rep))
- ; a tablet or a lambda wins over everything but a point -- row and column both the
- ; Church lane, a tablet being a lookup lambda here. "point" is the band, not the
- ; kind: a mint and a nom are both excused, by mxpoint above
+ ; a tablet or a lambda wins over all but a point (the band: mint and nom alike)
  (defq mx-tablet-dominates
    (paths bool
      (mxall mxnk (lam b (orb (mxpoint b) (nateqb (mxadd mxKTablet b) mxLaddh))))
@@ -130,59 +106,47 @@
      true)
    (idpath true)))
 
-; --- the compose cell: which cell of this table test/uuhom.l is about. that file
-; --- proves the monoid laws of homcomp -- love's `*` on the top band, prel's
-; --- compose -- as a free-standing algebra; here the lane is named, so a
-; --- dispatch edit that moved compose off the hot diagonal, or made the mint a
-; --- unit there instead of the zero, fails a proof rather than quietly leaving
-; --- uuhom a monoid about nothing. the guard fails by name if uuhom's terms are
-; --- not up: they load earlier by sort order and the citation must not dangle ---
+; --- the compose cell: the lane test/uuhom.l's homcomp monoid is about, pinned here
+; --- guard: uuhom's terms load earlier by sort order and must be up ---
 (test (two? (peep GLOB 'homcomp 0))
         (two? (peep GLOB 'hom-assoc 0))
         (two? (peep GLOB 'idfun 0)))
 (test
  (defn mxLcompose nat mxLmulh)                     ; the lane uuhom's homcomp spells
  (defq mx-compose-diag (paths nat (mxmul mxKHot mxKHot) mxLcompose) (idpath mxLcompose))
- ; ..and the mint at that cell is the zero, not the monoid's unit. uuhom's unit is
- ; idfun, itself a lambda and so a khot -- it rides the compose lane like any other
+ ; the mint there is the zero; the monoid's unit idfun is a khot like any other
  (defq mx-compose-zero (paths nat (mxmul mxKHot mxKMint) mxL0) (idpath mxL0))
- ; the Church sum is the band's other lane: uuhom's monoid is the multiplicative
- ; half of a two-operation band, and the two lanes are distinct
+ ; the Church sum is the band's other, distinct lane
  (defq mx-church-add-diag (paths nat (mxadd mxKHot mxKHot) mxLaddh) (idpath mxLaddh))
  (defq mx-church-lanes-apart (paths bool (nateqb mxLaddh mxLcompose) false) (idpath false)))
 
-; --- the planted faults. a bounded forall that came back `true` for the wrong
-; --- reason -- an empty range, a lookup that fell off its table -- would paint
-; --- every theorem above green, so each load-bearing claim gets its false twin
-; --- and the kernel must refuse that one. every negative takes its positive. ---
+; --- planted faults: each load-bearing claim's false twin must be refused, lest a
+; --- vacuous forall paint the theorems above green ---
 (hear (p \ e \ peep HELPC () 0 @ h (h ? (h p e) 0)))
 (test
  ; the cartesian cell is not the zero
  ('accepted = (rejects (z \ defq mx-ok-cart
    (paths nat (mxmul mxKChain mxKChain) mxLmul_cart) (idpath mxLmul_cart))))
  ('rejected = (rejects (z \ defq mx-bad-cart (paths nat (mxmul mxKChain mxKChain) mxL0) (idpath mxL0))))
- ; the band assignment has to be the derived one: shift it by a kind and the
- ; factorization stops holding
+ ; the band assignment shifted by a kind breaks the factorization
  ('rejected = (rejects (z \ defq mx-bad-band
    (paths bool
      (mxsq (lam a (lam b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband (succ b)))))))
      true)
    (idpath true))))
- ; and the numeric band is mx-numk itself, not a roster slid one kind along the
- ; lattice -- the guard on the RANGE, which is the shape a count-from-KCharm took
+ ; the numeric band is mx-numk itself, not a roster slid one kind along
  ('rejected = (rejects (z \ defq mx-bad-numeric
    (paths bool
      (mxall mxnk (lam k (mxiff (mxnumeric (succ k)) (nateqb (mxband k) (mxband mxKCharm)))))
      true)
    (idpath true))))
- ; and mirror is not the identity: the positional pair really does trade places
+ ; mirror is not the identity: the positional pair trades places
  ('rejected = (rejects (z \ defq mx-bad-mirror
    (paths bool (mxsq (lam a (lam b (nateqb (mxadd a b) (mxadd b a))))) true)
    (idpath true))))
- ; the compose cell is the mul lane, not the Church sum -- a band with one
- ; operation would make uuhom's monoid the whole story, and it is half of it
+ ; the compose cell is the mul lane, not the Church sum
  ('accepted = (rejects (z \ defq mx-ok-compose (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh))))
  ('rejected = (rejects (z \ defq mx-bad-compose (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh))))
- ; ..and the mint annihilates there rather than uniting
+ ; the mint annihilates there rather than uniting
  ('rejected = (rejects (z \ defq mx-bad-compose-unit (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh)))))
 (hear test-strict)

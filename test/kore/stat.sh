@@ -2,8 +2,7 @@
 # test/kore/stat.sh -- stat, du, date, id, mktemp, chown
 . "$(dirname "$0")/common.sh"
 
-# TZ=UTC: stat's %y is UTC and only UTC, and GNU reads TZ, so the oracle has to be
-# told. date reads TZ as GNU does; its zones are checked below with TZ set per zone.
+# our stat's %y is utc only, so gnu is told TZ=UTC too
 export TZ=UTC
 dt=$ho/.kore-dt
 rm -rf "$dt"; mkdir -p "$dt/a/b" "$dt/c"
@@ -16,15 +15,11 @@ for f in '%n' '%s' '%a' '%A' '%F' '%u' '%U' '%g' '%G' '%h' '%i' '%Y' '%b' '%B' '
          '%m' '%n|%s|%a' 'x%%y' 'a\tb\n' 'a%Qb'; do
   both "stat -c $f" stat -c "$f" "$dt/f1"
 done
-# the device numbers, which only a NODE has any of -- %t and %T split the packed word
-# into major and minor and spell them in hex, %d/%r hand the word over whole
+# a node's device numbers: %t/%T major and minor in hex, %d/%r the whole word
 for dv in /dev/null /dev/zero; do
   [ -e "$dv" ] && both "stat -c dev $dv" stat -c '%d|%D|%r|%R|%t|%T|%F' "$dv"
 done
-# the DEFAULT face: GNU's eight-line block, which this tool used to refuse outright for
-# want of an access time, a change time and a device number. the stat tuple carries all
-# three now and the birth line is statx's own call, answering the dash GNU answers on a
-# filesystem that keeps none. compared byte for byte on what holds still.
+# the default face, gnu's eight-line block, compared on the lines that hold still
 both "stat block file"  stat "$dt/f1"
 both "stat block empty" stat "$dt/a/b/f3"
 both "stat block dir"   stat "$dt/a"
@@ -32,9 +27,7 @@ both "stat block -L lk" stat -L "$dt/lk"
 for dv in /dev/null /dev/zero; do
   [ -e "$dv" ] && both "stat block $dv" stat "$dv"
 done
-# a link's own block is the one that cannot be compared byte for byte, and the reason is
-# not ours: READING a link updates its access time, so GNU run twice disagrees with GNU.
-# every other line is compared, the arrow among them.
+# a link's block: reading a link moves its atime, so that line differs even gnu to gnu
 stat "$dt/lk" 2>/dev/null | grep -v '^Access: 2' > "$g"
 korerun stat "$dt/lk" 2>/dev/null | grep -v '^Access: 2' > "$o"
 same "stat block link"
@@ -44,22 +37,16 @@ korerun stat > /dev/null 2>&1; r=$?
 korerun stat -c > /dev/null 2>&1; r=$?
 [ $r -eq 2 ] || fail "kore stat -c with no format (exit $r)"
 both "stat dir"      stat -c '%n %F %A %a' "$dt/a"
-# the bare face does NOT follow a link and -L does -- one stat call apart, and the
-# only check that can tell lstat from stat at all
+# the bare face reads the link itself, -L what it names
 both "stat link"     stat -c '%n %F %A' "$dt/lk"
 both "stat -L link"  stat -L -c '%n %F %A' "$dt/lk"
 both "stat many"     stat -c '%s %n' "$dt/f1" "$dt/a/f2"
 both "stat empty"    stat -c '%F' "$dt/a/b/f3"
-# %N is the name SHELL-QUOTED and, where the stat was the LINK's, an arrow and its
-# target -- so -L drops the arrow by following. the plain name was the only one asked
-# for above, which is exactly how a link's half of %N went missing.
+# %N quotes the name and adds a link's arrow and target; -L drops the arrow
 both "stat %N link"    stat -c '%N' "$dt/lk"
 both "stat %N -L link" stat -L -c '%N' "$dt/lk"
-# ..and every branch of the quoting: the plain single quotes, a space inside them, the
-# quote of its own that turns the whole thing into double quotes, the pair that cannot
-# (so the quote splices instead), a byte the shell writes as $'..', and a link whose
-# TARGET takes the second face. a stray byte over 127 is the one name left out: GNU
-# reads the locale to tell text from rubbish and this quoting does not.
+# each quoting branch: plain, a space, an inner quote, both quotes, a $'..' byte, a quoted
+# target. a byte over 127 is left out: gnu reads the locale for it
 qd=$ho/.kore-q; rm -rf "$qd"; mkdir -p "$qd"   # outside $dt: du walks that tree below
 : > "$qd/plain"; : > "$qd/with space"; : > "$qd/sq'ote"; : > "$qd/dq\"ote"
 : > "$qd/both'and\"q"; : > "$qd/back\\slash"; : > "$qd/dollar\$x"; : > "$qd/back\`tick"
@@ -71,8 +58,7 @@ for n in "$qd"/*; do i=$((i + 1)); both "stat %N q$i" stat -c '%N' "$n"; done
 both "stat --printf" stat --printf='a\t%s\n' "$dt/f1"
 korerun stat -c %s "$dt/nope" > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "kore stat missing file (exit $r)"
-# du: the walk hands out readdir order, so the tree comparisons are of the SETS
-# (find's honesty, and for the same reason); the single-path ones are byte-identical
+# du: tree walks compare as sets (readdir order); single paths byte for byte
 dusort() { n=$1; shift
            "$@" 2>/dev/null | LC_ALL=C sort > "$g"
            korerun "$@" 2>/dev/null | LC_ALL=C sort > "$o"
@@ -88,19 +74,16 @@ both "du -sb"  du -sb "$dt"
 both "du -sh"  du -sh "$dt"
 both "du -sk"  du -sk "$dt"
 both "du -h"   du -h "$dt/a/f2"
-# a hard link is counted ONCE per run, which is the whole reason du reads inodes
+# a hard link counts once per run
 rm -rf "$dt/hl"; mkdir "$dt/hl"; head -c 9000 /dev/urandom > "$dt/hl/one"
 ln "$dt/hl/one" "$dt/hl/two"
 both "du hard link" du -s "$dt/hl"
-# ..and -h's three significant figures, rounded UP, over a scale that reaches G
+# -h: three significant figures, rounded up, through G
 rm -rf "$dt/hs"; mkdir "$dt/hs"
 for sz in 1 5000 11000 100000 1500000 20000000; do head -c $sz /dev/zero > "$dt/hs/f$sz"; done
 dusort "-ah over a scale" du -ah "$dt/hs"
-# df: the figures MOVE while the gate runs -- something on a build box is always
-# writing -- so the comparison is of what does not. the header pins the column names
-# and GNU's minimum widths, which is the fussy half; the device, the SIZE (a filesystem
-# is resized on purpose, never by accident) and the mount point pin the rest. the
-# arithmetic behind used/available/use% is lawed in test/law/kore.l, where nothing moves.
+# df: the figures move under a busy box, so the check holds the header (names, widths),
+# the device, the size and the mount point
 dfstable() { awk '{ print $1, $2, $NF }'; }
 if [ -r /proc/self/mounts ]; then
   for fl in '' -k -h -i; do
@@ -110,8 +93,7 @@ if [ -r /proc/self/mounts ]; then
     korerun df $fl 2>/dev/null | dfstable > "$o"
     same "df $fl"
   done
-  # a named path reports the one filesystem holding it, found by the longest mount
-  # point its RESOLVED path starts with -- so a bind mount names itself, not its twin
+  # a path names the mount its resolved path lies under, so a bind mount names itself
   for p in / "$HO" "$dt/f1"; do
     for fl in -k -h -i; do
       df $fl "$p" 2>/dev/null | dfstable > "$g"
@@ -119,14 +101,11 @@ if [ -r /proc/self/mounts ]; then
       same "df $fl $p"
     done
   done
-  # -a keeps the filesystems with no blocks at all. the ROWS are what both agree on:
-  # GNU dashes a few by TYPE (autofs and the rest of its dummy list) without asking
-  # statfs at all, where this one asks and reports the zeroes it hears back
+  # -a: the rows both list; gnu dashes some types without asking statfs, we report zeroes
   df -a 2>/dev/null | awk '{ print $1, $NF }' | LC_ALL=C sort > "$g"
   korerun df -a 2>/dev/null | awk '{ print $1, $NF }' | LC_ALL=C sort > "$o"
   same "df -a rows"
-  # a missing path costs the status and prints no table at all -- a lone header would
-  # say a filesystem was found
+  # a missing path costs the status and prints no table
   korerun df "$dt/nope" > "$o" 2>/dev/null; r=$?
   [ $r -eq 1 ] || fail "kore df missing file (exit $r)"
   [ -s "$o" ] && fail "kore df laid a table for a missing file"
@@ -134,7 +113,7 @@ if [ -r /proc/self/mounts ]; then
   [ $r -eq 2 ] || fail "kore df unknown option (exit $r)"
   echo "kore: df (the three faces, a named path, -a's rows, GNU's columns) ok"
 fi
-# date: -d @SECONDS is what makes this gateable at all -- `now` differs by the second
+# date -d @SECONDS: the only face that holds still
 for s in 0 1 1000000000 1700000000 1234567890 951782400 2147483647 4102444800; do
   for f in '' '+%Y-%m-%d %H:%M:%S' \
            '+%a %A %b %B %j %y %C %e %F %T %D %s %H %I %p %u %w %Z %z' '+%%|%n|%t|'; do
@@ -148,9 +127,8 @@ for s in 0 1 1000000000 1700000000 1234567890 951782400 2147483647 4102444800; d
 done
 LC_ALL=C date -u -r "$dt/f1" '+%Y-%m-%d %H:%M:%S' > "$g"
 korerun date -u -r "$dt/f1" '+%Y-%m-%d %H:%M:%S' > "$o"; same "date -r FILE"
-# date's zones: TZif files (both hemispheres, half and three-quarter hours, and past the
-# last transition, where the footer rule speaks), posix rules, an empty TZ. a zone the
-# host lacks is skipped; a posix rule is only asked after 1970, where glibc applies it
+# date's zones: tzif files (both hemispheres, odd offsets, past the last transition), posix
+# rules, an empty TZ. a missing zone is skipped; a posix rule only after 1970, as glibc
 for z in America/New_York Australia/Sydney Europe/London America/St_Johns Asia/Kolkata \
          Pacific/Chatham "" "JST-9" "<+0330>-3:30" "EST5EDT,M3.2.0,M11.1.0" \
          "NZST-12NZDT,M9.5.0,M4.1.0/3" "CET-1CEST,J60/2,J300/3"; do
@@ -162,13 +140,12 @@ for z in America/New_York Australia/Sydney Europe/London America/St_Johns Asia/K
   done
 done
 [ "$(korerun date '+%Y')" = "$(date -u '+%Y')" ] || fail "kore date (now)"
-# id: the numeric and named faces byte-identical, groups included -- the supplementary
-# list is read out of /etc/group here (no getgroups, no NSS), so it is a real check
+# id: numeric and named faces, groups read from /etc/group
 for fl in -u -g -un -gn -G ''; do
   # shellcheck disable=SC2086
   both "id $fl" id $fl
 done
-# mktemp answers a name nobody had, so the SHAPE and the effect are the check
+# mktemp: the name's shape and its effect
 t=$(korerun mktemp) || fail "kore mktemp"
 case $t in /tmp/tmp.??????????) [ -f "$t" ] || fail "kore mktemp made no file";;
            *) fail "kore mktemp name: $t";; esac
@@ -180,14 +157,12 @@ case $t in "$dt"/woo??????) [ -f "$t" ] || fail "kore mktemp -p made no file";;
            *) fail "kore mktemp -p name: $t";; esac
 rm -f "$t"
 t=$(korerun mktemp -u); [ -e "$t" ] && fail "kore mktemp -u left the file behind"
-# chown: unprivileged, so the honest checks are the no-op and the refusal
+# chown unprivileged: the no-op and the refusal
 korerun chown "$(id -un):$(id -gn)" "$dt/f1" || fail "kore chown to our own ids"
 korerun chown nosuchuser000 "$dt/f1" 2>/dev/null; r=$?
 [ $r -eq 1 ] || fail "kore chown unknown user (exit $r)"
-# date -d reads GNU's common spellings: ISO with a T or a space and a zone, US slashes, a
-# month's name either way round, @N, relative items stacked and turned back by ago, a
-# signed number after a time as its zone, date's own default and -R spellings, midnight --
-# and touch -d the same way. under TZ=UTC0
+# date -d and touch -d over gnu's common spellings: iso, us slashes, month names, @N,
+# stacked relative items and ago, a trailing zone, -R, midnight. under TZ=UTC0
 for d in "2024-01-02" "2024-01-02 10:30" "2024-01-02T10:30:15Z" "2024-01-02 10:30:00 +0200" "2024-01-02T10:30:00+02:00" \
          "01/02/2024" "Jan 2 2024" "2 Jan 2024" "January 2, 2024" "@1700000000" "2024-01-31 +1 month" "2024-03-31 -1 month" \
          "2024-01-02 2 weeks ago" "2024-02-29 +1 year" "2024-01-02 next month" "2024-01-02 -2 hours" "2023-12-31 23:59:59 +1 sec" \
@@ -197,12 +172,11 @@ for d in "2024-01-02" "2024-01-02 10:30" "2024-01-02T10:30:15Z" "2024-01-02 10:3
 done
 g1=$(TZ=UTC0 date -d yesterday +%s); k1=$(TZ=UTC0 korerun date -d yesterday +%s); [ $((g1 - k1)) -le 2 ] && [ $((k1 - g1)) -le 2 ] || fail "kore date -d yesterday"
 TZ=UTC0 korerun date -d 'no such date' +%s > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore date -d of no date (rc $r)"
-# date's own spelling read back, -d glued as gen_initramfs.sh writes it; a weekday alone is refused
+# date's own spelling read back, -d glued; a lone weekday is refused
 [ "$(TZ=UTC0 korerun date "-dThu Jan  1 00:00:00 UTC 2026" +%s)" = 1767225600 ] || fail "kore date -dDATE glued"
 TZ=UTC0 korerun date -d thu +%s > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore date -d of a weekday alone (rc $r)"
 TZ=UTC0 korerun touch -d "2024-01-02 10:30" "$ho/.tdd" && [ "$(stat -c %Y "$ho/.tdd")" = 1704191400 ] || fail "kore touch -d DATE"; rm -f "$ho/.tdd"
-# du's long names, --max-depth, --exclude, -L through a link out of the tree, -x,
-# --apparent-size, -0; rows sorted (the walk is sorted, GNU's is readdir's)
+# du's long options, -L, -x, --apparent-size, -0; rows sorted (gnu walks readdir order)
 U=$PWD/$ho/.duf; rm -rf "$U"; mkdir -p "$U/t/a/b" "$U/t/c" "$U/outside"
 head -c 5000 /dev/zero > "$U/t/a/f.log"; head -c 9000 /dev/zero > "$U/t/a/b/g.txt"; echo x > "$U/t/c/h.log"; head -c 7000 /dev/zero > "$U/outside/z"
 ln -s ../../outside "$U/t/c/lo"
@@ -212,30 +186,26 @@ for c in "t" "--max-depth=1 t" "-d 0 t" "--exclude=*.log t" "-a --exclude=*.log 
 done
 (cd "$U" && du -0 t | tr '\0' '\n' | sort) > "$g"; (cd "$U" && LOVE_NO_IMAGE= "$PWD/../../$m" kore du -0 t | tr '\0' '\n' | sort) > "$o"; same "du -0"
 rm -rf "$U"
-# df's -T (a left-aligned Type column), -H in powers of 1000, -t and -x by type (glued,
-# repeated, long), against GNU on this machine's own mounts
-# the used and free figures move while the box writes, so a row is held to what does not:
-# its name, its size or type, and where it is mounted; the header whole
+# df -T, -H, -t and -x by type, against gnu on this box's mounts; a row holds its name,
+# size or type, and mount point, the header whole
 dfst() { awk 'NR == 1 { print; next } { print $1, $2, $NF }'; }
 for c in "-T /" "-H /" "-hT /" "-t tmpfs" "-x tmpfs -x btrfs" "--print-type /" "--si /" "--type=tmpfs" "-ttmpfs"; do
   # shellcheck disable=SC2086
   df $c 2>&1 | dfst > "$g"; korerun df $c 2>&1 | dfst > "$o"; same "df $c"
 done
-# mktemp's --suffix (after the random run), --tmpdir= and bare, --dry-run: by the name's shape
+# mktemp --suffix, --tmpdir, --dry-run: by the name's shape
 MT=$PWD/$ho/.mkt; rm -rf "$MT"; mkdir "$MT"
 n1=$(korerun mktemp --tmpdir="$MT" --suffix=.txt); case "$n1" in "$MT"/tmp.??????????.txt) [ -f "$n1" ] || fail "kore mktemp --suffix made nothing";; *) fail "kore mktemp --suffix: $n1";; esac
 n2=$(TMPDIR="$MT" korerun mktemp --tmpdir -u); case "$n2" in "$MT"/tmp.??????????) [ ! -e "$n2" ] || fail "kore mktemp --dry-run made one";; *) fail "kore mktemp --tmpdir: $n2";; esac
 n3=$(cd "$MT" && LOVE_NO_IMAGE= "$PWD/../../$m" kore mktemp --suffix .c fooXXXXXX); case "$n3" in foo??????.c) ;; *) fail "kore mktemp TEMPLATE --suffix: $n3";; esac
 rm -rf "$MT"
-# stat -f: GNU's face (its first three lines: the free counts move) and a -c of the fields
-# that hold still -- id, name length, the type's magic and name, block sizes, totals
+# stat -f: gnu's first three lines, and a -c of the fields that hold still
 for d in / /tmp; do
   stat -f "$d" | head -3 > "$g"; korerun stat -f "$d" | head -3 > "$o"; same "stat -f $d"
   stat -f -c '%n %i %l %t %T %s %S %b %c' "$d" > "$g"; korerun stat -f -c '%n %i %l %t %T %s %S %b %c' "$d" > "$o"; same "stat -f -c $d"
 done
-# chown/chgrp -v -c -R (a directory after its contents, a link met on the way changed
-# itself and never what it names) -h and --reference, against GNU's: what is said and
-# the groups the tree is left with. needs a second group of our own to move between
+# chown/chgrp -v -c -R -h --reference against gnu: what is said and the groups left.
+# a link met in -R changes itself, not its target. needs a second group of our own
 G1=$(id -gn); G2=$(id -Gn | tr ' ' '\n' | grep -v "^$G1\$" | head -1)
 if [ -n "$G2" ]; then
   CH=$PWD/$ho/.chg

@@ -27,6 +27,8 @@ pic=/usr/bin/pic
 run() {
   rm -rf "$w/c"; mkdir "$w/c"
   cp "$1"/*.chem "$w/c/" 2>/dev/null
+  # the random cases ride one file, one `@@ name` line before each
+  [ -f "$1/random.pack" ] && awk -v d="$w/c" '/^@@ /{close(f); f = d "/" $2; next} {print > f}' "$1/random.pack"
   for f in "$w/c"/*.chem; do
     [ -f "$f" ] || continue
     n=$(basename "$f" .chem)

@@ -1,7 +1,6 @@
-/* a memory output, held to gcc: the kernel's atomics and counters, `lock xadd %0, %1` with a
- * "+m" beside a "+r", cmpxchg's "=a" and "+m", xchg, inc/dec/add/or on a counter, bts, and an
- * "=m" store. the asm writes the memory itself, so nothing stores back. a target with no
- * template here computes the same. */
+/* memory outputs, held to gcc: lock xadd "+m" beside "+r", cmpxchg "=a" "+m", xchg, inc/dec/
+ * add/or, bts, an "=m" store; the asm writes memory, nothing stores back. targets without a
+ * template compute the same. */
 
 struct atom { int counter; };
 static long flags[2];

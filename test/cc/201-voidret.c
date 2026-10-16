@@ -1,7 +1,5 @@
-/* `return f();` in a void function, f void: the return still returns. the inliner splices a
- * small f into the caller's return, and an f that runs off its end left the caller running
- * on -- only below an if nested in another if's block, where no else carried the rest. and a
- * void f spliced whole, whose own `return g();` must still call g. held to gcc. */
+/* `return f();` in a void function still returns, inlined too: an f running off its end under
+ * nested ifs, and a spliced f whose own `return g();` still calls g. held to gcc. */
 
 static int n;
 void say(int k) { n = n * 10 + k; }
