@@ -8,7 +8,7 @@
 ;                          block's bytes, "" once done, and g's 'ans then (1 n) | the word
 ;   (zstd-unf rd mk)    -> (1 n) | the word | 'no: off rd, out through the writer mk answers
 ;                          (1 w), or () for 'no
-; the codec is C (zstde, and zstd-new zstd-block zstd-sum); the frame read is here, where
+; the codec is C (zstde, zstd-d, and zstd-new zstd-block zstd-sum); the frame read is here, where
 ; its fields are plain to read.
 (module 'zstd
 (borrow 'bytes)
@@ -69,7 +69,9 @@
                 (ck = 1 && c != zstd-sum (g 'st)) (zs-fin g 'check)
                 (pins g 'st () 'any 1 'mode 'frame, zstd-next g)))))
    (zs-once s) ({0 s} @ t (_ \ (peep t 0 "" @ p (pin t 0 "", p))))
-   (zstd-unpack s)
+   ; one frame that says its size decodes at once in C; anything else, or a fault, is walked
+   (zstd-unpack s) (zstd-d s @ u (string? u ? [1 u] (zs-walk s)))
+   (zs-walk s)
     (: g (zstd-pull (zs-once s))
        (go acc) (zstd-next g @ p
                   (#p = 0 ? (atom? (g 'ans) ? (g 'ans) [1 (two? acc ? (cats (rev acc)) "")])

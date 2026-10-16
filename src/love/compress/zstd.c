@@ -4,17 +4,31 @@
 //   (zstd-block st b)   one block, its 3-byte header first -> the bytes it says | ()
 //   (zstd-sum st)       the low 32 bits of xxh64 over every byte said, as 4 little-endian bytes
 //   (zstde s level)     bytes -> one whole frame, level 1..19, its size and checksum in it | ()
+//   (zstd-d s)          s one frame that says its size -> its bytes, at once | () for the walk
 // the window is the output: a match reaches back into what earlier blocks said.
 #ifndef ZS_STANDALONE
 #include "love.h"
 #include "bytes.h"
+#else
+#define love_inline inline __attribute__((always_inline))
 #endif
 #include <stdint.h>
 #include <string.h>
 
+// eight bytes as a little-endian word, and back: one load where the machine takes an unaligned
+// one (bytes.h), else the gather
+#if defined(wideld) && wideld
+#define ZLD(p) ld64(p)
+#define ZST(p, x) st64(p, x)
+#else
+static uint64_t ZLD(uint8_t const *p) { uint64_t w = 0; for (int i = 7; i >= 0; i--) w = w << 8 | p[i]; return w; }
+static void ZST(uint8_t *p, uint64_t x) { for (int i = 0; i < 8; i++) p[i] = (uint8_t) (x >> 8 * i); }
+#endif
+
 #define ZS_BMAX ((uintptr_t) 128 << 10)          // the most a block holds or says
 #define ZS_WMAX ((uintptr_t) 1 << 27)            // zstd's own default limit: past it, refused
 #define ZS_MAGIC 0x7a737464u
+#define ZS_SLACK 32                              // past the window and the literals: a copy runs over
 
 struct xx_st { uint64_t v[4], total; uint8_t mem[32]; unsigned memn; };
 struct zs_fse { uint16_t base; uint8_t sym, nb; };
@@ -27,7 +41,7 @@ struct zs_st {
  struct zs_fse ll[512], of[256], ml[512];
  struct zs_huf huf[1 << 11];
  struct xx_st x;                                // xxh64 on the way
- uint8_t lit[ZS_BMAX + 8]; };
+ uint8_t lit[ZS_BMAX + ZS_SLACK]; };
 
 static unsigned zs_hb(uint32_t x) { unsigned r = 0; while (x >>= 1) r++; return r; }
 
@@ -40,7 +54,7 @@ static unsigned zs_hb(uint32_t x) { unsigned r = 0; while (x >>= 1) r++; return 
 static uint64_t xx_rotl(uint64_t x, unsigned r) { return x << r | x >> (64 - r); }
 static uint64_t xx_round(uint64_t a, uint64_t in) { return xx_rotl(a + in * XP2, 31) * XP1; }
 static uint64_t xx_merge(uint64_t h, uint64_t v) { return (h ^ xx_round(0, v)) * XP1 + XP4; }
-static uint64_t xx_rd(const uint8_t *p, unsigned k) { uint64_t w = 0; while (k--) w = w << 8 | p[k]; return w; }
+static uint64_t xx_rd(const uint8_t *p, unsigned k) { if (k == 8) return ZLD(p); uint64_t w = 0; while (k--) w = w << 8 | p[k]; return w; }
 static void xx_init(struct xx_st *S) { S->v[0] = XP1 + XP2, S->v[1] = XP2, S->v[2] = 0, S->v[3] = 0 - XP1, S->total = 0, S->memn = 0; }
 static void xx_feed(struct xx_st *S, const uint8_t *p, uintptr_t n) {
  S->total += n;
@@ -75,15 +89,35 @@ static uint64_t zs_bits(const uint8_t *p, intptr_t n, intptr_t pos, unsigned k) 
  if (pos < 0) return pos + (intptr_t) k <= 0 ? 0 : zs_bits(p, n, 0, (unsigned) (pos + (intptr_t) k)) << -pos;
  intptr_t b = pos >> 3, e = b + 8 < n ? b + 8 : n;
  uint64_t w = 0;
- while (e > b) w = w << 8 | p[--e];
+ if (b + 8 <= n) w = ZLD(p + b);
+ else while (e > b) w = w << 8 | p[--e];
  return w >> (pos & 7) & (((uint64_t) 1 << k) - 1); }
-// a backward stream: read from its last bit down, past the 1 that pads its last byte
-struct zs_br { const uint8_t *p; intptr_t n, pos; };
+// a backward stream: read from its last bit down, past the 1 that pads its last byte. c holds the
+// eight bytes at p, u the bits of it used from the top; a reload steps p back by the whole bytes
+// used. past the stream's start the bits read 0, and left goes negative
+struct zs_br { const uint8_t *s, *p; uint64_t c; unsigned u; };
 static int zs_brinit(struct zs_br *r, const uint8_t *p, intptr_t n) {
  if (n < 1 || !p[n - 1]) return 0;
- r->p = p, r->n = n, r->pos = (n - 1) * 8 + zs_hb(p[n - 1]);
+ unsigned h = zs_hb(p[n - 1]);
+ r->s = p;
+ if (n >= 8) r->p = p + n - 8, r->c = ZLD(r->p), r->u = 8 - h;
+ else {
+  uint64_t c = 0;
+  for (intptr_t i = n; i--; ) c = c << 8 | p[i];
+  r->p = p, r->c = c, r->u = 8 - h + (unsigned) (64 - 8 * n); }   // the bytes low, the empty top as used
  return 1; }
-static uint64_t zs_read(struct zs_br *r, unsigned k) { r->pos -= k; return zs_bits(r->p, r->n, r->pos, k); }
+static intptr_t zs_left(struct zs_br const *r) { return (r->p - r->s) * 8 + 64 - (intptr_t) r->u; }
+static love_inline void zs_reload(struct zs_br *r) {
+ if (r->u > 64) return;
+ if (r->p - r->s >= 8) r->p -= r->u >> 3, r->u &= 7;
+ else if (r->p > r->s) {
+  unsigned k = r->u >> 3;
+  if (k > (unsigned) (r->p - r->s)) k = (unsigned) (r->p - r->s);
+  r->p -= k, r->u -= 8 * k; }
+ else return;
+ r->c = ZLD(r->p); }
+static love_inline uint64_t zs_peek(struct zs_br const *r, unsigned k) { return r->u >= 64 ? 0 : (r->c << r->u) >> (64 - k); }   // 1 <= k
+static love_inline uint64_t zs_read(struct zs_br *r, unsigned k) { uint64_t v = k ? zs_peek(r, k) : 0; r->u += k; return v; }   // k <= 56 past a reload
 
 // --- fse: a table's counts as written, then the decoding table they spread to ----------------
 static intptr_t zs_ncount(const uint8_t *p, uintptr_t n, int16_t *norm, unsigned maxs, unsigned maxlog,
@@ -149,10 +183,12 @@ static intptr_t zs_tree(struct zs_st *S, const uint8_t *p, uintptr_t n) {
   unsigned s1 = (unsigned) zs_read(&r, al), s2 = (unsigned) zs_read(&r, al);
   for (;;) {
    if (nw > 253) return -1;
+   zs_reload(&r);
    wt[nw++] = t[s1].sym, s1 = t[s1].base + (unsigned) zs_read(&r, t[s1].nb);
-   if (r.pos < 0) { wt[nw++] = t[s2].sym; break; }
+   if (zs_left(&r) < 0) { wt[nw++] = t[s2].sym; break; }
+   zs_reload(&r);
    wt[nw++] = t[s2].sym, s2 = t[s2].base + (unsigned) zs_read(&r, t[s2].nb);
-   if (r.pos < 0) { wt[nw++] = t[s1].sym; break; } } }
+   if (zs_left(&r) < 0) { wt[nw++] = t[s1].sym; break; } } }
  uint32_t sum = 0, cnt[13] = {0}, at[13];
  for (unsigned i = 0; i < nw; i++) {
   if (wt[i] > 11) return -1;
@@ -174,10 +210,12 @@ static intptr_t zs_tree(struct zs_st *S, const uint8_t *p, uintptr_t n) {
 static int zs_hstream(const struct zs_huf *t, unsigned lg, const uint8_t *p, uintptr_t n, uint8_t *o, uintptr_t k) {
  struct zs_br r;
  if (!zs_brinit(&r, p, (intptr_t) n)) return 0;
- for (uintptr_t i = 0; i < k; i++) {
-  struct zs_huf e = t[zs_bits(p, (intptr_t) n, r.pos - lg, lg)];
-  o[i] = e.sym, r.pos -= e.nb; }
- return r.pos == 0; }
+ uintptr_t i = 0;
+ for (; i + 4 <= k; i += 4) {                    // four codes of at most 11 bits to a reload
+  zs_reload(&r);
+  for (int j = 0; j < 4; j++) { struct zs_huf e = t[zs_peek(&r, lg)]; o[i + j] = e.sym, r.u += e.nb; } }
+ for (; i < k; i++) { zs_reload(&r); struct zs_huf e = t[zs_peek(&r, lg)]; o[i] = e.sym, r.u += e.nb; }
+ return zs_left(&r) == 0; }
 
 static int zs_huf(struct zs_st *S, const uint8_t *p, uintptr_t n, unsigned ns, uintptr_t rg) {
  if (ns == 1) return zs_hstream(S->huf, S->hlog, p, n, S->lit, rg);
@@ -260,6 +298,18 @@ static int zs_table(struct zs_st *S, unsigned mode, const uint8_t *p, uintptr_t 
  S->have |= bit;
  return 1; }
 
+// n bytes from a to o eight at a time, running over by up to seven: the room is the caller's, and
+// a reads only behind what o writes when they are eight or more apart
+static love_inline void zs_wild(uint8_t *o, uint8_t const *a, uintptr_t n) { for (uintptr_t j = 0; j < n; j += 8) ZST(o + j, ZLD(a + j)); }
+// a match of ml at off behind o: under eight apart, the first sixteen a byte at a time, then wide
+// from a whole number of periods, eight or more, back
+static love_inline void zs_match(uint8_t *o, uintptr_t off, uintptr_t ml) {
+ uint8_t const *a = o - off;
+ if (off >= 8) { zs_wild(o, a, ml); return; }
+ uintptr_t j = 0;
+ for (; j < ml && j < 16; j++) o[j] = a[j];
+ if (j < ml) { uintptr_t d = off * ((8 + off - 1) / off); zs_wild(o + j, o + j - d, ml - j); } }
+
 static intptr_t zs_seqs(struct zs_st *S, uint8_t *w, const uint8_t *p, uintptr_t n, const uint8_t *lit, uintptr_t nl) {
  uintptr_t i, ns;
  if (n < 1) return -1;
@@ -268,7 +318,8 @@ static intptr_t zs_seqs(struct zs_st *S, uint8_t *w, const uint8_t *p, uintptr_t
  else if (b0 < 255) { if (n < 2) return -1; ns = ((uintptr_t) (b0 - 128) << 8) + p[1], i = 2; }
  else { if (n < 3) return -1; ns = p[1] + ((uintptr_t) p[2] << 8) + 0x7f00, i = 3; }
  uint8_t *o0 = w + S->n, *o = o0, *oe = o0 + ZS_BMAX;
- const uint8_t *le = lit + nl;
+ const uint8_t *le = lit + nl,                   // ..and how far literals may be read over
+               *ls = lit >= S->lit && lit < S->lit + sizeof S->lit ? S->lit + sizeof S->lit : le;
  if (!ns) { if (i != n) return -1; memcpy(o, lit, nl); return (intptr_t) nl; }
  if (i >= n) return -1;
  unsigned m = p[i++];
@@ -282,7 +333,9 @@ static intptr_t zs_seqs(struct zs_st *S, uint8_t *w, const uint8_t *p, uintptr_t
  uint64_t r0 = S->rep[0], r1 = S->rep[1], r2 = S->rep[2];
  for (uintptr_t k = 0; k < ns; k++) {
   unsigned oc = S->of[so].sym, mc = S->ml[sm].sym, lc = S->ll[sl].sym;
-  uint64_t ov = ((uint64_t) 1 << oc) + zs_read(&r, oc), off;   // the extra bits: offset, match, literals
+  zs_reload(&r);                                 // the extra bits: offset; then match and literals
+  uint64_t ov = ((uint64_t) 1 << oc) + zs_read(&r, oc), off;
+  zs_reload(&r);
   uintptr_t ml = zs_mlbase[mc] + (uintptr_t) zs_read(&r, zs_mlbits[mc]),
             ll = zs_llbase[lc] + (uintptr_t) zs_read(&r, zs_llbits[lc]);
   if (ov > 3) off = ov - 3, r2 = r1, r1 = r0, r0 = off;
@@ -294,16 +347,16 @@ static intptr_t zs_seqs(struct zs_st *S, uint8_t *w, const uint8_t *p, uintptr_t
     if (x > 1) r2 = r1;
     r1 = r0, r0 = off; } }
   if (k + 1 < ns) {                              // the states on: literals, match, offset
+   zs_reload(&r);
    sl = S->ll[sl].base + (unsigned) zs_read(&r, S->ll[sl].nb);
    sm = S->ml[sm].base + (unsigned) zs_read(&r, S->ml[sm].nb);
    so = S->of[so].base + (unsigned) zs_read(&r, S->of[so].nb); }
   if (ll > (uintptr_t) (le - lit) || ll + ml > (uintptr_t) (oe - o)) return -1;
-  memcpy(o, lit, ll), o += ll, lit += ll;
+  if (lit + ll + 8 <= ls) zs_wild(o, lit, ll); else memcpy(o, lit, ll);
+  o += ll, lit += ll;
   if (!off || off > (uint64_t) (o - w)) return -1;
-  const uint8_t *src = o - off;
-  if (off >= ml) memcpy(o, src, ml), o += ml;
-  else for (uintptr_t j = 0; j < ml; j++) *o++ = src[j]; }
- if (r.pos || (uintptr_t) (le - lit) > (uintptr_t) (oe - o)) return -1;
+  zs_match(o, (uintptr_t) off, ml), o += ml; }
+ if (zs_left(&r) || (uintptr_t) (le - lit) > (uintptr_t) (oe - o)) return -1;
  memcpy(o, lit, (uintptr_t) (le - lit)), o += le - lit;
  S->rep[0] = r0, S->rep[1] = r1, S->rep[2] = r2;
  return o - o0; }
@@ -334,6 +387,38 @@ static intptr_t zs_block(struct zs_st *S, uint8_t *w, const uint8_t *b, uintptr_
   sz = (uintptr_t) got; }
  xx_feed(&S->x, o, sz), S->n += sz;
  return (intptr_t) sz; }
+
+// a frame whole, when s is one frame that says its size and nothing else, into one buffer: no
+// window slides and no block is copied out alone -> the bytes (n + ZS_SLACK from alloc, *on
+// set) | NULL for any other shape or a fault, which zstd.l's walk then reads and names
+#define ZS_WHOLE ((uintptr_t) 1 << 30)
+static const uint8_t zs_dn[4] = { 0, 1, 2, 4 }, zs_fz[4] = { 0, 2, 4, 8 };
+static uint8_t *zs_whole(const uint8_t *s, uintptr_t n, uintptr_t *on) {
+ if (n < 6 || xx_rd(s, 4) != 0xfd2fb528u) return NULL;
+ unsigned d = s[4], ss = d >> 5 & 1, dn = zs_dn[d & 3], fz = d >> 6 ? zs_fz[d >> 6] : ss;
+ uintptr_t i = 5 + !ss + dn + fz;
+ if (!fz || d & 8 || n < i || (dn && xx_rd(s + 5 + !ss, dn))) return NULL;
+ uint64_t fcs = xx_rd(s + 5 + !ss + dn, fz) + (fz == 2 ? 256 : 0);
+ if (fcs > ZS_WHOLE) return NULL;
+ struct zs_st *S = alloc(NULL, sizeof *S);
+ uint8_t *w = S ? alloc(NULL, (uintptr_t) fcs + ZS_BMAX + ZS_SLACK) : NULL;
+ int good = w != NULL;
+ if (good) {
+  memset(S, 0, offsetof(struct zs_st, lit));
+  S->cap = (uintptr_t) fcs + ZS_BMAX, S->win = (uintptr_t) fcs, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
+  xx_init(&S->x); }
+ for (int last = 0; good && !last; ) {
+  if (n - i < 3) { good = 0; break; }
+  uintptr_t bh = (uintptr_t) xx_rd(s + i, 3), k = (bh >> 1 & 3) == 1 ? 1 : bh >> 3;
+  if (n - i - 3 < k || zs_block(S, w, s + i, 3 + k) < 0 || S->n > fcs) { good = 0; break; }
+  i += 3 + k, last = (int) (bh & 1); }
+ if (good && S->n != fcs) good = 0;
+ if (good && d & 4) good = n - i >= 4 && xx_rd(s + i, 4) == (xx_done(&S->x) & 0xffffffffu), i += 4;
+ if (good && i != n) good = 0;                   // frames after it: the walk's
+ if (S) alloc(S, 0);
+ if (!good) { if (w) alloc(w, 0); return NULL; }
+ *on = (uintptr_t) fcs;
+ return w; }
 
 // ===== the coder: a hash-chain parse, huffman literals, fse sequences =====
 struct ze_bw { uint8_t *p, *e; uint64_t acc; unsigned nb; int bad; };   // bits out, low first
@@ -721,12 +806,12 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
 static struct str *zs_cask(word x) {
  struct str *s = cask_str(x);
  struct zs_st *S = s && s->len > ZS_HEAD ? (struct zs_st*) s->bytes : NULL;
- return S && S->magic == ZS_MAGIC && S->cap == s->len - ZS_HEAD ? s : NULL; }
+ return S && S->magic == ZS_MAGIC && S->cap + ZS_SLACK == s->len - ZS_HEAD ? s : NULL; }
 
 love_noinline static struct g *host_zstd_new(struct g *g) {
  word ww = g->sp[0];
  if (!oddp(ww) || getcharm(ww) < 0 || (uintptr_t) getcharm(ww) > ZS_WMAX) return g->sp[0] = ZeroPoint, g;
- uintptr_t win = (uintptr_t) getcharm(ww), cap = win + zs_room(win), n = ZS_HEAD + cap,
+ uintptr_t win = (uintptr_t) getcharm(ww), cap = win + zs_room(win), n = ZS_HEAD + cap + ZS_SLACK,
            sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
  if (!ok(g = have(g, sreq + breq))) return g;
  struct str *s = ini_str(bump(g, sreq), n);
@@ -757,6 +842,14 @@ love_noinline static struct g *host_zstd_sum(struct g *g) {
  for (int i = 0; i < 4; i++) ((uint8_t*) txt(g->sp[0]))[i] = (uint8_t) (h >> 8 * i);
  return g->sp[1] = g->sp[0], g->sp++, g; }
 
+love_noinline static struct g *host_zstd_d(struct g *g) {
+ uintptr_t on = 0;
+ uint8_t *w = strp(g->sp[0]) ? zs_whole((const uint8_t*) txt(g->sp[0]), len(g->sp[0]), &on) : NULL;
+ if (!w) return g->sp[0] = ZeroPoint, g;
+ if (ok(g = str0(g, on))) memcpy(txt(g->sp[0]), w, on), g->sp[1] = g->sp[0], g->sp++;   // pushes: out over s
+ alloc(w, 0);
+ return g; }
+
 love_noinline static struct g *host_zstde(struct g *g) {
  word sw = g->sp[0], lw = g->sp[1];
  if (!strp(sw) || !oddp(lw) || getcharm(lw) < 1 || getcharm(lw) > 19) return g->sp[1] = ZeroPoint, g->sp += 1, g;
@@ -774,9 +867,11 @@ static LvmWrap(lvm_zstd_new, host_zstd_new)
 static LvmWrap(lvm_zstd_block, host_zstd_block)
 static LvmWrap(lvm_zstd_sum, host_zstd_sum)
 static LvmWrap(lvm_zstde, host_zstde)
+static LvmWrap(lvm_zstd_d, host_zstd_d)
 
 LvDef("zstd-new", zstd_new, 1, "zstd");
 LvDef("zstd-block", zstd_block, 2, "zstd");
 LvDef("zstd-sum", zstd_sum, 1, "zstd");
 LvDef("zstde", zstde, 2, "zstd");
+LvDef("zstd-d", zstd_d, 1, "zstd");
 #endif
