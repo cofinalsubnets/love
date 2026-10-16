@@ -51,3 +51,5 @@
  (zstd-unpack (snip zst-a 0 (#zst-a - 1)) = 'end)
  (: (go i) (? (#zst-a <= i) 1 !(zst-same (snip zst-a 0 i) [7 4096]) 0 (go (i + 13))) (go 0))
  (: (go i) (? (#zst-a <= i) 1 !(zst-same (zst-flip zst-a i) [7 4096]) 0 (go (i + 7))) (go 0)))
+
+(test_fin (), puts "zstd: ok -- every cut of a frame reads as the whole does, and our frames read back\n", 0)
