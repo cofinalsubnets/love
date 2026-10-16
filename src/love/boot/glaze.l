@@ -1899,8 +1899,7 @@
                 hasbody (1 = #>form % 2)
                 ; a body-less `:` exports every binding, so an inlined hof const stays bound (its callers are outside the form);
                 ; dropping it is dead-binding elimination, sound only for a body-having `:`, where an unreferenced binding is unobservable
-                ;;; FIXME this is either wrong or a super weird way to write it:  (q \ (= <q <) (dehead pr))
-                keep (hasbody ? (filter (pr \ !(ho-any (q \ (<q = <) (dehead pr)) lamcs)) pairs)
+                keep (hasbody ? (filter (pr \ !(ho-any (q \ <q = <(dehead pr)) lamcs)) pairs)
                                 pairs)                                                           ; non-inlined bindings keep their raw form (grpfix recognizes define-sugar function heads)
                 subbed (map (pr \ <pr . sub (prps pr) >pr) keep)
                 (': . (hasbody ? (unpair subbed (sub () body)) (cbflat subbed)))))))
