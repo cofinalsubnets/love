@@ -211,7 +211,12 @@
    (thumb-dec d) (thumb-addsub-imm 'sub d d 1)
 
    ;; shifts by an immediate: MOV.W Rd, Rm, <type> #count  (type: lsl 0 lsr 1 asr 2 ror 3). in place.
+   ;; rol is ror the other way round; a rotate by a whole word is no change (ror #0 would be rrx)
    (thumb-shift op d c)
+      (? (op = 'rol) (thumb-shift 'ror d ((32 - c) & 31))
+         (op = 'ror && (c & 31) = 0) ()
+         (thumb-shift1 op d c))
+   (thumb-shift1 op d c)
       (: dn (rn d)
          ty (op @ 'shl 0 'shr 1 'sar 2 'ror 3 (scare 'badshift op))
          hw2 ((c >> 2 & 7) << 12 | (dn << 8 | ((c & 3) << 6 | (ty << 4 | dn))))

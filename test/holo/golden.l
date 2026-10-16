@@ -1123,6 +1123,10 @@
       ("t2.shl"     "4feac000"          ((shl r0 3)))                 ; lsl.w r0, r0, #3
       ("t2.shr"     "4fead000"          ((shr r0 3)))                 ; lsr.w r0, r0, #3
       ("t2.sar"     "4feae000"          ((sar r0 3)))                 ; asr.w r0, r0, #3
+      ("t2.ror"     "4fea7212"          ((ror r2 5)))                 ; ror.w r2, r2, #5
+      ("t2.rol"     "4fea3060"          ((rol r0 8)))                 ; ror.w r0, r0, #24 (rol is ror the other way)
+      ("t2.rol.1"   "4feaf373"          ((rol r3 1)))                 ; ror.w r3, r3, #31
+      ("t2.rol.32"  ""                  ((rol r0 32)))                ; a whole word: no change, never ror #0 (rrx)
       ("t2.shlv"    "00fa01f0"          ((shlv r0 r1)))               ; lsl.w r0, r0, r1 (count in r1)
       ("t2.sdiv"    "91fbf2f0"          ((div r0 r1 r2)))             ; sdiv r0, r1, r2
       ("t2.udiv"    "b1fbf2f0"          ((udiv r0 r1 r2)))            ; udiv r0, r1, r2
