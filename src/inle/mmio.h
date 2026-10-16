@@ -1,7 +1,5 @@
-// mmio.h -- device memory, one copy for the drivers and the arch seats. every access is
-// volatile so the compiler keeps program order; every target is little-endian, so a
-// typed load is the LE read. the pci doors want asmops.h's k_outl/k_inl, and asmops.h
-// has no guard, so the includer brings it in first.
+// mmio.h -- device memory: volatile keeps program order, every target is little-endian.
+// asmops.h has no guard, so the includer brings it in first (the pci doors want k_outl)
 #pragma once
 #include "k.h"
 #include <stdint.h>
@@ -12,8 +10,8 @@ static inline uint32_t r32(volatile uint8_t *p) { return *(volatile uint32_t*) p
 static inline void w8 (volatile uint8_t *p, uint8_t v)  { *p = v; }
 static inline void w16(volatile uint8_t *p, uint16_t v) { *(volatile uint16_t*) p = v; }
 static inline void w32(volatile uint8_t *p, uint32_t v) { *(volatile uint32_t*) p = v; }
-static inline void w64(volatile uint8_t *p, uint64_t v) {   // two 32-bit halves: the
-  w32(p, (uint32_t) v); w32(p + 4, (uint32_t) (v >> 32)); } // width every transport takes
+static inline void w64(volatile uint8_t *p, uint64_t v) {   // two halves: the width every
+  w32(p, (uint32_t) v); w32(p + 4, (uint32_t) (v >> 32)); } // transport takes
 
 // the address a device sees: exact for kmallocw memory, never for an image static
 static inline uintptr_t vtop(volatile void *p) { return (uintptr_t) p - khhdm; }

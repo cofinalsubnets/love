@@ -1,8 +1,5 @@
-// dtb -> kboot, the door itself: every arch booting off a flat device tree walks it
-// the same way, and the two numbers that differ belong to the stub that jumped here.
-// So this is a header included ONCE per arch (a64_dtb.c, rv64_dtb.c), each
-// spelling k_hhdm and k_map_top ahead of the include -- the constants fold and the
-// door is one function, with no wrapper standing between it and its caller.
+// dtb -> kboot, for every arch booting off a flat device tree: included once per arch, which
+// spells k_hhdm and k_map_top first, so the constants fold into the one function
 #include "k.h"
 #include "../love/bytes.h"
 
@@ -10,10 +7,8 @@
 #error "dtb.h: spell k_hhdm (the stub's window) and k_map_top (its far edge) first"
 #endif
 
-// everything from the RAM base up to the image's far edge (the firmware below it, the
-// dtb, the hole, the image itself) is spoken for, and no loader here reserves it --
-// hand it to the heap and the kernel eats itself. a VALUE the projection patches into
-// the file (src/tools/kproject.l), where the flat link's kimage_end symbol used to stand.
+// RAM below the image's far edge is spoken for, and nothing else reserves it: handed to the
+// heap, the kernel eats itself. a value kproject.l patches into the file
 extern uintptr_t const k_image_top;
 
 
@@ -24,7 +19,7 @@ extern uintptr_t const k_image_top;
 #define FDT_NOP        4
 #define FDT_END        9
 
-static int is(char const *a, char const *b) {      // tiny strcmp, self-contained
+static int is(char const *a, char const *b) {
   while (*a && *a == *b) { a++; b++; }
   return *a == *b; }
 
@@ -36,7 +31,7 @@ void dtb_to_kboot(uint64_t dtb_pa) {
   uint64_t k1 = (k_image_top + 0xfff) & ~0xfffull;   // page-rounded physical far edge
   kboot.hhdm = k_hhdm;
   uint32_t ac = 2, sc = 2;                         // root's cell counts (virt: 2/2)
-  int depth = 0, memd = 0, chos = 0;               // memd/chos: the depth of a memory / chosen node we are inside
+  int depth = 0, memd = 0, chos = 0;               // the depth of the memory / chosen node we are in
   for (;;) {
     uint32_t tok = ld32be(p); p += 4;
     if (tok == FDT_END) break;

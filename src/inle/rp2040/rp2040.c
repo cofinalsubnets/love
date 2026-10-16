@@ -1,33 +1,23 @@
-// RP2040 bare-metal arch backend (no Pico SDK): vector table + crt0, the
-// XOSC+PLL clock bring-up, the UART0 serial console, the microsecond timer,
-// and the SIO GPIO helpers. Plays the role of arch/<arch>/arch.c for the
-// freestanding kernel, but for a Cortex-M0+ booting from flash XIP.
+// rp2040 bare-metal arch backend, no pico SDK: vectors, crt0, clocks, UART0 console, the
+// timer and SIO GPIO, for a cortex-M0+ booting from flash XIP
 #include <stdint.h>
 #include "rp2040.h"
 
-// Linker-provided bounds (rp2040.lds).
+// linker bounds (rp2040.lds)
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[], __stack_top__[];
 
 int main(void);
 
 // --- fault diagnostics ----------------------------------------------------
-// ARMv6-M (Cortex-M0+) has no CFSR/BFAR, so a fault says only where it stopped:
-// halt on a breakpoint and let an attached SWD debugger read the frame the
-// hardware stacked. this handler used to select MSP/PSP and copy that frame
-// into a struct, which wants `naked` plus mrs/tst -- neither in holo's thumb1
-// lane. The frame is still on the stack for the debugger; only the copy is gone.
+// ARMv6-M has no CFSR/BFAR: halt and let SWD read the stacked frame
 void isr_hardfault(void) { for (;;) asm volatile("bkpt #0"); }
 
-// the templates here are holo's NEUTRAL mnemonics, not ARM's: `trap` is the
-// BKPT this backend lays (src/love/holo/thumb1.l). wfe/wfi have no thumb1 row yet,
-// so an idle handler spins instead of parking.
+// spins: wfe/wfi have no thumb1 row in holo yet
 static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }
 
 // --- crt0 / reset ---------------------------------------------------------
-// boot2 has already loaded SP from vectors[0] and handed control here. Copy
-// .data from its flash load address into SRAM, zero .bss, point VTOR at our
-// table, bring up the clocks, then enter main.
+// boot2 has loaded SP from vectors[0]
 __attribute__((used, noreturn)) void reset_handler(void) {
   REG(VTOR_ADDR) = 0x10000100u;
   for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
@@ -37,8 +27,7 @@ __attribute__((used, noreturn)) void reset_handler(void) {
   for (;;) asm volatile("bkpt #0"); }
 
 // --- vector table (at 0x10000100) -----------------------------------------
-// Only the M0+ system vectors; no peripheral IRQs are enabled, so the rest
-// park in default_handler. vectors[0] is the initial SP, not a function.
+// system vectors only: no peripheral IRQ is enabled
 __attribute__((section(".vectors"), used))
 void *const vectors[] = {
   (void *) __stack_top__,   // 0  initial SP
@@ -54,13 +43,13 @@ void *const vectors[] = {
 
 // --- clocks: XOSC (12 MHz) + PLL_SYS -> 125 MHz clk_sys; clk_peri off XOSC --
 void clocks_init(void) {
-  // 1. start the 12 MHz crystal oscillator and wait for it to stabilise.
+  // 1. the 12 MHz crystal
   REG(XOSC_CTRL) = XOSC_CTRL_1_15MHZ;
   REG(XOSC_STARTUP) = 47;                 // ~1 ms at 12 MHz: (12e6/1000)/256
   REG(XOSC_CTRL + REG_SET) = XOSC_CTRL_ENABLE;
   while (!(REG(XOSC_STATUS) & XOSC_STATUS_STABLE)) {}
 
-  // 2. clk_ref -> xosc; park clk_sys on clk_ref while we touch the PLL.
+  // 2. clk_ref -> xosc; clk_sys parked on clk_ref while the PLL moves
   REG(CLK_REF_DIV) = CLK_DIV_1;
   REG(CLK_REF_CTRL) = CLK_REF_SRC_XOSC;
   while (REG(CLK_REF_SELECTED) != (1u << CLK_REF_SRC_XOSC)) {}
@@ -77,13 +66,13 @@ void clocks_init(void) {
   REG(PLL_PRIM) = (6u << 16) | (2u << 12);
   REG(PLL_PWR + REG_CLR) = PLL_PWR_POSTDIVPD;            // power on postdiv
 
-  // 4. clk_sys -> PLL (glitchless: set AUXSRC with SRC=ref, then SRC=aux).
+  // 4. clk_sys -> PLL, glitchless: AUXSRC with SRC=ref, then SRC=aux
   REG(CLK_SYS_DIV) = CLK_DIV_1;
   REG(CLK_SYS_CTRL) = (CLK_SYS_AUX_PLLSYS << CLK_AUXSRC_LSB) | CLK_SYS_SRC_REF;
   REG(CLK_SYS_CTRL) = (CLK_SYS_AUX_PLLSYS << CLK_AUXSRC_LSB) | CLK_SYS_SRC_AUX;
   while (REG(CLK_SYS_SELECTED) != (1u << CLK_SYS_SRC_AUX)) {}
 
-  // 5. clk_peri -> xosc (exact 12 MHz reference for the UART baud divisor).
+  // 5. clk_peri -> xosc, the exact 12 MHz for the baud divisor
   REG(CLK_PERI_CTRL) = 0;
   REG(CLK_PERI_CTRL) = CLK_PERI_ENABLE | (CLK_PERI_AUX_XOSC << CLK_AUXSRC_LSB); }
 

@@ -1,8 +1,5 @@
-// droid architecture-specific C: inle as a linux process, the phone's seat (notes/plan/inle-droid.md).
-// the wasm seat's contract (src/inle/wasm/arch.c) answered by a real kernel: each face below is
-// one system call through __love_sys, moonlibc's raw tail, which kmain's __love_osv = -1 never
-// reaches -- moonlibc's own calls take src/inle/sys.c's answers, as on every other seat. the
-// serial line is fds 0 and 1, the screen the bridge's window; the reset ends the process.
+// droid arch: inle as a linux process on the phone, wasm/arch.c's contract over raw __love_sys
+// (moonlibc's own calls still take sys.c's answers). serial is fds 0 and 1, the screen the bridge's
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
@@ -22,14 +19,10 @@ extern uint8_t const cleat_8x16[256][16];
 
 #define sys(n, a, b, c, d) __love_sys(n, (long) (a), (long) (b), (long) (c), (long) (d), 0, 0)
 
-// the terminal as it was found, put back at the end; a tty reads raw while the machine runs.
 // kernel termios: four flag words, the line, the controls
 struct k_tio { uint32_t i, o, c, l; uint8_t line, cc[19]; };
-// the machine: the serial line, and the face -- the bridge's window (src/apps/droid/bridge.c),
-// the paper shown there as the rows that changed since the last frame (was), its records
-// read into r; under the paper the keys row, row pixels of the screen's h (rowh when it fits),
-// with ctrl and alt held off the row (ctl alt) or the keyboard's own (pctl palt); a paste
-// asked of the bridge and not yet ended, and a touch that began on the paper (held)
+// was the tty as found; fb/shown the paper and what the bridge (src/apps/droid/bridge.c) last got;
+// r its records; row the keys row's height; ctl/alt held on the row, pctl/palt on the keyboard
 static struct { struct k_tio was; bool tty, eof, drew, all, ctl, alt, pctl, palt, pasting, held; uint64_t tick, sent;
                 unsigned n, rn, sc, row, rowh; int fd; uint32_t w, h, cap, *fb, *shown;
                 unsigned char b[2048], r[192]; } m = { .fd = -1 };
@@ -198,9 +191,8 @@ static int paper_touch(int how, int32_t x, int32_t y) {
   if (how == 1) m.held = false;
   return 1; }
 
-// the bridge's records: keys into kmain's queue while it has room, a new size re-seats the
-// paper, a touch on the keys row is its key, one on the paper the pointer, a paste ten bytes
-// a record (P n bytes..) until an empty one. its end is the machine's
+// the bridge's 12-byte records, while kmain's queue has room: K key, T touch, S size, P paste
+// (ten bytes a record until an empty one). its end is the machine's
 static void face_take(int room) {
   if (m.fd < 0) return;
   if (m.rn < sizeof m.r) {
@@ -223,8 +215,8 @@ static void face_take(int room) {
   for (unsigned i = at; i < m.rn; i++) m.r[i - at] = m.r[i];
   m.rn -= at; }
 
-// the bridge's socket, its first size, and the paper carved off the top of the span: the
-// most it may grow to, the copy of what was shown under it. -> the span the heap keeps
+// the bridge's socket and first size; the paper and its shown copy carved off the span's top
+// -> the span the heap keeps
 static uintptr_t face_open(uintptr_t base, uintptr_t len) {
   char const *p = getenv("LOVE_FACE");
   struct { unsigned short fam; char path[108]; } u = { 1, {0} };
@@ -297,9 +289,7 @@ void k_reset(void) { leave(0); }
 
 void k_fault_trigger(intptr_t n) { (void) n; __builtin_trap(); }
 
-// the entry: moonlibc's runs as for any program, and main hands over here. the machine is
-// the words after argv[0] as its boot line, one anonymous span as its ram, INLE_RAM MiB, and
-// under the bridge (LOVE_FACE) a framebuffer console shown in its window
+// from main: argv after [0] the boot line, INLE_RAM MiB of anonymous ram, LOVE_FACE the bridge
 int k_droid_main(int argc, char const **argv) {
   char line[sizeof kboot.cmdline];
   uintptr_t n = 0;
