@@ -327,6 +327,68 @@
       (: ln (rn dl) hn (rn dh) an (rn a) bn (rn b)
          (t32 ((0xFB80 | an) << 16 | (ln << 12 | (hn << 8 | bn)))))
 
+   ;; -- the 128-bit kit (moon's i128/u128) on four words: the value rides r0:r1:r2:r3, lo word
+   ;; first, a binop's left staged in a 16-byte cell at [sp]. r12 is the scratch (the far lane's
+   ;; own) and a variable shift's count. one IR form each, so no pass parts a carry chain. --
+   thumb-w4 '(r0 r1 r2 r3)
+   (thumb-wc k) (thumb-ld 'r12 'sp (4 * k))                 ; the cell's word k
+   ;; op over the words, each against the cell's (c first) or the cell against each (c last)
+   (thumb-wchain ops cfirst)
+      (catall (map (k \ (thumb-wc k + (cfirst ? (thumb-aluop (ops k) (thumb-w4 k) 'r12 (thumb-w4 k))
+                                               (thumb-aluop (ops k) (thumb-w4 k) (thumb-w4 k) 'r12))))
+                   ^4))
+   thumb-addc '(adds adcs adcs adc)
+   thumb-subc '(subs sbcs sbcs sbc)
+   thumb-subf '(subs sbcs sbcs sbcs)                            ; the compare's chain keeps its last flags
+   (thumb-a128 sp9) (thumb-wchain thumb-addc ())
+   (thumb-s128 sp9) (thumb-wchain thumb-subc 1)                 ; the cell less the value
+   ;; against zero in r12: negate, step by one
+   (thumb-wk ops k) (thumb-movw 'r12 k + catall (map (i \ (i = 1 ? (thumb-movw 'r12 0) ())
+                                                    + thumb-aluop (ops i) (thumb-w4 i) (thumb-w4 i) 'r12) ^4))
+   thumb-n128 (thumb-movw 'r12 0 + catall (map (i \ thumb-aluop (thumb-subc i) (thumb-w4 i) 'r12 (thumb-w4 i)) ^4))
+   thumb-inc128 (thumb-wk thumb-addc 1)
+   thumb-dec128 (thumb-wk thumb-subc 1)
+   thumb-sx128 (thumb-mov 'r2 'r1 + thumb-shift 'sar 'r2 31 + thumb-mov 'r3 'r2)   ; the pair's sign fills the high half
+   ;; (c128 cond sp): 0/1 <- (CELL cond VALUE). eq/ne fold the words through eor; the ordered
+   ;; relations run the borrow chain and read the flags off the high word; gt/above/le/be
+   ;; reverse it and read the flipped relation
+   (thumb-c128 cond sp9)
+      (? (elem cond '(eq ne))
+          (thumb-wchain '(xor xor xor xor) ()
+           + thumb-aluop 'or 'r0 'r0 'r1 + thumb-aluop 'or 'r0 'r0 'r2 + thumb-aluop 'or 'r0 'r0 'r3
+           + thumb-cmp 'r0 0 + thumb-set cond 'r0)
+         (elem cond '(lt below ge ae)) (thumb-wchain thumb-subf 1 + thumb-set cond 'r0)
+         (thumb-wchain thumb-subf () + thumb-set (cond @ 'gt 'lt 'above 'below 'le 'ge 'be 'ae (scare 'badcc128 cond)) 'r0))
+   ;; by a constant: whole words move, then the funnel by the rest through r12
+   (thumb-wmove pairs) (catall (map (p \ (two? >p ? (thumb-mov <p <>p) (thumb-movw <p 0))) pairs))
+   (thumb-funnel hi lo s)                                       ; hi = hi << s | lo >> (32 - s)
+      (thumb-shift 'shl hi s + thumb-mov 'r12 lo + thumb-shift 'shr 'r12 (32 - s) + thumb-aluop 'or hi hi 'r12)
+   (thumb-funnelr lo hi s)                                      ; lo = lo >> s | hi << (32 - s)
+      (thumb-shift 'shr lo s + thumb-mov 'r12 hi + thumb-shift 'shl 'r12 (32 - s) + thumb-aluop 'or lo lo 'r12)
+   (thumb-shl128 c)
+      (: k (c // 32) s (c % 32) w thumb-w4
+         (thumb-wmove (map (i \ (3 - i @ j (j < k ? [(w j)] [(w j) (w (j - k))]))) ^4)
+          + (0 < s ? (catall (map (i \ (3 - i @ j (j < 1 ? (thumb-shift 'shl (w 0) s) (thumb-funnel (w j) (w (j - 1)) s)))) ^4)) ())))
+   (thumb-shrx128 c sar?)
+      (: k (c // 32) s (c % 32) w thumb-w4
+         ((sar? ? (thumb-mov 'r12 'r3 + thumb-shift 'sar 'r12 31) ())
+          + catall (map (j \ (3 - k < j ? (sar? ? (thumb-mov (w j) 'r12) (thumb-movw (w j) 0)) (k = 0 ? () (thumb-mov (w j) (w (j + k)))))) ^4)
+          + (0 < s ? (catall (map (j \ (j = 3 ? (thumb-shift (sar? ? 'sar 'shr) 'r3 s) (thumb-funnelr (w j) (w (j + 1)) s))) ^4)) ())))
+   (thumb-shr128 c) (thumb-shrx128 c ())
+   (thumb-sar128 c) (thumb-shrx128 c 1)
+   ;; by r12 (0..127): a bit at a time. lsl #1 through the carry chain, or lsr/asr #1 down
+   ;; through rrx; cmp/beq to the end, subw, b back
+   (thumb-shs ty d m c) (t32 (0xEA5F0000 | ((c >> 2 & 7) << 12 | (rn d << 8 | ((c & 3) << 6 | (ty << 4 | rn m))))))   ; movs.w Rd, Rm, <ty> #c (ror #0 = rrx)
+   (thumb-wloop body)
+      (: b2 (body + thumb-addsub-imm 'sub 'r12 'r12 1)
+         head (thumb-cmp 'r12 0)
+         (head + t16 (0xD000 | #b2 // 2 & 255)                  ; beq past the b (it reads pc+4)
+          + b2 + t16 (0xE000 | (0 - (#head + #b2 + 6)) // 2 & 2047)))   ; b back to the head
+   (thumb-wchain2 ops) (catall (map (k \ thumb-aluop (ops k) (thumb-w4 k) (thumb-w4 k) (thumb-w4 k)) ^4))
+   thumb-shl128v (thumb-wloop (thumb-wchain2 '(adds adcs adcs adc)))
+   thumb-shr128v (thumb-wloop (thumb-shs 1 'r3 'r3 1 + thumb-shs 3 'r2 'r2 0 + thumb-shs 3 'r1 'r1 0 + thumb-shs 3 'r0 'r0 0))
+   thumb-sar128v (thumb-wloop (thumb-shs 2 'r3 'r3 1 + thumb-shs 3 'r2 'r2 0 + thumb-shs 3 'r1 'r1 0 + thumb-shs 3 'r0 'r0 0))
+
    ;; control. B/BL carry a scrambled pc-relative offset in a bitfield; the fixup stashes the cond (or 0)
    ;; in aux and `patch` builds the whole 4-byte word. an unconditional B (jmp) rides t4, a conditional
    ;; one (br) rides t3, and BL (call) rides T1 -- all 32-bit, all 4-byte fixups.
@@ -399,6 +461,10 @@
           ('dsb . thumb-dsb) ('brk . thumb-brk)            ; -- the system lane --
           ('mrs . thumb-mrs)
           ('isb . t32 0xF3BF8F6F)                           ; isb sy
+          ('a128 . thumb-a128) ('s128 . thumb-s128) ('c128 . thumb-c128)   ; -- the 128-bit kit --
+          ('n128 . thumb-n128) ('inc128 . thumb-inc128) ('dec128 . thumb-dec128) ('sx128 . thumb-sx128)
+          ('shl128 . thumb-shl128) ('shr128 . thumb-shr128) ('sar128 . thumb-sar128)
+          ('shl128v . thumb-shl128v) ('shr128v . thumb-shr128v) ('sar128v . thumb-sar128v)
           ('wfi . t16 0xBF30)                               ; wait for interrupt
           ('ret . t16 0x4770)                               ; BX lr
           ('sys . t16 0xDF00)                               ; svc #0

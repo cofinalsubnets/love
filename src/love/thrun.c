@@ -14,6 +14,7 @@ struct thr {
  word ops, names, *cfg, *lim, pairs, node;            // node a return's
  word *s; intptr_t d;                                 // the slot list, its cells laid as garbage
  int full;                                            // past lim: the run is void
+ int deep;                                            // conds open: a C frame each, so capped
  union u *thene, *at; };                              // at: the join a stretch ended at
 enum { ThrK = 1, ThrA, ThrO, ThrC, ThrG, ThrCap, ThrCup, ThrTwo };   // cfg's rows past names
 
@@ -35,8 +36,13 @@ static love_noinline word thr_at(struct thr *t, intptr_t k) {        // (S k), (
 static love_noinline void thr_drop(struct thr *t, intptr_t k) {
  for (; k > 0 && t->d > 0; k--, t->d--) if (t->s) t->s = (word*) t->s[1]; }
 static word thr_tk(struct thr *t, word *n, intptr_t d, intptr_t k) { // the top k slots, top first
- if (k <= 0 || d <= 0) return ZeroPoint;
- return thr_cons(t, n ? n[0] : ZeroPoint, thr_tk(t, n ? (word*) n[1] : 0, d - 1, k - 1)); }
+ word h = ZeroPoint, l = ZeroPoint;
+ for (; k > 0 && d > 0; k--, d--, n = n ? (word*) n[1] : 0) {
+  word c = thr_cons(t, n ? n[0] : ZeroPoint, ZeroPoint);
+  if (t->full) return ZeroPoint;
+  if (l == ZeroPoint) h = c; else B(l) = c;
+  l = c; }
+ return h; }
 static love_noinline void thr_push(struct thr *t, word node) {
  word *m = thr_take(t, Width(struct mint)), y = m ? word(ini_missing((struct mint*) m, ++t->g->next_serial)) : ZeroPoint;
  thr_slot(t, y), t->d++;
@@ -63,9 +69,16 @@ static struct { lvm_t *op; char s[4]; } const thr_ldt[] = {
  {lvm_arg0, "0"}, {lvm_arg1, "1"}, {lvm_arg2, "2"}, {lvm_arg3, "3"},
  {lvm_quo0, "z"}, {lvm_quo1, "o"}, {lvm_quo2, "t"}, {lvm_quo3, "h"}, {lvm_quom1, "m"}, {lvm_quom2, "n"} };
 static int thr_run(struct thr *t, union u *p, union u *st);
+#define ThrDeep 2048                                  // conds nested past this read as 0
 // a cond: the then arm first, which finds the join if there is one; the else arm runs to it.
 // answers as the run does: 0 fails, 1 returns t->node, 2 joins at t->at with t->s
+static int thr_branch1(struct thr *t, word test, union u *a, union u *e, union u *st);
 static love_noinline int thr_branch(struct thr *t, word test, union u *a, union u *e, union u *st) {
+ if (t->deep >= ThrDeep) return 0;
+ t->deep++;
+ int k = thr_branch1(t, test, a, e, st);
+ return t->deep--, k; }
+static int thr_branch1(struct thr *t, word test, union u *a, union u *e, union u *st) {
  word *s0 = t->s; intptr_t d0 = t->d;
  union u *th = t->thene;
  t->thene = e;
@@ -158,7 +171,7 @@ static struct g *thrun(struct g *g) {
   for (word l = sp[3]; chainp(l) && nc <= ThrTwo; l = B(l)) cfgv[nc++] = A(l);
   int r = 0;
   word ans = 0;
-  struct thr t = { g, sp[2], nc > ThrTwo ? cfgv[0] : 0, cfgv, g->sp, ZeroPoint, ZeroPoint, 0, 0, 0, 0, 0 };
+  struct thr t = { g, sp[2], nc > ThrTwo ? cfgv[0] : 0, cfgv, g->sp, ZeroPoint, ZeroPoint, 0, 0, 0, 0, 0, 0 };
   if (evenp(sp[0]) && nc > ThrTwo && tabp(cfgv[0])) {
    word *prev = 0;                                    // the frame's slots, in list order: the head the top
    for (word l = sp[1], *c; chainp(l) && (c = thr_take(&t, 2)); l = B(l), t.d++) {

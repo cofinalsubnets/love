@@ -165,7 +165,7 @@
    (two? d && 1 = <d && 2 = <>d))
   (<(sound '(39 49)) @ d                           ; "'1" -> (` 1)
    (two? d && 1 = <>d))
-  (string (104 . 105 . 0) = <(sound '(34 104 105 34)))   ; "hi"
+  (string [104 105] = <(sound '(34 104 105 34)))   ; "hi"
 
   ; sequential reads thread the residue; the last one is the clean end
   (: a (sound '(49 32 50 32 51))                        ; "1 2 3"

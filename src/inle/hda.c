@@ -205,8 +205,7 @@ static int hda_bring_up(uint32_t bdf, void *dma) {
     pci_w8(bdf, 0x42, (pci_r8(bdf, 0x42) & ~7u) | 2);
   volatile uint8_t *m = khda.mm = (volatile uint8_t*) (khhdm + bar);
   // the block: CORB 1K, RIRB 2K, BDL 512, the position buffer 256; all 128-aligned
-  uintptr_t a = ((uintptr_t) dma + 127) & ~(uintptr_t) 127;
-  khda.corb = (volatile uint8_t*) a;
+  khda.corb = dma;
   khda.rirb = khda.corb + 1024;
   khda.bdl  = khda.corb + 3072;
   khda.pos  = khda.corb + 3584;
@@ -381,7 +380,7 @@ void k_horn_close(void) {
   w8(khda.mm + khda.sd, 0);
   khda.open = 0; }
 
-// the boot door: dma is one kmallocw block (>= 3840 + 128 bytes) the command rings,
+// the boot door: dma is one kmallocw block (>= 3840 bytes, 128-aligned) the command rings,
 // the buffer list and the position buffer live in for the machine's life
 void k_hda_init(void *dma) {
   if (!dma) return;

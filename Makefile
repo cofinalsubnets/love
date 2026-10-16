@@ -359,9 +359,11 @@ $(ho)/sb $(ho)/lush $(ho)/helm:
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
 	@chmod 755 $@
-out/mooncc0.image: out/.mooncc-cat.l $(love0)
+# pinned to out/ as love0 is, from the cat this tree lays: the same bytes whatever HCC says,
+# and under HCC the only one a clean tree has
+out/mooncc0.image: $(ho)/.mooncc-cat.l $(love0)
 	@echo 'BAKE	'$@
-	@$(love0) -l out/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
+	@$(love0) -l $< -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
 distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l src/love/holo/gas.l \
             $(holo_obj) src/love/holo/copy.l $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)

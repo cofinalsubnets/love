@@ -251,7 +251,7 @@
    amble-nil (:)
    amble-lam (mint 0)                                             ; the inner-lambda site marker: (amble-lam i n v..) -- entry i of arity n, curried through the imports v..
    (amax a b) (a < b ? b a)
-   (adistinct l) (l @ (a . u) (!(elem a u) && adistinct u) 1)
+   (adistinct l) (: (go l t) (l @ (a . u) (peep t a 0 ? 0 (go u (pin t a 1))) 1) (go l {}))   ; no name twice
    (amentions? x e) (? (aquote? e) 0  (e = x) 1  (two? e) (foldl (\ a y (a || amentions? x y)) 0 e)  0)
    ; the params name distinct slots; a captured sequencing binder may arrive as several _, harmless
    ; while nothing reads _
@@ -361,13 +361,14 @@
            [tally 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
            [(>) '>] [(>=) '>=] [(=) '=] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]]
    ; ev.l's iop carries a nif as its op word (a charm), which aopv's values never equal: the
-   ; words of the globals amble can name, word -> nom, filled at the first ask -- guts is not
-   ; there yet when this file bakes
+   ; words of the globals amble can name, word -> nom, filled at the first ask by ev.l's
+   ; readers, cited here before the mop takes them
    aopix {}
+   aopnf (cite 'guts 'nifop)  aopgv (cite 'guts 'gv)
    probebox {}                                                            ; slot 0 set: amble answers 1 where it would compile, and emits nothing
    (aopw x)
     (: _ (#(keys aopix) = 0 ?
-            (: nf (cite 'guts 'nifop) gv (cite 'guts 'gv)
+            (: nf aopnf gv aopgv
                (each '(pin peep elem max min snip tally two? cap cup + - * // % & | ^ < <= > >= = == .
                        rev cat assoc last string charm? nom? tablet? lit? string? gem? atom? nil? abs)
                      (n \ (: v (gv ? (gv n 0) 0) w (nf && v && !(charm? v) ? (nf v) 0)
@@ -411,7 +412,8 @@
                ['? ['== (adesug env ti ta <as) (adesug env ti ta <>as)] 0 1]
              ((op = op0 ? (adesug env ti ta op0) op) . map (x \ adesug env ti ta x) as))))
    ; alets: the value-let binders of e, or 'bad: even tally (the body-less form binds the enclosing
-   ; scope), name binders, no shadowing (enc = those in scope); one slot serves a name wherever bound
+   ; scope), name binders, no shadowing (enc = those in scope); one slot serves a name wherever bound.
+   ; past 48, more than the slots ok allows, it stops: 'bad
    (alets e acc) (alt e acc ())
    (alt e acc enc)
     (? (acc = 'bad) 'bad
@@ -428,7 +430,7 @@
                          (? (a2 = 'bad) 'bad
                             (p = '_) (gol >>l a2 en)
                             (elem p en) 'bad
-                            (gol >>l (elem p a2 ? a2 (p . a2)) (p . en))))))))
+                            (gol >>l (elem p a2 ? a2 (48 <= #a2 ? 'bad (p . a2))) (p . en))))))))
             >e acc enc))
        (foldl (\ ac x (alt x ac enc)) acc e))
    ; adrv?: does e drive -- a self-call or an applied frame nom? the non-loop cost gate: a body whose
@@ -497,9 +499,9 @@
        envl (lts = 'bad ? env (env + lts))
        ; a free head that is not farq resolves via gv at compile (redefinition-stale); a farq name is a
        ; woven sibling, called as entry(imports.. args..) off lz's frozen (entry . import-names), never gv
-       cand (filter (f \ !(f = self)) (foldl (\ ac i (aheads envl go i ac)) (aheads envl go body ()) inits))
-       drok (lp ? 1 (two? cand || two? ins ? (adrv? envl self body) 1))  ; the non-loop cost gate: free heads and inner lambdas ride only a body that
-                                                                         ; drives a param or itself -- and a declining body skips the resolution below
+       cand (lts = 'bad ? () (filter (f \ !(f = self)) (foldl (\ ac i (aheads envl go i ac)) (aheads envl go body ()) inits)))
+       drok (lts != 'bad && (lp ? 1 (two? cand || two? ins ? (adrv? envl self body) 1)))   ; the non-loop cost gate: free heads and inner lambdas ride only a body that
+                                                                         ; drives a param or itself -- and a declining body, or refused lets, skips the walks below
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the lam-list assoc; the cell read mirrors ev.l's cof, box slot 0
                                  (two? lfd ? (peep >lfd 0 0) 0))
@@ -567,7 +569,7 @@
                             (: bad (filter (x \ two? x && !(aquote? x) && !(amble-ok? envl shd kn go k 0 x)) >e)
                                (two? bad ? (small <bad) e)))
                why (? !(two? s && two? >s && all nom? ps && aparams? ps M && a = #ps && 0 < a) 'shape
-                      !lpok 'loop !drok 'cost (lts = 'bad) 'lets !(two? body) 'nobody
+                      !lpok 'loop (lts = 'bad) 'lets !drok 'cost !(two? body) 'nobody
                       !(all lit? gvals) ['globals (filter (p \ !(lit? <>p)) (map (f \ [f (gv f 0)]) gn))] !(all lit? ovals) 'ops
                       !(nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48) 'slots
                       !(all (amble-ok? ps shd kn 0 0 0) inits) 'inits
@@ -2488,7 +2490,7 @@
    natjit
     (: arch love-arch                                                     ; the runtime target ('x64 / 'a64), read on the actual binary
        G (cite 'glaze)                                                    ; not in the module (test_glaze re-cats it alone): every name arrives by key
-       defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, kept in guts (egg.l)
+       defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, cited before the mop (egg.l)
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
@@ -2508,6 +2510,10 @@
        (opnd-ok? ps e) (? (two? e) (all (opnd-ok? ps) >e)  (nom? e) (elem e ps)  1)   ; every operand leaf a frame param: jgir has no slot for a free capture
        (gdefs-ok? gds) (all (gd \ opnd-ok? ><gd >gd) gds)                             ; ... and per def body, over that def's own params
        threadir (G 'threadir)  leafops (G 'leafops)  thleaf (G 'thleaf)  thloop (G 'thloop)  thcount (G 'thcount)
+       ; a nested operand is a native push, and a lane's own pushes are under no stack check: a body
+       ; nested past gnest declines to its thread
+       gnest 1024
+       (nest? x n) (? (n <= 0) 1 (two? x) (any (y \ nest? y (n - 1)) x) 0)
        ; e = the bytecode entry (deopt target), s = the surface (\ frame.. body), a = arity, gv = ala's folded global resolver,
        ; farq = the letrec-local predicate (a farq name is wire-resolved: never gv it, the book namesake is stale), lams = the scope's
        ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = ev.l's uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
@@ -2516,10 +2522,12 @@
         (: _ (peep gvbox 0 0 ? 0 (pin gvbox 0 gv))
            _ (pin probebox 0 0)
            ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
-           t (threadir e leafops)                                                            ; the thread ev wrote, read once for every thread lane
+           deep (nest? body gnest)
+           t (deep ? 0 (threadir e leafops))                                                            ; the thread ev wrote, read once for every thread lane
            lf (thleaf t)
            lp (two? lf ? 0 (thloop t))
-           (? (two? lf) (hit (nif (emit (peep (asm arch (coreir arch (init >lf) (last lf) (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e a))
+           (? deep e
+              (two? lf) (hit (nif (emit (peep (asm arch (coreir arch (init >lf) (last lf) (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e a))
               (two? lp) (thcount lp @ [B I op cmp] (hit (njit-loop B I op cmp e))     ; the counted loop, then the n-var one: the back-edge is the win
                          (hit (njit-loop-n (lp 0) (lp 1) (lp 2) (lp 3) (lp 4) (lp 5) e)))
               !(all nom? ps) e                                                        ; a frame that is not all points (a pattern binder) declines every source lane

@@ -7,14 +7,14 @@
 # UV-pty, and with FBSD_SEED=1 / NBSD_SEED=1 (minutes) `love seed` on the box answering
 # the tree's own bytes. termios proper needs a real tty and is not here.
 #
-# the box is a host bee knows with the cap freebsd-x64, netbsd-x64, freebsd-a64 or netbsd-a64
-# (doc/bee.md, HOSTS), its ssh words from `love bee --on CAP --ssh`; FBSD_SSH, NBSD_SSH,
-# FBSD_ARM64_SSH and NBSD_ARM64_SSH still name one for a release. without a box the gate
-# skips loudly.
+# the box is a host bee knows with the cap freebsd-x64, netbsd-x64, freebsd-a64, netbsd-a64,
+# freebsd-rv64 or netbsd-rv64 (doc/bee.md, HOSTS), its ssh words from `love bee --on CAP --ssh`;
+# FBSD_SSH, NBSD_SSH, FBSD_ARM64_SSH, NBSD_ARM64_SSH, FBSD_RV64_SSH and NBSD_RV64_SSH still
+# name one for a release. without a box the gate skips loudly.
 # on a64 the local half of each comparison runs on an a64 host where one answers, else
-# under qemu-aarch64, and skips with neither.
+# under qemu-aarch64, and skips with neither. on rv64 it runs under qemu-riscv64.
 # provisioning the boxes: doc/misc/osbox.md.
-# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64]
+# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64|rv64]
 . test/gate/skip.sh
 set -u
 
@@ -27,6 +27,8 @@ case "$os-$arch" in
   freebsd-x64)   box=${FBSD_SSH:-};       sd=${FBSD_SEED:-} ;;
   freebsd-a64) box=${FBSD_ARM64_SSH:-}; sd=${FBSD_ARM64_SEED:-} ;;
   netbsd-a64)  box=${NBSD_ARM64_SSH:-}; sd=${NBSD_ARM64_SEED:-} ;;
+  freebsd-rv64) box=${FBSD_RV64_SSH:-}; sd= ;;    # the trophy ships an x64 love; none for rv64 yet
+  netbsd-rv64)  box=${NBSD_RV64_SSH:-}; sd= ;;
   *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
 esac
 [ -n "$box" ] || box=$("$ho/love" bee --on "$os-$arch" --ssh 2>/dev/null) || box=
@@ -43,6 +45,9 @@ if [ "$arch" = a64 ]; then
   a64_how "$ho/love"
   [ -n "$a64_via" ] || gate_skip "$t: skipped (no qemu-aarch64 and no a64 host for the local half)"
   run() { a64_one "$ho/love" "$@"; }
+elif [ "$arch" = rv64 ]; then
+  command -v qemu-riscv64 > /dev/null || gate_skip "$t: skipped (no qemu-riscv64 for the local half)"
+  run() { qemu-riscv64 "$@"; }
 else
   run() { "$@"; }
 fi

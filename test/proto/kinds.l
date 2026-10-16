@@ -39,7 +39,7 @@
         'top)))                                              ; lambda / unknown form -> top
 
  ; --- the seminaive FIXPOINT over the flat (n1 e1 n2 e2 ..) binding list ---
- (pairs bs) (? (atom? bs) 0 (atom? >bs) 0 ((<bs . <>bs) . pairs >>bs))
+ (pairs bs) (? (atom? bs) () (atom? >bs) () ((<bs . <>bs) . pairs >>bs))
  (alle a b) (? (atom? a) 1 (: p <a (>p = look b <p && alle >a b)))
  (enveq a b) (alle a b && alle b a)                          ; same name->kind both ways = fixpoint
  (step ps env) (foldl (env \ p \ joininto env <p (kindof env >p)) env ps)
