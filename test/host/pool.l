@@ -51,3 +51,5 @@
  ; the frame the same at any width, and in a fork's child
  (aall (pl-frame "3!" = pl-one))
  (said = "same"))
+
+(test_fin (), puts "pool: ok -- widths, the margin, love.l, the frame alike at any width and in a fork\n", 0)
