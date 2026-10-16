@@ -1102,6 +1102,7 @@ identity, laid beside the source the census reads.
 |---|---|---|---|---|---|
 | 2026-10-06 (gwen 40be5708f) | 4439 | 1286 | 1692 | 1455 | 4 |
 | 2026-10-16 (gwen f3f9357e1) | 4439 | 2350 | 1938 | 147 | 0 |
+| 2026-10-16, the static alias local (census16) | 4439 | 3233 | 1055 | 147 | 0 |
 
 two units time out at 300 s (`.vmlinux.export.o`, pinctrl-rzg2l) and two are compat vdso
 (`--target=arm-linux-gnueabi`). our cpp on the 222 sampled units agrees with the clang leg on 213;
@@ -1125,13 +1126,31 @@ compiles and differs, by cause: units it touches, and units it alone explains.
 
 | units | alone | cause | area |
 |---|---|---|---|
-| 1007 | 883 | **a `static` alias laid global**: `MODULE_DEVICE_TABLE` is `static typeof(name) __mod_device_table__..(..) __attribute__((used, alias(..)))`, which clang lays as a local and mooncc as a global. Wrong code, though it collides only where two units share a name | frontend |
+| 1007 | 883 | **a `static` alias laid global** (fixed since): `MODULE_DEVICE_TABLE` is `static typeof(name) __mod_device_table__..(..) __attribute__((used, alias(..)))`, which clang lays as a local and mooncc laid as a global | frontend |
 | 488 | 279 | a string or memory builtin called (`memset`, `memcmp`, `strlen`, `memcpy`) where clang expands or folds it: links, slower | gen |
 | 310 | 127 | a call clang folds away: `seq_puts`'s `__builtin_constant_p` arm (`__seq_puts`), `__udelay`, `__kmalloc_noprof`, `sprintf` | frontend |
 | 277 | 157 | `__compiletime_assert_N` kept: the clang leg's `__OPTIMIZE__`, as on 2026-10-06; our cpp defines none | frontend |
 | 233 | 152 | no `.bss`: an explicitly zeroed static (`DEFINE_RAW_SPINLOCK`) lays in `.data` | gen |
 
-the static alias alone holds back 883 units: with it, about 3230 of 4437 would be clang's.
+with the static alias laid local, the 1007 units it touched compiled again: 883 are clang's, and
+the other 124 differ by the causes below it.
+
+### x86_64 defconfig, a sample, measured 2026-10-16
+
+every 20th unit of 6.19.14's x86_64 defconfig (151 of 3080), against the host's clang 23.1.1
+(the pinned 22.1.8 lays only arm64), on our cpp with kbuild's flags: 6 same as clang, 129
+compile and differ, 13 refused, 2 time out, 1 a flag (`-o` past a second input). the clang `-E`
+leg agrees.
+
+- **`-fpatchable-function-entry=16,16` is taken in silence**: no nops before the entry and no
+  `__patchable_function_entries` section, so ftrace has no site to patch. 128 of the 129 units
+  that differ lack the section, 94 for that alone (gen).
+- every unit carries eleven `-m` flags mooncc refuses and the census leaves out, the kernel's
+  code model among them: `-mcmodel=kernel`, `-mno-red-zone`, `-mstack-alignment=8`,
+  `-mskip-rax-setup`, `-mno-fp-ret-in-387`, the `gs` stack guard and the retpoline and return
+  thunks (flags).
+- refused: an enum used before its definition 9, `endbr64` 1, `xstore` 1, a register spelled
+  `igest` 1, an asm immediate that is not a constant 1.
 
 **measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,
 `mooncc -t a64 -c`): of 474 units, 117 compiled, 149 crashed and 183 refused. With the rows
