@@ -25,4 +25,4 @@ int posix_memalign(void **pp, size_t al, size_t n) {
 size_t malloc_usable_size(void *p) {
   if (!p) return 0;
   __mhdr *b = __mblock(p, "malloc_usable_size");
-  return (b->size - 1) * sizeof(__mhdr) - (size_t) ((char *) p - (char *) (b + 1)); }
+  return (__munits(b) - 1) * sizeof(__mhdr) - (size_t) ((char *) p - (char *) (b + 1)); }

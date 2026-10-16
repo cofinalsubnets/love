@@ -1,3 +1,4 @@
+#define _GNU_SOURCE     // sigaltstack, SA_ONSTACK, MAP_ANONYMOUS
 #include "love.h"
 #include "cats.h"
 #include <stdio.h>
@@ -17,6 +18,8 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/utsname.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
 
 // love_clock lives in src/love/posix.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
@@ -420,6 +423,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   // reaches this; a mopped one keeps none of the cell or stack doors (egg.l).
   char const *nm = getenv("LOVE_NO_MOP");
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
+  g = evals_(g, "(: latemop 1)");                   // the egg leaves its mop here, run past the glaze
   g = cats_egg(g);                                    // prel then ev's half, and the printer with `@`
   g = cats_lib(g);                                   // register every baked module; the uses below are splices
   g = evals_(g,
@@ -451,6 +455,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
 #ifdef LvGlazed
   g = shelve(g);                                    // holo back to non-ambient
 #endif
+  g = evals_(g, "(latemop ())");                    // the egg's mop, now nothing reads what it takes
 
   g = evals_(g,
     "(: spawn0 spawn  spawnio0 spawnio  spawnmap0 spawnmap  wait0 wait"
@@ -549,20 +554,54 @@ love_noinline static struct g *argv_chain(struct g *g, char const **v, int argc,
 // the address is spelled by hand. it does not resume: the default disposition
 // goes back on and the signal is re-raised, so the exit status and the core stay
 // what they were.
-static void trap_note(int s, siginfo_t *si, void *ctx) {
-  char b[48], *p = b;
-  for (char const *m = s == SIGTRAP ? "*** love: SIGTRAP at 0x"
-                                    : "*** love: SIGILL at 0x"; *m; m++) *p++ = *m;
-  uintptr_t a = si ? (uintptr_t) si->si_addr : 0;
+static void fault_line(char const *m, uintptr_t a) {
+  char b[64], *p = b;
+  for (; *m; m++) *p++ = *m;
   int seen = 0;
   for (int i = (int) sizeof a * 8 - 4; i >= 0; i -= 4) {
     unsigned d = (unsigned) (a >> i) & 15;
     if (d || seen || !i) *p++ = "0123456789abcdef"[d], seen = 1; }
   *p++ = '\n';
+  (void) write(2, b, (size_t) (p - b)); }
+static void trap_note(int s, siginfo_t *si, void *ctx) {
   (void) ctx;
-  (void) write(2, b, (size_t) (p - b));
+  fault_line(s == SIGTRAP ? "*** love: SIGTRAP at 0x" : "*** love: SIGILL at 0x", si ? (uintptr_t) si->si_addr : 0);
   signal(s, SIG_DFL);
   raise(s); }
+
+// a C walk past the stack: the fault lands below the stack, where no frame can run its
+// handler, so the handler runs on a stack of its own, whose base holds the main stack's
+// top and limit. a stack fault says so; any other goes back to the default and retries
+void love_fault_note(int s, void *v) {
+  siginfo_t *si = v;
+  stack_t o;
+  uintptr_t a = si ? (uintptr_t) si->si_addr : 0;
+  if (!sigaltstack(NULL, &o) && o.ss_sp) {
+    uintptr_t const *k = (uintptr_t const*) o.ss_sp, top = k[0], lim = k[1];
+    if (a < top && top - a <= lim) {
+      fault_line("*** love: stack overflow at 0x", a);
+      signal(s, SIG_DFL);
+      raise(s);
+      return; } }
+  signal(s, SIG_DFL); }
+static void stack_note(int s, siginfo_t *si, void *ctx) { (void) ctx; love_fault_note(s, si); }
+static void stack_note_on(void const *top) {
+  size_t n = 1 << 18;                               // a lazy wake decodes its chunk on it too
+  void *m = mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (m == MAP_FAILED) return;
+  struct rlimit r;
+  uintptr_t cap = UINTPTR_MAX / 4,                  // no limit, or one past the word: a quarter of it
+            lim = !getrlimit(RLIMIT_STACK, &r) && r.rlim_cur != RLIM_INFINITY && r.rlim_cur < cap ? (uintptr_t) r.rlim_cur : cap;
+  ((uintptr_t*) m)[0] = (uintptr_t) top, ((uintptr_t*) m)[1] = lim + ((uintptr_t) 1 << 20);   // a guard's width past the limit
+  stack_t ss = { .ss_sp = m, .ss_flags = 0, .ss_size = n };
+  if (sigaltstack(&ss, NULL)) { munmap(m, n); return; }
+  struct sigaction sa;
+  memset(&sa, 0, sizeof sa);
+  sa.sa_sigaction = stack_note;
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+  sigemptyset(&sa.sa_mask);
+  sigaction(SIGSEGV, &sa, NULL);
+  sigaction(SIGBUS, &sa, NULL); }
 
 // SIGTRAP only where the trap instruction raises it -- on x86 it is the
 // debugger's, and naming a breakpoint "love: trap" would be a lie.
@@ -587,6 +626,7 @@ int main(int argc, char const **argv) {
 #endif
   signal(SIGPIPE, SIG_IGN);
   trap_note_on();
+  stack_note_on(&argc);
   struct g *g = NULL;
   char const *image_load_path = NULL, *bake = NULL,   // see boot(): "" = self-bake, a path = an image file
              *bake_load = NULL,                      // bake -l CAT: read-eval it before the seal
@@ -617,14 +657,14 @@ int main(int argc, char const **argv) {
   else if (argc == 2 && !strcmp(argv[1], "wake"))
    return fprintf(stderr, "love: wake needs an image path\n"), 2;
   // a named image that will not wake is the run's error, never an egg boot in its place: a
-  // foreign build's image (its fingerprint or its C), a torn one, or none at all
+  // foreign build's image (its fingerprint or its C), a torn or damaged one, or none at all
   int why = 0;
   if (image_load_path && !(g = image_load(image_load_path, &why))) {
    static char const *const says[] = { "torn", "another format, arch or word", "baked by a binary whose tables differ",
-                                       "baked from other C" };
+                                       "baked from other C", "damaged: its digest does not match" };
    return access(image_load_path, R_OK)
     ? (fprintf(stderr, "love: wake: %s: cannot open\n", image_load_path), 1)
-    : (fprintf(stderr, "love: wake: %s: not an image this binary can wake (%s)\n", image_load_path, says[why & 3]), 2); }
+    : (fprintf(stderr, "love: wake: %s: not an image this binary can wake (%s)\n", image_load_path, says[why]), 2); }
   char const *noimg = getenv("LOVE_NO_IMAGE");
   uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
@@ -636,6 +676,7 @@ int main(int argc, char const **argv) {
 #ifndef Love0
   if (!g && !bake && !(noimg && *noimg)) self_bake(argv);
 #endif
+  bool woke = g != NULL;
   if (!g) g = ini();
   // -n lays the stub back and saves no heap, so it skips the warm outright: the strip is
   // instant, and it answers for a binary whose own corpus would not boot.
@@ -647,7 +688,7 @@ int main(int argc, char const **argv) {
   bool argp = argc - skip > 1;
   if (!bake) g = argv_chain(g, argv, argc, skip);   // the line past the primes -- sp[0]
   if (ok(g)) {
-    g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+    if (!woke) g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);   // a woken book has them, mopped
     if (!bake) {
       g = defv(g, "cmdline");
       if (ok(g)) g->sp++; }          // the book holds it now

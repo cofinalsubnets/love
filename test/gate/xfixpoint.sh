@@ -6,6 +6,8 @@
 # usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
 #        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XOD XA OBJ...
 # XOD is the x-lane's object root, where make lays mkvec.l and the objects it passes
+# the TUs compile XFIX_J at a time (default 4), each its own process under qemu with a log of
+# its own; the link reads its list in make's order, so the order they finish in moves nothing
 . test/gate/skip.sh
 set -u
 
@@ -23,7 +25,10 @@ cat=$ho/.mooncc-cat.l
 
 command -v "$qemu" >/dev/null 2>&1 || gate_skip "test_xfixpoint: skipped (needs $qemu)"
 
-fail() { echo "FAIL test_xfixpoint: $*" >&2; exit 1; }
+# a red ends whatever still runs beside it: the pool's compiles, mksys, lay-vec
+fail() {
+  for x in ${q:-} ${sysp:-} ${vecp:-}; do kill "${x%%=*}" 2>/dev/null; done
+  echo "FAIL test_xfixpoint: $*" >&2; exit 1; }
 
 rm -rf "$d"
 mkdir -p "$d"
@@ -42,42 +47,65 @@ moon0 -t "$xtgt" -pie "$@" -o "$d/love1" || fail "love1 cross link"
 
 echo "XFIX $d/love1 rebuilds itself under $qemu"
 
-# under qemu, love1 bakes its own compiler image..
+# sys.o and the kernel's vectors want no compiler image: they lay beside the bake. an arch
+# with no seat carries no kernel, and $gate_arch_c is empty there -- the makefile draws that
+# line with its own wildcard.
+LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((cite 'moon '$mks) \"$d/sys.o\")" \
+  > "$d/sys.log" 2>&1 &
+sysp=$!
+vecp=
+if [ -n "$gate_arch_c" ]; then
+  LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xod/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
+    > "$d/kvec.log" 2>&1 &
+  vecp=$!
+fi
+
+# machine B: love1 bakes its own compiler image...
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (quit 0) (quit 1))" \
   || fail "love1 bakes mooncc1.image under $qemu"
 
-# ...and rebuilds every TU with it, natively, in the order make links them
-moon1() { "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
+# ...and rebuilds every TU with it, natively. q holds the running ones, pid=object=source
+jn=${XFIX_J:-4} q= n=0
+reap() {
+  set -- $q
+  p=${1%%=*} r=${1#*=}
+  shift
+  q="$*" n=$((n - 1))
+  wait "$p" || { cat "${r%%=*}.log"; fail "love1 mooncc -c ${r#*=}"; }
+}
+moon1() {
+  mkobj "$1"
+  f=$1
+  shift
+  "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc "$@" -c "$f" "$o" > "$o.log" 2>&1 &
+  q="$q $!=$o=$f" n=$((n + 1))
+  [ $n -lt $jn ] || reap
+}
 for f in $gate_love_c; do
-  mkobj "$f"
-  moon1 -D tco="$tco" -D LvHaveVersionH -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" \
-    || fail "love1 mooncc -c $f"
+  moon1 "$f" -D tco="$tco" -D LvHaveVersionH -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib
 done
 for f in $gate_host_c $gate_seat_c; do
-  mkobj "$f"
-  moon1 -D tco="$tco" -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 "$f" -D tco="$tco" -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib
 done
 for f in src/apps/moon/lib/moonlibc/math/*.c; do
-  mkobj "$f"
-  moon1 -Isrc/apps/moon/include -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 "$f" -Isrc/apps/moon/include
 done
-LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((cite 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
-test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
-
-# the kernel the artifact carries; an arch with none has an empty $gate_arch_c
+# the kernel the artifact carries (the Makefile's $(xkart_o)), rebuilt native and laid the same way
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include"
   for f in $gate_kern_c $gate_arch_c; do
-    mkobj "$f"
-    moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
+    moon1 "$f" -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include
   done
-  LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xod/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
-    || fail "love1 lay-vec"
+fi
+while [ $n -gt 0 ]; do reap; done
+wait "$sysp" || { cat "$d/sys.log"; fail "love1 mksys"; }
+test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
+if [ -n "$vecp" ]; then
+  wait "$vecp" || { cat "$d/kvec.log"; fail "love1 lay-vec"; }
   test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
 fi
 
 o2=; for o in "$@"; do o2="$o2 $d/${o#$xod/}"; done
-moon1 -pie $o2 -o "$d/love2" || fail "love2 link"
+"$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc -pie $o2 -o "$d/love2" || fail "love2 link"
 
 cmp "$d/love1" "$d/love2" || fail "love2 differs from love1 -- machine B does not reproduce machine A's bytes"
 

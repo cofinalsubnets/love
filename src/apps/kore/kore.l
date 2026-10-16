@@ -656,6 +656,8 @@
             'nc (cite 'nc 'nc-main)   ; nc's wrap registered ahead in the cat
             'ssh (cite 'ssh-cli 'ssh-main) 'sshd (cite 'ssh-cli 'sshd-main)   ; src/apps/ssh, ahead in the cat
             'scp (cite 'ssh-cli 'scp-main)
+            'ssh-keygen (cite 'ssh-cli 'keygen-main) 'ssh-copy-id (cite 'ssh-cli 'copyid-main)
+            'ssh-keyscan (cite 'ssh-cli 'keyscan-main)
             'make (cite 'cook 'cook-main) 'cook (cite 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
             'as as-main
             'ar ar-main 'ld ld-main
@@ -766,6 +768,9 @@
     'ssh "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"
     'sshd "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
     'scp "usage: scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target"
+    'ssh-keygen "usage: ssh-keygen [-q] [-a rounds] [-C comment] [-f file] [-N passphrase] [-t ed25519]; -y, -l, -p [-P old] [-N new], -F host, -R host"
+    'ssh-copy-id "usage: ssh-copy-id [-fn] [-i identity_file] [-p port] [-o option=value] [-t target_path] [user@]host"
+    'ssh-keyscan "usage: ssh-keyscan [-Hq] [-f file] [-p port] [-t type] host .."
     'as "usage: as TARGET IN OUT   (TARGET: x64 | a64)"
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
     'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
@@ -995,6 +1000,9 @@ every tool answers --help and --version, and -h where the letter is free
   ssh [user@]HOST    the ssh client; sshd [-p PORT] serves this user (src/apps/ssh)
   openssl CMD ..     x509 s_client verify dgst rand base64: openssl's read-only half
   scp SRC.. DEST     copies over ssh, [user@]host:path on one side (rcp's protocol)
+  ssh-keygen [-f F]  an ed25519 key in openssh's format; -y, -l, -p, -F/-R in known_hosts
+  ssh-copy-id HOST   the identity's .pub onto the far authorized_keys, once
+  ssh-keyscan HOST.. host keys as known_hosts lines (-H hashed)
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
   as TGT IN OUT      assemble IR forms from IN (x64|a64) into ELF OUT
   ar rcs OUT M..     the archive, GNU shape + ranlib index (ar t OUT lists)

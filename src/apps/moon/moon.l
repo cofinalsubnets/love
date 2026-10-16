@@ -645,12 +645,23 @@
               (call main)
               (pop lr)
               (ret))
-   ; the riscv twin: a0 = the OS stack pointer, exit_group = 94 in a7 (the
-   ; answer already rides a0); the default __love_start mirrors a64's.
-   crt0-rv '((lea r0 sp 0)
+   ; the riscv twin, serving all three kernels: linux and netbsd arrive with a0 zero and
+   ; argc at [sp], freebsd with the vector base in a0 -- so a non-zero a0 is freebsd's,
+   ; handed down as 2, and linux and netbsd are left to be asked. the linux side's exit
+   ; is netbsd's too: linux reads exit_group 94 in a7, netbsd exit 1 in t6 (holo's
+   ; scratch, so set raw beside the ecall); freebsd's exit is 1 in t0.
+   crt0-rv '((cmp r0 0)
+             (br ne c0r-fb)
+             (lea r0 sp 0)
              (li r1 0)
              (call __love_start)
-             (li r7 94) (sys)
+             (li r7 94)
+             (raw (147 15 16 0))      ; li t6, 1
+             (sys)
+             (label c0r-fb)
+             (li r1 2)
+             (call __love_start)
+             (li r8 1) (sys)
              (label __love_start)
              (push lr)
              (lea r1 r0 8)
@@ -858,11 +869,11 @@
    ; the refusal is the target's, not the kernel's. one archive per ISA, all four cut
    ; under -os linux, and that pin does not reach the bytes: impl.h parts the kernels at run
    ; time on __love_osv, and os.c, the only member with an OS predefine in it, sits under
-   ; #ifndef LvOsTranslate. riscv and i386 are where that stops -- no translation tables, so os.c reads
+   ; #ifndef LvOsTranslate. i386 and arm are where that stops -- no translation tables, so os.c reads
    ; -os and only linux has an answer; the BSDs there owe a compile, which refuses by #error.
    (rtcarried home tgt os)
     (? (os = 'none) ()                                     ; freestanding owes no runtime
-       (elem tgt '(rv64 i386 arm) && elem os '(freebsd netbsd)) ()
+       (elem tgt '(i386 arm) && elem os '(freebsd netbsd)) ()
        (elem tgt '(x64 a64 rv64 i386) && string tgt @ nm
           (!(string? nm) ? ()
              (runtime-gz nm @ z
@@ -1025,9 +1036,9 @@
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
                           'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs}))
     ; a BSD links where mksys lays the translation tail (impl.h's LvOsTranslate):
-    ; x64 and a64. elsewhere os.c has no tables for it, so it is refused here
-    (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64))
-          && udie 1 "cc: -os \(os) links on x64 and a64 only")
+    ; x64, a64 and rv64. elsewhere os.c has no tables for it, so it is refused here
+    (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64 rv64))
+          && udie 1 "cc: -os \(os) links on x64, a64 and rv64 only")
        ars (filter dota? ins)
        srcs (map (f \ (? (dotsrc? f) [f (string (cc-objbytes f t))]
                          (doto? f) (uread f @ r

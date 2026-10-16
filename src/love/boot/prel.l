@@ -282,17 +282,20 @@
                   F (? (tablet? r) r (: t (tablet 0) _ (pin t 0 (tablet 0)) t))
                   _ (pin F 31337 (. (stack ()) nm))
                   (setstack (. F (stack ()))))
-    ; a list head is (name export..): the body defglobs as ever, then every nom not named
-    ; is pulled off the tablet. the charm keys (0 the macros, 31337 the parent chain) are
-    ; not noms and so survive. quote the list head -- unquoted it rides the opfix pass, and
-    ; one operator nom in it re-associates the whole list and the module leaves empty.
+    ; a list head is (name export..): the body defglobs as ever, then every nom it added and
+    ; did not name is pulled off the tablet. what the tablet held at the open stays: a C row
+    ; that names the module (love.h's LvDef), or an earlier opening's exports. the charm keys
+    ; (0 the macros, 31337 the parent chain) are not noms and so survive. quote the list head
+    ; -- unquoted it rides the opfix pass, and one operator nom in it re-associates the whole
+    ; list and the module leaves empty.
     (mrun nm fs) (: n  (? (two? nm) (cap nm) nm)
                      xs (? (two? nm) (cup nm) ())
                      _  (mopen n)
-                     _  (each fs (\ f (ev 'ev f)))
                      F  (cap (stack ()))
+                     ks (keys F)
+                     _  (each fs (\ f (ev 'ev f)))
                      _  (? (two? xs)
-                           (each (keys F) (\ k (? (nom? k) (? (elem k xs) 0 (pull F k 0)) 0)))
+                           (each (keys F) (\ k (? (nom? k) (? (elem k xs) 0 (elem k ks) 0 (pull F k 0)) 0)))
                            0)
                      (leave ()))
     ; the quote takes the forms list whole -- (\ (f ..)), one element per form; an extra
@@ -733,7 +736,7 @@
 (: (lambp x) (two? x && == '\ <x && two? >>x) ; \ with >=1 param (one-operand \ is quote)
    (dsug n d) (atom? n ? (n . d) (dsug <n ('\ . >n + list d)))
    (lp x) (: a >x (atom? >a ? (0 . <a) (init a . last a)))
-   (ln bs) (? (atom? bs) 0 (atom? >bs) 0 (<(dsug <bs 0) . ln >>bs))
+   (ln bs) (? (atom? bs) () (atom? >bs) () (<(dsug <bs 0) . ln >>bs))
    ; w/wl: does x / binding-list bs reference symbol v? \ and : shadow, one-operand \ is quote,
    ; macros expand. u tracks lambda depth; dm counts only references not under a lambda.
    (w v x bnd u dm) (?
@@ -752,21 +755,36 @@
    ; shielded by a \ -- a call comes after the pin), and, for a value name, a read from anywhere
    ; the earlier bindings reach through the let's own names -- capture, not evaluation order.
    (boxset prs es) (: nm (map cap prs)
-     (reads m) >(assoc m es)
-     (anyname m) (map cap (reads m))                           ; read anywhere
-     (barename m) (map cap (filter (nil? * cup) (reads m)))   ; read not under a \
-     (grow s) (: s2 (foldl (a \ m \ a + filter (k \ !(elem k a)) (anyname m)) s s)
-                  (#s2 = #s ? s (grow s2)))
+     ; the first of each, as assoc and lidx find them: a name's position and def, a def's reads
+     (firsts l i t) (atom? l ? t (firsts >l (i + 1) (peep t <l -1 < 0 ? (pin t <l i) t)))
+     (first1 ps t) (atom? ps ? t (first1 >ps (two? (peep t <<ps ()) ? t (pin t <<ps (1 . ><ps)))))
+     at (firsts nm 0 (tablet 0))
+     df (first1 prs (tablet 0))
+     rd (first1 es (tablet 0))
+     (reads m) >(peep rd m ())
+     (anyname m) (map cap (reads m))
+     (lam? v) (lambp >(peep df v ()))
+     ; the earliest binding reading each name: any read, and a read under no lambda
+     (mark t x i) (peep t x -1 < 0 ? (pin t x i) t)
+     (seen l i ma mb) (atom? l ? [ma mb]
+                        (: rs (reads <l)
+                           (seen >l (i + 1) (foldl (\ t r (mark t <r i)) ma rs)
+                                            (foldl (\ t r (!>r ? (mark t <r i) t)) mb rs))))
+     mm (seen nm 0 (tablet 0) (tablet 0))
      ; near: a read from a binding at or before v. a lambda name takes only the bare ones --
      ; a call comes after the pin -- a value name every one.
-     (near v) (: d (lambp >(assoc v prs))
-                 (any (m \ elem v (d ? (barename m) (anyname m)))
-                      (take (1 + lidx v nm) nm)))
+     (near v) (: k (peep at v 0) (0 <= peep (mm (lam? v ? 1 0)) v -1 <= k))
      ; reach: v is read from anywhere the bindings before it get to through the let's own
      ; names -- capture, not evaluation order. an earlier closure inherits a later sibling's
-     ; captures, so it wants v's slot at construction, before that slot exists.
-     (reach v) (elem v (grow (catmap anyname (take (lidx v nm) nm))))
-     (filter (v \ (? (near v) 1 (lambp >(assoc v prs)) 0 (reach v))) nm))
+     ; captures, so it wants v's slot at construction, before that slot exists. the names the
+     ; bindings before a position reach only grow, so one walk keeps them, each added once
+     (add s x) (peep s x 0 ? s (foldl add (pin s x 1) (anyname x)))
+     (walk l i s r) (atom? l ? r
+                       (: r2 (peep at <l -1 = i ? (pin r <l (peep s <l 0)) r)
+                          (walk >l (i + 1) (foldl add s (anyname <l)) r2)))
+     rch (walk nm 0 (tablet 0) (tablet 0))
+     (reach v) (peep rch v 0)
+     (filter (v \ (? (near v) 1 (lam? v) 0 (reach v))) nm))
    ; breads: the read graph boxset takes -- per def, every sibling name it reads, tagged with
    ; whether the read sat under a \ (u). \ and : bind, a one-operand \ is quote, macros expand,
    ; except a head this let binds, which is a variable and never a macro. c0's door builds it here;

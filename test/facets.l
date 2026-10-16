@@ -11,6 +11,7 @@
    (fc-by k vs ts) (: _ (setenv "LOVE_THREADS" k) f (facets 512 320 7 fc-id vs ts () ())
                       _ (setenv "LOVE_THREADS" "") f)
    (fc-shared vs ts) (: f1 (fc-by "1" vs ts) (aall (f1 = fc-by "2!" vs ts) && aall (f1 = fc-by "8!" vs ts)))
+   (fc-flatten fl) (shape fl = [48] && aall (fl = peep ab (iota 48) 0))
    red 16711680 blue 255
    ; the screen as two halves, red and blue, and the same drawn blue first
    sq (fc-g [(fc-vx -1 -1 0 0 0 1 0 0) (fc-vx 1 -1 0 0 0 1 0 0) (fc-vx 1 1 0 0 0 1 0 0)
@@ -98,4 +99,6 @@
       (fc-go 100 () 0 = 0)
       ; a frame big enough to share comes out the same at widths 1, 2 and 8
       (fc-shared sq (fc-z [[0 1 2 -1] [3 4 5 -1]]))
-      (fc-shared (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]))))
+      (fc-shared (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]))
+      ; flag 64 answers the same colours as one row
+      (fc-flatten (facets 8 6 7 fc-id sq (fc-z [[0 1 2 -1] [3 4 5 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 64.0]])))))

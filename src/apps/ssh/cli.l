@@ -3,10 +3,14 @@
 ; the image, kore reaches both as (cite 'ssh-cli ..).
 ;
 ;   ssh [-p port] [-i identity] [-l user] [-t | -T] [-o option=value] [user@]host [command ..]
-;       -o UserKnownHostsFile=path, -o StrictHostKeyChecking=ask|accept-new|yes|no
+;       -o UserKnownHostsFile=path, -o StrictHostKeyChecking=ask|accept-new|yes|no, -o IdentityFile=path
 ;   sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]
 ;   scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target
-(module (ssh-cli ssh-main sshd-main scp-main kh-name kh-check kh-verdict)
+;   ssh-keygen [-q] [-a rounds] [-C comment] [-f file] [-N passphrase] [-t ed25519], or -y, -l,
+;       -p, -F host, -R host
+;   ssh-copy-id [-fn] [-i identity_file] [-p port] [-o option=value] [-t target_path] [user@]host
+;   ssh-keyscan [-Hq] [-f file] [-p port] [-t type] host ..
+(module (ssh-cli ssh-main sshd-main scp-main keygen-main copyid-main keyscan-main kh-name kh-check kh-verdict)
 (borrow 'ssh)
 (borrow 'tls)
 (borrow 'posix)
@@ -27,6 +31,7 @@
    (cl-opt prog o kv)
     ((kv @ (k + "=" + v) [k v] [kv ""]) @ [k v]
        (? (k = "UserKnownHostsFile") (pin o 'kh v)
+          (k = "IdentityFile") (pin o 'key v)
           (k = "StrictHostKeyChecking")                    ; ask (the default), accept-new, yes, no
            (: w (v = "off" ? "no" v)
               (elem w ["ask" "accept-new" "yes" "no"] ? (pin o 'shk w)
@@ -362,5 +367,235 @@
        (peep fl 102 0) (st (sc-source (sc-stdio 0) ops rec pres))
        (two? ops && two? >ops) (scp-client o ops rec pres)
        (die usage))))
+
+; --- ssh-keygen, ssh-copy-id and ssh-keyscan: ed25519 keys in openssh's own format ---
+; flags by getopt's rules: letters run together, a value glued on or the next word
+(:
+   ; -> [flags rest]: flags a tablet of letter -> its values, last first, or 1 for a flag
+   ; without one; (kg-opt o c) the last value
+   (kg-getopt prog usage vals bools as)
+    (: o (tablet 8)
+       (word w i r)
+        (? (#w <= i) (go r)
+           (: c (w i)
+              (? (elem c vals) (? (i + 1 < #w) (pin o c (snip w (i + 1) #w . peep o c ()), go r)
+                                  (two? r) (pin o c (<r . peep o c ()), go >r)
+                                  (cl-die prog ("option requires an argument -- " + string c + "\n" + usage)))
+                 (elem c bools) (pin o c 1, word w (i + 1) r)
+                 (cl-die prog ("unknown option -- " + string c + "\n" + usage)))))
+       (go as) (? (atom? as) () (<as = "--") >as (1 < #<as && <as 0 = 45) (word <as 1 >as) as)
+       r (go as)
+       [o r])
+   (kg-opt o c) (peep o c () @ v (two? v ? <v v))
+   (kg-slurp path) (: q (open path "r") (hot? q ? (: s (slurp q) (close q, s)) ()))
+   (kg-fpr blob) ("SHA256:" + b64e (sha blob) 0)
+   (kg-blob pub) (sstr "ssh-ed25519" + sstr pub)
+   ; a public key line's parts wherever its type sits (authorized_keys puts options ahead,
+   ; known_hosts names) -> [bits fingerprint comment label] | ()
+   (kg-pubparts l)
+    (: f (filter (w \ 0 < #w) (split l 32))
+       (at i) (? (#f <= i + 1) ()
+                 (: t (f i) b (b64d (f (i + 1)))
+                    (? (3 < #t && (snip t 0 4 = "ssh-" || snip t 0 4 = "ecds" || snip t 0 3 = "sk-")
+                        && 4 < #b && snip b 4 (4 + #t) = t)
+                       (: cm (join " " (snip f (i + 2) #f))
+                          c (cur b) _ (g-str c)
+                          bits (? (t = "ssh-rsa") (: _ (g-str c) n (g-str c) (bitlen (foldl (a \ c \ a * 256 + c) 0 (chars n))))
+                                  (fsub t "256" 0 >= 0) 256 (fsub t "384" 0 >= 0) 384 (fsub t "521" 0 >= 0) 521
+                                  (fsub t "ed25519" 0 >= 0) 256 0)
+                          lab (? (t = "ssh-rsa") "RSA" (t = "ssh-ed25519") "ED25519"
+                                 (t = "sk-ssh-ed25519@openssh.com") "ED25519-SK"
+                                 (snip t 0 3 = "sk-") "ECDSA-SK" (snip t 0 4 = "ecds") "ECDSA" "DSA")
+                          [bits (kg-fpr b) (0 < #cm ? cm (0 < i ? (f (i - 1)) "no comment")) lab])
+                       (at (i + 1)))))
+       (0 < #f && f 0 0 != 35 ? (at 0) ()))
+   ; a passphrase twice on the terminal, or () when there is none or the two differ
+   (kg-newpass prog)
+    (: a (ttyask "Enter passphrase (empty for no passphrase): " 0)
+       (? !(string? a) (cl-die prog "no terminal to read a passphrase from; give it with -N")
+          (ttyask "Enter same passphrase again: " 0 @ b
+             (a = b ? a (cl-die prog "passphrases do not match"))))))
+
+; ssh-keygen: make an ed25519 key, or read one: -y its public line, -l a fingerprint, -p a
+; new passphrase; -F and -R find and remove a host in known_hosts
+(: (keygen-main as)
+ (:
+    usage "usage: ssh-keygen [-q] [-a rounds] [-C comment] [-f file] [-N passphrase] [-t ed25519]
+       ssh-keygen -y [-f file] [-P passphrase]
+       ssh-keygen -l [-f file]
+       ssh-keygen -p [-a rounds] [-f file] [-P old] [-N new]
+       ssh-keygen -F hostname [-f known_hosts]
+       ssh-keygen -R hostname [-f known_hosts]"
+    (die m) (cl-die "ssh-keygen" m)
+    go (kg-getopt "ssh-keygen" usage (chars "tfNCPaFRE") (chars "qylpvh") as)
+    o <go
+    (opt c) (kg-opt o c)
+    _ (? (two? (go 1)) (die ("unexpected argument " + <(go 1) + "\n" + usage)) 0)
+    _ (? (opt 104) (die usage) 0)
+    home (cl-env "HOME" "")
+    q (opt 113)
+    rounds (? (opt 97) (unum (opt 97)) 24)
+    _ (? (charm? rounds && 0 < rounds) 0 (die ("bad rounds " + show (opt 97))))
+    kfile (opt 102)
+    (pass p) (opt 80 @ v (string? v ? v (ttyask ("Enter passphrase for \"" + p + "\": ") 0)))
+    (read p) (: t (kg-slurp p)
+                (? !(string? t) (die ("cannot read " + p))
+                   (ssh-keyparts p t pass @ k (string? k ? (die k) k))))
+    (say1 s) (say out s, flush out)
+    (keyfile _) (? (string? kfile) kfile
+                   (: d (home + "/.ssh/id_ed25519")
+                      a (ttyask ("Enter file in which to save the key (" + d + "): ") 1)
+                      (string? a && 0 < #a ? a d)))
+    ; known_hosts' lines whose names hold host, in order -> [number line]..
+    kh (? (string? kfile) kfile (home + "/.ssh/known_hosts"))
+    (khfind host)
+     (: t (kg-slurp kh) name (kh-low host)
+        (go ls n a)
+         (? (atom? ls) (rev a)
+            (: f (filter (w \ 0 < #w) (split <ls 32))
+               w (two? f && <f 0 = 64 && two? >f ? (f 1) (two? f ? <f ""))
+               (go >ls (n + 1) (0 < #w && w 0 != 35 && kh-named? w name ? ([n <ls] . a) a))))
+        (string? t ? (go (split t 10) 1 ()) (die ("cannot read " + kh))))
+    (? (opt 70)                                                  ; -F
+        (: hs (khfind (opt 70))
+           (map (h \ say1 ("# Host " + opt 70 + " found: line " + show <h + " \n" + h 1 + "\n")) hs,
+            two? hs ? 0 1))
+       (opt 82)                                                  ; -R
+        (: hs (khfind (opt 82))
+           (? (atom? hs) (say err ("Host " + opt 82 + " not found in " + kh + "\n"), 0)
+              (: t (kg-slurp kh) ns (map (h \ <h) hs)
+                 keep (: (k ls n) (? (atom? ls) () (elem n ns) (k >ls (n + 1)) (<ls . k >ls (n + 1)))
+                         (k (split t 10) 1))
+                 mode (stat kh 2 & 511)
+                 _ (unlink (kh + ".old"))
+                 _ (? (nom? (rename kh (kh + ".old"))) (die ("cannot rename " + kh)) 0)
+                 w (open kh "w")
+                 _ (? (hot? w) (say w (join "\n" keep), close w, chmod kh mode) (die ("cannot write " + kh)))
+                 (map (n \ say1 ("# Host " + opt 82 + " found: line " + show n + "\n")) ns,
+                  say1 (kh + " updated.\nOriginal contents retained as " + kh + ".old\n"),
+                  0))))
+       (opt 108)                                                 ; -l
+        (: p (keyfile 0)
+           t (kg-slurp p)
+           _ (? (string? t) 0 (die ("cannot read " + p)))
+           (line r) (say1 (show <r + " " + r 1 + " " + r 2 + " (" + r 3 + ")\n"))
+           ls (filter two? (map kg-pubparts (split t 10)))
+           (? (two? ls) (map line ls, 0)
+              (ssh-keyhead p t @ k
+                 (? (string? k) (die (p + " is not a key file"))
+                    (: pt (kg-slurp (p + ".pub"))
+                       r (string? pt ? (kg-pubparts <(split pt 10)) ())
+                       (line (two? r ? r [256 (kg-fpr (kg-blob (k 1))) "no comment" "ED25519"]), 0))))))
+       (opt 121)                                                 ; -y
+        (: p (keyfile 0) k (read p) (say1 (ssh-publine (k 1) (k 2)), 0))
+       (opt 112)                                                 ; -p
+        (: p (keyfile 0) k (read p)
+           np (? (string? (opt 78)) (opt 78) (kg-newpass "ssh-keygen"))
+           tmp (p + ".new")
+           _ (unlink tmp)
+           w (ssh-keyfile tmp (ssh-keyout <k (k 1) (k 2) np rounds))
+           _ (? (string? w) (die w) 0)
+           _ (? (nom? (rename tmp p)) (die ("cannot replace " + p)) 0)
+           (say1 "Your identification has been saved with the new passphrase.\n", 0))
+       ; making a key
+       (: ty (opt 116 @ t (string? t ? t "ed25519"))
+          _ (? (ty = "ed25519") 0 (die ("unsupported key type " + ty + "; ed25519 keys only")))
+          _ (q ? 0 (say1 "Generating public/private ed25519 key pair.\n"))
+          p (keyfile 0)
+          dir (: i (last (filter (i \ p i = 47) (jot #p))) (charm? i ? (snip p 0 i) ""))
+          _ (? (0 < #dir && atom? (stat dir))
+               (: _ (mkdir dir 448) (q ? 0 (say1 ("Created directory '" + dir + "'.\n")))) 0)
+          _ (? (two? (stat p))
+               (ttyask (p + " already exists.\nOverwrite (y/n)? ") 1 @ a
+                  (string? a && 0 < #a && (a 0 = 121 || a 0 = 89) ? (unlink p) (die "not overwriting")))
+               0)
+          np (? (string? (opt 78)) (opt 78) (kg-newpass "ssh-keygen"))
+          me (uname () @ u (two? u ? (u 1) "localhost"))
+          cm (opt 67 @ c (string? c ? c (cl-env "USER" "" + "@" + me)))
+          seed (rnd 32) pub (ed-pub seed)
+          w (ssh-keyfile p (ssh-keyout seed pub cm np rounds))
+          _ (? (string? w) (die w) 0)
+          pq (open (p + ".pub") "w")
+          _ (? (hot? pq) (say pq (ssh-publine pub cm), close pq) (die ("cannot write " + p + ".pub")))
+          (q ? 0 (say1 ("Your identification has been saved in " + p + "\nYour public key has been saved in "
+                        + p + ".pub\nThe key fingerprint is:\n" + kg-fpr (kg-blob pub) + " " + cm + "\n")),
+           0)))))
+
+; ssh-copy-id: the identity's public line onto the far end's authorized_keys, by a shell
+; there: ~/.ssh (or -t's directory) made 700 and the file 600, a key already there skipped. the
+; login is ssh's, its own identity (-o IdentityFile picks another); -n says what it would do,
+; -f skips the check
+(: (copyid-main as)
+ (:
+    usage "usage: ssh-copy-id [-fn] [-i identity_file] [-p port] [-o option=value] [-t target_path] [user@]host"
+    (die m) (cl-die "ssh-copy-id" m)
+    go (kg-getopt "ssh-copy-id" usage (chars "ipot") (chars "fnh") as)
+    fl <go args (go 1)
+    (opt c) (kg-opt fl c)
+    _ (? (opt 104 || !(two? args) || two? >args) (die usage) 0)
+    o (cl-opts 0)
+    _ (? (opt 112) (: n (unum (opt 112)) (charm? n ? (pin o 'port n) (die ("bad port " + opt 112)))) 0)
+    _ (map (kv \ cl-opt "ssh-copy-id" o kv) (rev (peep fl 111 ())))
+    id (opt 105 @ i (? !(string? i) (o 'key + ".pub") (4 < #i && snip i (#i - 4) #i = ".pub") i (i + ".pub")))
+    pt (kg-slurp id)
+    _ (? (string? pt) 0 (die ("cannot read " + id)))
+    line (filter (l \ two? (kg-pubparts l)) (split pt 10) @ ls (two? ls ? <ls (die (id + " holds no public key"))))
+    f (filter (w \ 0 < #w) (split line 32))
+    blob (: (go i) (? (#f <= i + 1) (f 1) (snip (f i) 0 4 = "ssh-" ? (f (i + 1)) (go (i + 1)))) (go 0))
+    (sq s) ("'" + join "'\\''" (split s 39) + "'")
+    ak (opt 116 @ t (string? t ? (sq t) ".ssh/authorized_keys"))
+    akd (opt 116 @ t (? !(string? t) ".ssh" (: i (last (filter (i \ t i = 47) (jot #t))) (? !(charm? i) "." (i = 0) "/" (sq (snip t 0 i))))))
+    cmd (? (opt 110) ("cd && if grep -qF " + sq blob + " " + ak + " 2>/dev/null; then echo present; else echo absent; fi")
+           ("cd || exit 1; umask 077; mkdir -p " + akd + " && chmod 700 " + akd + " && touch " + ak + " && chmod 600 " + ak + " || exit 1; "
+            + (opt 102 ? "" ("if grep -qF " + sq blob + " " + ak + "; then echo present; exit 0; fi; "))
+            + "if [ -s " + ak + " ] && [ -n \"$(tail -c 1 " + ak + ")\" ]; then echo >> " + ak + "; fi; "
+            + "printf '%s\\n' " + sq line + " >> " + ak + " && echo added"))
+    dest <args
+    at (split dest 64)
+    host (two? >at ? (last at) <at)
+    _ (? (two? >at) (pin o 'user (join "@" (rev >(rev at)))) 0)
+    t (cl-login "ssh-copy-id" o host)
+    okc (ssh-open t cmd)
+    _ (? (string? okc) (die okc) 0)
+    (rest a) (ch-line t @ l (string? l ? (rest (l . a)) (rev a)))
+    said (join "" (rest ()))
+    st (ch-end t)
+    who (o 'user + "@" + host)
+    fpr (: r (kg-pubparts line) (r 1))
+    (? (st != 0) (die ("the far end said " + show st + " " + said))
+       (fsub said "present" 0 >= 0) (say err ("ssh-copy-id: " + fpr + " is already on " + who + ", skipped\n"), 0)
+       (fsub said "absent" 0 >= 0) (say out ("would add " + fpr + " to " + who + ": " + line + "\n"), 0)
+       (fsub said "added" 0 >= 0) (say out ("Number of key(s) added: 1, " + fpr + " to " + who + "\n"), 0)
+       (die ("the far end said " + said)))))
+
+; ssh-keyscan: each host's ed25519 key, as known_hosts lines on stdout; -H hashes the names.
+; a host's version line goes to stderr unless -q, and a host with no answer sets status 1
+(: (keyscan-main as)
+ (:
+    usage "usage: ssh-keyscan [-Hq] [-f file] [-p port] [-t type] host .."
+    (die m) (cl-die "ssh-keyscan" m)
+    go (kg-getopt "ssh-keyscan" usage (chars "ptf") (chars "Hqh") as)
+    fl <go
+    (opt c) (kg-opt fl c)
+    _ (? (opt 104) (die usage) 0)
+    port (opt 112 @ p (? (string? p) (unum p @ n (charm? n ? n (die ("bad port " + p)))) 22))
+    tys (opt 116 @ t (string? t ? (split t 44) ["ed25519"]))
+    ed (elem 1 (map (t \ t = "ed25519" || t = "ssh-ed25519" ? 1 0) tys))
+    _ (map (t \ t = "ed25519" || t = "ssh-ed25519" ? 0
+                (say err ("ssh-keyscan: only ed25519 keys are read here; skipping " + t + "\n"))) tys)
+    hosts (go 1 + (opt 102 @ f (? !(string? f) ()
+                                          (: t (f = "-" ? (slurp in) (kg-slurp f))
+                                             (string? t ? (filter (l \ 0 < #l && l 0 != 35) (split t 10))
+                                                (die ("cannot read " + f)))))))
+    _ (? (two? hosts) 0 (die usage))
+    (hashed n) (: salt (rnd 20) ("|1|" + b64e salt 1 + "|" + b64e (kh-hmac1 salt n) 1))
+    (one h)
+     (: t (ssh-dial h port)
+        (? (string? t) (say err ("ssh-keyscan: " + h + ": " + t + "\n"), 1)
+           (: _ (close (t 's))
+              _ (opt 113 ? 0 (say err ("# " + h + ":" + show port + " " + ssh-clean (t 'peer) + "\n")))
+              n (kh-name h port)
+              (say out ((opt 72 ? (hashed n) n) + " ssh-ed25519 " + b64e (t 'hostkey) 1 + "\n"), flush out, 0))))
+    (? !ed 1 (foldl max 0 (map one hosts) ? 1 0))))
 
 ) ; module ssh-cli

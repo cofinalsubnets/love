@@ -29,7 +29,8 @@ void k_seat_init(void) {
 // nothing does -- love's stdio goes through the folded ports and posix.c touches an
 // implicit fd only at three terminal-control calls.
 // the kernel free list (kmain.c), the page supply under the mmap arm below
-extern void *kmallocw(uintptr_t n), kfree(void *p);
+extern void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
+extern void kfree(void *p), k_drop(void *p);
 
 // the ramfs path faces (kmain.c), each 0 or a negative errno. k_st is what the ramfs knows
 // about a path; ino/nlink/uid/dev have no answer down there and are invented in the stat
@@ -209,20 +210,18 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
    if (!b) return -EFAULT;
    return k_fd_dents((int) a, (void *) b, c);
   // the allocator's page door: moonlibc's malloc runs its mmap arenas here as anywhere,
-  // kmallocw supplying the pages. anonymous and kernel-placed only; the true base rides
-  // the word below the aligned block, where munmap reads it back. zeroed, since
-  // MAP_ANONYMOUS promises that and calloc's direct lane trusts it.
+  // kmallocwa supplying the pages. anonymous and kernel-placed only, and munmap gives the
+  // whole block back. zeroed, since MAP_ANONYMOUS promises that and calloc's direct lane
+  // trusts it.
   case NR_mmap: {
    if (a || (int) e != -1 || b <= 0) return -38;         // ENOSYS: not our shape
-   void *m = kmallocw(((uintptr_t) b + 2 * 4096) / sizeof(uintptr_t));
-   if (!m) return -12;                                   // ENOMEM
-   uintptr_t p = ((uintptr_t) m + sizeof(void *) + 4095) & ~4095ull;
-   ((void **) p)[-1] = m;
-   memset((void *) p, 0, (size_t) b);
+   void *p = kmallocwa(((uintptr_t) b + 4095) / 4096 * (4096 / sizeof(uintptr_t)), 4096);
+   if (!p) return -12;                                   // ENOMEM
+   memset(p, 0, (size_t) b);
    return (long) p; }
   case NR_munmap:
    if (!a || (a & 4095)) return -22;                     // EINVAL
-   kfree(((void **) a)[-1]);
+   kfree((void *) a);
    return 0;
   // the map is not flat: mkboot.l puts NX on the hhdm and these are 2 MiB entries the
   // executable window shares, so nothing here lifts it off one page. R/W is what every heap
@@ -312,10 +311,10 @@ void **k_proc_seat(long pid) {
 static struct k_proc *k_proc_slot(void) {
   for (int i = 0; i < k_procs_n; i++) if (!k_procs[i].pid && !k_procs[i].m) return &k_procs[i];
   int m = k_procs_n ? 2 * k_procs_n : 8;
-  struct k_proc *t = kmallocw((m * sizeof *t + sizeof(uintptr_t) - 1) / sizeof(uintptr_t));
+  struct k_proc *t = k_grab((uintptr_t) m * sizeof *t);
   if (!t) return NULL;
   for (int i = 0; i < m; i++) t[i] = i < k_procs_n ? k_procs[i] : (struct k_proc) {0};
-  if (k_procs) kfree(k_procs);
+  k_drop(k_procs);
   struct k_proc *p = &t[k_procs_n];
   k_procs = t, k_procs_n = m;
   return p; }
@@ -388,11 +387,11 @@ static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t
   struct k_st st;
   uintptr_t a0 = an ? strlen(av) + 1 : 0,
             pn = k_fs_stat("/proc/image", 11, &st, true) ? 5 : sizeof wake, n = pn + fn + 1 + an - a0;
-  char *b = kmallocw((n + sizeof(uintptr_t) - 1) / sizeof(uintptr_t));
+  char *b = k_grab(n);
   if (!b) return -ENOMEM;
   memcpy(b, wake, pn), memcpy(b + pn, f, fn + 1), memcpy(b + pn + fn + 1, av + a0, an - a0);
   long r = k_proc_start(p->pid, b, n, ev, en, NULL, 0);
-  kfree(b);
+  k_drop(b);
   return r; }
 
 // a turn for every process the kernel runs (k_proc_run), the done ones let go -> 0 when there

@@ -774,7 +774,7 @@
        ; netbsd's exec requires the ident note (no note -> ENOEXEC; other kernels ignore
        ; notes). 24 bytes in the header reserve, pt_note plus an alloc section so strip
        ; keeps it, on the ISAs that can meet that kernel.
-       nb? (wx? && elem mach '(62 183))
+       nb? (wx? && elem mach '(62 183 243))
        hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 3 1) + (img? ? 1 0) + (nb? ? 1 0)) + (nb? ? 24 0))
        nbo (hdrsz - 24)
        nbnote (nb? ? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
@@ -888,7 +888,7 @@
        ; the brand: ei_osabi = 9 in e_ident[7] on every exe this lane writes for an ISA that
        ; can meet freebsd -- linux never reads the byte and freebsd's imgact refuses without
        ; it. made here and not at a caller, so the two doors over one linker agree.
-       hdr9 (elem mach '(62 183) ? (ld-brand hdr 7 9) hdr)
+       hdr9 (elem mach '(62 183 243) ? (ld-brand hdr 7 9) hdr)
        (hdr9 . ((nb? ? [nbnote]) + >en + tail + [rtab] + >ei
                  + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
                     (ld-zeros (shto - (rdmo + rdmz))) sht])))

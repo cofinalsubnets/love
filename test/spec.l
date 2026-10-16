@@ -605,6 +605,8 @@
  ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                                      ;   the two spellings interchange
  ((1 . 2 . 3) = (1 . 2 . 3)) (3 = tally '(1 . 2))                              ;   the pair reads and prints, but a
                                                                      ;   quoted one is data: a 3-list
+ ("(1 . 2 . 3)" = show (1 . 2 . 3)) ("(1 . 0)" = show (1 . 0))                ; a chain prints all-dot, and a 0 tail is
+ ((1 . 2 . 3) = ev <(sound (show (1 . 2 . 3)))) ("(1 2 3)" = show [1 2 3])     ;   still a tail: it reads back as itself
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
  (1 = (3 != 4)) (0 = (3 != 3)) (opfix '(a != b && c) @ t (t = '(&& (!= a b) c)))    ; != is a plain
  (grip 2 '! () @ was (grip 2 '! was, was = ()))       ; dyad at the comparison band, and ! -- glued-lane

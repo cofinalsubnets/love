@@ -7,13 +7,13 @@
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
-  test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
+  test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
-  test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
+  test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_hearts_boot test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kernel_droid test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
-  test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
+  test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_quick test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
   test_refuzz test_reloc32 test_root test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
@@ -39,7 +39,7 @@ test_quick: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
 	test_drv test_wake test_gz test_sqfs test_ext4 test_cpio test_tfm test_caja test_grap test_chem \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
-	test_asmops test_dtb test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
+	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
 	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
 
 # really slow gate
@@ -52,12 +52,12 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_sqfs test_ext4 test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
-	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat \
+	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
 	test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_links \
-	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 \
+	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
 
 # $m is the warm love (the baked image); an egg-boot gate sets LOVE_NO_IMAGE=1 itself
@@ -177,7 +177,7 @@ test_front: $(ho)/front $(ho)/frontseat
 	@sh test/gate/run.sh -a hornseat "$(ho)/frontseat" "hornseat: ok" test/front/hornseat.l
 # standalone smoke tests kept out of the corpus: each wants a crew module, is not idempotent
 # (love0 evaluates twice), or can hang. gate = exit 0 and "<name>: ok"
-hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/corridor.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/qlog.l test/host/broker.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/corridor.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/qlog.l test/host/broker.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
 # test/host/sh.l drives out/lush via out/love, not PATH's love
 hostnif_cold =                                   # empty: no gate needs the cold lane
 hostnif_tests += test/host/xz.l test/host/bz2.l   # the xz and bzip2 pulls against their whole-string reads
@@ -185,14 +185,25 @@ hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and 
 # evback.l reads show names a mopped image has dropped
 hostnif_nomop = test/host/evback.l
 hostnif_exec =                                   # empty: the gc gates run warm, in the fork lane
+# the gates run hostnif_j at once, one target each, a gate's whole output kept in out/hostnif/
+# and shown only when it fails, the longest started first. under a parent's jobserver the
+# sub-make takes no -j of its own, and shares that pool
+hostnif_j = 4
+hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
 test_hostnif: host out$(hsuf)/lush
-	@for s in $(hostnif_tests); do echo "TEST $$s"; \
-	  case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
-	  case " $(hostnif_nomop) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 $m";; esac; \
-	  case " $(hostnif_exec) " in *" $$s "*) L="env $m";; esac; \
-	  cat test/00-init.l test/host/00-host.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif "$$L" ": ok" \
-	    || { echo "  (the gate above is $$s)"; exit 1; }; \
-	done
+	@rm -rf out$(hsuf)/hostnif && mkdir -p out$(hsuf)/hostnif
+	@$(MAKE) -s $(if $(findstring jobserver,$(MAKEFLAGS)),,-j$(hostnif_j)) hsuf=$(hsuf) \
+	   $(patsubst test/host/%.l,hostnif-%,$(filter $(hostnif_tests),$(hostnif_first)) $(filter-out $(hostnif_first),$(hostnif_tests)))
+	@echo "test_hostnif: $(words $(hostnif_tests)) gates"
+hostnif-%:
+	@s=test/host/$*.l; t0=`date +%s`; \
+	 case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
+	 case " $(hostnif_nomop) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 $m";; esac; \
+	 case " $(hostnif_exec) " in *" $$s "*) L="env $m";; esac; \
+	 cat test/00-init.l test/host/00-host.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif-$* "$$L" ": ok" \
+	   > out$(hsuf)/hostnif/$*.log 2>&1 \
+	   || { cat out$(hsuf)/hostnif/$*.log; echo "  (the gate above is $$s)"; exit 1; }; \
+	 echo "TEST $$s ($$((`date +%s` - t0))s)"
 # pure-love design models; they leak helpers into the global scope, so run standalone
 doc_tests = test/proto/dest.l test/proto/spl.l
 test_doc: host
@@ -496,6 +507,11 @@ test_dtb:
 	@echo TEST test/gate/dtb.c
 	@$(CC) -I$S/inle -I$S/love -I$R -o $(ho)/.dtbgate $R/test/gate/dtb.c
 	@$(ho)/.dtbgate
+# test_ffalloc -- src/inle/ffalloc.h's free list, churned on the host and checked whole every step
+test_ffalloc:
+	@echo TEST test/gate/ffalloc.c
+	@$(CC) -I$S/inle -I$S/love -I$R -o $(ho)/.ffallocgate $R/test/gate/ffalloc.c
+	@$(ho)/.ffallocgate
 # test_rvboot -- the rv64 boot stub and dtb door under qemu virt via OpenSBI, linked by ldkern
 # (a machine enters at the load address, not crt0). exit 42
 rvboot_o = $(ko)/rv64/rv64/boot.o $(ko)/rv64/inle/rv64/dtb.o $(ko)/rv64/rvboot.o
@@ -522,13 +538,14 @@ endif
 ifeq ($(hosta),a64)
 kvec_a64 = $(moon_d)/kvec.o
 endif
+# the three arches build and boot at once, after the tree and the rootfs, as test_inle does
 test_vec: host
-	@$(MAKE) -s a=x64 kernel
-	@$(gsh) test/gate/vec.sh x64 out/love-x64.elf $(kvec_x64)
-	@$(MAKE) -s a=a64 kernel
-	@$(gsh) test/gate/vec.sh a64 out/love-a64.elf $(kvec_a64)
-	@$(MAKE) -s a=rv64 kernel
-	@$(gsh) test/gate/vec.sh rv64 out/love-rv64.elf $(kvec_rv64)
+	@$(MAKE) -s $(src_tree) out/rootfs.tar
+	@rm -rf out/vec && mkdir -p out/vec
+	@$(MAKE) -s $(if $(findstring jobserver,$(MAKEFLAGS)),,-j3) vec-x64 vec-a64 vec-rv64
+vec-%:
+	@{ $(MAKE) -s a=$* kernel && $(gsh) test/gate/vec.sh $* out/love-$*.elf $(kvec_$*); } \
+	   > out/vec/$*.log 2>&1; r=$$?; cat out/vec/$*.log; exit $$r
 # the fixpoint: love1 bakes its compiler, recompiles every TU, links love2, byte-identical to
 # love1. the link list is make's objects, never a glob. test_extra only
 test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
@@ -547,14 +564,18 @@ test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
 .PHONY: test_fat
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd) $(uname_$(xa))
-# one binary answers every kernel alike, on a bee host with cap freebsd-x64/netbsd-x64 (or
+# one binary answers every kernel alike, on a bee host with cap freebsd-x64/netbsd-x64 (-a64, -rv64 likewise) (or
 # FBSD_SSH/NBSD_SSH); skips without. FBSD_SEED=1/NBSD_SEED=1 adds `love seed` there
-.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64
+.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64
 test_freebsd test_netbsd: test_%: host $(love0) out/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $*
 # ..and on aarch64 boxes, the local half under qemu-aarch64
 test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) out/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* a64
+# the third ISA: freebsd-rv64 and netbsd-rv64 hosts are riscv64 guests, the local half under
+# qemu-riscv64. the doors there are each kernel's number register: linux a7, freebsd t0, netbsd t6.
+test_freebsd_rv64 test_netbsd_rv64: test_%_rv64: host $(love0) out/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* rv64
 # test_raw_bake -- the mooncc PIE bakes and wakes its own image; x64 only, opt-in
 test_raw_bake: test_raw
 	@sh test/gate/raw-bake.sh $(ho) $t
@@ -1014,19 +1035,24 @@ test_uefi_a64: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/esp-a64 $(OVMF_A64) a64
 endif
 
-test_inle:
-	@$(MAKE) -s test_disk
-	@$(MAKE) -s test_uefi
-	@$(MAKE) -s test_kboot
-	@$(MAKE) -s test_kernel_uproc
-	@$(MAKE) -s test_kmitty
-	@$(MAKE) -s test_kverb
-	@$(MAKE) -s test_kernel_a64
-	@$(MAKE) -s test_uefi_a64
-	@$(MAKE) -s test_kernel_rv64
-	@$(MAKE) -s test_kernel_wasm
-	@$(MAKE) -s test_kernel_droid
+# rv64's tcg corpus runs near its ceiling on a busy box and loses it with anything beside
+# it, so it boots alone first; then the other arches at once, each its lanes in turn (an
+# arch's lanes share its elf's disk). logs in out/inle/ARCH.log. the tree and rootfs are made
+# first: selfpack writes the tree in place. under a parent's jobserver no -j of its own
+inle_rv64 = test_kernel_rv64
+inle_x64 = test_disk test_uefi test_kboot test_kernel_uproc test_kmitty test_kverb
+inle_wasm = test_kernel_wasm
+inle_a64 = test_kernel_a64 test_uefi_a64
+inle_droid = test_kernel_droid
+test_inle: host
+	@$(MAKE) -s $(src_tree) out/rootfs.tar
+	@rm -rf out/inle && mkdir -p out/inle
+	@$(MAKE) -s inle-rv64
+	@$(MAKE) -s $(if $(findstring jobserver,$(MAKEFLAGS)),,-j4) inle-x64 inle-wasm inle-a64 inle-droid
 	@echo "test_inle: boot, disk, command line, firmware -- the three arches, the wasm seat and the droid one"
+inle-%:
+	@for l in $(inle_$*); do $(MAKE) -s $$l || { echo "FAIL $$l"; exit 1; }; done > out/inle/$*.log 2>&1; \
+	 r=$$?; cat out/inle/$*.log; exit $$r
 
 # test_kernel_droid -- the kernel as a linux process: the kernel corpus off its ramfs, serial on stdout
 test_kernel_droid: host

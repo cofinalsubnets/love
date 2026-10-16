@@ -7,6 +7,8 @@
 #   refuse  mooncc has no lane: it refuses, by name, without a signal
 #   wide    not C on ilp32 (a static assert, a bit-field past its type): both refuse
 #   narrow  assumes a 64-bit long: the reference fails it, ours runs it to an exit
+#   w128    __int128, which the target's gcc has no lane for: the host gcc's build of the same
+#           source, run here, is the reference (the programs keep to a 64-bit long long)
 #   hosted  newlib's gaps, or gcc's thumb frames read otherwise: ours runs it to an exit
 # usage: cc32.sh TARGET OUTDIR LOVE     (TARGET: arm | i386)
 . test/gate/skip.sh
@@ -19,13 +21,15 @@ m=$3
 narrow="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
 case $tgt in
   arm)  name=test_ccarm; ref=arm-none-eabi-gcc; run=qemu-arm; gopt=-O1
-        refuse="111-int128 151-w128fuzz 161-enumwide 291-enumahead"
+        refuse="161-enumwide 291-enumahead"
+        w128="111-int128 151-w128fuzz"
         wide="68-static-assert 120-bfinit"
         hosted="72-quals 125-widelit 150-alloc 160-rangeinit 297-frameaddr 298-malloc-wrap 300-aligned-alloc 301-free-checks"
         gref() { arm-none-eabi-gcc -mcpu=cortex-a53 -mthumb -mfloat-abi=hard -mfpu=fp-armv8 --specs=rdimon.specs "$@"; }
         for tool in arm-none-eabi-gcc qemu-arm; do have $tool || gate_skip "$name: no $tool, skipped"; done ;;
   i386) name=test_cci386; ref="gcc -m32"; run=; gopt="-msse2 -mfpmath=sse"
         refuse="111-int128 151-w128fuzz"
+        w128=
         wide="68-static-assert 120-bfinit 161-enumwide"
         hosted=
         gref() { gcc -m32 "$@"; }
@@ -55,10 +59,17 @@ for f in test/cc/*.c; do
   hl=0
   case " $hosted " in *" $b "*) hl=1 ;; esac
   if [ $hl = 0 ]; then
-    # shellcheck disable=SC2086  # $gopt is a word list
-    gref $gopt -w -o "$d/$b.g" "$f" -lm > "$d/$b.glog" 2>&1 \
-      || { cat "$d/$b.glog" >&2; fail "$b: $ref could not build it"; }
-    (cd "$d" && timeout 60 $run "./$b.g" > "$b.gout" 2>&1; echo $? > "$b.grc")
+    case " $w128 " in
+      *" $b "*)
+        cc -w -O1 -o "$d/$b.g" "$f" > "$d/$b.glog" 2>&1 \
+          || { cat "$d/$b.glog" >&2; fail "$b: the host cc could not build it"; }
+        (cd "$d" && timeout 60 "./$b.g" > "$b.gout" 2>&1; echo $? > "$b.grc") ;;
+      *)
+        # shellcheck disable=SC2086  # $gopt is a word list
+        gref $gopt -w -o "$d/$b.g" "$f" -lm > "$d/$b.glog" 2>&1 \
+          || { cat "$d/$b.glog" >&2; fail "$b: $ref could not build it"; }
+        (cd "$d" && timeout 60 $run "./$b.g" > "$b.gout" 2>&1; echo $? > "$b.grc") ;;
+    esac
     rg=$(cat "$d/$b.grc")
   fi
   for os in t s; do

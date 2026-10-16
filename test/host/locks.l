@@ -86,12 +86,13 @@
                   + " r " + body + "\n f (open (rt + \".res/\" + show me) \"w\") _ (say f (show r)) _ (close f)\n"
                   + " (bar (rt + \".done\")))\n"))
        (map (\ _ (spawn [lr-love (rt + ".kid.l")])) ^n))
-   ; go, then watch f every few ms until n answers or 20 s -> [f's most, the answers]
+   ; go, then watch f every few ms until n answers or 90 s -> [f's most, the answers]. the
+   ; ends are the clock's, not a count of polls: beside other gates a poll takes longer
    (lr-go rt ps n f)
-    (: _ (rest 800) _ (lr-put (rt + ".go") "")
-       (look m k) (: m2 (max m (f 0)) got (lr-names (rt + ".res"))
-                     (? (n <= #got || k <= 0) [m2 got] (: _ (rest 3) (look m2 (k - 1)))))
-       r (look 0 6000)
+    (: _ (rest 800) _ (lr-put (rt + ".go") "") t0 (clock 0)
+       (look m) (: m2 (max m (f 0)) got (lr-names (rt + ".res"))
+                   (? (n <= #got || 90000 < clock t0) [m2 got] (: _ (rest 3) (look m2))))
+       r (look 0)
        as (map (\ p (: f (open (rt + ".res/" + p) "r") s (slurp f) _ (close f) s)) (r 1))
        _ (lr-put (rt + ".done") "")
        _ (map wait ps)
@@ -109,11 +110,12 @@
    _ (test (all (\ r (r = [16 1])) (map round ^4)))
    0)
 
-; twelve pollers on a pool of one: never two in h/ at once, every one served
+; twelve pollers on a pool of one, each holding a moment when granted: never two in h/ at once,
+; and every one served in turn, each polling for up to 60 s
 (: lr-h (lk-root + "-h")
-   ps (lr-kids lr-h 12 ("(: (poll k) (: a (locks-acquire rt \"heavy\" 'heavy me \"race\" () 1)\n"
+   ps (lr-kids lr-h 12 ("(: t0 (clock 0) (poll _) (: a (locks-acquire rt \"heavy\" 'heavy me \"race\" () 1)\n"
                         + "  (? (peep a \"granted\" 0) (: _ (rest 100) _ (locks-release rt \"heavy\" 'heavy me) 1)\n"
-                        + "     (k <= 0) 0 (: _ (rest 20) (poll (k - 1))))) (poll 1000))"))
+                        + "     (60000 < clock t0) 0 (: _ (rest 20) (poll 0)))) (poll 0))"))
    r (lr-go lr-h ps 12 (\ _ #(lr-names (lr-h + "/heavy/h"))))
    _ (test (1 = <r) (12 = #(r 1)) (all (\ a (a = "1")) (r 1)))
    0)

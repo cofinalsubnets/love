@@ -845,10 +845,13 @@
 
   ; --- chains. a one-operand `\` is quote, and a `(mono (run datum))` is a glued
   ; monadic -- print run+datum back the way opfix fused them.
-  ; an improper tail prints as the ` . ` pair it is -- the dyadic `.` reads it straight back.
-  (plist o x sn) (: (go l) (px o <l sn,
-                            (? (two? >l) (put o 32, go >l)
-                               !>l 0
+  ; an improper chain prints all-dot, (1 . 2 . 3): the dyadic `.` reads that straight back,
+  ; where (1 2 . 3) would read as (2 . 3). a tail of 0 or "" is still a tail: only () ends
+  (plist o x sn) (: (tl l) (two? l ? (tl >l) l)
+                    dot (tl x == () ? 0 1)
+                    (go l) (px o <l sn,
+                            (? (two? >l) ((dot ? (say o " . ") (put o 32)), go >l)
+                               (>l == ()) 0
                                (say o " . ", px o >l sn)))
                     (put o 40, go x, put o 41))
   (pchain o x sn) (: h <x t >x one (two? t && atom? >t)

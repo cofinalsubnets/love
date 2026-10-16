@@ -32,11 +32,11 @@
 
   ; proper lists
   ("(a b c)" = show '(a b c))
-  ("(1 2 3)" = show (1 . 2 . 3 . 0))
-  ("(\"a\" \"b\")" = show ("a" . "b" . 0))
+  ("(1 2 3)" = show (1 . 2 . 3 . ()))
+  ("(\"a\" \"b\")" = show ("a" . "b" . ()))
 
   ; nesting
-  ("(a (b) c)" = show ('a . ('b . 0) . 'c . 0))
+  ("(a (b) c)" = show ('a . ('b . ()) . 'c . ()))
   ("((1 2) (3 4))" = show '((1 2) (3 4)))
 
   ; result is always a string
@@ -46,12 +46,12 @@
   (string? (show {}))
 
   ; buffer growth past the initial cask
-  (: (rng n) (n = 0 ? 0 (n . rng (n - 1)))
+  (: (rng n) (n = 0 ? () (n . rng (n - 1)))
      s (show (rng 200))
    (do (string? s) (400 < #s))) ; fixme: a `do` in test position, likely meant as two tests
 
   ; gc stress: 500 shows, each allocating a port
-  (: (loop n) (n = 0 ? (show (1 . 2 . 3 . 0))
+  (: (loop n) (n = 0 ? (show (1 . 2 . 3 . ()))
                  (show "stress", loop (n - 1)))
    ("(1 2 3)" = loop 500)))
 

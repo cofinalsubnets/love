@@ -1,4 +1,4 @@
-/* __int128 / unsigned __int128, one check per op: 64x64 widening and 128x128
+/* __int128 / unsigned __int128 (x64, a64, thumb2's family), one check per op: 64x64 widening and 128x128
  * products, carries, compares as values and branches, constant and variable shifts,
  * u128/u64 divide, negation, truth, casts, ++/--, compound assigns, a returned pair.
  * targets without the lane refuse this file. each check adds 1: the exit code is the pass count. */
@@ -6,27 +6,27 @@
 typedef unsigned __int128 u128;
 typedef __int128 s128;
 
-static u128 mk(unsigned long hi, unsigned long lo) { return ((u128) hi << 64) | lo; }
+static u128 mk(unsigned long long hi, unsigned long long lo) { return ((u128) hi << 64) | lo; }
 
 int main(void) {
  int ok = 0;
- unsigned long a = 0xdeadbeefcafebabeUL, b = 0x123456789abcdef1UL;
+ unsigned long long a = 0xdeadbeefcafebabeULL, b = 0x123456789abcdef1ULL;
 
  /* widening product: (u128)u64 * u64 is one widening multiply */
  u128 p = (u128) a * b;
- if ((unsigned long) (p >> 64) == 0xfd5bdeeeb2a01d8UL) ok++;
- if ((unsigned long) p == 0xca165e3e6f4690deUL) ok++;
+ if ((unsigned long long) (p >> 64) == 0xfd5bdeeeb2a01d8ULL) ok++;
+ if ((unsigned long long) p == 0xca165e3e6f4690deULL) ok++;
 
  /* general 128x128 low product (cross terms) */
  u128 m = p * (u128) 3;
- if ((unsigned long) (m >> 64) == 0x2f8139ccc17e058aUL) ok++;
- if ((unsigned long) m == 0x5e431abb4dd3b29aUL) ok++;
+ if ((unsigned long long) (m >> 64) == 0x2f8139ccc17e058aULL) ok++;
+ if ((unsigned long long) m == 0x5e431abb4dd3b29aULL) ok++;
 
  /* add/sub carry across the boundary */
- u128 c1 = mk(0, 0xffffffffffffffffUL) + 1;
- if ((unsigned long) (c1 >> 64) == 1 && (unsigned long) c1 == 0) ok++;
+ u128 c1 = mk(0, 0xffffffffffffffffULL) + 1;
+ if ((unsigned long long) (c1 >> 64) == 1 && (unsigned long long) c1 == 0) ok++;
  u128 c2 = mk(1, 0) - 1;
- if ((unsigned long) (c2 >> 64) == 0 && (unsigned long) c2 == 0xffffffffffffffffUL) ok++;
+ if ((unsigned long long) (c2 >> 64) == 0 && (unsigned long long) c2 == 0xffffffffffffffffULL) ok++;
  if (c1 - c2 == 1) ok++;
 
  /* unsigned compares, value position (0/1 via c128) */
@@ -41,11 +41,11 @@ int main(void) {
  /* signed compares + negation's borrow */
  s128 n = -(s128) 7;
  if (n < 0) ok++;
- if ((long) n == -7) ok++;
+ if ((long long) n == -7) ok++;
  if (-(-n) == n) ok++;
  if ((s128) B > n) ok++;
  s128 nb = -(s128) B;                            /* borrow rides the halves */
- if ((long) (nb >> 64) == -1 && (unsigned long) nb == 0) ok++;
+ if ((long long) (nb >> 64) == -1 && (unsigned long long) nb == 0) ok++;
 
  /* branch position (cbranch's wide arms), both senses, const + general */
  if (p > B) ok++; else ok--;
@@ -57,7 +57,7 @@ int main(void) {
  /* constant shifts: below, at, and past 64 -- both directions, sar's flood */
  if (((u128) a << 13 >> 13) == a) ok++;
  if ((B >> 64) == 1) ok++;
- if ((mk(0x8000000000000000UL, 0) >> 100) == (0x8000000000000000UL >> 36)) ok++;
+ if ((mk(0x8000000000000000ULL, 0) >> 100) == (0x8000000000000000ULL >> 36)) ok++;
  if (((u128) 1 << 100 >> 36) == B) ok++;
  if (((s128) nb >> 64) == -1) ok++;
  if (((s128) nb >> 127) == -1) ok++;
@@ -65,8 +65,8 @@ int main(void) {
  /* variable shifts: the v-forms */
  int sh = 13;
  u128 v = ((u128) a << sh) | ((u128) b >> (64 - sh));
- if ((unsigned long) (v >> 64) == 0x1bd5UL) ok++;
- if ((unsigned long) v == 0xb7ddf95fd757c246UL) ok++;
+ if ((unsigned long long) (v >> 64) == 0x1bd5ULL) ok++;
+ if ((unsigned long long) v == 0xb7ddf95fd757c246ULL) ok++;
  sh = 64; if ((mk(0, a) << sh) == mk(a, 0)) ok++;
  sh = 99; if ((mk(a, 0) >> sh) == (u128) (a >> 35)) ok++;
 
@@ -82,7 +82,7 @@ int main(void) {
  if (!mk(0, 0)) ok++;
 
  /* the two-step divide: u128 / u64 and %, checked by the division algebra */
- u128 num = mk(3, 0x8000000000000001UL);
+ u128 num = mk(3, 0x8000000000000001ULL);
  u128 qq = num / 7, rr = num % 7;
  if (qq * 7 + rr == num) ok++;
  if (rr < 7) ok++;
@@ -100,10 +100,10 @@ int main(void) {
  pd >>= 4; pd <<= 4; if (pd == B) ok++;
 
  /* casts: truncation keeps the lo, widening keeps the sign */
- if ((unsigned long) mk(9, 42) == 42) ok++;
- if ((unsigned int) mk(9, 0x100000007UL) == 7) ok++;
- if ((s128) (long) -3 == -(s128) 3) ok++;
- if ((u128) (unsigned long) a == (u128) a) ok++;
+ if ((unsigned long long) mk(9, 42) == 42) ok++;
+ if ((unsigned int) mk(9, 0x100000007ULL) == 7) ok++;
+ if ((s128) (long long) -3 == -(s128) 3) ok++;
+ if ((u128) (unsigned long long) a == (u128) a) ok++;
 
  /* the folded constant double: 2^64 exactly */
  if ((double) ((u128) 1 << 64) == 18446744073709551616.0) ok++;

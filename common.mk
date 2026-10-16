@@ -179,6 +179,8 @@ cflags = -std=$(cstd) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -falign-functions=16 -fno-stack-protector
 # -fcf-protection (Intel CET) is x86-only; the other seats take it as a no-op.
 cflags += -fcf-protection=none
+# the debug info names the tree as ., so love0's bytes do not hang on where it was checked out
+cflags += -fdebug-prefix-map=$(abspath $(R))=.
 # a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half, which src/love/main.c
 # owes clock_gettime and kill to, so the level is asked for by name. but it is GLIBC'S ask: a
 # BSD header defaults to its whole surface and reads this as a NARROWING -- freebsd drops

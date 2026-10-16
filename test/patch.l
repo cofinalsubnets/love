@@ -73,12 +73,12 @@
 
 (:
  ; --- the model ---
- (chg k a b) ('chg . k . a . b . 0)       ; patch: change slot k, old->new
+ (chg k a b) ['chg k a b]                 ; patch: change slot k, old->new
  (valid t p) (pt-tget t (pt-pk p) = pt-pa p)              ; a patch belongs iff its context matches
  (apon t p) (pt-tset t (pt-pk p) (pt-pb p))               ; lay the patch's new value
  (applall t ps) (foldl apon t ps)                ; fold a whole frontier onto a tree
  (invert p) (chg (pt-pk p) (pt-pb p) (pt-pa p))           ; the groupoid inverse (unpull)
- (commute p q) (pt-pk p = pt-pk q ? 0 (q . p . 0))     ; partial: 0 = a dependency
+ (commute p q) (pt-pk p = pt-pk q ? 0 [q p])     ; partial: 0 = a dependency
 
  ; --- tree agreement at a witness key set ---
  (teq a b ks) (atom? ks ? 1 ((pt-tget a <ks = pt-tget b <ks) && teq a b >ks))
@@ -89,14 +89,14 @@
 
  ; (L1) commute is involutive; same-slot patches don't commute
  ((test
-   (pt-heq (commute px py) (py . px . 0))                          ; p;q -> q;p
+   (pt-heq (commute px py) [py px])                          ; p;q -> q;p
    (commute px py @ c (pt-heq (commute <c <>c)
-                           (px . py . 0)))                      ; ...and back to p;q
+                           [px py]))                      ; ...and back to p;q
    !(commute p1 p2)                                                  ; same slot -> no commute
    (pt-heq p1 p1) !(pt-heq px py)),                                        ; leq itself is honest
 
   ; (L2) inverse round-trips in context; invert is its own inverse
-  (: t0 (pt-tset 0 'x 5) p (chg 'x 5 9)
+  (: t0 (pt-tset () 'x 5) p (chg 'x 5 9)
      (test
       (valid t0 p)                                                   ; p belongs on t0
       (apon (apon t0 p) (invert p) @ t1 (teq t1 t0 '(x y)))          ; apply;unpull == id
@@ -107,13 +107,13 @@
      (test (teq a b '(x y)) (1 = pt-tget a 'x) (2 = pt-tget a 'y))),
 
   ; (L3b) a frontier is stable under an adjacent independent swap, so the patch set is a sound identity
-  (: pre (chg 'a 0 7 . 0) post (chg 'b 0 8 . 0)
-     f1 (applall 0 (pt-hcat pre (px . py . post)))                ; pre ++ [px py] ++ post
-     f2 (applall 0 (pt-hcat pre (py . px . post)))                ; ...px,py swapped
+  (: pre [(chg 'a 0 7)] post [(chg 'b 0 8)]
+     f1 (applall () (pt-hcat pre (px . py . post)))                ; pre ++ [px py] ++ post
+     f2 (applall () (pt-hcat pre (py . px . post)))                ; ...px,py swapped
      ((test (teq f1 f2 '(a b x y))),
-      (: holo (chg 'holo 0 1 . 0) glaze (chg 'glaze 0 1 . 0)
-         (test (teq (applall 0 (pt-hcat holo glaze))
-                      (applall 0 (pt-hcat glaze holo)) '(holo glaze)))))),
+      (: holo [(chg 'holo 0 1)] glaze [(chg 'glaze 0 1)]
+         (test (teq (applall () (pt-hcat holo glaze))
+                      (applall () (pt-hcat glaze holo)) '(holo glaze)))))),
   0))
 
 ; --- the positional rung: (hunk i olds news) over a sequence; commute re-aims by the length delta ---
@@ -220,7 +220,7 @@
  (applall t ps) (foldl pull t ps)
 
  ; --- witnesses: three rivals for x over base 1, and an independent bystander ---
- t0 (pt-tset 0 'x 1)
+ t0 (pt-tset () 'x 1)
  p (chg 'x 1 2) q (chg 'x 1 3) r (chg 'x 1 4)
  w (chg 'y 0 9)
 
@@ -255,8 +255,8 @@
 
   ; two components pinning one name differently land the same clash in either order
   (: holo [(chg 'font 0 1)] glaze [(chg 'font 0 2)]
-     fa (applall 0 (pt-hcat holo glaze))
-     fb (applall 0 (pt-hcat glaze holo))
+     fa (applall () (pt-hcat holo glaze))
+     fb (applall () (pt-hcat glaze holo))
      (test (teq fa fb '(font)) (pt-clash? (pt-tget fa 'font)))),
   0))
 

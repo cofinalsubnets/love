@@ -7,7 +7,7 @@
 
 (: bq-home (cwd 0)
    bq-love (: l <cmdline (l 0 = 47 ? l (bq-home + "/" + l)))
-   bq-app (bq-home + "/src/apps/bee.l")
+   bq-app "bee"            ; the binary's verb, baked from this tree: the lane makes `host` first
    bq-root (bq-home + "/out/.beeq-" + show (getpid 0))
    _ (mkdir bq-root 493)
    ; a session running these passes its own hive down -- BEE_HIVE, BEE_NAME, BEE_AS -- and a

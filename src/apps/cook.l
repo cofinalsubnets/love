@@ -456,7 +456,7 @@
    ; split on a top-level `ch`: parens and braces balance, so a delimiter inside $(..) / ${..}
    ; does not split (function args, the static-pattern colon).
    (splittop s ch)
-   (:- (g 0 0 0 0)
+   (:- (g 0 0 0 ())
     (g i depth st acc)
      (i >= #s ? (rev (snip s st i . acc))
       (s i @ (40 || 123) (g (1 + i) (1 + depth) st acc)
@@ -1036,8 +1036,8 @@
                      [("%." + tg) ("%." + sr)] 0))))))
 
    ; split a prereq word list at a `|` into (normal . order-only).
-   (splitbar ws) ((: (g l acc) (atom? l ? (rev acc . 0)
-                       (<l = "|" ? (rev acc . >l) (g >l (<l . acc))))) ws 0)
+   (splitbar ws) ((: (g l acc) (atom? l ? [(rev acc)]
+                       (<l = "|" ? (rev acc . >l) (g >l (<l . acc))))) ws ())
 
    ; parse a Makefile and register its rules: .PHONY members become phony symbols, every other
    ; item a file string. a rule is a static pattern rule (targets: tgtpat: prereqpats), an
@@ -1079,7 +1079,7 @@
               prtext (dbl ? (snip pl 1 #pl) prtext0)
               tgts (expand-words [tgtstext] as)
               sp (two? raws ? (sufpat <tgts) 0)   ; an old-style suffix rule, .c.o style
-              (? sp (pin patbox 0 ([<sp [<>sp] () raws] . peep patbox 0 0))
+              (? sp (pin patbox 0 ([<sp [<>sp] () raws] . peep patbox 0 ()))
                  ; drop .PHONY / .SUFFIXES / ... -- a special target names no directory,
                  ; so a leading dot alone is not the test: ./x and ../x are paths.
                  (any (t \ 0 < tally t && t 0 = 46 && 0 = lastslash t) tgts) 0
@@ -1096,7 +1096,7 @@
                              ; an empty recipe is make's cancellation idiom, and with no lex
                              ; builtin cancelling is registering nothing.
                              (!(two? raws) ? 0
-                                (each tgts (t \ (haspct t ? (pin patbox 0 ([t prs oos raws] . peep patbox 0 0)) 0))))
+                                (each tgts (t \ (haspct t ? (pin patbox 0 ([t prs oos raws] . peep patbox 0 ())) 0))))
                              ; make expands $</$^ when the recipe runs, against every line's
                              ; prerequisites merged; cook expands here, so it asks the card
                              ; already registered before adding this line's own words.
@@ -1109,7 +1109,7 @@
       ; variable, so it survives the dot-target drop above and lands in `as`.
       dg (trim (peep as ".DEFAULT_GOAL" ""))
       _ (0 < #dg && pin check 0 (mk-item dg))
-      patlist (peep patbox 0 0)
+      patlist (peep patbox 0 ())
       ; make's builtin implicit rules, same shape as a file's own pattern: (tgtpat prs oos raws).
       ; two fences, both load-bearing: tried only after the file's patterns, so a Makefile that
       ; states its own %.o: %.c wins outright, and taken only where the stem-source exists,

@@ -102,7 +102,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
 | openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 3's spelling) |
-| src/apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
+| src/apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either), ssh-keygen, ssh-copy-id, ssh-keyscan |
 | src/apps/gz.l, src/apps/xz.l, src/apps/bz2.l, src/apps/tar.l, src/apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (src/love/compress/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (src/love/compress/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
@@ -801,7 +801,7 @@ ICMPv6, and its TTL is the reply's hop limit. A name is looked up by `resolve6` 
 src/apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` is at most
 1452 here, one datagram on a 1500-byte link.
 
-## ssh, sshd and scp (src/apps/ssh/)
+## ssh, sshd and scp (src/apps/ssh/), and the key tools
 
 One of everything, OpenSSH's first choices: curve25519-sha256 for the exchange, ssh-ed25519
 keys, chacha20-poly1305@openssh.com both ways, public-key authentication. The client came first
@@ -834,6 +834,25 @@ receiving or `scp -f` sending, whatever `scp` the remote shell finds, OpenSSH's 
 kore's answers both, so kore to kore, OpenSSH's `scp -O` to kore and kore to OpenSSH all
 work. A received name with a slash, or `.` or `..`, is refused. Two remote hosts, or none,
 are refused by name.
+
+`ssh-keygen` makes and reads ed25519 keys in OpenSSH's own file format, and OpenSSH's
+ssh-keygen reads them, as ours reads its own: `-t ed25519` (the only type, and the default),
+`-f` the file (asked on a terminal, else `~/.ssh/id_ed25519`), `-N` the passphrase (asked twice
+when not given; a locked key is aes256-ctr under bcrypt_pbkdf, `-a` rounds, 24 by default),
+`-C` the comment (user@host by default), `-q` quiet. `-y` prints a key's public line, `-l` the
+fingerprint (`SHA256:`) of a key or of each line of an authorized_keys or known_hosts file, `-p`
+a new passphrase (`-P` the old). `-F host` prints known_hosts' lines for a host and `-R host`
+removes them, keeping the file as `.old`, plain and hashed names alike.
+
+`ssh-copy-id [-fn] [-i identity_file] [-p port] [-o option=value] [-t target_path] [user@]host`
+logs in as ssh does, with its own identity (`-o IdentityFile=` picks another: there are no
+passwords here), and appends `-i`'s public line to the far authorized_keys by a shell there,
+making the directory 700 and the file 600. A key already there is skipped; `-f` skips the
+check, `-n` only says what it would do, and `-t` names another file than `.ssh/authorized_keys`.
+
+`ssh-keyscan [-Hq] [-f file] [-p port] [-t type] host ..` dials each host, checks its key's
+signature, and prints known_hosts lines, `-H` with hashed names; each host's version line goes
+to stderr unless `-q`. Only ed25519 keys are read, so another `-t` type is skipped and said.
 
 ## ed and ex (src/apps/kore/ed.l)
 
