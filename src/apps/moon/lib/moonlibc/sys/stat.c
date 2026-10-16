@@ -9,11 +9,13 @@ int stat(char const *p, struct stat *st) {
     long r = er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) &f, 0));
     if (r >= 0) __love_fbstat(&f, st);
     return (int) r; }
+#ifdef LvMac
   if (__love_osv == 4) {
     struct __mac_stat f;
     long r = er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) &f, 0));
     if (r >= 0) __love_macstat(&f, st);
     return (int) r; }
+#endif
   if (__love_osv == 3) {
     struct __nb_stat f;
     long r = er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) &f, 0));
