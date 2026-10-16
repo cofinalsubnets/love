@@ -37,7 +37,7 @@
    wad-t-map2 [["THINGS" (wad-t-recs [[128 64 90 1 7] [128 384 270 3004 7] [128 128 0 2014 7]])]
                ["LINEDEFS" (wad-t-recs [[0 1 1 0 0 0 65535] [1 2 4 1 0 1 2] [2 3 1 0 0 3 65535] [3 0 1 0 0 4 65535]
                                         [1 4 1 0 0 5 65535] [4 5 1 0 0 6 65535] [5 2 1 0 0 7 65535]])]
-               ["SIDEDEFS" (wad-t-cat [(wad-t-side "-" "WALL" 0) (wad-t-side "WALL" "-" 0) (wad-t-side "-" "-" 1) (wad-t-side "-" "WALL" 0)
+               ["SIDEDEFS" (wad-t-cat [(wad-t-side "-" "wall" 0) (wad-t-side "WALL" "-" 0) (wad-t-side "-" "-" 1) (wad-t-side "-" "WALL" 0)
                                        (wad-t-side "-" "WALL" 0) (wad-t-side "-" "WALL" 1) (wad-t-side "-" "WALL" 1) (wad-t-side "-" "WALL" 1)])]
                ["VERTEXES" (wad-t-recs [[0 0] [0 256] [256 256] [256 0] [0 512] [256 512]])]
                ["SEGS" (wad-t-recs [[0 1 0 0 0 0] [1 2 0 1 0 0] [2 3 0 2 0 0] [3 0 0 3 0 0] [2 1 0 1 1 0] [1 4 0 4 0 0] [4 5 0 5 0 0] [5 2 0 6 0 0]])]
@@ -63,6 +63,9 @@
    ; read: the lumps and the map
    wd (wad-read path)
    _ (test (#(wd 'ls) = #lumps) (wad-read "out/.no-such.wad" = ()))
+   ; ..the verb's opening: the wad and its map, or why not
+   _ (test (: o (wad-open path "E1M1") (two? o && tablet? <o && tablet? <>o)) (wad-open path "E9M9" = (path + ": no map E9M9"))
+           (wad-open "Makefile" "E1M1" = "Makefile: not a wad") (wad-main [] = 2))
    M (wad-map wd "E1M1")
    _ (test (#(M 'vs) = 4) (#(M 'lines) = 4) (#(M 'secs) = 1) (#(M 'things) = 2) (wad-map wd "E9M9" = ()))
    _ (test (wad-sector M 128.0 128.0 = 0))
@@ -95,6 +98,8 @@
    ; the door: the bonus taken on the way to it, the door shut, the zombieman behind it asleep
    _ (rng-set (wheel 3))
    M2 (wad-map wd "E1M2")
+   ; ..a name read in either case is the same name: "wall" is WALL
+   _ (test (M2 'sides 0 4 = "WALL"))
    d (pins (wad-new 64 40 wd M2) 'w 64 'h 40 'kp 1 'dt 0.25)
    (zom s) <(filter (o \ o 't = 3004) (s 'objs))
    _ (test (#(d 'objs) = 2) (zom d 'st = 'idle) (d 'hp = 100) (d 'bul = 50))
@@ -137,11 +142,16 @@
 
    ; the body: a push glides on and slows; a strafe goes sideways; a gun changed comes down, then up
    ; (the state is one tablet, ticked in place: what to compare is read off first)
+   ; ..a press drives three tics, doom's thrust of 25/32 a tic, then friction slows it
    g (wad-tics (wad-step (wad-new 64 40 wd M) 'forward) 1) z1 (g 'pz) v1 (g 'vz)
-   g (wad-tics g 10)
-   _ (test (z1 > 64.0) (g 'pz - z1 > 8.0) (g 'vz < v1))
-   g (wad-tics (wad-step (wad-new 64 40 wd M) 'strafe-right) 4)
-   _ (test (g 'px > 140.0) (g 'pz = 64.0))
+   g (wad-tics g 2) v3 (g 'vz) z3 (g 'pz)
+   g (wad-tics g 20)
+   _ (test (z1 > 64.0) (v3 > v1) (g 'pz - z3 > 8.0) (g 'vz < v3 / 2.0))
+   g (wad-tics (wad-step (pins (wad-new 64 40 wd M) 'px 40.0) 'strafe-right) 4)
+   _ (test (g 'px > 42.0) (g 'pz = 64.0))
+   ; ..a turn key held turns 640 of 65536 a tic, then 1280 past the sixth
+   g (foldl (\ s _ (wad-tics (wad-step s 'turn-right) 1)) (wad-new 64 40 wd M) ^10)
+   _ (test (abs (g 'th - (6 * 640 + 4 * 1280) * tau / 65536.0) < 1e-6))
    g (wad-tics (wad-step (wad-new 64 40 wd M) 'gun1) 8)
    _ (test (g 'gun = 1) (g 'gy > 0))
    g (wad-tics g 40)
