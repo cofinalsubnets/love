@@ -9,6 +9,7 @@
 #ifndef ZS_STANDALONE
 #include "love.h"
 #include "bytes.h"
+#include "compress/prefix.h"
 #else
 #define love_inline inline __attribute__((always_inline))
 #endif
@@ -501,32 +502,6 @@ static unsigned ze_al(uintptr_t n, unsigned maxs, unsigned maxlog) {   // a tabl
  return al < 5 ? 5 : al > maxlog ? maxlog : al; }
 
 // --- literals ---------------------------------------------------------------------------------
-// code lengths, none past 11: huffman over the counts, halved until it fits -> the longest
-static unsigned ze_hlen(const uint32_t *cnt, unsigned ns, uint8_t *len) {
- uint32_t c[256], w[512];
- int16_t par[512];
- uint8_t alive[512];
- for (unsigned s = 0; s < ns; s++) c[s] = cnt[s];
- for (;;) {
-  unsigned k = 0, leaf[256], nn;
-  for (unsigned s = 0; s < ns; s++) if (c[s]) leaf[k] = s, w[k] = c[s], alive[k] = 1, par[k] = -1, k++;
-  for (nn = k; nn < 2 * k - 1; nn++) {           // the two lightest joined, k - 1 times
-   int a = -1, b = -1;
-   for (unsigned i = 0; i < nn; i++)
-    if (alive[i]) {
-     if (a < 0 || w[i] < w[a]) b = a, a = (int) i;
-     else if (b < 0 || w[i] < w[b]) b = (int) i; }
-   w[nn] = w[a] + w[b], alive[nn] = 1, par[nn] = -1, alive[a] = alive[b] = 0, par[a] = par[b] = (int16_t) nn; }
-  unsigned mx = 0;
-  for (unsigned s = 0; s < ns; s++) len[s] = 0;
-  for (unsigned i = 0; i < k; i++) {
-   unsigned d = 0;
-   for (int j = (int) i; par[j] >= 0; j = par[j]) d++;
-   len[leaf[i]] = (uint8_t) d;
-   if (d > mx) mx = d; }
-  if (mx <= 11) return mx;
-  for (unsigned s = 0; s < ns; s++) if (c[s]) c[s] = (c[s] + 1) / 2; } }
-
 // a huffman stream, read last symbol first, so written backward
 static uintptr_t ze_hstream(const uint8_t *lit, uintptr_t n, const uint16_t *code, const uint8_t *len, uint8_t *o, uintptr_t cap) {
  struct ze_bw w = { o, o + cap, 0, 0, 0 };
@@ -575,7 +550,11 @@ static uintptr_t ze_lits(const uint8_t *lit, uintptr_t n, uint8_t *o, uintptr_t 
   uint8_t len[256], wt[256];
   uint16_t code[256];
   uint32_t at[13] = {0}, cw[13] = {0};
-  unsigned mb = ze_hlen(cnt, maxs + 1, len);
+  uint32_t hc[256];
+  uint64_t keys[256], hw[512];
+  uint32_t pa[512];
+  memcpy(hc, cnt, (maxs + 1) * sizeof *hc);                // pfx_lens halves its counts in place
+  unsigned mb = pfx_lens(hc, maxs + 1, 11, len, keys, hw, pa);
   for (unsigned s = 0; s <= maxs; s++) wt[s] = len[s] ? (uint8_t) (mb + 1 - len[s]) : 0, cw[wt[s]]++;
   for (uint32_t w = 1, cur = 0; w <= mb; w++) at[w] = cur, cur += cw[w] << (w - 1);
   for (unsigned s = 0; s <= maxs; s++)
