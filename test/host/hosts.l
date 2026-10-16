@@ -3,14 +3,15 @@
 
 (borrow 'hosts)
 
-(: ht-home (cwd 0)
+(: ht-locks (cite 'locks 'locks-list)
+   ht-home (cwd 0)
    ht-d (ht-home + "/out/.hosts-" + show (getpid 0))
    _ (mkdir ht-d 493)
    (ht-put nm s) (: p (open (ht-d + "/" + nm) "w") _ (say p s) (close p))
    (ht-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
    _ (ht-put "ssh" "for a; do l=$a; done; exec sh -c \"$l\"\n")      ; the last word is the line
    _ (ht-put "down" "exit 255\n")
-   _ (ht-put "hosts" ("# a test registry\nname up\nreach sh " + ht-d + "/ssh up\nslots 2\ncaps a64-exec kvm-a64\npage 16384\n\n"
+   _ (ht-put "hosts" ("# a test registry\nname up\nreach sh " + ht-d + "/ssh up\nslots 2\ncaps a64-exec kvm-a64 lanes\nslots-lanes 1\napart-lanes bsd\npage 16384\n\n"
                       + "name gone\nreach sh " + ht-d + "/down gone\ncaps a64-exec\n\n"
                       + "name bsd\nreach sh " + ht-d + "/ssh bsd\ncaps freebsd-x64\nos freebsd\n"))
    _ (setenv "BEE_HOSTS" (ht-d + "/hosts"))
@@ -38,19 +39,27 @@
    s1 (hosts-take [<live] (getpid 0) "one")
    s2 (hosts-take [<live] 1 "two")
    _ (hosts-free s1 (getpid 0)) _ (hosts-free s2 1)
-   ; the env's hosts take the cap over the registry
+   ; a cap with slots of its own takes host-NAME-CAP-N, and holds its apart host's slot beside it
+   l1 (hosts-take (hosts-live (hosts-with "lanes" ())) (getpid 0) "lanes")
+   held (map cap (ht-locks (ht-d + "/locks") "exclusive"))
+   _ (hosts-free l1 (getpid 0))
+   after (map cap (ht-locks (ht-d + "/locks") "exclusive"))
+   ; the env names hosts for a release, and takes the cap over the registry
    _ (setenv "KTEST_A64_HOSTS" "far.lan:3 near.lan")
    ev (hosts-with "kvm-a64" ())
    _ (setenv "KTEST_A64_HOSTS" "")
    _ (test (ht-seq (ht-names all) ["up" "gone" "bsd"])
            (2 = all 0 "slots") (1 = all 1 "slots") (ht-seq (all 2 "reach") ["sh" (ht-d + "/ssh") "bsd"])
-           (ht-seq (all 0 "caps") ["a64-exec" "kvm-a64"]) ("16384" = all 0 "page") ("freebsd" = all 2 "os")
+           (ht-seq (all 0 "caps") ["a64-exec" "kvm-a64" "lanes"]) ("16384" = all 0 "page") ("freebsd" = all 2 "os")
            (ht-seq (ht-names a64) ["up" "gone"]) (ht-seq (ht-names live) ["up"])
            (ht-seq (ht-names p16) ["up"]) !(two? p4)
            (0 = probe) (75 = none)
            (3 = ran) (got = "carried\n") !gone
            (0 > fsub env "BEE_HOSTS" 0) (0 <= fsub env "LANG=C" 0)       ; only PATH HOME LANG=C cross
            ("host-up-1" = s1 1) ("host-up-2" = s2 1)
+           (1 = all 0 "slots-lanes") (ht-seq (all 0 "apart-lanes") ["bsd"])
+           (ht-seq l1 [<l1 "host-up-lanes-1" "host-bsd-1"]) (ht-seq (sort held) ["host-bsd-1" "host-up-lanes-1"])
+           !(two? after)
            (ht-seq (ht-names ev) ["far.lan" "near.lan"]) (ht-seq (map (h \ h "slots") ev) [3 1])
            (ht-seq (ev 0 "reach") ["ssh" "far.lan"]))
    _ (setenv "BEE_HOSTS" "") _ (setenv "BEE_LOCKS" "")

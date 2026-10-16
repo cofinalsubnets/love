@@ -132,8 +132,14 @@ Work this box cannot do, or should not, runs on another: an a64 binary on an arm
 **slots**
 :   How many pieces of work it takes at once, 1 unless given. Each slot is an exclusive lock, **host-***name***-***n*, so two lanes never crowd one box.
 
+**slots-***cap*
+:   Slots of that cap's own, kept apart from **slots**: work asking for *cap* takes **host-***name***-***cap***-***n* instead, so it never waits on, or crowds out, the host's other caps.
+
+**apart-***cap*
+:   Hosts, by name, that work asking for *cap* never runs beside: every slot of each is held for as long as the work runs, so their lanes wait for it and it waits for them.
+
 **caps**
-:   What it can do, as words: **a64-exec** (runs linux/arm64 binaries), **kvm-a64** (boots an a64 guest under kvm), **vt-x** (boots an x64 guest that uses VT-x), **freebsd-x64**, **netbsd-x64**, **freebsd-a64**, **netbsd-a64**, **freebsd-rv64**, **netbsd-rv64** (that system, to test against).
+:   What it can do, as words: **a64-exec** (runs linux/arm64 binaries), **kvm-a64** (boots an a64 guest under kvm), **vt-x** (boots an x64 guest that uses VT-x), **freebsd-x64**, **netbsd-x64**, **freebsd-a64**, **netbsd-a64**, **freebsd-rv64**, **netbsd-rv64** (that system, to test against), **lanes** (takes a gate's lanes, test/gate/lanes.sh).
 
 Any other line is a *fact*, such as **isa**, **os** or **page** (its page size in bytes). For example:
 

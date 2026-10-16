@@ -11,8 +11,9 @@
 ;   (hosts-on as)               love bee --on and --hosts, the door: its exit status
 ;
 ; the registry is ~/.love/etc/bee/hosts (BEE_HOSTS), a paragraph a host of `key value`:
-; name, reach (ssh words; ssh NAME by default), slots (1), caps, and any other line a fact
-; for --where. a slot is an exclusive lock, host-NAME-N. an env cap list takes its hosts
+; name, reach (ssh words; ssh NAME by default), slots (1), caps, slots-CAP (that cap's own
+; slots), apart-CAP (hosts its work never runs beside), and any other line a fact for --where.
+; a slot is an exclusive lock, host-NAME-N or host-NAME-CAP-N. an env cap list takes its hosts
 ; over the registry's: KTEST_A64_HOSTS (a64-exec, kvm-a64), KTEST_VMX_HOSTS (vt-x),
 ; FBSD_SSH NBSD_SSH FBSD_ARM64_SSH NBSD_ARM64_SSH (freebsd-x64 netbsd-x64 freebsd-a64 netbsd-a64)
 (module (hosts hosts-all hosts-with hosts-live hosts-take hosts-free hosts-line hosts-on)
@@ -24,7 +25,7 @@
    (hs-path _) (hs-env "BEE_HOSTS" @ p (string? p ? p (cite 'path 'nest 0 + "/etc/bee/hosts")))
 
    ; a host's lines into a tablet: reach and caps are words, slots a count, the rest text
-   (hs-val k ws) (k @ "reach" ws "caps" ws "slots" (hs-num <ws) (join " " ws))
+   (hs-val k ws) (? (starts? k "slots") (hs-num <ws) (starts? k "apart") ws (k @ "reach" ws "caps" ws (join " " ws)))
    (hs-fill t) (: nm (t "name")
                   (pins t "reach" (peep t "reach" ["ssh" nm]) "slots" (peep t "slots" 1) "caps" (peep t "caps" ())))
    (hs-push t acc) (? (tablet? t && string? (peep t "name" ())) (hs-fill t . acc) acc)
@@ -67,22 +68,34 @@
    (hosts-with cap where)
     (: ev (hs-env-hosts cap)
        hs (two? ev ? ev (filter (h \ elem cap (h "caps")) (hosts-all 0)))
-       (filter (h \ hs-fits? h where) hs))
+       (map (h \ pin h "want" cap) (filter (h \ hs-fits? h where) hs)))
 
    ; a slot is the lock host-NAME-N; with every slot taken this waits, saying so once
    (hs-root _) ((cite 'locks 'locks-root) 0)                   ; read per call: this module is baked
+   ; a cap with a slots-CAP line has slots of its own, host-NAME-CAP-N; an apart-CAP host's
+   ; slots are all held beside one, so its lanes never run with that cap's
+   (hs-lock h i) (: c (peep h "want" ()) per (string? c && charm? (peep h ("slots-" + c) ()))
+                    ("host-" + h "name" + (per ? ("-" + c) "") + "-" + show i))
+   (hs-count h) (: c (peep h "want" ()) (charm? (peep h ("slots-" + c) ()) ? (h ("slots-" + c)) (h "slots")))
+   (hs-grab nm who note) (peep ((cite 'locks 'locks-acquire) (hs-root 0) nm 'exclusive who note () 1) "granted" 0)
+   (hs-drop nm who) ((cite 'locks 'locks-release) (hs-root 0) nm 'exclusive who)
+   (hs-apart h) (catmap (n \ (: o (filter (x \ x "name" = n) (hosts-all 0))
+                             (? (two? o) (map (i \ "host-" + n + "-" + show (i + 1)) (jot (<o "slots"))) ())))
+                        (peep h ("apart-" + peep h "want" "") ()))
    (hosts-take hs who note)
-    (: (one h) (foldl (\ a i (two? a ? a (: nm ("host-" + h "name" + "-" + show i)
-                                            g ((cite 'locks 'locks-acquire) (hs-root 0) nm 'exclusive who note () 1)
-                                            (peep g "granted" 0 ? [h nm] ()))))
-                      () (map (+ 1) (jot (h "slots"))))
+    (: (both h nm) (: ap (hs-apart h)
+                      got (foldl (\ a l (? (hs-grab l who note) (l . a) a)) () ap)
+                      (? (#got = #ap) (h . nm . got)
+                         (: _ (map (l \ hs-drop l who) got) _ (hs-drop nm who) ())))
+       (one h) (foldl (\ a i (two? a ? a (: nm (hs-lock h i) (hs-grab nm who note ? (both h nm) ()))))
+                      () (map (+ 1) (jot (hs-count h))))
        (go n) (: s (foldl (\ a h (two? a ? a (one h))) () hs)
                  (? (two? s) s
                     (: _ (? (n = 0) (say err "bee: every slot on those hosts is taken; waiting\n") 0)
                        _ (rest 5000)
                        (go (n + 1)))))
        (go 0))
-   (hosts-free slot who) ((cite 'locks 'locks-release) (hs-root 0) (slot 1) 'exclusive who)
+   (hosts-free slot who) (map (l \ hs-drop l who) >slot)
 
    ; dir (or ()) goes as one tar on the one ssh; argv runs in a scratch dir with only PATH
    ; HOME LANG=C, and the dir goes after, whatever argv answered
