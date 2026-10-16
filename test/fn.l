@@ -93,6 +93,8 @@
        (fnq-fix "(x @ [a b] (a + b))") (fnq-fix "(: a 1 b (a + 1) (\\ q (q * b)))")
        (1 = ev <(sound "(. = (.))"))))
 ; text holes nested n deep compile in their length: each macro's operands come in factored
-(: (fnq-holes k) (k = 0 ? "\"x\"" ("\"a \\(" + fnq-holes (k - 1) + ") b\""))
+; the text is joined once: a + per level copies the inner text, and the law would time that
+(: (fnq-pile k s t) (k = 0 ? t (fnq-pile (k - 1) s (s . t)))
+   (fnq-holes k) (join "" (fnq-pile k "\"a \\(" ("\"x\"" . fnq-pile k ") b\"" ())))
  (test ("a a x b b" = ev <(sound (fnq-holes 2)))
        (test-linear (n \ ev ['\ 'u <(sound (fnq-holes n))]) 250)))
