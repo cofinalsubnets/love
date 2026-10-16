@@ -4,7 +4,7 @@
 ;   run:  cat test/00-init.l test/host/pool.l | out/love
 (borrow 'posix)
 (borrow 'pool)
-(: (pl-w k n) (: _ (setenv "LOVE_THREADS" k) w (par-width n) _ (setenv "LOVE_THREADS" "") w)
+(: (pl-w k n) (: _ (setenv "LOVE_THREADS" k) w (par-width n) _ (setenv "LOVE_THREADS" ()) w)
    ; a frame big enough to share: two big squares, red and blue, one over the other
    (pl-g l) (: f (foldr (+) () l) (gem-tray [(tally f)] f))
    (pl-vx x y z r g b) [(1.0 * x) (1.0 * y) (1.0 * z) 0.0 0.0 (1.0 * r) (1.0 * g) (1.0 * b)]
@@ -13,7 +13,7 @@
                 (pl-vx -1 1 0.5 0 0 1) (pl-vx 1 1 0.5 0 0 1) (pl-vx 0 -1 0.5 0 0 1)])
    pl-ts (: f [0 1 2 -1 3 4 5 -1] (star-tray [(tally f)] f))
    (pl-frame k) (: _ (setenv "LOVE_THREADS" k) f (facets 512 320 7 pl-id pl-vs pl-ts () ())
-                   _ (setenv "LOVE_THREADS" "") f)
+                   _ (setenv "LOVE_THREADS" ()) f)
    pl-one (pl-frame "1")
    pl-out ("/tmp/love-pool-law-" + show (getpid 0))
    ; a home whose love.l says (threads ..): read on the load's 50 ms tick, so each change waits
@@ -25,7 +25,7 @@
    _ (setenv "HOME" pl-home)
    s1 (pl-salt "1" 64)
    s3 (pl-salt "3!" 64)
-   s3e (: _ (setenv "LOVE_THREADS" "2!") w (par-width 64) _ (setenv "LOVE_THREADS" "") w)
+   s3e (: _ (setenv "LOVE_THREADS" "2!") w (par-width 64) _ (setenv "LOVE_THREADS" ()) w)
    _ (unlink (pl-home + "/.love/etc/love.l"))
    _ (rmdir (pl-home + "/.love/etc")) _ (rmdir (pl-home + "/.love")) _ (rmdir pl-home)
    _ (setenv "HOME" pl-h0)
