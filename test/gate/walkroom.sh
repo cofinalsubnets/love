@@ -21,10 +21,11 @@ roomy=$(LOVE_BUDGET_MB=1024 "$love" $d/big.l 2>&1)
 [ "$tight" = "$roomy" ] || { echo "FAIL walkroom: at 96 MB '$tight', at 1024 MB '$roomy'"; fails=$((fails+1)); }
 case $tight in *" v 1 1)") ;; *) echo "FAIL walkroom: the big list answered '$tight'"; fails=$((fails+1)) ;; esac
 
-# an object tray a third of a 64 MB budget: it fits, its hash's worklist (a word a cell) does not
+# a 23 MB object tray in a 56 MB budget: the tray fits from 48 MB, its hash's worklist (a word
+# a cell) only from 64, so both edges have room
 printf '%s\n' '(: n (35 * 83886) r (trap (n \ dig (top-tray [n] [])) n (a \ b \ (quote scared)))' \
   ' (puts (show r + " after\n")))' > $d/oom.l
-out=$(LOVE_BUDGET_MB=64 "$love" $d/oom.l 2>&1); st=$?
+out=$(LOVE_BUDGET_MB=56 "$love" $d/oom.l 2>&1); st=$?
 [ "$st" = 0 ] && [ "$out" = "scared after" ] || {
   echo "FAIL walkroom: past the budget, exit $st and '$out', wanted the scare caught"; fails=$((fails+1)); }
 
