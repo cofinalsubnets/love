@@ -345,6 +345,8 @@ struct g {
    n_resize,                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
    budget,                     // total cap in words (minor + 2*major), 0 = unbounded; by appel's
                                             // rule the nursery gets what the major pool leaves
+   walk,                          // the room a walk ran out of the gap wanting (words), the most any
+                                  // walk under one op asked: the op takes it and runs again
    minor0, major0, ratio,         // nursery floor, major grow/shrink step, copy-overhead setpoint;
                                           // seeded at ini, moved by `tune`. untraced: a bake drops them.
    push_gc;                       // a law's: the push this many pushes on collects, 0 none (guts' push-gc)
@@ -669,6 +671,21 @@ static love_inline struct g *have(struct g *g, uintptr_t n) {
  return !ok(g) || avail(g) >= n ? g : please(g, n);
 #endif
 }
+// a walk keeps its worklist in the gap it was lent and never past it: spent, it asks for
+// twice the region and gives up, and the op that started it takes the room and runs again.
+// walks nest (a probe's eqv, a compare's hash), so the ask is the largest of them
+static love_inline void walk_short(struct g *g, word const *base, word const *hi, uintptr_t want) {
+ uintptr_t n = (uintptr_t) (hi - base), w = (n < 32 ? 64 : 2 * n) + want;
+ if (w > g->walk) g->walk = w; }
+// the ask is on top of the room there is: an op may lay its own scratch ahead of the walk's,
+// so only a gap that grew is sure to give the walk more.
+// a host lane's: the room taken (which may collect), the ask cleared. its operands ride the stack
+static love_inline struct g *walk_room(struct g *g) {
+ uintptr_t w = g->walk + (uintptr_t) (g->sp - g->hp);
+ g->walk = 0;
+ return have(g, w); }
+// an op's: the room through lvm_gc, which runs the op again; its operands are as they were
+#define WalkAgain() do { if (g->walk) { uintptr_t _w = g->walk + room(Hp, Sp); g->walk = 0; have_gc(_w) } } while (0)
 static love_inline void *bump(struct g *g, uintptr_t n) {   // the mutator's: the nursery. gc.c bumps the major itself
  if (avail(g) < n) __builtin_trap();
  void *x = g->hp; g->hp += n; return x; }

@@ -277,22 +277,23 @@
    aopheads '(? : two? cap cup + - * // % & | ^ < <= > >= = == .)   ; the heads that are ops, not calls
    ; every head the amble reads by name, masked out of all three recognizers when a frame takes it.
    ; list/&&/|| have no arm and ride for the mask alone; ? and : are reader syntax, never names
-   aopnames '(two? cap cup + - * // % & | ^ < <= > >= = == . || && tally list
+   aopnames '(two? cap cup + - * // % & | ^ < <= > >= = == . || && tally long? list
               one? nil? atom? != !== peep mpeep)
    (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? the bisect knob's test
     (? (aquote? e) 0
        (two? e) (: op <e
-          (nom? op && !(op = go) && !(elem op aopheads)
+          (nom? op && !(op = go) && !(elem op aopheads) && !(along? e)
            || foldl (\ a x (a || ahascall? env go x)) 0 >e))
        0)
    ; aheads: the free call heads of e, the global-callee candidates. go is never one: a non-tail
    ; (go ..) must decline, not resolve a leaked namesake. over-approximate; amble-ok? is the gate
+   (along? e) (<e = 'long? && 3 = #e && whole? <>e && 0 < <>e <= 8)   ; (long? k x), k small: inline, no call
    (aheads env go e acc)
     (? (aquote? e) acc
        (two? e)
         (: op <e                                                    ; a2, not a rebind of acc: a `:` is one scope, so `acc (.. acc ..)`
            a2 (nom? op && !(op = go) && !(elem op env) && !(elem op acc)
-               && !(elem op aopheads) ?
+               && !(elem op aopheads) && !(along? e) ?
                  (op . acc) acc)                                      ; would read the unpinned local
            (foldl (\ ac x (aheads env go x ac)) a2 >e))
        acc)
@@ -315,6 +316,7 @@
                                     && gol >>l (<l = '_ ? ev (<l . ev)))))
                                as env))
               (elem oop '(two? cap cup)) (n = 1 && amble-ok? env shd gn go k 0 <as)
+              (oop && along? e) (amble-ok? env shd gn go k 0 <>as)
               (aop2? oop) (n = 2 && amble-ok? env shd gn go k 0 <as && amble-ok? env shd gn go k 0 <>as)
               (op = amble-lam) (all (v \ elem v env) >>as)                 ; an inner lambda site: its imports are frame reads
               (op = go) (tl && n = k && all (x \ amble-ok? env shd gn go k 0 x) as)
@@ -364,7 +366,7 @@
    ; aopv: a macro splices op values as heads (list lays the link nif), so a value head is named
    ; back to its nom, ==-keyed, unless env-shadowed; a miss falls through to prel's opnom
    aopv [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep]
-           [tally 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
+           [tally 'tally] [long? 'long?] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
            [(>) '>] [(>=) '>=] [(=) '=] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]]
    ; ev.l's iop carries a nif as its op word (a charm), which aopv's values never equal: the
    ; words of the globals amble can name, word -> nom, filled at the first ask by ev.l's
@@ -375,7 +377,7 @@
    (aopw x)
     (: _ (#(keys aopix) = 0 ?
             (: nf aopnf gv aopgv
-               (each '(pin peep elem max min snip tally two? cap cup + - * // % & | ^ < <= > >= = == .
+               (each '(pin peep elem max min snip tally long? two? cap cup + - * // % & | ^ < <= > >= = == .
                        rev cat assoc last string charm? nom? tablet? lit? string? gem? atom? nil? abs)
                      (n \ (: v (gv ? (gv n 0) 0) w (nf && v && !(charm? v) ? (nf v) 0)
                              (charm? w && w != 0 ? (pin aopix w n) 0))))))
@@ -564,6 +566,7 @@
                      (aseq cl as @ 'bad 'bad 0)                ; the self back edge
                     (op = go) (fbk ? (aseq cl as) (aguard (aseq cl as)))     ; the named-let back edge
                     (elem oop '(two? ==)) (aseq cl as)
+                    (oop && along? ex) (aseq cl as)
                     (oop = '= && (aqnom? <as || aqnom? <>as || lit? eqv)) (aseq cl as)
                     (oop = 'tally && elem 'tally gn && atom? >as) (aseq cl as)
                     (op = amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
@@ -608,6 +611,38 @@
              (ovload o) ([['ld T SP ovt]] + map (_ \ ['ld T T 16]) ^(posof o ovs 0) + [['ld X T 8] ['st SP ovo X]])
              lto (8 * (k + 3 + ng + nd))                    ; the let region, past the spills
              (lvo v) (lto + 8 * posof v lts 0)
+             ; the chain facts: the access forms a two? or long? test above has proven chains, so their
+             ; cap and cup are bare loads, no guard and no stub. a let bound to such a test carries it,
+             ; which is how && reaches here: (: b T (? b R b)); rebinding a name drops what mentions it
+             kf {}  kl (mint 0)
+             (kacc? x) (nom? x || two? x && elem <x '(cap cup) && !(elem <x shd) && two? >x && atom? >>x && kacc? <>x)
+             (kmen? n x) (x == n || two? x && kmen? n <>x)
+             (kfacts q) (? (nom? q) (kf q)
+                           (atom? q) ()
+                           (<q = 'two? && !(elem 'two? shd) && 2 = #q && kacc? <>q) [<>q]
+                           (<q = 'long? && !(elem 'long? shd) && 3 = #q && whole? <>q && kacc? <>>q)
+                            ((: (cups x n) (0 < n ? (x . cups ['cup x] (n - 1)))) <>>q <>q)
+                           ())
+             (kwith xs f) (two? xs ? (: o (kf kl) _ (pin kf kl (xs + o)) r (f 0) _ (pin kf kl o) r) (f 0))
+             (kbind bn bv bf) (bn = '_ ? (bf 0)
+                                 (: o (kf kl) on (kf bn) ob (kb bn) nf (kfacts bv) nb (kbool? bv)
+                                    _ (pins kf kl (filter (x \ !(kmen? bn x)) o) bn nf)
+                                    _ (pin kb bn nb)
+                                    r (bf 0)
+                                    _ (pins kf kl o bn on)
+                                    _ (pin kb bn ob)
+                                    r))
+             (kn? x) (elem x (kf kl))
+             ; a boolean test answers a fixnum 0 or 1, so its ? needs no truth guard: two? == long?, an
+             ; = against a quoted nom (raw identity), and a let bound to one
+             kb {}
+             (kbool? q) (? (nom? q) (kb q)
+                           (atom? q) 0
+                           (: oop (elem <q shd ? 0 <q)
+                              (? (elem oop '(two? ==)) (2 <= #q)
+                                 (oop && along? q) 1
+                                 (oop = '=) (aqnom? <>q || aqnom? <>>q)
+                                 0)))
              (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T and a fixnum, else lbl
              (abin sa sb d fin) (acg sa d + [['st SP (spill d) A]] + acg sb (d + 1)
                                  + (fbk ? [['st SP (spill (d + 1)) A]] ()) + [['ld T SP (spill d)]] + fin)   ; T = a, A = b (b spilled too for a stub)
@@ -657,21 +692,28 @@
                 + [['label dn]])))
              (aid sa sb d) (abin sa sb d [['cmp T A] ['set 'eq A] ['leax A A A 1 1]])                ; raw word identity: total, no guard
              (atwo sx d) (: ln (mint 0)
-              (acg sx d + [['li T 1] ['test A 1] ['br 'ne ln]
+              (kn? sx ? [['li A 3]]
+                 (acg sx d + [['li T 1] ['test A 1] ['br 'ne ln]
                               ['ld X A 0] (reach tgt A 0) ['cmp X A] ['br 'ne ln]
-                              ['li T 3] ['label ln] ['mov A T]]))
-             (acap sx d off) (acg sx d + fb1 (off = 8 ? 'cap 'cup)
+                              ['li T 3] ['label ln] ['mov A T]])))
+             (acap sx d off) (kn? sx ? (acg sx d + [['ld A A off]])
+                              (acg sx d + fb1 (off = 8 ? 'cap 'cup)
                                            [['test A 1] ['br 'ne 'deopt]
                                             ['ld X A 0] (reach tgt T 0) ['cmp X T] ['br 'ne 'deopt]
-                                            ['ld A A off]])
+                                            ['ld A A off]]))
+             ; (long? k x): k two? steps down the cups, any a fact has proven skipped
+             (along lk x d) (: no (mint 0) en (mint 0)
+              (: (step f i) (i < lk ? ((kn? f ? () [['test A 1] ['br 'ne no] ['ld X A 0] (reach tgt T 0) ['cmp X T] ['br 'ne no]])
+                                       + (i + 1 < lk ? [['ld A A 16]] ()) + step ['cup f] (i + 1)) ())
+                 (acg x d + step x 0 + [['li A 3] ['jmp en] ['label no] ['li A 1] ['label en]])))
              (alink sa sb d) (abin sa sb d (fb2 '. d                                                ; room for 3w + floor, else deopt (no GC mid-native) -- or the
                                              [['lea X HP 88] ['cmp SP X] ['br 'below 'deopt]         ; stub, whose cons collects
                                               (reach tgt X 0) ['st HP 0 X] ['st HP 8 T] ['st HP 16 A]
                                               ['mov A HP] ['add HP HP 24]]))
              (acq st sth sel d) (qrun ['? st sth sel]
-                                  (q \ y \ le \ ln \ (: tr (atruth 0)
+                                  (q \ y \ le \ ln \ (: tr (kbool? q ? [() ()] (atruth 0))
                                      [(acg q d) <tr [['cmp A 1] ['br 'le le]]                 ; heap truth -> net -> twin, or the bit stub; tag(x)<=1 <=> x<=0
-                                      (acg y d) [['jmp ln]] <>tr [['label le]]]))
+                                      (kwith (kfacts q) (_ \ acg y d)) [['jmp ln]] <>tr [['label le]]]))
                                   (x \ acg x d))
              (adrive cso) (: bb (mint 0)                                                                    ; apply the value at Sp[cso] to the arg in A, via the walkable resume:
               [['st SP -32 A] ['ld T SP cso] ['st SP -24 T]                                         ; frame [arg, callee, tag(bb-entry0), entry0] -- an odd charm + an out-of-
@@ -821,8 +863,8 @@
                + [['label dn]]))
              (aselfgo as d) (agous as 0 d + asmv (a - ni - 1) d + fairck tgt SC + [['jmp 'sgo]])               ; saturated tail self-call: new args (spilled first) over the arg slots (imports keep), jump the body top
              (acqt st sth sel d) (qrun ['? st sth sel]                                                ; acq, tails threaded
-                                   (q \ y \ le \ ln \ (: tr (atruth 0)
-                                      [(acg q d) <tr [['cmp A 1] ['br 'le le]] (acgt y d) [['jmp ln]] <>tr [['label le]]]))
+                                   (q \ y \ le \ ln \ (: tr (kbool? q ? [() ()] (atruth 0))
+                                      [(acg q d) <tr [['cmp A 1] ['br 'le le]] (kwith (kfacts q) (_ \ acgt y d)) [['jmp ln]] <>tr [['label le]]]))
                                    (x \ acgt x d))
              (acgt e d)                                                                             ; tail-position acg: thread tails through ? and let bodies so a saturated self-call jumps
               (? (aquote? e) (acg e d)
@@ -832,7 +874,7 @@
                        (op = ':) ((: (gol l) (atom? >l ? (acgt <l d)
                                                   (acg <>l d
                                                    + (<l != '_ ? [['st SP (lvo <l) A]])
-                                                   + gol >>l))) as)
+                                                   + kbind <l <>l (_ \ gol >>l)))) as)
                        (sfq && op = self && #as = a - ni) (aselfgo as d)
                        (acg2 e d 1))))
              (acg e d) (acg2 e d 0)
@@ -846,9 +888,10 @@
                     (? (op = ':) ((: (gol l) (atom? >l ? (acg <l d)                            ; a value let: each binding lands in its slot, in order
                                                   (acg <>l d
                                                    + (<l = '_ ? () [['st SP (lvo <l) A]])
-                                                   + gol >>l))) as)
+                                                   + kbind <l <>l (_ \ gol >>l)))) as)
                        (op = '?) (acq <as <>as <>>as d)
                        (oop = 'two?) (atwo <as d)
+                       (oop && along? e) (along <as <>as d)
                        (oop = 'cap) (acap <as d 8)
                        (oop = 'cup) (acap <as d 16)
                        (oop = '==) (aid <as <>as d)

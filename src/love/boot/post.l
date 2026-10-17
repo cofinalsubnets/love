@@ -365,7 +365,7 @@
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}
    ; and the same for the kernel -- only the respelling. main.c pins `love-os` per run off
    ; __love_osv: one binary meets four, and the compile that made it cannot say which.
-   os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'inle "Inle"}
+   os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'macos "Darwin" 'inle "Inle"}
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
    archof (arch-canon * name)

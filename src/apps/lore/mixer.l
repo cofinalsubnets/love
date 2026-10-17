@@ -4,7 +4,8 @@
 ;   (mix-new hn sound ear o)  a feeder of (st) for view's 'song, writing a tic's frames a call:
 ;                           (sound nm) answers [samples rate], samples floats about 0, or () for none,
 ;                           (ear st) the listener [x z th], th radians from +z toward +x; o
-;                           {'near 'far 'fps 'gain}: whole within near, gone past far
+;                           {'near 'far 'fps 'gain 'bus}: whole within near, gone past far; 'bus
+;                           (st n), if given, answers n frames more to lay under them, (left . right)
 (module (mixer mix-cry mix-new)
 (borrow 'rove)                          ; song-rate
 (borrow 'view)                          ; max2
@@ -17,6 +18,7 @@
    (v <= 0.0 ? () [(S 0) (1.0 * S 1 / song-rate) 0 (v * (1.0 - p)) (v * p)]))
  (firsts l k) (k = 0 || atom? l ? () (<l . firsts >l (k - 1)))
  (mix-new hn sound ear o) (: box {'vs ()} n (song-rate // peep o 'fps 35) pk (cite 'play 'pack) z (iota n * 0.0)
+   bus (peep o 'bus ())
    near (1.0 * peep o 'near 1.0) far (1.0 * peep o 'far 10.0) g (1.0 * peep o 'gain 20000.0)
    (st \ (: fx (peep st 'sfx ()) _ (pin st 'sfx ()) E (ear st)
             (start f) (sound (f 0) @ () () S (voice S (f 1) E near far))
@@ -25,5 +27,6 @@
                (: v <l y (peep (v 0) (int ((iota n + v 2) * v 1)) 0.0) p (v 2 + n)
                   (go >l (L + y * v 3) (R + y * v 4) (p * v 1 < #(v 0) ? ([(v 0) (v 1) p (v 3) (v 4)] . keep) keep))))
             r (go vs z z ())
-            (pin box 'vs (r 2), say hn (pk (r 0 . r 1) n g)))))
+            m (bus ? (bus st n) ())
+            (pin box 'vs (r 2), say hn (pk (two? m ? ((r 0 + <m) . (r 1 + >m)) (r 0 . r 1)) n g)))))
 )) ; module mixer

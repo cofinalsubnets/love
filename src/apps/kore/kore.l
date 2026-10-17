@@ -743,6 +743,8 @@
             'lzcat (cite 'xzcmd 'xzcat-main)
             'bzip2 (cite 'bz2cmd 'bzip2-main) 'bunzip2 (cite 'bz2cmd 'bunzip2-main)
             'bzcat (cite 'bz2cmd 'bzcat-main)
+            'zstd (cite 'zstdcmd 'zstd-main) 'unzstd (cite 'zstdcmd 'unzstd-main)
+            'zstdcat (cite 'zstdcmd 'zstdcat-main)
             'tar (cite 'tarcmd 'tar-main) 'cpio (cite 'cpiocmd 'cpio-main)
             ; the byte tools, the clock's other face, and the four one-liners
             'dd dd-main 'xxd xxd-main 'strings strings-main 'hexdump hexdump-main 'hd hd-main
@@ -967,7 +969,8 @@
     'zcat (cite 'gzcmd 'gzc-help)
     'xz (cite 'xzcmd 'xzc-help) 'unxz (cite 'xzcmd 'xzc-help) 'xzcat (cite 'xzcmd 'xzc-help)
     'unlzma (cite 'xzcmd 'xzc-help) 'lzcat (cite 'xzcmd 'xzc-help)
-    'bzip2 (cite 'bz2cmd 'bzc-help) 'bunzip2 (cite 'bz2cmd 'bzc-help) 'bzcat (cite 'bz2cmd 'bzc-help)}
+    'bzip2 (cite 'bz2cmd 'bzc-help) 'bunzip2 (cite 'bz2cmd 'bzc-help) 'bzcat (cite 'bz2cmd 'bzc-help)
+    'zstd (cite 'zstdcmd 'zsc-help) 'unzstd (cite 'zstdcmd 'zsc-help) 'zstdcat (cite 'zstdcmd 'zsc-help)}
 
    ; echo, test and [ read no options (posix: `echo --help` means the words); cook and
    ; lush answer their flags themselves
@@ -1087,7 +1090,8 @@ every tool answers --help and --version, and -h where the letter is free
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (src/apps/gz.l)
   xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (src/apps/xz.l)
   bzip2 | bunzip2 | bzcat [-cdfkqtvz1-9]       the block-sorting one (src/apps/bz2.l)
-  tar {c|x|t}[vzjJaO] [-f A] [-C D] [M..]      the ustar archive; z gzip, j bzip2, J xz (src/apps/tar.l)
+  zstd | unzstd | zstdcat [-cdfkqtvz#] [-o F]  zstandard (src/apps/zstd.l)
+  tar {c|x|t}[vzjJaO] [-f A] [-C D] [M..]      the ustar archive; z gzip, j bzip2, J xz, --zstd (src/apps/tar.l)
   cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (src/apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
   xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs

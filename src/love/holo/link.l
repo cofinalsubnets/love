@@ -84,7 +84,7 @@
    ; abs32 is ((S+A)|T), rel32 that minus P (gcc's `.word handler - .`).
    ; the numbers are obj.l's plus rel32, and a kind outside the set refuses: they collide
    ; with the x86-64 and riscv numbers, which is why the machine picks the lane first.
-   ldarm-kinds (ld-cls '((2 abs32) (3 rel32) (10 bl) (30 b) (47 movw16) (48 movt16)))
+   ldarm-kinds (ld-cls '((2 abs32) (3 rel32) (10 bl) (30 b) (47 movw16) (48 movt16) (51 bcc)))
    ; the a64 and riscv instruction fields, by relocation number, in the backend's own names.
    ; rela: S+a arrives whole, and the backend ors its field into the word already there
    lda64-kinds (ld-cls '((273 ld19) (274 adr21) (275 adrp21) (277 addlo12) (278 addlo12) (279 b14) (280 b19) (282 b26) (283 b26)
@@ -774,7 +774,8 @@
        ; netbsd's exec requires the ident note (no note -> ENOEXEC; other kernels ignore
        ; notes). 24 bytes in the header reserve, pt_note plus an alloc section so strip
        ; keeps it, on the ISAs that can meet that kernel.
-       nb? (wx? && elem mach '(62 183 243))
+       bsd? (elem mach '(62 183 243 3) || target = 'arm)   ; the ISAs that can meet a BSD
+       nb? (wx? && bsd?)
        hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 3 1) + (img? ? 1 0) + (nb? ? 1 0)) + (nb? ? 24 0))
        nbo (hdrsz - 24)
        nbnote (nb? ? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
@@ -822,7 +823,7 @@
               o1 <objs
               (two? e ? <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
-       cx [glo n0 end r0 r1 relbox rv (? (mach = 3) 'i386 (mach = 40) 1 ()) (backends target) (ld-extents objs)]
+       cx [glo n0 end r0 r1 relbox rv (ld-rel32 mach) (backends target) (ld-extents objs)]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
@@ -888,7 +889,7 @@
        ; the brand: ei_osabi = 9 in e_ident[7] on every exe this lane writes for an ISA that
        ; can meet freebsd -- linux never reads the byte and freebsd's imgact refuses without
        ; it. made here and not at a caller, so the two doors over one linker agree.
-       hdr9 (elem mach '(62 183 243) ? (ld-brand hdr 7 9) hdr)
+       hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
        (hdr9 . ((nb? ? [nbnote]) + >en + tail + [rtab] + >ei
                  + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
                     (ld-zeros (shto - (rdmo + rdmz))) sht])))
@@ -1189,6 +1190,8 @@
                           acc (ld-lanes + <os 'named))))
        (go objs ()))
 
+   ; which 32-bit reloc patcher a machine's objects take: i386's, arm's (1), or none
+   (ld-rel32 mach) (? (mach = 3) 'i386 (mach = 40) 1 ())
    (ldbare32 target runs srcs pns rel?)
     (: mach (peep elf-machines target 0)
        _ (0 >= mach  ? (scare 'link-target target))
@@ -1284,7 +1287,7 @@
        nif (lpos 'nifs @ r (two? r ? r [org org 0]))
        n0 (ld-align (ld-lane0 objs 'nifs @ s (two? s ? (s 3) 1)) <nif)
        relbox (rel? ? {0 ()})    ; the emit-relocs site accumulator
-       cx [glo n0 (<nif + nif 2) org org relbox () 1 be (ld-extents objs)]
+       cx [glo n0 (<nif + nif 2) org org relbox () (ld-rel32 mach) be (ld-extents objs)]
        ; -- the bytes, run by run, lane by lane, in that same order --
        body (: (go rs fp acc)
                 (atom? rs ? [fp acc]

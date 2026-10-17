@@ -29,11 +29,13 @@ lvm(lvm_map_data) { // FIXME this seems to just return const (). what is this fo
  Ip = cell(*++Sp); *Sp = ZeroPoint; love_musttail return Continue(); }
 
 // the backing slot of k, or -- if absent -- the first empty slot on its probe
-// chain. load is kept < 3/4 so an empty slot always terminates the sound.
+// chain. load is kept < 3/4 so an empty slot always terminates the sound. a walk
+// under it that spent the gap answers not found with g->walk set: no slot to write
 uintptr_t map_probe(struct g *g, word m, word k, bool *found) {
  uintptr_t mask = map_cap(m) - 1, i = hash(g, k) & mask;
  word *s = map_slots(m);
  for (;; i = (i + 1) & mask) {
+  if (g->walk) return *found = false, 0;
   word sk = s[2 * i];
   if (sk == map_gap) return *found = false, i;
   if (eql(g, k, sk)) return *found = true, i; } }
@@ -84,6 +86,7 @@ static love_noinline struct g *map_grow(struct g *g) {
   word k = os[2 * j];
   if (k == map_gap) continue;
   uintptr_t i = hash(g, k) & nmask;
+  if (g->walk) return g;                          // a key's walk spent the gap: the old backing stands
   while (ns[2 * i] != map_gap) i = (i + 1) & nmask;
   ns[2 * i] = k, ns[2 * i + 1] = os[2 * j + 1], nlen++; }
  tablet_back(nb)->len = putcharm(nlen);
@@ -96,13 +99,19 @@ static love_noinline struct g *map_grow(struct g *g) {
 love_noinline struct g *mapput(struct g *g) {
  if (!ok(g)) return g;
  bool found;
- uintptr_t i = map_probe(g, g->sp[2], g->sp[0], &found);
- if (found) {
-  gen_wb(g, map_back(g->sp[2]), g->sp[1]);         // barrier: a young value into an old backing
-  return map_slots(g->sp[2])[2 * i + 1] = g->sp[1], g->sp += 2, g; }
- if ((map_len(g->sp[2]) + 1) * 4 >= map_cap(g->sp[2]) * 3) {
+ uintptr_t i;
+ for (;; g = walk_room(g)) {                        // a walk spent the gap: the room, and the put again
+  if (!ok(g)) return g;
+  i = map_probe(g, g->sp[2], g->sp[0], &found);
+  if (g->walk) continue;
+  if (found) {
+   gen_wb(g, map_back(g->sp[2]), g->sp[1]);        // barrier: a young value into an old backing
+   return map_slots(g->sp[2])[2 * i + 1] = g->sp[1], g->sp += 2, g; }
+  if ((map_len(g->sp[2]) + 1) * 4 < map_cap(g->sp[2]) * 3) break;
   if (!ok(g = map_grow(g))) return g;
-  i = map_probe(g, g->sp[2], g->sp[0], &found); }   // re-probe larger backing
+  if (g->walk) continue;
+  i = map_probe(g, g->sp[2], g->sp[0], &found);    // re-probe larger backing
+  if (!g->walk) break; }
  word *s = map_slots(g->sp[2]);
  s[2 * i] = g->sp[0], s[2 * i + 1] = g->sp[1];
  gen_wb(g, map_back(g->sp[2]), g->sp[0]);          // barrier: a young key ...
@@ -118,6 +127,10 @@ static love_noinline word mapdel(struct g *g, word m, word k, word dflt) {
  if (!found) return dflt;
  word *s = map_slots(m);
  uintptr_t mask = map_cap(m) - 1;
+ // every key the shift may hash, hashed before a slot is written: a walk that spends the
+ // gap leaves the map as it was, for the op to run again
+ for (uintptr_t j = (i + 1) & mask; s[2 * j] != map_gap; j = (j + 1) & mask)
+  if (hash(g, s[2 * j]), g->walk) return dflt;
  for (uintptr_t j = i;;) {
   j = (j + 1) & mask;
   if (s[2 * j] == map_gap) break;
@@ -157,6 +170,7 @@ lvm(lvm_tablet) {
 lvm(lvm_map_lookup) {
  Pack(g);                                            // packed: the probe's walks take the nursery's free room
  word v = mapget(g, ZeroPoint, Sp[0], (word) Ip);   // a map miss answers () (the zero point), not the number 0
+ WalkAgain();
  Ip = cell(*++Sp), *Sp = v;
  love_musttail return Continue(); }
 
@@ -174,7 +188,12 @@ lvm(lvm_litp) {
 op11(lvm_hotp, (caskp(Sp[0]) || iop(Sp[0])) ? putcharm(1) : zero)
 
 // (hash x) -- the general hashing method exposed to l as a fixnum.
-op11(lvm_dig, (Pack(g), putcharm(hash(g, Sp[0]))))   // packed: hash takes the nursery's free room
+lvm(lvm_dig) {
+ Pack(g);                                            // packed: hash takes the nursery's free room
+ uintptr_t h = hash(g, Sp[0]);
+ WalkAgain();
+ Sp[0] = putcharm(h);
+ love_musttail return Next(1); }
 
 // (peep tray idx d) with idx an int tray: the gather. the answer takes idx's shape and the
 // tray's kind, a miss the default; a complex or object tray, a float index or a default
@@ -238,7 +257,9 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
   struct str *s = cask(x)->str;
   if (charmp(k) && (n = getcharm(k)) >= 0 && n < (word) len(s))
    z = putcharm((unsigned char) txt(s)[n]); }
- else if (tabp(x)) Pack(g), z = mapget(g, z, k, x);   // map lookup (not a data sentinel), packed for the probe's walks
+ else if (tabp(x)) {                            // map lookup (not a data sentinel), packed for the probe's walks
+  Pack(g), z = mapget(g, z, k, x);
+  WalkAgain(); }
  else if (evenp(x) && datp(x)) switch (typ(x)) {
   default: break;                               // a bare mint (DMint) is not indexable
   case DGem:                                    // a rank-0 scalar float: a zero key derefs to itself
@@ -326,7 +347,9 @@ lvm(lvm_pull) {
  if (tabp(coll)) {
   Pack(g);                                     // packed: the probe's walks take the nursery's free room
   v = mapget(g, Sp[2], Sp[1], coll);           // value, or default if absent
-  mapdel(g, coll, Sp[1], Sp[2]); }             // remove in place (no-op if absent)
+  WalkAgain();
+  mapdel(g, coll, Sp[1], Sp[2]);               // remove in place (no-op if absent)
+  WalkAgain(); }
  love_musttail return Answerp(2, v); }
 
 lvm(lvm_keys) {
@@ -407,6 +430,12 @@ static uintptr_t fn_hash_d(struct g *g, word x, int d) {
   h = (h ^ t) * mix; }
  return h; }
 
+// a box's bytes past its first word: that word is the kind's op, an address the load moves
+// and every box of the kind shares, so the hash is the payload's alone
+static uintptr_t box_hash(word x, uintptr_t len) {
+ uintptr_t h = mix;
+ for (uint8_t const *bs = (uint8_t const*) x + sizeof(word), *e = (uint8_t const*) x + len; bs < e; h ^= *bs++, h *= mix);
+ return h; }
 int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
  if (charmp(x)) return *out = rot(x*mix), 0;
  if (!datp(x)) return *out = fn_hash(g, x), 0;
@@ -421,22 +450,11 @@ int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
     // hash_at folds the cells: two trays built apart hold one set of values behind two
     // sets of pointers, and `=` reads through to the values
     bool obj = objtrayp(x);
-    uintptr_t len = obj ? (uintptr_t) ((uint8_t*) tray_data(tray(x)) - (uint8_t*) x)
-                        : love_tray_bytes(tray(x)), h = mix;
-    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, obj ? (*src = x, 3) : 0; }
-   case DBig: {
-    uintptr_t len = big_bytes(big(x)), h = mix;
-    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, 0; }
-   case DGem: {                                 // hash the lean box (ap is GC-stable, payload is the value)
-    uintptr_t len = gem_req * sizeof(word), h = mix;
-    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, 0; }
-   case DTwin: {                                // same: hash the lean (ap, re, im) box bytes
-    uintptr_t len = twin_req * sizeof(word), h = mix;
-    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, 0; }
+    *out = box_hash(x, obj ? (uintptr_t) ((uint8_t*) tray_data(tray(x)) - (uint8_t*) x) : love_tray_bytes(tray(x)));
+    return obj ? (*src = x, 3) : 0; }
+   case DBig: return *out = box_hash(x, big_bytes(big(x))), 0;
+   case DGem: return *out = box_hash(x, gem_req * sizeof(word)), 0;    // the lean box: its payload is the value
+   case DTwin: return *out = box_hash(x, twin_req * sizeof(word)), 0;  // same: (re, im)
    case DString: {
     uintptr_t n = len(x), h = mix;
     char const *bs = txt(x);

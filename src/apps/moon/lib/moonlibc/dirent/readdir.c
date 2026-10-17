@@ -1,9 +1,10 @@
 #include "../impl.h"
 struct dirent *readdir(DIR *d) {
   if (d->pos >= d->len) {
-    /* one call, both kernels: the 4th arg is freebsd's basep (NULL); linux
-     * getdents64 takes three and never reads the register */
-    long n = sc4(NR_getdents64, d->fd, (long) d->buf, sizeof d->buf, 0);
+    /* one call, every kernel: the 4th arg is a BSD's basep, NULL but on macos,
+     * which writes it unasked; linux getdents64 takes three and never reads it */
+    long long base;
+    long n = sc4(NR_getdents64, d->fd, (long) d->buf, sizeof d->buf, __love_osv == 4 ? (long) &base : 0);
     if (n <= 0) { if (n < 0) __errno_v = (int) -n; return 0; }
     d->len = (int) n; d->pos = 0; }
   if (__love_osv == 2) {
@@ -17,6 +18,19 @@ struct dirent *readdir(DIR *d) {
     d->ent.d_reclen = sizeof d->ent;
     d->ent.d_type = fe->d_type;
     memcpy(d->ent.d_name, fe->d_name, l);
+    d->ent.d_name[l] = 0;
+    return &d->ent; }
+  if (__love_osv == 4) {
+    /* macos's getdirentries64 record: namlen before type, a 1024-byte name */
+    struct __mac_dirent *me = (struct __mac_dirent *) (d->buf + d->pos);
+    unsigned l = me->namlen;
+    if (l > 255) l = 255;
+    d->pos += me->reclen;
+    d->ent.d_ino = me->ino;
+    d->ent.d_off = (long) me->seekoff;
+    d->ent.d_reclen = sizeof d->ent;
+    d->ent.d_type = me->type;
+    memcpy(d->ent.d_name, me->name, l);
     d->ent.d_name[l] = 0;
     return &d->ent; }
   if (__love_osv == 3) {

@@ -148,13 +148,14 @@
          (ldq && lo? d && !(reg-eq d base) ?
             (catall [(t1-li d off) (t1-add-any d base) (op1 d d)])
             (: s (t1-lowscratch d base '(r0 r1 r2 r3 r4 r5 r6 r7))
+               o (reg-eq base 'sp ? (off + 4) off)          ; the push has moved sp a word down
                (ldq ?
-                  (catall [(t1-push s) (t1-li s off) (t1-add-any s base) (op1 s s) (t1-movr d s) (t1-pop s)])
+                  (catall [(t1-push s) (t1-li s o) (t1-add-any s base) (op1 s s) (t1-movr d s) (t1-pop s)])
                   (need-lo d 'st-src-hi, ; a store's source has no bounce: must be low
-                   catall [(t1-push s) (t1-li s off) (t1-add-any s base) (op1 d s) (t1-pop s)])))))
+                   catall [(t1-push s) (t1-li s o) (t1-add-any s base) (op1 d s) (t1-pop s)])))))
    (t1-mem base16 sp16 sh d base off ldq)                 ; base16: [Rn,#imm5] op ; sp16: [sp,#imm8] op
-      (rn d @ dn
-         (reg-eq base 'sp ?
+      (rn d @ dn                                          ; or () where there is no sp form
+         (reg-eq base 'sp && sp16 ?
             (off >= 0 && 0 = off & 3 && off >> 2 <= 255 ? 0 (scare 'mem-sp-range off), need-lo d 'mem-sp-hi,
              t16 (sp16 | (dn << 8 | off >> 2)))
             (: u (off >> sh)
@@ -164,10 +165,10 @@
                   (t1-mem-far base16 sh d base off ldq)))))
    (t1-ld  d base off) (t1-mem 0x6800 0x9800 2 d base off 1)   ; LDR
    (t1-st  base off s) (t1-mem 0x6000 0x9000 2 s base off ())  ; STR
-   (t1-ldb d base off) (t1-mem 0x7800 0x7800 0 d base off 1)   ; LDRB (no sp16 form; sp path unused for byte)
-   (t1-stb base off s) (t1-mem 0x7000 0x7000 0 s base off ())  ; strb
-   (t1-ldh d base off) (t1-mem 0x8800 0x8800 1 d base off 1)   ; ldrh
-   (t1-sth base off s) (t1-mem 0x8000 0x8000 1 s base off ())  ; strh
+   (t1-ldb d base off) (t1-mem 0x7800 () 0 d base off 1)       ; ldrb: no sp form, sp rides the far lane
+   (t1-stb base off s) (t1-mem 0x7000 () 0 s base off ())      ; strb
+   (t1-ldh d base off) (t1-mem 0x8800 () 1 d base off 1)       ; ldrh
+   (t1-sth base off s) (t1-mem 0x8000 () 1 s base off ())      ; strh
    ;; signed loads have no immediate form on v6-M -> unsigned load then sign-extend in place.
    (t1-sxb d) (rn d @ dn (t16 (0xB240 | (dn << 3 | dn))))   ; sxtb Rd,Rd
    (t1-sxh d) (rn d @ dn (t16 (0xB200 | (dn << 3 | dn))))   ; sxth Rd,Rd

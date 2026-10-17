@@ -53,7 +53,12 @@
    ; ..a shot's sound: format 3, 11025 a second, a tenth of a second of square wave padded 16 either end
    wad-t-snd (: pd (wad-t-cat (map (_ \ string 128) ^16))
                (wad-t-cat [(wad-t-w16 3) (wad-t-w16 11025) (wrle 1135 4) pd (wad-t-cat (map (i \ string (i // 25 % 2 ? 64 192)) ^1103)) pd]))
-   lumps ([["PLAYPAL" (wad-t-pal + wad-t-pal2)] ["DSPISTOL" wad-t-snd] ["PNAMES" (wrle 2 4 + wad-t-name "WALLP" + wad-t-name "SKYP")] ["TEXTURE1" wad-t-t1]
+   ; ..E1M1's music: a bank of one sine and a score of one long note
+   wad-t-bank (: v (wad-t-cat (map string [33 240 15 0 0 63 0 33 240 15 0 0 0 0 0 0]))
+                ("#OPL_II#" + wad-t-cat (map string [0 0 128 0]) + v + v + zbytes (174 * 36) + "sine" + zbytes (28 + 174 * 32)))
+   wad-t-mus (: ev (wad-t-cat (map string [64 0 0  144 197 127 140  128 69 0  96]))
+               ("MUS\x1a" + wrle #ev 2 + wrle 18 2 + wrle 1 2 + wrle 0 2 + wrle 1 2 + wrle 0 2 + wrle 0 2 + ev))
+   lumps ([["PLAYPAL" (wad-t-pal + wad-t-pal2)] ["DSPISTOL" wad-t-snd] ["GENMIDI" wad-t-bank] ["D_E1M1" wad-t-mus] ["PNAMES" (wrle 2 4 + wad-t-name "WALLP" + wad-t-name "SKYP")] ["TEXTURE1" wad-t-t1]
            ["WALLP" (wad-t-patch 64 64 10 0 0)] ["SKYP" (wad-t-patch 256 128 20 0 0)]
            ["F_START" ""] ["FLR" (wad-t-cat (map (_ \ string 30) ^4096))] ["F_END" ""]
            ["S_START" ""] ["BAR1A0" (wad-t-patch 16 32 40 8 32)] ["S_END" ""] ["E1M1" ""]] + wad-t-map + [["E1M2" ""]] + wad-t-map2)
@@ -90,6 +95,12 @@
    _ (test (most (px 8 20) 0))                                    ; the wall, red
    _ (test (px 32 0 = 1973960))                                   ; the sky's own blue, 0x1e1ec8, unlit
    _ (test (most (px 32 39) 1))                                   ; the floor, green
+   ; ..a wad with STBAR (here all blue, 20) draws the view over it: its rows 32 of 200 of the frame
+   wb (: b (wad-t-patch 320 32 20 0 0) s2 ((wd 's) + b)
+        (pins {} 's s2 'ls (wd 'ls + [["STBAR" #(wd 's) #b]]) 'ix (pin (foldl (\ t k (pin t k (wd 'ix k))) {} (keys (wd 'ix))) "STBAR" #(wd 'ls))))
+   sb (pins (wad-new 64 40 wb M) 'w 64 'h 40 'kp 1) fb (wad-pens sb)
+   _ (test (all (y \ peep fb (y * 64 + 32) 0 = 1973960) [34 35 36 37 38 39])   ; the bar: 40 * 32 // 200 = 6 rows
+           (most (peep fb (33 * 64 + 32) 0) 1))                                 ; the floor just over it
    ; ..hurt, the frame takes the red palette for a while, a tic less each tic
    _ (pin st 'dc 5) red (rgb (peep (wad-pens st) (39 * 64 + 32) 0)) g0 (rgb (px 32 39))
    _ (test (#(st 'sc 'tints) = 2) (red 0 > g0 0 + 60) (red 1 < g0 1))
@@ -127,6 +138,11 @@
                           (fd d1, fd d1, close p)))
    pcm (uread snd @ r (two? r ? (r 1) ""))
    _ (test (#pcm > 0) (#pcm % 4 = 0) (any (i \ pcm i != 0) ^#pcm))
+   ; ..E1M1 has its music and E1M2 none; the mixer lays the music under silence too
+   mu (wad-new 64 40 wd M)
+   _ (open snd "w" @ p (: fd (wad-mixer p wd) (fd mu, close p)))
+   pcm2 (uread snd @ r (two? r ? (r 1) ""))
+   _ (test (tablet? (mu 'mus)) (d 'mus = ()) (mu 'sfx = ()) (any (i \ pcm2 i != 0) ^#pcm2))
    ; ..the mixer alone, in metres: a tone east of a listener facing north sounds in the right ear
    ;   more, and one past far not at all
    (wad-t-mix at) (: q ("out/.wad-mix-" + show (getpid 0) + ".raw")

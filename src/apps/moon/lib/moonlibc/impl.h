@@ -56,14 +56,29 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
  * lays x64, arm64 and riscv). Where it is absent netbsd's sigaction refuses BY NAME
  * rather than register a trampoline that is not there; freebsd on the same arch
  * is unaffected. */
-#if !defined(__wasm__) && !defined(__ILP32__)   /* wasm's one kernel is the page's loader; i386 and arm are linux's alone */
+#if !defined(__wasm__)   /* wasm's one kernel is the page's loader */
 # define LvOsTranslate 1        /* os.c's tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
-#ifdef LvOsTranslate
+#if defined(__x86_64__) && defined(LvOsTranslate)
+# define LvMac 1                /* macos: mksys's xnu leaves, a mach-o's kernel */
+#endif
+#if defined(__ARM_EABI__) || defined(__i386__)
+extern long __love_sys8(long n, long a, long b, long c, long d, long e, long f, long g, long h);   /* a BSD's mmap: 8 words */
+extern long long __love_sysw(long n, long a, long b, long c, long d, long e, long f);   /* ..and its lseek, r0:r1 */
+#ifdef __ARM_EABI__
+extern long __love_fbfork(void);         /* freebsd's fork, made from arm state */
+# define LvFbPad 1                       /* freebsd pads a 64-bit arg to an even slot here; netbsd does everywhere */
+#else
+# define LvFbPad 0
+#endif
+#elif defined(LvOsTranslate)
 extern long __love_sys7(long n, long a, long b, long c, long d, long e, long f, long g);   /* the 7th arg rides the stack (netbsd mmap) */
 #endif
 extern void __love_sigret(void);
+#ifdef __i386__
+extern void __love_sigret0(void);          /* the old frame's sigreturn */
+#endif
 extern int main(int, char**);
 
 /* FILE: stdio.h hands out an opaque pointer, so a member touching a stream
@@ -409,6 +424,10 @@ struct _IO_FILE {
 #define NR_statfs64       266
 #define NR_fstatfs64      267
 #define NR_fstatat64      327
+#define NR_lseek           19    /* the BSDs' keys in os.c's map: linux's members say _llseek, */
+#define NR_fstat          197    /* statx or fstatat64, and clock_nanosleep */
+#define NR_newfstatat     327
+#define NR_nanosleep      162
 #elif defined(__i386__)
 /* i386: x64's names at i386's numbers. time_t and off_t are 64-bit here, so a call
  * whose i386 twin takes them narrow rides its *64 / *_time64 cousin (named beside it);
@@ -516,6 +535,10 @@ struct _IO_FILE {
 #define NR_clock_nanosleep 407   /* clock_nanosleep_time64 */
 #define NR_statfs64       268
 #define NR_fstatfs64      269
+#define NR_lseek           19    /* the BSDs' keys in os.c's map, as arm's */
+#define NR_fstat          197
+#define NR_newfstatat     300
+#define NR_nanosleep      162
 #define NR_set_thread_area 243
 #else
 #define NR_read             0
@@ -686,11 +709,32 @@ static int __love_t64(long n) {
   return n == NR_clock_gettime || n == NR_clock_nanosleep || n == NR_ppoll || n == NR_pselect6
       || n == NR_utimensat || n == NR_futex; }
 #endif
+/* a BSD's error as the tail parks it, -(errno+4096): the band and not the sign, since a
+ * 32-bit address above 2G reads negative */
+static int __love_parked(long r) { return r < -4096L && r >= -4096L - 256; }
+#ifdef __i386__
+/* i386's BSDs keep their own timespec (__fbts, __nbts): a call carrying one narrows it going
+ * in and widens it coming back (os.c), its answer parked as any BSD's */
+long __love_tbsd(long n, long a, long b, long c, long d, long e, long f);
+static int __love_tbsdn(long n) {
+  return n == NR_clock_gettime || n == NR_nanosleep || n == NR_ppoll || n == NR_pselect6
+      || n == NR_utimensat; }
+#endif
 static long __love_call(long n, long a, long b, long c, long d, long e, long f) {
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();
   if (v < 0) return __love_inle(n, a, b, c, d, e, f);   /* before the BSD read: inle translates nothing */
+#ifdef __i386__
+  if (v >= 2 && __love_tbsdn(n)) {
+    long r = __love_tbsd(n, a, b, c, d, e, f);
+    return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
+#endif
   if (v >= 2) {
+#ifdef LvMac
+    if (v == 4) {                                     /* AT_FDCWD and the AT_ bits, in a copy: no arg's address is taken */
+      long w[5] = {a, b, c, d, e};
+      if (__love_macat(n, w)) a = w[0], b = w[1], c = w[2], d = w[3], e = w[4]; }
+#endif
     n = __love_nrfb(n);
     if (n < 0) return -38; }                          /* ENOSYS, canonically */
 #ifdef __ARM_EABI__
@@ -700,27 +744,34 @@ static long __love_call(long n, long a, long b, long c, long d, long e, long f) 
 #ifdef __ARM_EABI__
   if (r == -38 && v == 1 && __love_t64(n)) __love_t32k = 1, r = __love_t32(n, a, b, c, d, e, f);
 #endif
-#ifdef LvOsTranslate                                     /* a parked answer, BSD's; on i386 a high address reads negative */
-  if (r < -4096L) r = -__love_errfb(-r - 4096);
+#ifdef LvOsTranslate                                     /* a parked answer, BSD's */
+  if (__love_parked(r)) r = -__love_errfb(-r - 4096);
 #endif
   if (r == -14 && __love_efault()) {                     /* EFAULT, and the address woke: again */
     r = __love_sys(n, a, b, c, d, e, f);
 #ifdef LvOsTranslate
-    if (r < -4096L) r = -__love_errfb(-r - 4096);
+    if (__love_parked(r)) r = -__love_errfb(-r - 4096);
 #endif
   }
   return r; }
+/* xnu's unix calls answer in their class: the BSD number with this bit */
+#define LvMacUnix 0x2000000L
 static long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
+  if (__love_osv == 4) n |= LvMacUnix;
   long r = __love_sys(n, a, b, c, d, e, f);
 #ifdef LvOsTranslate
-  return r < -4096L ? -__love_errfb(-r - 4096) : r; }
+  return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
 #else
   return r; }
 #endif
-#ifdef LvOsTranslate
+#if defined(__ARM_EABI__) || defined(__i386__)
+static long __love_fb8(long n, long a, long b, long c, long d, long e, long f, long g, long h) {
+  long r = __love_sys8(n, a, b, c, d, e, f, g, h);
+  return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
+#elif defined(LvOsTranslate)
 static long __love_fb7(long n, long a, long b, long c, long d, long e, long f, long g) {
   long r = __love_sys7(n, a, b, c, d, e, f, g);
-  return r < -4096L ? -__love_errfb(-r - 4096) : r; }
+  return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
 #endif
 
 static long sc0(long n) { return __love_call(n, 0, 0, 0, 0, 0, 0); }
@@ -752,7 +803,7 @@ __mhdr *__mblock(void *p, char const *who);   /* the block behind p, or an abort
 int __mgrow(__mhdr *b, size_t nu);            /* realloc's growth in place: 1 when b now holds nu units */
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
 struct __sctx { char *p; size_t n, at; };
-struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long long mask; };
+struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long mask[8 / sizeof(long)]; };   /* the mask in words: 4-aligned on arm */
 /* `ent` is the freebsd repack slot: getdirentries' record is another shape,
  * so readdir translates the current one here and hands this out instead. */
 struct __dirstream { int fd; int pos; int len; struct dirent ent; char buf[4096]; };
@@ -779,31 +830,52 @@ _Static_assert(sizeof(struct __lx_statx) == 256, "statx buffer is the kernel's 2
 #ifdef __ILP32__
 int __love_statx(int dirfd, char const *p, int fl, struct stat *st);   /* fstat.c's, the stat trio's floor */
 #endif
-struct __fb_stat {                    /* ino64, 224 bytes; mode is 16-BIT */
-  unsigned long st_dev;
-  unsigned long st_ino;
-  unsigned long st_nlink;
+/* a BSD's own timespec. i386's: freebsd keeps a 32-bit time_t, netbsd a 64-bit one on 4
+ * with a 32-bit nsec; everywhere else both are ours */
+#ifdef __i386__
+typedef struct { int tv_sec; long tv_nsec; } __fbts;
+typedef struct { long long tv_sec; long tv_nsec; } __nbts;
+#else
+typedef struct timespec __fbts, __nbts;
+#endif
+static struct timespec __love_fbts(__fbts t) { struct timespec r = { t.tv_sec, t.tv_nsec }; return r; }
+static struct timespec __love_nbts(__nbts t) { struct timespec r = { t.tv_sec, t.tv_nsec }; return r; }
+struct __fb_stat {                    /* ino64, 224 bytes (208 on i386); mode is 16-BIT */
+  unsigned long long st_dev;
+  unsigned long long st_ino;
+  unsigned long long st_nlink;
   unsigned short st_mode;
   short         st_bsdflags;
   unsigned int  st_uid;
   unsigned int  st_gid;
   int           __pad0;
-  unsigned long st_rdev;
-  struct timespec st_atim;
-  struct timespec st_mtim;
-  struct timespec st_ctim;
-  struct timespec st_birthtim;
-  long          st_size;
-  long          st_blocks;
+  unsigned long long st_rdev;
+#ifdef __i386__
+  int st_atim_ext; __fbts st_atim;     /* i386's 32-bit time_t, a pad word ahead of each */
+  int st_mtim_ext; __fbts st_mtim;
+  int st_ctim_ext; __fbts st_ctim;
+  int st_birthtim_ext; __fbts st_birthtim;
+#else
+  __fbts st_atim, st_mtim, st_ctim, st_birthtim;
+#endif
+  long long     st_size;
+  long long     st_blocks;
   int           st_blksize;
   unsigned int  st_flags;
-  unsigned long st_gen;
-  unsigned long st_filerev;
-  unsigned long __spare[9];
+  unsigned long long st_gen;
+  unsigned long long st_filerev;
+  unsigned long long __spare[9];
 };
+#if defined(LvOsTranslate) && (defined(__ARM_EABI__) || !defined(__arm__))   /* bare thumb speaks no BSD */
+#ifdef __i386__
+_Static_assert(sizeof(struct __fb_stat) == 208, "freebsd's stat is 208 bytes on i386");
+#else
+_Static_assert(sizeof(struct __fb_stat) == 224, "freebsd's stat is 224 bytes");
+#endif
+#endif
 struct __fb_dirent {                  /* the ino64 record getdirentries fills */
-  unsigned long  d_ino;
-  long           d_off;
+  unsigned long long d_ino;
+  long long      d_off;
   unsigned short d_reclen;
   unsigned char  d_type;
   unsigned char  __pad0;
@@ -812,15 +884,30 @@ struct __fb_dirent {                  /* the ino64 record getdirentries fills */
   char           d_name[256];
 };
 struct __fb_sigact { void *h; int flags; unsigned int mask[4]; };   /* sigaction(416): no restorer */
-struct __fb_msghdr {                  /* BOTH BSDs: 48 bytes, int-wide lengths */
+struct __fb_msghdr {                  /* BOTH BSDs: int-wide lengths, 48 bytes (28 on ILP32) */
   void *name;
-  unsigned int namelen, _p0;
+  unsigned int namelen;
+#ifndef __ILP32__
+  unsigned int _p0;
+#endif
   void *iov;
-  int iovlen, _p1;
+  int iovlen;
+#ifndef __ILP32__
+  int _p1;
+#endif
   void *control;
   unsigned int controllen;
   int flags;
 };
+/* a BSD's cmsg: the 12-byte head (len level type, all ints), its data at the head rounded
+ * up to the kernel's alignment -- 8 on 64-bit and netbsd's arm, 4 on i386, freebsd's arm and macos */
+#ifdef __ARM_EABI__
+static unsigned long __love_cmh(void) { return __love_osv == 3 ? 16 : 12; }
+static unsigned long __love_cma(void) { return __love_osv == 3 ? 8 : 4; }
+#else
+static unsigned long __love_cmh(void) { return sizeof(long) == 8 && __love_osv != 4 ? 16 : 12; }
+static unsigned long __love_cma(void) { return __love_osv == 4 ? 4 : sizeof(long); }   /* macos aligns on 4 */
+#endif
 struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 speeds, no c_line */
   unsigned int c_iflag, c_oflag, c_cflag, c_lflag;
   unsigned char c_cc[20];
@@ -839,19 +926,32 @@ extern void __love_tiocan(struct __fb_termios const *f, struct termios *t);
  * args; mmap's 7th rides the stack through __love_sys7), these shapes, the
  * errno tail past 84, and the userland sigtramp the kernel does not provide. */
 #define NR_nb_sigaction_sigtramp 340   /* (sig, nsa, osa, tramp, 2) */
-struct __nb_stat {                    /* 152 bytes; the timespec quartet mid-struct */
-  unsigned long dev;
-  unsigned int mode, _p0;
-  unsigned long ino;
-  unsigned int nlink, uid, gid, _p1;
-  unsigned long rdev;
-  long atime, atimensec, mtime, mtimensec, ctime, ctimensec, btime, btimensec;
-  long size, blocks;
+struct __nb_stat {                    /* the timespec quartet mid-struct, each time_t 64-bit */
+  unsigned long long dev;
+  unsigned int mode;
+#ifndef __i386__
+  unsigned int _p0;                   /* a 64-bit word sits on 8, but on i386 */
+#endif
+  unsigned long long ino;
+  unsigned int nlink, uid, gid;
+#ifndef __i386__
+  unsigned int _p1;
+#endif
+  unsigned long long rdev;
+  __nbts atim, mtim, ctim, btim;
+  long long size, blocks;
   int blksize;
   unsigned int flags, gen, spare0, spare1;
 };
+#if defined(LvOsTranslate) && (defined(__ARM_EABI__) || !defined(__arm__))   /* bare thumb speaks no BSD */
+#ifdef __i386__
+_Static_assert(sizeof(struct __nb_stat) == 124, "netbsd's stat is 124 bytes on i386");
+#else
+_Static_assert(sizeof(struct __nb_stat) == 152, "netbsd's stat is 152 bytes");
+#endif
+#endif
 struct __nb_dirent {                  /* __getdents30's record: name at byte 13 */
-  unsigned long fileno;
+  unsigned long long fileno;
   unsigned short reclen, namlen;
   unsigned char type;
   char name[512];
@@ -860,14 +960,72 @@ struct __nb_sigact { void *h; unsigned int mask[4]; int flags; };   /* mask BEFO
 struct __nb_kevent {                  /* __kevent50's record: 40 bytes, no ext,
                                        * filter WIDE and positive (= -canon - 1) */
   unsigned long ident;
-  unsigned int filter, flags, fflags, _p0;
-  long data;
+  unsigned int filter, flags, fflags;
+#ifndef __ILP32__
+  unsigned int _p0;
+#endif
+  long long data;
   void *udata;
 };
 extern void __love_nbstat(struct __nb_stat const *f, struct stat *st);
 #ifdef LvNbTramp
 extern void __love_nb_sigtramp(void);   /* mksys: the ucontext register; setcontext */
 #endif
+/* ---- the fourth kernel: macos (xnu), the only one a mach-o meets. crt0 says so
+ * (osv 4) and nothing is probed. its unix calls are the classic BSD band in a
+ * class of their own (LvMacUnix); signals, sa flags, the siginfo head, termios
+ * bits and msghdr are freebsd's. its own: these records, AT_FDCWD -2 and the AT_
+ * bits, the calls it never had (clock_gettime, nanosleep, pipe2, getcwd,
+ * utimensat), fork and pipe answering in two registers, and a userland sigtramp
+ * that hands sigreturn a token. */
+struct __mac_stat {                   /* stat64, 144 bytes: a birth time after ctime */
+  int dev;
+  unsigned short mode, nlink;
+  unsigned long long ino;
+  unsigned int uid, gid;
+  int rdev;
+  struct timespec atim, mtim, ctim, btim;
+  long long size, blocks;
+  int blksize;
+  unsigned int flags, gen;
+  int lspare;
+  long long qspare[2];
+};
+struct __mac_dirent {                 /* getdirentries64's record: namlen before type */
+  unsigned long long ino, seekoff;
+  unsigned short reclen, namlen;
+  unsigned char type;
+  char name[1024];
+};
+struct __mac_sigact { void *h, *tramp; unsigned int mask; int flags; };   /* the tramp rides in.. */
+struct __mac_osigact { void *h; unsigned int mask; int flags; };          /* ..and not back out */
+struct __mac_kevent {                 /* 32 bytes: freebsd's head with no ext */
+  unsigned long ident;
+  short filter;
+  unsigned short flags;
+  unsigned int fflags;
+  long data;
+  void *udata;
+};
+struct __mac_termios {                /* freebsd's bits in long-wide words: 72 bytes */
+  unsigned long c_iflag, c_oflag, c_cflag, c_lflag;
+  unsigned char c_cc[20];
+  unsigned long c_ispeed, c_ospeed;
+};
+#ifdef LvMac
+_Static_assert(sizeof(struct __mac_stat) == 144, "macos's stat64 is 144 bytes");
+_Static_assert(sizeof(struct __mac_termios) == 72, "macos's termios is 72 bytes");
+_Static_assert(sizeof(struct __mac_kevent) == 32, "macos's kevent is 32 bytes");
+extern long __love_macfork(void);
+extern long __love_macpipe(void);          /* the ends as one word, the second high */
+extern void __love_mac_sigtramp(void);
+#endif
+extern void __love_macstat(struct __mac_stat const *f, struct stat *st);
+extern void __love_macsofl(int fd, long t);   /* SOCK_CLOEXEC/NONBLOCK, by fcntl */
+extern int __love_macat(long n, long *w);   /* an *at call's args, made xnu's: 1 if it was one */
+extern void __love_tiomac(struct __fb_termios const *f, struct __mac_termios *m);
+extern void __love_tiounmac(struct __mac_termios const *m, struct __fb_termios *f);
+
 #if defined(__aarch64__) || defined(__riscv)
 /* THE PROBE CANNOT USE __love_sys HERE. netbsd/aarch64 takes the number from
  * the SVC IMMEDIATE and SIGSYSes the register form, so asking which kernel we

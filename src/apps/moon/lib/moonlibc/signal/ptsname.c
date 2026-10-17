@@ -7,9 +7,14 @@ char *ptsname(int fd) {
     if (fb3(NR_fb_ioctl, fd, 0x48087448L, (long) &g) < 0) return 0;   /* TIOCPTSNAME */
     snprintf(nb, sizeof nb, "%s", g.sn);
     return nb; }
+  if (__love_osv == 4) {
+    char k[128];
+    if (fb3(NR_fb_ioctl, fd, 0x40807453L, (long) k) < 0) return 0;   /* TIOCPTYGNAME: the whole path */
+    snprintf(nb, sizeof nb, "%s", k);
+    return nb; }
   if (__love_osv == 2) {
     struct { int len; void *buf; } a = { sizeof nb - 5, nb + 5 };
-    if (fb3(NR_fb_ioctl, fd, 0x80106678L, (long) &a) < 0) return 0;   /* FIODGNAME */
+    if (fb3(NR_fb_ioctl, fd, (long) (0x80006678UL | sizeof a << 16), (long) &a) < 0) return 0;   /* FIODGNAME: _IOW, its size the struct's */
     return memcpy(nb, "/dev/", 5), nb; }                              /* the kernel answers "pts/N", sans /dev/ */
   int n = 0;
   if (ioctl(fd, 2147767344UL, &n) < 0) return 0;                      /* TIOCGPTN */

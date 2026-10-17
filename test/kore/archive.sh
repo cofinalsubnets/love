@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/kore/archive.sh -- gzip, gunzip, zcat, xz, unxz, bzip2, bunzip2, tar, cpio under kore's door
+# test/kore/archive.sh -- gzip, gunzip, zcat, xz, unxz, bzip2, bunzip2, zstd, unzstd, tar, cpio under kore's door
 . "$(dirname "$0")/common.sh"
 
 # the cmd modules leak their mains off a bodyless letrec (the trailing `_ (pins ..)`), which
@@ -150,6 +150,55 @@ if command -v bzip2 >/dev/null 2>&1; then
   bzip2 -dc "$ho/.arc.tbz" | tar tf - > "$o" 2>&1; grep -q 'sub/two\.txt' "$o" || fail "tar -j of kore's tar cjf"
 fi
 hv "bzip2 --help" '^bzip2 -- the' korerun bzip2 --help
+# zstd: the round trip, the empty frame (13 bytes), the input kept unless --rm, a torn frame
+# and a stranger refused with zstd's status 1, -o, and both directions against zstd itself
+# where it is there -- the 600 KiB binary crosses a 128 KiB block
+korerun zstd -c < "$ho/.arc1" > "$ho/.arc1.zst" || fail "kore zstd"
+korerun unzstd -c < "$ho/.arc1.zst" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore zstd | unzstd round trip"
+korerun zstd -c "$ho/.arc0" > "$ho/.arc0.zst"
+[ "$(wc -c < "$ho/.arc0.zst")" -eq 13 ] || fail "kore zstd: an empty input is a 13-byte frame"
+korerun zstdcat "$ho/.arc0.zst" > "$o"; [ ! -s "$o" ] || fail "kore zstdcat of the empty frame"
+for l in -1 -3 -19; do
+  korerun zstd $l -c "$ho/.arcb" | korerun zstd -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore zstd $l round trip, 600 KiB"
+done
+korerun zstd -c "$ho/.arcb" > "$ho/.arcb.zst"
+n=$(wc -c < "$ho/.arcb.zst"); head -c $((n - 30)) "$ho/.arcb.zst" | korerun zstdcat > /dev/null 2> "$g"; r=$?
+[ $r -eq 1 ] && grep -q 'premature end' "$g" || fail "kore zstdcat of a torn frame (rc $r)"
+korerun zstd -t "$ho/.arc1.xz" 2> "$ho/.arct.say"; r=$?
+[ $r -eq 1 ] && grep -q 'unsupported format' "$ho/.arct.say" || fail "kore zstd -t of an xz stream (rc $r)"
+cp "$ho/.arc1" "$ho/.arcq"; rm -f "$ho/.arcq.zst"; korerun zstd -q "$ho/.arcq" || fail "kore zstd FILE"
+[ -e "$ho/.arcq" ] && [ -e "$ho/.arcq.zst" ] || fail "kore zstd: the input is kept"
+korerun zstd -q "$ho/.arcq" 2> "$g"; r=$?
+[ $r -eq 1 ] && grep -q 'already exists' "$g" || fail "kore zstd: an output there is not overwritten (rc $r)"
+rm "$ho/.arcq"; korerun unzstd --rm "$ho/.arcq.zst" || fail "kore unzstd --rm"
+cmp -s "$ho/.arc1" "$ho/.arcq" && [ ! -e "$ho/.arcq.zst" ] || fail "kore unzstd --rm in place"
+rm -f "$ho/.arco.zst"; korerun zstd -q -o "$ho/.arco.zst" "$ho/.arc1" && korerun zstd -dc "$ho/.arco.zst" | cmp -s - "$ho/.arc1" || fail "kore zstd -o"
+korerun unzstd "$ho/.arc1" 2> "$g"; r=$?
+[ $r -eq 1 ] && grep -q 'unknown suffix' "$g" || fail "kore unzstd of a name it cannot strip (rc $r)"
+( cd "$ho" && "$K" kore tar --zstd -cf .arc.tzst .arcd ) || fail "kore tar --zstd -cf"
+korerun tar tf "$ho/.arc.tzst" > "$o" 2>&1 || fail "kore tar tf of a .tzst, sniffed"
+grep -q 'sub/two\.txt' "$o" || fail "kore tar --zstd: the listing"
+( cd "$ho" && "$K" kore tar caf .arca.tar.zst .arcd ) || fail "kore tar caf .tar.zst"
+korerun zstd -t "$ho/.arca.tar.zst" || fail "kore tar -a: .tar.zst is not zstd"
+if command -v zstd >/dev/null 2>&1; then
+  zstd -q -dc "$ho/.arc.tzst" | tar tf - > "$o" 2>&1; grep -q 'sub/two\.txt' "$o" || fail "zstd -d | tar of kore's tar --zstd"
+  ( cd "$ho" && tar cf - .arcd ) | zstd -q -c > "$ho/.arcg.tzst"
+  korerun tar tf "$ho/.arcg.tzst" > "$o" 2>&1; grep -q 'sub/two\.txt' "$o" || fail "kore tar of tar | zstd"
+  for p in -1 -19 "-T2 --no-check"; do
+    zstd -q $p -c "$ho/.arcb" > "$ho/.arcg.zst"
+    korerun zstd -dc "$ho/.arcg.zst" > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore unzstd of zstd $p"
+  done
+  zstd -q -c < "$ho/.arcb" > "$ho/.arcp.zst"
+  korerun zstd -dc "$ho/.arcp.zst" > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore unzstd of a frame with no size"
+  for l in -1 -9; do
+    korerun zstd $l -c "$ho/.arcb" | zstd -q -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "zstd -d of kore's zstd $l, 600 KiB"
+  done
+  zstd -q -t "$ho/.arc0.zst" || fail "zstd -t of kore's empty frame"
+  cat "$ho/.arcg.zst" "$ho/.arc1.zst" > "$ho/.arcs.zst"
+  cat "$ho/.arcb" "$ho/.arc1" > "$g"
+  korerun zstdcat "$ho/.arcs.zst" > "$o"; cmp -s "$g" "$o" || fail "kore zstdcat of two frames"
+fi
+hv "zstd --help" '^zstd -- zstandard' korerun zstd --help
 # tar beyond the bundled key: dashed letters, -C, members, f - both ways, J, a sniffed codec,
 # --strip-components, -O
 T=$HO/.arctar; rm -rf "$T"; mkdir -p "$T/o"
@@ -305,4 +354,4 @@ if command -v bzip2 >/dev/null 2>&1; then
   [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tjf of 1100 MiB of zeros did not stream (rc $r)"; }
 fi
 rm -rf "$B"
-echo "kore: gzip/gunzip/zcat/xz/unxz/bzip2/bunzip2/tar/cpio under kore's door ok"
+echo "kore: gzip/gunzip/zcat/xz/unxz/bzip2/bunzip2/zstd/unzstd/tar/cpio under kore's door ok"

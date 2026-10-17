@@ -216,7 +216,6 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
   if (ok(g)) g->symbols = pop1(g);
   if (ok(g = map_new(g))) g->lib = pop1(g);   // the registry, before the first modtab
   struct def def0[] = {
-   {"book", {.x = A(g->stack)}, 0},   // the l-level book = the orth map (the chain stays C-side; `stack` reads it)
    {"in", {.x = (word) &love_stdin}, 0},
    {"out", {.x = (word) &love_stdout}, 0},
    {"err", {.x = (word) &love_stderr}, 0},
@@ -232,6 +231,9 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
    // honors -- auto.l reads this and keeps the interpreter on a trampoline build
    {"love-tco", {.x = putcharm(tco)}, 0}, };
   g = defn(g, def0, countof(def0));
+  // the l-level book = the orth map (the chain stays C-side; `stack` reads it), read only
+  // after the rows above: each one allocates, so a copy taken with them could be moved
+  if (ok(g = push(g, 1, A(g->stack))) && ok(g = defv(g, "book"))) g->sp++;
   // a nif row's value is its run inside nifs[]; an instruction row's is a bare fn, and that
   // binds as its op charm -- no code address belongs in a love value (src/love/ev.c's pick/place).
   for (uintptr_t j = 0; j < countof(def1); j++) {
@@ -356,8 +358,12 @@ struct g *push(struct g *g, uintptr_t m, ...) {
  va_list xs;
  va_start(xs, m);
  uintptr_t n = 0;
+#ifdef LvGcStress
+ g = pushr(g, m, n, xs);              // push may collect, so under stress every one does, as have does
+#else
  if (avail(g) < m || (g->push_gc && !--g->push_gc)) g = pushr(g, m, n, xs);
  else for (g->sp -= m; n < m; g->sp[n++] = va_arg(xs, word));
+#endif
  va_end(xs);
  return g; }
 

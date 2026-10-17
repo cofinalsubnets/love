@@ -19,7 +19,7 @@
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
-  test_vec test_vi test_virt test_virt_build test_wake test_xfixpoint uuhomgen uukind uumx uusplgen \
+  test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits
 
 # the three gates: test (fast), test_slow (merge), test_extra (qemu, cross-arch, boards)
@@ -33,7 +33,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 
 
 # the core's gate: test_extra's local, unheavy lanes, about a minute
-test_quick: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
+test_quick: test_filemode test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
@@ -177,10 +177,10 @@ test_front: $(ho)/front $(ho)/frontseat
 	@sh test/gate/run.sh -a hornseat "$(ho)/frontseat" "hornseat: ok" test/front/hornseat.l
 # standalone smoke tests kept out of the corpus: each wants a crew module, is not idempotent
 # (love0 evaluates twice), or can hang. gate = exit 0 and "<name>: ok"
-hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/corridor.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/qlog.l test/host/broker.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/corridor.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/mus.l test/host/ops.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/qlog.l test/host/broker.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
 # test/host/sh.l drives out/lush via out/love, not PATH's love
 hostnif_cold =                                   # empty: no gate needs the cold lane
-hostnif_tests += test/host/xz.l test/host/bz2.l   # the xz and bzip2 pulls against their whole-string reads
+hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 # evback.l reads show names a mopped image has dropped
 hostnif_nomop = test/host/evback.l
@@ -300,6 +300,8 @@ test_gates: host
 .PHONY: test_seat test_cli test_nest
 gate_m += test_seat   # the file-seat lane
 # the cli exit status: 0 working, 1 unopenable, 2 malformed, a verb's own charm
+gate_m += test_hashrun   # a hash across processes
+gate_m += test_walkroom   # a walk past the gap, and past the budget
 gate_m += test_cli   # the cli exit-status lane
 gate_m += test_nest   # love nest, in a HOME of its own
 # a waiting machine spends nothing: a spinning scheduler stays green everywhere else
@@ -564,9 +566,9 @@ test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) $(ho)/mooncc0.image
 .PHONY: test_fat
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd) $(uname_$(xa))
-# one binary answers every kernel alike, on a bee host with cap freebsd-x64/netbsd-x64 (-a64, -rv64 likewise) (or
-# FBSD_SSH/NBSD_SSH); skips without. FBSD_SEED=1/NBSD_SEED=1 adds `love seed` there
-.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64
+# one binary answers every kernel alike, on a bee host with cap freebsd-x64/netbsd-x64 (-a64, -rv64,
+# -arm, -i386 likewise) (or FBSD_SSH/NBSD_SSH); skips without. FBSD_SEED=1/NBSD_SEED=1 adds `love seed` there
+.PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 test_freebsd_arm test_netbsd_arm test_freebsd_i386 test_netbsd_i386 test_macos test_macos_love
 test_freebsd test_netbsd: test_%: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $*
 # ..and on aarch64 boxes, the local half under qemu-aarch64
@@ -576,6 +578,18 @@ test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) $(ho)/mooncc0.image
 # qemu-riscv64. the doors there are each kernel's number register: linux a7, freebsd t0, netbsd t6.
 test_freebsd_rv64 test_netbsd_rv64: test_%_rv64: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* rv64
+# ..armv7 in the arm64 boxes' 32-bit lane, the local half under qemu-arm
+test_freebsd_arm test_netbsd_arm: test_%_arm: host $(love0) $(ho)/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* arm
+# ..i386 in the amd64 boxes' 32-bit lane, and here
+test_freebsd_i386 test_netbsd_i386: test_%_i386: host $(love0) $(ho)/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $* i386
+# macos: a mach-o for the box (cap macos-x64) beside each leg's ELF, the two answering alike
+test_macos: host $(love0) $(ho)/mooncc0.image
+	@$(gsh) test/gate/osbox.sh $(ho) $(love0) macos x64
+# love itself there: linked here as a mach-o, baked and run on the box
+test_macos_love: host $(ho)/love-macos.raw $(ho)/.dist-cat.l
+	@$(gsh) test/gate/maclove.sh $(ho)
 # test_raw_bake -- the mooncc PIE bakes and wakes its own image; x64 only, opt-in
 test_raw_bake: test_raw
 	@sh test/gate/raw-bake.sh $(ho) $t

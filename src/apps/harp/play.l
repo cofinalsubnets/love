@@ -18,9 +18,10 @@
 ; spliced at top level would shadow the prel for everything after it.
 (module '(play harp-main harp-usage harp-wav harp-horn harp-print harp-read harp-run
          harp-scale harp-chunk mkvoice cyc-voices mixdown pack song-out
-         twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice)
+         twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice held-ops)
 (borrow ((cite 'harp) @ m (m ? m "src/apps/harp/harp.l")))
 (borrow 'bytes)
+(borrow 'ops)                           ; the voices' operators, run by tones
 (:
    ; the fs doors by VALUE, off their module: a module layer does not see the
    ; session's posix splice, and a seat carrying none (src/inle/wasm) holds () here --
@@ -89,6 +90,20 @@
    ; the phase in cycles at t of a note at f gliding at k nepers a second: the
    ; integral of f e^(kt), and f t when it holds. k is what a slide comes to
    (vphase t f k) (k = 0.0 ? (t * f) (f * (exp (t * k) - 1.0) / k))
+   ; --- the kit again as tones' operators (ops.l), the same sounds run in C: each pitched
+   ;     timbre its partials [ratio level decay wave], each drum its operators; the clap's
+   ;     chatter is no operator, and stays the shape above ---
+   partials {"sin" [[1.0 1.0 0.0 0]] "saw" [[1.0 1.0 0.0 5]] "sqr" [[1.0 1.0 0.0 6]] "tri" [[1.0 1.0 0.0 4]]
+             "box" [[2.0 1.0 0.0 0] [6.0 0.3 6.0 0] [11.6 0.15 9.0 0]]
+             "chime" [[4.0 1.0 0.0 0] [11.04 0.5 2.0 0] [21.6 0.25 4.0 0]]}
+   kit {"bd" [{'f 46.0 'drop 2.6 'kappa 34.0 'd 8.0}] "sn" [{'wave 7 'lvl 0.75 'd 24.0} {'f 190.0 'lvl 0.5 'd 24.0}]
+        "hh" [{'wave 7 'lvl 0.5 'd 95.0}] "oh" [{'wave 7 'lvl 0.4 'd 13.0}] "rim" [{'f 1650.0 'lvl 0.7 'd 150.0}]
+        "tom" [{'f 96.0 'drop 1.4 'kappa 22.0 'd 11.0}]}
+   ; ..a held note's operators: venv's rise, then half the level held and half dying over d
+   ;   seconds, each partial's own decay over both
+   (held-ops nm f d) (cats (map (p \ [{'f (f * p 0) 'wave (p 3) 'l (0.5 * p 1) 'segs [[0.0 2 420.0 (p 2 * ops-db) 0.0]]}
+                                      {'f (f * p 0) 'wave (p 3) 'l (0.5 * p 1) 'segs [[0.0 2 420.0 ((2.6 / d + p 2) * ops-db) 0.0]]}])
+                               (peep partials nm ())))
    ; a voice is [end-frame amp-of-frames left-gain right-gain]
    (mkvoice st v rate)
     (instr (vname v) @ ins
@@ -106,7 +121,16 @@
                           tp (t * (t > 0.0))
                           e  (ins 1 ? (venv tp dur) 1.0)
                           (sh tp ix (vphase tp f k) * e * (t >= 0.0) * (t < dur))))
-             [end fn (amp * (1.0 - pn)) (amp * pn)])))
+             ; ..as operators where the kit has them, in the time of frames: speed scales
+             ;   every rate, and the note ends at dur over it
+             nm (vname v) pr (peep partials nm ()) dk (peep kit nm ())
+             gate [[(dur / spd) 1 0.0 0.0 0.0]]
+             os (? (two? pr) (map (p \ {'f (f * p 0 * spd) 'slide (k * spd) 'wave (p 3) 'l (p 1)
+                                         'segs ([[0.0 2 (420.0 * spd) ((2.6 / dur + p 2) * spd * ops-db) 0.0]] + gate)}) pr)
+                   (two? dk) (map (o \ {'f (peep o 'f 0.0 * spd) 'drop (peep o 'drop 0.0) 'kappa (peep o 'kappa 0.0 * spd)
+                                         'wave (peep o 'wave 0) 'l (peep o 'lvl 1.0) 'segs ([[0.0 0 0.0 (o 'd * spd * ops-db) 0.0]] + gate)}) dk)
+                   ())
+             (two? os ? (ops-voice os st end (amp * (1.0 - pn)) (amp * pn) rate) [end fn (amp * (1.0 - pn)) (amp * pn)]))))
 
    ; --- mixing and packing ---------------------------------------------------
    ; every live voice is evaluated over the whole chunk and summed. the cost is one
