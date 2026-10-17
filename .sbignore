@@ -22,13 +22,14 @@ notes
 *.glob
 *.cache
 test/proof/rocq/.*.aux
-test/proof/lean/*.olean
 
+# lean's whole directory: it tracks nothing, and test_uulean makes it, so a tree cut before
+# the lane and after it would differ by the directory alone
+test/proof/lean
 # generated proof terms: their gates lay them from the corpus on every run
 test/proof/rocq/gen.v
 test/proof/rocq/uugen.v
 test/proof/rocq/mx.v
-test/proof/lean/uugen.lean
 
 # what the extraction gates lay beside their sources and remove when done: a cut taken
 # while one runs must not pack them

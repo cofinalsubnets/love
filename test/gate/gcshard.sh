@@ -76,9 +76,24 @@ wt
 for h in b e; do ok f$h "the full corpus on the normal build ($h)"; ok p$h "the harness alone ($h)"; done
 sed -n 's/^@@gcshard \([0-9][0-9]*\)$/\1/p' $w/fb.out > $w/clock
 [ $(wc -l < $w/clock) -eq $(wc -l < $w/rest) ] || fail "the marked run lost a mark"
-# contiguous slices balanced by time: a file goes to the slice its running total falls in
-paste -d ' ' $w/clock $w/rest | awk -v n=$n '{ c[NR] = $1; f[NR] = $2 }
-  END { t = c[NR] - c[1] + 1; for (i = 1; i <= NR; i++) { k = int((c[i] - c[1]) * n / t); if (k >= n) k = n - 1; print k, f[i] } }' > $w/cut
+# contiguous slices with the least longest one, each file weighed by its baked stress ms in
+# test/gate/gcshard.cost (a past run's $w/cost, copied in by hand), or else its normal clock
+# times the table's median stress/normal ratio: the least cap that n greedy slices hold
+paste -d ' ' $w/clock $w/rest | awk -v n=$n -v tab=test/gate/gcshard.cost '
+  BEGIN { while ((getline l < tab) > 0) { split(l, p, " "); if (p[3] != "") s[p[3]] = p[2] } }
+  { c[NR] = $1; f[NR] = $2; d[NR] = NR > 1 ? $1 - c[NR - 1] : $1 }
+  function fits(t,   i, k, a) { k = 0; a = 0
+    for (i = 1; i <= NR; i++) { if (a > 0 && a + w[i] > t) { k++; a = 0 } a += w[i] }
+    return k < n }
+  END { m = 0
+    for (i = 1; i <= NR; i++) if ((f[i] in s) && d[i] > 0) { r[++m] = s[f[i]] / d[i]
+      for (j = m; j > 1 && r[j - 1] > r[j]; j--) { x = r[j]; r[j] = r[j - 1]; r[j - 1] = x } }
+    q = m ? r[int((m + 1) / 2)] : 1; W = 0; mx = 0
+    for (i = 1; i <= NR; i++) { w[i] = (f[i] in s) ? s[f[i]] : d[i] * q; W += w[i]; if (w[i] > mx) mx = w[i] }
+    lo = mx; hi = W
+    while (hi - lo > 1) { t = int((lo + hi) / 2); if (fits(t)) hi = t; else lo = t }
+    k = 0; a = 0
+    for (i = 1; i <= NR; i++) { if (a > 0 && a + w[i] > hi && k < n - 1) { k++; a = 0 } a += w[i]; print k, f[i] } }' > $w/cut
 el "the full corpus and the cut"
 
 # a shard: the harness, its carried files, its slice, zz-fin

@@ -1229,7 +1229,9 @@
    (pprim ps ts)
     (atom? (mark ts) ? ()         ; the bottom of the expression ladder: mark here and a bad operand reports itself, not the operator before it
        (<ts @ t
-          (? (tkk t = 'num)                           ; past int on t32, long is too narrow: long long
+          (? (tkk t = 'num && pchar ps = 'char && chq? t && 127 < tkv t && tkv t < 256)   ; 'c' is (int) (char) c
+              [['num (tkv t - 256)] >ts]
+             (tkk t = 'num)                           ; past int on t32, long is too narrow: long long
               [(pst32? ps && 2147483647 < tkv t ? ['cast 'llong ['num (tkv t)]] ['num (tkv t)]) >ts]
              (tkk t = 'unum)                          ; a u-suffixed literal wears its unsignedness (neg/div/shift go unsigned):
               [['cast 'uint ['num (tkv t)]] >ts]     ; 1u an unsigned INT (-1u wraps at 32 bits),
