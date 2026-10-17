@@ -409,7 +409,7 @@
         leave J save-loc))
 
    ; --- ship_out and the postamble (tex.web 638-642) ----------------------------------------
-   (two-digits n) (n < 10 ? ("0" + show n) (show n))
+   (two-digits n) (n < 10 ? "0\(n)" (show n))
    (cb-ship J p)
     (: pr (J 'params) ho (pr 'hoffset) vo (pr 'voffset)
        (p 'height > max-dimen || p 'depth > max-dimen || p 'height + p 'depth + vo > max-dimen
@@ -421,8 +421,7 @@
              _ (J 'pages = 0 ?
                   (: _ (dvi-out J 247) _ (dvi-out J 2)
                      _ (dvi-four J 25400000) _ (dvi-four J 473628672) _ (dvi-four J (pr 'mag))
-                     s (" TeX output " + show (pr 'year) + "." + two-digits (pr 'month) + "."
-                        + two-digits (pr 'day) + ":" + two-digits (pr 'time // 60) + two-digits (pr 'time % 60))
+                     s " TeX output \(pr 'year).\(two-digits (pr 'month)).\(two-digits (pr 'day)):\(two-digits (pr 'time // 60))\(two-digits (pr 'time % 60))"
                      (dvi-out J #s,
                       map (b \ dvi-out J b) (map s ^#s))))
              loc (J 'offset + J 'ptr)

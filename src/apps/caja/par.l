@@ -316,32 +316,32 @@
    ; --- the tokens as TeX says them --------------------------------------------------------------
    ; the TeX side must \def\sp{ } (a space after a control word) and name font k \f and the k-th
    ; letter; a fil amount is said in halves, so a token's must be one
-   (fname k) ("\\f" + string (96 + k))
+   (fname k) "\\f\(string (96 + k))"
    (units o) (["sp" "fil" "fill" "filll"] o)
-   (amt v o) (o = 0 ? (show v + "sp")
+   (amt v o) (o = 0 ? "\(v)sp"
                 (: whole (v // 65536) frac (v % 65536)
-                   (frac = 0 ? (show whole + units o) (show whole + ".5" + units o))))
-   (glue-tex g) (show (g 0) + "sp plus " + amt (g 1) (g 2) + " minus " + amt (g 3) (g 4))
-   (dim-tex nm v) (v = () ? "" (" " + nm + " " + show v + "sp"))
+                   (frac = 0 ? "\(whole)\(units o)" "\(whole).5\(units o)")))
+   (glue-tex g) "\(g 0)sp plus \(amt (g 1) (g 2)) minus \(amt (g 3) (g 4))"
+   (dim-tex nm v) (v = () ? "" " \(nm) \(v)sp")
    (plain? b) (32 < b && b < 127 && nelem b [92 123 125 37])
    ; each token said, and whether it ended in a plain character (a space may follow it bare)
    (tok-tex t)
     (two? t ?
        (t 0 @
-        'c (plain? (t 1) ? [(string (t 1)) 1] [("\\char" + show (t 1) + " ") 0])
-        'f [(fname (t 1) + " ") 0]
-        'pen [("\\penalty" + show (t 1) + " ") 0]
-        'kern [("\\kern" + show (t 1) + "sp ") 0]
-        'skip [("\\hskip" + glue-tex >t + "\\relax ") 0]
-        'vskip [("\\vskip" + glue-tex >t + "\\relax ") 0]
-        'rule [("\\vrule" + dim-tex "width" (t 1) + dim-tex "height" (t 2) + dim-tex "depth" (t 3) + "\\relax ") 0]
-        'hrule [("\\hrule" + dim-tex "width" (t 1) + dim-tex "height" (t 2) + dim-tex "depth" (t 3) + "\\relax ") 0]
-        'hbox [("\\hbox" + (t 1 = () ? "" (" to" + show (t 1) + "sp")) + "{" + cp-tex (t 2) + "}") 0]
-        'set (: k (t 1) v (t 2) nm ("\\" + show k)
-                [(? (k = 'parshape) (nm + " " + show #v + cats (map (e \ " " + show (e 0) + "sp " + show (e 1) + "sp") v) + "\\relax ")
-                    (elem k glue-params) (nm + "=" + glue-tex v + "\\relax ")
-                    (elem k dimen-params) (nm + "=" + show v + "sp\\relax ")
-                    (nm + "=" + show v + "\\relax "))
+        'c (plain? (t 1) ? [(string (t 1)) 1] ["\\char\(t 1) " 0])
+        'f ["\(fname (t 1)) " 0]
+        'pen ["\\penalty\(t 1) " 0]
+        'kern ["\\kern\(t 1)sp " 0]
+        'skip ["\\hskip\(glue-tex >t)\\relax " 0]
+        'vskip ["\\vskip\(glue-tex >t)\\relax " 0]
+        'rule ["\\vrule\(dim-tex "width" (t 1))\(dim-tex "height" (t 2))\(dim-tex "depth" (t 3))\\relax " 0]
+        'hrule ["\\hrule\(dim-tex "width" (t 1))\(dim-tex "height" (t 2))\(dim-tex "depth" (t 3))\\relax " 0]
+        'hbox ["\\hbox\(t 1 = () ? "" " to\(t 1)sp"){\(cp-tex (t 2))}" 0]
+        'set (: k (t 1) v (t 2) nm "\\\(k)"
+                [(? (k = 'parshape) "\(nm) \(#v)\(cats (map (e \ " \(e 0)sp \(e 1)sp") v))\\relax "
+                    (elem k glue-params) "\(nm)=\(glue-tex v)\\relax "
+                    (elem k dimen-params) "\(nm)=\(v)sp\\relax "
+                    "\(nm)=\(v)\\relax ")
                  0])
         ["" 0])
        (t @
