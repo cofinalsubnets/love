@@ -39,7 +39,7 @@
                                     (st < i) (rev (snip s st i . acc))
                                     (rev acc)))
                  0 0 ())
-   (endnl s)    (#s && s (#s - 1) = 10 ? s (s + "\n"))               ; one trailing newline, always
+   (endnl s)    (#s && s (#s - 1) = 10 ? s "\(s)\n")               ; one trailing newline, always
    ; a parser whose payload must also pass ok, or it fails where it began
    (pwhen ok a s y n) (a s (s1 \ x \ (ok x ? (y s1 x) (n s))) n)
    ; a row laid to n cells: the cells past its end empty, the ones past n gone
@@ -75,7 +75,7 @@
              ("mu" "×") ("di" "÷") ("+-" "±") ("is" "∫") ("if" "∞") ("pd" "∂")
              ("->" "→") ("<-" "←") ("ua" "↑") ("da" "↓") ("na" "∇") ("ap" "~")
              ("==" "≡") ("!=" "≠") ("<=" "≤") (">=" "≥") ("sr" "√") ("fm" "′"))
-   (glyph n)   ((: (g l) (? (atom? l) ((: (h m) (? (atom? m) ("\\(" + n) (<<m = n) <><m (h >m))) rglyphr)
+   (glyph n)   ((: (g l) (? (atom? l) ((: (h m) (? (atom? m) "\\(\(n)" (<<m = n) <><m (h >m))) rglyphr)
                             (<<l = n) <><l (g >l))) rglyphs)
    (rqat s i)  ((: (g l) (atom? l ? ()                       ; does a glyph start at i? -> (name len)
                             (: gl <><l n #gl
@@ -143,7 +143,7 @@
     (: n #s
        (go i cur acc)
         (? (n <= i) (rev (0 < #(tbtrim cur) ? (tbtrim cur . acc) acc))
-           (s i = 92 && i + 1 < n && s (i + 1) = 124) (go (i + 2) (cur + "|") acc)
+           (s i = 92 && i + 1 < n && s (i + 1) = 124) (go (i + 2) "\(cur)|" acc)
            (s i = 92 && i + 1 < n) (go (i + 2) (cur + snip s i (i + 2)) acc)
            (s i = 124) (go (i + 1) "" (tbtrim cur . acc))
            (go (i + 1) (cur + string (s i)) acc))
@@ -211,33 +211,33 @@
    (mdi l)  (atom? l ? ""
                (mdi1 <l @ s
                   (<<l = 'text && two? >l && <<>l = 'link && 0 < #s && s (#s - 1) = 33 ?
-                      (snip s 0 (#s - 1) + "\\!" + mdi >l)
+                      "\(snip s 0 (#s - 1))\\!\(mdi >l)"
                      (s + mdi >l))))
    (mdi1 x) (<x @ 'text (mq <>x)
-                  'code ("`" + <>x + "`")
-                  'strong ("**" + mdi <>x + "**")
-                  'em ("*" + mdi <>x + "*")
-                  'link ("[" + mdi <>x + "](" + <>>x + ")")
-                  'img ("![" + <>x + "](" + <>>x + ")")
+                  'code "`\(<>x)`"
+                  'strong "**\(mdi <>x)**"
+                  'em "*\(mdi <>x)*"
+                  'link "[\(mdi <>x)](\(<>>x))"
+                  'img "![\(<>x)](\(<>>x))"
                   "")
    ; a paragraph whose first characters would re-read as another block wears one backslash --
    ; the escape leaf takes it back off, so law 1 survives a paragraph that starts "- " or "# ".
-   (shield s) (two? (runp starter (endnl s)) ? ("\\" + s) s)
-   (qpre s)   (catmap (ln \ #ln ? ("> " + ln + "\n") ">\n") (splitnl s))
-   (nlist l i) (atom? l ? "" (show i + ". " + mdi <l + "\n" + nlist >l (i + 1)))
-   (mfront kvs) ("---\n" + cats (map (p \ string <p + ": " + <>p + "\n") (mfilled kvs)) + "---\n")
-   (mdefs l)    (catmap (it \ mdi <it + "\n:   " + mdi <>it + "\n") l)
+   (shield s) (two? (runp starter (endnl s)) ? "\\\(s)" s)
+   (qpre s)   (catmap (ln \ #ln ? "> \(ln)\n" ">\n") (splitnl s))
+   (nlist l i) (atom? l ? "" "\(i). \(mdi <l)\n\(nlist >l (i + 1))")
+   (mfront kvs) ("---\n" + cats (map (p \ "\(string <p): \(<>p)\n") (mfilled kvs)) + "---\n")
+   (mdefs l)    (catmap (it \ "\(mdi <it)\n:   \(mdi <>it)\n") l)
    ; a table row, a cell's bars escaped so the row splits where it should
-   (tbar l)     ("| " + join " | " l + " |")
+   (tbar l)     "| \(join " | " l) |"
    (tmcell i)   (mdi i @ s (cats (map (k \ s k @ 124 "\\|" c (string c)) ^#s)))
    (tmal a)     (a @ 'l ":--" 'c ":-:" 'r "--:" "---")
-   (mtable x)   (tbar (map tmcell (x 2)) + "\n" + tbar (map tmal (x 1)) + "\n"
-                 + catmap (r \ tbar (map tmcell r) + "\n") (x 3))
-   (mdb x) (<x @ 'head    (rep "#" <>x + " " + mdi <>>x + "\n")
-                 'para    (shield (mdi <>x) + "\n")
-                 'fence   ("```" + <>x + "\n" + <>>x + "```\n")
+   (mtable x)   ("\(tbar (map tmcell (x 2)))\n\(tbar (map tmal (x 1)))\n"
+                 + catmap (r \ "\(tbar (map tmcell r))\n") (x 3))
+   (mdb x) (<x @ 'head    "\(rep "#" <>x) \(mdi <>>x)\n"
+                 'para    "\(shield (mdi <>x))\n"
+                 'fence   "```\(<>x)\n\(<>>x)```\n"
                  'quote   (qpre (mdshow <>x))
-                 'bullets (catmap (i \ "- " + mdi i + "\n") <>x)
+                 'bullets (catmap (i \ "- \(mdi i)\n") <>x)
                  'numbers (nlist <>x 1)
                  'deflist (mdefs <>x)
                  'table   (mtable x)
@@ -250,30 +250,29 @@
 (: (hq s) (jug 0 @ j (each ^#s (i \ (s i @ c (say j (c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c))))), slurp j))
    (hti l)  (catmap hti1 l)
    (hti1 x) (<x @ 'text   (hq <>x)
-                  'code   ("<code>" + hq <>x + "</code>")
+                  'code   "<code>\(hq <>x)</code>"
                   'strong ("<strong>" + hti <>x + "</strong>")
                   'em     ("<em>" + hti <>x + "</em>")
-                  'link   ("<a href=\"" + hq <>>x + "\">" + hti <>x + "</a>")
-                  'mark   ("<a id=\"" + hq <>x + "\"></a>")
+                  'link   ("<a href=\"\(hq <>>x)\">" + hti <>x + "</a>")
+                  'mark   "<a id=\"\(hq <>x)\"></a>"
                   'img    ("<img src=\"" + hqa <>>x + "\" alt=\"" + hqa <>x + "\">")
                   "")
    ; an attribute's value: hq's three and the quote that would end it
    (hqa s)  (catmap (c \ c @ 34 "&quot;" 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)) (map (i \ s i) ^#s))
-   (hitems l t) (join "\n" (map (i \ "<li>" + hti i + "</li>") l) + "\n</" + t + ">")
-   (hmeta kvs)  (join "\n" (map (p \ "<meta name=\"" + string <p + "\" content=\"" + hq <>p + "\">") (mfilled kvs)))
-   (hdefs l)    ("<dl>\n" + join "\n" (map (it \ "<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>") l) + "\n</dl>")
+   (hitems l t) "\(join "\n" (map (i \ "<li>" + hti i + "</li>") l))\n</\(t)>"
+   (hmeta kvs)  (join "\n" (map (p \ "<meta name=\"\(string <p)\" content=\"\(hq <>p)\">") (mfilled kvs)))
+   (hdefs l)    "<dl>\n\(join "\n" (map (it \ "<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>") l))\n</dl>"
    (hal a)      (a @ 'l " align=\"left\"" 'c " align=\"center\"" 'r " align=\"right\"" "")
-   (hcells t al cs) (two? cs ? ("<" + t + hal <al + ">" + hti <cs + "</" + t + ">" + hcells t >al >cs) "")
-   (hrow t al cs) ("<tr>" + hcells t al cs + "</tr>")
-   (htable x)   ("<table>\n<thead>\n" + hrow "th" (x 1) (x 2) + "\n</thead>\n<tbody>\n"
-                 + cats (map (r \ hrow "td" (x 1) r + "\n") (x 3)) + "</tbody>\n</table>")
-   (htb x) (<x @ 'head    (: h ("h" + show <>x) ("<" + h + ">" + hti <>>x + "</" + h + ">"))
+   (hcells t al cs) (two? cs ? ("<\(t)\(hal <al)>" + hti <cs + "</\(t)>\(hcells t >al >cs)") "")
+   (hrow t al cs) "<tr>\(hcells t al cs)</tr>"
+   (htable x)   ("<table>\n<thead>\n\(hrow "th" (x 1) (x 2))\n</thead>\n<tbody>\n"
+                 + cats (map (r \ "\(hrow "td" (x 1) r)\n") (x 3)) + "</tbody>\n</table>")
+   (htb x) (<x @ 'head    (: h "h\(<>x)" ("<\(h)>" + hti <>>x + "</\(h)>"))
                  'para    ("<p>" + hti <>x + "</p>")
-                 'fence   ("<pre><code" + (0 < #<>x ? (" class=\"language-" + <>x + "\"") "")
-                                  + ">" + hq <>>x + "</code></pre>")
-                 'quote   ("<blockquote>\n" + htshow <>x + "\n</blockquote>")
-                 'bullets ("<ul>\n" + hitems <>x "ul")
-                 'numbers ("<ol>\n" + hitems <>x "ol")
+                 'fence   "<pre><code\(0 < #<>x ? " class=\"language-\(<>x)\"" "")>\(hq <>>x)</code></pre>"
+                 'quote   "<blockquote>\n\(htshow <>x)\n</blockquote>"
+                 'bullets "<ul>\n\(hitems <>x "ul")"
+                 'numbers "<ol>\n\(hitems <>x "ol")"
                  'deflist (hdefs <>x)
                  'table   (htable x)
                  'meta    (hmeta <>x)
@@ -296,7 +295,7 @@
                         (d < 0 || b <= d ? () (go (i + 1) b ((v < 0 ? 0 v) * b + d)))))
        (? (n < 2 || nm 0 != 35) ()
           (elem (nm 1) '(120 88)) (go 2 16 -1) (go 1 10 -1)))
-   (entof nm) ((: (g l) (? (atom? l) (hnum nm @ u (string? u ? u ("&" + nm + ";")))
+   (entof nm) ((: (g l) (? (atom? l) (hnum nm @ u (string? u ? u "&\(nm);"))
                            (<<l = nm) <><l (g >l))) hents)
    (hdec s)
     (: n #s o (jug 0)
@@ -362,7 +361,7 @@
    ; a mark in the one shape the reader knows; a name with a quote in it is none
    (hmk v)
     (string? v && 0 < #v && (: (g i) (? (#v <= i) 1 (v i = 34) 0 (g (i + 1))) (g 0)) ?
-       ("<a id=\"" + v + "\"></a>") "")
+       "<a id=\"\(v)\"></a>" "")
    ; the tags whose content is a line of text: a mark goes inside, where the text is; any
    ; other tag holds blocks or is dropped, and its mark goes ahead of it
    hinside '("p" "h1" "h2" "h3" "h4" "h5" "h6" "li" "dt" "dd" "td" "th")
@@ -444,10 +443,10 @@
              cs (hctls s e (hpast s e "form"))
              sub (filter (c \ c 1 = 'sub) cs @ l (two? l ? [<l]))
              kept (filter (c \ c 1 != 'sub) cs)
-             (pair c) (hpe (c 2) + "=" + hpe (c 3))
+             (pair c) "\(hpe (c 2))=\(hpe (c 3))"
              (link c) (: ot (map pair (filter (d \ <d != <c) kept + sub))
                          lb (c 4)
-                         ("<a href=\"form:" + act + "?" + cats (map (x \ x + "&") ot) + pair c + "\">["
+                         ("<a href=\"form:\(act)?" + cats (map (x \ "\(x)&") ot) + "\(pair c)\">["
                           + hq lb + rep "_" (12 - #lb) + "]</a>"))
              (map (c \ pin t <c (link c)) (filter (c \ c 1 = 'text) kept),
               t))))
@@ -530,19 +529,19 @@
                      (t = "a") (: v (op? && hattr s k (e - 1) "href")
                                   m2 (? #mk mk op? (hmk (hattr s k (e - 1) "name")) "")
                                 (? !op? (say o (ba ? "" "</a>"), go e 0)
-                                   (string? v) (say o (m2 + "<a href=\"" + v + "\">"), go e 0)
+                                   (string? v) (say o "\(m2)<a href=\"\(v)\">", go e 0)
                                    (say o m2, go e 1)))
                      (halias? t @ a
-                      (say o $ op? ? ("<" + a + snip s k (e - 1) + ">" @ tg
+                      (say o $ op? ? ("<\(a)\(snip s k (e - 1))>" @ tg
                                         (elem a hinside ? (tg + mk) (mk + tg)))
-                                     ("</" + a + ">"),
+                                     "</\(a)>",
                        go e ba)))))))))
 
 ; ---------------------------------------------------------------- html, read
 ; an open tag may carry attributes: `<h1 id="x">` is the same head as `<h1>`
-(: (otag t)    (alts [(lit ("<" + t + ">"))
-                      (seqs [(lit ("<" + t)) (one ws?) (span (!= 62)) (lit ">")])])
-   (ctag t)    (lit ("</" + t + ">"))
+(: (otag t)    (alts [(lit "<\(t)>")
+                      (seqs [(lit "<\(t)") (one ws?) (span (!= 62)) (lit ">")])])
+   (ctag t)    (lit "</\(t)>")
    hws         (skip (span ws?))
    (wrapt t a) (seqs [(skip (otag t)) a hws (skip (ctag t))])
    (hraw? c)   (c != 60 && c != 38)                        ; ordinary text runs to the next < or &
@@ -569,7 +568,7 @@
                                 (pack htinl) (skip (lit "</a>"))])) s y n)
    (htinl s y n)   (pmap mrg (many (alts [hent hcode hstrong hem hmark himgp hlink htext])) s y n)
 
-   (hlev n)  (tag (p \ ['head n <p]) (wrapt ("h" + show n) (pack htinl)))
+   (hlev n)  (tag (p \ ['head n <p]) (wrapt "h\(n)" (pack htinl)))
    hlang     (seqs [(skip (lit " class=\"language-")) (span (!= 34)) (skip (lit "\""))])
    h-rule  (tag (_ \ '(rule)) (lit "<hr>"))
    h-head  (alts (map hlev '(1 2 3 4 5 6)))
@@ -588,7 +587,7 @@
    h-dl    (tag (p \ ['deflist (dpair p)]) (wrapt "dl" (many h-dt)))
    ; a table: the cells inline, th or td alike, an alignment off htshow's own attribute
    ; and none off any other; the head is the first row, whichever section held it
-   (hcellp t) (alts (map (a \ tag (c \ [a <c]) (seqs [hws (skip (lit ("<" + t + hal a + ">"))) (pack htinl) (skip (ctag t))]))
+   (hcellp t) (alts (map (a \ tag (c \ [a <c]) (seqs [hws (skip (lit "<\(t)\(hal a)>")) (pack htinl) (skip (ctag t))]))
                          '(l c r)
                      + [(tag (c \ ['n <c]) (seqs [hws (skip (otag t)) (pack htinl) (skip (ctag t))]))]))
    h-tr    (pack (seqs [hws (skip (otag "tr")) (many (alts [(hcellp "th") (hcellp "td")])) hws (skip (ctag "tr"))]))
@@ -617,7 +616,7 @@
 ; the head. widths count cells, not bytes; a ttlinks mark rides in sentinels 1 and 2, width 0
 (: (tplain l) (catmap (x \ <x @ 'text <>x 'code <>x 'strong (tplain <>x) 'em (tplain <>x)
                             'link (tplain <>x) 'tmark (string 1 + <>x + string 2)
-                            'img (0 < #<>x ? ("[" + <>x + "]") "") "") l)
+                            'img (0 < #<>x ? "[\(<>x)]" "") "") l)
    (tvw s) ((: (g i n) (? (#s <= i) n
                           (s i = 1) (g ((: (h k) (#s <= k || s k = 2 ? (k + 1) (h (k + 1)))) i) n)
                           (g (cpnext s i) (n + max 0 (wcwidth (cpat s i)))))) 0 0)
@@ -637,10 +636,10 @@
 (: (rq s) ((: (g i acc)
               (!(i < #s) ? acc
                  (rqat s i @ hit
-                    (two? hit ? (g (i + <>hit) (acc + "\\(" + <hit))
+                    (two? hit ? (g (i + <>hit) "\(acc)\\(\(<hit)")
                        (s i @ c (g (i + 1) (acc + (c @ 92 "\\e" 45 "\\-" (string c)))))))))
            0 "")
-   (rline s) (#s && (s 0 = 46 || s 0 = 39) ? ("\\&" + s) s)       ; a leading . or ' is text
+   (rline s) (#s && (s 0 = 46 || s 0 = 39) ? "\\&\(s)" s)       ; a leading . or ' is text
    ; roff double-spaces after a period ending an input line, so one long line loses its
    ; sentence spacing. one sentence per line is lossless: the reader fills back with one space.
    (rsent s) ((: (g i st acc)
@@ -651,27 +650,27 @@
    (rfill s) (catmap (ln \ ln + "\n") (rsent s))
    (rfi l)  (catmap rfi1 l)
    (rfi1 x) (<x @ 'text   (rq <>x)
-                  'code   ("\\f(CR" + rq <>x + "\\fR")     ; cr, not the deprecated cw: groff warns on that
+                  'code   "\\f(CR\(rq <>x)\\fR"     ; cr, not the deprecated cw: groff warns on that
                   'strong ("\\fB" + rfi <>x + "\\fR")
                   'em     ("\\fI" + rfi <>x + "\\fR")
-                  'link   (rfi <>x + " \\(la" + rq <>>x + "\\(ra")
-                  'img    (0 < #<>x ? (rq ("[" + <>x + "]")) "")
+                  'link   (rfi <>x + " \\(la\(rq <>>x)\\(ra")
+                  'img    (0 < #<>x ? (rq "[\(<>x)]") "")
                   "")
-   (rth kvs)   (".TH" + cats (map (k \ " \"" + mget kvs k + "\"") metakeys) + "\n")
-   (rnums l i) (atom? l ? "" (".IP \"" + show i + ".\" 4\n" + rline (rfi <l) + "\n" + rnums >l (i + 1)))
+   (rth kvs)   ".TH\(cats (map (k \ " \"\(mget kvs k)\"") metakeys))\n"
+   (rnums l i) (atom? l ? "" (".IP \"\(i).\" 4\n" + rline (rfi <l) + "\n\(rnums >l (i + 1))"))
    (rdefs l)   (catmap (it \ ".TP\n" + rline (rfi <it) + "\n" + rfill (rfi <>it)) l)
    ; roff has no cells here: a table that fits a page is its laid columns as a display,
    ; and a wider one each row a paragraph of head: cell lines, which the page can fill
-   (rcell hc) (0 < #<hc ? (<hc + ": " + tplain <>hc) (tplain <>hc))
-   (rrow hd r) (".PP\n" + join "\n.br\n" (map (hc \ rline (rq (rcell hc))) (zipm hd r)) + "\n")
+   (rcell hc) (0 < #<hc ? ("\(<hc): " + tplain <>hc) (tplain <>hc))
+   (rrow hd r) ".PP\n\(join "\n.br\n" (map (hc \ rline (rq (rcell hc))) (zipm hd r)))\n"
    (rtable x)
     (tblines x @ ls
-       (foldl (a \ l \ a && tvw l <= 78) 1 ls ? (rfb ['fence "" (catmap (ln \ ln + "\n") ls)])
+       (foldl (a \ l \ a && tvw l <= 78) 1 ls ? (rfb ['fence "" (catmap (ln \ "\(ln)\n") ls)])
           (map tplain (x 2) @ hd (catmap (r \ rrow hd r) (x 3)))))
    (rfb x) (<x @ 'meta    (rth <>x)
                  'head    ((<>x < 2 ? ".SH " ".SS ") + rfi <>>x + "\n")
                  'para    (".PP\n" + rfill (rfi <>x))
-                 'fence   (".EX\n" + cats (map (ln \ rline (rq ln) + "\n") (splitnl <>>x)) + ".EE\n")
+                 'fence   (".EX\n" + cats (map (ln \ "\(rline (rq ln))\n") (splitnl <>>x)) + ".EE\n")
                  'quote   (".PP\n.RS\n" + rfshow <>x + ".RE\n")   ; the .pp spaces the display
                  'bullets (catmap (i \ ".IP \\(bu 2\n" + rline (rfi i) + "\n") <>x)
                  'numbers (rnums <>x 1)
@@ -705,7 +704,7 @@
                    (ln i = 92 && i + 1 < #ln && ln (i + 1) = 125) (g (i + 2) (k - 1))
                    (g (i + 1) k))) 0 d)
    ; a no-break control character is the same macro, so ' normalizes to .
-   (rfdot ln) (#ln && ln 0 = 39 ? ("." + snip ln 1 #ln) ln)
+   (rfdot ln) (#ln && ln 0 = 39 ? ".\(snip ln 1 #ln)" ln)
    ; a terminal is nroff: `.if n` text is read in the line's place, `.if t` answers "". 'no is
    ; a condition this cannot decide: an expression, a \{ group, or an .el (its .ie is not kept)
    (rfnro ln)
@@ -736,13 +735,13 @@
     (rffst ln @ a
        (? (!#a || rfdigs? a) ".PP\n"
           (rfbul? a) ".IP \\(bu\n"
-          (rfnum? a) (".IP \"" + a + "\"\n")
-          (".TP\n" + (#a && a 0 = 46 ? ("\\&" + a) a) + "\n")))
+          (rfnum? a) ".IP \"\(a)\"\n"
+          ".TP\n\(#a && a 0 = 46 ? "\\&\(a)" a)\n"))
    ; the reader never eats a stray closer, so balance is the scrub's job: a second .nf is a
    ; no-op, a .RE with no .RS goes, and what is still open at the end is shut here
    (rfshut nf rs) ((nf ? ".fi\n" "") + rep ".RE\n" rs)
    ; a macro the page defined for itself: its .de is gone, its first argument is kept as text
-   (rfown ln) (rffst ln @ r (!#r ? "" ((r 0 = 46 ? ("\\&" + r) r) + "\n")))
+   (rfown ln) (rffst ln @ r (!#r ? "" "\(r 0 = 46 ? "\\&\(r)" r)\n"))
    (rfscrub s)
     ((: (go l de nf d rs defs acc)
         (atom? l ? (cats (rev acc) + rfshut nf rs)
@@ -752,7 +751,7 @@
                  (0 < d)  (go >l de nf (rfdepth ln d) rs defs acc)         ; a conditional group
                  ; a comment, and a bare \ continuation with nothing on it
                  (rfcom? ln || ln = "\\") (go >l de nf d rs defs acc)
-                 (elem m rfdef) (go >l 1 nf d rs ("." + rffst ln . defs) acc)
+                 (elem m rfdef) (go >l 1 nf d rs (".\(rffst ln)" . defs) acc)
                  ; the branch this device takes is read in the condition's place, so a macro
                  ; there is still a macro and the text is still text
                  (elem m rfcond)
@@ -766,14 +765,14 @@
                     (? (m2 = ".sp") (go >l de nf d rs defs ((nf ? "\n" ".PP\n") . acc))
                        (m2 = ".IP" && !nf) (go >l de nf d rs defs (rfip ln . acc))
                        (elem m2 '(".nf" ".EX"))
-                        (go >l de 1 d rs defs (nf ? acc ((m2 + "\n") . acc)))
+                        (go >l de 1 d rs defs (nf ? acc ("\(m2)\n" . acc)))
                        (elem m2 '(".fi" ".EE"))
-                        (go >l de 0 d rs defs (nf ? ((m2 + "\n") . acc) acc))
-                       (m2 = ".RS") (go >l de nf d (rs + 1) defs (m2 + rest + "\n" . acc))
-                       (m2 = ".RE") (rs ? (go >l de nf d (rs - 1) defs (m2 + "\n" . acc))
+                        (go >l de 0 d rs defs (nf ? ("\(m2)\n" . acc) acc))
+                       (m2 = ".RS") (go >l de nf d (rs + 1) defs ("\(m2)\(rest)\n" . acc))
+                       (m2 = ".RE") (rs ? (go >l de nf d (rs - 1) defs ("\(m2)\n" . acc))
                                         (go >l de nf d rs defs acc))
                        (elem m defs) (go >l de nf d rs defs (rfown ln . acc))
-                       (go >l de nf d rs defs (m2 + rest + "\n" . acc))))))))
+                       (go >l de nf d rs defs ("\(m2)\(rest)\n" . acc))))))))
      (splitnl s) 0 0 0 0 () ()))
 
 ; ---------------------------------------------------------------- roff (man), read
@@ -785,7 +784,7 @@
                 (seqs [(skip (lit "\\(")) (one chr?) (one chr?)]))
    ; the escapes with a quoted argument (device call, motion, rule) show nothing, argument too
    rdropq  (tag (const '(text ""))
-                (alts (map (c \ seqs [(lit ("\\" + c)) (lit "'") (span (!= 39)) (lit "'")])
+                (alts (map (c \ seqs [(lit "\\\(c)") (lit "'") (span (!= 39)) (lit "'")])
                            '("X" "Z" "h" "v" "l" "L" "N" "o" "w" "A" "b" "D" "C" "R" "H" "S"))))
    ; a number register read: whatever it held, the .nr that set it is gone
    rreg    (tag (const '(text ""))
@@ -806,7 +805,7 @@
    rglb    (tag (p \ ['text (glyph <p)]) (seqs [(skip (lit "\\[")) (span (!= 93)) (skip (lit "]"))]))
    ; and the bare ones: a mark, a hyphenation point, a thin space -- all of them nothing here
    rnone   (tag (const '(text ""))
-                (alts (map (c \ lit ("\\" + c)) '("%" ":" "," "/" "|" "^" "{" "}" "c" "d" "u" "z" "p"))))
+                (alts (map (c \ lit "\\\(c)") '("%" ":" "," "/" "|" "^" "{" "}" "c" "d" "u" "z" "p"))))
    resc    (alts [(tag (const '(text "\\")) (lit "\\e"))
                   (tag (const '(text "\\")) (lit "\\\\"))
                   (tag (const '(text "-")) (lit "\\-"))
@@ -892,7 +891,7 @@
    r-ul   (tag (p \ ['bullets p]) (many1 r-bu))
    r-no   (seqs [(skip (lit ".IP")) (skip (span nonl?)) (skip (lit "\n")) r-filled])
    r-ol   (tag (p \ ['numbers p]) (many1 r-no))
-   r-ex   (tag (p \ ['fence "" (catmap (ln \ rplain ln + "\n") p)])
+   r-ex   (tag (p \ ['fence "" (catmap (ln \ "\(rplain ln)\n") p)])
                (seqs [(skip (alts [(lit ".EX") (lit ".nf")])) (skip (span nonl?)) (skip (lit "\n"))
                       (many (seq (notp (alts [(lit ".EE") (lit ".fi")])) rfline))
                       (skip (alts [(lit ".EE") (lit ".fi")])) (skip (span nonl?)) (skip (lit "\n"))]))
@@ -914,13 +913,12 @@
 ; not a lens: no reader, no row in `surfaces`. it fills to a width, man's shape: a .SH flush
 ; left, body at 5, a .SS at 3, a definition 7 past its term, a quote 4 further in. a display
 ; is not filled. each word carries its own escapes, so no wrap cuts an attribute from its reset.
-(: ttesc  (string 27)
-   ttmk0  (string 1)                                          ; a mark's sentinel, never text
+(: ttmk0  (string 1)                                          ; a mark's sentinel, never text
    ttmk1  (string 2)
-   (tton a)  (#a ? (ttesc + "[" + a + "m") "")
-   ttoff  (ttesc + "[0m")
+   (tton a)  (#a ? "\e[\(a)m" "")
+   ttoff  "\e[0m"
    (ttsp n)  (rep " " (n < 0 ? 0 n))
-   (ttadd a b) (#a ? (a + ";" + b) b)                        ; a nested attribute joins the outer
+   (ttadd a b) (#a ? "\(a);\(b)" b)                        ; a nested attribute joins the outer
    ; an inl -> [text attribute] runs. code stays plain: roman is what a terminal shows for it
    (ttsegs l a)
     (atom? l ? ()
@@ -931,10 +929,10 @@
                 'em     (ttsegs <>x (ttadd a "4") + ttsegs >l a)
                 ; the url trails the text it was on, the way a man page's \(la..\(ra does
                 ; -- and an anchor, which has no url, is just its text
-                'link   (ttsegs <>x a + (#<>>x ? [[(" <" + <>>x + ">") a]] ()) + ttsegs >l a)
+                'link   (ttsegs <>x a + (#<>>x ? [[" <\(<>>x)>" a]] ()) + ttsegs >l a)
                 ; ttlinks' own node: a place, laid as a sentinel with no width that ttpage lifts
                 'tmark  ([[(ttmk0 + <>x + ttmk1) 'mark]] + ttsegs >l a)
-                'img    ((0 < #<>x ? [[("[" + <>x + "]") a]]) + ttsegs >l a)
+                'img    ((0 < #<>x ? [["[\(<>x)]" a]]) + ttsegs >l a)
                 (ttsegs >l a))))
    ; a run's text at its whitespace, newlines too; the empty pieces at each end let a word
    ; carry on across a style change
@@ -967,7 +965,7 @@
         (atom? l ? (n < 0 ? (rev acc) (rev (pad + sty . acc)))
            (: v (swidth <<l) s <><l
               (? (n < 0) (go >l v s acc)
-                 (n + 1 + v <= room) (go >l (n + 1 + v) (sty + " " + s) acc)
+                 (n + 1 + v <= room) (go >l (n + 1 + v) "\(sty) \(s)" acc)
                  (go >l v s (pad + sty . acc)))))
        (go words -1 "" ()))
    (ttinl l w ind a) (ttfill (ttwords (ttsegs l a)) w ind)
@@ -979,12 +977,12 @@
    ; the .TH line: title(section) either side of the manual, dropped to the title if too wide
    (ttmeta kvs w)
     (: t (mget kvs 'title) sec (mget kvs 'section) mn (mget kvs 'manual)
-       l (#sec ? (t + "(" + sec + ")") t)
+       l (#sec ? "\(t)(\(sec))" t)
        gap (w - 1 - 2 * swidth l - swidth mn)                          ; the last column stays empty
        lf (gap // 2)
        (!#t || gap < 2 ? (#t ? [l] ())
           [(l + ttsp lf + mn + ttsp (gap - lf) + l)]))
-   (ttvis words) ((: (g l a) (atom? l ? a (g >l (#a ? (a + " " + <<l) <<l)))) words "")
+   (ttvis words) ((: (g l a) (atom? l ? a (g >l (#a ? "\(a) \(<<l)" <<l)))) words "")
    ; a term that fits the gap keeps its definition beside it, as .TP does; a longer one takes
    ; its own line. a blank line between items
    (ttdefs l w ind)
@@ -1002,7 +1000,7 @@
         r  (ttdefs >l w ind)
         (atom? r ? h (h + [""] + r))))
    (ttnums l w ind i)
-    (two? l ? (ttitem <l w ind (show i + ". ") + ttnums >l w ind (i + 1)))
+    (two? l ? (ttitem <l w ind "\(i). " + ttnums >l w ind (i + 1)))
    (ttbuls l w ind)
     (two? l ? (ttitem <l w ind "• " + ttbuls >l w ind))
    (ttblk x w ind)
@@ -1022,7 +1020,7 @@
     (tblines x @ ls
        (((: (g l) (? (atom? l) 1 (w < ind + tvw <l) 0 (g >l))) ls) ? (map (ln \ ttsp ind + ln) ls)
           (: hd (map tplain (x 2))
-             (rw r) (catmap (hc \ ttinl [['text (0 < #<hc ? (<hc + ": " + tplain <>hc) (tplain <>hc))]] w ind "")
+             (rw r) (catmap (hc \ ttinl [['text (0 < #<hc ? ("\(<hc): " + tplain <>hc) (tplain <>hc))]] w ind "")
                             (zipm hd r))
              ((: (g rs) (? (atom? rs) () (atom? >rs) (rw <rs) (rw <rs + [""] + g >rs))) (x 3)))))
    ; one blank line between blocks, none before the first, and none after a heading --
@@ -1044,14 +1042,14 @@
     (atom? l ? [() acc]
      (: x <l
         r (<x @ 'link   (#(x 2) ? (: a ((x 2) . acc) i (tlspans <>x a)
-                                     [(['tmark (string 3 + show #a)] . ['text ("[" + show #a + "]")] . <i) (i 1)])
+                                     [(['tmark (string 3 + show #a)] . ['text "[\(#a)]"] . <i) (i 1)])
                                   (tlspans <>x acc @ i [[['link <i (x 2)]] (i 1)]))
                  'em     (tlspans <>x acc @ i [[['em <i]] (i 1)])
                  'strong (tlspans <>x acc @ i [[['strong <i]] (i 1)])
                  'mark   [[['tmark <>x]] acc]
                  ; an image: a mark " img SRC" for a viewer to draw at, then its [alt]
-                 'img    [((0 < #(x 2) ? [['tmark (" img " + x 2)]] ())
-                           + (0 < #<>x ? [['text ("[" + <>x + "]")]] ())) acc]
+                 'img    [((0 < #(x 2) ? [['tmark " img \(x 2)"]] ())
+                           + (0 < #<>x ? [['text "[\(<>x)]"]] ())) acc]
                  [[x] acc])
         s (tlgo >l (r 1))
         [(<r + <s) (s 1)]))
@@ -1127,12 +1125,12 @@
           'table   ['table <>x (map (tpspans f) (x 2)) (map (map (tpspans f)) (x 3))]
           x)
    (ttpics d w)
-    (: (img x) (<x @ 'img ((0 < #(x 2) ? [['mark (" img " + x 2)]] ())
-                           + (0 < #<>x ? [['text ("[" + <>x + "]")]] ()))
+    (: (img x) (<x @ 'img ((0 < #(x 2) ? [['mark " img \(x 2)"]] ())
+                           + (0 < #<>x ? [['text "[\(<>x)]"]] ()))
                   [x])
        (mk x) (<x @ 'mark [['tmark <>x]] [x])
        (ttlift (ttyshow (map (tpblk mk) (tlcarry (map (tpblk img) d))) w)))
-   (ttyshow d w) (catmap (ln \ ln + "\n") (ttdoc d (w < 20 ? 20 w) 5))
+   (ttyshow d w) (catmap (ln \ "\(ln)\n") (ttdoc d (w < 20 ? 20 w) 5))
    (rf->tty s w) (ttyshow (rfread s) w)
    (md->tty s w) (ttyshow (mdread s) w)
    (ht->tty s w) (ttyshow (htread s) w))

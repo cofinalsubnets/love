@@ -415,7 +415,7 @@
                 + (mode = "kitty" ? pv-unkit "")
                 + "\e[\(top + 1);\(v 5 + 1)H\(drawn)"))))
        line (pv-status st @ s (st 'w < #s ? (snip s 0 (st 'w)) s))
-       "\(body)\(at rows)\e[7m\(line)\e[0m\e[K")
+       (body + "\(at rows)\e[7m\(line)\e[0m\e[K"))
    ; one key. panning moves a quarter of the view
    (pv-step st c)
     (: im (st 'im) ok (two? im) nf (pv-nf st)
