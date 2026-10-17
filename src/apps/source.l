@@ -5,15 +5,15 @@
 (borrow 'posix)
 ; civil, for a stamp's date (src/love/boot/post.l)
 (borrow 'cal)
-(: (src-die m) (udie 1 (";; " + m))
+(: (src-die m) (udie 1 ";; \(m)")
 
    ; a leading dash is never the positional directory, so a mistyped flag lays nothing
    (src-dash? w) (#w @ n (0 < n && w 0 = 45))
    (src-help? ("-h" || "--help" || "-help" || "help")) 1
    (src-vers? ("-v" || "--version")) 1
-   (src-vers m) (puts (uvers m + "\n"), quit 0)
+   (src-vers m) (puts "\(uvers m)\n", quit 0)
    (src-not-dir m w)
-    (src-die (w + " is not a directory -- `love " + m + " help` for usage"))
+    (src-die "\(w) is not a directory -- `love \(m) help` for usage")
 
    (src-head nom) (: n #nom
                      (go i) (? (n <= i) nom (nom i = 47) (snip nom 0 i) (go (i + 1)))
@@ -32,23 +32,23 @@
        top (src-top es)
        _ (0 >= #top ? (src-die "the carried source names no top directory"))
        w (tar-scatter dir es)
-       _ (atom? w ? (src-die ("can't write " + dir)))
-       root (dir = "." ? top (dir + "/" + top))
+       _ (atom? w ? (src-die "can't write \(dir)"))
+       root (dir = "." ? top "\(dir)/\(top)")
        ; no love is laid beside the source: the driver names the compiler in CC
        [1 root <>w])
 
    ; love-<version> under dir, laid once and shared by every verb that builds. the lay
    ; runs in a child where it can: the unpack leaves heap no collection gives back.
-   (src-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
+   (src-root dir) "\(dir = "." ? "" "\(dir)/")love-\(love-version)"
    (src-nest dir)
     (: root (src-root dir)
        exe (src-me 0)
-       (two? (stat (root + "/Makefile")) ? root
-          (: _ (say err (";; laying the source under " + dir + "\n"))
+       (two? (stat "\(root)/Makefile") ? root
+          (: _ (say err ";; laying the source under \(dir)\n")
              st (string? exe ? (spawn [exe "source" dir] @ p (charm? p && 0 <= p ? (wait p) 1))
                    (two? (src-lay dir) ? 0 1))
-             ((0 = st && two? (stat (root + "/Makefile")) ? 0
-               (src-die ("the source did not lay under " + dir))),
+             ((0 = st && two? (stat "\(root)/Makefile") ? 0
+               (src-die "the source did not lay under \(dir)")),
               root))))
 
    (src-usage _)
@@ -60,7 +60,7 @@
        _ (src-vers? d ? (src-vers "source"))
        _ (src-dash? d ? (src-not-dir "source" d))
        r (src-lay d)
-     (puts (";; wrote " + <>r + "\n"), 0))
+     (puts ";; wrote \(<>r)\n", 0))
 
    (src-dirs _)
     (: p ("" + getenv "PATH") n #p
@@ -71,7 +71,7 @@
    (src-foreign? p) (: a (stat p) b (stat (selfpath 0)) (two? a ? !(a = b) 0))
    ; a candidate's complaints are not the caller's news: both streams to /dev/null, status only
    (src-ccworks? cc dir)
-    (: c (dir + "/.ccprobe.c") o (dir + "/.ccprobe.o")
+    (: c "\(dir)/.ccprobe.c" o "\(dir)/.ccprobe.o"
        q (open c "w")
        (!(hot? q) ? 0
           (: _ (say q "int main(void){return 0;}\n")
@@ -85,16 +85,16 @@
    (src-cc dir)
     (: (try (w . x))
      (: (go ds) (atom? ds ? (try x)
-              (: d (#<ds ? <ds ".") p (d + "/" + w)
+              (: d (#<ds ? <ds ".") p "\(d)/\(w)"
                (src-foreign? p && src-ccworks? p dir ? [1 p] (go >ds))))
       (go (src-dirs ())))
      (try '("cc" "gcc" "clang")))
    (src-farm root exe)
-    (d : (root + "/out/.seedbin")
+    (d : "\(root)/out/.seedbin"
        ; a laid tree carries no out/, and mkdir makes one directory: the parent first
-       (mkdir (root + "/out") 493, mkdir d 493,
+       (mkdir "\(root)/out" 493, mkdir d 493,
         each (keys (cite 'verbs 'tab))
-             (k \ (d + "/" + string k @ p (unlink p, symlink exe p))),
+             (k \ ("\(d)/\(string k)" @ p (unlink p, symlink exe p))),
         d))
    ; this binary as a path, or () where there is none (on inle the artifact is the kernel)
    (src-me _) (selfpath 0 @ p (string? p ? p ()))
@@ -108,19 +108,19 @@
     (src-farm root exe @ farm
        (setenv "PATH" (farm + ":" + getenv "PATH"),
         setenv "LUSHFLAGS" "-a",
-        setenv "CC" (exe + " mooncc"),
+        setenv "CC" "\(exe) mooncc",
        ; says the arm out loud for common.mk's tags; a person may set LUSHFLAGS themselves
         setenv "LOVE_ARMED" "1",
         farm))
    src-needs '("cc" "make" "sh" "sed" "grep" "tr" "cat" "mkdir" "mv" "rm" "ln"
                "test" "uname" "printf" "install" "cmp" "chmod" "touch" "echo")
    ; kore's ujoin is not in this layer, so the join is local, like src-dirs' split
-   (src-words l) (? (atom? l) "" (atom? >l) <l (<l + " " + src-words >l))
+   (src-words l) (? (atom? l) "" (atom? >l) <l "\(<l) \(src-words >l)")
    (src-ours ns) (:- (go ns ())
     (go l acc) (atom? l ? (rev acc)
                 (: w <l
                    (any ds) (two? ds ?
-                             (: d (#<ds ? <ds ".") p (d + "/" + w)
+                             (: d (#<ds ? <ds ".") p "\(d)/\(w)"
                               (src-foreign? p ? 1 (any >ds))))
                  (go >l (any (src-dirs ()) ? acc (w . acc))))))
    ; compare two files in chunks, not whole: slurping two binaries holds their heap for good.
@@ -161,37 +161,37 @@
        (two? at && 16 <= at 1 && rd (at 0) 1 = string [1] && 0 <= copyfile made dst ?
           (uwrite-at dst (at 0) (string [2]))))
    (seed-cross root xa dst) (:- 0
-    made (root + "/out/x-" + show (nom xa) + "/love")
+    made "\(root)/out/x-\(nom xa)/love"
     m (seed-mark made dst)
     e (m = 1 ? 0 (copyfile made dst))
-    _ (e < 0 ? (src-die ("can't write " + dst)))
+    _ (e < 0 ? (src-die "can't write \(dst)"))
     _ (chmod dst 493)
     out? (src-lift dst)
-    _ (puts (";; laid " + dst + " -- a raw egg for " + xa + ". on that machine\n"
+    _ (puts (";; laid \(dst) -- a raw egg for \(xa). on that machine\n"
              + (m = 1 ? ";; its first run bakes it in place, then goes on.\n"
                          ";; `love bake` lays its crew from the source it carries.\n")
              + (out? ? ";; carried out of the machine. the x bit does not travel: chmod +x it there.\n" "")
              + ";; no fixpoint claimed here: a cross lay cannot BE this binary --\n"
-             + ";; `love seed` on the " + xa + " machine proves it.\n")))
+             + ";; `love seed` on the \(xa) machine proves it.\n")))
 
    ; run in a fresh exec, since the lay's heap is never unmapped; PATH and CC ride the
    ; environment. with no path to exec, seed-lay calls this directly and keeps the heap
    (seed-wait root xa dst)
     (: exe (src-me 0)
        here (cwd 0)
-       _ (!(chdir root) ? 0 (src-die ("can't enter " + root)))
+       _ (!(chdir root) ? 0 (src-die "can't enter \(root)"))
        xm (string? xa ? (show (nom xa)))     ; make's word for it
-       os (seed-os 0 @ o (nom? o ? [("xos=" + show o)] ()))
+       os (seed-os 0 @ o (nom? o ? ["xos=\(o)"] ()))
        ; -j with no count: cook reads this machine's width, and answers 1 where it
        ; cannot -- so the seed is as wide as the box and never wider.
-       s (src-run exe (string? xa ? (["make" "-j" ("xa=" + xm)] + os + [("out/x-" + xm + "/love")])
+       s (src-run exe (string? xa ? (["make" "-j" "xa=\(xm)"] + os + ["out/x-\(xm)/love"])
                                     ["make" "-j" "dist"]))
        st (two? s ? <s s)
        (chdir here,
-        (0 != st ? (src-die ("the build failed (exit " + show st + ")"))),
+        (0 != st ? (src-die "the build failed (exit \(st))")),
         (string? xa ? (seed-cross root xa dst)
            ; the rebuild must be this binary, byte for byte
-           (seed-fix exe (root + "/out/love")))))
+           (seed-fix exe "\(root)/out/love"))))
 
    ; the imageless projection of a binary, written beside p. a binary carrying no image
    ; is its own projection, which is how seed-fix reads either side's state.
@@ -203,8 +203,8 @@
    ; like with like: two baked or two bare sides compare whole, a mixed pair stripped.
    ; an image is a deterministic function of its binary, so differing images still fail
    (seed-fix exe out)
-    (: a (seed-bare exe (out + ".bare0"))
-       b (seed-bare out (out + ".bare1"))
+    (: a (seed-bare exe "\(out).bare0")
+       b (seed-bare out "\(out).bare1")
        ; neither side strips where there is no bake (wasm): both are bare already.
        ; every predicate parenthesised: a bare infix one swallows the arm beside it
        v (? (!(string? a) && !(string? b))          (src-same? exe out ? 'yes 'no)
@@ -215,8 +215,8 @@
                                                     'image)
        ((string? a ? (unlink a) 0),
         (string? b ? (unlink b) 0),
-        (v @ 'yes   (puts (";; fixpoint ok -- " + out + "\n"), 0)
-             'bare  (puts (";; fixpoint ok -- " + out + ", imageless: one side carries no image\n"), 0)
+        (v @ 'yes   (puts ";; fixpoint ok -- \(out)\n", 0)
+             'bare  (puts ";; fixpoint ok -- \(out), imageless: one side carries no image\n", 0)
              'image (say err ";; fixpoint failed: the code matches, the images do not\n", 1)
              'nostrip (say err ";; fixpoint: can't lay an imageless copy\n", 1)
              (say err ";; fixpoint failed\n", 1))))
@@ -264,13 +264,13 @@
        ; said bare, it lists the machines it can lay for
        _ (!(string? exe) && !(nom? xa) ?
           (two? as ? (src-die "this seat has no path to itself -- name a machine: `love seed x64`")
-             (puts ("seed for a machine: " + src-words (map show seed-arches) + "\n"), quit 0)))
+             (puts "seed for a machine: \(src-words (map show seed-arches))\n", quit 0)))
        root (src-nest dir)
        farm (string? exe ? (src-farm root exe) "")
        path ("" + getenv "PATH")
        ; ours lead PATH, or with -g trail it to fill the gaps; lush reads the same
        ; choice off LUSHFLAGS
-       _ (string? exe ? (setenv "PATH" (greg? ? (path + ":" + farm) (farm + ":" + path))) 0)
+       _ (string? exe ? (setenv "PATH" (greg? ? "\(path):\(farm)" "\(farm):\(path)")) 0)
        _ (setenv "LUSHFLAGS" (greg? ? "-g" "-a"))
        ; with no path to name, the Makefile reaches this binary by the verb `love`
        _ (string? exe ? 0 (setenv "LOVE" "love"))
@@ -282,19 +282,19 @@
        ; mooncc (the verb `cc` where there is no path to exec)
        _ (string? env ? 0
           (two? amb ? (setenv "CC" <>amb)
-           (setenv "CC" (string? exe ? (exe + " mooncc") "cc"))))
+           (setenv "CC" (string? exe ? "\(exe) mooncc" "cc"))))
        _ (!greg? ? (puts ";; using own tools throughout\n")
             (src-ours src-needs @ ours
-               (two? ours ? (puts $ ";; using own tools: " + (src-words ours) + "\n") 0)))
+               (two? ours ? (puts ";; using own tools: \(src-words ours)\n") 0)))
        cc (? (string? env) env (two? amb) <>amb "this binary")
        ; the OS rides the word where we had to pick one, because nothing else here says it
-       tgt (nom? xa ? (seed-os 0 @ o (" " + show xa + (nom? o ? ("-" + show o) ""))) "")
-       _ (puts (";; seeding" + tgt + " -- the compiler is " + cc + "\n"))
-       dst (nom? xa ? (dir + "/love-" + show xa) ())
+       tgt (nom? xa ? (seed-os 0 @ o " \(xa)\(nom? o ? "-\(o)" "")") "")
+       _ (puts ";; seeding\(tgt) -- the compiler is \(cc)\n")
+       dst (nom? xa ? "\(dir)/love-\(xa)" ())
        _ (string? exe ? 0 (quit (seed-wait root (show xa) dst)))   ; nothing to exec: wait here
        e (nom? xa ? (exec [exe "seed" "-wait" root (show xa) dst])
                     (exec [exe "seed" "-wait" root]))
-       (src-die ("can't wait for the build (exec: " + show e + ")")))
+       (src-die "can't wait for the build (exec: \(show e))"))
 
    (seed-main as0)
     (atom? as0 || <as0 != "-wait" ? (seed-lay as0)
@@ -310,14 +310,14 @@
    ; the boot stub is laid, not stored: the cat below evals off the carried tree in the
    ; Makefile's order. the arch is this binary's own, read off e_machine
    (kern-pick nm)
-    (uread ("/love/" + nm) @ [1 s] (s + "") (src-die ("the carried tree has no " + nm)))
+    (uread "/love/\(nm)" @ [1 s] (s + "") (src-die "the carried tree has no \(nm)"))
    (kern-b16 s i) (s i + 256 * s (i + 1))
    kern-box {}                  ; the verb's inputs, read back by the stream
    (kernel-main as)
     ; the operand is a path to WRITE, so the flags are asked before it: a `-h` taken
     ; for one lays a kernel in a file called -h
     (: usage "usage: love kernel OUT.elf"
-       _ (two? as && src-help? <as ? (puts (usage + "\n"), quit 0))
+       _ (two? as && src-help? <as ? (puts "\(usage)\n", quit 0))
        _ (two? as && src-vers? <as ? (src-vers "kernel"))
        _ (two? as ? 0 (src-die usage))
        out <as
@@ -346,7 +346,7 @@
             + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")
        (reads (tap ((: (g i) (i < #cat ? (peep cat i 0 . g (1 + i)))) 0)),
         pull vt 'kern-in 0,
-        puts (";; wrote " + out + " (" + arch + ")\n"),
+        puts ";; wrote \(out) (\(arch))\n",
         0))
 
    ; -- nest: this binary laid as the user's love under ~/.love/bin, the tools linked to it --
@@ -358,9 +358,8 @@
    (nest-when t)
     (t < 1 ? "unstamped"
        (: d (civil (t // 86400)) m (t % 86400 // 60)
-          (two x) (x < 10 ? ("0" + show x) (show x))
-          (show <d + "-" + two <>d + "-" + two <>>d + " " + two (m // 60) + ":" + two (m % 60)
-           + " utc")))
+          (two x) (x < 10 ? "0\(x)" (show x))
+          "\(<d)-\(two <>d)-\(two <>>d) \(two (m // 60)):\(two (m % 60)) utc"))
    ; the installed love's stamp, asked of it: 0 when it has none to give. its verbs are
    ; read first, so a love older than nest is never handed a word it would complain about
    (nest-theirs p)
@@ -383,13 +382,13 @@
              (string? s && (snip s 0 41 = "#!/usr/bin/env -S love -l\n; src/apps/lux/"
                             || 0 <= fsub s "((cite 'cli 'shell) 0)" 0)))))
    (nest-stale bin)
-    (filter (nm \ 0 < #nm && nm 0 != 46 && !(elem nm nest-keep) && nest-laid? (bin + "/" + nm))
+    (filter (nm \ 0 < #nm && nm 0 != 46 && !(elem nm nest-keep) && nest-laid? "\(bin)/\(nm)")
             (two? (stat bin) ? (readdir bin) ()))
    ; a ~/.local/bin link into the nest whose name the nest no longer holds, or will not
    (nest-stale-compat home bin gone)
-    (: d (home + "/.local/bin")
-       (filter (nm \ 0 < #nm && nm 0 != 46 && readlink (d + "/" + nm) = bin + "/" + nm
-                     && (elem nm gone || !(two? (stat (bin + "/" + nm)))))
+    (: d "\(home)/.local/bin"
+       (filter (nm \ 0 < #nm && nm 0 != 46 && readlink "\(d)/\(nm)" = "\(bin)/\(nm)"
+                     && (elem nm gone || !(two? (stat "\(bin)/\(nm)"))))
                (two? (stat d) ? (readdir d) ())))
 
    ; the verdict: 'fresh (none there) 'older 'same (these bytes) 'twin (one stamp, other
@@ -403,15 +402,15 @@
        _ (string? home && #home ? 0 (src-die "nest: no HOME"))
        me (selfpath 0)
        _ (string? me ? 0 (src-die "nest: cannot find this binary"))
-       bin (home + "/.love/bin") dst (bin + "/love")
+       bin "\(home)/.love/bin" dst "\(bin)/love"
        new (nest-read me)
-       _ (string? new ? 0 (src-die ("nest: cannot read " + me)))
+       _ (string? new ? 0 (src-die "nest: cannot read \(me)"))
        old (two? (stat dst) ? (nest-read dst))
        mine (nest-stamp 0)
        theirs (string? old ? (nest-theirs dst) 0)
        vd (nest-vd old new mine theirs)
        lay (elem vd '(fresh older other) || f? && !(vd = 'same))
-       (tool nm) (: p (bin + "/" + nm) l (readlink p)
+       (tool nm) (: p "\(bin)/\(nm)" l (readlink p)
                     was (? (string? l) l (two? (stat p)) "a file" "")
                     {'nm nm 'was was 'act (was = "love" ? 'keep 'link)})
        gone (nest-stale bin)
@@ -429,33 +428,32 @@
    ; a tool's line: what it is, and what it becomes
    (nest-tool-line pl t)
     (: nm (t 'nm) was (t 'was) pad (fill1 8 nm)
-       (? (t 'act = 'link) (pad + (#was ? was "absent") + " -> love")
-          (was = "love") (pad + "love")
-          (pad + (#was ? was "absent") + ", kept")))
-   (fill1 n s) (n <= #s ? (s + " ") (fill1 n (s + " ")))
+       (? (t 'act = 'link) "\(pad)\(#was ? was "absent") -> love"
+          (was = "love") "\(pad)love"
+          "\(pad)\(#was ? was "absent"), kept"))
+   (fill1 n s) (n <= #s ? "\(s) " (fill1 n "\(s) "))
    ; the plan, said: every line a person needs to say yes to it
    (nest-lines pl)
-    ([("~/.love/bin/love: " + nest-when (pl 'theirs)
-       + (pl 'verdict = 'fresh ? " (none)" "") + ", this build: " + nest-when (pl 'mine))
+    (["~/.love/bin/love: \(nest-when (pl 'theirs))\(pl 'verdict = 'fresh ? " (none)" ""), this build: \(nest-when (pl 'mine))"
       (nest-verdict pl)
       (pl 'lay = 'lay ? "lay this build as ~/.love/bin/love" "leave ~/.love/bin/love as it is")
       "the tools:"]
-     + map (t \ "  " + nest-tool-line pl t) (pl 'tools)
-     + map (nm \ "  " + fill1 8 nm + "laid by an earlier install, removed") (pl 'gone)
-     + map (nm \ "  ~/.local/bin/" + nm + " removed") (pl 'gonec))
+     + map (t \ "  \(nest-tool-line pl t)") (pl 'tools)
+     + map (nm \ "  \(fill1 8 nm)laid by an earlier install, removed") (pl 'gone)
+     + map (nm \ "  ~/.local/bin/\(nm) removed") (pl 'gonec))
    ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not
    ; ours already is left alone
    (nest-compat home bin nm)
-    (: d (home + "/.local/bin") p (d + "/" + nm) to (bin + "/" + nm)
+    (: d "\(home)/.local/bin" p "\(d)/\(nm)" to "\(bin)/\(nm)"
        (!(two? (stat d)) || string? (readlink p) || two? (stat p) ? 0 (symlink to p)))
    ; the plan carried out: the lines it says of what it did
    (nest-apply pl)
     (: home (pl 'home) bin (pl 'bin) dst (pl 'dst)
-       _ (mkdir (home + "/.love") 493) _ (mkdir bin 493)
+       _ (mkdir "\(home)/.love" 493) _ (mkdir bin 493)
        laid (pl 'lay = 'lay ?
-               (: tmp (bin + "/.love.new")
+               (: tmp "\(bin)/.love.new"
                   q (open tmp "w")
-                  _ (hot? q ? (say q (pl 'new), close q) (src-die ("nest: cannot write " + tmp)))
+                  _ (hot? q ? (say q (pl 'new), close q) (src-die "nest: cannot write \(tmp)"))
                   _ (chmod tmp 493)
                   ; the copy runs before it takes the name: a binary cut short, or one a
                   ; gate left half-built, never becomes the love on PATH
@@ -463,21 +461,20 @@
                   _ (<ok = 0 && >ok = "2\n" ? 0
                        (unlink tmp, src-die "nest: the copy does not run; nothing replaced"))
                   e (rename tmp dst)
-                  ((!e ? 0 (unlink tmp, src-die ("nest: cannot rename over " + dst))),
-                   [("~/.love/bin/love is now " + nest-when (pl 'mine)
-                     + (pl 'verdict @ 'fresh "" (", was " + nest-when (pl 'theirs))))])))
+                  ((!e ? 0 (unlink tmp, src-die "nest: cannot rename over \(dst)")),
+                   ["~/.love/bin/love is now \(nest-when (pl 'mine))\(pl 'verdict @ 'fresh "" ", was \(nest-when (pl 'theirs))")"])))
        ; a link to love wants a love to point at
        there (two? (stat dst))
-       (link t) (bin + "/" + t 'nm @ p
+       (link t) ("\(bin)/\(t 'nm)" @ p
                    (unlink p, symlink "love" p,
                     readlink p = "love"))
        ls (there ? (filter (t \ t 'act = 'link && link t) (pl 'tools)))
-       _ (each (pl 'gone) (nm \ unlink (bin + "/" + nm)))
-       _ (each (pl 'gonec) (nm \ unlink (home + "/.local/bin/" + nm)))
-       gn (pl 'gone + map (nm \ "~/.local/bin/" + nm) (pl 'gonec))
+       _ (each (pl 'gone) (nm \ unlink "\(bin)/\(nm)"))
+       _ (each (pl 'gonec) (nm \ unlink "\(home)/.local/bin/\(nm)"))
+       gn (pl 'gone + map (nm \ "~/.local/bin/\(nm)") (pl 'gonec))
        ((there ? (each ("love" . map (t \ t 'nm) (pl 'tools)) (nest-compat home bin)) 0),
-        laid + (two? ls ? [("linked " + foldl (a \ t \ a + " " + t 'nm) (<ls 'nm) >ls)])
-        + (two? gn ? [("removed " + foldl (a \ n \ a + " " + n) <gn >gn)])))
+        laid + (two? ls ? ["linked \(foldl (a \ t \ "\(a) \(t 'nm)") (<ls 'nm) >ls)"])
+        + (two? gn ? ["removed \(foldl (a \ n \ "\(a) \(n)") <gn >gn)"])))
    (nest-usage _)
     (say err "usage: love nest [-f] [-y | -n] [--stamp]
   lay this binary as ~/.love/bin/love and link its tools beside it. on a terminal the
@@ -494,32 +491,31 @@
        _ (two? bad ?
             (? (src-help? <bad) (nest-usage 0, quit 0)
                (src-vers? <bad) (src-vers "nest")
-               (say err ("love nest: unknown option " + <bad + "\n"), nest-usage 0, quit 2))
+               (say err "love nest: unknown option \(<bad)\n", nest-usage 0, quit 2))
             0)
        (has? a b) (elem a as || elem b as)
        f? (has? "-f" "--force") y? (has? "-y" "--yes") n? (has? "-n" "--dry-run")
-       _ (elem "--stamp" as ? (puts (show (nest-stamp 0) + "\n"), quit 0) 0)
+       _ (elem "--stamp" as ? (puts "\(nest-stamp 0)\n", quit 0) 0)
        pl (nest-plan f?)
-       (say1 m) (puts ("love nest: " + m + "\n"))
-       (sayall ls) (each ls (l \ puts (l + "\n")))
+       (say1 m) (puts "love nest: \(m)\n")
+       (sayall ls) (each ls (l \ puts "\(l)\n"))
        floor (cite 'roost 'roost-run)
        term (two? (tty 0) && two? (tty 1))
        (? n? (sayall (nest-lines pl), 0)
           (term && !y? && floor)
           (floor pl @ r
-             (r = 'apply ? (sayall (map (l \ "love nest: " + l) (nest-apply pl)), 0)
+             (r = 'apply ? (sayall (map (l \ "love nest: \(l)") (nest-apply pl)), 0)
                 (say1 "nothing changed", 0)))
           ; the plain way: a build no newer is kept, and says why
           (pl 'verdict @ vd
              ((elem vd '(newer twin) && !f? ?
-                 (say err ("love nest: ~/.love/bin/love is " + nest-when (pl 'theirs)
-                           + ", this is " + nest-when (pl 'mine)
+                 (say err ("love nest: ~/.love/bin/love is \(nest-when (pl 'theirs)), this is \(nest-when (pl 'mine))"
                            + (vd = 'twin ? ", a different build" "")
                            + " -- -f lays this one\n"),
                   quit 1)
                  0),
-              (vd = 'same ? (say1 ("~/.love/bin/love is this build already, " + nest-when (pl 'mine))) 0),
-              sayall (map (l \ "love nest: " + l) (nest-apply pl)),
+              (vd = 'same ? (say1 "~/.love/bin/love is this build already, \(nest-when (pl 'mine))") 0),
+              sayall (map (l \ "love nest: \(l)") (nest-apply pl)),
               0))))
 
    ; -- lux: the window manager, a verb over the source this binary carries. its modules
@@ -527,7 +523,7 @@
    ;    restarts by exec'ing its own argv, which comes back here --
    lux-modules ["core" "layout" "wire" "ewmh" "manage" "keys" "config" "lux"]
    (lux-main as)
-    (: cat (foldl (a \ m \ a + kern-pick ("src/apps/lux/" + m + ".l")) "" lux-modules)
+    (: cat (foldl (a \ m \ a + kern-pick "src/apps/lux/\(m).l") "" lux-modules)
        (reads (tap ((: (g i) (i < #cat ? (peep cat i 0 . g (1 + i)))) 0))))
    lux-usage "usage: love lux
   the window manager, over the display DISPLAY names; settings ride ~/.love/etc/lux.l
