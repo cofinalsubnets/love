@@ -17,15 +17,14 @@
                c (fsub h ":" 0)
                host (0 <= c ? (snip h 0 c) h) port (0 <= c ? (cite 'kore 'wg-digits (snip h (c + 1) #h)) d)
                (0 < k && 0 < d && 0 < #host && 0 < port ? [p host port path] ()))
- (urlenc s) (cats (map (i \ s i @ c ((48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122
+ (urlenc s) (catmap (i \ s i @ c ((48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122
                                        || c = 45 || c = 46 || c = 95 || c = 126) ? (string c)
                                       ("%" + b2hex (string c))))
-                       ^#s))
+                       ^#s)
  (peer-id _) ("-LV0300-" + cats (map (_ \ show (rand 10)) ^12))
  ; compact peers: six bytes each, the address and the port big end first
- (tr-peers s) (map (k \ [(show (s k) + "." + show (s (k + 1)) + "." + show (s (k + 2)) + "." + show (s (k + 3)))
-                         (rdbe s (k + 4) 2)])
-                   (filter (k \ k % 6 = 0) ^(#s - #s % 6)))
+ (tr-peers s) (map (k \ ["\(s k).\(s (k + 1)).\(s (k + 2)).\(s (k + 3))" (rdbe s (k + 4) 2)])
+               (filter (k \ k % 6 = 0) ^(#s - #s % 6)))
  ; a dictionary peer list, the older shape: {'ip 'port}
  (tr-dpeers l) (filter two? (map (p \ tablet? p ? [(peep p "ip" "") (peep p "port" 0)]) l))
 
@@ -67,7 +66,7 @@
      (? !(hot? p) "the tracker's name does not resolve"
         (: c (ask2 (wrbe 4497486125440 8 + wrbe 0 4 + tid ()) 3)
            (? !(string? c) (close p, "the tracker did not answer")
-              (rdbe c 0 4 = 3) (close p, ("the tracker refused: " + snip c 8 #c))
+              (rdbe c 0 4 = 3) (close p, "the tracker refused: \(snip c 8 #c)")
               (: q (snip c 8 16 + wrbe 1 4 + tid () + ask 'hash + ask 'id
                     + wrbe (ask 'down) 8 + wrbe (ask 'left) 8 + wrbe (ask 'up) 8
                     + wrbe ev 4 + wrbe 0 4 + wrbe (rand 4294967296) 4 + wrbe 4294967295 4
@@ -75,10 +74,10 @@
                  a (ask2 q 3)
                  (close p,
                   (? (!(string? a) || #a < 20) "the tracker did not answer the announce"
-                     (rdbe a 0 4 = 3) ("the tracker refused: " + snip a 8 #a)
+                     (rdbe a 0 4 = 3) "the tracker refused: \(snip a 8 #a)"
                      {'interval (rdbe a 8 4) 'leechers (rdbe a 12 4) 'seeders (rdbe a 16 4)
                       'peers (tr-peers (snip a 20 #a))})))))))
 
- (announce url ask) (tr-url url @ u (u 0 @ "http" (tr-http u ask) "udp" (tr-udp u ask) ("no " + u 0 + " trackers yet"))
-                              ("not a tracker url: " + url))
+ (announce url ask) (tr-url url @ u (u 0 @ "http" (tr-http u ask) "udp" (tr-udp u ask) "no \(u 0) trackers yet")
+                              "not a tracker url: \(url)")
 )) ; module tracker

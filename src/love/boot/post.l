@@ -2214,7 +2214,7 @@
         (as \ (? (atom? as) (vlist (vsort (keys tab)), flush out)
                  (<as = "--help")
                   (puts "usage: verbs   (the names this artifact answers to)\n", flush out, 0)
-                 (say err ("verbs: unknown option " + <as + "\n"), flush err, 2))))
+                 (say err "verbs: unknown option \(<as)\n", flush err, 2))))
 
    ; --- the seat scan, the third door ---
    ; a file that is the program seats itself: `love src/apps/moon/moon.l foo.c`, the installed
@@ -2534,10 +2534,10 @@
    ; sgr), 'paste (bracketed), 'hide (the cursor), ('title t) (pushed, popped on the way out). ttygive undoes exactly
    ; what ttytake set, every mouse mode included, and leaves the cursor shown
    (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'tap "\e[?9h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
-                  ('title t) ("\e[22;0t\e]2;" + t + "\a") "")
+                  ('title t) ("\e[22;0t\e]2;\(t)\a") "")
    (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'tap "\e[?1006l\e[?9l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
-   (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + cats (map ttyon ms)), flush out)
-   (ttygive ms) (say out ("\e[0m" + cats (map ttyoff (rev ms)) + "\e[?25h\e[?1049l"), flush out, raw 0)
+   (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + catmap ttyon ms), flush out)
+   (ttygive ms) (say out ("\e[0m" + catmap ttyoff (rev ms) + "\e[?25h\e[?1049l"), flush out, raw 0)
 
    ; --- the stage: a full-screen tty app, a tablet of doors, mitty's pane shape ------------
    ;   'show w h -> the frame for a w by h screen     'step k    a key
@@ -2547,11 +2547,11 @@
    ;   'modes   ttytake's
    ; eof leaves too, and the tty comes back whatever way the visit ends
    (stage-run d)
-    (: ms (peep d 'modes ()) tk (peep d 'tick ()) per (peep d 'every 33)
+    (: ms (d 'modes) tk (d 'tick) per (peep d 'every 33)
        st {'over 0 'dirt 1 'size ()}
        (over? _) (st 'over || (d 'over?) ())
-       (key c) (? (c = -7) (pin st 'over 1) (: _ ((d 'step) c) (pin st 'dirt 1)))
-       (paint g) (: _ (pins st 'dirt 0 'size g) (say out ((d 'show) (g 1) <g), flush out))
+       (key c) (? (c = -7) (pin st 'over 1) (: _ (d 'step c) (pin st 'dirt 1)))
+       (paint g) (: _ (pins st 'dirt 0 'size g) (say out (d 'show (g 1) <g), flush out))
        ; no tick: the frame, then a key, in turn
        (turns _) (: _ (paint (ttysize 7 19)) _ (key (edkey in)) (over? () ? 0 (turns ())))
        ; a tick: the keys on a task of their own, a frame when a key, the tick or the size says
@@ -2587,7 +2587,7 @@
    ; l grows by prepending, so the drawn one is the tail and the question is an identity.
    (edgrew t)
      (t 'l @ l
-        (!(t 'u) && !(t 'd) && !(t 'r) && two? l && cup l == t 'was))
+        (!(t 'u) && !(t 'd) && !(t 'r) && two? l && >l == t 'was))
    ; a repaint puts the whole line out again, costing the line's length a keystroke --
    ; quadratic over a pasted run, and a seat painting that into a framebuffer looks hung -- so
    ; the one grown character is worth telling from the line. a character landing on the margin
@@ -2657,7 +2657,7 @@
    ; first so the answer is exactly n wide -- both by column, not by byte.
    (edpad s n c) (edwide s @ w (w < n ? (s + ((n - w) (t \ t + c) "")) s))
    (edfit s n c) (edpad (edcut s n) n c)
-   (sgr code s) ("\e[" + code + "m" + s + "\e[0m")       ; s in the pen code, reset after
+   (sgr code s) "\e[\(code)m\(s)\e[0m"       ; s in the pen code, reset after
 
    ; --- the option walk, shared by kore's applets and love's own rail ----------------
    ; (uopt1 w flags vals) -- one word into its letters as words of their own, or () when the
@@ -2674,7 +2674,7 @@
        (go k acc)
         (n <= k ? (rev acc)
            (: c (w k)
-              s ("-" + string c)
+              s "-\(c)"
               g (snip w (k + 1) n)
               (? (elem c vals) (rev (#g ? (g . s . acc) (s . acc)))
                  (ours? c) (go (k + 1) (s . acc))
@@ -2699,9 +2699,8 @@
        ; one long word into the shape uopt1 answers for a short cluster, so `eat` walks
        ; either: the word alone, or the word and the value glued behind its `=`.
        (long1 a)
-        (a @ ("--" + nm + "=" + v) (lgot nm @ c (c && elem c vals ? [("--" + nm) v] ()))
-             ("--" + nm) (lgot nm @ c (c ? [a] ()))
-             ())
+        (a @ "--\(nm)=\(v)" (lgot nm @ c (c && elem c vals ? ["--\(nm)" v] ()))
+             "--\(nm)" (lgot nm @ c (c ? [a] ())) )
        ; the exploded word, then the argv tail behind it. a value key ends its chain, so
        ; at most one element of `bs` is ever a value and it is the last.
        (eat bs rest es)
@@ -2782,31 +2781,28 @@
    ; the leading flag words only: the walk stops at the first operand and at `--`, so a file
    ; really called --help still opens once something else has been named. not getopt -- a
    ; value word that looks like a flag is walked over, so `grep -e --help f` answers the help.
-   (uask as h? v?)
-    (two? as ?
-       (<as @ w
-          (? (w = "--") ()
-             (w = "--help") 'help
-             (w = "--version") 'vers
-             (w = "-h" && h?) 'help
-             (w = "-v" && v?) 'vers
-             (1 < #w && (w 0 = 45)) (uask >as h? v?)
-             ())))
+   (uask (w . u) h? v?)
+    (w @ "--" ()
+         "--help" 'help
+         "--version" 'vers
+         ("-h" && h?) 'help
+         ("-v" && v?) 'vers
+         (1 < #w && w 0 = 45 && uask >as h? v?))
    ; an applet as the world calls it: nm is its name, u its usage text, and h?/v? whether the
    ; bare letters are free -- posix or gnu has spoken for one in a few places, and there the
    ; long form is the only answer. answers the main a verb registry takes.
-   (uvers nm) (string nm + " / love " + love-version)                           ; the --version answer, one spelling for every tool
+   (uvers nm) "\(nm) / love \(love-version)"                           ; the --version answer, one spelling for every tool
    (udoor nm f u h? v?)
     (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one
-                   (puts (n && x (n - 1) = 10 ? x (x + "\n")), flush out, 0))
+                   (puts (n && x (n - 1) = 10 ? x "\(x)\n"), flush out, 0))
        (as \ (uask as h? v?
-              @ 'help (say1 (u || "usage: " + string nm))
+              @ 'help (say1 (u || "usage: \(nm)"))
                 'vers (say1 (uvers nm))
                 (f as))))
 
    ps1 "> "
    ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.
-   ps1c (string 27 + "[38;5;117m" + ps1 + string 27 + "[39m")
+   ps1c "\e[38;5;117m\(ps1)\e[39m"
 
    ; print the prompt, then dispatch keys until ^D or a submitted buffer.
    ; returns eofsym on ^D, else (vs . nhu) so the repl can thread history.
@@ -2819,13 +2815,13 @@
            edstep t (edkey in),
            (t 'ev @ 0 (loop ())
               ; ^D leaves the line ended, so whatever runs next starts on its own
-              (-7 || 4) ((0 < (t 'below) ? (csi (t 'below) 66) ()), putc 10, eofsym)
+              (-7 || 4) ((0 < t 'below ? (csi (t 'below) 66) ()), putc 10, eofsym)
               ; enter cashes the buffer as long as it parses complete
               10 (parseall (edchars t) @
                   ^no (ednl (eddetach t), loop ())
                   vs (: _ (eddetach t)
                         h (revcat (t 'hd) (t 'hu))
-                        (0 < (t 'below) ? (csi (t 'below) 66) (),   ; past the rows below the cursor
+                        (0 < t 'below ? (csi (t 'below) 66) (),   ; past the rows below the cursor
                          putc 10,
                          [vs (!vs ? h (take 100 (edframe t . h)))])))
               -8 (uphist t, loop ())
@@ -2835,7 +2831,7 @@
         (edbr loop))
    ; evaluate a single parsed datum cooperatively.
    (do_eval v)
-     (: pid (twirl (v \ show (ev v)) v)              ; shown aboard: ^C stops a long print too
+     (: pid (twirl (show * ev) v)              ; shown aboard: ^C stops a long print too
         (poll _)
           (? (landed? pid) ((catch pid @ s (string? s ? (puts s) (putx s))), -1)   ; the answer; a raise's ()
              (cue? 0) 
@@ -2862,7 +2858,7 @@
     (: prev (heard ())
        _ (hear shell-help)        ; the prompt survives every raise; a script must not
        _ (raw 1)
-       _ (puts $ ";3 love " love-version "\n")
+       _ (puts ";3 love \(love-version)\n")
        r (repl 0 0)
        (hear prev,
         r))
@@ -2904,7 +2900,7 @@
                          (: _ (pin t 'l (foldl (a \ ch \ ch . a) (t 'l) <cl))
                             cs >cl
                           (two? cs && two? >cs ?
-                            (puts $ "\n" + foldl (a \ s \ 0 = #a ? s (a + "  " + s)) "" cs + "\n"),
+                            (puts $ "\n" + foldl (a \ s \ 0 = #a ? s "\(a)  \(s)") "" cs + "\n"),
                            loop i draft)))))
               -8 (recall i (i >= hn ? i (i + 1)) draft)   ; up: older
               -9 (recall i (0 >= i  ? i (i - 1)) draft)    ; down: newer
@@ -2925,17 +2921,17 @@
 (: (cli-rail ln)
  (: (charm0 x) (charm? x ? x 0)
     ; a program's own uleave ('leave, udie's) goes out the same door
-    (door a b) (a == 'cli-leave || a == 'leave ? (charm0 b) (scare a b))
+    (door a b) (a @ ('cli-leave || 'leave) (charm0 b) (scare a b))
     cli2
  (trap (x \
             (: (cli-leave c) (scare 'cli-leave c)
                ; a kind test, not a match on (): a refusal answers a nom, and a nom is truthy
                ; open is posix's, and a seat without it answers () here rather than at the bake
                (load1 p) (cite 'posix 'open p "r" @ q
-                            (hot? q ? (reads q) (say err $ "love: cannot open " + p + "\n", cli-leave 1)))
+                            (hot? q ? (reads q) (say err "love: cannot open \(p)\n", cli-leave 1)))
                (eval1 s) (sounds s @ 'torn (say err "love: -e: unfinished form\n", cli-leave 2)
                                     (d @ (a . u)) (ev 'ev (atom? u ? a d)))   ; many datums fold to one application
-               v-msg ("love " + love-version + "\n")   ; _ arg: love has no nullary calls
+               v-msg "love \(love-version)\n"
                h-msg
                """
                usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]
@@ -2952,7 +2948,7 @@
                try `love verbs` to see a list of commands
 
                """
-               (need h '()) (say err $ "love: " + h + " needs an argument\n", cli-leave 2)
+               (need h '()) (say err "love: \(h) needs an argument\n", cli-leave 2)
                K 1024 M 1048576 G 1073741824
                wordsz (charm? G ? 8 4)             ; 2^30 is a charm only where a fixnum is 62-bit
                ; validate here: a bad value reaching `tune` writes a non-Z tray, which the nif refuses
@@ -2967,7 +2963,7 @@
                                                             ; `:` body slot folds into the binding chain
                              (charm? v && v >= 0 ?
                               (v * (u || M) // wordsz)
-                              (say err $ "love: " + h + ": not a size: " + s + "\n",
+                              (say err "love: \(h): not a size: \(s)\n",
                                cli-leave 2)))
                ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin / 'none.
                ; 'none is the line running out with no program named: -v and -h are not terminal, so
@@ -3011,7 +3007,7 @@
       V  (cite 'verbs)
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
       f  (V 'seat <ln)
-      (charm0 (? f          (trap (_ \ (f >ln)) () (\ a b (a == 'leave ? (charm0 b) (scare a b))))
+      (charm0 (? f          (trap (_ \ (f >ln)) () (\ a b (a @ 'leave (charm0 b) (scare a b))))
                  (two? >ln) (cli-rail ln)
                  tty        (shell 0)
                  (reads in, 0))))         ; non-tty stdin: the stream face drinks the in port
@@ -3020,6 +3016,6 @@
  ; with no seat to exec reach the repl by name. last in the letrec: the closure takes its free
  ; names as they stand.
  _ (cite 'verbs 'enlist 'love
-     (as \ (two? as ? (cli-rail (. "love" as)) (shell 0)))
+     (as \ (two? as ? (cli-rail ("love" . as)) (shell 0)))
      [('exec . (as \ (two? as && (<as = "bake" || <as = "wake"))))]))
 ) ; module cli

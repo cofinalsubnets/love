@@ -28,7 +28,7 @@
  (mc-rfind s b) (: (go k) (? (k < 0) (0 - 1) (s k = b) k (go (k - 1))) (go (#s - 1)))
 
  ; --- an entry is [name mode size], the mode an LSTAT's: a link is a link here -------
- (mc-join d n) (d @ "/" ("/" + n) (d + "/" + n))
+ (mc-join d n) (d @ "/" "/\(n)" "\(d)/\(n)")
  (mc-dir? e) (16384 = e 1 & 61440)
  (mc-link? e) (40960 = e 1 & 61440)
  ; is the path a directory with the links FOLLOWED -- what enter asks, since a link to
@@ -86,12 +86,12 @@
  ; pick takes the pane to the file's directory with the cursor on it
  (mc-find s p)
   (: d (p 'dir)
-     (rel f) (starts? f (d + "/") ? (snip f (#d + 1) #f) f)
-     (pin s 'seek (seek-new (seek-files d) (f \ rel f) rel "find")))
+     (rel f) (starts? f "\(d)/" ? (snip f (#d + 1) #f) f)
+     (pin s 'seek (seek-new (seek-files d) rel rel "find")))
  (mc-found s f)
   (: p (mc-act s) dir (mc-parent f) nm (snip f (mc-rfind f 47 + 1) #f)
      (mc-cd p dir,
-      (: (at l i) (? !(two? l) 0 (<(<l) = nm) i (at >l (i + 1)))
+      (: (at l i) (? !(two? l) 0 (<<l = nm) i (at >l (i + 1)))
          (mc-goto p (at (p 'es) 0) (s 'rows)))))
  (mc-seekey s c)
   (: d (s 'seek)
@@ -110,8 +110,8 @@
    (10 || 13)  (mc-enter s p, s)
    117           (mc-cd p (mc-parent (p 'dir)), s)
    114           (mc-cd p (p 'dir), s)
-   (118 || 17)   (pin s 'qv (s 'qv = 1 ? 0 1))
-   116           (pin s 'qv (s 'qv = 2 ? 0 2))
+   (118 || 17)   (pin s 'qv (s 'qv @ 1 0 1))
+   116           (pin s 'qv (s 'qv @ 2 0 2))
    47            (mc-find s p, s)
    (113 || -7) (pin s 'over 1))))
 
@@ -150,11 +150,11 @@
      (mc-nul? b) (mc-dump b n w)
      (: ls (lines b) ls2 (#b < 4096 || #ls < 2 ? ls (take (#ls - 1) ls))
         (map mc-vis (take n ls2))))
- (mc-pad rs) (map (r \ " " + r) rs)
+ (mc-pad rs) (map (r \ " \(r)") rs)
  (mc-count q n)
   (readdir q @ ns
      (atom? ns && ns != () ? ["cannot read"]
-        (#ns @ m ([(show m + (m = 1 ? " entry" " entries")) ""] + take (n - 2) (sort ns)))))
+        (#ns @ m ([(show m + (m @ 1 " entry" " entries")) ""] + take (n - 2) (sort ns)))))
 
  ; --- pictures ----------------------------------------------------------------------
  ; a picture fitted to cols by rows cells, never enlarged, by pic's nearest sampler ->
@@ -172,10 +172,10 @@
  ; is there, else decoded when cheap or when the frame has budget, else "..." and owed
  (mc-thumbat s q st cols rows gm)
   (: sz <st
-     key (q + " " + show (st 1) + " " + show sz + " " + show cols + " " + show rows + " " + gm)
+     key "\(q) \(st 1)) \(sz) \(cols) \(rows) \(gm)"
      hit (s 'cache key)
      (? (hit != ()) hit
-        (s 'cap < sz) ("too big to show, " + show (sz // 1048576) + " MB")
+        (s 'cap < sz) ("too big to show, \(sz // 1048576) MB")
         (sz < s 'cheap || 0 < s 'budget)
          (: _ (pin s 'budget (s 'budget - 1))
             r (uread q)
@@ -188,11 +188,11 @@
  ; a picture in the quick view: the thumbnail centred, its name and what it is under it
  (mc-pic s q nm st k b w n)
   (: d (cite 'kore 'pic-size b)
-     tag (two? d ? (show (d 0) + "x" + show (d 1) + "  " + show k) (show k))
+     tag (two? d ? "\(d 0)x\(d 1)  \(k)" (show k))
      th (mc-thumbat s q st (max 1 (w - 2)) (max 1 (n - 3)) (s 'gm))
      art (string? th ? [th] (th 1))
      lp (max 0 ((w - (string? th ? (edwide th) (th 0))) // 2))
-     blk (map (r \ edfit "" lp " " + r) art + ["" (" " + nm) (" " + tag)])
+     blk (map (r \ edfit "" lp " " + r) art + ["" " \(nm)" " \(tag)"])
      top (max 0 ((n - #blk) // 2))
      [(map (_ \ "") ^top + blk) (? (string? th) () (th 2 = "") () [lp top (th 2)])])
  ; the other pane in quick view -> [rows graphic], graphic () or [col row string] in it
@@ -217,13 +217,13 @@
      pg (drop (per * (ci // per)) es)
      (tile e ln)
       (: q (mc-join (p 'dir) <e) st (stat q)
-         (? (ln = mc-th - 1) (edfit (" " + <e) (mc-tw - 1) " " @ t (e = cur ? ("\e[7m" + t + "\e[0m ") (t + " ")))
+         (? (ln = mc-th - 1) (edfit " \(<e)" (mc-tw - 1) " " @ t (e = cur ? "\e[7m\(t)\e[0m " "\(t) "))
             !(two? st) (edfit "" mc-tw " ")
             (: th (mc-thumbat s q st (mc-tw - 2) (mc-th - 1) "block")
                art (string? th ? [th] (th 1))
                top ((mc-th - 1 - #art) // 2)
                r (top <= ln < top + #art ? (art (ln - top)) "")
-               (edfit (" " + r) mc-tw " "))))
+               (edfit " \(r)" mc-tw " "))))
      (band b) (take nc (drop (b * nc) pg) @ ts (map (ln \ catmap (e \ tile e ln) ts) ^mc-th))
      rows (catmap band ^(min nr ((#pg + nc - 1) // nc)))
      [(two? es ? rows [" no pictures here"]) ()])
@@ -238,12 +238,12 @@
  (mc-cell d e w sel)                           ; one listing row, fitted plain then dressed
   (: sz (mc-size e)
      k (w - #sz - 2)
-     txt (" " + edfit <e (k < 1 ? 1 k) " " + " " + sz)
+     txt (" " + edfit <e (k < 1 ? 1 k) " " + " \(sz)")
      row (edfit txt w " ")
      h (mc-hue d e)
-     (? (sel = 1) ("\e[7m" + row + "\e[0m")
-        (sel = 2) ("\e[4m" + row + "\e[0m")
-        #h (h + row + "\e[0m")
+     (? (sel = 1) ("\e[7m\(row)\e[0m")
+        (sel = 2) ("\e[4m\(row)\e[0m")
+        #h "\(h)\(row)\e[0m"
         row))
  (mc-row p k w act?)
   (: es (p 'es) i (p 'top + k)
@@ -256,13 +256,13 @@
  ; every picture let go when it changes
  (mc-gfx s x0 y0 g)
   (: e (string 27)
-     at (two? g ? (e + "[" + show (y0 + g 1) + ";" + show (x0 + g 0) + "H") "")
+     at (two? g ? "\(e)[\(y0 + g 1);\(x0 + g 0)H" "")
      gs (two? g ? (at + g 2) "")
      un (cite 'kore 'pv-unkit)
      old (s 'shown)
      (pin s 'shown gs,
       (? (s 'gm != "kitty") gs
-         (gs = old) (gs = "" ? "" (at + e + "_Ga=p,i=7,p=1,C=1,q=2" + e + "\\"))
+         (gs = old) (gs @ "" "" "\(at)\(e)_Ga=p,i=7,p=1,C=1,q=2\(e)\\")
          (un + gs))))
  (mc-frame s w h)
   (? !(nil? (s 'seek)) (seek-frame (s 'seek) w h)
@@ -283,9 +283,9 @@
      (say j "\e[H\e[0m",
       say j (mc-head (qv && a = 1 ? vh (l 'dir)) lw + "\e[0m|"
              + mc-head (qv && a = 0 ? vh (r 'dir)) rw + "\e[0m\e[K\r\n"),
-      each ^rows (k \ say j $ lrow k + "\e[0m|" + rrow k + "\e[0m\e[K\r\n"),
-      say j (edfit (" " + here) w " " + "\e[K\r\n"),
-      say j ("\e[7m" + edfit mc-keys w " " + "\e[0m\e[K\e[?25l"),
+      each ^rows (k \ say j "\(lrow k)\e[0m|\(rrow k)\e[0m\e[K\r\n"),
+      say j (edfit " \(here)" w " " + "\e[K\r\n"),
+      say j ("\e[7m\(edfit mc-keys w " ")\e[0m\e[K\e[?25l"),
       say j (mc-gfx s (a = 0 ? (lw + 2) 1) 2 (v 1)),
       slurp j)))
 
@@ -322,9 +322,9 @@
      ds (g? ? (drop 2 as) as)
      d1 (two? ds ? <ds ("" + cwd 0))
      d2 (two? ds && two? >ds ? <>ds d1)
-     (? !(elem gm ["auto" "block" "sixel" "kitty"]) (puts ("mc: no mode " + gm + "; block sixel kitty or auto\n"), 2)
-        !(mc-dirat? d1) (puts ("mc: " + d1 + ": not a directory\n"), 1)
-        !(mc-dirat? d2) (puts ("mc: " + d2 + ": not a directory\n"), 1)
+     (? !(elem gm ["auto" "block" "sixel" "kitty"]) (puts ("mc: no mode \(gm); block sixel kitty or auto\n"), 2)
+        !(mc-dirat? d1) (puts ("mc: \(d1): not a directory\n"), 1)
+        !(mc-dirat? d2) (puts ("mc: \(d2): not a directory\n"), 1)
         (mc-run d1 d2 gm)))
  _ (pins (cite 'verbs 'tab) 'mc (udoor 'mc mc-main mc-usage 1 1)))
 ) ; module mc

@@ -48,8 +48,8 @@
           (go wav-rows)))
    ; a decoder's s16, named nm, in m's shape
    (wav-s16 nm m) {'name nm 'desc nm 'w 2 'bits 16 'kind 's 'big 0 'ch (m 'ch) 'rate (m 'rate) 'align (2 * m 'ch)}
-   (wav-desc f) (f 'desc + ", Rate " + show (f 'rate) + " Hz, "
-                 + (f 'ch @ 1 "Mono" 2 "Stereo" n ("Channels " + show n)))
+   (wav-desc f) ("\(f 'desc), Rate \(f 'rate) Hz, "
+                 + (f 'ch @ 1 "Mono" 2 "Stereo" n "Channels \(n)"))
 
    ; --- the RIFF walk --------------------------------------------------------
    (wav-hex n) (: d "0123456789abcdef" (string (map (k \ d ((n >> k) & 15)) [12 8 4 0])))
@@ -59,14 +59,14 @@
        tag (tag0 = 65534 && z >= 26 ? (rdle s (p + 24) 2) tag0)
        ch (rdle s (p + 2) 2) rate (rdle s (p + 4) 4)
        align (rdle s (p + 12) 2) bits (rdle s (p + 14) 2)
-       name (? (tag = 1) (bits @ 8 "U8" 16 "S16_LE" 32 "S32_LE"
-                               24 (ch && align // ch = 4 ? "S24_LE" "S24_3LE") ())
-               (tag = 3) (bits @ 32 "FLOAT_LE" 64 "FLOAT64_LE" ())
-               (tag = 6) "A_LAW"
-               (tag = 7) "MU_LAW"
-               'tag)
-       (? (name = 'tag) ("can't play WAVE-file format 0x" + wav-hex tag + " which is not PCM or FLOAT encoded")
-          !(string? name) ("can't play WAVE-files with sample " + show bits + " bits wide")
+       name (tag @ 1 (bits @ 8 "U8" 16 "S16_LE" 32 "S32_LE"
+                             24 (ch && align // ch = 4 ? "S24_LE" "S24_3LE"))
+                   3 (bits @ 32 "FLOAT_LE" 64 "FLOAT64_LE")
+                   6 "A_LAW"
+                   7 "MU_LAW"
+                   'tag)
+       (? (name = 'tag) "can't play WAVE-file format 0x\(wav-hex tag) which is not PCM or FLOAT encoded"
+          !(string? name) "can't play WAVE-files with sample \(bits) bits wide"
           (ch < 1) "can't play WAVE-files with no channels"
           (wav-format name @ f
              (align < ch * f 'w ? "a WAVE-file whose frame is narrower than its samples"
@@ -118,7 +118,7 @@
                (m * (2 * (x >> 7) - 1)))
          kind (: mask ((1 << bits) - 1)
                  u ((wav-word c n align off w big) & mask)
-                 v (kind = 's ? ((u + (1 << (bits - 1))) & mask) u)
+                 v (kind @ 's ((u + (1 << (bits - 1))) & mask) u)
                  ((bits > 16 ? (v >> (bits - 16)) (v << (16 - bits))) - 32768))))
    (wav-pcm f n c)
     (: o (min 2 (f 'ch)) out (cask (n * 2 * o))
@@ -153,7 +153,7 @@
   U32_LE U32_BE FLOAT_LE FLOAT_BE FLOAT64_LE FLOAT64_BE MU_LAW A_LAW S24_3LE S24_3BE U24_3LE
   U24_3BE, or cd, cdr, dat; raw defaults to U8, 8000 Hz, mono. the horn picks the device:
   HORN=PATH names one, HORN=none plays to a sink that keeps time."
-   (aplay-fail m) (say err ("aplay: " + m + "\n"), flush err, 1)
+   (aplay-fail m) (say err ("aplay: \(m)\n"), flush err, 1)
    (aplay-int s) (string? s && #s && all (c \ 48 <= c <= 57) (chars s)
                   ? (foldl (\ a c (a * 10 + c - 48)) 0 (chars s)))
    ; held bytes then the port's gulps, a whole frame at a time, out the horn
@@ -173,45 +173,44 @@
    (aplay-one o q nm)
     (: (more h) (see q @ -1 h c (unsee q c, h + chug q))
        ; -> [what wav-head says, the bytes read for it]; a short head that is no RIFF is raw
-       rh (o 't = 'raw ? ['raw (more "")]
-             ((cite 'av 'av-head) q wav-head "" @ ['short h] [("RIFF" = snip h 0 4 ? 'more 'raw) h] x x))
+       rh (o 't @ 'raw ['raw (more "")]
+           (cite 'av 'av-head q wav-head "" @ ['short h] [(snip h 0 4 @ "RIFF" 'more 'raw) h] x x))
        hb <>rh
        r (<rh = 'more ? "a WAVE-file cut short ahead of its data" <rh)
        wav (tablet? r)
        (? (string? r) (aplay-fail r)
-          (!wav && o 't = 'wav) (aplay-fail (nm + ": not a WAVE-file"))
+          (!wav && o 't = 'wav) (aplay-fail "\(nm): not a WAVE-file")
           (: fo (o 'f)
              f (wav ? r (pins fo 'ch (o 'c) 'rate (o 'r) 'align (o 'c * fo 'w)))
              cap (? (0 <= o 'd) (o 'd * f 'rate) (0 <= o 's) (o 's) -1)
              h (wav ? (snip hb (r 'at) #hb) hb)
              (? (f 'rate < 8000 || 192000 < f 'rate)
-                 (aplay-fail ("rate " + show (f 'rate) + " Hz is outside the horn's 8000..192000"))
-                (o 'q ? () (say err ("Playing " + (wav ? "WAVE" "raw data") + " '" + nm + "' : "
-                                     + wav-desc f + "\n"), flush err),
+                 (aplay-fail "rate \(f 'rate) Hz is outside the horn's 8000..192000")
+                (o 'q ? () (say err "Playing \(wav ? "WAVE" "raw data") '\(nm)' : \(wav-desc f)\n", flush err),
                  horn (f 'rate) (min 2 (f 'ch)) @ hn
-                  (nom? hn ? (aplay-fail ("audio open error: " + show hn))
+                  (nom? hn ? (aplay-fail "audio open error: \(hn)")
                    (aplay-pump q h f (wav ? (r 'len) -1) cap hn,
                     flush hn, wav-drain hn, close hn, 0)))))))
    (aplay-file o p)
     (? (p = "-") (aplay-one o in "stdin")
        (open p "r" @ q
          (hot? q ? (aplay-one o q p @ r (close q, r))
-            (say err (p + ": " + uerrno q + "\n"), flush err, 1))))
+            (say err ("\(p): \(uerrno q)\n"), flush err, 1))))
    ; -x V, -xV and --long=V; aplay's -r takes kHz below 300
    aplay-long {"quiet" "-q" "file-type" "-t" "format" "-f" "channels" "-c" "rate" "-r"
                "duration" "-d" "samples" "-s"}
    (aplay-set o k v)
     (k @ "-t" ((lower v) @ "wav" (pin o 't 'wav, 1) "raw" (pin o 't 'raw, 1)
-                            (aplay-fail ("unrecognized file format " + v), ()))
+                            (aplay-fail "unrecognized file format \(v)", ()))
          "-f" ((lower v) @ "cd" (pins o 'f (wav-format "S16_LE") 'r 44100 'c 2, 1)
                            "cdr" (pins o 'f (wav-format "S16_BE") 'r 44100 'c 2, 1)
                            "dat" (pins o 'f (wav-format "S16_LE") 'r 48000 'c 2, 1)
-                           _ (wav-format v @ f (tablet? f ? (pin o 'f f, 1) (aplay-fail ("wrong extended format '" + v + "'"), ()))))
-         "-c" (aplay-int v @ n (n && 0 < n <= 256 ? (pin o 'c n, 1) (aplay-fail ("value " + v + " for channels is invalid"), ())))
-         "-r" (aplay-int v @ n (n && 0 < n ? (pin o 'r (n < 300 ? (n * 1000) n), 1) (aplay-fail ("bad speed value " + v), ())))
-         "-d" (aplay-int v @ n (charm? n ? (pin o 'd (n ? n -1), 1) (aplay-fail ("bad duration " + v), ())))
-         "-s" (aplay-int v @ n (charm? n ? (pin o 's (n ? n -1), 1) (aplay-fail ("bad samples " + v), ())))
-         (aplay-fail ("invalid option -- '" + snip k 1 #k + "'"), ()))
+                           _ (wav-format v @ f (tablet? f ? (pin o 'f f, 1) (aplay-fail "wrong extended format '\(v)'", ()))))
+         "-c" (aplay-int v @ n (n && 0 < n <= 256 ? (pin o 'c n, 1) (aplay-fail "value \(v) for channels is invalid", ())))
+         "-r" (aplay-int v @ n (n && 0 < n ? (pin o 'r (n < 300 ? (n * 1000) n), 1) (aplay-fail "bad speed value \(v)", ())))
+         "-d" (aplay-int v @ n (charm? n ? (pin o 'd (n ? n -1), 1) (aplay-fail "bad duration \(v)", ())))
+         "-s" (aplay-int v @ n (charm? n ? (pin o 's (n ? n -1), 1) (aplay-fail "bad samples \(v)", ())))
+         (aplay-fail "invalid option -- '\(snip k 1 #k)'", ()))
    (aplay-main as)
     (: o {'q 0 't () 'f (wav-format "U8") 'c 1 'r 8000 'd -1 's -1}
        (go l fs)
@@ -221,15 +220,15 @@
                  (a = "-q" || a = "--quiet") (pin o 'q 1, go >l fs)
                  (2 < #a && "--" = snip a 0 2)
                   (: i (findsub a "=") k (snip a 2 (i < 0 ? #a i)) s (aplay-long k)
-                     (? !(string? s) (aplay-fail ("unrecognized option '" + a + "'"))
+                     (? !(string? s) (aplay-fail "unrecognized option '\(a)'")
                         (s = "-q") (pin o 'q 1, go >l fs)
-                        (i < 0) (two? >l ? (aplay-set o s <>l ? (go >>l fs) 1) (aplay-fail ("option '" + a + "' needs a value")))
+                        (i < 0) (two? >l ? (aplay-set o s <>l ? (go >>l fs) 1) (aplay-fail ("option '\(a)' needs a value")))
                         (aplay-set o s (snip a (i + 1) #a) ? (go >l fs) 1)))
                  (1 < #a && 45 = a 0)
                   (: k (snip a 0 2)
                      (? (2 < #a) (aplay-set o k (snip a 2 #a) ? (go >l fs) 1)
                         (two? >l) (aplay-set o k <>l ? (go >>l fs) 1)
-                        (aplay-fail ("option requires an argument -- '" + snip a 1 2 + "'"))))
+                        (aplay-fail ("option requires an argument -- '\(snip a 1 2)'"))))
                  (go >l (a . fs)))))
        (go as ()))
    _ (pins (cite 'verbs 'tab) 'aplay (udoor 'aplay aplay-main aplay-usage 1 0)))

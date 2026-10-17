@@ -97,45 +97,45 @@
        (blob? p) (two? >(split "\"blob\"" p))
        (filter (q \ starts? q "doomgeneric/") (map path (filter blob? >(split "\"path\"" s)))))
    (dg-lay dl)
-    (: d (dl + "/doomgeneric")
-       ls (dl + "/tree.json")
-       (? (two? (stat (d + "/doomgeneric"))) 0
+    (: d "\(dl)/doomgeneric"
+       ls "\(dl)/tree.json"
+       (? (two? (stat "\(d)/doomgeneric")) 0
           (fetch dg-tree ls) 1
           (: q (open ls "r")
              s (hot? q ? (slurp q @ s (close q, s)) "")
              ps (dg-blobs s)
              _ (unlink ls)
              _ (mkdir d 493)
-             _ (mkdir (d + "/doomgeneric") 493)
-             _ (note ("laying " + show #ps + " files of doomgeneric off " + dg-raw))
-             bad #(filter (p \ grab (dg-raw + p) (d + "/" + p) != 0) ps)
+             _ (mkdir "\(d)/doomgeneric" 493)
+             _ (note "laying \(#ps) files of doomgeneric off \(dg-raw)")
+             bad #(filter (p \ grab (dg-raw + p) "\(d)/\(p)" != 0) ps)
              (? !ps 1 bad 1 0))))
    (dg-tar dl)
     (: tgz (dl + "/doomgeneric.tgz")
        r (fetch dg-url tgz)
        (? (r != 0) r
-          (two? (stat (dl + "/doomgeneric"))) 0
+          (two? (stat "\(dl)/doomgeneric")) 0
           (cite 'tarcmd 'tar-main ["xzf" tgz "-C" dl],
-           (two? (stat (dl + "/doomgeneric-master")) ?
-              (rename (dl + "/doomgeneric-master") (dl + "/doomgeneric")) 0),
-           unlink (dl + "/pax_global_header"),              ; the tarball's pax row, laid as a file
-           two? (stat (dl + "/doomgeneric")) ? 0 1)))
+           (two? (stat "\(dl)/doomgeneric-master") ?
+              (rename "\(dl)/doomgeneric-master" "\(dl)/doomgeneric") 0),
+           unlink "\(dl)/pax_global_header",              ; the tarball's pax row, laid as a file
+           two? (stat "\(dl)/doomgeneric") ? 0 1)))
    ; the nest's IWAD rides the exec unless the caller named one: the nest's cwd is the caller's
-   (nest-args dl as) (any (= "-iwad") as ? as ("-iwad" . dl + "/doom1.wad" . as))
+   (nest-args dl as) (any (= "-iwad") as ? as ("-iwad" . "\(dl)/doom1.wad" . as))
    ; the pair the DOOM=1 lane wants, fetched into DL once: 0 when both stand there. the
    ; tree comes as the tarball where a socket is ours, and file by file where the
    ; network is a page's fetch door (kore's wget rides the same door)
    (doom-fetch dl)
     (: _ (mkdir dl 493)
-       r1 (fetch wad-url (dl + "/doom1.wad"))
+       r1 (fetch wad-url "\(dl)/doom1.wad")
        r2 (elem 'fetch (names ()) ? (dg-lay dl) (dg-tar dl))
        (r1 != 0 || r2 != 0 ? 1 0))
-   (doom-aboard? dl) (two? (stat (dl + "/doom1.wad")) && two? (stat (dl + "/doomgeneric")))
+   (doom-aboard? dl) (two? (stat "\(dl)/doom1.wad") && two? (stat "\(dl)/doomgeneric"))
    ; the three rungs both nests climb: source laid under here, downloads in dl, the build.
    ; answers the sentence to fail with, or () when the nest stands ready; arm runs before cook
    (nest-lay here nest dl arm cook)
     (cite 'source 'src-nest here,                         ; laid once, shared by every verb
-     (? (atom? (stat (nest + "/Makefile"))) ("the source did not lay under " + here)
+     (? (atom? (stat "\(nest)/Makefile")) "the source did not lay under \(here)"
         (doom-fetch dl) "the downloads did not land"
         (: _ (arm 0)
            st (run-in nest cook)
@@ -143,13 +143,13 @@
    (doom-nest as)
     (: exe (selfpath 0)
        here (cwd 0)
-       nest (here + "/love-" + love-version)
-       bin (nest + "/out/doom/love")      ; the doom flavour's own tree (common.mk's hsuf)
-       dl (nest + "/dl")
-       (fail s) (say err ("doom: " + s + "\n"), 1)
+       nest "\(here)/love-\(love-version)"
+       bin "\(nest)/out/doom/love"      ; the doom flavour's own tree (common.mk's hsuf)
+       dl "\(nest)/dl"
+       (fail s) (say err ("doom: \(s)\n"), 1)
        (enter _) (: e (setenv "LOVE_DOOM_NEST" "1",
                        exec (bin . "doom" . nest-args dl as))
-                  (fail $ "cannot run " + bin + " (" + show e + ")"))
+                  (fail "cannot run \(bin) (\(e))"))
        (? !(string? exe) (fail "cannot find this binary's path")
           (0 < #(getenv "LOVE_DOOM_NEST") && two? (stat bin))
            (fail ("the nest's love carries no doom either: `cook host DOOM=1` under " + nest))
@@ -168,13 +168,13 @@
    ; (kexec) in place of this one, and that one carries the game
    (doom-nest-inle _)
     (: here (cwd 0)
-       nest ((here @ "/" "" here) + "/love-" + love-version)     ; the page's shell sits at /
-       dl (nest + "/dl")
-       mod (nest + "/out/doom/love.wasm")
-       (fail s) (say err ("doom: " + s + "\n"), 1)
-       (enter _) (: _ (note ("booting " + mod))
+       nest ((here @ "/" "" here) + "/love-\(love-version)")     ; the page's shell sits at /
+       dl "\(nest)/dl"
+       mod "\(nest)/out/doom/love.wasm"
+       (fail s) (say err ("doom: \(s)\n"), 1)
+       (enter _) (: _ (note ("booting \(mod)"))
                     e (ev 'kexec mod "sh -c 'doom; sh'")
-                    (fail ("cannot boot " + mod + " (" + show e + ")")))
+                    (fail ("cannot boot \(mod) (\(e))")))
        (? !(elem 'kexec (names ())) (fail "this machine cannot boot what it builds")
           (two? (stat mod)) (enter 0)
           ; a task shares no environment with its spawner on this seat, so what cook is
@@ -189,7 +189,7 @@
    doom-usage "usage: love doom [-iwad FILE] [-display :N] [-frames N]"
    (doom-main as)
     (: (opt a k d) (? (atom? a) d (<a = k && two? >a) <>a (opt >a k d))
-       nestwad (cwd 0 + "/love-" + love-version + "/dl/doom1.wad")
+       nestwad "\(cwd 0)/love-\(love-version)/dl/doom1.wad"
        wad (opt as "-iwad" (two? (stat "dl/doom1.wad") ? "dl/doom1.wad" nestwad))
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (opt as "-frames" () @ f (string? f ? (digits f) 0))
@@ -211,7 +211,7 @@
                       x-autorepeat s,
                       doom-start wad ? 0 (say err "doom: would not start\n", quit 1),
                       drive s sc win gc wad frames)
-                   (puts ("doom: " + show n + " frames\n"),
+                   (puts ("doom: \(n) frames\n"),
                     0))))))
 
    door (udoor 'doom doom-main doom-usage 1 1)

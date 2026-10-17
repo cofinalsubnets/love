@@ -32,8 +32,7 @@
    (icy-heads ls) (foldl (\ t l (fsub l ":" 0 @ c (? (c < 1) t (pin t (lower (snip l 0 c)) (strip (snip l (c + 1) #l))))))
                          {} ls)
    (icy-req [tls? host port path])
-    ("GET " + path + " HTTP/1.0\r\nHost: " + host + (port = (tls? ? 443 80) ? "" (":" + show port))
-     + "\r\nUser-Agent: love/" + love-version + "\r\nAccept: */*\r\nIcy-MetaData: 1\r\nConnection: close\r\n\r\n")
+    "GET \(path) HTTP/1.0\r\nHost: \(host)\(port = (tls? ? 443 80) ? "" ":\(port)")\r\nUser-Agent: love/\(love-version)\r\nAccept: */*\r\nIcy-MetaData: 1\r\nConnection: close\r\n\r\n"
 
    ; --- the wire, tcp or tls: tls's -----------------------------------------------------
    wire (cite 'tls 'tls-wire)
@@ -71,10 +70,10 @@
     (: (more b) (hear c @ g (string? g ? (b + g) ()))
        (out s) (? (0 < #s) (say w s, flush w) 0)
        (fin why) (? (string? (info 'why)) 0
-                    (: _ (pin info 'why why) _ (close w) (shut c, 0)))
+                  (pin info 'why why, close w, shut c, 0))
        (end b) (fin "the stream ended")
        (go b left)
-        (? (mi = 0) (: _ (out b) (more "" @ () (end ()) g (go g 0)))
+        (? (mi = 0) (out b, more "" @ () (end ()) g (go g 0))
            (#b = 0) (more "" @ () (end ()) g (go g left))
            (0 < left) (: k (min left #b) _ (out (snip b 0 k)) (go (snip b k #b) (left - k)))
            (: n (16 * b 0)
@@ -90,9 +89,9 @@
              'title () 'titles 0 'why () 'w w 'c c}
        (pin info 'task (twirl (_ \ icy-run c info b mi w) ()), [r info]))
    (icy-close info)
-    (: _ (peep info 'task () @ () 0 k (freeze k))
-       (? (string? (info 'why)) 0
-          (: _ (pin info 'why "closed") _ (close (info 'w)) (shut (info 'c), 0))))
+    (peep info 'task () @ () 0 k (freeze k),
+     (string? (info 'why) ? 0
+      (pin info 'why "closed", close (info 'w), shut (info 'c), 0)))
 
    ; --- one hop: the answer read, then followed, played, or refused ------------------------
    (icy-answer u hops c hd b)
@@ -100,16 +99,16 @@
        code (icy-num (snip st (fsub st " " 0 + 1) #st))
        loc (peep h "location" ())
        (? (300 <= code < 400 && string? loc) (shut c, icy-go (icy-resolve u loc) (hops - 1))
-          (code != 200) (shut c, u + " answered " + st)
+          (code != 200) (shut c, "\(u) answered \(st)")
           (icy-pl? (peep h "content-type" "") u b)
            (icy-all c b @ s (: _ (shut c)
                                (? (0 <= fsub s "#EXT-X-" 0) "an hls playlist: those are not read yet"
-                                  (icy-list s @ () ("no stream in the playlist at " + u)
+                                  (icy-list s @ () "no stream in the playlist at \(u)"
                                                 l (icy-go (icy-resolve u l) (hops - 1))))))
           (icy-stream u c h b)))
    (icy-go u hops)
     (: p (icy-url u)
-       (? !(two? p) ("not an http or https url: " + u)
+       (? !(two? p) "not an http or https url: \(u)"
           (hops < 1) "too many redirects"
           (wire <p (p 1) (p 2) 'verify @
             (why && string? why) why

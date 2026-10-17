@@ -77,9 +77,9 @@
  (pom-art p w h date)
   (: rot ((p * 360 - 180) / 180)
      inc (2 / h)
-     texts [("Date : " + date) ("Phase: " + pom-name p) ("Full : " + show (pom-percent p) + "%")]
+     texts ["Date : \(date)" "Phase: \(pom-name p)" "Full : \(pom-percent p)%"]
      (line y k)
-      (: x (sqrt (1 - y * y))
+      (: x (sqrt (1 - 2 y))
          ms0 (int (x * w * 5 / 7))
          ms (ms0 & 1 ? (ms0 - 1) ms0)
          sp (int ((w - ms) / 2))
@@ -99,22 +99,22 @@
  pom-lit 0xffd787
  pom-dim 0x4e4e4e
  (pom-pixels p n)
-  (: k (cos (2 * pi * p))
-     (px i j) (: x ((j + 0.5) * 2 / n - 1) y ((i + 0.5) * 2 / n - 1) w (sqrt (1 - y * y))
-                 (? (1 < x * x + y * y) ()
+  (: k (cos (tau * p))
+     (px i j) (: x ((j + 0.5) * 2 / n - 1) y ((i + 0.5) * 2 / n - 1) w (sqrt (1 - 2 y))
+                 (? (1 < 2 x + 2 y) ()
                     (p < 0.5 ? (w * k < x) (x < 0 - w * k)) pom-lit
                     pom-dim))
-     (map (i \ map (j \ px i j) ^n) ^n))
+     (map (i \ map (px i) ^n) ^n))
  ; lit at (nx ny) on the unit disc: the terminator is an ellipse cos 2πp wide, waxing
  ; lights the right side and waning the left
- (pom-lit? p nx ny) (: s (sqrt (max 0.0 (1.0 - ny * ny))) k (cos (2 * pi * p))
+ (pom-lit? p nx ny) (: s (sqrt (max 0.0 (1.0 - ny * ny))) k (cos (tau * p))
                       (p < 0.5 ? (nx > k * s) (nx < 0 - k * s)))
  ; the seas, roughly where they lie: [x y radius] on the unit disc, north up
  maria [[-0.35 -0.45 0.28] [0.18 -0.38 0.17] [0.3 -0.05 0.2] [0.68 -0.3 0.12]
         [-0.6 0.0 0.35] [-0.2 0.45 0.18] [0.55 0.2 0.14]]
- (pom-mare? nx ny) (any (m \ ((nx - m 0) * (nx - m 0) + (ny - m 1) * (ny - m 1) < m 2 * m 2)) maria)
+ (pom-mare? nx ny) (any ([a b c] \ 2 (nx - a) + 2 (ny - b) < 2 c) maria)
  ; the saver's moon at (nx ny): an xterm pen, sea or highland lit, the limb dark, () off it
- (pom-face p nx ny) (? (1.0 < nx * nx + ny * ny) ()
+ (pom-face p nx ny) (? (1.0 < 2 nx + 2 ny) ()
                       (pom-lit? p nx ny) (pom-mare? nx ny ? 187 230)
                       234)
  ; ..and n by n of it as rgb, for pom-cells
@@ -133,22 +133,22 @@
        [-0.6 0.0 0.35] [-0.2 0.45 0.18] [0.55 0.2 0.14] [0.38 0.32 0.09]]
  (sat v) (v < 0.0 ? 0.0 (1.0 < v ? 1.0 v))
  (pom-glow p nx ny)
-  (: d2 (nx * nx + ny * ny)
+  (: d2 (2 nx + 2 ny)
      (? (1.0 < d2) ()
-        (: nz (sqrt (1.0 - d2)) a (2 * pi * p) sx (sin a) sz (0.0 - cos a)
+        (: nz (sqrt (1.0 - d2)) a (tau * p) sx (sin a) sz (0.0 - cos a)
            mu0 (nx * sx + nz * sz) mu nz
            ls (mu0 <= 0.0 ? 0.0 (mu0 / (mu0 + mu)))
            lit (1.65 * (0.85 * ls + 0.15 * (mu0 < 0.0 ? 0.0 mu0)))
            ; ..a sea's shore wanders: its radius by the bearing from its middle
            (soft m) (: dx (nx - m 0) dy (ny - m 1) an (atan2 dy dx) k (m 0 * 7.0 + m 1 * 11.0)
                        rr (m 2 * (1.0 + 0.13 * sin (2.0 * an + k) + 0.06 * sin (5.0 * an + 2.0 * k)))
-                       (sat ((rr - sqrt (dx * dx + dy * dy)) / (0.5 * m 2))))
+                       (sat ((rr - sqrt (2 dx + 2 dy)) / (0.5 * m 2))))
            mare (foldl (\ b m (b < soft m ? (soft m) b)) 0.0 seas)
            ; ..the highlands' mottle: waves at slants and lengths that never line up
            mott (0.022 * sin (19.0 * nx + 11.0 * ny + 1.3) + 0.018 * sin (-23.0 * nx + 29.0 * ny + 0.4)
                  + 0.014 * sin (43.0 * nx - 31.0 * ny + 2.1) + 0.01 * sin (61.0 * nx + 67.0 * ny))
            (bright c) (: dx (nx - c 0) dy (ny - c 1) r (sqrt (dx * dx + dy * dy))
-                         (c 3 * sat (1.0 - r / c 2) + (c 3 = 0.5 ? (0.09 * sat (1.0 - r / 0.7) * (sin (9.0 * atan2 dy dx) @ v (v * v * v * v))) 0.0)))
+                         (c 3 * sat (1.0 - r / c 2) + (c 3 @ 0.5 (0.09 * sat (1.0 - r / 0.7) * (sin (9.0 * atan2 dy dx) @ v (4 v))) 0.0)))
            alb ((1.0 - 0.42 * mare + mott) * (1.0 + foldl (\ b c (b + bright c)) 0.0 craters))
            tint [(0.95 - 0.12 * mare) (0.93 - 0.1 * mare) (0.88 - 0.04 * mare)]
            earth (0.05 * (1.0 + cos a) / 2.0)
@@ -175,8 +175,7 @@
      (d2 p) (net (map (i \ 2 (c i - p i)) ^3))
      (d2 (map (_ \ 8 + 10 * y) ^3) < d2 (map lv q) ? (232 + y) (16 + 36 * q 0 + 6 * q 1 + q 2)))
  ; the sgr for x as ink (g "38") or ground ("48")
- (pom-tint x g tc) (: c (rgb x) (tc ? (g + ";2;" + show (c 0) + ";" + show (c 1) + ";" + show (c 2))
-                                  (g + ";5;" + show (pom-xterm x))))
+ (pom-tint x g tc) (: c (rgb x) (tc ? "\(g);2;\(c 0);\(c 1);\(c 2)" "\(g);5;\(pom-xterm x)"))
  (pom-cells g tc)
   (: (cell t b) (? (!(charm? t) && !(charm? b)) " "
                    !(charm? b) (sgr (pom-tint t "38" tc) "▀")
@@ -193,14 +192,14 @@
                  (go i) (i < #v && digit? (v i) ? (go (i + 1)) i)
                  n (unum (snip v 0 (go 0)))
                  (n ? n d))
- (fail s) (say err ("pom: " + s + "\n"), flush err, 1)
+ (fail s) (say err ("pom: \(s)\n"), flush err, 1)
  ; getopts 'de': [d e operands], or () for a letter it does not know
  (flags as d e)
   (: a <as
      (go i d e) (? (#a <= i) (flags >as d e)
                    (a i = 100) (go (i + 1) 1 e)
                    (a i = 101) (go (i + 1) d 1)
-                   (say err ("Unknown option: " + string (a i) + "\n"), ()))
+                   (say err ("Unknown option: \(a i)\n"), ()))
      (? !(two? as) [d e ()]
         (a = "--") [d e >as]
         (a = "-" || !(a 0 = 45)) [d e as]
@@ -215,10 +214,10 @@
      (: n (two? as ? (max 2 (unum <as)) d)
         _ (each (pom-cells (draw (pom-now 0) (2 * ((n + 1) // 2))) (pom-tc 0)) (l \ puts (l + "\n")))
         (flush out, 0)))
- (pom-main as) (? (two? as && <as = "-p") (pom-show pom-pixels 8 >as)
-                  (two? as && <as = "-s") (pom-show pom-moon 24 >as)
-                  (two? as && <as = "-n") (pom-show pom-natural 24 >as)
-                  (pom-date as))
+ (pom-main as) (as @ ("-p" . u) (pom-show pom-pixels 8 u)
+                     ("-s" . u) (pom-show pom-moon 24 u)
+                     ("-n" . u) (pom-show pom-natural 24 u)
+                     (pom-date as))
  (pom-date as)
   (: fl (flags as 0 0)
      rest (two? fl ? <>>fl)

@@ -40,18 +40,18 @@
     t {}
     ops (uopt as t '(105 111 112 113 115 119) () () 2)
     usage "usage: nc [-CdkNnUuvz] [-i SECS] [-o FILE] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT | -U [-l] PATH}"
-    (portof s) (uport s @ n (n ? n (die ("not a port: " + s))))
+    (portof s) (uport s @ n (n ? n (die "not a port: \(s)")))
     ; a flag's duration in ms, -1 when absent or negative
     (dur c) (: v (uoptv t c)
                neg (string? v && 0 < #v && v 0 = 45)
                m (string? v ? (udur (neg ? (snip v 1 #v) v)) -1)
-               (? !(charm? m) (die ("-" + string c + " takes a duration, not " + v)) neg -1 m))
+               (? !(charm? m) (die "-\(c) takes a duration, not \(v)") neg -1 m))
     q (dur 113)
     w (dur 119)
     i (dur 105)
     seen {}   ; the clock at the last chunk either way, for -w
     ov (uoptv t 111)
-    dumpf (string? ov ? (open ov "w" @ h (hot? h ? h (die ("cannot write " + ov + ": " + uerrno h)))))
+    dumpf (string? ov ? (open ov "w" @ h (hot? h ? h (die "cannot write \(ov): \(uerrno h)"))))
     offs {}   ; each direction's offset, for -o
     (note m) (t 118 ? (say err (m + "\n"), flush err) 0)
 
@@ -60,15 +60,15 @@
     (dline dir s o k)
      (#s <= k ? (flush dumpf)
         (: e (min #s (k + 16)) b (chars (snip s k e))
-           hx (cats (map (c \ " " + zpad 2 (radix c 16)) b))
-           pad (cats (map (_ \ "   ") (jot (16 - #b))))
+           hx (catmap (c \ " " + zpad 2 (radix c 16)) b)
+           pad (catmap (_ \ "   ") ^(16 - #b))
            tx (string (map (c \ 32 <= c < 127 ? c 46) b))
-           (say dumpf (string dir + " " + zpad 8 (radix (o + k) 16) + hx + pad + " # " + tx + "\n"),
+           (say dumpf "\(dir) \(zpad 8 (radix (o + k) 16))\(hx)\(pad) # \(tx)\n",
             dline dir s o e)))
     ; outbound bytes: with -C each newline goes as crlf
     (crlf b) (t 67 ? (replace b "\n" "\r\n") b)
     ; s cut after each newline
-    (pieces s) (s @ (a + "\n" + (r && 0 < #r)) ((a + "\n") . pieces r) [s])
+    (pieces s) (s @ (a + "\n" + (r && 0 < #r)) ("\(a)\n" . pieces r) [s])
     ; s out through f: whole, or with -i a line at a time, i ms apart
     (paced f s) (i < 0 ? (f s) (map (l \ (f l, pin seen 0 (clock 0), rest i)) (pieces s)))
 
@@ -83,15 +83,11 @@
                                  pump src dst dir))))
 
     ; with -w: answer once neither way has moved for w ms
-    (idle _) (clock 0 - seen 0 @ gap
-                (w <= gap ? 0 (rest (w - gap), idle 0)))
+    (idle _) (clock (seen 0) @ gap (w <= gap ? 0 (rest (w - gap), idle 0)))
 
     ; wait out the inbound pump: to the peer's eof, or with -q at most q ms, when a
     ; watchdog task freezes it
-    (linger d) (q < 0 ? (catch d)
-                  (twirl (_ \ (rest q, freeze d)) () @ g
-                     (catch d,
-                      freeze g)))
+    (linger d) (q < 0 ? (catch d) (twirl (_ \ (rest q, freeze d)) () @ g (catch d, freeze g)))
 
     ; a conversation: stdin outward in `up`, inward to stdout in `down`. all of stdin goes
     ; before teardown; then the peer must end it, or -q runs out. with -w, `dog` ends both
@@ -131,32 +127,32 @@
      (: l (listen la)
         (go _) (accept l @ c
                   (hot? c ? (: f (t 85 ? () (farend c))
-                               ((? (two? f) (note ("Connection received on " + <f + " " + show (f 1)))
-                                   (t 85) (note ("Connection received on " + name)) 0),
+                               ((? (two? f) (note "Connection received on \(<f) \(f 1)")
+                                   (t 85) (note "Connection received on \(name)") 0),
                                 talk c,
                                 (t 107 ? (go 0) (close l, 0))))
-                     (close l, die ("accept failed: " + uerrno c))))
-        (hot? l ? (note ("Listening on " + name), go 0)
-           (die ("cannot listen on " + name + ": " + uerrno l))))
-    (tserve addr port) (serve (addr ? ['tcp addr port] port) ((addr || "0.0.0.0") + " " + show port))
+                     (close l, die "accept failed: \(uerrno c)")))
+        (hot? l ? (note "Listening on \(name)", go 0)
+           (die "cannot listen on \(name): \(uerrno l)")))
+    (tserve addr port) (serve (addr ? ['tcp addr port] port) "\(addr || "0.0.0.0") \(port)")
     ; -U -l: the socket file goes when the server does
     (userv path) (serve ['unix path] path, unlink path, 0)
     ; -u -l: bind, and the first datagram's sender is the peer
     (userve addr port)
      (: p (addr ? (bind ['udp addr port]) (bind ['udp port]))
-        (hot? p ? (: _ (note ("Bound on " + (addr || "0.0.0.0") + " " + show port))
+        (hot? p ? (: _ (note "Bound on \(addr || "0.0.0.0") \(port)")
                      d (recv p)
-                     (nom? d ? (die ("recv failed: " + uerrno d))
-                        (note ("Connection received on " + <<d + " " + show (<d 1)),
+                     (nom? d ? (die "recv failed: \(uerrno d)")
+                        (note "Connection received on \(<<d) \(<d 1)",
                          dwrite (d 1),
                          dtalk p <d)))
-           (die ("cannot bind " + (addr ? addr "port") + " " + show port + ": " + uerrno p))))
+           (die "cannot bind \(addr ? addr "port") \(port): \(uerrno p)")))
     (uclient host port) (: to [(quad host) port]
                            p (bind ['udp 0])
-                           (hot? p ? (note ("Connection to " + host + " " + show port + " port [udp/*] succeeded!"), dtalk p to)
-                              (die ("cannot bind: " + uerrno p))))
+                           (hot? p ? (note "Connection to \(host) \(port) port [udp/*] succeeded!", dtalk p to)
+                              (die "cannot bind: \(uerrno p)")))
     ; a listen address as the dotted quad listen takes, names resolved
-    (quad a) (resolve a @ r (two? r ? (dns-show <r) (die ("cannot resolve " + a))))
+    (quad a) (resolve a @ r (two? r ? (dns-show <r) (die "cannot resolve \(a)")))
     ; -l's operands: [addr] port, or -s addr and -p port in their place
     (listener _)
      (: sv (uoptv t 115) pv (uoptv t 112) n #ops
@@ -177,30 +173,30 @@
     ; each of host's addresses in turn until one takes: the port, or the last refusal
     (reach host port) (: (go l e) (atom? l ? e (conn ['tcp (dns-show <l) port] @ c (hot? c ? c (go >l c))))
                          (go (resolve host) 'ehostunreach))
-    (took host port) ("Connection to " + host + " " + show port + " port [tcp/*] succeeded!")
-    (refused host port e) ("connect to " + host + " port " + show port + " (tcp) failed: " + uerrno e)
+    (took host port) "Connection to \(host) \(port) port [tcp/*] succeeded!"
+    (refused host port e) "connect to \(host) port \(port) (tcp) failed: \(uerrno e)"
 
     (client host port) (reach host port @ s
                           (hot? s ? (note (took host port), talk s) (die (refused host port s))))
 
     ; -U: the path's listener, or with -z only whether one is there
     (uconn path) (conn ['unix path] @ s
-                    (? !(hot? s) (t 122 ? (note ("nc: connect to " + path + " failed: " + uerrno s), uleave 1)
-                                    (die ("connect to " + path + " failed: " + uerrno s)))
-                       (t 122) (close s, note ("Connection to " + path + " succeeded!"), 0)
-                       (note ("Connection to " + path + " succeeded!"), talk s)))
+                    (? !(hot? s) (t 122 ? (note "nc: connect to \(path) failed: \(uerrno s)", uleave 1)
+                                    (die "connect to \(path) failed: \(uerrno s)"))
+                       (t 122) (close s, note "Connection to \(path) succeeded!", 0)
+                       (note "Connection to \(path) succeeded!", talk s)))
 
     ; -z: each port connected and closed, nothing sent; 0 when any took
     (scan host ports) (: (one n p) (: s (reach host p)
                                       m (hot? s ? (close s, note (took host p), n + 1)
-                                           (note ("nc: " + refused host p s), n))
+                                           (note "nc: \(refused host p s)", n))
                                       ((i < 0 ? 0 (rest i)),
                                        m))
                          (0 < foldl one 0 ports ? 0 (uleave 1)))
     ; a port or a lo-hi range -> its ports
-    (span a) (a @ (l + "-" + h)
+    (span a) (a @ "\(l)-\(h)"
                 (: lo (portof l) hi (portof h)
-                   (hi < lo ? (die ("not a range: " + a)) (map (+ lo) (jot (hi - lo + 1)))))
+                   (hi < lo ? (die "not a range: \(a)") (map (+ lo) ^(hi - lo + 1))))
                 [(portof a)])
 
     (? (uoptbad as t "CdiklNnopqsUuwvz") (die usage)
