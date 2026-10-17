@@ -45,7 +45,7 @@
     (dur c) (: v (uoptv t c)
                neg (string? v && 0 < #v && v 0 = 45)
                m (string? v ? (udur (neg ? (snip v 1 #v) v)) -1)
-               (? !(charm? m) (die "-\(c) takes a duration, not \(v)") neg -1 m))
+               (? !(charm? m) (die "-\(string c) takes a duration, not \(v)") neg -1 m))
     q (dur 113)
     w (dur 119)
     i (dur 105)
@@ -63,7 +63,7 @@
            hx (catmap (c \ " " + zpad 2 (radix c 16)) b)
            pad (catmap (_ \ "   ") ^(16 - #b))
            tx (string (map (c \ 32 <= c < 127 ? c 46) b))
-           (say dumpf "\(dir) \(zpad 8 (radix (o + k) 16))\(hx)\(pad) # \(tx)\n",
+           (say dumpf "\(string dir) \(zpad 8 (radix (o + k) 16))\(hx)\(pad) # \(tx)\n",
             dline dir s o e)))
     ; outbound bytes: with -C each newline goes as crlf
     (crlf b) (t 67 ? (replace b "\n" "\r\n") b)

@@ -2674,7 +2674,7 @@
        (go k acc)
         (n <= k ? (rev acc)
            (: c (w k)
-              s "-\(c)"
+              s "-\(string c)"
               g (snip w (k + 1) n)
               (? (elem c vals) (rev (#g ? (g . s . acc) (s . acc)))
                  (ours? c) (go (k + 1) (s . acc))
@@ -2787,7 +2787,7 @@
          "--version" 'vers
          ("-h" && h?) 'help
          ("-v" && v?) 'vers
-         (1 < #w && w 0 = 45 && uask >as h? v?))
+         (1 < #w && w 0 = 45 && uask u h? v?))
    ; an applet as the world calls it: nm is its name, u its usage text, and h?/v? whether the
    ; bare letters are free -- posix or gnu has spoken for one in a few places, and there the
    ; long form is the only answer. answers the main a verb registry takes.
