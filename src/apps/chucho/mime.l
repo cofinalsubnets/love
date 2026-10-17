@@ -39,7 +39,7 @@
       (atom? ls ? (rev acc)
          (<ls @ l
             (? (#l = 0) (fold >ls acc)
-               (ws? (l 0)) (fold >ls (acc @ ([n v] . r) ([n (v + " " + strip l)] . r) acc))
+               (ws? (l 0)) (fold >ls (acc @ ([n v] . r) ([n "\(v) \(strip l)"] . r) acc))
                (l @ ((k && 0 < #k && !(has? k " ")) + ":" + v) (fold >ls ([(lower k) (strip v)] . acc))
                   (fold >ls acc)))))
      (fold (lines h) ()))
@@ -103,7 +103,7 @@
             (put j (s i), go (i + 1) 0)))
      (? (has? s "=?") (go 0 0) s))
  ; a header value as it may travel: ascii as it is, else one encoded word
- (mime-head-enc s) (mime-ascii? s ? s ("=?utf-8?B?" + mime-b64e s + "?="))
+ (mime-head-enc s) (mime-ascii? s ? s "=?utf-8?B?\(mime-b64e s)?=")
 
  ; --- content-type and its parameters ---------------------------------------------------
  ; v cut at the semicolons outside quotes
@@ -142,7 +142,7 @@
  ; the parts between the delimiter lines; the preamble and epilogue dropped, and a body
  ; that never closes keeps its last part
  (mime-parts b bd)
-  (: d ("\n--" + bd) t ("\n" + b) nt #t
+  (: d "\n--\(bd)" t "\n\(b)" nt #t
      ; the next delimiter line at or after i -> [its start, its end, close?] | ()
      (next i)
       (fsub t d i @ k

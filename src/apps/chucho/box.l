@@ -23,7 +23,7 @@
  (mb-dir? p) (stat p @ st (two? st && 16384 = st 2 & 61440))
  (mb-kind p)
   (? (starts? p "imap://" || starts? p "imaps://") 'imap
-     (mb-dir? (p + "/cur") && mb-dir? (p + "/new")) 'maildir
+     (mb-dir? "\(p)/cur" && mb-dir? "\(p)/new") 'maildir
      (two? (stat p)) (mb-dir? p ? () 'mbox)
      ())
  (mb-has? m c) (has? (m 'flags) (string c))
@@ -50,12 +50,12 @@
  (mb-info n) (findsub n ":2," @ k (k < 0 ? "" (snip n (k + 3) #n)))
  (mb-base n) (findsub n ":" @ k (k < 0 ? n (snip n 0 k)))
  (mb-dmsg p sub n)
-  (: f (p + "/" + sub + "/" + n) st (stat f) t (mb-peek f)
+  (: f "\(p)/\(sub)/\(n)" st (stat f) t (mb-peek f)
      (? (!(two? st) || !(string? t)) ()
         (: m (mb-msg (mime-heads <(mime-split t)) (string (sort (chars (mb-info n)))) <st)
            (pins m 'file f 'sub sub 'name n, m))))
  (mb-dlist p sub)
-  (readdir (p + "/" + sub) @ ns
+  (readdir "\(p)/\(sub)" @ ns
      (two? ns ? (filter tablet? (map (mb-dmsg p sub) (filter (n \ #n && n 0 != 46) ns))) ()))
  (mb-dopen p)
   (: ms (mb-dlist p "cur" + mb-dlist p "new")
@@ -65,17 +65,16 @@
      (one m)
       (? (m 'del) (unlink (m 'file))
          (m 'flags = m 'flags0 && m 'sub = "cur") 0
-         (rename (m 'file) (p + "/cur/" + mb-base (m 'name) + ":2," + m 'flags)))
+         (rename (m 'file) "\(p)/cur/\(mb-base (m 'name)):2,\(m 'flags)"))
      (each (b 'msgs) one, mb-open p))
  (mb-uniq _)
   (: c (clock 0) un (uname 0) h (two? un ? <>un "localhost")
-     (show (c // 1000) + ".M" + show (c % 1000) + "P" + show (getpid 0) + "R" + show (rand 1000000)
-      + "." + replace (replace h "/" "\\057") ":" "\\072"))
+     "\(c // 1000).M\(c % 1000)P\(getpid 0)R\(rand 1000000).\(replace (replace h "/" "\\057") ":" "\\072")")
  (mb-dappend p raw fl)
-  (: n (mb-uniq 0) tmp (p + "/tmp/" + n)
-     (? !(uwrite tmp raw) ("cannot write " + tmp)
-        (rename tmp (#fl ? (p + "/cur/" + n + ":2," + fl) (p + "/new/" + n)) @ r
-           (nom? r ? ("cannot file " + tmp) 1))))
+  (: n (mb-uniq 0) tmp "\(p)/tmp/\(n)"
+     (? !(uwrite tmp raw) "cannot write \(tmp)"
+        (rename tmp (#fl ? "\(p)/cur/\(n):2,\(fl)" "\(p)/new/\(n)") @ r
+           (nom? r ? "cannot file \(tmp)" 1))))
  (mb-mkdir p) (each ["" "/cur" "/new" "/tmp"] (s \ mkdir (p + s) 448), mb-kind p = 'maildir)
 
  ; --- mbox ------------------------------------------------------------------------------
@@ -91,7 +90,7 @@
         (join "\n" (map one (split "\n" t)))))
  (mb-quote t)
   (: (one l) (: (go i) (i < #l && l i = 62 ? (go (i + 1)) i)
-                (go 0 @ k (starts? (snip l k #l) "From " ? (">" + l) l)))
+                (go 0 @ k (starts? (snip l k #l) "From " ? ">\(l)" l)))
      (join "\n" (map one (split "\n" t))))
  (mb-sflags hs)
   (: s (mime-get hs "status") x (mime-get hs "x-status")
@@ -107,7 +106,7 @@
  (mb-stamp p) (stat p @ st (two? st ? [<st (st 1)] ()))
  (mb-mopen p)
   (uread p @ r
-     (? !(two? r) ("cannot read " + p)
+     (? !(two? r) "cannot read \(p)"
         (: t <>r ss (mb-starts t)
            (go l acc) (l @ (a . b . _) (go >l ((mb-mmsg t a b) . acc))
                             [a] (rev ((mb-mmsg t a #t) . acc))
@@ -118,44 +117,44 @@
   (: k (findsub raw "\n\n") h (k < 0 ? raw (snip raw 0 k)) rest (k < 0 ? "" (snip raw k #raw))
      ls (filter (l \ !(starts? (lower l) "status:") && !(starts? (lower l) "x-status:")) (split "\n" h))
      (has c s) (has? fl c ? s "")
-     st ("Status: " + has "S" "R" + "O")
+     st "Status: \(has "S" "R")O"
      xs (has "R" "A" + has "F" "F" + has "T" "D")
-     (join "\n" (ls + [st] + (#xs ? [("X-Status: " + xs)] ())) + rest))
+     (join "\n" (ls + [st] + (#xs ? ["X-Status: \(xs)"] ())) + rest))
  (mb-msync b)
   (: p (b 'path) ms (b 'msgs)
      dirty (any (m \ m 'del || m 'flags != m 'flags0 || !(m 'old)) ms)
      (? !dirty b
-        (mb-stamp p != b 'stamp) (p + " changed on disk; not written")
+        (mb-stamp p != b 'stamp) "\(p) changed on disk; not written"
         (: j (jug 0)
            _ (each (filter (m \ !(m 'del)) ms)
                    (m \ mb-restatus (m 'raw) (m 'flags) @ r
-                      (say j (m 'from + "\n" + r + (ends? r "\n" ? "\n" "\n\n")))))
-           tmp (p + ".chucho-" + show (getpid 0))
-           (? !(uwrite tmp (slurp j)) ("cannot write " + tmp)
-              (nom? (rename tmp p)) (unlink tmp, "cannot replace " + p)
+                      (say j "\(m 'from)\n\(r)\(ends? r "\n" ? "\n" "\n\n")")))
+           tmp "\(p).chucho-\(getpid 0)"
+           (? !(uwrite tmp (slurp j)) "cannot write \(tmp)"
+              (nom? (rename tmp p)) (unlink tmp, "cannot replace \(p)")
               (mb-open p)))))
  (mb-asctime ms)
   (: s (ms // 1000) days (s // 86400) ymd (civil days) r (s % 86400)
      (p2 v) (zpad 2 (show v))
-     (wd3 (wday days) + " " + mon3 (ymd 1 - 1) + " " + (ymd 2 < 10 ? " " "") + show (ymd 2) + " "
-      + p2 (r // 3600) + ":" + p2 (r % 3600 // 60) + ":" + p2 (r % 60) + " " + show <ymd))
+     ("\(wd3 (wday days)) \(mon3 (ymd 1 - 1)) \(ymd 2 < 10 ? " " "")\(ymd 2) "
+      + "\(p2 (r // 3600)):\(p2 (r % 3600 // 60)):\(p2 (r % 60)) \(<ymd)"))
  (mb-mappend p raw fl)
   (: hs (mime-heads <(mime-split raw))
      a (mime-addrs (mime-get hs "from"))
      who (two? a && #(<a 1) ? (<a 1) "MAILER-DAEMON")
      r0 (replace raw "\r\n" "\n")
      body (mb-quote (#fl ? (mb-restatus r0 fl) r0))
-     t ("From " + who + " " + mb-asctime (clock 0) + "\n" + body + (ends? body "\n" ? "\n" "\n\n"))
+     t "From \(who) \(mb-asctime (clock 0))\n\(body)\(ends? body "\n" ? "\n" "\n\n")"
      (open p "a" @ q
-        (? !(hot? q) ("cannot open " + p)
+        (? !(hot? q) "cannot open \(p)"
            (say q t, close q, 1))))
 
  ; --- the doors -------------------------------------------------------------------------
  (mb-open p)
   (mb-kind p @ k
      (? (k = 'maildir) (mb-dopen p) (k = 'mbox) (mb-mopen p)
-        (k = 'imap) (p + ": an imap box opens with its password (imap-open)")
-        (p + ": no mailbox there")))
+        (k = 'imap) "\(p): an imap box opens with its password (imap-open)"
+        "\(p): no mailbox there"))
  (mb-raw b m)
   (b 'kind @ 'mbox (mb-unquote (m 'raw)) 'imap (cite 'imap 'imap-raw b m) (uread (m 'file) @ r (two? r ? <>r "")))
  (mb-sync b) (b 'kind @ 'mbox (mb-msync b) 'imap (cite 'imap 'imap-sync b) (mb-dsync b))
@@ -165,5 +164,5 @@
         (k = 'imap) "an imap box takes a message with its password (imap-append)"
         (k = 'mbox || (!k && !(ends? p "/"))) (mb-mappend p raw fl)
         (mb-mkdir (p @ (q + "/") q p)) (mb-dappend (p @ (q + "/") q p) raw fl)
-        ("cannot make " + p))))
+        "cannot make \(p)")))
 ) ; module mailbox
