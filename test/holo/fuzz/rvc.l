@@ -1,12 +1,8 @@
-; test/holo/fuzz/rvc.l -- the rvc squeeze, checked by equivalence rather than by intent.
-; riscv.l's rvc-of collapses a 32-bit word to its 2-byte C form where the operands fit;
-; this walks every form's reachable operand space, boundaries from both sides, and
-; disassembles each C word beside the word it replaced under llvm-mc. any pair decoding
-; differently is a miscompression. part two checks by intent the C forms the squeeze never
-; sees (c.j, c.beqz/c.bnez, chosen by distance via 'short and written by rv-patch): every
-; even offset against llvm-mc's spelling, plus what rv-cbase must refuse. llvm-mc prints
-; c.mv as `mv` but its 32-bit twin as `add rd, x0, rs2`; the compare treats them as one.
-; skips (exit 0) without llvm-mc; exit 1 on a mismatch. run: out/love test/holo/fuzz/rvc.l
+; the rvc squeeze checked by equivalence: every form's operand space, boundaries both sides,
+; each c word disassembled beside the word it replaced under llvm-mc. part two checks by intent
+; the forms the squeeze never sees (c.j, c.beqz/c.bnez by distance via 'short and rv-patch), and
+; what rv-cbase must refuse. llvm-mc prints c.mv as `mv` but its twin as `add rd, x0, rs2`: one.
+; skips without llvm-mc. run: out/love test/holo/fuzz/rvc.l
 
 (borrow 'posix)
 (reads (open "src/love/holo/holo.l" "r"))

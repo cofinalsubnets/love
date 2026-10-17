@@ -1,7 +1,5 @@
-; test/host/icy.l -- src/apps/icy.l: urls, titles and playlists read; then a station served
-; here on loopback -- a playlist, a redirect, and an icy stream of a wav with titles between
-; its blocks -- read back through av's door to the wav's own samples, its titles kept; where
-; ffmpeg is, it reads the same station to the same samples.
+; test/host/icy.l -- src/apps/icy.l: urls and playlists, then a loopback station (playlist,
+; redirect, icy wav stream) read back through av's door to the wav's samples
 ;   cat test/00-init.l test/host/icy.l | out/love
 (borrow 'posix)
 (borrow 'icy)
@@ -12,7 +10,7 @@
                              string c))
    ic-wav ("RIFF" + ic-le (36 + #ic-pcm) 4 + "WAVEfmt " + ic-le 16 4 + ic-le 1 2 + ic-le 2 2 + ic-le 8000 4
            + ic-le 32000 4 + ic-le 4 2 + ic-le 16 2 + "data" + ic-le #ic-pcm 4 + ic-pcm)
-   ; a metadata block: its length in sixteens, then the text, zeros to the end
+   ; metadata block: length in sixteens, text, zero pad
    (ic-block m) (: n ((#m + 15) // 16) (string [n] + m + string (cask (16 * n - #m))))
    ic-titles ["StreamTitle='one';" "" "StreamTitle='two';StreamUrl='';"]
    (ic-icy s mi) (: (go i acc) (? (#s <= i * mi) (cats (rev acc))
@@ -28,7 +26,6 @@
        (path = "/plain") ("HTTP/1.0 200 OK\r\nContent-Type: audio/wav\r\n\r\n" + ic-wav)
        "HTTP/1.0 404 Not Found\r\n\r\n")
    ic-live "ICY 200 OK\r\nicy-name: love radio\r\nicy-genre: test\r\nicy-br: 256\r\nicy-metaint: 1000\r\nContent-Type: audio/wav\r\n\r\n"
-   ; the station: each request read to its blank line, answered, closed
    (ic-req s) (: (go b) (? (0 <= fsub b "\r\n\r\n" 0) b
                            (see s @ -1 b c (unsee s c, go (b + chug s))))
                  (go ""))
@@ -49,7 +46,6 @@
            (icy-resolve "http://h/a/b.pls" "c" = "http://h:80/a/c") (icy-resolve "http://h/a/b" "/d" = "http://h:80/d")
            (icy-resolve "http://h/a" "https://x/y" = "https://x/y"))
 
-   ; the station through av's door: the playlist, the hop, then the stream
    (ic-read u) ((cite 'av 'av-uri) u @
                  [q info] ((cite 'av 'av-open) q @
                             [nm m h] (: st {'l ()}
@@ -64,7 +60,7 @@
            (got 3 'why = "the stream ended"))
    plain (ic-read (base + "/plain"))
    _ (test (two? plain) (plain 2 = ic-pcm) (plain 3 'title = ()) (plain 3 'metaint = 0))
-   ; closed early: the port ends, and says why
+   ; closed early
    _ (test (icy-open (base + "/live") @ [q info] (: _ (icy-close info) (info 'why = "closed" && string? (slurp q))) _ 0))
    free (test-free 0)
    _ (test (icy-open "ftp://x" = "not an http or https url: ftp://x")
@@ -73,8 +69,7 @@
            (icy-open (base + "/hls.m3u8") = "an hls playlist: those are not read yet")
            (icy-open ("http://127.0.0.1:" + show free + "/") = "cannot connect to 127.0.0.1:" + show free))
 
-   ; ffmpeg reads the same station to the same samples (and calls its close premature, as for
-   ; any icy stream: none says a length)
+   ; ffmpeg reads the same samples; fatal hides its premature-close note, as for any icy stream
    _ (? (hark ["sh" "-c" "command -v ffmpeg >/dev/null"] @ (0 . _) 1 _ 0)
         (test (hark ["ffmpeg" "-loglevel" "fatal" "-i" (base + "/live") "-f" "s16le" "-"] = (0 . ic-pcm)))
         (gate-partly "icy: no ffmpeg here, the station is not held to it"))

@@ -1,19 +1,12 @@
-; src/apps/kore/top.l -- top: the process table, repainted. this file is the data floor both
-; faces share and the plain face, procps' own; the rich face and top-main are htop.l's.
-; the floor under this one is proc.l's (uprocs, ustatf, umeminfo, uupticks, uloadav).
-;
-; %cpu is a delta: the first frame shows each process's since-boot average, every frame
-; after it the ticks since the previous one (so `top -bn1` reads high, as procps' does).
-; the keyboard is polled: `swig` sets O_NONBLOCK around its read, so no key reads 0.
-;
+; src/apps/kore/top.l -- top: the process table, repainted. the data floor both faces share,
+; and the plain face, procps' own; the rich face and top-main are htop.l's.
+; %cpu is a delta: the first frame shows each process's since-boot average, later frames the
+; ticks since the previous one (so `top -bn1` reads high, as procps' does).
+; the keyboard is polled: `swig` reads with O_NONBLOCK, so no key reads 0.
 ; a row is a list by field: 0 pid (a tid under H), 1 user, 2 PR, 3 NI, 4 VIRT KiB,
 ; 5 RES KiB, 6 SHR KiB, 7 state, 8 %CPU tenths, 9 %MEM tenths, 10 ticks, 11 command,
 ; 12 ppid, 13 threads, 14 kernel thread, 15 tgid, 16 uid. the sort key is that index,
 ; and the first twelve are the columns in order.
-;
-; the plain face: keys q quit, space or r repaint now, c the command line against the
-; comm, P by cpu, M by memory, T by time, N by pid. -b is this face with no terminal,
-; every process and one frame per iteration, and is what test/kore/top.sh reads.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -64,11 +57,9 @@
        (string? v ? v (uidname "/etc/passwd" uid @ n
                          (pin un uid n, n))))
 
-   ; one process or thread -> a row, or () when it went away between the readdir and
-   ; the read. `base` is its /proc directory, `tgid` the process it belongs to. `last`
-   ; is the previous frame's ticks by id and `ms` the milliseconds since it; with no
-   ; previous sample the process's own age stands in, which is the since-boot average
-   ; and the only honest answer a first frame has.
+   ; one process or thread -> a row, or () when it went away between the readdir and the
+   ; read. `last` is the previous frame's ticks by id, `ms` the milliseconds since; with no
+   ; previous sample the process's own age stands in (the since-boot average)
    (tp-rowat base id tgid last ms up memkb cmd? un)   ; `up` in ticks, starttime's scale
     (: r (uread (base + "/stat"))
        f (two? r ? (ustatf <>r))
@@ -125,9 +116,8 @@
        (pins st 'last <>q 'at now 'rows <q 'mi mi 'cpuw (st 'cpul) 'cpul cl))
 
    ; ---- the order ---------------------------------------------------------------
-   ; every key falls back to the pid, so a frame never reshuffles equal rows under
-   ; the reader's eye: two rows at 0.0% would otherwise trade places every repaint.
-   ; the names climb and the numbers fall, as both tops have it; inv turns it over
+   ; every key falls back to the pid, so equal rows never trade places between repaints.
+   ; names climb and numbers fall, as both tops have it; inv turns it over
    (tp-key c r) (c @ (2 || 3) (uatoi (r c)) (r c))
    (tp-sort c inv rs)
     (: up (elem c [0 1 7 11])
@@ -200,9 +190,8 @@
          (0 < n && n <= k ? 0
           (rest d, go (k + 1) 0)))
        (go 1 1))
-   ; the screen: repaint, then poll the keyboard in short naps until the delay is
-   ; spent. a key is read as one byte -- the plain face's keys are all single -- and an
-   ; escape sequence arrives as its bytes, none of which mean anything here.
+   ; the screen: repaint, then poll the keyboard in short naps until the delay is spent.
+   ; a key is one byte; an escape sequence's bytes mean nothing here
    tp-nap 60
    (tp-keys st b)
     (tp-swig in b @ n

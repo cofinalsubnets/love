@@ -343,7 +343,9 @@
    (ifval ts macs incf) (: r0 (resolve-defined ts macs incf)
                       r1 (expand r0 macs)
                       r2 (zero-ids r1)
-                      (ceval r2))
+                      (ceval (two? (mdef macs "__CHAR_UNSIGNED__") ? r2 (map chsx r2))))
+   ; a one-char constant is (char) c, so where plain char is signed '\xc8' is -56, as parse.l reads it
+   (chsx t) (kof t = 'num && 127 < vof t && vof t < 256 && chq? t ? (tok 'num (vof t - 256) (lof t)) t)
 
    ; -- #if's value model (C11 6.10.1) -- every operand has type intmax_t or
    ; uintmax_t, so a value is a 64-bit bit pattern plus a signedness, carried as

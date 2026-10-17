@@ -1,29 +1,8 @@
 #!/bin/sh
-# test/gate/raw.sh -- the GCC-FREE fixpoint, for one target. Everything test_selfhost
-# builds, PLUS our own raw libc (src/apps/moon/lib/moonlibc/: raw-syscall wrappers, mini
-# stdio, mmap malloc), the math floor (src/apps/moon/lib/moonlibc/math/lm.c, ours), and sys.o (the
-# syscall trampoline + our sigsetjmp/longjmp, laid by src/apps/moon/lib/mksys.l) -- then
-# OUR OWN static linker (src/love/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
-# glibc, no ld anywhere: the whole chain is love. Corpus green over the fresh egg.
-#
-# THREE targets, ONE procedure: x64 native, rv64 under qemu-user, and a64 on an a64 host
-# where one answers (test/gate/a64run.sh), else under qemu-user. They
-# were three near-identical recipes; what actually differs is four things -- the -t
-# flag, whether the holo backend has to be loaded for mksys (the host bake carries
-# only the native one), which mksys entry lays the syscall leaf, and the runner. A
-# fourth target is a case here, not another copy.
-#
-# make owns the dependency graph, the corpus list AND the source lanes; this owns the
-# procedure. NOT set -e: the corpus run captures $? for its own failure message.
-# the lanes arrive in the environment because the corpus already has the variadic
-# tail -- gate_love_c / gate_host_c, common.mk's own. one folder, named lanes: a
-# gate that globs a directory instead is a second authority on what the binary is.
-#
-# gate_seat_c is src/love/user/nokern.c + src/love/noblob.c: this link has no kmain.c under it and takes
-# neither out/src.o nor out/moonlibc.o, so it answers the kernel's doors and the carried
-# archives itself. Without them the bind fails on symbols nothing defines -- which is
-# the failure the weak defaults used to hide.
-#
+# test/gate/raw.sh -- the gcc-free love for one target: the source lanes, moonlibc by need,
+# the lm math, mksys's sys.o, bound by our own linker, then the corpus over the fresh egg.
+# x64 native, rv64 under qemu-user, a64 on an a64 host or qemu-user. the source lanes come
+# in the environment; gate_seat_c answers the kernel's doors and the carried archives.
 # usage: gate_love_c=.. gate_host_c=.. raw.sh TARGET OUTDIR LOVE CORPUS.l ..
 . test/gate/skip.sh
 . test/gate/a64run.sh
@@ -50,11 +29,7 @@ esac
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
 
-# x64 is the native lane: it needs no emulator but mksys/moonlibc/math are x64-only,
-# so it is the host arch that gates it. The cross lanes need their qemu.
-# gate_hosta is common.mk's $(hosta), and must be: `uname -m` is the kernel's MACHINE,
-# never the ISA word -- it says x86_64 here and amd64 on the BSDs, so a bare comparison
-# against `x64` skips this lane on every machine there is.
+# x64 wants an x64 host; gate_hosta is the isa word, which `uname -m` is not
 if [ -z "$need" ]; then
   if [ "$gate_hosta" != x64 ]; then
     gate_skip "$name: x86-64 only, skipped on ${gate_hosta:-unknown}"
@@ -79,18 +54,14 @@ for f in $gate_love_c $gate_host_c $gate_seat_c; do
   moonc -D tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done
 
-# moonlibc is NOT compiled here: the link below owes its symbols and the driver's
-# runtime table supplies them member by need (src/apps/moon/lib/moonlibc/, test_drv's
-# lane). Naming the objects would take every member, dead areas included.
+# moonlibc is not compiled here: the driver supplies its members by need at the link
 for f in src/apps/moon/lib/moonlibc/math/*.c; do
   b=$(basename "$f" .c)
   moonc -Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include -c "$f" "$d/m_$b.o" || fail "mooncc $tflag -c $f"
 done
 
-# sys.o is laid by mksys.l rather than compiled: it is the syscall trampoline and
-# our own sigsetjmp/longjmp, which have no C spelling. A cross target must JOIN the
-# sealed holo module and load its backend first -- the host bake carries only the
-# native one, where mooncc.image carries them all.
+# sys.o (the syscall trampoline, sigsetjmp/longjmp) is laid by mksys.l. a cross target
+# loads its holo backend first: the host bake carries only the native one
 { if [ -n "$backend" ]; then
     echo "(borrow 'holo)"
     cat "$backend"
@@ -102,15 +73,10 @@ done
 
 moonc "$d"/*.o -o "$ho/$bin" || fail "our-linker bind $bin"
 
-# the binary carries no baked image, so LOVE_NO_IMAGE forces the fresh-egg boot -- under a
-# CEILING, like every other emulated corpus here (ktest.l's 420 s): the cross lanes run this
-# under qemu, where a wedge and a slow run look the same from outside. 124 is the timeout's.
-# the corpus goes in as a FILE with stdin closed, not on a pipe, for test_host's reason
-# (test/test.mk): the corpus TESTS stdin, and `reads` no longer drains stdin ahead of the
-# first form, so a piped corpus has test/io.l's see/unsee poking the script it is riding on.
+# the fresh-egg boot under a 420 s ceiling. the corpus is a file, stdin closed: it tests stdin
 cat "$@" > "$ho/.corpus-$target.l"
 if [ "$target" = a64 ]; then
-  # the corpus reads the tree beside it, so the carried source goes over and it runs there
+  # the corpus reads the tree beside it, so the carried source goes over too
   a64_jobs "$ho/raw-a64-run"
   cp "$ho/$bin" "$ho/.corpus-$target.l" "$ho/raw-a64-run/"
   a64_tree || fail "$m would not lay its carried tree"
@@ -124,8 +90,7 @@ else
 fi
 tail -1 "$ho/$out"
 [ $s -eq 0 ] && grep -q "tests pass" "$ho/$out" || fail "corpus (exit $s)"
-# a file named past the corpus answers with its own line: the summary alone cannot say it
-# ran, and a reader stop exits 0 without it.
+# the sentinel file proves the corpus was read to its end
 [ -z "$gate_sentinel" ] || grep -q "$gate_sentinel" "$ho/$out" \
   || fail "no sentinel /$gate_sentinel/ -- a file was skipped or read past"
 

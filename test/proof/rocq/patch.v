@@ -1,157 +1,21 @@
-(* proof/patch.v -- the PATCH GROUPOID, the hand-proven slices, machine-checked in Rocq.
-
-   The design is the runnable toy (+ the argument that a
-   distribution, a namespace, and a repo state are ONE algebra of selectable sets,
-   with COMMUTE the primitive underneath). That toy DEMONSTRATES the laws at
-   runtime; this file upgrades demonstrate toward PROVE -- the commute laws as
-   theorems in a consistent metatheory.
-
-   Scope: the NAMED-SLOT model -- a tree is a total map (key -> value), a patch is
-   a single slot-change carrying its context (old -> new). This is darcs's "file
-   of named lines" abstraction, where commutation is the CLEAN case (independent
-   patches touch different slots and do not shift). Its four laws (L1 commute
-   involutive, L2 inverse round-trips in context, L3a independent patches are
-   order-free -- the semantic heart that makes merge/cherry-pick sound, L3b a
-   frontier is stable under an adjacent independent swap -- the reproducibility
-   tie) were the FIRST slice here, and are the first RETIRED: the uu-term rung
-   landed them as uu proof terms (test/uupatch.l), which src/tools/uu2coq.l +
-   src/tools/uu2lean.l emit into test/proof/rocq/uugen.v AND test/proof/lean/uugen.lean --
-   uu_commute_involutive / uu_invert_roundtrip / uu_commute_sound /
-   uu_applall_swap, axiom-free in BOTH kernels under make test_uugen +
-   test_uulean.
-
-   The SECOND slice (the positional rung, opened 2026-07-12) is RETIRED too:
-   HUNKS over a sequence, where a commuted q' is a genuine re-aim -- its index
-   slides by the other hunk's length delta -- and touching hunks refuse to
-   commute (strict: a seam has no canonical order once inserts land on it;
-   adjacency would break L1). Its four laws migrated to the same generated
-   leg -- uu_hcommute_involutive / uu_hinv_roundtrip / uu_hcommute_sound (via
-   uu_splice_after_comm + uu_splice_before_comm, the honest contexts pinning
-   the seams) / uu_hfold_swap -- each intermediate its own SEALED lemma
-   (test/uupatch.l's ladder). The hunk record and splice STAY here as the
-   vocabulary the later slices ride, with the splice-algebra little lemmas.
-
-   The THIRD slice (the conflictor rung, same day) closes commute's refusal
-   gap: a real merge RECORDS instead of refusing. The state enlarges (pijul's
-   move, not darcs 1.x's exotic patch algebra) -- a conflicted slot holds a
-   CLASH, the shared base plus a canonically-ordered rival set -- and merge
-   (pull, factoring through merge1) is total. Its laws, same axiom-free rule:
-     (M1) pull_merge_comm   rivals land the same cell either order, from ANY
-                            starting slot (so three-way convergence is M1 twice)
-     (M2) pull_idem         pulling a patch again settles
-     (M3) pull_records      the cell keeps the base AND both rivals
-     (M4) pull_fold_swap    a frontier is stable under ANY adjacent swap --
-                            independent OR conflicting: pull order is dead
-     (M5) resolve_roundtrip a resolution is an ordinary patch off the cell,
-                            and unpulling it returns the clash
-   The FOURTH slice (the identity rung, same day): a version IS its patch set.
-   Per-patch content hashes fold through cins -- the same canonical set that
-   carries a clash's rivals -- so the identity quotients by exactly what the
-   semantics proved dead and nothing more:
-     (H1) fid_swap  order-free   (the uu_applall_swap / pull_fold_swap face)
-     (H2) fid_dup   multiplicity-free  (the pull_idem face)
-   The FIFTH slice (the tree lift, 2026-07-13): a hunk gets a PATH, and the
-   shift algebra climbs the levels -- four commute lanes by path relation,
-   with a genuine PATH re-aim at the crossing:
-     (L1) tcommute_involutive  (the algebra half; the tree APPLY laws are
-          asserted in the .l -- their crossing-level core IS splice_after/
-          before_comm with singleton hunks -- and join the uu-term rung)
-   The SIXTH slice (the content-rewrite rung, same day): the swallow refusal
-   opens -- a shallow patch that MOVES the subtree a deep patch edited
-   commutes by rewriting its context THROUGH the content (undo the deep edit
-   in both sides, re-aim at the survivor's seat, occurrence guards keeping
-   the match canonical). Proven at ELEMENT grain (the deep edit as "at seat
-   j, a becomes b"; the rose-tree unit walk stays in the .l):
-     (L1) swal_involutive  (through the groupoid inverse -- exactly the .l's
-          mirror lane wiring, so involution is the algebra, not a re-check)
-   The SEVENTH slice (the clash-segments rung, same day): the conflictor
-   cell lifted to sequences -- pijul's graggle corner. Overlapping / touching
-   / same-seam rivals collapse the union hull of their base spans to ONE
-   clash element, the BUBBLE; rivals are segments, cins-canonical by content
-   hash; a rival extending past a landed bubble WIDENS it over the union
-   hull (the same day's second half). Proven at hash grain:
-     (M1) scell_comm   the bubble forgets arrival order (min/max + cins_comm)
-     (--)  splice_pad  padding commutes with rendering -- a rival padded up
-           when the bubble widens IS the rival rendered over the wide hull,
-           so mixed-span arrival order is dead too
-     (--)  bubble_len  one seat, rival sizes nowhere in the merged length --
-           downstream seats determinate before anyone resolves
-   The EIGHTH slice (the metavariable rung, same day): patches grow
-   variables and become rewrite RULES -- the unifier takes the application
-   seat (valid matches, apon instantiates), and the schematic swallow
-   commutes with the rule UNCHANGED: the variable abstracts the content, so
-   form six's rewrite-through vanishes into address algebra. Proven in the
-   lane's two halves:
-     (--)  mtch_sound        matching is SOUND: a pattern instantiated with
-           its own bindings reproduces the ground term (non-linear patterns
-           bind consistently -- the kanren move, on cap/cup cells)
-     (L1)  reaim_involutive  the deep patch's seat re-aim (olds seat -> news
-           seat, prefix surgery) swaps home
-   The NINTH slice (the critical-pairs rung, 2026-07-14): schematic-vs-
-   schematic -- two REWRITE RULES meet on one tree, and the seat relation
-   decides. DIVERGING seats commute with NO re-aim (tree addresses do not
-   shift under a disjoint rewrite -- the sequence slices' index slide
-   vanishes at tree grain), and any overlap is REFUSED with the refusal
-   EARNED: a concrete pair of rules on one ground where both orders succeed
-   and disagree, so no total commute exists at rule grain:
-     (L3a) rw_comm_div  diverging-seat rewrites are order-free (the match
-           verdicts on the shared ground carry across the other rule's put;
-           gput_comm_div closes) -- the semantic heart at rule grain
-     (--)  cp_earned    the critical pair: same seat, two rules, both
-           orders green, DIFFERENT trees -- overlap refusal is forced,
-           not conservative
-   Still deliberately out (the next refinements): the variable-overlap lane
-   (a redex nested under a METAVARIABLE of the other rule's lhs commutes for
-   LINEAR rules by sliding to the variable's rhs seat -- mvswal's rule-rule
-   face) and joinability of critical pairs (Knuth-Bendix territory: WHICH
-   overlaps are harmless is a completion question, not a commute question).
-
-   Method note, matching gc.v / spec.v house rule: NO Axiom, NO Admitted, NO
-   classical / funext escape hatch. Trees are functions, so equality of trees is
-   POINTWISE (forall k, ...) throughout -- we never assume functional
-   extensionality; every theorem quantifies the key.
-
-   PROVENANCE -- this file is SCAFFOLDING, not the destination. It is hand-authored
-   (spec.v tier), and a hand-authored proof model DRIFTS from the code it mirrors
-   -- the lesson wm2uu already banked when it retired the hand StackSet model for a
-   generated-and-gated one. The house pattern is: the ai implementation is the
-   source of truth; the Rocq/Lean is EMITTED and drift-gated. The route is now
-   OPEN: the named-slot slice went first (test/uupatch.l -- the laws as uu proof
-   TERMS, isdeceqnat's coprod carrying the evidence Nat.eqb dropped, emitted to
-   both kernels by src/tools/uu2coq.l + src/tools/uu2lean.l and audited axiom-free), and
-   its hand copy is deleted from here. Each remaining slice migrates the same
-   way as its model stabilizes -- the positional slice next (splice/firstn/skipn
-   need a list library at uu, the one piece uupatch.l didn't build); the file
-   shrinks slice by slice until it is gone. Until then it pins the remaining
-   theorem statements and proves each slice is real.
-
-   Written by Claude (Anthropic): the retired named-slot slice by the Opus 4.8
-   model; the positional slice on by Claude Fable 5. *)
+(* patch.v -- the patch groupoid: the hand-proven slices of test/patch.l's model.
+   no Axiom, no Admitted, no classical or funext: trees are functions, so tree
+   equality is pointwise (forall k) throughout. *)
 
 From Stdlib Require Import PeanoNat List Lia.
 Import ListNotations.
 
-(* ============================================================ *)
-(* the positional VOCABULARY: hunks and splice (the laws retired *)
-(* to the uu leg -- test/uupatch.l -> uugen.v / uugen.lean)      *)
-(* ============================================================ *)
+(* --- hunks and splice --- *)
 
-(* Mirror of test/patch.l's second form's model. A state is a SEQUENCE of
-   forms (nat stands in for a form), a patch a HUNK: at index hpos the segment
-   hold (its context -- a hunk BELONGS somewhere) becomes hnew. The four hunk
-   laws live in the generated leg now; the record and splice stay because the
-   swal and clash slices below speak them. *)
+(* a state is a sequence (nat stands in for a form); at hpos, hold becomes hnew *)
 
 Record hunk := mkh { hpos : nat ; hold : list nat ; hnew : list nat }.
 
-(* splice: replace the c elements at i with n (firstn/skipn are total, so
-   splice is too -- validity is what pins it to the honest region). *)
+(* replace the c elements at i with n; total, validity pins the honest region *)
 Definition splice (s : list nat) (i c : nat) (n : list nat) : list nat :=
   firstn i s ++ n ++ skipn (i + c) s.
 
-(* ============================================================ *)
-(* splice algebra: the three little lemmas everything rides     *)
-(* ============================================================ *)
+(* --- splice algebra --- *)
 
 Lemma firstn_len_app : forall (a b : list nat), firstn (length a) (a ++ b) = a.
 Proof.
@@ -163,7 +27,7 @@ Proof.
   intros. rewrite skipn_app, skipn_all, Nat.sub_diag. reflexivity.
 Qed.
 
-(* splice, aimed exactly at a decomposed middle: the ONE computation rule. *)
+(* splice aimed exactly at a decomposed middle: the one computation rule *)
 Lemma splice_at : forall (P o rest n : list nat) i c,
   i = length P -> c = length o ->
   splice (P ++ o ++ rest) i c n = P ++ n ++ rest.
@@ -175,27 +39,16 @@ Proof.
   apply skipn_len_app.
 Qed.
 
-(* every sequence splits at (i, c) -- unconditional; validity is what names
-   the middle piece. *)
+(* every sequence splits at (i, c) *)
 Lemma seg_decompose : forall (s : list nat) i c,
   s = firstn i s ++ firstn c (skipn i s) ++ skipn (i + c) s.
 Proof.
   intros. rewrite (Nat.add_comm i c), <- skipn_skipn.
   rewrite firstn_skipn, firstn_skipn. reflexivity.
 Qed.
-(* ============================================================ *)
-(* the CONFLICTOR slice: merge RECORDS, and the state enlarges  *)
-(* ============================================================ *)
+(* --- the conflictor slice: merge records a clash --- *)
 
-(* Mirror of test/patch.l's third form, on the lawful region (the .l's pull is
-   value-generic; here values are nat -- the models agree wherever the co-valid
-   discipline holds, and both no-op on cell-shaped breaches). commute REFUSES a
-   dependency; merge may not, so the STATE enlarges (pijul's move, not darcs
-   1.x's exotic patch algebra): a conflicted slot holds a CLASH -- the shared
-   base plus a canonically-ordered SET of rivals -- making merge total,
-   symmetric, and associative by construction. A clash is a first-class VALUE,
-   so a resolution is an ordinary patch whose old value is the cell, and the
-   groupoid laws ride along (resolve_roundtrip). *)
+(* a conflicted slot holds the shared base plus a canonical rival set *)
 
 Inductive slot :=
   | Plain (v : nat)
@@ -205,8 +58,7 @@ Definition stree := nat -> slot.
 
 Record spatch := mks { sk : nat ; sa : slot ; sb : slot }.
 
-(* the canonical rival set: sorted insert with dedup. cins_comm is what makes
-   merge order-free; cins_absorb is what lets a settled edit rejoin harmlessly. *)
+(* the canonical rival set: sorted insert with dedup *)
 Fixpoint cins (x : nat) (l : list nat) : list nat :=
   match l with
   | [] => [x]
@@ -283,7 +135,7 @@ Proof.
       * creduce. now rewrite IH.
 Qed.
 
-(* a settled rival rejoins harmlessly: insert dedups. *)
+(* a settled rival rejoins harmlessly *)
 Lemma cins_absorb : forall x l, cins x (cins x l) = cins x l.
 Proof.
   intros x l. induction l as [|h t IH]; simpl.
@@ -293,9 +145,7 @@ Proof.
     + destruct (Nat.ltb_spec x h); creduce; [reflexivity|now rewrite IH].
 Qed.
 
-(* merge1: the one-slot merge -- pull factors through it. Lane order mirrors
-   the .l: context matches / same edit settles / join the rivals / a rival
-   landed first / breach no-ops. *)
+(* the one-slot merge; lane order mirrors the .l's pull *)
 Definition merge1 (v old new : slot) : slot :=
   if slot_eqb v old then new
   else if slot_eqb v new then v
@@ -306,9 +156,7 @@ Definition merge1 (v old new : slot) : slot :=
        | _, _, _ => v
        end.
 
-(* pull: TOTAL merge-application (the .l's pull). It trusts the co-valid
-   discipline -- every pulled patch reads the shared base or a rival of it;
-   `valid`-style honesty stays with a lone patch's application. *)
+(* total merge-application; trusts every pulled patch to read the base or a rival *)
 Definition pull (t : stree) (p : spatch) : stree :=
   fun k => if k =? sk p then merge1 (t (sk p)) (sa p) (sb p) else t k.
 
@@ -323,7 +171,7 @@ Qed.
 Lemma pull_at : forall t p, pull t p (sk p) = merge1 (t (sk p)) (sa p) (sb p).
 Proof. intros. unfold pull. now rewrite Nat.eqb_refl. Qed.
 
-(* different slots never interact: the rung-1 independence face, on pull. *)
+(* different slots never interact *)
 Lemma pull_indep_comm : forall t p q, sk p <> sk q ->
   forall k, pull (pull t p) q k = pull (pull t q) p k.
 Proof.
@@ -337,16 +185,10 @@ Proof.
     + rewrite !pull_other by congruence. reflexivity.
 Qed.
 
-(* ============================================================ *)
-(* (M1) merge is SYMMETRIC -- for ANY starting slot             *)
-(* ============================================================ *)
+(* --- (M1) merge is symmetric, from any starting slot --- *)
 
-(* The heart of the rung: two rivals off one base land the same cell whichever
-   is pulled first -- for an ARBITRARY slot value v (the shared base, a rival
-   already landed, a clash already open, or a breach that no-ops). No
-   hypothesis on v means three-way convergence is just this law twice. *)
-(* the leaf grinder: on literal rival lists everything reduces to nat
-   comparisons -- destruct them all, prune by lia, close by reflexivity. *)
+(* no hypothesis on v, so three-way convergence is this law twice *)
+(* on literal rival lists everything reduces to nat comparisons *)
 Ltac cfin :=
   repeat (first
     [ reflexivity | lia | congruence
@@ -365,13 +207,11 @@ Proof.
   intros v a b c Hba Hca.
   destruct (Nat.eqb_spec b c) as [->|Nbc]; [reflexivity|].
   destruct v as [w|base rs]; unfold merge1; simpl.
-  - (* a plain slot: the base, a rival already landed, or one of the two
-       edits (settled on one side, deduped on the other) -- on literal lists
-       it all grinds down to comparisons *)
+  - (* a plain slot *)
     destruct (Nat.eqb_spec w a) as [->|Nwa]; creduce; [cfin|].
     destruct (Nat.eqb_spec w b) as [->|Nwb]; creduce; [cfin|].
     destruct (Nat.eqb_spec w c) as [->|Nwc]; creduce; cfin.
-  - (* a clash already open: join twice, either order -- or a breach no-op *)
+  - (* a clash already open, or a breach no-op *)
     destruct (Nat.eqb_spec base a) as [->|Nba2]; creduce.
     + now rewrite cins_comm.
     + reflexivity.
@@ -389,9 +229,7 @@ Proof.
   - rewrite !pull_other by congruence. reflexivity.
 Qed.
 
-(* ============================================================ *)
-(* (M2) the settled lanes: pulling is idempotent                *)
-(* ============================================================ *)
+(* --- (M2) pulling is idempotent --- *)
 
 Lemma merge1_idem : forall v o n, merge1 (merge1 v o n) o n = merge1 v o n.
 Proof.
@@ -406,9 +244,9 @@ Proof.
     + destruct v as [w|base rs]; destruct o as [a|oa ors]; destruct n as [b|na nrs];
         simpl in Evo, Evn; unfold merge1; simpl; rewrite ?Evo, ?Evn;
         try reflexivity.
-      * (* plain/plain/plain: the freshly opened cell re-absorbs b *)
+      * (* the freshly opened cell re-absorbs b *)
         cfin.
-      * (* clash/plain/plain: a joined set absorbs the repeat; a breach no-ops *)
+      * (* a joined set absorbs the repeat; a breach no-ops *)
         destruct (Nat.eqb_spec base a) as [->|Nba]; simpl;
           rewrite ?Nat.eqb_refl, ?Evo, ?Evn; simpl.
         -- f_equal. apply cins_absorb.
@@ -422,9 +260,7 @@ Proof.
   - rewrite !pull_other by congruence. reflexivity.
 Qed.
 
-(* ============================================================ *)
-(* (M3) a conflict is HONEST: base + both rivals, recorded      *)
-(* ============================================================ *)
+(* --- (M3) a conflict records the base and both rivals --- *)
 
 Theorem pull_records : forall t p q a b c, sk p = sk q ->
   sa p = Plain a -> sb p = Plain b -> sa q = Plain a -> sb q = Plain c ->
@@ -436,9 +272,7 @@ Proof.
   unfold merge1; simpl. rewrite Nat.eqb_refl. simpl. creduce. reflexivity.
 Qed.
 
-(* ============================================================ *)
-(* (M5) RESOLUTION is just a patch: the groupoid rides along    *)
-(* ============================================================ *)
+(* --- (M5) a resolution is just a patch --- *)
 
 Lemma merge1_resolve : forall o n, merge1 (merge1 o o n) n o = o.
 Proof.
@@ -455,10 +289,7 @@ Proof.
   - rewrite !pull_other by (simpl; congruence). reflexivity.
 Qed.
 
-(* ============================================================ *)
-(* (M4) a frontier is stable under ANY adjacent swap --         *)
-(* independent OR conflicting: merge closed the refusal gap     *)
-(* ============================================================ *)
+(* --- (M4) a frontier is stable under any adjacent swap --- *)
 
 Lemma pull_ext : forall t1 t2 p, (forall k, t1 k = t2 k) ->
   forall k, pull t1 p k = pull t2 p k.
@@ -475,10 +306,7 @@ Proof.
   - apply IH. intro k'. now apply pull_ext.
 Qed.
 
-(* THE frontier theorem of this rung: swapping two adjacent patches never
-   changes the merged tree -- different slots commute (rung 1's L3b face), and
-   same-slot RIVALS now converge instead of refusing. Pull order is dead as a
-   semantic input; the (unordered) patch set is the whole story. *)
+(* independent or rival, an adjacent swap never changes the merged tree *)
 Theorem pull_fold_swap : forall pre p q post t,
   (sk p <> sk q \/
    exists a b c, sa p = Plain a /\ sb p = Plain b /\ sa q = Plain a /\
@@ -496,23 +324,14 @@ Proof.
     + now apply pull_indep_comm.
 Qed.
 
-(* ============================================================ *)
-(* the IDENTITY slice: a version IS its patch set               *)
-(* ============================================================ *)
+(* --- the identity slice: a version is its patch set --- *)
 
-(* Mirror of test/patch.l's fourth form, on the lawful part. The .l hashes
-   each patch's printed form (engineering -- djb2 today, a real digest when
-   the store lands) and folds the hashes through cins, the same canonical set
-   that carries a clash's rivals; the scalar name is one more hash on top.
-   The LAWS live on the canonical list: the identity forgets exactly what the
-   semantics proved dead -- order (uu_applall_swap / pull_fold_swap) and repetition
-   (pull_idem) -- and nothing more (fid IS the set; distinct sets stay
-   distinct up to the engineering hash). *)
+(* patch hashes folded through cins: forgets order and repetition, nothing more *)
 
 Definition fid (hs : list nat) : list nat :=
   fold_left (fun acc h => cins h acc) hs [].
 
-(* (H1) order-free: any adjacent swap, one canonical set. *)
+(* (H1) order-free *)
 Theorem fid_swap : forall pre a b post,
   fid (pre ++ a :: b :: post) = fid (pre ++ b :: a :: post).
 Proof.
@@ -520,7 +339,7 @@ Proof.
   f_equal. apply cins_comm.
 Qed.
 
-(* (H2) multiplicity-free: a repeated patch names the same version. *)
+(* (H2) multiplicity-free *)
 Theorem fid_dup : forall pre a post,
   fid (pre ++ a :: a :: post) = fid (pre ++ a :: post).
 Proof.
@@ -528,22 +347,10 @@ Proof.
   f_equal. apply cins_absorb.
 Qed.
 
-(* ============================================================ *)
-(* the TREE-LIFT slice: a hunk gets a PATH -- the postcode      *)
-(* ============================================================ *)
+(* --- the tree-lift slice: a hunk gets a path --- *)
 
-(* Mirror of test/patch.l's fifth form, the algebra half. A patch is a hunk
-   plus a PATH to the sequence it splices; the load-bearing fact is that a
-   deep patch never changes an ancestor's length, so only same-sequence
-   patches shift INDICES while a shallow splice re-aims a deeper patch's path
-   COMPONENT at the crossing. tcommute has four lanes by path relation. The
-   elements stay abstract (Section variable): L1 is pure path/index algebra.
-
-   The tree APPLY laws (L2/L3 at tree grain) are asserted in the .l; their
-   crossing-level semantic core is ALREADY the proven uu_splice_after_comm /
-   uu_splice_before_comm (uugen.v/uugen.lean) with singleton hunks (editing
-   inside element j IS splice s j 1 [x]), and the remaining rose-tree plumbing
-   joins the uu migration rather than growing this scaffold. *)
+(* a deep patch never changes an ancestor's length, so a shallow splice
+   re-aims only the deeper patch's path component at the crossing *)
 
 Section TreeLift.
 Variable A : Type.
@@ -558,9 +365,7 @@ Fixpoint setidx (p : list nat) (d v : nat) : list nat :=
   | [], _ => []
   end.
 
-(* how two paths sit: same sequence / q deeper (crossing at child j, depth d)
-   / p deeper / diverged. d accumulates the shared-prefix length, so it is the
-   ABSOLUTE index of the crossing component -- what setidx re-aims. *)
+(* how two paths sit; d is the absolute index of the crossing component *)
 Inductive prel := Same | InQ (j d : nat) | InP (j d : nat) | Apart.
 
 Fixpoint rel (P Q : list nat) (d : nat) : prel :=
@@ -645,7 +450,7 @@ Proof.
     specialize (IH _ _ _ _ H). lia.
 Qed.
 
-(* re-aiming the crossing component keeps the relation, with the new j... *)
+(* re-aiming the crossing keeps the relation, with the new j... *)
 Lemma rel_inq_setidx : forall P Q d0 j d v,
   rel P Q d0 = InQ j d -> rel (setidx Q (d - d0) v) P d0 = InP v d.
 Proof.
@@ -658,7 +463,7 @@ Proof.
     rewrite Nat.eqb_refl. eauto.
 Qed.
 
-(* ...and putting the ORIGINAL component back is the identity. *)
+(* ...and putting the original component back is the identity *)
 Lemma setidx_self : forall P Q d0 j d,
   rel P Q d0 = InQ j d -> setidx Q (d - d0) j = Q.
 Proof.
@@ -678,15 +483,14 @@ Proof.
   now rewrite IH.
 Qed.
 
-(* (L1) tcommute is involutive -- the four lanes swap home, including the
-   PATH re-aim (the crossing component slides back exactly). *)
+(* (L1) tcommute is involutive, path re-aim included *)
 Theorem tcommute_involutive : forall p q q' p',
   tcommute p q = Some (q', p') -> tcommute q' p' = Some (p, q).
 Proof.
   intros [P ip o1 n1] [Q iq o2 n2] q' p' H.
   unfold tcommute in *; simpl in *.
   destruct (rel P Q 0) eqn:R.
-  - (* Same: rung 2's arithmetic, paths riding *)
+  - (* Same: index arithmetic *)
     pose proof (rel_same_eq _ _ _ R) as ->.
     destruct (ip + length n1 <? iq) eqn:E1.
     + injection H as <- <-; simpl. apply Nat.ltb_lt in E1.
@@ -704,7 +508,7 @@ Proof.
       * replace (ip + length n2 - length o2 + length o2 - length n2)
           with ip by lia. reflexivity.
       * apply Nat.ltb_ge in F1. lia.
-  - (* InQ: q is deeper; either untouched or its path component slid back *)
+  - (* InQ: q deeper *)
     destruct (j <? ip) eqn:E1.
     + injection H as <- <-; simpl.
       rewrite (rel_inq_flip _ _ _ _ _ R), E1. reflexivity.
@@ -722,7 +526,7 @@ Proof.
              with j by lia.
            rewrite SS. reflexivity.
         -- apply Nat.leb_gt in F2. lia.
-  - (* InP: p is deeper; mirror *)
+  - (* InP: mirror *)
     destruct (j <? iq) eqn:E1.
     + injection H as <- <-; simpl.
       rewrite (rel_inp_flip _ _ _ _ _ R), E1. reflexivity.
@@ -742,26 +546,14 @@ Proof.
              with j by lia.
            rewrite SS. reflexivity.
         -- apply Nat.leb_gt in F2. lia.
-  - (* Apart: disjoint subtrees ride untouched *)
+  - (* Apart: untouched *)
     injection H as <- <-; simpl.
     rewrite (rel_apart_sym _ _ _ R). reflexivity.
 Qed.
 
 End TreeLift.
 
-(* ============================================================ *)
-(* the CONTENT-REWRITE slice: the swallow commutes              *)
-(* ============================================================ *)
-
-(* Mirror of test/patch.l's sixth form, the L1 core at ELEMENT grain: the deep
-   edit collapsed to "at seat j, element a becomes b" (the unit walk's
-   rose-tree descent and the apply laws stay asserted in the .l and join the
-   uu-term rung). What is genuinely NEW in this lane -- the four occurrence
-   guards that make the context rewrite canonical BOTH ways -- is pure
-   occurrence/replace algebra over one sequence, proven here: swal composed
-   with itself through the groupoid inverse is the identity, which is exactly
-   how the .l rides it (the inq mirror inverts in and out, so ONE core serves
-   both directions and L1 falls out of the algebra). *)
+(* --- the content-rewrite slice: the swallow commutes, at element grain --- *)
 
 Section Swallow.
 Variable A : Type.
@@ -796,11 +588,8 @@ Fixpoint lay (l : list A) (k : nat) (v : A) : list A :=
   | h :: t, S k' => h :: lay t k' v
   end.
 
-(* the deep-first swallow commute: dp ran first, so sp's olds carry its
-   effect (element b at seat ej); undo it in BOTH of sp's sides, re-aim dp
-   at the survivor's seat in the news. the guards, as in the .l: context
-   matches, the post state exactly once on each side, the pre state on
-   neither. *)
+(* dp ran first: undo it in both of sp's sides, re-aim dp in the news.
+   guards: post state exactly once each side, pre state on neither *)
 Definition swal (dp : epatch) (sp : wpatch) : option (wpatch * epatch) :=
   let off := ej dp - wi sp in
   let O := wo sp in let N := wn sp in
@@ -819,7 +608,7 @@ Definition swal (dp : epatch) (sp : wpatch) : option (wpatch * epatch) :=
     end
   else None else None.
 
-(* --- the occurrence/replace lemma kit --- *)
+(* --- occurrence/replace lemmas --- *)
 
 Lemma lay_length : forall l k v, length (lay l k v) = length l.
 Proof. induction l; destruct k; simpl; auto. Qed.
@@ -854,7 +643,7 @@ Proof.
   - now rewrite IH.
 Qed.
 
-(* laying x over a non-x seat gains exactly one occurrence of x... *)
+(* laying x over a non-x seat gains one x... *)
 Lemma occ_lay_in : forall l k x u, nth_error l k = Some u -> u <> x ->
   occ x (lay l k x) = S (occ x l).
 Proof.
@@ -864,7 +653,7 @@ Proof.
   - destruct (Aeq h x); simpl; now rewrite (IH _ _ _ H NE).
 Qed.
 
-(* ...and laying non-x over an x seat loses exactly one. *)
+(* ...and laying non-x over an x seat loses one *)
 Lemma occ_lay_out : forall l k x v, nth_error l k = Some x -> v <> x ->
   occ x l = S (occ x (lay l k v)).
 Proof.
@@ -874,7 +663,7 @@ Proof.
   - destruct (Aeq h x); simpl; now rewrite <- (IH _ _ _ H NE).
 Qed.
 
-(* where x occurs NOWHERE, laying it in pins ffind to the seat. *)
+(* where x occurs nowhere, laying it in pins ffind to the seat *)
 Lemma ffind_lay : forall l k x, occ x l = 0 -> k < length l ->
   ffind x (lay l k x) = k.
 Proof.
@@ -884,9 +673,7 @@ Proof.
     destruct (Aeq h x); [congruence|]. rewrite IH; lia.
 Qed.
 
-(* (L1) the swallow commute is involutive THROUGH THE GROUPOID INVERSE --
-   invert both patches, swal again, and the originals come home (inverted:
-   un-inverting them is the .l's mirror wrap-up). *)
+(* (L1) involutive through the groupoid inverse: the originals come home inverted *)
 Theorem swal_involutive : forall dp sp sp' dp',
   swal dp sp = Some (sp', dp') ->
   swal (einv dp') (winv sp') = Some (winv sp, einv dp).
@@ -934,19 +721,8 @@ Qed.
 
 End Swallow.
 
-(* ============================================================ *)
-(* the CLASH-SEGMENTS slice: the bubble at hash grain           *)
-(* ============================================================ *)
-
-(* Mirror of test/patch.l's seventh form, the cell algebra: two co-valid
-   hunks whose spans overlap (or touch, or share a seam) collapse the UNION
-   HULL of their base spans to one clash cell -- the hull segment plus each
-   rival rendered as the hull with its hunk laid inside, the rival set
-   cins-canonical by content hash (the .l's hval; the identity slice already
-   rides the same move). Symmetry is min/max algebra plus cins_comm; the
-   join/absorb faces of pull's lane ARE cins_comm/cins_absorb, audited above.
-   The state-level M laws stay asserted in the .l (a cell is a first-class
-   ELEMENT there; here sequences are bare nat lists), queued for the uu rung. *)
+(* --- the clash-segments slice: overlapping hunks collapse their union hull
+   to one clash cell, rivals cins-canonical by hash --- *)
 
 Section ClashSeg.
 Variable hash : list nat -> nat.
@@ -966,8 +742,7 @@ Definition scell (s0 : list nat) (p q : hunk) : list nat * list nat :=
    cins (hash (rend s0 (ulo p q) (uhi p q) p))
         (cins (hash (rend s0 (ulo p q) (uhi p q) q)) [])).
 
-(* (M1 at cell grain) creation is SYMMETRIC: the hull forgets which span
-   came first, the rival set forgets which rival did. *)
+(* (M1 at cell grain) the cell forgets which hunk came first *)
 Theorem scell_comm : forall s0 p q, scell s0 p q = scell s0 q p.
 Proof.
   intros s0 p q. unfold scell, ulo, uhi.
@@ -977,12 +752,7 @@ Proof.
   f_equal. apply cins_comm.
 Qed.
 
-(* the WIDENING law: padding COMMUTES with rendering. a rival is a splice
-   into its hull; pad the hull on both sides and the same splice lands one
-   pad further in -- so a rival rendered over a narrow hull, padded up when
-   the bubble widens, IS the rival rendered over the wide hull directly.
-   this is what makes mixed-span arrival order dead: whichever pair bubbles
-   first, the third widens to the same cell (the .l's pull join lane). *)
+(* padding commutes with rendering: a widened bubble is the wide hull rendered directly *)
 Theorem splice_pad : forall (pl pr b n : list nat) i c,
   i + c <= length b ->
   pl ++ splice b i c n ++ pr = splice (pl ++ b ++ pr) (length pl + i) c n.
@@ -1001,9 +771,7 @@ Proof.
   now rewrite <- !app_assoc.
 Qed.
 
-(* the BUBBLE law: the conflicted hull contracts to ONE seat, so the merged
-   length reads off the hull alone -- no rival size anywhere in the formula:
-   every downstream seat is determinate before anyone resolves. *)
+(* the hull contracts to one seat: merged length has no rival size in it *)
 Theorem bubble_len : forall s0 p q x,
   uhi p q <= length s0 ->
   length (splice s0 (ulo p q) (uhi p q - ulo p q) [x])
@@ -1022,20 +790,7 @@ Qed.
 
 End ClashSeg.
 
-(* ============================================================ *)
-(* the METAVARIABLE slice: matching sound, the re-aim swaps home *)
-(* ============================================================ *)
-
-(* Mirror of test/patch.l's eighth form, in its two genuinely new halves.
-   Terms are cons-cells with atoms and metavariables -- exactly the .l's
-   grain (mtch walks cap/cup). The unifier half: one-sided matching threads
-   a substitution, a non-linear pattern binds consistently or fails, and
-   MATCHING IS SOUND -- a pattern instantiated with its own bindings
-   reproduces the ground term (what valid/apon lean on). The commute half:
-   the schematic swallow re-aims a deep patch from the variable's olds seat
-   to its news seat by prefix surgery, the rule itself riding unchanged --
-   involutive at address grain. The rose-tree bind/mvat plumbing stays
-   asserted in the .l, queued with the rest for the uu-term rung. *)
+(* --- the metavariable slice: matching is sound, the re-aim swaps home --- *)
 
 Section MetaVar.
 
@@ -1095,7 +850,7 @@ Proof.
     now rewrite (IHa1 _ E1), (IHa2 _ H).
 Qed.
 
-(* bindings only GROW: what a match step bound stays bound, unchanged *)
+(* bindings only grow *)
 Lemma mtch_mono : forall p g s s', mtch p g s = Some s' ->
   forall v t, sasq v s = Some t -> sasq v s' = Some t.
 Proof.
@@ -1111,8 +866,7 @@ Proof.
     eapply IHp2; [eassumption|]. eapply IHp1; eassumption.
 Qed.
 
-(* MATCHING IS SOUND, under any extension of the bindings it produced --
-   the strengthening that lets the Cell case ride mtch_mono. *)
+(* sound under any extension of its bindings, so the Cell case rides mtch_mono *)
 Lemma mtch_sound_ext : forall p g s s' s2,
   mtch p g s = Some s' ->
   (forall v t, sasq v s' = Some t -> sasq v s2 = Some t) ->
@@ -1142,10 +896,7 @@ Theorem mtch_sound : forall p g s',
   mtch p g [] = Some s' -> inst p s' = g.
 Proof. intros p g s' H. eapply mtch_sound_ext; eauto. Qed.
 
-(* the RE-AIM at address grain: the schematic swallow moves a deep patch's
-   path from the variable's olds seat to its news seat -- prefix surgery,
-   the rule itself riding unchanged. Swapping the seats back is home: the
-   .l's L1 for the metavariable lane. *)
+(* move a deep patch's path from the olds seat to the news seat *)
 Definition reaim (a b p : list nat) : list nat := b ++ skipn (length a) p.
 
 Theorem reaim_involutive : forall a b rest,
@@ -1156,15 +907,9 @@ Qed.
 
 End MetaVar.
 
-(* ============================================================ *)
-(* the CRITICAL-PAIRS slice: two rules meet on one tree          *)
-(* ============================================================ *)
+(* --- the critical-pairs slice: two rules meet on one tree --- *)
 
-(* Mirror of test/patch.l's ninth form. Terms and the matcher are the
-   MetaVar slice's; a rule application is mtch at a SEAT (a path of kid
-   choices), then gput of the instantiated rhs. kid reads are total --
-   junk on non-cells -- and the honest region is pinned by the match
-   verdicts, exactly splice/validity's arrangement. *)
+(* kid reads are total, junk on non-cells; the match verdicts pin the honest region *)
 
 Section RuleCommute.
 
@@ -1191,8 +936,7 @@ Proof.
   destruct d; simpl; apply IH.
 Qed.
 
-(* the two disturbance mirrors: a put on one side of the diverging seat
-   leaves the other side's read alone *)
+(* a put on one side of a diverging seat leaves the other's read alone *)
 Lemma gsub_put_ab : forall w ra rb g h,
   gsub (w ++ false :: rb) (gput (w ++ true :: ra) g h)
   = gsub (w ++ false :: rb) g.
@@ -1209,8 +953,7 @@ Proof.
   destruct d; simpl; auto.
 Qed.
 
-(* diverging puts commute -- and with NO index re-aim: tree addresses
-   don't shift, the sequence slices' slide is gone at this grain *)
+(* diverging puts commute with no re-aim: tree addresses don't shift *)
 Lemma gput_comm_div : forall w ra rb g x y,
   gput (w ++ false :: rb) (gput (w ++ true :: ra) g x) y
   = gput (w ++ true :: ra) (gput (w ++ false :: rb) g y) x.
@@ -1233,10 +976,7 @@ Definition rw2 (l1 r1 : term) (p1 : list bool)
   | None => None
   end.
 
-(* (L3a at rule grain) diverging-seat rewrites are ORDER-FREE: each rule's
-   match verdict on the shared ground survives the other's put (the
-   disturbance mirrors), so both sequenced orders land, and they land on
-   the SAME tree (the puts commute). *)
+(* (L3a) diverging-seat rewrites are order-free *)
 Theorem rw_comm_div : forall w ra rb l1 r1 l2 r2 g s1 s2,
   mtch l1 (gsub (w ++ true :: ra) g) [] = Some s1 ->
   mtch l2 (gsub (w ++ false :: rb) g) [] = Some s2 ->
@@ -1249,9 +989,7 @@ Proof.
   reflexivity.
 Qed.
 
-(* the critical pair EARNED: one shared seat, two rules, both orders
-   SUCCEED -- and disagree. No total commute exists at rule grain, so an
-   overlap refusal is honest necessity, not caution. *)
+(* one seat, two rules, both orders succeed and disagree: overlap must refuse *)
 Theorem cp_earned :
   rw2 (MV 0) (Atom 1) [] (MV 0) (Atom 2) [] (Atom 0)
   <> rw2 (MV 0) (Atom 2) [] (MV 0) (Atom 1) [] (Atom 0).
@@ -1259,30 +997,20 @@ Proof. discriminate. Qed.
 
 End RuleCommute.
 
-(* the axiom audit: every law closed under the global context -- no Axiom, no
-   Admitted, no classical/funext escape hatch, in ANY slice. *)
-Print Assumptions pull_merge_comm.     (* M1, clash -- rivals land one cell *)
-Print Assumptions pull_idem.           (* M2, clash -- pulling settles *)
-Print Assumptions pull_records.        (* M3, clash -- base + both rivals kept *)
-Print Assumptions pull_fold_swap.      (* M4, clash -- pull order is dead *)
-Print Assumptions resolve_roundtrip.   (* M5, clash -- resolution unpulls *)
-Print Assumptions fid_swap.            (* H1, identity -- order-free *)
-Print Assumptions fid_dup.             (* H2, identity -- multiplicity-free *)
-Print Assumptions swal_involutive.     (* L1, content-rewrite -- the swallow
-                                          swaps home through the inverse *)
-Print Assumptions scell_comm.          (* M1, clash segments -- the bubble
-                                          forgets arrival order *)
-Print Assumptions bubble_len.          (* the bubble law -- one seat, rival
-                                          sizes nowhere in the length *)
-Print Assumptions splice_pad.          (* the widening law -- padding commutes
-                                          with rendering *)
-Print Assumptions mtch_sound.          (* the unifier law -- a pattern
-                                          instantiated with its own bindings
-                                          reproduces the ground term *)
-Print Assumptions reaim_involutive.    (* L1, metavariables -- the seat
-                                          re-aim swaps home *)
-Print Assumptions tcommute_involutive. (* L1, tree -- four lanes, path re-aim *)
-Print Assumptions rw_comm_div.         (* L3a, critical pairs -- diverging
-                                          rules are order-free *)
-Print Assumptions cp_earned.           (* the critical pair -- overlap orders
-                                          genuinely disagree *)
+(* the axiom audit *)
+Print Assumptions pull_merge_comm.     (* M1, clash *)
+Print Assumptions pull_idem.           (* M2, clash *)
+Print Assumptions pull_records.        (* M3, clash *)
+Print Assumptions pull_fold_swap.      (* M4, clash *)
+Print Assumptions resolve_roundtrip.   (* M5, clash *)
+Print Assumptions fid_swap.            (* H1, identity *)
+Print Assumptions fid_dup.             (* H2, identity *)
+Print Assumptions swal_involutive.     (* L1, content-rewrite *)
+Print Assumptions scell_comm.          (* M1, clash segments *)
+Print Assumptions bubble_len.          (* bubble law *)
+Print Assumptions splice_pad.          (* widening law *)
+Print Assumptions mtch_sound.          (* matching is sound *)
+Print Assumptions reaim_involutive.    (* L1, metavariables *)
+Print Assumptions tcommute_involutive. (* L1, tree *)
+Print Assumptions rw_comm_div.         (* L3a, critical pairs *)
+Print Assumptions cp_earned.           (* the critical pair *)

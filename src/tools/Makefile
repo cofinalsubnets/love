@@ -11,8 +11,8 @@ include $(R)/common.mk
 # (where $(m)'s ../ prefix would point one level above the root).
 mr = out$(hsuf)/love
 
-.PHONY: all test_cook test_tele test_xor test_hue test_hueweb test_dlfind
-all: test_cook test_tele test_xor test_hue test_hueweb test_dlfind
+.PHONY: all test_cook test_tele test_xor test_hue test_hueweb test_dlfind test_srcwalk
+all: test_cook test_tele test_xor test_hue test_hueweb test_dlfind test_srcwalk
 
 # Build the host love on demand (it runs the .l tools); only if it's missing.
 $(m):
@@ -123,3 +123,14 @@ test_dlfind:
 	 echo $$t/n > $$t/h/.love/etc/dl && w $$t/c $$t/n && w $$t/a/b $$t/a/dl && \
 	 echo $$t/gone > $$t/h/.love/etc/dl && w $$t/c "" && \
 	 rm -rf $$t
+
+# src.tree packs only what git tracks: a file a gate lays (proof terms, lean's outputs, an
+# extraction's leftovers) that .sbignore misses re-packs the tree mid-gate and re-bakes love
+# under the lanes beside it. a gate's tree is committed; without git there is nothing to hold
+test_srcwalk:
+	@echo TEST selfpack.l -l against git ls-files
+	@cd $(R) && command -v git > /dev/null 2>&1 && git rev-parse --git-dir > /dev/null 2>&1 || { echo "  skipped: no git here"; exit 0; }; \
+	 o=out$(hsuf); LOVE_NO_IMAGE= out/love0 src/tools/selfpack.l -l | sed 's,^\./,,' | sort > $$o/.walk; \
+	 git ls-files | sort > $$o/.tracked; x=`comm -23 $$o/.walk $$o/.tracked`; \
+	 [ -z "$$x" ] || { echo "  FAIL: src.tree would pack files git does not track (a generated one wants .sbignore):"; echo "$$x"; exit 1; }; \
+	 echo "  ok   the walk's `wc -l < $$o/.walk` files are all tracked"

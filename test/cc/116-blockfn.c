@@ -1,17 +1,5 @@
-/* a function DECLARED inside a block is a function, not a local.
- *
- * `int f1(char *);` in a body declares an extern function with block scope. It
- * bound a local slot instead, so the call jumped through an uninitialized frame
- * word -- a SIGSEGV out of ordinary C that reads as harmless. c-testsuite's
- * 00078 is the shape; the declaration's own params are skipped at block scope,
- * so the sig it registers carries the return type and an empty list, which the
- * arity check exempts.
- *
- * The K&R spelling -- `void f(), g();`, empty parens, several to a line -- is
- * the one that matters in the field: xlander (1992) writes fourteen of them
- * across four files, and each of those four alone was enough to segfault it.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* a function declared inside a block is an extern function, not a local --
+ * including the K&R `void f(), g();` list. each check adds 1: the exit code is the pass count. */
 
 static int add1(char *p)  { return *p + 1; }
 static long twice(long n) { return n + n; }

@@ -157,10 +157,6 @@ void silk_ana_filt_bank_1(
 /********************************************************************/
 
 /* Approximation of 128 * log2() (exact inverse of approx 2^() below) */
-/* Convert input to a log scale    */
-opus_int32 silk_lin2log(
-    const opus_int32            inLin               /* I  input in linear scale                                         */
-);
 
 /* Approximation of a sigmoid function */
 opus_int silk_sigm_Q15(
@@ -276,13 +272,6 @@ void silk_NLSF2A(
     opus_int16                  *a_Q12,             /* O    monic whitening filter coefficients in Q12,  [ d ]          */
     const opus_int16            *NLSF,              /* I    normalized line spectral frequencies in Q15, [ d ]          */
     const opus_int              d                   /* I    filter order (should be even)                               */
-);
-
-void silk_insertion_sort_increasing(
-    opus_int32                  *a,                 /* I/O   Unsorted / Sorted vector                                   */
-    opus_int                    *idx,               /* O     Index vector for the sorted elements                       */
-    const opus_int              L,                  /* I     Vector length                                              */
-    const opus_int              K                   /* I     Number of correctly sorted positions                       */
 );
 
 void silk_insertion_sort_decreasing_int16(

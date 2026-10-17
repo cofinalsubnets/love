@@ -1,15 +1,6 @@
-/* the switch dispatch, on both sides of the density threshold and in the shapes that stress
- * what a jump table costs the analyses. a table's case labels are reachable ONLY through the
- * table -- no branch in the stream names them -- so every pass that reads control flow has to
- * read the table jump's own operands. one that does not decides those blocks are unreachable,
- * and the failures are quiet: a label swept away, a live value called dead across the switch,
- * a known constant carried into an arm the table could reach with a different one.
- *
- * so the rows here are not "does a switch work". they are: a value LIVE across the dispatch
- * and read again in an arm; an arm the body also FALLS INTO, which gives the label a second
- * predecessor with different state; a switch inside a LOOP, whose back edge crosses it; a
- * default reached from below and from above the case range; and the sparse/dense boundary
- * itself, so both lowerings run the same questions. */
+/* switch dispatch either side of the jump-table threshold: a table's labels are reached only
+ * through the table, so rows hold a value live across it, a fallen-into arm, a switch in a loop,
+ * defaults above and below the range. */
 #include <stdio.h>
 
 /* dense, past the threshold -- the table lowering */

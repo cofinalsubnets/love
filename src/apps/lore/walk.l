@@ -1,22 +1,11 @@
-; walk -- a body walking in first person: its keys, its step slid along what stops it,
-; and the time a frame took. a state holds 'px 'pz where it stands, 'th the way it faces
-; (radians from north toward east) and 'ph how far it looks up.
-;
-;   (walk-key st a g put)    a walking action, view's: 'turn-left 'turn-right turn,
-;                            'forward 'back step, 'look-up 'look-down tilt, each as far as
-;                            g says -- {'turn 'walk 'tilt 'up 'down}, a press's turn, step
-;                            and tilt and the pitch's bounds; (put st x z) moves it. () for
-;                            any other action
-;   (walk-slide st x z free?)  to x z where (free? st x z), else as far as goes east or
-;                            north alone, else nowhere
-;   (walk-dt st)             'dt the seconds since the last frame, kept between 0.02 and
-;                            0.25, and 'wall the clock it was taken at
-;   (walk-rail st a facing move)  an action on a rail, view's horizon for the look: the
-;                            turns within facing of ahead, 'forward goes on -- never back --
-;                            by (move st d), the looks tilt the horizon an eighth of the
-;                            screen, and 'stroll goes on by itself, 'walk; once 'done, none
-;   walk-binds walk-listed   the rail's own key, space for 'stroll, and the actions its
-;                            help shows -- no 'back on a rail
+; walk -- a body walking in first person. a state holds 'px 'pz where it stands, 'th its
+; bearing (radians from north toward east) and 'ph how far it looks up.
+;   (walk-key st a g put)    view's turn, step and look actions, as far as g {'turn 'walk 'tilt
+;                            'up 'down} says; (put st x z) moves it. () for any other action
+;   (walk-slide st x z free?)  to x z where free?, else along x alone, else z alone, else nowhere
+;   (walk-dt st)             'dt the seconds since the last frame, 0.02..0.25, 'wall its clock
+;   (walk-rail st a facing move)  on a rail: turns within facing of ahead, 'forward by
+;                            (move st d), never back; 'stroll toggles 'walk; none once 'done
 (module (walk walk-key walk-slide walk-dt walk-rail walk-binds walk-listed)
 (borrow 'view)                          ; wrap, clamp, min2, max2
 (:

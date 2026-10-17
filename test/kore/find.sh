@@ -1,11 +1,8 @@
 #!/bin/sh
-# test/kore/find.sh -- find: the walks compare SETS, the order being the file system's business
+# test/kore/find.sh -- find: the walks compare as sets
 . "$(dirname "$0")/common.sh"
 
-# THE ORDER IS SORTED ON BOTH SIDES. find hands out readdir order, which is the
-# file system's business and repeats for nobody; ours sorts each directory on
-# purpose (a build wants the same tree to cut the same image twice), so the only
-# honest comparison is of the SETS. everything else here is byte-identical.
+# both sides sorted: gnu walks readdir order, ours sorts on purpose. the rest is byte-identical
 ft=$ho/.kore-ftree
 rm -rf "$ft"; mkdir -p "$ft/a/b" "$ft/c"
 : > "$ft/f1.txt"; : > "$ft/a/f2.txt"; : > "$ft/a/b/f3.log"; : > "$ft/c/f4.txt"
@@ -32,18 +29,17 @@ fd prune     "$ft" -path '*/a' -prune -o -print
 fd twopaths  "$ft/a" "$ft/c"
 fd explicit  "$ft" -name '*.txt' -print
 fd notname   "$ft" '!' -name '*.txt'
-# -exec runs the command once per name; the output is ours to compare directly
+# -exec runs once per name
 korerun find "$ft" -name '*.log' -exec echo FOUND '{}' ';' > "$o" 2>/dev/null
 [ "$(cat "$o")" = "FOUND $ft/a/b/f3.log" ] || fail "kore find -exec: $(cat "$o")"
-# a path that is not there complains and the code remembers; the others still walk
+# a missing path complains and sets the code; the others still walk
 korerun find "$ft/nope" "$ft/c" > "$o" 2>"$g"; r=$?
 [ $r -eq 1 ] && [ -s "$g" ] && grep -q 'f4.txt' "$o" || fail "kore find missing path (exit $r)"
 # a malformed expression is a refusal, not a walk
 korerun find "$ft" -name > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "kore find bad expression (exit $r)"
-# the tests past the names: -iname -ipath -empty -newer -mtime -mmin -size -perm, -L
-# through a link, -depth; -print0 and -exec {} + compared as sorted words, since the walk
-# is sorted and GNU's is readdir's; -delete of a subtree, and of a directory not empty
+# -iname -ipath -empty -newer -mtime -mmin -size -perm, -L, -depth; -print0 and -exec {} +
+# as sorted words; -delete of a subtree, and of a non-empty directory
 F=$ho/.findp; rm -rf "$F"; mkdir -p "$F/t/a/b" "$F/t/e"
 printf 'x%.0s' $(seq 1 1500) > "$F/t/a/big"; : > "$F/t/a/zero"; echo hi > "$F/t/a/Hi.TXT"; echo s > "$F/t/a/b/s.c"
 chmod 640 "$F/t/a/zero"; chmod 755 "$F/t/a/big"; touch -d '3 days ago' "$F/t/a/b/s.c"; touch -d '10 minutes ago' "$F/t/a/Hi.TXT"
@@ -55,7 +51,7 @@ for x in "-iname hi.*" "-ipath */A/*" "-empty" "-newer $F/ref" "-mtime +1" "-mti
 done
 find -L "$F/t" -name s.c | sort > "$g"; korerun find -L "$F/t" -name s.c | sort > "$o"; same "find -L"
 find "$F/t" -print0 | tr '\0' '\n' | sort > "$g"; korerun find "$F/t" -print0 | tr '\0' '\n' | sort > "$o"; same "find -print0"
-# -printf, line by line and sorted: the directives gen_initramfs.sh asks (%p %m %U %G, %T@) and the rest
+# -printf line by line, sorted: %p %m %U %G %T@ and the rest
 for f in '%p %m %U %G\n' '%T@ %p\n' '%f|%h|%y|%s\n' '%%\t%p\0'; do
   find "$F/t" -printf "$f" | tr '\0' '\n' | sort > "$g"; korerun find "$F/t" -printf "$f" | tr '\0' '\n' | sort > "$o"; same "find -printf '$f'"
 done

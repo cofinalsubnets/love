@@ -2,7 +2,13 @@
 
 void *mmap(void *a, long n, int prot, int fl, int fd, off_t off) {
   long r;
-#ifdef LvOsTranslate
+#if defined(__ARM_EABI__) || defined(__i386__)
+  if (__love_osv >= 2) {                   /* (addr len prot flags fd [PAD] pos), pos a pair */
+    long nr = __love_osv == 3 ? 197 : NR_fb_mmap, f2 = (int) __love_mapfb(fl), lo = (long) off, hi = (long) (off >> 32);
+    r = __love_osv == 3 || LvFbPad ? __love_fb8(nr, (long) a, n, prot, f2, fd, 0, lo, hi)
+                                   : __love_fb8(nr, (long) a, n, prot, f2, fd, lo, hi, 0); }
+  else
+#elif defined(LvOsTranslate)
   if (__love_osv == 3)
     /* netbsd keeps the classic pad: (addr len prot flags fd PAD pos), the
      * seventh riding the stack through the wide door */
@@ -10,7 +16,7 @@ void *mmap(void *a, long n, int prot, int fl, int fd, off_t off) {
   else
 #endif
   {
-    if (__love_osv == 2) fl = (int) __love_mapfb(fl);
+    if (__love_osv >= 2) fl = (int) __love_mapfb(fl);   /* netbsd took its own door above */
 #ifdef __ILP32__
     if (off & 4095) { __errno_v = EINVAL; return (void *) -1; }
     r = sc6(NR_mmap, (long) a, n, prot, fl, fd, (long) (off >> 12));   /* mmap2: the offset in pages */

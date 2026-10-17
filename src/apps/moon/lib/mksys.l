@@ -84,6 +84,8 @@
          (br eq sj-fb)
          (cmp r1 3)
          (br eq sj-nb)
+         (cmp r1 4)
+         (br eq sj-mac)
          (li r6 0)                   ; rdi = SIG_BLOCK
          (li r9 8)                   ; r10 = sigsetsize
          (li r0 14)                  ; rt_sigprocmask
@@ -99,6 +101,12 @@
          (label sj-nb)
          (li r6 1)
          (li r0 293)                 ; __sigprocmask14: the same 16-byte shape
+         (sys)
+         (li r0 0)
+         (ret)
+         (label sj-mac)
+         (li r6 1)
+         (li r0 33554480)            ; xnu's sigprocmask 48, a 4-byte set
          (sys)
          (li r0 0)
          (ret)
@@ -120,6 +128,8 @@
          (br eq lj-fb)
          (cmp r1 3)
          (br eq lj-nb)
+         (cmp r1 4)
+         (br eq lj-mac)
          (li r6 2)                   ; rdi = SIG_SETMASK
          (li r9 8)                   ; r10 = sigsetsize
          (li r0 14)                  ; rt_sigprocmask
@@ -133,6 +143,11 @@
          (label lj-nb)
          (li r6 3)
          (li r0 293)                 ; __sigprocmask14
+         (sys)
+         (jmp lj-file)
+         (label lj-mac)
+         (li r6 3)
+         (li r0 33554480)            ; xnu's sigprocmask
          (sys)
          (label lj-file)
          (mov r0 r4)                 ; rax <- val, before rbp is restored
@@ -208,15 +223,73 @@
          (sys)
          (li r6 -1)
          (li r0 1)                   ; exit
-         (sys))
+         (sys)
+
+         ; -- __love_mac_sigtramp: xnu enters the registered tramp with (handler,
+         ;    style, sig, info, uctx, token) and wants sigreturn(uctx, style, token)
+         ;    back. what the handler clobbers is sigreturn's to restore, so the three
+         ;    ride callee-saved registers and the stack is only aligned
+         (label __love_mac_sigtramp)
+         (mov r3 r7)                 ; rbx <- uctx
+         (mov r11 r5)                ; r12 <- style
+         (mov r12 r8)                ; r13 <- token
+         (mov r0 r6)                 ; the handler
+         (mov r6 r2)                 ; rdi <- sig
+         (mov r5 r1)                 ; rsi <- info
+         (mov r2 r3)                 ; rdx <- uctx
+         (and sp sp -16)
+         (callr r0)
+         (mov r6 r3)
+         (mov r5 r11)
+         (mov r2 r12)
+         (li r0 33554616)            ; sigreturn 184
+         (sys)
+         (li r6 -1)
+         (li r0 33554433)            ; exit
+         (sys)
+
+         ; -- __love_macfork: xnu answers the child with the parent's pid in rax
+         ;    and 1 in rdx, so the child's 0 is said here
+         (label __love_macfork)
+         (li r0 33554434)            ; fork 2
+         (cmp r0 0)
+         (sys)
+         (br below mf-err)
+         (cmp r2 0)
+         (br eq mf-out)
+         (li r0 0)
+         (label mf-out)
+         (ret)
+         (label mf-err)
+         (neg r0)
+         (lea r0 r0 -4096)
+         (ret)
+
+         ; -- __love_macpipe: pipe's two ends come back in eax and edx, answered as
+         ;    one word, the second end high
+         (label __love_macpipe)
+         (li r0 33554474)            ; pipe 42
+         (cmp r0 0)
+         (sys)
+         (br below mf-err)
+         (shl r2 32)
+         (or r0 r0 r2)
+         (ret))
 
          (arch = 'i386)
-         ; the i386 lane, linux alone: cdecl args on the stack, the kernel's in
-         ; ebx ecx edx esi edi ebp through int 0x80. registers r0..r6 = eax ecx
-         ; edx ebx ebp esi edi. the jmp_buf: [0] ebx [4] esi [8] edi [12] ebp
-         ; [16] esp [20] eip, the 8-byte mask at [32].
+         ; the i386 lane, the three kernels: cdecl args on the stack. linux reads them
+         ; from ebx ecx edx esi edi ebp through int 0x80; both BSDs read them off the user
+         ; stack above a return slot, as a cdecl callee would, and answer an error with
+         ; the carry set and +errno in eax, a 64-bit answer in edx:eax. registers r0..r6
+         ; = eax ecx edx ebx ebp esi edi. the jmp_buf: [0] ebx [4] esi [8] edi [12] ebp
+         ; [16] esp [20] eip, the mask at [32], 16 bytes for a BSD's.
          '(
          (label __love_sys)
+         (label __love_sysw)         ; __love_sys read as long long: a BSD's lseek in edx:eax
+         (la r1 __love_osv)
+         (ld r1 r1 0)
+         (cmp r1 2)
+         (br ge sys-bsd)
          (push r4) (push r6) (push r5) (push r3)
          (ld r0 sp 20)               ; eax <- n
          (ld r3 sp 24)               ; ebx <- a
@@ -227,6 +300,33 @@
          (ld r4 sp 44)               ; ebp <- f
          (sys)
          (pop r3) (pop r5) (pop r6) (pop r4)
+         (ret)
+         (label sys-bsd)             ; f..a pushed: each push brings the next one to the same slot
+         (ld r1 sp 28) (push r1) (ld r1 sp 28) (push r1) (ld r1 sp 28) (push r1)
+         (ld r1 sp 28) (push r1) (ld r1 sp 28) (push r1) (ld r1 sp 28) (push r1)
+         (push r1)                   ; the return slot
+         (ld r0 sp 32)               ; eax <- n
+         (cmp r0 0)                  ; clears the carry
+         (sys)
+         (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1)   ; a pop leaves the flags
+         (br below sys-err)          ; `below' is carry set: a BSD error
+         (ret)
+         (label sys-err)
+         (neg r0)
+         (lea r0 r0 -4096)           ; -(errno+4096): parked for __love_call
+         (li r2 -1)                  ; ..and the high word, for __love_sysw
+         (ret)
+
+         ; -- __love_sys8(n,a..h): a BSD's mmap, eight words; never linux's
+         (label __love_sys8)
+         (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1)
+         (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1) (ld r1 sp 36) (push r1)
+         (push r1)
+         (ld r0 sp 40)               ; eax <- n
+         (cmp r0 0)
+         (sys)
+         (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1) (pop r1)
+         (br below sys-err)
          (ret)
 
          (label __sigsetjmp)
@@ -239,8 +339,12 @@
          (st r1 16 r0)
          (ld r0 sp 0)
          (st r1 20 r0)
-         (push r3) (push r5)
          (lea r2 r1 32)              ; edx = oldset
+         (la r0 __love_osv)
+         (ld r0 r0 0)
+         (cmp r0 2)
+         (br ge sj-bsd)
+         (push r3) (push r5)
          (li r3 0)                   ; ebx = SIG_BLOCK
          (li r1 0)                   ; ecx = NULL (read only)
          (li r5 8)                   ; esi = sigsetsize
@@ -249,16 +353,50 @@
          (pop r5) (pop r3)
          (li r0 0)
          (ret)
+         (label sj-bsd)              ; sigprocmask(SIG_BLOCK, NULL, oldset), a 16-byte set
+         (li r1 340)                 ; freebsd's
+         (cmp r0 3)
+         (br ne sj-num)
+         (li r1 293)                 ; netbsd's __sigprocmask14
+         (label sj-num)
+         (push r2)
+         (li r2 0) (push r2)
+         (li r2 1) (push r2)
+         (push r2)
+         (mov r0 r1)
+         (sys)
+         (pop r1) (pop r1) (pop r1) (pop r1)
+         (li r0 0)
+         (ret)
 
          (label siglongjmp)
          (ld r6 sp 4)                ; edi <- buf, through the kernel
          (ld r4 sp 8)                ; ebp <- val
-         (li r3 2)                   ; ebx = SIG_SETMASK
          (lea r1 r6 32)              ; ecx = the saved mask
+         (la r0 __love_osv)
+         (ld r0 r0 0)
+         (cmp r0 2)
+         (br ge lj-bsd)
+         (li r3 2)                   ; ebx = SIG_SETMASK
          (li r2 0)
          (li r5 8)
          (li r0 175)
          (sys)
+         (jmp lj-file)
+         (label lj-bsd)              ; sigprocmask(SIG_SETMASK, mask, NULL)
+         (li r2 340)
+         (cmp r0 3)
+         (br ne lj-num)
+         (li r2 293)
+         (label lj-num)
+         (li r0 0) (push r0)
+         (push r1)
+         (li r0 3) (push r0)
+         (push r0)
+         (mov r0 r2)
+         (sys)
+         (pop r1) (pop r1) (pop r1) (pop r1)
+         (label lj-file)
          (mov r0 r4)
          (ld r3 r6 0)
          (ld r5 r6 4)
@@ -271,6 +409,25 @@
          (li r0 1)
          (label lj-live)
          (jmpr r1)
+
+         ; -- __love_sigret0: linux's return from the old frame, the one a handler without
+         ;    SA_SIGINFO gets on i386: the signal number off, then sigreturn
+         (label __love_sigret0)
+         (pop r0)
+         (li r0 119)                 ; sigreturn
+         (sys)
+
+         ; -- __love_nb_sigtramp: netbsd's return path. the handler returns onto the signal
+         ;    number with the ucontext 140 bytes up; setcontext takes it in the arg slot
+         (label __love_nb_sigtramp)
+         (lea r0 sp 140)
+         (st sp 4 r0)
+         (li r0 308)                 ; setcontext
+         (sys)
+         (li r1 -1)
+         (st sp 4 r1)
+         (li r0 1)                   ; exit
+         (sys)
 
          (label __love_sigret)
          (li r0 173)                 ; rt_sigreturn
@@ -314,22 +471,79 @@
          (ret))
 
          (arch = 'arm)
-         ; the arm lane, linux eabi alone: aapcs args in r0-r3 then the stack, the
-         ; kernel's in r0-r5 with the number in r7 through svc 0. the jmp_buf: [0..28]
-         ; r4-r11, [32] sp, [36] lr, [40..103] d8-d15, the 8-byte mask at [104].
+         ; the arm lane, the three kernels: aapcs args in r0-r3 then the stack. linux reads
+         ; r0-r5 with the number in r7; freebsd r0-r3 with the number in r7 and the rest off
+         ; the user stack at the svc; netbsd (thumb) the same but the number in r0 and the
+         ; first arg in ip, through svc #255. the BSDs answer an error with the carry set
+         ; and +errno in r0, linux keeps the flags, so a carry going in clear is a BSD's.
+         ; the jmp_buf: [0..28] r4-r11, [32] sp, [36] lr, [40..103] d8-d15, the mask at
+         ; [104], 16 bytes for a BSD's.
          '(
-         (label __love_sys)
+         ; -- __love_sys8(n,a..h) and __love_sys(n,a..f): g h, or two zeros, pushed, then one
+         ;    tail. __love_sysw is __love_sys read as long long: a BSD's lseek answers in r0:r1
+         (label __love_sys8)
          (push r4) (push r5) (push r7)
+         (ld r4 sp 28)               ; h, past the three pushes
+         (ld r5 sp 24)               ; g
+         (push r4) (push r5)
+         (jmp sys-tail)
+         (label __love_sys)
+         (label __love_sysw)
+         (push r4) (push r5) (push r7)
+         (li r4 0)
+         (push r4) (push r4)
+         (label sys-tail)            ; [sp] g, [sp+4] h, [sp+20] d, [sp+24] e, [sp+28] f
+         (la r12 __love_osv)
+         (ld r12 r12 0)
+         (cmp r12 2)
+         (br ge sys-bsd)
          (mov r7 r0)                 ; r7 <- n
          (mov r0 r1)                 ; r0 <- a
          (mov r1 r2)                 ; r1 <- b
          (mov r2 r3)                 ; r2 <- c
-         (ld r3 sp 12)               ; r3 <- d, past the three pushes
-         (ld r4 sp 16)               ; r4 <- e
-         (ld r5 sp 20)               ; r5 <- f
+         (ld r3 sp 20)               ; r3 <- d
+         (ld r4 sp 24)               ; r4 <- e
+         (ld r5 sp 28)               ; r5 <- f
          (sys)
+         (jmp sys-out)
+         (label sys-bsd)
+         (ld r4 sp 4)                ; h
+         (ld r5 sp 0)                ; g
+         (ld r7 sp 28)               ; f
+         (push r4) (push r5) (push r7)
+         (ld r7 sp 36)               ; e
+         (push r7)                   ; [sp] e f g h: where the kernel reads them
+         (cmp r12 3)
+         (br eq sys-nb)
+         (mov r7 r0)                 ; freebsd: r7 <- n, r0 <- a
+         (mov r0 r1)
+         (mov r1 r2)
+         (mov r2 r3)
+         (ld r3 sp 36)               ; d
+         (li r4 0)                   ; 0 - 1 borrows, so C goes clear
+         (cmp r4 1)
+         (sys)                       ; svc #0: freebsd on arm64 sigills any other
+         (jmp sys-bsd1)
+         (label sys-nb)
+         (mov r12 r1)                ; netbsd: ip <- a, n stays in r0
+         (mov r1 r2)
+         (mov r2 r3)
+         (ld r3 sp 36)
+         (li r4 0)
+         (cmp r4 1)
+         (raw (255 223))             ; svc #255: netbsd's 32-bit lane on arm64 wants no other
+         (label sys-bsd1)
+         (pop r4) (pop r4) (pop r4) (pop r4)   ; e f g h off; a pop leaves the flags
+         (br ae sys-err)
+         (label sys-out)
+         (pop r4) (pop r4)           ; g h off
          (pop r7) (pop r5) (pop r4)
          (ret)
+         (label sys-err)
+         (neg r0)
+         (lea r0 r0 -4096)           ; -(errno+4096): parked for __love_call
+         (li r1 -1)                  ; ..and the high word, for __love_sysw
+         (jmp sys-out)
 
          (label __sigsetjmp)
          (st r0 0 r4) (st r0 4 r5) (st r0 8 r6) (st r0 12 r7)
@@ -341,11 +555,28 @@
          (raw (140 236 16 139))      ; vstmia r12, {d8-d15}
          (lea r2 r0 104)             ; oldset
          (push r7)
-         (li r0 0)                   ; SIG_BLOCK
          (li r1 0)                   ; NULL (read only)
+         (la r12 __love_osv)
+         (ld r12 r12 0)
+         (cmp r12 2)
+         (br eq sj-fb)
+         (cmp r12 3)
+         (br eq sj-nb)
+         (li r0 0)                   ; SIG_BLOCK
          (li r3 8)                   ; sigsetsize
          (li r7 175)                 ; rt_sigprocmask
          (sys)
+         (jmp sj-out)
+         (label sj-fb)
+         (li r0 1)                   ; SIG_BLOCK (both BSDs: 1), a 16-byte set
+         (li r7 340)                 ; sigprocmask
+         (sys)
+         (jmp sj-out)
+         (label sj-nb)
+         (li r12 1)
+         (li r0 293)                 ; __sigprocmask14
+         (raw (255 223))
+         (label sj-out)
          (pop r7)
          (li r0 0)
          (ret)
@@ -353,12 +584,29 @@
          (label siglongjmp)
          (mov r4 r0)                 ; buf and val ride callee-saved through the kernel
          (mov r5 r1)
-         (li r0 2)                   ; SIG_SETMASK
          (lea r1 r4 104)             ; the saved mask
          (li r2 0)
+         (la r12 __love_osv)
+         (ld r12 r12 0)
+         (cmp r12 2)
+         (br eq lj-fb)
+         (cmp r12 3)
+         (br eq lj-nb)
+         (li r0 2)                   ; SIG_SETMASK
          (li r3 8)
          (li r7 175)
          (sys)
+         (jmp lj-file)
+         (label lj-fb)
+         (li r0 3)                   ; SIG_SETMASK (both BSDs: 3)
+         (li r7 340)
+         (sys)
+         (jmp lj-file)
+         (label lj-nb)
+         (li r12 3)
+         (li r0 293)
+         (raw (255 223))
+         (label lj-file)
          (mov r0 r5)
          (cmp r0 0)
          (br ne lj-live)
@@ -373,6 +621,40 @@
          (ld lr r4 36)
          (ld r4 r4 0)                ; r4, last, off itself
          (jmpr lr)
+
+         ; -- __love_fbfork: freebsd's fork from arm state. its 32-bit lane on arm64 hands a
+         ;    child the parent's mode but not its thumb bit, so the child would wake on thumb
+         ;    code read as arm; made from arm state, both sides wake where they slept and bx
+         ;    lr brings them home. the carry rides the bx: a set one is the error, parked
+         (label __love_fbfork)
+         (push lr)
+         (la r12 fbfork-arm)
+         (raw (44 240 1 12))         ; bic ip, ip, #1: the link marks a label in this text thumb
+         (callr r12)                 ; blx to an even address: arm state
+         (pop lr)
+         (br ae fbfork-err)
+         (ret)
+         (label fbfork-err)
+         (neg r0)
+         (lea r0 r0 -4096)
+         (ret)
+         (align 4)
+         (label fbfork-arm)
+         (raw (4 112 45 229))        ; str r7, [sp, #-4]!
+         (raw (2 112 160 227))       ; mov r7, #2 (fork)
+         (raw (0 0 0 239))           ; svc #0
+         (raw (4 112 157 228))       ; ldr r7, [sp], #4
+         (raw (30 255 47 225))       ; bx lr
+
+         ; -- __love_nb_sigtramp: netbsd calls the handler itself and leaves the
+         ;    ucontext in r5; setcontext is the way back, exit if it fails
+         (label __love_nb_sigtramp)
+         (mov r12 r5)
+         (li r0 308)                 ; setcontext
+         (raw (255 223))
+         (mov r12 r0)
+         (li r0 1)                   ; exit
+         (raw (255 223))
 
          (label __love_sigret)
          (li r7 173)                 ; rt_sigreturn
@@ -963,12 +1245,15 @@
        ; tail, which is the whole of what impl.h's LvOsTranslate says to the C.
        (objelf arch ir ()
                (? (arch = 'x64)
-                  '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone")
+                  '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone"
+                    "__love_mac_sigtramp" "__love_macfork" "__love_macpipe")
                   (arch = 'a64)
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
                     "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp")
-                  (elem arch '(i386 arm))
-                  '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp")
+                  (arch = 'arm)
+                  '("__love_sys" "__love_sysw" "__love_sys8" "__love_fbfork" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone" "__love_tp")
+                  (arch = 'i386)
+                  '("__love_sys" "__love_sysw" "__love_sys8" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_sigret0" "__love_nb_sigtramp" "__love_clone" "__love_tp")
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
                     "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp"))
                () () () () () () ())))

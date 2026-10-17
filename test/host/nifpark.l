@@ -1,20 +1,13 @@
-; test/host/nifpark.l -- the nif floor's laws: a nif that cannot answer yet parks its task
-; instead of stopping the vm inside a syscall. every law is a ticker task that advances only if
-; the task under test gave up its turn. driven by test/host/run.l under a timeout, since most of
-; these regressions are hangs; the checks are `assert`, which stops the run.
-
-; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here,
-; the same guarded way the corpus prelude borrows it.
+; test/host/nifpark.l -- a nif that cannot answer yet parks its task, not the vm
+; each law is a ticker that advances only if the task under test yields. run bare by
+; test/host/run.l under a timeout (failures are hangs), hence the posix borrow here
 (cite 'posix ? (borrow 'posix) ())
 
 (: (ticker n) (twirl (_ \ ((: (go u) (pin n 0 (1 + peep n 0 0),
                                       rest 0,
                                       go ())) ())) ()))
 
-; --- law 1: accept parks on an empty backlog ----------------------------------
-; the server task reaches `accept` before anyone has connected. Under the blocking
-; accept it sat in the syscall and nothing else in the process ran -- not the ticker,
-; and not the main task that was about to connect, which is why the control hangs.
+; law 1: accept parks on an empty backlog
 (: pl (test-listen 0)
    port <pl
    l (pl 1)
@@ -30,10 +23,7 @@
    _ (close l)
    _ (assert (0 < k)))                  ; a blocking accept never gets here at all
 
-; --- law 2: recv parks on a quiet socket ----------------------------------
-; the same law on the datagram side. The peer address is (ipv4 << 16) | port --
-; 127.0.0.1 is 2130706433 -- which is how src/love/sock.c marshals a sockaddr into a
-; charm.
+; law 2: recv parks on a quiet socket; a peer is (ipv4 << 16) | port, as src/love/sock.c packs it
 (: up (test-bind 0)
    p (up 1)
    n {}
@@ -49,11 +39,7 @@
     assert (0 < k)
            (got = "ping")))           ; and the datagram still arrives whole
 
-; --- law 3: wait parks while a child is up ------------------------------------
-; and it is a poll, not an fd wait: sigchld is not in the scheduler's wait set and
-; a pid is not an fd, so `wait` re-arms for the next tick. That is rung 5's shape for
-; the write residue and the same trade. What the law pins is only that a peer runs --
-; how often the waiter wakes to ask is the poll's business, not the law's.
+; law 3: wait parks while a child is up; a poll, not an fd wait, so only that a peer runs is pinned
 (: n {}
    t (ticker n)
    r (tether '("sleep" "0.3"))
@@ -63,15 +49,8 @@
     assert (0 < peep n 0 0)         ; 0 with the blocking waitpid back in
            (st = 0)))                 ; ... and the child's status is still exact
 
-; --- law 4: hark parks for the child's whole life ------------------------------
-; not the reap -- the drain. a blocking read(2) over the child's stdout held the
-; vm for as long as the child had anything left to say. `hark` is a two-ap nif
-; body ({start},{drain},{ret0}) because the op is not re-runnable where it parks:
-; a re-entry from the top would fork a second child. So the fork is one op, the
-; capture is the other, and the five stack slots between them are the park state.
-; the child must be slow in the middle, not just at the end -- a child that
-; writes everything at once and exits would let a blocking drain finish in one
-; read and the law would pass over the bug.
+; law 4: hark parks through the drain, not just the reap
+; the child is slow in the middle: one that writes all at once lets a blocking drain pass
 (: n {}
    t (ticker n)
    r (hark '("sh" "-c" "echo one; sleep 0.2; echo two"))
@@ -80,30 +59,11 @@
            (<r = 0)
            (>r = "one\ntwo\n")))  ; ... and the capture is still whole
 
-; --- law 5: connect parks on the handshake ------------------------------------
-; the write-direction park, and the only one there is -- held back until something
-; asked for it, and connect is what asked. a socket that has sent
-; its syn is not readable and will not be; pollout is the question, which is why
-; the scheduler carries a direction per parked task at all.
-;
-; the instrument is a full accept queue, and nothing else offline works: an
-; unroutable address is no good, because a machine with no route to it fails
-; instantly with enetunreach and the law would pass straight over the bug. a syn
-; the kernel drops is retried for about two minutes, which is the stall this needs.
-;
-; so this law knows src/love/sock.c's `listen_backlog` by VALUE, and has to: it
-; fills the queue that constant sizes. linux queues one more than asked (the test
-; is `> max`), so backlog+1 arrivals fill it and the next is dropped. if the
-; constant moves and this does not, the fill stops one short, the stalled connect
-; lands instead, and `(nom? r)` reddens -- noisily, which is the point.
-;
-; and the fill closes as it goes, which costs one fd instead of 513: a client
-; hangup does not free the slot. An unaccepted connection holds its place in the
-; queue until something accepts it, and nothing here ever does.
-;
-; closing the listener is what ends it: the queued connections reset, the stalled
-; client's handshake fails, and `catch` reaps the failure's nom. no freeze, so no
-; socket is left behind by a task unspliced mid-park.
+; law 5: connect parks on the handshake, the write-direction park
+; the stall is a full accept queue (an unroutable address fails at once): this knows
+; src/love/sock.c's listen_backlog, 512; linux queues one more, so backlog+1 fills it.
+; the fill closes as it goes: a hangup does not free an unaccepted slot
+; closing the listener resets the stalled handshake, and catch reaps its nom
 (: pl (test-listen 0)
    port <pl
    l (pl 1)

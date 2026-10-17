@@ -105,6 +105,13 @@ static lvm(lvm_peepv) {
  Sp[4] = word(v);
  love_musttail return Nextp(1, 4); }
 
+// (push-gc n) -> n: the nth push from here collects, wherever it falls (0 none) -- a law's way
+// to put a collection under a push, the may-collect a raw local held across goes stale at
+static lvm(lvm_pushgc) {
+ g->push_gc = charmp(Sp[0]) && getcharm(Sp[0]) > 0 ? (uintptr_t) getcharm(Sp[0]) : 0;
+ love_musttail return Next(1); }
+
+LvDef("push-gc", pushgc, 1, "guts");
 LvDef("peepw", peepw, 2, "guts");
 LvDef("pinw", pinw, 3, "guts");
 LvDef("peepv", peepv, 5, "guts");

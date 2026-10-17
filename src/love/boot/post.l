@@ -156,6 +156,51 @@
       (tablet? M ?
          (each (two? ks ? ks (keys M)) (k \ (M k @ v (v && :: k v)))))))
 
+(: bigdigits (:
+   ; a non-negative integer's digits in base r by halves: x = q r^k + m, each half alone, so
+   ; the digits cost products, not a division a digit. a level is [r^k bits inv k], inv its
+   ; reciprocal; the top's is laid as the top split needs it, at the quotient's width
+   (dch n r a) (: q (n // r) d ("0123456789abcdefghijklmnopqrstuvwxyz" (n - q * r))
+                  (0 < q ? (dch q r (d . a)) (d . a)))
+   (dpad w s) (#s < w ? ("0" * (w - #s) + s) s)
+   ; floor(4^b / p), 2^(b-1) <= p < 2^b: newton from the top half's, its correction from the
+   ; top k bits of each factor, then a fix by the residue
+   (drecip p b) (? (b <= 8192) ((1 << (2 * b)) // p)
+                   (: h (b // 2 + 64) w (1 << (2 * b))
+                      x ((drecip (p >> (b - h)) h) << (b - h))
+                      e (w - p * x)
+                      k (b - h + 64) t (b + 1 - k) u (max 0 (bitlen e - k))
+                      y (x + (((x >> t) * (e >> u)) >> (2 * b - t - u)))
+                      r (w - p * y)
+                      (r < 0 ? (y - ((p - r - 1) // p)) (y + (r // p)))))
+   ; the levels for n, most first: r^k0 the largest power a charm holds, squared while it fits
+   (dlevels n r) (: nb (bitlen n)
+                    (lay l) [<l (l 1) (l 1 > 8192 ? (drecip <l (l 1)) 0) (l 2)]
+                    (go p k acc) (: b (bitlen p) (top _) ([p b 0 k] . map lay acc)
+                                    (2 * b - 2 >= nb ? (top 0)
+                                       (: pp (p * p) (pp > n ? (top 0) (go pp (2 * k) ([p b k] . acc))))))
+                    (p0 p k) ((p * r) < (1 << 62) ? (p0 (p * r) (k + 1)) (go p k ()))
+                    (p0 r 1))
+   ; [q m] of x by p, b its bits, inv its reciprocal or 0. q's m bits are all a product needs:
+   ; the estimate takes inv's top m + 64, or with none divides p's top m + 64 bits into x's
+   (ddiv x p b inv) (: m (bitlen x - b + 1)
+                       (adj q r) (? (r < 0) (adj (q - 1) (r + p)) (r >= p) (adj (q + 1) (r - p)) [q r])
+                       (? (m < 1) [0 x]
+                          (m < 2048 || b <= 8192) [(x // p) (x % p)]
+                          (: q (? (inv != 0) (: s (max 0 (b + 1 - m - 64))
+                                                (((x >> (b - 1)) * (inv >> s)) >> (b + 1 - s)))
+                                  (b - m - 64 > 0) (: s (b - m - 64) ph (p >> s)
+                                                     <(ddiv (x >> s) ph (b - s) (drecip ph (b - s))))
+                                  <(ddiv x p b (drecip p b)))
+                             (adj q (x - q * p)))))
+   ; x's digits, w of them (0: as many as it has)
+   (dsay o x r ls w) (? (atom? ls) (say o (dpad w (string (dch x r ()))))
+                        (: l <ls k (l 3)
+                           (w = 0 && x < <l ? (dsay o x r >ls 0)
+                              (: qr (ddiv x <l (l 1) (l 2)) (dsay o <qr r >ls (w ? (w - k) 0), dsay o (qr 1) r >ls k)))))
+   (go n r) (jug 0 @ o (dsay o n r (dlevels n r) 0, slurp o))
+   go))
+
 (: (chars s) (map s ^#s)                      ; a string is an atom, so map needs the indices
    (findsub s sub) (#sub = 0 ? 0 (fsub s sub 0))        ; -1 when absent
    (has? s sub)    (0 <= findsub s sub)
@@ -196,11 +241,11 @@
                  (whole * mul + (<fr * mul) // <>fr)
                  ()))
           ()))
-   ; lowercase digits past 9. putbn reads a charm only, so a big is split down to one
+   ; lowercase digits past 9. putbn reads a charm only; a big goes by halves
    (radix n b)
     (? (charm? n) (jug 0 @ o (putbn o n b, slurp o))
        (n < 0) ("-" + radix (0 - n) b)
-       (radix (n // b) b + string ("0123456789abcdefghijklmnopqrstuvwxyz" (n % b))))
+       (bigdigits n b))
    (zpad w s) (#s < w ? (zpad w ("0" + s)) s)
    (aup n a) (n + a - 1 & -a)                   ; n up to a multiple of a, a power of two
    ; a code point as its utf-8 bytes, "" outside unicode. `string` on a number is one byte
@@ -320,7 +365,7 @@
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}
    ; and the same for the kernel -- only the respelling. main.c pins `love-os` per run off
    ; __love_osv: one binary meets four, and the compile that made it cannot say which.
-   os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'inle "Inle"}
+   os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'macos "Darwin" 'inle "Inle"}
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
    archof (arch-canon * name)
@@ -731,51 +776,7 @@
 
   ; --- integers: the digits of a non-negative charm/sun/big, most significant first
   (dch n a) (: q (n // 10) d (48 + (n - q * 10)) (0 < q ? (dch q (d . a)) (d . a)))
-  (dstr n) (n < (1 << 256) ? (string (dch n ())) (jug 0 @ o (dsay o n (dlevels n) 0, slurp o)))
-  ; a big's digits by halves: x = q 10^k + r, each half alone, so a print costs products, not
-  ; a division a digit. a level is [10^k bits inv k], inv its reciprocal; the top's is laid
-  ; as the top split needs it, at the quotient's width
-  (dpad w s) (#s < w ? ("0" * (w - #s) + s) s)
-  ; a lopsided product as products of the shorter's width: the longer cut into pieces of it
-  (dmul a b) (: la (bitlen a) lb (bitlen b)
-                (? (lb < la) (dmul b a)
-                   (la < 8192 || lb < 2 * la) (a * b)
-                   (: mk ((1 << la) - 1)
-                      (go b i acc) (b = 0 ? acc (go (b >> la) (i + la) (acc + ((a * (b & mk)) << i))))
-                      (go b 0 0))))
-  ; floor(4^b / p), 2^(b-1) <= p < 2^b: newton from the top half's, its correction from the
-  ; top k bits of each factor, then a fix by the residue
-  (drecip p b) (? (b <= 8192) ((1 << (2 * b)) // p)
-                  (: h (b // 2 + 64) w (1 << (2 * b))
-                     x ((drecip (p >> (b - h)) h) << (b - h))
-                     e (w - p * x)
-                     k (b - h + 64) t (b + 1 - k) u (max 0 (bitlen e - k))
-                     y (x + (((x >> t) * (e >> u)) >> (2 * b - t - u)))
-                     r (w - p * y)
-                     (r < 0 ? (y - ((p - r - 1) // p)) (y + (r // p)))))
-  (dlevels n) (: nb (bitlen n)
-                 (lay l) [<l (l 1) (l 1 > 8192 ? (drecip <l (l 1)) 0) (l 2)]
-                 (go p k acc) (: b (bitlen p) (top _) ([p b 0 k] . map lay acc)
-                                 (2 * b - 2 >= nb ? (top 0)
-                                    (: pp (p * p) (pp > n ? (top 0) (go pp (2 * k) ([p b k] . acc))))))
-                 (go 1000000000000000000 18 ()))                           ; most first
-  ; [q r] of x by p, b its bits, inv its reciprocal or 0. q's m bits are all a product needs:
-  ; the estimate takes inv's top m + 64, or with none divides p's top m + 64 bits into x's
-  (ddiv x p b inv) (: m (bitlen x - b + 1)
-                      (adj q r) (? (r < 0) (adj (q - 1) (r + p)) (r >= p) (adj (q + 1) (r - p)) [q r])
-                      (? (m < 1) [0 x]
-                         (m < 2048 || b <= 8192) [(x // p) (x % p)]
-                         (: q (? (inv != 0) (: s (max 0 (b + 1 - m - 64))
-                                               (((x >> (b - 1)) * (inv >> s)) >> (b + 1 - s)))
-                                 (b - m - 64 > 0) (: s (b - m - 64) ph (p >> s)
-                                                    <(ddiv (x >> s) ph (b - s) (drecip ph (b - s))))
-                                 <(ddiv x p b (drecip p b)))
-                            (adj q (x - dmul q p)))))
-  ; x's digits, w of them (0: as many as it has)
-  (dsay o x ls w) (? (atom? ls) (say o (dpad w (string (dch x ()))))
-                     (: l <ls k (l 3)
-                        (w = 0 && x < <l ? (dsay o x >ls 0)
-                           (: qr (ddiv x <l (l 1) (l 2)) (dsay o <qr >ls (w ? (w - k) 0), dsay o (qr 1) >ls k)))))
+  (dstr n) (n < (1 << 256) ? (string (dch n ())) (bigdigits n 10))
   (ndig n) (n // 10 @ q (0 < q ? (1 + ndig q) 1))          ; the count, without building the list
   (pnum o n) (n < 0 ? (put o 45, say o (dstr (0 - n))) (say o (dstr n)))
 

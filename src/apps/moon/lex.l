@@ -88,6 +88,10 @@
 
    (clex src) (clexat src 1)
    (clexat src ln0) (clexm src ln0 () ())
+   ; a token spelled as a one-char constant: 'c', or one escape ('\xc8'). its value is the raw
+   ; byte, which parse.l and cpp.l's #if take as (char) c; a packed '\0\xc8' is an int
+   (chq? (_ . _ . _ . _ . s . _)) (: (bs i n) (i < #s ? (bs (i + 1) (s i = 92 ? (n + 1) n)) n)
+                                     (string? s && 2 < #s && s 0 = 39 && (#s = 3 || s 1 = 92 && bs 1 0 = 1)))
    ; ..and for the preprocessor: a token whitespace follows carries a 6th cell, so # can
    ; spell the gaps the source had (C11 6.10.3.2); cpp drops it on the way out
    (clexw src ln0) (clexm src ln0 () 1)

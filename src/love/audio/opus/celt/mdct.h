@@ -63,10 +63,6 @@ typedef struct {
 int clt_mdct_init(mdct_lookup *l,int N, int maxshift);
 void clt_mdct_clear(mdct_lookup *l);
 
-/** Compute a forward MDCT and scale by 4/N, trashes the input array */
-void clt_mdct_forward(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scalar *out,
-      const opus_val16 *window, int overlap, int shift, int stride);
-
 /** Compute a backward MDCT (no scaling) and performs weighted overlap-add
     (scales implicitly by 1/2) */
 void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scalar *out,

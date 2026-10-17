@@ -1,15 +1,5 @@
-; wide-integer box (Phase 2): integer ops past the 62-bit fixnum tag promote
-; to a boxed z instead of a float, and demote back to a fixnum once the
-; value fits the tag again. 2^61 (2305843009213693952) is the largest power of
-; two still a fixnum; 2^62 is the smallest power of two that must be boxed.
-;
-; nb: a literal >= 2^62 can't round-trip through the reader (the tag overflows
-; / strtol clamps), so the box is never written directly — it is always built
-; by arithmetic, and checks either fold it back into fixnum range or compare
-; two identically-built boxes.
-
-; the whole file probes the 64-bit-word wide-int box (2^62 fixnum-max, bit-63
-; shift idioms); on a 32-bit word these are out of range, so skip there (word).
+; the wide-int box: past the 62-bit fixnum tag ints box, and demote once they fit.
+; boxes are built by arithmetic, never written as literals. 64-bit words only
 (word ? (test
  ; --- promotion / demotion boundary ---
  !(charm? (1 << 62))                 ; 2^62 is boxed, not a fixnum
@@ -18,12 +8,11 @@
  (2305843009213693952 = ((1 << 62) >> 1))
  (charm? ((1 << 62) - (1 << 62)))       ; box - box = 0, a fixnum
  (0 = ((1 << 62) - (1 << 62)))
- ; -2^62 is exactly fix_min, so it stays a fixnum (the tagged range is
- ; asymmetric: [-2^62, 2^62-1]); one less overflows into a box
+ ; the tagged range is [-2^62, 2^62-1]: -2^62 stays a fixnum, one less boxes
  (charm? (0 - (1 << 62)))
  !(charm? ((0 - (1 << 62)) - 1))
 
- ; --- two equal boxes compare = (rides eqv's tuple arm); a box never = a fixnum
+ ; --- two equal boxes compare =; a box never = a fixnum
  ((1 << 62) = (1 << 62))
  (2200000000 * 2200000000 = 2200000000 * 2200000000)
  !((1 << 62) = 0)
@@ -34,8 +23,7 @@
  (0 = (((1 << 62) ^ -1) & (1 << 62)))  ; ~X & X = 0
  (-1 = (((1 << 62) ^ -1) ^ (1 << 62))) ; ~X ^ X = -1
 
- ; --- masked shift-right byte extraction with bit 63 set (the rd64 idiom:
- ; the mask discards the arithmetic-vs-logical shift difference) ---
+ ; --- masked byte extraction with bit 63 set: the mask hides the shift's sign fill ---
  !(charm? (171 << 56))                               ; 0xab << 56 sets bit 63 -> box
  (171 = (((171 << 56) >> 56) & 255))                 ; top byte reads back as 0xab
  (205 = ((((171 << 56) | (205 << 48)) >> 48) & 255)) ; byte 6 of 0xabcd... = 0xcd
@@ -55,8 +43,7 @@
  (1e18 < (1 << 62)) ; float < box
  ((1 << 62) < 1e19) ; box < float
 
- ; --- -2^63 = INT_MIN: still a (negative) box, compares and prints right. built by
-; negating the tower, not by (<< 1 63) -- << promotes now, so that is a big, not this ---
+ ; --- -2^63 = INT_MIN is a box; built by negation, since (1 << 63) is a big ---
  !(charm? (0 - (63 2)))
  ((0 - 63 2) < (0 - (1 << 62)))      ; INT_MIN < -2^62
 

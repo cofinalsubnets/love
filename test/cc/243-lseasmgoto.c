@@ -1,7 +1,6 @@
-/* the lse atomics as the kernel spells them (ldadd, stset, cas, swp and their orders and
- * sizes), run only where ID_AA64ISAR0_EL1 says the core has them; an asm goto with an
- * output that holds on the jump as well as the fall-through; .inst over gas's `!!`; a
- * "p" address prefetched through %a; branches to `.+k`, which are their own offsets. a target with no template here computes the same in C. */
+/* lse atomics (ldadd, stset, cas, swp, orders, sizes) where ID_AA64ISAR0_EL1 has them; asm goto
+ * with an output live on both edges; .inst over `!!`; "p" via %a; `.+k` branches. targets without a
+ * template compute the same. */
 typedef unsigned int u32;
 typedef unsigned long u64;
 

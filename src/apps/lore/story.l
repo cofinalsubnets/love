@@ -1,24 +1,16 @@
 ; story -- rove's fiction engine: a roguelike map to walk, and dialog windows to talk in.
-;
-; a level is a datum in a file (src/apps/lore/levels) the reader and printer round-trip,
-; so the designer (design.l) edits what this file plays:
+; a level is a datum the reader and printer round-trip (design.l edits it):
 ;   (level TITLE (start X Y) (map ROW ..)
 ;     (tiles (CH GLYPH FG BG SOLID) ..) (things (ID X Y GLYPH FG BG NAME STEP ..) ..))
-; a map character the palette lacks is # a wall, else a floor drawn as itself. bumping a
-; thing opens its dialog, which plays its steps -- (say TEXT ..) pages, (ask) a prompt
-; whose line an interpreter answers (read, open, look, help, or a love form).
-; the engine is pure -- (story-key g c), (story-frame g w h) -- and gates headless
-; (test/host/story.l); its keys are cli's edkey codes.
+; a map character the palette lacks is # a wall, else a floor drawn as itself. bumping a thing
+; plays its steps: (say TEXT ..), (ask) a prompt for the interpreter, (hatch) the tower.
+; the engine is pure -- (story-key g c), (story-frame g w h) -- its keys cli's edkey codes.
 ; (library ROOT) lays a hall with a shelf per crew module, each book a file.
-;
-; usage: love lore story [LEVEL.l | ROOT]      a level file (default src/apps/lore/levels/lighthouse.l),
-;                                         or a root to lift the library from (apps)
 (module (story story-main story-run story-new story-key story-frame open-window window-say
          level kind thing level-of data-of level-text load-level save-level library
          tile kind-of wall? thing-at pen wrap)
-; posix is OPTIONAL: the page's seat (src/inle/wasm) links none of it, and this file runs
-; there. ask before splicing -- an absent module is a scare, and the names below that
-; want a tty go missing on that seat exactly as they did before there was a module.
+; posix is optional: the wasm build links none of it and runs this file. borrow, never
+; splice: a spliced absent module scares, a borrowed one's tty names just go missing
 (borrow 'posix)
 (borrow 'text)
 (:

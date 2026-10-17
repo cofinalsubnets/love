@@ -1,26 +1,21 @@
-; test/host/top.l -- top's faces on a real terminal (the frames are lawed by test/kore/top.sh):
-; raw mode, the alternate screen, the poll, keys, the mouse, and the exit. `tether` spawns
-; `kore top` on a pty and the last frame is read off a quay screen. the only processes signalled
-; or reniced are sleeps this file spawned, and top is pointed at them with -p.
+; test/host/top.l -- `kore top` on a pty (frames are lawed by test/kore/top.sh); it signals
+; and renices only sleeps this file spawned, pointed at with -p
 ; run: LOVEBIN=out/love sh -c "cat test/00-init.l test/host/top.l | out/love"
 
 (: love (getenv "LOVEBIN")
    bf (cask 65536)
    (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
-   ; the master drained for ms: a frame nobody reads blocks its writer, and the keys
-   ; typed meanwhile would land in one read, the closing q with them
+   ; drain for ms: an unread frame blocks top, and keys typed meanwhile land in one read
    (drain m acc ms) (swig m bf @ n
                        (? (charm? n && 0 < n) (drain m (acc + snip bf 0 n) ms)
                           (ms < 1) acc
                           (do (rest 20) (drain m acc (ms - 20)))))
-   ; ..or until the screen is raised, which top does after the tty went raw: a key typed
-   ; before that meets a cooked line discipline
+   ; ..or until the alt screen is raised: a key typed before the tty is raw meets a cooked line
    (raised m acc ms) (? (has? acc "\e[?1049h") (drain m acc 300)
                         (ms < 1) acc
                         (raised m (drain m acc 100) (ms - 100)))
-   ; spawn `love kore top ARGS..` on a 24x100 pty and send each key whole, a reader's
-   ; pace apart; a function in keys acts on the master instead. an escape then q leaves
-   ; from any mode. answers [transcript status last-frame-text]
+   ; top on a 24x100 pty, each key sent whole; a function key acts on the master.
+   ; esc then q leaves any mode. answers [transcript status last-frame-text]
    (run keys args)
     (: r (tether (cat [love "kore" "top"] args))
        _ (test (two? r))
@@ -44,25 +39,24 @@
    (sleeper _) (spawn ["sleep" "30"])
    (nice p) (uread ("/proc/" + show p + "/stat") @ r ((cite 'kore 'ustatf) <>r 18))
 
-   ; --- the plain face (-P): q leaves at once, and leaves the screen put back ---
+   ; the plain face (-P)
    r1 (run [] ["-P"])
    t1 <r1
    _ (test
-      (0 = r1 1)                            ; the status a seat quits with
-      (has? t1 "\e[?1049h")                 ; the alternate screen was entered
-      (has? t1 "\e[?1049l")                 ; ..and left, which is the whole contract
-      (has? t1 "PID USER")                  ; the column row was drawn
-      (has? t1 "%Cpu(s):")                  ; ..under the headers
+      (0 = r1 1)
+      (has? t1 "\e[?1049h")
+      (has? t1 "\e[?1049l")
+      (has? t1 "PID USER")
+      (has? t1 "%Cpu(s):")
       (has? t1 "Tasks:")
       (has? t1 "load average:")
-      !(has? t1 "\e[?1006h"))               ; and no mouse was asked for
+      !(has? t1 "\e[?1006h"))               ; no mouse
 
-   ; --- a repaint key draws another frame without waiting out the three second delay
+   ; a repaint key draws without waiting out the delay
    r2 (run ["r" "r"] ["-P"])
    _ (test (0 = r2 1) (2 < cnt <r2 "PID USER"))
 
-   ; --- the rich face, the default on a terminal: meters, the list, the key bar, and an
-   ; exit that turns the mouse off, shows the cursor and leaves the alternate screen
+   ; the rich face, the default; its exit puts the mouse, cursor and screen back
    r3 (run [] [])
    t3 <r3
    _ (test
@@ -73,28 +67,26 @@
       (at t3 "\e[?1049h" < at t3 "\e[?1006l")
       (has? t3 "\e[?1000l") (has? t3 "\e[?25h") (has? t3 "\e[?1049l"))
 
-   ; --- -C: the same face without a colour
+   ; -C: no colour
    r4 (run [] ["-C"])
    _ (test (0 = r4 1) (has? (r4 2) "PID USER") !(has? <r4 "\e[38;5;"))
 
-   ; --- the help, the sort picker and the user picker open over the list
    r5 (run ["h"] [])
    r6 (run ["\e[17~"] [])
    r7 (run ["u"] [])
    _ (test (has? (r5 2) "any key goes back") (has? (r6 2) "Sort by:") (has? (r7 2) "Show user:")
            (0 = r5 1) (0 = r6 1) (0 = r7 1))
 
-   ; --- a new size is read at the next frame
    r8 (run [(m \ (settty m 30 100)) "r"] [])
    _ (test (0 = r8 1) (has? <r8 "\e[30;1H"))
 
-   ; --- k: the signal menu over a sleep of ours, the only row; enter sends TERM
+   ; k: enter sends TERM
    s1 (sleeper 0)
    r9 (run ["k" "\r"] ["-p" (show s1)])
    k1 (waitfor s1)
    _ (test (0 = r9 1) (has? <r9 "Send signal:") (143 = <k1))
 
-   ; --- ] twice: a sleep of ours two steps nicer than it started, which is the runner's nice
+   ; ] twice: two steps nicer
    s2 (sleeper 0)
    b2 <(sound (nice s2))
    r10 (run ["]" "]"] ["-p" (show s2)])
@@ -103,37 +95,33 @@
    _ (waitfor s2)
    _ (test (0 = r10 1) (n2 = b2 + 2))
 
-   ; --- three rows: this harness and two sleeps it spawned
    me (getpid 0)
    s3 (sleeper 0)
    s4 (sleeper 0)
    ps ["-p" (show me) "-p" (show s3) "-p" (show s4)]
-   ; t: the sleeps hang under this process
+   ; t: tree
    r11 (run ["t"] ps)
    _ (test (0 = r11 1) (has? (r11 2) "├─ sleep 30") (has? (r11 2) "└─ sleep 30"))
-   ; \: a filter keeps the sleeps and drops the harness, and says so over the list
+   ; \: filter
    r12 (run ["\\" "sleep" "\r"] ps)
    _ (test (0 = r12 1) (has? (r12 2) " filter sleep") (has? (r12 2) (show s3 + " "))
            !(has? (r12 2) (show me + " ")))
-   ; /: the search is typed on the bottom line
    r13 (run ["/" "sleep"] ps)
    _ (test (0 = r13 1) (has? (r13 2) "Search: sleep"))
-   ; the mouse: a click on the PID heading sorts by it, a second turns it over
+   ; a click on the PID heading sorts by it, a second reverses
    hy (lineof (r13 2) "PID USER")
    r14 (run [(click 3 hy)] ps)
    r15 (run [(click 3 hy) (click 3 hy)] ps)
    _ (test (0 = r14 1) (0 = r15 1) (0 < hy)
            (at (r14 2) (show s3 + " ") < at (r14 2) (show s4 + " "))
            (at (r15 2) (show s4 + " ") < at (r15 2) (show s3 + " ")))
-   ; ..and a click on a row selects it: N lays them by pid, the third row is s4, and
-   ; k's TERM reaches s4 and nothing else
+   ; a click selects a row: N sorts by pid, so the third row is s4
    r16 (run ["N" (click 20 (hy + 3)) "k" "\r"] ps)
    k4 (waitfor s4)
    _ (test (0 = r16 1) (143 = <k4) (atom? (gather s3)))
    _ (still s3 9)
    _ (waitfor s3)
 
-   ; --- an unknown option is a usage refusal and not a screen ---
    r17 (run [] ["-Z"])
    (test (2 = r17 1) !(has? <r17 "PID USER"),
     test_fin (),

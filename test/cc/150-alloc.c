@@ -1,15 +1,6 @@
-/* The allocator's contract, held against the C library's. moonlibc hands any request of
- * 128 kB or more a mapping of its own so that free can give the pages back, and calloc
- * skips the memset on those because the kernel has already zeroed them -- so the size a
- * request lands on decides which path serves it, and both paths owe the caller exactly
- * the same promises. A block must be zero when calloc says so, must keep its bytes
- * across a realloc that moves it, must survive being freed and asked for again, and a
- * multiply that wraps must refuse rather than hand back something too small.
- *
- * The sizes straddle that threshold deliberately: small enough to ride the arena, large
- * enough to take a mapping, and one either side of the boundary itself.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* the allocator's contract on both sides of its 128 kB mapping threshold: calloc
+ * zeroes, realloc keeps bytes when it moves, free then alloc again, an overflowing
+ * calloc multiply refuses. each check adds 1: the exit code is the pass count. */
 
 extern void *malloc(unsigned long);
 extern void *calloc(unsigned long, unsigned long);

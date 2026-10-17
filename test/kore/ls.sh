@@ -1,18 +1,8 @@
 #!/bin/sh
-# test/kore/ls.sh -- kore's ls against GNU's, byte for byte, over a flag matrix.
-# one file because the matrix is the test and a matrix reads badly inlined.
-#
-# TZ=UTC on BOTH sides. `ls -l`'s clock column is local time and this tree keeps
-# no timezone database, so ours is UTC always; the comparison is only meaningful
-# where GNU's is UTC too. (LC_ALL=C for the same reason on the name order.)
-#
-# the tree is BUILT here, never a real directory: a stray file, an ACL or an
-# SELinux label would move GNU's mode column by one character and read as a bug.
-#
-# the grid rows set COLUMNS on both sides, which is the only way to compare a
-# layout at all: neither ls columns into a pipe unless asked, and $COLUMNS is
-# what both read when there is no terminal to ask. TABSIZE is unset for the same
-# reason -- the pad elides onto tab stops and ours are 8, GNU's default.
+# test/kore/ls.sh -- kore's ls against gnu's, byte for byte, over a flag matrix.
+# TZ=UTC and LC_ALL=C on both sides (ours keeps no zones). the tree is built here, so no acl
+# or selinux mark moves gnu's mode column. grid rows set COLUMNS on both sides (no terminal
+# to ask); TABSIZE unset, ours and gnu's default both 8
 set -u
 m=${2:-./out/love}                   # (OUTDIR LOVE), as every subject here takes
 LC_ALL=C TZ=UTC; export LC_ALL TZ
@@ -32,7 +22,7 @@ ln -s a                     "$t/link"
 ln -s nowhere               "$t/dangling"
 chmod 0751 "$t/bbb"
 chmod 0700 "$t/sub"
-# a mtime well outside the six-month window, which is the OTHER date format
+# an mtime outside the six-month window: the other date format
 touch -d '2019-03-04 05:06:07' "$t/old" 2>/dev/null || touch -t 201903040506 "$t/old"
 
 try() {   # try FLAGS.. -- the tree is the last operand unless one is given
@@ -60,12 +50,12 @@ for f in "" -a -A -l -la -al -lA -1 -r -lr -t -lt -ltr -d -ld; do
   # shellcheck disable=SC2086
   try $f "$t"
 done
-# a plain file operand, and a link operand (which ls does NOT follow)
+# a plain file operand, and a link operand, not followed
 try -l "$t/a"
 try -l "$t/link"
 try -ld "$t/link"
 try "$t/a"
-# several operands: files first, then a `dir:` header block per directory
+# several operands: files first, then a `dir:` block per directory
 try "$t/a" "$t/bbb"
 try -l "$t/a" "$t/bbb"
 try "$t/sub" "$t/empty"
@@ -73,15 +63,14 @@ try -l "$t/sub" "$t/empty"
 try "$t/a" "$t/sub"
 try -l "$t/a" "$t/sub"
 try -l "$t/empty"
-# the old file, whose date column is the year form and not the clock
+# the old file: its date column takes the year form
 try -l "$t/old"
 # what is not there
 try "$w/nope"
 try -l "$t/a" "$w/nope"
 
-# -C down and -x across, over a width sweep: 1 and 2 are narrower than a column
-# may be, 24 and 80 straddle the longest name, and the odd ones catch a pad that
-# rounds onto a tab stop it did not earn.
+# -C down and -x across over a width sweep: below a column, straddling the longest name, and
+# odd widths that catch a pad rounding onto an unearned tab stop
 for c in 1 2 3 5 8 9 16 17 23 24 25 31 32 33 40 60 79 80 81 120 200; do
   tryw "$c" -C "$t"
   tryw "$c" -x "$t"
@@ -89,7 +78,7 @@ for c in 1 2 3 5 8 9 16 17 23 24 25 31 32 33 40 60 79 80 81 120 200; do
   tryw "$c" -Cr "$t"
   tryw "$c" -Ct "$t"
 done
-# -1 wins over a grid, and the command-line block grids the same way a directory does
+# -1 beats a grid; the command-line block grids as a directory does
 tryw 40 -1 "$t"
 tryw 40 -C "$t/a" "$t/bbb" "$t/zero"
 tryw 40 -x "$t/a" "$t/bbb" "$t/zero"
@@ -106,10 +95,8 @@ if command -v vdir >/dev/null 2>&1; then
   done
 fi
 
-# the flags past the first nine: sizes (-h -S -s), marks (-F -p), inodes (-i), owners
-# (-n -g -o), the other clocks (-u -c), down the tree (-R, a link to a directory not
-# followed), through links (-L), colour said outright; over a tree with a fifo, an
-# executable and a link to a directory
+# -h -S -s, -F -p, -i, -n -g -o, -u -c, -R (a link to a directory not followed), -L, colour;
+# over a tree with a fifo, an executable and a link to a directory
 u=$w/u; mkdir -p "$u/d/sub/deep"; head -c 3000 /dev/zero > "$u/d/big"; : > "$u/d/empty"; printf 'ab' > "$u/d/two"
 chmod 755 "$u/d/big"; ln -s big "$u/d/lnk"; ln -s sub "$u/d/lsub"; mkfifo "$u/d/fifo"; echo z > "$u/d/sub/z"; echo q > "$u/d/sub/deep/q"
 touch -d '2024-01-02 10:00' "$u/d/big"; touch -d '2024-01-03 10:00' "$u/d/two"; touch -d '2024-01-01 10:00' "$u/d/empty"

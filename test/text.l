@@ -18,8 +18,7 @@
  (3 = #(utf8 65535)) (4 = #(utf8 65536)) (4 = #(utf8 1114111))
  (utf8 1114112 = "") (utf8 -1 = ""))
 
-; 'text: utf-8 read as characters, and the columns a terminal gives them. a bad sequence is one
-; U+FFFD per byte; the widths are glibc's, so a prompt lines up where the terminal draws it
+; 'text: utf-8 as characters and terminal columns; a bad sequence is one U+FFFD per byte, widths glibc's
 (: cpat (cite 'text 'cpat) cpnext (cite 'text 'cpnext) cps (cite 'text 'cps)
    cplen (cite 'text 'cplen) cpsnip (cite 'text 'cpsnip) cprev (cite 'text 'cprev)
    wcwidth (cite 'text 'wcwidth) swidth (cite 'text 'swidth) scut (cite 'text 'scut)
@@ -41,8 +40,7 @@
       (scut "a日本語é" 4 = "a日") (scut "a日本語é" 3 = "a日") (scut "a日本語é" 99 = "a日本語é")
       (scut "e\xcc\x81x" 1 = "e\xcc\x81") (scut "日" 1 = "")))
 
-; 'text's grapheme clusters, quay's under ?2027: a ZWJ sequence, a skin tone, a flag and a
-; VS16-widened character are two columns each; a ZWJ between letters joins nothing after it
+; grapheme clusters: a zwj sequence, a skin tone, a flag and a vs16 char are two columns each
 (: gcnext (cite 'text 'gcnext) gcwidth (cite 'text 'gcwidth) sgwidth (cite 'text 'sgwidth)
    cpxp? (cite 'text 'cpxp?) cpvs? (cite 'text 'cpvs?) swidth (cite 'text 'swidth)
    fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"
@@ -66,8 +64,7 @@
       (edcut "e\xcc\x81x" 1 = "e\xcc\x81")                  ; the combining mark rides its base
       (edfit "日本語" 3 "." = "日.") (edfit "日" 4 " " = "日  ")))
 
-; 'text's classes and case maps: glibc 2.44's, off src/tools/mkctype.l. grep -i folds by cpfold,
-; gnulib's rule, which is not symmetric: U+1C80 takes U+0412, and U+0412 does not take it
+; classes and case maps, glibc's; cpfold is gnulib's rule, not symmetric: U+1C80 takes U+0412, not back
 (: cpupper (cite 'text 'cpupper) cplower (cite 'text 'cplower) cpis (cite 'text 'cpis)
    cpclass? (cite 'text 'cpclass?) cpfold (cite 'text 'cpfold) cpfolds (cite 'text 'cpfolds)
    cpback (cite 'text 'cpback) cpword? (cite 'text 'cpword?)

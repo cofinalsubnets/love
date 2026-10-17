@@ -1,5 +1,4 @@
-; sortby -- the merge sort with a love comparator, a C loop that hands each compare back to
-; the VM. the left is taken when (le x y), so a comparator that answers 1 on ties is stable.
+; sortby: merge sort with a love comparator; the left is taken when (le x y), so 1 on ties is stable
 (: (lcg x) ((16807 * x) % 2147483647)
    (genl x n) (n < 1 ? () (lcg x @ nx (nx . genl nx (n - 1))))
    (ins x l) (? (atom? l) [x] (x <= <l) (x . l) (<l . ins x >l))
@@ -7,11 +6,8 @@
    l (genl 1 3000)
    (recs ks i) (atom? ks ? () (((<ks % 7) . i) . recs >ks (i + 1)))     ; (key . position)
    rs (recs (genl 3 400) 0)
-   ; the spine is reserved after the merge, and that reservation collects like any other --
-   ; which re-enters the step at its top, where the last compare's answer is still pending.
-   ; the law wants that collection, so it sorts under a budget tight enough to force one:
-   ; twice the live set, as ord.l does, the nursery at its floor (tune's units are words; the
-   ; knobs are put back before anything else reads them).
+   ; a budget of twice the live set forces a collection at the spine, re-entering the step
+   ; with a compare's answer pending; the knobs go back before anything reads them
    k0 (tune ())
    _ (please 1)
    _ (tune [(2 * peep (gauge 0) 8 0) 8192 65536 24])

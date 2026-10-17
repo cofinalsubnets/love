@@ -1,15 +1,5 @@
-; --- test/baotest.l: the editor + repl + parseall unit battery ---
-; the line editor (ed*), the history zipper (uphist/downhist/eddetach), joinln/splitat,
-; and parseall are cli's exports (src/love/boot/post.l), reached through the module
-; tablet: (cite 'cli) hands the module back, (B 'edleft) reaches one, (keys B) lists them.
-;
-; cli is baked (in the host egg), so this file needs no -l:
-;
-;   cat test/00-init.l test/baotest.l | out/love
-;
-; (wired into `make test_hostnif`.) green dots = pass.
-; (ed u l r d) builds a buffer; (b4 t) and (b7 t) read it back as a comparable list,
-; with the history zipper for b7.
+; the editor, history zipper and parseall: cli's exports, reached through (cite 'cli)
+; (ed u l r d) builds a buffer; b4 and b7 read it back as a list, b7 with the history
 
 (: B (cite 'cli)
    ednew (B 'ednew)       edstep (B 'edstep)     edput (B 'edput)       ednl (B 'ednl)
@@ -78,8 +68,7 @@
   (-8 = (typed (ednew ()) [97 -8] 'ev))                            ; up with no line above
   ("a" = (edtext (typed (ednew ()) [97 -8 -9])))                  ; ..and the text stands
   (typed (ed ['(1 2)] () () ()) [-8] @ t (0 = (t 'ev) && '(1 2 10) = (edchars t)))    ; up with a line above is a motion
-   ; --- utf-8: the keys arrive a byte at a time and the cursor moves by character.
-   ; 日 is 230 151 165, 本 230 156 172, each two columns wide ---
+   ; --- utf-8: keys arrive by byte, the cursor moves by character; 日 and 本 two wide ---
   ("日本" = (edtext (typed (ednew ()) [230 151 165 230 156 172])))
   ("日a本" = (edtext (typed (ednew ()) [230 151 165 230 156 172 -1 97])))   ; left over a whole one
   ("日" = (edtext (typed (ednew ()) [230 151 165 230 156 172 127])))        ; backspace takes it whole
@@ -141,23 +130,21 @@
   (-10 = (edkey (tap [27 91 49 59 53 72])))                       ; ctrl-home
   (377 = (edkey (tap [27 121])))                                  ; alt-y
   (: p (tap [27 58]) a (edkey p) b (edkey p) ([27 58] = [a b]))      ; esc, then a colon: two keys
-   ; a tap is a PLACE: the SGR report decoded whole, the press answering -12 with the
-   ; cell waiting in edtap, and the release answering the miss and moving nothing
+   ; a mouse press answers -12 with the cell in edtap; the release is a miss
   (tap [27 91 60 48 59 49 50 59 53 77] @ p                           ; ESC [ <0;12;5M
    (-12 = (edkey p) && [11 4] = edtap ()))
   (tap [27 91 60 48 59 49 59 49 109] @ p                             ; ..and the release
    (0 = (edkey p) && [0 0] = edtap ()))
    ; --- parseall: a line is one expression; floats; the more-sentinel ---
-   ; a single datum is returned as-is in a one-list (no extra wrap), so a leading
-   ; monadic stays fused: "+(-3)" -> (mono (+ (-3))) -> -3, not the head-position (+ -3).
+   ; a single datum comes back as-is, so a leading monadic stays fused: "+(-3)" is -3
   ('((1 2 3)) = (parseall '(49 32 50 32 51)))            ; "1 2 3" -> the application
   ('((1 2)) = (parseall '(40 49 32 50 41)))              ; "(1 2)" -> the one form, as-is
-  (-3 = (ev <(parseall '(43 40 45 51 41))))              ; "+(-3)" -> monadic net = -3 (the bug fix)
+  (-3 = (ev <(parseall '(43 40 45 51 41))))              ; "+(-3)" -> monadic net = -3
   (() = (parseall ()))
   !(two? (parseall '(40 49)))
   (1.5 = <(parseall '(49 46 53)))
   (1000.0 = <(parseall '(49 101 51)))
-  (two? <(parseall '(49 46 50 46 51)))      ; "1.2.3": a digit-led run factors now (test/glued.l), no longer a nom
+  (two? <(parseall '(49 46 50 46 51)))      ; "1.2.3": a digit-led run factors
    ; the more-sentinel: an unclosed shape is m (not two?); a complete datum is
   !(two? (parseall '(40 43 32 49)))                   ; "(+ 1" unclosed
   (two? (parseall '(49 32 43)))                       ; "1 +" complete (the curry partial)
@@ -165,10 +152,8 @@
   (two? (parseall '(40 43 32 49 32 50 41)))           ; "(+ 1 2)" closed
   (two? (parseall '(49 32 61 32 49)))]                ; "1 = 1"
 
-   ; every check in the battery must be true.
    _ (each results (b \ test b))
-   ; and the battery must be non-trivial (a typo'd list returning () would
-   ; vacuously pass the each above).
+   ; non-trivial, so a typo'd empty list can't pass vacuously
    _ (test (50 < tally results)))
 
 (test_fin ())
