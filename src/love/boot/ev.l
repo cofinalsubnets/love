@@ -61,8 +61,8 @@
       (? (pure && <cv) (go (hv >cv) >a)         ; static arg: fold it into the partial
          (op && n = ar) (iop . (op == eqop && addreq? as ? sameop op) . as)   ; matching-arity nif -> inline (the hot path, keep)
          (hv == v)                                            ; no static prefix folded -> the original apply
-          (1 < ar && ar <= n ? (apx . ar . x)   ;   multi-arg fn the args saturate -> n-ary apply
-                               (apx . 0 . x))   ;   generic l2r apply
+          (apx . (? (1 < ar && ar <= n) ar     ;   multi-arg fn the args saturate -> n-ary apply
+                    (ar = 1) 1 0) . x)           ;   one-arg -> the l2r chain, else the optimistic apply
          (apx . 0 . bake hv . a))))             ; static prefix folded -> apply the partial to the rest
     (go v as))
    ; the operator symbols are quoted one by one -- bare mid-list they capture their left
@@ -324,10 +324,12 @@
            >k   (wxc >>fb bnd)               ; statically false -> drop this clause, try the rest
                      [(wx <>fb bnd)]))))     ; statically true  -> this result is the cond, drop rest
    ; napof: v is a non-nif multi-arg fn the n>1 call args saturate -> its arity, the width of the
-   ; leading n-ary apply; 0 = no n-ary lane. a surplus arg curries onto that answer, not the head.
-   ; the peeps are `==`-safe: a non-fn value never matches lvm_cur.
-   (napof v args) (charm? v || lvm_cur !== pick 0 v ? 0
-    (: ar (peek 1 v) (1 < ar && ar <= #args ? ar 0)))
+   ; leading n-ary apply; a surplus arg curries onto that answer, not the head. 1 = a value that
+   ; is no cur, which takes its args one at a time; 0 = unknown (not yet bound, or a cur the args
+   ; leave short), the optimistic apply. the peeps are `==`-safe: a non-fn value never matches lvm_cur.
+   (napof v args) (? (charm? v) 1
+                     (lvm_cur !== pick 0 v) (v == () ? 0 1)
+                     (: ar (peek 1 v) (1 < ar && ar <= #args ? ar 0)))
    ; fold: un-shadowed global head -> ap (fold/iop/apx); else an apx node (apx n head . args)
    ; carrying the strategy: n > 1 = the leading n-ary apply's width, 0 = the l2r chain.
    (fold x bnd) (: h <x
@@ -648,7 +650,7 @@
    (atom? >as ? (ana c <as * em1 op)      ; one arg
       (: s (c 'sn) k (apr2l c as) (pin c 'sn s, k * em1 op)))) ; n-ary, r2l args
   ; falook: walk the scope chain for head's fixed arity, recorded by ale in each enclosing let's
-  ; 'far map. > 0 = a multi-arg lambda sibling of that arity; 0 = a binding of that name that is
+  ; 'far map. > 0 = a lambda sibling of that arity; 0 = a binding of that name that is
   ; not one -- it shadows outer fars, so stop; -1 = not bound in this scope, keep walking, unless
   ; the name is this scope's own arg or stack local, which shadows the same way.
   (falook c h) (?- 0 c
@@ -657,37 +659,52 @@
        (-1 = a && !(elem h (c 'arg) || 0 <= sat c h)) (falook (c 'par) h)
        0)))
   ; apxh: (apx n head . args) -> apply. n > 1 -> r2l eval of the leading n args and one n-ary
-  ; apply, surplus args curried onto the answer l2r; n = 0 -> the plain 1-ary chain. the width
-  ; comes from fold/napof (a book global) or falook (a letrec lambda sibling the args saturate).
+  ; apply, surplus args curried onto the answer l2r; n = 1 -> the plain 1-ary chain; n = 0 ->
+  ; unknown, the optimistic apply. n comes from fold/napof (a book global); falook (a letrec
+  ; lambda sibling) refines an unknown one.
   (apxh c b) (: nary <b head <>b args >>b
-              ; the surplus lane is napof's alone. lvm_apn enters the callee at cell+2, past the
-              ; lvm_cur prologue, so `apn n` is sound only where n is the callee's arity -- napof
-              ; reads that off the value itself, but falook reads a name out of a compile-time far
-              ; map and can answer an enclosing binding's arity where an inner scope rebinds the
-              ; name. exact saturation is the most a guess can carry.
-              n2 (nary ? nary (nom? head && (: a (falook c head) (1 < a && a = #args && a))))
+              ; lvm_apn enters the callee at cell+2, past the lvm_cur prologue, so `apn n` is sound
+              ; only where n is the callee's arity: napof reads it off the value itself, and falook
+              ; reads a name out of a compile-time far map, which can answer an enclosing binding
+              ; where an inner scope rebinds the name -- so apn takes its guess only exactly
+              ; saturated, where a wrong one scares. any other width, or none at all, rides apo,
+              ; which checks the callee and lays the l2r chain when it misses.
+              fa (nary || !(nom? head) ? 0 (falook c head))
+              ex (1 < nary || (1 < fa && fa = #args))         ; a width apn has always taken
+              n2 (? (1 < nary) nary
+                    (1 = nary || 1 = fa || atom? >args) 0      ; a one-arg head, or one arg: the chain
+                    (1 < fa && fa <= #args) fa
+                    #args)
               f (ana c head) s (c 'sn) _ (sput c 0) s2 (c 'sn)
-              g (n2 ? (napn c args n2 s2) (apl2r c args))
+              g (n2 ? (napn c args n2 s2 (ex ? 0 1)) (apl2r c args))
               (pin c 'sn s, f * g))
   ; napn: the n-ary apply, then the surplus. the pin puts the compile-time stack back at the head
   ; slot -- apn consumes its arg slots and leaves the answer there, which is where l2r addresses from.
-  (napn c args n s) (: r (drop n args)
-                       g (apr2l c (take n args) * kap n)
+  ; o: the apo lane, the width a guess apo checks
+  (napn c args n s o) (: r (drop n args)
+                       g (apr2l c (take n args) * (o ? kapo kap) n)
                      (pin c 'sn s,
                       atom? r ? g (g * apl2r c r)))
   (app c a b) (: f (ana c a)
                  s (c 'sn)
                  g (sput c 0,
-                    apl2r c b)
+                    apimp c b)
                (pin c 'sn s, f * g))
  (apl2r c b) (?- id (two? b) (: f (ana c <b) g (apl2r c >b) (f * kap 1 * g)))
+ ; apimp: a closure's entry applied to its imports, which are loads and leave it short -- two
+ ; or more lay one partial, an uncn cell, where the chain lays one a name
+ (apimp c b) (? (atom? b || atom? >b || !(all nom? b)) (apl2r c b)
+                (: s (c 'sn) g (apr2l c b * kpart #b) (pin c 'sn s, g)))
  (apr2l c b) (?- id (two? b) (: g (apr2l c >b) f (ana c <b) (sput c 0, g * f)))
- (kap n k m)
+ (kap n k m) (kapv lvm_apn lvm_tapn n k m)
+ (kapo n k m) (kapv lvm_apo lvm_tapo n k m)
+ (kpart n k m) (kapv lvm_part lvm_tpart n k m)
+ (kapv a t n k m)
   (:- (p j)
     j (k (2 + m))
     p (pick 0 j == lvm_ret ?                              ; peep the continuation for ret -> tail
-       (n > 1 ? (place -1 lvm_tapn * poke 0 n) (place 0 lvm_tap))
-       (n > 1 ? (p2 lvm_apn n) (place -1 lvm_ap))))
+       (n > 1 ? (place -1 t * poke 0 n) (place 0 lvm_tap))
+       (n > 1 ? (p2 a n) (place -1 lvm_ap))))
 
   ; aco -- compile a cond (? test result .. else). jump-threaded: a test branches (lvm_cond) to the
   ; next clause on false, else runs its result and jumps to the join, the cond's continuation k,
@@ -700,7 +717,7 @@
     a <(c 'join)
     i (pick 0 a)
     (? (lvm_ret == i || lvm_tap == i) (p2 i (peek 1 a) j)
-       (lvm_tapn == i)                (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
+       (lvm_tapn == i || lvm_tapo == i) (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
                                       (p2 lvm_jump a j)))
    ; clauses: t/result pairs then a trailing else. a constant test folds to one branch; else emit
    ; lvm_cond -- true runs `then` + jumps to join, false falls to `rest`.
@@ -734,7 +751,7 @@
                          (pin scope 'sites (site . scope 'sites),
                           qsite site)))
                    q (sput c 0,
-                      apl2r c >(cof lfd))
+                      apimp c >(cof lfd))
                  (pin c 'sn (c 'sn - 1),
                   p * q))
   (ava c x) (avw c c x)
@@ -794,15 +811,14 @@
      (? (atom? rest)       (rev (nd . prs) . <nd . 1)   ; body-less: the last name is the body
         (atom? >rest)      (rev (nd . prs) . <rest . 0)   ; a trailing body form
                            (collect (nd . prs) <rest <>rest >>rest)))
-    cb (collect () a <b >b)
-    ; far: {name -> arity} for the lambda siblings, syntactic (binder count off the \-expr). only
-    ; fixed-arity multi-arg lambdas carry one; a value binding, single-arg lambda or rebound name
-    ; pins 0 -> the call stays l2r. pinned before the closures analyze their bodies, so falook
-    ; sees it.
+    cb (collect 0 a <b >b)
+    ; far: {name -> arity} for the lambda siblings, syntactic (binder count off the \-expr); a
+    ; value binding or rebound name pins 0, an unknown the optimistic apply. pinned before the
+    ; closures analyze their bodies, so falook sees it.
     (farof ps t) (?- t (two? ps)
      (: pr <ps k <pr d >pr
         a (-1 = peep t k -1 && lambp d ? (#>d - 1) 0)
-      (farof >ps (pin t k (1 < a ? a 0)))))
+      (farof >ps (pin t k (0 < a ? a 0)))))
     _ (pin q 'far (farof <cb {}))
     ; closures: a cell per lambda sibling, (0 . imports) off its census row -- feel's walk over the
     ; boxfixed defs, so no closure is built to learn its captures. weave builds each on its row.
