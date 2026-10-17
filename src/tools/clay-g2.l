@@ -11,7 +11,7 @@
 ; answers 1 and prints a report; quits 1 on any difference.
 (:
    _ (borrow 'moon)                       ; the front end is module 'moon now
-   (g2-say s) (puts (s + "\n"))
+   (g2-say s) (puts "\(s)\n")
 
    ; the front end without cc-parse's udie: a refusal has to come back as a value, so
    ; that "the file did not parse" reads differently from "the trees differ".
@@ -36,17 +36,16 @@
    (clay-g2 old new names)
     (: a (g2-front old)
        b (g2-front new)
-       _ (atom? a ? (g2-say ("g2: " + old + ": " + show a), quit 1))
-       _ (atom? b ? (g2-say ("g2: " + new + ": " + show b), quit 1))
+       _ (atom? a ? (g2-say "g2: \(old): \(a)", quit 1))
+       _ (atom? b ? (g2-say "g2: \(new): \(b)", quit 1))
        (one nm)
         (: fa (g2-find a nm) fb (g2-find b nm)
-           (? (atom? fa) (g2-say ("g2: MISSING from " + old + ": " + nm), 0)
-              (atom? fb) (g2-say ("g2: MISSING from " + new + ": " + nm), 0)
+           (? (atom? fa) (g2-say "g2: MISSING from \(old): \(nm)", 0)
+              (atom? fb) (g2-say "g2: MISSING from \(new): \(nm)", 0)
               (fa 1 = fb 1) 1
-              (g2-say ("g2: DIFFERS: " + nm), 0)))
+              (g2-say "g2: DIFFERS: \(nm)", 0)))
        oks (foldl (+) 0 (map one names))
-       (g2-say $ "g2: " + show oks + " / " + show #names
-                 + " definitions identical as trees",
+       (g2-say "g2: \(oks) / \(#names) definitions identical as trees",
         ; a vacuous pass is a fail: a front end that answered nothing reports 0/0
         oks = #names && 0 < oks
         ? (g2-say "g2: pass", 1)
