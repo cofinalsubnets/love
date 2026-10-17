@@ -866,7 +866,7 @@ struct __fb_stat {                    /* ino64, 224 bytes (208 on i386); mode is
   unsigned long long st_filerev;
   unsigned long long __spare[9];
 };
-#ifdef LvOsTranslate
+#if defined(LvOsTranslate) && (defined(__ARM_EABI__) || !defined(__arm__))   /* bare thumb speaks no BSD */
 #ifdef __i386__
 _Static_assert(sizeof(struct __fb_stat) == 208, "freebsd's stat is 208 bytes on i386");
 #else
@@ -943,7 +943,7 @@ struct __nb_stat {                    /* the timespec quartet mid-struct, each t
   int blksize;
   unsigned int flags, gen, spare0, spare1;
 };
-#ifdef LvOsTranslate
+#if defined(LvOsTranslate) && (defined(__ARM_EABI__) || !defined(__arm__))   /* bare thumb speaks no BSD */
 #ifdef __i386__
 _Static_assert(sizeof(struct __nb_stat) == 124, "netbsd's stat is 124 bytes on i386");
 #else
