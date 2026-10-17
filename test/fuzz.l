@@ -1,16 +1,5 @@
-; property-based fuzzer built on the step-8 RNG (xoshiro256++ functional stream).
-;
-; a generator is a function st -> (value . st'), the shape a curried (random st _) yields, so
-; generators thread the random state purely and compose by plumbing the returned
-; st onward. fz-find drives a generator N times against a predicate from a fixed
-; seed (so any failure is reproducible) and reports the first counterexample;
-; fz-ok is the boolean wrapper the asserts use. The properties below are
-; invariants that must hold for every draw -- algebraic laws of the numeric tower,
-; list-combinator identities, the print->read round trip, and array broadcasting.
-;
-; fz-find returns (X 1 0) on success or (X 0 counterexample) on failure;
-; to debug a red property interactively, eval (show (B (fz-find n seed g p)))
-; to see the offending input.
+; property fuzzer over the functional rng: a generator is st -> (value . st').
+; fz-find runs one n times from a fixed seed, answering (1 0) or (0 counterexample)
 (:
  ; --- generator monad: pure / map / bind over the functional RNG ---
  fz-pure (.)                           ; ignores the stream
@@ -79,13 +68,7 @@
  (fz-ok 300 14 (fz-pair2 fz-fix-nz fz-fix-nz)
    (v \ gcd <v <>v @ g (0 = <v % g && 0 = <>v % g))))
 
-; ---- number-as-function application (Church numerals), deliberately bounded ----
-; applying a fixnum n is Church-numeral application: a numeric operand m gives
-; m ** n, a function operand g gives g composed n times. The operator is always
-; drawn as a small non-negative fixnum (fz-op, 0..6) so neither the exponent nor
-; the composition depth can run away -- the fuzzer must never turn a random draw
-; into a 2^160-sized exponent. With fz-op bounded, every result here stays tiny
-; (|m ** n| <= 4 ** 6), so these properties cannot loop or blow up the heap.
+; ---- church numerals: the operator stays 0..6 so no exponent or depth runs away ----
 (: fz-op (fz-int 0 7))
 (test
  ; numeric operand: (n m) == m ** n  (exponent n bounded to <= 6)
@@ -100,34 +83,29 @@
  (fz-ok 300 20 fz-l (l \ l = rev (rev l)))                            ; rev is involutive
  (fz-ok 300 21 fz-l (l \ l = map id l))                              ; map id = id
  (fz-ok 300 22 fz-l (l \ l = foldr (.) () l))                       ; foldr X () = id
- ; cat adds spine lengths, and the net law holds exactly: $ of a cat is the
- ; saturated sum of the two lists' element sums (one clamp, at the top)
+ ; cat adds spine lengths; $ of a cat is the saturated sum of both element sums
  (fz-ok 300 23 (fz-pair2 fz-l fz-l)
-   (v \ (: (ln x) (foldl (n \ _ \ 1 + n) 0 x)
-           (sum x) (foldl (+) 0 x)
+   (v \ (: (sum x) (foldl (+) 0 x)
            a <v b <>v
-           (ln (a + b) = ln a + ln b && $(a + b) = $(sum a + sum b)))))
+           (#(a + b) = #a + #b && $(a + b) = $(sum a + sum b)))))
  (fz-ok 300 24 (fz-pair2 fz-l fz-l)
    (v \ rev (<v + <>v) = rev <>v + rev <v))    ; rev of cat
- ; map preserves spine length ($ is the net sum, so count the spine explicitly)
- (fz-ok 300 25 fz-l (l \ (: (ln x) (foldl (n \ _ \ 1 + n) 0 x) (ln (map (+ 1) l) = ln l))))
+ ; map preserves spine length
+ (fz-ok 300 25 fz-l (l \ #(map (+ 1) l) = #l))
  ; take n ++ drop n = identity, for n drawn within [0, spine length]
- (fz-ok 300 26 (fz-bind fz-l (l \ fz-map (n \ [l n]) (fz-int 0 (1 + foldl (n \ _ \ 1 + n) 0 l))))
+ (fz-ok 300 26 (fz-bind fz-l (l \ fz-map (n \ [l n]) (fz-int 0 (1 + #l))))
    (v \ <v = take <>v <v + drop <>v <v))
- ; filter keeps only matching elements and never grows the spine (the clamped $
- ; can grow under filter -- dropping a negative raises the net -- so fold)
+ ; filter keeps only matches and never grows the spine (the clamped $ may grow)
  (fz-ok 300 27 fz-l
-   (l \ (: (ln x) (foldl (n \ _ \ 1 + n) 0 x)
-           p (x \ 0 = x % 2)
-           (all p (filter p l) && ln (filter p l) <= ln l))))
+   (l \ (: p (x \ 0 = x % 2)
+           (all p (filter p l) && #(filter p l) <= #l))))
  ; an element consed on is found by elem
  (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (v \ elem <v (<v . <>v))))
 
 ; ---- print -> read round trip on random s-expressions ----
-; serialize via show, re-read the bytes, expect equality -- through rd-test, the
-; reader-under-test socket.
+; show, re-read through rd-test, expect equality
 (: (fz-s2cl s) ((: (g i) (? (i < #s) (peep s i 0 . g (1 + i)))) 0)
-   (fz-rd x) (rd-test (fz-s2cl (show x)) @ r (two? r ? <r r))       ; the reader-under-test socket (test/00-init.l)
+   (fz-rd x) (rd-test (fz-s2cl (show x)) @ r (two? r ? <r r))       ; the reader under test
    fz-syms '(a b c d foo bar baz qux)
    fz-leaf (fz-oneof [(fz-elt fz-syms) (fz-int -500 500)])
    (fz-sexp d) (d < 1 ? fz-leaf
@@ -151,12 +129,8 @@
  (fz-ok 250 42 fz-arrpair (v \ +(<v + <>v) = +<v + +<>v)))
 
 ; ---- string operations: + / snip / string / get / print->read ----
-; fz-str draws a random byte string (length 0..mx, any byte 0..255 -- show's
-; \xhh escaping round-trips them all). snip returns nil for an empty snip
-; (i==j), which + and the old scat treat as "" but `=` does not, so any comparison
-; that can land on an empty snip routes through fz-norm (+ x "" coerces a
-; nil/string to a string). fz-s2cl / fz-rd are the helpers from the round-trip
-; section above (string->charlist, print->read).
+; any byte 0..255. an empty snip may be nil, which `=` tells from "", so a
+; comparison that can land on one goes through fz-norm
 (: fz-byte (fz-int 0 256)                                  ; any byte 0..255
    (fz-cl->str cl) (two? cl ? (string cl) "")              ; charlist -> string ("" for nil)
    (fz-norm x) (x ? x "")                                  ; nil|string -> string
@@ -176,9 +150,8 @@
  (fz-ok 250 51 fz-s3 (v \ (<v + <>v) + <>>v = <v + (<>v + <>>v)))
  (fz-ok 300 52 fz-s (s \ s = "" + s))
  (fz-ok 300 53 fz-s (s \ s = s + ""))
- ; snip: any split reconcatenates to the original; the full snip is the string.
- ; gated: on 32-bit the RNG stream diverges (turn truncates the 64-bit word,
- ; filed), so these draw inputs that trip a real failure -- skip on the wasm shim.
+ ; snip: any split reconcatenates; the full snip is the string. 64-bit words only:
+ ; elsewhere the rng stream diverges into inputs that fail
  (word ? (fz-ok 300 54 fz-s-i (v \ <v = fz-norm (fz-norm (snip <v 0 >v) +
                                                  fz-norm (snip <v >v #<v)))) 1)
  (word ? (fz-ok 300 55 fz-s (s \ s = fz-norm (snip s 0 #s))) 1)
@@ -198,19 +171,10 @@
  (fz-ok 250 64 fz-s (s \ s = fz-rd s)))
 
 ; ---- mixed-band + and *: associativity across the bands ----
-; rows 3/4 and 51 fuzz associativity within a band; these cross one. `+` holds
-; everywhere: a number arrives as the winning band's unit, and text contributes
-; its bytes to a chain, so text and chain share one monoid. `*` on chains is the
-; cartesian product, which associates up to the canonical reassociation rather
-; than on the nose -- fz-mul-skip names those shapes, and test/law.l's
-; mul-reassoc / mul-count-out state what holds there instead.
-;
-; the rows carry their own name, trial count and seed, so a red one says which
-; property failed and prints the counterexample -- test/law.l's reporter, over a
-; generator instead of a fixed corpus.
+; `*` on chains, the cartesian product, associates only up to reassociation: fz-mul-skip
+; leaves those shapes out. a red row prints its name and counterexample
 (: fz-nomv (fz-elt '(sym alpha b))
-   ; * against a chain repeats it, so the count stays small here; rows 3/4 already
-   ; carry the numeric tower, and this lane is about crossing bands, not width.
+   ; * against a chain repeats it, so the count stays small
    fz-small (fz-int -4 5)
    fz-mix  (fz-oneof [fz-small fz-s fz-nomv fz-l])
    fz-mix3 (fz-trip fz-mix fz-mix fz-mix)

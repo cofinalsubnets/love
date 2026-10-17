@@ -1,9 +1,5 @@
-/* parse-time sizeof of a STRING LITERAL (an array bound -- lua's lundump
-   buffers size this way; cpp pastes adjacent literals first, phase 6), and
-   the non-finite literal: 1e999 reads as +inf, IMAGES in .data (fbits's
-   non-finite arms -- the fenc climb used to hang forever on it), compares
-   IEEE-honestly, and narrows to a float inf. freestanding like the rest of
-   the battery (exit-code compared to gcc; no libc calls). */
+/* sizeof of a string literal as an array bound (adjacent literals paste first),
+   and 1e999: +inf in .data, IEEE compares, narrowing to a float inf. */
 #include <math.h>
 
 static double big = 1e999;                 /* +inf in .data -- fbits */

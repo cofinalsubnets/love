@@ -1,14 +1,5 @@
-; missing -- a nom not in the book (the global table). reading one is a
-; call for help: with a global help installed the read raises
-; (help 'missing nom) and the help's result becomes the value at the site;
-; with nothing heard it reads the zero point -- the mint at serial 0: nameless, false,
-; and a unit (absence absorbs application). the read happens where the code says it does: a closure
-; captures its free globals at creation, so a missing read in a lambda body fires
-; the condition at the define, not the call.
-
-; welp is the floor handler: install it and a missing read answers the zero point with
-; no warning -- which is why every read below sits in a welp window. Outside one the
-; corpus hears test-strict (00-init.l) and a missing read ends the run, as in file mode.
+; reading a nom not in the book calls (help 'missing nom), whose answer is the value at the site;
+; with nothing heard it reads the zero point. welp answers it quietly; test-strict ends the run
 (hear welp)
 (test
  ((:) = an-never-defined)                      ; the floor handler: the zero point
@@ -16,9 +7,7 @@
  !(nom? an-never-defined))                       ; ... the zero point (absence): not a nom -- anonymous and empty
 (hear 0)
 
-; a name bound to 0 is in the book -- not missing, no condition: under an
-; armed help the read still answers its own 0 (presence beats value; the
-; value no longer tells bound from missing apart -- the condition lane does)
+; a name bound to 0 is in the book: an armed help never hears it
 (: an-zero 0)
 (hear (a \ b \ 'BOOM))
 (test (0 = an-zero) !('BOOM = an-zero) !((:) = an-zero))
@@ -30,23 +19,15 @@
        (two? r && 'missing-was = <r && 'an-ghost = <>r)))
 (hear 0)
 
-; the read of a lambda's free global happens at closure creation (the runtime
-; compiler captures it) or as a live site in the body (the bootstrap lane);
-; with the help installed across both moments, both lanes answer the help.
-; note the discipline: love0 runs this corpus twice in one scope, so a name
-; asserted missing must never be defined later -- the second pass would fold it.
+; a lambda's free global is read at creation or in the body; both answer the help.
+; a name asserted missing must never be defined later: the corpus may run twice in one scope
 (hear (a \ b \ a = 'missing ? 42 0))
 (: (an-g _) an-phantom)
 (test (42 = (an-g 0)))
 (hear 0)
 
-; one form, two scopes -- the split law: eager reads see let*, closures see
-; letrec*. a bare read before its name's pin is the outer binding (the book, a
-; param, an enclosing let) -- so a binding may rebuild on what it shadows:
-; (: s (trim s)) under a param s reads the param. a read under A \ is the letrec
-; cell, filled by the binder's pin; run early it is the missing condition with
-; the binding-site nom as payload: a call for help, the zero point where nothing hears.
-(hear welp)               ; the bare lane is now a book read when nothing binds it -- welp keeps the corpus quiet
+; eager reads see let*, closures letrec*: a bare pre-pin read is the outer binding, a closure's the cell
+(hear welp)
 (: an-outer 99)
 (test
  (99 = (: a an-outer an-outer 2 a))              ; the bare pre-pin read is the book's an-outer
@@ -55,12 +36,7 @@
  ((:) = (: f (_ \ an-cell) v (f 0) an-cell 5 v))  ; the closure's read is the cell: the point pre-pin
  (5 = (: f (_ \ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the value, once pinned
 (hear 0)
-; at every depth means nested too, and a shadowed name is the sharp case: the
-; outer binding answers exactly the eager pre-pin reads -- bare in a def -- and
-; never a closure's, which belong to the inner cell. cprop's splice lanes
-; (beta/bspl) bsub-rename a :'s binders whole-form, letrec-wise, so an entangled
-; : -- a bare pre-pin sibling read -- declines the splice (entg?) and the call
-; runs un-inlined; the two shapes below are the ones that told the lanes apart.
+; nested and shadowed: the outer answers only eager pre-pin reads, never a closure's
 (: an-outer2 42)
 (test
  (43 = (1 @ q (: an-outer2 (an-outer2 + 1) an-outer2)))      ; shadowed constant, nested: the outer 42 + 1
@@ -78,10 +54,7 @@
 (test ((:) = ()) ((?) = ()) ((\) = ()))
 (hear 0)
 
-; the conditioned read itself is the compiler's (boxfix's letrec cells) and its nom
-; is mopped at birth, so there is no user-facing call to test here. what a reader
-; wants from a tablet is presence, and peep answers that totally: a fresh (mint 0)
-; is unique, so no stored value can pose as it.
+; presence in a tablet: peep with a fresh (mint 0) default, which no stored value can pose as
 (test (: t {1 0} s (mint 0)
            (!(s = peep t 1 s)           ; a pinned 0 is present, not absent
                && s = peep t 9 s         ; an absent key is absent

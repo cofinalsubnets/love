@@ -221,6 +221,73 @@ static int bake_tail(struct g *g, int src, char const *tmp, void const *buf, uin
   alloc(sh, 0), alloc(ph, 0), alloc(str, 0), alloc(win, 0);
   return rc; }
 
+// a mach-o (mooncc -os macos) carries .image as its __IMAGE segment, laid last of what the
+// program maps: the blob lands where the symbol sits and the segment grows to hold it. dyld's
+// exe keeps __LINKEDIT after it, last in the file and in memory as dyld insists, so the bake
+// moves that past the grown image and every offset into it by the same distance. the link is
+// fixed-base, so the file's own segments map a live address to its offset. 0 done, >0 not a
+// mach-o or not laid for growth, <0 a real failure.
+struct macho_seg { uint32_t cmd, size; char name[16]; uint64_t addr, vsz, off, fsz;
+                   uint32_t maxp, initp, nsect, flags; };
+static void macho_slide(char *c, uint32_t lo, uint32_t hi, uint64_t from, uint64_t d) {
+  for (uint32_t k = lo; k + 4 <= hi; k += 8) {        // (offset, size) pairs: one into it moves
+    uint32_t o;
+    memcpy(&o, c + k, 4);
+    if (o && o >= from) o += (uint32_t) d, memcpy(c + k, &o, 4); } }
+static int bake_macho(int src, char const *tmp, void const *buf, uintptr_t len,
+                      uintptr_t lenaddr, uintptr_t imgaddr, mode_t mode) {
+  uint32_t h[8];
+  if (pread(src, h, sizeof h, 0) != (ssize_t) sizeof h || h[0] != 0xfeedfacfu) return 1;
+  struct macho_seg is, ls;
+  uint64_t lenoff = 0, imgoff = 0, last = 0;
+  long si = -1, li = -1;
+  int dst = -1, rc = -6;
+  char *cmds = alloc(NULL, h[5]), *win = alloc(NULL, BakeScratch);
+  if (!cmds || !win || pread(src, cmds, h[5], 32) != (ssize_t) h[5]) goto out;
+  for (uint32_t i = 0, at = 0, c[2]; i < h[4] && at + 8 <= h[5]; i++, at += c[1]) {
+    memcpy(c, cmds + at, sizeof c);
+    if (!c[1]) break;
+    if (c[0] != 25 || at + sizeof is > h[5]) continue;    // lc_segment_64
+    struct macho_seg sg;
+    memcpy(&sg, cmds + at, sizeof sg);
+    if (!strncmp(sg.name, "__LINKEDIT", sizeof sg.name)) { li = at, ls = sg; continue; }
+    if (lenaddr >= sg.addr && lenaddr < sg.addr + sg.fsz) lenoff = sg.off + (lenaddr - sg.addr);
+    if (imgaddr >= sg.addr && imgaddr < sg.addr + sg.fsz) imgoff = sg.off + (imgaddr - sg.addr);
+    if (!strncmp(sg.name, "__IMAGE", sizeof sg.name)) si = at, is = sg;
+    if (sg.off + sg.fsz > last) last = sg.off + sg.fsz; }
+  rc = 1;
+  if (si < 0 || !lenoff || !imgoff || imgoff < is.off || is.off + is.fsz != last
+      || (li >= 0 && ls.off < last)) goto out;
+  if ((dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700)) < 0) { rc = -6; goto out; }
+  if ((rc = bake_move(src, dst, 0, 0, imgoff, win))) goto out;
+  is.fsz = imgoff - is.off + len;
+  is.vsz = (is.fsz + 4095) & ~(uint64_t) 4095;
+  memcpy(cmds + si, &is, sizeof is);
+  if (li >= 0) {                                        // __LINKEDIT on past the image
+    uint64_t off = (is.off + is.fsz + 4095) & ~(uint64_t) 4095, from = ls.off, d = off - ls.off;
+    if ((rc = bake_move(src, dst, ls.off, off, ls.fsz, win))) goto out;
+    ls.off = off, ls.addr = is.addr + is.vsz;
+    memcpy(cmds + li, &ls, sizeof ls);
+    for (uint32_t i = 0, at = 0, c[2]; i < h[4] && at + 8 <= h[5]; i++, at += c[1]) {
+      memcpy(c, cmds + at, sizeof c);
+      if (!c[1]) break;
+      if (c[0] == 0x80000022 || c[0] == 0x22) macho_slide(cmds + at, 8, 48, from, d);   // dyld_info: five pairs
+      else if (c[0] == 2) macho_slide(cmds + at, 8, 24, from, d);                      // symtab: (sym n) (str size)
+      else if (c[0] == 11) {                                                           // dysymtab: six (off n) from 32
+        for (uint32_t k = 32; k + 8 <= 80; k += 8) macho_slide(cmds + at, k, k + 8, from, d); }
+      else if (c[0] == 0x1d || c[0] == 0x26 || c[0] == 0x29 || c[0] == 0x80000033 || c[0] == 0x80000034)
+        macho_slide(cmds + at, 8, 16, from, d); } }   // linkedit_data: signature, starts, data in code, fixups
+  { uintptr_t l = len;
+    if (pwrite(dst, buf, len, (off_t) imgoff) != (ssize_t) len
+        || pwrite(dst, cmds, h[5], 32) != (ssize_t) h[5]
+        || pwrite(dst, &l, sizeof l, (off_t) lenoff) != (ssize_t) sizeof l) rc = -6; }
+ out:
+  if (dst >= 0) {
+    if (!rc && (fchmod(dst, mode) || fsync(dst))) rc = -6;
+    if (close(dst)) rc = -6; }
+  alloc(cmds, 0), alloc(win, 0);
+  return rc; }
+
 // `bare` lays the sentinel stub back instead of a snapshot -- the section a fresh link
 // carries -- so the answer is an imageless binary, and no heap has to be saved.
 int image_bake(struct g *g, char const *out, int bare) {
@@ -237,7 +304,6 @@ int image_bake(struct g *g, char const *out, int bare) {
                  bi = { (uintptr_t) baked_image, 0, 0 };     // ..and the blob goes where that symbol reads
   dl_iterate_phdr(bake_phdr, &bl);
   dl_iterate_phdr(bake_phdr, &bi);
-  if (!bl.found || !bi.found) return alloc(buf, 0), -5;
   // exe[4096] is the kernel's own PATH_MAX, not a cap of ours: host_selfpath asks about a
   // real file, and no path an open could name is longer.
   char exe[4096];
@@ -247,7 +313,10 @@ int image_bake(struct g *g, char const *out, int bare) {
   struct stat st;
   int rc = -6, src = tmp ? open(exe, O_RDONLY) : -1;
   if (src >= 0 && !fstat(src, &st)) {
-    rc = bake_tail(g, src, tmp, bare ? (void const *) stub : buf, len, bl.off, bi.off, st.st_mode & 07777);
+    void const *blob = bare ? (void const *) stub : buf;
+    rc = bake_macho(src, tmp, blob, len, (uintptr_t) &baked_image_len, (uintptr_t) baked_image, st.st_mode & 07777);
+    if (rc > 0 && !(bl.found && bi.found)) rc = -5;      // an ELF the phdrs cannot place
+    else if (rc > 0) rc = bake_tail(g, src, tmp, blob, len, bl.off, bi.off, st.st_mode & 07777);
     if (rc > 0) {
       fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n");
       rc = -3; }

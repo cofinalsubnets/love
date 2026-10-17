@@ -7,6 +7,8 @@ int select(int n, fd_set *r, fd_set *w, fd_set *e, struct timeval *tv) {
   long sm[2];
   if (tv) { ts.tv_sec = tv->tv_sec; ts.tv_nsec = tv->tv_usec * 1000; tp = &ts; }
   sm[0] = 0; sm[1] = 8;
+  if (__love_osv == 4)                     /* no pselect there: select(2) takes the timeval as is */
+    return (int) er(fb6(93, n, (long) r, (long) w, (long) e, (long) tv, 0));
   if (__love_osv >= 2)
     return (int) er(sc6(NR_pselect6, n, (long) r, (long) w, (long) e, (long) tp, 0));
   return (int) er(sc6(NR_pselect6, n, (long) r, (long) w, (long) e, (long) tp, (long) sm)); }

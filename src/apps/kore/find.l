@@ -1,19 +1,7 @@
-; src/apps/kore/find.l -- find: walk the trees under the named paths, test each name
-; against an expression, act on what matches. a toolbox file, no seat -- kore is its door.
-;
-;   find [-L] [PATH..] [EXPR]   PATH defaults to .
-;   tests      -name pat  -iname pat  -path pat  -ipath pat  -type f|d|l  -empty
-;              -newer FILE  -mtime N  -mmin N  -size N[cwbkMG]  -perm [-/]MODE
-;              -true  -false   (N is +N more, -N less, N exactly)
-;   actions    -print  -print0  -printf FMT  -prune  -delete  -exec CMD.. ;  -exec CMD.. {} +
-;              (FMT: %p %f %h %m %U %G %s %y %T@ %%, and \n \t \\ \0)
-;   options    -maxdepth N  -mindepth N  -depth (-delete implies it)
-;   operators  ( )  ! / -not  -a / -and (implicit between two primaries)  -o / -or
-; no action means -print; -a binds tighter than -o and both short-circuit.
-;
-; the walk sorts each directory (GNU's readdir order is not repeatable; test/kore/find.sh
-; smokes against `find | sort`). links are not followed unless -L; a dangling one is
-; still visited.
+; src/apps/kore/find.l -- find: walk the trees under the named paths, test each name against
+; an expression, act on what matches. no action means -print; -a binds tighter than -o and
+; both short-circuit. each directory is read sorted, since readdir order is not repeatable.
+; links are not followed unless -L; a dangling one is still visited.
 (module 'kore
 (borrow 'glob) ; -name/-path
 (borrow 'posix)

@@ -1,7 +1,8 @@
 #include "../impl.h"
 
-/* the BSDs' cmsg head is 12 bytes with an int length but the data still sits at 16, so
- * only the heads are rewritten. of SOL_SOCKET only SCM_RIGHTS passes */
+/* the BSDs' msghdr lengths and cmsg head are int-wide (__love_cmh says where the data
+ * sits), so each head is laid again. of SOL_SOCKET only SCM_RIGHTS passes; control rides a
+ * fixed scratch, and a bigger one refuses */
 long sendmsg(int fd, struct msghdr const *m, int fl) {
   if (__love_osv < 2) return er(sc3(NR_sendmsg, fd, (long) m, fl));
   struct sockaddr_storage sa;
@@ -15,19 +16,22 @@ long sendmsg(int fd, struct msghdr const *m, int fl) {
   unsigned long cn = m->msg_controllen;
   if (cn) {
     unsigned char const *c = m->msg_control;
-    unsigned long at = 0;
-    if (cn > sizeof cb || !c) return er(-EINVAL);
-    memset(cb, 0, cn);
-    while (at + 16 <= cn) {
-      unsigned long l = *(unsigned long const*) (c + at);
-      int lv = *(int const*) (c + at + 8), ty = *(int const*) (c + at + 12);
-      if (l < 16 || l > cn - at) return er(-EINVAL);
+    unsigned long at = 0, bt = 0, ch = CMSG_ALIGN(sizeof(struct cmsghdr));
+    unsigned long bh = __love_cmh(), bal = __love_cma() - 1;
+    if (!c) return er(-EINVAL);
+    memset(cb, 0, sizeof cb);
+    while (at + ch <= cn) {
+      struct cmsghdr const *h = (struct cmsghdr const*) (c + at);
+      unsigned long l = h->cmsg_len, dl = l - ch;
+      int lv = h->cmsg_level, ty = h->cmsg_type;
+      if (l < ch || l > cn - at || bt + bh + dl > sizeof cb) return er(-EINVAL);
       if (lv == 1) { if (ty != 1) return er(-EINVAL); lv = 0xffff; }
       if (lv == 41 && ty == 52) ty = 47;  /* IPV6_HOPLIMIT */
-      *(unsigned int*) (cb + at) = (unsigned int) l;
-      *(int*) (cb + at + 4) = lv;
-      *(int*) (cb + at + 8) = ty;
-      memcpy(cb + at + 16, c + at + 16, l - 16);
-      at += (l + 7) & ~7UL; }
-    f.control = cb; f.controllen = (unsigned int) cn; }
+      *(unsigned int*) (cb + bt) = (unsigned int) (bh + dl);
+      *(int*) (cb + bt + 4) = lv;
+      *(int*) (cb + bt + 8) = ty;
+      memcpy(cb + bt + bh, c + at + ch, dl);
+      at += CMSG_ALIGN(l);
+      bt += (bh + dl + bal) & ~bal; }
+    f.control = cb; f.controllen = (unsigned int) bt; }
   return er(sc3(NR_sendmsg, fd, (long) &f, (long) __love_msgfb(fl))); }

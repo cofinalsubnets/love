@@ -1,27 +1,7 @@
-; src/apps/kore/openssl.l -- openssl: a small face of the openssl command line.
-;
-;   openssl x509 [-in F] [-inform PEM|DER] [-noout] [-text] [-subject] [-issuer] [-dates]
-;                [-startdate] [-enddate] [-serial] [-fingerprint] [-md5|-sha1|-sha224|-sha256
-;                |-sha384|-sha512] [-ext NAMES] [-pubkey] [-outform PEM|DER] [-out F]
-;   openssl x509 -req -in CSR (-CA F [-CAkey F] | -signkey F) [-days N] [-not_before T]
-;                [-not_after T] [-set_serial N] [-extfile F [-extensions S]] [-addext E]..
-;                [-copy_extensions copy] [-out F] ..and the printing flags above
-;   openssl genpkey -algorithm ed25519 | -algorithm EC -pkeyopt ec_paramgen_curve:P-256 [-out F]
-;   openssl req -new [-x509] (-key F | -newkey ed25519|ec [-pkeyopt ..] [-keyout F]) -subj /CN=..
-;                [-days N] [-not_before T] [-not_after T] [-set_serial N] [-addext E].. [-out F]
-;   openssl s_client [-connect] HOST:PORT [-servername NAME] [-showcerts] [-verify_return_error]
-;                [-brief] [-quiet]
-;   openssl verify [-CAfile F] [-untrusted F] [CERT..]
-;   openssl dgst [-md5|-sha1|-sha224|-sha256|-sha384|-sha512] [-r] [FILE..]
-;   openssl rand [-hex|-base64] [-out F] N
-;   openssl base64 [-e|-d] [-A] [-in F] [-out F]
-;   openssl version | help
-;
+; src/apps/kore/openssl.l -- openssl: a small face of the openssl command line (os-usage),
 ; spelled and printed as openssl 3 does, so scripts carry over. the certificate is read here
-; (its own total der walk, for printing); trust is the tls module's -- verify.l's chain-fail
-; against tls-roots or -CAfile, and client.l's handshake, tls 1.3 only. keys, requests and
-; certificates are made by the tls module's cert.l: ed25519 and p-256 keys, pkcs#8 and pkcs#10,
-; the extensions in openssl's config spelling (-addext, and -extfile's unnamed or named section).
+; (its own total der walk, for printing); trust is the tls module's (verify.l against tls-roots
+; or -CAfile; client.l, tls 1.3 only); keys, requests and certificates are made by its cert.l.
 (module 'kore
 (borrow 'bytes)
 (borrow 'posix)

@@ -1,7 +1,5 @@
-; test/host/kiosko.l -- the newsstand over a real socket, server task and client in one process.
-; asserted: the `..` guard (a segment test, percent-encoded too, `a..b` still served), get and
-; head, query and escapes cut and decoded, directory redirect, index or listing, content types,
-; and 404 for a missing file only.
+; test/host/kiosko.l -- the static server over a real socket, server task and client in one
+; process: the `..` guard, methods, request reading, paths, escapes, content types, 404
 ; not in the corpus: the socket nifs are not in love0. run: cat test/00-init.l test/host/kiosko.l | out/love
 
 (borrow 'kiosko)                                 ; the baked module, spliced
@@ -12,7 +10,7 @@
  (lit? (cite 'kiosko 'serve))
  !(cite 'kiosco))
 
-; --- the shelf ------------------------------------------------------------------------
+; the shelf
 (: dir "/tmp/kioskotest"
    (put-file f s) (open (dir + "/" + f) "w" @ q (say q s, close q))
    _ (hark ["rm" "-rf" dir])
@@ -26,88 +24,69 @@
    _ (put-file "blob.zzz" "unknown")
    _ (put-file "sub/index.html" "<h1>sub</h1>")
    _ (put-file "bare/one.txt" "listed")
-   ; a file bigger than one chunk. kiosko reads in 64K gulps off `swig`, and every way
-   ; that can go wrong -- a dropped tail, a doubled chunk, a byte lost at the seam where
-   ; swig answers 0 and a single `see` carries the next byte -- shows up only past the
-   ; first buffer. the body is checked whole, not just its length, so a reordering counts.
+   ; a file past the 64K swig gulps: a tail, a chunk or a byte at the seam is lost only there
    big (: (rep s n) (n < 1 ? "" (s + rep s (n - 1)))
           line "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n"
           (rep line 3000))                              ; 64 bytes x 3000 = 192000
    _ (put-file "big.txt" big)
 
-   ; --- one request, one connection: the client half -------------------------------------
-   ; kiosko answers with Connection: close, so slurping to EOF is the whole response and
-   ; there is no framing to get wrong on this side.
+   ; Connection: close, so slurping to EOF is the whole response
    pl (test-listen 0)
    port <pl
    l (pl 1)
    _ (test (lit? l))
-   ; the server task is kiosko's own accept loop in miniature -- `await` parks it on the
-   ; listener (a bare `accept` would BLOCK the whole process, and the client below would
-   ; never get to run), then serve1 answers one request. it stops on a flag rather than a
-   ; count, so adding an assert below does not silently hang the run.
+   ; `await` parks the task on the listener (a bare `accept` blocks the process); it stops on a
+   ; flag rather than a count, so a new assert cannot hang the run
    stop {}
-   ; ..and it takes two: the decoded path and the request head, which is what serve1
-   ; hands it. an arity short of that curries instead of failing -- the answer gets
-   ; indexed by the head and reads as "not mine", so every claim quietly becomes a 404.
+   ; the hook takes two, path and head: short an arg it curries, and every claim reads as a 404
    (mk p head) (? (p = "/made") '("text/plain" "made on the way out")
                   (p = "/a.txt") '("text/plain" "the hook wins over the file")
                   (p = "/echo") ["text/plain" head]
                   ())
    srv (twirl (_ \ ((: (g k) (: _ (await l)
                                 c (accept l)
-                                ; the maker hook: it claims /made and says "not mine" for
-                                ; everything else, including a path that is a file on disk
+                                ; claims /made, () for everything else, a file on disk too
                                 ((hot? c ? (serve1 dir mk c, seal c 1, close c) 0),
                                  (peep stop 0 0 ? 1 (g (k + 1)))))) 0)) 0)
    (ask req) (: c (connect ['tcp "127.0.0.1" port])
                 _ (say c req)
                 _ (flush c)
-                r (slurp c)                            ; Connection: close -- EOF frames it
+                r (slurp c)
                 (close c,
                  r))
    (get p)   (ask ("GET " + p + " HTTP/1.1\r\nHost: x\r\n\r\n"))
    (code r)  (#r @ n ((: (g i) (i < n && !(r i = 32) ? (g (i + 1)) (snip r (i + 1) (i + 4)))) 0))
-   (sub? s t) (: n #s m #t
-                 ((: (g i) (i + m <= n ? (snip s i (i + m) = t ? 1 (g (i + 1))) 0)) 0))
 
-   ; --- the maker hook -------------------------------------------------------------------
-   ; it is asked first, before the file on disk, which is the whole point: `love web`
-   ; paints a .l that is sitting right there. a hook that answers () is the ordinary
-   ; static server, and every case below proves that half.
+   ; the maker hook is asked before the file on disk; () is the plain static server
    _ (test
       ("200" = code (get "/made"))
-      (sub? (get "/made") "made on the way out")
-      (sub? (get "/a.txt") "the hook wins over the file")     ; ..even when the file exists
-      (sub? (get "/echo") "GET /echo")                        ; ..the head is the second argument
-      ("404" = code (get "/nope")))                         ; ..and () is still a 404
+      (has? (get "/made") "made on the way out")
+      (has? (get "/a.txt") "the hook wins over the file")
+      (has? (get "/echo") "GET /echo")
+      ("404" = code (get "/nope")))
 
-   ; --- the guard, first ------------------------------------------------------------------
+   ; the guard, first
    _ (test
       (code (get "/../../etc/passwd") = "403")
       (code (get "/sub/../../etc/passwd") = "403")
       (code (get "/%2e%2e/%2e%2e/etc/passwd") = "403")   ; ..the form that is actually tried
       (code (get "..") = "403")                          ; unrooted
-      ; and it is a segment test: a file whose name merely contains .. is ordinary
+      ; a segment test: a name merely containing .. is ordinary
       (code (get "/a..b") = "200")
-      (sub? (get "/a..b") "not an escape"))
+      (has? (get "/a..b") "not an escape"))
 
-   ; --- methods ---------------------------------------------------------------------------
+   ; methods
    hd (ask "HEAD /index.html HTTP/1.1\r\nHost: x\r\n\r\n")
    _ (test
       (code (get "/index.html") = "200")
       (code hd = "200")
-      (sub? hd "Content-Length: 13")     ; head reports the body it does not send
-      !(sub? hd "<h1>root</h1>")
+      (has? hd "Content-Length: 13")
+      !(has? hd "<h1>root</h1>")
       (code (ask "PUT / HTTP/1.1\r\nHost: x\r\n\r\n") = "405")
       (code (ask "DELETE / HTTP/1.1\r\nHost: x\r\n\r\n") = "405"))
 
-   ; --- how the request arrives -------------------------------------------------------------
-   ; the head is taken in one `swig` gulp now, not a character at a time, and that puts two
-   ; new ways to hang in the read: a client whose blank line has no carriage returns, and a
-   ; request that arrives in pieces (swig answers 0 mid-request and only a `see` can park
-   ; for the rest). both would wedge the connection rather than fail an assert, so they are
-   ; here -- a hang is the failure mode, and the gate has to be the thing that finds it.
+   ; the head is taken in one swig gulp: a bare-lf blank line and a request in pieces would
+   ; wedge rather than fail, so the gate has to find the hang
    _ (test (code (ask "GET /index.html HTTP/1.1\nHost: x\n\n") = "200"))     ; lf only
    split (: c (connect ['tcp "127.0.0.1" port])
             _ (say c "GET /index.htm")
@@ -117,23 +96,22 @@
             r (slurp c)
             (close c,
              r))
-   _ (test (code split = "200") (sub? split "<h1>root</h1>"))
+   _ (test (code split = "200") (has? split "<h1>root</h1>"))
 
-   ; --- paths ------------------------------------------------------------------------------
+   ; paths
    _ (test
-      (code (get "/") = "200")                       ; the root directory's index.html
-      (sub? (get "/") "<h1>root</h1>")
-      (sub? (get "/index.html?v=2") "<h1>root</h1>")   ; a query string is cut
-      (sub? (get "/odd%20name.txt") "spaced")          ; ..and an escape is decoded
-      (code (get "/sub") = "301")                    ; a directory redirects to its slash
-      (sub? (get "/sub") "Location: /sub/")
-      (sub? (get "/sub/") "<h1>sub</h1>")
-      (sub? (get "/bare/") "one.txt")                  ; no index.html -> a listing
+      (code (get "/") = "200")
+      (has? (get "/") "<h1>root</h1>")
+      (has? (get "/index.html?v=2") "<h1>root</h1>")   ; a query string is cut
+      (has? (get "/odd%20name.txt") "spaced")          ; ..and an escape is decoded
+      (code (get "/sub") = "301")
+      (has? (get "/sub") "Location: /sub/")
+      (has? (get "/sub/") "<h1>sub</h1>")
+      (has? (get "/bare/") "one.txt")
       (code (get "/nope.html") = "404"))
 
-   ; --- what a request may not carry, and what a page may not echo -------------------------
-   ; a control byte, raw or escaped, is 400 -- a NUL would cut the path short at open(2), a
-   ; CR LF would reach the Location header. a dot segment is 404, and a listing hides it.
+   ; a control byte, raw or escaped, is 400 (a NUL cuts the path at open(2), CR LF reaches
+   ; Location); a dot segment is 404 and hidden in a listing
    ; a name is escaped for html in a listing, and percent-encoded in an href and a Location
    _ (mkdir (dir + "/d\r\nX-Inj: 1") 493)
    _ (put-file "d\r\nX-Inj: 1/f" "x")
@@ -149,36 +127,29 @@
       (code (get "/index.html%00.css") = "400")
       (code (get "/a%0d%0aSet-Cookie:%20x") = "400")
       (code (get "/d%0D%0AX-Inj:%201") = "400")
-      !(sub? (get "/d%0D%0AX-Inj:%201") "X-Inj")
+      !(has? (get "/d%0D%0AX-Inj:%201") "X-Inj")
       (code (get "/a%7fb") = "400")
       (code (get "/.env") = "404")
       (code (get "/%2eenv") = "404")
       (code (get "/sub/../.env") = "404")
       (code (get "/.git/config") = "404")
-      (sub? (get "/sp%20ace") "Location: /sp%20ace/\r\n")
-      (sub? ls "one.txt")
-      !(sub? ls ".hid")
-      (sub? ls ">&lt;b&gt;&quot;&#39;&amp;.txt</a>")
-      (sub? ls "href=\"%3Cb%3E%22%27%26.txt\""))
+      (has? (get "/sp%20ace") "Location: /sp%20ace/\r\n")
+      (has? ls "one.txt")
+      !(has? ls ".hid")
+      (has? ls ">&lt;b&gt;&quot;&#39;&amp;.txt</a>")
+      (has? ls "href=\"%3Cb%3E%22%27%26.txt\""))
 
-   ; --- a body past the chunk boundary ----------------------------------------------------
+   ; a body past the chunk boundary
    bigr (get "/big.txt")
    _ (: i ((: (g k) (k < #bigr && !(snip bigr k (k + 4) = "\r\n\r\n") ? (g (k + 1)) k)) 0)
         body (snip bigr (i + 4) #bigr)
-        _ (test (#big = 192000)                       ; the fixture is really 3 chunks
-                  (sub? bigr "Content-Length: 192000")
+        _ (test (#big = 192000)
+                  (has? bigr "Content-Length: 192000")
                   (#body = #big)
-                  (body = big)))                               ; ..and byte-for-byte, not just as long
+                  (body = big)))
 
-   ; --- the lane boundary in the read -------------------------------------------------
-   ; `gulp` picks its lane by size: at or above the caskfloor it hands back the cask it
-   ; read into (zero copies, end-of-file proven by a one-byte probe), below it copies out
-   ; (one copy, end-of-file proven by a short read). so the answer is a cask on one side
-   ; of the floor and a string on the other -- fine downstream, since `say` writes either
-   ; and `tally` measures either, but it is exactly the kind of seam that serves right on
-   ; one side and wrong on the other. one file each side of the line, byte for byte.
-   ; the floor is kiosko's and it moved (8192 -> 131072 when `snip` learned to read a
-   ; cask), so these two follow it -- read `caskfloor` before touching the sizes.
+   ; `gulp` hands back its cask at or above kiosko's caskfloor and copies out below it:
+   ; one file each side of the line; read caskfloor before touching the sizes
    (dbl s n) (n <= #s ? (snip s 0 n) (dbl (s + s) n))          ; O(n), not (s + rep ..)
    under (dbl "abcdefgh" 131064)
    over  (dbl "abcdefgh" 131080)
@@ -189,40 +160,33 @@
                      (snip r (i + 4) n))
        u (get "/under.txt") o (get "/over.txt")
        (test (#under = 131064) (#over = 131080)  ; really either side of 131072
-               (bodyof u = under)                              ; the copy lane
-               (bodyof o = over)                               ; the cask lane
-               (sub? u "Content-Length: 131064")
-               (sub? o "Content-Length: 131080"))),
+               (bodyof u = under)
+               (bodyof o = over)
+               (has? u "Content-Length: 131064")
+               (has? o "Content-Length: 131080"))),
 
-    ; --- the read's slow lane, which no served file reaches any more --------------------
-    ; `gulp` proves it has the whole file from a short read: the buffer is one byte larger
-    ; than stat said, and on a regular file read comes up short only at the end. that means
-    ; no ordinary file goes round the loop now -- so the loop needs a test of its own, or it
-    ; rots as the fallback nobody runs. and it is a real fallback: the proof says nothing
-    ; when stat's size was 0, because a procfs file is generated on demand and answers short
-    ; reads that are not the end. /proc/cpuinfo handed back 3288 of its 26322 bytes the one
-    ; time the fast path was let near it. /proc/self/environ is stable, and on most machines
-    ; larger than the 4096 fallback buffer, so it also crosses a chunk boundary.
+    ; the read's slow lane: a short read proves the end only when stat's size was not 0,
+    ; which procfs breaks; /proc/self/environ is stable and usually past the 4096 buffer
     (: e (gulp "/proc/self/environ")
        r (open "/proc/self/environ" "r" @ q (slurp q))
        big (gulp "/proc/cpuinfo")
        bigr (open "/proc/cpuinfo" "r" @ q (slurp q))
        (test (0 < #e)
-               (e = r)                                   ; byte for byte, through the loop
-               (#big = #bigr))),            ; ..and nothing truncated at 4096
+               (e = r)
+               (#big = #bigr))),
 
-    ; --- content types -------------------------------------------------------------------
-    test (sub? (get "/index.html") "Content-Type: text/html")
-         (sub? (get "/a.css") "Content-Type: text/css")
-         (sub? (get "/blob.zzz") "Content-Type: application/octet-stream")
-         ; every answer is framed the same way, which is what lets the client above just slurp
-         (sub? (get "/a.css") "Connection: close")
-         (sub? (get "/a.css") "Content-Length: 15"),
+    ; content types
+    test (has? (get "/index.html") "Content-Type: text/html")
+         (has? (get "/a.css") "Content-Type: text/css")
+         (has? (get "/blob.zzz") "Content-Type: application/octet-stream")
+         ; every answer framed alike, so the client just slurps
+         (has? (get "/a.css") "Connection: close")
+         (has? (get "/a.css") "Content-Length: 15"),
 
-    ; raise the flag, then one last request to let the loop see it and return
+    ; raise the flag, then one last request lets the loop see it
     pin stop 0 1,
     test (code (get "/index.html") = "200"),
-    catch srv,                                         ; no orphan task
+    catch srv,
     close l,
 
     test_fin (),

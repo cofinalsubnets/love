@@ -1,15 +1,9 @@
-; test/host/window.l -- a window of the face's own on X, headless: an Xvfb, a window opened in
-; this process and laid red, and a second wire of the test's that reads its pixels back through
-; GetImage, sends keys and the pointer through XTEST and resizes it. asserted: the paper shown,
-; a key down and up by its set-1 code and the text it types, a move, a press and a release in
-; the window's pixels, a size and the fresh paper it brings; the clipboard and the primary
-; owned and asked for back over X, the clipboard lost to another, and another's pasted
-; INCR in pieces; then `love synth -w`, a key's note lit while it is held, and `love lore
-; corridor --window`, turning while a key is held.
-; a screenless window keeps its selections itself. no Xvfb -> a polite skip.
+; test/host/window.l -- a window on Xvfb, driven by a second wire (GetImage, XTEST, resize):
+; keys, pointer, size, selections and INCR; then `love synth -w` and `love lore corridor --window`.
+; skips without Xvfb
 ; run: cat test/00-init.l test/host/window.l | out/love
 (borrow 'window)
-(borrow 'synth)   ; synth-trows, where its strip sits
+(borrow 'synth)   ; synth-trows
 (: w0 {'w 1 'h 1 'paper (cask 4)}
    _ (window-own w0 'clipboard "kept", window-ask w0 'clipboard, window-ask w0 'primary)
    _ (test ([['paste "kept"] ['paste ""]] = window-events w0) (() = window-events w0))
@@ -43,7 +37,7 @@
    _ (test (hot? s))
    sc (XW 'x-setup s ())
    xw (win 'xw)
-   ; GetImage, ZPixmap: one pixel of window w at (x,y), as (r g b)
+   ; GetImage, ZPixmap: one pixel at (x,y), as (r g b)
    (px w x y) (: _ (w8 s 73, w8 s 2, w16 s 5, w32 s w)
                _ (w16 s x, w16 s y, w16 s 1, w16 s 1, w32 s 4294967295)
                _ (XW 'x-flush s)
@@ -88,8 +82,7 @@
    ev5 (drain () 4)
    _ (test (elem ['paste "h\u00e9llo\nw\u00f6rld"] ev3) (elem ['paste "p1"] ev4)
            (elem ['lost 'clipboard] ev5))
-   ; the clipboard the test's own window holds, asked for and sent INCR: the pieces go on
-   ; the window's property each time it deletes the last, the empty one closing it
+   ; INCR: a piece each time the window deletes the property, the empty one closing it
    u32 (XW 'u32)
    ow (XW 'scr-idbase sc)
    _ (XW 'x-window s ow (XW 'scr-root sc) 1 1 0)
@@ -121,8 +114,7 @@
    _ (landed? it ? 0 (freeze it))
    _ (test (elem ['paste "p1\nq2"] ev6))
    _ (window-close win)
-   ; synth in a window of its own: q's note lit while it is held and not once it is let go,
-   ; esc the end with status 0
+   ; synth: q's note lit only while held; esc ends with status 0
    ph (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "synth" "-w"])
    _ (rest 4000)
    kids <>(XW 'x-querytree s (XW 'scr-root sc))
@@ -141,8 +133,7 @@
    st (wfn <ph 3000)
    _ (test ([208 208 208] = before) ([255 128 0] = held) ([208 208 208] = after)
            (two? st) (0 = <st))
-   ; the corridor in a window of its own: l held turns the view while it is held, so the
-   ; picture moves; q is the end with status 0
+   ; the corridor: l held turns the view; q ends with status 0
    pc (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "lore" "corridor" "--window"])
    _ (rest 6000)
    cw (: kids <>(XW 'x-querytree s (XW 'scr-root sc)) (last l) (two? >l ? (last >l) <l) (last kids))

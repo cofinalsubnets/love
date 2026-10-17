@@ -1,15 +1,10 @@
-; --- test/json.l: the json module (src/apps/json.l) -- the wire mapping, exact both ways ---
-; `[]` is plain () and null is the named coin: the empty array is the common value (a
-; mapped or filtered list writes `[]` with no renaming step), null the weird one. run
-; standalone from the repo root:
-;   cat test/00-init.l test/json.l | out/love
+; --- the json module, exact both ways: `[]` is plain (), null the named coin ---
 
 (borrow "src/apps/json.l")
 
 (: (json-rt s) (json-read s @ r (two? r ? (json-show <>r) 'no-parse)))
 
-; presence rides out of band: (1 value) or () -- null, 0, "", [] and {} are all
-; legitimate documents and every one of them is nothing
+; presence rides out of band, (value) or (): null, 0, "", [] and {} are documents that are nothing
 (test
  (two? (json-read "null")) (two? (json-read "0")) (two? (json-read "\"\""))
  (two? (json-read "[]")) (two? (json-read "{}"))
@@ -46,8 +41,7 @@
  ("\"𝄞\"" = (json-rt "\"\\uD834\\uDD1E\""))
  ("\"𝄞\"" = (json-rt "\"𝄞\"")))                    ; already-utf-8 rides untouched
 
-; a real lsp message: publishDiagnostics with an empty diagnostics array, the shape
-; that forced the design -- [] must come back [], never null
+; an lsp publishDiagnostics with an empty array: [] comes back [], never null
 (test
  (: r (json-read ("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","
                     + "\"params\":{\"uri\":\"file:///x.l\",\"diagnostics\":[]}}"))

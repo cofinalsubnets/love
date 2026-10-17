@@ -1,17 +1,6 @@
-/* an elided initializer fills whole ELEMENTS, and an implied [] bound counts those.
- *
- * The bound divided the item count by the element's scalar LEAVES, which only an
- * array element type can answer -- so a struct element got one item apiece and
- * `PT cases[] = { 1,2,3,4,5,6,7, 8,9,10,11,12,13,14 };` over a seven-member PT
- * sized to 14 where C says 2 (c-testsuite's 00205). The bytes were laid right and
- * only the length was wrong, which is the half every loop over the table reads.
- *
- * Leaf-counting cannot say the rule (C 6.7.9p20). A union takes ONE initializer,
- * for its first member; a bitfield member takes one; and a char array takes one
- * item when that item is a STRING -- which the array lane was missing too, so a
- * plain string table `char m[][8] = {"ab","cd","ef"}` sized to a single row.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* an elided initializer fills whole elements and an implied [] bound counts them
+ * (C 6.7.9p20): struct elements, a union takes one, a bitfield one, a char array
+ * one string. each check adds 1: the exit code is the pass count. */
 
 typedef struct { int a, b, c, d, e, f, g; } PT;
 PT cases[] = { 1,2,3,4,5,6,7, 8,9,10,11,12,13,14 };

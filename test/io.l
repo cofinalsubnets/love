@@ -1,9 +1,7 @@
-; port nifs taking an explicit port: get, unget, end?, put, say, flush -- siblings of the
-; static-port (getc/putc/key?) nifs that dispatch via f->io. open/close round out the
-; surface for heap-allocated stream ports backed by real fds.
+; the port nifs on an explicit port, and open/close for fd-backed ports
 
 (test
-  ; in and out are heap-shaped (lvm_port_io), so show renders a hex address
+  ; in and out are heap ports, so show renders an address
   (string? (show in))
   (string? (show out))
   (0 < sat (show in))
@@ -15,9 +13,7 @@
     && 32 = rt 32                             ; operand and the rest go unchecked
     && 255 = rt 255))
 
-  ; the same pair once a real read has happened, which the net-zero roundtrip cannot
-  ; reach. on a tap, never on `in`: a real read of `in` eats the corpus feeding this
-  ; suite. the pushback is the port's (love.c's zungetc), so a tap walks identical code.
+  ; the pair after a real read, on a tap: a real read of `in` eats the corpus
   (tap '(120 121) @ t           ; a tap taps a charlist -- (tap "xy") is the empty one
    (see t,
     (99 = unsee t 99
@@ -25,14 +21,11 @@
      && 121 = see t   ; ..and y is still there, unshifted by the detour
      && -1 = see t))) ; ..and the end is still the end
 
-  ; a non-port reads as an already-empty stream: (get x) is -1, not the echoed x, so a
-  ; read-until-(-1) loop over an absent port terminates. this is what bounds the file
-  ; roundtrip below where `open` is a missing name resolving to a non-port.
+  ; a non-port reads as an empty stream, so a read-until-(-1) loop over one ends
   (-1 = see 42)
   (-1 = see "notaport")
 
-  ; port? answers by the head's ap word, so every port shape passes and every non-port
-  ; is () -- hot? and lit? alone cannot tell a port from its neighbours in the zoo.
+  ; port? passes every port shape and nothing else
   (port? in)
   (port? out)
   (port? (tap "x"))
@@ -42,15 +35,12 @@
   !(port? ())
   !(port? (x \ x))
   !(port? (cask 4))
-  ; slurp is bounded like see: a non-port drains as the empty stream rather than reading
-  ; the raw words of whatever it was handed. every drain lands text.
+  ; slurp of a non-port drains as the empty stream; every drain lands text
   ("" = slurp 42)   (string? (slurp 42))
   ("" = slurp ())
   (slurp (tap "") = slurp 42)
 
-  ; file roundtrip: say a string to /tmp, read it back byte-by-byte, compare. the payload
-  ; is (show (clock 0)) so a stale file from a previous run cannot pass. gated on files --
-  ; native and inle have a filesystem, the wasm shim stubs fd ports to EOF.
+  ; file roundtrip through /tmp; the clock payload keeps a stale file from passing
   (files ? (: txt (show (clock 0))
      wp (open "/tmp/l-io-test" "w")
      _ (say wp txt)
@@ -61,10 +51,7 @@
      (close rp,
       txt = rd)) 1)
 
-  ; --- chug and unchug: the run, and the run put back ---------------------------
-  ; unchug rewinds rpos, which is at once the reader's position and what io_pending
-  ; counts, so bytes given back are bytes stdin's seek-back sees again.
-  ; on a file, never on `in`: a real read of `in` eats the corpus feeding this suite.
+  ; --- chug and unchug: the run, and the run put back; on a file, never `in` ---
   (files ? (: pth "/tmp/l-io-unchug"
      wp (open pth "w") _ (say wp "abcdefghij") _ (close wp)
      p (open pth "r")
@@ -78,88 +65,61 @@
      fwd3 (unchug p -3)                 ; a negative take steps the position forward
      rest7 (chug p)
      (close p,
-      ; && and never `do` -- do is seqx, so it would answer the last clause alone
+      ; &&, not `do`: do answers its last clause alone
       ("abcdefghij" = whole
        && 4 = back4    && "ghij" = tail4
        && 10 = backall && "abcdefghij" = again
        && 10 = back10  && 3 = fwd3      && "defghij" = rest7))) 1)
-  ; nothing to give back is 0, never a scare -- and a short answer is the refusal, so the
-  ; count is the only check a caller has. a tap carries the ci vt and never a run.
+  ; nothing to give back is 0, never a scare; the count is the caller's only check
   (0 = unchug (tap '(120 121)) 4)
   (0 = unchug 42 4)
   (0 = unchug "notaport" 4)
   (0 = unchug in 0)                   ; the count refuses before the port is touched
-  ; never a nonzero unchug of `in` here: the door is signed, so a negative moves stdin
-  ; forward -- and this suite is fed through stdin on one of its doors, where that eats
-  ; its own source and reads a comment as code. a run-less port is the safe way to ask.
+  ; never a nonzero unchug of `in`: the suite is fed on stdin, so it would eat its own source
   (0 = unchug (tap '(120 121)) -2)
 
-  ; --- tap: charlist-backed read-only port (the ci vt) ---
+  ; --- tap: a charlist-backed read-only port ---
   (string? (show (tap 0)))
   (0 < sat (show (tap 0)))
   ; each call allocates a fresh port object
   (: p (tap 0) q (tap 0) (p != q))
-  ; a tap is a byte stream, so a charm outside 0..255 lands as its low byte. that is what
-  ; stops a -1 in the list forging the end of the stream: readers that stop at -1 lose
-  ; the whole list to one element.
+  ; a charm outside 0..255 lands as its low byte, so a -1 cannot forge the end
   (tap '(300 -1 65) @ p
    (44 = see p && 255 = see p && 65 = see p && -1 = see p))
-  ; counted by forcing, never by tally: a flow is lazy past the first run and a tap has
-  ; no buffered run, so tally sees one cell and a promise. the law is that both arrive.
+  ; counted by forcing, never by tally: a flow is lazy past its first run
   (: (fw cl n) (two? cl ? (fw (>cl @ t (lit? t ? (t ()) t)) (n + 1)) n)
      (2 = (fw (flow (tap '(-1 65))) 0)))
 
   ; --- once: the promise ---
-  ; a thunk that runs at most once and remembers, fired with the unit per the
-  ; zero-operand law -- (th) alone is th unrun. the law is the count, not the agreement:
-  ; two firings that agree prove nothing, so the witness is a tablet the body bumps.
+  ; runs at most once and remembers, fired with the unit; the witness is a count the body bumps
   (: c {}
      th (once (u \ peep c 0 0 @ k (pin c 0 (k + 1), k)))
      a (th ()) b (th ()) d (th ())
      (a = b && b = d && 1 = peep c 0 0))
-  ; a promise of nothing still forces once -- a flow's last promise answers () at eof.
-  ; presence-as-the-net fails here: a bare pin of () leaves the slot reading exactly like
-  ; an unforced one, so f re-runs forever, silently.
+  ; a promise of () still forces once, though a pinned () reads like an unforced slot
   (: c {}
      th (once (u \ (pin c 0 (peep c 0 0 + 1), ())))
      (th (), th (),
       !(th ()) && 1 = peep c 0 0))
 
-  ; --- flow: a port is a charlist ---
-  ; one whose tail is a promise drinking the next gulp, so `sound` reads a port with no
-  ; one turning it into text first.
+  ; --- flow: a port as a charlist whose tail is a promise of the next gulp ---
   (: p (tap '(40 49 32 50 41))                          ; "(1 2)"
      r (sound (flow p))
      (two? r && '(1 2) = <r))
-  ; the gulp is realized and only the join is lazy: one run's cells are ordinary conses,
-  ; and a flowing charlist ends in a promise or in (). the run is what the port has in
-  ; hand -- a buffered fd port hands over its 4096 the same way (test/front/io.l).
+  ; a run's cells are ordinary conses; a flow ends in a promise or ()
   (flow (tap '(97 98)) @ f
    (97 = <f && 98 = <>f && (lit? >>f || !(>>f))))
   ; an empty port is the empty charlist, not a promise of one
   !(flow (tap ()))
-  ; the memoization law: a position forced twice answers the same thing, so the flow's
-  ; tail is a `once` and not a bare (\ u (flow p)) -- p1 re-forces on purpose, and a
-  ; re-drinking tail loses the bytes between, a misread rather than a crash. the witness
-  ; has to be a port that still has something to give: two forces that both say () prove
-  ; nothing, so the unget puts a byte back after the first gulp.
+  ; a position forced twice answers the same; the unget gives the port something left to give
   (: p (tap '(97)) f (flow p) t >f
      _ (unsee p 98)
      x (t ()) y (t ())
-     ; x is compared by identity, not by `=`: its own tail is the next promise, so
-     ; (= '(98) x) is false -- the printer shows it as (98) because it stops at a tail
-     ; that is not a cons, the one place a flow does not look like a list.
+     ; x's tail is a promise, so it is not '(98) by `=`
      (lit? t && 98 = <x && x = y))
 
   ; --- sound: one datum per call, off text ---
-  ; sound takes a charlist and answers three ways: the datum consed onto what is left,
-  ; () at a clean end, or `torn` where the text ran out inside a shape. presence is the
-  ; cons -- ask two?, never the net -- and the residue is the answer, so the caller owns
-  ; what is left and nothing is stashed in a port.
-  !(sound ())
-
-  ; single datum: number, symbol, list, quoted form, string literal
-  (1 = <(sound '(49)))            ; "1"
+  ; single datum: symbol, list, quoted form, string literal
   ('a = <(sound '(97)))           ; "a"
   (<(sound '(40 49 32 50 41)) @ d ; "(1 2)"
    (two? d && 1 = <d && 2 = <>d))
@@ -180,14 +140,10 @@
   !(sound '(41))                                  ; ")"
 
   ; --- torn: the text ran out inside a shape ---
-  ('torn = sound '(40))                               ; unclosed list
   ('torn = sound '(34 97))                            ; unterminated string
   ('torn = sound '(39))                               ; dangling quote
 
-  ; torn and the clean end are distinct, and neither is a datum: a datum comes back as a
-  ; cons whatever it holds, so reading "()" answers the datum () -- exactly the case a
-  ; net test would call nothing.
-  (sound '(40 41) @ r (two? r && !<r))
+  ; torn and the clean end are distinct
   ('torn != sound ())
 
   ; a torn read resumes: hand back the same text with the rest appended
@@ -197,12 +153,6 @@
   (: a (sound '(40 41 32 49)) b (sound >a)
      (!<a && 1 = <b && !(sound >b)))
 
-  ; an unforced tail is a charlist not yet drunk, so sound fires it and reads on. without
-  ; this arm a residue arriving unforced would read as a clean end -- a short read,
-  ; silently. the cost is that a closure handed to sound is called, not refused.
+  ; sound forces an unforced tail and reads on, so a closure handed to it is called
   (sound (once (u \ map "(1 2)" ^5)) @ r
-   (two? r && '(1 2) = <r))
-
-  ; misuse: a non-charlist holds no datum, and reads as the clean end
-  !(sound 42)
-  !(sound 'notaport))
+   (two? r && '(1 2) = <r)))

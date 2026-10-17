@@ -1,15 +1,6 @@
-/* a compare or divide takes the COMMON converted type (C11 6.3.1.8), not
- * either-operand's: a lone unsigned int against int/long fits IN long and goes
- * SIGNED; int against uint meets at uint, unsigned and NARROWED to 32 bits
- * (the registers ride wider than the compare); ulong stays unsigned. and an
- * unsuffixed hex constant climbs the unsigned rungs of C11 6.4.4.1 --
- * 0xffffffff is a uint, 0xffffffffffffffff a ulong (c-testsuite's 00104).
- *
- * Every one of these compared unsigned whenever EITHER side was unsigned, at
- * full register width, so `l < u` read -6 as huge and `x != 0xffffffff` never
- * saw the int convert. A case label converts to the control's type too.
- *
- * Every check contributes 1, so the exit code IS the number that passed. */
+/* compare and divide take the common converted type (C11 6.3.1.8): uint vs long
+ * is signed, int vs uint is uint at 32 bits; unsuffixed hex climbs the unsigned
+ * rungs; a case label converts to the control's type. each check adds 1: the exit code is the pass count. */
 
 unsigned gu = 5u;                 /* globals, so nothing folds at parse */
 long gl = -6;

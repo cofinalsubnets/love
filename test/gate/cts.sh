@@ -1,39 +1,12 @@
 #!/bin/sh
-# test/gate/cts.sh -- mooncc against an OUTSIDE corpus: c-testsuite's 220 single-file
-# programs, each with the stdout+stderr it must print. Four targets, one procedure
-# (ccarch.sh's shape; node is the wasm machine, as in ccwasm.sh).
-#
-# WHY THIS AND NOT MORE test/cc FILES. Every file in test/cc/ was written here, and
-# nearly all of them were written to pin a fault we had already tripped over -- so the
-# battery says what we have already learned and nothing about what we have not. This
-# corpus was written by people compiling other compilers, and its FIRST run found nine
-# programs mooncc compiles clean and answers wrong, two of them by segfaulting, plus
-# nineteen it refuses. None of the nine had a consumer here yet, which is the whole
-# point: they were waiting for one.
-#
-# THE ORACLE IS THE CORPUS'S OWN .expected FILE, not gcc. That is the difference from
-# every other cc gate here -- an expected output written by a third party is an
-# independent opinion, where gcc is a second one that can share our reading of a
-# murky rule. (gcc passes all 220 on this box; the roster below is therefore ours.)
-#
-# THE FAILURES ARE ROSTERED, NOT SKIPPED, with a cause each -- and the roster is
-# double-edged: a program not on it must pass, and a program ON it must still fail.
-# So a fix that lands takes its line off this list, and a regression cannot hide in a
-# skip. The KIND is asserted too, because the two are not the same news: `refuses` is
-# mooncc saying no and naming the file, and costs an afternoon; `wrong` is mooncc
-# compiling clean and handing back a wrong answer, and costs a wrong artifact. A
-# refusal degrading into a wrong answer must be loud.
-#
-# Skips whole (exit 0, with the clone line) when the corpus is not here -- it is an
-# imported tree like the package rungs, found under dl/ then $MOONSRC (~/src), and
-# `make dl/c-testsuite` fetches it. The cross lanes skip without their qemu -- a64's
-# runs on an a64 host instead where one answers (test/gate/a64run.sh).
-# make owns the dependency graph; this owns the procedure.
-# NOT set -e: the checks report their own failures with context.
-#
+# test/gate/cts.sh -- mooncc against c-testsuite, an outside corpus whose oracle is each
+# program's own .expected. the failures are rostered with a cause, both ways: a program off
+# the roster must pass, one on it must still fail, and its kind (refuses or wrong) holds.
+# skips without the corpus (`make dl/c-testsuite`, or CTSSRC) or the target's runner.
 # usage: cts.sh ARCH OUTDIR LOVE     (ARCH: x64 | a64 | rv64 | wasm)
 . test/gate/skip.sh
 . test/gate/a64run.sh
+. test/gate/cclib.sh
 set -u
 
 arch=$1
@@ -48,38 +21,27 @@ case $arch in
   *) echo "cts.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
-# The roster, one line each: <number> <cause>. Every entry below reproduces on all
-# three targets, which is itself a finding -- these are front-end and shared-model
-# faults, not backend ones, and no target routes around any of them. The two that ARE
-# per-target follow the lists.
+# the roster, one line each: <number> <cause>. these hold on every target
 roster_refuses='
 00201 a ## paste that MAKES a macro name, which is then invoked with arguments
 00204 a register-exhausted SSE-class by-value argument -- five float HFAs (the gp twin landed, this one did not)
 00216 designated RANGE initializers -- [1 ... 5] = v
 '
-# EMPTY, and worth keeping as a list rather than a comment: the day one of these
-# comes back it belongs here, and `wrong` is the kind that must stay loud.
+# compiled clean and answered wrong: none on every target
 roster_wrong=''
-# the two per-target lines, both of them lanes x64 has and the others do not
-# (doc/misc/moon-c-gaps, "target asymmetries"): a by-value composite in a variadic
-# function, and the variable-length array. a64 carries the composite (AAPCS64's memory class).
+# a lane x64 and a64 have and the others lack
 if [ "$arch" != x64 ] && [ "$arch" != a64 ]; then
   roster_refuses="$roster_refuses
 00140 no lane for a by-value composite argument on $arch (x64 carries it, named and anonymous)
 "
 fi
-# the wasm MACHINE's one line, not the compiler's: the loader's kernel has no filesystem
-# (open is ENOSYS, fopen answers NULL), so the program that writes a file and reads it
-# back compiles clean and answers wrong. Rostered wrong so the day the seat grows files
-# the gate says so.
+# the wasm machine's line, not the compiler's: the loader has no filesystem
 if [ "$arch" = wasm ]; then
   roster_wrong="$roster_wrong
 00187 no filesystem under the loader's kernel: fopen answers NULL, and a NULL FILE does not trap on wasm
 "
 fi
-fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
-# the roster read two ways: which kind a number is on, and what its cause says
+# a number's kind, and its cause
 kindof() {
   case "$roster_refuses" in *"
 $1 "*) echo refuses; return;; esac
@@ -89,8 +51,7 @@ $1 "*) echo wrong; return;; esac
 }
 causeof() { printf '%s\n%s\n' "$roster_refuses" "$roster_wrong" | grep "^$1 " | cut -d' ' -f2-; }
 
-# where the binaries run: natively for x64, node for wasm, qemu-user for rv64, and for
-# a64 a host where one answers, else qemu-user
+# the runner: native x64, an a64 host or qemu-user, node for wasm
 if [ "$arch" = a64 ]; then
   a64_how "$m"
   [ -n "$a64_via" ] || gate_skip "$name: skipped (need $qemu or an a64 host)"
@@ -98,15 +59,13 @@ elif [ -n "$qemu" ]; then
   a64_qemu=$(command -v "$qemu" 2>/dev/null || true); a64_via=qemu
   [ -n "$a64_qemu" ] || gate_skip "$name: skipped (need $qemu)"
 else a64_qemu=; a64_via=qemu; fi
-# the wasm machine is node under the loader's kernel (loader.js run as a program), in qemu's seat
 if [ "$arch" = wasm ]; then
   NODE=$(command -v node 2>/dev/null || true)
   [ -n "$NODE" ] || gate_skip "$name: skipped (need node)"
   a64_qemu="$NODE $PWD/src/inle/wasm/loader.js"
 fi
 
-# the corpus, first hit wins: an explicit CTSSRC, then the dl/ make found ($DL: the tree's,
-# or the one it sits in), then the cache. empty when nothing matches.
+# the corpus: CTSSRC, then $DL (or dl), then $MOONSRC
 cts=${CTSSRC:-}
 if [ -z "$cts" ]; then
   for c in "${DL:-dl}"/c-testsuite "${MOONSRC:-$HOME/src}"/c-testsuite; do
@@ -121,8 +80,7 @@ fi
 d=$ho/cts-$arch
 rm -rf "$d"; mkdir -p "$d"
 
-# three passes, ccarch.sh's: build every program, run the built ones as one batch (one ssh
-# on a host), then judge each against its roster line
+# build all, run the built as one batch (one ssh on a host), then judge each
 a64_jobs "$d/run"
 npass=0; nref=0; nwrong=0
 built=
@@ -131,24 +89,19 @@ for f in "$cts"/tests/single-exec/*.c; do
   want=$(kindof "$b")
   [ -f "$f.expected" ] || fail "$b: the corpus has no .expected for it"
 
-  # take the status on its own line: after `if ! cmd`, $? is the `!`, not the cmd.
   moonrun $tflag -o "$d/run/$b.bin" "$f" > "$d/$b.cclog" 2>&1; st=$?
   if [ $st -ne 0 ]; then
     case $want in
       pass)  fail "$b: mooncc refused a program that must pass -- $(head -1 "$d/$b.cclog")" ;;
       wrong) fail "$b: mooncc refuses a program rostered as compiling and answering WRONG ($(causeof "$b")) -- a gap and a defect are not the same news, so move its line" ;;
     esac
-    [ $st -lt 128 ] || fail "$b: mooncc died on a signal ($st) where a refusal was expected"
-    grep -q "$f" "$d/$b.cclog" \
-      || { cat "$d/$b.cclog" >&2; fail "$b: the refusal does not name the file"; }
+    refusal $st "$d/$b.cclog" "$f"
     nref=$((nref + 1)); continue
   fi
   [ "$want" != refuses ] \
     || fail "$b: mooncc BUILT a program rostered as refusing ($(causeof "$b")) -- take its line out of this script"
 
-  # in the batch's dir, not here: 00187 writes fred.txt beside itself and reads it back.
-  # two of the rostered-wrong ones SEGFAULT; the batch's own stderr is dropped, so the
-  # shell announcing that does not read as the gate dying
+  # run in the batch's dir: 00187 writes a file beside itself
   a64_job "$b" "timeout 60 \$RUN ./$b.bin"
   built="$built $b"
 done

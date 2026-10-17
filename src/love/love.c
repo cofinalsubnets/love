@@ -182,7 +182,7 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  g->reach[ReachChain] = (word) lvm_chain, g->reach[ReachStr] = (word) lvm_str, g->reach[ReachMap] = (word) lvm_map_lookup;
  g->reach[ReachNom] = (word) lvm_nom, g->reach[ReachMint] = (word) lvm_sym, g->reach[ReachGem] = (word) lvm_gembox;
  g->reach[ReachCask] = (word) lvm_cask, g->reach[ReachDrive] = (word) callout_drive, g->reach[ReachResume] = (word) callout_resume;
- g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc, g->reach[ReachGap] = map_gap;
+ g->fair = 64, g->ticks = 0, g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc, g->reach[ReachGap] = map_gap;
  // book + macro maps (lookup-lambdas) then the main task thread.
  if (ok(g = map_new(g)) && ok(g = map_new(g)) && ok(g = have(g, 9))) {
   union u *M = bump(g, 9);            // sp[0]=macro, sp[1]=book (no GC since have)
@@ -216,7 +216,6 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
   if (ok(g)) g->symbols = pop1(g);
   if (ok(g = map_new(g))) g->lib = pop1(g);   // the registry, before the first modtab
   struct def def0[] = {
-   {"book", {.x = A(g->stack)}, 0},   // the l-level book = the orth map (the chain stays C-side; `stack` reads it)
    {"in", {.x = (word) &love_stdin}, 0},
    {"out", {.x = (word) &love_stdout}, 0},
    {"err", {.x = (word) &love_stderr}, 0},
@@ -232,6 +231,9 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
    // honors -- auto.l reads this and keeps the interpreter on a trampoline build
    {"love-tco", {.x = putcharm(tco)}, 0}, };
   g = defn(g, def0, countof(def0));
+  // the l-level book = the orth map (the chain stays C-side; `stack` reads it), read only
+  // after the rows above: each one allocates, so a copy taken with them could be moved
+  if (ok(g = push(g, 1, A(g->stack))) && ok(g = defv(g, "book"))) g->sp++;
   // a nif row's value is its run inside nifs[]; an instruction row's is a bare fn, and that
   // binds as its op charm -- no code address belongs in a love value (src/love/ev.c's pick/place).
   for (uintptr_t j = 0; j < countof(def1); j++) {
@@ -350,13 +352,18 @@ static struct g *pushr(struct g *g, uintptr_t m, uintptr_t n, va_list xs) {
  if (ok(g)) *--g->sp = x;
  return g; }
 
+// push may collect: when the stack meets the heap, or on the push a law counted down to
 struct g *push(struct g *g, uintptr_t m, ...) {
  if (!ok(g)) return g;
  va_list xs;
  va_start(xs, m);
  uintptr_t n = 0;
- if (avail(g) < m) g = pushr(g, m, n, xs);
+#ifdef LvGcStress
+ g = pushr(g, m, n, xs);              // push may collect, so under stress every one does, as have does
+#else
+ if (avail(g) < m || (g->push_gc && !--g->push_gc)) g = pushr(g, m, n, xs);
  else for (g->sp -= m; n < m; g->sp[n++] = va_arg(xs, word));
+#endif
  va_end(xs);
  return g; }
 
@@ -394,7 +401,7 @@ static lvm(lvm_please) {
  Sp[0] = putcharm((intptr_t) g->n_gc);
  Ip += 1; love_musttail return Continue(); }
 
-// (gauge 0) -> a list of sixteen VM stats, so a caller can match it with @:
+// (gauge 0) -> a list of seventeen VM stats, so a caller can match it with @:
 //   [0] len       pool size (words)
 //   [1] heap      words used from base (core + live heap)
 //   [2] stack     stack height (words)
@@ -411,9 +418,10 @@ static lvm(lvm_please) {
 //  [13] n_resize  pool reallocations so far (the pool-cliff tell)
 //  [14] minor_hi  peak words one minor copied -- the pause gauge (a copying
 //  [15] major_hi  peak words one major copied    collection's pause is its copy volume)
+//  [16] ticks     work in 64-step units: native countdowns refilled, and fairness yields (a clock-free cost)
 // derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap
 static lvm(lvm_gauge) {
- enum { N = 16 };
+ enum { N = 17 };
  Have(N * Width(struct chain));
  struct chain *c = (struct chain*) Hp;
  Hp += N * Width(struct chain);
@@ -435,6 +443,7 @@ static lvm(lvm_gauge) {
  Gs(13, g->n_resize);
  Gs(14, g->minor_hi);
  Gs(15, g->major_hi);
+ Gs(16, g->ticks);
  #undef Gs
  love_musttail return Answer(word(c)); }
 
@@ -492,6 +501,14 @@ lvm(lvm_natp) {
  int nat = e && (code_in(g, (uintptr_t)(e->ap == lvm_lazy ? k[-1].ap : e->ap))
                  || (e->ap == lvm_deferfwd && k[-1].ap == lvm_deferfwd));   // a deferred one that declined: its twin still at value[1]
  love_musttail return Answer(putcharm(nat)); }
+// (arena 0) -> [mapped bumped free spans]: the code arena's bytes and its free list's length
+lvm(lvm_arena) {
+ enum { N = 4 };
+ Have(N * Width(struct chain));
+ struct chain *c = (struct chain*) Hp;
+ Hp += N * Width(struct chain);
+ for (int i = 0; i < N; i++) ini_chain(c + i, putcharm((intptr_t) code_stat(g, i)), i + 1 < N ? (intptr_t) word(c + i + 1) : (intptr_t) ZeroPoint);
+ love_musttail return Answer(word(c)); }
 // a woken native's entry until its chunk of the image's code is seated: seat it, write the
 // code into the cell, enter. the header already names the code, one word behind an arity-1
 // entry and three behind a curried one's (lvm_cur and the arity between)
@@ -708,18 +725,19 @@ static lvm(lvm_casknew) {
 
 // the native code arena: hosted, the malloc heap is NX, so the glaze installs into
 // chunks of pages of its own. a chunk is RX; an install opens just the blob's pages,
-// writes, and seals them again (W^X, never both at once). a blob is [len, pad, code..],
-// 16-aligned, so the code address is what the closure cell holds and the length word
-// behind it answers a free. the code addresses live outside the GC pool; a native
-// closure's finalizer hands its blob to the free list, and the next install of that
-// size takes it. on inle -- one hosted-compiled binary, so the question is asked at
+// writes, and seals them again (W^X, never both at once). a blob is [len, span, code..],
+// 16-aligned, so the code address is what the closure cell holds; span is the bytes its
+// install took, which a free hands back. the code addresses live outside the GC pool; a
+// native closure's finalizer frees its blob: a span that ends the bump chunk's bump
+// retracts it, else it joins the free list, kept by address and merged with its
+// neighbours, and the next install takes the lowest that fits. on inle -- one hosted-compiled binary, so the question is asked at
 // RUN TIME, a negative __love_osv -- and on a freestanding seat, RAM is executable and
 // a heap copy runs, with no finalizer owed.
 // one chunk; used is its bump, fixed = the image's own (shared blobs, never freed one at a
 // time). own is what the allocator was handed, NULL off mmap: a seat whose executable
 // window is an alias frees by the address it asked for, not the address it runs.
 struct code { char *base, *own; size_t len, used; int fixed; struct lazy *lz; struct code *next; };
-struct cfree { char *p; size_t n; struct cfree *next; };           // a freed blob (its whole span)
+struct cfree { char *p; size_t n; struct cfree *next; };           // a free span, the list by address
 #if __STDC_HOSTED__
 // which kernel underneath: moonlibc's os.c defines it (0 unprobed; 1..3 the
 // hosted kernels; negative = we ARE the kernel). moonlibc defines it (os.c);
@@ -737,45 +755,79 @@ static int code_open(char *p, size_t n, int prot) {
  size_t ps = code_page();
  uintptr_t lo = (uintptr_t) p & ~(ps - 1), hi = ((uintptr_t) p + n + ps - 1) & ~(ps - 1);
  return mprotect((void*) lo, hi - lo, prot); }
+// the chunk installs bump: the newest that is the arena's, not an image's
+static struct code *code_bump(struct g *g) {
+ struct code *c = g->code;
+ while (c && c->fixed) c = c->next;
+ return c; }
+// [p, p+n) back to the arena. a free span is only ever beside another of the same chunk
+static void code_release(struct g *g, char *p, size_t n) {
+ struct code *c = g->code, *b = code_bump(g);
+ while (c && !(p >= c->base && p < c->base + c->len)) c = c->next;
+ if (!c) return;
+ if (c == b && p + n == c->base + c->used) {                     // the bump's top: retract, and past a span below it
+  c->used -= n;
+  for (struct cfree **l = &g->cfree, *f; (f = *l); l = &f->next)
+   if (f->p + f->n == c->base + c->used) { c->used -= f->n, *l = f->next, alloc(f, 0); break; }
+  return; }
+ struct cfree *pre = NULL, *nx = g->cfree;
+ while (nx && nx->p < p) pre = nx, nx = nx->next;
+ int lo = pre && pre->p >= c->base && pre->p + pre->n == p, hi = nx && nx->p == p + n && nx->p < c->base + c->len;
+ if (lo && hi) pre->n += n + nx->n, pre->next = nx->next, alloc(nx, 0);
+ else if (lo) pre->n += n;
+ else if (hi) nx->p = p, nx->n += n;
+ else {
+  struct cfree *f = alloc(NULL, sizeof *f);
+  if (!f) return;                                                  // no node: the span stays, unreachable
+  f->p = p, f->n = n, f->next = nx;
+  if (pre) pre->next = f; else g->cfree = f; } }
 static struct code *code_chunk(struct g *g, size_t need) {
  size_t ps = code_page(), len = (need > CodeChunk ? need : CodeChunk);
  len = (len + ps - 1) & ~(ps - 1);
  void *b = mmap(0, len, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
  if (b == MAP_FAILED) return NULL;
- struct code *c = alloc(NULL, sizeof *c);
+ struct code *c = alloc(NULL, sizeof *c), *o = code_bump(g);
  if (!c) { munmap(b, len); return NULL; }
+ if (o && o->used < o->len) {                                     // the old bump's tail is free space now
+  char *t = o->base + o->used;
+  size_t tn = o->len - o->used;
+  o->used = o->len, code_release(g, t, tn); }
  c->base = b, c->own = NULL, c->len = len, c->used = 0, c->fixed = 0, c->lz = NULL, c->next = g->code, g->code = c;
  return c; }
 // (code_install g src n): n bytes of code -> their executable address, NULL when no seat can hold them
 char *code_install(struct g *g, char const *src, size_t n) {
- size_t need = code_round(CodeHead + n + 1);
+ size_t need = code_round(CodeHead + n + 1), span = need;
  char *p = NULL;
- for (struct cfree **l = &g->cfree; *l; l = &(*l)->next)     // first fit off the free list
+ for (struct cfree **l = &g->cfree; *l; l = &(*l)->next)     // first fit, lowest address first
   if ((*l)->n >= need) {
    struct cfree *f = *l; p = f->p;
    if (f->n - need >= 32) f->p += need, f->n -= need;
-   else *l = f->next, alloc(f, 0);
+   else span = f->n, *l = f->next, alloc(f, 0);                  // taken whole: the blob owns the rest
    break; }
  if (!p) {
-  struct code *c = g->code;
+  struct code *c = code_bump(g);
   if (!c || c->len - c->used < need) c = code_chunk(g, need);
   if (!c) return NULL;
   p = c->base + c->used, c->used += need; }
- if (code_open(p, need, PROT_READ | PROT_WRITE)) return NULL;
- ((uintptr_t*) p)[0] = n, ((uintptr_t*) p)[1] = 0;
+ if (code_open(p, span, PROT_READ | PROT_WRITE)) return code_release(g, p, span), NULL;
+ ((uintptr_t*) p)[0] = n, ((uintptr_t*) p)[1] = span;
  memcpy(p + CodeHead, src, n);
  p[CodeHead + n] = 0;
- if (code_open(p, need, PROT_READ | PROT_EXEC)) return NULL;
+ if (code_open(p, span, PROT_READ | PROT_EXEC)) return code_release(g, p, span), NULL;
  code_sync(p + CodeHead, p + CodeHead + n);
  return p + CodeHead; }
 void code_free(struct g *g, char *code) {
  char *p = code - CodeHead;
- struct cfree *f;
  for (struct code *c = g->code; c; c = c->next)      // the image's chunk is text: the dump packs one blob
   if (c->fixed && p >= c->base && p < c->base + c->len) return;   // per distinct BODY, so a dead closure never
- f = alloc(NULL, sizeof *f);                      // frees bytes another one is still running
- if (!f) return;                                                  // no node: the blob stays, unreachable
- f->p = p, f->n = code_round(CodeHead + ((uintptr_t*) p)[0] + 1), f->next = g->cfree, g->cfree = f; }
+ code_release(g, p, ((uintptr_t*) p)[1]); }                       // frees bytes another one is still running
+// the arena's state, one figure at a time: 0 mapped, 1 bumped, 2 free, 3 free spans, over
+// the chunks installs own. a figure, not an array, so the nif keeps no local across its tail
+uintptr_t code_stat(struct g *g, int i) {
+ uintptr_t s = 0;
+ if (i < 2) { for (struct code *c = g->code; c; c = c->next) if (!c->fixed) s += i ? c->used : c->len; }
+ else for (struct cfree *f = g->cfree; f; f = f->next) s += i == 2 ? f->n : 1;
+ return s; }
 int code_in(struct g *g, uintptr_t v) {                          // a code address of this session's arena?
  for (struct code *c = g->code; c; c = c->next)
   if (v >= (uintptr_t) c->base && v < (uintptr_t) c->base + c->used) return 1;
@@ -821,6 +873,7 @@ int code_in(struct g *g, uintptr_t v) { return 0; }
 // snap's code rung reaches this only behind the code_in above, which owns no address
 size_t code_len(char *code) { return 0; }
 void code_free(struct g *g, char *code) { }
+uintptr_t code_stat(struct g *g, int i) { return 0; }
 static void code_drop(struct g *g, struct code *c) { alloc(c->own, 0); }
 // a chunk like the hosted lane's, so the session owns it and code_fin frees it
 static struct code *code_region(struct g *g, size_t n, char **w) {

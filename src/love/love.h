@@ -317,12 +317,16 @@ struct g {
  // what a native reads off g instead of carrying: the kind sentinels and callout drives are
  // addresses of this binary, so a blob holding one could not ride an image. ini fills it.
  word reach[12];
+ intptr_t fair;   // right past reach, where the glaze reads it: native code's countdown, a loop
+                  // step or a call takes one, and at 0 it refills
+ uintptr_t ticks; // ..and counts the refills, with the vm's fairness yields: work in 64-step units
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied
  // the remembered set, the whole write barrier: old cells that took a young pointer,
  // rescanned by the next minor. any rem_miss forces the next collection major (force sets one).
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by LvRemCap, the fixed capacity
+ uint64_t child_ign;                      // bit n: signal n stays ignored in a spawned child (a shell's trap '')
  int8_t lean;                             // grow-stickiness streak; a grow needs lean >= 2
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
@@ -341,10 +345,14 @@ struct g {
    n_resize,                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
    budget,                     // total cap in words (minor + 2*major), 0 = unbounded; by appel's
                                             // rule the nursery gets what the major pool leaves
-   minor0, major0, ratio;         // nursery floor, major grow/shrink step, copy-overhead setpoint;
+   walk,                          // the room a walk ran out of the gap wanting (words), the most any
+                                  // walk under one op asked: the op takes it and runs again
+   minor0, major0, ratio,         // nursery floor, major grow/shrink step, copy-overhead setpoint;
                                           // seeded at ini, moved by `tune`. untraced: a bake drops them.
+   push_gc;                       // a law's: the push this many pushes on collects, 0 none (guts' push-gc)
  uintptr_t cbase, croom;          // a compile's outermost C frame (ev.c's c0), 0 outside one, and the stack it may take
  uintptr_t ask;                   // the words the collector was asked for while it works: an oom's first datum
+ struct pool *pool;               // the threads C kernels share out over (pool.c), made at the first ask
  union {
   intptr_t v0;
   struct {
@@ -553,6 +561,9 @@ intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t)
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),     // ..l/bz2.c
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);  // ..l/xz.c
 uint32_t crc32(unsigned char const*, uintptr_t);                                    // ..l/hash.c
+// the thread pool (src/love/pool.c): fn(ctx, i) for chunks 0..n-1, C kernels only
+void par_run(struct g*, intptr_t, void (*)(void*, intptr_t), void*);
+intptr_t par_width(struct g*, intptr_t);
 // the carried source, a container src/love/archive/srctree.h reads
 extern unsigned char const srctree[];
 extern uintptr_t const srctree_len;
@@ -660,6 +671,21 @@ static love_inline struct g *have(struct g *g, uintptr_t n) {
  return !ok(g) || avail(g) >= n ? g : please(g, n);
 #endif
 }
+// a walk keeps its worklist in the gap it was lent and never past it: spent, it asks for
+// twice the region and gives up, and the op that started it takes the room and runs again.
+// walks nest (a probe's eqv, a compare's hash), so the ask is the largest of them
+static love_inline void walk_short(struct g *g, word const *base, word const *hi, uintptr_t want) {
+ uintptr_t n = (uintptr_t) (hi - base), w = (n < 32 ? 64 : 2 * n) + want;
+ if (w > g->walk) g->walk = w; }
+// the ask is on top of the room there is: an op may lay its own scratch ahead of the walk's,
+// so only a gap that grew is sure to give the walk more.
+// a host lane's: the room taken (which may collect), the ask cleared. its operands ride the stack
+static love_inline struct g *walk_room(struct g *g) {
+ uintptr_t w = g->walk + (uintptr_t) (g->sp - g->hp);
+ g->walk = 0;
+ return have(g, w); }
+// an op's: the room through lvm_gc, which runs the op again; its operands are as they were
+#define WalkAgain() do { if (g->walk) { uintptr_t _w = g->walk + room(Hp, Sp); g->walk = 0; have_gc(_w) } } while (0)
 static love_inline void *bump(struct g *g, uintptr_t n) {   // the mutator's: the nursery. gc.c bumps the major itself
  if (avail(g) < n) __builtin_trap();
  void *x = g->hp; g->hp += n; return x; }
@@ -816,6 +842,7 @@ lvm_t lvm_kcall,
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reaches them through g->reach)
  lvm_reach_offset,       // (reach-offset x): g->reach' byte offset, what the emitter's `reach` law loads from
  lvm_natp,        // (nat? f): is f a native closure -- its code in the arena
+ lvm_arena,       // (arena 0): the code arena's [mapped bumped free spans]
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
  lvm_deferfwd;    // a deferred native's code slot until its compile patches it (tablet.c)
 // the attributes are the declaration: `lvm(n)` is `love_noinline noicf _lvm(n)`, so these
@@ -1244,6 +1271,7 @@ int code_seat(struct g *g, char const *a);
 uint64_t image_sum(void const *p, uintptr_t n, uint64_t h);   // the image's digest (snap.c)
 char *code_window(char *p);
 void code_free(struct g *g, char *code), code_fin(struct g *g);
+uintptr_t code_stat(struct g *g, int i);
 int code_in(struct g *g, uintptr_t v);
 // the instruction table (src/love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. nif_cell draws the line against a nif's run.

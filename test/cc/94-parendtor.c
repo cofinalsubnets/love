@@ -1,10 +1,6 @@
-/* parenthesized declarators, the recursive lane (pdirect). three shapes that
-   real corpora hit: the REDUNDANT (name) -- lua wraps every API declarator so
-   a same-named macro can coexist; the qualified pointer (*const p) -- sqlite's
-   IOMETHODS finder table; and the NESTED (*(*x)(a))(b) -- sqlite's xDlSym, a
-   fn-ptr-returning-fn-ptr struct member. the type grows inside-out: a paren
-   declarator's pointee is what trails its `)`. exit agrees with gcc only if
-   layout, calls-through, and the def's bound params all line up. */
+/* parenthesized declarators: the redundant (name), the qualified (*const p), and
+   the nested (*(*x)(a))(b). the type grows inside-out: a paren declarator's
+   pointee is what trails its `)`. */
 
 /* the redundant (name): proto, def, and a paren-of-paren */
 int (add3)(int a, int b, int c);

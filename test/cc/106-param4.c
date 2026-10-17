@@ -1,30 +1,8 @@
-/* the 4th integer parameter survives its own function body.
- *
- * on x64 the SysV argument registers are rdi rsi rdx rcx r8 r9, and mooncc's
- * home pool is positionally arg-aligned at every position BUT two: arg 3 (rdx)
- * homes to r9 and arg 4 (rcx) to r10, so those two alone need a real prologue
- * mov. the ride analysis may instead let such a param stay in its arrival
- * register -- but it decided that by reading pass 1, where every param sits in
- * a frame slot, and then licensed a REBUILD that allocates differently. pass 2
- * reached for rcx as a store's address shuttle and the 4th parameter was gone;
- * the two out-pointers collapsed onto one, so `*d` wrote through `c`.
- *
- * this is a SILENT wrong answer before it is ever a crash: with both stores
- * aimed at the same valid address nothing faults, one variable just never gets
- * written. it reached the shipping binary through lm.c's mul64, whose `lo`
- * out-pointer became a wild address -- lm_sin then segfaulted for every
- * |x| >= 2^19, i.e. `(sine 1e20)` in out/love, under a green test_slow.
- *
- * found by the lm.c ulp differential (test_ulp), which is the only thing in
- * the tree that had ever compared mooncc's float output against another
- * compiler's. it lives HERE because it is a codegen law about parameters and
- * has nothing to do with math.
- *
- * the register pressure is load-bearing: with a short body the allocator never
- * wants the arrival register and the fault does not appear. keep the temps. */
+/* the 4th integer parameter (an out-pointer) survives its body: on x64 args 3 and
+ * 4 home away from their arrival registers. the register pressure is load-bearing:
+ * keep the temps, or the arrival register is never wanted. */
 
-/* the exact shape from src/apps/moon/lib/moonlibc/math/lm.c -- 64x64 -> 128 without
- * __int128, four params, the last two out-pointers */
+/* 64x64 -> 128 without __int128, four params, the last two out-pointers */
 static void mul64(unsigned long a, unsigned long b,
                   unsigned long *hi, unsigned long *lo)
 {
@@ -72,7 +50,7 @@ int main(void)
 	unsigned long hi = 0, lo = 0, x = 0, y = 0, z = 0;
 	int r = 0;
 
-	/* the lm.c case, at the window values rbig actually produces */
+	/* window values from a 192-bit reduction */
 	mul64(0x1e42d130773b76UL, 0x27bac7ebe5f17b3dUL, &hi, &lo);
 	r += hi == 0x4b2420c3281b4UL;
 	r += lo == 0xf30205e35e10dd1eUL;

@@ -622,7 +622,10 @@ static bool lexbound(struct g *g, struct env *d, word x) {
 
 static love_inline Ana(ana_2, word a, word b) {
  if (nomp(a) && (x = stacklook_macro(core_of(g), a)) && !lexbound(g, *c, a)) {  // macro table = each layer's [zero] slot, walked; the scope walk only on a macro hit. a macro is named, so a compound head asks nothing
+  mm(g, &x);
   g = push(g, 1, b);                             // the operands, held over the expansion
+  um(g);
+  if (ok(g)) b = g->sp[0];                       // the push can collect: b from where it put it
   g = eval(gxr(gxl(gxl(pushq(gxl(push(g, 4, b, zero, zero, x)))))));
   // the expansion is source again: it takes the opfix prepass a read form took, so a binder
   // a macro built (:- is one) lowers its patterns like one the reader saw. the same guard as

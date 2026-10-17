@@ -1,5 +1,6 @@
 # test/host/tlschain/gen.sh -- lays the chain fixtures test/host/tls.l reads: sh gen.sh DIR
-# roots, intermediates and leaves, rsa and ec, and one certificate for each rule broken
+# roots, intermediates and leaves, rsa and ec, and one certificate for each rule broken (ec: the
+# smaller key, the rule is the point)
 set -e
 D=$1
 cd "$D"
@@ -24,19 +25,19 @@ root roote p384 sha384
 cert intere p256 roote sha384 $NB $NA "$CA" "$KU"
 cert leafe p256 intere sha256 $NB $NA "$LEAF" "keyUsage=critical,digitalSignature" "$SA" "subjectAltName=DNS:good.test"
 cert leaf512 rsa interr sha512 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:good.test"
-cert expired rsa interr sha256 20200101000000Z 20210101000000Z "$LEAF" "subjectAltName=DNS:good.test"
-cert notyet rsa interr sha256 20400101000000Z 20410101000000Z "$LEAF" "subjectAltName=DNS:good.test"
-cert partial rsa interr sha256 $NB $NA "$LEAF" "subjectAltName=DNS:f*.wild.test,DNS:*.test"
-cert noca rsa interr sha256 $NB $NA "$LEAF" "subjectAltName=DNS:noca.test"
-cert undernoca rsa noca sha256 $NB $NA "$LEAF" "subjectAltName=DNS:good.test"
-cert inter0 rsa rootr sha256 $NB $NA "basicConstraints=critical,CA:TRUE,pathlen:0" "$KU"
-cert inter1 rsa inter0 sha256 $NB $NA "$CA" "$KU"
-cert deep rsa inter1 sha256 $NB $NA "$LEAF" "subjectAltName=DNS:good.test"
-cert crit rsa interr sha256 $NB $NA "$LEAF" "subjectAltName=DNS:good.test" "1.2.3.4=critical,ASN1:NULL"
-cert client rsa interr sha256 $NB $NA "$LEAF" "extendedKeyUsage=clientAuth" "subjectAltName=DNS:good.test"
-cert nosign rsa rootr sha256 $NB $NA "$CA" "keyUsage=critical,digitalSignature"
-cert undernosign rsa nosign sha256 $NB $NA "$LEAF" "subjectAltName=DNS:good.test"
-cert nosan rsa interr sha256 $NB $NA "$LEAF"
+cert expired p256 intere sha256 20200101000000Z 20210101000000Z "$LEAF" "subjectAltName=DNS:good.test"
+cert notyet p256 intere sha256 20400101000000Z 20410101000000Z "$LEAF" "subjectAltName=DNS:good.test"
+cert partial p256 intere sha256 $NB $NA "$LEAF" "subjectAltName=DNS:f*.wild.test,DNS:*.test"
+cert noca p256 intere sha256 $NB $NA "$LEAF" "subjectAltName=DNS:noca.test"
+cert undernoca p256 noca sha256 $NB $NA "$LEAF" "subjectAltName=DNS:good.test"
+cert inter0 p256 roote sha256 $NB $NA "basicConstraints=critical,CA:TRUE,pathlen:0" "$KU"
+cert inter1 p256 inter0 sha256 $NB $NA "$CA" "$KU"
+cert deep p256 inter1 sha256 $NB $NA "$LEAF" "subjectAltName=DNS:good.test"
+cert crit p256 intere sha256 $NB $NA "$LEAF" "subjectAltName=DNS:good.test" "1.2.3.4=critical,ASN1:NULL"
+cert client p256 intere sha256 $NB $NA "$LEAF" "extendedKeyUsage=clientAuth" "subjectAltName=DNS:good.test"
+cert nosign p256 roote sha256 $NB $NA "$CA" "keyUsage=critical,digitalSignature"
+cert undernosign p256 nosign sha256 $NB $NA "$LEAF" "subjectAltName=DNS:good.test"
+cert nosan p256 intere sha256 $NB $NA "$LEAF"
 root rootw p521 sha512
 cert leafw p384 rootw sha512 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:good.test"
 # name constraints: a root that may vouch for sb.test and 10/8 but not bad.sb.test, an issuer

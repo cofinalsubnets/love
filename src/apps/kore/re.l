@@ -24,9 +24,7 @@
         (ls @ (l . more)
            (one l @ [_ m _] (go more ((gflag t 105 ? (refold m) m) . acc)) ())
            [1 (rev acc)])
-       ; the empty pattern is one empty pattern, not none: `lines ""` is (), and
-       ; a walk over () would answer no patterns at all -- so `grep ''`, which
-       ; matches every line in GNU, would match nothing here
+       ; `lines ""` is (), but `grep ''` is one empty pattern that matches every line
        ls (lines txt)
        (go (two? ls ? ls [""]) ()))
    ; -w: the span must not sit inside a word. a word character, 'text's: ascii
@@ -73,8 +71,7 @@
     (: t {}
        o (grep-opt as t)
        _ (two? o ? () (udie 2 "grep: bad option"))
-       ; -a is in the usage and read nowhere: everything here is text, so it is a
-       ; no-op and not an unknown
+       ; -a is accepted and read nowhere: everything here is text
        _ (uoptbad as t (chars "nvclqhaixwFEoemfrRHLsABC" + [1001 1002]) @ c
             (!c ? () (udie 2 ("grep: unknown option -" + string c))))
        eps <>o rest <>>o

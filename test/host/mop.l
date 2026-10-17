@@ -14,7 +14,6 @@
    (mop-has k) (mop-G k !== ())
    (mop-on-book k) (elem k (names ()))
 
-   ; the baked image: every dropped name answers the miss, off the module and the book
    _ (test (tablet? mop-G)
            (all (k \ !(mop-has k)) mop-gone)
            (all (k \ !(mop-on-book k)) mop-gone)
@@ -29,7 +28,7 @@
    ge (hark ["env" "LOVE_NO_IMAGE=1" "out/love" "-e" ("(: _ (borrow \"src/apps/gif.l\") " + gq)])
    _ (test (two? gw) (<gw = 0) (>gw = "(1 1 1)") (two? ge) (<ge = 0) (>ge = "(1 1 1)"))
 
-   ; the doors that segfaulted from a script now answer (), as any missing name's value does
+   ; a dropped door answers (), as any missing name does
    _ (test (() = (cite 'guts 'peek) 100000000000 "abc")
            (() = (cite 'guts 'poke) 100000 7 "abc")
            (() = (cite 'guts 'place) 0 1 "abc"))
@@ -40,13 +39,11 @@
    dl (hark ["env" "LOVE_NO_IMAGE=1" "LOVE_NO_MOP=1" "out/love" "-e" dq])
    _ (test (two? dl) (<dl = 0) (>dl = "(() () () () () 1 1 7 1 (2 4))"))
 
-   ; the bounded byte doors still answer, and still hold their bounds
    _ (: c (cask 16) pinw (mop-G 'pinw) peepw (mop-G 'peepw)
         (test (c = pinw c 1 77) (77 = peepw c 1)
               (() = peepw c 2) (() = peepw c 2305843009213693953) (() = pinw c -1 5)))
 
-   ; the lane the doors come back on: an unbaked boot with LOVE_NO_MOP keeps them, and one
-   ; without it mops the same as the bake did
+   ; unbaked: LOVE_NO_MOP keeps the doors, and without it they mop as baked
    ask "(: G (cite 'guts) _ (putx [(? (G 'peek) 1 0) (? (G 'setstack) 1 0) (? (elem 'poke (names ())) 1 0) (? (elem 'calloutdrive (names ())) 1 0)]) (quit 0))"
    kept (hark ["env" "LOVE_NO_IMAGE=1" "LOVE_NO_MOP=1" "out/love" "-e" ask])
    mopped (hark ["env" "LOVE_NO_IMAGE=1" "out/love" "-e" ask])

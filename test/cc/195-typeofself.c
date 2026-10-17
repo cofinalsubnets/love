@@ -1,8 +1,5 @@
-/* a declarator's name is in scope from the end of its declarator (C11 6.2.1p7), so its own
- * initializer may type it: the kernel's get_unaligned casts through typeof of the pointer it
- * declares, container_of's typeof(*p), a sizeof over the new object, and an inner name that
- * shadows an outer one of another type -- each held to gcc. container_of steps a void *, which
- * gcc steps by bytes. */
+/* a declarator's name is in scope from its declarator's end (6.2.1p7), so its initializer may
+ * typeof or sizeof it, or shadow an outer name of another type. a void * steps by bytes. held to gcc. */
 
 #include <stddef.h>
 

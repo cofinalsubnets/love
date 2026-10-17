@@ -1,5 +1,4 @@
-; (show x) -> string. Heap-allocates a data-sink port, prints x through
-; gfputx, returns the harvested bytes. Should match what (dot x) writes to stdout.
+; (show x) -> string, what printing x writes
 
 (test
   ; numbers
@@ -20,11 +19,7 @@
 
   ; interned symbols print as their name
   ("foo" = show 'foo)
-  ; a mint prints (mint <serial>) -- the serial in decimal, the mint's identity. not an
-  ; exact round-trip: (mint <serial>) re-reads to a fresh mint (mint ignores its arg),
-  ; since identity is the mint's whole product and no spelling carries it -- the face only
-  ; has to distinguish, which the serial does. the serial is non-deterministic, so we
-  ; assert the shape: a leading "(mint ", stable, distinct.
+  ; a mint prints (mint <serial>): it re-reads to a fresh mint, so only the shape is checked
   ("(mint " = snip (show (mint 0)) 0 6)
   (mint 0 @ m (show m = show m))               ; stable: same mint, same face
   (: a (mint 0) b (mint 0) (show a != show b)) ; distinct mints, distinct faces
@@ -50,22 +45,17 @@
   (string? (show '(1 2 3)))
   (string? (show {}))
 
-  ; buffer growth: a 200-element list far exceeds the 32-byte initial cask,
-  ; forcing several doublings inside to_putc.
+  ; buffer growth past the initial cask
   (: (rng n) (n = 0 ? () (n . rng (n - 1)))
      s (show (rng 200))
-     ; 200 numbers + 199 separators + 2 parens = at least 400 chars
-   (do (string? s) (400 < #s))) ;; FIXME another `do` in test position, i think these are both supposed to be separate tests
+   (do (string? s) (400 < #s))) ; fixme: a `do` in test position, likely meant as two tests
 
-  ; GC stress: 500 inspects in a loop. Each call alloc'd a heap port + cask,
-  ; provoking many GCs. Final call must still produce the expected output.
+  ; gc stress: 500 shows, each allocating a port
   (: (loop n) (n = 0 ? (show (1 . 2 . 3 . ()))
                  (show "stress", loop (n - 1)))
    ("(1 2 3)" = loop 500)))
 
-; a map that holds itself prints <cycle> where it comes back: a near one at its first
-; return, a ring of a hundred within twice around; one map twice in a map is no cycle.
-; and a nest of maps prints in its length
+; a map that holds itself prints <cycle>; one map twice is no cycle; a nest prints in linear time
 (: shm-t {} _ (pin shm-t 'a shm-t)
    shm-a {} shm-b {} _ (pins shm-a 'b shm-b) _ (pins shm-b 'a shm-a)
    (shm-ring n) (: ms (map (u \ {}) ^n) _ (each ^n (i \ pin (ms i) 'n (ms ((i + 1) % n)))) <ms)

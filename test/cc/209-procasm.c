@@ -1,8 +1,5 @@
-/* the kernel's process asm: the cache-line flushes (clflush over memory and through a register,
- * under a ds prefix as the alternatives pad it, clflushopt/clwb where cpuid has them), push and
- * pop through memory (pushf; pop to a flags word), movnti, a call and a jump through memory, and
- * the privileged lane laid but not run: wbinvd/invd, monitor/mwait, verw, str/sldt/lldt, the
- * fs/gs base reads and writes, rdpmc. the asm is x64's. held to gcc. */
+/* process asm: clflush (memory, register, ds prefix), clflushopt/clwb per cpuid, push/pop through
+ * memory, movnti, call/jmp through memory; privileged ops laid, not run. x64 asm. held to gcc. */
 
 #if defined(__x86_64__)
 static void flush(volatile int *p) { asm volatile("clflush %0" : "+m"(*p)); }

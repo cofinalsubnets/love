@@ -7,9 +7,9 @@ int fcntl(int fd, int cmd, ...) {
   if (__love_osv >= 2) {
     /* DUPFD..SETFL share numbers, the status flags translate; the lock trio is fb 11-13,
      * nb 7-9, on a {start len pid type whence} record that freebsd extends by sysid */
-    int nb = __love_osv == 3;
+    int nb = __love_osv >= 3;             /* macos takes netbsd's numbers and record */
     if (cmd == F_SETFL) arg = __love_ofb(arg);
-    else if (cmd == F_DUPFD_CLOEXEC) cmd = nb ? 12 : 17;
+    else if (cmd == F_DUPFD_CLOEXEC) cmd = __love_osv == 4 ? 67 : nb ? 12 : 17;
     else if (cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW) {
       struct flock *l = (struct flock *) arg;
       struct { long start, len; int pid; short type, whence; int sysid; } kf;

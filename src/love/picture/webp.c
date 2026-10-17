@@ -1,8 +1,9 @@
 // src/love/picture/webp.c
 // (webp-pixels s) -> the w*h*4 rgba of a webp -- an animation's first frame, laid on its
-// canvas -- | why not: 1 not a webp, 2 cut short, 3 a kind it can't read (an interframe),
-// 4 a bad stream, 5 past 2^24 pixels, 6 no room. lossy (vp8, rfc 6386) with or without an
-// ALPH plane, and lossless (vp8l, rfc 9649); the pixels are libwebp's WebPDecodeRGBA's.
+// canvas; webp-frame below lays the rest -- | why not: 1 not a webp, 2 cut short, 3 a kind it
+// can't read (an interframe), 4 a bad stream, 5 past 2^24 pixels, 6 no room. lossy (vp8,
+// rfc 6386) with or without an ALPH plane, and lossless (vp8l, rfc 9649); the pixels are
+// libwebp's WebPDecodeRGBA's. webp-encode, at the foot, writes lossless.
 #include "love.h"
 #include "bytes.h"
 #include "compress/prefix.h"
@@ -1074,3 +1075,354 @@ love_noinline static struct g *host_webpd(struct g *g) {
  return g; }
 static lvm(lvm_webpd) LvmCall(g, host_webpd)
 LvDef("webp-pixels", webpd, 1, "webp");
+
+// s over d, neither premultiplied, in libwebp's animation decoder's integers: an opaque pixel
+// is copied, a clear one leaves d
+static void wp_over(uint8_t *d, const uint8_t *s) {
+ unsigned sa = s[3];
+ if (sa == 255) { memcpy(d, s, 4); return; }
+ if (!sa) return;
+ unsigned fa = (d[3] * (256 - sa)) >> 8, ba = sa + fa;
+ uint64_t sc = (1u << 24) / ba;
+ for (int k = 0; k < 3; k++) d[k] = (uint8_t) (((uint64_t) s[k] * sa + (uint64_t) d[k] * fa) * sc >> 24);
+ d[3] = (uint8_t) ba; }
+
+// (webp-frame s at canvas key prev) -> canvas with the ANMF chunk at s[at] laid on it | why not,
+// as webp-pixels says. a key frame clears the canvas and is copied; past it a frame that blends
+// lays its pixels over what is there, and one that does not overwrites its box. prev is the
+// ANMF before it when that one was cleared away, else 0: inside its box nothing is blended
+love_noinline static struct g *host_webpf(struct g *g) {
+ struct wp_mem m;
+ struct wp_info f;
+ if (!strp(g->sp[0]) || !oddp(g->sp[1]) || !strp(g->sp[2])) return g->sp[4] = putcharm(1), g->sp += 4, g;
+ const uint8_t *s = (const uint8_t*) txt(g->sp[0]);
+ uintptr_t n = len(g->sp[0]), at = (uintptr_t) getcharm(g->sp[1]);
+ int key = oddp(g->sp[3]) && getcharm(g->sp[3]), why = wp_info(s, n, &f);
+ uintptr_t pv = oddp(g->sp[4]) ? (uintptr_t) getcharm(g->sp[4]) : 0;
+ uintptr_t k = (uintptr_t) f.w * f.h * 4;
+ if (!why && len(g->sp[2]) != k) why = 4;
+ if (!why && (at < 12 || at > n || n - at < 32 || memcmp(s + at, "ANMF", 4))) why = 4;
+ uintptr_t sz = why ? 0 : ld32le(s + at + 4);
+ if (!why && (sz < 16 || sz > n - at - 8)) why = 2;
+ if (why) return g->sp[4] = putcharm(why), g->sp += 4, g;
+ unsigned fx = ld24le(s + at + 8) * 2, fy = ld24le(s + at + 11) * 2;
+ unsigned fw = ld24le(s + at + 14) + 1, fh = ld24le(s + at + 17) + 1, blend = !(s[at + 23] & 2);
+ if (fx + fw > f.w || fy + fh > f.h) return g->sp[4] = putcharm(4), g->sp += 4, g;
+ unsigned hx = 0, hy = 0, hw = 0, hh = 0;          // the box cleared before this frame
+ if (pv >= 12 && pv < n && n - pv >= 24 && !memcmp(s + pv, "ANMF", 4))
+  hx = ld24le(s + pv + 8) * 2, hy = ld24le(s + pv + 11) * 2, hw = ld24le(s + pv + 14) + 1, hh = ld24le(s + pv + 17) + 1;
+ m.n = 0;
+ uint8_t *fr = wp_new(&m, (uintptr_t) fw * fh * 4);
+ if (!fr) why = 6;
+ else why = wp_frame(&m, s + at + 24, s + at + 8 + sz, fw, fh, fr);
+ if (why) return wp_free(&m), g->sp[4] = putcharm(why), g->sp += 4, g;
+ if (!ok(g = str0(g, k))) return wp_free(&m), g;   // pushes: the new canvas over the five
+ uint8_t *o = (uint8_t*) txt(g->sp[0]);
+ if (key) memset(o, 0, k); else memcpy(o, txt(g->sp[3]), k);
+ for (unsigned y = 0; y < fh; y++)
+  for (unsigned x = 0; x < fw; x++) {
+   uint8_t *d = o + ((uintptr_t) (fy + y) * f.w + fx + x) * 4;
+   const uint8_t *c = fr + ((uintptr_t) y * fw + x) * 4;
+   unsigned cx = fx + x, cy = fy + y;
+   int hole = cx >= hx && cx < hx + hw && cy >= hy && cy < hy + hh;
+   if (key || !blend || hole) memcpy(d, c, 4); else wp_over(d, c); }
+ wp_free(&m);
+ g->sp[5] = g->sp[0], g->sp += 5;
+ return g; }
+static lvm(lvm_webpf) LvmCall(g, host_webpf)
+LvDef("webp-frame", webpf, 5, "webp");
+
+// ===== the lossless encoder =====
+// (webp-encode w h rgba) -> a lossless webp of the w*h rgba image | (). under 257 colours a
+// palette, packed 2, 4 or 8 to a pixel where it is small enough; else green subtracted and a
+// predictor chosen per 16x16 tile. then lz77 over hash chains, a colour cache of the size
+// that codes shortest, and one group of five codes.
+struct we { uint8_t *b; uintptr_t n, cap; uint64_t acc; unsigned nb; int bad; struct wp_mem *m; };
+
+static void we_put(struct we *e, uint32_t v, unsigned k) {
+ if (!k) return;
+ e->acc |= ((uint64_t) v & (((uint64_t) 1 << k) - 1)) << e->nb, e->nb += k;
+ while (e->nb >= 8) {
+  if (e->n == e->cap && !e->bad) {
+   uint8_t *b = wp_new(e->m, e->cap * 2);
+   if (!b) e->bad = 1;
+   else memcpy(b, e->b, e->n), wp_drop(e->m, e->b), e->b = b, e->cap *= 2; }
+  if (!e->bad) e->b[e->n++] = (uint8_t) e->acc;
+  e->acc >>= 8, e->nb -= 8; } }
+
+static uint32_t we_sub(uint32_t a, uint32_t b) {
+ return ((0x00ff00ffu + (a & 0xff00ff00u) - (b & 0xff00ff00u)) & 0xff00ff00u)
+      | ((0xff00ff00u + (a & 0x00ff00ffu) - (b & 0x00ff00ffu)) & 0x00ff00ffu); }
+
+// lengths for counts f, none past lim (prefix.h's pfx_lens); 0 when there is no room
+static int we_lens(struct wp_mem *m, const uint32_t *f, unsigned n, unsigned lim, uint8_t *lens) {
+ uint64_t *k = wp_new(m, (uintptr_t) n * 8), *w = wp_new(m, (uintptr_t) n * 16);
+ uint32_t *pa = wp_new(m, (uintptr_t) n * 8), *hc = wp_new(m, (uintptr_t) n * 4);
+ if (!k || !w || !pa || !hc) return 0;
+ memcpy(hc, f, (uintptr_t) n * 4), pfx_lens(hc, n, lim, lens, k, w, pa);
+ wp_drop(m, k), wp_drop(m, w), wp_drop(m, pa), wp_drop(m, hc);
+ return 1; }
+
+// canonical, shortest first, ties by symbol, each stored reversed as it is read
+static void we_codes(const uint8_t *lens, unsigned n, uint16_t *code) {
+ unsigned cnt[16] = { 0 }, nxt[16], c = 0, i, l;
+ for (i = 0; i < n; i++) cnt[lens[i]]++;
+ cnt[0] = 0;
+ for (l = 1; l < 16; l++) nxt[l] = c, c = (c + cnt[l]) << 1;
+ for (i = 0; i < n; i++)
+  if (lens[i]) {
+   unsigned v = nxt[lens[i]]++, r = 0;
+   for (l = 0; l < lens[i]; l++) r |= (v >> l & 1) << (lens[i] - 1 - l);
+   code[i] = (uint16_t) r; } }
+
+// a code for counts f laid on the stream: one or two small symbols spelled out, else lengths
+// run-length coded under a code of their own. lens and code answer how each symbol is
+// written, a lone symbol taking no bits
+static int we_code(struct we *e, const uint32_t *f, unsigned n, uint8_t *lens, uint16_t *code) {
+ unsigned nz = 0, s[2] = { 0, 0 }, i;
+ for (i = 0; i < n; i++) if (f[i]) { if (nz < 2) s[nz] = i; nz++; }
+ memset(lens, 0, n);
+ if (nz <= 2 && s[nz ? nz - 1 : 0] < 256) {
+  we_put(e, 1, 1), we_put(e, nz == 2, 1);
+  if (s[0] < 2) we_put(e, 0, 1), we_put(e, s[0], 1); else we_put(e, 1, 1), we_put(e, s[0], 8);
+  if (nz == 2) we_put(e, s[1], 8), lens[s[0]] = lens[s[1]] = 1, code[s[0]] = 0, code[s[1]] = 1;
+  return 1; }
+ if (!we_lens(e->m, f, n, 15, lens)) return 0;
+ uint32_t *rl = wp_new(e->m, (uintptr_t) n * 4), cf[19] = { 0 };
+ uint8_t cl[19];
+ uint16_t cc[19];
+ unsigned nr = 0, nc = 19;
+ if (!rl) return 0;
+ for (i = 0; i < n; ) {                          // (sym << 8) + extra; 16 repeats the length
+  unsigned v = lens[i], r = 1;                   // just given, 17 and 18 run zeros
+  while (i + r < n && lens[i + r] == v) r++;
+  if (v) {
+   rl[nr++] = v << 8, i++, r--;
+   while (r >= 3) { unsigned t = r > 6 ? 6 : r; rl[nr++] = 16u << 8 | (t - 3), i += t, r -= t; }
+   while (r) rl[nr++] = v << 8, i++, r--; }
+  else {
+   while (r >= 11) { unsigned t = r > 138 ? 138 : r; rl[nr++] = 18u << 8 | (t - 11), i += t, r -= t; }
+   if (r >= 3) rl[nr++] = 17u << 8 | (r - 3), i += r, r = 0;
+   while (r) rl[nr++] = 0, i++, r--; } }
+ for (i = 0; i < nr; i++) cf[rl[i] >> 8]++;
+ if (!we_lens(e->m, cf, 19, 7, cl)) return 0;
+ we_codes(cl, 19, cc);
+ unsigned one = 0;
+ for (i = 0; i < 19; i++) one += cl[i] != 0;
+ while (nc > 4 && !cl[wl_clord[nc - 1]]) nc--;
+ we_put(e, 0, 1), we_put(e, nc - 4, 4);
+ for (i = 0; i < nc; i++) we_put(e, cl[wl_clord[i]], 3);
+ we_put(e, 0, 1);                                // every symbol's length follows
+ for (i = 0; i < nr; i++) {
+  unsigned sy = rl[i] >> 8, x = rl[i] & 255;
+  if (one > 1) we_put(e, cc[sy], cl[sy]);
+  if (sy == 16) we_put(e, x, 2); else if (sy == 17) we_put(e, x, 3); else if (sy == 18) we_put(e, x, 7); }
+ wp_drop(e->m, rl);
+ we_codes(lens, n, code);
+ if (nz == 1) lens[s[0]] = 0;                    // a lone symbol, read in no bits
+ return 1; }
+
+// a length or distance, from 1 -> its prefix symbol, extra bit count and extra bits
+static unsigned we_prefix(uint32_t v, unsigned *eb, uint32_t *ex) {
+ v--;
+ if (v < 4) return *eb = 0, *ex = 0, v;
+ unsigned h = 31;
+ while (!(v >> h)) h--;
+ *eb = h - 1, *ex = v & ((1u << (h - 1)) - 1);
+ return 2 * h + (v >> (h - 1) & 1); }
+
+static unsigned we_hash(uint32_t a, uint32_t b) { return (a * 0x9e3779b1u ^ b * 0x85ebca6bu) >> 16; }
+
+// one entropy-coded image of w*h argb: the main one (top) says it has no meta image
+static int we_image(struct we *e, const uint32_t *px, unsigned w, unsigned h, int top) {
+ struct wp_mem *m = e->m;
+ uintptr_t n = (uintptr_t) w * h, i, nt = 0, pn = (uintptr_t) w * 8 + 16;
+ uint32_t *len = wp_new(m, n * 4), *val = wp_new(m, n * 4), *head = wp_new(m, 65536 * 4),
+          *prev = wp_new(m, n * 4), *hist = wp_new(m, (280 + 1024 + 3 * 256 + 40) * 4),
+          *cache = wp_new(m, 1024 * 4);
+ uint8_t *pm = wp_zero(m, pn), *lens = wp_new(m, 280 + 1024 + 3 * 256 + 40);
+ uint16_t *code = wp_new(m, (280 + 1024 + 3 * 256 + 40) * 2);
+ if (!len || !val || !head || !prev || !hist || !cache || !pm || !lens || !code) return 0;
+ for (unsigned c = 120; c >= 1; c--) { uintptr_t k = wl_plane(w, c); if (k < pn) pm[k] = (uint8_t) c; }
+ memset(head, 0xff, 65536 * 4);
+ // lz77: the pixel left and the one above first, then up to 64 back along the chain
+ for (i = 0; i < n; ) {
+  uintptr_t best = 0, bd = 0, most = n - i < 4096 ? n - i : 4096;
+  if (i + 1 < n) {
+   uint32_t hh = we_hash(px[i], px[i + 1]), j = head[hh];
+   uintptr_t cand[2] = { 1, w };
+   for (int t = 0; t < 66; t++) {
+    uintptr_t d;
+    if (t < 2) d = cand[t];
+    else { if (j == 0xffffffffu || i - j > (1u << 20) - 120) break; d = i - j, j = prev[j]; }
+    if (!d || d > i) continue;
+    uintptr_t l = 0;
+    while (l < most && px[i + l] == px[i + l - d]) l++;
+    if (l > best) best = l, bd = d;
+    if (best == most) break; } }
+  uintptr_t step = best >= 3 ? best : 1;
+  if (best >= 3) len[nt] = (uint32_t) best, val[nt++] = bd < pn && pm[bd] ? pm[bd] : (uint32_t) bd + 120;
+  else len[nt] = 0, val[nt++] = px[i];
+  for (uintptr_t q = i; q < i + step; q++)
+   if (q + 1 < n) { uint32_t hh = we_hash(px[q], px[q + 1]); prev[q] = head[hh], head[hh] = (uint32_t) q; }
+  i += step; }
+ wp_drop(m, head), wp_drop(m, prev);
+ // the counts each cache size makes, and the bits its codes would take
+ static const unsigned nsym[5] = { 280, 256, 256, 256, 40 };
+ unsigned cb = 0, cands[4] = { 0, 6, 8, 10 }, nca = n < 256 ? 1 : 4;
+ uint64_t bestc = ~(uint64_t) 0;
+ for (int pass = 0; pass <= (int) nca; pass++) {
+  unsigned bits = pass < (int) nca ? cands[pass] : cb, ng = 280 + (bits ? 1u << bits : 0);
+  uint32_t *f[5] = { hist, hist + ng, hist + ng + 256, hist + ng + 512, hist + ng + 768 };
+  memset(hist, 0, (ng + 808) * 4), memset(cache, 0, 1024 * 4);
+  uintptr_t p = 0;
+  for (uintptr_t t = 0; t < nt; t++) {
+   unsigned eb; uint32_t ex;
+   if (len[t]) {
+    f[0][256 + we_prefix(len[t], &eb, &ex)]++, f[4][we_prefix(val[t], &eb, &ex)]++;
+    for (uintptr_t q = p; q < p + len[t]; q++) if (bits) cache[(0x1e35a7bdu * px[q]) >> (32 - bits)] = px[q];
+    p += len[t]; continue; }
+   uint32_t a = val[t], hk = bits ? (0x1e35a7bdu * a) >> (32 - bits) : 0;
+   if (bits && cache[hk] == a) f[0][280 + hk]++;
+   else f[0][a >> 8 & 255]++, f[1][a >> 16 & 255]++, f[2][a & 255]++, f[3][a >> 24]++;
+   if (bits) cache[hk] = a;
+   p++; }
+  if (pass < (int) nca) {                        // weigh this size
+   uint64_t c = 0;
+   for (int k = 0; k < 5; k++) {
+    unsigned nk = k ? nsym[k] : ng;
+    if (!we_lens(m, f[k], nk, 15, lens)) return 0;
+    for (unsigned s = 0; s < nk; s++) c += (uint64_t) f[k][s] * lens[s]; }
+   if (c < bestc) bestc = c, cb = bits;
+   continue; }
+  // the winner: its codes, then the pixels
+  we_put(e, cb != 0, 1);
+  if (cb) we_put(e, cb, 4);
+  if (top) we_put(e, 0, 1);
+  uint8_t *L[5]; uint16_t *C[5];
+  for (int k = 0, at = 0; k < 5; at += k ? (int) nsym[k] : (int) ng, k++) {
+   L[k] = lens + at, C[k] = code + at;
+   if (!we_code(e, f[k], k ? nsym[k] : ng, L[k], C[k])) return 0; }
+  memset(cache, 0, 1024 * 4), p = 0;
+  for (uintptr_t t = 0; t < nt; t++) {
+   unsigned eb, s; uint32_t ex;
+   if (len[t]) {
+    s = 256 + we_prefix(len[t], &eb, &ex), we_put(e, C[0][s], L[0][s]), we_put(e, ex, eb);
+    s = we_prefix(val[t], &eb, &ex), we_put(e, C[4][s], L[4][s]), we_put(e, ex, eb);
+    for (uintptr_t q = p; q < p + len[t]; q++) if (cb) cache[(0x1e35a7bdu * px[q]) >> (32 - cb)] = px[q];
+    p += len[t]; continue; }
+   uint32_t a = val[t], hk = cb ? (0x1e35a7bdu * a) >> (32 - cb) : 0;
+   if (cb && cache[hk] == a) s = 280 + hk, we_put(e, C[0][s], L[0][s]);
+   else {
+    s = a >> 8 & 255, we_put(e, C[0][s], L[0][s]);
+    s = a >> 16 & 255, we_put(e, C[1][s], L[1][s]);
+    s = a & 255, we_put(e, C[2][s], L[2][s]);
+    s = a >> 24, we_put(e, C[3][s], L[3][s]); }
+   if (cb) cache[hk] = a;
+   p++; } }
+ wp_drop(m, len), wp_drop(m, val), wp_drop(m, hist), wp_drop(m, cache), wp_drop(m, pm);
+ wp_drop(m, lens), wp_drop(m, code);
+ return !e->bad; }
+
+// a residual's weight: each channel's distance from 0, as a signed byte
+static unsigned we_cost(uint32_t r) {
+ unsigned c = 0;
+ for (int k = 0; k < 32; k += 8) { int v = wl_s8(r >> k); c += (unsigned) (v < 0 ? -v : v); }
+ return c; }
+
+// the vp8l stream of argb px, w*h, header and transforms first
+static int we_vp8l(struct we *e, uint32_t *px, unsigned w, unsigned h) {
+ struct wp_mem *m = e->m;
+ uintptr_t n = (uintptr_t) w * h, i;
+ uint32_t pal[256], alpha = 0xff000000u;
+ unsigned nc = 0;
+ for (i = 0; i < n; i++) alpha &= px[i];
+ we_put(e, 0x2f, 8), we_put(e, w - 1, 14), we_put(e, h - 1, 14), we_put(e, alpha != 0xff000000u, 1), we_put(e, 0, 3);
+ for (i = 0; i < n && nc <= 256; i++) {          // the colours, sorted, while there are 256 or fewer
+  unsigned lo = 0, hi = nc;
+  while (lo < hi) { unsigned md = (lo + hi) / 2; if (pal[md] < px[i]) lo = md + 1; else hi = md; }
+  if (lo < nc && pal[lo] == px[i]) continue;
+  if (nc == 256) { nc = 257; break; }
+  memmove(pal + lo + 1, pal + lo, (nc - lo) * 4), pal[lo] = px[i], nc++; }
+ if (nc <= 256) {
+  unsigned xb = nc > 16 ? 0 : nc > 4 ? 1 : nc > 2 ? 2 : 3, bpp = 8 >> xb, xs = wl_sub(w, xb);
+  uint32_t pd[256];
+  for (i = 0; i < nc; i++) pd[i] = i ? we_sub(pal[i], pal[i - 1]) : pal[0];
+  we_put(e, 1, 1), we_put(e, 3, 2), we_put(e, nc - 1, 8);
+  if (!we_image(e, pd, nc, 1, 0)) return 0;
+  uint32_t *q = wp_new(m, (uintptr_t) xs * h * 4);
+  if (!q) return 0;
+  for (i = 0; i < (uintptr_t) xs * h; i++) q[i] = 0xff000000u;
+  for (unsigned y = 0; y < h; y++)
+   for (unsigned x = 0; x < w; x++) {
+    uint32_t v = px[(uintptr_t) y * w + x]; unsigned lo = 0, hi = nc;
+    while (lo < hi) { unsigned md = (lo + hi) / 2; if (pal[md] < v) lo = md + 1; else hi = md; }
+    q[(uintptr_t) y * xs + (x >> xb)] |= (uint32_t) lo << (8 + (x & ((1u << xb) - 1)) * bpp); }
+  we_put(e, 0, 1);
+  int r = we_image(e, q, xs, h, 1);
+  return wp_drop(m, q), r; }
+ for (i = 0; i < n; i++) {                        // green subtracted from red and blue
+  uint32_t a = px[i], g = a >> 8 & 255;
+  px[i] = (a & 0xff00ff00u) | (((a >> 16) - g) & 255) << 16 | ((a - g) & 255); }
+ we_put(e, 1, 1), we_put(e, 2, 2);
+ unsigned tb = 4, bw = wl_sub(w, tb), bh = wl_sub(h, tb);
+ uint32_t *modes = wp_new(m, (uintptr_t) bw * bh * 4), *res = wp_new(m, n * 4);
+ if (!modes || !res) return 0;
+ for (unsigned ty = 0; ty < bh; ty++)            // each tile's mode: the least residual
+  for (unsigned tx = 0; tx < bw; tx++) {
+   unsigned bm = 11; uint64_t bc = ~(uint64_t) 0;
+   for (unsigned md = 0; md < 14; md++) {
+    uint64_t c = 0;
+    for (unsigned y = ty << tb; y < h && y < (ty + 1) << tb; y++)
+     for (unsigned x = tx << tb; x < w && x < (tx + 1) << tb; x++) {
+      if (!x || !y) continue;
+      const uint32_t *q = px + (uintptr_t) y * w + x;
+      c += we_cost(we_sub(*q, wl_pred(md, q[-1], q - w))); }
+    if (c < bc) bc = c, bm = md; }
+   modes[(uintptr_t) ty * bw + tx] = 0xff000000u | bm << 8; }
+ for (unsigned y = 0; y < h; y++)
+  for (unsigned x = 0; x < w; x++) {
+   const uint32_t *q = px + (uintptr_t) y * w + x;
+   unsigned md = !y ? (x ? 1 : 0) : !x ? 2 : modes[(y >> tb) * bw + (x >> tb)] >> 8 & 15;
+   res[(uintptr_t) y * w + x] = we_sub(*q, wl_pred(md, x ? q[-1] : 0, y ? q - w : q)); }
+ we_put(e, 1, 1), we_put(e, 0, 2), we_put(e, tb - 2, 3);
+ if (!we_image(e, modes, bw, bh, 0)) return 0;
+ we_put(e, 0, 1);
+ int r = we_image(e, res, w, h, 1);
+ return wp_drop(m, modes), wp_drop(m, res), r; }
+
+static int webpe_args(struct g *g) {
+ if (!oddp(g->sp[0]) || !oddp(g->sp[1]) || !strp(g->sp[2])) return 0;
+ intptr_t w = getcharm(g->sp[0]), h = getcharm(g->sp[1]);
+ return w >= 1 && w <= 16384 && h >= 1 && h <= 16384 && !wp_big((uintptr_t) w, (uintptr_t) h)
+     && len(g->sp[2]) == (uint64_t) w * (uint64_t) h * 4; }
+
+love_noinline static struct g *host_webpe(struct g *g) {
+ if (!webpe_args(g)) return g->sp[2] = ZeroPoint, g->sp += 2, g;
+ unsigned w = (unsigned) getcharm(g->sp[0]), h = (unsigned) getcharm(g->sp[1]);
+ struct wp_mem m;
+ struct we e;
+ m.n = 0;
+ memset(&e, 0, sizeof e), e.m = &m, e.cap = 4096;
+ uintptr_t n = (uintptr_t) w * h;
+ uint32_t *px = wp_new(&m, n * 4);
+ if (!px || !(e.b = wp_new(&m, e.cap))) return wp_free(&m), g->sp[2] = ZeroPoint, g->sp += 2, g;
+ const uint8_t *s = (const uint8_t*) txt(g->sp[2]);
+ for (uintptr_t i = 0; i < n; i++)
+  px[i] = (uint32_t) s[4 * i + 3] << 24 | (uint32_t) s[4 * i] << 16 | (uint32_t) s[4 * i + 1] << 8 | s[4 * i + 2];
+ int r = we_vp8l(&e, px, w, h);
+ if (e.nb) we_put(&e, 0, 8 - e.nb);
+ if (!r || e.bad) return wp_free(&m), g->sp[2] = ZeroPoint, g->sp += 2, g;
+ uintptr_t pad = e.n & 1, k = 20 + e.n + pad;
+ if (!ok(g = str0(g, k))) return wp_free(&m), g;  // pushes: the file over the three
+ uint8_t *o = (uint8_t*) txt(g->sp[0]);
+ uint32_t riff = (uint32_t) (k - 8), chunk = (uint32_t) e.n;
+ memcpy(o, "RIFF", 4), memcpy(o + 8, "WEBPVP8L", 8);
+ for (int j = 0; j < 4; j++) o[4 + j] = (uint8_t) (riff >> 8 * j), o[16 + j] = (uint8_t) (chunk >> 8 * j);
+ memcpy(o + 20, e.b, e.n);
+ if (pad) o[20 + e.n] = 0;
+ wp_free(&m);
+ g->sp[3] = g->sp[0], g->sp += 3;
+ return g; }
+static lvm(lvm_webpe) LvmCall(g, host_webpe)
+LvDef("webp-encode", webpe, 3, "webp");

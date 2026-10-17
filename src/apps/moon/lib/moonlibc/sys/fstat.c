@@ -1,12 +1,48 @@
 #include "../impl.h"
 
+/* the freebsd branch fills the ino64 twin and translates -- shared with
+ * stat.c/lstat.c through __love_fbstat (this member is their floor). */
+void __love_fbstat(struct __fb_stat const *f, struct stat *st) {
+  memset(st, 0, sizeof *st);
+  st->st_dev = f->st_dev;
+  st->st_ino = f->st_ino;
+  st->st_nlink = f->st_nlink;
+  st->st_mode = f->st_mode;
+  st->st_uid = f->st_uid;
+  st->st_gid = f->st_gid;
+  st->st_rdev = f->st_rdev;
+  st->st_size = f->st_size;
+  st->st_blksize = f->st_blksize;
+  st->st_blocks = f->st_blocks;
+  st->st_atim = __love_fbts(f->st_atim);
+  st->st_mtim = __love_fbts(f->st_mtim);
+  st->st_ctim = __love_fbts(f->st_ctim); }
+
+/* ..and the netbsd twin (__fstat50's shape), same sharing */
+void __love_nbstat(struct __nb_stat const *f, struct stat *st) {
+  memset(st, 0, sizeof *st);
+  st->st_dev = f->dev;
+  st->st_ino = f->ino;
+  st->st_nlink = f->nlink;
+  st->st_mode = f->mode;
+  st->st_uid = f->uid;
+  st->st_gid = f->gid;
+  st->st_rdev = f->rdev;
+  st->st_size = f->size;
+  st->st_blksize = f->blksize;
+  st->st_blocks = f->blocks;
+  st->st_atim = __love_nbts(f->atim);
+  st->st_mtim = __love_nbts(f->mtim);
+  st->st_ctim = __love_nbts(f->ctim); }
+
 #ifdef __ILP32__
-/* a 32-bit target asks statx: no stat64 call fills a 64-bit time */
+/* a 32-bit target asks statx and lays its answer across: no stat64 call fills a 64-bit time */
 static dev_t lxdev(unsigned int ma, unsigned int mi) {
   return (dev_t) ((mi & 0xff) | (ma << 8) | ((mi & ~0xffu) << 12)); }
 
 #ifdef __ARM_EABI__
-/* a kernel before 4.11 has no statx; arm falls back to fstatat64, long longs aligned to 8 */
+/* ..but a kernel before 4.11 has no statx, and arm asks fstatat64 there: its long longs
+ * sit on 8, so the record pads where i386's does not */
 struct __arm_stat64 {
   unsigned long long st_dev;
   unsigned char __pad0[4];
@@ -43,7 +79,22 @@ static int stat64(int dirfd, char const *p, int fl, struct stat *st) {
   return 0; }
 #endif
 
+#ifdef LvOsTranslate
+/* a BSD under a 32-bit target: fstat for the empty path, else fstatat, into its own record */
+static int bsdstat(int dirfd, char const *p, int fl, struct stat *st) {
+  union { struct __fb_stat f; struct __nb_stat n; } u;
+  long r = (fl & AT_EMPTY_PATH) && !*p ? sc2(NR_fstat, dirfd, (long) &u)
+         : sc4(NR_newfstatat, dirfd, (long) p, (long) &u, fl & AT_SYMLINK_NOFOLLOW ? 0x200 : 0);
+  if (er(r) < 0) return -1;
+  if (__love_osv == 3) __love_nbstat(&u.n, st);
+  else __love_fbstat(&u.f, st);
+  return 0; }
+#endif
+
 int __love_statx(int dirfd, char const *p, int fl, struct stat *st) {
+#ifdef LvOsTranslate
+  if (__love_osv >= 2) return bsdstat(dirfd, p, fl, st);
+#endif
   struct __lx_statx sx;
   long r = sc5(NR_statx, dirfd, (long) p, fl, STATX_BASIC_STATS, (long) &sx);
 #ifdef __ARM_EABI__
@@ -69,46 +120,19 @@ int __love_statx(int dirfd, char const *p, int fl, struct stat *st) {
 int fstat(int fd, struct stat *st) { return __love_statx(fd, "", AT_EMPTY_PATH, st); }
 #else
 
-/* freebsd's ino64 stat into ours, shared with stat.c and lstat.c */
-void __love_fbstat(struct __fb_stat const *f, struct stat *st) {
-  memset(st, 0, sizeof *st);
-  st->st_dev = f->st_dev;
-  st->st_ino = f->st_ino;
-  st->st_nlink = f->st_nlink;
-  st->st_mode = f->st_mode;
-  st->st_uid = f->st_uid;
-  st->st_gid = f->st_gid;
-  st->st_rdev = f->st_rdev;
-  st->st_size = f->st_size;
-  st->st_blksize = f->st_blksize;
-  st->st_blocks = f->st_blocks;
-  st->st_atim = f->st_atim;
-  st->st_mtim = f->st_mtim;
-  st->st_ctim = f->st_ctim; }
-
-/* netbsd's __fstat50 record into ours */
-void __love_nbstat(struct __nb_stat const *f, struct stat *st) {
-  memset(st, 0, sizeof *st);
-  st->st_dev = f->dev;
-  st->st_ino = f->ino;
-  st->st_nlink = f->nlink;
-  st->st_mode = f->mode;
-  st->st_uid = f->uid;
-  st->st_gid = f->gid;
-  st->st_rdev = f->rdev;
-  st->st_size = f->size;
-  st->st_blksize = f->blksize;
-  st->st_blocks = f->blocks;
-  st->st_atim.tv_sec = f->atime;  st->st_atim.tv_nsec = f->atimensec;
-  st->st_mtim.tv_sec = f->mtime;  st->st_mtim.tv_nsec = f->mtimensec;
-  st->st_ctim.tv_sec = f->ctime;  st->st_ctim.tv_nsec = f->ctimensec; }
-
 int fstat(int fd, struct stat *st) {
   if (__love_osv == 2) {
     struct __fb_stat f;
     long r = er(sc2(NR_fstat, fd, (long) &f));
     if (r >= 0) __love_fbstat(&f, st);
     return (int) r; }
+#ifdef LvMac
+  if (__love_osv == 4) {
+    struct __mac_stat f;
+    long r = er(sc2(NR_fstat, fd, (long) &f));
+    if (r >= 0) __love_macstat(&f, st);
+    return (int) r; }
+#endif
   if (__love_osv == 3) {
     struct __nb_stat f;
     long r = er(sc2(NR_fstat, fd, (long) &f));

@@ -1,4 +1,5 @@
 #include "../impl.h"
+#include <sys/resource.h>
 
 /* linux answers from the vdso when it can; a 32-bit target wants the time64 name,
  * since its plain __vdso_clock_gettime fills the 32-bit record */
@@ -54,6 +55,23 @@ int clock_gettime(int ck, struct timespec *ts) {
   if (__love_osv == 1) {
     if (!probed) cgt = vdso_cgt(), probed = 1;
     if (cgt && !cgt(ck, ts)) return 0; }
+#endif
+#ifdef LvMac
+  if (__love_osv == 4) {
+    /* xnu has no clock_gettime: gettimeofday's third word is mach_absolute_time,
+     * nanoseconds on intel, and the cpu clocks are the process's rusage */
+    if (ck == 2 || ck == 3) {
+      struct rusage u;
+      if (getrusage(0, &u) < 0) return -1;
+      long us = (u.ru_utime.tv_sec + u.ru_stime.tv_sec) * 1000000L + u.ru_utime.tv_usec + u.ru_stime.tv_usec;
+      ts->tv_sec = us / 1000000, ts->tv_nsec = us % 1000000 * 1000;
+      return 0; }
+    struct timeval tv;
+    unsigned long long mt = 0;
+    if (er(fb3(116, (long) &tv, 0, (long) &mt)) < 0) return -1;
+    if (ck == 1) ts->tv_sec = (long) (mt / 1000000000), ts->tv_nsec = (long) (mt % 1000000000);
+    else ts->tv_sec = tv.tv_sec, ts->tv_nsec = tv.tv_usec * 1000;
+    return 0; }
 #endif
   if (__love_osv == 2) {
     /* freebsd: MONOTONIC 4 (1 is VIRTUAL), PROCESS_CPUTIME 15, THREAD_CPUTIME 14 */

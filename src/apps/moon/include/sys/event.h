@@ -7,9 +7,15 @@ struct kevent {
   short filter;
   unsigned short flags;
   unsigned int fflags;
+#ifdef __ILP32__
+  long long data;                     /* freebsd's int64_t and uint64_t, on every arch */
+  void *udata;
+  unsigned long long ext[4];
+#else
   long data;
   void *udata;
   unsigned long ext[4];
+#endif
 };
 #define EVFILT_READ    (-1)
 #define EVFILT_WRITE   (-2)

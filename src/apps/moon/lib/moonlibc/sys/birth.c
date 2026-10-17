@@ -1,20 +1,26 @@
 #include "../impl.h"
 
-/* birth time: 0 filled | 1 none kept | -1, errno set. the BSDs keep it in stat, where
- * none reads as a date (freebsd -1, netbsd 0); linux needs statx */
+
+/* birth time: 0 filled | 1 none kept | -1, errno set. the BSDs and macos keep it in stat,
+ * where none reads as a date (freebsd -1, netbsd 0); linux needs statx. nofollow is 0x200
+ * there, 0x100 on linux */
 int __love_birth(char const *p, int follow, struct timespec *out) {
 #ifdef LvOsTranslate
   if (__love_osv == 2) {
     struct __fb_stat f;
     if (er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) &f, follow ? 0 : 0x200)) < 0) return -1;
     if (f.st_birthtim.tv_sec < 0) return 1;
-    return *out = f.st_birthtim, 0; }
+    return *out = __love_fbts(f.st_birthtim), 0; }
+  if (__love_osv == 4) {
+    struct __mac_stat f;
+    if (er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) &f, follow ? 0 : 0x200)) < 0) return -1;
+    if (f.btim.tv_sec <= 0) return 1;
+    return *out = f.btim, 0; }
   if (__love_osv == 3) {
     struct __nb_stat f;
     if (er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) &f, follow ? 0 : 0x200)) < 0) return -1;
-    if (!f.btime) return 1;
-    out->tv_sec = f.btime, out->tv_nsec = f.btimensec;
-    return 0; }
+    if (!f.btim.tv_sec) return 1;
+    return *out = __love_nbts(f.btim), 0; }
 #endif
   { struct __lx_statx sx;
     long fl = follow ? 0 : AT_SYMLINK_NOFOLLOW;

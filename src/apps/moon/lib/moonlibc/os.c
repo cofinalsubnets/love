@@ -1,8 +1,8 @@
-/* os.c -- one binary on linux, freebsd and netbsd: numbers, errnos, signals and flags
- * translate through these tables. i386 and arm take identity stubs */
+/* os.c -- one binary on linux, freebsd, netbsd and macos: numbers, errnos, signals and
+ * flags translate through these tables. wasm takes identity stubs */
 #include "impl.h"
 
-long __love_osv;         /* 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, -1 inle */
+long __love_osv;         /* 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, 4 macos, -1 inle */
 
 /* inle's door, for a link without the kernel: ENOSYS */
 __attribute__((weak))
@@ -59,6 +59,57 @@ long __love_t32(long n, long a, long b, long c, long d, long e, long f) {
   return -38; }
 #endif
 
+#ifdef __i386__
+/* a timespec in a BSD's own shape: freebsd's 32-bit time_t cannot say past 2038, EOVERFLOW */
+union __bts { __fbts f; __nbts n; };
+static long bnar(long p, union __bts *o, int k) {
+  struct timespec const *t = (struct timespec const *) p;
+  for (int i = 0; i < k; i++) {
+    if (__love_osv == 3) o[i].n.tv_sec = t[i].tv_sec, o[i].n.tv_nsec = (long) t[i].tv_nsec;
+    else if (t[i].tv_sec != (int) t[i].tv_sec) return -75;
+    else o[i].f.tv_sec = (int) t[i].tv_sec, o[i].f.tv_nsec = (long) t[i].tv_nsec; }
+  return 0; }
+static void bwid(union __bts const *o, long p) {
+  *(struct timespec *) p = __love_osv == 3 ? __love_nbts(o->n) : __love_fbts(o->f); }
+
+long __love_tbsd(long n, long a, long b, long c, long d, long e, long f) {
+  union __bts o[2];
+  long nr = __love_nrfb(n), r;
+  if (nr < 0) return -38;
+  if (n == NR_clock_gettime) {
+    r = __love_sys(nr, a, (long) o, 0, 0, 0, 0);
+    if (!r) bwid(o, b);
+    return r; }
+  if (n == NR_nanosleep) {
+    if ((r = bnar(a, o, 1))) return r;
+    r = __love_sys(nr, (long) o, b ? (long) (o + 1) : 0, 0, 0, 0, 0);
+    if (b && __love_parked(r)) bwid(o + 1, b);           /* EINTR: the time left */
+    return r; }
+  if (n == NR_ppoll || n == NR_pselect6) {
+    long t = n == NR_ppoll ? c : e;
+    if (t && (r = bnar(t, o, 1))) return r;
+    return n == NR_ppoll ? __love_sys(nr, a, b, t ? (long) o : 0, d, e, f)
+                         : __love_sys(nr, a, b, c, d, t ? (long) o : 0, f); }
+  if (c && (r = bnar(c, o, 2))) return r;                /* utimensat: two */
+  return __love_sys(nr, a, b, c ? (long) o : 0, d, e, f); }
+#endif
+
+/* the running binary's path, which macos keeps out of any /proc: proc_info's
+ * PROC_PIDPATHINFO. 0 on every other kernel, whose /proc or sysctl answers */
+unsigned long __love_selfpath(char *b, unsigned long n) {
+#ifdef LvMac
+  if (__love_osv == 4) {
+    char t[4096];
+    memset(t, 0, sizeof t);
+    if (__love_fb(336, 2, getpid(), 11, 0, (long) t, sizeof t) < 0) return 0;   /* pidinfo, pathinfo */
+    unsigned long k = strlen(t);
+    if (!k || k >= n) return 0;
+    memcpy(b, t, k + 1);
+    return k; }
+#endif
+  (void) b, (void) n;
+  return 0; }
+
 long __love_osdetect(void) {
 #ifndef LvOsTranslate
   /* no tables on this arch: the kernel is whichever -os named */
@@ -73,8 +124,20 @@ long __love_osdetect(void) {
 # endif
 #else
   /* 20 is getpid on the BSDs and a refusal on linux; kern.ostype parts the BSDs
-   * (__sysctl 202, {CTL_KERN, KERN_OSTYPE}). a64 and rv64 ask through impl.h's leaves */
-# if defined(__aarch64__) || defined(__riscv)
+   * (__sysctl 202, {CTL_KERN, KERN_OSTYPE}). a64 and rv64 ask through impl.h's leaves,
+   * where asking freebsd blind is SIGILL: crt0's entry parts it out first */
+# if defined(__ARM_EABI__)
+  /* crt0 parted netbsd out by the entry; close(-1) is -EBADF on linux, +EBADF on freebsd */
+  return __love_sys(6, -1, 0, 0, 0, 0, 0) > 0 ? 2 : 1;
+# elif defined(__i386__)
+  /* crt0 asks only when ebx said a BSD: both take stack args, so the door is set first */
+  __love_osv = 2;
+  { int mib[2] = {1, 1};
+    char b[16] = {0};
+    unsigned long len = sizeof b;
+    __love_sys(202, (long) mib, 2, (long) b, (long) &len, 0, 0);
+    return b[0] == 'N' ? 3 : 2; }
+# elif defined(__aarch64__) || defined(__riscv)
   long r = __love_nbp20(-1);
   if (r <= 0) return 1;
   { int mib[2] = {1, 1};
@@ -119,106 +182,159 @@ int __love_sofb(long *lv, long *op) { return 0; }
 unsigned int __love_sain(void const *a, unsigned int n, void *out) { memcpy(out, a, n); return n; }
 void __love_saout(void *a, unsigned int n) { }
 #else
-/* canonical -> {freebsd, netbsd}; -1 refuses (ENOSYS), an absent call is linux's own.
+/* canonical -> {freebsd, netbsd, macos}; -1 refuses (ENOSYS), an absent call is linux's own.
  * netbsd's padded classics keep their numbers while the members slide the args */
-static short const os_nr[][3] = {
-  {NR_read,          NR_fb_read,          3},
-  {NR_write,         NR_fb_write,         4},
-  {NR_close,         NR_fb_close,         6},
-  {NR_fstat,         NR_fb_fstat,       440},   /* the member fills the OS twin */
-  {NR_lseek,         NR_fb_lseek,       199},   /* nb: (fd PAD off whence) */
-  {NR_mmap,          NR_fb_mmap,        197},   /* nb: 7 args, pos on the stack */
-  {NR_mprotect,      NR_fb_mprotect,     74},
-  {NR_munmap,        NR_fb_munmap,       73},
-  {NR_rt_sigaction,  NR_fb_rt_sigaction, -1},   /* the member builds the OS shape */
-  {NR_rt_sigprocmask, NR_fb_rt_sigprocmask, 293},/* 16-byte set, how+1 */
-  {NR_ioctl,         NR_fb_ioctl,        54},   /* the member translates requests */
-  {NR_pread64,       NR_fb_pread64,     173},   /* nb: (fd buf n PAD off) */
-  {NR_pwrite64,      NR_fb_pwrite64,    174},
-  {NR_mincore,       NR_fb_mincore,      78},
-  {NR_madvise,       NR_fb_madvise,      75},
-  {NR_msync,         NR_fb_msync,       277},   /* nb: __msync13; the member maps the flags */
-  {NR_copy_file_range, NR_fb_copy_file_range, -1},   /* netbsd has none */
-  {NR_nanosleep,     NR_fb_nanosleep,   430},
-  {NR_getpid,        NR_fb_getpid,       20},
-  {NR_socket,        NR_fb_socket,      394},
-  {NR_socketpair,    NR_fb_socketpair,  135},
-  {NR_connect,       NR_fb_connect,      98},
-  {NR_accept,        NR_fb_accept,       30},
-  {NR_sendto,        NR_fb_sendto,      133},
-  {NR_recvfrom,      NR_fb_recvfrom,     29},
-  {NR_sendmsg,       NR_fb_sendmsg,      28},
-  {NR_recvmsg,       NR_fb_recvmsg,      27},
-  {NR_shutdown,      NR_fb_shutdown,    134},
-  {NR_bind,          NR_fb_bind,        104},
-  {NR_listen,        NR_fb_listen,      106},
-  {NR_getsockname,   NR_fb_getsockname,  32},
-  {NR_getpeername,   NR_fb_getpeername,  31},
-  {NR_setsockopt,    NR_fb_setsockopt,  105},
-  {NR_getsockopt,    NR_fb_getsockopt,  118},
-  {57,               NR_fb_fork,          2},   /* fork: a BSD branch calls 57 */
-  {NR_execve,        NR_fb_execve,       59},
-  {NR_execveat,      NR_fb_fexecve,     465},   /* the member builds fexecve(fd av ev) */
-  {60,               NR_fb_exit,          1},   /* exit and exit_group are one act here */
-  {NR_wait4,         NR_fb_wait4,       449},
+static short const os_nr[][4] = {
+  {NR_read,          NR_fb_read,          3,    3},
+  {NR_write,         NR_fb_write,         4,    4},
+  {NR_close,         NR_fb_close,         6,    6},
+  {NR_fstat,         NR_fb_fstat,       440,  339},   /* the member fills the OS twin */
+  {NR_lseek,         NR_fb_lseek,       199,  199},   /* nb: (fd PAD off whence) */
+  {NR_mmap,          NR_fb_mmap,        197,  197},   /* nb: 7 args, pos on the stack */
+  {NR_mprotect,      NR_fb_mprotect,     74,   74},
+  {NR_munmap,        NR_fb_munmap,       73,   73},
+  {NR_rt_sigaction,  NR_fb_rt_sigaction, -1,   -1},   /* the member builds the OS shape */
+  {NR_rt_sigprocmask, NR_fb_rt_sigprocmask, 293,   48},/* 16-byte set, how+1 */
+  {NR_ioctl,         NR_fb_ioctl,        54,   54},   /* the member translates requests */
+  {NR_pread64,       NR_fb_pread64,     173,  153},   /* nb: (fd buf n PAD off) */
+  {NR_pwrite64,      NR_fb_pwrite64,    174,  154},
+  {NR_mincore,       NR_fb_mincore,      78,   78},
+  {NR_madvise,       NR_fb_madvise,      75,   75},
+  {NR_msync,         NR_fb_msync,       277,   65},   /* nb: __msync13; the member maps the flags */
+  {NR_copy_file_range, NR_fb_copy_file_range, -1,   -1},   /* netbsd has none */
+  {NR_nanosleep,     NR_fb_nanosleep,   430,   -1},
+  {NR_getpid,        NR_fb_getpid,       20,   20},
+  {NR_socket,        NR_fb_socket,      394,   97},
+  {NR_socketpair,    NR_fb_socketpair,  135,  135},
+  {NR_connect,       NR_fb_connect,      98,   98},
+  {NR_accept,        NR_fb_accept,       30,   30},
+  {NR_sendto,        NR_fb_sendto,      133,  133},
+  {NR_recvfrom,      NR_fb_recvfrom,     29,   29},
+  {NR_sendmsg,       NR_fb_sendmsg,      28,   28},
+  {NR_recvmsg,       NR_fb_recvmsg,      27,   27},
+  {NR_shutdown,      NR_fb_shutdown,    134,  134},
+  {NR_bind,          NR_fb_bind,        104,  104},
+  {NR_listen,        NR_fb_listen,      106,  106},
+  {NR_getsockname,   NR_fb_getsockname,  32,   32},
+  {NR_getpeername,   NR_fb_getpeername,  31,   31},
+  {NR_setsockopt,    NR_fb_setsockopt,  105,  105},
+  {NR_getsockopt,    NR_fb_getsockopt,  118,  118},
+  {NR_execve,        NR_fb_execve,       59,   59},
+  {NR_execveat,      NR_fb_fexecve,     465,   -1},   /* the member builds fexecve(fd av ev) */
+  {NR_exit,          NR_fb_exit,          1,    1},   /* exit and exit_group are one act here */
+  {NR_wait4,         NR_fb_wait4,       449,    7},
   /* getrusage: netbsd's __getrusage50 narrows suseconds_t. statfs: no row, the shapes disagree */
-  {NR_getrusage,     NR_fb_getrusage,    -1},
-  {NR_getrlimit,     NR_fb_getrlimit,   194},
-  {NR_setrlimit,     NR_fb_setrlimit,   195},
-  {NR_setpriority,   NR_fb_setpriority,  96},
-  {NR_kill,          NR_fb_kill,         37},
-  {NR_fcntl,         NR_fb_fcntl,        92},
-  {NR_fsync,         NR_fb_fsync,        95},
-  {NR_fdatasync,     NR_fb_fdatasync,   241},
-  {NR_ftruncate,     NR_fb_ftruncate,   201},   /* nb: (fd PAD len) */
-  {NR_getcwd,        NR_fb_getcwd,      296},   /* __getcwd answers 0 */
-  {NR_chdir,         NR_fb_chdir,        12},
-  {NR_fchmod,        NR_fb_fchmod,      124},
-  {NR_fchown,        NR_fb_fchown,      123},
-  {NR_umask,         NR_fb_umask,        60},
-  {NR_getuid,        NR_fb_getuid,       24},
-  {NR_getgid,        NR_fb_getgid,       47},
-  {NR_setuid,        NR_fb_setuid,       23},
-  {NR_setgid,        NR_fb_setgid,      181},
-  {NR_geteuid,       NR_fb_geteuid,      25},
-  {NR_setpgid,       NR_fb_setpgid,      82},
-  {NR_setsid,        NR_fb_setsid,      147},
-  {NR_setgroups,     NR_fb_setgroups,    80},
-  {NR_setresuid,     NR_fb_setresuid,    -1},   /* netbsd has none */
-  {NR_setresgid,     NR_fb_setresgid,    -1},
-  {NR_getpgid,       NR_fb_getpgid,     207},
-  {NR_sigaltstack,   NR_fb_sigaltstack, 281},   /* the member builds the OS shape */
-  {NR_chroot,        NR_fb_chroot,       61},
-  {NR_getdents64,    NR_fb_getdirentries, 390}, /* the member repacks the record */
-  {NR_clock_gettime, NR_fb_clock_gettime, 427}, /* the member translates the id */
-  {NR_exit_group,    NR_fb_exit,          1},
-  {NR_openat,        NR_fb_openat,      468},
-  {NR_mkdirat,       NR_fb_mkdirat,     461},
-  {NR_mknodat,       NR_fb_mknodat,     460},
-  {NR_fchownat,      NR_fb_fchownat,    464},
-  {NR_newfstatat,    NR_fb_newfstatat,  466},   /* the member fills the OS twin */
-  {NR_unlinkat,      NR_fb_unlinkat,    471},
-  {NR_renameat,      NR_fb_renameat,    458},
+  {NR_getrusage,     NR_fb_getrusage,    -1,  117},
+  {NR_getrlimit,     NR_fb_getrlimit,   194,  194},
+  {NR_setrlimit,     NR_fb_setrlimit,   195,  195},
+  {NR_setpriority,   NR_fb_setpriority,  96,   96},
+  {NR_kill,          NR_fb_kill,         37,   37},
+  {NR_fcntl,         NR_fb_fcntl,        92,   92},
+  {NR_fsync,         NR_fb_fsync,        95,   95},
+  {NR_fdatasync,     NR_fb_fdatasync,   241,  187},
+  {NR_ftruncate,     NR_fb_ftruncate,   201,  201},   /* nb: (fd PAD len) */
+  {NR_getcwd,        NR_fb_getcwd,      296,   -1},   /* __getcwd answers 0 */
+  {NR_chdir,         NR_fb_chdir,        12,   12},
+  {NR_fchmod,        NR_fb_fchmod,      124,  124},
+  {NR_fchown,        NR_fb_fchown,      123,  123},
+  {NR_umask,         NR_fb_umask,        60,   60},
+  {NR_getuid,        NR_fb_getuid,       24,   24},
+  {NR_getgid,        NR_fb_getgid,       47,   47},
+  {NR_setuid,        NR_fb_setuid,       23,   23},
+  {NR_setgid,        NR_fb_setgid,      181,  181},
+  {NR_geteuid,       NR_fb_geteuid,      25,   25},
+  {NR_setpgid,       NR_fb_setpgid,      82,   82},
+  {NR_setsid,        NR_fb_setsid,      147,  147},
+  {NR_setgroups,     NR_fb_setgroups,    80,   80},
+  {NR_setresuid,     NR_fb_setresuid,    -1,   -1},   /* netbsd has none */
+  {NR_setresgid,     NR_fb_setresgid,    -1,   -1},
+  {NR_getpgid,       NR_fb_getpgid,     207,  151},
+  {NR_sigaltstack,   NR_fb_sigaltstack, 281,   53},   /* the member builds the OS shape */
+  {NR_chroot,        NR_fb_chroot,       61,   61},
+  {NR_getdents64,    NR_fb_getdirentries, 390,  344}, /* the member repacks the record */
+  {NR_clock_gettime, NR_fb_clock_gettime, 427,   -1}, /* the member translates the id */
+  {NR_exit_group,    NR_fb_exit,          1,    1},
+  {NR_openat,        NR_fb_openat,      468,  463},
+  {NR_mkdirat,       NR_fb_mkdirat,     461,  475},
+  {NR_mknodat,       NR_fb_mknodat,     460,   -1},
+  {NR_fchownat,      NR_fb_fchownat,    464,  468},
+  {NR_newfstatat,    NR_fb_newfstatat,  466,  470},   /* the member fills the OS twin */
+  {NR_unlinkat,      NR_fb_unlinkat,    471,  472},
+  {NR_renameat,      NR_fb_renameat,    458,  465},
 #ifdef __riscv
-  {NR_renameat2,     NR_fb_renameat,    458},   /* riscv's rename: flags 0, one argument the BSDs ignore */
+  {NR_renameat2,     NR_fb_renameat,    458,  465},   /* riscv's rename: flags 0, one argument the BSDs ignore */
 #endif
-  {NR_linkat,        NR_fb_linkat,      457},
-  {NR_symlinkat,     NR_fb_symlinkat,   470},
-  {NR_readlinkat,    NR_fb_readlinkat,  469},
-  {NR_fchmodat,      NR_fb_fchmodat,    463},
-  {NR_faccessat,     NR_fb_faccessat,   462},
-  {NR_pselect6,      NR_fb_pselect6,    436},   /* the member hands a bare sigset* 6th */
-  {NR_ppoll,         NR_fb_ppoll,       437},   /* __pollts50: same first four args */
-  {NR_utimensat,     NR_fb_utimensat,   467},
-  {NR_pipe2,         NR_fb_pipe2,       453},
+  {NR_linkat,        NR_fb_linkat,      457,  471},
+  {NR_symlinkat,     NR_fb_symlinkat,   470,  474},
+  {NR_readlinkat,    NR_fb_readlinkat,  469,  473},
+  {NR_fchmodat,      NR_fb_fchmodat,    463,  467},
+  {NR_faccessat,     NR_fb_faccessat,   462,  466},
+  {NR_pselect6,      NR_fb_pselect6,    436,   -1},   /* the member hands a bare sigset* 6th */
+  {NR_ppoll,         NR_fb_ppoll,       437,   -1},   /* __pollts50: same first four args */
+  {NR_utimensat,     NR_fb_utimensat,   467,   -1},
+  {NR_pipe2,         NR_fb_pipe2,       453,   -1},
+  {NR_futex,         -1,                166,   -1},   /* netbsd's __futex speaks linux's; freebsd's is _umtx_op's, the member's */
+  {NR_sched_yield,   331,               350,   -1},
 };
 
 /* a plain scan: the keys ascend on x64 but not on the asm-generic arches */
 long __love_nrfb(long n) {
-  int col = __love_osv == 3 ? 2 : 1;
+  int col = __love_osv == 4 ? 3 : __love_osv == 3 ? 2 : 1;
   for (unsigned i = 0; i < sizeof os_nr / sizeof *os_nr; i++)
-    if (os_nr[i][0] == n) return os_nr[i][col];
+    if (os_nr[i][0] == n) return os_nr[i][col] < 0 || col < 3 ? os_nr[i][col] : LvMacUnix | os_nr[i][col];
   return -1; }
+
+#ifdef LvMac
+/* an *at call's args, made xnu's: AT_FDCWD is -2, and the AT_ bits (freebsd's 0x100..0x800)
+ * sit four places lower. w holds a..e */
+int __love_macat(long n, long *w) {
+  int fd = 0, fd2 = -1, fl = -1;
+  if (n == NR_openat || n == NR_mkdirat || n == NR_readlinkat) ;
+  else if (n == NR_fchownat) fl = 4;
+  else if (n == NR_newfstatat || n == NR_fchmodat || n == NR_faccessat) fl = 3;
+  else if (n == NR_unlinkat) fl = 2;
+  else if (n == NR_renameat) fd2 = 2;
+  else if (n == NR_linkat) fd2 = 2, fl = 4;
+  else if (n == NR_symlinkat) fd = 1;
+  else return 0;
+  if (w[fd] == -100) w[fd] = -2;
+  if (fd2 >= 0 && w[fd2] == -100) w[fd2] = -2;
+  if (fl >= 0) w[fl] = (w[fl] & 0xf00) >> 4;
+  return 1; }
+
+/* the socket type's two flag bits, which xnu never took, set on the new fd */
+void __love_macsofl(int fd, long t) {
+  if (t & 0x80000) fcntl(fd, F_SETFD, FD_CLOEXEC);
+  if (t & 0x800) fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK); }
+
+/* its stat64 and termios (freebsd's bits, each word a long) */
+void __love_macstat(struct __mac_stat const *f, struct stat *st) {
+  memset(st, 0, sizeof *st);
+  st->st_dev = (dev_t) f->dev;
+  st->st_ino = f->ino;
+  st->st_nlink = f->nlink;
+  st->st_mode = f->mode;
+  st->st_uid = f->uid;
+  st->st_gid = f->gid;
+  st->st_rdev = (dev_t) f->rdev;
+  st->st_size = f->size;
+  st->st_blksize = f->blksize;
+  st->st_blocks = f->blocks;
+  st->st_atim = f->atim;
+  st->st_mtim = f->mtim;
+  st->st_ctim = f->ctim; }
+void __love_tiomac(struct __fb_termios const *f, struct __mac_termios *m) {
+  memset(m, 0, sizeof *m);
+  m->c_iflag = f->c_iflag, m->c_oflag = f->c_oflag, m->c_cflag = f->c_cflag, m->c_lflag = f->c_lflag;
+  memcpy(m->c_cc, f->c_cc, 20);
+  m->c_ispeed = f->c_ispeed, m->c_ospeed = f->c_ospeed; }
+void __love_tiounmac(struct __mac_termios const *m, struct __fb_termios *f) {
+  memset(f, 0, sizeof *f);
+  f->c_iflag = (unsigned int) m->c_iflag, f->c_oflag = (unsigned int) m->c_oflag;
+  f->c_cflag = (unsigned int) m->c_cflag, f->c_lflag = (unsigned int) m->c_lflag;
+  memcpy(f->c_cc, m->c_cc, 20);
+  f->c_ispeed = (unsigned int) m->c_ispeed, f->c_ospeed = (unsigned int) m->c_ospeed; }
+#endif
 
 /* freebsd errno -> canonical. one with no canonical twin maps to 41, a blank in linux's numbering */
 static unsigned char const os_err[] = {
@@ -246,8 +362,13 @@ static unsigned char const os_err[] = {
 /* netbsd's errnos part from freebsd's only at 85..98 */
 static unsigned char const os_err_nb[] = {
   84, 95, 125, 74, 61, 63, 60, 62, 41, 72, 67, 71, 130, 131 };
+/* ..and macos from 82 to its ELAST 106: the exec and power family takes the blank */
+static unsigned char const os_err_mac[] = {
+  41, 41, 75, 41, 41, 41, 41, 125, 43, 42, 84, 41, 74, 72, 61, 67, 63, 60, 71, 62,
+  95, 41, 131, 130, 41 };
 long __love_errfb(long e) {
   if (__love_osv == 3 && e >= 85 && e <= 98) return os_err_nb[e - 85];
+  if (__love_osv == 4 && e >= 82 && e <= 106) return os_err_mac[e - 82];
   return (e > 0 && e < (long) (sizeof os_err)) ? os_err[e] : e; }
 
 /* signals, canonical <-> freebsd; -1 has no twin. freebsd 17 is SIGSTOP, canonical
@@ -263,7 +384,10 @@ long __love_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
 
 /* native siginfo heads: freebsd lays the lanes flat; netbsd swaps code and errno */
 struct __fb_siginfo { int signo, err, code, pid; unsigned uid; int status; void *addr; };
-struct __nb_siginfo { int signo, code, err, pad;
+struct __nb_siginfo { int signo, code, err;
+#ifndef __i386__
+  int pad;                            /* the union holds 64-bit words: on 8, but on i386 */
+#endif
   union { void *addr; struct { int pid; unsigned uid; int status; } chld; } u; };
 /* the address lane: a fault signal with a kernel code; a sent one carries its sender */
 static int os_faultlane(int s, long code) {
@@ -271,7 +395,7 @@ static int os_faultlane(int s, long code) {
          && code > 0 && code < 0x80; }
 /* si_code's sender band; the fault codes agree on all three kernels */
 static long os_sicode(long c) {
-  if (__love_osv == 2) switch (c) {
+  if (__love_osv == 2 || __love_osv == 4) switch (c) {
     case 0x10001: return 0;      /* SI_USER */
     case 0x10002: return -1;     /* SI_QUEUE */
     case 0x10003: return -2;     /* SI_TIMER */
@@ -288,7 +412,7 @@ static long os_sicode(long c) {
   return c; }
 void __love_sicanon(void const *n, siginfo_t *o) {
   memset(o, 0, sizeof *o);
-  if (__love_osv == 2) {
+  if (__love_osv == 2 || __love_osv == 4) {   /* macos keeps freebsd's head and its sender band */
     struct __fb_siginfo const *f = n;
     o->si_signo = (int) __love_sigcan(f->signo), o->si_errno = f->err;
     o->si_code = (int) os_sicode(f->code);
@@ -316,30 +440,34 @@ unsigned long __love_maskcan(unsigned long m) {
     if (m & (1UL << (s - 1))) { long t = os_sigcan[s]; if (t > 0) o |= 1UL << (t - 1); }
   return o; }
 
-/* open flags: the access mode rides, named bits translate, the rest drop */
+/* open flags: the access mode rides, named bits translate, the rest drop. the BSDs agree
+ * but for NOCTTY (macos 0x20000), DIRECTORY and CLOEXEC */
+static long const os_odir[] = {0x20000, 0x200000, 0x100000};
+static long const os_oclo[] = {0x100000, 0x400000, 0x1000000};
+static long os_ok(void) { return __love_osv == 4 ? 2 : __love_osv == 3; }
 long __love_ofb(long f) {
-  long o = f & 3, nb = __love_osv == 3;
+  long o = f & 3, k = os_ok();
   if (f & O_CREAT)     o |= 0x200;
   if (f & O_EXCL)      o |= 0x800;
-  if (f & O_NOCTTY)    o |= 0x8000;
+  if (f & O_NOCTTY)    o |= k == 2 ? 0x20000 : 0x8000;
   if (f & O_TRUNC)     o |= 0x400;
   if (f & O_APPEND)    o |= 8;
   if (f & O_NONBLOCK)  o |= 4;
-  if (f & O_DIRECTORY) o |= nb ? 0x200000 : 0x20000;
+  if (f & O_DIRECTORY) o |= os_odir[k];
   if (f & O_NOFOLLOW)  o |= 0x100;
-  if (f & O_CLOEXEC)   o |= nb ? 0x400000 : 0x100000;
+  if (f & O_CLOEXEC)   o |= os_oclo[k];
   return o; }
 long __love_ocan(long f) {
-  long o = f & 3, nb = __love_osv == 3;
+  long o = f & 3, k = os_ok();
   if (f & 0x200)    o |= O_CREAT;
   if (f & 0x800)    o |= O_EXCL;
-  if (f & 0x8000)   o |= O_NOCTTY;
+  if (f & (k == 2 ? 0x20000 : 0x8000)) o |= O_NOCTTY;
   if (f & 0x400)    o |= O_TRUNC;
   if (f & 8)        o |= O_APPEND;
   if (f & 4)        o |= O_NONBLOCK;
-  if (f & (nb ? 0x200000 : 0x20000))  o |= O_DIRECTORY;
+  if (f & os_odir[k]) o |= O_DIRECTORY;
   if (f & 0x100)    o |= O_NOFOLLOW;
-  if (f & (nb ? 0x400000 : 0x100000)) o |= O_CLOEXEC;
+  if (f & os_oclo[k]) o |= O_CLOEXEC;
   return o; }
 
 /* mmap flags: SHARED 1 / PRIVATE 2 / FIXED 0x10 agree; ANON moves to 0x1000;
@@ -430,8 +558,8 @@ void __love_tiocan(struct __fb_termios const *f, struct termios *t) {
   t->c_ispeed = f->c_ispeed; t->c_ospeed = f->c_ospeed; }
 
 /* inet6 moves; the BSD sockaddr fronts a length byte where linux's 16-bit family sits */
-long __love_affb(long a) { return a == 10 ? (__love_osv == 3 ? 24 : 28) : a; }
-long __love_afcan(long a) { return (a == 28 || a == 24) ? 10 : a; }
+long __love_affb(long a) { return a == 10 ? (__love_osv == 4 ? 30 : __love_osv == 3 ? 24 : 28) : a; }
+long __love_afcan(long a) { return a == (__love_osv == 4 ? 30 : __love_osv == 3 ? 24 : 28) ? 10 : a; }
 unsigned int __love_sain(void const *a, unsigned int n, void *out) {
   unsigned char const *s = a;
   unsigned char *b = out;
@@ -455,6 +583,7 @@ void __love_saout(void *a, unsigned int n) {
 /* socket type: CLOEXEC and NONBLOCK move high */
 long __love_sotype(long t) {
   long o = t & 0xff;
+  if (__love_osv == 4) return o;        /* macos has neither: __love_macsofl sets them after */
   if (t & 0x800)   o |= 0x20000000;
   if (t & 0x80000) o |= 0x10000000;
   return o; }
@@ -463,7 +592,7 @@ long __love_msgfb(long f) {
   long o = f & 3;                       /* OOB 1, PEEK 2 agree */
   if (f & 0x40)   o |= 0x80;            /* MSG_DONTWAIT */
   if (f & 0x100)  o |= 0x40;            /* MSG_WAITALL */
-  if (f & 0x4000) o |= __love_osv == 3 ? 0x400 : 0x20000;   /* MSG_NOSIGNAL */
+  if (f & 0x4000) o |= __love_osv == 4 ? 0x80000 : __love_osv == 3 ? 0x400 : 0x20000;   /* MSG_NOSIGNAL */
   return o; }
 /* recvmsg's msg_flags come back the other way */
 long __love_msgcan(long f) {
@@ -477,7 +606,7 @@ long __love_msgcan(long f) {
 int __love_sofb(long *lv, long *op) {
   if (*lv == 0) switch (*op) {
     case 2: *op = 4; return 0;          /* IP_TTL */
-    case 12: *op = __love_osv == 3 ? 23 : 65; return 0;   /* IP_RECVTTL */
+    case 12: *op = __love_osv == 4 ? 24 : __love_osv == 3 ? 23 : 65; return 0;   /* IP_RECVTTL */
     default: return -1; }
   if (*lv == 41) switch (*op) {
     case 16: *op = 4; return 0;         /* IPV6_UNICAST_HOPS */
@@ -506,7 +635,7 @@ int __love_sofb(long *lv, long *op) {
     case 20: *op = __love_osv == 3 ? 0x100c : 0x1006; return 0;   /* SO_RCVTIMEO */
     case 21: *op = __love_osv == 3 ? 0x100b : 0x1005; return 0;   /* SO_SNDTIMEO */
     case 30: *op = 2; return 0;         /* SO_ACCEPTCONN */
-    case 38: if (__love_osv == 3) return -1; *op = 0x1016; return 0;   /* SO_PROTOCOL: freebsd's alone */
-    case 39: if (__love_osv == 3) return -1; *op = 0x1019; return 0; } /* SO_DOMAIN */
+    case 38: if (__love_osv != 2) return -1; *op = 0x1016; return 0;   /* SO_PROTOCOL: freebsd's alone */
+    case 39: if (__love_osv != 2) return -1; *op = 0x1019; return 0; } /* SO_DOMAIN */
   return -1; }
 #endif

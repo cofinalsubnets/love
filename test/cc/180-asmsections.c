@@ -1,9 +1,6 @@
-/* directives in a function's asm, held to gcc: the template pushes a table section, names its
- * own numbered label from there (`1b - .`, and absolutely), and pops back to lay the rest of
- * the function -- the kernel's lock prefix, bug table and alternatives rows. two asms in one
- * function each lay their own `1:`; how many copies an inline function leaves is the
- * compiler's. a used static a pushed section names is laid, and the linker brackets each
- * table. a target with no template here computes the same. */
+/* section directives in a function's asm, held to gcc: push a table section, name a numbered
+ * label from it (`1b - .`, and absolute), pop back; two asms each lay their own `1:`; the linker
+ * brackets each table. targets without a template compute the same. */
 
 static __attribute__((used)) int helper(void) { return 5; }
 

@@ -1,17 +1,10 @@
-; the corpus mentions the frontend nifs (quit/open/close/run/getenv); a bare target
-; (kernel, wasm) binds few of them, and an unbound mention raises missing at every
-; define that names one. this file leads the corpus, so pin a no-op fallback for
-; whichever are absent: every later mention compiles quiet, and absence answers ().
-; the posix doors are a module of their own now (src/love/posix.c's rows name it) and the
-; corpus is ONE scope, so splicing it here is what lets every later file spell `open`
-; plainly -- and it must come before the fallbacks, which read what is in scope. a seat
-; without posix has no such module, and those fallbacks still cover it.
+; this file leads the corpus: splice posix first, then a no-op for each frontend nif
+; a bare target (kernel, wasm) lacks, so later mentions compile quiet and answer ()
 (cite 'posix ? (borrow 'posix))
 (map (n \ elem n (names ()) ? () (ev [': [n 'x] ()])) '(quit close run getenv))
 (elem 'open (names ()) ? () (ev '(: (open x y) ())))
 
-; test/gate/skip.sh's twin: a test that cannot run here says why through these, and on a
-; box marked strict (~/.love/etc/gate-strict, or LOVE_GATE_STRICT) the skip is red
+; a test that cannot run here says why; on a strict box (LOVE_GATE_STRICT) a skip is red
 (: (gate-strict? _) (? (getenv "LOVE_GATE_STRICT")
                       1 (open ((getenv "HOME") + "/.love/etc/gate-strict") "r" @ q (hot? q ? (close q, 1) 0)))
    (gate-skip m) (gate-strict? 0 ? (puts (m + " -- REFUSED: a strict box runs every lane\n"), quit 1)
@@ -19,16 +12,12 @@
    (gate-partly m) (gate-strict? 0 ? (puts (m + " -- REFUSED: a strict box runs every leg\n"), quit 1)
                     (puts (m + "\n"))))
 
-; the reader under test -- the socket. every print->read
-; differential in the tree reads through this one binding (test/roundtrip.l,
-; test/fuzz.l, test/host/rdiff.l), so the whole set moves by rebinding it here
-; and nowhere else. the protocol is `sound`'s: (r text) answers the datum consed
-; onto the rest, () at a clean end, or `torn` where the shape ran out of text.
+; the reader under test: every print->read differential reads through this one binding.
+; (r text) answers the datum consed onto the rest, () at a clean end, `torn` if cut short
 (: rd-test sound)
 
 (: test_t0 (clock 0)
- ; a name the book lacks ends the run, file mode's law. a welp window says a miss is the
- ; subject; outside one, absence read as data is a bug the tally would otherwise hide.
+ ; a missing name ends the run unless a welp window makes the miss the subject
  (test-strict a b) (say err (";; " + show a + " " + show b), put err 10,
                       flush err, quit 1, welp a b)
  (term_esc string) (do (putc 27) (puts string))
@@ -44,38 +33,25 @@
    test_state {}
    (test_set k v) (pin test_state k v)
    (test_get k) (peep test_state k 0)
-   ; a failed test records and carries on, so one run shows every failure -- zz-fin.l
-   ; prints the list and quits 1. a runner that does not end in zz-fin.l owes a
-   ; (test_fin ()) of its own before it claims ok, or its failures exit 0 in silence.
+   ; a failed test records and carries on; a runner not ending in zz-fin.l owes its own
+   ; (test_fin ()), or its failures exit 0 in silence
    (test_fin u) (test_get 'fail @ f
                  (? (two? f)
                     (do (puts "FAILED:") (putc 10)
                         (each f (x \ do (puts "  ") (putx x) (putc 10)))
                         (quit 1))
                     0))
-   ; word: a full 64-bit-word build (native, kernel) -- which is also where reals
-   ; are f64, libm is glibc's, a filesystem exists, and the RNG runs full-width.
-   ; false only on the 32-bit wasm shim; gates the asserts that need any of those.
+   ; a 64-bit-word build: f64 reals, full-width rng
    word (32 2 < max-charm)
-   ; hosted: a kernel underneath -- processes (hark), an environ, a filesystem. false on
-   ; inle and in the browser, where love-os says so; gates the laws that reach the OS.
+   ; a host os underneath (processes, environ); false on inle and in the browser
    hosted (love-os @ ('linux || 'freebsd || 'netbsd) 1 0)
-   ; gcstress: the LvGcStress runtime, which collects at every call that may, so a show
-   ; apiece moves the collection count; laws timing a live structure's growth skip there
-   gcstress (: c (peep (gauge 0) 3 0) _ (map show ^64) (peep (gauge 0) 3 0 - c > 32))
-   ; files: a real filesystem underneath -- native AND inle (a ramfs), not the browser.
-   ; word was this proxy while the wasm shim was 32-bit; the wasm64 module is 64-bit, so
-   ; word is true there now and a filesystem law needs its own predicate.
+   ; a real filesystem: native and inle (ramfs), not the browser
    files !(love-os = 'wasm)
-   ; (f 0) with stdout sent nowhere: the editor paints the terminal and asks it questions,
-   ; whose answers would land on the command line after the run
+   ; (f 0) with stdout to /dev/null, so a terminal's answers don't land on the command line
    (test-mute f) (!(hosted && elem 'openfd (names ())) ? (f 0)
                     (: _ (flush out) s (dup 1) n (openfd "/dev/null" 1) ((dup2 n 1, close n),
                                                                          mind f () (_ \ (flush out, dup2 s 1, close s))))))
-; ports of this run's own: two runs at once, a gate's and a hand's, never share one. a
-; process takes its ports in turn from a block its pid picks, never one twice, and steps
-; past any already taken; a server another process opens is ready when it answers, not
-; after a fixed nap
+; ports from a block the pid picks, never one twice, so concurrent runs never share one
 (: (test-next u) (test_get 'port @ k (test_set 'port (k + 1), 20000 + 64 * (getpid 0 % 600) + k))
    (test-seat f) (: (try n) (: p (test-next 0) s (f p) (!(nom? s) || n <= 0 ? [p s] (try (n - 1))))
                     (try 63))
@@ -87,14 +63,18 @@
                            (go 0))
    ; a server that takes many connections is up when one lands on loopback at port p
    (test-up p) (test-until nom? (_ \ connect ['tcp "127.0.0.1" p] @ c (nom? c ? c (close c)))))
-; how a cost grows: (f n) and (f (4 * n)) timed, the best of five each after a warm run,
-; the second held under eight times the first. a linear or n log n cost sits near four, a
-; quadratic one at sixteen. hosted only: the inle kernel's clock counts milliseconds, and
-; there the same laws pass and fail with the box's load; and not under gcstress, where each
-; collection walks the whole live set. in both it answers 1 untimed
-(: (test-took f n) (: t0 (nclock 0) _ (f n) (nclock t0))
-   (test-best f n) (foldl min (test-took f n) (map (u \ test-took f n) ^4))
-   (test-linear f n) (!hosted || gcstress || (: _ (f n) a (test-best f n) b (test-best f (4 * n)) (b < 8 * a))))
+; how a cost grows: (f n) and (f (4 * n)) counted after a warm run, the second held under
+; eight times the first (linear sits near 4, quadratic at 16). the count is the evaluator's
+; ticks (gauge [16]), never the clock; test-linear-words counts the words f allocates, for a
+; cost inside a nif
+(: (test-turns f n) (: p (twirl (_ \ (rest 1000000000)) ()) _ (rest 0)
+     t0 (peep (gauge 0) 16 0) _ (f n) t1 (peep (gauge 0) 16 0) _ (freeze p)
+     (t1 - t0))
+   (test-words f n) (: _ (please 1) w0 (peep (gauge 0) 6 0) _ (f n) _ (please 1)   ; [6] sums each nursery's fill
+                      (peep (gauge 0) 6 0 - w0))
+   (test-grows c f n) (: _ (f n) a (c f n) b (c f (4 * n)) (b < 8 * a))
+   (test-linear f n) (test-grows test-turns f n)
+   (test-linear-words f n) (test-grows test-words f n))
 
 (:: 'test (l \
                (:
@@ -105,8 +85,8 @@
                       (test_set 'fail (x . (two? (test_get 'fail) ? (test_get 'fail)))))))
                 ('do . map (l \ [report ['\ l] l]) l))))
 
-; the codec tests' reads: a file whole ("" for none), s16le as signed numbers, and 11172-4's
-; full accuracy -- the rms under 1/sqrt 12 of a step, none more than two
+; codec test reads: a whole file ("" for none), s16le samples, and full accuracy
+; (rms under 1/sqrt 12 of a step, none off by more than two)
 (: (av-t-rd p) (open p "r" @ q (hot? q ? (: s (slurp q) (close q, s)) ""))
    (av-t-s16 s) ((cite 'guts 'peepv) (: c (cask #s) (pour c 0 s 0 #s, c)) 0 2 2 (#s // 2) @ t (t - 65536 * (t >= 32768)))
    (av-t-full a b) (? (#a != #b || #a < 2) 0

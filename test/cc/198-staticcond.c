@@ -1,7 +1,5 @@
-/* a ?: in a static initializer whose condition is known at compile time: a folded integer
- * picking a function's address (the kernel's pm_sleep_ptr), a string literal as the
- * condition (never null -- nf_conntrack_sip's `"f" ? sizeof("f") - 1 : 0`), a static address,
- * and an integer ?: inside arithmetic. held to gcc. */
+/* a ?: in a static initializer decided at compile time: a folded int picking a function, a
+ * string literal condition (never null), a static address, a ?: inside arithmetic. held to gcc. */
 
 struct ops { int (*suspend)(int); int (*resume)(int); int (*idle)(int); };
 struct hdr { const char *name; unsigned long len; const char *cname; unsigned long clen; };

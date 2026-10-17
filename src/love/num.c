@@ -289,7 +289,8 @@ static void mag_add_off(love_limb *r, int rn, love_limb const *s, int sn, int of
  for (; c && off + i < rn; i++) { dlimb t = (dlimb) r[off+i] + c;        r[off+i] = (love_limb) t; c = t >> limb_bits; } }
 
 // karatsuba for equal-length operands: three half-size products in place of one
-// full one; below kara_cutoff schoolbook's lower constant wins. t is scratch.
+// full one; below kara_cutoff schoolbook's lower constant wins. t is scratch, 4n + 8 log n
+// limbs: each level's sums and middle product, then the next level's
 #define kara_cutoff 40   // limbs/operand above which Karatsuba beats schoolbook (measured crossover)
 static void mag_mul_kara(love_limb *r, love_limb const *a, love_limb const *b, int n, love_limb *t) {
  if (n < kara_cutoff) { mag_mul(r, a, n, b, n); return; }
@@ -302,8 +303,10 @@ static void mag_mul_kara(love_limb *r, love_limb const *a, love_limb const *b, i
  while (z2n > 0 && r[2*m + z2n-1] == 0) z2n--;
  love_limb *sa = t, *sb = sa + (h+1), *z1 = sb + (h+1);
  int nsa = mag_add(sa, a, m, a + m, h), nsb = mag_add(sb, b, m, b + m, h);
- mag_mul(z1, sa, nsa, sb, nsb);                       // z1 = (a0+a1)(b0+b1) on the half-size sums
- int nz1 = nsa + nsb;
+ for (int i = nsa; i <= h; i++) sa[i] = 0;
+ for (int i = nsb; i <= h; i++) sb[i] = 0;
+ mag_mul_kara(z1, sa, sb, h + 1, t + 4 * (h+1));     // z1 = (a0+a1)(b0+b1), the sums zero-padded to h+1
+ int nz1 = 2 * (h+1);
  while (nz1 > 0 && z1[nz1-1] == 0) nz1--;
  nz1 = mag_sub(z1, z1, nz1, r,       z0n);
  while (nz1 > 0 && z1[nz1-1] == 0) nz1--;   // z1 -= z0
@@ -532,23 +535,32 @@ static struct g *bmul_setup(struct g *g) {
 // [hdr | job stack | A(n) | B(n) | R(2n) | scratch], re-read by offset each
 // dispatch. a job either splits (push the three half-size children, LIFO) or
 // combines (z1 -= z0; z1 -= z2; r += z1<<m). a shorter operand rides zero-padded to n.
+// a lopsided pair (one past twice the other) is cut instead: n the shorter's width, the
+// longer np pieces of it, each piece's product laid in T and added into R at its offset
+// by a driver job (state 2 + the next piece).
 #define kmul_chunk (1 << 14)   // leaf limb-mults folded per dispatch before a yield check
 #define KmulHdr 8             // ws header limbs: [0]=n [1]=top (stack ptr) [2]=sign [3]=r_off
+                              // [4]=R's limbs [5]=np, the pieces (0: none) [6]=t_off
 #define KmulJw  6             // job record limbs: ar, br, n, rr, sr, state
 static union u const kmul_loop[1] = { { .ap = lvm_kmul } };
 
 static struct g *kmul_setup(struct g *g) {
  word a = g->sp[0], b = g->sp[1];
- // caller contract: bigp(a)&&bigp(b), n = the longer's limbs >= kara_cutoff
- int n = max(big_nlimbs(a), big_nlimbs(b)), d = 0;
+ // caller contract: bigp(a)&&bigp(b), n >= kara_cutoff: the longer's limbs, or for a
+ // lopsided pair the shorter's
+ int lo = min(big_nlimbs(a), big_nlimbs(b)), hi = max(big_nlimbs(a), big_nlimbs(b)),
+     np = 2 * lo < hi ? (hi + lo - 1) / lo : 0, n = np ? lo : hi, d = 0;
  for (int t = n; t >= kara_cutoff; t = (t + 1) / 2) d++;   // karatsuba depth
  uintptr_t njob = (uintptr_t) 8 * d + 32,                 // job-stack capacity (~3d live, generous)
            scrn = (uintptr_t) 6 * n + 16 * (uintptr_t) d + 256,      // O(n) scratch, with margin
+           asz = np ? (uintptr_t) np * n : (uintptr_t) n,
+           rsz = np ? asz + n : 2 * (uintptr_t) n,
            jobs_off = KmulHdr,
            a_off = jobs_off + njob * KmulJw,
-           b_off = a_off + n,
+           b_off = a_off + asz,
            r_off = b_off + n,
-           scr_off = r_off + 2 * (uintptr_t) n,
+           t_off = r_off + rsz,
+           scr_off = t_off + (np ? 2 * (uintptr_t) n : 0),
            wslimbs = scr_off + scrn,
            sreq = str_width(wslimbs * sizeof(love_limb)),
            breq = Width(struct cask) + Width(struct tag);
@@ -556,6 +568,7 @@ static struct g *kmul_setup(struct g *g) {
  a = g->sp[0], b = g->sp[1];                              // re-fetch (have may have GC'd)
  love_limb sa[wlimbs], sb[wlimbs]; love_limb const *la, *lb; bool nega, negb;
  int na = load_int_mag(a, sa, &la, &nega), nb = load_int_mag(b, sb, &lb, &negb);
+ if (na < nb) { love_limb const *x = la; la = lb, lb = x; int y = na; na = nb, nb = y; }   // the longer in A
  struct str *ws_s = ini_str(str(g->hp), wslimbs * sizeof(love_limb));
  g->hp += sreq;
  love_limb *ws = (love_limb*) txt(ws_s);
@@ -563,8 +576,9 @@ static struct g *kmul_setup(struct g *g) {
  memcpy(ws + a_off, la, (size_t) na * sizeof(love_limb));          // the rest stays the memset's zeros
  memcpy(ws + b_off, lb, (size_t) nb * sizeof(love_limb));
  ws[0] = (love_limb) n, ws[1] = 1, ws[2] = (love_limb) (nega != negb), ws[3] = r_off;   // n, top=1, sign, r_off
- love_limb *j0 = ws + jobs_off;                             // the root job: multiply a x B -> R
- j0[0] = a_off, j0[1] = b_off, j0[2] = (love_limb) n, j0[3] = r_off, j0[4] = scr_off, j0[5] = 0;
+ ws[4] = rsz, ws[5] = (love_limb) np, ws[6] = t_off;
+ love_limb *j0 = ws + jobs_off;                             // the root job: A x B -> R, or the driver
+ j0[0] = a_off, j0[1] = b_off, j0[2] = (love_limb) n, j0[3] = np ? t_off : r_off, j0[4] = scr_off, j0[5] = np ? 2 : 0;
  union u *k = (union u*) g->hp; g->hp += breq;
  cask(k)->ap = lvm_cask;
  cask(k)->str = ws_s;
@@ -577,7 +591,7 @@ static struct g *kmul_setup(struct g *g) {
 // FIXME can we choose different types to reduce the amount of explicit casting in this function?
 static lvm(lvm_kmul) {
  love_limb *ws = (love_limb*) txt(cask(Sp[0])->str);
- int n = (int) ws[0], top = (int) ws[1];
+ int top = (int) ws[1];
  love_limb *jobs = ws + KmulHdr;
  long budget = kmul_chunk;
  while (top > 0 && budget > 0) {
@@ -586,6 +600,16 @@ static lvm(lvm_kmul) {
   love_limb *J = jobs + (uintptr_t) (top - 1) * KmulJw;
   uintptr_t ar = J[0], br = J[1], rr = J[3], sr = J[4];
   int jn = (int) J[2], st = (int) J[5];
+  if (st >= 2) {                                          // driver: add the last piece's T, lay the next
+   int k = st - 2;
+   if (k > 0) mag_add_off(ws + ws[3], (int) ws[4], ws + rr, 2 * jn, (k - 1) * jn);
+   if (k < (int) ws[5]) {
+    J[5] = (love_limb) (st + 1);
+    love_limb *P = jobs + (uintptr_t) top * KmulJw;      // piece k x B -> T
+    P[0] = ar + (uintptr_t) k * (uintptr_t) jn, P[1] = br, P[2] = (love_limb) jn, P[3] = rr, P[4] = sr, P[5] = 0;
+    top++; }
+   else top--;
+   budget -= 2 * jn; continue; }
   if (jn < kara_cutoff) {                                 // leaf: schoolbook jn x jn -> ws[rr..rr+2jn)
    mag_mul(ws + rr, ws + ar, jn, ws + br, jn);
    budget -= (long) jn * jn; top--; continue; }
@@ -623,13 +647,13 @@ static lvm(lvm_kmul) {
  ws[1] = (love_limb) top;                                   // persist the stack pointer before any yield
  if (top > 0) { YieldCheck(); love_musttail return Continue(); }
  bool neg = ws[2];
- uintptr_t r_off = ws[3];               // done: ws[r_off..r_off+2n) is the product
- Have(Width(struct big) + b2w(((size_t) 2 * (size_t) n + 1) * sizeof(love_limb)));
+ uintptr_t r_off = ws[3], rn = ws[4];   // done: ws[r_off..r_off+rn) is the product
+ Have(Width(struct big) + b2w(((size_t) rn + 1) * sizeof(love_limb)));
  ws = (love_limb*) txt(cask(Sp[0])->str);                    // re-fetch (Have may have GC'd)
- n = (int) ws[0], r_off = ws[3];
+ r_off = ws[3], rn = ws[4];
  word ret = Sp[1], res;
  Pack(g);
- res = big_canon(&g->hp, ws + r_off, 2 * n, neg);
+ res = big_canon(&g->hp, ws + r_off, (int) rn, neg);
  Unpack(g);
  Sp += 1; Sp[0] = res; Ip = cell(ret); love_musttail return Continue(); }
 
@@ -640,9 +664,9 @@ lvm(lvm_bmul_start) {
  word a = Sp[0], b = Sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
  if (na <= bmul_chunk / nb) LvmResume(g, big_binop, vop_mul)
- if (bigp(a) && bigp(b) && 2 * min(na, nb) >= max(na, nb)) {   // near-equal large: subquadratic Karatsuba
-  LvmResume(g, kmul_setup) }
- LvmResume(g, bmul_setup) }   // lopsided large: chunked schoolbook
+ if (bigp(a) && bigp(b) && (2 * min(na, nb) >= max(na, nb) || min(na, nb) >= kara_cutoff)) {
+  LvmResume(g, kmul_setup) }  // large: Karatsuba, a lopsided pair in pieces of the shorter's width
+ LvmResume(g, bmul_setup) }   // a short one under the cutoff: chunked schoolbook
 
 static lvm(lvm_bmul) {
  int i = (int) getcharm(Sp[0]);
@@ -750,8 +774,26 @@ static lvm(lvm_bdiv) {
 static love_inline love_limb rdigit(char c) {
  return (love_limb) (c <= '9' ? c - '0' : (c | 32) - 'a' + 10); }
 
-// g->sp[0] is a [+-]?<pfx><digits> token; replace it with the canonical value.
-// accumulates `chunk` digits per mul-add pass (radix**chunk fits one limb).
+// slots of w limbs in x (np of them, a power of two) joined in pairs, hi r^(chunk w) + lo,
+// until one holds the value: each level's power the square of the last. pw, pn, t and kt
+// are scratch, kt karatsuba's
+static void mag_join_dec(love_limb *x, int np, love_limb *pw, love_limb *pn, love_limb *t, love_limb *kt,
+                         love_limb p0) {
+ pw[0] = p0;
+ for (int w = 1; w < np; w *= 2) {
+  for (int j = 0; j < np; j += 2 * w) {
+   love_limb *lo = x + j, *hi = lo + w;
+   int nh = w;
+   while (nh > 0 && !hi[nh - 1]) nh--;
+   if (!nh) continue;                                 // a zero top half: lo is the pair
+   mag_mul_kara(t, hi, pw, w, kt);
+   mag_add_off(t, 2 * w, lo, w, 0);
+   memcpy(lo, t, (size_t) 2 * w * sizeof(love_limb)); }
+  if (2 * w < np) { mag_mul_kara(pn, pw, pw, w, kt); love_limb *z = pw; pw = pn, pn = z; } } }
+
+// g->sp[0] is a [+-]?<pfx><digits> token; replace it with the canonical value. a power of
+// two radix packs its digits' bits; ten lays `chunk` digits a limb and joins them by
+// halves (mag_join_dec), or for a short token folds them in by a mul-add a limb
 static struct g *big_read_radix(struct g *g, love_limb radix, int chunk, uintptr_t pfx) {
  struct str *tok = str(g->sp[0]);
  uintptr_t n = tok->len;
@@ -759,12 +801,36 @@ static struct g *big_read_radix(struct g *g, love_limb radix, int chunk, uintptr
  bool neg = n && s[0] == '-';
  uintptr_t i = ((n && (s[0] == '-' || s[0] == '+')) ? 1 : 0) + pfx, ndig = n - i;
  int cap = (int) (ndig / (uintptr_t) chunk) + 3;  // upper-bound magnitude limbs (>= ndig/digits-per-limb)
- uintptr_t res_area = Width(struct big) + b2w((size_t) cap * sizeof(love_limb));
- if (!ok(g = have(g, res_area + b2w((size_t) cap * sizeof(love_limb))))) return g;
+ bool halves = radix == 10 && cap > 2 * kara_cutoff;
+ int np = 1;
+ while (halves && np < cap) np *= 2;
+ // halves: the slots, a product, two powers and karatsuba's scratch
+ uintptr_t work = halves ? (uintptr_t) 9 * np + 1024 : (uintptr_t) cap,
+           res_area = Width(struct big) + b2w((size_t) (halves ? np : cap) * sizeof(love_limb));
+ if (!ok(g = have(g, res_area + b2w((size_t) work * sizeof(love_limb))))) return g;
  tok = str(g->sp[0]), s = tok->bytes;            // re-fetch post-GC
  love_limb *mag = (love_limb*) (g->hp + res_area);
  int m = 0;
- while (i < n) {
+ if (radix == 16 || radix == 8) {                 // from the last digit up, lg bits each
+  int lg = radix == 16 ? 4 : 3, nb = 0; love_limb acc = 0;
+  for (uintptr_t k = n; k > i; k--) {
+   love_limb d = rdigit(s[k - 1]);
+   acc |= d << nb, nb += lg;
+   if (nb >= limb_bits) mag[m++] = acc, nb -= limb_bits, acc = nb ? d >> (lg - nb) : 0; }
+  if (nb) mag[m++] = acc; }
+ else if (halves) {                               // slot j: the chunk ending j chunks from the last digit
+  love_limb p0 = 1;
+  for (int k = 0; k < chunk; k++) p0 *= radix;
+  memset(mag, 0, (size_t) np * sizeof(love_limb));
+  for (uintptr_t e = n, j = 0; e > i; j++) {
+   uintptr_t b = e - i > (uintptr_t) chunk ? e - (uintptr_t) chunk : i;
+   love_limb acc = 0;
+   for (uintptr_t k = b; k < e; k++) acc = acc * radix + rdigit(s[k]);
+   mag[j] = acc, e = b; }
+  love_limb *pw = mag + np, *pn = pw + np, *t = pn + np, *kt = t + 2 * np;
+  mag_join_dec(mag, np, pw, pn, t, kt, p0);
+  m = np; }
+ else while (i < n) {
   love_limb acc = 0, pw = 1; int k = 0;
   for (; i < n && k < chunk; i++, k++) acc = acc * radix + rdigit(s[i]), pw *= radix;
   m = mag_mul_add_small(mag, m, pw, acc); }
@@ -1393,9 +1459,9 @@ static word kind_serial(struct g *g, word x) {
  return chainp(e) ? A(e) : zero; }
 // the total order sort and < share. a coin sits in its own band by payload: a kind's own
 // order ('<) lives in love, and the lanes that can ask it (lvm_cmp_ord, sortby) do.
-// a car descent would be a C frame, so the walk keeps the pending cdrs on a worklist:
-// the gap first (the callers leave it free), then off the heap. out of room it answers
-// cmp_torn, which every nonzero test carries up and each caller turns into a scare
+// a car descent would be a C frame, so the walk keeps the pending cdrs on a worklist in
+// the gap (the callers leave it free). spent, it answers cmp_torn with the room it wanted
+// in g->walk, which every nonzero test carries up and each caller's op runs again on
 #define cmp_torn INTPTR_MIN
 enum { CmpSettled, CmpChain, CmpCoin };                    // what a step left for the walk
 static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
@@ -1434,33 +1500,21 @@ static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
  uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/i/cask: by repr hash
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 
-static bool cmp_grow(struct g *g, word **base, word **w, word **hi, bool *own) {
- uintptr_t n = (uintptr_t) (*hi - *base), k = (uintptr_t) (*w - *base), n2 = n < 32 ? 64 : 2 * n;
- if (n2 > 4 * ((uintptr_t) g->len + g->major_len) + ((uintptr_t) 1 << 20)) return false;
- word *b = alloc(NULL, n2 * sizeof(word));
- if (!b) return false;
- if (k) memcpy(b, *base, k * sizeof(word));
- if (*own) alloc(*base, 0);
- *own = true, *base = b, *w = b + k, *hi = b + n2;
- return true; }
 static intptr_t cmp3w(struct g *g, word a, word b) {
  word *hi, *base = gap(g, &hi), *w = base, *hp0 = g->hp;
- bool own = false;
  int go;
- intptr_t c;
  for (;;) {
-  if (!own) g->hp = w;                                     // a hash's own walk takes the gap past ours
-  c = cmp3leaf(g, &a, &b, &go);
+  g->hp = w;                                               // a hash's own walk takes the gap past ours
+  intptr_t c = cmp3leaf(g, &a, &b, &go);
   g->hp = hp0;
+  if (g->walk) return cmp_torn;                            // a walk under it spent the gap
   if (go == CmpCoin) continue;                             // a coin: its payload, in place
   if (go == CmpChain) {                                    // the cdrs wait, the cars go first
-   if ((uintptr_t) (hi - w) < 2 && !cmp_grow(g, &base, &w, &hi, &own)) { c = cmp_torn; break; }
+   if ((uintptr_t) (hi - w) < 2) return walk_short(g, base, hi, 2), cmp_torn;
    *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
    continue; }
-  if (c || w == base) break;
-  b = *--w, a = *--w; }
- if (own) alloc(base, 0);
- return c; }
+  if (c || w == base) return c;
+  b = *--w, a = *--w; } }
 
 // the two arr.c's equality lane needs: whether a value orders as a number, and the order itself
 bool numband(struct g *g, word x) { return cmp_rank(g, x) == 2; }
@@ -1534,7 +1588,7 @@ lvm(lvm_sort) {
    if (allfix) while (x < m && y < hi) b[o++] = (intptr_t) a[y] < (intptr_t) a[x] ? a[y++] : a[x++];   // branch once per segment, not per compare
    else        while (x < m && y < hi) {
     intptr_t c = cmp3(g, a[y], a[x]);
-    if (c == cmp_torn) { Hp = (word*) spine; Pack(g); love_musttail return Ap(_lvm_ghelp, g); }   // the spine unlaid first
+    if (c == cmp_torn) { Hp = (word*) spine; WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }   // the spine unlaid first
     b[o++] = c < 0 ? a[y++] : a[x++]; }
    while (x < m) b[o++] = a[x++];
    while (y < hi) b[o++] = a[y++]; }
@@ -1586,7 +1640,7 @@ static lvm(lvm_cmp_ord) {
  else if (!(isnum(a) || twinp(a))) {                       // same non-number band: via cmp3
   Pack(g);                                                 // packed: its walks take the gap
   intptr_t c = cmp3(g, a, b);
-  if (c == cmp_torn) { Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
+  if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
   r = vcmp_int(op, c, 0); }
  else if (twinp(a) || twinp(b)) {                          // complex: lexicographic, per op
   flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
@@ -1619,7 +1673,7 @@ static lvm(lvm_extreme2) {
  if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) { g->b = (word) (4 | ismax); love_musttail return Ap(lvm_coin_cmp, g); }   // max asks b < a, min a < b
  Pack(g);                                                  // packed: cmp3's walks take the gap
  intptr_t c = cmp3(g, a, b);
- if (c == cmp_torn) { Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
+ if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
  love_musttail return Push((ismax ? c >= 0 : c <= 0) ? a : b); }
 lvm(lvm_max2) { g->b = (word) 1; love_musttail return Ap(lvm_extreme2, g); }
 lvm(lvm_min2) { g->b = (word) 0; love_musttail return Ap(lvm_extreme2, g); }

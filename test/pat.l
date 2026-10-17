@@ -1,7 +1,4 @@
-; test/pat.l -- the laws of `@`, pattern matching. the macro itself is the first half
-; of src/love/boot/post.l (on the book, so the corpus reads `@` bare); this file is what
-; keeps it honest. read src/love/boot/post.l for the grammar -- every tag it documents has
-; its clause below, and the sections here follow that order.
+; the laws of `@`, pattern matching, in the order post.l documents its grammar
 
 (test
  ; --- a nom binds, `_` swallows, and position is the whole grammar
@@ -62,8 +59,7 @@
  ('fits = (@ '(lam x b j k) (['lam a b] + _) 'fits 'no))
  ('no = (@ '(lam x) (['lam a b] + _) 'fits 'no))
  ('exact = (@ '(lam x b) ['lam a b] 'exact 'no)) ('no = (@ '(lam x b j) ['lam a b] 'exact 'no))
- ; --- + with a string literal among its pieces: the string split. a literal or a pin stands
- ; exactly where it is written, a free piece takes what is left
+ ; --- + with a string literal among its pieces splits a string; a free piece takes what is left
  ("world" = (@ "hello world" ("hello " + t) t 'no))       ; a prefix
  ('no = (@ "help" ("hello " + t) t 'no))
  ("pat" = (@ "pat.l" (b + ".l") b 'no))                   ; a suffix
@@ -92,8 +88,7 @@
  ('same = (@ "x/x" (a + "/" + a) 'same 'diff))              ; a repeated nom, non-linearly
  ('diff = (@ "x/y" (a + "/" + a) 'same 'diff))
  ('lisp = (@ "a.lisp" ((_ + ".l") || (_ + ".lisp")) 'lisp 'other))
- ; an anchor is (sits? s i t) and a needle (subidx s t i), compared in place: each the snip
- ; it stands for, held against that snip over every position, in and out of range
+ ; sits? and subidx agree with the snip they stand for at every position, in and out of range
  (: ss ["" "a" "ab" "abab" "xaba" "aaa"] ts ["" "a" "ab" "ba" "aba" "abab" "x"] is [-2 -1 0 1 2 3 4 5 6]
     (old s t i) (? (i + #t > #s) -1 (snip s i (i + #t) = t) i (old s t (i + 1)))
     (all (s \ all (t \ all (i \ (sits? s i t) = ((snip s i (i + #t) = t) ? 1 0)
@@ -102,7 +97,7 @@
  ("" = (@ "ab" ("ab" + x) x 'no))
  ('("a" "") = (@ "a==" (k + "==" + v) [k v] 'no))           ; a needle at the very end
  ('no = (@ "a=" (k + "==" + v) [k v] 'no))
- ; with no literal among the pieces, + is what it was: a bracket splits a list, else the form
+ ; with no literal among the pieces, a bracket splits a list, else + is the form
  ('no = (@ "xy.l" (a + b + ".l") 'split 'no))                ; ..nor when two free pieces meet
  ('form = (@ '(+ 1 2) (a + b) 'form 'no))
  ('form = (@ '(+ n 1) (a + 1) 'form 'no))
@@ -122,15 +117,13 @@
  ; --- the shapes nest, and a nested literal still binds nothing
  ('hit = (@ ['k {'f 1}] ['k {'f 1}] 'hit 'no))    ; the ` ctor: a quoted {..} is a FORM, not a map
  ('no = (@ ['k {'f 2}] ['k {'f 1}] 'hit 'no))
- ; --- a guard: (? g pat) is the shape and the side condition, (? g) the condition alone.
- ; g is an expression read for truth, never a pattern -- it binds nothing.
+ ; --- a guard: (? g pat) is shape and condition, (? g) the condition alone; g binds nothing
  ('up = (@ [1 2] (? (a < b) [a b]) 'up 'down))     ; ..and it sees what its own arm binds
  ('down = (@ [2 1] (? (a < b) [a b]) 'up 'down))
  ('small = (@ 3 (? (3 < 0)) 'neg (? (3 < 10)) 'small 'big))   ; ..alone, it is a conditional arm
  ('big = (@ 99 (? (99 < 0)) 'neg (? (99 < 10)) 'small 'big))
  (0 = (@ 5 (? (5 = 6)) 1 0))                       ; ..a guard that fails falls through, like a shape
- ; the order law: guards ride at the end of the conjunction, so an arm whose shape
- ; failed never runs its guard -- the accessors it reads have all been earned.
+ ; guards run last, so an arm whose shape failed never runs its guard
  ('no = (@ 5 (? (0 < a) [a]) 'yes 'no))
  ('no = (@ () (? (0 < a) [a b]) 'yes 'no))
  ; ..which is why a positional guard is a placement for the reader, not an earlier test
@@ -141,28 +134,23 @@
  ('k = (@ '(2 3) (? (a < b) (? (0 < a) [a b])) 'k 'no))       ; ..and guards stack
  ('no = (@ '(2 1) (? (a < b) (? (0 < a) [a b])) 'k 'no))
  (2 = (@ @(1 2) @(a (? (1 < b) b)) b 0))           ; ..anywhere a pattern goes
- ; --- `&&` is the guard, left to right, and lowers to exactly the `?` above. the tag is
- ; what says expression: (two? x) is a fine untagged pattern as well as a fine call, so
- ; a bare operand could never be read for truth.
+ ; --- `&&` is the guard, left to right, lowering to the `?` above
  (0 = (@ 5 (x && two? x) 1 0))    (1 = (@ 5 (x && atom? x) 1 0))
  (1 = (@ '(1 2) (x && two? x) 1 0))
  (1 = (@ 5 (c && c > 0) 1 0))     (0 = (@ -5 (c && c > 0) 1 0))
  ('y = (@ 5 (? (0 < c) c) 'y 'n)) ('y = (@ 5 (c && 0 < c) 'y 'n))  ; ..the two spellings
- ; `&&` is right-handed, so a chain arrives nested and is flattened: every
- ; operand past the first is its own guard.
+ ; a `&&` chain is flattened: every operand past the first is a guard
  (1 = (@ 5 (c && 0 < c && c < 10) 1 0))
  (0 = (@ 50 (c && 0 < c && c < 10) 1 0))  (0 = (@ -5 (c && 0 < c && c < 10) 1 0))
  (2 = (@ [1 2] ([a b] && a < b) b 0))     (0 = (@ [2 1] ([a b] && a < b) b 0))
  ; ..a guard over an alternative still stands over every branch
  ('y = (@ 5 ((3 || 5) && 1) 'y 'n))       ('n = (@ 5 ((3 || 5) && 0) 'y 'n))
- ; ..and the shape is earned first, so a guard reading an accessor the shape did not
- ; earn is never run
+ ; ..and the shape is earned first
  (0 = (@ 5 ([a b] && a < b) 1 0))
  (0 = (@ @(1 1) @(a (? (1 < b) b)) b 0))
  ('(3 4) = (@ '(1 2 3 4) (? (a < b) ([a b] + t)) t 'short))     ; ..a split included
  ('short = (@ '(1 2 3 4) (? (b < a) ([a b] + t)) t 'short))
- ; `&` and `|` are no tags: they are the bit operators, which a pattern may come to
- ; destructure. these say only that neither is the guard or the alternative
+ ; `&` and `|` are neither the guard nor the alternative
  ('n = (@ 5 (3 | 5) 'y 'n))       ('n = (@ 5 (c & 0 < c) 'y 'n))
  ; ..and where it bites, a string split: the guard is a piece's &&, the choice is ||
  ('g = (@ "-fx" ("-f" + (v && 0 < #v)) 'g 'n))  ('n = (@ "-f" ("-f" + (v && 0 < #v)) 'g 'n))
@@ -187,17 +175,14 @@
  (5 = (@ ['a 5] (? (0 < n) (['a n] || ['b _ n])) n 'no))
  (7 = (@ ['b 'q 7] (? (0 < n) (['a n] || ['b _ n])) n 'no))
  ('no = (@ ['a -1] (? (0 < n) (['a n] || ['b _ n])) n 'no))
- ; ..the first branch that matches wins, and supplies every nom: one it does not bind
- ; reads (), it does not fall through to a later branch. so a body never wears bindings
- ; from two shapes at once, and the branches need not bind the same noms.
+ ; ..the first branch that matches supplies every nom; one it does not bind reads ()
  ('(1 ()) = (@ ['a 1] (['a x] || ['b y]) [x y] 'n))
  ('(() 1) = (@ ['b 1] (['a x] || ['b y]) [x y] 'n))
  ; ..and one that binds may nest -- same law, one clause, the nom read from the winner
  ('(7 ()) = (@ ['k 7] ['k (a || [a b])] [a b] 'n))
  ('(7 8) = (@ ['k [7 8]] ['k ([a b] || a)] [a b] 'n))
  ('((7 8) ()) = (@ ['k [7 8]] ['k (a || [a b])] [a b] 'n))   ; ..`a` fits first, so `a` it is
- ; --- parens are the form, and exact on the tail the way brackets always were:
- ; (a b c) is three and so is [a b c]. `.` is how a tail says it will take more.
+ ; --- parens are exact on the tail like brackets; `.` takes more
  (4 = (@ '(1 2 3) (a b c) (a + c)))
  ('no = (@ '(1 2 3) (a) 'one 'no))                  ; ..shorter does not fit
  ('no = (@ '(1 2 3) (a b) 'two 'no))
@@ -212,16 +197,14 @@
  (0 = (@ '(1 2 3 4) [a b c] c 0))
  ; ..(X..) is [X..], so `+` is for a tail you want to NAME
  ('(3 4) = (@ '(1 2 3 4) ([a b] + t) t 'no))
- ; ..and `+` is left-handed, so a multi-split arrives as a + whose left is a +: cat is
- ; associative and so is this -- ([a b] + [c] + t) is three runs, the last one named.
+ ; ..([a b] + [c] + t) is three runs, the last one named
  ('(4 5) = (@ '(1 2 3 4 5) ([a b] + [c] + t) t 'no))
  (3 = (@ '(1 2 3 4 5) ([a b] + [c] + t) c 0))
  ('no = (@ '(1 2) ([a b] + [c] + t) t 'no))
  ; --- guards stack without nesting: every operand but the last is a condition
  (4 = (@ '(1 2 3) (? (1 < 2) (2 < 3) (a b c)) (a + c) 'no))
  ('no = (@ '(1 2 3) (? (1 < 2) (3 < 2) (a b c)) (a + c) 'no))
- ; ..and the pair bottoms out consistently: [] is the list at zero and () is the form
- ; at zero, and both are the empty chain and fit nothing else. `_` is the don't-care.
+ ; ..[] and () are the empty chain and fit nothing else; `_` is the don't-care
  ('no = (@ 5 () 'any 'no)) ('no = (@ '(1 2) () 'any 'no)) ('any = (@ () () 'any 'no))
  ('any = (@ 5 _ 'any 'no)) ('any = (@ '(1 2) _ 'any 'no)) ('any = (@ () _ 'any 'no))
  ('empty = (@ () [] 'empty 'no)) ('no = (@ '(1) [] 'empty 'no)) ('no = (@ 5 [] 'empty 'no))
@@ -233,15 +216,12 @@
  ('(1 2) = (@ '(1 2) (x @ [a b]) x 'no))
  ; ..both branches read the same value, so a nom in both is the ordinary non-linear one
  (3 = (@ '(3 3) ([a _] @ [_ a]) a 'no)) ('no = (@ '(3 4) ([a _] @ [_ a]) a 'no))
- ; --- the as-pattern: (v @ pat) is that same conjunction in haskell's spelling, so every
- ; && law above holds of it. spaced -- glued v@pat is one nom (opfix splits only a leading
- ; sigil) and glued @( is the tray, so the space is what tells the three apart.
+ ; --- the as-pattern (v @ pat), spaced: glued v@pat is one nom and glued @( a tray
  ('(lam x b) = (@ '(lam x b) (v @ ['lam p q]) v 'no))
  ('b = (@ '(lam x b) (v @ ['lam p q]) q 'no))
  ('no = (@ '(pi x b) (v @ ['lam p q]) v 'no))
  (3 = (@ '(3 3) ([a _] @ [_ a]) a 'no))            ; ..non-linear through it too
- ; --- the pin, elixir's ^x: glued ^ names jot, and jot in a pattern is an equality against
- ; x read from outside -- the one way a pattern spends a nom without binding it.
+ ; --- the pin ^x: an equality against x read from outside, binding nothing
  (: a 1 (9 = (@ '(1 9) (^a b) b 'no)))             ; ..fits when the value equals the outer a
  (: a 1 ('no = (@ '(7 9) (^a b) b 'no)))           ; ..and misses when it does not
  (: a 1 (7 = (@ '(7 9) (a b) a 'no)))              ; ..unpinned, the same nom rebinds instead
@@ -259,9 +239,7 @@
  ('no = (@ '(a (b q) d) (_ (_ 'c) _) 'deep 'no))
  )
 
-; --- a pattern in a \ param, which is opfix's doing and not this macro's: a param that is
-; not a nom becomes a fresh one and the body takes it apart. (\ [a b] x) is (\ v (@ v [a b] x)),
-; so every shape above works there, and a define-sugar binder is a \ like any other.
+; --- a pattern in a \ param: (\ [a b] x) is (\ v (@ v [a b] x)), by opfix
 (test
  (7 = ((\ [a b] (a + b)) '(3 4)))
  ('(6 20) = (map (\ [a b] (a * b)) '((2 3) (4 5))))      ; ..the everyday one
@@ -275,14 +253,25 @@
  ('z = ((\ ('lam . n . _) n) '(lam z b extra)))          ; ..and a tail
  ; ..an inner param still shadows: the rewrite is a binder, not a splice
  (9 = (((\ [a b] (\ a a)) '(1 2)) 9))
- ; ..a define-sugar binder is one too, at every level of a curried one. position 0 is the
- ; name (or the binder carrying it) and is never a pattern, which is why the two cannot clash.
+ ; ..a define-sugar binder too, at every level; position 0, the name, is never a pattern
  (7 = (: (f [a b]) (a + b) (f '(3 4))))
  (11 = (: (g x [a b]) (x + a) (g 10 '(1 2))))
  ('(1 2 3 4) = (: ((k [a b]) [c d]) [a b c d] (k '(1 2) '(3 4))))
  (7 = (: ((k a) b) (a + b) (k 3 4))))                    ; ..and an all-nom binder is untouched
 
-; there is nothing ungated here any more, because `@` no longer scares at all: every
-; pattern is read. a head that names no tag, or names one and misses its shape, is the
-; lax form pattern; an alternative binds the union with the winner's values. What used
-; to need a deferred-expansion lane to test is now an ordinary law above.
+; the decision dag: a test is asked once and every clause hears it. order still wins, a guard
+; that fails falls through to the next fitting clause, and a guard runs exactly where the flat
+; chain would run it -- once per clause whose shape fits, never for a clause its tag rules out
+(: patd-n (pin {} 0 0)
+   (patd-g x) (: _ (pin patd-n 0 (patd-n 0 + 1)) (x > 2))
+   (patd-m e) (e @ ('a x) x
+                   ('b x && patd-g x) 'big
+                   ('b x) 'small
+                   (('c || 'd) . _) 'cd
+                   ('a . _) 'along
+                   ('b x && patd-g x) 'never
+                   _ 'other)
+   got (map patd-m ['(a 1) '(a 1 2) '(b 5) '(b 1) '(c) '(d 1 2) 5 '(b) () '(e 1)])
+   _ (test (got = [1 'along 'big 'small 'cd 'cd 'other 'other 'other 'other])
+           (patd-n 0 = 2))        ; (b 5) and (b 1) ask the first guard; the sixth arm is never reached
+   0)

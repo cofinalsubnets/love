@@ -65,7 +65,7 @@ void __love_start(long *sp, long osv) {
   if (argc > 0 && argv[0]) __love_progname = argv[0];
   environ = e;
   while (*e) e++;
-  __auxv = (long *) (e + 1);
+  __auxv = osv == 4 ? 0 : (long *) (e + 1);   /* macos lays its apple strings there */
   __love_reloc();   /* before any data pointer is read */
   stdout->fd = 1;
   stdout->wr = 1;

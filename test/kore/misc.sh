@@ -1,10 +1,8 @@
 #!/bin/sh
-# test/kore/misc.sh -- dd, xxd, strings, cal, timeout, which, tty, clear, hostname,
-# hexdump, getopt
+# test/kore/misc.sh -- dd, xxd, strings, cal, timeout, which, tty, clear, hostname, hexdump, getopt
 . "$(dirname "$0")/common.sh"
 
-# dd: the data AND the two record lines. a partial block is the +1 column, which is
-# the half of dd's report that a `bs=` a file does not divide by is the only way to see
+# dd: the data and both record lines; a bs= the file does not divide shows the partial +1
 for c in "bs=1 count=5" "bs=6 skip=1" "bs=7" "bs=1000" "bs=3 count=2"; do
   # shellcheck disable=SC2086
   dd if="$ho/.arc1" $c > "$g" 2>/dev/null
@@ -21,11 +19,9 @@ korerun dd if="$ho/.arc1" of="$ho/.ddout" bs=2 2>/dev/null || fail "kore dd of="
 cmp -s "$ho/.arc1" "$ho/.ddout" || fail "kore dd if=/of= is a copy"
 korerun dd if="$ho/.arc1" of=/dev/null status=none > "$o" 2>&1
 [ -s "$o" ] && fail "kore dd status=none still spoke" || true
-# xxd: vim's, where the box has it; the -r round trip stands on its own either way
+# xxd: vim's where the box has it; the -r round trip stands either way
 dd if=/dev/urandom of="$ho/.xxbin" bs=311 count=1 2>/dev/null
-# ..and one FIXED input whose ascii gutter opens on two hex charms ("ab.."), which is
-# where -r used to read the gutter as data. random bytes hit it about one run in eight,
-# so the row that catches it cannot be left to the fixture's luck.
+# a fixed input whose ascii gutter opens on two hex digits, which -r must not read as data
 printf 'ab\0hello\0\1\2cd\0xyz\n' > "$ho/.xxgut"
 if command -v xxd >/dev/null 2>&1; then
   for f in .arc1 .xxbin .gs4 .gs5; do
@@ -39,7 +35,7 @@ if command -v xxd >/dev/null 2>&1; then
 fi
 korerun xxd "$ho/.xxbin" | korerun xxd -r > "$o" 2>/dev/null
 cmp -s "$ho/.xxbin" "$o" || fail "kore xxd | xxd -r round trip"
-# strings: the printable runs, the floor moving, and a real binary
+# strings: the printable runs, the floor moved, a real binary
 printf 'ab\0hello world\0\1\2cd\0longenough\n' > "$ho/.strbin"
 if command -v strings >/dev/null 2>&1; then
   for n in "" "-n 2" "-n10"; do
@@ -55,8 +51,7 @@ if command -v strings >/dev/null 2>&1; then
   printf 'hello' | strings > "$g" 2>/dev/null; printf 'hello' | korerun strings > "$o" 2>/dev/null
   same "strings, a run at eof"
 fi
-# cal: SIX week rows always, each padded to 20, and the year three abreast -- the
-# leap years come off epoch-days and want no table, so february is where a wrong one shows
+# cal: six week rows, each padded to 20, the year three abreast; february shows a wrong leap year
 if command -v cal >/dev/null 2>&1 && cal 9 2026 >/dev/null 2>&1; then
   for d in "9 2026" "2 2024" "2 2100" "2 2000" "2 2021" "12 1999" "1 1970" "8 2027" "5 2026"; do
     # shellcheck disable=SC2086
@@ -67,8 +62,7 @@ if command -v cal >/dev/null 2>&1 && cal 9 2026 >/dev/null 2>&1; then
   done
   cal 2026 > "$g" 2>/dev/null; korerun cal 2026 > "$o" 2>/dev/null; same "cal 2026 (the year)"
 fi
-# timeout: 124 when the clock wins, the command's own status when it does not, and
-# the whole point -- that it comes back at the deadline and not at the command's end
+# timeout: 124 when the clock wins, else the command's status; it returns at the deadline
 t0=$(date +%s)
 korerun timeout 1 sleep 20 > /dev/null 2>&1; r=$?
 t1=$(date +%s)
@@ -98,12 +92,10 @@ korerun which no-such-tool-xyzzy > /dev/null 2>&1; r=$?
 korerun tty < /dev/null > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "kore tty: not a terminal is exit 1 (got $r)"
 [ "$(korerun clear 2>/dev/null | wc -c)" = 11 ] || fail "kore clear: home, 2J and 3J"
-# the three read no options at all, so a dash word is refused and not ignored
+# these read no options, so a dash word is refused
 korerun tty -Z > "$o" 2>&1; r=$?
 [ $r -eq 2 ] && grep -q 'unknown option' "$o" || fail "kore tty -Z must be refused"
-# hexdump to the byte against the system's where there is one: both faces, the `*` a
-# repeated row folds to, a short last row padded out, -s landing past the end still
-# naming the offset it reached
+# hexdump against the system's: both faces, the `*` fold, a padded short row, -s past the end
 if command -v hexdump > /dev/null 2>&1; then
   printf 'hello\n' > "$ho/.hx1"; printf 'abc' > "$ho/.hx2"; : > "$ho/.hx3"
   { dd if=/dev/zero bs=48 count=1 2>/dev/null; printf 'x'; } > "$ho/.hx4"
@@ -116,9 +108,8 @@ if command -v hexdump > /dev/null 2>&1; then
   done
   hexdump -C "$ho/.arc1" > "$g"; korerun hd "$ho/.arc1" > "$o"; same "hd"
 fi
-# getopt against util-linux's where it is the enhanced one (-T answers 4): the quoting
-# for eval, abbreviated longs, the three operand modes, -a's one-dash longs, and the
-# parse errors -- stderr and the exit ride along
+# getopt against util-linux's enhanced one (-T answers 4): eval quoting, abbreviated longs,
+# the operand modes, -a, parse errors; stderr and the status ride along
 if getopt -T > /dev/null 2>&1; [ $? -eq 4 ]; then
   while IFS= read -r c; do
     eval "getopt $c" > "$g" 2>&1; rg=$?
@@ -147,10 +138,8 @@ ab: -a -b x y
 EOF_GETOPT
 fi
 korerun getopt -T; [ $? -eq 4 ] || fail "kore getopt -T must answer 4"
-# printf against GNU's (env reaches the binary, not the shell's builtin): stdout and
-# status over flags, widths, precisions, the bases, the reals exactly rounded, the
-# escapes, %b %q %c, a word that is not a number (said, and the status 1), missing
-# arguments (0 and "", silently) and the format reused while arguments remain
+# printf against gnu's binary (via env): stdout and status over flags, widths, bases, exact
+# reals, escapes, %b %q %c, a non-number (status 1), missing arguments, a reused format
 if env printf %q x > /dev/null 2>&1; then
   pf() { LC_ALL=C env printf "$@" > "$g" 2>/dev/null; r1=$?
          korerun printf "$@" > "$o" 2>/dev/null; r2=$?
@@ -177,8 +166,7 @@ if env printf %q x > /dev/null 2>&1; then
   pf '%5b' x
   pf '%#d' 1
 fi
-# every tool refuses a flag it does not know with 2 (env with GNU's 125), before it does
-# anything -- these read one as a file, a user, a name to kill, or said nothing at all
+# an unknown flag refuses with 2 (env 125) before anything is done
 : > "$ho/.rfq"
 for c in "stat -Q" "cmp -l" "install -v" "chown -Q gwen" "chgrp -Q gwen" "readlink -Q" "md5sum -Q" "sha256sum -c --nosuch" \
          "cksum -Q" "killall -q" "which -Q" "time -v" "printenv -Q" "pidof -x" "basename -Q" "dirname -Q" "ls --nosuch" \
@@ -190,9 +178,7 @@ done
 korerun env -Q > /dev/null 2>&1; r=$?; [ $r -eq 125 ] || fail "kore env -Q (rc $r)"
 korerun rev -ba "$ho/.rfq" 2>&1 | grep -q "unknown option -b" || fail "kore's refusal names the letter typed first"
 [ "$(korerun printenv -0 HOME | tr '\0' '|')" = "$HOME|" ] || fail "kore printenv -0"
-# dd's seek= (onto a file, zeros past its end), conv= ucase lcase swab sync notrunc,
-# oflag=append (cut first unless notrunc), ibs=/obs= records, iflag/oflag's byte counts,
-# status=none; the file left and the two record lines, against GNU
+# dd seek=, conv=, oflag=append, ibs=/obs=, byte counts, status=none: the file and the records
 printf 'Hello World abcdefghij\n' > "$ho/.ddi"; printf '0123456789ABCDEFGHIJ' > "$ho/.ddb"
 for c in "bs=4 count=2" "bs=4 skip=1 count=2" "conv=ucase" "conv=lcase" "conv=swab" "bs=5 conv=sync count=1" "bs=4 seek=2 count=1" \
          "bs=4 seek=2 count=1 conv=notrunc" "oflag=append" "oflag=append conv=notrunc" "bs=1 seek=30 count=2 conv=notrunc" "ibs=3 obs=5" \
@@ -204,7 +190,7 @@ for c in "bs=4 count=2" "bs=4 skip=1 count=2" "conv=ucase" "conv=lcase" "conv=sw
 done
 korerun dd conv=block < /dev/null > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore dd conv=block must refuse ($r)"
 rm -f "$ho"/.dd?
-# xxd's -p -i (from a file and from stdin) -c -g -u -l -s (0x too), and -p back through -r -p
+# xxd -p -i -c -g -u -l -s, from a file and stdin, and -p back through -r -p
 X2=$PWD/$ho/.xxq; printf 'Hello World 0123456789abcdef\n' > "$X2"
 for c in "-p" "-i" "-c 8" "-g 1" "-g 4" "-u" "-l 20" "-s 3" "-s 3 -l 10 -c 8" "-s 0x10" "-c 5" "-c 8 -g 3"; do
   # shellcheck disable=SC2086
@@ -213,8 +199,7 @@ done
 xxd -i < "$X2" > "$g"; korerun xxd -i < "$X2" > "$o"; same "xxd -i from stdin"
 korerun xxd -p "$X2" | korerun xxd -r -p > "$o"; cmp -s "$X2" "$o" || fail "kore xxd -p | xxd -r -p"
 rm -f "$X2"
-# timeout -v's words for each signal, --preserve-status, and 137 where a KILL ended it
-# (-s KILL, and -k after a TERM the command ignores); GNU's under LC_ALL=C
+# timeout -v's words per signal, --preserve-status, 137 after a KILL; gnu's under LC_ALL=C
 for c in "-v 0.3 sleep 2" "--preserve-status 0.3 sleep 2" "-s KILL -v 0.3 sleep 2" "--signal=INT --verbose 0.3 sleep 2"; do
   # shellcheck disable=SC2086
   { LC_ALL=C timeout $c; echo "rc=$?"; } > "$g" 2>&1; { korerun timeout $c; echo "rc=$?"; } > "$o" 2>&1; same "timeout $c"

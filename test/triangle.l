@@ -1,10 +1,4 @@
-; triangular numbers, the long way -- and the blue floor that doubles the zero.
-;
-;   (sat (jot k)) sums 0 1 .. k-1, so it is the (k-1)th triangular number (jot is
-;   0-origin). map it over (jot n) and the first two entries are 0: jot 0 = () is
-;   the empty sum, jot 1 = (0) a lone zero, and nothing and 0 share one measure --
-;   the blue floor. so the triangle opens  0 0 1 3 6 ..  and 1, the one you would
-;   call first, lands third.
+; triangular numbers via (sat (jot k)): jot 0 and jot 1 both sum to 0, so the row opens 0 0 1 3
 
 (flip compose jot (map (compose sat jot)) @ tri               ; n -> the first n partial sums of jot
  (test

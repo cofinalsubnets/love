@@ -1,13 +1,19 @@
 #include "../impl.h"
 #include <pthread.h>
 
-/* a mutex word is 0 free, 1 held, 2 held maybe with waiters; only exchange moves it, the
- * one atomic mooncc has, so an unlock that takes back a 2 wakes one */
+/* a mutex word is 0 free, 1 held, 2 held maybe with waiters; only exchange moves it, so an
+ * unlock that takes back a 2 wakes one. the unlock releases, or on arm64 and riscv the
+ * holder's writes land after the next holder reads */
 #define FxWait 128
 #define FxWake 129
+/* netbsd's __futex speaks linux's (os.c's row); freebsd's word is _umtx_op's private
+ * WAIT_UINT and WAKE, its timeout the size of a timespec and then the timespec */
 static int __fx_wait(int *w, int v, struct timespec const *rel) {
+  if (__love_osv == 2) return (int) fb6(454, (long) w, 15, v, rel ? (long) sizeof *rel : 0, (long) rel, 0);
   return (int) sc4(NR_futex, (long) w, FxWait, v, (long) rel); }
-static void __fx_wake(int *w, int n) { sc4(NR_futex, (long) w, FxWake, n, 0); }
+static void __fx_wake(int *w, int n) {
+  if (__love_osv == 2) fb6(454, (long) w, 16, n, 0, 0, 0);
+  else sc4(NR_futex, (long) w, FxWake, n, 0); }
 
 /* abstime (CLOCK_REALTIME) as the time left, or 0 when it has passed */
 static int __pt_left(struct timespec const *abs, struct timespec *rel) {
@@ -28,7 +34,7 @@ static int __pt_taketill(int *w, struct timespec const *abs) {
     if (!__pt_left(abs, &rel)) return ETIMEDOUT;
     __fx_wait(w, 2, &rel); }
   return 0; }
-static void __pt_give(int *w) { if (__sync_lock_test_and_set(w, 0) == 2) __fx_wake(w, 1); }
+static void __pt_give(int *w) { if (__atomic_exchange_n(w, 0, __ATOMIC_RELEASE) == 2) __fx_wake(w, 1); }
 
 int pthread_mutexattr_init(pthread_mutexattr_t *a) { a->__kind = PTHREAD_MUTEX_DEFAULT; return 0; }
 int pthread_mutexattr_destroy(pthread_mutexattr_t *a) { return 0; }
@@ -121,12 +127,13 @@ int pthread_rwlock_unlock(pthread_rwlock_t *l) {
   __fx_wake(&l->__seq, 0x7fffffff);
   return 0; }
 
-/* once: 0 not yet, 1 running, 2 done; a claim that lands on a 2 puts it back */
+/* once: 0 not yet, 1 running, 2 done; a claim that lands on a 2 puts it back. done is a
+ * release, read with an acquire */
 int pthread_once(pthread_once_t *o, void (*fn)(void)) {
-  while (*o != 2) {
+  while (__atomic_load_n(o, __ATOMIC_ACQUIRE) != 2) {
     int was = __sync_lock_test_and_set(o, 1);
-    if (was == 0) { fn(); __sync_lock_test_and_set(o, 2); __fx_wake(o, 0x7fffffff); return 0; }
-    if (was == 2) { __sync_lock_test_and_set(o, 2); __fx_wake(o, 0x7fffffff); return 0; }
+    if (was == 0) { fn(); __atomic_exchange_n(o, 2, __ATOMIC_RELEASE); __fx_wake(o, 0x7fffffff); return 0; }
+    if (was == 2) { __atomic_exchange_n(o, 2, __ATOMIC_RELEASE); __fx_wake(o, 0x7fffffff); return 0; }
     __fx_wait(o, 1, 0); }
   return 0; }
 
