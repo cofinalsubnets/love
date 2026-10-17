@@ -6,8 +6,8 @@
 ; V and B-V in hundredths of a magnitude (B-V 60, about the sun's, where the catalogue has none)
 (borrow 'posix)
 (: lim 450
-   ; a fixed-width field, bytes i to j of the line, read as a number, or () where it is blank
-   (field l i j) (: s (snip l i j) (0 = net (map (k \ s k != 32) ^#s) ? () (read s)))
+   ; a fixed-width field, bytes i to j of the line, read as a number, or () where it is blank or no number
+   (field l i j) (: s (snip l i j) (0 = net (map (k \ s k != 32) ^#s) ? () (sound s @ [v] (star? v ? v ()) ())))
    (hund x) (int (floor (x * 100.0 + 0.5)))
    (star l) (: rh (field l 75 77) rm (field l 77 79) rs (field l 79 83)
                dd (field l 84 86) dm (field l 86 88) ds (field l 88 90)
@@ -18,8 +18,11 @@
                       (hund (sg * (dd + dm / 60.0 + ds / 3600.0)))
                       (hund v) (bv = () ? 60 (hund bv))])))
    (rows l) (? (atom? l) () (catmap (s \ " " + catmap (n \ " \(n)") s) (take 8 l) . rows (drop 8 l)))
-   (main args) (: src (: q (open (args 0) "r") s (slurp q) (close q, s))
+   (die m) (say err "mkstars: \(m)\n", quit 1)
+   (main args) (: _ (#args < 2 ? (say err "usage: love src/tools/mkstars.l CATALOG OUT.l\n", quit 2))
+                  src (open (args 0) "r" @ q (hot? q ? (slurp q @ s (close q, s)) (die "cannot read \(args 0)")))
                   ss (map (p \ p 1) (sort (map (s \ [(s 2) s]) (filter two? (map star (lines src))))))
+                  _ (two? ss ? 0 (die "\(args 0) holds no star to magnitude 4.5"))
                   body ("; src/apps/lore/starmap.l -- written by src/tools/mkstars.l from the Yale Bright Star\n"
                         + "; Catalogue (5th revised ed., Hoffleit & Warren 1991; CDS V/50): its \(#ss) stars to\n"
                         + "; magnitude 4.5, brightest first. each is four integers: right ascension and declination\n"
@@ -28,5 +31,5 @@
                         + catmap (r \ "\(r)\n") (rows ss) + " ])\n) ; module starmap\n")
                   q (open (args 1) "w")
                   (hot? q ? (say q body, close q)
-                     (say err "mkstars: cannot open \(args 1)\n", quit 1)))
+                     (die "cannot open \(args 1)")))
    (main >argv))
