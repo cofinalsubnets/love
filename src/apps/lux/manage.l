@@ -38,7 +38,7 @@
    ; --- predicates: (ctx) -> bool. prop?/class-of? query X properties. ---
    (prop? propnm valnm) (c \ x-has-atom (mg-sock c) (mg-win c) propnm valnm)   ; isInProperty atom VALUE
    (class-of? names) (? !(two? names) (c \ 0)                                    ; an empty roster asks X nothing
-                        (c \ : cl (x-getclass (mg-sock c) (mg-win c)) (any (n \ n = cl) names)))
+                        (c \ : cl (x-getclass (mg-sock c) (mg-win c)) (any (= cl) names)))
    (<||> p q) (c \ p c || q c)                                                 ; predicate or
 
    ; --- combinators. A Maybe-hook (from -?>) is (ctx sh) -> (sh') | () : matched

@@ -5,8 +5,8 @@
 ; phrase sounds together.
 
 (module '(phrases phrase-books book-names book book-phrases)
-(borrow ((cite 'just) @ m (m ? m "src/apps/harp/just.l")))
-(borrow ((cite 'tonnetz) @ m (m ? m "src/apps/harp/tonnetz.l")))
+(borrow (cite 'just || "src/apps/harp/just.l"))
+(borrow (cite 'tonnetz || "src/apps/harp/tonnetz.l"))
 (:
    (r a b) (a /// b)
    ; a phrase and its utonal mirror, named as a pair

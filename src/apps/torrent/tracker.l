@@ -17,30 +17,28 @@
                c (fsub h ":" 0)
                host (0 <= c ? (snip h 0 c) h) port (0 <= c ? (cite 'kore 'wg-digits (snip h (c + 1) #h)) d)
                (0 < k && 0 < d && 0 < #host && 0 < port ? [p host port path] ()))
- (urlenc s) (catmap (i \ s i @ c ((48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122
+ (urlenc s) (cats (map (i \ s i @ c ((48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122
                                        || c = 45 || c = 46 || c = 95 || c = 126) ? (string c)
                                       ("%" + b2hex (string c))))
-                       ^#s)
+                       ^#s))
  (peer-id _) ("-LV0300-" + cats (map (_ \ show (rand 10)) ^12))
  ; compact peers: six bytes each, the address and the port big end first
- (tr-peers s) (map (k \ ["\(s k).\(s (k + 1)).\(s (k + 2)).\(s (k + 3))" (rdbe s (k + 4) 2)])
-               (filter (k \ k % 6 = 0) ^(#s - #s % 6)))
+ (tr-peers s) (map (k \ ["\(s k).\(s $ k + 1).\(s $ k + 2).\(s $ k + 3)" (rdbe s (k + 4) 2)])
+                   (filter (k \ k % 6 = 0) ^(#s - #s % 6)))
  ; a dictionary peer list, the older shape: {'ip 'port}
  (tr-dpeers l) (filter two? (map (p \ tablet? p ? [(peep p "ip" "") (peep p "port" 0)]) l))
 
  ; --- http ---------------------------------------------------------------------------
  (tr-http u ask)
-  (: q ("info_hash=" + urlenc (ask 'hash) + "&peer_id=" + urlenc (ask 'id) + "&port=" + show (ask 'port)
-        + "&uploaded=" + show (ask 'up) + "&downloaded=" + show (ask 'down) + "&left=" + show (ask 'left)
-        + "&compact=1&numwant=50" + (0 < #(ask 'event) ? ("&event=" + ask 'event) ""))
+  (: q "info_hash=\(urlenc (ask 'hash))&peer_id=\(urlenc (ask 'id))&port=\(ask 'port)&uploaded=\(ask 'up)&downloaded=\(ask 'down)&left=\(ask 'left)&compact=1&numwant=50\(0 < #(ask 'event) ? "&event=\(ask 'event)" "")"
      path (u 3 + (0 <= fsub (u 3) "?" 0 ? "&" "?") + q)
      (cite 'kore 'wg-once 0 (u 1) (u 2) path @
        (why && string? why) why
-       [code head b] (code != 200 ? ("the tracker said " + snip head 9 (fsub head "\r\n" 0))
+       [code head b] (code != 200 ? "the tracker said \(snip head 9 (fsub head "\r\n" 0))"
                         (cite 'benc 'bdecode b @ [d] (tr-reply d) "the tracker's answer is not bencode"))
        _ "the tracker did not answer"))
  (tr-reply d) (? !(tablet? d) "the tracker's answer is not a dictionary"
-                 (peep d "failure reason" ()) ("the tracker refused: " + d "failure reason")
+                 (peep d "failure reason" ()) "the tracker refused: \(d "failure reason")"
                  (: ps (peep d "peers" "")
                     {'interval (peep d "interval" 1800) 'seeders (peep d "complete" 0)
                      'leechers (peep d "incomplete" 0)
@@ -60,7 +58,7 @@
  (tr-udp u ask)
   (: ip (cite 'dns 'resolve (u 1)) from [(ip ? (cite 'dns 'dns-show <ip) "") (u 2)]
      (tid _) (wrbe (rand 4294967296) 4)
-     (ask2 q n) (n = 0 ? () (tr-udp-ask p from q (2000 * (5 - n)) @ r (string? r ? r (ask2 q (n - 1)))))
+     (ask2 q n) (n @ 0 () (tr-udp-ask p from q (2000 * (5 - n)) @ r (string? r ? r (ask2 q (n - 1)))))
      p (two? ip ? (bind ['udp 0]))
      ev (ask 'event @ "completed" 1 "started" 2 "stopped" 3 0)
      (? !(hot? p) "the tracker's name does not resolve"

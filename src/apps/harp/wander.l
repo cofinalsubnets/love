@@ -5,7 +5,7 @@
 ;
 ; LEAN is signed: 1 follows the phrases up the lattice, -1 leans away, 0 moves only
 ; on what the kernel carries. HOME pulls the center back against the drift.
-(borrow ((cite 'harp) @ m (m ? m "src/apps/harp/harp.l")))
+(borrow (cite 'harp || "src/apps/harp/harp.l"))
 (borrow "src/apps/harp/play.l")
 (borrow "src/apps/harp/just.l")
 (borrow "src/apps/harp/drift.l")
@@ -21,11 +21,9 @@
        path (string? (as 3) ? (as 3) "out/harp-wander.wav")
        o    {'lean (1.0 * lean) 'home (1.0 * home)}
        _    (each (drift-walk o phrases n)
-                  (st \ (say out $ (show (st 'pos) + "  " + show (st 'tonic)
-                                    + "  " + show (int (drift-cents st)) + "c\n"))))
+             (st \ say out "\(st 'pos)  \(st 'tonic)  \(int $ drift-cents st)c\n"))
        song (pset (drift-song o phrases n) (hit (pure "tri")))
-       (harp-wav song 0 n 48000 0.5 24000 11000.0 path,
-        say out $ path + "\n", 0)))
+       (harp-wav song 0 n 48000 0.5 24000 11000.0 path, say out "\(path)\n", 0)))
 
 (: s (cite 'verbs 'fire ["harp-wander" "wander.l"])
    (two? s ? (quit (wander-main >s))))

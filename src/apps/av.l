@@ -34,10 +34,10 @@
    ; a raw fd, since lseek takes one and a port's buffer would desync under it
    (av-patch path at s)
     ((cite 'posix 'openfd) path 4 @ fd
-      (? !(charm? fd) ("cannot write " + path)
+      (? !(charm? fd) "cannot write \(path)"
          (charm? ((cite 'posix 'lseek) fd at 0))
           (: p (fdopen fd) _ (say p s) _ (flush p) (close p, 0))
-         (: _ (close fd) ("cannot seek in " + path))))
+         (: _ (close fd) "cannot seek in \(path)")))
    ; gulps are kept as a list and joined once a step; f runs only when the head has grown to
    ; what it asked, so a head costs a parse a block, not a parse a gulp
    (av-head q f h0) (av-read q f h0 1)
@@ -81,13 +81,13 @@
    (av-uri u)
     (? (starts? u "http://" || starts? u "https://")
         ((cite 'icy 'icy-open) u @ [q info] [q info] why why)
-       (open u "r" @ q (hot? q ? [q {}] ("cannot open " + u))))
+       (open u "r" @ q (hot? q ? [q {}] "cannot open \(u)")))
    (av-play q)
     (av-open q @
       [nm m h] (: c (av-codec nm)
                   f ((c 3) m)
                   (horn (f 'rate) (min 2 (f 'ch)) @ hn
-                     (nom? hn ? ("no horn: " + show hn)
+                     (nom? hn ? "no horn: \(hn)"
                       ((c 4) q h m (av-pcm f (say hn)) @ r
                          (flush hn, wav-drain hn, close hn, r)))))
       why why))
