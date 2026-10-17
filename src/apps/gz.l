@@ -129,7 +129,7 @@
                     1))))))
 
    (gz-codes s n t b lit dst)                ; the symbol loop, fixed or dynamic
-    (: (go u)
+    (:- (go ()) (go u)
         (gz-dec s n t lit @ d
            (? !d ()
               (peep t 1 0) ()                                  ; ran off the end
@@ -140,13 +140,10 @@
                     (: lc (sy - 257)
                        l (peep gz-lbase lc 0 + gz-bits s n t (peep gz-lext lc 0))
                        dd (gz-dec s n t dst)
-                       (!dd ? ()
-                          (: dc (<(>dd))
-                             (29 < dc ? ()
-                                (: dist (peep gz-dbase dc 0 + gz-bits s n t (peep gz-dext dc 0))
-                                   r (gz-copy b dist l)
-                                   ((! r) ? () (go ())))))))))))
-       (go ()))
+                     (dd ? (: dc <>dd
+                      (29 < dc ? ()
+                       (: dist (peep gz-dbase dc 0 + gz-bits s n t (peep gz-dext dc 0))
+                        (gz-copy b dist l ? (go ()))))))))))))
 
    ; code lengths through a third code; 16 repeats the previous length, so the walk carries it
    (gz-dynamic s n t b)
@@ -201,7 +198,7 @@
    (gz-zip s nom stamp) (gz-zipw s nom stamp gz-deflate)
    (gz-zip9 s nom stamp) (gz-zipw s nom stamp gz-deflate-best)
    (gz-zipw s nom stamp def)
-    (: txt (s + "")
+    (: txt "\(s)"
        named (#nom ? 1 0)
        h (cask 10)
        (pins h 0 31 1 139 2 8 3 (named ? 8 0)
@@ -246,17 +243,17 @@
    (gz-fin g a) (pins g 'mode 'end 'ans a, "")
    (gz-more g k)                                 ; buf grown to k bytes, or as far as the input goes
     (peep g 'buf "" @ b
-       (k <= #b ? b (peep g 'rd () 0 @ p (#p = 0 ? b (pin g 'buf (b + p), gz-more g k)))))
+       (k <= #b ? b (g 'rd 0 @ p (#p @ 0 b (pin g 'buf (b + p), gz-more g k)))))
    (gz-headin g)                                 ; -> the header whole off buf | () where none can be
     (: b (peep g 'buf "")   h (gz-head b)
        (? h h
           (3 <= #b && !(b 0 = 31 && b 1 = 139 && b 2 = 8)) ()
-          (peep g 'rd () 0 @ p (#p = 0 ? () (pin g 'buf (b + p), gz-headin g)))))
+          (g 'rd 0 @ p (#p @ 0 () (pin g 'buf (b + p), gz-headin g)))))
    (gz-next g)
     (peep g 'mode 'end @
      'end ""
      'head
-     (: h (gz-headin g)   b (peep g 'buf "")   hd (peep g 'hd ())
+     (: h (gz-headin g)   b (peep g 'buf "")   hd (g 'hd)
         (!h ? (? (peep g 'first 0) (gz-fin g 'nogz)
                  (#(gz-more g 1) = 0) (gz-fin g [1 (hd 0) (hd 1) (peep g 'tot 0) (hd 2)])
                  (gz-fin g ['trail (hd 0) (hd 1) (peep g 'tot 0) (hd 2)]))
@@ -265,7 +262,7 @@
             gz-next g)))
      'body
      (: b (peep g 'buf "")
-        r (inflate-feed (peep g 'st ()) (#b = 0 ? (peep g 'rd () 0) b))
+        r (inflate-feed (peep g 'st ()) (#b @ 0 (peep g 'rd () 0) b))
         (pin g 'buf "",
          (? (two? r) (<r @ o
                         (pins g 'crc (crc32-on (peep g 'crc 0) o) 'n (peep g 'n 0 + #o) 'buf >r 'mode 'trail,
@@ -279,13 +276,9 @@
            gz-next g))))
    ; mk (stamp name) of the first header answers (1 w), w the writer, or () for 'no
    (gz-unzipf rd mk)
-    (: g (gz-pull rd)   p (gz-next g)   hd (peep g 'hd ())
-       (!(two? hd) ? (peep g 'ans ())
-          (mk (hd 0) (hd 1) @ m
-             (!(two? m) ? 'no
-                (: w <>m
-                   (go p) (#p = 0 ? (peep g 'ans ()) (w p, go (gz-next g)))
-                   (go p)))))))
+    (: g (gz-pull rd) p (gz-next g) hd (g 'hd)
+     (atom? hd ? (g 'ans) (mk (hd 0) (hd 1) @ m (atom? m ? 'no
+      (:- (go p) w <>m (go p) (#p @ 0 (g 'ans) (w p, go (gz-next g))) ))))))
 
 ) ; module 'gz
 
@@ -328,26 +321,25 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; the tenth is rounded, not truncated, and a tie lands half away from zero where C
    ; rounds half to even -- a difference an exact .05 could reach and real sizes do not.
    (gzc-ratio num den)
-    (den = 0 ? "  0.0%"
-       (: neg (num < 0) a (neg ? -num num)
-          v ((a * 1000 + den // 2) // den)
-          txt (show (v // 10) + "." + show (v % 10) + "%")
-          (gzc-pad 6 (neg ? ("-" + txt) txt))))
+    (den @ 0 "  0.0%"
+     (: neg (num < 0) a (neg ? -num num)
+        v ((a * 1000 + den // 2) // den)
+        txt (show (v // 10) + "." + show (v % 10) + "%")
+      (gzc-pad 6 (neg ? "-\(txt)" txt))))
 
    ; --- -l, the listing ------------------------------------------------------
    gzc-lhead "         compressed        uncompressed  ratio uncompressed_name"
    (gzc-lrow fs un pay nom)
-    (gzc-pad 19 (show fs) + " " + gzc-pad 19 (show un)
-     + " " + gzc-ratio (un - pay) un + " " + nom)
+    "\(gzc-pad 19 $ show fs) \(gzc-pad 19 $ show un) \(gzc-ratio (un - pay) un) \(nom)"
    (gzc-list t fs)
     (: suf (peep t 'suf ".gz")
        _ (say out (gzc-lhead + "\n"))
        (one p acc)                     ; acc: (status compressed uncompressed payload)
         (uread p @ r
-           (!r ? (gzc-moan t (p + ": No such file or directory"),
+           (!r ? (gzc-moan t "\(p): No such file or directory",
                   [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
               (: s <>r h (gz-head s)
-                 (!h ? (gzc-moan t (p + ": not in gzip format"),
+                 (!h ? (gzc-moan t "\(p): not in gzip format",
                         [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
                     (: fs2 #s un (gzc-isize s) pay (fs2 - <>>>h - 8)
                        ; the name column is the path as it was typed, stem and all --
@@ -364,7 +356,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; --- the suffix rules -----------------------------------------------------
    ; .gz (or -S's) comes off; .tgz answers .tar, which is the one rename gzip does.
    (gzc-stem p suf)                    ; -> (1 stem) | ()
-    (p @ (s + ^suf + "") [1 s] (s + ".tgz") [1 (s + ".tar")] ())
+    (p @ (s + ^suf + "") [1 s] (s + ".tgz") [1 "\(s).tar"] ())
 
    (gzc-zip t s nom stamp) (peep t 'lvl 6 @ 9 (gz-zip9 s nom stamp) (gz-zip s nom stamp))
 
@@ -372,9 +364,9 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-zip1 t p)
     (: suf (peep t 'suf ".gz")
        r (uread p)
-       (? !r (gzc-moan t (p + ": No such file or directory"), 1)
+       (? !r (gzc-moan t "\(p): No such file or directory", 1)
           (ends? p suf && !(peep t 'c 0))
-           (gzc-moan t (p + " already has " + suf + " suffix -- unchanged"), 0)
+           (gzc-moan t "\(p) already has \(suf) suffix -- unchanged", 0)
           (: s <>r
              st (stat p)
              ms (two? st ? <>st 0)
@@ -383,12 +375,12 @@ no file, or a bare -, is the filter: stdin -> stdout"
              (peep t 'c 0 ? (say out z, flush out, 0)
                 (p + suf @ dst
                    (? (two? (lstat dst) && !(peep t 'f 0))
-                      (gzc-moan t (dst + " already exists;\tnot overwritten"), 2)
+                      (gzc-moan t "\(dst) already exists;\tnot overwritten", 2)
                       !(uwrite dst z)
-                       (gzc-moan t ("cannot write " + dst), 1)
+                       (gzc-moan t "cannot write \(dst)", 1)
                       (two? st && (chmod dst (<>>st & 4095), utime dst ms),
                        peep t 'k 0 ? 0 (unlink p),
-                       gzc-tell t (p + ":\t" + gzc-ratio (#s - gzc-pay z) #s
+                       gzc-tell t ("\(p):\t" + gzc-ratio (#s - gzc-pay z) #s
                                      + (peep t 'k 0 ? " -- created " " -- replaced with ")
                                      + dst),
                        0)))))))
@@ -398,11 +390,11 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-rd q) (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q))))
    (gzc-dstat t nm u)                  ; the answer of gz-unzipf, said
     (? (u = 'big) (gzc-moan t (nm + gzc-big), 1)
-       (u = 'nogz) (gzc-moan t (nm + ": not in gzip format"), 1)
+       (u = 'nogz) (gzc-moan t "\(nm): not in gzip format", 1)
        (u = 'no) (peep t 'why 1)
-       (two? u && <u = 'trail) (gzc-moan t (nm + ": decompression OK, trailing garbage ignored"), 2)
+       (two? u && <u = 'trail) (gzc-moan t "\(nm): decompression OK, trailing garbage ignored", 2)
        (two? u) 0
-       (gzc-moan t (nm + ": invalid compressed data--crc error"), 1))
+       (gzc-moan t "\(nm): invalid compressed data--crc error", 1))
    (gzc-unzip1 t p)
     (: suf (peep t 'suf ".gz")
        stem0 (gzc-stem p suf)
@@ -410,21 +402,21 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (!(peep t 'c 0) && !(peep t 't 0) && !stem0 && !(peep t 'N 0) ?
           (gzc-moan t (p + ": unknown suffix -- ignored"), 2)
        (open p "r" @ q
-       (!(hot? q) ? (gzc-moan t (p + ": No such file or directory"), 1)
+       (!(hot? q) ? (gzc-moan t "\(p): No such file or directory", 1)
           (: k {}
              (no w m) (pin k 'why w, gzc-moan t m, ())
              (mk stamp nom)
               (? (peep t 't 0) [1 (s \ 0)]
                  (peep t 'c 0) [1 (say out)]
                  (peep t 'N 0 && 0 < #nom @ N?
-                    (!stem0 && !N? ? (no 2 (p + ": unknown suffix -- ignored"))
+                    (!stem0 && !N? ? (no 2 "\(p): unknown suffix -- ignored")
                        (: dst (N? ? (phead p + pbase nom) <>stem0)
                           (two? (lstat dst) && !(peep t 'f 0) ?
-                             (no 2 (dst + " already exists;\tnot overwritten"))
+                             (no 2 "\(dst) already exists;\tnot overwritten")
                              (open dst "w" @ o
-                                (!(hot? o) ? (no 1 ("cannot write " + dst))
+                                (!(hot? o) ? (no 1 "cannot write \(dst)")
                                    (pins k 'dst dst 'o o 'N N? 'stamp stamp,
-                                    [1 (s \ say o s)]))))))))
+                                    [1 (say o)]))))))))
              u (gz-unzipf (gzc-rd q) mk)
              _ (close q)
              o (peep k 'o ())
@@ -441,7 +433,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                        (two? st) (utime dst <>st)
                        0),
                     peep t 'k 0 || unlink p,
-                    gzc-tell t (p + ":\t" + gzc-ratio (u 3 - (<st - u 4 - 8)) (u 3)
+                    gzc-tell t ("\(p):\t" + gzc-ratio (u 3 - (<st - u 4 - 8)) (u 3)
                                  + (peep t 'k 0 ? " -- created " " -- replaced with ")
                                  + dst),
                     r))))))))
@@ -451,16 +443,16 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-walk t p)                      ; -r: a directory is its files, sorted
     (? !(gzc-dirp? p) (gzc-one t p)
        (peep t 'r 0)
-        (foldl (acc \ c \ gzc-worse acc (gzc-walk t (p + "/" + c))) 0 (sort (readdir p)))
-       (gzc-moan t (p + " is a directory -- ignored"), 2))
+        (foldl (acc \ c \ gzc-worse acc (gzc-walk t "\(p)/\(c)")) 0 (sort (readdir p)))
+       (gzc-moan t "\(p) is a directory -- ignored", 2))
 
    ; --- the filter: no file named, so stdin -> stdout -------------------------
    (gzc-filter t)
     (peep t 'd 0 ?
-       (gz-unzipf (gzc-rd in) (a \ b \ [1 (peep t 't 0 ? (s \ 0) (s \ say out s))]) @ u
+       (gz-unzipf (gzc-rd in) (a \ b \ [1 (peep t 't 0 ? (s \ 0) (say out))]) @ u
           (flush out,
            gzc-dstat t "stdin" u))
-       (slurp in @ s (say out (gzc-zip t (s + "") "" 0), flush out, 0)))
+       (slurp in @ s (say out (gzc-zip t "\(s)" "" 0), flush out, 0)))
 
    ; --- the options ----------------------------------------------------------
    ; a digit is a level, the last one kept; only 9 (--best) changes the coder
@@ -471,10 +463,10 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-opts as t)                     ; -> (1 files) | ()  -- () is a bad option
     (: u {}
        r (cite 'cli 'uoptp as u [83] () gzc-longs)
-       bad (two? r ? (cite 'cli 'uoptun u (gzc-flags + "S0123456789")))
-       (? !(two? r) (: w <(rev as) (gzc-moan t ((w 1 = 45 ? "--suffix" "-S") + " wants a suffix"), ()))
-          (r 3) (gzc-moan t ("unknown option " + r 3), ())
-          bad (gzc-moan t ("unknown option -" + string bad), ())
+       bad (two? r ? (cite 'cli 'uoptun u "\(gzc-flags)S0123456789"))
+       (? !(two? r) (: w <(rev as) (gzc-moan t "\(w 1 @ 45 "--suffix" "-S") wants a suffix", ()))
+          (r 3) (gzc-moan t "unknown option \(r 3)", ())
+          bad (gzc-moan t "unknown option -\(string bad)", ())
           (: _ (each (chars gzc-flags) (c \ peep u c 0 && pin t (intern (string c)) 1))
              lv (cite 'cli 'uoptlast as "123456789" [83] gzc-longs)
              _ (lv ? (pin t 'lvl (lv - 48)))
@@ -486,10 +478,10 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: t t0
        o (gzc-opts as t)
        (? !o 1
-          (peep t 'h 0) (say out (gzc-help + "\n"), flush out, 0)
+          (peep t 'h 0) (say out "\(gzc-help)\n", flush out, 0)
           (peep t 'V 0)
-           (say out (uvers "gzip" + "\n"), flush out, 0)
-          (filter (p \ !(p = "-")) <>o @ fs
+           (say out "\(uvers "gzip")\n", flush out, 0)
+          (filter (!= "-") <>o @ fs
              ((? (peep t 'l 0) 0 (peep t 't 0) (pin t 'd 1) 0),
               (? !(two? fs) (peep t 'l 0 ? (gzc-moan t "-l wants a file", 1)
                                            (gzc-filter t))
