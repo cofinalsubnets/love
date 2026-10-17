@@ -243,18 +243,18 @@
        until (gr-take-word g "until" ?
               (gr-skip-blanks g, gr-c g = 34 ? (gr-adv g, gr-string g) (gr-word g)))
        text (string? file ?
-             (uread file @ r (two? r ? <>r (gr-err g ("can't open file " + file)))))
+             (uread file @ r (two? r ? <>r (gr-err g "can't open file \(file)"))))
        (!(string? thru) ?
         (string? file ? (gr-push-file g file text) 0)
         (: ls (string? file ? (lines text) (gr-take-lines g until))
            ls2 (string? file ? (gr-cut-until ls until) ls)
-           body (cats (map (l \ gr-subst thru (gr-words l) + "\n") ls2))
+           body (cats (map (l \ "\(gr-subst thru (gr-words l))\n") ls2))
            (string? file ? (gr-push-file g file body) (gr-push g (gr-src body 'text))))))
    ; a file's text pushed: troff hears of it, and of where the graph goes on after it
    (gr-push-file g file t)
-    (: _ (gr-o0 g (".lf 1 " + file + "\n"))
+    (: _ (gr-o0 g ".lf 1 \(file)\n")
        s (gr-src t 'text)
-       (pin s 'endlf (".lf " + show (gr-fline g + g 'skew) + " " + g 'name + "\n"),
+       (pin s 'endlf ".lf \(gr-fline g + g 'skew) \(g 'name)\n",
         gr-push g s))
    (gr-cut-until ls w)
     (!(string? w) || atom? ls ? ls
@@ -322,7 +322,7 @@
         gr-for-ok f v2 ? (pins s 'i 0 'bol 0, 1) 0))
    (gr-step op v by) (op @ "*" (v * by) "/" (v / by) "-" (v - by) (v + by))
    ; a tick's value as a label: troff's minus on a negative one
-   (gr-tnum v) (v < 0 ? ("\\-" + gr-g (0.0 - v)) (gr-g v))
+   (gr-tnum v) (v < 0 ? "\\-\(gr-g (0.0 - v))" (gr-g v))
    (gr-down? op by) (op @ "*" (by < 1) "/" (by > 1) "-" (by > 0) (by < 0))
    (gr-for-ok f v) (f 'down ? (f 'to <= v) (v <= f 'to))
 
@@ -451,7 +451,7 @@
    (gr-pt g p)
     (: c (gr-coord g <p) x (gr-axv c 'x (p 1)) y (gr-axv c 'y (p 2))
        (gr-extend c 'x x, gr-extend c 'y y,
-        "xy_" + <p + "(" + gr-g x + "," + gr-g y + ")"))
+        "xy_\(<p)(\(gr-g x),\(gr-g y))"))
    ; [coord] expr, expr, or the same in parens -> [name x y]
    (gr-point g)
     (: nm (gr-optcoord g)
@@ -475,7 +475,7 @@
        _ (pin g 'ncoord (g 'ncoord + 1))
        c0 (gr-coord g nm)
        ; a second unnamed one renames the default, in grap's own buffer
-       nm2 (!named && 1 < g 'ncoord ? ("gg" + show (g 'ncoord)) nm)
+       nm2 (!named && 1 < g 'ncoord ? "gg\(g 'ncoord)" nm)
        _ (named || nm2 = nm ? 0 (pins g 'dflt nm2 'dbuf 1))
        c (gr-coord g nm2)
        (rng ax) (: l (gr-expr g) _ (gr-want-op g ",") u (gr-expr g)
@@ -497,7 +497,7 @@
        (lg ax) (: l (ax = 'x ? 'xl 'yl) u (ax = 'x ? 'xu 'yu) f (ax = 'x ? 'xfix 'yfix)
                   (c f ?
                    (c l <= 0 || c u <= 0 ?
-                    (gr-err g ("can't have log of " + (show ax) + " coord " + gr-g (c l) + "," + gr-g (c u)))
+                    (gr-err g "can't have log of \(ax) coord \(gr-g (c l)),\(gr-g (c u))")
                     (pins c l (gr-log10 (c l)) u (gr-log10 (c u))))
                    0))
        (c 'xlog ? (lg 'x) 0, c 'ylog ? (lg 'y) 0,
@@ -506,7 +506,7 @@
 
    ; -- output ----------------------------------------------------------------------
    (gr-o g s) (say (g 'body) s, pin g 'drew 1)
-   (gr-ol g s) (gr-o g (s + "\n"))
+   (gr-ol g s) (gr-o g "\(s)\n")
 
    ; -- lines: draw, new, next, and a line of numbers --------------------------------------
    ; a line's state: its style, its mark, whether it has begun
@@ -519,7 +519,7 @@
      (gr-k g 0 = 'name && gr-styles w != () ?
       (: _ (gr-next g)
          s (gr-styles w)
-         (gr-num-ahead? g ? (s + " " + gr-g (gr-expr g)) s))))
+         (gr-num-ahead? g ? "\(s) \(gr-g (gr-expr g))" s))))
    (gr-num-ahead? g)
     (gr-k g 0 @ k
      (? (k = 'num) 1
@@ -546,9 +546,9 @@
    (gr-next-pt g nm p st)
     (: l (gr-line g nm) at (gr-pt g p)
        ((l 'on ?
-         (gr-ol g ("line " + (string? st ? st (l 'style)) + " from L" + nm + " to " + at + "; L" + nm + ": Here"))
-         (pin l 'on 1, gr-ol g ("L" + nm + ": " + at))),
-        string? (l 'mark) ? (gr-ol g ("\"" + l 'mark + "\" at " + at)) 0))
+         (gr-ol g "line \(string? st ? st (l 'style)) from L\(nm) to \(at); L\(nm): Here")
+         (pin l 'on 1, gr-ol g "L\(nm): \(at)")),
+        string? (l 'mark) ? (gr-ol g "\"\(l 'mark)\" at \(at)") 0))
    ; next [name] at point [linedesc]
    (gr-next-stmt g)
     (: _ (gr-next g)
@@ -568,7 +568,7 @@
        _ (atom? >vs ? (pin g 'nextx (g 'nextx + 1)) 0)
        x <xs
        (map (y \ (l 'draw ? (gr-next-pt g nm [nm x y] ())
-                  (gr-ol g ("box invis wid 0 ht 1*textht \"" + g 'mark + "\" at " + gr-pt g [nm x y]))))
+                  (gr-ol g "box invis wid 0 ht 1*textht \"\(g 'mark)\" at \(gr-pt g [nm x y])")))
             >xs))
 
    ; -- plot, line, circle, pic ---------------------------------------------------------
@@ -577,7 +577,7 @@
     (: (go acc) (gr-k g 0 = 'name && elem (gr-v g 0) ["ljust" "rjust" "above" "below"] ?
                  (go (<>(gr-next g) . acc)) (rev acc))
        (go ()))
-   (gr-said ws) (foldl (a \ w \ a + " " + w) "" ws)
+   (gr-said ws) (foldl (a \ w \ "\(a) \(w)") "" ws)
    ; plot "str" [just..] at point | plot expr at point
    (gr-plot-stmt g)
     (: _ (gr-next g)
@@ -585,10 +585,10 @@
        (string? s ?
         (: js (gr-just g) _ (gr-w? g 0 "at" ? (gr-next g) (gr-syn g))
            p (gr-point g)
-           (gr-ol g ("box invis wid 0 ht 1*textht \"" + s + "\"" + gr-said js + " at " + gr-pt g p)))
+           (gr-ol g "box invis wid 0 ht 1*textht \"\(s)\"\(gr-said js) at \(gr-pt g p)"))
         (: v (gr-expr g) _ (gr-w? g 0 "at" ? (gr-next g) (gr-syn g))
            p (gr-point g)
-           (gr-ol g ("\"" + gr-tnum v + "\" at " + gr-pt g p)))))
+           (gr-ol g "\"\(gr-tnum v)\" at \(gr-pt g p)"))))
    ; line|arrow [linedesc] from point to point [linedesc]
    (gr-line-stmt g kw)
     (: _ (gr-next g)
@@ -600,15 +600,15 @@
        s2 (gr-linedesc g)
        st (? (string? s2) s2 (string? s1) s1 "")
        pa (gr-pt g a) pb (gr-pt g b)
-       (gr-ol g (kw + " " + st + " from " + pa + " to " + pb)))
+       (gr-ol g "\(kw) \(st) from \(pa) to \(pb)"))
    ; circle [rad expr] at point
    (gr-circle-stmt g)
     (: _ (gr-next g)
        r (gr-w? g 0 "rad" || gr-w? g 0 "radius" ? (gr-next g, gr-expr g))
        _ (gr-w? g 0 "at" ? (gr-next g) (gr-syn g))
        p (gr-point g)
-       (r = () ? (gr-ol g ("\"\\s-3\\(ob\\s0\" at " + gr-pt g p))
-        (gr-ol g ("circle rad " + gr-g r + " at " + gr-pt g p))))
+       (r = () ? (gr-ol g "\"\\s-3\\(ob\\s0\" at \(gr-pt g p)")
+        (gr-ol g "circle rad \(gr-g r) at \(gr-pt g p)")))
 
    ; -- frame and labels --------------------------------------------------------------
    ; frame [ht e] [wid e] [side linedesc].. [linedesc]
@@ -644,14 +644,14 @@
        n #ss
        width (w != () ? (w + 0.00001) (gr-fl (foldl (m \ s \ max m #<s) 0 ss) / 15))
        _ (gr-ol g "\ttextht = 0.166667")
-       _ (lr || w != () ? (gr-ol g ("\ttextwid = " + gr-g width)) 0)
-       body (cats (map (s \ " \"" + <s + "\"" + s 1) ss))
+       _ (lr || w != () ? (gr-ol g "\ttextwid = \(gr-g width)") 0)
+       body (cats (map (s \ " \"\(<s)\"\(s 1)") ss))
        at (sd @ 'bot " with .n at Frame.s - (0,2 * textht)"
                'top " with .s at Frame.n + (0,2 * textht)"
                'left " wid textwid with .e at Frame.w - (0.2,0)"
                " wid textwid with .w at Frame.e + (0.2,0)")
-       sh (dx != 0 || dy != 0 ? (" + (" + gr-g dx + "," + gr-g dy + ")") "")
-       (gr-ol g ("Label:\tbox invis wid 0 ht " + show n + "*textht" + body + at + sh)))
+       sh (dx != 0 || dy != 0 ? " + (\(gr-g dx),\(gr-g dy))" "")
+       (gr-ol g "Label:\tbox invis wid 0 ht \(n)*textht\(body)\(at)\(sh)"))
 
    ; -- ticks and grids -----------------------------------------------------------------
    ; the values of an at list [[v label] ..] or a from list, and whether any were labelled
@@ -707,18 +707,18 @@
    (gr-lwid s in) (gr-f2 ((in ? 0.0 0.1) + (4.0 * #s) / 30))
    ; one tick's pic: side, in, the coord, the value as kept, its label or ()
    (gr-tick g sd in auto nm v lab)
-    (: xy (elem sd ['bot 'top] ? ("x_" + nm + "(" + gr-g v + ")") ("y_" + nm + "(" + gr-g v + ")"))
+    (: xy (elem sd ['bot 'top] ? "x_\(nm)(\(gr-g v))" "y_\(nm)(\(gr-g v))")
        end (in && !auto ? "start" "end")
-       _ (gr-ol g (sd @ 'bot ("\tline  " + (in ? "up" "down") + " ticklen from (" + xy + ",0)")
-                       'top ("\tline  " + (in ? "down" "up") + " ticklen from (" + xy + ",frameht)")
-                       'left ("\tline  " + (in ? "right" "left") + " ticklen from (0," + xy + ")")
-                       ("\tline  " + (in ? "left" "right") + " ticklen from (framewid," + xy + ")")))
+       _ (gr-ol g (sd @ 'bot "\tline  \(in ? "up" "down") ticklen from (\(xy),0)"
+                       'top "\tline  \(in ? "down" "up") ticklen from (\(xy),frameht)"
+                       'left "\tline  \(in ? "right" "left") ticklen from (0,\(xy))"
+                       "\tline  \(in ? "left" "right") ticklen from (framewid,\(xy))"))
        win (in && !auto)
        (lab = () ? 0
-        (gr-ol g (sd @ 'bot ("\tbox invis \"" + lab + "\" ht .25 wid 0 with .n at last line." + end)
-                       'top ("\tbox invis \"" + lab + "\" ht .2 wid 0 with .s at last line." + end)
-                       'left ("\t\"" + lab + " \" wid " + gr-lwid lab win + " rjust at last line." + end)
-                       ("\t\" " + lab + "\" wid " + gr-lwid lab win + " ljust at last line." + end)))))
+        (gr-ol g (sd @ 'bot "\tbox invis \"\(lab)\" ht .25 wid 0 with .n at last line.\(end)"
+                       'top "\tbox invis \"\(lab)\" ht .2 wid 0 with .s at last line.\(end)"
+                       'left "\t\"\(lab) \" wid \(gr-lwid lab win) rjust at last line.\(end)"
+                       "\t\" \(lab)\" wid \(gr-lwid lab win) ljust at last line.\(end)"))))
    ; the axis a side's values ride
    (gr-axis sd) (elem sd ['bot 'top] ? 'x 'y)
    ; ticks [side] [in|out [len]] [off | at .. | from ..]
@@ -742,7 +742,7 @@
           (: nm <tl its (tl 1) any (tl 2) kind (tl 3)
              c (gr-coord g nm)
              (sd = () ? 0 (gr-unauto g sd),
-              gr-ol g ("Ticks_" + nm + ":\n\tticklen = " + gr-g len),
+              gr-ol g "Ticks_\(nm):\n\tticklen = \(gr-g len)",
               map (it \ (: ax (sd = () ? 'x (gr-axis sd)) v (gr-axv c ax (it 0))
                            (gr-extend2 c ax v 1,
                             sd = () ? 0 (gr-tick g sd (io = 1) 0 nm v (gr-tick-label it any kind)))))
@@ -763,19 +763,19 @@
         (: nm <tl its (tl 1) kind (tl 3)
            c (gr-coord g nm)
            (gr-unauto g sd,
-            gr-ol g ("Grid_" + nm + ":"),
+            gr-ol g "Grid_\(nm):",
             map (it \ (: ax (gr-axis sd) v (gr-axv c ax (it 0)) _ (gr-extend2 c ax v 1)
-                         xy (ax = 'x ? ("x_" + nm + "(" + gr-g v + ")") ("y_" + nm + "(" + gr-g v + ")"))
-                         _ (gr-ol g (sd @ 'bot ("\tline " + st + " up frameht from (" + xy + ",0)")
-                                        'top ("\tline " + st + " down frameht from (" + xy + ",frameht)")
-                                        'left ("\tline " + st + " right framewid from (0," + xy + ")")
-                                        ("\tline " + st + " left framewid from (framewid," + xy + ")")))
+                         xy (ax = 'x ? "x_\(nm)(\(gr-g v))" "y_\(nm)(\(gr-g v))")
+                         _ (gr-ol g (sd @ 'bot "\tline \(st) up frameht from (\(xy),0)"
+                                        'top "\tline \(st) down frameht from (\(xy),frameht)"
+                                        'left "\tline \(st) right framewid from (0,\(xy))"
+                                        "\tline \(st) left framewid from (framewid,\(xy))"))
                          lab (? (string? (it 1)) (kind = 'at ? (gr-atlabel (it 1)) (it 1)) (kind = 'from) (gr-tnum (it 0)) ())
                          (lab = () ? 0
-                          (gr-ol g (sd @ 'bot ("\tbox invis \"" + lab + "\" ht .25 wid 0 with .n at last line.start")
-                                        'top ("\tbox invis \"" + lab + "\" ht .2 wid 0 with .s at last line.start")
-                                        'left ("\t\"" + lab + " \" wid " + gr-lwid lab 1 + " rjust at last line.start")
-                                        ("\t\" " + lab + "\" wid " + gr-lwid lab 1 + " ljust at last line.start"))))))
+                          (gr-ol g (sd @ 'bot "\tbox invis \"\(lab)\" ht .25 wid 0 with .n at last line.start"
+                                        'top "\tbox invis \"\(lab)\" ht .2 wid 0 with .s at last line.start"
+                                        'left "\t\"\(lab) \" wid \(gr-lwid lab 1) rjust at last line.start"
+                                        "\t\" \(lab)\" wid \(gr-lwid lab 1) ljust at last line.start")))))
                 its))))
 
    ; -- automatic ticks -----------------------------------------------------------------
@@ -830,9 +830,9 @@
        au (g 'auto)
        (!(tablet? c) || atom? au ? 0
         (: xa (gr-auto-axis c 'x) ya (gr-auto-axis c 'y) nm (g 'dflt)
-           _ (say o ("Autoticks:\t# x " + gr-g <xa + ".." + gr-g (xa 1) + ", y " + gr-g <ya + ".." + gr-g (ya 1)
-                     + ";   xt " + gr-g (xa 4) + "," + gr-g (xa 5) + ", yt " + gr-g (ya 4) + "," + gr-g (ya 5)
-                     + ", xq,xm = " + gr-g (xa 2) + ",0, yq,ym = " + gr-g (ya 2) + ",0\n"))
+           _ (say o ("Autoticks:\t# x \(gr-g <xa)..\(gr-g (xa 1)), y \(gr-g <ya)..\(gr-g (ya 1))"
+                     + ";   xt \(gr-g (xa 4)),\(gr-g (xa 5)), yt \(gr-g (ya 4)),\(gr-g (ya 5))"
+                     + ", xq,xm = \(gr-g (xa 2)),0, yq,ym = \(gr-g (ya 2)),0\n"))
            body0 (g 'body)
            _ (pin g 'body o)
            (axis a sides)
@@ -841,7 +841,7 @@
                sd (? (elem pf au) pf (elem ot au) ot ())
                lg (c (<sides = 'bot ? 'xlog 'ylog))
                (sd = () || atom? (a 3) ? 0
-                (gr-ol g ("Ticks_" + nm + ":\n\tticklen = 0.1"),
+                (gr-ol g "Ticks_\(nm):\n\tticklen = 0.1",
                  map (v \ gr-tick g sd (peep (g 'autoin) sd 0) 1 nm (lg ? (gr-log10 v) v) (gr-tnum v)) (a 3))))
            (axis xa ['bot 'top],
             axis ya ['left 'right],
@@ -857,22 +857,22 @@
        (said ax) (: l (c (ax = 'x ? 'xl 'yl)) u (c (ax = 'x ? 'xu 'yu)) lg (c (ax = 'x ? 'xlog 'ylog))
                     (lg && l <= u ? [(gr-pow10 l) (gr-pow10 u)] [l u]))
        sx (said 'x) sy (said 'y)
-       _ (say o ("\t# " + nm + " " + gr-g <sx + " .. " + gr-g (sx 1) + ", " + gr-g <sy + " .. " + gr-g (sy 1) + "\n"))
+       _ (say o "\t# \(nm) \(gr-g <sx) .. \(gr-g (sx 1)), \(gr-g <sy) .. \(gr-g (sy 1))\n")
        m (? (g 'mset) (gr-var g "margin") (g 'anyset) 0.0 0.07)
        _ (c 'xfix ? 0 (gr-margin c 'x m))
        _ (c 'yfix ? 0 (gr-margin c 'y m))
        (map1 ax arg size) (: l (c (ax = 'x ? 'xl 'yl)) u (c (ax = 'x ? 'xu 'yu))
-                             (l < u ? ("(($" + arg + ")-(" + gr-g l + "))*" + gr-g (size / (u - l))) (gr-g (size / 2))))
+                             (l < u ? "(($\(arg))-(\(gr-g l)))*\(gr-g (size / (u - l)))" (gr-g (size / 2))))
        mx (map1 'x "1" wid) my (map1 'y "2" ht) my1 (map1 'y "1" ht)
-       (say o ("define xy_" + nm + " @ \t" + mx + ", " + my + " @\ndefine x_" + nm + " @ \t" + mx
-               + " @\ndefine y_" + nm + " @ \t" + my1 + " @\n")))
+       (say o ("define xy_\(nm) @ \t\(mx), \(my) @\ndefine x_\(nm) @ \t\(mx)"
+               + " @\ndefine y_\(nm) @ \t\(my1) @\n")))
    (gr-frame g o)
     (: fs (g 'fsides)
-       _ (say o ("\tframeht = " + gr-g (g 'ht) + "\n\tframewid = " + gr-g (g 'wid) + "\n"))
+       _ (say o "\tframeht = \(gr-g (g 'ht))\n\tframewid = \(gr-g (g 'wid))\n")
        any (0 < #(keys fs))
-       (say o ("Frame:\tbox ht frameht wid framewid with .sw at 0,0 " + (any ? "invis" "") + "\n"),
+       (say o "Frame:\tbox ht frameht wid framewid with .sw at 0,0 \(any ? "invis" "")\n",
         (any ?
-         (map (e \ (fs <e @ st (say o ("\tline from Frame." + e 1 + " to Frame." + e 2 + (string? st ? (" " + st) "") + "\n"))))
+         (map (e \ (fs <e @ st (say o "\tline from Frame.\(e 1) to Frame.\(e 2)\(string? st ? " \(st)" "")\n")))
               [['top "nw" "ne"] ['bot "sw" "se"] ['left "sw" "nw"] ['right "se" "ne"]])
          0)))
    ; a graph's pic, when it drew anything: its systems newest first, its frame, its automatic
@@ -880,7 +880,7 @@
    (gr-finish g)
     (!(g 'drew) ? 0
      (: o (g 'o)
-        _ (say o (g 'gname + ": [\n"))
+        _ (say o "\(g 'gname): [\n")
         cs (map (nm \ g 'cs nm) (g 'corder))
         ; the automatic ticks see the ranges the margins leave
         co (jug 0)
@@ -889,7 +889,7 @@
          gr-frame g o,
          gr-autoticks g o,
          say o (slurp (g 'body)),
-         say o ("\n] " + g 'gpos + "\n"))))
+         say o "\n] \(g 'gpos)\n")))
    (gr-new-graph g nm pos)
     (pins g 'gname nm 'gpos pos 'drew 0 'body (jug 0) 'cs {} 'corder () 'lines {}
             'fsides {} 'auto ['bot 'left] 'autoin {} 'autopref {} 'ht 2.0 'wid 3.0 'ncoord 0 'nextx 1.0 'anyset 0)
@@ -928,7 +928,7 @@
    (gr-print g)
     (: _ (gr-next g)
        s (gr-text g)
-       (say err ("\t" + (string? s ? s (gr-g (gr-expr g))) + "\n")))
+       (say err "\t\(string? s ? s (gr-g (gr-expr g)))\n"))
    ; sh runs the command, its output straight out ahead of all grap has kept
    (gr-sh g cmd)
     (hark ["sh" "-c" cmd] @ r
@@ -956,17 +956,17 @@
           ["+" 1.0])
        op <r by (r 1)
        body (gr-k g 0 = 'body ? (<>(gr-next g)) (gr-syn g))
-       _ (gr-ol g ("# for " + v + " from " + gr-g a + " to " + gr-g b + " by " + op + " " + gr-g by + " "))
+       _ (gr-ol g "# for \(v) from \(gr-g a) to \(gr-g b) by \(op) \(gr-g by) ")
        f {'var v 'to b 'by by 'op op 'down (gr-down? op by)}
        (gr-setvar g v a,
         ; the rest of the for's line waits under the body
-        gr-for-ok f a ? (gr-src (body + "\n") 'for @ s (pin s 'for f, gr-push g s)) 0))
+        gr-for-ok f a ? (gr-src "\(body)\n" 'for @ s (pin s 'for f, gr-push g s)) 0))
    (gr-if g)
     (: _ (gr-next g)
        e (gr-expr g)
        b (gr-k g 0 = 'ifb ? (<>(gr-next g)) (gr-syn g))
        t (e != 0 ? <b (b 1))
-       (string? t ? (gr-push g (gr-src (t + "\n") 'text)) 0))
+       (string? t ? (gr-push g (gr-src "\(t)\n" 'text)) 0))
 
    ; -- the document -------------------------------------------------------------------
    (gr-macro? l w) (starts? l w && (#l = #w || gr-blank? (l #w)))
@@ -979,7 +979,7 @@
    (gr-doc g nm text)
     (: ls (lines text)
        _ (pin g 'name nm)
-       _ (gr-o0 g (".lf 1 " + nm + "\n"))
+       _ (gr-o0 g ".lf 1 \(nm)\n")
        (go ls k)
         (? (atom? ls) 0
            (gr-macro? <ls ".G1")
@@ -992,20 +992,20 @@
                ; the .G2 line, when there was one
                pe (: (fin l) (? (atom? l) () (gr-macro? <l ".G2") <l (fin >l)) (fin >ls))
                sk (g 'skew)
-               _ (gr-o0 g (".PS" + args + "\nscale = 1\n.lf " + show (k + 1 + sk) + "\n"))
+               _ (gr-o0 g ".PS\(args)\nscale = 1\n.lf \(k + 1 + sk)\n")
                _ (g 'defs ? 0
                   (: _ (pin g 'defs 1)
-                     _ (gr-o0 g (".lf 1 " + gr-defines-path + "\n"))
+                     _ (gr-o0 g ".lf 1 \(gr-defines-path)\n")
                      d (uread gr-defines-path @ r2 (two? r2 ? <>r2 gr-defines))
                      (gr-run-defs g d,
-                      gr-o0 g (".lf " + show (k + sk) + " " + nm + "\n"))))
+                      gr-o0 g ".lf \(k + sk) \(nm)\n")))
                _ (gr-new-graph g "Graph" "")
                _ (pins g 'dflt (peep g 'dflt "gg") 'cur (peep g 'dbuf 0 ? 'buf (peep g 'dflt "gg")))
-               ok (trap (_ \ (gr-run-body g (cats (map (x \ x + "\n") bl)) (k + 1), 1)) ()
+               ok (trap (_ \ (gr-run-body g (cats (map (x \ "\(x)\n") bl)) (k + 1), 1)) ()
                         (a \ m \ (a @ 'gr-err (gr-gave-up g nm m k bl pe pk, 0) (scare a m))))
-               (ok ? (gr-finish g, gr-o0 g (".PE\n.lf " + show (pk + 1 + sk) + "\n")) 0,
+               (ok ? (gr-finish g, gr-o0 g ".PE\n.lf \(pk + 1 + sk)\n") 0,
                 go (r 2) (pk + 1)))
-           (gr-o0 g (<ls + "\n"), go >ls (k + 1)))
+           (gr-o0 g "\(<ls)\n", go >ls (k + 1)))
        (go ls 1))
    (gr-o0 g s) (say (g 'o) s)
    ; a graph given up: said, and what it drew let go. the lines after the one it failed
@@ -1014,9 +1014,9 @@
    (gr-gave-up g nm m k bl pe pk)
     (: t (g 'errln = () ? (gr-fline g) (g 'errln))
        sk (g 'skew)
-       _ (say err ("grap: " + m + " near " + nm + ":" + show (t - 1) + "\n"))
+       _ (say err "grap: \(m) near \(nm):\(t - 1)\n")
        rest (: (drop l j) (? (atom? l) () (t < j) l (drop >l (j + 1))) (drop bl (k + 1)))
-       (gr-o0 g (".PE\n.lf " + show (t + sk) + "\n" + cats (map (x \ x + "\n") rest) + (string? pe && t < pk ? (pe + "\n") "")),
+       (gr-o0 g ".PE\n.lf \(t + sk)\n\(cats (map (x \ "\(x)\n") rest))\(string? pe && t < pk ? "\(pe)\n" "")",
         pin g 'skew (sk - 1)))
    ; grap.defines: definitions only
    (gr-run-defs g d)
@@ -1035,7 +1035,7 @@
                (: f <l
                   t (f = "-" ? (string? sin ? sin (slurp in)) (uread f @ r (two? r ? <>r)))
                   (string? t ? (gr-doc g f t, go >l)
-                   (say err ("grap: can't open " + f + "\n"), pin g 'status 1))))
+                   (say err "grap: can't open \(f)\n", pin g 'status 1))))
        (go (two? fs ? fs ["-"]),
         [(g 'status) (slurp (g 'o))]))
 )
