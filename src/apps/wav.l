@@ -153,7 +153,7 @@
   U32_LE U32_BE FLOAT_LE FLOAT_BE FLOAT64_LE FLOAT64_BE MU_LAW A_LAW S24_3LE S24_3BE U24_3LE
   U24_3BE, or cd, cdr, dat; raw defaults to U8, 8000 Hz, mono. the horn picks the device:
   HORN=PATH names one, HORN=none plays to a sink that keeps time."
-   (aplay-fail m) (say err ("aplay: \(m)\n"), flush err, 1)
+   (aplay-fail m) (say err "aplay: \(m)\n", flush err, 1)
    (aplay-int s) (string? s && #s && all (c \ 48 <= c <= 57) (chars s)
                   ? (foldl (\ a c (a * 10 + c - 48)) 0 (chars s)))
    ; held bytes then the port's gulps, a whole frame at a time, out the horn
@@ -222,13 +222,13 @@
                   (: i (findsub a "=") k (snip a 2 (i < 0 ? #a i)) s (aplay-long k)
                      (? !(string? s) (aplay-fail "unrecognized option '\(a)'")
                         (s = "-q") (pin o 'q 1, go >l fs)
-                        (i < 0) (two? >l ? (aplay-set o s <>l ? (go >>l fs) 1) (aplay-fail ("option '\(a)' needs a value")))
+                        (i < 0) (two? >l ? (aplay-set o s <>l ? (go >>l fs) 1) (aplay-fail "option '\(a)' needs a value"))
                         (aplay-set o s (snip a (i + 1) #a) ? (go >l fs) 1)))
                  (1 < #a && 45 = a 0)
                   (: k (snip a 0 2)
                      (? (2 < #a) (aplay-set o k (snip a 2 #a) ? (go >l fs) 1)
                         (two? >l) (aplay-set o k <>l ? (go >>l fs) 1)
-                        (aplay-fail ("option requires an argument -- '\(snip a 1 2)'"))))
+                        (aplay-fail "option requires an argument -- '\(snip a 1 2)'")))
                  (go >l (a . fs)))))
        (go as ()))
    _ (pins (cite 'verbs 'tab) 'aplay (udoor 'aplay aplay-main aplay-usage 1 0)))

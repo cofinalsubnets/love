@@ -194,7 +194,7 @@
                                        m))
                          (0 < foldl one 0 ports ? 0 (uleave 1)))
     ; a port or a lo-hi range -> its ports
-    (span a) (a @ "\(l)-\(h)"
+    (span a) (a @ (l + "-" + h)
                 (: lo (portof l) hi (portof h)
                    (hi < lo ? (die "not a range: \(a)") (map (+ lo) ^(hi - lo + 1))))
                 [(portof a)])

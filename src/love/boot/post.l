@@ -2699,8 +2699,8 @@
        ; one long word into the shape uopt1 answers for a short cluster, so `eat` walks
        ; either: the word alone, or the word and the value glued behind its `=`.
        (long1 a)
-        (a @ "--\(nm)=\(v)" (lgot nm @ c (c && elem c vals ? ["--\(nm)" v] ()))
-             "--\(nm)" (lgot nm @ c (c ? [a] ())) )
+        (a @ ("--" + nm + "=" + v) (lgot nm @ c (c && elem c vals ? ["--\(nm)" v] ()))
+             ("--" + nm) (lgot nm @ c (c ? [a] ())) )
        ; the exploded word, then the argv tail behind it. a value key ends its chain, so
        ; at most one element of `bs` is ever a value and it is the last.
        (eat bs rest es)

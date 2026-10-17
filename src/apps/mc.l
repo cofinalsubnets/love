@@ -175,7 +175,7 @@
      key "\(q) \(st 1)) \(sz) \(cols) \(rows) \(gm)"
      hit (s 'cache key)
      (? (hit != ()) hit
-        (s 'cap < sz) ("too big to show, \(sz // 1048576) MB")
+        (s 'cap < sz) "too big to show, \(sz // 1048576) MB"
         (sz < s 'cheap || 0 < s 'budget)
          (: _ (pin s 'budget (s 'budget - 1))
             r (uread q)
@@ -241,8 +241,8 @@
      txt (" " + edfit <e (k < 1 ? 1 k) " " + " \(sz)")
      row (edfit txt w " ")
      h (mc-hue d e)
-     (? (sel = 1) ("\e[7m\(row)\e[0m")
-        (sel = 2) ("\e[4m\(row)\e[0m")
+     (? (sel = 1) "\e[7m\(row)\e[0m"
+        (sel = 2) "\e[4m\(row)\e[0m"
         #h "\(h)\(row)\e[0m"
         row))
  (mc-row p k w act?)
@@ -285,7 +285,7 @@
              + mc-head (qv && a = 0 ? vh (r 'dir)) rw + "\e[0m\e[K\r\n"),
       each ^rows (k \ say j "\(lrow k)\e[0m|\(rrow k)\e[0m\e[K\r\n"),
       say j (edfit " \(here)" w " " + "\e[K\r\n"),
-      say j ("\e[7m\(edfit mc-keys w " ")\e[0m\e[K\e[?25l"),
+      say j "\e[7m\(edfit mc-keys w " ")\e[0m\e[K\e[?25l",
       say j (mc-gfx s (a = 0 ? (lw + 2) 1) 2 (v 1)),
       slurp j)))
 
@@ -322,9 +322,9 @@
      ds (g? ? (drop 2 as) as)
      d1 (two? ds ? <ds ("" + cwd 0))
      d2 (two? ds && two? >ds ? <>ds d1)
-     (? !(elem gm ["auto" "block" "sixel" "kitty"]) (puts ("mc: no mode \(gm); block sixel kitty or auto\n"), 2)
-        !(mc-dirat? d1) (puts ("mc: \(d1): not a directory\n"), 1)
-        !(mc-dirat? d2) (puts ("mc: \(d2): not a directory\n"), 1)
+     (? !(elem gm ["auto" "block" "sixel" "kitty"]) (puts "mc: no mode \(gm); block sixel kitty or auto\n", 2)
+        !(mc-dirat? d1) (puts "mc: \(d1): not a directory\n", 1)
+        !(mc-dirat? d2) (puts "mc: \(d2): not a directory\n", 1)
         (mc-run d1 d2 gm)))
  _ (pins (cite 'verbs 'tab) 'mc (udoor 'mc mc-main mc-usage 1 1)))
 ) ; module mc

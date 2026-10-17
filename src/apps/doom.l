@@ -146,7 +146,7 @@
        nest "\(here)/love-\(love-version)"
        bin "\(nest)/out/doom/love"      ; the doom flavour's own tree (common.mk's hsuf)
        dl "\(nest)/dl"
-       (fail s) (say err ("doom: \(s)\n"), 1)
+       (fail s) (say err "doom: \(s)\n", 1)
        (enter _) (: e (setenv "LOVE_DOOM_NEST" "1",
                        exec (bin . "doom" . nest-args dl as))
                   (fail "cannot run \(bin) (\(e))"))
@@ -171,10 +171,10 @@
        nest ((here @ "/" "" here) + "/love-\(love-version)")     ; the page's shell sits at /
        dl "\(nest)/dl"
        mod "\(nest)/out/doom/love.wasm"
-       (fail s) (say err ("doom: \(s)\n"), 1)
-       (enter _) (: _ (note ("booting \(mod)"))
+       (fail s) (say err "doom: \(s)\n", 1)
+       (enter _) (: _ (note "booting \(mod)")
                     e (ev 'kexec mod "sh -c 'doom; sh'")
-                    (fail ("cannot boot \(mod) (\(e))")))
+                    (fail "cannot boot \(mod) (\(e))"))
        (? !(elem 'kexec (names ())) (fail "this machine cannot boot what it builds")
           (two? (stat mod)) (enter 0)
           ; a task shares no environment with its spawner on this seat, so what cook is

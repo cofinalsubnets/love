@@ -192,14 +192,14 @@
                  (go i) (i < #v && digit? (v i) ? (go (i + 1)) i)
                  n (unum (snip v 0 (go 0)))
                  (n ? n d))
- (fail s) (say err ("pom: \(s)\n"), flush err, 1)
+ (fail s) (say err "pom: \(s)\n", flush err, 1)
  ; getopts 'de': [d e operands], or () for a letter it does not know
  (flags as d e)
   (: a <as
      (go i d e) (? (#a <= i) (flags >as d e)
                    (a i = 100) (go (i + 1) 1 e)
                    (a i = 101) (go (i + 1) d 1)
-                   (say err ("Unknown option: \(a i)\n"), ()))
+                   (say err "Unknown option: \(a i)\n", ()))
      (? !(two? as) [d e ()]
         (a = "--") [d e >as]
         (a = "-" || !(a 0 = 45)) [d e as]
