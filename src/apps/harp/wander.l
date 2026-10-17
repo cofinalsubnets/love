@@ -14,10 +14,10 @@
    phrases [[1 (5 /// 4) (3 /// 2) (15 /// 8)]
             [1 (6 /// 5) (3 /// 2) (9 /// 5)]
             [[(1 /// 2) (5 /// 8) (3 /// 4)] (9 /// 8) (7 /// 4)]]
-   (num s d) (string? s ? (read s @ v (charm? v ? v d)) d)
+   (num s d) (string? s ? (sound s @ [v] (star? v ? v d) d) d)
 
    (wander-main as)
-    (: lean (num (as 0) 1.0) home (num (as 1) 0.1) n (num (as 2) 16)
+    (: lean (num (as 0) 1.0) home (num (as 1) 0.1) n (num (as 2) 16 @ k (charm? k ? k 16))
        path (string? (as 3) ? (as 3) "out/harp-wander.wav")
        o    {'lean (1.0 * lean) 'home (1.0 * home)}
        _    (each (drift-walk o phrases n)
