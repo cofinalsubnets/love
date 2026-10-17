@@ -156,7 +156,7 @@
       (xs @- 1 (e . u)
        (tar-head e @ h (h ?
       (say j h,
-       tar-get e 'kind 'file = 'file ?
+       tar-get e 'kind 'file @ 'file
         (tar-get e 'body "" @ body (#body && say j (tar-pad body))),
        go u)))))
 
@@ -203,7 +203,7 @@
      (go o acc) (n - o >= tar-blk ?
                  (tar-read1 s n o @ r
                   (? (r == 'end) [1 (rev acc)]
-                      r (go <>>r (tar-get <(>r) 'kind 'file = 'global ? acc (<(>r) . acc)))))))
+                      r (go <>>r (tar-get <(>r) 'kind 'file @ 'global acc (<>r . acc)))))))
 
    ; --- reading off a stream --------------------------------------------------
    ; a source is a reader rd (rd _ the next piece, "" at the end) behind a buffer, so a
@@ -227,7 +227,7 @@
         h))
    (tar-pour s n wr)
     (: b (peep s 'b "")   o (peep s 'o 0)   have (#b - o)
-       (? (n <= have) (: _ (wr (snip b o (o + n))) _ (pin s 'o (o + n)) n)
+       (? (n <= have) (wr (snip b o (o + n)), pin s 'o (o + n), n)
           (: _ (0 < have ? (wr (snip b o #b)) 0) _ (pins s 'b "" 'o 0) (tar-pour1 s wr n (n - have)))))
    ; k of n still to pour, the buffer empty. the last piece's arm is a function of its own: as an
    ; arm here, storing p into s kept the turn before it from being a tail call, every piece held
@@ -244,26 +244,23 @@
    ; answers 1 to go on, anything else to stop. an archive ends at its zero block, so a
    ; source that runs out first is torn, as tar-unpack says.
    ; -> (1 count) | () torn or a sum that disagrees | 'stop f stopped it
-   (tar-walk s f)
-    (: (go k)
-        (tar-take s tar-blk @ h
-           (? (#h < tar-blk) ()
-              (tar-zero? h 0) [1 k]
-              (tar-hdr h @ r
-                 (!r ? ()
-                    (: sz (r 2)   b {'left sz}   meta (tar-get (r 1) 'kind 'file = 'global)
-                       (pin (r 1) 'size sz,
-                        (!meta && f (r 1) b != 1 ? 'stop
-                           (peep b 'left 0 + padk sz tar-blk @ n
-                              (tar-pour s n (x \ 0) < n ? () (go (meta ? k (k + 1))))))))))))
-       (go 0))
-   (tar-body s b wr) (: n (peep b 'left 0)   got (tar-pour s n wr)   (pin b 'left (n - got), got = n))
+   (tar-walk s f) (:- (go 0) (go k)
+    (tar-take s tar-blk @ h
+     (? (#h < tar-blk) ()
+        (tar-zero? h 0) [1 k]
+        (tar-hdr h @ r
+         (r ? (: sz (r 2)  b {'left sz}   meta (tar-get (r 1) 'kind 'file = 'global)
+          (pin (r 1) 'size sz,
+           (!meta && f (r 1) b != 1 ? 'stop
+              (peep b 'left 0 + padk sz tar-blk @ n
+                 (tar-pour s n (x \ 0) < n ? () (go (meta ? k (k + 1)))))))))))) )
+   (tar-body s b wr) (: n (peep b 'left 0) got (tar-pour s n wr) (pin b 'left (n - got), got = n))
 
    ; --- the filesystem, in and out -------------------------------------------
    ; a walk answers paths relative to root and stores them that way: an archive
    ; carrying "/home/gwen/..." is one that unpacks over somebody's system. tar's own
    ; "removing leading /" warning exists because the naive spelling does that.
-   (tar-join a b) (#a ? (a + "/" + b) b)
+   (tar-join a b) (#a ? "\(a)/\(b)" b)
    ; stat answers (size mtime-ms mode mtime-ns), and its mtime is milliseconds where
    ; tar's field is seconds. it follows a symlink -- there is no lstat here -- so the
    ; link test is readlink, which answers the target for one and nothing for anything
@@ -283,7 +280,7 @@
    ; neither key but 'size, so a thin entry heads exactly as its fat twin does.
    (tar-thin? keep root rel) (tar-walk? keep root rel 0)
    (tar-walk? keep root rel fat)            ; -> (1 entries) | ()
-    (: full (#rel ? (root + "/" + rel) root)
+    (: full (#rel ? "\(root)/\(rel)" root)
        lnk (readlink full)
        st (stat full)
        (? (string? lnk)
@@ -304,7 +301,7 @@
                           (tar-join rel <ks @ k2
                            (!(keep k2) ? (go >ks acc)
                             (tar-walk? keep root k2 fat @ r
-                             (r && go >ks (foldl (flip cons) acc <>r))))))
+                             (r && go >ks (foldl (flip (.)) acc <>r))))))
              r (go kids ())
              (r ? [1 (e . <>r)]))
           !fat
@@ -349,7 +346,7 @@
    (tar-segs nom)                           ; -> (1 segs) | ()
     (:- (go 0 0 ()) n #nom
      (cut st k acc) (snip nom st k @ s (#s = 0 || s = "." ? acc (s . acc)))
-     (go k st acc) (? (n <= k) (rev (cut st k acc) @ l (any (s \ s = "..") l ? () [1 l]))
+     (go k st acc) (? (n <= k) (rev (cut st k acc) @ l (any (= "..") l ? () [1 l]))
                       (nom k = 47) (go (k + 1) (k + 1) (cut st k acc))
                       (go (k + 1) st acc)))
    ; asked of the path itself, never what a link there names
@@ -359,14 +356,14 @@
    ; root/segs with every parent made, and never through a symlink or a non-directory:
    ; a link the archive laid a member ago would carry the next write out of root
    (tar-lay root segs)                      ; -> (1 path) | ()
-    (: (at q) (#root ? (root + "/" + q) q)
+    (: (at q) (#root ? "\(root)/\(q)" q)
        (go ss q)
         (at q @ p
            (? (atom? >ss) [1 p]
               (tar-link-at? p) ()
-              (tar-dir-at? p) (go >ss (q + "/" + <>ss))
+              (tar-dir-at? p) (go >ss "\(q)/\(<>ss)")
               (two? (lstat p)) ()
-              (mkdir p 493, (tar-dir-at? p ? (go >ss (q + "/" + <>ss)) ()))))
+              (mkdir p 493, (tar-dir-at? p ? (go >ss "\(q)/\(<>ss)")))))
        (atom? segs ? [1 root] (go segs <segs)))
    ; the permission bits alone: a set-id or sticky bit off an archive is not ours to lay
    (tar-perm m) (m & 511)
@@ -380,8 +377,8 @@
        lp (sg && tar-lay root <>sg)
        p (lp && <>lp)
        kind (tar-get e 'kind 'file)
-       _ (? !sg (warn (nom + ": Member name contains '..'"))
-            !lp (warn (nom + ": Cannot extract through a symbolic link or a file"))
+       _ (? !sg (warn "\(nom): Member name contains '..'")
+            !lp (warn "\(nom): Cannot extract through a symbolic link or a file")
             (atom? <>sg) 0
             (tar-link-at? p && unlink p))
        ; the mode is content, and it must be laid back explicitly: `open`
@@ -406,7 +403,7 @@
     (:- (go es 0 0) (go xs k r)
      (atom? xs ? [1 k r]
       (: e <xs   w (tar-put warn root e (q \ say q (tar-get e 'body "")))
-         (w = 'fail ? () (go >xs (k + w) (r + 1 - w))))))
+         (w @ 'fail () (go >xs (k + w) (r + 1 - w))))))
    (tar-scatter root es)                    ; -> (1 count) | (), () on any refusal
     (tar-scatter? (m \ 0) root es @ w (w && w 2 = 0 ? [1 (w 1)] ())))) ; module 'tar
 
@@ -432,9 +429,9 @@
 (borrow 'tar)
 
 (borrow 'posix)
-(: (tarc-die m) (udie 2 ("tar: " + m))
-   (tarc-warn m) (say err ("tar: " + m + "\n"), flush err)
-   (tarc-lazy m f what) (cite m f @ b (lit? b ? b (tarc-die ("no " + what + " aboard"))))
+(: (tarc-die m) (udie 2 "tar: \(m)")
+   (tarc-warn m) (say err "tar: \(m)\n", flush err)
+   (tarc-lazy m f what) (cite m f @ b (lit? b ? b (tarc-die "no \(what) aboard")))
 
    ; --- the codecs: 'z 'j 'J 'zst, and () for a bare tar -----------------------------
    (tarc-zip z a) (z @ 'z (gz-zip a "" 0)
@@ -448,18 +445,16 @@
          'J (tarc-lazy 'xz 'xz-unpack "xz" b @ v (two? v && v))
          'zst (tarc-lazy 'zstd 'zstd-unpack "zstd" b @ v (two? v && v))
          [1 b])
-   (tarc-sniff b)
-    (? (2 <= #b && b 0 = 31 && b 1 = 139) 'z
-       (4 <= #b && snip b 0 3 = "BZh") 'j
-       (6 <= #b && b 0 = 253 && snip b 1 5 = "7zXZ" && b 5 = 0) 'J
-       (4 <= #b && snip b 0 4 = "\x28\xb5\x2f\xfd") 'zst
-       ())
-   (tarc-bysuf p)
-    (? (ends? p ".gz" || ends? p ".tgz" || ends? p ".taz") 'z
-       (ends? p ".bz2" || ends? p ".tbz" || ends? p ".tbz2" || ends? p ".tb2") 'j
-       (ends? p ".xz" || ends? p ".txz") 'J
-       (ends? p ".zst" || ends? p ".tzst") 'zst
-       ())
+   (tarc-sniff b) (?
+    (2 <= #b && b 0 = 31 && b 1 = 139) 'z
+    (4 <= #b && snip b 0 3 = "BZh") 'j
+    (6 <= #b && b 0 = 253 && snip b 1 5 = "7zXZ" && b 5 = 0) 'J
+    (4 <= #b && snip b 0 4 = "\x28\xb5\x2f\xfd") 'zst)
+   (tarc-bysuf p) (?
+    (ends? p ".gz" || ends? p ".tgz" || ends? p ".taz") 'z
+    (ends? p ".bz2" || ends? p ".tbz" || ends? p ".tbz2" || ends? p ".tb2") 'j
+    (ends? p ".xz" || ends? p ".txz") 'J
+    (ends? p ".zst" || ends? p ".tzst") 'zst)
    (tarc-zname z) (z @ 'z "gzip" 'j "bzip2" 'zst "zstd" "xz")
    ; the archive goes out a piece at a time, coded in runs of tarc-run: gzip members, xz
    ; and bzip2 streams and zstd frames each read on into the next, so one coded whole is the same archive and
@@ -474,26 +469,26 @@
                ["gzip" 'z 'z] ["gunzip" 'z 'z] ["ungzip" 'z 'z] ["bzip2" 'z 'j] ["xz" 'z 'J] ["zstd" 'z 'zst]
                ["auto-compress" 'auto 1] ["verbose" 'v 1] ["to-stdout" 'O 1]
                ["file" 'f 'arg] ["directory" 'C 'arg] ["strip-components" 'strip 'arg]]
-   (tarc-row k rows) (: (go l) (? !(two? l) () (<<l = k) <l (go >l)) (go rows))
+   (tarc-row k rows) (: (go l) (? (atom? l) () (<<l = k) <l (go >l)) (go rows))
    (tarc-set t row v) (pin t (row 1) (row 2 = 'arg ? v (row 2)))
    ; one letter cluster -> the words left; `wait` the arg-takers' words still owed, the
    ; bundled key's way: czf A takes A for f after the cluster, -fA and -f A the dashed way
    (tarc-cluster t w k dash rest)
     (#w <= k ? rest
        (tarc-row (w k) tarc-letters @ row
-          (? !row (tarc-die ("invalid option -- '" + string (w k) + "'"))
+          (? !row (tarc-die "invalid option -- '\(string (w k))'")
              !(row 2 = 'arg) (tarc-set t row 0, tarc-cluster t w (k + 1) dash rest)
              (dash && k + 1 < #w) (tarc-set t row (snip w (k + 1) #w), rest)
-             !(two? rest) (tarc-die ("option requires an argument -- '" + string (w k) + "'"))
+             !(two? rest) (tarc-die "option requires an argument -- '\(string (w k))'")
              (tarc-set t row <rest, tarc-cluster t w (k + 1) dash >rest))))
    (tarc-long t w rest)                ; --name, --name=V, --name V -> the words left
     (: nv (w @ ((n && 0 < #n) + "=" + v) [n v] [w ()])
        nm <nv
        row (tarc-row nm tarc-longs)
-       (? !row (tarc-die ("unrecognized option '--" + w + "'"))
-          !(row 2 = 'arg) (tarc-set t row 0, rest)
+       (? !row (tarc-die "unrecognized option '--\(w)'")
+          (row 2 != 'arg) (tarc-set t row 0, rest)
           (string? <>nv) (tarc-set t row <>nv, rest)
-          !(two? rest) (tarc-die ("option '--" + nm + "' requires an argument"))
+          !(two? rest) (tarc-die "option '--\(nm)' requires an argument")
           (tarc-set t row <rest, >rest)))
    (tarc-opts t as)                    ; the bundled key first, then anything in any order
     (: (go l mem)
@@ -576,9 +571,9 @@
        root (peep t 'C "")
        ; opened before the walk, so an archive inside the tree is seen as itself and left out
        q (a = "-" ? out (open a "w"))
-       _ (!(hot? q) && tarc-die (a + ": Cannot open"))
+       _ (!(hot? q) && tarc-die "\(a): Cannot open")
        (self? e) (a != "-" && tar-strip (tar-get e 'path "") = tar-strip a
-                  && (tarc-warn (tar-get e 'nom "" + ": file is the archive; not dumped"), 1))
+                  && (tarc-warn "\(tar-get e 'nom ""): file is the archive; not dumped", 1))
        ; each member as named: a leading / comes off, as GNU takes it off, and says so
        (one p)
         (: p2 (tarc-trim p)
@@ -586,7 +581,7 @@
            rel (: (go k) (k < #p2 && p2 k = 47 ? (go (k + 1)) (snip p2 k #p2)) (go 0))
            _ (abs && !(peep t 'slash 0) && (pin t 'slash 1, tarc-warn "Removing leading `/' from member names"))
            g (tar-thin? 0 (abs ? "/" (#root ? root ".")) (abs && !#rel ? "." rel))
-           (g ? <>g (tarc-warn (p + ": Cannot stat: No such file or directory"), pin t 'bad 1, ())))
+           (g ? <>g (tarc-warn "\(p): Cannot stat: No such file or directory", pin t 'bad 1, ())))
        es (filter (e \ !(self? e)) (foldl (acc \ p \ acc + one p) () ops))
        _ (any (e \ !(tar-head e)) es && tarc-die "cannot pack (a path too long for ustar?)")
        _ (peep t 'v 0 && each es (e \ tarc-tell t (tar-get e 'nom "")))
@@ -609,30 +604,30 @@
     (: a (tarc-arch t)
        _ (a = "-" && two? (tty in) && tarc-die "Refusing to read archive contents from terminal (missing -f option?)")
        q (a = "-" ? in (open a "r"))
-       _ (!(hot? q) && tarc-die (a + ": Cannot open: No such file or directory"))
+       _ (!(hot? q) && tarc-die "\(a): Cannot open: No such file or directory")
        raw (tar-src (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q)))))
        z (peep t 'z () @ w (w ? w (tarc-sniff (tar-peek raw 6))))
-       (all r a) (r 0 @ p (#p = 0 ? (cats (rev a)) (all r (p . a))))
-       (drain src) (: (dr r) (#(r 0) = 0 ? 0 (dr r)) (dr (tar-rd src)))
-       (? (z = 'z)
+       (all r a) (r 0 @ p (#p @ 0 (cats (rev a)) (all r (p . a))))
+       (drain src) (: (dr r) (#(r 0) @ 0 0 (dr r)) (dr (tar-rd src)))
+       (z @ 'z
           (: g (gz-pull (tar-rd raw))   src (tar-src (_ \ gz-next g))
              [src (_ \ (drain src, two? (peep g 'ans ()))) z])
-          (z = 'J || z = 'j || z = 'zst)
+          ('J || 'j || 'zst)
           (: m (z @ 'J 'xz 'j 'bz2 'zstd)
-             g (tarc-lazy m (intern (show m + "-pull")) (tarc-zname z) (tar-rd raw))
-             next (cite m (intern (show m + "-next")))
+             g (tarc-lazy m (nom "\(m)-pull") (tarc-zname z) (tar-rd raw))
+             next (cite m (nom "\(m)-next"))
              src (tar-src (_ \ next g))
              [src (_ \ (drain src, two? (peep g 'ans ()))) z])
           (: u (z ? (tarc-unzip z (all (tar-rd raw) ())) [1 raw])
-             (!u && tarc-die (a + ": not a " + tarc-zname z + " stream, or its check disagrees"),
-              [(z ? (tar-src ({0 <>u} @ t1 (_ \ (peep t1 0 "" @ v (pin t1 0 "", v))))) raw) (_ \ 1) z]))))
+             (!u && tarc-die "\(a): not a \(tarc-zname z) stream, or its check disagrees",
+              [(z ? (tar-src ({0 <>u} @ t1 (_ \ (peep t1 0 "" @ v (pin t1 0 "", v))))) raw) 0 z]))))
    ; after the walk: the codec's check first, since a torn stream underneath reads as a torn
    ; archive above it, then the archive, then the words no member answered
    (tarc-end t sf w)
     (tarc-arch t @ a
-       (w = 'stop && tarc-die ("cannot write under " + peep t 'C "."),
-        !(sf 1 0) && tarc-die (a + ": not a " + tarc-zname (sf 2) + " stream, or its check disagrees"),
-        !(two? w) && tarc-die (a + ": not a tar archive, or it is truncated"),
+       (w = 'stop && tarc-die "cannot write under \(peep t 'C ".")",
+        !(sf 1 0) && tarc-die "\(a): not a \(tarc-zname (sf 2)) stream, or its check disagrees",
+        !(two? w) && tarc-die "\(a): not a tar archive, or it is truncated",
         tarc-unseen t))
    ; x and t walk the members as they come: a body is poured to its file or to stdout and
    ; never held, so an archive is as big as the disk and not as the heap. a member laid
@@ -645,8 +640,8 @@
                                       (<>r @ e2
                                          (peep t 'v 0 && tarc-tell t (tar-get e2 'nom ""),
                                           (peep t 'O 0 ?
-                                             ((tar-get e2 'kind 'file = 'file ? (tar-body src b (x \ say out x)) 0), 1)
-                                             (tar-put warn root e2 (q \ tar-body src b (x \ say q x)) = 'fail ? 'stop 1))))))))
+                                             ((tar-get e2 'kind 'file @ 'file (tar-body src b (say out)) 0), 1)
+                                             (tar-put warn root e2 (tar-body src b * say) @ 'fail 'stop 1))))))))
        (flush out,
         tarc-end t sf w,
         (peep t 'bad 0 ? 2 0)))
