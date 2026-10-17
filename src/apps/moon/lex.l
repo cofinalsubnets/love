@@ -53,7 +53,7 @@
    ; decimal->binary, the same one love's own literals ride, and it carries the
    ; whole range including the subnormals. the `e` keeps the answer a gem however
    ; integral the digits look.
-   (cfdec mant dxp) <(sound (show mant + "e" + show dxp))
+   (cfdec mant dxp) <(sound "\(mant)e\(dxp)")
    (cflo v)
     (? !(two? v) v
        (<v = 'dec) (cfdec <>v <>>v)
