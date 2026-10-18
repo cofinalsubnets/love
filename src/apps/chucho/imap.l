@@ -33,7 +33,7 @@
            hpt (hp @ (h + ":" + t) [h (mime-num t)] [hp (tls? ? 993 143)])
            host <hpt port <>hpt
            (#host && 0 < port ? [tls? user host port (#box ? box "INBOX")] ()))))
- (imap-quote s) ("\"" + replace (replace s "\\" "\\\\") "\"" "\\\"" + "\"")
+ (imap-quote s) "\"\(replace (replace s "\\" "\\\\") "\"" "\\\"")\""
 
  ; --- a response: its lines, the literals between them read exactly -----------------------
  ; the {n} a line ends with, -1 for none
@@ -91,21 +91,21 @@
  ; a command with a literal after it: sent when the server says go on
  (im-cmd-lit c cmd lit)
   (: n (c 'tagn + 1)
-     tag ("c" + show n)
+     tag "c\(n)"
      _ (pin c 'tagn n)
-     _ (smtp-put c (tag + " " + cmd + (string? lit ? (" {" + show #lit + "}") "") + "\r\n"))
+     _ (smtp-put c "\(tag) \(cmd)\(string? lit ? " {\(#lit)}" "")\r\n")
      (go acc)
       (im-segs c @ segs
          (? (atom? segs) (pin c 'dead 1, ["" (rev acc) "the server went away"])
             (: l <segs
-               (? (starts? l (tag + " "))
+               (? (starts? l "\(tag) ")
                    (: r (snip l (#tag + 1) #l)
                       (r @ (a + " " + b) [(upper a) (rev acc) b] [(upper r) (rev acc) ""]))
-                  (starts? l "+") (? (string? lit) (smtp-put c (lit + "\r\n"), go acc) (go acc))
+                  (starts? l "+") (? (string? lit) (smtp-put c "\(lit)\r\n", go acc) (go acc))
                   (go ((imap-parse segs) . acc))))))
      (go ()))
  (im-ok? r) (<r = "OK")
- (im-why what r) (what + ": " + (<r = "" ? "the server went away" (<r + " " + r 2)))
+ (im-why what r) "\(what): \(<r = "" ? "the server went away" "\(<r) \(r 2)")"
 
  ; --- the session ---------------------------------------------------------------------------
  ; -> a connection logged in, or why not
@@ -122,7 +122,7 @@
                        (up != 1 && !(elem host ["localhost" "127.0.0.1" "::1"]))
                         (smtp-close c, "the server offers no tls; the password stays here")
                        (starts? g "* PREAUTH") c
-                       (im-cmd c ("LOGIN " + imap-quote user + " " + imap-quote pass) @ r
+                       (im-cmd c "LOGIN \(imap-quote user) \(imap-quote pass)" @ r
                           (im-ok? r ? c (smtp-close c, im-why "LOGIN" r)))))))))
      "not an imap url")
  ; a FETCH response's items as a tablet: names upper, values as they came
@@ -137,8 +137,8 @@
  (show-or v) (string? v ? v "0")
  ; the selected box's messages -> [msg ..] | why not
  (im-list c name)
-  (im-cmd c ("SELECT " + imap-quote name) @ r
-     (? !(im-ok? r) (im-why ("SELECT " + name) r)
+  (im-cmd c "SELECT \(imap-quote name)" @ r
+     (? !(im-ok? r) (im-why "SELECT \(name)" r)
         (: ex (foldl (a \ x \ x @ ["*" n "EXISTS"] (mime-num n) a) 0 (r 1))
            (? (ex < 1) ()
               (im-cmd c "FETCH 1:* (UID FLAGS RFC822.SIZE BODY.PEEK[HEADER])" @ f
@@ -147,7 +147,7 @@
                          (filter (x \ x @ ["*" _ "FETCH" _] 1 0) (f 1)))))))))
  (imap-open url user pass)
   (imap-url url @ u
-     (? (atom? u) ("not an imap url: " + url)
+     (? (atom? u) "not an imap url: \(url)"
         (im-login u user pass @ c
            (? (string? c) c
               (im-list c (u 4) @ ms
@@ -158,25 +158,25 @@
   (? !(b 'conn 'dead) (b 'conn)
      (im-login (imap-url (b 'path)) (b 'user) (b 'pass) @ c
         (? (string? c) c
-           (im-cmd c ("SELECT " + imap-quote (imap-url (b 'path) 4)) @ r
+           (im-cmd c "SELECT \(imap-quote (imap-url (b 'path) 4))" @ r
               (im-ok? r ? (pin b 'conn c, c) (im-why "SELECT" r))))))
  (imap-raw b m)
   (? (string? (m 'raw)) (m 'raw)
      (im-live b @ c
         (? (string? c) ""
-           (im-cmd c ("UID FETCH " + show (m 'uid) + " BODY.PEEK[]") @ r
+           (im-cmd c "UID FETCH \(m 'uid) BODY.PEEK[]" @ r
               (: it (foldl (a \ x \ x @ ["*" _ "FETCH" l] (im-items l) a) {} (r 1))
                  t (it "BODY[]")
                  (string? t ? (pin m 'raw (replace t "\r\n" "\n"), m 'raw) ""))))))
  (im-flagstr m)
   (join " " (catmap (p \ has? (m 'flags) (string (p 1)) ? [(ch-cap1 (p 0))] ()) im-flags
              + (m 'del ? ["\\Deleted"] ())))
- (ch-cap1 f) ("\\" + upper (snip f 1 2) + snip f 2 #f)
+ (ch-cap1 f) "\\\(upper (snip f 1 2))\(snip f 2 #f)"
  (imap-sync b)
   (im-live b @ c
      (? (string? c) c
         (: ch (filter (m \ m 'del || m 'flags != m 'flags0) (b 'msgs))
-           bad (filter (m \ !(im-ok? (im-cmd c ("UID STORE " + show (m 'uid) + " FLAGS.SILENT (" + im-flagstr m + ")")))) ch)
+           bad (filter (m \ !(im-ok? (im-cmd c "UID STORE \(m 'uid) FLAGS.SILENT (\(im-flagstr m))"))) ch)
            ex (? (any (m \ m 'del) (b 'msgs)) (im-cmd c "EXPUNGE") ["OK"])
            (? (two? bad) "the server refused some flags"
               !(im-ok? ex) (im-why "EXPUNGE" ex)
@@ -184,12 +184,12 @@
                  (? (string? ms) ms (pins {} 'kind 'imap 'path (b 'path) 'conn c 'msgs ms 'user (b 'user) 'pass (b 'pass))))))))
  (imap-append url user pass raw fl)
   (imap-url url @ u
-     (? (atom? u) ("not an imap url: " + url)
+     (? (atom? u) "not an imap url: \(url)"
         (im-login u user pass @ c
            (? (string? c) c
               (: lit (replace (replace raw "\r\n" "\n") "\n" "\r\n")
                  f (join " " (catmap (p \ has? fl (string (p 1)) ? [(ch-cap1 (p 0))] ()) im-flags))
-                 r (im-cmd-lit c ("APPEND " + imap-quote (u 4) + " (" + f + ")") lit)
+                 r (im-cmd-lit c "APPEND \(imap-quote (u 4)) (\(f))" lit)
                  (im-cmd c "LOGOUT", smtp-close c, im-ok? r ? 1 (im-why "APPEND" r)))))))
  (imap-close b) (b 'conn @ c (tablet? c && !(c 'dead) ? (im-cmd c "LOGOUT", smtp-close c) 0)))
 ) ; module imap

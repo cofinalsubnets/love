@@ -29,7 +29,7 @@
    (ch-cmp a) (ch-compass (ch-oct a))
    ; an atom's corner a bond at a leaves from: its centre's straight up or down, else the
    ; right end's or the left's, at the compass point nearest
-   (ch-acorner a) (ch-norm a @ m ((? (m = 0 || m = 180) "C" (m < 180) "R" "L") + "." + ch-cmp m))
+   (ch-acorner a) (ch-norm a @ m "\(? (m = 0 || m = 180) "C" (m < 180) "R" "L").\(ch-cmp m)")
    ; a numeral's leading part as chem reads one: an integer from its digits
    (ch-num? w) (: n #w (dig i) (i < n && 48 <= w i <= 57 ? (dig (i + 1)) i)
                   a (0 < n && (w 0 = 45 || w 0 = 43) ? 1 0) b (dig a)
@@ -60,7 +60,7 @@
        (go i) (? (n <= i) (slurp o)
                  (digit? (w i))
                   (: j (digs i) k (j + 1 < n && w j = 46 && digit? (w (j + 1)) ? (digs (j + 1)) j)
-                     (say o ("\\s-3\\d" + snip w i k + "\\u\\s+3"),
+                     (say o "\\s-3\\d\(snip w i k)\\u\\s+3",
                       go k))
                  (w i = 46 && i + 1 < n && digit? (w (i + 1)))
                   (say o "\\v#-.3m#.\\v#.3m#", go (i + 1))
@@ -78,8 +78,8 @@
         (ch-wid s (snip w 0 i) + (caps ? (s 'cwid / 2) 0.0))))
    ; atom("text", width, height, where bonds meet, and the size's own height, width, gap)
    (ch-atom s w)
-    ("atom(\"" + ch-text w + "\", " + ch-g (ch-wid s w) + ", " + ch-g (s 'textht) + ", " + ch-g (ch-cx s w)
-     + ", " + ch-g (s 'ht0) + ", " + ch-g (s 'cw0) + ", " + ch-g (s 'gap0) + ")")
+    ("atom(\"\(ch-text w)\", \(ch-g (ch-wid s w)), \(ch-g (s 'textht)), \(ch-g (ch-cx s w))"
+     + ", \(ch-g (s 'ht0)), \(ch-g (s 'cw0)), \(ch-g (s 'gap0)))")
 
    ; -- places ---------------------------------------------------------------------------
    ; the vertex of a ring a way points to: its sides' sectors counted from its first
@@ -88,23 +88,23 @@
    (ch-ref s a)
     (: k (s 'last) r (s 'ring)
        (k @ 'bond "Last.end"
-            'atom ("Last." + ch-acorner a)
-            'ring ("Last.V" + show (ch-vertex r a) + "." + ch-cmp a)
-            ("Last." + ch-cmp a)))
+            'atom "Last.\(ch-acorner a)"
+            'ring "Last.V\(ch-vertex r a).\(ch-cmp a)"
+            "Last.\(ch-cmp a)"))
    ; a bond's from: a moiety's corner, a bond's end, a ring's vertex, a named place's side
    (ch-from s x a)
     (: k (s 'names x)
        dot (: (go i) (? (i < 0) -1 (x i = 46) i (go (i - 1))) (go (#x - 1)))
-       (? (k = 'atom) (x + "." + ch-acorner a)
-          (k = 'bond) (x + ".end")
-          (tablet? k) (x + ".V" + show (ch-vertex k a) + "." + ch-cmp a)
-          (0 <= dot && dot + 1 < #x && ch-upper? (x (dot + 1))) (x + "." + ch-cmp a)
-          (x + " ")))
+       (? (k = 'atom) "\(x).\(ch-acorner a)"
+          (k = 'bond) "\(x).end"
+          (tablet? k) "\(x).V\(ch-vertex k a).\(ch-cmp a)"
+          (0 <= dot && dot + 1 < #x && ch-upper? (x (dot + 1))) "\(x).\(ch-cmp a)"
+          "\(x) "))
 
    ; -- statements -----------------------------------------------------------------------
    (ch-o s t) (say (s 'o) t)
-   (ch-ol s t) (ch-o s (t + "\n"))
-   (ch-join ws) (atom? ws ? "" (foldl (a \ w \ a + " " + w) <ws >ws))
+   (ch-ol s t) (ch-o s "\(t)\n")
+   (ch-join ws) (atom? ws ? "" (foldl (a \ w \ "\(a) \(w)") <ws >ws))
    ; [double|triple|front|back] bond [angle|dir] [length n] [from X | to X.. | pic..]
    (ch-bond s pre ws)
     (: kind (<ws = "bond" ? "bond" (ch-bond-kinds <ws))
@@ -119,23 +119,23 @@
            [a len ['pic (ch-join l)]])
        r (go rest (s 'dir) (s 'db) ())
        a <r len (r 1) th (r 2)
-       third (? (th = ()) ("from " + ch-ref s a + " ")
-                (<th = 'from) ("from " + ch-from s (th 1) a)
-                (<th = 'to) ("to " + th 1 + " ")
-                (th 1 + " "))
-       (ch-ol s (pre + "Last: " + kind + "(" + ch-g len + ", " + show a + ", " + third + ")"),
+       third (? (th = ()) "from \(ch-ref s a) "
+                (<th = 'from) "from \(ch-from s (th 1) a)"
+                (<th = 'to) "to \(th 1) "
+                "\(th 1) ")
+       (ch-ol s "\(pre)Last: \(kind)(\(ch-g len), \(a), \(third))",
         pins s 'last 'bond 'dir a))
    ; a moiety, placed against the last thing, or where its pic says
    (ch-moiety s pre ws)
     (: w <ws nm (ch-name w) a (s 'dir)
-       where (two? >ws ? (" " + ch-join >ws)
-              (" with ." + ch-acorner (a + 180) + " at " + ch-ref s a))
-       (ch-ol s (pre + "Last: " + nm + ": " + ch-atom s w + where),
+       where (two? >ws ? " \(ch-join >ws)"
+              " with .\(ch-acorner (a + 180)) at \(ch-ref s a)")
+       (ch-ol s "\(pre)Last: \(nm): \(ch-atom s w)\(where)",
         pin (s 'names) nm 'atom,
         pin s 'last 'atom))
    (ch-bp s pre)
     (s 'dir @ a
-     (ch-ol s (pre + "Last: BP: \"\" ht 0 wid 0 with ." + ch-cmp (a + 180) + " at " + ch-ref s a),
+     (ch-ol s "\(pre)Last: BP: \"\" ht 0 wid 0 with .\(ch-cmp (a + 180)) at \(ch-ref s a)",
       pin s 'last 'other))
    ; a ring: [aromatic] ring|ringN|benzene|flatring [pointing D] [aromatic] [put M at N]..
    ; [double I,J ..] [pic..]
@@ -155,7 +155,7 @@
             (: (pairs m acc) (two? m && 0 <= fsub <m "," 0 ? (pairs >m (<m . acc)) [m (rev acc)])
                pr (pairs >l ())
                (go <pr (pin r 'dbl (r 'dbl + pr 1))))
-           (pin r 'extra (cats (map (w \ " " + w) l))))
+           (pin r 'extra (cats (map (w \ " \(w)") l))))
        r (go >ws1 {'n (flat ? 5 n0) 'n6 n0 'off 0 'aro (aro0 || kw = "benzene") 'puts () 'dbl () 'extra "" 'flat flat})
        (ch-ring-body s pre r line,
         pins s 'last 'ring 'ring r))
@@ -164,15 +164,15 @@
        ; the size is pi's own; the angles below are chem's degrees
        rad (side / (2 * sin (ch-pi / n6)))
        step (360.0 / n6)
-       (vx k) ((off + (k - 1) * step) / ch-deg @ t ("(" + ch-g (rad * sin t) + "," + ch-g (rad * cos t) + ")"))
-       _ (ch-ol s (pre + "Last: [\n\tC: 0,0"))
-       _ (map (k \ ch-ol s ("\tV" + show k + ": " + vx k)) ^(n6 + 2))
+       (vx k) ((off + (k - 1) * step) / ch-deg @ t "(\(ch-g (rad * sin t)),\(ch-g (rad * cos t)))")
+       _ (ch-ol s "\(pre)Last: [\n\tC: 0,0")
+       _ (map (k \ ch-ol s "\tV\(k): \(vx k)") ^(n6 + 2))
        _ (r 'flat ? (ch-ol s "\tV4: V5; V5: V6") 0)
        puts (r 'puts) anyput (two? puts)
        (put-at k) (: p (filter (p \ <p = k) puts) (two? p ? (<p 1)))
        half (s 'ht0 / 2)
        (chop k f) (put-at k != () ? (ch-g (half * f)) "0")
-       (chops i j f) (anyput ? (" chop " + chop i f + " chop " + chop j f) "")
+       (chops i j f) (anyput ? " chop \(chop i f) chop \(chop j f)" "")
        ; a pair said either way round is the side from its first vertex
        dbl (map (p \ (: ws (usplit 44 p) a (ch-int <ws) b (ch-int <>ws)
                         ((a % n) + 1 = b ? [a b] [b a])))
@@ -181,22 +181,22 @@
                       k (i + 1)
                       m (put-at k)
                       _ (m = () ? 0
-                         (ch-ol s ("\tV" + show k + ": ellipse invis ht " + ch-g (s 'ht0) + " wid " + ch-g (s 'cw0)
-                                   + " at V" + show k + "\n\t" + ch-name m + ":" + ch-atom s m + " at V" + show k)))
+                         (ch-ol s ("\tV\(k): ellipse invis ht \(ch-g (s 'ht0)) wid \(ch-g (s 'cw0))"
+                                   + " at V\(k)\n\t\(ch-name m):\(ch-atom s m) at V\(k)")))
                       k2 (k % n + 1)
-                      _ (ch-ol s ("\tline from V" + show k + " to V" + show k2 + chops k k2 1))
+                      _ (ch-ol s "\tline from V\(k) to V\(k2)\(chops k k2 1)")
                       ; the flat ring's cut side is set in further, and chopped less
                       (cut d) (r 'flat && <d = 3)
                       (map (d \ ((cut d ? "0.75" "0.85") @ f
-                                 (ch-ol s ("\tline from " + f + "<C,V" + show <d + "> to " + f + "<C,V" + show (d 1) + ">"
+                                 (ch-ol s ("\tline from \(f)<C,V\(<d)> to \(f)<C,V\(d 1)>"
                                            + chops <d (d 1) (cut d ? 0.2 (2 / 3.0))))))
                            (filter (d \ <d = k) dbl))))
               ^n)
-       _ (r 'aro ? (ch-ol s ("\tcircle rad " + ch-g (r 'flat ? (0.4 * side) (rad / 2)) + " at 0,0")) 0)
+       _ (r 'aro ? (ch-ol s "\tcircle rad \(ch-g (r 'flat ? (0.4 * side) (rad / 2))) at 0,0") 0)
        a (s 'dir)
        place (elem "with" (ch-words (r 'extra)) ? ""
-              ("with .V" + show (ch-vertex r (a + 180)) + "." + ch-cmp (a + 180) + " at " + ch-ref s a))
-       (ch-ol s ("] " + place + " " + r 'extra)))
+              "with .V\(ch-vertex r (a + 180)).\(ch-cmp (a + 180)) at \(ch-ref s a)")
+       (ch-ol s "] \(place) \(r 'extra)"))
 
    ; a line of a diagram
    (ch-line s l)
@@ -208,7 +208,7 @@
                         (ch-ol s (ch-trim (snip l (i + 3) #l)),
                          pin s 'last 'other))
           (elem w0 ch-settings) (ch-set s w0 (<(rev ws)))
-          (ch-o s ("\n#" + l + "\n"),
+          (ch-o s "\n#\(l)\n",
            ch-chunks s l ws)))
    ; settings: the last word is the value
    (ch-set s k v)
@@ -233,7 +233,7 @@
        (go l pre first) (atom? l ? 0
                          (ch-thing s pre <l (first ? l) lab,
                           go >l "" 0))
-       (go cs (lab = () ? "" (lab + ": ")) 1))
+       (go cs (lab = () ? "" "\(lab): ") 1))
    ; the rings: ring, benzene and flatring six-sided, ringN N-sided by its last figure, 1 to 8
    (ch-ring? w) (elem w ["benzene" "flatring"] || starts? w "ring")
    (ch-ring-sides w) ((starts? w "ring" && 4 < #w ? (w (#w - 1) - 48) 6) @ d (1 <= d <= 8 ? d 6))
@@ -250,7 +250,7 @@
                 'bp (ch-bp s pre)
                 'moiety (ch-moiety s pre >ws)
                 'atom (ch-moiety s pre ws)
-                'str (ch-ol s (pre + "Last: " + ch-join ws), pin s 'last 'other)
+                'str (ch-ol s "\(pre)Last: \(ch-join ws)", pin s 'last 'other)
                 (ch-ol s (pre + ch-join ws), pin s 'last 'other)),
         ; a label names what the line drew
         (lab = () ? 0
@@ -261,11 +261,11 @@
    (ch-macros _)
     (: d "/usr/share/groff"
        vs (udirp d ? (sort (filter (e \ 0 < #e && digit? (e 0)) (readdir d))))
-       hit (filter (v \ two? (stat (d + "/" + v + "/tmac/chem.pic"))) vs)
-       (two? hit ? (d + "/" + <hit + "/tmac/chem.pic") "chem.pic"))
+       hit (filter (v \ two? (stat "\(d)/\(v)/tmac/chem.pic")) vs)
+       (two? hit ? "\(d)/\(<hit)/tmac/chem.pic" "chem.pic"))
    (ch-start s)
     ((s 'begun ? 0
-      (pin s 'begun 1, ch-o s ("copy \"" + ch-macros 0 + "\"\n" + ch-prelude))),
+      (pin s 'begun 1, ch-o s "copy \"\(ch-macros 0)\"\n\(ch-prelude)")),
      ch-ol s "Last: 0,0",
      pins s 'last 'start 'dir 90)
    ; every line is read with its blanks trimmed off both ends; only a diagram's comment
@@ -307,7 +307,7 @@
                (: f <l
                   t (f = "-" ? (string? sin ? sin (slurp in)) (uread f @ r (two? r ? <>r)))
                   (string? t ? (ch-doc s t, go >l)
-                   (say err ("chem: can't open " + f + "\n"), pin s 'status 1))))
+                   (say err "chem: can't open \(f)\n", pin s 'status 1))))
        (go (two? fs ? fs ["-"]),
         [(peep s 'status 0) (slurp (s 'o))]))
 )

@@ -143,33 +143,33 @@
 ; --- the response --------------------------------------------------------------------
 ; one shape for every answer. head sends a get's headers, Content-Length included, and no body
 (: (reply c code why ctype body head?)
-   (say c ("HTTP/1.1 " + show code + " " + why + "\r\n"
-                + "Content-Type: " + ctype + "\r\n"
-                + "Content-Length: " + show #body + "\r\n"
-                + "Cache-Control: no-cache\r\n"
-                ; isolation, so a page may use SharedArrayBuffer
-                + "Cross-Origin-Opener-Policy: same-origin\r\n"
-                + "Cross-Origin-Embedder-Policy: require-corp\r\n"
-                + "Connection: close\r\n\r\n"),
+   (each ["HTTP/1.1 \(code) \(why)\r\n"
+          "Content-Type: \(ctype)\r\n"
+          "Content-Length: \(#body)\r\n"
+          "Cache-Control: no-cache\r\n"
+          ; isolation, so a page may use SharedArrayBuffer
+          "Cross-Origin-Opener-Policy: same-origin\r\n"
+          "Cross-Origin-Embedder-Policy: require-corp\r\n"
+          "Connection: close\r\n\r\n"] (say c),
     !head? ? (say c body),
     flush c,
     code)
    ; an error is a page too -- small, and readable when a browser shows it
    (oops c code why head?)
    (reply c code why "text/html; charset=utf-8"
-          ("<!doctype html><meta charset=\"utf-8\"><title>" + show code + " " + why
+          ("<!doctype html><meta charset=\"utf-8\"><title>\(code) \(why)"
            + "</title><body style=\"font:16px ui-serif,Georgia,serif;padding:3rem\">"
-           + "<h1>" + show code + " &middot; " + why + "</h1><p>kiosko</p>") head?)
+           + "<h1>\(code) &middot; \(why)</h1><p>kiosko</p>") head?)
    ; a directory with no index.html: list it, directories first, each entry a link. plain
    ; enough that no stylesheet is needed and no page of the site is shadowed by it.
    (listing c root p head?)
    (: full (root + p)
       names (sort (filter (f \ !(0 < #f && f 0 = 46)) (readdir full)))
       (row f) ((dir? (full + f) ? (f + "/") f) @ sub
-                 ("<li><a href=\"" + hesc (penc sub) + "\">" + hesc sub + "</a></li>"))
-      body ("<!doctype html><meta charset=\"utf-8\"><title>" + hesc p + "</title>"
+                 "<li><a href=\"\(hesc (penc sub))\">\(hesc sub)</a></li>")
+      body ("<!doctype html><meta charset=\"utf-8\"><title>\(hesc p)</title>"
             + "<body style=\"font:16px ui-serif,Georgia,serif;padding:2rem\">"
-            + "<h1>" + hesc p + "</h1><ul>"
+            + "<h1>\(hesc p)</h1><ul>"
             + (p = "/" ? "" "<li><a href=\"..\">../</a></li>")
             + catmap row names + "</ul>")
       (reply c 200 "OK" "text/html; charset=utf-8" body head?)))
@@ -199,11 +199,10 @@
                            ; redirect to the slashed form so relative links resolve;
                            ; then index.html; then a listing
                            (? !(ends? p "/")
-                              (say c ("HTTP/1.1 301 Moved Permanently\r\nLocation: " + penc p
-                                      + "/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
+                              (say c "HTTP/1.1 301 Moved Permanently\r\nLocation: \(penc p)/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
                                flush c, [301 meth raw])
-                              (fhere? (full + "index.html"))
-                              (gulp (full + "index.html") @ b
+                              (fhere? "\(full)index.html")
+                              (gulp "\(full)index.html" @ b
                                  (reply c 200 "OK" "text/html; charset=utf-8" b head?, [200 meth raw]))
                               (listing c root p head?, [200 meth raw]))
                            !(fhere? full) (oops c 404 "Not Found" head?, [404 meth raw])
@@ -212,7 +211,7 @@
                                  (oops c 403 "Forbidden" head?, [403 meth raw]))))))))))))))
 
 ; --- the loop ---------------------------------------------------------------------------
-(: (note quiet l) (!quiet ? (say err $ "kiosko: " + show <l + " " + <>l + " " + <>>l + "\n"))
+(: (note quiet l) (!quiet ? (say err "kiosko: \(<l) \(<>l) \(<>>l)\n"))
    ; collect finished sessions: an uncaught task stays on the run ring, walked every switch.
    ; `scoop` answers (pid . retval) or () without blocking; test with two?, a session returns ()
    (drain _)  (two? (scoop 0) ? (drain ()))
@@ -237,7 +236,7 @@
       a (charm? port ? ["127.0.0.1" port] port)
       l (listen ['tcp <a <>a])
     (hot? l ?
-       (!quiet ? (say err $ "kiosko: serving " + r + " on http://" + <a + ":" + show <>a + "/"
+       (!quiet ? (say err $ "kiosko: serving \(r) on http://\(<a):\(<>a)/"
                    + (<a = "0.0.0.0" ? " (every address)" "") + "\n"),
         accept-loop r l quiet before make,
         close l,

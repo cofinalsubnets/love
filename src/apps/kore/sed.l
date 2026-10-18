@@ -67,7 +67,7 @@
        (num i v) (i < n && dig? (sc i) ? (num (i + 1) (10 * v + (sc i - 48))) [v i])
        ; to the unescaped delimiter d: \d -> d, all else verbatim -> (text j) | ()
        (until i d acc)
-        (n <= i ? ()
+        (n > i ?
          (sc i @ c
             (? (c = d) [acc (i + 1)]
                (c = 92 && i + 1 < n && sc (i + 1) = d)
@@ -86,7 +86,7 @@
                      (go (j + 1)))
            (go j1))
        (untilre i d acc)
-        (n <= i ? ()
+        (n > i ?
          (sc i = 91 && d != 91 ? (bkend (i + 1) @ e (untilre e d (acc + snip sc i e)))
           (sc i = 92 && i + 1 < n && sc (i + 1) != d ? (untilre (i + 2) d (acc + snip sc i (i + 2)))
            (sc i = 92 && i + 1 < n ? (untilre (i + 2) d (acc + string d))
@@ -98,8 +98,7 @@
             (? (dig? c) (num i 0 @ [v j] [['ln v] j])
                (c = 36) ['(last) (i + 1)]
                (c = 47) (untilre (i + 1) 47 "" @ [txt j]
-                          (rx txt @ [_ nds _] [['re nds] j] ())
-                          ())
+                          (rx txt @ [_ nds _] [['re nds] j] ()))
                [() i])))
        (sepend? j) (n <= j || sep? (sc j) || sc j = 125 || sc j = 35)
        ; the s command's tail past the verb: delimiter, regex, replacement,
@@ -114,12 +113,8 @@
                    (: (fgo k g? p?)
                        (? (sepend? k) [k g? p?]
                           (sc k = 103) (fgo (k + 1) 1 p?)
-                          (sc k = 112) (fgo (k + 1) g? 1)
-                          ())
-                      (fgo j5 () () @ [j6 g? p?] [[nds rp g? p?] j6] ()))
-                   ())
-                 ())
-               ()))))
+                          (sc k = 112) (fgo (k + 1) g? 1))
+                      (fgo j5 () () @ [j6 g? p?] [[nds rp g? p?] j6] ()))))))))
        ; y's tail: two equal-length sets, \\ and \n spelled as themselves -> (table j) | ()
        (yun t) ((: (g i acc) (i >= #t ? (rev acc)
                               (t i = 92 && i + 1 < #t ? (g (i + 2) ((t (i + 1) = 110 ? 10 (t (i + 1))) . acc))
@@ -131,16 +126,13 @@
              (until (j3 + 2) dl "" @ [a j4]
                (until j4 dl "" @ [b j5]
                  (yun a @ xa (yun b @ xb
-                   (#xa = #xb && sepend? j5 ? [(foldl (t \ i \ pin t (xa i) (xb i)) {} (rev ^#xa)) j5] ())))
-                 ())
-               ()))))
+                   (#xa = #xb && sepend? j5 ? [(foldl (t \ i \ pin t (xa i) (xb i)) {} (rev ^#xa)) j5] ()))))))))
        ; } closes the nearest open {, whose payload becomes the count of commands inside it
        (open? c) (c 2 = 'blk && !(charm? (c 3)))
        (close acc)
         ((: (g l k pre) (l @ (c . more)
                           (open? c ? (foldl (t \ x \ x . t) ([(c 0) (c 1) 'blk k (c 4)] . more) pre)
-                             (g more (k + 1) (c . pre)))
-                          ())) acc 0 ())
+                             (g more (k + 1) (c . pre))))) acc 0 ())
        (rcmd i acc)
         (skip i @ j
            (n <= j ? (any open? acc ? () [1 (rev acc)])
@@ -158,18 +150,12 @@
                           (: v (sc j3)
                              plain (verb \ (sepend? (j3 + 1) ?
                                               (rcmd (j3 + 1) ([a1 a2 verb () bang] . acc))))
-                             (? (v = 112) (plain 'p)
-                                (v = 100) (plain 'd)
-                                (v = 113) (two? a2 ? () (plain 'q))
-                                (v = 115) (rsub j3 @ [pay j4]
-                                            (rcmd j4 ([a1 a2 's pay bang] . acc))
-                                            ())
-                                (v = 121) (ry j3 @ [pay j4]
-                                            (rcmd j4 ([a1 a2 'y pay bang] . acc))
-                                            ())
-                                (v = 123) (rcmd (j3 + 1) ([a1 a2 'blk () bang] . acc))
-                                ()))))))))
-              ()))))
+                             (v @ 112 (plain 'p)
+                                  100 (plain 'd)
+                                  113 (two? a2 ? () (plain 'q))
+                                  115 (rsub j3 @ [pay j4] (rcmd j4 ([a1 a2 's pay bang] . acc)))
+                                  121 (ry j3 @ [pay j4] (rcmd j4 ([a1 a2 'y pay bang] . acc)))
+                                  123 (rcmd (j3 + 1) ([a1 a2 'blk () bang] . acc))))))))))))))
        (rcmd 0 ()))
 
    ; -- the cycle. (srun cmds rd n? op) -> the exit remembered, 0. op is the output port,
@@ -188,11 +174,11 @@
         (: a1 <c a2 <>c
            (? (atom? a2) (amatch a1 no ln last?)
               (peep t idx 0)
-               ((<a2 = 'ln ? (<>a2 <= no) (amatch a2 no ln last?)) @ fin
+               ((<a2 @ 'ln (<>a2 <= no) (amatch a2 no ln last?)) @ fin
                   (fin ? (pin t idx 0),
                    1))
               (amatch a1 no ln last?)
-               ((<a2 = 'ln ? (<>a2 <= no)) @ one
+               ((<a2 @ 'ln (<>a2 <= no)) @ one
                   (one ? () (pin t idx 1),
                    1))
               ()))
@@ -200,21 +186,19 @@
        (rline cs idx ps no q last?)
         (cs @ (c . more)
            (!(sel? c idx no ps last? @ s (c 4 ? !s s))
-            ? (c 2 = 'blk                             ; an unselected { skips what it holds
-               ? ((: (g l k i) (k < 1 ? (rline l i ps no q last?) (g >l (k - 1) (i + 1)))) more (c 3) (idx + 1))
+            ? (c 2 @ 'blk                             ; an unselected { skips what it holds
+               ((: (g l k i) (k < 1 ? (rline l i ps no q last?) (g >l (k - 1) (i + 1)))) more (c 3) (idx + 1))
                (rline more (idx + 1) ps no q last?))
-              (<>>c @ v
-                 (? (v = 'd) [1 ps]
-                    (v = 'q) [2 ps]
-                    (v = 'p) (say q ps, put q 10, rline more (idx + 1) ps no q last?)
-                    (v = 'blk) (rline more (idx + 1) ps no q last?)
-                    (v = 'y) (rline more (idx + 1) (string (map (ch \ peep <>>>c ch ch) (chars ps))) no q last?)
-                    (: pay <>>>c
-                       pr >>pay
-                       r (usub <pay <>pay ps <pr)
-                       ps2 <>r
-                       (<r && <>pr ? (say q ps2, put q 10),
-                        rline more (idx + 1) ps2 no q last?)))))
+              (<>>c @ 'd [1 ps] 'q [2 ps]
+                      'p (say q ps, put q 10, rline more (idx + 1) ps no q last?)
+                      'blk (rline more (idx + 1) ps no q last?)
+                      'y (rline more (idx + 1) (string (map (ch \ peep <>>>c ch ch) (chars ps))) no q last?)
+                         (: pay <>>>c
+                            pr >>pay
+                            r (usub <pay <>pay ps <pr)
+                            ps2 <>r
+                            (<r && <>pr ? (say q ps2, put q 10),
+                             rline more (idx + 1) ps2 no q last?))))
            [0 ps])
        ; the last line of an unterminated source rides a jug: its newline goes missing after
        ; the last write only (`sed -n 'p;p'` keeps the inner one), so the line is rendered
@@ -248,7 +232,7 @@
                 (: k (findsub w "f") pre (snip w 0 k) glued (snip w (k + 1) n)
                    f (? (0 < #glued) glued (two? >a) <>a (udie 1 "sed: option requires an argument -- 'f'"))
                    more (0 < #glued ? >a >>a)
-                   (go more ((script f) . "-e" . (1 < #pre ? (pre . acc) acc))))
+                   (go more (script f . "-e" . (1 < #pre ? (pre . acc) acc))))
                (go >a (w . acc)))))
        ws (go as ())
        [ws (box 'sfx)])
@@ -257,7 +241,7 @@
        t {}
        o (uopt as t '(101) '(101) ())                      ; -e script, stacking
        _ (two? o ? () (udie 1 "sed: bad option"))
-       _ (uoptbad as t "nEeirs" @ c (!c ? () (udie 1 ("sed: unknown option -" + string c))))
+       _ (uoptbad as t "nEeirs" @ c (!c ? () (udie 1 "sed: unknown option -\(string c)")))
        eps <>o rest <>>o
        _ (two? eps || two? rest ? ()
           (udie 1 "usage: sed [-nErs] [-i[SUFFIX]] [-e SCRIPT].. [-f FILE].. SCRIPT [FILE..]"))
@@ -266,10 +250,10 @@
        sc (two? eps ? (ujoinc 10 eps) <rest)
        fs (ustray "sed" as (two? eps ? rest >rest))
        pc (sparse sc (peep t 69 0))
-       _ (two? pc ? () (udie 1 ("sed: invalid script: " + sc)))
+       _ (two? pc ? () (udie 1 "sed: invalid script: \(sc)"))
        cmds <>pc
        ; GNU's own sentence for an unreadable operand, and the one the gate pins
-       (sed-miss f) (say err ("sed: can't read " + f + ": No such file or directory"), put err 10, 0)
+       (sed-miss f) (say err "sed: can't read \(f): No such file or directory", put err 10, 0)
        ; -i: each file its own stream, edited and written back; one that will not open
        ; complains and the rest flow. the answer is held whole, since it overwrites its input;
        ; a suffix keeps the old file beside it first. -s is the same walk said on out
@@ -281,7 +265,7 @@
               _ (srun cmds rd n? j)
               b (peep rd 'bad 0)
               ((b || !i? ? () (uwrite f (slurp j) ? ()
-                               (say err ("sed: couldn't open " + f), put err 10))),
+                               (say err "sed: couldn't open \(f)", put err 10))),
                inplace more (b ? 1 bad)))
            (flush out, flush err, bad ? 2 0))
        ((i? || s?) && two? fs ? (inplace fs ())

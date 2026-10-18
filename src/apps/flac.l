@@ -135,23 +135,23 @@
   -t decodes and checks the stream's md5. -c writes to stdout, -o names the output, -f
   overwrites one that exists, -s is quiet."
    (flac-say o m) (o "s" ? 0 (say err m, flush err, 0))
-   (flac-err m) (say err (m + "\n"), flush err, 1)
+   (flac-err m) (say err "\(m)\n", flush err, 1)
    (flac-exists? p) (open p "r" @ q (hot? q ? (close q, 1) 0))
    (flac-one o p)
     (: nm (p = "-" ? "stdin" p)
        q (p = "-" ? in (open p "r"))
-       (? !(hot? q) (flac-err (nm + ": ERROR: " + uerrno q))
+       (? !(hot? q) (flac-err "\(nm): ERROR: \(uerrno q)")
           (: r ((cite 'av 'av-head) q flac-meta "" @ ['short h] ["cut short" h] x x)
              m <r hb (r 1)
-             fin (\ v (p = "-" ? v (close q, v)))
-             (? (string? m) (fin (flac-err (nm + ": ERROR: " + m)))
+             fin (\ v (p @ "-" v (close q, v)))
+             (? (string? m) (fin (flac-err "\(nm): ERROR: \(m)"))
                 (o "t") (: b (cask 89) _ (md5-init b)
                           r (flac-pump q (snip hb (m 'at) #hb) (pin m 'whole 1) (pcm \ md5-feed b pcm))
                           sum (md5-done b)
-                          (fin (? (string? r) (flac-err (nm + ": ERROR while decoding data: " + r))
+                          (fin (? (string? r) (flac-err "\(nm): ERROR while decoding data: \(r)")
                                   (m 'md5 != "00000000000000000000000000000000" && sum != m 'md5)
-                                   (flac-err (nm + ": ERROR, MD5 signature mismatch"))
-                                  (flac-say o (nm + ": ok\n")))))
+                                   (flac-err "\(nm): ERROR, MD5 signature mismatch")
+                                  (flac-say o "\(nm): ok\n"))))
                 (: raw (o "raw")
                    w ((m 'bps + 7) // 8)
                    big (o "endian" = "big") uns (raw ? (o "sign" = "unsigned") (w = 1))
@@ -161,14 +161,14 @@
                    (? (raw && !(o "endian" && o "sign"))
                        (fin (flac-err "ERROR: for decoding to a raw file you must specify --endian and --sign"))
                       (op != "-" && !(o "f") && flac-exists? op)
-                       (fin (flac-err ("ERROR: output file " + op + " already exists, use -f to override")))
-                      (: d (op = "-" ? out (open op "w"))
-                         (? !(hot? d) (fin (flac-err ("ERROR: cannot write " + op + ": " + uerrno d)))
+                       (fin (flac-err "ERROR: output file \(op) already exists, use -f to override"))
+                      (: d (op @ "-" out (open op "w"))
+                         (? !(hot? d) (fin (flac-err "ERROR: cannot write \(op): \(uerrno d)"))
                             (: _ (raw ? () (say d (flac-wav-head m)))
                                r (flac-pump q (snip hb (m 'at) #hb) (pin m 'whole 1) (pcm \ say d (flac-lay pcm w (raw ? 0 (8 * w - m 'bps)) big uns)))
-                               _ (flush d, op = "-" ? () (close d))
-                               (fin (? (string? r) (flac-err (nm + ": ERROR while decoding data: " + r))
-                                       (flac-say o (nm + ": done\n")))))))))))))
+                               _ (flush d, op @ "-" () (close d))
+                               (fin (? (string? r) (flac-err "\(nm): ERROR while decoding data: \(r)")
+                                       (flac-say o "\(nm): done\n"))))))))))))
    ; --- encoding ------------------------------------------------------------
    flac-level-bs [1152 1152 1152 4096 4096 4096 4096 4096 4096]
    ; a field keeps its width while its value is () (the head laid ahead), as wrbe would not
@@ -180,10 +180,9 @@
    (flac-native f)
     (: w (f 'w) bits (f 'bits) big (f 'big) k (f 'kind)
        (? (charm? (f 'tag) && k != 's && k != 'u)
-           ((f 'ext ? "unsupported WAVEFORMATEXTENSIBLE chunk with non-PCM format " "unsupported format type ")
-            + show (f 'tag))
-          (k != 's && k != 'u) ("can't encode " + f 'desc + " samples")
-          (bits < 4 || bits > 32 || w != (bits + 7) // 8) ("can't encode " + f 'desc + " samples")
+           "unsupported \(f 'ext ? "WAVEFORMATEXTENSIBLE chunk with non-PCM format" "format type") \(f 'tag)"
+          (k != 's && k != 'u) "can't encode \(f 'desc) samples"
+          (bits < 4 || bits > 32 || w != (bits + 7) // 8) "can't encode \(f 'desc) samples"
           (pcm \ (: le (big ? (flac-lay pcm w 1 0) pcm) (k = 'u ? (flac-lay le w 0 1) le)))))
    ; the input as [format meta held pump port] | why not
    (flac-src o q)
@@ -235,7 +234,7 @@
        np (? (dt <= 0) 0 (: (go k acc) (? (dt <= k * 10 * rate) acc
                                           (: sn (k * 10 * rate // bs * bs) (go (k + 1) (acc && <acc = sn ? acc (sn . acc)))))
                             #(go 0 ())))
-       vendor ("love " + love-version)
+       vendor "love \(love-version)"
        (vc ts) (flac-le #vendor 4 + vendor + flac-le #ts 4 + join "" (map (t \ flac-le #t 4 + t) ts))
        ; a flac re-encoded keeps its blocks but STREAMINFO, the padding's length, and its tags
        ; unless -T gives others
@@ -280,7 +279,7 @@
                    (? (#h1 != #h0) "the metadata changed its length"
                       (op = "-") [(#h0 + st 'out) total]
                       (: _ (close d)
-                         (((cite 'av 'av-patch) op 0 h1) @ 0 [(#h1 + st 'out) total] why why))))))))
+                         ((cite 'av 'av-patch op 0 h1) @ 0 [(#h1 + st 'out) total] why why))))))))
    ; a kept seektable's points moved to the frames that now hold them: sorted, a repeat a
    ; placeholder, a point past the end left as it was
    (flac-reseek s total bs offs sizes)
@@ -293,7 +292,7 @@
        (join "" (re + far + map (k \ ph + string (cask 10)) ^(#ps - #re - #far))))
    ; to three places, rounded; flac input on stdin has no size to say it against
    (flac-ratio a b) (? !(charm? b) "N/A"
-                       ((b ? ((2000 * a + b) // (2 * b)) 0) @ k (show (k // 1000) + "." + snip (show (1000 + k % 1000)) 1 4)))
+                       ((b ? ((2000 * a + b) // (2 * b)) 0) @ k "\(k // 1000).\(snip (show (1000 + k % 1000)) 1 4)"))
    ; what flac measures the ratio against: a flac file's size, a wav's samples and a header
    (flac-den o p [f m h pump q] total)
     (? (o "raw") (total * f 'align)
@@ -303,44 +302,46 @@
    (flac-warn o p [f m h pump q])
     (: sk (string? (flac-native f) ? () (f 'skip @ (l && two? l) l _ ()))
        rt (two? (o "tags") && string? (m 'head) && two? (filter (b \ <b = 4) (m 'blocks)))
-       _ (each sk (id \ say err (p + ": WARNING: skipping unknown chunk '" + id + "' (use --keep-foreign-metadata to keep)\n")))
-       _ (? rt (say err (p + ": WARNING, replacing tags from input FLAC file with those given on the command-line\n")) ())
+       _ (each sk (id \ say err "\(p): WARNING: skipping unknown chunk '\(id)' (use --keep-foreign-metadata to keep)\n"))
+       _ (? rt (say err "\(p): WARNING, replacing tags from input FLAC file with those given on the command-line\n") ())
        (flush err, 1))
-   flac-same (" already exists.\n\nBy default flac encodes files to FLAC format; if you meant to decode this file\n"
-              + "from FLAC to something else, use -d.  If you meant to re-encode this file from\n"
-              + "FLAC to FLAC again, use -f to force writing to the same file, or -o to specify\n"
-              + "a different output filename.")
+   flac-same """
+ already exists.
+
+By default flac encodes files to FLAC format; if you meant to decode this file
+from FLAC to something else, use -d.  If you meant to re-encode this file from
+FLAC to FLAC again, use -f to force writing to the same file, or -o to specify
+a different output filename.
+"""
    (flac-enc-one o p)
     (: nm p
        q (p = "-" ? in (open p "r"))
-       (? !(hot? q) (flac-err (nm + ": ERROR: " + uerrno q))
-          (: fin (\ v (p = "-" ? v (close q, v)))
+       (? !(hot? q) (flac-err "\(nm): ERROR: \(uerrno q)")
+          (: fin (\ v (p @ "-" v (close q, v)))
              op (? (o "c" || (p = "-" && !(o "o"))) "-"
                    (o "o") (o "o")
                    (: i (foldl (\ a k (p k = 46 ? k a)) -1 ^#p)
-                      ((0 < i && i > foldl (\ a k (p k = 47 ? k a)) -1 ^#p ? (snip p 0 i) p) + ".flac")))
+                      ((0 < i && i > foldl (\ a k (p k @ 47 k a)) -1 ^#p ? (snip p 0 i) p) + ".flac")))
              (? (op != "-" && !(o "f") && flac-exists? op)
-                 (fin (flac-err ("ERROR: output file " + op
-                                 + (op = p ? flac-same " already exists, use -f to override"))))
+                 (fin (flac-err "ERROR: output file \(op)\(op = p ? flac-same " already exists, use -f to override")"))
                 (flac-src o q @
-                   (why && string? why) (fin (flac-err (nm + ": ERROR: " + why)))
-                   src (: d (op = "-" ? out (open op "w"))
-                          (? !(hot? d) (fin (flac-err ("ERROR: cannot write " + op + ": " + uerrno d)))
+                   (why && string? why) (fin (flac-err "\(nm): ERROR: \(why)"))
+                   src (: d (op @ "-" out (open op "w"))
+                          (? !(hot? d) (fin (flac-err "ERROR: cannot write \(op): \(uerrno d)"))
                              ((flac-warn o p src, flac-enc o src d op) @
                                ; a failed encode leaves no half a file behind
-                               (why && string? why) (: _ (? (op = "-") () (close d, (cite 'posix 'unlink) op))
-                                                       (fin (flac-err (nm + ": ERROR: " + why))))
-                               [n total] (fin (flac-say o (nm + ": wrote " + show n + " bytes, ratio="
-                                                           + flac-ratio n (flac-den o p src total) + "\n")))))))))))
+                               (why && string? why) (: _ (op @ "-" () (close d, (cite 'posix 'unlink) op))
+                                                       (fin (flac-err "\(nm): ERROR: \(why)")))
+                               [n total] (fin (flac-say o "\(nm): wrote \(n) bytes, ratio=\(flac-ratio n (flac-den o p src total))\n"))))))))))
    flac-long {"decode" "d" "test" "t" "stdout" "c" "force" "f" "silent" "s"
               "no-padding" "nopad" "no-seektable" "noseek"}
    (flac-num s) (string? s && #s && all (c \ 48 <= c <= 57) (chars s)
                  ? (foldl (\ a c (a * 10 + c - 48)) 0 (chars s)))
    ; a value option: -b, -o and -T take one, glued or the next word
    (flac-val o k v)
-    (k @ "b" (flac-num v @ n (n ? (pin o "b" n, 1) (flac-err ("ERROR: bad blocksize " + v), ())))
+    (k @ "b" (flac-num v @ n (n ? (pin o "b" n, 1) (flac-err "ERROR: bad blocksize \(v)", ())))
          "o" (pin o "o" v, 1)
-         "T" (0 < findsub v "=" ? (pin o "tags" (v . peep o "tags" ()), 1) (flac-err ("ERROR: bad tag " + v), ()))
+         "T" (0 < findsub v "=" ? (pin o "tags" (v . peep o "tags" ()), 1) (flac-err "ERROR: bad tag \(v)", ()))
          _ ())
    (flac-main as)
     (: o {}
@@ -364,18 +365,18 @@
                          || (k = "sign" && (v = "signed" || v = "unsigned")))
                          (pin o k v, go >l fs)
                         (string? (flac-long k)) (pin o (flac-long k) 1, go >l fs)
-                        (flac-err ("ERROR: unknown option " + a))))
+                        (flac-err "ERROR: unknown option \(a)")))
                  (1 < #a && 45 = a 0)
                   (: c (string [(a 1)]) rest (snip a 2 #a)
                      (? (elem (a 1) (chars "boT"))
                          (? #rest (flac-val o c rest ? (go >l fs) 1)
                             (two? >l) (flac-val o c <>l ? (go >>l fs) 1)
-                            (flac-err ("ERROR: option -" + c + " needs a value")))
+                            (flac-err "ERROR: option -\(c) needs a value"))
                         (all (c \ elem c (chars "dtcfs012345678")) (chars (snip a 1 #a)))
                          (each (chars (snip a 1 #a))
                                (c \ (48 <= c <= 56 ? (pin o "level" (c - 48)) (pin o (string [c]) 1))),
                           go >l fs)
-                        (flac-err ("ERROR: unknown option " + a))))
+                        (flac-err "ERROR: unknown option \(a)")))
                  (go >l (a . fs)))))
        (go as ()))
 
@@ -390,27 +391,22 @@
     (: (n i [t len p])
         (: kind (t < 7 ? (flac-types t) "UNKNOWN")
            last (i = #(m 'blocks) - 1)
-           ("METADATA block #" + show i + "\n  type: " + show t + " (" + kind + ")\n  is last: "
-            + (last ? "true" "false") + "\n  length: " + show len + "\n"
-            + (t @ 0 ("  minimum blocksize: " + show (m 'minbs) + " samples\n  maximum blocksize: "
-                       + show (m 'maxbs) + " samples\n  minimum framesize: " + show (m 'minfr)
-                       + " bytes\n  maximum framesize: " + show (m 'maxfr) + " bytes\n  sample_rate: "
-                       + show (m 'rate) + " Hz\n  channels: " + show (m 'ch) + "\n  bits-per-sample: "
-                       + show (m 'bps) + "\n  total samples: " + show (m 'total) + "\n  MD5 signature: "
-                       + m 'md5 + "\n")
+           ("METADATA block #\(i)\n  type: \(t) (\(kind))\n  is last: \(last ? "true" "false")\n  length: \(len)\n"
+            + (t @ 0 ("  minimum blocksize: \(m 'minbs) samples\n  maximum blocksize: \(m 'maxbs) samples\n"
+                       + "  minimum framesize: \(m 'minfr) bytes\n  maximum framesize: \(m 'maxfr) bytes\n"
+                       + "  sample_rate: \(m 'rate) Hz\n  channels: \(m 'ch)\n  bits-per-sample: \(m 'bps)\n"
+                       + "  total samples: \(m 'total)\n  MD5 signature: \(m 'md5)\n")
                   3 (: k (len // 18)
-                       ("  seek points: " + show k + "\n"
+                       ("  seek points: \(k)\n"
                         + join "" (map (j \ (: q (p + 18 * j)
-                                          ("    point " + show j
+                                          ("    point \(j)"
                                            + (rdbe s q 8 = 18446744073709551615 ? ": PLACEHOLDER\n"
-                                              (": sample_number=" + show (rdbe s q 8) + ", stream_offset="
-                                               + show (rdbe s (q + 8) 8) + ", frame_samples="
-                                               + show (rdbe s (q + 16) 2) + "\n")))))
+                                              ": sample_number=\(rdbe s q 8), stream_offset=\(rdbe s (q + 8) 8), frame_samples=\(rdbe s (q + 16) 2)\n"))))
                                    ^k)))
                   4 (flac-tags s p len @ [v ts]
-                       ("  vendor string: " + v + "\n  comments: " + show #ts + "\n"
-                        + join "" (map (j \ "    comment[" + show j + "]: " + ts j + "\n") ^#ts)))
-                  2 ("  application ID: " + b2hex (snip s p (p + 4)) + "\n")
+                       ("  vendor string: \(v)\n  comments: \(#ts)\n"
+                        + join "" (map (j \ "    comment[\(j)]: \(ts j)\n") ^#ts)))
+                  2 "  application ID: \(b2hex (snip s p (p + 4)))\n"
                   "")))
        (join "" (map (i \ n i (m 'blocks i)) ^#(m 'blocks))))
    (mf-tag ts k) (filter (t \ (findsub t "=") @ i (0 < i && upper (snip t 0 i) = upper k)) ts)
@@ -418,38 +414,38 @@
             "--show-max-framesize" "--show-sample-rate" "--show-channels" "--show-bps"
             "--show-total-samples" "--show-vendor-tag" "--export-tags-to=-"]
    (mf-show s m a)
-    (: (num k) (show (m k) + "\n")
+    (: (num k) "\(m k)\n"
        (? (11 < #a && "--show-tag=" = snip a 0 11)
-           (foldl (\ r t (r + t + "\n")) "" (mf-tag (m 'tags) (snip a 11 #a)))
+           (foldl (\ r t "\(r)\(t)\n") "" (mf-tag (m 'tags) (snip a 11 #a)))
         (a @ "--list" (mf-list s m)
-            "--show-md5sum" (m 'md5 + "\n") "--show-min-blocksize" (num 'minbs)
+            "--show-md5sum" "\(m 'md5)\n" "--show-min-blocksize" (num 'minbs)
             "--show-max-blocksize" (num 'maxbs) "--show-min-framesize" (num 'minfr)
             "--show-max-framesize" (num 'maxfr) "--show-sample-rate" (num 'rate)
             "--show-channels" (num 'ch) "--show-bps" (num 'bps) "--show-total-samples" (num 'total)
-            "--show-vendor-tag" (m 'vendor + "\n")
-            "--export-tags-to=-" (foldl (\ r t (r + t + "\n")) "" (m 'tags))
+            "--show-vendor-tag" "\(m 'vendor)\n"
+            "--export-tags-to=-" (foldl (\ r t "\(r)\(t)\n") "" (m 'tags))
             ())))
    ; one file's answers, each line led by its name when there are several
    (mf-print ops pre s)
     (: m (flac-meta s)
-       (? !(tablet? m) (flac-err ("ERROR: " + (string? m ? m "cut short")))
+       (? !(tablet? m) (flac-err "ERROR: \(string? m ? m "cut short")")
           (: _ (each ops (a \ say out (a = "--list" ? (mf-show s m a)
-                                       (join "" (map (x \ pre + x + "\n") (lines (mf-show s m a)))))))
+                                       (join "" (map (x \ "\(pre)\(x)\n") (lines (mf-show s m a)))))))
              _ (flush out)
              0)))
    ; the head alone, every block of it
    (mf-file ops pre p)
     (open p "r" @ q
-      (? !(hot? q) (flac-err (p + ": ERROR: No such file or directory"))
+      (? !(hot? q) (flac-err "\(p): ERROR: No such file or directory")
          (: r ((cite 'av 'av-head-all) q flac-meta "" @ [_ h] h _ "") _ (close q)
             (mf-print ops pre r))))
    (metaflac-main as)
     (: ops (filter (a \ 2 < #a && "--" = snip a 0 2) as)
        fs (filter (a \ !(2 < #a && "--" = snip a 0 2)) as)
        bad (filter (a \ !(elem a mf-opts || (11 < #a && "--show-tag=" = snip a 0 11))) ops)
-       (? (two? bad) (flac-err ("metaflac: ERROR: unknown option " + <bad + "\n" + metaflac-usage))
-          !(two? fs) (flac-err ("metaflac: ERROR: you must specify at least one FLAC file\n" + metaflac-usage))
-          (foldl (\ st p (mf-file (two? ops ? ops ["--list"]) (#fs > 1 ? (p + ":") "") p @ r (r ? r st)))
+       (? (two? bad) (flac-err "metaflac: ERROR: unknown option \(<bad)\n\(metaflac-usage)")
+          !(two? fs) (flac-err "metaflac: ERROR: you must specify at least one FLAC file\n\(metaflac-usage)")
+          (foldl (\ st p (mf-file (two? ops ? ops ["--list"]) (#fs > 1 ? "\(p):" "") p @ r (r ? r st)))
                  0 fs)))
    _ (pins (cite 'verbs 'tab) 'flac (udoor 'flac flac-main flac-usage 1 0))
    _ (pins (cite 'verbs 'tab) 'metaflac (udoor 'metaflac metaflac-main metaflac-usage 1 1)))

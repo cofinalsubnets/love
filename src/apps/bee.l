@@ -23,9 +23,9 @@
      ; what cannot move the key, the shell, the backend or the machine's locks
      bee-tree-keys ['model 'max-tokens 'thinking 'context 'queue-watch 'stall-minutes 'gone-minutes]
      bee-salt (: sf (cite 'salt 'salt-file) h (getenv "HOME")
-                 u (? (string? h) (sf (h + "/.love/etc/bee.l") {}) {})
+                 u (? (string? h) (sf "\(h)/.love/etc/bee.l" {}) {})
                  t (sf ".bee.l" {})
-                 (foldl (\ c k (pin c k (t k))) u (filter (\ k (elem k bee-tree-keys)) (keys t))))
+                 (foldl (c \ k \ pin c k (t k)) u (filter (k \ elem k bee-tree-keys) (keys t))))
      (word w) (string? w ? w (show w))
      (setting k d) (: v (peep bee-salt k ()) (two? v ? (word <v) d))
      (slurp-file p) (uread p @ [1 s] s)
@@ -101,7 +101,7 @@
        (tool "edit_file" "Replace old_text, which must occur exactly once, with new_text."
              {"path" (prop "the file's path") "old_text" (prop "the text now there")
               "new_text" (prop "its replacement")} ["path" "old_text" "new_text"])
-       (tool "shell" ("Run a command line in " + bee-shname + ". Answers stdout and stderr, then "
+       (tool "shell" ("Run a command line in \(bee-shname). Answers stdout and stderr, then "
                       + "the exit status." + (bee-verbs-lead? ? (" The commands the system prompt names "
                       + "are love's own userland (kore); anything else comes from PATH.") ""))
              {"command" (prop "the command line")} ["command"])
@@ -221,8 +221,8 @@
      bee-cwd (: d (getenv "PWD") (? (string? d && 0 < #d) d "."))
      ; "" for the root, then "/home", "/home/gwen" .. the working directory
      bee-dirs (foldl (\ a p (a + [(a (#a - 1) + "/" + p)]))
-                      [""] (filter (\ p (0 < #p)) (cite 'kore 'usplit 47 bee-cwd)))
-     (instr-in d) (filter two? (map (\ f (: p (d + "/" + f) s (slurp-file p) (? (string? s) [p s])))
+                      [""] (filter (p \ 0 < #p) (cite 'kore 'usplit 47 bee-cwd)))
+     (instr-in d) (filter two? (map (\ f (: p "\(d)/\(f)" s (slurp-file p) (? (string? s) [p s])))
                                     ["AGENTS.md" "CLAUDE.md"]))
      bee-instr (catmap instr-in bee-dirs)
      (clip0 s) (#s <= 40000 ? s (snip s 0 40000 + "\n[cut]"))
@@ -237,7 +237,7 @@
      (hex2 n) (string [("0123456789abcdef" (n // 16)) ("0123456789abcdef" (n % 16))])
      ; a user's card: the person at this login, in the hive through bee's hud, with no model
      ; behind it. it is never swept, so mail to it waits while no hud is open
-     bee-login (: u (getenv "USER") (? (string? u && 0 < #u) u "user"))
+     bee-login (: u (getenv "USER") (string? u && 0 < #u ? u "user"))
      user-card? (cite 'hive 'hive-user?)
      taken? (cite 'hive 'hive-taken?)                       ; a name no one else may settle as
      sweep (cite 'hive 'hive-sweep)
@@ -271,16 +271,16 @@
          _ (uwrite (d + "/.card")
                    (unlines ([("pid " + show (getpid 0)) ("cwd " + bee-cwd) ("branch " + b)
                               ("model " + (: m (peep bee-cell 'model ()) (string? m ? m bee-cc? (peep bee-cc 'model "claude") bee-model)))
-                              ("state " + state)
-                              ("since " + show (bee-cell 'since))]
+                              "state \(state)"
+                              "since \(bee-cell 'since)"]
                              + (string? tn ? [("turn " + tn)] ())
-                             + (bee-mcp? && !bee-as? ? [("parent " + show (ppid-of (getpid 0)))] ()))
-                            + (: s (peep bee-cell 'claude ()) (string? s ? ("claude " + s + "\n") ""))))
+                             + (bee-mcp? && !bee-as? ? ["parent \(ppid-of (getpid 0))"] ()))
+                            + (: s (peep bee-cell 'claude ()) (string? s ? "claude \(s)\n" ""))))
          (rename (d + "/.card") (d + "/card")))
      (settle branch)
       (: d (cell-of (me 0))
-         _ (: c (card-of (me 0)) (? (tablet? c && !(user-card? c)) (sweep (me 0)) 0))   ; a dead namesake's leavings
-         _ (umkdirs (d + "/inbox") 448) _ (mkdir (d + "/read") 448)
+         _ (: c (card-of (me 0)) (tablet? c && !(user-card? c) ? (sweep (me 0)) 0))   ; a dead namesake's leavings
+         _ (umkdirs "\(d)/inbox" 448) _ (mkdir "\(d)/read" 448)
          _ (pins bee-cell 'since (clock 0 // 1000) 'branch branch)
          (card! "idle"))
      (state! s) (? (bee-cell 'state && bee-cell 'state != s) (card! s) 0)
@@ -288,28 +288,28 @@
      ; [id text] of a message, sealed when seal is [key chain]: then to, id and cert (base64) join the
      ; header, and a last sig line signs every line above, the blank line and the text
      (sealed-msg from to text seal)
-      (: id (show (clock 0) + "-" + from + "-" + hex2 (clock 0 % 256))
-         hd ("from " + from + "\nsent " + show (clock 0 // 1000) + "\n"
-             + (two? seal ? ("to " + to + "\nid " + id + "\ncert " + cite 'bytes 'b64e (seal 1) 1 + "\n") ""))
-         sg (? (two? seal) ("sig " + b2hex (cite 'ssh 'ed-sign <<seal (<seal 1) (hd + "\n" + text)) + "\n") "")
-         [id (hd + sg + "\n" + text)])
+      (: id "\(clock 0)-\(from)-\(hex2 (clock 0 % 256))"
+         hd ("from \(from)\nsent \(clock 0 // 1000)\n"
+             + (two? seal ? "to \(to)\nid \(id)\ncert \(cite 'bytes 'b64e (seal 1) 1)\n" ""))
+         sg (? (two? seal) "sig \(b2hex (cite 'ssh 'ed-sign <<seal (<seal 1) "\(hd)\n\(text)"))\n" "")
+         [id "\(hd)\(sg)\n\(text)"])
      ; a message into another's inbox, here or on another box -> "" when it is there, else why not
      (post-with from to text seal)
       (: at (find to "@" 0) nm (at < 0 ? to (snip to 0 at)) box (? (0 < at) (snip to (at + 1) #to) "")
          b (box-seal 0)
          away (0 < #box && !(two? b && b 1 "name" = box))
-         c (card-of nm) ib (cell-of nm + "/inbox")
-         sl2 (? (two? seal || !away) seal (name-seal from))           ; a sender with no cell, sealed by the box
+         c (card-of nm) ib "\(cell-of nm)/inbox"
+         sl2 (two? seal || !away ? seal (name-seal from))           ; a sender with no cell, sealed by the box
          m (sealed-msg from to text sl2) id <m
          (? away (? (two? sl2) (: r (relay box (m 1) "--deliver") (? (<r = 0) "" ("cannot deliver to " + box + ": " + r 1)))
                     ("mail leaves this box only sealed, and nothing here can seal it for " + to))
             !(taken? c) ("no session named " + to)
-            !(uwrite (ib + "/." + id) (m 1)) ("cannot write to " + to)
-            (nom? (rename (ib + "/." + id) (ib + "/" + id))) ("cannot deliver to " + to)
+            !(uwrite "\(ib)/.\(id)" (m 1)) "cannot write to \(to)"
+            (nom? (rename "\(ib)/.\(id)" "\(ib)/\(id)")) "cannot deliver to \(to)"
             ""))
      ; the way to another box: ~/.love/etc/bee/boxes, a line each, NAME HOST [LOVE [HOME]] ->
      ; [host love home], home "" when the far love runs in the login's own
-     (box-lines _) (: s (slurp-file (bee-keys + "/boxes")) (? (string? s) (lines s) ()))
+     (box-lines _) (: s (slurp-file "\(bee-keys)/boxes") (? (string? s) (lines s) ()))
      (box-route nm)
       (: hit (filter (w \ two? w && <w = nm) (map words (box-lines 0)))
          w (two? hit ? <hit [nm])
@@ -319,7 +319,7 @@
      (box-learn nm host lv home)
       (: f (bee-keys + "/boxes")
          ls (filter (l \ (: w (words l) !(two? w && <w = nm))) (box-lines 0))
-         (uwrite f (unlines (ls + [(nm + " " + host + " " + lv + (0 < #home ? (" " + home) ""))]))))
+         (uwrite f (unlines (ls + [("\(nm) \(host) \(lv)" + (0 < #home ? " \(home)" ""))]))))
      ; a sealed message carried to another box: (relay CMD ..) HOST LOVE bee VERB, the message on
      ; its stdin -> [exit output]
      bee-relay (: v (peep bee-salt 'relay ()) (two? v ? (map word v) ["ssh" "-T"]))
@@ -329,7 +329,7 @@
          f (bee-hive + "/.relay-" + show (getpid 0) + "-" + show n)               ; a beat may relay beside a post
          _ (uwrite f msg)
          fd (openfd f 0) pp (pipe 0)
-         p (spawnio (bee-relay + [<r] + (0 < #(r 2) ? ["env" ("HOME=" + r 2)] ()) + [(r 1) "bee" verb]) fd >pp >pp (open-fds 0) -1 0)
+         p (spawnio (bee-relay + [<r] + (0 < #(r 2) ? ["env" "HOME=\(r 2)"] ()) + [(r 1) "bee" verb]) fd >pp >pp (open-fds 0) -1 0)
          _ (close >pp) _ (? (0 <= fd) (close fd) 0)
          q (fdopen <pp)
          (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
@@ -340,20 +340,20 @@
      ; --deliver, a sealed message on stdin from another box: kept in the inbox it names when it
      ; is addressed here, to a live session, under an id not yet taken, and its seal checks
      (deliver s)
-      (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k))
-         (hv key) (: fl (filter (\ l (starts? l (key + " "))) (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
+      (: k (find s "\n\n" 0) hd (k < 0 ? s (snip s 0 k))
+         (hv key) (: fl (filter (\ l (starts? l "\(key) ")) (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
          to (: t (hv "to") (string? t ? t "")) id (: i (hv "id") (string? i ? i ""))
          at (find to "@" 0) nm (? (0 < at) (snip to 0 at) "")
          b (box-seal 0) d (cell-of nm) c (card-of nm)
          (? !(two? b) [0 "this box has no card"]
-            !(0 < at && snip to (at + 1) #to = b 1 "name") [0 ("not addressed to this box: '" + to + "'")]
+            !(0 < at && snip to (at + 1) #to = b 1 "name") [0 "not addressed to this box: '\(to)'"]
             !(0 < #id && id 0 != 46 && find id "/" 0 < 0) [0 "a bad id"]
-            !(taken? c) [0 ("no session named " + nm)]
-            (two? (stat (d + "/inbox/" + id)) || two? (stat (d + "/read/" + id))) [0 "that id is taken"]
+            !(taken? c) [0 "no session named \(nm)"]
+            (two? (stat "\(d)/inbox/\(id)") || two? (stat "\(d)/read/\(id)")) [0 "that id is taken"]
             !(string? ((mail-check s id nm) 2) && 0 < #((mail-check s id nm) 2)) [0 "the seal does not check"]
-            !(uwrite (d + "/inbox/." + id) s) [0 ("cannot write to " + nm)]
-            (nom? (rename (d + "/inbox/." + id) (d + "/inbox/" + id))) [0 ("cannot deliver to " + nm)]
-            [1 ("delivered to " + to)]))
+            !(uwrite "\(d)/inbox/.\(id)" s) [0 "cannot write to \(nm)"]
+            (nom? (rename "\(d)/inbox/.\(id)" "\(d)/inbox/\(id)")) [0 "cannot deliver to \(nm)"]
+            [1 "delivered to \(to)"]))
      ; --- beats: every (beat N) seconds a box tells the boxes it knows which sessions it holds, sealed
      ; as beat@BOX; one sender a box, whoever holds hive/.beat. the far box keeps hive/.boxes/BOX,
      ; and a beat older than three periods is a box gone quiet ---
@@ -363,7 +363,7 @@
          (? (two? b) (filter (\ x (x != b 1 "name")) (map (\ w <w) (filter two? (map words (box-lines 0))))) ()))
      (beat-body _)
       (unlines (map (\ p (: c (p 1) br (peep c "branch" "")
-                           ("session " + <p + " " + peep c "state" "?" + " " + peep c "since" "0" + " " + (0 < #br ? br "-"))))
+                           ("session \(<p) \(peep c "state" "?") \(peep c "since" "0") " + (0 < #br ? br "-"))))
                     (filter (\ p !(user-card? (p 1))) (settled 0))))
      ; the right to send, a directory made atomically and holding its holder's pid; a dead one's taken
      (beat-hold _)
@@ -373,10 +373,10 @@
          (? ((mkdir l 448) = ()) (mine 0)
             (p = getpid 0) 1
             (alive? p) 0
-            (: _ (unlink pf) _ (rmdir l) (? ((mkdir l 448) = ()) (mine 0) 0))))
+            (: _ (unlink pf) _ (rmdir l) (mkdir l 448 @ () (mine 0) 0))))
      (beat-send _)
       (: sl (name-seal "beat") body (beat-body 0)
-         (map (\ bx (: m (sealed-msg "beat" ("beat@" + bx) body sl) r (relay bx (m 1) "--beat") [bx (<r = 0)]))
+         (map (\ bx (: m (sealed-msg "beat" "beat@\(bx)" body sl) r (relay bx (m 1) "--beat") [bx (<r = 0)]))
               (? (two? sl) (beat-boxes 0) ())))
      (beat-loop _) (? (0 < bee-beat) (: _ (? (two? (beat-boxes 0) && beat-hold 0) (beat-send 0) 0) _ (rest (bee-beat * 1000)) (beat-loop 0)) 0)
      ; --beat, a sealed beat on stdin from another box: kept when it is addressed here, its seal is a
@@ -392,73 +392,73 @@
          (ms i) (: j (find i "-" 0) (? (0 < j) (digits (snip i 0 j)) 0))
          last (: t (slurp-file f) (? (string? t) (: ls (filter (\ l (starts? l "id ")) (lines t)) (? (two? ls) (snip <ls 3 #<ls) "")) ""))
          (? !(two? b) [0 "this box has no card"]
-            (to != "beat@" + b 1 "name") [0 ("not a beat for this box: '" + to + "'")]
+            (to != "beat@" + b 1 "name") [0 "not a beat for this box: '\(to)'"]
             !(card-name? src) [0 "the seal does not check"]
             !(ms last < ms id) [0 "an old beat"]
-            (: _ (umkdirs (bee-hive + "/.boxes") 448)
-               (? (&& (uwrite (f + ".new") ("box " + src + "\nid " + id + "\nat " + show (clock 0 // 1000) + "\n" + body))
-                      !(nom? (rename (f + ".new") f)))
+            (: _ (umkdirs "\(bee-hive)/.boxes" 448)
+               (? (&& (uwrite "\(f).new" "box \(src)\nid \(id)\nat \(clock 0 // 1000)\n\(body)")
+                      !(nom? (rename "\(f).new" f)))
                   [1 ("beat from " + src)] [0 "cannot keep the beat"]))))
      ; a box's last beat -> [its age in seconds, its sessions as [name state since branch] each] | ()
      (beat-of bx)
       (: t (slurp-file (bee-hive + "/.boxes/" + bx))
          (? (string? t)
             (: ls (lines t) at (foldl (\ a l (starts? l "at " ? (digits (snip l 3 #l)) a)) 0 ls)
-               [(clock 0 // 1000 - at) (map (\ l >(words l)) (filter (\ l (starts? l "session ")) ls))])))
+               [(clock 0 // 1000 - at) (map (cup * words) (filter (l \ starts? l "session ") ls))])))
      (beat-fresh? b) (two? b && <b <= 3 * max bee-beat 1)
      ; the sessions other boxes' fresh beats name, [NAME@BOX state since branch] each
      (remote-sessions _)
-      (: bs (filter (\ f (f 0 != 46 && !(ends? f ".new"))) (: d (readdir (bee-hive + "/.boxes")) (two? d ? d ())))
-         (catmap (\ bx (: b (beat-of bx) (? (beat-fresh? b) (map (\ s ((<s + "@" + bx) . >s)) (b 1)) ()))) (sort bs)))
-     (remote-live? w) (elem w (map (\ s <s) (remote-sessions 0)))
+      (: bs (filter (\ f (f 0 != 46 && !(ends? f ".new"))) (: d (readdir "\(bee-hive)/.boxes") (two? d ? d ())))
+         (catmap (\ bx (: b (beat-of bx) (? (beat-fresh? b) (map (s \ "\(<s)@\(bx)" . >s) (b 1)) ()))) (sort bs)))
+     (remote-live? w) (elem w (map cap (remote-sessions 0)))
      ; every session that reads as live: the ones here by pid, the ones elsewhere by beat
-     (live-names _) (map (\ p <p) (settled 0) + map (\ s <s) (remote-sessions 0))
+     (live-names _) (map (\ p <p) (settled 0) + map cap (remote-sessions 0))
      (post-as from to text) (post-with from to text ())
      ; the hud's card, at the login's name: "here" while a hud holds it, "away" after, its
      ; inbox kept either way
      (user-card! st)
-      (: d (cell-of bee-login) t (d + "/.card-" + show (getpid 0))
-         _ (umkdirs (d + "/inbox") 448) _ (mkdir (d + "/read") 448)
-         _ (uwrite t (unlines [("pid " + show (st = "here" ? (getpid 0) 0)) ("cwd " + bee-cwd) "kind user" "model user"
-                               ("state " + st) ("since " + show (clock 0 // 1000))]))
-         (rename t (d + "/card")))
+      (: d (cell-of bee-login) t "\(d)/.card-\(getpid 0)"
+         _ (umkdirs "\(d)/inbox" 448) _ (mkdir "\(d)/read" 448)
+         _ (uwrite t (unlines ["pid \(st @ "here" (getpid 0) 0)" "cwd \(bee-cwd)" "kind user" "model user"
+                               "state \(st)" "since \(clock 0 // 1000)"]))
+         (rename t "\(d)/card"))
      ; -> "" when this hud holds the user's card, else why not. one live user card a login
      (user-settle _)
       (: c (card-of bee-login)
-         (? (tablet? c && !(user-card? c) && alive? (card-pid c)) ("the session " + bee-login + " has the user's name")
+         (? (tablet? c && !(user-card? c) && alive? (card-pid c)) "the session \(bee-login) has the user's name"
             (user-card? c && alive? (card-pid c) && card-pid c != getpid 0) "another hud has the user's card"
             (: _ (user-card! "here") "")))
      ; mail from the user, marked kind user, to a live session here -> "" when it is there
      (user-post to text)
-      (: c (card-of to) ib (cell-of to + "/inbox")
-         id (show (clock 0) + "-" + bee-login + "-" + hex2 (clock 0 % 256))
-         m ("from " + bee-login + "\nsent " + show (clock 0 // 1000) + "\nkind user\n\n" + text)
-         (? !(tablet? c && !(user-card? c) && alive? (card-pid c)) ("no session named " + to)
-            !(uwrite (ib + "/." + id) m) ("cannot write to " + to)
-            (nom? (rename (ib + "/." + id) (ib + "/" + id))) ("cannot deliver to " + to)
+      (: c (card-of to) ib "\(cell-of to)/inbox"
+         id "\(clock 0)-\(bee-login)-\(hex2 (clock 0 % 256))"
+         m "from \(bee-login)\nsent \(clock 0 // 1000)\nkind user\n\n\(text)"
+         (? !(tablet? c && !(user-card? c) && alive? (card-pid c)) "no session named \(to)"
+            !(uwrite "\(ib)/.\(id)" m) "cannot write to \(to)"
+            (nom? (rename "\(ib)/.\(id)" "\(ib)/\(id)")) "cannot deliver to \(to)"
             ""))
      ; what waits for the user, oldest first, each moved to read/ -> [from text] each
      (user-mail _)
-      (: d (cell-of bee-login) ib (d + "/inbox") fs (readdir ib)
+      (: d (cell-of bee-login) ib "\(d)/inbox" fs (readdir ib)
          (? !(two? fs) ()
             (filter two? (map (f \ (? (f 0 = 46) ()
-                                     (nom? (rename (ib + "/" + f) (d + "/read/" + f))) ()
-                                     (: s (slurp-file (d + "/read/" + f))
+                                     (nom? (rename "\(ib)/\(f)" "\(d)/read/\(f)")) ()
+                                     (: s (slurp-file "\(d)/read/\(f)")
                                         (? (string? s) (: m (mail-check s f bee-login) [<m (m 1)])))))
                               (sort fs)))))
      ; a process's parent, off linux's /proc; 0 where there is none
      (ppid-of p)
-      (: s (slurp-file ("/proc/" + show p + "/stat"))
+      (: s (slurp-file "/proc/\(p)/stat")
          (? !(string? s) 0
-            (: (go i k) (? (#s <= i) k (go (i + 1) (s i = 41 ? i k)))   ; the last ), past the comm
-               k (go 0 -1) w (? (0 <= k) (words (snip s (k + 1) #s)) ())
+            (: (go i k) (#s <= i ? k (go (i + 1) (s i @ 41 i k)))   ; the last ), past the comm
+               k (go 0 -1) w (0 <= k ? (words (snip s (k + 1) #s)) ())
                (#w > 1 ? (digits (w 1)) 0))))
      (ancestors p) (: (go p acc n) (? (p <= 1 || n <= 0) acc (go (ppid-of p) (p . acc) (n - 1))) (go p () 32))
      ; a claude code session backgrounded (an /exit with work running, or claude --bg): its claude
      ; runs under claude's --bg-pty-host, holding no terminal. its card's parent is that claude
      (backgrounded? c)
       (: p (digits (peep c "parent" "0"))
-         (0 < p && two? (filter (a \ (: t (slurp-file ("/proc/" + show a + "/cmdline")) (string? t && 0 <= find t "--bg-pty-host" 0)))
+         (0 < p && two? (filter (a \ (: t (slurp-file "/proc/\(a)/cmdline") (string? t && 0 <= find t "--bg-pty-host" 0)))
                                 (take 4 (rev (ancestors p))))))
      ; --state STATE [--pid P]: a claude code session's hooks say busy or idle. the session is the
      ; one whose card names P or an ancestor of it as its parent, else BEE_NAME's, else the one
@@ -475,12 +475,12 @@
          (? (string? hit && elem st ["busy" "idle"]) (card-state hit st) 0))
      ; the state and turn lines of a card rewritten, the rest kept, through a rename
      (card-state nm st)
-      (: d (cell-of nm) s (slurp-file (d + "/card"))
+      (: d (cell-of nm) s (slurp-file "\(d)/card")
          (? !(string? s) 0
             (: ls (filter (l \ 0 < #l && !(starts? l "state ") && !(starts? l "turn ")) (lines s))
-               t (d + "/.card-" + show (getpid 0))
-               _ (uwrite t (unlines (ls + [("state " + st) ("turn " + show (clock 0 // 1000))])))
-               (rename t (d + "/card")))))
+               t "\(d)/.card-\(getpid 0)"
+               _ (uwrite t (unlines (ls + ["state \(st)" "turn \(clock 0 // 1000)"])))
+               (rename t "\(d)/card"))))
      (post to text) (post-with (me 0) to text (? (bee-cell 'state || bee-as?) (cell-seal 0)))
      ; a message file, by its id -> [from text seal user]. seal: the sender's card name when its sig
      ; checks against this box's lineage, "" when unsigned or no card here, () when it fails.
@@ -498,9 +498,9 @@
             !(two? b) [from body "" u]
             (: ch (: c (hv "cert") (string? c ? (cite 'bytes 'b64d c) ()))
                t (? (string? ch) (sl 'seal-check ch (b 1 "lineage") (clock 0 // 1000) (bee-revoked 0)))
-               signed (unlines (take (#ls - 1) ls) + "\n" + body)
+               signed (unlines (take (#ls - 1) ls) + "\n\(body)")
                (? (&& (starts? (ls (#ls - 1)) "sig ") (tablet? t) (t "kind" = "cell")
-                      (starts? (t "name") (from + "@")) (elem (hv "to") [who (who + "@" + b 1 "name")]) (hv "id" = id)
+                      (starts? (t "name") "\(from)@") (elem (hv "to") [who "\(who)@\(b 1 "name")"]) (hv "id" = id)
                       (cite 'ssh 'ed-verify (hex2b (t "pub")) signed (hex2b sg)))
                   [from body (t "name") u] [from body () u]))))
      ; a mail that fails its seal is kept in read/, and the model is told only that it came
@@ -512,16 +512,16 @@
          (? !(two? fs) ()
             (filter two? (map (\ f (? (f 0 = 46) ()
                                       ; an id already taken is a replay
-                                      (two? (stat (d + "/read/" + f))) (: _ (unlink (ib + "/" + f)) (mail-refused ("a message came again as " + f + ", an id already taken, and was dropped")))
-                                      (nom? (rename (ib + "/" + f) (d + "/read/" + f))) ()
-                                      (: s (slurp-file (d + "/read/" + f))
-                                         (? (string? s) (: m (mail-parse s f) (string? (m 2) ? m (mail-refused ("a message signed as " + <m + " failed its seal check; it is set aside unread as read/" + f))))))))
+                                      (two? (stat "\(d)/read/\(f)")) (: _ (unlink "\(ib)/\(f)") (mail-refused "a message came again as \(f), an id already taken, and was dropped"))
+                                      (nom? (rename "\(ib)/\(f)" "\(d)/read/\(f)")) ()
+                                      (: s (slurp-file "\(d)/read/\(f)")
+                                         (? (string? s) (: m (mail-parse s f) (string? (m 2) ? m (mail-refused "a message signed as \(<m) failed its seal check; it is set aside unread as read/\(f)")))))))
                               (sort fs)))))
      ; messages as the model reads them, each tagged with its sender, and its seal when it checked
      (mail-text ms)
-      (foldl (\ a m (a + "<message from=\"" + <m + "\"" + (0 < #(m 2) ? (" sealed=\"" + m 2 + "\"") "")
+      (foldl (\ a m (a + "<message from=\"\(<m)\"" + (0 < #(m 2) ? " sealed=\"\(m 2)\"" "")
                      + (m 3 ? " kind=\"user\"" "")
-                     + ">\n" + m 1 + "\n</message>\n"))
+                     + ">\n\(m 1)\n</message>\n"))
              "" ms)
 
      ; --- the binary this bee runs, known by its stat and the bee source it carries: a build laid over
@@ -533,7 +533,7 @@
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      ; the bee source a binary carries, hashed
      (self-src exe)
-      (: o (lush-out (sh-quote exe + " kore cat" + foldl (\ a f (a + " /love/" + f)) "" (words bee-served) + " 2>/dev/null"))
+      (: o (lush-out (sh-quote exe + " kore cat" + foldl (\ a f "\(a) /love/\(f)") "" (words bee-served) + " 2>/dev/null"))
          (string? o && 0 < #o ? (sha256 o) ""))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
@@ -600,22 +600,22 @@
          _ (go 0) _ (close q) _ (close o)
          code (reap (j 'pid))
          _ (pin j 'code code)
-         (post-as ("job-" + j 'id) (me 0)
-                  ("job " + j 'id + " ended with exit " + show code + " after "
-                   + show (clock (j 't0) // 1000) + "s: " + j 'cmd + "\nits last lines:\n"
+         (post-as "job-\(j 'id)" (me 0)
+                  ("job \(j 'id) ended with exit \(code) after "
+                   + show (clock (j 't0) // 1000) + "s: \(j 'cmd)\nits last lines:\n"
                    + tail-of (j 'log) 20)))
      (job-text id)
       (: j (peep bee-jobs id ())
          (? !(tablet? j) ("no job " + id)
-            ((? (charm? (j 'code)) ("exit " + show (j 'code))
-                ("running for " + show (clock (j 't0) // 1000) + "s"))
+            ((? (charm? (j 'code)) "exit \(j 'code)"
+                "running for \(clock (j 't0) // 1000)s")
              + ": " + j 'cmd + "\n" + tail-of (j 'log) 30)))
      ; the whole group: the shell and whatever it started
      (job-stop id)
       (: j (peep bee-jobs id ())
-         (? !(tablet? j) ("no job " + id)
-            (charm? (j 'code)) (id + " has already ended")
-            (: _ (still (0 - j 'pid) 15) ("stopped " + id))))
+         (? !(tablet? j) "no job \(id)"
+            (charm? (j 'code)) "\(id) has already ended"
+            (: _ (still (0 - j 'pid) 15) "stopped \(id)")))
 
      ; --- spawning: a bee detached in a directory, serving, its output to HIVE/logs/NAME.log ---
      sh-quote (cite 'lush 'sh-quote)
@@ -627,28 +627,28 @@
      (settles? nm n) (? (tablet? (card-of nm)) 1 (n <= 0) 0 (: _ (rest 50) (settles? nm (n - 1))))
      ; -> "" when it has settled, else why not
      (spawn-bee nm dir0 prompt yes)
-      (: dir (? (0 < #dir0 && dir0 0 = 47) dir0 (bee-cwd + "/" + dir0))
-         c (card-of nm) lg (bee-hive + "/logs")
+      (: dir (? (0 < #dir0 && dir0 0 = 47) dir0 "\(bee-cwd)/\(dir0)")
+         c (card-of nm) lg "\(bee-hive)/logs"
          (? !(string? bee-self) "this bee cannot find its own binary"
-            !(name-ok? nm) ("a name is letters, digits, - _ and ., at most 64: " + nm)
-            (user-card? c) (nm + " is a user's name")
-            (tablet? c && alive? (card-pid c)) ("a bee named " + nm + " is already running")
-            !(two? (stat dir)) ("no directory " + dir)
+            !(name-ok? nm) "a name is letters, digits, - _ and ., at most 64: \(nm)"
+            (user-card? c) "\(nm) is a user's name"
+            (tablet? c && alive? (card-pid c)) "a bee named \(nm) is already running"
+            !(two? (stat dir)) "no directory \(dir)"
             (: _ (umkdirs lg 448)
-               line ("cd " + sh-quote dir + " && BEE_NAME=" + sh-quote nm + " PWD=" + sh-quote dir
-                     + " BEE_PROMPT=" + sh-quote prompt + " exec " + sh-quote bee-self + " bee --serve"
-                     + (yes ? " -y" "") + " >> " + sh-quote (lg + "/" + nm + ".log") + " 2>&1")
+               line ("cd \(sh-quote dir) && BEE_NAME=\(sh-quote nm) PWD=\(sh-quote dir)"
+                     + " BEE_PROMPT=\(sh-quote prompt) exec \(sh-quote bee-self) bee --serve"
+                     + (yes ? " -y" "") + " >> \(sh-quote "\(lg)/\(nm).log") 2>&1")
                nul (openfd "/dev/null" 0)
                p (spawnio [bee-self "lush" "-c" line] nul nul nul (open-fds 0) 0 0)
                _ (? (0 <= nul) (close nul) 0)
                (? !(charm? p && 0 < p) ("could not start " + nm)
                   (: _ (twirl (\ _ (reap p)) 0)                  ; reaped when it ends
                      (? (settles? nm 100) ""
-                        (nm + " started but has not settled; its log is " + lg + "/" + nm + ".log")))))))
+                        "\(nm) started but has not settled; its log is \(lg)/\(nm).log"))))))
      (stop-bee nm)
       (: c (card-of nm)
-         (? !(tablet? c && alive? (card-pid c)) ("no bee named " + nm + " is running")
-            (: _ (still (card-pid c) 15) ("stopped " + nm))))
+         (? !(tablet? c && alive? (card-pid c)) "no bee named \(nm) is running"
+            (: _ (still (card-pid c) 15) "stopped \(nm)")))
 
      ; --- what the model is told ---
      ; a line of this binary's own lush -> its stdout, "" without a self
@@ -679,20 +679,20 @@
      bee-me (string? bee-self ? bee-self "love")
      ; how a verb is reached: by bare name where lush puts love's verbs first, else through love
      bee-run (bee-verbs-lead? ? "by bare name in your shell, where lush finds it inside love before PATH"
-                                  ("as `" + bee-me + " VERB ARGS`"))
+                                  "as `\(bee-me) VERB ARGS`")
      bee-brief
       (unlines
        ["## love, the binary you run in"
-        ("bee, your shell and its commands all run inside one static binary, love, at `" + bee-me
-         + "` (version " + love-version + "). It carries a whole toolchain and userland, so the work "
+        ("bee, your shell and its commands all run inside one static binary, love, at `\(bee-me)"
+         + "` (version \(love-version)). It carries a whole toolchain and userland, so the work "
          + "needs nothing from the host: no system compiler, make, libc, coreutils or interpreter. "
-         + "Run each tool " + bee-run + ". A command love does not carry comes from the host's PATH "
+         + "Run each tool \(bee-run). A command love does not carry comes from the host's PATH "
          + "and may be missing there, so prefer the built-in one.")
         "- cc (mooncc): a C11 compiler written in love; static executables for linux and freebsd on x64, a64 and rv64 (-t, -os), linked against its own libc. `cc -o hello hello.c && ./hello` works with an empty PATH. with it: as, ld, ar, nm, objcopy, readelf, size, strip, strings."
         "- make (cook): runs ordinary Makefiles, and Cookfiles written in love; -j works."
         "- sh (lush), vi, ed, sed, awk, grep, diff, patch, find, xargs, sort and the rest of a posix userland (kore). Flags are POSIX: a GNU-only option may be refused with status 2, and `VERB --help` shows what a verb takes."
         "- archives: tar, gzip, gunzip, xz, bzip2, zstd, cpio. network: nc, wget (with tls), ssh, scp, sshd, httpd, telnet, ping, nslookup, traceroute. also bc, dc, less, man, xxd, hexdump, ps, top, and sb, a patch-set vcs."
-        ("- every verb love carries:" + bee-verbs + ".")
+        "- every verb love carries:\(bee-verbs)."
         ""
         "## the love language"
         "love is a curried lisp with infix sugar; source files end in .l."
@@ -705,8 +705,8 @@
         "- truth: a value is true when it sums positive, so 0, () and -1 are all false; predicates answer 0 or 1."
         "- matching: (x @ pattern result pattern2 result2 default)."
         "- io: (puts s) writes, (show x) renders any value as a string, argv holds a program's arguments."
-        ("- try an expression with `" + bee-me + " -e 'EXPR'` (it prints the answer), run a program with `"
-         + bee-me + " prog.l ARGS`, list the verbs with `" + bee-me + " verbs`.")
+        ("- try an expression with `\(bee-me) -e 'EXPR'` (it prints the answer), run a program with `"
+         "\(bee-me) prog.l ARGS`, list the verbs with `\(bee-me) verbs`.")
         ""
         "## how love is made"
         "- src/love/: the virtual machine and runtime in C, and the boot .l files (evaluator, prelude)."
@@ -716,10 +716,10 @@
         "moon compiles the C runtime, the love programs are baked into an image inside the binary, and a compressed copy of the whole source tree rides along; from it the binary rebuilds itself byte for byte."
         ""
         "## the source, and working on it"
-        ("- `" + bee-me + " source DIR` lays the carried source at DIR/love-" + love-version + " (DIR defaults to .).")
-        ("- `" + bee-me + " seed [DIR]` lays it and rebuilds it with the built-in tools, checking the result is this binary byte for byte.")
+        "- `\(bee-me) source DIR` lays the carried source at DIR/love-\(love-version) (DIR defaults to .)."
+        "- `\(bee-me) seed [DIR]` lays it and rebuilds it with the built-in tools, checking the result is this binary byte for byte."
         ("- to develop there: cd into the tree and read its AGENTS.md, then build with love's own tools, as seed does: `LUSHFLAGS=-a CC=\"" + bee-me
-         + " mooncc\" make -j dist` makes out/love, and `make test` is the fast gate. `" + bee-me
+         + " mooncc\" make -j dist` makes out/love, and `make test` is the fast gate. `\(bee-me)"
          + " src/apps/libra/libra.l FILE` checks a .l file's parens.")
         "- that build needs nothing from the host, PATH or not; two checks in make test spawn the host's sh and true by name, and fail where PATH has neither."])
 
@@ -809,7 +809,7 @@
          _ (foldl (\ a s (: _ (stall-check (sect-queue <s) (s 1)) a)) 0 now)
          (? (two? news)
             (post-as "queue-watch" (me 0)
-                     (foldl (\ a t (a + t)) "" news + "read it fresh before acting on it."))
+                     (foldl (+) "" news + "read it fresh before acting on it."))
             0))
      ; --- the watchdog: a stalled head (owner gone, green not landed, waiting with none gating) rings its
      ; leader once, else every live row holder. a stall is keyed by row, state and head, so a move starts
@@ -828,13 +828,13 @@
       (: rows (q-rows text) h (q-head rows) live (live-names 0)
          (? (h = ()) ()
             (: r (rows h) st (r 5) own (r 1)
-               gating? (two? (filter (\ p ((rows p) 5 = "gating")) (keys rows)))
+               gating? (two? (filter (p \ rows p 5 = "gating") (keys rows)))
                (? (!(elem own live) && elem st ["waiting" "gating" "green"])
-                   [[(stall-key q h r "gone") ("row " + h + "'s owner " + own + " has no live session (it was " + st + ")") (bee-mins 'gone-minutes 5)]]
+                   [[(stall-key q h r "gone") "row \(h)'s owner \(own) has no live session (it was \(st))" (bee-mins 'gone-minutes 5)]]
                   (st = "green")
-                   [[(stall-key q h r "green") ("row " + h + " (" + own + ") is green at " + r 4 + " and not landed") (bee-mins 'stall-minutes 30)]]
+                   [[(stall-key q h r "green") "row \(h) (\(own)) is green at \(r 4) and not landed" (bee-mins 'stall-minutes 30)]]
                   (st = "waiting" && !gating?)
-                   [[(stall-key q h r "idle") ("row " + h + " (" + own + ") heads the queue waiting, and no row is gating") (bee-mins 'stall-minutes 30)]]
+                   [[(stall-key q h r "idle") "row \(h) (\(own)) heads the queue waiting, and no row is gating" (bee-mins 'stall-minutes 30)]]
                   ()))))
      ; when a row was first seen in its state and head, by any watcher: its age, with no field in the row
      bee-seen-dir (bee-hive + "/.seen")
@@ -860,12 +860,12 @@
          (ring s)
           (: k <s mins (s 2) since (stall-since k now)
              (? (now - since < mins * 60000) 0
-                (: fd (openfd (bee-stall-dir + "/" + k + ".rung") 3)
+                (: fd (openfd "\(bee-stall-dir)/\(k).rung" 3)
                    (? !(charm? fd && 0 <= fd) 0
                       (: _ (close fd)
                          to (? (elem lead live) [lead] (filter (\ n (elem n live)) (q-uniq (map (\ p (((q-rows text) p) 1)) (keys (q-rows text))))))
-                         msg (q + " has stalled " + show mins + "+ minutes: " + s 1 + ". read it fresh, then fold, land, take the lead or ask its owner.")
-                         _ (foldl (\ a n (: _ (post-as "watchdog" n msg) a)) 0 to)
+                         msg "\(q) has stalled \(mins)+ minutes: \(s 1). read it fresh, then fold, land, take the lead or ask its owner."
+                         _ (foldl (\ a n (post-as "watchdog" n msg, a)) 0 to)
                          1)))))
          (foldl (\ a s (a + ring s)) 0 ss))
      (watch _) (? (0 < bee-qwatch) (: _ (rest (bee-qwatch * 1000)) _ (watch-tick 0) (watch 0)) 0)
@@ -888,9 +888,9 @@
      (chomp s) (: n #s (? (0 < n && s (n - 1) = 10) (snip s 0 (n - 1)) s))
      (q-git? q) (starts? q "refs/queue/")
      (q-hub _) (: h (getenv "SB_HUB") (? (string? h && 0 < #h) h (setting 'hub ".")))
-     (q-sbc a) ("sb -C " + sh-quote (q-hub 0) + " " + a)
+     (q-sbc a) "sb -C \(sh-quote (q-hub 0)) \(a)"
      (q-sb a) (lush-out (q-sbc a))
-     (q-sbat h a) (lush-out ("sb -C " + sh-quote h + " " + a))
+     (q-sbat h a) (lush-out "sb -C \(sh-quote h) \(a)")
      ; cmd ran clean: its && echo of tok came back
      (says? cmd tok) (0 <= find (lush-out (cmd + " && echo " + tok)) tok 0)
      ; the hub's psid for a set (a psid, a ref, or head), "" when it has none
@@ -955,21 +955,21 @@
             ""))
      (field in k d) (: v (peep in k ()) (? (string? v && 0 < #v) v d))
      (q-short q) (q @ ("refs/queue/" + n) n ("queue/" + n) n "")
-     (git1 a) (chomp (lush-out ("git " + a)))
+     (git1 a) (chomp (lush-out "git \(a)"))
      ; --mirror-queue REF DEST: DEST's copy is taken when either copy's `lives` line names another box,
      ; else ours is pushed
      (mirror-queue ref dest)
       (: tmp "refs/mirror-in/queue"
-         theirs (? (says? ("git fetch -q " + sh-quote dest + " " + sh-quote ("+" + ref + ":" + tmp) + " 2>/dev/null") "got")
+         theirs (? (says? ("git fetch -q " + sh-quote dest + " " + sh-quote "+\(ref):\(tmp)" + " 2>/dev/null") "got")
                    (git1 ("rev-parse --verify -q " + tmp)) "")
          mine (git1 ("rev-parse --verify -q " + sh-quote ref))
-         tt (? (0 < #theirs) (lush-out ("git cat-file -p " + theirs)) "")
-         mt (? (0 < #mine) (lush-out ("git cat-file -p " + mine)) "")
-         _ (? (0 < #theirs) (git1 ("update-ref -d " + tmp)) "")
+         tt (? (0 < #theirs) (lush-out "git cat-file -p \(theirs)") "")
+         mt (? (0 < #mine) (lush-out "git cat-file -p \(mine)") "")
+         _ (? (0 < #theirs) (git1 "update-ref -d \(tmp)") "")
          r (? (0 < #theirs && theirs != mine && (0 < #(q-lives-box tt) || 0 < #(q-lives-box mt)))
                (: _ (git1 ("update-ref " + sh-quote ref + " " + theirs))
                   [1 ("took " + dest + "'s " + ref + ": its " + q-line tt "leader")])
-              (0 = #mine) [0 ("no " + ref + " here")]
+              (0 = #mine) [0 "no \(ref) here"]
               (theirs = mine) [1 (ref + " is the same at " + dest)]
               (: o (lush-out ("git push -q --force " + sh-quote dest + " " + sh-quote ("+" + ref + ":" + ref) + " 2>&1 && echo pushed"))
                  (? (0 <= find o "pushed" 0) [1 ("pushed " + ref + " to " + dest)] [0 ("cannot push " + ref + " to " + dest + ": " + chomp o)])))
@@ -988,8 +988,8 @@
          b (? (0 < #base) base (#qs = 1) (git1 ("merge-base " + sh-quote <qs + " " + sh-quote head)) "")
          lm (\ n (cite 'lanemap n))
          (? (#b = 0) [0 "no base: name one, or keep one queue here to measure from"]
-            (0 < #(git-sha "HEAD") && #(git-sha b) = 0) [0 ("no commit " + b + " here")]
-            (0 < #(git-sha "HEAD") && #(git-sha head) = 0) [0 ("no commit " + head + " here")]
+            (0 < #(git-sha "HEAD") && #(git-sha b) = 0) [0 "no commit \(b) here"]
+            (0 < #(git-sha "HEAD") && #(git-sha head) = 0) [0 "no commit \(head) here"]
             (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
                bk (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
                [1 (unlines (lm 'lanes-lines (lm 'lanes-plan ps bk (lm 'lanes-covers (string? mk ? mk "")))))])))
@@ -1002,27 +1002,27 @@
      ; --- queue_gate: the row written gating at dir's HEAD, then `love bee --gate` detached there runs every
      ; lane the union owes from its gated-on, slow last, under the heavy lock; green, or waiting with its reds,
      ; each red told to the owners of the paths that owed it ---
-     (g-git dir a) (chomp (lush-out ("git -C " + sh-quote dir + " " + a)))
-     (gate-dir in) (: d (field in "dir" bee-cwd) (? (d 0 = 47) d (bee-cwd + "/" + d)))
+     (g-git dir a) (chomp (lush-out "git -C \(sh-quote dir) \(a)"))
+     (gate-dir in) (: d (field in "dir" bee-cwd) (d 0 @ 47 d "\(bee-cwd)/\(d)"))
      (gate-why q text who dir)
       (: rows (q-rows text) r (q-own rows who)
          ahead (? (r = ()) () (filter (\ p (!(q-folded? (rows p)) && q-num p < q-num r)) (keys rows)))
          prev (foldl (\ a p (? (#a = 0 || q-num a < q-num p) p a)) "" ahead)
          (? !(q-git? q) "queue_gate gates a git queue's row"
-            (r = ()) ("you hold no row in " + q)
-            (q-folded? (rows r)) ("row " + r + " is " + (rows r) 5 + ": the union's own row gates")
-            (0 < #prev && (rows prev) 5 != "green")
-             ("row " + prev + " ahead is " + (rows prev) 5 + ": the head row gates, or the row behind a green one")
-            !(two? (stat (dir + "/test/gate/lanes.sh"))) ("no test/gate/lanes.sh in " + dir)
-            (#(g-git dir "rev-parse --verify -q HEAD") = 0) ("no commit checked out in " + dir)
-            (0 < #(g-git dir "status --short --untracked-files=no")) (dir + " has changes not committed: a gate runs on a commit")
+            (r = ()) "you hold no row in \(q)"
+            (q-folded? (rows r)) "row \(r) is \(rows r 5): the union's own row gates"
+            (0 < #prev && rows prev 5 != "green")
+             ("row " + prev + " ahead is \(rows prev 5): the head row gates, or the row behind a green one")
+            !(two? (stat "\(dir)/test/gate/lanes.sh")) "no test/gate/lanes.sh in \(dir)"
+            (#(g-git dir "rev-parse --verify -q HEAD") = 0) "no commit checked out in \(dir)"
+            (0 < #(g-git dir "status --short --untracked-files=no")) "\(dir) has changes not committed: a gate runs on a commit"
             ""))
      (gate-spawn q dir who only)
       (? !(string? bee-self) "this bee cannot find its own binary"
          (: _ (umkdirs (dir + "/out") 493)
             ; BEE_AS, not BEE_NAME: the caller's own mcp card holds who while the gate runs, and
             ; BEE_NAME takes a name only when it is free
-            line ("cd " + sh-quote dir + " && BEE_AS=" + sh-quote who + " PWD=" + sh-quote dir + " exec "
+            line ("cd \(sh-quote dir) && BEE_AS=\(sh-quote who) PWD=\(sh-quote dir) exec "
                   + sh-quote bee-self + " bee --gate " + sh-quote q + cats (map (\ l (" " + sh-quote l)) only)
                   + " >> " + sh-quote (dir + "/out/gate.log") + " 2>&1")
             nul (openfd "/dev/null" 0)
@@ -1037,34 +1037,34 @@
                   (: w (queue-row1 {"queue" q "state" "gating" "gated_head" h "row" r})
                      e (? <w (gate-spawn q dir who only) "")
                      (? !<w w
-                        (0 < #e) [0 ("row " + r + " is gating at " + h + ", but " + e + ": write it back to waiting")]
-                        [1 ("row " + r + " is gating at " + h + ". love bee --gate runs "
+                        (0 < #e) [0 "row \(r) is gating at \(h), but \(e): write it back to waiting"]
+                        [1 ("row \(r) is gating at \(h). love bee --gate runs "
                             + (two? only ? (join " " only + " again, the lanes its last gate passed standing,")
                                  "every lane its union owes there,")
-                            + " the slow lane last, under the heavy lock, logging to " + dir + "/out/gate.log, and writes "
+                            + " the slow lane last, under the heavy lock, logging to \(dir)/out/gate.log, and writes "
                             + "the row when it ends; a message says so.")]))))))
      ; the runner, in the union's worktree as the row's session
-     (gate-say s) (: _ (puts ("love bee --gate: " + s + "\n")) _ (flush out) 0)
-     (gate-wait p) (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 1000) (gate-wait p))))   ; a gate's hours
+     (gate-say s) (puts "love bee --gate: \(s)\n", flush out, 0)
+     (gate-wait p) (: s (gather p) (? (two? s) <s (nom? s) -1 (rest 1000, gate-wait p)))   ; a gate's hours
      (gate-run q only)
       (: who (me 0) dir bee-cwd rd (q-read q) text (rd 1) rows (q-rows text) r (q-own rows who)
          row (? (r = ()) () (rows r)) h (git1 "rev-parse HEAD")
          ; an ignore every child inherits: spawnio resets the job signals (int quit pipe tstp ttin ttou)
          ign (filter (\ n ((cite 'posix 'sigign?) n)) (filter (\ n !(elem n [2 3 9 13 19 20 21 22])) (map (+ 1) ^31)))
          (back why) (: _ (gate-say why) _ (queue-row1 {"queue" q "state" "waiting" "row" r})
-                       _ (post-as ("gate-" + r) who ("queue_gate: row " + r + " is waiting again, ungated: " + why)) 1)
-         (? (r = ()) (: _ (gate-say (who + " holds no row in " + q)) 1)
+                       _ (post-as "gate-\(r)" who "queue_gate: row \(r) is waiting again, ungated: \(why)") 1)
+         (? (r = ()) (: _ (gate-say "\(who) holds no row in \(q)") 1)
             (row 4 != h) (back ("row " + r + " gates " + row 4 + ", but HEAD is " + h))
             (two? ign) (back ("signals " + join " " (map show ign) + " are ignored here, and every lane would "
                               + "inherit them: start it from a shell that ignores none"))
             (: b (row 3) plan (lanes-plan-of b h)
-               all (map (\ x <x) (filter (\ x (<x != "test_slow")) plan))
+               all (map cap (filter (!= "test_slow" * cap) plan))
                ln (filter (\ l (q-row? l && <(words l) = r)) (lines text))
                n (? (two? ln) (q-note <ln) "")
                ; a rerun after a split: the lanes named run again, and the ones the last gate passed stand
-               ls (? (two? only) (filter (\ l (l != "test_slow")) only) all)
+               ls (? (two? only) (filter (!= "test_slow") only) all)
                stood (? (two? only) (filter (\ l (!(elem l ls) && elem [l "0"] (gate-was n))) all) ())
-               _ (gate-say ("row " + r + " at " + h + " from " + b + ": " + join " " (ls + ["test_slow"])
+               _ (gate-say ("row \(r) at \(h) from \(b): " + join " " (ls + ["test_slow"])
                             + (two? stood ? (", standing: " + join " " stood) "")))
                ; the lanes write to this log as they run
                p (spawnio ([bee-self "bee" "--lock" "--heavy" "--out" (dir + "/out") "--" "sh" "test/gate/lanes.sh"
@@ -1087,7 +1087,7 @@
                w (queue-row1 {"queue" q "state" (ok ? "green" "waiting") "row" r "note" note})
                _ (gate-say (w 1))
                _ (? ok 0 (gate-tell q r owe dir))
-               _ (post-as ("gate-" + r) who ("queue_gate: row " + r + " at " + h + (ok ? " is green: " " is red: ")
+               _ (post-as ("gate-" + r) who ("queue_gate: row \(r) at \(h)" + (ok ? " is green: " " is red: ")
                                              + join " " (map (\ y (<y + "=" + y 1)) res)
                                              + (two? reds ? ("; " + said + ". split those rows out of the union, then queue_gate "
                                                              + "lanes \"" + join " " (map (\ y <y) reds) + "\" runs only them again")
@@ -1112,15 +1112,15 @@
      (gate-owe r rows b plan reds)
       (: mp (map (\ m (: rw (rows m) hm (rw 4) [m (rw 1) (rw 2) (row-paths (git1 ("merge-base " + sh-quote b + " " + sh-quote hm)) hm)]))
                  (r . q-folds rows r))
-         (why l) (: p (filter (\ x (<x = l)) plan) (? (two? p) (<p 3) ()))
-         (map (\ l (: os (filter (\ o (any (\ p (elem p (o 3))) (why l))) mp)
-                     [l (? (two? os) os (filter (\ o (<o = r)) mp)) (why l)]))
+         (why l) (: p (filter (= l * cap) plan) (? (two? p) (<p 3) ()))
+         (map (\ l (: os (filter (o \ any (p \ elem p (o 3)) (why l)) mp)
+                     [l (? (two? os) os (filter (= r * cap) mp)) (why l)]))
               reds))
-     (gate-said o) (<o + " owed by " + join ", " (map (\ m (<m + " " + m 2)) (o 1)))
+     (gate-said o) (<o + " owed by " + join ", " (map (\ m "\(m 0) \(m 2)") (o 1)))
      (gate-tell q r owe dir)
-      (map (\ o (map (\ s (post s (q-short q + ": row " + r + "'s union went red in " + <o + ", owed by "
-                                   + join ", " (map (\ m (<m + " " + m 2)) (o 1)) + " (" + join " " (take 5 (o 2))
-                                   + "); the log is " + dir + "/out/lanes-gate/" + <o + ".log")))
+      (map (\ o (map (\ s (post s (q-short q + ": row \(r)'s union went red in \(<o), owed by "
+                                   + join ", " (map (\ m "\(m 0) \(m 2)") (o 1)) + " (" + join " " (take 5 (o 2))
+                                   + "); the log is \(dir)/out/lanes-gate/\(<o).log")))
                      (q-uniq (map (\ m (m 1)) (o 1)))))
            owe)
      ; [[lane rc] ..] a row's note says its last gate ran
@@ -1130,7 +1130,7 @@
          e (find s " | " 0)
          (map (\ w (: i (find w "=" 0) [(snip w 0 i) (snip w (i + 1) #w)]))
               (filter (\ w (0 < find w "=" 0)) (words (e < 0 ? s (snip s 0 e))))))
-     (git-tree x) (git1 ("rev-parse --verify -q " + sh-quote (x + "^{tree}")))
+     (git-tree x) (git1 ("rev-parse --verify -q " + sh-quote "\(x)^{tree}"))
      ; the base line a new queue starts from: the branch it is named for, at its sha
      (q-base-of q)
       (: nm (q-short q) s (? (q-git? q) (git1 ("rev-parse --short --verify -q " + sh-quote ("refs/heads/" + nm))) (q-psid "head"))
@@ -1138,7 +1138,7 @@
      ; bee's standard protocol, the header of a queue it makes: the queue outlives bee, so it says its rules
      (q-standard q lead base)
       (unlines
-       [("# " + q-short q + " merge queue, on bee's standard protocol (doc/bee.md, THE MERGE QUEUE): the state every")
+       ["# \(q-short q) merge queue, on bee's standard protocol (doc/bee.md, THE MERGE QUEUE): the state every"
         "#   session reads; messages only announce changes to it."
         (? (q-git? q) ("# read:  git cat-file -p " + q)
            ("# read:  queue_read, or sb -C HUB ledger " + q + " --text   (HUB: SB_HUB, the one nest every session names)"))
@@ -1194,12 +1194,12 @@
         "# line: <position> <session> <branch> <gated-on> <gated-head> <state>  # note"
         (? (q-git? q) "#   gated-on: the base's sha for the head, else the row above's gated-head; state waiting|gating|green|folded-into-N"
            "#   gated-on: the base's psid for the head, else the row above's gated-head; state waiting|gating|green|folded-into-N")
-        ("leader " + lead)
-        (<base + " " + base 1)])
+        "leader \(lead)"
+        "\(base 0) \(base 1)"])
      ; the rows of a text, and what they say
      ; a session may hold a row per branch: its rows by position, and the one a land tool acts on --
      ; its head row when it is the head, else its first
-     (q-owns rows who) (sort (filter (\ p ((rows p) 1 = who)) (keys rows)))
+     (q-owns rows who) (sort (filter (\ p (rows p 1 = who)) (keys rows)))
      (q-own rows who)
       (: ps (q-owns rows who) h (q-head rows)
          (? !(two? ps) () (elem h ps) h (foldl (\ a p (q-num p < q-num a ? p a)) <ps >ps)))
@@ -1208,8 +1208,8 @@
      (q-pick rows who in)
       (: rp (field in "row" "") br (field in "branch" "") ps (q-owns rows who)
          mine (filter (\ p ((rows p) 2 = br)) ps)
-         (? (0 < #rp) (? !(two? (peep rows rp ())) ("no row " + rp)
-                         ((rows rp) 1 != who) ("row " + rp + " is " + (rows rp) 1 + "'s")
+         (? (0 < #rp) (? !(two? (peep rows rp ())) "no row \(rp)"
+                         (rows rp 1 != who) "row \(rp) is \(rows rp 1)'s"
                          rp)
             (0 < #br) (two? mine ? <mine ())
             !(two? ps) ()
@@ -1254,12 +1254,12 @@
              "a position places a new row, at a number no row holds"
             !(q-state? st) "state is waiting, gating, green, folded-into-N or left"
             (two? cur && 0 < #br && br != cur 2 && (q-folded? cur || cur 5 = "gating"))
-             ("row " + own + " carries " + cur 2 + " and is " + cur 5 + ": pass branch " + br + " without row to join a new row")
-            (0 < #f && lead != i) ("only the leader, " + lead + ", writes a fold")
-            (0 < #f && !(two? tgt)) ("no row " + f + " to fold into")
-            (0 < #f && tgt 5 != "waiting") ("row " + f + " is " + tgt 5 + ": a row folds only into a waiting row")
-            (0 < #f && q-num pos <= q-num f) ("row " + f + " is not ahead of row " + pos + ": a row folds into a row ahead of it")
-            (0 < #f && two? (q-folds rows pos)) ("rows fold into row " + pos + ": fold them on first")
+             "row \(own) carries \(cur 2) and is \(cur 5): pass branch \(br) without row to join a new row"
+            (0 < #f && lead != i) "only the leader, \(lead), writes a fold"
+            (0 < #f && !(two? tgt)) "no row \(f) to fold into"
+            (0 < #f && tgt 5 != "waiting") "row \(f) is \(tgt 5): a row folds only into a waiting row"
+            (0 < #f && q-num pos <= q-num f) "row \(f) is not ahead of row \(pos): a row folds into a row ahead of it"
+            (0 < #f && two? (q-folds rows pos)) "rows fold into row \(pos): fold them on first"
             ""))
      ; the text with who's row set from the input, or its row gone when state is left -> [text line why]
      (q-edit text who in own)
@@ -1340,7 +1340,7 @@
      bee-ledger-tools ["queue_read" "queue_row" "queue_lead" "queue_land" "queue_landed" "queue_commit"]
      (ledger s)
       (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k)) body (? (k < 0) "" (snip s (k + 2) #s))
-         (hv key) (: fl (filter (\ l (starts? l (key + " "))) (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
+         (hv key) (: fl (filter (l \ starts? l "\(key) ") (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
          to (: t (hv "to") (string? t ? t "")) id (: i (hv "id") (string? i ? i ""))
          b (box-seal 0) ids (bee-keys + "/ledger-ids")
          sealed (: m (mail-check s id "ledger") (string? (m 2) && 0 < #(m 2) ? (m 2) ""))
@@ -1366,7 +1366,7 @@
      (queue-commit in sealed)
       (: q (field in "queue" "") e (peep in "entry" "") t (peep in "text" "") was (field in "was" "none")
          f ((cite 'qlog 'qlog-read) e)
-         before (? (was = "none") "" (<>(q-read q)))
+         before (was @ "none" "" <>(q-read q))
          (? (!(q-name? q) || q-git? q) [0 "a commit is for an sb queue"]
             !(tablet? f) [0 "not an entry"]
             (f "by" != sealed) [0 "an entry is committed by its writer"]
@@ -1406,19 +1406,19 @@
          t (? (two? ws) (<ws 1) "")
          (? (own != () || in "state" != "waiting" || !(q-git? q) || field in "keep" "" = "1"
              || #t = 0 || #(git-sha h) = 0) ""
-            (all (\ f (q-clean? h ((rows f) 4))) (t . q-folds rows t)) t
+            (all (\ f (q-clean? h (rows f 4))) (t . q-folds rows t)) t
             ""))
      ; the join's owner and the absorbing row's are told; the answer says so too
      (q-told-fold q text who t p in)
       (: r ((q-rows text) t)
-         m (q-short q + ": bee folded row " + p + " (" + who + ", " + field in "branch" "-" + ") into waiting row " + t
+         m ("\(q-short q): bee folded row \(p) (\(who), " + field in "branch" "-" + ") into waiting row " + t
             + " (" + r 1 + ", " + r 2 + ") on its join: their heads merge clean" + (" but for " + join " " q-relaid)
-            + ", which the union lays again. " + r 1 + " merges " + field in "gated_head" "" + " into " + t
+            + ", which the union lays again. \(r 1) merges \(field in "gated_head" "") into \(t)"
             + "'s union now, which runs every lane its branches owe once; queue_row keep 1 on either row keeps its own "
             + "slot instead.")
          _ (? (r 1 != me 0) (post (r 1) m) "")
          _ (? (who != me 0) (post who m) "")
-         ("\nfolded into row " + t + " (" + r 1 + "): " + m))
+         "\nfolded into row \(t) (\(r 1)): \(m)")
      ; a queue not made yet is made on bee's standard header, led by the leader given, else this session
      (queue-row1 in)
       (: q (in "queue") who (field in "session" (me 0))
@@ -1444,10 +1444,10 @@
                         [(q-keep <e1 <(words (e1 1)) (kp = "1")) (e1 1) ""])
                    (? (0 < #(e 2)) [0 (e 2)]
                       (q-write q old text <e)
-                       [1 ((new? ? ("made " + q + " on bee's standard header, led by " + q-leader <e + "\n") "")
-                           + (? (0 < #(e 1)) ("row now: " + e 1) ("the change is in " + q))
+                       [1 ((new? ? ("made \(q) on bee's standard header, led by " + q-leader <e + "\n") "")
+                           + (0 < #(e 1) ? "row now: \(e 1)" "the change is in \(q)")
                            + (? (0 < #fo) (q-told-fold q text who fo <(words (e 1)) in) "")
-                           + (in "state" = "left" ? "" (q-crowd <e)))]
+                           + (in "state" @ "left" "" (q-crowd <e)))]
                       (n <= 0) [0 (q + " kept moving under the write; read it and try again")]
                       (: _ (rest 200) (try (n - 1)))))))
          (try 5))
@@ -1520,7 +1520,7 @@
                                           (? (<ls = ("branch refs/heads/" + br))) wt
                                           (go >ls wt)))
          (go (lines (lush-out "git worktree list --porcelain")) ""))
-     (q-joins ss) (? (two? ss) (foldl (\ a s (a + ", " + s)) <ss >ss) "")
+     (q-joins ss) (? (two? ss) (foldl (\ a s "\(a), \(s)") <ss >ss) "")
      (q-uniq ss) (foldl (\ a s (elem s a ? a (a + [s]))) () ss)
      ; "a", "a and b", "a, b and c"
      (q-and ss) (? (atom? ss) "" (atom? >ss) <ss (q-joins (take (#ss - 1) ss) + " and " + ss (#ss - 1)))
@@ -1529,21 +1529,21 @@
      ; whose other parents reach g (or g itself); else the tip, when it holds g with that tree
      (q-landed-at br from g gt)
       (: cs (rev (map words (lines (lush-out ("git log --first-parent -n 512 --format='%H %T %P' "
-                                               + sh-quote (0 < #from ? (from + ".." + br) br))))))
-         (lands? c) (two? c && c 1 = gt && (<c = g || two? (filter (\ x (q-on? g x)) (drop 3 c))))
+                                               + sh-quote (0 < #from ? "\(from)..\(br)" br))))))
+         (lands? c) (two? c && c 1 = gt && (<c = g || two? (filter (q-on? g) (drop 3 c))))
          ok (filter lands? cs)
          (? (two? ok) (<ok 0) (q-on? g br && git-tree br = gt) (git-sha br) ""))
      ; the row a land tool acts on -> [pos row base] or why not
      (q-landing q who rows text)
       (: p (q-own rows who) r (? p (rows p) ()) base (q-base-line text) h (q-head rows)
-         (? !(two? (keys rows)) ("no rows in " + q)
-            !p ("no row for " + who + " in " + q)
-            (r 5 != "green") ("row " + p + " is " + r 5 + ": only a green row lands")
+         (? !(two? (keys rows)) "no rows in \(q)"
+            !p "no row for \(who) in \(q)"
+            (r 5 != "green") "row \(p) is \(r 5): only a green row lands"
             (h != p && q-merged? q base (rows h))
              ("row " + h + " is still landing (merged, make test running); wait for its queue_landed")
-            (h != p) ("row " + h + " is ahead of row " + p + ": the head lands first")
-            !(two? base) (q + " has no base line")
-            (two? (q-unresolved q [(r 3) (r 4)])) ("row " + p + ": " + q-unres-why q <(q-unresolved q [(r 3) (r 4)]))
+            (h != p) "row \(h) is ahead of row \(p): the head lands first"
+            !(two? base) "\(q) has no base line"
+            (two? (q-unresolved q [(r 3) (r 4)])) ("row \(p): " + q-unres-why q <(q-unresolved q [(r 3) (r 4)]))
             [p r base]))
      ; a row merged onto the base branch, or taken by the hub, whose queue_landed has not yet run
      (q-merged? q base r)
@@ -1558,22 +1558,21 @@
                (? !(q-git? q) (q-land-sb who p (r 4) was fs)
                (: cur (git-sha br) g (git-sha (r 4)) gt (git-tree g) mt (q-merge-tree br g)
                wt (q-checkout br)
-               (? (#cur = 0) [0 ("no branch " + br + " here")]
+               (? (#cur = 0) [0 "no branch \(br) here"]
                   !(starts? cur was)
-                   [0 (br + " is at " + cur + " but the queue's base line says " + was
+                   [0 ("\(br) is at \(cur) but the queue's base line says " + was
                        + ": the leader sets the base line before anyone lands")]
                   (#g = 0) [0 ("no commit " + r 4 + " here: the gated head must be in this repository")]
-                  (#mt = 0) [0 ("git merge-tree --write-tree " + br + " " + g + " conflicts: re-merge onto " + br + " and re-gate")]
+                  (#mt = 0) [0 ("git merge-tree --write-tree \(br) \(g) conflicts: re-merge onto " + br + " and re-gate")]
                   (mt != gt)
-                   [0 ("merging " + g + " onto " + br + " gives the tree " + mt + ", not the gated tree " + gt
-                       + ": re-merge onto " + br + " at " + cur + " and re-gate")]
+                   [0 "merging \(g) onto \(br) gives the tree \(mt), not the gated tree \(gt): re-merge onto \(br) at \(cur) and re-gate"]
                   [1 (unlines
-                      [("row " + p + " (" + who + (two? fs ? (", with row" + (#fs = 1 ? " " "s ") + q-joins fs + " folded in") "")
-                        + ") lands: its gated head " + g + " merges onto " + br + " at " + cur + " into the tree it gated, " + gt + ".")
+                      [("row \(p) (" + who + (two? fs ? (", with row" + (#fs @ 1 " " "s ") + q-joins fs + " folded in") "")
+                        + ") lands: its gated head \(g) merges onto \(br) at \(cur) into the tree it gated, \(gt).")
                        ("in the checkout of " + br + (0 < #wt ? (", " + wt) "") + ":")
-                       ("  git rev-parse " + br + "   # must print " + cur)
+                       ("  git rev-parse \(br)   # must print " + cur)
                        "  git status --short   # must print no one's uncommitted edits"
-                       ("  git merge --no-ff " + g + " -m " + sh-quote ("Merge queue row " + p + " (" + who + ")"))
+                       ("  git merge --no-ff \(g) -m " + sh-quote "Merge queue row \(p) (\(who))")
                        ("  git rev-parse 'HEAD^{tree}'   # must print " + gt)
                        ("  love bee --lock --out " + sh-quote ((0 < #wt ? wt ".") + "/out") + " -- make test   # the fast gate, one make in its out/")
                        "then queue_landed, which checks the landed tree and drops the row and the rows folded into it. the rows behind wait for it."])]))))))
@@ -1581,35 +1580,35 @@
      ; inside it, so the hub then realizes exactly the set that was gated ---
      (q-land-sb who p g was fs)
       (: hub (q-hub 0) cur (q-psid "head") gp (q-psid g)
-         (? (#cur = 0) [0 ("no nest at " + hub + ": SB_HUB names the hub")]
+         (? (#cur = 0) [0 "no nest at \(hub): SB_HUB names the hub"]
             !(starts? cur was)
-             [0 ("the hub's head is " + cur + " but the queue's base line says " + was
+             [0 ("the hub's head is \(cur) but the queue's base line says " + was
                  + ": the leader sets the base line before anyone lands")]
             (gp != g)
-             [0 ("the hub holds no set " + g + ": bank it and deposit it from the nest that gated it, "
-                 + "sb bank NAME and sb sync --keep " + hub)]
+             [0 ("the hub holds no set \(g): bank it and deposit it from the nest that gated it, "
+                 + "sb bank NAME and sb sync --keep \(hub)")]
             !(says? (q-sbc ("within head " + sh-quote g)) "yes")
-             [0 ("the hub's head " + cur + " is not inside " + g + ": restack on the base and re-gate")]
+             [0 ("the hub's head " + cur + " is not inside \(g): restack on the base and re-gate")]
             ; a row owned on another box: the take is the hub's, so it is done here
             (peep bee-who 'remote 0)
              (: _ (q-sb ("take " + sh-quote g + " >/dev/null 2>&1")) now (q-psid "head")
-                (? (now = g) [1 ("row " + p + " (" + who + ") landed on the hub: its head is now " + g + ". queue_landed next.")]
-                   [0 ("the hub did not take " + g + " (its head is " + now + "): its tree may hold unrecorded work; tell the leader")]))
+                (? (now = g) [1 "row \(p) (\(who)) landed on the hub: its head is now \(g). queue_landed next."]
+                   [0 "the hub did not take \(g) (its head is \(now)): its tree may hold unrecorded work; tell the leader"]))
             [1 (unlines
-                [("row " + p + " (" + who + (two? fs ? (", with row" + (#fs = 1 ? " " "s ") + q-joins fs + " folded in") "")
-                  + ") lands: the hub's head at " + cur + " grows to its gated set, " + g + ", which it lies inside.")
-                 ("  sb -C " + hub + " take " + g)
-                 ("  sb -C " + hub + " psid   # must print " + g)
+                [("row \(p) (" + who + (two? fs ? (", with row" + (#fs = 1 ? " " "s ") + q-joins fs + " folded in") "")
+                  + ") lands: the hub's head at \(cur) grows to its gated set, \(g), which it lies inside.")
+                 "  sb -C \(hub) take \(g)"
+                 "  sb -C \(hub) psid   # must print \(g)"
                  "then queue_landed, which checks the hub's head and drops the row and the rows folded into it."])]))
      ; a landing checked: [the new base line's id, the bee files it changed] or why not
      (q-landed-git br was g0)
       (: from (git-sha was) g (git-sha g0) gt (git-tree g)
          at (? (#g = 0) "" (q-landed-at br from g gt))
-         (? (#g = 0) ("no commit " + g0 + " here")
-            !(q-on? g br) ("the gated head " + g + " is not on " + br + ": land it first, as queue_land says")
+         (? (#g = 0) "no commit \(g0) here"
+            !(q-on? g br) "the gated head \(g) is not on \(br): land it first, as queue_land says"
             (#at = 0)
-             ("no commit on " + br + "'s first-parent line" + (0 < #from ? (" since " + was) "")
-              + " merges " + g + " with the gated tree " + gt + ", and the tip's tree is " + git-tree br
+             ("no commit on \(br)'s first-parent line" + (0 < #from ? (" since " + was) "")
+              + " merges \(g) with the gated tree \(gt), and the tip's tree is " + git-tree br
               + ": the row stays; tell the leader")
             [(git1 ("rev-parse --short " + sh-quote at))
              (? (0 < #from) (q-served (row-paths from at)) "")]))
@@ -1632,7 +1631,7 @@
                               (<ls = ("branch refs/heads/" + br)) wt
                               (go >ls wt))
                  (go wts ""))
-         ents (filter two? (map (\ l (: k (find l "\t" 0) (? (k = 64 || k = 65) [(snip l 0 k) (snip l (k + 1) #l)] ())))
+         ents (filter two? (map (\ l (: k (find l "\t" 0) (k @ (64 || 65) [(snip l 0 k) (snip l (k + 1) #l)] ())))
                                 (lines (q-sbat h0 "ls -l"))))
          _ (umkdirs bee-hive 448)
          ; git's id for each blob: the mirror's own map from sb's hash, each one git still holds;
@@ -1642,7 +1641,7 @@
                       (lines (? (two? (stat mapf)) (slurp-file mapf) "")))
          hs (uniq (map (e \ snip <e 0 64) ents))
          cand (filter (h \ string? (known h)) hs)
-         _ (uwrite (tmp + ".ask") (cats (catmap (h \ [(known h) "\n"]) cand)))
+         _ (uwrite "\(tmp).ask" (cats (catmap (h \ [(known h) "\n"]) cand)))
          held2 (lines (? (two? cand) (lush-out ("git -C " + sh-quote path + " cat-file --batch-check < " + sh-quote (tmp + ".ask"))) ""))
          live (foldl (\ t i (? (find (held2 i) " blob " 0 = 40) (pin t (cand i) 1) t)) {} ^#cand)
          need (filter (h \ !(live h)) hs)
@@ -1677,16 +1676,16 @@
                        ; a publish's KEEP paths, hashed from PUB with their modes
                        (? (0 < #pub)
                           (: ks (map (k \ (k (#k - 1) = 47 ? (snip k 0 (#k - 1)) k)) keep)
-                             (unlines (map (k \ "[ -e " + sh-quote (pub + "/" + k) + " ] || { echo " + sh-quote ("the publish at " + pub + " has no " + k) + "; exit 1; }") ks
+                             (unlines (map (k \ "[ -e " + sh-quote "\(pub)/\(k)" + " ] || { echo " + sh-quote ("the publish at " + pub + " has no " + k) + "; exit 1; }") ks
                                        + ["gd=$(git rev-parse --absolute-git-dir)"
-                                          ("(cd " + sh-quote pub + " && find" + foldl (\ a k (a + " " + sh-quote k)) "" ks
+                                          ("(cd \(sh-quote pub) && find" + foldl (\ a k "\(a) \(sh-quote k)") "" ks
                                            + " -type f | git --git-dir=\"$gd\" --work-tree=. update-index --add --stdin)")])))
                           ":")
                        "t=$(git write-tree)"
                        "if [ -n \"$par\" ] && [ \"$(git rev-parse \"$par^{tree}\")\" = \"$t\" ]; then echo \"same $par\"; exit 0; fi"
                        ("if [ -n \"$par\" ]; then c=$(git commit-tree \"$t\" -p \"$par\" -F " + sh-quote (tmp + ".msg") + "); "
-                        + "else c=$(git commit-tree \"$t\" -F " + sh-quote (tmp + ".msg") + "); fi")
-                       ("git update-ref " + sh-quote ("refs/heads/" + br) + " \"$c\" \"$par\"")
+                        + "else c=$(git commit-tree \"$t\" -F " + sh-quote "\(tmp).msg" + "); fi")
+                       ("git update-ref " + sh-quote "refs/heads/\(br)" + " \"$c\" \"$par\"")
                        "echo \"made $c\""]))
          o (? (0 < #held && q-abs held != hub) ""
               (two? (filter (g \ #g != 40) gs)) ""
@@ -1705,31 +1704,30 @@
      ; NEST's recorded tree written through the mirror to BRANCH: "" when it is c's outside keep, else why
      (q-shadow-cmp nest br keep c msg)
       (: mr (q-mirror nest ([(q-abs ".") br] + keep) msg "")
-         df (? <mr (filter (\ l (0 < #l)) (lines (git1 ("diff --name-only " + c + " " + sh-quote ("refs/heads/" + br) + " -- ."
-                                                        + foldl (\ a k (a + " " + sh-quote (":(exclude)" + k))) "" keep)))) ())
+         df (? <mr (filter (\ l (0 < #l)) (lines (git1 ("diff --name-only \(c) " + sh-quote "refs/heads/\(br)" + " -- ."
+                                                        + foldl (\ a k ("\(a) " + sh-quote ":(exclude)\(k)")) "" keep)))) ())
          (? !(<mr) ("the mirror did not take it: " + mr 1)
-            (two? df) ("its tree differs from " + c + " at " + q-and (take 5 df) + (5 < #df ? " .." ""))
+            (two? df) ("its tree differs from \(c) at " + q-and (take 5 df) + (5 < #df ? " .." ""))
             ""))
      (q-shadow sh c)
-      (: hub <sh br (sh 1) keep (drop 2 sh) stop (hub + ".shadow.stop") lg (hub + ".shadow.log")
-         st (slurp-file stop) t0 (clock 0) have (hub + ".shadow.have") want (hub + ".shadow.want")
-         ixf (hub + ".shadow.index") ix ("env GIT_INDEX_FILE=" + sh-quote ixf + " git ")
-         (kb _) (: o (words (lush-out ("du -sk " + sh-quote (hub + "/.sb") + " 2>/dev/null"))) (? (two? o) <o "0"))
+      (: hub <sh br (sh 1) keep (drop 2 sh) stop "\(hub).shadow.stop" lg "\(hub).shadow.log"
+         st (slurp-file stop) t0 (clock 0) have "\(hub).shadow.have" want "\(hub).shadow.want"
+         ixf "\(hub).shadow.index" ix "env GIT_INDEX_FILE=\(sh-quote ixf) git "
+         (kb _) (: o (words (lush-out "du -sk \(sh-quote "\(hub)/.sb") 2>/dev/null")) (two? o ? <o "0"))
          (halt why) (: _ (uwrite stop (why + "\n")) [0 why 1])
-         (? (string? st) [0 ("still stopped, " + stop + " says: " + chomp st) 0]
+         (? (string? st) [0 "still stopped, \(stop) says: \(chomp st)" 0]
             (: k0 (kb 0)
-               o (lush-out (unlines ["set -e" ("mkdir -p " + sh-quote hub)
+               o (lush-out (unlines ["set -e" "mkdir -p \(sh-quote hub)"
                                      ; the index kept from the landing before: only what moved is written
                                      ("if [ -f " + sh-quote ixf + " ] && [ -d " + sh-quote (hub + "/.sb") + " ]; then "
                                       + ix + "--work-tree=" + sh-quote hub + " read-tree -m -u " + c + "; else "
                                       + ix + "--work-tree=" + sh-quote hub + " read-tree --reset -u " + c + "; fi")
-                                     ("sb -C " + sh-quote hub + " ls 2>/dev/null | sort > " + sh-quote have)
-                                     ("git ls-tree -r --name-only " + c + " | sort > " + sh-quote want)
-                                     ("comm -23 " + sh-quote have + " " + sh-quote want + " | while IFS= read -r p; do rm -f "
-                                      + sh-quote hub + "/\"$p\"; done")
-                                     ("rm -f " + sh-quote have + " " + sh-quote want)
-                                     ("sb -C " + sh-quote hub + " record " + sh-quote ("gwen " + c) + " >/dev/null 2>&1 || true")
-                                     ("sb -C " + sh-quote hub + " bank " + sh-quote ("gwen-" + c) + " >/dev/null 2>&1 && echo banked")]))
+                                     "sb -C \(sh-quote hub) ls 2>/dev/null | sort > \(sh-quote have)"
+                                     "git ls-tree -r --name-only \(c) | sort > \(sh-quote want)"
+                                     "comm -23 \(sh-quote have) \(sh-quote want) | while IFS= read -r p; do rm -f \(sh-quote hub)/\"$p\"; done"
+                                     "rm -f \(sh-quote have) \(sh-quote want)"
+                                     ("sb -C \(sh-quote hub) record " + sh-quote ("gwen " + c) + " >/dev/null 2>&1 || true")
+                                     ("sb -C \(sh-quote hub) bank " + sh-quote ("gwen-" + c) + " >/dev/null 2>&1 && echo banked")]))
                ps (chomp (q-sbat hub "psid 2>/dev/null"))
                res (? !(starts? o "banked" && #ps = 64) ("the record or bank in " + hub + " failed: " + chomp o)
                       (q-shadow-cmp hub br keep c ("shadow of " + c + "\n\nsb psid " + ps + "\n")))
@@ -1737,21 +1735,21 @@
                _ (uwrite lg ((? (two? (stat lg)) (slurp-file lg) "")
                              + foldl (\ a w (a + " " + w)) c [(#ps = 64 ? ps "-") (0 < #res ? "differs" "match") (show ms) k1] + "\n"))
                (? (0 < #res) (halt res)
-                  [1 ("gwen-" + snip c 0 9 + " recorded in " + hub + " as " + snip ps 0 12 + ", the tree matches ("
-                      + show ms + " ms, the store " + k1 + " KB, " + (k0 = "0" ? "new" ("was " + k0)) + ")")]))))
+                  [1 ("gwen-\(snip c 0 9) recorded in \(hub) as \(snip ps 0 12), the tree matches ("
+                      + show ms + " ms, the store \(k1) KB, " + (k0 = "0" ? "new" ("was " + k0)) + ")")]))))
      ; --- a worker nest: DIR made from the hub's head (SB_HUB, else (hub ..), maybe NAME@BOX), out/ seeded
      ; from a hub here; a session works there as in a worktree ---
      ; .sb/bin: a shim per love verb the host's PATH lacks, so host tools win -> how many it laid
      (shim-text v) (unlines ["#!/bin/sh" "# a love verb in this nest: the nest's own love when built, else love on PATH"
                              ("r=$(dirname \"$0\")/../..; [ -x \"$r/out/love\" ] && exec \"$r/out/love\" " + v + " \"$@\"")
-                             ("exec love " + v + " \"$@\"")])
+                             "exec love \(v) \"$@\""])
      (nest-shims d)
-      (: b (d + "/.sb/bin") _ (umkdirs b 448) _ (lush-out ("rm -f " + sh-quote b + "/*"))
+      (: b (d + "/.sb/bin") _ (umkdirs b 448) _ (lush-out "rm -f \(sh-quote b)/*")
          ps (filter (\ p (0 < #p && p != b)) (cite 'kore 'usplit 58 (: p (getenv "PATH") (string? p ? p ""))))
-         (host? v) (two? (filter (\ p (two? (stat (p + "/" + v)))) ps))
+         (host? v) (two? (filter (\ p (two? (stat "\(p)/\(v)"))) ps))
          vs (filter (\ v (v != "love" && find v "/" 0 < 0 && !(host? v))) (sort (map show (keys (cite 'verbs 'tab)))))
-         _ (map (\ v (uwrite (b + "/" + v) (shim-text v))) vs)
-         _ (? (two? vs) (lush-out ("chmod +x " + sh-quote b + "/*")) "")
+         _ (map (v \ uwrite "\(b)/\(v)" (shim-text v)) vs)
+         _ (? (two? vs) (lush-out "chmod +x \(sh-quote b)/*") "")
          #vs)
      (nest-cmd as)
       (: d (? (two? >as) <>as "") hub (q-hub 0) far (find hub "@" 0 > 0)
@@ -1760,84 +1758,84 @@
             (two? (stat (d + "/.sb"))) (: n (nest-shims d) _ (puts (d + " is a nest already: its verbs laid again in .sb/bin (" + show n + ")\n")) 0)
             !(far || two? (stat (hub + "/.sb")))
              (: _ (say err "bee: no hub: SB_HUB, or (hub PATH) or (hub NAME@BOX) in ~/.love/etc/bee.l, names the nest a worker nest is made from\n") 2)
-            (two? (stat d)) (: _ (say err ("bee: " + d + " is there already\n")) 1)
+            (two? (stat d)) (: _ (say err "bee: \(d) is there already\n") 1)
             (: _ (umkdirs d 448)
-               tk (says? ("sb -C " + sh-quote d + " sync --take " + sh-quote hub + " >/dev/null") "ok")
-               ps (chomp (lush-out ("sb -C " + sh-quote d + " psid")))
-               ob (? (!far && two? (stat (hub + "/out")) && !(two? (stat (d + "/out"))))
-                     (says? ("cp -a " + sh-quote (hub + "/out") + " " + sh-quote (d + "/out")) "ok") 0)
+               tk (says? "sb -C \(sh-quote d) sync --take \(sh-quote hub) >/dev/null" "ok")
+               ps (chomp (lush-out "sb -C \(sh-quote d) psid"))
+               ob (? (!far && two? (stat (hub + "/out")) && !(two? (stat "\(d)/out")))
+                     (says? ("cp -a " + sh-quote "\(hub)/out" + " " + sh-quote "\(d)/out") "ok") 0)
                nv (? !tk 0 (nest-shims d))
-               (? !tk (: _ (say err ("bee: " + d + " could not take the hub's head from " + hub + "\n")) 1)
-                  (: _ (puts ("a worker nest at " + d + " on the hub's head " + ps
+               (? !tk (: _ (say err "bee: \(d) could not take the hub's head from \(hub)\n") 1)
+                  (: _ (puts ("a worker nest at \(d) on the hub's head \(ps)"
                               + (ob ? ", out/ seeded from the hub's" "") + "; "
-                              + show nv + " love verbs in .sb/bin, first on its sessions' PATH.\n"
-                              + "work there; sb record, then sb bank NAME and sb sync --keep " + hub + " to hand the hub the set you gated.\n"))
+                              + "\(nv) love verbs in .sb/bin, first on its sessions' PATH.\n"
+                              + "work there; sb record, then sb bank NAME and sb sync --keep \(hub) to hand the hub the set you gated.\n"))
                      0)))))
      ; --- the door: what another box's key may run here, forced by its authorized_keys line (--door KEY).
      ; only a sealed delivery, ledger call, beat or admission, the hello, and sb serve @hub ---
-     (door-line k) ("command=\"env HOME=" + bee-home + " " + bee-me + " bee --door\",restrict " + k)
+     (door-line k) "command=\"env HOME=\(bee-home) \(bee-me) bee --door\",restrict \(k)"
      bee-home (: h (getenv "HOME") (string? h ? h "/"))
      (door-hello _)
       (: hub (setting 'hub "") b (box-seal 0)
-         ps (? (two? (stat (hub + "/.sb"))) (chomp (lush-out ("sb -C " + sh-quote hub + " psid"))) "")
-         qs (? (0 < #ps) (filter (\ l (starts? l "queue/")) (lines (lush-out ("sb -C " + sh-quote hub + " ledger")))) ())
+         ps (? (two? (stat "\(hub)/.sb")) (chomp (lush-out "sb -C \(sh-quote hub) psid")) "")
+         qs (? (0 < #ps) (filter (l \ starts? l "queue/") (lines (lush-out "sb -C \(sh-quote hub) ledger"))) ())
          [1 ("door: box " + (? (two? b) (b 1 "name") "(no card)") + ", hub " + (? (0 < #ps) ps "(none)")
-             + foldl (\ a l (a + "\nledger " + l)) "" qs)])
+             + foldl (\ a l "\(a)\nledger \(l)") "" qs)])
      (door-run oc sr)
       (: w (words oc) n #w
          (last k) (? (k <= n) (drop (n - k) w) ())
          hub (setting 'hub "")
-         (? (= (last 2) ["bee" "--deliver"]) (sr (deliver (slurp in)))
-            (= (last 2) ["bee" "--ledger"]) (sr (ledger (slurp in)))
-            (= (last 2) ["bee" "--beat"]) (sr (beat-take (slurp in)))
-            (= (last 2) ["bee" "--admit"]) (sr (admit (slurp in)))
-            (= (last 2) ["bee" "--door"]) (sr (door-hello 0))
-            (= (last 3) ["sb" "serve" "@hub"])
-             (? (two? (stat (hub + "/.sb"))) (: p (spawn [bee-me "sb" "serve" hub]) (? (charm? p && 0 < p) (wait p) 1))
+         (? (last 2 = ["bee" "--deliver"]) (sr (deliver (slurp in)))
+            (last 2 = ["bee" "--ledger"]) (sr (ledger (slurp in)))
+            (last 2 = ["bee" "--beat"]) (sr (beat-take (slurp in)))
+            (last 2 = ["bee" "--admit"]) (sr (admit (slurp in)))
+            (last 2 = ["bee" "--door"]) (sr (door-hello 0))
+            (last 3 = ["sb" "serve" "@hub"])
+             (? (two? (stat "\(hub)/.sb")) (: p (spawn [bee-me "sb" "serve" hub]) (? (charm? p && 0 < p) (wait p) 1))
                 (sr [0 "this box keeps no hub: (hub PATH) in ~/.love/etc/bee.l"]))
             (sr [0 ("the door here takes bee --deliver, --ledger, --beat, --admit and --door, and sb serve @hub; not: " + oc)])))
      ; --- a fresh node: the box checked in order, each step's state, and the first one missing
      ; said with what to run. the hub is (hub NAME@BOX), reached by BOX's door ---
      (node-steps _)
-      (: hub (setting 'hub "") at (find hub "@" 0) bx (? (0 < at) (snip hub (at + 1) #hub) "")
-         nest (setting 'nest (bee-home + "/g"))
-         etc (bee-home + "/.love/etc")
+      (: hub (setting 'hub "") at (find hub "@" 0) bx (0 < at ? (snip hub (at + 1) #hub) "")
+         nest (setting 'nest "\(bee-home)/g")
+         etc "\(bee-home)/.love/etc"
          route (? (0 < #bx) (box-route bx) ["" ""])
          ; the key ssh offers the box: its identityfiles as ssh -G reads them, the first with a .pub
          pub (: ids (? (0 < #(route 0)) (filter (\ l (starts? l "identityfile ")) (lines (lush-out ("ssh -G " + sh-quote (route 0) + " 2>/dev/null")))) ())
                 ; ssh's ~ is the account's home from passwd, not $HOME (a node may run in a scratch one)
                 pw (: h (chomp (lush-out "getent passwd \"$(id -un)\" | cut -d: -f6")) (0 < #h ? h bee-home))
                 fs (map (\ l (: f (snip l 13 #l) (? (starts? f "~/") (pw + snip f 1 #f) f))) ids)
-                ks (filter (\ f (string? (slurp-file (f + ".pub")))) fs)
-                (? (two? ks) (chomp (slurp-file (<ks + ".pub"))) ""))
+                ks (filter (\ f (string? (slurp-file "\(f).pub"))) fs)
+                (? (two? ks) (chomp (slurp-file "\(<ks).pub")) ""))
          door (\ _ (? (0 < #bx) (relay bx "" "--door") [1 ""]))
          [["love, nested in ~/.love/bin"
-           (\ _ (two? (stat (bee-home + "/.love/bin/love")) && two? (stat (bee-home + "/.love/bin/lush"))))
+           (\ _ (two? (stat "\(bee-home)/.love/bin/love") && two? (stat "\(bee-home)/.love/bin/lush")))
            (\ _ "in a love tree (a seed, or love source DIR): make, then ./out/love nest -y")]
           ["the hub named: (hub NAME@BOX) in ~/.love/etc/bee.l"
            (\ _ (0 < at && 0 < #bx))
-           (\ _ ("mkdir -p " + etc + " && echo '(hub hub@BOX)' >> " + etc + "/bee.l   # BOX: the box that keeps the queue's hub"))]
-          [("the way to " + bx + ": a line in ~/.love/etc/bee/boxes")
+           (\ _ "mkdir -p \(etc) && echo '(hub hub@BOX)' >> \(etc)/bee.l   # BOX: the box that keeps the queue's hub")]
+          ["the way to \(bx): a line in ~/.love/etc/bee/boxes"
            (\ _ (two? (filter (\ l (two? (words l) && <(words l) = bx)) (box-lines 0))))
-           (\ _ ("mkdir -p " + bee-keys + " && echo '" + bx + " HOST' >> " + bee-keys + "/boxes   # HOST: what ssh reaches it as"))]
-          [("the door on " + bx + " lets this box in")
+           (\ _ "mkdir -p \(bee-keys) && echo '\(bx) HOST' >> \(bee-keys)/boxes   # HOST: what ssh reaches it as")]
+          ["the door on \(bx) lets this box in"
            (\ _ (: r (door 0) (&& (<r = 0) (starts? (r 1) "door:"))))
            (\ _ ("on " + bx + ", its owner lays this box's key behind the door:\n  love bee --door "
                  + (0 < #pub ? pub "KEY") + " >> ~/.ssh/authorized_keys"
                  + (0 < #pub ? "" "\n(no key here: ssh-keygen -t ed25519 first)")))]
-          [("enrolled in " + bx + "'s lineage: a box card")
+          ["enrolled in \(bx)'s lineage: a box card"
            (\ _ (two? (box-seal 0)))
-           (\ _ ("on " + bx + ": love bee --ticket, then here:\n  love bee --enrol TOKEN NAME | "
+           (\ _ ("on \(bx): love bee --ticket, then here:\n  love bee --enrol TOKEN NAME | "
                  + joinw (bee-relay + [<route (route 1) "bee" "--admit"]) + " | love bee --enrolled"))]
-          [("a nest at " + nest + " on the hub's head")
-           (\ _ (two? (stat (nest + "/.sb"))))
-           (\ _ ("love bee --nest " + nest + "   # (nest PATH) in ~/.love/etc/bee.l names another"))]
-          [("the nest's love verbs in " + nest + "/.sb/bin (sb, cook, kore bare in its sessions)")
-           (\ _ (two? (stat (nest + "/.sb/bin"))))
-           (\ _ ("love bee --nest " + nest + "   # on a nest already, it lays the verbs again"))]
-          [("love built in the nest: " + nest + "/out/love")
-           (\ _ (two? (stat (nest + "/out/love"))))
-           (\ _ ("cd " + nest + " && make   # the cc on PATH builds love0, love builds the rest"))]
+          ["a nest at \(nest) on the hub's head"
+           (\ _ (two? (stat "\(nest)/.sb")))
+           (\ _ "love bee --nest \(nest)   # (nest PATH) in ~/.love/etc/bee.l names another")]
+          ["the nest's love verbs in \(nest)/.sb/bin (sb, cook, kore bare in its sessions)"
+           (\ _ (two? (stat "\(nest)/.sb/bin")))
+           (\ _ "love bee --nest \(nest)   # on a nest already, it lays the verbs again")]
+          ["love built in the nest: \(nest)/out/love"
+           (\ _ (two? (stat "\(nest)/out/love")))
+           (\ _ "cd \(nest) && make   # the cc on PATH builds love0, love builds the rest")]
           ["claude code on PATH"
            (\ _ (0 < #(chomp (lush-out "command -v claude"))))
            (\ _ "install Claude Code: https://claude.com/claude-code")]
@@ -1848,25 +1846,25 @@
      (node-walk m)
       (? (atom? m) (node-done 0)
          (: st <m
-            (? ((st 1) 0) (: _ (puts ("ok    " + <st + "\n")) (node-walk >m))
-               (: _ (puts ("next  " + <st + "\n  " + ((st 2) 0) + "\n")) 1))))
+            (st 1 0 ? (puts "ok    \(<st)\n", node-walk >m)
+               (puts "next  \(<st)\n  \(st 2 0)\n", 1))))
      (node-done _)
       (: hub (setting 'hub "") nest (setting 'nest (bee-home + "/g")) bx (snip hub (find hub "@" 0 + 1) #hub)
          ; the hub's queues, as its door's hello lists them
          r (relay bx "" "--door")
          qs (? (<r = 0) (filter (\ w (1 < #w && <w = "ledger")) (map words (lines (r 1)))) ())
          _ (puts ("this box is a node. start a session in the nest, and read doc/bee.md, NEW NODE and THE MERGE QUEUE:\n"
-                  + "  cd " + nest + " && claude --dangerously-load-development-channels server:bee\n"
+                  + "  cd \(nest) && claude --dangerously-load-development-channels server:bee\n"
                   + (? (two? qs) ("its queues are the hub's, read with queue_read:\n"
-                                  + foldl (\ a w (a + "  " + w 1 + "@" + bx + "\n")) "" qs)
-                       ("the hub keeps no queue yet; one made there is queue/NAME@" + bx + "\n"))))
+                                  + foldl (\ a w "\(a)  \(w 1)@\(bx)\n") "" qs)
+                       "the hub keeps no queue yet; one made there is queue/NAME@\(bx)\n")))
          0)
      (queue-landed in) (: _ (pins bee-who 'tool "queue_landed") (q-wcheck in queue-landed1))
      (queue-landed1 in)
       (: q (in "queue") i (me 0) who (field in "session" i) rel (field in "release" "") pub (field in "publish" "")
          (try n)
           (: rd (q-read q) old <rd text (rd 1) rows (q-rows text) lead (q-leader text)
-             l (? (old = "none") ("no queue " + q) (who != i && lead != i) ("only the leader, " + lead + ", lands another's row")
+             l (? (old = "none") ("no queue " + q) (who != i && lead != i) "only the leader, \(lead), lands another's row"
                   (0 < #pub && q-git? q) "publish writes an sb queue's git mirror; on git, the generated files are the row's own commits"
                   (0 < #pub && #(q-mirror-of text) < 3) "publish needs the mirror line to name the paths it keeps: queue_lead mirror PATH BRANCH KEEP.."
                   (0 < #pub && pub 0 != 47) "publish is the absolute path of the directory the publisher laid its files in"
@@ -1877,11 +1875,11 @@
                    ; on sb, the landing is written to the git mirror, when the queue names one
                    mi (? (q-git? q) () (q-mirror-of text))
                    mr (? (string? lk || !(two? mi)) [1 ""]
-                         (q-mirror (q-hub 0) mi ("Merge queue row " + p + " (" + who + "): "
+                         (q-mirror (q-hub 0) mi ("Merge queue row \(p) (\(who)): "
                                        + (: ls (filter (\ x (q-row? x && <(words x) = p)) (lines text)) (? (two? ls) (q-note <ls) ""))
-                                       + "\n\nsb psid " + r 4 + "\n") pub))
+                                       + "\n\nsb psid \(r 4)\n") pub))
                    (? (string? lk) [0 lk]
-                      !(<mr) [0 ("the hub took " + r 4 + ", but " + mr 1 + ": the row stays; tell the leader")]
+                      !(<mr) [0 "the hub took \(r 4), but \(mr 1): the row stays; tell the leader"]
                       (: gone (p . q-folds rows p) short <lk
                          ; a landing that changes bee's served code ends the note with the restart line
                          bz (lk 1)
@@ -1891,15 +1889,15 @@
                             (: rows2 (q-rows t2) h (q-head rows2)
                                to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (? h (h . q-folds rows2 h) ()))))
                                sent (? (0 < #rn)
-                                       (map (\ s [s (q-post s ("row " + p + " landed on " + br + " at " + short + ": " + rn))]) to)
+                                       (map (\ s [s (q-post s "row \(p) landed on \(br) at \(short): \(rn)")]) to)
                                        ())
-                               got (map (\ x <x) (filter (\ x (#(x 1) = 0)) sent))
-                               lost (filter (\ x (0 < #(x 1))) sent)
+                               got (map cap (filter (x \ #(x 1) = 0) sent))
+                               lost (filter (x \ 0 < #(x 1)) sent)
                                ; the shadow records the landing; a stop goes to the leader too
                                sh (? (q-git? q) (q-shadow-of t2) ())
                                sr (? (two? sh) (q-shadow sh (git-sha short)) [1 ""])
-                               pr (? (<sr || lead = i || !(sr 2)) "" (q-post lead ("the shadow of " + q + " stopped at " + short + ": " + sr 1)))
-                               [1 ("landed: " + q-rows-say gone + " left " + q + ", whose base line is now " + br + " " + short + ". "
+                               pr (? (<sr || lead = i || !(sr 2)) "" (q-post lead "the shadow of \(q) stopped at \(short): \(sr 1)"))
+                               [1 ("landed: \(q-rows-say gone) left \(q), whose base line is now \(br) \(short). "
                                    + (? (0 < #(mr 1)) ("the mirror: " + (? (starts? (mr 1) "made ") ("a commit " + snip (mr 1) 5 #(mr 1)) "the tip had the tree already")
                                                          + (0 < #pub ? (", its " + q-and (drop 2 mi) + " from " + pub) "") + ". ") "")
                                    + (? !(two? to) "no row is behind it."
@@ -1935,13 +1933,13 @@
           by (? (tablet? h) (show (peep h "pid" "?") + ": " + peep h "note" "")
                 (two? hs) (foldl (\ a x (a + (0 < #a ? ", " "") + show (peep x "pid" "?") + ": " + peep x "note" "")) "" hs)
                 "?")
-          ("queued for " + nm + ": position " + show (peep r "position" "?") + ", held by " + by
-           + (r "mem_gb" @ () "" g (", " + show g + " GB available"))
-           + "; a message from lock-" + nm + " comes when it is yours")))
+          ("queued for \(nm): position " + show (peep r "position" "?") + ", held by \(by)"
+           + (r "mem_gb" @ () "" g (", \(g) GB available"))
+           + "; a message from lock-\(nm) comes when it is yours")))
      (lock-acquire in)
       (? !(locks? 0) [0 "locks are not in this binary"]
          (: nm (in "name") kind (field in "kind" "exclusive") nr (field in "no_row" "")
-            note ((0 < #nr ? ("[no row: " + nr + "] ") "") + field in "note" "")
+            note ((0 < #nr ? "[no row: \(nr)] " "") + field in "note" "")
             why (? (kind = "heavy" && #nr = 0) (heavy-why bee-cwd) "")
             (? !(elem kind ["exclusive" "heavy"]) [0 "kind is exclusive or heavy"]
                (0 < #why) [0 why]
@@ -1973,8 +1971,8 @@
               (map (\ nm (: q (bee-locks nm) r (lock-ask nm <q (q 1))
                             (? (tablet? r && peep r "granted" 0 = 1)
                                (: _ (pull bee-locks nm 0)
-                                  (post-as ("lock-" + nm) (me 0)
-                                           ("lock " + nm + " is granted to you: go ahead, and lock_release it when done")))
+                                  (post-as "lock-\(nm)" (me 0)
+                                           "lock \(nm) is granted to you: go ahead, and lock_release it when done"))
                                0)))
                    (keys bee-locks))
               0)
@@ -2095,7 +2093,7 @@
      (request key body)
       (: tls? <bee-at port (bee-at 2)
          keyed (tls? && string? key && 0 < #key)
-         ("POST " + bee-at 3 + " HTTP/1.1\r\nHost: " + bee-host
+         ("POST \(bee-at 3) HTTP/1.1\r\nHost: " + bee-host
           + (port = (tls? ? 443 80) ? "" (":" + show port))
           + (? bee-oai? (keyed ? ("\r\nauthorization: Bearer " + key) "")
                ((keyed ? ("\r\nx-api-key: " + key) "")
@@ -2203,7 +2201,7 @@
          (? (string? c) [{"role" role "content" c}]
             (role = "assistant")
              (: txt (foldl (\ a b (b "type" = "text" ? (a + b "text") a)) "" c)
-                uses (filter (\ b (b "type" = "tool_use")) c)
+                uses (filter (b \ b "type" = "tool_use") c)
                 m2 {"role" "assistant" "content" (? (#txt = 0 && two? uses) json-null txt)}
                 _ (? (two? uses)
                      (pin m2 "tool_calls"
@@ -2283,29 +2281,29 @@
              (n <= 0) ()
              (<ps = ".") (walk acc >ps n)
              (<ps = "..") (walk (up acc) >ps n)
-             (: c (acc = "/" ? ("/" + <ps) (acc + "/" + <ps)) t (readlink c)
-                (? (string? t && 0 < #t) (walk (t 0 = 47 ? "/" acc) (parts t + >ps) (n - 1))
+             (: c (acc @ "/" "/\(<ps)" "\(acc)/\(<ps)") t (readlink c)
+                (? (string? t && 0 < #t) (walk (t 0 @ 47 "/" acc) (parts t + >ps) (n - 1))
                    (walk c >ps n))))
-         (walk "/" (parts (? (0 < #q && q 0 = 47) q (cwd 0 + "/" + q))) 40))
+         (walk "/" (parts (? (0 < #q && q 0 = 47) q "\(cwd 0)/\(q)")) 40))
      ; inside the working tree, where a link out of it does not count
      (in-tree? p)
       (: r (canon bee-cwd) f (canon p)
-         (string? r && string? f && (r = "/" || f = r || starts? f (r + "/"))))
+         (string? r && string? f && (r = "/" || f = r || starts? f "\(r)/")))
 
      ; the child's output read by see, which parks this task alone, and its exit by gather,
      ; which never blocks: the screen keeps painting while a command runs. stdin is /dev/null
      (shell-out cmd)
       (: pp (pipe 0) nul (openfd "/dev/null" 0)
          p (spawnio (shell-argv cmd) nul >pp >pp (open-fds 0) -1 0)
-         _ (close >pp) _ (? (0 <= nul) (close nul) 0)
+         _ (close >pp) _ (0 <= nul ? (close nul) 0)
          q (fdopen <pp)
-         (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
+         (go acc) (: c (see q) (? (c < 0) acc (unsee q c, go (acc + chug q))))
          t (go "")
          _ (close q)
-         (t + "[exit " + show (reap p) + "]"))
+         "\(t)[exit \(reap p)]")
      ; a child's exit status, waited for without blocking; -1 when there is none
      (reap p) (? !(charm? p && 0 <= p) -1
-                 (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 5) (reap p)))))
+                 (: s (gather p) (? (two? s) <s (nom? s) -1 (rest 5, reap p))))
 
      ; the text an edit would leave, or [0 why]
      (edited s old new)
@@ -2315,9 +2313,9 @@
             [1 (snip s 0 k + new + snip s (k + #old) #s)]))
      (edit p old new)
       (: e (edited (slurp-file p) old new)
-         (? !<e [0 (e 1 + " in " + p)]
-            (uwrite p (e 1)) [1 ("edited " + p)]
-            [0 ("cannot write " + p)]))
+         (? !<e [0 "\(e 1) in \(p)"]
+            (uwrite p (e 1)) [1 "edited \(p)"]
+            [0 "cannot write \(p)"]))
 
      ; a streamed input is unchecked by the api: every required field must be a string
      (valid? name in)
@@ -2336,7 +2334,7 @@
           "send_message" (: e (post (in "to") (in "text"))
                             (? (#e = 0) [1 ("sent to " + in "to")] [0 e]))
           "start_job" (: id (job-start (in "command"))
-                         (? (string? id) [1 ("started " + id + "; a message from job-" + id + " comes when it ends")]
+                         (? (string? id) [1 ("started \(id); a message from job-\(id) comes when it ends")]
                             [0 "the job did not start"]))
           "check_job" [1 (job-text (in "id"))]
           "stop_job" [1 (job-stop (in "id"))]
@@ -2366,7 +2364,7 @@
      (ctl? c) ((c < 32 && c != 10 && c != 9) || c = 127)
      (visible s) (: bs (map s ^#s)
                     (? (two? (filter ctl? bs))
-                       (string (catmap (\ c (? (ctl? c) [94 (c = 127 ? 63 (c + 64))] [c])) bs))
+                       (string (catmap (c \ ctl? c ? [94 (c @ 127 63 (c + 64))] [c]) bs))
                        s))
      ; what an ask shows: all of the input, a write or an edit as its whole diff
      (ask-lines name in)
@@ -2419,7 +2417,7 @@
       (: name (b "name") in (b "input")
          h (f 'tool name in)
          r (? !(valid? name in) (run f h name in)
-              (f 'yes || free? name in || (f 'ask h) = 1) (run f h name in)
+              (f 'yes || free? name in || f 'ask h = 1) (run f h name in)
               [0 "the user declined"])
          _ (f 'done h r)
          t {"type" "tool_result" "tool_use_id" (b "id") "content" (r 1)}
@@ -2471,10 +2469,10 @@
      (plain yes)
       {'yes yes
        'text (\ x (puts x, flush out))
-       'think (\ x (? bee-tty? (: _ (puts ("\e[2;3m" + x + "\e[0m")) (flush out)) 0))
+       'think (\ x (? bee-tty? (: _ (puts "\e[2;3m\(x)\e[0m") (flush out)) 0))
        'break (\ _ (puts "\n"))
-       'note (\ s (puts ("\nbee: " + s + "\n")))
-       'mail (\ from t (puts ("\nbee: a message from " + from + "\n" + t + "\n")))
+       'note (\ s (puts "\nbee: \(s)\n"))
+       'mail (\ from t (puts "\nbee: a message from \(from)\n\(t)\n"))
        'wire (\ s 0)
        'tool (\ name in (: _ (puts ("  " + shown name + " " + visible (brief name in) + "\n")) [name in]))
        ; the whole input under the line when the line did not say all of it
@@ -2519,7 +2517,7 @@
      (keep-avatar nm)
       (: h (getenv "HOME")
          (? !(string? h) 0
-            (: d (h + "/.love/etc") p (d + "/bee.l") s (slurp-file p)
+            (: d "\(h)/.love/etc" p "\(d)/bee.l" s (slurp-file p)
                ls (filter (l \ !(starts? (lstrip l) "(avatar")) (lines (string? s ? s "")))
                _ (umkdirs d 448)
                (uwrite p (unlines ls + "(avatar " + nm + ")\n")))))
@@ -2565,8 +2563,8 @@
           (: r (rows p) st (r 5) fold? (q-folded? r)
              age (: t (stamp-at bee-seen-dir (stall-key q p r "seen")) (? (charm? t) (hud-dur (now - t)) ""))
              red? (p = h && string? stall)
-             stc (? red? (sgr "31" (st + " " + age)) fold? st
-                    (st @ "green" (sgr "32" (st + " " + age)) "gating" (sgr "33" (st + " " + age)) (st + " " + age)))
+             stc (? red? (sgr "31" "\(st) \(age)") fold? st
+                    (st @ "green" (sgr "32" "\(st) \(age)") "gating" (sgr "33" "\(st) \(age)") "\(st) \(age)"))
              gist (hud-gist (peep notes p ""))
              (? fold?
                 [(sgr "2" (ind + "  " + edfit (r 0) 4 " " + edfit (r 1) 10 " " + " " + edfit (r 2) 18 " " + " "
@@ -2682,8 +2680,8 @@
       (: d (cell-of (me 0) + "/asks") fs (readdir d)
          _ (? (two? fs)
               (map (\ fl (? !(ends? fl ".ask") 0
-                            (: p (d + "/" + fl) a (: s (slurp-file p) (? (string? s) (json-read s) ()))
-                               id (snip fl 0 (#fl - 4)) ans (d + "/" + id + ".answer")
+                            (: p "\(d)/\(fl)" a (: s (slurp-file p) (? (string? s) (json-read s) ()))
+                               id (snip fl 0 (#fl - 4)) ans "\(d)/\(id).answer"
                                (? (two? (stat ans)) 0
                                   (: j (? (two? a && tablet? (a 1)) (a 1) {})
                                      tn (peep j "tool_name" "?") in (peep j "input" {})
@@ -2787,14 +2785,14 @@
      ; what a claude code session is told when it starts the server
      (mcp-said _)
       (unlines
-       [("You are the session named " + (me 0) + " in bee's hive at " + bee-hive + ", where the sessions on "
+       [("You are the session named \(me 0) in bee's hive at \(bee-hive), where the sessions on "
          + "this machine -- bee agents and claude code sessions alike -- find each other and write to each other.")
         ("Mail sent to you, and queue-watch's notices about your rows, ride on the result of any bee tool as "
          + "<message from=\"NAME\">..</message>; inbox takes them when you have nothing else to call. " + bee-trust)
         ("When this session was started with `claude --dangerously-load-development-channels server:bee`, new mail "
          + "also rings as a <channel source=\"bee\"> notice, which starts a turn while you are idle. The notice only "
          + "says who wrote: take the mail with inbox, and act on it as on any message.")]
-       + bee-merge-rules + (#bee-queues = 0 ? "" (unlines ["As the queues stood when this session started:" bee-queues])))
+       + bee-merge-rules + (#bee-queues @ 0 "" (unlines ["As the queues stood when this session started:" bee-queues])))
      ; a claude code session's own name, when BEE_AS does not give it: its cell moves, mail and all
      (set-name a)
       (: nm (peep a "name" ()) was (me 0) c (? (string? nm) (card-of nm) ())
@@ -2825,11 +2823,11 @@
             ; a backgrounded claude keeps the card alive with no one at it: say how to reach it
             (tablet? k && alive? (card-pid k) && backgrounded? k)
              (: id (: c (r "claude") (snip c 0 (min 8 #c)))
-                [0 (nm + " is a backgrounded claude session (" + id + "): `claude attach " + id + "` opens it here, "
-                    + "or `claude stop " + id + "` and then `love bee --resume " + nm + "` (--attach, --stop do either)") id])
+                [0 ("\(nm) is a backgrounded claude session (\(id)): `claude attach \(id)` opens it here, "
+                    + "or `claude stop \(id)` and then `love bee --resume \(nm)` (--attach, --stop do either)") id])
             (tablet? k && alive? (card-pid k)) [0 (nm + " is live")]
             (: _ (uwrite mc (json-show {"mcpServers" {"bee" {"command" bee-me "args" ["bee" "--mcp"]}}}))
-               [1 ("cd " + sh-quote (r "cwd") + " && BEE_NAME=" + sh-quote nm + " exec claude"
+               [1 ("cd " + sh-quote (r "cwd") + " && BEE_NAME=\(sh-quote nm) exec claude"
                    + " --dangerously-load-development-channels server:bee --strict-mcp-config --mcp-config " + sh-quote mc
                    + " --resume " + sh-quote (r "claude") + (0 < #prompt ? (" " + sh-quote prompt) ""))])))
      (resumable _)
@@ -2868,12 +2866,12 @@
                tu (peep a "tool_use_id" ())                ; so the screen asks on the block it drew
                _ (uwrite (d + "/." + id) (json-show (: j {"tool_name" tn "input" (tablet? inp ? inp {})}
                                                         (string? tu ? (pin j "tool_use_id" tu) j))))
-               _ (rename (d + "/." + id) (d + "/" + id + ".ask"))
-               ans (ask-wait (d + "/" + id + ".answer") (ask-limit * 5))
-               _ (unlink (d + "/" + id + ".ask")) _ (unlink (d + "/" + id + ".answer"))
+               _ (rename "\(d)/.\(id)" "\(d)/\(id).ask")
+               ans (ask-wait "\(d)/\(id).answer" (ask-limit * 5))
+               _ (unlink "\(d)/\(id).ask") _ (unlink "\(d)/\(id).answer")
                (? (ans = "y") (allow 0)
-                  (deny (? (ans = ()) "no answer came from bee's screen" "the user declined"))))))
-     (mcp-call nm a) (? (nm = "approve") (mcp-approve a) (mcp-tool nm a))
+                  (deny (ans @ () "no answer came from bee's screen" "the user declined"))))))
+     (mcp-call nm a) (nm @ "approve" (mcp-approve a) (mcp-tool nm a))
      ; under BEE_AS the server speaks as its bee, which keeps the cell; else it is a claude code session's
      ; own, settled while it runs, watching the queues, its mail riding on tool answers and the bell
      (mcp-serve inp outp)

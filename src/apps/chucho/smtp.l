@@ -25,11 +25,11 @@
  ; crlf on every line, a leading dot doubled, and the end of data after
  (smtp-wire raw)
   (: t (replace raw "\r\n" "\n") t2 (t @ (a + "\n") a t)
-     (join "\r\n" (map (l \ #l && l 0 = 46 ? ("." + l) l) (split "\n" t2)) + "\r\n"))
+     "\(join "\r\n" (map (l \ #l && l 0 = 46 ? ".\(l)" l) (split "\n" t2)))\r\n")
 
  ; --- a connection: tls's wire, plain or sealed, and the bytes read ahead -> it | why not ----
  (smtp-conn tls? host port)
-  (cite 'tls 'tls-wire tls? host port 'verify @ w (? (tablet? w) {'w w 'buf ""} tls? ("tls: " + show w) w))
+  (cite 'tls 'tls-wire tls? host port 'verify @ w (? (tablet? w) {'w w 'buf ""} tls? "tls: \(show w)" w))
  (smtp-put c s) (cite 'tls 'tls-say (c 'w) s)
  (sm-more c) (cite 'tls 'tls-hear (c 'w) @ r (string? r ? r ()))
  ; the next line without its crlf, () at the end of the stream
@@ -44,7 +44,7 @@
         (sm-more c @ m (string? m ? (pin c 'buf (b + m), smtp-take c n) ()))))
  ; a socket raised to tls in place -> 1 | why not
  (smtp-tls c host port)
-  (cite 'tls 'tls-on (c 'w 's) host port 'verify @ t (tablet? t ? (pin c 'w t, 1) ("tls: " + show t)))
+  (cite 'tls 'tls-on (c 'w 's) host port 'verify @ t (tablet? t ? (pin c 'w t, 1) "tls: \(show t)"))
  ; a reply, its lines gathered -> [code [text ..]], code 0 when the server went away
  (sm-reply c)
   (: (go acc)
@@ -53,19 +53,19 @@
             (#l < 4 || l 3 != 45) [(mime-num (snip l 0 3)) (rev ((snip l (min 4 #l) #l) . acc))]
             (go ((snip l 4 #l) . acc))))
      (go ()))
- (sm-cmd c s) (smtp-put c (s + "\r\n"), sm-reply c)
+ (sm-cmd c s) (smtp-put c "\(s)\r\n", sm-reply c)
  (smtp-close c) (cite 'tls 'tls-close (c 'w))
  sh-quote (cite 'lush 'sh-quote)
  (sm-local? h) (elem h ["localhost" "127.0.0.1" "::1"])
 
  ; --- the conversation ----------------------------------------------------------------------
  ; each step answers the next, or a why that ends it; a why carries the server's own words
- (sm-why what r) (what + ": " + show <r + " " + join " " <>r)
+ (sm-why what r) "\(what): \(<r) \(join " " <>r)"
  (sm-ok? r lo hi) (lo <= <r && <r <= hi)
  (sm-ehlo c)
   (: un (uname 0) me (two? un ? <>un "localhost")
-     r (sm-cmd c ("EHLO " + me))
-     (sm-ok? r 250 259 ? r (sm-cmd c ("HELO " + me))))
+     r (sm-cmd c "EHLO \(me)")
+     (sm-ok? r 250 259 ? r (sm-cmd c "HELO \(me)")))
  (sm-has? r w) (any (l \ starts? (upper l) w) <>r)
  (sm-talk c host port user pass from rcpts raw)
   (: g (sm-reply c)
@@ -83,23 +83,23 @@
      !(sm-ok? e 250 259) (sm-why "EHLO" e)
      (#user && !(c 'w 'up) && !(sm-local? host)) "the server offers no tls; the password stays here"
      (: a (? !(#user) [235 ()]
-             (sm-cmd c ("AUTH PLAIN " + mime-b64e ("\0" + user + "\0" + pass))))
+             (sm-cmd c "AUTH PLAIN \(mime-b64e "\0\(user)\0\(pass)")"))
         (? !(sm-ok? a 235 235) (sm-why "AUTH" a)
-           (sm-cmd c ("MAIL FROM:<" + from + ">") @ m
+           (sm-cmd c "MAIL FROM:<\(from)>" @ m
               (? !(sm-ok? m 250 259) (sm-why "MAIL FROM" m)
                  (: (rc l) (? (atom? l) 1
-                              (sm-cmd c ("RCPT TO:<" + <l + ">") @ r
-                                 (sm-ok? r 250 259 ? (rc >l) (sm-why ("RCPT TO " + <l) r))))
+                              (sm-cmd c "RCPT TO:<\(<l)>" @ r
+                                 (sm-ok? r 250 259 ? (rc >l) (sm-why "RCPT TO \(<l)" r))))
                     ok (rc rcpts)
                     (? (string? ok) ok
                        (sm-cmd c "DATA" @ d
                           (? !(sm-ok? d 354 354) (sm-why "DATA" d)
-                             (: _ (smtp-put c (smtp-wire raw + ".\r\n"))
+                             (: _ (smtp-put c "\(smtp-wire raw).\r\n")
                                 f (sm-reply c)
                                 (sm-ok? f 250 259 ? (sm-cmd c "QUIT", 1) (sm-why "the message" f))))))))))))
  (smtp-send url user pass from rcpts raw)
   (smtp-url url @ u
-     (? (atom? u) ("not an smtp url: " + url)
+     (? (atom? u) "not an smtp url: \(url)"
         (: host <>u port <>>u
            (smtp-conn <u host port @ c
               (? (string? c) c
@@ -108,7 +108,7 @@
 
  ; --- sendmail ------------------------------------------------------------------------------
  (smtp-pipe cmd from rcpts raw)
-  (: argv ("exec " + cmd + " -oi -f " + sh-quote from + " -- " + join " " (map sh-quote rcpts))
+  (: argv "exec \(cmd) -oi -f \(sh-quote from) -- \(join " " (map sh-quote rcpts))"
      _ (flush out) pp (pipe 0)
      (? (nom? pp) "cannot make a pipe"
         (: p (spawnio ["sh" "-c" argv] <pp -1 -1 [>pp] -1 0)
@@ -117,5 +117,5 @@
            _ (say q (replace raw "\r\n" "\n"))
            _ (close q)
            st (charm? p && 0 <= p ? (wait p) -1)
-           (st = 0 ? 1 (cmd + " failed (" + show st + ")"))))))
+           (st = 0 ? 1 "\(cmd) failed (\(st))")))))
 ) ; module smtp

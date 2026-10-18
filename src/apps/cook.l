@@ -62,7 +62,7 @@
    ; without bound) and a later non-empty recipe wins, as make does. the first item ever
    ; registered is the default ticket. card = (ingredients orderonly . steps); orderonly
    ; prereqs are built-if-missing but never make a target stale (make's `| prereqs`).
-   (adds a b) (foldl (acc \ x \ (elem x acc ? acc (acc + [x]))) a b)
+   (adds a b) (foldl (acc \ x \ elem x acc ? acc (acc + [x])) a b)
    ; a leading $HOME or $PWD in an item or a prereq opens here, at registration. step strings
    ; want none of it -- sh -c expands them itself; a non-string item is phony and rides through.
    (unpre w tok val)
@@ -125,7 +125,7 @@
                ; phony's whole subtree in front of the sibling beside it. park the land under
                ; the item instead: the parent calls jobland on the way past, so every job comes home.
                 (atom? steps ?
-                   (pin pending item (. 'agg (. (ingredients + orderonly) ())), ())
+                   (pin pending item ['agg (ingredients + orderonly)], ())
                    (: _ (each ingredients (d \ jobland d done shipped pending))
                       _ (each orderonly (d \ jobland d done shipped pending))
                       ta0 (date item)
@@ -141,7 +141,7 @@
                            (settle item ta0 (stale ? steps) done shipped))))))
             ; no card: a source leaf. it must already exist on disk.
             (date item @ ta
-             (ta ? 0 (say err $ "cook: no recipe to make " + show item + "\n", quit 1),
+             (ta ? 0 (say err "cook: no recipe to make \(item)\n", quit 1),
               pin done item ta,
               ta)))))
 
@@ -149,7 +149,7 @@
    ; mtime, so a no-op rebuild does not force dependents. `steps` is () when no recipe ran.
    (settle item ta0 steps done shipped)
    (date item @ nw
-      ((two? steps && (!ta0 ? (nw ? 1 0) (nw ? (nw > ta0) 0)) ?
+      ((two? steps && (!ta0 ? !!nw (nw ? (nw > ta0) 0)) ?
           (pin shipped item 1) 0),
        pin done item nw,
        nw))
@@ -174,7 +174,7 @@
    (: k (unseat item)
       nm (string? k ? k (show k))
       ((#(peep tvarbox k "") ?
-          (say err $ "cook: target-specific variable (" + nm + ") not implemented.\n",
+          (say err "cook: target-specific variable (\(nm)) not implemented.\n",
            quit 2)),
        each steps step1))
 
@@ -189,7 +189,7 @@
 
    ; an (exec ..) step replaces the process, so a recipe carrying one can never be a
    ; job: the child would be replaced and cook would carry on as if it had run.
-   (jobforkable? steps) (!(any (s \ two? s && <s = 'exec) steps))
+   (jobforkable? steps) (!(any ('exec . _ \ 1) steps))
 
    ; answers the job's pid, which the caller must land before reading the item's age, or 0 when
    ; it ran here. the serial lane drains first: a recipe run here calls herald, which waits on
@@ -217,7 +217,7 @@
    (jobwait p)
    (peep verdicts p 'no @ v
       (? (v != 'no) (pull verdicts p 0, v)
-         (0 = #running) (udie 1 ("cook: lost the job for pid " + show p))
+         (0 = #running) (udie 1 "cook: lost the job for pid \(p)")
          (jobreap 0, jobwait p)))
 
    (jobdrain _) (0 < #running ? (jobreap 0, jobdrain 0) 0)
@@ -227,7 +227,7 @@
    ; would read as up to date on the next run.
    (jobdie item ec)
    (jobdrain 0,
-    say err $ "cook: the recipe for " + show item + " failed\n",
+    say err "cook: the recipe for \(item) failed\n",
     quit ec)
 
    ; (exec PROG ARGS..) is the interactive step: the exec nif replaces cook and inherits the
@@ -254,8 +254,8 @@
        _ (flush out)
        r (herald step)
        (two? r ?
-          (0 = <r ? 0 (udie 1 ("cook: command failed (exit " + show <r + ")")))
-          (udie 1 ("cook: cannot run " + join " " step))))
+          (0 = <r ? 0 (udie 1 "cook: command failed (exit \(<r))"))
+          (udie 1 "cook: cannot run \(join " " step)")))
 
    ; the in-image shell, decided once and kept: where the shell we would spawn is the binary
    ; already running, the recipe line runs here -- one image wake for a whole make instead of
@@ -287,9 +287,9 @@
        r (two? o ? [<>o] (herald ([sh] + flags + [cmd])))
        ec (two? r ? <r -1)
        (? (0 = ec) 0
-          !(two? r) (udie 1 ("cook: cannot run " + cmd))
-          ignore (say err $ "cook: " + cmd + " (exit " + show ec + ", ignored)\n")
-          (udie 1 ("cook: command failed (exit " + show ec + ")")))))
+          (atom? r) (udie 1 "cook: cannot run \(cmd)")
+          ignore (say err "cook: \(cmd) (exit \(ec), ignored)\n")
+          (udie 1 "cook: command failed (exit \(ec))"))))
 
 ; --- the entry points ----------------------------------------------------------
 
@@ -305,8 +305,7 @@
    (!item ? (say err "cook: nothing to cook\n", quit 1)
       (prepped item @ shipped 
          ; a run that built something says nothing, as make does: the recipes tag themselves
-         (0 < #shipped ? 0
-            (puts $ "cook: " + show item + " is already up to date\n"))))
+         (0 < #shipped ? 0 (puts "cook: \(item) is already up to date\n"))))
 
    ; a command-line word -> an item: the bare string for a file recipe (explicit or from a
    ; pattern rule), the interned symbol for a phony one, a file that is there as itself, else a
@@ -777,8 +776,7 @@
    ; exec-prefixed line becomes an (exec "sh" "-c" cmd) step instead.
    ; the shell a recipe line rides. .SHELLFLAGS is a plain make variable, so it is
    ; already in `as` (the .DEFAULT_GOAL precedent); its default is make's own -c.
-   (shflags as) (trim (peep as ".SHELLFLAGS" "") @ f
-                   (? (0 < #f) (split-ws f) '("-c")))
+   (shflags as) (trim (peep as ".SHELLFLAGS" "") @ f (0 < #f ? (split-ws f) '("-c")))
    ; $(@D): the target's directory sans trailing slash ("." for a bare name), $(@F)
    ; its basename -- make's D/F faces, pinned beside the plain automatics.
    (dslash w) (lastslash w @ k (0 < k ? (snip w 0 (1 < k ? (k - 1) k)) "."))
@@ -794,9 +792,9 @@
        ; $?: the prerequisites newer than the target, all of them when it is not on disk (make's
        ; answer for a phony and a first build); a phony prerequisite is newer whatever the clock says.
        nwr (filter (x \ (nom? x ? 1 (date x @ xd (!td ? (xd ? 1 0) (xd ? (xd > td) 0))))) pr)
-       _ (pins as "@" (itext t) "<" (two? pt ? <pt "") "^" (join " " pt) "*" stem)
-       _ (pins as "?" (join " " (map itext nwr)))
-       _ (pins as "@D" (nom? t ? "." (dslash t)) "@F" (nom? t ? (show t) (fnotdir t)))
+       _ (pins as "@" (itext t) "<" (two? pt ? <pt "") "^" (join " " pt) "*" stem
+                  "?" (join " " (map itext nwr))
+                  "@D" (nom? t ? "." (dslash t)) "@F" (nom? t ? (show t) (fnotdir t)))
        fl (shflags as)
        sn (shname as)
        quiet? (0 < #(peep as ".SILENT" ""))
@@ -978,7 +976,7 @@
      (lines (uncont src)) ())
 
    ; read a file whole (for `include`), then split it into classified lines.
-   (slurp-of path) (uread path @ [1 s] s (udie 1 ("cook: cannot read " + path)))
+   (slurp-of path) (uread path @ [1 s] s (udie 1 "cook: cannot read \(path)"))
    (file-lines ip) (text-lines (slurp-of ip))
 
    ; seed the variable table as make does: the environment first (every NAME=value, origin
@@ -1030,7 +1028,7 @@
          (: (lastdot k r) (n <= k ? r (t k = 46 ? (lastdot (1 + k) k) (lastdot (1 + k) r)))
             d (lastdot 1 0)
             (d = 0 ?                                        ; .c -> % : %.c
-               (sufknown (snip t 1 n) ? ["%" ("%" + t)] 0)
+               (sufknown (snip t 1 n) ? ["%" "%\(t)"] 0)
                (: sr (snip t 1 d) tg (snip t (1 + d) n)       ; .c.o -> %.o : %.c
                   (sufknown sr && sufknown tg ?
                      [("%." + tg) ("%." + sr)] 0))))))
@@ -1046,9 +1044,9 @@
    (: as (seed-defaults {} (posixp src))
       rules (build (text-lines src) as)
       phony ({} @ ps
-               (each rules (r \ (expand-words [<r] as @ tg
+               (each rules (r \ expand-words [<r] as @ tg
                   (any (= ".PHONY") tg ?
-                     (each (expand-words [<>r] as) (p \ pin ps p 1)) 0))), ps))
+                     (each (expand-words [<>r] as) (p \ pin ps p 1)) 0)), ps))
       ; .ONESHELL is a target, not a variable, but what it governs is recipe
       ; expansion -- so record it where expand-steps already looks: `as`.
       _ (each rules (r \ (any (= ".ONESHELL") (expand-words [<r] as) ?
@@ -1203,10 +1201,9 @@
 
    ; is a recipe-file path named like a Makefile? then cook reads it as one.
    (mk-ends p suf) (: ls #suf lp #p (ls <= lp && suf = snip p (lp - ls) lp))
-   (makefilep p) (pbase p @ b
-      (b = "Makefile" || b = "makefile" || b = "GNUmakefile" || mk-ends p ".mk"))
+   (makefilep p) (pbase p @ ("Makefile" || "makefile" || "GNUmakefile") 1 (mk-ends p ".mk"))
    ; the love-recipe names, and there are only these: Cards.l, Cookfile, or anything else .l
-   (lovefilep p) (pbase p @ b (mk-ends p ".l" || b = "Cookfile"))
+   (lovefilep p) (pbase p @ "Cookfile" 1 b (mk-ends p ".l"))
    ; -f names the makefile whatever it is called, as make's does, so only a love-recipe name
    ; argues back; discovery still needs the name to tell it what it found.
    (asmake? p explicit?) (? explicit? !(lovefilep p) (makefilep p))
@@ -1229,13 +1226,13 @@
    ; books so the regenerated Cookfile can be read back into a clean scope.
    (regen-cookfile mk ck)
    (: _ (pin emitp 0 1)
-       _ (register-makefile (slurp-close mk))
-       o (open ck "w")
-       (emit-cookfile o,
-        close o,
-        pin emitp 0 0,
-        clear-cards 0,
-        say err ("cook: " + ck + " regenerated from " + mk), put err 10))
+      _ (register-makefile (slurp-close mk))
+      o (open ck "w")
+    (emit-cookfile o,
+     close o,
+     pin emitp 0 0,
+     clear-cards 0,
+     say err "cook: \(ck) regenerated from \(mk)\n"))
    ; where a Cookfile and a Makefile both sit in the cwd and the Makefile is the newer, refresh
    ; the Cookfile from it before discovery picks it up. (date is () for a missing file.)
    (autoregen _)
@@ -1270,7 +1267,7 @@
       RECIPE ...        the items to build (default: the first recipe declared)
     a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary love source.
     """)
-   (need-arg h r) (two? r ? 0 (udie 2 ("cook: " + h + " needs an argument")))
+   (need-arg h r) (two? r ? 0 (udie 2 "cook: \(h) needs an argument"))
    ; is this word the count, or the next argument? all digits and at least one.
    (jobword? w)
    (: n #w
@@ -1309,7 +1306,7 @@
                   (!(digitp (w k))) 0
                   (go (k + 1) (a * 10 + w k - 48)))
       v (0 < n ? (go 0 0) 0)
-      (0 < v ? v (say err ("cook: -j wants a job count, not " + show w),
+      (0 < v ? v (say err "cook: -j wants a job count, not \(w)",
                   put err 10, quit 2)))
    ; a NAME=VAL word (make's command-line variable; NAME:=VAL folds to the same,
    ; the split point's leading : stripped) -> (name . val), or () for a plain word.
@@ -1321,27 +1318,26 @@
    (parse-args ws)             ; -> a tablet: 'file, 'emit, 'help, 'ver, 'var, 'pos (the recipe words, in order)
    ((: (loop ws opt) (!(two? ws) ? opt
        (: w <ws r >ws
-          (? (w = "-f" || w = "--file") (need-arg w r, pin opt 'file <r, loop >r opt)
-             (w = "-C" || w = "--directory") (need-arg w r, pin opt 'dir <r, loop >r opt)
-             (w = "-j" || w = "--jobs")
+          (w @ ("-f" || "--file") (need-arg w r, pin opt 'file <r, loop >r opt)
+             ("-C" || "--directory") (need-arg w r, pin opt 'dir <r, loop >r opt)
+             ("-j" || "--jobs")
                 (two? r && jobword? <r ? (pin opt 'jobs (jobn <r), loop >r opt)
                    (pin opt 'jobs (jobauto 0), loop r opt))
-             (2 < tally w && "-j" = snip w 0 2)          ; glued: -j8
+             ("-j" + _)          ; glued: -j8
                                              (pin opt 'jobs (jobn (snip w 2 #w)), loop r opt)
-             (w = "-n" || w = "--dry-run" || w = "--just-print")
+             ("-n" || "--dry-run" || "--just-print")
                                                   (pin opt 'dry 1, loop r opt)
-             (w = "--emit")                                       (pin opt 'emit 1, loop r opt)
-             (w = "-h" || w = "--help" || w = "help")      (pin opt 'help 1, loop r opt)
-             (w = "-v" || w = "--version" || w = "version") (pin opt 'ver 1, loop r opt)
+             "--emit"                                       (pin opt 'emit 1, loop r opt)
+             ("-h" || "--help" || "help")      (pin opt 'help 1, loop r opt)
+             ("-v" || "--version" || "version") (pin opt 'ver 1, loop r opt)
              ; make's -s is .SILENT for the run; the directory chatter flags have nothing to do
-             (w = "-s" || w = "--silent" || w = "--quiet")
-                                                  (pin opt 'var (peep opt 'var () + [(".SILENT" . "1")]), loop r opt)
-             (w = "--no-print-directory" || w = "-w" || w = "--print-directory") (loop r opt)
-             (0 < tally w && w 0 = 45)                     ; any other dash word is a flag, never a recipe
-                                                  (say err ("cook: unknown option " + w), put err 10, quit 2)
+             ("-s" || "--silent" || "--quiet") (pin opt 'var (peep opt 'var () + [(".SILENT" . "1")]), loop r opt)
+             ("--no-print-directory" || "-w" || "--print-directory") (loop r opt)
+             (? (0 < #w && w 0 = 45))                     ; any other dash word is a flag, never a recipe
+                                     (say err "cook: unknown option \(w)", put err 10, quit 2)
              (varw w @ vw
-                (two? vw ? (pin opt 'var (peep opt 'var () + [vw]), loop r opt)
-                   (pin opt 'pos (peep opt 'pos () + [w]), loop r opt)))))))
+                (two? vw ? (pin opt 'var (opt 'var + [vw]), loop r opt)
+                   (pin opt 'pos (opt 'pos + [w]), loop r opt)))))))
     ws {})
 
    ; -- cook-main (this form's body answers it) --
@@ -1364,8 +1360,8 @@
       ; -C DIR: the cook runs there -- discovery, the build file, every recipe -- as make's does
       _ (peep opt 'dir 0 @ d
            (!d || !(nom? (chdir d)) ? 0
-              (udie 2 ("cook: cannot cd to " + d))))
-      _ (pin clivars 0 (peep opt 'var ()))                   ; the VAR=VAL words, for seed-defaults
+              (udie 2 "cook: cannot cd to \(d)")))
+      _ (pin clivars 0 (opt 'var))                   ; the VAR=VAL words, for seed-defaults
       _ (pin jobs 0 (peep opt 'jobs 1))                      ; the -j width; 1 is the serial cook
       ; ..and the width goes down the environment, for a recipe that forks on its own account.
       ; not a jobserver: nothing is handed back, so it is a hint and no claim on this pool.
@@ -1374,7 +1370,7 @@
       emit? (peep opt 'emit 0)
       pos (peep opt 'pos ())
       xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)
-      _ (xf && !(exists? xf) ? (udie 1 ("cook: cannot open " + xf)) 0)
+      _ (xf && !(exists? xf) ? (udie 1 "cook: cannot open \(xf)") 0)
       ; a positional is a recipe wherever discovery can name the build file itself; the back-compat
       ; form is kept for the case it was written for, a build file discovery cannot find.
       disc0 (xf ? 0 (discover 0))                                    ; what discovery would name, if anything
@@ -1391,8 +1387,8 @@
           (slurp-close file @ s
              ((asmake? file xf ?
                  (register-makefile s, cook-all 0)
-                 (sounds s @ 'torn (udie 1 ("cook: unfinished form in " + file))
-                             fs (each fs (f \ ev 'ev f)))),
+                 (sounds s @ 'torn (udie 1 "cook: unfinished form in \(file)")
+                             fs (each fs (ev 'ev)))),
               0))
           (two? pos) (udie 1 "cook: no Cards.l, Cookfile or Makefile found")
           0)))

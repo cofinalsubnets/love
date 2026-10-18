@@ -43,7 +43,7 @@
    ; the text kinds) | why not
    (pnm-head s)
     (: k (2 <= #s && s 0 = 80 ? (s 1 - 48) 0)
-       (nums i n acc) (? (n = 0) [(rev acc) i]
+       (nums i n acc) (n @ 0 [(rev acc) i]
                          (pnm-num s i @ r (two? r ? (nums (r 1) (n - 1) (r 0 . acc)) ())))
        (? (k < 1 || 7 < k) "not a pnm"
           (k = 7)
@@ -115,17 +115,17 @@
                    (go i) (? (i = n) [w h (string o)]
                              (: p (d * i) q (4 * i)
                                 (? (d < 3)
-                                    (: g (peep c p 0) (pin o q g, pin o (q + 1) g, pin o (q + 2) g,
-                                                       pin o (q + 3) (d = 2 ? (peep c (p + 1) 0) 255)))
-                                   (pin o q (peep c p 0), pin o (q + 1) (peep c (p + 1) 0),
-                                    pin o (q + 2) (peep c (p + 2) 0), pin o (q + 3) (d = 4 ? (peep c (p + 3) 0) 255))),
+                                    (: g (peep c p 0) (pins o q g (q + 1) g (q + 2) g
+                                                       (q + 3) (d @ 2 (peep c (p + 1) 0) 255)))
+                                   (pins o q (peep c p 0) (q + 1) (peep c (p + 1) 0)
+                                    (q + 2) (peep c (p + 2) 0) (q + 3) (d @ 4 (peep c (p + 3) 0) 255))),
                                 go (i + 1)))
                    (go 0))))))
 
    (pnm-encode w h px)
     (: n (w * h) c (cask (3 * n))
        (go i) (? (i = n) 0 (: p (4 * i) q (3 * i)
-                              (pin c q (px p), pin c (q + 1) (px (p + 1)), pin c (q + 2) (px (p + 2)),
+                              (pins c q (px p) (q + 1) (px (p + 1)) (q + 2) (px (p + 2)),
                                go (i + 1))))
        (go 0, "P6\n\(w) \(h)\n255\n" + string c))
 

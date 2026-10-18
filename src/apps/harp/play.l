@@ -175,7 +175,7 @@
    (song-out s n g) (: base (s 'fpos)
                        live (filter (p \ p 1 0 >= base) (s 'vs))
                        now (filter (p \ p 0 < base + n) live)
-                       ((pins s 'vs live 'fpos (base + n)),
+                       (pins s 'vs live 'fpos (base + n),
                         say (s 'h) (pack (mixdown (map (p \ p 1) now) base n) n g)))
 
    ; --- the run: cycles in, chunks out ---------------------------------------
@@ -231,12 +231,10 @@
    (qshow t) (qparts t @ p (1 = <>p ? (show <p) (show <p + "/" + show <>p)))
    (harp-print p c0 ncyc)
     (each ^ncyc
-          (i \ (c0 + i @ c
-                  (say out $ "cycle " + (show c) + "\n",
-                   each (p (qi c) (qi (c + 1)))
-                        (x \ (say out $ "  " + (qshow (evwb x)) + " .. " + (qshow (evwe x))
-                                        + (onset? x ? "" "  (tail)")
-                                        + "  " + (show (evv x)) + "\n"))))))
+     (i \ c0 + i @ c
+      (say out "cycle \(c)\n",
+       each (p (qi c) (qi (c + 1)))
+       (x \ say out "  \(qshow (evwb x)) .. \(qshow (evwe x))\(onset? x ? "" "  (tail)")  \(evv x)\n"))))
 
    ; --- the verb -------------------------------------------------------------
    harp-usage "usage: harp [-n N] [-c CPS] [-r RATE] [-g GAIN] [-o F.wav] [-p] [-s SCORE] PATTERN..
@@ -256,7 +254,7 @@
                             i))
    spliced {}
    (harp-splice _) (peep spliced 0 0 ? ()
-                      (pin spliced 0 1, ev (<(sound "(borrow 'harp)"))))
+                      (pin spliced 0 1, ev <(sound "(borrow 'harp)")))
    (harp-read a) (harp-lead a @ i
                     (i < #a && 40 = a i ? (harp-splice (), sound a @ (f . _) (ev f) hush)
                                           (hit (mini a))))
@@ -265,8 +263,7 @@
    (harp-main as)
     (: (go l o ps)
         (atom? l ? (harp-fire o (lrev ps))
-         (<l @
-               "-n" (go >>l (pin o 'cycles (harp-atoi <>l)) ps)
+         (<l @ "-n" (go >>l (pin o 'cycles (harp-atoi <>l)) ps)
                "-r" (go >>l (pin o 'rate (harp-atoi <>l)) ps)
                "-c" (go >>l (pin o 'cps (harp-atof <>l)) ps)
                "-f" (go >>l (pin o 'from (harp-atoi <>l)) ps)
@@ -292,7 +289,7 @@
                                    (acc + filter (b \ !(b 'err)) (sc 'score-parse ls)))))
                    () (o 'scores))
        cps  (o 'cps)
-       ps2  (bars = 'bad ? () (ps + (two? bars ? [(sc 'score-tune bars cps)] ())))
+       ps2  (bars @ 'bad () (ps + (two? bars ? [(sc 'score-tune bars cps)] ())))
        p    (? !(two? ps2) hush
                (1 = #ps2) (<ps2 @ x (string? x ? (harp-read x) x))
                (stack (map (x \ (string? x ? (harp-read x) x)) ps2)))

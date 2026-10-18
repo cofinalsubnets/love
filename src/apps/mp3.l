@@ -78,14 +78,14 @@
        (go i acc) (? (end < i + 10 || s i = 0) (rev acc)
                      (: id (snip s i (i + 4)) n (mp3-fsz s v i)
                         nm (mp3-names id)
-                        (go (i + 10 + n) (string? nm ? ((nm + "=" + mp3-text (snip s (i + 10) (i + 10 + n))) . acc) acc))))
+                        (go (i + 10 + n) (string? nm ? (("\(nm)=" + mp3-text (snip s (i + 10) (i + 10 + n))) . acc) acc))))
        (? (v < 3) () (go 10 ())))
 
    ; --- the meta ------------------------------------------------------------
    ; a xing or info frame: no audio; its frame count, and lame's encoder delay and padding. it
    ; sits past the side info -- past the crc too, though lame lays it where the crc is not
    (mp3-xing s o n ch lsf)
-    (: x0 (o + 4 + (lsf ? (ch = 1 ? 9 17) (ch = 1 ? 17 32)))
+    (: x0 (o + 4 + (lsf ? (ch @ 1 9 17) (ch @ 1 17 32)))
        (tag? x) (snip s x (x + 4) @ t (t = "Xing" || t = "Info"))
        x (? ((s (o + 1) & 1) = 0 && tag? (x0 + 2)) (x0 + 2) x0)
        (? !(tag? x) ()
@@ -144,7 +144,7 @@
            (mp3-frame st h o f @
              (pcm . nx) (: hd (mp3-hd h o) c (hd 1)
                            (? (hd 2 != m 'rate) "the stream changes its sample rate"
-                              (: _ (out (f ? pcm (mp3-shape pcm c want))) (go h nx))))
+                              (out (f ? pcm (mp3-shape pcm c want)), go h nx)))
              2 (wav-gulp q @ g (string? g ? (go (snip h o #h + g) 0) 0))
              4 (mp3-hd h o @ [n c r] (: _ (out (string (cask (m 'spf * want * w)))) (go h (o + max n 4))) _ (go h (o + 1)))
              _ (? (o >= #h) (wav-gulp q @ g (string? g ? (go g 0) 0))
@@ -167,19 +167,19 @@
   plays each FILE (- for stdin) through the horn; -w writes a wav instead, -s raw to stdout,
   -t tests and writes nothing. layer iii only. HORN=PATH names the device, HORN=none a sink
   that keeps time."
-   (mpg123-err m) (say err (m + "\n"), flush err, 1)
+   (mpg123-err m) (say err "\(m)\n", flush err, 1)
    (mpg123-wav m f n)
     (: ch (m 'ch) w (f ? 4 2) (cl v) (min 4294967295 v)
        ("RIFF" + wrle (cl (36 + n)) 4 + "WAVE" + "fmt " + wrle 16 4 + wrle (f ? 3 1) 2 + wrle ch 2 + wrle (m 'rate) 4
         + wrle (m 'rate * ch * w) 4 + wrle (ch * w) 2 + wrle (8 * w) 2 + "data" + wrle (cl n) 4))
    (mpg123-one o p)
     (: q (p = "-" ? in (open p "r"))
-       (? !(hot? q) (mpg123-err ("mpg123: cannot open " + p + ": " + uerrno q))
+       (? !(hot? q) (mpg123-err "mpg123: cannot open \(p): \(uerrno q)")
           (: r ((cite 'av 'av-head) q mp3-meta "" @ ['short h] ["cut short" h] x x)
              play !(o "w" || o "s" || o "t")
              m0 <r hb (r 1) f (o "e" = "f32" && !play ? 1 0)
-             fin (\ v (p = "-" ? v (close q, v)))
-             (? (string? m0) (fin (mpg123-err ("mpg123: " + p + ": " + m0)))
+             fin (\ v (p @ "-" v (close q, v)))
+             (? (string? m0) (fin (mpg123-err "mpg123: \(p): \(m0)"))
                 (: m (o "g" ? (pins m0 'skip 0 'total 0) m0)
                    d (? (o "w") (open (o "w") "w") (o "s") out play (horn (m 'rate) (min 2 (m 'ch))) ())
                    (? (o "w" && !(hot? d)) (fin (mpg123-err ("mpg123: cannot write " + o "w")))
@@ -189,7 +189,7 @@
                          _ (? (o "w") (say d (mpg123-wav m f 0)) ())
                          r (mp3-run q (snip hb (m 'at) #hb) m f
                                     (pcm \ (: _ (pin ps 'n (ps 'n + #pcm)) (? (o "w" || o "s" || play) (say d pcm) ()))))
-                         _ (? (o "w") (: _ (flush d) _ (close d) ((cite 'av 'av-patch) (o "w") 0 (mpg123-wav m f (ps 'n))))
+                         _ (? (o "w") (: _ (flush d) _ (close d) (cite 'av 'av-patch (o "w") 0 (mpg123-wav m f (ps 'n))))
                               (o "s") (flush d)
                               play (flush d, wav-drain d, close d)
                               ())
@@ -198,7 +198,7 @@
     (: o {}
        (go l fs)
         (? (atom? l) (? !(two? fs) (mpg123-err mpg123-usage)
-                        (foldl (\ st p (mpg123-one o p @ r (r ? r st))) 0 (rev fs)))
+                        (foldl (\ st p (mpg123-one o p @ r (r || st))) 0 (rev fs)))
            (<l @ "-q" (go >l fs) "-t" (pin o "t" 1, go >l fs) "-s" (pin o "s" 1, go >l fs)
                  "--no-gapless" (pin o "g" 1, go >l fs)
                  "-w" (two? >l ? (pin o "w" <>l, go >>l fs) (mpg123-err "mpg123: -w needs a file name"))

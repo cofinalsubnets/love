@@ -16,7 +16,7 @@
 (borrow 'bytes)
 (borrow 'gz)
 (:
-   png-sig (string 137 + "PNG\r\n" + string 26 + "\n")
+   png-sig (string 137 + "PNG\r\n\x1a\n")
    png-adam7 [[0 0 8 8] [4 0 8 8] [0 4 4 8] [2 0 4 4] [0 2 2 4] [1 0 2 2] [0 1 1 2]]
 
    ; --- chunks ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@
     (: ty (hd 'ty) dep (hd 'dep) chs (hd 'chs) trns (hd 'trns)
        (sm k) (png-sample c d (x * chs + k) dep)
        (sc v) (png-scale v dep)
-       (put r g b a) (pin out o r, pin out (o + 1) g, pin out (o + 2) b, pin out (o + 3) a)
+       (put r g b a) (pins out o r (o + 1) g (o + 2) b (o + 3) a)
        (key k) (rdbe trns (2 * k) 2)
        (ty @ 0 (: v (sm 0) g (sc v)
                   (put g g g (#trns = 2 && v = key 0 ? 0 255)))
@@ -200,7 +200,7 @@
    (png-encode w h px)
     (: st (4 * w) pal (png-census w h px)
        (pal = () ?
-           (png-file w h 8 6 "" (png-filter (map (y \ png-row px st y) ^h) st 4))
+           (png-file w h 8 6 "" (png-filter (map (png-row px st) ^h) st 4))
           (: ks (pal 0) ix (pal 1) m #ks
              dep (? (m <= 2) 1 (m <= 4) 2 (m <= 16) 4 8) n ((w * dep + 7) // 8)
              (row y) (: r (png-row px st y) c (cask n)
@@ -259,7 +259,7 @@
     (png-parse s @ t
        (? (string? t) t
           (: hd (t 'hd) w (hd 'w) h (hd 'h) ih (t 'ihdr)
-             frs (rev (peep t 'fr ()))
+             frs (rev (t 'fr))
              (fail why acc) (acc = () ? why [w h (rev acc)])
              (go fs c n acc)
               (? (fs = () || most <= n) [w h (rev acc)]

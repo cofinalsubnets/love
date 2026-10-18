@@ -33,7 +33,7 @@
    (keys-find t lib sym) (afind (r \ kb-mods r = lib && kb-sym r = sym) t @ hit
                              (two? hit ? (kb-act hit) ()))
    (keys-union custom def) (custom + filter (r \ !(keys-has custom (kb-mods r) (kb-sym r))) def)
-   (keys-syms t) (foldl (a \ r \ (any (x \ x = kb-sym r) a ? a (kb-sym r . a))) () t)
+   (keys-syms t) (foldl (a \ r \ (any (= (kb-sym r)) a ? a (kb-sym r . a))) () t)
 
    ; --- key specs: a list, `(sup shift e)` -- the last element is the key, every
    ;     one before it a modifier. a config writes these (src/apps/lux/config.l reads
@@ -65,12 +65,11 @@
                       (#nm = 1) (nm 0)                                      ; one char is its ascii keysym
                       (afind (r \ <r = nm) xk-names @ hit
                          (two? hit ? <>hit ())))))                             ; unknown name -> () (no keysym is 0, so nothing is lost)
-   (kmod-of m modm) (? (m = 'sup || m = 'super || m = 'mod4) supm
-                       (m = 'alt || m = 'mod1) altm
-                       (m = 'ctrl || m = 'control) ctrlm
-                       (m = 'shift) shiftm
-                       (m = 'mod) modm                                         ; `mod` follows whatever the config chose
-                       ())
+   (kmod-of m modm) (m @ ('sup || 'super || 'mod4) supm
+                       ('alt || 'mod1) altm
+                       ('ctrl || 'control) ctrlm
+                       'shift shiftm
+                       'mod modm)                                        ; `mod` follows whatever the config chose
    ; a spec -> (lib keysym), or () if any field is unknown. the mask accumulates
    ; through a `(1 mask)` wrapper: a bare mask of 0 (no modifiers) is a legitimate
    ; answer and would read as failure on its own.
@@ -100,9 +99,9 @@
    ; --- the directional block: the .hs list comprehension as a map --
    ;     (dir keysyms delta) x {hjkl, arrows} x {mod, mod+shift, mod+ctrl} ---
    (kdirs-for nud) [['left  [104 xk-left]  [(0 - nud) 0]]
-                     ['down  [106 xk-down]  [0 nud]]
-                     ['up    [107 xk-up]    [0 (0 - nud)]]
-                     ['right [108 xk-right] [nud 0]]]
+                    ['down  [106 xk-down]  [0 nud]]
+                    ['up    [107 xk-up]    [0 (0 - nud)]]
+                    ['right [108 xk-right] [nud 0]]]
    (kdir-rows modm d) (: dir <d delta (d 2)
                          (foldl cat () (map (sym \ [(kb modm sym ['go dir delta])
                                                      (kb (modm | shiftm) sym ['swapd dir delta])
@@ -186,7 +185,7 @@
    ;     the most recently used other window (the alt-tab flip); Backward to
    ;     the least. Windows never yet focused count as oldest. ---
    (nm-pick row f hist fwd)
-    (: cands (filter (w \ w != f && any (x \ x = w) row) hist)
-       fresh (filter (w \ w != f && !(any (x \ x = w) cands)) row)
+    (: cands (filter (w \ w != f && any (= w) row) hist)
+       fresh (filter (w \ w != f && !(any (= w) cands)) row)
        order (cands + fresh)
        (? (atom? order) () fwd <order <(rev order))))

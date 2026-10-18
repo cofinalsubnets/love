@@ -121,7 +121,7 @@
                          (og-pump (snip s (m 'at) k + string [(255 - s k)] + snip s (k + 1) #s) m @ [r pcm]
                            (r = 0 && 0 < #pcm)))
                       ; av plays it through the horn
-                      (sh "HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) (puts (show (av-play (open \"c1.oga\" \"r\")))) (quit 0)' 2>&1"
+                      (sh "HORN=none ../love -e '(borrow (quote posix), borrow (quote av), (puts (show (av-play (open \"c1.oga\" \"r\")))), quit 0)' 2>&1"
                          = (0 . "0"))))
         (gate-partly "ogg: no flac or ffmpeg, the reference streams skipped"))
 

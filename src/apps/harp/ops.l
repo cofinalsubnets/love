@@ -16,12 +16,12 @@
 (:
  width 49
  ops-db 8.685889638065035                ; dB a neper: 20 / ln 10
- (ops-row o) (: (g k d) (peep o k d) ss (peep o 'segs ())
+ (ops-row o) (: (g k d) (peep o k d) ss (o 'segs)
    ([(1.0 * g 'at 0) (1.0 * g 'f 0) (1.0 * g 'slide 0) (1.0 * g 'drop 0) (1.0 * g 'kappa 0) (1.0 * g 'wave 0)
     (1.0 * g 'mod -1) (1.0 * g 'depth 0) (1.0 * g 'fb 0) (1.0 * g 'l 0) (1.0 * g 'r 0) (1.0 * g 'vib 0)
     (1.0 * g 'vrate 0) (1.0 * g 'trem 0) (1.0 * g 'trate 0) 0.0 0.0 (1.0 * g 'lvl 1)
-    (1.0 * #ss)] + cats (map (s \ map (x \ 1.0 * x) s) ss) + map (_ \ 0.0) ^(5 * (6 - #ss))))
- (ops-rows os) (gem-tray [(width * #os)] (cats (map ops-row os)))
+    (1.0 * #ss)] + catmap (map (* 1.0)) ss + map (_ \ 0.0) ^(5 * (6 - #ss))))
+ (ops-rows os) (gem-tray [(width * #os)] (catmap ops-row os))
  kern (cite 'dsp 'tones)
  ; ..the reference where the seat has no kernel, or the first operator asks for it ('ref 1)
  (ops-run R os st n f0 rate) (kern && !(peep <os 'ref 0) ? (kern R st n f0 rate) (ops-ref os st n f0 rate))
@@ -45,16 +45,16 @@
                 (f0 + i < at) (go (i + 1) y1 y2 (0.0 . acc))
                 (: t ((f0 + i - at) / (1.0 * rate))
                    a (env ss t * lvl * (tm = 0.0 ? 1.0 (exp (0.0 - tm * (0.5 - 0.5 * cos (tr * t * tau)) / ops-db))))
-                   x ((sl = 0.0 ? (f * t) (f * (exp (sl * t) - 1.0) / sl)) + (g = 0.0 ? 0.0 (g * (1.0 - exp (0.0 - ka * t))))
+                   x ((sl @ 0.0 (f * t) (f * (exp (sl * t) - 1.0) / sl)) + (g @ 0.0 0.0 (g * (1.0 - exp (0.0 - ka * t))))
                       + (vib = 0.0 || vr = 0.0 ? 0.0 (f * vib / (vr * tau) * (1.0 - cos (vr * t * tau))))
                       + (m >= 0 && m < j ? (dep * peep (outs m) i 0.0) 0.0) + fb * (y1 + y2))
-                   v (a = 0.0 ? 0.0 (a * wave w x (f0 + i)))
+                   v (a @ 0.0 0.0 (a * wave w x (f0 + i)))
                    (go (i + 1) v y1 (v . acc))))
               r (go 0 (y0 j 0) (y0 j 1) ())
               (pin outs j (gem-tray [n] (r 0)), pin ys j [(r 1) (r 2)]))
    _ (each ^k one)
    (side key) (: S (foldl (\ acc j (acc + outs j * peep (os j) key 0.0)) (iota n * 0.0) ^k) (map (i \ peep S i 0.0) ^n))
-   (gem-tray [(2 * n + 2 * k)] (side 'l + side 'r + cats (map (j \ ys j) ^k))))
+   (gem-tray [(2 * n + 2 * k)] (side 'l + side 'r + catmap ys ^k)))
 
  ; --- a voice: the kernel run for the frames asked, the outputs carried; asked for frames out
  ;     of their order (a law's look), it runs again from the start to reach them ---

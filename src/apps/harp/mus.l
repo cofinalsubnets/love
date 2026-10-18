@@ -56,20 +56,20 @@
  (run p lim) (: evs (p 'evs)
    (? (atom? evs) (: nb (p 'base + int (p 'sc 'ticks * p 'fpt)) (nb >= lim || p 'sc 'ticks = 0 ? 0 (: _ (pins p 'evs (p 'sc 'evs) 'base nb) (run p lim))))
       (: e <evs at (p 'base + int (e 0 * p 'fpt))
-         (at >= lim ? 0 (: _ (apply p e at) _ (pin p 'evs >evs) (run p lim))))))
+         (at >= lim ? 0 (apply p e at, pin p 'evs >evs, run p lim)))))
  ; ..at most 16 voices: the oldest let-go ones are the first to stop
  (firsts l k) (k = 0 || atom? l ? () (<l . firsts >l (k - 1)))
  (mus-feed p n) (: base (p 'fpos) _ (run p (base + n))
    tails (firsts (filter (v \ v 0 >= base) (p 'tails)) (max2 0 (16 - #(p 'on))))
    _ (pins p 'tails tails 'fpos (base + n))
-   ((cite 'play 'mixdown) (map (s \ s 2) (p 'on) + tails) base n))
+   (cite 'play 'mixdown (map (s \ s 2) (p 'on) + tails) base n))
  (mus-voices p) (#(p 'on) + #(p 'tails))
  ; --- which lump a map plays: an episode's map its own, doom 2's by their names in order ---
  d2 ["RUNNIN" "STALKS" "COUNTD" "BETWEE" "DOOM" "THE_DA" "SHAWN" "DDTBLU" "IN_CIT" "DEAD" "STLKS2"
      "THEDA2" "DOOM2" "DDTBL2" "RUNNI2" "DEAD2" "STLKS3" "ROMERO" "SHAWN2" "MESSAG" "COUNT2"
      "DDTBL3" "AMPIE" "THEDA3" "ADRIAN" "MESSG2" "ROMER2" "TENSE" "SHAWN3" "OPENIN" "EVIL" "ULTIMA"]
  e4 ["E3M4" "E3M2" "E3M3" "E1M5" "E2M7" "E2M4" "E2M6" "E2M5" "E1M9"]
- (mus-track m) (? (#m = 4 && m 0 = 69 && m 2 = 77) (m 1 = 52 ? ("D_" + e4 (m 3 - 49)) ("D_" + m))
-                  (#m = 5 && snip m 0 3 = "MAP") (: k ((m 3 - 48) * 10 + m 4 - 49) (0 <= k && k < 32 ? ("D_" + d2 k) ()))
+ (mus-track m) (? (#m = 4 && m 0 = 69 && m 2 = 77) (m 1 @ 52 "D_\(e4 (m 3 - 49))" "D_\(m)")
+                  (#m = 5 && snip m 0 3 = "MAP") (: k ((m 3 - 48) * 10 + m 4 - 49) (0 <= k && k < 32 ? "D_\(d2 k)"))
                   ())
 )) ; module mus

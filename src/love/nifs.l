@@ -193,25 +193,25 @@
    ; mod is the module the row is born in, () for the global book -- and no sweep in egg.l
    ; has to know it. the boot .l files compile against the bare book, so any name one of
    ; them spells has to stay global, which is what keeps that column near-empty.
-   (mod-of r) (4 < tally r ? (r 4) ())
+   (mod-of r) (4 < #r ? (r 4) ())
    (zip a b) (two? a ? ([<a <b] . zip >a >b))
    (nif-row at r)
     (: im (string <>>>r)
        md (mod-of r @ m (m ? (cstrlit (string m)) "0"))
        (nif-wide? r ?
-          ("C(" + show at + ", " + show <>>r + ", " + cstrlit <>r + ", " + im + ", " + md + ")")
-          ("P(" + show at + ", " + cstrlit <>r + ", " + im + ", " + md + ")")))
+          "C(\(at), \(<>>r), \(cstrlit <>r), \(im), \(md))"
+          "P(\(at), \(cstrlit <>r), \(im), \(md))"))
    (chunk n l)
     (: (go i cur l) (two? l ? (i = n ? (rev cur . go 0 () l) (go (i + 1) (<l . cur) >l))
                        (two? cur ? [(rev cur)]))
      (go 0 () l))
    ; a macro body over several lines, each but the last ending in a continuation
-   (nif-lines l) (l @ (h . t) (foldl (a \ s \ a + " \\" + nl + " " + s) ("\\" + nl + " " + h) t) "")
+   (nif-lines l) (l @ (h . t) (foldl (a \ s \ "\(a) \\\(nl) \(s)") "\\\(nl) \(h)" t) "")
    nif-rows-def
     (mac "nif_rows(P, C)" (nif-lines (map (p \ nif-row <>p <p) (zip nif-rows nif-ats))))
    nif-insts-def
     (mac "inst_rows(I)"
-         (nif-lines (map (c \ sepby " " (map (i \ "I(" + string i + ")") c)) (chunk 6 nif-insts))))
+         (nif-lines (map (c \ sepby " " (map (i \ "I(\(i))") c)) (chunk 6 nif-insts))))
 
    nif-table
     ['gdecl [["nifs" '(arr (const (named "union u")) 0)

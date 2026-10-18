@@ -36,7 +36,6 @@
 (borrow 'smtp)
 (borrow 'imap)
 (:
- ch-esc (string 27)
  ch-hdrs ["date" "from" "to" "cc" "subject"]
  ch-help ["index" "  j k  up down     the cursor          enter    read the message"
           "  ^f ^b  space -   a page              = *      the first, the last"
@@ -63,7 +62,7 @@
          (l i @ c
             (? (c = 9) (8 - col % 8 @ k (say j (edfit "" k " "), go (i + 1) (col + k)))
                (c = 13) (go (i + 1) col)
-               (c < 32 || c = 127) (say j ("^" + string (c = 127 ? 63 (c + 64))), go (i + 1) (col + 2))
+               (c < 32 || c = 127) (say j "^\(string (c = 127 ? 63 (c + 64)))", go (i + 1) (col + 2))
                (put j c, go (i + 1) (col + (128 <= c < 192 ? 0 1))))))
      (go 0 0))
  ; a long line broken at a space where one falls in the second half, else hard
@@ -89,19 +88,19 @@
 
  ; --- settings --------------------------------------------------------------------------------
  (ch-home _) (getenv "HOME" @ h (string? h ? h ""))
- (ch-short p) (ch-home 0 @ h (#h && starts? p h ? ("~" + snip p #h #p) p))
+ (ch-short p) (ch-home 0 @ h (#h && starts? p h ? "~\(snip p #h #p)" p))
  (ch-cfg s k d) (s 'cfg k @ v (two? v ? (show-or <v) d))
  (show-or v) (string? v ? v (show v))
  ; ~ is home, = and + the folder
  (ch-path s p)
   (? (#p < 1) p
      (p 0 = 126) (ch-home 0 + snip p 1 #p)
-     (p 0 = 61 || p 0 = 43) (ch-path s (ch-cfg s 'folder "~/Mail") + "/" + snip p 1 #p)
+     (p 0 = 61 || p 0 = 43) "\(ch-path s (ch-cfg s 'folder "~/Mail"))/\(snip p 1 #p)"
      p)
  (ch-me s)
   (: f (ch-cfg s 'from "")
      a (mime-addrs f)
-     (two? a ? (a 0 1) (show-or (getenv "USER") + "@" + (uname 0 @ u (two? u ? (u 1) "localhost")))))
+     (two? a ? (a 0 1) "\(show-or (getenv "USER"))@\(uname 0 @ u (two? u ? (u 1) "localhost"))"))
  (ch-mine? s a)
   (: x (lower a)
      (x = lower (ch-me s) || any (y \ lower y = x) (words (ch-cfg s 'alternates ""))))
@@ -178,7 +177,7 @@
  (ch-count s f) (#(filter f (s 'box 'msgs)))
 
  ; --- the pager's text ------------------------------------------------------------------------
- (ch-hl name v) (ch-esc + "[1m" + name + ":" + ch-esc + "[0m " + v)
+ (ch-hl name v) "\e[1m\(name):\e[0m \(v)"
  (ch-cap n) (join "-" (map (p \ #p ? (upper (snip p 0 1) + snip p 1 #p) p) (split "-" n)))
  ; a leaf as lines: text as text, html through lapiz, anything else named
  ; a leaf as [lines painted?]: text as text, html through lapiz (fed no control byte, so its
@@ -196,8 +195,8 @@
  (ch-leaf-text l w) (ch-leaf l w @ [ls _] (map ch-plain ls) ())
  (ch-tag l i)
   (l @ [t pm hs body nm]
-     (ch-esc + "[35m[-- " + show (i + 1) + ": " + (#nm ? (chucho-vis nm + ", ") "") + t + ", "
-      + ch-size #body + " --]" + ch-esc + "[0m")
+     ("\e[35m[-- \(i + 1): \(#nm ? "\(chucho-vis nm), " "")\(t), "
+      + "\(ch-size #body) --]\e[0m")
      "")
  (ch-shown? l) (l @ [t pm hs body nm] (? (starts? (lower (mime-get hs "content-disposition")) "attachment") 0
                                          (elem t ["text/plain" "text/html" "message/rfc822" "message/delivery-status" "text/x-diff"]) 1
@@ -205,13 +204,13 @@
  ; a body line painted: a quote by depth, a signature dim
  (ch-paint l sig?)
   (: d (: (go i k) (? (#l <= i) k (l i = 62) (go (i + 1) (k + 1)) (l i = 32) (go (i + 1) k) k) (go 0 0))
-     (? sig? (ch-esc + "[2m" + l + ch-esc + "[0m")
-        (0 < d) (ch-esc + (d % 2 ? "[36m" "[33m") + l + ch-esc + "[0m")
+     (? sig? "\e[2m\(l)\e[0m"
+        (0 < d) "\e\(d % 2 ? "[36m" "[33m")\(l)\e[0m"
         l))
  ; a header wrapped plain, then its name made bold
  (ch-hdr-lines n v w)
-  (chucho-wrap (n + ": " + v) w @ (x . r)
-     ((ch-esc + "[1m" + snip x 0 (#n + 1) + ch-esc + "[0m" + snip x (#n + 1) #x) . r)
+  (chucho-wrap "\(n): \(v)" w @ (x . r)
+     ("\e[1m\(snip x 0 (#n + 1))\e[0m\(snip x (#n + 1) #x)" . r)
      [])
  (chucho-render s m w)
   (: raw (mb-raw (s 'box) m)
@@ -235,31 +234,31 @@
 
  ; --- the frame -------------------------------------------------------------------------------
  ; a month and day: [m d], or a day's secs
- (ch-day v) (? (two? v) (mon3 (v 0 - 1) + " " + zpad 2 (show (v 1))) (civil (v // 86400) @ [_ m d] (ch-day [m d]) ""))
+ (ch-day v) (? (two? v) "\(mon3 (v 0 - 1)) \(zpad 2 (show (v 1)))" (civil (v // 86400) @ [_ m d] (ch-day [m d]) ""))
  (ch-size n)
   (? (n < 1000) (show n)
-     (n < 10240) (show (n // 1024) + "." + show (n % 1024 * 10 // 1024) + "K")
-     (n < 1048576) (show (n // 1024) + "K")
-     (show (n // 1048576) + "M"))
+     (n < 10240) "\(n // 1024).\(n % 1024 * 10 // 1024)K"
+     (n < 1048576) "\(n // 1024)K"
+     "\(n // 1048576)M")
  (ch-flags m)
   ((m 'del ? "D" (mb-new? m ? "N" (mb-has? m 82 ? "r" " "))) + (mb-has? m 70 ? "!" " "))
  (ch-irow s e i w sel?)
   (e @ [m pre]
      (: who (ch-mine? s (m 'fromaddr) && #(mime-get (m 'hs) "to")
-                ? ("To " + (mime-addrs (mime-get (m 'hs) "to") @ ((n a) . _) (#n ? n a) ""))
+                ? "To \(mime-addrs (mime-get (m 'hs) "to") @ ((n a) . _) (#n ? n a) "")"
                 (m 'who))
-        sz ("(" + ch-size (m 'size) + ")")
+        sz "(\(ch-size (m 'size)))"
         head (edfit "" (4 - #(show (i + 1))) " " + show (i + 1))
-        txt (head + " " + ch-flags m + " " + ch-day (m 'day) + "  " + edfit (chucho-vis who) 18 " "
-             + " " + edfit "" (7 - #sz) " " + sz + " " + pre + m 'subj)
+        txt ("\(head) \(ch-flags m) \(ch-day (m 'day))  \(edfit (chucho-vis who) 18 " ")"
+             + " \(edfit "" (7 - #sz) " ")\(sz) \(pre)\(m 'subj)")
         row (edfit txt w " ")
-        (? sel? (ch-esc + "[7m" + row + ch-esc + "[0m")
-           (m 'del) (ch-esc + "[31m" + row + ch-esc + "[0m")
-           (mb-has? m 70) (ch-esc + "[33m" + row + ch-esc + "[0m")
-           (mb-new? m) (ch-esc + "[1m" + row + ch-esc + "[0m")
+        (? sel? "\e[7m\(row)\e[0m"
+           (m 'del) "\e[31m\(row)\e[0m"
+           (mb-has? m 70) "\e[33m\(row)\e[0m"
+           (mb-new? m) "\e[1m\(row)\e[0m"
            row))
      (edfit "" w " "))
- (ch-bar w t) (ch-esc + "[7m" + edfit t w " " + ch-esc + "[0m")
+ (ch-bar w t) "\e[7m\(edfit t w " ")\e[0m"
  ch-ikeys " q:Quit  d:Del  u:Undel  s:Save  m:Mail  r:Reply  g:Group  f:Fwd  ?:Help"
  ch-pkeys " i:Exit  -:PrevPg  <Space>:NextPg  v:View Attachm.  d:Del  r:Reply  j:Next  ?:Help"
  ch-vkeys " s:Save to a file  j k:Move  q:Back to the message"
@@ -268,11 +267,11 @@
   (: pl (s 'pl) t (s 'ptop) (map (k \ drop (t + k) pl @ l (two? l ? <l "")) ^n))
  (ch-cbody s n w)
   (: d (s 'draft) hs (d 'hs)
-     (row nm) ("    " + ch-cap nm + ": " + chucho-vis (mime-get hs nm))
+     (row nm) "    \(ch-cap nm): \(chucho-vis (mime-get hs nm))"
      as (d 'atts)
      ls (map row ["from" "to" "cc" "bcc" "subject"] + [""]
          + (two? as ? ["-- Attachments"] [])
-         + map (a \ "    " + a) as)
+         + map (a \ "    \(a)") as)
      (map (k \ drop k ls @ l (two? l ? (edfit <l w " ") "")) ^n))
  (ch-ibody s n w)
   (: o (s 'order) t (s 'top)
@@ -281,16 +280,16 @@
   (: b (s 'box) v (s 'view)
      (? (v = 'pager)
          (: n #(s 'pl) r (s 'rows) t (s 'ptop)
-            pc (n <= r ? "all" (t + r >= n ? "end" (show (100 * (t + r) // n) + "%")))
-            ("-- chucho: " + (s 'pm 'subj) + "  -- (" + pc + ")"))
+            pc (n <= r ? "all" (t + r >= n ? "end" "\(100 * (t + r) // n)%"))
+            "-- chucho: \(s 'pm 'subj)  -- (\(pc))")
         (v = 'compose) "-- chucho: compose"
         (v = 'help) "-- chucho: help"
         (v = 'parts) "-- chucho: the parts"
-        ("-*-chucho: " + ch-short (b 'path) + " [Msgs:" + show #(b 'msgs) + " New:" + show (ch-count s mb-new?)
-         + " Del:" + show (ch-count s (m \ m 'del)) + "]---(" + (s 'thr ? "threads" "date") + ")")))
+        ("-*-chucho: \(ch-short (b 'path)) [Msgs:\(#(b 'msgs)) New:\(ch-count s mb-new?)"
+         + " Del:\(ch-count s (m \ m 'del))]---(\(s 'thr ? "threads" "date"))")))
  (ch-parts-body s n w)
   (: lv (s 'parts) c (s 'pcur)
-     (map (k \ drop k lv @ l (two? l ? (ch-tag <l k @ t (k = c ? (ch-esc + "[7m" + edfit (ch-plain t) w " " + ch-esc + "[0m") t)) "")) ^n))
+     (map (k \ drop k lv @ l (two? l ? (ch-tag <l k @ t (k = c ? "\e[7m\(edfit (ch-plain t) w " ")\e[0m" t)) "")) ^n))
  (chucho-frame s w h)
   (: n (max 1 (h - 3))
      _ (pins s 'rows n 'w w)
@@ -304,8 +303,8 @@
      p (s 'prompt)
      stat (two? p ? (p 0 + (p 2 = 1 ? (edfit "" (swidth (p 1)) "*") (p 1))) (s 'msg))
      cc (min w (1 + swidth (ch-plain stat)))
-     (? (two? p) (tui-fresh s h [w h v] () rows (edfit stat w " ") h cc + ch-esc + "[?25h")
-        (ch-esc + "[?25l" + tui-fresh s h [w h v] () rows (edfit stat w " ") h 1)))
+     (? (two? p) "\(tui-fresh s h [w h v] () rows (edfit stat w " ") h cc)\e[?25h"
+        "\e[?25l\(tui-fresh s h [w h v] () rows (edfit stat w " ") h 1)"))
 
  ; --- prompts: a line typed at the bottom, then handed on ------------------------------------
  ; 'prompt is [label text how then], then a step (s text) -> s; how is 0, 1 for a
@@ -338,15 +337,15 @@
   (ch-at s @ m (tablet? m ? (f m, s) (ch-say s "no message here")))
  (ch-find s t from)
   (: o (s 'order) q (lower t)
-     (hit? m) (has? (lower (m 'subj + " " + m 'who + " " + m 'fromaddr)) q)
+     (hit? m) (has? (lower "\(m 'subj) \(m 'who) \(m 'fromaddr)") q)
      (go k) (? (#o <= k) () (hit? <(o ((from + k) % #o))) ((from + k) % #o) (go (k + 1)))
      (? (#q < 1) (ch-say s "no search yet")
-        (go 1 @ i (charm? i ? (ch-goto s i, ch-say s "") (ch-say s ("not found: " + t))))))
+        (go 1 @ i (charm? i ? (ch-goto s i, ch-say s "") (ch-say s "not found: \(t)")))))
  (ch-save s del?)
   (ch-at s @ m
      (? !(tablet? m) (ch-say s "no message here")
         (ch-ask s (del? ? "Save to mailbox: " "Copy to mailbox: ")
-                ("=" + (findsub (m 'fromaddr) "@" @ k (k < 0 ? (m 'fromaddr) (snip (m 'fromaddr) 0 k)))) 0
+                "=\(findsub (m 'fromaddr) "@" @ k (k < 0 ? (m 'fromaddr) (snip (m 'fromaddr) 0 k)))" 0
                 (s \ t \ (: p (ch-path s t)
                             r (ch-append s p (mb-raw (s 'box) m) (mb-flag (m 'flags) 83 1))
                             (? (r = 1) ((del? ? (pin m 'del 1) 0), ch-say s ((del? ? "saved to " "copied to ") + t))
@@ -355,11 +354,11 @@
   (: r (mb-sync (s 'box))
      (? (string? r) (ch-say s r)
         (: n #(s 'box 'msgs) (pin s 'box r, chucho-order s, ch-goto s (s 'cur),
-                               ch-say s ("written; " + show #(r 'msgs) + " kept")))))
+                               ch-say s "written; \(#(r 'msgs)) kept"))))
  (ch-dirty? s) (any (m \ m 'del || m 'flags != m 'flags0) (s 'box 'msgs))
  (ch-quit s)
   (? (ch-count s (m \ m 'del) = 0) ((ch-dirty? s ? (ch-sync s) s), pin s 'over 1)
-     (ch-ask s ("Purge " + show (ch-count s (m \ m 'del)) + " deleted messages? (y/n) ") "" 'key
+     (ch-ask s "Purge \(ch-count s (m \ m 'del)) deleted messages? (y/n) " "" 'key
              (s \ t \ ((ch-yes? t ? (ch-sync s) (each (s 'box 'msgs) (m \ pin m 'del 0), ch-sync s)), pin s 'over 1))))
  ; --- opening a box: an imap one with its password -- set, a command's, or asked for -------
  (ch-imap-user s p) (imap-url p @ u (two? u && #(u 1) ? (u 1) (ch-cfg s 'imap-user (show-or (getenv "USER")))))
@@ -373,9 +372,9 @@
   (? (mb-kind p = 'imap)
       (ch-imap-pass s @ pw
          (? (string? pw)
-             (ch-say s ("opening " + p + " ..."),
+             (ch-say s "opening \(p) ...",
               imap-open p (ch-imap-user s p) pw @ b (string? b ? (pin s 'ipass (), ch-say s b) (pin s 'ipass pw, k s b)))
-            (ch-ask s ("Password for " + ch-imap-user s p + ": ") "" 1 (s \ t \ (pin s 'ipass t, ch-openbox s p k)))))
+            (ch-ask s "Password for \(ch-imap-user s p): " "" 1 (s \ t \ (pin s 'ipass t, ch-openbox s p k)))))
      (mb-open p @ b (string? b ? (ch-say s b) (k s b))))
  (ch-install s b)
   ((s 'box 'kind = 'imap ? (imap-close (s 'box)) 0),
@@ -457,8 +456,8 @@
       (10 || 13 || 115)
        (drop k lv @ l
           (two? l ? (<l @ [t pm hs body nm]
-                       (ch-ask s "Save to file: " ("~/" + (#nm ? nm "part")) 0
-                               (s \ p \ (uwrite (ch-path s p) body ? (ch-say s ("saved " + p)) (ch-say s ("cannot write " + p))))))
+                       (ch-ask s "Save to file: " "~/\(#nm ? nm "part")" 0
+                               (s \ p \ (uwrite (ch-path s p) body ? (ch-say s "saved \(p)") (ch-say s "cannot write \(p)")))))
              s))
       (113 || 105 || -7) (pins s 'view 'pager 'msg "")))
 
@@ -468,14 +467,14 @@
  (chucho-draft s to cc subj body extra quote)
   (: sig (ch-cfg s 'signature "")
      st (#sig ? (uread (ch-path s sig)) ())
-     tail (two? st ? ("\n-- \n" + st 1) "")
+     tail (two? st ? "\n-- \n\(st 1)" "")
      (pins {} 'hs [["from" (ch-cfg s 'from (ch-me s))] ["to" to] ["cc" cc] ["bcc" ""] ["subject" subj]]
               'body (quote + body + tail) 'atts () 'extra extra 'reply ()))
  (ch-quote-text s m)
   (: lv (mime-leaves (mb-raw (s 'box) m))
      ts (catmap (l \ ch-shown? l ? (ch-leaf-text l 72) ()) lv)
-     (join "\n" (map (l \ #l ? ("> " + l) ">") ts) + "\n"))
- (ch-addrs-str as) (join ", " (map (a \ a @ [n x] (#n ? (n + " <" + x + ">") x)) as))
+     "\(join "\n" (map (l \ #l ? "> \(l)" ">") ts))\n")
+ (ch-addrs-str as) (join ", " (map (a \ a @ [n x] (#n ? "\(n) <\(x)>" x)) as))
  (chucho-reply s m all?)
   (: hs (m 'hs)
      rt (mime-get hs "reply-to")
@@ -484,39 +483,39 @@
      cc (? all? (filter (a \ !(ch-mine? s (a 1)) && !(any (b \ lower (b 1) = lower (a 1)) to))
                          (mime-addrs (mime-get hs "to") + mime-addrs (mime-get hs "cc")))
            ())
-     subj (mime-words (mime-get hs "subject") @ x (ch-base-subj x @ b ("Re: " + b)))
+     subj (mime-words (mime-get hs "subject") @ x (ch-base-subj x @ b "Re: \(b)"))
      mid (m 'mid)
      refs (string? mid ? (m 'refs + [mid]) (m 'refs))
      d (mime-date (mime-get hs "date"))
-     when (two? d ? (ch-day [(d 2) (d 3)] + " " + show (d 1)) "")
-     intro ("On " + when + ", " + m 'who + " wrote:\n")
+     when (two? d ? "\(ch-day [(d 2) (d 3)]) \(d 1)" "")
+     intro "On \(when), \(m 'who) wrote:\n"
      dr (chucho-draft s (ch-addrs-str to) (ch-addrs-str cc) subj (intro + ch-quote-text s m)
                       (string? mid ? [["In-Reply-To" mid] ["References" (join " " refs)]] ()) "")
      (pin dr 'reply m, dr))
  (chucho-forward s m)
   (: hs (m 'hs)
-     subj ("Fwd: " + mime-words (mime-get hs "subject"))
-     (h n) (mime-get hs n @ v (#v ? [(ch-cap n + ": " + mime-words v)] ()))
+     subj "Fwd: \(mime-words (mime-get hs "subject"))"
+     (h n) (mime-get hs n @ v (#v ? ["\(ch-cap n): \(mime-words v)"] ()))
      txt (join "\n" (catmap (l \ ch-shown? l ? (ch-leaf-text l 72) ()) (mime-leaves (mb-raw (s 'box) m))))
-     body ("\n----- Forwarded message from " + m 'who + " <" + m 'fromaddr + "> -----\n\n"
-           + join "\n" (h "date" + h "from" + h "to" + h "cc" + h "subject") + "\n\n" + txt
+     body ("\n----- Forwarded message from \(m 'who) <\(m 'fromaddr)> -----\n\n"
+           + "\(join "\n" (h "date" + h "from" + h "to" + h "cc" + h "subject"))\n\n\(txt)"
            + "\n\n----- End forwarded message -----\n")
      (chucho-draft s "" "" subj body () ""))
  ; the draft as the editor sees it, and read back
  (ch-draft-text d)
-  (join "" (map (h \ ch-cap <h + ": " + h 1 + "\n") (d 'hs)) + "\n" + d 'body)
+  "\(join "" (map (h \ "\(ch-cap <h): \(h 1)\n") (d 'hs)))\n\(d 'body)"
  (ch-draft-read d t)
   (mime-split t @ [h b] (pins d 'hs (mime-heads h) 'body b))
 
  ; --- the message as it is sent ---------------------------------------------------------------
  (chucho-rfcdate ms)
   (: s (ms // 1000) z (s // 86400) ymd (civil z) r (s % 86400) (p2 v) (zpad 2 (show v))
-     (wd3 (wday z) + ", " + p2 (ymd 2) + " " + mon3 (ymd 1 - 1) + " " + show <ymd + " "
-      + p2 (r // 3600) + ":" + p2 (r % 3600 // 60) + ":" + p2 (r % 60) + " +0000"))
+     ("\(wd3 (wday z)), \(p2 (ymd 2)) \(mon3 (ymd 1 - 1)) \(<ymd) "
+      + "\(p2 (r // 3600)):\(p2 (r % 3600 // 60)):\(p2 (r % 60)) +0000"))
  (ch-special? n) (any (c \ has? "()<>[]:;@\\,.\"" (string c)) (chars n))
  (ch-enc-name n)
-  (? !(mime-ascii? n) (mime-head-enc n) (ch-special? n) ("\"" + replace n "\"" "\\\"" + "\"") n)
- (ch-enc-addrs v) (join ", " (map (a \ a @ [n x] (#n ? (ch-enc-name n + " <" + x + ">") x)) (mime-addrs v)))
+  (? !(mime-ascii? n) (mime-head-enc n) (ch-special? n) "\"\(replace n "\"" "\\\"")\"" n)
+ (ch-enc-addrs v) (join ", " (map (a \ a @ [n x] (#n ? "\(ch-enc-name n) <\(x)>" x)) (mime-addrs v)))
  (ch-type p)
   (: l (lower p)
      (? (ends? l ".txt") "text/plain" (ends? l ".pdf") "application/pdf" (ends? l ".png") "image/png"
@@ -527,7 +526,7 @@
  (ch-b64-lines t) (: e (mime-b64e t) (go i acc) (? (#e <= i) (join "\n" (rev acc)) (go (i + 76) ((snip e i (min #e (i + 76))) . acc)))
                      (go 0 ()))
  (ch-base n) (: (go i) (? (i < 0) n (n i = 47) (snip n (i + 1) #n) (go (i - 1))) (go (#n - 1)))
- (ch-uniq _) (show (clock 0) + "." + show (getpid 0) + "." + show (rand 1000000000))
+ (ch-uniq _) "\(clock 0).\(getpid 0).\(rand 1000000000)"
  ; -> [raw recipients sender] | why not
  (chucho-build s d)
   (: hs (d 'hs)
@@ -537,25 +536,25 @@
      dom (sender @ (_ + "@" + d) d "localhost")
      addr? (n \ elem n ["from" "to" "cc" "reply-to"])
      keep (filter (h \ h @ [n v] (#(strip v) && n != "bcc") 0) hs)
-     hd (map (h \ h @ [n v] (ch-cap n + ": " + (? (addr? n) (ch-enc-addrs v) (n = "subject") (mime-head-enc v) v))) keep)
+     hd (map (h \ h @ [n v] "\(ch-cap n): \(? (addr? n) (ch-enc-addrs v) (n = "subject") (mime-head-enc v) v)") keep)
      body (replace (d 'body) "\r\n" "\n")
      cs (mime-ascii? body ? "us-ascii" "utf-8")
-     tp ("Content-Type: text/plain; charset=" + cs + "\nContent-Transfer-Encoding: " + (cs = "utf-8" ? "8bit" "7bit"))
+     tp "Content-Type: text/plain; charset=\(cs)\nContent-Transfer-Encoding: \(cs = "utf-8" ? "8bit" "7bit")"
      atts (map (p \ [p (uread (ch-path s p))]) (d 'atts))
      bad (filter (a \ !(two? (a 1))) atts)
-     bd ("=-chucho-" + ch-uniq 0)
-     (part a) (a @ [p r] ("--" + bd + "\nContent-Type: " + ch-type p + "; name=\"" + ch-base p
-                           + "\"\nContent-Disposition: attachment; filename=\"" + ch-base p
-                           + "\"\nContent-Transfer-Encoding: base64\n\n" + ch-b64-lines (r 1) + "\n") "")
+     bd "=-chucho-\(ch-uniq 0)"
+     (part a) (a @ [p r] ("--\(bd)\nContent-Type: \(ch-type p); name=\"\(ch-base p)"
+                           + "\"\nContent-Disposition: attachment; filename=\"\(ch-base p)"
+                           + "\"\nContent-Transfer-Encoding: base64\n\n\(ch-b64-lines (r 1))\n") "")
      mime (? (two? atts)
-              ("Content-Type: multipart/mixed; boundary=\"" + bd + "\"\n\n--" + bd + "\n" + tp + "\n\n"
-               + body + (ends? body "\n" ? "\n" "\n\n") + cats (map part atts) + "--" + bd + "--\n")
-              (tp + "\n\n" + body))
+              ("Content-Type: multipart/mixed; boundary=\"\(bd)\"\n\n--\(bd)\n\(tp)\n\n"
+               + "\(body)\(ends? body "\n" ? "\n" "\n\n")" + cats (map part atts) + "--\(bd)--\n")
+              "\(tp)\n\n\(body)")
      (? (atom? rc) "no recipients"
-        (two? bad) ("cannot read " + <(<bad))
-        [(join "\n" (hd + map (x \ x @ [n v] (n + ": " + v) "") (d 'extra)
-                     + [("Date: " + chucho-rfcdate (clock 0)) ("Message-ID: <" + ch-uniq 0 + "@" + dom + ">")
-                        "MIME-Version: 1.0" "User-Agent: chucho (love)"]) + "\n" + mime)
+        (two? bad) "cannot read \(<(<bad))"
+        [(join "\n" (hd + map (x \ x @ [n v] "\(n): \(v)" "") (d 'extra)
+                     + ["Date: \(chucho-rfcdate (clock 0))" "Message-ID: <\(ch-uniq 0)@\(dom)>"
+                        "MIME-Version: 1.0" "User-Agent: chucho (love)"]) + "\n\(mime)")
          rc sender]))
  ; the password: set, or a command's first line, or asked for and kept for the session
  (ch-pass-cmd cmd)
@@ -580,7 +579,7 @@
      r (#rec ? (ch-append s (ch-path s rec) raw "S") 1)
      m (d 'reply)
      ((tablet? m ? (pin m 'flags (mb-flag (m 'flags) 82 1)) 0),
-      pins s 'view 'index 'draft () 'msg (r = 1 ? "Mail sent." ("Mail sent; not filed: " + r))))
+      pins s 'view 'index 'draft () 'msg (r = 1 ? "Mail sent." "Mail sent; not filed: \(r)")))
  (ch-send-now s)
   (: d (s 'draft) b (chucho-build s d)
      (? (string? b) (ch-say s b)
@@ -595,7 +594,7 @@
    101 (pin s 'act ['edit])
    97 (ch-ask s "Attach file: " "~/" 0
               (s \ t \ (two? (stat (ch-path s t)) ? (pin (s 'draft) 'atts (s 'draft 'atts + [t]), s)
-                         (ch-say s ("no file " + t)))))
+                         (ch-say s "no file \(t)"))))
    68 (s 'draft 'atts @ as (two? as ? (pin (s 'draft) 'atts (take (#as - 1) as), s) s))
    (113 || -7) (ch-ask s "Abandon this message? (y/n) " "" 'key
                        (s \ t \ (ch-yes? t ? (pins s 'view 'index 'draft () 'msg "abandoned") s)))
@@ -603,13 +602,13 @@
 
  ; --- the runner: the tty's half --------------------------------------------------------------
  (ch-editor s) (ch-cfg s 'editor (getenv "VISUAL" @ v (string? v && #v ? v (getenv "EDITOR" @ e (string? e && #e ? e "vi")))))
- (ch-tmp _) ((getenv "TMPDIR" @ t (string? t && #t ? t "/tmp")) + "/chucho-" + show (getpid 0) + "-" + show (clock 0) + ".eml")
+ (ch-tmp _) "\(getenv "TMPDIR" @ t (string? t && #t ? t "/tmp"))/chucho-\(getpid 0)-\(clock 0).eml"
  ; the screen given back while the editor has it, and taken again after
  (ch-edit s d)
   (: p (ch-tmp 0) t0 (ch-draft-text d)
      _ (uwrite p t0)
      _ (ttygive ())
-     pid (spawn ["sh" "-c" (ch-editor s + " '" + replace p "'" "'\\''" + "'")])
+     pid (spawn ["sh" "-c" "\(ch-editor s) '\(replace p "'" "'\\''")'"])
      _ (charm? pid && 0 <= pid ? (wait pid) 0)
      _ (ttytake (), pin s 'lastr ())
      r (uread p)
@@ -638,13 +637,13 @@
  (ch-spool s)
   (: c (ch-cfg s 'spool "") m (getenv "MAIL") h (ch-home 0)
      (? #c (ch-path s c) (string? m && #m) m
-        (mb-kind (h + "/Maildir") = 'maildir) (h + "/Maildir")
-        (h + "/mbox")))
+        (mb-kind "\(h)/Maildir" = 'maildir) "\(h)/Maildir"
+        "\(h)/mbox"))
  ; -s -c -a and addresses: a message without the index, the body read or edited
  (ch-batch s as)
   (: (go l subj cc atts to)
       (l @ ("-s" . v . r) (go r v cc atts to)
-           ("-c" . v . r) (go r subj (#cc ? (cc + ", " + v) v) atts to)
+           ("-c" . v . r) (go r subj (#cc ? "\(cc), \(v)" v) atts to)
            ("-a" . v . r) (go r subj cc (atts + [v]) to)
            (a . r) (go r subj cc atts (to + [a]))
            [subj cc atts to])
@@ -654,16 +653,16 @@
      tty? (two? (tty 0))
      (? !tty? (: b (slurp in) _ (pin d 'body (string? b ? b ""))
                  r (pin s 'draft d, ch-send-now s)
-                 (s 'msg = "Mail sent." ? 0 (say err ("chucho: " + s 'msg + "\n"), 1)))
+                 (s 'msg = "Mail sent." ? 0 (say err "chucho: \(s 'msg)\n", 1)))
         (: _ (ttytake (), mind (_ \ (ch-edit s d, s 'view = 'compose ? (ch-loop s) 0)) () (_ \ ttygive ()))
-           (puts (s 'msg + "\n"), 0))))
+           (puts "\(s 'msg)\n", 0))))
  (ch-flag? a) (#a && a 0 = 45 && !(elem a ["-s" "-c" "-a"]))
  (chucho-main as)
   (: cfg (ch-cfgs 0)
      s0 (pins {} 'cfg (tablet? cfg ? cfg {}))
      (? (two? as && <as = "-f" && two? >as) (ch-start s0 (ch-path s0 <>as))
         (two? as && ch-flag? <as)
-         (puts (ch-usage + "\n"), 2)
+         (puts "\(ch-usage)\n", 2)
         (two? as) (ch-batch (chucho-new (pins {} 'kind 'none 'path "" 'msgs ()) (s0 'cfg)) as)
         (ch-start s0 (ch-spool s0))))
  ; a local box must open before the screen is taken; an imap one may ask for its password
@@ -671,6 +670,6 @@
   (? (mb-kind p = 'imap)
       (: s (chucho-new (pins {} 'kind 'none 'path p 'msgs ()) (s0 'cfg))
          (ch-openbox s p ch-install, chucho-run s))
-     (mb-open p @ b (string? b ? (puts ("chucho: " + b + "\n"), 1) (chucho-run (chucho-new b (s0 'cfg))))))
+     (mb-open p @ b (string? b ? (puts "chucho: \(b)\n", 1) (chucho-run (chucho-new b (s0 'cfg))))))
  _ (pins (cite 'verbs 'tab) 'chucho (udoor 'chucho chucho-main ch-usage 1 1)))
 ) ; module chucho
