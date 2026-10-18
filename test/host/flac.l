@@ -167,7 +167,7 @@
                                  + fl-r #(av-t-rd (dir + "/x.flac")) #(av-t-rd (dir + "/m.flac")) + "\n")))))
         0)
    ; the decoder door: av picks the codec off the bytes
-   (av e) (sh ("HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) " + e + " (quit 0)' 2>&1"))
+   (av e) (sh ("HORN=none ../love -e '(borrow (quote posix), borrow (quote av), " + e + ", quit 0)' 2>&1"))
    _ (sh "../love flac -s -d -f t.flac")
    _ (test (av "(puts (show (av-open (open \"t.flac\" \"r\") @ [n m h] [n (m (quote rate)) (#h)] w w)))"
               = (0 . "(\"flac\" 8000 318)"))
