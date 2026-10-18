@@ -196,13 +196,15 @@
         + (#row < 6 ? "" (deep ? (";48;2;" + hue-rgb (row 5)) (";48;5;" + show (row 4))))
         + "m"))
    ; a theme with a Normal row owns the ground: 'ground sets it, 'off ends a run back on
-   ; it rather than on the terminal's, and Visual, when there is one, is the selection's
+   ; it rather than on the terminal's; Visual is the selection's, MatchParen a mate's, LineNr the gutter's
    (hue-pens rows deep)
     (foldl (b \ r \ pin b <r (hue-pen r deep)) (tablet ()) rows @ gp
        (: b (foldl (b \ c \ pin b (hue-cls c) (gp (hue-grp c))) (tablet ()) hue-classes)
-          gr (peep gp 'Normal ()) sl (peep gp 'Visual ())
+          gr (peep gp 'Normal ()) sl (peep gp 'Visual ()) mp (peep gp 'MatchParen ()) ln (peep gp 'LineNr ())
           (string? gr ? (pin b 'ground gr, pin b 'off (hue-off + gr)) 0,
            string? sl ? (pin b 'sel sl) 0,
+           string? mp ? (pin b 'match mp) 0,
+           string? ln ? (pin b 'lnr ln) 0,
            b)))
 
    ; --- painting one line -----------------------------------------------------

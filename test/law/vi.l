@@ -236,7 +236,7 @@
       ((vgo '("ab" "cd") "yy>>" 'reg) = '(lin ("ab")))
       (lns (vgob '("ab") ((bytes ":set sw=4") + [CR] + (bytes ">>"))) = '("    ab"))
       (st? (vgob '("ab") ((bytes ":set sw") + [CR])) 'msg = "shiftwidth=2")
-      (st? (vgob '("ab") ((bytes ":set nu") + [CR])) 'msg = "not an option: nu"))
+      (st? (vgob '("ab") ((bytes ":set nux") + [CR])) 'msg = "not an option: nux"))
 
 ; --- ^A and ^X, * and #, H M L, zt zz zb, and insert's ^W and ^U ---
    _ (test
@@ -409,7 +409,7 @@
 
 ; --- the painted row is cached against its text: a cursor move re-lexes nothing ---
    _ (test
-      (: st (hlon (small '("(map f)" "(g 1)") "")) _ (vfresh st)
+      (: st (hlon (small '("(map f)" "(g 1)") "l")) _ (vfresh st)
          r0 (st 'hlrow 0)
          ; [[text carry from to] painted]
          (<r0 = ["(map f)" 0 0 7 'l] && 0 < #<>r0))
@@ -683,7 +683,7 @@
    (twin ls ks) (: a (vgo ls ks) b (vgo ls ks)
                    (pin a 'w 30, pin a 'h 5, pin b 'w 30, pin b 'h 5,
                     hlon b,
-                    bare (vframe b) = vframe a))
+                    bare (vframe b) = bare (vframe a)))
    _ (test
       (twin '("(map (+ 1) '(1 2 3)) ; hi" "(: x 2)") "")
       (twin '("(: css \"a" "b\" 1)") "j")
@@ -861,11 +861,95 @@
       (hk 'md "(map f l)" ['fence 96 3 'l 0] = '(paren book paren))
       (hk 'md "raw *x*" ['fence 126 3 () 0] = '(string))
       (hk 'md "````" ['fence 96 3 'c 0] = '(pre)))         ; a longer run closes too
+
+; --- ~ in an ex file name is the face's home ---
+   (vah ks) (vgob '("a") ((bytes ks) + [CR]))
+   (vhome ks) (vfeed (pin (vnew '("a") "t") 'home "/h") ((bytes ks) + [CR]))
+   _ (test
+      (st? (vhome ":w ~/x") 'dow = '("/h/x"))
+      (st? (vhome ":e ~") 'doe = '("/h"))
+      (st? (vhome ":sp ~/y") 'dos = '(stack "/h/y"))
+      (st? (vhome ":w a~b") 'dow = '("a~b"))                 ; only a leading one
+      (st? (vhome ":grep ~/x") 'dof = '("grep" "~/x"))        ; a query is not a file name
+      (st? (vhome ":ex ~/d") 'dex = '("/h/d"))
+      (st? (vah ":w ~/x") 'dow = '("~/x")))                  ; no home known: as typed
+
+; --- `.` after a visual operator repeats it over as many lines, or characters on one row ---
+   _ (test
+      (lns (vgo '("a" "b" "c") "Vj>.") = '("    a" "    b" "c"))
+      (lns (vgo '("      a" "      b") "Vj<.") = '("  a" "  b"))
+      (lns (vgo '("a" "b" "c" "d") "Vjdj.") = '("c"))
+      (lns (vgo '("abcdef") "vld.") = '("ef"))
+      (lns (vgo '("a" "b" "c") "Vj>j.") = '("  a" "    b" "  c")))
+
+; --- aw takes the blanks after the word, else the ones before: never the next run of ink ---
+   _ (test
+      (lns (vgo '("(foo bar)") "wwdaw") = '("(foo)"))
+      (lns (vgo '("(foo bar)") "daw") = '("foo bar)"))
+      (lns (vgo '("foo(bar)") "daw") = '("(bar)"))
+      (lns (vgo '("f(x, y)") "fydaw") = '("f(x,)"))
+      (lns (vgo '("a b c") "d2aw") = '("c"))
+      (lns (vgo '("a b c d") "2dw") = '("c d"))                ; the count before the operator..
+      (lns (vgo '("a b c d e") "2d2w") = '("e"))               ; ..multiplies the motion's
+      (lns (vgo '("abcdef") "2dl") = '("cdef"))
+      (lns (vgo '("a" "b" "c" "d") "2dj") = '("d")))
+
+; --- on a delimiter, its mate is drawn in the 'match pen ---
+   (vam st) (vpen st 'match "\e[46m") (vaoff st) (vpen st 'off "\e[0m")
+   _ (test
+      (see (box '("(ab)") 8 3) "" @ st (body st = [("(ab" + vam st + ")" + vaoff st) "~"]))
+      (see (box '("(ab)") 8 3) "$" @ st (body st = [(vam st + "(" + vaoff st + "ab)") "~"]))
+      (see (box '("(ab)") 8 3) "l" @ st (body st = '("(ab)" "~")))          ; off a delimiter: plain
+      (see (box '("[a" "b]") 8 3) "" @ st (body st = ["[a" ("b" + vam st + "]" + vaoff st)])))
+
+; --- an edit lexes again only from its row, until the carry meets the old one ---
+   (vacount _) (: n (cask 1) lx (hues-lexer 'l)
+                [n (s \ in \ k \ (pin n 0 (n 0 + 1), lx s in k))])
+   _ (test
+      (: c (vacount 0) n <c lx <>c
+         st (vnew (map (i \ "(a " + show i + ")") ^200) "t.l")
+         _ (vcarry st 'l lx)
+         _ (pin n 0 0)
+         _ (vfeed st (bytes "jjx"))
+         _ (vcarry st 'l lx)
+         (n 0 < 4 && vcarry st 'l (hues-lexer 'l) = hue-carry (hues-lexer 'l) (st 'lines)))
+      (: c (vacount 0) n <c lx <>c
+         st (vnew ["\"a" "b" "c\"" "d"] "t.l")
+         _ (vcarry st 'l lx)
+         _ (vfeed st (bytes "x"))                               ; the string opens no more
+         (vcarry st 'l lx = hue-carry (hues-lexer 'l) (st 'lines))))
+
+; --- :set nu lays a gutter of line numbers, and the text and cursor move over by it ---
+   _ (test
+      (see (box '("a" "b") 8 4) ":set nu\r" @ st (body st = '("  1 a" "  2 b" "~")))
+      (: st (see (box '("ab" "cd") 8 4) ":set nu\rjl") L (vlay st)
+         (<>>L = 2 && <>>>L = 6))
+      (see (box '("abcdefgh") 8 4) ":set nu\r:set wrap\r" @ st (body st = '("  1 abcd" "    efgh" "~")))
+      (see (box '("a") 8 3) ":set nu\r:set nonu\r" @ st (body st = '("a" "~")))
+      (st? (vah ":set number") 'msg = "number")
+      (st? (vah ":set noai") 'msg = "noautoindent"))
+
+; --- : and / keep their histories, the up arrow walking back through them ---
+   _ (test
+      (lns (vgob '("aa") ((bytes ":s/a/b/") + [CR] + (bytes ":") + [-8 CR])) = '("bb"))
+      (at (vgob '("x" "a" "b" "a") ((bytes "/a") + [CR] + (bytes "/b") + [CR] + (bytes "/") + [-8 -8 CR])) = '(3 0))
+      (lns (vgob '("aaa") ((bytes ":s/a/b/") + [CR] + (bytes ":s/a/c/") + [CR] + (bytes ":") + [-8 -8 CR])) = '("bcb"))
+      (st? (vgob '("a") ((bytes ":") + [-8])) 'mode = 'c))   ; nothing to recall: still typing
+
+; --- a new line takes the indent of the one it opens from, and gives it back unused ---
+   _ (test
+      (lns (vgo '("  ab") "A\rcd\e") = '("  ab" "  cd"))
+      (lns (vgo '("  ab") "ocd\e") = '("  ab" "  cd"))
+      (lns (vgo '("  ab") "Ocd\e") = '("  cd" "  ab"))
+      (lns (vgo '("  ab") "o\e") = '("  ab" ""))
+      (lns (vgo '("  ab") "A\r\rx\e") = '("  ab" "" "  x"))
+      (at (vgo '("  ab") "o") = '(1 2))
+      (lns (vgob '("  ab") ((bytes ":set noai") + [CR] + (bytes "ocd\e"))) = '("  ab" "cd")))
    ; paint invariance again, off the .l lexer
    (twinf ls nm) (: a (vnew ls nm) b (vnew ls nm)
                     (pin a 'w 30, pin a 'h 5, pin a 'hl (),
                      pin b 'w 30, pin b 'h 5, hlon b,
-                     (bare (vframe b) = vframe a) && !(vframe b = vframe a)))
+                     (bare (vframe b) = bare (vframe a)) && !(vframe b = vframe a)))
    ((test
      (twinf '("int x; /* a" "b */ char *s = \"q\";") "t.c")
      (twinf '("<p class=\"a\">x &lt; y</p>") "t.html")
