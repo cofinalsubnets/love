@@ -1,8 +1,6 @@
-; src/apps/chucho/imap.l -- a mailbox on an IMAP server (RFC 9051, the part a reader needs):
-; LOGIN, SELECT, the headers fetched for the index and a body when it is read, the flags
-; stored back and the deleted expunged, a message appended. imaps:// is tls from the first
-; byte (993), imap:// is raised to it by STARTTLS (143); a password goes only over tls, but
-; to this host. the connection is smtp's (src/apps/chucho/smtp.l).
+; src/apps/chucho/imap.l -- a mailbox on an IMAP server (RFC 9051, what a reader needs).
+; imaps:// is tls from the first byte (993), imap:// is raised to it by STARTTLS (143); a
+; password goes only over tls, but to localhost. the connection is smtp's.
 ;
 ;   (imap-url u)                  -> [tls? user host port mailbox] | ()
 ;   (imap-open u user pass)       -> a box, as mailbox's: {'kind 'imap 'path 'msgs ..} | why not
@@ -12,7 +10,7 @@
 ;   (imap-parse segs)             -> a response's tokens as a tree: strings, () for NIL, lists
 ;
 ; a message is mailbox's, with 'uid; 'raw holds its text once read. the box keeps its
-; credentials, so a connection the server dropped is made again.
+; credentials, to reconnect when the server drops it.
 (module (imap imap-url imap-open imap-raw imap-sync imap-append imap-close imap-parse imap-quote)
 (borrow 'posix)
 (borrow 'mime)

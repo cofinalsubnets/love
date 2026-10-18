@@ -1,33 +1,17 @@
 ; mx2coq: generate test/proof/rocq/mx.v from the table (mx.l), in love.
 ;
-; the +/* dispatch matrices are love data now, and love.c's mx.h is laid from the
-; same datum -- so this file and the C it models cannot drift, which is the whole
-; reason rung 2 of doc/misc/clay.md exists. run it with the table catted ahead:
+; mx.h is laid from the same datum, so this and the C cannot drift. run with the table ahead:
 ;   cat mx.l src/tools/mx2coq.l | out/love > test/proof/rocq/mx.v   (gate: test_mx, every run)
 ;
-; it emits Coq where the tables' shape becomes machine-checked, the shape
-; claude.md carries as prose:
-;   * the band partition is derived, not assumed: kinds are grouped by
-;     row+column equality across both matrices at once, and the factorization
-;     theorems check in Coq that the tables carry no information
-;     beyond that quotient: a band matrix plus the band assignment ("every
-;     gem/array kind routes identically"). kmint is its own band, the unit
-;     lane whole (the dispatchers early-out a mint first -- the fast path;
-;     the matrix says the same thing, so nothing rests on the early-out).
-;   * dispatch commutes: mx[a][b] = mirror mx[b][a] over the whole square,
-;     where mirror swaps the positional pair (bin_a/bin_b, "answer the a/b
-;     operand") and fixes every other lane -- a symmetric lane handles
-;     orientation itself, the positional pair carries it in the name, and
-;     either way the table adds none of its own.
-;   * the diagonal reads the lattice: one lane per band, the algebra ladder.
+; it emits Coq checking the tables' shape: the band partition (kinds grouped by row+column
+; equality across both matrices) with both tables factoring through it; dispatch commutes up
+; to mirror (bin_a/bin_b swap, every other lane fixed); the diagonal reads the lattice.
 
 (borrow 'posix)
 (: (join l) (foldl (+) "" l)
    nl "\n"
 
-   ; the table comes from mx.l, catted ahead of this file -- love data, the
-   ; same datum love.c's mx.h is laid from. the lane's symbol IS the datum here, so
-   ; there is nothing to recover from a binary and no lane this file can fail to name.
+   ; the table is love data from mx.l, catted ahead; a lane's symbol IS the datum
    kinds mx-kinds                                       ; the kind noms, enum order
    addm  mx-add                                         ; one row of lane noms per kind
    mulm  mx-mul
@@ -37,8 +21,7 @@
    (cell m i j) (m i j)                                 ; a grid is indexed by application
    (rrow m i) (map (j \ cell m i j) ridx)
    (rcol m j) (map (i \ cell m i j) ridx)
-   ; a kind's dispatch signature: its row and column in both matrices --
-   ; equal signature = same band
+   ; a kind's dispatch signature: equal signature = same band
    (sig i) [(rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i)]
    (idxin x l k) (? (atom? l) -1 (<l = x) k (idxin x >l (k + 1)))
    sigs ((: (go is acc) (atom? is ? (rev acc)
@@ -50,15 +33,13 @@
    (members c) (filter (i \ c = band i) ridx)
 
    (kn i) (show (kinds i))                              ; kcharm ...
-   ; lane nom -> Coq ctor. the table spells lanes as their C symbols (lvm_addn), and
-   ; the prefix says nothing here, so it comes off: Laddn, not Llvm_addn.
+   ; lane nom -> Coq ctor, the lvm_ prefix dropped: Laddn
    (ln x) (show x @ t ("L" + (t @ ("lvm_" + r) r t)))
    lanes ((: (go rows acc)                              ; distinct lanes, appearance order
             (atom? rows ? (rev acc)
                (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
 
-   ; ==, not =: the test is "is this the head cell", not "does it look like it"
    (commas f l) (join (map (x \ (x = <l ? (f x) ("; " + f x))) l))
    (bars f l)   (join (map (x \ (x = <l ? (f x) (" | " + f x))) l))
 
@@ -106,8 +87,7 @@
    _ (dot ("Definition lane_eqb (x y : lane) : bool := match x, y with "
          + (join (map (x \ (x = <lanes ? "" " | ") + ln x + ", " + ln x + " => true") lanes))
          + " | _, _ => false end." + nl))
-   ; mirror: the argument swap's action on lanes. the positional degenerate pair
-   ; trades places (bin_a answers Sp[0], bin_b Sp[1]); every symmetric lane is fixed.
+   ; mirror: the argument swap on lanes. bin_a (answers Sp[0]) and bin_b trade; the rest are fixed.
    (mir x) (show x @ t (t @ "lvm_bin_a" "Lbin_b" "lvm_bin_b" "Lbin_a" (ln x)))
    _ (dot ("Definition mirror (l : lane) : lane := match l with "
          + (join (map (x \ (x = <lanes ? "" " | ") + ln x + " => " + mir x) lanes))

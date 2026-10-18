@@ -183,6 +183,10 @@
  fts 0.02                               ; ..and the floor's, finer for its joints and grate
  fl-nx (int (2.0 * yard-a / fts + 0.999)) fl-nz (int (2.0 * yard-b / fts + 0.999))
  maps {}
+ ; a room's light at g: a lamp's warm, a television's blue, a bathroom's white, the stair and
+ ; hall's sh and the lobby's lob
+ (room-em g tv bw sh lob) (cmix (cmix (cmix (cmix (c* g [1.0 0.76 0.44]) [0.5 0.62 1.0] tv) (c* g [0.9 0.88 0.8]) bw)
+                                [0.85 0.95 0.82] sh) [0.95 0.8 0.52] lob)
  ; a wall texel: its colour, and what its window shows lit -- 'glass, 'key the window,
  ; 'night lit all night, 'tv
  (wall-at i) (:
@@ -230,8 +234,7 @@
    cur ((throw wkey 1 19 3 = 0) * (1 - lob))
    lamp (0.55 + 0.45 * (throw wkey 2 23 10 / 10.0))
    glow (lamp * (1.0 - 0.6 * cur * (hw * 0.45 < mag cp)))
-   em (cmix (cmix (cmix (cmix (c* glow [1.0 0.76 0.44]) [0.5 0.62 1.0] tv) (c* glow [0.9 0.88 0.8]) bw)
-                  [0.85 0.95 0.82] (stw + hall)) [0.95 0.8 0.52] lob)
+   em (room-em glow tv bw (stw + hall) lob)
    ; ..the brick: courses and their bonds, chipped in patches a brick at a time
    row (floor (py / 0.08)) bi (floor ((al + row % 2 * 0.12) / 0.24))
    cx (floor (al / 0.7)) cy (floor (py / 0.5))
@@ -652,8 +655,7 @@
    hr (day-secs (st 'sim) / 3600.0)
    on (frac (sin (K * 12.9898 + int hr * 78.233) * 43758.5453) * 100.0 < lit-share hr)
    lamps (over ((1 - nt) * on * 0.7 * flicker-tv t0 K tv) nt ((lt 'day < 0.55) * 0.75))
-   (em g) (cmix (cmix (cmix (cmix (c* g [1.0 0.76 0.44]) [0.5 0.62 1.0] tv) (c* g [0.9 0.88 0.8]) bw)
-                      [0.85 0.95 0.82] (stw + hall)) [0.95 0.8 0.52] lob)
+   (em g) (room-em g tv bw (stw + hall) lob)
    panes (c+ (c* 0.5 (lt 'amb)) [0.02 0.025 0.03])
    mid (c* lamps (em lamp)) out (c* lamps (em (lamp * (1.0 - 0.6 * cur))))
    wn (P 'wn) sd (P 'sd) rf (P 'rf)

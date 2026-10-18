@@ -1,17 +1,10 @@
-; src/apps/xz.l -- the .xz container (and the old .lzma one, read) over src/love/compress/xz.c's LZMA2
-; codec. `(borrow 'xz)`, then:
-;   (xz-pack s dict check)  -> the .xz bytes of s: one block, one LZMA2 filter, the check
-;                              one of 'none 'crc32 'crc64 'sha256
-;   (xz-unpack s)           -> (1 bytes) | a word saying why not ('format 'corrupt 'end
-;                              'filter 'check 'big): every stream in s, the padding between them
-;                              skipped, each block's check and each index held to its blocks
-;   (xz-pull rd)            -> g, a reader over the streams as they come: (xz-next g) the next
-;                              piece, "" once done, and g's 'ans then (1 n) | the word
-;   (xz-unf rd mk)          -> (1 n) | the word | 'no: .xz or .lzma off rd, out through the
-;                              writer mk answers (1 w), or () for 'no
-; the codec is C (lzma2e lzma2d lzma2len crc64, and lzma2-new lzma2-chunk crc64-on lzma-new
-; lzma-feed for a stream a piece at a time); the container is here, where
-; its fields are plain to read. the xz spec is tukaani's .xz file format 1.2.
+; src/apps/xz.l -- the .xz container (and .lzma, read) over src/love/compress/xz.c's LZMA2;
+; the spec is tukaani's .xz file format 1.2.
+;   (xz-pack s dict check)  -> .xz bytes of s, one block; check 'none 'crc32 'crc64 'sha256
+;   (xz-unpack s)           -> (1 bytes) | 'format 'corrupt 'end 'filter 'check 'big; every
+;                              stream in s, padding skipped, checks and indexes held
+;   (xz-pull rd)            -> g: (xz-next g) the next piece, "" once done, then g's 'ans
+;   (xz-unf rd mk)          -> (1 n) | the word | 'no: .xz or .lzma, out through mk's (1 w)
 (module 'xz
 (borrow 'posix)
 (borrow 'bytes)
@@ -41,8 +34,7 @@
        head (xz-magic + flags + wrle (crc32 flags) 4)
        p (xz-dprop dict)
        body (#s = 0 ? "" (lzma2e s (xz-dsize p)))
-       ; the block header: its size byte, flags (one filter, both sizes), the sizes, the
-       ; LZMA2 filter with its props byte, padding to four, and its own crc32
+       ; the block header: size byte, flags, sizes, the LZMA2 filter, padding to four, crc32
        bh0 (string 192 + xz-vli #body + xz-vli #s + xz-bytes [33 1 p])
        bh1 (string ((#bh0 + 1 + padk (#bh0 + 1) 4 + 4) // 4 - 1) + bh0)
        bh2 (bh1 + zbytes (padk #bh1 4))
@@ -133,10 +125,8 @@
                  (? (#s <= j) [1 (acc + <r)]
                     (#s < j + 4) 'corrupt
                     (go j (acc + <r)))))))
-   ; the old container: a props byte, the dictionary, the size (all ones for unsaid,
-   ; then the stream's end mark says where it stops), and one LZMA1 stream
-   ; liblzma's sniff: props under 225, a dictionary of 2^n or 2^n + 2^(n-1) (or all ones),
-   ; and a size of at most 2^38 or unsaid
+   ; the old container: props byte, dictionary, size (all ones: the end mark says), one LZMA1
+   ; stream. liblzma's sniff: props < 225, dict 2^n or 2^n + 2^(n-1) (or all ones), size <= 2^38
    (xz-lzma? s)
     (: d (13 <= #s ? (rdle s 1 4) 0) us (13 <= #s ? (rdle s 5 8) 0)
        (up v) (: a (v - 1) b (a | a >> 2) c (b | b >> 3) e (c | c >> 4) f (e | e >> 8)
@@ -144,10 +134,8 @@
        (13 <= #s && s 0 < 225 && (d = 4294967295 || up d = d)
         && (us <= 274877906944 || us = 18446744073709551615)))
    ;; --- reading as it comes ---
-   ; xz-unpack's walk over a source (src/apps/tar.l's tar-src) instead of a string: a block's
-   ; LZMA2 is decoded a chunk at a time into a window its dictionary wide (its size where the
-   ; header says it, if less), the check carried on as the bytes go by, and each index held
-   ; to the blocks read. the words are xz-unpack's
+   ; xz-unpack's walk over a tar-src: LZMA2 a chunk at a time into a dictionary-wide window,
+   ; the check carried on, each index held to the blocks read
    (xz-pull rd) {'src (tar-src rd) 'mode 'stream 'n 0}
    ; a .lzma off raw, past its 13-byte head: lzma-feed's pieces until it hands back ("" . rest)
    (xz-lzpull raw)
@@ -199,7 +187,7 @@
                                 (st = () ? (xz-fin g 'big)
                                    (pins g 'st st 'hs hs 'bh bh 'cl 0 'un 0 'ck (xz-ck0 (g 'cid)) 'mode 'chunk,
                                     xz-next g)))))))))
-          (m = 'chunk)                           ; a chunk whole: its control byte, header, data
+          (m = 'chunk)                           ; a chunk: control byte, header, data
            (: cz (g 'bh 0)   (past? v) (charm? cz && cz < v)   ; no chunk runs past a size the header said
               c (past? (g 'cl + 1) ? "" (tar-take src 1))   k0 (#c ? (c 0) 0)
               hn (? (k0 < 3) 2 (k0 < 128) -1 (192 <= k0) 5 4)
@@ -245,8 +233,7 @@
                 (p = zbytes 4) (tar-take src 4, xz-next g)
                 (#p < 4) (xz-fin g 'corrupt)
                 (pin g 'mode 'stream, xz-next g)))))
-   ; .xz or .lzma streamed: mk is asked for the writer before the first byte out, and a stream
-   ; that fails before any is said without it
+   ; mk is asked for the writer before the first byte out; an early failure never asks
    (xz-unf rd mk)
     (: raw (tar-src rd)   h (tar-peek raw 13)
        g (xz-lzma? h && snip h 0 6 != xz-magic ? (xz-lzpull raw) (xz-pull (tar-rd raw)))
@@ -260,17 +247,10 @@
 )
 ) ; module 'xz
 
-; --- the face -----------------------------------------------------------------------
-; `love xz`, `unxz`, `xzcat`, and the .lzma readers `unlzma`/`lzcat`: xz-utils' flag
-; spelling over the container above.
-;
-;   xz [-cdfkqtvz] [-0..-9] [-e] [-T N] [-C CHECK] [-S SUF] [FILE..]
-;   unxz = xz -d      xzcat = xz -dc      unlzma = xz -d      lzcat = xz -dc
-;
-; a level picks the dictionary (-0 256 KiB .. -9 64 MiB, xz's), never bigger than the
-; input needs; the parse is one fast greedy one whatever the level, so -e and -T are
-; taken and change nothing. writing is .xz alone; reading takes .xz and .lzma by their
-; magic. no file, or a bare -, is the filter. status as xz's: 0, 1 an error, 2 a warning.
+; --- the face ---
+; `love xz`, `unxz`, `xzcat`, `unlzma`, `lzcat`: xz-utils' flags over the container above.
+; a level picks the dictionary, never bigger than the input needs; the parse is one greedy
+; one whatever the level. writes .xz only. status: 0, 1 an error, 2 a warning.
 (module 'xzcmd
 (borrow 'xz)
 (borrow 'path)
@@ -306,13 +286,14 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (xzc-put t p dst bytes st)           ; the output laid, the input's mode and time carried
     (? (two? (lstat dst) && !(peep t 'f 0)) (xzc-moan t (dst + ": File exists"), 1)
        !(uwrite dst bytes) (xzc-moan t (dst + ": Cannot write"), 1)
-       (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)),
-        (peep t 'k 0 ? 0 (unlink p)),
-        peep t 'v 0 && (say err ("xz: " + p + " -> " + dst + "\n"), flush err),
-        0))
+       (xzc-done t p dst st))
+   (xzc-done t p dst st)
+    (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)),
+     (peep t 'k 0 ? 0 (unlink p)),
+     peep t 'v 0 && (say err ("xz: " + p + " -> " + dst + "\n"), flush err),
+     0)
    (xzc-rd q) (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q))))
-   ; a file decompressed as it comes off the disk: the output opened before the first byte,
-   ; its mode and time laid after the last, and taken away again if the stream fails partway
+   ; decompress as read: the output opened at the first byte, removed if the stream fails
    (xzc-unone t p st)
     (xzc-stem t p @ stem
        (!(peep t 't 0) && !(peep t 'c 0) && !stem ? (xzc-moan t (p + ": Filename has an unknown suffix, skipping"), 2)
@@ -334,10 +315,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                     (? (u = 'no) 1
                        (atom? u) (laid && unlink dst, xzc-moan t (p + ": " + xzc-why u), 1)
                        !laid 0
-                       (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)),
-                        (peep t 'k 0 ? 0 (unlink p)),
-                        peep t 'v 0 && (say err ("xz: " + p + " -> " + dst + "\n"), flush err),
-                        0))))))))
+                       (xzc-done t p dst st))))))))
    (xzc-one t p)
     (stat p @ st
        (? (two? st && st 2 & 61440 = 16384) (xzc-moan t (p + ": Is a directory, skipping"), 2)
@@ -357,8 +335,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
         (say err "xz: Compressed data cannot be written to a terminal\n", 1)
        (slurp in + "" @ s2 (say out (xz-pack s2 (xzc-dict t #s2) (peep t 'ck 'crc64)), 0)))
 
-   ; the cli walker in gnu order. -d, -z and -t decide the direction by the last one said,
-   ; and a level digit likewise; -C -S -T -F take a word, glued or next
+   ; the cli walker in gnu order: the last of -d -z -t and the last level stand;
+   ; -C -S -T -F take a word, glued or next
    xzc-longs {"stdout" 99 "to-stdout" 99 "decompress" 100 "uncompress" 100 "compress" 122
               "keep" 107 "force" 102 "test" 116 "quiet" 113 "verbose" 118 "extreme" 101
               "fast" 101 "best" 101 "help" 104 "version" 86

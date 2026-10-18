@@ -40,16 +40,7 @@
    ; -- moieties ----------------------------------------------------------------------
    (ch-upper? c) (65 <= c <= 90)
    (ch-chars w) (map (i \ w i) ^#w)
-   (ch-blank? c) (c = 32 || c = 9)
-   (ch-macro? l w) (starts? l w && (#l = #w || ch-blank? (l #w)))
-   ; words split on blanks
-   (ch-words s)
-    (: n #s
-       (go i acc) (? (n <= i) (rev acc)
-                     (ch-blank? (s i)) (go (i + 1) acc)
-                     (: (e j) (j < n && !(ch-blank? (s j)) ? (e (j + 1)) j)
-                        j (e i) (go j (snip s i j . acc))))
-       (go 0 ()))
+   ; blanks, macro lines and words are grap's: gr-blank?, gr-macro?, gr-words
    ; a moiety's name: its letters and figures
    (ch-name w) (cats (map (c \ string c) (filter (c \ (ch-upper? c || (97 <= c <= 122) || digit? c)) (ch-chars w))))
    ; its text for troff: figures lowered and shrunk, one point between figures kept among
@@ -194,13 +185,13 @@
               ^n)
        _ (r 'aro ? (ch-ol s "\tcircle rad \(ch-g (r 'flat ? (0.4 * side) (rad / 2))) at 0,0") 0)
        a (s 'dir)
-       place (elem "with" (ch-words (r 'extra)) ? ""
+       place (elem "with" (gr-words (r 'extra)) ? ""
               "with .V\(ch-vertex r (a + 180)).\(ch-cmp (a + 180)) at \(ch-ref s a)")
        (ch-ol s "] \(place) \(r 'extra)"))
 
    ; a line of a diagram
    (ch-line s l)
-    (: ws (ch-words l)
+    (: ws (gr-words l)
        w0 (two? ws ? <ws "")
        (? (atom? ws) 0
           (w0 0 = 35) 0
@@ -275,7 +266,7 @@
        (troff? t) (0 < #t && (t 0 = 46 || t 0 = 39))
        (go l mode)
         (atom? l ? 0
-         (: x <l t (ch-trim x) ws (ch-words t)
+         (: x <l t (ch-trim x) ws (gr-words t)
             (? (mode = 'chem)
                 (? (starts? t ".cend") (ch-ol s ".PE", go >l 'text)
                    (troff? t) (ch-ol s t, go >l mode)
@@ -287,12 +278,12 @@
                (t = ".cstart") (ch-ol s ".PS", ch-start s, go >l 'chem)
                (mode = 'pic)
                 (ws = ["begin" "chem"] ? (ch-start s, go >l 'begin)
-                 (ch-ol s t, go >l (ch-macro? t ".PE" ? 'text 'pic)))
-               (ch-ol s t, go >l (ch-macro? t ".PS" ? 'pic 'text)))))
+                 (ch-ol s t, go >l (gr-macro? t ".PE" ? 'text 'pic)))
+               (ch-ol s t, go >l (gr-macro? t ".PS" ? 'pic 'text)))))
        (go ls 'text))
    (ch-trim t)
-    (: (a i) (i < #t && ch-blank? (t i) ? (a (i + 1)) i)
-       (b j) (0 < j && ch-blank? (t (j - 1)) ? (b (j - 1)) j)
+    (: (a i) (i < #t && gr-blank? (t i) ? (a (i + 1)) i)
+       (b j) (0 < j && gr-blank? (t (j - 1)) ? (b (j - 1)) j)
        i (a 0) j (b #t)
        (i < j ? (snip t i j) ""))
 
@@ -303,12 +294,7 @@
     (: s {'o (jug 0) 'names {} 'begun 0 'last 'start 'dir 90 'ring ()}
        _ (ch-size s 1.0)
        fs (filter (a \ !(starts? a "-") || a = "-") as)
-       (go l) (atom? l ? 0
-               (: f <l
-                  t (f = "-" ? (string? sin ? sin (slurp in)) (uread f @ r (two? r ? <>r)))
-                  (string? t ? (ch-doc s t, go >l)
-                   (say err "chem: can't open \(f)\n", pin s 'status 1))))
-       (go (two? fs ? fs ["-"]),
+       (gr-files fs sin (f \ ch-doc s) (f \ (say err "chem: can't open \(f)\n", pin s 'status 1)),
         [(peep s 'status 0) (slurp (s 'o))]))
 )
 ) ; module 'kore

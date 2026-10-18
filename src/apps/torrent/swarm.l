@@ -1,9 +1,7 @@
-; src/apps/torrent/swarm.l -- the download: a swarm of peer connections, each a task, over
-; one shared state. a piece is picked for a peer from a deadline window ahead of the
-; playhead first, in order, and rarest-first past it; its blocks are asked all at once,
-; it is checked against its sha1 when whole, and laid into the files in place. what is
-; had is offered back: an interested peer is unchoked while a slot is free, and its
-; requests are answered from the files.
+; src/apps/torrent/swarm.l -- the download: peer connections, each a task, over one shared
+; state. pieces are picked in order from a deadline window ahead of the playhead, rarest-first
+; past it; checked against sha1 when whole and laid in place. had pieces are offered back:
+; an interested peer is unchoked while a slot is free.
 ;
 ;   (swarm-new m dir)        -> the state: the files laid under dir, the pieces already
 ;                               there checked and had
@@ -91,9 +89,7 @@
  (sw-count! t bf d) (each ^(t 'm 'count) (i \ pw-has? bf i ? (pin (t 'avail) i (max 0 (min 255 (peep (t 'avail) i 0 + d))))))
 
  ; --- a peer, dialled or dialling us: one loop either way ---------------------------
- ; we say interested while short of a piece, take a piece at a time while unchoked, unchoke
- ; an interested peer while a slot is free and answer its requests, and tell every peer of
- ; each piece had
+ ; interested while short of a piece; unchoke an interested peer while a slot is free
  (sw-talk t c)
   (: m (t 'm) n (m 'count)
      st (pins {} 'bf (cask ((n + 7) // 8)) 'choked 1 'piece -1 'got 0 'buf {}
@@ -110,7 +106,7 @@
                                  each ^((k + blk - 1) // blk) (b \ pw-request c i (b * blk) (min blk (k - b * blk))))))))
      (drop! _) (st 'piece @ i (0 <= i ? (pin (t 'busy) i 0, pin st 'piece -1)))
      (choke! _) (? !(st 'choking) (send 0 "", pin st 'choking 1, pin t 'open (t 'open - 1)))
-     ; between messages: the pieces had since, a slot for a peer that wants one, a keepalive
+     ; between messages: the pieces had since, a free slot, a keepalive
      (tend _) (: now (clock 0)
                  (each ^(t 'had - st 'told) (k \ send 4 (wrbe (t 'log (st 'told + k)) 4)),
                   pin st 'told (t 'had),

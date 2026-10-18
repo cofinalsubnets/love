@@ -1,44 +1,29 @@
 #!/bin/love
-; --- boot.l: the initramfs /init -- love as pid 1 on the Linux kernel ---
-; the real bringup companion to init.l's (pid1 0) tour. where (pid1 0) mounts into
-; /tmp/love-* demo paths and reaps a planted orphan to prove the shape, this is what the
-; kernel actually execs as process 1 out of the initramfs: mount the fhs filesystems,
-; then hand the console to lush (src/apps/lush.l, catted to /lib/sh.l) and never exit (pid 1 leaving panics the kernel).
-;
-; packaged by the Makefile as /init (this file, shebang -> /bin/love), beside /bin/love,
-; /bin/kore (+ applet symlinks) and /lib/sh.l. boot line:
+; boot.l -- the initramfs /init: love as pid 1 on linux. mounts the fhs filesystems, then
+; hands the console to lush (/lib/sh.l) and never exits: pid 1 leaving panics the kernel.
 ;   qemu ... -kernel <bzImage> -initrd initramfs.cpio.gz -append "console=ttys0 rdinit=/init"
-;
-; safe to dry-run on the host: `out/love init/boot.l` sees getpid != 1, prints the
-; banner and returns -- no mounts, no shell handoff (so it never blocks a dev machine).
+; run where getpid != 1 it prints the banner and returns: no mounts, no handoff.
 (borrow 'posix)
-(: (say1 s) (puts s, puts "\n")                     ; a console line
+(: (say1 s) (puts s, puts "\n")
 
-   ; mount one early filesystem at its fhs path (mkdir first; mount is () success /
-   ; -errno failure -- e.g. ebusy when the kernel already auto-mounted devtmpfs).
-   ; the sign, never a truth test: 0 and -errno are both falsey.
+   ; mount answers () on success, else an error name (ebusy where the kernel auto-mounted devtmpfs)
    (mnt src tgt typ)
      (: _ (mkdir tgt 493)
         r (mount src tgt typ)
-        (say1 ("  mount " + typ + " on " + tgt
-               + (r < 0 ? (" -> errno " + show (0 - r)) " -> ok"))))
+        (say1 ("  mount " + typ + " on " + tgt + " -> " + (r = () ? "ok" (show r)))))
 
-   ; the console job: a fresh `love` running the shell over the inherited console fds.
-   ; the -l registers module 'lush (the parts' own wraps); the -e reads it through
-   ; one use -- compile is per-binding, so (sh 0) compiles after the splice.
+   ; a fresh love running the shell on the inherited console. -l registers module 'lush;
+   ; -e borrows it in one use, since compile is per-binding and (sh 0) compiles after the splice
    (console _) ["/bin/love" "-l" "/lib/sh.l" "-e" "(: _ (borrow 'lush) (sh 0))"]
 
-   ; a boot self-check: run a real userland command (kore, forked + captured) so the
-   ; console shows the base system works end to end before we hand off the tty. `hark`
-   ; returns (exit . stdout); the shebang on /bin/kore points at /bin/love.
+   ; a real userland command, forked and captured, before the tty is handed off
    (selfcheck _)
      (hark ["/bin/kore" "ls" "/proc"] @ r
         (say1 ("-- self-check: kore ls /proc -> exit " + show <r
                + ", " + show #>r + " bytes --")))
 
-   ; pid 1's forever loop: harvest every child (waitpid(-1) via `glean`). the console dying
-   ; respawns it (a getty); any other pid is a reparented orphan we just harvest. a
-   ; non-pair glean (nothing pending / -ECHILD) paces the loop so we never busy-spin.
+   ; pid 1's loop: reap every child; the console dying respawns it, any other is an orphan.
+   ; a non-pair glean (nothing pending) paces the loop
    (harvest shpid)
      (glean 0 @ ev
         (two? ev ?

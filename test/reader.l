@@ -1,14 +1,13 @@
-; the reader's laws: what it emits for a text, compared structurally, never by printing,
-; since the printer shows (mono (< x)) as `<x`
+; the reader's laws, compared structurally, never by printing: the printer shows (mono (< x)) as `<x`
 (: (rdr s) (sound s @ r (two? r ? <r r)))
 
 ; --- the read protocol: (datum . rest), () at a clean end, or `torn` inside a shape ---
 ; presence is the cons, never the net: "()" reads a datum
 (test
  (sound '(49) @ r (two? r && 1 = <r && !>r))                   ; a datum, nothing after
- !(sound ())                                          ; a clean end -- the blue floor
+ !(sound ())                                          ; a clean end
  ('torn = sound '(40))                              ; the text ran out inside a shape
- (sound '(49 32 50) @ r                               ; ...and the residue reads the next
+ (sound '(49 32 50) @ r                               ; the residue reads the next
   (1 = <r && 2 = <(sound >r)))
  (sound '(40 41) @ r (two? r && !<r))                   ; the datum () is still a datum
  ; a charlist whose tail is a number: the tail is its residue as it stands, as a name's is
@@ -26,15 +25,15 @@
  !(sound 42) !(sound 'notaport)                       ; nothing to read is a clean end
  ((sound "(1 2) 3") = sound (map "(1 2) 3" ^7)))  ; the two doors agree, datum and rest
 
-; --- the port door: sound reads a port as its flow; the datums agree with the string's.
-; a tap gulps a byte at a time, so every lookahead re-forces a remembered tail ---
+; --- the port door: the datums agree with the string's. a tap gulps a byte at a time,
+; so every lookahead re-forces a remembered tail ---
 (: (rdr-all x)                                      ; every datum of a text, in order
    (: (go cl acc) (sound cl @ r
                    (? (two? r)      (go >r (<r . acc))
                       (r = 'torn) 'torn
                       (rev acc)))
       (go x ()))
-   (rdr-doors s) (: cl (map s (jot #s))             ; string, charlist and port agree
+   (rdr-doors s) (: cl (map s (jot #s))
                     d (rdr-all s)
                     (d = rdr-all cl && d = rdr-all (tap cl))))
 (test
@@ -43,9 +42,8 @@
  !(sound (tap ()))                                  ; a spent port is a clean end
  !(sound (jug 0))                                   ; ...and so is one with no read door
  ('torn = sound (tap (map "(1" ^2)))              ; torn reads torn off a port too
- ; one byte per gulp: every lane crosses a thunk at every position
  (rdr-doors "(1 2) 3 \"hi\" 'q")
- (rdr-doors "#!/usr/bin/env love\n(a b)")           ; the lookahead: one position, 3 forces
+ (rdr-doors "#!/usr/bin/env love\n(a b)")           ; the lookahead: 3 forces
  (rdr-doors "\"\\x41\\x42\" 7")                     ; the \xnn lane: 2 forces
  (rdr-doors "; comment\n(a . b) {1 2} @(3) (0 ~ 1)")
  (rdr-doors "map (+ 1) '(1 2 3)")                   ; an operator run, glued and spaced
@@ -91,7 +89,6 @@
  (493 = rdr "0755") (7 = rdr "007") (0 = rdr "00")        ; octal, the leading zero its whole prefix
  ((0 - (1 / 2)) = rdr "-.5") ((1 / 2) = rdr "+.5")
  (18446744073709551615 = rdr "18446744073709551615")          ; decimal above the word: a big
- ; ..and the same value in the other two bases, in every build
  (18446744073709551615 = rdr "0xffffffffffffffff")
  (18446744073709551615 = rdr "01777777777777777777777")
  (18446744071564165120 = rdr "0xffffffff80200000")            ; a high-half address
@@ -134,7 +131,6 @@
  ('(mono (-+ 5)) = rdr "-+5")       (-5 = -+5)
  ('(mono (- x)) = rdr "-x")
  ('(mono (+ x)) = rdr "+x")
- ; ...and the numeral exception
  (-3 = rdr "-3") (3 = rdr "+3")
  ('- = rdr "- x")                                   ; a lone - is the symbol
  ('(mono (- (f x))) = rdr "-(f x)")                 ; glued to a form: negate

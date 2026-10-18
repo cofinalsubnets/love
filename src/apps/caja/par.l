@@ -1,26 +1,20 @@
 ; src/apps/caja/par.l -- caja's paragraphs: characters into an hlist, the hlist into lines.
-; `(borrow 'caja-par)`. tex.web's main loop (part 46, 1034-1044), paragraph starts and
-; ends (47, 1091-1096), line_break (parts 38-39) and hyphenation (40-43), section for
-; section:
-;
+; tex.web's main loop (1034-1044), paragraph starts and ends (1091-1096), line_break (parts
+; 38-39) and hyphenation (40-43), section for section:
 ;   (cp-setup J)              -ini TeX's codes and parameters, on a job from cb-job
-;   (cp-patterns J s)         the words of a \patterns{..} body
-;   (cp-hyphenation J s)      the words of a \hyphenation{..} body
+;   (cp-patterns J s) (cp-hyphenation J s)  a \patterns{..} or \hyphenation{..} body
 ;   (cp-hyphen-file J s)      both, out of a file like hyphen.tex
 ;   (cp-mode J)               an empty internal vertical list, as \vbox{ opens one
-;   (cp-run J M toks)         the tokens, in order (below); answers M
+;   (cp-run J M toks)         the tokens, in order; answers M
 ;   (cp-vlist J M)            ends a paragraph still open; the vlist's first node
 ;   (cp-hbox J f w toks)      \hbox{..} in font f, to w or natural (w ()); the box
-;   (cp-tex toks)             the tokens as -ini TeX says them, the font k as \f and a letter
+;   (cp-tex toks)             the tokens as -ini TeX says them, font k as \f and a letter
 ;   (cp-node J n)             n with an 'id, for a node made outside
-;
-; a token: ['c code] a character in the current font, 'sp a space, 'xsp a control space,
-; ['f k] a font, ['pen n] (either mode), ['kern w] an explicit kern, ['skip glue] and
-; ['vskip glue], 'dash for \-, ['rule w h d] a \vrule, ['hrule w h d] (a running width ()),
-; ['hbox w toks], ['box b] a box node made already (from cp-node; cp-tex cannot say it), 'nb
-; \noboundary, 'indent, 'noindent, 'par, ['set k v] a parameter. a glue is w st sto sh sho,
-; flat after the head or as a list in 'set.
-; nodes are box.l's; each carries an 'id, for where tex.web compares pointers.
+; a token: ['c code], 'sp, 'xsp (control space), ['f k], ['pen n], ['kern w], ['skip glue],
+; ['vskip glue], 'dash (\-), ['rule w h d], ['hrule w h d] (a running width ()), ['hbox w toks],
+; ['box b] (from cp-node), 'nb (\noboundary), 'indent, 'noindent, 'par, ['set k v]. a glue is
+; w st sto sh sho, flat after the head or a list in 'set. nodes are box.l's, each with an 'id
+; where tex.web compares pointers.
 (module (caja-par cp-setup cp-patterns cp-hyphenation cp-hyphen-file cp-mode cp-run cp-vlist
          cp-hbox cp-tex cp-node cp-spec)
 (borrow 'tfm)
@@ -32,7 +26,7 @@
    ignore-depth -65536000
    z7 (0 * iota 7)                            ; tex.web's six-word width arrays, as trays
 
-   ; --- the job's codes and parameters ------------------------------------------------
+   ; --- the job's codes and parameters ---
    (cp-spec w st sto sh sho) {'width w 'stretch st 'sto sto 'shrink sh 'sho sho}
    (cp-setup J)
     (: lc {} sf {}
@@ -57,7 +51,7 @@
    (zero? g) (g = () || g 'width = 0 && g 'stretch = 0 && g 'shrink = 0)
    (spec-of g) (g = () ? (cp-spec 0 0 0 0 0) g)
 
-   ; --- nodes ---------------------------------------------------------------------------
+   ; --- nodes ---
    (nd J n) (pin J 'nid (J 'nid + 1), pin n 'id (J 'nid), n)
    (cp-node J n) (nd J n)
    (same? a b) (a != () && b != () && a 'id = b 'id)
@@ -72,7 +66,7 @@
    ; the character field as tex.web reads it off any node: a non-character's subtype
    (charfield n) (char? n ? (n 'char) (n 'sub))
 
-   ; --- fonts -----------------------------------------------------------------------------
+   ; --- fonts ---
    (tf J f) (J 'fonts f 'tfm)
    (ci J f c) (tf J f 'ci c)
    (exists J f c) (tf J f @ t (t 'bc <= c && c <= t 'ec && 0 < <(t 'ci c)))
@@ -86,7 +80,7 @@
    ; a width as line_break takes one: characters, ligatures, boxes, rules, kerns
    (wd J n) (char? n || n 'type = 6 ? (cw J (n 'font) (n 'char)) (n 'width))
 
-   ; --- the lists of a mode: 'head a sentinel node, 'tail the last -------------------------
+   ; --- the lists of a mode: 'head a sentinel node, 'tail the last ---
    (cp-mode J)
     (nd J {'type 'head 'link ()} @ v
        {'mode 'v 'vhead v 'vtail v 'pd ignore-depth 'vpg 0 'font 0 'hhead () 'tail () 'sf 1000
@@ -94,7 +88,7 @@
    (tail-append M n) (pin (M 'tail) 'link n, pin M 'tail n)
    (vappend M n) (pin (M 'vtail) 'link n, pin M 'vtail n)
 
-   ; --- the main loop: a run of characters, ligatures and kerns (tex.web 1034-1040) --------
+   ; --- the main loop: a run of characters, ligatures and kerns (tex.web 1034-1040) ---
    (adjust-sf J M c)
     (J 'sf c @ s
        (? (s = 1000) (pin M 'sf 1000)
@@ -105,8 +99,7 @@
    ; the run starts at the character token first in toks; answers the tokens left
    (main-loop J M toks)
     (tf J (M 'font) 'nl = 0 ? (plain-run J M toks) (lig-run J M toks))
-   ; a font with no lig/kern program has no boundary either, and the loop comes down to
-   ; this: each character its node, a hyphen character a discretionary after it
+   ; no lig/kern program: each character its node, a hyphen character a discretionary after it
    (plain-run J M toks)
     (: f (M 'font) t (tf J f) ci (t 'ci) hc (hychar J f)
        _ (pin J 'cbd 0)
@@ -208,7 +201,7 @@
        (run l) (l = 'out ? (S 'in) (run (step l)))
        (run 'append))
 
-   ; --- spaces (tex.web 1041-1044) ----------------------------------------------------------
+   ; --- spaces (tex.web 1041-1044) ---
    (font-glue J f) (cp-spec (fparam J f 2) (fparam J f 3) 0 (fparam J f 4) 0)
    (normal-space J M)
     (P J 'spaceskip @ ss
@@ -221,7 +214,7 @@
              g (cp-spec w (xn-over-d (b 'stretch) sf 1000) (b 'sto) (xn-over-d (b 'shrink) 1000 sf) (b 'sho))
              (tail-append M (gluenode J g 0)))))
 
-   ; --- starting and ending paragraphs (tex.web 1091, 1096, 1070) ----------------------------
+   ; --- starting and ending paragraphs (tex.web 1091, 1096, 1070) ---
    (norm-min h) (? (h <= 0) 1 (h >= 63) 63 h)
    (cur-lang J) (P J 'language @ l (l <= 0 || l > 255 ? 0 l))
    (new-graf J M indented)
@@ -250,7 +243,7 @@
      vappend M b,
      pin M 'pd (b 'depth))
 
-   ; --- the tokens -----------------------------------------------------------------------------
+   ; --- the tokens ---
    ; a glue in a token is [w st sto sh sho]; the parameters that take one
    glue-params ['leftskip 'rightskip 'parfillskip 'baselineskip 'lineskip 'parskip 'spaceskip
                 'xspaceskip 'splittopskip]
@@ -313,9 +306,9 @@
        (go toks))
    (cp-vlist J M) (end-graf J M, M 'vhead 'link)
 
-   ; --- the tokens as TeX says them --------------------------------------------------------------
-   ; the TeX side must \def\sp{ } (a space after a control word) and name font k \f and the k-th
-   ; letter; a fil amount is said in halves, so a token's must be one
+   ; --- the tokens as TeX says them ---
+   ; the TeX side must \def\sp{ } and name font k \f and the k-th letter; a fil amount is
+   ; said in halves, so a token's must be one
    (fname k) "\\f\(string (96 + k))"
    (units o) (["sp" "fil" "fill" "filll"] o)
    (amt v o) (o = 0 ? "\(v)sp"
@@ -367,7 +360,7 @@
               (go >ts (r 1) (p 0) (p 1))))
        (go ts 0 0 ()))
 
-   ; --- \patterns and \hyphenation (tex.web 934-939, 960-965) ------------------------------
+   ; --- \patterns and \hyphenation (tex.web 934-939, 960-965) ---
    ; a pattern is kept under its letters, the language's byte first, with its n0..nk; every
    ; prefix is kept too, so a lookup stops where the trie would
    (words s)
@@ -434,7 +427,7 @@
            (go (i + 1)))
        (go 0))
 
-   ; --- line_break (tex.web 813-890) --------------------------------------------------------------
+   ; --- line_break (tex.web 813-890) ---
    ; the active list: A is both active and last_active; an active node has 'type 0 or 1
    ; (unhyphenated, hyphenated), a delta node 'type 2 and its widths in 'd. tex.web's six-word
    ; width arrays are trays of seven, slot 0 unused, so a delta is one add
@@ -677,7 +670,7 @@
             (pin L 'thr (P J 'tolerance), pin L 'second 1,
              pin L 'final (P J 'emergencystretch <= 0)))
 
-       ; --- hyphenation (891-918, 923, 930-934) -----------------------------------------------
+       ; --- hyphenation (891-918, 923, 930-934) ---
        H {'hu {} 'hc {} 'hyf {} 'hn 0}
        (lc c) (J 'lc c)
        (hu k) (H 'hu k) (hc k) (H 'hc k) (hyf k) (peep (H 'hyf) k 0)
@@ -932,7 +925,7 @@
            (outer 0,
             pin (S 's) 'link q))
 
-       ; --- post_line_break (877-890) ----------------------------------------------------------
+       ; --- post_line_break (877-890) ---
        (post-line-break fwp)
         (: head (L 'head)
            (rev q cp) (q = () ? cp (q 'prev @ nx (pin q 'prev cp, rev nx q)))

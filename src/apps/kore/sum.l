@@ -189,16 +189,19 @@
        (o 'c ? (sum-check "sha3sum" (_ \ mk) (2 * (o 'a // 8)) (o 'fs) {})
         (sum-say "sha3sum" (o 'b ? (\ v n f (v + "\n")) sum-hexline) mk "-" (o 'fs))))
 
+   ; each file through row, stdin unnamed when none -> the exit, 1 when one went wrong
+   (sum-rows fs row)
+    (: (walk a ok) (two? a ? (walk >a (row <a <a ok)) ok)
+       ok (two? fs ? (walk fs 1) (row "-" "" 1))
+       (flush out,
+        ok ? 0 1))
    ; crc32: toybox's -- zlib's crc of each file, eight hex digits and the name
    (crc32-main as)
     (: (row f nm ok)
         (sum-fold f crc32-on 0 @ r
            (two? r ? (say out (zpad 8 (radix <r 16) + (#nm ? (" " + nm) "") + "\n"), ok)
             (sum-nope "crc32" f r, 0)))
-       (walk a ok) (two? a ? (walk >a (row <a <a ok)) ok)
-       ok (two? as ? (walk as 1) (row "-" "" 1))
-       (flush out,
-        ok ? 0 1))
+       (sum-rows as row))
 
    ; sum: bsd's 16-bit rotating checksum over 1024-byte blocks (-r, the default), or
    ; system v's byte total folded to 16 bits over 512-byte blocks (-s, --sysv), the
@@ -219,17 +222,13 @@
                (go >a sv (w . ops)))))
        r (go as 0 ())
        sv <r fs <>r
-       (pad w c s) (w <= #s ? s (pad w c (string c + s)))
        (line v n nm)
         ((sv ? (: t (v & 4294967295) q ((t & 65535) + (t >> 16)) (show ((q & 65535) + (q >> 16)) + " " + show ((n + 511) // 512)))
-            (pad 5 48 (show v) + " " + pad 5 32 (show ((n + 1023) // 1024))))
+            (zpad 5 (show v) + " " + upad 5 (show ((n + 1023) // 1024))))
          + (#nm ? (" " + nm) "") + "\n")
        (row f nm ok)
         (sum-fold f (sv ? (\ a h (a + net h)) bsdsum) 0 @ r
            (two? r ? (say out (line <r <>r nm), ok)
             (sum-nope "sum" f r, 0)))
-       (walk a ok) (two? a ? (walk >a (row <a <a ok)) ok)
-       ok (two? fs ? (walk fs 1) (row "-" "" 1))
-       (flush out,
-        ok ? 0 1)))
+       (sum-rows fs row)))
 ) ; module 'kore

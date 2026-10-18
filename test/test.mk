@@ -182,6 +182,8 @@ hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host
 hostnif_cold =                                   # empty: no gate needs the cold lane
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
+hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
+hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight
 # evback.l reads show names a mopped image has dropped
 hostnif_nomop = test/host/evback.l
 hostnif_exec =                                   # empty: the gc gates run warm, in the fork lane
@@ -773,15 +775,17 @@ test_gcheck: host $(love0) $(ho)/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_host
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_hostegg
 # test_gcstress: LvGcStress collects every time and poisons the nursery, the corpus in
-# GCS_SHARDS shards a half; _bake also bakes under stress, _full runs it whole (hours)
+# GCS_SHARDS shards a half; _bake also bakes under stress, _full runs it whole and the stress
+# love0 over all of it (hours)
 GCS_SHARDS ?= 4
 test_gcstress: host $(love0) $(ho)/mooncc0.image
 	@MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
 test_gcstress_bake: host $(love0) $(ho)/mooncc0.image
 	@GCS_BAKE=1 MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
-test_gcstress_full: host $(love0) $(ho)/mooncc0.image
+test_gcstress_full: host $(love0) out/gcs0/love0 out/lib/corpus.list $(ho)/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
+	@sh test/gate/l0stress.sh .
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---
 # each gate skips, saying so, when its checker is missing
 COQC     ?= $(shell command -v coqc 2>/dev/null)

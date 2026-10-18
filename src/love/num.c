@@ -1714,6 +1714,8 @@ lvm(lvm_vbin) {
      && !(atray && tray(a)->type == love_O) && !(btray && tray(b)->type == love_O)) {
   if (vop_bitp(op)) love_musttail return Push(ZeroPoint);   // no bits on a complex
   g->b = (word) (op); love_musttail return Ap(lvm_cbin, g); }
+ if (((atray && coinp(b)) || (btray && coinp(a))) && !vop_bitp(op)) {   // a coin: the object lane, per cell
+  g->b = (word) (op); love_musttail return Ap(lvm_obin, g); }
  if (!(atray || isnum(a)) || !(btray || isnum(b)))
   love_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: 0, not ()
  if ((atray && tray(a)->type == love_O) || (btray && tray(b)->type == love_O)) {

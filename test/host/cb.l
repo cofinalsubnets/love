@@ -1,7 +1,6 @@
 ; a vttest-lite for quay's screen (src/love/cb.c, src/love/quay/quay.c), which is inle's console too
-; out of the corpus: inside it love0's second evaluation stops, cause unknown
+; out of the corpus: inside it love0's second evaluation stops
 ; run: cat test/00-init.l test/host/00-host.l test/host/cb.l | out/love      ; exits 1 on fail, prints cb: ok
-;
 ; a cell is three words (src/love/quay/quay.h): the glyph (codepoint, width, picture, face),
 ; then fg and bg, each a kind in its top byte over a 24-bit value
 (: (chat s i) (2097151 & glass s i 0)
@@ -276,7 +275,7 @@
  _ (test ([27 91 63 54 99] = reply s))
  _ (scribe s "\e[5n")
  _ (test ([27 91 48 110] = reply s))
- ; a burst of asks: a full reply queue stops the feed, answering the bytes taken; undrained takes all
+ ; a burst of asks: a full reply queue stops the feed, answering the bytes taken
  q (cats (map (\ i "\e[6n") (jot 20)))
  (said _) (: r (reply s) (two? r ? (string r) ""))
  (feed x a) (: r (scribe s x) a2 (a + said 0)
@@ -513,7 +512,7 @@
    _ (scribe s3 "\e_Ga=T,f=24,s=2,v=2,c=2,r=1,C=1;/wAA/wAA/wAA/wAA\e\\")
    _ (test (pic? s3 0) (pic? s3 1) !(pic? s3 2) !(pic? s3 10)
            (red = tilepx s3 1 7 15) (0 = cur s3))
-   ; stretched over the whole screen, which a copy could not be: the store is one screenful
+   ; stretched over the whole screen: the store is one screenful
    s4 (h-mkscr 4 10)
    _ (scribe s4 "\e_Ga=T,f=24,s=2,v=2,c=10,r=4,C=1,q=2;/wAA/wAA/wAA/wAA\e\\")
    _ (test (pic? s4 0) (pic? s4 39) (red = tilepx s4 39 7 15)
@@ -581,8 +580,8 @@
    _ (test (rpic? b 0) !(rpic? x 0) (0 = chat x 0))
    _ (test !(regrid s s 4 5) (0 < regrid s () 4 5) !(regrid s (cask 10) 4 5)))
 
-; history: rows scrolled off the top, at negative glass indices (-cols the newest); peer
-; looks back, and more output keeps the view on the same lines
+; history: rows scrolled off the top, at negative glass indices (-cols the newest);
+; peer looks back, and more output keeps the view on the same lines
 (: (hrow s k c) (cats (map (\ q (: ch (2097151 & glass s (k + q) 0) (0 = ch ? " " (string ch)))) (jot c)))
    s (h-mkscr 3 4)
    _ (scribe s ("\e[20h" + "aa\nbb\ncc\ndd\nee"))        ; LNM: \n is a newline; five lines on three rows
@@ -608,7 +607,7 @@
    _ (test (769 = glass w -8 3) (19990 = 2097151 & glass w -4 0) (1 = (glass w -4 0 >> 21 & 3)))
    r (regrid w (cask (screen () 2 3)) 2 3)             ; regrid: history and the rows shrunk away
    _ (test (3 = gaze r 9) ("e" = snip (hrow r -9 3) 0 1) ("3  " = hrow r -3 3) ("5  " = hrow r 3 3))
-   ; the painter looks back too: row 0 one line back paints what a screen with it there does
+   ; the painter looks back too: row 0 one line back paints as a screen with that row there
    (pix sc y) (: px (cask (4 * 32 * 48)) _ (dye sc px 32 y -1 ()) (snip px (y * 2048) ((y + 1) * 2048)))
    p (h-mkscr 3 4)
    _ (scribe p ("\e[20h" + "aa\nbb\ncc\ndd"))

@@ -1,28 +1,15 @@
-; uu2lean: love's internal proof corpus, exported to lean 4 -- the second backend of
-; the verification bridge (cf. src/tools/uu2coq.l, the Rocq leg). Same uu.l, same
-; dependency-closure machinery; a different kernel re-checks the same proof terms.
+; uu2lean: love's uu proof corpus exported to lean 4, the twin of uu2coq.l. loads and
+; certifies the uu files, reads them as data, and translates every (defn/defq nm T t) in
+; the MLTT fragment; lean re-checks the same terms.
 ;
-; This sweeps test/uu.l: loads uu's kernel (every defn type-checked against its
-; stated type -- uu certifies them), reads the file as data, collects every
-; (defn/defq nm T t), and translates the universe-safe MLTT fragment to Lean. `lean`
-; re-checks the lot -- an independent third witness (uu, then Rocq, then Lean), so a
-; law certified here and by uugen.v is agreed by two unrelated kernels (de Bruijn).
-;
-; a def exports iff in the handled fragment and every global it mentions exports -- a
-; dependency closure (identical to uu2coq.l), so the univalence tower drops on its own
-; (it bottoms at univalenceAxiom, an `axm` we never emit). Lean gives two things Coq
-; needed flags for, for free: structure-eta (so idisweq exports with a plain `total2`
-; structure) and universe polymorphism (`Type _` auto-binds). As in the Rocq leg,
-; `paths` is the Type-valued identity type (Lean's `Eq` is Prop), so a path can be a
-; Sigma carrier. Defs are `noncomputable` -- we certify the terms, never run them, so
-; the code generator (which rejects bare recursors) is irrelevant.
+; a def exports iff in the fragment and every global it mentions exports -- a dependency
+; closure, so the univalence tower (bottoming at an `axm`) drops on its own. `paths` is the
+; Type-valued identity (Lean's `Eq` is Prop), so a path can be a Sigma carrier.
 ;
 ; Run: out/love src/tools/uu2lean.l > test/proof/lean/uugen.lean   then  lean test/proof/lean/uugen.lean
 
 (borrow 'posix)
-; the files read below spell their laws `test`, the corpus recorder. here they run to
-; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
-; and a false law stops the run rather than printing a dot into the output.
+; stdout is the artifact, so the files' `test` laws run as assert: silent, a false one stops
 (:: 'test (. 'assert))
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))
@@ -43,17 +30,15 @@
    _ (reads (open "test/uukindlaw.l" "r"))          ; load + certify uu's corpus (populates GLOB)
    bs (intern "\\")
    nl "\n"
-   b8 "⟨"  b9 "⟩"   ; Lean's anonymous-constructor angle brackets
+   b8 "⟨"  b9 "⟩"
    (unq x) (two? x && <x = bs ? (x 1) x)   ; strip one ' (reads shows quote as (\ ..))
-   (lines l) (foldl (a \ s \ a + s + nl) "" l)   ; join a list of lines, newline after each
-
-   ; read a file's top-level forms as data (the reader strips ; comments)
+   (lines l) (foldl (a \ s \ a + s + nl) "" l)
 
    ; a uu name -> a Lean identifier: prefix uu_, kebab '-' -> '_'
    (sanit s) (jug 0 @ j (each ^#s (i \ say j (string (s i @ 45 95 c c))), slurp j))
    (leann nm) ("uu_" + sanit (string nm))
 
-   ; --- collect (kind nm T t) entries from the uu.l forms (defns live inside asserts) ---
+   ; --- collect (kind nm T t) entries (defns live inside the laws) ---
    (deq? c) (two? c && (<c = 'defn || <c = 'defq))
    (axq? c) (two? c && <c = 'axm)
    (entry c) (? (deq? c) ['def (unq (c 1)) (unq (c 2)) (unq (c 3))]
@@ -67,52 +52,37 @@
    (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat` -- the local cat is the string fold
    ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))) ())
 
-   ; the silent-no-op gate (defense in depth behind uu.l's arity-door macros):
-   ; a def gathered off the file must be whole -- three operands; a paren slip
-   ; that merges the type into the term reads () in the term seat -- and
-   ; pinned, since a partially applied defn/defq is a truthy closure that pins
-   ; nothing and paints its assert dot green. redden here instead. the empty seat is
-   ; `== ()` and not `!`: a term of 0 is a legal def (a code table's first row) and
-   ; falsy, so truthiness would redden it.
+   ; a def must be whole (a paren slip reads () as its term) and pinned (a partial defn is a
+   ; truthy closure that pins nothing). `= ()`, not `!`: a term of 0 is a legal def
    _ (map (e \ ((<e = 'def && e 3 = () || !(peep GLOB (e 1) 0)) ?
                   (puts "MALFORMED-OR-UNPINNED-DEF ", puts (string (e 1)), quit 1)
                   0))
         ents)
 
-   ; names that exist (corpus-wide) -- for telling a global reference from a bound var
+   ; corpus names, telling a global from a bound var
    nt {} _ (map (e \ pin nt <>e 1) ents)
    (corpus? x) (peep nt x 0)
 
-   ; explicit skips: the type-in-type detonations (sound MLTT can't host them, and
-   ; lean's universe check rightly rejects them -- the filter, working as intended)
+   ; the type-in-type laws, which sound MLTT rejects
    bl {}
    _ (map (n \ pin bl n 1) '(the_world_explodes but_seriously_the_world_explodes whoa irref))
 
-   ; UU pinned to concrete `Type` for these: a type-level nat_rect both declares
-   ; and computes `Type _`, so the level is underdetermined, Lean generalizes it,
-   ; and the universe strands at every downstream use (uu_zrow found it). ground
-   ; the StackSet model's types at Type 0 and the whole tower's universes solve.
+   ; UU pinned to `Type` for these: a type-level nat_rect leaves the level underdetermined
+   ; and the universe strands downstream
    mono {}
    _ (map (n \ pin mono n 1) '(nvec nlist stk mstk patch tree ppair pvec plist cmside hunk hpair hvec hlist hcmside duo etree epatch spair scmside cell tmleaf tm svec slist sqside mvside store))
 
-   ; transparent type-former/identity combinators: Lean checks a paths.rec minor premise
-   ; at reducible transparency and won't unfold a plain `def`, so an equivalence proof
-   ; (idisweq: idfun T x must reduce to x) stalls. Mark these few `@[reducible]`.
+   ; `@[reducible]`: Lean checks a paths.rec minor premise at reducible transparency, so
+   ; idisweq stalls unless idfun T x unfolds
    red {}
    _ (map (n \ pin red n 1) '(idfun coconustot coconusfromt hfiber))
 
-   ; backend-specific drop set (NOT soundness -- uu AND Rocq certify everything here). empty:
-   ; the two based-J equivalence roots Lean's elaborator can't reconstruct from the structural
-   ; term (idisweq, iscontrcoconustot) are instead hand-proven below (the `manual` set), so the
-   ; full 200 port -- matching the Rocq leg. Kept as the mechanism for any future holdout.
+   ; names Lean cannot take though uu and Rocq certify them; empty
    np {}
    _ (map (n \ pin np n 1) '())
 
-   ; hand-written Lean proofs for the two based-J equivalence roots the structural
-   ; translation can't reconstruct (see the note above). Tactic mode runs at full
-   ; transparency, so `cases` does the path induction and idfun reduces -- where the
-   ; emitted term stalled. Their ~17 dependents auto-port once these exist. The type is
-   ; still the auto-translated stated type; only the body is replaced.
+   ; hand-written bodies for the two based-J roots the emitted term stalls on: tactic mode
+   ; runs at full transparency. the type is still translated
    manual {
    'idisweq
        "  by intro T y; refine ⟨⟨y, @paths.idpath _ y⟩, ?_⟩; intro t; obtain ⟨x, p⟩ := t; cases p; exact @paths.idpath _ _"
@@ -120,8 +90,7 @@
        "  by intro T t; refine ⟨⟨t, @paths.idpath _ t⟩, ?_⟩; intro w; obtain ⟨x, p⟩ := w; cases p; exact @paths.idpath _ _"}
 
    ; --- the translator: a uu term -> a Lean string ---
-   ; every MLTT constructor is mapped; `un` is the safety net for any unhandled head
-   ; (empty today -- the dependency closure + lean are the real filters).
+   ; `un` names unhandled heads; empty
    un {}
    bases {'nat "Nat" 'UU "(Type _)" 'bool "Bool" 'unit "PUnit.{1}"
           'empty "Empty" 'true "true" 'false "false" 'tt "PUnit.unit"}
@@ -141,13 +110,11 @@
      'idpath    ("(@paths.idpath _ " + u2l <>t + ")")
      'paths     ("(@paths " + u2l <>t + " " + u2l <>>t + " " + u2l (t 3) + ")")
      'nat_rect  ("(@Nat.rec " + u2l <>t + " " + u2l <>>t + " " + u2l (t 3) + " " + u2l (t 4) + ")")
-     ; Bool.rec is false-case then true-case (Lean's ctor order); uu/Coq order is
-     ; true-case then false-case -- so swap the two minor premises (e3<->e4)
+     ; Bool.rec takes the false case first, uu the true case: swapped
      'bool_rect ("(@Bool.rec " + u2l <>t + " " + u2l (t 3) + " " + u2l <>>t + " " + u2l (t 4) + ")")
      'unit_rect ("(@PUnit.rec " + u2l <>t + " " + u2l <>>t + " " + u2l (t 3) + ")")
      'empty_rect ("(@Empty.rec " + u2l <>t + " " + u2l <>>t + ")")
-       ; Sigma -> a Lean structure (definitional eta is FREE -- idisweq exports plainly).
-       ; total2 mirrors pi (index 1 var, 2 domain, 3 body); tpair's family inferred.
+       ; Sigma -> a Lean structure, with definitional eta. total2 mirrors pi
      'total2    ("(total2 (fun " + string <>t + " : " + u2l <>>t + " => " + u2l (t 3) + "))")
      'tpair     ("(total2.tpair " + u2l <>t + " " + u2l <>>t + ")")
      'pr1       ("(total2.pr1 " + u2l <>t + ")")
@@ -183,9 +150,7 @@
    ; --- dependency closure: keep only defs all of whose mentions also survive ---
    (allin? l ex) (two? l ? (peep ex <l 0 && allin? >l ex) 1)
    (pass cs ex) (foldl (\ a e (allin? (mlist e) ex ? (pin a (e 1) 1, a) a)) (tablet 0) cs)
-   ; the measure is the key COUNT: pass only ever shrinks ex, so the counts settle
-   ; exactly when the set does. not glued $, which nets any tablet to 1 and would
-   ; stop the walk after one pass, past defs whose dependency that pass dropped.
+   ; the measure is the key count: pass only shrinks ex. not glued $, which nets a tablet to 1
    (fix ex) (pass cands ex @ ex2 (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
    ex0 (foldl (\ a e (pin a (e 1) 1, a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
@@ -197,7 +162,7 @@
       + nl + (mb ? mb ("  " + (u2l (e 3)))) + nl)
      _ (pin bases 'UU "(Type _)")
      out)
-   ; foldr keeps ents' order, and lean wants every definition before its uses (foldl flips)
+   ; foldr keeps ents' order: lean wants every definition before its uses
    exports (foldr (\ e a (peep keep (e 1) 0 ? (e . a) a)) () ents)
 
    _ (dot (lines [

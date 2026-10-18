@@ -1,6 +1,5 @@
 ; test/host/papel.l -- what papel adds over lapiz and cook: anchors, slugs, relinks, titles, freshness.
-; not in the corpus: it writes under /tmp. run through stdin, as a file named papel.l would run
-; papel itself: cat test/00-init.l test/host/papel.l | out/love
+; not in the corpus: it writes under /tmp. run: cat test/00-init.l test/host/papel.l | out/love
 
 ; --- the module seam: three modules, and papel adds nothing to the book
 (elem 'parse (names ()) @ parse-before  ; the book before the load, for the leak delta
@@ -10,8 +9,8 @@
        (elem 'cook (cite ()))
        (elem 'build (keys (cite 'papel)))
        (lit? (cite 'papel 'papel-main))
-       !(cite 'papyrus)                          ; a missing module answers ()
-       ; peg is loaded by lapiz and cook; `parse` may already be on the book, so the leak check is a delta
+       !(cite 'papyrus)
+       ; `parse` may already be on the book via lapiz and cook, so the leak check is a delta
        (elem 'peg (cite ()))
        (lit? (cite 'peg 'seq))
        (parse-before = elem 'parse (names ()))))
@@ -82,8 +81,8 @@ Only a paragraph, so the title has to come from the meta block.
    ; 3 pages + stylesheet + index; then nothing; then the touched page and the index
    n1 (build conf)
    n2 (build conf)
-   ; rewrite one source as is to advance its mtime, read first as `open "w"` truncates; the
-   ; rest lets the coarse file clock tick, or cook's strict-older compare reads it fresh
+   ; rewrite a source as is to advance its mtime (read first: `open "w"` truncates); the rest lets
+   ; the coarse file clock tick, or cook's strict-older compare reads it fresh
    _ (rest 5)
    _ (: s (get-file "src/one.md") q (open (dir + "/src/one.md") "w") (say q s, close q))
    n3 (build conf)
@@ -92,15 +91,15 @@ Only a paragraph, so the title has to come from the meta block.
    ; --- and the dev-server gate over it
    ; `refresh`, per request: builds only when the source fingerprint moved, and never misses an edit
    box {}
-   r1 (refresh conf box)                                 ; first look -- nothing remembered yet
+   r1 (refresh conf box)
    r2 (refresh conf box)
-   _ (rest 5)                                       ; same coarse-clock care as one.md above
+   _ (rest 5)                                       ; coarse-clock care as above
    _ (: s (get-file "src/two.md") q (open (dir + "/src/two.md") "w") (say q s, close q))
    r3 (refresh conf box)
    r4 (refresh conf box)
    _ (test (0 = r1) (0 = r2) (2 = r3) (0 = r4))
 
-   ; ..re-declaring recipes on every build must not grow the card
+   ; re-declaring recipes on every build must not grow the card
    cards (cite 'cook 'cards)
    (icount _) #<(cards (dir + "/site/index.html"))
    n0 (icount ())
@@ -134,14 +133,14 @@ Only a paragraph, so the title has to come from the meta block.
    ; --- relink: rewritten inside the site, untouched outside
    hrefs (finds one "href=\"")
    _ (test
-      (has? hrefs "two.html")                    ; in the site -> .html
+      (has? hrefs "two.html")
       (has? hrefs "archive/old.md")              ; not built -> left alone
       (has? hrefs "https://example.com/x.md")    ; absolute -> left alone
       !(has? hrefs "two.md"))
 
    ; --- title: the three sources, in order
    _ (test
-      (0 < #(finds one "<h1 id=\""))             ; from the head-1
+      (0 < #(finds one "<h1 id=\""))
       (has? (finds two "content=\"") "Two From Meta")
       (cite 'papel 'ptitle (cite 'lapiz 'mdread (get-file "src/two.md")) "x") = "Two From Meta"
       (cite 'papel 'ptitle (cite 'lapiz 'mdread (get-file "src/three.md")) "three.md") = "three.md")
@@ -168,7 +167,7 @@ Only a paragraph, so the title has to come from the meta block.
            pin t 'quiet 1,
            t))
    rn (build rconf)
-   (test (10 < rn)                                   ; it built a real site
+   (test (10 < rn)
          (0 = build rconf),                     ; ..and is at once up to date
     (: (page f) (open (dir + "/love/" + f) "r" @ q (hot? q ? (slurp q) ""))
        (each (filter (f \ (cite 'papel 'ends? f ".html")) (readdir (dir + "/love")))

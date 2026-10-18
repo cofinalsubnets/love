@@ -1,12 +1,12 @@
-; wasm modules laid by holo for wasm.mjs and loader.mjs to validate and run under node: a
-; memory64 module with an import, a table, a data segment, i64 arithmetic, 64-bit loads and
-; stores, call_indirect, one dispatch-loop function by hand and five lowered by wasm-fn.
+; wasm modules laid by holo for wasm.mjs and loader.mjs to validate and run under node:
+; memory64 with an import, a table, a data segment, i64 arithmetic, 64-bit loads/stores,
+; call_indirect, a dispatch loop by hand and five functions lowered by wasm-fn
 
 (borrow 'holo)
 
 (: ;; sum 0..n by dispatch loop. locals: 0 n, 1 the label (i32), 2 acc, 3 i.
-   ;; from inside the innermost block the depths are B0 0, B1 1, B2 2, the loop 3, the exit 4;
-   ;; falling out of block k runs label k's body, and label 3 is the default: the exit.
+   ;; from the innermost block: B0 0, B1 1, B2 2, the loop 3, the exit 4;
+   ;; falling out of block k runs label k's body; label 3, the default, exits
    sum-body
     '((i32.const 0) (local.set 1)
       (block) (loop) (block) (block) (block)
@@ -23,7 +23,7 @@
       (end) (end)
       (local.get 2))
    ;; off holo's ir through wasm-fn: a counted loop, recursion (r3, r4 survive calls), fall-through
-   ;; labels, sized memory ops with a negative displacement and a scaled index, and the flags.
+   ;; labels, sized memory ops with a negative displacement and a scaled index, the flags
    isum-ir '((li r1 0) (li r2 0)
              (label top) (cmp r2 r0) (br gt done) (add r1 r1 r2) (inc r2) (jmp top)
              (label done) (mov r0 r1) (ret))
@@ -69,8 +69,8 @@
    _ (wasm-write "out/.holo.wasm" m)
    _ (puts ("test/holo/wasm: wrote out/.holo.wasm, " + show #(wasm-emit m) + " bytes\n"))
 
-   ;; a second module by wasm-program: doubles as their bits through r0, the ucomisd conditions
-   ;; packed as bits, a narrowed float image, saturating conversions, the overflow flags.
+   ;; a second module by wasm-program: doubles as bits through r0, ucomisd conditions as bits,
+   ;; a narrowed float image, saturating conversions, the overflow flags
    dsum-ir '((xorpd f0 f0) (li r2 0)                                  ; sum 0..n as doubles, the bits back
              (label top) (cmp r2 r0) (br gt done) (cvtsi2sd f1 r2) (addsd f0 f1) (inc r2) (jmp top)
              (label done) (movqrx r0 f0) (ret))
@@ -100,9 +100,9 @@
    _ (wasm-write "out/.holo2.wasm" m2)
    _ (puts ("test/holo/wasm: wrote out/.holo2.wasm, " + show #(wasm-emit m2) + " bytes\n"))
 
-   ;; a mock artifact for the loader, over __love_sys with linux's numbers. [16] the out buffer's
-   ;; length, 4096 the buffer, [24] malloc's bump pointer; init asks the clock (228) and probes
-   ;; (20 must answer -EBADF); eval write(1)s its text; grow mmaps a page and stores a word.
+   ;; a mock artifact for the loader over __love_sys, linux numbers. [16] the out buffer's length,
+   ;; 4096 the buffer, [24] malloc's bump pointer; init asks the clock (228) and probes 20
+   ;; (must answer -EBADF); eval write(1)s its text; grow mmaps a page and stores a word
    malloc-ir '((li r1 24) (ld r2 r1 0) (add r3 r2 r0) (add r3 r3 15) (and r3 r3 -16) (st r1 0 r3) (mov r0 r2) (ret))
    free-ir '((ret))
    init-ir '((li r0 228) (li r1 1) (li r2 32) (call __love_sys) (mov r3 r0)

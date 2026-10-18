@@ -11,11 +11,10 @@
 (borrow 'mesh)
 (:
  eps 1e-6
- (sub a b) [(a 0 - b 0) (a 1 - b 1) (a 2 - b 2)]
  (side pl p) (dot (pl 0) p - pl 1)        ; above 0 outside the plane's brush
  (plane n p) (: u (unit n) [u (dot u p)])
  ; --- polygons: lists of points going round, convex ---
- (cut-at a b sa sb) (: t (sa / (sa - sb)) (c+ a (c* t (sub b a))))
+ (cut-at a b sa sb) (: t (sa / (sa - sb)) (c+ a (c* t (c- b a))))
  ; ..the part on the plane's inside, and the part beyond it
  (split ps pl) (: n #ps
    (go i ins outs) (? (i = n) [(rev ins) (rev outs)]
@@ -28,7 +27,7 @@
  (keep ps pl) (split ps pl 0)
  ; ..whether the plane passes through it, a point clear either side
  (crosses? ps pl) (any (p \ side pl p > 1e-5) ps && any (p \ side pl p < -1e-5) ps)
- (area ps) (: a <ps (go l s) (atom? >l ? s (go >l (c+ s (cross (sub <l a) (sub <>l a))))) (mag3 (go >ps [0.0 0.0 0.0])))
+ (area ps) (: a <ps (go l s) (atom? >l ? s (go >l (c+ s (cross (c- <l a) (c- <>l a))))) (mag3 (go >ps [0.0 0.0 0.0])))
  (mag3 v) (sqrt (dot v v))
  (mid ps) (c* (1.0 / #ps) (foldl c+ [0.0 0.0 0.0] ps))
  ; --- brushes ---
@@ -47,11 +46,11 @@
  ; ..each side of the plan a wall, its outside away from the plan's middle
  (brush-prism air y0 y1 ps) (: m (mid (map (p \ [(p 0) 0.0 (p 1)]) ps)) n #ps
    (wall i) (: a (ps i) b (ps ((i + 1) % n)) d [(b 0 - a 0) 0.0 (b 1 - a 1)] nn (unit [(d 2) 0.0 (0.0 - d 0)])
-             q [(a 0) 0.0 (a 1)] o (dot nn (sub m q) > 0.0 ? (c* -1.0 nn) nn)
+             q [(a 0) 0.0 (a 1)] o (dot nn (c- m q) > 0.0 ? (c* -1.0 nn) nn)
              (plane o q))
    (brush air (map wall ^n + [[[0.0 -1.0 0.0] (0.0 - y0)] [[0.0 1.0 0.0] y1]])))
- (brush-cut b p q r) (: n (unit (cross (sub q p) (sub r p))) m (mid (cats (filter (f \ #f >= 3) (b 'faces))))
-   o (dot n (sub m p) > 0.0 ? (c* -1.0 n) n)
+ (brush-cut b p q r) (: n (unit (cross (c- q p) (c- r p))) m (mid (cats (filter (f \ #f >= 3) (b 'faces))))
+   o (dot n (c- m p) > 0.0 ? (c* -1.0 n) n)
    (brush (b 'air) (b 'planes + [(plane o p)])))
  (brush-move b d) (brush (b 'air) (map (pl \ [(pl 0) (pl 1 + dot (pl 0) d)]) (b 'planes)))
  (brush-mirror b k c) (: (fl v) (map (i \ i = k ? (0.0 - v i) (v i)) ^3)
@@ -86,7 +85,7 @@
      ; ..a piece of brush b's fanned from its first corner, turned to face n
      (fan ps n b) (: k (look n (mid ps) b) tex (k 0)
        vs (map (p \ (look n p b @ t [(p 0) (p 1) (p 2) (t 1) (t 2) (n 0) (n 1) (n 2) 1.0 1.0 1.0])) ps)
-       (one a b c) (dot (cross (sub (ps c) (ps a)) (sub (ps b) (ps a))) n > 0.0 ? [a b c tex] [a c b tex])
+       (one a b c) (dot (cross (c- (ps c) (ps a)) (c- (ps b) (ps a))) n > 0.0 ? [a b c tex] [a c b tex])
        (mesh vs (map (i \ one 0 (i + 1) (i + 2)) ^(#ps - 2))))
      (mesh-join (cats (map (f \ map (p \ fan p (f 1) (bs (f 2))) (grid (f 0) cell)) fs)))))
 ) ; module brush
