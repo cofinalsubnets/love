@@ -1408,7 +1408,7 @@ for s in "R rotbl" "R romsg" "D mutp" "D fnp" "D wtbl" "B rozero"; do
     || fail "const lane: '$s' is not where it belongs ($(grep " ${s#* }\$" "$ho/.ro.nm"))"
 done
 
-echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, love_nifs brackets, named-section lanes + their const/writable flag homes, const globals to .rodata, a FOREIGN gcc .o whole, a symbol table nm/gdb read, a .comment naming every producer) ok"
+echo "mooncc: cc (laws + a $(ls test/cc/*.c | wc -l)-program gcc battery + interop + our own linker) ok"
 
 
 # -- the warm compiler

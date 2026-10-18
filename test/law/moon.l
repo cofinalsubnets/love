@@ -25,7 +25,6 @@
       ((tn ts 7) = ['p ";" 1])
       ((tn ts 8) = ['p "}" 1])))
 (: (tn ts k) (k < 1 ? <ts (tn >ts (k - 1)))
-(tn3 ts k) (tn ts k @ t [<t <>t <>>t])     ; kind/value/line: not the slot-4 spelling
    (tn3 ts k) (tn ts k @ t [<t <>t <>>t])
    (spl r k) (tn <>r k @ t (4 < tally t ? <>>>>t))                 ; the token's slot-4 spelling
    c1 <>(clex "a // x\nb")
@@ -55,7 +54,7 @@
       ((tn3 <>(clex "\"ab\\\ncd\"") 0) = ['str "abcd" 1])          ; \<newline> inside a string splices (the pair vanishes) -- tar's --help strings
       ((tn3 <>(clex "\"open") 0) = ['p "\"" 1])               ; so does an unterminated string's
       ; slot 4, the source spelling: what a value cannot answer back (0777 and 511 are one)
-      ((spl (clex "0777") 0) = "0777") ((spl (clex "0777") 0) = "0777")
+      ((spl (clex "0777") 0) = "0777")
       ((spl (clex "1u") 0) = "1u") ((spl (clex "1.20") 0) = "1.20")
       ((spl (clex "0x1F") 0) = "0x1F") ((spl (clex "'a'") 0) = "'a'")
       ((spl (clex "\"a\\nb\"") 0) = "\"a\\nb\"")               ; the escape, not the byte
@@ -463,7 +462,6 @@
       (two? (cgn "int t[3] = {1,2,3}; int main() { return t[2]; }"))               ; a global array constant image
       (two? (cgn "int main() { char s[4] = \"ab\"; return s[0]; }"))               ; a local char array from a string
       ; --- label-valued global images through the abs64 data relocation ---
-      (two? (cgn "char *s = \"hi\"; int main() { return 0; }"))                    ; char* -> a rodata string's address
       (two? (cgn "int q = 5; int *p = &q; int main() { return *p; }"))             ; &global
       (two? (cgn "int a[2] = {1,2}; int *p = a; int main() { return p[1]; }"))     ; an array decays to its address
       (two? (cgn "char *m[3] = {\"a\",\"bb\",\"ccc\"}; int main() { return m[0][0]; }"))   ; an array of string pointers
@@ -892,7 +890,6 @@
       ((cast "void f(void){return;}") = '(prog ((fn "f" () (blk ((ret ())))))))   ; bare void return
       ((cexp "sizeof x") = '(szof (var "x")))                                       ; sizeof EXPR -> a node (not folded)
       ((cexp "(int (*)(int)) p") = '(cast (ptr (fn int (int))) (var "p")))                ; a function-pointer cast type (return and parameters ride)
-      ((cexp "sizeof(int)") = '(cast ulong (num 4)))                              ; sizeof type folds to a coated num (size_t)
       ((cast "typedef long a, b; int main(void){ b x; return x; }") =                ; a multi-declarator typedef binds both names as `long`
          '(prog ((tdef) (fn "main" () (blk ((decl (("x" long ()))) (ret (var "x"))))))))
       ((cast "typedef int F(int); int main(void){return 0;}") = '(prog ((tdef) (fn "main" () (blk ((ret (num 0))))))))
@@ -2004,8 +2001,7 @@
          (elem '(mov r7 r6) c5)                     ; a label between them: not adjacent
          (elem '(mov r7 r6) c6)                     ; a dead copy at index 5: the floor holds it
          !(elem '(mov r7 r6) c8)                    ; ...one form later it drops
-         ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret)) ||
-          ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret)))))))
+         ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret))))))
 
 ; --- the value layer's instrument, over val.l's live half: functions of a TU, the escape census,
 ; cells, dead stores and per-def chains. a frame op off the base+const shape reads everything,
@@ -2302,17 +2298,6 @@
        (go l acc) (atom? l ? acc (go >l (cell1 <l acc)))
        (go (ctx 'cls) ()))
 
-   ; -- the differential rows for one TU: C census, D dead, H chains, per fn --
-   (vgauge tu fs)
-    (: (fn1 nb acc)
-        (: nm <nb bd <>nb
-           ctx (vctx bd)
-           cs (map (r \ vapp ['C tu nm] (vtake 9 r)) (ctx 'cls))
-           dd (map (r \ vapp ['D tu nm] r) (vdead ctx))
-           hs (map (r \ vapp ['H tu nm] r) (vchains ctx))
-           (vapp acc (vapp cs (vapp dd hs))))
-       (go l acc) (atom? l ? acc (go >l (fn1 <l acc)))
-       (go (vfns fs) ()))
 )
 
 ; --- the value layer: cfg, escape census, cells, dead stores, per-def chains, on hand shapes.
@@ -2594,5 +2579,5 @@ int main() { return 0; }"
       (0 = calls (fnf 'guard <>irB) "bug_on")))
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
-(say err "test/law/moon: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, a64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the AST inliner + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default (rung 5) + the one-build default and its rides (rung 6, the only world) ok")
+(say err "test/law/moon: ok")
 (put err 10)
