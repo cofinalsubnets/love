@@ -5310,6 +5310,7 @@
    (nsib? g) (drop 10 (g 'mo) @ r (two? r && <r))  ; -fno-optimize-sibling-calls: a call stays a call
    (avz? g) (drop 11 (g 'mo) @ r (two? r && <r))   ; -ftrivial-auto-var-init=zero
    (ibt? g) (x64t? g && drop 12 (g 'mo) @ r (two? r && <r))   ; -fcf-protection=branch: x86's endbr pads
+   (sspg g) (drop 15 (g 'mo) @ r (two? r ? <r))   ; -fstack-protector's guard (mode reg symbol offset)
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
    ; the chunks of n bytes at an a-aligned address: (pos width) each, widest first
    (alchunks n a)
@@ -5405,7 +5406,7 @@
        (sv l acc) (two? l && two? <l && <<l = 'st && <l 1 = 'sp && charm? (<l 2) && nom? (<l 3) ?
                      (sv >l ([(<l 2) (<l 3)] . acc)) [(rev acc) l])
        s9 (N ? (sv >>fs ()))
-       (!(x64? g) || !N || !(two? <>s9) ? fs
+       (!(x64? g) || g 'sspf || !N || !(two? <>s9) ? fs
           (: saves <s9 rs (map (p \ p 1) saves) bod <>s9 n #bod
              fv (foldl (t \ i \ pin t i (bod i)) {} (jot n))
              lix (foldl (t \ i \ fv i @ f (two? f && <f = 'label ? (pin t (f 1) i) t)) {} (jot n))
@@ -6054,7 +6055,7 @@
        K (sf @ ('sub 'sp 'sp k) (charm? k ? k))
        ; a64's spmerge folds an outgoing-arg park into the frame's sub: the excess rides under the slots
        xk (a6 && charm? K ? (K - aup (peep g 'off 0) 16) 0)
-       (!(two? slots) || arm? g && !a6 || abl? g 'repack || g 'hasasm || !pro || !(charm? K) || xk < 0 ? fs
+       (!(two? slots) || arm? g && !a6 || abl? g 'repack || g 'hasasm || g 'sspf || !pro || !(charm? K) || xk < 0 ? fs
           (: obs {}                            ; base -> (size lo hi esc wordy? first-src)
              ; wordy?: every touch a full-word ld/st at the base; first-src: the first store's reg, () if a load came first
              tls {}                        ; base -> ((i op reg off)..) newest-first
@@ -7929,6 +7930,22 @@
           ; the prefix rides along: what dead code removes of the home, the record follows out
           (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2) pf (r 3)] . g 'fasecs),
            asmruns tgt home)))
+   ; the canary sits at fp-16, under the frame link (fnreset keeps the cell): set from the guard
+   ; at entry, compared on every way out. one blob each, every register it borrows put back
+   (sspblob g k)
+    (: G (sspg g) m <G r (G 1) sy (G 2) o (G 3) tgt (gtgt g)
+       gx (? (m = 'tls) (string? sy ? "%\(r):\(sy)" "%\(r):\(o)") (tgt = 'x64) "\(sy)(%rip)" sy)
+       ga (m = 'global ? "adrp x9, \(sy)\nldr x9, [x9, :lo12:\(sy)]" "mrs x9, \(r)\nldr x9, [x9, #\(o)]")
+       fail (tgt = 'a64 ? "b.eq 1f\nbl __stack_chk_fail\n1:" "je 1f\ncall __stack_chk_fail\n1:")
+       txt (? (tgt = 'x64)
+               (k = 'set ? "pushq %rax\nmovq \(gx), %rax\nmovq %rax, -16(%rbp)\npopq %rax"
+                  "pushq %rax\npushq %r11\nmovq \(gx), %rax\nmovq -16(%rbp), %r11\ncmpq %rax, %r11\npopq %r11\npopq %rax\n\(fail)")
+              (tgt = 'i386)
+               (k = 'set ? "pushl %eax\nmovl \(gx), %eax\nmovl %eax, -16(%ebp)\npopl %eax"
+                  "pushl %eax\nmovl \(gx), %eax\ncmpl %eax, -16(%ebp)\npopl %eax\n\(fail)")
+              (k = 'set ? "stp x9, x10, [sp, #-16]!\n\(ga)\nstr x9, [x29, #-16]\nldp x9, x10, [sp], #16"
+                 "stp x9, x10, [sp, #-16]!\n\(ga)\nldr x10, [x29, #-16]\ncmp x9, x10\nldp x9, x10, [sp], #16\n\(fail)"))
+       (asmbody g tgt () txt))
    ; forms -> raw runs between the labels and aligns, every fix left open for the function's lay
    (asmruns tgt fs)
     (: (flush cur acc) (two? cur ? (rev cur @ p (['raw (asmho tgt p (cg-refs p {}))] . acc)) acc)
@@ -8600,7 +8617,7 @@
    ; ones -- fn, epi, pool, vslots, fc, sret -- re-pin at their owner)
    (fnreset g)
     (pins (rgreset g)          ; the seat channels' neutral state -- disjoint pin set
-     'off 8                    ; the frame cursor: slot -8 = saved r3 (see epi)
+     'off (g 'sspf ? 16 8)      ; the frame cursor: slot -8 = saved r3 (see epi), -16 the canary
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'fescv ()                 ; ..a frame address become a value (a musttail call still jumps)
@@ -8610,7 +8627,7 @@
      'twice ()                 ; a call returning twice pins it (no callee-saved pool)
      'ebx ()                   ; i386: ebx joins the seats (cgfn's second build)
      'ltaken ()                ; the labels a &&L names (a computed goto's targets)
-     'fpin ()                  ; the frame link is asked for by name (unframe stands off)
+     'fpin (g 'sspf)           ; the frame link is asked for by name (unframe stands off)
      'cssv ()                  ; the callee-saved save forms (a cs grant pins)
      'sret ()                  ; the memory-return slot (the driver re-pins under sr6f)
      'pcopy ())                ; the by-reference struct params' copies, laid after the spills (spillp)
@@ -8803,6 +8820,7 @@
                     (bad? r ? 'bad (tor0 g r + [['jmpt 'r0 <ls ls]])))))
           ('lbl nm) [['label (name "\(g 'fn).\(nm)")]]
           ('asm . _) (cgasm g env s)
+          ('ssp k) (sspblob g k)
           ; case/default labels come from the tablet atop g 'cases (the switch's pre-scan);
           ; no enclosing switch, or an unscanned value, refuses
           ('case lo hi)
@@ -8998,7 +9016,7 @@
 
    ; -- the inline lane: a small (or always_inline) fn splices its body at the call site, each arg in
    ; a fresh 8-byte temp, each return into r0 then a jump to the splice's end label --
-   (noinl? x) (? (elem x '(sdecl goto lbl vastart varr)) 1   ; varr: a VLA's slots ride cgfn's per-fn prescan
+   (noinl? x) (? (elem x '(sdecl goto lbl vastart varr ssp)) 1   ; varr: a VLA's slots ride cgfn's per-fn prescan; ssp its canary cell
                  (atom? x) ()
                  (x @ ('call _ as && 6 < tally as) 1 ()) 1     ; an overflow-arg call moves sp -- splicing it bars the caller's unframe
                  (noinl? <x || noinl? >x))
@@ -10099,6 +10117,7 @@
        ; arrived; a name such a probe could not resolve is no refusal's cause
        _ (pin g 'undecl ())
        params <>>f
+       _ (: (has? x) (? (atom? x) () (<x = 'ssp) 1 (any has? x)) (pin g 'sspf (has? (f 3))))   ; a canary keeps its cell
        _ (fnreset g)                                 ; the whole per-fn pin record wiped
        _ (pin g 'rdg (rdgraph >>>f))
        ; v6-M has no fpu: f0/f1/f15 are three frame cells, and soften rewrites every f-op onto them
@@ -11085,7 +11104,7 @@
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry]
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard]
           'pfes (two? xtra && 13 < #xtra ? (xtra 13) {})   ; fn name -> its own patchable_function_entry (N M)
           'pfel ()}                                 ; the pads laid, newest first
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
