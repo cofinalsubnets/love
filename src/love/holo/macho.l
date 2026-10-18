@@ -15,6 +15,8 @@
    ; lc_unixthread, x86_thread_state64: 21 words, rip the 17th, the rest zero
    (macho-thread ent)
     (catall [(le32 5) (le32 184) (le32 4) (le32 42) (ld-zeros 128) (le64 ent) (ld-zeros 32)])
+   ; an import's name in libSystem: "libsys.read" asks for read beside an object's own read
+   (macho-dyname s) (starts? s "libsys." ? (snip s 7 #s) s)
    ; lc_main, dyld's: the entry's offset in the file, the main thread's stack the default
    (macho-main off) (catall [(le32 2147483688) (le32 24) (le64 off) (le64 0)])
 
@@ -70,7 +72,7 @@
        iend (img? ? (ldlay1 'image iaddr objs) iaddr)
        ; the bind opcodes: flat lookup, pointers, then a name and its slot apiece
        binds (catall ([[62 81]]                              ; dylib special -2, type pointer
-                      + map (k \ (: n ("_" + imps k)
+                      + map (k \ (: n ("_" + macho-dyname (imps k))
                                      (catall [[(elem (imps k) wimps ? 65 64)] (map n ^#n) [0]   ; 65 a weak import
                                               [115] (macho-uleb (dend - d0 + 8 * k)) [144]]))) ^ni
                       + [[0]]))

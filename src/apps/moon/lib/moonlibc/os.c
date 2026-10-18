@@ -302,6 +302,206 @@ int __love_macat(long n, long *w) {
   if (fl >= 0) w[fl] = (w[fl] & 0xf00) >> 4;
   return 1; }
 
+/* dyld's exe asks xnu through libSystem by name, a weak import each ("libsys." keeps it
+ * apart from our own read; macho.l binds the bare name): 0 in a static link, where the raw
+ * trap stays. -1 reads errno through __error() and parks as the trap's carry */
+#define LvLs(t, nm, sym, ...) extern t __ls_##nm(__VA_ARGS__) __asm__("libsys." sym) __attribute__((weak))
+LvLs(int *, error, "__error", void);
+LvLs(void, exit, "_exit", int);
+LvLs(int, fork, "fork", void);
+LvLs(long, read, "read", int, void *, unsigned long);
+LvLs(long, write, "write", int, void const *, unsigned long);
+LvLs(int, close, "close", int);
+LvLs(int, wait4, "wait4", int, int *, int, void *);
+LvLs(int, chdir, "chdir", char const *);
+LvLs(int, getpid, "getpid", void);
+LvLs(int, setuid, "setuid", unsigned);
+LvLs(unsigned, getuid, "getuid", void);
+LvLs(unsigned, geteuid, "geteuid", void);
+LvLs(long, recvmsg, "recvmsg", int, void *, int);
+LvLs(long, sendmsg, "sendmsg", int, void const *, int);
+LvLs(long, recvfrom, "recvfrom", int, void *, unsigned long, int, void *, void *);
+LvLs(int, accept, "accept", int, void *, void *);
+LvLs(int, getpeername, "getpeername", int, void *, void *);
+LvLs(int, getsockname, "getsockname", int, void *, void *);
+LvLs(int, kill, "kill", int, int);
+LvLs(int, pipe, "pipe", int *);
+LvLs(int, sigaction, "__sigaction", int, void const *, void *);
+LvLs(unsigned, getgid, "getgid", void);
+LvLs(int, sigprocmask, "sigprocmask", int, void const *, void *);
+LvLs(int, sigaltstack, "__sigaltstack", void const *, void *);
+LvLs(int, ioctl, "ioctl", int, unsigned long, ...);
+LvLs(int, execve, "execve", char const *, char *const *, char *const *);
+LvLs(unsigned short, umask, "umask", unsigned short);
+LvLs(int, chroot, "chroot", char const *);
+LvLs(int, msync, "msync", void *, unsigned long, int);
+LvLs(int, munmap, "munmap", void *, unsigned long);
+LvLs(int, mprotect, "mprotect", void *, unsigned long, int);
+LvLs(int, madvise, "madvise", void *, unsigned long, int);
+LvLs(int, mincore, "mincore", void const *, unsigned long, char *);
+LvLs(int, setgroups, "setgroups", int, unsigned const *);
+LvLs(int, setpgid, "setpgid", int, int);
+LvLs(int, fcntl, "fcntl", int, int, ...);
+LvLs(int, select, "select", int, void *, void *, void *, void *);
+LvLs(int, fsync, "fsync", int);
+LvLs(int, setpriority, "setpriority", int, unsigned, int);
+LvLs(int, socket, "socket", int, int, int);
+LvLs(int, connect, "connect", int, void const *, unsigned);
+LvLs(int, getpriority, "getpriority", int, unsigned);
+LvLs(int, bind, "bind", int, void const *, unsigned);
+LvLs(int, setsockopt, "setsockopt", int, int, int, void const *, unsigned);
+LvLs(int, listen, "listen", int, int);
+LvLs(int, getrusage, "getrusage", int, void *);
+LvLs(int, getsockopt, "getsockopt", int, int, int, void *, void *);
+LvLs(int, fchown, "fchown", int, unsigned, unsigned);
+LvLs(int, fchmod, "fchmod", int, unsigned short);
+LvLs(long, sendto, "sendto", int, void const *, unsigned long, int, void const *, unsigned);
+LvLs(int, shutdown, "shutdown", int, int);
+LvLs(int, socketpair, "socketpair", int, int, int, int *);
+LvLs(int, setsid, "setsid", void);
+LvLs(int, getpgid, "getpgid", int);
+LvLs(long, pread, "pread", int, void *, unsigned long, long);
+LvLs(long, pwrite, "pwrite", int, void const *, unsigned long, long);
+LvLs(int, setgid, "setgid", unsigned);
+LvLs(int, fdatasync, "fdatasync", int);
+LvLs(int, getrlimit, "getrlimit", int, void *);
+LvLs(int, setrlimit, "setrlimit", int, void const *);
+LvLs(void *, mmap, "mmap", void *, unsigned long, int, int, int, long);
+LvLs(long, lseek, "lseek", int, long, int);
+LvLs(int, ftruncate, "ftruncate", int, long);
+LvLs(int, sysctl, "sysctl", int *, unsigned, void *, unsigned long *, void *, unsigned long);
+LvLs(int, poll, "poll", void *, unsigned, int);
+LvLs(int, fstat64, "fstat64", int, void *);
+LvLs(long, getdirentries64, "__getdirentries64", int, void *, unsigned long, long *);
+LvLs(int, kqueue, "kqueue", void);
+LvLs(int, openat, "openat", int, char const *, int, ...);
+LvLs(int, renameat, "renameat", int, char const *, int, char const *);
+LvLs(int, faccessat, "faccessat", int, char const *, int, int);
+LvLs(int, fchmodat, "fchmodat", int, char const *, unsigned short, int);
+LvLs(int, fchownat, "fchownat", int, char const *, unsigned, unsigned, int);
+LvLs(int, fstatat64, "fstatat64", int, char const *, void *, int);
+LvLs(int, linkat, "linkat", int, char const *, int, char const *, int);
+LvLs(int, unlinkat, "unlinkat", int, char const *, int);
+LvLs(long, readlinkat, "readlinkat", int, char const *, char *, unsigned long);
+LvLs(int, symlinkat, "symlinkat", char const *, int, char const *);
+LvLs(int, mkdirat, "mkdirat", int, char const *, unsigned short);
+LvLs(int, getentropy, "getentropy", void *, unsigned long);
+LvLs(int, dup2, "dup2", int, int);
+LvLs(int, proc_info, "__proc_info", int, int, int, unsigned long, void *, int);
+LvLs(int, kevent, "kevent", int, void const *, int, void *, int, void const *);
+LvLs(int, clock_gettime, "clock_gettime", int, void *);
+LvLs(int, usigaction, "sigaction", int, void const *, void *);
+
+/* sigaction by libSystem, its own tramp doing the sigreturn: the user's shape both ways */
+long __love_macsigact(long sig, struct __mac_osigact const *a, struct __mac_osigact *old) {
+  if (!__ls_usigaction) return LvNoDoor;
+  return __ls_usigaction((int) sig, a, old) ? -(*__ls_error() + 4096L) : 0; }
+
+/* sigsetjmp's and siglongjmp's mask (mksys) */
+long __love_macmask(long how, long set, long oset) { return __love_fb(48, how, set, oset, 0, 0, 0); }
+
+/* clock_gettime by libSystem: our ids 0-3 are its 0 6 12 16 */
+long __love_macclock(int ck, struct timespec *ts) {
+  if (!__ls_clock_gettime || ck < 0 || ck > 3) return LvNoDoor;
+  static int const id[4] = {0, 6, 12, 16};
+  int r = __ls_clock_gettime(id[ck], ts);
+  return r ? -(*__ls_error() + 4096L) : 0; }
+
+/* n is xnu's unix number (its class bit aside), the args as the trap takes them */
+long __love_door(long n, long a, long b, long c, long d, long e, long f) {
+  if (!__ls_error) return LvNoDoor;
+  int *ep = __ls_error();
+  void *pa = (void *) a, *pb = (void *) b, *pc = (void *) c, *pd = (void *) d, *pe = (void *) e;
+  char const *sa = pa, *sb = pb, *sd = pd;
+  int ia = (int) a, ib = (int) b, ic = (int) c, id = (int) d;
+  long r;
+  *ep = 0;
+  switch (n & 0xffffff) {
+  case 1: __ls_exit(ia); return 0;
+  case 2: r = __ls_fork(); break;
+  case 3: r = __ls_read(ia, pb, (unsigned long) c); break;
+  case 4: r = __ls_write(ia, pb, (unsigned long) c); break;
+  case 6: r = __ls_close(ia); break;
+  case 7: r = __ls_wait4(ia, pb, ic, pd); break;
+  case 12: r = __ls_chdir(sa); break;
+  case 20: r = __ls_getpid(); break;
+  case 23: r = __ls_setuid((unsigned) a); break;
+  case 24: r = __ls_getuid(); break;
+  case 25: r = __ls_geteuid(); break;
+  case 27: r = __ls_recvmsg(ia, pb, ic); break;
+  case 28: r = __ls_sendmsg(ia, pb, ic); break;
+  case 29: r = __ls_recvfrom(ia, pb, (unsigned long) c, id, pe, (void *) f); break;
+  case 30: r = __ls_accept(ia, pb, pc); break;
+  case 31: r = __ls_getpeername(ia, pb, pc); break;
+  case 32: r = __ls_getsockname(ia, pb, pc); break;
+  case 37: r = __ls_kill(ia, ib); break;
+  case 42: r = __ls_pipe(pa); break;
+  case 46: r = __ls_sigaction(ia, pb, pc); break;
+  case 47: r = __ls_getgid(); break;
+  case 48: r = __ls_sigprocmask(ia, pb, pc); break;
+  case 53: r = __ls_sigaltstack(pa, pb); break;
+  case 54: r = __ls_ioctl(ia, (unsigned long) b, c); break;
+  case 59: r = __ls_execve(sa, pb, pc); break;
+  case 60: r = __ls_umask((unsigned short) a); break;
+  case 61: r = __ls_chroot(sa); break;
+  case 65: r = __ls_msync(pa, (unsigned long) b, ic); break;
+  case 73: r = __ls_munmap(pa, (unsigned long) b); break;
+  case 74: r = __ls_mprotect(pa, (unsigned long) b, ic); break;
+  case 75: r = __ls_madvise(pa, (unsigned long) b, ic); break;
+  case 78: r = __ls_mincore(pa, (unsigned long) b, pc); break;
+  case 80: r = __ls_setgroups(ia, pb); break;
+  case 82: r = __ls_setpgid(ia, ib); break;
+  case 90: r = __ls_dup2(ia, ib); break;
+  case 92: r = __ls_fcntl(ia, ib, c); break;
+  case 93: r = __ls_select(ia, pb, pc, pd, pe); break;
+  case 95: r = __ls_fsync(ia); break;
+  case 96: r = __ls_setpriority(ia, (unsigned) b, ic); break;
+  case 97: r = __ls_socket(ia, ib, ic); break;
+  case 98: r = __ls_connect(ia, pb, (unsigned) c); break;
+  case 100: r = __ls_getpriority(ia, (unsigned) b); break;
+  case 104: r = __ls_bind(ia, pb, (unsigned) c); break;
+  case 105: r = __ls_setsockopt(ia, ib, ic, pd, (unsigned) e); break;
+  case 106: r = __ls_listen(ia, ib); break;
+  case 117: r = __ls_getrusage(ia, pb); break;
+  case 118: r = __ls_getsockopt(ia, ib, ic, pd, pe); break;
+  case 123: r = __ls_fchown(ia, (unsigned) b, (unsigned) c); break;
+  case 124: r = __ls_fchmod(ia, (unsigned short) b); break;
+  case 133: r = __ls_sendto(ia, pb, (unsigned long) c, id, pe, (unsigned) f); break;
+  case 134: r = __ls_shutdown(ia, ib); break;
+  case 135: r = __ls_socketpair(ia, ib, ic, pd); break;
+  case 147: r = __ls_setsid(); break;
+  case 151: r = __ls_getpgid(ia); break;
+  case 153: r = __ls_pread(ia, pb, (unsigned long) c, d); break;
+  case 154: r = __ls_pwrite(ia, pb, (unsigned long) c, d); break;
+  case 181: r = __ls_setgid((unsigned) a); break;
+  case 187: r = __ls_fdatasync(ia); break;
+  case 194: r = __ls_getrlimit(ia, pb); break;
+  case 195: r = __ls_setrlimit(ia, pb); break;
+  case 197: r = (long) __ls_mmap(pa, (unsigned long) b, ic, id, (int) e, f); break;
+  case 199: r = __ls_lseek(ia, b, ic); break;
+  case 201: r = __ls_ftruncate(ia, b); break;
+  case 202: r = __ls_sysctl(pa, (unsigned) b, pc, pd, pe, (unsigned long) f); break;
+  case 230: r = __ls_poll(pa, (unsigned) b, ic); break;
+  case 336: r = __ls_proc_info(ia, ib, ic, (unsigned long) d, pe, (int) f); break;
+  case 339: r = __ls_fstat64(ia, pb); break;
+  case 344: r = __ls_getdirentries64(ia, pb, (unsigned long) c, pd); break;
+  case 362: r = __ls_kqueue(); break;
+  case 363: r = __ls_kevent(ia, pb, ic, pd, (int) e, (void *) f); break;
+  case 463: r = __ls_openat(ia, sb, ic, d); break;
+  case 465: r = __ls_renameat(ia, sb, ic, sd); break;
+  case 466: r = __ls_faccessat(ia, sb, ic, id); break;
+  case 467: r = __ls_fchmodat(ia, sb, (unsigned short) c, id); break;
+  case 468: r = __ls_fchownat(ia, sb, (unsigned) c, (unsigned) d, (int) e); break;
+  case 470: r = __ls_fstatat64(ia, sb, pc, id); break;
+  case 471: r = __ls_linkat(ia, sb, ic, sd, (int) e); break;
+  case 472: r = __ls_unlinkat(ia, sb, ic); break;
+  case 473: r = __ls_readlinkat(ia, sb, pc, (unsigned long) d); break;
+  case 474: r = __ls_symlinkat(sa, ib, (char const *) c); break;
+  case 475: r = __ls_mkdirat(ia, sb, (unsigned short) c); break;
+  case 500: r = __ls_getentropy(pa, (unsigned long) b); break;
+  default: return LvNoDoor; }
+  return r == -1 && *ep ? -(*ep + 4096L) : r; }
+
 /* the socket type's two flag bits, which xnu never took, set on the new fd */
 void __love_macsofl(int fd, long t) {
   if (t & 0x80000) fcntl(fd, F_SETFD, FD_CLOEXEC);
