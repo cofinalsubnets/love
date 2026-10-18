@@ -757,9 +757,14 @@ static love_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
  for (e = nom, v = def; ok(g) && chainp(e); e = B(e), v = B(v)) {
   word nv;
   if (lambp(g, A(v))) {
-   d = A(dl), dl = B(dl);
+   d = A(dl);
+   // a name this binding's body calls is its latest binding before this one, else the latest
+   g = append(push(g, 2, B(dl), lam));
+   if (ok(g)) g = eset(g, c, ELams, pop1(g));
+   dl = B(dl);
    size_t nb = llen(lget(g, d, LImps)); // the import row is frozen here: sites already applied it
    g = c0_lambda(g, c, lget(g, d, LImps), BA(v));
+   if (ok(g)) g = eset(g, c, ELams, lam);
    if (!ok(g)) return forget();
    g = lset(g, d, LThread, A(g->sp[0]));        // the pair stays on the stack across both
    if (ok(g)) g = lset(g, d, LImps, B(g->sp[0]));   // puts: either can move it

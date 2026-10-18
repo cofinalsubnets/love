@@ -50,3 +50,7 @@
 ; own captures -- the first reads k and the second does not
 (test (2 = ((\ k (: (f x) (x + k)  (f x) 2  (f 0))) 5))
       (5 = ((\ k (: (f x) 2  (f x) (x + k)  (f 0))) 5)))
+; a rebinding's body calls the earlier binding; one before both calls the latest, one between the earlier
+(test (1 = ((\ k (: (f n) k  (f n) (n < 1 ? 7 (f (n - 1)))  (f 2))) 1))
+      (2 = ((\ k (: (g x) (f x)  (f x) k  (f x) 2  (g 0))) 1))
+      (1 = ((\ k (: (f x) k  (g x) (f x)  (f x) 2  (g 0))) 1)))
