@@ -8656,6 +8656,7 @@
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'fescv ()                 ; ..a frame address become a value (a musttail call still jumps)
      'lpm ()                   ; lprop's answers: the fn's tree passes are done with them
+     'kpm ()                   ; ..and kprop's
      'fesca ()                 ; ..and a frame address handed a call (a later call may not jump past it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
@@ -9800,7 +9801,14 @@
                         ('var nm) (pin esc nm 1)
                         (('asm || 'tasm) . t . _) (: _ (pin asms 't (t . asms 't)) (scan >>x))
                         (scan <x, scan >x)))
-       _ (map (f \ (<f = 'fn ? (scan (lprop g (dprune !(ilp32? g) (e \ ()) (lprop g (respell f))))) (scan f))) fs)
+       ; propagation only drops names and asms, never adds one: a body naming no static fn and
+       ; holding no asm scans to nothing that counts, propagated or not
+       (rel? x) (? !(two? x) ()
+                   (x @ ('var nm) (peep sfns nm () && 1)
+                        (('asm || 'tasm) . _) 1
+                        (rel? <x || rel? >x)))
+       _ (map (f \ (<f = 'fn ? (respell f @ r (rel? r ? (scan (lprop g (dprune !(ilp32? g) (e \ ()) (lprop g r)))) (scan r)))
+                     (scan f))) fs)
        (spelt? nm) (any (t \ string? t && 1 < #(split nm t)) (asms 't))
        w64 !(ilp32? g)
        ; the substitution: a parameter the body writes, or one of a type no constant stands for, is left alone
@@ -9984,7 +9992,11 @@
        (tw? (f 3) ? f ([<f <>f <>>f (simp ((rd (f 3)) @ ('blk items) ['blk (blk items () () 1)] (inner (rd (f 3)))))] + >>>>f)))
    ; -- AST constant propagation: a scalar local declared once from a folding initializer, never
    ; written or &-taken, shadowing nothing, reads as its cast literal and its decl drops. runs to a fixpoint --
+   ; it runs to its fixpoint, so a tree it answered once answers itself again
    (kprop g f)
+    (: m (g 'kpm @ () (: t {} _ (pin g 'kpm t) t) t9 t9)
+       (peep m f () ? f (: r (kprop0 g f) _ (pin m r 1) r)))
+   (kprop0 g f)
     (: items <><>>>f
        dcl {} tak {} wrt {} ivs {} sdl {}           ; ivs: the locals an asm names as an immediate; sdl the block statics
        (cen x c9)                                   ; one walk: the censuses + the decl pairs seen
@@ -10049,7 +10061,7 @@
                             (two? ds ? ['decl ds] '(nop)))
              (sub <x . sub >x)))
        (atom? (keys sbs) ? f
-        (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
+        (kprop0 g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
    ; -- a small counted loop unrolled: for (T k = A; k < B; k++) of at most 16 trips, its copies small
    ; in all, a body that neither writes k, takes its address, nor leaves early. each copy reads k as
