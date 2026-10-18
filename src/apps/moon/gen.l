@@ -4266,73 +4266,77 @@
                  (<l = r) [<>l]
                  (go >l))
        (go qfile))
+   ; rdsp's arms by op: an op takes the first arm that names it, as the chain of tests it
+   ; replaces read them, so one lookup answers where up to forty tests ran. laid once a unit
+   ; (g 'rdarms): the arms call fns the book lays later, which a bake-time value cannot
+   (rg1 x) (charm? x ? () [x])
+   (rdmk _)
+    (: t {}
+       (arm ops a) (map (o \ (peep t o 'none = 'none ? (pin t o a) 0)) ops)
+       _ (arm '(li) (g \ f \ [() [<>f] 1]))
+       _ (arm '(mov) (g \ f \ [[<>>f] [<>f] 1]))
+       _ (arm aluops (g \ f \ (<>f @ 'sp [() () ()]      ; sp motion touches no gp register
+                               [(rg1 <>>f + rg1 <>>>f) [<>f] 1])))
+       _ (arm flagops (g \ f \ [(rg1 <>>f + rg1 <>>>f) [<>f] ()]))
+       _ (arm '(push) (g \ f \ [[<>f] () ()]))
+       ; v6-M's pop pc is an exit: it reads what it owes back, or the return value dies
+       _ (arm '(pop) (g \ f \ (<>f = 'pc ? [(lvret g + csregs g) [<>f] ()] [() [<>f] ()])))
+       _ (arm '(shl shr sar rol ror ror4) (g \ f \ [[<>f] [<>f] 1]))
+       _ (arm ldops9 (g \ f \ [[<>>f] [<>f] 1]))
+       _ (arm gstops (g \ f \ [[<>f <>>>f] () ()]))
+       _ (arm stxops (g \ f \ [[<>f <>>f (f 5)] () ()]))
+       _ (arm fxops (g \ f \ [[<>>f <>>>f] () ()]))
+       _ (arm fstxops (g \ f \ [[<>f <>>f] () ()]))
+       _ (arm '(ldsdl) (g \ f \ [() () ()]))
+       _ (arm siops (g \ f \ [[<>f] () ()]))
+       _ (arm '(cmpm) (g \ f \ [([<>f] + rg1 <>>>f) () ()]))
+       _ (arm '(cmprm) (g \ f \ [[<>f <>>f] () ()]))
+       _ (arm leaops (g \ f \ [[<>>f] [<>f] 1]))
+       _ (arm xops (g \ f \ [[<>>f <>>>f] [<>f] 1]))
+       _ (arm x4ops (g \ f \ [[<>f <>>f <>>>f] [<>f] 1]))
+       _ (arm m4ops (g \ f \ [[<>f <>>f] [<>f] 1]))
+       _ (arm '(la laa) (g \ f \ [() [<>f] 1]))
+       _ (arm '(set) (g \ f \ [() [<>>f] 1]))
+       _ (arm '(cmov) (g \ f \ [[<>>f <>>>f] [<>>f] 1]))
+       _ (arm '(cmp test) (g \ f \ [(rg1 <>f + rg1 <>>f) () ()]))
+       _ (arm unops (g \ f \ [[<>f] [<>f] 1]))
+       ; vmov Df, Rlo, Rlo+1 names only the low half: qtwin spells the high one, else deaddef kills a
+       ; live read and the forwarders keep a stale def
+       _ (arm '(movqxr) (g \ f \ [([<>>f] + (ilp32? g ? (qtwin <>>f) ())) () ()]))
+       _ (arm '(movqrx) (g \ f \ [() ([<>f] + (ilp32? g ? (qtwin <>f) ())) 1]))
+       ; movsnxr's s-slot write is a side effect nothing here sees: never droppable
+       _ (arm '(movsnxr) (g \ f \ [[<>>f] () ()]))
+       _ (arm '(movsnrx) (g \ f \ [() [<>f] 1]))
+       _ (arm '(cvtsi2sd cvtui2sd cvtsi2ss cvtui2ss movdxr) (g \ f \ [[<>>f] () ()]))
+       _ (arm '(cvttsd2si cvttsd2ui cvttss2si cvttss2ui) (g \ f \ [() [<>f] ()]))
+       _ (arm '(movdrx) (g \ f \ [() [<>f] 1]))
+       _ (arm fldops (g \ f \ [[<>>f] () ()]))
+       _ (arm fstops (g \ f \ [[<>f] () ()]))
+       _ (arm xmmops (g \ f \ [() () ()]))
+       _ (arm divops (g \ f \ [(rg1 <>>f + rg1 <>>>f) '(r0 r1 r2 r3) ()]))
+       _ (arm llops (g \ f \ ['(r0 r1 r2 r3) '(r0 r1 r2 r3) ()]))
+       _ (arm wmops (g \ f \ [[(f 3) (f 4)] [<>f <>>f] 1]))
+       _ (arm '(mla) (g \ f \ [[<>>f <>>>f (f 4)] [<>f] 1]))
+       _ (arm '(clz) (g \ f \ [[<>>f] [<>f] 1]))
+       _ (arm '(jmpt) (g \ f \ [[<>f] () ()]))
+       ; x64's wide multiply also writes rax (rdx it saves itself)
+       _ (arm '(mulh umulh) (g \ f \ [[<>>f <>>>f] ([<>f] + (x86? g ? '(r0) ())) ()]))
+       ; a variable shift defines only its dest (x64's count is cl, never moved into): a claimed r1
+       ; def would make the pair lane's carry-in look dead
+       _ (arm vshops (g \ f \ [[<>f <>>f] [<>f] ()]))
+       ; the wide kit: the pair rides r2:r0 unspelled, so copyprop never renames it; x64 spends rcx in
+       ; m128r/c128r and s128r answers through the park; the four-word face carries all four, r12 scratch
+       _ (arm '(sx128) (g \ f \ (t32w? g ? ['(r1) '(r2 r3) 1] ['(r0) '(r2) 1])))
+       _ (arm '(n128 inc128 dec128 shl128 shr128 sar128)
+              (g \ f \ (t32w? g ? ['(r0 r1 r2 r3) '(r0 r1 r2 r3 r12) 1] ['(r0 r2) '(r0 r2) 1])))
+       _ (arm '(mw128r) (g \ f \ [['r0 <>f] '(r0 r2) 1]))
+       _ (arm '(a128r s128r m128r)
+              (g \ f \ [(['r0 'r2 <>f] + rg1 <>>f) ('(r0 r2) + (x64? g ? (<f @ 's128r [<>f <>>f] 'm128r '(r1) ()) ())) 1]))   ; a128r's hi may be 0
+       _ (arm '(c128r) (g \ f \ [['r0 'r2 <>>f <>>>f] (x64? g ? '(r0 r1 r2) '(r0)) 1]))
+       t)
    (rdsp g f)                                         ; -> [reads defs pure?] | 'bar
-    (: op <f
-       (rg1 x) (charm? x ? () [x])
-       (? (op = 'li) [() [<>f] 1]
-          (op = 'mov) [[<>>f] [<>f] 1]
-          (elem op aluops)
-           (<>f @ 'sp [() () ()]      ; sp motion touches no gp register
-            [(rg1 <>>f + rg1 <>>>f) [<>f] 1])
-          (elem op flagops) [(rg1 <>>f + rg1 <>>>f) [<>f] ()]
-          (op = 'push) [[<>f] () ()]
-          ; v6-M's pop pc is an exit: it reads what it owes back, or the return value dies
-          (op = 'pop && <>f = 'pc) [(lvret g + csregs g) [<>f] ()]
-          (op = 'pop) [() [<>f] ()]
-          (elem op '(shl shr sar rol ror ror4)) [[<>f] [<>f] 1]
-          (elem op ldops9) [[<>>f] [<>f] 1]
-          (elem op gstops) [[<>f <>>>f] () ()]
-          (elem op stxops) [[<>f <>>f (f 5)] () ()]
-          (elem op fxops) [[<>>f <>>>f] () ()]
-          (elem op fstxops) [[<>f <>>f] () ()]
-          (op = 'ldsdl) [() () ()]
-          (elem op siops) [[<>f] () ()]
-          (op = 'cmpm) [([<>f] + rg1 <>>>f) () ()]
-          (op = 'cmprm) [[<>f <>>f] () ()]
-          (elem op leaops) [[<>>f] [<>f] 1]
-          (elem op xops) [[<>>f <>>>f] [<>f] 1]
-          (elem op x4ops) [[<>f <>>f <>>>f] [<>f] 1]
-          (elem op m4ops) [[<>f <>>f] [<>f] 1]
-          (elem op '(la laa)) [() [<>f] 1]
-          (op = 'set) [() [<>>f] 1]
-          (op = 'cmov) [[<>>f <>>>f] [<>>f] 1]
-          (elem op '(cmp test)) [(rg1 <>f + rg1 <>>f) () ()]
-          (elem op unops) [[<>f] [<>f] 1]
-          ; vmov Df, Rlo, Rlo+1 names only the low half: qtwin spells the high one, else deaddef kills a
-          ; live read and the forwarders keep a stale def
-          (op = 'movqxr) [([<>>f] + (ilp32? g ? (qtwin <>>f) ())) () ()]
-          (op = 'movqrx) [() ([<>f] + (ilp32? g ? (qtwin <>f) ())) 1]
-          ; movsnxr's s-slot write is a side effect nothing here sees: never droppable
-          (op = 'movsnxr) [[<>>f] () ()]
-          (op = 'movsnrx) [() [<>f] 1]
-          (elem op '(cvtsi2sd cvtui2sd cvtsi2ss cvtui2ss movdxr)) [[<>>f] () ()]
-          (elem op '(cvttsd2si cvttsd2ui cvttss2si cvttss2ui)) [() [<>f] ()]
-          (op = 'movdrx) [() [<>f] 1]
-          (elem op fldops) [[<>>f] () ()]
-          (elem op fstops) [[<>f] () ()]
-          (elem op xmmops) [() () ()]
-          (elem op divops)
-           [(rg1 <>>f + rg1 <>>>f) '(r0 r1 r2 r3) ()]
-          (elem op llops) ['(r0 r1 r2 r3) '(r0 r1 r2 r3) ()]
-          (elem op wmops) [[(f 3) (f 4)] [<>f <>>f] 1]
-          (op = 'mla) [[<>>f <>>>f (f 4)] [<>f] 1]
-          (op = 'clz) [[<>>f] [<>f] 1]
-          (op = 'jmpt) [[<>f] () ()]
-          ; x64's wide multiply also writes rax (rdx it saves itself)
-          (elem op '(mulh umulh)) [[<>>f <>>>f] ([<>f] + (x86? g ? '(r0) ())) ()]
-          ; a variable shift defines only its dest (x64's count is cl, never moved into): a claimed r1
-          ; def would make the pair lane's carry-in look dead
-          (elem op vshops) [[<>f <>>f] [<>f] ()]
-          ; the wide kit: the pair rides r2:r0 unspelled, so copyprop never renames it; x64 spends rcx in
-          ; m128r/c128r and s128r answers through the park; the four-word face carries all four, r12 scratch
-          (op = 'sx128) (t32w? g ? ['(r1) '(r2 r3) 1] ['(r0) '(r2) 1])
-          (elem op '(n128 inc128 dec128 shl128 shr128 sar128))
-           (t32w? g ? ['(r0 r1 r2 r3) '(r0 r1 r2 r3 r12) 1] ['(r0 r2) '(r0 r2) 1])
-          (op = 'mw128r) [['r0 <>f] '(r0 r2) 1]
-          (elem op '(a128r s128r m128r))
-           [(['r0 'r2 <>f] + rg1 <>>f) ('(r0 r2) + (x64? g ? (op @ 's128r [<>f <>>f] 'm128r '(r1) ()) ())) 1]   ; a128r's hi may be 0
-          (op = 'c128r) [['r0 'r2 <>>f <>>>f] (x64? g ? '(r0 r1 r2) '(r0)) 1]
-          'bar))
+    (: t (g 'rdarms @ () (: t9 (rdmk 0) _ (pin g 'rdarms t9) t9) t8 t8)
+       (peep t <f 'bar @ 'bar 'bar a (a g f)))
    ; a64 renames by position: x4 is also an arg register, so only the base slot's r4 becomes fp
    a4base (: t (foldl (t \ o \ pin t o 2) {} (ldops9 + fldops + xops + fxops + leaops + '(cmprm)))
            (foldl (t \ o \ pin t o 1) t (stops9 + stxops + fstxops + siops + '(cmpm))))
@@ -5667,17 +5671,28 @@
              lin {}
              lot {}
              (gone? f) (xjmp? f labt)               ; a sibcall: arguments in flight, reads everything
+             ; each form's (reads defs) and successors, once
+             dt (foldl (t \ e \ pin t <e (gone? <>e ? [um ()] (lvtx g <>e u))) {} rl)
+             st (foldl (t \ e \ pin t <e (succ <>e <e)) {} rl)
+             ; a form is read again only when a successor's live-in moved since: the same inputs give
+             ; the same lists. tick numbers every reading, seen when i was read, moved when lin i grew
+             ck {'n 0} seen {} moved {}
              (pass l ch)                            ; one backward sweep -> did any live-in grow?
               (!(two? l) ? ch
-                 (: e <l i <e f <>e
-                    d (gone? f ? [um ()] (lvtx g f u))
-                    lo (foldl (a \ s \ lvun a (lin s)) () (succ f i))
-                    li (lvun <d (filter (r9 \ (nelem r9 <>d)) lo))
-                    old (lin i)
-                    ch2 !(lvsame li old)
-                    (ch2 ? (pin lin i li) 0,
-                     pin lot i lo,
-                     pass >l (ch || ch2))))
+                 (: e <l i <e
+                    ss (st i)
+                    (? (peep seen i -1 >= 0 && !(any (s \ peep moved s -1 > seen i) ss)) (pass >l ch)
+                       (: d (dt i)
+                          lo (foldl (a \ s \ lvun a (lin s)) () ss)
+                          li (lvun <d (filter (r9 \ (nelem r9 <>d)) lo))
+                          old (lin i)
+                          ch2 !(lvsame li old)
+                          n (ck 'n + 1)
+                          (pin ck 'n n,
+                           pin seen i n,
+                           ch2 ? (pin lin i li, pin moved i n) 0,
+                           pin lot i lo,
+                           pass >l (ch || ch2))))))
              (fix u9) (pass rl () ? (fix ()) 0)
              (fix (),
               [lin lot]))))
@@ -8604,6 +8619,7 @@
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'fescv ()                 ; ..a frame address become a value (a musttail call still jumps)
+     'lpm ()                   ; lprop's answers: the fn's tree passes are done with them
      'fesca ()                 ; ..and a frame address handed a call (a later call may not jump past it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
@@ -9773,7 +9789,13 @@
    ; -- straight-line propagation: in a block, past `x = K` (or an op= whose answer is K whatever x
    ; held) x reads as K up to its next write. a label keeps it only when every write of x is behind it
    ; and no goto came first. a scalar local never &-taken; not across a call that returns twice --
+   ; cgfn's chain hands it the same tree again: one answer per tree until fnreset lets them go,
+   ; keyed by the statics too, the only names the unit's table gains as fns are laid
    (lprop g f)
+    (: m (g 'lpm @ () (: t {} _ (pin g 'lpm t) t) t9 t9)
+       k [(g 'statics) f]
+       (peep m k 'none @ 'none (: r (lprop0 g f) _ (pin m k r) r) r9 r9))
+   (lprop0 g f)
     (: w64 !(ilp32? g)
        tak {} tys {}
        ; an asm's memory operand takes its name's address, as kprop reads it
