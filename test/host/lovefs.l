@@ -45,7 +45,7 @@
    tars >h
    whole (tree-tar 0)
    moon (tree-tar "moon")
-   (lf-fresh e) (hark [(selfpath 0) "-e" ("(borrow 'posix) " + e + " (puts (show (map (r \\ r 5) (tree-head 0)))) (quit 0)")])
+   (lf-fresh e) (hark [(selfpath 0) "-e" ("(borrow 'posix, " + e + ", (puts (show (map (r \\ r 5) (tree-head 0)))), quit 0)")])
  (test
    ((map cap h) = ["index" "moon" "bake" "seat" "lisp" "c" "rest"])
    (all (r \ elem (r 1) [0 1 2 3]) h)                 ; the Makefile's tree_codecs, any of the four
