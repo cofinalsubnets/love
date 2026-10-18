@@ -14,14 +14,12 @@
 (borrow 'posix)
 (: (say1 s) (puts s, puts "\n")                     ; a console line
 
-   ; mount one early filesystem at its fhs path (mkdir first; mount is () success /
-   ; -errno failure -- e.g. ebusy when the kernel already auto-mounted devtmpfs).
-   ; the sign, never a truth test: 0 and -errno are both falsey.
+   ; mount one early filesystem at its fhs path (mkdir first); mount answers () or the
+   ; error's name -- ebusy when the kernel already auto-mounted devtmpfs
    (mnt src tgt typ)
      (: _ (mkdir tgt 493)
         r (mount src tgt typ)
-        (say1 ("  mount " + typ + " on " + tgt
-               + (r < 0 ? (" -> errno " + show (0 - r)) " -> ok"))))
+        (say1 ("  mount " + typ + " on " + tgt + " -> " + (r = () ? "ok" (show r)))))
 
    ; the console job: a fresh `love` running the shell over the inherited console fds.
    ; the -l registers module 'lush (the parts' own wraps); the -e reads it through

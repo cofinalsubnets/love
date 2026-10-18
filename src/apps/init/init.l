@@ -186,13 +186,13 @@
      (open path "w" @ p (hot? p ? (say p s, flush p, close p, 'ok) 'denied))
    (try-mount src tgt typ)
      (: _ (mkdir tgt 493)
-        r (mount src tgt typ)                            ; 0 success, -errno failure
+        r (mount src tgt typ)                            ; () or the error's name
         (note ("  mount " + typ + " on " + tgt
-               + (r < 0 ? (" -> EPERM (errno " + show (0 - r) + ", needs root/pid-ns)") " -> ok"))))
+               + (r = () ? " -> ok" (" -> " + show r + " (needs root/pid-ns)")))))
    (boot-system _)
      (newns 0 @ e
-        (note (e < 0 ? "-- pid1 bringup: (no unpriv userns here; a real pid1 is root) --"
-                       "-- pid1 bringup: private user+mount ns (root-in-ns) --"),
+        (note (e = () ? "-- pid1 bringup: private user+mount ns (root-in-ns) --"
+                        "-- pid1 bringup: (no unpriv userns here; a real pid1 is root) --"),
          try-mount "tmpfs" "/tmp/love-run"  "tmpfs",       ; works unprivileged -> proves mount
          try-mount "proc"  "/tmp/love-proc" "proc",        ; needs a pid-ns too -> eperm here
          note "-- cgroup-v2: mkdir a group, write a pid to cgroup.procs --",
@@ -216,8 +216,8 @@
 ; (pid1 0) is the deterministic proof tour; (perceive 0) is the live supervisor
 ; (park on the signalfd, restart per policy, SIGTERM -> graceful shutdown).
 (: (mount1 src tgt typ)                                  ; mount as pid1 (root in a pid-ns: it works)
-     (: _ (mkdir tgt 493) r (mount src tgt typ)          ; () success, +errno failure
-        (note ("  mount " + typ + " on " + tgt + (r ? (" -> errno " + show r) " -> ok"))))
+     (: _ (mkdir tgt 493) r (mount src tgt typ)          ; () or the error's name
+        (note ("  mount " + typ + " on " + tgt + " -> " + (r = () ? "ok" (show r)))))
 
    ; drain glean until `target` children are collected (or steps run out). classify
    ; each dead pid by `pids`: present -> a child we started; absent -> a reparented
