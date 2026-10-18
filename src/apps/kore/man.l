@@ -1,6 +1,6 @@
 ; src/apps/kore/man.l -- `man`: the page a name has, laid out for a terminal. lapiz reads and
 ; lays the roff, less.l pages it; man is the search path, the decompression and the handing over.
-; a lone `.so` redirect is followed once; mdoc is refused, not rendered.
+; a lone `.so` redirect is followed once; lapiz reads mdoc pages as well as man ones.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -70,16 +70,6 @@
     (: d (root + "/" + man-head so)
        h (udirp d ? (man-hits d (man-stem (man-base so))))
        (two? h ? (d + "/" + <h)))
-   ; a page that spells .Dd or .Sh and never .TH is mdoc, which this reader does not read
-   (man-mdoc? s)
-    (: l (lines s)
-       (go ls th)
-        (? (atom? ls) th
-           (man-pre? <ls ".TH ") 0
-           (man-pre? <ls ".Dd ") 1
-           (man-pre? <ls ".Sh ") 1
-           (go >ls th))
-       (go l 0))
    ; the page found, read, redirected and rendered. [1 path text] when it lands and
    ; [0 complaint] when it does not -- every way of failing carries the sentence for it
    (man-lay nm sec w)
@@ -93,9 +83,7 @@
                    ; so say which target, rather than lay a blank screen
                    (so && !p2 ? [0 ("man: " + nm + " redirects to " + so + ", which is not here")]
                     ((p2 ? (man-text p2 @ t (t ? t s)) s) @ s2
-                       (man-mdoc? s2 ?
-                           [0 ("man: " + nm + " is an mdoc page, which is not read yet")]
-                          [1 (p2 ? p2 p) (cite 'lapiz 'rf->tty s2 w)]))))))))
+                       [1 (p2 ? p2 p) (cite 'lapiz 'rf->tty s2 w)])))))))
    (man-moan m) (say err m, put err 10, 1)
    ; a leading operand is a section only if it starts with a digit, is at most 4 long, and a
    ; name follows it: `man 411toppm` names a page
@@ -118,12 +106,20 @@
        (wh nm) (man-find nm sec @ p
                   (p ? (puts (p + "\n"), 0)
                      (man-moan ("man: no manual entry for " + nm))))
-       (one nm) (man-lay nm sec w @ r
-                   (? !<r (man-moan <>r)
-                      (atom? hw) (puts (usgr <>>r), 0)
-                      (pgride () (lines <>>r)
-                                   (nm + (#sec ? ("(" + sec + ")") "")) in
-                                   <>hw <hw {} "", 0)))
+       (one nm) (man-lay nm sec w @ r (? !<r (man-moan <>r) (puts (usgr <>>r), 0)))
+       (title nm) (nm + (#sec ? ("(" + sec + ")") ""))
+       (ld nm) (man-lay nm sec w @ r (<r ? [(lines <>>r) (title nm)] <>r))
+       ; on a terminal the pages are one walk, :n and :p between them; a name with no page
+       ; is said first and left out of it
+       (walk ns bad)
+        (? (atom? ns) bad
+           (ld <ns @ r
+              (string? r ? (: _ (man-moan r) (walk >ns 1))
+                 (: _ (pgride ns <r <>r in <>hw <hw (pin {} 'load ld) "") bad))))
        ; the status is the worst of the names, and a charm: the seat quits with it
-       (foldl (\ a nm ((peep t 119 0 ? (wh nm) (one nm)) @ r (a || r ? 1 0))) 0 nms)))
+       (peep t 119 0 || atom? hw ?
+          (foldl (\ a nm ((peep t 119 0 ? (wh nm) (one nm)) @ r (a || r ? 1 0))) 0 nms)
+          (: miss (filter (nm \ !(man-find nm sec)) nms)
+             _ (map (nm \ man-moan ("man: no manual entry for " + nm)) miss)
+             (walk (filter (nm \ man-find nm sec) nms) (two? miss ? 1 0))))))
 ) ; module 'kore

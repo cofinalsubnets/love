@@ -260,13 +260,17 @@
        ((2 < n ? (say err ("printf: warning: " + snip w 2 n
                            + ": character(s) following character constant have been ignored\n")) 0),
         n < 2 ? 0 (w 1)))
-   ; an argument as a whole number: C's strtoimax (strtoumax under u?, a minus wrapping)
-   (pf-int st w u?)
+   ; an argument as a number: a quoted character's code, else f's reading of it from a,
+   ; past its blanks, n its length
+   (pf-arg st w f)
     (#w @ n
        (0 < n && (w 0 = 39 || w 0 = 34) ? (pf-cchar st w)
         (: (sp k) (k < n && (w k = 32 || w k = 9 || w k = 10) ? (sp (k + 1)) k)
-           a (sp 0)
-           neg (a < n && w a = 45)
+           (f n (sp 0)))))
+   ; an argument as a whole number: C's strtoimax (strtoumax under u?, a minus wrapping)
+   (pf-int st w u?)
+    (pf-arg st w (n \ a \
+        (: neg (a < n && w a = 45)
            b (a < n && (w a = 45 || w a = 43) ? (a + 1) a)
            hx (b + 2 < n && w b = 48 && (w (b + 1) = 120 || w (b + 1) = 88) && 0 <= hexv (w (b + 2)))
            base (? hx 16 (b < n && w b = 48) 8 10)
@@ -284,11 +288,8 @@
             u? && v < 0 ? (v + 18446744073709551616) v))))
    ; an argument as a real: C's strtold, and inf and nan by name
    (pf-flt st w)
-    (#w @ n
-       (0 < n && (w 0 = 39 || w 0 = 34) ? (pf-cchar st w)
-        (: (sp k) (k < n && (w k = 32 || w k = 9 || w k = 10) ? (sp (k + 1)) k)
-           a (sp 0)
-           b (a < n && (w a = 45 || w a = 43) ? (a + 1) a)
+    (pf-arg st w (n \ a \
+        (: b (a < n && (w a = 45 || w a = 43) ? (a + 1) a)
            neg (a < n && w a = 45)
            lw (aw-down (snip w b n))
            (? (lw = "inf" || lw = "infinity") (neg ? '-inf 'inf)
@@ -496,12 +497,12 @@
    aw-ops '("**=" "+=" "-=" "*=" "/=" "%=" "^=" "==" "!=" "<=" ">=" "&&" "||"
             "++" "--" "!~" ">>" "**" "{" "}" "(" ")" "[" "]" ";" "," "+" "-"
             "*" "/" "%" "^" "!" ">" "<" "|" "?" ":" "~" "$" "=")
-   (aw-op-at s n k)                              ; -> [text next] | ()
+   ; the first of ops (the longest first) at k -> [text next] | ()
+   (aw-op-in ops s n k)
     (: (has t) (#t @ m (k + m <= n && t = snip s k (k + m)))
-       (try (w . u)) (has w ? ((w @ "**" "^" "**=" "^=" w) @ nm
-                                 [nm (k + #w)])
-                      (try u))
-       (try aw-ops))
+       (try (w . u)) (has w ? [w (k + #w)] (try u))
+       (try ops))
+   (aw-op-at s n k) (aw-op-in aw-ops s n k @ [w j] [(w @ "**" "^" "**=" "^=" w) j] ())
    (aw-esc c) (c @ 110 10  116 9  114 13  92 92  34 34
                    47 47  97 7  98 8  102 12  118 11  c)
    ; a "..." body from i (past the quote) -> [text next]; the escapes are eaten here
@@ -643,22 +644,17 @@
        (aw-op? ts "-") (aw-e-un >ts ng @ [e r] [['neg e] r] ())
        (aw-op? ts "+") (aw-e-un >ts ng @ [e r] [['pos e] r] ())
        (aw-e-pow ts ng))
-   (aw-e-mul ts ng)
-    (aw-e-un ts ng @ [a r]
+   ; sub's leaning left, joined by any of ops
+   (aw-chain sub ops ts ng)
+    (sub ts ng @ [a r]
       (: (go n m)
-          (aw-op? m "*" || aw-op? m "/" || aw-op? m "%" ?
-             (aw-e-un >m ng @ [b m2] (go ['bin <><m n b] m2) ())
+          (two? m && <<m == 'op && elem <><m ops ?
+             (sub >m ng @ [b m2] (go ['bin <><m n b] m2) ())
              [n m])
          (go a r))
       ())
-   (aw-e-add ts ng)
-    (aw-e-mul ts ng @ [a r]
-      (: (go n m)
-          (aw-op? m "+" || aw-op? m "-" ?
-             (aw-e-mul >m ng @ [b m2] (go ['bin <><m n b] m2) ())
-             [n m])
-         (go a r))
-      ())
+   (aw-e-mul ts ng) (aw-chain aw-e-un ["*" "/" "%"] ts ng)
+   (aw-e-add ts ng) (aw-chain aw-e-mul ["+" "-"] ts ng)
    ; concatenation is the operator with no spelling: two operands side by side
    (aw-e-cat ts ng)
     (aw-e-add ts ng @ [a r]

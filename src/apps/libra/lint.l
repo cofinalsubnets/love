@@ -1,24 +1,19 @@
-; src/apps/libra/lint.l -- the .l balance scan, one scanner under every consumer: `libra
-; check` gates `make lint`, `libra doc` rides lint-cmts, vi's :lint rides
-; lint-scan. it is a balance scan, not a parse -- delimiters and strings and
-; nothing else. `'` is a reader operator, never a delimiter, so it scans as
-; ordinary code: the trap a C lexer falls into.
+; src/apps/libra/lint.l -- the .l balance scan under `libra check`, `libra doc` and vi's
+; :lint. delimiters and strings, not a parse; `'` is a reader operator, never a delimiter.
 ;
-; (lint-scan src) answers warnings, each [line col text] 1-based, and an unclosed
-; opener or string reports where it opened rather than end-of-file.
+; (lint-scan src) answers warnings, each [line col text] 1-based; an unclosed opener or
+; string reports where it opened.
 ;
 (module (lint lint-scan lint-of lint-cmts)
 (: (lclose c) (c @ 40 41 91 93 125)          ; ( -> )   [ -> ]   { -> }
    (lopen c)  (c @ 41 40 93 91 123)          ; ...and back, for the report
 
    ; --- character classes ----------------------------------------------------
-   ; the three sets are strings so they can be checked against love.c at a glance
    (lin? s c) (:- (go 0) n #s (go k) (? (n <= k) () (s k = c) 1 (go (k + 1))))
 
    ; the operator run characters -- love.c's op_break, complemented
    (lopc? c) (lin? "!#$%&*+-./:<=>?\\^|~" c)
-   ; the constructor sigils, exhaustive: a ( glued behind one of these is a datum,
-   ; not a form -- '(a) quote, @(a) tray. the list wears [] and the map {} instead.
+   ; the constructor sigils: a ( glued behind one is a datum -- '(a) quote, @(a) tray
    (lctc? c) (lin? "'@" c)
    ; a token character: not whitespace, a delimiter, a quote mark or a `;`
    (ltkc? c) !(c < 33 || elem c '(34 59 40 41 91 93 123 125))
@@ -28,10 +23,9 @@
    (ltok-at src n i) (:- (snip src i (go i)) (go k) (k < n && ltkc? (src k) ? (go (k + 1)) k))
 
    ; --- raw texts -------------------------------------------------------------
-   ; three or more quotes open one and as many close it, no escapes; when the opener
-   ; ends its line the closer is a line of only spaces and the quotes. (lraw src n i)
-   ; is the index past its closer, () when it never closes. a longer run that closes one
-   ; line keeps its extra quotes as text, so a one-line raw text may end in a quote
+   ; three or more quotes open one and as many close it; an opener ending its line closes on
+   ; a line of only spaces and quotes. (lraw src n i) is the index past the closer, () when
+   ; it never closes. a longer one-line closing run keeps its extra quotes as text
    (lraw? src n i) (i + 2 < n && src (i + 1) = 34 && src (i + 2) = 34)
    (lraw src n i)
     (: (qs k) (k < n && src k = 34 ? (qs (k + 1)) k)
@@ -46,9 +40,8 @@
           (s + 1 < n && src s = 13 && src (s + 1) = 10) (many (nl s))
           (one e)))
    ; --- holes ---------------------------------------------------------------
-   ; "a \(x) b": a hole is code to its closer, and the text runs on past it.
-   ; (lhole src n i), i at the (, is the index past the closer, n when there is none;
-   ; strings, raw texts and comments inside it are walked whole
+   ; "a \(x) b": a hole is code to its closer. (lhole src n i), i at the (, is the index past
+   ; the closer, n when there is none
    (lhole src n i)
     (: (eol k) (? (n <= k) n (src k = 10) (k + 1) (eol (k + 1)))
        (code k d)
@@ -74,12 +67,10 @@
      [line col])
 
    ; --- the config the rules read --------------------------------------------
-   ; a plain tablet read with peep, never src/apps/libra/salt.l: vi cats this file directly
-   ; (test/test.mk) and a module it had to carry along would break that.
-   ; a switch whose default is yes -- absent means on, only an explicit 0 is off
+   ; a plain tablet, not salt.l: vi cats this file alone.
+   ; a switch whose default is yes: only an explicit 0 is off
    (lint-yes? conf k) (conf k @ (v . _) !!v 1)
-   ; the name a token mentions: a leading ' is quote, so 'foo names foo and a
-   ; rename wants both. a trailing ' is the prime idiom, part of the name.
+   ; the name a token mentions: a leading ' is quote; a trailing ' is part of the name
    (lname t) (:- (go 0) n #t (go k) (k < n && t k = 39 ? (go (k + 1)) (snip t k n)))
    ; the roster entry for the token text t: a bare name, or (name "hint")
    (lint-dep roster t)
@@ -99,30 +90,24 @@
      "\\" (2 <= ne))
 
    ; --- the frame ------------------------------------------------------------
-   ; cl the expected closer, ln/co where the opener sat (so an unclosed one reports
-   ; its own position), ne how many elements taken, e1 the index the first started
-   ; at, pl/qd the singleton rule's two bits, am the match bit, pd the deferred
-   ; verdicts. e1 is an index read back out of src, never accumulated as text.
+   ; cl the expected closer, ln/co where the opener sat, ne elements taken, e1 the index
+   ; the first started at, pl/qd the singleton rule's bits, am the match bit, pd the
+   ; deferred verdicts
    (lelem stk i)
     (atom? stk ? stk
      (: f <stk ne (f 'ne + 1)
       (pin f 'ne ne, ne @ 1 (pin f 'e1 i), stk)))
 
-   ; a bare `@` marks its frame a match: everything after is arms, where (x) is a
-   ; list shape and the singleton rule stands down. a glued @( is the tray ctor and
-   ; never reaches here. lpush inherits the bit, so arm bodies go quiet too -- that
-   ; costs missed gripes, never noise.
+   ; a bare `@` marks its frame a match: its arms' (x) are list shapes, so the singleton
+   ; rule stands down, inherited by arm bodies too -- missed gripes, never noise
    (lat src stk it ti i)
     (? !(it && two? stk) stk
        (snip src ti i != "@") stk
        (pin <stk 'am 1, stk))
 
    ; a new opener. pre is what it is glued to, empty when it stands free:
-   ;   all constructor sigils -> a datum, and a ' among them makes the contents
-   ;                             data too, inherited by every frame inside
-   ;   all operator chars     -> exempt: glued, two sigil runs lex as one, and
-   ;                             telling <(<l) (same value) from <(= x) (not <=x)
-   ;                             needs the operator table a balance scan lacks
+   ;   all constructor sigils -> a datum; a ' makes everything inside data too
+   ;   all operator chars     -> exempt: telling <(<l) from <(= x) needs the operator table
    ;   anything else          -> foo(x) is two datums, so the ( is a plain form
    (lpush stk c i line col src it ti)
     (: pre (it ? (snip src ti i) "")
@@ -135,16 +120,11 @@
        ({'cl (lclose c) 'ln line 'co col 'ne 0 'e1 0 'pl pl 'qd qd 'am am 'pd ()}
         . stk))
 
-   ; the singleton warning for a form about to close, or (). (f) == f, so the
-   ; parens do nothing -- except where the one element is all punctuation, which is
-   ; (+) as a value and (:) (?) (\) at their zero point. the exemption is narrower
-   ; than "starts with punctuation": (<>b) is droppable and flagging it is the point.
-   ;
-   ; a singleton in pattern position is a list shape, and which positions are
-   ; patterns is known only when the binder closes, its last element being the body.
-   ; so an element of a `\`, an even element of a `:`, or one level inside such an
-   ; element defers its verdict to that close -- final index warns, any other is a
-   ; pattern and stays silent. odd `:` elements are values and warn at once.
+   ; the singleton warning for a form about to close, or (). exempt when the one element is
+   ; all punctuation -- (+) as a value -- but (<>b) still warns.
+   ; a singleton in pattern position is a list shape, known only when the binder closes:
+   ; an element of a `\`, an even one of a `:`, or one level inside defers to that close --
+   ; the final index (the body) warns, others stay silent. odd `:` elements warn at once.
    (lsing src n f)
     (f @ {'pl 1 'ne 1 'e1 e1 'ln ln 'co co}
      (ltok-at src n e1 @ t
@@ -164,28 +144,24 @@
      (pin f 'pd ((idx . wr) . f 'pd), rest))
 
    ; --- the scan -------------------------------------------------------------
-   ; (lint-of src conf) is the whole weighing; (lint-scan src) is it with no config,
-   ; which runs balance alone. the rule is the 4th field, appended, so a consumer
-   ; reading <w / <>w / <>>w for line, column and text did not have to change.
+   ; (lint-of src conf) is the whole weighing; (lint-scan src) balance alone. a warning is
+   ; [line col text rule]
    (lint-scan src) (lint-of src ())
 
    (lint-of src conf)
     (: n  #src
-       ; no config at all -- lint-scan's () -- is balance alone, the contract vi's
-       ; cat and the fixtures ride. singleton is on by default under any other.
+       ; no config is balance alone; under any other singleton defaults on
        sg (conf @ () 0 (lint-yes? conf 'singleton))
        dp (conf 'deprecated)
-       ; a token just ended at i, having started at ti/tc. a no-op until a config asks
+       ; a token just ended at i, having started at ti/tc
        (lend line tc ti i warns)
         (snip src ti i @ t
          (atom? dp ? warns
           (lint-dep dp (lname t) @ r
            (two? r ? ([line tc (lint-depmsg <>r) 'deprecated] . warns) warns))))
 
-       ; stk the frames above, a matched-pair stack so ([)] is caught; sl/sc a
-       ; string's opening spot; it/ti/tc the token in hand; st is code | cmt | str.
-       ; it must fire once per token, at its first character -- once per character
-       ; and a three-letter name counts as three elements.
+       ; stk the frames above, so ([)] is caught; sl/sc a string's opening spot; it/ti/tc the
+       ; token in hand, counted once at its first character; st is code | cmt | str
        (w i st stk line col sl sc it ti tc warns)
         (n <= i ?
             (: w0 (it ? (lend line tc ti i warns) warns)
@@ -224,8 +200,7 @@
                   (w (i + 1) 'code (lat src stk it ti i) (line + 1) 1 sl sc 0 ti tc
                      (it ? (lend line tc ti i warns) warns))
                  (c = 40 || c = 91 || c = 123)                                 ; ( [ {  -- push
-                  ; an opener is an element of its parent, unless glued to the
-                  ; token before it, where the two are one datum
+                  ; an opener is an element of its parent unless glued to a token
                   (w (i + 1) 'code (lpush (it ? stk (lelem stk i)) c i line col src it ti)
                      line (col + 1) sl sc 0 ti tc
                      (it ? (lend line tc ti i warns) warns))
@@ -241,11 +216,9 @@
                          (w (i + 1) 'code >stk line (col + 1) sl sc 0 ti tc
                             ([line col "mismatched \(string c)" 'balance] . w0))
                         (: f <stk rest >stk
-                           ; the verdicts this binder owed: an entry at the final
-                           ; index was the body, which is where a singleton warns
+                           ; the verdicts this binder owed: only the final index (body) warns
                            w1 (foldl (a \ p \ >p @ wr (f 'ne @ ^<p (wr . a) a)) w0 (f 'pd))
-                           ; the off path answers (), which is what the test below reads:
-                           ; && is transparent and would pass sg's own 0 through
+                           ; (), not &&, which would pass sg's 0 through
                            sw (sg ? (lsing src n f) ())
                            (? (sw = ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
                               (f 'am)   (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)   ; match arms: silent
@@ -262,9 +235,7 @@
 
    ; --- the comments ---------------------------------------------------------
    ; (lint-cmts src) answers every comment in reading order, [line col text kind]
-   ; 1-based at the introducer, kind 'semi or 'bang. it answers the text and not
-   ; just the span, because no reader in the tree keeps comments -- libra's doc
-   ; verb walks these rather than encoding .l lexing a fifth time.
+   ; 1-based at the introducer, kind 'semi or 'bang
    (lint-cmts src)
     (:- (w 0 'code 1 1 0 0 0 'semi ())
      n #src

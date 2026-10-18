@@ -743,6 +743,14 @@ static long fb1(long n, long a) { return __love_fb(n, a, 0, 0, 0, 0, 0); }
 static long fb2(long n, long a, long b) { return __love_fb(n, a, b, 0, 0, 0, 0); }
 static long fb3(long n, long a, long b, long c) { return __love_fb(n, a, b, c, 0, 0, 0); }
 static long fb6(long n, long a, long b, long c, long d, long e, long f) { return __love_fb(n, a, b, c, d, e, f); }
+/* bind's and connect's: the address through __love_sain where the kernel's head differs */
+static long sc_sa(long n, int fd, void const *a, unsigned int len) {
+  if (__love_osv >= 2) {
+    struct sockaddr_storage s;
+    if (len > sizeof s) return -EINVAL;
+    len = __love_sain(a, len, &s);
+    return sc3(n, fd, (long) &s, len); }
+  return sc3(n, fd, (long) a, len); }
 /* static in a header: the dead-static sweep drops the bodies a member does not use */
 
 /* the shapes the public headers keep opaque, and the fmt members' limb geometry. */

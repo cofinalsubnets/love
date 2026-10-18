@@ -1,43 +1,26 @@
-; --- test/proto/spl.l: CALL vs SPLICE, modeled -- an ev.l inliner design spike ---
-; ev.l inlines nothing above the nif level. this model is the license an inliner
-; would need, said runnable: a stack machine in ev's emitter shape (an emitter is
-; (\ k ..) prepending onto the continuation's thread -- src/love/boot/ev.l "THE EMISSION
-; INTERFACE" the design), and THREE ways to compile a call site,
-; which are one body compiler `cb` handed three param READERS:
-;
-;   ecall   -- the calling convention: args delivered into SEATS, body reads seats
-;   ebind   -- the splice, by BINDING: args into locals, body reads locals
-;   esubst  -- the splice, by SUBSTITUTION: the arg EMITTER is the reader
-;
-; the observation is (value . trace) -- an `emit` effect op appends to the trace
-; and leaves the stack alone, so a duplicated effect leaves the VALUE untouched
-; and only the trace can convict. the laws:
-;   * license: ecall == ebind as (value . trace), every sample -- the seat
-;     routing is the representative-object bridge, un-forced (hom.md's move)
-;   * the flip: a param read TWICE under an effectful arg -- esubst duplicates
-;     the effect (trace 2 where bind has 1) while the VALUES STAY EQUAL: the
-;     classic by-name breach, invisible at R, and why pureset is a LICENSE
-;   * order: arg effects precede body effects, call and bind alike
-; NOT modeled: the boxed return (the register machine's s4 laws carry the tail
-; story), scare/abort mid-body (a scare here is a trace record, not a control
-; exit), recursion. run: cat test/00-init.l test/proto/spl.l | out/love
-;
-; the uu lift: src/tools/spl2uu.l emits these threads as test/uusplgen.l;
-; test/uuspllaw.l proves the laws forall states, and the cross-machine theorem
-; meets the register machine's de5bck there.
+; --- test/proto/spl.l: CALL vs SPLICE, modeled: the license an ev.l inliner would need ---
+; a stack machine in ev's emitter shape (an emitter prepends onto the continuation's thread)
+; and three call-site compilers, one body compiler `cb` handed three param readers:
+; ecall -- args into seats; ebind -- splice by binding, args into locals;
+; esubst -- splice by substitution, the arg emitter is the reader
+; the observation is (value . trace): `emit` appends to the trace and leaves the stack, so
+; only the trace convicts a duplicated effect. laws: ecall == ebind every sample; a param
+; read twice under an effectful arg doubles the effect under esubst, the values equal (why
+; pureset is a license); arg effects precede body effects. not modeled: the boxed return,
+; a scare mid-body, recursion. spl2uu lifts these threads to test/uusplgen.l
 
-; --- the machine: ops are (op x); state [stack locals seats trace]; A the
-; --- caller's environment. emitters prepend, compose runs left first.
+; --- the machine: ops are (op x); state [stack locals seats trace]; A the caller's env.
+; emitters prepend, compose runs left first ---
 (: (kop op x) (k \ [op x] . k)
-   (kpushk x) (kop 'pushk x)                        ; push a constant
-   (kpusha i) (kop 'pusha i)                        ; push caller arg i
-   (kpushl i) (kop 'pushl i)                        ; push local i
-   (kpushs i) (kop 'pushs i)                        ; push seat i
-   (ksetl i) (kop 'setl i)                          ; pop into local i
-   (ksets i) (kop 'sets i)                          ; pop into seat i
-   kadd (kop 'add 0)                                ; pop two, push the sum
+   (kpushk x) (kop 'pushk x)
+   (kpusha i) (kop 'pusha i)                        ; caller arg i
+   (kpushl i) (kop 'pushl i)
+   (kpushs i) (kop 'pushs i)
+   (ksetl i) (kop 'setl i)
+   (ksets i) (kop 'sets i)
+   kadd (kop 'add 0)
    kemit (kop 'emit 0)                              ; append TOS to the trace, keep it
-   (kseq a b) (k \ a (b k))                         ; compose: a's ops first
+   (kseq a b) (k \ a (b k))                         ; a's ops first
 
    ; the interpreter: a thread against env A -> (value . trace)
    (put9 al i v) ([i v] . al)
@@ -56,8 +39,8 @@
                 (scare 'spl-op op))))
    (run em A) (in9 (em ()) A () () () ())
 
-   ; --- the body compiler: exprs ('p i) ('a i) ('k n) ('add e e) ('emit e),
-   ; --- prd the param reader -- the three strategies ARE three prd's
+   ; --- the body compiler: exprs ('p i) ('a i) ('k n) ('add e e) ('emit e);
+   ; prd the param reader: the three strategies are three prd's ---
    (cb e prd)
     (<e @ 'p (prd <>e)
           'a (kpusha <>e)
@@ -75,8 +58,8 @@
 
    ; --- the samples; a0e is the effectful arg (reads caller arg 0, emits it) ---
    a0e '(emit (a 0))
-   e0 ['((a 0)) '(add (p 0) (k 1))]                 ; pure: y + 1
-   e1 [[a0e] '(add (p 0) (k 1))]                    ; effect, param read once
+   e0 ['((a 0)) '(add (p 0) (k 1))]
+   e1 [[a0e] '(add (p 0) (k 1))]
    e2 [[a0e] '(add (p 0) (p 0))]                    ; effect, param read TWICE
    e3 [[a0e] '(emit (k 5))]                         ; order: arg effect, then body's
    A9 '((0 7))                                      ; the demo env: arg 0 = 7
@@ -92,10 +75,10 @@
 
 ; --- the flip: substitution duplicates the effect; the VALUE cannot see it ---
 (test
- ((both esubst e0) = (both ebind e0))              ; pure: substitution is licensed
- ((both esubst e1) = (both ebind e1))              ; read once: still licensed
- (both esubst e2 != both ebind e2)                ; read twice: the breach
- ('(14 7 7) = (both esubst e2))                    ; ... value 14 EQUAL, effect DOUBLED
+ ((both esubst e0) = (both ebind e0))
+ ((both esubst e1) = (both ebind e1))
+ (both esubst e2 != both ebind e2)
+ ('(14 7 7) = (both esubst e2))                    ; value 14 equal, effect doubled
  (<(both esubst e2) = <(both ebind e2)))
 
 (puts "spl: ok") (putc 10)

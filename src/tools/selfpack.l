@@ -1,24 +1,16 @@
 ; src/tools/selfpack.l -- cut the source container from the tree itself.
-;
 ;   love src/tools/selfpack.l [-c codecs] src.tree top stamp build roster [drop..]
-;   love src/tools/selfpack.l -l          the walk's files, one path a line: the tree's listing
-;
-; codecs names a section's codec, `lisp=bzip2,c=bzip2,rest=lzma2`: stored deflate bzip2 lzma2,
-; deflate where none is named. every seat carries every decoder, so the table is free to move.
-;
-; the tree on disk is the source, checkout and seed-laid tree alike. it leaves out sb's law
-; (.sbignore plus sb's built-ins, so the vcs walk and this cut agree), sp-own's structural skips
-; and each drop. the walk is sorted and every mtime pinned to stamp, so the same files answer
-; the same bytes (test_distboot holds a re-cut to the byte). `build` rides in as top/STAMP: a
-; number, or `set` -- the newest patch time in the nest's head (sb's set-stamp), else an
-; unpacked release's own STAMP, else 0, which orders nothing. roster names the files a
-; carried-source bake reads (the Makefile's distfiles).
-; the container is the one src/love/archive/srctree.h reads: a header, an index, and the tar in
-; sections, each packed alone under the codec its -c table names, else deflate. the
-; id is the sha of the joined tar, kept in src.tree.sha; the quiet pass (tar-thin? + tar-hash)
-; answers "has the tree moved" off stat alone.
-; the borrows name paths, in dependency order: a module name has nothing to find under love0,
-; and `-l FILE` whose basename names a verb seats it (`-l src/apps/sb/sb.l` would run sb).
+;   love src/tools/selfpack.l -l          the walk's files, one path a line
+; codecs: `lisp=bzip2,c=bzip2,rest=lzma2`, of stored deflate bzip2 lzma2, deflate unnamed
+; the walk leaves out sb's ignore law, sp-own and each drop; sorted, every mtime pinned to
+; stamp, so the same files answer the same bytes (test_distboot). build rides as top/STAMP:
+; a number, or `set` -- sb's set-stamp, else an unpacked release's STAMP, else 0. roster
+; names the files a carried-source bake reads
+; the container is srctree.h's: a header, an index, and the tar in sections each packed
+; alone; its id is the joined tar's sha in src.tree.sha, and the quiet pass answers "has
+; the tree moved" off stat alone
+; the borrows are paths in dependency order: a module name finds nothing under love0, and
+; -l of a verb's basename would seat it
 (borrow "src/apps/gz.l")
 (borrow "src/apps/tar.l")
 (borrow "src/apps/kore/text.l")
@@ -26,7 +18,7 @@
 (borrow "src/apps/sb/merge.l")
 (borrow "src/apps/dns.l")
 (borrow "src/apps/sb/http.l")
-(borrow "src/apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
+(borrow "src/apps/sb/sb.l")   ; for the ignore law only
 
 (borrow 'posix)
 (borrow 'bz2)
@@ -36,25 +28,22 @@
    (sp-read p) (uread p @ [1 s] [1 (s + "")] ())
    (sp-write p s) (: q (open p "w")
                      (!(hot? q) ? (sp-die ("cannot write " + p)), say q s, close q))
-   ; the structural skips, which no ignore file may take away. doc/ itself stays:
-   ; `make install` generates the three man pages from doc/{love,cook,lush}.md.
+   ; the structural skips no ignore file may take away; doc/ stays for the man pages
    sp-own '("bin" "dl" "doc/misc" ".*")
    sp-ign? (cite 'sb 'ign?)
-   ; sb's directory-only built-ins ride as plain rules here: this walk has no stat to
-   ; ask, and the cut knows its own tree holds no file by those names
+   ; sb's directory-only built-ins ride as plain rules: the walk has no stat to ask
    (sp-rules drops) ((cite 'sb 'igs 0) + (cite 'sb 'igsdir) + sp-own + drops)
-   ; handed to the walk, not run after it, so a rejected directory is never descended
-   ; into. .sbignore itself has to ride: a seeded tree cuts itself with the same law.
+   ; handed to the walk, so a rejected directory is never descended; .sbignore rides, so a
+   ; seeded tree cuts itself by the same law
    (sp-keep? rules nom) (nom = ".sbignore" || !(sp-ign? nom rules))
-   ; re-home the kept entries under top; the walk is sorted, so order holds.
+   ; re-home the kept entries under top
    (sp-take es top acc)
     (atom? es ? (rev acc)
        (<es @ e (pin e 'nom (top + "/" + tar-get e 'nom ""), sp-take >es top (e . acc))))
 
-   ; the sections, in the order they join: the frame (the root, top, STAMP and every
-   ; directory) with moon's toolchain slice behind it, what a nestless compile reads (moon.l's
-   ; mblob); the bake roster; what a seat reads at run time; the other .l; C and asm; the
-   ; rest. each keeps the walk's order.
+   ; the sections in join order: the frame (root, top, STAMP, every directory) with moon's
+   ; toolchain slice (moon.l's mblob), the bake roster, the seat's run-time reads, .l, C and
+   ; asm, the rest; each keeps the walk's order
    sp-secs ["moon" "bake" "seat" "lisp" "c" "rest"]
    sp-seat ["src/apps/tls/roots.pem" "VERSION"]        ; tls/verify.l's roots, and the version line
    ; -c's table -> {section codec}, in srctree.h's numbers
@@ -78,14 +67,13 @@
                         (ends? n ".l") "lisp"
                         (any (x \ ends? n x) [".c" ".h" ".S" ".s"]) "c"
                         "rest"))
-   ; -> each section's entries, leveled and re-homed under top. shared by both passes, so
-   ; their digests compare.
+   ; -> each section's entries, leveled and re-homed; shared by both passes so digests compare
    (sp-lev es top stamp build ros)
     (: root <es
        te (tar-entry top 'dir "")
        _ (pin te 'mode (tar-get root 'mode 493))
        se (tar-entry "STAMP" 'file (build + "\n"))
-       ; tagged before any is re-homed: sp-take pins the new nom into the entry itself
+       ; tagged before re-homing: sp-take pins the new nom into the entry itself
        tag (map (e \ [(sp-sec ros e) e]) >es)
        parts (map (nm \ sp-take (map (p \ p 1) (filter (p \ <p = nm) tag)) top ()) sp-secs)
        (map (l \ tar-level l stamp) (([root te] + sp-take [se] top () + <parts) . >parts)))
@@ -99,8 +87,7 @@
    (sp-rel nom) (: (go i) (? (#nom <= i) "" (nom i = 47) (snip nom (i + 1) #nom) (go (i + 1)))
                    (go 0))
    (sp-pad n) (512 * ((n + 511) // 512))
-   ; section k's index records, each entry's bytes at their offset in its tar. a directory,
-   ; the root and top have no record: a path's directories are what lies under them.
+   ; section k's index records; directories, the root and top have none
    (sp-recs k es)
     (: (go l at acc)
         (atom? l ? (cats (rev acc))
@@ -112,8 +99,7 @@
                           n sp-nul (kind = 'link ? (tar-get e 'to "") "") sp-nul]))
               (go >l (at + 512 + sp-pad len) (r . acc))))
        (go es 0 ()))
-   ; each section's tar is tar-pack's less the end blocks, which only the last keeps: joined,
-   ; they are the one archive the tree cut to
+   ; each section's tar less the end blocks, which only the last keeps: joined, one archive
    (sp-frags secs)
     (: n #secs
        (map (i \ tar-pack (secs i) @ a
@@ -130,11 +116,10 @@
        (row i) (cats [(sp-name (names i)) (sp-le (codec i) 4) (sp-le #(raws i) 4) (sp-le #(packs i) 4)
                       (sp-le (gz-crc32 (raws i)) 4)])
        (cats (["lovetree" (sp-le #raws 4)] + map row ^#raws + packs)))
-   ; the sidecar names the format and the codecs with the digest, so a cut under another
-   ; layout or table is not fresh
+   ; the sidecar names the format and codecs too, so another layout or table is not fresh
    (sp-fmt spec) ("tree2 " + spec + " ")
 
-   ; the cut that reads: pack, hash, and write when the content actually moved.
+   ; pack, hash, and write when the content moved
    (sp-cut spec out side top stamp build rules ros)
     (: g (tar-gather? (sp-keep? rules) "." "")
        _ (!g ? (sp-die "cannot read the tree"))
@@ -146,12 +131,11 @@
        (? (two? old && two? have && <>old = h) 0
           (puts ("LOVE\t" + out), putc 10, sp-write out (sp-tree (sp-codecs spec) secs frags), sp-write side h, 0)))
 
-   ; the build stamp of the tree here, in seconds: a function of the patch set, never a clock.
-   ; sb reads the nest off the working directory, which is the tree's root
+   ; the build stamp: a function of the patch set, never a clock; sb reads the nest off the cwd
    (sp-stamp _)
     (: t ((cite 'sb 'set-stamp) ((cite 'sb 'head) ()))
        (0 < t ? t (sp-read "STAMP" @ [1 x] (<(sound x) @ v (charm? v ? v 0)) 0)))
-   ; the listing: the tree's files under sb's law alone, which the cut's structural skips narrow
+   ; the listing: the tree's files under sb's law alone
    (sp-ls _)
     (: t (tar-thin? (sp-keep? ((cite 'sb 'igs 0) + (cite 'sb 'igsdir))) "." "")
        _ (!t ? (sp-die "cannot read the tree"))
@@ -170,13 +154,11 @@
        build (av 3 = "set" ? (show (sp-stamp 0)) (av 3))
        ros (sp-read (av 4) @ [1 s] (foldl (t \ w \ pin t w 1) {} (words s))
               (sp-die ("cannot read the roster " + av 4)))
-       ; top joins the drops: a release untarred at the root would otherwise ride the
-       ; next blob, and the artifact would swallow a whole second love.
+       ; top joins the drops, or a release untarred at the root would ride the next blob
        drops (top . >>>>>av)
        side (out + ".sha")
-       ; `stat`, not a read: the question is only whether the container is there. a ()
-       ; from the thin pass (a torn read, a nom too long for ustar) is not an answer
-       ; and falls through to the cut, which reads each file once.
+       ; `stat`, not a read: only whether the container is there. a () from the thin pass falls
+       ; through to the cut
        rules (sp-rules drops)
        t (tar-thin? (sp-keep? rules) "." "")
        _ (!t ? (sp-die "cannot read the tree"))

@@ -1,4 +1,4 @@
-; test/uupatch.l -- test/patch.l's laws as uu proof terms, re-checked in rocq and lean via uu2coq/uu2lean
+; test/uupatch.l -- test/patch.l's laws as uu proof terms, re-checked in rocq and lean
 ; loads after test/uu.l and test/uulay.l (sort order), whose list vocabulary it uses
 
 ; --- the model: patch, tree, apply, validity, inverse, commute ---
@@ -78,7 +78,7 @@
                  (lam e2 (fromempty
                     (paths (coprod ppair unit) (ii2 tt) (ii1 (tpair p q)))
                     (ne (pathsinv0 nat (pk q) (pk p) e2))))
-                 ; the ascriptions pin tpair's family: lean won't iota-reduce under a live metavariable
+                 ; pin tpair's family: lean won't iota-reduce under a live metavariable
                  (lam ne2 (the (paths (coprod ppair unit)
                                  (ii1 (tpair p q)) (ii1 (tpair p q)))
                                (idpath (ii1 (the ppair (tpair p q))))))
@@ -192,7 +192,7 @@
  (2 = (vof 0 '(apon (apon (lam k 0) (chg 5 0 2)) (chg 3 0 1) 5))))
 
 ; --- (L3b) a frontier is stable under an adjacent swap of independent patches.
-; --- patch lists are vectors at patch (length is pr1, like nlist); applall is the left fold ---
+; --- patch lists are vectors (length is pr1, like nlist); applall is the left fold ---
 (test
  (defn pvec (pi n nat UU)
    (lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h patch r))) n)))
@@ -266,7 +266,7 @@
 
 ; === the positional slice: hunks over a sequence, where commute re-aims ===
 ; each intermediate path is its own defq: a path-valued let poisons every later check in its scope
-; --- the index algebra: plus-cancellation, one induction each (succ-succ steps are definitional) ---
+; --- the index algebra: plus-cancellation, one induction each ---
 (test
  (defq natlehnplusnm
    (pi a nat (pi b nat (paths bool (natgtb a (add a b)) false)))
@@ -698,8 +698,8 @@
            h)))
         (natgthorleh (hi q) (add (hi p) (nlen (hn p)))))))))))
 
-; --- (L2) in range and matching, apply-then-unpull is the identity; the bound keeps an
-; --- out-of-range insert honest (its inverse would aim past the end) ---
+; --- (L2) in range and matching, apply-then-unpull is the identity; the bound keeps
+; --- an out-of-range insert honest ---
 (test
  (defq hinv-roundtrip
    (pi s nlist (pi p hunk
@@ -769,8 +769,7 @@
   = (vof 0 '(hap (hap (ncons 1 (ncons 2 (ncons 3 nnil))) (mkh 1 (ncons 2 nnil) (ncons 7 (ncons 8 nnil))))
                  (hinv (mkh 1 (ncons 2 nnil) (ncons 7 (ncons 8 nnil))))))))
 
-; --- (L3a) each intermediate path is its own defq, every use a stuck neutral.
-; --- seams: a valid (i, o) window splits s as A ++ o ++ W ---
+; --- (L3a) seams: a valid (i, o) window splits s as A ++ o ++ W ---
 (test
  (defq seams
    (pi s nlist (pi i nat (pi o nlist
@@ -2077,7 +2076,7 @@
 
 ; === the element tree: every nat is a rose tree under the cantor pairing ===
 ; a node is (npair label kids-code), the zero-labelled leaf is 0, so the nat kit rides at tree grain
-; --- the cantor pairing: npair climbs the triangle, unpair walks the diagonal (every branch definitional) ---
+; --- the cantor pairing: npair climbs the triangle, unpair walks the diagonal ---
 (test
  (defn tri
    (pi n nat nat)
@@ -2160,7 +2159,7 @@
  ; the round trip computes both ways on closed nats
  (vof 0 '9 = vof 0 '(npair (upa 9) (upb 9))))
 
-; --- the beta ladder: unpair undoes npair, by double induction (diagonal outside, walk inside) ---
+; --- the beta ladder: unpair undoes npair, by double induction ---
 (test
  (defq unpbheadu
    (pi d nat
@@ -2501,8 +2500,8 @@
  (defn isdeceqetree
    (pi x etree (pi y etree (coprod (paths etree x y) (pi e (paths etree x y) empty))))
    isdeceqnat)
- ; the tree computes: a leaf is its label's triangle, the zero leaf is 0,
- ; and eta reads any nat as a node -- 5 is (enode 0 (ncons 1 nnil))
+ ; the tree computes: a leaf is its label's triangle, the zero leaf is 0, and eta
+ ; reads any nat as a node
  (vof 0 '28 = vof 0 '(enode 7 nnil))
  (vof 0 '0 = vof 0 '(enode 0 nnil))
  (vof 0 '2 = vof 0 '(enode 0 (ncons (enode 0 nnil) nnil)))
@@ -2539,7 +2538,7 @@
                 y))))
         x))))
 
-; --- the four primitives; lay and lget carry the seat as a pi so it decrements with the walk ---
+; --- the four primitives; lay and lget carry the index as a pi so it decrements with the walk ---
 (test
  (defn occ
    (pi x nat (pi l nlist nat))
@@ -3035,7 +3034,7 @@
              (pr1 l))
             (pr2 l)
             k)))))
- ; the kit computes end to end: an absent element laid in is found at its seat
+ ; the kit computes end to end: an absent element laid in is found where laid
  (vof 0 '1 = vof 0 '(ffind 9 (lay (ncons 7 (ncons 3 nnil)) 1 9)))
  (vof 0 '1 = vof 0 '(occ 9 (lay (ncons 7 (ncons 3 nnil)) 1 9)))
  ((vof 0 '(ncons 7 (ncons 3 nnil))) = (vof 0 '(lay (lay (ncons 7 (ncons 3 nnil)) 1 9) 1 3))))
@@ -3109,7 +3108,7 @@
                 j))))
         i))))
 
-; --- the model: one bool_rect on the folded guard, re-aiming the deep edit at the survivor's seat ---
+; --- the model: one bool_rect on the folded guard ---
 (test
  (defn epatch
    UU
@@ -4594,7 +4593,7 @@
                         (natplusswap l (natminus u l) (natminus m u)))
                       (natpluscancelminus (add l (natminus m u)) (natminus u l)))))))))))))
 
-; --- the canonical rival set: sorted insert with dedup, three sealed reduction rungs ---
+; --- the canonical rival set: sorted insert with dedup ---
 (test
  (defn cins
    (pi x nat (pi l nlist nlist))
@@ -5533,8 +5532,8 @@
                     (cins (hash (rend s (ulo q p) (uhi q p) p)) nnil)))
                 (scell-hi hash s p q)
                 (scell-riv hash s p q))))))))
- ; the bubble forgets arrival order, computed at lcode hash (tiny values:
- ; a unary lcode tower grows quadratically in the rendered content)
+ ; the bubble forgets arrival order, at lcode hash (tiny values: a unary lcode
+ ; tower grows quadratically in the rendered content)
  ((vof 0 '(scell lcode (ncons 1 (ncons 2 nnil)) (mkh 0 (ncons 1 nnil) (ncons 2 nnil)) (mkh 1 (ncons 2 nnil) nnil)))
   = (vof 0 '(scell lcode (ncons 1 (ncons 2 nnil)) (mkh 1 (ncons 2 nnil) nnil) (mkh 0 (ncons 1 nnil) (ncons 2 nnil))))))
 
@@ -5764,7 +5763,7 @@
                                   (natlehnplusnm (hi p) (nlen (ho p))))
                                 (natmaxgel (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q)))))
                               h))))))))))))))
- ; the bubble contracts the hull to one seat: length off the hull alone
+ ; the bubble contracts the hull to one element: length off the hull alone
  (vof 0 '2 = vof 0 '(nlen (splice (ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil)))) 0 3 (ncons 9 nnil))))
  ; and padding commutes with rendering
  ((vof 0 '(lapp (ncons 7 nnil) (lapp (splice (ncons 1 (ncons 2 (ncons 3 nnil))) 1 1 (ncons 5 nnil)) (ncons 8 nnil))))
@@ -6529,7 +6528,7 @@
  (vof 0 '(inst 1 (mcell 0 (lmv 0) (latom 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)) =
     vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 0)))))
 
-; --- the re-aim at address grain: prefix surgery from the olds seat to the news seat, and back ---
+; --- the re-aim at address grain: prefix surgery from the olds address to the news, and back ---
 (test
  (defn reaim
    (pi a nlist (pi b nlist (pi p nlist nlist)))
@@ -6549,7 +6548,7 @@
               (ldroplenapp a w))
             (maponpaths nlist nlist (lam y (lapp a y)) (ldrop (nlen b) (lapp b w)) w
               (ldroplenapp b w)))))))
- ; the re-aim computes both ways: out through the olds seat, home again
+ ; the re-aim computes both ways
  ((vof 0 '(reaim (ncons 1 nnil) (ncons 5 (ncons 6 nnil)) (ncons 1 (ncons 9 nnil))))
   = (vof 0 '(ncons 5 (ncons 6 (ncons 9 nnil)))))
  ((vof 0 '(reaim (ncons 5 (ncons 6 nnil)) (ncons 1 nnil)
@@ -6767,7 +6766,7 @@
 ; === the critical-pairs slice: kid surgery at code grain (gsub/gput over a tree address) ===
 ; closed demos ride lof: vof pays the unary grind on cell codes
 (test
- ; the cell tag rides the second seat, (npair pair 2): an open cell stays a small stuck node
+ ; the cell tag is the second component, (npair pair 2): an open cell stays a small stuck node
  (defn gka (pi g nat nat) (lam g (upa (upa g))))
  (defn gkb (pi g nat nat) (lam g (upb (upa g))))
  (defn gcell (pi a nat (pi b nat nat)) (lam a (lam b (npair (npair a b) 2))))

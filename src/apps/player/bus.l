@@ -1,13 +1,12 @@
 ; src/apps/player/bus.l -- the player core's mix bus: the eq, volume and balance over s16 pcm,
 ; and the views' feeds off what comes out. eq.c's biquads and spectrum do the per-sample work;
-; numbers cross to it in Q40, laid here. `(borrow 'bus)`, then:
+; numbers cross to it in Q40.
 ;
 ;   bus-bands               winamp's ten centers, Hz
 ;   (bus-co rate eq pre vol bal on) -> the coefficients for biquads: each band below nyquist an
-;                           rbj peaking filter (sox's equalizer, width in q), off as 0 dB, which
-;                           is the identity, so a slider or the switch never changes the
-;                           filters' shape and their memory carries; preamp, volume (0..100) and
-;                           balance (-100..100) as the two channels' gains
+;                           rbj peaking filter, off as 0 dB (the identity, so the filters'
+;                           memory carries); preamp, volume (0..100) and balance (-100..100)
+;                           as the two channels' gains
 ;   (bus-run b pcm ch)      -> pcm through b, a bus tablet ('co, 'st) whose memory moves on
 ;   (bus-new)               -> a bus at rest, flat
 ;   (bus-spec pcm ch rate n) -> n bins 0..255, log-spaced 20 Hz .. 20 kHz, dB -96 .. 0 of full

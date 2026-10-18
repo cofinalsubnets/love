@@ -14,11 +14,9 @@
 ;   (csr-make k name lines)  a pkcs#10 request's der | [why not] ; (csr-read d) -> a tablet | why not
 ;   (pem-out label d)        pem text ; (pem-in t label) the der of each block of that label
 ;
-; the extensions: basicConstraints, keyUsage, extendedKeyUsage, subjectAltName (DNS, IP, email,
-; URI), nameConstraints (permitted and excluded DNS and IP subtrees, as verify.l reads them),
-; subjectKeyIdentifier=hash (sha-1 of the key's bits, as openssl) and
-; authorityKeyIdentifier=keyid. ed25519 signs through src/apps/ssh/ed25519.l, p-256 ecdsa through
-; p256.l beside this file.
+; extensions: basicConstraints, keyUsage, extendedKeyUsage, subjectAltName, nameConstraints
+; (as verify.l reads them), subjectKeyIdentifier=hash and authorityKeyIdentifier=keyid.
+; ed25519 signs through src/apps/ssh/ed25519.l, p-256 ecdsa through p256.l.
 (module 'tls
 (borrow 'bytes)
 (borrow 'cal)
@@ -78,7 +76,7 @@
    ; --- keys: ['ed25519 seed pub] and ['p256 d [x y]] ---
    (key-new kind)
     (? (kind = 'ed25519) (rnd 32 @ s ['ed25519 s (cite 'ssh 'ed-pub s)])
-       (kind = 'p256) (p256-scalar 0 @ d ['p256 d (p256-pub d)])         ; d 32 bytes, never a bignum
+       (kind = 'p256) (p256-scalar 0 @ d ['p256 d (p256-pub d)])
        ())
    (ec-point q) (string 4 + wrbe <q 32 + wrbe (q 1) 32)
    (key-spki k)
@@ -113,7 +111,7 @@
     (k @ ['ed25519 s p] (cite 'ssh 'ed-sign s p m)
          ['p256 d _] (p256-sign d m @ rs (der-enc [48 [(der-int <rs) (der-int (rs 1))]]))
          ())
-   ; the key id: sha-1 of the key's bit string, rfc 5280's first method and openssl's
+   ; the key id: sha-1 of the key's bit string, as openssl
    (key-id sp) (der-tree sp @ [48 [_ [3 b]]] (unhex (sha1 (snip b 1 #b))) ())
 
    ; --- names ---
@@ -221,9 +219,8 @@
 
    ; --- the certificate ---
    ; o: 'subject 'issuer (name ders), 'spki (the subject's key), 'key (the signer), 'nb 'na
-   ; (seconds), 'serial, 'akid (the issuer's key id; the subject's own when absent), 'exts
-   ; ("name=value" lines and [oid der] pairs, a later one of an oid replacing an earlier)
-   ; -> the der | [why not]
+   ; (seconds), 'serial, 'akid (the subject's own when absent), 'exts (lines and [oid der]
+   ; pairs, a later oid replacing an earlier) -> the der | [why not]
    (cert-make o)
     (: kid (key-id (o 'spki))
        ctx {'kid kid 'akid (o 'akid @ a (string? a ? a kid))}

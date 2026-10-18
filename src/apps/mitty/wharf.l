@@ -1,28 +1,17 @@
-; src/apps/mitty/wharf.l -- a wharf is where several vessels berth: the layout algebra under
-; quay's panes, and the one piece every seat shares. it answers rectangles in cells,
-; never pixels -- mitty seats them with \e[r;cH, the kernel console multiplies them by
-; the font's width and height, and neither has to know what the other does with them.
-; cells are the only currency both speak, and the one `gaze` already answers in.
-; a module: `(borrow 'wharf)` on the artifact, `(borrow "src/apps/mitty/wharf.l")` off the tree.
+; src/apps/mitty/wharf.l -- the layout algebra under quay's panes. it answers rectangles in
+; cells, never pixels; each consumer scales them its own way.
 ;
 ; a plan is a binary tree. a leaf is a pane's id; a node is one split:
 ;
 ;   (dir pct a b)   dir 'stack (a above b) or 'beside (a left of b)
 ;                   pct 1..99 -- a's share of the axis being divided
 ;
-; an id is any value that is not a pair, since pairs are how a node is told from a
-; leaf; charms are the obvious choice and what the laws use. () is reserved -- it is
-; how wharf-shut says the last pane is gone.
+; an id is any value that is not a pair. () is reserved: wharf-shut's empty wharf.
 ;
-; a split spends a cell on the bar between its halves, so two panes side by side in
-; 80 columns get 39 and 40. under three cells there is no room for two, so the split
-; does not happen and b lays at zero extent. a zero-extent pane is still in the list,
-; wearing (id row col 0 0): ask wharf-show?, never whether the rectangle nets nothing.
+; a split spends a cell on the bar between its halves (80 columns -> 39 and 40). under three
+; cells b lays at zero extent, still in the list: ask wharf-show?.
 ;
-; two laws hold of every lay, and test/host/wharf.l checks them over a spread of plans
-; and sizes rather than trusting the arithmetic: every rectangle sits inside the wharf,
-; and no two overlap. the spans are half-open, so a zero-extent pane overlaps nothing
-; -- including itself -- and neither law has to except it.
+; laws: every rectangle sits inside the wharf, and no two overlap (spans half-open).
 (module '(wharf wharf-at wharf-bars wharf-panes wharf-col wharf-cols wharf-drag wharf-id wharf-lay wharf-layg
           wharf-row wharf-rows wharf-show? wharf-shut wharf-split wharf-steer)
 (:
@@ -34,17 +23,15 @@
    (wharf-cols b)  <>>>>b
    (wharf-show? b) (0 < wharf-rows b && 0 < wharf-cols b)
 
-   ; a's share of n units at pct, the bar's g already spent. both halves get at least
-   ; one; under g + 2 there is no split to make and a takes it all. cells spend a bar of
-   ; one; a pixel layout (lux's bsp) names its own gap
+   ; a's share of n units at pct, the bar's g spent. both halves get at least one; under
+   ; g + 2 a takes it all
    (wcut n pct g) (n < g + 2 ? n
                      ((n - g) * pct // 100 @ k
                         (? (k < 1) 1 (n - g - 1 < k) (n - g - 1) k)))
    (wrest n a g) (n < g + 2 ? 0 (n - g - a))
 
    ; --- the lay: every pane's rectangle, in plan order -----------------------
-   ; a half with no room lays at its parent's corner, not past the bar that was never
-   ; spent, so a caller may do arithmetic on an origin without asking if it is real.
+   ; a half with no room lays at its parent's corner, not past an unspent bar
    (wlay p row col r c g)
     (two? p ?
        (p @ [d pct a b]
@@ -56,15 +43,12 @@
               (cat (wlay a row col r w g)
                    (wlay b row (0 < t ? (col + w + g) col) r t g)))))
        [[p row col r c]])
-   ; () is the empty wharf, never a pane named (): wharf-shut answers it when the last
-   ; one leaves, and a door that missed this hands back a phantom pane wearing the
-   ; empty name. the same guard rides bars and panes below.
+   ; () is the empty wharf, never a pane named ()
    (wharf-lay p r c) (() = p ? () (wlay p 0 0 r c 1))
    (wharf-layg p r c g) (() = p ? () (wlay p 0 0 r c g))
 
    ; --- the bars: (dir row col len), 'across spanning cols, 'down spanning rows
-   ; a bar rides only where a split actually happened -- both halves showable --
-   ; so a wharf too narrow to divide is drawn with no line through it.
+   ; a bar only where both halves are showable
    (wbars p row col r c)
     (two? p ?
        (p @ [d pct a b]
@@ -83,8 +67,7 @@
    (wpanes p) (two? p ? (cat (wpanes <>>p) (wpanes <>>>p)) [p])
    (wharf-panes p) (() = p ? () (wpanes p))
 
-   ; which pane owns this cell, or () for none -- a zero-extent one owns nothing,
-   ; since its half-open span is empty, so the mouse can never land on the unshowable
+   ; which pane owns this cell, or () -- a zero-extent one owns nothing
    (wharf-at bs row col)
     (two? bs ?
      (: b <bs r0 (wharf-row b) c0 (wharf-col b)
@@ -95,9 +78,7 @@
 
    ; --- steering ---------------------------------------------------------------
    ; focus moves to the nearest showable pane past this one's edge whose other axis
-   ; overlaps -- the rule that lets one tall pane be reached from any of the short ones
-   ; beside it. nowhere to go answers the id unchanged, so a steer at the wall is a
-   ; no-op rather than a condition.
+   ; overlaps; nowhere to go answers the id unchanged
    (wover a1 n1 a2 n2) (a1 < a2 + n2 && a2 < a1 + n1)
    (wpick bs id) (two? bs && (wharf-id <bs = id ? <bs (wpick >bs id)))
    (wpast f b d)
@@ -131,8 +112,7 @@
              (two? cs ? (wharf-id (foldl (wnear f d) () cs)) id))))
 
    ; --- editing the plan --------------------------------------------------------
-   ; split the pane named id in two; the new one takes the second half. an id
-   ; that is not in the plan changes nothing, which is what a stale focus deserves.
+   ; split the pane named id in two, the new one second; an absent id changes nothing
    (wharf-split p id d pct new)
     (two? p ? [<p <>p (wharf-split <>>p id d pct new) (wharf-split <>>>p id d pct new)]
        (p = id ? [d pct p new] p))
@@ -153,8 +133,7 @@
        p)
    (wharf-drag p r c ar ac to) (() = p ? () (wdrag p 0 0 r c ar ac to))
 
-   ; shut a pane; its sibling takes the whole of what the pair held, bar and all.
-   ; shutting the last one answers () -- a wharf with nothing tied up at it.
+   ; shut a pane; its sibling takes what the pair held. the last one answers ()
    (wharf-shut p id)
     (two? p ?
        (: a (wharf-shut <>>p id) b (wharf-shut <>>>p id)

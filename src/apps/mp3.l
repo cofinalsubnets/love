@@ -6,12 +6,10 @@
 ;                             a gapless stream drops ahead and plays (0 for unknown), 'tags
 ;                             ("NAME=value" ..) from an id3v2 tag | 'more | why not
 ;   (mp3-format m)         -> the format tablet src/apps/wav.l's wav-pcm takes: s16, m's shape
-;   (mp3-pump q h m emit)  -> each frame's samples to emit, h the bytes held from m 'at, q the
-;                             port the rest comes from -> 0 | why not. a stream entered mid-way
-;                             finds the next frame; a damaged frame plays as silence; an id3v2
-;                             tag between frames (a stream's next song) pins its 'tags on m and
-;                             counts its 'link up from 0
-;   (mp3-sniff s)          -> 1 an mp3 | 0 | 'more: with meta, format and pump, the decoder door
+;   (mp3-pump q h m emit)  -> each frame's samples to emit (h the bytes held from m 'at, q the
+;                             port) -> 0 | why not. a damaged frame plays as silence; an id3v2
+;                             tag between frames pins its 'tags on m and counts 'link up
+;   (mp3-sniff s)          -> 1 an mp3 | 0 | 'more
 ;
 ; a frame whose channels differ from the stream's first (a mode change) is laid in its shape:
 ; one doubled, or two averaged.
@@ -27,8 +25,8 @@
    mp3-id3 (cite 'flac 'flac-id3)
    ; a frame's size at i, syncsafe in v4
    (mp3-fsz s v i) (? (v = 4) (foldl (\ a j (a * 128 + (s (i + 4 + j) & 127))) 0 ^4) (rdbe s (i + 4) 4))
-   ; an id3v2 tag at the head of s, for av-head: its end once held; else its size, or for a tag
-   ; past 1 MiB the tag rebuilt from the frames already held, the rest of it skipped unread
+   ; an id3v2 tag at the head of s: its end once held; else its size, or past 1 MiB the tag
+   ; rebuilt from the frames held, the rest skipped unread
    (mp3-tagr s)
     (: k (mp3-id3 s) v (#s > 3 ? (s 3) 4)
        (held i) (? (#s < i + 10 || s i = 0) i (: e (i + 10 + mp3-fsz s v i) (e <= #s ? (held e) i)))

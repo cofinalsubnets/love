@@ -1,8 +1,7 @@
 #!/usr/bin/env -S love -l
 ; src/apps/helm/unit.l -- the unit language: what a helm config says.
 ;
-; a config is DATA, never code (salt's law): the file is read with `sound` and
-; no part of it is evaluated, so nothing in it needs quoting. one form per unit:
+; a config is DATA, read with `sound` and never evaluated. one form per unit:
 ;
 ;   (service sshd
 ;     (exec "/usr/sbin/sshd" "-D")
@@ -14,9 +13,8 @@
 ;   (oneshot hostname (exec "/bin/hostname" "moon"))
 ;   (target  default  (wants sshd getty))
 ;
-; three kinds. a service is long-running and supervised; a oneshot runs to
-; completion and is done; a target is a name for a set of them, and nothing
-; else. the clauses:
+; a service is long-running and supervised; a oneshot runs to completion; a target
+; names a set of them. the clauses:
 ;
 ;   (exec ARG ..)      the argv, execvp'd. a service and a oneshot need one.
 ;   (after NAME ..)    these come up first, and we wait for them.
@@ -27,10 +25,8 @@
 ;   (dir PATH)         the child's working directory.
 ;   (env K V ..)       environment pairs, set for the child alone.
 ;
-; a unit is a TABLET keyed by exactly those clause names plus 'name and 'kind,
-; so the language and the record are one vocabulary and a new clause is one row
-; of `hkeys`. every complaint is collected rather than raised: a config is read
-; once and `helm check` owes you all of it at once, not the first line.
+; a unit is a TABLET keyed by those clause names plus 'name and 'kind; a new clause is
+; one row of `hkeys`. complaints are collected, not raised: `helm check` reports them all.
 (module 'helm
 (borrow 'posix)
 (: hkinds    ['service 'oneshot 'target]
@@ -41,8 +37,7 @@
 
    ; --- reading ---------------------------------------------------------------
    (hslurp path) (uread path @ [1 t] t ())
-   ; text -> [forms torn?]. a dropped paren hides every unit under it, so it is
-   ; answered and not swallowed.
+   ; text -> [forms torn?]. a dropped paren hides every unit under it, so it is answered
    (hforms t)
     (: (go x acc) (sound x @ r
                      (? (two? r)     (go >r (<r . acc))
@@ -85,15 +80,14 @@
    (hnames us) (map (u \ u 'name) us)
 
    ; --- what is wrong with it -------------------------------------------------
-   ; every check answers a list of complaints, and `hcheck` is their concatenation
-   ; in reading order. nothing here raises: a bad config is a report, not a fault.
+   ; every check answers a list of complaints; nothing here raises
    (happend a b) (foldl (l \ x \ (x . l)) b (rev a))
    (hdedup l seen) (atom? l ? (rev seen)
                       (elem <l seen ? (hdedup >l seen) (hdedup >l (<l . seen))))
    (hstrings? l) (atom? l ? 1 (string? <l ? (hstrings? >l) 0))
 
-   ; a cycle in `after` is the one error the supervisor cannot survive: the dep
-   ; walk would never bottom out. answers the name the walk came back to, or ().
+   ; an `after` cycle would keep the dep walk from bottoming out. answers the name the walk
+   ; came back to, or ()
    (hcycle us nm seen)
     (elem nm seen ? nm
        (hby us nm @ u
@@ -130,8 +124,7 @@
                          (foldl (g \ u \ happend g (hcheck1 us u)) () us))))
 
    ; --- the door --------------------------------------------------------------
-   ; path -> [units gripes]. an unreadable file is one gripe and no units, which
-   ; is what a supervisor with nothing to run should say rather than raise.
+   ; path -> [units gripes]. an unreadable file is one gripe and no units
    (hconf path)
     (hslurp path @ t
        (!t ? [() [("cannot read " + path)]]
@@ -142,8 +135,8 @@
              [us (happend <>p (happend torn (hcheck us)))])))
 
    ; --- showing ---------------------------------------------------------------
-   ; a name list is joined; an argv is a command line, so it goes through shword --
-   ; `sh -c "date > f"` laid out with spaces reads as a redirect helm performs
+   ; a name list is joined; an argv goes through sh-show (`sh -c "date > f"` spaced out
+   ; would read as a redirect)
    (hargv-line l) (? (atom? l) "" (atom? >l) <l (<l + " " + hargv-line >l))
    hargv-show (cite 'lush 'sh-show)
    (hunit-line u)

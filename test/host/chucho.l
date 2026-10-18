@@ -1,4 +1,4 @@
-; test/host/chucho.l -- the mail reader, headless: mime, mailboxes, smtp, imap and chucho's steps
+; the mail reader, headless: mime, mailboxes, smtp, imap and chucho's steps
 ; run: cat test/00-init.l test/host/chucho.l | out/love
 
 (borrow 'posix)

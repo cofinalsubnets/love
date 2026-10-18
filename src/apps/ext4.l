@@ -1,7 +1,6 @@
 ; src/apps/ext4.l -- an empty ext4, laid as mke2fs -t ext4 -b 4096 lays one, its uuid, hash
 ; seed and clock given: a journal, flex_bg, 64bit, metadata_csum (crc32c), an orphan file and
-; room to grow (the resize inode). every block mke2fs places is placed by its rules -- the
-; geometry, the flex groups' tables, first-fit from a goal for the rest -- so the bytes are its.
+; room to grow (the resize inode). every block is placed by mke2fs's rules, so the bytes are its.
 ;   (ext4-make nb uuid seed stamp) -> {block bytes ..}, the blocks that are not zero; nb 4K
 ;                                     blocks, uuid and seed 16 bytes, stamp seconds
 ;   (ext4-image blocks nb)         -> the whole image as one string
@@ -187,7 +186,7 @@
        _ (bput img (jr 0 0) (be 3225106840 + be 4 + be 0 + be bs + be jn + be 1 + be 1 + zbytes 20 + uuid + be 1))
 
        ; --- the orphan file: each block a zero table and a tail, its checksum by its own number.
-       ; past 2^21 blocks mke2fs's default is 2 blocks: its size macro, 2 << 20, divides first ---
+       ; past 2^21 blocks mke2fs's default is 2 blocks (its macro divides first) ---
        on (? (nb < 131072) 32 (nb < 2097152) (nb // bs) 2)
        ob (map (k \ newblk 0) ^on)
        _ (foldl (_ \ b \ bput img b (zbytes (bs - 8) + le 185649668 4

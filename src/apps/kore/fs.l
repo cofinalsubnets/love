@@ -389,8 +389,7 @@
          (!e && charm? m ? (chmod q m) 0,
           (!e || (p? && udirp q) ? ok
            (say err ("mkdir: cannot create " + q), put err 10, 0))))
-       (go a ok) (two? a ? (go >a (one <a ok)) (ok ? 0 1))
-       (two? fs ? (go fs 1) (udie 2 "usage: mkdir [-pv] [-m MODE] DIR..")))
+       (two? fs ? (ueach one fs) (udie 2 "usage: mkdir [-pv] [-m MODE] DIR..")))
    (rmdir-main as)
     (: fo (uflags "rmdir" as () "pv")
        t <fo
@@ -436,8 +435,7 @@
            _ (there || t 99 ? () (open q "a" @ p (hot? p ? (close p))))
            e (there || !(t 99) ? (utime q ms))
            (!e ? ok (say err ("touch: cannot touch " + q), put err 10, 0)))
-       (go a ok) (two? a ? (go >a (one <a ok)) (ok ? 0 1))
-       (two? fs ? (go fs 1) (udie 2 "usage: touch [-c] [-r FILE] [-d @SECONDS] FILE..")))
+       (two? fs ? (ueach one fs) (udie 2 "usage: touch [-c] [-r FILE] [-d @SECONDS] FILE..")))
 
    ; -- lift: hand a file outside the machine (the page's downloads, the node runner's
    ; directory) through /proc/lift; where there is none, says so
@@ -592,8 +590,7 @@
              ((want = ()) || (two? (stat want)) ?
               ((say out (face p), put out end), ok)
               (q? ? 0 ((say err ("realpath: " + q + ": No such file or directory"), put err 10), 0))))))
-       (go a ok) (two? a ? (go >a (one <a ok)) (flush out, ok ? 0 1))
-       (go fs 1))
+       (ueach one fs))
 
    ; -- link and unlink: the bare syscalls --
    (link-main as0)

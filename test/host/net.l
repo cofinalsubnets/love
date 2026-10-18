@@ -1,6 +1,5 @@
 ; test/host/net.l -- kore's telnet, telnetd, microcom, nslookup, ping, traceroute and httpd.
 ; a server is a process of its own: a pty read holds this whole process.
-;   cat test/00-init.l test/host/00-host.l test/host/net.l | out/love
 (borrow 'posix)
 ; paths are the pid's own, so two runs over one out/ keep apart
 (: net-dir ("out/.nettest-" + show (getpid 0)))
@@ -32,8 +31,7 @@
    _ (test (send 255 0 = string 255 + string 255) (send 13 1 = "\r\n") (send 97 1 = "a")
            (send 10 0 = "\r\n") (send 13 0 = "") (send 97 0 = "a"))
 
-   ; the client on a pty: the server offers the echo, greets, answers a line and closes,
-   ; leaving what it read in a file
+   ; the client on a pty: the server offers the echo, greets, answers a line, closes
    love <cmdline
    port (test-free 0)
    dir net-dir
@@ -55,12 +53,11 @@
 "),
        close p))
    srv (tether [love sfile])
-   _ (test-until (s \ !(two? s)) (_ \ (stat (dir + "/up"))))   ; its listen, before our connect
+   _ (test-until (s \ !(two? s)) (_ \ (stat (dir + "/up"))))   ; its listen before our connect
    r (tether [love "telnet" "127.0.0.1" (show port)])
    _ (test (two? r))
    m >r
-   ; type only once the greeting is up: by then the echo is taken and the terminal raw
-   ; what the pty has shown up to the first pat, or "" at its end
+   ; type only once the greeting is up (the echo taken, the terminal raw)
    (upto pat t) (see m @ b (b < 0 ? ""
                               (t + string b @ t2 (0 <= fsub t2 pat 0 ? t2 (upto pat t2)))))
    seen (upto "hello" "")
@@ -134,9 +131,8 @@
    (test (got = "ping") (shown = "pong") (<st = 0)
          (0 <= fsub <bad "microcom: -d is not supported" 0) (bad 1 = 1)))
 
-; nslookup against a fake nameserver: box.test's a and aaaa (one address, then an empty yes),
-; nosuch.test NXDOMAIN. ping on the echo socket where allowed, then in a fresh namespace,
-; whose root may open the raw socket the bsds ping through
+; nslookup against a fake nameserver; ping on the echo socket, then in a fresh namespace whose
+; root may open the raw socket the bsds ping through
 (: K (cite 'kore)
    love <cmdline
    dir net-dir
@@ -162,7 +158,7 @@
        close p))
    (run args) (: r (tether (love . args)) t (slurp >r) [t <(h-waitfor <r)])
    srv (tether [love nfile])
-   _ (test-until (s \ !(two? s)) (_ \ (stat (nfile + ".up"))))   ; its bind, before our queries
+   _ (test-until (s \ !(two? s)) (_ \ (stat (nfile + ".up"))))   ; its bind before our queries
    a (run ["nslookup" ("-port=" + show np) "box.test" "127.0.0.1"])
    b (run ["nslookup" ("-port=" + show np) "nosuch.test" "127.0.0.1"])
    _ (slurp >srv, h-waitfor <srv)
@@ -200,9 +196,8 @@
          (K 'ping-ms "1" = 1000) (K 'ping-ms "0.2" = 200) (K 'ping-ms "2.5" = 2500)
          (K 'ping-ms "x" = ()) (K 'ping-t 84000 = "0.084") (K 'ping-t 11331000 = "11.331")))
 
-; traceroute through a router to a target in namespaces, v4 and v6, raw then echo socket:
-; router at hop 1, target at 2, !N with no route. a ping6 first settles neighbour discovery.
-; tr-mark and the loopback trace run everywhere
+; traceroute through a router to a target in namespaces, v4 and v6, raw then echo socket.
+; a ping6 first settles neighbour discovery; tr-mark and the loopback trace run everywhere
 (: K (cite 'kore)
    love <cmdline
    dir net-dir
@@ -280,7 +275,7 @@ kill $R $D
    _ (test (two? g) (<g = 200) (g 2 = "<p>served</p>"))
    _ (still <srv 15)
    _ (h-waitfor <srv)
-   ; a bare port is loopback's alone: 127.0.0.2 reaches every address on linux, not 127.0.0.1
+   ; a bare port binds 127.0.0.1 alone: 127.0.0.2, loopback on linux, misses
    p2 (test-free 0)
    srv2 (tether [love "httpd" "-f" "-p" (show p2) "-h" root])
    (try2 k) (K 'wg-once 0 "127.0.0.1" p2 "/" @ r (? (two? r) r (k < 1) r (rest 50, try2 (k - 1))))
