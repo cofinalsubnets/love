@@ -276,6 +276,17 @@
    (leave J save-loc)
     (prune J save-loc, J 'curs > 0 ? (dvi-pop J save-loc), pin J 'curs (J 'curs - 1))
    (sub-out J b) (b 'type = 1 ? (vlist-out J b) (hlist-out J b))
+   ; leaders of boxes l long over w2 from J's ax, the box's edge at org: ax moved to the first
+   ; box, answering the gap between boxes -- aligned (100), centered (101) or expanded
+   (lead-start J ax org sub l w2)
+    (? (sub = 100)
+        (: s0 (J ax) v1 (org + l * ((J ax - org) // l))
+           (pin J ax (v1 < s0 ? (v1 + l) v1), 0))
+       (: lq (w2 // l) lr (w2 % l)
+          (sub = 101 ? (pin J ax (J ax + lr // 2), 0)
+             (lr // (lq + 1) @ lx
+                (pin J ax (J ax + (lr - (lq - 1) * lx) // 2),
+                 lx)))))
    (hlist-out J box)
     (: gs {'cur 0.0 'g 0}
        save-loc (enter J) base (J 'curv) left (J 'curh)
@@ -321,16 +332,7 @@
                                (lb 'width @ lw
                                   (lw > 0 && wd > 0 ?
                                      (: wd2 (wd + 10) edge (J 'curh + wd2)
-                                        lx (p 'sub = 100 ?
-                                              (: s0 (J 'curh)
-                                                 h1 (left + lw * ((J 'curh - left) // lw))
-                                                 (pin J 'curh (h1 < s0 ? (h1 + lw) h1),
-                                                  0))
-                                              (: lq (wd2 // lw) lr (wd2 % lw)
-                                                 (p 'sub = 101 ? (pin J 'curh (J 'curh + lr // 2), 0)
-                                                    (lr // (lq + 1) @ lx
-                                                       (pin J 'curh (J 'curh + (lr - (lq - 1) * lx) // 2),
-                                                        lx)))))
+                                        lx (lead-start J 'curh left (p 'sub) lw wd2)
                                         (rep k) (J 'curh + lw <= edge ?
                                                  (: _ (pin J 'curv (base + lb 'shift)) _ (synch-v J) sv (J 'dviv)
                                                     _ (synch-h J) sh (J 'dvih)
@@ -374,16 +376,7 @@
                                (lb 'height + lb 'depth @ lh
                                   (lh > 0 && ht > 0 ?
                                      (: ht2 (ht + 10) edge (J 'curv + ht2)
-                                        lx (p 'sub = 100 ?
-                                              (: s0 (J 'curv)
-                                                 v1 (top + lh * ((J 'curv - top) // lh))
-                                                 (pin J 'curv (v1 < s0 ? (v1 + lh) v1),
-                                                  0))
-                                              (: lq (ht2 // lh) lr (ht2 % lh)
-                                                 (p 'sub = 101 ? (pin J 'curv (J 'curv + lr // 2), 0)
-                                                    (lr // (lq + 1) @ lx
-                                                       (pin J 'curv (J 'curv + (lr - (lq - 1) * lx) // 2),
-                                                        lx)))))
+                                        lx (lead-start J 'curv top (p 'sub) lh ht2)
                                         (rep k) (J 'curv + lh <= edge ?
                                                  (: _ (pin J 'curh (left + lb 'shift)) _ (synch-h J) sh (J 'dvih)
                                                     _ (pin J 'curv (J 'curv + lb 'height)) _ (synch-v J) sv (J 'dviv)

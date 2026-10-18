@@ -231,14 +231,14 @@
                     each ^60 (i \ (synth-feed st j, slurp j)),
                     synth-frame st,
                     0))
+ ; the horn, () when there is none, and a feed that keeps it a lead ahead
+ (synth-horn st) (: hn (horn song-rate 2 @ h (nom? h ? () h)) pace (pacer ())
+                    [hn (_ \ (lead-of (pace! pace) @ l (hn ? (song-fill hn l (_ \ (synth-feed st hn))) 0)))])
  (lead-of gap) (int (2.5 * gap * song-rate / 1000.0) @ n
                   (n < synth-lead ? synth-lead (song-lead-max < n ? song-lead-max n)))
  (synth-run o) (: _ (synth-warm ())
    st (synth-new o)
-   hn (horn song-rate 2 @ h (nom? h ? () h))
-   pace (pacer ())
-   (feed _) (lead-of (pace! pace) @ l
-               (hn ? (song-fill hn l (_ \ (synth-feed st hn))) 0))
+   hf (synth-horn st) hn <hf feed <>hf
    (go _) (feed (),
            st 'dirty ? (say out (synth-frame st), flush out, pin st 'dirty 0),
            keys st = 'quit || st 'over ? () (rest 4, go ()))
@@ -252,6 +252,7 @@
                51 0 38 1 52 2 39 3 53 4
                16 0 3 1 17 2 4 3 18 4 19 5 6 6 20 7 7 8 21 9 8 10 22 11 23 12 10 13 24 14
                11 15 25 16 26 17 13 18 27 19}
+ synth-wknobs {15 9 333 -10 331 -11 328 -8 336 -9}   ; tab and the arrows: the keys' knobs
  (synth-hold st k s)
   (: tm (synth-tims st (st 'tim)) at (st 'fpos) d (tm 1)
      f (261.6255653005986 * exp (s * ln2-12))
@@ -276,12 +277,9 @@
         (e = 'size) (pins st 'dirty 1)
         (e != 'down || any (p \ <p = k) (st 'hv)) st
         (k = 1) (pins st 'over 1)
-        (k = 15) (pins st 'tim ((st 'tim + 1) % #(synth-tims st)) 'dirty 1)
-        (k = 333) (prog st 1)
-        (k = 331) (prog st -1)
-        (k = 328) (pins st 'oct (min (st 'oct + 1) synth-octaves) 'dirty 1)
-        (k = 336) (pins st 'oct (max (st 'oct - 1) (0 - synth-octaves)) 'dirty 1)
-        (peep synth-qwerty k () @ o (charm? o ? (synth-hold st k (12.0 * st 'oct + o)) st))))
+        (peep synth-wknobs k () @ c
+           (charm? c ? (synth-step st c)
+              (peep synth-qwerty k () @ o (charm? o ? (synth-hold st k (12.0 * st 'oct + o)) st))))))
  (synth-wframe st)
   (esc + "[H" + esc + "[2J"
    + "synth -- the qwerty rows play while they are held\r\n\r\n"
@@ -316,10 +314,7 @@
   (: _ (synth-warm ()) st (synth-new o)
      win (window-open 640 400 "synth")
      (? !(tablet? win) (say err ("synth: no window (" + show win + ")\n"), flush err, 1)
-        (: hn (horn song-rate 2 @ h (nom? h ? () h))
-           pace (pacer ())
-           (feed _) (lead-of (pace! pace) @ l
-                       (hn ? (song-fill hn l (_ \ (synth-feed st hn))) 0))
+        (: hf (synth-horn st) hn <hf feed <>hf
            (go _) (feed (),
                    each (window-events win) (r \ synth-wstep st r),
                    st 'dirty ? (synth-paint st win, window-show win 0 (window-size win 1), pin st 'dirty 0),
@@ -329,10 +324,7 @@
  synth-usage "usage: love synth [--fm FILE] [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, q leaves)\n       love synth [--fm FILE] -w      (a window: the qwerty rows sound while held)\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
  ; --- the mitty: the keys a stage over a vi stage on the loop's text ---
  (synth-mitty br vi f o) (: _ (synth-warm ()) st (synth-new o)
-   hn (horn song-rate 2 @ h (nom? h ? () h))
-   pace (pacer ())
-   (feed _) (lead-of (pace! pace) @ l
-               (hn ? (song-fill hn l (_ \ (synth-feed st hn))) 0))
+   hf (synth-horn st) hn <hf feed <>hf
    sz (br 'hsize 0) hb (br 'mitty-up <sz <>sz)
    buf (vi 'vi-open f)
    _ (pin buf 'exmore '("send" "play" "stop" "cps"))

@@ -56,7 +56,7 @@
 
  ; --- laying the room: in the middle of the screen, the rest of it outside -----------
  (roost-lay w h n) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'rows h 'cols w 'solid '(0 2 4 5)}
+   d (pins (floor-new w h) 'rows h 'cols w 'solid '(0 2 4 5))
    x0 ((w - room-w) // 2) y0 ((h - room-h) // 2)
    x1 (x0 + room-w - 1) y1 (y0 + room-h - 1)
    _ (each ^room-h $ j \ each ^room-w $ i \ dput d (x0 + i) (y0 + j) $
@@ -150,9 +150,7 @@
  (roost-bar g) (src 'nest-when @ when (fill w-bar [(when (g 'pl 'theirs)) (when (g 'pl 'mine))]))
  (roost-frame g) (: d (g 'd) rows (d 'rows) cols (d 'cols)
    f (:- (slurp j) j (paint (jug 0) d (roost-face g) (g 'msg) (roost-bar g)))
-   sg (g 'sign)
-   (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()),
-    two? sg ? (sign-over f <sg >sg 1 rows cols) f))
+   (sign-frame d f (g 'sign) rows cols))
 
  ; --- the walk: the screen raised, a key a turn, the answer handed back ---------------
  (roost-walk pl) (: ws (ttysize 7 19)

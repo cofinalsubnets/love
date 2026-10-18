@@ -10,6 +10,7 @@
 ;   (window-own win sel text) text held as the selection sel, 'primary or 'clipboard
 ;   (window-ask win sel)      the selection sel asked for: its text comes as [paste s]
 ;   (window-typing win on)    a phone's soft keyboard up or down, and a row of the keys it lacks
+;   (window-wets sc)          the rows of quay screen sc dirty since the last asking (wet clears)
 ;
 ; the records: [down key] [up key] [text s] [press b x y] [release b x y] [move x y]
 ; [size w h] [close] [paste s] [lost sel]. a key is its PS/2 set-1 code (where it sits);
@@ -19,7 +20,7 @@
 ; a tablet of 'w 'h 'paper alone is a law's screenless window: it shows nothing and its
 ; events are its 'evq. off X a selection is the window's own.
 (module '(window window-here? window-open window-paper window-size window-show window-events window-close
-          window-own window-ask window-typing)
+          window-own window-ask window-typing window-wets)
 (borrow 'xwire)
 (borrow 'posix)
 (borrow 'bytes)
@@ -178,6 +179,9 @@
     (win 'how = 'droid ? (: s (win 's) _ (say s ("I" + wrle (on ? 1 0) 1), flush s)
                             (pins win 'row (on ? droid-rowh 0) 'more [['size (win 'w) (win 'H - (on ? droid-rowh 0))]], 0))
        0)
+   (window-wets sc) (: (bits d base i acc) (i < 32 ? (bits d base (i + 1) (d >> i & 1 ? ((base + i) . acc) acc)) acc)
+                       (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
+                       (go 0 ()))
 
    ; --- the selections. off X the window keeps them; on X it owns one, serves it, and
    ;     asks another's owner onto a property of its own ---

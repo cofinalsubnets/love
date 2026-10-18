@@ -112,11 +112,7 @@
            (<cs = 32) (detab >cs (col + 1) ('xsp . acc))
            (detab >cs (col + 1) (32 < <cs && <cs < 127 ? (['c <cs] . acc) (['c 63] . acc))))
        ['hbox () ([['kern (ind + 10 * pt)] ['f tt]] + detab (cps s) 0 ())])
-   (lines s) (: n #s
-                (go i a acc) (? (i >= n) (rev (a < n ? (snip s a n . acc) acc))
-                                (s i = 10) (go (i + 1) (i + 1) (snip s a i . acc))
-                                (go (i + 1) a acc))
-                (go 0 0 ()))
+   (lns s) (#s ? (lines s))                  ; post's lines, but none in ""
    (cell-box J f w al toks)
     (? (al = 'r) ['hbox w (hss . toks)]
        (al = 'c) ['hbox w (hss . toks + [hss])]
@@ -142,7 +138,7 @@
               (#t = 0 ? [] (head 1 [['text (#sec = 0 ? t "\(t)(\(sec))")]] ind)))
      'head (head (b 1) (b 2) ind)
      'para (para rm ind (b 1))
-     'fence ([(skip (3 * pt))] + map (fence-line ind) (lines (b 2)) + [(skip (3 * pt))])
+     'fence ([(skip (3 * pt))] + map (fence-line ind) (lns (b 2)) + [(skip (3 * pt))])
      'quote (blocks J (ind + 20 * pt) (b 1) + [['set 'leftskip (glue0 ind)]])
      'bullets (cats (map (l \ item ind [['f sy] ['c 15] ['f rm]] l) (b 1)))
      'numbers (b 1 @ l (cats (map (k \ item ind (digits (k + 1) + [['c 46]]) (l k)) ^#l)))

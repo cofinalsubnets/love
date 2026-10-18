@@ -6,7 +6,7 @@
 (module (apartment apartment-run apartment-walk apartment-main apartment-new apartment-turn
          apartment-frame apartment-bar apartment-lay apartment-face apartment-stride
          apartment-stir chat chat-key chat-node chat-end chat-book blocks blocks-name
-         cube-w cube-h river-h water-rate water-gap inside? oct-pt stone-lines apartment-song-new apartment-song-feed
+         cube-w cube-h river-h water-rate water-gap inside? stone-lines apartment-song-new apartment-song-feed
          apartment-sfx phrase phrase-gap phrase-ring phrase-slow phrase-every phrase-vary phrase-first
          phrase-echoes drone-voice drone-notes song-chunk npc-glyph bones-glyph)
 (borrow 'posix)
@@ -88,16 +88,10 @@
 
  ; --- laying the plain: grass, eight cubes in an octagon about the middle, the river across
  ; from edge to edge, and a path from each cube to it ---
- ; a point of the octagon, a flat side up: k of eight, clockwise from the right of the top
- ; pair. rx and ry are its reach, across and down
- (oct-pt cx cy rx ry k) (: a (k * 0.7853981633974483 - 1.1780972450961724)
-                           c (cos a) s (sin a)
-                           [(cx + int (rx * c + (0.0 < c ? 0.5 -0.5)))
-                            (cy + int (ry * s + (0.0 < s ? 0.5 -0.5)))])
  ; a cube is [x0 y0 w h pane]: its corner, its size, and the glass cell its path leaves
  ; through. yours is the first, the left of the top pair; the rest follow clockwise
  (apartment-lay w h sb) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'rows h 'cols w 'solid '(6 4)}
+   d (pins (floor-new w h) 'rows h 'cols w 'solid '(6 4))
    _ (each ^(w * h) (i \ pin (d 't) i 1))
    cx (w // 2) cy (h // 2)
    ; the octagon's reach: down, what the plain has room for; across, twice that (a cell is
@@ -109,7 +103,7 @@
    ; a cube at its point, its pane in the wall facing the river; the pairs beside the river
    ; stand off it by river-gap at least
    off (river-h // 2 + 1 + cube-h // 2 + river-gap)
-   (cube-at k) (: j ((k + 7) % 8) pt (oct-pt cx cy rx ry j)
+   (cube-at k) (: j ((k + 7) % 8) pt (oct-at cx cy rx ry j)
                   mx <pt my (elem j '(1 2 5 6) ? (<>pt < cy ? (cy - max off (cy - <>pt)) (cy + max off (<>pt - cy))) <>pt)
                   x0 (mx - cube-w // 2) y0 (my - cube-h // 2)
                   (cube x0 y0,
@@ -177,21 +171,13 @@
     g))
 
  ; --- the talk: the tree's node as a sign, a key as its answer -----------------------
- (chat-node k) (: (go (e . u)) (<e @ ^k e (go u)) (go chat-book))
- ; a choice's line is marked off between the bytes 1 and 2, which fit paints as a button
- (choice-line c) (string 1 + " " + show <c + "  " + c 1 + " " + string 2)
+ (chat-node k) (tree-node chat-book k)
  (chat g k) (: nd (chat-node k) nm (g 'npc 'nm)
-               txt (map (l \ fill l [nm]) (nd 1)) chs (nd 2)
-               ks (map (show * cap) chs)
-               lines (txt + (two? chs ? [""] ()) + map choice-line chs
-                      + ["" (fill chat-foot [(two? chs ? (join ", " ks) "any key")])])
-               (pins g 'talk k 'sign (nm . lines)))
+               (pins g 'talk k 'sign (nm . tree-lines (map (l \ fill l [nm]) (nd 1)) (nd 2) chat-foot)))
  ; a digit picks its choice, anything else at a node with choices shows it again, and a
  ; node without them closes -- and that is the end of the talk
  (chat-key g k) (: nd (chat-node (g 'talk)) chs (nd 2)
-                   (atom? chs ? (chat-end g)
-                    (: c (filter (c \ 48 + <c = k) chs)
-                       (chat g (two? c ? (<c 2) (g 'talk))))))
+                   (atom? chs ? (chat-end g) (chat g (tree-next chs k (g 'talk)))))
  ; the end: the stranger gone, the pane to shards, a drum, the others bones, the grass past
  ; your cube's glass to sand, and the river dry
  (chat-end g) (: d (g 'd) w (d 'w) c (d 'cube)
@@ -237,7 +223,7 @@
  (apartment-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
    wet (g 'desert ? sk (d 'flow (d 'phase + water-rate * g 'wt) 0.0))
    ents (filter tablet? (g 'p . (g 'npc) . g 'ms))
-   spot (foldl (t \ e \ pin t (e 'x + w * e 'y) e) {} ents)
+   spot (mob-spots w ents)
    (ramp-of t) (t @ 1 grass-ramp 2 sand-ramp 3 path-ramp 4 water-ramp 5 bed-ramp 8 (g 'desert ? bed-ramp water-ramp) ())
    ; the ground is slop's skin as half blocks; what stands on it stands on the lower half
    (skin-of rp) (rp = water-ramp ? wet sk)
@@ -254,9 +240,7 @@
  (apartment-bar g) (fill w-bar [(g 'desert ? "the desert" "the plain") (g 'tn)])
  (apartment-frame g) (: d (g 'd) rows (d 'rows) cols (d 'cols)
    f (:- (slurp j) j (paint (jug 0) d (apartment-face g) (g 'msg) (apartment-bar g)))
-   sg (g 'sign)
-   (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()),
-    two? sg ? (sign-over f <sg >sg 1 rows cols) f))
+   (sign-frame d f (g 'sign) rows cols))
 
  ; --- the song: a chunk at a time. a music-box phrase (g a c, a quarter tone flat, semitones
  ; from middle c) every so many seconds at an octave the die picks, lower slower and longer,

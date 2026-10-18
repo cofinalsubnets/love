@@ -153,33 +153,33 @@ spectrum, q quits."
         ("  " + cats (map (i \ (? (i = i0) ((gone ? faint bold) o "●") (a <= i <= b) (ink o "━")
                                   (i = mid) (sgr "2" "┃") (sgr "2" "─"))) ^n))))
 
+   ; the spectrum over n columns: the bin of cents c (-1 when off), the first bin of a column
+   ; i and the one past its last, and its loudest bin on a scale of 0..m
+   (bands t n on c)
+    (: sp (t 'spec) (b0 i) (i * bins // n) (b1 i) (max (b0 i + 1) ((i + 1) * bins // n))
+       [(on ? (floor (c / 100.0 + 0.5) - 24) -1) b0 b1
+        (i \ m \ max 0 (min m (int ((foldl max -999.0 (take (b1 i - b0 i) (drop (b0 i) sp)) + 60.0) / 60.0 * m + 0.5))))])
    ; the spectrum across n columns, four rows of eighth blocks over -60..0 dBFS and a row of
    ; octave Cs; a column takes the loudest of its bins, the reading's column bold
    blocks [" " "▁" "▂" "▃" "▄" "▅" "▆" "▇" "█"]
    (strip t n on c)
-    (: sp (t 'spec) pb (on ? (floor (c / 100.0 + 0.5) - 24) -1)
-       (b0 i) (i * bins // n) (b1 i) (max (b0 i + 1) ((i + 1) * bins // n))
-       (lev i) (foldl max -999.0 (take (b1 i - b0 i) (drop (b0 i) sp)))
-       cols (map (i \ [(b0 i // 12 + 1) (b0 i <= pb && pb < b1 i)
-                       (max 0 (min 32 (int ((lev i + 60.0) / 60.0 * 32.0 + 0.5))))]) ^n)
+    (bands t n on c @ [pb b0 b1 lev]
+    (: cols (map (i \ [(b0 i // 12 + 1) (b0 i <= pb && pb < b1 i) (lev i 32)]) ^n)
        (bar r) ("  " + cats (map ([o me e] \ (max 0 (min 8 (e - 8 * (3 - r))) @ k
                                    (k = 0 ? " " ((me ? bold ink) o (blocks k))))) cols))
        (lab i acc) (i >= n ? (cats (rev acc))
                       ((b1 i - 1) // 12 @ o (b0 i <= 12 * o && i + 2 <= n
                          ? (lab (i + 2) (ink (o + 1) ("C" + show (o + 1)) . acc))
                          (lab (i + 1) (" " . acc)))))
-       (map bar ^4 + [("  " + lab 0 ())]))
+       (map bar ^4 + [("  " + lab 0 ())])))
    ; the spectrum on its side, n rows from B7 down to C1, bars bw cells long
    ticks ["" "▏" "▎" "▍" "▌" "▋" "▊" "▉"]
    (column t n bw on c)
-    (: sp (t 'spec) pb (on ? (floor (c / 100.0 + 0.5) - 24) -1)
-       (b0 i) (i * bins // n) (b1 i) (max (b0 i + 1) ((i + 1) * bins // n))
-       (lev i) (foldl max -999.0 (take (b1 i - b0 i) (drop (b0 i) sp)))
-       (one i) (: o (b0 i // 12 + 1) cb (12 * ((b1 i - 1) // 12))
-                  e (max 0 (min (8 * bw) (int ((lev i + 60.0) / 60.0 * 8.0 * bw + 0.5))))
+    (bands t n on c @ [pb b0 b1 lev]
+    (: (one i) (: o (b0 i // 12 + 1) cb (12 * ((b1 i - 1) // 12)) e (lev i (8 * bw))
                   lab (b0 i <= cb && (i = 0 || b1 (i - 1) <= cb) ? (ink (cb // 12 + 1) (pad ("C" + show (cb // 12 + 1)) 3)) "   ")
                   (lab + ((b0 i <= pb && pb < b1 i ? bold ink) o (cats (map (_ \ "█") ^(e // 8)) + ticks (e % 8)))))
-       (map (r \ one (n - 1 - r)) ^n))
+       (map (r \ one (n - 1 - r)) ^n)))
    ; a row's width as the screen shows it, and the row filled out to n with spaces
    (wide s) (tuner-plain s @ p (net (map (b \ b & 192 != 128) (chars p))))
    (fill s n) (s + pad "" (n - wide s))
@@ -207,9 +207,6 @@ spectrum, q quits."
 
    ; --- a window's stage: each frame scribed into a quay screen, its dirty rows dyed onto
    ;     the paper, 8 by 16 a cell ---
-   (wets sc) (: (bits d base i acc) (i < 32 ? (bits d base (i + 1) (d >> i & 1 ? ((base + i) . acc) acc)) acc)
-                (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
-                (go 0 ()))
    (glass t)
     (window-open 640 480 "tuner" @ wd
      (? !(tablet? wd) (say err "tuner: no window (\(wd))\n", 1)
@@ -225,7 +222,7 @@ spectrum, q quits."
                         ['down 1] (pin t 'over 1) ['close] (pin t 'over 1) 0)
        (show _) (: sc (gx ()) r (gaze sc 1) c (gaze sc 2) p (window-paper wd) W <(window-size wd)
                    _ (scribe sc (paint t c r))
-                   ys (wets sc @ d (gx 'all ? (pin gx 'all 0, ^r) d))
+                   ys (window-wets sc @ d (gx 'all ? (pin gx 'all 0, ^r) d))
                    (two? ys ? (each ys (y \ dye sc p W y -1 ()), window-show wd (16 * foldl min <ys ys) (16 * foldl max <ys ys + 16)) 0))
        (go _) (each (window-events wd) event, show 0, t 'over ? 0 (rest 50, go 0))
        (go 0))

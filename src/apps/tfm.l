@@ -88,8 +88,8 @@
     (: lh (h 'lh) cs 24 ds 28 sc 32 fam 72 rw 92
        ((12 <= lh ?
            (check-bcpl st sc 40,
-            (? (11 <= b st sc && snip (string (st 't)) (sc + 1) (sc + 12) = "TEX MATH SY") (pin st 'ft 1)
-               (11 <= b st sc && snip (string (st 't)) (sc + 1) (sc + 12) = "TEX MATH EX") (pin st 'ft 2)),
+            (11 <= b st sc ? (snip (string (st 't)) (sc + 1) (sc + 12) @ m
+                                (? (m = "TEX MATH SY") (pin st 'ft 1) (m = "TEX MATH EX") (pin st 'ft 2)))),
             (17 <= lh ?
                (left st, out st "FAMILY", check-bcpl st fam 20, out-bcpl st fam, right st,
                 (18 <= lh ?
@@ -223,21 +223,23 @@
                   go (i + 1)))
        (go 0))
    ; one step of the program at i; answers its first byte's address
+   ; a step's next character at k + 1 vetted, the boundary char let by
+   (step-next st h k what)
+    (none? st h (b st (k + 1)) && b st (k + 1) != st 'bchar ?
+       (bad-char st what (b st (k + 1)), bset st (k + 1) (h 'bc)))
    (out-step st h i)
     (: k (lstep h i) nl (h 'nl)
        ((? (128 < b st k)
            (nl <= 256 * b st (k + 2) + b st (k + 3) ?
               (bad st "Ligature unconditional stop command address is too big."))
            (128 <= b st (k + 2))
-            (: _ (none? st h (b st (k + 1)) && b st (k + 1) != st 'bchar ?
-                    (bad-char st "Kern step for" (b st (k + 1)), bset st (k + 1) (h 'bc)))
+            (: _ (step-next st h k "Kern step for")
                _ (left st) _ (out st "KRN") _ (out-char st (b st (k + 1)))
                r (256 * (b st (k + 2) - 128) + b st (k + 3))
                ((h 'nk <= r ? (bad st "Kern index too large.", out st " R 0.0")
                    (out-fix st (4 * (h 'kern + r)))),
                 right st))
-           (: _ (none? st h (b st (k + 1)) && b st (k + 1) != st 'bchar ?
-                   (bad-char st "Ligature step for" (b st (k + 1)), bset st (k + 1) (h 'bc)))
+           (: _ (step-next st h k "Ligature step for")
               _ (none? st h (b st (k + 3)) ?
                    (bad-char st "Ligature step produces the" (b st (k + 3)), bset st (k + 3) (h 'bc)))
               _ (left st)

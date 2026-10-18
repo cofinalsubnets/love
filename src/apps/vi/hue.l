@@ -98,13 +98,16 @@
    ; the word lanes' class, or () when none claims the token
    (hue-word bk t) (tablet? bk ? (bk t) ())
 
+   ; a run [k a b] onto acc, when keep and the run is not empty
+   (hue-emit keep acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+
    ; --- the lexer -------------------------------------------------------------
    ; (hue-lex bk s in keep) answers [runs out]: runs [class from to), to exclusive, and the
    ; string state at eol: 0 code, 1 in a string, a raw text's quote count. keep gates the emit
    ; only, so hue-carry is this same walk -- one scanner, never two
    (hue-lex bk s in keep)
     (: n #s
-       (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+       emit (hue-emit keep)
        (tend i) (n <= i || hue-term? (s i) ? i (tend (i + 1)))
        (srun i) (i < n && hue-sig? (s i) ? (srun (i + 1)) i)
        ; glued: the run touches a datum start; at eol a trailing run is dyadic

@@ -70,27 +70,16 @@
 
    ; --- the exchange, the server's half of client.l's ssh-dial ---
    sd-kexs ["curve25519-sha256" "curve25519-sha256@libssh.org" "kex-strict-s-v00@openssh.com"]
-   (sd-kexinit _) (u8 20 + rnd 16 + names sd-kexs + names ["ssh-ed25519"] + names [cipher] + names [cipher]
-                  + names ["hmac-sha2-256"] + names ["hmac-sha2-256"] + names ["none"] + names ["none"]
-                  + names [] + names [] + u8 0 + u32 0)
-   ; the client's lists against ours -> a reason string, or the strict flag
-   (sd-agree ic)
-    (: c (cur ic) _ (g-skip c 17)
-       kx (g-names c) hk (g-names c) cs (g-names c) sc (g-names c)
-       (? !(elem "curve25519-sha256" kx || elem "curve25519-sha256@libssh.org" kx)
-          ("no common key exchange; the client offers " + join "," kx)
-          (nelem "ssh-ed25519" hk) ("no common host key type; the client takes " + join "," hk)
-          !(elem cipher cs && elem cipher sc) ("no common cipher; the client offers " + join "," cs)
-          (elem "kex-strict-c-v00@openssh.com" kx)))
    ; versions, kexinits, the ecdh reply signed by the host key, newkeys each way, and the
    ; userauth service -> 1 | a reason string. our send key is kd "D", the client's "C"
    (sd-hello t hk)
     (: _ (wr t (vsd + "\r\n"))
        vc (server-version t)
-       is (sd-kexinit 0)
+       is (kexinit sd-kexs)
        _ (ssh-send t is)
        ic (string? vc ? (expect t 20) ())
-       ok (? !(string? vc) "no version line" !(string? ic) "no kexinit" (sd-agree ic))
+       ok (? !(string? vc) "no version line" !(string? ic) "no kexinit"
+             (agree ic "client" "no common host key type; the client takes " "kex-strict-c-v00@openssh.com"))
        (string? ok ? ok
           (: _ (pin t 'strict ok)                          ; strict kex (ssh-next)
              e (expect t 30)
@@ -105,15 +94,7 @@
                          h (sha (sstr vc + sstr vsd + sstr ic + sstr is + sstr ks + sstr qc + sstr qs + kk))
                          _ (ssh-send t (u8 31 + sstr ks + sstr qs + sstr (sstr "ssh-ed25519" + sstr (ed-sign hs hp h))))
                          _ (pin t 'sid h)
-                         (kd x) (sha (kk + h + x + h) @ k1 (k1 + sha (kk + h + k1)))
-                         (pair k) [(snip k 0 32) (snip k 32 64)]
-                         _ (ssh-send t (u8 21))
-                         _ (pin t 'ck (pair (kd "D")))
-                         _ (ok ? (pin t 'sseq 0) 0)
-                         nk (expect t 21)
-                         _ (pin t 'sk (pair (kd "C")))
-                         _ (ok ? (pin t 'rseq 0) 0)
-                         _ (pin t 'strict 0)
+                         nk (newkeys t kk h ok "D" "C")
                          sr (string? nk ? (expect t 5) ())
                          sv (string? sr ? (cur sr @ c2 (g-skip c2 1, g-str c2)) "")
                          (? !(string? nk) "no newkeys"

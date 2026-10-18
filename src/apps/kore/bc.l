@@ -146,10 +146,6 @@
    bc-ops '("&&" "||" "==" "!=" "<=" ">=" "++" "--" "+=" "-=" "*=" "/=" "%="
             "^=" "+" "-" "*" "/" "%" "^" "=" "<" ">" "!" "(" ")" "[" "]" "{"
             "}" "," ";")
-   (bc-op-at s n k)                            ; -> [text next] | ()
-    (: (has t) (#t @ m (k + m <= n && t = snip s k (k + m)))
-       (try (w . u)) (has w ? [w (k + #w)] (try u))
-       (try bc-ops))
    ; GNU's print escapes; a backslash before anything else drops both charms
    (bc-esc c) (c @ 110 10  116 9  114 13  97 7  98 8  102 12  113 34  92 92  -1)
    (bc-strlit s n i)                           ; past the quote -> [text next]
@@ -193,7 +189,7 @@
                 (: e (wd k)
                    w (snip src k e)
                    (go e ((elem w bc-kws ? ['kw w] ['name w]) . acc)))
-               (bc-op-at src n k @ [w j] (go j (['op w] . acc))
+               (aw-op-in bc-ops src n k @ [w j] (go j (['op w] . acc))
                  (bc-syn ("unexpected character " + string c))))))
        (go 0 ()))
    ; a numeral is its own value when it is one figure -- `ibase=2; 9` is 9, not

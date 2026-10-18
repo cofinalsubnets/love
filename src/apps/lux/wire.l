@@ -91,14 +91,15 @@
    (x-border s win px)                                                           ; ConfigureWindow border-width
     (x-w8 s 12, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w16 s 16, x-w16 s 0, x-w32 s px)
 
-   ; --- InternAtom; also the redirect sync point ---
-   (x-intern s nm)
+   ; a request of op on win alone, or on the name nm, flushed -> its reply
+   (x-query s op win) (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s, x-reply s)
+   (x-query-name s op nm)
     (: n #nm
-       _ (x-w8 s 16, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) / 4),
-          x-w16 s n, x-w16 s 0, x-wname s nm,
-          (: (go i) (i < x-pad4 n ? (put s 0, go (i + 1))) (go 0)),
-          x-flush s)
-       hdr (x-reply s) (<hdr = 1 ? (u32 hdr 8)))                                 ; () on an error
+       (x-w8 s op, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) / 4),
+        x-w16 s n, x-w16 s 0, x-wpad s nm, x-flush s, x-reply s))
+
+   ; --- InternAtom; also the redirect sync point ---
+   (x-intern s nm) (x-query-name s 16 nm @ hdr (<hdr = 1 ? (u32 hdr 8)))           ; () on an error
 
    ; --- GetProperty -> (format nitems bytes) ---
    (x-getprop s win prop)
@@ -124,8 +125,7 @@
 
    ; --- GetGeometry -> (x y w h) ---
    (x-getgeom s win)
-    (: _ (x-w8 s 14, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)
-       hdr (x-reply s)
+    (: hdr (x-query s 14 win)
        (? !(<hdr = 1) '(0 0 1 1)                                                 ; window died
           [(u16 hdr 12) (u16 hdr 14) (u16 hdr 16) (u16 hdr 18)]))
    (x-raise s win) (x-w8 s 12, x-w8 s 0, x-w16 s 4, x-w32 s win,                 ; stackMode=Above
@@ -139,9 +139,8 @@
         x-w8 s 33, x-w8 s 32, x-w16 s 0, x-w32 s win, x-w32 s pr,
         x-w32 s dl, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-w32 s 0))
    (x-confnotify s win)                                                          ; ICCCM 4.1.5: an overruled ConfigureRequest still gets
-    (: _ (x-w8 s 14, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)                ; a synthetic ConfigureNotify with the real geometry
-       hdr (x-reply s)                                                           ; (VTE sizes its grid off it)
-       (? !(<hdr = 1) 0
+    (: hdr (x-query s 14 win)                                                     ; a synthetic ConfigureNotify with the real geometry
+       (? !(<hdr = 1) 0                                                          ; (VTE sizes its grid off it)
           (: gx (u16 hdr 12) gy (u16 hdr 14) gw (u16 hdr 16) gh (u16 hdr 18) bw (u16 hdr 20)
              (x-w8 s 25, x-w8 s 0, x-w16 s 11, x-w32 s win, x-w32 s 131072,
               x-w8 s 22, x-w8 s 0, x-w16 s 0, x-w32 s win, x-w32 s win,
@@ -163,22 +162,19 @@
    (x-warp s win x y) (x-w8 s 41, x-w8 s 0, x-w16 s 6, x-w32 s 0, x-w32 s win,
                        x-w16 s 0, x-w16 s 0, x-w16 s 0, x-w16 s 0, x-w16 s x, x-w16 s y)
    (x-queryptr s win)                                                            ; QueryPointer -> the pointer's root (x y)
-    (: _ (x-w8 s 38, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)
-       hdr (x-reply s)
+    (: hdr (x-query s 38 win)
        (<hdr = 1 ? [(i16 hdr 16) (i16 hdr 18)] '(0 0)))
 
    ; --- at startup adopt windows mapped before the redirect, and restart survivors ---
    (x-querytree s win)
-    (: _ (x-w8 s 15, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)
-       hdr (x-reply s)
+    (: hdr (x-query s 15 win)
        ; presence rides out of band: [1 windows], or () when the query failed --
        ; QueryTree on the root cannot fail legitimately, so () means a garbled reply
        (? !(<hdr = 1) ()
           (: n (u16 hdr 16) bytes (x-rbytes s (u32 hdr 4 * 4))
              [1 (take n (x-atoms-of bytes))])))
    (x-attrs s win)                                                               ; -> (map-state override-redirect); 2 = IsViewable
-    (: _ (x-w8 s 3, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)
-       hdr (x-reply s)
+    (: hdr (x-query s 3 win)
        (? !(<hdr = 1) '(0 1)                                                    ; window died: unmanageable
           (x-rbytes s (u32 hdr 4 * 4),                                          ; drain the reply data
            [(hdr 26) (hdr 27)])))
@@ -193,13 +189,7 @@
    ; --- RandR 1.5: the monitors are the screens ---
    (i16 l off) (u16 l off @ v (v < 32768 ? v (v - 65536)))
    (x-queryext s nm)                                                            ; -> (major-opcode first-event) | ()
-    (: n #nm
-       _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) / 4),
-          x-w16 s n, x-w16 s 0, x-wname s nm,
-          (: (go i) (i < x-pad4 n ? (put s 0, go (i + 1))) (go 0)),
-          x-flush s)
-       hdr (x-reply s)
-       (<hdr = 1 && hdr 8 ? [(hdr 9) (hdr 10)]))
+    (x-query-name s 98 nm @ hdr (<hdr = 1 && hdr 8 ? [(hdr 9) (hdr 10)]))
    (x-randr-init s root)
     (x-queryext s "RANDR" @ ext
        (!ext ? ()
@@ -220,10 +210,11 @@
              (go 0 0))))
 
    ; --- keyboard ---
+   (x-kbmap s mink nkc)                                                         ; GetKeyboardMapping's request -> its reply
+    (x-w8 s 101, x-w8 s 0, x-w16 s 2, x-w8 s mink, x-w8 s nkc, x-w16 s 0, x-flush s, x-reply s)
    (x-keymap s mink maxk syms)                                                   ; syms: the keysyms to locate
     (: nkc (1 + (maxk - mink))
-       _ (x-w8 s 101, x-w8 s 0, x-w16 s 2, x-w8 s mink, x-w8 s nkc, x-w16 s 0, x-flush s)
-       hdr (x-reply s)
+       hdr (x-kbmap s mink nkc)
        ; an error reply must not be read as keysyms: it would desync the connection
        ; for good. 0 keysyms = "no chords"
        kpc (<hdr = 1 ? (hdr 1) 0)
@@ -337,8 +328,7 @@
    ; keycode -> [sym shifted-sym], the whole table once (GetKeyboardMapping)
    (x-keysyms s mink maxk)
     (: nkc (maxk - mink + 1)
-       _ (x-w8 s 101, x-w8 s 0, x-w16 s 2, x-w8 s mink, x-w8 s nkc, x-w16 s 0, x-flush s)
-       hdr (x-reply s)
+       hdr (x-kbmap s mink nkc)
        kpc (<hdr = 1 ? (hdr 1) 0)
        km (tablet 256)
        (go k) (k < nkc && 0 < kpc ?                                                ; an error reply carries no table

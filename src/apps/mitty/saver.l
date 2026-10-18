@@ -120,28 +120,32 @@
       each (st 'moon) (m \ cv-put cv <m (m 1) hb (m 2) (m 3)),
       cv-text cv (r - 1) (max 0 ((c - #cap) // 2)) (snip cap 0 c) 244 sky))
 
+ ; a cell's upper half on the grid of 2r by c, row major, and its lower c on: st's 'up and
+ ; 'lo, and the cells drawn as pens's colours of v there
+ (half-ups r c) (: n (r * c) ((iota n // c) * (2 * c) + iota n % c))
+ (pens-halves cv st pens v dv)
+  (: fg (peep pens (peep v (st 'up) 0) dv) bg (peep pens (peep v (st 'lo) 0) dv) d (cv 'b)
+     (each ^(cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
+
  ; --- slop: slop-drift, the slop's skin, on half cells in slop's own ramp ---
  slop-drift (cite 'slop 'slop-drift)
  ramp (star-tray [#(cite 'slop 'slop-ramp)] (cite 'slop 'slop-ramp))
  ; each cell's upper and lower sample, as flat indices into the field's 2r by c
  (slop-new r c seed p sty)
-  (: n (r * c) up ((iota n // c) * (2 * c) + iota n % c)
+  (: up (half-ups r c)
      {'f (slop-drift r c) 'up up 'lo (up + c)})
  ; the skin's [-4 4] onto the ramp's 24 steps at a calmer clock; the pens are two gathers
  (slop-draw st cv t)
   (: fl (st 'f)
      k (int ((fl (t * 0.0005) 0 + 4.001) * 2.9))
-     fg (peep ramp (peep k (st 'up) 0) 220)
-     bg (peep ramp (peep k (st 'lo) 0) 220)
-     d (cv 'b)
-     (each ^(cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
+     (pens-halves cv st ramp k 220))
 
  ; --- life: conway's, on a torus of half cells, each cell's age its green ---
  (life-new r c seed p sty)
   (: h (2 * r) w c n (h * w)
      ys (iota n // w) xs (iota n % w)
      (nb dy dx) ((ys + dy + h) % h * w + (xs + dx + w) % w)
-     up ((iota (r * c) // c) * (2 * c) + iota (r * c) % c)
+     up (half-ups r c)
      {'n n 'seed seed 'gen 0 't 0 'same 0 'pop -1 'up up 'lo (up + c)
       'nbs [(nb -1 -1) (nb -1 0) (nb -1 1) (nb 0 -1) (nb 0 1) (nb 1 -1) (nb 1 0) (nb 1 1)]
       'age (life-seed n seed)})
@@ -165,11 +169,7 @@
   (: want (t * life-gps // 1000)
      (owed k) (? (k < 3 && st 't < want) (: _ (life-step st) _ (pin st 't (st 't + 1)) (owed (k + 1))) 0)
      _ (owed 0)
-     a (st 'age)
-     fg (peep life-pens (peep a (st 'up) 0) sky)
-     bg (peep life-pens (peep a (st 'lo) 0) sky)
-     d (cv 'b)
-     (each ^(cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
+     (pens-halves cv st life-pens (st 'age) sky))
 
  ; --- matrix: green rain, each column a drop of its own speed, length and gap, a pure
  ; function of the column, the row and the clock ---

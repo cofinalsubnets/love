@@ -269,8 +269,8 @@
 ; --- the expr floor (expr.l): values are texts, numeric where wanted; division truncates ---
 (: (e as) (<(ex-parse 0 as))
    (test
-      (ex-num "42" = '(1 42)) (ex-num "-7" = '(1 -7)) !(ex-num "12a") !(ex-num "")
-      !(ex-num "-") (ex-num "0" = '(1 0))
+      (t-int "42" = '(1 42)) (t-int "-7" = '(1 -7)) !(t-int "12a") !(t-int "")
+      !(t-int "-") (t-int "0" = '(1 0))
       (ex-true? "1") (ex-true? "a") !(ex-true? "0") !(ex-true? "")
       (ex-arith "/" "-7" "2" = "-3") (ex-arith "%" "-7" "2" = "-1")       ; C's truncation
       (ex-arith "/" "7" "-2" = "-3") (ex-arith "%" "7" "-2" = "1")

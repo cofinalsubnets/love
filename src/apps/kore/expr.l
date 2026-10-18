@@ -8,22 +8,14 @@
    ; the operators by level, loosest first; the walk below indexes this list by depth
    ex-ops '(("|") ("&") ("<" "<=" "=" "==" "!=" ">=" ">") ("+" "-") ("*" "/" "%") (":"))
    (ex-die m) (udie 2 ("expr: " + m))
-   ; a whole-number text -> (1 n) | (). a leading - belongs to the number and nothing
-   ; else does: expr has no unary minus, so "-3" is a numeral and "- 3" is a syntax error
-   (ex-num s)
-    (: n #s
-       neg (0 < n ? (s 0 = 45) 0)
-       st (neg ? 1 0)
-       (go k acc) (n <= k ? [1 acc]
-                   (s k @ c (c < 48 || 57 < c ? ()
-                             (go (k + 1) (10 * acc + c - 48)))))
-       (n <= st ? () (go st 0 @ r (two? r ? [1 (neg ? (0 - <>r) <>r)]))))
+   ; a whole-number text -> (1 n) | () is test's t-int: a leading - belongs to the number and
+   ; nothing else does. expr has no unary minus, so "-3" is a numeral and "- 3" is a syntax error
    (ex-true? v) (!(v = "") && !(v = "0"))
    (ex-bool b) (b ? "1" "0")
    ; division truncates toward zero, the remainder wears the dividend's sign (C's rule and
    ; expr's), computed on magnitudes with the sign put back
    (ex-arith op a b)
-    (: x (ex-num a) y (ex-num b)
+    (: x (t-int a) y (t-int b)
        _ (two? x && two? y ? () (ex-die "non-integer argument"))
        p <>x q <>y
        _ ((op = "/" || op = "%") && q = 0 ? (ex-die "division by zero"))
@@ -32,7 +24,7 @@
        (show (? (op = "+") (p + q) (op = "-") (p - q) (op = "*") (p * q)
                 (op = "/") tq (p - tq * q))))
    (ex-cmp op a b)
-    (: x (ex-num a) y (ex-num b)
+    (: x (t-int a) y (t-int b)
        both (two? x && two? y)
        lt (both ? (<>x < <>y) (a < b))
        eq (both ? (<>x = <>y) (a = b))
@@ -63,7 +55,7 @@
    ; substr S pos len: 1-based, and every way of falling outside answers the empty text
    (ex-substr s ps ls)
     (: n #s
-       x (ex-num ps) y (ex-num ls)
+       x (t-int ps) y (t-int ls)
        p (two? x ? <>x 0) l (two? y ? <>y 0)
        st (p - 1)
        en (st + l)

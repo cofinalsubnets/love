@@ -75,7 +75,7 @@
 
    (hues-cl sp s in keep)
     (: n #s kw (sp 'kw) qs (sp 'q) ln (sp 'ln)
-       (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+       emit (hue-emit keep)
        lead (hues-skip s 0)
        (cm i a acc)
         (hues-find s i "*/" @ j
@@ -114,7 +114,7 @@
    ; `name:` in a segment no { ends. carry: 0 or 2 by mode, plus 1 inside /* */
    (hues-css s in keep)
     (: n #s
-       (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+       emit (hue-emit keep)
        (cm i a acc m)
         (hues-find s i "*/" @ j
          (n <= j ? [(rev (emit acc 'comment a n)) (m + 1)] (w (j + 2) (emit acc 'comment a (j + 2)) m)))
@@ -159,7 +159,7 @@
     (hues-run s i (c \ hues-idc? c || c = 35) @ j (i < j && j < #s && s j = 59 ? (j + 1)))
    (hues-html s in keep)
     (: n #s
-       (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+       emit (hue-emit keep)
        (txt i acc)
         (n <= i ? [(rev acc) 0]
            (: c (s i) d (i + 1 < n ? (s (i + 1)) 0)
@@ -210,7 +210,7 @@
    (hues-sh s in keep) (hues-shx () s in keep)
    (hues-shx mk s in keep)
     (: n #s
-       (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+       emit (hue-emit keep)
        (brk? c) (elem c " \t;|&()<>`")
        (wstart? i) (i < 1 || brk? (s (i - 1)))
        (out hd) (string? hd ? hd 0)
@@ -282,7 +282,7 @@
    (hues-mk s in keep)
     (0 < #s && s 0 = 9 ? [<(hues-shx 1 s 0 keep) 0]
        (: n #s
-          (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+          emit (hue-emit keep)
           (rest i acc)
            (n <= i ? [(rev acc) 0] (s i @
             92 (rest (i + 2) acc)
@@ -302,7 +302,7 @@
    ; a string before a : is a key. jsonc's // comments too; nothing spans lines
    (hues-json s in keep)
     (:- (w 0 ()) n #s
-     (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+     emit (hue-emit keep)
      (w i acc)
       (n <= i ? [(rev acc) 0]
          (s i @ c
@@ -345,7 +345,7 @@
        (n < e ? n e))
    (hues-roff s in keep)
     (: n #s
-       (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+       emit (hue-emit keep)
        (w i acc q)
         (n <= i ? [(rev acc) 0]
            (s i @ c
@@ -379,7 +379,7 @@
           ()))
    (hues-asm s in keep)
     (: n #s
-       (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+       emit (hue-emit keep)
        lead (hues-skip s 0)
        (cm i a acc hd)
         (hues-find s i "*/" @ j
@@ -443,7 +443,7 @@
    ; inner] inside a fence
    (hues-md sub s in keep)
     (: n #s
-       (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+       emit (hue-emit keep)
        lead (hues-skip s 0)
        (fence i) (: c (i < n ? (s i) 0) j (hues-run s i (b \ b = c))
                     ((c = 96 || c = 126) && 2 < j - i ? [c (j - i) j]))
