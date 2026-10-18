@@ -257,14 +257,9 @@ static struct str *inf_cask(word x) {
  return s && s->len == sizeof(struct inf_st) && ((struct inf_st*) s->bytes)->magic == IS_MAGIC ? s : NULL; }
 
 static love_noinline struct g *host_inflate_new(struct g *g) {
- uintptr_t sreq = str_width(sizeof(struct inf_st)), breq = Width(struct cask) + Width(struct tag);
- if (!ok(g = have(g, sreq + breq))) return g;
- struct str *s = ini_str(bump(g, sreq), sizeof(struct inf_st));
- memset(s->bytes, 0, sizeof(struct inf_st));
- ((struct inf_st*) s->bytes)->magic = IS_MAGIC;
- union u *k = bump(g, breq);
- cask(k)->ap = lvm_cask, cask(k)->str = s;
- tagthread(k, Width(struct cask));
+ union u *k = new_cask(&g, sizeof(struct inf_st), sizeof(struct inf_st));
+ if (!k) return g;
+ ((struct inf_st*) cask(k)->str->bytes)->magic = IS_MAGIC;
  return g->sp[0] = word(k), g; }
 
 static love_noinline struct g *host_inflate_feed(struct g *g) {
