@@ -201,3 +201,11 @@
    (? G (test ((gzsp-n ['\ 'keep [': '(emit acc k a b) '(keep && a < b ? ([k a b] . acc) acc) '(lx s n i acc) gzsp-body 'lx]])
               = gzsp-n ['\ 'keep [': '(mk-emit kp) '(\ acc k a b (kp && a < b ? ([k a b] . acc) acc)) 'emit '(mk-emit keep) '(lx s n i acc) gzsp-body 'lx]]))
       0))
+; a deopt reruns a group from its entry: a cask written blind reruns the same, one written after a read of
+; itself need not, so the group check takes the first and refuses the second -- answering, never a miss
+(: G (cite 'glaze)
+   (? G (: R (G 'jgir-rerun-ok?)
+           (gzro d) (trap (_ \ R d) 0 (a \ _ \ 'scared))
+           (test (1 = gzro [(['f 'c 'i 'n] . '(? (= i n) c (f (pin c i 65) (+ i 1) n)))])
+                 (0 = gzro [(['f 'c 'i 'n] . '(? (= i n) c (f (pin c i (+ 1 (peep c i))) (+ i 1) n)))])))
+      0))
