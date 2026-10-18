@@ -1,63 +1,38 @@
-; scan -- find one byte in a text, natively where that is possible. love's own walk
-; costs ~684 instructions a byte (a call, an index, a compare, a tail); the kernel
-; below costs 1.876, which is 364x, and every tool that reads lines or matches a
-; pattern spends most of its life in exactly this loop.
-;
-; the glaze does not reach this code: auto.l's lanes recognise integer-arithmetic
-; leaves, counted loops, recursive arithmetic groups and float grids, so string work
-; falls to the plain interpreter -- LOVE_NO_GLAZE moves `kore grep` by 0.02% while it
-; moves a numeric loop by 4.5x. a hand-written kernel is the only way in.
+; scan -- find one byte in a text, natively where possible. love's own walk costs
+; ~684 instructions a byte, the kernel below ~1.9; the glaze's lanes leave string
+; work to the interpreter, so a hand-written kernel is the only way in.
 ;
 ; eight bytes a step: (w - ones) & ~w & highs is nonzero exactly when some byte of w
 ; is zero, so xor'ing the text with the needle in all eight lanes turns "is this byte
-; the needle" into "is this byte zero". a hit inside a word falls to the byte loop,
-; which is at most eight more steps.
+; the needle" into "is this byte zero". a hit inside a word falls to the byte loop.
 ;
-; built on first use, not at a module binding -- and the reason is the registry,
-; not the bake. this module's text is evaluated inside the boot's own module registry
-; (src/love/cats.c), which runs before the boot says (borrow 'holo): assembling there takes
-; the whole registry down with it, and the symptom is a bare ";; no-module bao", the
-; first module anyone asks for afterwards. so the assemble and the install both wait
-; for a caller. one holo run and one arena blob per process, and never again.
+; built on first use, not at a module binding: this text runs inside the boot's module
+; registry, before (borrow 'holo), and assembling there takes the registry down.
+; one holo run and one arena blob per process.
 ;
-; and the blob names no address of the binary. natives ride the image now, so this
-; kernel can be carried into a bake and woken under another base -- which is sound
-; only because the string-kind guard loads its sentinel from g's reach rather than
-; wearing an li of (apof ""). that is glaze.l's `reach` law and it binds here too.
+; the blob names no address of the binary, so it survives a bake woken under another
+; base: the string-kind guard loads its sentinel from g's reach (glaze.l's `reach` law).
 (module 'scan
 (:
-   ; the honest answer, and the differential oracle the laws hold the kernel to.
-   ; it is also the engine wherever the kernel cannot be built -- inle declines the
-   ; install (its heap rides an NX window), and so does wasm
+   ; the twin: the oracle the laws hold the kernel to, and the engine wherever it can't be built
    (walk s c i) (: n #s (go k) (n <= k ? -1 (s k = c ? k (go (k + 1)))) (go (i < 0 ? 0 i)))
 
    ones 72340172838076673                        ; 0x0101010101010101
-   ; highs is ones << 7 (0x8080808080808080), shifted rather than written: as a
-   ; literal it needs all 64 bits, and a tagged fixnum holds 62 -- so the spelled
-   ; constant is a bignum, which is not what `li` wants
+   ; highs is ones << 7, shifted rather than written: as a literal it is a bignum,
+   ; which `li` does not take
    ;
-   ; the ABI is spelled nowhere below. the lvm ops are tail-called C functions of
-   ; (g, Ip, Hp, Sp), so the four roles sit wherever the platform's own convention
-   ; puts the first four arguments -- and only Hp (r2) lands in the same abstract
-   ; register on both. r1 is Sp on x64 and Ip on a64, so a kernel that writes
-   ; its registers out cannot move: assembled for the other target it would read its
-   ; arguments off the instruction pointer. sc is the scratch and is here for the
-   ; same reason -- r0 is free on x64 and is `g` on a64.
+   ; lvm ops are C functions of (g, Ip, Hp, Sp), so the roles sit in each target's
+   ; argument registers and differ between x64 and a64: never spell them below
    ;                            g   ip  sp  scratch
    (abi tgt) (tgt @ 'a64 '(r0 r1 r3 r4) '(r6 r5 r1 r0))
-   ; r7..r14 are free of the ABI on both and are spelled: r7 = the charm, r8 = the
-   ; cursor, r9 = the bytes, r10 = n, r11 = the charm in all eight lanes, r12 = ones,
-   ; r13 = highs, r14 = ~w. r11..r14 are callee-saved on x64 (x86's r12..r15) so
-   ; they are pushed; on a64 they are caller-saved and the pushes are merely idle.
-   ; the guards deopt before any push, so the machine sp is balanced on every way
-   ; out -- and a64's push is `str s, [sp, #-16]!`, which keeps sp 16-aligned
+   ; r7 = the charm, r8 = the cursor, r9 = the bytes, r10 = n, r11 = the charm in all
+   ; eight lanes, r12 = ones, r13 = highs, r14 = ~w. r11..r14 are callee-saved on x64,
+   ; so pushed; the guards deopt before any push, so sp balances on every way out
    (scan-ir tgt)
     (: rg (abi tgt) G <rg IP <>rg SP <>>rg SC <>>>rg
        ([['ld SC SP 0] ['test SC 1] '(br ne deopt)               ; Sp[0] a pointer ...
           ['ld 'r7 SC 0]
-          ; the string kind off g's reach (slot 1), never an li of (apof ""):
-          ; that is a C code address, and a blob that names one is not the same
-          ; bytes under another base. glaze.l's `reach` law, and the same reason
+          ; the string kind off g's reach (slot 1), never an li of (apof "")
           ['ld 'r8 G (reach-offset 0 + 8)]
           '(cmp r7 r8) '(br ne deopt)]                            ; ... of string kind
         + [['ld SC SP 8] ['test SC 1] '(br eq deopt)]             ; Sp[1] a charm
@@ -98,16 +73,14 @@
         + ['(label deopt) ['ld 'r7 IP 8] ['lea IP 'r7 16]         ; arity >= 2: Ip <- the twin
            ['ld 'r7 IP 0] '(jmpr r7)]))
 
-   ; build it, or answer the twin. `nif` hands the twin back itself when it declines
-   ; (inle's heap rides an NX window; so does wasm), so no fallback is arranged here
+   ; build it, or answer the twin. `nif` hands the twin back when it declines (inle, wasm)
    (mk _) (: h (cite 'holo) g (cite 'glaze)
              (!h || !g || !(elem love-arch '(x64 a64)) ? walk
                 (: bs (peep (h 'assemble love-arch (scan-ir love-arch)) 'bytes 0)
                    (g 'nif (cask bs) walk 3))))
-   box {}                                ; one install for the process, not one per ask
-   ; (scanner ()) -> (f s c i), answering the index of charm c at-or-after i, or -1.
-   ; a caller with many texts asks once and holds f: this is a tablet read, which is
-   ; ~1000 instructions, and belongs outside any loop
+   box {}                                ; one install for the process
+   ; (scanner ()) -> (f s c i), the index of charm c at-or-after i, or -1.
+   ; ask once and hold f: this is a tablet read, outside any loop
    (scanner _) (peep box 'k 'none @ k (k @- k 'none (mk () @ k2 (pin box 'k k2, k2))))
 )
 

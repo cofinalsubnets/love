@@ -1,7 +1,6 @@
-; decode -- x86-64 machine code back to the parsed instruction of src/love/holo/dialect.l: the
-; bytes-to-text half of the x86 lens. what as.l and x64.l emit, what gcc's output uses, and the
-; kernel's system lane all read back; anything else lands as a `.byte` item, one byte at a time,
-; so a stream never scares and always resynchronises. the showers then print either dialect.
+; decode -- x86-64 machine code back to dialect.l's parsed instruction, for either shower to
+; print. an opcode not known here lands as a `.byte` item, one byte at a time, so a stream never
+; scares and always resynchronises.
 ;
 ;   (x64-decode s i)         one instruction at byte offset i of the string s -> (n . items):
 ;                            its length and its items (one, or a prefix item -- lock, rep -- first)
@@ -13,15 +12,14 @@
 ; a decoded operand is the value's: (rg enc w), (im n), (mem base index scale disp), a rip form
 ; (rip () disp) with no symbol, a branch target (lbl n) as a number, a memory operand under a
 ; segment override as (seg fs o). the operand size w is the instruction's, 0 where the value
-; keeps none (branches, the SSE lane with no GPR) -- the same reading the text readers make, so
-; decode and att-read agree on the bytes as.l lays (test/holo/decode.l holds both laws).
+; keeps none (branches, the SSE lane with no GPR) -- the reading att-read makes of the same text.
 
 (module 'holo
-(: ;; --- bytes and fields: reads past the end answer 0, and `fin` refuses the instruction ---
+(: ;; a read past the end answers 0; `fin` then refuses the instruction
    (dc-at s k) (k < #s ? (s k) 0)
    (dc-le s i n) (foldl (\ a k (a + (dc-at s (i + k) << 8 * k))) 0 ^n)
    (dc-sx v n) (1 << 8 * n - 1 @ m (v >= m ? (v - (m << 1)) v))
-   (dc-imm s i n) (dc-sx (dc-le s i n) n)                     ; a signed immediate of n bytes
+   (dc-imm s i n) (dc-sx (dc-le s i n) n)
    dc-hexd "0123456789abcdef"
    (dc-hex2 b) ("0x" + string (dc-hexd (b >> 4)) + string (dc-hexd (b & 15)))
    (dc-byte b) ['dir ".byte" (dc-hex2 b)]
@@ -53,8 +51,8 @@
    ;; the value's w: the GPR operand's width, else 0 (the SSE lane, branches)
    (dc-vw wr wm) (? (wr < 16) wr (wm < 16) wm 0)
 
-   ;; --- modrm at k, the register field at width wr and the r/m at wm (16 = xmm): ---
-   ;;     -> [k2 reg-operand rm-operand digit], a memory operand wrapped by any segment override
+   ;; modrm at k, the reg field at width wr and the r/m at wm (16 = xmm) -> [k2 reg rm digit],
+   ;; a memory operand wrapped by any segment override
    (dc-modrm s k p wr wm)
     (: m (dc-at s k) md (m >> 6) dg (m >> 3 & 7) rm (m & 7)
        rexp (pf p 'rex) bx (pf p 'b) xx (pf p 'x)
@@ -74,7 +72,7 @@
           (: dn (md @ 1 1 2 4 0) d (dn @ 0 0 (dc-imm s (k + 1) dn))
              [(k + 1 + dn) reg (wrap ['mem (rm | bx << 3) -1 1 d]) dg])))
 
-   ;; --- the prefixes, then the opcode ---
+   ;; the prefixes, then the opcode
    (x64-decode s i)
     (:- (go i {}) n #s (go j p)
      (j >= n ? (1 . [(dc-byte (dc-at s i))])
@@ -162,7 +160,7 @@
                  mn (c @ 217 (r 3 @ 5 'fldcw 7 'fnstcw ()) 219 (r 3 @ 0 'fildl ())
                          221 (r 3 @ 4 'frstor 6 'fnsave 7 'fnstsw ()) (r 3 @ 0 'filds 5 'fildll ()))
                  (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (fin k [(dc-byte c)]))))
-          ;; the string ops, Intel's names (the at&T shower respells movsd's)
+          ;; the string ops, Intel's names (the AT&T shower respells movsd's)
           164 (nil 'movsb)  165 (nil (w @ 2 'movsw 8 'movsq 'movsd))
           166 (nil 'cmpsb)  167 (nil (w @ 2 'cmpsw 8 'cmpsq 'cmpsd))
           170 (nil 'stosb)  171 (nil (w @ 2 'stosw 8 'stosq 'stosd))
@@ -203,7 +201,7 @@
           15 (dc-0f s i j p)
           (fin k [(dc-byte c)])))
 
-   ;; --- the 0F map: the system lane, cmov/jcc/setcc, the extends, and SSE under its prefixes ---
+   ;; the 0F map: the system lane, cmov/jcc/setcc, the extends, and SSE under its prefixes
    (dc-0f s i j p)
     (: n #s k (j + 1) c (dc-at s k) k2 (k + 1)
        px (? (pf p 'repne) 'f2 (pf p 'rep) 'f3 (pf p 'opsz) '66 'none)       ; the SSE mandatory prefix
@@ -341,7 +339,7 @@
           194 (dc-modrm s k2 p 16 16 @ r (finx (r 0 + 1) [(op1 (lane "cmp") 0 [(r 1) (r 2) ['im (dc-at s (r 0))]])]))
           (bad 0)))
 
-   ;; --- the stream: every instruction with its offset, targets made absolute ---
+   ;; every instruction with its offset, targets made absolute
    (dc-abs base off n o)
     (<o @- o
      'lbl (charm? <>o ? ['lbl (<>o + base)] o)
@@ -354,9 +352,9 @@
       (: r (x64-decode s off) ln <r
          its (map (it \ (<it = 'op ? ['op (it 1) (it 2) (map (o \ dc-abs base off ln o) (it 3))] it)) >r)
        (go (off + ln) ([off ln its] . acc)))))
-   ;; a target inside the stream, on an instruction boundary, becomes the symbol L<addr> and a
-   ;; label row is laid there; a rip form keeps its address as (rip L<addr> 0). base is the one
-   ;; x64-disasm read the rows at, so a row's address is its offset past it
+   ;; a target on an instruction boundary becomes the symbol L<addr>, with a label row laid
+   ;; there; a rip form becomes (rip L<addr> 0). base is where x64-disasm read the rows, so a
+   ;; row's address is its offset past it
    (x64-relabel rows base)
     (: starts (foldl (t \ r \ pin t (<r + base) 1) {} rows)
        (sym a) (name ("L" + show a))

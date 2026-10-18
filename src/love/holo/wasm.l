@@ -1,10 +1,6 @@
-; wasm -- the module writer: a WebAssembly binary off love data, the container half of the
-; browser lane (rung 0). not a holo backend: a module has no
-; addresses, so lay/resolve never see it. what is here is the leaf encoders (LEB128, names,
-; vectors, sections), the opcode table with each op's immediate shape, and one whole-module
-; emitter over a tablet. the law: the ALU is i64 and the memory is 64-bit (memory64), so an
-; address is an i64 and a data segment's offset is an i64.const. an f64 constant arrives as
-; its bit pattern (gen.l's fbits) -- no float encoding lives here.
+; wasm -- a WebAssembly module writer over a tablet. not a holo backend: a module has no
+; addresses, so lay/resolve never see it. the ALU is i64 and memory is memory64 by default, so
+; an address is an i64 and a data offset an i64.const. a float constant arrives as its bits.
 ;
 ; a module tablet:
 ;   'types   (((params) (results)) ..)          valtypes: i32 i64 f32 f64
@@ -18,39 +14,37 @@
 ;   'data    ((off byte ..) ..)                 active segments in memory 0
 ;   'start   funcidx
 ;   'mem64   1                                  0 asks the wasm32 shape (i32 offsets, i32.const data offsets)
-; an instruction form is (op imm ..): (i64.const 5) (local.get 0) (block i64) (br_table (1 0) 2)
-; (i64.load align offset) (call_indirect typeidx tableidx) (f64.const bits) -- the table below
-; names each op's shape. functions, types, tables, memories and globals are indices, imports first.
+;   'names   ((funcidx name) ..)                the "name" section, so a trap's stack names functions
+; an instruction form is (op imm ..): (i64.const 5) (block i64) (br_table (1 0) 2)
+; (i64.load align offset) (call_indirect typeidx tableidx). indices count imports first.
 
 (module 'holo
 (borrow 'posix)
-(: ;; -- LEB128. unsigned rides // and % so a u64 past the fixnum stays exact; signed stops
-   ;;    when the rest is the sign's own extension and the byte's bit 6 agrees. --
+(: ;; LEB128: unsigned rides // and % so a u64 past the fixnum stays exact; signed stops
+   ;; when the rest is the sign's extension and the byte's bit 6 agrees
    (uleb n) (: b (n % 128) r (n // 128) (r @ 0 [b] (b + 128 . uleb r)))
    (sleb n) (: m (n % 128) b (m < 0 ? (m + 128) m) r ((n - b) // 128)
                (r = 0 && b < 64 || r = -1 && b >= 64 ? [b] (b + 128 . sleb r)))
    (wrap32 n) (n > 2147483647 ? (n - 4294967296) n)
-   (wbytes s) (map s ^#s)                 ; a string's bytes
+   (wbytes s) (map s ^#s)
    (wname s) (uleb #s + wbytes s)
    (wvec items) (uleb #items + catall items)   ; items: a list of byte lists
-   ;; the big lanes are strings, never a cons per byte: a section, a function's entry, the
-   ;; data segment. a byte list is coerced where it meets one; a jug joins many
+   ;; sections, function entries and data are strings, never a cons per byte; a byte list
+   ;; is coerced where it meets one
    (wstr x) (? (string? x) x (two? x) (string x) "")
    (wcat strs) (jug 0 @ j (map (x \ (string? x && say j x)) strs, slurp j))
    (wvecs items) (wcat ((string (uleb #items)) . map wstr items))   ; items: strings or byte lists
    (wsect id bs) (wstr bs @ b (string (id . (uleb #b)) + b))
 
-   ;; -- the types --
    wasm-vt {'i32 127 'i64 126 'f32 125 'f64 124 'funcref 112}
    (vt t) (look wasm-vt t 'bad-valtype)
    (blocktype x) (? (x = ()) [64] (x = 'void) [64] (nom? x) [(vt x)] (sleb x))   ; a valtype, or a type index
    wasm-kind {'func 0 'table 1 'memory 2 'global 3}
    (kind k) (look wasm-kind k 'bad-kind)
 
-   ;; -- the opcode table: op -> (code shape). code is a byte or, past the 0xfc prefix, the bytes;
-   ;;    the shape names the immediates: n none, u one index, bt a blocktype, brt (labels) default,
-   ;;    mem align offset, i32c/i64c a signed constant, f32c/f64c a bit pattern, ci type table,
-   ;;    m0 the memory index byte. --
+   ;; op -> (code shape). code is a byte, or a byte list past the 0xfc prefix. shape: n none,
+   ;; u one index, bt a blocktype, brt (labels) default, mem align offset, i32c/i64c a signed
+   ;; constant, f32c/f64c a bit pattern, ci type table, m0 the memory index byte
    wasm-rows
     '((unreachable 0 n) (nop 1 n) (block 2 bt) (loop 3 bt) (if 4 bt) (else 5 n) (end 11 n)
      (br 12 u) (br_if 13 u) (br_table 14 brt) (return 15 n) (call 16 u) (call_indirect 17 ci)
@@ -103,7 +97,6 @@
      (memory.copy (252 10 0 0) n) (memory.fill (252 11 0) n))
    wasm-ops (foldl (t \ a . u \ pin t a u) {} wasm-rows)
 
-   ;; -- one instruction form -> its bytes --
    (wins f)
     (: r (wasm-ops <f)
        g <>f
@@ -124,7 +117,6 @@
               (scare 'bad-wasm-shape <f)))
    (wexpr body) (catmap wins body + [11])           ; a body or an init expression, ended
 
-   ;; -- the module --
    (wlimits l is64) (two? >l + (is64 ? 4 0) . uleb <l + (two? >l && uleb <>l))
    (wfunctype t) (96 . wvec (map (x \ [(vt x)]) <t) + wvec (map (x \ [(vt x)]) <>t))
    (wdesc d is64)
@@ -141,8 +133,7 @@
                 (string (uleb #e) + e))
    (wdata d is64) (: bs (wstr >d)                             ; (off byte ..), or (off . string)
                      (string (0 . (wexpr [[(is64 ? 'i64.const 'i32.const) <d]] + uleb #bs)) + bs))
-   ;; presence is two?, never nil?: nil? is the falsy test, a net over the whole value, and a
-   ;; body carrying the minimum i64 nets negative -- a section would vanish in silence
+   ;; presence is two?, never nil?: a body carrying a large negative constant nets falsy
    (wsection id items f) (two? items && wsect id (wvecs (map f items)))
    (wasm-emit m)
     (: is64 (peep m 'mem64 1)
@@ -161,7 +152,7 @@
          (two? elem && wsect 9 (wvec [(0 . wexpr '((i32.const 0)) + wvec (map uleb elem))]))
          (wsection 10 (m 'funcs) wcode)
          (wsection 11 (m 'data) (d \ wdata d is64))
-         (: ns (m 'names)                   ; the "name" custom section: a trap's stack names its function
+         (: ns (m 'names)
             (two? ns ?
              (wvec (map (m . n . _ \ uleb m + wname n) ns) @ fm
                 (wsect 0 (wname "name" + (1 . uleb #fm + fm))))))]))
