@@ -544,6 +544,20 @@
                 (call main)
                 (pop r6)
                 (ret))
+   ; dyld's exe enters by lc_main as main(argc, argv, envp, apple) on an aligned stack;
+   ; argv still points into the kernel's block, so argc is the word below it
+   crt0-macmain '((lea r6 r5 -8)
+                  (and sp sp -16)
+                  (li r5 4)
+                  (call __love_start)
+                  (mov r6 r0) (li r0 33554433) (sys)
+                  (label __love_start)
+                  (push r6)
+                  (lea r5 r6 8)
+                  (ld r6 r6 0)
+                  (call main)
+                  (pop r6)
+                  (ret))
    ; the i386 entry: argc at [esp], the vector's address and what ebx says of the kernel handed to
    ; __love_start as cdecl arguments with esp 16-aligned at the call, then exit_group 252 (exit 1,
    ; a BSD's, if it returns)
@@ -958,7 +972,7 @@
        runs (charm? dorg ? [['at org 'text 'rodata 'nifs]
                             ['copy dorg 'data 'bss]]
                            [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (mac? ? crt0-macos (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+       c9 (mac? ? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
        all (arm? || so ? srcs
                    (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
