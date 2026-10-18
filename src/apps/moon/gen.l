@@ -9016,6 +9016,8 @@
 
    ; -- the inline lane: a small (or always_inline) fn splices its body at the call site, each arg in
    ; a fresh 8-byte temp, each return into r0 then a jump to the splice's end label --
+   ; an always_inline body splices without its canary: the caller's frame is the one guarded
+   (sspcut x) (? !(two? x) x (<x == 'ssp) '(nop) (map sspcut x))
    (noinl? x) (? (elem x '(sdecl goto lbl vastart varr ssp)) 1   ; varr: a VLA's slots ride cgfn's per-fn prescan; ssp its canary cell
                  (atom? x) ()
                  (x @ ('call _ as && 6 < tally as) 1 ()) 1     ; an overflow-arg call moves sp -- splicing it bars the caller's unframe
@@ -11121,13 +11123,14 @@
                           (<f = 'fn && nelem <>f weaks && empty? (f 3) ? (pin (g 'nopf) <>f 1) 0),
                           ; ..and one that is a single `return E`, for kcall to answer where E is one constant
                           (<f = 'fn && nelem <>f weaks ? ((f 3) @ ('blk . is . _) (two? is && !(two? >is) && <<is = 'ret && two? >(<is) ? (pin (g 'fnret) <>f <>(<is)) 0) 0) 0),
-                          <f = 'fn && !nolin &&
-                          nelem <>f weaks &&
-                          nelem <>f noinls &&
-                          inlok? g f (sigs <>f) (elem <>f ainls) ?
-                            ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
-                             (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
-                             pin (g 'inl) <>f f),
+                          (<f = 'fn && !nolin &&
+                           nelem <>f weaks &&
+                           nelem <>f noinls ?
+                             ((elem <>f ainls ? (sspcut f) f) @ fi
+                                (inlok? g fi (sigs <>f) (elem <>f ainls) ?
+                                   ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
+                                    (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
+                                    pin (g 'inl) <>f fi) 0)) 0),
                           recfns >fs)))
        _ (recfns <>ast)
        _ (: (go ns) (!(two? ns) ? 1 (pin (g 'fns) <ns 1, go >ns))
