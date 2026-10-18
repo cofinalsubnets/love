@@ -426,7 +426,7 @@ lvm(lvm_natp) {
  word x = Sp[0];
  union u *k = evenp(x) ? cell(x) : NULL, *e = k && k->ap == lvm_cur ? k + 2 : k;
  int nat = e && (code_in(g, (uintptr_t)(e->ap == lvm_lazy ? k[-1].ap : e->ap))
-                 || (e->ap == lvm_deferfwd && k[-1].ap == lvm_deferfwd));   // a deferred one that declined: its twin still at value[1]
+                 || ((e->ap == lvm_deferfwd || e->ap == lvm_firstcall) && k[-1].ap == e->ap));   // a deferred one, declined or not called yet: its twin still at value[1]
  love_musttail return Answer(putcharm(nat)); }
 // (arena 0) -> [mapped bumped free spans]: the code arena's bytes and its free list's length
 lvm(lvm_arena) {
@@ -613,6 +613,16 @@ static lvm(lvm_casknew) {
  cask(k)->str = s;
  tagthread(k, Width(struct cask));
  love_musttail return Answer(word(k)); }
+
+union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear) {
+ uintptr_t sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
+ struct g *g = *gp = have(*gp, sreq + breq);
+ if (!ok(g)) return NULL;
+ struct str *s = ini_str(bump(g, sreq), n);
+ memset(s->bytes, 0, clear);
+ union u *k = bump(g, breq);
+ cask(k)->ap = lvm_cask, cask(k)->str = s;
+ return tagthread(k, Width(struct cask)); }
 
 // tell the I-cache about fresh code; wasm has no arena and no intrinsic, so a site never asks directly
 #ifdef __wasm__

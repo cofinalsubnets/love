@@ -486,92 +486,42 @@ static lvm(lvm_bsdsum) {
 
 // crc32 (IEEE 802.3, reflected 0xedb88320), sliced by eight. the tables are built on first
 // call, idempotent: a second thread needs only the flag to land after the table (cksum's too)
-static uint32_t crc_t[8][256];
-static int crc_ready;
+static uint32_t crc_t[8][256], crcc_t[8][256];
+static int crc_ready, crcc_ready;
 
-static void crc_init(void) {
+// a reflected crc's eight tables: table k is table 0 shifted k bytes on
+static void crc_tables(uint32_t t[8][256], uint32_t poly) {
  unsigned i, k;
  for (i = 0; i < 256; i++) {
   uint32_t c = i;
-  for (k = 0; k < 8; k++) c = (c & 1) ? (c >> 1) ^ 0xedb88320 : c >> 1;
-  crc_t[0][i] = c; }
- for (i = 0; i < 256; i++) {                    // table k is table 0 shifted k bytes on
-  uint32_t c = crc_t[0][i];
-  for (k = 1; k < 8; k++) { c = crc_t[0][c & 0xff] ^ (c >> 8); crc_t[k][i] = c; } }
- crc_ready = 1; }
+  for (k = 0; k < 8; k++) c = (c & 1) ? (c >> 1) ^ poly : c >> 1;
+  t[0][i] = c; }
+ for (i = 0; i < 256; i++) {
+  uint32_t c = t[0][i];
+  for (k = 1; k < 8; k++) { c = t[0][c & 0xff] ^ (c >> 8); t[k][i] = c; } } }
+
+static love_noinline uint32_t crc_walk(uint32_t const t[8][256], uint32_t c, const uint8_t *p, uintptr_t n) {
+ for (; n >= 8; p += 8, n -= 8) {
+  uint32_t a = c ^ ld32le(p), b = ld32le(p + 4);
+  c = t[7][a & 0xff] ^ t[6][(a >> 8) & 0xff]
+    ^ t[5][(a >> 16) & 0xff] ^ t[4][a >> 24]
+    ^ t[3][b & 0xff] ^ t[2][(b >> 8) & 0xff]
+    ^ t[1][(b >> 16) & 0xff] ^ t[0][b >> 24]; }
+ for (; n; p++, n--) c = t[0][(c ^ *p) & 0xff] ^ (c >> 8);
+ return c; }
 
 // the callers complement c on the way in and out
 static uint32_t crc32_run(uint32_t c, const uint8_t *p, uintptr_t n) {
- if (!crc_ready) crc_init();
- for (; n >= 8; p += 8, n -= 8) {
-  uint32_t a = c ^ ld32le(p), b = ld32le(p + 4);
-  c = crc_t[7][a & 0xff] ^ crc_t[6][(a >> 8) & 0xff]
-    ^ crc_t[5][(a >> 16) & 0xff] ^ crc_t[4][a >> 24]
-    ^ crc_t[3][b & 0xff] ^ crc_t[2][(b >> 8) & 0xff]
-    ^ crc_t[1][(b >> 16) & 0xff] ^ crc_t[0][b >> 24]; }
- for (; n; p++, n--) c = crc_t[0][(c ^ *p) & 0xff] ^ (c >> 8);
- return c; }
-
-static uint32_t crc32_of(const uint8_t *p, uintptr_t n) { return ~crc32_run(0xffffffff, p, n); }
-uint32_t crc32(unsigned char const *p, uintptr_t n) { return crc32_of(p, n); }
-
-static love_inline struct g *host_crc32(struct g *g) {
- if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- { struct str *s = (struct str*) g->sp[0];
-   g->sp[0] = putcharm(crc32_of((const uint8_t*) s->bytes, (uintptr_t) s->len)); }
- return g; }
-static lvm(lvm_crc32) {
- LvmCall(g, host_crc32) }
-
-static lvm(lvm_crc32_on) {
- word c = Sp[0], x = Sp[1];
- if (!charmp(c) || !strp(x)) Sp[1] = ZeroPoint;
- else {
-  struct str *s = (struct str*) x;
-  Sp[1] = putcharm(~crc32_run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
- love_musttail return Nextp(1, 1); }
+ if (!crc_ready) crc_tables(crc_t, 0xedb88320), crc_ready = 1;
+ return crc_walk(crc_t, c, p, n); }
 
 // crc32c (castagnoli, reflected 0x82f63b78): crc32's walk, held to love's by test/digest.l
-static uint32_t crcc_t[8][256];
-static int crcc_ready;
-
-static void crcc_init(void) {
- unsigned i, k;
- for (i = 0; i < 256; i++) {
-  uint32_t c = i;
-  for (k = 0; k < 8; k++) c = (c & 1) ? (c >> 1) ^ 0x82f63b78 : c >> 1;
-  crcc_t[0][i] = c; }
- for (i = 0; i < 256; i++) {
-  uint32_t c = crcc_t[0][i];
-  for (k = 1; k < 8; k++) { c = crcc_t[0][c & 0xff] ^ (c >> 8); crcc_t[k][i] = c; } }
- crcc_ready = 1; }
-
 static uint32_t crc32c_run(uint32_t c, const uint8_t *p, uintptr_t n) {
- if (!crcc_ready) crcc_init();
- for (; n >= 8; p += 8, n -= 8) {
-  uint32_t a = c ^ ld32le(p), b = ld32le(p + 4);
-  c = crcc_t[7][a & 0xff] ^ crcc_t[6][(a >> 8) & 0xff]
-    ^ crcc_t[5][(a >> 16) & 0xff] ^ crcc_t[4][a >> 24]
-    ^ crcc_t[3][b & 0xff] ^ crcc_t[2][(b >> 8) & 0xff]
-    ^ crcc_t[1][(b >> 16) & 0xff] ^ crcc_t[0][b >> 24]; }
- for (; n; p++, n--) c = crcc_t[0][(c ^ *p) & 0xff] ^ (c >> 8);
- return c; }
+ if (!crcc_ready) crc_tables(crcc_t, 0x82f63b78), crcc_ready = 1;
+ return crc_walk(crcc_t, c, p, n); }
 
-static love_inline struct g *host_crc32c(struct g *g) {
- if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- { struct str *s = (struct str*) g->sp[0];
-   g->sp[0] = putcharm(~crc32c_run(0xffffffff, (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
- return g; }
-static lvm(lvm_crc32c) {
- LvmCall(g, host_crc32c) }
-
-static lvm(lvm_crc32c_on) {
- word c = Sp[0], x = Sp[1];
- if (!charmp(c) || !strp(x)) Sp[1] = ZeroPoint;
- else {
-  struct str *s = (struct str*) x;
-  Sp[1] = putcharm(~crc32c_run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
- love_musttail return Nextp(1, 1); }
+static uint32_t crc32c_of(const uint8_t *p, uintptr_t n) { return ~crc32c_run(0xffffffff, p, n); }
+uint32_t crc32(unsigned char const *p, uintptr_t n) { return ~crc32_run(0xffffffff, p, n); }
 
 // adler32 (RFC 1950): 5552 bytes is the most before a sum could pass 32 bits, so the modulus waits
 static uint32_t adler_run(const uint8_t *p, uintptr_t n) {
@@ -583,13 +533,20 @@ static uint32_t adler_run(const uint8_t *p, uintptr_t n) {
   a %= 65521, b %= 65521; }
  return b << 16 | a; }
 
-static love_inline struct g *host_adler32(struct g *g) {
+static love_inline struct g *host_sum(struct g *g, uint32_t (*sum)(const uint8_t*, uintptr_t)) {
  if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- { struct str *s = (struct str*) g->sp[0];
-   g->sp[0] = putcharm(adler_run((const uint8_t*) s->bytes, (uintptr_t) s->len)); }
- return g; }
-static lvm(lvm_adler32) {
- LvmCall(g, host_adler32) }
+ struct str *s = (struct str*) g->sp[0];
+ return g->sp[0] = putcharm(sum((const uint8_t*) s->bytes, (uintptr_t) s->len)), g; }
+static lvm(lvm_crc32) { LvmCall(g, host_sum, crc32) }
+static lvm(lvm_crc32c) { LvmCall(g, host_sum, crc32c_of) }
+static lvm(lvm_adler32) { LvmCall(g, host_sum, adler_run) }
+
+static love_inline word crc_on(word c, word x, uint32_t (*run)(uint32_t, const uint8_t*, uintptr_t)) {
+ if (!charmp(c) || !strp(x)) return ZeroPoint;
+ struct str *s = (struct str*) x;
+ return putcharm(~run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
+static lvm(lvm_crc32_on) { Sp[1] = crc_on(Sp[0], Sp[1], crc32_run); love_musttail return Nextp(1, 1); }
+static lvm(lvm_crc32c_on) { Sp[1] = crc_on(Sp[0], Sp[1], crc32c_run); love_musttail return Nextp(1, 1); }
 
 // cksum (POSIX, unreflected 0x04c11db7, seed 0): the byte count goes through the walk after
 // the message, low byte first, so the empty file is 4294967295. ck_bit is the tables' only source

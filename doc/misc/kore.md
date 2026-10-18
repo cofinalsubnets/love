@@ -12,7 +12,7 @@ worst of those absences by running the flags rather than reading the list — `s
 `-n` and `ls` no `-l`, each reading the flag as a filename — and both now carry a matrix
 against GNU (`test/kore/sort.sh`, `test/kore/ls.sh`) inside `make test_kore`.
 
-kore is love's unix userland, and the verb for it: busybox's multi-call trick done natively.
+kore is love's unix userland: busybox's multi-call trick done natively, each tool a verb of love.
 The love-native POSIX environment over the Linux kernel is kernel + a static `love` + .l
 files, and kore is its coreutils and more — sh, make, vi, cc, nc, the archives. How it
 compares to busybox, toybox, GNU and uutils, name by name, is the census at the foot.
@@ -23,11 +23,10 @@ ONE roster — `$(korefiles)` in the Makefile: kore_head (kore's own toolboxes, 
 src/apps/vi/, src/apps/tui.l, src/apps/dns.l, src/apps/nc.l, the lush files, src/apps/cook.l), the holo linker
 files, kore_arc (gz.l tar.l cpio.l) and kore_net (the tls stack, wget.l, www.l and net.l). The
 crew rides IN the default binary's own image, so the
-build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a four-line sh
-shim — re-evaling the cat per spawn costs ~1.3s, so only the distro, which has no image
-to ship, still runs it as a `#!/bin/love` script.
-`src/apps/kore/kore.l` loads LAST and dispatches off the program seat of `cmdline`: `kore TOOL
-ARGS..`, or symlink a tool's name to kore and argv[0] picks it (how the distro shadows at
+spelling is `love TOOL` — re-evaling the cat per spawn costs ~1.3s, so only the distro,
+which has no image to ship, still runs it as a `#!/bin/love` script, `/lib/kore.l`.
+`src/apps/kore/kore.l` loads LAST: every tool is a verb, and its file dispatches off the
+program seat of `cmdline`, so a symlink named for a tool runs it (how the distro shadows at
 will). The registry is a tablet, so tool names never collide with the globals they call (the
 `mkdir` applet CALLS the `mkdir` nif; different namespaces).
 
@@ -134,7 +133,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
   status — and `urun` is the driver both faces come back through, flushing the ports and
   answering the charm. So the seat is the one site that quits (`kore-main` answers, and the
   tail of kore.l quits with it), and a caller staying in the image lives through a tool that
-  fails: `kore-main` is the in-image door, taking `(link "kore" "ls" "-l")` and answering the
+  fails: `kore-main` is the in-image door, taking `(link "ls" "-l")` and answering the
   status. mooncc rides the same floor with two doors of its own — `moon-run` answers, `moon-main`
   quits with what it answers (doc/misc/moon.md). nothing unwinds through a scare, so a port a tool
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in

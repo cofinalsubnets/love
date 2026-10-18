@@ -143,11 +143,11 @@
      (: _ (mkdir tgt 493)
         r (mount src tgt typ)                            ; () success, else an error
         (note ("  mount " + typ + " on " + tgt
-               + (r < 0 ? (" -> EPERM (errno " + show (0 - r) + ", needs root/pid-ns)") " -> ok"))))
+               + (r = () ? " -> ok" (" -> " + show r + " (needs root/pid-ns)")))))
    (boot-system _)
      (newns 0 @ e
-        (note (e < 0 ? "-- pid1 bringup: (no unpriv userns here; a real pid1 is root) --"
-                       "-- pid1 bringup: private user+mount ns (root-in-ns) --"),
+        (note (e = () ? "-- pid1 bringup: private user+mount ns (root-in-ns) --"
+                        "-- pid1 bringup: (no unpriv userns here; a real pid1 is root) --"),
          try-mount "tmpfs" "/tmp/love-run"  "tmpfs",
          try-mount "proc"  "/tmp/love-proc" "proc",        ; needs a pid-ns too
          note "-- cgroup-v2: mkdir a group, write a pid to cgroup.procs --",
@@ -161,7 +161,7 @@
 ; reaps reparented orphans love never spawned. (perceive 0) is the live supervisor
 (: (mount1 src tgt typ)
      (: _ (mkdir tgt 493) r (mount src tgt typ)          ; () success, else an error
-        (note ("  mount " + typ + " on " + tgt + (r ? (" -> errno " + show r) " -> ok"))))
+        (note ("  mount " + typ + " on " + tgt + " -> " + (r = () ? "ok" (show r)))))
 
    ; glean until target children are collected or steps run out; a pid absent from pids
    ; is a reparented orphan; a non-pair glean just paces the loop

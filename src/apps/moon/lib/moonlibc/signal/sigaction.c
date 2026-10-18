@@ -25,9 +25,9 @@ static void __love_sigshim(int s, void *si, void *ctx) {
 int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
 #ifdef LvMac
   if (__love_osv == 4) {
-    /* freebsd's numbers, flags and shim; the record carries the tramp the kernel
-     * enters (mksys's __love_mac_sigtramp), a 4-byte mask, and the old one comes
-     * back in the user's shape */
+    /* freebsd's numbers, flags and shim, a 4-byte mask: libSystem's sigaction in the
+     * user's shape, its tramp returning, or the kernel's with ours (mksys's
+     * __love_mac_sigtramp) riding in. the old one comes back in the user's shape */
     long fs = __love_sigfb(sig);
     if (fs <= 0) { __errno_v = EINVAL; return -1; }
     struct __mac_sigact ka;
@@ -45,7 +45,11 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
       ka.tramp = (void *) __love_mac_sigtramp;
       ka.flags = (int) __love_safb(a->sa_flags);
       ka.mask = (unsigned int) __love_maskfb((unsigned long) a->sa_mask.__v[0]); }
-    long r = fb3(46, fs, a ? (long) &ka : 0, old ? (long) &ko : 0);
+    struct __mac_osigact kn;
+    if (a) kn.h = ka.h, kn.mask = ka.mask, kn.flags = ka.flags;
+    long r = __love_macsigact(fs, a ? &kn : 0, old ? &ko : 0);
+    if (r == LvNoDoor) r = fb3(46, fs, a ? (long) &ka : 0, old ? (long) &ko : 0);
+    else if (__love_parked(r)) r = -__love_errfb(-r - 4096);
     if (r < 0) { if (a) __sighand[fs] = prev, __sigsi[fs] = prevsi;
                  __errno_v = (int) -r; return -1; }
     if (old) {

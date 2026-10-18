@@ -37,7 +37,7 @@ seq 1 25 > "$rt/sq"; printf 'a\nb' > "$rt/nonl"; : > "$rt/none"
 sp() { n=$1; shift
        rm -rf "$rt/sg" "$rt/so"; mkdir -p "$rt/sg" "$rt/so"
        ( cd "$rt/sg" && split "$@" ) 2>/dev/null
-       ( cd "$rt/so" && LOVE_NO_IMAGE= "$K" kore split "$@" ) 2>/dev/null
+       ( cd "$rt/so" && LOVE_NO_IMAGE= "$K" split "$@" ) 2>/dev/null
        diff -r "$rt/sg" "$rt/so" > /dev/null 2>&1 || fail "kore split $n vs GNU"; }
 sp "-l 10"   -l 10 ../sq
 sp "-l 7 pre" -l 7 ../sq pre
@@ -83,7 +83,7 @@ printf 'one\ntwo\nthree\nfour line here\nfive\nsix\nseven is longer than eight\n
 for c in "-n 3" "-n 4" "-n l/3" "-n l/2" "-C 12" "-C 20" "-x -l 2" "-d -l 3" "--additional-suffix=.txt -l 4" "--numeric-suffixes -a 3 -l 5"; do
   rm -f "$SP"/g/* "$SP"/k/*
   # shellcheck disable=SC2086
-  (cd "$SP/g" && split $c ../in); (cd "$SP/k" && LOVE_NO_IMAGE= "$PWD/../../../$m" kore split $c ../in)
+  (cd "$SP/g" && split $c ../in); (cd "$SP/k" && LOVE_NO_IMAGE= "$PWD/../../../$m" split $c ../in)
   (cd "$SP/g" && for f in *; do echo "== $f"; cat "$f"; done) > "$g"; (cd "$SP/k" && for f in *; do echo "== $f"; cat "$f"; done) > "$o"
   same "split $c"
 done

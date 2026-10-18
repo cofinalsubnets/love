@@ -837,9 +837,6 @@
              ps (sort (filter (p \ <(sa p) != <(sb p)) (keys u)))
              _ (map (p \ puts (p + "\n")) ps)
              0)))
-   ; a set's stamp: its newest tip's time in seconds, which orders two builds of a tree
-   (set-stamp ids) (foldl (\ a i (: f (patch i) (? (two? f) (max a (<(fld f 'time) // 1000)) a))) 0 ids)
-   (sb-stamp args) (: x (setof (two? args ? <args "head")) (? (two? x) (: _ (puts (show (set-stamp <x) + "\n")) 1)))
    (sb-within a b) (: x (setof a) y (setof b) (? (two? x && two? y) (: d (dv-derive <y) (sb-all? (t \ 0 <= dv-dep d t) <x))))
    (sb-apply args)
     (mk (),
@@ -1495,67 +1492,29 @@
 
 ; --- the CLI face: usage + the verb dispatcher (cook-main's shape) ---
 (:
-   sb-usage "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
-usage: sb VERB ..
-  record [NOTE]   working changes -> a patch in the store (.sb/)
-  sync [--keep] PEER  EXCHANGE patch sets with a peer nest (a dir holding .sb/),
-                  or PULL from an http:// remote -- any static file tree serving
-                  a .sb/ is a complete one, and it takes no push.
-                  pull what it has, push what it lacks, settle BOTH trees to
-                  the union of their HEADS. two patches on one path three-way
-                  merge; a true overlap lands in markers and exits 1 -- resolve,
-                  then record. --keep only deposits: both stores fill, no head
-                  moves, so a hub holds work it has not taken.
-                  ssh://[USER@]HOST[:PORT]/PATH is a nest on another box, its
-                  side `sb serve PATH` (SB_SSH the ssh words, SB_LOVE the far love).
-                  NAME@BOX is the nest NAME that BOX's door serves (love bee --door),
-                  BOX reached as ~/.love/etc/bee/boxes says
-  sync --take PEER  pull only, and grow the head by the peer's head: a new nest
-                  made from a hub, or one brought up to it
-  serve [DIR]     the far side of an ssh sync, on stdin and stdout
-  take ID..       grow the HEAD by a set (a ref, or patches by prefix, with
-                  their deps) and lay the tree: what a hub does to land work
-  ls [-l]         the head's paths; -l puts each one's side (blob hash, x when
-                  executable) and a tab before it
-  unpack DIR [H..|-]  blobs as plain files DIR/HASH: the hashes named (- reads them
-                  from stdin), else the head's
-  pack            every loose blob and every pack into one pack (.sb/pack), read
-                  back before the old ones go. sync packs past 1024 loose
-  psid [SET]      the name of a set's state: the head's, or SET's (a ref, a
-                  patch, a psid, or head)
-  paths A B       the paths sets A and B lay differently, a line each
-  within A B      exit 0 when set A lies inside set B
-  stamp [SET]     the newest of a set's patch times, in seconds: the head's, or SET's
-  apply [ID..]    make the HEAD a dep-consistent SUBSET, laid in the tree (an ID
-                  may be a prefix; its deps come along). checkout and cherry-pick
-                  are one act here. no ID realizes the whole store -- the way back
-  bank NAME       freeze the current head -- its whole TIP SET -- as an immutable
-                  release. deps are per PATH, so a multi-tip head is ordinary
-                  parallel work, not a fork to repair. `apply NAME` realizes it
-  undo ID [NOTE]  add the INVERSE of a patch -- revert as growth, never deletion.
-                  a path that moved on since three-way merges instead of being
-                  clobbered: P's write is lifted OUT, later edits stay
-  log             the patches, newest first (* marks a tip of the head)
-  log PATH        the head's patches that write PATH, or a path under it, the
-                  fold's last first
-  show ID         a patch: its time, note and deps, then each hunk as a diff
-  blame PATH      each line of PATH in the head, after the patch that wrote it
-  status          the head, the banks at it, what the store holds beyond it,
-                  conflicted paths, and the tree's changes: A D M, X the mode
-  bisect GOOD BAD [--] CMD ..  lay the banks above GOOD and within BAD, halving,
-                  and run CMD in each: exit 0 good, 125 skip, else bad. says the
-                  first bad set and the patches it adds, then lays the head back
-  diff            working tree vs the recorded state (unified; exit 1 on change)
-  ledger [NAME]   a named value that moves only by compare-and-swap, its every
-                  entry kept. no NAME lists them; NAME prints what it holds
-  ledger NAME --id | --log      its hash (none when new) | every entry
-  ledger NAME --was OLD FILE    move it to FILE's text (- is stdin) iff it
-                  stands at OLD (none for a new one); exit 1 when it has moved on.
-                  plain ledgers stay in their nest. a signed queue (its head an
-                  entry, src/apps/qlog.l) moves only by an entry that follows,
-                  and sync pulls it along a chain that checks
-  ledger NAME --text            the text a signed queue's head names
-  -C DIR VERB ..  the verb in the nest at DIR
+   sb-usage "usage: sb VERB ..
+  record [NOTE]           record the working changes as a patch
+  sync [--keep] PEER      exchange patch sets with PEER and settle both trees
+  sync --take PEER        pull only, and grow the head by PEER's head
+  serve [DIR]             the far side of an ssh sync
+  take ID..               grow the head by a set and lay the tree
+  apply [ID..]            set the head to a subset of the store and lay it
+  bank NAME               freeze the head as a named release
+  undo ID [NOTE]          record the inverse of a patch
+  log [PATH]              the patches, newest first; with PATH, those that write it
+  show ID                 a patch: its time, note, deps and hunks
+  blame PATH              each line of PATH, after the patch that wrote it
+  status                  the head, its banks, the store beyond it, the tree's changes
+  diff                    the working tree against the head
+  ls [-l]                 the head's paths
+  psid [SET]              the name of a set's state
+  paths A B               the paths two sets lay differently
+  within A B              exit 0 when set A lies inside set B
+  bisect GOOD BAD CMD ..  find the first bad bank between GOOD and BAD
+  unpack DIR [H..|-]      blobs as plain files DIR/HASH
+  pack                    gather every blob into one pack
+  ledger [NAME ..]        a value moved only by compare-and-swap
+  -C DIR VERB ..          run the verb in the nest at DIR
 "
    ; usage on stderr, exit 2
    (usage _) (say err sb-usage, uleave 2)
@@ -1591,7 +1550,6 @@ usage: sb VERB ..
            "ls" (sb-ls (elem "-l" >as), 0)
            "unpack" (two? >as ? !(sb-unpack <>as (>>as = ["-"] ? (words (slurp in + "")) >>as)) (usage ()))
            "psid" !(sb-psid >as)
-           "stamp" !(sb-stamp >as)
            "paths" (#>as = 2 ? (sb-paths <>as <>>as) (usage ()))
            "within" (#>as = 2 ? !(sb-within <>as <>>as) (usage ()))
            "diff" (0 < sb-diff ())

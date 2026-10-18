@@ -83,4 +83,6 @@
 (: (fnq-pile k s t) (k = 0 ? t (fnq-pile (k - 1) s (s . t)))
    (fnq-holes k) (join "" (fnq-pile k "\"a \\(" ("\"x\"" . fnq-pile k ") b\"" ())))
  (test ("a a x b b" = ev <(sound (fnq-holes 2)))
-       (test-linear (n \ ev ['\ 'u <(sound (fnq-holes n))]) 250)))
+       (test-linear (n \ ev ['\ 'u <(sound (fnq-holes n))]) 250)
+       ; 3000 deep: love compiles it, love0's c0 runs out of room and scares deep, caught
+       (: r (trap (_ \ ev ['\ 'u <(sound (fnq-holes 3000))] 0) 0 (a \ _ \ a)) (r = 'deep || #r = 12001))))

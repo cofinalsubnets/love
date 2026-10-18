@@ -54,14 +54,14 @@
 (borrow 'bz2)
 (borrow 'path)
 (borrow 'posix)
-(: bzc-help "bzip2 -- the block-sorting compressor in love (src/love/compress/bz2.c is the codec)
+(: bzc-help "bzip2 -- the block-sorting compressor
 usage: bzip2 [-cdfkqstvz] [-1..-9] [FILE..]
   -z  compress (the default)            -d  decompress (bunzip2)
   -c  write on stdout, keep the files   -k  keep the input file
   -f  overwrite an existing output      -t  test the files, write nothing
   -q  say nothing on a warning          -v  say what happened, on err
   -1 .. -9  the block, 100k to 900k (9)  --fast is -1, --best -9
-  -s  taken, and it changes nothing
+  -s  accepted, ignored
 no file, or a bare -, is the filter: stdin -> stdout"
    bzc-sufs [[".bz2" ""] [".bz" ""] [".tbz2" ".tar"] [".tbz" ".tar"]]
 

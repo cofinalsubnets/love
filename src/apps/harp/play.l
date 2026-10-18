@@ -155,7 +155,7 @@
    ; --- the run: cycles in, chunks out ---------------------------------------
    harp-chunk 2048
    ; a cycle's onsets as voices with their start frames. the one crossing from `///` cycle time
-   ; to integer frames is qnum: a rational on the tray lane would answer () in silence.
+   ; to integer frames is qnum: nothing downstream of here holds a rational.
    (cyc-voices p c c0 spc rate)
     (filter two?
             (map (x \ mkvoice ((c - c0) * spc + int (spc * qnum (evwb x - qi c)))

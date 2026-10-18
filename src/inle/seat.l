@@ -71,8 +71,6 @@
                       (!(nil? v) ? (v . as)
                          (k-tool (intern (b + "-main")) as @ k
                             (? (two? k) k
-                               ; `kore TOOL ..` with no dispatcher registered: the test kernel bakes the applets
-                               (b = "kore" && two? as) (k-tool (intern (<as + "-main")) >as)
                                (two? (stat a0)) (k-progf a0 as h)
                                ; a path the seat lacks is looked for under /love, so `love test/kernel/all.l` runs anywhere
                                (!(47 = peep a0 0 0) && two? (stat ("/love/" + a0)))

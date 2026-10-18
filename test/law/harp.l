@@ -21,8 +21,8 @@
              ((-1 /// 2) < (1 /// 3)) ((7 /// 2) < (5 /// 1))
              ; equality by value, which onset? rests on
              ((qi 1) = (1 /// 1))  ((qi 2) = (4 /// 2))  !((qi 1) = (qi 2))
-             ; a rational does not meet a tray, so frames go through qnum
-             !((iota 4) + (1 /// 3))
+             ; a rational meets a tray cell by cell, and stays exact
+             (show ((iota 4) + (1 /// 3)) = "@((1 /// 3) (4 /// 3) (7 /// 3) (10 /// 3))")
              ; qfl floors where // truncates: cycle -1/2 is in cycle -1
              (0  = qfl (1 /// 2))   (-1 = qfl (-1 /// 2))
              (-1 = qfl (-1 /// 1))  (-2 = qfl (-3 /// 2))

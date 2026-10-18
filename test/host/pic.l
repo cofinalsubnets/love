@@ -95,13 +95,13 @@
    ; pic as a command
    _ (put (dir + "/a.gif") gf, put (dir + "/b.jpg") jp, put (dir + "/n.txt") "hello")
    _ (put (dir + "/anim.gif") anim)
-   r1 (hark [love "kore" "pic" "-w" "8" (dir + "/a.gif")])
-   r2 (hark [love "kore" "jpegcat" "-w" "8" (dir + "/a.gif") (dir + "/b.jpg")])
-   r3 (hark [love "kore" "pic" "cat" (dir + "/n.txt") (dir + "/none.png")])
+   r1 (hark [love "pic" "-w" "8" (dir + "/a.gif")])
+   r2 (hark [love "jpegcat" "-w" "8" (dir + "/a.gif") (dir + "/b.jpg")])
+   r3 (hark [love "pic" "cat" (dir + "/n.txt") (dir + "/none.png")])
    _ (test (<r1 = 0) (has? >r1 "▀") !(has? >r1 "a.gif")
            (<r2 = 0) (has? >r2 "a.gif:\n") (has? >r2 "b.jpg:\n")
            (<r3 = 1))
-   (pic as) (hark ([love "kore" "pic"] + as))
+   (pic as) (hark ([love "pic"] + as))
    ; a bare pic sniffs: a picture is drawn, anything else goes to classic pic (src/apps/kore/gpic.l)
    _ (put (dir + "/d.ms") ".PS\nbox\n.PE\ntext\n")
    _ (test (pic [(dir + "/a.gif")] @ r (<r = 0 && has? >r "▀"))
@@ -235,8 +235,8 @@
            ; a sixel is whole bands: 5 rows of 16 is 80 pixels, 78 of them drawn
            (K 'pv-view gq @ v (v 4 = 78)))
    ; the default is blocks, and off a terminal the viewer says so
-   _ (test (<(hark [love "kore" "pic" "less" (dir + "/a.gif")]) = 2)
-           (<(hark [love "kore" "pic" "less" "-g" "neon" (dir + "/a.gif")]) = 2))
+   _ (test (<(hark [love "pic" "less" (dir + "/a.gif")]) = 2)
+           (<(hark [love "pic" "less" "-g" "neon" (dir + "/a.gif")]) = 2))
 
    ; markdown and html2text on a terminal: a local picture under its image's line
    _ (put (dir + "/sub.gif") gf)

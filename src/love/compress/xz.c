@@ -823,18 +823,13 @@ love_noinline static struct g *host_lzma_new(struct g *g) {
  if (want >= 0 && (uintptr_t) want < dict) dict = want < 4096 ? 4096 : (uintptr_t) want;
  if (dict > XZ_MAX) return g->sp[2] = putcharm(1), g->sp += 2, g;
  uintptr_t litn = (uintptr_t) 0x300 << (pm.lc + pm.lp), cap = dict + LM_ROOM,
-           n = LM_HEAD + litn * sizeof(lzp) + cap,
-           sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
- if (!ok(g = have(g, sreq + breq))) return g;
- struct str *s = ini_str(bump(g, sreq), n);
- memset(s->bytes, 0, LM_HEAD);
- struct lm_st *S = (struct lm_st*) s->bytes;
+           n = LM_HEAD + litn * sizeof(lzp) + cap;
+ union u *k = new_cask(&g, n, LM_HEAD);
+ if (!k) return g;
+ struct lm_st *S = (struct lm_st*) cask(k)->str->bytes;
  S->magic = LM_MAGIC, S->cap = cap, S->dict = dict, S->litn = litn, S->want = (uint64_t) want;
- S->m.lc = pm.lc, S->m.lp = pm.lp, S->m.pb = pm.pb, S->m.lit = (lzp*) (s->bytes + LM_HEAD);
+ S->m.lc = pm.lc, S->m.lp = pm.lp, S->m.pb = pm.pb, S->m.lit = (lzp*) ((char*) S + LM_HEAD);
  lz_reset(&S->m);
- union u *k = bump(g, breq);
- cask(k)->ap = lvm_cask, cask(k)->str = s;
- tagthread(k, Width(struct cask));
  return g->sp[2] = word(k), g->sp += 2, g; }
 love_noinline static struct g *host_lzma_feed(struct g *g) {
  struct str *cs = lm_cask(g->sp[0]);
@@ -910,16 +905,11 @@ static struct str *l2_cask(word x) {
 love_noinline static struct g *host_lzma2_new(struct g *g) {
  word dw = g->sp[0];
  if (!oddp(dw) || getcharm(dw) < 4096 || (uintptr_t) getcharm(dw) > XZ_MAX) return g->sp[0] = ZeroPoint, g;
- uintptr_t dict = (uintptr_t) getcharm(dw), n = L2_HEAD + dict + L2_ROOM(dict),
-           sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
- if (!ok(g = have(g, sreq + breq))) return g;
- struct str *s = ini_str(bump(g, sreq), n);
- memset(s->bytes, 0, L2_HEAD);
- struct l2_st *S = (struct l2_st*) s->bytes;
+ uintptr_t dict = (uintptr_t) getcharm(dw), n = L2_HEAD + dict + L2_ROOM(dict);
+ union u *k = new_cask(&g, n, L2_HEAD);
+ if (!k) return g;
+ struct l2_st *S = (struct l2_st*) cask(k)->str->bytes;
  S->magic = L2_MAGIC, S->cap = dict + L2_ROOM(dict), S->dict = dict, S->needdict = S->needprops = 1;
- union u *k = bump(g, breq);
- cask(k)->ap = lvm_cask, cask(k)->str = s;
- tagthread(k, Width(struct cask));
  return g->sp[0] = word(k), g; }
 love_noinline static struct g *host_lzma2_chunk(struct g *g) {
  struct str *cs = l2_cask(g->sp[0]);

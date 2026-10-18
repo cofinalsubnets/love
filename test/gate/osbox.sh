@@ -189,6 +189,25 @@ fout=$($box 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv
 [ "$lout" = "$fout" ] || fail "uv1: the kernels disagree -- linux[$lout] $os[$fout]"
 echo "$lout" | grep -q "uv1: argc=3 jmp=7 ebadf=ok kill=ok" || fail "uv1 body -- got: $lout"
 echo "$lout" | grep -q "rc=42" || fail "uv1 exit -- got: $lout"
+# dyld's exe enters by LC_MAIN; -static keeps the raw one, LC_UNIXTHREAD, and answers alike
+if [ "$os" = macos ]; then
+  moon0 -os macos -static "$d/uv1.c" -o "$d/uv1s.mac" || fail "uv1: the -static mach-o compile"
+  lc=$($box 'cat > /tmp/uv1 && otool -l /tmp/uv1 | grep -c "cmd LC_MAIN"; otool -l /tmp/uv1 | grep -c "cmd LC_UNIXTHREAD"' < "$d/uv1.mac")
+  [ "$lc" = "1
+0" ] || fail "uv1: dyld's exe enters other than by LC_MAIN alone -- got: $lc"
+  sout=$($box 'cat > /tmp/uv1s && chmod +x /tmp/uv1s && otool -l /tmp/uv1s | grep -c "cmd LC_UNIXTHREAD"; for i in 1 2 3 4; do /tmp/uv1s one two; echo "rc=$?"; done' < "$d/uv1s.mac")
+  [ "$sout" = "1
+$lout" ] || fail "uv1: the -static exe -- got: $sout"
+  # dyld's exe asks libSystem by name: an inserted getpid answers it (flat binds), never -static's trap
+  printf '#include <stdio.h>\n#include <unistd.h>\nint main(void) { printf("%%d\\n", (int) getpid()); return 0; }\n' > "$d/door.c"
+  moon0 -os macos "$d/door.c" -o "$d/door.mac" && moon0 -os macos -static "$d/door.c" -o "$d/doors.mac" || fail "door: the mach-o compiles"
+  $box 'cat > /tmp/door && chmod +x /tmp/door' < "$d/door.mac" || fail "door: the box could not take it"
+  $box 'cat > /tmp/doors && chmod +x /tmp/doors' < "$d/doors.mac" || fail "door: the box could not take -static's"
+  dout=$($box 'printf "int getpid(void) { return 4242; }\n" > /tmp/ip.c && cc -dynamiclib -o /tmp/ip.dylib /tmp/ip.c &&
+    DYLD_INSERT_LIBRARIES=/tmp/ip.dylib /tmp/door; DYLD_INSERT_LIBRARIES=/tmp/ip.dylib /tmp/doors') || fail "door: the box's run -- got: $dout"
+  [ "$(echo "$dout" | head -1)" = 4242 ] || fail "door: dyld's exe did not ask libSystem's getpid -- got: $dout"
+  [ "$(echo "$dout" | tail -1)" != 4242 ] || fail "door: the -static exe reached libSystem -- got: $dout"
+fi
 
 echo "$t: UV1 -- ONE default-lane binary answered both kernels the same"
 

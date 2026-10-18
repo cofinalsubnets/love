@@ -74,7 +74,8 @@ static lvm_t *const image_extra_aps[] = {
  lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_unc,
  lvm_fputbn, lvm_yield_sw, lvm_yield_nif, lvm_task_exit,
  _lvm_yieldk,     // a task parked mid-yield carries it
- lvm_deferfwd };  // a deferred native whose compile declined
+ lvm_deferfwd,    // a deferred native whose compile declined
+ lvm_firstcall }; // ..and one not called yet
 // a data object's words, as the gc sizes it. d carries the kind, s the length words: two
 // homes only in a fused load, the ap decoded into the pool while the payload is still in the blob
 static uintptr_t image_datasize(union u *d, void const *s) {
@@ -187,7 +188,7 @@ static intptr_t image_imm_index(word v) {
 // stream. a chunk starts at an object boundary, so each one inflates and walks on its own
 #define StreamSegHead (2 * sizeof(uint64_t))
 #define StreamRow (4 * sizeof(uint64_t))                       // first word, raw offset, deflated offset, digest
-#define StreamZWords ((uintptr_t) 2 << 10)
+#define StreamZWords ((uintptr_t) 8 << 10)                     // ~16 KB raw: 2K deflated a third worse
 #ifndef ImageZStream
 #define ImageZStream 1
 #endif

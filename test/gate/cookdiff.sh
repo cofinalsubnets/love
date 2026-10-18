@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/cookdiff.sh -- cook against GNU make: each case is a tiny Makefile run by
 # both, outputs equal byte for byte. an unknown builtin expands to nothing in silence
-# usage: cookdiff.sh LOVE     (LOVE = a binary whose `kore make` verb is cook)
+# usage: cookdiff.sh LOVE     (LOVE = a binary whose `make` verb is cook)
 . test/gate/skip.sh
 set -u
 K=${1:?usage: cookdiff.sh LOVE}
@@ -29,7 +29,7 @@ case_() {
   nm=$1; kind=$2
   d=$work/$nm; mkdir -p "$d"; cat > "$d/Makefile"
   g=$(cd "$d" && make -s 2>&1)
-  c=$(cd "$d" && LOVE_NO_IMAGE= "$K" kore make 2>&1 | grep -vE "$cooknoise")
+  c=$(cd "$d" && LOVE_NO_IMAGE= "$K" make 2>&1 | grep -vE "$cooknoise")
   ran=$((ran + 1))
   [ "$g" = "$c" ] && return 0
   if [ "$kind" = known ]; then
@@ -221,10 +221,10 @@ case2_() {
   dg=$work/$nm.gnu;  mkdir -p "$dg"; printf '%s' "$body" > "$dg/Makefile"; printf 'one\n' > "$dg/src"
   dc=$work/$nm.cook; mkdir -p "$dc"; printf '%s' "$body" > "$dc/Makefile"; printf 'one\n' > "$dc/src"
   g1=$(cd "$dg" && make -s $goal 2>&1)
-  c1=$(cd "$dc" && LOVE_NO_IMAGE= "$K" kore make $goal 2>&1 | grep -vE "$cooknoise")
+  c1=$(cd "$dc" && LOVE_NO_IMAGE= "$K" make $goal 2>&1 | grep -vE "$cooknoise")
   touch -t 200001010000 "$dg/$art" "$dc/$art" 2>/dev/null
   g2=$(cd "$dg" && make -s $goal 2>&1)
-  c2=$(cd "$dc" && LOVE_NO_IMAGE= "$K" kore make $goal 2>&1 | grep -vE "$cooknoise")
+  c2=$(cd "$dc" && LOVE_NO_IMAGE= "$K" make $goal 2>&1 | grep -vE "$cooknoise")
   g="$g1 | $g2"; c="$c1 | $c2"
   [ "$g" = "$c" ] && return 0
   if [ "$kind" = known ]; then

@@ -31,6 +31,16 @@ fi
 for b in out/love out/love.raw out$gs/love.raw out/gcs0/love0; do [ -x $b ] || fail "no $b"; done
 for b in out/.dist-cat.l out$gs/.dist-cat.l; do [ -s $b ] || fail "no $b"; done
 mkdir -p $w/bn $w/bs
+# each stress build is one: a build that drops LvGcStress passes as a normal one, blind.
+# under stress every have collects, so a small walk counts its collections in the many thousands
+ng='(: _ (map (x \ [x x]) ^2000) ((gauge 0) 3))'
+gcn() { env LOVE_NO_IMAGE=1 "$1" -e "$ng" 2>/dev/null | tail -1; }
+n0=$(gcn out/love0); n1=$(gcn out/love.raw)
+for b in out/gcs0/love0 out$gs/love.raw; do
+  ns=$(gcn $b); [ $b = out/gcs0/love0 ] && nn=$n0 || nn=$n1
+  [ -n "$ns" ] && [ -n "$nn" ] && [ "$ns" -gt $((100 * nn + 1000)) ] \
+    || fail "$b collects $ns times on a small walk, the normal build $nn: not a stress build"
+done
 
 # a background run: $w/TAG.out and $w/TAG.rc. wt waits for the runs, never the bakes
 ps=
@@ -42,8 +52,7 @@ bake() { ( cd $w/$1 && { env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT=$hot "$2" bake -l "$3
                          echo $! > pid; wait $!; echo $? > rc; } ) & }
 [ "$sbake" = 1 ] && { bake bs $PWD/out$gs/love.raw $PWD/out$gs/.dist-cat.l; bsp=$!; }
 # the stress love0 beside the bakes: its boot, then both its passes -- c0, then the egg it
-# bootstraps -- over the harness and one file. its whole corpus joins once eqv stops trapping
-# on a stressed heap, where a printer probe collides a closure key with a thread key
+# bootstraps -- over the harness and one file. its whole corpus is test_gcstress_full's (hours)
 mkdir -p $w/l0/out/lib
 ln -s $PWD/test $w/l0/test; ln -s $PWD/src $w/l0/src
 printf './test/00-init.l ./test/spec.l ./test/uu.l ./test/bell.l ./test/zz-fin.l' > $w/l0/out/lib/corpus.list

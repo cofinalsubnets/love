@@ -1,11 +1,10 @@
 ; src/tools/selfpack.l -- cut the source container from the tree itself.
-;   love src/tools/selfpack.l [-c codecs] src.tree top stamp build roster [drop..]
+;   love src/tools/selfpack.l [-c codecs] src.tree top stamp roster [drop..]
 ;   love src/tools/selfpack.l -l          the walk's files, one path a line
 ; codecs: `lisp=bzip2,c=bzip2,rest=lzma2`, of stored deflate bzip2 lzma2, deflate unnamed
 ; the walk leaves out sb's ignore law, sp-own and each drop; sorted, every mtime pinned to
-; stamp, so the same files answer the same bytes (test_distboot). build rides as top/STAMP:
-; a number, or `set` -- sb's set-stamp, else an unpacked release's STAMP, else 0. roster
-; names the files a carried-source bake reads
+; stamp, so the same files answer the same bytes (test_distboot). roster names the files a
+; carried-source bake reads
 ; the container is srctree.h's: a header, an index, and the tar in sections each packed
 ; alone; its id is the joined tar's sha in src.tree.sha, and the quiet pass answers "has
 ; the tree moved" off stat alone
@@ -41,7 +40,7 @@
     (atom? es ? (rev acc)
        (<es @ e (pin e 'nom (top + "/" + tar-get e 'nom ""), sp-take >es top (e . acc))))
 
-   ; the sections in join order: the frame (root, top, STAMP, every directory) with moon's
+   ; the sections in join order: the frame (root, top, every directory) with moon's
    ; toolchain slice (moon.l's mblob), the bake roster, the seat's run-time reads, .l, C and
    ; asm, the rest; each keeps the walk's order
    sp-secs ["moon" "bake" "seat" "lisp" "c" "rest"]
@@ -68,15 +67,14 @@
                         (any (x \ ends? n x) [".c" ".h" ".S" ".s"]) "c"
                         "rest"))
    ; -> each section's entries, leveled and re-homed; shared by both passes so digests compare
-   (sp-lev es top stamp build ros)
+   (sp-lev es top stamp ros)
     (: root <es
        te (tar-entry top 'dir "")
        _ (pin te 'mode (tar-get root 'mode 493))
-       se (tar-entry "STAMP" 'file (build + "\n"))
        ; tagged before re-homing: sp-take pins the new nom into the entry itself
        tag (map (e \ [(sp-sec ros e) e]) >es)
        parts (map (nm \ sp-take (map (p \ p 1) (filter (p \ <p = nm) tag)) top ()) sp-secs)
-       (map (l \ tar-level l stamp) (([root te] + sp-take [se] top () + <parts) . >parts)))
+       (map (l \ tar-level l stamp) (([root te] + <parts) . >parts)))
 
    ; --- the container ---
    sp-nul (string (cask 1))
@@ -120,10 +118,10 @@
    (sp-fmt spec) ("tree2 " + spec + " ")
 
    ; pack, hash, and write when the content moved
-   (sp-cut spec out side top stamp build rules ros)
+   (sp-cut spec out side top stamp rules ros)
     (: g (tar-gather? (sp-keep? rules) "." "")
        _ (!g ? (sp-die "cannot read the tree"))
-       secs (sp-lev <>g top stamp build ros)
+       secs (sp-lev <>g top stamp ros)
        frags (sp-frags secs)
        h (sp-fmt spec + sha256 (cats frags))
        old (sp-read side)
@@ -131,10 +129,6 @@
        (? (two? old && two? have && <>old = h) 0
           (puts ("LOVE\t" + out), putc 10, sp-write out (sp-tree (sp-codecs spec) secs frags), sp-write side h, 0)))
 
-   ; the build stamp: a function of the patch set, never a clock; sb reads the nest off the cwd
-   (sp-stamp _)
-    (: t ((cite 'sb 'set-stamp) ((cite 'sb 'head) ()))
-       (0 < t ? t (sp-read "STAMP" @ [1 x] (<(sound x) @ v (charm? v ? v 0)) 0)))
    ; the listing: the tree's files under sb's law alone
    (sp-ls _)
     (: t (tar-thin? (sp-keep? ((cite 'sb 'igs 0) + (cite 'sb 'igsdir))) "." "")
@@ -147,24 +141,23 @@
        av (two? a0 && <a0 = "-c" ? >>a0 a0)
        _ (sp-codecs spec)                              ; a bad table dies before the walk
        n #av
-       _ (n < 5 ? (sp-die "usage: selfpack [-c CODECS] SRC.TREE TOP STAMP BUILD ROSTER [DROP..]"))
+       _ (n < 4 ? (sp-die "usage: selfpack [-c CODECS] SRC.TREE TOP STAMP ROSTER [DROP..]"))
        out <av
        top <>av
        stamp <(sound <>>av)
-       build (av 3 = "set" ? (show (sp-stamp 0)) (av 3))
-       ros (sp-read (av 4) @ [1 s] (foldl (t \ w \ pin t w 1) {} (words s))
-              (sp-die ("cannot read the roster " + av 4)))
+       ros (sp-read (av 3) @ [1 s] (foldl (t \ w \ pin t w 1) {} (words s))
+              (sp-die ("cannot read the roster " + av 3)))
        ; top joins the drops, or a release untarred at the root would ride the next blob
-       drops (top . >>>>>av)
+       drops (top . >>>>av)
        side (out + ".sha")
        ; `stat`, not a read: only whether the container is there. a () from the thin pass falls
        ; through to the cut
        rules (sp-rules drops)
        t (tar-thin? (sp-keep? rules) "." "")
        _ (!t ? (sp-die "cannot read the tree"))
-       hq (tar-hash (foldl (+) () (sp-lev <>t top stamp build ros)))
+       hq (tar-hash (foldl (+) () (sp-lev <>t top stamp ros)))
        old (sp-read side)
        quiet (string? hq && two? old && <>old = sp-fmt spec + hq && two? (stat out))
-       (quiet ? 0 (sp-cut spec out side top stamp build rules ros)))
+       (quiet ? 0 (sp-cut spec out side top stamp rules ros)))
 
    (sp-main >argv))

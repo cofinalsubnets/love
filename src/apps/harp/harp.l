@@ -21,7 +21,7 @@
    ; --- exact cycle time -----------------------------------------------------
    ; the tree's rationals: `3 /// 4`; arithmetic and order are exact over them.
    ; a whole rational is its integer, so qparts is the one place a time is taken apart.
-   ; a rational meeting a tray answers (): a time crosses into frame arithmetic via qnum.
+   ; a rational meeting a tray answers a tray, exact; a time crosses into frames via qnum.
    (qi n)     (n /// 1)
    qzero      (0 /// 1)
    qone       (1 /// 1)

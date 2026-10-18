@@ -25,16 +25,16 @@
                   + " *evil-name) printf 'C0644 6 .bashrc\\nhello\\n\\000' ;;\n"
                   + " *evil-mode) printf 'C6777 6 evil-mode\\nhello\\n\\000' ;;\n"
                   + " *evil-tree) printf 'D0700 0 .ssh\\nC0600 3 authorized_keys\\nhi\\n\\000E\\n' ;;\n"
-                  + " *) exec " + (love 0 = 47 ? love (cwd 0 + "/" + love)) + " kore scp \"$@\" ;;\nesac\n"))
+                  + " *) exec " + (love 0 = 47 ? love (cwd 0 + "/" + love)) + " scp \"$@\" ;;\nesac\n"))
         (close q))
    _ (chmod (dir + "/bin/scp") 493)
    ; a lush login shell runs `-c` precarious whatever LUSHFLAGS holds, so PATH decides
    path0 (getenv "PATH") lf0 (getenv "LUSHFLAGS")
    _ (setenv "PATH" (dir + "/bin:" + path0)) _ (setenv "LUSHFLAGS" "p")
-   srv (tether [love "kore" "sshd" "-p" (show port) "-h" (dir + "/host") "-o" ("AuthorizedKeysFile=" + dir + "/ak")])
+   srv (tether [love "sshd" "-p" (show port) "-h" (dir + "/host") "-o" ("AuthorizedKeysFile=" + dir + "/ak")])
    _ (setenv "PATH" path0) _ (setenv "LUSHFLAGS" lf0)
    _ (test-up port)
-   (ssh key args) (tether (love . "kore" . "ssh" . "-p" . show port . "-i" . (dir + "/" + key)
+   (ssh key args) (tether (love . "ssh" . "-p" . show port . "-i" . (dir + "/" + key)
                                 . "-o" . "StrictHostKeyChecking=no" . args))
    (run key args) (: r (ssh key args) t (slurp >r) [t <(h-waitfor <r)])
    a (run "id" ["-T" (user + "@127.0.0.1") "echo out-$((6*7)); echo err >&2; exit 3"])
@@ -49,7 +49,7 @@
         t (slurp >r) [t <(h-waitfor <r)])
    _ (test (has? <c "/dev/pts/") (has? <c "30 100") (c 1 = 0))
    ; a pty's TERM is its own session's, not left in the server's environment
-   tt (: r (tetherenv (love . "kore" . "ssh" . "-p" . show port . "-i" . (dir + "/id")
+   tt (: r (tetherenv (love . "ssh" . "-p" . show port . "-i" . (dir + "/id")
                             . "-o" . "StrictHostKeyChecking=no" . ["-t" (user + "@127.0.0.1") "echo \"<$TERM>\""])
                       ["TERM=xterm-test"])
          t (slurp >r) [t <(h-waitfor <r)])
@@ -79,7 +79,7 @@
    _ (map (d \ mkdir (dir + d) 448) ["/src" "/src/sub" "/up" "/down" "/o"])
    _ (put (dir + "/src/f1") "hello\n") _ (put (dir + "/src/sub/blob") blob)
    _ (utime (dir + "/src/f1") 981158400000)
-   (scp args) (: r (tether (love . "kore" . "scp" . "-P" . show port . "-i" . (dir + "/id")
+   (scp args) (: r (tether (love . "scp" . "-P" . show port . "-i" . (dir + "/id")
                              . "-o" . "StrictHostKeyChecking=no" . args))
                  t (slurp >r) [t <(h-waitfor <r)])
    far (user + "@127.0.0.1:")

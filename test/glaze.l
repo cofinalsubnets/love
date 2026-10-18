@@ -187,3 +187,11 @@
            (test (gzdn '(: a 1  (f x) (: b 1  b 2  b)  a 2  g '(: c 1  c 2)) = '(a a))
                  (gzdn '(: _ 1  _ 2  (f x) x) = ())))
       0))
+; a lexer body calling an emitter declines on cost whether the emitter is a sibling lambda or
+; a value import: one verdict for one body, the same natives under either spelling
+(: G (cite 'glaze)
+   gzsp-body '(? (n <= i) acc (? (s i = 32) (emit acc 'sp i (i + 1)) (? (s i = 10) (emit acc 'nl i (i + 1)) (? (s i = 9) (emit acc 'tab i (i + 1)) (? (s i < 48) (emit acc 'punct i (i + 1)) (? (s i < 58) (emit acc 'digit i (i + 1)) (? (s i < 65) (emit acc 'sym i (i + 1)) (emit acc 'word i (i + 1)))))))))
+   (gzsp-n src) (: F (ev 'fires) a (peep F () 0) lx (ev src 1) [(peep F () 0 - a) (nat? lx) (lx "a 1" 3 0 ())])
+   (? G (test ((gzsp-n ['\ 'keep [': '(emit acc k a b) '(keep && a < b ? ([k a b] . acc) acc) '(lx s n i acc) gzsp-body 'lx]])
+              = gzsp-n ['\ 'keep [': '(mk-emit kp) '(\ acc k a b (kp && a < b ? ([k a b] . acc) acc)) 'emit '(mk-emit keep) '(lx s n i acc) gzsp-body 'lx]]))
+      0))

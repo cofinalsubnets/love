@@ -506,7 +506,10 @@
        ; a free head that is not farq resolves via gv at compile (redefinition-stale); a farq name is a
        ; woven sibling, called as entry(imports.. args..) off lz's frozen (entry . import-names), never gv
        cand (lts = 'bad ? () (filter (f \ !(f = self)) (foldl (\ ac i (aheads envl go i ac)) (aheads envl go body ()) inits)))
-       drok (lts != 'bad && (lp ? 1 (two? cand || two? ins ? (aself? self body || adrv? envl self body && acells body <= 64) 1)))   ; free heads and inner lambdas ride only a body that a body that
+       ; the gate reads an import (the self cell's row) as the sibling call it would be spelled as: a free head, no frame param
+       envg (filter (v \ !(elem v simp)) envl)
+       gcand (lts = 'bad ? () (filter (f \ !(f = self)) (foldl (\ ac i (aheads envg go i ac)) (aheads envg go body ()) inits)))
+       drok (lts != 'bad && (lp ? 1 (two? gcand || two? ins ? (aself? self body || adrv? envg self body && acells body <= 64) 1)))   ; free heads and inner lambdas ride only a body that a body that
                                                                          ; drives itself, or a param while small; a declining body or refused lets skip the walks
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the cell's box slot 0
@@ -2590,6 +2593,7 @@
     (: arch love-arch
        G (cite 'glaze)                                                    ; not in the module: every name arrives by key
        defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, cited before the mop
+       firstcell (cite 'guts 'firstcell)
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
@@ -2616,8 +2620,17 @@
        ; e = the bytecode entry (deopt target), s = the surface (\ frame.. body), a = arity, gv = ala's folded global resolver,
        ; farq = the letrec-local predicate (a farq name is wire-resolved: never gv it, the book namesake is stale), lams = the scope's
        ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = the uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
-       ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never)
+       ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never).
+       ; LOVE_LAZY_GLAZE, read per closure, waits for the closure's first call (firstcell), and the compile sees the siblings as they are then
        (natjit e s a gv farq lams nm ti ta inl rt)
+        (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v))
+           (: lz (freeze-self lams nm)
+              L (firstcell e a (\ L (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))))
+              (L == () ? (natnow e s a gv farq lams nm ti ta inl rt) L))
+           (natnow e s a gv farq lams nm ti ta inl rt))
+       ; the self cell as it is now: a later compile reads its own import row as this one would
+       (freeze-self lams nm) (: sc (assoc nm lams) (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams))
+       (natnow e s a gv farq lams nm ti ta inl rt)
         (: _ (peep gvbox 0 0 ? 0 (pin gvbox 0 gv))
            _ (pin probebox 0 0)
            ps (init >s)  body (last >s)
@@ -2667,9 +2680,8 @@
                        0)
                  (!ok ? (no 0)
                     (: L (defercell e a)
-                       sc (assoc nm lams)
-                       lz (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams)
-                       _ (pin rt 'defer ((_ \ (deferpatch L (natjit e s a gv farq lz nm ti ta inl 0))) . peep rt 'defer ()))
+                       lz (freeze-self lams nm)
+                       _ (pin rt 'defer ((_ \ (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))) . peep rt 'defer ()))
                        L)))))
        natjit)                                                            ; the inner : answers the closure; its aliases stay private
    (fired? n) (n < peep fires () 0)
