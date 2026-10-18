@@ -1,18 +1,13 @@
-; nifs.l -- love.c's nif roster and its instruction roster as love data, and the C
-; laid from them: nifs.h, through clay. doc/misc/clay.md rung 4.
-;
-; edit this file, not nifs.h -- make relays it from here, off the mx_gen roster in
-; test/test.mk. `make mx` refreshes by hand, test_clay diffs.
-;
-; a new love name must not already be a LOCAL in src/love/boot/*.l: those files compile
-; against the bare book, so a sibling of the same name shadows the nif in that whole
-; letrec and the call quietly becomes a partial application of the local. grep them
-; for the name as a binding, not just the book for the name.
+; nifs.l -- love.c's nif and instruction rosters as love data, and nifs.h laid from them
+; through clay. edit this, not nifs.h: make relays it (mx_gen), test_clay diffs.
+; a new love name must not already be a LOCAL in src/love/boot/*.l: they compile against
+; the bare book, so a sibling of that name shadows the nif and the call silently becomes a
+; partial application of the local
 (:
    _ (borrow "src/apps/moon/clay.l")
 
-   ; --- the nifs. one row per (C symbol, love name, arity, impl). arity is a shape,
-   ; not a number the C reads: 1 runs the op straight, 2..5 curry on lvm_cur first.
+   ; --- the nifs: (C symbol, love name, arity, impl [module]). arity is a shape: 1 runs
+   ; straight, 2..5 curry on lvm_cur first
    nif-rows
     '((nif_clock         "clock"         1 lvm_clock)
       (nif_nclock        "nclock"        1 lvm_nclock)
@@ -170,8 +165,7 @@
       (nif_bitlen        "bitlen"        1 lvm_bitlen)
       (nif_arena         "arena"         1 lvm_arena))
 
-   ; --- the instructions the codegen emits. no name column and no arity: an
-   ; instruction is jumped to, not applied, so its C symbol is its only spelling.
+   ; --- the instructions: jumped to, not applied, so the C symbol is the only spelling
    nif-insts
     '(lvm_unc lvm_index lvm_ret lvm_ap lvm_tap lvm_apn lvm_tapn lvm_jump lvm_cond lvm_arg
       lvm_quote lvm_defglob lvm_argap lvm_quoteap lvm_argtap lvm_arg0 lvm_arg1 lvm_arg2
@@ -180,9 +174,8 @@
       lvm_argtwocond lvm_apo lvm_tapo lvm_uncn lvm_part lvm_tpart)
 
    ; --- the C, through clay ------------------------------------------------------
-   ; the roster laid once as X-rows, and three consumers expanding it: the nifs table,
-   ; def1, and nif_lvm. P is a plain run {impl, ret0}; C a curried one, {cur, count,
-   ; impl, ret0} above one operand. at is the run's offset in nifs, a running sum here.
+   ; the roster laid once as X-rows for three consumers: nifs, def1, nif_lvm. P a plain run
+   ; {impl, ret0}; C a curried one {cur, count, impl, ret0}. at: the run's offset in nifs
    nl (string 10)
    (vr s) ['var s]
    (mac nm body) ['cpp-def nm body]
@@ -190,9 +183,8 @@
    nif-ats
     (: (go l n) (two? l ? (n . go >l (n + (nif-wide? <l ? 4 2))))
      (go nif-rows 0))
-   ; mod is the module the row is born in, () for the global book -- and no sweep in egg.l
-   ; has to know it. the boot .l files compile against the bare book, so any name one of
-   ; them spells has to stay global, which is what keeps that column near-empty.
+   ; mod: the row's module, () for the global book. any name a boot .l file spells must
+   ; stay global, since they compile against the bare book
    (mod-of r) (4 < #r ? (r 4) ())
    (zip a b) (two? a ? ([<a <b] . zip >a >b))
    (nif-row at r)
@@ -217,15 +209,14 @@
     ['gdecl [["nifs" '(arr (const (named "union u")) 0)
               ['init [['call (vr "nif_rows") [(vr "nif_run_p") (vr "nif_run_c")]]]]]]
      '(static)]
-   ; the book table: love name -> the value as a word. a nif carries its run's address,
-   ; an instruction carries itself -- the union member says which, so no cast either way.
+   ; the book table: a nif carries its run's address, an instruction itself; the union member
+   ; says which, so no cast
    nif-def1
     ['gdecl [["def1" '(arr (const (struct "def")) 0)
               ['init [(vr "nif_rows(nif_def_p, nif_def_c) inst_rows(nif_def_i)")]]]]
      '(static)]
-   ; book name -> the lvm_ that runs it, as love data in .rodata: `dis` can name only the
-   ; book key, mooncc's IR only the C symbol. lib/splice.l reads it. not static: the
-   ; runtime asks for it by name.
+   ; book name -> its lvm_, in .rodata: `dis` knows only the book key, mooncc's IR only the C
+   ; symbol. lib/splice.l reads it; not static, the runtime asks for it by name
    nif-lvmmap
     ['gdecl [["nif_lvm" '(arr (const char) 0)
               (vr (cstrlit "(" + " nif_rows(nif_lvm_p, nif_lvm_c) " + cstrlit ")"))]] ()]
@@ -249,5 +240,5 @@
       nif-rows-def nif-insts-def]
      + nif-macs + [nif-table nif-def1 nif-lvmmap] + nif-undefs)
    nifs-h (cats (map clay-show nif-forms))
-   ; a shape check first: a malformed tree arrives as a codegen error naming nothing.
+   ; a shape check first: a malformed tree arrives as a codegen error naming nothing
    nifs-ok (any (c \ clay-ok? c != 1) nif-forms ? 0 1))

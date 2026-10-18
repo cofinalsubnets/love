@@ -1,18 +1,12 @@
-; src/inle/mkboot.l -- lay boot.o, the kernel's bring-up: the register-exact code that runs before
-; there is a C environment (mkvec.l's sibling).
-;
+; src/inle/mkboot.l -- lay boot.o, the register-exact bring-up before there is a C environment.
 ;   (lay-boot dst "x64")   the PVH note, the page tables + GDT, the long-mode ladder, khop
 ;   (lay-boot dst "a64")   the translation tables, MAIR/TCR/TTBR, the MMU switch, the hop, khop
 ;   (lay-boot dst "rv64")  the one sv39 root, satp, sstatus.FS, khop
-;
-; boot's link is flat on every arch (vaddr = paddr at the kernel base), so a label's running, linked
-; and page-table address are one number and `la` answers it; x64's image lies above it, in the
-; upper half (kproject.l). `lia` (an absolute) stays only where wanted for its own sake: the first
-; fetch after the MMU comes on, where a pc-relative branch would ride a broken map instead of
-; failing on it, the stack it lands on, and x64's reach up to the image.
-; runs after src/love/holo/{elf,obj}.l in a (borrow 'holo) cat with the target's backend joined;
-; the Makefile drives it. registers are holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi;
-; a64: rN = xN.
+; the link is flat (vaddr = paddr), so `la` answers a label; x64's image lies in the upper half.
+; `lia` stays where an absolute is wanted: the first fetch after the MMU comes on (a pc-relative
+; branch would ride a broken map), its stack, and x64's reach up to the image.
+; runs after holo/{elf,obj}.l in a (borrow 'holo) cat with the target's backend joined.
+; registers: x86 r0=rax r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; a64 rN = xN.
 (:
    (b-rep n x) (n >= 1 ? (x . b-rep (n - 1) x))
    (b-zeros n) (b-rep n 0)
@@ -21,18 +15,9 @@
    (b-abs64 lbl ad) [['fix 8 'abs64 lbl ad]]     ; ..and its 8-byte twin
    (b-quad v) ['raw (le64 v)]
 
-   ;; -- the x86-32 helper table -------------------------------------------
-   ;; holo lays x64, and the PVH stub's first thirty instructions run in 32-bit
-   ;; protected mode, where the same opcodes mean different things: 0x41 is
-   ;; `inc %ecx` here and a REX prefix there, and ModRM mod=00 rm=101 is an
-   ;; absolute disp32 here and RIP-relative there. teaching holo a mode nothing
-   ;; else in the tree needs would be the wrong shape, and frozen raw words
-   ;; would be unreadable -- so the encodings live here as named byte-list
-   ;; functions, each one checked against `llvm-mc -triple=i386 --show-encoding`
-   ;; and each carrying its AT&T source. the PVH protocol is frozen, so this is
-   ;; write-once code.
-   ;; a memory operand off %edi always takes the disp32 form (mod=10), even
-   ;; where a disp8 would fit -- one shape, three bytes, no branch on the offset.
+   ;; -- x86-32 helpers: the PVH stub's first instructions run in 32-bit protected mode,
+   ;; where holo's x64 encodings mean other things. each checked against llvm-mc -triple=i386.
+   ;; an %edi memory operand always takes disp32 (mod=10): one shape.
    i-cli            '(250)                                   ; fa           cli
    i-xor-ecx        '(49 201)                                ; 31 c9        xor %ecx, %ecx
    i-eax-ecx        '(137 200)                               ; 89 c8        mov %ecx, %eax
@@ -60,36 +45,30 @@
    (i32 bs) ['raw bs]                                        ; one 32-bit instruction, one form
 
    ;; -- x64 ------------------------------------------------------------
-   ;; the note `qemu -kernel` reads to find the 32-bit entry. it is an ELF NOTE
-   ;; the LOADER consults, not advisory metadata, so link.l places it like
-   ;; progbits instead of dropping it (dropping it would strand the kernel).
+   ;; the PVH note `qemu -kernel` reads to find the 32-bit entry; link.l keeps it like progbits.
    x-note
     ([['raw (le32 4 + le32 4 + le32 18)]]            ; namesz 4, descsz 4, XEN_ELFNOTE_PHYS32_ENTRY
      + [['raw '(88 101 110 0)]]                      ; "Xen\0"
      + [['raw (b-abs32 'pvh32 0)]])                  ; the PHYSICAL address of the 32-bit entry
 
-   ;; the page tables, zero-filled and part of the file (they are .boot's bytes,
-   ;; not .bss -- the loader hands them over whole). one PML4, one PDPT the
-   ;; identity and hhdm windows share, four PDs of 2 MiB entries covering
-   ;; physical 0..4 GiB. RAM above 4 GiB stays unmapped -- pvh.c drops those
-   ;; e820 entries.
+   ;; the page tables, file bytes (not .bss): one PML4, one PDPT shared by the identity and
+   ;; hhdm windows, four PDs of 2 MiB entries over phys 0..4 GiB. RAM above 4 GiB is unmapped.
    x-boot
     ('((label pml4)) + [['raw (b-zeros 4096)]]
      + '((label pdpt_id)) + [['raw (b-zeros 4096)]]
      + '((label pd0)) + [['raw (b-zeros 16384)]]
-     ;; the GDT: a null, a 64-bit code segment at 0x08, a data segment at 0x10.
+     ;; the GDT: null, 64-bit code at 0x08, data at 0x10.
      + [['align 8] ['label 'gdt]]
      + [(b-quad 0) (b-quad 0x00209A0000000000) (b-quad 0x0000920000000000)]
      + [['label 'gdt_end] ['align 8] ['label 'gdtreg]]
      + [['raw (le16 23)]]                            ; gdt_end - gdt - 1
-     ;; lgdt runs before paging, so the base it loads must be PHYSICAL
+     ;; lgdt runs before paging: the base must be physical
      + [['raw (b-abs64 'gdt 0)]])
 
    ;; the ladder. 32-bit protected mode, paging off, ebx -> hvm_start_info.
    x-boot-text
     ([['label 'pvh32] (i32 i-cli)]
-     ;; the four PDs: entry i = (i << 21) | P|RW|PS -- 2048 qwords, phys 0..4 GiB.
-     ;; the high dword of each entry stays the zero the loader left there.
+     ;; the four PDs: entry i = (i << 21) | P|RW|PS; high dwords stay zero.
      + [(i32 (i-edi-sym 'pd0 0)) (i32 i-xor-ecx) ['label 'pd_loop]
         (i32 i-eax-ecx) (i32 (i-shl-eax 21)) (i32 (i-or-eax 0x83))
         (i32 i-st-edi-idx8) (i32 i-inc-ecx) (i32 (i-cmp-ecx 0x800))
@@ -100,14 +79,8 @@
         (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 8))
         (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 16))
         (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 24))]
-     ;; PML4: [0] identity, [256] the hhdm at 0xffff8000_00000000, [511] the image
-     ;; window at 0xffffff80_00000000 -- one PDPT described three times. NX on the
-     ;; hhdm is the whole reason it exists: one bit at the top of the walk covers
-     ;; every page under it, and the hhdm is how the kernel reaches ram (kboot.hhdm),
-     ;; so heap and every page it hands out stop being executable without a second
-     ;; table. the image window keeps X: the kernel runs there (kproject.l), and so
-     ;; does code the heap holds (code_window). identity is this stub's alone, and
-     ;; leaves the lower half to a process.
+     ;; PML4: [0] identity, [256] the hhdm (NX), [511] the image window -- one PDPT thrice.
+     ;; NX at the top of the hhdm covers every page the heap hands out; the image window keeps X.
      + [(i32 (i-edi-sym 'pml4 0)) (i32 (i-eax-sym 'pdpt_id 3))
         (i32 i-st-edi0) (i32 (i-st-edi (256 * 8))) (i32 (i-st-edi (511 * 8)))
         (i32 (i-stimm-edi (256 * 8 + 4) 0x80000000))]
@@ -117,13 +90,10 @@
         (i32 (i-eax-sym 'pml4 0)) (i32 (i-stcr 3))
         (i32 (i-ecx-imm 0xC0000080)) (i32 i-rdmsr)                  ; EFER
         (i32 (i-or-eax 0x900)) (i32 i-wrmsr)                          ; LME | NXE
-         ; NXE before PG: with it clear, bit 63 of a table entry is RESERVED, and
-         ; the first walk after paging comes on faults instead of honouring the NX.
+         ; NXE before PG: else bit 63 of an entry is reserved and the first walk faults.
         (i32 (i-ldcr 0)) (i32 (i-or-eax 0x80000001)) (i32 (i-stcr 0))]    ; PG | PE
      + [(i32 (i-ljmp 'pvh64 0))]
-     ;; ..and we are 64-bit. the data selectors, then the hop into the mapped
-     ;; world -- absolute on purpose: it is the first fetch after paging, and a
-     ;; relative branch would ride a broken map instead of failing on it.
+     ;; 64-bit: the data selectors, then an absolute hop (the first fetch after paging).
      + [['label 'pvh64]]
      + [['raw '(102 184 16 0)]                       ; 66 b8 10 00  mov $0x10, %ax
         ['raw '(142 216)]                            ; 8e d8        mov %ax, %ds
@@ -131,11 +101,8 @@
         ['raw '(142 208)]]                           ; 8e d0        mov %ax, %ss
      + '((lia r0 khop) (jmpr r0)))
 
-   ;; past the hop: a stack, SSE on before ANY C runs (pvh_to_kboot is compiled
-   ;; and free to vectorize -- the same dance as the top of kmain, which stays
-   ;; for a door that hands over with C already reachable), then C. the stack is
-   ;; read through the image window, and C is reached there by absolute calls:
-   ;; the image is a half of the address space away from this text.
+   ;; past the hop: a stack, SSE on before any C runs (pvh_to_kboot may vectorize), then C,
+   ;; by absolute calls through the image window.
    x-text
     '((label khop)
        (lia sp kstack_top)
@@ -148,8 +115,7 @@
        (ldcr r0 4)
        (or r0 r0 0x600)                               ; CR4.OSFXSR | OSXMMEXCPT
        (stcr 4 r0)
-       ;; hvm_start_info (a low physical address) -> arg0. the zx4 is `mov
-       ;; %ebx, %edi`: the 32-bit half is all the loader set.
+       ;; hvm_start_info -> arg0; zx4: the loader set only the 32-bit half.
        (mov r6 r3) (zx4 r6)
        (lia r0 pvh_to_kboot)
        (callr r0)
@@ -159,13 +125,9 @@
        (cli) (hlt) (jmp x_park))
 
    ;; -- a64 -----------------------------------------------------------
-   ;; the tables mirror x86's shape index for index: one L1 named twice, as the
-   ;; identity map under TTBR0 (where the kernel runs) and as the hhdm at
-   ;; L0[256] under TTBR1. the first gig is virt's MMIO ground and is laid as a
-   ;; real L2 of 2 MiB Device blocks -- arch.c's mmio_map walks TTBR1 expecting
-   ;; a TABLE there (a 1 GiB block would read as a bogus L2 pointer) and re-lays
-   ;; the two slots it cares about, same shape. RAM (1..4 GiB) rides 1 GiB
-   ;; Normal blocks, and the kernel's own gig is one of them.
+   ;; one L1 named twice: identity under TTBR0 and hhdm at L0[256] under TTBR1. the first gig
+   ;; is a real L2 of 2 MiB Device blocks (mmio_map walks TTBR1 expecting a table there);
+   ;; RAM (1..4 GiB) rides 1 GiB Normal blocks.
    a-boot
     ('((label l0_lo)) + [['raw (b-zeros 4096)]]      ; TTBR0: [0] -> l1_id
      + '((label l0_hi)) + [['raw (b-zeros 4096)]]    ; TTBR1: [256] hhdm -> l1_id
@@ -173,29 +135,21 @@
      + '((label l2_dev)) + [['raw (b-zeros 4096)]])     ; 512 x 2M Device blocks over phys 0..1G
 
    a-gig 0x40000705                                 ; 0x40000000 | 0x705  valid | AttrIndx 1 | SH inner | AF
-   ;; PXNTable | UXNTable, bits 59 and 60 of a TABLE descriptor: nothing under
-   ;; this entry may be fetched from, at either EL. x86's NX bit, one level up.
+   ;; PXNTable | UXNTable (bits 59, 60 of a table descriptor): x86's NX, one level up.
    a-xntab 0x1800000000000000
    a-boot-text
     ('((label a64boot)
-       ;; the DOOR, one bit, read off the MACHINE and not off who booted us: a
-       ;; firmware hand-off enters with the MMU ON, `qemu -kernel` with it off.
-       ;; GAS said this with `tbz x9, #0, 1f`; the neutral surface has
-       ;; no test-bit-and-branch and no immediate AND, so the bit is masked
-       ;; through a register. x9/x10 are dead at the entry.
+       ;; firmware enters with the MMU on, `qemu -kernel` with it off: read SCTLR.M.
+       ;; no test-bit-branch or immediate AND in the neutral surface; x9/x10 are dead here.
        (mrs r9 sctlr_el1)
        (li r10 1) (and r10 r9 r10) (cmp r10 0)
        (br eq a64_cold)
-       (jmp kmain)                                   ; already mapped: straight into C, nothing to bring up
+       (jmp kmain)                                   ; already mapped: straight into C
        (label a64_cold)
-       (mov r21 r0)                                  ; x0 is 0 today (probed); a loader that
-                                                     ;   passes a dtb pointer is honored at khop
-       (li r6 3)                                     ; a table descriptor's low bits: valid | table
-                                                     ;   (a LITERAL: this block is quoted, so a name
-                                                     ;    here would ride through as a symbol)
-       ;; l2_dev: 512 x 2 MiB Device blocks (valid | AF, AttrIndx 0). `la` is
-       ;; pc-relative and we are running LOW, so every address written into a
-       ;; table below is the physical one, which is what a table must hold.
+       (mov r21 r0)                                  ; x0: a loader's dtb pointer, honored at khop
+       (li r6 3)                                     ; valid | table; a literal, the block is quoted
+       ;; l2_dev: 512 x 2 MiB Device blocks. `la` is pc-relative and we run low, so every
+       ;; address written into a table is physical.
        (la r0 l2_dev)
        (li r1 0)
        (li r2 0x401)
@@ -209,17 +163,12 @@
      + [['li 'r2 a-gig] ['st 'r1 8 'r2]
         ['li 'r2 (a-gig + 0x40000000)] ['st 'r1 16 'r2]
         ['li 'r2 (a-gig + 0x80000000)] ['st 'r1 24 'r2]]
-     ;; the L0s: the same L1 under both -- identity for the kernel to run in,
-     ;; the hhdm for reaching ram by physical address. the XN pair rides the
-     ;; hhdm descriptor ALONE, which is the whole reason the second window is
-     ;; worth its entry: one bit at the top of the walk covers every page under
-     ;; it, so the heap and every page it hands out stop being executable
-     ;; through the map the kernel reads them by, while the identity walk keeps
-     ;; X for the image it runs from. the x86 stub says this at PML4[256].
+     ;; the L0s: the same L1 under both. the XN pair rides the hhdm alone, so pages reached
+     ;; through it can't execute while identity keeps X for the image.
      + ['(or r3 r1 r6)
         '(la r0 l0_lo) '(st r0 0 r3)
         '(la r2 l0_hi)
-        ['li 'r5 a-xntab] '(or r5 r5 r3) '(st r2 2048 r5)]     ; [256], and nothing under it runs
+        ['li 'r5 a-xntab] '(or r5 r5 r3) '(st r2 2048 r5)]     ; [256]: nothing under it runs
      + '(;; MAIR: attr0 Device-nGnRnE (what mmio_attr_index prefers), attr1 Normal WB
          (li r3 0xff00)
          (msr mair_el1 r3)
@@ -230,8 +179,7 @@
          (msr tcr_el1 r3)
          (msr ttbr0_el1 r0)
          (msr ttbr1_el1 r2)
-         ;; FP/SIMD on before ANY C runs (dtb.c is compiled and free to
-         ;; vectorize) -- archinit's own set stays for the MMU-on door.
+         ;; FP/SIMD on before any C runs (dtb.c may vectorize)
          (mrs r3 cpacr_el1)
          (li r4 0x300000) (or r3 r3 r4)        ; 3 << 20
          (msr cpacr_el1 r3)
@@ -243,12 +191,8 @@
          (li r4 0x1005) (or r3 r3 r4)          ; M | C | I = 1<<0 | 1<<2 | 1<<12
          (msr sctlr_el1 r3)
          (isb)
-         ;; into the mapped world. the link is flat, so this lands where the
-         ;; pc already is -- but it rides the literal anyway, because it is the
-         ;; first fetch after the MMU came on and a pc-relative branch would
-         ;; hide a broken identity map instead of failing on it. the align is
-         ;; lia's, not decoration: the literal sits at the instruction's own
-         ;; address + 8, so the site has to be even-worded for the load.
+         ;; an absolute hop although the link is flat: a pc-relative branch would hide a broken
+         ;; identity map. the align is lia's: the literal sits at the site + 8.
          (align 8)
          (lia r9 khop)
          (jmpr r9)))
@@ -258,7 +202,6 @@
        (la r9 kstack_top)                            ; flat: pc-relative IS the linked address
        (lea sp r9 0)                                 ; mov sp, x9
        ;; qemu lays the dtb at the RAM base; a loader that passed one in x0 wins.
-       ;; GAS said this with csel; the neutral surface says it with a branch.
        (li r1 0x40000000)                             ; RAMB, virt's RAM base
        (cmp r21 0)
        (br ne a64_havedtb)
@@ -272,46 +215,30 @@
        (jmp a64_park))
 
    ;; -- rv64 ------------------------------------------------------------
-   ;; sv39, and the whole map is ONE table: a root's 512 entries each describe a
-   ;; gigabyte, so four of them at [0..3] are the identity window the kernel runs
-   ;; in and four more at [256..259] are the hhdm at 0xffffffc0_00000000 -- which
-   ;; is where sv39's upper half begins, index 256 being its first entry. no second
-   ;; level anywhere: x86 needs one for its 2 MiB pages and a64 one more for
-   ;; virt's device ground, and riscv wants neither -- MMIO lives under the first
-   ;; gigabyte, and a base sv39 PTE carries no memory type to say about it (that is
-   ;; the platform's PMA, or Svpbmt, and this machine needs neither).
+   ;; sv39, one table: [0..3] identity gigs, [256..259] the hhdm at 0xffffffc0_00000000.
+   ;; no second level: MMIO is under the first gig and a base PTE carries no memory type.
    r-boot ('((label rv_root)) + [['raw (b-zeros 4096)]])
 
-   ;; a leaf PTE for gigabyte i: PPN is (i << 30) >> 12, and PPN sits at bit 10, so
-   ;; the address half is just i << 28. flags V|R|W|G|A|D, plus X on the identity
-   ;; window alone -- the hhdm is how the kernel reaches ram (kboot.hhdm), and NOT
-   ;; being able to fetch through it is the whole reason a second window is worth
-   ;; its entries. x86 says this with NX at PML4[256], a64 with the XN pair.
+   ;; a leaf PTE for gig i: PPN (i << 30 >> 12) at bit 10 is i << 28. V|R|W|G|A|D, X on the
+   ;; identity window alone (the hhdm is non-executable, as on x86 and a64).
    (r-pte i x) (i << 28 | (x ? 0xEF 0xE7))
    r-boot-text
     ('((label rvboot)
-       ;; SBI hands over a0 = this hart's id and a1 = the device tree. a1 is the
-       ;; only one that outlives the bring-up, and s2 is where it waits.
+       ;; SBI: a0 = hart id, a1 = the device tree, kept in s2.
        (mov r13 r1)
        (la r0 rv_root))
      + (foldl (\ a i (a + [['li 'r2 (r-pte i 1)] ['st 'r0 (i * 8) 'r2]
                            ['li 'r2 (r-pte i 0)] ['st 'r0 (2048 + i * 8) 'r2]]))
               () ^4)
-     + '(;; satp: mode 8 (sv39) over the root's PPN, then the fence that makes the
-         ;; map current. the pc is inside the identity window, so the fetch after
-         ;; this IS the test of it -- there is no literal to hop through the way
-         ;; the other two lanes take one, and a broken map faults here rather than
-         ;; being ridden quietly.
+     + '(;; satp: sv39 over the root's PPN. the pc is in the identity window, so the next
+         ;; fetch tests the map; there is no literal hop.
          (shr r0 12)
          (li r2 0x8000000000000000)
          (or r0 r0 r2)
          (csrw satp r0)
          (sfence zr zr)
-         ;; FP on before ANY C runs -- dtb.h's walk is compiled and free to
-         ;; vectorize, and kmain is the runtime. a reset leaves sstatus.FS = Off,
-         ;; where the first fld traps; OpenSBI happens to hand over with it open
-         ;; already, and this is here so the kernel never depends on which firmware
-         ;; did it. 3 << 13 is Dirty, what a kernel that never swaps the file wants.
+         ;; FP on before any C runs (sstatus.FS is Off at reset; don't depend on the firmware).
+         ;; 3 << 13 is Dirty.
          (li r8 0x6000)
          (csrs sstatus r8)
          (jmp khop)))
@@ -326,18 +253,13 @@
        (wfi)
        (jmp rv_park))
 
-   ;; the boot stack, every arch: kmain never returns. 1 MiB, though the C walks below the
-   ;; egg bake are meant to stay flat: below the stack lie the boot's page tables, which an
-   ;; overflow eats in silence (the HHDM's L0 entry goes to zero, and every later access
-   ;; takes a level-0 fault, the report's own included), and the room stands in for the
-   ;; guard page there is not yet. .bss so it costs the file nothing. the far end carries a
-   ;; label, so every khop loads the top and the size is spelled once.
+   ;; the boot stack, 1 MiB; kmain never returns. the boot page tables lie below it and an
+   ;; overflow eats them in silence (no guard page yet). .bss, free in the file.
    b-stack [['label 'kstack] ['raw (b-zeros 1048576)] ['label 'kstack_top]]
 
    ;; -- the two objects ---------------------------------------------------
-   ;; SHF flags: 2 ALLOC, 3 ALLOC|WRITE, 6 ALLOC|EXEC. types: 1 PROGBITS,
-   ;; 7 NOTE, 8 NOBITS. .boot stays PROGBITS on both arches -- its zeros are
-   ;; file bytes today and the loader hands the whole span over.
+   ;; SHF: 2 ALLOC, 3 ALLOC|WRITE, 6 ALLOC|EXEC. types: 1 PROGBITS, 7 NOTE, 8 NOBITS.
+   ;; .boot stays PROGBITS: the loader hands the whole span over.
    (lay-boot dst arch) (write-bytes dst (lay-boot-bytes arch))
    (lay-boot-bytes arch)
     (arch @ "x64"
@@ -360,11 +282,8 @@
                 () ()
                 '("khop"))
        "rv64"
-       ;; the stub before the tables, which is the other way round from both lanes
-       ;; above: this door is entered at the ADDRESS a kernel was loaded to and not
-       ;; at the symbol an ELF header names -- qemu's virt hands SBI the load base,
-       ;; and a flashed image on real silicon has no header to name anything with.
-       ;; so the first laid byte has to BE rvboot; e_entry lands on it either way.
+       ;; the stub before the tables: this door is entered at the load address, not a symbol,
+       ;; so the first laid byte has to be rvboot.
        (objsecs 'rv64
                 [[".boot.text" 1 6 16   r-boot-text]
                  [".boot"      1 3 4096 r-boot]

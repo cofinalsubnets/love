@@ -1,10 +1,6 @@
-; src/apps/moon/floor.l -- the C type floor: the laws that are neither syntax nor codegen,
-; spelled once and read from both sides. pure over the shared type vocabulary
-; ('char 'short 'int 'long .. | ('ptr t) | ('arr t n) | ('struct tag) | ('bitfield ty off w [n])):
-; the machine WORD and the struct-tag table arrive as parameters, which is the whole point --
-; parse threads them off ps, gen off g, and a front that is neither stands on this file alone.
-; nothing here may name a token, a parse state, a register or a target: the moment it does,
-; a second front has to drag cparse in to size a struct.
+; src/apps/moon/floor.l -- the C type floor: laws neither syntax nor codegen, read by parse and gen.
+; pure over the type vocabulary ('int .. | ('ptr t) | ('arr t n) | ('struct tag) | ('bitfield ty off w [n]));
+; the word and the struct-tag table are parameters. never name a token, parse state, register or target.
 (module 'moon
 (:
    ; -- the type shapes --
@@ -15,13 +11,8 @@
    (bitf? ('bitfield . _)) 1             ; (bitfield uty bitoff width [n]); its lvalue is a unit address, n bytes when packed
    (cplxty? ty) (stru? ty && elem <>ty '("__cplx_double" "__cplx_float"))   ; a seeded complex
 
-   ; -- sizes and alignment. w is the machine word in bytes (4 on the 32-bit thumb ABI, 8
-   ; otherwise), stag the tag table: tag -> (fields size align).
-   ; one body on purpose: parse bakes member offsets into stag at playout and gen trusts
-   ; them, so a divergence mislays every pointer-bearing struct silently.
-   ; the widths spell their members out rather than reaching for gen's `llt?`/`d128?` -- those
-   ; two name a register pair and a protocol, which is gen's business and no law of C. that is
-   ; the admission rule here: a name earns the floor by being about C, not about a machine.
+   ; -- sizes and alignment. w is the word in bytes, stag: tag -> (fields size align).
+   ; one body: parse bakes member offsets into stag and gen trusts them.
    (tysz w stag ty)
     (? (ptr? ty) w
        (arr? ty) (<>>ty * tysz w stag <>ty)
@@ -33,8 +24,7 @@
              ('llong || 'ullong || 'double) 8  ; 8-byte on every target (t32's word is 4)
              ('i128 || 'u128) 16
              w))
-   ; a scalar aligns to its size, up to cap: the widest a scalar asks on the target (16 on the
-   ; 64-bit ones, 8 under AAPCS32, 4 under SysV i386, whose long long and double sit 4-aligned)
+   ; a scalar aligns to its size, up to cap (16 on 64-bit, 8 under AAPCS32, 4 under SysV i386)
    (tyalign w cap stag ty)
     (? (ptr? ty) w
        (arr? ty) (tyalign w cap stag <>ty)
@@ -42,11 +32,8 @@
        (bitf? ty) (tyalign w cap stag <>ty)
        (min (tysz w stag ty) cap))
 
-   ; -- the typing door: C's promotion and conversion law spelled once -- integer promotions
-   ; (C11 6.3.1.1) and the usual arithmetic conversions (6.3.1.8). parse's arithmetic lanes
-   ; read it, gen's cmpu (compare/divide signedness) consumes it. w64 is the one seam: whether
-   ; long is 8 bytes -- on ilp32 a long cannot hold every uint, so long meets uint at ulong
-   ; where LP64 answers long.
+   ; -- integer promotions (C11 6.3.1.1) and usual arithmetic conversions (6.3.1.8).
+   ; w64: whether long is 8 bytes -- on ilp32 long meets uint at ulong, on LP64 at long.
    (parith? ty) (bitf? ty ? 1
                    (elem ty '(bool char schar cchar uchar short ushort int uint long ulong
                                  llong ullong i128 u128 float double)))
@@ -58,7 +45,6 @@
                  (elem ty '(bool char schar cchar uchar short ushort)) 'int
                  ty)
    (puac w64 ta tb)
-    ; either operand decides, so this reads both and cannot be an @ over ta alone
     (? (ta = 'double || tb = 'double) 'double
        (ta = 'float || tb = 'float) 'float
      (: a (pprom ta) b (pprom tb)

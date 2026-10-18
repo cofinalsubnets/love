@@ -1,6 +1,6 @@
-; src/apps/hosts.l -- the other machines a session may run work on: a registry of hosts, each
-; with how it is reached, what it can do and how many slots it has, and a door that takes a
-; free slot on a host that can, lays a directory there, runs a command and answers its status.
+; src/apps/hosts.l -- the other machines a session may run work on: a registry of hosts
+; (reach, caps, slots), and a door that takes a free slot on a capable host, lays a
+; directory there, runs a command and answers its status.
 ;
 ;   (hosts-all 0)               every host the registry names
 ;   (hosts-with cap where)      the hosts with cap whose facts hold where, "key=value" or ()
@@ -10,11 +10,10 @@
 ;   (hosts-line h dir argv)     the sh line that lays dir on h, runs argv there and cleans up
 ;   (hosts-on as)               love bee --on and --hosts, the door: its exit status
 ;
-; the registry is ~/.love/etc/bee/hosts (BEE_HOSTS), a paragraph a host of `key value` lines:
-; name, reach (the ssh words; ssh NAME unless given), slots (1), caps (words), and any other
-; line a fact, which --where asks for. a slot is an exclusive lock, host-NAME-N, so no two
-; lanes crowd a box. for a release the env still names hosts, and a cap it names takes its
-; hosts over the registry's: KTEST_A64_HOSTS (a64-exec, kvm-a64), KTEST_VMX_HOSTS (vt-x),
+; the registry is ~/.love/etc/bee/hosts (BEE_HOSTS), a paragraph a host of `key value`:
+; name, reach (ssh words; ssh NAME by default), slots (1), caps, and any other line a fact
+; for --where. a slot is an exclusive lock, host-NAME-N. an env cap list takes its hosts
+; over the registry's: KTEST_A64_HOSTS (a64-exec, kvm-a64), KTEST_VMX_HOSTS (vt-x),
 ; FBSD_SSH NBSD_SSH FBSD_ARM64_SSH NBSD_ARM64_SSH (freebsd-x64 netbsd-x64 freebsd-a64 netbsd-a64)
 (module (hosts hosts-all hosts-with hosts-live hosts-take hosts-free hosts-line hosts-on)
 (borrow 'posix)
@@ -52,8 +51,8 @@
    (hs-env-hosts cap)
     (catmap (e \ (: v (hs-env <e) (? (string? v && elem cap (e 1)) (hs-of-env <e v (e 1)) ()))) hs-envs)
 
-   ; ssh to a host: its own words, then batch mode and a short connect before the destination,
-   ; so an option the registry gives comes first and stands (ssh keeps the first it reads)
+   ; ssh to a host: its own words first (ssh keeps the first it reads), then batch mode and
+   ; a short connect
    (hs-ssh h) (: r (h "reach") n #r (take (n - 1) r + ["-o" "BatchMode=yes" "-o" "ConnectTimeout=10"] + [(r (n - 1))]))
    (hs-ask h line) (hark (hs-ssh h + [line]))
    (hosts-live hs) (filter (h \ <(hs-ask h "true") = 0) hs)
@@ -85,8 +84,8 @@
        (go 0))
    (hosts-free slot who) ((cite 'locks 'locks-release) (hs-root 0) (slot 1) 'exclusive who)
 
-   ; dir (or ()) goes over as one tar on the one ssh, argv runs in a scratch dir there with
-   ; only PATH HOME LANG=C, and the dir goes after, whatever argv answered
+   ; dir (or ()) goes as one tar on the one ssh; argv runs in a scratch dir with only PATH
+   ; HOME LANG=C, and the dir goes after, whatever argv answered
    (hosts-line h dir argv)
     (: d ("/tmp/bee-on-" + show (getpid 0))
        there ("mkdir -p " + d + " && cd " + d + (string? dir ? " && tar xf -" "")

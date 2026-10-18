@@ -1,21 +1,13 @@
-; src/apps/caja/doc.l -- lapiz under caja: a document's blocks set as pages, a DVI.
-; `(borrow 'caja-doc)`. lapiz reads markdown, html and roff into one middle (src/apps/lapiz.l);
-; this shower lays that middle out as caja tokens, in Computer Modern at plain TeX's sizes:
-;
+; src/apps/caja/doc.l -- lapiz under caja: lapiz's middle (markdown, html, roff) laid out as
+; caja tokens and set as pages, a DVI, in Computer Modern at plain TeX's sizes. `(borrow 'caja-doc)`:
 ;   cd-fonts                  the TFM names, in the order cd-job wants their bytes
-;   (cd-job tfms hyph date)   a job: tfms the TFM files' bytes, hyph a file like hyphen.tex,
-;                             date [year month day minutes] for the DVI's comment
-;   (cd-tokens J doc)         the document as tokens (src/apps/caja/par.l), a vbox's contents;
-;                             J measures table cells
-;   (cd-dvi J doc)            the document as a DVI: one vbox, \vsplit into pages, each page
-;                             shipped with its number centred under it
-;   (cd-tex J doc hyph)       the same document as -ini TeX, which sets the same DVI; hyph
-;                             is the path TeX reads the patterns from
-;
-; the pages are \vsplit's, not the page builder's (that is rung 6): no marks, no inserts,
-; the \vsize as it comes. text is OT1: what Computer Modern lacks is said in a near form --
-; an accented letter as its base, a sign cmr does not have in typewriter type, another
-; Latin-1 sign as ?, and a symbol past Latin-1 not at all.
+;   (cd-job tfms hyph date)   tfms the TFMs' bytes, hyph a file like hyphen.tex, date
+;                             [year month day minutes] for the DVI's comment
+;   (cd-tokens J doc)         a vbox's contents as tokens; J measures table cells
+;   (cd-dvi J doc)            one vbox, \vsplit into pages, each numbered under it
+;   (cd-tex J doc hyph)       the same as -ini TeX, setting the same DVI; hyph the patterns' path
+; the pages are \vsplit's, not the page builder's: no marks, no inserts. text is OT1: an
+; accented letter sets as its base, another Latin-1 sign cmr lacks as ?, past Latin-1 nothing.
 (module (caja-doc cd-fonts cd-job cd-tokens cd-dvi cd-tex)
 (borrow 'text)
 (borrow 'tfm)
@@ -33,8 +25,7 @@
    ; set outside the document's vbox: \pages reads them
    outer [['set 'hsize hsize] ['set 'vsize (648 * pt)] ['set 'splittopskip [(10 * pt) 0 0 0 0]]
           ['set 'splitmaxdepth (4 * pt)]]
-   ; plain's paragraphs, looser: \tolerance 1000 and an emergency stretch, no indentation,
-   ; space between paragraphs instead
+   ; plain's paragraphs, looser: \tolerance 1000 and an emergency stretch, no indent, space between
    inner [['set 'pretolerance 100] ['set 'tolerance 1000] ['set 'emergencystretch (20 * pt)]
           ['set 'linepenalty 10] ['set 'hyphenpenalty 50] ['set 'exhyphenpenalty 50]
           ['set 'adjdemerits 10000] ['set 'doublehyphendemerits 10000]
@@ -57,7 +48,7 @@
         J))
    (die m) (say err "\(m)\n", flush err, quit 1)
 
-   ; --- text ----------------------------------------------------------------------------------
+   ; --- text ---
    ; a code point cmr has no slot for, as OT1 codes: the accented letters take their base
    near {8216 [96] 8217 [39] 8220 [96 96] 8221 [39 39] 8211 [45 45] 8212 [45 45 45]
          8230 [46 46 46] 223 [25] 230 [26] 339 [27] 248 [28] 198 [29] 338 [30] 216 [31]
@@ -71,8 +62,7 @@
    ; the ASCII signs cmr puts something else at: set in typewriter
    (tt-sign? c) (elem c [60 62 92 95 94 123 125 124 126])
    (space? c) (elem c [32 9 10 13 160])
-   ; a string's tokens in font f: a run of spaces is one 'sp, a straight double quote opens
-   ; after a space or a bracket and closes otherwise
+   ; a run of spaces is one 'sp; a straight double quote opens after a space or a bracket
    (text-toks f s)
     (: cs (cps s)
        (go l prev acc)
@@ -100,7 +90,7 @@
                       []))
                l))
 
-   ; --- blocks --------------------------------------------------------------------------------
+   ; --- blocks ---
    (skip w) ['vskip w 0 0 0 0]
    (glue0 w) [w 0 0 0 0]
    (para f ind l) (['set 'leftskip (glue0 ind)] . ['f f] . 'noindent . inl-toks f l + ['par])
@@ -164,7 +154,7 @@
      [])
    (cd-tokens J doc) (inner + blocks J 0 doc + [(skip 0) ['vskip 0 65536 1 0 0]])
 
-   ; --- pages ---------------------------------------------------------------------------------
+   ; --- pages ---
    (footer n) ['hbox hsize ([hss ['f rm]] + digits n + [hss])]
    (cd-dvi J doc)
     (: _ (cp-run J (cp-mode J) outer)

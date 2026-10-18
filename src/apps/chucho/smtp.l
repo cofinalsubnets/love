@@ -1,7 +1,7 @@
-; src/apps/chucho/smtp.l -- a message handed on: to a sendmail on this host, or to a
-; submission server over SMTP (RFC 5321), in tls from the first byte (smtps://, port 465) or
-; raised to it by STARTTLS (smtp://, port 587). a password goes only over tls, but to a
-; server on this host. the tls is src/apps/tls's, certificates checked the way wget's are.
+; src/apps/chucho/smtp.l -- a message handed on: to a sendmail on this host, or over SMTP
+; (RFC 5321) in tls from the first byte (smtps://, 465) or raised by STARTTLS (smtp://, 587).
+; a password goes only over tls, but to a server on this host. certificates are checked
+; as wget checks them.
 ;
 ;   (smtp-send url user pass from rcpts raw)   -> 1 | why not, a string
 ;   (smtp-pipe cmd from rcpts raw)             -> 1 | why not: sendmail's way
@@ -59,7 +59,7 @@
  (sm-local? h) (elem h ["localhost" "127.0.0.1" "::1"])
 
  ; --- the conversation ----------------------------------------------------------------------
- ; each step answers the next, or a why that ends it; a why carries the server's own words
+ ; each step answers the next, or a why (the server's own words) that ends it
  (sm-why what r) "\(what): \(<r) \(join " " <>r)"
  (sm-ok? r lo hi) (lo <= <r && <r <= hi)
  (sm-ehlo c)
