@@ -938,8 +938,8 @@
       (: n #s
          bang (j < n && s j = 33)
          k (bang ? (j + 1) j)
-         arg (vtilde st (vextrim (snip s k n)))
-         nm (0 < #arg ? arg (st 'file))
+         arg (vextrim (snip s k n))
+         nm (0 < #arg ? (vtilde st arg) (st 'file))
          w (vexfull st w0)
          (? (two? w) (vmsg st ("ambiguous: " + w0 + " -- " + foldl (a \ m \ a + " " + m) "" <>w))
             (w = "s") (vexsub st s k r1 r2)
@@ -964,12 +964,12 @@
             (w = "w") (pin st 'dow [nm])
             (w = "wq" || w = "x") (pin st 'dow [nm], pin st 'quit 1)
             (w = "edit") (vedit st nm bang)
-            (w = "split") (pin st 'dos ['stack arg])
-            (w = "vsplit") (pin st 'dos ['beside arg])
+            (w = "split") (pin st 'dos ['stack (vtilde st arg)])
+            (w = "vsplit") (pin st 'dos ['beside (vtilde st arg)])
             ; a picker over the tree here, the face's to open: its files, or every line
             (w = "find" || w = "grep") (pin st 'dof [w arg])
             ; a browser beside this buffer, on arg or the working directory: the face's door
-            (w = "explore") (pin st 'dex [arg])
+            (w = "explore") (pin st 'dex [(vtilde st arg)])
             (w = "hl") (pin st 'hl (st 'hl ? () 1),
                         vmsg st (st 'hl ? "syntax on" "syntax off"))
             (w = "set") (vexset st arg)

@@ -886,6 +886,8 @@
       (st? (vhome ":e ~") 'doe = '("/h"))
       (st? (vhome ":sp ~/y") 'dos = '(stack "/h/y"))
       (st? (vhome ":w a~b") 'dow = '("a~b"))                 ; only a leading one
+      (st? (vhome ":grep ~/x") 'dof = '("grep" "~/x"))        ; a query is not a file name
+      (st? (vhome ":ex ~/d") 'dex = '("/h/d"))
       (st? (vah ":w ~/x") 'dow = '("~/x")))                  ; no home known: as typed
 
 ; --- `.` after a visual operator repeats it over as many lines, or characters on one row ---
@@ -939,7 +941,9 @@
       (: st (see (box '("ab" "cd") 8 4) ":set nu\rjl") L (vlay st)
          (<>>L = 2 && <>>>L = 6))
       (see (box '("abcdefgh") 8 4) ":set nu\r:set wrap\r" @ st (body st = '("  1 abcd" "    efgh" "~")))
-      (see (box '("a") 8 3) ":set nu\r:set nonu\r" @ st (body st = '("a" "~"))))
+      (see (box '("a") 8 3) ":set nu\r:set nonu\r" @ st (body st = '("a" "~")))
+      (st? (vah ":set number") 'msg = "number")
+      (st? (vah ":set noai") 'msg = "noautoindent"))
 
 ; --- : and / keep their histories, the up arrow walking back through them ---
    _ (test
