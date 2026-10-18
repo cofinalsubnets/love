@@ -485,7 +485,7 @@ word fn_meaning(struct g *c, word x) {
  while (evenp(x) && in_heap(c, x)) {
   union u *k = cell(x), *cd = k[0].ap == lvm_cur ? k + 2 : k;
   lvm_t *e = cd[0].ap == lvm_lazy ? k[-1].ap : cd[0].ap;      // a woken entry, its chunk unseated
-  if ((e != lvm_deferfwd && !code_in(c, (uintptr_t) e)) || k[-1].ap != e) break;   // or a deferred one that declined
+  if ((e != lvm_deferfwd && e != lvm_firstcall && !code_in(c, (uintptr_t) e)) || k[-1].ap != e) break;   // or a deferred one, declined or not called yet
   x = cd[1].x; }
  return x; }
 // threads that are carriers, not code: known by identity, never by their words
