@@ -796,7 +796,8 @@ static struct g *obin_run(struct g *g, int op) {
 
 // the C lane takes plain numbers; anything else, and `/`, goes whole to hook_obin
 static bool obj_plain(word x) {
- if (!trayp(x) || tray(x)->type != love_O) return true;
+ if (!trayp(x)) return isnum(x);                     // a coin or a twin against the tray
+ if (tray(x)->type != love_O) return true;
  struct tray *v = tray(x);
  for (uintptr_t i = 0, n = tray_nelem(v); i < n; i++) if (!isnum(tray_get_obj(v, i))) return false;
  return true; }
