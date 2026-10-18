@@ -23,7 +23,7 @@
   (: f (open "\(hive-cell nm)/card" "r")
      s (hot? f ? (slurp f @ s (close f, s)))
      (? (string? s)
-        (foldl (\ t l (l @ ((k && 0 < #k) + " " + v) (pin t k v) t))
+        (foldl (\ t l (l @ ((k && 0 < #k) + " \(v)") (pin t k v) t))
                {"name" nm} (lines s))))
  (hive-pid c) (unum (peep c "pid" "0") @ n (charm? n ? n 0))
  (hive-alive? p) (charm? p && 0 < p && !(nom? (still p 0)))
