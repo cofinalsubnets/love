@@ -493,6 +493,7 @@
        self (? (nm = 0) 0  (elem nm ps) 0  (elem nm vars0) 0  (nm = go) 0
                (elem nm '(? two? cap cup == + - * < <= > >= = || tally list &&)) 0
                (simp != take ni ps) 0
+               (1 < #(filter (l \ two? l && <l = nm) lams)) 0         ; a name the `:` binds twice: a call to it may be another binding's
                nm)
        sfq  (self != 0)
        ; the value lets ride slots past the spills, one flat namespace (alets declined any rebind)
@@ -1657,10 +1658,21 @@
                               && two? >>nl && atom? >>>nl               ; (: (g q..) GBODY), body-less (one binding)
                               && #>e = #>gnf)))))                       ; inits arity == g's arity
    (subst-sym nm val e) (? (e = nm) val (dquote? e) e (two? e) (map (x \ subst-sym nm val x) e) e)   ; symbol nm -> val in e; a quote is data
+   ; ..nm -> val where nm is free: never under a \ whose params or a `:` whose names bind it, nor into a define whose params do
+   (hname h) (two? h ? (hname <h) h)
+   (subst-free nm val e)
+    (? (e = nm) val
+       (atom? e || aquote? e) e
+       (<e = '\) ((any (p \ p = nm) (rev >(rev >e))) ? e (map (x \ subst-free nm val x) e))
+       (<e = ':) (: ps (anat-defs >e)
+                   ((any (pr \ hname <pr = nm) <ps) ? e
+                      (: sub (map (pr \ <pr . ((two? <pr && occurs? nm <pr) ? >pr (subst-free nm val >pr))) <ps)
+                         (': . ((1 = #>e % 2) ? (unpair sub (subst-free nm val <>ps)) (cbflat sub))))))
+       (map (x \ subst-free nm val x) e))
    ; norm-let: (: aux.. (g q..) GBODY (g inits..)) -> the named-let ((: (g q..) GBODY[aux inlined]) inits..) lift handles. the
    ; aux values close against each other left to right and every use is a copy, so only a dcheap? value goes: a call would recompute per use
-   (auxclose aps) (foldl (\ acc ap (acc + [(<ap . (foldl (\ b q (subst-sym <q >q b)) >ap acc))])) () aps)
-   (auxinl aps x) (foldl (\ b ap (subst-sym <ap >ap b)) x (auxclose aps))
+   (auxclose aps) (foldl (\ acc ap (acc + [(<ap . (foldl (\ b q (subst-free <q >q b)) >ap acc))])) () aps)
+   (auxinl aps x) (foldl (\ b ap (subst-free <ap >ap b)) x (auxclose aps))
    (norm-let body)
     (!(two? body && <body = ': && !(atom? >body)) ? body
        (: parsed (anat-defs >body) pairs <parsed result <>parsed
@@ -1669,8 +1681,9 @@
              !(all (dcheap? * cup) auxps) body
              (: g <<<fnps q ><<fnps gbody ><fnps
                 (!(<result = g && #>result = #q) ? body            ; result must be (g inits..) matching arity
-                   (: inl (auxinl auxps)                                             ; inline every aux name -> its closed value
-                      ([': (g . q) (inl gbody)] . map inl >result)))))))
+                   (: inl (auxinl auxps)                                             ; inline every aux name -> its closed value,
+                      gl (inl ('\ . q + [gbody]))                                    ; in gbody as a lambda over q, so g's own params stay g's
+                      ([': (g . q) <(rev gl)] . map inl >result)))))))
    (lift-pair p)                                                                                  ; (nameform . body) -> (rewritten-pair newdefs)
     (: nf <p pb0 (norm-let >p)
        gd (two? pb0 && 4 = #pb0 && <pb0 = '? && two? (pb0 1) && <(pb0 1) = 'whole?)          ; (? (whole? N) LOOP FOLD), defoliate's guard: the loop lifts
@@ -1727,6 +1740,14 @@
                       && (: v >pr (two? v && <v = g))
                       && !(other-use? <pr pr ipairs ibody)) ipairs)
    (subst-pairs g gn fv pairs) (map (pr \ <pr . subst-call g gn fv >pr) pairs)    ; rewrite (g A..) in every pair's value
+   ; ..a name of ns bound in e: a \'s params, a `:`'s names, a define's params. a call rewritten under such a binder
+   ;   would hand the hoisted loop the inner value for its capture
+   (rebinds? ns e)
+    (? (atom? e || aquote? e) 0
+       (<e = '\) ((any (p \ elem p ns) (rev >(rev >e))) || rebinds? ns (last e))
+       (<e = ':) (: ps (anat-defs >e)
+                   ((any (pr \ (any (p \ occurs? p <pr) ns) || rebinds? ns >pr) <ps) || rebinds? ns <>ps))
+       (any (rebinds? ns) e))
    (plift-fn Fpair)                                                                               ; ((F P..) . FBODY) -> `(Fpair' newdefs)
     (: nf <Fpair FBODY >Fpair
        (!(two? nf && nom? <nf && two? FBODY && <FBODY = ': && two? >FBODY) ? [Fpair ()]
@@ -1739,12 +1760,15 @@
                             cnd (two? bd && <bd = '? ? (opd bd 0))
                             N (two? cnd && <cnd = '< ? (opd cnd 1))                   ; cond (i < N) -> the bound
                             (nom? H && N != () ? ((H . N) . m) m))) () wlifts)       ; so `(tablet 0)` -> `(tablet N)`: the native inserts never grow
-             lifts (filter (pr \ roloop? pr sibnames) ipairs + wlifts)
+             (caps pr) (filter (s \ !(s = '_) && !(elem s ><pr) && occurs? s >pr) (P + valnames))
+             (site-ok? pr) (: g <<pr cs (caps pr)                                               ; no call to g sits under a rebinding of a capture
+                              (all (q \ q = pr || !(occurs? g >q) || !(rebinds? cs [': <q >q 0])) ipairs
+                               && (!(occurs? g ibody) || !(rebinds? cs ibody))))
+             lifts (filter site-ok? (filter (pr \ roloop? pr sibnames) ipairs + wlifts))
              (atom? lifts ? [Fpair ()]
                 (: remain (filter (pr \ !(any (lp \ (pr = lp)) lifts)) ipairs)                ; the non-lifted inner bindings (by identity)
                    specs (map (pr \ <<pr                                               ; per lift a spec (g gn fv..): name, hoisted name F_g, captures
-                               . ((name (string F + "_" + string <<pr))
-                                     . (filter (s \ !(s = '_) && !(elem s ><pr) && occurs? s >pr) (P + valnames)))) lifts)   ; `_` is rebound locally by the loop's pin slot, never a capture
+                               . ((name (string F + "_" + string <<pr)) . caps pr)) lifts)   ; `_` is rebound locally by the loop's pin slot, never a capture
                    (presz pr) (fnpair? pr ? pr (: ms (afind (x \ (<x = <pr)) mapsz) v >pr   ; a map binding `(H (tablet 0))` -> `(H (tablet N))`
                                 (two? ms && two? v && <v = 'tablet ? (<pr . ['tablet >ms]) pr)))    ; presize `(tablet N)` so the N native inserts never grow
                    rwp (map presz (foldl (\ ps sp (subst-pairs <sp <>sp >>sp ps)) remain specs))
@@ -2318,10 +2342,15 @@
    (srcrec form0)
     (two? form0 && <form0 = ': && !(atom? >form0) && 0 = #>form0 % 2 ?                                   ; body-less `:` only
      ({'form form0} @ cell (foldl (\ _ n (pin srcreg n cell)) () (swbnds form0))))
+   ; a pair naming or reading a name the form binds twice, as lowered or as written, or holding a `:`
+   ; that binds one twice, is not recorded
    (swlow c) (peep c 'low 0 ? 0
       (: _ (pin c 'low 1)
-         low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix (c 'form))))))))))))   ; autogroup's full lowering
-         (foldl (\ _ pr (swfnpair? pr && (: cur (peep srcreg <<pr 0) (cur = 0 || (cur = c))) ?
+         f (c 'form)  dn (dupnames f)  ops <(anat-defs >f)
+         (taint? e) (any (n \ occurs? n e) dn)
+         (swok? pr) !(taint? pr || any (o \ hname <o = <<pr && (taint? o || dupbind? >o)) ops)
+         low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix f)))))))))))   ; autogroup's full lowering
+         (foldl (\ _ pr (swfnpair? pr && swok? pr && (: cur (peep srcreg <<pr 0) (cur = 0 || (cur = c))) ?
                             (pin srcreg <<pr (><pr . >pr)) ())) () <(anat-defs >low))))
    (swsrc h) (: d (peep srcreg h 0)                                                   ; a recorded global's lowered pair, or 0
     (? (d == 0) 0
@@ -2330,6 +2359,12 @@
         (: d2 (peep srcreg h 0) (tablet? d2 ? (pin srcreg h 0, 0) d2)))))
    (swuniq l) (? (atom? l) () (elem <l >l) (swuniq >l) (<l . swuniq >l))
    (swbnds e) (map (p \ two? <p ? <<p <p) <(anat-defs >e))                       ; a `:`'s binding names
+   ; a `:` anywhere in e binding one name twice (`_` aside, never read): a rebinding shadows the
+   ; earlier one past it, but the passes below key bindings by name, so it is left to the interpreter
+   (dupbind? e) (? (atom? e || aquote? e) 0
+                   (<e = ':) (!(distinctp (filter (n \ n != '_) (swbnds e))) || any dupbind? >e)
+                   (any dupbind? e))
+   (dupnames e) (: ns (filter (n \ n != '_) (swbnds e)) (filter (n \ 1 < #(filter (= n) ns)) ns))   ; the names e's own `:` binds twice
    ; collect call heads, skipping a `\` subform whole (its params never leak). the walk reads opfixed source, so an infix
    ; operand never masquerades as a head; bnd = the `:` names + params that filter local heads
    (swwalk e bnd acc) (? (atom? e) acc  (two? e && <e = '\) acc
@@ -2358,6 +2393,7 @@
        ; only a few one-line integer predicates survive grpfix there, so the whole file would pay the lifting. srcrec still lowers these for the swallow
        (0 = #>form0 % 2) form0
        (memo-leak? form0) form0                                                                ; a `:`-sibling map memo (fact/bell) -> interp, sound
+       (dupbind? form0) form0                                                                  ; a name bound twice in one `:` -> interp
        ; opfixed at the head: every pass below reads a call as a list with a head; raw source leaves a bare symbol in infix operand position
        (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix form0)))))))))))
           parsed (anat-defs >form) pairs <parsed

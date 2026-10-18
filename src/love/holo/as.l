@@ -87,9 +87,8 @@
 
    ;; --- operand size: the value carries it resolved (dialect.l's xa-width), 0 when neither the
    ;; text nor a register said -- fine for the 64-bit-default forms (push/pop/call/jmp), a raise
-   ;; for anything else. width 2 takes a 66 prefix, width 1 the opcode one below the wide one
-   ;; (89/88, 01/00, c7/c6, f7/f6, ff/fe all sit in that relation). ---
-   (as-osz md w)  (w @ 2 '(102))
+   ;; for anything else. the 66 prefix is as-osz's, by mode; width 1 takes the opcode one below
+   ;; the wide one (89/88, 01/00, c7/c6, f7/f6, ff/fe all sit in that relation). ---
    (as-rexw w) (w = 8)
    (as-opw opc w) (w @ 1 (opc - 1) opc)
    (as-imw w n)   (w @ 1 [(byte n)] 2 (le16 n) (le32 n))
