@@ -364,6 +364,79 @@ t \\- a thing
            ls (lines (flush (ttyshow d 40)))
            (test (nelem "     .." ls) (nelem "     .. .." ls)
                    (elem "     kept by nroff t - a thing" ls))),
+        ; a page's own macro is its body, run with its arguments: \\$n, \\$* and an .am's tail;
+        ; one that calls itself stops rather than runs forever
+        (: d (rfread ".TH \"T\" \"1\" \"\" \"s\" \"m\"
+.de Pair
+\\\\fB\\\\$1\\\\fR and \\\\$2
+..
+.am Pair
+(all: \\\\$*)
+..
+.de Loop
+.Loop
+..
+.SH NAME
+.Pair first \"second one\"
+.Loop
+")
+           ls (lines (flush (ttyshow d 60)))
+           (test (elem "     first and second one (all: first second one)" ls))),
+        ; an mdoc page: its own macros, laid as the man ones
+        (: d (rfread ".\\\" a comment
+.Dd $Mdocdate: June 24 2025 $
+.Dt NC 1
+.Os
+.Sh NAME
+.Nm nc
+.Nd arbitrary connections
+.Sh SYNOPSIS
+.Nm nc
+.Op Fl 46b
+.Op Fl I Ar length
+.Op Fl x Ar proxy_address Ns Op : Ns Ar port
+.Op Ar destination
+.Sh DESCRIPTION
+The
+.Nm
+utility, unlike
+.Xr telnet 1 ,
+scripts
+.Dq nicely .
+.Bl -tag -width Ds
+.It Fl 4
+Use IPv4 addresses only.
+.It Fl I Ar length
+Specify the size.
+.El
+.Bl -bullet -offset indent -compact
+.It
+simple proxies
+.El
+.Bd -literal -offset indent
+$ nc -l 1234
+.Ed
+.Bl -enum
+.It
+one
+.It
+two
+.El
+.Sh EXIT STATUS
+.Ex -std
+")
+           ls (lines (flush (ttyshow d 80)))
+           (test (has? <ls "NC(1)") (has? <ls "General Commands Manual")
+                 (elem "     nc - arbitrary connections" ls)
+                 (elem "     nc [-46b] [-I length] [-x proxy_address[:port]] [destination]" ls)
+                 (elem "     The nc utility, unlike telnet(1), scripts “nicely”." ls)
+                 (elem "     -4     Use IPv4 addresses only." ls)
+                 (elem "     -I length" ls) (elem "            Specify the size." ls)
+                 (elem "         • simple proxies" ls)
+                 (elem "         $ nc -l 1234" ls)
+                 (elem "     1. one" ls) (elem "     2. two" ls)
+                 (elem "     The nc utility exits 0 on success, and >0 if an error occurs." ls)
+                 (nelem "a comment" ls))),
         ; every link with a url is [n] in reading order; an anchor is a mark and no number.
         ; each [n] rides behind a mark named byte 3 and n, which ttpage lifts
         (: d (htread "<h2>see <a href=\"/h\">head</a></h2><p>a <a href=\"x/1\">one</a> and <em><a href=\"#f\">two <b>b</b></a></em>, <a name=\"n\">anchor</a></p><ul><li><a href=\"u3\">three</a></li></ul><blockquote><p><a href=\"q4\">four</a></p></blockquote><dl><dt><a href=\"d5\">term</a></dt><dd><a href=\"d6\">def</a></dd></dl><table><tr><th><a href=\"t7\">h</a></th></tr><tr><td><a href=\"t8\">c</a></td></tr></table>")

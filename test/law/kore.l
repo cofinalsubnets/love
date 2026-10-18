@@ -679,6 +679,19 @@
     pgstep st 58, pgstep st 112,
     (test (st 'fi = 0) (st 'doe = '("a.txt")))))
 
+; ..and reads it through the face's 'load when there is one: man walks pages, not files.
+; a complaint from the loader is the message, and the page stays
+(: t (pin {} 'load (nm \ nm = "gone" ? "man: no manual entry for gone" [[("page " + nm)] (nm + "(1)")]))
+   st (pgnew t 20 5)
+   (pgload st '("page ls") "ls(1)",
+    pins st 'files '("ls" "cat" "gone") 'fi 0,
+    pgstep st 58, pgstep st 110, pgdoe st,
+    (test (st 'file = "cat(1)") (st 'ls = '("page cat"))),
+    pgstep st 58, pgstep st 110, pgdoe st,
+    (test (st 'file = "cat(1)") (st 'msg = "man: no manual entry for gone")),
+    pgstep st 58, pgstep st 112, pgstep st 58, pgstep st 112, pgdoe st,
+    (test (st 'file = "ls(1)") (st 'ls = '("page ls")))))
+
 ; --- the bc floor (bc.l): the scale rules, the base writer, the numeral reader, the grammar ---
 (: st (bc-state 0)
    (sho b n) (pin st 'obase b, bc-show st n)
@@ -818,9 +831,6 @@
    ; the root is up past the file and its section directory, in one step
    (man-root "/usr/share/man/man1/ls.1.gz" = "/usr/share/man")
    (man-root "/usr/share/man/man3/printf.3.gz" = "/usr/share/man")
-   ; mdoc is the macro set this reader does not read, and .th ahead of .Sh settles it
-   (man-mdoc? ".Dd July 1 2026\n.Sh NAME\n") (man-mdoc? ".Sh NAME\n")
-   !(man-mdoc? ".TH LS 1\n.SH NAME\n") !(man-mdoc? ".TH X 1\n.Sh odd\n") !(man-mdoc? "")
    ; a section is a digit and up to three more, with a name behind it; 411toppm is a name
    (man-sec? ["3" "printf"]) (man-sec? ["3p" "x"]) (man-sec? ["3ssl" "x"])
    !(man-sec? ["411toppm"]) !(man-sec? ["411toppm" "x"])
