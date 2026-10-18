@@ -1,8 +1,6 @@
-// srctree.h -- the carried source as a container (src/tools/selfpack.l cuts it): a header, an
-// index, and sections of tar that decode into RAM at their first read. the sections joined are
-// the exact tar the tree cuts to. the host's /love (src/love/lovefs.c), the carried-source bake
-// (main.c) and the kernel's ramfs (src/inle/kmain.c) all read through here, each with its own
-// struct and allocator.
+// srctree.h -- the carried source as a container (selfpack.l cuts it): a header, an index, and
+// tar sections decoded at first read, which joined are the tree's exact tar. lovefs.c, main.c's
+// bake and kmain.c's ramfs read through here
 //
 // little-endian throughout:
 //   "lovetree"  u32 nsec  then nsec rows of  name[8] u32 codec, raw, packed, crc32
@@ -28,8 +26,7 @@ struct tree {
   uintptr_t n;
   void *(*grab)(uintptr_t); };   // bytes for a decoded section, kept for good
 
-// parse the header, decode the index and lay the rows. false for no container, a torn one,
-// or no memory; t is then not to be read.
+// false for no container, a torn one, or no memory; t is then not to be read
 bool tree_open(struct tree *t, unsigned char const *z, uintptr_t zn, void *(*grab)(uintptr_t));
 // section i's bytes, decoded and checked at the first ask -> NULL where that fails
 unsigned char const *tree_sec(struct tree *t, uint32_t i);

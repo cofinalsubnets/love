@@ -1,19 +1,7 @@
-// blk -- the disk (rung 5): virtio-blk, polled, one request in flight.
-// x64 finds it by PCI config-space walk (CF8/CFC) and drives the MODERN
-// virtio-pci transport; a64 scans qemu virt's fixed virtio-mmio slots
-// (version 2 -- the test lane passes force-legacy=false). Both transports
-// share one split virtqueue and one synchronous request door: k_blk_rw posts
-// a three-descriptor chain (header, data, status) and spins on the used ring
-// -- a sector under qemu answers in microseconds, and the spin is BOUNDED so
-// a dead device is a refusal, never a hang. no interrupts: the device's line
-// stays masked and nobody listens.
-//
-// every DMA address the device sees is PHYSICAL: pa = va - khhdm, which
-// holds exactly for kmallocw/love-heap memory (meminit chains RAM at
-// khhdm + base) and does NOT hold for image statics -- so the ring and the
-// request header live in the block kmain hands k_blk_init, and data buffers
-// are always heap (a love string's bytes). the filesystem over this stays in
-// love (src/apps/fat.l); this file is the small part that must be C.
+// blk -- the disk: virtio-blk, polled, one request in flight, over modern virtio-pci (x64)
+// or qemu virt's version-2 virtio-mmio slots. a request spins on the used ring, bounded, so a
+// dead device is a refusal, never a hang. every DMA address is pa = va - khhdm, which holds for
+// heap memory but not image statics: ring and header live in kmain's block, data in the heap
 #include "k.h"
 #include "asmops.h"
 #include "mmio.h"
@@ -24,23 +12,21 @@ void serial_putc(int);
 static void bputs(char const *s) { bput_s(serial_putc, s); }
 static void bputn(uintptr_t v) { bput_n(serial_putc, v, 10); }
 
-// one request moves at most this many sectors; k_blk_rw chunks larger asks.
-// 64K keeps a single data descriptor comfortably under every qemu bound.
+// per request: 64K keeps one data descriptor under every qemu bound
 #define k_blk_chunk 128
 
 static struct {
   uint64_t sectors;                  // 0 = no disk
   volatile uint8_t *desc, *avail, *used, *hdr, *sts;
   uint16_t qsz, avail_idx;
-  // pci notify door: address precomputed at init. mmio: base + 0x50.
+  // mmio notifies at base + 0x50
   volatile uint16_t *notify16;       // pci writes the queue index here
   volatile uint32_t *notify32;       // mmio writes it here
   volatile uint8_t *devst;           // device_status: pci's byte, mmio's word
 } kblk;
 
-// the hardware fence DMA needs around the avail publish and the used read.
-// x86 is TSO and every ring access above is volatile, so program order is
-// enough; a64 reorders Normal-vs-Device, so a real barrier stands there.
+// the DMA fence around the avail publish and the used read: x86's TSO and volatile suffice,
+// a64 reorders Normal against Device
 static inline void dma_fence(void) {
 #if defined(INLE_DROID)
 #elif defined(__aarch64__)
@@ -50,9 +36,7 @@ static inline void dma_fence(void) {
 #endif
 }
 
-// --- the split virtqueue, shared by both transports ------------------------
-// lays desc/avail/used plus the request header and status byte into the DMA
-// block, 16-aligned. sizes at qsz=8: desc 128, avail 22, used 70.
+// the split virtqueue, header and status byte, 16-aligned in the DMA block
 static int vq_lay(void *dma) {
   kblk.qsz = 8;
   kblk.desc  = dma;
@@ -61,9 +45,7 @@ static int vq_lay(void *dma) {
   kblk.hdr   = kblk.desc + 288;
   kblk.sts   = kblk.desc + 304;
   for (int i = 0; i < 320; i++) kblk.desc[i] = 0;
-  // a polled driver takes no interrupt: VRING_AVAIL_F_NO_INTERRUPT, or the
-  // completion's INTx lands on an unhandled vector stub and resets the machine
-  // in silence -- exactly how it announced itself.
+  // VRING_AVAIL_F_NO_INTERRUPT, or the completion's INTx resets the machine in silence
   w16(kblk.avail + 0, 1);
   return 1; }
 
@@ -76,15 +58,14 @@ static void vq_dead(void) {
   kblk.sectors = 0;
   bputs("disk: virtio-blk stopped answering, reset and dropped\r\n"); }
 
-// post one request and spin it home. type 0 = read (device fills data),
-// 1 = write (device drains it). -> 0 ok, -1 refused/failed/timed out.
+// type 0 read, 1 write. -> 0 ok, -1 refused, failed or timed out
 static int vq_go(uint32_t type, uint64_t lba, void *data, uint32_t bytes) {
   volatile uint8_t *d = kblk.desc;
   w32(kblk.hdr + 0, type);
   w32(kblk.hdr + 4, 0);
   w64(kblk.hdr + 8, lba);
   w8(kblk.sts, 0xff);                          // poison: the device must write 0
-  // desc 0: the header, chained on
+  // desc 0: the header
   w64(d + 0, vtop(kblk.hdr)); w32(d + 8, 16); w16(d + 12, 1); w16(d + 14, 1);
   // desc 1: the data, device-writable on a read
   w64(d + 16, vtop(data)); w32(d + 24, bytes);
@@ -105,9 +86,9 @@ static int vq_go(uint32_t type, uint64_t lba, void *data, uint32_t bytes) {
 #if defined(INLE_DROID)
 static void blk_scan(void *dma) { }
 #elif defined(__x86_64__)
-// --- the modern virtio-pci transport ----------------------------------------
+// the modern virtio-pci transport
 
-// a memory BAR's assigned address (the firmware laid it), 0 when empty/io.
+// a memory BAR's address, 0 when empty or io
 static uint64_t pci_bar(uint32_t bdf, uint32_t bar) {
   uint32_t lo = pci_r32(bdf, 0x10 + 4 * bar);
   if (lo & 1) return 0;                        // io-space BAR: not this transport
@@ -119,7 +100,7 @@ static int blk_pci(uint32_t bdf, void *dma) {
   // the vendor capability walk: cfg_type 1 = common, 2 = notify, 4 = device
   uint64_t common = 0, notify = 0, devcfg = 0;
   uint32_t nmult = 0;
-  // bounded: a list that loops is the device's word, and 48 is all 256 bytes can hold
+  // bounded: 48 is all 256 bytes can hold, so a looping list ends
   uint32_t hops = 0;
   for (uint32_t c = pci_r8(bdf, 0x34) & 0xfc; c && hops < 48; c = pci_r8(bdf, c + 1) & 0xfc, hops++) {
     if (pci_r8(bdf, c) != 9) continue;         // 9 = vendor-specific (virtio's)
@@ -129,13 +110,10 @@ static int blk_pci(uint32_t bdf, void *dma) {
     else if (type == 2) notify = at, nmult = pci_r32(bdf, c + 16);
     else if (type == 4) devcfg = at; }
   if (!common || !notify || !devcfg) return 0; // legacy-only device: not driven
-  // every x64 door's map stops at 4G (pvh + uefi/loader.c both lay 0..4G),
-  // so a BAR above it is out of reach -- OVMF parks 64-bit
-  // BARs there unless the lane pins its MMIO window low (src/tools/ktest.l's fw_cfg).
-  // khhdm 0 would be a true identity door where everything is reachable.
+  // every x64 door maps only 0..4G; OVMF parks 64-bit BARs above unless ktest.l pins them low
   if (khhdm && (common >> 32 || notify >> 32 || devcfg >> 32))
     return bputs("disk: virtio-blk BAR above 4G, skipped\r\n"), 0;
-  // memory decode + bus master on, INTx OFF (bit 10): this driver polls
+  // memory decode + bus master on, INTx off (bit 10)
   pci_w32(bdf, 4, pci_r32(bdf, 4) | 6 | 1 << 10);
   volatile uint8_t *cc = (volatile uint8_t*) (khhdm + common);
   kblk.devst = cc + 20;
@@ -176,11 +154,8 @@ static void blk_scan(void *dma) {
       if (blk_pci(bdf, dma)) return; } } }
 
 #elif defined(__aarch64__) || defined(__riscv)
-// --- qemu virt's virtio-mmio slots, the version-2 transport ------------------
-// fixed slots (32 on the arm virt, 8 on the riscv one); the test lane runs
-// -global virtio-mmio.force-legacy=false, so a populated slot speaks version 2.
-// a version-1 slot is skipped with a word: it is a configuration face, not an
-// absence.
+// qemu virt's virtio-mmio slots (32 on arm, 8 on riscv), version 2 under
+// force-legacy=false; a version-1 slot is skipped with a word, a configuration face
 #if defined(__aarch64__)
 #define VIRTIO_MMIO_PHYS 0x0a000000
 #define VIRTIO_MMIO_N    32
@@ -229,9 +204,7 @@ static void blk_scan(void *dma) {
 static void blk_scan(void *dma) { }
 #endif
 
-// --- the three doors kmain wires to love ------------------------------------
-// dma is one kmallocw block (>= 320 bytes, 16-aligned) the ring
-// and request header live in for the machine's life.
+// dma: one kmallocw block (>= 320 bytes, 16-aligned) held for the machine's life
 void k_blk_init(void *dma) {
   if (!dma) return;
   blk_scan(dma);
@@ -242,8 +215,7 @@ void k_blk_init(void *dma) {
 
 uint64_t k_blk_sectors(void) { return kblk.sectors; }
 
-// read (wr 0) or write (wr 1) n sectors at lba, chunked; buf is heap memory
-// (a love string's bytes). -> 0 ok, -1 refused.
+// wr 0 read, 1 write; buf is heap memory. -> 0 ok, -1 refused
 int k_blk_rw(uint64_t lba, uint32_t n, void *buf, int wr) {
   if (!kblk.sectors || lba + n < lba || lba + n > kblk.sectors) return -1;
   uint8_t *p = buf;

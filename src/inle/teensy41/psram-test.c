@@ -1,9 +1,6 @@
-// PSRAM smoke test -- a bake-free standalone main (the bringup ledger's
-// fast-iteration pattern): probe the FlexSPI2 PSRAM, print the chip ids and
-// size, then pattern-test the whole mapped span. Serial is the report
-// channel (LPUART6, 115200); the LED seals the verdict: slow blink = PASS,
-// solid = FAIL, fast blink = no PSRAM found. Built by `make -C src/inle/teensy41
-// psramtest` (mooncc, same objects as the love build minus main.o).
+// PSRAM smoke test, a bake-free main: probe FlexSPI2, print the ids and size, pattern-test the
+// span. report on LPUART6 at 115200; the LED: slow = pass, solid = fail, fast = no PSRAM.
+// `make -C src/inle/teensy41 psramtest`
 #include <stdint.h>
 #include "teensy41.h"
 #include "../bput.h"
@@ -37,14 +34,12 @@ int main(void) {
 
   uint32_t words = (mb << 20) / 4;
   uint32_t bad = 0, first_bad = 0, first_want = 0, first_got = 0;
-  // pass 1: address-tagged word every 1 KB across the whole span (fast, hits
-  // both chips and the chip seam), then read back
+  // pass 1: an address-tagged word every 1 KB, across both chips and their seam
   for (uint32_t i = 0; i < words; i += 256) PSRAM[i] = 0xA5000000u + i;
   for (uint32_t i = 0; i < words; i += 256) {
     uint32_t got = PSRAM[i], want = 0xA5000000u + i;
     if (got != want && !bad++) { first_bad = i; first_want = want; first_got = got; } }
-  // pass 2: dense walk over the first and last 64 KB (bus integrity + the
-  // top of the second chip), inverted tag so pass 1 residue can't fake it
+  // pass 2: the first and last 64 KB dense, tag inverted so pass 1's residue can't fake it
   for (uint32_t i = 0; i < 16384; i++) {
     PSRAM[i] = ~(0x5A000000u + i);
     PSRAM[words - 1 - i] = ~(0xC3000000u + i); }
@@ -61,7 +56,7 @@ int main(void) {
     gpio_put(LED_BIT, 1);
     for (;;) ; }
   puts_("; PASS "); putdec(mb); puts_(" MB clean\r\n");
-  // heartbeat + echo: prove BOTH wire directions continuously
+  // heartbeat + echo: both wire directions
   { uint32_t t = 0; uintptr_t last = love_clock();
     puts_("; echo ready\r\n");
     for (;;) {

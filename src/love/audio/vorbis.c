@@ -1,14 +1,12 @@
-// src/love/audio/vorbis.c -- vorbis i audio (xiph's spec), decoded.
+// vorbis.c -- vorbis i audio (xiph's spec), decoded
 // (vorbis-size id setup)  -> the bytes a decoder's state needs for these headers (the
 //                            identification and setup packets), a charm | -why
 // (vorbis-init b id setup) -> 0, b (a cask that size) laid as the decoder | why
 // (vorbis-packet b p f)   -> one audio packet's samples, interleaved in wav's channel order,
 //                            s16le (f 0) or f32le (f 1): "" for the first packet, which only
 //                            primes the overlap | why
-// why: 1 not this kind of packet, 2 cut short, 3 a kind this can't read (floor 0), 4 a bad
-// stream. the setup's codebooks, floors and the rest are laid in the cask by offsets, so it may
-// move between calls. doubles throughout and no libm: the cosines are a series, so every
-// build decodes the same samples. the floor's inverse-db table is the spec's.
+// why: 1 not this kind of packet, 2 cut short, 3 a kind this can't read (floor 0), 4 a bad stream.
+// no libm, the cosines a series: every build decodes the same samples
 #include "love.h"
 #include "bytes.h"
 #include "fft.h"
@@ -60,8 +58,7 @@ static float const vb_idb[256] = {
  0.56742212, 0.60429640, 0.64356699, 0.68538959, 0.72993007, 0.77736504,
  0.82788260, 0.88168307, 0.9389798, 1.0};
 
-// --- the arena: everything the setup header asks for, laid in one block by offsets so the
-// block may move between calls. a first pass with no block only counts
+// the arena: the setup laid by offsets, so the block may move between calls; no block only counts
 struct va { uint8_t *b; uint32_t used, cap; int bad; };
 static uint32_t va_get(struct va *a, uint32_t n) {
  uint32_t o = (a->used + 7u) & ~7u;
@@ -117,10 +114,8 @@ struct vh {                   // the head of the arena
  uint32_t prev, cur, fbuf, cls, zr, out;            // decode room
  int pn, primed; };
 
-// --- the setup -----------------------------------------------------------
-// codewords as the spec assigns them: each entry takes the leftmost free leaf at its length.
-// avail[d] is the free leaf at depth d, msb-aligned; the tree is int32 pairs, a child >= 0 a
-// node, < 0 ~entry, 0x7fffffff none
+// each entry takes the leftmost free leaf at its length; avail[d] the free leaf at depth d,
+// msb-aligned; a child >= 0 a node, < 0 ~entry, 0x7fffffff none
 static int vb_tree(int32_t *t, const uint8_t *len, uint32_t n, uint32_t room) {
  uint32_t avail[33] = {0}, nodes = 1;
  int first = 1;
@@ -343,7 +338,6 @@ static int vb_setup(struct va *a, const uint8_t *id, uint32_t idn, const uint8_t
  h->out = va_get(a, 4 * ch * hn * 2);
  return a->bad ? 3 : 0; }
 
-// --- the audio -----------------------------------------------------------
 static int vb_entry(const uint8_t *base, struct vbit *b, const struct vcb *c) {
  const int32_t *t = AT(const int32_t, c->tree);
  int32_t n = 0;

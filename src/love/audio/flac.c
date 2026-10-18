@@ -159,9 +159,8 @@ static int ff_body(struct fb *b, struct fh *h, int64_t *x, uintptr_t o) {
    l[i] = ff_floor(mid + side, 1), r[i] = ff_floor(mid - side, 1); }
  return 0; }
 
-// --- the encoder: one frame at a time, the shape a level asks for ---------------------
-// a level is libFLAC's: the longest lpc, mid/side, the deepest rice partition (its blocksize is
-// the caller's, as flac -b makes it). every candidate is costed exactly and the smallest written.
+// the encoder, a frame at a time. a level is libFLAC's (lpc order, mid/side, rice depth; the
+// blocksize the caller's); every candidate is costed exactly and the smallest written
 struct fe_lv { int lpc, ms, po; };
 static const struct fe_lv fe_levels[9] = {
  {0, 0, 3}, {0, 1, 3}, {0, 1, 3}, {6, 0, 4}, {8, 1, 4}, {8, 1, 5}, {8, 1, 6}, {12, 1, 6}, {12, 1, 6} };
@@ -197,9 +196,8 @@ static uint64_t fe_rice_est(uint64_t sum, uint64_t n, int *kp) {
   if (c < best) best = c, *kp = k; }
  return best; }
 
-// the residual r[order..bs) costed at every partition order up to maxpo -> the bits, with s's
-// partition order and parameters set; ~0 when a residual will not fit 32 bits. the finest
-// partitions' sums are taken once; a coarser partition's sum is its two halves'
+// r[order..bs) costed at every partition order up to maxpo -> the bits, s's partitions set;
+// ~0 when a residual won't fit 32 bits
 static uint64_t fe_resid(const int64_t *r, uint64_t *u, int bs, int order, int maxpo, struct fe_sub *s) {
  int top = 0;
  while (top < maxpo && !(bs & ((2 << top) - 1)) && bs >> (top + 1) > order) top++;

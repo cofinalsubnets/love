@@ -1,9 +1,5 @@
-// a64 architecture-specific C: the PL011 serial console, the GICv2
-// interrupt controller, the ARM generic timer, and CPU-exception
-// reporting. the exception vector table itself is laid by src/inle/mkvec.l;
-// archinit points VBAR_EL1 at it. this is the a64 counterpart of
-// x64/arch.c -- same contract (archinit, serial_init, serial_putc,
-// k_reset), different hardware.
+// a64 arch C: the PL011 console, the GICv2, the generic timer, exception reporting. the
+// vectors are src/inle/mkvec.l's; the contract is x64/arch.c's (archinit, serial_*, k_reset)
 #include <stdint.h>
 #include "asmops.h"                    // the privileged instructions, both spellings
 #include "k.h"                       // kboot, and kputc/kputs/kputn (src/inle/kmain.c)
@@ -11,10 +7,7 @@
 
 void kq(uint8_t);                      // kmain's input queue, one byte
 
-// --- QEMU 'virt' machine fixed MMIO layout ---------------------------
-// the virt machine's device addresses are stable across QEMU versions;
-// a port to other boards would read these from the device tree the door
-// hands us instead of hardcoding them.
+// qemu virt's fixed MMIO; another board would read the device tree
 #define UART_PHYS   0x09000000         // PL011 UART
 #define RTC_PHYS    0x09010000         // PL031 RTC -- inside the UART's 2MiB block
 #define GICD_PHYS   0x08000000         // GICv2 distributor
@@ -23,30 +16,18 @@ void kq(uint8_t);                      // kmain's input queue, one byte
 #define UART_INTID  33                 // PL011 -> SPI 1 -> INTID 32+1
 #define TIMER_INTID 30                 // EL1 physical timer -> PPI INTID 30
 
-// --- device MMIO mapping ---------------------------------------------
-// the HHDM covers RAM but not device MMIO, so the GIC and UART
-// pages are unmapped at boot. mmio_map adds them: it walks the live
-// TTBR1_EL1 tables (reachable through the HHDM, since page tables live
-// in RAM) and installs 2MiB block descriptors at the HHDM image of
-// each device. both devices sit in the first 1GiB of physical space,
-// so they share one L2 table; when the door left that slot empty we
-// supply our own static l2_table. the attribute index is whatever
-// Device (or, failing that, Normal) slot MAIR_EL1 already holds --
-// MAIR is global, shared with the mappings already standing, so we must
-// not edit it.
+// the HHDM covers RAM only: mmio_map lays 2MiB blocks for the devices in the live TTBR1
+// tables, one L2 for the first 1GiB. MAIR is shared with the standing mappings: read, never edited
 #define PA_MASK  0x0000fffffffff000ULL  // descriptor output addr, bits 47:12
 #define BLK_MASK 0x0000ffffffe00000ULL  // 2MiB block output addr, bits 47:21
 
 static uint64_t l2_table[512] __attribute__((aligned(4096)));
 
-// translate a (mapped) virtual address to physical via the MMU.
 static uintptr_t va2pa(void *va) {
   uint64_t par = k_at_s1e1w_par(va);
   return (par & PA_MASK) | ((uintptr_t) va & 0xfff); }
 
-// the MAIR_EL1 slot to use for device memory: prefer a Device
-// attribute, then Normal non-cacheable, then Normal write-back (still
-// correct under QEMU). MAIR is the door's, and left as-is.
+// the MAIR slot for devices: a Device attribute, then Normal non-cacheable, then write-back
 static uint32_t mmio_attr_index(void) {
   uint64_t mair = k_rd_mair_el1();
   static uint8_t const prefer[] = { 0x00, 0x04, 0x08, 0x0c, 0x44, 0xff };
@@ -60,7 +41,7 @@ static void mmio_map(void) {
   uint64_t ttbr1 = k_rd_ttbr1_el1();
   uint64_t *l0 = (uint64_t*) (khhdm + (ttbr1 & PA_MASK));
 
-  // the GIC and UART share L0/L1 indices (both in the first 1GiB).
+  // the devices share L0/L1 indices
   uintptr_t va = khhdm + GICD_PHYS;
   uint64_t l0e = l0[(va >> 39) & 0x1ff];
   uint64_t *l1 = (uint64_t*) (khhdm + (l0e & PA_MASK));
@@ -83,16 +64,8 @@ static void mmio_map(void) {
 
   k_tlbi_all(); }
 
-// --- PL011 serial console --------------------------------------------
-// the a64 analogue of x64's COM1: a second console alongside the
-// framebuffer, and the only console when no framebuffer is present.
-// output is also the panic channel. input is interrupt-driven via the
-// receive FIFO: a burst raises the receive interrupt at the FIFO
-// threshold, and a lone keystroke raises the receive-timeout interrupt
-// once the line goes idle. either way the GIC delivers UART_INTID,
-// k_irq routes it to k_uart, and k_uart drains the whole FIFO into the
-// same input queue the rest of the kernel reads. bytes pass through
-// verbatim, exactly as on x64.
+// PL011 console, also the panic channel. input by interrupt: a burst at the FIFO threshold,
+// a lone key by the receive timeout
 #define UARTDR    0x000                // data register
 #define UARTFR    0x018                // flag register
 #define UARTLCR_H 0x02c                // line control
@@ -102,14 +75,10 @@ static void mmio_map(void) {
 #define FR_RXFE   (1u << 4)            // receive holding register empty
 #define FR_TXFF   (1u << 5)            // transmit holding register full
 
-// --- the wall clock: the PL031 RTC ------------------------------------
-// one register, already UNIX SECONDS, and already mapped: RTC_PHYS shares the 2MiB
-// block mmio_map lays for the UART. the a64 counterpart of x64's CMOS walk,
-// and a tenth its size -- so it must be called AFTER archinit, like everything
-// else that touches device memory here.
+// the PL031 RTC, unix seconds; mapped by the UART's block, so only after archinit
 uint64_t k_rtc(void) { return mmio_rd(RTC_PHYS, 0); }
 
-// called once from kmain, just after archinit (so the GIC is up).
+// once from kmain, after archinit has the GIC up
 void serial_init(void) {
   mmio_wr(UART_PHYS, UARTCR, 0);                  // disable while configuring
   mmio_wr(UART_PHYS, UARTICR, 0x7ff);             // clear any pending interrupts
@@ -119,19 +88,17 @@ void serial_init(void) {
 
 void serial_putc(int c) {
   if (c == '\n') serial_putc('\r');
-  // bounded spin on "transmit holding register full" so an absent or
-  // wedged port cannot hang output.
+  // bounded, so an absent or wedged port can't hang output
   for (int i = 0; i < 100000 && (mmio_rd(UART_PHYS, UARTFR) & FR_TXFF); i++) {}
   mmio_wr(UART_PHYS, UARTDR, (uint8_t) c); }
 
-// reached from k_irq. drain every received byte, then clear the UART's
-// receive interrupt (data + receive-timeout).
+// from k_irq: drain, then clear receive and receive-timeout
 static void k_uart(void) {
   while (!(mmio_rd(UART_PHYS, UARTFR) & FR_RXFE))
     kq(mmio_rd(UART_PHYS, UARTDR) & 0xff);
   mmio_wr(UART_PHYS, UARTICR, (1u<<4) | (1u<<6)); }
 
-// --- GICv2 interrupt controller --------------------------------------
+// GICv2
 #define GICD_CTLR       0x000          // distributor control
 #define GICD_ISENABLER  0x100          // set-enable, +4*(intid/32)
 #define GICD_IPRIORITYR 0x400          // priority, byte at +intid
@@ -156,9 +123,7 @@ static void gic_init(void) {
   mmio_wr(GICC_PHYS, GICC_PMR, 0xf0);        // unmask all interrupt priorities
   mmio_wr(GICC_PHYS, GICC_CTLR, 1); }        // enable CPU interface
 
-// --- ARM generic timer (EL1 physical timer) --------------------------
-// fires TIMER_INTID at ~100 Hz, matching the x64 PIT rate; the
-// handler reloads the countdown, which also deasserts the interrupt.
+// the EL1 physical timer at ~100 Hz; the reload also deasserts the interrupt
 static uint64_t timer_interval;        // CNTFRQ_EL0 / 100
 
 static inline void rearm_timer(void) { k_wr_cntp_tval_el0(timer_interval); }
@@ -168,10 +133,7 @@ static void timer_init(void) {
   rearm_timer();
   k_wr_cntp_ctl_el0(1); }               // enable
 
-// --- interrupt dispatch ----------------------------------------------
-// reached from the IRQ vector (mkvec.l). claim the interrupt, handle
-// it, then signal completion. an INTID of 1020+ is the GIC's spurious
-// marker and must not be acknowledged.
+// from the IRQ vector; an INTID of 1020+ is spurious and must not be acknowledged
 void k_irq(void) {
   uint32_t iar = mmio_rd(GICC_PHYS, GICC_IAR), intid = iar & 0x3ff;
   if (intid >= 1020) return;
@@ -179,7 +141,7 @@ void k_irq(void) {
   else if (intid == UART_INTID) k_uart();
   mmio_wr(GICC_PHYS, GICC_EOIR, iar); }
 
-// --- CPU exception reporting -----------------------------------------
+// CPU exception reporting
 static char const *fault_kind(uint64_t esr) {
   switch (esr >> 26) {                 // ESR_EL1.EC -- exception class
     case 0x15: return "SVC";
@@ -190,13 +152,7 @@ static char const *fault_kind(uint64_t esr) {
     case 0x2c: return "FP";
     default:   return "?"; } }
 
-// panic-path console output. kputc stamps a char into the framebuffer
-// ring buffer (kcb, when present) and mirrors it to serial; it takes no
-// l state, so it runs from a fault handler with no live `struct g`.
-
-// reached from the sync/FIQ/SError vectors. report and halt -- faults
-// are not resumed (returning would just re-fault). kput* reach the
-// serial console even when no framebuffer is up.
+// from the sync/FIQ/SError vectors: report and halt. kput* need no struct g
 void k_fault(uint64_t esr, uint64_t elr, uint64_t far) {
   k_daif_mask_all();                   // all interrupts off while reporting
   static int nested;
@@ -210,30 +166,19 @@ void k_fault(uint64_t esr, uint64_t elr, uint64_t far) {
   fbdraw();
   for (;;) k_wait(); }
 
-// --- bring-up and reset ----------------------------------------------
-// archinit runs into a civilised environment -- EL1, MMU on, a stack and
-// the HHDM in place, laid by a64boot's cold path or by the firmware on an
-// MMU-on door -- so it only has to install our own vector table, interrupt
-// controller and timer, then unmask IRQs.
+// archinit finds EL1, the MMU, a stack and the HHDM up: it adds vectors, GIC and timer
 void archinit(void) {
-  // a bootloader may enter at EL1t (SP_EL0 selected, SP_EL1 unset) with
-  // FP/SIMD trapping -- both must be settled before anything can fault or
-  // touch a double. asmops.h carries why each one is written the way it is.
+  // a bootloader may enter at EL1t with FP/SIMD trapping: settle both before anything faults
   k_sp_to_el1h();
   k_fpen_enable();
   k_wr_vbar_el1((uintptr_t) vectors);
-  // The HHDM covers RAM only, so mmio_map() walks TTBR1 to add 2 MiB
-  // block descriptors at HHDM+phys for the GIC and UART pages (skipped
-  // when the HHDM response is absent and khhdm == 0).
   if (khhdm) mmio_map();
   gic_init();
   timer_init();
   k_daif_unmask_irq(); }               // unmask IRQ (DAIF.I = 0)
 
-// (fault n) backend: deliberately raise a CPU exception. n indexes the
-// x86 vector numbers the builtin shares across arches; on a64 we
-// map 3 -> breakpoint, 13/14 -> data abort, anything else -> undefined
-// instruction. does not return -- k_fault reports and halts.
+// (fault n): n is an x86 vector number; 3 a breakpoint, 13/14 a data abort, else undefined.
+// k_fault halts
 void k_fault_trigger(intptr_t n) {
  switch (n) {
   case 3:            // breakpoint
@@ -246,7 +191,7 @@ void k_fault_trigger(intptr_t n) {
    k_udf0();
    break; } }
 
-// PSCI SYSTEM_RESET. QEMU's 'virt' machine exposes PSCI over HVC.
+// PSCI SYSTEM_RESET, over HVC on virt
 void k_reset(void) {
   k_psci_system_reset();
   for (;;) k_wait(); }

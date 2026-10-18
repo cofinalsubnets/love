@@ -1,78 +1,47 @@
-// nif -- quay's love-facing door: struct cb hosted INSIDE a cask, so the love side
-// owns allocation and lifetime (the GC moves and reclaims the screen like any value)
-// and the C side stays a pure byte machine re-derived from the cask on every call.
-//
-// the BODIES only. registration is each seat's own trick -- the host's love_nifs
-// section glob (src/love/cb.c), the kernel's defs[] table, the playdate's own -- so this
-// file names no seat and links nothing but the engine beside it.
+// nif -- quay's love-facing door: a struct cb inside a cask, so love owns its lifetime and
+// the C side re-derives it on every call. the bodies only: each host registers them its own way
 //
 //   (screen b rows cols) -> b    open a cb over cask b (cb_open)
-//                         | n    b not a cask: the byte count a (cask n) needs,
-//                                so the ctor is (screen (cask (screen () r c)) r c);
-//                                the count carries a store a screenful of pictures deep
-//                                and a thousand lines of history, and a twin grid
-//                                for the main one to wait out the alternate screen in
+//                         | n    b not a cask: the bytes a (cask n) needs, so the ctor
+//                                is (screen (cask (screen () r c)) r c)
 //                         | ()   misuse: cask too small, or silly geometry
-//   (scribe scr x)       -> scr  feed x through the VT parser: a byte charm,
-//                                or every byte of a string/cask; () misuse
-//                         | n    a screen whose replies are drained: only the first n
-//                                went in, its queue full -- reply, then scribe the rest
-//   (regrid scr b rows cols) -> b  scr laid across into cask b as a rows x cols
-//                                screen (cb_regrid): text, clusters, and pictures
-//                                while the store holds them; b not a cask answers
-//                                the byte count, as screen's does, with scr's cluster
-//                                pool as it has grown; () misuse
-//   (glass scr i k)      -> w    word k of cell i, or (): 0 the glyph (codepoint,
-//                                width, picture, face), 1 the fg, 2 the bg
-//                                (the layout is quay.h's struct cb_cell); a
-//                                cluster's glyph holds its base, and 3 to 11 are
-//                                the rest of it, 0 past the last. a negative i reads
-//                                the history: -cols is the newest line's first
-//                                cell, back to -(held * cols)
-//   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
-//                                3 flag, 4 top, 5 bot, 6 and 7 a cell's width and
-//                                height in pixels, 8 the lines the view looks back,
-//                                9 the history's lines held, 10 and 11 the selection's
-//                                first cell and the one past its last; () misuse
-//   (peer scr n)         -> n    look n lines back into the history (0 the live
-//                                grid), clamped to what is held; answers the view
-//   (mouse scr b row col how) -> s  the report a pointer event makes as the program asked
-//                                (cb_mouse): b the button with its modifier bits, how
-//                                0 a press, 1 a release, 2 a move; "" when not asked
-//   (select scr a b u)   -> scr  select cells a..b (glass's counting, either order) by
-//                                cell (u 0), word (1) or line (2); another u clears
-//   (copied scr a b)     -> s    cells [a, b) as text (cb_copied): a wide char once, marks
-//                                after their base, newlines where rows did not wrap
-//   (pasted scr s)       -> s    string s as a seat pastes it into this screen (cb_pasted):
-//                                newlines as returns, controls gone, bracketed when
-//                                the program asked (?2004); () misuse
-//   (picture scr slot k) -> n|s  a live picture's width (k 0), height (1), gen (2), or its
-//                                pixels as base64 rgba (3) or raw (4), unset ones clear; the
-//                                width (5) and height (6) its tiles span; () for none
-//   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
-//                                home to the pty master) as byte charms; () quiet
+//   (scribe scr x)       -> scr  feed a byte charm, or every byte of a string/cask
+//                         | n    replies pending: only the first n went in -- reply, then
+//                                scribe the rest
+//   (regrid scr b rows cols) -> b  scr laid into cask b as a rows x cols screen (cb_regrid);
+//                                b not a cask answers the byte count, as screen's does
+//   (glass scr i k)      -> w    word k of cell i (quay.h's struct cb_cell): 0 the glyph,
+//                                1 the fg, 2 the bg, 3 to 11 a cluster's rest, 0 past its
+//                                last. a negative i reads history: -cols the newest line
+//   (gaze scr k)         -> n    0 cursor, 1 rows, 2 cols, 3 flag, 4 top, 5 bot, 6 7 a
+//                                cell's pixel w h, 8 the view's lookback, 9 history held,
+//                                10 11 the selection's first cell and one past its last
+//   (peer scr n)         -> n    view n lines back (0 live), clamped; answers the view
+//   (mouse scr b row col how) -> s  the report the program asked for (cb_mouse): how 0
+//                                press, 1 release, 2 move; "" when not asked
+//   (select scr a b u)   -> scr  select cells a..b by cell (u 0), word (1) or line (2);
+//                                another u clears
+//   (copied scr a b)     -> s    cells [a, b) as text (cb_copied)
+//   (pasted scr s)       -> s    s as a paste into this screen (cb_pasted), bracketed
+//                                when asked (?2004)
+//   (picture scr slot k) -> n|s  a live picture's width (k 0), height (1), gen (2), pixels
+//                                as base64 rgba (3) or raw (4), tile span w (5) h (6)
+//   (reply scr)          -> (b ..) drain the reply queue (DSR/DA) as byte charms
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
-//   (tilepx scr i x y)   -> n    pixel (x,y) of cell i's tile: 0xff over its rgb where
-//                                the picture set it, 0 where not; () for no tile
-//   (dye scr buf w row cur font) -> scr   grid row `row` painted into cask buf, a
-//                                32bpp picture w pixels wide, by the console's own
-//                                painter (paint.c) in the built-in 8x16, font a
-//                                loaded one (as fontrow takes) or (); cur the cell
-//                                the cursor wears, -1 for none; () misuse
-//   (limned scr k n f fg bg) -> (s took f fg bg)   cells k..k+n-1 as the escapes an
-//                                outer terminal paints them by (src/apps/mitty/limn.l's
-//                                row): the pen f fg bg carried in (f -1 for none) and out,
-//                                stopping short at a picture's tile, took the cells done
-//   (fontrow f cp r)     -> n    row r of cp's glyph in font f (a string or cask as
-//                                src/apps/font.l lays it), the leftmost pixel bit 15;
-//                                () when f is no font (cb_font_ok) or lacks cp
+//   (tilepx scr i x y)   -> n    pixel (x,y) of cell i's tile: 0xff over its rgb, 0 unset
+//   (dye scr buf w row cur font) -> scr   row painted into cask buf, 32bpp w pixels wide,
+//                                by paint.c; font () for the built-in 8x16; cur -1 for none
+//   (limned scr k n f fg bg) -> (s took f fg bg)   cells k..k+n-1 as an outer terminal's
+//                                escapes (mitty/limn.l's row), the pen threaded in and out,
+//                                stopping at a picture's tile
+//   (fontrow f cp r)     -> n    row r of cp's glyph in font f (as font.l lays it), the
+//                                leftmost pixel bit 15; () for no font or no cp
+//   misuse answers () throughout
 #include "love.h"
 #include "quay.h"
 
-// Re-derive the struct cb from a cask arg, or 0 if it isn't one / doesn't
-// hold a sane screen. The cask is OPEN DATA -- the love side can pin any byte
-// of it -- so every entry clamps the header fields the C loops trust: a
-// scribbled screen may paint garbage, never read or write out of bounds.
+// the struct cb in a cask, or 0. love can pin any byte of it, so every field the C loops
+// trust is clamped: a scribbled screen may paint garbage, never go out of bounds
 static struct cb *scr_ok(word x) {
  struct str *s = cask_str(x);
  if (!s || s->len < sizeof(struct cb)) return 0;
@@ -104,10 +73,8 @@ static struct cb *scr_ok(word x) {
  if (c->ol > 6) c->ol = 6;
  return c; }
 
-// (screen b rows cols): open a screen over cask b. A non-cask b answers the
-// byte count the cask needs -- the size protocol that keeps sizeof(struct cb)
-// out of the surface. Geometry is capped well under the u32 cell indices.
-// the store a rows x cols screen gets, or ~0u for a geometry refused
+// the store a rows x cols screen gets, or ~0u for a geometry refused; capped well under
+// the u32 cell indices
 static uint32_t scr_sn(word rw, word kw) {
  intptr_t const r = (rw & 1) ? getcharm(rw) : 0, k = (kw & 1) ? getcharm(kw) : 0;
  if (r < 1 || k < 1 || r > 65535 || k > 65535 || (uintptr_t) r * (uintptr_t) k > (uintptr_t) 1 << 22) return ~0u;
@@ -154,9 +121,8 @@ static lvm(lvm_regrid) {
  Sp[3] = out;
  Sp += 3; Ip += 1; love_musttail return Continue(); }
 
-// the cluster pool of the screen at sp[0] grown: twice the slots past the header's (cb_nclu
-// at first), the cask's bytes laid again when its own do not reach. g Packed; a pool at
-// cb_clumax stays as it is
+// grow the cluster pool of the screen at sp[0], doubling, into a new cask when its own is
+// short. g packed; a pool at cb_clumax stays
 love_noinline static struct g *scr_grow(struct g *g) {
  struct cb *c = scr_ok(g->sp[0]);
  uint32_t const most = cb_clumax - cb_nclu, add = c->cx ? c->cx : cb_nclu,
@@ -172,9 +138,7 @@ love_noinline static struct g *scr_grow(struct g *g) {
  cb_xclu(scr_ok(g->sp[0]), cx);
  return g; }
 
-// the feed's workhorse, g Packed with [scr x] at sp: x's bytes from the first through
-// cb_putc, the pool grown whenever it fills. answers at sp[1]: the screen when every byte
-// went in, the count that did when the reply queue waits to be drained, () for misuse
+// the feed, g packed with [scr x] at sp. answers at sp[1] as scribe does
 love_noinline static struct g *scr_pour(struct g *g) {
  struct cb *c = scr_ok(g->sp[0]);
  word x = g->sp[1];
@@ -191,10 +155,7 @@ love_noinline static struct g *scr_pour(struct g *g) {
  g->sp[1] = i == n ? g->sp[0] : putcharm(i);
  return g; }
 
-// (scribe scr x): the feed. A charm is one byte; a string or cask pours every byte through
-// cb_putc (the hot path: one nif call per pty read). Returns the screen back so feeds
-// chain -- or, on a screen whose replies are drained, the count poured when its queue
-// would not hold another: drain it, and scribe the rest
+// (scribe scr x): the hot path, one call per pty read
 static lvm(lvm_scribe) {
  Pack(g);
  g = scr_pour(g);
@@ -202,7 +163,6 @@ static lvm(lvm_scribe) {
  Unpack(g);
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
-// (glass scr i k): look through to one word of one cell.
 static lvm(lvm_glass) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
@@ -216,8 +176,7 @@ static lvm(lvm_glass) {
  Sp[2] = out;
  Sp += 2; Ip += 1; love_musttail return Continue(); }
 
-// (gaze scr k): one header field by key -- no allocation, so a render loop
-// polls the cursor for free. 0 cursor, 1 rows, 2 cols, 3 flag, 4 top, 5 bot.
+// (gaze scr k): no allocation, so a render loop polls for free
 static lvm(lvm_gaze) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
@@ -238,7 +197,6 @@ static lvm(lvm_gaze) {
  Sp[1] = out;
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
-// (peer scr n): the view n lines back, clamped; answers where it landed
 static lvm(lvm_peer) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
@@ -249,8 +207,7 @@ static lvm(lvm_peer) {
  Sp[1] = out;
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
-// (wet scr k): dirty-row bits for rows 32k..32k+31, read-and-cleared --
-// the renderer's shopping list. bit 255 stands for row 255 and past.
+// (wet scr k): rows 32k..32k+31; bit 255 stands for row 255 and past
 static lvm(lvm_damage) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
@@ -262,7 +219,6 @@ static lvm(lvm_damage) {
  Sp[1] = out;
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
-// (tilepx scr i x y): one pixel of cell i's tile, as the painter reads it
 static lvm(lvm_tilepx) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
@@ -285,9 +241,8 @@ static struct str *nif_bytes(word x) {
  if (((union u*) x)->ap == lvm_cask) return ((struct cask*) x)->str;
  return 0; }
 
-// (dye scr buf w row cur font): one row of the screen as pixels, the same draw the
-// kernel's framebuffer takes. the paper is buf, clipped to its own bytes; a font that
-// fails its vetting is no font. no allocation, so every pointer holds throughout
+// (dye ..): the kernel framebuffer's draw, clipped to buf; a font failing its vetting is
+// none. no allocation, so every pointer holds
 static lvm(lvm_dye) {
  struct cb *c = scr_ok(Sp[0]);
  struct str *b = cask_str(Sp[1]);
@@ -304,7 +259,6 @@ static lvm(lvm_dye) {
  Sp[5] = out;
  Sp += 5; Ip += 1; love_musttail return Continue(); }
 
-// (fontrow f cp r): the painter's own reading of a font, vetting and all
 static lvm(lvm_fontrow) {
  word f = Sp[0], out = ZeroPoint;
  struct str *s = 0;
@@ -318,9 +272,7 @@ static lvm(lvm_fontrow) {
  Sp[2] = out;
  Sp += 2; Ip += 1; love_musttail return Continue(); }
 
-// Workhorse for (reply scr), called with g Packed and the screen at sp[0].
-// Drains the queue into a stack buffer FIRST (have may move the cask),
-// then builds the byte list tail-first. Returns a not-ok g only on OOM.
+// (reply scr)'s body, g packed: the queue drains to a stack buffer before have moves the cask
 love_noinline static struct g *host_reply(struct g *g) {
  struct cb *c = scr_ok(g->sp[0]);
  uint8_t buf[cb_outn];
@@ -335,8 +287,7 @@ love_noinline static struct g *host_reply(struct g *g) {
  g->sp[0] = tail;
  return g; }
 
-// (reply scr): what the terminal wants to say back (DSR position reports, DA).
-// The app forwards these bytes to the pty master; the kernel never asks.
+// the app forwards these to the pty master
 static lvm(lvm_reply) {
  Pack(g);
  g = host_reply(g);
@@ -344,7 +295,7 @@ static lvm(lvm_reply) {
  Unpack(g);
  Ip += 1; love_musttail return Continue(); }
 
-// (mouse scr b row col how): the bytes are laid before Have, which may move the cask
+// (mouse ..): the bytes are laid before Have, which may move the cask
 static lvm(lvm_mouse) {
  struct cb *c = scr_ok(Sp[0]);
  uint8_t buf[cb_mousen];
@@ -361,8 +312,7 @@ static lvm(lvm_mouse) {
   Sp[4] = word(s); }
  Sp += 4; Ip += 1; love_musttail return Continue(); }
 
-// (picture scr slot k): the base64 (k 3) or the raw rgba (k 4) is laid straight from the
-// store, counted first for Have
+// (picture ..): pixels laid straight from the store, counted first for Have
 static lvm(lvm_picture) {
  struct cb *c = scr_ok(Sp[0]);
  struct cb_img const *im = c && (Sp[1] & Sp[2] & 1) && getcharm(Sp[1]) > 0 && getcharm(Sp[1]) < cb_nimg
@@ -402,7 +352,6 @@ static lvm(lvm_picture) {
  Sp[2] = out;
  Sp += 2; Ip += 1; love_musttail return Continue(); }
 
-// (select scr a b u)
 static lvm(lvm_select) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
@@ -437,9 +386,8 @@ static lvm(lvm_pasted) {
  Sp[1] = word(s);
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
-// limn's row in C: cells k.. as the escapes an outer terminal paints them by, the pen
-// threaded through (pn[0] the face, -1 for none said yet; 1 the fg; 2 the bg). it stops
-// at a picture's tile, which src/apps/mitty/limn.l paints its own way. o 0 only counts
+// limn's row in C: pn[0] the face (-1 none said yet), 1 the fg, 2 the bg; stops at a
+// picture's tile, which limn.l paints its own way. o 0 only counts
 static uintptr_t limn_s(uint8_t *o, uintptr_t at, char const *s) {
  for (; *s; s++, at++) if (o) o[at] = (uint8_t) *s;
  return at; }
@@ -496,7 +444,7 @@ static uintptr_t limn_cells(struct cb const *c, uint8_t *o, intptr_t k, intptr_t
  *took = i;
  return at; }
 
-// (limned scr k n f fg bg): counted, then laid after have, which may move the cask
+// (limned ..): counted, then laid after have, which may move the cask
 love_noinline static struct g *host_limned(struct g *g) {
  word *a = g->sp;
  struct cb *c = scr_ok(a[0]);

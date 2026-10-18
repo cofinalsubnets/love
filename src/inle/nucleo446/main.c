@@ -1,19 +1,7 @@
-// Nucleo-F446RE firmware -- every C file compiled by mooncc -t thumb2sp (the
-// F446's Cortex-M4 has a single-precision FPU, the playdate's exact shape:
-// f64 transfers on the d-regs, f64 arithmetic through __aeabi_* libgcc).
-//
-// NOT love: the 128 KB SRAM is the same wall the rp2040 hit (a prel-only
-// bake wants a >512 KB arena) -- this is the TOOLCHAIN on silicon. Boot,
-// first-light the LED, banner the self-reported core clock over the ST-LINK
-// VCP, then run an on-board self-check battery: softened doubles, floats,
-// 64-bit pairs, the lm math floor (bit-exact expectations, the same values
-// test_thumb2sp pins against gcc on qemu-M4), composites and varargs. Every
-// check prints; the tally is the story. A -D QSMOKE build leaves through
-// qemu semihosting with the tally as the exit code (100+n names the first
-// miss, 98 a fault) -- booted BY HAND (`make -C src/inle/nucleo446 smoke`, then
-// qemu's STM32F405 cousin), since test_thumb2sp gates this lane's arithmetic
-// against gcc and `make test_nucleo446` only builds and verifies the image.
-// The device build blinks instead: slow = all green, fast = a miss.
+// Nucleo-F446RE firmware, all mooncc -t thumb2sp (single-precision FPU, f64 through __aeabi_*).
+// not love (128 KB SRAM): the toolchain on silicon, a self-check battery over the ST-LINK VCP.
+// -D QSMOKE exits through qemu semihosting with the tally (100+n the first miss, 98 a fault),
+// booted by hand (`make -C src/inle/nucleo446 smoke`); the device blinks slow green, fast a miss
 #include <stdint.h>
 #include "nucleo446.h"
 #include "../bput.h"
@@ -25,8 +13,7 @@ static void puts_(const char *s) {
 static void putu(uint32_t v) { bput_n(serial_putc, v, 10); }
 
 // --- the battery ----------------------------------------------------------
-// volatile inputs keep every operand a runtime value; expectations are exact
-// (the lm values are the bit-identical ones harnesslm.c pins vs gcc).
+// volatile inputs keep every operand a runtime value; expectations are exact (harnesslm.c's)
 static volatile double da = 2.5, db = -1.25, one = 1.0, two = 2.0, big = 1e9;
 static volatile float ff = 1.5f;
 static volatile long long p64 = 0x123456789ABLL, q64 = 100000LL;
@@ -63,12 +50,11 @@ static int run(void) {
   CK(db < 0.0);
   CK((long long)(da * 4.0) == 10);
   CK((double)i7 / (double)i2 == 3.5);
-  // bare floats (the FPU's own lane under thumb2sp)
+  // bare floats, the FPU's own lane
   CK(ff * ff == 2.25f);
   CK((double)ff == 1.5);
   CK(ff + ff == 3.0f);
-  // 64-bit pairs: mul, unsigned div-mod, shifts, sign (SIGNED 64 divide is
-  // thumb2's one standing refusal -- an open compiler item, not a port one)
+  // 64-bit pairs; no signed 64 divide: thumb2's open refusal
   CK(u64 % 1000ULL == 720ULL);
   CK(-p64 == -1250999896491LL);
   CK(p64 * 3 == 3752999689473LL);
@@ -83,17 +69,16 @@ static int run(void) {
   CK(lm_log(two) == 0.69314718055994529);
   CK(lm_atan2(one, two) == 0.46364760900080609);
   CK(lm_sin(big) == 0.54584344944869956);      // the big-argument reduction
-  // composites + varargs (the AAPCS-VFP shapes test_thumb2sp gates vs gcc)
+  // composites + varargs, the AAPCS-VFP shapes
   { struct zn z = zmake(da, db);
     CK(z.re == da && z.im == db);
     CK(znorm(z) == da*da + db*db); }
   CK(isum(imake(-7, 1000)) == 993);
   CK(vsum(3, 10, 20, 12) == 42);
-  return ok; }   // 28 (mooncc varargs are anonymous WORDS only -- love.c's shape)
+  return ok; }   // 28; mooncc varargs are anonymous words only
 
 int main(void) {
-  // first light before anything else: a board that dies later still shows
-  // the vector table + crt0 + clocks worked.
+  // first light: a board that dies later still shows crt0 and the clocks worked
   led_init(); led_put(1);
   timer_init();
   puts_("\n; mooncc/nucleo446\n; core ");
@@ -106,8 +91,7 @@ int main(void) {
 #ifdef QSMOKE
   sh_exit((uint32_t)r);
 #endif
-  // LED = the status channel when no terminal is watching: slow blink green,
-  // fast blink a miss. The button flips it solid while held (a live input).
+  // slow blink green, fast a miss; the button holds it solid
   uint32_t half = r <= 100 ? 500u : 120u;
   for (;;) {
     led_put(1); { uint32_t t = clock_ms(); while (clock_ms() - t < half && !btn_get()) {} }

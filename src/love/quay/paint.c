@@ -1,10 +1,8 @@
-// paint -- a quay screen as pixels, and the only place the palette is spent.
-// 32bpp targets; a 1-bit device (the playdate) draws its own.
+// paint -- a quay screen as 32bpp pixels, the only place the palette is spent
 #include "quay.h"
 #include "xterm256.h"
 
-// a colour word as xrgb: a default follows the screen's, an index is the palette's.
-// bold brightens the low eight, as a vt did.
+// a colour word as xrgb; bold brightens the low eight
 static uint32_t cb_rgbof(struct cb const *c, uint32_t k, uint32_t d, int bright) {
   if (cb_kind(k) == cb_def) k = d;
   if (cb_kind(k) == cb_rgb) return cb_val(k);
@@ -15,9 +13,8 @@ static uint32_t cb_rgbof(struct cb const *c, uint32_t k, uint32_t d, int bright)
 static uint32_t cb_mid(uint32_t a, uint32_t b) {
   return (a >> 1 & 0x7f7f7f) + (b >> 1 & 0x7f7f7f); }
 
-// one TILE onto the paper at pixel (x,y): its piece of the picture, a pixel a glyph pixel
-// (so a scale square each), the cell's bg where the picture set nothing. a picture is laid
-// in the screen's cell grain, so a font of another size paints the tile as bare ground
+// one tile of a picture at pixel (x,y), the cell's bg where it set nothing; a picture is in
+// the screen's cell grain, so a font of another size paints bare ground
 static void cb_tpx(struct cb_paper const *p, struct cb const *c, struct font const *f,
                    struct cb_cell const *cell, uintptr_t x, uintptr_t y) {
   uintptr_t const s = p->scale;
@@ -34,9 +31,7 @@ static void cb_tpx(struct cb_paper const *p, struct cb const *c, struct font con
         uint32_t const o = v >> 24 ? v & 0xffffffu : bg;
         for (uintptr_t e = 0; e < s; e++) px[k * s + e] = o; } } } }
 
-// cp's glyph in the chain: the built-in font's where the cp437 page has cp, else a loaded
-// font's (qf, the 8x16 cell only). cb_row reads row r of it left-aligned in 32 bits, bit 31
-// the leftmost pixel, and 0 for a glyph neither font has
+// row r of cp's glyph, bit 31 leftmost: the built-in font's, else the loaded qf (8x16 only), else 0
 struct cb_look { uint8_t const *bmp, *rows; };
 static struct cb_look cb_look(struct font const *f, uint8_t const *qf, uint32_t cp) {
   uintptr_t const bpr = ((uintptr_t) f->w + 7) / 8;
@@ -50,13 +45,8 @@ static uint32_t cb_row(struct font const *f, struct cb_look l, uint8_t r) {
   if (l.bmp) return (uint32_t) l.bmp[r * bpr] << 24 | (bpr > 1 ? (uint32_t) l.bmp[r * bpr + 1] << 16 : 0u);
   return 0; }
 
-// one CELL onto the paper at pixel (x,y), wide when it is a wide char's lead -- two cells'
-// width, the tail beside it painted here too. the base draws through the chain, the ■ where
-// it has nothing; a cluster's marks lie over it, centred on a wide one, and a mark the chain
-// lacks draws nothing, as does a character ?2027 joined that takes columns of its own. a cell that would fall off is dropped, so a caller cannot be made to
-// write outside the target it named. a glyph pixel is a paper->scale square, which is the
-// whole of "sharp": whole pixels, no resampling, and the same table serving a 640x400 screen
-// and a dense one.
+// one cell at pixel (x,y), a wide lead painting its tail too; ■ where the chain has nothing,
+// marks centred over it. a cell that would fall off the target is dropped
 static void cb_px(struct cb_paper const *p, struct cb const *c, struct font const *f,
                   uint8_t const *qf, struct cb_cell const *cell, uintptr_t x, uintptr_t y) {
   uintptr_t const bpr = ((uintptr_t) f->w + 7) / 8, s = p->scale;
@@ -85,12 +75,8 @@ static void cb_px(struct cb_paper const *p, struct cb const *c, struct font cons
         uint32_t const v = ul || (o >> (31 - k) & 1) ? fg : bg;
         for (uintptr_t e = 0; e < s; e++) px[k * s + e] = v; } } } }
 
-// one ROW of `c` as a reader sees it (cb_seen: a history line while the view looks back)
-// onto the paper at (x0,y0) -- the origin is what lets a screen hold a RECTANGLE of the
-// target rather than all of it. `cur` names the grid cell wearing the cursor (~0u for
-// none), worn as the reverse face so a cell already reversed reads normally under it,
-// which is the only way a block stays visible on one; it rides down with its row as the
-// view looks back. a tail is its lead's to paint, and the cursor on one is worn by the lead.
+// one row as a reader sees it, at (x0,y0). cur is the cursor's cell (~0u none), worn as reverse
+// so a reversed cell reads normal under it; on a tail the lead wears it
 void cb_paint(struct cb_paper const *p, struct cb const *c, struct font const *f,
               uint8_t const *qf, uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur) {
   struct cb_cell const *line = row < c->rows ? cb_seen(c, row) : 0;

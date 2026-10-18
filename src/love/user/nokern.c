@@ -1,18 +1,11 @@
-// src/love/user/nokern.c -- the null seat: what a link with no kmain.c under it owes itself.
-// src/love/main.c dispatches to the kernel's doors on a negative __love_osv, so the symbols have
-// to stand even where that branch is unreachable; kmain.c gives the real bodies and this
-// gives the ones that refuse. love0 was the only such link when these left the runtime,
-// and the gate links that build the artifact's C without the kernel half are the others.
-//
-// plain definitions, not weak ones: a link that ends up with two of any of these says so,
-// and a link with none fails to link -- which is why common.mk keeps this out of host_c
-// and each link names it, the way it names main0.c.
+// src/love/user/nokern.c -- refusing bodies for kmain.c's symbols, for a link without the kernel:
+// main.c reaches them even where unreachable. plain, not weak, so two or none fails the link;
+// common.mk keeps this out of host_c and each link names it, as it names main0.c
 #include "love.h"
 
 uintptr_t knifs_slice(struct def const **s) { return *s = NULL, 0; }
 char *code_window(char *p) { return p; }
 
-// the kernel's port lanes and the rows beneath them: a body where the linker wants one
 struct g *k_port_flush(struct g *g) { return g; }
 struct g *k_port_writen(struct g *g, unsigned char const *src, uintptr_t n) { return g->b = -1, g; }
 intptr_t k_port_readn(struct g *g, unsigned char *dst, uintptr_t n) { return -1; }

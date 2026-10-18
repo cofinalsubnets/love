@@ -1,12 +1,7 @@
-// Teensy 4.1 external PSRAM bring-up: the FlexSPI2 controller + the QPI
-// PSRAM chips on the two bottom pads, mapped at 0x70000000. A faithful
-// transcription of PJRC cores/teensy4 startup.c configure_external_ram()
-// (the silicon authority, per the bringup ledger) into this port's
-// absolute-register house style; every offset re-derived from imxrt.h.
-// The ROM does not touch FlexSPI2 -- without this init the region bus-faults.
-// psram_init() sizes and QPI-enables up to two chips, answers total MB
-// (0 / 8 / 16); psram_chip_id(n) answers the raw JEDEC id read during probe
-// (0x5D0D = AP/ESP 8 MB, 0x5D9D = ISSI -- anything else is absent/bad solder).
+// teensy 4.1 external PSRAM: FlexSPI2 and the QPI chips on the bottom pads, at 0x70000000.
+// transcribed from PJRC startup.c configure_external_ram(), offsets from imxrt.h; the ROM leaves
+// FlexSPI2 off, so without this the region bus-faults. psram_init answers total MB (0/8/16),
+// psram_chip_id(n) the raw JEDEC id (0x5D0D AP/ESP 8 MB, 0x5D9D ISSI, else absent)
 #include <stdint.h>
 #include "teensy41.h"
 

@@ -1,14 +1,6 @@
-// Teensy 4.1 (i.MX RT1062) frontend for love -- bare metal, no Teensyduino.
-//
-// love's frontend contract (love.h): the host defines love_clock, the
-// love_stdin/love_stdout ports, the love_fd_port_vt vtable, and the cooperative-wait
-// hooks. Here the console is LPUART6 on pin0(RX)/pin1(TX) at 115200 8N1,
-// reachable over a 3.3 V USB-serial adapter -- the analogue of the rp2040
-// port's UART0 console (USB CDC is a TODO, see README). The arch backend
-// (teensy41.c) owns the FlexSPI boot image, startup, clocks, LPUART, GPT
-// timer, and GPIO; this file is just the love glue plus a few GPIO nifs. The
-// shell line editor (src/love/boot/post.l, the baked shell core) drives the console
-// exactly as it drives the kernel's.
+// teensy 4.1 (i.MX RT1062) frontend for love, bare metal: the love.h frontend contract and a
+// few GPIO nifs. the console is LPUART6 on pins 0/1 at 115200 8N1 (USB CDC is a TODO, see
+// README); teensy41.c owns boot image, startup, clocks, uart, timer and GPIO
 #include "../../love/love.h"
 #include "teensy41.h"
 #include "../bput.h"
@@ -18,22 +10,14 @@
 #define EOF (-1)
 #endif
 
-// --- cooperative waits ----------------------------------------------------
-// The host backs these with poll(2); we have only the free-running GPT timer
-// and a polled LPUART, so spin against a love_clock() deadline (ticks are ms;
-// ticks==0 means wait forever). No IRQs are enabled, so there is nothing to
-// WFE on -- a tight poll keeps (key)/timed sleeps re-checking readiness. Same
-// shape as the host's poll_wait, minus the kernel.
+// cooperative waits spin against love_clock (ms; 0 forever): no IRQs, so nothing to WFE on
 void love_sleep(uintptr_t ms) {
-  if (!ms) { for (;;) if (serial_rx_ready()) return; }   // wait forever -- but wake on input
+  if (!ms) { for (;;) if (serial_rx_ready()) return; }   // forever, but wake on input
   uintptr_t start = love_clock();
   while (love_clock() - start < ms) ; }
 
-// the readiness law (src/love/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
-// ready -- a string port waits on nothing external, and answering "not ready"
-// parks its task on a wait no scheduler can satisfy (lvm_sound's park law
-// spins sound -> yield -> sound forever: the Enter-key freeze that walled
-// first-silicon interactive). fd 0 is the honest poll; other fds are nominal.
+// the readiness law (main.c, kmain.c): a negative fd, a string port, is always ready, or its
+// task parks on a wait nothing satisfies. fd 0 is the honest poll; other fds are nominal
 bool ready(int fd, int events) { return fd || events != wait_in ? 1 : serial_rx_ready(); }
 
 void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
@@ -43,12 +27,8 @@ void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
     for (int i = 0; i < n; i++) if (ready(fds[i].fd, fds[i].events)) return;
     if (ms && love_clock() - start >= ms) return; } }
 
-// --- port vtable ----------------------------------------------------------
-// Both ports ride LPUART6; the fd is nominal (>= 0 so the dispatcher routes
-// here). Serial never reaches EOF, so a dry read is 0 and never -1. It used to
-// call serial_getc, which spins the whole vm on an empty ring; serial_rx_ready
-// pumps the ring and answers the same question without waiting. (serial_getc
-// stays in the driver -- psram-test.c is a standalone image with no scheduler.)
+// both ports ride LPUART6, the fd nominal. serial never reaches EOF: a dry read is 0, and
+// serial_getc is called only behind serial_rx_ready, so an empty ring never spins the vm
 static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   uintptr_t k = 0;
   while (k < n && serial_rx_ready()) dst[k++] = (unsigned char) serial_getc();
@@ -56,13 +36,11 @@ static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
 
 static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
   for (uintptr_t k = 0; k < n; k++) {
-    if (src[k] == '\n') serial_putc('\r');   // cook LF -> CRLF for terminals
+    if (src[k] == '\n') serial_putc('\r');
     serial_putc(src[k]); }
   return g->b = (intptr_t) n, g; }
 
-// LPUART has no output buffer here, so a flush has nothing of its own to push --
-// it is simply the moment before the user is shown something, which makes it the
-// place to say what the INBOUND ring could not hold (teensy41.c's rx_put).
+// nothing to push: a flush is where to say what the inbound ring dropped (teensy41.c's rx_put)
 static struct g *fd_flush(struct g *g) {
   uint32_t lost = serial_rx_lost();
   if (lost) {
@@ -73,20 +51,17 @@ static struct g *fd_flush(struct g *g) {
 
 struct fio love_stdin  = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
 struct fio love_stdout = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-// No separate error stream; route err to the console too.
 struct fio love_stderr = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 struct port_vt const love_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
 #include "../../love/fdrow.h"                       // love_fd_readn / love_fd_say off the two above
 
-// --- GPIO builtins --------------------------------------------------------
-// (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin.
-// (gpio_dir pin out) -- direction: out non-zero => output; returns out.
-// (gpio_put pin val) -- drive an output: val non-zero => high; returns val.
-// (gpio_get pin)     -- sample an input; returns 1 (high) or 0 (low).
-// zero is putcharm(0), so getcharm(arg) != 0 reads a number or zero correctly.
+// (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin
+// (gpio_dir pin out) -- out non-zero => output; returns out
+// (gpio_put pin val) -- val non-zero => high; returns val
+// (gpio_get pin)     -- 1 high, 0 low
 static lvm(love_gpio_init) {
-  gpio_init(getcharm(Sp[0]));           // leaves Sp[0] (the pin) as the result
+  gpio_init(getcharm(Sp[0]));           // Sp[0], the pin, is the result
   Ip += 1;
   return Continue(); }
 
@@ -113,17 +88,15 @@ static lvm(love_gpio_put) {
   Ip += 1;
   return Continue(); }
 
-// 1-arg nifs run their thunk directly; 2-arg nifs build a 2-slot frame with
-// lvm_cur first (mirrors the host's nif_open shape).
+// a 2-arg nif leads with lvm_cur, as the host's nif_open does
 static union u const
   nif_gpio_init[] = {{love_gpio_init}, {lvm_ret0}},
   nif_gpio_get[]  = {{love_gpio_get}, {lvm_ret0}},
   nif_gpio_dir[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_dir}, {lvm_ret0}},
   nif_gpio_put[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_put}, {lvm_ret0}};
 
-// the baked heap image, embedded by ld -b binary (see the Makefile + .image
-// in teensy41.lds). FILE scope: mooncc emits no relocation for a block-scope
-// extern array (the address materializes as garbage -- silicon-diagnosed).
+// the baked image (ld -b binary, teensy41.lds's .image). file scope: mooncc emits no
+// relocation for a block-scope extern array
 extern const char _binary_love_img_start[], _binary_love_img_end[];
 
 static struct def defs[] = {
@@ -132,11 +105,7 @@ static struct def defs[] = {
   {"gpio_put",  {.k = nif_gpio_put}},
   {"gpio_get",  {.k = nif_gpio_get}}, };
 
-// --- the arena ------------------------------------------------------------
-// The generational collector is the ONLY collector, and it draws its pools
-// through alloc, whose default rides malloc/free (src/love/love.c). So the frontend
-// supplies those: a first-fit free list (ffalloc.h) over a static arena in OCRAM2,
-// with the C stack above it under __stack_top__.
+// malloc/free for alloc's default: a first-fit free list (ffalloc.h) over the arena
 #include "../ffalloc.h"
 
 // the seat check: the egg hatched into the self-hosted ev, and a closure runs through the heap
@@ -149,32 +118,17 @@ void *malloc(size_t n) { return mallocw(b2w(n)); }
 
 void free(void *p) { ff_free(&freelist, p); }
 
-// --- entry ----------------------------------------------------------------
-// cstartup (teensy41.c) has set up the FPU, .data/.bss, VTOR, clocks, and the
-// console before calling us. The bootstrap egg compiles the love compiler with
-// the C evaluator, recompiles it with itself, installs it, then we run the
-// shell -- identical to host/free, just smaller. The arena of FIRST resort is
-// the 16 MB external PSRAM (psram.c brings up FlexSPI2; pattern-tested clean
-// on this board 2026-07-22) -- the same arena size the qemu-M7 port bakes in;
-// the old 384 KB OCRAM2 pool starved the bake (the first-silicon blocker: a
-// live set past the budget faults INSIDE the collector -- solid LED, then the
-// bootloader chip's 7-blink as the locked core trips its supervision). The
-// OCRAM pool stays as the no-PSRAM fallback.
-static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed: naturally aligned (mooncc parses no post-declarator attribute)
+// the arena is the 16 MB PSRAM (psram.c), the qemu-M7 port's size; this OCRAM pool, too small
+// to bake in, is the fallback
+static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed for alignment: mooncc parses no post-declarator attribute
 
 
 int main(void) {
-  // first light: the LED comes on before any love runs, so a board with no
-  // serial adapter still shows the boot image + crt0 + clocks worked. The
-  // gpio_* layer indexes GPIO2 BITS: the pin-13 LED is GPIO2_IO03 = LED_BIT.
+  // first light before any love runs; gpio_* indexes GPIO2 bits (the pin-13 LED is GPIO2_IO03)
   gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
-  // a raw banner straight to the LPUART: proves the console path (mux, baud,
-  // adapter wiring) the moment the board resets, before any love runs.
   for (char const *s = "\r\n; inle/teensy41\r\n"; *s; s++)
     serial_putc(*s);
-  // self-reported core clock: derive MHz from the LIVE mux state (not from
-  // what clocks_init intended) -- pll1 path only; anything else prints the
-  // rom-path face so a silently-failed retune is visible on every boot.
+  // the core clock from the live mux state, so a failed retune shows on every boot
   { uint32_t mhz = 0;
     if (!(REG(CCM_CBCDR) & CBCDR_PERIPH_CLK_SEL)
         && (REG(CCM_CBCMR) & CBCMR_PRE_PERIPH_MASK) == CBCMR_PRE_PERIPH_PLL1
@@ -191,8 +145,7 @@ int main(void) {
     for (; *s; s++) serial_putc(*s); }
   uintptr_t arena_words;
   if (psram_mb) {
-    // 64 B shy of the region edge: a one-past read at a block boundary must
-    // stay inside the region (the mps2 port's bus-fault lesson)
+    // 64 B shy of the edge: a one-past read at a block boundary must stay inside
     freelist = (struct mem*) 0x70000000u;
     arena_words = ((psram_mb << 20) - 64u) / sizeof(uintptr_t); }
   else {
@@ -200,10 +153,7 @@ int main(void) {
     arena_words = sizeof pool / sizeof(uintptr_t); }
   freelist->next = NULL;
   freelist->len = arena_words;
-  // WAKE-FIRST: the flash carries a heap image (qemu-baked at build time by
-  // src/inle/mps2's baker -- fully symbolic, so this differently-linked binary
-  // may wake it). A good image skips the ~55 s on-device bake; any problem
-  // answers NULL and the egg lane below bakes from source as always.
+  // wake first: the flash's image is baked by src/inle/mps2's qemu baker; NULL bakes the egg
   uintptr_t t0 = love_clock();
   struct g *g = love_image_load(_binary_love_img_start,
                                (uintptr_t)(_binary_love_img_end - _binary_love_img_start), 0);
@@ -212,28 +162,21 @@ int main(void) {
     for (; *s; s++) serial_putc(*s); }
   if (!woke) g = ini();
   g = defn(g, defs, countof(defs));
-  // born: this wake's cost, as src/love/main.c defines it -- the egg lane's egg.l pins its own
+  // born: this wake's cost, as main.c defines it; the egg lane's egg.l pins its own
   if (woke && ok(g = push(g, 1, putcharm((intptr_t) (love_clock() - t0))))) {
     g = defv(g, "born");
     if (ok(g)) g->sp++; }
-  // BOUND the collector to the arena (the Appel knob -- please, love.c):
-  // 2*minor + 2*major carve out of the free list, and a major resize holds old
-  // and new at once, so an unbounded budget OOMs inside the collector. A
-  // quarter of the arena leaves the double-buffered resize and free-list
-  // fragmentation their room.
+  // a budget, or the collector ooms inside a major; a quarter leaves a resize's two blocks and
+  // fragmentation their room
   if (ok(g)) g->budget = arena_words / 4;
-  // The LED is the status channel while the console has no adapter: solid on
-  // = still baking/waking, OFF = the shell is at its prompt, fast blink
-  // (below) = fatal. 3 is LED_BIT (GPIO2_IO03 = pin 13). the tail runs AFTER
-  // the bake/wake, so its `puts` marks the exact moment love is up.
+  // the LED: on while baking or waking, off at the prompt, fast blink fatal. 3 is LED_BIT
 #define TE_TAIL(banner) \
     "   _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
     "   _ (putc 10)" \
     "   _ (puts (? ok \"" banner "\" \"; SEAT CHECK FAILED -- shell up anyway\"))" \
     "   _ (putc 10) ((cite 'cli 'shell) 0))"
   if (!woke) {
-    // the on-device egg bake: bao is a MODULE, registered by the eval below and
-    // then spliced. a woken image (the mps2 baker's) carries the load already.
+    // the on-device bake; cli is a module, borrowed below
     g = egg(g,
 #include "egg.h"
     ,
@@ -244,11 +187,9 @@ int main(void) {
 #include "post.h"
     );
     g = evals_(g, "(borrow 'cli) 0"); }
-  // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
-  // here, never in the base (bakes carry none; every boot or wake pushes its own).
+  // the session: a fresh writable layer for the shell's defglobs, never the base
   g = love_open(g);
-  // the seat check answers first: a shell over an image that fails it is
-  // worse than a loud prompt, and this board has no exit code to say it with.
+  // the seat check answers first: this board has no exit code to say it with
   struct g *r = evals_(g, woke ?
     "(: ok "
     SEAT_OK
@@ -257,7 +198,7 @@ int main(void) {
     "(: ok "
     SEAT_OK
     TE_TAIL("; egg hatched -- shell up"));
-  // The shell only returns on a fatal error: honest face, then blink it out.
+  // the shell returns only on a fatal error
   if (code_of(r) == status_scare) scare_face(r);
   fin(r);
   for (;;) {

@@ -1,14 +1,9 @@
-// thrun.c -- a thread read back: thrun, the symbolic run of a thread ev wrote, which lamform
-// prints and threadir hands the glaze. one translation unit of the runtime; the shared layouts
-// and the cross-TU seam are src/love/love.h.
+// thrun.c -- the symbolic run of a thread ev wrote, which lamform prints and threadir hands the glaze
 #include "love.h"
 
-// (thrun p s ops cfg): a symbolic run of the thread at p, for post.l's threadir and lamform.
-// every value pushed is a slot, a fresh mint, and the answer is (node . pairs), each pair
-// (slot . node) saying how a slot was made -- or 0 for a thread ev does not write. s is the
-// frame's slots, top first; ops 0, or the op names a reading may meet; cfg [names k a o c g
-// cap cup two?], names a tablet from a nif to its name. it lays everything, answer and slot
-// cells alike, by bumping g->hp up to lim; out of room, it is laid again in twice the room
+// (thrun p s ops cfg) -> (node . pairs), each pair (slot . node), every slot a fresh mint; 0 for
+// a thread ev does not write. s the frame's slots, top first; ops 0 or the op names allowed;
+// cfg [names k a o c g cap cup two?], names a tablet nif -> name. all of it bumps g->hp up to lim
 struct thr {
  struct g *g;
  word ops, names, *cfg, *lim, pairs, node;            // node a return's
@@ -70,8 +65,8 @@ static struct { lvm_t *op; char s[4]; } const thr_ldt[] = {
  {lvm_quo0, "z"}, {lvm_quo1, "o"}, {lvm_quo2, "t"}, {lvm_quo3, "h"}, {lvm_quom1, "m"}, {lvm_quom2, "n"} };
 static int thr_run(struct thr *t, union u *p, union u *st);
 #define ThrDeep 2048                                  // conds nested past this read as 0
-// a cond: the then arm first, which finds the join if there is one; the else arm runs to it.
-// answers as the run does: 0 fails, 1 returns t->node, 2 joins at t->at with t->s
+// the then arm first, which finds the join; the else arm runs to it.
+// 0 fails, 1 returns t->node, 2 joins at t->at with t->s
 static int thr_branch1(struct thr *t, word test, union u *a, union u *e, union u *st);
 static love_noinline int thr_branch(struct thr *t, word test, union u *a, union u *e, union u *st) {
  if (t->deep >= ThrDeep) return 0;
@@ -130,8 +125,7 @@ static int thr_run(struct thr *t, union u *p, union u *st) {
    word a = thr_apn(t, n);
    thr_drop(t, n + 1), thr_push(t, a), p += op == lvm_ap ? 1 : 2;
    continue; }
-  // a jump over the else arm ends a then arm at its join; any other is a cond the
-  // compiler folded, its dead arm jumped over, and the reading goes on where it lands
+  // over the else arm: the then arm's join; any other jumps a folded cond's dead arm
   if (op == lvm_jump) {
    union u *j = p[1].m, *e = t->thene;
    if (j == st || (e && thr_over(t, p, j, e))) return t->at = j, 2;
@@ -159,9 +153,8 @@ static int thr_run(struct thr *t, union u *p, union u *st) {
   if (nm == ZeroPoint || !thr_want(t, nm)) return 0;
   word o = thr_l3(t, t->cfg[ThrO], nm, thr_tk(t, t->s, t->d, n));
   thr_drop(t, n), thr_push(t, o), p += 1; } }
-// thrun over its operands p s ops cfg (sp[0..3]), packed: the answer in sp[3] -- 0 for a
-// thread ev does not write -- laid on the young heap. a run that ran out of room is given
-// back, its mints' serials too, and run again in twice the room, which may collect
+// p s ops cfg at sp[0..3], the answer in sp[3]. a run out of room gives back the heap and the
+// serials, and runs again in twice the room, which may collect
 static struct g *thrun(struct g *g) {
  for (uintptr_t want = 0;; want = 2 * want + 64) {
   if (want && !ok(g = have(g, want))) return g;

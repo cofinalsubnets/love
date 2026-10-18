@@ -1,11 +1,6 @@
-// wasm architecture-specific C: the door, the serial line, the clocks, the idle and the
-// reset. this is the wasm counterpart of x64/arch.c -- same contract (archinit,
-// serial_init, serial_putc, k_reset, k_rtc, k_fault_trigger), no hardware at all: the
-// machine is the worker running the module (src/inle/wasm/inle.js), and each face below is
-// one hypercall through __love_sys, the module's one import, wearing linux's number for
-// the nearest thing -- write is the serial line, read the keys, nanosleep the idle,
-// clock_gettime the two clocks, reboot the reset. moonlibc's own calls never reach that
-// import here: kmain writes __love_osv = -1 first, so they take src/inle/sys.c's C answer.
+// wasm's x64/arch.c: the machine is the worker (inle.js), each face one hypercall through
+// __love_sys under linux's nearest number. kmain sets __love_osv = -1 first, so moonlibc's
+// own calls take sys.c's answers and never reach the import
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
@@ -39,17 +34,15 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 void archinit(void) { }
 void serial_init(void) { }
 
-// the serial line goes to the worker a line or a buffer at a time, never a byte: each
-// hypercall is a decode and a crossing, and a screenful of escapes is tens of thousands
-// of bytes. what is held goes out before any sleep or reset, so nothing waits on it
-static struct { unsigned char b[2048]; unsigned n; } ser;   // the arch's one held line
+// a line or a buffer per hypercall, never a byte; drained before any sleep or reset
+static struct { unsigned char b[2048]; unsigned n; } ser;
 static void serial_drain(void) {
   if (ser.n) __love_sys(hc_write, 1, (long) ser.b, ser.n, 0, 0, 0), ser.n = 0; }
 void serial_putc(int c) {
   ser.b[ser.n++] = (unsigned char) c;
   if (c == '\n' || ser.n == sizeof ser.b) serial_drain(); }
 
-// the two clocks the worker keeps: 0 the wall, 1 monotonic since the page loaded
+// 0 the wall, 1 monotonic since the page loaded
 static uint64_t clock_ms(long which) {
   long ts[2];
   if (__love_sys(hc_clock_gettime, which, (long) ts, 0, 0, 0, 0)) return 0;
@@ -57,8 +50,7 @@ static uint64_t clock_ms(long which) {
 
 uint64_t k_rtc(void) { return clock_ms(0) / 1000; }
 
-// no timer interrupt counts ticks here: they are caught up off the monotonic clock,
-// whenever kmain is about to read them (k_tick_sync) and after every idle
+// no timer interrupt: ticks catch up off the monotonic clock before a read and after an idle
 void k_tick_sync(void) {
   static uint64_t last;
   uint64_t now = clock_ms(1);
@@ -66,15 +58,9 @@ void k_tick_sync(void) {
   kticks += (now - last) / 10;
   last += (now - last) / 10 * 10; }
 
-// no keyboard interrupt either: the keys the worker queued are taken when a task asks
-// after one (kmain's k_kb_poll) and after every idle -- read on fd 0 never blocks here,
-// it answers what is there, and never more than kmain's queue has room for: the rest
-// waits in the worker's ring, which is deep, so a pasted line arrives whole. asking is
-// the one way a guest that never idles -- a frame loop the horn paces -- hears a key.
-// the page's pointer and clipboard ride lanes of their own beside the keys: a pointer record
-// is how, the button with its modifiers, a pad, then the paper's pixel, y and x, as two
-// little-endian bytes each, and kmain's k_pointer takes it; a paste is plain bytes, taken
-// as the queue has room (with its bracket's room kept back) and closed once it runs dry
+// no keyboard interrupt: keys come when a task asks (k_kb_poll) and after an idle, never past
+// the queue's room. a pointer record: how, button, pad, then y and x as le16. a paste is
+// taken as the queue has room, its bracket's room kept back, and closed once dry
 void k_kb_poll(void);
 void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x);
 void k_paste_in(uint8_t const *s, long n);
@@ -98,8 +84,7 @@ void k_kb_sync(int room) {
 
 void k_copy_out(uint8_t const *s, uintptr_t n) { __love_sys(hc_copy, (long) s, (long) n, 0, 0, 0, 0); }
 
-// the scancodes the page queued on their own lane (src/inle/wasm/machine.js's scan lane), for the tap when a
-// game armed it (kmain's k_scan_put) and dropped otherwise, so the lane never fills
+// machine.js's scan lane, for a game's armed tap (k_scan_put), else dropped so it never fills
 void k_scan_put(uint8_t b);
 bool k_scan_armed(void);
 void k_scan_sync(void) {
@@ -107,17 +92,13 @@ void k_scan_sync(void) {
   long n = __love_sys(hc_scan, (long) b, sizeof b, 0, 0, 0, 0);
   for (long i = 0; i < n; i++) k_scan_put(b[i]); }
 
-// the idle: sleep one tick or until a key, then take the keys that came while we were
-// away; the worker skips the sleep while its ring holds more
+// one tick or until a key; the worker skips the sleep while its ring holds more
 void k_idle(void) {
   long ts[2] = { 0, 10 * 1000000 };
   serial_drain();
   __love_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
   k_kb_poll();
-  // the codes go out whether or not a game armed the tap, and the worker holds its sleep
-  // while the lane has anything in it: unread is not the same as empty, so an unarmed tap
-  // empties the lane here and k_scan_put drops what it takes. armed, the game's own pop
-  // syncs and this leaves the codes where they are.
+  // the worker won't sleep while the lane holds codes, so unarmed it is emptied here
   if (!k_scan_armed()) k_scan_sync();
   k_tick_sync(); }
 
@@ -133,9 +114,7 @@ bool k_nap(uintptr_t ms) {
 // the paper was drawn on by something other than the console: the worker blits it
 void k_fb_touch(void) { __love_sys(hc_drew, 0, 0, 0, 0, 0, 0); }
 
-// the page's network (kmain's k_fetch): the worker takes URL whole -- the page's own
-// origin, or a file under --origin under node -- and hands it over in pieces, laid as
-// the ramfs file at PATH
+// the worker fetches url (the page's origin, or --origin under node) into the ramfs file at path
 int k_fs_open(char const *p, uintptr_t pn, char m);
 long k_fd_write(int fd, void const *b, long n);
 long k_fd_close(int fd);
@@ -152,25 +131,21 @@ long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
   __love_sys(hc_fetch_close, 0, 0, 0, 0, 0, 0);
   return r; }
 
-// the seat's own files (kmain's /mnt/host): each operation one hypercall, its number
-// hc_host + op, answered by the worker from the page's folder or storage, or a directory
-// under node (cpu.mjs's host lane)
+// kmain's /mnt/host: hc_host + op, answered from the page's storage or cpu.mjs's host lane
 long k_host(long op, long a, long b, long c, long d, long e) {
   return __love_sys(hc_host + op, a, b, c, d, e, 0); }
 
 // the reset: the worker unwinds the module and boots it again
 void k_reset(void) { serial_drain(); for (;;) __love_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
-// ..and into another module: the path and the boot line go into the lift slot, and the
-// worker reads the file at the reset the way it lifts one, then boots those bytes
-// a process is an instance of its own, in a worker of its own: the page starts it, and its
-// calls come back through the worker's mailbox to src/inle/sys.c's k_proc_call
-// a module's own bytes ride as a (code, length) pair, the call having one argument left
+// a process is an instance in its own worker, its calls back through sys.c's k_proc_call;
+// code rides as a (code, length) pair, the call having one argument left
 long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintptr_t en,
                   char const *code, uintptr_t cn) {
   uintptr_t c[2] = { (uintptr_t) code, cn };
   return __love_sys(hc_proc, pid, (long) av, (long) an, (long) ev, (long) en, code ? (long) c : 0); }
 void k_proc_stop(long pid) { __love_sys(hc_proc_stop, pid, 0, 0, 0, 0, 0); }
 
+// a reset into another module: path and boot line go to the lift slot
 long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
   unsigned char b[256];
   if (pn + 1 + cn >= sizeof b) return -ENAMETOOLONG;
@@ -181,32 +156,20 @@ long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
   if (r < 0) return r;
   k_reset();
   return 0; }
-// a path for the page to carry out: it lands in the shared lift slot and the request is
-// raised, and the worker's loop reads the file and posts it at its next idle
+// a path for the page to carry out, posted at the worker's next idle
 void k_lift_ask(unsigned char const *p, uintptr_t n) {
   __love_sys(hc_lift, (long) p, (long) n, 0, 0, 0, 0); }
 
 // (fault n) backend: wasm has one trap, `unreachable`, and every n is it
 void k_fault_trigger(intptr_t n) { (void) n; __builtin_trap(); }
 
-// moonlibc's signal-return trampoline, the metal tails' one asm leaf (mksys.l); no
-// signal is ever delivered on this machine, so the leaf is empty
+// mksys.l's signal-return leaf: no signal is delivered here
 void __love_sigret(void) { }
 
-// the door: the worker grows the memory, then hands over the span above the module's
-// own data and shadow stack, the boot line, and the heap image it fetched, if any (laid
-// above the span; kmain copies it into the heap). a page with a canvas names its size in
-// REAL pixels -- the canvas backing store, device ratio included -- and the scale a glyph
-// pixel gets there, which is how the page's own scale reaches the console; rows and columns
-// then fall out of the two. the framebuffer is carved off the top of that span; headless,
-// the serial line is the console (kmain's own law). never returns: kmain ends in k_reset.
-// `sc` carries two things in one argument, and it has to: moon's wasm convention hands a
-// function EIGHT integer slots and k_start already spent them. the low byte is the scale a
-// glyph pixel gets; the rest is the RESERVATION in pixels -- the most this canvas will ever
-// be, which is the screen it sits on. the paper is carved at the reservation and the heap
-// gets what is under it, so k_fb_reseat can move the live w/h around inside a span the heap
-// was never given. a reservation under w*h (0, from a door that names none) is the live
-// size, and the canvas is pinned the way it always was.
+// the door: the span above the module's data and stack, the boot line, and a fetched image
+// (above the span). w, h in device pixels; the framebuffer comes off the top. never returns.
+// sc packs two (moon's wasm abi has eight int slots): the low byte the glyph scale, the rest
+// the reservation in pixels, carved whole so k_fb_reseat moves w/h inside it; under w*h, pinned
 void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, uintptr_t sc,
              char const *cmd, uintptr_t img, uintptr_t imgn) {
   uintptr_t const scale = sc & 0xff, cap0 = sc >> 8;
@@ -224,21 +187,14 @@ void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, uintptr_t sc,
   k_cmdline(cmd, ~(uintptr_t) 0);
   kmain(); }
 
-// where the worker blits from: the framebuffer's address, 0 when there is none
+// where the worker blits from, 0 none
 uintptr_t k_fb_addr(void) { return (uintptr_t) kboot.fb.base; }
 
-// the canvas was resized under the running machine. the base does not move -- only what
-// of the reservation is in use -- so the worker keeps blitting from k_fb_addr and simply
-// reads a new w and h back. 0 says the machine would not take it and the page should keep
-// the box it had.
+// the base stays put inside the reservation; 0: refused, the page keeps its box
 bool k_fb_resize(uintptr_t w, uintptr_t h, uintptr_t scale) {
   return k_fb_reseat((unsigned) w, (unsigned) h, (unsigned) w, (unsigned) scale); }
 
-// --- what this seat does not have ------------------------------------------------
-// the horn is src/inle/hda.c's, and there is no sound card behind a wasm module; the
-// carried per-ISA runtimes are the shipped artifact's, and out/wasm/src.o brings only
-// the source blob. plain definitions, so a seat that grows either one collides here
-// rather than quietly keeping the empty answer.
+// no carried runtimes here: plain definitions, so a seat that grows them collides
 const unsigned char rtgz_x64[1] = {0};
 const uintptr_t rtgz_x64_len = 0;
 const unsigned char rtgz_a64[1] = {0};
