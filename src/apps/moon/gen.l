@@ -9787,7 +9787,8 @@
                            ('asm . _) (foldl (a \ o \ <>o @ ('var v) (v . a) a) acc (x 2 + x 3))   ; any asm operand stays a name
                            (pwrites >x (pwrites <x acc))))
    (pdecls x acc) (? !(two? x) acc (x @ (('decl || 'sdecl) . ps . _) (foldl (a \ p \ (<p . a)) acc ps) (pdecls >x (pdecls <x acc))))
-   (psub ks x) (? !(two? x) x (x @ ('var v) (assoc v ks @ e (two? e ? <>e x)) (map (psub ks) x)))
+   ; a __builtin_constant_p keeps its param: ipa-cp is no inlining, so it reads 0 as in any other shape
+   (psub ks x) (? !(two? x) x (x @ ('var v) (assoc v ks @ e (two? e ? <>e x)) ('bcp . _) x (map (psub ks) x)))
    ; -- straight-line propagation: in a block, past `x = K` (or an op= whose answer is K whatever x
    ; held) x reads as K up to its next write. a label keeps it only when every write of x is behind it
    ; and no goto came first. a scalar local never &-taken; not across a call that returns twice --
