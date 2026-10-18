@@ -503,6 +503,7 @@
        self (? (nm = 0) 0  (elem nm ps) 0  (elem nm vars0) 0  (nm = go) 0
                (elem nm '(? two? cap cup == + - * < <= > >= = || tally list &&)) 0
                (simp != take ni ps) 0
+               (1 < #(filter (l \ two? l && <l = nm) lams)) 0         ; a name the `:` binds twice: a call to it may be another binding's
                nm)
        sfq  (self != 0)
        ; the value lets ride slots past the spills, one flat namespace (alets declined any rebind)
@@ -1676,7 +1677,7 @@
    (hname h) (two? h ? (hname <h) h)
    (subst-free nm val e)
     (? (e = nm) val
-       (atom? e) e
+       (atom? e || aquote? e) e
        (<e = '\) ((any (p \ p = nm) (rev >(rev >e))) ? e (map (x \ subst-free nm val x) e))
        (<e = ':) (: ps (anat-defs >e)
                    ((any (pr \ hname <pr = nm) <ps) ? e
@@ -1757,7 +1758,7 @@
    ; ..a name of ns bound in e: a \'s params, a `:`'s names, a define's params. a call rewritten under such a binder
    ;   would hand the hoisted loop the inner value for its capture
    (rebinds? ns e)
-    (? (atom? e) 0
+    (? (atom? e || aquote? e) 0
        (<e = '\) ((any (p \ elem p ns) (rev >(rev >e))) || rebinds? ns (last e))
        (<e = ':) (: ps (anat-defs >e)
                    ((any (pr \ (any (p \ occurs? p <pr) ns) || rebinds? ns >pr) <ps) || rebinds? ns <>ps))
@@ -2355,10 +2356,15 @@
    (srcrec form0)
     (two? form0 && <form0 = ': && !(atom? >form0) && 0 = #>form0 % 2 ?                                   ; body-less `:` only -> a global-leaking define
      ({'form form0} @ cell (foldl (\ _ n (pin srcreg n cell)) () (swbnds form0))))
-   (swlow c) (peep c 'low 0 || dupbind? (c 'form) ? 0
+   ; a pair naming or reading a name the form binds twice, as lowered or as written, or holding a `:`
+   ; that binds one twice, is not recorded
+   (swlow c) (peep c 'low 0 ? 0
       (: _ (pin c 'low 1)
-         low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix (c 'form))))))))))))   ; autogroup's full lowering: church/hof/&& + structural (lift/loops/value-lets)
-         (foldl (\ _ pr (swfnpair? pr && (: cur (peep srcreg <<pr 0) (cur = 0 || (cur = c))) ?
+         f (c 'form)  dn (dupnames f)  ops <(anat-defs >f)
+         (taint? e) (any (n \ occurs? n e) dn)
+         (swok? pr) !(taint? pr || any (o \ hname <o = <<pr && (taint? o || dupbind? >o)) ops)
+         low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix f)))))))))))   ; autogroup's full lowering: church/hof/&& + structural (lift/loops/value-lets)
+         (foldl (\ _ pr (swfnpair? pr && swok? pr && (: cur (peep srcreg <<pr 0) (cur = 0 || (cur = c))) ?
                             (pin srcreg <<pr (><pr . >pr)) ())) () <(anat-defs >low))))
    (swsrc h) (: d (peep srcreg h 0)                                                   ; a recorded global's lowered pair, or 0
     (? (d == 0) 0
@@ -2369,9 +2375,10 @@
    (swbnds e) (map (p \ two? <p ? <<p <p) <(anat-defs >e))                       ; a `:`'s binding names
    ; a `:` anywhere in e binding one name twice (`_` aside, never read): a rebinding shadows the
    ; earlier one past it, but the passes below key bindings by name, so it is left to the interpreter
-   (dupbind? e) (? (atom? e) 0
+   (dupbind? e) (? (atom? e || aquote? e) 0
                    (<e = ':) (!(distinctp (filter (n \ n != '_) (swbnds e))) || any dupbind? >e)
                    (any dupbind? e))
+   (dupnames e) (: ns (filter (n \ n != '_) (swbnds e)) (filter (n \ 1 < #(filter (= n) ns)) ns))   ; the names e's own `:` binds twice
    ; collect call heads, skipping a `\` subform whole (its params never leak). the walk reads opfixed source, so an infix
    ; operand never masquerades as a head; bnd = the `:` names + params that filter local heads
    (swwalk e bnd acc) (? (atom? e) acc  (two? e && <e = '\) acc

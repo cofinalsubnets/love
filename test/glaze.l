@@ -186,3 +186,10 @@
            (map gzl-3 ins = [0 0 0 1 0 0 0 0])
            (map gzl-f ins = [0 0 0 3 0 0 0 0]))
    0)
+; the swallow records each pair of a form binding a name twice but those that name or read it:
+; dupnames finds the names a `:` itself rebinds
+(: G (cite 'glaze)
+   (? G (: gzdn (G 'dupnames)
+           (test (gzdn '(: a 1  (f x) (: b 1  b 2  b)  a 2  g '(: c 1  c 2)) = '(a a))
+                 (gzdn '(: _ 1  _ 2  (f x) x) = ())))
+      0))
