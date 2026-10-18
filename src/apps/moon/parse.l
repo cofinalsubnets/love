@@ -37,10 +37,10 @@
    ; the watermark: a refusal unwinds with no position, so the deepest token any lookahead
    ; stood on is remembered. only a failing form's re-parse runs on stamped tokens.
    far {}
-   (mark ts)
-    ((atom? ts ? ()
-        (: t <ts s (seqof t)
-           (charm? s && peep far 'seq -1 < s ? (pin far 'seq s, pin far 'tok t)))),
+   (mark ts)                                        ; seqof, spelled out: it runs on every lookahead
+    ((two? ts ?
+        (: t <ts
+           (two? >>>>t ? (<>>>t @ s (charm? s && peep far 'seq -1 < s ? (pin far 'seq s, pin far 'tok t)))))),
      ts)
    (want ts s) (mark ts, (two? ts && tp? <ts s ? >ts))
    (peekp ts s) (mark ts, two? ts && tp? <ts s)
@@ -127,7 +127,7 @@
         (skipbal >>ts 1 @ e (cleanup? ts e ? (nocleanup e) (pattr e)))
        ts)
    ; cleanup is not decoration: it runs code at every scope exit
-   (cleanup? a b) (attrin a b "cleanup" || attrin a b "__cleanup__")
+   (cleanup? a b) (a = b ? () (idv? <a "cleanup" || idv? <a "__cleanup__" || cleanup? >a b))
    (nocleanup ts) (blame ts "__attribute__((cleanup)) is not carried out")
    ; gcc's mode(M): the type laid at M's width, keeping its signedness. scans from the head to
    ; the first depth-0 `;`/`{`, or the `)`/type-led `,` ending a parameter.
@@ -160,7 +160,7 @@
                                 (peekp s ")" || peekp s "]" || peekp s "}") (sk >s (d - 1))
                                 (sk >s d))
                     (sk s 0))
-       (go ts 0 () () ()))
+       (ps 'nomode ? () (go ts 0 () () ())))      ; cparse-o's: the unit never names mode
    ; the type mode M lays ty at -> a type, or a refusal's sentence
    (modety ps m ty)
     (: uns (elem ty '(uchar cchar ushort uint ulong ullong u128))
@@ -260,11 +260,6 @@
                          (idv? t a || idv? t b) 1
                          (go >s d))))
        (go ts 0))
-   (inlany? ts) (attrany? ts "always_inline" "__always_inline__")
-   (wkany? ts) (attrany? ts "weak" "__weak__")
-   (noinlany? ts) (attrany? ts "noinline" "__noinline__")
-   (usedany? ts) (attrany? ts "used" "__used__")
-   (gnuinlany? ts) (attrany? ts "gnu_inline" "__gnu_inline__")
    ; `section("NAME")` to the first depth-0 `;` or `{`. -> NAME | ()
    (secat? ts)
     (: (go s d) (atom? s ? ()
@@ -302,6 +297,21 @@
                                 (two? tr ? (talign ps <tr) (go >s d))))
                          (go >s d))))
        (go ts 0))
+   ; the words the scans above answer to, read in one walk by their bounds: a scan whose
+   ; words are absent answers () having looked at nothing else, so ptop runs only the rest
+   hdword {"section" 1 "__section__" 1 "alias" 1 "__alias__" 1 "weak" 1 "__weak__" 1
+           "always_inline" 1 "__always_inline__" 1 "noinline" 1 "__noinline__" 1 "used" 1
+           "__used__" 1 "gnu_inline" 1 "__gnu_inline__" 1 "aligned" 1 "__aligned__" 1 "_Alignas" 1}
+   (hdhits ts)
+    (: (go s d acc) (atom? s ? acc
+                       (<s @ t
+                          (? (d < 1 && (tp? t ";" || tp? t "{")) acc
+                             (tp? t "(") (go >s (d + 1) acc)
+                             (tp? t ")") (go >s (d - 1) acc)
+                             (tkk t = 'id && peep hdword (tkv t) ()) (go >s d (tkv t . acc))
+                             (go >s d acc))))
+       (go ts 0 ()))
+   (hwin hw a b) (elem a hw || elem b hw)
 
    ; -- the parse state --
    (psnew tgt) (psnew-d tgt 'moon)                ; the default language
@@ -2513,19 +2523,21 @@
    ; the top level. staticness, section and the other attributes are noted at entry (the
    ; outermost sighting wins) and pinned per name by note.
    (ptop ps ts)
-    ((peep ps 'curstat () ? () (leadstatic? ps ts ? (pin ps 'curstat 1))),
-     (peep ps 'cursect () ? () (secat? ts @ sc (sc ? (pin ps 'cursect sc)))),
-     (peep ps 'curalias () ? () (aliasat? ts @ al (al ? (pin ps 'curalias al)))),
-     (peep ps 'curweak () ? () (wkany? ts ? (pin ps 'curweak 1))),
-     (peep ps 'curinl () ? () (inlany? ts ? (pin ps 'curinl 1))),
-     (peep ps 'curnoinl () ? () (noinlany? ts ? (pin ps 'curnoinl 1))),
-     (peep ps 'curused () ? () (usedany? ts ? (pin ps 'curused 1))),
-     ; C99 inline: plain `inline` lays no external definition, `extern inline` does;
-     ; gnu_inline (gnu89's) the other way about
-     (peep ps 'curlink () ? ()
-        (pin ps 'curlink (leadkw? ps ts 'inline && !!(leadextern? ps ts) = !!(gnuinlany? ts) ? 'inl 'ext))),
-     (peep ps 'curalign () ? () (alignat? ps ts @ an (an ? (pin ps 'curalign an)))),
-     ptop9 ps ts)
+    (hdhits ts @ hw
+     ((peep ps 'curstat () ? () (leadstatic? ps ts ? (pin ps 'curstat 1))),
+      (peep ps 'cursect () ? () (hwin hw "section" "__section__" && secat? ts @ sc (sc ? (pin ps 'cursect sc)))),
+      (peep ps 'curalias () ? () (hwin hw "alias" "__alias__" && aliasat? ts @ al (al ? (pin ps 'curalias al)))),
+      (peep ps 'curweak () ? () (hwin hw "weak" "__weak__" ? (pin ps 'curweak 1))),
+      (peep ps 'curinl () ? () (hwin hw "always_inline" "__always_inline__" ? (pin ps 'curinl 1))),
+      (peep ps 'curnoinl () ? () (hwin hw "noinline" "__noinline__" ? (pin ps 'curnoinl 1))),
+      (peep ps 'curused () ? () (hwin hw "used" "__used__" ? (pin ps 'curused 1))),
+      ; C99 inline: plain `inline` lays no external definition, `extern inline` does;
+      ; gnu_inline (gnu89's) the other way about
+      (peep ps 'curlink () ? ()
+         (pin ps 'curlink (leadkw? ps ts 'inline && !!(leadextern? ps ts) = !!(hwin hw "gnu_inline" "__gnu_inline__") ? 'inl 'ext))),
+      (peep ps 'curalign () ? ()
+         (hwin hw "aligned" "__aligned__" || elem "_Alignas" hw ? (alignat? ps ts @ an (an ? (pin ps 'curalign an))))),
+      ptop9 ps ts))
    (ptop9 ps ts)
     (? (peekp ts ";") ['(tdef) >ts]           ; a stray top-level `;` -- an empty declaration
        ; a leading __extension__ strips before the keyword checks (`__extension__ typedef`)
@@ -2675,6 +2687,7 @@
        _ (pin far 'tok ())
        _ (pin far 'why ())
        _ (pin far 'wseq ())
+       _ (pin ps 'nomode ())                     ; its lookaheads move the watermark
        r (ptop ps (stampf ts2 i0 spans))
        dt (two? r ? () (far 'tok))
        t (two? dt ? dt ft)
@@ -2702,6 +2715,12 @@
    (cparse-o ts tgt dia opts)
     (: ps (pin (psnew-d tgt dia) 'swch (opts 'swch))
        toks (fsbody ts) spans (fspans ts)
+       ; a unit with no `mode(M)` or `__mode__(M)` has no mode attribute, so modeat's walk
+       ; of every declaration is skipped; pfail's re-parse walks it again
+       (mdw? l) (? (atom? l) ()
+                   ((idv? <l "mode" || idv? <l "__mode__") && two? >l && tp? <>l "(" && idat? >>l) 1
+                   (mdw? >l))
+       _ (mdw? toks ? () (pin ps 'nomode 1))
        ; does the unit name volatile anywhere? types carry no qualifier, so gen then keeps
        ; every load and store where the source put it
        vol (foldl (a \ t \ a || tkk t = 'kw && tkv t = 'volatile ||
