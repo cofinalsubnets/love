@@ -35,8 +35,7 @@
    ; a whole rational is its integer (`4 /// 2` is 2), so a time is a coin or an
    ; integer, and qparts is the one place either is taken apart: `load` answers the
    ; parts of a coin only. qi still spells a time, and nothing below writes a bare one.
-   ; a rational meeting a TRAY answers () -- `+` takes the coin lane before the
-   ;   array lane and the rational's method refuses a non-star. so a time crosses
+   ; a rational meeting a tray answers a tray of rationals, exact; a time still crosses
    ;   into frame arithmetic through qnum and never after; see src/apps/harp/play.l.
    (qi n)     (n /// 1)
    qzero      (0 /// 1)

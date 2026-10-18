@@ -182,9 +182,7 @@
    harp-chunk 2048
    ; a cycle's onsets, as voices, with the start frame each one lands on.
    ; THIS IS THE BOUNDARY. cycle time is a `///` rational and frame time is an
-   ; integer, and qnum is the one crossing: a rational that reached the tray lane
-   ; would answer () rather than promoting it, and the voice would go silent with
-   ; nothing said. nothing downstream of here holds a rational.
+   ; integer, and qnum is the one crossing: nothing downstream of here holds a rational.
    (cyc-voices p c c0 spc rate)
     (filter two?
             (map (x \ mkvoice ((c - c0) * spc + int (spc * qnum (evwb x - qi c)))
