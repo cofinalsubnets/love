@@ -522,8 +522,14 @@ int main(void) { dirty(); return probe(); }
 EOF
 moonrun -ftrivial-auto-var-init=zero -o "$ho/.avz" "$ho/.avz.c" > /dev/null 2>&1 || fail "-ftrivial-auto-var-init=zero compile"
 "$ho/.avz" || fail "-ftrivial-auto-var-init=zero left a local unzeroed ($?)"
-printf 'int f(int n) { char v[n]; return v[0]; }\n' > "$ho/.avzv.c"
-moonrun -ftrivial-auto-var-init=zero -c -o /dev/null "$ho/.avzv.c" > /dev/null 2>&1 && fail "-ftrivial-auto-var-init=zero took a VLA it does not zero"
+# ..a VLA's block too, every time its declaration runs
+cat > "$ho/.avzv.c" <<'EOF'
+__attribute__((noinline)) static void dirty(void) { volatile char b[512]; for (int i = 0; i < 512; i++) b[i] = (char) 0xa5; }
+__attribute__((noinline)) static int vla(int n) { char v[n]; int s = 0; for (int i = 0; i < n; i++) s += v[i]; return s; }
+int main(void) { int s = 0; for (int k = 1; k < 90; k += 7) { dirty(); s += vla(k); } return s != 0; }
+EOF
+moonrun -ftrivial-auto-var-init=zero -o "$ho/.avzv" "$ho/.avzv.c" > /dev/null 2>&1 || fail "-ftrivial-auto-var-init=zero compile (a VLA)"
+"$ho/.avzv" || fail "-ftrivial-auto-var-init=zero left a VLA unzeroed"
 # -fcf-protection=branch: endbr where an indirect branch lands -- an entry another unit or a
 # pointer reaches, a table's case, a label whose address is taken, a returns-twice call's return
 cat > "$ho/.ibt.c" <<'EOF'

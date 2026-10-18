@@ -7803,6 +7803,10 @@
        ; sub sp, stash the block pointer; the fn stays out of sibcalls and homing (fesc + hasasm)
        v16 '((add r0 r0 15) (shr r0 4) (shl r0 4))   ; rounded up to 16: shr/shl, a64's encoder refuses ~15 as an and immediate
        vsub '((lea r1 sp 0) (sub r1 r1 r0) (lea sp r1 0))   ; sp -= r0 through a plain register: on a64 only lea (add-immediate) sees 31 as sp
+       ; -ftrivial-auto-var-init=zero: the new block, r0 bytes at sp (a multiple of 16), word by word
+       (vzero g lf) (: lz (name "\(lf).z") ld (name "\(lf).d")
+                       ['(lea r1 sp 0) '(add r2 r1 r0) '(li r0 0) ['label lz] '(cmp r1 r2) ['br 'eq ld]
+                        '(st r1 0 r0) ['add 'r1 'r1 (wsize g)] ['jmp lz] ['label ld]])
        (vone ps env2 acc p ty)
         (peep (g 'vslots) (varix ty) () @ sl
            (!(two? sl) ? 'bad
@@ -7818,7 +7822,7 @@
                                  ['label lf]]
                              + asint g dr
                              + (1 < es ? (imby g 'r0 es)) + [['st 'r4 so 'r0]]
-                             + v16 + vsub + ['(lea r0 sp 0) ['st 'r4 po 'r0]])
+                             + v16 + vsub + (avz? g ? (vzero g lf) ()) + ['(lea r0 sp 0) ['st 'r4 po 'r0]])
                        (one >ps ([<p po ty] . env2) (acc + code)))))))
        (one ps env2 acc)
         (!(two? ps) ? [acc env2]
@@ -7835,7 +7839,6 @@
                       (nolane g "a variable-length array cannot take an initializer")
                      !(elem (gtgt g) '(x64 a64 rv64 i386 i386m16 thumb2 thumb2sp arm))
                       (nolane g "no lane for a variable-length array\(ontgt g)")
-                     (avz? g) (nolane g "-ftrivial-auto-var-init=zero and a variable-length array")
                      (vone ps env2 acc p ty))
                  (: span (aup (tsz g ty) 8)
               off (naslot g span (max (tal g ty) (4 < #p ? (p 4) 0)))   ; a record's fifth slot: its own ask
