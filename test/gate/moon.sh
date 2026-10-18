@@ -50,13 +50,17 @@ cc_g=$(command -v gcc || command -v cc)
 
 # -- the battery
 printf 'int main() { return 42; }\n' > "$ho/.cc1.c"
+# the guard and the fail -fstack-protector-all's runs link (moonlibc lays neither)
+printf 'unsigned long __stack_chk_guard = 0x5a5aa5a5deadbeefUL;\nvoid __stack_chk_fail(void) { __builtin_trap(); }\n' > "$ho/.sspg.c"
+moonrun -c -o "$ho/.sspg.o" "$ho/.sspg.c" > /dev/null 2>&1 || fail "mooncc: the stack guard object"
 for f in test/cc/*.c; do
   moonrun "$f" "$ho/.ccb" > /dev/null 2>&1 || fail "mooncc compile $f"
   "$ho/.ccb"; a=$?
   $cc_g -O0 -o "$ho/.ccbg" "$f" && "$ho/.ccbg"; b=$?
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
   # ..and again with the hardening flags, which change no answer
-  moonrun -fcf-protection=full -ftrivial-auto-var-init=zero "$f" "$ho/.ccb" > /dev/null 2>&1 || fail "mooncc -fcf-protection -ftrivial-auto-var-init compile $f"
+  moonrun -fcf-protection=full -ftrivial-auto-var-init=zero -fstack-protector-all -o "$ho/.ccb" "$f" "$ho/.sspg.o" > /dev/null 2>&1 ||
+    fail "mooncc -fcf-protection -ftrivial-auto-var-init -fstack-protector-all compile $f"
   "$ho/.ccb"; c=$?
   [ $a -eq $c ] || fail "mooncc battery $f hardened (ours $c, unhardened $a)"
 done
@@ -500,7 +504,7 @@ printf 'int lf(int a, int b) { int t[4] = { a, b, a + b, a - b }; return t[a & 3
 moonrun -O2 -mno-red-zone -c -o "$ho/.rz.o" "$ho/.rz.c" > /dev/null 2>&1 || fail "-mno-red-zone compile"
 objdump -d "$ho/.rz.o" | grep -q -- '-0x[0-9a-f]*(%rsp)' && fail "-mno-red-zone: a store below sp"
 # what mooncc does not honour refuses by name, exit 2
-for fl in -mcmodel=kernel -fstack-protector-strong -fno-such-flag -mno-such-flag; do
+for fl in -mcmodel=large -fno-such-flag -mno-such-flag; do
   moonrun $fl -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?
   [ $r -eq 2 ] && grep -q -- "$fl" "$ho/.fl.err" || fail "$fl: exit $r, not refused by name"
 done
@@ -643,6 +647,123 @@ moonrun -t rv64 -fpatchable-function-entry=2 -c -o /dev/null "$ho/.pfe.c" > /dev
 moonrun -t thumb2 -fpatchable-function-entry=2 -c -o /dev/null "$ho/.pfe.c" > /dev/null 2>&1 && fail "-fpatchable-function-entry taken on thumb2"
 moonrun -fpatchable-function-entry=1,2 -c -o /dev/null "$ho/.pfe.c" > /dev/null 2>&1 && fail "-fpatchable-function-entry=1,2 taken"
 echo "mooncc: -fpatchable-function-entry lays each fn's nop pad and its word, the attribute per fn"
+
+# -fstack-protector-strong: a canary under the frame link, set from the guard at entry and
+# checked on every way out; an overflow reaches __stack_chk_fail, a fair run answers as without
+cat > "$ho/.ssp.c" <<'EOF'
+#include <string.h>
+#include <unistd.h>
+unsigned long __stack_chk_guard = 0x5a5aa5a5deadbeefUL;
+void __stack_chk_fail(void) { _exit(42); }
+__attribute__((noinline)) int sum(const char *s) { char b[16]; strcpy(b, s); int t = 0; for (int i = 0; b[i]; i++) t += b[i]; return t; }
+__attribute__((noinline)) int vla(int n) { int a[n]; for (int i = 0; i < n; i++) a[i] = i; int t = 0; for (int i = 0; i < n; i++) t += a[i]; return t; }
+__attribute__((noinline)) void adr(int *p) { *p += 1; }
+__attribute__((noinline)) int tk(int x) { adr(&x); return x; }
+int main(int argc, char **argv) { return (sum(argc > 1 ? argv[1] : "hello") + vla(10) + tk(4)) & 127; }
+EOF
+moonrun -fstack-protector-strong -o "$ho/.ssp" "$ho/.ssp.c" > /dev/null 2>&1 || fail "-fstack-protector-strong compile"
+"$ho/.ssp"; a=$?
+$cc_g -O2 -fno-stack-protector -o "$ho/.sspgc" "$ho/.ssp.c" > /dev/null 2>&1 && "$ho/.sspgc"; b=$?
+[ $a -eq $b ] || fail "-fstack-protector-strong: a fair run answers $a, gcc $b"
+"$ho/.ssp" AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; a=$?
+[ $a -eq 42 ] || fail "-fstack-protector-strong: an overflow exits $a, not through __stack_chk_fail"
+# which fns: -strong takes an array, a VLA, an address taken; -all every fn; the attributes per fn
+cat > "$ho/.sspw.c" <<'EOF'
+int g(int *);
+int plain(int x) { return x * 3; }
+int arr(int x) { int a[2] = { x, x }; return g(a); }
+int adr(int x) { return g(&x); }
+__attribute__((no_stack_protector)) int nsp(int x) { int a[2] = { x, x }; return g(a); }
+__attribute__((stack_protect)) int sp(int x) { return x + 1; }
+EOF
+sspw() {        # FLAGS.. -> the fns that read the guard
+  moonrun "$@" -c -o "$ho/.sspw.o" "$ho/.sspw.c" > /dev/null 2>&1 || { echo compile; return; }
+  objdump -dr "$ho/.sspw.o" | awk '/^[0-9a-f]+ </ { f = $2 } /__stack_chk_guard/ { print f }' | sort -u | tr -d '<>:' | tr '\n' ' '
+}
+[ "$(sspw -fstack-protector-strong)" = "adr arr sp " ] || fail "-fstack-protector-strong guards $(sspw -fstack-protector-strong), not adr arr sp"
+[ "$(sspw -fstack-protector-all)" = "adr arr plain sp " ] || fail "-fstack-protector-all guards $(sspw -fstack-protector-all)"
+[ "$(sspw -fstack-protector-explicit)" = "sp " ] || fail "-fstack-protector-explicit guards $(sspw -fstack-protector-explicit)"
+[ "$(sspw)" = "" ] || fail "no -fstack-protector, and $(sspw) read the guard"
+# the guard's modes: x86 off a segment (the kernel's gs and a symbol), a64 off a system register
+moonrun -fstack-protector-all -mstack-protector-guard-reg=gs -mstack-protector-guard-symbol=__ref_stack_chk_guard \
+  -c -o "$ho/.sspw.o" "$ho/.sspw.c" > /dev/null 2>&1 || fail "-mstack-protector-guard-reg=gs compile"
+objdump -dr "$ho/.sspw.o" | grep -q '%gs:' && objdump -dr "$ho/.sspw.o" | grep -q '__ref_stack_chk_guard' ||
+  fail "-mstack-protector-guard-reg=gs -symbol=: no %gs: load of the symbol"
+moonrun -fstack-protector-all -mstack-protector-guard=tls -c -o "$ho/.sspw.o" "$ho/.sspw.c" > /dev/null 2>&1 || fail "-mstack-protector-guard=tls compile"
+objdump -d "$ho/.sspw.o" | grep -q '%fs:' && objdump -d "$ho/.sspw.o" | grep -q '\$0x28,' || fail "-mstack-protector-guard=tls: not off %fs:0x28"
+moonrun -t i386 -fstack-protector-all -mstack-protector-guard-reg=fs -mstack-protector-guard-symbol=__stack_chk_guard \
+  -c -o /dev/null "$ho/.sspw.c" > /dev/null 2>&1 || fail "-fstack-protector on i386"
+moonrun -t a64 -fstack-protector-all -mstack-protector-guard=sysreg -mstack-protector-guard-reg=sp_el0 \
+  -mstack-protector-guard-offset=1024 -c -o "$ho/.sspw.o" "$ho/.sspw.c" > /dev/null 2>&1 || fail "-mstack-protector-guard=sysreg on a64"
+if command -v llvm-objdump > /dev/null; then
+  llvm-objdump -d "$ho/.sspw.o" | grep -qi 'mrs.*sp_el0' && llvm-objdump -d "$ho/.sspw.o" | grep -q '#0x400\]' ||
+    fail "-mstack-protector-guard=sysreg: no sp_el0 load at 1024"
+fi
+for fl in "-t rv64" "-mstack-protector-guard-reg=es" "-t a64 -mstack-protector-guard=tls" "-t a64 -mstack-protector-guard=sysreg -mstack-protector-guard-reg=sp_el0 -mstack-protector-guard-offset=4"; do
+  moonrun $fl -fstack-protector-strong -c -o /dev/null "$ho/.sspw.c" > /dev/null 2>&1; r=$?
+  [ $r -eq 2 ] || fail "-fstack-protector-strong $fl: exit $r, not refused"
+done
+echo "mooncc: -fstack-protector guards the fns its level names, an overflow reaches __stack_chk_fail, the guard's modes"
+
+# the x86-64 kernel's -m set: -mcmodel=kernel and -mno-fp-ret-in-387 ask nothing of x64's code
+# (rip-relative, abs64 words, long double in xmm0); -mskip-rax-setup leaves al unset at a
+# varargs call; -mstack-alignment=8 realigns a 16-aligned local; the thunk asks send every
+# indirect branch through __x86_indirect_thunk_REG and every return through __x86_return_thunk
+cat > "$ho/.r3.c" <<'EOF'
+int pf(const char *, ...);
+int h(int);
+extern int (*fp)(int);
+__attribute__((noinline)) void va(long x) { pf("", x); }
+__attribute__((noinline)) int sum16(int n) { int a[4] __attribute__((aligned(16))) = { n, n + 1, n + 2, n + 3 }; int *p = a; return ((unsigned long)p & 15) ? -1 : p[0] + p[1] + p[2] + p[3]; }
+__attribute__((noinline)) int cl(int x) { return fp(x) + 1; }
+__attribute__((noinline)) int tl(int x) { return fp(x); }
+__attribute__((noinline)) int pr(int (*q)(int), int x) { return q(x) * 2; }
+__attribute__((noinline)) int sw(int x) { switch (x) { case 0: return h(3); case 1: return 7; case 2: return h(9); case 3: return 11; case 4: return 2; case 5: return h(1); case 6: return 5; } return 0; }
+EOF
+moonrun -c -o "$ho/.r3a.o" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: plain compile"
+moonrun -mcmodel=kernel -mno-fp-ret-in-387 -mno-red-zone -mcmodel=small -mindirect-branch=keep -mfunction-return=keep \
+  -c -o "$ho/.r3b.o" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: -mcmodel=kernel -mno-fp-ret-in-387 compile"
+cmp -s "$ho/.r3a.o" "$ho/.r3b.o" || fail "r3: -mcmodel=kernel -mno-fp-ret-in-387 changed x64's code"
+r3fn() {        # OBJ FN -> FN's disassembly, one insn a line
+  objdump -dr --no-show-raw-insn "$1" | awk -v f="<$2>:" '$2 == f { on = 1; next } /^[0-9a-f]+ </ { on = 0 } on'
+}
+r3fn "$ho/.r3a.o" va | grep -q '%eax' || fail "r3: a varargs call sets no al"
+moonrun -mskip-rax-setup -c -o "$ho/.r3b.o" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: -mskip-rax-setup compile"
+r3fn "$ho/.r3b.o" va | grep -q '%eax' && fail "-mskip-rax-setup: va still sets al"
+moonrun -mstack-alignment=8 -c -o "$ho/.r3b.o" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: -mstack-alignment=8 compile"
+r3fn "$ho/.r3a.o" sum16 | grep -q 'and .*0xfffffffffffffff0' && fail "r3: a 16-aligned local realigned on a 16-aligned stack"
+r3fn "$ho/.r3b.o" sum16 | grep -q 'and .*0xfffffffffffffff0' || fail "-mstack-alignment=8: sum16's aligned local is not realigned"
+cmp -s "$ho/.r3a.o" "$ho/.r3b.o" && fail "-mstack-alignment=8 changed nothing"
+printf 'int f(int n) { __int128 a[n]; a[0] = n; return (int)a[0]; }\n' > "$ho/.r3v.c"
+moonrun -mstack-alignment=8 -c -o /dev/null "$ho/.r3v.c" > /dev/null 2>&1 && fail "-mstack-alignment=8 took a VLA of 16-aligned elements"
+th="-mindirect-branch=thunk-extern -mfunction-return=thunk-extern -mindirect-branch-register -mindirect-branch-cs-prefix"
+moonrun $th -c -o "$ho/.r3b.o" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: the thunk asks compile"
+objdump -d --no-show-raw-insn "$ho/.r3b.o" > "$ho/.r3b.d"
+grep -Eq '(call|jmp) +\*|[[:space:]]ret$' "$ho/.r3b.d" && fail "r3: an indirect branch or a ret outside the thunks: $(grep -E '(call|jmp) +\*|[[:space:]]ret$' "$ho/.r3b.d" | head -1)"
+objdump -r "$ho/.r3b.o" | grep -q '__x86_indirect_thunk_' || fail "r3: no __x86_indirect_thunk_ call"
+objdump -r "$ho/.r3b.o" | grep -q '__x86_return_thunk' || fail "r3: no __x86_return_thunk jump"
+# ..and a run: thunks that branch plainly answer as the unthunked build
+cat > "$ho/.r3m.c" <<'EOF'
+int pf(const char *s, ...) { return s[0]; }
+int h(int x) { return x * 5; }
+int (*fp)(int) = h;
+void va(long);
+int sum16(int), cl(int), tl(int), pr(int (*)(int), int), sw(int);
+__asm__(".globl __x86_return_thunk\n__x86_return_thunk: ret\n"
+        ".irp r,rax,rcx,rdx,rbx,rbp,rsi,rdi,r8,r9,r10,r11,r12,r13,r14,r15\n"
+        ".globl __x86_indirect_thunk_\\r\n__x86_indirect_thunk_\\r: jmp *%\\r\n.endr\n");
+int main(void) { int t = 0; va(3); for (int i = 0; i < 8; i++) t += sw(i); return (t + sum16(4) + cl(2) + tl(3) + pr(h, 1)) & 127; }
+EOF
+$cc_g -O2 -o "$ho/.r3g" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 && "$ho/.r3g"; b=$?
+moonrun $th -mstack-alignment=8 -mskip-rax-setup -o "$ho/.r3" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: the thunked link"
+"$ho/.r3"; a=$?
+[ $a -eq $b ] || fail "r3: the thunked run answers $a, gcc $b"
+for fl in "-mcmodel=large" "-mcmodel=medium" "-mstack-alignment=4" "-mindirect-branch=thunk" "-mfunction-return=thunk-inline" \
+          "-t a64 -mskip-rax-setup" "-t i386 -mno-fp-ret-in-387" "-t i386 -mindirect-branch=thunk-extern"; do
+  moonrun $fl -c -o /dev/null "$ho/.r3.c" > /dev/null 2>&1; r=$?
+  [ $r -eq 2 ] || fail "r3: $fl: exit $r, not refused"
+done
+echo "mooncc: the x86-64 kernel's -m set: the code model, al, the 8-aligned stack, the retpoline and return thunks"
 
 # -- C11 conditional features (6.10.8.3), per target
 # ours alone (gcc has atomics): a claimed absence sends portable code down a fallback

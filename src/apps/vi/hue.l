@@ -1,6 +1,7 @@
 ; src/apps/vi/hue.l -- the .l syntax, once, for vi's painter and src/tools/hue2vim.l
 ; reads .l by lint.l's rules: `;` and `#!` to eol, "..." the only string; tokens, not a parse
 ; a row is (class vim-group rule); the rule tags are closed, each read by hue-lex and hue2vim
+;
 ; row order is priority; word lanes name a runtime probe rather than list words
 (module 'vi
 (borrow 'posix)

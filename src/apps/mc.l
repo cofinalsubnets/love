@@ -9,7 +9,7 @@
 ;   /  find under the pane's directory, narrowed as typed (seek.l); enter goes, esc back
 ;   r  re-read the pane           q  leave
 ;
-; pictures by kore pic: blocks, or sixel/kitty where the terminal answers and -g allows.
+; pictures by `love pic`: blocks, or sixel/kitty where the terminal answers and -g allows.
 ; thumbnails cache by path, mtime and cell size; a dear decode waits for the keys to rest.
 ;
 ; every key is a pure step on the state and every frame a pure lay, so the tool gates

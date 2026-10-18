@@ -194,7 +194,7 @@ rm -f "$ho"/.dd?
 X2=$PWD/$ho/.xxq; printf 'Hello World 0123456789abcdef\n' > "$X2"
 for c in "-p" "-i" "-c 8" "-g 1" "-g 4" "-u" "-l 20" "-s 3" "-s 3 -l 10 -c 8" "-s 0x10" "-c 5" "-c 8 -g 3"; do
   # shellcheck disable=SC2086
-  (cd "$ho" && xxd $c .xxq) > "$g"; (cd "$ho" && LOVE_NO_IMAGE= "$PWD/../$m" kore xxd $c .xxq) > "$o"; same "xxd $c"
+  (cd "$ho" && xxd $c .xxq) > "$g"; (cd "$ho" && LOVE_NO_IMAGE= "$PWD/../$m" xxd $c .xxq) > "$o"; same "xxd $c"
 done
 xxd -i < "$X2" > "$g"; korerun xxd -i < "$X2" > "$o"; same "xxd -i from stdin"
 korerun xxd -p "$X2" | korerun xxd -r -p > "$o"; cmp -s "$X2" "$o" || fail "kore xxd -p | xxd -r -p"

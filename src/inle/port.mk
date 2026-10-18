@@ -121,7 +121,7 @@ $(R)/$(o)/rt.o: $(S)/apps/moon/lib/rt.c $(lv)
 	@cd $(R) && $(MOONCC) -t $(p_tgt) -Isrc/apps/moon/include -c src/apps/moon/lib/rt.c $(o)/rt.o
 
 # p_ocopy -- the flatten, for the ports that ship a .bin/.hex: src/love/holo/copy.l reads the
-# linked ELF and writes objcopy's two output formats, byte for byte (`kore objcopy` is the
+# linked ELF and writes objcopy's two output formats, byte for byte (`love objcopy` is the
 # same code with a name). Takes no argument; a port that links its own ELF and stops there
 # (virt, mps2) never asks for it.
 define p_ocopy

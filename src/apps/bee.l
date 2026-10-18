@@ -533,7 +533,7 @@
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      ; the bee source a binary carries, hashed
      (self-src exe)
-      (: o (lush-out (sh-quote exe + " kore cat" + foldl (\ a f "\(a) /love/\(f)") "" (words bee-served) + " 2>/dev/null"))
+      (: o (lush-out (sh-quote exe + " cat" + foldl (\ a f "\(a) /love/\(f)") "" (words bee-served) + " 2>/dev/null"))
          (string? o && 0 < #o ? (sha256 o) ""))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))

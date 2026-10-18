@@ -16,7 +16,7 @@ clean() { n=$1; want=$2; shift 2
           grep -q '^;;' "$d/err" && fail "kore openssl $n scared: $(head -1 "$d/err")"; :; }
 
 # --- the door ---
-is version "$(k version)" "love kore openssl (a subset; not OpenSSL)"
+is version "$(k version)" "love openssl (a subset; not OpenSSL)"
 clean "with no command" 1
 clean "an unknown command" 1 nosuch
 grep -q "^Invalid command 'nosuch'" "$d/err" || fail "kore openssl nosuch: no complaint"
@@ -150,7 +150,7 @@ k genpkey -algorithm ed25519 -out "$d/old.key" && k genpkey -algorithm ed25519 -
   || fail "kore openssl genpkey over an old file"
 for f in ca in new old lnk; do is "genpkey $f.key mode" "$(mode "$d/$f.key")" "-rw-------"; done
 [ -e "$d/lnk.target" ] && fail "kore openssl genpkey followed a link"
-(umask 0; cd "$d" && LOVE_NO_IMAGE= "$K" kore openssl req -x509 -newkey ed25519 -subj /CN=k -out k.pem) || fail "kore openssl req -newkey, keyout default"
+(umask 0; cd "$d" && LOVE_NO_IMAGE= "$K" openssl req -x509 -newkey ed25519 -subj /CN=k -out k.pem) || fail "kore openssl req -newkey, keyout default"
 is "req privkey.pem mode" "$(mode "$d/privkey.pem")" "-rw-------"
 k req -new -x509 -key "$d/ca.key" -subj "/CN=kore root/O=love" -days 3650 \
   -addext "keyUsage=critical,keyCertSign,cRLSign" \

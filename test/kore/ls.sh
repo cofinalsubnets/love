@@ -90,7 +90,7 @@ if command -v vdir >/dev/null 2>&1; then
   for f in "" -a -r; do
     ran=$((ran + 1))
     # shellcheck disable=SC2086
-    "$m" kore vdir $f "$t" > "$w/mine" 2>&1; vdir $f "$t" > "$w/theirs" 2>&1
+    "$m" vdir $f "$t" > "$w/mine" 2>&1; vdir $f "$t" > "$w/theirs" 2>&1
     cmp -s "$w/mine" "$w/theirs" || { echo "FAIL vdir $f"; fail=$((fail + 1)); }
   done
 fi

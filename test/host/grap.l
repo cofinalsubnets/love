@@ -38,12 +38,12 @@
 
    f (dir + "/g.ms")
    _ (put f ".G1\nlabel bot \"x\"\n1 1\n2 3\n.G2\n")
-   r1 (hark [love "kore" "grap" f])
-   r2 (hark [love "kore" "grap" (dir + "/none.g")])
+   r1 (hark [love "grap" f])
+   r2 (hark [love "grap" (dir + "/none.g")])
    _ (test (<r1 = 0) (has? >r1 (".lf 1 " + f + "\n")) (has? >r1 "Label:\tbox invis")
            (<r2 = 1))
    _ (put (dir + "/g.pic") >r1)
-   r3 (hark [love "kore" "pic" (dir + "/g.pic")])
+   r3 (hark [love "pic" (dir + "/g.pic")])
    (test (<r3 = 0) (has? >r3 "\\D'l "),
     hark ["rm" "-rf" dir]))
 (test_fin (), puts "grap: ok", putc 10, 0)

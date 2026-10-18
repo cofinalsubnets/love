@@ -20,12 +20,12 @@
 # a gcc the script skips, like moon-sweep.sh without a package tree.
 set -e
 
-# mooncc and kore are love's own verbs (the layered bake); MOONCC/KORE still override.
+# mooncc and the kore tools are love's own verbs (the layered bake); MOONCC/KORE still override.
 # `env`, not a bare assignment prefix: $mc expands AFTER assignment-recognition, so a
 # literal `LOVE_NO_IMAGE=` in the expansion would run as a command name.
 love=${LOVE:-b/love}
 mc=${MOONCC:-env LOVE_NO_IMAGE= $love mooncc}
-kore=${KORE:-env LOVE_NO_IMAGE= $love kore}
+kore=${KORE:-env LOVE_NO_IMAGE= $love}
 gcc=${GCC:-gcc}
 d=${TMPDIR:-/tmp}/moon-reject.$$
 [ -x "$love" ] || { echo "moon-reject: no $love -- run make host"; exit 0; }
@@ -118,7 +118,7 @@ echo "--- labels: the ones that reach the SYMBOL TABLE ---"
 # these two are the finding. An unresolved local label does not refuse -- it
 # leaves the object carrying an undefined GLOBAL symbol spelled with mooncc's own
 # internal name, and only the LINK notices. the symbol table is printed because the
-# compiler's exit code says nothing. `kore nm -u` reads it -- our own reader over
+# compiler's exit code says nothing. `love nm -u` reads it -- our own reader over
 # holo's ELF door, so this needs no binutils to say what the object owes.
 p s_goto    'int main(void){ goto nowhere; return 0; }'
 p s_dupcase 'int main(void){ int x=1; switch(x){ case 1: return 1; case 1: return 2; } return 0; }'

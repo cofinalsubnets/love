@@ -295,7 +295,7 @@
 ; and substitution refs, the common functions, ifeq/ifdef, `include`, the = := ?= += flavors,
 ; pattern and static-pattern rules, order-only prereqs, the automatics; recipe lines run via sh -c.
 ;
-; $(wildcard) prefers lush's glob, so `kore make` globs before a shell exists; else globw
+; $(wildcard) prefers lush's glob, so `love make` globs before a shell exists; else globw
 ; shells out. the probe names sh-line, not the module: module 'lush exists from the floor.
 (? (lit? (cite 'lush 'sh-line)) 0
    (two? (stat "src/apps/lush.l")) (borrow "src/apps/lush.l")

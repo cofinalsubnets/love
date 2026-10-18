@@ -34,7 +34,7 @@ for t in kore sb cook libra mooncc lux; do
 done
 [ "$(readlink "$H/.local/bin/lush")" = "$H/.love/bin/lush" ] || fail "no ~/.local/bin compat link"
 [ "$("$H/.love/bin/lush" -c 'echo ok')" = ok ] || fail "the linked lush does not run"
-[ "$("$H/.love/bin/lush" -ac 'kore echo ok')" = ok ] || fail "lush -ac does not run a verb"
+[ "$("$H/.love/bin/lush" -ac 'basename /x/ok')" = ok ] || fail "lush -ac does not run a verb"
 
 # what earlier installs laid goes: tool links, the lux script, bao, the papel link, and
 # their ~/.local/bin links -- a file the nest did not lay stays, and so does its link

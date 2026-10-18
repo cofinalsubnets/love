@@ -18,8 +18,8 @@
 
    ; a real userland command, forked and captured, before the tty is handed off
    (selfcheck _)
-     (hark ["/bin/kore" "ls" "/proc"] @ r
-        (say1 ("-- self-check: kore ls /proc -> exit " + show <r
+     (hark ["/bin/ls" "/proc"] @ r
+        (say1 ("-- self-check: ls /proc -> exit " + show <r
                + ", " + show #>r + " bytes --")))
 
    ; pid 1's loop: reap every child; the console dying respawns it, any other is an orphan.

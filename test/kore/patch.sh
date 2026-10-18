@@ -12,13 +12,13 @@ pmk() { cp "$pw/base" "$pw/new"; sed -i "$1" "$pw/new"
             | sed -e '1s|^--- base.*|--- a/sub/f.txt|' -e '2s|^+++ new.*|+++ b/sub/f.txt|' ) > "$pw/p.diff"; }
 prun() { n=$1; shift
          ( cd "$pw/g" && patch "$@" < "$pw/p.diff" ) >/dev/null 2>&1; a=$?
-         ( cd "$pw/o" && LOVE_NO_IMAGE= "$K" kore patch "$@" < "$pw/p.diff" ) >/dev/null 2>&1; b=$?
+         ( cd "$pw/o" && LOVE_NO_IMAGE= "$K" patch "$@" < "$pw/p.diff" ) >/dev/null 2>&1; b=$?
          diff -r "$pw/g" "$pw/o" > /dev/null 2>&1 && [ $a -eq $b ] \
            || { diff -r "$pw/g" "$pw/o" | head -5; fail "kore patch $n (gnu $a ours $b)"; }; }
 pset; pmk 's/three/THREE/; s/seven/SEVEN/'; prun "two hunks" -p1
 pset; pmk 's/three/THREE/; s/seven/SEVEN/'
 ( cd "$pw/g" && patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1
-( cd "$pw/o" && LOVE_NO_IMAGE= "$K" kore patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1
+( cd "$pw/o" && LOVE_NO_IMAGE= "$K" patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1
 prun "-R puts it back" -p1 -R
 # an offset: a line inserted ahead moves the hunk
 pset; pmk 's/three/THREE/; s/seven/SEVEN/'
@@ -28,7 +28,7 @@ pset; pmk 's/three/THREE/'; prun "--dry-run touches nothing" -p1 --dry-run
 # no -p: the basename, so `patch < p` works inside the directory
 pset; pmk 's/four/FOUR/'
 ( cd "$pw/g/sub" && patch < "$pw/p.diff" ) >/dev/null 2>&1; a=$?
-( cd "$pw/o/sub" && LOVE_NO_IMAGE= "$K" kore patch < "$pw/p.diff" ) >/dev/null 2>&1; b=$?
+( cd "$pw/o/sub" && LOVE_NO_IMAGE= "$K" patch < "$pw/p.diff" ) >/dev/null 2>&1; b=$?
 diff -r "$pw/g" "$pw/o" > /dev/null 2>&1 && [ $a -eq $b ] || fail "kore patch (no -p)"
 # a create (--- /dev/null), its -0,0 seat reached
 pset; printf 'x\ny\nz\n' > "$pw/new"
@@ -53,7 +53,7 @@ prun "many hunks" -p1
 pset; pmk 's/two/TWO/'
 sed -i -e '1s|.*|--- x/y/sub/f.txt|' -e '2s|.*|+++ x/y/sub/f.txt|' "$pw/p.diff"
 ( cd "$pw/g" && patch -p2 -i "$pw/p.diff" ) >/dev/null 2>&1; a=$?
-( cd "$pw/o" && LOVE_NO_IMAGE= "$K" kore patch -p2 -i "$pw/p.diff" ) >/dev/null 2>&1; b=$?
+( cd "$pw/o" && LOVE_NO_IMAGE= "$K" patch -p2 -i "$pw/p.diff" ) >/dev/null 2>&1; b=$?
 diff -r "$pw/g" "$pw/o" > /dev/null 2>&1 && [ $a -eq $b ] || fail "kore patch -p2 -i"
 pset
 printf 'aa\nbb\n' > "$pw/g/sub/g.txt"; cp "$pw/g/sub/g.txt" "$pw/o/sub/g.txt"
@@ -64,7 +64,7 @@ prun "two files in one patch" -p1
 pset; pmk 's/three/THREE/; s/seven/SEVEN/'
 for s in g o; do printf 'nope\nnope\nnope\nnope\nnope\nnope\nnope\nnope\n' > "$pw/$s/sub/f.txt"; done
 ( cd "$pw/g" && patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1; a=$?
-( cd "$pw/o" && LOVE_NO_IMAGE= "$K" kore patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1; b=$?
+( cd "$pw/o" && LOVE_NO_IMAGE= "$K" patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1; b=$?
 [ $a -eq 1 ] && [ $b -eq 1 ] && cmp -s "$pw/g/sub/f.txt" "$pw/o/sub/f.txt" \
   && [ -f "$pw/o/sub/f.txt.rej" ] && [ -f "$pw/o/sub/f.txt.orig" ] \
   || fail "kore patch reject (gnu $a ours $b)"
@@ -72,7 +72,7 @@ cmp -s "$pw/g/sub/f.txt.rej" "$pw/o/sub/f.txt.rej" || fail "kore patch .rej vs G
 # the .orig is the unrelated file, so the .rej is applied to the tree it was cut against:
 # a .rej we write is one our reader takes back
 cp "$pw/base" "$pw/o/sub/f.txt"
-( cd "$pw/o/sub" && LOVE_NO_IMAGE= "$K" kore patch f.txt < f.txt.rej ) >/dev/null 2>&1 \
+( cd "$pw/o/sub" && LOVE_NO_IMAGE= "$K" patch f.txt < f.txt.rej ) >/dev/null 2>&1 \
   || fail "kore patch: the .rej does not re-apply"
 cmp -s "$pw/o/sub/f.txt" "$pw/new" || fail "kore patch: the re-applied .rej lands elsewhere"
 echo "kore: patch (13 applications leaving the same tree GNU patch does -- offsets, creates, rejects, the newline) ok"
