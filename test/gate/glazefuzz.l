@@ -44,11 +44,13 @@
    iop   (_ \ pick '(+ - * < > = // %))
    fop   (_ \ pick '(+ - *))
    gfn   (_ \ pick '(gfz0 gfz1 gfz2 gfz3 gfz4))
+   ; argument order is unspecified, so every draw is its own binding, last operand first
    (xpr d lf op) (d < 1 ? (lf 0)                 ; an expression of depth d over a leaf and an operator generator
-                  (rand 4 @ 0 (lf 0)
-                            1 [(op 0) (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
-                            2 ['? ['< (xpr (d - 1) lf op) 3] (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
-                            ['+ (xpr (d - 1) lf op) (lf 0)]))
+                  (: e (d - 1)
+                   (rand 4 @ 0 (lf 0)
+                             1 (: c (xpr e lf op) b (xpr e lf op) a (op 0) [a b c])
+                             2 (: c (xpr e lf op) b (xpr e lf op) a (xpr e lf op) ['? ['< a 3] b c])
+                             (: b (lf 0) a (xpr e lf op) ['+ a b]))))
    ; fourteen shapes, one per lane the hook offers, each lane probed not assumed: 9 reaches
    ; calloutinfo with every earlier lane declining, 10 calloutinfo-frame, 11 the counted loop
    (shape i)
