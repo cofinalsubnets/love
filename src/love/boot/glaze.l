@@ -1656,7 +1656,7 @@
                              (two? gnf && nom? <gnf && 1 < #gnf && all nom? >gnf && distinctp >gnf
                               && two? >>nl && atom? >>>nl               ; (: (g q..) GBODY), body-less (one binding)
                               && #>e = #>gnf)))))                       ; inits arity == g's arity
-   (subst-sym nm val e) (? (e = nm) val (two? e) (map (x \ subst-sym nm val x) e) e)            ; symbol nm -> val in e
+   (subst-sym nm val e) (? (e = nm) val (dquote? e) e (two? e) (map (x \ subst-sym nm val x) e) e)   ; symbol nm -> val in e; a quote is data
    ; norm-let: (: aux.. (g q..) GBODY (g inits..)) -> the named-let ((: (g q..) GBODY[aux inlined]) inits..) lift handles. the
    ; aux values close against each other left to right and every use is a copy, so only a dcheap? value goes: a call would recompute per use
    (auxclose aps) (foldl (\ acc ap (acc + [(<ap . (foldl (\ b q (subst-sym <q >q b)) >ap acc))])) () aps)
