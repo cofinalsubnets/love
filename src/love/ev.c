@@ -590,7 +590,7 @@ static love_inline Ana(ana_2, word a, word b) {
   g = eval(gxr(gxl(gxl(pushq(gxl(push(g, 4, b, zero, zero, x)))))));
   // the expansion takes the opfix prepass, with c0's guard; the operands came in factored,
   // so the pass keeps them whole: (of '(e . operands))
-  word e = ok(g) ? g->sp[0] : 0, of = core_of(g)->hook[hook_opfixp];
+  word e = ok(g) ? g->sp[0] : ZeroPoint, of = core_of(g)->hook[hook_opfixp];   // a scared expansion is no chain
   if (chainp(e) && (!evenp(A(e)) || datp(A(e))) && evenp(of)) {
    g = eval(gxr(gxl(gxl(pushq(gxl(gxl(push(g, 5, e, g->sp[1], zero, zero, of))))))));
    if (ok(g)) g->sp[2] = g->sp[0], g->sp += 2; }
