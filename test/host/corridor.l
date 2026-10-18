@@ -122,6 +122,13 @@
        (brush-medium (rs 'sc 'brushes) [-4.85 2.0 1.6] = 0) (brush-medium (rs 'sc 'brushes) [-4.6 3.3 1.6] = 1)
        (up 'py = 0.5 + eye-h) (mag (up 'ph - 10.0 * pi / 180.0) < 1e-9) (mag (up 'th - pi / 2.0) < 1e-9)
        (has? pos "(start [0.0 0.0 1.0] 0.0 0.0)") (tablet? (corridor-load "src/apps/lore/levels/station.l"))))
+; the station: the wings' chambers and the hallway open onto the platform; its edge railed
+; but across the car's door; the track bed a metre under the car's floor, so the two never meet
+(: sb (corridor-new 40 24 (corridor-load "src/apps/lore/levels/station.l") "src/apps/lore/levels/" 'sc 'brushes)
+   (m x y z) (brush-medium sb [x y z])
+ (test (m -9.0 0.3 -0.05 = 1) (m 9.0 0.3 -0.05 = 1) (m 0.0 0.3 -0.05 = 1)
+       (m -9.0 0.3 -4.44 = 0) (m 9.0 0.3 -4.44 = 0) (m 0.0 0.3 -4.44 = 1)
+       (m 0.0 -0.5 -6.0 = 1) (m 0.0 -1.1 -6.0 = 0) (m 0.0 -0.5 -2.0 = 0)))
 ; a car: its door opens at the start and stays open while the player is in; walls and the shut
 ; door stop a walk; out, it shuts, reopening for a step back; then it leaves, and the edge stops
 ; a walk; each change cried, the car drawn only while it stands, its sounds in range

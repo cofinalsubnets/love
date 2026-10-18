@@ -50,12 +50,13 @@
   (start [0 0 -5.9] 0 0)
   ; the hall, 38 metres across, five high and 16 long
   (room [-19 0 0] [19 5 16])
-  ; the platform, its floor a grate, and the track beside it running on into the tunnels
+  ; the platform, its floor a grate, and the track a metre below it running on into the
+  ; tunnels, under the car's floor
   (skin {'floor grate} (room [-24 0 -4.52] [24 3.5 0]))
-  (room [-24 0 -7.6] [24 3.5 -4.52])
-  (room [-70 0 -7.6] [70 3 -4.52])
+  (room [-24 -1 -7.6] [24 3.5 -4.52])
+  (room [-70 -1 -7.6] [70 3 -4.52])
   ; solid blocks standing in from the side walls, mirrored about x 0; the hallway between
-  ; them opens onto the platform, and each wing's chamber south looks onto it over a railing
+  ; them and each wing's chamber south open onto the platform
   (mirror-x 0
    [(solid (box [-19 0 0] [-11 5 4]))
     (solid (box [-7 0 0] [-3 5 4]))
@@ -63,12 +64,13 @@
     (solid (box [-7 0 8] [-3 5 10]))
     (solid (box [-19 0 16] [-3 5 10]))
     (repeat 2 [4 0 0] [(across (strip-light [-13 5 6]))])
-    ; ..the chamber's railing: a plinth, two posts and a rail, open over it to the platform's ceiling
-    (solid (box [-11 0 -0.1] [-7 0.4 0.1]))
-    (repeat 2 [1.33 0 0] [(solid (box [-9.7 0.4 -0.03] [-9.64 1.0 0.03]))])
-    (solid (box [-11 1.0 -0.04] [-7 1.06 0.04]))])
-  ; the car at the platform, its door on the hallway; it leaves west
-  (train [-9 0 -7.2] [9 2.3 -4.6] (door [0 0 -4.6] 1.4 2.0) -55)
+    ; ..the railing along the platform's edge, open across the car's door: a plinth, posts
+    ; and a rail
+    (solid (box [-24 0 -4.52] [-1 0.4 -4.36]))
+    (repeat 16 [-1.52 0 0] [(solid (box [-1.06 0.4 -4.47] [-1 1.0 -4.41]))])
+    (solid (box [-24 1.0 -4.48] [-1 1.06 -4.4]))])
+  ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
+  (train [-9 0 -7.24] [9 2.3 -4.64] (door [0 0 -4.64] 1.4 2.0) -55)
   (repeat 7 [6 0 0] [(across (strip-light [-18 3.5 -2.4]))])
   ; the way out north: a door, and a corridor beyond
   ;(room [-1.2 0 32.2] [1.2 2.6 40])
