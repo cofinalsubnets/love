@@ -1,18 +1,15 @@
-; src/love/holo/elfsec.l -- a named section's bytes out of any ELF, on any machine. `(borrow "src/love/holo/elfsec.l")`:
+; src/love/holo/elfsec.l -- a named section's bytes out of any ELF, any machine's:
 ;
-;   (elfsec path nm) -> (1 bytes) | ()      the section named nm, or () for no file / no section
+;   (elfsec path nm) -> (1 bytes) | ()      () for no file / no section
 ;
-; the (1 bytes) wrapper is the answer, not the bytes: an empty section is a real section and
-; a bare () would call it absent. a section table is a table, so an a64 object reads on
-; x86-64 asking nothing of the machine underneath -- which is how `.comment`, the producer
-; record, is read back with no binutils in the picture.
+; the wrapper keeps an empty section distinct from an absent one.
 (borrow 'posix)
 (:
    (es-slurp p) (uread p @ [1 s] s ())
    (es-le s i n) (: (go k a m) (k = n ? a (go (k + 1) (a + peep s (i + k) 0 * m) (m * 256)))
                     (go 0 0 1))
-   ; e_ident[4] is the class, 1 is 32 and 2 is 64; the rows are the same fields at their two
-   ; spellings -- shoff shentsz shnum | sh_name sh_off sh_size, and e_shstrndx two past shnum.
+   ; by e_ident[4] (1 elf32, 2 elf64): e_shoff off width, e_shentsize off, e_shnum off |
+   ; sh_name sh_offset sh_size as off width; e_shstrndx sits two past e_shnum.
    es-e32 '(32 4 46 48   0 4 16 4 20 4)
    es-e64 '(40 8 58 60   0 4 24 8 32 8)
    (es-sec exe nm)

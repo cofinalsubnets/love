@@ -397,6 +397,15 @@
     ; multi-arg recursion: tak's args survive nested self-calls on the machine stack
     (: rt '(: (tak x y z) (? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z) (tak 18 12 6))
        (&& !(= (autogroup rt) rt) (= 7 (ev rt)) (= (base-ev rt) (ev rt))))
+    ; a higher-order constant inlines into its callers and only its own binding drops: sum (n + 2) over 1..5
+    (: rh '(: tw (\ h x (h (h x)))  (inc n) (+ n 1)  (f n) (? (< n 1) 0 (+ (tw inc n) (f (- n 1))))  (f 5))
+       (&& !(= (autogroup rh) rh) (= 25 (ev rh)) (= (base-ev rh) (ev rh))))
+    ; a macro's call never flattens: sec inlines to ((list v 9) 1), an index, never (list v 9 1)
+    (: rl '(: (sec l) (l 1)  (pr2 v) (sec (list v 9))  (nib c) (? (< c 58) (- c 48) (- c 87))  (+ (pr2 5) (nib 50)))
+       (&& !(= (autogroup rl) rl) (= 11 (ev rl)) (= (base-ev rl) (ev rl))))
+    ; an inlined name stays as written in a quote: (show 'sec) is "sec", never the lambda's text
+    (: rq '(: (sec l) (l 1)  (pr2 v) (sec (list v 9))  (nib c) (? (< c 58) (- c 48) (- c 87))  k (tally (show 'sec))  (+ (+ (pr2 5) (nib 50)) k))
+       (&& !(= (autogroup rq) rq) (= 14 (ev rq)) (= (base-ev rq) (ev rq))))
     ; group swallow: an external global callee's recorded source folds in as an in-blob sibling
     (: rsw '(: (rsw1 n) (? (< n 1) 0 (+ (swq n) (rsw1 (- n 1)))) (rsw1 5))                    ; sum swq(1..5) = 2+5+10+17+26 = 60
        rst '(: (rst1 n) (? (< n 1) 0 (+ (swsum n) (rst1 (- n 1)))) (rst1 4))                 ; sum swsum(1..4) = 1+3+6+10 = 20

@@ -1,27 +1,20 @@
-; src/love/holo/copy.l -- objcopy's two output formats, ours: a linked elf flattened to
-; the bytes a flash tool takes. `-O binary` is the image as it lies from the lowest
-; load address, `-O ihex` that same image in Intel hex, which is what teensy_loader_cli
-; and the Teensy Loader gui read. between them they were the last foreign tool on the
-; thumb boards (src/inle/{teensy41,nucleo446,rp2040}/Makefile); `kore objcopy` is the applet.
+; src/love/holo/copy.l -- objcopy's two output formats: a linked elf flattened to the
+; bytes a flash tool takes. `-O binary` is the image from the lowest load address,
+; `-O ihex` the same image in Intel hex. `kore objcopy` is the applet.
 ;
-; a section's sh_addr is where it runs, and the flasher wants where it is stored --
-; different numbers for a lane held in flash and copied into RAM at boot. so every
-; section is carried through the PT_LOAD holding its file bytes and the segment's
-; p_paddr answers: lma = p_paddr + (off - p_offset). matching by file offset rather
-; than by address is what keeps two lanes sharing a vaddr apart.
+; a flasher wants the load address, not sh_addr: each section maps through the PT_LOAD
+; holding its file bytes, lma = p_paddr + (off - p_offset). matching by file offset keeps
+; two lanes sharing a vaddr apart.
 ;
-; the section table sets the record breaks -- objcopy starts a fresh record at each
-; section, so a hex file carries the section shape in where its short records fall.
-; matching that is what lets test/gate/objcopy.sh be a byte comparison and not a
-; reading of the result.
+; a hex record never spans two sections, as in gnu objcopy, so output compares by bytes.
 ;
 ; loads after src/love/holo/link.l, whose field table, ld-write and ld-zeros it reads.
 (module 'holo
-(borrow 'kore) ; the text/u floors (usplit ..), scoped to this module's compile
+(borrow 'kore)
 (borrow 'posix)
 
 (:
-   ;; the pt_loads as (fileoff filesz paddr) -- all a flat image needs of them.
+   ;; the pt_loads as (fileoff filesz paddr)
    (oc-segs fs s)
     (: n (ld-f fs s 0 'e-phnum) po (ld-f fs s 0 'e-phoff) e (ld-n fs 'ph-ent)
        (rev (foldl (\ acc i (po + i * e @ h
@@ -36,22 +29,14 @@
                         (go >ps))))
        (go segs))
 
-   ;; -> ((lma fileoff size).. in lma order, entry). what a flat image is made of is
-   ;; every section the loader allocates that has bytes to give -- .bss is allocated
-   ;; and has none, which is right: a flasher writes what exists. the question is
-   ;; has bytes, not is-progbits: a dynamic exe loads its .note, .dynsym, .gnu.hash
-   ;; and .rela.dyn too, and each is a type of its own.
+   ;; -> ((lma fileoff size).. in lma order, entry): every SHF_ALLOC section with file
+   ;; bytes. the test is not-NOBITS, not is-PROGBITS: .note, .dynsym and .rela.dyn load too.
    (oc-read id s)
     (: _ (s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0
             (scare 'copy-not-elf id))
        fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'copy-elf-class id))
-       ; a table this file does not have is a table of stride 0, so ask after the
-       ; count first or the entsize check answers for it and names the wrong field.
-       ; both tables are load-bearing here and neither is optional in an executable:
-       ; a bare image from elf.l's one-segment writer carries no section headers, and
-       ; flattening it off the segment alone would be a guess. (gnu objcopy refuses it
-       ; too; llvm-objcopy writes a zero-BYTE image and says nothing, which on a board
-       ; is a brick that looks like a build.)
+       ; both tables are required: an image without section headers (elf.l's writer)
+       ; is refused, not guessed at. counts before entsizes, which read 0 for a missing table.
        shnum (ld-f fs s 0 'e-shnum) phnum (ld-f fs s 0 'e-phnum)
        _ (0 < shnum ? 0 (scare 'copy-no-sections id))
        _ (0 < phnum ? 0 (scare 'copy-no-segments id))
@@ -71,11 +56,9 @@
        (two? secs ? 0 (scare 'copy-nothing id),
         [(sortby (\ a b (<a <= <b)) secs) (ld-f fs s 0 'e-entry)]))
 
-   ;; the section named nm in a linked elf, as (file-offset size), or () where it has none:
-   ;; where a patch of the binary's own bytes goes (src/apps/source.l marks a cross seed's
-   ;; egg in its .love.image). rd answers the n bytes at an offset, so a caller reads the
-   ;; header, the section table and the names and nothing else -- (\ o n (snip s o (o + n)))
-   ;; over bytes in hand
+   ;; the section named nm in a linked elf, as (file-offset size), or (). (rd o n) answers
+   ;; the n bytes at o, so only the header, section table and names are read --
+   ;; (\ o n (snip s o (o + n))) over bytes in hand
    (elf-sec-at rd nm) (rd 0 64 @ hd (#hd < 52 || !(hd 0 = 127 && hd 1 = 69) ? () (es-at rd nm hd)))
    (es-at rd nm hd)
     (: fs (hd 4 = 1 ? elf32f elf64f)
@@ -89,9 +72,7 @@
                  (go (i + 1)))
        (#strs ? (go 1) ()))
 
-   ;; -- the flat image, as a list of pieces for ld-write. a gap between two sections
-   ;; is zeros: the file lays down from the lowest load address, so whatever is not a
-   ;; section is what the part comes up holding there.
+   ;; -- the flat image, as pieces for ld-write; a gap between sections is zeros
    (oc-bin s secs)
     (: (go l pos acc)
         (atom? l ? (rev acc)
@@ -101,21 +82,15 @@
                   (snip s o (o + n) . (pos < a ? (ld-zeros (a - pos) . acc) acc)))))
        (go secs (<secs 0) ()))
 
-   ;; -- Intel hex: ":" ll AAAA tt dd.. CC, every byte two ASCII hex digits, CC the
-   ;; two's complement of the sum of all before it. 01 is the end, and an entry of 0
-   ;; writes no start record at all, which is objcopy's silence.
-   ;; the address field is sixteen bits, so a base record carries the rest -- and there
-   ;; are two of those, a 1976 one and a 1988 one. under 1 MB the base is an 8086 segment
-   ;; (type 02, the base shifted right 4); at or above it is a linear upper half (type 04).
-   ;; the two do not replace each other, they sum, so a run climbing past 1 MB has to
-   ;; zero the segment before naming a linear base -- a bare 04 would land 0xf0000 high.
-   ;; a data record stops at the 64K line rather than wrapping over it.
-   ;; the line ending is crlf -- the format has been a serial-line format since 1973
-   ;; and every writer still speaks it. a lone \n reads back fine and diffs wrong.
+   ;; -- Intel hex: ":" ll AAAA tt dd.. CC, each byte two hex digits, CC the two's
+   ;; complement of the sum before it; 01 ends, and an entry of 0 writes no start record.
+   ;; the high address bits ride a base record: under 1 MB an 8086 segment (02, base >> 4),
+   ;; above it a linear upper half (04). the two sum, so climbing past 1 MB zeroes the
+   ;; segment first. a data record stops at a 64K line. lines end crlf.
    oc-digits "0123456789ABCDEF"
    oc-pairs (foldl (\ a b (a + snip oc-digits (b >> 4) ((b >> 4) + 1)
                              + snip oc-digits (b & 15) ((b & 15) + 1)))
-                   "" ^256)                       ; every byte's two digits, once
+                   "" ^256)
    (oc-x2 b) (snip oc-pairs (b + b) (b + b + 2))
    (oc-cat ls) (foldl (+) "" ls)
    (oc-rec ty addr bs)
@@ -123,8 +98,7 @@
        ck ((256 - foldl (+) 0 all % 256) % 256)
        (oc-cat (":" . (map oc-x2 (all + [ck]) + '("\r\n")))))
    (oc-be4 v) [(v >> 24 & 255) (v >> 16 & 255) (v >> 8 & 255) (v & 255)]
-   ;; the entry wears the same two ages as the base: type 03 is cs:ip under 1 MB, and
-   ;; type 05 the flat address above it.
+   ;; the entry likewise: 03 is cs:ip under 1 MB, 05 the flat address above
    (oc-start e)
     (0xFFFFF < e ? (oc-rec 5 0 (oc-be4 e))
        (oc-rec 3 0 [((e >> 16 & 15) << 4) 0 (e >> 8 & 255) (e & 255)]))
@@ -158,9 +132,7 @@
                           (map (k \ s (c 1 + k)) ^(c 2)) . acc2))))
        (go (oc-chunks secs) 0 () ()))
 
-   ;; -- the applet. GNU's objcopy names itself when it complains and exits 1, and a
-   ;; makefile's error belongs where the binutils one went; `kore objcopy` dispatches
-   ;; here, and so does the one-line cat a port build runs.
+   ;; -- the applet; it complains as gnu objcopy does, named and exit 1
    (oc-die m) (say err ("objcopy: " + m), put err 10, quit 1)
    (objcopy as)
     (#as != 4 ? (oc-die "usage: objcopy -O binary|ihex IN OUT")

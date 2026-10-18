@@ -1,14 +1,8 @@
-; i386 -- the 32-bit x86 backend for the neutral assembler (src/love/holo/holo.l), and its 16-bit
-; twin. one emitter tablet per mode: 'i386 lays protected-mode code, 'i386m16 the same instructions
-; for a 16-bit code segment the way gcc's -m16 (gas's .code16gcc) does -- 66 on a 32-bit operand,
-; 67 on every memory operand, call and ret 32-bit so a frame keeps its shape, jumps 16-bit.
-; every encoding was checked against `objdump -d` (-M i8086 for the twin).
-;
-; loads after x64.l, whose x86 core (ModRM/SIB, the tables, the relocation kinds) it shares.
-; the register file is x64's first eight, no REX anywhere:
-;   sp->esp  r0->eax r1->ecx r2->edx r3->ebx  r4->ebp r5->esi r6->edi
-; and r7..r14 refuse at the door (i386-lower). only r0..r3 have a byte face: a byte store, setcc or movzx from r4..r6 or sp
-; would name ah..bh, so it detours by xchg. the wide ops (the 128-bit kit, REX.W faces) are not rows.
+; i386 -- the 32-bit x86 backend for holo, and its 16-bit twin 'i386m16, laid as gcc -m16
+; (.code16gcc) does: 66 on a 32-bit operand, 67 on every memory operand, call and ret 32-bit, jumps 16-bit.
+; loads after x64.l and shares its x86 core (ModRM/SIB, tables, relocation kinds). no REX:
+;   sp->esp  r0->eax r1->ecx r2->edx r3->ebx  r4->ebp r5->esi r6->edi;  r7..r14 refuse (i386-lower)
+; only r0..r3 have a low byte; a byte op on another register detours by xchg.
 
 (module 'holo
 (: i386-regs {'sp 4 'r0 0 'r1 1 'r2 2 'r3 3 'r4 5 'r5 6 'r6 7}
@@ -20,15 +14,14 @@
    (mem regf base disp) (x86-mem regf (i3rn base) disp)
    (memx regf base index scale disp) (x86-memx regf (i3rn base) (i3rn index) scale disp)
    (i3b r) (i3rn r @ n (n < 4 ? n (scare 'i386-bytereg r)))     ; a register with a low byte
-   ;; a byte op on esi/edi borrows a low-byte register by xchg (the flags untouched): the first of
-   ;; eax..ebx the operation's address does not name, swapped in around it and back
+   ;; a byte op on ebp/esi/edi swaps in, by xchg (flags kept), the first of eax..ebx its address does not name
    (i3xb m s avoid f)
     (i3rn s < 4 ? (f s)
        (: t (<(filter (r \ nelem r avoid) '(r0 r1 r2 r3)))
           sw (o32 m + (t = 'r0 ? [(144 | i3rn s)] [135 (modrm 3 (i3rn s) (i3rn t))]))   ; 90+r with eax, else 87 /r
           (sw + f t + sw)))
 
-   ;; the mode's prefixes: a 32-bit operand, a 16-bit one, a memory operand
+   ;; m 1 is the 16-bit mode: prefixes for a 32-bit operand, a 16-bit one, a memory operand
    (o32 m) (m = 1 ? [102] ())
    (o16 m) (m = 1 ? () [102])
    (a32 m) (m = 1 ? [103] ())
@@ -39,9 +32,8 @@
     (i3rn d @ dn
        (o32 m + (fits8 imm ? [131 (modrm 3 ext dn) (byte imm)] ([129 (modrm 3 ext dn)] + le32 imm))))
    (i3step m rr ext d y) (reg? y ? (i3rr m [rr] d y) (i3ri m ext d y))
-   ;; [base+off] and [base+index*scale+disp] at width w, the register field regf
-   ;; base 'rip with off (sym k): that symbol's absolute address -- disp16 in 16-bit code, as the
-   ;; segment's own addresses go, else ModRM's disp32-only face (32-bit mode has no rip)
+   ;; base 'rip with off (sym k) is that symbol's absolute address: disp16 in 16-bit code, else
+   ;; ModRM's disp32-only form (no rip-relative in 32-bit mode)
    (i3abs m regf off)
     (m = 1 ? [(modrm 0 regf 6) (fix 2 'abs16 <off <>off)] [(modrm 0 regf 5) (fix 4 'abs32 <off <>off)])
    (i3mem m w opc regf base off)
@@ -49,7 +41,6 @@
    (i3memd m w opc dig base off)
     (base = 'rip ? (ow m w + opc + i3abs m dig off) (a32 m + ow m w + opc + mem dig base off))
    (i3memx m w opc regf base ix sc dp) (a32 m + ow m w + opc + memx (i3rn regf) base ix sc dp)
-   ;; a byte face's register field must have a low byte
    (i3mw m w opc8 opc regf base off) (i3mem m w (w = 1 ? opc8 opc) (w = 1 ? (i3b regf, regf) regf) base off)
 
    (i3-li m d imm)
@@ -127,18 +118,16 @@
        (? (w = 1) (scare 'i386-btm-byte op)
           (reg? y) (i3-mw m w () [15 (k @ 4 163 5 171 6 179 187)] y base off)
           (i3-mw m w () [15 186] k base off + [(byte y)])))
-   ;; the carry chain three-address: d <- a OP b with the carry in. mov keeps the flags, so the
-   ;; two-address dance is sound; d aliasing b has no honest encoding unless OP commutes
+   ;; d <- a OP b with carry in; mov keeps the flags. d aliasing b only when OP commutes
    (i3-adc m op d a b)
     (? (i3rn d = i3rn a) (i3-carry m op 4 d b)
        (reg? b && i3rn d = i3rn b) (op = 'adc ? (i3-carry m op 4 d a) (scare 'alias-dst [op d a b]))
        (i3-mov m d a + i3-carry m op 4 d b))
    (i3-cas m acc new ptr)
     (acc @ 'r0 ([240] + i3mem m 4 [15 177] new ptr 0) (scare 'cas-acc acc))
-   ;; the thread pointer: linux i386 keeps it in gs, the block's first word the pointer itself
+   ;; linux i386 keeps the thread pointer at gs:0
    (i3-tp m d) ([101] + a32 m + o32 m + [139 (modrm 0 (i3rn d) 5)] + le32 0)
 
-   ;; movsx/movzx r32 from a register's low byte or word; the 32-bit faces are the register itself
    (i3-sx m w d)
     (? (w = 4) ()
        (w = 1) (i3xb m d () (t \ o32 m + [15 190 (modrm 3 (i3rn t) (i3b t))]))
@@ -146,7 +135,7 @@
    (i3-zx m w d) (? (w = 4) () (w = 1) (i3xb m d () (t \ i3-zxm m 1 t t)) (i3-zxm m w d d))
    (i3-zxm m w d s)
     (? (w = 4) (i3-mov m d s)
-       (w = 1 && 4 <= i3rn s) (i3-mov m d s + i3-zx m 1 d)      ; esi/edi has no low byte: copy, then extend in place
+       (w = 1 && 4 <= i3rn s) (i3-mov m d s + i3-zx m 1 d)      ; no low byte: copy, then extend in place
        (o32 m + [15 (w @ 1 182 183) (modrm 3 (i3rn d) (w = 1 ? (i3b s) (i3rn s)))]))
 
    (i3-push m s)
@@ -156,7 +145,7 @@
    (i3-pop m d) (o32 m + [(88 | i3rn d)])
    (i3-un m opc ext d) (o32 m + [opc (modrm 3 ext (i3rn d))])
 
-   ;; control. call is 32-bit in both modes; a jump's displacement is the mode's own width
+   ;; call is 32-bit in both modes; a jump's displacement is the mode's width
    (i3-call m label) (o32 m + [232 (fix 4 'rel32 label 0)])
    (i3-jmp m label) (m = 1 ? [233 (fix 2 'rel16 label 0)] [233 (fix 4 'rel32 label 0)])
    (i3-br m cond label)
@@ -166,8 +155,7 @@
    (i3-callm m base off) (base = 'rip ? (o32 m + [255] + i3abs m 2 off) (a32 m + o32 m + [255] + mem 2 base off))
    (i3-jmpm m base off) (i3memd m 4 [255] 4 base off)
    (i3-jmpt m d tl labs) (i3-jmpr m d)
-   ;; a label's address: absolute, as gcc -fno-pic lays it. lar is the translation-invariant
-   ;; one, where the image runs: call the next instruction, pop it, add the distance
+   ;; la is absolute (gcc -fno-pic); lar is position-independent: call next, pop, add the distance
    (i3-la m d label) (i3-laa m d label 0)
    (i3-laa m d label k) (o32 m + [(184 | i3rn d) (fix 4 'abs32 label k)])
    (i3-lar m d label)
@@ -181,8 +169,7 @@
    (i3-cmov m cond d s)
     (i3rn d = i3rn s ? (scare 'cmov-alias d) (o32 m + [15 (jcc-op cond - 64) (modrm 3 (i3rn d) (i3rn s))]))
    (i3-mulo m d a b t lbl) (i3-imul m d a b + (m = 1 ? [15 128 (fix 2 'rel16 lbl 0)] [15 128 (fix 4 'rel32 lbl 0)]))
-   ;; div/rem and the high multiply: edx:eax-fixed, so edx is saved round them and a divisor in
-   ;; eax or edx goes through a stack cell. clobbers eax; d must not be r2
+   ;; edx:eax-fixed: edx is saved round them, a divisor in eax or edx goes through a stack cell. clobbers eax
    (i3-div m remf sgn d a b)
     (: cell? (i3rn b = 0 || i3rn b = 2)
        (catall [(o32 m + [82])
@@ -211,7 +198,7 @@
    (i3-stseg m n s) (0 <= n <= 5 || scare 'i386-segnum n, [142 (modrm 3 n (i3rn s))])
    (i3-segst m n base off) (i3memd m 1 [140] n base off)
    (i3-segld m n base off) (i3memd m 1 [142] n base off)
-   ; a segment register pushed or popped (es cs ss ds fs gs = 0..5; cs has no pop), at width w
+   ; es cs ss ds fs gs = 0..5; cs has no pop
    (i3-pushseg m n w) (ow m w + (n @ 0 [6] 1 [14] 2 [22] 3 [30] 4 [15 160] 5 [15 168] (scare 'i386-segnum n)))
    (i3-popseg m n w) (ow m w + (n @ 0 [7] 2 [23] 3 [31] 4 [15 161] 5 [15 169] (scare 'i386-segnum n)))
    (i3-cr m opc n g) (0 <= n <= 7 || scare 'i386-crnum n, [15 opc (modrm 3 n (i3rn g))])
@@ -229,9 +216,8 @@
            (modrm 3 (i3rn d) (i3rn s))]))
    (i3-int m n) (0 <= n <= 255 || scare 'i386-int-vector n, [205 n])
 
-   ;; -- sse2's scalar lane on xmm0..7: x64's encodings without a REX. a double's 64 bits cross to
-   ;; the gp pair (r, its twin) through an 8-byte cell under esp, and the unsigned word converts
-   ;; through x87's 64-bit integer load (fisttp's truncation for the way back) --
+   ;; sse2 scalar on xmm0..7, x64's encodings without REX. a double crosses to the gp pair (r, i3hi r)
+   ;; through an 8-byte cell under esp; unsigned converts go through x87's 64-bit fild / fisttp
    i386-xregs (fregs 8)
    (i3x r) (look i386-xregs r 'i386-badxreg)
    (i3hi r) (r @ 'r0 'r1 'r1 'r2 'r2 'r3 'r5 'r6 (scare 'i386-pair r))
@@ -241,7 +227,7 @@
    (i3-xmem m pfx opc xn base off) (a32 m + [pfx 15 opc] + mem xn base off)
    (i3-xmemx m pfx opc xn base ix sc dp) (a32 m + [pfx 15 opc] + memx xn base ix sc dp)
    (i3-x87 m opc dig) (a32 m + [opc] + mem dig 'sp 0)                 ; an x87 op over [esp]
-   (i3-cell m fs) (i3-lea m 'sp 'sp -8 + fs + i3-lea m 'sp 'sp 8)       ; an 8-byte cell under esp, flags kept
+   (i3-cell m fs) (i3-lea m 'sp 'sp -8 + fs + i3-lea m 'sp 'sp 8)       ; lea keeps the flags
    (i3-movqxr m f r)
     (i3-cell m (i3mem m 4 [137] r 'sp 0 + i3mem m 4 [137] (i3hi r) 'sp 4 + i3-xmem m 242 16 (i3x f) 'sp 0))
    (i3-movqrx m r f)
@@ -258,7 +244,6 @@
    (i3-cvttss2ui m r f)
     (i3-cell m (i3-xmem m 243 17 (i3x f) 'sp 0
                 + i3-x87 m 217 0 + i3-x87 m 221 1 + i3mem m 4 [139] r 'sp 0))           ; fld dword; fisttp qword
-   ;; the tablet for a mode
    (i386-ems m)
     (: t (emsof
           [('li . i3-li m) ('mov . i3-mov m) ('cmp . i3-cmp m) ('test . i3-test m) ('imul . i3-imul m)
@@ -343,7 +328,6 @@
        t)
    i386-ems32 (i386-ems 0)
    i386-ems16 (i386-ems 1)
-   ;; a register past r6 has no 32-bit face
    i386-wide '(r7 r8 r9 r10 r11 r12 r13 r14)
    (i386-lower ems ins)
     (: _ (each >ins (o \ elem o i386-wide && scare 'i386-badreg [o ins]))

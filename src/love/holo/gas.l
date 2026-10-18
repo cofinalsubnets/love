@@ -1,34 +1,27 @@
-; gas -- the GNU-dialect front for inline asm: the text an `asm("..")` template carries once its
-; operands are substituted, in the assembler syntax the target's own toolchain speaks (AT&T on
-; x64, ARM on a64, riscv, thumb), lowered to the neutral IR src/love/holo/holo.l assembles. where
-; text.l reads holo's own mnemonics over abstract registers, this reads what clang and gcc read,
-; so one template serves every compiler. it encodes nothing itself: every line lands on a backend
-; row, so the encodings stay where they are gated (test/holo/golden.l). (as.l is the physical
-; encoder over the same x64 value; this one is the inline-asm dialect front.)
+; gas -- the GNU-dialect front for inline asm and file-scope assembly: the text in the syntax
+; the target's own toolchain speaks (AT&T on x86, ARM on a64, riscv, thumb), lowered to the
+; neutral IR holo.l assembles, so one template serves every compiler. a line lands on a backend
+; row where one fits, else on as.l's bytes (x64) or its own word (a64).
 ;
-;   (gas-text tgt src)          ; text -> IR forms, tgt one of 'x64 'a64 'rv64 'thumb2 'thumb1
+;   (gas-text tgt src)          ; text -> IR forms, tgt 'x64 'i386 'i386m16 'a64 'rv64 or a thumb
 ;   (gas-reg tgt r w mod)       ; the dialect's spelling of neutral register r at byte width w
 ;   (gas-imm tgt n mod)         ; .. of an immediate ("$3" / "3" / "#3")
 ;   (gas-mem tgt r)             ; .. of a memory operand at register r ("(%rax)" / "[x0]" / "0(a0)")
 ;   (gas-regname tgt s)         ; the dialect's register name -> the neutral symbol, () if unknown
 ;
-; what a line may say is what the neutral IR can carry: 64-bit register ops, immediates, base +
-; displacement memory, labels local to the template (GNU's `1:` / `1f` / `1b` included), and the
-; system lane. x64's 32-bit forms ride the 64-bit op plus a zero-extend; the 8/16-bit register
-; forms and indexed memory refuse. a64 lays its own word where the IR's would not be gas's: W ops,
-; written-back and indexed addresses, an X op the IR spells longer. a line that fits nothing
-; scares, so a typo never drops out.
-; a multi-instruction template separates on `\n` or `;`, as GNU does. the x64 text is read by
-; src/love/holo/dialect.l's att-read -- the same parsed instruction as.l encodes and the Intel
-; dialect shows -- and only lowered here; the other dialects still parse their own lines.
+; the template lane carries 64-bit register ops, immediates, base + displacement memory, labels
+; local to the template (GNU's `1:` / `1f` / `1b`), and the system lane. x64's 32-bit forms ride
+; the 64-bit op plus a zero-extend. a64 lays its own word where the IR's would not be gas's: W
+; ops, written-back and indexed addresses, an X op the IR spells longer. a line that fits
+; nothing scares, so a typo never drops out. the x64 text is read by dialect.l's att-read; the
+; other dialects parse their own lines.
 
 (module 'holo
-(: ;; the lexer (gtoks) and the immediate expressions (gimm) sit in src/love/holo/dialect.l,
-   ;; shared with the x86 lens; the lines and local labels below are GNU's, for every dialect
+(: ;; the lexer (gtoks) and the immediate expressions (gimm) are dialect.l's
 
-   ;; -- lines. a template separates on newline or `;`; `//` comments everywhere, `#` where it is
-   ;; not the immediate marker. GNU's numeric local labels resolve here, before any dialect looks:
-   ;; the k-th `N:` becomes the symbol lN.k, `Nf` the next one, `Nb` the last one. --
+   ;; a template separates on newline or `;`; `//` comments everywhere, `#` where it is not the
+   ;; immediate marker. GNU's numeric local labels resolve before any dialect looks: the k-th
+   ;; `N:` becomes the symbol lN.k, `Nf` the next one, `Nb` the last one
    (gcut s c) (: i ((: (g j) (? (j >= #s) -1 (s j = c) j (g (j + 1)))) 0) (i < 0 ? s (snip s 0 i)))
    (gcut2 s c) (: n #s                              ; a doubled c starts a comment, outside a string
       i ((: (g j q) (? (j + 1 >= n) -1 (q && s j = 92) (g (j + 2) q) (s j = 34) (g (j + 1) !q)
@@ -59,7 +52,7 @@
                            (('sym s) . rest) ['ins (name s) (gops rest)]
                            (scare 'gas-line toks)))
 
-   ;; -- the register files, dialect name -> neutral (and back). --
+   ;; the register files, dialect name -> neutral (and back)
    (gtab rows) (tablet 0 @ t (foldl (\ _ p (pin t <p <>p)) 0 rows, t))
    (ghas? t k) (nom? (peep t k ()))                ; a symbol-valued row is there
    gx-rows '((r0 "rax" "eax" "ax" "al") (r1 "rcx" "ecx" "cx" "cl") (r2 "rdx" "edx" "dx" "dl")
@@ -81,7 +74,7 @@
                  foldl (\ _ p (pin t <p <>p)) 0 '((x29 fp) (x30 lr) (sp sp) (xzr zr)),
                  t))
    ; gcc's and clang's other names for x0..x30, which a register variable or clobber may
-   ; spell (arm-smccc.h's asm("r0")); asm text keeps llvm-mc's
+   ; spell (asm("r0")); asm text keeps llvm-mc's
    a64-ccnames (tablet 0 @ t
                   (foldl (\ _ i (pin t (name ("r" + show i)) (a64-names (name ("x" + show i))))) 0 ^31,
                    t))
@@ -98,10 +91,10 @@
                  pin t 'sp 'sp, pin t 'lr 'lr,
                  t))
    (gthumb? tgt) (elem tgt '(thumb2 thumb2sp arm thumb1))
-   (gx86? tgt) (elem tgt '(x64 i386 i386m16))
+   (gx86? tgt) (elem tgt '(x64 i386 i386m16))   ; AT&T: the x64 lane, i386 through gx-w32
    ; a line `name = expr`: an identifier, one `=` (not `==`), something after it
    (gf-eqset? t) (: e (xa-idx t 61)
-                    (0 < e && e + 1 < #t && t (e + 1) != 61 && gf-ident? (xa-trim (snip t 0 e))))      ; AT&T's dialect: the x64 lane, i386 through gx-w32
+                    (0 < e && e + 1 < #t && t (e + 1) != 61 && gf-ident? (xa-trim (snip t 0 e))))
    (g32? tgt) (elem tgt '(i386 i386m16))
 
    ;; the dialect's spelling of the neutral file, for operand substitution. `mod` is GNU's
@@ -123,7 +116,7 @@
    (gas-mem tgt r) (? (gx86? tgt) ("(" + gas-reg tgt r (g32? tgt ? 4 8) 0 + ")")
                       (tgt = 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")
                       ("[" + gas-reg tgt r 8 0 + "]"))
-   (gas-regname tgt s)                              ; gas's own `%rdx` names the register too (the kernel's __get_user)
+   (gas-regname tgt s)                              ; gas's own `%rdx` names the register too
     (name (s @ ("%" + r) r s) @ k
        (? (tgt = 'x64) (peep gx-regs k () @ e (two? e ? <e))
           (g32? tgt) (peep gx-regs k () @ e (two? e && <>e < 8 && elem <e '(r0 r1 r2 r3 sp r4 r5 r6) ? <e))
@@ -131,15 +124,13 @@
           (tgt = 'rv64) (peep rv-names k ())
           (peep t32-names k ())))
 
-   ;; -- x64: the AT&T text is read by src/love/holo/dialect.l (att-read) into the parsed
-   ;;    instruction -- (op mn w ops), destination first, physical registers -- and lowered here.
-   ;;    GNU's numeric local labels resolve over the read items first, the k-th `N:` becoming
-   ;;    lN.k, `Nf` the next one, `Nb` the last one. --
+   ;; x64: att-read's (op mn w ops), destination first, physical registers, lowered here;
+   ;; GNU's numeric local labels resolve over the read items first (gx-locals)
    gx-neutral '(r0 r1 r2 r3 sp r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)    ; the neutral file, by encoding
    (gx-r o) (<o = 'rg && <>o < 16 ? (gx-neutral <>o) (scare 'gas-x64-register o))
    (gx-rv o) (<o = 'im ? <>o (gx-r o))                            ; a register or an immediate
    (gx-imm o) (<o = 'im ? <>o (scare 'gas-x64-operand o))
-   (gx-mem o) (<o = 'mem && o 1 >= 0 && o 2 < 0 ? [(gx-neutral (o 1)) (o 4)]    ; -> (base disp)
+   (gx-mem o) (<o = 'mem && o 1 >= 0 && o 2 < 0 ? [(gx-neutral (o 1)) (o 4)]    ; -> (base disp), no index
                  (scare 'gas-x64-operand o))
    (gx-zx d w) (? (w = 4) [['zx4 d]] (w = 8) () (scare 'gas-x64-width w))
    (gx-lop w) (w @ 8 'ld 4 'ldu4 2 'ldu2 'ldu1)
@@ -197,7 +188,7 @@
                     (scare 'gas-x64-operand o))
    gx-ext (gtab '((movzb (zx1 ldu1)) (movzw (zx2 ldu2)) (movsb (sx1 ld1)) (movsw (sx2 ld2)) (movsl (sx4 ld4))))
    ; a %gs:/%fs: operand: the override byte before the one form that reaches memory. an absolute
-   ; address (percpu's `%gs:sym`, `%gs:40`) loads through its destination: the address, then the word
+   ; address (`%gs:sym`, `%gs:40`) loads through its destination: the address, then the word
    (gx-seg m w0 ops)
     (: i ((: (g j) (? (j >= #ops) -1 (<(ops j) = 'seg) j (g (j + 1)))) 0)
        sg <>(ops i) o <>>(ops i) w (w0 > 0 ? w0 8)
@@ -235,8 +226,8 @@
           ; a segment register pushed or popped, at the suffix's width (i386's; the 64-bit map
           ; keeps fs and gs alone)
           (elem m '(push pop) && <d = 'sr) [[(m @ 'push 'pushseg 'popseg) <>d (w0 > 0 ? w0 4)]]
-          ; a far call or jump through memory, the segment:offset pointer there (FF /3, FF /5) --
-          ; i386's; the 64-bit map dropped the immediate forms, and gas-nolong refuses those
+          ; a far call or jump through memory, the segment:offset pointer there (FF /3, FF /5);
+          ; the immediate forms are i386's alone, and gas-nolong refuses them
           ((elem m '(lcall lcallw lcalll ljmp ljmpw ljmpl)) && <d = 'ind)
            (gx-mref <>d @ bm [['mdig [255] (elem m '(lcall lcallw lcalll) ? 3 5)
                                 (elem m '(lcallw ljmpw) ? 2 4) <bm <>bm]])
@@ -261,7 +252,7 @@
           (elem m '(bsr bsf tzcnt lzcnt popcnt))
            (<d = 'rg && <s = 'rg ? [['bscan m (w0 > 0 ? w0 (d 2)) (gx-r d) (gx-r s)]]
               (scare 'gas-x64-operand ops))
-          ; a segment's access rights and limit, by its selector (signal's force_valid_ss)
+          ; a segment's access rights and limit, by its selector
           (elem m '(lar lsl lsll larl))
            (<d = 'rg && <s = 'rg ? [['rrop [15 (elem m '(lar larl) ? 2 3)] (w0 > 0 ? w0 (d 2)) (gx-r d) (gx-r s)]]
               (scare 'gas-x64-operand ops))
@@ -294,19 +285,18 @@
                      (scare 'gas-x64-operand s)))
               (scare 'gas-x64-operand d))
           (m = 'lea)
-           (? ; no symbol: the address past this lea (the kernel's _THIS_IP_) -- its own bytes,
-              ; REX.W 8D, modrm rm=101 over the displacement; nothing for a fix to name
+           (? ; no symbol: an address relative to this lea's end -- its own bytes, REX.W 8D,
+              ; modrm rm=101 over the displacement; nothing for a fix to name
               (<s = 'rip && !(nom? <>s) && <d = 'rg)
                (<>d @ n [['raw ([(72 | (n >= 8 ? 4 0)) 141 ((n & 7) << 3 | 5)] + gf-le <>>s 4)]])
               (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
               (<s = 'rip && nom? <>s) [['la (gx-r d) <>s] ['lea (gx-r d) (gx-r d) <>>s]]   ; sym+k: lea keeps the flags too
               (<s = 'mem) (gx-mem s @ bm [['lea (gx-r d) <bm <>bm]])
               (scare 'gas-x64-operand ops))
-          ; add and subtract with the carry, a register at the far end: the kernel's
-          ; array_index_mask_nospec (`cmp; sbb %0,%0`, the borrow spread to a mask)
-          ; a register and a word in memory: csum_partial's `adcq 8(%rsi),%rax`
+          ; an ALU op of a register and a word in memory (`adcq 8(%rsi),%rax`)
           (elem m '(add or adc sbb and sub xor cmp) && <d = 'rg && elem <s '(mem lbl rip))
            (gx-mref s @ bm [['alurm m (w0 > 0 ? w0 (d 2)) (gx-r d) <bm <>bm]])
+          ; add and subtract with the carry, a register at the far end (`sbb %0,%0`)
           (elem m '(adc sbb))
            (<d = 'rg ? [['carry m (w0 > 0 ? w0 (d 2)) (gx-r d) (gx-rv s)]] (scare 'gas-x64-operand ops))
           (elem m gx-alu)
@@ -345,7 +335,7 @@
    (gx-item it) (<it @ 'label [['label <>it]]
                       'op (any (o \ two? o && <o = 'seg) (it 3) ? (gx-seg (it 1) (it 2) (it 3))
                              (gx-ins (it 1) (it 2) (it 3)))
-                      (scare 'gas-x64-line it))                    ; a directive has no place in a template
+                      (scare 'gas-x64-line it))
    ; an inline template's line: the template lane, and as.l's bytes where it has no row (the
    ; vector rows -- pshufb, sha256rnds2). an operand the template refuses stays refused
    (gx-text src)
@@ -353,9 +343,6 @@
                                                        (scare a b))))
                      (gx-item it)))
             (gx-locals (att-read src)))
-   ;; ..and a file-scope run (an assembly source's): encoded exactly by as.l -- the width it says,
-   ;; any addressing, the flags a 32-bit op sets -- and lowered as a template only where as.l
-   ;; has no row (the system lane)
    ;; ..i386's: the template lane alone (as.l's bytes are 64-bit encodings), then gx-w32
    (gx-text32 src)
     (catmap (it \ (<it = 'op ? (trap gx-item it (\ a b (a = 'gas-x64-op ? (scare 'gas-i386-op b) (scare a b))))
@@ -378,6 +365,9 @@
                        (ghas? gx-ren <f) [((gx-ren <f) . >f)]
                        [f]))
                fs))
+   ;; ..and a file-scope run (an assembly source's): encoded exactly by as.l -- the width it says,
+   ;; any addressing, the flags a 32-bit op sets -- and lowered as a template only where as.l
+   ;; has no row (the system lane)
    (gx-exact src) (gx-exactm 64 'x64 src)
    ;; ..in a segment of md bits (.code16/.code32/.code64): as.l at that mode; the template lane
    ;; takes over only in the object's own mode, whose backend lays it
@@ -390,7 +380,7 @@
                      (gx-item it)))
             (gx-locals (att-read src)))
 
-   ;; -- a64, the ARM dialect: dst first, xN/wN/sp/xzr, #imm, [base, #off], b.cond. --
+   ;; a64, the ARM dialect: dst first, xN/wN/sp/xzr, #imm, [base, #off], b.cond.
    ;; operands: (reg rN w) | (imm n) | (mem base off) | (memw base off), pre-indexed |
    ;; (memx base idx option shift) | (sym s) -- a sysreg, an option, a label. what the IR's
    ;; 64-bit rows cannot say -- a W-register op, a written-back or indexed address, `ret xN`, an
@@ -1171,7 +1161,7 @@
             ('ins m os) (ga-ins m (map (o \ ga-opnd (ga-glue o)) os))
             ()))
 
-   ;; -- rv64: dst first, the ABI register names, off(base) memory, the csr pseudos. --
+   ;; rv64: dst first, the ABI register names, off(base) memory, the csr pseudos
    (gr-reg s) (peep rv-names (name s) ())
    (gr-opnd toks)
     (toks @ (('sym s)) (gr-reg s @ r (nom? r ? ['reg r 8] ['sym (name s)]))
@@ -1225,7 +1215,7 @@
             ('ins m os) (gr-ins m (map gr-opnd os))
             ()))
 
-   ;; -- thumb: the same operand grammar as a64 over r0..r12, the small system handful. --
+   ;; thumb: the same operand grammar as a64 over r0..r12, the small system handful
    (gt-reg s) (peep t32-names (name s) ())
    (gt-opnd toks)
     (toks @ (('ch 35) . rest) ['imm (gimm rest)]
@@ -1265,10 +1255,9 @@
             ('ins m os) (gt-ins m (map gt-opnd os))
             ()))
 
-   ;; -- file scope: an asm("..") outside any function is the whole assembler -- sections, data,
-   ;; labels the object exports. the directives read are the ones C headers write there (the
-   ;; kernel's export, initcall, tracepoint and static-call rows); a run of instructions goes to
-   ;; gas-text, and any other directive scares. --
+   ;; file scope: an asm("..") outside any function, or a .s file, is the whole assembler --
+   ;; sections, data, exported labels. a run of instructions goes to gas-text; a directive not
+   ;; read here scares
    (gf-kin? nm b) (nm = b || starts? nm (b + "."))
    ; gas's own defaults for a section named without flags: the standard four and their dotted
    ; kin, .init/.fini, and otherwise none -- not even allocated
@@ -1395,8 +1384,7 @@
    ;; gas's macro language, over a text's lines before anything reads them: .macro/.endm and a
    ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne/.ifb/.ifnb with
    ;; .else, .set/.equ (the symbol reads as its value on the lines after), `name .req reg` and
-   ;; .unreq (the name reads as its register), .error, .purgem --
-   ;; the kernel's exception-table macro, which finds a register's number by name
+   ;; .unreq (the name reads as its register), .error, .purgem
    gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne" ".ifb" ".ifnb")
    (gf-expand tgt ls)
     (: mac {} sv {} sv0 {} rq {} cnt {}
@@ -1430,8 +1418,8 @@
        (val e) (gimm (gtoks (ssub e)))
        ; ..at a point, acc the lines laid so far (latest first): backward local labels (`Nb`)
        ; whose distances the a64 lines between them measure. the latest named is the origin and
-       ; the others sit back from it, so only their differences mean anything -- the kernel's
-       ; `nops (662b-661b) / 4`. anything unmeasurable between leaves the expression refused
+       ; the others sit back from it, so only their differences mean anything (`(662b-661b) / 4`).
+       ; anything unmeasurable between leaves the expression refused
        (vat e acc) (trap val e (\ a b (gtoks (ssub e) @ ts (lbloffs ts acc @ m (two? m ? (gimm (lsub ts m)) (scare a b))))))
        (lsub ts m) (map (t \ t @ ('lref v 98) ['num (assoc v m @ x <>x)] t) ts)
        ; a line's leading labels and the rest -> [names rest]
@@ -1471,7 +1459,6 @@
                                    (two? a ? (go j (acc + <>a)) (go (i + 1) (acc + string c))))
                                (go (i + 1) (acc + string c)))))
            (go 0 ""))
-       ; a call's lines: keyword arguments by name, the rest in order, a default for one empty or left off
        ; a call's arguments: split at commas, and at a space with no operator beside it
        ; (`m x0 8 1f`, but `m (a) | (b)` is one), outside brackets and quotes
        (margs s)
@@ -1498,6 +1485,7 @@
                         (a . eqj >l))))
        ; an argument that is one quoted string passes its inside (`"dmb sy"` -> dmb sy)
        (unq a) (: n #a (n >= 2 && a 0 = 34 && a (n - 1) = 34 && !(xa-has? (snip a 1 (n - 1)) 34) ? (snip a 1 (n - 1)) a))
+       ; a call's lines: keyword arguments by name, the rest in order, a default for one empty or left off
        (call m rest)
         (: ps <m
            as (map unq (0 = #(xa-trim rest) ? () (margs rest)))
@@ -1558,7 +1546,6 @@
        out (rev (go ls ()))
        ; a use before its .set reads the value it is first set to, as llvm-mc reads it
        (atom? (keys sv0) ? out (map (s \ rsub s sv0 {}) out)))
-   ; does gas-text read it whole: instructions, and labels on lines of their own
    ; .base64's text -> its bytes: six bits a character accumulate, a byte out per eight; padding
    ; and anything else outside the alphabet carries no bits
    (gf-b64v c) (? (65 <= c <= 90) (c - 65) (97 <= c <= 122) (c - 71) (48 <= c <= 57) (c + 4)
@@ -1576,6 +1563,7 @@
    (gf-alpha? c) (65 <= c <= 90 || 97 <= c <= 122)
    (gf-ident? t) (0 < #t && (gf-alpha? (t 0) || t 0 = 95 || t 0 = 46)
                   && all (c \ gf-alpha? c || digit? c || c = 95 || c = 46 || c = 36) (chars t))
+   ; does gas-text read it whole: instructions, and labels on lines of their own
    (gas-plain? tgt src)
     (all (l \ (: s (xa-trim l) c (gf-labat s)
                  (? (0 = #s) 1 (0 <= c) (0 = #(xa-trim (snip s (c + 1) #s))) (s 0 != 46))))
@@ -1593,8 +1581,8 @@
                           (elem mn gx-gone || (elem mn gx-farimm && starts? (xa-trim (xa-rest t)) "$")
                            ? (name mn) ()))))
               () (gf-lines tgt src)))
-   ; -> [secs fns objs]: secs ((name type flags forms)..) first-seen, fns and objs the .globl
-   ; names a label here defines, split by whether its section executes
+   ; -> [secs fns objs weaks [aliases]]: secs ((name type flags forms)..) first-seen, fns and
+   ; objs the .globl names a label here defines, split by whether its section executes
    (gas-top tgt src) (gas-top-in tgt src ".text" [1 6] "")
    ; ..read from a section of the caller's own, home, wearing [type flags] htd; a numeric label
    ; is named pfx + GNU's own, so two readings never lay one twice
@@ -1820,7 +1808,7 @@
             0)
        ; an alias lays its label beside its target's, in the target's section; a target
        ; that is itself an alias is followed to the label at the end of the chain, and one
-       ; this text never labels goes back to the caller (the kernel's `.set compat_sys_x, sys_ni_syscall`)
+       ; this text never labels goes back to the caller
        am (foldl (\ t al (pin t <al <>al)) {} (peep st 'alias ()))
        (aroot s n) (string? (labs s) || n > 16 || !(am s) ? s (aroot (am s) (n + 1)))
        _ (foldl (\ _ al (: a <al s (aroot <>al 0) nm (labs s)
@@ -1833,13 +1821,13 @@
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
-       ; a section the text named stays though empty: a linker script may lay it (the setup's .bstext)
+       ; a section the text named stays though empty: a linker script may lay it
        ; the aliases onto names this text never labels ride a fifth element, only when there are any
        ([(filter (r \ two? (r 3) || elem <r (peep st 'named ())) (map sec (rev (st 'order))))
          (filter exec? def) (filter (l \ !(exec? l)) def) (rev (peep st 'weak ()))]
         + (peep st 'xal () @ x (two? x ? [(rev x)] ()))))
 
-   ;; -- the front door: TEXT -> IR, by target. --
+   ;; text -> IR, by target
    (gas-text tgt src)
     (? (tgt = 'x64) (gx-text src)
        (g32? tgt) (gx-w32 (gx-text32 src))

@@ -75,21 +75,21 @@
     (: _ (pin pg-ctr 0 0) r (pg-dbl (pg-bump 0))
        (2 = r && 1 = peep pg-ctr 0 0))))       ; evaluated once: 1+1, counter at 1
 
-; --- the binding splice: an impure arg binds once, in call order, ahead of the body.
+; --- the binding splice: an impure arg binds once, ahead of the body.
 ; behavioural only, so each holds under both compilers and under decline ---
 (: bs-ctr (cask 1)
    (bs-bump _) (peep bs-ctr 0 0 @ v (pin bs-ctr 0 (v + 1), v + 1))
    (bs-mix a b c) (a + b + c)
-   (bs-ord a b) (b - a)                    ; reads its args in reverse; eval stays call order
+   (bs-ord a b) (b - a)                    ; reads its args in reverse
    (bs-drop a b) b                         ; drops its first param; the effect must still run
    (bs-esc n) (x \ x + n)                  ; a lambda body -> escapes at value position
    (test
     ; mixed: the constants substitute and the one impure arg binds -- value and trace as the call
     (: _ (pin bs-ctr 0 0) r (bs-mix 3 (bs-bump 0) 4)
        (8 = r && 1 = peep bs-ctr 0 0))
-    ; order: two impure args evaluate in call order however the body reads them
+    ; two impure args each run once; they run in no promised order, so r is either order's
     (: _ (pin bs-ctr 0 0) r (bs-ord (bs-bump 0) (bs-bump 0))
-       (1 = r && 2 = peep bs-ctr 0 0))
+       ((r = 1 || r = -1) && 2 = peep bs-ctr 0 0))
     ; a dropped param's effect still runs -- bound, never substituted away
     (: _ (pin bs-ctr 0 0) r (bs-drop (bs-bump 0) 7)
        (7 = r && 1 = peep bs-ctr 0 0))

@@ -275,3 +275,21 @@
    _ (test (got = [1 'along 'big 'small 'cd 'cd 'other 'other 'other 'other])
            (patd-n 0 = 2))        ; (b 5) and (b 1) ask the first guard; the sixth arm is never reached
    0)
+
+; a text hole is a pattern: (weave (list "x" (v) "y")) cuts a string as the + chain of its
+; pieces does, a hole a sub-pattern -- guards included -- and a hole beside a + piece joins
+; its chain. holes side by side are each as short as can be: all but the last take ""
+(: (pt-hole s) (s @ "\(a)-\(b)" [a b] 'no)
+   (pt-plus s) (s @ (a + "-" + b) [a b] 'no)
+   (pt-kv s) (s @ "\((k && 0 < #k)) \(v)" [k v] 'no)
+   (pt-hive s) (s @ ((k && 0 < #k) + " \(v)") [k v] 'no)
+ (test (all (s \ pt-hole s = pt-plus s) ["ab-cd" "-x" "x-" "a-b-c" "abc" ""])
+       ('("ab" "cd") = pt-hole "ab-cd") ('("a" "b-c") = pt-hole "a-b-c") ('no = pt-hole "abc")
+       ('("id" "7") = ("id:7" @ "\(t):\(n)" [t n] 'no)) ("7" = ("id:7" @ "id:\(n)" n 'no))
+       ('no = ("ix:7" @ "id:\(n)" n 'no))
+       ('("k1" "v w") = pt-kv "k1 v w") ('no = pt-kv " v")
+       ('("k1" "v w") = pt-hive "k1 v w") ('no = pt-hive " v")
+       ('("" "abc") = ("abc" @ "\(a)\(b)" [a b] 'no))
+       ('("" "ab") = ("ab z" @ "\(a)\(b) z" [a b] 'no))
+       ("abc" = ("abc" @ "\(s)" s 'no))))
+
