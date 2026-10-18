@@ -1,12 +1,7 @@
-/* always_inline honored (the love_inline lever): a marked static splices at any
- * size -- multi-return if-chains, loops, switches -- and noinline bars the
- * table by name. splices NEST to depth 3, so a marked chain flattens; an &
- * -taking arg or body declines back to the real call; a struct-returning call
- * inside a spliced body parks its result through a lean (the sibcall window
- * must not read it as arg staging -- the zn_false shape). inlining is
- * semantics-neutral, so every check must answer exactly as gcc -O0.
- *
- * Each check contributes 1, so the exit code IS the number that passed. */
+/* always_inline splices at any size (if-chains, loops, switches), nests to depth
+ * 3; noinline bars it; an &-taking arg or body declines to the real call; a
+ * struct-returning call inside a splice parks its result. answers match gcc -O0.
+ * each check adds 1: the exit code is the pass count. */
 
 #define AI static inline __attribute__((always_inline))
 #define NOI static __attribute__((noinline))

@@ -1,38 +1,6 @@
-/* src/apps/moon/lib/rt.c -- the compiler runtime: the calls mooncc's own lowering makes where
- * the machine has no instruction for the operation. ARMv6-M (the RP2040's M0+) has no FPU,
- * no umull, no clz and no variable 64-bit shift, so a double, a 64-bit multiply and a
- * leading-zero count all leave as a call; a single-precision FPU (the playdate's M7, the
- * F446's M4) keeps the 64-bit transfers and softens f64 alone. These are the names gen.l
- * emits, and gcc's libgcc answered them until this file did.
- *
- * NO FLOATING-POINT TYPE APPEARS HERE, and that is the point twice over.
- *
- *   The ABI. A helper is called with its operands in the CORE registers -- r0:r1 and r2:r3
- *   for a double, r0 for a float, and the answer back the same way. That is the AEABI's
- *   soft-float convention and it is what gen.l's soften pass stages. It is NOT what a
- *   `double` parameter means to mooncc on a seat with an FPU: thumb2sp passes one in d0/d1
- *   and answers in d0, so a helper spelled `double f(double, double)` there reads the right
- *   operands only by luck and returns in the wrong place. Spelled in uint64_t the two
- *   conventions are the same convention, on every target this file is compiled for.
- *
- *   The recursion. Nothing here may use the operation it implements: a double add inside
- *   __aeabi_dadd, a 64-bit multiply inside __aeabi_lmul, a variable 64-bit shift anywhere --
- *   each is a call back into this file, and the second one does not return. The subtlest is
- *   `float`, which has no arithmetic of its own on these seats and so rides as a double: a
- *   float-typed return narrows through __aeabi_d2f, which is a function in this file.
- *
- * So the kernel is integer-only. Every 64-bit shift goes through sl64/sr64/sa64 and those
- * are written in 32-bit halves, as are the products mul32 composes. Constant-count 64-bit
- * shifts ARE inline on v6-M (gen.l's pshiftc), which is why the halvings and the
- * (uint64_t)hi << 32 rebuilds are free.
- *
- * binary64 throughout, round-to-nearest-even, denormals and NaN in both directions. The
- * gate is test_softfp: every entry here against the hardware's own answer, on a machine
- * that has one.
- *
- * It is not the fastest shape -- a double add pays a call or two to fold its guard bits
- * where libgcc's hand-written v6-M pays none -- and no board here computes in double where
- * that shows. Correctness and one readable file were the trade. */
+/* the compiler runtime: helpers mooncc calls where the target lacks the instruction (v6-M, soft f64).
+ * doubles and floats travel as bit patterns in core registers (the aeabi soft-float abi), and no
+ * code here may use an operation that lowers back into this file: integer-only, 32-bit halves */
 #include <stdint.h>
 
 #define MANT 0x000fffffffffffffull       /* the 52 stored significand bits */
@@ -43,7 +11,6 @@
 #define DSGN(u) ((uint32_t) ((u) >> 63))
 #define DEXP(u) ((int32_t) (((u) >> 52) & 0x7ff))
 
-/* ---------------------------------------------------------------- the shifts */
 static uint64_t sl64(uint64_t v, int32_t n) {
  uint32_t lo = (uint32_t) v, hi = (uint32_t) (v >> 32);
  if (n >= 32) { hi = n >= 64 ? 0 : lo << (n - 32); lo = 0; }
@@ -67,9 +34,7 @@ int64_t __aeabi_llsl(int64_t v, int32_t n) { return (int64_t) sl64((uint64_t) v,
 int64_t __aeabi_llsr(int64_t v, int32_t n) { return (int64_t) sr64((uint64_t) v, n); }
 int64_t __aeabi_lasr(int64_t v, int32_t n) { return sa64(v, n); }
 
-/* ------------------------------------------------------- leading/trailing zeros */
-/* 0 answers the width: gcc leaves it undefined, and a defined answer makes clz64 below
- * one branch rather than two. */
+/* 0 answers the width, so clz64 takes one branch */
 int32_t __clzsi2(uint32_t x) {
  int32_t n = 0;
  if (x == 0) return 32;
@@ -94,7 +59,6 @@ static int32_t clz64(uint64_t v) {
  uint32_t hi = (uint32_t) (v >> 32);
  return hi ? __clzsi2(hi) : 32 + __clzsi2((uint32_t) v); }
 
-/* ------------------------------------------------------------ 64-bit multiply */
 /* 32x32 -> 64 out of four 16x16 products: v6-M's MULS is 32x32 -> 32 and nothing wider */
 static uint64_t mul32(uint32_t a, uint32_t b) {
  uint32_t al = a & 0xffff, ah = a >> 16, bl = b & 0xffff, bh = b >> 16;
@@ -118,9 +82,7 @@ static void mul64(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) {
  *lo = (m << 32) | (uint32_t) ll;
  *hi = mul32(ah, bh) + (lh >> 32) + (hl >> 32) + (m >> 32); }
 
-/* -------------------------------------------------------------- 64-bit divide */
-/* restoring, normalized first so the loop runs only over the quotient's own bits. a zero
- * divisor is undefined upstream; answering all-ones beats faulting inside a helper. */
+/* restoring, normalized first; a zero divisor answers all-ones */
 static uint64_t udivmod64(uint64_t n, uint64_t d, uint64_t *rem) {
  uint64_t q = 0, dd;
  int32_t sh;
@@ -150,13 +112,8 @@ int64_t __moddi3(int64_t a, int64_t b) {
            b < 0 ? -(uint64_t) b : (uint64_t) b, &r);
  return a < 0 ? -(int64_t) r : (int64_t) r; }
 
-/* ================================================================ binary64 === */
-/* every double below is its BIT PATTERN, in and out -- see the head of the file.
- *
- * the shared tail. m carries the 53-bit significand with three guard bits under it, so a
- * normalized one has bit 55 set and the value is m * 2^(e-1078); e is the biased exponent
- * that significand belongs to. Denormalize if e fell off the bottom, round to nearest-even
- * on the guard bits (bit 2 is the half, bits 1..0 the sticky), encode. */
+/* m is the significand over 3 guard bits (normalized at bit 55), value m * 2^(e-1078):
+ * denormalize, round to nearest-even on the guard bits, encode */
 static uint64_t pack(uint32_t s, int32_t e, uint64_t m) {
  uint64_t sb = (uint64_t) s << 63;
  uint32_t r;
@@ -268,9 +225,7 @@ uint64_t __aeabi_ddiv(uint64_t ua, uint64_t ub) {
  else e = ea - eb + 1022;
  return pack(s, e, q); }
 
-/* --------------------------------------------------------------- the compares */
-/* both operands to a signed key: sign-magnitude order IS numeric order once the negatives
- * are reflected, and both zeros land on 0. */
+/* sign-magnitude reflected to a signed key; both zeros land on 0 */
 static int32_t dord(uint64_t ua, uint64_t ub, int32_t *un) {
  int64_t ka, kb;
  if ((ua & ~SGNB) > DINF || (ub & ~SGNB) > DINF) { *un = 1; return 0; }
@@ -286,7 +241,6 @@ int32_t __aeabi_dcmpge(uint64_t a, uint64_t b) { int32_t u, c = dord(a, b, &u); 
 int32_t __aeabi_dcmpgt(uint64_t a, uint64_t b) { int32_t u, c = dord(a, b, &u); return !u && c > 0; }
 int32_t __aeabi_dcmpun(uint64_t a, uint64_t b) { int32_t u; dord(a, b, &u); return u; }
 
-/* ------------------------------------------------------------- int <-> double */
 static uint64_t u64tod(uint32_t s, uint64_t v) {
  int32_t sh;
  if (v == 0) return (uint64_t) s << 63;
@@ -299,8 +253,7 @@ uint64_t __aeabi_ui2d(uint32_t x) { return u64tod(0, x); }
 uint64_t __aeabi_l2d(int64_t x)   { return x < 0 ? u64tod(1, -(uint64_t) x) : u64tod(0, (uint64_t) x); }
 uint64_t __aeabi_ul2d(uint64_t x) { return u64tod(0, x); }
 
-/* toward zero, as a magnitude. out of range is undefined upstream (gen.l's own non-v6-M
- * lowering shifts to garbage there); saturating is the kinder garbage. */
+/* toward zero, as a magnitude; out of range saturates */
 static uint64_t dtrunc(uint64_t u) {
  int32_t e = DEXP(u);
  uint64_t m = u & MANT;
@@ -316,7 +269,6 @@ uint64_t __aeabi_d2ulz(uint64_t u) { return DSGN(u) ? 0 : dtrunc(u); }
 int32_t __aeabi_d2iz(uint64_t u)   { return (int32_t) __aeabi_d2lz(u); }
 uint32_t __aeabi_d2uiz(uint64_t u) { return (uint32_t) __aeabi_d2ulz(u); }
 
-/* ----------------------------------------------------------- float <-> double */
 uint64_t __aeabi_f2d(uint32_t u) {
  uint32_t m = u & 0x7fffff;
  int32_t e = (int32_t) ((u >> 23) & 0xff);
@@ -357,10 +309,7 @@ uint32_t __aeabi_d2f(uint64_t u) {
  if (!(m & HID)) { int32_t sh = clz64(m) - 11; m = sl64(m, sh); e -= sh; }
  return packf(s, e - 896, (uint32_t) (m >> 26) | ((m << 38) != 0)); }
 
-/* ----------------------------------------------------------- binary32 arithmetic */
-/* through binary64: 53 bits carry a sum, difference, product or quotient of two 24-bit
- * significands closely enough that one rounding to 24 is the correctly rounded single,
- * and an int32 converts to binary64 exactly */
+/* binary32 through binary64: one rounding to 24 bits is the correctly rounded single */
 uint32_t __aeabi_fadd(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_dadd(__aeabi_f2d(a), __aeabi_f2d(b))); }
 uint32_t __aeabi_fsub(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_dsub(__aeabi_f2d(a), __aeabi_f2d(b))); }
 uint32_t __aeabi_fmul(uint32_t a, uint32_t b) { return __aeabi_d2f(__aeabi_dmul(__aeabi_f2d(a), __aeabi_f2d(b))); }
@@ -384,9 +333,8 @@ int32_t __aeabi_fcmpge(uint32_t a, uint32_t b) { return __aeabi_dcmpge(__aeabi_f
 int32_t __aeabi_fcmpgt(uint32_t a, uint32_t b) { return __aeabi_dcmpgt(__aeabi_f2d(a), __aeabi_f2d(b)); }
 int32_t __aeabi_fcmpun(uint32_t a, uint32_t b) { return __aeabi_dcmpun(__aeabi_f2d(a), __aeabi_f2d(b)); }
 
-/* the 128-bit kit on a 32-bit target (gen.l's t32w lane): the right operand rides r0-r3 as two
- * halves, the left the caller's 16-byte cell, which aapcs lays as this call's stack arguments
- * (mooncc binds them in place). the answer goes back into that cell, where the caller reads it */
+/* 128-bit ops on a 32-bit target: the right operand in r0-r3, the left the caller's 16-byte
+ * cell, laid as this call's stack arguments; the answer goes back into that cell */
 void __moon_m128(uint64_t rlo, uint64_t rhi, uint64_t llo, uint64_t lhi) {
   uint64_t volatile *c = &llo;
   uint64_t hi, lo;

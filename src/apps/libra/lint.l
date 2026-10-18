@@ -13,7 +13,7 @@
 
    ; --- character classes ----------------------------------------------------
    ; the three sets are strings so they can be checked against love.c at a glance
-   (lin? s c) (: n #s (go k) (? (n <= k) () (s k = c) 1 (go (k + 1))) (go 0))
+   (lin? s c) (:- (go 0) n #s (go k) (? (n <= k) () (s k = c) 1 (go (k + 1))))
 
    ; the operator run characters -- love.c's op_break, complemented
    (lopc? c) (lin? "!#$%&*+-./:<=>?\\^|~" c)
@@ -23,12 +23,9 @@
    ; a token character: not whitespace, a delimiter, a quote mark or a `;`
    (ltkc? c) !(c < 33 || elem c '(34 59 40 41 91 93 123 125))
 
-   (lall? p s) (: n #s
-                  (go k) (? (n <= k) (0 < n) (p (s k)) (go (k + 1)) ())
-                  (go 0))
+   (lall? p s) (:- (go 0) n #s (go k) (? (n <= k) (0 < n) (p (s k)) (go (k + 1)) ()))
    ; the token starting at index i (empty if a delimiter sits there)
-   (ltok-at src n i) (: (go k) (k < n && ltkc? (src k) ? (go (k + 1)) k)
-                        (snip src i (go i)))
+   (ltok-at src n i) (:- (snip src i (go i)) (go k) (k < n && ltkc? (src k) ? (go (k + 1)) k))
 
    ; --- raw texts -------------------------------------------------------------
    ; three or more quotes open one and as many close it, no escapes; when the opener
@@ -56,45 +53,44 @@
     (: (eol k) (? (n <= k) n (src k = 10) (k + 1) (eol (k + 1)))
        (code k d)
         (? (n <= k) n
-           (: c (src k)
-              (? (c = 40 || c = 91 || c = 123) (code (k + 1) (d + 1))
-                 (c = 41 || c = 93 || c = 125) (d = 1 ? (k + 1) (code (k + 1) (d - 1)))
-                 (c = 34) (code (lraw? src n k ? (lraw src n k || n) (lstr src n (k + 1))) d)
-                 (c = 59) (code (eol k) d)
-                 (code (k + 1) d))))
+           (src k @
+              (40 || 91 || 123) (code (k + 1) (d + 1))
+              (41 || 93 || 125) (d @ 1 (k + 1) (code (k + 1) (d - 1)))
+              34 (code (lraw? src n k ? (lraw src n k || n) (lstr src n (k + 1))) d)
+              59 (code (eol k) d)
+              (code (k + 1) d)))
        (code i 0))
    ; a string's body from k: the index past its closing quote, or n
-   (lstr src n k)
-    (? (n <= k) n
-       (src k = 34) (k + 1)
-       (src k = 92) ((k + 1 < n && src (k + 1) = 40) ? (lstr src n (lhole src n (k + 1))) (lstr src n (k + 2)))
-       (lstr src n (k + 1)))
+   (lstr src n k) (n <= k ? n (src k @
+    34 (k + 1)
+    92 (k + 1 < n && src (k + 1) = 40 ? (lstr src n (lhole src n (k + 1))) (lstr src n (k + 2)))
+    (lstr src n (k + 1))))
    ; a hole's frame: it closes back into its text, and its parens are the hole's own
    (lholef stk line col sl sc)
     ({'cl 41 'ln line 'co col 'ne 0 'e1 0 'pl 0 'qd 0 'am 0 'pd () 'hole 1 'sl sl 'sc sc} . stk)
    ; [line col] at j, from [line col] at i
    (lpos src i j line col)
-    (i < j ? (lpos src (i + 1) j (src i = 10 ? (line + 1) line) (src i = 10 ? 1 (col + 1)))
+    (i < j ? (lpos src (i + 1) j (src i @ 10 (line + 1) line) (src i @ 10 1 (col + 1)))
      [line col])
 
    ; --- the config the rules read --------------------------------------------
    ; a plain tablet read with peep, never src/apps/libra/salt.l: vi cats this file directly
    ; (test/test.mk) and a module it had to carry along would break that.
    ; a switch whose default is yes -- absent means on, only an explicit 0 is off
-   (lint-yes? conf k) (conf k @ (v . _) (bit v) 1)
+   (lint-yes? conf k) (conf k @ (v . _) !!v 1)
    ; the name a token mentions: a leading ' is quote, so 'foo names foo and a
    ; rename wants both. a trailing ' is the prime idiom, part of the name.
-   (lname t) (: n #t (go k) (k < n && t k = 39 ? (go (k + 1)) (snip t k n)) (go 0))
+   (lname t) (:- (go 0) n #t (go k) (k < n && t k = 39 ? (go (k + 1)) (snip t k n)))
    ; the roster entry for the token text t: a bare name, or (name "hint")
    (lint-dep roster t)
     (atom? roster ? ()
        (: e <roster
           nm (two? e ? <e e)
-          (string nm = t ? [1 e] (lint-dep >roster t))))
+          (string nm @ ^t [1 e] (lint-dep >roster t))))
    (lint-depmsg e)
     (: nm (two? e ? <e e)
        h  (two? e && two? >e ? <>e ())
-       ("deprecated " + string nm + (string? h ? (" -- " + h) "")))
+       ("deprecated \(nm)" + (string? h ? " -- \(h)" "")))
 
    ; is frame f a binder slot -- a `\` past its head, or a `:` at an even element?
    (lbind? src n {'e1 e1 'ne ne})
@@ -110,7 +106,7 @@
    (lelem stk i)
     (atom? stk ? stk
      (: f <stk ne (f 'ne + 1)
-      (pin f 'ne ne, ne = 1 ? (pin f 'e1 i) 0, stk)))
+      (pin f 'ne ne, ne @ 1 (pin f 'e1 i), stk)))
 
    ; a bare `@` marks its frame a match: everything after is arms, where (x) is a
    ; list shape and the singleton rule stands down. a glued @( is the tray ctor and
@@ -118,7 +114,7 @@
    ; costs missed gripes, never noise.
    (lat src stk it ti i)
     (? !(it && two? stk) stk
-       !(snip src ti i = "@") stk
+       (snip src ti i != "@") stk
        (pin <stk 'am 1, stk))
 
    ; a new opener. pre is what it is glued to, empty when it stands free:
@@ -153,7 +149,7 @@
     (f @ {'pl 1 'ne 1 'e1 e1 'ln ln 'co co}
      (ltok-at src n e1 @ t
       (lall? lopc? t ? ()
-         [ln co ("singleton " + (0 < #t ? ("(" + t + ") ") "") + "-- (x) == x")
+         [ln co ("singleton " + (0 < #t ? "(\(t)) " "") + "-- (x) == x")
           'singleton])))
    ; the deferral home: () to warn now, else [depth idx] naming the binder frame
    ; (1 parent, 2 grandparent) and the element index the verdict keys on
@@ -195,13 +191,13 @@
             (: w0 (it ? (lend line tc ti i warns) warns)
                w1 (st @ 'str ([sl sc "unclosed string" 'balance] . w0) w0)
                (rev (foldl (a \ o \ (o @ {'cl cl 'ln ln 'co co}
-                              ([ln co ("unclosed " + string (lopen cl)) 'balance] . a)))
+                              ([ln co "unclosed \(string (lopen cl))" 'balance] . a)))
                      w1 stk)))
            (src i @ c
               (? (st = 'str)                                    ; inside "..."
-                  (c @ 92 ((i + 1 < n && src (i + 1) = 40) ?                   ; \( opens a hole
-                             (w (i + 2) 'code (lholef stk line col sl sc) line (col + 2) sl sc 0 ti tc warns)
-                             (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns))   ; \ escape: skip next
+                  (c @ 92 (i + 1 < n && src (i + 1) = 40 ?                   ; \( opens a hole
+                           (w (i + 2) 'code (lholef stk line col sl sc) line (col + 2) sl sc 0 ti tc warns)
+                           (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns))   ; \ escape: skip next
                        34 (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc warns)
                        10 (w (i + 1) 'str stk (line + 1) 1 sl sc 0 ti tc warns)
                           (w (i + 1) 'str stk line (col + 1) sl sc 0 ti tc warns))
@@ -240,15 +236,14 @@
                   ((it ? (lend line tc ti i warns) warns) @ w0
                      (? (atom? stk)
                          (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
-                            ([line col ("stray " + string c) 'balance] . w0))
+                            ([line col "stray \(string c)" 'balance] . w0))
                         !(<stk 'cl = c)
                          (w (i + 1) 'code >stk line (col + 1) sl sc 0 ti tc
-                            ([line col ("mismatched " + string c) 'balance] . w0))
+                            ([line col "mismatched \(string c)" 'balance] . w0))
                         (: f <stk rest >stk
                            ; the verdicts this binder owed: an entry at the final
                            ; index was the body, which is where a singleton warns
-                           w1 (foldl (a \ p \ (>p @ wr (<p = f 'ne ? (wr . a) a)))
-                                     w0 (f 'pd))
+                           w1 (foldl (a \ p \ >p @ wr (f 'ne @ ^<p (wr . a) a)) w0 (f 'pd))
                            ; the off path answers (), which is what the test below reads:
                            ; && is transparent and would pass sg's own 0 through
                            sw (sg ? (lsing src n f) ())

@@ -2,8 +2,7 @@
 # test/kore/column.sh -- fold, expand, unexpand -- the tab stops
 . "$(dirname "$0")/common.sh"
 
-# all three count COLUMNS: the tab cases are the point, since a byte count answers
-# differently for every one of them
+# all three count columns, so the tab cases are the point
 pipe "fold"        'abcdefghij
 kl
 '                  fold -w 4
@@ -25,8 +24,7 @@ pipe "expand -t 4" 'a	b
 '                  expand -t 4
 pipe "expand -i"   '	a	b
 '                  expand -i
-# a tab lands only where it saves at least TWO columns, so a lone space sitting on
-# a stop stays a space -- the one rule the obvious implementation gets wrong
+# a tab lands only where it saves two columns or more: a lone space on a stop stays a space
 pipe "unexpand"    '   	ab   cd
 '                  unexpand
 pipe "unexpand -a" '        a       b
@@ -39,9 +37,8 @@ pipe "unexpand tail" 'a
 '                    unexpand -a
 pipe "unexpand -t 4" '    a   b
 '                    unexpand -t 4
-# column against util-linux's: filling down and across, a table on whitespace and on -s,
-# -o, blank lines skipped, wide characters two columns, a name too wide for the screen.
-# not -x narrower than one column, where util-linux runs every name onto one line
+# column against util-linux: down and across, tables on whitespace and -s, -o, blank lines
+# skipped, wide characters, a too-wide name. not -x below one column, where util-linux joins all
 if command -v column > /dev/null 2>&1; then
 names='a
 bb

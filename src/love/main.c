@@ -319,7 +319,8 @@ static struct g *run_program(struct g *g, bool replp) {
   if (replp) (void) raw_mode(1);
   if (__love_osv > 0 && on_inle()) g = evals_(g, "(task-doors-on 0)");
   g = love_open(g);
-  if (getenv("LOVE_NO_GLAZE")) g = evals_(g, glaze_off);
+  char const *ng = getenv("LOVE_NO_GLAZE");
+  if (ng && *ng) g = evals_(g, glaze_off);
   return evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
 #ifdef Love0
@@ -520,6 +521,22 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   return run_program(g, !argp && isatty(STDIN_FILENO)); }
 #endif
 
+// the knobs this process reads once, at boot or wake, each empty taken as unset. boot-env
+// holds each as it was here, and a warm fork inherits that heap, so lush forks only for a
+// child whose knobs match
+static char const *const boot_knobs[] = {
+  "LOVE_BUDGET_MB", "LOVE_NO_GLAZE", "LOVE_NO_IMAGE", "LOVE_NO_MOP", "LOVE_TOUCH_OUT" };
+love_noinline static struct g *boot_env(struct g *g) {
+  uintptr_t n = sizeof boot_knobs / sizeof *boot_knobs;
+  for (uintptr_t i = 0; i < n; i++) {
+    char const *v = getenv(boot_knobs[i]);
+    g = strof(g, boot_knobs[i]);
+    g = v && *v ? strof(g, v) : push(g, 1, ZeroPoint);     // unset or empty is ()
+    g = gxr(gxr(push(g, 1, ZeroPoint))); }                   // [name value]
+  g = push(g, 1, ZeroPoint);
+  for (uintptr_t i = 0; i < n; i++) g = gxr(g);
+  return defv(g, "boot-env"); }
+
 love_noinline static struct g *argv_chain(struct g *g, char const **v, int argc, int skip) {
   int n = 0;
   if (argc > 0) g = strof(g, v[0]), n++;                  // argv[0] is always the program
@@ -680,19 +697,23 @@ int main(int argc, char const **argv) {
       char const *osn =
 #if defined(__moonlibc__)
         __love_osv  < 0 ? "inle" :
-        __love_osv == 1 ? (on_inle() ? "inle" : "linux") : __love_osv == 2 ? "freebsd" : __love_osv == 3 ? "netbsd" : 0;
+        __love_osv == 1 ? (on_inle() ? "inle" : "linux") : __love_osv == 2 ? "freebsd" : __love_osv == 3 ? "netbsd"
+        : __love_osv == 4 ? "macos" : 0;
 #elif defined(__linux__)
         "linux";
 #elif defined(__FreeBSD__)
         "freebsd";
 #elif defined(__NetBSD__)
         "netbsd";
+#elif defined(__APPLE__)
+        "macos";
 #else
         0;
 #endif
       if (osn && ok(g = intern(strof(g, osn)))) {
         g = defv(g, "love-os");
-        if (ok(g)) g->sp++; } }
+        if (ok(g)) g->sp++; }
+      if (ok(g = boot_env(g))) g->sp++; }
     if (image_load_path && ok(g = push(g, 1, putcharm((intptr_t) woke_ms)))) {
       g = defv(g, "born");
       if (ok(g)) g->sp++; }

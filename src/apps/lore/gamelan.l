@@ -1,14 +1,10 @@
-; gamelan -- a level's music as a gamelan plays it slow: a chime struck now and then on a
-; five-note scale, and a gong under it every so many seconds, out the horn a frame at a
-; time. the port is any jug, so a song gates headless.
-;
+; gamelan -- a level's music played slow: a chime now and then on a five-note scale and a
+; gong under it every so many seconds, a frame's chunk at a time into any port.
 ;   (gamelan-new h sd)       a song into port h, its die spun from sd
-;   (gamelan-feed s tune)    one frame's chunk of it: a chime by the die and a gong when it
-;                            is due. tune is {'scale the five steps in semitones from
-;                            middle c 'down the octaves under it 'high one in high the
-;                            octave over 'gain a chime's least 'odds a chime's chance a
-;                            chunk, in thousandths 'gong the gong's note 'gong-gain
-;                            'gong-legato 'gong-every its least seconds apart}
+;   (gamelan-feed s tune)    one chunk. tune is {'scale five semitones from middle c, 'down the
+;                            octaves under it, 'high one in high an octave over, 'gain a
+;                            chime's least, 'odds its chance a chunk in thousandths, 'gong
+;                            its note, 'gong-gain, 'gong-legato, 'gong-every least seconds apart}
 (module (gamelan gamelan-new gamelan-feed)
 (borrow 'rove)                          ; the die, the rate
 (borrow 'play)                          ; the voices, the mix
@@ -16,11 +12,9 @@
  fps 30
  chunk (song-rate // fps)                               ; a frame's worth
  gain 11000.0
- ; the song: its port, a spun die, the frames written, the voices ringing, when the gong
- ; is next due, and how many strikes there have been
+ ; the song: its port, a die, frames written, voices ringing, the gong's next frame, strikes
  (gamelan-new h sd) {'h h 'sb {sd} 'fpos 0 'vs () 'gong 0 'struck 0}
- ; ..a chime by the die, its degree and octave off the die too; a gong when it is due,
- ; the next some seconds on
+ ; ..a chime by the die; a gong when due, the next some seconds on
  (gamelan-feed s tune) (: sb (s 'sb) base (s 'fpos)
    (strike v) (base + roll sb chunk @ at
                  (pins s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]) 'struck (s 'struck + 1)))

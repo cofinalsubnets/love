@@ -1,14 +1,7 @@
 ; src/apps/kore/lens.l -- the two kore doors onto lapiz: `html2text` and `markdown`.
-;
-;   html2text [-w COLS] [FILE..]                          html2text index.html
-;   markdown [-t html|roff|text|cells] [-w COLS] [FILE..] markdown README.md > readme.html
-;   markdown -t dvi [FILE]                                markdown README.md > readme.dvi
-;
-; the width is -w, else the terminal's, else 80; no operands reads stdin. attributes ride
-; out only to a terminal. -t cells is -t text broken by caja (src/apps/caja/cell.l).
-; `markdown` writes a fragment -- papel owns the page template. html2text reads a page as
-; prose: lapiz's scrub drops script, style and head; an image says its [alt], and on a
-; terminal a local one is drawn under it (pic.l).
+; no operands reads stdin; attributes ride out only to a terminal. `markdown` writes a
+; fragment, no page template. html2text reads a page as prose: an image says its [alt], and on
+; a terminal a local one is drawn under it.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -22,13 +15,13 @@
                        80))
    ; one trailing newline, always: a shower ends where the document does, and a tool that
    ; writes to a terminal owes the prompt its own line
-   (lensnl s) (#s && s (#s - 1) = 10 ? s (s + "\n"))
+   (lensnl s) (#s && s (#s - 1) = 10 ? s "\(s)\n")
    ; one lay over the operands, or over stdin when there are none. the status is the worst
    ; of the files, and a charm: the seat quits with it
    (lensrun lay nm fs)
     (: (one p) (uread p @ r
                   (two? r ? (puts (lensnl (lay <>r p)), 0)
-                   (say err (nm + ": cannot open " + p), put err 10, 1)))
+                   (say err "\(nm): cannot open \(p)", put err 10, 1)))
        (two? fs ? (foldl (\ a p (one p @ r (a || r ? 1 0))) 0 fs)
         (puts (lensnl (lay (slurp in) "")), 0)))
    ; the directory a path is in, with its slash; "" for a bare name
@@ -56,7 +49,7 @@
                  (two? im ? (pin t (a 1) (peep t (a 1) () + cite 'kore 'ww-art im w rows deep)) t))
               t))
        pics (foldl draw {} (r 1))
-       (catmap (i \ (ls i) + "\n" + catmap (x \ x + "\n") (pics i)) ^#ls))
+       (catmap (i \ "\(ls i)\n" + catmap (x \ "\(x)\n") (pics i)) ^#ls))
 
    h2t-usage "usage: html2text [-w COLS] [FILE..]"
    (h2t-lay s w tty? p) (tty? ? (lens-pics (cite 'lapiz 'htread s) w p) (usgr (cite 'lapiz 'ht->tty s w)))
@@ -65,7 +58,7 @@
        o (uopt as t '(119) '(101) ())                       ; -w takes a value
        _ (two? o ? () (udie 2 h2t-usage))
        _ (uoptbad as t '(119) @ c
-            (!c ? () (udie 2 ("html2text: unknown option -" + string c))))
+            (!c ? () (udie 2 "html2text: unknown option -\(string c)")))
        ws (tty 1)                                     ; the width is the OUTPUT's
        w (lens-w t ws)
        tty? (two? ws)
@@ -73,18 +66,17 @@
 
    md-usage "usage: markdown [-t html|roff|text|cells|dvi] [-w COLS] [FILE..]"
    md-tos ["html" "roff" "text" "cells" "dvi"]
-   ; -t dvi: caja sets the document in pages (src/apps/caja/doc.l), with Computer Modern's
-   ; metrics and plain's patterns out of a TeX tree -- $CAJA_TEXMF, else where TeX Live puts
-   ; one. one file or stdin; a man page (its first line a request) is read as roff
+   ; -t dvi: caja sets pages with cm metrics and hyphen patterns from a TeX tree ($CAJA_TEXMF,
+   ; else TeX Live's). one file or stdin; a man page (first line a request) is read as roff
    texmf-roots ["/usr/share/texmf-dist" "/usr/share/texlive/texmf-dist" "/usr/local/share/texmf-dist"]
    (lens-texmf rel)
     (: e (getenv "CAJA_TEXMF")
        rs (string? e && 0 < #e ? (e . texmf-roots) texmf-roots)
-       (go l) (two? l ? (uread (<l + "/" + rel) @ r (two? r ? (<>r + "") (go >l))))
+       (go l) (two? l ? (uread "\(<l)/\(rel)" @ r (two? r ? "\(<>r)" (go >l))))
        (go rs))
    (lens-roff? s) (0 < #s && (s 0 = 46 || 1 < #s && s 0 = 39 && s 1 = 92))
    (md-dvi s)
-    (: tfms (map (n \ lens-texmf ("fonts/tfm/public/cm/" + n + ".tfm")) (cite 'caja-doc 'cd-fonts))
+    (: tfms (map (n \ lens-texmf "fonts/tfm/public/cm/\(n).tfm") (cite 'caja-doc 'cd-fonts))
        hy (lens-texmf "tex/generic/hyphen/hyphen.tex")
        _ (elem () (hy . tfms) ?
             (udie 1 "markdown: -t dvi wants Computer Modern's TFMs and hyphen.tex from a TeX tree; set CAJA_TEXMF"))
@@ -100,24 +92,24 @@
         flush out,
         0))
    (md-lay s to w tty? p)
-    (? (to = "roff") (cite 'lapiz 'md->rf s)
-       (to = "text") (tty? ? (lens-pics (cite 'lapiz 'mdread s) w p) (usgr (cite 'lapiz 'md->tty s w)))
-       (to = "cells") (: d (lens-roff? s ? (cite 'lapiz 'rfread s) (cite 'lapiz 'mdread s))
-                         o (cite 'caja-cell 'cc-show d w)
-                         (tty? ? o (usgr o)))
+    (to @ "roff" (cite 'lapiz 'md->rf s)
+          "text" (tty? ? (lens-pics (cite 'lapiz 'mdread s) w p) (usgr (cite 'lapiz 'md->tty s w)))
+          "cells" (: d (lens-roff? s ? (cite 'lapiz 'rfread s) (cite 'lapiz 'mdread s))
+                     o (cite 'caja-cell 'cc-show d w)
+                   (tty? ? o (usgr o)))
        (cite 'lapiz 'md->ht s))
    (markdown-main as)
     (: t {}
        o (uopt as t '(116 119) '(101) ())                   ; -t and -w take values
        _ (two? o ? () (udie 2 md-usage))
        _ (uoptbad as t '(116 119) @ c
-            (!c ? () (udie 2 ("markdown: unknown option -" + string c))))
+            (!c ? () (udie 2 "markdown: unknown option -\(string c)")))
        v (uoptv t 116)
        to (string? v ? v "html")
        _ (elem to md-tos ? () (udie 2 md-usage))
        ws (tty 1)
        w (lens-w t ws)
        tty? (two? ws && (to = "text" || to = "cells"))
-       (to = "dvi" ? (md-dvi-main <>>o)
-        (lensrun (\ s p (md-lay s to w tty? p)) "markdown" <>>o))))
+       (to @ "dvi" (md-dvi-main <>>o)
+        (lensrun (s \ md-lay s to w tty?) "markdown" <>>o))))
 ) ; module 'kore

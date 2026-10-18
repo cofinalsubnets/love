@@ -1,12 +1,11 @@
 #ifndef _LOVE_STDIO_H
 #define _LOVE_STDIO_H
-/* glibc provides NULL from stdio/stdlib/string too (not just stddef) -- third-party
-   C (the LFS ladder) leans on that; guarded so a prior stddef include is fine. */
+/* NULL here too, as glibc does */
 #ifndef NULL
 #define NULL ((void*)0)
 #endif
 typedef unsigned long size_t;
-typedef struct _IO_FILE FILE;   /* opaque; glibc owns the layout */
+typedef struct _IO_FILE FILE;   /* opaque */
 extern FILE *stdin, *stdout, *stderr;
 #define EOF (-1)
 #define BUFSIZ 8192
@@ -37,8 +36,7 @@ int    getchar(void);
 char  *fgets(char*, int, FILE*);
 long   getline(char**, size_t*, FILE*);           /* ssize_t */
 long   getdelim(char**, size_t*, int, FILE*);
-/* no gets: C11 removed it, there is nothing safe to point it at, and a
- * declaration with no definition is a link trap wearing a promise. */
+/* no gets: c11 removed it */
 FILE  *fopen(char const*, char const*);
 FILE  *freopen(char const*, char const*, FILE*);
 int    fclose(FILE*);
@@ -72,11 +70,7 @@ int    fscanf(FILE*, char const*, ...);
 int    sscanf(char const*, char const*, ...);
 FILE  *popen(char const*, char const*);
 int    pclose(FILE*);
-/* pre-C89 gnulib sources (argmatch.c ..) call exit/abort with no <stdlib.h>,
-   leaning on the implicit int decl mooncc refuses -- surface them here, the
-   same "the ladder leans on cross-header provision" note above covers it.
-   the str trio below is the same story: GNU getopt.c's non-GNU-libc branch
-   includes only stdio.h and calls them implicitly (m4-1.4). */
+/* old sources call these with only stdio.h, and mooncc refuses implicit decls */
 void   exit(int);
 void   abort(void);
 size_t strlen(char const*);
@@ -92,7 +86,7 @@ int    vdprintf(int, char const*, va_list);
 int    vscanf(char const*, va_list);
 int    vfscanf(FILE*, char const*, va_list);
 int    vsscanf(char const*, char const*, va_list);
-/* the GNU pair: allocate the answer. darkhttpd's whole reply builder rides them. */
+/* gnu: allocate the answer */
 int    asprintf(char**, char const*, ...);
 int    vasprintf(char**, char const*, va_list);
 #endif

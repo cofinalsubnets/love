@@ -188,10 +188,10 @@
        w (m @ ("QI" || "byte") 1 "HI" 2 "SI" 4 "DI" 8 "TI" 16 ("word" || "pointer") (psword ps) 0)
        (? (m = "SF" && elem ty '(float double)) 'float
           (m = "DF" && elem ty '(float double)) 'double
-          (w < 1) ("__attribute__((mode(" + m + "))) is not carried out")
+          (w < 1) "__attribute__((mode(\(m)))) is not carried out"
           !(elem ty '(char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
-           ("__attribute__((mode(" + m + "))) on a non-integer type is not carried out")
-          (w = 16 && pst32? ps) ("__attribute__((mode(" + m + "))) is not carried out on a 32-bit target")
+           "__attribute__((mode(\(m)))) on a non-integer type is not carried out"
+          (w = 16 && pst32? ps) "__attribute__((mode(\(m)))) is not carried out on a 32-bit target"
           (w @ 1 (uns ? 'uchar 'schar) 2 (uns ? 'ushort 'short) 4 (uns ? 'uint 'int)
              8 (? (pst32? ps) (uns ? 'ullong 'llong) uns 'ulong 'long)
              (uns ? 'u128 'i128))))
@@ -205,7 +205,7 @@
         (: nm (tkv <ts) k (ps 'lrn)
            _ (pin ps 'lrn (k + 1))
            old (peep (ps 'lren) nm 'none)
-           (pin (ps 'lren) nm (nm + "__L" + show k),   ; C-legal, so clay reads it back
+           (pin (ps 'lren) nm "\(nm)__L\(k)",   ; C-legal, so clay reads it back
             plabs ps >ts (['lren nm old] . sh)))
        (plabs ps >ts sh))
    (lname ps nm) (peep (ps 'lren) nm nm)
@@ -246,7 +246,7 @@
           ; only the stack pointer: gcc reserves the register for the whole TU and we
           ; cannot, so any register the allocator uses would answer whatever it last held
           (!(elem s '("rsp" "sp" "esp" "%rsp" "%esp")) ?
-             (blame >>>>ts ("a global register variable is taken on the stack pointer only, not '" + s + "'"))
+             (blame >>>>ts "a global register variable is taken on the stack pointer only, not '\(s)'")
              (pin (ps 'gregs) nm [s 'long], >>>>ts))))
    ; a file-scope declarator's asm label, `void f(void) asm("g")`: the object's symbol is g, the
    ; name the object writer lays (adjacent strings join, glibc's `__asm__ ("" "g")`); the C name
@@ -871,7 +871,7 @@
                     nbit (uni ? (bit < sz * 8 ? (sz * 8) bit) (abit + sz * 8))
                     (go >l nbit nmx ([name at ty] . acc))))))
        (go ms 0 0 ()))
-   (panon ps) (peep ps 'anon 0 @ k (pin ps 'anon (k + 1), ".anon" + show k))
+   (panon ps) (peep ps 'anon 0 @ k (pin ps 'anon (k + 1), ".anon\(k)"))
    ; a tag defined inside a block is that block's (C11 6.7.2.3), and cannot be scoped the way
    ; an enum constant is: the key is what gen sizes and lays members by, long after the brace
    ; closed. so mint a key and bind the spelling to it for the rest of the block. the key leads
@@ -886,7 +886,7 @@
     (peep ps 'blkd 0 < 1 ? nm
        (: k (peep ps 'anon 0)
           _ (pin ps 'anon (k + 1))
-          key ("." + nm + "." + show k)
+          key ".\(nm).\(k)"
           (spin ps 'tags nm key,
            key)))
    ; ..and a bare `struct T` reads the innermost block tag of that spelling. with none in
@@ -941,7 +941,7 @@
                              (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
                                 (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
                                 (peep ps 'pkwidebf ()) (pin ps 'pkwidebf (), clblame "a packed bit-field spanning more than 8 bytes is not carried out")
-                                (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame ("field '" + n + "' has incomplete type")))
+                                (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame "field '\(n)' has incomplete type"))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
                               uni ? (pin (ps 'utag) tag2 1) 0,
@@ -953,7 +953,9 @@
               ; the underlying type is unsigned when no enumerator is negative (gcc's choice),
               ; which shows in an enum bit-field: `enum c code : 8` holding 148 must load 148
               ; back, not -108. the tag remembers, so a later `enum c` reads the same signedness.
-              (: ts2 >ts
+              ; an attribute run may stand before the tag (mesa's `enum PACKED name`), as after the body
+              (: hp (pattpk ps >ts) lpk <hp
+                 ts2 <>hp
                  tag (idat? ts2 ? (tkv <ts2))
                  ts3 (tag ? >ts2 ts2)
                  ; an enum tag scopes by restoring, not by renaming: the type is a plain integer
@@ -991,7 +993,7 @@
                  (peekp ts3 "{" ?
                     (: (consts ts4 v pos lo hi)
                         (? (peekp ts4 "}")                         ; a trailing comma (or empty body): the enum ends
-                            (pattpk ps >ts4 @ pa (ety pos lo hi <pa (modeat ps >ts4) @ ty (ty = () ? () [ty <>pa])))
+                            (pattpk ps >ts4 @ pa (ety pos lo hi (max <pa lpk) (modeat ps >ts4) @ ty (ty = () ? () [ty <>pa])))
                            !(idat? ts4) ()
                            (: name (tkv <ts4)
                               ts5 >ts4
@@ -1011,7 +1013,7 @@
                                     (peekp ts6 "," ? (consts >ts6 (<vr + 1) pos2 lo2 hi2)
                                        (: rest (want ts6 "}")
                                           pa (two? rest ? (pattpk ps rest) [0 rest])
-                                          (two? rest ? (ety pos2 lo2 hi2 <pa (modeat ps rest) @ ty (ty = () ? () [ty <>pa])))))))))
+                                          (two? rest ? (ety pos2 lo2 hi2 (max <pa lpk) (modeat ps rest) @ ty (ty = () ? () [ty <>pa])))))))))
                        (consts >ts3 0 1 0 0))
                     ; a tag not yet defined (a declaration ahead of its enum, the kernel's apic.h) reads
                     ; as gcc lays the enum that has no negative enumerator, so its redeclaration agrees
@@ -1195,7 +1197,7 @@
        nm (b = 'float ? "__divsc3" "__divdc3")
        _ (peep (ps 'sigs) nm () ? 0 (pin (ps 'sigs) nm [w [b b b b] ()]))
        (side x t) (elvpure? x ? [x ()]
-                     (: n (1 + peep ps 'cxdn 0) _ (pin ps 'cxdn n) v ("__cxdiv_" + show n)
+                     (: n (1 + peep ps 'cxdn 0) _ (pin ps 'cxdn n) v "__cxdiv_\(n)"
                         [['var v] [['decl [[v t x]]]]]))
        (part x t f) (t = w ? ['dot x f] ['cast b ['dot x f]])     ; a float side widens a part at a time
        sl (side l ta) sr (side r tb)
@@ -1227,7 +1229,9 @@
    (pprim ps ts)
     (atom? (mark ts) ? ()         ; the bottom of the expression ladder: mark here and a bad operand reports itself, not the operator before it
        (<ts @ t
-          (? (tkk t = 'num)                           ; past int on t32, long is too narrow: long long
+          (? (tkk t = 'num && pchar ps = 'char && chq? t && 127 < tkv t && tkv t < 256)   ; 'c' is (int) (char) c
+              [['num (tkv t - 256)] >ts]
+             (tkk t = 'num)                           ; past int on t32, long is too narrow: long long
               [(pst32? ps && 2147483647 < tkv t ? ['cast 'llong ['num (tkv t)]] ['num (tkv t)]) >ts]
              (tkk t = 'unum)                          ; a u-suffixed literal wears its unsignedness (neg/div/shift go unsigned):
               [['cast 'uint ['num (tkv t)]] >ts]     ; 1u an unsigned INT (-1u wraps at 32 bits),
@@ -1398,7 +1402,7 @@
               (: r1 (want >ts "(")
                  ra (two? r1 ? (pasn ps r1))
                  rest (two? ra ? (want <>ra ")"))
-                 pc ("__builtin_popcount" + snip (tkv t) 16 #(tkv t))
+                 pc "__builtin_popcount\(snip (tkv t) 16 #(tkv t))"
                  (two? rest ? [(mkbin ps '& ['call ['var pc] [<ra]] ['num 1]) rest]))
              ; __builtin_choose_expr(c,a,b): c must fold, the unchosen arm is parsed and
              ; dropped, so a call to an undefined function in it links clean. arms need not type alike
@@ -1415,8 +1419,9 @@
                     !(charm? cv) (blame r1 "__builtin_choose_expr wants a constant condition")
                     [(cv = 0 ? <rb <ra) rest]))
              ; __func__ (C99 6.4.2.2): the enclosing function's name as a string, pinned by the
-             ; two body-parsing sites; outside a body it stays an undeclared identifier.
-             (idv? t "__func__" && string? (ps 'fnname))
+             ; two body-parsing sites; outside a body it stays an undeclared identifier. gcc's
+             ; __FUNCTION__ and __PRETTY_FUNCTION__ are the same string in C
+             (tkk t = 'id && elem (tkv t) '("__func__" "__FUNCTION__" "__PRETTY_FUNCTION__") && string? (ps 'fnname))
               [['str (ps 'fnname)] >ts]
              ; a name being declared right now is not an enum constant. C11 6.2.1p7: a
              ; declarator's scope begins at the end of its declarator, so `uintptr_t M = f(),
@@ -1637,7 +1642,7 @@
           ty2 (ptype ps ['cond a a b])
           n (1 + peep ps 'elvn 0)
           _ (pin ps 'elvn n)
-          t ("__elvis_" + show n)
+          t "__elvis_\(n)"
           (!ty || !ty2 ? ()
              ['sexpr [['decl [[t (pdecay ty) a]]]] ['cond ['var t] ['var t] b] ty2])))
    (pcond ps ts)
@@ -1846,14 +1851,13 @@
           "__builtin_popcountll" '(pop ullong)
           "__builtin_ffs" '(ffs uint) "__builtin_ffsl" '(ffs ulong) "__builtin_ffsll" '(ffs ullong)
           ())
-   (blen v) (v = 0 ? 0 (1 + blen (v >> 1)))
    (bctz v) (v & 1 = 1 ? 0 (1 + bctz (v >> 1)))
    (bpop v) (v = 0 ? 0 ((v & 1) + bpop (v >> 1)))
    (bswp v n) (n = 0 ? 0 ((v & 255) * (2 ** (8 * (n - 1))) + bswp (v >> 8) (n - 1)))
    ; v already in ty, unsigned -> (value type) | (); clz and ctz of 0 are undefined, no fold
    (bfold w64 op ty v)
     (op @ 'bswap [(bswp v (tbits w64 ty // 8)) ty]
-          'clz (v = 0 ? () [(tbits w64 ty - blen v) 'int])
+          'clz (v = 0 ? () [(tbits w64 ty - bitlen v) 'int])
           'ctz (v = 0 ? () [(bctz v) 'int])
           'pop [(bpop v) 'int]
           'ffs [(v = 0 ? 0 (bctz v + 1)) 'int]
@@ -2008,19 +2012,40 @@
    (clat l i) (? (atom? l) () (i = 0) l (clat >l (i - 1)))   ; the tail at token i
    (clp? l i s) (clat l i @ t (two? t && tp? <t s))
    (cli? l i s) (clat l i @ t (two? t && idv? <t s))
-   (clgrp? l) (cli? l 0 "__attribute__" && clp? l 1 "(" && clp? l 2 "(" &&
-               (cli? l 3 "cleanup" || cli? l 3 "__cleanup__") &&
-               clp? l 4 "(" && idat? (clat l 5) && clp? l 6 ")" && clp? l 7 ")" && clp? l 8 ")")
+   (clgrp? l) (two? (clpick l))
+   ; an __attribute__((..)) holding cleanup(f) among its items -> (f  the attribute without
+   ; that item, () when it was the only one  the tokens past the attribute) | ()
+   (clpick l)
+    (: (cl1? it) (#it = 4 && (idv? <it "cleanup" || idv? <it "__cleanup__") && tp? (it 1) "("
+                  && idat? (clat it 2) && tp? (it 3) ")")
+       ; the items at depth 0 of the list, each its tokens, up to the closing `))`
+       (items s d cur acc cm)
+        (? (atom? s) ()
+           (d = 0 && tp? <s ")") (two? >s && tp? <>s ")" ? [(rev (rev cur . acc)) cm s] ())
+           (d = 0 && tp? <s ",") (items >s 0 () (rev cur . acc) <s)
+           (tp? <s "(") (items >s (d + 1) (<s . cur) acc cm)
+           (tp? <s ")") (items >s (d - 1) (<s . cur) acc cm)
+           (items >s d (<s . cur) acc cm))
+       (? !(cli? l 0 "__attribute__" && clp? l 1 "(" && clp? l 2 "(") ()
+          (items (clat l 3) 0 () () () @ r
+             (? (atom? r) ()
+                (: its <r cm <>r cl <>>r ks (filter (it \ !(cl1? it)) its)
+                   (#ks = #its - 1 ?
+                      [(tkv (<(filter cl1? its) 2))
+                       (#ks = 0 ? () (take 3 l + foldl (\ a it (a = () ? it (a + [cm] + it))) () ks + take 2 cl))
+                       >>cl]
+                      ()))))))
    ; over the first declarator, up to its `=` `,` or `;` -> (f-name | () | 'many  tokens
    ; the-word-before-the-attribute)
    (clstrip ts)
     (: (go l d acc f pv)
         (? (atom? l) [() ts]
            (d = 0 && (tp? <l ";" || tp? <l "=" || tp? <l ",")) (f ? [f (rev acc + l) pv] [() ts])
-           (clgrp? l) (go (clat l 9) d acc (f ? 'many (tkv <(clat l 5))) (two? acc ? (tkv <acc)))
-           (tp? <l "(" || tp? <l "[" || tp? <l "{") (go >l (d + 1) (<l . acc) f pv)
-           (tp? <l ")" || tp? <l "]" || tp? <l "}") (go >l (d - 1) (<l . acc) f pv)
-           (go >l d (<l . acc) f pv))
+           (clpick l @ k
+              (? (two? k) (go <>>k d (rev <>k + acc) (f ? 'many <k) (two? acc ? (tkv <acc)))
+                 (tp? <l "(" || tp? <l "[" || tp? <l "{") (go >l (d + 1) (<l . acc) f pv)
+                 (tp? <l ")" || tp? <l "]" || tp? <l "}") (go >l (d - 1) (<l . acc) f pv)
+                 (go >l d (<l . acc) f pv))))
        (go ts 0 () () ()))
    (pdecl0 ps ts)
     (: br (pbty ps ts)
@@ -2136,7 +2161,7 @@
         (: md (i + 2 < n && alpha? (tmpl (i + 1)))     ; %c[ reads past the letter
            b (md ? (i + 2) (i + 1))
            (? (n <= i) acc
-              (tmpl i = 37 && i + 1 < n && tmpl (i + 1) = 37) (go (i + 2) (acc + "%%"))
+              (tmpl i = 37 && i + 1 < n && tmpl (i + 1) = 37) (go (i + 2) "\(acc)%%")
               (tmpl i = 37 && b < n && tmpl b = 91)
                (: e (rbr (b + 1))
                   nm (e < 0 ? () (snip tmpl (b + 1) e))
@@ -2372,7 +2397,7 @@
               ; C11 6.8.1p3: a label's scope is its whole function, so two of a name are one
               ; label emitted twice and every goto to it takes the first -- silently.
               (lname ps (tkv t) @ nm
-                 (peep (ps 'labs) nm () ? (blame ts ("duplicate label '" + nm + "'"))
+                 (peep (ps 'labs) nm () ? (blame ts "duplicate label '\(nm)'")
                     (pin (ps 'labs) nm 1, [['lbl nm] >>ts])))
              (thenw (pexpr ps ts) ";" @ r
                 (two? r ? [['expr <r] <>r])))))
@@ -2848,7 +2873,7 @@
                                                  (goc vps)))
                                          ; C11 6.7.6.2p2: no variably modified object at file scope
                                          vm (filter (p \ vmod? <>p) vps)
-                                         (? (two? vm) (blame rest ("variably modified '" + <<vm + "' at file scope"))
+                                         (? (two? vm) (blame rest "variably modified '\(<<vm)' at file scope")
                                             (two? vps) [['gdecl vps] rest]
                                             ['(tdef) rest]))))
                             (? (atom? fpty && peekp ts2 "(")        ; a function (the return type rides the sig table)
@@ -2897,7 +2922,7 @@
        why (peep far 'wseq () = peep far 'seq () ? (far 'why))
        (atom? t ? (gripe () () () "parse error at end of input")
           (gripe (two? dt ? (filof t) (filat spans i0)) <>>t ()
-                 (why ? why ("parse error near " + spell t)))))
+                 (why ? why "parse error near \(spell t)"))))
    ; C11 6.7p4: a redeclared file-scope object keeps a compatible type. what is compared is the
    ; shape -- scalar against pointer against struct, and two different arithmetic types --
    ; which is what autoconf's suffix probes ask (`extern ptrdiff_t foo; extern int foo;`)
@@ -2909,7 +2934,7 @@
                      (<prs @ pr
                         (peep (ps 'globals) <pr () @ old
                            (two? pr && old && <>pr && tyclash? old <>pr ?
-                              ("conflicting types for '" + <pr + "'") (go >prs)))))
+                              "conflicting types for '\(<pr)'" (go >prs)))))
           (go <>f)))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
@@ -3016,7 +3041,7 @@
                  (w && elem (tkk t) '(id kw))
                   (: nm (tkk t = 'kw ? show (tkv t) (tkv t))
                      (attrdoes nm = 'no ?
-                        (gripe (filat spans i) (<>>t) () ("__attribute__((" + attrname nm + ")) is not carried out"))
+                        (gripe (filat spans i) (<>>t) () "__attribute__((\(attrname nm))) is not carried out")
                         (item >l (i + 1) d ())))
                  (item >l (i + 1) d ()))))
        (scan l i)

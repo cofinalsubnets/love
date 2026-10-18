@@ -156,6 +156,51 @@
       (tablet? M ?
          (each (two? ks ? ks (keys M)) (k \ (M k @ v (v && :: k v)))))))
 
+(: bigdigits (:
+   ; a non-negative integer's digits in base r by halves: x = q r^k + m, each half alone, so
+   ; the digits cost products, not a division a digit. a level is [r^k bits inv k], inv its
+   ; reciprocal; the top's is laid as the top split needs it, at the quotient's width
+   (dch n r a) (: q (n // r) d ("0123456789abcdefghijklmnopqrstuvwxyz" (n - q * r))
+                  (0 < q ? (dch q r (d . a)) (d . a)))
+   (dpad w s) (#s < w ? ("0" * (w - #s) + s) s)
+   ; floor(4^b / p), 2^(b-1) <= p < 2^b: newton from the top half's, its correction from the
+   ; top k bits of each factor, then a fix by the residue
+   (drecip p b) (? (b <= 8192) ((1 << (2 * b)) // p)
+                   (: h (b // 2 + 64) w (1 << (2 * b))
+                      x ((drecip (p >> (b - h)) h) << (b - h))
+                      e (w - p * x)
+                      k (b - h + 64) t (b + 1 - k) u (max 0 (bitlen e - k))
+                      y (x + (((x >> t) * (e >> u)) >> (2 * b - t - u)))
+                      r (w - p * y)
+                      (r < 0 ? (y - ((p - r - 1) // p)) (y + (r // p)))))
+   ; the levels for n, most first: r^k0 the largest power a charm holds, squared while it fits
+   (dlevels n r) (: nb (bitlen n)
+                    (lay l) [<l (l 1) (l 1 > 8192 ? (drecip <l (l 1)) 0) (l 2)]
+                    (go p k acc) (: b (bitlen p) (top _) ([p b 0 k] . map lay acc)
+                                    (2 * b - 2 >= nb ? (top 0)
+                                       (: pp (p * p) (pp > n ? (top 0) (go pp (2 * k) ([p b k] . acc))))))
+                    (p0 p k) ((p * r) < (1 << 62) ? (p0 (p * r) (k + 1)) (go p k ()))
+                    (p0 r 1))
+   ; [q m] of x by p, b its bits, inv its reciprocal or 0. q's m bits are all a product needs:
+   ; the estimate takes inv's top m + 64, or with none divides p's top m + 64 bits into x's
+   (ddiv x p b inv) (: m (bitlen x - b + 1)
+                       (adj q r) (? (r < 0) (adj (q - 1) (r + p)) (r >= p) (adj (q + 1) (r - p)) [q r])
+                       (? (m < 1) [0 x]
+                          (m < 2048 || b <= 8192) [(x // p) (x % p)]
+                          (: q (? (inv != 0) (: s (max 0 (b + 1 - m - 64))
+                                                (((x >> (b - 1)) * (inv >> s)) >> (b + 1 - s)))
+                                  (b - m - 64 > 0) (: s (b - m - 64) ph (p >> s)
+                                                     <(ddiv (x >> s) ph (b - s) (drecip ph (b - s))))
+                                  <(ddiv x p b (drecip p b)))
+                             (adj q (x - q * p)))))
+   ; x's digits, w of them (0: as many as it has)
+   (dsay o x r ls w) (? (atom? ls) (say o (dpad w (string (dch x r ()))))
+                        (: l <ls k (l 3)
+                           (w = 0 && x < <l ? (dsay o x r >ls 0)
+                              (: qr (ddiv x <l (l 1) (l 2)) (dsay o <qr r >ls (w ? (w - k) 0), dsay o (qr 1) r >ls k)))))
+   (go n r) (jug 0 @ o (dsay o n r (dlevels n r) 0, slurp o))
+   go))
+
 (: (chars s) (map s ^#s)                      ; a string is an atom, so map needs the indices
    (findsub s sub) (#sub = 0 ? 0 (fsub s sub 0))        ; -1 when absent
    (has? s sub)    (0 <= findsub s sub)
@@ -196,11 +241,11 @@
                  (whole * mul + (<fr * mul) // <>fr)
                  ()))
           ()))
-   ; lowercase digits past 9. putbn reads a charm only, so a big is split down to one
+   ; lowercase digits past 9. putbn reads a charm only; a big goes by halves
    (radix n b)
     (? (charm? n) (jug 0 @ o (putbn o n b, slurp o))
        (n < 0) ("-" + radix (0 - n) b)
-       (radix (n // b) b + string ("0123456789abcdefghijklmnopqrstuvwxyz" (n % b))))
+       (bigdigits n b))
    (zpad w s) (#s < w ? (zpad w ("0" + s)) s)
    (aup n a) (n + a - 1 & -a)                   ; n up to a multiple of a, a power of two
    ; a code point as its utf-8 bytes, "" outside unicode. `string` on a number is one byte
@@ -320,7 +365,7 @@
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}
    ; and the same for the kernel -- only the respelling. main.c pins `love-os` per run off
    ; __love_osv: one binary meets four, and the compile that made it cannot say which.
-   os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'inle "Inle"}
+   os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'macos "Darwin" 'inle "Inle"}
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
    archof (arch-canon * name)
@@ -348,7 +393,7 @@
 ; symbolic run of the stack machine (ev.c's thrun): every value pushed is a slot, a fresh
 ; mint whose node says how it was made, and the nodes render as source once the run is done.
 (: lamthr (:
-   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) gcache {}
+   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) uncn lvm_uncn gcache {}
    ; what thrun reads: a nif -> its name, then the node tags and the fused loads' names
    thcfg [(foldl (\ t v (nifnom v @ nm (string? nm ? (pin t v (name nm)) t)))
                  {} (catmap (l \ (map l (keys l))) (stack ())))
@@ -365,10 +410,13 @@
    (fn? v) (lit? v && !(tablet? v) && !(hot? v))
    (arity e) (cur == pick 0 e ? (peek 1 e) 1)
    (entry e) (cur == pick 0 e ? (seek 2 e) e)
-   (partp v) (unc == pick 0 v || cur == pick 0 v && unc == pick 2 v)
+   (uncp o) (o == unc || o == uncn)
+   (partp v) (uncp (pick 0 v) || cur == pick 0 v && uncp (pick 2 v))
    (unc0 v) (cur == pick 0 v ? (seek 2 v) v)
-   (pargs v) (: (go u a) (peek 2 u @ l (unc == pick 0 l ? (go l (peek 1 u . a)) (peek 1 u . a))) (go (unc0 v) ()))
-   (fbase v) (: (go u) (peek 2 u @ l (unc == pick 0 l ? (go l) (seek -2 l))) (go (unc0 v)))
+   (ulink u) (unc == pick 0 u ? (peek 2 u) (peek (2 + peek 1 u) u))
+   (uargs u) (unc == pick 0 u ? [(peek 1 u)] (map (i \ peek (2 + i) u) ^(peek 1 u)))
+   (pargs v) (: (go u a) (ulink u @ l (uncp (pick 0 l) ? (go l (uargs u + a)) (uargs u + a))) (go (unc0 v) ()))
+   (fbase v) (: (go u) (ulink u @ l (uncp (pick 0 l) ? (go l) (seek -2 l))) (go (unc0 v)))
    ; a row's value is a binding power, negative as often as not: ask for presence
    (infix? x) (name? x ? (any (k \ (k != 0 && peep (operators k) x () !== ())) (keys operators)))
 
@@ -716,7 +764,7 @@
   ; or self reference -- the printer below is one), a sibling bound to an unfoldable
   ; call is boxed too and its cell never filled, so every read of it raises `missing`:
   ;   (: f (: (a o) (f o) c (tablet 0) (\ o c)))   -> ;; missing c
-  cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1))
+  cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) uncn lvm_uncn
   ; the float width is the seat's, never this file's: a 32-bit seat gets binary32 for
   ; flo_t. so ask the arithmetic -- a hard-coded 2^53 sends norm's doubling loop past
   ; every float32 there is and it never returns.
@@ -728,51 +776,7 @@
 
   ; --- integers: the digits of a non-negative charm/sun/big, most significant first
   (dch n a) (: q (n // 10) d (48 + (n - q * 10)) (0 < q ? (dch q (d . a)) (d . a)))
-  (dstr n) (n < (1 << 256) ? (string (dch n ())) (jug 0 @ o (dsay o n (dlevels n) 0, slurp o)))
-  ; a big's digits by halves: x = q 10^k + r, each half alone, so a print costs products, not
-  ; a division a digit. a level is [10^k bits inv k], inv its reciprocal; the top's is laid
-  ; as the top split needs it, at the quotient's width
-  (dpad w s) (#s < w ? ("0" * (w - #s) + s) s)
-  ; a lopsided product as products of the shorter's width: the longer cut into pieces of it
-  (dmul a b) (: la (bitlen a) lb (bitlen b)
-                (? (lb < la) (dmul b a)
-                   (la < 8192 || lb < 2 * la) (a * b)
-                   (: mk ((1 << la) - 1)
-                      (go b i acc) (b = 0 ? acc (go (b >> la) (i + la) (acc + ((a * (b & mk)) << i))))
-                      (go b 0 0))))
-  ; floor(4^b / p), 2^(b-1) <= p < 2^b: newton from the top half's, its correction from the
-  ; top k bits of each factor, then a fix by the residue
-  (drecip p b) (? (b <= 8192) ((1 << (2 * b)) // p)
-                  (: h (b // 2 + 64) w (1 << (2 * b))
-                     x ((drecip (p >> (b - h)) h) << (b - h))
-                     e (w - p * x)
-                     k (b - h + 64) t (b + 1 - k) u (max 0 (bitlen e - k))
-                     y (x + (((x >> t) * (e >> u)) >> (2 * b - t - u)))
-                     r (w - p * y)
-                     (r < 0 ? (y - ((p - r - 1) // p)) (y + (r // p)))))
-  (dlevels n) (: nb (bitlen n)
-                 (lay l) [<l (l 1) (l 1 > 8192 ? (drecip <l (l 1)) 0) (l 2)]
-                 (go p k acc) (: b (bitlen p) (top _) ([p b 0 k] . map lay acc)
-                                 (2 * b - 2 >= nb ? (top 0)
-                                    (: pp (p * p) (pp > n ? (top 0) (go pp (2 * k) ([p b k] . acc))))))
-                 (go 1000000000000000000 18 ()))                           ; most first
-  ; [q r] of x by p, b its bits, inv its reciprocal or 0. q's m bits are all a product needs:
-  ; the estimate takes inv's top m + 64, or with none divides p's top m + 64 bits into x's
-  (ddiv x p b inv) (: m (bitlen x - b + 1)
-                      (adj q r) (? (r < 0) (adj (q - 1) (r + p)) (r >= p) (adj (q + 1) (r - p)) [q r])
-                      (? (m < 1) [0 x]
-                         (m < 2048 || b <= 8192) [(x // p) (x % p)]
-                         (: q (? (inv != 0) (: s (max 0 (b + 1 - m - 64))
-                                               (((x >> (b - 1)) * (inv >> s)) >> (b + 1 - s)))
-                                 (b - m - 64 > 0) (: s (b - m - 64) ph (p >> s)
-                                                    <(ddiv (x >> s) ph (b - s) (drecip ph (b - s))))
-                                 <(ddiv x p b (drecip p b)))
-                            (adj q (x - dmul q p)))))
-  ; x's digits, w of them (0: as many as it has)
-  (dsay o x ls w) (? (atom? ls) (say o (dpad w (string (dch x ()))))
-                     (: l <ls k (l 3)
-                        (w = 0 && x < <l ? (dsay o x >ls 0)
-                           (: qr (ddiv x <l (l 1) (l 2)) (dsay o <qr >ls (w ? (w - k) 0), dsay o (qr 1) >ls k)))))
+  (dstr n) (n < (1 << 256) ? (string (dch n ())) (bigdigits n 10))
   (ndig n) (n // 10 @ q (0 < q ? (1 + ndig q) 1))          ; the count, without building the list
   (pnum o n) (n < 0 ? (put o 45, say o (dstr (0 - n))) (say o (dstr n)))
 
@@ -893,12 +897,17 @@
                      px o p sn, put o 41)))
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
-  ; [2], so the base value sits at link-2.
-  (partp v) (unc == pick 0 v || cur == pick 0 v && unc == pick 2 v)
+  ; [2], an uncn cell its n args from [2] and the link after them, so the base value
+  ; sits at link-2.
+  (uncp o) (o == unc || o == uncn)
+  (partp v) (uncp (pick 0 v) || cur == pick 0 v && uncp (pick 2 v))
   (unc0 v) (cur == pick 0 v ? (seek 2 v) v)
-  (nargs v) (: (go u n) (peek 2 u @ l (unc == pick 0 l ? (go l (1 + n)) n)) (go (unc0 v) 1))
-  (fbase v) (: (go u) (peek 2 u @ l (unc == pick 0 l ? (go l) (seek -2 l))) (go (unc0 v)))
-  (farg v i n) (: (go u w) (0 < w ? (go (peek 2 u) (w - 1)) (peek 1 u)) (go (unc0 v) ((n - 1) - i)))
+  (ulink u) (unc == pick 0 u ? (peek 2 u) (peek (2 + peek 1 u) u))
+  (uargs u) (unc == pick 0 u ? [(peek 1 u)] (map (i \ peek (2 + i) u) ^(peek 1 u)))
+  (pargs v) (: (go u a) (ulink u @ l (uncp (pick 0 l) ? (go l (uargs u + a)) (uargs u + a))) (go (unc0 v) ()))
+  (fbase v) (: (go u) (ulink u @ l (uncp (pick 0 l) ? (go l) (seek -2 l))) (go (unc0 v)))
+  (nargs v) #(pargs v)
+  (farg v i n) (pargs v i)
 
   (pfn o v sn) (nifnom v @ nm
                   (string? nm ? (lamform v @ s (s == name nm ? (say o nm) (px o s sn)))   ; off the book: what binds it
@@ -2213,7 +2222,7 @@
         (as \ (? (atom? as) (vlist (vsort (keys tab)), flush out)
                  (<as = "--help")
                   (puts "usage: verbs   (the names this artifact answers to)\n", flush out, 0)
-                 (say err ("verbs: unknown option " + <as + "\n"), flush err, 2))))
+                 (say err "verbs: unknown option \(<as)\n", flush err, 2))))
 
    ; --- the seat scan, the third door ---
    ; a file that is the program seats itself: `love src/apps/moon/moon.l foo.c`, the installed
@@ -2533,10 +2542,10 @@
    ; sgr), 'paste (bracketed), 'hide (the cursor), ('title t) (pushed, popped on the way out). ttygive undoes exactly
    ; what ttytake set, every mouse mode included, and leaves the cursor shown
    (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'tap "\e[?9h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
-                  ('title t) ("\e[22;0t\e]2;" + t + "\a") "")
+                  ('title t) ("\e[22;0t\e]2;\(t)\a") "")
    (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'tap "\e[?1006l\e[?9l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
-   (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + cats (map ttyon ms)), flush out)
-   (ttygive ms) (say out ("\e[0m" + cats (map ttyoff (rev ms)) + "\e[?25h\e[?1049l"), flush out, raw 0)
+   (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + catmap ttyon ms), flush out)
+   (ttygive ms) (say out ("\e[0m" + catmap ttyoff (rev ms) + "\e[?25h\e[?1049l"), flush out, raw 0)
 
    ; --- the stage: a full-screen tty app, a tablet of doors, mitty's pane shape ------------
    ;   'show w h -> the frame for a w by h screen     'step k    a key
@@ -2546,11 +2555,11 @@
    ;   'modes   ttytake's
    ; eof leaves too, and the tty comes back whatever way the visit ends
    (stage-run d)
-    (: ms (peep d 'modes ()) tk (peep d 'tick ()) per (peep d 'every 33)
+    (: ms (d 'modes) tk (d 'tick) per (peep d 'every 33)
        st {'over 0 'dirt 1 'size ()}
        (over? _) (st 'over || (d 'over?) ())
-       (key c) (? (c = -7) (pin st 'over 1) (: _ ((d 'step) c) (pin st 'dirt 1)))
-       (paint g) (: _ (pins st 'dirt 0 'size g) (say out ((d 'show) (g 1) <g), flush out))
+       (key c) (? (c = -7) (pin st 'over 1) (: _ (d 'step c) (pin st 'dirt 1)))
+       (paint g) (: _ (pins st 'dirt 0 'size g) (say out (d 'show (g 1) <g), flush out))
        ; no tick: the frame, then a key, in turn
        (turns _) (: _ (paint (ttysize 7 19)) _ (key (edkey in)) (over? () ? 0 (turns ())))
        ; a tick: the keys on a task of their own, a frame when a key, the tick or the size says
@@ -2586,7 +2595,7 @@
    ; l grows by prepending, so the drawn one is the tail and the question is an identity.
    (edgrew t)
      (t 'l @ l
-        (!(t 'u) && !(t 'd) && !(t 'r) && two? l && cup l == t 'was))
+        (!(t 'u) && !(t 'd) && !(t 'r) && two? l && >l == t 'was))
    ; a repaint puts the whole line out again, costing the line's length a keystroke --
    ; quadratic over a pasted run, and a seat painting that into a framebuffer looks hung -- so
    ; the one grown character is worth telling from the line. a character landing on the margin
@@ -2656,7 +2665,7 @@
    ; first so the answer is exactly n wide -- both by column, not by byte.
    (edpad s n c) (edwide s @ w (w < n ? (s + ((n - w) (t \ t + c) "")) s))
    (edfit s n c) (edpad (edcut s n) n c)
-   (sgr code s) ("\e[" + code + "m" + s + "\e[0m")       ; s in the pen code, reset after
+   (sgr code s) "\e[\(code)m\(s)\e[0m"       ; s in the pen code, reset after
 
    ; --- the option walk, shared by kore's applets and love's own rail ----------------
    ; (uopt1 w flags vals) -- one word into its letters as words of their own, or () when the
@@ -2673,7 +2682,7 @@
        (go k acc)
         (n <= k ? (rev acc)
            (: c (w k)
-              s ("-" + string c)
+              s "-\(string c)"
               g (snip w (k + 1) n)
               (? (elem c vals) (rev (#g ? (g . s . acc) (s . acc)))
                  (ours? c) (go (k + 1) (s . acc))
@@ -2698,9 +2707,8 @@
        ; one long word into the shape uopt1 answers for a short cluster, so `eat` walks
        ; either: the word alone, or the word and the value glued behind its `=`.
        (long1 a)
-        (a @ ("--" + nm + "=" + v) (lgot nm @ c (c && elem c vals ? [("--" + nm) v] ()))
-             ("--" + nm) (lgot nm @ c (c ? [a] ()))
-             ())
+        (a @ ("--" + nm + "=" + v) (lgot nm @ c (c && elem c vals ? ["--\(nm)" v] ()))
+             ("--" + nm) (lgot nm @ c (c ? [a] ())) )
        ; the exploded word, then the argv tail behind it. a value key ends its chain, so
        ; at most one element of `bs` is ever a value and it is the last.
        (eat bs rest es)
@@ -2781,31 +2789,28 @@
    ; the leading flag words only: the walk stops at the first operand and at `--`, so a file
    ; really called --help still opens once something else has been named. not getopt -- a
    ; value word that looks like a flag is walked over, so `grep -e --help f` answers the help.
-   (uask as h? v?)
-    (two? as ?
-       (<as @ w
-          (? (w = "--") ()
-             (w = "--help") 'help
-             (w = "--version") 'vers
-             (w = "-h" && h?) 'help
-             (w = "-v" && v?) 'vers
-             (1 < #w && (w 0 = 45)) (uask >as h? v?)
-             ())))
+   (uask (w . u) h? v?)
+    (w @ "--" ()
+         "--help" 'help
+         "--version" 'vers
+         ("-h" && h?) 'help
+         ("-v" && v?) 'vers
+         (1 < #w && w 0 = 45 && uask u h? v?))
    ; an applet as the world calls it: nm is its name, u its usage text, and h?/v? whether the
    ; bare letters are free -- posix or gnu has spoken for one in a few places, and there the
    ; long form is the only answer. answers the main a verb registry takes.
-   (uvers nm) (string nm + " / love " + love-version)                           ; the --version answer, one spelling for every tool
+   (uvers nm) "\(nm) / love \(love-version)"                           ; the --version answer, one spelling for every tool
    (udoor nm f u h? v?)
     (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one
-                   (puts (n && x (n - 1) = 10 ? x (x + "\n")), flush out, 0))
+                   (puts (n && x (n - 1) = 10 ? x "\(x)\n"), flush out, 0))
        (as \ (uask as h? v?
-              @ 'help (say1 (u || "usage: " + string nm))
+              @ 'help (say1 (u || "usage: \(nm)"))
                 'vers (say1 (uvers nm))
                 (f as))))
 
    ps1 "> "
    ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.
-   ps1c (string 27 + "[38;5;117m" + ps1 + string 27 + "[39m")
+   ps1c "\e[38;5;117m\(ps1)\e[39m"
 
    ; print the prompt, then dispatch keys until ^D or a submitted buffer.
    ; returns eofsym on ^D, else (vs . nhu) so the repl can thread history.
@@ -2818,13 +2823,13 @@
            edstep t (edkey in),
            (t 'ev @ 0 (loop ())
               ; ^D leaves the line ended, so whatever runs next starts on its own
-              (-7 || 4) ((0 < (t 'below) ? (csi (t 'below) 66) ()), putc 10, eofsym)
+              (-7 || 4) ((0 < t 'below ? (csi (t 'below) 66) ()), putc 10, eofsym)
               ; enter cashes the buffer as long as it parses complete
               10 (parseall (edchars t) @
                   ^no (ednl (eddetach t), loop ())
                   vs (: _ (eddetach t)
                         h (revcat (t 'hd) (t 'hu))
-                        (0 < (t 'below) ? (csi (t 'below) 66) (),   ; past the rows below the cursor
+                        (0 < t 'below ? (csi (t 'below) 66) (),   ; past the rows below the cursor
                          putc 10,
                          [vs (!vs ? h (take 100 (edframe t . h)))])))
               -8 (uphist t, loop ())
@@ -2834,7 +2839,7 @@
         (edbr loop))
    ; evaluate a single parsed datum cooperatively.
    (do_eval v)
-     (: pid (twirl (v \ show (ev v)) v)              ; shown aboard: ^C stops a long print too
+     (: pid (twirl (show * ev) v)              ; shown aboard: ^C stops a long print too
         (poll _)
           (? (landed? pid) ((catch pid @ s (string? s ? (puts s) (putx s))), -1)   ; the answer; a raise's ()
              (cue? 0) 
@@ -2861,7 +2866,7 @@
     (: prev (heard ())
        _ (hear shell-help)        ; the prompt survives every raise; a script must not
        _ (raw 1)
-       _ (puts $ ";3 love " love-version "\n")
+       _ (puts ";3 love \(love-version)\n")
        r (repl 0 0)
        (hear prev,
         r))
@@ -2903,7 +2908,7 @@
                          (: _ (pin t 'l (foldl (a \ ch \ ch . a) (t 'l) <cl))
                             cs >cl
                           (two? cs && two? >cs ?
-                            (puts $ "\n" + foldl (a \ s \ 0 = #a ? s (a + "  " + s)) "" cs + "\n"),
+                            (puts $ "\n" + foldl (a \ s \ 0 = #a ? s "\(a)  \(s)") "" cs + "\n"),
                            loop i draft)))))
               -8 (recall i (i >= hn ? i (i + 1)) draft)   ; up: older
               -9 (recall i (0 >= i  ? i (i - 1)) draft)    ; down: newer
@@ -2924,17 +2929,17 @@
 (: (cli-rail ln)
  (: (charm0 x) (charm? x ? x 0)
     ; a program's own uleave ('leave, udie's) goes out the same door
-    (door a b) (a == 'cli-leave || a == 'leave ? (charm0 b) (scare a b))
+    (door a b) (a @ ('cli-leave || 'leave) (charm0 b) (scare a b))
     cli2
  (trap (x \
             (: (cli-leave c) (scare 'cli-leave c)
                ; a kind test, not a match on (): a refusal answers a nom, and a nom is truthy
                ; open is posix's, and a seat without it answers () here rather than at the bake
                (load1 p) (cite 'posix 'open p "r" @ q
-                            (hot? q ? (reads q) (say err $ "love: cannot open " + p + "\n", cli-leave 1)))
+                            (hot? q ? (reads q) (say err "love: cannot open \(p)\n", cli-leave 1)))
                (eval1 s) (sounds s @ 'torn (say err "love: -e: unfinished form\n", cli-leave 2)
                                     (d @ (a . u)) (ev 'ev (atom? u ? a d)))   ; many datums fold to one application
-               v-msg ("love " + love-version + "\n")   ; _ arg: love has no nullary calls
+               v-msg "love \(love-version)\n"
                h-msg
                """
                usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]
@@ -2951,7 +2956,7 @@
                try `love verbs` to see a list of commands
 
                """
-               (need h '()) (say err $ "love: " + h + " needs an argument\n", cli-leave 2)
+               (need h '()) (say err "love: \(h) needs an argument\n", cli-leave 2)
                K 1024 M 1048576 G 1073741824
                wordsz (charm? G ? 8 4)             ; 2^30 is a charm only where a fixnum is 62-bit
                ; validate here: a bad value reaching `tune` writes a non-Z tray, which the nif refuses
@@ -2966,7 +2971,7 @@
                                                             ; `:` body slot folds into the binding chain
                              (charm? v && v >= 0 ?
                               (v * (u || M) // wordsz)
-                              (say err $ "love: " + h + ": not a size: " + s + "\n",
+                              (say err "love: \(h): not a size: \(s)\n",
                                cli-leave 2)))
                ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin / 'none.
                ; 'none is the line running out with no program named: -v and -h are not terminal, so
@@ -3010,7 +3015,7 @@
       V  (cite 'verbs)
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
       f  (V 'seat <ln)
-      (charm0 (? f          (trap (_ \ (f >ln)) () (\ a b (a == 'leave ? (charm0 b) (scare a b))))
+      (charm0 (? f          (trap (_ \ (f >ln)) () (\ a b (a @ 'leave (charm0 b) (scare a b))))
                  (two? >ln) (cli-rail ln)
                  tty        (shell 0)
                  (reads in, 0))))         ; non-tty stdin: the stream face drinks the in port
@@ -3019,6 +3024,6 @@
  ; with no seat to exec reach the repl by name. last in the letrec: the closure takes its free
  ; names as they stand.
  _ (cite 'verbs 'enlist 'love
-     (as \ (two? as ? (cli-rail (. "love" as)) (shell 0)))
+     (as \ (two? as ? (cli-rail ("love" . as)) (shell 0)))
      [('exec . (as \ (two? as && (<as = "bake" || <as = "wake"))))]))
 ) ; module cli

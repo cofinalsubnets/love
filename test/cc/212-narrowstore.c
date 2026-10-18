@@ -1,7 +1,6 @@
-/* narrow stores through a pointer from a register-riding value: the store truncates on its own,
- * so an integer cast at least as wide as the stored type drops and no extend runs first; the
- * assignment's answer keeps its conversion wherever it is read -- chained, compared, returned,
- * or through a comma. held to gcc. */
+/* a narrow store through a pointer truncates itself: a cast at least as wide drops, no extend
+ * first; the assignment's value keeps its conversion when chained, compared, returned, comma'd.
+ * held to gcc. */
 
 typedef unsigned char u8;
 typedef signed char s8;

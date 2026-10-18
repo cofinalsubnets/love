@@ -25,6 +25,13 @@ try "symbolic displacement"  'movq sym(%rbx), %rax'
 try "immediate with a tail"  'movq $4x, %rax'
 try "empty hex"              'movq $0x, %rax'
 try "symbolic scale"         'movq %rax, (%rbx,%rcx,n)'
+# ah..bh beside a REX: under one those slots name spl..dil, so gas refuses ("can't encode
+# register '%ah' in an instruction requiring REX prefix") where laying it names another register
+try "high byte, rex reg"     'movb %ah, %sil'
+try "high byte, r8b"         'movb %ah, %r8b'
+try "high byte, rex.w"       'movzbq %ah, %rax'
+try "high byte, rex base"    'addb %ch, (%r9)'
+try "high byte, rex disp"    'movb %bh, 8(%r10)'
 # shapes x86 has no encoding for, or the front no width for
 try "no width"               'mov $1, (%rbx)'
 try "no width, unary"        'neg (%rbx)'
@@ -37,5 +44,5 @@ try "too many mem fields"    'movq %rax, (%rbx,%rcx,4,8)'
 try "unknown mnemonic"       'frobq %rax, %rbx'
 try "unknown register"       'movq %rzz, %rbx'
 
-echo "test/holo/asrefuse: $n refused, $leaked leaked"
+echo "test/holo/asrefuse: $((n - leaked)) of $n refused, $leaked leaked"
 [ "$leaked" -eq 0 ] || exit 1

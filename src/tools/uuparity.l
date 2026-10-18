@@ -14,12 +14,12 @@
 (: unimath "/usr/lib/ocaml/coq/user-contrib/UniMath"
    uul "test/uu.l"
 
-   (rdf p) (uread p @ [1 t] t ())
+   (rdf p) (uread p @ [1 t] t)
    (dir? p) (stat p @ st (atom? st ? 0 (61440 & <>>st = 16384)))
    (sfx-v? s) (#s @ n (2 < n && s (n - 2) = 46 && s (n - 1) = 118))
    (vnamec? c) (alnum? c || c = 95 || c = 39)            ; [a-za-z0-9_']
    (unamec? c) (alnum? c || c = 95 || c = 45)            ; [a-za-z0-9_-]
-   (blank? c) (c = 32 || c = 9 || c = 13)
+   (blank? (32 || 9 || 13)) 1
 
    ; every *.v under p, then one flat sort so the visit order is the path order
    (vfiles p acc)
@@ -31,8 +31,7 @@
    kws '("Definition" "Theorem" "Lemma" "Corollary" "Proposition" "Axiom" "Fixpoint" "Record" "Inductive")
    (pfx? s n i kw) (: k #kw
                       (go j) (? (k <= j) (i + k)
-                                (i + j < n) (s (i + j) = kw j ? (go (j + 1)) ())
-                                ())
+                                (i + j < n) (s (i + j) = kw j ? (go (j + 1))))
                       (go 0))
    (kw-end s n i) (: (try m) (atom? m ? ()
                                 (pfx? s n i <m @ e (charm? e ? e (try >m))))
@@ -97,7 +96,7 @@
                  (go >m ([short (scan-v (rdf full) pubT short)] . acc))))
           (go (sort (vfiles unimath ())) ()))
    ; the preamble ctors and notations that are names in uu.l's object language
-   _ (map (x \ (nom x @ nm (peep pubT nm 0 ? 0 (pin pubT nm "Foundations/Preamble.v"))))
+   _ (map (x \ nom x @ nm (peep pubT nm 0 ? 0 (pin pubT nm "Foundations/Preamble.v")))
           '("tpair" "pr1" "pr2" "idpath" "ii1" "ii2" "tt" "succ"
             "total2" "paths" "coprod" "nat" "bool" "unit" "empty" "UU"))
 
@@ -107,9 +106,7 @@
    matched (filter (s \ !(uu-loc? s) && peep pubT (nom s) 0) names)
    impostors (filter (s \ !(uu-loc? s) && !(peep pubT (nom s) 0)) names)
 
-   _ (puts $ uul + ": " + show #names + " names = " + show #matched
-             + " published + " + show #local + " uu-local + "
-             + show #impostors + " impostors\n")
+   _ (puts "\(uul): \(#names) names = \(#matched) published + \(#local) uu-local + \(#impostors) impostors\n")
    ; coverage per file: counts over matched (dups counted), first-seen order, then sorted
    cov (: (go m acc)
            (atom? m ? acc
@@ -119,11 +116,11 @@
                            (acc + [[f 1]])))))
           (go matched ()))
    _ (map (p \ (: f <p c <>p t (assoc f tot)
-                  (puts $ "  " + pad3 c + "/" + pad3 (two? t ? <>t "?") + " " + f + "\n")))
+                (puts "  \(pad3 c)/\(pad3 (two? t ? <>t "?")) \(f)\n")))
           (foldl (\ a p (ins p a)) () cov))
    _ (two? impostors ?
         (puts "IMPOSTORS (unpublished names without uu- prefix):\n",
-         map (x \ puts ("  " + x + "\n")) impostors,
+         map (x \ puts "  \(x)\n") impostors,
          quit 1)
         (puts "parity audit clean: every unprefixed name is published UniMath\n", 0))
    0)

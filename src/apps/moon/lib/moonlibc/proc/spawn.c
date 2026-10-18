@@ -2,10 +2,7 @@
 #include <spawn.h>
 #include <sys/wait.h>
 
-/* posix_spawn. inle has a call for it, as a kernel with no fork must: the file, argv and
- * environment as NUL-ended words, and the actions as (op fd src) triples it applies to the
- * child's copy of our fds. an open is ours to make, close-on-exec, and dup2'd there. any
- * other kernel answers ENOSYS, and a fork and an exec do it, an action failing as a 127 */
+/* inle has a spawn call, taking (op fd src) triples; elsewhere it is fork and exec */
 
 int posix_spawn_file_actions_init(posix_spawn_file_actions_t *fa) {
   *fa = (posix_spawn_file_actions_t) {0};
@@ -47,7 +44,7 @@ int posix_spawnattr_getsigdefault(posix_spawnattr_t const *at, sigset_t *s) { *s
 int posix_spawnattr_setsigmask(posix_spawnattr_t *at, sigset_t const *s) { at->mask = *s; return 0; }
 int posix_spawnattr_getsigmask(posix_spawnattr_t const *at, sigset_t *s) { *s = at->mask; return 0; }
 
-static size_t sp_words(char *b, char *const *v) {   /* each word and its NUL, laid at b if b */
+static size_t sp_words(char *b, char *const *v) {   /* laid at b if b */
   size_t n = 0;
   for (; v && *v; v++) {
     size_t k = strlen(*v) + 1;
@@ -55,7 +52,6 @@ static size_t sp_words(char *b, char *const *v) {   /* each word and its NUL, la
     n += k; }
   return n; }
 
-/* inle's call -> the pid, or -errno; -ENOSYS where the kernel has none */
 static long sp_inle(char const *f, posix_spawn_file_actions_t const *fa,
                     char *const *av, char *const *ev) {
   int n = fa ? fa->n : 0, opened = 0;

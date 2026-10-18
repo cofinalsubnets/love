@@ -1,8 +1,7 @@
 #include <sys/sysctl.h>
 #include "../impl.h"
 
-/* the BSD door (__sysctl is 202 on both); on a linux kernel the name has no
- * meaning and answers ENOSYS -- the callers all guard on the OS. */
+/* the BSDs only */
 int sysctl(int const *name, unsigned int namelen, void *oldp, size_t *oldlenp,
            void const *newp, size_t newlen) {
   if (__love_osv < 2) { __errno_v = ENOSYS; return -1; }

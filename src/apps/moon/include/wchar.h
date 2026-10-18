@@ -1,9 +1,7 @@
 #ifndef _LOVE_WCHAR_H
 #define _LOVE_WCHAR_H
 #include <stddef.h>
-/* C11 7.29: the types and limits, and the restartable conversions of the C locale -- plain
-   ascii, as glibc's is: a byte or a character past 0x7f is EILSEQ. no wide strings or wide
-   streams beyond these. */
+/* the c locale's restartable conversions only: ascii, a byte past 0x7f is EILSEQ */
 typedef unsigned int wint_t;
 typedef struct { int count; unsigned value; } mbstate_t;
 #define WEOF      ((wint_t) 0xffffffffu)

@@ -2,21 +2,9 @@
 #include <regex.h>
 #include "../ctype/ucd.h"
 
-/* ---- regcomp, regexec, regerror, regfree: posix regular expressions, as glibc reads them ----
- * a pattern parses to a tree, the tree compiles to a program, and the program runs as a
- * backtracking search for the leftmost-longest match -- every path from a start, the longest
- * end kept, its groups those of the first path (greedy first) to reach it. BRE and ERE, glibc's
- * gnu escapes (\w \W \s \S \b \B \< \> \` \'), back-references in both. without
- * back-references a (pc, pos) is walked once per regexec: what can be reached from it does not
- * depend on how it was reached, and a start that failed reached nothing -- so the search is
- * O(program x text). a back-reference makes the reach depend on the groups, and the search
- * walks it whole. a mid-branch ^ also answers just past a newline the match consumed, and a
- * mid-branch $ just before one the match goes on to consume -- glibc's reading.
- * under a UTF-8 LC_CTYPE at regcomp, pattern and text read by character, as love's re does:
- * a literal, `.`, a bracket and \w \s take a whole one and never a byte no character wears,
- * which matches only itself; classes and -i past ascii are the unicode floor's, -i gnulib's
- * case_folded_counterparts; REG_UTF8 reads so whatever the locale. REG_GREP reads gnu grep's dialect, where posix refuses: a repeat
- * with nothing to repeat is skipped (ERE) or ink (BRE), and a brace that opens no interval is ink. */
+/* posix regex as glibc reads it: a backtracking leftmost-longest search, groups from the first path
+ * to the longest end; without back-references each (pc, pos) is walked once, O(program x text).
+ * a UTF-8 LC_CTYPE or REG_UTF8 reads by character; REG_GREP takes gnu grep's leniencies */
 
 enum { N_CHAR, N_ANY, N_SET, N_BOL, N_EOL, N_ASSERT, N_CAT, N_ALT, N_REP, N_GROUP, N_BREF, N_EMPTY };
 enum { A_WORDB, A_NWORDB, A_WBEG, A_WEND, A_BUFBEG, A_BUFEND };
@@ -24,7 +12,7 @@ enum { O_CHAR, O_ANY, O_SET, O_BOL, O_EOL, O_ASSERT, O_SPLIT, O_JMP, O_SAVE, O_B
 #define REP_INF (-1)
 #define DUP_MAX 0x7fff
 #define PROG_MAX (1 << 16)
-#define RE_DEEP 256                     /* groups nested past this are refused, as pcre's limit */
+#define RE_DEEP 256                     /* groups nested past this are refused, as pcre */
 #define GEN_DEEP 1024                   /* groups and repeats nested in the tree past this */
 
 /* a set: a bitmap of bytes -- in utf-8 mode ascii's only -- and past it the code-point ranges
@@ -34,7 +22,7 @@ typedef struct node { int t, c, n, min, max; struct node *a, *b; rset *set; } no
 typedef struct { int op, x, y; rset *set; } ins;
 /* the program, one block that holds no pointer: this, then its np ins, nsets sets and their
  * ranges -- an O_SET's x is its set, a set's cr where its ranges start */
-typedef struct { int np, nsets, nregs, bref, flags, u8, lead; size_t nsub; } prog;   /* lead: lead() */
+typedef struct { int np, nsets, nregs, bref, flags, u8, lead; size_t nsub; } prog;
 #define INS(g) ((ins const *) ((g) + 1))
 #define SETS(g) ((rset const *) (INS(g) + (g)->np))
 #define RANGES(g) ((uint32_t const *) (SETS(g) + (g)->nsets))
@@ -74,9 +62,8 @@ static void setc(parser *P, rset *s, int c) {
   setb(s, c);
   if (P->icase) { setb(s, tolower(c)); setb(s, toupper(c)); } }
 
-/* ---- utf-8 mode's characters ---- */
-/* gnulib's case_folded_counterparts, as love's cpfold: c's uppercase, that one's lowercase if
- * it comes back, and the lowercase letters with no way back that share c's uppercase */
+/* gnulib's case_folded_counterparts: c's uppercase, its lowercase if it maps back, and the
+ * one-way lowercase letters sharing c's uppercase */
 static uint32_t const lone[] = {181, 305, 383, 453, 456, 459, 498, 837, 962, 976, 977, 981, 982,
                                 1008, 1009, 1010, 1013, 7835, 8126};
 static uint32_t up(uint32_t c) { return c < 128 ? (uint32_t) toupper((int) c) : __ucd_map(1, c); }
@@ -281,9 +268,8 @@ static node *atom(parser *P, int depth, int *anchor) {
   if (c == '[') return bracket(P);
   return lit(P, c); }
 
-/* under REG_GREP, an ERE repeat with nothing to repeat -- at a branch's start or after an
- * anchor -- is passed over, a whole interval with it, as gnu grep picks its lines; a brace that
- * opens none is ink, and a group closing on a skip is unmatched */
+/* REG_GREP: an ERE repeat with nothing to repeat is skipped, as gnu grep; a brace that opens
+ * no interval is a literal */
 static int skip(parser *P, int depth) {
   int c = (unsigned char) *P->s, mn, mx;
   if (!P->grep || !(c == '*' || c == '+' || c == '?' || c == '{')) return 0;
@@ -363,7 +349,6 @@ static node *alt(parser *P, int depth) {
   if (!P->err && !depth && *P->s) P->err = P->ext ? REG_ERPAREN : REG_EPAREN;
   return a; }
 
-/* ---- the program ---- */
 typedef struct { ins *p; int np, cp, nregs, err, deep; } emitter;
 
 static int emit(emitter *E, int op, int x, int y, unsigned char *set) {
@@ -491,7 +476,6 @@ int regcomp(regex_t *re, char const *pat, int flags) {
 
 void regfree(regex_t *re) { free(re->re_prog); re->re_prog = 0; }
 
-/* ---- the search ---- */
 typedef struct { int kind, a, b; } frame;      /* kind 0: branch (pc a, pos b); 1: restore slot a to b */
 typedef struct {
   prog const *g; char const *s; int n, base, eflags, *slot, nslot;
@@ -511,8 +495,7 @@ static int push(run *R, int k, int a, int b) {
 static int chat(run *R, int i, int *n) {
   if (!R->g->u8) { *n = 1; return (unsigned char) R->s[i]; }
   return u8at(R->s + i, (size_t) (R->n - i), n); }
-/* is the character at i a word's -- before i when back: _ or alnum. a byte no character
- * wears reads as the latin-1 character of its value, as glibc's regex reads it */
+/* is the character at i (before i when back) _ or alnum; a stray byte reads as latin-1, as glibc */
 static int wordc(run *R, int i, int back) {
   if (back ? i <= 0 : i >= R->n) return 0;
   int j = back ? i - 1 : i, n, c;
@@ -601,7 +584,7 @@ static int search(run *R, int at) {
 int regexec(regex_t const *re, char const *str, size_t nm, regmatch_t *pm, int eflags) {
   prog const *g = re->re_prog;
   if (!g) return REG_BADPAT;
-  int off = 0, n;   /* REG_STARTEND as glibc reads it: the search starts at rm_so, ^ and \b look behind it */
+  int off = 0, n;   /* REG_STARTEND as glibc: start at rm_so, ^ and \b look behind it */
   if ((eflags & REG_STARTEND) && pm) { off = pm[0].rm_so; n = pm[0].rm_eo; }
   else n = (int) strlen(str);
   if (g->lead >= 0 && !memchr(str + off, g->lead, (size_t) (n - off))) return REG_NOMATCH;

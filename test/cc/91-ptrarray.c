@@ -1,9 +1,5 @@
-/* pointer to array -- a parenthesized declarator (*p) with a trailing array
-   suffix: int (*p)[3] is a pointer to array[3] of int, distinct from int *p[3]
-   (an array of pointers). (*p)[i] derefs to the array then indexes; p+1 strides
-   by the whole array; &a of an array yields the pointer-to-array. also the
-   array-of-pointer-to-array form int (*q[2])[3]. exit agrees with gcc only if
-   the declarator types, the deref, and the pointer stride all match. */
+/* pointer to array: int (*p)[3] vs int *p[3]; (*p)[i], p+1 striding the whole
+   array, &a of an array, and int (*q[2])[3]. */
 int g2[2][3] = { {1,2,3}, {4,5,6} };
 
 int firstrow(int (*p)[3]) { return (*p)[0] + (*p)[1] + (*p)[2]; }   /* param ptr-to-array */

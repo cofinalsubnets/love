@@ -1,9 +1,4 @@
-; --- test/letrec.l: the letrec capture laws under a shadowing binder ----------------------
-; both letrecs load a sibling lambda's captures by NAME at each reference site and
-; propagate them by name across siblings, so a lambda binder that shadows a name free in
-; a sibling def used to hand the site its own value. both compilers now mint such a
-; binder before analysis -- ev.l's cplam and c0_lambda hold the same law -- and every
-; shape here answered wrongly without it, under either.
+; --- letrec captures under a shadowing binder: captures go by name, so a shadowing binder is minted first ---
 (test
     ; a sibling's param shadows the name a later sibling captures; reads and calls both ways
     (5 = ((a \ (: (h a) (go a) (go b) (b * a) (h 5))) 1))
@@ -29,23 +24,20 @@
     ('(10 10) = ((a \ (: (h a) (go a) (go b) (b * a) [(h 5) (go 5)])) 2))
     ; a lambda in the let body shadowing the capture
     ('(5 6) = ((a \ (: (go b) (b * a) (map (a \ go a) [5 6]))) 1))
-    ; the shapes that were already right, held right: an inner : VALUE shadow (cells are
-    ; by location), a sibling reading the let's own value name, and a shadowed let name
+    ; an inner : value shadow, a sibling reading the let's own value name, a shadowed let name
     (2 = ((a \ (: go (b \ b + a) (: a 9 (go 1)))) 1))
     (11 = ((a \ (: v (a + 1) go (b \ b + v) h (v \ go v) (h 9))) 1))
     (4 = ((a \ (: (f y) (y * 2) g (f \ f 3) (g (z \ z + a)))) 1))
-    ; the let* law shy's cluster rename must keep: a pre-pin read sees the outer
+    ; let*: a pre-pin read sees the outer
     (43 = ((p \ (: p (p + 1) p)) 42))
-    ; a sugared head's param shadowing a value sibling of the SAME `:`, both orders,
-    ; and the explicit-lambda spelling it must agree with
+    ; a sugared head's param shadowing a value sibling of the same `:`, both orders, and the lambda spelling
     (3 = (: (x f) f  f 2  (x 3)))
     (7 = (: (x f y) (f + y)  f 2  (x 3 4)))
     (3 = (: f 2  (x f) f  (x 3)))
     (3 = (: x (f \ f)  f 2  (x 3)))
     (11 = (: f 2  (g f) (f + 1)  (g 10))))
 
-; a sibling that calls the one before it twice, fourteen deep: cprop inlines each whole into
-; the next, so a fuel spent per path alone lays 2^14 copies. the form's node budget holds it
+; each sibling calls the one before twice, fourteen deep: the node budget keeps inlining from laying 2^14 copies
 (: (lr-hn i) (name ("h" + show i))
    (lr-defs i) (? (i < 1) ['(h0 x) '(x + 1)]
                   (lr-defs (i - 1) + [[(lr-hn i) 'x] [(lr-hn (i - 1)) [(lr-hn (i - 1)) 'x]]]))

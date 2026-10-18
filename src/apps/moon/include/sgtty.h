@@ -1,16 +1,14 @@
 #ifndef _LOVE_SGTTY_H
 #define _LOVE_SGTTY_H
-/* freestanding sgtty.h for cc: the old BSD v7 terminal interface. modern code
- * only reaches it through legacy guards; provide the struct + the classic
- * ioctls so a HAVE_SGTTY_H build type-checks without the glibc header. */
+/* the v7 terminal interface, enough for a HAVE_SGTTY_H build to type-check */
 #include <sys/ioctl.h>
 
 struct sgttyb {
-	char  sg_ispeed; /* input speed */
-	char  sg_ospeed; /* output speed */
-	char  sg_erase;  /* erase character */
-	char  sg_kill;   /* kill character */
-	short sg_flags;  /* mode flags */
+	char  sg_ispeed;
+	char  sg_ospeed;
+	char  sg_erase;
+	char  sg_kill;
+	short sg_flags;
 };
 
 #define TIOCGETP _IOR('t',  8, struct sgttyb)

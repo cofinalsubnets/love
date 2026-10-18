@@ -183,9 +183,12 @@ static struct g *argv_marshal(struct g *g, char ***cavp) {
 // in every child between fork and exec -- or ^C could never kill what it launches.
 // SIGPIPE rides this too: love ignores it, but a child that inherits the ignore is a
 // `yes | head` that never stops. main.c's two exec sites reset it by hand.
-static void sig_dfl_job(void) {
+// what the shell asked to stay ignored (trap '', g->child_ign) goes back on after, as POSIX
+// has an ignore ride into what a shell starts
+static void sig_dfl_job(uint64_t ign) {
  signal(SIGINT, SIG_DFL); signal(SIGQUIT, SIG_DFL); signal(SIGPIPE, SIG_DFL);
  signal(SIGTSTP, SIG_DFL); signal(SIGTTIN, SIG_DFL); signal(SIGTTOU, SIG_DFL);
+ for (int s = 1; s < 64; s++) if (ign >> s & 1) signal(s, SIG_IGN);
  // ..and the mask, which sigaction does not touch and exec does not clear: a signal a
  // shell blocks to watch it (sigfd) is inherited through the exec, leaving the child
  // deaf to ^C. every exec-bound child here leaves through this one door.
@@ -206,6 +209,16 @@ love_noinline static word host_sigclear(struct g *g) {
  sigset_t none; sigemptyset(&none);
  return sigprocmask(SIG_SETMASK, &none, NULL) ? love_err(g, errno) : ZeroPoint; }
 static lvm(lvm_sigclear) { Sp[0] = host_sigclear(g); love_musttail return Next(1); }
+
+// (childign sigs) -> () -- the signals a spawned child keeps ignored, a list of numbers;
+// every other one the child side resets. a shell's trap '' sets it
+static lvm(lvm_childign) {
+ uint64_t m = 0;
+ for (word l = Sp[0]; chainp(l); l = B(l))
+  if (charmp(A(l)) && getcharm(A(l)) > 0 && getcharm(A(l)) < 64) m |= (uint64_t) 1 << getcharm(A(l));
+ g->child_ign = m;
+ Sp[0] = ZeroPoint;
+ love_musttail return Next(1); }
 
 // (spawn argv) -> the child pid, or the failure's nom, told apart by kind. fork + execvp;
 // the parent returns at once, unlike run (waits + captures) and exec (replaces in place).
@@ -361,7 +374,7 @@ love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err
   for (word p = closes; chainp(p); p = B(p)) {
    intptr_t fd = getcharm(A(p));
    if (fd > 2) close((int) fd); }
-  sig_dfl_job();                                // undo the shell's ignores (TTOU too)
+  sig_dfl_job(g->child_ign);                    // undo the shell's ignores (TTOU too)
   execvp(argv_file(cav), cav);
   _exit(127); }                                 // seen by the next glean
  if (pg >= 0) setpgid(pid, (pid_t) (pg ? pg : pid));   // parent side too: no race window
@@ -556,9 +569,16 @@ static lvm(lvm_cwd) {
 // (selfpath _) -> the path of the running binary, or () where the seat cannot say.
 // no argv[0] fallback: a bare `cmdline` read from baked code folds to the bake's line,
 // and the callers here are baked, so the operand would arrive already wrong.
+#if defined(__moonlibc__)
+unsigned long __love_selfpath(char *b, unsigned long n);   // moonlibc's: macos's proc_info
+#endif
 love_noinline size_t host_selfpath(char *b, size_t n) {
- // a runtime ladder, one binary meeting more than one kernel: linux's link, netbsd's
- // spelling of it, then freebsd's sysctl door -- each try answers only on its kernel.
+ // a runtime ladder, one binary meeting more than one kernel: macos's proc_info, linux's
+ // link, netbsd's spelling of it, then freebsd's sysctl door -- each answers only on its kernel.
+#if defined(__moonlibc__)
+ size_t k = __love_selfpath(b, n);
+ if (k) return k;
+#endif
  ssize_t r = readlink("/proc/self/exe", b, n - 1);
  if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
  if (r > 0) {
@@ -1177,6 +1197,7 @@ LvDef("glean", reapany, 1, NULL);
 LvDef("sigfd", sigfd, 1, "posix");
 LvDef("sigtake", sigtake, 1, "posix");
 LvDef("sigclear", sigclear, 1, "posix");
+LvDef("childign", childign, 1, "posix");
 LvDef("sigign?", sigignp, 1, "posix");
 LvDef("wait", waitpid, 1, NULL);
 LvDef("chdir", chdir, 1, "posix");
@@ -1468,7 +1489,7 @@ love_noinline static struct g *host_tether(struct g *g, int envat) {
  if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return push(g, 1, love_err(g, e)); }
  if (!pid) {                                       // child
   close(mfd); close(ep[0]);
-  sig_dfl_job();                                  // the ignores must not ride the exec
+  sig_dfl_job(g->child_ign);                      // the ignores must not ride the exec
   int e;
   if (setsid() < 0) { e = errno; goto childfail; }
   int sfd = open(sname, O_RDWR);                  // opening a tty in a fresh session claims it as ctty

@@ -1,18 +1,21 @@
 #ifndef _LOVE_SYS_EVENT_H
 #define _LOVE_SYS_EVENT_H
-/* kqueue, the BSD door (linux answers ENOSYS; signalfd is the twin there).
- * the canonical face is freebsd's (struct + the negative filters); netbsd's
- * 40-byte record and positive filters translate in the member. EVFILT_SIGNAL
- * idents speak CANONICAL signal numbers both ways (SIGCHLD is 17 here, never
- * the kernel's 20) -- the one filter whose ident the permutation rides. */
+/* kqueue, bsd only: freebsd's shape, netbsd's translated. EVFILT_SIGNAL idents are
+ * canonical signal numbers (SIGCHLD 17, never the kernel's 20) */
 struct kevent {
   unsigned long ident;
   short filter;
   unsigned short flags;
   unsigned int fflags;
+#ifdef __ILP32__
+  long long data;                     /* freebsd's int64_t and uint64_t, on every arch */
+  void *udata;
+  unsigned long long ext[4];
+#else
   long data;
   void *udata;
   unsigned long ext[4];
+#endif
 };
 #define EVFILT_READ    (-1)
 #define EVFILT_WRITE   (-2)

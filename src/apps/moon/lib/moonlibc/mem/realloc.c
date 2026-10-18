@@ -1,9 +1,8 @@
 #include "../impl.h"
 #include <sys/mman.h>
 
-/* grows in place where it can: an arena block into the free block after it, a mapping of
-   its own through mremap (linux's; elsewhere ENOSYS, and the copy below). a slot past its
-   class, or an aligned pointer, copies */
+/* grows in place where it can: an arena block into its free neighbour, a mapping by
+ * mremap (linux only); anything else copies */
 void *realloc(void *p, size_t n) {
   if (!p) return malloc(n);
   if (n == 0) { free(p); return 0; }

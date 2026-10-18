@@ -33,7 +33,7 @@
        old (box 'lastr)                           ; [geo key rows status]
        same? (two? old && key != () && <>old = key)
        at? (two? old && <old = geo)
-       (place i ln) (e + "[" + show (i + 1) + ";1H" + ln + e + "[K")
+       (place i ln) "\(e)[\(i + 1);1H\(ln)\(e)[K"
        (dif a b i acc)
         (atom? b ? acc
            (dif (two? a ? >a ()) >b (i + 1)
@@ -44,6 +44,5 @@
                    (e + "[H" + go rows "")))
        stat2 (at? && <>>>old = stat ? "" (place (h - 1) stat))
        (pin box 'lastr [geo key rows stat],
-        e + "[?2026h" + body + stat2
-          + e + "[" + show cr + ";" + show cc + "H" + e + "[?2026l")))
+        "\(e)[?2026h\(body)\(stat2)\(e)[\(cr);\(cc)H\(e)[?2026l")))
 ) ; module tui

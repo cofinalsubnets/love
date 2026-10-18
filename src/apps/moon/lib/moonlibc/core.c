@@ -1,96 +1,20 @@
-/* src/apps/moon/lib/moonlibc/core.c -- the floor every link takes: the syscall table
- * and its wrappers, errno, mem/string, malloc, env, stdio, exit and the entry.
- * The optional areas are members beside this one; see impl.h. */
+/* moonlibc's floor: the entry, auxv, -pie relocation, errno, stdio handles */
 #include "impl.h"
 
 char **environ;
 static long *__auxv;
 
-/* ---- errno: one int (love is single-threaded), kernel -errno unwrapped ---- */
-int __errno_v;
+int __errno_v;   /* one int: love is single-threaded */
 int *__errno_location(void) { return &__errno_v; }
 
-/* the classic table (errno 1..34), the range real packages print; past it the
- * number speaks for itself. the texts are the canonical POSIX ones -- m4's
- * check suite string-compares "No such file or directory". */
-/* rand/random: one 64-bit LCG (Knuth's MMIX multiplier), read off the high bits
- * where an LCG's period per bit is longest. rand takes 15, random 31. */
+typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in 16-byte units */
 
+char const *__love_progname = "";   /* argv[0], for gnulib's progname */
 
-
-/* ---- exit: the atexit chain, the stdio flush, then exit_group ---- */
-
-
-/* ---- malloc (mem/free.c): small blocks are slots of a size class in 64 KiB slabs,
- * the rest come off a coalescing free list over 1 MiB mmap arenas, and a block past
- * 128 KiB gets a mapping of its own. 16-byte units and alignment. ---- */
-typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in units */
-
-/* alloca: no native / __builtin form, so malloc backs it and stack depth
- * reclaims it. both arches grow DOWN, so a frame that has returned sits at a
- * HIGHER address than the current probe; on each call we free every block
- * whose mark sits BELOW `here` (its frame unwound past). blocks from the same
- * or an ancestor frame (mark >= here) stay. leak-free without a
- * stack-direction probe. */
-/* argv[0], stashed by __love_start below -- gnulib's progname module reaches for
- * this and would otherwise die at the link */
-char const *__love_progname = "";
-
-
-/* ---- stdio: FILE is a fd plus (for write streams) a flush buffer. stdout is
- * the one hot stream -- love's fd_putc sends EVERY output byte through fputc, so
- * it buffers 8KB (line-flushed on a tty, glibc's shape); stderr never buffers;
- * fopen'd streams buffer 4KB. reads are unbuffered (image.c freads whole
- * files), which keeps fseek/ftell honest as plain lseek. ---- */
 FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
 
-
-/* the conversion flags, gathered off the % once so neither field function
- * takes a parameter per flag. */
-/* ---- the exact decimal of a double --------------------------------------
- *
- * a double is m * 2^e with m a 53-bit INTEGER, so its decimal form is finite:
- * at most 309 digits before the point and 1074 after. bd[] holds every one of
- * them, nine to a limb in base 1e9, reached by doubling or halving the
- * mantissa -- so rounding and emission read EXACT digits and the answer is
- * byte-equal to glibc, which is what test_libc compares.
- *
- * the lane this replaced turned digits out of the double itself, normalising
- * by repeated `/= 10`. that spends a rounding per decade, and the error lands
- * exactly where a long precision asks to read: %.17g of 1e300 came back wrong
- * from its 16th digit, %.20f of 0.1 answered twenty zeros where the value
- * carries ...00555, and a TIE could not be broken at all -- the residue that
- * decides it had already been rounded away, so %.0f of 2.5 said 3 where every
- * conforming printf says 2. an approximate converter cannot be gated against
- * an exact one; that is the whole reason this is a bignum and not a patch.
- */
-
-
-
-
-/* ---- signals: glibc's 152-byte sigaction folded onto the kernel's 32-byte
- * one. BOTH arches carry the restorer slot (a64 is the odd asm-generic
- * arch that kept SA_RESTORER in its uapi) -- but only x86-64 needs it filled
- * (sys.o's __love_sigret); a64 leaves flag+slot zero and the kernel lays
- * its vdso return trampoline. ---- */
-
-
-
-/* ---- dirent over getdents64: the kernel record IS our struct dirent ---- */
-
-
-/* its sibling, added for connect's handshake park: SO_ERROR after POLLOUT is the
-   one way to tell a completed connect from a refused one, and love has no other
-   door to it. sys/socket.h has always declared it. */
-
-/* ---- the load bias: 0 for a fixed-base ET_EXEC, the ASLR slide for a -pie
- * ET_DYN. AT_PHDR is the runtime address of the program headers, which sit at
- * file offset 64 inside the p_offset==0 PT_LOAD, so bias = AT_PHDR - 64 - that
- * segment's link-time p_vaddr (0x400000 for EXEC -> 0; 0 for PIE -> the slide). ---- */
-/* a_type reads through its LOW WORD everywhere: netbsd's AuxInfo is
- * {u32 type, pad, u64 value} and the kernel leaves the pad unzeroed, so a
- * long-wide read sees garbage -- and linux's u64 types all fit 32 bits, so
- * one narrow read serves every kernel (the AT_NULL stop included). */
+/* load bias: AT_PHDR - 64 - the p_offset==0 PT_LOAD's p_vaddr; 0 for ET_EXEC, the slide for -pie.
+ * a_type reads its low word: netbsd's AuxInfo is {u32 type, pad, u64} with the pad unzeroed */
 static unsigned long __love_bias(void) {
   unsigned long phdr = 0; ElfW(Half) phnum = 0;
   for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
@@ -103,30 +27,23 @@ static unsigned long __love_bias(void) {
       return phdr - sizeof(ElfW(Ehdr)) - (unsigned long) ph[i].p_vaddr;
   return 0; }
 
-/* ---- -pie self-relocation. The linker (src/love/holo/link.l) laid the exe at base 0
- * and left every abs64 data pointer holding its base-0 offset, plus a table of
- * those sites bracketed by __start_/__stop_love_rela. Add the real load base to each
- * -- the whole of static-PIE relocation, no dynamic loader. Must run before any
- * such pointer is dereferenced (top of __love_start). An ET_EXEC binary links an
- * EMPTY table (start == stop), so this is a no-op there. ---- */
+/* -pie: the linker leaves each abs64 data pointer at its base-0 offset, its sites listed
+ * in love_rela; add the bias to each. ET_EXEC links an empty table */
 extern long __start_love_rela[], __stop_love_rela[];
 static void __love_reloc(void) {
   unsigned long bias = __love_bias();
   for (long *p = __start_love_rela; p < __stop_love_rela; p++)
     *(unsigned long *) (bias + (unsigned long) *p) += bias; }
 
-/* ---- getauxval: the kernel's word for a type, 0 where it laid none ---- */
 unsigned long getauxval(unsigned long t) {
-  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2)      /* low word: __love_bias's rule */
+  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2)
     if ((unsigned int) a[0] == t) return (unsigned long) a[1];
   return 0; }
 
-/* ---- dl_iterate_phdr off the auxv (AT_PHDR/AT_PHNUM): one callback covers "the
- * main program", carrying the real load bias so image.c's bake walk bounds the
- * in-binary pointers correctly under -pie (0 for a fixed-base ET_EXEC). ---- */
+/* one callback, for the main program, carrying the load bias */
 int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), void *data) {
   unsigned long phdr = 0, phnum = 0;
-  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {   /* low word: __love_bias's rule */
+  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
     if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
     if ((unsigned int) a[0] == 5) phnum = (unsigned long) a[1]; }   /* AT_PHNUM */
   if (!phdr) return 0;
@@ -138,23 +55,18 @@ int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), voi
   in.dlpi_phnum = (ElfW(Half)) phnum;
   return cb(&in, sizeof in, data); }
 
-/* ---- the entry: crt0 hands us the arg vector base (argc at [sp]); unpack
- * argv/envp/auxv, arm stdio, run main, exit with its answer. this STRONG
- * definition overrides crt0's weak call-main tail (the linker's weak machinery
- * is the whole switch -- no flags anywhere). crt0's second word is what its
- * own entry test learned about the kernel, 0 where it learned nothing: the
- * aarch64 probe may not run blind (see __love_osdetect), so there the freebsd
- * side answers 2 and only linux and netbsd are left to ask. ---- */
+/* overrides crt0's weak call-main tail. sp is the arg vector (argc at [0]);
+ * osv is crt0's kernel guess, 0 where it has none */
 void __love_start(long *sp, long osv) {
-  __love_osv = osv ? osv : __love_osdetect();   /* which kernel: crt0's answer where it has one, else ask */
+  __love_osv = osv ? osv : __love_osdetect();
   long argc = sp[0];
   char **argv = (char **) (sp + 1);
   char **e = argv + argc + 1;
-  if (argc > 0 && argv[0]) __love_progname = argv[0];   /* getprogname's answer */
+  if (argc > 0 && argv[0]) __love_progname = argv[0];
   environ = e;
   while (*e) e++;
-  __auxv = (long *) (e + 1);
-  __love_reloc();                 /* -pie: slide abs64 data pointers before any is used (no-op for ET_EXEC) */
+  __auxv = osv == 4 ? 0 : (long *) (e + 1);   /* macos lays its apple strings there */
+  __love_reloc();   /* before any data pointer is read */
   stdout->fd = 1;
   stdout->wr = 1;
   stdout->buf = __obuf;

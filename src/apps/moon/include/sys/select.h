@@ -2,8 +2,7 @@
 #define _LOVE_SYS_SELECT_H
 #include <sys/types.h>
 #include <sys/time.h>
-/* glibc's layout exactly: 1024 bits as 16 longs, so a set built here is the one
- * the kernel reads and a mooncc object interoperates with a glibc-built one. */
+/* glibc's layout: 1024 bits as 16 longs, as the kernel reads it */
 #define FD_SETSIZE 1024
 #define __NFDBITS (8 * (int) sizeof(unsigned long))
 typedef struct { unsigned long fds_bits[FD_SETSIZE / (8 * sizeof(unsigned long))]; } fd_set;

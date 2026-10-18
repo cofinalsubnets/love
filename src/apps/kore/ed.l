@@ -1,25 +1,9 @@
-; src/apps/kore/ed.l -- ed and ex, the line editors: one buffer, two dialects over it. a
-; toolbox file, no seat -- kore is its door; loads after re.l and sed.l (usubn).
-;
-;   ed [-s] [-p PROMPT] [FILE]
-;   ex [-s] [-R] [-v] [-c CMD | +CMD] [FILE]
-;
-; the addresses are POSIX's in both: N . $ 'x /re/ ?re? with + - ^ offsets (a bare
-; number after an address adds too), joined by , and ; -- either side may be missing:
-; `,` is 1,$ and `;` is .,$, `,N` is 1,N and `N,` is N,N -- and % is 1,$.
-; ed's commands: a c d e E f g G h H i j k l m n p P q Q r s t u v V w W wq z = ! and
-; the bare newline, with the p l n suffixes. an error says `?`, H turns the reason on.
-; s reads & \1..\9, % alone for the last replacement, a backslash-newline to split the
-; line, and the g N p l n flags; a bare s repeats the last, g and p toggling it and r
-; taking the last search's pattern.
-; ex reads the same buffer by word: [range] word[!] [args], any unambiguous head of
-; the word, | between commands (g v and ! take the rest), a count after the word,
-; named registers for d ya pu, set, > < & ~, a range filtered through !cmd, and vi,
-; which hands the buffer to the vi engine and ends with it.
-; stdin not a terminal is a script, and an error in one ends the edit with 1 (POSIX's
-; rule and GNU ed's; vim's ex carries on).
-; out of scope: ^C (it kills, as it does every tool here), ex's file list (next,
-; args), open mode, s's c flag, ed's -x and -r.
+; src/apps/kore/ed.l -- ed and ex, the line editors: one buffer, two dialects over it.
+; loads after re.l and sed.l (usubn). addresses are POSIX's in both; ex reads commands by
+; word (any unambiguous head), | between them, and vi hands the buffer to the vi engine.
+; stdin not a terminal is a script, and an error in one ends the edit with 1, as POSIX and
+; GNU ed have it (vim's ex carries on).
+; out of scope: ^C, ex's file list (next, args), open mode, s's c flag, ed's -x and -r.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -29,13 +13,10 @@
    ex-usage "usage: ex [-s] [-R] [-v] [-c CMD | +CMD] [FILE]"
 
    ; -- the buffer -------------------------------------------------------------------
-   ; the lines are records [id text] laid in chunks, each chunk its count consed onto
-   ; its records: an address walks the counts, and an edit rebuilds the chunks it
-   ; touches and shares the rest, so undo keeps the old chunk list whole. 'n is the
-   ; line count, 'dot the current line (0 before the first). an id outlives
-   ; renumbering, so a mark or a global's hit follows its line and dies with it. every
-   ; change bumps 'gen, which is how undo tells a command that changed the buffer from
-   ; one that did not
+   ; records [id text] laid in chunks, each chunk its count consed onto its records: an edit
+   ; rebuilds the chunks it touches and shares the rest, so undo keeps the old list whole.
+   ; an id outlives renumbering, so a mark or a global's hit follows its line and dies with
+   ; it. every change bumps 'gen, which tells undo whether a command changed the buffer
    (ed-new ex?)
     {'buf () 'n 0 'nid 1 'dot 0 'gen 0 'file "" 'dirty () 'marks {} 'undo () 'undid ()
      'pat () 'spat () 'rep () 'sg () 'snth 1 'err "" 'help () 'prompt "*" 'pon ()
@@ -325,10 +306,9 @@
        (go s))
    (ed-lsrc ls)                                    ; a list read as a source
     ({'l ls} @ b (_ \ (b 'l @ l (two? l ? (pin b 'l >l, <l)))))
-   ; g v G V: mark the lines of a..b that match (or do not), then visit each mark still
-   ; standing, dot on it. cl is the list's text; inter? reads one command per line.
-   ; the hunt for the next mark goes on from the last, and once from the top when it
-   ; runs out -- a command can move a marked line above the one it runs on
+   ; g v G V: mark the matching (or not) lines of a..b, then visit each mark still standing.
+   ; the hunt for the next mark goes on from the last, and once from the top: a command can
+   ; move a marked line above the one it runs on
    (ed-global e a b m inv? cl inter? src)
     (: _ (e 'ing ? (ed-fail "cannot nest global commands") 0)
        marks {}

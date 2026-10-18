@@ -1,9 +1,6 @@
-/* the x86-64 kernel's templates: a basic asm's bare registers (io_delay's `outb %al`), an
- * input tied to an output by name (csum_ipv6_magic's "[sum]"), the ALU over a word in
- * memory (csum_partial's adcq), a symbol's word read by its address (a uniprocessor
- * percpu read), lar over a selector, an "i" only __builtin_constant_p makes constant past
- * an inlined body, an __int128 passed and taken in registers and swapped by cmpxchg16b (slub's
- * freelist), and a file-scope asm that names registers bare. held to gcc. */
+/* x64 templates: bare registers in a basic asm, a named tied input, alu over memory (adcq), a
+ * symbol's word by address, lar, an "i" made constant past inlining, __int128 in registers and
+ * cmpxchg16b, a file-scope asm naming registers. held to gcc. */
 
 #if defined(__x86_64__)
 static long cur = 41;

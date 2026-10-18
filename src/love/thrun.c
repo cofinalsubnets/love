@@ -124,8 +124,8 @@ static int thr_run(struct thr *t, union u *p, union u *st) {
   if (op == lvm_ret) return t->node = thr_at(t, 0), 1;
   if (op == lvm_argtap) thr_push(t, thr_at(t, getcharm(p[1].x)));
   if (op == lvm_tap || op == lvm_argtap) return t->node = thr_apn(t, 1), 1;
-  if (op == lvm_tapn) return t->node = thr_apn(t, getcharm(p[1].x)), 1;
-  if (op == lvm_ap || op == lvm_apn) {
+  if (op == lvm_tapn || op == lvm_tapo || op == lvm_tpart) return t->node = thr_apn(t, getcharm(p[1].x)), 1;
+  if (op == lvm_ap || op == lvm_apn || op == lvm_apo || op == lvm_part) {
    intptr_t n = op == lvm_ap ? 1 : getcharm(p[1].x);
    word a = thr_apn(t, n);
    thr_drop(t, n + 1), thr_push(t, a), p += op == lvm_ap ? 1 : 2;

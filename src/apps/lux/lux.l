@@ -1,46 +1,18 @@
-; src/apps/lux/lux.l -- the driver: wire the pure core (src/apps/lux/core.l), the layout engine
-; (src/apps/lux/layout.l), the manageHook (src/apps/lux/manage.l), the keymap (src/apps/lux/keys.l), and EWMH
-; (src/apps/lux/ewmh.l) over the X protocol (src/apps/lux/wire.l), configured by src/apps/lux/config.l.
-; Concatenate them:
-;   cat src/apps/lux/{core,layout,wire,ewmh,manage,keys,config,lux}.l | love
-; (against `Xephyr :7 -ac`, or a real server with lux-auth set). Rung 8: the
-; driver reads the config -- border width and colors (focused/normal pixels),
-; workspaces, the layout stack, hooks, keymap, startup spawns -- and runs until
-; the display dies or (quit). The f_t hinge: a float-focused chord moves/
-; resizes the float, a tile-focused one messages the layout / navigates. the
-; sheaf's zipper holds every window on a view, so wsfoc names the focus whatever
-; its kind and no float focus rides beside it; hist is nextMatch's mru focus ring;
-; lays is the layout book, one layout per tag (xmonad's per-workspace layout).
+; lux's driver: core, layout, manage, keys and ewmh over the X wire, read after
+; {core,layout,wire,ewmh,manage,keys,config}.l in that order; runs until the display dies or quit.
+; the sheaf's zipper holds every window on a view, floats too, so wsfoc is the one focus.
+; hist is the mru focus ring; lays is the layout book, one layout per tag.
 
-; --- the lux repl: a unix-socket moor into the running wm (the dock's shape,
-; crew-side; `nc <sock>` is the client). Forms eval in the book, so every
-; global is a verb; the live (sh lays hist) state rides lux-cell -- reads
-; take the snapshot ((lux-st ())), changes queue a state function through
-; (lux! f), and the driver's loop drains the queue at its next X event,
-; guarded: a change must answer a 3-list whose sheaf is wssane? -- the proved
-; invariant, standing as a live seatbelt -- or it is refused and the old
-; state kept. one hand on the wire: the repl never touches any X socket (the
-; the painter's law, absolute); with layout.l's open dispatch lane,
-; (lay! [my-closure state..]) swaps in a layout written at the prompt.
-; The socket is an eval server -- $xdg_runtime_dir (0700) when set, /tmp
-; otherwise (a socket refuses connect without write permission). The socket
-; is also the back door when the chords are dead or an install went in:
-;   echo '(lux-restart ())' | nc -U $xdg_runtime_dir/lux-<n>.sock
-; execs the script in place (same pid; the adoption sweep keeps every
-; window). The live socket is the one that accepts; dead generations'
-; leftovers are swept at moor start (lux-sweep).
+; --- the lux repl: an eval server on a unix socket in $XDG_RUNTIME_DIR (else /tmp).
+; reads take the (sh lays hist) snapshot in lux-cell; changes queue through (lux! f)
+; and the loop applies them, refused unless the answer is a 3-list whose sheaf is
+; wssane?. the repl never touches the X socket. (lux-restart ()) is the back door.
 (borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
 (borrow 'posix)
 (: lux-cell {}
    (lux-st u) (lux-cell 'st)
-   ; a change queues; the driver's loop drains at its next X event. On a live
-   ; desktop that is imminent (any motion, focus or property tick); a headless
-   ; harness nudges with any event of its own (boot/luxui-probe.l sends a
-   ; no-op ClientMessage). Deliberately no wake wire from lux's side: a poke
-   ; connection made Xvfb close-down an innocent client whose id range rode a
-   ; recycled slot (gdb: ospoll_wait -> CloseDownClient -> FreeClientResources
-   ; with the victim's socket provably open) -- one hand on the wire, and the
-   ; wire is the driver's alone.
+   ; a change waits for the loop's next X event; no wake from here, the wire is the
+   ; driver's alone. a headless caller nudges with an event of its own
    (lux! f) (pin lux-cell 'q (f . lux-cell 'q), 'queued)                 ; (a peep+pin pair -- a concurrent drain in the gap can lose
                                                                          ;  a change; prompt-scale odds, and wssane? guards either way)
    ; the book: lays is ((tag lay)..), a tag without an entry on the configured stack
@@ -57,15 +29,10 @@
    (float! w r) (lux! (st \ [(wsdofloat <st w r) <>st (st 2)]))
    (row u) (wsrow <(lux-st ()))
 
-   ; the moor: shore the socket, twirl a session per client -- read every form
-   ; a line completes, eval through the self-hosted ev, show the value back.
-   ; deliberate orphans, like the dock's: lux runs forever.
+   ; a task per client, never caught: lux runs forever
    (lux-rundir u) (getenv "XDG_RUNTIME_DIR" @ rd (1 < #rd ? rd "/tmp"))
    (lux-sock u) (lux-rundir () + "/lux-" + lux-dispnum () + ".sock")
-   ; the sweep: an exec'd restart and a dead Xephyr session both drop their
-   ; moor fd without unlinking, so lux-*.sock files pile up in the rundir.
-   ; probe every sibling: a refused connect is a dead one, unlink it; a live
-   ; other-display lux answers and keeps its socket.
+   ; sockets are never unlinked on exit: a sibling that refuses connect is dead, unlink it
    (lux-sweep own)
     (: dir (lux-rundir ())
        (sockish? n) (n @ ("lux-" + _ + ".sock") 1 0)
@@ -81,27 +48,16 @@
     (? !(two? m) <argv
        (<m = "-l") (two? >m ? <>m <argv)
        (go >m)))
-   ; restart-in-place from the moor -- the door when the chords are dead (a
-   ; wedged driver, an upgraded install): exec drops the cloexec'd sockets,
-   ; the redirect releases, the new generation adopts every window. same pid.
-   ; the exact original argv first (exec is execvp, so `love` re-resolves off
-   ; PATH -- an upgraded binary lands on the first restart, and a dev pile of
-   ; -l modules re-runs whole); the script and the seat itself as fallbacks.
-   ; the argv a restart execs: run as the verb (`love lux`), this very binary as that verb
-   ; again -- PATH may hold another lux, or none -- else the original argv
+   ; restart in place, same pid: the sockets close on exec and the new generation adopts
+   ; every window. as the verb, this very binary again; else the original argv, then fallbacks
    (lux-argv u) (<argv = "lux" ? ((selfpath 0) . argv) argv)
    (lux-restart u) (say out "lux: restart over the moor -- exec\n", flush out,
                     exec (lux-argv ()),
                     exec [(lux-self ())],
                     exec [(selfpath 0) (lux-self ())],
                     'restart-failed)
-   ; the session reads lines (see parks the TASK -- the reader's park law) and
-   ; sounds the TEXT: `sound` walks a charlist, so a socket running dry mid-skip
-   ; cannot strand the whole vm in a C parse the way sounding the fd once did (an
-   ; idle attached client froze the wm between asks; a painter starved on
-   ; exactly this). a torn shape carries to the next line as the residue the
-   ; reader hands back -- not the accumulation re-read from byte zero -- and
-   ; every form on a line runs, where only the first used to.
+   ; read lines (see parks the task) and sound the text, never the fd: a parse must not
+   ; block the wm. a torn form carries to the next line; every form on a line runs
    (lux-session c)
     (: (rdline acc) (see c @ -1 () 10 (rev (10 . acc)) ch (rdline (ch . acc)))
        (go pend) (rdline () @ cl
@@ -129,9 +85,7 @@
                            knock ()))
              (knock ())))))
 
-; a welp-face help so a scare returns a visible value (to the repl client, or
-; at a driver raise site) instead of dropping the wm -- the dock's shape:
-; answer ('scare a b), the only bit a help sees.
+; a scare answers ('scare a b) instead of dropping the wm
 (hear (a \ b \ ['scare a b]))
 
 (: s (x-connect lux-display)
@@ -153,12 +107,9 @@
    _ (x-cursor s root (scr-idbase sc + 1) (scr-idbase sc + 2))                   ; setDefaultCursor xC_left_ptr
    _ (map spawn lux-startup)
 
-   ; --- keyboard: resolve the keymap's keysyms to keycodes, grab every chord.
-   ;     each chord is grabbed once per lock variant (bare, CapsLock=2, Mod2=16,
-   ;     both): a latched lock rides the KeyPress state and an exact-modifier
-   ;     grab misses it -- every binding dead while plain typing sails on
-   ;     (kmodmask already masks the lock bits back out at match time). the
-   ;     table lives in a cell so MappingNotify can re-resolve and regrab. ---
+   ; --- keyboard: each chord grabbed per lock variant (bare, CapsLock=2, Mod2=16, both),
+   ;     or a latched lock kills every binding; kmodmask drops them at match time.
+   ;     the table lives in a cell so MappingNotify can regrab ---
    (keys-resolve u) (x-keymap s (scr-mink sc) (scr-maxk sc) (keys-syms lux-keymap) @ km
                        (filter (r \ <>r > 0)                                   ; rows (lib keycode action); keysym absent -> dropped
                                (map (r \ [(kb-mods r) (peep km (kb-sym r) 0) (kb-act r)]) lux-keymap)))
@@ -181,29 +132,20 @@
    (rescreen sh) (under-pointer (wsrescreen sh (screens ())) @ sh2               ; re-read the screens into the sheaf, saying so when they moved
                     (sh2 = sh ? 0 (line ("lux: screens " + show (wsvis sh2))), sh2))
 
-   ; --- the unmap ledger (xmonad's mapped + waitingUnmap): map!/hide! track our
-   ;     own intent at send time -- mapd holds the windows we have mapped, owed
-   ;     counts the unmap echoes we're owed back. a real UnmapNotify with no
-   ;     echo owed is the client's own unmap: a withdraw, whether or not the
-   ;     ICCCM courtesy synthetic ever comes (a toolkit that skips it still
-   ;     gets evicted instead of a window that can never disappear). ---
+   ; --- the unmap ledger: mapd holds what we mapped, owed counts our own unmap echoes.
+   ;     a real UnmapNotify with none owed is the client's withdraw, synthetic or not ---
    mapd (tablet 8) owed (tablet 8)
    (map! w) (pin mapd w 1, x-map s w, fwin w @ f (f = w ? 0 (x-map s f)))
    (hide! w) (fwin w @ f (f = w ? 0 (x-unmap s f)),
               peep mapd w 0 ? (pin owed w (1 + peep owed w 0)) 0,              ; only a mapped window echoes -- an unmap of the
               pull mapd w 0, x-unmap s w)                                        ; already-hidden fires no event, so no count
 
-   ; --- frames: a managed window rides in a frame of its own size plus the border,
-   ;     the client inside -- a reparenting wm, so a toolkit that assumes one (java's awt)
-   ;     places itself right. the frame takes the client's depth and visual (a
-   ;     compositor reads alpha off the top-level), moves and stacks; override-redirect,
-   ;     so a restart's sweep never adopts a stale one. the border is the frame's own
-   ;     background around the client at (bw bw), never an X border: a border change is
-   ;     a size change, which a compositor that renames its pixmap only on a resize sees.
-   ;     the client is resized only when its size changes and told its root
-   ;     geometry (ICCCM 4.2.3) when the frame moves; an unchanged place sends nothing.
-   ;     a frame record: 'f the frame, 'own its own visual, 'g (x y w h bw) as placed,
-   ;     'bw the border the next move! lays, 'px. a client's parent is its frame ---
+   ; --- frames: reparenting, some toolkits assume it. the frame takes the client's depth
+   ;     and visual (a compositor reads alpha off the top-level) and is override-redirect,
+   ;     so a restart never adopts one. the border is the frame's background, never an X
+   ;     border, so a border change is a resize a compositor sees. a moved frame tells the
+   ;     client its root geometry (ICCCM 4.2.3). record: 'f frame, 'own visual,
+   ;     'g (x y w h bw) as placed, 'bw for the next move!, 'px ---
    frm (tablet 8) fidc {'n 16 'free ()} cmaps (tablet 4)
    (fid u) (fidc 'free @ fr (two? fr ? (pin fidc 'free >fr, <fr)
                                (fidc 'n @ n (pin fidc 'n (n + 1), scr-idbase sc + n))))
@@ -363,12 +305,8 @@
                'swapd (tgt ? (relay (wsmap sh (zswapw fw tgt)) lays) (loop sh lays hist))
                       (relay sh (lays-send lays (wscur sh) (dir @ ('left || 'down) 'shrink 'expand) z))))))
 
-   ; --- pointer drag (xmonad's mouseBindings): the window follows the pointer
-   ;     ('move) or its far corner does ('resize). g0 is the start rect, (rx0 ry0)
-   ;     the start pointer; a release/motion carries the live pointer at bytes
-   ;     20/22. The final rect is recomputed from the release position, so no
-   ;     rect need thread through the loop. Other events are dropped for the
-   ;     drag's duration -- the pointer is grabbed, the user is not spawning. ---
+   ; --- pointer drag: 'move or 'resize from start rect g0 and pointer (rx0 ry0); the
+   ;     live pointer is at bytes 20/22. other events are dropped while the pointer is grabbed ---
    (drag-rect mode g0 rx0 ry0 rx ry)
     (: dx (rx - rx0) dy (ry - ry0)
        (mode @ 'move [(g0 0 + dx) (g0 1 + dy) (g0 2) (g0 3)]
@@ -383,11 +321,8 @@
           (ev-code e = 5) (ev-raw e @ pkt (drag-rect mode g0 rx0 ry0 (u16 pkt 20) (u16 pkt 22)))       ; ButtonRelease: settle
           (drag mode w g0 rx0 ry0)))                                            ; anything else mid-drag: ignore
 
-   ; --- the repl gate: every pass through the loop publishes the snapshot and
-   ;     drains (lux!) changes, each guarded -- a change must answer a 3-list
-   ;     whose sheaf is wssane? (the proved invariant, live) or it is refused
-   ;     and the old state kept. a scare inside a change answers ('scare a b)
-   ;     through the help above -- not a 3-list, so it refuses the same way. ---
+   ; --- the repl gate: publish the snapshot, drain (lux!) changes; a scare's answer is
+   ;     not a 3-list, so it is refused like any other bad change ---
    (loop sh lays hist)
     (: q (pull lux-cell 'q ())
        (? !(two? q) (pin lux-cell 'st [sh lays hist],
@@ -403,11 +338,8 @@
               line ("lux: changed x" + show #q),
               loop2 sh2 lays2 (st 2)))))
 
-   ; --- the event loop: (sheaf, layout, focus-history).
-   ;     the mru param is hist0, the fresh ring hist: a `:` binding shadows a
-   ;     same-named parameter over the whole form (one scope, no escape), so
-   ;     `hist (?  .. hist ..)` read the zero point every pass -- the ring
-   ;     never accumulated. name the parameter apart and the ring lives. ---
+   ; --- the event loop: (sheaf, layout, focus-history). the parameter is hist0 because
+   ;     a `:` binding shadows a same-named parameter over the whole form ---
    (loop2 sh lays hist0)
     (: f (wsfoc sh)                                                              ; the mru rides the focus: floats enter too
        hist (f && f != (two? hist0 ? <hist0 ()) ? (f . znub f hist0) hist0)
@@ -426,8 +358,8 @@
               loop sh lays hist))
           (: code (ev-code e) win (ev-window e)
              (? (code = 20 && wsknownw? sh win)                                ; MapRequest from a window we already manage: ignore it
-                (line ("lux: remap " + show win), loop sh lays hist)          ; (mapping it here would paint it OVER a workspace it
-                (code = 20)                                                      ; isn't on -- the "one window on two workspaces" bug)
+                (line ("lux: remap " + show win), loop sh lays hist)          ; (mapping it here would paint it over a workspace
+                (code = 20)                                                      ; it isn't on)
                                                                                  ; MapRequest: admit tiled, run the manageHook, then place
                 (: st (ewmh-track s win) _ (st ? (line ("lux: strut " + show win)) 0)   ; a dock's strut shrinks the tiling rect
                    sh1 (admit (under-pointer sh) win)                          ; a new window lands where the pointer is
@@ -586,29 +518,15 @@
    (furniture? w) (x-has-atom s w "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP" ||     ; desktops and docks are furniture, never clients
                       x-has-atom s w "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK")
    (ghostly? w) (two? (x-getprop-atoms s w (x-intern s "WM_STATE")))             ; the last generation's stamp: managed then, maybe hidden now
-   ; the race knob, test-only: milliseconds to wait before the sweep reads the
-   ; tree. this sweep is the only adoption path for an already-mapped window --
-   ; no MapRequest ever comes for one -- and it is one-shot, so losing the race
-   ; loses the window for the life of the process. the window is narrower than a
-   ; single added comment line's worth of compile time on a cold boot, which is
-   ; why every in-process instrument hid it and no candidate fix could be tested.
-   ; lux_sweep_delay opens it on demand, so a fix can be measured instead of
-   ; guessed. unset in every normal run, where it costs one getenv.
+   ; LUX_SWEEP_DELAY, test-only: milliseconds to wait before the sweep reads the tree
    sweep-wait (: v (getenv "LUX_SWEEP_DELAY") w (0 < #v ? (gem v) 0)
                   (w && 0 < w ? w 0))
    _ (0 < sweep-wait ? (line ("lux: sweep delayed " + show sweep-wait), rest sweep-wait))
-   ; one query, and its presence checked: () is a failed round trip, not an empty
-   ; root (x-querytree's wrapper). the two reads below used to be two separate
-   ; QueryTrees, which could disagree; one answer serves both.
+   ; one query for both reads below; () is a failed round trip, not an empty root
    tree (x-querytree s root)
    _ (atom? tree ?  (line "lux: QueryTree FAILED at startup -- the stream is garbled, adopting nothing"))
-   ; and the fault injector, the knob that actually makes a fix testable.
-   ; lux_sweep_miss=1 forces the sweep to see an empty tree -- exactly what a lost
-   ; race leaves behind. it is the deterministic form of the defect: the delay
-   ; knob above can only ever make the sweep later, and later always wins, so a
-   ; delay can prove the race's direction but can never reproduce it. this can.
-   ; any future fix for "a missed sweep is permanent" must make a miss=1 run pass;
-   ; today one fails, because nothing ever looks at the tree a second time.
+   ; LUX_SWEEP_MISS=1, test-only: the first sweep sees an empty tree, as a lost race
+   ; leaves it; resweep below must recover
    twins (? ("1" = getenv "LUX_SWEEP_MISS") (line "lux: sweep MISSED (forced)", ())
             (two? tree) <>tree ())
    kids (filter (nil? * furniture?)
@@ -618,8 +536,7 @@
    (adopt-tag w) (: d (x-getprop-atoms s w (x-intern s "_NET_WM_DESKTOP"))       ; the last generation wrote each window's tag on the window
                     t (two? d ? (1 + <d) 1)                                    ; (floats wear their HOME tag too, so they come back to it,
                     (0 < t && #lux-tags >= t ? t 1))                 ; tiled; out of range -> tag 1)
-   ; admit a batch: tag it, stamp it ICCCM, wire its mouse, seed the map ledger.
-   ; spelled once because the second look below needs exactly the same thing.
+   ; admit a batch: tag it, stamp it ICCCM, wire its mouse, seed the map ledger
    (take-in sh ws)
     (foldl (ss \ w \ wsview (admit (wsview ss (adopt-tag w)) w) <lux-tags) sh ws @ sh2
        (map (w \ x-chprop32 s w (x-intern s "WM_STATE") (x-intern s "WM_STATE") '(1 0)) ws,
@@ -634,17 +551,8 @@
      refocus sh, line (tag + show ws))                                          ; stamp keeps it adoptable through the next restart)
    sh0 (take-in (rescreen (sheaf lux-tags)) kids)                            ; the screens, before any window lands
    _ (two? kids ? (settle sh0 kids "lux: adopted "))
-   ; the second look, and the whole point of it: the sweep above is one shot and
-   ; it is the only adoption path an already-mapped window has -- no MapRequest
-   ; ever comes for one -- so a sweep that read the tree before the server settled
-   ; lost those windows for the life OF the process. that is not a rare shape: it
-   ; is what a restart-in-place leaves behind, and it presented as a wm that came
-   ; back with an empty client list and no way to recover but another restart.
-   ; so look again, and keep looking while looking keeps paying -- convergent, not
-   ; a magic constant: the pass stops the moment it finds nothing new, so a healthy
-   ; start costs one beat and a QueryTree, while a slow server gets several. a
-   ; window that arrives after the last pass still has MapRequest; this is only for
-   ; the ones that were already mapped when we took over.
+   ; look again: an already-mapped window gets no MapRequest, so a sweep that ran before
+   ; the server settled would lose it for good. stops at the first pass that finds nothing
    (adoptable sh ws) (filter (w \ !(wsknownw? sh w) &&
                                   !(furniture? w) &&
                                   (x-manageable? s w || ghostly? w)) ws)
@@ -660,7 +568,7 @@
                  resweep sh2 (n - 1))))))
    sh1 (resweep sh0 4)
    _ (twirl (u \ lux-moor (lux-sock ())) 0)                                   ; the repl moor: its own task, its own sockets
-   _ (loop sh1 () () ())
+   _ (loop sh1 () ())
    _ (close s)
    _ (line "lux: done")
    (quit 0))                                                                    ; the shebang's -l makes this file a preload: falling off

@@ -1,8 +1,8 @@
 #include "../impl.h"
 #include <libgen.h>
 
-/* ---- dirname: posix's, which may write into its argument. a path that opens with exactly
- * two slashes keeps them in an all-slash answer, as glibc does ---- */
+/* posix's dirname, which may write into its argument; exactly two leading slashes
+ * survive in an all-slash answer, as in glibc */
 char *dirname(char *p) {
   if (!p || !*p) return ".";
   size_t n = strlen(p), lead = strspn(p, "/");

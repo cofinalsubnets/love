@@ -1,15 +1,7 @@
 #include "../impl.h"
 
-/* the first difference, a word at a time: equal words hold no differing byte, so
- * only the word that differs falls to the byte loop, which then runs at most
- * sizeof(long) more times. n bounds every load, so the word lane needs no
- * alignment for safety -- it takes it for speed, and only where BOTH pointers
- * offer it, as memcpy does.
- * THE WORD COMPARE SAYS WHETHER, NEVER WHICH WAY. a word holds its bytes in
- * the machine's order, so on a little-endian seat the wide compare orders them
- * backwards; the answer has to come from the byte loop that follows.
- * the stride is sizeof(long), never a literal 8: a 32-bit seat (the thumb
- * boards) would else step eight bytes having compared four. */
+/* the word compare says whether, never which way: little-endian words order their bytes
+ * backwards, so the byte loop after the differing word gives the answer */
 int memcmp(void const *a, void const *b, size_t n) {
   unsigned char const *x = a, *y = b;
   if ((((unsigned long) x | (unsigned long) y) & (sizeof(unsigned long) - 1)) == 0) {

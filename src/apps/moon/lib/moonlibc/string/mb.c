@@ -1,11 +1,8 @@
 #include "../impl.h"
 #include <wchar.h>
 
-/* ---- the multibyte conversions. in the C locale one byte a character, ascii only -- a byte or
- * a character past 0x7f is EILSEQ, as glibc's C locale answers. under a UTF-8 LC_CTYPE
- * (num.c's setlocale) utf-8 as glibc's C.UTF-8 reads it: the old long forms too, up to six
- * bytes and U+7FFFFFFF, but no overlong and no surrogate. a character torn across calls waits
- * in the mbstate_t: its length << 4 | the bytes still owed, and the bits so far ---- */
+/* the C locale is ascii only (past 0x7f is EILSEQ, as glibc); a UTF-8 LC_CTYPE reads up to six
+ * bytes, no overlong, no surrogate. mbstate_t holds length << 4 | bytes owed, and the bits so far */
 static int ill(void) { errno = EILSEQ; return -1; }
 
 wint_t btowc(int c) { return c >= 0 && c < 128 ? (wint_t) c : WEOF; }

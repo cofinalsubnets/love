@@ -1,9 +1,6 @@
-; test/host/flac.l -- src/apps/flac.l and src/love/audio/flac.c's flac-frame.
-; a small stream libFLAC wrote, three frames, decoded to its samples by their sha-256 and its
-; md5; every byte of it flipped and decoded, which answers why or samples and never falls
-; over; then, where the reference flac is, streams of every shape held to flac -d and
-; metaflac --list byte for byte; last the verbs.
-;   cat test/00-init.l test/host/flac.l | out/love
+; test/host/flac.l -- src/apps/flac.l and src/love/audio/flac.c's flac-frame, held to the
+; reference flac and metaflac where they are
+; run: cat test/00-init.l test/host/flac.l | out/love
 (borrow 'posix)
 (borrow 'flac)
 (borrow 'bytes)
@@ -50,26 +47,24 @@
    _ (test (fl-seek 0 = [0 (fl-all tiny (m 'at) m)])
            (fl-seek 1 = [0 (snip (fl-all tiny (m 'at) m) 128 384)])
            (fl-seek 40 = [0 (snip (fl-all tiny (m 'at) m) 128 384)]))
-   ; a first frame that fails its crc: a seek hunts past it, but from the stream's start
-   ; ('whole, flac -d and -t) it is the stream's error
+   ; a first frame failing its crc: a seek hunts past it; from the start it is the stream's error
    (fl-bad whole) (: s (snip tiny (m 'at) #tiny) p (dir + "/bad")
                      _ (open p "w" @ q (say q (snip s 0 5 + string [(s 5) ^ 255] + snip s 6 #s), close q))
                      q (open p "r") r (flac-pump q "" (pin m 'whole whole) (_ \ 0))
                      (close q, pin m 'whole 0, r))
    _ (test (fl-bad 0 = 0) (string? (fl-bad 1)))
-   ; a flipped byte anywhere answers why or samples, and never takes the process down
+   ; a flipped byte anywhere answers why or samples, never a crash
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    _ (test (atom? (filter (i \ !(flac-meta (flip tiny i) @ m2
                                   (? (tablet? m2) (fl-all (flip tiny i) (m2 'at) m2 @ r (string? r || charm? r))
                                      (string? m2 || fl-more? m2))))
                           (jot #tiny))))
 
-   ; -- against the reference ------------------------------------------------------------
+   ; against the reference
    ref? (all (t \ <(hark ["sh" "-c" ("command -v " + t + " >/dev/null")]) = 0) ["flac" "metaflac" "ffmpeg"])
    (sh c) (hark ["sh" "-c" ("cd " + dir + " && " + c)])
    ; channels, bits, encoder options: fixed and lpc orders, blocksizes, mid/side, wasted bits
-   ; flac -d leaves a 32-bit sample signed when asked for unsigned; flac.l flips it as at every
-   ; other width, so 32 bits is held to flac signed
+   ; flac -d leaves 32-bit samples signed when asked unsigned, so 32 bits is held to flac signed
    cases [["1" "8" "-0"] ["1" "16" "-8"] ["2" "16" "-5"] ["2" "16" "-8 -b 192 --lax"]
           ["2" "24" "-8 -A 'tukey(0.5)'"] ["2" "32" "-5"] ["6" "16" "-5"] ["2" "16" "-0 -b 4608"]
           ["2" "24" "-3 -b 576"] ["8" "16" "-1"] ["2" "16" "-8 -l 32 -q 15 --lax -b 1024"]]
@@ -88,8 +83,7 @@
                l (sh ("../love metaflac --list " + f + ".flac"))
                (<a = 0 && >a = av-t-rd (dir + "/" + f + ".wav") && <b = 0 && >b = av-t-rd (dir + "/" + f + ".bu")
                 && <l = 0 && >l = av-t-rd (dir + "/" + f + ".list")))
-   ; the encoder: every shape at three levels, through the reference flac -t (its crcs and md5)
-   ; and back out of the reference decoder byte for byte, and no more than 5% past libFLAC's size
+   ; the encoder: every shape at three levels, past flac -t, decoded back, within 5% of libFLAC's size
    (fl-num t) (foldl (\ a c (a * 10 + c - 48)) 0 (chars t))
    ; STREAMINFO's frame sizes and the seektable's points, held to the frames themselves
    (fl-held f)
@@ -118,7 +112,7 @@
                       (all (f \ enc f 0) fs) (all (f \ enc f 5) fs) (all (f \ enc f 8) fs)))
         (gate-partly "flac: no flac, metaflac or ffmpeg, the reference streams skipped"))
 
-   ; -- the verbs ------------------------------------------------------------------------
+   ; the verbs
    _ (open (dir + "/t.flac") "w" @ q (say q tiny, close q))
    _ (test (sh "../love flac -d t.flac 2>&1" = (0 . "t.flac: done\n"))
            (sh "../love flac -d t.flac 2>&1" = (1 . "ERROR: output file t.wav already exists, use -f to override\n"))
@@ -129,8 +123,7 @@
            (sh "../love metaflac --show-sample-rate --show-tag=title t.flac" = (0 . "8000\nTITLE=tiny\n"))
            (sh "../love metaflac --export-tags-to=- t.flac" = (0 . "TITLE=tiny\n"))
            (sh "head -c 300 t.flac | ../love flac -s -t - 2>&1" = (1 . "stdin: ERROR while decoding data: cut short\n")))
-   ; -- the head is read once: a picture past 64 KiB leaves the port unread through the door,
-   ; and metaflac, reading every block, still lists it --
+   ; the head is read once: a picture past 64 KiB is left unread through the door; metaflac lists it
    (fl-pic n) ("fLaC" + snip tiny 4 42 + string [6 ((n >> 16) & 255) ((n >> 8) & 255) (n & 255)] + string (cask n)
                + snip tiny 42 #tiny)
    _ (open (dir + "/pic.flac") "w" @ q (say q (fl-pic 1048576), close q))
@@ -139,14 +132,14 @@
              [n m h] (m 'tags = ["TITLE=tiny"] && !(elem 6 (map (b \ <b) (m 'blocks))))
              _ 0)
            (sh "../love metaflac --list pic.flac | grep -c 'type: 6 (PICTURE)'" = (0 . "1\n")))
-   ; the encoder through the door: a wav in, and a flac re-encoded, each back to the same samples
+   ; the encoder through the door: a wav, and a flac re-encoded, back to the same samples
    _ (test (sh "../love flac -s -f t.wav -o w.flac && ../love flac -s -d -c w.flac | cmp - t.wav" = (0 . ""))
            (sh "../love flac -s -f -8 t.flac -o r.flac && ../love flac -s -t r.flac" = (0 . ""))
            (sh "../love flac -f t.wav -o w.flac 2>&1" @ (0 . m) ("t.wav: wrote " = snip m 0 13) _ 0)
            (sh "../love metaflac --show-vendor-tag w.flac" @ (0 . v) ("love " = snip v 0 5) _ 0)
            (sh "../love flac -s -f --force-raw-format t.wav -o x.flac 2>&1"
               = (1 . "t.wav: ERROR: for raw input you must specify --channels, --bps, --sample-rate, --endian and --sign\n")))
-   ; -- the encoder against the reference: what a re-encode keeps, the warnings, the ratio --
+   ; the encoder against the reference: what a re-encode keeps, the warnings, the ratio
    (fl-r a b) ((2000 * a + b) // (2 * b) @ k (show (k // 1000) + "." + snip (show (1000 + k % 1000)) 1 4))
    (fl-list f) (sh ("metaflac --list --except-block-type=STREAMINFO " + f
                     + " | awk '/^METADATA/ {t = 0} /type: 4/ {t = 4} !(t == 4 && /^  length/) && !/vendor string|stream_offset/'"))
@@ -173,8 +166,8 @@
                          = (0 . ("m.flac: wrote " + show #(av-t-rd (dir + "/x.flac")) + " bytes, ratio="
                                  + fl-r #(av-t-rd (dir + "/x.flac")) #(av-t-rd (dir + "/m.flac")) + "\n")))))
         0)
-   ; -- the decoder door: av picks the codec off the bytes, and plays through the horn ----------
-   (av e) (sh ("HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) " + e + " (quit 0)' 2>&1"))
+   ; the decoder door: av picks the codec off the bytes
+   (av e) (sh ("HORN=none ../love -e '(borrow (quote posix), borrow (quote av), " + e + ", quit 0)' 2>&1"))
    _ (sh "../love flac -s -d -f t.flac")
    _ (test (av "(puts (show (av-open (open \"t.flac\" \"r\") @ [n m h] [n (m (quote rate)) (#h)] w w)))"
               = (0 . "(\"flac\" 8000 318)"))

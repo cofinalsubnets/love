@@ -1,21 +1,6 @@
-; lore -- the game engine and its games, behind one verb: `love lore NAME ..` plays one,
-; and `love lore` alone lists them. a game is not a verb of its own, so neither a shell
-; nor PATH meets its name.
-;
-; the engine is libraries the games borrow:
-;   rove   the roguelike floor: tiles, fov, the painter, the signs, the paced keys
-;   view   the first-person screen in half blocks: rays, pens, frames, the tty loop
-;   flicker how bright a light is over time: a tube stammering or buzzing, a breath, a beacon, a television
-;   walk   a body walking in first person: its keys, a step slid along what stops it, the frame time, a rail
-;   gamelan a level's slow music: a chime struck now and then on a five-note scale, a gong under it
-;   vec    triples of numbers or trays: vectors, colours, and the hash's value noise
-;   sky    the sun by date, hour and latitude, and the weather: clear to overcast, smooth or in pixels
-;   grove  trees grown from a seed, drawn as wood and points, and the shade they cast
-;   mesh   triangles: shapes, textures, the sun or lamps on them, and the frame out
-;   neon   signs bent from tube: a stroke font, and the tubes, halo and lamp of a sign
-;   swatch textures painted from a recipe: layers of shapes and paints
-;   brush  a world carved from solid by air brushes and filled again by solid ones
-;   scenery the words a level file is written in: rooms, brushes, lights, textures
+; lore -- the game engine and its games, behind one verb: `love lore NAME ..` plays one, and
+; `love lore` alone lists them. a game is not a verb of its own, so neither a shell nor PATH
+; meets its name. the engine is the libraries the games borrow (rove, view, mesh, sky ..).
 ; a game registers with (lore-enlist NAME MAIN), MAIN taking the args after its name, and
 ; (lore-alias OLD NAME) lets another name play it, unlisted.
 (module (lore lore-enlist lore-alias lore-games lore-main)

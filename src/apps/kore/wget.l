@@ -1,16 +1,10 @@
 ; src/apps/kore/wget.l -- wget: one url to one file, over http or https.
-;
-;   wget [-q] [--no-check-certificate] [--allow-downgrade] [-O FILE] URL
-;
-; a GET with Connection: close, redirects followed (eight, then it stops, and never from
-; https down to http without --allow-downgrade), a chunked body unchunked to its last chunk,
-; the rest read to the peer's close and held to its Content-Length. https rides the tls module's
-; client (src/apps/tls/client.l), which verifies the server's certificate to a root in the
-; host's bundle (SSL_CERT_FILE names another) or to a pin in ~/.love/tls_pins, and a
-; refusal says which check failed on which certificate. --no-check-certificate, as GNU's,
-; skips that and says so unless -q. the file is -O, else the url's last path word, else
-; index.html. the exit codes are wget's own: 0, 1 a bad url or a dead wire, 3 the file, 4 an
-; answer cut short, 5 a certificate not believed, 8 a server that answered with an error status.
+; a GET with Connection: close; up to eight redirects, never https down to http without
+; --allow-downgrade; a chunked body unchunked, the rest read to close and held to its
+; Content-Length. https verifies through the tls module's client unless
+; --no-check-certificate, which says so unless -q. the file is -O, else the url's last path
+; word, else index.html. exits are wget's: 1 a bad url or a dead wire, 3 the file, 4 an
+; answer cut short, 5 a certificate not believed, 8 an error status.
 (module 'kore
 (borrow 'path)
 (borrow 'posix)

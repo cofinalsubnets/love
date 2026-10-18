@@ -1,7 +1,5 @@
-; test/jotfuse.l -- a walker over (jot N) runs its counted twin, or with a lambda literal for its
-; step the loop with that body inline (ev.l's jotfuse, jotin): every answer, and the order of every
-; call, as the walker over the built range. jf-r builds the range where no fold sees a jot, so it
-; is the walker as written
+; a walker over (jot N) runs fused; it must match the walker over the built range in answers and call order.
+; jf-r builds the range where no fold sees a jot
 (: (jf-r n) (jot n)
    (jf-log f) (: t {'l ()} _ (f (i \ pin t 'l (i . t 'l))) (t 'l)))
 (test

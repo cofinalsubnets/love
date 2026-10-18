@@ -1,21 +1,7 @@
-/* the wide pair: __int128 / unsigned __int128 (gen's d128 lane: x64, a64, thumb2's family).
- *
- * the lane's whole surface, one check each: widening 64x64 products (the ONE
- * multiply the bignum kernel lives on), general 128x128 low products, carry
- * chains across the half boundary, every compare at both signednesses (value
- * AND branch positions -- cgbin settles 0/1 via c128, cbranch rides the same
- * op through cmp/br), constant shifts on each side of 64, variable shifts (the
- * v-forms, 0..127 exact), the two-step u128/u64 divide and remainder,
- * negation's borrow, truth off either half, casts in and out, the folded
- * (double)((u128)1<<64) constant, wide ++/-- (step, store, step back),
- * compound assigns, and a static function RETURNING the pair on the protocol
- * (rdx:rax, the SysV i128 return; x2:x0 on a64).
- *
- * a target without the lane refuses this file loud (ccarch.sh expects that,
- * like 100-complex): parse accepts the type everywhere, gen carries it where
- * the backend spells the carrying ops.
- *
- * Each check contributes 1, so the exit code IS the number that passed. */
+/* __int128 / unsigned __int128 (x64, a64, thumb2's family), one check per op: 64x64 widening and 128x128
+ * products, carries, compares as values and branches, constant and variable shifts,
+ * u128/u64 divide, negation, truth, casts, ++/--, compound assigns, a returned pair.
+ * targets without the lane refuse this file. each check adds 1: the exit code is the pass count. */
 
 typedef unsigned __int128 u128;
 typedef __int128 s128;

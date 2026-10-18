@@ -1,11 +1,6 @@
-/* C11's three type-directed operators, held to gcc: _Generic selects on the
- * controlling expression's LVALUE-CONVERTED type (so a string literal picks
- * char*, never char[4]) and evaluates no other arm; _Alignof answers talign,
- * the door playout lays members with; _Alignas is honored at FILE SCOPE.
- *
- * the battery compares EXIT CODES, so every check folds into the status:
- * 0 is agreement, and the first failing check's number comes back instead.
- */
+/* _Generic on the lvalue-converted type (a string literal is char*), evaluating no
+ * other arm; _Alignof; _Alignas at file scope. 0 is agreement, else the first
+ * failing check's number. */
 #include <stdalign.h>
 #include <iso646.h>
 

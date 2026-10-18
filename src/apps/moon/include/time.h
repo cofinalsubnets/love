@@ -7,19 +7,16 @@ typedef long time_t;
 #endif
 typedef long clock_t;
 #define CLOCKS_PER_SEC 1000000
-#ifdef __ILP32__                /* the kernel's time64 record: 16 bytes, the pad is not read */
+#ifdef __ILP32__  /* the kernel's 16-byte time64 record */
 struct timespec { time_t tv_sec; long tv_nsec; long __pad; };
 #else
 struct timespec { long tv_sec; long tv_nsec; };
 #endif
-/* glibc layout -- a hosted (cc-built) object links libc's localtime, so the
-   field order + the two GNU extensions (tm_gmtoff/tm_zone) must match. */
+/* glibc's layout, gnu's tm_gmtoff and tm_zone included */
 struct tm { int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon;
             int tm_year; int tm_wday; int tm_yday; int tm_isdst;
             long tm_gmtoff; char const* tm_zone; };
-/* tzset + its three globals: no timezone database here, so the zone is always
- * UTC and tzset is the no-op that says so. declared because a program calls it
- * before localtime and reads tzname for a log line. */
+/* no timezone database: the zone is always utc and tzset a no-op */
 void tzset(void);
 extern char *tzname[2];
 extern long timezone;

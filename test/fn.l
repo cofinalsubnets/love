@@ -1,14 +1,6 @@
-; functions print as value forms that reconstruct under eval: builtins -> the bare name;
-; lambdas -> a (\ …) form read back off the compiled thread (post.l's lamform), each binder a
-; shortlex letter by its depth -- a b .. z aa ab .. -- skipping any letter the form spells free,
-; which a binder of that spelling would capture. a global or a module's function prints as its
-; name, a let as (: ..), a closure as a lambda over the names it captured. show -> read -> eval
-; gives back an `=` function (rt below; the dedicated suite is roundtrip.l).
-; `=` compares functions by what they compiled to: two lambdas are equal when their threads are,
-; and a param is a stack slot there, so lambdas that differ only in their names are equal. a
-; partial-app is its base and its captures: equal to another partial of an equal base holding equal
-; captures, never to a lambda it would reduce to (`=` reduces nothing).
-; two globals bound as one letrec, as post.l binds its own: fn-al calls its sibling
+; functions print as forms that eval back to an `=` function: a lambda's binders are
+; shortlex letters by depth, skipping any spelled free. `=` compares compiled threads
+; two globals bound as one letrec: fn-al calls its sibling
 (: (fn-dg c) (? (c < 1) 0 (fn-dg (c - 1)))  (fn-al c) (fn-dg c || c > 90))
 (: (rt x) (ev <(sound (show x)))
    (rt= f) (f = rt f)
@@ -21,8 +13,7 @@
   (show (x \ x) = show (y \ y))               ; a-equivalent -> identical print
   ("(\\ a ((\\ b b)))" = show (x \ (x \ x)))  ; a lambda body sits in a singleton: bare, the reader would merge the params
   ("(\\ a 'y)" = show (x \ 'y))               ; quoted datum not renamed
-  ; a letter spelled free in the form is skipped, or the rename would capture it. c0 refuses
-  ; a missing name outright, so these are ev's
+  ; a free letter is skipped, or the rename would capture it; ev's, since c0 refuses a missing name
   (fnfree "(\\ a b d e f (+ c a))" '(\ p q r s t (c + p)))           ; c free -> binder 2 is d
   (fnfree "(\\ a b d e f h i j k (+ c (+ g k)))"
           '(\ p q r s t u v w x (c + (g + x))))                       ; c and g both skipped
@@ -53,8 +44,7 @@
   (has? (show (: t {'a 1} _ (pin t 'me t) (x \ peep t x 0))) "{..2}")
   (#(show ev) < 200000)
   !(has? (show ev) "((mint ")                        ; every name it calls is bound
-  ; ..and ev read back off its own show is an ev -- where its doors are nameable: an ev
-  ; closing over a door the mop dropped (src/love/boot/egg.l) reads back as a miss of that name
+  ; ..and ev read back off its own show is an ev, or a miss where the mop dropped a door
   (trap (_ \ 3 = (ev <(sound (show ev))) '(+ 1 2)) ()
         (a \ b \ a = 'missing && !(cite 'guts 'place) && (nelem b (names ()))))
   ; --- functions compare by their threads ---
@@ -63,17 +53,15 @@
   (((a \ b \ a + b) 1) = ((x \ y \ x + y) 1))           ; partials: equal bases, equal captures
   !(((a \ b \ a + b) 1) = ((a \ b \ a + b) 2))         ; ..a different capture stays distinct
   !(((a \ b \ a + b) 1) = (b \ 1 + b))                 ; a partial is not the lambda it would reduce to
-  ((i \ (x \ x + i)) = (i \ x \ x + i))                 ; nested and multi-param spellings are the same function -- opfix (op-flat-ol) flattens both compilers (c0 + feel), so this holds under love0 too
+  ((i \ (x \ x + i)) = (i \ x \ x + i))                 ; nested and multi-param spellings are the same function
   ((x \ (x \ x)) = (x \ (x \ x)))                       ; shadowing stays nested (not flattened to the ambiguous (\ x x x)); still self-equal
   !((x \ (. x)) = (.))                                  ; eta is not reduced either
   ((+ 1) = (+ 1)) !((+ 1) = (+ 2))                      ; a builtin base: base and captures, pairwise
   (9 = peep {((a \ b \ a + b) 5) 9} ((x \ y \ x + y) 5) 0)   ; hash consistency: a map keyed on a partial, found by an equal one
-  ; worklist safety: a closure with a chain capture nested in a compared structure -- equal closures
-  ; but a differing tail must stay not equal (a capture's pairs must not clobber the pending ones)
+  ; worklist safety: equal closures with a chain capture, then a differing tail, stay unequal
   !((. ((v \ x \ x + v) '(1 2)) (. 5 6)) = (. ((v \ x \ x + v) '(1 2)) (. 5 7)))
   ((. ((v \ x \ x + v) '(1 2)) (. 5 6)) = (. ((v \ x \ x + v) '(1 2)) (. 5 6)))
-  ; the same safety on the no-capture path: a quoted datum in the thread is a value the
-  ; worklist compares above the pending pairs, so the differing tail still tells
+  ; the same on the no-capture path, a quoted datum in the thread
   !((. (a \ (\ 5)) (. 5 6)) = (. (b \ (\ 5)) (. 5 7)))
   ((. (a \ (\ 5)) (. 5 6)) = (. (b \ (\ 5)) (. 5 6)))
   ; the pairs taken as equal grow with the walk: 2000 equal threads built apart, one pair each
@@ -81,9 +69,7 @@
   (string? (show map))
   (10 < #(show map))))
 
-; a source application n deep compiles in its length: ((((1)))) peels at every level. the two
-; compile laws here time hosted seats only: on the inle kernel they read a ratio the hosted
-; seats do not, unsettled yet whether that is its compile or its clock
+; a source application n deep compiles in its length: ((((1)))) peels at every level
 (: (fnq-nest n) (n = 0 ? 1 [(fnq-nest (n - 1))])
  (test (1 = ev (fnq-nest 50)) (test-linear (n \ ev ['\ 'u (fnq-nest n)]) 1500)))
 
@@ -93,6 +79,8 @@
        (fnq-fix "(x @ [a b] (a + b))") (fnq-fix "(: a 1 b (a + 1) (\\ q (q * b)))")
        (1 = ev <(sound "(. = (.))"))))
 ; text holes nested n deep compile in their length: each macro's operands come in factored
-(: (fnq-holes k) (k = 0 ? "\"x\"" ("\"a \\(" + fnq-holes (k - 1) + ") b\""))
+; the text is joined once: a + per level copies the inner text, and the law would time that
+(: (fnq-pile k s t) (k = 0 ? t (fnq-pile (k - 1) s (s . t)))
+   (fnq-holes k) (join "" (fnq-pile k "\"a \\(" ("\"x\"" . fnq-pile k ") b\"" ())))
  (test ("a a x b b" = ev <(sound (fnq-holes 2)))
        (test-linear (n \ ev ['\ 'u <(sound (fnq-holes n))]) 250)))

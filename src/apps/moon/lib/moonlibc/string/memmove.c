@@ -1,9 +1,7 @@
 #include "../impl.h"
 
-/* a downward move is memcpy's lanes walked backwards: same agreement test, same
- * byte head (off the tail this time), same quad, and pointers that disagree shift
- * two aligned words together per stored word. each quad loads before it stores,
- * so an overlap never reads a word it has written. */
+/* a downward move is memcpy's lanes walked backwards; each quad loads before it stores,
+ * so an overlap never reads a word it has written */
 void *memmove(void *d, void const *s, size_t n) {
   unsigned char *dp = d; unsigned char const *sp = s;
   if (dp == sp || n == 0) return d;

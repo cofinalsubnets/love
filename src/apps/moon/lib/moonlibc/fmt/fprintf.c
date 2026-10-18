@@ -2,15 +2,12 @@
 
 static unsigned long long const bd_p10[9] = {
   1ULL, 10ULL, 100ULL, 1000ULL, 10000ULL, 100000ULL, 1000000ULL, 10000000ULL, 100000000ULL };
-/* the digit at index k -- BdU is the units place, larger is further right.
- * OUTSIDE the array every digit is a zero, which is what lets an arbitrary
- * precision print with no buffer and no cap. */
+/* the digit at index k, BdU the units place, larger further right; outside the array every
+ * digit is zero, so any precision prints with no buffer */
 static unsigned bd_dig(unsigned long long const *d, int k) {
   if (k < 0 || k >= BdD) return 0;
   return (unsigned) (d[k / 9] / bd_p10[8 - k % 9] % 10ULL); }
-/* the live range shrinks toward index 0 as the value grows and toward BdN as
- * it shrinks, so both walks carry their bound rather than sweeping the array:
- * a shift is O(digits that exist), not O(1413). */
+/* both walks carry the live range's bound, so a shift costs the digits that exist */
 static int bd_mul2(unsigned long long *d, int lo, int hi, int s) {
   unsigned long long carry = 0;
   int i;
@@ -36,8 +33,7 @@ static void bd_trunc(unsigned long long *d, int k) {
   if (k < 0) i = 0;
   else { d[k / 9] -= d[k / 9] % bd_p10[8 - k % 9]; i = k / 9 + 1; }
   for (; i < BdN; i++) d[i] = 0; }
-/* add one at digit index k, carrying toward index 0. the array has 324 integer
- * digits against a largest double of 309, so the carry always lands. */
+/* add one at digit index k, carrying toward index 0; 324 integer digits hold any double's 309 */
 static int bd_inc(unsigned long long *d, int k, int lo) {
   int i = k / 9;
   unsigned long long add = bd_p10[8 - k % 9];
@@ -46,8 +42,7 @@ static int bd_inc(unsigned long long *d, int k, int lo) {
     if (d[i] < BdB) break;
     d[i] -= BdB; add = 1; i--; }
   return i >= 0 && i < lo ? i : lo; }
-/* round to keep digits through index k. the value is exact, so a TIE is a real
- * tie and breaks to even -- %.0f of 2.5 is 2 and of 3.5 is 4. */
+/* round to keep digits through index k: the value is exact, so a tie is real and goes to even */
 static int bd_round(unsigned long long *d, int k, int lo) {
   unsigned n = bd_dig(d, k + 1);
   int up = n > 5;
@@ -58,28 +53,23 @@ static int bd_round(unsigned long long *d, int k, int lo) {
     up = any || (bd_dig(d, k) & 1); }
   bd_trunc(d, k);
   return up ? bd_inc(d, k, lo) : lo; }
-/* the index of the most significant digit that is not a zero, or the units
- * place when the value is zero (which reads 0 and dates the exponent at 0). */
+/* the index of the most significant nonzero digit, or the units place for a zero */
 static int bd_msd(unsigned long long const *d, int lo) {
   for (int i = lo; i < BdN; i++)
     if (d[i]) { int k = i * 9; while (!bd_dig(d, k)) k++; return k; }
   return BdU; }
-/* the float lanes: %f %e %g %a and their upper-case twins. */
 static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
                      int prec, int width, int fl) {
   unsigned long long bits;
   memcpy(&bits, &v, sizeof bits);
-  int neg = (int) (bits >> 63);            /* from the SIGN BIT, not v < 0:
-                                              -0.0 is not less than zero, and
-                                              printf must still say -0 */
+  int neg = (int) (bits >> 63);            /* the sign bit, so -0.0 prints -0 */
   int be = (int) ((bits >> 52) & 0x7ffULL);
   unsigned long long man = bits & 0xfffffffffffffULL;
   int up = conv == 'E' || conv == 'G' || conv == 'F' || conv == 'A';
   if (up) conv += 32;
   int sgn = __fmtsgn(neg, fl);
 
-  /* --- infinity and not-a-number: three letters, and the zero flag does not
-     reach them -- a wide %08.1f of -inf pads with spaces. */
+  /* the 0 flag does not reach inf and nan: they pad with spaces */
   if (be == 0x7ff) {
     char const *w = man ? "nan" : "inf";
     int len = 3 + (sgn ? 1 : 0);
@@ -90,10 +80,8 @@ static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
     if (fl & FfLeft) __pad(put, ctx, pad, 32);
     return; }
 
-  /* --- %a: the bits themselves, four to a hex digit, so only the rounding at
-     a short precision needs any care. a subnormal keeps the -1022 exponent and
-     shows a leading 0 rather than renormalising, and so does a mantissa that
-     rounds up past f -- 0.999999 at %.1a is 0x2.0p-1, not 0x1.0p+0. */
+  /* %a: a subnormal keeps the -1022 exponent with a leading 0, and a mantissa rounding past f
+     is not renormalised (0.999999 at %.1a is 0x2.0p-1) */
   if (conv == 'a') {
     int lead = be ? 1 : 0;
     int xe = be ? be - 1023 : man ? -1022 : 0;
@@ -130,7 +118,6 @@ static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
     if (fl & FfLeft) __pad(put, ctx, pad, 32);
     return; }
 
-  /* --- the decimal lanes, off the exact digits. */
   unsigned long long bd[BdN];
   for (int i = 0; i < BdN; i++) bd[i] = 0;
   unsigned long long m = be ? man | 0x10000000000000ULL : man;
@@ -158,9 +145,7 @@ static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
     lo = bd_round(bd, cut, lo);
     msd = bd_msd(bd, lo); }
 
-  /* the digits to show: one at msd for %e, or the whole integer part for %f --
-     and when the value has none, the units place, which reads the 0 that C
-     asks for. */
+  /* one digit at msd for %e, else the integer part, at least the units place's 0 */
   int i0 = conv == 'e' ? msd : msd < BdU ? msd : BdU;
   int i1 = conv == 'e' ? msd : BdU;
   if (strip) while (fprec && !bd_dig(bd, i1 + fprec)) fprec--;
@@ -359,7 +344,7 @@ int printf(char const *fmt, ...) {
   int r = __fmt(__femit, stdout, fmt, ap);
   va_end(ap);
   return r; }
-/* the v-variants: __fmt copies the va_list it is handed, so these just forward it. */
+/* __fmt copies the va_list it is handed, so the v-variants just forward it */
 int vfprintf(FILE *f, char const *fmt, va_list ap) { return __fmt(__femit, f, fmt, ap); }
 int vprintf(char const *fmt, va_list ap) { return __fmt(__femit, stdout, fmt, ap); }
 int vsnprintf(char *p, size_t n, char const *fmt, va_list ap) {
@@ -367,12 +352,10 @@ int vsnprintf(char *p, size_t n, char const *fmt, va_list ap) {
   int r = __fmt(__semit, &s, fmt, ap);
   if (n) p[s.at < n ? s.at : n - 1] = 0;
   return r < 0 ? r : (int) s.at; }
-/* asprintf: measure with a null sink, then format into a fresh block. two
- * passes over the format rather than a growing buffer -- __fmt counts either way. */
+/* measure with a null sink, then format into a fresh block */
 int vasprintf(char **out, char const *fmt, va_list ap) {
   struct __sctx s; s.p = 0; s.n = 0; s.at = 0;
-  va_list m;                                       /* the measuring pass takes a COPY:
-                                                    * __fmt walks the list to its end */
+  va_list m;                                       /* a copy: __fmt walks the list to its end */
   va_copy(m, ap);
   int r = __fmt(__semit, &s, fmt, m);
   va_end(m);

@@ -18,14 +18,14 @@
    (rinv r)   (jparts r @ p (<>p /// <p))
 
    ; [rest k]: n with every factor p taken out, and how many there were
-   (pexp n p) ((: (go m k) (m % p = 0 ? (go (m // p) (k + 1)) [m k])) n 0)
+   (pexp n p) ((: (go m k) (m % p @ 0 (go (m // p) (k + 1)) [m k])) n 0)
 
    ; the exponents over jprimes, or 'over for a ratio with a prime past 7
    (monzo r)
     (: (walk ps a b)
         (? !(two? ps) (a = 1 && b = 1 ? () 'over)
            (: x (pexp a <ps) y (pexp b <ps) rest (walk >ps <x <y)
-              (rest = 'over ? 'over ((<>x - <>y) . rest))))
+              (rest = 'over ? 'over (<>x - <>y . rest))))
        p (jparts r)
        (walk jprimes <p <>p))
    (unmonzo m)
@@ -34,7 +34,7 @@
            1 (zip jprimes m))
 
    ; the lattice point, octave dropped; and back, in the octave above 1
-   (point r)   (monzo r @ m (m = 'over ? 'over >m))
+   (point r)   (monzo r @ 'over 'over m >m)
    (unpoint v) (oct (unmonzo (0 . v)))
    (oct r)     (? (r >= 2) (oct (r * (1 /// 2))) (r < 1) (oct (r * 2)) r)
    ; the octave nearest 1: within half an octave either side, so a center stays put

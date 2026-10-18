@@ -1,20 +1,9 @@
 #!/bin/sh
-# test/gate/osbox.sh -- the multi-OS gate: one default-lane x64 binary (no -os, branded
-# EI_OSABI=9, carrying the netbsd ident note) answers every kernel with the same text and
-# status. the legs: UV1 (entry, carry, sigsetjmp), UV2 (open flags, stat, dirent,
-# signals, fork), UV-net (sockaddr heads, sockopt names, msg flags over loopback tcp, udp,
-# unix, and SCM_RIGHTS), UV-sig (signalfd, or kqueue's EVFILT_SIGNAL on its ENOSYS),
-# UV-pty, and with FBSD_SEED=1 / NBSD_SEED=1 (minutes) `love seed` on the box answering
-# the tree's own bytes. termios proper needs a real tty and is not here.
-#
-# the box is a host bee knows with the cap freebsd-x64, netbsd-x64, freebsd-a64, netbsd-a64,
-# freebsd-rv64 or netbsd-rv64 (doc/bee.md, HOSTS), its ssh words from `love bee --on CAP --ssh`;
-# FBSD_SSH, NBSD_SSH, FBSD_ARM64_SSH, NBSD_ARM64_SSH, FBSD_RV64_SSH and NBSD_RV64_SSH still
-# name one for a release. without a box the gate skips loudly.
-# on a64 the local half of each comparison runs on an a64 host where one answers, else
-# under qemu-aarch64, and skips with neither. on rv64 it runs under qemu-riscv64.
-# provisioning the boxes: doc/misc/osbox.md.
-# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64|rv64]
+# test/gate/osbox.sh -- the multi-os gate: one default-lane binary answers linux and a bsd
+# box with the same text and status, leg by leg; *_SEED=1 adds `love seed` on the box.
+# macos meets no ELF: each leg links a mach-o twin for the box, and the two answer alike.
+# the box: *_SSH, else bee's host with the cap OS-ARCH; skips without one
+# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd|macos [x64|a64|rv64|arm|i386]
 . test/gate/skip.sh
 set -u
 
@@ -29,17 +18,24 @@ case "$os-$arch" in
   netbsd-a64)  box=${NBSD_ARM64_SSH:-}; sd=${NBSD_ARM64_SEED:-} ;;
   freebsd-rv64) box=${FBSD_RV64_SSH:-}; sd= ;;    # the trophy ships an x64 love; none for rv64 yet
   netbsd-rv64)  box=${NBSD_RV64_SSH:-}; sd= ;;
+  freebsd-arm) box=${FBSD_ARM_SSH:-${FBSD_ARM64_SSH:-}}; sd= ;;
+  netbsd-arm)  box=${NBSD_ARM_SSH:-${NBSD_ARM64_SSH:-}}; sd= ;;
+  freebsd-i386) box=${FBSD_I386_SSH:-${FBSD_SSH:-}}; sd= ;;
+  netbsd-i386)  box=${NBSD_I386_SSH:-${NBSD_SSH:-}}; sd= ;;
+  macos-x64)    box=${MAC_SSH:-}; sd= ;;
   *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
 esac
 [ -n "$box" ] || box=$("$ho/love" bee --on "$os-$arch" --ssh 2>/dev/null) || box=
+# an arm64 BSD runs armv7 binaries in its 32-bit lane, so an a64 box answers for arm too, and
+# an amd64 one for i386
+[ -n "$box" ] || [ "$arch" != arm ] || box=$("$ho/love" bee --on "$os-a64" --ssh 2>/dev/null) || box=
+[ -n "$box" ] || [ "$arch" != i386 ] || box=$("$ho/love" bee --on "$os-x64" --ssh 2>/dev/null) || box=
 t=test_$os; [ "$arch" = x64 ] || t=test_${os}_${arch}
 d=$ho/$os-$arch
 
 [ -n "$box" ] || gate_skip "$t: skipped (no box in the env)"
 
-# the LOCAL half of each comparison: native where the arch is this machine's, else
-# linux/arm64 itself on an a64 host, or qemu-user standing in for it. The point of the
-# leg is ONE binary under TWO kernels, so the runner is linux and nothing else.
+# the local half is linux: native, an a64 host, or qemu-aarch64
 if [ "$arch" = a64 ]; then
   . test/gate/a64run.sh
   a64_how "$ho/love"
@@ -48,6 +44,9 @@ if [ "$arch" = a64 ]; then
 elif [ "$arch" = rv64 ]; then
   command -v qemu-riscv64 > /dev/null || gate_skip "$t: skipped (no qemu-riscv64 for the local half)"
   run() { qemu-riscv64 "$@"; }
+elif [ "$arch" = arm ]; then
+  command -v qemu-arm >/dev/null 2>&1 || gate_skip "$t: skipped (no qemu-arm for the local half)"
+  run() { qemu-arm "$@"; }
 else
   run() { "$@"; }
 fi
@@ -153,17 +152,12 @@ int main(void) {
 EOF
 
 moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
+# a leg's binary for the box: the local one, or its mach-o twin linked beside it
+twin() { [ "$os" != macos ] || moon0 -os macos "$d/$1.c" -o "$d/$2.mac"; }
+boxbin() { if [ "$os" = macos ]; then echo "$d/$1.mac"; else echo "$d/$1"; fi; }
 
-# ---- rung UV1: ONE binary, both kernels ----
-# the DEFAULT lane, no -os: canonical numbers dispatched at runtime (os.c's
-# probe + map), the dual crt0, the dual sigprocmask leaves, the errno row,
-# and the brand BORN in (every hosted static exe leaves the linker EI_OSABI=9;
-# freebsd's loader requires the byte and linux's never reads it). the SAME
-# file must answer the SAME text and status on both kernels.
-# -e/argv LANES RUN MANY TIMES ON PURPOSE: the freebsd kernel hands the
-# vector base in %rdi and [rsp] may hold a pad word below argc, so a crt0
-# reading the wrong door flips by stack address, not by input -- one green
-# run proves nothing.
+# uv1: entry, errno, sigsetjmp, and the EI_OSABI=9 brand freebsd's loader needs.
+# run four times: a crt0 reading argv wrong flips by stack address
 cat > "$d/uv1.c" <<'EOF'
 #include <unistd.h>
 #include <errno.h>
@@ -186,10 +180,11 @@ int main(int argc, char **argv) {
   return 42; }
 EOF
 moon0 -t "$arch" "$d/uv1.c" -o "$d/uv1" || fail "uv1: the default-lane compile"
+twin uv1 uv1 || fail "uv1: the mach-o compile"
 [ "$(dd if="$d/uv1" bs=1 skip=7 count=1 2>/dev/null | od -An -tu1 | tr -d ' ')" = 9 ] \
   || fail "uv1: not born branded EI_OSABI=9"
 lout=$(for i in 1 2 3 4; do run "$d/uv1" one two; echo "rc=$?"; done)
-fout=$($box 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$d/uv1") \
+fout=$($box 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$(boxbin uv1)") \
   || fail "uv1: the box could not take or run it"
 [ "$lout" = "$fout" ] || fail "uv1: the kernels disagree -- linux[$lout] $os[$fout]"
 echo "$lout" | grep -q "uv1: argc=3 jmp=7 ebadf=ok kill=ok" || fail "uv1 body -- got: $lout"
@@ -197,15 +192,11 @@ echo "$lout" | grep -q "rc=42" || fail "uv1 exit -- got: $lout"
 
 echo "$t: UV1 -- ONE default-lane binary answered both kernels the same"
 
-# ---- rung UV2: the compat members -- the WHOLE rung2 battery, one binary ----
-# the same source the -os leg runs, compiled in the DEFAULT lane: open flags,
-# stat, dirent, dup2, mkdir/rmdir, mmap, getcwd, readdir, sigaction + the
-# handler's number, sigprocmask's bits, fork + the wait status -- every one
-# translated at runtime, and the SAME file answers the SAME text on both
-# kernels. (the linux run answers here; the box answers over ssh.)
+# uv2: rung2.c -- open flags, stat, dirent, mmap, signals, fork, translated at runtime
 moon0 -t "$arch" "$d/rung2.c" -o "$d/uv2" || fail "uv2: the default-lane compile"
-l2=$(run "$d/uv2" < /dev/null; echo "rc=$?")   # stdin pinned: the battery asserts isatty(0)==0
-f2=$($box 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$d/uv2") \
+twin rung2 uv2 || fail "uv2: the mach-o compile"
+l2=$(run "$d/uv2" < /dev/null; echo "rc=$?")   # rung2.c asserts isatty(0)==0
+f2=$($box 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$(boxbin uv2)") \
   || fail "uv2: the box could not take or run it"
 [ "$l2" = "$f2" ] || fail "uv2: the kernels disagree -- linux[$l2] $os[$f2]"
 echo "$l2" | grep -q "rc=42" || fail "uv2 exit -- got: $l2"
@@ -213,11 +204,7 @@ echo "$l2" | grep -q "all" || fail "uv2 battery -- got: $l2"
 
 echo "$t: UV2 -- the whole rung2 battery, one binary, both kernels"
 
-# ---- rung UV-net: the socket family, one binary ----
-# sockaddr heads rebuilt (the BSD length byte where linux's 16-bit family
-# sits), sockopt names permuted under SOL_SOCKET's move, msg flags mapped --
-# proven over loopback TCP (bind/listen/getsockname/connect/accept), UDP
-# (sendto/recvfrom + the peer's translated head), and a unix-path pair.
+# uv-net: sockaddr heads, sockopt names, msg flags over loopback tcp, udp, unix, SCM_RIGHTS
 cat > "$d/uvnet.c" <<'EOF'
 #include <unistd.h>
 #include <errno.h>
@@ -326,8 +313,9 @@ int main(void) {
 }
 EOF
 moon0 -t "$arch" "$d/uvnet.c" -o "$d/uvnet" || fail "uvnet: the default-lane compile"
+twin uvnet uvnet || fail "uvnet: the mach-o compile"
 ln=$(run "$d/uvnet" < /dev/null; echo "rc=$?")
-fn=$($box 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$d/uvnet") \
+fn=$($box 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$(boxbin uvnet)") \
   || fail "uvnet: the box could not take or run it"
 [ "$ln" = "$fn" ] || fail "uvnet: the kernels disagree -- linux[$ln] $os[$fn]"
 echo "$ln" | grep -q "net all" || fail "uvnet battery -- got: $ln"
@@ -335,11 +323,8 @@ echo "$ln" | grep -q "rc=42" || fail "uvnet exit -- got: $ln"
 
 echo "$t: UV-net -- the socket family, one binary, both kernels"
 
-# ---- rung UV-sig: the signal perceive source, one binary ----
-# posix.c's sigfd lane, spelled out: signalfd where the kernel has it, and on
-# its ENOSYS the kqueue door -- EVFILT_SIGNAL idents in CANONICAL numbers both
-# ways, fired by a BLOCKED signal (the signalfd contract), the child still
-# waitable after the event. the SAME text on both kernels.
+# uv-sig: signalfd, or kqueue's EVFILT_SIGNAL on its ENOSYS, in canonical numbers,
+# fired by a blocked signal, the child still waitable after
 cat > "$d/uvsig.c" <<'EOF'
 #include <unistd.h>
 #include <errno.h>
@@ -397,8 +382,9 @@ int main(void) {
 }
 EOF
 moon0 -t "$arch" "$d/uvsig.c" -o "$d/uvsig" || fail "uvsig: the default-lane compile"
+twin uvsig uvsig || fail "uvsig: the mach-o compile"
 ls2=$(run "$d/uvsig" < /dev/null; echo "rc=$?")
-fs2=$($box 'cat > /tmp/uvsig && chmod +x /tmp/uvsig && /tmp/uvsig; echo "rc=$?"' < "$d/uvsig") \
+fs2=$($box 'cat > /tmp/uvsig && chmod +x /tmp/uvsig && /tmp/uvsig; echo "rc=$?"' < "$(boxbin uvsig)") \
   || fail "uvsig: the box could not take or run it"
 [ "$ls2" = "$fs2" ] || fail "uvsig: the kernels disagree -- linux[$ls2] $os[$fs2]"
 echo "$ls2" | grep -q "uvsig: usr1=10 chld=17 canonical" || fail "uvsig body -- got: $ls2"
@@ -406,12 +392,8 @@ echo "$ls2" | grep -q "rc=42" || fail "uvsig exit -- got: $ls2"
 
 echo "$t: UV-sig -- the signal source, signalfd or kqueue, both kernels"
 
-# ---- rung UV-pty: the pty quartet, one binary ----
-# posix_openpt (freebsd's real syscall; /dev/ptmx elsewhere), grantpt
-# (netbsd's TIOCGRANTPT; a no-op where open grants), unlockpt, ptsname
-# (FIODGNAME / TIOCPTSNAME / TIOCGPTN -- three kernels, three shapes), then
-# the slave opens, tells tty, and carries a line. names differ per kernel
-# (/dev/pts/N vs /dev/ttypN) so the text prints none of them.
+# uv-pty: posix_openpt, grantpt, unlockpt, ptsname, then the slave carries a line.
+# pty names differ per kernel, so none is printed
 cat > "$d/uvpty.c" <<'EOF'
 #include <unistd.h>
 #include <errno.h>
@@ -444,8 +426,9 @@ int main(void) {
 }
 EOF
 moon0 -t "$arch" "$d/uvpty.c" -o "$d/uvpty" || fail "uvpty: the default-lane compile"
+twin uvpty uvpty || fail "uvpty: the mach-o compile"
 lp=$(run "$d/uvpty" < /dev/null; echo "rc=$?")
-fp=$($box 'cat > /tmp/uvpty && chmod +x /tmp/uvpty && /tmp/uvpty; echo "rc=$?"' < "$d/uvpty") \
+fp=$($box 'cat > /tmp/uvpty && chmod +x /tmp/uvpty && /tmp/uvpty; echo "rc=$?"' < "$(boxbin uvpty)") \
   || fail "uvpty: the box could not take or run it"
 [ "$lp" = "$fp" ] || fail "uvpty: the kernels disagree -- linux[$lp] $os[$fp]"
 echo "$lp" | grep -q "pty all" || fail "uvpty battery -- got: $lp"
@@ -453,15 +436,8 @@ echo "$lp" | grep -q "rc=42" || fail "uvpty exit -- got: $lp"
 
 echo "$t: UV-pty -- the quartet, one binary, both kernels"
 
-# ---- rung UV-siginfo: SA_SIGINFO, one binary, both kernels ----
-# the record itself, not just the number. a handler that asked for SA_SIGINFO is
-# handed the kernel's own siginfo, and the three kernels lay it three ways:
-# freebsd puts pid/uid/status ahead of the address and numbers si_code's SENDER
-# band from 0x10001, netbsd swaps code and errno in the head and unions the
-# address with the child, linux is the shape moonlibc canonicalises to. so the
-# SAME binary must read the SAME record everywhere -- a wrong offset or an
-# untranslated code shows up as a differing line, not as a crash.
-# the pid and uid are reported as a MATCH: they differ between two machines.
+# uv-siginfo: each kernel lays siginfo its own way; the same binary must read the same
+# record. pids are reported as a match, since they differ between machines
 cat > "$d/uvsi.c" <<'EOF'
 #include <unistd.h>
 #include <signal.h>
@@ -545,9 +521,16 @@ int main(void) {
   return 42; }
 EOF
 moon0 -t "$arch" "$d/uvsi.c" -o "$d/uvsi" || fail "uvsi: the default-lane compile"
+twin uvsi uvsi || fail "uvsi: the mach-o compile"
 lout=$(run "$d/uvsi"; echo "rc=$?")
-fout=$($box 'cat > /tmp/uvsi && chmod +x /tmp/uvsi && /tmp/uvsi; echo "rc=$?"' < "$d/uvsi") \
+fout=$($box 'cat > /tmp/uvsi && chmod +x /tmp/uvsi && /tmp/uvsi; echo "rc=$?"' < "$(boxbin uvsi)") \
   || fail "uvsi: the box could not take or run it"
+# xnu fills a sent SIGBUS as a fault of its own (BUS_ADRERR, no sender), its libc's
+# handlers reading the same: there is no sender to give back, so that line is not compared
+if [ "$os" = macos ]; then
+  echo "$fout" | grep -q "uvsi: sbus signo=7 code=2 pid=0" || fail "uvsi: xnu's sent bus fault -- got: $fout"
+  lout=$(echo "$lout" | grep -v "uvsi: sbus"); fout=$(echo "$fout" | grep -v "uvsi: sbus")
+fi
 [ "$lout" = "$fout" ] || fail "uvsi: the kernels disagree -- linux[$lout] $os[$fout]"
 echo "$lout" | grep -q "uvsi: chld signo=17 code=1 status=7 pid=1" \
   || fail "uvsi child lane -- got: $lout"
@@ -555,21 +538,84 @@ echo "$lout" | grep -q "uvsi: usr1 signo=10 code=0 pid=1" \
   || fail "uvsi sender band -- got: $lout"
 echo "$lout" | grep -q "uvsi: segv signo=11 code=1 addr=0x12340000" \
   || fail "uvsi fault lane -- got: $lout"
-echo "$lout" | grep -q "uvsi: sbus signo=7 code=0 pid=1" \
+[ "$os" = macos ] || echo "$lout" | grep -q "uvsi: sbus signo=7 code=0 pid=1" \
   || fail "uvsi sent-fault lane -- got: $lout"
 echo "$lout" | grep -q "rc=42" || fail "uvsi exit -- got: $lout"
 
 echo "$t: UV-siginfo -- one SA_SIGINFO record read the same on both kernels"
 
-# ---- the trophy, opt-in by name (FBSD_SEED=1, minutes): the seed builds the
-# seed ON THE BOX, and the bytes are the tree's own. the bake is budget-
-# invariant now, so the box's budget (RAM economics) does not move the answer.
+# uvth: threads -- thr_new and _umtx_op on freebsd, _lwp_create and __futex on netbsd, clone
+# on linux: four threads count under a mutex and a condition, each its own self, joined, and a
+# timed wait that times out. the BSDs thread on the 64-bit ISAs; macos does not yet
+case "$os-$arch" in
+  *-x64|*-a64|*-rv64) [ "$os" = macos ] || {
+cat > "$d/uvth.c" <<'EOF'
+#include <pthread.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>
+
+static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+static int count, ready;
+static pthread_t self[4];
+
+static void *work(void *a) {
+  int i = (int) (long) a;
+  self[i] = pthread_self();
+  pthread_mutex_lock(&mu);
+  while (!ready) pthread_cond_wait(&cv, &mu);
+  pthread_mutex_unlock(&mu);
+  for (int k = 0; k < 20000; k++) { pthread_mutex_lock(&mu); count++; pthread_mutex_unlock(&mu); }
+  return (void *) (long) (i * 7); }
+
+int main(void) {
+  pthread_t t[4];
+  for (long i = 0; i < 4; i++) if (pthread_create(&t[i], 0, work, (void *) i)) { puts("uvth: no thread"); return 1; }
+  usleep(20000);
+  pthread_mutex_lock(&mu); ready = 1; pthread_cond_broadcast(&cv); pthread_mutex_unlock(&mu);
+  long sum = 0;
+  for (int i = 0; i < 4; i++) { void *r; pthread_join(t[i], &r); sum += (long) r; }
+  int distinct = 1;
+  for (int i = 0; i < 4; i++) for (int j = 0; j < i; j++) if (pthread_equal(self[i], self[j])) distinct = 0;
+  for (int i = 0; i < 4; i++) if (pthread_equal(self[i], pthread_self())) distinct = 0;
+  struct timespec ab;
+  clock_gettime(CLOCK_REALTIME, &ab);
+  ab.tv_nsec += 50000000; if (ab.tv_nsec >= 1000000000) ab.tv_sec++, ab.tv_nsec -= 1000000000;
+  pthread_mutex_lock(&mu);
+  int to = pthread_cond_timedwait(&cv, &mu, &ab);
+  pthread_mutex_unlock(&mu);
+  printf("uvth: count=%d sum=%ld distinct=%d timedout=%d\n", count, sum, distinct, to == ETIMEDOUT);
+  return 42; }
+EOF
+moon0 -t "$arch" "$d/uvth.c" -o "$d/uvth" || fail "uvth: the default-lane compile"
+lout=$(run "$d/uvth"; echo "rc=$?")
+fout=$($box 'cat > /tmp/uvth && chmod +x /tmp/uvth && /tmp/uvth; echo "rc=$?"' < "$d/uvth") \
+  || fail "uvth: the box could not take or run it"
+[ "$lout" = "$fout" ] || fail "uvth: the kernels disagree -- linux[$lout] $os[$fout]"
+echo "$lout" | grep -q "uvth: count=80000 sum=42 distinct=1 timedout=1" || fail "uvth body -- got: $lout"
+echo "$lout" | grep -q "rc=42" || fail "uvth exit -- got: $lout"
+echo "$t: UV-threads -- four threads counted, joined and timed out alike on both kernels"
+# ..and love's own pool there, x64's love being the binary that goes: its widths, and the
+# frame the same at every width (test/host/pool.l)
+if [ "$arch" = x64 ]; then
+  pout=$($box 'rm -rf /tmp/uvpool && mkdir /tmp/uvpool && cd /tmp/uvpool && cat > love && chmod +x love' < "$ho/love" \
+    && cat test/00-init.l test/host/pool.l test/zz-fin.l | $box 'cd /tmp/uvpool && ./love; echo "rc=$?"; cd / && rm -rf /tmp/uvpool') \
+    || fail "uvpool: the box could not run the pool's law -- got: $pout"
+  echo "$pout" | grep -q "rc=0" || fail "uvpool: the pool's law on $os -- got: $pout"
+  echo "$t: UV-pool -- love's pool took its widths, and drew one frame at each"
+fi
+} ;;
+esac
+
+# the seed leg (*_SEED=1, minutes): the seed builds itself on the box to the tree's bytes
 if [ -n "$sd" ]; then
   $box 'rm -rf /tmp/seedrun && mkdir /tmp/seedrun && cd /tmp/seedrun \
     && cat > love && chmod +x love' < "$ho/love" \
     || fail "trophy: the box could not take the seed"
-  # the love-level sigfd round rides the shipped binary: the port IS a kqueue
-  # here -- the pending take, then the PARKED take (await merges the kq fd).
+  # love's sigfd over kqueue: the pending take, then the parked one
   cat > "$d/sigkq.l" <<'EOF'
 ; sigfd and sigtake are the posix module's rows, not the bare book's. a corpus
 ; file inherits 00-init's borrow; this one is handed straight to love and owes
@@ -591,10 +637,7 @@ EOF
   { echo "$sout" | grep -q "sigkq ok" && echo "$sout" | grep -q "rc=0"; } \
     || fail "trophy: love's sigfd missed on the box -- got: $sout"
   echo "$t: sigfd rode kqueue -- the pending and the parked take, on the box"
-  # the bare-binary door: the shipped love compiles hello world from a bare
-  # cwd, resolving its headers and runtime from the CARRIED source in memory
-  # (HOME pinned to an empty scratch, and it must STAY empty -- nothing is
-  # written anywhere), and the exe answers.
+  # love cc from a bare cwd, off its carried source; HOME must stay empty
   cat > "$d/hicc.c" <<'EOF'
 #include <stdio.h>
 int main(void) { printf("hi from the bare door\n"); return 0; }

@@ -95,12 +95,12 @@
               'tags (ogg-tags (ps 1) 8)})))
    (ogg-op-start m)
     (: st (cask (opus-state (m 'ch))) r (opus-init st (m 'ch) (m 'gain)) w (2 * m 'ch) n {'n 0}
-       (? (r != 0) (\ pkt gr ())
-          (\ pkt gr (opus-packet st pkt 0 @
-                      pcm (? !(string? pcm) ()                 ; a packet that will not decode is passed over
-                             (: k (#pcm // w) t (n 'n) lo (max 0 (m 'pre - t))
-                                hi (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
-                                (pin n 'n (t + k), lo < hi ? (snip pcm (lo * w) (hi * w)) "")))))))
+       (r != 0 ? (\ pkt gr ())
+        (\ pkt gr (opus-packet st pkt 0 @
+                    pcm (? !(string? pcm) ()                 ; a packet that will not decode is passed over
+                           (: k (#pcm // w) t (n 'n) lo (max 0 (m 'pre - t))
+                              hi (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
+                              (pin n 'n (t + k), lo < hi ? (snip pcm (lo * w) (hi * w)) "")))))))
    (ogg-codecs _)
     [["flac" (p \ "\x7fFLAC" = snip p 0 5) ogg-flac-head (cite 'flac 'flac-format) ogg-flac-start]
      ["vorbis" (p \ "\x01vorbis" = snip p 0 7) ogg-vb-head (wav-s16 "vorbis") ogg-vb-start]
@@ -116,7 +116,7 @@
    (ogg-open c p) (? !(string? p) ()
                      (<c = "flac" && 0 < #p && elem (p 0 & 127) [1 6]) {'drop (p 0)}
                      [p])
-   (ogg-close h p) (? (tablet? h) (string [(((h 'drop) & 128) | 1) 0 0 0]) (cats (rev (p . h))))
+   (ogg-close h p) (? (tablet? h) (string [((h 'drop & 128) | 1) 0 0 0]) (cats (rev (p . h))))
    ; a whole packet on one page, the same way
    (ogg-shrink c p) (ogg-open c p @ t (tablet? t ? (ogg-close t "") p))
    (ogg-hjoin c held cont pk tl)
@@ -139,9 +139,9 @@
            (ogg-cut s b ls @ [pk tl]
              (? !(two? st)
                  (? !(ty & 2) "an ogg stream with no codec this reads"
-                    (: c <(filter (c \ (c 1) (pk 0 @ p (string? p ? p ""))) (ogg-codecs ()))
+                    (: c <(filter (c \ c 1 (pk 0 @ p (string? p ? p ""))) (ogg-codecs ()))
                        (? !(two? c) (go e ())
-                          (ogg-heads c () (map (p \ ogg-shrink c p) pk) 0 @
+                          (ogg-heads c () (map (ogg-shrink c) pk) 0 @
                             ['done m k] (pins m 'ogg <c 'serial sn 'at o 'skip k)
                             ['more ps] (go e [c sn ps (ogg-open c tl)])
                             why why))))
@@ -161,7 +161,7 @@
        (sync h i) (: k (findsub (snip h i #h) "OggS") (k < 0 ? -1 (i + k)))
        ; a chain's next stream: its headers read on from o, and its format the first's
        (chain h o fmt)
-        ((cite 'av 'av-head) q ogg-meta (snip h o #h) @
+        (cite 'av 'av-head q ogg-meta (snip h o #h) @
           ['short _] 0
           [m h2] (? !(tablet? m) m
                     (ogg-format m @ f (f 'rate = fmt 'rate && f 'ch = fmt 'ch && f 'align = fmt 'align))
@@ -190,5 +190,5 @@
                                      (wav-gulp q @ g (? (string? g) (run (snip h (max o (#h - 3)) #h + g) 0 m dec () k ended)
                                                         ended 0
                                                         why)))))
-       (run h0 0 m0 ((ogg-codec (m0 'ogg)) 4 m0) () (m0 'skip) 0)))
+       (run h0 0 m0 (ogg-codec (m0 'ogg) 4 m0) () (m0 'skip) 0)))
 ) ; module ogg

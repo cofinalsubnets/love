@@ -152,7 +152,7 @@
   (: m (t 'm) n (tpiece-len m i) d (cats (map (b \ peep (st 'buf) b "") ^((n + blk - 1) // blk)))
      ok (#d = n && hex2b (sha1 d) = m 'pieces i)
      (ok ? (sw-lay-piece d (swarm-spans t (i * m 'plen) n))
-        (pin t 'why ("piece " + show i + " failed its hash")),
+        (pin t 'why "piece \(i) failed its hash"),
       pin (t 'busy) i 0, pins st 'piece -1 'buf {},
       ok ? (sw-had! t i)))
 
@@ -175,8 +175,7 @@
  (swarm-add! t ps) (each ps (p \ (show p) @ k (peep (t 'tried) k 0 ? 0 (pin (t 'tried) k 1, pin t 'left (t 'left + [p])))))
  (sw-more! t mx) (? (mx <= t 'peers || atom? (t 'left) || t 'had = t 'm 'count) 0
                     (: p <(t 'left)
-                       (pin t 'left >(t 'left),
-                        pin t 'peers (t 'peers + 1),
+                       (pins t 'left >(t 'left) 'peers (t 'peers + 1),
                         sw-task! t (_ \ (sw-dial t p, pin t 'peers (t 'peers - 1))),
                         sw-more! t mx)))
  (sw-listen t l mx)
@@ -184,8 +183,8 @@
      (go _) (: _ (await l) s (accept l)
                _ (? !(hot? s) 0
                     (mx <= t 'peers) (close s)
-                    (: _ (pin t 'peers (t 'peers + 1))
-                       (sw-task! t (_ \ (take s, pin t 'peers (t 'peers - 1))))))
+                    (pin t 'peers (t 'peers + 1),
+                     sw-task! t (_ \ (take s, pin t 'peers (t 'peers - 1)))))
                (go ()))
      (sw-task! t go))
  (swarm-run t peers opts)
@@ -199,8 +198,8 @@
      (wait k) (? (peep t 'quit 0) 1
                  (!seed && stop <= t 'had) 1
                  (t 'peers = 0 && atom? (t 'left) && !(hot? l) && t 'had < t 'm 'count)
-                   ("every peer is gone, " + show (t 'had) + " of " + show (t 'm 'count) + " pieces had")
-                 (: _ (sw-more! t mx) _ (rest 1000) (tick t, wait (k + 1))))
+                   "every peer is gone, \(t 'had) of \(t 'm 'count) pieces had"
+                 (sw-more! t mx, rest 1000, tick t, wait (k + 1)))
      r (wait 0)
      (each (t 'tasks) freeze, r))
 )) ; module swarm

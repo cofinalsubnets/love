@@ -1,9 +1,8 @@
 #include "../impl.h"
 #include <arpa/inet.h>
 
-/* network-order bytes -> text, or 0 and ENOSPC when it does not fit n. v6 is lowercase
- * with no leading zeros, the longest run of two or more zero groups (the first of a tie)
- * as ::, and a quad for the last 32 bits after 96 zero bits or ::ffff -- glibc's text */
+/* glibc's v6 text: the first longest run of two or more zero groups as ::, a quad after
+ * 96 zero bits or ::ffff */
 static char *put_dec(char *p, unsigned v) {
   if (v >= 100) *p++ = (char) ('0' + v / 100);
   if (v >= 10) *p++ = (char) ('0' + v / 10 % 10);

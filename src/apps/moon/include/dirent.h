@@ -1,7 +1,7 @@
 #ifndef _LOVE_DIRENT_H
 #define _LOVE_DIRENT_H
-typedef struct __dirstream DIR;   /* opaque; glibc owns it */
-struct dirent {                   /* getdents64's record on every lane */
+typedef struct __dirstream DIR;   /* opaque */
+struct dirent {                   /* getdents64's record on every kernel */
   unsigned long long d_ino;
   long long      d_off;
   unsigned short d_reclen;

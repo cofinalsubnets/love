@@ -532,43 +532,28 @@ static int fn_eq(struct g *c, word a, word b, word **wp, word *hi) {
   *w++ = x, *w++ = y; }
  return *wp = w, 1; }
 
-// a walk's worklist: the region it was lent, then, spent, a block of its own twice the size
-// with the pending words carried over, given back when the walk ends -- a lent region is the
-// lender's. a walk past every pool's words has met a cycle: that traps
-static void walk_grow(struct g *g, word **base, word **w, word **hi, uintptr_t want, bool *own) {
- uintptr_t n = *base ? (uintptr_t) (*hi - *base) : 0, k = *base ? (uintptr_t) (*w - *base) : 0,
-           n2 = n ? 2 * n : 64;
- while (n2 - k < want) n2 *= 2;
- if (n2 > 4 * ((uintptr_t) g->len + g->major_len) + ((uintptr_t) 1 << 20)) __builtin_trap();
- word *b = alloc(NULL, n2 * sizeof(word));
- if (!b) __builtin_trap();                                // no room to walk: the oom no reservation saw
- if (k) memcpy(b, *base, k * sizeof(word));
- if (*own) alloc(*base, 0);
- *own = true, *base = b, *w = b + k, *hi = b + n2; }
-
 // the value hash: a chain spines, its cars pending on the worklist under one running h, and
 // every leaf goes to tablet.c's hash_leaf -- a function among them hashed by its thread there,
 // which never recurs into a value -- and an object tray's cells fold like cars
+// spent, it answers 0 with the room it wanted in g->walk (walk_short)
 uintptr_t hash_at(struct g *g, intptr_t x0, word *base, word *end) {
  word *sw = base, x = x0, src = 0;
  uintptr_t h = mix, t = 0;
- bool fold = chainp(x), own = false;
+ bool fold = chainp(x);
  for (;;) {
   while (chainp(x)) {
-   if (sw == end) walk_grow(g, &base, &sw, &end, 1, &own);
+   if (sw == end) return walk_short(g, base, end, 1), 0;
    h = (h ^ mix) * mix;                                   // mark a chain node
    *sw++ = A(x), x = B(x); }
   if (hash_leaf(g, x, &t, &src) == 3) {                   // an object tray: the header already in t
    struct tray *v = tray(src);
    uintptr_t n = tray_nelem(v);
-   if ((uintptr_t) (end - sw) < n) walk_grow(g, &base, &sw, &end, n, &own);
+   if ((uintptr_t) (end - sw) < n) return walk_short(g, base, end, n), 0;
    for (uintptr_t i = n; i--;) *sw++ = tray_get_obj(v, i);
    fold = true; }
   if (!fold) return t;
   h = (h ^ t) * mix;
-  if (sw == base) {
-   if (own) alloc(base, 0);
-   return h; }
+  if (sw == base) return h;
   x = *--sw; } }
 
 // one non-descending step of the walk: eq_no and eq_yes settle it, and the four descents
@@ -608,31 +593,14 @@ static enum eqstep eqv_leaf(struct g *g, word a, word b) {
 // captures), so a pair met again holds rather than walks forever. the walk never calls back
 // in, so this is the only frame of it the C stack ever holds.
 // ..eqv's region holds both: the pairs taken as equal at its base, nseen of them, and the
-// worklist over them. grown, both are carried over and the table grows with the region;
-// a region the caller lent is left to the caller, a block of the walk's own given back
-static bool eqv_grow(struct g *g, word **base, word **w, word **hi, uintptr_t *nseen,
-                     uintptr_t ns, bool *own, uintptr_t want) {
- uintptr_t n = *base ? (uintptr_t) (*hi - *base) : 0,
-           k = *base ? (uintptr_t) (*w - (*base + 2 * *nseen)) : 0, n2 = n ? 2 * n : 64, ns2;
- for (;; n2 *= 2) {
-  ns2 = n2 / 8 < *nseen ? *nseen : n2 / 8;
-  if (n2 >= 2 * ns2 + k + want) break; }
- if (n2 > 4 * ((uintptr_t) g->len + g->major_len) + ((uintptr_t) 1 << 20)) return false;
- word *b = alloc(NULL, n2 * sizeof(word));
- if (!b) return false;
- if (ns) memcpy(b, *base, 2 * ns * sizeof(word));
- if (k) memcpy(b + 2 * ns2, *base + 2 * *nseen, k * sizeof(word));
- if (*own) alloc(*base, 0);
- *own = true, *base = b, *w = b + 2 * ns2 + k, *hi = b + n2, *nseen = ns2;
- return true; }
-
+// worklist over them. either spent, it answers -1 with the room it wanted in g->walk
 static int eqv_at(struct g *g, word a, word b, word *base, word *top) {
  uintptr_t nseen = base ? (uintptr_t) (top - base) / 8 : 0, ns = 0;
  word *hi = top, *w = base ? base + 2 * nseen : 0;
- bool own = false;
  int r = 0;
  struct g *c = core_of(g);
-#define eqv_room(k) if ((uintptr_t) (hi - w) < (k) && !eqv_grow(g, &base, &w, &hi, &nseen, ns, &own, (k))) { r = -1; goto out; }
+#define eqv_short(k) { walk_short(g, base, hi, (k)); r = -1; goto out; }
+#define eqv_room(k) if ((uintptr_t) (hi - w) < (k)) eqv_short(k)
  for (;;) {
   switch (eqv_leaf(g, a, b)) {
    case eq_no: goto out;
@@ -667,32 +635,27 @@ static int eqv_at(struct g *g, word a, word b, word *base, word *top) {
      a = (word) ba, b = (word) bb; continue; }
     for (word *s = base; s && s < base + 2 * ns; s += 2)
      if (s[0] == a && s[1] == b) goto held;               // already taken as equal: it holds
-    if (ns == nseen                                       // the table is full: grown
-        && (!eqv_grow(g, &base, &w, &hi, &nseen, ns, &own, 0) || ns == nseen)) { r = -1; goto out; }
+    if (ns == nseen) eqv_short(2)                         // the table is full
     base[2 * ns] = a, base[2 * ns + 1] = b, ns++;
     { int f = fn_eq(c, a, b, &w, hi);
-      // fn_eq ran out of room: the pair comes off the table, the worklist grows, and the
-      // pair is asked again -- left on, it would read as already equal
-      if (f < 0) { ns--; if (!eqv_grow(g, &base, &w, &hi, &nseen, ns, &own, 64)) { r = -1; goto out; } continue; }
+      if (f < 0) eqv_short(64)                            // fn_eq ran out of room
       if (f == 0) goto out; }
    held:
     break; } }
   if (w == (base ? base + 2 * nseen : 0)) { r = 1; goto out; }   // drained: all equal
   b = *--w, a = *--w; }
 #undef eqv_room
+#undef eqv_short
  out:
- if (own) alloc(base, 0);
  return r; }
 
 // a map probe and a comparator both answer mid-reservation, where nothing may allocate on the
-// heap: the walk grows a worklist of its own off it.
+// heap: the walk takes the gap, and spent answers 0 with g->walk set, for its op to run again
 love_noinline bool eqv(struct g *g, word a, word b) {
  enum eqstep s = eqv_leaf(g, a, b);
  if (s == eq_yes || s == eq_no) return s == eq_yes;        // settled without a walk, so no scratch
  word *top, *base = gap(g, &top);
- int r = eqv_at(g, a, b, base, top);
- if (r < 0) __builtin_trap();                            // no room to walk: the oom no reservation saw
- return r > 0; }
+ return eqv_at(g, a, b, base, top) > 0; }
 
 // whole-array `=`: a boolean like every other kind (shapes match, every cell
 // equal), not the elementwise mask -- `<` and `>` are the mask makers. cells
@@ -778,7 +741,8 @@ lvm(lvm_eq) {
  Pack(g);                                                 // the gap is the nursery's free room: true only packed
  word *top, *base = gap(g, &top);
  int r = eq_value(g, a, b, base, top);
- if (r < 0) love_musttail return Ap(_lvm_ghelp, g);         // no room to walk: the scare
+ WalkAgain();                                             // the gap ran out: more room, and again
+ if (r < 0) love_musttail return Ap(_lvm_ghelp, g);
  Sp[1] = r ? putcharm(1) : zero;
  love_musttail return Nextp(1, 1); }
 
@@ -813,7 +777,8 @@ lvm(lvm_elem) { word x = Sp[0], l = Sp[1];
  word *top, *base = gap(g, &top);
  for (; chainp(l) && !nomp(l); l = B(l)) {
   int r = eq_value(g, x, A(l), base, top);
-  if (r < 0) love_musttail return Ap(_lvm_ghelp, g);        // no room to walk: the scare
+  WalkAgain();                                            // the gap ran out: more room, and again
+  if (r < 0) love_musttail return Ap(_lvm_ghelp, g);
   if (r) love_musttail return Push(putcharm(1)); }
  love_musttail return Push(zero); }
 
@@ -837,8 +802,8 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
  if (op == vop_eq) {                            // a cell against a cell: the whole `=`, structural
   word *top, *base = gap(*fp, &top);
   int r = eq_value(*fp, a, b, base, top);
-  if (r < 0) return *fp = encode(*fp, status_scare), zero;      // no room to walk: the scare
-  return r ? putcharm(1) : zero; }
+  if (r < 0 && !(*fp)->walk) return *fp = encode(*fp, status_scare), zero;
+  return r > 0 ? putcharm(1) : zero; }                         // spent: obin_run takes the room
  if (op >= vop_lt) {                            // comparison -> 1 / zero, no allocation
   if (!isnum(a) || !isnum(b)) return zero;       // twinp not in isnum -> unordered -> zero
   intptr_t t = (gemp(a) || gemp(b)) ? vcmp_flo(op, toflo(a), toflo(b))
@@ -934,10 +899,14 @@ static struct g *obin_run(struct g *g, int op) {
  struct bcast w; bc_open(&w, atray ? tray(g->sp[1]) : 0, btray ? tray(g->sp[2]) : 0, R, shp);
  for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
   intptr_t oa = w.oa, ob = w.ob;
-  word ae = atray ? tray_get_obj(tray(g->sp[1]), oa) : g->sp[1],  // scalar operand re-read each step
-       be = btray ? tray_get_obj(tray(g->sp[2]), ob) : g->sp[2],
-       res = obin_elem(&g, op, ae, be);
-  if (!ok(g)) return g;
+  word res;
+  for (;;) {                                                     // a walk spent: the room, and the cell again
+   word ae = atray ? tray_get_obj(tray(g->sp[1]), oa) : g->sp[1],  // scalar operand re-read each step
+        be = btray ? tray_get_obj(tray(g->sp[2]), ob) : g->sp[2];
+   res = obin_elem(&g, op, ae, be);
+   if (!ok(g)) return g;
+   if (!g->walk) break;
+   if (!ok(g = walk_room(g))) return g; }
   tray_put_obj(tray(g->sp[0]), p, res);                          // re-fetch result post-alloc
   // and barrier it: a minor mid-loop promotes the result array while its
   // elements stay young -- an edge the rem set must carry, or the next minor

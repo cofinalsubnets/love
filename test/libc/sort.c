@@ -1,10 +1,5 @@
-/* qsort -- ours is a shellsort with n/2 halving gaps, glibc's is a mergesort
- * with a quicksort fallback. NEITHER IS STABLE and the standard does not ask
- * them to be, so every case here sorts DISTINCT keys: a differential on equal
- * keys would compare an ordering neither library promises.
- *
- * the sizes walk past the gap sequence's turns, and the element size is varied
- * because the byte-swap lane is where a size-agnostic sort goes wrong. */
+/* qsort: neither ours nor glibc's is stable, so every case sorts distinct keys. the
+ * sizes walk past the gap sequence's turns, and the element size varies for the swap lane. */
 #include <stdlib.h>
 #include <string.h>
 #include "say.h"
@@ -30,7 +25,7 @@ static void show(char const *nm, int const *v, int n) {
 int main(void) {
  int v[64];
 
- /* a scrambler with no library call in it, so the INPUT is identical in
+ /* a scrambler with no library call in it, so the input is identical in
     both builds however each one's rand() behaves */
  for (int n = 0; n <= 33; n++) {
   for (int i = 0; i < n; i++) v[i] = (i * 37 + 11) % 101;

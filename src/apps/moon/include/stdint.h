@@ -1,7 +1,5 @@
 #ifndef _LOVE_STDINT_H
 #define _LOVE_STDINT_H
-/* freestanding stdint for cc (rung 3, stage 7c-ii). the unsigned types are real
- * now -- cc has `unsigned` (zero-extend loads, logical >>, unsigned cmp/div). */
 typedef signed char        int8_t;
 typedef short              int16_t;
 typedef int                int32_t;
@@ -18,8 +16,7 @@ typedef unsigned int       uint32_t;
 #define UINT16_MAX  65535
 #define UINT32_MAX  4294967295U
 #if defined(__arm__) || defined(__i386__)
-/* the 32-bit targets (thumb, i386): long IS the 4-byte word; long long is
- * the 8-byte register pair. */
+/* the 32-bit targets: long is 4 bytes, long long the 8-byte pair */
 typedef long long          int64_t;
 typedef unsigned long long uint64_t;
 typedef long               intptr_t;
@@ -49,9 +46,7 @@ typedef unsigned long      uintmax_t;
 #define SIZE_MAX    18446744073709551615UL
 #endif
 
-/* the least/fast families, glibc's spellings: least is the exact width, and
- * fast8 is a char while fast16/32 take the machine word (a long here, an int
- * on the 32-bit targets) -- the widths are ABI, not taste. */
+/* glibc's widths, which are abi: least is exact, fast8 a char, fast16/32 the machine word */
 typedef int8_t   int_least8_t;   typedef uint8_t   uint_least8_t;
 typedef int16_t  int_least16_t;  typedef uint16_t  uint_least16_t;
 typedef int32_t  int_least32_t;  typedef uint32_t  uint_least32_t;

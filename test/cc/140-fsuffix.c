@@ -1,14 +1,5 @@
-/* Two bugs, one symptom. C11 6.4.4.2: an `f` suffix makes a FLOAT constant -- ours
- * kept 53 bits, so sizeof(1.5f) was 8 and `0.1f == 0.1` was TRUE. Fixing the type
- * alone did not fix the value, which exposed the deeper one:
- *
- * A CAST TO float NEVER ROUNDED. gen keeps every float as a double in a register
- * and narrows only at a STORE (fstf), so `(float)d` passed the double straight
- * through -- (float)0.1 == 0.1 read true for a variable too, not just a literal.
- * The cast now round-trips through single precision, which is where the rounding
- * becomes observable. The integer twin -- an `l` suffix, landed 2026-08-16 -- sits
- * at the end.
- */
+/* an f suffix makes a float constant (sizeof 4, 0.1f != 0.1), a cast to float
+ * rounds to single precision, and an l suffix makes a long. */
 #include <stdio.h>
 
 static double dv = 0.1;

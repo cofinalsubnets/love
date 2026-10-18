@@ -13,7 +13,7 @@
 (: bs 4096  bpg 32768  isz 256  flex 16  apb 1024  fino 11  usedi 12
    (le v n) (wrle v n)
    (be v) (wrbe v 4)
-   (oops m) (say err ("ext4: " + m + "\n"), quit 1)
+   (oops m) (say err "ext4: \(m)\n", quit 1)
    (cdiv a b) ((a + b - 1) // b)
    (ones n) (join "" (map (_ \ string 255) ^n))
    ; ext4's crc32c is the raw register: no complement in or out
@@ -24,7 +24,7 @@
    (atb s o b) (snip s 0 o + b + snip s (o + #b) #s)
 
    ; --- the used blocks, as half-open runs [a b) sorted by start -----------------------------
-   (runs _) (pins {} 'iv ())
+   (runs _) {'iv ()}
    (mark u a n)
     (: (ins l) (? (atom? l) [[a (a + n)]]
                   (<l 0 < a) (<l . ins >l)
@@ -68,7 +68,7 @@
            (rem > 0 && rem < over + 50 ? (fit (nb - rem)) {'nb nb 'ng ng 'db db 'ipg ipg 'ib ib 'rsv rsv}))
        g (fit nb0)
        r (5 * nb0 // 100)
-       (pin g 'r (g 'nb = nb0 ? r (floor (100.0 * r / nb0 * g 'nb / 100.0)))))
+       (pin g 'r (g 'nb @ ^nb0 r (floor (100.0 * r / nb0 * g 'nb / 100.0)))))
 
    (ext4-make nb0 uuid hseed stamp)
     (: g (geometry nb0)
@@ -82,7 +82,7 @@
        (glast gr) (min nb (gr * bpg + bpg) - 1)
        (free gr) (glast gr - gfirst gr + 1 - used u (gfirst gr) (glast gr + 1))
        ; each group's superblock, descriptors and growth room
-       _ (foldl (_ \ gr \ (super? gr ? (mark u (gfirst gr) (1 + db + rsv)) 0)) 0 ^ng)
+       _ (foldl (_ \ gr \ super? gr ? (mark u (gfirst gr) (1 + db + rsv)) 0) 0 ^ng)
 
        ; --- the tables, flex_bg's way: bitmaps then tables, packed at the flex group's head ---
        ; gfb: the first b in [s, f) whose n blocks are free, or -1
@@ -110,7 +110,7 @@
            _ (pin ibl gr b2)
            b3 (grab (offset gr (gr % flex > 0 ? (itl (gr - 1) + ib) (b2 + toff)) ib rem) ib)
            (pin itl gr b3))
-       _ (foldl (_ \ gr \ table gr) 0 ^ng)
+       _ (foldl (_ \ table) 0 ^ng)
        overhead (used u 0 nb)
 
        ; --- inodes: the fields mke2fs writes; the checksum goes on last, over all 256 bytes ---
@@ -124,7 +124,7 @@
            (pin inodes ino (head + blk + tail + ext + zbytes (isz - 128 - #ext))))
        (ext-tree es)
         (le 62218 2 + le #es 2 + le 4 2 + le 0 2 + le 0 4
-         + join "" (map (e \ e @ [l n p] (le l 4 + le n 2 + le (p >> 32) 2 + le (p & 4294967295) 4)) es))
+         + join "" (map ([l n p] \ le l 4 + le n 2 + le (p >> 32) 2 + le (p & 4294967295) 4) es))
        (isum ino s)
         (: big (rdle s 128 2 >= 4)
            z (at (big ? (at s 130 0 2) s) 124 0 2)
@@ -170,9 +170,9 @@
              (nb < 8388608) 32768 (nb < 16777216) 65536 (nb < 33554432) 131072 262144)
        (busy k) (k < ng && free k = 0 ? (busy (k + 1)) k)
        mg (nb // 2 // bpg)
-       jst (? (mg > flex) (busy (mg - mg % flex) @ k (k = ng ? 0 k)) (mg > 0) (mg - 1) 0)
+       jst (? (mg > flex) (busy (mg - mg % flex) @ k (k @ ^ng 0 k)) (mg > 0) (mg - 1) 0)
        jen ((mg > flex ? jst mg) @ m (m + 1 < ng ? (m + 1) m))
-       jgr (foldl (b \ k \ (free k > free b ? k b)) jst (map (k \ jst + 1 + k) ^(jen - jst)))
+       jgr (foldl (b \ k \ free k > free b ? k b) jst (map (jst + 1 +) ^(jen - jst)))
        (stretch goal left)
         (? (left = 0) ()
            (zero u goal (nb - 1) @ b
@@ -181,7 +181,7 @@
                   (mark u b n, [b n] . stretch (b + n) (left - n))))))
        jr (stretch (gfirst jgr) jn)
        _ (#jr > 4 ? (oops "the journal needs an extent tree") 0)
-       jes (rev (foldl (a \ r \ ([(net (map (e \ e 1) a)) (r 1) (r 0)] . a)) () jr))
+       jes (rev (foldl (a \ r \ ([+(map (e \ e 1) a) (r 1) (r 0)] . a)) () jr))
        jtree (ext-tree jes)
        _ (iput 8 33152 (jn * bs) 1 jn 524288 jtree 1)
        _ (bput img (jr 0 0) (be 3225106840 + be 4 + be 0 + be bs + be jn + be 1 + be 1 + zbytes 20 + uuid + be 1))
@@ -201,7 +201,7 @@
                 0 (sort (keys inodes)))
        (ibits gr)
         (gr > 0 ? (zbytes (ipg // 8))
-           (join "" (map (k \ string (foldl (x \ j \ (k * 8 + j < usedi ? (x | (1 << j)) x)) 0 ^8)) ^(ipg // 8))))
+           (join "" (map (k \ string (foldl (x \ j \ k * 8 + j < usedi ? (x | (1 << j)) x) 0 ^8)) ^(ipg // 8))))
        (uninit gr) (gr < ng - 1 && used u (gfirst gr) (glast gr + 1) = 0)
        (desc gr)
         (: bc (uninit gr ? 0 (crc seed (bitmap u (gfirst gr) bpg nb)))
@@ -228,7 +228,7 @@
            (at s1 1020 (crc 4294967295 (snip s1 0 1020)) 4))
        _ (foldl (_ \ gr \ (? (super? gr)
                               (: b (gfirst gr)
-                                 _ (gr = 0 ? (poke img 0 1024 (sb 0)) (bput img b (sb gr)))
+                                 _ (gr @ 0 (poke img 0 1024 (sb 0)) (bput img b (sb gr)))
                                  (foldl (_ \ k \ bput img (b + 1 + k) (snip descs (k * bs) (min #descs (k * bs + bs)))) 0 ^db))
                               0))
                 0 ^ng)
@@ -237,9 +237,9 @@
    (ext4-image img nb)
     (join "" (map (b \ peep img b (zbytes bs)) ^nb))
    (ext4-write path img nb)
-    (truncate path (nb * bs) 1 @ r (? (nom? r) (oops ("cannot size " + path))
+    (truncate path (nb * bs) 1 @ r (nom? r ? (oops "cannot size \(path)")
       (each (sort (keys img))
         (b \ openfd path 4 @ fd (? (charm? fd && fd >= 0) (lseek fd (b * bs) 0, fdopen fd @ p (say p (img b), close p))
-                                 (oops ("cannot write " + path)))))))
+                                 (oops "cannot write \(path)"))))))
 )
 ) ; module ext4

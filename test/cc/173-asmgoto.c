@@ -1,7 +1,6 @@
-/* gcc's asm goto, held to gcc: the jump lands on the function's own label, numbered
- * after every operand (past two, %l3 is the second) or named (%l[five]); a value the fall-through
- * knows does not ride the asm's edge; an edge back up is a loop; a label is reached by
- * the asm and a plain goto alike. a target with no template here computes the same. */
+/* asm goto, held to gcc: labels numbered after the operands (%l3) or named (%l[five]), a
+ * back edge as a loop, a label reached by asm and goto alike. targets without a template compute
+ * the same. */
 
 #if defined(__x86_64__)
 #define PICK  "cmpq $5, %0\n\tje %l[five]\n\tcmpq $7, %0\n\tje %l3"

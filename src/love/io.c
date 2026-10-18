@@ -517,22 +517,27 @@ static love_inline struct g*gfputbn(struct g *g, intptr_t n, uint8_t b, struct i
  return g->io = o, ioputn(g, n, b); }
 
 // --- partial-application introspection ---
-// a partial-app closure is a thread headed lvm_unc (or [lvm_cur n][lvm_unc …]);
-// each unc cell holds a captured arg at [1] and a link at [2], so the base value
-// is terminal_link-2 and the args are the chain of [1] fields, newest first.
+// a partial-app closure is a thread headed by a chain of unc cells (or [lvm_cur n] and
+// the chain). an unc cell holds one captured arg at [1] and a link at [2], an uncn cell
+// [uncn n x1..xn link] n of them in application order; the outer cells hold the newest,
+// and the base value is the terminal link-2.
+static love_inline bool fn_uncp(union u *u) { return u[0].ap == lvm_unc || u[0].ap == lvm_uncn; }
+static love_inline int fn_uncw(union u *u) { return u[0].ap == lvm_unc ? 1 : (int) getcharm(u[1].x); }
+static love_inline union u *fn_link(union u *u) { return u[0].ap == lvm_unc ? u[2].m : u[2 + getcharm(u[1].x)].m; }
 bool fn_partialp(union u *k) {
- return k[0].ap == lvm_unc || (k[0].ap == lvm_cur && k[2].ap == lvm_unc); }
+ return fn_uncp(k) || (k[0].ap == lvm_cur && fn_uncp(k + 2)); }
 static love_inline union u *fn_unc0(union u *k) {
  return k[0].ap == lvm_cur ? k + 2 : k; }       // first unc cell
 union u *fn_base(union u *k, int *nargs) { // base value + captured-arg count
  union u *u = fn_unc0(k), *link;
  int n = 0;
- for (;;) { link = u[2].m; n++; if (link[0].ap != lvm_unc) break; u = link; }
+ for (;;) { link = fn_link(u); n += fn_uncw(u); if (!fn_uncp(link)) break; u = link; }
  return *nargs = n, link - 2; }
 word fn_arg(union u *k, int i, int nargs) { // i-th arg in application order
  union u *u = fn_unc0(k);
- for (int w = nargs - 1 - i; w > 0; w--) u = u[2].m;
- return u[1].x; }
+ int at = nargs - fn_uncw(u);                   // the first index this cell holds
+ while (i < at) u = fn_link(u), at -= fn_uncw(u);
+ return u[0].ap == lvm_unc ? u[1].x : u[2 + i - at].x; }
 // what `=` and the hash read a function value as: a native is its bytecode twin (the code
 // is a copy of it, at an address of its own), anything else itself. a native is the one
 // cell whose code word is the arena's and repeats in the header one word ahead of the value

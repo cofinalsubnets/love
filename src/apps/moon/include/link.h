@@ -1,7 +1,6 @@
 #ifndef _LOVE_LINK_H
 #define _LOVE_LINK_H
-/* just enough ELF for image.c: dl_iterate_phdr (the bake_phdr walk) and the file
-   headers the self-bake rewrites to grow the .image segment (bake_tail). */
+/* just enough elf for dl_iterate_phdr and the file headers the bake rewrites */
 typedef unsigned long  Elf64_Addr;
 typedef unsigned long  Elf64_Off;
 typedef unsigned long  Elf64_Xword;

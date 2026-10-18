@@ -1,8 +1,4 @@
-; mint serials -- every mint draws from one stream (pids share it), and the serial is what
-; makes the total order total over points: symbols order by name, then interned-first, then
-; serial (creation order), so the nameless sort among themselves by when they were made.
-; the serial is also the mint's hash, so distinct mints key a map apart. (the +/* lanes a
-; symbol inherits are spec.l's; the fine dispatch cells are test/matrix.l's.)
+; mint serials: symbols order by name, then interned-first, then serial (creation order)
 (: a (mint 0) b (mint 0) c (mint 0)
  (test
   (a < b) (b < c) (a < c) !(b < a) !(c < b)     ; strict, transitive, by creation

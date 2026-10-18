@@ -1,9 +1,6 @@
 #include "../impl.h"
 
-/* fopen's other door: the fd is already open, so only the FILE is minted. The
- * mode is trusted rather than checked against the fd's real flags -- fcntl
- * F_GETFL would answer, but every caller here passes the mode it opened with,
- * and a wrong one is the caller's bug in a way a silent correction would hide. */
+/* the mode is trusted, not checked against the fd's flags: a wrong one is the caller's bug */
 FILE *fdopen(int fd, char const *mode) {
   int wr = 0;
   if (mode[0] == 'w' || mode[0] == 'a') wr = 1;

@@ -1,12 +1,8 @@
 #ifndef _LOVE_INTTYPES_H
 #define _LOVE_INTTYPES_H
-/* freestanding inttypes for cc: the fixed-width types come from stdint, plus the
- * PRI format macros and the strtoimax/strtoumax conversions programs call. */
 #include <stdint.h>
 
-/* the PRI format macros, C99 7.8.1: an int-sized type takes no length, a long-sized one l,
-   and the 64-bit ones are long here but long long on the 32-bit arm seats (whose intptr_t is
-   a long, as stdint.h has it) */
+/* the 64-bit ones are long here but long long on the 32-bit targets */
 #define PRId8      "d"
 #define PRIi8      "i"
 #define PRIo8      "o"

@@ -336,8 +336,8 @@ LvDef("inflate-feed", inflate_feed, 2, "gz");
 // a twin held to the bytes: same greedy parse (chain 32, min match 3, the far-3
 // refusal at 4096), same 16384-symbol blocks each costed stored/fixed/dynamic, same
 // two-queue Huffman merge with its leaf-wins tie, same halving walk back under the
-// depth limit -- so `cmp` over any input is the differential. gz-deflate stays the
-// readable statement; test/host/gzc.l holds the two to the same bytes.
+// depth limit -- so `cmp` over any input is the differential. test/host/gzdeflate.l's
+// gz-deflatel is the readable statement; test/host/gzc.l holds the two to the same bytes.
 // why it exists: the love coder is 35x-to-13x off C, but its real cost is the heap.
 // interpreted DEFLATE churns cells per symbol, and on the love0 egg that runs selfpack
 // the heap grows toward the budget before a collection pays. this is a fixed window
@@ -376,41 +376,6 @@ static uint32_t df_rev(uint32_t v, unsigned k) {
 // the ladders are short and walked from the top (gz-lcode/gz-dcode)
 static unsigned df_lcode(unsigned v) { for (unsigned i = 28; i >= 1; i--) if (gz_lbase[i] <= v) return i; return 0; }
 static unsigned df_dcode(unsigned v) { for (unsigned i = 29; i >= 1; i--) if (gz_dbase[i] <= v) return i; return 0; }
-
-// --- the Huffman lengths: sorted leaves + the internal queue, ties to the leaf,
-// --- and the halving walk when the code outgrows the format (gz-hpass exactly).
-// scratch rows are the caller's; pa is zeroed here because depth chases it to 0.
-static unsigned df_hlens(uint32_t *f, unsigned nsym, unsigned lim, uint8_t *lens,
-                         uint32_t *hc, uint32_t *keys, uint32_t *w, uint32_t *sy, uint32_t *pa) {
- unsigned i, u = 0, pass;
- for (i = 0; i < nsym; i++) hc[i] = f[i];
- for (i = 0; i < nsym; i++) if (hc[i]) u++;
- if (u < 2) { if (!hc[0]) hc[0] = 1; if (!hc[1]) hc[1] = 1; }   // a code needs two symbols
- for (pass = 0;; pass++) {
-  unsigned nl = 0, top, li, ii, mx = 0;
-  for (i = 0; i < nsym; i++) if (hc[i]) keys[nl++] = (hc[i] << 9) + i;
-  unsigned a; for (a = 1; a < nl; a++) {                      // counts ride their symbol; ties to
-   uint32_t v = keys[a]; unsigned b = a;                      // the lower symbol, sort ascending
-   while (b && keys[b - 1] > v) { keys[b] = keys[b - 1]; b--; }
-   keys[b] = v; }
-  for (i = 0; i < nl; i++) { w[i] = keys[i] >> 9; sy[i] = keys[i] & 511; }
-  memset(pa, 0, (2 * nl - 1) * sizeof *pa);
-  li = 0; ii = nl;
-  for (top = nl; top + 1 <= 2 * nl - 1; top++) {
-   unsigned a, b;
-#define DF_PICK(L, I) ((L) < nl && ((I) >= top || w[L] <= w[I]))
-   if (DF_PICK(li, ii)) a = li++; else a = ii++;
-   if (DF_PICK(li, ii)) b = li++; else b = ii++;
-#undef DF_PICK
-   w[top] = w[a] + w[b]; pa[a] = top + 1; pa[b] = top + 1; }
-  memset(lens, 0, nsym);
-  for (i = 0; i < nl; i++) {
-   unsigned d = 0, p = pa[i];
-   while (p) { d++; p = pa[p - 1]; }
-   lens[sy[i]] = (uint8_t) d;
-   if (d > mx) mx = d; }
-  if (mx <= lim || pass >= 32) return mx;
-  for (i = 0; i < nsym; i++) if (hc[i]) { uint32_t h = hc[i] >> 1; hc[i] = h ? h : 1; } } }
 
 // canonical, shortest first, ties by symbol, stored reversed (gz-hcodes)
 static void df_hcodes(const uint8_t *lens, unsigned nsym, unsigned mx, uint32_t *code) {
@@ -478,8 +443,9 @@ static void df_wstored(struct df_sink *t, const uint8_t *s, uintptr_t i0, uintpt
 // is per block or per code and merely reused.
 struct df_ar {
  uint32_t *head, *prev, *tok, *fl, *fd,
-          *hc, *keys, *w, *sy, *pa, *rlb, *fc,
+          *hc, *pa, *rlb, *fc,
           *codl, *codd, *codc, *fixcl, *fixcd;
+ uint64_t *keys, *w;
  uint8_t *lenl, *lend, *lenc, *fixll, *fixld, *cl;
  unsigned chain, lazy; };                                       // the twin's 32 and greedy; the image lane digs
 #define DF_ARENA (384u << 10)
@@ -488,13 +454,21 @@ static void df_carve(uint8_t *m, struct df_ar *a) {
 #define DF_TAKE(f, n, ty) a->f = (ty*) p; p += ((n) * sizeof(ty) + 7u) & ~7u
  DF_TAKE(head, 32768, uint32_t); DF_TAKE(prev, 32768, uint32_t);
  DF_TAKE(tok, DF_TOKMAX, uint32_t); DF_TAKE(fl, 286, uint32_t); DF_TAKE(fd, 30, uint32_t);
- DF_TAKE(hc, 286, uint32_t); DF_TAKE(keys, 286, uint32_t);
- DF_TAKE(w, 571, uint32_t); DF_TAKE(sy, 571, uint32_t); DF_TAKE(pa, 571, uint32_t);
+ DF_TAKE(hc, 286, uint32_t); DF_TAKE(keys, 286, uint64_t);
+ DF_TAKE(w, 572, uint64_t); DF_TAKE(pa, 572, uint32_t);
  DF_TAKE(rlb, 320, uint32_t); DF_TAKE(fc, 19, uint32_t);
  DF_TAKE(codl, 286, uint32_t); DF_TAKE(codd, 30, uint32_t); DF_TAKE(codc, 19, uint32_t);
  DF_TAKE(fixcl, 288, uint32_t); DF_TAKE(fixcd, 30, uint32_t);
  DF_TAKE(lenl, 286, uint8_t); DF_TAKE(lend, 30, uint8_t); DF_TAKE(lenc, 19, uint8_t);
  DF_TAKE(fixll, 288, uint8_t); DF_TAKE(fixld, 30, uint8_t); DF_TAKE(cl, 316, uint8_t); }
+
+// --- the Huffman lengths (prefix.h's pfx_lens, gz-hpass exactly); a deflate code
+// --- needs two symbols, so a lone one gains a partner of count 1.
+static unsigned df_hlens(const uint32_t *f, unsigned nsym, unsigned lim, uint8_t *lens, struct df_ar *a) {
+ unsigned i, u = 0;
+ for (i = 0; i < nsym; i++) a->hc[i] = f[i], u += f[i] != 0;
+ if (u < 2) { if (!a->hc[0]) a->hc[0] = 1; if (!a->hc[1]) a->hc[1] = 1; }
+ return pfx_lens(a->hc, nsym, lim, lens, a->keys, a->w, a->pa); }
 
 #define DF_HASH(s, i) (((((uint32_t) (s)[i] << 10) ^ ((uint32_t) (s)[(i) + 1] << 5)) ^ (s)[(i) + 2]) & DF_HMASK)
 static void df_ins(const uint8_t *s, uintptr_t n, uintptr_t i, uint32_t *head, uint32_t *prev) {
@@ -556,8 +530,8 @@ static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_
    i += l; } }
  last = n <= i;
  a->fl[256]++;                                                  // end-of-block, always sent
- unsigned mxl = df_hlens(a->fl, 286, 15, a->lenl, a->hc, a->keys, a->w, a->sy, a->pa),
-          mxd = df_hlens(a->fd, 30, 15, a->lend, a->hc, a->keys, a->w, a->sy, a->pa),
+ unsigned mxl = df_hlens(a->fl, 286, 15, a->lenl, a),
+          mxd = df_hlens(a->fd, 30, 15, a->lend, a),
           hlit, hdist, hclen, nr, j2, mxc;
  uint64_t dyn, fix, raw;
 
@@ -567,7 +541,7 @@ static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_
  nr = df_run(a->cl, hlit + hdist, a->rlb);
  memset(a->fc, 0, 19 * sizeof *a->fc);
  for (j2 = 0; j2 < nr; j2++) a->fc[a->rlb[j2] >> 7]++;
- mxc = df_hlens(a->fc, 19, 7, a->lenc, a->hc, a->keys, a->w, a->sy, a->pa);
+ mxc = df_hlens(a->fc, 19, 7, a->lenc, a);
  for (hclen = 19; hclen > 4 && !a->lenc[gz_clord[hclen - 1]]; hclen--) ;
  dyn = 17 + hclen * 3 + df_ccost(a->rlb, a->lenc, nr)
      + df_cost(a->fl, a->lenl, 286) + df_cost(a->fd, a->lend, 30) + xb;

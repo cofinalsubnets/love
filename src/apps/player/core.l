@@ -37,8 +37,8 @@
    core-keys ['state 'song 'pos 'dur 'rate 'ch 'bits 'kbps 'vol 'bal 'pre 'eq 'eqon
               'repeat 'random 'single 'consume 'qver 'sink 'clients]
    item-keys ['id 'uri 'title 'artist 'album 'dur]
-   (S c k) ((c 's) k)
-   (Q c i) ((c 'q) i)
+   (S c k) (c 's k)
+   (Q c i) (c 'q i)
 
    (core-new sink)
     {'s {'state 'stop 'song -1 'pos 0.0 'dur 0.0 'rate 0 'ch 0 'bits 0 'kbps 0 'vol 100 'bal 0
@@ -55,8 +55,8 @@
    (lsnap c) ['snap (alist (c 's) core-keys) [(S c 'qver) (map core-item (c 'q))]]
    (emit c msg) (each (c 'w) (w \ (w 1) msg))
    ; set fields and tell every client, in one event
-   (sets c kvs) (: _ (each kvs (kv \ pin (c 's) <kv (kv 1))) (emit c ['set kvs]))
-   (requeue c) (: _ (pin (c 's) 'qver (S c 'qver + 1)) (emit c (queue-msg c)))
+   (sets c kvs) (each kvs (kv \ pin (c 's) <kv (kv 1)), emit c ['set kvs])
+   (requeue c) (pin (c 's) 'qver (S c 'qver + 1), emit c (queue-msg c))
    (notice c why) (emit c ['msg why])
 
    ; --- items -----------------------------------------------------------------
@@ -66,14 +66,14 @@
    ; a uri through the door -> [codec m h port info] | why: a path or an http(s) stream, info
    ; the stream's live tablet ({} for a file). the caller lets both go with shut
    (stream? info) (tablet? info && string? (peep info 'url ()))
-   (shut q info) (: _ (? (stream? info) ((cite 'icy 'icy-close) info) 0) (close q))
+   (shut q info) (stream? info ? (cite 'icy 'icy-close info) 0, close q)
    (opens p)
     ((cite 'av 'av-uri) p @
       [q info] ((cite 'av 'av-open) q @ [nm m h] [nm m h q info]
                                         why (shut q info, why))
       why why)
-   (frames m) (? (charm? (peep m 'total ())) (m 'total)
-                 (charm? (peep m 'len ()) && 0 <= m 'len) (m 'len // m 'align)
+   (frames m) (? (charm? (m 'total)) (m 'total)
+                 (charm? (m 'len) && 0 <= m 'len) (m 'len // m 'align)
                  0)
    ; a stream is asked only its name: what it carries may be a codec still to come
    (probe c uri)
@@ -100,7 +100,7 @@
    (horn-at c rate)
     (? (c 'hn != () && c 'hrate = rate) (c 'hn)
        (: _ (horn-off c)
-          (horn rate 2 @ hn (nom? hn ? (notice c ("no horn: " + show hn), ())
+          (horn rate 2 @ hn (nom? hn ? (notice c "no horn: \(hn)", ())
                                 (pins c 'hn hn 'hrate rate, hn)))))
    (ring-put c pcm)
     (: n (#pcm // 4) r (c 'ring) at (c 'rw % ringn)
@@ -153,12 +153,12 @@
                         ['state (paused? c ? 'pause 'play)]])
              r ((cd 4) q h m ((cite 'av 'av-pcm) f (pcm \ feed c rate (stereo pcm ch))))
              _ (shut q info) _ (pins c 'fq () 'fi {})
-             (? (r = 0) (after c i) (: _ (notice c (p + ": " + show r)) (after c i))))
-         why (: _ (notice c why) (after c i))))
+             (r @ 0 (after c i) (notice c "\(p): \(r)", after c i)))
+         why (notice c why, after c i)))
    ; the track at i is done: the next by the modes, or let the horn play out and stop
    (after c i)
     (: n #(c 'q)
-       _ (? (S c 'consume && i < n) (: _ (pin c 'q (dropat (c 'q) i)) (requeue c)) 0)
+       _ (? (S c 'consume && i < n) (pin c 'q (dropat (c 'q) i), requeue c) 0)
        n2 #(c 'q) i2 (S c 'consume ? (i - 1) i)
        nx (? (n2 = 0) -1
              (S c 'single) (S c 'repeat ? (max 0 i2) -1)
@@ -199,7 +199,7 @@
        m (c 'fm) k (tablet? m ? (peep m 'link 0) 0)
        it (0 <= S c 'song ? (Q c (S c 'song)) ())
        (? !(tablet? it) 0
-          (n != c 'ftn && string? t && 0 < #t) (: _ (pin c 'ftn n) _ (pin it 'title t) (requeue c))
+          (n != c 'ftn && string? t && 0 < #t) (pin c 'ftn n, pin it 'title t, requeue c)
           (k != c 'fln) (: _ (pin c 'fln k)
                            _ (pins it 'title (tag m "TITLE" || it 'title) 'artist (tag m "ARTIST" || it 'artist)
                                       'album (tag m "ALBUM" || it 'album))
@@ -235,7 +235,7 @@
              ok)
        (: h (c 'held) _ (pin c 'held "")
           _ (horn-at c (c 'brate))
-          _ (? (0 < #h && c 'hn != ()) (: _ (say (c 'hn) h) _ (flush (c 'hn)) _ (ring-put c h) (pin c 'tf (c 'tf + #h // 4))) 0)
+          _ (? (0 < #h && c 'hn != ()) (say (c 'hn) h, flush (c 'hn), ring-put c h, pin c 'tf (c 'tf + #h // 4)) 0)
           _ (sets c [['state 'play]])
           ok))
    (go-to c i at)
@@ -337,7 +337,7 @@
     (? (c 'remote) (rsend c msg)
        (ltell c id msg))
    (core-watch c f) (c 'remote ? (rwatch c f) (lwatch c f))
-   (core-unwatch c id) (c 'remote ? (pin c 'fs (filter (w \ <w != id) (c 'fs))) (lunwatch c id))
+   (core-unwatch c id) (c 'remote ? (pin c 'fs (filter (!= id * cap) (c 'fs))) (lunwatch c id))
    (core-close c) (c 'remote ? (rclose c) (lclose c))
 
    ; --- served: a core on PLAYER_RUN/main.sock (~/.love/run/player) ------------
@@ -346,8 +346,8 @@
    ; lead with a number, its tag: its answer leads with the same number. tasks switch at any
    ; call, so what two tasks share here is written by one of them only
    (player-dir _) (: e (getenv "PLAYER_RUN") h (getenv "HOME")
-                    (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/player") "/tmp/player"))
-   (player-sock nm) (player-dir 0 + "/" + nm + ".sock")
+                    (? (string? e && 0 < #e) e (string? h) "\(h)/.love/run/player" "/tmp/player"))
+   (player-sock nm) "\(player-dir 0)/\(nm).sock"
    (lines-in s f) (line-of s @ () 0
                     x (: m (sound x @ (m . _) m _ ()) (f m @ 0 0 _ (lines-in s f))))
    ; one client: its lines in, the core's out through an outbox its own task drains, so a
@@ -358,7 +358,7 @@
        (put1 m) (: me (myself 0 @ p (charm? p ? p 0)) q (peep qs me ())
                    q2 (? (tablet? q) q (: t {'w 0 'r 0} (pin qs me t, t)))
                    n (q2 'w)
-                   (pin q2 n (show m + "\n"), pin q2 'w (n + 1)))
+                   (pin q2 n "\(m)\n", pin q2 'w (n + 1)))
        (take q) (: r (q 'r) w (q 'w) ks (map (k \ k + r) ^(w - r))
                    ls (map (k \ q k) ks)
                    (each ks (k \ pin q k ()), pin q 'r w, ls))
@@ -379,7 +379,7 @@
    (core-serve c path)
     (: _ (umkdirs (player-dir 0) 448) _ (unlink path)
        l (listen ['unix path])
-       (? !(hot? l) ("cannot listen on " + path)
+       (? !(hot? l) "cannot listen on \(path)"
           (: acc (twirl (_ \ (: (go _) (accept l @ s (hot? s ? (twirl (_ \ conn c s) 0, go 0) 0)) (go 0))) 0)
              (wait _) (c 'dead ? 0 (rest 50, wait 0))
              _ (wait 0)
@@ -422,7 +422,7 @@
        p (? (string? me) (spawnio [me "setsid" me "player" "--serve"] nul nul nul fds 0 0) -1)
        _ (? (0 <= nul) (close nul) 0)
        (charm? p && 0 < p))
-   (player-reach nm n) (core-attach (player-sock nm) @ () (? (n = 0) () (rest 50, player-reach nm (n - 1))) rc rc)
+   (player-reach nm n) (core-attach (player-sock nm) @ () (n @ 0 () (rest 50, player-reach nm (n - 1))) rc rc)
    (player-core nm) (core-attach (player-sock nm) @ () (? (player-spawn nm) (player-reach nm 100) ()) rc rc)
 
    ; --- the verb: the protocol on stdin and stdout ---------------------------
@@ -435,11 +435,11 @@
        (flag f) (elem f as)
        (? (flag "--serve") (core-serve (core-new nm) (player-sock nm))
           (flag "--kill") (core-attach (player-sock nm) @
-                            () (: _ (say err ("player: no core is served as " + nm + "\n")) _ (flush err) 1)
+                            () (say err "player: no core is served as \(nm)\n", flush err, 1)
                             rc (: _ (core-send rc ['kill]) _ (core-close rc) 0))
           (flag "--headless") (player-core nm @
-                                () (: _ (say err ("player: cannot start a core as " + nm + "\n")) _ (flush err) 1)
-                                rc (: _ (player-feed rc fs) _ (core-close rc) 0))
+                                () (say err "player: cannot start a core as \(nm)\n", flush err, 1)
+                                rc (player-feed rc fs, core-close rc, 0))
           (flag "--pipe" || !(two? (tty 1))) (player-pipe fs)
           (flag "--here") (player-tui fs (core-new nm))
           (player-core nm @ () (player-tui fs (core-new nm)) rc (player-tui fs rc))))
@@ -448,7 +448,7 @@
     (: ids (map (p \ (core-send c ['add p]) @ ['ok i] i _ ()) fs)
        got (filter (i \ i != ()) ids)
        st (core-snap c @ [_ s _] s _ ())
-       stopped (foldl (\ a kv (<kv = 'state ? (kv 1 = 'stop) a)) 1 st)
+       stopped (foldl (\ a kv (<kv @ 'state (kv 1 = 'stop) a)) 1 st)
        (? (two? got && stopped)
           (core-send c ['status] @ [_ _ [_ its]] (: n (findsub (map (it \ (<(filter (kv \ <kv = 'id) it)) 1) its) [<got])
                                                     (core-send c ['play n]))
@@ -457,7 +457,7 @@
    ; the protocol on stdin and stdout, over a core in process
    (player-pipe fs)
     (: c (core-new "main")
-       (line m) (say out (show m + "\n"), flush out)
+       (line m) (say out "\(m)\n", flush out)
        id (core-watch c line)
        _ (each fs (p \ (core-send c ['add p]) @ ['ok _] 0 r (line r)))
        _ (? (0 < #(c 'q)) (core-send c ['play 0]) 0)
@@ -470,7 +470,7 @@
    ; attached core plays on when the cells close, as a tmux session does
    (player-tui fs c)
     (: _ (player-feed c fs)
-       _ ((cite 'ptui 'ptui-run) ((cite 'ptui 'ptui-new) c))
+       _ (cite 'ptui 'ptui-run (cite 'ptui 'ptui-new c))
        (core-close c, 0))
    _ (pins (cite 'verbs 'tab) 'player (udoor 'player player-main "usage: love player [--here|--pipe|--serve|--headless|--kill] [FILE..]" 1 1)))
 ) ; module core

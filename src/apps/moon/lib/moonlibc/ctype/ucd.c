@@ -1,6 +1,4 @@
-// src/apps/moon/lib/moonlibc/ctype/ucd.c -- the unicode floor: unicode 17 under glibc 2.44's
-// rules, off src/tools/mkctype.l, mkwidth.l and mkemoji.l. compiled into love on every
-// frontend, as math/lm.c is.
+// the unicode floor: unicode 17 under glibc 2.44's rules, tables from src/tools/mk*.l
 #include "ucd.h"
 #include "ucdctype.h"
 #include "ucdwidth.h"

@@ -2,8 +2,7 @@
 # test/kore/encode.sh -- base64, base32, tsort, factor
 . "$(dirname "$0")/common.sh"
 
-# the encodings ride a BINARY file, which is the only input that says anything:
-# text agrees under any bug that only mangles the high bit
+# the encodings ride a binary file: text hides a high-bit bug
 head -c 5000 /dev/urandom > "$ho/.b64src" 2>/dev/null || dd if=/dev/random of="$ho/.b64src" bs=1 count=5000 2>/dev/null
 both "base64"      base64 "$ho/.b64src"
 both "base64 -w 0" base64 -w 0 "$ho/.b64src"
@@ -15,8 +14,7 @@ base32 "$ho/.b64src" > "$ho/.b32txt"
 korerun base32 -d "$ho/.b32txt" > "$o"; cmp -s "$ho/.b64src" "$o" || fail "kore base32 -d"
 printf 'aG!s\n' | korerun base64 -d > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "kore base64 bad input (rc $r)"
-# tsort: OUR order is a topological one and not GNU's, so the input pins one -- a
-# chain has exactly one answer, and then both tools owe the same lines
+# tsort: ours is a topological order, not gnu's, so a chain pins the one answer
 pipe "tsort chain" 'a b
 b c
 c d
@@ -29,7 +27,7 @@ both "factor"      factor 97 100 1234567 65537 2 1 0
 pipe "factor stdin" '12 13
 17
 '                   factor
-# basenc: every encoding both ways against GNU's, its wrap, and what a decode refuses
+# basenc: every encoding both ways, its wrap, and what a decode refuses
 be=$ho/.kore-be; head -c 1000 /dev/urandom > "$be.bin"; printf 'hello world!\n' > "$be.txt"; : > "$be.nil"
 if command -v basenc >/dev/null 2>&1; then
   for e in --base64 --base64url --base32 --base32hex --base16 --base2msbf --base2lsbf; do
@@ -52,7 +50,7 @@ if command -v basenc >/dev/null 2>&1; then
   printf 'aG*VsbG8=\n' | basenc -di --base64 > "$g"; printf 'aG*VsbG8=\n' | korerun basenc -di --base64 > "$o"; same "basenc -di"
   LC_ALL=C basenc "$be.txt" > "$g" 2>&1; korerun basenc "$be.txt" > "$o" 2>&1; same "basenc with no encoding"
 fi
-# uuencode and uudecode: busybox's faces, and each reading the other's
+# uuencode and uudecode: busybox's faces, each reading the other's
 chmod 640 "$be.bin"
 if command -v busybox >/dev/null 2>&1; then
   for f in "$be.bin" "$be.txt" "$be.nil"; do

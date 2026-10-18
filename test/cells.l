@@ -1,9 +1,5 @@
-; --- test/cells.l: the cell doors -- peek/poke for values, pick/place for instructions ---
-; the four are the compiler's own. the bootstrap egg (love0) runs this corpus before any mop,
-; so there they are the book's; a mopped image drops them outright (src/love/boot/egg.l), and
-; there every law below stands down -- test/host/mop.l holds that they are gone, and under
-; LOVE_NO_MOP that they are back. read them through `cite`, never a (borrow 'guts) splice:
-; the corpus is one scope and a splice here would reach every file after this one.
+; the cell doors: peek/poke for values, pick/place for instructions. a mopped image drops
+; them and these laws stand down; cited, never borrowed, since the corpus is one scope
 (: G (cite 'guts)
    (guts k) (G k || (elem k (names ()) ? (ev k) ()))      ; the module, else the book (love0)
    g-peek (guts 'peek) g-poke (guts 'poke)
@@ -17,8 +13,8 @@
 ; the doors are reachable, and every instruction name is a charm rather than an address
 (cells-law (tablet? G) g-peek g-pick g-place (charm? g-ret) (charm? g-ap))
 
-; an instruction reads as a charm through pick and as () through peek, and a value cell
-; the other way round. a 2-arg nif is [cur][arity][impl][ret0], a 1-arg one [impl][ret0].
+; pick reads an instruction, peek a value, each () for the other.
+; a 2-arg nif is [cur][arity][impl][ret0], a 1-arg one [impl][ret0]
 (cells-law
  (charm? (g-pick 0 (+))) (charm? (g-pick 2 (+))) (charm? (g-pick 0 cap))
  (() = g-peek 0 (+)) (() = g-peek 2 (+)) (() = g-peek 0 cap)
@@ -27,8 +23,7 @@
  (g-pick 2 (+) != g-pick 2 (-))                    ; but their bodies differ
  (g-pick 3 (+) = g-pick 1 cap))                    ; and both end in lvm_ret0
 
-; totality: a charm target is not a heap address, and every door answers () rather than
-; dereferencing one. these six segfaulted before the guard, on any fixnum at all.
+; totality: a charm is no heap address, so every door answers () on one
 (cells-law
  (() = g-peek 0 5) (() = g-pick 0 5) (() = g-seek 0 5)
  (() = g-poke 0 1 5) (() = g-place 0 g-ret 5)
@@ -46,22 +41,19 @@
  (g-poke 1 'val th, 'val = g-peek 1 th)              ; and a poked value is still a value
  (() = g-pick 1 th))
 
-; a nif VALUE in a cell is a value, whole: its address is a def1 row like an instruction's,
-; and reading it as one left every nif call off the inline path -- silently, and everywhere.
+; a nif value in a cell is a value, though its address looks like an instruction's
 (cells-law
  (g-poke 1 (+) th, 5 = g-peek 1 th 2 3)            ; poked in, read back, still adds
  (g-poke 1 cap th, 1 = g-peek 1 th [1 2])
  (() = g-pick 1 th))                                 ; and pick declines it: not an instruction
 
-; the whole point: the instruction the book hands out is a charm, not a code address, so
-; ordinary value machinery walks it without dereferencing anything
+; an instruction is a charm, so ordinary value machinery walks it safely
 (cells-law
  (charm? g-ret) (charm? g-quote) !(g-ret = g-quote)
  (0 < g-ret) ("" != show g-ret)
  (1 = #[g-ret]) ({g-ret 1} g-ret = 1))          ; a tablet key, which peep would eql
 
-; --- the bounds. these are structural, not content: stem reads the head off the object's
-; --- terminator and span counts the cells to it, so a walk stays inside whatever it finds.
+; --- bounds: stem reads the head off the object's terminator, span counts cells to it ---
 (: g-stem (guts 'stem) g-span (guts 'span) g-dis (guts 'dis))
 
 (: fn (x \ x + 1) h (g-stem fn))
@@ -89,8 +81,7 @@
  (() = g-poke 2 'x t2) (() = g-place 2 g-ret t2)     ; writing it is refused
  (2 = g-span t2))                                    ; ..and the object is still whole
 
-; a glazed body is a code address the op table cannot name, so pick will not see it and
-; peek would otherwise hand it out raw. under LOVE_NO_GLAZE there is none, and this holds.
+; a glazed body is a raw code address: peek must not hand it out
 (cells-law (nat? fn ? (() = g-peek 0 fn) 1))
 
 ; the disassembler: one row a cell, over the whole object

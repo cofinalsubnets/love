@@ -1,8 +1,7 @@
 #include "../impl.h"
 
-/* the scanf family, C99 7.19.6.2: one engine over a string or a stream. a source reads a
- * character and gives one back (a stream's ungetc holds the one lookahead scanf needs); n counts
- * what the conversions consumed, for %n */
+/* the scanf family (C99 7.19.6.2) over a string or a stream; one character of lookahead,
+ * given back, and n counts what was consumed, for %n */
 struct __ssrc { FILE *f; unsigned char const *s; long n; };
 static int __sget(struct __ssrc *r) {
   int c = r->f ? getc(r->f) : (*r->s ? *r->s++ : EOF);
@@ -17,8 +16,8 @@ static int __sdig(int c, int base) {
   int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'z' ? c - 'a' + 10 : c >= 'A' && c <= 'Z' ? c - 'A' + 10 : 99;
   return d < base ? d : -1; }
 
-/* an integer field of at most w characters: base 0 reads a C prefix. *v holds the magnitude, wrapped
- * past 64 bits as strtoul's callers see it saturated -- *over says it overflowed. 0 for no digits */
+/* an integer field of at most w characters, base 0 reading a C prefix: *v the magnitude, which
+ * wraps past 64 bits with *over set. 0 for no digits */
 static int __sint(struct __ssrc *r, int base, int w, unsigned long long *v, int *neg, int *over) {
   #define SNext (--w > 0 ? __sget(r) : EOF)            /* the width spent, nothing more is read */
   int c = __sget(r), any = 0;
@@ -38,8 +37,7 @@ static int __sint(struct __ssrc *r, int base, int w, unsigned long long *v, int 
   __sunget(r, c);
   return any; }
 
-/* a float field's text: on the stack, then on the heap past it, so no field is cut short;
- * a heap that cannot hold it marks the field lost */
+/* a float field's text: on the stack, then the heap, so no field is cut short */
 struct __sfb { char *p; size_t n, cap; int lost; char s[512]; };
 static void __sfput(struct __sfb *b, int c) {
   if (b->n + 1 >= b->cap) {
@@ -155,8 +153,7 @@ static int __vscan(struct __ssrc *r, char const *fmt, va_list ap) {
       unsigned long long v; int neg, over;
       if (!__sint(r, base, w ? w : 1 << 30, &v, &neg, &over)) return got;
       if (skip) continue;
-      /* signed conversions take strtol's view (saturating), unsigned strtoul's (negation wraps) */
-      /* ..at the width it lands in: long long's for ll and j, long's for the rest */
+      /* signed saturates as strtol, unsigned wraps a negation as strtoul, at the target's width */
       if (cv == 'd' || cv == 'i') {
         unsigned long long top = len == 'q' ? 0x7fffffffffffffffULL : (unsigned long long) LONG_MAX;
         if (over || v > top + neg) v = neg ? 0ULL - top - 1 : top;
