@@ -1,26 +1,15 @@
-; src/tools/dest2uu.l -- emit test/uuhomgen.l: test/proto/dest.l's two generators (cv
-; the r0 protocol, ck the destination die) run on dest.l's own law-site samples,
-; the emissions lifted to uu nlist terms so test/uuhomlaw.l can prove the laws
-; of them (substrate: test/uuhom.l). Run on the host binary:
-;
+; src/tools/dest2uu.l -- emit test/uuhomgen.l: dest.l's two generators (cv the r0 protocol,
+; ck the destination die) run on its law-site samples, lifted to uu nlist terms.
 ;   love src/tools/dest2uu.l > test/uuhomgen.l        (or: make uuhomgen)
-;
-; the lift: 4 nats per instruction (op d a b, 0-padded); operands parity-tagged
-; (reg r = 2r, imm k = 2k+1); the sp shuttle idioms fold to push/pop. dest.l's
-; `:` forms are eval'd (its samples s1..e5 leak from their body-less binders, so
-; the roster below is dest.l's), its law asserts run as a gate; only the e5 bin
-; expression is copied, dest.l holding it inline. the lift is a translator --
-; untrusted like wm2uu: a wrong lift can miss a law, never fake a theorem the
-; laws file doesn't ask, and the artifact prints each source form beside its
-; term for the reading.
-; load dest.l first, in its own top-level form: the next form's bare cv/cvs/ck/cks
-; references resolve at its compile, which must follow this run. reads carries the
-; top-level leak (uu2coq's door); out rides a jug meanwhile -- dest.l's own asserts
-; gate the run, its "dest: ok" stays out of the artifact.
+; the lift: 4 nats per instruction (op d a b, 0-padded); operands parity-tagged (reg r = 2r,
+; imm k = 2k+1); the sp shuttle idioms fold to push/pop. the lift is untrusted: a wrong one
+; can miss a law, never fake a theorem the laws don't ask, and each source form prints
+; beside its term.
+; dest.l loads in its own top-level form, so the next form's cv/cvs/ck/cks resolve after it;
+; its samples s1..e5 leak from body-less binders, and its "dest: ok" goes to a jug.
 (borrow 'posix)
-; the files read below spell their laws `test`, the corpus recorder. here they run to
-; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
-; and a false law stops the run rather than printing a dot into the output.
+; dest.l's laws are spelled `test`, the corpus recorder; here stdout is the artifact, so
+; bind assert's: silent on success, and a false law stops the run
 (:: 'test (. 'assert))
 (jug 0 @ j (wear [in j err], reads (open "test/proto/dest.l" "r"), wear (), ()))
 
@@ -28,8 +17,7 @@
           (r8 8) (r9 9) (r10 10) (r11 11) (sp 12))
    rels '((lt 0) (ge 1) (le 2) (gt 3) (eq 4) (ne 5))
    (look t k) (assoc k t @ e (two? e ? <>e (scare 'dest2uu-look k)))
-   ; labels and frame offsets take codes as met, in emission order -- presence is
-   ; the (1 x) wrapper, a code may be 0
+   ; labels and frame offsets take codes as met; presence is the (1 x) wrapper, a code may be 0
    LAB {} OFF {}
    (dyn t x) (t x @ e
                 (two? e ? <e
@@ -81,7 +69,7 @@
         puts $ "\n    nnil" + ")" * 4 * #fs + ")",
         ()))
 
-   eb '(bin add (v y) (k 1))                    ; dest.l's e5 bin, held inline there
+   eb '(bin add (v y) (k 1))
    _ (relab 0)  a3 (cvs s3 e3)
    _ (relab 0)  b3 (cks s3 e3 P)
    a4 (cvs s4 e4)  b4 (cks s4 e4 P)

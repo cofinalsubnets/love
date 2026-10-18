@@ -1,47 +1,27 @@
-; scenery -- the words a level is written in. a level is a love file whose last form is
-; (level NAME PART ..); every word below is a plain function, so a level can name
-; things, compute them, and build them in loops. in metres: x east, y up, z north, every
-; place a point [x y z], every colour (rgb r g b).
-;
-;   (level NAME PART ..)               the level; a part may be a list of parts. a macro
-;                                      over (level-of NAME [PART ..])
-;   (start [x y z] bearing pitch)      where the player stands, facing bearing degrees from
-;                                      north toward east, looking pitch degrees up
-;   (room [x y z] [x y z])             a box of air between two corners: floor, walls and
-;                                      ceiling. two rooms a wall apart share it
-;   (air SHAPE) (solid SHAPE)          a brush: space starts solid, air carves it and solid
-;                                      fills it again, the later winning; a room is an air box
-;     (box [x y z] [x y z])            ..a box between two corners
-;     (prism height [[x y z] ..])      ..its floor plan going round, at the first point's height
-;   (cut [x y z] [x y z] [x y z] BRUSH)  the brush less what lies across the plane through
-;                                      three points from its middle: a slope, a bevel
-;   (door [x y z] width height)        a sliding door in the wall between two rooms, the
-;                                      middle of its foot at x y z
-;   (train [x y z] [x y z] DOOR leave) a car on rails, its inside between two corners and a
-;                                      (door ..) in a long wall: it opens as the level starts,
-;                                      shuts once the player is out, and the car goes leave
-;                                      metres along its length, the sign its way, and is gone
-;   (strip-light [x y z])              a light strip along z, its face at y
-;   (bulb [x y z] (rgb r g b))         a bare bulb, its light
-;   (poster [x y z] width height FILE) on the wall nearest, the middle of its foot at x y z;
-;                                      a png's path from the level's folder, or () for the
-;                                      corridor's own
-;   (sign [x y z] height TEXT (rgb r g b))  a neon sign on the wall nearest
-;   (across LIGHT)                     a strip turned across, along x
-;   (stammer LIGHT) (buzz LIGHT) (breathe LIGHT)  a light failing, buzzing or breathing
-;   (texture width height metres LAYERS)  a texture, width by height texels and metres wide
-;                                      on a surface, painted by its layers (swatch.l), quoted
-;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
-;                                      floor any face turned up and a ceiling down
-;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
-;   (repeat n [dx dy dz] PARTS)        the parts n times, each that far on from the last
-;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
-;
+; scenery -- the words a level is written in: a love file whose last form is (level NAME
+; PART ..), every word a plain function. metres, x east, y up, z north; points [x y z].
+;   (level NAME PART ..)          a part may be a list of parts; a macro over level-of
+;   (start [x y z] bearing pitch) bearing degrees from north toward east, pitch up
+;   (room [x y z] [x y z])        a box of air; two rooms a wall apart share it
+;   (air SHAPE) (solid SHAPE)     brushes: space starts solid, the later winning
+;     (box [x y z] [x y z])  (prism height [[x y z] ..])  a floor plan going round
+;   (cut [x y z] [x y z] [x y z] BRUSH)  less what lies across the plane, from its middle
+;   (door [x y z] width height)   sliding, in the wall between two rooms, its foot's middle
+;   (train [x y z] [x y z] DOOR leave)  a car whose door opens at the start and shuts once
+;                                 the player is out; it goes leave metres, the sign its way
+;   (strip-light [x y z])  (bulb [x y z] (rgb r g b))  (across LIGHT) a strip along x
+;   (poster [x y z] width height FILE)  on the nearest wall; FILE () the corridor's own
+;   (sign [x y z] height TEXT (rgb r g b))  neon, on the nearest wall
+;   (stammer LIGHT) (buzz LIGHT) (breathe LIGHT)
+;   (texture width height metres LAYERS)  texels, metres wide on a surface, layers quoted
+;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  a floor any face turned up
+;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  where no skin says
+;   (repeat n [dx dy dz] PARTS)  (mirror-x c PARTS) (mirror-z c PARTS)
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of start room air solid box prism cut door train strip-light bulb poster sign
          across stammer buzz breathe texture skin textures repeat mirror-x mirror-z rgb)
-(borrow 'view)                          ; min2 max2
-(borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
+(borrow 'view)
+(borrow 'swatch)
 (:
  (num? v) (charm? v || gem? v)
  (f v) (1.0 * v)
@@ -49,7 +29,7 @@
  (no what got) (scare 'level (what + " -- not " + show got))
  (P q what) (pt? q ? (map f q) (no what q))
  (N v what) (num? v ? (f v) (no what v))
- ; ..a part: a tablet of its kind and its fields; with, a copy changed
+ ; a part: a tablet of its kind and fields; with, a copy changed
  (part k l) (foldl (\ t kv (pin t (kv 0) (kv 1))) {'kind k} l)
  (with p k v) (pin (foldl (\ t q (pin t q (p q))) {} (keys p)) k v)
  (kind? p ks) (tablet? p && elem (peep p 'kind ()) ks)
@@ -57,7 +37,7 @@
  (colour? c) (two? c && #c = 3 && all num? c)
  (start at deg pitch) (: u "(start [x y z] bearing pitch)" (part 'start [['at (P at u)] ['deg (N deg u)] ['pitch (N pitch u)]]))
  (room lo hi) (: u "(room [x y z] [x y z])" (part 'room [['lo (P lo u)] ['hi (P hi u)] ['skin {}]]))
- ; ..a brush's shape, its kind and points; air and solid make it a brush
+ ; a brush's shape; air and solid make it a brush
  (box lo hi) (: u "(box [x y z] [x y z])" (part 'box [['lo (P lo u)] ['hi (P hi u)]]))
  (prism h ps) (: u "(prism height [[x y z] ..])"
    (two? ps && #ps >= 3 ? (part 'prism [['h (N h u)] ['pts (map (q \ P q u) ps)]]) (no u ps)))
@@ -82,7 +62,7 @@
  (stammer l) (how 'stammer l)
  (buzz l) (how 'buzz l)
  (breathe l) (how 'breathe l)
- ; ..a texture, a value: its recipe checked here, so a bad layer stops the level at it
+ ; a texture's recipe is checked here, so a bad layer stops the level at it
  (texture w h m ls) (: u "(texture width height metres LAYERS)"
    (? (!(charm? w && charm? h && 0 < w <= 512 && 0 < h <= 512)) (no u [w h])
       (!(num? m && m > 0)) (no u m)
@@ -111,7 +91,7 @@
  (hi2 a b) (map (k \ max2 (a k) (b k)) ^3)
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
- ; ..the textures named: the defaults by their place, every other by its number
+ ; textures named: the defaults by their place, every other by its number
  (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)

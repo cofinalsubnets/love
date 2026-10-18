@@ -1,38 +1,38 @@
 ; object trays: rank-N containers of any values, traced cell by cell; one cell demotes to its value
 
-(: (oa-list n acc) (n < 1 ? acc (oa-list (n - 1) (. n acc)))            ; build (1 .. n)
+(: (oa-list n acc) (n < 1 ? acc (oa-list (n - 1) (. n acc)))
    (oa-churn n)    (n < 1 ? 0 (oa-list 300 @ g (oa-churn (n - 1))))     ; alloc + discard
-   oa-big     (100 2)                                                   ; a bignum (past fixnum/box range)
+   oa-big     (100 2)                                                   ; a bignum
    oa-vals  [oa-big (oa-big * oa-big) (oa-big + 7) "hi" 'sym]
    oa-a     (top-tray '(5) oa-vals)
-   oa-z     (top-tray '(3) 0)                         ; nil-filled
+   oa-z     (top-tray '(3) 0)
    oa-nest  (top-tray '(2) [(top-tray '(2) '(1 2)) (top-tray '(2) '(3 4))]))
 
 (test
- ; --- construction / accessors ---
- (top-tray = tier oa-a)                                 ; oa-a is an object tray
+ ; --- construction / accessors
+ (top-tray = tier oa-a)
  (1 = rank oa-a)   (5 = tally oa-a)
  (5 = cap (shape oa-a))
  !(top-tray 0 0)                    ; rank-0 demotes to its lone cell -- nil-filled here
  (1 = top-tray 0 '(1))              ; ... or the value: a one-cell array is that value
- !(top-tray '(2 2 2 2 2 2 2 2 2) 0) ; over-rank rejected
+ !(top-tray '(2 2 2 2 2 2 2 2 2) 0)
 
- ; --- holds arbitrary values verbatim (no boxing/coercion) ---
+ ; --- holds arbitrary values verbatim
  (oa-big = peep oa-a 0 0)
  (oa-big * oa-big = peep oa-a 1 0)
  (oa-big + 7 = peep oa-a 2 0)
  ("hi" = peep oa-a 3 0)
  ('sym = peep oa-a 4 0)
- !(peep oa-z 0 0)                           ; (top-tray ... 0) fills with nil
+ !(peep oa-z 0 0)
 
- ; --- nested object arrays + index into the inner one ---
+ ; --- nested object arrays
  (4 = peep (peep oa-nest 1 0) 1 0)
 
- ; --- falsiness: an all-nil o-array is falsy; any truthy element flips it ---
- (oa-z ? 0 1)                                    ; oa-z all nil -> falsy -> 1
- (oa-a ? 1 0)                                     ; oa-a has truthy elems -> 1
+ ; --- falsiness: all-nil is falsy; any truthy element flips it
+ (oa-z ? 0 1)
+ (oa-a ? 1 0)
 
- ; --- print: the surface form; the tier is inferred again on read-back ---
+ ; --- print: the tier is inferred again on read-back
  ("@(10 20 30)" = show (top-tray '(3) '(10 20 30)))
 
  ; --- gc stress: the bignum cells are forwarded across collections ---
@@ -41,39 +41,37 @@
  (oa-big * oa-big = peep oa-a 1 0)
  ('sym = peep oa-a 4 0))
 
-; --- elementwise arithmetic through the promoting scalar ops: exact where an int tray wraps ---
+; --- elementwise arithmetic through the promoting scalar ops: exact where an int tray wraps
 (: oa-x   (top-tray '(3) [(100 2) 2 3])
    oa-y   (top-tray '(3) [1 (100 2) 4])
    oa-sum (oa-x + oa-y)
    oa-prd (oa-x * oa-y)
    oa-w   (40 2)                              ; 2^40 fits z; 2^40 * 2^40 = 2^80 overflows it
-   oa-zar (star-tray '(2) [oa-w oa-w])           ; typed int array -> wraps
-   oa-oar (top-tray   '(2) [oa-w oa-w]))          ; object array   -> exact
+   oa-zar (star-tray '(2) [oa-w oa-w])
+   oa-oar (top-tray   '(2) [oa-w oa-w]))
 
 (test
- ; an op on an object tray answers one
  (top-tray = tier oa-sum)
- ; exact elementwise results (no wrap, no float rounding)
  (((100 2) + 1) = peep oa-sum 0 0)
  ((2 * (100 2)) = peep oa-prd 1 0)
  (12 = peep oa-prd 2 0)
 
- ; transparency vs the typed lane: 2^40*2^40 = 2^80; z wraps to 0, o stays exact
+ ; 2^40*2^40 = 2^80: z wraps to 0, o stays exact
  ((80 2) = peep (oa-oar * oa-oar) 0 0)
  !((80 2) = peep (oa-zar * oa-zar) 0 0)
 
  ; broadcasting: object array (+) scalar bignum
- (2 * 100 2 = peep (oa-x + 100 2) 0 0) ; (2^100)+(2^100)
- (3 + 100 2 = peep (100 2 + oa-x) 2 0) ; scalar on the left; oa-x elem 2 = 3
+ (2 * 100 2 = peep (oa-x + 100 2) 0 0)
+ (3 + 100 2 = peep (100 2 + oa-x) 2 0)
 
  ; mixed: object array (+) typed int array -> widens the int array, stays exact
  (word ? ((2 * oa-w) = peep (oa-oar + oa-zar) 0 0) 1)   ; 2^40 wraps differently in a 32-bit z-array
 
- ; comparison over object arrays -> 0/1 element
+ ; comparison answers a 0/1 element
  (1 = peep (top-tray '(2) '(1 5) < top-tray '(2) '(3 2)) 0 0)
  (0 = peep (top-tray '(2) '(1 5) < top-tray '(2) '(3 2)) 1 0)
 
- ; --- reductions fold exactly through the same dispatch ---
+ ; --- reductions fold exactly
  (100 2 + 5 = +oa-x)
  (6 * 100 2 = *oa-x)
  (100 2 = amax (top-tray '(3) [5 (100 2) 7]))
@@ -83,19 +81,19 @@
  $(top-tray '(2) '(0 5))
  !$(top-tray '(2) '(0 0))
 
- ; --- arithmetic under GC pressure: bignum products survive collection ---
+ ; --- arithmetic under GC pressure
  (0 = oa-churn 40)
- (2 * 80 2 = +(oa-oar * oa-oar))     ; [2^80 2^80] summed = 2^81
+ (2 * 80 2 = +(oa-oar * oa-oar))     ; 2^81
  ; a numeric operand widens first, and may collect: the fresh object one beside it moves
  (@(1 2) + (top-tray '(2) '(10 20)) @ s (11 = peep s 0 0 && 22 = peep s 1 0))
  ((top-tray '(2) '(10 20)) + @(1 2) @ s (11 = peep s 0 0 && 22 = peep s 1 0)))
 
 ; --- `array`: the tier inferred, a number or list shape, the elements curried in after it ---
-(: oa-q (array 2 'hello 'world)                  ; symbols -> object array
+(: oa-q (array 2 'hello 'world)
    oa-bn (array 2 (100 2) 5)                  ; bignum -> o, stored exactly
-   oa-m  (array [2 2] 1 2 3 4))                 ; rank-2 from a shape list
+   oa-m  (array [2 2] 1 2 3 4))
 (test
- ; ints -> z, any float -> r, anything past the 64-bit tower -> o
+ ; ints -> z, any float -> r, past the 64-bit tower -> o
  (star-tray = tier (array 3 1 2 3))
  (gem-tray = tier (array 3 1 2.0 3))
  (top-tray = tier oa-q)
@@ -103,36 +101,34 @@
  ; numeric shape -> rank-1 vector of length ($ n); a non-positive shape is empty
  (1 = rank (array 4 1 2 3 4))
  (0 = #(array -3)) ("@()" = show (array -3))
- ; shape list -> rank-N
  (2 = rank oa-m)   (4 = peep oa-m [1 1] 0)
- ; elements stored verbatim, in order
  ('world = peep oa-q 1 0)
- ((100 2) = peep oa-bn 0 0)                  ; full bignum, not truncated to z
+ ((100 2) = peep oa-bn 0 0)                  ; full bignum, not truncated
  ; currying: a partial collector is a function; completing it builds the array
  ("@('a 'b)" = show (array 2 'a 'b))
  ; (array 0) -> empty rank-1 array, no elements to collect; it prints @()
  ("@()" = show (array 0))
- ; round-trips: numeric array result prints as the terse @(…) sugar
+ ; a numeric array result prints as @(..)
  ("@(1 2 3)" = show (array 3 1 2 3))
  ; saturating shape coercion: a float / complex / vector dimension -> ($ d)
- (3 = #(array 2.9 7 8 9))                 ; ($ 2.9) = 3 : rank-1 length 3
+ (3 = #(array 2.9 7 8 9))
  (3 = #(array (3 ~ 4) 0 0 0))             ; ($ (3 ~ 4)) = 3, the real part
- (8 = #(array [2.0 3.5] 1 2 3 4 5 6 7 8)) ; dims (2 4) -> 8 elems
+ (8 = #(array [2.0 3.5] 1 2 3 4 5 6 7 8))
  ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
- (top-tray = tier @((100 2) 1))                    ; bignum element -> object array
+ (top-tray = tier @((100 2) 1))
  (aall (@(1 2 3) = array 3 1 2 3)))
 
 ; --- the measure recurses into each element, so an all-zero tray nets 0 ---
-(: oa-z2 (array 2 (0 ~ 0) (0 ~ 0))             ; two zero complexes -> packed c array
-   oa-c2 (array 2 (0 ~ 0) (3 ~ 4))               ; nets sum: (0 ~ 0)+(3 ~ 4) -> re 3 -> ceil 3
+(: oa-z2 (array 2 (0 ~ 0) (0 ~ 0))
+   oa-c2 (array 2 (0 ~ 0) (3 ~ 4))               ; re 3 -> ceil 3
    oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates pin, forces o
 (test
  (twin-tray = tier oa-z2) (twin-tray = tier oa-c2) (top-tray = tier oa-b2)
- (0 = $oa-z2) !oa-z2        ; all-zero object array -> falsy, pin 0
- (3 = $oa-c2) !!oa-c2       ; one nonzero element -> truthy, ceil(3)
+ (0 = $oa-z2) !oa-z2
+ (3 = $oa-c2) !!oa-c2
  !!oa-b2                       ; a bignum element is truthy
- (0 = $(top-tray '(2 2) 0)) ; all-nil object array -> pin 0
- !!(array 2 'a 'b))            ; symbol elements -> truthy
+ (0 = $(top-tray '(2 2) 0))
+ !!(array 2 'a 'b))
 
 ; --- `=` reads through a cell to its value, so the hash does too, never the pointers
 (: oa-k1 @(("a" + "b") [1 2] 'sym)

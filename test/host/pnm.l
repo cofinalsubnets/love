@@ -1,10 +1,8 @@
 ; test/host/pnm.l -- src/apps/pnm.l: netpbm's pictures, read and written
-; each kind PIL and magick write -- P1 to P3 as text, P4 to P6, 16 bits a sample, a pam of
-; rgb with alpha and of grey with alpha -- decoded to its rgba by sha-256; maxvals that are
-; not a byte's, comments, pam's black-and-white; ppm and pam written and read back. then,
-; where python3's PIL is, more of them, held to PIL's decode byte for byte (to magick's for
-; the text kinds, 16-bit grey and pam, which PIL reads otherwise or not at all); last the
-; refusals.
+; each kind PIL and magick write -- P1 to P6, 16 bits a sample, pam rgba and grey-alpha -- decoded
+; to rgba by sha-256; odd maxvals, comments, pam's black-and-white; ppm and pam written and read
+; back. then, where python3's PIL is, more held to PIL's decode byte for byte (magick's for the
+; text kinds, 16-bit grey and pam); last the refusals.
 ;   cat test/00-init.l test/host/pnm.l | out/love
 (borrow 'posix)
 (borrow 'hashes)
@@ -19,7 +17,7 @@
                                string c))
    (px d) (map (k \ d 2 k) (jot #(d 2)))
 
-   ; -- fixtures ------------------------------------------------------------------------
+   ; -- fixtures --
    p1-pbm (unx (cats [
      "50310a3720350a312031203120312030203020300a312031203120312030203020300a31203120312031"
      "2030203020300a312031203120312030203020300a312031203120302030203020300a"
@@ -104,7 +102,7 @@
               (two? e && atom? (filter (k \ e 2 k != (k % 4 = 3 ? 255 (d 2 k))) (jot #(d 2)))))
            (pnm-decode (pnm-encode 7 5 (pnm-decode p6-ppm 2)) = pnm-decode p6-ppm))
 
-   ; -- against PIL ---------------------------------------------------------------------
+   ; -- against PIL --
    pil? (: r (hark ["python3" "-c" "import PIL"]) (two? r) && (<r = 0))
    _ (put (dir + "/mk.py") "import sys, random, shutil, subprocess
 from PIL import Image
@@ -149,7 +147,7 @@ open(d + '/manifest', 'w').write(chr(10).join(man) + chr(10))
                 (test (<r = 0) (10 < #ls) (atom? (filter (l \ !(same l)) ls))))
         (gate-partly "pnm: no python3 PIL, its pictures skipped"))
 
-   ; -- the refusals --------------------------------------------------------------------
+   ; -- the refusals --
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    (sane d) (string? d || two? d)
    (test (pnm-decode "hello" = "not a pnm") (pnm-size "P8 1 1 255\n" = "not a pnm")

@@ -1,7 +1,7 @@
-; the at&t x86-64 front's goldens: each hex is the .text gas emits for the same source.
-; regenerate: printf '%s\n' 'src' | as --64 -o t.o - && objcopy -O binary -j .text t.o t.bin && xxd -p t.bin
-; straight-line only: branch relaxation and the accumulator short forms are gas choices as.l
-; does not make, and call/lea targets are defined in-snippet so the rel32 resolves in place.
+; x86-64 goldens: each hex is the .text gas emits for the same source:
+; printf '%s\n' 'src' | as --64 -o t.o - && objcopy -O binary -j .text t.o t.bin && xxd -p t.bin
+; straight-line only: branch relaxation and accumulator short forms are gas choices as.l
+; does not make; call/lea targets sit in-snippet so the rel32 resolves in place
 (borrow 'holo)
 
 (borrow 'posix)
@@ -14,15 +14,15 @@
         sayln $ "FAIL " + name + ": want " + show want + " got " + show got + "\n"))
    (chk name want src) (chk-eq name want (as-hex src))
 
-   ;; -- the golden table: (name  expected-hex  at&t-source) --
+   ;; (name  expected-hex  at&t-source)
    tests '(
-      ;; mov: immediate (width from the destination), movabs by range, register-to-register
+      ;; mov
       ("mov.imm.q"   "48c7c001000000"        "mov $1, %rax")
       ("mov.imm.l"   "bb02000000"            "mov $2, %ebx")
       ("mov.movabs"  "48b8cb04fb711f010000"  "mov $1234567890123, %rax")
       ("mov.rr"      "4889c3"                "mov %rax, %rbx")
       ("mov.rr.ext"  "4d89c1"                "mov %r8, %r9")
-      ;; ALU, register source (low + REX-extended, 64- and 32-bit)
+      ;; ALU, register source
       ("add.rr"      "4801ca"                "add %rcx, %rdx")
       ("sub.rr.l"    "29f7"                  "sub %esi, %edi")
       ("and.rr"      "4821c3"                "and %rax, %rbx")
@@ -30,7 +30,7 @@
       ("xor.rr.ext"  "4d31d3"                "xor %r10, %r11")
       ("cmp.rr"      "4839c3"                "cmp %rax, %rbx")
       ("test.rr"     "4885c0"                "test %rax, %rax")
-      ;; ALU, immediate source (imm8 short form 83/ext, imm32 81/ext to a non-accumulator)
+      ;; ALU, immediate source
       ("add.imm8"    "4883c005"              "add $5, %rax")
       ("add.imm32"   "4881c380000000"        "add $128, %rbx")
       ("sub.imm32"   "4881ebe8030000"        "sub $1000, %rbx")
@@ -44,7 +44,7 @@
       ("push"        "55"                    "push %rbp")
       ("pop"         "5d"                    "pop %rbp")
       ("push.ext"    "4154"                  "push %r12")
-      ;; rip-relative + internal call (target defined in-snippet, rel32 resolved in place)
+      ;; rip-relative + internal call
       ("call.int"    "e800000000c3"          "call target\ntarget:\n ret")
       ("lea.rip"     "488d3500000000c3"      "lea target(%rip), %rsi\ntarget:\n ret")
       ;; nullary
@@ -56,8 +56,7 @@
       ("cdq"         "99"                    "cdq")
       ("cdqe"        "4898"                  "cdqe")
       ("hlt"         "f4"                    "hlt")
-      ;; the sign-extend family in both spellings -- cltq/cltd and cwtl/cwtd are the pairs a
-      ;; letter apart that mean different halves of it
+      ;; sign-extend: cltq/cltd and cwtl/cwtd are a letter apart and mean different halves
       ("cbw"         "6698"                  "cbw")
       ("cbtw"        "6698"                  "cbtw")
       ("cwde"        "98"                    "cwde")
@@ -89,8 +88,7 @@
       ("xlatb"       "d7"                    "xlatb")
       ("sysretl"     "0f07"                  "sysretl")
       ("sysretq"     "480f07"                "sysretq")
-      ;; memory, base+displacement -- and the two encodings the base register forces: an rsp/r12
-      ;; base needs a SIB to say so, an rbp/r13 base has no disp-less slot and takes a 0 byte
+      ;; memory, base+disp: an rsp/r12 base needs a SIB, an rbp/r13 base takes a 0 disp byte
       ("mem.st"       "488903"                "mov %rax, (%rbx)")
       ("mem.ld"       "488b03"                "mov (%rbx), %rax")
       ("mem.disp8"    "48894308"              "mov %rax, 8(%rbx)")
@@ -114,7 +112,7 @@
       ("sib.rsp"      "4889048c"              "mov %rax, (%rsp,%rcx,4)")
       ("sib.ext"      "4b8904ec"              "mov %rax, (%r12,%r13,8)")
       ("sib.nobase"   "4889048d10000000"      "mov %rax, 16(,%rcx,4)")
-      ;; immediate to memory -- neither operand carries a width, so the suffix is the only source
+      ;; immediate to memory: the suffix is the only width
       ("mem.imm.q"    "48c70301000000"        "movq $1, (%rbx)")
       ("mem.imm.l"    "c745fc01000000"        "movl $1, -4(%rbp)")
       ("mem.imm.w"    "66c7030100"            "movw $1, (%rbx)")
@@ -167,9 +165,7 @@
       ("rip.neg"      "48f71d00000000c3"      "negq t(%rip)\nt:\n ret")
       ("rip.push"     "ff3500000000c3"        "pushq t(%rip)\nt:\n ret")
       ("rip.call.ind" "ff1500000000c3"        "call *t(%rip)\nt:\n ret")
-      ;; past the GPR core, what a compiler's own .s asks: cmov/set, the F7 group, three-operand
-      ;; imul, shifts, extends, a high byte, %fs:, SSE moves/arithmetic/converts and the imm8
-      ;; forms, and rip operands with an immediate after the displacement
+      ;; past the GPR core, what a compiler's .s asks; rip operands with an imm after the disp
       ("cmov.ae" "480f43d1" "cmovae %rcx, %rdx")
       ("cmov.le.l" "0f4e30" "cmovle (%rax), %esi")
       ("set.ne" "400f95c6" "setne %sil")
@@ -230,15 +226,14 @@
       ("rip.cmpb.imm" "803d0000000001c3" "cmpb $1, t(%rip)\nt:\n ret"))
 
    _ (foldl (_ \ t \ chk (t 0) (t 1) (t 2)) 0 tests)
-   ;; -- the lens laws: each source reads to a value both dialects show and read back
-   ;;    unchanged, and the intel spelling assembles to the golden bytes --
+   ;; -- lens laws: both dialects show and read back unchanged; intel lays the golden bytes
    (law name want src)
       (att-read src @ v
        (chk-eq (name + ".att") v (att-read (att-show v)),
         chk-eq (name + ".intel") v (intel-read (intel-show v)),
         chk-eq (name + ".intel.hex") want (as-hexv (intel-read (intel-show v)))))
    _ (foldl (_ \ t \ law (t 0) (t 1) (t 2)) 0 tests)
-   ;; ..and template shapes: a control register, an immediate expression, `;` joins, a `//` comment
+   ;; template shapes: a control register, an immediate expression, `;` joins, `//`
    (law2 name want src)
       (att-read src @ v
        (chk-eq name want v,
@@ -249,8 +244,7 @@
            "and $~(1 << 2), %rax // clear\n or $((1 << 9) | (1 << 10)), %rax")
    ; sha256rnds2's three-operand spelling names the implied xmm0; it reads back as the two
    _ (chk "sha.sha256rnds2.xmm0" "0f38cbca" "sha256rnds2 %xmm0, %xmm2, %xmm1")
-   ;; a symbol displacement shows as it reads -- table(,%rbx,8) reads back to itself -- and in
-   ;; intel as gas's table[rbx*8], which gas lays with the same reloc (in-mem reads none back)
+   ;; a symbol displacement shows as it reads, and in intel as gas's table[rbx*8]
    (law-sy src intel)
       (att-read src @ v
        (chk-eq (src + ".att") v (att-read (att-show v)),
@@ -259,20 +253,20 @@
    _ (law-sy "jmp *table(,%rbx,8)" "jmp\tQWORD PTR table[rbx*8]")
    _ (law-sy "movq table+16(%rbx), %rax" "mov\trax, QWORD PTR table[rbx+16]")
    _ (law-sy "movq table-8(%rbx,%rcx,4), %rax" "mov\trax, QWORD PTR table[rbx+rcx*4-8]")
-   ;; ah..bh where no REX is needed lay as gas lays them (beside one, asrefuse.sh)
+   ;; ah..bh where no REX is needed lay as gas lays them
    _ (chk "highbyte.sib" "887c5808" "movb %bh, 8(%rax,%rbx,2)")
    _ (chk "highbyte.movz" "0fb6c4" "movzbl %ah, %eax")
    _ (law2 "lens.semi" '((op xor 4 ((rg 2 4) (rg 2 4))) (op mov 4 ((rg 0 4) (im 1))) (op div 4 ((rg 1 4))))
            "xorl %edx,%edx; movl $1,%eax; divl %ecx;")
-   ;; -- the decoder: golden bytes read back to the source's value (labels aside: a decoded
-   ;;    target is an address) and re-encode to the golden bytes through relabelled rows --
+   ;; -- the decoder: golden bytes read back to the source (but labels: a decoded target is
+   ;;    an address) and re-encode through relabelled rows
    (hexv c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (c - 55))
    (unhex h) (string (map (i \ hexv (h (2 * i)) * 16 + hexv (h (2 * i + 1))) ^(#h // 2)))
    (law3 name want src)
       (x64-disasm (unhex want) 0 @ rows
        ((has? src ":" ? 0 (chk-eq (name + ".decode") (att-read src) (catmap (r \ r 2) rows))),
         chk-eq (name + ".decode.hex") want (as-hexv (x64-relabel rows 0)),
-        ; read at an address of its own, the targets relabel the same and re-encode alike
+        ; read at another address, the targets relabel the same
         chk-eq (name + ".decode.base") want (as-hexv (x64-relabel (x64-disasm (unhex want) 4198400) 4198400))))
    _ (foldl (_ \ t \ law3 (t 0) (t 1) (t 2)) 0 tests)
    ; the operand-size prefix by mode: in a 16-bit segment the 32-bit width takes 66

@@ -1,25 +1,21 @@
-; src/apps/locks.l -- the machine's locks, for sessions that share one box: an exclusive lock per
-; resource (an out/ two makes must not build at once), and a pool of heavy slots (test_slow,
-; the kernels) granted first come first served, at most `max` at once and only while memory
-; is above a floor. state is files under one root, so any session can read it and a crash
-; leaves evidence; nothing here kills anything.
-;
+; src/apps/locks.l -- the machine's locks for sessions sharing one box: an exclusive lock per
+; resource, and a pool of heavy slots granted first come first served, at most `max` at once
+; and only while memory is above a floor. state is files under one root, so any session can
+; read it and a crash leaves evidence; nothing here kills anything.
 ;   (locks-root 0)                              BEE_LOCKS, /run/user/UID/love-locks, ~/.love/run/locks
 ;   (locks-acquire root nm kind who note floor max) {"granted" 1} | {"granted" 0 "position" ..}
 ;   (locks-release root nm kind who)            1 | ()
 ;   (locks-list root)                           {"exclusive" .. "heavy" .. "waiting" .. "mem_gb" ..}
 ;   (locks-run root reqs note floor max argv)   each [nm kind] in turn, then argv; its status
-;
-; kind is 'exclusive or 'heavy, who a pid (the holder's), floor in GB (() for none), max a
-; count. acquire never waits: a queued heavy ticket keeps its place, and asking again polls
-; it. /run/user is a tmpfs, so a boot clears it -- a pid is only a holder among this boot's
-; processes, and its start time rides beside it so a reused pid is not mistaken for one.
+; kind 'exclusive or 'heavy, who the holder's pid, floor in GB (() none). acquire never
+; waits: a queued heavy ticket keeps its place and asking again polls it. a pid's start time
+; rides beside it, so a reused pid is not mistaken for the holder.
 (module (locks locks-root locks-acquire locks-release locks-list locks-run)
 (borrow 'posix)
 
 (: (lk-str x) (string? x ? x (show x))
-   (lk-cs s) (lk-str s @ t (map t ^#t))   ; a string's bytes, as a list
-   ; a name as a file name: letters, digits, _ and -; the dot is kept for the tool's own temps
+   (lk-cs s) (lk-str s @ t (map t ^#t))
+   ; letters, digits, _ and -; a dot only in the tool's own temps
    (lk-slug s) (string (map (\ c (? (47 < c < 58 || 64 < c < 91 || 96 < c < 123 ||
                                      c = 95 || c = 45) c 45))
                             (lk-cs s)))
@@ -29,7 +25,7 @@
    (lk-read p) (: r (uread p) (? (two? r) <>r ()))
    (lk-names d) (: ns (readdir d) (? (two? ns) (sort (filter (n \ 0 < #n && n 0 != 46) ns)) ()))
 
-   ; a process's start time, field 22 of /proc/PID/stat, as the string it is there; () off linux
+   ; field 22 of /proc/PID/stat, as the string; () off linux
    (lk-start p)
     (: t (lk-read ("/proc/" + show p + "/stat"))
        (? !(string? t) ()
@@ -48,8 +44,7 @@
    (lk-parse t)
     (foldl (\ o l (l @ ((k && 0 < #k) + " " + v) (pin o k v) o))
            {} (lines (lk-str t)))
-   ; live: the pid answers a signal 0 (eperm is someone else's, and alive), and where a start
-   ; time was kept it still matches
+   ; live: the pid answers signal 0 (eperm is alive) and a kept start time still matches
    (lk-live? o)
     (: p (lk-num (peep o "pid" "0")) s (peep o "start" "")
        (0 < p && 'esrch != still p 0 &&
@@ -68,8 +63,8 @@
    (lk-gone d) (: _ (unlink (d + "/owner")) (rmdir d))
    ; an owner's own name, pid start and since, which no later owner shares
    (lk-token o) (lk-slug (peep o "pid" "0") + "-" + lk-slug (peep o "start" "") + "-" + lk-slug (peep o "since" ""))
-   ; a stale lock is renamed aside only by the one reaper whose mkdir of d.reap-TOKEN won, and only
-   ; while d still holds that owner, so a live lock laid since is never moved. a marker goes after an hour
+   ; a stale lock is renamed aside only by the reaper whose mkdir of d.reap-TOKEN won, and only
+   ; while d still holds that owner, so a live lock laid since is never moved. markers age out in an hour
    (lk-reclaim dir base o)
     (: d (dir + "/" + base) k (lk-token o) pre (base + ".reap-") now (clock 0)
        _ (map (\ n (: p (dir + "/" + n) s (stat p) (? (two? s && s 1 < now - 3600000) (rmdir p) 0)))
@@ -100,8 +95,8 @@
        (? (lk-num (peep o "pid" "0") = who) (: _ (lk-gone d) 1) ()))
    (lk-x-drop root nm who) (lk-x-free (lk-xdir root nm) who)
 
-   ; --- heavy: tickets, q/ waiting and h/ held, each a file holding its owner; a ticket is named
-   ; by when it was asked for, so sorted names are the order of asking ---
+   ; --- heavy: tickets in q/ waiting and h/ held, each a file holding its owner, named by when
+   ; it was asked for, so sorted names are the order of asking ---
    (lk-hq root) (root + "/heavy/q")
    (lk-hh root) (root + "/heavy/h")
    (lk-tag who nm) ("-" + show who + "-" + lk-slug nm)
@@ -133,7 +128,7 @@
     (? (peep (lk-x-take mx "mutex" "mutex" me "" 1) "granted" 0) 1
        (n <= 0) 0
        (: _ (rest 20) (lk-hold mx me (n - 1))))
-   ; ticket t moved to h/ when may, it is first, and there is room and memory; else its place
+   ; t moves to h/ when may, it is first, and there is room and memory; else its place
    (lk-h-step root nm t floor max may)
     (: q (lk-hq root) h (lk-hh root)
        held (lk-sweep h)
@@ -185,11 +180,9 @@
             'heavy (map (n \ lk-num (peep (lk-parse (lk-read (lk-hh root + "/" + n))) "pid" "0")) (lk-sweep (lk-hh root)))
             ())
 
-   ; the wrapper: each [nm kind] in turn, waiting with a line on stderr whenever the answer
-   ; changes, then argv spawned (every disposition default: spawn resets them) and waited for.
-   ; a lock an ancestor already holds is passed through, neither taken nor released: a
-   ; wrapper under a wrapper never waits on its own parent.
-   ; the locks go on any way out that unwinds; a killed wrapper leaves its owner to be reclaimed
+   ; each [nm kind] in turn, a line on stderr whenever the answer changes, then argv spawned
+   ; and waited for. a lock an ancestor holds is passed through, so a wrapper under a wrapper
+   ; never waits on its parent. the locks go on any unwinding exit; a killed wrapper's are reclaimed
    (locks-run root reqs0 note floor max argv)
     (: me (getpid 0) anc (lk-ancestors me)
        reqs (filter (r \ !(two? (filter (p \ elem p anc) (lk-holders root <r (r 1))))) reqs0)

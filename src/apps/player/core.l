@@ -1,29 +1,18 @@
 ; src/apps/player/core.l -- the player's core: a queue, the decoder door, the bus, the horn,
-; and the messages every view speaks (notes/plan/av.md, the core's protocol). one core a
-; user; in process a view watches it and sends to it, and a socket only carries the same
-; messages. `(borrow 'pcore)`, then:
-;
+; and the messages every view speaks. one core a user; a socket carries the same messages.
 ;   (core-new name)       -> a core, stopped, its queue empty
-;   (core-send c msg)     -> the reply to msg, [verb arg ..]: [ok] [ok VALUE] [err "why"]
+;   (core-send c msg)     -> the reply, [verb arg ..]: [ok] [ok VALUE] [err "why"]
 ;   (core-watch c f)      -> a client id; f is handed [snap ..] at once, then every event
 ;   (core-tell c id msg)  -> core-send as that client: its feeds are its own
 ;   (core-unwatch c id)
 ;   (core-snap c)         -> [snap STATE QUEUE]
 ;   (core-close c)        -> stops it and lets the horn go
-;   a uri is a path or an http(s) stream (icy.l, through av-uri); a stream's title follows
-;   what the station says it plays
 ;   (core-serve c path)   -> serves c on a unix socket until a client says kill
-;   (core-attach path)    -> a served core, attached: the words above take it as they take a
-;                            core here | ()
-;   (player-main as)      -> the verb: `love player [FILE..]` -- on a terminal the player in
-;                            cells (src/apps/player/tui.l) on the user's served core, started
-;                            detached when none is (--here: a core in this process);
-;                            --headless queues and plays and leaves; --serve is the server,
-;                            --kill stops it; --pipe or off a terminal the protocol on stdio
-;
-; a track runs on a task of its own that feeds the horn a chunk at a time, never more than
-; lead ahead of the speaker, so a pause, a seek or an eq change is heard within lead. what
-; went out is kept in a ring for the feeds, read where the speaker is, not where the bus is.
+;   (core-attach path)    -> a served core the words above take | ()
+;   (player-main as)      -> `love player [FILE..]`
+; a uri is a path or an http(s) stream. a track's task feeds the horn at most lead ahead, so
+; a pause, seek or eq change is heard within lead; the feeds read a ring of what went out
+; where the speaker is, not where the bus is.
 (module (pcore core-new core-send core-watch core-tell core-unwatch core-snap core-close
               core-serve core-attach core-keys core-item player-main)
 (borrow 'bus)
@@ -47,7 +36,7 @@
      'q () 'nid 1 'w () 'nw 1 'hn () 'hrate 0 'brate 0 'dec () 'fq () 'fi {} 'ftn 0 'fm () 'fln 0 'bus (bus-new ()) 'tick ()
      'tf 0 'base 0 'skip 0 'ring (cask (4 * ringn)) 'rw 0 'held "" 'seed (clock 0)}
 
-   ; --- the messages out ------------------------------------------------------
+   ; --- the messages out ---
    (alist t ks) (map (k \ [k (t k)]) ks)
    (core-item it) (alist it item-keys)
    (queue-msg c) ['queue (S c 'qver) (map core-item (c 'q))]
@@ -59,12 +48,11 @@
    (requeue c) (pin (c 's) 'qver (S c 'qver + 1), emit c (queue-msg c))
    (notice c why) (emit c ['msg why])
 
-   ; --- items -----------------------------------------------------------------
+   ; --- items ---
    (base p) (: k (findsub (rev (chars p)) [47]) (k < 0 ? p (snip p (#p - k) #p)))
    (tag m nm) (: u (upper nm + "=")
                  (foldl (\ a t (a || (#t > #u && upper (snip t 0 #u) = u ? (snip t #u #t) ()))) () (peep m 'tags ())))
-   ; a uri through the door -> [codec m h port info] | why: a path or an http(s) stream, info
-   ; the stream's live tablet ({} for a file). the caller lets both go with shut
+   ; -> [codec m h port info] | why; info a stream's live tablet ({} for a file). shut lets both go
    (stream? info) (tablet? info && string? (peep info 'url ()))
    (shut q info) (stream? info ? (cite 'icy 'icy-close info) 0, close q)
    (opens p)
@@ -94,7 +82,7 @@
       why why))
    (find c id) (findsub (map (it \ it 'id) (c 'q)) [id])
 
-   ; --- the horn and the ring -------------------------------------------------
+   ; --- the horn and the ring ---
    (lag c) (c 'hn @ () 0 hn (horn-lag hn @ n (charm? n ? n 0)))
    (horn-off c) (c 'hn @ () 0 hn (close hn, pins c 'hn () 'hrate 0, 0))
    (horn-at c rate)
@@ -116,7 +104,7 @@
                       (pour out o (c 'ring) (4 * at) (4 * k), go (f + k) (o + 4 * k))))
        (go s (4 * (n - (e - s))), string out))
 
-   ; --- the track task --------------------------------------------------------
+   ; --- the track task ---
    (stereo pcm ch)
     (? (ch = 2) pcm
        (: n (#pcm // 2) c (cask (4 * n)) t (cask #pcm) _ (pour t 0 pcm 0 #pcm)
@@ -192,8 +180,8 @@
            _ (retitle c)
            (go (k + 1)))
        (go 0))
-   ; the playing track's title moved -- a stream's StreamTitle, or a codec's tags at a new chain
-   ; link ('link, a count the pump bumps): the item takes it, and the queue goes out again
+   ; a stream's StreamTitle or a codec's tags at a new chain link ('link, bumped by the pump)
+   ; retitle the playing item and send the queue again
    (retitle c)
     (: fi (c 'fi) n (stream? fi ? (peep fi 'titles 0) 0) t (stream? fi ? (peep fi 'title "") "")
        m (c 'fm) k (tablet? m ? (peep m 'link 0) 0)
@@ -215,7 +203,7 @@
                                           _ ['scope at (bus-scope (ring-get c (r // fps)) 2 n)]))))
           _ 0))))
 
-   ; --- commands --------------------------------------------------------------
+   ; --- commands ---
    ok ['ok]
    (nay why) ['err why]
    (num? x) (charm? x || gem? x)
@@ -331,7 +319,7 @@
    (lclose c) (: _ (halt c) _ (horn-off c)
                  _ (c 'tick @ () 0 t (freeze t)) (pins c 'tick () 'w ()))
 
-   ; --- the five words, on a core here or one attached over its socket ----------
+   ; --- the five words, here or over a socket ---
    (core-send c msg) (core-tell c 0 msg)
    (core-tell c id msg)
     (? (c 'remote) (rsend c msg)
@@ -340,19 +328,17 @@
    (core-unwatch c id) (c 'remote ? (pin c 'fs (filter (!= id * cap) (c 'fs))) (lunwatch c id))
    (core-close c) (c 'remote ? (rclose c) (lclose c))
 
-   ; --- served: a core on PLAYER_RUN/main.sock (~/.love/run/player) ------------
-   ; on the wire the first line is the attach's [snap]; after it [ok] [err] [snap] answer
-   ; commands in the order they came, and every other message is an event. a command may
-   ; lead with a number, its tag: its answer leads with the same number. tasks switch at any
-   ; call, so what two tasks share here is written by one of them only
+   ; --- served: a core on PLAYER_RUN/main.sock (~/.love/run/player) ---
+   ; the first line is the attach's [snap]; then [ok] [err] [snap] answer commands in order
+   ; and every other message is an event. a command led by a number gets its answer led by
+   ; it. tasks switch at any call, so shared state is written by one task only
    (player-dir _) (: e (getenv "PLAYER_RUN") h (getenv "HOME")
                     (? (string? e && 0 < #e) e (string? h) "\(h)/.love/run/player" "/tmp/player"))
    (player-sock nm) "\(player-dir 0)/\(nm).sock"
    (lines-in s f) (line-of s @ () 0
                     x (: m (sound x @ (m . _) m _ ()) (f m @ 0 0 _ (lines-in s f))))
-   ; one client: its lines in, the core's out through an outbox its own task drains, so a
-   ; slow client never holds the core. each task that speaks has its own queue in the outbox,
-   ; its slots and 'w written by it alone, 'r by the drain alone
+   ; one client: the core's lines go out through an outbox its own task drains, so a slow
+   ; client never holds the core. each speaking task has its own queue: 'w by it, 'r by the drain
    (conn c s)
     (: qs {} ob {'on 1}
        (put1 m) (: me (myself 0 @ p (charm? p ? p 0)) q (peep qs me ())
@@ -385,8 +371,7 @@
              _ (wait 0)
              _ (freeze acc) _ (close l) _ (unlink path) _ (rest 50)
              (lclose c, 0))))
-   ; a served core, attached -> a handle the five words take | () when none answers at path.
-   ; every command goes tagged, so tasks may send at once
+   ; -> a handle the five words take | () when none answers. every command goes tagged
    (core-attach path)
     (: s (connect ['unix path])
        (? !(hot? s) ()
@@ -414,7 +399,7 @@
                   _ (rc 'rd @ () 0 t (landed? t ? 0 (freeze t)))
                   _ (close (rc 's))
                   (pins rc 'up 0 'fs ()))
-   ; the core named nm: the one served, else one started detached as mitty does, then attached
+   ; the served core named nm, else one started detached, then attached
    (player-num s) (sound s @ (n . _) (charm? n ? n -1) _ -1)
    (player-spawn nm)
     (: me (selfpath 0) nul (openfd "/dev/null" 0)
@@ -425,7 +410,7 @@
    (player-reach nm n) (core-attach (player-sock nm) @ () (n @ 0 () (rest 50, player-reach nm (n - 1))) rc rc)
    (player-core nm) (core-attach (player-sock nm) @ () (? (player-spawn nm) (player-reach nm 100) ()) rc rc)
 
-   ; --- the verb: the protocol on stdin and stdout ---------------------------
+   ; --- the verb ---
    (line-of p) (: (go acc) (see p @ -1 (two? acc ? (string (rev acc)) ()) 10 (string (rev acc)) ch (go (ch . acc)))
                   (go ()))
    ; love player [--here|--pipe|--serve|--headless|--kill] [FILE..]
@@ -466,11 +451,10 @@
                                  r (two? m ? (core-tell c id m) ['err "a message is [verb arg ..]"])
                                  (line r, m = ['bye] ? 0 (go 0))))
        (go 0, core-close c, 0))
-   ; the cells on this terminal over core c; tui.l bakes after this file, so by cite. an
-   ; attached core plays on when the cells close, as a tmux session does
+   ; tui.l bakes after this file, so by cite. an attached core plays on when the cells close
    (player-tui fs c)
     (: _ (player-feed c fs)
        _ (cite 'ptui 'ptui-run (cite 'ptui 'ptui-new c))
        (core-close c, 0))
    _ (pins (cite 'verbs 'tab) 'player (udoor 'player player-main "usage: love player [--here|--pipe|--serve|--headless|--kill] [FILE..]" 1 1)))
-) ; module core
+) ; module pcore

@@ -45,7 +45,6 @@
                     (<f @ op
                        (? (op = 'jmp) (peep lt <>f -1 @ j (j < 0 ? () [j]))
                           (op = 'br) (peep lt <>>f -1 @ j (j < 0 ? nx (j . nx)))
-                          ; a table jump names its targets, so the graph keeps the edges
                           (op = 'jmpt) (filter (j \ 0 <= j) (map (L \ peep lt L -1) (f 3)))
                           (elem op '(ret jmpr jmpm ud2)) ()
                           nx)))
@@ -53,9 +52,8 @@
                go >l (i + 1))))
        (go bd 0))
 
-   ; -- reaching defs at cell grain: rt i -> the defs (a sorted subset of dfs)
-   ; reaching into i, over the index window [lo, hi] (a repack hull is such a
-   ; window: no path leaves it and returns unseen). forward fixpoint; unions.
+   ; -- reaching defs: rt i -> the defs (sorted subset of dfs) reaching i, over [lo, hi],
+   ; a window no path leaves and returns to unseen. forward fixpoint.
    (vreach lo hi succ dfs)
     (: rt {}
        dt (foldl (t \ d \ pin t d 1) {} dfs)
@@ -74,8 +72,8 @@
        (fix _) (0 < step 0 lo ? (fix 0) rt)
        (fix 0))
 
-   ; -- chain grouping: defs merge when one load's reaching set joins them (the
-   ; phi seam). [((defs uses)..) nodefs], chains keyed ascending by first def.
+   ; -- chain grouping: defs merge when one load's reaching set joins them.
+   ; [((defs uses)..) nodefs], chains ascending by first def.
    (vgroup rt dfs uss)
     (: uf {}
        (find x) (peep uf x x @ p (p = x ? x (find p)))

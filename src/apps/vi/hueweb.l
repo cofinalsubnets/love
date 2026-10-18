@@ -1,36 +1,29 @@
 ; src/apps/vi/hueweb.l -- the .l syntax as a stylesheet and as painted html, from hue.l's
-; class table and config.l's theme: the third reader of that table, beside core.l's vframe
-; and src/tools/hue2vim.l. it asks hue what each span is, so a new class reaches all three.
+; class table and config.l's theme; it asks hue what each span is, so a new class reaches
+; every reader of that table.
 ;
-;   (hw-vars scheme)     the :root block: a hue-page palette as css variables, dark under a media query
+;   (hw-vars scheme)     the :root block: a palette as css variables, dark under a media query
 ;   (hw-css scheme)      the stylesheet: a rule per class, the frame, a little prose styling
 ;   (hw-body path src)   that source as a <pre>, one span per line
 ;   (hw-page ttl hrefs home body)   ..in a page, with its stylesheets and a home link
 ;
-; hue-lex answers only the spans it claims, so the gaps fill with plain text, and the
-; string-open state carries from line to line. no papel: hue.l, config.l and kiosko ride
-; the artifact and papel does not, so `love serve` paints its own source with nothing on
-; the box. the word lanes ask the running binary, so under LOVE_NO_IMAGE they see the
-; compiler's internals. (borrow 'vi) sits inside the module, so vi's names stay out of the
-; session; a tool outside the vi images borrows config.l and hue.l first.
+; no papel: it does not ride the artifact, and `love serve` paints its own source.
+; (borrow 'vi) sits inside the module, so vi's names stay out of the session.
 (module (hueweb hw-vars hw-css hw-body hw-page)
 (borrow 'vi)
 (:
-   ; the first row of tbl headed by k. config.l's two tables are both keyed that
-   ; way and there is no assoc in the vocabulary, so this is the one walk for both
+   ; the first row of tbl headed by k; there is no assoc in the vocabulary
    (hw-find tbl k) (:- (f tbl) (f l) (? (atom? l) () (<<l = k) <l (f >l)))
-   (hw-q s) (cite 'lapiz 'hq s)          ; the three characters html cannot hear otherwise
-   ; the final newline ends the last line, it does not open another: a file of n lines
-   ; that ends in one would otherwise paint an n+1'th empty row.
+   (hw-q s) (cite 'lapiz 'hq s)
+   ; the final newline ends the last line, it does not open another
    (hw-lines s) (:- (g 0 0 ())
                  (g i st acc) (? (i >= #s) (st < i ? (rev (snip s st i . acc)) (rev acc))
                                  (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
                                  (g (i + 1) st acc)))
 
    ; --- the palette ----------------------------------------------------------
-   ; a scheme off config.l's hue-page: one palette, or a light and a dark one. a role
-   ; is the variable of its own name, so the frame says var(--link) and the table
-   ; answers. an unknown scheme is an empty block, and the page wears the UA's colours.
+   ; a role is the variable of its own name, so the frame says var(--link). an
+   ; unknown scheme is an empty block
    (hw-vars nm)
    (: s (hw-find hue-page nm)
       (roles p) (":root{" + cats (map (r \ "--" + string <r + ":" + <>r + ";") p) + "}\n")
@@ -38,17 +31,13 @@
          (roles (s 1) + (two? >>s ? ("@media (prefers-color-scheme:dark){" + roles (s 2) + "}\n") ""))))
 
    ; --- the stylesheet -------------------------------------------------------
-   ; one rule per class, coloured by the group that class names. a class whose
-   ; group the theme does not carry gets no rule at all rather than a guess.
+   ; a class whose group the theme does not carry gets no rule rather than a guess
    hw-faces (cats * map (f \ f @ 'bold ";font-weight:700" 'italic ";font-style:italic" ""))
-   ; a row is (group cterm256 "#rrggbb" faces); no row, no rule
+   ; a row is (group cterm256 "#rrggbb" faces)
    (hw-rule r) (hw-find hue-theme (hue-grp r) @
                 (_ _ col fs) (".hue .l-" + string (hue-cls r) + "{color:" + col + hw-faces fs + "}\n")
                 "")
-   ; the frame: a slab to sit on, and line numbers out of a css counter -- so the
-   ; markup carries one span per line and no number, and selecting the code copies
-   ; the code alone. the page's own colours answer to the reader's theme; the
-   ; syntax colours are the theme either way, which is what the editor shows.
+   ; line numbers out of a css counter, so selecting the code copies the code alone
    hw-frame
    ".hue{background:var(--pre);padding:1rem 0;border-radius:6px;overflow-x:auto;counter-reset:ln;
   font:.82rem/1.55 ui-monospace,Menlo,monospace}
@@ -78,8 +67,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
    (hw-css nm) (hw-vars nm + hw-frame + cats (map hw-rule hue-classes))
 
    ; --- one file, painted ----------------------------------------------------
-   ; a line becomes its runs, in order, with the unclaimed gaps between them kept
-   ; as plain text. `in` rides from line to line for the string carry.
+   ; the unclaimed gaps between runs stay plain text; `in` carries an open string
    (hw-span c a b s) ("<span class=\"l-" + string c + "\">" + hw-q (snip s a b) + "</span>")
    (hw-paint bk s in)
    (:- (go <r 0 "")
@@ -97,9 +85,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
              (acc + "<span class=\"ln\" id=\"L" + show k + "\">" + txt + "\n</span>")))))
 
    ; --- the page -------------------------------------------------------------
-   ; small on purpose: a title, whatever stylesheets the caller wants linked, a
-   ; home link, and the body. the site passes papel.css so a painted page and a
-   ; doc page are one design; `love serve` passes its own and nothing else.
+   ; the site passes papel.css; `love serve` passes its own
    (hw-page ttl hrefs home body)
    ("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
     + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"

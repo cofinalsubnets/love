@@ -1,17 +1,7 @@
-; src/apps/vi/hue.l -- the .l syntax, written down once, for two readers: the painter in
-; src/apps/vi/core.l's vframe, and the vim syntax file src/tools/hue2vim.l generates from
-; the table below (out/syntax.vim, never checked in).
-;
-; it reads .l by src/apps/libra/lint.l's rules -- `;` and `#!` comment to end of line,
-; "..." is the only string, `'` is a reader operator and never a delimiter -- and knows
-; tokens, not a parse.
-;
-; a row is `(class vim-group rule)`; the rule's tag set is closed at eight (eol span mark
-; delim num word punct sep), each with exactly two interpreters, hue-lex and hue-vim. a
-; shape neither can say wants a new tag, not a hand patch.
-; row order is priority: the word lanes sit above punct, as vim's syn keyword beats a
-; syn match (`?` and `&&` are both). every word lane names a runtime probe (`names`,
-; `macros`, `values`) rather than listing words; only the three special forms are written.
+; src/apps/vi/hue.l -- the .l syntax, once, for vi's painter and src/tools/hue2vim.l
+; reads .l by lint.l's rules: `;` and `#!` to eol, "..." the only string; tokens, not a parse
+; a row is (class vim-group rule); the rule tags are closed, each read by hue-lex and hue2vim
+; row order is priority; word lanes name a runtime probe rather than list words
 (module 'vi
 (borrow 'posix)
 
@@ -21,11 +11,7 @@
       (string     String     (span 34 92))                 ; " with \ escapes
       (atom       Identifier (mark 39))                    ; 'foo -- the mark and its token
       (paren      Delimiter  (delim "()[]{}"))
-      ; `,` earns a tag of its own because it is its own case everywhere else too:
-      ; the C reader stops on it like a quote, and opfix splits a form at
-      ; it (prel's op-cm?/op-take/op-drop). it is in no vocabulary -- (elem ',
-      ; (names ())) is nothing -- so no word lane claims it; it is not a sigil, so
-      ; no punct lane does; and it has no partner, so it cannot ride the pair above.
+      ; `,` is its own case: in no vocabulary, not a sigil, no partner
       (comma      Operator   (sep 44))
       (number     Number     (num))
       (form       Statement  (word (":" "?" "\\")))        ; letrec* / cond / lambda
@@ -35,8 +21,7 @@
       (mono       Special    (punct glued))
       (dyad       Operator   (punct spaced)))
 
-   ; the sigil alphabet, shared by both punct lanes and emitted verbatim into the
-   ; generated character class -- stated here, never twice.
+   ; the sigil alphabet, shared by both punct lanes and the vim class
    hue-sigils "@#$~.!?%^*+/<>=|&-"
 
    ; --- reading the table -----------------------------------------------------
@@ -67,44 +52,12 @@
        (go 0))
 
    ; --- the book --------------------------------------------------------------
-   ; pulchritude runs inside love, so the vocabulary is not a list to curate, it
-   ; is a question to ask. a bare symbol paints as vocabulary iff the book knows
-   ; it -- so the house words colour and your own locals do not, and a rename
-   ; re-curates itself. src/tools/hue2vim.l asks the same question at generation time
-   ; and bakes the answer into syn keyword lines.
-   ;
-   ; a NAME, not every binding: `+` `$` `<=` `->` are in the book too, and they
-   ; belong to the punct lanes, where the glued/spaced valence shows. one filter
-   ; here serves both readers -- syntax.vim has always said the same thing in
-   ; prose ("the sigil matches below own every punct run"), which is precisely the
-   ; kind of promise that goes stale when only prose keeps it.
+   ; the vocabulary is asked of the book, not curated; sigil-leading names go to the punct lanes
    (hue-name? w) (string w @ t (0 < #t && !(hue-sig? (t 0))))
 
-   ; the words a lane claims. a probe nom asks the runtime; anything else is the
-   ; literal list itself. sorted, because the generator freezes this into a
-   ; diff-gated file and tablet-key order is nobody's promise.
-   ;
-   ; the two book-derived probes drop sigil-leading names, for the reason above.
-   ; `macros` is not filtered: `&&` `||` `>>=` `:-` are genuinely macros and should
-   ; say so, and they come from the macro table rather than the book, so they were
-   ; never competing with the punct lanes in the first place.
-   ;
-   ; `values` is the constants, asked rather than listed. `lit?` is true of a nif
-   ; or closure and false of a value, so its complement is the names that are
-   ; something instead of doing something -- but that alone is too wide: it also
-   ; catches argv, cmdline and `parsed`, which are the run, not the language.
-   ; and `parsed` is bound only when love was handed a file, so the wide test
-   ; made the answer depend on how the tool was invoked -- a gate that flaps
-   ; between `love f.l` and `cat f.l | love`. so ask the sharper question: a
-   ; constant is a scalar or A NAME, a number or a string or a nom. every
-   ; run-dependent binding is a list or a tablet, and none of those is any of the
-   ; three, so one positive test excludes the lot without naming a single one.
-   ; the two book lanes are both positive tests, and that symmetry is what makes
-   ; the answer independent of how love was started: a name does something (lit?
-   ; -- a nif or a closure) or it is something (a scalar or a name). anything
-   ; that is neither is session data -- argv, cmdline, parsed, verbs -- and falls
-   ; out of both lanes rather than being named and excluded. that costs argv and
-   ; cmdline their colour, which is the price of a file that cannot flap.
+   ; the words a lane claims: a probe asks the runtime, else the literal list. sorted, since
+   ; the generator freezes it. a book name either does something (lit?) or is a scalar or a
+   ; name; session data (argv, parsed) is neither, so the answer is the same however love started
    (hue-verb? w) (lit? (ev w))
    (hue-const? w) (ev w @ v
                      (!(lit? v) &&
@@ -115,19 +68,13 @@
        (a = 'values) (sort (map string (filter hue-name? (filter hue-const? (names ())))))
        a)
 
-   ; one tablet, token -> class, filled in reverse table order so an earlier row
-   ; wins -- the same priority hue-lex reads top-down, paid once at birth instead
-   ; of walked per token.
+   ; token -> class, filled in reverse so an earlier row wins
    (hue-book x)
     (foldl (b \ r \ foldl (b2 \ w \ pin b2 w (hue-cls r)) b (hue-words (hue-arg r)))
            (tablet ()) (rev (hue-tagged 'word)))
 
    ; --- is this token a number? -----------------------------------------------
-   ; -3  .5  1.  1e10  1.5e-3  0x1f -- an optional sign, then either a hex body or
-   ; a mantissa with at least one digit and an optional exponent, and nothing left
-   ; over. it runs before the punct split so a leading `-` or `.` stays part of the
-   ; number, which is the order syntax.vim gets by defining LoveNumber after the
-   ; sigil matches. the reader takes 0x, so the painter has to.
+   ; -3 .5 1. 1e10 1.5e-3 0x1f; runs before the punct split so a leading `-` or `.` stays numeric
    (hue-num? t)
     (: n #t
        (digs i) (i < n && 48 <= t i && t i <= 57 ? (digs (i + 1)) i)
@@ -148,30 +95,19 @@
             b)
        (hx || md && x = n))
 
-   ; the word lanes, already folded into one tablet by hue-book; () when no lane
-   ; claims the token
+   ; the word lanes' class, or () when none claims the token
    (hue-word bk t) (tablet? bk ? (bk t) ())
 
    ; --- the lexer -------------------------------------------------------------
-   ; (hue-lex bk s in keep) answers [runs out]: the classified runs over the one
-   ; line s, each [class from to] with `to` exclusive, and the string state at
-   ; the line's end -- 0 code, 1 still inside a string, a raw text's quote count
-   ; inside one, which is what carries a
-   ; multi-line literal (src/apps/papel.l's css is forty lines of one string)
-   ; onto the next line.
-   ;
-   ; `keep` gates the emit and nothing else, so hue-carry below is literally this
-   ; same walk with its answers thrown away. two scanners would drift; there is
-   ; one, and this is what makes that true rather than merely intended.
+   ; (hue-lex bk s in keep) answers [runs out]: runs [class from to), to exclusive, and the
+   ; string state at eol: 0 code, 1 in a string, a raw text's quote count. keep gates the emit
+   ; only, so hue-carry is this same walk -- one scanner, never two
    (hue-lex bk s in keep)
     (: n #s
        (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
        (tend i) (n <= i || hue-term? (s i) ? i (tend (i + 1)))
        (srun i) (i < n && hue-sig? (s i) ? (srun (i + 1)) i)
-       ; glued means the whole run touches a datum start: syntax.vim's rule, and
-       ; the excluded set is its own -- blank, `)`, `,`, `;` and more sigil chars
-       ; (the last so a greedy run cannot backtrack and split itself). at the end
-       ; of a line there is no datum, so a trailing run is dyadic.
+       ; glued: the run touches a datum start; at eol a trailing run is dyadic
        (glued? j) (j < n &&
                    (: c (s j)
                       !(hue-blank? c || c = 41 || c = 44 || c = 59 || hue-sig? c)))
@@ -233,25 +169,20 @@
                  (c = hue-quo) (tend (i + 1) @ j (w j (emit acc 'atom i j)))
                  (hue-delim? c) (w (i + 1) (emit acc 'paren i (i + 1)))
                  (c = hue-sep) (w (i + 1) (emit acc 'comma i (i + 1)))
-                 ; a stop no lane claims (a control byte) is one plain char --
-                 ; and that is what leaves `word` the i<j it walks on
+                 ; a stop no lane claims (a control byte) is one plain char
                  (hue-term? c) (w (i + 1) acc)
                  (word i (tend i) acc))))
        (? (in = 1) (wstr 0 0 ()) (charm? in && 2 < in) (wraw in ()) (w 0 ())))
 
-   ; one start-state per line: fold a lexer (lx s in keep) down the buffer,
-   ; keeping nothing. hue-lex over a book is one; src/apps/vi/hues.l has the rest
+   ; one start-state per line: fold a lexer (lx s in keep) down the buffer, keeping nothing
    (hue-carry lx ls)
     (:- (go ls 0 ())
         (go l st acc) (atom? l ? (rev acc)
                         (lx <l st () @ r (go >l <>r (st . acc)))))
 
    ; --- the pens --------------------------------------------------------------
-   ; one finished escape per class, built once, so painting a frame is a lookup
-   ; and never string-building per token (slop-pal's bargain, src/apps/lore/slop.l). the theme
-   ; is keyed by vim group and the class table joins the two, so swapping
-   ; src/apps/vi/config.l's numbers for another colorscheme's moves the editor and
-   ; leaves the generated syn file -- which links to the groups -- alone.
+   ; one escape per class, built once. the theme is keyed by vim group, so swapping
+   ; colorschemes moves the editor and leaves the generated syn file alone
    hue-off "\e[0m"
    (hue-hx c) (? (48 <= c && c <= 57) (c - 48) (65 <= c && c <= 70) (c - 55) (c - 87))
    (hue-byte t k) (hue-hx (t k) * 16 + hue-hx (t (k + 1)))
@@ -277,8 +208,7 @@
            b)))
 
    ; --- painting one line -----------------------------------------------------
-   ; escapes are zero width, so a caller clips first and paints the clipped text:
-   ; every column it already worked out stays worked out.
+   ; escapes are zero width, so a caller clips first and paints the clipped text
    (hue-paint pens s runs)
     (: n #s
        (go i l acc)
@@ -287,10 +217,7 @@
               (string? p ? (go b >l (acc + snip s i a + p + snip s a b + peep pens 'off hue-off))
                  (go b >l (acc + snip s i b)))))
        (go 0 runs ""))
-   ; one window of a line: columns [a b). the runs are read from column 0, since
-   ; a clip cannot tell it began inside a string, then cut to the window and
-   ; shifted home. the lexer never reads past b, so a = 0 is the plain whole-line
-   ; paint and costs what it always did.
+   ; one window [a b) of a line: lexed from column 0, then cut and shifted home
    (hue-win pens lx s in a b)
     (: t (snip s 0 b)
        rs <(lx t in 1)
@@ -302,14 +229,8 @@
        (hue-paint pens (snip t a b) (a < 1 ? rs (cut rs ()))))
 
    ; --- the theme, and the user's own ------------------------------------------
-   ; kore ships as a baked image, so src/apps/vi/config.l is not a knob anyone
-   ; downstream has. a theme file beside the seat overrides it, read as data with
-   ; `sound` (the datum reader) and never evaled. presence is the open: a theme
-   ; file with no rows in it means "no overrides", which is a perfectly good
-   ; thing for a theme file to mean, so the question is whether it opened -- not
-   ; whether it had bytes. a row that is not a row is simply not a row: a bad
-   ; theme must not take the editor down with it.
-   ; a bare name in it picks the theme the rows fold over, the last name read winning
+   ; a theme file under HOME overrides config.l, read as data with `sound`, never evaled.
+   ; it opening is what counts, not its bytes; a bad row is skipped. the last bare name picks the theme
    (hue-over rows r) (two? r ? (map (o \ (<o = <r ? r o)) rows) rows)
    (hue-file x)                                    ; -> [name rows], name () for none
     (: h (getenv "HOME")

@@ -62,8 +62,7 @@ here")) = "// two lines" + nl + "// here" + nl))
     (gripe? (one cl-inf))))
 
 ; --- a struct or union definition, the other form cparse cannot emit
-; fields are ((name ty)..); a 3rd slot 'union changes only the keyword, and a union is
-; still referred to as ('struct tag)
+; fields are ((name ty)..); a 3rd slot 'union changes only the keyword; a union is still ('struct tag)
 (: cl-sd '(sdef "P" (("x" int) ("next" (ptr (struct "P"))) ("row" (arr (named "lvm_t") KN))))
    cl-un '(sdef "pun" (("d" double) ("u" ullong)) union)
    (test

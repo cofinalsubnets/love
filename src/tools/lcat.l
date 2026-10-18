@@ -1,47 +1,31 @@
 ; lcat: the love source a frontend bakes, laid as C. two doors:
-;
 ;   love src/tools/lcat.l          > out/lib/baked.h   the full love's one header, the roster below
 ;   love src/tools/lcat.l FILE.l   > FILE.h            one file as one C string literal (the ports, test/front)
-;
-; each top-level form is re-printed via show, the forms joined into one string, and that string
-; minified: a space is dropped wherever the reader parses the same without it. the test is
-; empirical -- the left token and the whole next form re-parse with and without the space, and
-; the datums themselves must agree (`o(` = `o (`, but not `-5` and `- 5`, nor `two?s`). spaces
-; inside a string literal are data.
-; the baked header lays every text deflated: SYM the bytes (sizeof - 1 their length), SYM_raw
-; what they inflate to, every byte a three-digit octal escape so a following digit cannot
-; extend it.
+; each top-level form is re-shown, the forms joined, and the string minified: a space is
+; dropped wherever the reader parses the same without it, tested empirically (`o(` = `o (`,
+; but not `-5` and `- 5`, nor `two?s`).
+; the baked header lays every text deflated: SYM the bytes, SYM_raw the inflated length,
+; every byte a three-digit octal escape so a following digit cannot extend it.
 
 (borrow 'posix)
 (borrow 'gz)
 
 (: (die m) (say err ("lcat: " + m + "\n"), quit 1)
    (s2cl s) ((: (g i) (i < #s ? (s i . g (i + 1)))) 0)  ; string -> charlist
-   ; the datums readable from s (stop on the eof sentinel or an incomplete form,
-   ; which read signals by returning the port itself) -- the full forms, compared
-   ; structurally, not just counted: a re-tokenization can preserve the count yet
-   ; change the parse (name'(a b) and name '(a b) both read two datums).
+   ; the datums readable from s (read answers the port itself at eof or a torn form), whole:
+   ; a re-tokenization can keep the count yet change the parse (name'(a b) vs name '(a b)).
    (datums s) ((: (g x a) (sound x @ r (two? r ? (g >r (<r . a)) (rev a)))) s 0)
-   ; the next complete form of a charlist, re-shown; 0 if none reads cleanly.
+   ; the next complete form of a charlist, re-shown; 0 if none reads cleanly
    (form1 cs) (sound cs @ r (two? r ? (show <r) 0))
-   ; a hard token boundary: whitespace, delimiters, string quote, comment, and
-   ; the value-surface chars that reach across a space (' ` each skip whitespace
-   ; to find their datum, so nothing a token could span survives them).
-   ; @ # ~ are not here, though they are sigils: those three read glue, so a
-   ; token can end at one (fs@) and gluing can change the parse (@ x is the symbol
-   ; @ then x, @x is (tuple x); '# is the sigil's own name, '#x the run around x).
-   ; resetting the left context there would hide the very byte the probe has to
-   ; weigh -- and opb? then keeps their space outright.
-   ; a chain, not a elem over a list: this runs on every byte of every text.
+   ; a hard token boundary: whitespace, delimiters, quote, comment, and ' ` , which skip
+   ; whitespace to their datum. not @ # ~: those read glue (@ x vs @x), so the probe must
+   ; weigh them, and opb? keeps their space outright. a chain, not elem: runs on every byte.
    (hardb c) (? (c = 32) 1 (c = 10) 1 (c = 9) 1
                 (c = 40) 1 (c = 41) 1 (c = 91) 1 (c = 93) 1 (c = 123) 1 (c = 125) 1
                 (c = 34) 1 (c = 59) 1 (c = 39) 1 (c = 96) 1 (c = 44) 1
                 0)
-   ; an operator-run byte: punct that is neither a hard boundary nor a name
-   ; char -- \ included, though it never fuses. under the valence law a run
-   ; glued to a datum is monadic, and the probe below tests in isolation --
-   ; head position, where fusion is suppressed -- so a space between a run's
-   ; end and a datum start is kept conservatively: it is semantic mid-list.
+   ; an operator-run byte: punct neither hard nor a name char. a run glued to a datum is
+   ; monadic mid-list but the probe reads in head position, so that space is kept.
    (opb? c) (? (hardb c) 0
                (48 <= c <= 57) 0
                (65 <= c <= 90) 0
@@ -51,25 +35,18 @@
    (dstart? b) (? (b = 41) 0 (b = 93) 0 (b = 125) 0 (b = 59) 0
                   (b = 32) 0 (b = 10) 0 (b = 9) 0
                   1)
-   ; ctx = the bytes since the last hard boundary, reversed (the left token);
-   ; cs = the remaining charlist after the space. the space is redundant iff
-   ; lt+rt re-parses to the same datums as lt rt, where rt is the whole next
-   ; form -- a quote reaches its operand, so any lexer rule is honoured, not
-   ; just today's. the opb? clause still keeps an operator-then-datum space:
-   ; the probe reads in isolation (head position, fusion off) but the run is
-   ; monadic mid-list.
+   ; ctx: the bytes since the last hard boundary, reversed; cs: the charlist after the
+   ; space. redundant iff lt+rt reads the same datums as lt rt, rt the whole next form.
    (redundant? ctx cs) (two? ctx && opb? <ctx && dstart? <cs ? 0
                           (: lt (string (rev ctx)) rt (form1 cs)
                              (rt ? (datums (lt + rt) = datums (lt + " " + rt)) 0)))
-   ; the minified text of a source. a torn input dies loudly: a header silently short
-   ; of its last forms is the empty-lcat disaster wearing a subtler face -- the build
-   ; would take it as fresh and fail somewhere else.
+   ; the minified text of a source. a torn input dies: a header short of its last forms
+   ; would pass as fresh and fail somewhere else.
    (minify src)
     (: acc (sounds src @ 'torn (die "unfinished form in input")
                          fs (foldl (\ a f (a = "" ? (show f) (a + " " + show f))) "" fs))
-       ; walk acc: drop redundant spaces (outside string literals). ctx = bytes since
-       ; the last hard boundary (reversed); instr = inside a "..." literal (where \
-       ; escapes); out = the survivors, reversed.
+       ; drop redundant spaces outside literals; instr: inside "..." (\ escapes);
+       ; out: the survivors, reversed
        (g cs ctx instr out)
         (two? cs
          ? (: c <cs
@@ -79,11 +56,10 @@
                  (c = 32
                   ; a space between two strings is never redundant: three quotes open a raw text
                   ? (!(two? out && <out = 34 && two? >cs && <>cs = 34) && redundant? ctx >cs
-                     ? (g >cs ctx 0 out)                          ; drop the space; ctx keeps accruing
-                       (g >cs 0 0 (c . out)))                     ; keep it: a real boundary
-                    ; a terminal ' is a prime, not a quote: `x'` is one name, so the byte
-                    ; belongs to the left token and the space after it is load-bearing; only a
-                    ; ' at token start reaches across whitespace for its datum
+                     ? (g >cs ctx 0 out)                          ; drop it; ctx keeps accruing
+                       (g >cs 0 0 (c . out)))                     ; keep it
+                    ; a terminal ' is a prime (`x'` is one name), so the space after it stays; only a
+                    ; ' at token start reaches across whitespace
                     (g >cs (hardb c && (c != 39 || atom? ctx) ? 0 (c . ctx))
                        (c = 34) (c . out)))))
            (string (rev out)))
@@ -113,32 +89,27 @@
    (file n) (cache n @ s
                (string? s ? s (minify (slurp-file (path n)) @ m (pin cache n m, m))))
 
-   ; the baked source (src/love/cats.c), row by row: a string lays as it is -- the arch
-   ; guards -- and a list is [symbol items], laid deflated with the _raw twin. an item is a
-   ; symbol, one boot file by name, or a string, glue laid between two files. a group is ONE
-   ; text: evals_ reads a text whole before its first form runs, so the grouping here is
-   ; part of the boot's meaning.
+   ; the baked source (cats.c): a string lays as is (arch guards); a list is [symbol items],
+   ; laid deflated with its _raw twin, items a boot file by name or glue text. a group is ONE
+   ; text: evals_ reads it whole before its first form runs, so grouping is meaning.
    rows
     [['cat_egg_z ['egg]]
      ['cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
      ['cat_post_z ['post]]
-     ; holo, one blob per arch because the backend is; an arch with no backend registers
-     ; none, the one shape that leaves LvCatModsH unset. scan rides it: it lays a native
-     ; kernel through holo at load. every other module is post's.
+     ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset. scan lays a
+     ; native kernel through holo at load. every other module is post's.
      "#if defined(__x86_64__)" "#define LvCatModsH 1"
      ['cat_lib_h_z ['holo 'x64 'scan]]
      "#elif defined(__aarch64__)" "#define LvCatModsH 1"
      ['cat_lib_h_z ['holo 'a64 'scan]]
      "#elif defined(__riscv)" "#define LvCatModsH 1"
      ['cat_lib_h_z ['holo 'rv64 'scan]]
-     ; wasm is gen's rv64 lane under another writer (src/love/holo/wasmfn.l), so the
-     ; machine under that seat's holo is rv64's
+     ; wasm is gen's rv64 lane under another writer, so its holo machine is rv64's
      "#elif defined(__wasm__)" "#define LvCatModsH 1"
      ['cat_lib_h_z ['holo 'rv64 'scan]]
      "#endif"
-     ; the glaze, one text: src/love/boot/glaze.l carries its own (borrow 'holo) and its own
-     ; (module 'glaze ..) wrapper, so which halves are inside the module is the file's to
-     ; state and not this roster's. not a module blob: an unglazed build must not pay for it.
+     ; the glaze: glaze.l states its own module wrapper. not a module blob: an unglazed build
+     ; must not pay for it.
      "#ifdef LvGlazed"
      ['src_glaze_z ['glaze 'holo 'x64 'a64]]
      "#endif"]
@@ -153,7 +124,7 @@
     (string? r ? (say out (r + "\n"))
        (lay-z (show (r 0)) (text (r 1)))))
 
-; argv leads with this script's own path: one file after it is the one-file door
+; argv leads with this script's path: one file after it is the one-file door
 (>argv @ as
    (two? as ? (say out ("\"" + clit (minify (slurp-file <as)) + "\"\n"))
       (say out "/* generated by src/tools/lcat.l -- do not edit. LvGlazed is the includer's word. */\n",

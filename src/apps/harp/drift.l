@@ -1,16 +1,11 @@
 ; src/apps/harp/drift.l -- a tonal center that walks the just lattice, steered by the
 ; phrases played over it, with the error diffused forward as floyd-steinberg does.
-;
-; every phrase is just intervals over the current center, so it is pure inside. after
-; it plays, its TENSION -- where its notes sit in the lattice, each weighted by its
-; distance from home -- says which way the center wants to go. the center can only
-; land on lattice points (a fifth, a third, a seventh away, or stay), so what it wanted
-; and where it went differ; that error is spread over the next few steps by a kernel,
-; and the walk is right on average though no step is. two knobs set its character:
-;   'lean   signed. above 0 the center follows the notes (the piece travels), below 0
-;           it leans away from them, and 0 moves only on the carried error
+; a phrase's tension says where the center wants to go; it can only land on lattice
+; points, and the error is spread over the next steps by a kernel. knobs:
+;   'lean   signed: above 0 the center follows the notes, below 0 leans away, 0 moves
+;           only on the carried error
 ;   'home   a pull back toward where the walk began, against the comma drift
-; and 'cost prices a move by its own distance, so small moves win a close call.
+;   'cost   prices a move by its own distance, so small moves win a close call
 
 (module '(drift dmoves dkernel dopts dopt minby dflat tension ptones drift-new drift-step
           drift-walk drift-cents drift-pick drift-compose tune phrase-pat drift-song compose-song)
@@ -18,20 +13,18 @@
 (borrow (cite 'harp || "src/apps/harp/harp.l"))
 (:
    dzero [0.0 0.0 0.0]
-   ; the steps a center may take, as points: stay, the fifths, the major thirds, the
-   ; minor thirds (6/5 and its inverse), the harmonic sevenths
+   ; stay, fifths, major thirds, minor thirds (6/5 and inverse), harmonic sevenths
    dmoves [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [1 -1 0] [-1 1 0] [0 0 1] [0 0 -1]]
    ; floyd-steinberg's weights, laid along time: 7 3 5 1 sixteenths, nearest first
    dkernel [0.4375 0.3125 0.1875 0.0625]
-   ; 'wc 'steer 'fresh are the chooser's: see drift-compose
+   ; 'wc 'steer 'fresh: see drift-pick
    dopts {'lean 1.0 'home 0.0 'cost 0.25 'kernel dkernel 'moves dmoves
           'wc 1.0 'steer 1.0 'fresh 2.0}
    (dopt o k) (peep o k (dopts k))
    (minby f l) (foldl (a \ x \ f x < f a ? x a) <l >l)
 
-   ; where a phrase's weight lies, relative to its center: the mean of its points,
-   ; each weighted by how far out it is. a chord is a list inside the phrase
-   ; a phrase's notes in one list, its chords opened
+   ; tension: the mean of a phrase's points, each weighted by how far out it is.
+   ; dflat: a phrase's notes in one list, its chords opened
    (dflat l) (? !(two? l) () (coin? <l || !(two? <l)) (<l . dflat >l) (dflat <l + dflat >l))
    (tension rs)
     (: wv (filter (x \ x 1 != 'over) (map (r \ [(lnorm (point r)) (point r)]) (dflat rs)))
@@ -39,8 +32,7 @@
        (tw = 0.0 ? dzero
           (vscale (1.0 / tw) (foldl vadd dzero (map (x \ vscale (x 0) (x 1)) wv)))))
 
-   ; a walk's state: where the center is, its pitch, and the error still owed to the
-   ; steps ahead, one vector per kernel weight
+   ; the error still owed to the steps ahead: one vector per kernel weight
    (drift-new o) {'pos [0 0 0] 'tonic 1 'queue (map (_ \ dzero) (dopt o 'kernel))
                   'move [0 0 0] 'want dzero 'tension dzero}
 
@@ -64,16 +56,13 @@
    ; a phrase's notes as absolute lattice points, over a center at pos
    (ptones pos rs) (map (r \ vadd pos (point r)) (dflat rs))
 
-   ; the walk choosing its own phrases from a vocabulary: each step scores every
-   ; phrase over the new center and plays the best --
-   ;   'wc     per note it shares with the phrase before, as absolute points: what
-   ;           makes a move of the center sound connected
-   ;   'steer  signed: how far to favour a phrase pulling along what the walk still
-   ;           owes (above 0, momentum) or against it (below 0, the walk turns)
+   ; drift-pick scores every phrase over st's center and answers [phrase its-points]
+   ; ([() ()] at the start for prev):
+   ;   'wc     per note shared with the phrase before, as absolute points
+   ;   'steer  signed: favour a phrase pulling along what the walk owes (above 0) or
+   ;           against it (below 0)
    ;   'fresh  what repeating the last phrase costs
-   ; answers [state phrase] per step
-   ; one choice: the phrase to play over st's center after prev, [phrase its-points]
-   ; or [() ()] at the start; answers the same pair for the phrase chosen
+   ; drift-compose answers [state phrase] per step
    (drift-pick o st prev vocab)
     (: owed (vsub <(st 'queue) (vscale (dopt o 'home) (st 'pos)))
        (score ph) (dopt o 'wc * #(filter (p \ elem p (prev 1)) (ptones (st 'pos) ph))
@@ -89,7 +78,7 @@
 
    ; --- into harp ------------------------------------------------------------------
    ; ratios over a center become 'note, semitones from middle c; a tablet keeps its
-   ; other keys and gives its 'ji
+   ; other keys
    (tune t p)
     (pmap (v \ (: r (tablet? v ? (v 'ji) v) s (semis (t * r))
                   (tablet? v ? (pin (foldl (n \ k \ pin n k (v k)) {} (keys v)) 'note s)

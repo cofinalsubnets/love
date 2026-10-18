@@ -1,14 +1,13 @@
 ; src/apps/caja/cell.l -- caja on a terminal: lapiz's middle set in cells and shipped as text.
-; `(borrow 'caja-cell)`. the blocks are ttyshow's (src/apps/lapiz.l), the lines caja's:
+; `(borrow 'caja-cell)`. the blocks are lapiz's ttyshow's, the lines caja's:
 ;
-;   (cc-show d w)   the document d as ttyshow lays it at width w, each paragraph broken by
-;                   line_break into a ragged right -- the fewest demerits, not the greedy fill
+;   (cc-show d w)   d as ttyshow lays it at width w, each paragraph broken by line_break
+;                   into a ragged right -- the fewest demerits, not the greedy fill
 ;
-; a cell font is a TFM's shape: a character as wide as the cells wcwidth gives it, a space one
-; cell that neither stretches nor shrinks, and \rightskip the only stretch in a line. caja
-; codes a character in a byte, so a plane of fonts holds 255 of them: ASCII as itself, the
-; rest in the order they come, and a new plane when one is full. a font is a plane and an SGR
-; attribute. a fence, a table, a rule and the .th line are ttyshow's lines, set as boxes.
+; a cell font: a character as wide as wcwidth gives it, a space one cell that neither
+; stretches nor shrinks, \rightskip the only stretch. a character codes in a byte, so a
+; plane holds 255: ASCII as itself, the rest in arrival order, a new plane when full. a
+; font is a plane and an SGR attribute. fences, tables, rules and .th are ttyshow's lines.
 (module (caja-cell cc-show)
 (borrow 'text)
 (borrow 'lapiz)
@@ -31,7 +30,7 @@
                                 (go (i + 1) a acc))
                 (go 0 0 ()))
 
-   ; --- the fonts ------------------------------------------------------------------------------
+   ; --- the fonts ---
    (glyph t s c) (pin (t 'ci) s [(wcwidth c @ 1 1 2 2 3) 17 0 0])
    (plane J)
     (: n #(J 'planes)
@@ -75,7 +74,7 @@
                  (go >l (t . acc)))))
        (go ts ()))
 
-   ; --- text -------------------------------------------------------------------------------------
+   ; --- text ---
    (space? c) (elem c [32 9 10 13])
    (text-toks a s) (map (c \ (space? c ? 'sp ['ch a c])) (cps s))
    ; spaces as a line wants them: none at either end, a run one
@@ -96,7 +95,7 @@
                l))
    (cells ts) (net (map (t \ (t = 'sp ? 1 (max 0 (wcwidth (t 2))))) ts))
 
-   ; --- blocks -------------------------------------------------------------------------------------
+   ; --- blocks ---
    ; a paragraph at ind, its lines after the first hung by hang, the first led by a label box
    (par ind hang label body)
     (squeeze body @ b
@@ -135,7 +134,7 @@
              (<(<d) = 'head) (h + r)
              (h + [gap] + r))))
 
-   ; --- the shipper ----------------------------------------------------------------------------------
+   ; --- the shipper ---
    (glue-width b g)
     (g 'width @ w
        (? (b 'gsign = 1 && g 'sto = b 'gorder) (w + int (b 'gset * g 'stretch + 0.5))

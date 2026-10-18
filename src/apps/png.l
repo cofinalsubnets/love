@@ -1,6 +1,5 @@
 ; src/apps/png.l -- png decoding: every colour type and depth, palettes, transparency, adam7,
 ; apng's frames; and encoding.
-; `(borrow 'png)`, then:
 ;
 ;   (png-decode s)              -> (w h rgba) | a string saying why not
 ;   (png-frames s most)         -> (w h ((rgba ms) ..)), up to most frames composed on the
@@ -10,8 +9,7 @@
 ;                                  nif (png-unfilter s o rows n bpp) answers to
 ;
 ; rgba is w*h*4 bytes, 8 bits a sample: a 16-bit sample rounds to its nearest 8-bit one,
-; a low-depth grey scales to the full range. ancillary chunks past tRNS are skipped, so
-; gamma and colour space are the viewer's to ignore.
+; a low-depth grey scales to the full range. ancillary chunks past tRNS are skipped.
 (module (png png-decode png-frames png-encode png-walk png-unfilter)
 (borrow 'bytes)
 (borrow 'gz)
@@ -63,8 +61,7 @@
               (4 < f ? "bad filter"
                  (png-recon c f d (d - n - 1) n bpp (k = 0), row (k + 1) (d + n)))))
        (row 0 o))
-   ; src/love/picture/png.c's nif; the walk above is the oracle test/host/png.l holds it to
-   ; -> [rows first-row-offset row-stride] | why not
+   ; the nif, with the walk above its oracle -> [rows first-row-offset row-stride] | why not
    (png-rows c o rows n bpp)
     (png-unfilter c o rows n bpp @ r (string? r ? [r 0 n] "bad filter"))
 
@@ -162,8 +159,7 @@
    (png-key px i) (((px i << 8 | px (i + 1)) << 8 | px (i + 2)) << 8 | px (i + 3))
    ; the row y as bytes, st of them
    (png-row px st y) (snip px (y * st) ((y + 1) * st))
-   ; the colours while there are at most 256 -> [keys index-of] | (), first seen first. a
-   ; row that repeats the one above is not walked again
+   ; the colours while there are at most 256 -> [keys index-of] | (), first seen first
    (png-census w h px)
     (: t {} st (4 * w)
        (go y i ks m)
@@ -175,8 +171,8 @@
               (0 <= peep t k -1 ? (go y (i + 4) ks m)
                  (pin t k m, go y (i + 4) (k . ks) (m + 1)))))
        (go 0 0 () 0))
-   ; filtered rows: a row that repeats the one above is up, all zero; else sub over bpp
-   ; byte samples, or none when bpp is 0 (a palette's, where sub buys nothing)
+   ; filtered rows: a repeat of the row above is up, all zero; else sub over bpp bytes,
+   ; or none when bpp is 0 (a palette's)
    (png-filter rows n bpp)
     (: o (jug 0) zero (string (cask n))
        (sub r) (: c (cask n) _ (pour c 0 r 0 (min n bpp))
@@ -208,7 +204,7 @@
                                      (pin c (b >> 3) (peep c (b >> 3) 0 | v << 8 - dep - (b & 7)))))
                              ^w,
                          string c))
-             ; a repeated row is packed again only to be seen equal
+             ; a repeated row reuses its packing
              (rows y prev pr acc) (y = h ? (rev acc)
                                      (: r (png-row px st y)
                                         p (0 < y && r = prev ? pr (row y))
@@ -252,9 +248,8 @@
 
    ; --- apng -----------------------------------------------------------------------------
    ; a frame's fcTL: sequence, w h x y, the delay's numerator and denominator, dispose (0
-   ; none, 1 cleared, 2 the canvas before it) and blend (0 overwrite, 1 over). the canvas
-   ; starts clear; a first frame disposing to the one before is cleared. a later frame that
-   ; fails ends the walk with the frames so far
+   ; none, 1 cleared, 2 the canvas before it) and blend (0 overwrite, 1 over). a first
+   ; frame disposing to the one before is cleared; a later frame that fails ends the walk
    (png-frames s most)
     (png-parse s @ t
        (? (string? t) t

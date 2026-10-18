@@ -1,18 +1,14 @@
-; src/apps/sb/http.l -- the smallest HTTP/1.1 get that can walk a store, over the
-; `connect` socket floor (src/love/sock.c).
+; src/apps/sb/http.l -- the smallest HTTP/1.1 get that can walk a store, over `connect`.
 ;
-; a client only, and only get: the store is content-addressed, so every fetch is a plain
-; get on a known name, verified by sha256 on arrival; any static file server is a remote.
-; we send `Connection: close` and read to EOF: prel's slurp draws to end-of-stream, so a
-; keep-alive response would park the task forever.
+; get only: the store is content-addressed and verified by sha256, so any static server is a
+; remote. `Connection: close` and read to EOF, since slurp draws to end-of-stream.
 ;
-; rides module 'sb, so these names never reach the book; `dial` comes off module 'dns,
-; scoped here to the wrap's own compile.
+; rides module 'sb, so these names never reach the book
 (module 'sb
 (borrow 'dns)
 (borrow 'posix)
 (:
-   ; "80" -> 80. `int` is a truncation, not a parser, so digits are ours.
+   ; "80" -> 80. `int` truncates, it does not parse.
    (digits s)
     (: n #s
        (go i a) (n <= i ? (0 < n ? a)
@@ -20,9 +16,7 @@
                       (47 < c && c < 58 ? (go (i + 1) (a * 10 + (c - 48))))))
        (go 0 0))
 
-   ; the index of `sub` in `s` at or after `cite`, searching at most `cap`
-   ; positions -- headers sit in the first few KB and a whole-body scan would be
-   ; O(n*m) for nothing. -1 when absent.
+   ; the index of `sub` in `s` at or after `cite`, searching at most `cap` positions; -1 if absent
    (findsub s sub cite cap)
     (: n #s m #sub lim (n - m < cap ? (n - m) cap)
        (go i) (? (lim < i) -1
@@ -34,9 +28,7 @@
    ; "http://host[:port]/path" -> (host port path) | ()
    (url-split u) ((cite 'kore 'wg-url u) @ w (w && !<w ? >w))        ; wget's split, http only
 
-   ; one get -> (status body) | (). () is a dead socket or an unreadable
-   ; response; a 404 is a perfectly good answer and comes back as (404 ..), so
-   ; the caller can tell "no such object" from "no such host".
+   ; one get -> (status body) | (): () a dead socket or unreadable response, a 404 is (404 ..)
    (http-get host port path)
     (dial host port @ s
        (? !(hot? s) ()
@@ -54,11 +46,8 @@
                           code (sp < 0 ? () (digits (snip head (sp + 1) (sp + 4))))
                           (code ? [code body])))))))))
 
-   ; get a store object under a base url -> (1 body) | (). the presence wrapper,
-   ; not the bare body: a 0-byte blob is a legitimate object and `!""` is true,
-   ; so a bare body would read as absence -- the same law the empty-file fix set
-   ; down (presence is the wrapper, never the net). anything but 200 is absence,
-   ; which is all a walk needs to know.
+   ; a store object under a base url -> (1 body) | (). wrapped, since a 0-byte blob is real and
+   ; `!""` is true; anything but 200 is absence.
    (http-fetch base rel)
     (url-split (base + rel) @ u
        (two? u ?

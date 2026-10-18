@@ -1,16 +1,13 @@
-; src/tools/kinds2uu.l -- the kinds-lattice analog of src/tools/wm2uu.l: read the abstract
-; domain of test/proto/kinds.l as data and emit test/uukind.l -- the join (and its
-; num? guard) compiled into uu terms over a nat-coded carrier, so test/uukindlaw.l
-; proves the semilattice laws OF the actual analysis, not a hand transcription. Run:
+; src/tools/kinds2uu.l -- read the kinds lattice of test/proto/kinds.l as data and emit
+; test/uukind.l: the join and its num? guard as uu terms over a nat-coded carrier, so
+; test/uukindlaw.l proves the laws of the actual analysis. Run:
 ;
 ;   love src/tools/kinds2uu.l > test/uukind.l        (or: make uukind)
 ;
-; the encoding is derived from kinds.l's own `rank`: each kind symbol takes its
-; rank as its nat code (bot 0 .. top 5), and `str` -- the incomparable branch, off
-; rank's table -- takes the next code up. so `rank` folds to identity here, and the
-; translation is otherwise structural: ? -> nested bool_rect, = (and ==) -> nateqb,
-; < -> natgtb (swapped), && -> andb, num? -> the emitted numq, a `:` -> a let.
-; kind symbols appear only quoted in kinds.l ('bot ..), so a bare nom is a variable.
+; each kind takes its `rank` as its nat code (bot 0 .. top 5), and `str`, the branch off
+; rank's table, the next code up, so `rank` folds to identity. otherwise structural:
+; ? -> nested bool_rect, = and == -> nateqb, < -> natgtb (swapped), && -> andb,
+; num? -> numq, `:` -> let. kinds appear only quoted in kinds.l, so a bare nom is a variable.
 ;
 ; a body-less `:` -- the k2-* vocabulary leaks; none shadows a nif.
 (borrow 'posix)
@@ -43,8 +40,6 @@
        (: h <e
           (? (h = '?)    (k2-cond km >e ty)
              (h = ':)    (k2-lets km >e ty)
-             ; `=` and == both: kinds.l compares points, and the sweep that made
-             ; every such == an `=` left this reading only the old spelling.
              (h = '== || h = '=)
                          ['nateqb (k2-tx km (e 1) 'nat) (k2-tx km (e 2) 'nat)]
              (h = '<)    ['natgtb (k2-tx km (e 2) 'nat) (k2-tx km (e 1) 'nat)]
@@ -95,7 +90,7 @@
     map (c \ pl (" (defn uk" + string (k2-nom km c) + " nat " + show c + ")")) ucodes,
     pdefn "numq" numq ")",
     pdefn "kjoin" kjoin "))",
-    ; the carrier codes 0..str, for the law file (derived, so drift follows kinds.l)
+    ; the carrier codes 0..str, for the law file
     pl ("(: uk-codes '" + show ucodes),
     puts ")\n",
     0))

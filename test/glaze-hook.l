@@ -1,33 +1,31 @@
-; the natjit creation hook: a qualifying leaf is native-backed when its closure is built.
-; runs native code, so it is its own lane (test_hook), not the corpus. each law claims the
-; answer and that the hook fired (`fires`, `fired?`), since bytecode computes it too
+; the natjit creation hook: a qualifying leaf is native-backed when its closure is built. its own
+; lane (test_hook). each law claims the answer and that the hook fired, since bytecode computes it too
 (assert (lit? natjit) (lit? fires) (lit? fired?))            ; unbound, every claim below would read 1
 
 (assert
-    ; --- embedded leaves get native-backed at creation, and compute correctly ---
+    ; --- embedded leaves: native at creation, computing right
     (: n (peep fires () 0)
        (31 = (ev '(: f (\ x (+ (* x 3) 1)) (f 10)))                ; leaf in a let body
-        && fired? n))                                               ; ... the hook fired on it
-    (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; embedded leaf, applied inline -> deopt -> bignum
-    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; chain body -> the amble lane owns it
-    ; --- an embedded float-result leaf: native gem box at creation, == interp, deopts on a non-float arg ---
-    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))         ; f built by ala -> the float lane fires
-       (gem? (fr 4) && 8.0 = (fr 4) && (fr 4 = ((x \ (x * 1.5) + 2.0) 4))      ; boxes a gem, == the interpreter
-        && fired? n && (fr 'nope = ((x \ (x * 1.5) + 2.0) 'nope))))            ; ... the hook fired, and a non-float arg deopts == interp
-    ; --- an embedded N-VAR loop (iterative fib i,a,b): native back-edge at creation, == interp ---
+        && fired? n))                                               ; ..and the hook fired
+    (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; applied inline, deopts to a bignum
+    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; a chain body: the amble owns it
+    ; --- a float-result leaf boxes a gem, == interp, deopts on a non-float arg
+    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))         ; the float lane fires
+       (gem? (fr 4) && 8.0 = (fr 4) && (fr 4 = ((x \ (x * 1.5) + 2.0) 4))      ; == the interpreter
+        && fired? n && (fr 'nope = ((x \ (x * 1.5) + 2.0) 'nope))))            ; ..and a non-float arg deopts
+    ; --- an N-var loop (fib): a native back-edge, == interp
     (: n (peep fires () 0)  fib (ev '(: f (\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) f))
-       (55 = (fib 10) && fired? n                                                                ; the hook owned the loop; fib(10)=55
+       (55 = (fib 10) && fired? n
         && (fib 20 = ((m \ (: (go i a b) (i < m ? (go (i + 1) b (a + b)) a)) 0 0 1) 20))         ; == the interpreter
-        && (fib 100 = ((m \ (: (go i a b) (i < m ? (go (i + 1) b (a + b)) a)) 0 0 1) 100))))     ; ... and past fixnum, deopted to its thread
-    ; --- an embedded capturing closure: native captured closure, transparent ---
-    (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)           ; inner (\ x (+ x y)) is the embedded one
-       (15 = (a5 10) && ('(6 7 8) = (map a5 '(1 2 3)))     ; native captured closure, composes
-        && a5 = ((y \ (x \ x + y)) 5)))                    ; ... and = the interpreter's instance
-    ; --- transparency on a capturing leaf pulled out as a value (a closed one would hoist) ---
-    (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)  ; inner captures z -> a fresh native cell per call
-       (19 = (f 10) && f = ((z \ (x \ x + z)) 9)))       ; computes right, = the interp instance
-    ; --- the self seam: a letrec name recurs natively -- a tail call re-enters as a loop,
-    ; a non-tail call takes the direct self frame; a captured import re-supplies through both
+        && (fib 100 = ((m \ (: (go i a b) (i < m ? (go (i + 1) b (a + b)) a)) 0 0 1) 100))))     ; ..past fixnum, deopted to its thread
+    ; --- a capturing closure: native and transparent
+    (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)           ; the inner lambda is the embedded one
+       (15 = (a5 10) && ('(6 7 8) = (map a5 '(1 2 3)))
+        && a5 = ((y \ (x \ x + y)) 5)))                    ; ..= the interpreter's instance
+    ; --- transparency on a capturing leaf pulled out as a value (a closed one would hoist)
+    (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)  ; a fresh native cell per call
+       (19 = (f 10) && f = ((z \ (x \ x + z)) 9)))
+    ; --- the self seam: a tail self-call loops, a non-tail one takes the direct self frame
     (: n (peep fires () 0)
        r (ev '(: (sum f z l) (? (two? l) (sum f (f z (cap l)) (cup l)) z) (sum (\ a x (+ a (* x x))) 0 '(1 2 3 4))))
        (30 = r && fired? n))
@@ -54,8 +52,8 @@
        h (ev '(: (h a b) (? (< 0 b) (+ (+ (// a b) (% a b)) (+ (& a b) (+ (| a b) (^ a b)))) 0) h))
        i (a \ b \ ((a // b) + (a % b)) + ((a & b) + ((a | b) + (a ^ b))))
        (fired? n && (h 17 5 = i 17 5) && (h -17 8 = i -17 8) && 0 = (h 17 0)))
-    ; --- an inner lambda in a driver body is built natively, fresh per evaluation; a closed
-    ; one is shared. the inner bodies decline every lane, so the fire is the driver's
+    ; --- an inner lambda in a driver body is built fresh per evaluation, a closed one shared. the
+    ; inner bodies decline every lane, so the fire is the driver's
     (: n (peep fires () 0)
        ad (ev '(: (ad f l) (? (two? l) (. (f (\ x (+ (tally (show x)) (cap l)))) (ad f (cup l))) ()) ad))
        cs (ad (g \ g) '(1 2))
@@ -83,32 +81,30 @@
     (: n (peep fires () 0)
        mk (ev '(\ l ((: (go l acc) (? (two? l) (go (cup l) (. (\ y (* y (tally (show (cap l))))) acc)) acc)) l ())))
        (fired? n && ('(2 2 2) = (map (c \ c 2) (mk '(1 2 3)))) && ('(4 2) = (map (c \ c 2) (mk '(1 10))))))
-    ; --- the restart law: a deopt re-runs from the restart point, so a loop that writes and
-    ;     then overflows is declined, and nothing is written twice
+    ; --- the restart law: a deopt re-runs from the restart point, so nothing is written twice
     (: f (ev '(: (mk o n k) (? (<= n 0) (slurp o) (: _ (put o (+ 97 (% k 5))) (mk o (- n 1) (+ (* k 7) 3)))) mk))
-       ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40 9)))     ; a self-call loop: its restart point is the running iteration
+       ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40 9)))     ; a self-call loop restarts at the running iteration
     (: f (ev '(: (build o n) ((: (go m k) (? (<= m 0) (slurp o) (: _ (put o (+ 97 (% k 5))) (go (- m 1) (+ (* k 7) 3))))) n 9) build))
-       ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40)))       ; a named-let: its vars ride reserved slots, so the restart is the whole loop
+       ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40)))       ; a named-let restarts the whole loop
     ; --- a constant past fixnum range is no immediate: declined, never laid truncated
     (: f (ev '(\ x (: y 6000000000000000000 (+ x y))))
        (6000000000000000000 = (f 0) && (f 0 = ((x \ (: y 6000000000000000000 (x + y))) 0))))
     (: f (ev '(\ x (: y -6000000000000000000 (+ x y))))
        (-6000000000000000000 = (f 0)))
     (: f (ev '(\ n (: (go i a) (? (< i n) (go (+ i 1) 6000000000000000000) a) (go 0 0))))
-       (6000000000000000000 = (f 4)))                            ; ... and one folding left behind in a loop
+       (6000000000000000000 = (f 4)))                            ; ..and one left behind in a loop
     (: f (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a 6000000000000000000)) a)) 0 0)))
        (6000000000000000000 = (f 1)))
-    ; --- the fallback stubs: a guard failing past a call computes the op in place, so the
-    ;     recursive list idiom ambles and no call runs twice
+    ; --- the fallback stubs: a guard failing past a call computes the op in place; no call runs twice
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) () ((h m) . (g h (- m 1)))) g))
        (fired? n && ('(9 4 1) = f (x \ x * x) 3)))                     ; a cons after the non-tail self-call
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) 0 (+ (h m) (g h (- m 1)))) g))
-       (fired? n && (12000000000000000000 = f (_ \ 4000000000000000000) 3)))   ; the sum overflows past the call: the + stub answers the bignum
+       (fired? n && (12000000000000000000 = f (_ \ 4000000000000000000) 3)))   ; the + stub answers the bignum
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) 0 (? (h m) (+ 1 (g h (- m 1))) (g h (- m 1)))) g))
-       (fired? n && (2 = f (x \ x = 2 ? () [x]) 3)))                     ; a heap truth on the call's answer: the bit stub decides
+       (fired? n && (2 = f (x \ x = 2 ? () [x]) 3)))                     ; the bit stub decides
     ; ... and the stub's bit is the glaze's own, whatever the book binds to `bit`
     (: old bit
        _ (ev '(: bit (\ a b 1)))
@@ -120,13 +116,12 @@
     (: o (jug 0) k {0}
        f (ev '(: (g h m) (? (< m 1) 0 (+ (h m) (g h (- m 1)))) g))
        _ (f (x \ (: _ (pin k 0 (1 + peep k 0 0)) _ (put o (97 + x)) 4000000000000000000)) 3)
-       ((3 = peep k 0 0) && ("dcb" = slurp o)))                          ; three calls, three effects -- the overflow past them replayed none
-    ; ... and the lane keeps the calls no restart can reach -- nothing deopts after this one
+       ((3 = peep k 0 0) && ("dcb" = slurp o)))                          ; three calls, three effects, none replayed
+    ; ... and a lane keeps calls no restart can reach
     (: n (peep fires () 0)
        f (ev '(: (go i m a) (? (< i m) (go (+ i 1) m (tally (show (+ a i)))) a) go))
        (fired? n && 2 = (f 0 20 0)))
-    ; --- a literal divisor shifts or multiplies by its magic, truncating toward zero,
-    ;     on the leaf, the loop and the amble
+    ; --- a literal divisor shifts or multiplies by its magic, truncating toward zero
     (: n (peep fires () 0)
        f (ev '(\ x (+ (* 100 (// x 7)) (% x 7))))
        (fired? n && ('(-1401 -1 0 1 1401 20000 -20000) = map f '(-99 -1 0 1 99 1400 -1400))))
@@ -142,14 +137,13 @@
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) 0 (+ (% (h m) 4096) (+ (// (h m) 10) (g h (- m 1))))) g))
        (fired? n && 6504 = (f (x \ 1000 - (x * (x * x))) 12)))
-    ; --- a helper above the sibling it calls compiles at the end of its form, into the cell its
-    ;     callers already hold
+    ; --- a helper above the sibling it calls compiles into the cell its callers already hold
     (: n (peep fires () 0)
        _ (ev '(module (gzh gzh-sum) (: (gzh-sum l acc) (? (two? l) (gzh-sum >l (acc + gzh-sq <l)) acc) (gzh-sq x) (x * x))))
        f (cite 'gzh 'gzh-sum)
        (fired? n && nat? f && 14 = (f [1 2 3] 0)))
-    ; --- a saturated call's frame must not land on a tablet a call-out just made in the
-    ;     last free words: swept over m, the 15th argument stays a tablet
+    ; --- a saturated call's frame must not land on a tablet a call-out just made in the last free
+    ; words: swept over m, the 15th argument stays a tablet
     (: n (peep fires () 0)
        f (ev '(: (gzf16 a b c d e f g h i j k l m n o p) (? (tablet? o) 0 1)
                  (gzfmk m) (: g (gauge 0)  r (- (- (g 0) (g 1)) (g 2))

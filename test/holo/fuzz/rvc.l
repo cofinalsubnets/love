@@ -9,8 +9,7 @@
 (reads (open "src/love/holo/rv64.l" "r"))
 
 (: _ (borrow (name "holo"))
-   ;; the rv64 backend's test door -- the squeeze, the fixup writer and the cb base. holo's
-   ;; own surface carries the rest (imm?, at, jot).
+   ; the rv64 backend's test door: the squeeze, the fixup writer and the cb base
    parts (peep (peep backends 'rv64 ()) 'parts ())
    _ (tablet? parts ? 0
         (say err "FAIL test_rvc: the rv64 backend lays no `parts` door\n", quit 1))
@@ -42,7 +41,7 @@
    (bytes-of w n) (: (go i acc) (n <= i ? acc (go (i + 1) (acc + ("0x" + hx2 ((w >> (8 * i)) & 255)) + " ")))
                      (go 0 ""))
 
-   ;; -- the sweep. every (word32 . word16) pair rvc-of answers on the enumerated space. --
+   ; -- the sweep: every (word32 . word16) pair rvc-of answers on the enumerated space
    (mk-i imm rs1 f3 rd op) (((imm & 4095) << 20) | ((rs1 << 15) | ((f3 << 12) | ((rd << 7) | op))))
    (mk-r f7 rs2 rs1 f3 rd op) ((f7 << 25) | ((rs2 << 20) | ((rs1 << 15) | ((f3 << 12) | ((rd << 7) | op)))))
    (mk-s imm rs1 rs2 f3 op) ((imm & 4095) @ u
@@ -57,7 +56,6 @@
    shs   (upto 63)
    alloff (offs + odds)
 
-   ; every candidate 32-bit word the sweep visits
    words (: (fl ls) (foldl (a \ l \ a + l) () ls)
             (over l f) (fl (map f l))
             (fl [
@@ -83,7 +81,6 @@
               ; multiples of 16 take the sp form, the odd ones must fall back or refuse
              (map (k \ mk-i ((k * 8) - 544) 2 0 2 0x13) (upto 136))]))
 
-   ; keep only those that compress, paired with their C word
    pairs (foldl (a \ w \ rvc-of w @ c
                          (two? c ? ([w ((c 0) | ((c 1) << 8))] . a) a)) () words)
    npair #pairs
@@ -105,7 +102,7 @@
    (idx-of s sub) (: n #s k #sub
                      (go i) (? ((n - k) < i) () ((snip s i (i + k)) = sub) i (go (i + 1)))
                      (go 0))
-   ; `add rd, zero, rs2` and `mv rd, rs2` are one instruction -- see the header
+   ; one instruction; see the header
    (demv s) (norm s @ t
              (? (pfx? t "add ")
                 (idx-of t ", zero, " @ c

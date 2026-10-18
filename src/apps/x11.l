@@ -3,7 +3,7 @@
 ;   (x11 "honeydew")        "#f0fff0", or () for a name that is not one
 ;   (x11-rgb "lavender")    (230 230 250)
 ;   (x11-fg "lavender")     "\e[38;2;230;230;250m" -- and x11-bg the background's
-;   (x11-256 "lavender")    189: the cube cell quay lands that truecolour on (src/love/quay/quay.c)
+;   (x11-256 "lavender")    189: the cube cell quay lands that truecolour on
 ;   (x11-names 0)           every name, sorted
 ;   (x11-pen 88)            (135 0 0): a pen's rgb -- 16..231 the cube, 232..255 the grey ramp
 ;   (x11-pen-hex 88)        "#870000", and (x11-near 88) the name nearest it, "darkred"
@@ -11,10 +11,8 @@
 ;   love x11 88             cell -- and a swatch of the cell when the output is a terminal;
 ;                           a pen's row has the name nearest it, marked ~
 ;
-; a name is matched lowercase with its spaces, hyphens and underscores dropped, so
-; "Navy Blue" and navyblue are one. the four names where X11 and the web disagree
-; carry X11's value -- gray bebebe, green 00ff00, maroon b03060, purple a020f0 -- and
-; the web's are webgray, webgreen, webmaroon, webpurple, as rgb.txt has them.
+; a name is matched lowercase with spaces, hyphens and underscores dropped. gray, green,
+; maroon and purple carry X11's values; the web's are webgray, webgreen, webmaroon, webpurple.
 (module 'x11
 (borrow 'posix)
 (:
@@ -73,8 +71,7 @@
  (x11-cube v) (v < 48 ? 0 ((v - 35) // 40))
  (x11-256 n) (x11-rgb n @ c (two? c ? (16 + 36 * x11-cube <c + 6 * x11-cube (c 1) + x11-cube (c 2)) ()))
  (x11-names _) (sort (keys x11-tab))
- ; ..and the other way: a pen's rgb, 16..231 the cube and 232..255 the grey ramp, where
- ; 232 + n is 8 + 10n; its hex; and the name nearest it in rgb
+ ; ..and the other way: a pen's rgb (232 + n is grey 8 + 10n), its hex, its nearest name
  x11-levels [0 95 135 175 215 255]
  (x11-pen c) (? (!(charm? c)) ()
                 (232 <= c && c <= 255) (8 + 10 * (c - 232) @ v [v v v])
@@ -85,10 +82,8 @@
  (x11-near c) (: p (x11-pen c)
                  (gap n) (x11-rgb n @ q (2 (q 0 - p 0) + 2 (q 1 - p 1) + 2 (q 2 - p 2)))
                  (two? p ? (foldl (a \ n \ (gap n < gap a ? n a)) "black" (x11-names 0)) ()))
- ; the verb: every argument a row -- a name's hex, rgb and cube cell, or a pen's hex,
- ; rgb and nearest name, marked ~ -- the columns padded to the widest, as ls pads its;
- ; a swatch of the cell on the end when stdout is a terminal, and no arguments is
- ; every name. an argument that is neither is said on stderr, and the answer is 1
+ ; the verb: a row an argument, every name with none; an argument that is neither a name
+ ; nor a pen is said on stderr, and the answer is 1
  (x11-main as)
   (: tty? (two? (tty 1))
      (row n) (: h (x11 n) c (unum n)

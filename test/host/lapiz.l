@@ -1,15 +1,15 @@
-; test/host/lapiz.l -- the document lens over a markdown corpus that touches every block and span
-;   law 1  the AST is the fixed point of each surface: (mdread (mdshow a)) = a, (htread (htshow a)) = a.
-;   law 2  each surface round-trips through the other up to normalization; both normalizers idempotent.
+; test/host/lapiz.l -- the document lens over a markdown corpus touching every block and span
+;   law 1  the AST is each surface's fixed point: (mdread (mdshow a)) = a, (htread (htshow a)) = a
+;   law 2  each surface round-trips through the other up to normalization; normalizers idempotent
 ; a new surface owes law 1 and nothing more.
 ; not in the corpus: it loads a crew file. run: cat test/00-init.l test/host/lapiz.l | out/love
 
-(borrow 'lapiz)                                ; the baked module, spliced
-(borrow 'text)                                 ; swidth, a line's cells
+(borrow 'lapiz)                                ; spliced
+(borrow 'text)
 
 ; the module seam
 (test
- (elem 'lapiz (cite ()))                   ; the registry lists it
+ (elem 'lapiz (cite ()))
  (elem 'md->ht (keys (cite 'lapiz)))
  ("<h1>hi</h1>" = cite 'lapiz 'md->ht "# hi")     ; the opaque accessor reaches a face
  (lit? (cite 'lapiz))
@@ -88,7 +88,7 @@ int main(void) { return 0; }
 
 the [end](e)."]
 
-   (nrm s) (mdshow (mdread s))                 ; read then show
+   (nrm s) (mdshow (mdread s))
    (hrm s) (htshow (htread s))
    ; `show` prints a 0 nil-tail like (), so probe the tail itself
    (t0? x) (!(two? x) ? (0 = x) (t0? <x || t0? >x))
@@ -101,17 +101,16 @@ the [end](e)."]
                    (m = nrm m)
                    (h = md->ht (ht->md h))
                    (h = hrm h)
-                   !(t0? d)                        ; no 0 tail anywhere in the middle
+                   !(t0? d)                        ; no 0 tail anywhere inside
                    !(t0? (htread h))))) corpus,
 
-    ; the shapes, spelled out
     test (mdread "# hi" = '((head 1 ((text "hi")))))
          (mdread "*a*b" = '((para ((em ((text "a"))) (text "b")))))
          (mdread "- x\n- y\n" = '((bullets (((text "x")) ((text "y"))))))
          (mdread "> q\n" = '((quote ((para ((text "q")))))))
          (mdread "```c\nx\n```\n" = '((fence "c" "x\n")))
          (mdread "[t](u)" = '((para ((link ((text "t")) "u")))))
-         ; an image: its alt plain, its src; a bang ahead of a link is text, escaped to stay so
+         ; an image: alt plain, its src; a bang ahead of a link is text, escaped to stay so
          (mdread "![a *b*](c.png)" = '((para ((img "a *b*" "c.png")))))
          (mdread "wow\\![t](u)" = '((para ((text "wow!") (link ((text "t")) "u")))))
          (mdread "wow! [t](u)" = '((para ((text "wow! ") (link ((text "t")) "u")))))
@@ -236,17 +235,17 @@ some literal
            (convert 'md 'att "# hi" = 'nolens),
       0)),
 
-    ; real documents: the man pages are generated into roff by src/tools/mkman.l, so law 1
-    ; keeps doc/*.md and doc/*.1 from disagreeing
+    ; the man pages are generated into roff by src/tools/mkman.l, so law 1 keeps doc/*.md
+    ; and doc/*.1 agreeing
     (: (slurpf f) (open f "r" @ q (slurp q))
        (map (f \ (mdread (slurpf f) @ d
                     (test
-                       (0 < #d)                         ; it parsed
+                       (0 < #d)
                        (d = mdread (mdshow d))        ; law 1 on real markdown
                        (d = htread (htshow d))
                        !(t0? d))))
             ["README.md" "doc/love.md" "doc/cook.md"],
-        ; readme.md is outside the roff domain (deep headings, fence languages, links, rules)
+        ; readme.md is outside the roff domain
         map (f \ (mdread (slurpf f) @ d
                     (test (d = rfread (rfshow d)))))   ; law 1 on the roff the build ships
             ["doc/love.md" "doc/cook.md"],
@@ -256,7 +255,7 @@ some literal
                             (nelem 'rule (map cap d))))) ["doc/love.md" "doc/cook.md"],
         0)),
 
-    ; html outside its own output: what the scrub promises for pages htshow never wrote
+    ; html outside its own output: what the scrub promises for foreign pages
     test
     ; an attribute does not hide a block (an id is kept, as a mark); non-prose is dropped
     (htread "<h1 id=\"x\">hi</h1>" = '((head 1 ((mark "x") (text "hi")))))
@@ -265,7 +264,7 @@ some literal
     (htread "<head><title>t</title></head><p>hi</p>" = '((para ((text "hi")))))
     (htread "<script>var x = '<p>no</p>';</script><p>yes</p>" = '((para ((text "yes")))))
     (htread "<!-- <p>no</p> --><p>yes</p>" = '((para ((text "yes")))))
-    ; a container is unwrapped -- what it held is still there, one level out
+    ; a container is unwrapped: what it held is still there, one level out
     (htread "<div class=\"a\"><p>hi</p></div>" = '((para ((text "hi")))))
     (htread "<div><div><p>hi</p></div></div>" = '((para ((text "hi")))))
     ; a nested kill does not end its parent early
@@ -279,7 +278,7 @@ some literal
     (htread "<p>a&nbsp;b &amp; c&#65;d&#x42;e</p>" = '((para ((text "a b & cAdBe")))))
     (htread "<p>&mdash;&hellip;</p>" = '((para ((text "—…")))))
     (htread "<p>&nosuchentity;</p>" = '((para ((text "&nosuchentity;")))))   ; unknown rides through
-    ; a tag with no node here is dropped and its content kept, so nothing truncates
+    ; a tag with no node is dropped and its content kept
     (htread "<p>a</p><button>b</button><p>c</p>"
      = '((para ((text "a"))) (para ((text "b"))) (para ((text "c")))))
     ; the closers stay with the block waiting for them
@@ -289,9 +288,9 @@ some literal
     (htread "<!doctype html><html><head></head><body></body></html>" = ()),
 
     ; the terminal surface: every heading survives roff and the tty shower, at its column.
-    ; not law 1 -- there is no ttread -- so 'tty is no row in `surfaces`
+    ; there is no ttread, so 'tty is no row in `surfaces`
     (: (slurpf f) (open f "r" @ q (slurp q))
-       ; an inl down to its text -- lapiz keeps its own `plain` off the export list
+       ; an inl down to its text; lapiz keeps its own `plain` unexported
        (flat l) (atom? l ? "" (<l @ x
                       ((<x @ 'text <>x 'code <>x 'strong (flat <>x) 'em (flat <>x)
                               'link (flat <>x) "") + flat >l)))
@@ -317,7 +316,7 @@ some literal
                        ; the .th became the header line, with the page either side of it
                        (<ls @ h0 (0 < #h0 && h0 0 != 32)))))
             ["doc/love.md" "doc/cook.md"],
-        ; a document of wide tables overruns neither straight nor through roff, laid a row at a time
+        ; wide tables overrun neither straight nor through roff, laid a row at a time
         (: d (mdread (slurpf "doc/misc/kore.md"))
            ; the width is characters: a check mark is three bytes and one column
            (cols l) (flush l @ f #(filter (c \ !(128 <= c && c < 192)) (map (i \ f i) ^#f)))
@@ -438,8 +437,8 @@ two
                  (elem "     1. one" ls) (elem "     2. two" ls)
                  (elem "     The nc utility exits 0 on success, and >0 if an error occurs." ls)
                  (nelem "a comment" ls))),
-        ; every link with a url is [n] in reading order, n picks its url; an anchor is a mark and no
-        ; number. each [n] rides behind a mark named byte 3 and n, which ttpage lifts
+        ; every link with a url is [n] in reading order; an anchor is a mark and no number.
+        ; each [n] rides behind a mark named byte 3 and n, which ttpage lifts
         (: d (htread "<h2>see <a href=\"/h\">head</a></h2><p>a <a href=\"x/1\">one</a> and <em><a href=\"#f\">two <b>b</b></a></em>, <a name=\"n\">anchor</a></p><ul><li><a href=\"u3\">three</a></li></ul><blockquote><p><a href=\"q4\">four</a></p></blockquote><dl><dt><a href=\"d5\">term</a></dt><dd><a href=\"d6\">def</a></dd></dl><table><tr><th><a href=\"t7\">h</a></th></tr><tr><td><a href=\"t8\">c</a></td></tr></table>")
            r (ttlinks d)
            p (ttpage d 60)
@@ -458,10 +457,10 @@ two
                  (elem "     a [2]one and [3]two b, anchor" ls)
                  ; a page with no links answers none, and the doc unchanged
                  (ttlinks (mdread "a *b* `c`\n") = [(mdread "a *b* `c`\n") ()]))),
-        ; a form read anyway: a get form's text field links to form:ACTION?PAIRS, the other
-        ; controls as they stand, the first submit, its own name=value last; a post form, <select>,
-        ; hidden or unchecked control lays nothing. an image is its alt, " img SRC" ahead of it;
-        ; a bare & is itself; an attribute may go unquoted, and a > inside a quoted one ends no tag
+        ; a get form's text field links to form:ACTION?PAIRS (the other controls as they
+        ; stand, the first submit, its own name=value last); a post form, <select>, hidden or
+        ; unchecked control lays nothing. an image is its alt, " img SRC" ahead of it; a bare
+        ; & is itself; an attribute may go unquoted, and a > inside a quoted one ends no tag
         (htread "<form action=\"/w/i.php?old=1#f\"><input type=hidden name=t value=\"Special:S &amp; b\"><input name=q placeholder=\"Find\"><select name=k><option value=a>A<option selected>B b</select><input type=checkbox name=c checked><input type=checkbox name=d><input type=submit name=go value=Go><input type=submit name=no value=No><textarea name=n>x &lt; y</textarea></form><form method=POST><input name=p></form>" @ f
            (test (f = '((para ((link ((text "[Find________]")) "form:/w/i.php?t=Special%3AS+%26+b&k=B+b&c=on&n=x+%3C+y&go=Go&q=")
                                 (link ((text "[x < y_______]")) "form:/w/i.php?t=Special%3AS+%26+b&q=&k=B+b&c=on&go=Go&n=x+%3C+y")))))
@@ -470,7 +469,7 @@ two
                  (htread "<p>a <img alt=\"no src\"> b</p>" = '((para ((text "a ") (img "no src" "") (text " b")))))
                  (htread "<div><img src=\"a&amp;b.png\"></div>" = '((para ((img "" "a&b.png")))))
                  (htread "<p><img></p>" = htread "<p></p>")
-                 ; a picture hidden, or of a class a <noscript>'s <style> hides by a plain .name, is not laid
+                 ; a picture hidden, or of a class a <noscript>'s <style> hides by .name, is not laid
                  (htread "<head><noscript><style>.ph { visibility: hidden }</style></noscript></head><p><img class=\"x ph\" src=a alt=A><img hidden src=h alt=H><img src=b alt=B></p>"
                   = '((para ((img "B" "b")))))
                  (htread "<noscript><style>@media (x){.m{display:none}} .c, .d > i {display: none}</style></noscript><p><img class=m src=m alt=M><img class=c src=c alt=C><img class=d src=d alt=D></p>"
@@ -479,8 +478,8 @@ two
                   = '((para ((text "fish & chips, ") (link ((text "q")) "q?a=1&b=2&c=3")))))
                  (htread "<p><a href=/u/v title=\"a > b\">u</a> <span id=s>s</span></p>"
                   = '((para ((link ((text "u")) "/u/v") (text " ") (mark "s") (text "s"))))))),
-        ; every id a mark, inside a tag whose content is a line and ahead of any other; html keeps
-        ; them, markdown and the terminal show nothing; ttpage answers each one's line
+        ; every id a mark, inside a tag whose content is a line and ahead of any other; html
+        ; keeps them, markdown and the terminal show nothing; ttpage answers each one's line
         (: src "<div id=\"top\"></div><h2 id=\"History\">History</h2><p>see <a href=\"#cite_note-1\">[1]</a> and <a name=\"old\">old place</a> here</p><ol><li id=\"cite_note-1\"><span id=\"x\"></span>the note</li><li id=\"cite_note-2\">two</li></ol><section id=\"end\"><p>last</p></section><p>tail <a id=\"q&amp;a\"></a></p>"
            bare "<h2>History</h2><p>see <a href=\"#cite_note-1\">[1]</a> and old place here</p><ol><li>the note</li><li>two</li></ol><p>last</p><p>tail </p>"
            d (htread src)
@@ -497,18 +496,18 @@ two
                  (nelem 1 (map (i \ <p i) ^#(<p)))                ; no sentinel left behind
                  (p 2 = [["top" 0] ["History" 0] ["old" 1] ["cite_note-1" 3] ["x" 3]
                          ["cite_note-2" 4] ["end" 6] ["q&a" 8]]))),
-        ; a page's content start: <main> or role=main is " main", an <article> " article" -- a space
-        ; in the name, which no id has -- beside the tag's own id
+        ; a page's content start: <main> or role=main is " main", <article> " article" (a space
+        ; no id has) beside the tag's own id
         (htread "<nav><p>menu</p></nav><main id=\"content\"><h1>t</h1></main>" @ d
            (test (d = '((para ((text "menu"))) (para ((mark "content") (mark " main"))) (head 1 ((text "t")))))
                  (htread (htshow d) = d)
                  (ttpage d 60 2 = [["content" 2] [" main" 2]])
                  (htread "<div role=\"main\"><p>x</p></div>" = '((para ((mark " main"))) (para ((text "x")))))
                  (htread "<article><p>y</p></article>" = '((para ((mark " article"))) (para ((text "y")))))
-                 ; a page's indenting leaves blank text beside the marks, and they still move on
+                 ; indenting leaves blank text beside the marks, and they still move on
                  (ttpage (htread "<nav><p>m</p></nav><main>\n    <p>x</p></main>") 60 2 = [[" main" 2]]))),
-        ; an image shows its [alt] and a mark " img SRC" on its line; one with no alt is its mark
-        ; alone, carried onto the next line; ttpics leaves links as ttyshow shows them
+        ; an image shows its [alt] and a mark " img SRC" on its line; one with no alt is its
+        ; mark alone, on the next line; ttpics leaves links as ttyshow shows them
         (mdread "a ![logo](l.png) b\n\n![](bare.png)\n\nnext [x](u)\n" @ d
            (test (ttpage d 60 = ["     a [logo] b\n\n     next [1]x\n" ["u"] [[" img l.png" 0] [" img bare.png" 2]] [2]])
                  (ttpics d 60 = ["     a [logo] b\n\n     next x <u>\n" [[" img l.png" 0] [" img bare.png" 2]]])

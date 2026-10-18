@@ -1,7 +1,5 @@
-; src/apps/chucho/box.l -- mailboxes on disk: a maildir (cur/ new/ tmp/, the flags in each
-; file's name) or an mbox (one file, a "From " line before each message). a box is read whole
-; into a tablet, changed in memory, and written back by mb-sync, which drops the deleted and
-; lays the flags.
+; src/apps/chucho/box.l -- mailboxes on disk: a maildir (flags in each file's name) or an
+; mbox. a box is read whole into a tablet, changed in memory, and written back by mb-sync.
 ;
 ;   (mb-kind p)            'maildir 'mbox 'imap or () for nothing there
 ;   (mb-open p)            -> {'kind 'path 'msgs [msg ..]} | why not, a string

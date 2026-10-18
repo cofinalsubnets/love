@@ -1,6 +1,5 @@
-; test/host/cook.l -- cook's Makefile importer (src/apps/cook.l): fixture Makefiles run
-; through cook as a subprocess, asserted over its stdout. standalone, not in the corpus
-; run: out/love test/host/cook.l
+; test/host/cook.l -- cook's Makefile importer: fixture Makefiles through a cook subprocess,
+; asserted over its stdout. standalone: out/love test/host/cook.l
 ; driven bare, so the posix door is borrowed here
 (cite 'posix ? (borrow 'posix) ())
 
@@ -140,8 +139,7 @@
    bi (run-cook (mk ["CC = echo-cc"
                      ("all: " + (dir + "/b/z.o")) "\t@echo BUILTIN-DONE"]) "all")
    _ (ok "builtin %.o: %.c fires" (has? bi "echo-cc" && has? bi "-c -o" && has? bi "z.c"))
-   ; ..and the match-anything builtins (`%: %.c`, `%: %.o`) stay out: with `x.o` on disk, a
-   ; link target `x` is still the Makefile's own recipe
+   ; ..and the match-anything builtins stay out: with x.o on disk, `x` is still the Makefile's recipe
    _ (sh ("echo O > " + (dir + "/b/lone.o")))
    ma (run-cook (mk [("all: " + (dir + "/b/lone")) ((dir + "/b/lone: ") + (dir + "/b/lone.o"))
                      "\t@echo \"MA[mine]\""]) "all")
@@ -239,9 +237,8 @@
                       "all:" "\techo \"P[$(p)]\"")) "all")
    _ (ok "abspath cleans // . .." (has? ab "P[/x/z]"))
 
-   ; --emit: a resolved Cookfile, .PHONY targets as symbols, files as strings, each recipe line
-   ; a ("sh" "-c" cmd) step, the default ticket first. a pattern whose source is missing does
-   ; not apply, so the sources are real
+   ; --emit: a resolved Cookfile, .PHONY as symbols, files as strings, each line a sh -c step,
+   ; the default first. a pattern whose source is missing does not apply, so the sources are real
    _ (sh ("mkdir -p " + dir + "/e; touch " + dir + "/e/a.c " + dir + "/e/b.c"))
    eo (dir + "/e/a.o " + dir + "/e/b.o")
    em (run-emit (mk ["CC := cc"  ("OBJ := " + eo)  ".PHONY: all clean"
@@ -332,8 +329,8 @@
    _ (ok "an expanded @ is a modifier, not a word"
          (has? qm "M5[quiet]" && !(has? qm "@echo")))
 
-   ; SHELL picks the shell for recipe lines and $(shell), seen through $0 (lush pins "lush" in
-   ; -c). the shim runs `love lush` through out/love. $(wildcard) is lush's glob, nullglob
+   ; SHELL picks the shell for recipe lines and $(shell), seen through $0 (lush pins "lush" in -c);
+   ; $(wildcard) is lush's glob, nullglob
    _ (write-file (dir + "/lushsh") "#!/bin/sh\nexec out/love lush \"$@\"\n")
    _ (sh ("chmod +x " + (dir + "/lushsh")))
    shl (run-cook (mk [("SHELL := " + (dir + "/lushsh"))
@@ -530,7 +527,6 @@
    _ (hv "override CC = clang\n" tc2)
    _ (ok "cook-vars: override beats the command line" (tc2 "CC" = "clang"))
 
-   ; summary
    _ (sh ("rm -rf " + dir))
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (show np + (" cook tests pass" + ? (0 < nf) (", " + (show nf + " FAIL")) "")))
