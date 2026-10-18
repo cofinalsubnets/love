@@ -19,7 +19,6 @@
    bus-q40 1099511627776.0
    bus-bands [60 170 310 600 1000 3000 6000 12000 14000 16000]
    bus-width 1.41                        ; q: about an octave a band
-   pi 3.141592653589793
    ; floats as Q40 int64s, one string
    (bus-q l) (: c (cask (8 * #l))
                 (each ^#l (i \ pinv c (8 * i) 8 8 (iota 1 + (l i) * bus-q40)),
@@ -27,7 +26,7 @@
    (db g) (10.0 ** (g / 20.0))
    ; rbj's peaking eq, a0 divided out
    (peak rate f g)
-    (: A (10.0 ** (g / 40.0)) w (2.0 * pi * f / rate) al (sin w / (2.0 * bus-width))
+    (: A (10.0 ** (g / 40.0)) w (tau * f / rate) al (sin w / (2.0 * bus-width))
        cw (cos w) a0 (1.0 + al / A)
        [((1.0 + al * A) / a0) (-2.0 * cw / a0) ((1.0 - al * A) / a0) (-2.0 * cw / a0) ((1.0 - al / A) / a0)])
    (bus-co rate eq pre vol bal on)
@@ -45,7 +44,7 @@
    ; --- the feeds -------------------------------------------------------------
    bus-n 2048
    ; the window, then the twiddles e^(-2 pi i k / n) as cosines and sines, made once
-   (bus-tw n) (: t (iota n) h (iota (n // 2)) a (2.0 * pi / n)
+   (bus-tw n) (: t (iota n) h (iota (n // 2)) a (tau / n)
                  c (cask (16 * n))
                  (pinv c 0 8 8 ((0.5 - 0.5 * cos (a * t)) * bus-q40),
                   pinv c (8 * n) 8 8 (cos (a * h) * bus-q40),
@@ -62,9 +61,9 @@
    edges {}
    (edge rate n) (: k [rate n] (string? (peep edges k ()) ? (edges k) (pin edges k (bus-edges rate n), edges k)))
    ; a full-scale sine's peak bin under the hann window: (32767 n / 4) squared
-   ref (: a (32767.0 * bus-n / 4.0) (a * a))
+   ref (2 $ 32767.0 * bus-n / 4.0)
    (bus-spec pcm ch rate n)
-    ((cite 'dsp 'spectrum) pcm ch (tw bus-n) (edge rate n) @
+    (cite 'dsp 'spectrum pcm ch (tw bus-n) (edge rate n) @
       s (string? s ? (: c (cask #s) _ (pour c 0 s 0 #s)
                         p (peepv c 0 8 8 n)
                         v (max 0 (min 255 (int ((10.0 * log ((p + 1) / ref) / log 10.0 + 96.0) * 255.0 / 96.0))))
@@ -75,6 +74,6 @@
        (col i) (: a (i * f // n) b (max (a + 1) ((i + 1) * f // n))
                   t (peepv c (2 * ch * a) 2 (2 * ch) (b - a))
                   s (t - 65536 * (t >= 32768))
-                  [((amin s) >> 8) ((amax s) >> 8)])
+                  [(amin s >> 8) (amax s >> 8)])
        (f < n ? (map (_ \ [0 0]) ^n) (map col ^n))))
 ) ; module bus

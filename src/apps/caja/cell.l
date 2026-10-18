@@ -21,10 +21,10 @@
    hss ['skip 0 65536 1 65536 1]
    gap ['vskip L 0 0 0 0]
    free (map (+ 128) ^128 + map (+ 1) ^31 + [127])
-   ttoff (string 27 + "[0m")
-   (tton a) (string 27 + "[" + a + "m")
-   (ttadd a b) (#a ? (a + ";" + b) b)
-   (spaces n) (: (go k s) (k < 1 ? s (go (k - 1) (s + " "))) (go n ""))
+   ttoff "\e[0m"
+   (tton a) "\e[\(a)m"
+   (ttadd a b) (#a ? "\(a);\(b)" b)
+   (spaces n) (: (go k s) (k < 1 ? s (go (k - 1) "\(s) ")) (go n ""))
    (lines s) (: n #s
                 (go i a acc) (? (i >= n) (rev (a < n ? (snip s a n . acc) acc))
                                 (s i = 10) (go (i + 1) (i + 1) (snip s a i . acc))
@@ -90,8 +90,8 @@
                          'code (text-toks a <>x)
                          'strong (inl (ttadd a "1") <>x)
                          'em (inl (ttadd a "4") <>x)
-                         'link (inl a <>x + (#<>>x ? ('sp . text-toks a ("<" + <>>x + ">")) []))
-                         'img (#<>x ? (text-toks a ("[" + <>x + "]")) [])
+                         'link (inl a <>x + (#<>>x ? ('sp . text-toks a "<\(<>>x)>") []))
+                         'img (#<>x ? (text-toks a "[\(<>x)]") [])
                          []))
                l))
    (cells ts) (net (map (t \ (t = 'sp ? 1 (max 0 (wcwidth (t 2))))) ts))
@@ -122,10 +122,10 @@
           'fence   (map (verb ind) (lines <>>x))
           'quote   (doc <>x w (ind + 4))
           'bullets (cats (map (l \ item ind "• " l) <>x))
-          'numbers (<>x @ l (cats (map (k \ item ind (show (k + 1) + ". ") (l k)) ^#l)))
+          'numbers (<>x @ l (cats (map (k \ item ind "\(k + 1). " (l k)) ^#l)))
           'deflist (defs <>x ind)
           'table   (map (l \ verb ind (unpad l)) (lines (ttyshow [x] (w - ind + 5))))
-          'rule    [(verb ind (w - ind @ n (: (go k s) (k < 1 ? s (go (k - 1) (s + "-"))) (go (max 1 n) ""))))]
+          'rule    [(verb ind (w - ind @ n (: (go k s) (k < 1 ? s (go (k - 1) "\(s)-")) (go (max 1 n) ""))))]
           [])
    ; one blank line between blocks, none after a heading
    (doc d w ind)
@@ -193,7 +193,7 @@
           (go l r acc)
            (? (!(two? l)) (join "" (rev acc))
               (: e <l k ((e 0 - y0 + L // 2) // L)
-                 (go >l (k + 1) ((e 1 + "\n") . (map (_ \ "\n") ^(k - r) + acc)))))
+                 (go >l (k + 1) ("\(e 1)\n" . (map (_ \ "\n") ^(k - r) + acc)))))
           (go rs 0 ())))
 
    (cc-show d w0)

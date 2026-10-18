@@ -1,10 +1,8 @@
 #include "../impl.h"
 #include <sys/resource.h>
 
-/* linux answers the clock from the vdso without entering the kernel, and love's
- * scheduler reads it every switch. a 32-bit target's own name is the time64 one: its plain
- * __vdso_clock_gettime fills the 32-bit record. a vdso that is not there or refuses
- * leaves the call to the kernel. */
+/* linux answers from the vdso when it can; a 32-bit target wants the time64 name,
+ * since its plain __vdso_clock_gettime fills the 32-bit record */
 #if defined(__x86_64__) || defined(__aarch64__) || defined(__riscv)
 # define LvVdso 1
 typedef Elf64_Ehdr vehdr; typedef Elf64_Phdr vphdr; typedef Elf64_Word vword;
@@ -38,7 +36,7 @@ static cgtfn vdso_cgt(void) {
     if (ph[i].p_type == 2) dv = ph[i].p_vaddr; }                /* PT_DYNAMIC */
   if (!dv) return 0;
   char const *str = 0; vsym const *sym = 0; vword const *hash = 0;
-  for (long const *d = (long const *) (bias + dv); d[0]; d += 2)  /* a dynamic entry is two words */
+  for (long const *d = (long const *) (bias + dv); d[0]; d += 2)
     if (d[0] == 5) str = (char const *) (bias + d[1]);          /* DT_STRTAB */
     else if (d[0] == 6) sym = (vsym const *) (bias + d[1]);     /* DT_SYMTAB */
     else if (d[0] == 4) hash = (vword const *) (bias + d[1]);   /* DT_HASH: nchain is the count */
@@ -76,8 +74,7 @@ int clock_gettime(int ck, struct timespec *ts) {
     return 0; }
 #endif
   if (__love_osv == 2) {
-    /* the clockids part: REALTIME 0 agrees; MONOTONIC is 4 there (1 is
-     * CLOCK_VIRTUAL), PROCESS_CPUTIME_ID 15, THREAD_CPUTIME_ID 14. */
+    /* freebsd: MONOTONIC 4 (1 is VIRTUAL), PROCESS_CPUTIME 15, THREAD_CPUTIME 14 */
     if (ck == 1) ck = 4;
     else if (ck == 2) ck = 15;
     else if (ck == 3) ck = 14; }

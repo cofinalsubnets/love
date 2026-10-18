@@ -28,8 +28,7 @@ struct sockaddr_in6 {
 #define IPPROTO_UDP 17
 #define IPPROTO_IPV6 41
 #define IPPROTO_ICMPV6 58
-/* IPPROTO_IP's and IPPROTO_IPV6's options, linux's numbers: the bsd seam translates
- * both, and a name without a row there is refused (the error queue's have none) */
+/* linux's numbers, translated for the bsds; the RECVERR pair has no bsd twin */
 #define IP_TTL           2
 #define IP_RECVERR       11
 #define IP_RECVTTL       12
@@ -43,8 +42,7 @@ struct sockaddr_in6 {
 #define INET_ADDRSTRLEN  16
 #define INET6_ADDRSTRLEN 46
 extern struct in6_addr const in6addr_any, in6addr_loopback;
-/* the address predicates, glibc's non-__GNUC__ spelling: an in6_addr read as
- * four network-order words. htonl of a constant folds, so these stay constant. */
+/* an in6_addr read as four network-order words */
 #define IN6_IS_ADDR_UNSPECIFIED(a) \
   (((unsigned const*)(a))[0] == 0 && ((unsigned const*)(a))[1] == 0 \
    && ((unsigned const*)(a))[2] == 0 && ((unsigned const*)(a))[3] == 0)

@@ -30,8 +30,7 @@ int utimensat(int dfd, char const *p, struct timespec const *ts, int fl) {
   if (__love_osv == 4) return macutimes(dfd, p, ts);
 #endif
   if (__love_osv == 2) {
-    /* freebsd spells the specials -1/-2 where linux says 2^30-1/2^30-2, and
-     * AT_SYMLINK_NOFOLLOW wears its bit */
+    /* freebsd's UTIME_NOW/OMIT are -1/-2, and its own nofollow bit */
     struct timespec t2[2];
     long a = ts ? (long) ts : 0;
     if (ts && (ts[0].tv_nsec == UTIME_NOW || ts[0].tv_nsec == UTIME_OMIT

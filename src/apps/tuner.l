@@ -30,9 +30,9 @@ window, where a tap on its left, middle or right third is a, s or A. a/A move A4
 spectrum, q quits."
 
    (hue o) (hues (max 0 (min 8 o)))
-   (ink o s) (sgr ("38;5;" + show (hue o)) s)
-   (bold o s) (sgr ("1;38;5;" + show (hue o)) s)
-   (faint o s) (sgr ("2;38;5;" + show (hue o)) s)
+   (ink o s) (sgr "38;5;\(hue o)" s)
+   (bold o s) (sgr "1;38;5;\(hue o)" s)
+   (faint o s) (sgr "2;38;5;\(hue o)" s)
    (pad s n) (edfit s (max 0 n) " ")                ; plain text only: an escape has no width
    (fmod a b) (a - b * floor (a / b))
    ; a frame with its escapes gone, as a terminal would show it
@@ -49,8 +49,8 @@ spectrum, q quits."
    ; a parabola through it and its neighbours. -> hz, or () where nothing periodic is there.
    ; the difference is the window's energy, the lagged window's and twice their correlation,
    ; and the correlations of every lag are one transform there and back
-   (fft x) ((cite 'dsp 'fft) x)
-   (ifft x) ((cite 'dsp 'ifft) x)
+   (fft x) (cite 'dsp 'fft x)
+   (ifft x) (cite 'dsp 'ifft x)
    (tuner-yin x)
     (: y (recent x)
        sq (y * y) c (re (ifft (conj (fft (y * (iota #y < win))) * fft y)))
@@ -92,7 +92,7 @@ spectrum, q quits."
    (tuner-spectrum pl x)
     (pl @ [ns bs]
      (: m #x
-        pw (foldl (\ t n (pin t n (fft (snip x (m - n) m * hann n) @ z (re z * re z + im z * im z)))) {} ns)
+        pw (foldl (\ t n (pin t n (fft (snip x (m - n) m * hann n) @ z (2 (re z) + 2 (im z))))) {} ns)
         (map ([n kf k] \ (: p (pw n) i (floor kf) u (kf - i)
                             q (at p i + u * (at p (i + 1) - at p i))
                             (20.0 * log (k * (q ** 0.5) / 32768.0 + 1e-9) / log 10.0)))
@@ -151,7 +151,7 @@ spectrum, q quits."
     (: s (floor (c / 100.0 + 0.5)) off (c - 100.0 * s)
        (tuner-note (4 * s) @ [nm o _]
         ((gone ? faint bold) o
-         ("◀━━ " + nm + show o + "  " + signed off + "¢"
+         ("◀━━ \(nm)\(o)  \(signed off)¢"
           + (w < 48 ? "" ("  " + show (int (f * 10.0 + 0.5) / 10.0) + " Hz"))
           + (w < 60 || hi - lo < 1.0 ? "" ("  " + signed (lo - 100.0 * s) + "…" + signed (hi - 100.0 * s) + "¢"))
           + (abs off < 5.0 ? "  ✓" "")))))
@@ -219,15 +219,14 @@ spectrum, q quits."
        mk (on ? (marker c (t 'hz) (tall ? 0 w) lo hi gone) ())
        sc (map (y \ (k0 + cy - y) @ k (row k (y = cy ? mk ()) (klo <= k <= khi))) ^body)
        rows (tall ? (map ((r . s) \ fill r besidew + s) (zip sc (column t body (w - besidew - 4) on c))) sc)
-       top (sgr "7" (pad (w < 50 ? ("  tuner  A4 " + show (t 'ref) + "  " + t 'src + "  level " + show (int (t 'lvl)))
-                                ("  love tuner   A4 = " + show (t 'ref) + " Hz   " + t 'src
-                                 + "   level " + show (int (t 'lvl)))) w))
+       top (sgr "7" (pad (w < 50 ? "  tuner  A4 \(t 'ref)  \(t 'src)  level \(int (t 'lvl))"
+                                "  love tuner   A4 = \(t 'ref) Hz   \(t 'src)   level \(int (t 'lvl))")) w)
        keys "a/A A4 ∓1 Hz  s spectrum  q quit"
        bot (sgr "2" (pad ((? (w < 64) "  " (w < 84) "  ━ semitone  ╺━ ¼  · ⅛    "
                              "  ━ semitone  ╺━ quarter tone  · eighth tone    ") + keys) w))
        nl (on ? (needle t (t 'nd) w lo hi gone) (sgr "2" "  (listening)"))
        ([top] + rows + [nl ""] + (sp ? (strip t (max 11 (w - 4)) on c + [""]) ()) + [bot]))
-   (paint t w h) (tuner-frame t w h @ rs ("\e[H" + cats (map (r \ r + "\e[K\r\n") (init rs)) + last rs + "\e[K"))
+   (paint t w h) (tuner-frame t w h @ rs ("\e[H" + catmap (r \ "\(r)\e[K\r\n") (init rs) + last rs + "\e[K"))
 
    ; --- a window's stage: each frame scribed into a quay screen, the glass, and the rows it
    ;     names dirty dyed onto the paper, 8 by 16 a cell; every row onto a fresh paper ---
@@ -236,7 +235,7 @@ spectrum, q quits."
                 (go 0 ()))
    (glass t)
     (window-open 640 480 "tuner" @ wd
-     (? !(tablet? wd) (say err ("tuner: no window (" + show wd + ")\n"), 1)
+     (? !(tablet? wd) (say err "tuner: no window (\(wd))\n", 1)
         (tuner-glass t wd, window-close wd, 0)))
    ; t's frames on wd until a close, esc, q or t's own end; a frame follows every turn's events
    (tuner-glass t wd)
@@ -276,14 +275,14 @@ spectrum, q quits."
                         ())
            @ f (f && 0 < f ? f ()))
    (tuner-main as)
-    (: (bad s) (say err ("tuner: " + s + "\n" + tuner-usage + "\n"), 2)
+    (: (bad s) (say err "tuner: \(s)\n\(tuner-usage)\n", 2)
        (go as ref dev dm wn)
-        (as @ ("-a" . v . r) (hz v @ x (? x (go r x dev dm wn) (bad ("not a frequency: " + v))))
+        (as @ ("-a" . v . r) (hz v @ x (? x (go r x dev dm wn) (bad "not a frequency: \(v)")))
               ("-d" . v . r) (go r ref v dm wn)
               ("--demo" . r) (go r ref dev 1 wn)
               ("--window" . r) (go r ref dev dm 1)
               () (run ref dev dm wn)
-              (bad ("what is " + <as + "?")))
+              (bad ("what is \(<as)?")))
        (run ref dev dm wn)
         (: _ (? dev (setenv "HORN_IN" dev) 0)
            h (dm ? () (horn-in rate 1))

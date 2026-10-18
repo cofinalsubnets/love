@@ -1,6 +1,5 @@
 #include "../impl.h"
 
-/* the reentrant core carries its place in *nxt; strtok is it over one static place */
 char *strtok_r(char *s, char const *sep, char **nxt) {
   if (!s) s = *nxt;
   if (!s) return 0;

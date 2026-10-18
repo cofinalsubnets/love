@@ -1,7 +1,6 @@
 #ifndef _LOVE_ELF_H
 #define _LOVE_ELF_H
-/* the ELF format (the System V gABI and the psABIs' relocation numbers): the types, headers,
-   sections, symbols, relocations, program headers, dynamic entries and notes, both widths */
+/* the elf format, both widths: the gabi's structures and the psabis' relocation numbers */
 #include <stdint.h>
 
 typedef uint16_t Elf32_Half;   typedef uint16_t Elf64_Half;
@@ -98,7 +97,7 @@ typedef struct {
 #define EM_BPF 247
 #define EM_LOONGARCH 258
 
-/* e_flags on arm (32-bit): the EABI version in the top byte, and the float ABI */
+/* e_flags on arm: the eabi version in the top byte, and the float abi */
 #define EF_ARM_EABIMASK 0xff000000
 #define EF_ARM_EABI_VERSION(flags) ((flags) & EF_ARM_EABIMASK)
 #define EF_ARM_EABI_UNKNOWN 0x00000000

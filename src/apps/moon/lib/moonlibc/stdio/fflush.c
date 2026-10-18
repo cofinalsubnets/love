@@ -13,8 +13,7 @@ static int __fdrain(FILE *f) {
   f->len = 0;
   if (__wall(f->fd, f->buf, n) < 0) { f->err = 1; return EOF; }
   return 0; }
-/* the streams fopen, fdopen and popen open, so fflush(NULL) and exit reach every one: the one
- * piece of process-wide stdio state past the standard three, linked through the FILEs themselves */
+/* the streams fopen, fdopen and popen open, so fflush(NULL) and exit reach every one */
 static FILE *__love_files;
 void __love_fopened(FILE *f) { f->next = __love_files; __love_files = f; }
 static void __love_fclosed(FILE *f) {
@@ -26,7 +25,7 @@ int fflush(FILE *f) {
     for (FILE *o = __love_files; o; o = o->next) if (o->wr && __fdrain(o)) r = EOF;
     return r ? EOF : 0; }
   return f->wr ? __fdrain(f) : __rsync(f); }
-void setbuf(FILE *f, char *buf) {          /* NULL = unbuffered (m4 -e); else a BUFSIZ block */
+void setbuf(FILE *f, char *buf) {          /* NULL = unbuffered, else a BUFSIZ block */
   __fdrain(f);
   if (!f->wr) { __rsync(f); f->rp = f->rl = 0; if (buf) f->rb = (unsigned char *) buf; f->rcap = buf ? 8192 : 0; return; }
   if (buf) { f->buf = (unsigned char *) buf; f->cap = 8192; f->line = 0; }
@@ -42,9 +41,8 @@ int setvbuf(FILE *f, char *buf, int mode, size_t size) {
   if (buf && size) { f->buf = (unsigned char *) buf; f->cap = (int) size; }
   f->line = mode == _IOLBF;
   return 0; }
-/* a buffered stream is NEVER LEFT FULL -- len < cap between calls, so the store is in
- * bounds and the == below catches the fill. fwrite drains at <= for exactly this: left
- * exactly full, it writes one past the end AND this == never matches again. */
+/* a buffered stream is never left full (fwrite drains at <=), so this store is in bounds
+ * and the == catches the fill */
 int fputc(int c, FILE *f) {
   unsigned char b = (unsigned char) c;
   if (!f->cap) { if (__wall(f->fd, &b, 1) < 0) { f->err = 1; return EOF; } return b; }
@@ -71,7 +69,7 @@ int fclose(FILE *f) {
   if (f->heap) free(f);
   return r; }
 FILE *freopen(char const *path, char const *mode, FILE *f) {
-  __fdrain(f);                                     /* the stream KEEPS its FILE (and its buffer) -- only the fd turns over */
+  __fdrain(f);                                     /* the stream keeps its FILE and buffer, only the fd turns over */
   close(f->fd);
   int fl = O_RDONLY, wr = 0;
   if (mode[0] == 'w') { fl = O_WRONLY | O_CREAT | O_TRUNC; wr = 1; }

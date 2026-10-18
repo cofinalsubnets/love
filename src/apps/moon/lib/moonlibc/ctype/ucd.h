@@ -1,5 +1,4 @@
-// ucd.h -- the unicode floor's doors (ucd.c): one copy of the classes, case maps, column widths
-// and emoji runs, read by love's 'text, quay and this libc
+// the unicode floor (ucd.c): classes, case maps, column widths and emoji runs
 #ifndef UCD_H
 #define UCD_H
 #include <stdint.h>

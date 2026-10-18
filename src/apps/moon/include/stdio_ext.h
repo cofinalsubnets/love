@@ -1,7 +1,7 @@
 #ifndef _STDIO_EXT_H
 #define _STDIO_EXT_H
 #include <stdio.h>
-/* glibc's (and musl's) window onto a stream's state, which gnulib asks of a libc */
+/* glibc's and musl's window onto a stream's state */
 size_t __fbufsize(FILE *);
 size_t __fpending(FILE *);
 size_t __freadahead(FILE *);

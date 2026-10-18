@@ -188,10 +188,10 @@
        w (m @ ("QI" || "byte") 1 "HI" 2 "SI" 4 "DI" 8 "TI" 16 ("word" || "pointer") (psword ps) 0)
        (? (m = "SF" && elem ty '(float double)) 'float
           (m = "DF" && elem ty '(float double)) 'double
-          (w < 1) ("__attribute__((mode(" + m + "))) is not carried out")
+          (w < 1) "__attribute__((mode(\(m)))) is not carried out"
           !(elem ty '(char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
-           ("__attribute__((mode(" + m + "))) on a non-integer type is not carried out")
-          (w = 16 && pst32? ps) ("__attribute__((mode(" + m + "))) is not carried out on a 32-bit target")
+           "__attribute__((mode(\(m)))) on a non-integer type is not carried out"
+          (w = 16 && pst32? ps) "__attribute__((mode(\(m)))) is not carried out on a 32-bit target"
           (w @ 1 (uns ? 'uchar 'schar) 2 (uns ? 'ushort 'short) 4 (uns ? 'uint 'int)
              8 (? (pst32? ps) (uns ? 'ullong 'llong) uns 'ulong 'long)
              (uns ? 'u128 'i128))))
@@ -205,7 +205,7 @@
         (: nm (tkv <ts) k (ps 'lrn)
            _ (pin ps 'lrn (k + 1))
            old (peep (ps 'lren) nm 'none)
-           (pin (ps 'lren) nm (nm + "__L" + show k),   ; C-legal, so clay reads it back
+           (pin (ps 'lren) nm "\(nm)__L\(k)",   ; C-legal, so clay reads it back
             plabs ps >ts (['lren nm old] . sh)))
        (plabs ps >ts sh))
    (lname ps nm) (peep (ps 'lren) nm nm)
@@ -246,7 +246,7 @@
           ; only the stack pointer: gcc reserves the register for the whole TU and we
           ; cannot, so any register the allocator uses would answer whatever it last held
           (!(elem s '("rsp" "sp" "esp" "%rsp" "%esp")) ?
-             (blame >>>>ts ("a global register variable is taken on the stack pointer only, not '" + s + "'"))
+             (blame >>>>ts "a global register variable is taken on the stack pointer only, not '\(s)'")
              (pin (ps 'gregs) nm [s 'long], >>>>ts))))
    ; a file-scope declarator's asm label, `void f(void) asm("g")`: the object's symbol is g, the
    ; name the object writer lays (adjacent strings join, glibc's `__asm__ ("" "g")`); the C name
@@ -871,7 +871,7 @@
                     nbit (uni ? (bit < sz * 8 ? (sz * 8) bit) (abit + sz * 8))
                     (go >l nbit nmx ([name at ty] . acc))))))
        (go ms 0 0 ()))
-   (panon ps) (peep ps 'anon 0 @ k (pin ps 'anon (k + 1), ".anon" + show k))
+   (panon ps) (peep ps 'anon 0 @ k (pin ps 'anon (k + 1), ".anon\(k)"))
    ; a tag defined inside a block is that block's (C11 6.7.2.3), and cannot be scoped the way
    ; an enum constant is: the key is what gen sizes and lays members by, long after the brace
    ; closed. so mint a key and bind the spelling to it for the rest of the block. the key leads
@@ -886,7 +886,7 @@
     (peep ps 'blkd 0 < 1 ? nm
        (: k (peep ps 'anon 0)
           _ (pin ps 'anon (k + 1))
-          key ("." + nm + "." + show k)
+          key ".\(nm).\(k)"
           (spin ps 'tags nm key,
            key)))
    ; ..and a bare `struct T` reads the innermost block tag of that spelling. with none in
@@ -941,7 +941,7 @@
                              (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
                                 (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
                                 (peep ps 'pkwidebf ()) (pin ps 'pkwidebf (), clblame "a packed bit-field spanning more than 8 bytes is not carried out")
-                                (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame ("field '" + n + "' has incomplete type")))
+                                (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame "field '\(n)' has incomplete type"))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
                               uni ? (pin (ps 'utag) tag2 1) 0,
@@ -1197,7 +1197,7 @@
        nm (b = 'float ? "__divsc3" "__divdc3")
        _ (peep (ps 'sigs) nm () ? 0 (pin (ps 'sigs) nm [w [b b b b] ()]))
        (side x t) (elvpure? x ? [x ()]
-                     (: n (1 + peep ps 'cxdn 0) _ (pin ps 'cxdn n) v ("__cxdiv_" + show n)
+                     (: n (1 + peep ps 'cxdn 0) _ (pin ps 'cxdn n) v "__cxdiv_\(n)"
                         [['var v] [['decl [[v t x]]]]]))
        (part x t f) (t = w ? ['dot x f] ['cast b ['dot x f]])     ; a float side widens a part at a time
        sl (side l ta) sr (side r tb)
@@ -1402,7 +1402,7 @@
               (: r1 (want >ts "(")
                  ra (two? r1 ? (pasn ps r1))
                  rest (two? ra ? (want <>ra ")"))
-                 pc ("__builtin_popcount" + snip (tkv t) 16 #(tkv t))
+                 pc "__builtin_popcount\(snip (tkv t) 16 #(tkv t))"
                  (two? rest ? [(mkbin ps '& ['call ['var pc] [<ra]] ['num 1]) rest]))
              ; __builtin_choose_expr(c,a,b): c must fold, the unchosen arm is parsed and
              ; dropped, so a call to an undefined function in it links clean. arms need not type alike
@@ -1642,7 +1642,7 @@
           ty2 (ptype ps ['cond a a b])
           n (1 + peep ps 'elvn 0)
           _ (pin ps 'elvn n)
-          t ("__elvis_" + show n)
+          t "__elvis_\(n)"
           (!ty || !ty2 ? ()
              ['sexpr [['decl [[t (pdecay ty) a]]]] ['cond ['var t] ['var t] b] ty2])))
    (pcond ps ts)
@@ -2161,7 +2161,7 @@
         (: md (i + 2 < n && alpha? (tmpl (i + 1)))     ; %c[ reads past the letter
            b (md ? (i + 2) (i + 1))
            (? (n <= i) acc
-              (tmpl i = 37 && i + 1 < n && tmpl (i + 1) = 37) (go (i + 2) (acc + "%%"))
+              (tmpl i = 37 && i + 1 < n && tmpl (i + 1) = 37) (go (i + 2) "\(acc)%%")
               (tmpl i = 37 && b < n && tmpl b = 91)
                (: e (rbr (b + 1))
                   nm (e < 0 ? () (snip tmpl (b + 1) e))
@@ -2397,7 +2397,7 @@
               ; C11 6.8.1p3: a label's scope is its whole function, so two of a name are one
               ; label emitted twice and every goto to it takes the first -- silently.
               (lname ps (tkv t) @ nm
-                 (peep (ps 'labs) nm () ? (blame ts ("duplicate label '" + nm + "'"))
+                 (peep (ps 'labs) nm () ? (blame ts "duplicate label '\(nm)'")
                     (pin (ps 'labs) nm 1, [['lbl nm] >>ts])))
              (thenw (pexpr ps ts) ";" @ r
                 (two? r ? [['expr <r] <>r])))))
@@ -2873,7 +2873,7 @@
                                                  (goc vps)))
                                          ; C11 6.7.6.2p2: no variably modified object at file scope
                                          vm (filter (p \ vmod? <>p) vps)
-                                         (? (two? vm) (blame rest ("variably modified '" + <<vm + "' at file scope"))
+                                         (? (two? vm) (blame rest "variably modified '\(<<vm)' at file scope")
                                             (two? vps) [['gdecl vps] rest]
                                             ['(tdef) rest]))))
                             (? (atom? fpty && peekp ts2 "(")        ; a function (the return type rides the sig table)
@@ -2922,7 +2922,7 @@
        why (peep far 'wseq () = peep far 'seq () ? (far 'why))
        (atom? t ? (gripe () () () "parse error at end of input")
           (gripe (two? dt ? (filof t) (filat spans i0)) <>>t ()
-                 (why ? why ("parse error near " + spell t)))))
+                 (why ? why "parse error near \(spell t)"))))
    ; C11 6.7p4: a redeclared file-scope object keeps a compatible type. what is compared is the
    ; shape -- scalar against pointer against struct, and two different arithmetic types --
    ; which is what autoconf's suffix probes ask (`extern ptrdiff_t foo; extern int foo;`)
@@ -2934,7 +2934,7 @@
                      (<prs @ pr
                         (peep (ps 'globals) <pr () @ old
                            (two? pr && old && <>pr && tyclash? old <>pr ?
-                              ("conflicting types for '" + <pr + "'") (go >prs)))))
+                              "conflicting types for '\(<pr)'" (go >prs)))))
           (go <>f)))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
@@ -3041,7 +3041,7 @@
                  (w && elem (tkk t) '(id kw))
                   (: nm (tkk t = 'kw ? show (tkv t) (tkv t))
                      (attrdoes nm = 'no ?
-                        (gripe (filat spans i) (<>>t) () ("__attribute__((" + attrname nm + ")) is not carried out"))
+                        (gripe (filat spans i) (<>>t) () "__attribute__((\(attrname nm))) is not carried out")
                         (item >l (i + 1) d ())))
                  (item >l (i + 1) d ()))))
        (scan l i)

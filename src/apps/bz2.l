@@ -67,7 +67,7 @@ usage: bzip2 [-cdfkqstvz] [-1..-9] [FILE..]
 no file, or a bare -, is the filter: stdin -> stdout"
    bzc-sufs [[".bz2" ""] [".bz" ""] [".tbz2" ".tar"] [".tbz" ".tar"]]
 
-   (bzc-say t m) (say err (peep t 'nm "bzip2" + ": " + m + "\n"), flush err)
+   (bzc-say t m) (say err (peep t 'nm "bzip2" + ": \(m)\n"), flush err)
    (bzc-moan t m) (peep t 'q 0 ? 0 (bzc-say t m))
    (bzc-suf p) (: (go l) (? (atom? l) () (ends? p <<l) <l (go >l)) (go bzc-sufs))
    (bzc-lpad w c s) (w <= #s ? s (bzc-lpad w c (c + s)))
@@ -75,37 +75,37 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: v (floor (abs x * m + 0.5))
        s ((x < 0 && 0 < v ? "-" "") + show (v // m) + "." + bzc-lpad (#(show m) - 1) "0" (show (v % m)))
        (bzc-lpad w " " s))
-   (bzc-why t p w) (w @ 'format (p + " is not a bzip2 file.")
-                        'end (p + ": Compressed file ends unexpectedly")
-                        'big (p + ": decompresses past 1 GiB, more than is held in memory")
-                        (p + ": data integrity (CRC) error in data"))
+   (bzc-why t p w) (w @ 'format "\(p) is not a bzip2 file."
+                        'end "\(p): Compressed file ends unexpectedly"
+                        'big "\(p): decompresses past 1 GiB, more than is held in memory"
+                        "\(p): data integrity (CRC) error in data")
    (bzc-tell t p m)                    ; -v's line: the name, padded as bzip2 pads it
-    (say err ("  " + p + ": " + bzc-lpad (peep t 'w 7 - #p) " " "" + m + "\n"), flush err)
+    (say err ("  \(p): " + bzc-lpad (peep t 'w 7 - #p) " " "" + "\(m)\n"), flush err)
    (bzc-ratio s z)
     (#s = 0 ? "no data compressed."
        (bzc-fix (#s / #z) 1000 6 + ":1, " + bzc-fix (8 * #z / #s) 1000 6 + " bits/byte, "
-        + bzc-fix (100 * (1 - #z / #s)) 100 5 + "% saved, " + show #s + " in, " + show #z + " out."))
+        + bzc-fix (100 * (1 - #z / #s)) 100 5 + "% saved, \(#s) in, \(#z) out."))
    (bzc-put t p dst bytes st)          ; the output laid, the input's mode and time carried
-    (? (two? (lstat dst) && !(peep t 'f 0)) (bzc-moan t ("Output file " + dst + " already exists."), 1)
-       !(uwrite dst bytes) (bzc-moan t ("Can't create output file " + dst + "."), 1)
+    (? (two? (lstat dst) && !(peep t 'f 0)) (bzc-moan t "Output file \(dst) already exists.", 1)
+       !(uwrite dst bytes) (bzc-moan t "Can't create output file \(dst).", 1)
        (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)), peep t 'k 0 ? 0 (unlink p), 0))
    (bzc-rd q) (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q))))
    ; a file decompressed as it comes off the disk: the output opened before the first byte,
    ; its mode and time laid after the last, and taken away again if the stream fails partway
    (bzc-unone t p st)
     (open p "r" @ q
-       (!(hot? q) ? (bzc-moan t ("Can't open input file " + p + ": No such file or directory."), 1)
+       (!(hot? q) ? (bzc-moan t "Can't open input file \(p): No such file or directory.", 1)
           (: k {}
              x (bzc-suf p)
-             dst (x ? (snip p 0 (#p - #<x) + <>x) (p + ".out"))
+             dst (x ? (snip p 0 (#p - #<x) + <>x) "\(p).out")
              (no m) (bzc-moan t m, ())
              (mk _) (? (peep t 't 0) [1 (s \ 0)]
-                       (peep t 'c 0) [1 (s \ say out s)]
-                       (!x && bzc-moan t ("Can't guess original name for " + p + " -- using " + dst),
-                        (two? (lstat dst) && !(peep t 'f 0) ? (no ("Output file " + dst + " already exists."))
+                       (peep t 'c 0) [1 (say out)]
+                       (!x && bzc-moan t "Can't guess original name for \(p) -- using \(dst)",
+                        (two? (lstat dst) && !(peep t 'f 0) ? (no "Output file \(dst) already exists.")
                            (open dst "w" @ o
-                              (!(hot? o) ? (no ("Can't create output file " + dst + "."))
-                                 (pin k 'o o, [1 (s \ say o s)]))))))
+                              (!(hot? o) ? (no ("Can't create output file \(dst)."))
+                                 (pin k 'o o, [1 (say o)]))))))
              u (bz2-unf (bzc-rd q) mk)
              _ (close q)
              o (peep k 'o ())   laid (hot? o)
@@ -120,16 +120,16 @@ no file, or a bare -, is the filter: stdin -> stdout"
                   0))))))
    (bzc-one t p)
     (stat p @ st
-       (? (two? st && st 2 & 61440 = 16384) (bzc-moan t ("Input file " + p + " is a directory."), 1)
+       (? (two? st && st 2 & 61440 = 16384) (bzc-moan t "Input file \(p) is a directory.", 1)
           (peep t 'd 0) (bzc-unone t p st)
           (uread p @ r
-             (!r ? (bzc-moan t ("Can't open input file " + p + ": No such file or directory."), 1)
+             (!r ? (bzc-moan t "Can't open input file \(p): No such file or directory.", 1)
                 (bzc-suf p @ x
                    (x && !(peep t 'c 0) ?
-                      (bzc-moan t ("Input file " + p + " already has " + <x + " suffix."), 1)
+                      (bzc-moan t "Input file \(p) already has \(<x) suffix.", 1)
                       (bz2-pack <>r (peep t 'lvl 9) @ z
                          (peep t 'v 0 && bzc-tell t p (bzc-ratio <>r z),
-                          (peep t 'c 0 ? (say out z, 0) (bzc-put t p (p + ".bz2") z st))))))))))
+                          (peep t 'c 0 ? (say out z, 0) (bzc-put t p "\(p).bz2" z st))))))))))
    (bzc-filter t)
     (? (peep t 'd 0)
        (bz2-unf (bzc-rd in) (_ \ [1 (peep t 't 0 ? (s \ 0) (say out))]) @ u
@@ -147,9 +147,9 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: u {}
        r (cite 'cli 'uoptp as u () () bzc-longs)
        bad (cite 'cli 'uoptun u "cdzkftqvhVLs123456789")
-       (? (r 3) (bzc-say t ("Bad flag `" + r 3 + "'"), ())
+       (? (r 3) (bzc-say t "Bad flag `\(r 3)'", ())
           bad (: w <(filter (w \ 1 < #w && w 0 = 45 && w 1 != 45 && elem bad w) as)
-                 (bzc-say t ("Bad flag `" + w + "'"), ()))
+                 (bzc-say t "Bad flag `\(w)'", ()))
           (: _ (each (chars "ckfqvhVs") (c \ peep u c 0 && pin t (intern (string c)) 1))
              _ (peep u 76 0 && pin t 'V 1)
              _ (peep u 116 0 && pin t 't 1)
@@ -162,7 +162,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (bzc-run as t)
     (: o (bzc-opts as t)
        r (? !o 1
-            (peep t 'h 0) (say out (bzc-help + "\n"), 0)
+            (peep t 'h 0) (say out "\(bzc-help)\n", 0)
             (peep t 'V 0) (say out (uvers "bzip2" + "\n"), 0)
             (filter (!= "-") <>o @ fs
                (pin t 'w (foldl (a \ p \ max a #p) 7 fs),

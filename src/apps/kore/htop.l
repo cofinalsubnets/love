@@ -26,8 +26,7 @@
            'msg "38;5;178" 'miss "38;5;167"}
    tr-mono {'hdr "7" 'hsort "1;4;7" 'sel "7" 'num "1" 'run "1" 'dsk "1" 'flbl "7"
             'prompt "7" 'mhdr "7" 'msel "7"}
-   (tr-pen st p) (peep (st 'mono ? tr-mono tr-pal) p "" @ c
-                    (tr-e + "[0" + (0 < #c ? (";" + c) "") + "m"))
+   (tr-pen st p) (peep (st 'mono ? tr-mono tr-pal) p "" @ c "\(tr-e)[0\(0 < #c ? ";\(c)" "")m")
    ; [[pen text] ..] -> exactly w columns, the text cut to fit, the last pen padding
    (tr-segs st segs w)
     (: (go l left acc)
@@ -46,7 +45,7 @@
     (st 'mono ?
         (: f (foldl (\ a s (a + s 0)) 0 segs)
            k (max 0 (min w (int (f * w + 0.5))))
-           (string (map (_ \ 124) (jot k)) + tr-sp (w - k)))
+           (string (map (_ \ 124) ^k) + tr-sp (w - k)))
        (: u (w * 8)
           ends (: (go l a acc) (atom? l ? (rev acc)
                                 (a + l 0 0 @ a2 (go >l a2 ([(max 0 (min u (int (a2 * u + 0.5)))) (l 0 1)] . acc))))
@@ -59,19 +58,18 @@
           (go i last acc)
            (w <= i ? acc
             (: c (cell i) fb [(c 1) (c 2)]
-               (go (i + 1) fb (acc + (fb = last ? "" (tr-e + "[38;5;" + show (c 1) + ";48;5;" + show (c 2) + "m"))
-                                   + c 0))))
+             (go (i + 1) fb (acc + (fb @ ^last "" "\(tr-e)[38;5;\(c 1);48;5;\(c 2)m") + c 0))))
           (go 0 () "")))
 
    ; ---- sizes -------------------------------------------------------------------
    (tr-hum kb)                         ; KiB -> 812M, 11.2G
-    (? (kb < 1024) (show kb + "K")
-       (kb < 1048576) (show (kb // 1024) + "M")
-       (tp-d1 (kb * 10 // 1048576) + "G"))
+    (? (kb < 1024) "\(kb)K"
+       (kb < 1048576) "\(kb // 1024)M"
+       "\(tp-d1 $ kb * 10 // 1048576)G")
    (tr-upt s) (s // 86400 @ d
-                 ((0 < d ? (show d + (d = 1 ? " day, " " days, ")) "") + uclk (s % 86400)))
+                 ((0 < d ? (show d + (d @ 1 " day, " " days, ")) "") + uclk (s % 86400)))
    (tr-load _) (: l (uread "/proc/loadavg") ws (two? l ? (words <>l))
-                  (2 < #ws ? (ws 0 + " " + ws 1 + " " + ws 2) "0.00 0.00 0.00"))
+                  (2 < #ws ? "\(ws 0) \(ws 1) \(ws 2)" "0.00 0.00 0.00"))
 
    ; ---- the meters --------------------------------------------------------------
    ; a meter: its label, the bar, and a figure, lw + 1 + bar + 1 + tw columns
@@ -93,7 +91,7 @@
        cac (g 'Cached + g 'SReclaimable)
        used (max 0 (tot - free - buf - cac))
        (tr-meter st "Mem" 3 [[(used / tot) 71] [(buf / tot) 33] [(cac / tot) 178]]
-                 (tr-hum used + "/" + tr-hum tot) 13 w))
+                 "\(tr-hum used)/\(tr-hum tot)" 13 w))
    (tr-swapm st mi w)
     (: g (k \ (peep mi k 0))
        tot (g 'SwapTotal) used (max 0 (tot - g 'SwapFree))
@@ -119,16 +117,16 @@
    (tr-info st w)
     (: lw ((w - 2) // 2) rw (w - 2 - lw)
        mi (st 'mi) rs (st 'rows)
-       ps (filter (r \ (<r = r 15)) rs)
+       ps (filter (r \ <r = r 15) rs)
        kt (#(filter (r \ r 14) ps))
-       thr (tp-sum (map (r \ (r 14 ? 0 (r 13))) ps))
-       run (#(filter (r \ (r 7 = "R")) ps))
+       thr (tp-sum (map (r \ r 14 ? 0 (r 13)) ps))
+       run (#(filter (r \ r 7 = "R") ps))
        right [[['lbl "Tasks: "] ['num (show #ps)] ['txt ", "] ['thr (show thr)] ['txt " thr, "]
                ['kth (show kt)] ['txt " kthr; "] ['run (show run)] ['txt " running"]]
               [['lbl "Load average: "] ['num (tr-load 0)]]
               [['lbl "Uptime: "] ['num (tr-upt (uupsecs 0))]]]
        left [(tr-memm st mi lw) (tr-swapm st mi lw) (tr-pen st 'txt + tr-sp lw)]
-       (map (i \ (left i + tr-pen st 'txt + "  " + tr-segs st (right i) rw)) (jot 3)))
+       (map (i \ left i + tr-pen st 'txt + "  " + tr-segs st (right i) rw) ^3))
 
    ; ---- the list ----------------------------------------------------------------
    ; name, width, left-aligned; a column's index is its row field
@@ -140,7 +138,7 @@
                    (go tr-cols 0 0))
    (tr-head st)
     (map (i \ (: c (tr-cols i) t (c 2 ? (urpad (c 1) (c 0)) (upad (c 1) (c 0)))
-                 [(i = st 'sort ? 'hsort 'hdr) ((0 < i ? " " "") + t)]))
+                 [(st 'sort @ ^i 'hsort 'hdr) ((0 < i ? " " "") + t)]))
          (jot 12))
    (tr-kpen k b) ((0 < #k ? (k (#k - 1)) 0) @ z (? (z = 109) 'mb (z = 103 || z = 116 || z = 112) 'gb b))
    (tr-row st r pre sel?)
@@ -350,11 +348,11 @@
    ; one key into the state -> 0 nothing, 1 quit, 2 repaint, 3 sample and repaint
    (tr-step st k)
     (st 'mode @ m
-       (k = 0 ? 0 (pin st 'msg ""),
-        (? (m = 'search || m = 'filter) (tr-typed st m k)
-           (m = 'menu) (tr-menukey st k)
-           (m = 'help) (two? k && !(k 4) ? 0 (pin st 'mode (), 2))
-           (tr-key st k))))
+       (k @ 0 0 (pin st 'msg ""),
+        m @ ('search || 'filter) (tr-typed st m k)
+         'menu (tr-menukey st k)
+         'help (two? k && !(k 4) ? 0 (pin st 'mode (), 2))
+         (tr-key st k)))
 
    ; ---- the frame ---------------------------------------------------------------
    tr-help ["top: the rich face; -P is the plain one, -C drops the colour"
@@ -376,14 +374,14 @@
             " any key goes back"]
    (tr-bottom st w)
     (: m (st 'mode) msg (peep st 'msg "")
-       (? (m = 'search) (tr-segs st [['prompt "Search: "] ['txt (peep st 'srch "")]
-                                     [(st 'miss ? 'miss 'txt) (st 'miss ? "   not found" "")]
-                                     ['txt "   Enter done  Esc back  F3 next"]] w)
-          (m = 'filter) (tr-segs st [['prompt "Filter: "] ['txt (peep st 'filt "")]
-                                     ['txt "   Enter keep  Esc clear"]] w)
+       (m @ 'search (tr-segs st [['prompt "Search: "] ['txt (peep st 'srch "")]
+                                 [(st 'miss ? 'miss 'txt) (st 'miss ? "   not found" "")]
+                                 ['txt "   Enter done  Esc back  F3 next"]] w)
+           'filter (tr-segs st [['prompt "Filter: "] ['txt (peep st 'filt "")]
+                                ['txt "   Enter keep  Esc clear"]] w)
           (tr-segs st (cat (foldl (\ a f (cat a [['fkey (f 0)] ['flbl (urpad 6 (f 1))]])) () tr-fkeys)
                            [['txt "  "] ['msg msg]]) w)))
-   (tr-at y) (tr-e + "[" + show (y + 1) + ";1H")
+   (tr-at y) "\(tr-e)[\(y + 1);1H"
    (tr-draw st w h)
     (: hd (cat (tr-cpus st w) (tr-info st w))
        hy #hd
@@ -393,8 +391,8 @@
        vs (st 'view) top (st 'top) si (st 'si) m (st 'mode)
        pw (m = 'menu ? tr-pw 0)
        lw (w - pw)
-       notes (cat (string? (st 'user) ? [(" user " + st 'user)])
-                  (0 < #(peep st 'filt "") ? [(" filter " + st 'filt)]))
+       notes (cat (string? (st 'user) ? [" user \(st 'user)"])
+                  (0 < #(peep st 'filt "") ? [" filter \(st 'filt)"]))
        chead (tr-segs st (cat (0 < pw ? [['mhdr (tr-fit " " pw)]])
                               (cat (tr-head st) [['hdr (cats notes)]])) w)
        (body i) (: j (top + i)

@@ -23,25 +23,22 @@
                        ^#s))
  (peer-id _) ("-LV0300-" + cats (map (_ \ show (rand 10)) ^12))
  ; compact peers: six bytes each, the address and the port big end first
- (tr-peers s) (map (k \ [(show (s k) + "." + show (s (k + 1)) + "." + show (s (k + 2)) + "." + show (s (k + 3)))
-                         (rdbe s (k + 4) 2)])
+ (tr-peers s) (map (k \ ["\(s k).\(s $ k + 1).\(s $ k + 2).\(s $ k + 3)" (rdbe s (k + 4) 2)])
                    (filter (k \ k % 6 = 0) ^(#s - #s % 6)))
  ; a dictionary peer list, the older shape: {'ip 'port}
  (tr-dpeers l) (filter two? (map (p \ tablet? p ? [(peep p "ip" "") (peep p "port" 0)]) l))
 
  ; --- http ---------------------------------------------------------------------------
  (tr-http u ask)
-  (: q ("info_hash=" + urlenc (ask 'hash) + "&peer_id=" + urlenc (ask 'id) + "&port=" + show (ask 'port)
-        + "&uploaded=" + show (ask 'up) + "&downloaded=" + show (ask 'down) + "&left=" + show (ask 'left)
-        + "&compact=1&numwant=50" + (0 < #(ask 'event) ? ("&event=" + ask 'event) ""))
+  (: q "info_hash=\(urlenc (ask 'hash))&peer_id=\(urlenc (ask 'id))&port=\(ask 'port)&uploaded=\(ask 'up)&downloaded=\(ask 'down)&left=\(ask 'left)&compact=1&numwant=50\(0 < #(ask 'event) ? "&event=\(ask 'event)" "")"
      path (u 3 + (0 <= fsub (u 3) "?" 0 ? "&" "?") + q)
      (cite 'kore 'wg-once 0 (u 1) (u 2) path @
        (why && string? why) why
-       [code head b] (code != 200 ? ("the tracker said " + snip head 9 (fsub head "\r\n" 0))
+       [code head b] (code != 200 ? "the tracker said \(snip head 9 (fsub head "\r\n" 0))"
                         (cite 'benc 'bdecode b @ [d] (tr-reply d) "the tracker's answer is not bencode"))
        _ "the tracker did not answer"))
  (tr-reply d) (? !(tablet? d) "the tracker's answer is not a dictionary"
-                 (peep d "failure reason" ()) ("the tracker refused: " + d "failure reason")
+                 (peep d "failure reason" ()) "the tracker refused: \(d "failure reason")"
                  (: ps (peep d "peers" "")
                     {'interval (peep d "interval" 1800) 'seeders (peep d "complete" 0)
                      'leechers (peep d "incomplete" 0)
@@ -61,13 +58,13 @@
  (tr-udp u ask)
   (: ip (cite 'dns 'resolve (u 1)) from [(ip ? (cite 'dns 'dns-show <ip) "") (u 2)]
      (tid _) (wrbe (rand 4294967296) 4)
-     (ask2 q n) (n = 0 ? () (tr-udp-ask p from q (2000 * (5 - n)) @ r (string? r ? r (ask2 q (n - 1)))))
+     (ask2 q n) (n @ 0 () (tr-udp-ask p from q (2000 * (5 - n)) @ r (string? r ? r (ask2 q (n - 1)))))
      p (two? ip ? (bind ['udp 0]))
      ev (ask 'event @ "completed" 1 "started" 2 "stopped" 3 0)
      (? !(hot? p) "the tracker's name does not resolve"
         (: c (ask2 (wrbe 4497486125440 8 + wrbe 0 4 + tid ()) 3)
            (? !(string? c) (close p, "the tracker did not answer")
-              (rdbe c 0 4 = 3) (close p, ("the tracker refused: " + snip c 8 #c))
+              (rdbe c 0 4 = 3) (close p, "the tracker refused: \(snip c 8 #c)")
               (: q (snip c 8 16 + wrbe 1 4 + tid () + ask 'hash + ask 'id
                     + wrbe (ask 'down) 8 + wrbe (ask 'left) 8 + wrbe (ask 'up) 8
                     + wrbe ev 4 + wrbe 0 4 + wrbe (rand 4294967296) 4 + wrbe 4294967295 4
@@ -75,10 +72,10 @@
                  a (ask2 q 3)
                  (close p,
                   (? (!(string? a) || #a < 20) "the tracker did not answer the announce"
-                     (rdbe a 0 4 = 3) ("the tracker refused: " + snip a 8 #a)
+                     (rdbe a 0 4 = 3) "the tracker refused: \(snip a 8 #a)"
                      {'interval (rdbe a 8 4) 'leechers (rdbe a 12 4) 'seeders (rdbe a 16 4)
                       'peers (tr-peers (snip a 20 #a))})))))))
 
- (announce url ask) (tr-url url @ u (u 0 @ "http" (tr-http u ask) "udp" (tr-udp u ask) ("no " + u 0 + " trackers yet"))
-                              ("not a tracker url: " + url))
+ (announce url ask) (tr-url url @ u (u 0 @ "http" (tr-http u ask) "udp" (tr-udp u ask) "no \(u 0) trackers yet")
+                              "not a tracker url: \(url)")
 )) ; module tracker

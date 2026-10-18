@@ -1,7 +1,7 @@
 #include "../impl.h"
 #include <err.h>
 
-/* the program's name as glibc prints it here: argv[0] past its last slash */
+/* argv[0] past its last slash, as glibc prints it */
 static char const *__errname(void) {
   char const *p = __love_progname, *s = p;
   for (; *p; p++) if (*p == '/') s = p + 1;

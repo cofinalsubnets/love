@@ -1,6 +1,5 @@
 #include "../impl.h"
 
-/* ---- env ---- */
 char *getenv(char const *k) {
   size_t n = strlen(k);
   if (!environ) return 0;

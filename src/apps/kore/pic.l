@@ -102,26 +102,26 @@
    ; a colour as sgr: 24-bit when deep, else the 256-colour cube
    (pic-deep _) (getenv "COLORTERM" @ ct (string? ct && (ct = "truecolor" || ct = "24bit")))
    (pic-sgr deep fg c)
-    (deep ? ((fg ? "38;2;" "48;2;") + show (c 0) + ";" + show (c 1) + ";" + show (c 2))
+    (deep ? "\(fg ? "38;2;" "48;2;")\(c 0);\(c 1);\(c 2)"
        (: (q v) ((v * 5 + 127) // 255)
-          ((fg ? "38;5;" "48;5;") + show (16 + 36 * q (c 0) + 6 * q (c 1) + q (c 2)))))
+          "\(fg ? "38;5;" "48;5;")\(16 + 36 * q (c 0) + 6 * q (c 1) + q (c 2))"))
    ; a sampled picture as rows of cells, two pixels to each
    (pic-cells sm deep)
-    (: ow (sm 0) oh (sm 1) px (sm 2) e (string 27)
+    (: ow (sm 0) oh (sm 1) px (sm 2)
        (pix x y) (4 * (y * ow + x) @ o
                     (oh <= y || px (o + 3) = 0 ? () [(px o) (px (o + 1)) (px (o + 2))]))
-       (sg fg c) (e + "[" + pic-sgr deep fg c + "m")
-       (cell t b) (? (!t && !b) (e + "[0m ")
-                     !b (e + "[0m" + sg 1 t + "▀")
-                     !t (e + "[0m" + sg 1 b + "▄")
-                     (sg 1 t + sg 0 b + "▀"))
+       (sg fg c) "\e[\(pic-sgr deep fg c)m"
+       (cell t b) (? (!t && !b) "\e[0m "
+                     !b "\e[0m\(sg 1 t)▀"
+                     !t "\e[0m\(sg 1 b)▄"
+                     "\(sg 1 t)\(sg 0 b)▀")
        (row r) (jug 0 @ o
                   (map (x \ say o (cell (pix x (2 * r)) (pix x (2 * r + 1)))) ^ow,
-                   slurp o + e + "[0m"))
+                   "\(slurp o)\e[0m"))
        (map row ^((oh + 1) // 2)))
    (pic-view im x0 y0 s ow oh deep) (pic-cells (pic-sample im x0 y0 s ow oh) deep)
    ; the blocks as text, a line a row
-   (pic-ans im cols rows deep) (cats (map (r \ r + "\n") (pic-art im cols rows deep)))
+   (pic-ans im cols rows deep) (cats (map (r \ "\(r)\n") (pic-art im cols rows deep)))
    ; a picture as rows of cells at most cols wide and rows tall
    (pic-art im cols rows deep)
     (pic-fit im cols rows @ s
@@ -131,7 +131,7 @@
    ; one sixel string, gif's palette (exact to 255 colours, median cut past); idx is each
    ; pixel's register plus one, 0 clear; a pixel under half alpha is left to the ground
    (pic-sixel im)
-    (: w (im 0) h (im 1) px (im 2) n (w * h) e (string 27)
+    (: w (im 0) h (im 1) px (im 2) n (w * h)
        key (cite 'gif 'gif-key)
        pal (cite 'gif 'gif-palette px n 255)
        cols (pal 0) ix (pal 1) f (pal 2)
@@ -139,9 +139,8 @@
        _ (map (i \ (f (key px (4 * i)) @ k (pin idx i (k < 0 ? 0 (1 + peep ix k 0))))) ^n)
        (pct v) ((v * 100 + 127) // 255)
        (colour i) (cols i @ c
-                     ("#" + show i + ";2;" + show (pct (c >> 16 & 255)) + ";"
-                      + show (pct (c >> 8 & 255)) + ";" + show (pct (c & 255))))
-       (run v k) (string (63 + v) @ ch (3 < k ? ("!" + show k + ch) (catmap (_ \ ch) ^k)))
+                     "#\(i);2;\(pct (c >> 16 & 255));\(pct (c >> 8 & 255));\(pct (c & 255))")
+       (run v k) (string (63 + v) @ ch (3 < k ? "!\(k)\(ch)" (catmap (_ \ ch) ^k)))
        (rle m lo hi)
         (: o (jug 0)
            _ (0 < lo ? (say o (run 0 lo)) 0)
@@ -158,38 +157,36 @@
                                               (pin t c k, pin lo c x, k)) m)
                               (pin m2 x (peep m2 x 0 | 1 << y - y0), pin hi c x))))
            (map (x \ map (y \ dot x y) ys) ^w,
-            ujoinc 36 (map (c \ "#" + show (c - 1) + rle (t c) (lo c) (hi c)) (sort (keys t))) + "-"))
-       (e + "P0;1;0q\"1;1;" + show w + ";" + show h
+            "\(ujoinc 36 (map (c \ "#\(c - 1)\(rle (t c) (lo c) (hi c))") (sort (keys t))))-"))
+       ("\eP0;1;0q\"1;1;\(w);\(h)"
         + catmap colour ^#cols
         + catmap (b \ band (6 * b)) ^((h + 5) // 6)
-        + e + "\\"))
+        + "\e\\"))
    ; a picture through kitty's protocol: raw rgba placed at the cursor, 4096 bytes of
    ; base64 a chunk, no answer asked for
    (pic-kitty im) (pic-kits im "")
    ; ..with more keys on the first chunk, each "k=v,"
    (pic-kits im keys)
-    (: e (string 27) b (ubenc ub64set 6 (im 2)) n #b o (jug 0)
+    (: b (ubenc ub64set 6 (im 2)) n #b o (jug 0)
        (go i) (: j (min n (i + 4096)) m (j < n ? "1" "0")
-                 (say o (e + "_G" + (i = 0 ? ("a=T,f=32,q=2," + keys + "s=" + show (im 0) + ",v=" + show (im 1) + ",") "")
-                         + "m=" + m + ";" + snip b i j + e + "\\"),
+                 (say o "\e_G\(i = 0 ? "a=T,f=32,q=2,\(keys)s=\(im 0),v=\(im 1)," "")m=\(m);\(snip b i j)\e\\",
                   j < n ? (go j) (slurp o)))
        (go 0))
    ; what pic asks a terminal: kitty's query and the cell size, then DA1, which every
    ; terminal answers and so ends the wait
-   pic-ask (cats [(string 27) "_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA" (string 27) "\\"
-                  (string 27) "[16t" (string 27) "[c"])
+   pic-ask "\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\\e[16t\e[c"
    (pic-digits s i) (: (go i v) (#s <= i || !(47 < s i < 58) ? v (go (i + 1) (v * 10 + s i - 48))) (go i 0))
    (pic-past s i) (#s <= i || !(47 < s i < 58) ? i (pic-past s (i + 1)))
    ; DA1's answer in s as ";p;..;p;", or "" before it is whole
    (pic-da s)
-    (: i (fsub s (string 27 + "[?") 0)
-       (go j) (? (i < 0 || #s <= j) "" (s j = 99) (";" + snip s (i + 3) j + ";")
+    (: i (fsub s "\e[?" 0)
+       (go j) (? (i < 0 || #s <= j) "" (s j = 99) ";\(snip s (i + 3) j);"
                  (s j = 59 || 47 < s j < 58) (go (j + 1)) "")
        (go (i + 3)))
    ; the answers to pic-ask -> {'kitty 'sixel 'cw 'ch}, cw and ch 0 when not said
    (pic-heard s)
-    (fsub s (string 27 + "[6;") 0 @ c
-       {'kitty (0 <= fsub s (string 27 + "_Gi=31;OK") 0)
+    (fsub s "\e[6;" 0 @ c
+       {'kitty (0 <= fsub s "\e_Gi=31;OK" 0)
         'sixel (0 <= fsub (pic-da s) ";4;" 0)
         'ch (c < 0 ? 0 (pic-digits s (c + 4)))
         'cw (c < 0 ? 0 (pic-digits s (pic-past s (c + 4) + 1)))})
@@ -231,19 +228,19 @@
        "no such type")
    (pic-in who p)
     (p = "-" ? (slurp in)
-     (uread p @ r (two? r ? <>r (udie 1 (who + ": cannot open " + p)))))
+     (uread p @ r (two? r ? <>r (udie 1 "\(who): cannot open \(p)"))))
    (pic-out who p b)
     (? (p = "-") (say out b, flush out, 0)
        (uwrite p b) 0
-       (udie 1 (who + ": cannot write " + p)))
+       (udie 1 "\(who): cannot write \(p)"))
    ; the type of the -t value or the out file's name, or leave
    (pic-otype who t p dflt)
-    (: v (uoptv t 116) ty (string? v ? (pic-type ("." + v)) (pic-type p))
+    (: v (uoptv t 116) ty (string? v ? (pic-type ".\(v)") (pic-type p))
        (? (ty != ()) ty (dflt != () && !(string? v)) dflt
-          (udie 2 (who + ": " + (string? v ? ("no type " + v) ("no type for " + p)) + "; png gif jpeg webp qoi ppm pam sixel or ans"))))
+          (udie 2 "\(who): \(string? v ? "no type \(v)" "no type for \(p)"); png gif jpeg webp qoi ppm pam sixel or ans")))
    (pic-num t k d) (uoptv t k @ v (string? v ? (uatoi v @ n (0 < n ? n d)) d))
    (pic-decoded who nm b)
-    (pic-decode b @ im (two? im ? im (udie 1 (who + ": " + nm + ": " + im))))
+    (pic-decode b @ im (two? im ? im (udie 1 "\(who): \(nm): \(im)")))
 
    ; -- the verbs ---------------------------------------------------------------
    (pic-main as)
@@ -251,7 +248,7 @@
            "less" (picless-main >as)
            "convert" (pic-convert >as)
            "pixelize" (pic-pixelize >as)
-           "help" (say out (pic-usage + "\n"), 0)
+           "help" (say out "\(pic-usage)\n", 0)
            (pic-route as))
    ; a bare pic: a flag of cat's (-g -w -h) is pictures, one of GNU pic's is classic pic
    ; (src/apps/kore/gpic.l); with neither the first input decides, a picture pic reads being
@@ -270,7 +267,7 @@
    ; -g's mode, block when unsaid; auto taken by what the terminal answered
    (pic-mode who t)
     (: v (uoptv t 103) g (string? v ? v "block")
-       (elem g ["auto" "block" "sixel" "kitty"] ? g (udie 2 (who + ": no mode " + g + "; block sixel kitty or auto"))))
+       (elem g ["auto" "block" "sixel" "kitty"] ? g (udie 2 "\(who): no mode \(g); block sixel kitty or auto")))
    (pic-pick g pr) (? (g != "auto") g (pr 'kitty) "kitty" (pr 'sixel) "sixel" "block")
    (pic-cat as) (pic-cat-in as ())
    ; ..stdin already read as sin, when it was
@@ -287,16 +284,16 @@
        deep (pic-deep 0)
        (draw im)
         (mode @ "sixel" (say out (pic-sixel (pic-px im cols rows cw ch)))
-                "kitty" (say out (pic-kitty (pic-px im cols rows cw ch) + "\n"))
-                (map (r \ puts (r + "\n")) (pic-art im cols rows deep)))
+                "kitty" (say out "\(pic-kitty (pic-px im cols rows cw ch))\n")
+                (map (r \ puts "\(r)\n") (pic-art im cols rows deep)))
        (one nm b)
         (pic-decode b @ im
-           (two? im ? (1 < #fs ? (puts (nm + ":\n")) 0, draw im, flush out, 0)
-            (say err ("pic: " + nm + ": " + im), put err 10, 1)))
+           (two? im ? (1 < #fs ? (puts "\(nm):\n") 0, draw im, flush out, 0)
+            (say err "pic: \(nm): \(im)", put err 10, 1)))
        (two? fs ?
            (foldl (\ a f (: r (uread f)
                             x (two? r ? (one f <>r)
-                               (say err ("pic: cannot open " + f), put err 10, 1))
+                               (say err "pic: cannot open \(f)", put err 10, 1))
                             (a || x ? 1 0)))
                   0 fs)
           (one "stdin" (string? sin ? sin (slurp in)))))
@@ -312,7 +309,7 @@
                 (? (pic-kind b = ty && !(string? (uoptv t 113))) b
                    (ty = 'ans) (pic-ans (pic-decoded who (ops 0) b) 80 () 1)
                    (pic-encode ty (pic-decoded who (ops 0) b) (pic-num t 113 90) @ r
-                      (string? r ? r (udie 1 (who + ": " + r)))))))
+                      (string? r ? r (udie 1 "\(who): \(r)"))))))
    (pic-pixelize as)
     (: who "pic pixelize"
        fo (uflags who as [99 104 113 115 116 119] "chqstw")
@@ -320,7 +317,7 @@
        _ (#ops = 2 ? () (udie 2 pic-usage))
        ty (pic-otype who t (ops 1) 'png)
        c (uoptv t 99 @ v (string? v ? v "24"))
-       _ (elem c ["24" "256"] ? () (udie 2 (who + ": -c is 24 or 256")))
+       _ (elem c ["24" "256"] ? () (udie 2 "\(who): -c is 24 or 256"))
        im (pic-decoded who (ops 0) (pic-in who (ops 0)))
        cols (pic-num t 119 80) rows (pic-num t 104 ())
        (pic-out who (ops 1)
@@ -385,22 +382,20 @@
     (: im (st 'im) path (st 'fs (st 'i)) nf (pv-nf st)
        nm (: (go i) (? (i < 0) path (path i = 47) (snip path (i + 1) #path) (go (i - 1)))
              (go (#path - 1)))
-       tag (1 < #(st 'fs) ? ("  [" + show (st 'i + 1) + "/" + show #(st 'fs) + "]") "")
+       tag (1 < #(st 'fs) ? "  [\(st 'i + 1)/\(#(st 'fs))]" "")
        (? (st 'msg = picless-help) picless-help
-          (atom? im) (nm + ": " + im + tag)
+          (atom? im) "\(nm): \(im)\(tag)"
           (pv-view st @ v
-             (nm + tag + "  " + show (im 0) + "x" + show (im 1)
-              + "  " + show (int (100 / v 0 + 0.5)) + "%"
-              + (1 < nf ? ("  frame " + show (st 'f + 1) + "/" + show nf
-                           + (st 'play ? "" " (paused)")) "")
-              + (0 < #(st 'msg) ? ("  " + st 'msg) "  (? for keys)")))))
-   pv-unkit (string 27 + "_Ga=d,d=a,q=2" + string 27 + "\\")
+             ("\(nm)\(tag)  \(im 0)x\(im 1)  \(int (100 / v 0 + 0.5))%"
+              + (1 < nf ? "  frame \(st 'f + 1)/\(nf)\(st 'play ? "" " (paused)")" "")
+              + (0 < #(st 'msg) ? "  \(st 'msg)" "  (? for keys)")))))
+   pv-unkit "\e_Ga=d,d=a,q=2\e\\"
    ; the whole screen as one string, the frame drawn once per view
    (pv-frame st)
-    (: e (string 27) im (st 'im) rows (st 'h - 1)
-       (at r) (e + "[" + show (r + 1) + ";1H")
+    (: im (st 'im) rows (st 'h - 1)
+       (at r) "\e[\(r + 1);1H"
        body
-        (atom? im ? (catmap (r \ at r + e + "[K") ^rows)
+        (atom? im ? (catmap (r \ "\(at r)\e[K") ^rows)
          (: v (pv-view st) ck [(v 0) (v 1) (v 2) (v 3) (v 4) (st 'w) (st 'h)]
             _ (ck = st 'ck ? 0 (pins st 'ck ck 'rows {}))
             f (st 'f)
@@ -414,13 +409,13 @@
                                   (pin (st 'rows) f d2, d2)) d))
             pad (catmap (_ \ " ") ^(v 5)) top (v 6)
             (mode = "block" ?
-                (catmap (r \ at r + (top <= r < top + #drawn ? (pad + drawn (r - top)) "") + e + "[K") ^rows)
+                (catmap (r \ "\(at r)\(top <= r < top + #drawn ? (pad + drawn (r - top)) "")\e[K") ^rows)
                ; the rows cleared, kitty's pictures let go, then the picture at its corner
-               (catmap (r \ at r + e + "[K") ^rows
+               (catmap (r \ "\(at r)\e[K") ^rows
                 + (mode = "kitty" ? pv-unkit "")
-                + e + "[" + show (top + 1) + ";" + show (v 5 + 1) + "H" + drawn))))
+                + "\e[\(top + 1);\(v 5 + 1)H\(drawn)"))))
        line (pv-status st @ s (st 'w < #s ? (snip s 0 (st 'w)) s))
-       (body + at rows + e + "[7m" + line + e + "[0m" + e + "[K"))
+       (body + "\(at rows)\e[7m\(line)\e[0m\e[K"))
    ; one key. panning moves a quarter of the view
    (pv-step st c)
     (: im (st 'im) ok (two? im) nf (pv-nf st)
@@ -475,11 +470,11 @@
        mode (pic-pick g pr)
        _ (mode = "block" ? 0
           (pins st 'mode mode 'ux (0 < pr 'cw ? (pr 'cw) 8) 'uy (0 < pr 'ch ? (pr 'ch) 16)))
-       b (cask 64) e (string 27)
+       b (cask 64)
        (go dirty)
         (: hw2 (ttysize 0 0)
            moved (!(<hw2 = st 'h) || !(<>hw2 = st 'w))
-           _ (moved ? (pins st 'h <hw2 'w <>hw2, puts (e + "[2J")) 0)
+           _ (moved ? (pins st 'h <hw2 'w <>hw2, puts "\e[2J") 0)
            _ (dirty || moved ? (puts (pv-frame st), flush out) 0)
            n (pic-swig in b)
            ks (charm? n && 0 < n ? (pv-keys (snip (string b) 0 n)))

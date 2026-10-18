@@ -50,12 +50,12 @@
        (map (e \ pin (J 'sf) (e 0) (e 1)) sfcodes,
         cp-hyphen-file J hyph,
         map (k \ (: e (fonts k) f (cb-font J (e 0) "" (tfms k) (e 1))
-                    (f = 'badtfm ? (die ("caja: " + e 0 + ".tfm is not a TFM TeX would load")) f)))
+                    (f = 'badtfm ? (die "caja: \(e 0).tfm is not a TFM TeX would load") f)))
             ^#fonts,
         map (k \ pin (J 'fonts k) 'hyphenchar 45) (map (+ 1) ^#fonts),
         map (i \ cb-set-param J (['year 'month 'day 'time] i) (date i)) ^4,
         J))
-   (die m) (say err (m + "\n"), flush err, quit 1)
+   (die m) (say err "\(m)\n", flush err, quit 1)
 
    ; --- text ----------------------------------------------------------------------------------
    ; a code point cmr has no slot for, as OT1 codes: the accented letters take their base
@@ -96,7 +96,7 @@
                       'strong (['f bf] . inl-toks bf (sp 1) + [['f f]])
                       'code (['f tt] . text-toks tt (sp 1) + [['f f]])
                       'link (inl-toks f (sp 1))
-                      'img (text-toks f ("[" + sp 1 + "]"))
+                      'img (text-toks f "[\(sp 1)]")
                       []))
                l))
 
@@ -149,7 +149,7 @@
     (b 0 @
      'meta (: kv (b 1) (get k) (filter (p \ p 0 = k) kv @ e (two? e ? (e 0 1) ""))
               t (get 'title) sec (get 'section)
-              (#t = 0 ? [] (head 1 [['text (#sec = 0 ? t (t + "(" + sec + ")"))]] ind)))
+              (#t = 0 ? [] (head 1 [['text (#sec = 0 ? t "\(t)(\(sec))")]] ind)))
      'head (head (b 1) (b 2) ind)
      'para (para rm ind (b 1))
      'fence ([(skip (3 * pt))] + map (fence-line ind) (lines (b 2)) + [(skip (3 * pt))])
@@ -184,17 +184,15 @@
         cb-dvi J))
    (cd-tex J doc hyph)
     (map (k \ J 'params k) ['year 'month 'day 'time] @ d
-       ("\\catcode`\\{=1 \\catcode`\\}=2 \\batchmode\\year=" + show (d 0) + " \\month=" + show (d 1)
-        + " \\day=" + show (d 2) + " \\time=" + show (d 3) + "\n"
-        + "\\def\\sp{ }\\input " + hyph + "\n\\defaulthyphenchar=45\n"
+       ("\\catcode`\\{=1 \\catcode`\\}=2 \\batchmode\\year=\(d 0) \\month=\(d 1) \\day=\(d 2) \\time=\(d 3)\n"
+        + "\\def\\sp{ }\\input \(hyph)\n\\defaulthyphenchar=45\n"
         + cats (map (k \ (fonts k @ e
-                            ("\\font\\f" + string (97 + k) + "=" + e 0
-                             + (e 1 = -1000 ? "" (" at " + show (e 1) + "sp")) + "\\relax\n")))
+                            "\\font\\f\(string (97 + k))=\(e 0)\(e 1 = -1000 ? "" " at \(e 1)sp")\\relax\n"))
                     ^#fonts)
-        + cats (map (e \ "\\sfcode" + show (e 0) + "=" + show (e 1) + "\\relax\n") sfcodes)
-        + cp-tex outer + "\n"
+        + cats (map (e \ "\\sfcode\(e 0)=\(e 1)\\relax\n") sfcodes)
+        + "\(cp-tex outer)\n"
         + "\\def\\pages{\\ifvoid0 \\else\\advance\\count0 by1 \\setbox1\\vsplit0 to\\vsize"
         + "\\shipout\\vbox{\\box1 \\vskip24pt\\hbox to\\hsize{\\hss\\fa\\number\\count0\\hss}}"
         + "\\expandafter\\pages\\fi}\n"
-        + "\\setbox0\\vbox{" + cp-tex (cd-tokens J doc) + "}\n\\pages\\end\n")))
+        + "\\setbox0\\vbox{\(cp-tex (cd-tokens J doc))}\n\\pages\\end\n")))
 ) ; module caja-doc

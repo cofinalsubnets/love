@@ -102,9 +102,9 @@
                 (? (0 < #s) s                            ; the spelling the lexer kept
                    (elem k numks) (show (vof t))           ; ..or a cpp-minted decimal
                    (k = 'kw) (show (vof t))
-                   (k = 'str) ("\"" + vof t + "\"")
+                   (k = 'str) "\"\(vof t)\""
                    (elem k '(wstr str16 str32))                       ; a wide literal, prefix restored
-                    ((? (k = 'wstr) "L\"" (k = 'str16) "u\"" "U\"") + vof t + "\"")
+                    "\((? (k = 'wstr) "L\"" (k = 'str16) "u\"" "U\""))\(vof t)\""
                    (vof t)))                          ; id / p are their text
    ; C11 6.10.3.2's stringize: the argument's own spelling, quotes and escapes and
    ; all. the standard's extra \ before each " and \ buys a text that RE-LEXES to
@@ -116,7 +116,7 @@
    (bs? t) (spell t = "\\")
    (spellcat ts) (: (go l acc gap) (? (atom? l) acc
                                       (bs? <l && !(spaced? <l) && two? >l && bs? <>l)
-                                       (go >>l (acc + (gap && acc != "" ? " " "") + "\\") (spaced? <>l))
+                                       (go >>l "\(acc)\(gap && acc != "" ? " " "")\\" (spaced? <>l))
                                       (go >l (acc + (gap && acc != "" ? " " "") + spell <l)
                                           (spaced? <l)))
                     (go ts "" 0))
@@ -494,7 +494,7 @@
     (>body @ r
        (!(two? r && pv? <r "(" && two? >r && (kof <>r = 'str) &&
          two? >>r && pv? <>>r ")") ? ()
-          (: nm (vof <>r) key ("#save:" + nm) stk (macs key)
+          (: nm (vof <>r) key "#save:\(nm)" stk (macs key)
              (? (vof <body = "push_macro") (pin macs key (mdef macs nm . stk))
                 (two? stk) (pin macs nm <stk, pin macs key >stk)
                 ()))))
@@ -625,7 +625,7 @@
                  sbody (two? sline ? >>sline)
                  (? (elem dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
                      (docond dir sbody sline macs cond incf @ cond2
-                        (cond2 = 'err ? (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
+                        (cond2 = 'err ? (gripeat sline "#\(dir) without #if")   ; unbalanced -- fatal, not empty
                            (cppgo rest macs cond2 nb out1 incf)))
                     !(condactive cond) (cppgo rest macs cond nb out1 incf)      ; skipped: ignore non-cond directives
                     (dir = "define") (defmacro macs body, cppgo rest macs cond nb out1 incf)
@@ -635,13 +635,13 @@
                     ; its own words, and "#error directive" throws that away -- pdclib's
                     ; config prints which type it could not match, and the bare form left
                     ; 232 refused files with nothing to read.
-                    (dir = "error") (gripeat sline ("#error: " + spellcat body))
+                    (dir = "error") (gripeat sline "#error: \(spellcat body)")
                     ; a #warning is not fatal to gcc and must not be to us: glibc
                     ; and gnulib deprecate through it, mid-header, on purpose. it
                     ; says the text unlocated -- the driver's channel is for fatal
                     ; gripes, and a warning that stops nothing has none yet.
                     (dir = "warning")
-                     (say err ("cc: warning: " + spellcat body + "\n"),
+                     (say err "cc: warning: \(spellcat body)\n",
                       cppgo rest macs cond nb out1 incf)
                     (dir = "pragma" && pragmac? body)
                      (dopragmac macs body, cppgo rest macs cond nb out1 incf)
@@ -650,7 +650,7 @@
                     (dir = "pragma" && two? body && idv? <body "pack")
                      (dopack macs >body @ n
                         (? (charm? n) (cppgo rest macs cond nb (['pack n (lof <sline)] . out1) incf)
-                           (gripeat sline ("#pragma pack" + spellcat >body + " is not one mooncc reads"))))
+                           (gripeat sline "#pragma pack\(spellcat >body) is not one mooncc reads")))
                     ; #line N ["file"]: the next line becomes N, so a token at
                     ; physical P reports P + (N - L - 1). the file operand is
                     ; parsed and dropped -- __file__ is the TU's name throughout.
@@ -677,7 +677,7 @@
                     ; `#` there is the assembly's (a device tree's #address-cells)
                     (two? (mdef macs "__ASSEMBLER__")) (lnshift macs line @ sl
                         (held ? (cppgo rest macs cond (revcat sl buf) out incf) (cppgo rest macs cond () (revcat sl out1) incf)))
-                    (gripeat sline ("invalid preprocessing directive #" + spellcat [<>line]))))
+                    (gripeat sline "invalid preprocessing directive #\(spellcat [<>line])")))
              !(condactive cond) (cppgo rest macs cond buf out incf)                    ; skipped code: drop
              (cppgo rest macs cond (revcat (lnshift macs line) buf) out incf))))         ; active code: accumulate (reversed)
 
@@ -719,16 +719,16 @@
           sys? (two? b && pv? <b "<")
           name (incname b)
           txt (name ? (incf name sys?))
-          spelt (sys? ? ("<" + name + ">") ("\"" + name + "\""))
+          spelt (sys? ? "<\(name)>" "\"\(name)\"")
           ; only a TU's first include is a memo candidate: a deeper one runs
           ; against a table this very include already moved, so its pre-state
           ; is its includer's business and the compare would never hit.
           nth (peep macs 'ninc 0)
           (pin macs 'ninc (nth + 1),
-           atom? txt ? (gripeat body ("cannot resolve #include " + spelt))      ; unresolved -> fatal
+           atom? txt ? (gripeat body "cannot resolve #include \(spelt)")      ; unresolved -> fatal
              (: ipath (3 < #txt ? <>>>txt "")   ; incload's resolved path; "" from a bare (1 text)
                 ; #pragma once: a header that says it is read once per TU, by its resolved path
-                okey ("#once:" + ipath)
+                okey "#once:\(ipath)"
                 seen (0 < #ipath && two? (macs okey))
                 _ (!seen && 0 < #ipath && oncep <>txt && pin macs okey [1])
                 pre (nth = 0 ? (msnap macs))
@@ -749,7 +749,7 @@
                       ; a refusal as a token list and walk it. a located refusal is the
                       ; header's own and takes its name; a bare one is knowable only at
                       ; the #include, and stays there.
-                      (!(okv? lr) ? (gripe? lr ? (gripein lr name) (gripeat body ("lex error in " + spelt)))
+                      (!(okv? lr) ? (gripe? lr ? (gripein lr name) (gripeat body "lex error in \(spelt)"))
                          (: itoks <>lr
                             chf (<>>txt @ c (c ? c incf))
                             ; the #line delta is the header's own: macs is shared, so save
@@ -903,11 +903,11 @@
              (any (p \ n <= #p && snip p 0 n = xy) cpuncts))))
    (cpp-text toks incf fname)
     (: r (cppgo toks (cppmacs fname) () () () incf)
-       (qesc s) ("\"" + string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
+       (qesc s) "\"\(string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
                                                    (c < 32 || 126 < c ? (c & 255 @ o [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
-                                        (chars s)) + "\"")
+                                        (chars s)))\""
        (sp t) (? (kof t = 'str) (0 < #(sof t) ? (sof t) (qesc (vof t))) (spell t))
-       (mark l f) ("\n# " + show (l < 1 ? 1 l) + " \"" + f + "\"\n")
+       (mark l f) "\n# \(l < 1 ? 1 l) \"\(f)\"\n"
        ; files: the stack of open paths; cl the line the text stands on, cf its file
        (go ts files cl cf acc prev)
         (atom? ts ? (join "" (rev ("\n" . acc)))

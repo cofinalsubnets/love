@@ -14,7 +14,7 @@ int execvp(char const *f, char *const *av) {
       memcpy(buf, path, i);
       buf[i] = '/';
       memcpy(buf + i + 1, f, fn + 1);
-      execv(buf, av); }                     /* returns only on failure; keep walking */
+      execv(buf, av); }
     path += i;
     if (*path == ':') path++; }
   __errno_v = ENOENT;

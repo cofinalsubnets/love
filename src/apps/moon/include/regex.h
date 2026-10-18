@@ -10,7 +10,7 @@ typedef struct { regoff_t rm_so, rm_eo; } regmatch_t;
 #define REG_ICASE    2
 #define REG_NEWLINE  4
 #define REG_NOSUB    8
-#define REG_GREP     16  /* gnu grep's reading: a repeat with nothing to repeat is skipped, a bad brace is ink */
+#define REG_GREP     16  /* gnu grep's reading: a repeat with nothing to repeat is skipped, a bad brace is literal */
 #define REG_UTF8     32  /* by character, whatever the locale */
 
 #define REG_NOTBOL   1

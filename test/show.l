@@ -65,3 +65,9 @@
        (0 <= fsub (show (shm-ring 100)) "<cycle>" 0) (tally (show (shm-ring 100)) < 4000)
        !(0 <= fsub (show shm-y) "<cycle>" 0)
        (test-linear (n \ show (shm-nest n 1)) 1500)))
+
+; a partial laid in one cell -- an unknown head called short, apo's miss -- shows as the
+; chain of unc cells it stands for
+(: (sha-k3 a b c) (a < 1 ? [a b c] (sha-k3 (a - 1) b c))
+   (sha-t2 f a b n) (n < 1 ? (f a b) (sha-t2 f a b (n - 1)))
+ (test (show (sha-t2 sha-k3 0 2 1) = show ((sha-k3 0) 2))))

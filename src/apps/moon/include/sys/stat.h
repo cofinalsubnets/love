@@ -1,10 +1,9 @@
 #ifndef _LOVE_SYS_STAT_H
 #define _LOVE_SYS_STAT_H
-#include <time.h>       /* struct timespec */
-#include <sys/types.h>  /* mode_t etc -- POSIX says stat.h provides them (busybox leans on it) */
+#include <time.h>
+#include <sys/types.h>  /* posix: stat.h provides mode_t and kin */
 #if defined(__aarch64__) || defined(__riscv)
-/* the asm-generic kernel struct stat (a64 + rv64): 128 bytes, st_mode
- * before st_nlink and both 32-bit -- what newfstatat fills verbatim */
+/* asm-generic's kernel stat, 128 bytes, st_mode before st_nlink: newfstatat fills it */
 struct stat {
   unsigned long st_dev;
   unsigned long st_ino;
@@ -25,8 +24,7 @@ struct stat {
   unsigned int __unused5;
 };
 #elif defined(__ILP32__)
-/* i386 and arm: no kernel record is filled in place (statx or stat64 is, and fstat.c
- * reads it across), so the words are the wide ones */
+/* i386 and arm: copied across from statx or stat64, so the wide types */
 struct stat {
   dev_t st_dev;
   ino_t st_ino;
@@ -43,7 +41,7 @@ struct stat {
   struct timespec st_ctim;
 };
 #else
-/* glibc x86-64 struct stat: 144 bytes, st_nlink BEFORE st_mode (the classic) */
+/* x86-64's kernel stat, 144 bytes, st_nlink before st_mode */
 struct stat {
   unsigned long st_dev;
   unsigned long st_ino;
@@ -78,7 +76,6 @@ struct stat {
 #define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
 #define UTIME_NOW  1073741823
 #define UTIME_OMIT 1073741822
-/* permission bits (decimal for the octal values, matching this file's style) */
 #define S_ISUID 2048
 #define S_ISGID 1024
 #define S_ISVTX 512
@@ -94,17 +91,12 @@ struct stat {
 #define S_IROTH 4
 #define S_IWOTH 2
 #define S_IXOTH 1
-/* the common (non-POSIX) all-user combos gnulib/coreutils expect */
 #define S_IRWXUGO (S_IRWXU | S_IRWXG | S_IRWXO)
 #define S_IXUGO   (S_IXUSR | S_IXGRP | S_IXOTH)
-/* the st_Xtime compatibility aliases glibc supplies (third-party C reads these) */
 #define st_atime st_atim.tv_sec
 #define st_mtime st_mtim.tv_sec
 #define st_ctime st_ctim.tv_sec
-/* moon's own, where POSIX has nothing: a file's birth time, which no struct stat on
- * this page has a seat for. the BSDs carry it in the stat they already do and linux
- * needs statx, so the question is asked once here and the kernel decided underneath.
- * -> 0 with *out filled | 1 where the filesystem keeps none | -1, errno set. */
+/* a file's birth time: 0 with *out filled, 1 where the filesystem keeps none, -1 errno */
 int __love_birth(char const *path, int follow, struct timespec *out);
 int stat(char const*, struct stat*);
 int fstat(int, struct stat*);

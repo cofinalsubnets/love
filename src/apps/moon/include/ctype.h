@@ -1,9 +1,5 @@
 #ifndef _LOVE_CTYPE_H
 #define _LOVE_CTYPE_H
-/* the C character classes -- declarations only; moonlibc/libc owns the bodies.
-   love.c itself never needs these (it nets bytes directly), so this header exists
-   for THIRD-PARTY C (the LFS-userland ladder) -- without it
-   a `#include <ctype.h>` falls through to glibc's GNU-laden one and mooncc chokes. */
 int isalnum(int);
 int isalpha(int);
 int isblank(int);

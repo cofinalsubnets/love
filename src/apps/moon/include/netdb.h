@@ -1,7 +1,7 @@
 #ifndef _LOVE_NETDB_H
 #define _LOVE_NETDB_H
 #include <sys/socket.h>
-/* glibc field order: the four ints, addrlen, then ADDR before canonname */
+/* glibc's field order: ai_addr before ai_canonname */
 struct addrinfo {
   int ai_flags;
   int ai_family;

@@ -1,13 +1,12 @@
 #ifndef _LOVE_LIMITS_H
 #define _LOVE_LIMITS_H
-/* freestanding limits for cc. the object-like limits a portable program leans on;
- * PATH_MAX/NAME_MAX live here on linux (via <linux/limits.h>) so we host them too. */
+/* PATH_MAX and NAME_MAX live here too, as on linux */
 #define CHAR_BIT   8
 #define MB_LEN_MAX 16
 #define SCHAR_MIN  (-128)
 #define SCHAR_MAX  127
 #define UCHAR_MAX  255
-#ifdef __CHAR_UNSIGNED__                /* plain char per the target's ABI: signed on x86-64 and wasm */
+#ifdef __CHAR_UNSIGNED__  /* plain char's sign is the abi's */
 #define CHAR_MIN   0
 #define CHAR_MAX   UCHAR_MAX
 #else
@@ -21,7 +20,7 @@
 #define INT_MAX    2147483647
 #define UINT_MAX   4294967295U
 #if defined(__arm__) || defined(__i386__)
-/* the 32-bit targets: long is the 4-byte word, long long the 8-byte pair. */
+/* the 32-bit targets: long is 4 bytes, long long the 8-byte pair */
 #define LONG_MIN   (-2147483647L - 1)
 #define LONG_MAX   2147483647L
 #define ULONG_MAX  4294967295UL
@@ -38,8 +37,7 @@
 #endif
 #define PATH_MAX   4096
 #define NAME_MAX   255
-/* POSIX's _POSIX_* are the guaranteed MINIMA, fixed by the standard -- a program
- * sizes a buffer by them rather than by what this machine happens to allow. */
+/* posix's guaranteed minima */
 #define _POSIX_ARG_MAX     4096
 #define _POSIX_OPEN_MAX    20
 #define _POSIX_NAME_MAX    14
