@@ -1,7 +1,7 @@
 ; typed multi-rank arrays (trays): construction, indexing, broadcast, reductions, printing
 
 (test
- ; --- constructor + accessors ---
+ ; --- constructor + accessors
  (2 = rank (star-tray '(2 3) 0))
  (6 = #(star-tray '(2 3) 0))
  (star-tray = tier (star-tray '(2 3) 0))
@@ -11,66 +11,65 @@
  !(tier "x")
 
  ; --- only rank 0 demotes to a scalar; a rank-1 length-1 array stays an array ---
- (0 = star-tray 0 0)                        ; empty shape, zero-filled -> the fixnum 0
- (gem? (gem-tray 0 0)) (0.0 = gem-tray 0 0) ; -> a boxed 0.0
+ (0 = star-tray 0 0)
+ (gem? (gem-tray 0 0)) (0.0 = gem-tray 0 0)
  (tray? (star-tray '(1) '(5)))              ; rank-1 len-1 -> a one-cell array, not the fixnum 5
- (5 = (peep (star-tray '(1) '(5)) 0 -1))    ; ...its lone cell reads back
+ (5 = (peep (star-tray '(1) '(5)) 0 -1))
  (tray? @(3.5)) (tray? (3.5 = @(3.5)))      ; @(3.5) is a one-cell array: = with its scalar is a mask, not a bit
  (1 = tally @(3.5)) (1 = rank @(3.5))
  !(rank (star-tray 0 0))           ; a demoted scalar is not a tuple
  !#(gem-tray 0 0)
  !(shape (star-tray 0 0))
 
- ; --- get: rank-1 fixnum index ---
+ ; --- get: rank-1 fixnum index
  (10 = peep (star-tray '(3) '(10 20 30)) 0 -1)
  (20 = peep (star-tray '(3) '(10 20 30)) 1 -1)
  (30 = peep (star-tray '(3) '(10 20 30)) 2 -1)
  (-1 = peep (star-tray '(3) '(10 20 30)) 3 -1)  ; out of bounds -> default
- (-1 = peep (star-tray '(3) '(10 20 30)) -1 -1) ; negative -> default
+ (-1 = peep (star-tray '(3) '(10 20 30)) -1 -1)
 
  ; --- get: rank-N shape-list index, row-major ---
  (1 = peep (star-tray '(2 2) '(1 2 3 4)) '(0 0) -1)
  (2 = peep (star-tray '(2 2) '(1 2 3 4)) '(0 1) -1)
  (3 = peep (star-tray '(2 2) '(1 2 3 4)) '(1 0) -1)
  (4 = peep (star-tray '(2 2) '(1 2 3 4)) '(1 1) -1)
- (-1 = peep (star-tray '(2 2) '(1 2 3 4)) '(2 0) -1) ; oob -> default
+ (-1 = peep (star-tray '(2 2) '(1 2 3 4)) '(2 0) -1)
  (-1 = peep (star-tray '(2 2) 0) 0 -1)               ; wrong-rank key -> default
  (-1 = peep (star-tray '(2 2) 0) '(0) -1)            ; too-few indices -> default
 
- ; --- rank-0 deref: empty/nil key yields the lone scalar ---
+ ; --- rank-0 deref: an empty key yields the lone scalar
  (2.5 = peep 2.5 0 -9)
 
- ; --- float element read boxes an r ---
  (1.5 = peep (gem-tray '(2) '(1.5 2.5)) 0 -1)
  (gem? (peep (gem-tray '(2) '(1.5 2.5)) 0 -1))
 
- ; --- scalar broadcast: array (op) scalar ---
+ ; --- scalar broadcast
  (aall (star-tray '(3) '(11 21 31) = (star-tray '(3) '(10 20 30) + 1)))
  (aall (star-tray '(3) '(9 19 29) = (star-tray '(3) '(10 20 30) - 1)))
  (aall (star-tray '(2) '(4 6) = (star-tray '(2) '(2 3) * 2)))
- (aall (star-tray '(2) '(3 5) = (star-tray '(2) '(7 11) // 2))) ; `//` floor division, stays z
+ (aall (star-tray '(2) '(3 5) = (star-tray '(2) '(7 11) // 2)))
  (gem-tray = tier (star-tray '(2) '(7 11) / 2))                 ; `/` promotes (7/2 inexact) -> r
  (aall (gem-tray '(2) '(3.5 5.5) = (star-tray '(2) '(7 11) / 2)))
  (aall (star-tray '(2) '(4 6) = (star-tray '(2) '(8 12) / 2)))   ; `/` stays z when every element divides evenly
  (aall (star-tray '(2) '(1 1) = (star-tray '(2) '(7 11) % 2)))
- (aall (star-tray '(3) '(2 4 6) = (1 + star-tray '(3) '(1 3 5))))  ; scalar on the left
+ (aall (star-tray '(3) '(2 4 6) = (1 + star-tray '(3) '(1 3 5))))
 
- ; --- array (op) array, same shape ---
+ ; --- array (op) array, same shape
  (aall ((star-tray '(3) '(11 22 33)) = (star-tray '(3) '(10 20 30) + star-tray '(3) '(1 2 3))))
  (aall ((star-tray '(3) '(9 18 27)) = (star-tray '(3) '(10 20 30) - star-tray '(3) '(1 2 3))))
 
- ; --- numpy broadcasting: outer sum of a column and a row ---
+ ; --- numpy broadcasting
  (aall ((star-tray '(3 3) '(11 21 31 12 22 32 13 23 33)) = (star-tray '(3 1) '(1 2 3) + star-tray '(1 3) '(10 20 30))))
  ; size-1 axis stretches
  (aall ((star-tray '(2 2) '(11 21 12 22)) = (star-tray '(2 2) '(1 1 2 2) + star-tray '(1 2) '(10 20))))
 
- ; --- mixed element-type promotes to the widest ---
- (gem-tray = tier (star-tray '(2) 0 + 1.5))            ; z array + r scalar -> r
+ ; --- mixed element types promote to the widest
+ (gem-tray = tier (star-tray '(2) 0 + 1.5))
  (aall (gem-tray '(2) '(1.5 1.5) = (star-tray '(2) 0 + 1.5)))
- (star-tray = tier (star-tray '(2) 0 + star-tray '(2) 0)) ; z + z -> z
+ (star-tray = tier (star-tray '(2) 0 + star-tray '(2) 0))
  (star-tray = tier (star-tray '(2) 0 + 1))                ; scalar int never widens the array
 
- ; --- comparison -> 0/1 bool array ---
+ ; --- comparison -> 0/1 array
  (aall (star-tray '(3) '(1 2 3) < 10))
  !(aall (star-tray '(3) '(1 2 30) < 10))
  (sat (star-tray '(3) '(1 20 30) < 10))
@@ -81,42 +80,42 @@
  (aall (star-tray '(2) '(5 6) = star-tray '(2) '(5 6)))
  !(aall (star-tray '(2) '(5 6) = star-tray '(2) '(5 7)))
 
- ; --- reductions ---
+ ; --- reductions
  (60 = net (star-tray '(3) '(10 20 30)))
  (6000 = prod (star-tray '(3) '(10 20 30)))
  (30 = amax (star-tray '(3) '(10 30 20)))
  (10 = amin (star-tray '(3) '(20 10 30)))
  (6.0 = net (gem-tray '(3) '(1.0 2.0 3.0)))
- (21 = net (star-tray '(2 3) '(1 2 3 4 5 6))) ; reduces over all axes
- (aall (star-tray '(3) '(1 2 3)))             ; every element true
- !(aall (star-tray '(3) '(1 0 3)))            ; a zero element
+ (21 = net (star-tray '(2 3) '(1 2 3 4 5 6)))
+ (aall (star-tray '(3) '(1 2 3)))
+ !(aall (star-tray '(3) '(1 0 3)))
  !(aall (star-tray '(2) '(1 -1)))             ; ..and a negative one: the truth law, not nonzero
  !(aall (gem-tray '(2) '(1.5 -0.5)))
  (sat (star-tray '(3) '(0 0 3)))
- !(sat (star-tray '(3) 0))                         ; all zero
+ !(sat (star-tray '(3) 0))
 
  ; --- reductions are the identity on a scalar (rank-agnostic idiom) ---
  (5 = net 5)
  (5 = amax 5)
  (1 = aall 1)
  (0 = aall 0)
- (aall (1 < 2))                                    ; scalar: (< 1 2) = 1, (aall 1) = 1
+ (aall (1 < 2))
  !(aall (2 < 1))
- (aall (star-tray '(2) '(1 2) < star-tray '(2) '(3 4)))  ; array: same expression
+ (aall (star-tray '(2) '(1 2) < star-tray '(2) '(3 4)))
 
- ; --- truthiness is the net (spec.l); here only the shapes an array adds to it ---
+ ; --- truthiness is the net (spec.l); only the shapes an array adds
  !(gem-tray '(2 2) 0)           ; a zero float array, at rank 2
- (nil? @(-2 1)) !(nil? @(-2 3)) ; the cells sum before the gate: -2+1 <= 0 < -2+3
+ (nil? @(-2 1)) !(nil? @(-2 3)) ; the cells sum before the gate
 
- ; --- elementwise transcendentals over an array ---
+ ; --- elementwise transcendentals
  (aall (gem-tray '(2) '(2.0 3.0) = ((1 / 2) (gem-tray '(2) '(4.0 9.0)))))
- (gem-tray = tier ((1 / 2) (star-tray '(3) 0)))  ; result is a float array
+ (gem-tray = tier ((1 / 2) (star-tray '(3) 0)))
 
  ; --- print: rank 1 as @(…), rank 2+ as (array '(shape) elem …) ---
  ("@(10 20 30)" = show (star-tray '(3) '(10 20 30)))
  ("(array '(2 2) 1 2 3 4)" = show (star-tray '(2 2) '(1 2 3 4)))
  ("@(1.5 2.5)" = show (gem-tray '(2) '(1.5 2.5)))
- ("@(1 2 3)" = show (star-tray '(3) '(1 2 3)))   ; z aliases the word-int kind -> terse @
+ ("@(1 2 3)" = show (star-tray '(3) '(1 2 3)))   ; z aliases the word-int kind
  ; @(…) reads back to an equal array; the explicit form is a plain constructor call
  (aall (star-tray '(3) '(10 20 30) = @(10 20 30)))
  (aall (gem-tray '(2) '(1.5 2.5) = @(1.5 2.5)))
@@ -127,23 +126,23 @@
  (aall (gem-tray '(2) '(1.5 2.5) = tuple 1.5 2.5))
 
  ; --- non-conforming / non-numeric -> nil ---
- !(star-tray '(3) 0 + star-tray '(4) 0) ; shapes [3] and [4] don't conform
+ !(star-tray '(3) 0 + star-tray '(4) 0)
  ("x" = (star-tray '(3) 0 + "x"))       ; a tray is number-band: against a string it degenerates
- !(star-tray '(3) 0))                   ; (sanity) zero array is falsy
+ !(star-tray '(3) 0))
 
 ; --- empty arrays: broadcast keeps a 0-axis empty (a 1-axis takes the other size, 0
 ; included), and empty reductions answer their monoid units ---
 (star-tray '(0) 0 @ e
  (test
-  ("@()" = (show e)) ('(0) = (shape e)) (1 = (rank e)) (0 = #e) ; empty rank-1 prints @()
-  (0 = (net e)) (1 = (prod e)) (aall e)                         ; the units: empty sum 0, empty product 1, empty conjunction true
-  !e (0 = $e)                                                   ; an empty nets nothing
+  ("@()" = (show e)) ('(0) = (shape e)) (1 = (rank e)) (0 = #e)
+  (0 = (net e)) (1 = (prod e)) (aall e)                         ; the monoid units
+  !e (0 = $e)
   (0 = #(e + e)) (0 = #(e * 2)) (0 = #(1 + e))
-  (0 = #(e < 1)) (0 = #(e = e))                ; compare masks stay empty
+  (0 = #(e < 1)) (0 = #(e = e))
   (0 = #(e 2))                                 ; an empty exponent array applies empty
-  (0 = #(sine e)) (0 = #(2 e))                 ; elementwise maps stay empty
+  (0 = #(sine e)) (0 = #(2 e))
   (0 = #((star-tray '(1) '(5)) + e))           ; a 1-axis broadcasts to 0, not 1
-  (-1 = (peep e 0 -1))                         ; out of bounds -> the default
+  (-1 = (peep e 0 -1))
   ('(0 3) = (shape ((gem-tray '(0 3) 0) + 1))) ; rank-2 empties keep their shape
   (@() @ rt                                    ; the printed form (@()) reads back
    (0 = #rt && '(0) = shape rt && star-tray = tier rt))))
@@ -152,17 +151,17 @@
 (test
  (aall (@(1 0 1) = (@(1 2 3) = @(1 5 3))))
  (aall (@(0 1 0) = (@(1 2 3) != @(1 5 3))))
- (aall (@(0 1 0) = (@(1 2 3) = 2)))                  ; broadcast
+ (aall (@(0 1 0) = (@(1 2 3) = 2)))
  (0 = (@(1 2) = @(1 2 3)))                           ; non-conformant: 0, not a mask
  (aall (@(1 1) = @(1 1))) !(aall (@(1 2) = @(1 3)))
  (aany (@(1 2) = @(1 3))) !(aany (@(1 2) = @(5 6))) !(aany (star-tray '(0) 0))
  (aany (star-tray '(2) '(-1 1))) !(aany (star-tray '(2) '(-1 0)))   ; the truth law
  (1 = aany 1) (0 = aany 0)
- (5 = max 3 5) (3 = min 3 5) (charm? (max 3 5))      ; the operand itself
+ (5 = max 3 5) (3 = min 3 5) (charm? (max 3 5))
  (2.5 = max 2.5 -1) (-1 = min 2.5 -1)
  (aall (@(3 5 3) = max @(1 5 2) 3)) (aall (@(1 3 2) = min @(1 5 2) 3))
  (aall (@(1.5 4.0) = max @(1.5 2.0) @(0.0 4.0)))
- (star-tray = tier (max @(1 5 2) 3))                 ; ints stay ints
+ (star-tray = tier (max @(1 5 2) 3))
  ("b" = max "a" "b") ('(2) = max '(1) '(2))          ; the order < keeps, across kinds
  (30 = amax @(10 30 20)) (10 = amin @(20 10 30))
  (2 = floor 2.7) (-3 = floor -2.5) (2 = floor 2) (charm? (floor 2.7))

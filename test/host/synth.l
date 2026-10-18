@@ -1,5 +1,5 @@
-; test/host/synth.l -- the keyboard synth, headless: all but the tty runner
-; not in the test/*.l corpus (it loads a crew module)
+; test/host/synth.l -- the keyboard synth, headless: all but the tty runner. a crew module,
+; not in the corpus:
 ;   cat test/00-init.l test/host/synth.l | out/love
 
 (borrow 'synth)
@@ -179,8 +179,8 @@
  (test (c = [255 128 0]) (d = [208 208 208]) (cs = [56 56 56]) (csl = [0 0 0])
        (c2 = [208 208 208])))
 
-; --- the FM timbre: with a bank it is the last; left and right choose its instrument, a strike
-; --- and a held key sound through it, and a key let go rings out its release
+; --- the FM timbre: with a bank it is the last; left and right choose the instrument, a strike
+; --- and a held key sound through it, a let-go key rings out its release
 (: (syn-fm-b l) (foldl (\ a c (a + string c)) "" l)
    ; ..one instrument, a sine (the modulator silent), held while the key is; the rest empty
    v (syn-fm-b [33 240 15 0 0 63 0 33 240 15 0 0 0 0 0 0])

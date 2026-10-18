@@ -1,8 +1,7 @@
-; src/apps/broker.l -- the wild hive's broker, the stub (notes/plan/wild-hive.md, rung 1): the one
-; holder of the purse. a node asks for "one node of class X in region R for N hours"; the broker
-; checks the allowlist, the concurrency cap and the budget, raises a decision, and rents only once
-; the decision is answered by the authority the policy names for its class. every request and
-; every answer goes to its log.
+; src/apps/broker.l -- the wild hive's broker, the one holder of the purse. a node asks for "one
+; node of class X in region R for N hours"; the broker checks the allowlist, the concurrency cap
+; and the budget, raises a decision, and rents once the policy's authority for the class answers.
+; every request and answer is logged.
 ;
 ;   (broker-open dir)                   the broker's state -> a tablet | a reason
 ;   (broker-request b text now)         a request -> its decision {'id 'class 'ask 'by 'deadline} | a reason
@@ -11,11 +10,10 @@
 ;   (broker-policy b text)              a new policy, root-signed and a higher serial -> 1 | a reason
 ;   (broker-teardown b text free)       a root-signed `teardown LEASE` -> 1 | a reason
 ;   (broker-sign k lines)               lines signed by a seals key -> the text
-;   (broker-rent-local start)           rent and free through the host registry (src/apps/hosts.l)
+;   (broker-rent-local who)             rent and free through the host registry
 ;
-; the state is a directory OUTSIDE any hive tree (BROKER_DIR, ~/.love/broker): root.pub (gwen's
-; root key, hex), policy, ledger (cents spent), leases, log, and creds, which no answer, log line
-; or lease ever carries. the policy is root-signed text, one `key value..` a line:
+; the state is a directory outside any hive tree: root.pub (the root key, hex), policy, ledger
+; (cents spent), leases, log, and creds, which no answer, log line or lease carries. the policy is root-signed text, one `key value..` a line:
 ;   serial N                 a newer policy needs a higher one
 ;   budget CENTS             the purse; spend never passes it
 ;   max N                    nodes rented at once
@@ -27,9 +25,8 @@
 ; then `sig HEX` over every line above it. a request is `class C`, `region R`, `hours N`, `by NODE`,
 ; `why ..`, and raises a decision of class `node`. an answer is root's `answer ID yes|no` + sig, or
 ; a voter's `vote ID yes|no` + `voter NAME` + sig, one counted per voter per decision.
-; THE ENVELOPE: budget, policy, teardown and revoke are root's in every policy -- a policy that
-; hands one to a quorum is refused -- and nothing but a root signature moves them. a quorum
-; spends inside the purse; it never raises it.
+; the envelope: budget, policy, teardown and revoke are root's in every policy, and a policy
+; handing one to a quorum is refused. a quorum spends inside the purse; it never raises it.
 (module (broker broker-open broker-request broker-answer broker-tick broker-policy broker-teardown
          broker-sign broker-rent-local)
 (borrow 'posix)
@@ -61,7 +58,7 @@
    ; --- the files ---
    (br-read p) (uread p @ [1 s] (s + "") ())
    (br-add p s) (: q (open p "a") (? (hot? q) (: _ (say q s) _ (close q) 1) 0))
-   ; a dir inside a hive tree is no place for the purse: a node could read or record it
+   ; a dir inside a hive tree is no place for the purse: a node could read it
    (br-up p) (: (cut i) (? (i <= 0) "/" (p i = 47) (snip p 0 i) (cut (i - 1))) (cut (#p - 1)))
    (br-in-tree? d) (: (up p) (? (two? (stat (p + "/.sb")) || two? (stat (p + "/.git"))) 1
                                  (p = "/" || p = "") 0

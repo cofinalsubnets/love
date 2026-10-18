@@ -1,17 +1,9 @@
 ; src/apps/caja/box.l -- caja's boxes: TeX's node lists, the packager and the DVI shipper.
-; `(borrow 'caja-box)`. tex.web parts 10, 32 and 33, section for section:
-;
-;   nodes     (cb-char J f c) (cb-rule w h d) (cb-glue w st sto sh sho) (cb-kern w)
-;             (cb-penalty n) (cb-math w s) (cb-leaders kind box glue) (cb-list nodes)
-;   packing   (cb-hpack J p w m) (cb-vpack J p h m) (cb-vpackage J p h m l): m is 'exactly
-;             or 'additional; the box answered, and J's 'badness set as last_badness is
-;   fonts     (cb-font J name area bytes size) -> the font's internal number
-;   the job   (cb-job 0) a fresh one; (cb-ship J box) a page out; (cb-dvi J) the file
-;
-; a node is a tablet with tex.web's type code under 'type (0 hlist .. 13 unset) and
-; 'char for a character; 'link is the next node, () for null. a glue spec is its own
-; tablet, shared between nodes as tex.web shares it. dimensions are scaled points, and
-; glue_set is a double, as TeX Live's glue_ratio is.
+; tex.web parts 10, 32 and 33, section for section. m is 'exactly or 'additional; a pack
+; sets J's 'badness as last_badness. (cb-font J name area bytes size) -> its internal number
+; a node is a tablet, tex.web's type code under 'type (0 hlist .. 13 unset), 'char for a
+; character; 'link the next, () for null. a glue spec is a shared tablet. dimensions are
+; scaled points; glue_set a double, as TeX Live's glue_ratio
 (module (caja-box cb-char cb-rule cb-glue cb-kern cb-penalty cb-math cb-leaders cb-list
          cb-null-box cb-hpack cb-vpack cb-vpackage cb-font cb-job cb-ship cb-dvi cb-badness
          cb-param cb-set-param)
@@ -36,7 +28,6 @@
    (cb-kern w) {'type 11 'sub 0 'width w 'link ()}
    (cb-penalty n) {'type 12 'sub 0 'penalty n 'link ()}
    (cb-math w s) {'type 9 'sub s 'width w 'link ()}
-   ; link a love list of nodes; the first, or ()
    ; link a love list of nodes, a () among them left out; the first, or ()
    (cb-list ns0)
     (: ns (filter (!= ()) ns0)
@@ -285,6 +276,17 @@
    (leave J save-loc)
     (prune J save-loc, J 'curs > 0 ? (dvi-pop J save-loc), pin J 'curs (J 'curs - 1))
    (sub-out J b) (b 'type = 1 ? (vlist-out J b) (hlist-out J b))
+   ; leaders of boxes l long over w2 from J's ax, the box's edge at org: ax moved to the first
+   ; box, answering the gap between boxes -- aligned (100), centered (101) or expanded
+   (lead-start J ax org sub l w2)
+    (? (sub = 100)
+        (: s0 (J ax) v1 (org + l * ((J ax - org) // l))
+           (pin J ax (v1 < s0 ? (v1 + l) v1), 0))
+       (: lq (w2 // l) lr (w2 % l)
+          (sub = 101 ? (pin J ax (J ax + lr // 2), 0)
+             (lr // (lq + 1) @ lx
+                (pin J ax (J ax + (lr - (lq - 1) * lx) // 2),
+                 lx)))))
    (hlist-out J box)
     (: gs {'cur 0.0 'g 0}
        save-loc (enter J) base (J 'curv) left (J 'curh)
@@ -330,16 +332,7 @@
                                (lb 'width @ lw
                                   (lw > 0 && wd > 0 ?
                                      (: wd2 (wd + 10) edge (J 'curh + wd2)
-                                        lx (p 'sub = 100 ?
-                                              (: s0 (J 'curh)
-                                                 h1 (left + lw * ((J 'curh - left) // lw))
-                                                 (pin J 'curh (h1 < s0 ? (h1 + lw) h1),
-                                                  0))
-                                              (: lq (wd2 // lw) lr (wd2 % lw)
-                                                 (p 'sub = 101 ? (pin J 'curh (J 'curh + lr // 2), 0)
-                                                    (lr // (lq + 1) @ lx
-                                                       (pin J 'curh (J 'curh + (lr - (lq - 1) * lx) // 2),
-                                                        lx)))))
+                                        lx (lead-start J 'curh left (p 'sub) lw wd2)
                                         (rep k) (J 'curh + lw <= edge ?
                                                  (: _ (pin J 'curv (base + lb 'shift)) _ (synch-v J) sv (J 'dviv)
                                                     _ (synch-h J) sh (J 'dvih)
@@ -383,16 +376,7 @@
                                (lb 'height + lb 'depth @ lh
                                   (lh > 0 && ht > 0 ?
                                      (: ht2 (ht + 10) edge (J 'curv + ht2)
-                                        lx (p 'sub = 100 ?
-                                              (: s0 (J 'curv)
-                                                 v1 (top + lh * ((J 'curv - top) // lh))
-                                                 (pin J 'curv (v1 < s0 ? (v1 + lh) v1),
-                                                  0))
-                                              (: lq (ht2 // lh) lr (ht2 % lh)
-                                                 (p 'sub = 101 ? (pin J 'curv (J 'curv + lr // 2), 0)
-                                                    (lr // (lq + 1) @ lx
-                                                       (pin J 'curv (J 'curv + (lr - (lq - 1) * lx) // 2),
-                                                        lx)))))
+                                        lx (lead-start J 'curv top (p 'sub) lh ht2)
                                         (rep k) (J 'curv + lh <= edge ?
                                                  (: _ (pin J 'curh (left + lb 'shift)) _ (synch-h J) sh (J 'dvih)
                                                     _ (pin J 'curv (J 'curv + lb 'height)) _ (synch-v J) sv (J 'dviv)

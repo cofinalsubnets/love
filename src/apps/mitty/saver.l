@@ -1,34 +1,24 @@
 ; src/apps/mitty/saver.l -- mitty's screensavers. a saver draws into a canvas of cells at a
 ; time t, and a painter sends only the cells that changed since the last frame.
-;
 ;   love mitty -s NAME     a saver on its own, until a key; -s alone names them
-;
-; mitty starts one when its glass has had no key for (screensaver-idle N) minutes, as
-; ~/.love/etc/mitty.l says with (screensaver NAME) -- cycle and 10 unless said, 0 for never --
-; and the watch below is all it holds. the frames are pure in (rows cols t phase):
-; saver-frame and saver-canvas are the headless doors, gated by test/host/saver.l.
-;   pom     the moon at its phase, over stars that twinkle; pom natural draws it as pom -n
-;   slop    slop's skin, slop-drift, in its own gold and pink
-;   life    conway's life on the half cells, aged in greens
-;   matrix  green rain down the columns
-;   court   lore's courtyard: a day and an hour thrown, the season's weather, the eye
-;           somewhere in the yard turning slowly, the hours running on
-;   grass99 grass simulator 1999's week, from a thrown hour of it, the field on its own
-;   cycle   each of the above in turn, the next at each start and every five minutes
+; mitty starts one after (screensaver-idle N) minutes without a key, (screensaver NAME) in
+; ~/.love/etc/mitty.l (cycle and 10 unless said, 0 for never). frames are pure in
+; (rows cols t phase); saver-frame and saver-canvas are gated by test/host/saver.l.
+;   pom matrix life slop court grass99, and cycle: each in turn, every five minutes
 (module (saver saver-names saver-frame saver-canvas saver-cell saver-moon-lit?
          saver-watch saver-tick saver-key saver-on? saver-cli)
 (borrow 'posix)
 (borrow 'cal)
 (:
  drain-keys (cite 'rove 'drain-keys)
- ; a cell's own dice, kept under 2^32 at every step so no product leaves the fixnums
+ ; a cell's own dice, kept under 2^32 so no product leaves the fixnums
  (h32 a) (: h ((a ^ a >> 16) * 73244475 % 4294967296)
             h2 ((h ^ h >> 16) * 73244475 % 4294967296)
             (h2 ^ h2 >> 16))
  (dice x y s k) (h32 ((x * 7919 + y * 104729 + s * 15485863) % 4294967296) % k)
 
- ; --- the canvas: r by c cells of seven bytes, a glyph and two pens of three. a pen below
- ; 256 is the palette's; 256 on is 256 + a 24-bit colour as view-deep-pens gives it ---
+ ; --- the canvas: r by c cells of seven bytes, a glyph and two 3-byte pens. a pen
+ ; under 256 is the palette's; else 256 + a 24-bit colour ---
  blank-fg 252
  sky 16
  cw 7
@@ -55,15 +45,14 @@
  ; the pens and the cursor's steps right, spelled once
  fgs (: t {} _ (each ^256 (i \ pin t i ("\e[38;5;" + show i + "m"))) t)
  bgs (: t {} _ (each ^256 (i \ pin t i ("\e[48;5;" + show i + "m"))) t)
- ; ..and a 24-bit one, its six bits a channel widened
+ ; a 24-bit pen, its six bits a channel widened
  (rgb-sgr ground v) (: q (v - 256) (ch k) (show ((q >> k & 63) * 255 // 63))
    ("\e[" + ground + ";2;" + ch 12 + ";" + ch 6 + ";" + ch 0 + "m"))
  (fg-sgr f) (f < 256 ? (fgs f) (rgb-sgr "38" f))
  (bg-sgr b) (b < 256 ? (bgs b) (rgb-sgr "48" b))
  rights (: t {} _ (each ^256 (i \ pin t i ("\e[" + show i + "C"))) t)
 
- ; the first cell from i on where the bytes a and p differ, n for none: numbers only, so
- ; the scan stays a tight loop
+ ; the first cell from i on where a and p differ, n for none: numbers only, a tight loop
  (cv-next a p i n)
   (? (i < n && (: k (cw * i) (peep a k 0 = peep p k 0 && peep a (k + 1) 0 = peep p (k + 1) 0
                                 && peep a (k + 2) 0 = peep p (k + 2) 0 && peep a (k + 3) 0 = peep p (k + 3) 0
@@ -71,9 +60,8 @@
                                 && peep a (k + 6) 0 = peep p (k + 6) 0)))
      (cv-next a p (i + 1) n)
      i)
- ; the cells of cv that differ from pv's, or all of them, as escapes; pv is then cv's copy.
- ; the cursor and the pen are tracked, so a run of changed cells costs a glyph each, and
- ; a gap in a row a step right
+ ; the cells of cv that differ from pv's (or all) as escapes; pv becomes cv's copy.
+ ; cursor and pen are tracked, so a changed run costs a glyph each
  (cv-paint cv pv all)
   (: j (jug 0) c (cv 'c) n (cv 'r * c) a (cv 'b) p (pv 'b)
      (go i0 at f0 b0)
@@ -96,14 +84,13 @@
  ; --- pom: the moon at its phase, large and centred, over stars that twinkle ---
  pom-name (cite 'pom 'pom-name)
  pom-percent (cite 'pom 'pom-percent)
- pom-now (cite 'pom 'pom-now)                  ; the phase this hour, utc, as pom reckons it
+ pom-now (cite 'pom 'pom-now)
  ; the moon's face is pom's, so `pom -s` prints what this draws
  saver-moon-lit? (cite 'pom 'pom-lit?)
  moon-pen (cite 'pom 'pom-face)
  ; ..or as pom -n draws it, its nearest pen
  (natural-pen p nx ny) ((cite 'pom 'pom-glow) p nx ny @ v (charm? v ? ((cite 'pom 'pom-xterm) v)))
- ; the disc on half cells, a cell two pixels each about as wide as it is tall, as
- ; [y x upper lower] for every cell it touches: laid once, it does not move
+ ; the disc on half cells as [y x upper lower] per touched cell, laid once
  (moon-cells p r c pen0)
   (: rad (0.45 * min (2 * r - 4) c)
      cy (r - 1.0) cx (c / 2.0)
@@ -133,30 +120,32 @@
       each (st 'moon) (m \ cv-put cv <m (m 1) hb (m 2) (m 3)),
       cv-text cv (r - 1) (max 0 ((c - #cap) // 2)) (snip cap 0 c) 244 sky))
 
+ ; a cell's upper half on the grid of 2r by c, row major, and its lower c on: st's 'up and
+ ; 'lo, and the cells drawn as pens's colours of v there
+ (half-ups r c) (: n (r * c) ((iota n // c) * (2 * c) + iota n % c))
+ (pens-halves cv st pens v dv)
+  (: fg (peep pens (peep v (st 'up) 0) dv) bg (peep pens (peep v (st 'lo) 0) dv) d (cv 'b)
+     (each ^(cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
+
  ; --- slop: slop-drift, the slop's skin, on half cells in slop's own ramp ---
  slop-drift (cite 'slop 'slop-drift)
  ramp (star-tray [#(cite 'slop 'slop-ramp)] (cite 'slop 'slop-ramp))
  ; each cell's upper and lower sample, as flat indices into the field's 2r by c
  (slop-new r c seed p sty)
-  (: n (r * c) up ((iota n // c) * (2 * c) + iota n % c)
+  (: up (half-ups r c)
      {'f (slop-drift r c) 'up up 'lo (up + c)})
- ; the skin's [-4 4] read onto the ramp's 24 steps, slop's own reading, at a calmer clock;
- ; the pens are two gathers, so the cells are only copied
+ ; the skin's [-4 4] onto the ramp's 24 steps at a calmer clock; the pens are two gathers
  (slop-draw st cv t)
   (: fl (st 'f)
      k (int ((fl (t * 0.0005) 0 + 4.001) * 2.9))
-     fg (peep ramp (peep k (st 'up) 0) 220)
-     bg (peep ramp (peep k (st 'lo) 0) 220)
-     d (cv 'b)
-     (each ^(cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
+     (pens-halves cv st ramp k 220))
 
  ; --- life: conway's, on a torus of half cells, each cell's age its green ---
- ; a step is eight gathers and a few tray ops, C doing every cell
  (life-new r c seed p sty)
   (: h (2 * r) w c n (h * w)
      ys (iota n // w) xs (iota n % w)
      (nb dy dx) ((ys + dy + h) % h * w + (xs + dx + w) % w)
-     up ((iota (r * c) // c) * (2 * c) + iota (r * c) % c)
+     up (half-ups r c)
      {'n n 'seed seed 'gen 0 't 0 'same 0 'pop -1 'up up 'lo (up + c)
       'nbs [(nb -1 -1) (nb -1 0) (nb -1 1) (nb 0 -1) (nb 0 1) (nb 1 -1) (nb 1 0) (nb 1 1)]
       'age (life-seed n seed)})
@@ -180,14 +169,10 @@
   (: want (t * life-gps // 1000)
      (owed k) (? (k < 3 && st 't < want) (: _ (life-step st) _ (pin st 't (st 't + 1)) (owed (k + 1))) 0)
      _ (owed 0)
-     a (st 'age)
-     fg (peep life-pens (peep a (st 'up) 0) sky)
-     bg (peep life-pens (peep a (st 'lo) 0) sky)
-     d (cv 'b)
-     (each ^(cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
+     (pens-halves cv st life-pens (st 'age) sky))
 
- ; --- matrix: green rain, each column a drop of its own speed, length and gap; the head
- ; and every glyph a pure function of the column, the row and the clock ---
+ ; --- matrix: green rain, each column a drop of its own speed, length and gap, a pure
+ ; function of the column, the row and the clock ---
  (rain-new r c seed p sty) {'seed seed}
  (rain-pen d n) (? (d = 0) 231 (4 * d < n) 46 (2 * d < n) 40 (4 * d < 3 * n) 34 22)
  (rain-draw st cv t)
@@ -206,11 +191,9 @@
          (each ^n cell))
      (each ^(cv 'c) col))
 
- ; --- the lore scenes: a screen of pixels two to a cell, drawn as half blocks in the
- ; scene's own dithered pens; the scene ticked as many frames as the clock owes it, a few
- ; at most, so a slow frame skips the time rather than chasing it ---
- ; a scene's colours as pens: 24-bit where COLORTERM says the terminal has them, as lore's
- ; games ask, else the palette's cube dithered by bay
+ ; --- the lore scenes: pixels two to a cell as half blocks, ticked as many frames as the
+ ; clock owes, a few at most, so a slow frame skips time ---
+ ; pens are 24-bit where COLORTERM says so, else the palette's cube dithered by bay
  (scene-pens c bay) (? (elem (getenv "COLORTERM") ["truecolor" "24bit"]) ((cite 'view 'view-deep-pens) c + 256)
                        ((cite 'view 'view-cube-pens) c bay))
  (halves cv px) (: r (cv 'r) c (cv 'c) d (cv 'b)
@@ -219,11 +202,8 @@
  (owe s want tick) (: (go k) (? (k < 4 && s 'done < want) (: _ (tick 0) _ (pin s 'done (s 'done + 1)) (go (k + 1))) 0)
                       _ (go 0)
                       (pin s 'done (max (s 'done) (want - 4))))
- ; ..court: a day of this year and an hour thrown -- by day three times in four, any hour
- ; else -- the season's weather, the eye somewhere in the yard and not in the trunk,
- ; looking nearly straight up through a narrower lens than the walk's, so the sky fills
- ; it and the wall tops and the tree frame it, nodding slowly as it turns; the sky's
- ; hours at 600 a second
+ ; ..court: a thrown day and hour (by day three times in four), the season's weather, the
+ ; eye somewhere in the yard looking nearly straight up, turning slowly; sky hours at 600x
  (court-new r c seed p sty)
   (: (rr k m) (dice k 5 seed m)
      y <((cite 'cal 'civil) (clock 0 // 86400000))
@@ -241,7 +221,7 @@
      _ (owe s (t * 20 // 1000) (_ \ (pin st 't (st 't + 1), (cite 'court 'court-move) st)))
      _ (pins st 'th (s 'th + t * 0.00003) 'ph (s 'ph + 0.05 * sin (t * 0.000045)))
      (halves cv (scene-pens ((cite 'mesh 'mesh-flat) ((cite 'court 'court-pens) st)) (st 'bay))))
- ; ..grass99: the week from a thrown hour of it, a field its own; at the week's end another
+ ; ..grass99: the week from a thrown hour, a fresh field at the week's end
  (meadow-new r c seed p sty)
   (: g ((cite 'grass 'grass-new) r c seed)
      _ (pin g 'h (6.0 + dice 0 9 seed 160 + dice 1 9 seed 100 / 100.0))
@@ -261,7 +241,7 @@
          "life" {'fps 10 'new life-new 'draw life-draw}
          "matrix" {'fps 15 'new rain-new 'draw rain-draw}}
  saver-names (sort (keys savers))
- ; cycle plays each saver in turn: the next at each start, and the next again each cycle-ms
+ ; cycle: the next saver at each start, and again each cycle-ms
  cycle-ms 300000
  (pick nm k) (nm = "cycle" ? (saver-names (k % #saver-names)) nm)
  ; a name may carry a style after a space, "pom natural": the saver's, then the word
@@ -273,7 +253,7 @@
  (saver-make nm r c seed p)
   (: d (savers (base nm)) nw (d 'new)
      {'nm nm 'd d 'r r 'c c 'st (nw r c (seed % 65536) p (style nm)) 'cv (cv-new r c) 'pv (cv-new r c) 'all 1 't0 0 'next 0})
- ; the frame at t, ms into the saver; a mark, a pen, puts a small ✉ in the top right corner
+ ; the frame at t ms into the saver; a mark (a pen) puts a ✉ in the top right corner
  (saver-show s t mark)
   (: cv (s 'cv) dr ((s 'd) 'draw) all (s 'all)
      _ (cv-wipe cv)
@@ -291,14 +271,13 @@
  (saver-canvas nm r c t p) (: s (saver-make nm r c 7 p) _ (saver-show s t 0) (s 'cv))
 
  ; --- the idle watch: a saver after mins without a key, and any key back ---
- ; the key that wakes it is the saver's; news is a count the screen keeps of what arrived
+ ; news is a count the screen keeps of what arrived
  (saver-watch nm mins)
   {'nm nm 'last () 'on () 'bye 0 'n0 0 'k (clock 0 // 1000)
    'idle (? !(known? nm) 0 (charm? mins || gem? mins) (int (mins * 60000)) 0)}
  (saver-on? w) (w 'on != ())
  (saver-key w now) (? (saver-on? w) (pins w 'on () 'bye 1 'last now, 1) (pin w 'last now, 0))
- ; -> the escapes to send now: a frame while a saver runs, the cursor back as it ends,
- ; else ""
+ ; -> the escapes to send now: a frame, the cursor back as a saver ends, else ""
  (saver-tick w now r c news)
   (: s (w 'on)
      (fresh t0 nm) (: s2 (saver-make nm r c now ()) (pins s2 't0 t0 'next now, pin w 'on s2, s2))

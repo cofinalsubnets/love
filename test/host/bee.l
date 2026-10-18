@@ -5,14 +5,14 @@
 
 (: cr-home (cwd 0)
    cr-love (: l <cmdline (l 0 = 47 ? l (cr-home + "/" + l)))
-   ; the verb the binary carries, baked from this tree's src/apps/bee.l -- the lane makes `host`
-   ; first -- and what a user runs; a read of the source would cost each of 126 runs ~3.5 s
+   ; the verb the binary carries, baked from this tree's bee.l: what a user runs, and far cheaper
+   ; per run than reading the source
    cr-app "bee"
-   ; every path this lays is the pid's own, so two runs over one out/ keep apart
+   ; paths are the pid's own, so two runs over one out/ keep apart
    cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
-   ; a session running these passes its own hive down -- BEE_HIVE, BEE_NAME, BEE_AS -- and a
-   ; world would read the live sessions and write its cells among them: HOME alone says here
+   ; a session running these passes its hive down (BEE_HIVE, BEE_NAME, BEE_AS); a world would
+   ; write its cells among the live sessions: HOME alone says here
    _ (map (\ k (setenv k ())) ["BEE_HIVE" "BEE_NAME" "BEE_AS"])
    (cr-put d nm s) (: p (open (d + "/" + nm) "w") _ (say p s) (close p))
    (cr-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
@@ -498,8 +498,8 @@
       (1 = <no) (cr-in (no 1) "no session to resume named nobody"))
    0)
 
-; locks through bee (src/apps/locks.l), in a scratch BEE_LOCKS root; the test holds the one heavy
-; ticket (heavy-max 1), so bee's ask queues behind it
+; locks through bee in a scratch BEE_LOCKS root; the test holds the one heavy ticket
+; (heavy-max 1), so bee's ask queues behind it
 (: cr-l2 (cr-dir "locks" "(mem-floor 1)\n(heavy-max 1)\n")
    lroot (cr-l2 + "/locks")
    (L nm) (cite 'locks nm)

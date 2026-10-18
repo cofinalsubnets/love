@@ -18,7 +18,7 @@
    (fi-num w)
     (: c (0 < #w ? (w 0) 0) sg (? (c = 43) 1 (c = 45) -1 0)
        d (sg = 0 ? w (snip w 1 #w))
-       (0 < #d && all digit? (chars d) ? [sg (unum d)]))
+       (udigs? d ? [sg (unum d)]))
    (fi-cmp nw v) (: sg <nw n <>nw (? (sg = 1) (n < v) (sg = -1) (v < n) (v = n)))
 
    ; -- the expression: words in, a tree out --

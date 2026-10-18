@@ -1,18 +1,6 @@
 #!/usr/bin/env -S love -l
-; src/apps/helm/helm.l -- the driver: helm's command line, and helm's own boot.
-;
-;   helm [-c CONF] [-s SOCK] [-q]   supervise. as pid 1 it lays the machine first.
-;   helm check [-c CONF]            read the config, say what is wrong, print the units.
-;                                   exit 1 on a gripe.
-;   helm ctl [WORDS ..]             talk to a running helm: one command, or a session.
-;
-; the config defaults to /etc/helm.l, the socket to $XDG_RUNTIME_DIR/helm.sock else
-; /run/helm.sock. src/apps/helm/sample.l shows the whole language.
-; as pid 1 it lays a machine that needs no disk: the early filesystems, /usr/bin as links
-; onto this binary (argv[0] is the door), then the carried source laid out as a tree --
-; inle's boot in userspace. src/apps/init/ is not joined to it yet.
-;
-; run from the tree:
+; src/apps/helm/helm.l -- the driver: helm's command line, and helm's own boot as pid 1.
+; src/apps/helm/sample.l shows the whole config language. run from the tree:
 ;   love -l src/apps/helm/unit.l -l src/apps/helm/sup.l -l src/apps/helm/moor.l \
 ;        -l src/apps/helm/helm.l -e '(helm-main ["-c" "src/apps/helm/sample.l"])'
 (module 'helm
@@ -31,9 +19,8 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    (hdie c m) (udie c ("helm: " + m))
 
    ; --- helm ctl: the client --------------------------------------------------
-   ; a PIPE, not a protocol: the words go up as one line and whatever comes back
-   ; is written out. a session is the same pipe with two tasks on it, the reader
-   ; parked on the socket while the writer is parked on the terminal.
+   ; a pipe, not a protocol: the words go up as one line, whatever comes back is written out.
+   ; a session is the same pipe, a reader task parked on the socket, a writer on the terminal
    (hdown c)  (see c @ ch (ch == -1 ? 0 (putc ch, flush out, hdown c)))
    (hup c)    (see in @ ch (ch == -1 ? (seal c 1)
                               (put c ch, ch == 10 ? (flush c) 0, hup c)))
@@ -56,23 +43,16 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
         two? gs ? 1 0))
 
    ; --- pid 1's own bringup ---------------------------------------------------
-   ; only as pid 1, where we are root in our own namespace and these mounts are
-   ; ours to make. anywhere else helm is a plain supervisor and touches nothing.
+   ; only as pid 1, root in our own namespace; elsewhere helm touches nothing
    (hmount1 src tgt typ)
     (mkdir tgt 493,
      mount src tgt typ @ r
        (hnote ("mount " + typ + " on " + tgt + (r ? (" -> errno " + show r) " -> ok"))))
    ; --- the underlay: /usr/bin, laid from the verb table ----------------------
-   ; this binary answers to every name in (cite 'verbs 'tab) through argv[0] --
-   ; post.l's `seat` reads the basename -- so a directory of links onto selfpath
-   ; IS the userland, and a machine with no disk still has one. inle wants no such
-   ; directory: k-prog reads the registry itself (src/inle/kmain.c). here execve
-   ; resolves a path, so the kernel is owed the dirents the registry stands for.
-   ;
-   ; the names come from the registry and are never listed: a roster would drift
-   ; from what the binary can actually do the first time a verb is added.
-   ; one link, laid over whatever stands there: a second boot into a live tmpfs
-   ; would meet its own last pass, and eexist is not a reason to have no `ls`.
+   ; this binary answers to every verb through argv[0], so a directory of links onto selfpath
+   ; is the userland of a diskless machine. names come from the registry, never a roster.
+   ; inle wants none: k-prog reads the registry itself
+   ; one link, laid over whatever stands there: a second boot meets its own last pass
    (hlink1 exe dir nm)
     (dir + "/" + string nm @ p
        (unlink p, nom? (symlink exe p) ? 0 1))
@@ -83,23 +63,15 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
            (: r  (mount "tmpfs" dir "tmpfs")
              _  (hnote ("underlay " + dir + (nom? r ? (" -> " + string r + ", laid in place")
                                                       " -> tmpfs")))
-             ; `love` is not a verb -- it is the seat every other name wears -- so
-             ; it is named here rather than read off the table.
+             ; `love` is no verb, it is the seat every name wears
              ws (sort ("love" . map string (keys (cite 'verbs 'tab))))
              n  (net (map (w \ hlink1 exe dir w) ws))
              (hnote ("underlay " + show n + " names on " + exe),
               n)))))
    ; --- the scatter: the carried tree, inflated into RAM -----------------------
-   ; inle's ramfs IS this tree (k_untar in src/inle/kmain.c): the artifact carries
-   ; its own source and the machine reads it at boot, so a disk was never what the
-   ; tree was on. the same tree is here, so a hosted pid 1 lays it too.
-   ;
-   ; paths re-home below the tar's top, as the kernel's rows do, so the tree reads
-   ; from inside the way a checkout does -- /src/apps/helm/helm.l, not /love-0.1/src/..
-   ; a love linked without its source (the raw distro base) carries none and
-   ; says so; the underlay above stands on its own and does not want this.
-   ; the tar's top, dropped: the entry that IS the top has no slash and re-homes
-   ; to nothing, which is how it stops being a directory at the root.
+   ; inle's ramfs is this tree (k_untar); a hosted pid 1 lays it too. paths re-home below the
+   ; tar's top, as a checkout reads; a love linked without its source carries none
+   ; the tar's top dropped: the top entry has no slash and re-homes to nothing
    (hbelow nom)
     (nom @ (_ + "/" + b) b "")
    (hscatter root)
@@ -127,8 +99,8 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
            1)))
 
    ; --- helm run --------------------------------------------------------------
-   ; the splice first: the moor evaluates in the session's book, so helm's own
-   ; vocabulary has to BE that book for (status 0) to mean anything at a prompt.
+   ; the splice first: the moor evaluates in the session's book, so helm's vocabulary
+   ; must be that book for (status 0) to mean anything at a prompt
    (helm-run conf sock quiet)
     (cite 'helm ? (borrow 'helm), hput 'conf conf, hput 'quiet quiet, helm-pid1 0,
      (: r  (hconf conf)
@@ -145,11 +117,9 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
         0)))
 
    ; --- the command line ------------------------------------------------------
-   ; the flags in `ws` into `t`, answering the words behind them. walked twice, once
-   ; ahead of the verb and once behind it, `helm check -c CONF` being the spelling the
-   ; usage gives -- one tablet, so either side pins the same key.
-   ; a word that is neither a flag of ours nor a command, named for what it looks like:
-   ; the walk stops at the first word that is not a flag, so `helm --nosuch` arrives here
+   ; the flags in ws into t, answering the words behind them; walked ahead of the verb and
+   ; behind it (`helm check -c CONF`), one tablet for both
+   ; the walk stops at the first non-flag, so `helm --nosuch` arrives here
    (hbad w) (hdie 2 ((1 < #w && w 0 = 45 ? "unknown option " "not a command: ") + w))
    (hopts t ws)
     (: o (uopt ws t '(99 115) () {"config" 99 "socket" 115 "quiet" 113})
@@ -164,7 +134,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
        w (two? r ? <r "")
        _ (w = "" || w = "run" || w = "check" || w = "ctl" ? 0 (hbad w))
        verb (? (w = "check") 'check (w = "ctl") 'ctl 'run)
-       ; ctl is where our flags end -- the words behind it are the remote command's own
+       ; ctl is where our flags end: the words behind it are the remote command's
        words (verb = 'ctl ? >r (hopts t >r))
        _ (? (verb = 'ctl) 0 (two? words) (hbad <words) 0)
        conf (uoptv t 99 @ v (!v ? "/etc/helm.l" v))
@@ -173,11 +143,9 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
           (verb == 'ctl)   (helm-ctl sock words)
           (helm-run conf sock (peep t 113 0))))))
 
-; the seat, its own form so the binder above stays body-less and defglobs: fire
-; helm-main iff the installed `helm` script sits in the program seat of the real
-; command line. the bare file name is deliberately NOT a seat word -- helm is
-; four files, and a `-l src/apps/helm/helm.l` that seated would start supervising in
-; the middle of loading itself.
+; the seat, its own form so the binder above stays body-less: fire helm-main iff `helm`
+; is the program word. the file name is not a seat word, or -l helm.l would supervise
+; mid-load
 (: door (udoor 'helm (urun helm-main) helm-usage 1 1)
    _ (cite 'verbs 'enlist 'helm door ())
    s (cite 'verbs 'fire ["helm"])

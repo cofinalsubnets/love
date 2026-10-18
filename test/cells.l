@@ -1,5 +1,5 @@
-; the cell doors: peek/poke for values, pick/place for instructions. a mopped image drops
-; them and these laws stand down; cited, never borrowed, since the corpus is one scope
+; the cell doors: peek/poke values, pick/place instructions. a mopped image drops them and these
+; laws stand down; cited, never borrowed, since the corpus is one scope
 (: G (cite 'guts)
    (guts k) (G k || (elem k (names ()) ? (ev k) ()))      ; the module, else the book (love0)
    g-peek (guts 'peek) g-poke (guts 'poke)
@@ -7,7 +7,6 @@
    g-seek (guts 'seek) g-spin (guts 'spin) g-trim (guts 'trim)
    g-ret (guts 'lvm_ret) g-ap (guts 'lvm_ap) g-quote (guts 'lvm_quote)
    cells-open (lit? g-peek))
-; a law that asks the doors, and holds only where they stand
 (:: 'cells-law (l \ ['? 'cells-open ('test . l) ()]))
 
 ; the doors are reachable, and every instruction name is a charm rather than an address

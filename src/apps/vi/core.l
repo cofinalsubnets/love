@@ -25,7 +25,12 @@
    (vnl st) #(st 'lines)
    (vdrop l k) (k < 1 || atom? l ? l (vdrop >l (k - 1)))
    ; a line's height in screen rows: 1 unwrapped, else what it folds to
-   (vhgt st ln) (? !(st 'wrap) 1 #(vsegs ln (st 'w)))
+   (vhgt st ln) (? !(st 'wrap) 1 #(vsegs ln (st 'w - vgut st)))
+   ; :set nu's gutter: the widest line number, three at least, and a blank; cached on the generation
+   (vgut st) (? !(st 'nu) 0
+                (st 'gutcar @ g
+                   (two? g && <g = st 'hlgen ? <>g
+                      (#(show (vnl st)) @ k ((k < 3 ? 3 k) + 1 @ n (pin st 'gutcar [(st 'hlgen) n], n))))))
    ; the last file row the body can show -- what H M L stop at. wrapped, that
    ; is a walk down the heights from the view's corner
    (vbot st)
@@ -45,15 +50,24 @@
                          (go j (n - vhgt st (st 'lines (i < j ? i j)))))))
        (? !(st 'wrap) (fence (r + d * k)) (go r k)))
    (vink ln) (: n #ln                       ; first non-blank column
-                 (go i) (i < n && (ln i = 32 || ln i = 9) ? (go (i + 1)) i)
-                 (go 0 @ k (? (k < n) k (0 < n) (n - 1) 0)))
+                 (vlead ln @ k (? (k < n) k (0 < n) (n - 1) 0)))
    ; every edit to 'lines bumps the generation, so caches recompute once per edit
    (vgen st) (pin st 'hlgen (st 'hlgen + 1))
    (vput st r ln) (pins st 'lines (: (go l i) (two? l ?
                                                  ((i = r ? ln <l) . go >l (i + 1)))
                                      (go (st 'lines) 0))
                          'dirty 1,
+                   vtouch st r r 1,
                    vgen st)
+   ; rows r1..r2 became k rows: 'hlfrom is the first row an edit since the carry touched,
+   ; 'hlto the last new row one wrote, 'hldel the rows gained, so a row past 'hlto was row
+   ; (i - 'hldel) when the carry was laid
+   (vtouch st r1 r2 k)
+    (: f (st 'hlfrom) t (st 'hlto) d (k - (r2 - r1 + 1))
+       t2 (charm? t ? (r2 < t ? (t + d) t) -1)
+       (pins st 'hlfrom (charm? f && f < r1 ? f r1)
+                'hlto (max t2 (r1 + k - 1))
+                'hldel (st 'hldel + d)))
    ; -- characters: 'col is a byte, always a character's first, and the screen counts
    ; columns -- a wide character two, a combining mark none, an ascii byte one (a tab
    ; renders raw, so it is the terminal's one column here too)
@@ -108,13 +122,13 @@
    (vblanks n) (: (go i acc) (i < 1 ? acc (go (i - 1) (acc + " "))) (go n ""))
    (vmsg st m) (pin st 'msg m)
    (vsnap st) (pins st 'undo ([(st 'lines) (st 'row) (st 'col)] . st 'undo) 'redo ())
-   (vrest st fr) (pins st 'lines <fr 'row <>fr, vgen st,
+   (vrest st fr) (pins st 'lines <fr 'row <>fr 'hlcar (), vgen st,
                   vgole st <>>fr, pin st 'dirty 1)
 
    ; the pure half of :e: a fresh buffer on the face's lines, cursor home, no history.
    ; the paint is re-decided from the new name
    (vload st ls nm)
-    (pins st 'lines (? (two? ls) ls '("")) 'file nm 'row 0 'top 0 'tops 0 'left 0,
+    (pins st 'lines (? (two? ls) ls '("")) 'file nm 'row 0 'top 0 'tops 0 'left 0 'hlcar (),
      vgole st 0,
      pins st 'undo () 'redo () 'dirty () 'hl (nom? (vlang st)),
      vgen st)
@@ -126,6 +140,7 @@
        post (vtake st (r2 + 1) (vnl st - 1))
        nl2 (pre + ins + post)
      (pins st 'lines (two? nl2 ? nl2 '("")) 'dirty 1,
+      two? nl2 ? (vtouch st r1 r2 #ins) (pin st 'hlcar ()),
       vgen st))
    (vtake st r1 r2)                                ; rows r1..r2, a fresh list
     (: (go l i acc) (atom? l || r2 < i ? (rev acc)
@@ -135,27 +150,23 @@
    ; -- the word motions: (row col) -> (row col), crossing lines when free.
    ; cf is the class: vcl for w e b, vclw for W E B, and that one argument is the
    ; whole difference between the two families --
+   (vskipb ls n cf r c)                            ; over blanks, line ends included
+    (ls r @ ln
+       (? (c < #ln) (cf (ln c) = 0 ? (vskipb ls n cf r (c + 1)) [r c])
+          (r + 1 < n) (vskipb ls n cf (r + 1) 0)
+          [r #ln]))
    (vwfwd st cf r c)                               ; next word start
     (: ls (st 'lines) n #ls
        (at r2 c2) (ls r2 @ ln (c2 < #ln ? (cf (ln c2)) 0))
        (skipk r2 c2 k)                             ; over the current run of class k
         (ls r2 @ ln
          (c2 < #ln && cf (ln c2) = k ? (skipk r2 (c2 + 1) k) [r2 c2]))
-       (skipb r2 c2)                               ; over blanks, line ends included
-        (ls r2 @ ln
-           (? (c2 < #ln) (cf (ln c2) = 0 ? (skipb r2 (c2 + 1)) [r2 c2])
-              (r2 + 1 < n) (skipb (r2 + 1) 0)
-              [r2 #ln]))
        k (at r c)
        p (k = 0 ? [r c] (skipk r c k))
-       (skipb <p <>p))
+       (vskipb ls n cf <p <>p))
    (vwend st cf r c)                               ; next word end (inclusive target)
-    (: ls (st 'lines) n #ls
-       (skipb r2 c2) (ls r2 @ ln
-                        (? (c2 < #ln) (cf (ln c2) = 0 ? (skipb r2 (c2 + 1)) [r2 c2])
-                           (r2 + 1 < n) (skipb (r2 + 1) 0)
-                           [r2 c2]))
-       p (skipb r (vnx (ls r) c))
+    (: ls (st 'lines)
+       p (vskipb ls #ls cf r (vnx (ls r) c))
        r2 <p c2 <>p ln (ls r2)
        (#ln <= c2 ? [r2 (vend ln)]
           (: k (cf (ln c2))
@@ -183,11 +194,22 @@
     (st 'lex @ c
        (two? c && <c = g ? <>c
           (hues-lexer g @ k (pin st 'lex [g k], k))))
-   ; the per-line lexer start states, cached as [gen lang states]; the paint reads it too
+   ; the per-line lexer start states, cached as [gen lang states]; the paint reads it too.
+   ; after edits, the old states hold above 'hlfrom, and past 'hlto they hold again from
+   ; the first row whose state comes out the old one's
    (vcarry st g lx)
     (st 'hlcar @ c
        (two? c && <c = st 'hlgen && <>c = g ? <>>c
-        (hue-carry lx (st 'lines) @ k (pin st 'hlcar [(st 'hlgen) g k], k))))
+        ((two? c && <>c = g && charm? (st 'hlfrom) && st 'hlfrom < #<>>c ? (vrecarry st lx <>>c) (hue-carry lx (st 'lines))) @ k
+           (pins st 'hlcar [(st 'hlgen) g k] 'hlfrom () 'hlto () 'hldel 0, k))))
+   (vrecarry st lx old)
+    (: f (st 'hlfrom) t (st 'hlto) d (st 'hldel)
+       ; the rows past the edits run in step with the old states, shifted by d
+       (go l i s acc os)
+        (? !(two? l) (rev acc)
+           (t < i && two? os && <os = s) (revcat acc os)
+           (lx <l s () @ r (go >l (i + 1) <>r (s . acc) (t < i + 1 ? (i + 1 - d @ j (j < 0 ? () (two? os ? >os (vdrop old j)))) ()))))
+       (go (vdrop (st 'lines) f) f (old f) (rev (take f old)) (t < f ? (vdrop old (f - d)) ())))
    (vskips st r)                                   ; the ([a b) ..) that are not code
     (vlang st @ g
        (? !(nom? g) ()
@@ -250,6 +272,17 @@
        i (go (st 'col))
        (? !(charm? i) ()
           ((ln i @ c (vclose? c ? (vmatec c) c)) @ o (vmate st r i o (vmatec o)))))
+   ; the mate the frame marks: the cursor on a ( ) [ ] { } that is code -> [r c] | ().
+   ; cached against the cursor and the generation, since an unmatched one scans to an end
+   (vmatch st)
+    (: r (st 'row) c (st 'col) ky [(st 'hlgen) r c]
+       (st 'mtcar @ m
+          (two? m && <m = ky ? <>m
+             (: ln (st 'lines r)
+                ch (c < #ln ? (ln c) 0)
+                o (? (elem ch '(40 91 123)) ch (elem ch '(41 93 125)) (vmatec ch) ())
+                mt (? !o () !(vcode? (vskips st r) c) () (vmate st r c o (vmatec o)))
+                (pin st 'mtcar [ky mt], mt)))))
 
    ; -- paragraphs: a run of blank lines or a run of non-blank ones --------------
    (vblank? st i) (0 = #(st 'lines i))
@@ -413,13 +446,17 @@
                          (go j) (0 <= j - 1 && cf (ln (j - 1)) = k ? (go (j - 1)) j)
                          (go i))
              (ext i j) (j < 1 || len <= i ? i (ext (rune i) (j - 1)))
+             (blank? i) (i < len && cf (ln i) = 0)
+             ; n words from a word's start, a blank run between two counting with neither
+             (words i j) (rune i @ e (j < 2 || len <= e ? e (words (blank? e ? (rune e) e) (j - 1))))
              a (runs c)
-             e1 (ext a n)
-             ; around is the word and the blanks that follow -- two runs, each
-             ; way round -- and with none to follow it takes the ones before
-             e2 (ar ? (ext a (2 * n)) e1)
-             a2 (ar && e2 = e1 && 0 < a && cf (ln (a - 1)) = 0 ? (runs (a - 1)) a)
-             ['spn r a2 r e2])))
+             (? !ar ['spn r a r (ext a n)]
+                ; on blanks, around is them and the word after
+                (blank? a) ['spn r a r (ext a (2 * n))]
+                ; on a word, the blanks that follow it, and with none to follow the ones before
+                (: e (words a n) t (blank? e ? (rune e) e)
+                   a2 (e = t && 0 < a && cf (ln (a - 1)) = 0 ? (runs (a - 1)) a)
+                   ['spn r a2 r t])))))
    (vqobj st ar q)                                 ; i" a" i' a' i` a`
     (: r (st 'row) ln (st 'lines r) n #ln c (st 'col)
        (nx i) (? (n <= i) () (ln i = 92) (nx (i + 2)) (ln i = q) i (nx (i + 1)))
@@ -526,10 +563,7 @@
           (: a (0 < s && ln (s - 1) = 45 ? (s - 1) s)
              (fw i) (dig? i ? (fw (i + 1)) i)
              b (fw s)
-             v (: t (snip ln a b) k #t
-                   (go i acc) (k <= i ? acc (go (i + 1) (10 * acc + (t i - 48))))
-                   q (go (a < s ? 1 0) 0)
-                   (a < s ? (0 - q) q))
+             v (unum (snip ln s b) @ q (a < s ? (0 - q) q))
              w (v + n)
              (vsnap st,
               vput st r (snip ln 0 a + show w + snip ln b len),
@@ -826,7 +860,7 @@
        (0 = tally nm) (vmsg st "no file name")
        (pin st 'doe [nm]))
 
-   ; :set sw=N / shiftwidth=N (bare :set sw reports), and :set wrap / nowrap
+   ; :set sw=N / shiftwidth=N (bare :set sw reports), and :set wrap, nu and ai, each with its no
    (vexset st arg)
     (: n #arg
        (eq k) (? (n <= k) () (arg k = 61) k (eq (k + 1)))
@@ -835,6 +869,12 @@
        (? (nm = "wrap" || nm = "nowrap")
            (pin st 'wrap (nm = "wrap" ? 1 ()),
             vmsg st (st 'wrap ? "wrap" "nowrap"))
+          (elem nm '("nu" "number" "nonu" "nonumber"))
+           (pin st 'nu (2 < #nm && snip nm 0 2 = "no" ? () 1),
+            vmsg st (st 'nu ? "number" "nonumber"))
+          (elem nm '("ai" "autoindent" "noai" "noautoindent"))
+           (pin st 'ai (2 < #nm && snip nm 0 2 = "no" ? () 1),
+            vmsg st (st 'ai ? "autoindent" "noautoindent"))
           !(nm = "sw" || nm = "shiftwidth") (vmsg st $ "not an option: " + nm)
           !(charm? j) (vmsg st $ "shiftwidth=" + show (st 'sw))
           (: t (vextrim (snip arg (j + 1) n)) k #t
@@ -878,13 +918,20 @@
           !(two? means) w
           (two? >means) ['many (rev means)]
           <means))
+   ; a leading ~ in a file name is the home the face put on 'home; without one it stays as typed
+   (vtilde st nm)
+    (: h (st 'home)
+       (? (!(string? h) || #nm < 1 || nm 0 != 126) nm
+          (#nm = 1) h
+          (nm 1 = 47) (h + snip nm 1 #nm)
+          nm))
    (vexcmd st s i r1 r2 got?)
     (vexword s i @ [j w0]
       (: n #s
          bang (j < n && s j = 33)
          k (bang ? (j + 1) j)
          arg (vextrim (snip s k n))
-         nm (0 < #arg ? arg (st 'file))
+         nm (0 < #arg ? (vtilde st arg) (st 'file))
          w (vexfull st w0)
          (? (two? w) (vmsg st ("ambiguous: " + w0 + " -- " + foldl (a \ m \ a + " " + m) "" <>w))
             (w = "s") (vexsub st s k r1 r2)
@@ -909,12 +956,12 @@
             (w = "w") (pin st 'dow [nm])
             (w = "wq" || w = "x") (pin st 'dow [nm], pin st 'quit 1)
             (w = "edit") (vedit st nm bang)
-            (w = "split") (pin st 'dos ['stack arg])
-            (w = "vsplit") (pin st 'dos ['beside arg])
+            (w = "split") (pin st 'dos ['stack (vtilde st arg)])
+            (w = "vsplit") (pin st 'dos ['beside (vtilde st arg)])
             ; a picker over the tree here, the face's to open: its files, or every line
             (w = "find" || w = "grep") (pin st 'dof [w arg])
             ; a browser beside this buffer, on arg or the working directory: the face's door
-            (w = "explore") (pin st 'dex [arg])
+            (w = "explore") (pin st 'dex [(vtilde st arg)])
             (w = "hl") (pin st 'hl (st 'hl ? () 1),
                         vmsg st (st 'hl ? "syntax on" "syntax off"))
             (w = "set") (vexset st arg)
@@ -945,16 +992,23 @@
                 (vexcmd st s j r1 r2 got?)))))
 
    ; -- insert mode --
+   ; under :set ai a new line takes the indent of the one it opens from, and 'aiw marks
+   ; it while nothing is typed on it: left like that, by escape or enter, it goes back
    (vins st c)
     (: r (st 'row) col (st 'col) ln (vln st) len #ln
-       (? (c = 27) (pin st 'mode 'n,
-                    vgole st (vpv ln col),
-                    vclampn st)
+       bare? (st 'aiw = r && vlead ln = len)
+       _ (c = 27 || c = 13 || c = 10 ? () (pin st 'aiw ()))
+       (? (c = 27) (: _ (bare? && 0 < len ? (vput st r "", pin st 'col 0))
+                      (pins st 'mode 'n 'aiw (),
+                       vgole st (vpv (vln st) (st 'col)),
+                       vclampn st))
           (c = 13 || c = 10)
-           (vput st r (snip ln 0 col),
-            vsplice st (r + 1) r [(snip ln col len)],
-            pin st 'row (r + 1),
-            vgole st 0)
+           (: k (st 'ai ? (vlead ln) 0) ind (snip ln 0 (k < col ? k col))
+              rest (snip ln col len @ t (st 'ai ? (snip t (vlead t) #t) t))
+              (vput st r (bare? ? "" (snip ln 0 col)),
+               vsplice st (r + 1) r [(ind + rest)],
+               pins st 'row (r + 1) 'aiw (0 < #ind ? (r + 1) ()),
+               vgole st #ind))
           (c = 8 || c = 127)
            (? (0 < col) (vpv ln col @ p
                            (vput st r (snip ln 0 p + snip ln col len),
@@ -1058,8 +1112,16 @@
                   (vgole st <>>mr)))))))
 
    ; -- normal mode --
+   ; o and O: a line opened at row at, indented as the cursor's is under :set ai
+   (vopen st at)
+    (: ind (st 'ai ? (vln st @ ln (snip ln 0 (vlead ln))) "")
+       (vsnap st,
+        vsplice st at (at - 1) [ind],
+        pins st 'row at 'mode 'i 'aiw (0 < #ind ? at ()),
+        vgole st #ind))
    (vnorm st c)
-    (: n (st 'cnt @ v (0 < v ? v 1))
+    (: ; a count before the operator multiplies the motion's: 2d3w takes six words
+       n (st 'cnt @ v (0 < v ? v 1) @ k (st 'op @ o (two? o ? (k * <>o) k)))
        (mv1 mr)                                    ; a motion result, no operator
         (? (atom? mr) st
            (<mr = 'lin)
@@ -1120,7 +1182,7 @@
           (elem c '(100 121 99 62 60))                       ; d y c > <
            (: op (st 'op)
               (two? op && <op = c ?
-                 (n * <>op @ total
+                 (n @ total
                     (pin st 'op (),
                      vopl st c (st 'row) (: t (st 'row + total - 1) nl (vnl st)
                                             (t < nl ? t (nl - 1)))))
@@ -1162,29 +1224,27 @@
                     pin st 'mode 'i)
           (c = 73) (vsnap st, vgole st (vink (vln st)), pin st 'mode 'i)   ; I
           (c = 65) (vsnap st, vgole st (vlen st), pin st 'mode 'i)         ; A
-          (c = 111) (vsnap st, ; o
-                     vsplice st (st 'row + 1) (st 'row) '(""),
-                     pin st 'row (st 'row + 1),
-                     vgole st 0,
-                     pin st 'mode 'i)
-          (c = 79) (vsnap st, ; O
-                    vsplice st (st 'row) (st 'row - 1) '(""),
-                    vgole st 0,
-                    pin st 'mode 'i)
+          (c = 111) (vopen st (st 'row + 1))                    ; o
+          (c = 79) (vopen st (st 'row))                         ; O
           (c = 112) (vpaste st 1 n)                             ; p
           (c = 80) (vpaste st () n)                             ; P
           (c = 118 || c = 86)                                   ; v V: visual, from here
            (pin st 'op (), pins st 'va [(st 'row) (st 'col)] 'mode (c = 118 ? 'v 'V))
           (c = 117) (vundo st)                                  ; u
           (c = 18) (vredo st)                                   ; ^R
-          (c = 58) (pin st 'cmd (ednew ()), pin st 'mode 'c)     ; :
+          (c = 58) (pin st 'cmd (vprompt st 'exh), pin st 'mode 'c)     ; :
           (c = 47 || c = 63)                                    ; / ?
-           (pin st 'cmd (ednew ()), pin st 'dir (c = 47 ? 1 -1), pin st 'mode 's)
+           (pin st 'cmd (vprompt st 'srh), pin st 'dir (c = 47 ? 1 -1), pin st 'mode 's)
           (c = 110) (two? (st 'pat) ? (vhunt st (st 'dir)) (vmsg st "no previous search"))
           (c = 78) (two? (st 'pat) ? (vhunt st (0 - st 'dir)) (vmsg st "no previous search"))
           (c = 6) (page 1) (c = 2) (page -1)                    ; ^F ^B
           (c = 4) (page 1) (c = 21) (page -1)                   ; ^D ^U (half via `page`)
           st))
+
+   ; -- the : and / histories: cli's own, a prompt's older lines under 'hu --
+   (vprompt st k) (pins (ednew ()) 'hu (st k) 'hd () 'cur ())
+   (vkeep st k) (: t (eddetach (st 'cmd))
+                   (edempty? t ? () (pin st k (take 100 (edframe t . revcat (t 'hd) (t 'hu))))))
 
    ; -- the dot register ---------------------------------------------------------
    ; `.` replays the last change's keys, recorded from a changing command until normal
@@ -1204,7 +1264,13 @@
        fwd? (<a < r || <a = r && <>a <= col)
        c1 (fwd? ? <>a col) c2 (fwd? ? col <>a)
        (leave _) (pins st 'va () 'mode 'n)
-       (op opc) (leave (),
+       ; what `.` repeats: as many lines (3>> for three), or on one row as many
+       ; characters (3dl); a span across rows is not recorded
+       (arm opc) (? (opc = 121) ()
+                    (kind = 'V || vlinop? opc) (pins st 'reccnt (r2 - r1 + 1) 'rec [opc opc])
+                    (r1 = r2) (: e (vnx (st 'lines r1) c2) (go i k) (e <= i ? k (go (vnx (st 'lines r1) i) (k + 1)))
+                                 (pins st 'reccnt (go c1 0) 'rec [108 opc])))
+       (op opc) (leave (), arm opc,
                  kind = 'V || vlinop? opc ? (vopl st opc r1 r2)
                    (vospn st opc r1 c1 r2 (vnx (st 'lines r2) c2)))
        (? (c = 27) (leave ())
@@ -1250,9 +1316,12 @@
            ; the line is cli's prompt; a backspace on nothing leaves too, which is vi's
            ; own rule and no prompt's
            (st 'cmd @ t
-              ((c = 127 || c = 8 || c = -3) && edempty? t ? (pin st 'mode 'n)
+              (? ((c = 127 || c = 8 || c = -3) && edempty? t) (pin st 'mode 'n)
+                 ; up and down off the prompt's own rows walk its history
+                 (c = -8 && !(two? (t 'u)) || c = -9 && !(two? (t 'd))) ((c = -8 ? uphist downhist) t, st)
                  (edcmd st 'cmd c
-                  (s \ (pin st 'mode (m = 's ? (vback st) 'n),
+                  (s \ (vkeep st (m = 'c ? 'exh 'srh),
+                        pin st 'mode (m = 's ? (vback st) 'n),
                         vmsg st "",
                         (? (m = 'c) (vex st)
                            (s = "") (two? (st 'pat) ? (vhunt st (st 'dir)) st)
@@ -1277,19 +1346,19 @@
      'row 0 'col 0 'goal 0 'top 0 'tops 0 'left 0 'wrap ()
      'mode 'n 'cnt 0 'op () 'pc () 'pcb "" 'gcnt 0 'lastf ()
      'reg () 'undo () 'redo ()
-     'dot () 'rec () 'reccnt 0 'dotting ()
+     'dot () 'rec () 'reccnt 0 'dotting () 'hlfrom () 'hlto () 'hldel 0
      'file file 'dirty () 'msg "" 'sw 2
      'cmd "" 'pat () 'pattx "" 'patw () 'dir 1
-     'quit () 'dow () 'doe () 'dos () 'dox () 'va () 'exmore ()
+     'quit () 'dow () 'doe () 'dos () 'dox () 'va () 'exmore () 'home ()
      'hl (nom? (hues-lang file (two? ls ? <ls ""))) 'pens () 'lex () 'hlcar () 'hlgen 0 'hlrow (tablet ())
-     'lncar () 'laycar () 'lastr () 'w 80 'h 24}
+     'lncar () 'laycar () 'mtcar () 'gutcar () 'nu () 'ai 1 'aiw () 'lastr () 'w 80 'h 24}
 
    ; -- the frame ---------------------------------------------------------------
    ; vlay settles the view and works out what the screen should hold: the body rows
    ; (windowed, painted), the status line (clipped), and where the cursor goes.
    ; vframe writes all of it; vfresh writes the difference. one layout under both.
    (vlay st)
-    (: w (st 'w) h (st 'h) body (h - 1) ls (st 'lines)
+    (: sw (st 'w) gw (vgut st) w (sw - gw) h (st 'h) body (h - 1) ls (st 'lines)
        wrap? (st 'wrap) row (st 'row) cln (vln st)
        (hgt ln) (vhgt st ln)
        ; the cursor's screen row within its line and the byte that row opens on
@@ -1327,7 +1396,7 @@
                (pins st 'top <q 'tops <>q)))
        top (st 'top) tops (st 'tops) left (st 'left)
        ; the status line clips from the left, where a deep path sits; `<` marks the cut
-       (clipl ln) (#ln @ k (w < k ? ("<" + snip ln (k - w + 1) k) ln))
+       (clipl ln) (#ln @ k (sw < k ? ("<" + snip ln (k - sw + 1) k) ln))
        ; -- the paint: the window is cut in plain columns, then painted, so every column
        ; below is a plain one. a language the name does not tell paints as .l under :hl
        lg (st 'hl && tablet? (st 'pens) ? (vlang st @ g (nom? g ? g 'l)))
@@ -1341,6 +1410,7 @@
        vr1 (vis? ? (<va < row ? <va row) 0) vr2 (vis? ? (<va < row ? row <va) 0)
        vfwd? (vis? && (<va < row || <va = row && <>va <= st 'col))
        vc1 (vfwd? ? <>va (st 'col)) vc2 (vfwd? ? (st 'col) <>va)
+       mt (vmatch st)
        (sel fr raw) (!vis? || fr < vr1 || vr2 < fr ? ()
                        (#raw @ k
                           (? (st 'mode = 'V) [0 (k < 1 ? 1 k)]
@@ -1359,12 +1429,21 @@
                   pad (k < <>s && q = k ? " " "")       ; the cell past the end, a line's own
                   (snip raw a p + vpen st 'sel "\e[7m" + snip raw p q + pad + vpen st 'off "\e[0m" + snip raw q b))
               (b <= a) ""
+              ; the delimiter's mate, in its pen, the rest of the row painted as ever
+              (two? mt && <mt = fr && a <= <>mt < b)
+               (: m <>mt m2 (vnx raw m @ e (b < e ? b e))
+                  (seg x y) (? (y <= x) "" !paint (snip raw x y) (hue-win (st 'pens) lx raw in x y))
+                  (seg a m + vpen st 'match "\e[46m" + snip raw m m2 + vpen st 'off "\e[0m" + seg m2 b))
               !paint (snip raw a b)
               (: rw (st 'hlrow) ky [raw in a b lg] c (peep rw i ())
                  (two? c && <c = ky ? <>c
                     (hue-win (st 'pens) lx raw in a b @ p
                        (pin rw i [ky p],
                         p)))))))
+       ; the gutter: a file row's number on its first screen row, blanks under it
+       (gut fr k) (? (gw < 1) "" (0 < k) (vblanks gw)
+                     (show (fr + 1) @ t (vpen st 'lnr "" @ p
+                        (p + vblanks (gw - 1 - #t) + t + (0 < #p ? vpen st 'off "\e[0m" "") + " "))))
        ; 'lines and the carry are lists: drop to the corner once and step from there
        (rows l cl i k acc fr)
         (? (body <= i) (rev acc)
@@ -1372,7 +1451,7 @@
            (: raw <l
               win (wrap? ? (vdrop (vsegs raw w) k @ sg [<sg (two? >sg ? <>sg #raw) 0])
                      (vwin raw left w))
-              r (lay raw <cl i win fr)
+              r (gut fr k + lay raw <cl i win fr)
               (wrap? && k + 1 < hgt raw ? (rows l cl (i + 1) (k + 1) (r . acc) fr)
                  (rows >l >cl (i + 1) 0 (r . acc) (fr + 1)))))
        status (? (st 'mode = 'c) (":" + edtext (st 'cmd))
@@ -1386,12 +1465,12 @@
        said? (st 'mode = 'c || st 'mode = 's)
        cr (said? ? h (body < cnt ? body cnt))
        cc (: k (? said? (edcol (st 'cmd) + 2)
-                  wrap? (vcols cln <>cseg (st 'col) + 1)
-                  (vcols cln 0 (st 'col) - left + 1))
-             (w < k ? w k))
+                  wrap? (vcols cln <>cseg (st 'col) + 1 + gw)
+                  (vcols cln 0 (st 'col) - left + 1 + gw))
+             (sw < k ? sw k))
        ; the body is a pure function of this key, so an unchanged key reuses the last rows
-       key [(st 'hlgen) w top tops left body (paint ? 1 ()) (wrap? ? 1 ())
-            (vis? ? [(st 'mode) vr1 vc1 vr2 vc2]) (st 'theme)]
+       key [(st 'hlgen) w gw top tops left body (paint ? 1 ()) (wrap? ? 1 ())
+            (vis? ? [(st 'mode) vr1 vc1 vr2 vc2]) (st 'theme) mt]
        lc (st 'laycar)
        rs (two? lc && <lc = key ? <>lc
              (rows (vdrop l0 (top - t0)) (vdrop car top) 0 tops () top @ k

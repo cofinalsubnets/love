@@ -294,15 +294,10 @@
    say? (string? m && (st 'err || peep st 'pos 0 || st 'mt < st 'msg-t + 3.0))
    text (say? ? (snip (pad (" " + m) w " ") 0 w) "")
    (mesh-show st f (say? ? (esc + "[" + show r + ";1H" + esc + (st 'err ? "[1;37;41m" "[0;37;40m") + text + esc + "[0m") "")
-              (say? ? (band st text r) {})))
+              (say? ? (view-band st text r (st 'err ? [150 20 20 124] [20 20 20 233])) {})))
  (where st) (: (r v) (show (int (v * 100.0 + (v < 0.0 ? -0.5 0.5)) / 100.0))
    deg (st 'th * 180.0 / pi @ d (d < 0.0 ? (d + 360.0) d))
    "(start [\(r (st 'px)) \(r (st 'py - eye-h)) \(r (st 'pz))] \(r deg) \(r (st 'ph * 180.0 / pi)))")
- ; ..as one of view's bands on row r: its cells, a character each, and its pens
- (band st s r) (: deep (st 'deep)
-   (pen v) (deep ? (: (q x) ((x * 63 + 127) // 255) (q (v 0) * 4096 + q (v 1) * 64 + q (v 2))) (v 3))
-   (cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
-   {(r - 1) [0 (cells s) (pen [240 240 240 255]) (pen (st 'err ? [150 20 20 124] [20 20 20 233]))]})
  ; --- the state: the screen as view lays it, the level and its scene, where the player
  ;     stands and looks, the clock, the doors ---
  (corridor-new w h lv dir) (: s (lv 'start)

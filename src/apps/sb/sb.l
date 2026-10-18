@@ -120,11 +120,13 @@
        _ (pin pks (pk-key d) [sg ps])
        ps)
    (pk-of d) (: c (peep pks (pk-key d) ()) (? (two? c && <c = pk-sig d) (c 1) (pk-load d)))
+   ; the idx record at a -> (k off len)
+   (pk-ent ix a) [(snip ix (a + 65) (a + 66)) (snum (snip ix (a + 67) (a + 79))) (snum (snip ix (a + 80) (a + 92)))]
    ; a hash in one idx text by halving -> (k off len) | ()
    (pk-find1 ix h)
     (: (go lo hi) (? (hi <= lo) ()
                      (: m ((lo + hi) // 2) a (m * pkr) k (snip ix a (a + 64))
-                        (? (k = h) [(snip ix (a + 65) (a + 66)) (snum (snip ix (a + 67) (a + 79))) (snum (snip ix (a + 80) (a + 92)))]
+                        (? (k = h) (pk-ent ix a)
                            (k < h) (go (m + 1) hi)
                            (go lo m))))
        (go 0 (#ix // pkr)))
@@ -170,9 +172,8 @@
              ent {}
              _ (map (pk \ (: ix (pk 1)
                              (map (i \ (: a (i * pkr)
-                                         (pin ent (snip ix a (a + 64))
-                                              [(snip ix (a + 65) (a + 66))
-                                               ['p (".sb/pack/" + <pk + ".pack") (snum (snip ix (a + 67) (a + 79))) (snum (snip ix (a + 80) (a + 92)))]])))
+                                         e (pk-ent ix a)
+                                         (pin ent (snip ix a (a + 64)) [<e ['p (".sb/pack/" + <pk + ".pack") (e 1) (e 2)]])))
                                   (jot (#ix // pkr)))))
                     old)
              _ (map (e \ pin ent <e >e) loose)
@@ -194,7 +195,7 @@
                      ())
              ix (? (two? recs) (cats recs) "")
              size (: st (stat tmp) (two? st ? <st -1))
-             want (: r (? (two? recs) (recs (#recs - 1)) "") (? (0 < #r) (snum (snip r 67 79) + snum (snip r 80 92)) 0))
+             want (: r (? (two? recs) (recs (#recs - 1)) "") (? (0 < #r) (: e (pk-ent r 0) (e 1 + e 2)) 0))
              nm (sha256 ix) pf (".sb/pack/" + nm)
              ok (#recs = #hs && size = want
                  && !(nom? (rename tmp (pf + ".pack")))
@@ -773,6 +774,22 @@
                                 + show (gi 'blobs + go 'blobs) + " blobs\n"))
                        (pushed ? 1 0))
                     (sync3 peer pd home gi go pushed ru)))
+   ; a report's tail: the conflicts and the ref clashes
+   (clash-tail nleft nref)
+    ((nleft @ 0 "" (", " + show nleft + " conflicted"))
+     + (nref @ 0 "" (", " + show nref + " ref clash" + (nref @ 1 "" "es"))) + "\n")
+   ; a sync's report and its warnings: there the far end's settle | (), ok whether it took the write
+   (sync-say st nin nout nb there ok pd nleft nref)
+    (: _ (puts ("sb: synced -- " + show <st + " patches (" + show nin + " in, " + show nout + " out), "
+                + show nb + " blobs, " + show <>st + " files here"
+                + (? (two? there) (", " + show <>there + " files there") "")
+                + clash-tail nleft nref))
+       _ (? ok ()
+            (say err ("sb: pulled only -- the peer "
+                      + (? (0 < pd) "has unrecorded changes" "would not take the write")
+                      + "; run sync from its side to finish\n")))
+       _ (nleft @ 0 () (say err "sb: settle the flagged paths, then record\n"))
+       (nref @ 0 () (say err "sb: a banked name is immutable\n")))
    ; both heads move to their union, and both trees to its derive
    (sync3 peer pd home gi go pushed ru)
               (: u (head () + head-in peer)
@@ -781,21 +798,7 @@
                  nref <>ru
                  pst (? !pushed ()                             ; settle the far end too
                         (: c (chdir peer) r (settle u) _ (chdir home) r))
-                 _ (puts ("sb: synced -- " + show <st + " patches ("
-                          + show (gi 'laid) + " in, " + show (go 'laid) + " out), "
-                          + show (gi 'blobs + go 'blobs) + " blobs, " + show <>st + " files here"
-                          + (? (two? pst) (", " + show <>pst + " files there") "")
-                          + (nleft @ 0 "" (", " + show nleft + " conflicted"))
-                          + (nref @ 0 "" (", " + show nref + " ref clash"
-                                              + (nref @ 1 "" "es"))) + "\n"))
-                 _ (? pushed ()
-                      (say err ("sb: pulled only -- the peer "
-                                + (? (0 < pd) "has unrecorded changes" "would not take the write")
-                                + "; run sync from its side to finish\n")))
-                 _ (nleft @ 0 ()
-                    (say err "sb: settle the flagged paths, then record\n"))
-                 _ (nref @ 0 ()
-                    (say err "sb: a banked name is immutable\n"))
+                 _ (sync-say st (gi 'laid) (go 'laid) (gi 'blobs + go 'blobs) pst pushed pd nleft nref)
                  (? (pushed && 0 = nleft && 0 = nref) <st 0))
 
    ; --- apply: realize a dep-consistent subset of the store in the tree ---
@@ -1250,26 +1253,14 @@
        nleft (tell <>>st)
        pst (? pushed (ssh-form (ssh-ask c (ssh-line "take" u))) ())
        took (two? pst && 0 <= pst 2)
-       _ (puts ("sb: synced -- " + show <st + " patches (" + show nin + " in, " + show nout + " out), "
-                + show nb + " blobs, " + show <>st + " files here"
-                + (? took (", " + show <>pst + " files there") "")
-                + (nleft @ 0 "" (", " + show nleft + " conflicted"))
-                + (nref @ 0 "" (", " + show nref + " ref clash" + (nref @ 1 "" "es"))) + "\n"))
-       _ (? took ()
-            (say err ("sb: pulled only -- the peer "
-                      + (? (0 < pd) "has unrecorded changes" "would not take the write")
-                      + "; run sync from its side to finish\n")))
-       _ (nleft @ 0 () (say err "sb: settle the flagged paths, then record\n"))
-       _ (nref @ 0 () (say err "sb: a banked name is immutable\n"))
+       _ (sync-say st nin nout nb (took ? pst) took pd nleft nref)
        (? (took && 0 = nleft && 0 = nref && 0 = pst 2) <st 0))
    ; a take: the peer's head joins ours, nothing goes back
    (take-tell gi fh nref)
     (? !(tablet? gi && gi 'ok) (say err "sb: some objects did not arrive -- the take is INCOMPLETE\n", 0)
        (: st (settle (head () + fh)) nleft (tell <>>st)
           _ (puts ("sb: took the peer's head -- " + show <st + " patches (" + show (gi 'laid) + " in), "
-                   + show (gi 'blobs) + " blobs, " + show <>st + " files here"
-                   + (nleft @ 0 "" (", " + show nleft + " conflicted"))
-                   + (nref @ 0 "" (", " + show nref + " ref clash" + (nref @ 1 "" "es"))) + "\n"))
+                   + show (gi 'blobs) + " blobs, " + show <>st + " files here" + clash-tail nleft nref))
           _ (nleft @ 0 () (say err "sb: settle the flagged paths, then record\n"))
           (? (0 = nleft && 0 = nref) <st 0)))
    ; the same from a peer nest on this box: no push, the peer only read

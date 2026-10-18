@@ -91,11 +91,7 @@
  ; --- the frame: the map with the cursor on it, the tile and thing under it, the help --
  (design-frame d w h) (: j (jug 0) lvl (d 'lvl)
    mh (h - 4)
-   spot (foldl (t \ id \ (lvl 'things id @ th (pin t [(th 'x) (th 'y)] th))) {} (keys (lvl 'things)))
-   (cell x y) (? (x = lvl 'sx && y = lvl 'sy) ["@" 228 -1]
-                 (peep spot [x y] 0) (spot [x y] @ th [(th 'gl) (th 'fg) (th 'bg)])
-                 (y >= lvl 'h || x >= #(lvl 'rows y)) [" " -1 -1]
-                 (kind-of lvl (tile lvl x y) @ k [(k 'gl) (k 'fg) (k 'bg)]))
+   cell (level-cells lvl (lvl 'sx) (lvl 'sy))
    (row y) (:- (go 0 () "")
     (go x p acc) (x >= w ? acc
      (: c (cell x y) cur? (x = d 'cx && y = d 'cy) p2 >c
