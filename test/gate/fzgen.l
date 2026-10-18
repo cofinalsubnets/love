@@ -1,9 +1,15 @@
 ; test/gate/fzgen.l -- the random cases of the grap, gpic and chem gates, drawn from a seed.
 ;   love test/gate/fzgen.l LANG SEED N DIR   writes DIR/fz-SEED-I.EXT for I in [0, N)
+;   love test/gate/fzgen.l LANG known           the divergences LANG's cases steer around
 ; each case draws from its own stream (seed, index), so one regenerates alone. undefined
 ; names and odd attribute runs are drawn on purpose: both tools must refuse alike
 (borrow 'posix)
 (: nl (string 10)
+   ; the known differences: each one a steer below, named where it is read, until it is
+   ; fixed and its entry goes. the gates print them; FZ_STEER=0 draws through them all
+   fz-known [["grap" "syntax-recovery" "a syntax error's .lf line and echoed rest (a bare draw or new, words in data, copy thru short of fields)"]]
+   fz-steer (getenv "FZ_STEER" != "0")
+   (known? nm) (fz-steer && any (k \ k 1 = nm) fz-known)
    (pick l) (l (rand #l))
    (chance p) (randf 1.0 < p)
    (opt p s) (chance p ? s "")
@@ -36,21 +42,23 @@
                  (r = 5) (gex (k - 1) + " " + pick ["+" "-" "*"] + " " + gex (k - 1))
                  (gex (k - 1) + " / " + pos 0)))
    ; a data line outside copy thru is all numbers; inside, every field the body reads
-   (gdata _) (rand 4 @ k (? (k = 0) (num 100)
-                            (k = 1) (sp [(num 1000) (num 100) (num 10)])
-                            (sp [(sgn (num 100)) (num 100)])))
-   (gcdata _) (sp [(num 1000) (num 100) (chance 0.5 ? (pick ["a" "b" "x1"]) (num 10))])
+   (gdata _) (rand (known? "syntax-recovery" ? 4 5) @ k
+              (? (k = 0) (num 100)
+                 (k = 1) (sp [(num 1000) (num 100) (num 10)])
+                 (k = 4) (sp [(pick ["a" "b" "x1"]) (num 100) (num 100)])
+                 (sp [(sgn (num 100)) (num 100)])))
+   (gcdata _) (sp [(num 1000) (known? "syntax-recovery" || chance 0.8 ? (num 100) "")
+                   (chance 0.5 ? (pick ["a" "b" "x1"]) (num 10))])
    (glist _) (join ", " (times (1 + rand 4) (_ \ sp [(num 100) (opt 0.3 (gstr 0))])))
    (grange star) (sp ["from" (show (1 + rand 9)) "to" (show (10 + rand 20))
                       (opt 0.6 ("by " + (star ? (pick ["" "*" "+"]) "") + show (2 + rand 9)))])
    gfmt ["%.1f" "%g" "%5f" "%g%%" "%.2f"]
-   ; a range runs low to high
-   (grng _) (: a (sgn (num 100)) (a + ", " + show (read a + 1 + rand 900)))
-   ; a named system and a log axis have their ranges given
-   (gcoord nm) (: x (nm != "" || chance 0.7) y (nm != "" || chance 0.5)
+   ; a range, now and then high to low
+   (grng _) (: a (sgn (num 100)) b (show (read a + 1 + rand 900))
+               (chance 0.15 ? (b + ", " + a) (a + ", " + b)))
+   (gcoord nm) (: x (chance 0.7) y (chance 0.5)
                   (sp ["coord" nm (x ? ("x " + grng 0) "") (y ? ("y " + grng 0) "")
-                       (x && log? 0 ? (opt 0.6 "log x") "") (y && log? 0 ? (opt 0.5 "log y") "")]
-                   @ s (s = "coord" ? "coord x 1, 10" s)))
+                       (log? 0 ? (pick ["" "log x" "log y" "log log" "log x log y"]) "")]))
    (gplot nm) (sp ["plot"
                    (rand 6 @ k (? (k = 0) (pick gmarks)
                                   (k = 1) (gex 2)
@@ -81,9 +89,9 @@
    ; a bare draw or new is a syntax error
    (gdraw _) (sp [(pick ["draw" "new"]) (chance 0.5 ? (gsty 0) "")
                   (pick ["" "bullet" "delta" "\"x\"" "\"\\(sq\""])] @ s
-                 (elem s ["draw" "new"] ? (s + " dotted") s))
+                 (known? "syntax-recovery" && elem s ["draw" "new"] ? (s + " dotted") s))
    ; one statement, as lines; nm names the coordinate system the case set up, if any
-   (gstmt nm last) (rand 30 @ k
+   (gstmt nm last) (rand 31 @ k
      (? (k < 4) [(gdata 0)]
         (k < 8) [(gplot nm)]
         (k = 8) [(sp ["next" nm "at" (gpt nm)])]
@@ -108,10 +116,11 @@
         (k = 26) [(pick ["print \"msg\"" ("print sqrt(" + pos 0 + ")")])]
         (k = 27) [(pick [".sp" (".ps " + show (8 + rand 5)) ".ft B"])]
         (k = 28) [(pick ["margin = 0" "margin = .2" ("margin = " + small 0)])]
+        (k = 29) [(chance 0.3 ? (sp ["coord" nm]) (gcoord nm))]
         [(gplot nm)]))
    (grap _) (: _ (pin lg 0 (chance 0.25 ? 1 0))
                nm (pick ["" "" "" "aa"])
-               head (nm != "" || chance 0.4 ? [(gcoord nm)] ())       ; a coord comes before what it scales
+               head (nm != "" || chance 0.4 ? [(gcoord nm)] ())
                n (1 + rand 12)
                body (catmap (i \ gstmt nm (i = n - 1)) ^n)
                ([(sp [".G1" (pick ["" "3i" "4i 2i"])])] + head + body + [".G2"]))
@@ -261,9 +270,12 @@
                        ^(1 + rand 3)))
 
    langs {"grap" [grap ".g"] "gpic" [gpic ".pic"] "chem" [chem ".chem"]}
-   (main a) (: g (langs (a 1)) seed (read (a 2)) n (read (a 3)) dir (a 4)
-               (g = () ? (say err ("fzgen: no language " + a 1 + nl))
-                  (each ^n (i \ (: _ (rng-set (wheel (seed * 1000003 + i)))
+   (main a) (: g (langs (a 1)) dir (a 4)
+               (? (g = ()) (say err ("fzgen: no language " + a 1 + nl))
+                  (a 2 = "known")
+                   (each (filter (k \ <k = a 1) fz-known) (k \ say out (k 1 + ": " + k 2 + (fz-steer ? "" " (not steered)") + nl)))
+                  (: seed (read (a 2)) n (read (a 3))
+                   (each ^n (i \ (: _ (rng-set (wheel (seed * 1000003 + i)))
                                    f (open (dir + "/fz-" + show seed + "-" + show i + g 1) "w")
-                                   (say f (join nl (g 0 0) + nl), close f))))))
+                                   (say f (join nl (g 0 0) + nl), close f)))))))
    (main [(argv 0) (argv 1) (argv 2) (argv 3) (argv 4)]))

@@ -62,5 +62,9 @@ grep '^differs' "$w/gate" | sed 's/^differs/  differs:/'
 run test/chem/open > "$w/open"
 ok=$(grep -c '^ok' "$w/open"); all=$(grep -c '^ok\|^differs' "$w/open")
 echo "chem: $((k - d)) of $k identical, $dr drawn the same by both pics; open $ok of $all"
+# the differences the fz cases are steered around, still to fix (test/gate/fzgen.l's fz-known)
+"$L" "$r/test/gate/fzgen.l" chem known > "$w/known"
+sed 's/^/  known: /' "$w/known"
+echo "chem: $(grep -c . "$w/known") known differences steered around"
 [ $d -eq 0 ] || { echo "FAIL chem: $d of $k differ from $ref (fz cases: FZ_SEED=$seed FZ_N=$fzn)"; exit 1; }
 echo "chem: ok"

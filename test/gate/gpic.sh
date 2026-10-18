@@ -62,5 +62,9 @@ for m in "" -n -t -c -tz; do
   x=; [ "$s" -gt 0 ] && x=", $s without an oracle"
   echo "gpic: pic ${m:-(troff)}: $((k - d)) of $k gating identical$x; open $ok of $all"
 done
+# the differences the fz cases are steered around, still to fix (test/gate/fzgen.l's fz-known)
+"$L" "$r/test/gate/fzgen.l" gpic known > "$w/known"
+sed 's/^/  known: /' "$w/known"
+echo "gpic: $(grep -c . "$w/known") known differences steered around"
 [ $bad -eq 0 ] || { echo "FAIL gpic: $bad of $total differ from $ref (fz cases: FZ_SEED=$seed FZ_N=$fzn)"; exit 1; }
 echo "gpic: ok"
