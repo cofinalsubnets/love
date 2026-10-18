@@ -1,20 +1,12 @@
 #include "../impl.h"
 #include <getopt.h>
 
-/* ---- getopt, getopt_long, getopt_long_only: glibc's behaviour ----
- * the whole of a parse's state is a struct getopt_data, and the _r calls take one: next, the
- * cursor inside a clustered -abc, and [first, last), the operands passed over so far, beside
- * the posix four. gnu order (the default) permutes: each option found is moved ahead of the
- * operands before it, lazily, so the operands end after the options in their own order. a
- * leading '+' or POSIXLY_CORRECT stops at the first operand; a leading '-' answers an operand
- * as option 1. a ':' after those silences the messages and answers ':' for a missing value.
- * optind = 0 starts over. the posix calls run one instance, synced with posix's globals --
- * those and it are the only state at file scope. */
+/* glibc's getopt. a parse's state is a getopt_data: next, the cursor in a clustered -abc,
+ * and [first, last), the operands passed over, which permuting moves after the options */
 char *optarg;
 int optind = 1, opterr = 1, optopt;
 static struct getopt_data posix = GETOPT_DATA_INIT;
 
-/* [first, last) and [last, optind) trade places, each in its own order */
 static void swap(char **v, struct getopt_data *d) {
   int a = d->first, b = d->last, e = d->optind;
   for (int j = b; j < e; j++) {
@@ -25,8 +17,7 @@ static void swap(char **v, struct getopt_data *d) {
 
 static int operand(char const *a) { return a[0] != '-' || !a[1]; }
 
-/* a long option, its name at d->next (past `pre`): the val, 0 when it set a flag, '?' / ':'
- * on a refusal, -1 when long_only finds no name and the short reading is to be tried */
+/* the val, 0 when it set a flag, '?' or ':' on a refusal, -1 to try it as short options */
 static int longopt(int ac, char **av, char const *os, struct option const *lo, int *ix,
                    int only, int loud, char const *pre, struct getopt_data *d) {
   char *s = d->next, *eq = s;
@@ -132,7 +123,6 @@ int getopt_long_only_r(int ac, char *const *av, char const *os, struct option co
                        struct getopt_data *d) {
   return run(ac, av, os, lo, ix, 1, d); }
 
-/* the posix calls: the globals in, one parse step on the instance, the globals out */
 static int step(int ac, char *const *av, char const *os, struct option const *lo, int *ix, int only) {
   posix.optind = optind; posix.opterr = opterr;
   int r = run(ac, av, os, lo, ix, only, &posix);

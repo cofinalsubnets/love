@@ -1,13 +1,9 @@
 #ifndef _LOVE_FLOAT_H
 #define _LOVE_FLOAT_H
-/* freestanding <float.h> for cc: the IEEE-754 characteristics for this ABI.
- * float = binary32, double = binary64, and long double IS double -- cc gives it
- * 8 bytes and a 53-bit significand, which is what __LDBL_MANT_DIG__ says and what
- * codegen does, so the LDBL_ rungs below restate the DBL ones. an 80-bit x87
- * story here hands out an LDBL_MAX that overflows to infinity. */
+/* ieee-754 binary32 and binary64; mooncc's long double is double, so LDBL_ restates DBL_ */
 #define FLT_RADIX        2
 #define FLT_ROUNDS       1     /* round to nearest */
-#define FLT_EVAL_METHOD  0     /* evaluate each type at its own width */
+#define FLT_EVAL_METHOD  0     /* each type at its own width */
 #define DECIMAL_DIG      17    /* long double -> decimal round-trip */
 
 #define FLT_MANT_DIG     24

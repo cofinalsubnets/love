@@ -1,8 +1,7 @@
 #ifndef _LOVE_SYS_UCONTEXT_H
 #define _LOVE_SYS_UCONTEXT_H
 #include <signal.h>
-/* the context a SA_SIGINFO handler's third argument points at: linux's frame, laid as the kernel
-   lays it, up to the register set (a BSD kernel hands its own shape). no getcontext/makecontext */
+/* a SA_SIGINFO handler's context: linux's frame up to the register set; a bsd hands its own */
 #if defined(__x86_64__)
 typedef long long greg_t;
 #define NGREG 23

@@ -13,8 +13,8 @@ long __rfill(FILE *f) {
 
 long __rahead(FILE *f) { return (long) (f->rl - f->rp) + (f->un != 0); }
 
-/* POSIX: a flushed input stream leaves the fd at the stream's position, its read-ahead and
- * pushback dropped. a pipe cannot seek back, so it keeps what it holds, as glibc does */
+/* POSIX: a flushed input stream leaves the fd at the stream's position; a pipe cannot seek
+ * back, so it keeps what it holds, as glibc */
 int __rsync(FILE *f) {
   long a = __rahead(f);
   if (a == 0) return 0;

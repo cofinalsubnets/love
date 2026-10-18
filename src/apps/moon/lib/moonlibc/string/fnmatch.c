@@ -38,8 +38,8 @@ static int __fnbracket(char const *p, int c, int fl, char const **end) {
 static int __fnlead(char const *n0, char const *s, int fl) {
   return (fl & FNM_PERIOD) && *s == '.' && (s == n0 || ((fl & FNM_PATHNAME) && s[-1] == '/')); }
 
-/* only the last star backtracks: a later star's starts are a superset of what an earlier
- * one's moving would give, and under FNM_PATHNAME none crosses a '/' */
+/* only the last star backtracks: a later star's starts cover what moving an earlier one
+ * would give, and under FNM_PATHNAME none crosses a '/' */
 static int __fnm(char const *p, char const *s, char const *n0, int fl) {
   char const *sp = 0, *ss = 0;                       /* past the last star, and where it ends */
   for (;;) {

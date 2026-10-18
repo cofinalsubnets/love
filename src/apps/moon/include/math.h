@@ -1,9 +1,9 @@
 #ifndef _LOVE_MATH_H
 #define _LOVE_MATH_H
-/* long double is double here; the l forms are not spelled */
+/* long double is double here */
 typedef float float_t;
 typedef double double_t;
-#define HUGE_VAL 1e999   /* overflows to +inf in the lexer (infinity; fbits images it) */
+#define HUGE_VAL 1e999   /* overflows to +inf */
 #define HUGE_VALF 1e999f
 #define HUGE_VALL 1e999
 #define INFINITY 1e999f

@@ -1,6 +1,5 @@
 #include "../impl.h"
 
-/* ---- the terminal ---- */
 int tcgetattr(int fd, struct termios *t) {
 #ifdef LvMac
   if (__love_osv == 4) {                   /* freebsd's bits, in long-wide words */

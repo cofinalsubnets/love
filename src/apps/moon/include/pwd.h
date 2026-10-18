@@ -1,16 +1,15 @@
 #ifndef _LOVE_PWD_H
 #define _LOVE_PWD_H
-/* freestanding pwd.h for cc: the password-database entry + its lookups. */
 #include <sys/types.h>
 
 struct passwd {
-	char *pw_name;   /* username */
-	char *pw_passwd; /* password */
-	uid_t pw_uid;    /* user id */
-	gid_t pw_gid;    /* group id */
-	char *pw_gecos;  /* real name */
-	char *pw_dir;    /* home directory */
-	char *pw_shell;  /* shell program */
+	char *pw_name;
+	char *pw_passwd;
+	uid_t pw_uid;
+	gid_t pw_gid;
+	char *pw_gecos;
+	char *pw_dir;
+	char *pw_shell;
 };
 
 struct passwd *getpwnam(char const*);

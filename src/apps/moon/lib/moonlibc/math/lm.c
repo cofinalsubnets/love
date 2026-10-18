@@ -1,25 +1,6 @@
-// src/apps/moon/lib/moonlibc/math/lm.c -- the math floor: our own transcendentals, ONE file on
-// every frontend (host, love0, kernel, wasm, the gcc-free raw build -- the last
-// vendored math, fdlibm, retired here). binary64, portable C in the mooncc subset:
-// unions for bit access, uint64 arithmetic, no fma/int128/builtins. coefficients
-// are TAYLOR/exact-rational (re-derivable, no minimax magic) at mpmath-verified
-// double roundings; constants carry hi/lo splits where a product must stay exact.
-//
-// the surface is the seven love.c consumes (its love_* defines): lm_sqrt EXACT
-// (IEEE-correct rounding); lm_exp/lm_log <= 1 ulp; lm_sin/lm_cos ~0.74 ulp at
-// EVERY magnitude (compact Payne-Hanek -- no domain stance); lm_atan2 <= 3 ulp;
-// lm_pow <= 2 ulp typical, degrading ~linearly in |y ln x| toward the
-// representable rim (~40 ulp at 1e+-300) -- the one documented stance -- with
-// the algebraic exponents (y in {2, 1, -1, 1/2}) EXACT: the spec's power-is-
-// application identities ride lm_pow. measured against glibc by the differential
-// ulp harness (2M+ deterministic samples a function, src/tools/ulp.c), and the
-// mooncc-compiled object is GATED to measure identical to the system cc's --
-// test_ulp, both sweep modes. that second half was a hand check and a header
-// claim until 2026-07-29, when it turned out to be false and two mooncc bugs
-// were living behind it (a lost 4th parameter segfaulting lm_sin above 2^19,
-// and an unsigned 64-bit word converting to double SIGNED, which cost rbig
-// 1609 ulp). float bits are where a codegen fault hides best: the corpus, the
-// C battery and every other gate stayed green through both.
+// the math floor: binary64 transcendentals in portable mooncc-subset c (no fma, int128, builtins).
+// taylor/exact-rational coefficients; sqrt exact, exp/log <= 1 ulp, sin/cos ~0.74 ulp at every
+// magnitude, atan2 <= 3 ulp, pow <= 2 ulp typical (~40 at 1e+-300), exact for y in {2, 1, -1, 1/2}
 #include <stdint.h>
 
 typedef union { double d; uint64_t u; } db;
@@ -29,7 +10,7 @@ static uint64_t mku(double d) { db b; b.d = d; return b.u; }
 #define DNan  mkd(0x7ff8000000000000ull)
 #define DInf  mkd(0x7ff0000000000000ull)
 
-// -- Dekker: split a double into 26+27 bit halves so products are exact --
+// dekker: 26+27 bit halves so products are exact
 static void dsplit(double a, double *hi, double *lo) {
  double c = a * 0x8000001p0;                     // a * (2^27 + 1)
  *hi = c - (c - a);
@@ -47,10 +28,8 @@ static void tsum(double a, double b, double *s, double *e) {
  double bb = *s - a;
  *e = (a - (*s - bb)) + (b - bb); }
 
-// ============================== sqrt ==============================
-// Newton in double from a bit-level seed, then a CORRECT-ROUNDING fixup:
-// candidates y and its ulp neighbor, pick whichever square (evaluated
-// exactly via Dekker) sits nearer x. Ties are perfect squares (r == 0).
+// newton from a bit-level seed, then a correct-rounding fixup: of y and its ulp
+// neighbour, whichever exact square sits nearer x
 double lm_sqrt(double x) {
  uint64_t ux = mku(x);
  if (x != x) return DNan;
@@ -58,9 +37,7 @@ double lm_sqrt(double x) {
  if (ux >> 63) return DNan;                                 // negative
  if ((ux >> 52) == 0x7ff) return x;                          // +inf
  int scale = 0;
- // pre-scale ALL tiny x (denormals included): the rounding fixup's Dekker
- // products must stay NORMAL (y^2's low half sits ~80 bits under x -- an
- // x below ~2^-512 would sink it denormal and the exactness with it)
+ // pre-scale tiny x: the fixup's dekker products must stay normal
  if (x < 0x1p-512) { x *= 0x1p540; ux = mku(x); scale = -270; }
  // seed: halve the exponent field (a ~5-bit guess), sharpen by Newton
  uint64_t uy = ((ux >> 1) + (0x3ffull << 51)) & 0x7fffffffffffffffull;
@@ -84,9 +61,7 @@ double lm_sqrt(double x) {
  }
  return scale ? y * 0x1p-270 : y; }
 
-// ============================== exp ==============================
-// x = k ln2 + r, |r| <= ln2/2; e^r by Taylor to r^13 (tail < 2^-57), then
-// scale by 2^k in the exponent bits (two-step near the denormal floor).
+// x = k ln2 + r, |r| <= ln2/2; e^r by taylor to r^13 (tail < 2^-57), then 2^k
 static const double LN2_HI = 0x1.62e42f8000000p-1, LN2_LO = 0x1.be8e7bcd5e4f2p-27,
                     LOG2E  = 0x1.71547652b82fep+0;
 static double scale2k(double y, int k) {                     // y * 2^k, k in [-2098, 2098]
@@ -114,9 +89,7 @@ double lm_exp(double x) {
        + r *  0x1.6124613a86d09p-33)))))))))));
  return scale2k(1.0 + p, k); }
 
-// ============================== log ==============================
-// x = 2^k m, m in [sqrt2/2, sqrt2); s = (m-1)/(m+1); ln m = 2 atanh s =
-// 2s(1 + s^2/3 + ... + s^22/23); result k ln2_hi + (ln m + k ln2_lo).
+// x = 2^k m, m in [sqrt2/2, sqrt2); ln m = 2 atanh s, s = (m-1)/(m+1), series to s^22/23
 double lm_log(double x) {
  uint64_t ux = mku(x);
  if (x != x) return x;
@@ -146,16 +119,12 @@ double lm_log(double x) {
  double lnm = 2.0 * s + (2.0 * slo + 2.0 * s * z * p);
  return k * LN2_HI + (lnm + k * LN2_LO); }
 
-// ============================ sin / cos ============================
-// reduction: j = round(x 2/pi), r = x - j pi/2 by a THREE-PART Cody-Waite
-// (33+33+rest bits), remainder carried hi+lo; kernels are Taylor to r^17 /
-// r^16 on |r| <= pi/4 with the lo word folded in through cos r and sin r. the reduction is
-// honest to a MEASURED |x| bound (the redscan) -- that bound is the stance.
+// three-part cody-waite (33+33+rest bits) below 2^19, payne-hanek past it, r carried hi+lo;
+// taylor kernels to r^17 / r^16 on |r| <= pi/4
 static const double INVPIO2 = 0x1.45f306dc9c883p-1,
   PIO2_1 = 0x1.921fb54400000p+0, PIO2_2 = 0x1.0b4611a600000p-34,
   PIO2_3 = 0x1.3198a2e037073p-69;
-// reduce x to (r, rlo) with quadrant j; answers j (0 on the no-reduce fast path)
-// 64x64 -> 128 without __int128: 32-bit halves
+// 64x64 -> 128 in 32-bit halves
 static void mul64(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) {
  uint64_t ah = a >> 32, al = a & 0xffffffffull, bh = b >> 32, bl = b & 0xffffffffull;
  uint64_t p0 = al * bl, p1 = al * bh, p2 = ah * bl, p3 = ah * bh;
@@ -166,10 +135,7 @@ static void mul64(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) {
  *hi = p3 + (mid >> 32) + c;
  *lo = (mid << 32) | (p0 & 0xffffffffull); }
 
-// Payne-Hanek: (|x| * 2/pi) mod 4 from the stored bit stream of 2/pi, to 192
-// fraction bits -- honest reduction at ANY magnitude. x = m 2^(E-52); the
-// product's bits around the binary point come from a 3-word window of the
-// stream at offset E-55; nearest-multiple rounding leaves |r| <= pi/4.
+// payne-hanek: (|x| 2/pi) mod 4 off a 3-word window of 2/pi's bits at offset E-55, 192 fraction bits
 static const uint64_t TPB[] = {          // 2/pi binary fraction, 64-bit words
  0xa2f9836e4e441529ull, 0xfc2757d1f534ddc0ull, 0xdb6295993c439041ull,
  0xfe5163abdebbc561ull, 0xb7246e3a424dd2e0ull, 0x06492eea09d1921cull,
@@ -223,10 +189,11 @@ static int rbig(double ax, double *r, double *rlo) {
  *rlo = (*r - rr) + *rlo;
  *r = rr;
  return j; }
+// reduce x to (r, rlo); answers the quadrant
 static int rpio2(double x, double *r, double *rlo) {
  double ax = x < 0 ? -x : x;
  if (ax <= 0x1.921fb54442d18p-1) { *r = x; *rlo = 0; return 0; }   // |x| <= pi/4
- if (ax >= 0x1p19) {                                         // Cody-Waite's honest bound: hand off
+ if (ax >= 0x1p19) {                                         // past cody-waite's bound
   int j = rbig(ax, r, rlo);
   if (x < 0) { *r = -*r; *rlo = -*rlo; j = (4 - j) & 3; }    // sin/cos symmetry: reduce |x|, flip
   return j; }
@@ -289,10 +256,8 @@ double lm_cos(double x) {
   case 2: return -kcos(r, rl);
   default: return ksin(r, rl); } }
 
-// ============================ atan / atan2 ============================
-// t in [0,1] reduces against the nearest center c in {0, 1/4, 1/2, 3/4, 1}:
-// u = (t-c)/(1+ct) keeps |u| <= ~1/7, and a 10-term alternating Taylor closes
-// under a half ulp; t > 1 flips through pi/2 - atan(1/t). centers carry hi/lo.
+// t in [0,1] against the nearest c in {0, 1/4, 1/2, 3/4, 1}: u = (t-c)/(1+ct), |u| <= ~1/7,
+// a 10-term taylor; t > 1 flips through pi/2 - atan(1/t)
 static const double ATC_H[] = { 0.0, 0x1.f5b75f92c80ddp-3, 0x1.dac670561bb4fp-2,
   0x1.4978fa3269ee1p-1, 0x1.921fb54442d18p-1 };
 static const double ATC_L[] = { 0.0, 0x1.8ab6e3cf7afbdp-57, 0x1.a2b7f222f65e2p-56,
@@ -339,10 +304,7 @@ double lm_atan2(double y, double x) {
  if (sx) a = PI_H - (a - PI_L);                              // second quadrant
  return sy ? -a : a; }
 
-// ============================== pow ==============================
-// |x|^y = exp(y ln|x|) with the log carried HI+LO (the series' s already has
-// its division residue; k ln2 is exact by the split), y*ln in dd, and exp
-// taking the lo linearly. sign/edge cases walk the IEEE table first.
+// |x|^y = exp(y ln|x|), the log and the product in double-double, exp taking the lo linearly
 static int lm_oddint(double y) {                             // 2 even int, 1 odd int, 0 not int
  if (y != y || y - y != 0) return 0;                         // nan/inf
  double ay = y < 0 ? -y : y;
@@ -401,8 +363,7 @@ double lm_pow(double x, double y) {
   if (!oi) return DNan;
   neg = oi == 1;
   x = -x; }
- // the algebraic exponents answer EXACTLY (power is application: the spec's
- // ((/ 1 2) 9) = 3.0 rides here) -- and skip the whole log/exp tower
+ // the algebraic exponents answer exactly: love's ((/ 1 2) 9) = 3.0
  if (y == 2.0)  return x * x;
  if (y == 1.0)  return neg ? -x : x;
  if (y == -1.0) return neg ? -1.0 / x : 1.0 / x;
@@ -420,10 +381,7 @@ double lm_pow(double x, double y) {
  e = e + e * we;                                             // now the linear step is honest
  return neg ? -e : e; }
 
-// -- the float twins (the 32-bit lane: wasm, the MCUs): compute in binary64,
-// narrow once -- correct within a float ulp, and the dispatch can still take
-// their ADDRESS (love.c hands love_sin to lvm_math1 as a pointer, so the 32-bit
-// love_* must be real functions, not casting macros). --
+// float twins: real functions, not macros, since love takes their address
 float lm_sinf(float x) { return (float) lm_sin(x); }
 float lm_cosf(float x) { return (float) lm_cos(x); }
 float lm_atan2f(float y, float x) { return (float) lm_atan2(y, x); }
@@ -433,17 +391,8 @@ float lm_logf(float x) { return (float) lm_log(x); }
 float lm_powf(float x, float y) { return (float) lm_pow(x, y); }
 
 
-// -- lm_strtod: correctly rounded decimal -> binary64, the READ half of the
-// shortest-roundtrip pair (love.c's printer is the SHOW half; the two share
-// one mental model). a naive seed lands within a bounded ulp distance; the
-// walk then compares the INPUT DIGITS -- exactly, as decimal integers under
-// x2/x5 carry walks, no allocation -- against each candidate's binary
-// rounding interval (the midpoints 4m-2/4m+2, 4m-1 at a binade floor, at
-// 2^(e-2); closed on an even mantissa, the printer's own predicate) and
-// steps one ulp at a time by bit arithmetic until the input falls inside.
-// exact and the same answer on every target: glibc's strtod leaves the
-// trusted base, and the naive accumulator that read "0.3" one ulp off
-// (moonlibc's num.c) delegates here now.
+// correctly rounded decimal -> binary64: a naive seed, then step one ulp until the input
+// digits, compared exactly in decimal, fall inside the candidate's rounding interval
 enum { lm_dgmax = 800 };   // a boundary expansion: 17 digits + one per x5 step (<= 1076)
 static void lm_dgmul(unsigned char *d, int *n, int k) {   // k = 2 or 5
  int c = 0;
@@ -467,10 +416,7 @@ static int lm_dgcmp(unsigned char const *a, int na, int sh, int sticky,
   int da = i >= sh ? a[i - sh] : 0;
   if (da != b[i]) return da < b[i] ? -1 : 1; }
  return sticky ? 1 : 0; }
-// a hex float is EXACT by construction -- its significand is already binary, so
-// there is no decimal->binary search here at all: collect the digits, round once.
-// m keeps up to 60 bits and a sticky bit carries the rest, which is enough --
-// digits below the 53rd can break a tie but never create one.
+// a hex float rounds once: m keeps 60 bits, a sticky bit the rest
 static double lm_hexflo(uint64_t m, int e2, int sticky, int sign) {
  if (!m) return sign > 0 ? 0.0 : -0.0;
  while (!(m >> 63)) m <<= 1, e2--;               // normalize: MSB to bit 63
@@ -485,9 +431,7 @@ static double lm_hexflo(uint64_t m, int e2, int sticky, int sign) {
   uint64_t lost = m & (((uint64_t) 1 << sh) - 1), half = (uint64_t) 1 << (sh - 1);
   sig = m >> sh;
   if (lost > half || (lost == half && (sticky || (sig & 1)))) sig++; }
- // the subnormal encoding runs CONTINUOUSLY into the normals: a sig that
- // rounded up to 2^52 reads as exponent field 1, mantissa 0 -- the smallest
- // normal -- so the raw word is already the answer and needs no special case.
+ // a subnormal rounded up to 2^52 encodes as the smallest normal on its own
  if (sub) { double d = mkd(sig); return sign > 0 ? d : -d; }
  if (sig >> 53) sig >>= 1, E++;                  // the all-ones carry
  if (E > 1023) return sign > 0 ? DInf : -DInf;
@@ -498,9 +442,7 @@ double lm_strtod(char const *s, char **end) {
  int sign = 1;
  if (*p == '-') sign = -1, p++;
  else if (*p == '+') p++;
- // 0x H.H [p+-D] (C99 7.20.1.3): the exponent is optional HERE, where a source
- // literal must carry one. a bare 0x matches no digit and falls through, so the
- // decimal lane below takes its "0" and leaves the x -- an honest symbol still.
+ // 0x H.H [p+-D], the exponent optional; a bare 0x reads as "0"
  if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
   char const *q = p + 2;
   uint64_t hm = 0;
@@ -528,12 +470,8 @@ double lm_strtod(char const *s, char **end) {
      he += es * pv;
      if (end) *end = (char*) r; } }
    return lm_hexflo(hm, he, hst, sign); } }
- // significant digits: up to 780 kept exactly (din, MSB collected then
- // reversed -- correct rounding can genuinely need ~768 digits; a mere sticky
- // bit cannot carry a truncated tail's MAGNITUDE through a mid-comparison,
- // only break an exact tie, and the 3.2M-parse differential found the 1-ulp
- // misses that proves). beyond 780 the tail folds to sticky, which by the
- // worst-case bound can then only break ties. fr counts post-point digits.
+ // up to 780 significant digits kept exactly (rounding can need ~768), the rest
+ // a sticky bit; fr counts post-point digits
  unsigned char din[790];
  int any = 0, pt = 0, fr = 0, nin = 0, extra = 0, sticky = 0;
  double v0 = 0;
@@ -567,8 +505,7 @@ double lm_strtod(char const *s, char **end) {
  int mag = nin + kk;                             // value in [10^(mag-1), 10^mag)
  if (mag > 310)  return sign * DInf;
  if (mag < -342) return sign > 0 ? 0.0 : -0.0;
- // the seed: v0 holds only the TOP 19 kept digits, so its scale carries the
- // rest of din's length; x 10 in bounded chunks (gradual under/overflow lands close)
+ // the seed: v0 holds the top 19 digits, scaled in bounded chunks
  { int e = kk + (nin > 19 ? nin - 19 : 0);
    while (e >= 300)  v0 *= 1e300, e -= 300;
    while (e <= -300) v0 /= 1e300, e += 300;

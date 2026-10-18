@@ -9,14 +9,14 @@ void *memmove(void*, void const*, size_t);
 void *memset(void*, int, size_t);
 int   memcmp(void const*, void const*, size_t);
 void *memchr(void const*, int, size_t);
-void *mempcpy(void*, void const*, size_t);      /* GNU extension: memcpy returning the END */
-void *rawmemchr(void const*, int);              /* GNU extension: memchr with no length bound */
+void *mempcpy(void*, void const*, size_t);      /* gnu: memcpy answering the end */
+void *rawmemchr(void const*, int);              /* gnu: memchr with no bound */
 size_t strlen(char const*);
 int   strcmp(char const*, char const*);
 int   strncmp(char const*, char const*, size_t);
 int   strcasecmp(char const*, char const*);
 int   strncasecmp(char const*, char const*, size_t);
-char *strcasestr(char const*, char const*);   /* the GNU case-blind strstr */
+char *strcasestr(char const*, char const*);
 char *strcpy(char*, char const*);
 char *strncpy(char*, char const*, size_t);
 char *strcat(char*, char const*);

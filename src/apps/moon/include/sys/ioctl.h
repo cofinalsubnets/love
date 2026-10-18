@@ -7,7 +7,7 @@ struct winsize { unsigned short ws_row, ws_col, ws_xpixel, ws_ypixel; };
 #define TIOCSWINSZ 21524
 #define FIONREAD   21531
 
-/* the linux _IOC encoding: dir<<30 | size<<16 | type<<8 | nr. */
+/* linux's _IOC encoding: dir<<30 | size<<16 | type<<8 | nr */
 #define _IOC_NRBITS   8
 #define _IOC_TYPEBITS 8
 #define _IOC_SIZEBITS 14

@@ -1,7 +1,6 @@
 #include "../impl.h"
 
-/* over getc rather than read, so the ungetc pushback is honored here too -- it
- * already reads a byte at a time, so the indirection costs nothing. */
+/* over getc, so an ungetc pushback is honoured */
 char *fgets(char *buf, int n, FILE *f) {
   int i = 0;
   while (i < n - 1) {

@@ -1,8 +1,7 @@
 #include "../impl.h"
 
-/* select over pselect6: the only lane asm-generic carries (no plain select on
- * arm64/riscv). linux's 6th arg is a {set, size} pair; freebsd's pselect
- * takes the bare sigset* -- and we carry none, so NULL rides both ways. */
+/* pselect6, as arm64 and riscv have no select. linux's 6th arg is a {set, size} pair,
+ * a BSD's a bare sigset pointer */
 int select(int n, fd_set *r, fd_set *w, fd_set *e, struct timeval *tv) {
   struct timespec ts, *tp = 0;
   long sm[2];

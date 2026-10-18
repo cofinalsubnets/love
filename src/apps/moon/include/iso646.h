@@ -1,6 +1,5 @@
 #ifndef _LOVE_ISO646_H
 #define _LOVE_ISO646_H
-/* C11 7.9 -- the alternative spellings, and nothing else lives here */
 #define and    &&
 #define and_eq &=
 #define bitand &

@@ -1,10 +1,10 @@
 #ifndef _LOVE_TERMIOS_H
 #define _LOVE_TERMIOS_H
-#include <sys/types.h>   /* pid_t, for the tc[gs]etpgrp pair */
+#include <sys/types.h>
 typedef unsigned int  tcflag_t;
 typedef unsigned char cc_t;
 typedef unsigned int  speed_t;
-/* glibc x86-64 layout: 4 flag words, a line byte, 32 control chars, 2 speeds = 60 bytes */
+/* glibc x86-64's 60-byte layout */
 struct termios {
   tcflag_t c_iflag, c_oflag, c_cflag, c_lflag;
   cc_t c_line;

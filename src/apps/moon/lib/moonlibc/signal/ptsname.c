@@ -14,8 +14,8 @@ char *ptsname(int fd) {
     return nb; }
   if (__love_osv == 2) {
     struct { int len; void *buf; } a = { sizeof nb - 5, nb + 5 };
-    if (fb3(NR_fb_ioctl, fd, (long) (0x80006678UL | sizeof a << 16), (long) &a) < 0) return 0;   /* FIODGNAME: _IOW, its size the struct's */
-    return memcpy(nb, "/dev/", 5), nb; }                              /* the kernel answers "pts/N", sans /dev/ */
+    if (fb3(NR_fb_ioctl, fd, (long) (0x80006678UL | sizeof a << 16), (long) &a) < 0) return 0;   /* FIODGNAME, sized by the struct */
+    return memcpy(nb, "/dev/", 5), nb; }                              /* the kernel answers "pts/N" */
   int n = 0;
   if (ioctl(fd, 2147767344UL, &n) < 0) return 0;                      /* TIOCGPTN */
   snprintf(nb, sizeof nb, "/dev/pts/%d", n);

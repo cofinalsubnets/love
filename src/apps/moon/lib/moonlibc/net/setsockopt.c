@@ -3,6 +3,6 @@
 int setsockopt(int fd, int lv, int op, void const *v, socklen_t n) {
   if (__love_osv >= 2) {
     long l = lv, o = op;
-    if (__love_sofb(&l, &o)) return (int) er(-ENOSYS);   /* an unmapped name, loudly */
+    if (__love_sofb(&l, &o)) return (int) er(-ENOSYS);   /* an unmapped name */
     return (int) er(sc5(NR_setsockopt, fd, (int) l, (int) o, (long) v, n)); }
   return (int) er(sc5(NR_setsockopt, fd, lv, op, (long) v, n)); }

@@ -40,10 +40,10 @@ static long bsd_long(int a, int b) {
   if (sysctl(mib, 2, &v, &n, 0, 0)) return -1;
   return n == sizeof(int) ? (long) *(int *) &v : (long) v; }
 
-/* the kernel's page, AT_PAGESZ: 16K on a pi 5's kernel, 4K where no auxv says (inle) */
+/* AT_PAGESZ; 4K where no auxv says (inle) */
 static long page_size(void) { unsigned long p = getauxval(6); return p ? (long) p : 4096; }
 
-/* linux answers from /sys and sysinfo(2), the BSDs from hw.*; inle has no answer yet */
+/* linux answers from /sys and sysinfo(2), the BSDs from hw.* */
 long sysconf(int name) {
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();

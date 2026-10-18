@@ -1,17 +1,16 @@
 #ifndef _LOVE_SYS_RESOURCE_H
 #define _LOVE_SYS_RESOURCE_H
-#include <sys/time.h>   /* struct timeval */
-#include <sys/types.h>  /* id_t */
+#include <sys/time.h>
+#include <sys/types.h>
 #define RUSAGE_SELF      0
 #define RUSAGE_CHILDREN (-1)
-/* the kernels agree on the two timevals and part company after them: the tail is
- * sized to linux's and read by nobody. `time` wants ru_utime and ru_stime. */
+/* the kernels agree only on the two timevals; the tail is linux's, read by nobody */
 struct rusage {
   struct timeval ru_utime, ru_stime;
   long ru_maxrss, ru_ixrss, ru_idrss, ru_isrss, ru_minflt, ru_majflt, ru_nswap,
        ru_inblock, ru_oublock, ru_msgsnd, ru_msgrcv, ru_nsignals, ru_nvcsw, ru_nivcsw; };
 int getrusage(int, struct rusage*);
-/* the resource numbers are linux's; sys/getrlimit.c respells them for a BSD */
+/* linux's numbers, respelled for the bsds */
 typedef unsigned long rlim_t;
 #define RLIM_INFINITY (~(rlim_t) 0)
 #define RLIMIT_CPU     0

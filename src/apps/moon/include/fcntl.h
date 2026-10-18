@@ -1,9 +1,7 @@
 #ifndef _LOVE_FCNTL_H
 #define _LOVE_FCNTL_H
-#include <sys/types.h>   /* off_t, flock's */
-/* Linux x86-64 values (octal in the kernel; spelled decimal here) -- the
- * CANONICAL face on every lane; a freebsd kernel takes them translated
- * (moonlibc's os.c flag rows). */
+#include <sys/types.h>
+/* linux x86-64's values, in decimal, on every kernel; the bsds take them translated */
 #define O_RDONLY         0
 #define O_WRONLY         1
 #define O_RDWR           2
@@ -13,14 +11,7 @@
 #define O_TRUNC        512
 #define O_APPEND      1024
 #define O_NONBLOCK    2048
-/* THE ARM FAMILY IS THE EXCEPTION HERE, and rv64 is NOT in it. a64 kept
- * 32-bit ARM's values for these two; rv64 takes the genuine asm-generic
- * ones, which are x86-64's. the first cut of this gated on
- * `__aarch64__ || __riscv` and called 040000 "asm-generic" -- it is arm's. on
- * rv64 that made O_DIRECTORY mean O_DIRECT and O_NOFOLLOW mean O_LARGEFILE:
- * opendir answered EINVAL (direct I/O on a directory), and the symlink guard
- * was silently absent, which is the quieter half. a64 masked it by being
- * right, so it took a rv64 package build to surface. */
+/* a64 keeps 32-bit arm's values for these two; rv64 takes asm-generic's, which are x86-64's */
 #if defined(__aarch64__) || defined(__arm__)
 #define O_DIRECTORY  16384   /* arm/a64 040000 */
 #define O_NOFOLLOW   32768   /* arm/a64 0100000 */
@@ -30,19 +21,19 @@
 #endif
 #define O_CLOEXEC   524288
 #ifdef __i386__
-#define O_LARGEFILE 32768  /* 0100000: off_t is 64-bit, so every open asks for it */
+#define O_LARGEFILE 32768  /* off_t is 64-bit, so every open asks for it */
 #elif defined(__ARM_EABI__)
 #define O_LARGEFILE 131072 /* arm's 0400000 */
 #else
 #define O_LARGEFILE 0      /* glibc's on 64-bit: every open is large already */
 #endif
-#define O_SEARCH   O_RDONLY   /* Linux has no O_SEARCH; gnulib's own fallback (fcntl.in.h) */
-#define O_BINARY         0    /* no text/binary distinction on Linux (a DOS-ism; 0 = no-op) */
+#define O_SEARCH   O_RDONLY   /* linux has no O_SEARCH */
+#define O_BINARY         0    /* dos-isms: no-ops here */
 #define O_TEXT           0
-#define AT_FDCWD      (-100)   /* both kernels' spelling */
+#define AT_FDCWD      (-100)
 #define AT_SYMLINK_NOFOLLOW 256
 #define AT_REMOVEDIR        512
-/* linux only, and only fexecve asks: the BSDs have the call itself */
+/* linux only, for fexecve */
 #define AT_EMPTY_PATH      4096
 #define F_DUPFD          0
 #define F_GETFD          1
@@ -51,7 +42,7 @@
 #define F_SETFL          4
 #define FD_CLOEXEC       1
 #define F_DUPFD_CLOEXEC 1030   /* F_LINUX_SPECIFIC_BASE (1024) + 6 */
-/* POSIX record locks (sqlite's whole locking story rides these) */
+/* posix record locks */
 #define F_GETLK          5
 #define F_SETLK          6
 #define F_SETLKW         7
@@ -61,7 +52,7 @@
 struct flock {
   short l_type;
   short l_whence;
-  off_t l_start;   /* i386: flock64's record, which fcntl.c asks for by F_*LK64 */
+  off_t l_start;   /* i386: flock64's record, asked for by F_*LK64 */
   off_t l_len;
   int   l_pid;
 };

@@ -163,7 +163,8 @@
  I(lvm_arg3) I(lvm_quo0) I(lvm_quo1) I(lvm_quo2) I(lvm_quo3) I(lvm_quom1) \
  I(lvm_quom2) I(lvm_aa) I(lvm_aq) I(lvm_qa) I(lvm_qq) I(lvm_aap) \
  I(lvm_aqp) I(lvm_qap) I(lvm_qqp) I(lvm_argcap) I(lvm_argcup) I(lvm_argtwo) \
- I(lvm_argcond) I(lvm_argtwocond)
+ I(lvm_argcond) I(lvm_argtwocond) I(lvm_apo) I(lvm_tapo) I(lvm_uncn) I(lvm_part) \
+ I(lvm_tpart)
 #define nif_run_p(at, nm, im, mod) { im }, { lvm_ret0 },
 #define nif_run_c(at, a, nm, im, mod) { lvm_cur }, { .x = putcharm(a) }, { im }, { lvm_ret0 },
 #define nif_def_p(at, nm, im, mod) { nm, { .k = nifs + at }, mod },

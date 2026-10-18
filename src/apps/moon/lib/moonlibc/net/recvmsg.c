@@ -1,11 +1,9 @@
 #include "../impl.h"
 
-/* sendmsg's mirror: the kernel fills the BSD twins in our scratch, the heads
- * rewrite back to the canon in the caller's buffers. control past the scratch
- * comes back MSG_CTRUNC -- the kernel's own word for it. */
+/* sendmsg's mirror; control past the scratch comes back MSG_CTRUNC */
 long recvmsg(int fd, struct msghdr *m, int fl) {
   if (__love_osv < 2) return er(sc3(NR_recvmsg, fd, (long) m, fl));
-  if (fl & MSG_ERRQUEUE) return er(-EAGAIN);   /* linux's alone: a bsd has no error queue */
+  if (fl & MSG_ERRQUEUE) return er(-EAGAIN);   /* a BSD has no error queue */
   struct sockaddr_storage sa;
   unsigned char cb[256];
   struct __fb_msghdr f = {0, 0, 0, 0, 0, 0, 0, 0, 0};
