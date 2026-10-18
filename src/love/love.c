@@ -614,6 +614,16 @@ static lvm(lvm_casknew) {
  tagthread(k, Width(struct cask));
  love_musttail return Answer(word(k)); }
 
+union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear) {
+ uintptr_t sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
+ struct g *g = *gp = have(*gp, sreq + breq);
+ if (!ok(g)) return NULL;
+ struct str *s = ini_str(bump(g, sreq), n);
+ memset(s->bytes, 0, clear);
+ union u *k = bump(g, breq);
+ cask(k)->ap = lvm_cask, cask(k)->str = s;
+ return tagthread(k, Width(struct cask)); }
+
 // tell the I-cache about fresh code; wasm has no arena and no intrinsic, so a site never asks directly
 #ifdef __wasm__
 #define code_sync(a, b) ((void) (a), (void) (b))

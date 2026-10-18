@@ -1002,11 +1002,19 @@ static intptr_t q_put(struct k_pipe *p, unsigned char const *src, uintptr_t n) {
   p->wp += n;
   return (intptr_t) n; }
 
+// a queue's read: its bytes, else 0 (park) while a writer holds the other end, -1 (the end) after
+static intptr_t q_read(struct k_pipe *q, int writers, unsigned char *dst, uintptr_t n) {
+  return q->wp > q->rp ? q_get(q, dst, n) : writers ? 0 : -1; }
+static bool q_ready(struct k_pipe const *q, int writers) { return q->wp > q->rp || !writers; }   // bytes, or the end
+
+// a stateless dup (a console twin) still owes k_fd_free a way back to empty
+static void k_row_zero(int fd) {
+  struct k_source *s = k_source(fd);
+  if (s) *s = (struct k_source) {0}; }
+
 static intptr_t pipe_readn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_pipe *p = k_pipe_of(fd);
-  if (!p) return -1;
-  if (p->wp == p->rp) return p->wrefs ? 0 : -1; // quiet with a writer: park; else the end
-  return q_get(p, dst, n); }
+  return p ? q_read(p, p->wrefs, dst, n) : -1; }
 
 static intptr_t pipe_writen(int fd, unsigned char const *src, uintptr_t n) {
   struct k_pipe *p = k_pipe_of(fd);
@@ -1016,7 +1024,7 @@ static intptr_t pipe_writen(int fd, unsigned char const *src, uintptr_t n) {
 
 static bool pipe_rready(int fd) {
   struct k_pipe *p = k_pipe_of(fd);
-  return p && (p->wp > p->rp || !p->wrefs); }   // bytes, or the end -- both wake a reader
+  return p && q_ready(p, p->wrefs); }
 
 static void pipe_free(struct k_pipe *p) {
   if (p->rrefs || p->wrefs) return;
@@ -1025,20 +1033,13 @@ static void pipe_free(struct k_pipe *p) {
 
 static void pipe_rclose(int fd) {
   struct k_pipe *p = k_pipe_of(fd);
-  struct k_source *s = k_source(fd);
-  if (s) *s = (struct k_source) {0};
+  k_row_zero(fd);
   if (p) p->rrefs--, pipe_free(p); }
 
 static void pipe_wclose(int fd) {
   struct k_pipe *p = k_pipe_of(fd);
-  struct k_source *s = k_source(fd);
-  if (s) *s = (struct k_source) {0};
+  k_row_zero(fd);
   if (p) p->wrefs--, pipe_free(p); }
-
-// a stateless dup (a console twin) still owes k_fd_free a way back to empty
-static void k_row_zero(int fd) {
-  struct k_source *s = k_source(fd);
-  if (s) *s = (struct k_source) {0}; }
 
 // the pty: master, slave and signal rows over one k_pty. the master (a mitty pane) writes keys
 // through the line discipline into in and reads out; the slave the other way, \n as \r\n under
@@ -1110,9 +1111,7 @@ static void pty_key(struct k_pty *t, unsigned char c) {
 
 static intptr_t pty_mreadn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_pty *t = k_pty_of(fd);
-  if (!t) return -1;
-  if (t->out.wp == t->out.rp) return t->srefs ? 0 : -1;
-  return q_get(&t->out, dst, n); }
+  return t ? q_read(&t->out, t->srefs, dst, n) : -1; }
 
 static intptr_t pty_mwriten(int fd, unsigned char const *src, uintptr_t n) {
   struct k_pty *t = k_pty_of(fd);
@@ -1122,7 +1121,7 @@ static intptr_t pty_mwriten(int fd, unsigned char const *src, uintptr_t n) {
 
 static bool pty_mready(int fd) {
   struct k_pty *t = k_pty_of(fd);
-  return t && (t->out.wp > t->out.rp || !t->srefs); }
+  return t && q_ready(&t->out, t->srefs); }
 
 static intptr_t pty_sreadn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_pty *t = k_pty_of(fd);
@@ -1147,13 +1146,11 @@ static bool pty_sready(int fd) {
 
 static intptr_t pty_greadn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_pty *t = k_pty_of(fd);
-  if (!t) return -1;
-  if (t->sig.wp == t->sig.rp) return t->mrefs ? 0 : -1;
-  return q_get(&t->sig, dst, n); }
+  return t ? q_read(&t->sig, t->mrefs, dst, n) : -1; }
 
 static bool pty_gready(int fd) {
   struct k_pty *t = k_pty_of(fd);
-  return t && (t->sig.wp > t->sig.rp || !t->mrefs); }
+  return t && q_ready(&t->sig, t->mrefs); }
 
 // the terminal gone is a hangup: SIGHUP onto the signal row, before the row's end
 static void pty_mclose(int fd) {

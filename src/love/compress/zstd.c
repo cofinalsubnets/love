@@ -790,17 +790,12 @@ static struct str *zs_cask(word x) {
 love_noinline static struct g *host_zstd_new(struct g *g) {
  word ww = g->sp[0];
  if (!oddp(ww) || getcharm(ww) < 0 || (uintptr_t) getcharm(ww) > ZS_WMAX) return g->sp[0] = ZeroPoint, g;
- uintptr_t win = (uintptr_t) getcharm(ww), cap = win + zs_room(win), n = ZS_HEAD + cap + ZS_SLACK,
-           sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
- if (!ok(g = have(g, sreq + breq))) return g;
- struct str *s = ini_str(bump(g, sreq), n);
- struct zs_st *S = (struct zs_st*) s->bytes;
- memset(S, 0, offsetof(struct zs_st, lit));
+ uintptr_t win = (uintptr_t) getcharm(ww), cap = win + zs_room(win), n = ZS_HEAD + cap + ZS_SLACK;
+ union u *k = new_cask(&g, n, offsetof(struct zs_st, lit));
+ if (!k) return g;
+ struct zs_st *S = (struct zs_st*) cask(k)->str->bytes;
  S->magic = ZS_MAGIC, S->cap = cap, S->win = win, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
  xx_init(&S->x);
- union u *k = bump(g, breq);
- cask(k)->ap = lvm_cask, cask(k)->str = s;
- tagthread(k, Width(struct cask));
  return g->sp[0] = word(k), g; }
 
 love_noinline static struct g *host_zstd_block(struct g *g) {
