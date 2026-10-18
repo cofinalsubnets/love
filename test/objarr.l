@@ -192,7 +192,7 @@
  (1 = oa-at (oa-i * oa-q) 3) ((-1 /// 3) = oa-at (oa-i - oa-q) 0) ((-8 /// 3) = oa-at (oa-q - oa-i) 3)
  (9 = oa-at (oa-i / oa-q) 3)
  ((9 /// 2) = peep ((top-tray [2 2] [1 2 3 4]) + (1 /// 2)) [1 1] ())
- ((5.0 /// 6.0) = oa-at ((iota 2 + 0.5) + oa-q) 0)
+ (gem? (oa-at ((iota 2 + 0.5) + oa-q) 0))                ; a float cell: the inexact wins
  (aall ((oa-i < oa-q) = @(1 0 0 0))) (aall ((oa-q < oa-i) = @(0 1 1 1)))
  (aall ((oa-i = oa-q) = @(0 0 0 0))) (aall ((@(1 (1 /// 3)) = oa-q) = @(0 1)))
  !(oa-i & oa-q))

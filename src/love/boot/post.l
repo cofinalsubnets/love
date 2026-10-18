@@ -989,8 +989,10 @@
           (: g (gcd (abs n) (abs d)) s (d < 0 ? -1 1)
            [(s * n // g) (s * d // g)]))
         (arg v) (? (coin? v) (load v) (two? v) v [v 1])       ; an operand as (n d): a bare star is n/1
-        ; a component is a plain star, never a coin, or gcd would not terminate
-        (nstar? v) (atom? v && (nil? * coin?) v && v = +v)   ; atom? first: a chain's net is a rational whose '= asks this again
+        ; a plain number, never a coin: atom? first, a chain's net is a rational whose '= asks this again
+        (pnum? v) (atom? v && (nil? * coin?) v && v = +v)
+        ; a component is an exact integer: a float or a twin has no gcd to reduce by
+        (nstar? v) (pnum? v && !(gem? v || twin? v))
         (ok? v) (nstar? v || two? v && all nstar? v)
         (q p) (1 = <>p ? <p (c p))                          ; a reduced (n d): the integer when d is 1, else struck
         (measure c) (: p (load c) q (<p / <>p)                ; n/d; a quotient lost to underflow
@@ -1001,6 +1003,9 @@
         (num? v) (nstar? v || coin? v && ok? (load v))      ; a number or a rational, never a text or a list
         (div x y) (ok? x && ok? y && <y != 0 ?              ; invert and multiply; by zero -> ()
                    (q (reduce (<x * <>y) (<>x * <y))))
+        ; an inexact operand: the op over the measures, and the inexact answer wins
+        (inex f a b) (: u (val a) w (val b) (pnum? u && pnum? w ? (f u w)))
+        (fquot a b) (inex (\ u w (w = 0 ? () (u / w))) a b)
         c (coin '/// (z \ {'star 1                               ; a rational is a star
          'net measure
          '< (\ a b (: x (arg a) y (arg b)                      ; cross-multiply, exact (d > 0)
@@ -1014,15 +1019,18 @@
                      (0 < <p ? (k + 1) k)))                  ; up from a positive trunc
          '+ (\ a b (: x (arg a) y (arg b)
              (ok? x && ok? y ?
-              (q (reduce (<x * <>y + <y * <>x) (<>x * <>y))))))
+              (q (reduce (<x * <>y + <y * <>x) (<>x * <>y)))
+              (inex (+) a b))))
          '* (\ a b (: x (arg a) y (arg b)
              (ok? x && ok? y ?
-              (q (reduce (<x * <y) (<>x * <>y))))))
+              (q (reduce (<x * <y) (<>x * <>y)))
+              (inex (*) a b))))
          '- (\ a b (: x (arg a) y (arg b)
              (ok? x && ok? y ?
-              (q (reduce (<x * <>y - <y * <>x) (<>x * <>y))))))
-         '/ (\ a b (div (arg a) (arg b)))}))
-        (strike a b) (num? a && num? b ? (div (arg a) (arg b)))  ; a zero or non-number operand -> ()
+              (q (reduce (<x * <>y - <y * <>x) (<>x * <>y)))
+              (inex (-) a b))))
+         '/ (\ a b (: x (arg a) y (arg b) (ok? x && ok? y ? (div x y) (fquot a b))))}))
+        (strike a b) (num? a && num? b ? (div (arg a) (arg b)) (fquot a b))  ; a zero or non-number operand -> (), a float the quotient
         (n \ (two? n ? (strike <n <>n)                         ; (/// (n d)) -- the list form
                        (strike n)))))                         ; (/// n d) -- the curried form, and 3 /// 4 spaced
 
