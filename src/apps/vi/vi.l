@@ -19,7 +19,8 @@
    (vi-open f)
     (: r (0 < #f ? (uread f))
        st (vnew (two? r ? (lines <>r)) f)
-       (0 < #f && atom? r ? (vmsg st (f + ": new file")),
+       (pin st 'home (getenv "HOME"),
+        0 < #f && atom? r ? (vmsg st (f + ": new file")),
         (vi-theme st ())))
    ; the pens, and the door :colorscheme rings to swap them: the face reads the env
    ; and the theme file, the engine neither
@@ -114,7 +115,8 @@
        (load _) (box ? (pin st 'reg (peep box () (st 'reg))) 0)
        (keep _) (box ? (pin box () (st 'reg)) 0)
        (text v) (? (atom? v) "" (<v = 'lin) (foldl (a \ l \ a + l + "\n") "" <>v) <>v)
-       (type s) (map (c \ vstep st c) (map (i \ s i) ^#s))
+       ; a paste is text, not typing: its own indent stands, so :set ai sits it out
+       (type s) (: ai (st 'ai) _ (pin st 'ai ()) _ (each ^#s (i \ vstep st (s i))) (pin st 'ai ai))
      [(w \ h \ (pins st 'w w 'h h, st 'seek @ d (nil? d ? ("\e[?25h" + vfresh st) (cite 'seek 'seek-frame d w h))))
       (c \ (nil? (st 'seek) ? (load (), vstep st c, keep (), dow st, doe st, dos st (doors 'split), dox st (doors 'ex), dof st, dex st (doors 'explore))
                (vseek st c)))
