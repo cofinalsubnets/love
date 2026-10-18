@@ -656,7 +656,7 @@
                   'link   (rfi <>x + " \\(la\(rq <>>x)\\(ra")
                   'img    (0 < #<>x ? (rq "[\(<>x)]") "")
                   "")
-   (rth kvs)   ".TH\(cats (map (k \ " \"\(mget kvs k)\"") metakeys))\n"
+   (rth kvs)   ".TH\(join "" (map (k \ " \"\(mget kvs k)\"") metakeys))\n"
    (rnums l i) (atom? l ? "" (".IP \"\(i).\" 4\n" + rline (rfi <l) + "\n\(rnums >l (i + 1))"))
    (rdefs l)   (catmap (it \ ".TP\n" + rline (rfi <it) + "\n" + rfill (rfi <>it)) l)
    ; roff has no cells here: a table that fits a page is its laid columns as a display,

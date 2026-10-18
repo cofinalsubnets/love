@@ -1016,7 +1016,7 @@
        sk (g 'skew)
        _ (say err "grap: \(m) near \(nm):\(t - 1)\n")
        rest (: (drop l j) (? (atom? l) () (t < j) l (drop >l (j + 1))) (drop bl (k + 1)))
-       (gr-o0 g ".PE\n.lf \(t + sk)\n\(cats (map (x \ "\(x)\n") rest))\(string? pe && t < pk ? "\(pe)\n" "")",
+       (gr-o0 g ".PE\n.lf \(t + sk)\n\(join "" (map (x \ "\(x)\n") rest))\(string? pe && t < pk ? "\(pe)\n" "")",
         pin g 'skew (sk - 1)))
    ; grap.defines: definitions only
    (gr-run-defs g d)
