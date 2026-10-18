@@ -528,6 +528,38 @@ static lvm(lvm_deferpatch) {
    c[5].x = n, gen_wb_cell(g, &c[5], n); } }
  love_musttail return Answerp(1, Sp[0]); }
 LvDef("deferpatch", deferpatch, 2, "guts");
+// a first-call native: a deferred cell whose code slot is lvm_firstcall and whose N holds the
+// thunk that compiles it. its first call makes it forward first, so a call while the compile
+// runs is the twin's, then hands the cell to the thunk (callout_drive), whose deferpatch lays
+// the native in; the landing enters the cell again as it was entered
+static lvm(lvm_firstcall_land) {                    // [ans ip]
+ Ip = cell(Sp[1]); Sp += 2; love_musttail return Continue(); }
+static union u const firstcall_land[] = {{.ap = lvm_firstcall_land}};
+lvm(lvm_firstcall) {
+ Have(4);
+ union u *v = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? Ip - 2 : Ip;
+ word t = Ip[5].x, *dst = Sp - 4;
+ Ip->ap = v[-1].ap = lvm_deferfwd, Ip[5].x = putcharm(0);
+ dst[0] = word(v), dst[1] = t, dst[2] = word(firstcall_land), dst[3] = word(Ip);
+ Sp = dst; Ip = (union u*) callout_drive; love_musttail return Continue(); }
+// (firstcell interp arity thunk): defercell's cell, compiled by (thunk cell) at its first call
+static lvm(lvm_firstcell) {
+ word f = Sp[0];
+ intptr_t ar = oddp(Sp[1]) ? getcharm(Sp[1]) : 0;
+ if (ar < 1 || oddp(f) || datp(f)
+     || (ar > 1 && (cell(f)->ap != lvm_cur || cell(f)[1].x != putcharm(ar))))
+  love_musttail return Answerp(2, ZeroPoint);
+ Have(10);
+ union u *k = (union u*) Hp;
+ uintptr_t w = 0;
+ k[w++].ap = lvm_firstcall;
+ if (ar > 1) k[w++].ap = lvm_cur, k[w++].x = putcharm(ar);
+ k[w++].ap = lvm_firstcall, k[w++].x = Sp[0], k[w++].ap = lvm_ret, k[w++].x = putcharm(ar - 1);
+ k[w++].x = putcharm(0), k[w++].x = Sp[2];
+ Hp += w + 1;
+ tagthread(k, w);
+ love_musttail return Answerp(2, word(k + 1)); }
+LvDef("firstcell", firstcell, 3, "guts");
 
 // (pour dst doff src soff n): n bytes into cask dst, clamped to both; answers dst
 lvm(lvm_bcopy) {
