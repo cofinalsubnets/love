@@ -775,15 +775,17 @@ test_gcheck: host $(love0) $(ho)/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_host
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_hostegg
 # test_gcstress: LvGcStress collects every time and poisons the nursery, the corpus in
-# GCS_SHARDS shards a half; _bake also bakes under stress, _full runs it whole (hours)
+# GCS_SHARDS shards a half; _bake also bakes under stress, _full runs it whole and the stress
+# love0 over all of it (hours)
 GCS_SHARDS ?= 4
 test_gcstress: host $(love0) $(ho)/mooncc0.image
 	@MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
 test_gcstress_bake: host $(love0) $(ho)/mooncc0.image
 	@GCS_BAKE=1 MAKE='$(MAKE)' sh test/gate/gcshard.sh . $(GCS_SHARDS)
-test_gcstress_full: host $(love0) $(ho)/mooncc0.image
+test_gcstress_full: host $(love0) out/gcs0/love0 out/lib/corpus.list $(ho)/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
+	@sh test/gate/l0stress.sh .
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---
 # each gate skips, saying so, when its checker is missing
 COQC     ?= $(shell command -v coqc 2>/dev/null)
