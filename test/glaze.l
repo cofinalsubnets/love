@@ -209,3 +209,12 @@
            (test (1 = gzro [(['f 'c 'i 'n] . '(? (= i n) c (f (pin c i 65) (+ i 1) n)))])
                  (0 = gzro [(['f 'c 'i 'n] . '(? (= i n) c (f (pin c i (+ 1 (peep c i))) (+ i 1) n)))])))
       0))
+; a list literal led by a constant, ['p x], glazes as its cons spelling does: the known prefix
+; of a saturated nif stays an operand, never a partial for a head
+(: (gzqh-l s i acc) (i = #s ? acc (gzqh-l s (i + 1) (['p (s i)] . acc)))
+   (gzqh-c s i acc) (i = #s ? acc (gzqh-c s (i + 1) ((. 'p (. (s i) ())) . acc)))
+   (gzqh-n s i acc) (i = #s ? acc (gzqh-n s (i + 1) ([7 (s i)] . acc)))
+   _ (test (gzqh-l "ab" 0 () = [['p 98] ['p 97]]) (gzqh-l "ab" 0 () = gzqh-c "ab" 0 ())
+           (gzqh-n "ab" 0 () = [[7 98] [7 97]])
+           (nat? gzqh-l = nat? gzqh-c) (nat? gzqh-n = nat? gzqh-c))
+   0)
