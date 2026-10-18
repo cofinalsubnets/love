@@ -145,18 +145,30 @@
    vc "SSH-2.0-love_ssh"
    kexs ["curve25519-sha256" "curve25519-sha256@libssh.org" "ext-info-c" "kex-strict-c-v00@openssh.com"]
    cipher "chacha20-poly1305@openssh.com"
-   (kexinit _) (u8 20 + rnd 16 + names kexs + names ["ssh-ed25519"] + names [cipher] + names [cipher]
-              + names ["hmac-sha2-256"] + names ["hmac-sha2-256"] + names ["none"] + names ["none"]
-              + names [] + names [] + u8 0 + u32 0)
-   ; the server's lists, checked against ours -> a reason string, or the strict flag
-   (agree is)
+   (kexinit ks) (u8 20 + rnd 16 + names ks + names ["ssh-ed25519"] + names [cipher] + names [cipher]
+                + names ["hmac-sha2-256"] + names ["hmac-sha2-256"] + names ["none"] + names ["none"]
+                + names [] + names [] + u8 0 + u32 0)
+   ; the peer's lists, checked against ours -> a reason string, or whether it takes strict kex
+   (agree is peer hkm strict)
     (: c (cur is) _ (g-skip c 17)
        kx (g-names c) hk (g-names c) cs (g-names c) sc (g-names c)
        (? !(elem "curve25519-sha256" kx || elem "curve25519-sha256@libssh.org" kx)
-          ("no common key exchange; the server offers " + join "," kx)
-          (nelem "ssh-ed25519" hk) ("no ssh-ed25519 host key; the server offers " + join "," hk)
-          !(elem cipher cs && elem cipher sc) ("no common cipher; the server offers " + join "," cs)
-          (elem "kex-strict-s-v00@openssh.com" kx)))
+          ("no common key exchange; the " + peer + " offers " + join "," kx)
+          (nelem "ssh-ed25519" hk) (hkm + join "," hk)
+          !(elem cipher cs && elem cipher sc) ("no common cipher; the " + peer + " offers " + join "," cs)
+          (elem strict kx)))
+   ; newkeys each way over shared kk and hash h: our keys kd me, the peer's kd them, the
+   ; strict sequence reset -> what came for the peer's newkeys
+   (newkeys t kk h ok me them)
+    (: (kd x) (: k1 (sha (kk + h + x + h)) k (k1 + sha (kk + h + k1)) [(snip k 0 32) (snip k 32 64)])
+       _ (ssh-send t (u8 21))
+       _ (pin t 'ck (kd me))
+       _ (ok ? (pin t 'sseq 0) 0)
+       nk (expect t 21)
+       (pin t 'sk (kd them),
+        ok ? (pin t 'rseq 0) 0,
+        pin t 'strict 0,
+        nk))
 
    (ssh-dial host port)
     (dial host port @ s
@@ -166,10 +178,10 @@
              _ (wr t (vc + "\r\n"))
              vs (server-version t)
              _ (pin t 'peer vs)
-             ic (kexinit 0)
+             ic (kexinit kexs)
              _ (ssh-send t ic)
              is (expect t 20)
-             ok (string? vs ? (string? is ? (agree is) "no kexinit") "no version line")
+             ok (string? vs ? (string? is ? (agree is "server" "no ssh-ed25519 host key; the server offers " "kex-strict-s-v00@openssh.com") "no kexinit") "no version line")
              (string? ok ? (close s, ok)
                 (: _ (pin t 'strict ok)
                    priv (rnd 32) qc (x25519-pub priv)
@@ -187,18 +199,10 @@
                             !(kt = "ssh-ed25519" && st = "ssh-ed25519" && ed-verify hpk h sb)
                              (close s, "the host key's signature does not verify")
                             (: _ (pin t 'sid h) _ (pin t 'hostkey ks)
-                               (kd x) (sha (kk + h + x + h) @ k1 (k1 + sha (kk + h + k1)))
-                               (pair k) [(snip k 0 32) (snip k 32 64)]
-                               _ (ssh-send t (u8 21))
-                               _ (pin t 'ck (pair (kd "C")))
-                               _ (ok ? (pin t 'sseq 0) 0)
-                               nk (expect t 21)
-                               (pin t 'sk (pair (kd "D")),
-                                ok ? (pin t 'rseq 0) 0,
-                                pin t 'strict 0,
-                                (? !(string? nk) (close s, "no newkeys")
-                                   (ssh-send t (u8 5 + sstr "ssh-userauth"),
-                                    string? (expect t 6) ? t (close s, "no userauth service")))))))))))))
+                               nk (newkeys t kk h ok "C" "D")
+                               (? !(string? nk) (close s, "no newkeys")
+                                  (ssh-send t (u8 5 + sstr "ssh-userauth"),
+                                   string? (expect t 6) ? t (close s, "no userauth service"))))))))))))
 
    ; the host key's fingerprint, as openssh prints it
    (ssh-fingerprint t) ("SHA256:" + b64e (sha (t 'hostkey)) 0)
@@ -274,35 +278,17 @@
     (see in @ ch
        (ch = -1 ? (ssh-send t (u8 96 + u32 (t 'rch)))
           (: _ (unsee in ch)
-             s (chug in)
-             (put1 i) (#s <= i ? 0
-                         (min (t 'rmax) (t 'rwin) @ room
-                            (room < 1 ? (rest 5, put1 i)
-                               (min room (#s - i) @ n
-                                  (pin t 'rwin (t 'rwin - n),
-                                   ssh-send t (u8 94 + u32 (t 'rch) + sstr (snip s i (i + n))),
-                                   put1 (i + n))))))
-             (put1 0, pump t))))
+             (ch-put t (chug in) (_ \ rest 5), pump t))))
    ; the channel's traffic until it closes -> the exit status
    (drain t)
     (ssh-next t @ p
        (? !(string? p) (t 'status)
           (: ty (p 0) c (cur p) (g-skip c 5,
-                                 (? (ty = 94) (: d (g-str c) _ (say out d) _ (flush out)
-                                                 used (t 'used + #d)
-                                                 (lwin // 2 < used ?
-                                                  (ssh-send t (u8 93 + u32 (t 'rch) + u32 used), pin t 'used 0)
-                                                  (pin t 'used used),
-                                                  drain t))
+                                 (? (ty = 94) (g-str c @ d (say out d, flush out, ch-took t #d, drain t))
                                     (ty = 95) (: _ (g-u32 c) d (g-str c)
                                                  (say err d, flush err, pin t 'used (t 'used + #d), drain t))
                                     (ty = 93) (pin t 'rwin (t 'rwin + g-u32 c), drain t)
-                                    (ty = 98) (: nm (g-str c) wr? (g-u8 c)
-                                                 ((? (nm = "exit-status") (pin t 'status (g-u32 c))
-                                                     (nm = "exit-signal") (pin t 'status 255)
-                                                     0),
-                                                  wr? ? (ssh-send t (u8 100 + u32 (t 'rch))) 0,
-                                                  drain t))
+                                    (ty = 98) (ch-req t c, drain t)
                                     (ty = 97) (ssh-send t (u8 97 + u32 (t 'rch)), t 'status)
                                     (drain t))))))
 
@@ -312,12 +298,14 @@
    ; SIGWINCH (28 on linux and the BSDs) queued to a signalfd; each wake sends the size now
    (winch t sig) (await sig, sigtake sig, chreq t "window-change" 0 (geom 0), winch t sig)
 
-   (ssh-run t cmd pty?)
+   ; a session channel asked for: (k c), c past the confirmation's channel, or no if refused
+   (session t no k)
     (: _ (ssh-send t (u8 90 + sstr "session" + u32 0 + u32 lwin + u32 32768))
        r (ssh-next t)
-       (? !(string? r && r 0 = 91) -1
-          (: c (cur r) _ (g-skip c 5)
-             _ (pin t 'rch (g-u32 c)) _ (pin t 'rwin (g-u32 c)) _ (pin t 'rmax (g-u32 c))
+       (? !(string? r && r 0 = 91) no (cur r @ c (g-skip c 5, k c))))
+   (ssh-run t cmd pty?)
+    (session t -1
+       (c \ (: _ (pin t 'rch (g-u32 c)) _ (pin t 'rwin (g-u32 c)) _ (pin t 'rmax (g-u32 c))
              _ (pin t 'used 0) _ (pin t 'status -1)
              term (getenv "TERM" @ e (string? e ? e "xterm"))
              _ (pty? ? (chreq t "pty-req" 1 (sstr term + geom 0 + sstr (u8 0))) 0)
@@ -340,17 +328,30 @@
    ;   (ch-end t)         eof, then the channel's close -> the exit status
    ; one task drives it: a read pulls packets until it has enough, stderr goes to ours
    (ssh-open t cmd)
-    (: _ (ssh-send t (u8 90 + sstr "session" + u32 0 + u32 lwin + u32 32768))
-       r (ssh-next t)
-       (? !(string? r && r 0 = 91) "the server refused a session channel"
-          (: c (cur r) _ (g-skip c 5)
-             rch (g-u32 c) rwin (g-u32 c) rmax (g-u32 c)       ; in wire order: pins evaluates last first
-             (pins t 'rch rch 'rwin rwin 'rmax rmax 'used 0 'status -1 'rbuf "" 'eof 0 'closed 0,
-              chreq t "exec" 1 (sstr cmd),
-              reply t ? 1 ("the server would not run " + cmd)))))
+    (session t "the server refused a session channel"
+       (c \ (: rch (g-u32 c) rwin (g-u32 c) rmax (g-u32 c)       ; in wire order: pins evaluates last first
+                (pins t 'rch rch 'rwin rwin 'rmax rmax 'used 0 'status -1 'rbuf "" 'eof 0 'closed 0,
+                 chreq t "exec" 1 (sstr cmd),
+                 reply t ? 1 ("the server would not run " + cmd)))))
    (ch-took t n) (: used (t 'used + n)
                     (lwin // 2 < used ? (ssh-send t (u8 93 + u32 (t 'rch) + u32 used), pin t 'used 0)
                        (pin t 'used used)))
+   ; a channel request: an exit's status kept, and the failure a reply was asked for
+   (ch-req t c) (: nm (g-str c) wr? (g-u8 c)
+                   ((? (nm = "exit-status") (pin t 'status (g-u32 c)) (nm = "exit-signal") (pin t 'status 255) 0),
+                    wr? ? (ssh-send t (u8 100 + u32 (t 'rch))) 0))
+   ; s into the channel inside the peer's window and packet size, wait run while the window
+   ; is shut -> 1, or 0 once the channel closed
+   (ch-put t s wait)
+    (: (go i) (? (#s <= i) 1
+                 (t 'closed = 1) 0
+                 (min (t 'rmax) (t 'rwin) @ room
+                    (room < 1 ? (wait (), go i)
+                       (min room (#s - i) @ n
+                          (pin t 'rwin (t 'rwin - n),
+                           ssh-send t (u8 94 + u32 (t 'rch) + sstr (snip s i (i + n))),
+                           go (i + n))))))
+       (go 0))
    ; one packet into the channel's state -> 0 once it can bring no more
    (ch-pull t)
     ((t 'closed = 1 ? () (ssh-next t)) @ p
@@ -359,10 +360,7 @@
                                  (? (ty = 94) (g-str c @ d (pin t 'rbuf (t 'rbuf + d), ch-took t #d, 1))
                                     (ty = 95) (: _ (g-u32 c) d (g-str c) (say err d, flush err, ch-took t #d, 1))
                                     (ty = 93) (pin t 'rwin (t 'rwin + g-u32 c), 1)
-                                    (ty = 98) (: nm (g-str c) wr? (g-u8 c)
-                                                 ((? (nm = "exit-status") (pin t 'status (g-u32 c)) (nm = "exit-signal") (pin t 'status 255) 0),
-                                                  wr? ? (ssh-send t (u8 100 + u32 (t 'rch))) 0,
-                                                  1))
+                                    (ty = 98) (ch-req t c, 1)
                                     (ty = 96) (pin t 'eof 1, 1)
                                     (ty = 97) (ssh-send t (u8 97 + u32 (t 'rch)), pins t 'eof 1 'closed 1, 0)
                                     1)))))
@@ -377,16 +375,7 @@
        (? (0 <= k) (ch-read t (k + 1))
           (t 'eof = 1) ()
           (ch-pull t, ch-line t)))
-   (ch-write t s)
-    (: (go i) (? (#s <= i) 1
-                 (t 'closed = 1) 0
-                 (min (t 'rmax) (t 'rwin) @ room
-                    (room < 1 ? (ch-pull t, go i)
-                       (min room (#s - i) @ n
-                          (pin t 'rwin (t 'rwin - n),
-                           ssh-send t (u8 94 + u32 (t 'rch) + sstr (snip s i (i + n))),
-                           go (i + n))))))
-       (go 0))
+   (ch-write t s) (ch-put t s (_ \ ch-pull t))
    (ch-end t)
     (t 'closed = 1 ? 0 (ssh-send t (u8 96 + u32 (t 'rch))),
      (: (go _) (t 'closed = 1 ? (t 'status) (ch-pull t, go 0)) (go 0)))

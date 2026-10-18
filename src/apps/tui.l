@@ -5,15 +5,29 @@
 ;
 ;   (tui-settle cur top rows)              -> the new top
 ;   (tui-fresh box h geo key rows stat cr cc) -> the escapes for this frame
+;   (tui-vis l cr)                         -> l with its control bytes shown
 ;
 ; both are pure but for tui-fresh's one pin, so an app stays testable headless.
-(module '(tui tui-settle tui-fresh)
+(module '(tui tui-settle tui-fresh tui-vis)
 (:
    ; the window follows the cursor only far enough to hold it, which is what makes a
    ; page read as a page and not as a jump. rows is the body's height; for a view with
    ; a stride (lupa's sixteen bytes a row) settle the row index and scale the answer
    (tui-settle cur top rows)
     (? (cur < top) cur (top + rows <= cur) (cur - rows + 1) top)
+
+   ; a tab to the next stop of 8, the other control bytes as ^X, a return dropped unless cr:
+   ; no escape a file or a sender wrote reaches the terminal
+   (tui-vis l cr)
+    (: j (jug 0) n #l
+       (go i col)
+        (n <= i ? (slurp j)
+           (l i @ c
+              (? (c = 9) (8 - col % 8 @ k (say j (edfit "" k " "), go (i + 1) (col + k)))
+                 (c = 13 && !cr) (go (i + 1) col)
+                 (c < 32 || c = 127) (say j ("^" + string (c = 127 ? 63 (c + 64))), go (i + 1) (col + 2))
+                 (put j c, go (i + 1) (col + (128 <= c < 192 ? 0 1))))))
+       (go 0 0))
 
    ; a full redraw a keystroke is the flicker: the screen is cleared line by line and
    ; rewritten while the terminal draws it. so keep the rows the last frame put there,

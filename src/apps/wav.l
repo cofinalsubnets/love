@@ -154,8 +154,6 @@
   U24_3BE, or cd, cdr, dat; raw defaults to U8, 8000 Hz, mono. the horn picks the device:
   HORN=PATH names one, HORN=none plays to a sink that keeps time."
    (aplay-fail m) (say err "aplay: \(m)\n", flush err, 1)
-   (aplay-int s) (string? s && #s && all (c \ 48 <= c <= 57) (chars s)
-                  ? (foldl (\ a c (a * 10 + c - 48)) 0 (chars s)))
    ; held bytes then the port's gulps, a whole frame at a time, out the horn
    (aplay-pump q h0 f left cap hn)
     (: align (f 'align)
@@ -206,10 +204,10 @@
                            "cdr" (pins o 'f (wav-format "S16_BE") 'r 44100 'c 2, 1)
                            "dat" (pins o 'f (wav-format "S16_LE") 'r 48000 'c 2, 1)
                            _ (wav-format v @ f (tablet? f ? (pin o 'f f, 1) (aplay-fail "wrong extended format '\(v)'", ()))))
-         "-c" (aplay-int v @ n (n && 0 < n <= 256 ? (pin o 'c n, 1) (aplay-fail "value \(v) for channels is invalid", ())))
-         "-r" (aplay-int v @ n (n && 0 < n ? (pin o 'r (n < 300 ? (n * 1000) n), 1) (aplay-fail "bad speed value \(v)", ())))
-         "-d" (aplay-int v @ n (charm? n ? (pin o 'd (n ? n -1), 1) (aplay-fail "bad duration \(v)", ())))
-         "-s" (aplay-int v @ n (charm? n ? (pin o 's (n ? n -1), 1) (aplay-fail "bad samples \(v)", ())))
+         "-c" (unum v @ n (n && 0 < n <= 256 ? (pin o 'c n, 1) (aplay-fail "value \(v) for channels is invalid", ())))
+         "-r" (unum v @ n (n && 0 < n ? (pin o 'r (n < 300 ? (n * 1000) n), 1) (aplay-fail "bad speed value \(v)", ())))
+         "-d" (unum v @ n (charm? n ? (pin o 'd (n ? n -1), 1) (aplay-fail "bad duration \(v)", ())))
+         "-s" (unum v @ n (charm? n ? (pin o 's (n ? n -1), 1) (aplay-fail "bad samples \(v)", ())))
          (aplay-fail "invalid option -- '\(snip k 1 #k)'", ()))
    (aplay-main as)
     (: o {'q 0 't () 'f (wav-format "U8") 'c 1 'r 8000 'd -1 's -1}

@@ -306,10 +306,12 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (xzc-put t p dst bytes st)           ; the output laid, the input's mode and time carried
     (? (two? (lstat dst) && !(peep t 'f 0)) (xzc-moan t (dst + ": File exists"), 1)
        !(uwrite dst bytes) (xzc-moan t (dst + ": Cannot write"), 1)
-       (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)),
-        (peep t 'k 0 ? 0 (unlink p)),
-        peep t 'v 0 && (say err ("xz: " + p + " -> " + dst + "\n"), flush err),
-        0))
+       (xzc-done t p dst st))
+   (xzc-done t p dst st)
+    (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)),
+     (peep t 'k 0 ? 0 (unlink p)),
+     peep t 'v 0 && (say err ("xz: " + p + " -> " + dst + "\n"), flush err),
+     0)
    (xzc-rd q) (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q))))
    ; a file decompressed as it comes off the disk: the output opened before the first byte,
    ; its mode and time laid after the last, and taken away again if the stream fails partway
@@ -334,10 +336,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                     (? (u = 'no) 1
                        (atom? u) (laid && unlink dst, xzc-moan t (p + ": " + xzc-why u), 1)
                        !laid 0
-                       (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)),
-                        (peep t 'k 0 ? 0 (unlink p)),
-                        peep t 'v 0 && (say err ("xz: " + p + " -> " + dst + "\n"), flush err),
-                        0))))))))
+                       (xzc-done t p dst st))))))))
    (xzc-one t p)
     (stat p @ st
        (? (two? st && st 2 & 61440 = 16384) (xzc-moan t (p + ": Is a directory, skipping"), 2)

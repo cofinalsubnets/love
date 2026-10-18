@@ -25,11 +25,7 @@
    (tton a) "\e[\(a)m"
    (ttadd a b) (#a ? "\(a);\(b)" b)
    (spaces n) (: (go k s) (k < 1 ? s (go (k - 1) "\(s) ")) (go n ""))
-   (lines s) (: n #s
-                (go i a acc) (? (i >= n) (rev (a < n ? (snip s a n . acc) acc))
-                                (s i = 10) (go (i + 1) (i + 1) (snip s a i . acc))
-                                (go (i + 1) a acc))
-                (go 0 0 ()))
+   (lns s) (#s ? (lines s))                  ; post's lines, but none in ""
 
    ; --- the fonts ------------------------------------------------------------------------------
    (glyph t s c) (pin (t 'ci) s [(wcwidth c @ 1 1 2 2 3) 17 0 0])
@@ -116,15 +112,15 @@
                    l))
    (unpad l) (5 <= #l ? (snip l 5 #l) l)
    (blk x w ind)
-    (<x @ 'meta    (map (verb 0) (lines (ttyshow [x] w)))
+    (<x @ 'meta    (map (verb 0) (lns (ttyshow [x] w)))
           'head    (par (<>x < 2 ? 0 3) 0 () (inl "1" <>>x))
           'para    (par ind 0 () (inl "" <>x))
-          'fence   (map (verb ind) (lines <>>x))
+          'fence   (map (verb ind) (lns <>>x))
           'quote   (doc <>x w (ind + 4))
           'bullets (cats (map (l \ item ind "• " l) <>x))
           'numbers (<>x @ l (cats (map (k \ item ind "\(k + 1). " (l k)) ^#l)))
           'deflist (defs <>x ind)
-          'table   (map (l \ verb ind (unpad l)) (lines (ttyshow [x] (w - ind + 5))))
+          'table   (map (l \ verb ind (unpad l)) (lns (ttyshow [x] (w - ind + 5))))
           'rule    [(verb ind (w - ind @ n (: (go k s) (k < 1 ? s (go (k - 1) "\(s)-")) (go (max 1 n) ""))))]
           [])
    ; one blank line between blocks, none after a heading

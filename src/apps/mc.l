@@ -125,15 +125,7 @@
               (: b (cask n) k (swig p b) (close p,
                                           (charm? k && 0 < k ? (snip (string b) 0 k) "")))))))
  ; a line with its control bytes shown: a tab to the next stop of 8, the rest as ^X
- (mc-vis l)
-  (: j (jug 0)
-     (go i col)
-      (#l <= i ? (slurp j)
-         (l i @ c
-            (? (c = 9) (8 - col % 8 @ k (say j (edfit "" k " "), go (i + 1) (col + k)))
-               (c < 32 || c = 127) (say j ("^" + string (c = 127 ? 63 (c + 64))), go (i + 1) (col + 2))
-               (say j (snip l i (i + 1)), go (i + 1) (col + (128 <= c < 192 ? 0 1))))))
-     (go 0 0))
+ (mc-vis l) (tui-vis l 1)
  (mc-hx v d) (d < 1 ? "" (mc-hx (v // 16) (d - 1) + snip "0123456789abcdef" (v % 16) (v % 16 + 1)))
  (mc-nul? b) (: (go i) (? (#b <= i) () (b i = 0) 1 (go (i + 1))) (go 0))
  ; a binary file as a dump: offset, the bytes in hex, and those that print

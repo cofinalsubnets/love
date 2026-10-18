@@ -766,16 +766,13 @@
 
  ; --- the glass: the rows it names dirty (wet reads and clears), the cursor's row and the
  ;     one it left, dyed onto the paper and shown ---
- (mw-wets sc) (: (bits d base i acc) (i < 32 ? (bits d base (i + 1) (d >> i & 1 ? ((base + i) . acc) acc)) acc)
-              (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
-              (go 0 ()))
  (mw-paint win gx font all last)
   (: sc (peep gx () 0) p (window-paper win) W <(window-size win)
      r (gaze sc 1) c (gaze sc 2)
      cur (gaze sc 3 & 1 ? (gaze sc 0) -1)
      v (gaze sc 8)
      rows (tablet 8)
-     _ (each (all ? (jot r) (mw-wets sc)) (y \ (y < r ? (pin rows y 1) 0)))
+     _ (each (all ? (jot r) (window-wets sc)) (y \ (y < r ? (pin rows y 1) 0)))
      _ (-1 < cur && cur // c + v < r ? (pin rows (cur // c + v) 1) 0)
      _ (-1 < last && last != cur && last // c + v < r ? (pin rows (last // c + v) 1) 0)
      ys (sort (keys rows))

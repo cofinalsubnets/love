@@ -152,6 +152,9 @@
    ; claims the token
    (hue-word bk t) (tablet? bk ? (bk t) ())
 
+   ; a run [k a b] onto acc, when keep and the run is not empty
+   (hue-emit keep acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+
    ; --- the lexer -------------------------------------------------------------
    ; (hue-lex bk s in keep) answers [runs out]: the classified runs over the one
    ; line s, each [class from to] with `to` exclusive, and the string state at
@@ -165,7 +168,7 @@
    ; one, and this is what makes that true rather than merely intended.
    (hue-lex bk s in keep)
     (: n #s
-       (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
+       emit (hue-emit keep)
        (tend i) (n <= i || hue-term? (s i) ? i (tend (i + 1)))
        (srun i) (i < n && hue-sig? (s i) ? (srun (i + 1)) i)
        ; glued means the whole run touches a datum start: syntax.vim's rule, and

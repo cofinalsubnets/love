@@ -45,8 +45,7 @@
                          (go j (n - vhgt st (st 'lines (i < j ? i j)))))))
        (? !(st 'wrap) (fence (r + d * k)) (go r k)))
    (vink ln) (: n #ln                       ; first non-blank column
-                 (go i) (i < n && (ln i = 32 || ln i = 9) ? (go (i + 1)) i)
-                 (go 0 @ k (? (k < n) k (0 < n) (n - 1) 0)))
+                 (vlead ln @ k (? (k < n) k (0 < n) (n - 1) 0)))
    ; every edit to 'lines bumps the generation, so caches recompute once per edit
    (vgen st) (pin st 'hlgen (st 'hlgen + 1))
    (vput st r ln) (pins st 'lines (: (go l i) (two? l ?
@@ -135,27 +134,23 @@
    ; -- the word motions: (row col) -> (row col), crossing lines when free.
    ; cf is the class: vcl for w e b, vclw for W E B, and that one argument is the
    ; whole difference between the two families --
+   (vskipb ls n cf r c)                            ; over blanks, line ends included
+    (ls r @ ln
+       (? (c < #ln) (cf (ln c) = 0 ? (vskipb ls n cf r (c + 1)) [r c])
+          (r + 1 < n) (vskipb ls n cf (r + 1) 0)
+          [r #ln]))
    (vwfwd st cf r c)                               ; next word start
     (: ls (st 'lines) n #ls
        (at r2 c2) (ls r2 @ ln (c2 < #ln ? (cf (ln c2)) 0))
        (skipk r2 c2 k)                             ; over the current run of class k
         (ls r2 @ ln
          (c2 < #ln && cf (ln c2) = k ? (skipk r2 (c2 + 1) k) [r2 c2]))
-       (skipb r2 c2)                               ; over blanks, line ends included
-        (ls r2 @ ln
-           (? (c2 < #ln) (cf (ln c2) = 0 ? (skipb r2 (c2 + 1)) [r2 c2])
-              (r2 + 1 < n) (skipb (r2 + 1) 0)
-              [r2 #ln]))
        k (at r c)
        p (k = 0 ? [r c] (skipk r c k))
-       (skipb <p <>p))
+       (vskipb ls n cf <p <>p))
    (vwend st cf r c)                               ; next word end (inclusive target)
-    (: ls (st 'lines) n #ls
-       (skipb r2 c2) (ls r2 @ ln
-                        (? (c2 < #ln) (cf (ln c2) = 0 ? (skipb r2 (c2 + 1)) [r2 c2])
-                           (r2 + 1 < n) (skipb (r2 + 1) 0)
-                           [r2 c2]))
-       p (skipb r (vnx (ls r) c))
+    (: ls (st 'lines)
+       p (vskipb ls #ls cf r (vnx (ls r) c))
        r2 <p c2 <>p ln (ls r2)
        (#ln <= c2 ? [r2 (vend ln)]
           (: k (cf (ln c2))
@@ -526,10 +521,7 @@
           (: a (0 < s && ln (s - 1) = 45 ? (s - 1) s)
              (fw i) (dig? i ? (fw (i + 1)) i)
              b (fw s)
-             v (: t (snip ln a b) k #t
-                   (go i acc) (k <= i ? acc (go (i + 1) (10 * acc + (t i - 48))))
-                   q (go (a < s ? 1 0) 0)
-                   (a < s ? (0 - q) q))
+             v (unum (snip ln s b) @ q (a < s ? (0 - q) q))
              w (v + n)
              (vsnap st,
               vput st r (snip ln 0 a + show w + snip ln b len),

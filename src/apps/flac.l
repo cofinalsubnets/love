@@ -137,6 +137,8 @@
    (flac-say o m) (o "s" ? 0 (say err m, flush err, 0))
    (flac-err m) (say err "\(m)\n", flush err, 1)
    (flac-exists? p) (open p "r" @ q (hot? q ? (close q, 1) 0))
+   ; the output's name: "-" for stdout, else -o's, else d
+   (flac-op o p d) (? (o "c" || (p = "-" && !(o "o"))) "-" (o "o") (o "o") d)
    (flac-one o p)
     (: nm (p = "-" ? "stdin" p)
        q (p = "-" ? in (open p "r"))
@@ -155,9 +157,7 @@
                 (: raw (o "raw")
                    w ((m 'bps + 7) // 8)
                    big (o "endian" = "big") uns (raw ? (o "sign" = "unsigned") (w = 1))
-                   op (? (o "c" || (p = "-" && !(o "o"))) "-"
-                         (o "o") (o "o")
-                         ((#p > 5 && ".flac" = snip p (#p - 5) #p ? (snip p 0 (#p - 5)) p) + (raw ? ".raw" ".wav")))
+                   op (flac-op o p ((#p > 5 && ".flac" = snip p (#p - 5) #p ? (snip p 0 (#p - 5)) p) + (raw ? ".raw" ".wav")))
                    (? (raw && !(o "endian" && o "sign"))
                        (fin (flac-err "ERROR: for decoding to a raw file you must specify --endian and --sign"))
                       (op != "-" && !(o "f") && flac-exists? op)
@@ -318,10 +318,8 @@ a different output filename.
        q (p = "-" ? in (open p "r"))
        (? !(hot? q) (flac-err "\(nm): ERROR: \(uerrno q)")
           (: fin (\ v (p @ "-" v (close q, v)))
-             op (? (o "c" || (p = "-" && !(o "o"))) "-"
-                   (o "o") (o "o")
-                   (: i (foldl (\ a k (p k = 46 ? k a)) -1 ^#p)
-                      ((0 < i && i > foldl (\ a k (p k @ 47 k a)) -1 ^#p ? (snip p 0 i) p) + ".flac")))
+             op (flac-op o p (: i (foldl (\ a k (p k = 46 ? k a)) -1 ^#p)
+                                ((0 < i && i > foldl (\ a k (p k @ 47 k a)) -1 ^#p ? (snip p 0 i) p) + ".flac")))
              (? (op != "-" && !(o "f") && flac-exists? op)
                  (fin (flac-err "ERROR: output file \(op)\(op = p ? flac-same " already exists, use -f to override")"))
                 (flac-src o q @
@@ -335,11 +333,9 @@ a different output filename.
                                [n total] (fin (flac-say o "\(nm): wrote \(n) bytes, ratio=\(flac-ratio n (flac-den o p src total))\n"))))))))))
    flac-long {"decode" "d" "test" "t" "stdout" "c" "force" "f" "silent" "s"
               "no-padding" "nopad" "no-seektable" "noseek"}
-   (flac-num s) (string? s && #s && all (c \ 48 <= c <= 57) (chars s)
-                 ? (foldl (\ a c (a * 10 + c - 48)) 0 (chars s)))
    ; a value option: -b, -o and -T take one, glued or the next word
    (flac-val o k v)
-    (k @ "b" (flac-num v @ n (n ? (pin o "b" n, 1) (flac-err "ERROR: bad blocksize \(v)", ())))
+    (k @ "b" (unum v @ n (n ? (pin o "b" n, 1) (flac-err "ERROR: bad blocksize \(v)", ())))
          "o" (pin o "o" v, 1)
          "T" (0 < findsub v "=" ? (pin o "tags" (v . peep o "tags" ()), 1) (flac-err "ERROR: bad tag \(v)", ()))
          _ ())
@@ -359,8 +355,8 @@ a different output filename.
                      (? (k = "output-name" && 0 <= i) (pin o "o" v, go >l fs)
                         (k = "tag" && 0 <= i) (flac-val o "T" v ? (go >l fs) 1)
                         (k = "blocksize" && 0 <= i) (flac-val o "b" v ? (go >l fs) 1)
-                        ((k = "channels" || k = "bps" || k = "sample-rate") && flac-num v)
-                         (pin o k (flac-num v), go >l fs)
+                        ((k = "channels" || k = "bps" || k = "sample-rate") && unum v)
+                         (pin o k (unum v), go >l fs)
                         ((k = "endian" && (v = "little" || v = "big"))
                          || (k = "sign" && (v = "signed" || v = "unsigned")))
                          (pin o k v, go >l fs)

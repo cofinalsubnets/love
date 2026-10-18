@@ -79,6 +79,21 @@
    ; --- packaging (tex.web 644-679) -----------------------------------------------------
    (order tot) (? (tot 3 != 0) 3 (tot 2 != 0) 2 (tot 1 != 0) 1 0)
    (add! tot o v) (pin tot o (tot o + v))
+   ; the glue set to make up x, and J's badness with it; ov runs on an overfull box
+   (glue-set J r p0 x st sh ov)
+    (pin J 'badness 0,
+     (? (x > 0)
+        (order st @ o
+           (pins r 'gorder o 'gsign 1,
+            st o != 0 ? (pin r 'gset (x / st o)) (pins r 'gsign 0 'gset 0.0),
+            o = 0 && p0 != () ? (pin J 'badness (cb-badness x (st 0)))))
+        (x < 0)
+        (order sh @ o
+           (pins r 'gorder o 'gsign 2,
+            sh o != 0 ? (pin r 'gset ((0 - x) / sh o)) (pins r 'gsign 0 'gset 0.0),
+            (? (sh o < 0 - x && o = 0 && p0 != ()) (pin J 'badness 1000000, pin r 'gset 1.0, ov ())
+               (o = 0 && p0 != ()) (pin J 'badness (cb-badness (0 - x) (sh 0))))))),
+     r)
    (cb-hpack J p0 w m)
     (: r (cb-null-box 0) _ (pin r 'list p0)
        st {0 0 1 0 2 0 3 0} sh {0 0 1 0 2 0 3 0}
@@ -119,26 +134,12 @@
        w2 (m @ 'additional (dims 'x + w) w)
        _ (pin r 'width w2)
        x (w2 - dims 'x)
-       (pin J 'badness 0,
-        (? (x > 0)
-           (order st @ o
-              ((pins r 'gorder o 'gsign 1),
-               st o != 0 ? (pin r 'gset (x / st o)) (pins r 'gsign 0 'gset 0.0),
-               o = 0 && p0 != () ? (pin J 'badness (cb-badness x (st 0)))))
-           (x < 0)
-           (order sh @ o
-              ((pins r 'gorder o 'gsign 2),
-               sh o != 0 ? (pin r 'gset (-x / sh o)) (pins r 'gsign 0 'gset 0.0),
-               (? (sh o < 0 - x && o = 0 && p0 != ())
-                  (: _ (pin J 'badness 1000000) _ (pin r 'gset 1.0)
-                     over (0 - x - sh 0)
-                     ; the overfull rule, where TeX would lay one
-                     (J 'params 'overfullrule > 0 && over > J 'params 'hfuzz ?
-                        (: (last q) (q 'link = () ? q (last (q 'link)))
-                           nr (cb-rule (J 'params 'overfullrule) null-flag null-flag)
-                           (pin (last p0) 'link nr))))
-                  (o = 0 && p0 != ()) (pin J 'badness (cb-badness (0 - x) (sh 0))))))),
-        r))
+       ; the overfull rule, where TeX would lay one
+       (glue-set J r p0 x st sh
+          (_ \ (J 'params 'overfullrule > 0 && 0 - x - sh 0 > J 'params 'hfuzz ?
+                   (: (last q) (q 'link = () ? q (last (q 'link)))
+                      nr (cb-rule (J 'params 'overfullrule) null-flag null-flag)
+                      (pin (last p0) 'link nr))))))
    (cb-vpack J p h m) (cb-vpackage J p h m max-dimen)
    (cb-vpackage J p0 h m l)
     (: r (cb-null-box 0) _ (pins r 'type 1 'list p0)
@@ -165,20 +166,7 @@
        h2 (m = 'additional ? (dims 'x + h) h)
        _ (pin r 'height h2)
        x (h2 - dims 'x)
-       (pin J 'badness 0,
-        (? (x > 0)
-           (order st @ o
-              (pin r 'gorder o, pin r 'gsign 1,
-               st o != 0 ? (pin r 'gset (x / st o)) (pins r 'gsign 0 'gset 0.0),
-               o = 0 && p0 != () ? (pin J 'badness (cb-badness x (st 0)))))
-           (x < 0)
-           (order sh @ o
-              (pin r 'gorder o, pin r 'gsign 2,
-               sh o != 0 ? (pin r 'gset ((0 - x) / sh o)) (pins r 'gsign 0 'gset 0.0),
-               (? (sh o < 0 - x && o = 0 && p0 != ())
-                  (pin J 'badness 1000000, pin r 'gset 1.0)
-                  (o = 0 && p0 != ()) (pin J 'badness (cb-badness (0 - x) (sh 0))))))),
-        r))
+       (glue-set J r p0 x st sh (_ \ 0)))
 
    ; --- the DVI buffer (tex.web 595-601) --------------------------------------------------
    (dvi-out J b)
@@ -285,6 +273,17 @@
    (leave J save-loc)
     (prune J save-loc, J 'curs > 0 ? (dvi-pop J save-loc), pin J 'curs (J 'curs - 1))
    (sub-out J b) (b 'type = 1 ? (vlist-out J b) (hlist-out J b))
+   ; leaders of boxes l long over w2 from J's ax, the box's edge at org: ax moved to the first
+   ; box, answering the gap between boxes -- aligned (100), centered (101) or expanded
+   (lead-start J ax org sub l w2)
+    (? (sub = 100)
+        (: s0 (J ax) v1 (org + l * ((J ax - org) // l))
+           (pin J ax (v1 < s0 ? (v1 + l) v1), 0))
+       (: lq (w2 // l) lr (w2 % l)
+          (sub = 101 ? (pin J ax (J ax + lr // 2), 0)
+             (lr // (lq + 1) @ lx
+                (pin J ax (J ax + (lr - (lq - 1) * lx) // 2),
+                 lx)))))
    (hlist-out J box)
     (: gs {'cur 0.0 'g 0}
        save-loc (enter J) base (J 'curv) left (J 'curh)
@@ -330,16 +329,7 @@
                                (lb 'width @ lw
                                   (lw > 0 && wd > 0 ?
                                      (: wd2 (wd + 10) edge (J 'curh + wd2)
-                                        lx (p 'sub = 100 ?
-                                              (: s0 (J 'curh)
-                                                 h1 (left + lw * ((J 'curh - left) // lw))
-                                                 (pin J 'curh (h1 < s0 ? (h1 + lw) h1),
-                                                  0))
-                                              (: lq (wd2 // lw) lr (wd2 % lw)
-                                                 (p 'sub = 101 ? (pin J 'curh (J 'curh + lr // 2), 0)
-                                                    (lr // (lq + 1) @ lx
-                                                       (pin J 'curh (J 'curh + (lr - (lq - 1) * lx) // 2),
-                                                        lx)))))
+                                        lx (lead-start J 'curh left (p 'sub) lw wd2)
                                         (rep k) (J 'curh + lw <= edge ?
                                                  (: _ (pin J 'curv (base + lb 'shift)) _ (synch-v J) sv (J 'dviv)
                                                     _ (synch-h J) sh (J 'dvih)
@@ -383,16 +373,7 @@
                                (lb 'height + lb 'depth @ lh
                                   (lh > 0 && ht > 0 ?
                                      (: ht2 (ht + 10) edge (J 'curv + ht2)
-                                        lx (p 'sub = 100 ?
-                                              (: s0 (J 'curv)
-                                                 v1 (top + lh * ((J 'curv - top) // lh))
-                                                 (pin J 'curv (v1 < s0 ? (v1 + lh) v1),
-                                                  0))
-                                              (: lq (ht2 // lh) lr (ht2 % lh)
-                                                 (p 'sub = 101 ? (pin J 'curv (J 'curv + lr // 2), 0)
-                                                    (lr // (lq + 1) @ lx
-                                                       (pin J 'curv (J 'curv + (lr - (lq - 1) * lx) // 2),
-                                                        lx)))))
+                                        lx (lead-start J 'curv top (p 'sub) lh ht2)
                                         (rep k) (J 'curv + lh <= edge ?
                                                  (: _ (pin J 'curh (left + lb 'shift)) _ (synch-h J) sh (J 'dvih)
                                                     _ (pin J 'curv (J 'curv + lb 'height)) _ (synch-v J) sv (J 'dviv)
