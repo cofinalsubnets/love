@@ -1013,7 +1013,8 @@ lvm(lvm_mulh) {
  Sp = dst; Ip = (union u*) numap_drive; love_musttail return Continue(); }
 
 // coin +/*/-//: the kind's method over the raw operands; two kinds, or no method, answer ().
-// Ap keeps Ip on the opcode, so word(Ip + 1) is the return
+// against a tray it is the object lane's, the method per cell. Ap keeps Ip on the opcode, so
+// word(Ip + 1) is the return
 static lvm(lvm_coin_op) {
  intptr_t slot = g->b;                              // the kind slot, off the scratch
  word a = Sp[0], b = Sp[1];
@@ -1021,6 +1022,9 @@ static lvm(lvm_coin_op) {
   love_musttail return Push(ZeroPoint);
  word f = kind_get(g, coinp(a) ? coin_kind(a) : coin_kind(b), slot);
  if (f == ZeroPoint) love_musttail return Push(ZeroPoint);
+ if (trayp(a) || trayp(b)) {
+  g->b = (word) (slot == KnAdd ? vop_add : slot == KnMul ? vop_mul : slot == KnSub ? vop_sub : vop_quot);
+  love_musttail return Ap(lvm_obin, g); }
  Have(2);
  a = Sp[0], b = Sp[1];                              // re-read post-GC
  f = kind_get(g, coinp(a) ? coin_kind(a) : coin_kind(b), slot);
