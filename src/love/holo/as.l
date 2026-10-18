@@ -1,23 +1,13 @@
-; as -- a real assembler front over holo: it reads standard GNU x86-64 assembly, in either
-; dialect, and emits the same byte/fixup item stream the neutral backend (src/love/holo/x64.l)
-; produces, so src/love/holo/obj.l lays the relocatable `.o` and src/love/holo/link.l links it --
-; the front tooth of the gcc-free chain, paired with link.l's `ld`. the text is read by
-; src/love/holo/dialect.l (att-read / intel-read) into one parsed-instruction value, and this
-; file is the physical encoder over that value: where src/love/holo/text.l parses holo's own
-; mnemonics over abstract registers, this encodes real x86-64 -- physical registers, the operand
-; width, the full operand grammar. the encoders mirror x64.l form-for-form but read the register
-; number off the operand and carry the width (x64.l is 64-bit-mode only). scope: the GPR core at
-; all four widths -- ALU, mov, unary, push/pop, lea, test over register, immediate and memory
-; operands; call/jmp/jcc (NEAR; branch relaxation is M2), and the nullaries. a memory operand is
-; the full base+index*scale+disp, rip-relative and indirect included.
+; as -- a GNU x86-64 assembler over holo: dialect.l reads either dialect into one value, and
+; this encodes it to the byte/fixup item stream x64.l produces, for obj.l and link.l. the
+; encoders mirror x64.l form for form, but take physical registers and carry the operand width
+; and the mode (64, or i386's 32 and 16). branches are near, never relaxed.
 ;
-; load after holo.l + x64.l + dialect.l (bare, dev/test context -- the encoder primitives
-; le32/byte/fix/modrm.. are still on the global book; the eventual host path reaches them
-; through the `holo` book):
+; load after holo.l, x64.l and dialect.l:
 ;   out/love -l src/love/holo/holo.l -l src/love/holo/x64.l -l src/love/holo/dialect.l -l src/love/holo/as.l ...
 
 (module 'holo
-(: ;; --- encoder primitives (physical, width-aware; x64.l is the form reference). ---
+(:
    (as-hi n) (n >> 3)  (as-lo n) (n & 7)
    (as-rex f w r x b) (f > 0 || w > 0 || r > 0 || x > 0 || b > 0 ?   ; only when a bit is set,
                          [(64 | (w << 3 | (r << 2 | (x << 1 | b))))] ())    ; or f forces one
@@ -31,12 +21,10 @@
    (as-frc o) (as-regw o != 1 || <>o >= 16 ? 0 (4 <= as-regn o <= 7))
    (as-frcs ops) (foldl (a \ o \ a > 0 ? a (as-frc o)) 0 ops)
 
-   ;; --- the r/m half: a register (mod 3) or a memory operand, which lays a Modrm (+ SIB)
-   ;; (+ displacement) and hands up the REX X and B bits. an rbp/r13 base has no disp-less slot
-   ;; (mod 0 there means disp32) so force a disp byte; an rsp/r12 base needs a SIB to say so; a
-   ;; base-less form is mod 0 + SIB base 5 + a full disp32; rip-relative is mod 0, rm 5, and the
-   ;; four bytes are a rel32 fixup -- measured from the end of its own field, and the fixup
-   ;; carries no addend, so a symbol with an offset cannot be spelled and is refused. ---
+   ;; the r/m half: a register (mod 3), or memory as Modrm (+ SIB) (+ disp), the REX X and B bits
+   ;; apart. an rbp/r13 base has no disp-less form (mod 0 there means disp32), so it takes a disp
+   ;; byte; an rsp/r12 base needs a SIB; a base-less form is mod 0 + SIB base 5 + disp32;
+   ;; rip-relative is mod 0, rm 5 and a rel32 fixup, its displacement the addend.
    ;; the mode md: 64 (x86-64), 32 or 16 (i386's segments). outside 64 there is no REX; an
    ;; operand of the other width takes 66, and memory takes 67 where its registers' width is not
    ;; the segment's. dialect.l marks a 16-bit address register +32 (bx bp si di: 35 37 38 39)
@@ -105,30 +93,27 @@
    (as-rexw w) (w = 8)
    (as-opw opc w) (w @ 1 (opc - 1) opc)
    (as-imw w n)   (w @ 1 [(byte n)] 2 (le16 n) (le32 n))
-   ;; the whole reg-with-r/m family in one spelling: size prefix, REX, opcode, Modrm tail. `rn` is
-   ;; the reg field -- a register encoding, or an opcode extension digit.
+   ;; the reg-with-r/m family: size prefixes, REX, opcode, Modrm tail. `rn` is the reg field,
+   ;; a register or an opcode extension digit
    (as-emit md w frc opc rn rm)
       (catall [(as-asz md rm) (as-osz md w) (as-rexm md frc (as-rexw w) (as-hi rn) (as-rm-x rm) (as-rm-b rm))
                 opc (as-rm md rn rm)])
 
-   ;; the ALU group: mnemonic -> (rr-opcode  imm-ext). reg field carries the source (AT&T src,dst);
-   ;; the reg->r/m direction is the table's opcode and r/m->reg is +2 (mov's 89/8b sit the same way).
+   ;; mnemonic -> (rr-opcode imm-ext): the table's opcode is reg -> r/m, and r/m -> reg is +2
    as-alu {'add '(1 0) 'or '(9 1) 'and '(33 4) 'sub '(41 5) 'xor '(49 6) 'cmp '(57 7)}
-   ;; the condition codes: jcc mnemonic -> 0F 8x low byte.
+   ;; jcc -> the low byte of 0F 8x
    as-cc {'jo 128 'jno 129 'jb 130 'jc 130 'jnae 130 'jae 131 'jnb 131 'jnc 131
           'je 132 'jz 132 'jne 133 'jnz 133 'jbe 134 'jna 134 'ja 135 'jnbe 135
           'js 136 'jns 137 'jp 138 'jpe 138 'jnp 139 'jpo 139
           'jl 140 'jnge 140 'jge 141 'jnl 141 'jle 142 'jng 142 'jg 143 'jnle 143}
 
-   ;; alu $imm,r/m: 80 /ext ib for a byte, else the 83 /ext ib short form where the immediate fits,
-   ;; else 81 /ext iz.
+   ;; alu $imm,r/m: 80 /ext ib for a byte, else 83 /ext ib where the immediate fits, else 81 /ext iz
    (as-alu-i md ext w frc rm imm)
       (? (w = 1)     (as-emit md 1 frc '(128) ext rm + [(byte imm)])
          (fits8 imm) (as-emit md w frc '(131) ext rm + [(byte imm)])
          (as-emit md w frc '(129) ext rm + as-imw w imm))
 
-   ;; mov $imm,%reg: the b0/b8+r short forms by width, movabs where a 64-bit immediate needs it,
-   ;; c7 /0 id where it fits signed-32.
+   ;; mov $imm,%reg: b0/b8+r by width; at width 8, c7 /0 id where it fits signed-32, else movabs
    (as-mov-ri md d w frc imm)
       (as-rexm md frc (as-rexw w) 0 0 (as-hi d) @ rx
          (? (w = 1) (catall [rx [(176 | as-lo d) (byte imm)]])
@@ -137,12 +122,12 @@
             (fits32 imm) (catall [rx [199 (as-mrm 3 0 d)] (le32 imm)])
             (catall [rx [(184 | as-lo d)] (le64 imm)])))
 
-   ;; --- the per-instruction encoders (each -> a byte/fix item list), in at&T operand order. ---
+   ;; the per-instruction encoders, in AT&T operand order.
    ;; a rip-relative operand with an immediate tail: x64-patch measures rel32 from the end of its
    ;; own field, so the fix's aux steps back over the n immediate bytes that follow it
-   (as-imt bs n o) (<o = 'rip ? (as-riptail bs n) bs)       ; n immediate bytes after o's field
+   (as-imt bs n o) (<o = 'rip ? (as-riptail bs n) bs)
    (as-riptail bs n) (map (x \ (two? x && <x = 'fix && x 2 = 'rel32 ? (fix (x 1) 'rel32 (x 3) (x 4 - n)) x)) bs)
-   (as-2 md mn w a b)                                           ; two-operand: at&T src,dst
+   (as-2 md mn w a b)                                           ; AT&T src,dst
       (: ka <a kb <b frc (as-frcs [a b])
          alu (as-alu mn)
          rr  (mn @ 'mov 137 'test 133 (alu @ (a . _) a 0))
@@ -166,7 +151,7 @@
                n (? (opi > 0) (w @ 1 1 2 2 4) (w = 1 || fits8 im) 1 (w @ 2 2 4))
                (<b = 'rip ? (as-riptail bs n) bs))
             (scare 'as-op2-form [a b])))
-   (as-1 md mn w a)                                             ; one-operand
+   (as-1 md mn w a)
       (: k <a  frc (as-frc a)
          ; push/pop take 66 but never REX.W; outside 64 the width is the suffix's or the register's
          pw (? (md = 64) (w @ 2 2 0) (w > 0) w (k = 'rg) (as-regw a) 0)
@@ -195,18 +180,17 @@
                         + (elem mn '(call calll callw) ? [232 (rel sym)] [233 (rel sym)])))
             (as-cc mn) (a 1 @ sym [15 (peep as-cc mn 0) (rel sym)])
             (scare 'as-op1 mn)))
-   ;; --- the nullaries, by their one spelling: the reader folds at&T's c<from>t<to> family
-   ;; (cltq, cltd, ..) and retq/leaveq/xlatb onto these. `int3' is what holo's own text calls trap.
+   ;; the nullaries: the reader folds AT&T's c<from>t<to> family and retq/leaveq/xlatb onto these
    as-nils {'ret '(195) 'nop '(144) 'hlt '(244)
             'syscall '(15 5) 'leave '(201)
             'cbw '(102 152) 'cwde '(152) 'cdqe '(72 152)      ; al -> ax, ax -> eax, eax -> rax
             'cwd '(102 153) 'cdq '(153) 'cqo '(72 153)        ; .. and the dx:ax splits
             'int3 '(204) 'ud2 '(15 11) 'pause '(243 144)
             'cpuid '(15 162) 'rdtsc '(15 49) 'rdtscp '(15 1 249)
-            'cli '(250) 'sti '(251)                  ; the interrupt flag
-            'pushf '(156) 'pushfq '(156) 'popf '(157) 'popfq '(157)   ; ... and the whole word, through the stack
-            'clc '(248) 'stc '(249) 'cmc '(245)   ; ... the carry flag
-            'cld '(252) 'std '(253)                  ; ... and the direction flag
+            'cli '(250) 'sti '(251)
+            'pushf '(156) 'pushfq '(156) 'popf '(157) 'popfq '(157)
+            'clc '(248) 'stc '(249) 'cmc '(245)
+            'cld '(252) 'std '(253)
             'lahf '(159) 'sahf '(158)
             'xlat '(215)
             'sysret '(15 7) 'sysretl '(15 7) 'sysretq '(72 15 7)}
@@ -228,10 +212,9 @@
           (elem mn '(cdqe cqo syscall sysret sysretq pushfq popfq)) (scare 'as-op0-mode [mn md])
           (as-nils mn @ () (scare 'as-op0 mn) b b)))
 
-   ;; --- past the GPR core: what a compiler's own .s asks. SSE by a table of (prefix opcode),
-   ;; register <- r/m, and a move's store row where the destination is memory; REX.W only where a
-   ;; general register is 64 wide. a symbol as an immediate is an abs32 the link fills (the
-   ;; non-PIE images this links); cmov/set key off jcc's table. ops destination first here. ---
+   ;; past the GPR core, ops destination first. SSE by a table of (prefix opcode), register <-
+   ;; r/m, with a store row for a move to memory; REX.W only where a general register is 64 wide.
+   ;; a symbol as an immediate is an absolute fix (non-PIE); cmov/set key off jcc's table
    as-sse {'addsd [[242] 88] 'subsd [[242] 92] 'mulsd [[242] 89] 'divsd [[242] 94]
               'minsd [[242] 93] 'maxsd [[242] 95] 'sqrtsd [[242] 81] 'addss [[243] 88]
               'subss [[243] 92] 'mulss [[243] 89] 'divss [[243] 94] 'minss [[243] 93]
@@ -265,7 +248,6 @@
    as-ssh {'psrlw [113 2] 'psraw [113 4] 'psllw [113 6] 'psrld [114 2] 'psrad [114 4] 'pslld [114 6]
            'psrlq [115 2] 'psllq [115 6] 'psrldq [115 3] 'pslldq [115 7]}
    as-shf {'rol 0 'ror 1 'rcl 2 'rcr 3 'shl 4 'sal 4 'shr 5 'sar 7}
-   ; ..more integer lanes, the same shape
    as-sse2 {'punpckhbw [[102] 104] 'punpckhwd [[102] 105] 'punpckhdq [[102] 106] 'pmuludq [[102] 244]
             'pmulhw [[102] 229] 'pmulhuw [[102] 228] 'pmaddwd [[102] 245] 'packuswb [[102] 103]
             'packsswb [[102] 99] 'packssdw [[102] 107] 'pmaxsw [[102] 238] 'pminsw [[102] 234]
@@ -357,8 +339,7 @@
           ()))
 
    ;; an instruction of the value: (op mn w ops), ops destination first; the encoders above
-   ;; take at&T's order. movabs is mov by range here; a high-byte register (ah.., slot 16 up)
-   ;; has no encoding in this front.
+   ;; take AT&T's order. movabs is mov by range; a high-byte register (16 up) lays as 4..7
    (as-instr it) (as-instrm 64 it)
    ;; ah..bh share their slots with spl..dil, which a REX selects: one beside a REX is refused,
    ;; as gas refuses it, where laying it would name the other register
@@ -434,8 +415,8 @@
                  (as-emit md w 0 [15 (163 + 8 * k)] (as-regn s) d)))
           ()))
 
-   ;; --- pass one: walk the items, encode each, assign addresses, record labels + .globl. returns
-   ;;     a tablet { 'items 'labels 'globls }. label defs emit no bytes; directives steer. ---
+   ;; pass one: encode each item, assign addresses, record labels and .globl -> {'items 'labels
+   ;; 'globls}. the listed directives are ignored: one .text section
    as-dirs '(".text" ".data" ".section" ".p2align" ".align" ".type" ".size" ".file" ".ident")
    (as-lay its)
       (: labels {}  globls {}  st {}
@@ -444,14 +425,13 @@
                (<its @ it
                   (<it @ 'label (pin labels <>it addr, go >its addr items)
                         'globl (pin globls <>it 1, go >its addr items)
-                        'dir (elem <>it as-dirs ? (go >its addr items)   ; M1: single .text section
+                        'dir (elem <>it as-dirs ? (go >its addr items)
                                 (scare 'as-directive <>it))
                         (revonto (as-instr it) items 0 @ r
                            (go >its (addr + <r) >r)))))
          (go its 0 ()))
 
-   ;; --- resolve intra-section fixups (near rel32) to final .text bytes, and the hex for goldens.
-   ;;     as-text reads at&T; as-textv takes the value, so either dialect assembles. ---
+   ;; resolve the fixups against the labels. as-text reads AT&T; as-textv takes the value
    (as-textv its) (as-lay its @ st
                      (resolve (st 'items) (peep st 'labels 0) (backends 'x64) 0))
    (as-text src) (as-textv (att-read src))
