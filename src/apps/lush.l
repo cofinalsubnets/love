@@ -1993,7 +1993,16 @@
               _ (each opens close)
               _ (? (sh-fd0? fdmap) (chug in) 0)       ; the old stdin's read-ahead goes with it
               (? (atom? argv) (pin S 'sh-status 0, 0)
+                 ((S 'sh-subfds) || (0 < (S 'sh-online))) (sh-execkid S argv)
                  (sh-execgo S argv)))))
+   ; a forkless subshell -- a $( ) body, an sh-oneline -- has no process of its own to
+   ; replace: argv runs as a child, and its status ends the subshell
+   (sh-execkid S argv)
+     (: _ (flush out) _ (flush err)
+        pid (? (sh-known? S <argv) (spawnmap (sh-spawnv S argv) () () (sh-pgm S 0) (sh-fgm S 0)) ())
+        st (? (charm? pid) (sh-waitfg S [pid] (sh-unwords argv), S 'sh-status)
+              (say err ("lush: exec: " + <argv + ": not found\n"), 127))
+        (pin S 'sh-status st, sh-leave S st))
    ; an ignore survives exec: shed the shell's tty ignores, restored if exec fails
    (sh-exectty S on)
      (? (S 'sh-tty) (each [sig-int sig-quit sig-tstp sig-ttou sig-ttin] (flip signal on)) 0)
