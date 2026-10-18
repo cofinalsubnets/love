@@ -1,19 +1,6 @@
-// Playdate frontend for love -- the rune CAS workbench riding the crank.
-//
-// love's frontend contract (love.h): the host defines love_clock, the
-// love_stdin/love_stdout ports, the love_fd_port_vt vtable, and the cooperative-wait
-// hooks. Here the console is a quay cb (50x30 cells of the 8x8 CGA font)
-// blitted to the 1-bit LCD each frame; stdout/stderr both land there, so the
-// prel's puts IS the screen and a scare face is visible. The heap rides the
-// SDK realloc, which pdglue.c gives malloc and free. The bootstrap egg compiles the love compiler
-// with the C evaluator, recompiles it with itself, installs it, then
-// src/apps/rune.l bakes in as a registered module and cas.l (this folder) drives
-// the demo: the C update just clears the console, fires (cas ()), and blits.
-//
-// This file is mooncc-compiled on device (-t thumb2sp: the STM32F746's FPU is
-// single-precision, so every f64 op softens to __aeabi_* -- the same libgcc
-// helpers Panic's own toolchain leans on). The SDK lives behind pdglue.c's
-// word-only surface; nothing here sees pd_api.h, a float ABI, or a variadic.
+// the playdate frontend: the rune cas workbench on the crank. the console is a 50x30 quay cb
+// blitted to the lcd each frame, stdout and stderr both; each update fires (cas ()).
+// mooncc -t thumb2sp on device (f64 softens to __aeabi_*); the SDK is behind pdglue.c
 #include "../../love.h"
 #include "quay.h"
 #include "pdglue.h"
@@ -33,22 +20,16 @@ static struct k {
     uint8_t cb_bytes[sizeof(struct cb) + sizeof(struct cb_cell) * NROWS * NCOLS]; };
 } K;
 
-// --- clock + cooperative waits ---------------------------------------------
 uintptr_t love_clock(void) { return pdg_ms(); }
 void love_sleep(uintptr_t ms) {
   uintptr_t start = love_clock();
   if (ms) while (love_clock() - start < ms) ;
 }
-// the readiness law (src/love/main.c, the teensy's Enter-freeze lesson): a
-// NEGATIVE fd is ALWAYS ready -- a string port waits on nothing external.
-// fd 0 answers instantly too (it is always at the end), so every fd is
-// honestly ready here.
+// a negative fd is always ready (main.c's law), and fd 0 is always at its end
 bool ready(int fd, int events) { return 1; }
 void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) { love_sleep(ms); }
 
-// --- port vtable: output rides the console buffer --------------------------
-// there is no text input on the device -- the crank and the buttons are the
-// whole keyboard -- so stdin is at the end from the first read and says so.
+// no text input on the device: stdin is at its end from the first read
 static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   return -1; }
 static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
@@ -58,13 +39,11 @@ static struct g *_flush(struct g *g) { return g; }
 
 struct fio love_stdin  = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
 struct fio love_stdout = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-// No separate error stream on the device; the scare face lands on the LCD too.
 struct fio love_stderr = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 struct port_vt const love_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
 
 #include "../../fdrow.h"                       // love_fd_readn / love_fd_say off the two above
 
-// --- the playdate nifs ------------------------------------------------------
 // (crank ())     -- the crank angle 0..359, or () docked
 // (pushed ())    -- this frame's fresh button bits (left 1 right 2 up 4
 //                   down 8 B 16 A 32)
@@ -83,13 +62,7 @@ static lvm(cur_set) {
   Ip += 1;
   return Continue(); }
 
-// --- the horn's seat door ---------------------------------------------------
-// this roster says love_horn_seat, so src/love/horn.c asks these instead of hunting a kernel's
-// device -- the same four src/inle/hda.c answers under inle. the ring and the SDK source are
-// pdglue's, which owns pd_api.h; nothing but words crosses.
-//
-// a mono port is doubled to stereo before it reaches here (src/love/horn.c's horn_land), so
-// what arrives is always interleaved stereo and the pull can hand two channels out.
+// love_horn_seat: horn.c asks these, as inle's hda.c; always stereo (horn_land doubles mono)
 int k_horn_open(int rate) { return pdg_horn_open(rate); }
 intptr_t k_horn_write(unsigned char const *src, uintptr_t n) {
   return pdg_horn_push(src, (int) n); }
@@ -105,7 +78,6 @@ static struct def defs[] = {
   {"pushed",  {.k = nif_pushed}},
   {"cur_set", {.k = nif_cur_set}} };
 
-// --- the frame --------------------------------------------------------------
 static void blit(void) {
   uint8_t *frame = pdg_frame();
   for (uint32_t i = 0; i < NROWS; i++)
@@ -123,17 +95,14 @@ static int k_update(void *_) {
     cb_fill(kcb, 0);
     K.g = evals_(K.g, "(cas ())");
     if (!ok(K.g)) {
-      // honest face: the condition prints to the console, and the screen
-      // freezes on it (reset the device to go again)
+      // the screen freezes on the condition until a reset
       if (code_of(K.g) == status_scare) scare_face(K.g);
       K.dead = 1; } }
   blit();
   return 1; }
 
 #if TARGET_PLAYDATE
-// newlib syscall stubs: love.c's strtod/strtol pull gdtoa, whose error paths
-// reach abort and the stdio buffer setup; none of them can actually run here,
-// the linker just wants the names.
+// newlib stubs for gdtoa's unreachable error paths: the linker wants the names
 int _write(int fd, const void *b, size_t n) { return n; }
 void _exit(int c) { for (;;) ; }
 int _fstat(int fd, void *st) { return -1; }
@@ -146,8 +115,7 @@ int _read(int fd, void *b, size_t n) { return 0; }
 void *_sbrk(intptr_t n) { return (void *) -1; }
 #endif
 
-// --- entry -------------------------------------------------------------------
-// THE BAKED MODULE: rune does not declare itself, so the wrapper is here; q and kanren ride post.
+// rune does not declare itself, so the wrapper is here; q and kanren ride post
 static char const src_mods[] =
 "(module 'rune "
 #include "rune.h"
@@ -158,11 +126,8 @@ void love_init(void) {
   pdg_log("love: init");
   cb_open(kcb, NROWS, NCOLS, 0);
   kcb->flag |= cb_lnm | cb_wrap;   // console discipline + autowrap the long forms
-  // WAKE-FIRST: the pdx bundles the qemu-baked heap image (love-pd.img --
-  // egg + rune + cas, wake-checked at build time). A good wake skips the
-  // minutes-long on-device bake the OS watchdog would kill anyway; any
-  // problem answers NULL and the egg lane below bakes from source (the
-  // 64-bit simulator refuses the 32-bit image this way BY DESIGN).
+  // wake the pdx's baked image first: the on-device bake outlasts the watchdog. a refusal
+  // (the 64-bit simulator's, always) answers NULL and bakes from source
   struct g *g0 = NULL;
   uintptr_t t0 = love_clock();
   { enum { imgcap = 2u << 20 };
@@ -177,18 +142,14 @@ void love_init(void) {
     cb_putc(kcb, *s);
   blit();
   struct g *g = defn(woke ? g0 : ini(), defs, countof(defs));
-  // ..and the LvNif slice of every TU linked beside this one, as src/love/main.c drains it:
-  // src/love/horn.c's rows ride the section, not the table above.
+  // and the LvNif section, as main.c drains it: horn.c's rows ride it
   g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
-  // born: this wake's cost, as src/love/main.c defines it -- the egg lane's egg.l pins its own
+  // born: this wake's cost, as main.c defines it; the egg lane's egg.l pins its own
   if (woke && ok(g = push(g, 1, putcharm((intptr_t) (love_clock() - t0))))) {
     g = defv(g, "born");
     if (ok(g)) g->sp++; }
   pdg_log(ok(g) ? "love: core up" : "love: core FAILED");
-  // bound the collector to a QUARTER of the device's 16 MB (the Appel knob,
-  // teensy's law): a major resize holds old and new pools at once, so the
-  // transient peak is double the budget -- 8 MB here, and the simulator
-  // emulates the device heap exactly (a budget of half OOMed it).
+  // a quarter of the device's 16 MB: a major holds old and new pools, so the peak is twice this
   if (ok(g)) g->budget = (4u << 20) / sizeof(word);
   if (woke) {
     K.g = love_open(g);           // the waker opens its own session (the bake carries none)
@@ -212,7 +173,7 @@ void love_init(void) {
     " "
 #include "cas.h"
     " 0");
-  // THE SESSION: the crank's evals defglob here, never in the base
+  // the crank's evals defglob in the session, never in the base
   K.g = love_open(K.g);
   pdg_log(ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");
   if (ok(K.g))

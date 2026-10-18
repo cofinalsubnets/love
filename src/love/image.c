@@ -1,9 +1,5 @@
-// src/love/image.c -- file I/O around the stdio-free image codec in snap.c (image_save /
-// love_image_load). that codec rides love_tu, which the src/inle/ boards link with no stdio
-// aboard, so stdio stops here. main.c calls image_bake (lay the image back into the
-// binary's own .image section), image_dump (write a plain image file) and image_load.
-// bake and dump answer 0 ok / <0 error; load answers NULL on any problem, so the caller
-// falls back to a normal egg boot.
+// image.c -- file I/O around snap.c's stdio-free image codec, which the boards link: stdio
+// stops here. bake and dump answer 0 or <0; load answers NULL and the caller boots the egg
 #define _GNU_SOURCE
 #include "love.h"
 #include <stdio.h>
@@ -14,28 +10,20 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <link.h>
-// the prefault hint is linux's alone. neither BSD has the flag, and there the wake takes
-// its faults as the decode walks -- a slower map, never a different one.
+// linux's alone: on the BSDs the wake faults as it decodes
 #ifndef MAP_POPULATE
 #define MAP_POPULATE 0
 #endif
 
-// the scratch beside a bake's target, per-process. two loves bake the same name
-// concurrently all the time under `make -jN`, and on one shared name they interleave into
-// each other's bytes, the second to rename answering ENOENT. NULL on refusal.
+// the scratch beside a bake's target, per process: make -jN bakes one name concurrently
 static char *bake_scratch(struct g *g, char const *path) {
   long pid = (long) getpid();
-  int n = snprintf(NULL, 0, "%s.bake.%ld", path, pid);       // measure, then the one exact block
+  int n = snprintf(NULL, 0, "%s.bake.%ld", path, pid);
   char *t = n < 0 ? NULL : alloc(NULL, (size_t) n + 1);
   if (t) snprintf(t, (size_t) n + 1, "%s.bake.%ld", path, pid);
   return t; }
 
-// the one bake to a file, for the nif and the verb alike. the path is sp[0], read after the
-// dump: gen_major moves the string and sp[0] is a root, so it rides the move where a C local
-// would not. noinline keeps these buffers out of lvm_bake's frame, which would defeat the
-// lvm_ ap's tail-jump (make vmret). 0 ok, <0 refused.
-// the bake's choices off the environment: LOVE_BAKE_CHUNK the words of a stream chunk,
-// LOVE_BAKE_HOT a file of word ranges, "a b" a line, that a profile of this layout touched
+// LOVE_BAKE_CHUNK the words of a stream chunk, LOVE_BAKE_HOT a file of "a b" word ranges a profile touched
 static void *image_save_env(struct g *g, uintptr_t *len) {
   struct image_opt o = { 0, NULL, 0 };
   char const *c = getenv("LOVE_BAKE_CHUNK"), *h = getenv("LOVE_BAKE_HOT");
@@ -62,26 +50,26 @@ static void *image_save_env(struct g *g, uintptr_t *len) {
   if (r) alloc(r, 0);
   return buf; }
 
+// the one bake to a file. the path is sp[0], a root, read after the dump moves it; noinline
+// keeps these buffers out of lvm_bake's frame, which would defeat its tail-jump (make vmret)
 love_noinline static int image_put(struct g *g) {
   uintptr_t len = 0;
   void *buf = image_save_env(g, &len);
   if (!buf) return -2;
   char const *path = txt(str(g->sp[0]));          // a love string ends in a NUL
-  // land it beside the target, never on it: "wb" empties the file and only then writes the
-  // megabytes back, so a reader in between gets a short image, which wakes with no verbs.
+  // beside the target, never on it: a reader mid-write would wake a short image
   char *tmp = bake_scratch(g, path);
   int rc = -4;
   if (tmp) {
     FILE *f = fopen(tmp, "wb");
     rc = !f ? -4 : (fwrite(buf, 1, len, f) == len) ? 0 : -4;
     if (f && fclose(f)) rc = -4;
-    if (!rc && rename(tmp, path)) rc = -4;        // the adopt: atomic, a whole file or none
+    if (!rc && rename(tmp, path)) rc = -4;        // atomic: a whole file or none
     if (rc) remove(tmp);
     alloc(tmp, 0); }
   return alloc(buf, 0), rc; }
 
-// `bake PATH`: image_put reads the path off the stack, so the C string goes there first.
-// the push can move g, so g comes back out, and the rc rides g->b, written last.
+// `bake PATH`: the path goes on the stack for image_put; the rc rides g->b
 struct g *image_dump(struct g *g, char const *path) {
   g = strof(g, path);
   if (!ok(g)) return core_of(g)->b = -2, g;
@@ -89,34 +77,16 @@ struct g *image_dump(struct g *g, char const *path) {
   g->sp++;
   return g->b = rc, g; }
 
-// image_bake -- lay an image into a binary's own .image section on disk. `out` NULL is the
-// self-bake, in place; a path writes a copy there instead. ETXTBSY-proof by the adopt
-// pattern -- copy the file, lay the blob in, fsync, rename, so anything still executing
-// keeps the old inode.
-// same build = same tables and C, so the codec's guards (image_why) hold by construction.
-// .image is laid last, so the blob is appended where the section already sits and only the
-// one phdr and shdr that name it are rewritten. no reserve, no ceiling, and no vaddr moves.
-// bake_tail reads that requirement off the binary's own section headers rather than a build
-// flag, and it is one thing: .image ends the segment carrying it -- true of a section alone
-// in the highest PT_LOAD (the Makefile's --section-start) and of one riding the tail of the
-// single segment holo lays. any other link is refused loudly: there is nowhere to grow.
-// the in-binary home of the post-boot heap image (doc/misc/snapshot.md): the binary loads
-// its own dump at startup, identical layout by construction, so the codec's same-binary
-// +delta relocation just works. sentinel-initialized rather than {0} so it lands in
-// PROGBITS, patchable in place, never .bss. the bake grows the section, so this stub exists
-// only to give it an address.
+// the binary's own heap image (doc/misc/snapshot.md). {1}, not {0}, so it lands in PROGBITS,
+// never .bss; the bake grows the section, and this stub only gives it an address
 #define ReserveWords 2u
 __attribute__((section(".love.image"))) uint64_t baked_image[ReserveWords] = {1};
 uintptr_t baked_image_len = ReserveWords * 8u;
-// the stub's size is a lie gcc believes: ReserveWords is 2 because the bake grows the
-// object, so a read past the second word is out of bounds of the declaration and in bounds
-// of the section. main.c's `extern uint64_t baked_image[]` never hears about it.
+// a read past the stub's two words is out of the declaration's bounds, in the section's
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__mooncc__)
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
-// --- the carried image -------------------------------------------------------
-// the section holds one image; its first word is the codec's own magic. an unbaked
-// binary carries a stub too short to be one, and the caller boots the egg.
+// an unbaked binary's stub is too short to be an image, and the caller boots the egg
 int baked_pick(void const **blob, uintptr_t *blen) {
   return *blob = (void const *) baked_image, *blen = baked_image_len,
          baked_image_len > 0; }
@@ -131,8 +101,8 @@ static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
       b->off = p->p_offset + (b->addr - lo), b->found = 1; }
   return 1; }                                     // stop after the first object: the main program
 
-#define BakeScratch (64u << 10)                  // the copy/pad window: a bake runs once, so iterations are free
-// move n bytes src@soff -> dst@doff through the caller's window. the two lanes only shuttle bytes.
+#define BakeScratch (64u << 10)                  // the copy window
+// n bytes src@soff -> dst@doff through the window
 static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *win) {
   for (uint64_t z = 0; z < n; ) {
     size_t w = n - z < BakeScratch ? (size_t)(n - z) : BakeScratch;
@@ -141,7 +111,8 @@ static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n,
     z += w; }
   return 0; }
 
-// lay the image. 0 done, >0 "this binary is not laid for growth", <0 a real failure.
+// lay the image into .image, which must end the last segment: append where it sits, rewrite
+// its one phdr and shdr, fsync, rename. 0 done, >0 not laid for growth, <0 a failure
 static int bake_tail(struct g *g, int src, char const *tmp, void const *buf, uintptr_t len,
                      uint64_t lenoff, uint64_t imgoff, mode_t mode) {
   Elf64_Ehdr eh;
@@ -169,10 +140,7 @@ static int bake_tail(struct g *g, int src, char const *tmp, void const *buf, uin
   for (size_t i = 1; i < nsh; i++)
     if (sh[i].sh_name < sh[eh.e_shstrndx].sh_size && !strcmp(str + sh[i].sh_name, ".love.image")) { si = i; break; }
   if (!si) goto out;                              // no .image section at all
-  // the blob goes exactly where the section already sits, so the loader's offset/vaddr
-  // congruence is inherited rather than recomputed and a rebake lands on its own
-  // footprint. all that must hold is that .image is last -- nothing allocated above it,
-  // and it ends the segment that carries it, so growing it grows nothing else.
+  // where the section sits, so offset/vaddr congruence is inherited: nothing allocated above it
   off = sh[si].sh_offset;
   for (size_t i = 1; i < nsh; i++) {
     if (i == si || sh[i].sh_type == SHT_NOBITS || !(sh[i].sh_flags & SHF_ALLOC)) continue;
@@ -183,11 +151,8 @@ static int bake_tail(struct g *g, int src, char const *tmp, void const *buf, uin
   if (pi == nph) goto out;                        // .image does not end a segment: not the tail
   for (size_t i = 0; i < nph; i++)                // ..and no other segment lives above it
     if (i != pi && ph[i].p_type == PT_LOAD && ph[i].p_vaddr > ph[pi].p_vaddr) goto out;
-  // the blob's home is baked_image's, not the section's. a lay may open the section
-  // with alignment padding ahead of the symbol -- the address is congruent to the file
-  // offset, which says nothing about the symbol's own alignment -- and the wake reads from
-  // the symbol. pad is that gap: it rides inside the head and the two records below carry
-  // it, so the bake lands where the wake looks whatever the lay left in front.
+  // the blob goes at baked_image, not the section's start: pad is alignment a link may lay
+  // before the symbol, and the two records below carry it
   if (imgoff < off || imgoff - off >= sh[si].sh_size) goto out;   // the symbol is not in the section
   pad = imgoff - off;
   head = imgoff;                                  // everything below the blob stays put, byte for byte
@@ -221,12 +186,9 @@ static int bake_tail(struct g *g, int src, char const *tmp, void const *buf, uin
   alloc(sh, 0), alloc(ph, 0), alloc(str, 0), alloc(win, 0);
   return rc; }
 
-// a mach-o (mooncc -os macos) carries .image as its __IMAGE segment, laid last of what the
-// program maps: the blob lands where the symbol sits and the segment grows to hold it. dyld's
-// exe keeps __LINKEDIT after it, last in the file and in memory as dyld insists, so the bake
-// moves that past the grown image and every offset into it by the same distance. the link is
-// fixed-base, so the file's own segments map a live address to its offset. 0 done, >0 not a
-// mach-o or not laid for growth, <0 a real failure.
+// a mach-o's .image is its __IMAGE segment, last mapped, grown to hold the blob. dyld wants
+// __LINKEDIT last, so it and every offset into it move past the image. the link is fixed-base,
+// so segments map an address to its offset. 0 done, >0 not a mach-o laid for growth, <0 failed
 struct macho_seg { uint32_t cmd, size; char name[16]; uint64_t addr, vsz, off, fsz;
                    uint32_t maxp, initp, nsect, flags; };
 static void macho_slide(char *c, uint32_t lo, uint32_t hi, uint64_t from, uint64_t d) {
@@ -288,24 +250,18 @@ static int bake_macho(int src, char const *tmp, void const *buf, uintptr_t len,
   alloc(cmds, 0), alloc(win, 0);
   return rc; }
 
-// `bare` lays the sentinel stub back instead of a snapshot -- the section a fresh link
-// carries -- so the answer is an imageless binary, and no heap has to be saved.
+// out NULL bakes in place, a path writes a copy; bare lays the stub back, an imageless binary
 int image_bake(struct g *g, char const *out, int bare) {
   uint64_t stub[ReserveWords] = {1};
   uintptr_t len = sizeof stub;
   void *buf = bare ? NULL : image_save_env(g, &len);
-  // the natives ride: their code is a segment of the image, woken as a chunk of the
-  // arena. only a refused bake (below) is worth a word.
   if (!bare && !buf) return -2;
-  // baked_image_len is patched by file offset, taken from the running program's own
-  // phdrs -- the one place a live address and a file position name the same byte. a copy
-  // is this binary's head byte for byte, so the same offset names the same word there.
+  // baked_image_len patched by the file offset the running phdrs give; a copy shares the head
   struct bake_at bl = { (uintptr_t) &baked_image_len, 0, 0 },
                  bi = { (uintptr_t) baked_image, 0, 0 };     // ..and the blob goes where that symbol reads
   dl_iterate_phdr(bake_phdr, &bl);
   dl_iterate_phdr(bake_phdr, &bi);
-  // exe[4096] is the kernel's own PATH_MAX, not a cap of ours: host_selfpath asks about a
-  // real file, and no path an open could name is longer.
+  // the kernel's PATH_MAX
   char exe[4096];
   if (!host_selfpath(exe, sizeof exe)) return alloc(buf, 0), -6;
   char const *dst = out ? out : exe;
@@ -320,15 +276,13 @@ int image_bake(struct g *g, char const *out, int bare) {
     if (rc > 0) {
       fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n");
       rc = -3; }
-    if (!rc && rename(tmp, dst)) rc = -6;         // the adopt: atomic, a new inode
+    if (!rc && rename(tmp, dst)) rc = -6;         // a new inode: ETXTBSY-proof
     if (rc) unlink(tmp); }
   if (src >= 0) close(src);
   alloc(tmp, 0);
   return alloc(buf, 0), rc; }
 
-// the (bake path) nif: `love wake path prog.l ..` boots a session carrying every global
-// this one had pinned, a live native closure among them -- its code is bytes the image
-// carries. answers 1 | ().
+// (bake path): `love wake path ..` boots with every global this one pinned. 1 | ()
 // FIXME extend LvmCall macro to handle this.
 static lvm(lvm_bake) {
  Pack(g);
@@ -345,12 +299,11 @@ struct g *image_load(char const *path, int *why) {
   if (fd < 0) return NULL;
   struct stat st;
   struct g *g = NULL;
-  if (!fstat(fd, &st) && st.st_size > 0) {        // map, don't read: the core copies the blob straight
-    size_t n = (size_t) st.st_size;               // out of the page cache -- one pass, no file buffer
+  if (!fstat(fd, &st) && st.st_size > 0) {        // mapped: no file buffer
+    size_t n = (size_t) st.st_size;
     void *buf = mmap(NULL, n, PROT_READ, MAP_PRIVATE, fd, 0);
     if (buf != MAP_FAILED) {
-      // step over a shebang if the image wears one -- images written before the line was
-      // dropped carry one, padded to a word. a plain image starts at the magic.
+      // older images wear a shebang, padded to a word
       size_t off = 0;
       if (n > 2 && ((char*) buf)[0] == '#' && ((char*) buf)[1] == '!') {
         char *nl = memchr(buf, '\n', n);

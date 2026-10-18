@@ -5,11 +5,8 @@
 //                          gain (the head's output gain: dB in Q7.8) | why
 // (opus-packet b p f)   -> one packet's samples, interleaved, s16le (f 0) or f32le (f 1); p ""
 //                          conceals a lost packet | why: an opus error code, negated
-// the decoder is the rfc's reference (its float build), in src/love/audio/opus/ with its
-// notices, built here as one unit. it allocates nothing: the state is the caller's cask, and
-// its scratch -- the reference's pseudostack -- the tail of that cask, pointed at for the
-// length of each call and let go after (the one mutable global, a pointer, and a decode is
-// never interrupted). its maths ride the tree's own (lm.c).
+// the rfc's reference decoder (float build, opus/ with its notices) as one unit, allocating
+// nothing: its pseudostack is the cask's tail, pointed at for one call (the one mutable global)
 #include "love.h"
 #include "bytes.h"
 #include <stdint.h>

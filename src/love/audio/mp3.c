@@ -1019,10 +1019,8 @@ static uint8_t const mp3_parts[3][28] = {
  {8,9,6,12,6,9,9,9,6,9,12,6,15,18,0,0,6,15,12,0,6,12,9,6,6,18,9,0},
  {9,9,6,12,9,9,9,9,9,9,12,6,18,18,0,0,12,12,12,0,12,9,9,6,15,12,9,0}};
 
-// the decoder's state, laid in a cask the caller makes (cask (mp3-state 0)): all zeros is a
-// fresh stream. the overlap and synthesis fifo carry from frame to frame, the reservoir is
-// the main data later frames may reach back into; the rest is work room, kept here and not
-// on the stack
+// the decoder's state, in the caller's cask: all zeros is a fresh stream. ov, v and res carry
+// between frames; the rest is work room kept off the stack
 struct mst {
  double ov[2][576];         // the imdct's second halves, 32 subbands x 18
  double v[2][1024];         // the synthesis fifo
@@ -1055,7 +1053,7 @@ static double mp3_p4(int q) {
 
 static double mp3_pw(double b, int n) { double r = 1; while (n-- > 0) r *= b; return r; }
 
-// n^(4/3) = n * cbrt(n): newton from a guess off the exponent, so every build gives the same
+// n^(4/3) = n * cbrt(n): newton from a guess off the exponent, the same on every build
 static double mp3_p43(int n) {
  if (n < 2) return n;
  double x = n, t = 1;
@@ -1266,15 +1264,15 @@ static int mp3_free(const uint8_t *h, int len) {
   if (h[p] == 0xff && h[p + 1] == h[1] && (h[p + 2] & 0xfc) == (h[2] & 0xfc)) return p;
  return len > 4096 ? -4 : -2; }
 
-// one frame: header at h, the side info and main data after it -> samples per channel
-// a frame's main data kept as the reservoir the frames after reach back into
+// a frame's main data kept as the reservoir later frames reach back into
 static void mp3_keep(struct mst *m, const uint8_t *fd, int md) {
  int keep = md >= 1024 ? 1024 : md, old = m->reslen + keep > 1024 ? 1024 - keep : m->reslen;
  for (int i = 0; i < old; i++) m->res[i] = m->res[m->reslen - old + i];
  for (int i = 0; i < keep; i++) m->res[old + i] = fd[md - keep + i];
  m->reslen = old + keep; }
 
-// (0 for a frame the reservoir cannot reach yet, which plays as silence) | -why; *flen its bytes
+// the frame at h -> samples per channel (0 when the reservoir can't reach back yet: silence)
+// | -why; *flen its bytes
 static int mp3_decode(struct mst *m, const uint8_t *h, int len, int *flen) {
  int ver, rate, nch, n = mp3_head(h, &ver, &rate, &nch);
  if (n == -2) n = mp3_free(h, len);
@@ -1286,8 +1284,7 @@ static int mp3_decode(struct mst *m, const uint8_t *h, int len, int *flen) {
  int sr = (h[2] >> 2 & 3) + 3 * (ver == 0 ? 0 : ver == 1 ? 1 : 2), row = sr - (sr != 0);
  int head = 4 + 2 * crc;
  if (n < head + si) return -4;
- // the main data: mdb bytes back in the reservoir, then this frame's. a frame refused past
- // here still keeps its main data, which the frames after may reach back into
+ // mdb bytes back in the reservoir, then this frame's; a frame refused past here still keeps its main data
  int md = n - head - si;
  const uint8_t *fd = h + head + si;
  struct mbit b = {h + head, si, 0};

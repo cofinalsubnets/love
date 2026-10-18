@@ -1,16 +1,14 @@
-// the droid seat's sound card: love.h's k_horn_* and k_horn_in_* on the bridge's two sockets,
-// HORN=sock:PATH and HORN_IN=sock:PATH, the wire src/love/horn.c's sock door speaks (the rate
-// as a u32, its top byte the channels asked of the mic). with no HORN, a sink that keeps time
-// and discards, a quarter second deep -- the host's HORN=none. with no HORN_IN, no mic.
+// the droid sound card: k_horn_* on HORN=sock:PATH and HORN_IN=sock:PATH, horn.c's sock wire
+// (a u32 rate, its top byte the mic's channels). no HORN: a timed sink a quarter second deep
 #include <stdint.h>
 #include "../../apps/moon/lib/moonlibc/impl.h"
 
 #define sys(n, a, b, c, d) __love_sys(n, (long) (a), (long) (b), (long) (c), (long) (d), 0, 0)
 
-// the sink's frames queued as of t, in ns; the sockets, and the paths the bridge named
+// held: the sink's frames queued as of t (ns)
 static struct { uint64_t rate, held, t; int out, in; unsigned inch; char const *hp, *ip; } h = { .out = -1, .in = -1 };
 
-// the bridge's paths, taken off the process's environment before the kernel runs
+// taken off the environment before the kernel runs
 void k_droid_horn(char const *out, char const *in) {
   h.hp = out && !strncmp(out, "sock:", 5) ? out + 5 : 0;
   h.ip = in && !strncmp(in, "sock:", 5) ? in + 5 : 0; }
@@ -28,7 +26,7 @@ static void drain(void) {
 
 static void shut(int *fd) { if (*fd >= 0) sys(NR_close, *fd, 0, 0, 0); *fd = -1; }
 
-// a stream to the listener at path, the rate word said, then never waiting; -1 refused
+// a nonblocking stream to path, the rate word said; -1 refused
 static int dial(char const *path, int rate, unsigned inch) {
   struct { unsigned short fam; char path[108]; } u = { 1, {0} };
   if (strlen(path) >= sizeof u.path) return -1;
@@ -78,8 +76,7 @@ int k_horn_in_open(int rate, int chans) {
   h.inch = (unsigned) chans;
   return (h.in = dial(h.ip, rate, h.inch)) < 0 ? -1 : 0; }
 
-// what the mic has heard, in whole frames: a frame split across reads is waited out, a
-// second at most; 0 when dry, -1 once the bridge is gone
+// whole frames: a split frame is waited out, a second at most; 0 dry, -1 the bridge gone
 intptr_t k_horn_read(unsigned char *dst, uintptr_t n) {
   uintptr_t fb = 2 * h.inch;
   if (h.in < 0 || !fb) return -1;

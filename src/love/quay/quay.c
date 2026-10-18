@@ -2,13 +2,12 @@
 #include "cp437.h"
 #include "../../apps/moon/lib/moonlibc/ctype/ucd.h"
 
-// *e <- a cell of codepoint cp in the current pen. the blank a clear or scroll
-// leaves behind is cp 0 in the current pen,
-// so erased ground keeps the program's background (BCE).
+// *e <- cp in the current pen; a cleared cell is cp 0 in it too, so erased ground keeps
+// the program's background (BCE)
 static void cb_pen(struct cb const *c, uint32_t cp, struct cb_cell *e) {
   e->g = cb_gw(cp, c->cur_face), e->fg = c->cur_fg, e->bg = c->cur_bg; }
 
-// mark rows r1..r2 for repainting (inclusive; rows past 255 fold onto bit 255).
+// mark rows r1..r2 for repainting, inclusive; rows past 255 fold onto bit 255
 static void cb_dmg(struct cb *c, uint32_t r1, uint32_t r2) {
   if (r1 > 255) r1 = 255;
   if (r2 > 255) r2 = 255;
@@ -30,10 +29,8 @@ void cb_fill(struct cb *c, uint32_t cp) {
 
 void cb_clear(struct cb *c) { cb_fill(c, 0); }
 
-// the attribute, and every cell ALREADY on the screen with it -- the characters stay put,
-// their faces and colours go back to the default. the rows are marked like any other write:
-// a cell whose colour changed and whose row is clean is a cell the painter will not come
-// back for, so the screen would recolour only where something else happened to be writing.
+// the attribute, and every cell on the screen back to the default face and colours. the rows
+// are marked, or the painter recolours only where something else is writing
 void cb_recolor(struct cb *c, uint32_t fg, uint32_t bg) {
   cb_attr(c, fg, bg);
   for (uint32_t i = 0, j = (uint32_t) c->rows * c->cols; i < j; i++)
@@ -48,9 +45,7 @@ void cb_attr(struct cb *c, uint32_t fg, uint32_t bg) {
   c->def_fg = fg, c->def_bg = bg;
   c->cur_fg = c->cur_bg = cb_ink(cb_def, 0), c->cur_face = 0; }
 
-// stamp a raw cp437 glyph with the current pen and step the cursor, no
-// interpretation -- the escape-free lane for callers that mean every byte
-// as a picture.
+// a raw cp437 glyph in the current pen, uninterpreted, and step the cursor
 void cb_stamp(struct cb *c, uint8_t i) {
   uint32_t r = c->wpos / c->cols;
   cb_pen(c, cb_unfold(i), &c->cb[c->wpos]);
@@ -74,9 +69,7 @@ void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   c->top = 0, c->bot = rows - 1u;
   cb_clear(c); }
 
-// scroll rows [t,b] up/down by n, blanking what opens. the saved cursor
-// RIDES ALONG when its cell moves -- the old scroll left it pointing at
-// shifted ground.
+// scroll rows [t,b] up/down by n, blanking what opens; the saved cursor rides along
 static void cb_ride(struct cb *c, uint32_t *p, uint32_t t, uint32_t b, int dn, uint32_t n) {
   uint32_t r = *p / c->cols, k = n * c->cols;
   if (r < t || r > b) return;
@@ -112,9 +105,7 @@ static void cb_scdn(struct cb *c, uint32_t t, uint32_t b, uint32_t n) {
   cb_dirt(c, t, b);
   cb_ride(c, &c->spos, t, b, +1, n); }
 
-// index: down one row, scrolling at the region's bottom margin. a
-// cursor below the region (possible after DECSTBM) steps to the screen
-// edge and stops.
+// index: down a row, scrolling at the region's bottom; a cursor below the region stops at the edge
 static void cb_ind(struct cb *c) {
   uint32_t r = c->wpos / c->cols;
   c->flag &= (uint16_t) ~cb_pend;
@@ -127,8 +118,7 @@ static void cb_ri(struct cb *c) {  // reverse index: the mirror
   if (r == c->top) cb_scdn(c, c->top, c->bot, 1);
   else if (r) c->wpos -= c->cols; }
 
-// absolute cursor addressing; origin mode reads rows against the
-// scroll region. every deliberate move drops a pending wrap.
+// absolute addressing; origin mode reads rows against the region. a move drops a pending wrap
 static void cb_goto(struct cb *c, uint32_t r, uint32_t col) {
   uint32_t lo = 0, hi = c->rows - 1u;
   if (c->flag & cb_origin) r += c->top, lo = c->top, hi = c->bot;
@@ -137,9 +127,8 @@ static void cb_goto(struct cb *c, uint32_t r, uint32_t col) {
   if (col >= c->cols) col = c->cols - 1u;
   c->wpos = r * c->cols + col, c->flag &= (uint16_t) ~cb_pend; }
 
-// the reply queue: answers (DSR, DA) ride home to whoever feeds the
-// parser; the host drains them to the pty master, the kernel may not
-// bother. a full queue drops the tail -- a late report beats a torn one.
+// the reply queue (DSR, DA): the host drains it to the pty master. full drops the tail, a late
+// report beats a torn one
 static void cb_say(struct cb *c, char const *s) {
   while (*s && c->on < cb_outn) c->out[c->on++] = (uint8_t) *s++; }
 
@@ -182,7 +171,7 @@ uint32_t cb_mouse(struct cb const *c, uint8_t *o, uint32_t b, uint32_t row, uint
   o[4] = (uint8_t) (col < 222u ? 33u + col : 255u), o[5] = (uint8_t) (row < 222u ? 33u + row : 255u);  // a byte's reach
   return 6; }
 
-// a paste can't close its bracket early or carry a sequence in: its controls go
+// a paste can't close its bracket early or carry a sequence in: its controls drop, \n is \r
 int cb_paste1(uint8_t prev, uint8_t b) {
   if (b == '\n') return prev == '\r' ? -1 : '\r';
   return (b < 32 && b != '\t' && b != '\r') || b == 127 ? -1 : b; }
@@ -255,8 +244,8 @@ static uintptr_t cb_u8(uint8_t *o, uintptr_t k, uint32_t cp) {
 uintptr_t cb_copied(struct cb const *c, uint8_t *o, intptr_t a, intptr_t b) {
   intptr_t const cs = c->cols, lo = -(intptr_t) c->hn * cs, hi = (intptr_t) c->rows * cs;
   a = a < lo ? lo : a, b = b > hi ? hi : b;
-  // blanks are held back until something follows them, so a hard line end drops its tail
-  // unwritten and the count pass (o 0) answers every byte the writing pass will lay
+  // blanks wait for something to follow, so a line end drops its tail and the count pass (o 0)
+  // answers every byte the writing pass lays
   uintptr_t k = 0, held = 0;
   for (intptr_t i = a; i < b; i++) {
     struct cb_cell const *e = cb_at(c, i);
@@ -274,18 +263,15 @@ uintptr_t cb_copied(struct cb const *c, uint8_t *o, intptr_t a, intptr_t b) {
   for (; held; held--) k = cb_u8(o, k, ' ');
   return k; }
 
-// the OSC asks worth answering: colour queries (ESC]10;? fg, ESC]11;? bg)
-// -- zsh and friends probe the background at line-editor startup and WAIT;
-// silence costs the user a second of buffered keystrokes. the answers are
-// the default pen's truth on every renderer: c0c0c0 on black.
+// the OSC colour queries (ESC]10;? fg, ESC]11;? bg): zsh probes the background and waits.
+// the default pen everywhere: c0c0c0 on black
 static void cb_oscq(struct cb *c) {
   if (c->ol == 4 && c->ob[0] == '1' && c->ob[2] == ';' && c->ob[3] == '?') {
     if (c->ob[1] == '0') cb_say(c, "\033]10;rgb:c0c0/c0c0/c0c0\a");
     else if (c->ob[1] == '1') cb_say(c, "\033]11;rgb:0000/0000/0000\a"); } }
 
-// C0 controls, live in ground state and mid-CSI alike. \n implies \r
-// only under LNM (the kernel console's discipline); a raw feed keeps
-// the column, which is what a pty's ONLCR-translated stream expects.
+// C0 controls, live in ground and mid-CSI. \n implies \r only under LNM (the kernel console's);
+// a raw feed keeps the column, as a pty's ONLCR stream expects
 static void cb_ctl(struct cb *c, uint8_t i) {
   uint32_t cs = c->cols, col = c->wpos % cs;
   switch (i) {
@@ -303,22 +289,15 @@ static void cb_ctl(struct cb *c, uint8_t i) {
    case 15: c->gset &= (uint8_t) ~cb_so; return;            // SI: G0 back
    default: return; } }  // BEL and the rest of C0: swallowed whole
 
-// DEC special graphics, 0x5f..0x7e: what ncurses' ACS letters draw -- q a line, x a
-// bar, l k m j the corners, t u v w n the tees and the cross
+// DEC special graphics, 0x5f..0x7e: ncurses' ACS lines, corners, tees and cross
 static uint16_t const cb_decgfx[32] = {
   0x00a0, 0x25c6, 0x2592, 0x2409, 0x240c, 0x240d, 0x240a, 0x00b0, 0x00b1, 0x2424, 0x240b,
   0x2518, 0x2510, 0x250c, 0x2514, 0x253c, 0x23ba, 0x23bb, 0x2500, 0x23bc, 0x23bd, 0x251c,
   0x2524, 0x2534, 0x252c, 0x2502, 0x2264, 0x2265, 0x03c0, 0x2260, 0x00a3, 0x00b7 };
 
-// a printing glyph. a pending wrap fires FIRST (deferred autowrap: the
-// glyph that landed on the last column left the cursor there; the next
-// one carries it to a fresh line), then the stamp, then the step -- a
-// stamp on the last column pends rather than moving, or overwrites in
-// place with autowrap off.
-// a wide char is two cells, a lead holding the codepoint and a tail holding 0; one
-// that meets the last column wraps first (or steps back, autowrap off). a zero-width
-// one is a mark, and joins the cell before it (cb_mark). cb_unpair blanks the other
-// half of whatever pair a write lands on.
+// a printing glyph: a pending wrap fires first (deferred autowrap), then the stamp, then the step;
+// on the last column it pends, or overwrites with autowrap off. a wide char is a lead holding cp
+// and a tail holding 0, wrapping first at the last column; a zero-width one joins the cell before
 static void cb_unpair(struct cb *c, uint32_t p) {
   uint32_t const cs = c->cols, col = p % cs, w = cb_wide(c->cb[p].g);
   if (w == cb_tail && col) c->cb[p - 1].g &= 0xff000000u;
@@ -343,9 +322,8 @@ static uint32_t cb_free(struct cb const *c, uint32_t n) {
   while (k < n && cb_slotp(c, k)[0]) k++;
   return k; }
 
-// the sweep: every slot no cell nor the history names is freed, save `keep`; cell `skip`
-// names nothing, its slot about to change. a named slot is marked in its base's top bit,
-// which no codepoint reaches
+// the sweep: free every slot no cell nor the history names, save keep; cell skip names nothing.
+// a named slot is marked in its base's top bit, which no codepoint reaches
 static void cb_reap(struct cb *c, uint32_t keep, uint32_t skip) {
   uint32_t const n = cb_nclu + c->cx;
   for (uint32_t i = 0, m = cb_ncells(c); i < m; i++) {
@@ -356,9 +334,8 @@ static void cb_reap(struct cb *c, uint32_t keep, uint32_t skip) {
     uint32_t *const v = cb_slotp(c, k);
     v[0] = v[0] >> 31 ? v[0] & ~((uint32_t) 1 << 31) : 0; } }
 
-// the slot holding v: one that already does, else a free one, else one freed by a sweep
-// (all but cell `skip`, whose slot v replaces); n when every slot is named. taking the
-// last free one sweeps at once, and a pool still full says so in cfull
+// the slot holding v: one that does, a free one, else one a sweep frees (skip excluded); n when
+// all are named. taking the last free one sweeps at once; still full sets cfull
 static uint32_t cb_slot(struct cb *c, uint32_t const *v, uint32_t skip) {
   uint32_t const n = cb_nclu + c->cx;
   uint32_t k, j;
@@ -376,9 +353,8 @@ static int cb_vs16(uint32_t cp) { return __ucd_in(ucd_vs, cp); }
 static int cb_xp(uint32_t cp) { return __ucd_in(ucd_xp, cp); }
 static int cb_regional(uint32_t cp) { return cp >= 0x1f1e6u && cp <= 0x1f1ffu; }
 
-// under ?2027, VS16 after a narrow character with an emoji style, or any join (any),
-// makes its cell a wide char's lead and the next its tail. on the last column, the pair
-// wraps to the next line as a wide char would there; with autowrap off it stays narrow
+// under ?2027, VS16 after an emoji-style narrow char, or any join, widens its cell into a lead and
+// tail; on the last column it wraps, or with autowrap off stays narrow
 static void cb_emoji(struct cb *c, uint32_t p, int any) {
   uint32_t const cs = c->cols;
   struct cb_cell e = c->cb[p];
@@ -398,8 +374,7 @@ static void cb_emoji(struct cb *c, uint32_t p, int any) {
   if ((p + 1u) % cs == cs - 1u) { c->wpos = p + 1u; if (c->flag & cb_wrap) c->flag |= cb_pend; }
   else c->wpos = p + 2u; }
 
-// the cell before the cursor -- the one a pending wrap sits on, a wide char's lead for
-// its tail -- or ~0u for none
+// the cell before the cursor (a pending wrap's, a tail's lead), or ~0u
 static uint32_t cb_prev(struct cb const *c) {
   uint32_t const cs = c->cols;
   uint32_t p = c->wpos;
@@ -407,9 +382,8 @@ static uint32_t cb_prev(struct cb const *c) {
   if (cb_wide(c->cb[p].g) == cb_tail && p % cs) p--;
   return p; }
 
-// under ?2027, does cp join the cluster before the cursor rather than take cells: an emoji
-// modifier after a pictograph, a pictograph after a ZWJ that ends one, a regional indicator
-// after a lone one -- while the cluster has room ('text's gcnext keeps the same rules)
+// under ?2027, does cp join the cluster before the cursor while it has room: the same rules as
+// 'text's gcnext
 static int cb_joins(struct cb const *c, uint32_t cp) {
   uint32_t const p = cb_prev(c);
   if (!(c->flag & cb_gc) || p == ~0u) return 0;
@@ -421,9 +395,8 @@ static int cb_joins(struct cb const *c, uint32_t cp) {
   if (cb_regional(cp)) return n == 1 && cb_regional(b);
   return cb_xp(cp) && cb_xp(b) && v && v[n - 1] == 0x200du; }
 
-// a mark joins the cell before the cursor, keeping its pen, as does a character ?2027
-// joins there (cb_joins), which widens it. none there, a picture, or a full cluster: the
-// mark is dropped (though a VS16 still widens, cb_emoji)
+// a mark, or a char ?2027 joins, goes into the cell before the cursor, keeping its pen. none
+// there, a picture, or a full cluster drops it (a VS16 still widens)
 static void cb_mark(struct cb *c, uint32_t m) {
   uint32_t const cs = c->cols, p = cb_prev(c);
   if (p == ~0u) return;
@@ -460,8 +433,7 @@ static void cb_glyph(struct cb *c, uint32_t cp) {
   if (last % cs == cs - 1u) { c->wpos = last; if (c->flag & cb_wrap) c->flag |= cb_pend; }
   else c->wpos = last + 1u; }
 
-// row r after an erase or a shift: a lead with no tail beside it, or a tail with no
-// lead, is blanked -- half a wide char draws as nothing
+// row r after an erase or shift: half a wide char is blanked
 static void cb_mend(struct cb *c, uint32_t r) {
   uint32_t const cs = c->cols, rb = r * cs;
   for (uint32_t j = 0; j < cs; j++) {
@@ -530,8 +502,7 @@ void cb_peer(struct cb *c, uint32_t n) {
   n = n < c->hn ? n : c->hn;
   if (n != c->view) c->view = n, cb_dmg(c, 0, c->rows - 1u); }
 
-// a line into the history: the next free one, else the oldest's place. a reader looking
-// back goes on seeing the same lines
+// a line into the history, the next free or the oldest's place; a reader looking back sees the same lines
 static void cb_line(struct cb *c, struct cb_cell const *row, uint32_t w) {
   if (!c->hl) return;
   struct cb_cell *d;
@@ -543,8 +514,7 @@ static void cb_line(struct cb *c, struct cb_cell const *row, uint32_t w) {
 
 static void cb_keep(struct cb *c, uint32_t r) { cb_line(c, c->cb + (uintptr_t) r * c->cols, c->cols); }
 
-// every cell that can name a cluster or a picture: the grid's, the main grid's while it waits
-// in the twin, then the history's
+// every cell that can name a cluster or picture: the grid, the main grid waiting in the twin, the history
 static uint32_t cb_ntwin(struct cb const *c) {
   return c->twin && c->flag & cb_alt ? (uint32_t) c->rows * c->cols : 0; }
 static uint32_t cb_ncells(struct cb const *c) {
@@ -563,9 +533,8 @@ struct cb_img const *cb_img(struct cb const *c, uint32_t slot) {
   uint64_t const end = (uint64_t) im->off + (uint64_t) im->w * im->h;
   return end <= cb_words(c) ? im : 0; }
 
-// the sweep: a picture no cell (nor history line) names is dropped -- save, with ids, one kitty holds by id
-// for a later placement -- and the rest packed down in the order they were laid, which is
-// the order of their offsets
+// the sweep: drop a picture no cell or history line names, save ones a kitty id holds, and pack
+// the rest in laying order, which is offset order
 static void cb_sweep(struct cb *c, int ids) {
   struct cb_img *im = cb_imgs(c);
   uint32_t *px = cb_spx(c), seen[cb_nimg / 32] = { 0 }, top = 0;
@@ -586,8 +555,7 @@ static void cb_sweep(struct cb *c, int ids) {
   for (uint32_t k = 0; k < cb_nimg; k++) im[k].live = im[k].live == 3;
   c->stop = top; }
 
-// a cell index carried from a grid `ocols` wide, its rows shifted up by `from` -- the
-// cursor's and DECSC's. what falls outside the new grid lands on its edge.
+// a cell index from a grid ocols wide, rows shifted up by from; outside lands on the edge
 static uint32_t cb_carry(uint32_t pos, uint32_t ocols, uint32_t from,
                          uint32_t rows, uint32_t cols) {
   uint32_t r = pos / ocols, k = pos % ocols;
@@ -596,8 +564,8 @@ static uint32_t cb_carry(uint32_t pos, uint32_t ocols, uint32_t from,
   if (k >= cols) k = cols - 1u;
   return r * cols + k; }
 
-// old's pictures into c's empty store, packed in slot order while they fit: the ones a
-// carried cell names first, then the ones kitty holds by id. a tile of one left behind blanks
+// old's pictures into c's empty store in slot order while they fit: carried cells' first, then
+// kitty's by id. a tile of one left behind blanks
 static void cb_restock(struct cb *c, struct cb const *old) {
   uint32_t const n = cb_ncells(c), room = cb_words(c);
   struct cb_img const *oi = cb_imgs(old);
@@ -620,15 +588,8 @@ static void cb_restock(struct cb *c, struct cb const *old) {
     uint32_t const g = cb_nth(c, i)->g;
     if (g & cb_pic && !(room && ni[cb_tslot(g)].live)) cb_nth(c, i)->g = g & 0xff000000u; } }
 
-// old laid across into c, a fresh rows x cols screen with a store of sn bytes: the pen, the
-// modes, the clusters and a parser mid-sequence come whole; the cells row for row, clipped
-// where c is narrower, scrolled up only as far as the cursor's row needs, so shrinking
-// spends the blank tail under a prompt before it touches a line; the pictures they name as
-// far as the store holds them. nothing reflows -- a line wrapped at the old width stays
-// broken where it was. the history comes too, hl lines of it, its lines clipped or widened
-// like the rows, and the rows the shrink scrolled away join it; and a main grid waiting out
-// the alternate screen, from its top, into c's twin when tw (else it is lost, and the way
-// out clears). c and old may not overlap
+// old laid into c, a fresh rows x cols screen: pen, modes, clusters and parser whole; rows clipped,
+// scrolled only as far as the cursor needs; no reflow. the history and the twin come too. no overlap
 void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl,
                uint32_t tw) {
   uint32_t const orows = old->rows, ocols = old->cols, cr = old->wpos / ocols,
@@ -659,12 +620,11 @@ void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols,
   c->gset = old->gset, c->sgset = old->sgset;
   cb_dirt(c, 0, rows - 1u); }
 
-// --- sixel: DECSIXEL into a canvas at the store's top, tiles at the cursor at the end ---
-// the canvas is a screen's width of pixels wide and as deep as the arena leaves (at most
-// 256 cells); rows are cleared as bands first reach them. a pixel set is 0xff over its rgb.
+// sixel: DECSIXEL into a canvas at the store's top, a screen wide and at most 256 cells deep,
+// bands cleared on first touch; a set pixel is 0xff over its rgb
 static void cb_six_open(struct cb *c) {
   c->sslot = 0;
-  c->kopen = 0;   // a kitty transfer still open gives way: its slot and room are not its own till it ends
+  c->kopen = 0;   // an open kitty transfer gives way
   if (!cb_words(c)) return;
   cb_sweep(c, 1);
   uint32_t k = 1;
@@ -678,8 +638,7 @@ static void cb_six_open(struct cb *c) {
   cb_imgs(c)[k] = (struct cb_img) { c->stop, stride, h, 0, 0, 0, 0, 0 };
   c->sslot = (uint16_t) k, c->sx = c->sy = c->sw = c->sh = 0, c->sreg = 0, c->srep = 1, c->sm = 0; }
 
-// a colour off HLS, sixel's hue wheel putting blue at 0, red at 120 and green at 240;
-// l and s in percent, the arithmetic in ten-thousandths
+// HLS with sixel's wheel (blue 0, red 120, green 240); l and s in percent, math in 1/10000ths
 static uint32_t cb_hls1(uint32_t m1, uint32_t m2, uint32_t hh) {
   hh %= 360u;
   if (hh < 60) return m1 + (m2 - m1) * hh / 60u;
@@ -739,9 +698,8 @@ static void cb_six(struct cb *c, uint8_t i) {
 
 static void cb_ind(struct cb *c);
 
-// picture k's tiles at the cursor, a text row a cell row, scrolling as text would. the
-// cursor then ends under it at its first column (sixel), or beside its last tile on its
-// last row (kitty), or stays where it was (kitty's C=1)
+// picture k's tiles at the cursor, scrolling as text would; the cursor ends under it (sixel),
+// beside its last tile (kitty), or stays put (kitty's C=1)
 enum { cb_under_pic = 0, cb_beside_pic = 1, cb_stay = 2 };
 static void cb_place(struct cb *c, uint32_t k, int after) {
   struct cb_img const *im = cb_img(c, k);
@@ -770,9 +728,7 @@ static void cb_place(struct cb *c, uint32_t k, int after) {
   cb_ind(c);
   c->wpos = c->wpos - c->wpos % cs + col0; }
 
-// the string's end: the canvas packed to its own width becomes the slot's picture, and its
-// tiles land at the cursor, a text row a cell row, scrolling as text would. the cursor
-// ends under the picture, at the column it started in
+// the string's end: the canvas packed to its width becomes the slot's picture, tiled at the cursor
 static void cb_six_close(struct cb *c) {
   if (c->sm) cb_six(c, 0);
   uint32_t const k = c->sslot;
@@ -788,12 +744,8 @@ static void cb_six_close(struct cb *c) {
   c->stop = im->off + w * h;
   cb_place(c, k, 0); }
 
-// --- kitty graphics, a subset: APC G key=value,..;base64 ST -----------------------------
-// a=t stores an image by id, a=T stores and places it, a=p places one stored, a=q asks
-// whether it would take one, a=d deletes (all, or by id). f=24 and f=32 raw pixels, or
-// f=100 a PNG (png.c), direct (t=d), sent whole or in m=1 chunks; c and r size the
-// placement in cells, nearest pixel. compression and the other media answer an error. an image a kitty id holds outlives
-// its placements until a delete or a store too full to keep it.
+// kitty graphics, a subset: APC G key=value,..;base64 ST. a=t store, a=T store and place, a=p
+// place, a=q ask, a=d delete. f=24/32 raw, f=100 PNG, t=d only, m=1 chunks; c and r size in cells
 static void cb_kit_reply(struct cb *c, int ok, char const *err) {
   if (!c->ki || c->kq >= 2 || (ok && c->kq == 1)) return;
   cb_say(c, "\033_Gi="), cb_sayn(c, c->ki), cb_say(c, ";"), cb_say(c, ok ? "OK" : err), cb_say(c, "\033\\"); }
@@ -819,10 +771,8 @@ static void cb_kit_key(struct cb *c) {
    case 'C': c->kcur = (uint8_t) v; break;
    default: break; } }
 
-// a free slot with room for n words at the store's top: the sweep first keeps what ids
-// hold, then, pressed, lets it go; last, the image this id names gives way, its tiles
-// blanked -- an a=T replacing it lands on them next, so a frame sent whole never shows
-// the gap. 0 for none
+// a free slot with room for n words at the store's top: sweep keeping ids, then not, then this id's
+// image gives way, so an a=T replacing it shows no gap. 0 for none
 static uint32_t cb_kit_slot(struct cb *c, uint32_t n) {
   for (int ids = 1; ids >= -1; ids--) {
     if (ids < 0) {
@@ -840,9 +790,8 @@ static uint32_t cb_kit_slot(struct cb *c, uint32_t n) {
     if (k < cb_nimg && n <= cb_words(c) - c->stop) return k; }
   return 0; }
 
-// picture k to span c x r cells (one of them 0: kept to the aspect), nearest pixel, read
-// that way where it is painted -- no copy, so a screen-wide one costs no store. a later
-// placement of the same image at another size moves the earlier one's too
+// picture k spans c x r cells (a 0 keeps the aspect), scaled where painted, no copy; a later
+// placement at another size moves the earlier ones too
 static uint32_t cb_kit_scale(struct cb *c, uint32_t k) {
   struct cb_img *im = cb_imgs(c) + k;
   if (!cb_img(c, k)) return k;
@@ -882,11 +831,10 @@ static void cb_kit_begin(struct cb *c) {
   if (c->ka != 't' && c->ka != 'T' && c->ka != 'q') return cb_kit_reply(c, 0, "EINVAL:action");
   if (c->kt != 'd' || c->ko) return cb_kit_reply(c, 0, "EINVAL:medium");
   if (c->kf != 24 && c->kf != 32 && c->kf != 100) return cb_kit_reply(c, 0, "EINVAL:format");
-  // a PNG's size is its own: it takes the store's whole top to land in, pixels and all
+  // a PNG takes the store's whole top, pixels and all
   int const png = c->kf == 100;
   if (!png && (!c->ks || !c->kv || c->ks > 65536u || c->kv > 65536u)) return cb_kit_reply(c, 0, "EINVAL:size");
-  // the same id again at its size: the pixels land over the old ones where its tiles show
-  // them, as kitty replaces an image its placements keep -- no second copy, and no gap
+  // the same id at its size: the pixels land over the old, as kitty replaces an image in place
   if (!png && c->ka != 'q' && c->ki)
     for (uint32_t j = 1; j < cb_nimg; j++) {
       struct cb_img const *im = cb_img(c, j);
@@ -955,9 +903,7 @@ static void cb_kit_end(struct cb *c) {
   if (c->ka == 'T') cb_kit_show(c, k);
   cb_kit_reply(c, 1, 0); }
 
-// RIS: everything back to the floor -- pens, faces, region, modes,
-// cursor, ground. LNM survives: the newline discipline belongs to the
-// console (the kernel set it at boot), not to the program resetting.
+// RIS: everything back to the floor; LNM survives, the console's discipline
 static void cb_ris(struct cb *c) {
   uint16_t lnm = c->flag & cb_lnm;
   c->gset = c->sgset = 0;
@@ -977,16 +923,14 @@ static void cb_restore(struct cb *c) {  // DECRC
   c->wpos = c->spos, c->gset = c->sgset, c->flag &= (uint16_t) ~cb_pend;
   c->cur_fg = c->sfg, c->cur_bg = c->sbg, c->cur_face = c->sface; }
 
-// DECSTR, the soft reset: the pen, the region, origin mode, the saved cursor and the
-// charsets back to the floor; the screen and the cursor stay
+// DECSTR: pen, region, origin mode, saved cursor and charsets reset; screen and cursor stay
 static void cb_decstr(struct cb *c) {
   c->cur_fg = c->cur_bg = cb_ink(cb_def, 0), c->cur_face = 0;
   c->top = 0, c->bot = c->rows - 1u, c->flag &= (uint16_t) ~cb_origin;
   c->gset = c->sgset = 0, c->spos = 0, c->sfg = c->sbg = c->cur_fg, c->sface = 0; }
 
-// SGR: the pen. colours by index (8 + bright 8 + 256) or 38;2 rgb, faces in
-// the glyph word's top byte. each parameter moves the pen being made as it arrives, so
-// a sequence of any length is heard whole; an m final makes it the pen
+// SGR: colours by index (8 + bright 8 + 256) or 38;2 rgb, faces in the glyph word's top byte;
+// each parameter moves the pen as it arrives, so any length is heard whole
 static uint32_t cb_chan(uint16_t v) { return v > 255 ? 255u : v; }
 static void cb_sgr1(struct cb *c, uint16_t p) {
   static uint8_t const on[10] = { 0, cb_bold, cb_dim, cb_ital, cb_under, cb_blink, 0, cb_rev, cb_hide, cb_strike };
@@ -1019,8 +963,7 @@ static void cb_param(struct cb *c) {
 static void cb_sgr(struct cb *c, int priv) {
   if (!priv) c->cur_fg = c->pfg, c->cur_bg = c->pbg, c->cur_face = c->pface; }
 
-// DECRQM (CSI ? Ps $ p, CSI Ps $ p): a mode's state as CSI ? Ps ; s $ y -- 1 set, 2 reset,
-// 0 one quay does not know
+// DECRQM: a mode's state as CSI ? Ps ; s $ y -- 1 set, 2 reset, 0 unknown
 static void cb_rqm(struct cb *c, int priv) {
   uint16_t const p = c->pv[0], f = c->flag;
   int s = 0;
@@ -1036,9 +979,8 @@ static void cb_rqm(struct cb *c, int priv) {
   else if (p == 47 || p == 1047 || p == 1049) s = f & cb_alt ? 1 : 2;
   cb_say(c, priv ? "\033[?" : "\033["), cb_sayn(c, p), cb_say(c, ";"), cb_sayn(c, (uint32_t) s), cb_say(c, "$y"); }
 
-// DEC private / ANSI modes (CSI ? .. h/l and CSI .. h/l). the alternate screen
-// (47/1047/1049): the main grid waits in the twin and a cleared grid takes its place,
-// then comes back whole on the way out. a screen laid with no twin clears instead.
+// DEC private and ANSI modes. the alternate screen (47/1047/1049): the main grid waits in the twin;
+// with no twin it clears
 static void cb_mode(struct cb *c, int priv, int on) {
   for (uint8_t k = 0; k < c->pn; k++) {
     uint16_t p = c->pv[k];
@@ -1066,8 +1008,7 @@ static void cb_mode(struct cb *c, int priv, int on) {
         else cb_clear(c);
         cb_dirt(c, 0, c->rows - 1u), cb_restore(c), c->flag &= (uint16_t) ~cb_alt; } } } }
 
-// the CSI dispatch, one final byte at a time. n/m: the first two
-// parameters with their traditional default of 1.
+// the CSI dispatch; n/m are the first two parameters, default 1
 static void cb_csi(struct cb *c, uint8_t i) {
   uint32_t n = c->pv[0] ? c->pv[0] : 1, m = c->pn > 1 && c->pv[1] ? c->pv[1] : 1;
   uint32_t cs = c->cols, r = c->wpos / cs, col = c->wpos % cs;
@@ -1159,13 +1100,8 @@ static void cb_csi(struct cb *c, uint8_t i) {
    case 'u': return cb_restore(c);
    default: return; } }  // anything else: politely nothing
 
-// cb_put1 interprets a working VT subset, one folded byte at a time: C0
-// controls (with LNM ruling \n), ESC 7/8/D/E/M/c/#8, CSI cursor addressing
-// (A-H, f, G, d, E, F), erase (J 0-3, K 0-2, X), edit (@ P L M), scroll (S T,
-// DECSTBM r), SGR colours + faces, DEC modes (autowrap, cursor, origin,
-// the alternate screen), and DSR/DA replies via the reply queue.
-// OSC/DCS bodies are swallowed whole; charset designators too. anything
-// printable is stamped as a glyph with the current pen.
+// a VT subset, one folded byte at a time: C0, ESC 7/8/D/E/M/c/#8, CSI cursor, erase, edit, scroll,
+// SGR, DEC modes and DSR/DA. OSC/DCS bodies and charset designators are swallowed
 static void cb_put1(struct cb *c, uint8_t i) {
   switch (c->esc) {
    case 1:                                  // after ESC
@@ -1259,12 +1195,12 @@ static void cb_put1(struct cb *c, uint8_t i) {
     if (i == 27) { c->esc = 15; return; }
     if (i == 0x18 || i == 0x1a) { c->esc = 0, c->kopen = 0; return; }
     return cb_kit_b64(c, i);
-   case 15:                                 // ESC inside kitty: \ ends it; anything else ends it too, and begins
+   case 15:                                 // ESC inside kitty: it ends, and anything but \ begins
     cb_kit_end(c), c->esc = 0;
     if (i == '\\') return;
     c->esc = 1;
     return cb_put1(c, i);
-   case 11:                                 // ESC inside sixel: \ ends it; anything else ends it too, and begins
+   case 11:                                 // ESC inside sixel: it ends, and anything but \ begins
     cb_six_close(c), c->esc = 0;
     if (i == '\\') return;
     c->esc = 1;
@@ -1283,9 +1219,8 @@ static void cb_put1(struct cb *c, uint8_t i) {
       return cb_glyph(c, cb_decgfx[i - 0x5f]);              // DEC graphics in GL
     return cb_glyph(c, i); } }
 
-// the built-in fonts draw the cp437 page (cp437.h, laid by quay.l): a codepoint's
-// glyph is ascii as itself, else the fold's -- the classic page plus aliases that
-// MEAN one of ours. anything else, astral planes included, wears the ■.
+// the built-in fonts draw cp437 (cp437.h, laid by quay.l): ascii as itself, else the fold's;
+// anything else wears the ■
 int cb_437x(uint32_t cp) {
   if (cp < 0x7f) return (int) cp;
   uintptr_t lo = 0, hi = sizeof cp437_fold / sizeof *cp437_fold;
@@ -1300,8 +1235,7 @@ uint8_t cb_437(uint32_t cp) { int g = cb_437x(cp); return g < 0 ? 0xfe : (uint8_
 
 static uint32_t cb_rd16(uint8_t const *b, uintptr_t i) { return (uint32_t) b[i] | (uint32_t) b[i + 1] << 8; }
 
-// a font is 12 bytes of head, the directory, the pages and the glyphs, each index in
-// range: a page names a real page, a glyph a real glyph. anything else is no font
+// a font is 12 bytes of head, the directory, the pages, the glyphs, every index in range
 int cb_font_ok(uint8_t const *b, uintptr_t n) {
   if (!b || n < cb_qf_head + 2u * cb_qf_dir) return 0;
   if (b[0] != 'q' || b[1] != 'f' || b[2] != '1' || b[3] || b[4] != 8 || b[5] != 16) return 0;
@@ -1330,18 +1264,15 @@ uint8_t cb_width(uint32_t cp) { int w = __ucd_width(cp); return (uint8_t) (w < 0
 // a cp437 glyph byte's codepoint: the page read forward
 uint32_t cb_unfold(uint8_t g) { return cp437[g]; }
 
-// a finished codepoint. C1 controls, surrogates and past-unicode land as U+FFFD, so
-// nothing a cell holds can mean a control to a painter re-emitting it; mid-sequence
-// it is a byte the parser speaks nothing for.
+// a finished codepoint: C1, surrogates and past-unicode land as U+FFFD, so no cell means a
+// control to a painter re-emitting it
 static void cb_uni(struct cb *c, uint32_t cp) {
   if (cp < 0xa0 || (cp >= 0xd800 && cp < 0xe000) || cp > 0x10ffff) cp = 0xfffd;
   if (c->esc) cb_put1(c, 0xfe);
   else cb_glyph(c, cp); }
 
-// cb_putc: the byte door. utf-8 decodes here -- a lead opens a sequence
-// (state rides in ucp/un), continuations accumulate, and the finished
-// codepoint is the cell's. a torn sequence lands a U+FFFD and the tearing
-// byte rides on; raw cp437 art goes through cb_stamp, which never interprets.
+// the byte door: utf-8 decodes here (state in ucp/un); a torn sequence lands U+FFFD and the
+// tearing byte rides on
 void cb_putc(struct cb *c, char _i) {
   uint8_t i = (uint8_t) _i;
   if (c->un) {                                   // continuations expected

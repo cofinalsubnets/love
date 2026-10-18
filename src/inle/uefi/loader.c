@@ -1,14 +1,6 @@
-// src/inle/uefi/loader.c -- our own BOOTX64.EFI / BOOTAA64.EFI: the bring-up a bootloader used
-// to do, in ~250 lines of mooncc-compiled C. mkefi.l's thunks carry the calling-convention
-// seam (efi_main in, efi_call out) and efi_go, the tail that swaps the tables and jumps.
-// the loader reads love.elf off its own volume, takes the pages at the load address (or
-// anywhere, and maps them there), copies the PT_LOADs home, finds `kboot` in the kernel's
-// symtab and fills it: the memmap's conventional ranges, the GOP framebuffer, the hhdm and
-// love.cmd's line if the volume has one. then ExitBootServices, our page tables (identity,
-// the hhdm's no-execute twin, and on x64 the image window), and the kernel's entry -- which
-// notices nothing, since kboot is kboot and the same ELF boots every door.
-// integer-only on purpose: the x86 entry thunk saves rsi/rdi around the sysv call and
-// nothing else, so the ms_abi xmm6..15 stay untouched only while no float sneaks in.
+// src/inle/uefi/loader.c -- BOOTX64.EFI / BOOTAA64.EFI: load love.elf off our volume, fill its
+// kboot, lay the page tables, ExitBootServices, jump. mkefi.l's thunks are efi_call and efi_go.
+// integer-only: the x86 entry thunk saves only rsi/rdi, so ms_abi's xmm6..15 must stay untouched
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
@@ -37,9 +29,8 @@ static void say(char *s) {
 
 static u64 die(char *s) { say("uefi: "); say(s); say("\r\n"); return 1; }
 
-// the k_boot shape (src/inle/k.h), kept in step by hand: this file compiles freestanding,
-// before out/lib exists. every field through the last one written here must match k.h's
-// layout; a tail this copy is short of shows up as a member the compiler cannot find.
+// k.h's k_boot, copied by hand (this compiles before out/lib exists): every field through the
+// last one written here must match k.h's layout
 #define ram_max 64
 struct k_boot {
  u32 ram_n;
@@ -51,14 +42,11 @@ struct k_boot {
  char cmdline[256]; };
 
 static u8 mmap[32768];                 // the UEFI memory map, GetMemoryMap-filled
-// the page tables: pml4, a pdpt per window, four pds, and the spare pd the low window
-// takes when the kernel had to be relocated. a table's low 12 bits are its flags, so the
-// aligned(4096) is the contract -- mooncc honors it.
+// pml4, a pdpt per window, four pds, and a spare pd for a relocated kernel; a table's low
+// 12 bits are its flags, so the alignment is the contract
 static u64 pt[8 * 512] __attribute__((aligned(4096)));
 
-// the boot line, when the volume carries one: a firmware door has no -append, so an ESP
-// that wants the kernel to run something spells it in love.cmd beside love.elf. absent is
-// the ordinary case and leaves the console shell.
+// love.cmd beside love.elf is the boot line, the firmware door's -append; absent is ordinary
 static void kcmdline(void *root, struct k_boot *kb) {
  void *cf = 0;
  static u16 cname[9] = {'l','o','v','e','.','c','m','d',0};
@@ -71,8 +59,7 @@ static void kcmdline(void *root, struct k_boot *kb) {
   kb->cmdline[i] = (char) cbuf[i];                // stops at the trailing newline
  kb->cmdline[i] = 0; }
 
-// a link address's physical one, through the PT_LOAD holding it: x64's image is linked in
-// the upper half and loaded low (kproject.l)
+// a link address's physical one: x64's image is linked high and loaded low (kproject.l)
 static u64 kpa(u8 *e, u64 va) {
  u64 phoff = *(u64*) (e + 32);
  u16 phn = *(u16*) (e + 56), phsz = *(u16*) (e + 54);
@@ -110,8 +97,7 @@ u64 efi_main(void *handle, void *st) {
  if (efi_call(((void**) f)[4], (u64) f, (u64) &rsz, buf, 0, 0) || rsz != fsz)
   return die("short read on love.elf");
 
- // the ELF: a PT_LOAD's paddr is the physical address it wants. take exactly those
- // pages and copy each segment home.
+ // a PT_LOAD's paddr is the physical address it wants
  u8 *e = (u8 *) buf;
  if (*(u32 *) e != 0x464c457f) return die("love.elf is not an ELF");
  u64 phoff = *(u64*) (e + 32), entry = *(u64*) (e + 24);
@@ -124,25 +110,19 @@ u64 efi_main(void *handle, void *st) {
   if (pa < lo) lo = pa;
   if (pa + msz > hi) hi = pa + msz; }
  if (hi <= lo) return die("love.elf carries no load segments");
- // floor lo to 2M: the window is laid in 2M pages, and the lowest load address is only
- // page-aligned, so the 2M floor below it is where the kernel's first block lives.
+ // the window is laid in 2M pages
  lo &= ~0x1fffffull;
  u64 npg = (hi - lo + 4095) / 4096, span = lo, kbase = lo;
- // at the link address when firmware will part with it: then identity is the kernel's
- // map and nothing relocates. firmware owns low memory and may refuse, and then anywhere
- // 2M-aligned will do.
+ // at the link address if firmware parts with it, else anywhere 2M-aligned
  if (efi_call(bs[5], 2, 2, npg, (u64) &span, 0)) {
   span = 0;
   if (efi_call(bs[5], 0, 2, npg + 512, (u64) &span, 0))   // + 2M of alignment slack
    return die("no pages for the kernel");
   kbase = (span + 0x1fffff) & ~0x1fffffull;
-  // relocating shadows virtual lo..hi and we still have to run there: efi_go's cr3 load
-  // is followed by an instruction fetch, off a stack that rides along. both are
-  // firmware's placement, so ask rather than assume. (pt and mmap are statics.)
+  // relocating shadows virtual lo..hi, where efi_go still fetches code and uses the stack
   u64 imb = ((u64*) lip)[8], ims = ((u64*) lip)[9], sp = (u64) &span;
 #if defined(__aarch64__)
-  // the low window's ram gig is one 1 GiB block and the override splits that one; a
-  // kernel outside it would want a second table this does not lay.
+  // the override splits only the first RAM gig's block
   if (lo < 0x40000000ull || hi > 0x80000000ull)
    return die("the kernel wants to live outside the first RAM gig");
 #else
@@ -181,11 +161,8 @@ u64 efi_main(void *handle, void *st) {
  kb->hhdm = HHDM;
  kcmdline(root, kb);
 
- // the framebuffer, when GOP has a linear one. a GOP is not a framebuffer: PixelBltOnly
- // (format 3) answers a mode and a size but no address, since the pixels reach the screen
- // only through Blt() -- virtio-gpu is that shape under edk2. taking the mode anyway hands
- // kmain base 0 and cbinit paints at physical zero, silently. so the base and the format
- // are the test, not the protocol's presence.
+ // a GOP is not a framebuffer: PixelBltOnly (format 3, virtio-gpu under edk2) has no address,
+ // so the base and the format are the test
  void *gop = 0;
  if (!efi_call(bs[40], (u64) gop_guid, 0, (u64) &gop, 0, 0) && gop) {
   u8 *m = (u8*) ((void**) gop)[3];
@@ -199,15 +176,11 @@ u64 efi_main(void *handle, void *st) {
    kb->fb.pitch_px = *(u32*) (info + 32);
    kb->has_fb = 1; } }
 
- // page tables before ExitBootServices, while `say` still works: two windows onto one set
- // of blocks -- identity for the image to run in, and the hhdm, no-execute, to reach ram
- // by physical address. mkboot.l's stubs lay the same shape and share a level where
- // nothing relocates. the low window is the one that bends, so the hhdm stays a true
- // direct map: k.h promises physical P at khhdm + P, and blk.c's vtop inverts it.
+ // tables before ExitBootServices, while say works: identity to run in, the hhdm (no-execute)
+ // as a true direct map -- only the low window bends, since blk.c's vtop inverts khhdm + P
  for (u64 i = 0; i < 8 * 512; i++) pt[i] = 0;
 #if defined(__aarch64__)
- // l0_lo, l0_hi, the two L1s, l2_dev, l2_ram. a table descriptor is 3, a block
- // 1: 0x705 is a Normal block (AttrIndx 1, SH inner, AF), 0x401 a Device one.
+ // l0_lo, l0_hi, two L1s, l2_dev, l2_ram. table 3, block 1: 0x705 Normal, 0x401 Device
  for (u64 i = 0; i < 512; i++) pt[4 * 512 + i] = (i << 21) | 0x401;   // MMIO, phys 0..1G
  for (u64 i = 1; i < 4; i++) {                                        // RAM, 1G blocks
   pt[2 * 512 + i] = (i << 30) | 0x705;
@@ -221,9 +194,7 @@ u64 efi_main(void *handle, void *st) {
    l2[(v - 0x40000000ull) >> 21] = (kbase + (v - lo)) | 0x705;
   pt[2 * 512 + 1] = (u64) l2 | 3; }
  pt[0] = (u64) &pt[2 * 512] | 3;                                  // TTBR0[0]
- // PXNTable | UXNTable, bits 59 and 60: nothing under the hhdm may be fetched from, at
- // either EL. efi_go reads TTBR1's root at pt + 4096, so l0_hi sitting on the page right
- // after l0_lo is the contract.
+ // PXNTable | UXNTable: no fetch under the hhdm. efi_go reads TTBR1's root at pt + 4096
  pt[512 + 256] = (u64) &pt[3 * 512] | 3 | (3ull << 59);            // TTBR1[256]
 #else
  for (u64 i = 0; i < 2048; i++) pt[3 * 512 + i] = (i << 21) | 0x83;
@@ -235,15 +206,13 @@ u64 efi_main(void *handle, void *st) {
   for (u64 v = lo; v < hi; v += 0x200000) kpd[v >> 21] = (kbase + (v - lo)) | 0x83;
   pt[512] = (u64) kpd | 3; }
  pt[0] = (u64) &pt[512] | 3;
- // NX on the hhdm entry alone: one bit at the top of the walk covers every page under
- // it. the identity window keeps X, since efi_go's next instruction fetch is there, and
- // the image window at [511] is the identity's twin, the kernel's own and its heap code's
+ // NX on the hhdm's top entry covers it all; identity keeps X for efi_go, and [511], the
+ // image window, is identity's twin
  pt[256] = (u64) &pt[2 * 512] | 3 | (1ull << 63);
  pt[511] = (u64) &pt[512] | 3;
 #endif
 
- // the memmap -> kboot.ram: conventional (7) only, so the kernel heap never eats this
- // stack, the tables or the kernel span. then the ExitBootServices dance.
+ // kboot.ram: conventional (7) only, so the heap never eats this stack, the tables or the kernel
  u64 msz = sizeof mmap, key = 0, dsz = 0, dvr = 0;
  if (efi_call(bs[7], (u64) &msz, (u64) mmap, (u64) &key, (u64) &dsz, (u64) &dvr))
   return die("GetMemoryMap failed");

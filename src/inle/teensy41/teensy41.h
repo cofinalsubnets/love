@@ -1,23 +1,11 @@
-// Teensy 4.1 (NXP i.MX RT1062) register map -- bare metal, no Teensyduino core.
-//
-// The i.MX RT1062 is a Cortex-M7 (ARMv7E-M, FPv5-D16 double-precision FPU)
-// running at up to 600 MHz, booting XIP from an 8 MB FlexSPI NOR flash at
-// 0x60000000. Only the registers this frontend touches: the FlexSPI boot
-// image structures (FlexSPI config block / IVT / boot data the ROM walks),
-// CCM clock gates + the LPUART/GPT clock roots, one LPUART for the console,
-// GPT1 as the millisecond timer, and a slice of GPIO + IOMUXC for the LED.
-// Values lifted from the i.MX RT1060 Reference Manual register listings and
-// cross-checked against PJRC's cores/teensy4; kept terse. Verify against the
-// RM before trusting any single offset on silicon (see README.md).
+// Teensy 4.1 (i.MX RT1062, Cortex-M7, XIP from FlexSPI NOR) register map, bare metal: only the
+// registers this board touches, from the RT1060 RM and PJRC's cores/teensy4
 #pragma once
 #include <stdint.h>
 
 #define REG(a) (*(volatile uint32_t *)(uintptr_t)(a))
 
-// --- memory map ----------------------------------------------------------
-// FlexSPI NOR program flash (XIP), the dedicated 512 KB OCRAM2 we run RAM
-// out of, and the TCMs (left at the boot default in this scaffold -- see
-// README: ITCM/DTCM placement is a future optimisation).
+// memory map: RAM is OCRAM2; the TCMs stay at the boot default
 #define FLASH_BASE  0x60000000u   // 8 MB QSPI NOR on Teensy 4.1
 #define ITCM_BASE   0x00000000u
 #define DTCM_BASE   0x20000000u
@@ -25,7 +13,6 @@
 #define OCRAM2_SIZE (512u * 1024u)
 #define PSRAM_BASE  0x70000000u   // optional external PSRAM (Teensy 4.1 pads)
 
-// --- peripheral bases ----------------------------------------------------
 #define CCM_BASE        0x400FC000u
 #define CCM_ANALOG_BASE 0x400D8000u
 #define IOMUXC_BASE     0x401F8000u
@@ -36,15 +23,12 @@
 #define SCB_VTOR        0xE000ED08u
 #define SCB_CPACR       0xE000ED88u   // FPU coprocessor access control
 
-// --- CCM: clock gates + LPUART clock root --------------------------------
 #define CCM_CCGR1 (CCM_BASE + 0x6Cu)   // GPT1 gates (CG10 bus, CG11 serial)
 #define CCM_CCGR3 (CCM_BASE + 0x74u)   // LPUART6 gate (CG3)
 #define CCM_CSCDR1 (CCM_BASE + 0x24u)  // UART_CLK_SEL (bit6) + UART_CLK_PODF[5:0]
 
-// --- CCM: the ARM-PLL path (600 MHz core) ---------------------------------
-// core = 24 MHz * DIV_SELECT / 2 / (ARM_PODF+1); 600 = 24*100/2/2. The dance
-// (PJRC clockspeed.c shape): park periph_clk on the osc, retune PLL1, switch
-// back. Every mux/divider write handshakes through CDHIPR.
+// core = 24 MHz * DIV_SELECT / 2 / (ARM_PODF+1); 600 = 24*100/2/2. each mux or divider
+// write handshakes through CDHIPR
 #define CCM_CCSR   (CCM_BASE + 0x0Cu)
 #define CCM_CACRR  (CCM_BASE + 0x10u)  // ARM_PODF[2:0] = divide-minus-one
 #define CCM_CBCDR  (CCM_BASE + 0x14u)
@@ -67,7 +51,7 @@
 #define PLL_ARM_ENABLE    (1u << 13)
 #define PLL_ARM_POWERDOWN (1u << 12)
 
-// --- DCDC: the core supply (600 MHz wants 1.25 V) -------------------------
+// DCDC: 600 MHz wants 1.25 V
 #define DCDC_REG0 0x40080000u
 #define DCDC_REG3 0x4008000Cu
 #define DCDC_REG0_STS_DC_OK (1u << 31)     // output settled at target
@@ -78,7 +62,6 @@
 #define CSCDR1_UART_CLK_PODF_MASK 0x3Fu
 #define OSC_HZ 24000000u                  // on-board crystal
 
-// --- LPUART (LPUARTv2) ----------------------------------------------------
 #define LPUART_BAUD  (LPUART6_BASE + 0x10u)
 #define LPUART_STAT  (LPUART6_BASE + 0x14u)
 #define LPUART_CTRL  (LPUART6_BASE + 0x18u)
@@ -91,7 +74,7 @@
 #define LPUART_STAT_TDRE (1u << 23)               // TX data register empty
 #define LPUART_STAT_TC   (1u << 22)               // transmit COMPLETE (shifter drained)
 #define LPUART_STAT_RDRF (1u << 21)               // RX data register full
-#define LPUART_STAT_OR   (1u << 19)               // RX overrun: latches and HALTS reception until cleared
+#define LPUART_STAT_OR   (1u << 19)               // RX overrun: halts reception until cleared
 #define LPUART_CTRL_TE   (1u << 19)
 #define LPUART_CTRL_RE   (1u << 18)
 #define LPUART_FIFO_TXFE (1u << 7)                // enable TX FIFO
@@ -99,44 +82,32 @@
 #define LPUART_STAT_ERR  ((1u << 19) | (1u << 18) | (1u << 17) | (1u << 16))   // OR | NF | FE | PF, all write-1-clear
 #define LPUART_FIFO_RXFE (1u << 3)                // enable RX FIFO
 
-// --- IOMUXC pad mux (only the two console pads + the LED pad) -------------
-// SW_MUX_CTL_PAD offsets from IOMUXC_BASE (RT1060 RM, IOMUXC memory map). The
-// daisy-chain select (SELECT_INPUT) routes the LPUART RX pad to the receiver.
+// IOMUXC: the two console pads and the LED pad
 #define IOMUXC_SW_MUX_GPIO_AD_B0_02 (IOMUXC_BASE + 0x0C4u)  // pin1 TX1 -> LPUART6_TX (ALT2)
 #define IOMUXC_SW_MUX_GPIO_AD_B0_03 (IOMUXC_BASE + 0x0C8u)  // pin0 RX1 -> LPUART6_RX (ALT2)
 #define IOMUXC_SW_MUX_GPIO_B0_03    (IOMUXC_BASE + 0x148u)  // pin13 LED -> GPIO2_IO03 (ALT5)
-// RX daisy chain (SELECT_INPUT) -> GPIO_AD_B0_03. The SELECT_INPUT registers live
-// in the SECOND IOMUXC block (base + 0x400); LPUART6_RX is that block's offset
-// 0x150, so IOMUXC_BASE + 0x400 + 0x150 = +0x550 (per PJRC imxrt.h:
-// IOMUXC_LPUART6_RX_SELECT_INPUT = IMXRT_IOMUXC_b.offset150). Silicon-verified
-// 2026-07-12 -- the earlier +0x520 wrote a neighbouring register, leaving the
-// receiver's pad-select at reset default so RX heard nothing while TX (which
-// drives its pad directly) worked fine.
+// the RX daisy chain: SELECT_INPUT lives in the second block, +0x400 + 0x150 (imxrt.h offset150)
 #define IOMUXC_LPUART6_RX_SELECT    (IOMUXC_BASE + 0x550u)
 #define MUX_ALT(n) (n)
 #define MUX_SION (1u << 4)
-// pad CONTROL (drive strength / speed / keeper) -- the SW_PAD_CTL register sits a
-// uniform 0x1F0 (124 pads x4) past its matching SW_MUX_CTL. The mux routes the
-// LPUART TX signal to the pad, but a pad at its reset-default driver won't drive
-// the line -- serial_init MUST set these (see the note there).
+// pad control, 0x1F0 past its SW_MUX_CTL: at the reset default a pad won't drive the line
 #define IOMUXC_SW_PAD_GPIO_AD_B0_02 (IOMUXC_BASE + 0x2B4u)  // pin1 TX pad ctl
 #define IOMUXC_SW_PAD_GPIO_AD_B0_03 (IOMUXC_BASE + 0x2B8u)  // pin0 RX pad ctl
 #define PAD_CTL_UART 0x10B0u   // DSE6 + SPEED2 + keeper -- PJRC's UART pad config
 
-// --- GPT1 (free-running microsecond timer) -------------------------------
+// GPT1, free-running
 #define GPT1_CR  (GPT1_BASE + 0x00u)
 #define GPT1_PR  (GPT1_BASE + 0x04u)
 #define GPT1_CNT (GPT1_BASE + 0x24u)
 #define GPT_CR_EN     (1u << 0)
 #define GPT_CR_ENMOD  (1u << 1)
 #define GPT_CR_CLKSRC_24M (5u << 6)   // crystal oscillator (24 MHz)
-#define GPT_CR_EN_24M (1u << 10)       // the crystal path's OWN enable -- without it CNT sits at 0
+#define GPT_CR_EN_24M (1u << 10)       // the crystal path's own enable: without it CNT sits at 0
 #define GPT_CR_FRR    (1u << 9)        // free-run (no compare reset)
 #define GPT_CR_SWR    (1u << 15)       // software reset
 #define GPT1_CCGR_BUS    10            // CCGR1 CG10
 #define GPT1_CCGR_SERIAL 11           // CCGR1 CG11
 
-// --- GPIO2 (the LED bank) ------------------------------------------------
 #define GPIO2_DR       (GPIO2_BASE + 0x00u)
 #define GPIO2_GDIR     (GPIO2_BASE + 0x04u)
 #define GPIO2_PSR      (GPIO2_BASE + 0x08u)
@@ -144,7 +115,6 @@
 #define GPIO2_DR_CLEAR (GPIO2_BASE + 0x88u)
 #define LED_BIT 3u                     // GPIO2_IO03 = Teensy pin 13
 
-// arch backend (teensy41.c)
 void clocks_init(void);
 void serial_init(void);
 void serial_putc(int c);

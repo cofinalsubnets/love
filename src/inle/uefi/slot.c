@@ -1,12 +1,10 @@
-// src/inle/uefi/slot.c -- hearts' boot chooser, a BOOTAA64.EFI that picks a slot and starts
-// that slot's EFI-stub kernel. its volume (the ESP) carries hearts.st and a directory per slot:
+// src/inle/uefi/slot.c -- hearts' boot chooser: a BOOTAA64.EFI starting one slot's EFI-stub
+// kernel. the ESP carries:
 //   hearts.st      three bytes: the active slot, the slot to try once or '-', a newline
 //   a/Image.gz     the kernel, gzipped (a/Image, as it is, where there is no .gz)
 //   a/cmd          its command line; likewise b/
-// a pending try is spent before it boots -- the file rewritten in place -- so a trial that never
-// says it is well comes back, at its next reset, on the active slot. the kernel's line gets
-// " hearts.slot=X", and " hearts.try=1" on a trial. an arm64 Image does not unpack itself, so
-// a gzipped one is inflated here, its crc checked, and started from memory.
+// a try is spent before it boots, so a trial that never says it is well resets onto the active
+// slot. the line gets " hearts.slot=X" (and " hearts.try=1"); an arm64 Image can't unpack itself
 #include "../../love/compress/inflate.h"
 
 typedef unsigned long long u64;
@@ -74,8 +72,7 @@ static u32 crc32(u8 const *p, u64 n) {
  for (c = 0xffffffff; n--; p++) c = t[(c ^ *p) & 0xff] ^ c >> 8;
  return ~c; }
 
-// a gzip member (RFC 1952) inflated into pool memory, its size through *n; 0 if it is not
-// whole: a header of another kind, a stream short of its trailer's size, a crc that differs
+// a gzip member (RFC 1952) inflated into pool memory, its size through *n; 0 unless whole and its crc agrees
 static u8 *gunzip(u8 const *z, u64 zn, u64 *n) {
  u64 p = 10, b = 0;
  if (zn < 18 || z[0] != 0x1f || z[1] != 0x8b || z[2] != 8 || z[3] & 0xe0) return 0;

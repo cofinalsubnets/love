@@ -1,20 +1,10 @@
-// src/love/mem.c -- raw slots on a cask: the door between love's values and a byte buffer's own
-// layout. love reads a cask a byte at a time, which is a dispatch per byte -- a loop for
-// anything wider than one, and a loop per ELEMENT for anything laid in bulk.
+// mem.c -- raw slots on a cask, in the `guts` module, never the book
 //   (peepw c i)        -> the word at 8-byte slot i, low 4 bytes | () misuse
 //   (pinw c i v)       -> lay v zero-extended into 8-byte slot i -> c | () misuse
 //   (peepv c o w s n)  -> n elements of w bytes, stride s from byte o, as a Z tray
 //   (pinv c o w s v)   -> the elements of tray v laid that way -> c | () misuse
-// the pair carrying a width and a stride is the general one, and the stride is why: a
-// stride wider than the width is an INTERLEAVE, which is what a frame of stereo PCM is
-// (src/apps/harp/play.l's pack lays each channel with one call) and what a plane of anything
-// else is. little-endian, low bytes, unsigned: a caller wanting a signed read subtracts,
-// and one wanting fewer bytes says so in w. a float element truncates toward zero, the
-// same answer `int` gives -- so a tray of samples goes down without a pass to round it.
-// value ops, so absence/misuse answers (); flat.l binds getw/putw to the word pair, the
-// byte path staying the portable twin (freestanding targets have no host glob). they are
-// born in the `guts` module rather than on the book -- a raw word door has no business in
-// a global read.
+// a stride past the width interleaves (harp/play.l's channels). little-endian, unsigned; a
+// float element truncates toward zero, as `int` does. flat.l binds getw/putw to the word pair
 #include "love.h"
 #include <string.h>
 #include <stdint.h>
@@ -43,11 +33,7 @@ static lvm(lvm_pinw) {
  Sp[2] = out;
  love_musttail return Nextp(1, 2); }
 
-// does a run of n elements at (o, w, s) lie inside len bytes? n = 0 is the empty run and
-// asks only that the offset be in the buffer. THE LAST STEP IS A DIVISION and not the
-// multiplication it reads as: n is a tray's length and s a charm, and their product is
-// what would wrap -- a wrap here answers "it fits" about a run that does not, which is
-// the whole buffer's bounds gone. dividing the room instead cannot leave the range.
+// does a run of n at (o, w, s) lie inside len bytes? a division, never n * s, which can wrap
 static bool slot_fit(uintptr_t len, intptr_t o, intptr_t w, intptr_t s, uintptr_t n) {
  if (o < 0 || w < 1 || w > 8 || s < w) return false;
  if ((uintptr_t) o > len) return false;
@@ -56,8 +42,7 @@ static bool slot_fit(uintptr_t len, intptr_t o, intptr_t w, intptr_t s, uintptr_
  if (room < (uintptr_t) w) return false;
  return n - 1 <= (room - (uintptr_t) w) / (uintptr_t) s; }
 
-// a tray the byte lane can read: the two number types. an object tray's words are
-// pointers and a complex one's are pairs, so neither goes down a byte at a time.
+// object and complex trays never go down a byte at a time
 static bool numtray(word x) {
  return trayp(x) && (tray(x)->type == love_Z || tray(x)->type == love_R); }
 
@@ -89,9 +74,7 @@ static lvm(lvm_peepv) {
   Sp[4] = ZeroPoint; love_musttail return Nextp(1, 4); }
  uintptr_t bytes = tray_bytes(love_Z, 1, (uintptr_t) n);
  Have(b2w(bytes));
- // nothing above moved a stack slot, so the collection's restart of this instruction
- // re-reads the same operands and lands here again; what a collection DID move is the
- // cask, so every pointer is taken after the Have and none before.
+ // a collection's restart re-reads the same operands; the cask moved, so pointers come after
  c = Sp[0];
  intptr_t o = getcharm(Sp[1]), w = getcharm(Sp[2]), s = getcharm(Sp[3]);
  struct tray *v = ini_tray((struct tray*) Hp, love_Z, 1);

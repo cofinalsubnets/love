@@ -1,42 +1,23 @@
-// src/love/horn.c -- the horn: PCM out and in as a port, on every seat.
-//
-//   (horn rate chans)     open the sound device -> a port | an errno nom | 'badarg.
-//                         16-bit little-endian samples go out through the ordinary
-//                         write path; 1 or 2 channels, the rate in 8000..192000.
-//   (horn-in rate chans)  open the capture device the same way: the samples come in
-//                         through the ordinary read path, and a dry device parks the
-//                         reader as a quiet fd does.
-//   (horn-lag port)       out: frames written and not yet played; in: frames heard and
-//                         not yet read. the port's own pending run included, or () for
-//                         a non-horn.
-//
-// the port wears the fd port's shape (love.h: love_horn_vt is a bio to io.c), so a
-// full device answers 0 at the door, the write run keeps the residue and the task
-// parks on the 1 ms poll every heap port already has -- backpressure, never a
-// dropped frame. the device under the door is per KERNEL,
-// picked at run time off __love_osv:
-//   - inle: the C face, k_horn_* (src/inle/hda.c)
-//   - linux: /dev/snd/pcmC*D*p (capture: *c) by ALSA's ioctls, no libasound -- plain
-//     syscalls only
-//   - freebsd: /dev/dsp, the three OSS ioctls and write(2) or read(2)
-//   - netbsd: /dev/sound, audio(4)'s one SETINFO and write(2) or read(2)
-//   - macos: an AudioQueue in this process, AudioToolbox loaded by dyld at the first open
-//     (playback only; a static link, with no dyld under it, answers ENODEV)
-//   - HORN=sock:PATH: a unix socket's listener plays it (the droid bridge, AAudio under
-//     it): the rate as a little-endian u32, then the stereo frames. HORN_IN=sock:PATH
-//     the same way round: the u32's top byte asks the channels, and the frames come back
-//   - HORN=none in the environment: a sink that keeps time and discards, so a box
-//     without a card (and every gate) still sees the shape: the ring fills, refuses,
-//     drains at the rate. HORN=<path> names the device instead of the first found.
-//     HORN_IN is the same word for capture, and its none is silence at the rate.
-//   - a BOARD with its own card: -D love_horn_seat=1 on the roster that links this file,
-//     and the seat answers k_horn_* the way src/inle/hda.c does under inle. it is a fact about
-//     the link, not a guess about the box -- which is what the OS word cannot carry,
-//     since a board has no OS to have a word about.
-// a mono port is doubled to stereo on the way down, so the device is always stereo. a
-// capture device keeps the count and width it has (a usb mic is often mono alone, a
-// laptop's dmic 32-bit stereo alone), and the port takes the top 16 bits and mixes or
-// doubles them to the caller's on the way up.
+// horn.c -- pcm out and in as a port, on every seat
+//   (horn rate chans)     the sound device -> a port | an errno nom | 'badarg: s16le written
+//                         on the ordinary path, 1 or 2 channels, the rate in 8000..192000
+//   (horn-in rate chans)  the capture device the same way, read; a dry one parks the reader
+//   (horn-lag port)       frames unplayed (out) or unread (in), the port's pending run
+//                         included; () for a non-horn
+// a bio to io.c, so a full device answers 0 and the task parks: backpressure, never a drop.
+// the device, by __love_osv at run time:
+//   - inle: k_horn_* (inle/hda.c)
+//   - linux: /dev/snd/pcmC*D*p (capture *c) by ALSA ioctls, no libasound
+//   - freebsd: /dev/dsp, OSS; netbsd: /dev/sound, audio(4)
+//   - macos: an AudioQueue, AudioToolbox by dyld at the first open (playback only; a static
+//     link answers ENODEV)
+//   - HORN=sock:PATH: a unix listener (the droid bridge): a le u32 rate, then stereo frames;
+//     HORN_IN=sock:PATH the same, the u32's top byte the channels
+//   - HORN=none: a sink that keeps time and discards, so every gate sees the ring's shape;
+//     HORN=<path> names the device. HORN_IN likewise, its none silence at the rate
+//   - a board: -D love_horn_seat=1 on its roster, the seat answering k_horn_* as hda.c does
+// the device is always stereo (mono doubled); capture keeps the device's count and width,
+// the top 16 bits mixed or doubled to the caller's
 #include "love.h"
 #include <unistd.h>
 #include <stdlib.h>
@@ -45,34 +26,22 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
-// stand-ins for a link with no src/inle/hda.c under it
+// declared here for a link with no hda.c
 int k_horn_open(int rate);
 intptr_t k_horn_write(unsigned char const *src, uintptr_t n);
 uintptr_t k_horn_lag(void);
 void k_horn_close(void);
 
 enum { horn_sink, horn_dev, horn_seat, horn_sock, horn_seat_in, horn_aq };
-// the port: the bio, then the device's words, all charms. wpos and t0 are the sink's
-// clock (frames landed or handed out, and the ms the drain is reckoned from); dir is 0 out
-// and 1 in, dchans and dwid the device's own channel count and bytes a sample; the others
-// hold the open.
+// all charms. wpos, t0: the sink's frames and the ms it drains from; dir 0 out, 1 in;
+// dchans, dwid: the device's channels and bytes a sample; aq the macos queue
 struct horn { struct bio b; word kind, rate, chans, wpos, t0, dir, dchans, dwid, aq; };
 
 // the sink keeps a quarter second: what a small card's ring holds
 #define sink_ms 250
 
-// --- which doors this build carries ------------------------------------------------
-// WHICH door a kernel wants is a run-time question wherever this libc carries both,
-// and ours carries both: the ALSA words are _IOC arithmetic and the OSS ones are
-// written out, so neither needs its own box's headers. choosing here at COMPILE time
-// was the last thing in the artifact whose bytes depended on the kernel it was built
-// ON, and so the last thing standing between an on-box `love seed` and its fixpoint.
-// a foreign libc still gets the one door its own box can speak for.
-// a seat that carries its own door wants neither kernel's: it is freestanding, so
-// open/ioctl/close/getenv have nobody here to answer them, and a reference to one is a
-// link error rather than a device it will never reach. this is the ONE compile-time
-// answer that is not a guess about the build box -- the roster declaring it is the same
-// roster that supplies k_horn_*.
+// the doors this build carries: moonlibc carries all and picks at run time, so the bytes never
+// depend on the build box (love seed's fixpoint). a seat is freestanding, no open/ioctl: none
 #ifndef love_horn_seat
 #define love_horn_seat 0
 #endif
@@ -104,10 +73,9 @@ struct horn { struct bio b; word kind, rate, chans, wpos, t0, dir, dchans, dwid,
 #define horn_sun 0
 #endif
 
-// --- linux: ALSA by ioctl ---------------------------------------------------------
+// linux: ALSA by ioctl
 #if horn_alsa
-// sound/asound.h's shapes, the ones the handshake needs and no more. an interval's
-// four flag bits ride one word: openmin 1, openmax 2, integer 4, empty 8.
+// sound/asound.h's shapes, only the handshake's; interval flags openmin 1, openmax 2, integer 4, empty 8
 struct snd_interval { uint32_t min, max, flags; };
 struct snd_mask { uint32_t bits[8]; };
 struct snd_pcm_hw_params {
@@ -129,9 +97,8 @@ enum { iv_sample_bits, iv_frame_bits, iv_channels, iv_rate, iv_period_time, iv_p
 static void iv_set(struct snd_interval *v, uint32_t lo, uint32_t hi) {
  v->min = lo, v->max = hi, v->flags = 4; }
 
-// the handshake on an open pcm fd: interleaved s16 (or s32, wid 4), the rate, the
-// channels, and a buffer of 4096..32768 frames (the kernel picks the least: ~85 ms at
-// 48k, a game's lag and a stream's comfort both). -> 0, or the negated errno.
+// interleaved s16 (s32 at wid 4), and a buffer of 4096..32768 frames, the kernel taking the
+// least (~85 ms at 48k) -> 0 | -errno
 static int alsa_setup(int fd, int rate, int chans, int wid) {
  struct snd_pcm_hw_params p;
  memset(&p, 0, sizeof p);
@@ -152,11 +119,8 @@ static int alsa_setup(int fd, int rate, int chans, int wid) {
  if (ioctl(fd, ALSA_PREPARE) < 0) return -errno;
  return 0; }
 
-// the first playback (or capture) node under /dev/snd, or the named one. the order is the
-// card order and nothing wiser: a box whose first node is an HDMI port names its own in
-// HORN. playback is s16 stereo; capture takes *chans, else the other count, in s16, else
-// s32, and says which in *chans and *wid. a capture stream is started here, so the ring
-// is filling from the open.
+// the first node in card order, or the named one. playback is s16 stereo; capture tries *chans,
+// the other count, then s32, answering in *chans and *wid, and starts filling from the open
 static int alsa_open(char const *name, int rate, int dir, int *chans, int *wid, int *err) {
  char nm[40];
  for (int c = 0; c < 8; c++)
@@ -185,8 +149,7 @@ static int alsa_open(char const *name, int rate, int dir, int *chans, int *wid, 
  if (!name) *err = ENODEV;
  return -1; }
 
-// write(2) on a pcm fd is WRITEI_FRAMES by another door: whole frames land, a full
-// ring is EAGAIN, an underrun is EPIPE and wants a prepare before the retry.
+// whole frames; full is EAGAIN, an underrun EPIPE, which wants a prepare before the retry
 static intptr_t alsa_land(int fd, unsigned char const *src, uintptr_t n) {
  for (int again = 0; ; again++) {
   ssize_t k = write(fd, src, n);
@@ -196,9 +159,7 @@ static intptr_t alsa_land(int fd, unsigned char const *src, uintptr_t n) {
   if (errno == EPIPE && !again && !ioctl(fd, ALSA_PREPARE)) continue;
   return -1; } }
 
-// read(2) on a capture fd is READI_FRAMES the same way: whole frames, a dry ring is
-// EAGAIN, an overrun is EPIPE -- what the reader missed is gone, so the stream starts
-// again and this read answers nothing yet.
+// dry is EAGAIN; an overrun (EPIPE) restarts the stream and answers nothing yet
 static intptr_t alsa_take(int fd, unsigned char *dst, uintptr_t n) {
  for (;;) {
   ssize_t k = read(fd, dst, n);
@@ -215,10 +176,9 @@ static uintptr_t alsa_lag(int fd) {
 
 #endif
 
-// --- freebsd: OSS on /dev/dsp ------------------------------------------------------
+// freebsd: OSS on /dev/dsp
 #if horn_oss
-// the ioctl words by the _IOC of whatever libc this is: a native one lays BSD's own
-// encoding, and moonlibc lays linux's and its ioctl turns each into the kernel's
+// by this libc's _IOC: a native one lays BSD's, moonlibc linux's and its ioctl translates
 #define OSS_SETFMT    _IOWR('P', 5, int)
 #define OSS_SPEED     _IOWR('P', 2, int)
 #define OSS_CHANNELS  _IOWR('P', 6, int)
@@ -260,11 +220,10 @@ static uintptr_t oss_lag(int fd, int dir, uintptr_t fb) {
 
 #endif
 
-// --- netbsd: audio(4) on /dev/sound ----------------------------------------------
+// netbsd: audio(4) on /dev/sound
 #if horn_sun
-// sys/audioio.h's two shapes, as netbsd 10 lays them (the man page's u_long seek is
-// stale: it is a u_int, and the info is 136 bytes). INITINFO's all-ones is "leave it".
-// the words by this libc's _IOC, as OSS's are.
+// sys/audioio.h as netbsd 10 lays it: seek is a u_int whatever the man page says, the info
+// 136 bytes. INITINFO's all-ones is "leave it"
 struct sun_prinfo {
  uint32_t sample_rate, channels, precision, encoding, gain, port, seek, avail_ports,
           buffer_size, ispare, samples, eof;
@@ -276,8 +235,7 @@ struct sun_info { struct sun_prinfo play, record;
 #define SUN_GETBUFINFO _IOR('A', 35, struct sun_info)
 #define SUN_SLINEAR_LE 6
 
-// the kernel mixes and converts since netbsd 9, so any rate and count the track asks for
-// is taken -- what GETINFO reads back is the proof, not SETINFO's answer
+// the kernel converts any rate and count: GETINFO's read-back is the proof, not SETINFO's answer
 static int sun_open(char const *name, int rate, int dir, int *chans, int *err) {
  int fd = open(name ? name : "/dev/sound", (dir ? O_RDONLY : O_WRONLY) | O_NONBLOCK | O_CLOEXEC);
  if (fd < 0) return *err = errno, -1;
@@ -313,10 +271,8 @@ static uintptr_t sun_lag(int fd, int dir, uintptr_t fb) {
 
 #endif
 
-// --- any kernel with sockets: a listener plays it, or hears for us ----------------
-// the fd goes non-blocking once the rate is said, so a full socket is a full ring; what
-// it has not sent yet is the lag (SIOCOUTQ), the listener's own few ms left uncounted.
-// capture says its channels in the rate word's top byte, 0 there being playback's stereo
+// a socket listener: nonblocking once the rate is said, so a full socket is a full ring and
+// SIOCOUTQ the lag; the rate word's top byte is capture's channels, 0 playback
 #if !love_horn_seat && !defined(__wasm__)
 #define horn_sockdoor 1
 #include <sys/socket.h>
@@ -342,8 +298,7 @@ static intptr_t sock_land(int fd, unsigned char const *src, uintptr_t n) {
 static uintptr_t sock_lag(int fd, int dir, uintptr_t fb) {
  int q = 0;
  return ioctl(fd, dir ? 0x541B : 0x5411, &q) < 0 ? 0 : (uintptr_t) q / fb; }
-// what the listener has heard, in whole frames of fb bytes: a frame split across two
-// reads is waited out, a second at most; 0 when dry, -1 once the listener is gone
+// whole frames of fb bytes: a split frame is waited out, a second at most; 0 dry, -1 gone
 static intptr_t sock_take(int fd, unsigned char *dst, uintptr_t n, uintptr_t fb) {
  intptr_t k = read(fd, dst, n);
  if (k <= 0) return k < 0 && errno == EAGAIN ? 0 : -1;
@@ -365,14 +320,9 @@ static void sock_shut(int fd) { (void) fd; }
 #endif
 static int horn_sock_name(char const *dev) { return horn_sockdoor && dev && !strncmp(dev, "sock:", 5); }
 
-// --- macos: an AudioQueue in this process -----------------------------------------
-// AudioToolbox comes through dlopen at the first open: the references are weak, so an
-// ELF link (where nothing answers them) and a static mach-o read 0 and refuse, and only
-// dyld's exe (mooncc -lSystem) reaches it. the queue's own thread calls back for each
-// buffer and takes what the ring holds, silence for the rest, so the queue never starves
-// to a stop; love's thread fills the ring and a full one answers 0, the door's backpressure.
-// one writer and one reader, each counter written by its side alone, and x86 keeps stores
-// in order: the ring wants no lock. it lives outside the heap, where no collection moves it.
+// macos: AudioToolbox by dlopen, weak, so only dyld's exe (mooncc -lSystem) reaches it. the
+// queue's thread takes what the ring holds, silence for the rest, so it never starves; a full
+// ring answers 0. one writer, one reader, x86's ordered stores: no lock. off the heap, unmoved
 #if defined(__moonlibc__) && defined(__x86_64__) && !love_horn_seat
 #define horn_mac 1
 void *dlopen(char const *path, int mode) __attribute__((weak));
@@ -447,11 +397,8 @@ static uintptr_t aq_lag(intptr_t p) { return 0; }
 static void aq_shut(intptr_t p) { (void) p; }
 #endif
 
-// --- the door, chosen on the kernel we woke on ------------------------------------
-// linux takes ALSA, freebsd OSS and netbsd audio(4); a kernel with none answers ENODEV.
-// the fd carries no flavour, so land, take and lag ask the same question open did;
-// __love_osv does not move under a run. dir is 0 out and 1 in; *chans is asked for and
-// answered, and fb is a device frame's bytes.
+// the door by the kernel we woke on, else ENODEV; land, take and lag ask as open did, since
+// __love_osv never moves under a run. *chans is asked and answered, fb a device frame's bytes
 #if horn_alsa || horn_oss || horn_sun
 #define horn_doorless 0
 static int dev_open(char const *name, int rate, int dir, int *chans, int *wid, int *err) {
@@ -502,7 +449,7 @@ static uintptr_t dev_lag(int fd, int dir, uintptr_t fb) {
 #endif
  return 0; }
 #else
-// --- anywhere else: no device door, the sink alone ---------------------------------
+// no device door: the sink alone
 // a seat with a door opens the sink only by HORN=none; a doorless one has nothing else
 #define horn_doorless 1
 #if !love_horn_seat
@@ -513,24 +460,20 @@ static intptr_t dev_take(int fd, unsigned char *dst, uintptr_t n) { return -1; }
 static uintptr_t dev_lag(int fd, int dir, uintptr_t fb) { return 0; }
 #endif
 
-// the seat's own door, asked once: inle says so with the OS word, a board in its
-// roster. everything below asks this and never the word, so the two seats that answer
-// k_horn_* are one case and not two.
+// inle by the OS word, a board by its roster: one case below, never the word
 #if love_horn_seat
 #define horn_at_seat 1
 #else
 #define horn_at_seat (__love_osv < 0)
 #endif
-// ..and a doorless build opens no fd, so it closes none -- and has nobody to close with
+// a doorless build opens no fd and has no close
 #if horn_doorless
 static void dev_shut(int fd) { (void) fd; }
 #else
 static void dev_shut(int fd) { close(fd); }
 #endif
 
-// --- the sink: a ring that keeps time --------------------------------------------
-// frames played since t0 at the rate; the ring is sink_ms deep. an underrun (the
-// clock passed the writer) re-bases t0 so the writer starts a fresh run.
+// the sink: frames played since t0 at the rate, sink_ms deep; an underrun re-bases t0
 static uintptr_t sink_played(struct horn *h) {
  uintptr_t now = love_clock(), t0 = (uintptr_t) getcharm(h->t0), rate = (uintptr_t) getcharm(h->rate),
            wpos = (uintptr_t) getcharm(h->wpos);
@@ -546,9 +489,8 @@ static uintptr_t sink_land(struct horn *h, uintptr_t frames) {
  h->wpos = putcharm((intptr_t) (wpos + frames));
  return frames; }
 
-// ..and turned round for HORN_IN=none: silence heard at the rate since t0, wpos the
-// frames handed out. a reader who falls a ring behind loses the oldest, as a card's
-// overrun does, so what it holds never passes sink_ms.
+// HORN_IN=none: silence at the rate since t0, wpos the frames handed out; a reader a ring
+// behind loses the oldest, as an overrun does
 static uintptr_t sink_heard(struct horn *h) {
  uintptr_t now = love_clock(), t0 = (uintptr_t) getcharm(h->t0), rate = (uintptr_t) getcharm(h->rate),
            wpos = (uintptr_t) getcharm(h->wpos), cap = rate * sink_ms / 1000;
@@ -562,9 +504,7 @@ static uintptr_t sink_take(struct horn *h, uintptr_t frames) {
  h->wpos = putcharm(getcharm(h->wpos) + (intptr_t) frames);
  return frames; }
 
-// --- the C face on this seat --------------------------------------------------------
-// one device for a program with no heap in hand (doom's mixer): the kernel's under
-// inle, else the host's card, opened here and kept -- the singleton the C face is.
+// the C face, for a program with no heap in hand (doom's mixer): one device, kept
 static int horn_c_fd = -1, horn_c_sock;
 
 int love_horn_open(int rate) {
@@ -589,8 +529,7 @@ uintptr_t love_horn_lag(void) {
  if (horn_at_seat) return k_horn_lag();
  return horn_c_fd < 0 ? 0 : horn_c_sock ? sock_lag(horn_c_fd, 0, 4) : dev_lag(horn_c_fd, 0, 4); }
 
-// a seat may tap the sink's accepted PCM -- the browser feeds it to WebAudio. the
-// default takes nothing, so every native seat keeps discarding at the sink.
+// a seat may tap the sink's pcm (the browser's WebAudio); the default takes nothing
 __attribute__((weak)) void love_horn_tap(unsigned char const *pcm, uintptr_t frames,
                                        uintptr_t chans, uintptr_t rate) {
  (void) pcm, (void) frames, (void) chans, (void) rate; }
@@ -601,9 +540,7 @@ void love_horn_close(void) {
  else if (horn_c_fd >= 0) dev_shut(horn_c_fd);
  horn_c_fd = -1; }
 
-// --- the door -------------------------------------------------------------------
-// a stereo run goes down as it is; a mono one is doubled through a stack frame,
-// and what the device took is answered in the caller's bytes.
+// a mono run is doubled through a stack frame; the answer is in the caller's bytes
 static intptr_t horn_put(struct horn *h, int kind, int fd, unsigned char const *src, uintptr_t n) {
  return kind == horn_dev ? dev_land(fd, src, n) : kind == horn_sock ? sock_land(fd, src, n)
       : kind == horn_aq ? aq_land(getcharm(h->aq), src, n) : k_horn_write(src, n); }
@@ -631,10 +568,8 @@ struct g *love_horn_writen(struct g *g, unsigned char const *src, uintptr_t n) {
  else k = horn_land(h, src, n);
  return g->b = k, g; }
 
-// the read door: whole frames in the caller's count. a device that keeps the caller's
-// count in s16 reads straight into dst; else a stack frame takes the device's frames,
-// each sample's top 16 bits, mixed down (the mean of the two) or doubled up. 0 is a dry
-// device, and the reader parks on its fd -- or, with none, on the poll every heap port has.
+// whole frames: straight into dst when the device matches, else through a stack frame, the
+// top 16 bits mixed (the mean) or doubled. 0 is dry, and the reader parks
 intptr_t love_horn_readn(struct g *g, unsigned char *dst, uintptr_t n) {
  struct horn *h = (struct horn*) g->io;
  if (!getcharm(h->dir)) return -1;                  // a playback port reads as the end
@@ -671,8 +606,7 @@ __attribute__((weak)) intptr_t k_horn_read(unsigned char *dst, uintptr_t n) { (v
 __attribute__((weak)) uintptr_t k_horn_in_lag(void) { return 0; }
 __attribute__((weak)) void k_horn_in_close(void) { }
 
-// the finalizer, inside GC: shut the device. the fd lane's fd is io_close's too, but
-// that one only runs for the fd port; this port's close is its own.
+// the finalizer, inside GC: io_close runs only for the fd port, so this port shuts its own
 static void horn_fin(struct g *g, void *p) {
  struct horn *h = p;
  int kind = (int) getcharm(h->kind);
@@ -685,20 +619,17 @@ static void horn_fin(struct g *g, void *p) {
  h->b.f.fd = putcharm(-1);
  h->kind = putcharm(horn_sink); }
 
-// `close` on a horn (src/love/posix.c): the same shutting, outside GC
+// posix.c's close on a horn, outside GC
 void love_horn_shut(struct io *io) { horn_fin(NULL, io); }
 
-// the seat is one device each way, and a port opened on it takes it from every port before:
-// an older one's close, or its finalizer whenever a collection finds it dead, shuts nothing
+// one device each way: a newer port takes it, so an older one's close or finalizer shuts nothing
 static void seat_take(struct g *g, int kind) {
  for (struct fz *z = g->fz; z; z = z->next)
   if (z->fn == horn_fin) {
    struct horn *o = (struct horn*) z->p;
    if (getcharm(o->kind) == kind) o->kind = putcharm(horn_sink); } }
 
-// (horn rate chans) and (horn-in rate chans) -> the port at sp[2], over the two args.
-// a seat listens where it answers k_horn_in_*, and a doorless build hears only
-// HORN_IN=none's silence: it has no card to be quiet about.
+// the port at sp[2]; a doorless build hears only HORN_IN=none's silence
 love_noinline static struct g *horn_mk(struct g *g, int dir) {
  word rw = g->sp[0], cw = g->sp[1];
  intptr_t rate = (rw & 1) ? getcharm(rw) : -1, chans = (cw & 1) ? getcharm(cw) : -1;
@@ -767,11 +698,8 @@ static lvm(lvm_horn) {
 static lvm(lvm_horn_in) {
  LvmCall(g, horn_in_open) }
 
-// (horn-lag p) -> frames queued and unplayed (or heard and unread) | () for anything but
-// an open horn. what the device holds, and what the port still has to hand it: a full
-// ring takes nothing and the run stays pending in the port, and a feeder that reads only
-// the device's queue would see its lag stand still and never stop feeding. a reader's
-// port holds the rest of its last gulp the same way.
+// the device's queue and the port's pending run both: a feeder reading only the device would
+// see a full ring's lag stand still and never stop
 static lvm(lvm_horn_lag) {
  word x = Sp[0];
  if (charmp(x) || cell(x)->ap != lvm_port_io || ((struct io*) x)->vt != &love_horn_vt)

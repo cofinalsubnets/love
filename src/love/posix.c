@@ -1,14 +1,8 @@
-// src/love/posix.c -- the POSIX surface, in one place: process (spawn/reap/wait/signal, the
-// pid-1 supervisor's primitives and the shell's job control), fs effects and values
-// (stat/readdir/rename/chmod/..), the environment, pipes and raw-fd plumbing, and the pty
-// wrapper. host-only, auto-globbed + LvNif-registered. the conventions, kept throughout:
+// posix.c -- the POSIX surface: process and job control, fs, environment, fds, the pty.
 //   effect ops answer () ok | 'enoent | 'badarg
 //   value ops answer the value | () absence | 'enoent | 'badarg
-// an errno set at the C level comes back as the nom naming it (love_err reads the
-// boot-interned vocabulary, so no error path allocates); a call refused before a syscall
-// ran answers 'badarg, which is no posix name, so the two never shadow. ok is (), so !e
-// reads "it worked" on an effect op and nom? e reads "it failed" on any op.
-// the argv marshal lives beside the spawns that consume it; main.c wants it, not static.
+// an errno comes back as its nom (boot-interned, no allocation); 'badarg is a refusal before
+// any syscall, never a posix name
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
 #include "archive/srctree.h"   // the carried tree, under /love (lovefs.c)
@@ -32,13 +26,8 @@
 #include <sys/resource.h>   // getrusage, RUSAGE_SELF/CHILDREN (the cpu clocks)
 #include <time.h>           // clock_gettime, for love_clock
 
-// --- what this libc carries, asked once -------------------------------------
-// which doors a lane may call, not which kernel it stands on: ours carries every door on
-// all three (src/apps/moon/include/sys), so these are build facts under __moonlibc__ and box
-// facts under anything else. mount and unshare reach only linux, and os.c leaves their
-// rows unmapped elsewhere, so the call refuses with ENOSYS at run time -- the only place
-// that can know, one binary meeting three kernels; compiling them out by the build's
-// kernel would refuse them on a linux box too.
+// what this libc carries, not which kernel runs it: moonlibc carries every door, and a door
+// the kernel lacks answers ENOSYS at run time (one binary, three kernels)
 #if defined(__moonlibc__)
 # define LvHaveSignalfd 1
 # define LvHaveKqueue   1
@@ -77,52 +66,42 @@
 #if defined(LvHaveStatfs)
 #include <sys/vfs.h>        // statfs(2), the block and inode counts df reports
 #endif
-// outside every guard: what follows is called unconditionally below (argv_marshal,
-// sigtake, the pty pair), so one kernel's feature may not gate it.
-// CLOCK_REALTIME in milliseconds -- the one scale for the scheduler's deadlines,
-// (clock t), and every mtime. on inle it reads the kernel's kboot/kticks scale.
+// CLOCK_REALTIME in ms: the one scale for deadlines, (clock t) and every mtime
 love_noinline uintptr_t love_clock(void) {
  struct timespec ts;
  return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1 :
   (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
-// argv: the chain of strings at g->sp[0] -> a NUL-terminated char** laid in the
-// uncommitted heap gap at Hp. GC-invisible, no l pointers, valid across a fork --
-// host_spawn_guard leaves the window above hp mapped for exactly this, so what execvp
-// reads must live here and not in the strings. consumed before any further allocation.
-// *cavp is the vector or NULL; a misuse (non-string or empty argv) leaves g ok and a
-// failed reserve leaves it not ok, and each caller says what a misuse answers.
-// with envat >= 0 the list at g->sp[envat] ("K=V" strings, () for none) is laid after argv
-// by the same reserve, *cevp its NULL-ended vector (NULL for none); anything else there,
-// or an entry that is not K=V, is argv's misuse
+// the strings at g->sp[0] -> a char** laid in the heap gap at hp, which host_spawn_guard keeps
+// mapped across a fork; consumed before any further allocation. *cavp NULL with g ok is a
+// misuse, with g not ok an oom. envat >= 0 lays g->sp[envat]'s K=V list after it in *cevp
 static struct g *argv_env_marshal(struct g *g, char ***cavp, int envat, char ***cevp) {
  *cavp = NULL;
  if (cevp) *cevp = NULL;
  word argv = g->sp[0], env = envat >= 0 ? g->sp[envat] : ZeroPoint;
  uintptr_t argc = 0, total = 0, envc = 0, etotal = 0;
- // the head may be (path . name): the child is named name and the file is path, laid
- // past argv's NULL where argv_file finds it -- a shell that searched PATH once
- // says where it landed, and the exec does not walk PATH a second time
+ // a (path . name) head names the child name and lays path past argv's NULL for argv_file,
+ // so the exec does not walk PATH again
  word h = chainp(argv) ? A(argv) : ZeroPoint;
  int alt = chainp(h) && cstrp(A(h)) && strp(B(h));
  for (word p = argv; chainp(p); p = B(p)) {
   word e = !argc && alt ? B(h) : A(p);
-  if (!cstrp(e)) return g;                                // misuse: non-string, or a NUL inside
-  argc++, total += len(e) + 1; }                             // +1 for the NUL
- if (!argc) return g;                                        // empty argv
+  if (!cstrp(e)) return g;
+  argc++, total += len(e) + 1; }
+ if (!argc) return g;
  if (alt) total += len(A(h)) + 1;
  if (env != ZeroPoint && !chainp(env)) return g;             // misuse: env not a list
  for (word p = env; chainp(p); p = B(p)) {
   word e = A(p);
-  if (!cstrp(e) || !len(e) || txt(e)[0] == '=' || !memchr(txt(e), '=', len(e))) return g;   // K=V, no NUL inside
+  if (!cstrp(e) || !len(e) || txt(e)[0] == '=' || !memchr(txt(e), '=', len(e))) return g;   // K=V
   envc++, etotal += len(e) + 1; }
  uintptr_t aw = argc + 2 + b2w(total), ew = envc ? envc + 1 + b2w(etotal) : 0;
  if (!ok(g = have(g, aw + ew))) return g;
- argv = g->sp[0];                            // have may have GC'd; argv and env are
- env = envat >= 0 ? g->sp[envat] : ZeroPoint; // rooted on the stack, forwarded there
+ argv = g->sp[0];                            // have may have collected
+ env = envat >= 0 ? g->sp[envat] : ZeroPoint;
  h = A(argv);
- char **cav = (char**) g->hp,                                // at Hp: aligned
-      *blob = (char*) (g->hp + (argc + 2));                  // whole words after
+ char **cav = (char**) g->hp,
+      *blob = (char*) (g->hp + (argc + 2));
  uintptr_t off = 0, i = 0;
  for (word p = argv; chainp(p); p = B(p), i++) {
   struct str *s = str(!i && alt ? B(h) : A(p));
@@ -137,7 +116,7 @@ static struct g *argv_env_marshal(struct g *g, char ***cavp, int envat, char ***
   memcpy(blob + off, txt(s), len(s));
   blob[off + len(s)] = 0;
   cav[argc + 1] = blob + off; }
- if (envc) {                                 // the env's vector and bytes, past argv's words
+ if (envc) {
   char **cev = (char**) (g->hp + aw), *eb = (char*) (g->hp + aw + envc + 1);
   uintptr_t eo = 0, j = 0;
   for (word p = env; chainp(p); p = B(p), j++) {
@@ -152,50 +131,29 @@ static struct g *argv_env_marshal(struct g *g, char ***cavp, int envat, char ***
  return g; }
 struct g *love_argv_marshal(struct g *g, char ***cavp) { return argv_env_marshal(g, cavp, -1, NULL); }
 
-// a wait(2) status word -> the exit code, 128+signal for a signalled death (the shell
-// convention), or -1 for neither. the one copy every reaper here and hark (main.c) share.
+// a wait(2) status -> the exit code, 128+signal, or -1
 static love_inline int proc_status(int st) {
  return WIFEXITED(st) ? WEXITSTATUS(st)
        : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1; }
 
-// port_fd: the live fd of a port arg, or -1 for a non-port. a closed port carries the
-// -3 sentinel, handed straight to the syscall, which fails with EBADF.
-
-// a love string as a C string, NULL for a non-string or one with a NUL inside: bytes[len]
-// is always a NUL (src/love/love.h), so the bytes go to the syscall where they lie.
+// NULL for a non-string or an inner NUL; bytes[len] is always a NUL (love.h)
 static love_inline char const *str_c(word x) { return cstrp(x) ? txt(x) : NULL; }
 
-// love_argv_marshal with the misuse answer added: called with g Packed, a misuse pushes
-// 'badarg and leaves *cavp NULL, oom returns !ok g with *cavp NULL too, so
-// `if (!*cavp) return g` covers both.
+// a misuse pushes 'badarg, so `if (!*cavp) return g` covers it and oom alike
 static struct g *argv_marshal(struct g *g, char ***cavp) {
  g = love_argv_marshal(g, cavp);
  return !*cavp ? push(g, 1, badarg(g)) : g; }
 
-// --- the supervisor pair: spawn without waiting, reap any dead child ------------
-// (spawn argv)  -> child pid (a fixnum) | a nom ('badarg misuse)
-// (glean _)     -> (pid . status) of one reaped child
-//                | ()                 none pending
-//                | a nom              (e.g. 'echild: no children left)
-// on a real pid1 glean also collects reparented orphans (waitpid(-1)).
-
-// SIG_IGN survives exec, so a shell that ignores the job-control signals must undo that
-// in every child between fork and exec -- or ^C could never kill what it launches.
-// SIGPIPE rides this too: love ignores it, but a child that inherits the ignore is a
-// `yes | head` that never stops. main.c's two exec sites reset it by hand.
-// what the shell asked to stay ignored (trap '', g->child_ign) goes back on after, as POSIX
-// has an ignore ride into what a shell starts
+// SIG_IGN and the mask both survive exec: every exec-bound child leaves through here, or
+// ^C misses it and `yes | head` never stops. main.c's two exec sites reset by hand. what the
+// shell asked to stay ignored (trap '', g->child_ign) goes back on after, as POSIX has it
 static void sig_dfl_job(uint64_t ign) {
  signal(SIGINT, SIG_DFL); signal(SIGQUIT, SIG_DFL); signal(SIGPIPE, SIG_DFL);
  signal(SIGTSTP, SIG_DFL); signal(SIGTTIN, SIG_DFL); signal(SIGTTOU, SIG_DFL);
  for (int s = 1; s < 64; s++) if (ign >> s & 1) signal(s, SIG_IGN);
- // ..and the mask, which sigaction does not touch and exec does not clear: a signal a
- // shell blocks to watch it (sigfd) is inherited through the exec, leaving the child
- // deaf to ^C. every exec-bound child here leaves through this one door.
  sigset_t none; sigemptyset(&none); sigprocmask(SIG_SETMASK, &none, NULL); }
 
-// (sigign? sig) -> 1 if this signal is SIG_IGN right now, else 0. POSIX: a signal ignored
-// on entry to a non-interactive shell cannot be trapped or reset; `&` is how one arrives.
+// (sigign? sig): POSIX lets a non-interactive shell not trap a signal ignored on entry
 love_noinline static word host_sigignp(word sigw) {
  struct sigaction sa;
  if (!charmp(sigw)) return putcharm(0);
@@ -203,15 +161,13 @@ love_noinline static word host_sigignp(word sigw) {
  return putcharm(sa.sa_handler == SIG_IGN ? 1 : 0); }
 static lvm(lvm_sigignp) { Sp[0] = host_sigignp(Sp[0]); love_musttail return Next(1); }
 
-// (sigclear _) -> () -- empty this process's signal mask. the exec children get it
-// from sig_dfl_job above; a shell's forked subshell never execs, so it asks here.
+// (sigclear _): for a forked subshell, which never reaches sig_dfl_job's exec
 love_noinline static word host_sigclear(struct g *g) {
  sigset_t none; sigemptyset(&none);
  return sigprocmask(SIG_SETMASK, &none, NULL) ? love_err(g, errno) : ZeroPoint; }
 static lvm(lvm_sigclear) { Sp[0] = host_sigclear(g); love_musttail return Next(1); }
 
-// (childign sigs) -> () -- the signals a spawned child keeps ignored, a list of numbers;
-// every other one the child side resets. a shell's trap '' sets it
+// (childign sigs) -> (): the signals a spawned child keeps ignored (a shell's trap '')
 static lvm(lvm_childign) {
  uint64_t m = 0;
  for (word l = Sp[0]; chainp(l); l = B(l))
@@ -220,13 +176,8 @@ static lvm(lvm_childign) {
  Sp[0] = ZeroPoint;
  love_musttail return Next(1); }
 
-// (spawn argv) -> the child pid, or the failure's nom, told apart by kind. fork + execvp;
-// the parent returns at once, unlike run (waits + captures) and exec (replaces in place).
-// the child inherits init's stdio; a failed exec _exit(127)s, seen by the next glean.
-// spawn guard: the heap pools leave an exec-bound fork's inheritance, so fork copies no
-// page tables for memory the child drops at once. scoped by the caller -- the (fork) nif
-// and any child that walks the heap inherit whole. best-effort: an unaligned edge or a
-// kernel without the advice keeps plain fork.
+// the spawn guard: an exec-bound fork inherits no heap pools, so no page tables are copied;
+// the (fork) nif and any child that walks the heap inherit whole. best-effort
 #if defined(LvHaveDontfork)
 static void guard1(void *lo, void *hi, int adv) {
  uintptr_t a = ((uintptr_t) lo + 4095) & ~(uintptr_t) 4095,
@@ -236,20 +187,14 @@ static void guard1(void *lo, void *hi, int adv) {
 void host_spawn_guard(struct g *g, int on) {
 #if defined(LvHaveDontfork)
  int adv = on ? MADV_DONTFORK : MADV_DOFORK;
- // the ceiling is the frontier, not the block top: love_argv_marshal lays the child's argv
- // at g->hp, so the window above hp stays mapped and is all execvp can still read.
- guard1(g, g->hp, adv);
+ guard1(g, g->hp, adv);                       // not the block top: the argv sits above hp
  guard1(g->major_base, g->major_base + g->major_len, adv);
 #else
 #endif
 }
 
-// stdin made exact before a fork: the bytes the reader holds ahead go back to the fd and
-// out of the buffer, so parent and child both stand where the reader does. a seekable
-// stdin's offset is shared across the fork, and a child that exits holding them gives
-// them back through it (src/love/main.c's stdin_give) while the parent still reads its copy:
-// a `while read` loop around a subshell read every line past the first again. an exec'd
-// child wants the same, or it starts past what the shell had read ahead of it.
+// before a fork: a seekable stdin gives back what the reader holds ahead, so parent and
+// child both stand where the reader does (the offset is shared)
 static void stdin_exact(struct g *g) {
  if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // a pipe or a tty
  struct io *i = (struct io*) g->inport;
@@ -259,14 +204,12 @@ static void stdin_exact(struct g *g) {
  io_unread(g, i, -(intptr_t) io_pending(g, i));
  if (u) love_stdin.io.ungetc_buf = putcharm(EOF); }
 
-// every fd love opens is close-on-exec; a child sees only what is laid onto its own
-// numbers. dup2 onto itself keeps the flag, so that case clears it instead.
+// every fd love opens is cloexec; dup2 onto itself keeps the flag, so that case clears it
 static void fd_give(int s, int d) {
  if (s == d) fcntl(d, F_SETFD, 0);
  else dup2(s, d); }
 
-// an fd love opens for itself moves from 3..9 to 10 and up: those are a shell's to hand its
-// user (`exec 3>&-`), and a port's fd closed or laid over under it is closed again at GC
+// love's own fds move from 3..9 to 10 up: those are the shell user's (`exec 3>&-`)
 static int fd_up(int fd) {
  if (fd < 3 || fd > 9) return fd;
  int h = fcntl(fd, F_DUPFD_CLOEXEC, 10);
@@ -282,8 +225,8 @@ static int openfd_mode(char const *path, intptr_t m) {
            : O_RDONLY;
  return fd_up(open(path, flags | O_CLOEXEC, m == 3 ? 0600 : 0644)); }
 
-// a deferred redirect, (path mode msg): opened in the child, where a fifo may block.
-// a failed open says msg on the stderr laid so far and exits 1, as a shell's redirect does.
+// a deferred redirect (path mode msg), opened in the child where a fifo may block; a
+// failure says msg and exits 1
 static void spawn_open(int cfd, word d) {
  char const *p = str_c(A(d));
  word m = chainp(B(d)) ? A(B(d)) : ZeroPoint,
@@ -296,13 +239,11 @@ static void spawn_open(int cfd, word d) {
  fd_give(fd, cfd);
  if (fd != cfd) close(fd); }
 
-// a map's source fd: a charm, or the fd under a port -- what a task that wears its own stdio
-// hands a child for 0, 1 and 2. -1 for anything else
+// a map's source fd: a charm or a port's fd, else -1
 static intptr_t map_src(word sw) { return charmp(sw) ? getcharm(sw) : port_fd(sw); }
 
-// a kernel with no fork (a process on inle) spawns instead: the triple and fdmap become
-// posix_spawn's actions, a deferred redirect opened here and handed over. a failed one says
-// its msg and refuses the spawn, where a forked child would have exited 1
+// a kernel with no fork (inle) spawns: the triple and fdmap become posix_spawn's actions,
+// and a failed deferred redirect refuses the spawn
 love_noinline static struct g *host_spawnk(struct g *g, char **cav, int const io[3],
                                            word fdmap, word closes, intptr_t pg) {
  posix_spawn_file_actions_t fa;
@@ -338,25 +279,23 @@ love_noinline static struct g *host_spawnk(struct g *g, char **cav, int const io
  posix_spawn_file_actions_destroy(&fa), posix_spawnattr_destroy(&at);
  return push(g, 1, e ? love_err(g, e) : putcharm(pid)); }
 
-// the one fork + exec. argv rides at sp[0]; in/out/err are spawnio's fixed triple (-1: leave
-// it), applied first; fdmap is a list of (childfd . srcfd) pairs and closes a list of fds,
-// both read off the stack after the marshal (a GC may have moved them), -1 for none.
-// pg >= 0 puts the child in that group (0: a fresh one it leads), fg hands it the terminal.
+// the one fork + exec: argv at sp[0]; in/out/err -1 to leave; fdmap ((childfd . srcfd) ..)
+// and closes are stack slots read after the marshal, -1 for none. pg >= 0 joins (0 leads) a group
 love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err,
                                           int mapat, int closeat, intptr_t pg, intptr_t fg) {
  char **cav;
  g = argv_marshal(g, &cav);
- if (!cav) return g;                                         // misuse pushed -1, or oom
+ if (!cav) return g;
  word fdmap = mapat >= 0 ? g->sp[mapat] : ZeroPoint,
          closes = closeat >= 0 ? g->sp[closeat] : ZeroPoint;
- fflush(NULL);                                               // flush now, not twice in the child
+ fflush(NULL);                                               // not twice in the child
  stdin_exact(g);
  pid_t pid = fork();
  if (pid < 0 && errno == ENOSYS) return host_spawnk(g, cav, (int[3]) { in, out, err }, fdmap, closes, pg);
  if (pid < 0) return push(g, 1, love_err(g, errno));
  if (!pid) {
   if (pg >= 0) {
-   setpgid(0, (pid_t) pg);                     // 0 leads a fresh group, >0 joins it
+   setpgid(0, (pid_t) pg);
    if (fg) { signal(SIGTTOU, SIG_IGN);          // the handoff, from the background
     tcsetpgrp(0, pg ? (pid_t) pg : getpid()); } }
   if (in  >= 0) fd_give(in, 0);
@@ -370,23 +309,20 @@ love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err
    word sw = B(e);
    if (map_src(sw) >= 0) fd_give((int) map_src(sw), (int) cfd);
    else if (chainp(sw)) spawn_open((int) cfd, sw);
-   else close((int) cfd); }                    // () (or a negative) srcfd closes childfd
+   else close((int) cfd); }
   for (word p = closes; chainp(p); p = B(p)) {
    intptr_t fd = getcharm(A(p));
    if (fd > 2) close((int) fd); }
-  sig_dfl_job(g->child_ign);                    // undo the shell's ignores (TTOU too)
+  sig_dfl_job(g->child_ign);
   execvp(argv_file(cav), cav);
-  _exit(127); }                                 // seen by the next glean
+  _exit(127); }
  if (pg >= 0) setpgid(pid, (pid_t) (pg ? pg : pid));   // parent side too: no race window
- return push(g, 1, putcharm(pid)); }                      // parent: the live pid
+ return push(g, 1, putcharm(pid)); }
 
 static lvm(lvm_spawn) {
- LvmCallp(g, 1, host_spawnx, -1, -1, -1, -1, -1, -1, 0) }   // pid over argv
+ LvmCallp(g, 1, host_spawnx, -1, -1, -1, -1, -1, -1, 0) }
 
-// (glean _) -> (pid . status) of one reaped child, () if none are pending, or the
-// failure's nom. the arg is a dummy, so a bare (glean) curries; call it (glean 0).
-// off the wrappers' frames so their tails jump. leaves one net value at sp[0]: (), an
-// errno nom, or the record -- (status) for a named pid, (pid . status) for a wildcard.
+// (glean 0): sp[0] gets (), a nom, or (status) for a named pid, (pid . status) for any
 love_noinline static struct g *host_reap(struct g *g, pid_t pid) {
  int st;
  pid_t r = waitpid(pid, &st, WNOHANG);
@@ -396,25 +332,18 @@ love_noinline static struct g *host_reap(struct g *g, pid_t pid) {
  word status = putcharm(proc_status(st));
  struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                 pid < 0 ? putcharm(r) : status,
-                                pid < 0 ? status : ZeroPoint);   // a real ()-tailed list, not the charm-0 fossil
+                                pid < 0 ? status : ZeroPoint);
  g->sp[0] = word(w);
  return g; }
 
 static lvm(lvm_reapany) {
  LvmCall(g, host_reap, -1) }
 
-// --- the signal perceive source (signalfd; kqueue on the BSDs) ------------------
-// (sigfd sigs)  -> a port over a signalfd watching `sigs` (a list of signal numbers; a
-//                  non-list keeps the supervisor default SIGCHLD + SIGTERM), those signals
-//                  first blocked so they queue to the fd instead of their default
-//                  disposition -- which is what turns a TERM into an event, not a death.
-//                  a nom on failure. SIGINT is left unblocked so ^C bails.
-// (sigtake port) -> (signo . pid) of one pending signal, or () if none ready.
-// SIGCHLD coalesces, so a 'chld wake still loops `glean` to harvest every zombie.
+// (sigfd sigs): a port over a signalfd (kqueue on the BSDs); the signals are blocked so a
+// TERM is an event, not a death. (sigtake port) -> (signo . pid) | (). SIGCHLD coalesces
 #if defined(LvHaveSignalfd) || defined(LvHaveKqueue)
 #if defined(LvHaveKqueue)
-// the BSD door: the port holds a kqueue fd instead. EVFILT_SIGNAL fires on send, before
-// delivery, so the same blocked mask queues here too. one kernel per process, so a flag.
+// EVFILT_SIGNAL fires before delivery, so the blocked mask queues here too
 static int host_sigkq;
 love_noinline static int host_sigfd_kq(word a) {
  int kq = kqueue();
@@ -434,18 +363,18 @@ love_noinline static int host_sigfd_kq(word a) {
  host_sigkq = 1;
  return kq; }
 #endif
-// the canonical door, then the BSD one where it answers -- the try is the probe.
+// signalfd, then kqueue: the try is the probe
 static int mk_sigfd(struct g *g, void *m) {
  int fd = -1, e = ENOSYS;
 #if defined(LvHaveSignalfd)
  if ((fd = signalfd(-1, m, SFD_NONBLOCK | SFD_CLOEXEC)) < 0) e = errno;
 #endif
 #if defined(LvHaveKqueue)
- if (fd < 0 && e == ENOSYS && (fd = host_sigfd_kq(g->sp[0])) < 0) e = errno;   // a BSD kernel; kqueue is the body
+ if (fd < 0 && e == ENOSYS && (fd = host_sigfd_kq(g->sp[0])) < 0) e = errno;
 #endif
  (void) g, (void) m;
  return fd < 0 ? -e : fd; }
-// a list of signal numbers to watch; anything else keeps SIGCHLD + SIGTERM.
+// a non-list watches SIGCHLD + SIGTERM
 love_noinline static struct g *host_sigfd(struct g *g) {
  sigset_t m;
  sigemptyset(&m);
@@ -464,8 +393,7 @@ love_noinline static struct g *host_sigfd(struct g *g) {
  return g->sp[1] = g->sp[0], g->sp += 1, g; }                 // port over the dummy arg
 static lvm(lvm_sigfd) { LvmCall(g, host_sigfd) }
 
-// read one pending signal (non-blocking) into (signo . pid). signo is the raw canonical
-// number; pid is ssi_pid -- except the kqueue lane, which names no sender: pid 0 there.
+// kqueue names no sender: pid 0
 love_noinline static struct g *host_sigtake(struct g *g, int fd) {
  intptr_t signo, pid;
 #if defined(LvHaveKqueue)
@@ -474,7 +402,7 @@ love_noinline static struct g *host_sigtake(struct g *g, int fd) {
   struct timespec z = {0, 0};
   int k = kevent(fd, 0, 0, &ev, 1, &z);
   if (k < 0)  { g->sp[0] = love_err(g, errno); return g; }
-  if (k != 1) { g->sp[0] = ZeroPoint; return g; }              // none ready
+  if (k != 1) { g->sp[0] = ZeroPoint; return g; }
   signo = (intptr_t) ev.ident; pid = 0; }
  else
 #endif
@@ -482,12 +410,12 @@ love_noinline static struct g *host_sigtake(struct g *g, int fd) {
 #if defined(LvHaveSignalfd)
   struct signalfd_siginfo si;
   ssize_t n = read(fd, &si, sizeof si);
-  if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {      // EAGAIN is absence, not failure
+  if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
    g->sp[0] = love_err(g, errno); return g; }
-  if (n != (ssize_t) sizeof si) { g->sp[0] = ZeroPoint; return g; }  // none ready
+  if (n != (ssize_t) sizeof si) { g->sp[0] = ZeroPoint; return g; }
   signo = (intptr_t) si.ssi_signo; pid = (intptr_t) si.ssi_pid;
 #else
-  g->sp[0] = love_err(g, ENOSYS); return g;   // no canonical door: the kq lane above is the only one
+  g->sp[0] = love_err(g, ENOSYS); return g;
 #endif
  }
  if (!ok(g = have(g, Width(struct chain)))) return g;
@@ -501,36 +429,23 @@ static lvm(lvm_sigtake) {
  if (fd < 0) { Sp[0] = badarg(g); love_musttail return Next(1); }
  LvmCall(g, host_sigtake, fd) }
 #else
-// a libc with neither door; keep the names present (so init.l loads) but refusing.
+// neither door: the names stay, so init.l loads
 static lvm(lvm_sigfd)   { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 static lvm(lvm_sigtake) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 #endif
 
-// --- foreground job control + cwd (the muscle a real shell needs) ---------------
-// (wait pid)   -> block until pid exits or stops: an exit is its proc_status (exit /
-//                 128+sig), a stop (^Z) is 256 + the stopping signal -- a charm above
-//                 every exit status, so a shell tells "stopped" from "done".
-// (signal sig disp) -> sigaction: disp 0 = default, 1 = ignore. () | a nom | 'badarg.
-//                 the shell ignores INT/QUIT/TSTP so the tty's ^C/^Z reach only the
-//                 foreground child; spawn's child side resets them.
-// (chdir path) -> () ok | a nom | 'badarg misuse. the `cd` builtin.
-// (cwd _)      -> the current directory as a string, or a nom on failure. for the prompt.
-// the syscall body lives in an love_noinline helper so the lvm_ wrapper stays a pure
-// tail-jump: a stack buffer would block the sibcall to Continue() and trip `make vmret`.
-// WNOHANG, and () means "still running" -- a real answer is a charm status or a nom, so
-// the zero point is free to carry that fourth term and no sentinel is overloaded.
+// job control. a syscall body sits in a noinline helper so the lvm_ wrapper stays a pure
+// tail-jump (`make vmret`). (wait pid): proc_status, or 256 + the signal for a stop
 love_noinline static word host_waitpid(struct g *g, word arg) {
  intptr_t pid = charmp(arg) ? getcharm(arg) : 0;
  int st;
  pid_t r;
  do r = waitpid((pid_t) pid, &st, WUNTRACED | WNOHANG); while (r < 0 && errno == EINTR);
- if (!r) return ZeroPoint;                                   // alive, neither exited nor stopped
+ if (!r) return ZeroPoint;                                   // still running
  if (r < 0) return love_err(g, errno);
  if (WIFSTOPPED(st)) return putcharm(256 + WSTOPSIG(st));
  return putcharm(proc_status(st)); }
-// (wait pid) parks rather than blocks: a live child re-arms the task for the next tick and
-// yields, so a peer task runs while a foreground job is up -- a poll, one waitpid per
-// millisecond per waiter. nothing is consumed before the park, so the op re-runs whole.
+// parks, polling each ms, so a peer task runs under a foreground job; the op re-runs whole
 static lvm(lvm_waitpid) {
  word r = host_waitpid(g, Sp[0]);
  if (r == ZeroPoint) { g->next_wake_at = love_clock() + 1; love_musttail return Ap(lvm_yield_sw, g); }
@@ -546,9 +461,8 @@ love_noinline static word host_posix_signal(struct g *g, word sigw, word dw) {
 
 LvmWord2(posix_signal)
 
-// a host inlines into its wrapper unless its frame holds a buffer or an address-taken
-// local -- those stay love_noinline, off the frame the musttail has to leave behind
-// a call on one path or two -> () | its errno as a nom | 'badarg
+// a host inlines unless its frame holds a buffer or an address-taken local: those stay
+// noinline, off the frame the musttail leaves
 static love_inline word path1(struct g *g, word pw, int (*f)(char const*)) {
  char const *p = str_c(pw);
  return !p ? badarg(g) : f(p) ? love_err(g, errno) : ZeroPoint; }
@@ -561,20 +475,18 @@ LvmWord1(chdir)
 love_noinline static struct g *host_cwd(struct g *g) {
  char buf[4096];
  if (!getcwd(buf, sizeof buf)) return g->sp[0] = love_err(g, errno), g;
- if (!ok(g = strof(g, buf))) return g;            // oom -> !ok, wrapper ghelps
- return g->sp[1] = g->sp[0], g->sp += 1, g; }           // cwd string over the dummy arg
+ if (!ok(g = strof(g, buf))) return g;
+ return g->sp[1] = g->sp[0], g->sp += 1, g; }           // over the dummy arg
 static lvm(lvm_cwd) {
  LvmCall(g, host_cwd) }
 
-// (selfpath _) -> the path of the running binary, or () where the seat cannot say.
-// no argv[0] fallback: a bare `cmdline` read from baked code folds to the bake's line,
-// and the callers here are baked, so the operand would arrive already wrong.
+// (selfpath _) -> the running binary's path, or (). no argv[0] fallback: baked code folds
+// `cmdline` to the bake's line. a ladder: macos's proc_info, linux's link, netbsd's, then
+// the sysctl doors
 #if defined(__moonlibc__)
-unsigned long __love_selfpath(char *b, unsigned long n);   // moonlibc's: macos's proc_info
+unsigned long __love_selfpath(char *b, unsigned long n);
 #endif
 love_noinline size_t host_selfpath(char *b, size_t n) {
- // a runtime ladder, one binary meeting more than one kernel: macos's proc_info, linux's
- // link, netbsd's spelling of it, then freebsd's sysctl door -- each answers only on its kernel.
 #if defined(__moonlibc__)
  size_t k = __love_selfpath(b, n);
  if (k) return k;
@@ -583,15 +495,12 @@ love_noinline size_t host_selfpath(char *b, size_t n) {
  if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
  if (r > 0) {
   b[r] = 0;
-  // the suffix is the kernel's, not the path's: once our inode is unlinked the link reads
-  // "PATH (deleted)" and every later open or rename names a file that is not there.
+  // an unlinked inode's link reads "PATH (deleted)": the suffix is the kernel's
   size_t dl = sizeof " (deleted)" - 1;
   if ((size_t) r > dl && !memcmp(b + (size_t) r - dl, " (deleted)", dl))
    r -= (ssize_t) dl, b[r] = 0;
   return (size_t) r; }
 #if defined(LvHaveSysctl)
- // ours always links sysctl (ENOSYS off the BSDs); glibc dropped the symbol,
- // and that build is the linux bootstrap scaffold -- /proc answered above.
  int mib[4] = { 1, 14, 12, -1 };                       // freebsd: CTL_KERN KERN_PROC KERN_PROC_PATHNAME(-1)
  size_t sz = n;
  if (!sysctl(mib, 4, b, &sz, NULL, 0) && sz) return strlen(b);
@@ -609,45 +518,21 @@ love_noinline static struct g *host_selfpath_ap(struct g *g) {
 static lvm(lvm_selfpath) {
  LvmCall(g, host_selfpath_ap) }
 
-// --- pipes + redirects (the fd plumbing a shell pipeline needs) ------------------
-// every fd here is close-on-exec: a child gets only what in/out/err, fdmap or dup2 lay.
-// (pipe _)       -> (readfd . writefd) of a fresh pipe (raw fds), or a nom.
-// (openfd path m) -> a raw fd opening `path`: m 0 = read, 1 = write/create/trunc,
-//                   2 = write/create/append, 3 = write/create/EXCL at mode 0600 -- the one
-//                   that fails on an existing name, 4 = write in place (no create, no
-//                   trunc), 5 = a device read and written, never made the controlling
-//                   terminal, nonblocking so a serial line's open does not wait on its
-//                   carrier. a nom on failure, 'badarg on a bad path.
-// (spawnio argv in out err closes pg fg) -> pid | a nom. fork; in the child, the
-//                   job-control dance first -- pg < 0 stays in the parent's pgrp (the
-//                   non-tty lane), pg = 0 leads a fresh group, pg > 0 joins that group
-//                   (pipeline members join their stage-0 leader) -- and fg nonzero hands
-//                   the child's group the terminal (tcsetpgrp on fd 0 before the dup2s,
-//                   TTOU ignored for the handoff; the parent setpgids too, closing the
-//                   race). a job in its own pgrp is what makes ^Z real: POSIX discards a
-//                   stop signal sent to an orphaned group, and the shell's own group is
-//                   that under a nested session. then dup2 `in`/`out`/`err` (each >=0)
-//                   onto 0/1/2, close every fd in `closes` (the pipe ends the child must
-//                   not leak, so a downstream reader sees EOF), reset the job signals,
-//                   execvp. the parent closes its own pipe ends with `close`.
-// (ttyfg pg)     -> give the terminal (fd 0) to process group pg; pg <= 0 takes it back
-//                   to the caller's own group. () | a nom.
-// (setpg pid pg) -> put process pid in group pg; 0 for pid is the caller, 0 for pg is a
-//                   fresh group the process leads. spawnio does this dance in C for a
-//                   child it execs; a shell's forked stage never execs, so it asks here --
-//                   both sides call it, closing the same race spawnio's two calls do.
+// pipes and redirects. (spawnio argv in out err closes pg fg): a job in its own pgrp is what
+// makes ^Z real, since POSIX drops a stop sent to an orphaned group. (setpg pid pg) is that
+// dance for a forked stage that never execs; both sides call it
 static int mk_pipe(struct g *g, void *fds) {
  (void) g;
  int *p = fds;
  if (pipe(p)) return -errno;
  p[0] = fd_up(p[0]), p[1] = fd_up(p[1]);
- fcntl(p[0], F_SETFD, FD_CLOEXEC), fcntl(p[1], F_SETFD, FD_CLOEXEC);   // pipe2's flags: not every seat
+ fcntl(p[0], F_SETFD, FD_CLOEXEC), fcntl(p[1], F_SETFD, FD_CLOEXEC);   // not every libc has pipe2
  return 0; }
 love_noinline static struct g *host_pipe(struct g *g) {
  int fds[2], r = mk_pipe(g, fds);
  if (!ok(g = love_fd_retry(g, &r, mk_pipe, fds))) return g;
  if (r < 0) return g->sp[0] = love_err(g, -r), g;
- if (!ok(g = have(g, Width(struct chain)))) return close(fds[0]), close(fds[1]), g;   // oom -> !ok
+ if (!ok(g = have(g, Width(struct chain)))) return close(fds[0]), close(fds[1]), g;
  struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                 putcharm(fds[0]), putcharm(fds[1]));
  return g->sp[0] = word(w), g; }
@@ -664,7 +549,7 @@ love_noinline static struct g *host_openfd(struct g *g) {
  return push(g, 1, fd < 0 ? love_err(g, -fd) : putcharm(fd)); }
 static lvm(lvm_openfd) {
  if (!str_c(Sp[0])) { Sp[1] = badarg(g); Sp += 1; love_musttail return Next(1); }
- LvmCallp(g, 2, host_openfd) }                  // [path, mode] -> [fd]
+ LvmCallp(g, 2, host_openfd) }
 
 static lvm(lvm_spawnio) {
  int in  = charmp(Sp[1]) ? (int) getcharm(Sp[1]) : -1,
@@ -672,7 +557,7 @@ static lvm(lvm_spawnio) {
      err = charmp(Sp[3]) ? (int) getcharm(Sp[3]) : -1;
  intptr_t pg = charmp(Sp[5]) ? getcharm(Sp[5]) : -1,
           fg = charmp(Sp[6]) ? getcharm(Sp[6]) : 0;
- LvmCallp(g, 7, host_spawnx, in, out, err, -1, 4, pg, fg) }   // argv at sp[0], closes at sp[4]; pid over the 7 args
+ LvmCallp(g, 7, host_spawnx, in, out, err, -1, 4, pg, fg) }   // closes at sp[4]
 
 love_noinline static word host_posix_setpg(struct g *g, word pidw, word pgw) {
  if (!charmp(pidw) || !charmp(pgw)) return badarg(g);
@@ -687,7 +572,7 @@ love_noinline static word host_posix_ttyfg(struct g *g, word pgw) {
 
 LvmWord1(posix_ttyfg)
 
-// (ttypg fd) -> the group that owns the terminal on fd, ttyfg's other half
+// (ttypg fd): the terminal's owning group
 love_noinline static word host_posix_ttypg(struct g *g, word x) {
  intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);
  if (fd < 0) return badarg(g);
@@ -696,32 +581,23 @@ love_noinline static word host_posix_ttypg(struct g *g, word x) {
 
 LvmWord1(posix_ttypg)
 
-// (fdopen fd) -> a port over a raw fd -- pipe/openfd's other half. 'badarg on a non-charm
-// or negative fd. the port's GC finalizer owns the fd from here: do not also close it.
+// (fdopen fd): the port's finalizer owns the fd from here; do not also close it
 static lvm(lvm_fdopen) {
  intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : -1;
  if (fd < 0) love_musttail return Answer(badarg(g));
- LvmCallp(g, 1, io_alloc, (int) fd) }   // port over the fd arg -- alloc pushed it
+ LvmCallp(g, 1, io_alloc, (int) fd) }
 
-// (spawnmap argv fdmap closes pg fg) -> pid | a nom. spawnio with `fdmap`, a list of
-// (childfd . srcfd) pairs applied in order in the child -- dup2(srcfd, childfd) for a
-// charm srcfd >= 0 or a port's fd, spawn_open for a (path mode msg) srcfd, close(childfd) for () --
-// each srcfd reading the fd table as remapped so far, the POSIX left-to-right redirection
-// law (`>f 2>&1` is ((1 . f) (2 . 1)) and the second entry sees the first's work). pg/fg
-// and closes ride unchanged from spawnio.
+// (spawnmap argv fdmap closes pg fg): fdmap applies in order, each entry seeing the table as
+// remapped so far -- POSIX's left-to-right law (`>f 2>&1` is ((1 . f) (2 . 1)))
 static lvm(lvm_spawnmap) {
  intptr_t pg = charmp(Sp[3]) ? getcharm(Sp[3]) : -1,
           fg = charmp(Sp[4]) ? getcharm(Sp[4]) : 0;
- LvmCallp(g, 5, host_spawnx, -1, -1, -1, 1, 2, pg, fg) }   // argv at sp[0], fdmap sp[1], closes sp[2]; pid over the 5 args
+ LvmCallp(g, 5, host_spawnx, -1, -1, -1, 1, 2, pg, fg) }   // fdmap sp[1], closes sp[2]
 
-// (getuid _) -> the real uid, a charm; always succeeds. (getgid _) -> the real gid, its
-// pair -- `id` owes the primary group as a fact, not as the /etc/passwd row's guess.
 static lvm(lvm_getuid) { Sp[0] = putcharm(getuid()); love_musttail return Next(1); }
 static lvm(lvm_getgid) { Sp[0] = putcharm(getgid()); love_musttail return Next(1); }
 
-// (fork _) -> child pid | 0 in the child | a nom. fork without exec, the shell's subshell:
-// the child evals a subtree and quits, and must never return to the reader loop. the
-// discipline is all in the caller -- flush out/err before, child = eval+quit.
+// (fork _): the shell's subshell; the child must never return to the reader loop
 static love_inline word host_fork(struct g *g) {
  fflush(NULL);
  stdin_exact(g);
@@ -730,9 +606,7 @@ static love_inline word host_fork(struct g *g) {
  return pid < 0 ? love_err(g, errno) : putcharm(pid); }
 static lvm(lvm_fork) { Sp[0] = host_fork(g); love_musttail return Next(1); }
 
-// (dup2 src dst) -> () | a nom | 'badarg. the self-redirect.
-// (dup fd) -> a fresh fd duplicating fd (>= 10, clear of the 0-9 a shell hands its user,
-// close-on-exec) | a nom. the save half.
+// (dup fd) lands at 10 and up, clear of the shell user's 0-9
 static love_inline word host_dup2(struct g *g, word sw, word dw) {
  return !charmp(sw) || !charmp(dw) ? badarg(g) :
         (sw == dw ? fcntl((int) getcharm(dw), F_SETFD, 0)       // the laid fd rides an exec
@@ -753,12 +627,8 @@ love_noinline static struct g *host_dup(struct g *g) {
 
 static lvm(lvm_dup) { LvmCall(g, host_dup) }
 
-// --- pid1 bringup: mount the early filesystems + cgroup dirs ----------------------
-// (mkdir path mode) -> mkdir(2). () | a nom | 'badarg misuse. mode is octal (493 = 0755).
-// (mount src tgt type) -> mount(2), flags 0 / no data (enough for proc/sysfs/tmpfs).
-//   () | a nom | 'badarg misuse. needs privilege: run as pid1/root, or after (newns 0).
-// (newns _) -> unshare a private user+mount namespace and selfmap to root-in-ns, so
-//   (mount ...) works unprivileged. () | a nom. a real pid1 skips this, being root.
+// pid1 bringup. (newns _) unshares a user+mount namespace as root-in-ns, so mount works
+// unprivileged
 static lvm(lvm_mkdir) {
  char const *p = str_c(Sp[0]);
  if (!p) { Sp[1] = badarg(g); Sp += 1; love_musttail return Next(1); }
@@ -772,51 +642,40 @@ static love_inline word host_mount(struct g *g, word a, word b, word c) {
  if (!src || !tgt || !typ) return badarg(g);
  return mount(src, tgt, typ, 0, NULL) ? love_err(g, errno) : ZeroPoint; }
 static lvm(lvm_mount) { Sp[2] = host_mount(g, Sp[0], Sp[1], Sp[2]); Sp += 2; love_musttail return Next(1); }
-// (mountf src tgt type flags) -> () | a nom. the same call carrying linux's MS_ word (ro,
-// bind, remount, the nosuid family). it stands beside mount because a nif's arity is fixed
-// and src/apps/init/boot.l calls the three-argument one. the data argument stays NULL, so an
-// -o that is filesystem text rather than a flag (tmpfs's size=) is refused by name.
+// (mountf src tgt type flags): mount with linux's MS_ word, beside it since a nif's arity is
+// fixed (init/boot.l calls mount). data stays NULL
 static love_inline word host_mountf(struct g *g, word a, word b, word c, word f) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
  if (!src || !tgt || !typ) return badarg(g);
  return mount(src, tgt, typ, (unsigned long) getcharm(f), NULL) ? love_err(g, errno) : ZeroPoint; }
 static lvm(lvm_mountf) {
   Sp[3] = host_mountf(g, Sp[0], Sp[1], Sp[2], Sp[3]); Sp += 3; love_musttail return Next(1); }
-// (umount tgt) -> () | a nom. linux's umount2 at flags 0; freebsd spells it unmount with
-// another shape, so it rides mount's guard.
 static lvm(lvm_umount) {
   char const *t = str_c(Sp[0]);
   Sp[0] = !t ? badarg(g) : (umount(t) ? love_err(g, errno) : ZeroPoint);
   love_musttail return Next(1); }
-// (reboot how) -> a nom, or no return: 0 restarts, 1 powers off, 2 halts. pid 1's last word;
-// the kernel writes nothing back first, so the caller syncs.
+// (reboot how): 0 restarts, 1 powers off, 2 halts; the caller syncs first
 static lvm(lvm_reboot) {
   intptr_t h = charmp(Sp[0]) ? getcharm(Sp[0]) : -1;
   int cmd = h == 0 ? (int) RB_AUTOBOOT : h == 1 ? (int) RB_POWER_OFF : h == 2 ? (int) RB_HALT_SYSTEM : 0;
   Sp[0] = !cmd ? badarg(g) : (reboot(cmd), love_err(g, errno));
   love_musttail return Next(1); }
 #else
-// the call is there; our mount speaks a shape this kernel does not answer.
 static lvm(lvm_reboot) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 static lvm(lvm_mount) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
 static lvm(lvm_mountf) { Sp[3] = love_err(g, ENOSYS); Sp += 3; love_musttail return Next(1); }
 static lvm(lvm_umount) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 #endif
 
-// (chroot dir) -> () | a nom. needs privilege and says so through errno like any other
-// row -- 'eperm is an answer, not a crash.
 static lvm(lvm_chroot) {
   char const *p = str_c(Sp[0]);
   Sp[0] = !p ? badarg(g) : (chroot(p) ? love_err(g, errno) : ZeroPoint);
   love_musttail return Next(1); }
 
-// (sync _) -> (). sync(2) answers nothing and cannot fail -- the kernel schedules
-// the writeback and returns -- so this is the one effect op here with no errno lane.
+// sync(2) cannot fail
 static lvm(lvm_sync) { sync(); Sp[0] = ZeroPoint; love_musttail return Next(1); }
 
-// (mknod path mode dev) -> () | a nom. mode carries the type bits (S_IFIFO, S_IFCHR,
-// S_IFBLK) as well as the permissions, as mknod(2) takes them; dev is the encoded device
-// number, ignored for a fifo. mkfifo is this call with S_IFIFO and dev 0, not a second nif.
+// (mknod path mode dev): mode carries the type bits; mkfifo is S_IFIFO with dev 0
 static lvm(lvm_mknod) {
   char const *p = str_c(Sp[0]);
   intptr_t mode = getcharm(Sp[1]), dev = getcharm(Sp[2]);
@@ -842,39 +701,13 @@ static lvm(lvm_newns) {
  Sp[0] = ZeroPoint;
  love_musttail return Next(1); }
 #else
-// a linux mechanism; elsewhere the name stands and refuses.
 static lvm(lvm_newns) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 #endif
 
-// --- the general POSIX fs surface -- these serve any program, not just the supervisor,
-// so their C symbols wear the posix_ prefix; the love names stay the plain POSIX words.
-// (stat path|fd) -> (size mtime mode ns uid gid nlink blocks ino atime ctime dev rdev
-//                   blksize) | a nom ('enoent absent, 'eacces unreadable, ..) | 'badarg.
-//                   a charm is an open fd and the answer is fstat's, the tuple the same.
-//                   size in bytes, mtime in milliseconds (the (clock t) scale), mode the
-//                   raw st_mode charm (love reads the S_IFMT bits itself: (& mode 61440)
-//                   is 32768 file, 16384 dir, 40960 link); ns is that mtime whole in
-//                   nanoseconds, one charm to year 2262, so two writes in one millisecond
-//                   still order (cook). blocks is st_blocks, 512-byte units -- disk usage
-//                   and not the size, so a sparse file says less than it is. atime and
-//                   ctime ride in nanoseconds; dev is the filesystem the file is on and
-//                   rdev the device a node names (0 for everything else), both the
-//                   kernel's packed word, which love splits into major and minor itself;
-//                   blksize is the io block a write wants to be a multiple of.
-//                   the tail is append-only and a reader asks `tally` before it reads
-//                   past ns: the kernel's own stat (src/inle/kmain.c) answers the first four.
-// (lstat path)   -> the same tuple, of the link itself where the path names one -- du and
-//                   `stat` owe the link's own blocks and mode. on a charm it is `stat`.
-// (readdir path) -> the entry names, a list of strings ("." and ".." dropped); an empty
-//                   directory is (), told from every failure by kind: a nom | 'badarg.
-//                   no order promised (readdir order, prepended) -- sort in love.
-// (unlink path)  -> () ok | a nom | 'badarg misuse.
-// (lseek fd off whence) -> the new offset | a nom | 'badarg misuse. raw fds, the openfd
-//                   lane -- not ports (a port's read buffer would desync under a seek).
-//                   whence: 0 SET, 1 CUR, 2 END, a stranger 'einval and not a quiet SET.
-// /love's answer in stat's shape: 1 the path is the tree's (mode 0 where it is absent), 0 the
-// OS's. read-only and this process's own; a directory wears its newest row's date.
-static int lovefs_stat(char const *p, struct stat *st) {
+// the fs surface. (stat path|fd) -> (size mtime mode ns uid gid nlink blocks ino atime ctime
+// dev rdev blksize): mtime in ms, ns/atime/ctime in ns, blocks in 512s, mode raw st_mode.
+// the tail is append-only; inle's stat (src/inle/kmain.c) answers only the first four
+static int lovefs_stat(char const *p, struct stat *st) {   // 1 the tree's (mode 0 absent), 0 the OS's
  char c[256];
  uintptr_t cn;
  struct vfs_st vs;
@@ -935,15 +768,8 @@ static lvm(lvm_posix_lstat) {
 static lvm(lvm_posix_stat) {
  LvmCall(g, host_posix_stat) }
 
-// (statfs path) -> (bsize blocks bfree bavail files ffree frsize fsid0 fsid1 namelen type)
-//                  | a nom | 'badarg.
-//                  what the filesystem holding the path has, in blocks of frsize (bsize
-//                  where a kernel leaves frsize at 0). bavail is what an ordinary user may
-//                  take and sits under bfree by the reserve root keeps. files/ffree are
-//                  the inode counts, 0 where the filesystem has none. the fsid's two words,
-//                  the longest name and the type's magic ride after, for stat -f; the
-//                  tail is append-only. linux's shape alone:
-//                  the BSDs spell the call over another struct, so a BSD hears 'enosys.
+// (statfs path) -> (bsize blocks bfree bavail files ffree frsize fsid0 fsid1 namelen type),
+// append-only; linux's struct alone, so a BSD hears 'enosys
 #if defined(LvHaveStatfs)
 love_noinline static struct g *host_posix_statfs(struct g *g) {
  char const *p = str_c(g->sp[0]);
@@ -973,11 +799,7 @@ love_noinline static struct g *host_posix_statfs(struct g *g) {
 static lvm(lvm_posix_statfs) {
  LvmCall(g, host_posix_statfs) }
 
-// (birth path follow) -> the file's creation time in nanoseconds | () where the filesystem
-//                  keeps none | a nom | 'badarg. no struct stat here has a seat for one,
-//                  so __love_birth reads the BSDs' own stat and linux's statx. its own call
-//                  and not a fifteenth seat in the stat tuple, which du and ls walk a
-//                  million times a tree.
+// (birth path follow): creation time in ns | (); its own call, off the stat tuple du and ls walk
 #if defined(__moonlibc__)
 love_noinline static word host_posix_birth(struct g *g, word pw, word fw) {
  char const *p = str_c(pw);
@@ -989,12 +811,10 @@ love_noinline static word host_posix_birth(struct g *g, word pw, word fw) {
       : putcharm((intptr_t) b.tv_sec * 1000000000 + b.tv_nsec); }
 LvmWord2(posix_birth)
 #else
-// moonlibc is where the three kernels are known; love0 is not it. the name stands, refusing.
 static lvm(lvm_posix_birth) { Sp[1] = love_err(g, ENOSYS); love_musttail return Nextp(1, 1); }
 #endif
 
-// (rusage who) -> (user sys), cpu microseconds. who: 0 this process, -1 the children it
-//                 has already reaped, which is how `time` differences a spawn.
+// (rusage who) -> (user sys) in us; who 0 self, -1 the reaped children
 love_noinline static struct g *host_posix_rusage(struct g *g) {
  word x = g->sp[0];
  if (!charmp(x)) return g->sp[0] = badarg(g), g;
@@ -1010,14 +830,13 @@ love_noinline static struct g *host_posix_rusage(struct g *g) {
 static lvm(lvm_posix_rusage) {
  LvmCall(g, host_posix_rusage) }
 
-// /love's listing: each name under the directory once, as the vfs walks it
 love_noinline static struct g *lovefs_readdir(struct g *g, char const *c, uintptr_t cn) {
  g->sp[0] = ZeroPoint;
  char const *q;
  uintptr_t cl;
  bool dir;
  for (int cur = 0; lovefs_child(c, cn, &cur, &q, &cl, &dir) >= 0; ) {
-  if (!ok(g = str0(g, cl))) return g;                     // pushes: name over acc
+  if (!ok(g = str0(g, cl))) return g;
   memcpy(txt(g->sp[0]), q, cl);
   if (!ok(g = have(g, Width(struct chain)))) return g;
   struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
@@ -1036,16 +855,16 @@ static love_inline struct g *host_posix_readdir(struct g *g) {
    if (i != -1) return g->sp[0] = love_err(g, i == -2 ? ENOENT : ENOTDIR), g; }
  DIR *d = opendir(p);
  if (!d) return g->sp[0] = love_err(g, errno), g;
- g->sp[0] = ZeroPoint;                                        // the accumulator, over the path
+ g->sp[0] = ZeroPoint;                                        // the accumulator
  for (struct dirent *e; (e = readdir(d));) {
   if (e->d_name[0] == '.' && (!e->d_name[1] || (e->d_name[1] == '.' && !e->d_name[2])))
-   continue;                                                  // "." and ".."
-  if (!ok(g = strof(g, e->d_name))) return closedir(d), g;   // pushes: name over acc
+   continue;
+  if (!ok(g = strof(g, e->d_name))) return closedir(d), g;
   if (!ok(g = have(g, Width(struct chain)))) return closedir(d), g;
   struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
-                                 g->sp[0], g->sp[1]);         // (name . acc), slots re-read post-GC
+                                 g->sp[0], g->sp[1]);         // slots re-read past the GC
   g->sp[1] = word(w);
-  g->sp += 1; }                                               // pop the name
+  g->sp += 1; }
  closedir(d);
  return g; }
 
@@ -1056,14 +875,13 @@ static love_inline word host_posix_unlink(struct g *g, word p) { return path1(g,
 
 LvmWord1(posix_unlink)
 
-// (fnmatch pat s) -> 1 | 0: the libc's pattern law, no flags; a nul inside either never matches
+// (fnmatch pat s): no flags; an inner NUL never matches
 static love_inline word host_fnmatch(struct g *g, word p, word t) {
  (void) g; char const *a = str_c(p), *b = str_c(t);
  return putcharm(a && b && !fnmatch(a, b, 0)); }
 LvmWord2(fnmatch)
 
-// (regcomp p fl) -> (b n): p's program b, a string to keep, and its group count | -e, regcomp's
-// error e. moonlibc's program is one block that holds no pointer, so b is a copy of it; another
+// (regcomp p fl) -> (b n) | -e. moonlibc's program holds no pointer, so b copies it; another
 // libc's b is fl and p, compiled again at each regexec
 static love_inline struct g *host_regcomp(struct g *g) {
  char const *p = str_c(g->sp[0]);
@@ -1091,9 +909,8 @@ static love_inline struct g *host_regcomp(struct g *g) {
 static lvm(lvm_regcomp) {
  LvmCallp(g, 1, host_regcomp) }
 
-// (regexec b s i ef) -> the leftmost-longest match in s at or after i, as (so eo ..) for it and
-// its groups to the last of the first nine that took part, -1 for one that did not | () | -e.
-// ef: regexec's flags; what lies before i is still the text
+// (regexec b s i ef) -> (so eo ..) to the last of nine groups that took part, -1 for one that
+// did not | () | -e; what lies before i is still the text
 static love_inline struct g *host_regexec(struct g *g) {
  word b = g->sp[0], s = g->sp[1], i = g->sp[2], e = g->sp[3];
  if (!strp(b) || !len(b) || !strp(s) || !charmp(i) || !charmp(e) || getcharm(i) < 0 || getcharm(i) > (intptr_t) len(s))
@@ -1119,9 +936,7 @@ static love_inline struct g *host_regexec(struct g *g) {
 static lvm(lvm_regexec) {
  LvmCallp(g, 3, host_regexec) }
 
-// (setenv name val) -> () | a nom | 'badarg misuse; a non-string val unsets the name.
-// (environ _)       -> the environment as a list of "name=value" strings (the raw POSIX
-//                      shape -- split at the first '=' in love; no order promised).
+// (setenv name val): a non-string val unsets
 static love_inline word host_posix_setenv(struct g *g, word nw, word vw) {
  char const *n = str_c(nw), *v = str_c(vw);
  if (!n || (!v && strp(vw))) return badarg(g);
@@ -1131,9 +946,9 @@ LvmWord2(posix_setenv)
 
 extern char **environ;
 static love_inline struct g *host_posix_environ(struct g *g) {
- g->sp[0] = ZeroPoint;                                        // the accumulator, over the dummy arg
+ g->sp[0] = ZeroPoint;                                        // the accumulator
  for (char **e = environ; e && *e; e++) {
-  if (!ok(g = strof(g, *e))) return g;                  // pushes: entry over acc
+  if (!ok(g = strof(g, *e))) return g;
   if (!ok(g = have(g, Width(struct chain)))) return g;
   struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                  g->sp[0], g->sp[1]);
@@ -1143,12 +958,12 @@ static love_inline struct g *host_posix_environ(struct g *g) {
 static lvm(lvm_posix_environ) {
  LvmCall(g, host_posix_environ) }
 
-// (uname _) -> (sysname nodename release version machine), uname(2)'s five, or a nom
+// (uname _) -> (sysname nodename release version machine)
 love_noinline static struct g *host_posix_uname(struct g *g) {
  struct utsname u;
  if (uname(&u)) return g->sp[0] = love_err(g, errno), g;
  char const *f[] = { u.machine, u.version, u.release, u.nodename, u.sysname };   // last first
- g->sp[0] = ZeroPoint;                                        // the accumulator, over the dummy arg
+ g->sp[0] = ZeroPoint;
  for (int i = 0; i < 5; i++) {
   if (!ok(g = strof(g, f[i]))) return g;
   if (!ok(g = have(g, Width(struct chain)))) return g;
@@ -1159,8 +974,7 @@ love_noinline static struct g *host_posix_uname(struct g *g) {
 static lvm(lvm_posix_uname) {
  LvmCall(g, host_posix_uname) }
 
-// (sysconf _) -> (pagesize cpus-conf cpus-online phys-pages avphys-pages): sysconf(3)'s
-// answers, each a number or () where the kernel gives none
+// (sysconf _) -> (pagesize cpus-conf cpus-online phys-pages avphys-pages), () where none
 love_noinline static struct g *host_posix_sysconf(struct g *g) {
  int const k[] = { _SC_AVPHYS_PAGES, _SC_PHYS_PAGES, _SC_NPROCESSORS_ONLN,
                    _SC_NPROCESSORS_CONF, _SC_PAGESIZE };                   // last first
@@ -1178,20 +992,15 @@ static lvm(lvm_posix_sysconf) {
 static love_inline word host_posix_lseek(struct g *g, word fdw, word offw, word whw) {
  if (!charmp(fdw) || !charmp(offw) || !charmp(whw)) return badarg(g);
  intptr_t w = getcharm(whw);
- // the three by name, a platform's numbers being its own; anything else goes down as -1,
- // so the row answers 'einval rather than seeking to 0 and calling it success.
+ // raw fds only: a port's buffer would desync. a stranger whence is -1, so 'einval, not SET
  int wh = w == 0 ? SEEK_SET : w == 1 ? SEEK_CUR : w == 2 ? SEEK_END : -1;
  off_t r = lseek((int) getcharm(fdw), (off_t) getcharm(offw), wh);
  return r < 0 ? love_err(g, errno) : putcharm((intptr_t) r); }
 
 LvmWord3(posix_lseek)
 
-// not every row here is the module's: the ones registered with NULL stay on the book,
-// because a seat shadows each with a global of its own (src/inle/kmain.c's bindings and no-op
-// roster, and the four src/love/main.c's seat-doors tablet swaps). a global name reads the
-// live book (src/love/ev.c's lvm_index), which is how the shadow is reached, so a module
-// splice above the base would hide it for good and the crew would call the host's door on
-// a seat with no host. the line is syscall vs seat door, and only the seats can say which.
+// a NULL row stays on the book: a seat shadows it with a global (src/inle/kmain.c, main.c's
+// seat-doors), reached through the live book, which a module splice would hide for good
 LvDef("spawn", spawn, 1, NULL);
 LvDef("glean", reapany, 1, NULL);
 LvDef("sigfd", sigfd, 1, "posix");
@@ -1241,20 +1050,8 @@ LvDef("ttypg", posix_ttypg, 1, NULL);
 LvDef("setpg", posix_setpg, 2, NULL);
 LvDef("setenv", posix_setenv, 2, NULL);
 LvDef("environ", posix_environ, 1, NULL);
-// --- the rest of the fs surface: the effect ops the fs tools ride (mv, ln, touch,
-// chmod, chown -- src/apps/kore/fs.l and friends) -------------------------------------
-//   (rename old new)      -> () | a nom | 'badarg  (mv's heart; same filesystem)
-//   (symlink target path) -> () | a nom | 'badarg  (path becomes a link to target)
-//   (readlink path)       -> the target string | a nom | 'badarg
-//   (chmod path mode)     -> () | a nom | 'badarg  (mode the raw permission charm)
-//   (chown path uid gid)  -> () | a nom | 'badarg  (-1 leaves that id alone)
-//   (lchown path uid gid) -> the same, of a link itself and not what it names
-//   (utime path ms)       -> () | a nom | 'badarg  (mtime and atime on the stat
-//                            scale, milliseconds; a non-charm ms reads "now")
-//   (umask mask)          -> the previous mask | 'badarg misuse (always succeeds)
-//   (rmdir path)          -> () | a nom | 'badarg  (the empty-directory unlink)
-//   (hardlink old new)    -> () | a nom | 'badarg  (link(2); `link` the word is the
-//                            chain ctor, so the nif wears the long form)
+// the fs tools' effect ops. (utime path ms): a non-charm ms is now. hardlink is link(2),
+// `link` being the chain ctor
 static love_inline word host_posix_rename(struct g *g, word o, word n) { return path2(g, o, n, rename); }
 LvmWord2(posix_rename)
 
@@ -1271,7 +1068,7 @@ love_noinline static struct g *host_posix_readlink(struct g *g) {
  ssize_t n = readlink(p, b, sizeof b - 1);
  if (n < 0) return g->sp[0] = love_err(g, errno), g;
  b[n] = 0;
- if (!ok(g = strof(g, b))) return g;                    // pushes: target over path
+ if (!ok(g = strof(g, b))) return g;
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 static lvm(lvm_posix_readlink) {
  LvmCall(g, host_posix_readlink) }
@@ -1312,12 +1109,8 @@ LvmWord1(posix_rmdir)
 static love_inline word host_posix_hardlink(struct g *g, word o, word n) { return path2(g, o, n, link); }
 LvmWord2(posix_hardlink)
 
-// (copyfile src dst) -> bytes copied | a nom ('badarg misuse). src's bytes into dst
-// without passing through the heap. bytes only -- mode is the caller's to set.
-// a plain read/write loop: copy_file_range is linux-only and may short-copy or refuse
-// with EXDEV/EINVAL, so a correct use needs this loop under it anyway.
-// the buffer lives in the helper, not the lvm_ -- 64K owed at a tail turns the jump into
-// a ret and grows the stack every dispatch (love.h's no-scratch rule).
+// (copyfile src dst) -> bytes copied: off the heap, bytes only. copy_file_range would still
+// need this loop under it
 love_noinline static word host_posix_copyfile(struct g *g, word sw, word dw) {
  char const *s = str_c(sw), *d = str_c(dw);
  if (!s || !d) return badarg(g);
@@ -1325,7 +1118,7 @@ love_noinline static word host_posix_copyfile(struct g *g, word sw, word dw) {
  if (in < 0) return love_err(g, errno);
  int out = open(d, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
  if (out < 0) { int e = errno; close(in); return love_err(g, e); }
- char buf[1 << 15];                               // the helper's own frame, never a global
+ char buf[1 << 15];                               // in the helper, never the lvm_ (love.h)
  intptr_t done = 0, err = 0;
  for (;;) {
   ssize_t n = read(in, buf, sizeof buf);
@@ -1341,8 +1134,7 @@ shut:
  return err ? love_err(g, (int) err) : putcharm(done); }
 LvmWord2(posix_copyfile)
 
-// (rlimit res which) -> a bound as a charm, -1 unlimited: res by the index below, which 0 the
-// soft, 1 the hard. (setrlimit res soft hard) -> () | a nom: -1 unlimited, () keeps that bound
+// (rlimit res which): which 0 soft, 1 hard; -1 unlimited. (setrlimit res soft hard): () keeps one
 static love_inline int host_rlres(intptr_t i) {
  switch (i) { case 0: return RLIMIT_CPU;   case 1: return RLIMIT_FSIZE; case 2: return RLIMIT_DATA;
               case 3: return RLIMIT_STACK; case 4: return RLIMIT_CORE;  case 5: return RLIMIT_NPROC;
@@ -1369,8 +1161,7 @@ love_noinline static word host_posix_setrlimit(struct g *g, word rw, word sw, wo
 static lvm(lvm_posix_setrlimit) {
  Sp[2] = host_posix_setrlimit(g, Sp[0], Sp[1], Sp[2]); Sp += 2; love_musttail return Next(1); }
 
-// (prio which who) -> the nice value | a nom; (setprio which who n) -> () | a nom. which 0
-// a process, 1 a process group, 2 a user; who 0 the caller's own.
+// (prio which who): which 0 process, 1 group, 2 user; who 0 the caller
 static love_inline word host_posix_prio(struct g *g, word ww, word hw) {
  if (!charmp(ww) || !charmp(hw)) return badarg(g);
  errno = 0;
@@ -1383,8 +1174,7 @@ static love_inline word host_posix_setprio(struct g *g, word ww, word hw, word n
         ? love_err(g, errno) : ZeroPoint; }
 LvmWord3(posix_setprio)
 
-// (truncate path n make) -> () | a nom | 'badarg: the file cut or stretched to n bytes,
-// made first (0666 less the umask) when `make` is truthy, or a charm fd instead of a path.
+// (truncate path|fd n make): made first when make is truthy
 love_noinline static word host_posix_truncate(struct g *g, word pw, word nw, word mw) {
  if (!charmp(nw) || getcharm(nw) < 0) return badarg(g);
  if (charmp(pw)) return ftruncate((int) getcharm(pw), (off_t) getcharm(nw)) ? love_err(g, errno) : ZeroPoint;
@@ -1397,8 +1187,7 @@ love_noinline static word host_posix_truncate(struct g *g, word pw, word nw, wor
  return e ? love_err(g, e) : ZeroPoint; }
 LvmWord3(posix_truncate)
 
-// (setsid ctty) -> the new session's id | a nom: the caller leads a fresh session and
-// group, and takes fd 0's terminal as its controlling one when ctty is truthy
+// (setsid ctty): a truthy ctty takes fd 0's terminal as the controlling one
 static love_noinline word host_posix_setsid(struct g *g, word cw) {
  pid_t s = setsid();
  if (s < 0) return love_err(g, errno);
@@ -1406,8 +1195,7 @@ static love_noinline word host_posix_setsid(struct g *g, word cw) {
  return putcharm(s); }
 LvmWord1(posix_setsid)
 
-// (fsync path data) -> () | a nom | 'badarg: what the kernel holds of path's contents
-// written down, fdatasync's lesser promise when data is truthy
+// (fsync path data): fdatasync when data is truthy
 love_noinline static word host_posix_fsync(struct g *g, word pw, word dw) {
  char const *p = str_c(pw);
  if (!p) return badarg(g);
@@ -1441,35 +1229,14 @@ LvDef("fsync", posix_fsync, 2, "posix");
 LvDef("rmdir", posix_rmdir, 1, "posix");
 LvDef("hardlink", posix_hardlink, 2, NULL);
 LvDef("copyfile", posix_copyfile, 2, "posix");
-// --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
-// spawn a program on a fresh pseudo-terminal, reap it without blocking, signal it, and
-// read/write its window size. (tether argv) is hark (main.c) with the stdout pipe swapped
-// for a pty pair: the same argv marshal + close-on-exec errno-pipe handshake, but the
-// child's 0/1/2 become the pty slave and the parent keeps the master as a heap port.
-//
-//   (tether argv)      -> (pid . master-port) | a nom ('badarg misuse)
-//   (tetherenv argv env) the same, each "K=V" of env set in the child over what it inherits
-//   (reap pid)         -> (status)   exited (a pair, truthy even at status 0)
-//                       | ()         still running
-//                       | a nom      waitpid error (e.g. 'echild)
-//   (kill pid sig)     -> () ok | a nom  (caller passes (0 - pid) for the group)
-//   (tty fd)           -> (rows . cols) of the terminal on fd, or a nom
-//   (settty p r c)     -> () ok | a nom  push a size onto a master port
-//
-// (tty) names the fd it asks about: a charm (0 in, 1 out, 2 err) or a port over one. size
-// and isatty are one question -- TIOCGWINSZ answers only for a terminal -- so a pair means
-// one and 'enotty anything else. a nom is truthy, so the caller's test is `two?`, not `?`.
-
-// called with g Packed; argv is the sole GC root at g->sp[0]. leaves exactly one net value
-// above argv on every non-oom path; a not-ok g only on oom, which lvm_tether ghelps.
+// the pty wrapper. (tether argv) -> (pid . master-port): hark (main.c) with a pty pair for
+// the stdout pipe; the child's 0/1/2 are the slave. tetherenv sets env's K=V in the child
 love_noinline static struct g *host_tether(struct g *g, int envat) {
-  // no l allocation between the marshal and the fork, or the uncommitted gap moves
+  // no allocation between the marshal and the fork, or the gap moves
  char **cav, **cev;
  g = argv_env_marshal(g, &cav, envat, &cev);
- if (!cav) return ok(g) ? push(g, 1, badarg(g)) : g;   // misuse, or oom
-
-  // open the master, unlock the slave, copy the slave path (ptsname's buffer is
-  // static -- snapshot it for the child, which inherits the snapshot across fork).
+ if (!cav) return ok(g) ? push(g, 1, badarg(g)) : g;
+  // ptsname's buffer is static: snapshot it
  int mfd = posix_openpt(O_RDWR | O_NOCTTY);
  if (mfd < 0) return push(g, 1, love_err(g, errno));
  fcntl(mfd, F_SETFD, FD_CLOEXEC);                  // a later child may not read this one
@@ -1479,25 +1246,24 @@ love_noinline static struct g *host_tether(struct g *g, int envat) {
   if (!p || strlen(p) >= sizeof sname) { close(mfd); return push(g, 1, love_err(g, p ? ENAMETOOLONG : errno)); }
   memcpy(sname, p, strlen(p) + 1); }
 
-  // close-on-exec errno pipe: child writes its setup/exec errno here; a clean
-  // exec closes the write end -> parent reads EOF (childerr stays 0).
+  // the child's errno comes back here; a clean exec closes it, so EOF
  int ep[2];
  if (pipe(ep)) { int e = errno; close(mfd); return push(g, 1, love_err(g, e)); }
  fcntl(ep[0], F_SETFD, FD_CLOEXEC), fcntl(ep[1], F_SETFD, FD_CLOEXEC);
 
  pid_t pid = fork();
  if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return push(g, 1, love_err(g, e)); }
- if (!pid) {                                       // child
+ if (!pid) {
   close(mfd); close(ep[0]);
-  sig_dfl_job(g->child_ign);                      // the ignores must not ride the exec
+  sig_dfl_job(g->child_ign);
   int e;
   if (setsid() < 0) { e = errno; goto childfail; }
   int sfd = open(sname, O_RDWR);                  // opening a tty in a fresh session claims it as ctty
   if (sfd < 0) { e = errno; goto childfail; }
-  ioctl(sfd, TIOCSCTTY, 0);                       // belt-and-braces; harmless if already ctty
+  ioctl(sfd, TIOCSCTTY, 0);                       // harmless if already ctty
   dup2(sfd, 0); dup2(sfd, 1); dup2(sfd, 2);
   if (sfd > 2) close(sfd);
-  for (char **v = cev; v && *v; v++) {           // the gap is this child's own copy: split K=V there
+  for (char **v = cev; v && *v; v++) {           // the gap is this child's own copy
    char *eq = strchr(*v, '=');
    *eq = 0;
    if (setenv(*v, eq + 1, 1)) { e = errno; goto childfail; } }
@@ -1507,49 +1273,45 @@ love_noinline static struct g *host_tether(struct g *g, int envat) {
   { ssize_t w = write(ep[1], &e, sizeof e); (void) w; }
   _exit(127); }
 
- close(ep[1]);                                     // parent
+ close(ep[1]);
  int childerr = 0; ssize_t r;
  do r = read(ep[0], &childerr, sizeof childerr); while (r < 0 && errno == EINTR);
  close(ep[0]);
- if (childerr) {                                   // setup/exec failed in the child
+ if (childerr) {
   close(mfd);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
   return push(g, 1, love_err(g, childerr)); }
 
-  // success: master -> heap port (pushes it to sp[0]; argv slides to sp[1]).
  struct g *io = io_alloc(g, mfd);
- if (!ok(io)) {                                 // oom: tear the child down, then ghelp
+ if (!ok(io)) {                                 // oom: tear the child down
   kill(pid, SIGKILL);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
   close(mfd);
   return io; }
  g = io;
- if (!ok(g = have(g, Width(struct chain)))) return g;   // port at sp[0] kept as a root
+ if (!ok(g = have(g, Width(struct chain)))) return g;
  struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                  putcharm(pid), g->sp[0]);
- g->sp[0] = word(w);                               // [(pid . port), argv]
+ g->sp[0] = word(w);
  return g; }
 
 static lvm(lvm_tether) {
- LvmCallp(g, 1, host_tether, -1) }   // result over argv
+ LvmCallp(g, 1, host_tether, -1) }
 static lvm(lvm_tetherenv) {
- LvmCallp(g, 2, host_tether, 1) }    // argv at sp[0], env at sp[1]; result over both
+ LvmCallp(g, 2, host_tether, 1) }    // env at sp[1]
 
-// (reap pid): non-blocking wait. a reaped child's decoded status comes back as a
-// one-element list, so "exited 0" (a pair) and "still running" (()) do not collapse.
+// (reap pid) -> (status) | (): a list, so exited 0 is truthy apart from still running
 static lvm(lvm_reap) {
  LvmCall(g, host_reap, (pid_t) (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)) }
 
-// (kill pid sig): POSIX kill(2), a negative pid signalling the process group. () | a nom |
-// 'badarg -- a non-charm pid may not fold to 0, which would signal the caller's own group.
+// a non-charm pid may not fold to 0, which signals the caller's own group
 static lvm(lvm_kill) {
  if (!charmp(Sp[0]) || !charmp(Sp[1])) {
   Sp[1] = badarg(g); love_musttail return Nextp(1, 1); }
  Sp[1] = kill((pid_t) getcharm(Sp[0]), (int) getcharm(Sp[1])) ? love_err(g, errno) : ZeroPoint;
  love_musttail return Nextp(1, 1); }
 
-// the &ws ioctl + the chain alloc live here so lvm_tty's Continue() tail-jumps. overwrites
-// sp[0] with (rows . cols) or a nom; a not-ok g only on oom, which lvm_tty ghelps.
+// (tty fd) -> (rows . cols) | 'enotty: size and isatty are one question, so test with two?
 love_noinline static struct g *host_tty(struct g *g) {
  struct winsize ws;
  word x = g->sp[0];
@@ -1562,14 +1324,10 @@ love_noinline static struct g *host_tty(struct g *g) {
  g->sp[0] = word(w);
  return g; }
 
-// (tty fd): the terminal on fd as (rows . cols); a nom ('enotty) if fd is none, 'badarg
-// for an operand that is neither a charm fd nor a port.
 static lvm(lvm_tty) {
  LvmCall(g, host_tty) }
 
-// (settty port rows cols): push a window size onto a master port; the kernel raises
-// SIGWINCH on the slave's foreground group. () | a nom (a non-port or closed -> 'ebadf).
-// the ioctl sits off lvm_settty's frame so its Continue() tail-jumps; 0 or the errno.
+// (settty port rows cols): the kernel raises SIGWINCH on the slave's foreground group
 love_noinline static int host_settty(intptr_t fd, intptr_t row, intptr_t col) {
  struct winsize ws = {0};
  ws.ws_row = (unsigned short) row;
@@ -1584,10 +1342,7 @@ static lvm(lvm_settty) {
  Sp[2] = rc ? love_err(g, -rc) : ZeroPoint;
  love_musttail return Nextp(1, 2); }
 
-// (ptyecho port on): toggle the pty's input ECHO so a line-editing wrapper owns the echo;
-// ICANON is left intact, the child still reading whole lines and seeing VEOF. tcsetattr on
-// the master fd sets the shared pty termios. off lvm_ptyecho's frame so its Continue()
-// tail-jumps; returns 0 or a negated errno (EBADF for a non-port fd).
+// (ptyecho port on): ECHO only, so a line-editing wrapper owns the echo; ICANON stays
 love_noinline static int host_ptyecho(intptr_t fd, intptr_t on) {
  struct termios t;
  if (fd < 0) return -EBADF;
@@ -1602,11 +1357,8 @@ static lvm(lvm_ptyecho) {
  Sp[1] = rc ? love_err(g, -rc) : ZeroPoint;
  love_musttail return Nextp(1, 1); }
 
-// (termios fd) -> (iflag oflag cflag lflag speed cc0..cc16) | a nom | 'badarg: the line
-// discipline on fd in linux's canonical spelling (the libc respells a BSD's). speed is the
-// baud, read from c_ospeed where the kernel keeps one and from cflag's CBAUD where it does not.
-// (settermios fd l) takes that same list back: () | a nom. both speeds and CBAUD are set,
-// or with a negative speed cflag's CBAUD is taken as given.
+// (termios fd) -> (iflag oflag cflag lflag speed cc0..cc16) in linux's spelling; speed from
+// c_ospeed, else CBAUD. settermios takes it back; a negative speed keeps cflag's CBAUD
 static const unsigned tio_baud[][2] = {
  {0, 0}, {50, 1}, {75, 2}, {110, 3}, {134, 4}, {150, 5}, {200, 6}, {300, 7}, {600, 8},
  {1200, 9}, {1800, 10}, {2400, 11}, {4800, 12}, {9600, 13}, {19200, 14}, {38400, 15},
@@ -1666,16 +1418,12 @@ love_noinline static word host_settermios(struct g *g, word x, word l) {
  return tcsetattr((int) fd, TCSADRAIN, &t) ? love_err(g, errno) : ZeroPoint; }
 LvmWord2(settermios)
 
-// (raw on): own the interactive terminal discipline on stdin. a truthy `on` puts the tty
-// in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is the sole echo; on = 0 / ()
-// restores the cooked termios captured at the first raw-on. () | a nom ('enotty).
-// one terminal, so one saved baseline and one atexit -- main.c's repl calls raw_mode
-// too, and two owners each capturing their own cooked state would ride atexit's LIFO.
+// (raw on): off restores the cooked termios from the first raw-on. one baseline and one
+// atexit, shared with main.c's repl, or two owners would ride atexit's LIFO
 static struct termios raw_cooked;
 static int raw_have_cooked = 0;
 static void raw_restore(void) {
  if (raw_have_cooked) tcsetattr(STDIN_FILENO, TCSANOW, &raw_cooked); }
-// off lvm_raw's frame so its Continue() tail-jumps; returns 0 or the errno.
 love_noinline int raw_mode(intptr_t on) {
  struct termios t;
  if (tcgetattr(STDIN_FILENO, &t)) return -errno;
@@ -1691,9 +1439,7 @@ static lvm(lvm_raw) {
  Sp[0] = rc ? love_err(g, -rc) : ZeroPoint;
  love_musttail return Next(1); }
 
-// (swig port b): drink whatever the fd has waiting into cask b, without blocking.
-// n bytes read; 0 = nothing waiting or eof (the next see tells those apart); a nom =
-// failure ('badarg misuse).
+// (swig port b): what the fd has waiting into cask b, unblocking; 0 is nothing or eof
 static lvm(lvm_swig) {
  word p = Sp[0], x = Sp[1], out = badarg(g);
  if (!charmp(p) && ((union u*) p)->ap == lvm_port_io
@@ -1701,8 +1447,7 @@ static lvm(lvm_swig) {
   struct io *io = (struct io*) p;
   intptr_t fd = io_fd(io);
   struct str *s = cask(x)->str;
-    // the port's own pending run comes first: a buffered see may have gulped
-    // ahead of us, and reading the fd past it would scramble the byte order
+    // the port's buffered bytes first, or the order scrambles
   if (s->len && io_pending(g, io)) {
    uintptr_t k = io_read_drain(g, io, (unsigned char*) s->bytes, s->len);
    Sp[1] = putcharm((intptr_t) k);
@@ -1719,15 +1464,9 @@ static lvm(lvm_swig) {
  Sp[1] = out;
  love_musttail return Nextp(1, 1); }
 
-// --- the port doors: (open path mode) and (close p) --------------------------
-// on inle the open(2)/close(2) below land in src/inle/sys.c's arms, so the ramfs answers the
-// same nif; on the host a path under /love is the carried tree's (src/love/lovefs.c), as it is
-// for stat, lstat, readdir and readlink. `open`'s presence in the book is what lights up prel's module walk
-// (src/love/boot/prel.l's fsopen, by peep) and salt's config read, both gating on the name.
-
-// mode is a l string; only the first byte is consulted: r read, w truncate-or-create,
-// a append-or-create. an unknown mode is misuse ('badarg); open(2)'s refusal comes up as
-// its nom, so a caller tells 'etxtbsy (relinking a running binary) from 'enoent by name.
+// the port doors. on inle open(2)/close(2) land in src/inle/sys.c; on the host /love is the
+// carried tree's. `open` in the book lights up prel's module walk (fsopen) and salt's config read
+// mode's first byte: r read, w truncate-or-create, a append-or-create
 static int call_open(struct str *pv, struct str *mv) {
   if (mv->len == 0) return -1;
   int flags;
@@ -1740,17 +1479,14 @@ static int call_open(struct str *pv, struct str *mv) {
   return fd < 0 ? -errno : fd; }
 static int mk_open(struct g *g, void *env) { (void) env; return call_open(str(g->sp[0]), str(g->sp[1])); }
 
-// (open path mode) -- a heap port (closed on GC), or a nom: open(2)'s errno, 'badarg for
-// misuse. a failure is truthy (a nom nets positive), so a caller may not ask ? of the
-// answer -- port? is the success test, nom? the failure test.
-// heap and stack ride registers under tco, and a seat whose open reports them (inle's
-// /proc/gauge) reads them off the struct: LvmCallp's Pack is that write-back.
+// a nom is truthy: test with port? or nom?, never ?. LvmCallp's Pack writes back the registers
+// a seat's open may report (inle's /proc/gauge)
 love_noinline static struct g *host_open(struct g *g) {
   { char rel[256];
     uintptr_t rn;
     struct str *mv = str(g->sp[1]);
     intptr_t i = lovefs_at(str(g->sp[0])->bytes, rel, &rn);
-    if (i != -1) {                                // /love: read-only, a port over the row's bytes
+    if (i != -1) {                                // /love: read-only
       char m = mv->len ? mv->bytes[0] : 0;
       word e = m != 'r' && m != 'w' && m != 'a' ? badarg(g)
              : m != 'r' ? love_err(g, EROFS)
@@ -1764,17 +1500,14 @@ love_noinline static struct g *host_open(struct g *g) {
   return ok(r) ? r : (close(fd), push(g, 1, love_err(g, ENOMEM))); }
 static lvm(lvm_open) {
   if (!cstrp(Sp[0]) || !strp(Sp[1])) { Sp[1] = badarg(g); love_musttail return Nextp(1, 1); }
-  LvmCallp(g, 2, host_open) }                   // [path, mode] -> [port]
+  LvmCallp(g, 2, host_open) }
 
-// (close x) -- a port, or a raw fd from openfd/pipe/dup. on a port: flush, close, and hand
-// it the closed vt, so every later read, write and flush finds the door that does nothing
-// and the finalizer, which asks the vt for an fd, skips. on a charm: close(2). no-op else.
+// (close x), a port or a raw fd: a port gets the closed vt, so later doors and the finalizer skip
 static lvm(lvm_close) {
   if (charmp(Sp[0])) {
     intptr_t fd = getcharm(Sp[0]);
     Sp[0] = (fd >= 0 && close((int) fd)) ? love_err(g, errno) : ZeroPoint;
     love_musttail return Next(1); }
-  // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
   if (cell(Sp[0])->ap == lvm_port_io) {
     struct io *io = (struct io*) Sp[0];
     intptr_t fd = io_fd(io);
@@ -1782,10 +1515,9 @@ static lvm(lvm_close) {
     if (fd >= 0 || horn) {
       g->io = io;
       Pack(g);
-      g = io_wflush(g, io);   // buffered bytes land before the fd dies
+      g = io_wflush(g, io);
       if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
-      // the device would not take the whole run: park and come back. nothing is mutated
-      // yet -- the fd is open and Ip unadvanced -- so the re-run is this close from the top.
+      // a short write parks; nothing is mutated yet, so the re-run is this close whole
       if (io_wpending(g, (struct io*) g->sp[0])) {
         Unpack(g);
         g->next_wake_at = love_clock() + 1;

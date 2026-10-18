@@ -1,9 +1,6 @@
-// vfs.h -- the tree both seats serve: inle's whole namespace (src/inle/kmain.c) and the host's
-// /love (src/love/lovefs.c). a table of entries over baked rows -- the carried source's,
-// decoding by section at the first read, and any others a seat lays -- with heap copies
-// made at the first write. paths are canonical and relative to the root ("" is the root);
-// a directory is an entry that says so, or a prefix something lives under. no state but the
-// struct its seat holds, and memory through the seat's own doors.
+// vfs.h -- the tree under inle's namespace (kmain.c) and the host's /love (lovefs.c): entries
+// over baked rows, copied to the heap at the first write. paths are canonical, "" the root; a
+// directory is an entry that says so, or a prefix something lives under
 #ifndef VFS_H
 #define VFS_H
 #include <stdint.h>
@@ -37,8 +34,7 @@ struct vfs {
  void (*drop)(void*);
  uintptr_t (*now)(void); };        // ms, for what a write or create stamps
 
-// the carried source's rows laid under pre (its own prefix, "love"), then tar's (a plain ustar
-// of the seat's own, no prefix, its links resolved against the rows) -> false on memory
+// the carried source's rows under pre ("love"), then a plain ustar's, unprefixed -> false on memory
 bool vfs_untar(struct vfs *v, char const *pre, unsigned char const *z, uintptr_t zn,
                unsigned char const *tar, uintptr_t tn);
 // the table: one entry per baked and extra row, and room for `more` the seat lays itself,
@@ -47,8 +43,8 @@ int vfs_lay(struct vfs *v, int more);
 
 struct vfs_file const *vfs_bake_row(struct vfs const *v, int i);
 unsigned char const *vfs_bake_bytes(struct vfs *v, int i);
-// what entry i reads as -- its heap copy once it has one, the baked bytes until then ("" where
-// a section will not decode) -- and its length alone, which decodes nothing
+// entry i's bytes: its heap copy, else the baked ones ("" where a section won't decode);
+// vfs_size decodes nothing
 unsigned char const *vfs_blob(struct vfs *v, int i, uintptr_t *len);
 uintptr_t vfs_size(struct vfs const *v, int i);
 
@@ -66,16 +62,14 @@ char const *vfs_entry(struct vfs const *v, int i, char const *p, uintptr_t pn, u
 // anything live under the prefix, and the newest date beneath it
 bool vfs_kids(struct vfs const *v, char const *p, uintptr_t pn, uintptr_t *ms);
 bool vfs_dirp(struct vfs const *v, char const *p, uintptr_t pn);
-// the next distinct name under a directory from entry *cur on (0 to start) -> the entry that
-// first carries it, *cur past it; -1 after the last. *name and *len its name, *dir whether
-// it is one. a whole listing walks the table once over
+// the next distinct name under a directory from entry *cur on (0 to start) -> its first
+// entry, *cur past it; -1 after the last. a whole listing walks the table once
 int vfs_child(struct vfs const *v, char const *p, uintptr_t pn, int *cur, char const **name,
               uintptr_t *len, bool *dir);
 // a path's kind and stamp: 0 none, 1 a file, 2 a directory, 3 a link; *i its entry or -1
 struct vfs_st { int i, kind; uintptr_t size, mode, ms; };
 int vfs_stat(struct vfs *v, char const *cp, uintptr_t cn, struct vfs_st *st);
 
-// the doors that change the tree
 int vfs_parent_ok(struct vfs const *v, char const *p, uintptr_t n);
 int vfs_slot(struct vfs *v);
 char *vfs_strdup(struct vfs *v, char const *p, uintptr_t n);

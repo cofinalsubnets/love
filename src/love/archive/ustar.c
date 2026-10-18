@@ -1,5 +1,4 @@
-// ustar.c -- see ustar.h. no allocation and no io: every one of these reads bytes the
-// caller already has, so the hosted lane and the freestanding one take the same file.
+// ustar.c -- see ustar.h. no allocation and no io: only bytes the caller already has
 #include "ustar.h"
 #include <string.h>
 

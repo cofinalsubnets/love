@@ -1,13 +1,11 @@
-// src/love/compress/prefix.h -- one canonical prefix code read lsb first, rfc 1951's and vp8l's alike:
-// compress/gz.c and picture/webp.c build and read it the same way, and choose its lengths alike.
+// prefix.h -- one canonical prefix code read lsb first, rfc 1951's and vp8l's alike (gz.c, webp.c
+// build and read it, and choose its lengths, the same way)
 #ifndef INF_H
 #define INF_H
 #include <stdint.h>
 #include <string.h>
 
-// the counts and symbols the walk needs, and the table over them. an entry is
-// (symbol << 4) | length, and 0 -- no code is 0 bits -- means "walk it". sym holds nsym
-// symbols and tab 1 << root entries, both the caller's storage.
+// a tab entry is (symbol << 4) | length, 0 meaning walk it; sym (nsym) and tab (1 << root) are the caller's
 struct inf_code { uint16_t cnt[16], *sym, *tab; unsigned root; };
 
 static inline void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
@@ -17,7 +15,7 @@ static inline void inf_build(struct inf_code *c, const uint8_t *lens, unsigned n
  memset(sym, 0, (size_t) nsym * sizeof *sym);
  memset(tab, 0, (size_t) size * sizeof *tab);
  for (i = 0; i < nsym; i++) c->cnt[lens[i]]++;
- c->cnt[0] = 0;                                  // a zero length is no code, not a code
+ c->cnt[0] = 0;                                  // a zero length is no code
  ofs[1] = 0;
  for (l = 1; l < 15; l++) ofs[l + 1] = ofs[l] + c->cnt[l];
  for (i = 0; i < nsym; i++) if (lens[i]) sym[ofs[lens[i]]++] = (uint16_t) i;
@@ -31,8 +29,7 @@ static inline void inf_build(struct inf_code *c, const uint8_t *lens, unsigned n
     if (!tab[j]) tab[j] = (uint16_t) ((s << 4) | l); }
   code <<= 1; } }
 
-// the bit walk, for the codes the table does not hold: a table entry, (symbol << 4) |
-// length, or -1 where no code matches
+// the walk for codes past the table: an entry, or -1 where none matches
 static inline int inf_walk(const struct inf_code *c, uint64_t bb) {
  int code = 0, first = 0, index = 0, cnt;
  unsigned l;

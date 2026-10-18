@@ -1,9 +1,7 @@
 // src/love/crypto/bcrypt.c
 // (bcrypt-hash pi pass salt) -> 32 bytes   | () misuse
-// openbsd's bcrypt_hash, the block bcrypt_pbkdf repeats: an eksblowfish schedule keyed by
-// two 64-byte sha-512 digests, then "OxychromaticBlowfishSwatDynamite" enciphered 64 times.
-// pi is blowfish's starting state, P then S, 1042 big-endian words of pi's fraction; the
-// caller derives it, so no table is written here. the pbkdf around this is love's.
+// openbsd's bcrypt_hash, the block bcrypt_pbkdf repeats. pi is blowfish's starting state
+// (P then S, 1042 big-endian words), derived by the caller; the pbkdf around this is love's
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
@@ -26,8 +24,7 @@ static uint32_t bf_word(const uint8_t *d, int n, int *j) {
  for (int i = 0; i < 4; i++) w = w << 8 | d[*j], *j = (*j + 1) % n;
  return w; }
 
-// the key into P, then P and S re-enciphered in place, data (when there is some) mixed
-// in as it goes
+// the key into P, then P and S re-enciphered in place, data (if any) mixed in
 static void bf_expand(bf *c, const uint8_t *data, const uint8_t *key) {
  int j = 0, k = 0;
  uint32_t l = 0, r = 0, *w = c->p;

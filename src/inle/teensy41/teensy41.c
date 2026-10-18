@@ -1,25 +1,17 @@
-// Teensy 4.1 bare-metal arch backend (no Teensyduino core): CCM clock
-// bring-up, the LPUART6 console, GPT1 as the millisecond timer, and a thin
-// GPIO layer for the on-board LED -- the C half, compiled by mooncc. The
-// ROM-facing boot image (FlexSPI config block + IVT + boot data + vectors),
-// the crt0, the HardFault shim, and the barrier/wfi/bkpt helpers live in
-// mkboot.l: exact flash sections and bare instructions, laid from holo IR. The
-// FlexSPI/IVT lore (wrong-offset first-silicon stories) rides mkboot.l now.
+// Teensy 4.1 bare-metal arch backend: clocks, the LPUART6 console, GPT1, the LED. the boot
+// image, crt0, HardFault shim and barrier helpers are mkboot.l's
 #include <stdint.h>
 #include "teensy41.h"
 #include "../bput.h"
 
-// Linker-provided bounds (teensy41.lds) + the mkboot.l vector table.
+// teensy41.lds's bounds and mkboot.l's vectors
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[];
 extern void *const vectors[];
 
 int main(void);
 
-// --- fault diagnostics ----------------------------------------------------
-// ARMv7E-M HardFault: capture the stacked exception frame so an attached SWD
-// debugger lands on a known address. mkboot.l's isr_hardfault selects the
-// active stack and branches here with the frame in r0.
+// the stacked frame from mkboot.l's isr_hardfault (r0), kept where an SWD debugger finds it
 volatile struct fault {
   uint32_t r0, r1, r2, r3, r12, lr, pc, psr, sp, magic;
 } fault;
@@ -30,9 +22,7 @@ void hardfault_report(uint32_t *frame) {
   fault.pc  = frame[6]; fault.psr = frame[7];
   fault.sp  = (uint32_t)(uintptr_t) frame;
   fault.magic = 0xFA017EDu;
-  // say it on the wire while we still can (serial is polled, no IRQs needed);
-  // the bootloader chip resets us shortly after the bkpt, and RAM re-zeroes.
-  // CFSR/BFAR/MMFAR classify the fault (precise bus faults carry the address).
+  // on the wire before the bootloader chip resets us; CFSR/BFAR/MMFAR classify the fault
   { const char *tags[6] = { "\r\n; FAULT pc=", " lr=", " sp=", " cfsr=", " bfar=", " mmfar=" };
     uint32_t v[6] = { frame[6], frame[5], (uint32_t)(uintptr_t) frame,
                       REG(0xE000ED28u), REG(0xE000ED38u), REG(0xE000ED34u) };
@@ -40,17 +30,10 @@ void hardfault_report(uint32_t *frame) {
       bput_s(serial_putc, tags[k]);
       bput_x(serial_putc, v[k], 8); }
     serial_putc('\r'); serial_putc('\n'); }
-  for (;;) {} }   // idle, report delivered (a bkpt here would re-enter DebugMon)
+  for (;;) {} }   // a bkpt here would re-enter DebugMon
 
-// --- caches ----------------------------------------------------------------
-// XIP with the caches off fetches EVERY instruction over the 60 MHz QSPI: the
-// egg bake crawls from seconds into hours (first silicon 2026-07-04: solid LED,
-// no change -- not hung, CRAWLING; the slowness was the bug). The ARMv7-M
-// default memory map already types both the flash window (0x60000000) and
-// OCRAM (0x20200000) as Normal/cacheable, so enabling I+D at the SCB is the
-// whole job -- no MPU regions needed. Sequence per the ARMv7-M ARM: invalidate,
-// then enable. The D-cache invalidate walks sets x ways from CCSIDR (RT1062:
-// 32 KB, 4-way, 32 B lines -> way field at bit 30, set field at bit 5).
+// XIP without caches fetches every instruction over QSPI, hours for a bake. the default map
+// already types flash and OCRAM cacheable, so no MPU regions; RT1062 L1D: way at bit 30, set at 5
 #define SCB_CCR     0xE000ED14u
 #define SCB_CCSIDR  0xE000ED80u
 #define SCB_CSSELR  0xE000ED84u
@@ -74,24 +57,17 @@ static void caches_init(void) {
   REG(SCB_CCR) |= 1u << 16;                      // D-cache on
   arm_dsb_isb(); }
 
-// mkboot.l's cstartup established our stack and falls in here.
+// from mkboot.l's cstartup, the stack laid
 void cmain(void) {
-  // FIRST LIGHT, before anything that can hang: a cold boot that dies in
-  // clock bring-up must still show the LED (an all-dark board with working
-  // HalfKay was the first-cold-boot face -- every earlier boot was a WARM
-  // reset riding the previous session's clock/DCDC state).
+  // the LED before anything that can hang: a cold boot dying in clock bring-up still shows it
   gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
-  // FPU on (CP10/CP11 full access) before any float-typed code runs.
+  // FPU on (CP10/CP11) before any float code
   REG(SCB_CPACR) |= (0xFu << 20);
-  // debug monitor ON: a bkpt with no debugger otherwise ESCALATES to lockup
-  // (mute -- the supervisor just resets us). With MON_EN it vectors to the
-  // fault reporter instead, so every __builtin_trap NAMES its pc on the wire.
+  // MON_EN: a bkpt with no debugger vectors to the fault reporter rather than a mute lockup
   REG(0xE000EDFCu) |= (1u << 16);
   arm_dsb_isb();
   caches_init();
-  clocks_init();          // pure MMIO, no .data/.bss reads -- so the big copy
-                          // below already runs at 600 MHz
-  // .data from its flash load address into OCRAM2; zero .bss.
+  clocks_init();          // no .data/.bss reads, so the copy below runs at 600 MHz
   for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
   for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
   REG(SCB_VTOR) = (uint32_t)(uintptr_t) vectors;
@@ -99,15 +75,7 @@ void cmain(void) {
   main();
   for (;;) arm_wfi(); }
 
-// --- clocks ---------------------------------------------------------------
-// The ARM core to 600 MHz (the ROM boots it at ~396), plus the two roots
-// this frontend reads -- the LPUART clock (24 MHz osc) and GPT1 (24 MHz
-// osc). Both ride the crystal, so the core retune changes neither the
-// console baud nor the timebase math.
-// bounded register wait: cold-boot reset state can leave a handshake bit
-// stuck where the warm-reset path (riding the previous session's state)
-// sailed through -- an unbounded spin here is an all-dark board. ~10 ms at
-// any core clock; 0 = gave up.
+// a cold boot can leave a handshake bit stuck: ~10 ms at any clock, 0 = gave up
 static int wait_reg(uint32_t addr, uint32_t mask, int want_set) {
   for (uint32_t i = 0; i < 4000000u; i++) {
     uint32_t v = REG(addr) & mask;
@@ -115,17 +83,15 @@ static int wait_reg(uint32_t addr, uint32_t mask, int want_set) {
   return 0; }
 
 void clocks_init(void) {
-  // Voltage BEFORE speed: DCDC core supply to 1.25 V, wait for it to settle.
-  // EVERY wait is BOUNDED: a timeout bails back toward the ROM clock -- a
-  // board that cannot reach 600 MHz must still BOOT (the banner self-report
-  // says which path won).
+  // the core to 600 MHz, voltage first; a timeout stays near the ROM clock and still boots.
+  // the UART and GPT ride the crystal, untouched by the retune
   REG(DCDC_REG3) = (REG(DCDC_REG3) & ~DCDC_REG3_TRG_MASK) | DCDC_TRG_1V25;
   if (!wait_reg(DCDC_REG0, DCDC_REG0_STS_DC_OK, 1)) return;   // no settled supply: stay on the ROM clock
-  // Park periph_clk on the 24 MHz osc while the ARM PLL retunes.
+  // park periph_clk on the osc while PLL1 retunes
   REG(CCM_CBCMR) = (REG(CCM_CBCMR) & ~CBCMR_PERIPH_CLK2_MASK) | CBCMR_PERIPH_CLK2_OSC;
   REG(CCM_CBCDR) |= CBCDR_PERIPH_CLK_SEL;
   if (!wait_reg(CCM_CDHIPR, CDHIPR_PERIPH_CLK_SEL_BUSY, 0)) return;
-  // ARM PLL: 24 MHz * 100 / 2 = 1200 MHz, then the core divider /2 = 600.
+  // 24 MHz * 100 / 2 = 1200 MHz, then /2
   REG(CCM_ANALOG_PLL_ARM) = PLL_ARM_POWERDOWN;
   REG(CCM_ANALOG_PLL_ARM) = PLL_ARM_ENABLE | 100u;
   if (!wait_reg(CCM_ANALOG_PLL_ARM, PLL_ARM_LOCK, 1)) {       // PLL never locked: un-park and live slow
@@ -134,8 +100,7 @@ void clocks_init(void) {
   REG(CCM_CCSR) &= ~CCSR_PLL1_SW_CLK_SEL;        // core rides pll1_main
   REG(CCM_CACRR) = 1u;                            // /2
   wait_reg(CCM_CDHIPR, CDHIPR_ARM_PODF_BUSY, 0);
-  // AHB /1 (600 MHz), IPG /4 (150 MHz, its ceiling); pre-periph = the
-  // divided ARM PLL; then un-park.
+  // AHB /1, IPG /4 (150 MHz, its ceiling); pre-periph the divided PLL; un-park
   REG(CCM_CBCDR) = (REG(CCM_CBCDR) & ~(CBCDR_AHB_PODF_MASK | CBCDR_IPG_PODF_MASK))
                  | CBCDR_IPG_PODF_DIV4;
   wait_reg(CCM_CDHIPR, CDHIPR_AHB_PODF_BUSY, 0);
@@ -143,67 +108,44 @@ void clocks_init(void) {
   REG(CCM_CBCDR) &= ~CBCDR_PERIPH_CLK_SEL;
   wait_reg(CCM_CDHIPR, CDHIPR_PERIPH_CLK_SEL_BUSY, 0);
 
-  // Gate LPUART6 (CCGR3 CG3) and GPT1 (CCGR1 CG10/CG11) on.
   REG(CCM_CCGR3) |= CCGR_ON(3);
   REG(CCM_CCGR1) |= CCGR_ON(GPT1_CCGR_BUS) | CCGR_ON(GPT1_CCGR_SERIAL);
-  // LPUART clock = 24 MHz osc, no further divide.
+  // LPUART clock: the osc, undivided
   uint32_t c = REG(CCM_CSCDR1);
   c = (c & ~CSCDR1_UART_CLK_PODF_MASK) | CSCDR1_UART_CLK_SEL_OSC;
   REG(CCM_CSCDR1) = c;
 
-  // GPT1: reset, then free-run off the 24 MHz osc with a /24 prescaler so the
-  // counter ticks at 1 MHz (1 us). love_clock() divides to milliseconds.
+  // GPT1 free-runs at 1 MHz off the osc
   REG(GPT1_CR) = GPT_CR_SWR;
   while (REG(GPT1_CR) & GPT_CR_SWR) {}
   REG(GPT1_PR) = 24u - 1u;
   REG(GPT1_CR) = GPT_CR_CLKSRC_24M | GPT_CR_EN_24M | GPT_CR_FRR | GPT_CR_ENMOD;
   REG(GPT1_CR) |= GPT_CR_EN; }
 
-// --- LPUART6 console ------------------------------------------------------
 void serial_init(void) {
-  // pin1 -> LPUART6_TX, pin0 -> LPUART6_RX (both ALT2); daisy-chain the RX.
   REG(IOMUXC_SW_MUX_GPIO_AD_B0_02) = MUX_ALT(2);
   REG(IOMUXC_SW_MUX_GPIO_AD_B0_03) = MUX_ALT(2);
   REG(IOMUXC_LPUART6_RX_SELECT) = 1u;            // select GPIO_AD_B0_03
-  // the pad's OUTPUT DRIVER. The mux alone routes the LPUART TX signal to the
-  // pad, but a pad left at its reset-default drive strength does not drive the
-  // line -- first silicon (2026-07-12) had TDRE asserting and bytes clocking out
-  // with the wire dead idle until these were set. DSE6 + medium speed + keeper
-  // (PJRC's UART pad config) gives TX a real driver; the RX pad takes the keeper
-  // so a disconnected input does not float.
+  // the mux alone leaves the pad at a drive strength that does not move the line
   REG(IOMUXC_SW_PAD_GPIO_AD_B0_02) = PAD_CTL_UART;   // TX drive
   REG(IOMUXC_SW_PAD_GPIO_AD_B0_03) = PAD_CTL_UART;   // RX keeper
 
-  // 115200 8N1 from the 24 MHz UART clock: OSR=16, SBR=13 -> 115384 (+0.16%).
-  REG(LPUART_CTRL) = 0;                           // disable while configuring
+  // 115200 8N1: OSR=16, SBR=13 -> 115384 (+0.16%)
+  REG(LPUART_CTRL) = 0;
   REG(LPUART_BAUD) = LPUART_BAUD_OSR(16) | LPUART_BAUD_SBR(13) | LPUART_BAUD_BOTHEDGE;
   REG(LPUART_FIFO) |= LPUART_FIFO_TXFE | LPUART_FIFO_RXFE;
   REG(LPUART_CTRL) = LPUART_CTRL_TE | LPUART_CTRL_RE;
-  // the RX pad floats until the mux above lands, and boot-window noise can
-  // wedge the FIFO (garbage in flight at enable): flush RX, clear every
-  // error flag, drain anything already latched -- start CLEAN
+  // boot-window noise can wedge the FIFO: flush, clear the error flags, drain
   REG(LPUART_FIFO) |= LPUART_FIFO_RXFLUSH;
   REG(LPUART_STAT) = LPUART_STAT_ERR;
   while (REG(LPUART_STAT) & LPUART_STAT_RDRF) (void) REG(LPUART_DATA); }
 
-// The RX FIFO is 4 deep and the editor answers every received char with a
-// ~20-byte redraw at the same baud, so a paste outruns the hardware 20:1 --
-// no polling discipline can save it at the FIFO. The soft ring absorbs the
-// difference: serial_putc's TDRE stalls are exactly where inbound bytes died,
-// so the pump runs there (and in every RX poll). A latched overrun both
-// halts reception AND desyncs the FIFO pointers (Kinetis-lineage block), so
-// the recovery is save-what's-readable, RXFLUSH, clear every error flag.
+// the 4-deep RX FIFO loses a paste to the editor's redraws, so a soft ring is pumped from
+// serial_putc's TDRE stalls too. an overrun desyncs the FIFO: read what's there, flush, clear
 static uint8_t  rx_ring[1024];
 static uint32_t rx_w, rx_r, rx_lost;
 
-// A FULL RING DROPS THE NEWEST BYTE AND COUNTS IT. it used to write straight
-// through -- `rx_ring[rx_w++ & 1023u] = ..` with no room check -- so a paste
-// longer than the ring OVERWROTE bytes the reader had not taken yet: the stream
-// came out scrambled in the middle rather than short at the end, and nothing
-// anywhere said a byte had been lost. The hardware overrun a few lines up is
-// handled with care; this is the same event one layer in, and it deserves the
-// same. Dropping the newest keeps what survives a coherent PREFIX, and
-// serial_rx_lost (main.c's flush) is where the count reaches the user.
+// a full ring drops the newest byte and counts it, so what survives is a prefix
 static void rx_put(uint8_t b) {
   if (rx_w - rx_r < sizeof rx_ring) rx_ring[rx_w++ & 1023u] = b;
   else if (rx_lost != (uint32_t) -1) rx_lost++; }
@@ -219,9 +161,8 @@ static void rx_pump(void) {
     if (!(REG(LPUART_STAT) & LPUART_STAT_RDRF)) return;
     rx_put(REG(LPUART_DATA) & 0xff); } }
 
-// how many inbound bytes the ring could not hold since the last ask, and clears.
-// NOT reported from rx_pump: the console is this same UART, so a notice
-// written there would re-enter through serial_putc's own pump.
+// the drops since the last ask, and clears; not reported from rx_pump, which a notice
+// on this same UART would re-enter
 uint32_t serial_rx_lost(void) {
   uint32_t n = rx_lost;
   return rx_lost = 0, n; }
@@ -238,14 +179,9 @@ int serial_getc(void) {
   while (rx_w == rx_r) rx_pump();
   return rx_ring[rx_r++ & 1023u]; }
 
-// --- clock: milliseconds since boot (GPT1 counts microseconds) -----------
 uintptr_t love_clock(void) { return REG(GPT1_CNT) / 1000u; }
 
-// --- GPIO -----------------------------------------------------------------
-// Scaffold scope: GPIO2 bit operations plus the IOMUXC mux for pin 13 (the
-// LED). A full Teensy pin map (pad -> GPIO bank/bit -> ALT5 mux, all 55 pins)
-// is a TODO; here `pin` is a GPIO2 bit index and pin 13 (LED_BIT) is the one
-// pad we mux. Mirrors rp2040.c's gpio_* contract so main.c's nifs are shared.
+// rp2040.c's gpio_* contract; pin is a GPIO2 bit, only the LED's pad muxed. TODO: the full pin map
 void gpio_init(unsigned pin) {
   if (pin == LED_BIT) REG(IOMUXC_SW_MUX_GPIO_B0_03) = MUX_ALT(5);
   REG(GPIO2_GDIR) &= ~(1u << pin); }            // input until set_dir

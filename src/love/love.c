@@ -1,32 +1,20 @@
-// love.c -- g, stack, sys, str, sym, chain, tray. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are src/love/love.h.
+// love.c -- g, stack, sys, str, sym, chain, tray; the shared layouts are love.h
 #include "love.h"
-// the spelling hash a fresh nom caches in its `dig` slot (same fnv walk as the
-// KString lane in hash(), so a nom and its name string hash alike)
+// a nom's cached spelling hash: hash()'s KString walk, so a nom and its name hash alike
 static love_inline uintptr_t nom_dig(uintptr_t name) {
  uintptr_t n = len(name), h = mix;
  char const *bs = txt(name);
  while (n--) h ^= (uint8_t) *bs++, h *= mix;
  return h; }
 
-// which kernel we woke on -- 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, -1 inle. the
-// values and the probe are moonlibc's (src/apps/moon/lib/moonlibc/os.c), which owns the word
-// on any link that carries it; this is the same word for a link that does not -- love0
-// under the ambient cc, and the boards, which take moonlibc's string members and no os.c.
-//
-// WEAK, where this tree's doors are plain definitions on purpose (src/love/bare.c, src/love/user/nokern.c).
-// the rule those state is about DOORS: a missing implementation quietly becoming a no-op
-// is the bug it prevents. this is a data word whose zero is already an answer -- os.c
-// spells 0 "unprobed", and 0 is exactly what the seats below read today -- so there is no
-// quiet wrong behaviour to fall into, only an honest "nobody probed".
+// the kernel we woke on (0 unprobed, 1 linux, 2 freebsd, 3 netbsd, -1 inle): moonlibc's os.c
+// owns it where linked. weak unlike the doors, since its zero is already an honest answer
 __attribute__((weak)) long __love_osv;
 #include <stddef.h>
 struct chain;
-// this file's own, forward-declared so order within it does not matter.
 static char *add_emit(struct g *g, char *w, word x);
 static intptr_t seq_byte(word x);
-// the nifs.h table lands mid-file and names these, so the whole set is declared up here
-// (lvm_subn's body comes out of avm_slow, which carries no storage class of its own).
+// nifs.h lands mid-file and names these (lvm_subn's body comes out of avm_slow)
 static lvm_t
  lvm_apof, lvm_stack, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
  lvm_gauge, lvm_intf, lvm_key, lvm_kreg, lvm_link, lvm_mint, lvm_mintp, lvm_lib, lvm_namep,
@@ -35,10 +23,8 @@ static lvm_t
 static struct g
  *ini_0(struct g*g, uintptr_t len0);
 static uintptr_t stringlen(struct g *g, word x);
-// the build's version string, generated into out/lib/love_version.h and surfaced
-// as `love-version`. -DLvVersion wins (love0 pins "bootstrap" so a new commit never
-// relinks the bootstrap); -DLvHaveVersionH says the header exists -- mooncc has
-// no __has_include, so the probe alone is not enough.
+// `love-version`: -DLvVersion wins (love0 pins "bootstrap"); -DLvHaveVersionH since mooncc
+// has no __has_include
 #ifndef LvVersion
 # if defined(LvHaveVersionH) || (defined(__has_include) && __has_include("love_version.h"))
 #  include "love_version.h"
@@ -50,25 +36,18 @@ static uintptr_t stringlen(struct g *g, word x);
 word const map_gap_cell = 0; // FIXME why do we need 0 as a constant :/
 struct str0 const str_empty = { .ap = lvm_str, .len = 0 };
 struct mint const mint_zero = { .ap = lvm_sym, .serial = 0 };
-// ============================================================================
-// g
-// ============================================================================
+// ===== g =====
 enum status fin(struct g *g) {
  enum status s = code_of(g);
  if ((g = core_of(g))) {
    for (struct fz *fz = g->fz; fz; fz->fn(g, fz->p), fz = fz->next); // run finalizers
    code_fin(g);                                 // ..then the native arena they hand blobs back to
-   // the rem set and the major pool are ini_0's own alloc calls, not room inside
-   // the nursery -- a frontend that exits never misses them, one that fins to make room
-   // for the next runtime gets nothing back without this.
    if (g->rem) alloc(g->rem, 0);
    if (g->major_base) image_drop(g->major_base), alloc(g->major_base, 0);
    alloc(g, 0); }                       // ..the pool is g, so it goes last
  return s; }
 
-// the map a row binds into, pushed: the book, or the tablet its module names -- minted on
-// first sight and registered in g->lib, so a registration section owns its namespace
-// outright rather than landing on the book to be swept off later.
+// pushes the map a row binds into: the book, or its module's tablet, minted into g->lib on first sight
 static struct g *def_home(struct g *g, char const *m) {
  if (!ok(g)) return g;                                       // ..so g is the core, unmasked
  if (!m) return push(g, 1, A(g->stack));
@@ -91,9 +70,7 @@ struct g *defn(struct g*g, struct def const*defs, uintptr_t n) {
  return g; }
 
 // FIXME this function should pop the bound value off the stack
-// defn's twin for a value that moves: it rides g->sp[0], where the collector
-// updates it, and is left there (a second name binds the same one; callers pop).
-// the sp[1] re-read happens after the book push, so a collection inside it is accounted for.
+// defn for a value that moves: it rides g->sp[0] and is left there; callers pop
 struct g *defv(struct g *g, char const *nm) {
  if (!ok(g)) return g;
  g = push(g, 1, A(g->stack));           // [book, value, ..]
@@ -102,26 +79,20 @@ struct g *defv(struct g *g, char const *nm) {
  if (ok(g)) g->sp++;                               // [value, ..]
  return g; }
 
-// the nif + instruction registry: one `union u` table, a nif's little stream being a
-// run inside it, then def1 -- the name -> value table defn reads into the book,
-// carrying each run's address. both are laid from the one roster in nifs.l -- edit
-// that, not nifs.h; make relays it and test_clay diffs.
+// the nif registry and def1, its name table: generated from nifs.l -- edit that, not nifs.h
 #include "nifs.h"
 
 static lvm(_lvm_yield_c) { return Pack(g), g; }
 union u const yield_c[] = { {_lvm_yield_c} };
 
-// lvm_help: the default help ap -- re-encode the raised status, yield to C.
-// _lvm_help_scare sits outside lvm_* on purpose: the one designed `ret`
-// (vmret sounds lvm_* only), reached by tail call. the status rides the core's b,
-// like every other thing an op needs beyond the stack.
+// the default help ap: re-encode the raised status (on the core's b), yield to C.
+// _lvm_help_scare is outside lvm_* since vmret sounds lvm_* only
 static lvm(_lvm_help_scare) { return Pack(g), encode(g, (enum status) g->b); }
 lvm(lvm_help) {
  struct g *c = core_of(g);
  c->b = code_of(g);
  love_musttail return Ap(_lvm_help_scare, c); }
 
-// reverse-lookup a nif value -> its source name or NULL (the printer renders nifs by name)
 char const *nif_name(intptr_t x) {
  intptr_t j = def_index(x);
  return j < 0 ? 0 : def1[j].n; }
@@ -131,9 +102,8 @@ word nif_word(char const *nm) {                 // strlen + memcmp: the boards l
   if (strlen(def1[i].n) == n && !memcmp(def1[i].n, nm, n)) return def1[i].v.x;
  return 0; }
 
-// the canonical (linux) errno numbering, lowercase -- the spellings ini_0
-// interns into g->errs. 41 and 58 are blanks in the numbering itself; a kernel
-// row with no canonical concept translates to 41 (os.c), which lands 'eunknown.
+// the canonical (linux) errno names for g->errs. 41 and 58 are blanks; os.c maps an
+// unknown to 41, which lands 'eunknown
 static struct { short v; char n[16]; } const errnames[] = {
  {0,"eunknown"}, {-1,"badarg"}, {1,"eperm"}, {2,"enoent"}, {3,"esrch"},
  {4,"eintr"}, {5,"eio"}, {6,"enxio"}, {7,"e2big"}, {8,"enoexec"},
@@ -169,7 +139,6 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  g->scare_a = g->scare_b = g->scare_c = zero;   // v0..end is GC-walked: raw 0 is not a value
  for (int i = 0; i < hook_n; i++) g->hook[i] = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
- // the rem set + major pool ride alloc: a seat whose heap cannot supply them cannot run
  g->major_len = love_major0;
  g->rem = alloc(NULL, LvRemCap * sizeof(word));
  g->major_base = g->rem ? alloc(NULL, g->major_len * sizeof(word)) : NULL;
@@ -177,41 +146,35 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  g->major_hp = g->major_base, g->budget = love_budget;
  g->minor0 = love_minor0, g->major0 = love_major0, g->ratio = gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = wait_in;
- // the reach: the kind sentinels a native's guards compare against and the two drives,
- // reached through g since a blob carries no address of the binary
+ // the kind sentinels and drives a native reaches through g: a blob holds no binary address
  g->reach[ReachChain] = (word) lvm_chain, g->reach[ReachStr] = (word) lvm_str, g->reach[ReachMap] = (word) lvm_map_lookup;
  g->reach[ReachNom] = (word) lvm_nom, g->reach[ReachMint] = (word) lvm_sym, g->reach[ReachGem] = (word) lvm_gembox;
  g->reach[ReachCask] = (word) lvm_cask, g->reach[ReachDrive] = (word) callout_drive, g->reach[ReachResume] = (word) callout_resume;
  g->fair = 64, g->ticks = 0, g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc, g->reach[ReachGap] = map_gap;
- // book + macro maps (lookup-lambdas) then the main task thread.
+ // book + macro maps, then the main task thread
  if (ok(g = map_new(g)) && ok(g = map_new(g)) && ok(g = have(g, 9))) {
-  union u *M = bump(g, 9);            // sp[0]=macro, sp[1]=book (no GC since have)
+  union u *M = bump(g, 9);            // sp[0]=macro, sp[1]=book
   M[0].m = M;
   M[1].x = zero;   // sentinel; replaced on first yield
   M[2].x = zero;   // main pid
   M[3].x = zero;   // wake_at: zero means "always runnable"
-  M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
+  M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O
   M[5].x = putcharm(wait_in);   // wait_events: the read direction, the default
   M[6].x = ZeroPoint;   // help: () until the first (hear f)
   M[7].x = ZeroPoint;   // stdio: () until the first (wear l)
   g->tasks = tagthread(M, 8);
-  g->parked = NULL;   // nothing is fd-parked before the first task ever parks
-  // book[zero] = macro (the macro table -- no separate field). both are on the
-  // stack; push the zero key so (sp2,sp1,sp0)=(book,macro,zero) for mapput.
+  g->parked = NULL;
+  // book[zero] = macro: the macro table has no field of its own
   g = push(g, 1, zero);
   g = mapput(g);                     // -> sp[0] = book
-  g->stack = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
-  // the abyss: g->stack holds a chain of books, walked head-first (stacklook) --
-  // one link today (orth, the boot book); a later layer prepends and shadows.
-  // the l-level `book` global stays the orth map (def0 pins A(g->stack)).
+  g->stack = g->sp[0];
+  // g->stack is a chain of books walked head-first (stacklook): a later layer prepends and shadows
   if (ok(g = have(g, Width(struct chain)))) {
    struct chain *ly = (void*) bump(g, Width(struct chain));
    ini_chain(ly, g->sp[0], ZeroPoint);
    g->stack = (word) ly; }
   g = pop(g, 1);
-  // the weak intern map (string -> the canonical atom), created before the
-  // first intern (the def tables just below). it lives outside the traced
-  // v0 region: a collection clones it untraced and sweeps it at the fixpoint.
+  // the weak intern map, before the first intern; outside the traced v0 region
   g = map_new(g);
   if (ok(g)) g->symbols = pop1(g);
   if (ok(g = map_new(g))) g->lib = pop1(g);   // the registry, before the first modtab
@@ -219,33 +182,26 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
    {"in", {.x = (word) &love_stdin}, 0},
    {"out", {.x = (word) &love_stdout}, 0},
    {"err", {.x = (word) &love_stderr}, 0},
-   // the two doors prel builds (tap and jug), so it can stamp the kind it means;
-   // mopped at birth like every other raw pointer the compiler folds (src/love/boot/egg.l)
+   // the doors prel builds tap and jug from; mopped at birth (egg.l)
    {"ci-vt", {.x = (word) &ci_vt}, 0},
    {"to-vt", {.x = (word) &to_vt}, 0},
-   // max-charm/min-charm: this build's fixnum bounds, exposed so width-specific
-   // tests gate on the real boundary (it differs on 32- vs 64-bit ports).
+   // this build's fixnum bounds, which differ by word width
    {"max-charm", {.x = putcharm((word)((uintptr_t)-1 >> 2))}, 0},
    {"min-charm", {.x = putcharm(-(word)((uintptr_t)-1 >> 2) - 1)}, 0},
-   // love-tco: glazed code continues by tail-jump, which only the threaded build
-   // honors -- auto.l reads this and keeps the interpreter on a trampoline build
+   // glazed code tail-jumps, which only the threaded build honors: auto.l reads this
    {"love-tco", {.x = putcharm(tco)}, 0}, };
   g = defn(g, def0, countof(def0));
-  // the l-level book = the orth map (the chain stays C-side; `stack` reads it), read only
-  // after the rows above: each one allocates, so a copy taken with them could be moved
+  // the book, the orth map (the chain stays C-side), read after the rows above: each one
+  // allocates, so a copy taken with them could be moved
   if (ok(g = push(g, 1, A(g->stack))) && ok(g = defv(g, "book"))) g->sp++;
-  // a nif row's value is its run inside nifs[]; an instruction row's is a bare fn, and that
-  // binds as its op charm -- no code address belongs in a love value (src/love/ev.c's pick/place).
+  // an instruction row binds as its op charm: no code address belongs in a love value
   for (uintptr_t j = 0; j < countof(def1); j++) {
    struct def d = def1[j];
    if (!nif_cell(d.v.k)) d.v.x = putcharm(op_index((intptr_t) d.v.ap));
    g = defn(g, &d, 1); }
-  if (ok(g = strof(g, LvVersion)))            // a live string: off the stack, never an def
+  if (ok(g = strof(g, LvVersion)))            // a live string, so defv, not a def
    g = pop(defv(g, "love-version"), 1);
-  // `love-arch`: the host CPU the glaze emits for, and the assembler target every backend
-  // is registered under. A NOM, in the prel's canonical spelling (src/love/boot/prel.l's arch-canon)
-  // -- so a reader compares it against 'x64 rather than interning a string first, and
-  // there is one word for this machine across holo, moon, kore and the seed.
+  // `love-arch`: the glaze's target, a nom in prel.l's arch-canon spelling
 #if defined(__x86_64__)
   #define LvArch "x64"
 #elif defined(__aarch64__)
@@ -259,10 +215,8 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
 #endif
   if (ok(g = intern(strof(g, LvArch))))
    g = pop(defv(g, "love-arch"), 1);
-  // the errno vocabulary (g->errs): canonical number -> its nom, all interned
-  // here so no error path ever allocates. love_err reads it; 0 is 'eunknown, the
-  // answer for the numbering's blanks, and -1 'badarg, the refused-before-any-
-  // syscall answer -- neither is a posix name, so neither can shadow one.
+  // g->errs: errno -> its nom, interned here so no error path allocates. -1 'badarg is refused
+  // before any syscall
   if (ok(g = map_new(g))) {
    for (uintptr_t n = countof(errnames); ok(g) && n--;)
     g = mapput(push(intern(strof(g, errnames[n].n)), 1, putcharm(errnames[n].v)));
@@ -277,8 +231,7 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
     *q = 0;
     g = mapput(push(intern(strof(g, nm)), 1, putcharm(i))); }
    if (ok(g)) g->kinds = pop1(g); }
-  // the kind table's keys and the built-in coins' names (g->knom, love.h's Kn rows), and
-  // the registry of named kinds (g->kreg): name -> (serial . table), pinned by post.l's `coin`
+  // g->knom: love.h's Kn rows; g->kreg: name -> (serial . table), pinned by post.l's `coin`
   { char const *const ns[KnN] = { "name", "+", "*", "ap", "-", "net", "star", "/",
                                   "payload", "<", "=", "int", "ceil", "lambda", "cask", "port", "coin" };
     for (int i = 0; ok(g) && i < KnN; i++)
@@ -287,8 +240,6 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
     for (int i = 0; ok(g) && i < RnN; i++)
      if (ok(g = intern(strof(g, ns[i])))) g->rnom[i] = pop1(g); }
   if (ok(g = map_new(g))) g->kreg = pop1(g);
-  // the 'missing tag needs nothing here (the raise sites mint it); the reader owns
-  // no operator tables -- book['operators] is seeded by the prel and factored at compile time
  }
  return g; }
 
@@ -297,19 +248,12 @@ word love_err(struct g *g, int e) {
  word v = mapget(g, 0, putcharm(e), g->errs);
  return v ? v : mapget(g, 0, zero, g->errs); }
 
-// THE system process. a mutable global the runtime keeps, and it is here
-// rather than behind a per-seat hook because there is ONE artifact: kmain and main and gc
-// are objects in the same ELF, so a weak default and a seat's override are two bodies with
-// one name, not two sides. born below, and moved only by gen_grow, which is the only place
-// a `struct g` ever changes address. read by C that sits UNDER the syscall boundary and
-// therefore cannot be handed g -- inle's /proc. a seat running two states at once would
-// see the one that grew last; nothing in the tree does, and only /proc reads this.
+// the system process, a mutable global: inle's /proc reads it from under the syscall
+// boundary, where no g is in hand. moved only by gen_grow
 struct g *love_system;
 
-// the once-laid tables: filled before the first g by whichever start comes first (ini, or
-// love_image_load for a wake), read-only after, one copy however many g there are. the lock
-// makes a second start wait for the first. arm32 has no exchange lane, and its boards are one
-// core that starts before any interrupt, so a plain flag is the whole story there
+// the once-laid tables, filled by the first start (ini or love_image_load), read-only after.
+// arm32 has no exchange, and its boards start one core before any interrupt
 static int once_lock, once_done;
 static love_inline void once_take(int *l) {
 #if !defined(__arm__)
@@ -334,15 +278,13 @@ int love_once(void) {
 
 struct g *ini(void) {
  if (!love_once()) return encode(NULL, status_scare);
- uintptr_t const len0 = love_minor0;   // initial minor pool; grows on demand (gen_grow)
+ uintptr_t const len0 = love_minor0;
  struct g *g = alloc(NULL, len0 * sizeof(word));
  if (g == NULL) return encode(g, status_scare);
  g = ini_0(g, len0);
  return ok(g) ? (love_system = g) : g; }
 
-// ============================================================================
-// stack
-// ============================================================================
+// ===== stack =====
 static struct g *pushr(struct g *g, uintptr_t m, uintptr_t n, va_list xs) {
  if (n == m) return please(g, m);
  word x = va_arg(xs, word);
@@ -381,18 +323,13 @@ struct g *gxr(struct g *g) {
   *++g->sp = (word) p; }
  return g; }
 
-// ============================================================================
-// sys
-// ============================================================================
+// ===== sys =====
 op11(lvm_clock, putcharm(love_clock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 
-// the fine clock: monotonic ns for differences ((nclock t) is ns minus t); clock
-// stays at ms, the scheduler's scale (ns wraps 32 bits every 4.3s). weak default
-// degrades to ms*1e6; hosts override with a real ns source.
+// monotonic ns, for differences; clock stays ms, since ns wraps 32 bits every 4.3s
 op11(lvm_nclock, putcharm(nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 
-// (please x): a collection on demand -- () a minor, a positive charm a major;
-// answers the new n_gc (the real-time lever). force keeps it from steering the nursery.
+// (please x): () a minor, a positive charm a major; answers n_gc. force leaves the nursery be
 static lvm(lvm_please) {
  word n = Sp[0];
  Pack(g);
@@ -401,7 +338,7 @@ static lvm(lvm_please) {
  Sp[0] = putcharm((intptr_t) g->n_gc);
  Ip += 1; love_musttail return Continue(); }
 
-// (gauge 0) -> a list of seventeen VM stats, so a caller can match it with @:
+// (gauge 0) -> a list of seventeen VM stats:
 //   [0] len       pool size (words)
 //   [1] heap      words used from base (core + live heap)
 //   [2] stack     stack height (words)
@@ -411,21 +348,19 @@ static lvm(lvm_please) {
 //   [6] n_seen    Σ heap occupancy entering each collection (scanned = live + dead, words)
 //   [7] n_evac    Σ heap survivors copied out each collection (live, words)
 //   [8] old       the tenured set: words live in the major pool
-//   [9] rem_miss  rem-set entries dropped on overflow since the last collection (a miss forces a major; ~always 0)
-//  [10] rem_hi    peak remembered-set size (distinct old objects with a young field)
+//   [9] rem_miss  rem-set entries dropped on overflow since the last collection
+//  [10] rem_hi    peak remembered-set size
 //  [11] n_minor   minor collections so far (majors = n_gc - n_minor)
 //  [12] major_cap the major pool's reserved footprint: major_len words
-//  [13] n_resize  pool reallocations so far (the pool-cliff tell)
-//  [14] minor_hi  peak words one minor copied -- the pause gauge (a copying
-//  [15] major_hi  peak words one major copied    collection's pause is its copy volume)
-//  [16] ticks     work in 64-step units: native countdowns refilled, and fairness yields (a clock-free cost)
-// derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap
+//  [13] n_resize  pool reallocations so far
+//  [14] minor_hi  peak words one minor copied (the pause)
+//  [15] major_hi  peak words one major copied
+//  [16] ticks     work in 64-step units: native refills and fairness yields, a clock-free cost
 static lvm(lvm_gauge) {
  enum { N = 17 };
  Have(N * Width(struct chain));
  struct chain *c = (struct chain*) Hp;
  Hp += N * Width(struct chain);
- // cell i holds stat i and links to cell i+1, the last to ()
  #define Gs(i, v) ini_chain(c + (i), putcharm((intptr_t) (v)), (i) + 1 < N ? (intptr_t) word(c + (i) + 1) : (intptr_t) ZeroPoint)
  Gs(0, g->len);
  Gs(1, Hp - ptr(g));
@@ -435,11 +370,11 @@ static lvm(lvm_gauge) {
  Gs(5, g->max_heap);
  Gs(6, g->n_seen);
  Gs(7, g->n_evac);
- Gs(8, g->major_hp - g->major_base);                // words live in the major pool
+ Gs(8, g->major_hp - g->major_base);
  Gs(9, g->rem_miss);
  Gs(10, g->rem_hi);
  Gs(11, g->n_minor);
- Gs(12, g->major_len);                              // major pool capacity, words
+ Gs(12, g->major_len);
  Gs(13, g->n_resize);
  Gs(14, g->minor_hi);
  Gs(15, g->major_hi);
@@ -448,20 +383,16 @@ static lvm(lvm_gauge) {
  love_musttail return Answer(word(c)); }
 
 // (tune v) -> the four live GC knobs as a list, in words:
-//   [0] budget  total footprint cap (minor + 2*major); 0 = unbounded (appel's rule)
+//   [0] budget  total footprint cap (minor + 2*major); 0 = unbounded
 //   [1] minor0  the nursery floor every resize clamps up to
-//   [2] major0  the major pool's grow/shrink step (never 0: it divides)
-//   [3] ratio   copy-overhead setpoint -- the nursery grows while copied/allocated tops 1/ratio
-// (tune ()) reads; a list of four numbers writes and answers what it replaced, so a probe
-// can put the knobs back. seeded at ini from love_minor0/love_major0/gc_ratio.
-// a knob lands at the next collection -- tightening budget frees nothing until then,
-// so pair it with (please 1). a wrong shape is a silent no-op answering the current
-// knobs (pin's misuse convention). these are untraced scalars ahead of v0, so a bake
-// does not carry them: a woken image tunes again (host's LOVE_BUDGET_MB does exactly that).
+//   [2] major0  the major pool's grow/shrink step
+//   [3] ratio   the nursery grows while copied/allocated tops 1/ratio
+// (tune ()) reads; four numbers write and answer the old ones; a wrong shape just reads.
+// a knob lands at the next collection; a bake does not carry them, so a woken image tunes again
 static lvm(lvm_tune) {
  enum { N = 4 };
  Have(N * Width(struct chain));
- word x = Sp[0];                             // read post-Have: a collection forwards the operand
+ word x = Sp[0];                             // post-Have
  struct chain *c = (struct chain*) Hp;
  Hp += N * Width(struct chain);
  #define Ts(i, v) ini_chain(c + (i), putcharm((intptr_t) (v)), (i) + 1 < N ? (intptr_t) word(c + (i) + 1) : (intptr_t) ZeroPoint)
@@ -470,31 +401,27 @@ static lvm(lvm_tune) {
  Ts(2, g->major0);
  Ts(3, g->ratio);
  #undef Ts
- // exactly four numbers, else the knobs stay as they are
  word x1 = chainp(x) ? B(x) : ZeroPoint, x2 = chainp(x1) ? B(x1) : ZeroPoint,
       x3 = chainp(x2) ? B(x2) : ZeroPoint;
  if (chainp(x3) && B(x3) == ZeroPoint && charmp(A(x)) && charmp(A(x1)) && charmp(A(x2)) && charmp(A(x3))) {
   intptr_t b = getcharm(A(x)), mi = getcharm(A(x1)), ma = getcharm(A(x2)), ra = getcharm(A(x3));
-  // a pool knob no heap could hold is refused, as a 0 is: the sizers scale them
-  g->budget = b > 0 ? (uintptr_t) b : 0;     // <= 0 is the unbounded spelling, not a refusal
-  if (mi > 0 && (uintptr_t) mi <= words_max / 4) g->minor0 = (uintptr_t) mi;   // a 0 floor would let the nursery vanish
+  // a knob no heap could hold is refused, as a 0 is: the sizers scale them
+  g->budget = b > 0 ? (uintptr_t) b : 0;     // <= 0 is unbounded, not a refusal
+  if (mi > 0 && (uintptr_t) mi <= words_max / 4) g->minor0 = (uintptr_t) mi;
   if (ma > 0 && (uintptr_t) ma <= words_max / 4) g->major0 = (uintptr_t) ma;   // the step divides
-  if (ra > 0 && ra <= 1024) g->ratio = (uintptr_t) ra; }   // 0 would never grow, a vast one overflows the grow test
+  if (ra > 0 && ra <= 1024) g->ratio = (uintptr_t) ra; }   // a vast one overflows the grow test
  love_musttail return Answer(word(c)); }
 
-// (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. the string-lane glaze
-// reads the kind of a reference string at codegen time and emits a `cmp [s], kind; jne deopt` type guard.
+// (apof x): x's kind pointer as a fixnum, 0 for an immediate; the glaze's type guards read it
 static lvm(lvm_apof) {
  word x = Sp[0];
  Sp[0] = putcharm(evenp(x) ? (uintptr_t) cell(x)->ap : 0);
  Ip += 1;
  love_musttail return Continue(); }
 
-// (reach-offset x) -> the byte offset of g->reach, so the emitter's `reach` law reads a slot as `ld r g off`
 lvm(lvm_reach_offset) { love_musttail return Answer(putcharm((intptr_t) offsetof(struct g, reach))); }
-// (nat? f) -> 1 when f is a native closure: arity 1 enters its code directly; an
-// arity>=2 cell curries through lvm_cur with the code at value[2]. a woken one's entry may be
-// lvm_lazy still, its header naming the code
+// (nat? f): a native closure, entered directly at arity 1 or through lvm_cur with the code at
+// value[2]; a woken one's entry may still be lvm_lazy, its header naming the code
 lvm(lvm_natp) {
  word x = Sp[0];
  union u *k = evenp(x) ? cell(x) : NULL, *e = k && k->ap == lvm_cur ? k + 2 : k;
@@ -509,32 +436,25 @@ lvm(lvm_arena) {
  Hp += N * Width(struct chain);
  for (int i = 0; i < N; i++) ini_chain(c + i, putcharm((intptr_t) code_stat(g, i)), i + 1 < N ? (intptr_t) word(c + i + 1) : (intptr_t) ZeroPoint);
  love_musttail return Answer(word(c)); }
-// a woken native's entry until its chunk of the image's code is seated: seat it, write the
-// code into the cell, enter. the header already names the code, one word behind an arity-1
-// entry and three behind a curried one's (lvm_cur and the arity between)
+// a woken native's entry until its code is seated. the header names the code, one word behind
+// an arity-1 entry and three behind a curried one's
 lvm(lvm_lazy) {
  union u *h = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? Ip - 3 : Ip - 1;
  if (code_seat(g, (char const*) h->ap)) { Pack(g); love_musttail return Ap(_lvm_ghelp, encode(g, status_scare)); }
  Ip->ap = h->ap;
  love_musttail return Continue(); }
 
-
-// (cue? p): would `see` answer without parking? the dual of the park law -- all
-// three terms (pushback, buffered run -- the borrowed one too, for the static input
-// port that reads through it -- and fd), or a port with bytes in hand reads
-// "not ready". it asks will you answer, not is there data: a hung-up fd reads
-// ready and the see answers -1. a non-port asks about stdin (the bare (cue? 0)).
+// (cue? p): would `see` answer without parking? any of the park law's three terms (pushback, a
+// buffered run, the fd). a hung-up fd is ready (see answers -1); a non-port asks stdin
 static lvm(lvm_key) {
- Sp[0] = io_route(g, iop(Sp[0]) ? Sp[0] : (word) &love_stdin);   // the bare (cue? 0) asks about stdin, so it routes too
+ Sp[0] = io_route(g, iop(Sp[0]) ? Sp[0] : (word) &love_stdin);
  struct io *i = (struct io*) Sp[0];
  Sp[0] = (getcharm(i->ungetc_buf) != EOF || io_pending(g, i)
           || ready((int) io_fd(i), wait_in)) ? putcharm(1) : zero;
  Ip += 1;
  love_musttail return Continue(); }
 
-// ============================================================================
-// str
-// ============================================================================
+// ===== str =====
 struct g *str0(struct g *g, uintptr_t len) {
  if (!len) { if (ok(g = have(g, 1))) *--g->sp = EmptyString; return g; } // never alloc empty
  uintptr_t req = str_width(len);
@@ -548,34 +468,27 @@ struct g *strof(struct g *g, char const *cs) {
  return g; }
 
 op11(lvm_strp, strp(Sp[0]) ? putcharm(1) : zero)
-// a cask snips as the string of its bytes, the way `pour` already reads one: swig
-// fills a buffer and the caller wants the prefix it filled, and (string b) first
-// copies the whole buffer to take a corner of it -- 64K a read for a 12-byte file.
-// text and charlist are one sequence in two spellings -- + splices across them --
-// so one knife cuts both: (string (snip l i j)) is (snip (string l) i j).
+// a cask snips as the string of its bytes, as `pour` reads one. a charlist cuts the same:
+// (string (snip l i j)) is (snip (string l) i j)
 static lvm(lvm_snip) {
  intptr_t i = oddp(Sp[1]) ? getcharm(Sp[1]) : 0,
           j = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
- // a chain is text's other spelling, so it takes the same knife: the same clamps
- // over the same half-open range, and the element where the byte was. () is the
- // charlist "" and snips to itself.
  if (Sp[0] == ZeroPoint) Sp[2] = ZeroPoint;
  else if (chainp(Sp[0]) && !nomp(Sp[0])) {
   intptr_t n = (intptr_t) llen(Sp[0]);
   i = max(i, 0), i = min(i, n);
   j = max(j, i), j = min(j, n);
-  if (j == i) Sp[2] = ZeroPoint;                 // the empty of the kind, as "" is below
+  if (j == i) Sp[2] = ZeroPoint;
   else {
    uintptr_t req = (uintptr_t) (j - i) * Width(struct chain);
    Have(req);
-   word y = Sp[0];                               // re-read post-Have (GC may have moved it)
+   word y = Sp[0];                               // post-Have
    for (intptr_t k = 0; k < i; k++) y = B(y);
    struct chain *base = (struct chain*) Hp, *w = base;
    Hp += req;
    for (intptr_t k = i; k < j; k++, y = B(y), w++) ini_chain(w, A(y), word(w + 1));
-   w[-1].b = ZeroPoint;                          // a fresh spine, so only its own tail is cut
+   w[-1].b = ZeroPoint;
    Sp[2] = word(base); } }
- // a rank-1 tray cuts the same way: the range copied into a fresh tray of its type
  else if (trayp(Sp[0]) && tray(Sp[0])->rank == 1) {
   struct tray *v = tray(Sp[0]);
   intptr_t n = (intptr_t) v->shape[0];
@@ -583,7 +496,7 @@ static lvm(lvm_snip) {
   j = max(j, i), j = min(j, n);
   uintptr_t m = (uintptr_t) (j - i), req = b2w(tray_bytes(v->type, 1, m));
   Have(req);
-  v = tray(Sp[0]);                               // re-read post-Have (GC may have moved it)
+  v = tray(Sp[0]);                               // post-Have
   struct tray *t = (struct tray*) Hp;
   Hp += req;
   ini_tray(t, v->type, 1), t->shape[0] = m;
@@ -594,15 +507,12 @@ static lvm(lvm_snip) {
   struct str *s = bytes_of(Sp[0]), *t;
   i = max(i, 0), i = min(i, (word) len(s));
   j = max(j, i), j = min(j, (word) len(s));
-  // an empty range (i == j) answers a string, the closest form of nothing for this
-  // kind, not the bare floor (fixnum 0) -- and the empty string, never a fresh one.
-  // no 0-length string is ever allocated (str0 holds the same line), which is what
-  // lets two empties be ==-equal wherever they were built.
+  // no 0-length string is ever allocated (str0 too), so two empties are ==-equal
   if (j == i) Sp[2] = EmptyString;
   else {
    size_t req = str_width(j - i);
    Have(req);
-   s = bytes_of(Sp[0]);                          // re-read post-Have (GC may have moved it)
+   s = bytes_of(Sp[0]);                          // post-Have
    t = str(Hp);
    Hp += req;
    ini_str(t, j - i);
@@ -610,9 +520,7 @@ static lvm(lvm_snip) {
    Sp[2] = (word) t; } }
  love_musttail return Nextp(1, 2); }
 
-// (sits? s i t): t's bytes sit in s at i -- (= t (snip s i (i + #t))) compared in place,
-// so a pattern's anchor costs no allocation. a string or cask s and a string t; anything
-// else is 0; an empty t is 1 anywhere, as its snip is.
+// (sits? s i t): (= t (snip s i (i + #t))) in place; an empty t is 1 anywhere
 static lvm(lvm_sitsp) {
  word v = zero;
  if ((strp(Sp[0]) || caskp(Sp[0])) && strp(Sp[2])) {
@@ -621,8 +529,7 @@ static lvm(lvm_sitsp) {
   if (!m || (0 <= i && i + m <= (intptr_t) len(s) && !memcmp(txt(s) + i, txt(t), (size_t) m))) v = putcharm(1); }
  love_musttail return Answerp(2, v); }
 
-// (subidx s t i): the first index >= i where t sits in s, or -1 -- prel's fsub over two
-// strings, without a snip a position. an empty t is found at i itself while i <= #s.
+// (subidx s t i): the first index >= i where t sits in s, or -1; an empty t is at i while i <= #s
 static lvm(lvm_subidx) {
  intptr_t r = -1;
  if (strp(Sp[0]) && strp(Sp[1])) {
@@ -636,10 +543,8 @@ static lvm(lvm_subidx) {
    if (!memcmp(p, txt(t), (size_t) m)) { r = k; break; } } }
  love_musttail return Answerp(2, putcharm(r)); }
 
-// (cats l): the foldr of + over l, in one allocation where its pieces are all of a kind.
-// strings (and ()s) join into one fresh string, a lone string answering as itself; lists
-// (and ()s) append, every spine copied but the last, which is shared as + shares it.
-// anything else -- numbers, trays, a string beside a list, an improper l -- is hook 10's.
+// (cats l): the foldr of + over l, in one allocation when the pieces are all strings or all
+// lists (the last list shared, as + shares it); anything else goes to the hook
 static lvm(lvm_cats) {
  uintptr_t nstr = 0, nlist = 0, other = 0, bytes = 0, cells = 0, lastn = 0;
  word p = Sp[0], one = ZeroPoint;
@@ -651,23 +556,23 @@ static lvm(lvm_cats) {
    uintptr_t k = 0;
    word q = x;
    for (; chainp(q) && !nomp(q); q = B(q)) k++;
-   if (q != ZeroPoint) other++;                                  // an improper piece is the fold's to judge
+   if (q != ZeroPoint) other++;
    else nlist++, cells += lastn, lastn = k, one = x; }
   else other++; }
- if (p != ZeroPoint || other || (nstr && nlist)) {               // the general fold, in love
+ if (p != ZeroPoint || other || (nstr && nlist)) {
   Have(2);
   word h = hot_hook(g->hook[hook_cats]), l = Sp[0], *dst = Sp - 2;
   dst[0] = l, dst[1] = h, dst[2] = word(Ip + 1);
   Sp = dst, Ip = (union u*) callout_drive;
   love_musttail return Continue(); }
- if (nstr + nlist <= 1) love_musttail return Answer(one);          // () or a lone piece, as itself
+ if (nstr + nlist <= 1) love_musttail return Answer(one);
  if (nstr) {
   if (!bytes) love_musttail return Answer(EmptyString);
   Have(str_width(bytes));
   struct str *t = ini_str(str(Hp), bytes);
   Hp += str_width(bytes);
   char *w = txt(t);
-  for (p = Sp[0]; chainp(p); p = B(p))                           // re-read: a collection may have moved it
+  for (p = Sp[0]; chainp(p); p = B(p))                           // post-Have
    if (strp(A(p))) memcpy(w, txt(A(p)), len(A(p))), w += len(A(p));
   love_musttail return Answer(word(t)); }
  Have(cells * Width(struct chain));
@@ -678,32 +583,28 @@ static lvm(lvm_cats) {
  for (p = Sp[0]; chainp(p); p = B(p)) {
   word x = A(p);
   if (x == ZeroPoint) continue;
-  if (++k == nlist) { prev->b = x; break; }                      // the last piece is shared, as + shares it
+  if (++k == nlist) { prev->b = x; break; }                      // the last piece is shared
   for (; chainp(x); x = B(x), w++) {
    ini_chain(w, A(x), ZeroPoint);
    if (prev) prev->b = word(w); else head = word(w);
    prev = w; } }
  love_musttail return Answer(head); }
 
-
-// applying a cask behaves as 0 (yields 1); byte-identical to lvm_port_io, kept
-// distinct by noicf so caskp and iop never collide
+// applying a cask yields 1; byte-identical to lvm_port_io, kept apart by noicf so caskp and iop never collide
 lvm(lvm_cask) {
  Ip = cell(*++Sp); *Sp = ZeroPoint; love_musttail return Continue(); }
-// (cask n) — a zeroed n-byte mutable cask; (cask charlist) — one holding those
-// bytes (the bulk way in). n<=0 -> EmptyString, so no empty cask object exists.
-// two heap objects under one Have, so no GC sees a half-built cask.
+// (cask n): a zeroed n-byte mutable cask; (cask charlist): one holding those bytes. n <= 0 is ""
 static lvm(lvm_casknew) {
  bool listp = chainp(Sp[0]);
  intptr_t n = charmp(Sp[0]) ? getcharm(Sp[0]) : listp ? (intptr_t) llen(Sp[0]) : 0;
- if (n <= 0) love_musttail return Answer(EmptyString);   // no empty cask: it is ""
+ if (n <= 0) love_musttail return Answer(EmptyString);
  uintptr_t sreq = str_width(n),
            breq = Width(struct cask) + Width(struct tag);
  Have(sreq + breq);
  struct str *s = ini_str(str(Hp), n);
  Hp += sreq;
- if (listp) {                                                // the charlist lane, mirroring lvm_string's
-  word y = Sp[0];                                            // re-read post-Have, like the cask lane there
+ if (listp) {
+  word y = Sp[0];                                            // post-Have
   for (uintptr_t i = 0; i < (uintptr_t) n; y = B(y)) txt(s)[i++] = (char) getcharm(A(y)); }
  else memset(txt(s), 0, n);
  union u *k = (union u*) Hp;
@@ -713,44 +614,31 @@ static lvm(lvm_casknew) {
  tagthread(k, Width(struct cask));
  love_musttail return Answer(word(k)); }
 
-// AArch64 wants the I-cache told about freshly written code (a no-op on x86); wasm has
-// no code arena to tell and emscripten's clang has no intrinsic to tell it with, so the
-// question is answered ONCE here rather than at each install -- a site that forgets the
-// guard is a wasm build that dies in instruction selection, which is how this got said.
+// tell the I-cache about fresh code; wasm has no arena and no intrinsic, so a site never asks directly
 #ifdef __wasm__
 #define code_sync(a, b) ((void) (a), (void) (b))
 #else
 #define code_sync(a, b) __builtin___clear_cache(a, b)
 #endif
 
-// the native code arena: hosted, the malloc heap is NX, so the glaze installs into
-// chunks of pages of its own. a chunk is RX; an install opens just the blob's pages,
-// writes, and seals them again (W^X, never both at once). a blob is [len, span, code..],
-// 16-aligned, so the code address is what the closure cell holds; span is the bytes its
-// install took, which a free hands back. the code addresses live outside the GC pool; a
-// native closure's finalizer frees its blob: a span that ends the bump chunk's bump
-// retracts it, else it joins the free list, kept by address and merged with its
-// neighbours, and the next install takes the lowest that fits. on inle -- one hosted-compiled binary, so the question is asked at
-// RUN TIME, a negative __love_osv -- and on a freestanding seat, RAM is executable and
-// a heap copy runs, with no finalizer owed.
-// one chunk; used is its bump, fixed = the image's own (shared blobs, never freed one at a
-// time). own is what the allocator was handed, NULL off mmap: a seat whose executable
-// window is an alias frees by the address it asked for, not the address it runs.
+// the native code arena: hosted, RX page chunks outside the GC pool, opened W only while an
+// install writes (W^X). a blob is [len, span, code..], 16-aligned; span is what its install
+// took, which a free hands back: off the bump chunk's end it retracts, else it joins the free
+// list, by address, merged with its neighbours, lowest fit first. inle (asked at run time:
+// __love_osv < 0) and freestanding seats run heap copies, no finalizer owed.
+// fixed = the image's own chunk, never freed blob by blob; own = what the allocator handed,
+// NULL off mmap, freed by that address and not the window it runs at
 struct code { char *base, *own; size_t len, used; int fixed; struct lazy *lz; struct code *next; };
 struct cfree { char *p; size_t n; struct cfree *next; };           // a free span, the list by address
 #if __STDC_HOSTED__
-// which kernel underneath: moonlibc's os.c defines it (0 unprobed; 1..3 the
-// hosted kernels; negative = we ARE the kernel). moonlibc defines it (os.c);
-// a seat without one gives its own -- love0 in src/love/user/main0.c.
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #define CodeChunk ((size_t) 1 << 20)
 #define CodeHead (2 * sizeof(uintptr_t))
 static size_t code_round(size_t n) { return (n + 15) & ~(size_t) 15; }
-static size_t code_page(void) { long q = sysconf(_SC_PAGESIZE); return q > 0 ? (size_t) q : 4096; }   // glibc's sysconf is a cached auxv load, not a syscall
-// open [p, p+n) for writing, or seal it; page-granular, so neighbours ride along -- nothing
-// runs while an install writes, so that costs no one anything
+static size_t code_page(void) { long q = sysconf(_SC_PAGESIZE); return q > 0 ? (size_t) q : 4096; }
+// open [p, p+n) for writing, or seal it; neighbours on the page ride along, and nothing runs meanwhile
 static int code_open(char *p, size_t n, int prot) {
  size_t ps = code_page();
  uintptr_t lo = (uintptr_t) p & ~(ps - 1), hi = ((uintptr_t) p + n + ps - 1) & ~(ps - 1);
@@ -818,29 +706,24 @@ char *code_install(struct g *g, char const *src, size_t n) {
  return p + CodeHead; }
 void code_free(struct g *g, char *code) {
  char *p = code - CodeHead;
- for (struct code *c = g->code; c; c = c->next)      // the image's chunk is text: the dump packs one blob
-  if (c->fixed && p >= c->base && p < c->base + c->len) return;   // per distinct BODY, so a dead closure never
- code_release(g, p, ((uintptr_t*) p)[1]); }                       // frees bytes another one is still running
-// the arena's state, one figure at a time: 0 mapped, 1 bumped, 2 free, 3 free spans, over
-// the chunks installs own. a figure, not an array, so the nif keeps no local across its tail
+ for (struct code *c = g->code; c; c = c->next)      // the image packs one blob per body, so its
+  if (c->fixed && p >= c->base && p < c->base + c->len) return;   // chunk frees nothing
+ code_release(g, p, ((uintptr_t*) p)[1]); }
+// the arena, one figure at a time: 0 mapped, 1 bumped, 2 free, 3 free spans, over the chunks
+// installs own. a figure, not an array, so the nif keeps no local across its tail
 uintptr_t code_stat(struct g *g, int i) {
  uintptr_t s = 0;
  if (i < 2) { for (struct code *c = g->code; c; c = c->next) if (!c->fixed) s += i ? c->used : c->len; }
  else for (struct cfree *f = g->cfree; f; f = f->next) s += i == 2 ? f->n : 1;
  return s; }
-int code_in(struct g *g, uintptr_t v) {                          // a code address of this session's arena?
+int code_in(struct g *g, uintptr_t v) {
  for (struct code *c = g->code; c; c = c->next)
   if (v >= (uintptr_t) c->base && v < (uintptr_t) c->base + c->used) return 1;
  return 0; }
 size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
-// the seat's executable alias for a heap block: itself, unless a seat maps its heap
-// non-executable and keeps a second window that runs. inle does (src/inle/kmain.c).
 
-// the image lane: a segment of blobs gets a chunk of its own, text nothing frees, empty
-// until a seat writes it through *w. inle's mmap hands back the hhdm, NX by construction
-// (src/inle/mkboot.l puts the bit on the whole window), and its mprotect cannot lift that off a
-// 2 MiB entry the identity map shares -- so there the block runs through the window that
-// does, the same memory by the low map's address
+// the image's segment, a fixed chunk written through *w. inle's hhdm is NX and mprotect cannot
+// lift it off a shared 2 MiB entry, so there the block runs through code_window's low map
 static struct code *code_region(struct g *g, size_t n, char **w) {
  struct code *c = alloc(NULL, sizeof *c);
  if (!c) return NULL;
@@ -852,16 +735,15 @@ static struct code *code_region(struct g *g, size_t n, char **w) {
   size_t ps = code_page(), len = (n + ps - 1) & ~(ps - 1);
   void *b = mmap(0, len, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (b == MAP_FAILED) { alloc(c, 0); return NULL; }
-  c->base = *w = b, c->own = NULL, c->len = c->used = len; }       // used = len: the tail is nobody's
+  c->base = *w = b, c->own = NULL, c->len = c->used = len; }       // the tail is nobody's
  c->fixed = 1, c->lz = NULL, c->next = g->code, g->code = c;
  return c; }
-// open [p, p+n) of a region for its seat to write, or seal it; a heap block is writable as it is
+// a heap block is writable as it is
 static int code_wopen(struct code *c, char *p, size_t n, int seal) {
  return c->own ? 0 : code_open(p, n, seal ? PROT_READ | PROT_EXEC : PROT_READ | PROT_WRITE); }
 static void code_drop(struct g *g, struct code *c) {
  if (c->own) alloc(c->own, 0); else munmap(c->base, c->len); }
-// a byte a chunk, shared across fork: which chunks any process of this image has seated.
-// none where we are the kernel, whose fork is a no-op
+// a byte a chunk, shared across fork: which chunks any process of this image has seated
 static unsigned char *code_wants(size_t n) {
  void *b = __love_osv < 0 ? MAP_FAILED : mmap(0, n, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
  return b == MAP_FAILED ? NULL : b; }
@@ -869,13 +751,10 @@ static void code_unwant(unsigned char *w, size_t n) { if (w) munmap(w, n); }
 #else
 // freestanding: RAM runs as it is; blobs live in the heap (lvm_nif) and an image's segment in the allocator
 int code_in(struct g *g, uintptr_t v) { return 0; }
-// no arena, so no blob carries the length word an install writes -- and nobody asks:
-// snap's code rung reaches this only behind the code_in above, which owns no address
 size_t code_len(char *code) { return 0; }
 void code_free(struct g *g, char *code) { }
 uintptr_t code_stat(struct g *g, int i) { return 0; }
 static void code_drop(struct g *g, struct code *c) { alloc(c->own, 0); }
-// a chunk like the hosted lane's, so the session owns it and code_fin frees it
 static struct code *code_region(struct g *g, size_t n, char **w) {
  struct code *c = alloc(NULL, sizeof *c);
  char *b = c ? alloc(NULL, n) : NULL;
@@ -895,27 +774,24 @@ char *code_adopt(struct g *g, char const *src, size_t n) {
  if (code_wopen(c, c->base, n, 1)) return NULL;
  code_sync(c->base, c->base + n);
  return c->base; }
-// a segment deflated a chunk at a time, each seated when a native in it first runs: the
-// image's table holds where each chunk starts in the segment and in z, and its digest, three
-// words apiece; tab keeps the first two, sum the third. every chunk was deflated against dic,
-// nd bytes, a preset dictionary
+// a segment deflated a chunk at a time, each seated when a native in it first runs. the
+// image's table rows are (start, zstart, digest): tab keeps two, sum the third; dic is the preset dictionary
 struct lazy { unsigned char const *z, *dz; char *w; unsigned char *seated, *dic, *want; uint64_t *sum; uintptr_t n, nz, nch, nd, ndz; uint64_t tab[]; };
 static int code_seat1(struct code *c, uintptr_t k) {
  struct lazy *l = c->lz;
  if (l->seated[k]) return 0;
- if (l->dz && inflate_raw(l->dz, l->ndz, l->dic, l->nd) != (intptr_t) l->nd) return -1;   // the first seat's
+ if (l->dz && inflate_raw(l->dz, l->ndz, l->dic, l->nd) != (intptr_t) l->nd) return -1;   // the first seat inflates dic
  l->dz = NULL;
  uintptr_t a = (uintptr_t) l->tab[2 * k], b = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 2] : l->n,
            za = (uintptr_t) l->tab[2 * k + 1], zb = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 3] : l->nz;
- if (image_sum(l->z + za, zb - za, 0) != l->sum[k]                   // a damaged chunk: never seated, never run
+ if (image_sum(l->z + za, zb - za, 0) != l->sum[k]                   // a damaged chunk never runs
      || code_wopen(c, c->base + a, b - a, 0)
      || inflate_dict(l->z + za, zb - za, (unsigned char*) l->w + a, b - a, l->dic, l->nd) != (intptr_t)(b - a)
      || code_wopen(c, c->base + a, b - a, 1)) return -1;
  code_sync(c->base + a, c->base + b);
  if (l->want) l->want[k] = 1;
  return l->seated[k] = 1, 0; }
-// kept: z outlives the session, else every chunk is seated now. NULL on a table that does
-// not describe n bytes from nz
+// kept: z outlives the session, else every chunk is seated now. NULL on a bad table
 char *code_lazy(struct g *g, size_t n, unsigned char const *z, size_t nz, unsigned char const *tab, uintptr_t nch,
                 unsigned char const *dz, size_t ndz, size_t nd, int kept) {
  char *w;
@@ -937,7 +813,6 @@ char *code_lazy(struct g *g, size_t n, unsigned char const *z, size_t nz, unsign
  if (!kept)
   for (uintptr_t k = 0; k < nch; k++) if (code_seat1(c, k)) return NULL;
  return c->base; }
-// seat the chunk holding a, when a lazy segment has it; 0 unless that fails
 int code_seat(struct g *g, char const *a) {
  for (struct code *c = g->code; c; c = c->next)
   if (c->lz && a >= c->base && a < c->base + c->lz->n) {
@@ -950,8 +825,7 @@ void code_warm(struct g *g) {
  for (struct code *c = g->code; c; c = c->next)
   if (c->lz && c->lz->want)
    for (uintptr_t k = 0; k < c->lz->nch; k++) if (c->lz->want[k] && !c->lz->seated[k] && code_seat1(c, k)) return; }
-// the arena is the session's, not the collector's: no root names a chunk, so nothing but
-// the end of the session can free one. blobs still live are dead code by then.
+// the arena is the session's, not the collector's: only its end frees a chunk
 void code_fin(struct g *g) {
  for (struct code *c = g->code, *n; c; c = n) {
   n = c->next, code_drop(g, c);
@@ -960,62 +834,52 @@ void code_fin(struct g *g) {
  for (struct cfree *f = g->cfree, *n; f; f = n) n = f->next, alloc(f, 0);
  g->code = NULL, g->cfree = NULL; }
 
-// ============================================================================
-// sym
-// ============================================================================
-// the interning half of nom: string s -> the symbol it spells; identity on any other arg.
-// the empty spelling names nothing: (intern "") is ().
+// ===== sym =====
+// string s -> the symbol it spells; identity on any other arg
 lvm(lvm_intern) {
  if (strp(Sp[0])) {
-  if (Sp[0] == EmptyString) love_musttail return Answer(ZeroPoint);  // (intern "") -> () (zero-ontology: the empty spelling is the zero point)
+  if (Sp[0] == EmptyString) love_musttail return Answer(ZeroPoint);  // the empty spelling names ()
   word y;
   Have(intern_reserve(g));
   Pack(g), y = intern_checked(g, str(g->sp[0])), Unpack(g);
   Sp[0] = y; }
  love_musttail return Next(1); }
 
-// (mint _) -> a fresh nameless point, identity its only property (the arg is
-// ignored). `code` gets the mint serial: its hash and its order key, GC-stable.
-// mints answer nomp, so they bind as gensyms.
+// (mint _) -> a fresh nameless point; its serial is its GC-stable hash and order key
 static lvm(lvm_mint) {
  Have(Width(struct mint));
  struct mint *y = (struct mint*) Hp;
- Hp += Width(struct mint);                   // mints are uniform: ap, code
+ Hp += Width(struct mint);
  ini_missing(y, ++g->next_serial);
  return
   Sp[0] = word(y),
   Ip += 1,
   Continue(); }
 
-// (nom n) -> the name a string spells, a name itself, a fresh mint for anything else.
-// interning, so idempotent: (nom "x") = (nom 'x) = 'x; `mint` is the one fresh constructor.
+// (nom n): the name a string spells, a name itself, a fresh mint for anything else
 static lvm(lvm_nomctor) {
  if (strp(Sp[0]) || namep(Sp[0])) love_musttail return Ap(lvm_intern, g);
  love_musttail return Ap(lvm_mint, g); }
 
 struct g *intern(struct g*g) {
- if (!ok(g)) return g;                        // intern_reserve reads g, and have's guard is
-                                                 // too late (it is an argument): a caller's scare
-                                                 // was dereferenced rather than propagated
- if (ok(g = have(g, intern_reserve(g))))   // atom + (at the load factor) the doubled backing
+ if (!ok(g)) return g;                        // intern_reserve reads g before have's guard
+ if (ok(g = have(g, intern_reserve(g))))
   g->sp[0] = intern_checked(g, str(g->sp[0]));
  return g; }
 
-// what a fresh intern may bump: the atom, plus (at the load factor) the doubled
-// backing. callers reserve this before intern_checked, so the insert never allocates.
+// what a fresh intern may bump: the atom, plus at the load factor the doubled backing
 uintptr_t intern_reserve(struct g *g) {
  word m = g->symbols;
  uintptr_t extra = m && (map_len(m) + 1) * 4 >= map_cap(m) * 3 ? map_back_words(2 * map_cap(m)) : 0;
- return Width(struct nom) + extra; }   // a named symbol is one flat KNom (name + serial)
+ return Width(struct nom) + extra; }
 
-// probe the weak intern map by string content; a miss mints the canonical KNom
-// and inserts it. one canonical nom per spelling. bump-only in here (see intern_reserve).
+// one canonical nom per spelling, minted on a miss; bump-only (intern_reserve)
 love_noinline word intern_checked(struct g *g, struct str *b) {
  word m = g->symbols;
  bool found;
  uintptr_t i = map_probe(g, m, word(b), &found);
  if (found) return map_slots(m)[2 * i + 1];
- if ((map_len(m) + 1) * 4 >= map_cap(m) * 3) {           // at load: rehash into a doubled backing
+ if ((map_len(m) + 1) * 4 >= map_cap(m) * 3) {
   uintptr_t ncap = 2 * map_cap(m), nmask = ncap - 1;
   union u *nb = map_fill_back(bump(g, map_back_words(ncap)), ncap);
   word *os = map_slots(m), *ns = tablet_back(nb)->slot;
@@ -1027,33 +891,25 @@ love_noinline word intern_checked(struct g *g, struct str *b) {
    while (ns[2 * x] != map_gap) x = (x + 1) & nmask;
    ns[2 * x] = k, ns[2 * x + 1] = os[2 * j + 1], nlen++; }
   tablet_back(nb)->len = putcharm(nlen);
-  tablet(m)->back = (word) nb, gen_wb(g, m, (word) nb);  // swap backing; header identity stable
+  tablet(m)->back = (word) nb, gen_wb(g, m, (word) nb);  // the header keeps its identity
   i = map_probe(g, m, word(b), &found); }
- struct nom *y = ini_nom(bump(g, Width(struct nom)), word(b), nom_dig(word(b)));  // the canonical KNom: name + serial + cached spelling hash
+ struct nom *y = ini_nom(bump(g, Width(struct nom)), word(b), nom_dig(word(b)));
  word *slots = map_slots(m);
  slots[2 * i] = word(b), slots[2 * i + 1] = word(y);
  gen_wb(g, map_back(m), word(y));                        // a fresh atom in a tenured backing
  map_len_set(m, map_len(m) + 1);
  return word(y); }
 
-// (nom? x): a real point -- a non-() mint or a named nom; () is the one point
-// that is not nom?
+// (nom? x): a non-() mint or a named nom
 op11(lvm_nomp, (nomp(Sp[0]) && Sp[0] != ZeroPoint) ? putcharm(1) : zero)
-// (name? x): a named point only (KNom) -- a nom with a spelling. name? => nom?; the gap
-// nom? \ name? is the anonymous-but-real mints (gensyms).
 op11(lvm_namep, namep(Sp[0]) ? putcharm(1) : zero)
-// (mint? x): that gap, asked directly -- a bare point, the gensym `nom` hands back.
-// mint? and name? partition nom?, and () is in neither. the only way to ask, since
-// `string` answers text for every point alike and a mint's spelling is "".
+// mint? and name? partition nom?; the only way to ask, since a mint's spelling is ""
 op11(lvm_mintp, (mintp(Sp[0]) && Sp[0] != ZeroPoint) ? putcharm(1) : zero)
-op11(lvm_packp, (packp(Sp[0]) || gemp(Sp[0]) || bigp(Sp[0]) || twinp(Sp[0])) ? putcharm(1) : zero)  // the pack family: arrays + every boxed number, gem/sun/twin
+op11(lvm_packp, (packp(Sp[0]) || gemp(Sp[0]) || bigp(Sp[0]) || twinp(Sp[0])) ? putcharm(1) : zero)  // arrays + every boxed number
 op11(lvm_sunp, bigp(Sp[0]) ? putcharm(1) : zero)
 op11(lvm_setp, trayp(Sp[0]) ? putcharm(1) : zero)
-// (int x): truncate a float scalar to a fixnum; other numbers pass through. used by
-// num-ap to get an integer composition count from a non-integer numeral operator.
-// int: a gem truncates toward zero, saturating at the charm bounds like the other
-// rungs (the bare cast wrapped above 2^62 -- UB read as 0); a coin whose kind spells
-// 'int takes that; everything else passes through.
+// (int x): a gem truncates toward zero, saturating at the charm bounds; a coin whose kind
+// spells 'int takes that; the rest pass through
 static lvm(lvm_intf) {
  if (trayp(Sp[0])) {                            // a float tray truncates to an int tray, the rest pass
   if (tray(Sp[0])->type != love_R) { Ip += 1; love_musttail return Continue(); }
@@ -1065,25 +921,21 @@ static lvm(lvm_intf) {
                  : v != v ? 0 : (intptr_t) v); }
  Ip += 1; love_musttail return Continue(); }
 
-// ============================================================================
-// chain
-// ============================================================================
+// ===== chain =====
 op11(lvm_cap, chainp(Sp[0]) ? A(Sp[0]) : Sp[0])
-op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) : ZeroPoint)   // cup of an atom -> the const () (ZeroPoint), not the moving core (which had serial g->ip, not 0)
-op11(lvm_stack, g->stack)   // the live layer chain (the abyss) -- runtime-internal, mopped at birth; ev.l's gv walks it
-op11(lvm_setstack, (g->stack = Sp[0], zero))   // set the layer chain: the scope-layer door (open/use/close ride it); runtime-internal, mopped at birth
-op11(lvm_kreg, g->kreg)   // (kreg _): the named-kind registry; post.l's coin/kinds read and pin it
-op11(lvm_lib, g->lib)   // (lib _): the module registry book; runtime-internal, mopped at birth
-// push a fresh writable layer at the head of the book chain -- the runtime's
-// enter: the session's scope, every defglob's target
+op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) : ZeroPoint)
+op11(lvm_stack, g->stack)   // the layer chain; these three are mopped at birth
+op11(lvm_setstack, (g->stack = Sp[0], zero))
+op11(lvm_kreg, g->kreg)   // post.l's coin/kinds read and pin it
+op11(lvm_lib, g->lib)
+// push a fresh writable layer at the head of the book chain: the session's scope
 struct g *love_open(struct g *g) {
- if (!ok(g = map_new(g))) return g;                 // sp[0] = the fresh layer map
+ if (!ok(g = map_new(g))) return g;
  g = gxr(push(g, 1, g->stack));                      // (layer . chain)
  if (!ok(g)) return g;
  g->stack = *g->sp;
  return pop(g, 1); }
-// drop the link just below the head -- the runtime's bare leave, the inverse of
-// one `borrow`; nothing below the head is a no-op
+// drop the link just below the head: the inverse of one `borrow`
 struct g *shelve(struct g *g) {
  if (!ok(g)) return g;
  word bk = g->stack;
@@ -1093,7 +945,7 @@ struct g *shelve(struct g *g) {
  g->stack = *g->sp;
  return pop(g, 1); }
 
-op11(lvm_chainp, (chainp(Sp[0]) && !nomp(Sp[0])) ? putcharm(1) : zero)  // the surface chain?: a real compound list. a named symbol reads (name . mint) but counts as an atom
+op11(lvm_chainp, (chainp(Sp[0]) && !nomp(Sp[0])) ? putcharm(1) : zero)  // a nom is chainp in C but an atom here
 
 static lvm(lvm_link) {
  Have(Width(struct chain));
@@ -1133,29 +985,20 @@ static lvm(lvm_link) {
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b); \
   if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(box_req); emit_int(_res, av c_op bv); \
    love_musttail return Push(_res); } } \
- { g->b = (word) (vop); love_musttail return Ap(lvm_bdiv_start, g); } }   /* big // and % run yieldable (resumable long division) */
-// a bare mint (() too) is not a number, so a numeric lane has nothing to compute with
-// and answers (), either side: - / // % & | ^ << >>. the sequence ops keep their own
-// band rules and never come here -- () is the unit of + (joining nothing on) and the
-// annihilator of * (repeating a sequence an absent number of times). comparisons and
-// `=` stay strict.
-// the ordered comparisons (< <= > >=) and their total order over all values are
-// defined after vcmp_int/vcmp_flo (the per-op helpers they reuse), by lvm_vbin.
-
+ { g->b = (word) (vop); love_musttail return Ap(lvm_bdiv_start, g); } }   /* big // and % run yieldable */
+// a mint (() too) is not a number: a numeric lane answers () either side. + and * keep their own
+// band rules, () the unit of + and the annihilator of *
 
 avm_slow(add, vop_add, __builtin_add_overflow, ad + bd)
 avm_slow(sub, vop_sub, __builtin_sub_overflow, ad - bd)
 avm_slow(mul, vop_mul, __builtin_mul_overflow, ad * bd)
 
-avm_slowdiv(fquot, vop_fquot, /, love_trunc(ad / bd), (void) 0)  // `//` truncating: float operand floors toward zero
-// a % 0 = a, in the numerator's own rep. a zero modulus is no modulus (Z/0Z is Z, and the
-// class of a is {a}), and it is what keeps a = (a // n) * n + (a % n) true at n = 0 --
-// where (a // 0) * 0 is () and () is the unit of +, so the remainder carries the whole a.
+avm_slowdiv(fquot, vop_fquot, /, love_trunc(ad / bd), (void) 0)  // truncating toward zero
+// a % 0 = a, which keeps a = (a // n) * n + (a % n) at n = 0: (a // 0) * 0 is (), the unit of +
 avm_slowdiv(rem, vop_rem, %, love_fmod(ad, bd),
             if (b == zero || (gemp(b) && toflo(b) == 0)) love_musttail return Push(a))
 
-// `/` true division: exact integer when b divides a, a float box otherwise
-// (the truncating quotient is `//`)
+// `/`: an exact integer when b divides a, else a float
 lvm(lvm_quotn) {
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) { g->b = (word) vop_quot; love_musttail return Ap(lvm_vbin, g); }
@@ -1165,17 +1008,16 @@ lvm(lvm_quotn) {
   flo_t ad = toflo(a), bd = toflo(b);
   emit_gem(_res, ad / bd);
   love_musttail return Push(_res); }
- if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b);  // bv != 0 (b != zero)
-  if (!(av == INTPTR_MIN && bv == -1)) {                            // INT_MIN/-1 is exact but overflows -> bignum lane
+ if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b);  // bv != 0
+  if (!(av == INTPTR_MIN && bv == -1)) {                            // exact but overflows: the bignum lane
    if (av % bv == 0) { word _res; Have(box_req); emit_int(_res, av / bv);
     love_musttail return Push(_res); }
-   word _res; Have(box_req);                                        // inexact -> promote to float
+   word _res; Have(box_req);
    emit_gem(_res, (flo_t) av / (flo_t) bv);
    love_musttail return Push(_res); } }
  LvmResume(g, big_quot_true) }
 
-// `-`: fixnum fast path, the () unit, then coins (`-` has no kind matrix, so the
-// interception lives here), then the numeric slow lane
+// `-` has no kind matrix, so coins are caught here
 static lvm(lvm_sub) {
  word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) { intptr_t t;
@@ -1185,126 +1027,100 @@ static lvm(lvm_sub) {
  avm_unit(a, b);
  if (coinp(a) || coinp(b)) love_musttail return Ap(lvm_sub_coin, g);
  love_musttail return Ap(lvm_subn, g); }
-// lvm_mul + its kind matrix live after the `+` string lane, below.
 
-// `+` on sequences is order-preserving concatenation, a scalar lifting into the
-// sequence on the side it appears:
-//   str + str  -> byte concat          list + list -> spine append
-//   str + list -> (. str list)      list + str  -> (append list (list str))
-//   nom + str  -> byte concat          text + list -> the bytes SPLICE in
-// text and chain are one monoid: a string or named symbol against a list contributes
-// its bytes as elements, never itself as one. a number is foreign to both bands: it
-// arrives as the band's unit, so the other operand answers whole.
-// one byte from a number, strictly an exact integer 0..255 (rep-blind: 66.0 is
-// 66); anything else answers -1.
+// `+` on sequences concatenates in order: text and chain are one monoid, so text against a
+// list splices in as its bytes, never as one element.
+// seq_byte: an exact integer 0..255 in any rep (66.0 is 66), else -1
 static love_inline intptr_t seq_byte(word x) {
  if (charmp(x)) { intptr_t v = getcharm(x); return v < 0 || v > 255 ? -1 : v; }
  if (gemp(x)) { flo_t f = gem_get(x);
-  if (!(f >= 0 && f <= 255)) return -1;                 // range first (nan fails); cast below is safe
+  if (!(f >= 0 && f <= 255)) return -1;                 // range first (nan fails), so the cast is safe
   return f != (flo_t) (intptr_t) f ? -1 : (intptr_t) f; }
  return -1; }
-// list lane. the matrix routes only list-involved pairs here (src/love/mx.l's five cells),
-// and lvm_add has already answered for () and every mint, so one operand is a chain and
-// the other is a chain, a string or a named symbol -- nothing else arrives.
-// list+list -> spine append; text <-> list -> the bytes splice; anything else adjoins.
+// the list lane (mx.l's five cells): one operand a chain, the other a chain, string or named symbol
 lvm(lvm_add_seq) {
  word a = Sp[0], b = Sp[1];
- if (chainp(a) && chainp(b)) {                         // list + list -> append a..b
+ if (chainp(a) && chainp(b)) {
   uintptr_t n = llen(a); Have(n * Width(struct chain));
   a = Sp[0], b = Sp[1];
   struct chain *base = (struct chain*) Hp, *w = base;
   Hp += n * Width(struct chain);
   for (word l = a; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
-  (w - 1)->b = b;                                // last cdr -> b
+  (w - 1)->b = b;
   love_musttail return Push(word(base)); }
- // elt <-> list: exactly one is a chain, the both-chains lane having answered above.
- // said to the compiler rather than tested -- the fact is the matrix's, not something
- // the optimizer can see, and without it the selects below re-test what is already known.
- if (!chainp(a) && !chainp(b)) __builtin_unreachable();
- // front is where the element or its bytes land -- ahead of the list when it is the
- // left operand, at the tail when it is the right.
- bool front = chainp(b);
+ if (!chainp(a) && !chainp(b)) __builtin_unreachable();   // the matrix's fact, told to the optimizer
+ bool front = chainp(b);                                  // the element lands ahead of the list
  word lst = chainp(a) ? a : b, elt = chainp(a) ? b : a;
- if (strp(elt) || nomp(elt)) {              // TEXT SPLICES as its bytes -- the charlist hom, so text
-  uintptr_t n = stringlen(g, elt),          // and chain are ONE monoid and + associates across the two.
-            m = front ? 0 : llen(lst);      // adjoining instead would merge two texts concatenated first.
+ if (strp(elt) || nomp(elt)) {              // text splices as its bytes, so + associates across kinds
+  uintptr_t n = stringlen(g, elt),
+            m = front ? 0 : llen(lst);
   Have((n + m) * Width(struct chain));
-  a = Sp[0], b = Sp[1];                                        // re-read post-GC
+  a = Sp[0], b = Sp[1];                                        // post-Have
   front = chainp(b);
   lst = chainp(a) ? a : b, elt = chainp(a) ? b : a;
-  struct str *sx = strp(elt) ? str(elt) : nom_str(g, elt);   // a nameless mint has no bytes: n = 0
+  struct str *sx = strp(elt) ? str(elt) : nom_str(g, elt);   // a mint has no bytes: n = 0
   unsigned char const *t = sx ? (unsigned char const*) txt(sx) : 0;
   struct chain *base = (struct chain*) Hp, *bw = base + m;
   Hp += (n + m) * Width(struct chain);
   for (uintptr_t i = 0; i < n; i++) ini_chain(bw + i, putcharm(t[i]), word(bw + i + 1));
   if (n) bw[n - 1].b = front ? lst : ZeroPoint;
   if (front) love_musttail return Push(n ? word(bw) : lst);
-  struct chain *w = base;                                    // text on the right: spine, then the bytes
+  struct chain *w = base;
   for (word l = lst; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
   w[-1].b = n ? word(bw) : ZeroPoint;
   love_musttail return Push(word(base)); }
  if (front) { Sp[0] = elt, Sp[1] = lst; love_musttail return Ap(lvm_link, g); }  // (. elt list)
- uintptr_t n = llen(lst) + 1; Have(n * Width(struct chain));        // append elt at tail
+ uintptr_t n = llen(lst) + 1; Have(n * Width(struct chain));
  lst = chainp(Sp[0]) ? Sp[0] : Sp[1], elt = chainp(Sp[0]) ? Sp[1] : Sp[0];
  struct chain *base = (struct chain*) Hp, *w = base;
  Hp += n * Width(struct chain);
  for (word l = lst; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
- ini_chain(w, elt, ZeroPoint);                     // trailing (elt . ()) -- list terminator (zero-ontology)
+ ini_chain(w, elt, ZeroPoint);
  love_musttail return Push(word(base)); }
 
 // --- text lane: strings + symbols ---
-// the string tower is string (0) < uninterned-sym (1) < named-sym|num (2); mixing
-// demotes to the lower rank (min keeps the partner's type). the concat is built
-// as one string in operand order, then returned per rank: as-is / fresh mint / interned.
-struct str *nom_str(struct g *g, word x) {   // symbol -> name string, or 0 (a bare mint / the zero point / a non-symbol)
- return namep(x) ? str(nom(x)->name) : 0; }  // a named point (KNom) carries its name; a bare mint is nameless
+struct str *nom_str(struct g *g, word x) {   // a name's string, or 0
+ return namep(x) ? str(nom(x)->name) : 0; }
 
 static love_inline uintptr_t stringlen(struct g *g, word x) {  // bytes x contributes to a concat
  if (strp(x)) return len(x);
  if (nomp(x)) { struct str *n = nom_str(g, x); return n ? n->len : 0; }
  return 1; }                                            // number -> one byte
-                                                        //
-love_inline char *add_emit(struct g *g, char *w, word x) {  // append x's bytes; return advanced w
+
+love_inline char *add_emit(struct g *g, char *w, word x) {
  if (strp(x)) return (void) memcpy(w, txt(x), len(x)), w + len(x);
  if (nomp(x)) { struct str *n = nom_str(g, x);
   return n ? ((void) memcpy(w, txt(n), n->len), w + n->len) : w; }
- return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (unreachable from + since the
-                                                        // degenerate lane; symbol paths never land here)
+ return *w = (char) seq_byte(x), w + 1; }               // number -> one byte
 struct str *seq_cat(struct g *g, void *w, word a, word b) {
  struct str *z = ini_str(str(w), stringlen(g, a) + stringlen(g, b));
  return add_emit(g, add_emit(g, txt(z), a), b), z; }
 
 lvm(lvm_add_string) {
  word a = Sp[0], b = Sp[1];
- if (trayp(a) || trayp(b)) love_musttail return Push(ZeroPoint); // array <-> string: undefined
+ if (trayp(a) || trayp(b)) love_musttail return Push(ZeroPoint);
  if ((!strp(a) && seq_byte(a) < 0) || (!strp(b) && seq_byte(b) < 0)) love_musttail return Push(ZeroPoint);
  uintptr_t n = stringlen(g, a) + stringlen(g, b);
  if (!n) love_musttail return Push(EmptyString);
  uintptr_t req = str_width(n);
  Have(req);
- a = Sp[0], b = Sp[1];                                  // re-read post-GC
- struct str *z = seq_cat(g, Hp, a, b);                     // a's bytes then b's, in order
+ a = Sp[0], b = Sp[1];                                  // post-Have
+ struct str *z = seq_cat(g, Hp, a, b);
  Hp += req;
  *++Sp = word(z);
  Ip++; love_musttail return Continue(); }
 lvm(lvm_0) {                             // unsupported mix (array <-> string)
  love_musttail return Push(ZeroPoint); }
-// the unit lane: a bare mint rides through +/*. the dispatchers early-out a mint
-// first, so these cells are belt and braces -- but they say the true thing, so
-// the matrix stands correct on its own (mx.v checks the whole square).
-lvm(lvm_bin_unit) {                       // a point is the identity; two points join, the greater stands (lvm_add's fast path says the same)
+// the unit lane: the dispatchers catch a mint first, but the matrix stands on its own (mx.v)
+lvm(lvm_bin_unit) {                       // a point is the identity; of two, the greater stands
  word a = Sp[0], b = Sp[1];
  love_musttail return Push(nomp(a) ? (nomp(b) && love_mint_cmp(g, a, b) > 0 ? a : b) : a); }
-// the degenerate lane: a mixed pair with no lawful crossing answers the higher
-// band's operand whole -- the foreigner arrives as that band's unit, since the
-// only hom a group has into a free monoid is trivial. this is what restores +
-// associativity (the byte law and the element-adjoin law could not associate).
+// the degenerate lane: a mixed pair with no lawful crossing answers the higher band's operand
+// whole, the foreigner arriving as its unit -- what keeps + associative
 lvm(lvm_bin_a) { word a = Sp[0]; love_musttail return Push(a); }
 lvm(lvm_bin_b) { word b = Sp[1]; love_musttail return Push(b); }
 
-// ============================================================================
-// tray
-// ============================================================================
+// ===== tray =====
 size_t const love_T[] = {
  [love_Z] = Bytes,
  [love_R] = Bytes,
@@ -1314,14 +1130,10 @@ size_t const love_T[] = {
 uintptr_t love_tray_bytes(struct tray *v) {
  return tray_bytes(v->type, v->rank, tray_nelem(v)); }
 
-// these are love.h's data-apply shims: one TU has to hold the body.
+// love.h's data-apply shims
 #if data_section
-// the slot is the kind. each sentinel lays in its own input section love.data.N,
-// N its enum d value, on a grain of data_stride -- so a run of one-fn sections
-// tiles at exactly that, and love_typ is one divide on (ap - lvm_sym) with in_data one
-// unsigned compare (love.h). ld is told the tiling outright, in scripts mx.l lays
-// from the same roster enum d comes from; holo needs no telling -- it lays each
-// section on the grain the object declares, which is the same thing.
+// each sentinel in section love.data.N (N its enum d) on a data_stride grain, so love_typ is one
+// divide on (ap - lvm_sym). ld's scripts are laid by mx.l from enum d's roster
 #define DSENT(nn, name, handler) \
  __attribute__((section("love.data." #nn), used, aligned(data_stride))) \
  lvm(name) { love_musttail return Ap(handler, g); }
@@ -1344,15 +1156,11 @@ lvm(lvm_gembox)   { love_musttail return Ap(data_num_apply, g); }
 lvm(lvm_twinbox)  { love_musttail return Ap(data_num_apply, g); }
 #endif
 
-// def1 is nifs.h's, and this TU is where that header lands; snap.c walks the
-// same table to number the aps it serializes.
+// snap.c walks def1 to number the aps it serializes
 struct def const *const love_def1 = def1;
 uintptr_t const def1_n = countof(def1);
-// which def1 rows are VALUES: a nif's row carries .k, a run inside nifs[]; an instruction's
-// carries .ap. the union says which was WRITTEN and C checks it there -- at RUNTIME the two
-// are one word, so the question is still the address's, and this is the one place that asks.
-// the boot above splits on it, and so does src/love/snap.c's op table: a cell holding a nif is
-// holding a value, and must read back as one.
+// a def1 row is a value (a nif's run in nifs[]) or an instruction: at run time the union is one
+// word, so the address says which. ini_0 and snap.c's op table split on it
 int nif_cell(union u const *k) {
  return (uintptr_t) ((char const*) k - (char const*) nifs) < sizeof nifs; }
 
