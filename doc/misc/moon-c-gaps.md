@@ -1165,30 +1165,31 @@ a one-char constant is `(char) c` under either (lex.l's `chq?`, parse.l's `pprim
 (a plain memset or memcpy stays a call), `-falign-functions=N`, `-fno-optimize-sibling-calls`
 (a musttail call then refuses by name), `-fno-omit-frame-pointer` on a64 (the frame record on every
 fn that calls; clang's a64 leaves keep none either), `-fshort-enums` on the AAPCS32 targets and
-`-fno-short-enums` elsewhere, `-fpic`/`-fPIE` on x64 a64 rv64 wasm.
+`-fno-short-enums` elsewhere, `-fpic`/`-fPIE` on x64 a64 rv64 wasm, and:
+- `-fpatchable-function-entry=N,M` and its attribute: N nops, M ahead of the entry and the rest
+  after its bti or endbr, a word to each pad in `__patchable_function_entries`; x64 i386 a64 rv64.
+- `-ftrivial-auto-var-init=zero`: an automatic without an initializer takes a zero one (cgdecl);
+  a VLA refuses.
+- `-fcf-protection=branch|return|full` on x86: endbr where an indirect branch lands (an entry
+  another unit or a pointer reaches, a table's case, a label whose address is taken, a returns-twice
+  call's return), the feature_1_and note, `__CET__`.
+- `-fwrapv` and `-fno-strict-overflow`: an int op int is typed 'int and its + - * << and - sign-extend
+  again (`nar32`), as `u32nar?` re-narrows a uint. a wrapper on cgexpr that asked `peekty` each node's
+  C type was tried and grew without bound: peekty goes back through expression codegen, so every
+  level re-typed its subtree.
 
 **taken as they stand:** `-fno-strict-aliasing` (memfw forgets on any root that may overlap),
 `-fno-delete-null-pointer-checks`, `-fno-common` (a tentative lays as a definition), `-fno-pie`,
 `-fomit-frame-pointer`, the absent-feature `-fno-*` (unwind tables, stack check and clash
-protection, canary, addrsig, ident), `-fcf-protection=none`, `-ftrivial-auto-var-init=uninitialized`,
-`-fstrict-flex-arrays[=N]` (`__builtin_object_size` answers its unknown), `-fms-extensions`, the
-placement, alignment, inlining and diagnostic hints, `-mno-red-zone` (no store below sp in 293
-test/cc objects; owes a law), `-mtune=`.
+protection, canary, addrsig, ident), `-fstrict-flex-arrays[=N]` (`__builtin_object_size` answers
+its unknown), `-fms-extensions`, the placement, alignment, inlining and diagnostic hints,
+`-mno-red-zone` (no store below sp), `-mtune=`.
 
 **refused by name, exit 2:** every other `-f`/`-m`. the ones the kernel asks, by row:
-- R2 `-fpatchable-function-entry=N,M`: N nops, M before the entry, and `__patchable_function_entries`,
-  as clang lays them on x64 and a64.
 - R3 the x64 kernel `-m` set: `-mcmodel=kernel` (32S, no abs32), the retpoline and return thunks
   (`-mretpoline-external-thunk`, `-mindirect-branch-cs-prefix`, `-mfunction-return=thunk-extern`;
   callr/jmpr/jmpt and ret), `-mstack-alignment=`, `-mskip-rax-setup`, `-mno-fp-ret-in-387`.
 - R4 `-fstack-protector-strong` with `-mstack-protector-guard-reg=gs` and `-symbol=`.
-- R5 `-ftrivial-auto-var-init=zero` and `-fcf-protection=branch`.
-- R6 `-fwrapv` and `-fno-strict-overflow`: an int's + - * stand 64 bits wide where they are read
-  (`(long) (x + 1)` and `(x * 2) / 2` at INT_MAX differ from gcc -fwrapv), which C's undefined
-  overflow allows and the kernel's flag does not. the narrowing belongs in cgbin0's lanes, the way
-  `u32nar?` re-narrows a uint. a wrapper on cgexpr that asked `peekty` each node's C type was tried
-  and grew without bound: peekty goes back through expression codegen, so every level re-typed its
-  subtree.
 - `-fno-omit-frame-pointer` off a64: x64 addresses its frame off sp and keeps no rbp.
 
 **measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,
