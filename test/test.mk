@@ -182,6 +182,7 @@ hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host
 hostnif_cold =                                   # empty: no gate needs the cold lane
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
+hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
 hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight
 # evback.l reads show names a mopped image has dropped
 hostnif_nomop = test/host/evback.l

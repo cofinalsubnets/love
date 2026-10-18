@@ -10,8 +10,7 @@
    (mnt src tgt typ)
      (: _ (mkdir tgt 493)
         r (mount src tgt typ)
-        (say1 ("  mount " + typ + " on " + tgt
-               + (r < 0 ? (" -> errno " + show (0 - r)) " -> ok"))))
+        (say1 ("  mount " + typ + " on " + tgt + " -> " + (r = () ? "ok" (show r)))))
 
    ; a fresh love running the shell on the inherited console. -l registers module 'lush;
    ; -e borrows it in one use, since compile is per-binding and (sh 0) compiles after the splice
