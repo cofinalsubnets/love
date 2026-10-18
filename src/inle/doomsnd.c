@@ -1,14 +1,5 @@
-// src/inle/doomsnd.c -- doom's sound: the sound_module_t doomgeneric asks for, mixed
-// in software and handed to the horn's C face (love.h's love_horn_*: src/inle/hda.c
-// under inle, the host's card otherwise). rides the DOOM=1 lane beside doom.c and is
-// otherwise not built.
-//
-// eight channels of DMX lumps (8-bit unsigned mono, mostly 11025 Hz, behind an
-// 8-byte header and 16 bytes of padding each side) resampled linearly to the
-// device's 48k and mixed with volume and separation into 16-bit stereo. the mix
-// keeps a short lead over the play head -- ds_lead frames -- so a shot is heard
-// when it is fired; the ring under it is deeper, which is what keeps a slow frame
-// from underrunning. music is silent: the lumps are MUS and want a synthesizer.
+// src/inle/doomsnd.c -- doom's sound_module_t, mixed in software onto love_horn_* (DOOM=1 only).
+// DMX lumps resampled linearly to 48k 16-bit stereo, ds_lead ahead of the play head; music is silent
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -19,7 +10,6 @@
 #include "deh_str.h"
 #include "m_misc.h"
 
-// the horn's C face (love.h)
 int love_horn_open(int rate);
 intptr_t love_horn_write(unsigned char const*, uintptr_t);
 uintptr_t love_horn_lag(void);
@@ -40,8 +30,7 @@ static void lump_name(sfxinfo_t *sfx, char *buf, size_t n) {
  if (ds.prefix) M_snprintf(buf, n, "ds%s", DEH_String(sfx->name));
  else M_StringCopy(buf, DEH_String(sfx->name), n); }
 
-// the parsed lump, cached on the sfx for the run: format 3, rate, length, then the
-// samples inside their padding. a lump that is not DMX answers NULL and is silent.
+// cached on the sfx: format 3, rate, length, then the samples inside 16 bytes of padding a side
 static struct ds_sample const *sample_of(sfxinfo_t *sfx) {
  if (sfx->driver_data) return sfx->driver_data;
  if (sfx->lumpnum < 0) return NULL;
@@ -93,7 +82,6 @@ static void ds_stop(int c) {
 static boolean ds_playing(int c) {
  return c >= 0 && c < ds_chn && ds.ch[c].smp != NULL; }
 
-// one chunk of frames: every live channel, resampled and panned, summed and clipped
 static void mix(int16_t *out, uint32_t frames) {
  memset(out, 0, frames * 4);
  for (int c = 0; c < ds_chn; c++) {
@@ -110,8 +98,7 @@ static void mix(int16_t *out, uint32_t frames) {
    out[2 * i + 1] = (int16_t) (r > 32767 ? 32767 : r < -32768 ? -32768 : r);
    ch->pos += ch->step; } } }
 
-// every frame: top the lead up. a short land is a full ring, which the lead keeps
-// far from -- so what was mixed is what was heard.
+// every frame: top the lead up. the ring is deeper than the lead, so a short write is never lost
 static void ds_update(void) {
  if (!ds.on) return;
  int16_t buf[2 * ds_chunk];
@@ -130,7 +117,7 @@ sound_module_t DG_sound_module = {
  ds_devices, 1,
  ds_init, ds_shutdown, ds_lump, ds_update, ds_params, ds_start, ds_stop, ds_playing, ds_cache };
 
-// --- music: the door is there and nothing comes through it ------------------
+// music: a stub
 static boolean mu_init(void) { return true; }
 static void mu_none(void) { }
 static void mu_volume(int v) { }

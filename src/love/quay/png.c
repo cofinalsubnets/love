@@ -1,9 +1,6 @@
-// png -- a PNG laid into quay's store as pixels, for kitty's f=100. every colour type and
-// depth (1..16), tRNS, and Adam7; alpha as the store keeps it, set at half or past.
-// no allocation: the caller hands one region holding the file at its head and room behind
-// it, and the pixels come back at the head. the zlib stream is packed in place, inflated
-// behind where the pixels will end, then unfiltered and read out row by row -- a pixel
-// never lands on a byte still to be read.
+// png -- a PNG into quay's store as pixels (kitty f=100): every colour type and depth, tRNS,
+// Adam7. in place: the file at the region's head, inflated behind where the pixels end, so a
+// pixel never lands on a byte still to be read
 #include "quay.h"
 
 intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);

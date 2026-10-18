@@ -1,5 +1,5 @@
-// bytes -- words off unaligned byte runs, either order, and the msb-first crc-32 step (cksum,
-// bzip2). a caller owns the bound: each reads its full width.
+// bytes -- words off unaligned byte runs, either order, and the msb-first crc-32 step.
+// the caller owns the bound: each reads its full width
 #pragma once
 #include "love.h"
 
@@ -23,8 +23,7 @@ static love_inline uint8_t *pcm_lay(uint8_t *q, float const *x, uintptr_t n, boo
    *q++ = (uint8_t) t, *q++ = (uint8_t) (t >> 8); }
  return q; }
 
-// one load where the machine takes an unaligned one -- mooncc lays a byte gather as eight loads
-// and as many shifts and ors
+// one unaligned load where the machine takes it: mooncc lays a byte gather as eight loads
 #if defined(__x86_64__) || defined(__aarch64__)
 #define wideld 1
 struct u64u { uint64_t v; } __attribute__((packed, aligned(1)));

@@ -1,5 +1,4 @@
-// src/love/crypto/hash.c -- digests over a string's bytes. auto-globbed and LvNif-registered,
-// the fs.c discipline; value ops, so absence or misuse answers ().
+// hash.c -- digests over a string's bytes; misuse answers ()
 //   (md5 str) (sha1 str) (sha224 str) (sha256 str) (sha384 str) (sha512 str)
 //   (blake2b str) (sha3 str)  -> the lowercase hex digest (blake2b's the 64-byte one,
 //                                sha3's the 256-bit one)
@@ -9,27 +8,21 @@
 //   (cksum str)               -> POSIX cksum's crc with the length folded in, a charm
 //   (ogg-crc s o n)           -> the crc of the ogg page s[o..o+n), its crc field as zeros
 //   (bsdsum acc str)          -> bsd sum's 16-bit checksum carried on over str
-// the others stream too, the state in a cask the caller allocates (the nifs do not):
+// the others stream too, the state in a cask the caller allocates:
 //   (X-init b) / (X-feed b str) / (X-done b), b a cask of X's width:
 //   md5 89, sha1 93, sha224 106, sha256 105, sha384 202, sha512 201, cksum 12;
 //   blake2b 210, its init (blake2b-init b n) for an n-byte digest; sha3 204, its init
 //   (sha3-init b bits shake) for any length 8..512 (bits under 128 a shake's), shake's pad
 //   when shake is truthy
-// FIPS 180-4, FIPS 202, RFC 1321, RFC 7693, IEEE 802.3 and POSIX cksum, all the compact
-// single-pass shape. src/apps/kore's checksum tools are these plus a line of output.
-// they do not all stand on the same footing. crc32 shadows src/apps/gz.l's gz-crcwalk and
-// cksum test/digest.l's hash-ckwalk -- both polynomials are stated in love and the C
-// is held to the walk at every length, so a disagreement has a right answer. sha256 and
-// md5 shadow nothing, yet src/apps/sb's blob and patch ids and src/apps/moon's cache key rest on
-// them; only the published vectors in test/digest.l and GNU coreutils in
-// test/gate/kore.sh hold them honest. the fix for that thin rope is a love sha-256.
+// FIPS 180-4, FIPS 202, RFC 1321, RFC 7693, IEEE 802.3 and POSIX cksum. the crcs are held to
+// walks spelled in love (gz-crcwalk, hash-ckwalk); sha256 and md5, which sb's ids rest on,
+// only to published vectors and coreutils (test/digest.l, test/gate/kore.sh)
 #include "love.h"
 #include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 
-// sha-512's round constants; sha-256's are their high halves (both are the cube roots
-// of the first primes, to 64 and to 32 bits)
+// sha-512's round constants; sha-256's are their high halves
 static uint64_t const K512[80] = {
  0x428a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull,
  0x3956c25bf348b538ull, 0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull,
@@ -52,9 +45,8 @@ static uint64_t const K512[80] = {
  0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull, 0x431d67c49c100d4cull,
  0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull};
 
-// initial states as 32-bit words, a 64-bit word high half first. sha-256's are
-// sha-512's high halves and sha-224's are sha-384's low halves, so each digest names
-// its table, a stride and a start; md5's are sha-1's first four. blake2b's iv is sha-512's.
+// initial states as 32-bit words, high half first. sha-256's are sha-512's high halves,
+// sha-224's sha-384's low, md5's sha-1's first four, blake2b's sha-512's: a table, stride, start
 static uint32_t const
  sha512_h0[16] = {
   0x6a09e667,0xf3bcc908, 0xbb67ae85,0x84caa73b, 0x3c6ef372,0xfe94f82b, 0xa54ff53a,0x5f1d36f1,
@@ -105,9 +97,8 @@ static void sha_block(uint32_t h[8], const uint8_t *p) {
  h[4] += e; h[5] += f; h[6] += gg; h[7] += hh; }
 
 #if defined(__x86_64__)
-// the sha extensions: four rounds to a sha256rnds2 pair, the schedule by sha256msg1/2, as intel
-// lays them. the state rides xmm1/xmm2 as ABEF/CDGH, the message words rotate through
-// xmm3..6, xmm0 is the rounds' implied operand. whole blocks only, n > 0
+// the sha extensions, as intel lays them: state in xmm1/xmm2 as ABEF/CDGH, words through
+// xmm3..6, xmm0 implied. whole blocks only, n > 0
 #define NI(x) x "\n\t"
 #define NI_LD(o, t) NI("movdqu " o "(%0), " t) NI("pshufb %%xmm8, " t)
 #define NI_RA(o, t) NI("movdqu " o "(%3), %%xmm0") NI("paddd " t ", %%xmm0") NI("sha256rnds2 %%xmm1, %%xmm2")
@@ -171,8 +162,7 @@ static int sha_hw(void) {
  return (int) (b >> 29 & 1); }
 #define sha_blocks_hw sha_blocks_ni
 #elif defined(__aarch64__) && (defined(__moonlibc__) || defined(__ARM_FEATURE_SHA2))
-// the armv8 sha2 words: four rounds to a sha256h/sha256h2 pair, the schedule by sha256su0/1. the
-// state rides v0/v1 as abcd/efgh, the words rotate through v16..v19, v20 the round constants.
+// armv8 sha2: state in v0/v1 as abcd/efgh, words through v16..v19, v20 the round constants.
 // whole blocks only, n > 0
 #define CE(x) x "\n\t"
 #define CE_R(o, t) CE("ldr q20, [%3, #" o "]") CE("add v4.4s, " t ".4s, v20.4s") \
@@ -198,8 +188,7 @@ static love_noinline void sha_blocks_ce(uint32_t h[8], const uint8_t *p, uintptr
   CE("str q0, [%2]") "str q1, [%2, #16]"
   : "+r"(p), "+r"(n) : "r"(h), "r"(k)
   : "v0", "v1", "v2", "v3", "v4", "v5", "v16", "v17", "v18", "v19", "v20", "memory", "cc"); }
-// the cpu's word on it, id_aa64isar0_el1's sha2 field: inle reads its own, linux and freebsd
-// answer the read at el0 for it; elsewhere the c rounds
+// id_aa64isar0_el1's sha2 field: inle reads its own, linux and freebsd trap the el0 read
 static int sha_hw(void) {
  if (__love_osv != 1 && __love_osv != 2 && __love_osv >= 0) return 0;
  uint64_t r;
@@ -211,8 +200,7 @@ static int sha_hw(void) { return 0; }
 static void sha_blocks_hw(uint32_t h[8], const uint8_t *p, uintptr_t n) { (void) h, (void) p, (void) n; }
 #endif
 
-// sha-512 keeps its eight 64-bit words as sixteen 32-bit halves, so it rides the same
-// buffering and the same state layout as the 32-bit digests
+// sha-512's words as sixteen 32-bit halves, so it shares the 32-bit digests' buffering and layout
 static void sha512_block(uint32_t h[16], const uint8_t *p) {
  uint64_t w[80], v[8];
  for (int i = 0; i < 16; i++) w[i] = ld64be(p + 8 * i);
@@ -262,20 +250,16 @@ static void md5_block(uint32_t h[4], const uint8_t *p) {
   a = d; d = c; c = b; b += rl(f, MS[i]); }
  h[0] += a; h[1] += b; h[2] += c; h[3] += d; }
 
-// --- the buffering the merkle-damgard digests share --------------------------------
-// md5, sha-1 and the four sha-2s differ here only in the compression function, the
-// block (64 or 128 bytes) and which way the length is laid, so the block arithmetic is
-// written once and the one-shots and the streams below both go through it.
+// the merkle-damgard buffering, once for md5, sha-1 and the sha-2s, one-shots and streams alike
 typedef void (*blkfn)(uint32_t *h, const uint8_t *p);
 
-// the row a digest is: its state's width in a cask (the width is the type), the words
-// it keeps and the words it shows, the block, the order, the compression, and where
-// its initial words sit in which table
+// a digest's row: its cask width (the width is the type), words kept and shown, block,
+// order, compression, initial words
 struct digspec { uintptr_t st; int words, outw; unsigned bs; int be; blkfn f;
                  const uint32_t *h0; int step, first; };
 
-// the cask: h[words] be | count 8 be | remainder len 1 | remainder bs | a tag byte on
-// the truncated two, so no two widths meet
+// the cask: h[words] be | count 8 be | remainder len 1 | remainder bs | a tag byte on the
+// truncated two, so no two widths meet
 #define DigSt(w, bs, tag) (4 * (w) + 9 + (bs) + (tag))
 static const struct digspec
  dig_md5    = {DigSt(4, 64, 0),   4, 4,   64, 0, md5_block,    sha1_h0,   1, 0},
@@ -288,8 +272,7 @@ static const struct digspec
 static void dig_h0(uint32_t *h, const struct digspec *d) {
  for (int k = 0; k < d->words; k++) h[k] = d->h0[k * d->step + d->first]; }
 
-// top the remainder up, run whole blocks straight off the input, keep the tail ->
-// the new remainder length
+// -> the new remainder length
 static unsigned blk_feed(uint32_t *h, uint8_t *buf, unsigned rem, const struct digspec *d,
                          const uint8_t *p, uintptr_t n) {
  unsigned bs = d->bs;
@@ -308,8 +291,7 @@ static unsigned blk_feed(uint32_t *h, uint8_t *buf, unsigned rem, const struct d
  if (n) memcpy(buf, p, n);
  return (unsigned) n; }
 
-// the pad: 0x80, zeros, then the bit count in the block's last eighth -- big-endian
-// for the shas, little for md5; the 128-byte block's 16-byte count is high zeros
+// 0x80, zeros, the bit count in the block's last eighth: be for the shas, le for md5
 static void blk_done(uint32_t *h, const uint8_t *buf, unsigned r, uint64_t len,
                      const struct digspec *d) {
  uint8_t tail[256];
@@ -327,7 +309,7 @@ static void blk_done(uint32_t *h, const uint8_t *buf, unsigned r, uint64_t len,
 
 static const char hexd[] = "0123456789abcdef";
 
-// the hex face every digest wears, the digest's own order, n words wide
+// n words of hex in the digest's own order
 static void blk_hex(const uint32_t *h, int words, int be, char *out) {
  for (int k = 0; k < words; k++)
   for (int j = 0; j < 4; j++) {
@@ -336,7 +318,7 @@ static void blk_hex(const uint32_t *h, int words, int be, char *out) {
    out[8 * k + 2 * j + 1] = hexd[b & 15]; }
  out[8 * words] = 0; }
 
-// pushes the digest's hex over the argument, the one-shots' and the streams' shared last step
+// the hex over the argument
 static struct g *dig_push(struct g *g, const char *hex) {
  if (!ok(g = strof(g, hex))) return g;
  g->sp[1] = g->sp[0];
@@ -369,10 +351,8 @@ static lvm(lvm_sha224) LvmCall(g, host_sha224)
 static lvm(lvm_sha384) LvmCall(g, host_sha384)
 static lvm(lvm_sha512) LvmCall(g, host_sha512)
 
-// --- blake2b (rfc 7693), unkeyed, any length 1..64 bytes ---------------------------
-// not merkle-damgard: no length pad, the last block compressed with a flag instead,
-// so a whole block is held back until the next byte (or the end) says whether it was
-// the last. its stream is a state of its own shape for that reason.
+// blake2b (rfc 7693), unkeyed, 1..64 bytes: the last block is flagged, so a whole block is
+// held back until the next byte or the end says which it was
 static uint8_t const B2S[10][16] = {
  { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15}, {14,10, 4, 8, 9,15,13, 6, 1,12, 0, 2,11, 7, 5, 3},
  {11, 8,12, 0, 5, 2,15,13,10,14, 3, 6, 7, 1, 9, 4}, { 7, 9, 3, 1,13,12,11,14, 2, 6, 5,10, 4, 0,15, 8},
@@ -403,7 +383,7 @@ static void b2_init(uint64_t h[8], unsigned nn) {
  for (int i = 0; i < 8; i++) h[i] = b2iv(i);
  h[0] ^= 0x01010000u ^ nn; }
 
-// -> the new held length, 1..128 once anything came: a full block waits for the next feed
+// -> the new held length, 1..128 once anything came
 static unsigned b2_feed(uint64_t h[8], uint64_t *t, uint8_t *buf, unsigned rem,
                         const uint8_t *p, uintptr_t n) {
  if (!n) return rem;
@@ -438,10 +418,8 @@ love_noinline static struct g *host_blake2b(struct g *g) {
  return dig_push(g, hex); }
 static lvm(lvm_blake2b) LvmCall(g, host_blake2b)
 
-// --- sha-3 (fips 202): keccak-f[1600] as a sponge ---------------------------------
-// no block buffer: a byte is xored straight into the state where the sponge stands,
-// and the permutation runs whenever the rate fills. the rate is 200 less twice the
-// digest, so any length rides one loop; past the rate the digest squeezes on.
+// sha-3 (fips 202): bytes xored straight into the sponge, permuted as the rate fills; the
+// rate is 200 less twice the digest, and a digest past it squeezes on
 static void keccak(uint64_t a[25]) {
  static uint8_t const rho[25] = {0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14},
                       pi[25] = {0,10,20,5,15,16,1,11,21,6,7,17,2,12,22,23,8,18,3,13,14,24,9,19,4};
@@ -460,7 +438,7 @@ static void keccak(uint64_t a[25]) {
    rc = rc & 0x80 ? (rc << 1) ^ 0x171 : rc << 1; }
   a[0] ^= k; } }
 
-// the state rides as 200 little-endian bytes, lane i at 8i, so byte k of the sponge is byte k
+// 200 le bytes, lane i at 8i, so byte k of the sponge is byte k
 static void k_ld(const uint8_t *st, uint64_t a[25]) { for (int i = 0; i < 25; i++) a[i] = ld64le(st + 8 * i); }
 static void k_st(uint8_t *st, const uint64_t a[25]) {
  for (int i = 0; i < 25; i++) for (int j = 0; j < 8; j++) st[8 * i + j] = (uint8_t) (a[i] >> (8 * j)); }
@@ -493,8 +471,7 @@ love_noinline static struct g *host_sha3(struct g *g) {
  return dig_push(g, hex); }
 static lvm(lvm_sha3) LvmCall(g, host_sha3)
 
-// --- bsd sum: a 16-bit checksum rotated right a bit before each byte ---------------
-// (bsdsum acc str) -> acc with str's bytes folded in | (); a whole file is a fold from 0
+// bsd sum, rotated right a bit before each byte; a whole file is a fold from 0
 static lvm(lvm_bsdsum) {
  word a = Sp[0], x = Sp[1];
  if (!charmp(a) || !strp(x)) Sp[1] = ZeroPoint;
@@ -507,15 +484,8 @@ static lvm(lvm_bsdsum) {
   Sp[1] = putcharm(c); }
  love_musttail return Nextp(1, 1); }
 
-// --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -------------------------
-// eight bytes at a time, and that is the whole difference: the byte-at-a-time walk
-// src/apps/gz.l spells is a dependency chain one link per byte, where slicing spends eight
-// independent lookups and lets the machine overlap them. gz.l cannot do this -- eight
-// tray reads per byte would cost eight times what one does.
-// the tables are built on the first call rather than laid in .rodata: 2048 entries
-// off a one-line recurrence, and nothing for a reader to check against the polynomial.
-// write-once and idempotent (every builder writes the same words), so the one thing a
-// second thread would need is the flag landing after the table. cksum's pair below too.
+// crc32 (IEEE 802.3, reflected 0xedb88320), sliced by eight. the tables are built on first
+// call, idempotent: a second thread needs only the flag to land after the table (cksum's too)
 static uint32_t crc_t[8][256];
 static int crc_ready;
 
@@ -530,7 +500,7 @@ static void crc_init(void) {
   for (k = 1; k < 8; k++) { c = crc_t[0][c & 0xff] ^ (c >> 8); crc_t[k][i] = c; } }
  crc_ready = 1; }
 
-// the register walk; c is the register, complemented on the way in and out by its callers
+// the callers complement c on the way in and out
 static uint32_t crc32_run(uint32_t c, const uint8_t *p, uintptr_t n) {
  if (!crc_ready) crc_init();
  for (; n >= 8; p += 8, n -= 8) {
@@ -553,7 +523,6 @@ static love_inline struct g *host_crc32(struct g *g) {
 static lvm(lvm_crc32) {
  LvmCall(g, host_crc32) }
 
-// (crc32-on c str) -> the crc32 of whatever c was the crc32 of, str's bytes after it
 static lvm(lvm_crc32_on) {
  word c = Sp[0], x = Sp[1];
  if (!charmp(c) || !strp(x)) Sp[1] = ZeroPoint;
@@ -562,9 +531,7 @@ static lvm(lvm_crc32_on) {
   Sp[1] = putcharm(~crc32_run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
  love_musttail return Nextp(1, 1); }
 
-// --- crc32c (castagnoli: reflected, polynomial 0x82f63b78) ------------------------------
-// crc32's walk over another polynomial, its tables built the same way; ext4 and jbd2
-// checksum their metadata with it. test/digest.l holds it to the walk spelled in love.
+// crc32c (castagnoli, reflected 0x82f63b78): crc32's walk, held to love's by test/digest.l
 static uint32_t crcc_t[8][256];
 static int crcc_ready;
 
@@ -598,7 +565,6 @@ static love_inline struct g *host_crc32c(struct g *g) {
 static lvm(lvm_crc32c) {
  LvmCall(g, host_crc32c) }
 
-// (crc32c-on c str) -> the crc32c of whatever c was the crc32c of, str's bytes after it
 static lvm(lvm_crc32c_on) {
  word c = Sp[0], x = Sp[1];
  if (!charmp(c) || !strp(x)) Sp[1] = ZeroPoint;
@@ -607,9 +573,7 @@ static lvm(lvm_crc32c_on) {
   Sp[1] = putcharm(~crc32c_run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
  love_musttail return Nextp(1, 1); }
 
-// --- adler32 (RFC 1950): the two sums zlib's stream ends with -------------------------
-// 5552 bytes is the most either sum takes before it could pass 32 bits, so the modulus
-// waits that long. test/digest.l holds it to the walk spelled in love.
+// adler32 (RFC 1950): 5552 bytes is the most before a sum could pass 32 bits, so the modulus waits
 static uint32_t adler_run(const uint8_t *p, uintptr_t n) {
  uint32_t a = 1, b = 0;
  while (n) {
@@ -627,15 +591,8 @@ static love_inline struct g *host_adler32(struct g *g) {
 static lvm(lvm_adler32) {
  LvmCall(g, host_adler32) }
 
-// --- cksum (POSIX: not reflected, polynomial 0x04c11db7, the length folded in) -----
-// a different crc from the one above in every part: the register runs the other way,
-// the seed is 0, and the message does not end at the last byte -- the byte count goes
-// through the same walk, low byte first, which is what makes cksum answer 4294967295
-// for the empty file rather than 0. its tables are its own for that reason: crc32's
-// are the reflected polynomial's and answer a different number.
-// ck_bit is the statement of the polynomial, and it is the table's only source -- the
-// walk below is derived from it, not a second spelling of it. the tables are worth their
-// space: bit-at-a-time is 8 shifts and a branch a byte, 3.5 s of a 3.9 s run over 100 MB.
+// cksum (POSIX, unreflected 0x04c11db7, seed 0): the byte count goes through the walk after
+// the message, low byte first, so the empty file is 4294967295. ck_bit is the tables' only source
 
 static uint32_t ck_t[8][256];
 static int ck_ready;
@@ -650,8 +607,7 @@ static love_noinline void ck_init(void) {
    ck_t[k][i] = c; } }
  ck_ready = 1; }
 
-// eight bytes at a time, the same trade crc32 takes above: eight independent lookups
-// the machine can overlap, against a dependency chain one link per byte.
+// sliced by eight, as crc32
 static uint32_t ck_run(uint32_t c, const uint8_t *p, uintptr_t n) {
  if (!ck_ready) ck_init();
  for (; n >= 8; p += 8, n -= 8) {
@@ -663,8 +619,7 @@ static uint32_t ck_run(uint32_t c, const uint8_t *p, uintptr_t n) {
  for (; n; p++, n--) c = (c << 8) ^ ck_t[0][((c >> 24) ^ *p) & 0xff];
  return c; }
 
-// the length, low byte first, through the same walk -- eight bytes at the most, so it
-// stays a byte at a time
+// the length, low byte first, a byte at a time
 static uint32_t ck_len(uint32_t c, uint64_t len) {
  if (!ck_ready) ck_init();
  for (; len; len >>= 8) {
@@ -682,8 +637,7 @@ static lvm(lvm_cksum) {
   Sp[0] = putcharm(cksum_of((unsigned char const*)s->bytes, s->len)); }
  love_musttail return Next(1); }
 
-// ogg's page crc is cksum's register with nothing folded in after: seed 0, no complement.
-// the page's own crc field, bytes 22..25, goes through as zeros
+// cksum's register, nothing folded after, no complement; the crc field (bytes 22..25) as zeros
 static love_inline struct g *host_ogg_crc(struct g *g) {
  word r = ZeroPoint;
  if (strp(g->sp[0]) && oddp(g->sp[1]) && oddp(g->sp[2])) {
@@ -695,26 +649,14 @@ static love_inline struct g *host_ogg_crc(struct g *g) {
  return g->sp[2] = r, g->sp += 2, g; }
 static lvm(lvm_ogg_crc) LvmCall(g, host_ogg_crc)
 
-// --- the same digests, resumable ---------------------------------------------------
-// the one-shots want their whole message contiguous, and for a file that is the file.
-// each triple below carries the state in a cask instead, so a caller feeds it a gulp
-// at a time and holds nothing. the block loops above are untouched -- one spelling of
-// each compression function, two ways in, so a streamed digest cannot drift from its
-// one-shot, and test/digest.l holds the two together at every chunking.
-//
-// the layout is this file's; love allocates the cask, carries it, and never reads it.
-// big-endian throughout, whatever the algorithm's own order, so the state is bytes and
-// not this machine's words -- it can be written down, and an image carrying one wakes
-// on any box. the block digests' is DigSt's above; the other two:
-//
+// the streams: the one-shots' compression functions, the state in a cask love never reads.
+// big-endian throughout, so an image carrying one wakes on any box. the block digests' is
+// DigSt's; the others:
 //   blake2b, 210:  0..63 h[8] be | 64..71 count be | 72..79 zero | 80 held len
 //                  | 81 digest bytes | 82.. held block
 //   sha3,    204:  0..199 the sponge | 200 position | 201 rate | 202 digest bytes | 203 pad
 //   cksum,    12:  0..3 crc be   | 4..11 count be                    (no block, no rem)
-//
-// the size is the type. every entry point checks the width it wants -- which is what
-// stops an md5 state being fed to sha256-feed and answering a number that looks like
-// a digest.
+// the size is the type: every entry checks its width, or an md5 state feeds sha256
 #define B2St 210
 #define K3St 204
 #define CkSt 12
@@ -734,8 +676,7 @@ static void dig_st(uint8_t *st, const uint32_t *h, int words, uint64_t len) {
   st[4*k+2] = (uint8_t) (h[k] >> 8);  st[4*k+3] = (uint8_t)  h[k]; }
  for (int k = 0; k < 8; k++) st[4*words + k] = (uint8_t) (len >> (56 - 8*k)); }
 
-// (X-init b) -> b, carrying the standard's initial state and nothing fed | () on
-// anything that is not a cask of X's width
+// (X-init b) -> b | () for anything not a cask of X's width
 static word dig_init(word x, const struct digspec *d) {
  struct str *s = dig_cask(x, d->st);
  if (!s) return ZeroPoint;
@@ -746,9 +687,7 @@ static word dig_init(word x, const struct digspec *d) {
  dig_st(st, h, d->words, 0);
  return x; }
 
-// (X-feed b str) -> b, str's bytes folded in | (). any chunk size: what does not fill
-// a block stays in the remainder and rides to the next feed, which is the whole point
-// -- a caller reads by the gulp and never has to think in blocks.
+// (X-feed b str) -> b | (), any chunk size
 static word dig_feed(word x, word a, const struct digspec *d) {
  struct str *cs = dig_cask(x, d->st);
  if (!cs || !strp(a)) return ZeroPoint;
@@ -764,8 +703,7 @@ static word dig_feed(word x, word a, const struct digspec *d) {
  dig_st(st, h, d->words, len);
  return x; }
 
-// (X-done b) -> the hex digest | (). the pad is the one-shot's, over the remainder
-// rather than the message tail; b is left spent, not reusable.
+// (X-done b) -> the hex digest | (); b is left spent
 static love_noinline struct g *dig_done(struct g *g, const struct digspec *d) {
  struct str *cs = dig_cask(g->sp[0], d->st);
  if (!cs) return g->sp[0] = ZeroPoint, g;
@@ -904,8 +842,7 @@ love_noinline static word host_ck_done(word x) {
  dig_ld(st, &c, 1, &len);
  return putcharm(~ck_len(c, len)); }
 
-// cksum streams with no block and no remainder: its walk is a byte at a time, so the
-// whole state is the register and the count.
+// cksum's state is the register and the count, no block
 static lvm(lvm_ck_init) {                      // (cksum-init b) -> b zeroed | (): the cask, never a pointer into it
  struct str *s = dig_cask(Sp[0], CkSt);
  if (!s) Sp[0] = ZeroPoint; else memset(s->bytes, 0, CkSt);

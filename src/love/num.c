@@ -1,22 +1,19 @@
-// num.c -- big. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are src/love/love.h.
+// num.c -- big, the numeric tower; the cross-TU seam is love.h
 #include "love.h"
-#define limb_clz(x) (__builtin_clzll((unsigned long long) (x)) - (8 * (int) sizeof(unsigned long long) - limb_bits))  // leading zeros of a nonzero limb, at limb width
-// decimal digits a limb spans: floor(limb_bits * log10 2), 30103 = round(1e5 log10 2)
+#define limb_clz(x) (__builtin_clzll((unsigned long long) (x)) - (8 * (int) sizeof(unsigned long long) - limb_bits))  // of a nonzero limb
+// floor(limb_bits * log10 2), 30103 = round(1e5 log10 2)
 #define limb_dec_chunk  (limb_bits * 30103 / 100000)
-// the binary-radix twins: the most digits whose product still fits a limb
+// the most digits that still fit a limb
 #define limb_hex_chunk  ((limb_bits - 1) / 4)
 #define limb_oct_chunk  ((limb_bits - 1) / 3)
 #define limb_base ((dlimb) 1 << limb_bits)
-// the bitwise codes ride the word lane (spec.l's width law): defined only where the cells
-// are machine words; other operands take the whole op to the zero point
+// bitwise ops only on machine-word cells (spec.l's width law), else the zero point
 #define vop_bitp(op) ((op) >= vop_band && (op) <= vop_bsr)
 static love_inline flo_t love_floor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
 static love_inline flo_t net_flo(flo_t v) { return v != v ? 0 : v; }
 struct love_zn { flo_t re, im; };                     // the net: a complex value
 static love_inline struct love_zn zn(flo_t re, flo_t im) {
   struct love_zn z = {re, im}; return z; }
-// this file's own, forward-declared so order within it does not matter.
 static dlimb div128by64(love_limb hi, love_limb lo, love_limb d, love_limb *rem);
 static love_limb
  div2by1(love_limb hi, love_limb lo, love_limb d, love_limb *rem),
@@ -61,17 +58,9 @@ static void
             love_limb const *b, int nb, bool negb, bool subtract),
  mag_add_off(love_limb *r, int rn, love_limb const *s, int sn, int off),
  mag_mul_kara(love_limb *r, love_limb const *a, love_limb const *b, int n, love_limb *t);
-// ============================================================================
-// big
-// ============================================================================
-// bignums close the tower fixnum -> sun box -> bignum. all multi-limb work
-// lives in love_noinline magnitude helpers over raw limb arrays (no allocation),
-// so the VM entries keep their tail calls and the GC never sees a half-built
-// object. products/divides stay hardware (mulq/divq via div2by1) -- never
-// __multi3/__udivti3, which the -nostdlib freestanding port cannot supply.
+// big: fixnum -> sun box -> bignum. multi-limb work is noinline helpers over raw limbs that
+// never allocate, so the VM keeps its tail calls; never __multi3/__udivti3, which -nostdlib lacks
 
-
-// |slen| of a heap bignum.
 static love_inline int big_nlimbs(word x) {
  intptr_t s = big(x)->slen;
  return (int) (s < 0 ? -s : s); }
@@ -80,14 +69,12 @@ uintptr_t big_bytes(struct big *b) {
  intptr_t n = b->slen < 0 ? -b->slen : b->slen;
  return sizeof(struct big) + (uintptr_t) n * sizeof(love_limb); }
 
-// --- raw magnitude primitives (little-endian limb arrays); callers pass
-// normalized inputs and normalize outputs via big_canon
+// magnitudes: little-endian limbs, normalized in, big_canon'd out
 
 static int mag_copy(love_limb *dst, love_limb const *src, int n) {
  for (int i = 0; i < n; i++) dst[i] = src[i];
  return n; }
 
-// compare magnitudes: -1 if a<b, 0 if equal, 1 if a>b.
 static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b, int nb) {
  while (na > 0 && a[na-1] == 0) na--;
  while (nb > 0 && b[nb-1] == 0) nb--;
@@ -95,7 +82,7 @@ static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b,
  for (int i = na - 1; i >= 0; i--) if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
  return 0; }
 
-// r = a + b. r distinct from a,b; capacity >= max(na,nb)+1. returns limb count.
+// r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
 static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
  if (na < nb) { love_limb const *t = a; a = b; b = t; int u = na; na = nb; nb = u; }
  dlimb s, c = 0; int i = 0;
@@ -104,8 +91,7 @@ static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_
  if (c) r[i++] = (love_limb) c;
  return i; }
 
-// r = a - b, requires a >= b (magnitudes). r distinct from a,b. returns na
-// (caller normalizes away any high zero limbs the subtraction produced).
+// r = a - b, a >= b, r distinct -> na, high zeros the caller's
 static love_noinline int mag_sub(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
  sdlimb borrow = 0; int i = 0;
  for (; i < nb; i++) {
@@ -118,36 +104,32 @@ static love_noinline int mag_sub(love_limb *r, love_limb const *a, int na, love_
   r[i] = (love_limb) d; }
  return na; }
 
-// rows [i, end) of the schoolbook r = a * b: row i adds into r[i..i+nb) and writes its top
-// limb r[i+nb], so only row 0 reads limbs no row wrote. mag_mul runs every row; lvm_bmul
-// runs a chunk per dispatch so a long product yields
+// rows [i0, end) of the schoolbook r = a * b; only row 0 reads limbs no row wrote, so lvm_bmul
+// can run a chunk per dispatch and yield
 static love_noinline void mag_mul_rows(love_limb *r, love_limb const *a, int i0, int end, love_limb const *b, int nb) {
  if (!i0) for (int j = 0; j < nb; j++) r[j] = 0;
  for (int i = i0; i < end; i++) {
-  dlimb carry = 0; love_limb ai = a[i];            // ai stays a limb so ai*b[j] is the hardware 64x64->128 (not a 128x128 __multi3)
+  dlimb carry = 0; love_limb ai = a[i];            // a limb, so ai*b[j] is 64x64->128, not __multi3
   for (int j = 0; j < nb; j++) {
    dlimb s = (dlimb) ai * b[j] + r[i+j] + carry;
    r[i+j] = (love_limb) s; carry = s >> limb_bits; }
   r[i+nb] = (love_limb) carry; } }
 
-// r = a * b (schoolbook). r must be distinct from a,b; capacity >= na+nb
+// r distinct, capacity na+nb
 static love_inline void mag_mul(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
  mag_mul_rows(r, a, 0, na, b, nb); }
 
-// a = a*mul + add, in place (mul,add < 2^limb_bits). a capacity must allow one
-// carry limb at a[n]. returns the new limb count. used by the decimal reader.
+// a = a*mul + add in place, room for a carry at a[n] -> the limb count
 static love_noinline int mag_mul_add_small(love_limb *a, int n, love_limb mul, love_limb add) {
  dlimb c = add;
  for (int i = 0; i < n; i++) { dlimb s = (dlimb) a[i] * mul + c; a[i] = (love_limb) s; c = s >> limb_bits; }
  if (c) a[n++] = (love_limb) c;
  return n; }
 
-// 128/64 -> quotient + remainder, caller guarantees the quotient fits a limb
-// (hi < d): the hardware divq on x86-64, never __udivti3
+// 128/64 with hi < d, so the quotient fits a limb
 static love_inline love_limb div2by1(love_limb hi, love_limb lo, love_limb d, love_limb *rem) {
 #if defined(__x86_64__) && limb_bits == 64 && defined(__GNUC__) && !defined(__mooncc__)
- // gcc/clang take the one-divq asm; mooncc compiles the C face below natively
- // (its u128/u64 divide is the same two-step divq dance, emitted whole)
+ // mooncc emits the C face below as divq itself
  __asm__("divq %2" : "+a"(lo), "+d"(hi) : "r"(d));
  return *rem = hi, lo;
 #else
@@ -155,16 +137,14 @@ static love_inline love_limb div2by1(love_limb hi, love_limb lo, love_limb d, lo
  return *rem = (love_limb) (num % d), (love_limb) (num / d);
 #endif
 }
-// 128/64 -> full quotient + remainder for the q-hat step, as two divq-safe steps
+// the full 128/64 quotient for q-hat, as two divq-safe steps
 static love_inline dlimb div128by64(love_limb hi, love_limb lo, love_limb d, love_limb *rem) {
  love_limb qhi = hi / d, r1 = hi % d;
  love_limb qlo = div2by1(r1, lo, d, rem);
  return ((dlimb) qhi << limb_bits) | qlo; }
 
-// knuth Algorithm D long division (Hacker's Delight divmnu), in three pieces so the
-// one-shot below and the resumable lane (lvm_bdiv) grind the same arithmetic.
-// normalize u (m limbs) and v (n >= 2 limbs) so v's top bit is set, into un (m+1
-// limbs) and vn (n limbs); answers the shift
+// knuth's algorithm D (Hacker's Delight divmnu) in three pieces, shared with lvm_bdiv.
+// u (m limbs) and v (n >= 2) shifted so v's top bit is set, into un (m+1) and vn -> the shift
 static int mag_dnorm(love_limb *un, love_limb *vn, love_limb const *u, int m, love_limb const *v, int n) {
  int s = limb_clz(v[n-1]);
  for (int i = n - 1; i > 0; i--) vn[i] = (v[i] << s) | (s ? (dlimb) v[i-1] >> (limb_bits - s) : 0);
@@ -174,25 +154,24 @@ static int mag_dnorm(love_limb *un, love_limb *vn, love_limb const *u, int m, lo
  un[0] = u[0] << s;
  return s; }
 
-// one quotient limb: q-hat off un's top three limbs at j, then qhat*vn multiplied
-// and subtracted out of un[j..j+n], added back once if the guess ran one high
+// one quotient limb: q-hat from un's top three at j, qhat*vn subtracted, added back if one high
 static love_inline love_limb mag_divstep(love_limb *un, love_limb const *vn, int n, int j) {
  dlimb const B = limb_base;
- love_limb rr;                                   // 128/64 q-hat: divq-safe two-step, no __udivti3
+ love_limb rr;
  dlimb qhat = div128by64(un[j+n], un[j+n-1], vn[n-1], &rr), rhat = rr;
  while (qhat >= B || qhat * vn[n-2] > ((rhat << limb_bits) | un[j+n-2])) {
   qhat--; rhat += vn[n-1];
   if (rhat >= B) break; }
  sdlimb borrow = 0;
  for (int i = 0; i < n; i++) {
-  dlimb p = (dlimb) (love_limb) qhat * vn[i];   // qhat < B here: a limb, so 64x64->128 not 128x128
+  dlimb p = (dlimb) (love_limb) qhat * vn[i];   // qhat < B: a limb, so 64x64->128
   sdlimb sub = (sdlimb) un[i+j] - borrow - (sdlimb) (love_limb) p;
   un[i+j] = (love_limb) sub;
   borrow = (sdlimb) (p >> limb_bits) - (sub >> limb_bits); }
  sdlimb sub = (sdlimb) un[j+n] - borrow;
  un[j+n] = (love_limb) sub;
  if (sub >= 0) return (love_limb) qhat;
- dlimb carry = 0;                            // qhat was one too big: add back
+ dlimb carry = 0;                            // one too big: add back
  for (int i = 0; i < n; i++) {
   dlimb t = (dlimb) un[i+j] + vn[i] + carry;
   un[i+j] = (love_limb) t;
@@ -200,14 +179,14 @@ static love_inline love_limb mag_divstep(love_limb *un, love_limb const *vn, int
  un[j+n] = (love_limb) (un[j+n] + carry);
  return (love_limb) qhat - 1; }
 
-// the remainder is un's low n limbs, shifted back out of normal form
+// the remainder: un's low n limbs, shifted back
 static void mag_ddenorm(love_limb *r, love_limb const *un, int n, int s) {
  for (int i = 0; i < n; i++) r[i] = s ? (un[i] >> s) | ((dlimb) un[i+1] << (limb_bits - s)) : un[i]; }
 
 // u (m limbs) / v (n limbs, m >= n) -> q (m-n+1 limbs), r (n limbs); un/vn are scratch
 static love_noinline void mag_divmod(love_limb *q, love_limb *r,
   love_limb const *u, int m, love_limb const *v, int n, love_limb *un, love_limb *vn) {
- if (n == 1) {                                  // single-limb divisor: simple
+ if (n == 1) {
   love_limb rem = 0;
   for (int j = m - 1; j >= 0; j--) { love_limb rr; q[j] = div2by1(rem, u[j], v[0], &rr); rem = rr; }
   r[0] = rem; return; }
@@ -215,13 +194,8 @@ static love_noinline void mag_divmod(love_limb *q, love_limb *r,
  for (int j = m - n; j >= 0; j--) q[j] = mag_divstep(un, vn, n, j);
  mag_ddenorm(r, un, n, s); }
 
-// --- operand loading + tier conversions -------------------------------------
-
-// load integer operand x (fixnum / sun box / bignum -- never a float) as a
-// magnitude. a fixnum/box fills `scratch` (wlimbs limbs: 1 with native-width
-// limbs, 2 with 32-bit limbs on a 64-bit word) and points *out at it; a bignum
-// points *out into its heap limbs (stable only while no GC runs). sets *neg and
-// returns the limb count (0 for the value zero). wlimbs = limbs to hold one word.
+// an integer x as a magnitude -> the limb count, 0 for zero. a fixnum or box fills scratch
+// (wlimbs: the limbs of one word); a bignum's *out points into the heap, stable until a GC
 static int load_int_mag(word x, love_limb scratch[wlimbs], love_limb const **out, bool *neg) {
  if (bigp(x)) { struct big *b = big(x); intptr_t s = b->slen;
   *neg = s < 0, *out = b->limb; return (int) (s < 0 ? -s : s); }
@@ -242,59 +216,51 @@ flo_t big_to_flo(word x) {
  for (int i = n - 1; i >= 0; i--) r = r * (double) limb_base + (double) b->limb[i];
  return (flo_t) (neg ? -r : r); }
 
-// the bignum's two's-complement value mod 2^W (its low machine word). used when
-// an integer-array elementwise op must broadcast a bignum scalar down to one
-// machine-int element ("arrays win; demote the bignum by its low bits").
 int big_cmp(word a, word b) {
  love_limb sa[wlimbs], sb[wlimbs]; love_limb const *la, *lb; bool na, nb;
  int nla = load_int_mag(a, sa, &la, &na), nlb = load_int_mag(b, sb, &lb, &nb);
- bool aneg = na && nla > 0, bneg = nb && nlb > 0;   // zero is non-negative
+ bool aneg = na && nla > 0, bneg = nb && nlb > 0;
  if (aneg != bneg) return aneg ? -1 : 1;
  int c = mag_cmp(la, nla, lb, nlb);
  return aneg ? -c : c; }
 
-// demote a magnitude to the smallest tier: fixnum, sun box, bignum -- the single
-// sink that keeps the tiers disjoint, so eqv / table keys stay well defined
+// the smallest tier: the one sink that keeps the tiers disjoint, so eqv and keys hold
 word big_canon(word **hp, love_limb const *limb, int n, bool neg) {
  while (n > 0 && limb[n-1] == 0) n--;
  if (n == 0) return zero;
- if (n <= wlimbs) {                        // small enough to weigh against the charm range
+ if (n <= wlimbs) {
   uintptr_t u = 0;
-  for (int i = 0; i < n; i++) u |= (uintptr_t) limb[i] << (limb_bits * i);   // combine limbs into a word
+  for (int i = 0; i < n; i++) u |= (uintptr_t) limb[i] << (limb_bits * i);
   uintptr_t const fixmag = (uintptr_t) 1 << (Bits - 2);   // |mincharm| = 2^(W-2)
-  if (!neg) { if (u <= fixmag - 1) return putcharm((intptr_t) u); }          // maxcharm = 2^(W-2)-1
+  if (!neg) { if (u <= fixmag - 1) return putcharm((intptr_t) u); }
   else if (u <= fixmag) return putcharm((intptr_t) ((uintptr_t) 0 - u)); }   // incl mincharm
  struct big *b = ini_big(big(*hp), neg ? -n : n);
  for (int i = 0; i < n; i++) b->limb[i] = limb[i];
  *hp += b2w(sizeof(struct big) + (size_t) n * sizeof(love_limb));
  return word(b); }
 
-// --- arithmetic (sign-magnitude over the loaded operands) -------------------
-
-// r = a +/- b (subtract flips b's sign), result magnitude + sign.
+// sign-magnitude r = a +/- b
 static void big_addsub(love_limb *r, int *rn, bool *rneg,
   love_limb const *a, int na, bool nega, love_limb const *b, int nb, bool negb, bool subtract) {
- bool sb = subtract ? !negb : negb;             // effective sign of the b operand
+ bool sb = subtract ? !negb : negb;
  if (nega == sb) { *rn = mag_add(r, a, na, b, nb); *rneg = nega; }
  else { int c = mag_cmp(a, na, b, nb);
   if (c == 0) { *rn = 0; *rneg = false; }
   else if (c > 0) { *rn = mag_sub(r, a, na, b, nb); *rneg = nega; }
   else { *rn = mag_sub(r, b, nb, a, na); *rneg = sb; } } }
 
-// add magnitude s (sn limbs) into r at limb offset off, carrying up. r is sized
-// for the full result, so the carry settles within it.
+// s into r at limb off; r sized for the whole result, so the carry settles in it
 static void mag_add_off(love_limb *r, int rn, love_limb const *s, int sn, int off) {
  dlimb c = 0; int i = 0;
  for (; i < sn; i++)            { dlimb t = (dlimb) r[off+i] + s[i] + c; r[off+i] = (love_limb) t; c = t >> limb_bits; }
  for (; c && off + i < rn; i++) { dlimb t = (dlimb) r[off+i] + c;        r[off+i] = (love_limb) t; c = t >> limb_bits; } }
 
-// karatsuba for equal-length operands: three half-size products in place of one
-// full one; below kara_cutoff schoolbook's lower constant wins. t is scratch, 4n + 8 log n
-// limbs: each level's sums and middle product, then the next level's
-#define kara_cutoff 40   // limbs/operand above which Karatsuba beats schoolbook (measured crossover)
+// karatsuba for equal lengths; t is scratch, 4n + 8 log n limbs: each level's sums and
+// middle product, then the next level's
+#define kara_cutoff 40   // limbs per operand, the measured crossover
 static void mag_mul_kara(love_limb *r, love_limb const *a, love_limb const *b, int n, love_limb *t) {
  if (n < kara_cutoff) { mag_mul(r, a, n, b, n); return; }
- int m = n / 2, h = n - m;                           // low m limbs, high h (m or m+1) limbs
+ int m = n / 2, h = n - m;
  mag_mul_kara(r,       a,     b,     m, t);           // z0 -> r[0..2m)
  mag_mul_kara(r + 2*m, a + m, b + m, h, t);           // z2 -> r[2m..2n)
  int z0n = 2*m;
@@ -305,7 +271,7 @@ static void mag_mul_kara(love_limb *r, love_limb const *a, love_limb const *b, i
  int nsa = mag_add(sa, a, m, a + m, h), nsb = mag_add(sb, b, m, b + m, h);
  for (int i = nsa; i <= h; i++) sa[i] = 0;
  for (int i = nsb; i <= h; i++) sb[i] = 0;
- mag_mul_kara(z1, sa, sb, h + 1, t + 4 * (h+1));     // z1 = (a0+a1)(b0+b1), the sums zero-padded to h+1
+ mag_mul_kara(z1, sa, sb, h + 1, t + 4 * (h+1));     // z1 = (a0+a1)(b0+b1), zero-padded to h+1
  int nz1 = 2 * (h+1);
  while (nz1 > 0 && z1[nz1-1] == 0) nz1--;
  nz1 = mag_sub(z1, z1, nz1, r,       z0n);
@@ -321,14 +287,13 @@ static int big_mul_mag(love_limb *r, love_limb const *a, int na, love_limb const
  while (n > 0 && r[n-1] == 0) n--;
  return n; }
 
-// the packed multi-precision lane for + - * / % (zero divisor screened by the
-// caller): computes a (vop) b, leaves the result at g->sp[1], pops one, advances
-// ip -- so the caller is just Pack; binop; Unpack; Continue.
+// + - * / % packed, a zero divisor screened by the caller: the result at sp[1], one popped,
+// ip advanced, so the caller is Pack; binop; Unpack; Continue
 struct g *big_binop(struct g *g, int vop) {
  word a = g->sp[0], b = g->sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2,
-     bound = na + nb + 2,                        // result magnitude upper bound
-     work = 4 * (na + nb) + 16;                  // divmod scratch upper bound
+     bound = na + nb + 2,                        // the result's bound
+     work = 4 * (na + nb) + 16;                  // divmod scratch's
  uintptr_t res_area = Width(struct big) + b2w((size_t) bound * sizeof(love_limb)),
            ws_words = b2w((size_t) (bound + work) * sizeof(love_limb));
  if (!ok(g = have(g, res_area + ws_words))) return g;
@@ -342,14 +307,14 @@ struct g *big_binop(struct g *g, int vop) {
   case vop_add: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, false); break;
   case vop_sub: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, true); break;
   case vop_mul: rn = big_mul_mag(rmag, la, nla, lb, nlb, scr); rneg = nega != negb; break;
-  default: {                                     // vop_quot / vop_rem (truncated)
+  default: {                                     // quot and rem, truncated
    int c = mag_cmp(la, nla, lb, nlb);
    if (c < 0) {                                  // |a| < |b|: q = 0, r = a
     if (vop == vop_rem) rn = mag_copy(rmag, la, nla), rneg = nega; }
    else {
     love_limb *q = scr, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
     mag_divmod(q, rem, la, nla, lb, nlb, un, vn);
-    if (vop != vop_rem) {                          // vop_quot / vop_fquot: truncated quotient
+    if (vop != vop_rem) {
      int qn = nla - nlb + 1; while (qn > 0 && q[qn-1] == 0) qn--;
      rn = mag_copy(rmag, q, qn), rneg = nega != negb; }
     else {
@@ -357,9 +322,7 @@ struct g *big_binop(struct g *g, int vop) {
      rn = mag_copy(rmag, rem, rr), rneg = nega; } } } }
  return *++g->sp = big_canon(&g->hp, rmag, rn, rneg), ++g->ip, g; }
 
-// bitwise over the whole integer tower. sign-magnitude goes in as its infinite
-// two's-complement extension, so a negative operand contributes ones above its
-// magnitude; w = max + 1 limb of sign headroom carries that exactly.
+// bitwise over the tower, as infinite two's complement: w = max + 1 limb of sign headroom
 static void twos_neg(love_limb *r, int w) {
  love_limb carry = 1;
  for (int i = 0; i < w; i++) { love_limb v = (love_limb) (~r[i] + carry); carry = carry && !v; r[i] = v; } }
@@ -384,25 +347,23 @@ struct g *big_bitop(struct g *g, int vop) {
         : vop == vop_bor  ? (love_limb) (ra[i] | rb[i])
         :                   (love_limb) (ra[i] ^ rb[i]);
  bool rneg = vop == vop_band ? (nega && negb) : vop == vop_bor ? (nega || negb) : (nega != negb);
- if (rneg) twos_neg(ra, w);                      // ..and back out of two's complement
+ if (rneg) twos_neg(ra, w);
  int rn = w; while (rn > 0 && ra[rn-1] == 0) rn--;
  return *++g->sp = big_canon(&g->hp, ra, rn, rneg), ++g->ip, g; }
 
-// << and >> over the whole tower. a left shift is x * 2^k and promotes rather than
-// dropping the bits off the word; a right shift FLOORS, so -5 >> 1 is -3 where //
-// truncates to -2. a negative count shifts the other way, the only total reading of
-// one, and a count past the value's width answers 0 or -1 by the sign.
+// << and >> over the tower: left promotes, right floors (-5 >> 1 = -3, where // gives -2), a
+// negative count turns round, and one past the width answers 0 or -1
 struct g *big_shift(struct g *g, int vop) {
  word a = g->sp[0], b = g->sp[1];
  love_limb sb[wlimbs]; love_limb const *lb; bool negk;
  int nlb = load_int_mag(b, sb, &lb, &negk);
- // the count, saturated: anything past an int is "further than any value is wide"
+ // the count, saturated past an int
  uintptr_t kk = 0; bool khuge = nlb > (int) (sizeof(uintptr_t) / sizeof(love_limb));
  for (int i = 0; i < nlb && !khuge; i++) {
   if ((uintptr_t) (limb_bits * i) >= 8 * sizeof(uintptr_t)) { khuge = lb[i] != 0; break; }
   kk |= (uintptr_t) lb[i] << (limb_bits * i); }
  if (kk > (uintptr_t) INT32_MAX) khuge = true;
- bool left = (vop == vop_bsl) != negk;            // a negative count turns the shift round
+ bool left = (vop == vop_bsl) != negk;
  int k = khuge ? 0 : (int) kk;
  int na = bigp(a) ? big_nlimbs(a) : wlimbs;
  int ls = khuge ? 0 : k / limb_bits, bs = khuge ? 0 : k % limb_bits;
@@ -411,7 +372,7 @@ struct g *big_shift(struct g *g, int vop) {
  uintptr_t res_area = Width(struct big) + b2w((size_t) w * sizeof(love_limb)),
            ws_words = b2w((size_t) w * sizeof(love_limb));
  if (!ok(g = have(g, res_area + ws_words))) return g;
- a = g->sp[0];                                    // re-fetch (have may have GC'd)
+ a = g->sp[0];                                    // re-fetch past the have
  love_limb sa[wlimbs]; love_limb const *la; bool neg;
  int nla = load_int_mag(a, sa, &la, &neg);
  love_limb *r = (love_limb*) (g->hp + res_area);
@@ -430,21 +391,18 @@ struct g *big_shift(struct g *g, int vop) {
   if (!bs) for (int i = 0; i < rn; i++) r[i] = la[ls + i];
   else for (int i = 0; i < rn; i++)
    r[i] = (love_limb) ((la[ls + i] >> bs) | (i + 1 < rn ? (la[ls + i + 1] << (limb_bits - bs)) : 0)); }
- if (!left && neg) {                              // floor: a shifted-out bit rounds away from zero
+ if (!left && neg) {                              // floor: a lost bit rounds away from zero
   bool lost = khuge || ls >= nla;
   for (int i = 0; i < ls && !lost && i < nla; i++) lost = la[i] != 0;
   if (!lost && bs) lost = (la[ls] & (love_limb) ((((love_limb) 1) << bs) - 1)) != 0;
-  if (lost) { love_limb carry = 1;                  // magnitude + 1
+  if (lost) { love_limb carry = 1;
    for (int i = 0; i < rn && carry; i++) { r[i] = (love_limb) (r[i] + 1); carry = !r[i]; }
    if (carry) r[rn++] = 1; } }
  while (rn > 0 && r[rn-1] == 0) rn--;
  return *++g->sp = big_canon(&g->hp, r, rn, neg && rn > 0), ++g->ip, g; }
 
 
-// `/` over the bignum lane: like big_binop's truncated quotient, but the result
-// stays an exact integer only when b divides a; a nonzero remainder promotes to a
-// float box of a/b (the bignum analogue of the scalar `/` int promotion). operands
-// at g->sp[0..1] are integers; a zero divisor is screened off by the caller.
+// `/` over bignums: exact when b divides a, else a float; a zero divisor screened by the caller
 struct g *big_quot_true(struct g *g) {
  word a = g->sp[0], b = g->sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2,
@@ -460,7 +418,7 @@ struct g *big_quot_true(struct g *g) {
  love_limb *rmag = (love_limb*) (g->hp + res_area), *scr = rmag + bound;
  bool rneg = false, exact;
  int rn = 0, c = mag_cmp(la, nla, lb, nlb);
- if (c < 0) exact = (nla == 0);                  // |a| < |b|: q = 0, exact iff a == 0
+ if (c < 0) exact = (nla == 0);                  // |a| < |b|: q = 0
  else {
   love_limb *q = scr,
           *rem = q + (nla - nlb + 1),
@@ -474,28 +432,23 @@ struct g *big_quot_true(struct g *g) {
   while (qn > 0 && q[qn-1] == 0) qn--;
   rn = mag_copy(rmag, q, qn), rneg = nega != negb; }
  if (exact) g->sp[1] = big_canon(&g->hp, rmag, rn, rneg);
- else g->sp[1] = mk_gem(&g->hp, toflo(a) / toflo(b));  // a,b still valid: no GC since the re-fetch, and toflo is alloc-free
+ else g->sp[1] = mk_gem(&g->hp, toflo(a) / toflo(b));  // no GC since the re-fetch
  g->sp++;
  g->ip = (union u*) g->ip + 1;
  return g; }
 
-// --- resumable (yieldable) multiply ---
-// schoolbook run as one C call never yields, so a huge product would block every
-// peer task. drive it as a self-looping VM instruction instead: the partial
-// product lives in a cask, each dispatch folds ~bmul_chunk limb-mults, and the
-// work state rides the l stack [i, r, ret_ip, a, b]. operands stay heap bignums
-// so the loop reads stable limb pointers (no &scratch -- the sibcall law).
+// a yieldable schoolbook: a self-looping op folding bmul_chunk limb-mults per dispatch into a
+// cask, state [i, r, ret_ip, a, b]; the operands heap bignums, no &scratch (the sibcall law)
 #define bmul_chunk (1 << 14)
 static union u const bmul_loop[1] = { { .ap = lvm_bmul } };
 
-// materialize integer x as a heap big (a bignum returns in place)
 static union u *as_big(word **hp, word x) {
  if (bigp(x)) return cell(x);
  intptr_t v = toint(x);
  bool neg = v < 0;
  uintptr_t u = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
  love_limb tmp[wlimbs];
- int n = 0;                                  // a machine word is wlimbs limbs
+ int n = 0;
  for (int i = 0; i < wlimbs; i++) {
    tmp[i] = (love_limb) (u >> (limb_bits * i));
    if (tmp[i]) n = i + 1; }
@@ -504,8 +457,7 @@ static union u *as_big(word **hp, word x) {
  *hp += b2w(sizeof(struct big) + (size_t) n * sizeof(love_limb));
  return cell((word) b); }
 
-// promote both operands, allocate the zeroed result cask, lay out the work frame;
-// one have so no half-built state is ever seen
+// one have, so no half-built state is ever seen
 static struct g *bmul_setup(struct g *g) {
  word a = g->sp[0], b = g->sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
@@ -514,7 +466,7 @@ static struct g *bmul_setup(struct g *g) {
            breq = Width(struct cask) + Width(struct tag),
            bigmax = Width(struct big) + b2w((size_t) wlimbs * sizeof(love_limb));
  if (!ok(g = have(g, 2 * bigmax + sreq + breq + 3))) return g;
- a = g->sp[0], b = g->sp[1];                       // re-fetch (have may have GC'd)
+ a = g->sp[0], b = g->sp[1];
  union u *abig = as_big(&g->hp, a), *bbig = as_big(&g->hp, b), *ret = g->ip + 1;
  struct str *s = ini_str(str(g->hp), rbytes);
  g->hp += sreq;
@@ -530,29 +482,23 @@ static struct g *bmul_setup(struct g *g) {
  g->ip = (union u*) bmul_loop;
  return g; }
 
-// --- resumable Karatsuba multiply: a true recursive karatsuba (O(n^1.585)) as a
-// yieldable VM instruction. the whole computation lives in one pinned cask
-// [hdr | job stack | A(n) | B(n) | R(2n) | scratch], re-read by offset each
-// dispatch. a job either splits (push the three half-size children, LIFO) or
-// combines (z1 -= z0; z1 -= z2; r += z1<<m). a shorter operand rides zero-padded to n.
-// a lopsided pair (one past twice the other) is cut instead: n the shorter's width, the
-// longer np pieces of it, each piece's product laid in T and added into R at its offset
-// by a driver job (state 2 + the next piece).
-#define kmul_chunk (1 << 14)   // leaf limb-mults folded per dispatch before a yield check
-#define KmulHdr 8             // ws header limbs: [0]=n [1]=top (stack ptr) [2]=sign [3]=r_off
-                              // [4]=R's limbs [5]=np, the pieces (0: none) [6]=t_off
+// a yieldable karatsuba in one cask [hdr | job stack | A(n) | B(n) | R(2n) | scratch], read by
+// offset each dispatch. a job splits (three children, LIFO) or combines; the shorter is zero-padded.
+// a lopsided pair is cut instead: n the shorter's width, the longer np pieces of it, each
+// piece's product laid in T and added into R by a driver job (state 2 + the next piece)
+#define kmul_chunk (1 << 14)   // leaf limb-mults per dispatch
+#define KmulHdr 8             // [0]=n [1]=top [2]=sign [3]=r_off [4]=R's limbs [5]=np [6]=t_off
 #define KmulJw  6             // job record limbs: ar, br, n, rr, sr, state
 static union u const kmul_loop[1] = { { .ap = lvm_kmul } };
 
 static struct g *kmul_setup(struct g *g) {
  word a = g->sp[0], b = g->sp[1];
- // caller contract: bigp(a)&&bigp(b), n >= kara_cutoff: the longer's limbs, or for a
- // lopsided pair the shorter's
+ // both bignums, n >= kara_cutoff: the longer's limbs, or a lopsided pair's shorter's
  int lo = min(big_nlimbs(a), big_nlimbs(b)), hi = max(big_nlimbs(a), big_nlimbs(b)),
      np = 2 * lo < hi ? (hi + lo - 1) / lo : 0, n = np ? lo : hi, d = 0;
  for (int t = n; t >= kara_cutoff; t = (t + 1) / 2) d++;   // karatsuba depth
- uintptr_t njob = (uintptr_t) 8 * d + 32,                 // job-stack capacity (~3d live, generous)
-           scrn = (uintptr_t) 6 * n + 16 * (uintptr_t) d + 256,      // O(n) scratch, with margin
+ uintptr_t njob = (uintptr_t) 8 * d + 32,                 // ~3d live
+           scrn = (uintptr_t) 6 * n + 16 * (uintptr_t) d + 256,
            asz = np ? (uintptr_t) np * n : (uintptr_t) n,
            rsz = np ? asz + n : 2 * (uintptr_t) n,
            jobs_off = KmulHdr,
@@ -565,7 +511,7 @@ static struct g *kmul_setup(struct g *g) {
            sreq = str_width(wslimbs * sizeof(love_limb)),
            breq = Width(struct cask) + Width(struct tag);
  if (!ok(g = have(g, sreq + breq + 3))) return g;
- a = g->sp[0], b = g->sp[1];                              // re-fetch (have may have GC'd)
+ a = g->sp[0], b = g->sp[1];
  love_limb sa[wlimbs], sb[wlimbs]; love_limb const *la, *lb; bool nega, negb;
  int na = load_int_mag(a, sa, &la, &nega), nb = load_int_mag(b, sb, &lb, &negb);
  if (na < nb) { love_limb const *x = la; la = lb, lb = x; int y = na; na = nb, nb = y; }   // the longer in A
@@ -573,9 +519,9 @@ static struct g *kmul_setup(struct g *g) {
  g->hp += sreq;
  love_limb *ws = (love_limb*) txt(ws_s);
  memset(ws, 0, wslimbs * sizeof(love_limb));
- memcpy(ws + a_off, la, (size_t) na * sizeof(love_limb));          // the rest stays the memset's zeros
+ memcpy(ws + a_off, la, (size_t) na * sizeof(love_limb));
  memcpy(ws + b_off, lb, (size_t) nb * sizeof(love_limb));
- ws[0] = (love_limb) n, ws[1] = 1, ws[2] = (love_limb) (nega != negb), ws[3] = r_off;   // n, top=1, sign, r_off
+ ws[0] = (love_limb) n, ws[1] = 1, ws[2] = (love_limb) (nega != negb), ws[3] = r_off;
  ws[4] = rsz, ws[5] = (love_limb) np, ws[6] = t_off;
  love_limb *j0 = ws + jobs_off;                             // the root job: A x B -> R, or the driver
  j0[0] = a_off, j0[1] = b_off, j0[2] = (love_limb) n, j0[3] = np ? t_off : r_off, j0[4] = scr_off, j0[5] = np ? 2 : 0;
@@ -584,19 +530,19 @@ static struct g *kmul_setup(struct g *g) {
  cask(k)->str = ws_s;
  tagthread(k, Width(struct cask));
  union u *ret = g->ip + 1;
- g->sp[0] = word(k), g->sp[1] = word(ret);                // frame [ws_buf, ret_ip]  (was [a, b])
+ g->sp[0] = word(k), g->sp[1] = word(ret);                // [ws, ret_ip] over [a, b]
  g->ip = (union u*) kmul_loop;
  return g; }
 
-// FIXME can we choose different types to reduce the amount of explicit casting in this function?
+// FIXME: types that need fewer casts
 static lvm(lvm_kmul) {
  love_limb *ws = (love_limb*) txt(cask(Sp[0])->str);
  int top = (int) ws[1];
  love_limb *jobs = ws + KmulHdr;
  long budget = kmul_chunk;
  while (top > 0 && budget > 0) {
-  ws[1] = (love_limb) top; // persist top, then a per-job yield check:
-  YieldCheck(); // a once-per-dispatch check yields too rarely here
+  ws[1] = (love_limb) top;
+  YieldCheck(); // per job: once per dispatch yields too rarely
   love_limb *J = jobs + (uintptr_t) (top - 1) * KmulJw;
   uintptr_t ar = J[0], br = J[1], rr = J[3], sr = J[4];
   int jn = (int) J[2], st = (int) J[5];
@@ -610,27 +556,27 @@ static lvm(lvm_kmul) {
     top++; }
    else top--;
    budget -= 2 * jn; continue; }
-  if (jn < kara_cutoff) {                                 // leaf: schoolbook jn x jn -> ws[rr..rr+2jn)
+  if (jn < kara_cutoff) {                                 // a leaf: schoolbook
    mag_mul(ws + rr, ws + ar, jn, ws + br, jn);
    budget -= (long) jn * jn; top--; continue; }
-  int m = jn / 2, h = jn - m;                             // low m limbs, high h (m or m+1)
+  int m = jn / 2, h = jn - m;
   if (st == 0) {                                          // split
    uintptr_t saO = sr, sbO = sr + (uintptr_t) (h + 1),
              z1O = sr + 2 * (uintptr_t) (h + 1), csr = sr + 4 * (uintptr_t) (h + 1);
    int ns = mag_add(ws + saO, ws + ar, m, ws + ar + m, h);            // sa = a_lo + a_hi
-   memset(ws + saO + ns, 0, (size_t) (h + 1 - ns) * sizeof(love_limb));   // zero-extend to exactly h+1
-   int nt = mag_add(ws + sbO, ws + br, m, ws + br + m, h);            // sb = b_lo + b_hi
+   memset(ws + saO + ns, 0, (size_t) (h + 1 - ns) * sizeof(love_limb));   // exactly h+1
+   int nt = mag_add(ws + sbO, ws + br, m, ws + br + m, h);
    memset(ws + sbO + nt, 0, (size_t) (h + 1 - nt) * sizeof(love_limb));
-   memset(ws + z1O, 0, (size_t) 2 * (h + 1) * sizeof(love_limb));            // clear z1's output slot
-   J[5] = 1;                                                          // this job combines when it returns
-   love_limb *z1J = jobs + (uintptr_t) top       * KmulJw;            // push z1 = sa*sb (pops first)
+   memset(ws + z1O, 0, (size_t) 2 * (h + 1) * sizeof(love_limb));
+   J[5] = 1;                                                          // combines when it returns
+   love_limb *z1J = jobs + (uintptr_t) top       * KmulJw;            // z1 = sa*sb
    z1J[0] = saO, z1J[1] = sbO, z1J[2] = (love_limb) (h + 1), z1J[3] = z1O, z1J[4] = csr, z1J[5] = 0;
-   love_limb *z2J = jobs + (uintptr_t) (top + 1) * KmulJw;            // push z2 = a_hi*b_hi -> r[2m..]
+   love_limb *z2J = jobs + (uintptr_t) (top + 1) * KmulJw;            // z2 = a_hi*b_hi -> r[2m..]
    z2J[0] = ar + m, z2J[1] = br + m, z2J[2] = (love_limb) h, z2J[3] = rr + 2 * (uintptr_t) m, z2J[4] = csr, z2J[5] = 0;
-   love_limb *z0J = jobs + (uintptr_t) (top + 2) * KmulJw;            // push z0 = a_lo*b_lo -> r[0..] (pops last)
+   love_limb *z0J = jobs + (uintptr_t) (top + 2) * KmulJw;            // z0 = a_lo*b_lo -> r[0..]
    z0J[0] = ar, z0J[1] = br, z0J[2] = (love_limb) m, z0J[3] = rr, z0J[4] = csr, z0J[5] = 0;
-   top += 3; budget -= jn;                                            // pop order z0,z2,z1 then this (combine)
-  } else {                                                // combine (st == 1)
+   top += 3; budget -= jn;                                            // pops z0, z2, z1, then this
+  } else {                                                // combine
    uintptr_t z1O = sr + 2 * (uintptr_t) (h + 1);
    int z0n = 2 * m;
    while (z0n > 0 && ws[rr + (uintptr_t) z0n - 1] == 0) z0n--;
@@ -644,12 +590,12 @@ static lvm(lvm_kmul) {
    while (nz1 > 0 && ws[z1O + (uintptr_t) nz1 - 1] == 0) nz1--;
    mag_add_off(ws + rr, 2 * jn, ws + z1O, nz1, m);                             // r += z1 * B^m
    budget -= jn; top--; } }
- ws[1] = (love_limb) top;                                   // persist the stack pointer before any yield
+ ws[1] = (love_limb) top;                                   // before any yield
  if (top > 0) { YieldCheck(); love_musttail return Continue(); }
  bool neg = ws[2];
- uintptr_t r_off = ws[3], rn = ws[4];   // done: ws[r_off..r_off+rn) is the product
+ uintptr_t r_off = ws[3], rn = ws[4];   // done: the product at ws[r_off..r_off+rn)
  Have(Width(struct big) + b2w(((size_t) rn + 1) * sizeof(love_limb)));
- ws = (love_limb*) txt(cask(Sp[0])->str);                    // re-fetch (Have may have GC'd)
+ ws = (love_limb*) txt(cask(Sp[0])->str);                    // re-fetch past the Have
  r_off = ws[3], rn = ws[4];
  word ret = Sp[1], res;
  Pack(g);
@@ -658,36 +604,34 @@ static lvm(lvm_kmul) {
  Sp += 1; Sp[0] = res; Ip = cell(ret); love_musttail return Continue(); }
 
 lvm(lvm_bmul_start) {
- // small-product fast path: a product that fits one chunk never yields, so the
- // resumable setup is pure overhead -- and that is the common case. one-shot it
- // through big_binop. (na <= chunk/nb keeps na*nb from overflowing a 32-bit int.)
+ // one chunk's product never yields: one-shot. na <= chunk/nb keeps na*nb off int overflow
  word a = Sp[0], b = Sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
  if (na <= bmul_chunk / nb) LvmResume(g, big_binop, vop_mul)
  if (bigp(a) && bigp(b) && (2 * min(na, nb) >= max(na, nb) || min(na, nb) >= kara_cutoff)) {
-  LvmResume(g, kmul_setup) }  // large: Karatsuba, a lopsided pair in pieces of the shorter's width
- LvmResume(g, bmul_setup) }   // a short one under the cutoff: chunked schoolbook
+  LvmResume(g, kmul_setup) }  // karatsuba, a lopsided pair in pieces of the shorter's width
+ LvmResume(g, bmul_setup) }   // short, under the cutoff: chunked schoolbook
 
 static lvm(lvm_bmul) {
  int i = (int) getcharm(Sp[0]);
  struct big *A = big(Sp[3]), *B = big(Sp[4]);
  intptr_t sla = A->slen, slb = B->slen;
  int na = sla < 0 ? -sla : sla, nb = slb < 0 ? -slb : slb;
- if (!na || !nb) {                                // a zero operand: product is 0
+ if (!na || !nb) {
   word ret = Sp[2]; Sp += 4; Sp[0] = zero; Ip = cell(ret); love_musttail return Continue(); }
  love_limb *la = A->limb, *lb = B->limb, *rl = (love_limb*) txt(cask(Sp[1])->str);
  int end = min(i + max(1, bmul_chunk / nb), na);
- mag_mul_rows(rl, la, i, end, lb, nb);             // one chunk of rows
+ mag_mul_rows(rl, la, i, end, lb, nb);
  i = end;
- Sp[0] = putcharm(i);                               // persist progress before any yield/GC
+ Sp[0] = putcharm(i);                               // before any yield or GC
  if (i < na) {
    YieldCheck();
    love_musttail return Continue(); }
- bool neg = (sla < 0) != (slb < 0); word ret;     // done: canonicalize the product
+ bool neg = (sla < 0) != (slb < 0); word ret;
  Have(Width(struct big) + b2w((size_t) (na + nb) * sizeof(love_limb)));
  ret = Sp[2];
- love_limb *rmag = (love_limb*) txt(cask(Sp[1])->str);  // re-fetch (Have may have GC'd)
- Pack(g);                                          // canon needs the synced g->hp (not &Hp: stack-local escapes block the sibcall)
+ love_limb *rmag = (love_limb*) txt(cask(Sp[1])->str);  // re-fetch past the Have
+ Pack(g);                                          // g->hp, never &Hp: an escaping local blocks the sibcall
  word res = big_canon(&g->hp, rmag, na + nb, neg);
  Unpack(g);
  Sp += 4;
@@ -695,12 +639,10 @@ static lvm(lvm_bmul) {
  Ip = cell(ret);
  love_musttail return Continue(); }
 
-// --- resumable long division (lvm_bmul's divmod twin): normalize once into a
-// pinned workspace [hdr | vn | un | q], grind the Knuth-D loop in chunks,
-// persisting the index j. every entry re-reads the base from Sp[1] (a GC moves
-// it). cheap divides one-shot through big_binop. which: 0 = //, 1 = %.
+// a yieldable long division: normalized once into a cask [hdr | vn | un | q], the D loop in
+// chunks, j on the stack; the base re-read from Sp[1] at every entry. which: 0 //, 1 %
 #define bdiv_chunk (1 << 14)
-#define BdivHdr 6           // ws header limbs: m, n, s(shift), which, nega, negb
+#define BdivHdr 6           // m, n, shift, which, nega, negb
 static union u const bdiv_loop[1] = { { .ap = lvm_bdiv } };
 
 static struct g *bdiv_setup(struct g *g, int which) {
@@ -726,7 +668,7 @@ static struct g *bdiv_setup(struct g *g, int which) {
  cask(k)->str = ws_s;
  tagthread(k, Width(struct cask));
  union u *ret = g->ip + 1;
- g->sp -= 1;                                          // [j, ws_buf, ret_ip]  (was [a, b])
+ g->sp -= 1;                                          // [j, ws, ret_ip] over [a, b]
  g->sp[0] = putcharm(m - n), g->sp[1] = word(k), g->sp[2] = word(ret);
  g->ip = (union u*) bdiv_loop;
  return g; }
@@ -735,7 +677,7 @@ lvm(lvm_bdiv_start) {
  int vop = (int) g->b;
  word a = Sp[0], b = Sp[1];
  int m = bigp(a) ? big_nlimbs(a) : wlimbs, n = bigp(b) ? big_nlimbs(b) : wlimbs;
- // one-shot the cheap cases: |a|<|b| (q=0), single-limb divisor, or a short quotient.
+ // one-shot: |a| < |b|, a single-limb divisor, or a short quotient
  if (m < n || n < 2 || m - n < (int) (bdiv_chunk / (uintptr_t) n)) LvmResume(g, big_binop, vop)
  LvmResume(g, bdiv_setup, vop == vop_rem) }
 
@@ -748,13 +690,12 @@ static lvm(lvm_bdiv) {
      steps = max(1, (int) (bdiv_chunk / (uintptr_t) n));
  for (int c = 0; c < steps && j >= 0; c++, j--) q[j] = mag_divstep(un, vn, n, j);
  if (j >= 0) { Sp[0] = putcharm(j); YieldCheck(); love_musttail return Continue(); }
- // done: canonicalize the requested output. denormalize the remainder into vn (now
- // dead), not in place, so a GC-retry of this tail stays idempotent. persist j=-1
- // first so a retry skips the loop.
+ // done. the remainder denormalizes into the dead vn, not in place, so a GC retry of this tail
+ // is idempotent; j = -1 first, so the retry skips the loop
  Sp[0] = putcharm(-1);
  int outn = which ? n : (m - n + 1);
  Have(Width(struct big) + b2w((size_t) (outn + 1) * sizeof(love_limb)));
- ws = (love_limb*) txt(cask(Sp[1])->str);                 // re-fetch (Have may have GC'd)
+ ws = (love_limb*) txt(cask(Sp[1])->str);                 // re-fetch past the Have
  vn = ws + BdivHdr, un = vn + n, q = un + (m + 1);
  bool rneg = which ? nega : (nega != negb);
  word ret = Sp[2], res;
@@ -767,16 +708,12 @@ static lvm(lvm_bdiv) {
  Ip = cell(ret);
  love_musttail return Continue(); }
 
-// --- reader / printer -------------------------------------------------------
-
-// one digit, either radix -- decimal digits sort below 'a', so the same fold
-// reads both and hex takes either case.
+// a digit in any radix, hex either case
 static love_inline love_limb rdigit(char c) {
  return (love_limb) (c <= '9' ? c - '0' : (c | 32) - 'a' + 10); }
 
-// slots of w limbs in x (np of them, a power of two) joined in pairs, hi r^(chunk w) + lo,
-// until one holds the value: each level's power the square of the last. pw, pn, t and kt
-// are scratch, kt karatsuba's
+// slots of w limbs in x (np, a power of two) joined in pairs, hi r^(chunk w) + lo, until one
+// holds the value, each level's power the square of the last. pw, pn, t, kt are scratch
 static void mag_join_dec(love_limb *x, int np, love_limb *pw, love_limb *pn, love_limb *t, love_limb *kt,
                          love_limb p0) {
  pw[0] = p0;
@@ -791,16 +728,15 @@ static void mag_join_dec(love_limb *x, int np, love_limb *pw, love_limb *pn, lov
    memcpy(lo, t, (size_t) 2 * w * sizeof(love_limb)); }
   if (2 * w < np) { mag_mul_kara(pn, pw, pw, w, kt); love_limb *z = pw; pw = pn, pn = z; } } }
 
-// g->sp[0] is a [+-]?<pfx><digits> token; replace it with the canonical value. a power of
-// two radix packs its digits' bits; ten lays `chunk` digits a limb and joins them by
-// halves (mag_join_dec), or for a short token folds them in by a mul-add a limb
+// sp0 a [+-]?<pfx><digits> token -> its value: a power of two radix packs its digits' bits;
+// ten lays chunk digits a limb and joins them by halves, or for a short token mul-adds a limb
 static struct g *big_read_radix(struct g *g, love_limb radix, int chunk, uintptr_t pfx) {
  struct str *tok = str(g->sp[0]);
  uintptr_t n = tok->len;
  char const *s = tok->bytes;
  bool neg = n && s[0] == '-';
  uintptr_t i = ((n && (s[0] == '-' || s[0] == '+')) ? 1 : 0) + pfx, ndig = n - i;
- int cap = (int) (ndig / (uintptr_t) chunk) + 3;  // upper-bound magnitude limbs (>= ndig/digits-per-limb)
+ int cap = (int) (ndig / (uintptr_t) chunk) + 3;
  bool halves = radix == 10 && cap > 2 * kara_cutoff;
  int np = 1;
  while (halves && np < cap) np *= 2;
@@ -840,36 +776,30 @@ struct g *big_read_dec(struct g *g) { return big_read_radix(g, 10, limb_dec_chun
 struct g *big_read_hex(struct g *g) { return big_read_radix(g, 16, limb_hex_chunk, 2); }
 struct g *big_read_oct(struct g *g) { return big_read_radix(g,  8, limb_oct_chunk, 1); }
 
-// --- (tray witness shape-list vals): the typed array constructor (mopped; the
-// prel's *-tray wrap it). the witness names its tier by example (0/0.0/~(0 0)/()
-// -> z/r/c/o); vals fills row-major (missing stays 0, extras ignored). bad
-// witness / negative dim / over-rank -> zero.
+// (tray witness shape vals), mopped behind prel's *-tray: the witness names the tier by example,
+// 0 Z, 0.0 R, ~(0 0) C, else O; vals fill row-major. a negative dim or over-rank -> zero
 lvm(lvm_trayctor) {
- word t = Sp[0], shp = Sp[1];                  // t = a witness gem (names its tier), vals = Sp[2]
- // the type is read off the witness's kind -- a value inhabiting the tier: 0 -> Z,
- // 0.0 -> R, ~(0 0) -> C, and anything else (canonically (), the O floor) -> O.
+ word t = Sp[0], shp = Sp[1];                  // vals = Sp[2]
  intptr_t ty = twinp(t) ? love_C : gemp(t) ? love_R
              : intp(t) ? love_Z : love_O;
  uintptr_t rank = 0, nelem = 1;
  for (word l = shp; chainp(l); l = B(l)) {
   word d = A(l);
   if (!charmp(d) || getcharm(d) < 0) love_musttail return Answerp(2, zero);
-  rank++, nelem = mulsat(nelem, (uintptr_t) getcharm(d)); }   // saturates: tray_bytes refuses it
+  rank++, nelem = mulsat(nelem, (uintptr_t) getcharm(d)); }   // saturated, for tray_bytes to refuse
  if (rank > maxrank) love_musttail return Answerp(2, zero);
  uintptr_t bytes = tray_bytes(ty, rank, nelem);
  Have(b2w(bytes));
  struct tray *v = (struct tray*) Hp;
  Hp += b2w(bytes);
  ini_tray(v, ty, rank);
- uintptr_t i = 0;                              // re-walk the (possibly moved) lists
+ uintptr_t i = 0;                              // the lists may have moved
  for (word l = Sp[1]; chainp(l); l = B(l)) v->shape[i++] = (uintptr_t) getcharm(A(l));
- if (ty == love_O) for (i = 0; i < nelem; i++) tray_put_obj(v, i, ZeroPoint);  // O floor is () not 0
+ if (ty == love_O) for (i = 0; i < nelem; i++) tray_put_obj(v, i, ZeroPoint);  // O's floor is ()
  else memset(tray_data(v), 0, nelem * love_T[ty]);
- i = 0;                                        // no alloc below, so v/Sp[2] stay put
+ i = 0;                                        // no alloc below
  for (word l = Sp[2]; chainp(l) && i < nelem; l = B(l), i++) tray_put(v, i, A(l));
- // only a rank-0 point (empty shape) demotes to its lone scalar gem; a
- // rank-1-len-1 stays an array (@(5) is a one-cell array, not 5 -- collapsing it
- // left the surface discontinuous). root the built tray: the box alloc can GC.
+ // only rank 0 demotes to its scalar: @(5) stays a one-cell array. rooted, as the box can GC
  Sp[2] = word(v);
  if (rank == 0) {
   if (ty == love_O) love_musttail return Answerp(2, tray_get_obj(v, 0));
@@ -881,8 +811,7 @@ lvm(lvm_trayctor) {
   love_musttail return Answerp(2, _res); }
  love_musttail return Answerp(2, word(v)); }
 
-// (iota mask): where -- the flat indices of a real tray's nonzero elements, in order, as a
-// z-array: the gather's and the scatter's index tray. apl's iota underbar
+// (iota mask): the flat indices of a real tray's nonzeros as a z-array, apl's iota underbar
 static lvm(lvm_where) {
  struct tray *m = tray(Sp[0]);
  uintptr_t n = tray_nelem(m), k = 0;
@@ -899,7 +828,7 @@ static lvm(lvm_where) {
   if (m->type == love_R ? tray_get_flo(m, i) != 0 : tray_get_int(m, i) != 0) p[j++] = (intptr_t) i;
  love_musttail return Answer(word(v)); }
 
-// (iota n): a z-array of 0..n-1, the array twin of `jot`; n<0 or non-fixnum -> zero
+// (iota n): 0..n-1, the array twin of `jot`
 lvm(lvm_iota) {
  word nx = Sp[0];
  if (packp(nx) && tray(nx)->rank && tray(nx)->type <= love_R) love_musttail return Ap(lvm_where, g);
@@ -911,22 +840,21 @@ lvm(lvm_iota) {
  Hp += b2w(bytes);
  ini_tray(v, love_Z, 1);
  v->shape[0] = n;
- intptr_t *p = tray_data(v);                        // love_Z: raw words, so no per-cell kind test
+ intptr_t *p = tray_data(v);                        // love_Z: raw words
  for (uintptr_t i = 0; i < n; i++) p[i] = (intptr_t) i;
  love_musttail return Answer(word(v)); }
 
-// --- accessors -------------------------------------------------------------
-// rank / element-type code as fixnums; zero for a non-tray. both 0 for a scalar box.
+// rank and element type; () for a non-tray, 0 for a scalar box
 op11(lvm_rank, packp(Sp[0]) ? putcharm(tray(Sp[0])->rank) : ZeroPoint)
 op11(lvm_atype, packp(Sp[0]) ? putcharm(tray(Sp[0])->type) : ZeroPoint)
 
-// total element count (1 for a scalar box), zero for a non-tray.
+// the element count, 1 for a scalar box
 lvm(lvm_alen) {
  word x = Sp[0];
  if (!packp(x)) love_musttail return Answer(ZeroPoint);
  love_musttail return Answer(putcharm(tray_nelem(tray(x)))); }
 
-// the bits of an integer's magnitude, 0 for 0: 2^(n-1) <= |x| < 2^n. zero for a non-integer
+// n with 2^(n-1) <= |x| < 2^n, 0 for 0
 lvm(lvm_bitlen) {
  word x = Sp[0];
  if (charmp(x)) {
@@ -934,10 +862,10 @@ lvm(lvm_bitlen) {
   uintptr_t m = v < 0 ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
   love_musttail return Answer(putcharm(m ? 64 - __builtin_clzll((unsigned long long) m) : 0)); }
  if (!bigp(x)) love_musttail return Answer(ZeroPoint);
- int n = big_nlimbs(x);                                  // canonical: the top limb is nonzero
+ int n = big_nlimbs(x);                                  // canonical: the top limb nonzero
  love_musttail return Answer(putcharm((intptr_t) (n - 1) * limb_bits + limb_bits - limb_clz(big(x)->limb[n-1]))); }
 
-// dimensions as a list (allocates rank link cells), zero for a non-tray.
+// the dimensions as a list
 lvm(lvm_shape) {
  word x = Sp[0];
  if (!packp(x)) love_musttail return Answer(ZeroPoint);
@@ -946,26 +874,23 @@ lvm(lvm_shape) {
  struct tray *v = tray(Sp[0]);                 // re-read post-Have
  struct chain *p = (struct chain*) Hp;
  Hp += r * Width(struct chain);
- word list = ZeroPoint;                             // () terminator (zero-ontology)
+ word list = ZeroPoint;
  for (uintptr_t i = r; i--; )
   ini_chain(p, putcharm(v->shape[i]), list), list = word(p), p++;
  love_musttail return Answer(list); }
 
 
-// love_O reductions (sum/prod/max/min) fold through the promoting scalar op, so an
-// object array reduces *exactly*. defined after the object lane (below); the
-// numeric reductions divert here when their operand is a love_O array.
+// love_O reductions fold through the promoting scalar op, so they are exact
 struct g *ored(struct g *g, int kind);   // kind: 0 sum, 1 prod, 2 max, 3 min
 
-// --- reductions: array -> scalar; identity on a scalar, which makes
-// (aall (< a b)) rank-agnostic
+// reductions: identity on a scalar, so (aall (< a b)) is rank-agnostic
 lvm(lvm_asum) {
  word x = Sp[0];
- if (!packp(x)) love_musttail return Next(1);        // scalar: (asum 5) = 5
+ if (!packp(x)) love_musttail return Next(1);
  if (tray(x)->type == love_O) LvmResume(g, ored, 0)
- if (tray(x)->type == love_C) {                   // complex sum -> a complex box
-  struct tray *v = tray(x); uintptr_t n = tray_nelem(v);  // K=4 accumulators (see aprod)
-  flo_t *fp = tray_data(v);                   // read all parts before Have (no alloc here)
+ if (tray(x)->type == love_C) {
+  struct tray *v = tray(x); uintptr_t n = tray_nelem(v);  // K=4 accumulators, as aprod
+  flo_t *fp = tray_data(v);                   // all read before the Have
   flo_t a0=0,b0=0, a1=0,b1=0, a2=0,b2=0, a3=0,b3=0; uintptr_t j = 0;
   for (; j + 4 <= n; j += 4)
    a0 += fp[2*j],   b0 += fp[2*j+1], a1 += fp[2*j+2], b1 += fp[2*j+3],
@@ -979,13 +904,13 @@ lvm(lvm_asum) {
  bool fdom = v->type >= love_R; word _res;
  Have(box_req);
  v = tray(Sp[0]);
- if (fdom) {                                    // love_R: K=4 accumulators (see aprod complex), raw doubles
+ if (fdom) {
   flo_t *d = tray_data(v), a0=0,a1=0,a2=0,a3=0; uintptr_t i = 0;
   for (; i + 4 <= n; i += 4) a0 += d[i], a1 += d[i+1], a2 += d[i+2], a3 += d[i+3];
   for (; i < n; i++) a0 += d[i];
   emit_gem(_res, (a0+a1)+(a2+a3)); }
- else {                                         // K=4 (modular, Z/2^64 is a commutative ring -> assoc+exact)
-  uintptr_t *p = tray_data(v), a0=0,a1=0,a2=0,a3=0, i = 0;   // raw words: the kind test stays out of the loop
+ else {                                         // mod 2^64, so the regrouping is exact
+  uintptr_t *p = tray_data(v), a0=0,a1=0,a2=0,a3=0, i = 0;
   for (; i + 4 <= n; i += 4) a0 += p[i], a1 += p[i+1], a2 += p[i+2], a3 += p[i+3];
   for (; i < n; i++) a0 += p[i];
   emit_int(_res, (intptr_t) ((a0+a1)+(a2+a3))); }
@@ -995,9 +920,8 @@ lvm(lvm_aprod) {
  word x = Sp[0];
  if (!packp(x)) love_musttail return Next(1);
  if (tray(x)->type == love_O) LvmResume(g, ored, 1)
- if (tray(x)->type == love_C) {                   // complex product -> a complex box
-  // K=4 independent accumulators break the multiply latency chain (~3x);
-  // reassociation is sound -- fp differs only in last-bit rounding per grouping
+ if (tray(x)->type == love_C) {
+  // K=4 accumulators break the latency chain; the regrouping moves only last-bit rounding
   struct tray *v = tray(x);
   uintptr_t n = tray_nelem(v);
   flo_t *fp = tray_data(v),
@@ -1017,20 +941,19 @@ lvm(lvm_aprod) {
  uintptr_t n = tray_nelem(v);
  bool fdom = v->type >= love_R; word _res;
  Have(box_req); v = tray(Sp[0]);
- if (fdom) {                                    // K=4 accumulators (see complex above)
+ if (fdom) {
   flo_t a0=1,a1=1,a2=1,a3=1; uintptr_t i = 0;
   for (; i + 4 <= n; i += 4) a0*=tray_get_flo(v,i), a1*=tray_get_flo(v,i+1), a2*=tray_get_flo(v,i+2), a3*=tray_get_flo(v,i+3);
   for (; i < n; i++) a0 *= tray_get_flo(v, i);
   emit_gem(_res, (a0*a1)*(a2*a3)); }
- else {                                         // K=4 (modular product; imul is latency-bound, ~3x)
+ else {                                         // modular
   uintptr_t a0=1,a1=1,a2=1,a3=1, i = 0;
   for (; i + 4 <= n; i += 4) a0*=(uintptr_t)tray_get_int(v,i), a1*=(uintptr_t)tray_get_int(v,i+1), a2*=(uintptr_t)tray_get_int(v,i+2), a3*=(uintptr_t)tray_get_int(v,i+3);
   for (; i < n; i++) a0 *= (uintptr_t) tray_get_int(v, i);
   emit_int(_res, (intptr_t) ((a0*a1)*(a2*a3))); }
  love_musttail return Answer(_res); }
 
-// max / min over a non-empty array (kind 2 = max, 3 = min, matching ored);
-// empty -> zero; scalar -> identity. the kind selects the comparison sense.
+// kind 2 max, 3 min, as ored; empty -> ()
 static lvm(lvm_aextreme) {
  int kind = (int) g->b;
  word x = Sp[0];
@@ -1042,8 +965,7 @@ static lvm(lvm_aextreme) {
  if (!n) love_musttail return Answer(ZeroPoint);
  bool fdom = v->type >= love_R, ismax = kind == 2; word _res;
  Have(box_req); v = tray(Sp[0]);
- // K=4 running extremes break the latency chain; exact (selects an existing element). the kind
- // (love_R past the object and complex lanes, else love_Z) and the direction are asked once, a loop each
+ // K=4 running extremes, exact; the kind and direction asked once, a loop each
  #define AEXT(T, P, B, M) do { T m0 = P[0], m1 = m0, m2 = m0, m3 = m0, e; uintptr_t i = 1; \
   for (; i + 4 <= n; i += 4) { \
    e = P[i];   if (e B m0) m0 = e;  e = P[i+1]; if (e B m1) m1 = e; \
@@ -1064,9 +986,8 @@ static lvm(lvm_aextreme) {
 lvm(lvm_max) { g->b = (word) 2; love_musttail return Ap(lvm_aextreme, g); }   // amax
 lvm(lvm_min) { g->b = (word) 3; love_musttail return Ap(lvm_aextreme, g); }   // amin
 
-// the object lane of aall (g->b = 2i) and aany (2i + 1), scanning from element i: a compound
-// element is measured by love under a landing cell, [e measure land op 2i+any] over the tray
-// in the operand slot, and the landing scans on past it
+// aall's (g->b = 2i) and aany's (2i + 1) object lane from element i: a compound element is
+// measured as [e measure land op 2i+any] over the tray, and the landing scans on
 static lvm(lvm_ascan);
 static lvm(lvm_ascan_land) {
  intptr_t k = getcharm(Sp[2]); bool any = k & 1;
@@ -1081,7 +1002,7 @@ static lvm(lvm_ascan) {
  for (uintptr_t i = (uintptr_t) (k >> 1); i < tray_nelem(tray(Sp[0])); i++) {
   word e = tray_get_obj(tray(Sp[0]), i);
   if (!leafp(e)) {
-   Have(5);                                                      // (a collection re-runs the op from 0)
+   Have(5);                                                      // a collection re-runs the op from 0
    word *dst = Sp - 5;
    dst[0] = e, dst[1] = hot_hook(g->hook[hook_net]), dst[2] = word(ascan_land), dst[3] = word(Ip),
    dst[4] = putcharm((intptr_t) (i << 1) | any);
@@ -1089,29 +1010,25 @@ static lvm(lvm_ascan) {
   if (!leaf_nilp(e) == any) love_musttail return Answer(putcharm(any)); }
  love_musttail return Answer(putcharm(!any)); }
 
-// aall: the conjunction reduction under the truth law -- every element true, a positive
-// real part, as `?` and leaf_nilp read it; empty -> vacuously true; scalar -> identity
+// every element true by `?`'s law, a positive real part; empty is true
 lvm(lvm_aall) {
  word x = Sp[0];
  if (!packp(x)) love_musttail return Next(1);
  struct tray *v = tray(x);
  uintptr_t n = tray_nelem(v);
- if (v->type == love_O) { g->b = 0; love_musttail return Ap(lvm_ascan, g); }   // object: the oracle itself
- if (v->type == love_C) {                         // complex: the real part
+ if (v->type == love_O) { g->b = 0; love_musttail return Ap(lvm_ascan, g); }
+ if (v->type == love_C) {
   flo_t *fp = tray_data(v);
   for (uintptr_t i = 0; i < n; i++)
    if (!(fp[2*i] > 0)) love_musttail return Answer(zero);
   love_musttail return Answer(putcharm(1)); }
- // a short-circuit sound, not an accumulator chain -- already load-bound (the
- // compiler vectorizes it), so multi-accumulating buys nothing; left as is.
  bool fdom = v->type >= love_R;
  for (uintptr_t i = 0; i < n; i++)
   if (fdom ? !(tray_get_flo(v, i) > 0) : tray_get_int(v, i) <= 0)
    love_musttail return Answer(zero);
  love_musttail return Answer(putcharm(1)); }
 
-// aany: the disjunction under the same law -- some element true; empty -> false;
-// scalar -> identity, as aall
+// some element true; empty is false
 lvm(lvm_aany) {
  word x = Sp[0];
  if (!packp(x)) love_musttail return Next(1);
@@ -1129,9 +1046,7 @@ lvm(lvm_aany) {
    love_musttail return Answer(putcharm(1));
  love_musttail return Answer(zero); }
 
-// (floor x): the greatest integer under a float, a charm as int and ceil answer, saturating
-// at the charm bounds; an integer passes. a float tray floors elementwise to an int tray;
-// an int tray passes whole
+// (floor x): a charm saturating at the charm bounds; a float tray floors to an int tray
 lvm(lvm_floor) {
  word a = Sp[0];
  if (trayp(a)) {
@@ -1145,8 +1060,7 @@ lvm(lvm_floor) {
                  : v != v ? 0 : (intptr_t) v); }
  love_musttail return Next(1); }
 
-// (outer a b): result[I,J] = a[I] * b[J], shape a.shape ++ b.shape; complex/
-// object or over-rank -> zero
+// (outer a b): r[I,J] = a[I] * b[J]; complex, object or over-rank -> ()
 lvm(lvm_outer) {
  word a = Sp[0], b = Sp[1];
  if (!(trayp(a) && trayp(b))) love_musttail return Push(ZeroPoint);
@@ -1158,7 +1072,7 @@ lvm(lvm_outer) {
  enum tray_type rt = fdom ? love_R : love_Z;
  uintptr_t bytes = tray_bytes(rt, rank, n);
  Have(b2w(bytes));
- va = tray(Sp[0]), vb = tray(Sp[1]);          // re-read post-Have
+ va = tray(Sp[0]), vb = tray(Sp[1]);
  struct tray *r = (struct tray*) Hp; Hp += b2w(bytes);
  ini_tray(r, rt, rank);
  memcpy(r->shape, va->shape, va->rank * sizeof *r->shape);
@@ -1171,9 +1085,7 @@ lvm(lvm_outer) {
    for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = (intptr_t)((uintptr_t)av * (uintptr_t)tray_get_int(vb, j)); } }
  love_musttail return Push(word(r)); }   // arity 2
 
-// (inner a b): +.× -- contract a's last axis with b's first (1D·1D = dot, 2D·2D =
-// matmul); mismatch/complex/object/over-rank -> zero. ikj order so the inner j
-// loop vectorizes.
+// (inner a b): +.×, a's last axis against b's first; ikj, so the inner j loop vectorizes
 lvm(lvm_inner) {
  word a = Sp[0], b = Sp[1];
  if (!(trayp(a) && trayp(b))) love_musttail return Push(ZeroPoint);
@@ -1181,14 +1093,14 @@ lvm(lvm_inner) {
  if (va->type > love_R || vb->type > love_R || va->rank < 1 || vb->rank < 1)
   love_musttail return Push(ZeroPoint);
  uintptr_t K = va->shape[va->rank - 1];
- if (K != vb->shape[0]) love_musttail return Push(ZeroPoint);   // contracted axes must agree
+ if (K != vb->shape[0]) love_musttail return Push(ZeroPoint);
  uintptr_t M = 1, N = 1;
  for (uintptr_t i = 0; i + 1 < va->rank; i++) M = mulsat(M, va->shape[i]);
  for (uintptr_t i = 1; i < vb->rank; i++) N = mulsat(N, vb->shape[i]);
  uintptr_t rank = (va->rank - 1) + (vb->rank - 1), n = mulsat(M, N);
- if (rank > maxrank || n > words_max) love_musttail return Push(ZeroPoint);   // no heap holds it
+ if (rank > maxrank || n > words_max) love_musttail return Push(ZeroPoint);
  bool fdom = va->type == love_R || vb->type == love_R, ar = va->type == love_R, br = vb->type == love_R;
- if (n == 1) {                                  // 1D·1D dot, or any 1-cell contraction -> scalar (invariant)
+ if (n == 1) {                                  // a 1-cell contraction is a scalar
   word _res;
   if (fdom) {
    flo_t *Ad = tray_data(va), *Bd = tray_data(vb);
@@ -1225,11 +1137,10 @@ lvm(lvm_inner) {
     for (uintptr_t j = 0; j < N; j++) C[i*N+j] = (intptr_t)((uintptr_t)C[i*N+j] + (uintptr_t)av * (uintptr_t)B[l*N+j]); } }
  love_musttail return Push(word(r)); }   // arity 2
 
-// --- elementwise monadic math over an array -> a float array of the same shape;
-// the fill loop takes no &local, so the lvm wrapper keeps its tail call
+// monadic math -> a float tray; the fill takes no &local, so the wrapper keeps its tail call
 static love_noinline void vmap1_fill(struct tray *r, struct tray *a, flo_t (*fn)(flo_t)) {
  uintptr_t n = tray_nelem(r);
- flo_t *d = tray_data(r);                          // r is love_R; a's kind is asked once, not per element
+ flo_t *d = tray_data(r);
  if (a->type == love_R) { flo_t *s = tray_data(a); for (uintptr_t i = 0; i < n; i++) d[i] = fn(s[i]); }
  else for (uintptr_t i = 0; i < n; i++) d[i] = fn(tray_get_flo(a, i)); }
 
@@ -1247,8 +1158,7 @@ lvm(lvm_vmap1) {
  vmap1_fill(r, a, fn);
  love_musttail return Answer(word(r)); }
 
-// the same over a float tray into an int tray: the machine word's own saturation, a NaN
-// to 0, so floor and int leave the float kind the way their scalars do
+// into an int tray, saturating, a NaN to 0, as floor and int's scalars leave the float kind
 static love_inline intptr_t flo_word(flo_t v) {
  return v >= (flo_t) INTPTR_MAX ? INTPTR_MAX : v <= (flo_t) INTPTR_MIN ? INTPTR_MIN
       : v != v ? 0 : (intptr_t) v; }
@@ -1272,8 +1182,7 @@ lvm(lvm_vmap1z) {
  vmap1z_fill(r, a, fn);
  love_musttail return Answer(word(r)); }
 
-// --- elementwise dyadic engine with broadcasting. integer division guards /0
-// and INT_MIN/-1 -> 0 (one element can't change the whole result's domain).
+// dyadic, broadcasting. integer /0 and INT_MIN/-1 answer 0: one element can't change the domain
 flo_t vop_flo(int op, flo_t a, flo_t b) {
  switch (op) {
   case vop_sub: return a - b; case vop_mul: return a * b;
@@ -1292,49 +1201,43 @@ static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
   case vop_band: return a & b;
   case vop_bor:  return a | b;
   case vop_bxor: return a ^ b;
-  case vop_bsl: case vop_bsr: {   // a tray element is a machine word, so the width law
-   int lf = op == vop_bsl;        // holds here -- but past the width it empties, never wraps
+  case vop_bsl: case vop_bsr: {   // a machine word: past the width it empties, never wraps
+   int lf = op == vop_bsl;
    intptr_t k = b < 0 ? (lf = !lf, b == INTPTR_MIN ? INTPTR_MAX : -b) : b;
    return k >= Bits ? (lf ? 0 : a < 0 ? -1 : 0)
                     : lf ? (intptr_t)((uintptr_t) a << k) : a >> k; }
   default: return (intptr_t)((uintptr_t) a + (uintptr_t) b); } } // vop_add
 intptr_t vcmp_flo(int op, flo_t a, flo_t b) {
  switch (op) {
-  case vop_lt: return a < b; case vop_le: return a <= b;   // the ordered four keep IEEE:
-  case vop_gt: return a > b; case vop_ge: return a >= b;   // () is not less than itself either
-  default: return same_flo(a, b); } }        // vop_eq -- but it IS equal to itself
+  case vop_lt: return a < b; case vop_le: return a <= b;   // the ordered four keep IEEE
+  case vop_gt: return a > b; case vop_ge: return a >= b;
+  default: return same_flo(a, b); } }        // vop_eq: a NaN equals itself
 intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
  switch (op) {
   case vop_lt: return a < b; case vop_le: return a <= b;
   case vop_gt: return a > b; case vop_ge: return a >= b;
   default: return a == b; } }                   // vop_eq
 
-// --- the net: the complex-valued measure. a complex scalar nets itself (additivity
-// needs phase, so the codomain is C and the order retraction happens once, in the
-// observers); every other scalar nets real; a numeric tray the sum of its elements --
-// unclamped -- so negatives cancel and opposite phases annihilate by vector cancellation.
-// C nets the leaves alone. a chain, an object tray or a coin is love's: prel's `measure`
-// (hook 8) sums the parts and reads a coin by its kind's 'net, so a kind's measure is
-// written in love like its + and *, and the walk over a deep value rides the VM stack,
-// never C's. an lvm meets one through lvm_measure (ev.c).
-// bytes read as charms, summed: a string's net, a cask's, a named point's spelling's
+// the net, complex-valued: a numeric tray sums unclamped, so phases cancel. C nets the leaves
+// alone; a chain, object tray or coin is prel's `measure` (hook 8), whose walk rides the VM stack
+// bytes summed as charms: a string's net, a cask's, a nom's
 static flo_t bytes_net(char const *p, uintptr_t n) {
   flo_t t = 0;
   for (char const *q = p + n; p < q; t += (uint8_t) *p++);
   return t; }
-// the real part of a leaf's net -- the part every observer reads. x must be leafp.
+// the real part of a leaf's net, what every observer reads; x leafp
 flo_t net_re(word x) {
-  if (charmp(x)) return (flo_t) getcharm(x);                     // fixnum: its value
+  if (charmp(x)) return (flo_t) getcharm(x);
   if (caskp(x)) return bytes_net((char const*) cask(x)->str->bytes, cask(x)->str->len);
-  if (tabp(x) || !datp(x)) return 1;                                // a table, fn or port: present, so
-  switch (typ(x)) {                                                 // truthy, and never its contents
+  if (tabp(x) || !datp(x)) return 1;                                // a table, fn or port: truthy,
+  switch (typ(x)) {                                                 // never its contents
     case DString: return bytes_net(txt(x), len(x));
-    case DBig: return big_to_flo(x);                              // full magnitude, sign intact
+    case DBig: return big_to_flo(x);
     case DGem: return gem_get(x);
     case DTwin: return twin_re(x);
-    case DMint: return 0;                                            // a bare point nets nothing
+    case DMint: return 0;
     case DNom: return bytes_net(txt(nom(x)->name), len(nom(x)->name));
-    case DTray: {                                                    // a numeric tray: Σ elements, unclamped
+    case DTray: {
       struct tray *v = tray(x);
       uintptr_t i, n = tray_nelem(v);
       flo_t s = 0;
@@ -1343,7 +1246,6 @@ flo_t net_re(word x) {
       else { intptr_t *d = tray_data(v); for (i = 0; i < n; i++) s += (flo_t) d[i]; }   // love_Z: never a NaN
       return s; }
     default: return 1; } }
-// the imaginary part: a complex scalar's phase, a complex tray's Σ; every other leaf nets real
 flo_t net_im(word x) {
   if (twinp(x)) return twin_im(x);
   if (!trayp(x) || tray(x)->type != love_C) return 0;
@@ -1351,17 +1253,15 @@ flo_t net_im(word x) {
   for (uintptr_t i = 0, n = tray_nelem(tray(x)); i < n; i++) s += net_flo(d[2 * i + 1]);
   return s; }
 
-// a compound's net is love's: hand x to prel's measure (hook 8), and return to this same op,
-// which runs again on the number that replaced x. every op that needs a compound's net or
-// truth takes this door. before the seal the hook traps: the boot asks no compound's truth.
+// a compound to prel's measure, then this same op again on the number; before the seal the
+// hook traps, as the boot asks no compound's truth
 lvm(lvm_measure) {
   Have(2);
   word *dst = Sp - 2;
   dst[0] = Sp[0], dst[1] = hot_hook(g->hook[hook_net]), dst[2] = word(Ip);
   Sp = dst; Ip = (union u*) callout_drive;
   love_musttail return Continue(); }
-// the same for a coin whose kind answers for itself: its slot g->b ('int or 'ceil) is called
-// on the coin, and the op runs again on the number; a kind without that slot is measured
+// a coin by its kind's slot g->b ('int or 'ceil), then the op again; without the slot, measured
 lvm(lvm_coin_rung) {
   word f = kind_get(g, coin_kind(Sp[0]), (intptr_t) g->b);
   if (f == ZeroPoint) love_musttail return Ap(lvm_measure, g);
@@ -1372,8 +1272,7 @@ lvm(lvm_coin_rung) {
   love_musttail return Continue(); }
 // ($ x): max(0, ceil (re (net x))), clamped to a charm
 static intptr_t saturate(word x) {
-  // the charm lane is exactness, not speed: the net is a double, so above 2^53 a
-  // charm comes back rounded -- and $ is the identity on every green charm (spec.l).
+  // exactness, not speed: the net is a double, rounding a charm past 2^53 (spec.l)
   if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }
   flo_t re = net_re(x);
   if (re <= 0) return 0;
@@ -1386,8 +1285,7 @@ lvm(lvm_saturate) {
  if (__builtin_expect(!leafp(Sp[0]), 0)) love_musttail return Ap(lvm_measure, g);
  Sp[0] = putcharm(saturate(Sp[0])); Ip += 1; love_musttail return Continue(); }
 
-// (ceil x): ceil (re (net x)), clamped to a charm -- a net past the charm range answers the
-// edge rather than wrapping. $ is this with a floor of 0.
+// (ceil x): ceil (re (net x)), clamped to a charm; $ is this floored at 0
 static intptr_t ceilnet(word x) {
   if (charmp(x)) return getcharm(x);
   flo_t re = net_re(x);
@@ -1401,45 +1299,33 @@ lvm(lvm_ceil) {
  if (__builtin_expect(!leafp(Sp[0]), 0)) love_musttail return Ap(lvm_measure, g);
  Sp[0] = putcharm(ceilnet(Sp[0])); Ip += 1; love_musttail return Continue(); }
 
-// === ordered comparison: the true-blue total order over all values ===========
-// low -> high: () < mint < string < number < tray < chain < map < hot (an array
-// operand compares elementwise via lvm_vbin instead -- the mask). within a band:
-// numbers by value across the tower (complex lexicographic by (re, im), NaN
-// unordered), strings lex, symbols by name then serial, chains lex recursively,
-// tablets by serial, lambdas by repr hash (GC-stable). only < and <= are implemented; > and >=
-// reverse the operands (right for NaN: swap, never negate). a total preorder:
-// hash-colliding lambdas compare equal but are not =. the compare order is
-// decoupled from the enum dispatch order -- cmp_rank remaps, the matrices untouched.
+// () < mint < string < number < object tray < chain < tablet < hot; numbers by value, tablets by
+// serial, lambdas by repr hash -- a preorder: colliding lambdas compare equal but are not =
 static love_inline int cmp_rank(struct g *g, word x) {
- if (nomp(x)) return 0;                            // mint/symbol -- the floor (a named sym is a (name . mint) chain)
+ if (nomp(x)) return 0;                            // before chain: a named sym is a chain
  enum q k = kind(x);
- if (k == KString) return 1;                       // string: above mint, below number
- if (isnum(x) || twinp(x)) return 2;               // the number band, by value (charm bridges up from string)
- if (k == KTrayZ || k == KTrayR || k == KTrayC) return 2;  // a galaxy folds into the number band, ordered by its net
- if (k == KTrayO) return 3;                         // object tray: above the numbers, below chain
- if (k == KChain) return 4;                        // chain: the grammar substrate -- high, just under book (only book's mutability seats it above)
- if (k == KTablet) return 5;                          // tablet: above chain
- return 6; }                                       // KHot -- the ceiling (the only kind left)
+ if (k == KString) return 1;
+ if (isnum(x) || twinp(x)) return 2;
+ if (k == KTrayZ || k == KTrayR || k == KTrayC) return 2;  // a galaxy orders by its net
+ if (k == KTrayO) return 3;
+ if (k == KChain) return 4;
+ if (k == KTablet) return 5;
+ return 6; }                                       // KHot
 static love_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
  return c ? (c < 0 ? -1 : 1) : la < lb ? -1 : la > lb ? 1 : 0; }
-// the floor band (cmp_rank 0): bare mints (KMint, by serial) < named points (KNom, by
-// spelling -- interned, so one spelling is one nom and there is no tie to break). ()
-// is the bare mint of serial 0 -- every fresh mint takes ++next_serial -- so it seats
-// least of all by the same rule, no guard.
+// bare mints by serial < noms by spelling (interned: no tie). () is serial 0, so least, no guard
 static love_inline intptr_t mint_cmp(struct g *g, word a, word b) {
  if (a == b) return 0;
  bool na = namep(a), nb = namep(b);
- if (na != nb) return na ? 1 : -1;                       // bare mint < named symbol
+ if (na != nb) return na ? 1 : -1;
  if (na) { struct str *sa = str(nom(a)->name), *sb = str(nom(b)->name);
   return bytes_cmp(txt(sa), len(sa), txt(sb), len(sb)); }
- uintptr_t ca = sym(a)->serial, cb = sym(b)->serial;     // both bare: by serial
+ uintptr_t ca = sym(a)->serial, cb = sym(b)->serial;
  return ca < cb ? -1 : ca > cb ? 1 : 0; }
 intptr_t love_mint_cmp(struct g *g, word a, word b) { return mint_cmp(g, a, b); }  // the point order, for +'s join
-// two galaxies of equal net: a strict tiebreak so cmp3 stays antisymmetric --
-// shape lexicographically (rank, then dims), then cell content (re, then im),
-// row-major. reached only from the number band below, both operands galaxies.
+// two galaxies of equal net, so cmp3 stays antisymmetric: rank, dims, then cells (re, im)
 static love_inline struct love_zn tray_cell_zn(struct tray *v, uintptr_t i) {
  if (v->type == love_C) { flo_t *d = tray_data(v); return zn(d[2*i], d[2*i+1]); }
  return zn(tray_get_flo(v, i), 0); }
@@ -1447,92 +1333,84 @@ static intptr_t galaxy_tie(struct tray *va, struct tray *vb) {
  if (va->rank != vb->rank) return va->rank < vb->rank ? -1 : 1;
  for (uintptr_t i = 0; i < va->rank; i++)
   if (va->shape[i] != vb->shape[i]) return va->shape[i] < vb->shape[i] ? -1 : 1;
- uintptr_t n = tray_nelem(va);                             // same shape -> same nelem
+ uintptr_t n = tray_nelem(va);
  for (uintptr_t i = 0; i < n; i++) {
   struct love_zn ea = tray_cell_zn(va, i), eb = tray_cell_zn(vb, i);
   if (ea.re != eb.re) return ea.re < eb.re ? -1 : 1;
   if (ea.im != eb.im) return ea.im < eb.im ? -1 : 1; }
  return 0; }
-// a coin's kind serial: the registration order two kinds compare by
+// two kinds compare by registration
 static word kind_serial(struct g *g, word x) {
  word e = mapget(g, zero, kind_get(g, coin_kind(x), KnName), core_of(g)->kreg);
  return chainp(e) ? A(e) : zero; }
-// the total order sort and < share. a coin sits in its own band by payload: a kind's own
-// order ('<) lives in love, and the lanes that can ask it (lvm_cmp_ord, sortby) do.
-// a car descent would be a C frame, so the walk keeps the pending cdrs on a worklist in
-// the gap (the callers leave it free). spent, it answers cmp_torn with the room it wanted
-// in g->walk, which every nonzero test carries up and each caller's op runs again on
+// the order sort and < share, a coin by payload (its kind's '< is for cmp_ord and sortby). cdrs
+// wait on a worklist in the gap; spent, cmp_torn with the room it wanted in g->walk, carried
+// up for each caller's op to run again
 #define cmp_torn INTPTR_MIN
-enum { CmpSettled, CmpChain, CmpCoin };                    // what a step left for the walk
+enum { CmpSettled, CmpChain, CmpCoin };                    // what a step leaves the walk
 static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
  word a = *pa, b = *pb;
  *go = CmpSettled;
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
- if (ra != rb) return ra < rb ? -1 : 1;                    // cross-kind: the true-blue lattice (cmp_rank)
- // same band -- dispatch by the actual kind (not the synthetic cmp_rank, which remaps mint/
- // string/tray/chain off their enum ordinal). symbols first: a named sym is a chain, so the chain
- // recursion below would otherwise grab it.
- if (nomp(a)) return mint_cmp(g, a, b);                    // mint band: () < bare mints < named syms
- if (ra == 2) {                                            // number band: stars + galaxies, ordered by net
-  if (galaxyp(a) || galaxyp(b)) {                          // a galaxy in play -> by net (re, im), then star<galaxy, then shape/content
+ if (ra != rb) return ra < rb ? -1 : 1;
+ // same band, by the actual kind; symbols first, or the chain lane grabs a named sym
+ if (nomp(a)) return mint_cmp(g, a, b);
+ if (ra == 2) {
+  if (galaxyp(a) || galaxyp(b)) {                          // by net (re, im), then star < galaxy, then shape
    bool ga = galaxyp(a), gb = galaxyp(b);
    flo_t na = net_re(a), nb = net_re(b);
    if (na != nb) return na < nb ? -1 : 1;
    flo_t ia = net_im(a), ib = net_im(b);
    if (ia != ib) return ia < ib ? -1 : 1;
-   if (ga != gb) return ga ? 1 : -1;                       // net tie: a star seats below a galaxy
-   return galaxy_tie(tray(a), tray(b)); }                    // both galaxies, equal net: shape then content
-  if (twinp(a) || twinp(b)) {                              // both scalars -- complex: (re, im) lexicographic
+   if (ga != gb) return ga ? 1 : -1;
+   return galaxy_tie(tray(a), tray(b)); }
+  if (twinp(a) || twinp(b)) {
    flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
    if (ar != br) return ar < br ? -1 : 1;
    flo_t ai = twinp(a) ? twin_im(a) : 0, bi = twinp(b) ? twin_im(b) : 0;
    return ai < bi ? -1 : ai > bi ? 1 : 0; }
   if (gemp(a) || gemp(b)) { flo_t av = toflo(a), bv = toflo(b); return av < bv ? -1 : av > bv ? 1 : 0; }
-  return big_cmp(a, b); }                                // exact fix/box/big tower
+  return big_cmp(a, b); }
  if (strp(a)) return bytes_cmp(txt(a), len(a), txt(b), len(b));
- if (chainp(a)) return *go = CmpChain, 0;                 // chain: car, then cdr -- the walk's
+ if (chainp(a)) return *go = CmpChain, 0;
  if (coinp(a) && coinp(b)) {
-  if (coin_kind(a) == coin_kind(b)) return *pa = coin_load(a), *pb = coin_load(b), *go = CmpCoin, 0;   // one kind: by payload
-  word sa = kind_serial(g, a), sb = kind_serial(g, b);                             // two: by registration
+  if (coin_kind(a) == coin_kind(b)) return *pa = coin_load(a), *pb = coin_load(b), *go = CmpCoin, 0;   // by payload
+  word sa = kind_serial(g, a), sb = kind_serial(g, b);
   if (charmp(sa) && charmp(sb) && sa != sb) return getcharm(sa) < getcharm(sb) ? -1 : 1; }
- if (tabp(a) && tabp(b)) { uintptr_t sa = map_serial(a), sb = map_serial(b);   // tablet: by serial -- mutable, so
-  return sa < sb ? -1 : sa > sb ? 1 : 0; }                                        // its identity orders it, never its contents
- uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/i/cask: by repr hash
+ if (tabp(a) && tabp(b)) { uintptr_t sa = map_serial(a), sb = map_serial(b);   // mutable: its identity
+  return sa < sb ? -1 : sa > sb ? 1 : 0; }                                        // orders it, never its contents
+ uintptr_t ha = hash(g, a), hb = hash(g, b);
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 
 static intptr_t cmp3w(struct g *g, word a, word b) {
  word *hi, *base = gap(g, &hi), *w = base, *hp0 = g->hp;
  int go;
  for (;;) {
-  g->hp = w;                                               // a hash's own walk takes the gap past ours
+  g->hp = w;                                               // a hash's walk takes the gap past ours
   intptr_t c = cmp3leaf(g, &a, &b, &go);
   g->hp = hp0;
   if (g->walk) return cmp_torn;                            // a walk under it spent the gap
-  if (go == CmpCoin) continue;                             // a coin: its payload, in place
-  if (go == CmpChain) {                                    // the cdrs wait, the cars go first
+  if (go == CmpCoin) continue;
+  if (go == CmpChain) {                                    // the cars first
    if ((uintptr_t) (hi - w) < 2) return walk_short(g, base, hi, 2), cmp_torn;
    *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
    continue; }
   if (c || w == base) return c;
   b = *--w, a = *--w; } }
 
-// the two arr.c's equality lane needs: whether a value orders as a number, and the order itself
+// for arr.c's equality lane
 bool numband(struct g *g, word x) { return cmp_rank(g, x) == 2; }
 static love_inline intptr_t cmp3(struct g *g, word a, word b) { return cmp3w(g, a, b); }
 intptr_t love_cmp3(struct g *g, word a, word b) { return cmp3(g, a, b); }
 
-// (sort l): stable ascending merge by cmp3 -- one reservation up front (n result
-// chains + 2n scratch in the uncommitted gap), and cmp3 is alloc-free, so nothing
-// moves between reservation and fill. prel's sort dispatches (<)/(>) here.
-// (tally x): the count -- how many, never how much: a string/cask its charms, a
-// list its spine, an array its cells, a map its keys, a symbol its spelling.
+// (tally x): how many, never how much -- charms, links, cells, keys, a symbol's spelling
 intptr_t love_count(struct g *g, word l) {
- while (coinp(l)) l = coin_load(l);                  // a coin tallies its payload
+ while (coinp(l)) l = coin_load(l);
  if (strp(l)) return (intptr_t) len(l);
  if (caskp(l)) return (intptr_t) len(cask(l)->str);
  if (tabp(l)) return (intptr_t) map_len(l);
  if (trayp(l)) return (intptr_t) tray_nelem(tray(l));
- if (nomp(l)) { struct str *nm = nom_str(g, l); return nm ? (intptr_t) len(nm) : 0; }  // a sym counts its spelling; a bare mint / the core: 0
+ if (nomp(l)) { struct str *nm = nom_str(g, l); return nm ? (intptr_t) len(nm) : 0; }
  intptr_t n = 0;
  while (chainp(l)) n++, l = B(l);
  return n; }
@@ -1541,10 +1419,7 @@ lvm(lvm_tally) {
  Sp[0] = putcharm(love_count(g, Sp[0]));
  love_musttail return Next(1); }
 
-// (long? n l): is l a chain at least n links deep -- the arity question, asked once.
-// `two?` per step is the spelling that reads, and it costs a cup, a load and a
-// dispatch each; a destructuring pattern asks it n times to reach n fields
-// (src/love/boot/post.l). n <= 0 is true of anything: no link is claimed.
+// (long? n l): l at least n links deep, the arity question post.l's patterns ask once
 lvm(lvm_longp) { word l = Sp[1];
  if (!charmp(Sp[0])) love_musttail return Push(zero);
  for (intptr_t k = getcharm(Sp[0]); k > 0; k--) {
@@ -1552,30 +1427,31 @@ lvm(lvm_longp) { word l = Sp[1];
   l = B(l); }
  love_musttail return Push(putcharm(1)); }
 
+// (sort l): a stable ascending merge, one reservation up front; cmp3 never allocates
 lvm(lvm_sort) {
  word l = Sp[0];
  if (!chainp(l) || !chainp(B(l))) love_musttail return Next(1);
  uintptr_t n = 0;
  for (word p = l; chainp(p); p = B(p)) {
-  if (coinp(A(p))) { *--Sp = nif_word("<="); love_musttail return Ap(lvm_sortby, g); }   // a coin aboard: its kind's order, through the lane that can ask it (<= keeps ties left)
+  if (coinp(A(p))) { *--Sp = nif_word("<="); love_musttail return Ap(lvm_sortby, g); }   // a coin: its kind's order; <= keeps ties left
   n++; }
- uintptr_t req = n * Width(struct chain) + 2 * n + 256;   // words: spine + 2n scratch + a radix count table
+ uintptr_t req = n * Width(struct chain) + 2 * n + 256;   // the spine, 2n scratch, a radix table
  Have(req);
- l = Sp[0];                                        // re-read post-GC
+ l = Sp[0];
  struct chain *spine = (struct chain*) Hp;
- Hp += n * Width(struct chain);                   // commit the spine only
- word *a = (word*) Hp, *b = a + n, *end = b + n;   // scratch: the uncommitted gap
+ Hp += n * Width(struct chain);                   // the spine only
+ word *a = (word*) Hp, *b = a + n, *end = b + n;   // scratch in the uncommitted gap
  uintptr_t i = 0;
  for (word p = l; chainp(p); p = B(p)) a[i++] = A(p);
- for (i = 0; i < n; i++) if (!charmp(a[i])) break;   // all-fixnum fast path: a tagged fixnum (v<<1|1)
- bool allfix = i == n;                               // orders as a signed word, so skip the generic cmp3
+ for (i = 0; i < n; i++) if (!charmp(a[i])) break;
+ bool allfix = i == n;                               // a tagged charm orders as a signed word
  if (!allfix) Pack(g), g->hp = end;                  // cmp3's walks take the gap past the scratch
- if (allfix && n >= 64) {                            // LSD radix, a byte a pass over the key span: linear, branch-free
+ if (allfix && n >= 64) {                            // LSD radix, a byte a pass over the key span
   intptr_t lo = (intptr_t) a[0], hi = lo;
   for (i = 1; i < n; i++) { intptr_t v = (intptr_t) a[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
   uintptr_t span = ((uintptr_t) hi - (uintptr_t) lo) >> 1;   // the tag bit never differs
   int bits = span ? 64 - __builtin_clzll((unsigned long long) span) : 0;
-  uintptr_t *cnt = (uintptr_t*) (b + n);              // past both scratch halves, still in the gap
+  uintptr_t *cnt = (uintptr_t*) (b + n);              // past the scratch, still in the gap
   for (int sh = 0; sh < bits; sh += 8) {
    for (uintptr_t k = 0; k < 256; k++) cnt[k] = 0;
    for (i = 0; i < n; i++) cnt[((a[i] - (uintptr_t) lo) >> (sh + 1)) & 255]++;
@@ -1585,7 +1461,7 @@ lvm(lvm_sort) {
  else for (uintptr_t w = 1; w < n; w *= 2) {       // bottom-up stable merge
   for (uintptr_t lo = 0; lo < n; lo += 2 * w) {
    uintptr_t m = min(lo + w, n), hi = min(lo + 2 * w, n), x = lo, y = m, o = lo;
-   if (allfix) while (x < m && y < hi) b[o++] = (intptr_t) a[y] < (intptr_t) a[x] ? a[y++] : a[x++];   // branch once per segment, not per compare
+   if (allfix) while (x < m && y < hi) b[o++] = (intptr_t) a[y] < (intptr_t) a[x] ? a[y++] : a[x++];
    else        while (x < m && y < hi) {
     intptr_t c = cmp3(g, a[y], a[x]);
     if (c == cmp_torn) { Hp = (word*) spine; WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }   // the spine unlaid first
@@ -1594,24 +1470,21 @@ lvm(lvm_sort) {
    while (y < hi) b[o++] = a[y++]; }
   word *t = a; a = b; b = t; }
  for (i = 0; i < n; i++) ini_chain(spine + i, a[i], word(spine + i + 1));
- spine[n - 1].b = ZeroPoint;                        // () terminator (zero-ontology)
+ spine[n - 1].b = ZeroPoint;
  love_musttail return Answer(word(spine)); }
 
-// a coin orders by its kind's '< (either side, like +): x < y is asked as the method's
-// ((f x) y) under numap_drive, and the answer lands under the op's own return with a code --
-// 0 as it is, 1 negated (<= and >= ask the other way round), 2 the extreme (max and min:
-// a on a true answer, else b). [x f y land code ret] lies over the operands, which stay
+// a coin by its kind's '<, either side: ((f x) y) under numap_drive, [x f y land code ret] over
+// the operands. code 0 as is, 1 negated (<= and >=), 2 the extreme (a if true, else b)
 static lvm(lvm_coin_cmp_land) {
- if (__builtin_expect(!leafp(Sp[0]), 0)) love_musttail return Ap(lvm_measure, g);   // a compound answer: measured, then here again
+ if (__builtin_expect(!leafp(Sp[0]), 0)) love_musttail return Ap(lvm_measure, g);
  bool t = !leaf_nilp(Sp[0]); intptr_t code = getcharm(Sp[1]);
  Ip = cell(Sp[2]);
  Sp += 3;                                                    // [ans code ret a b] -> [a b]
  word r = code == 2 ? (t ? Sp[0] : Sp[1]) : putcharm(code ? !t : t);
- Sp += 1; Sp[0] = r;                                         // two operands in, one answer out
+ Sp += 1; Sp[0] = r;
  love_musttail return Continue(); }
 static union u const coin_cmp_land[] = { {.ap = lvm_coin_cmp_land} };
-// the '< of whichever operand is the coin, or 0: two coins of distinct kinds have no order
-// between them, and a kind without '< keeps the coin band (cmp3, by payload)
+// the coin's '<, or 0: two kinds have no order, and a kind without '< orders by payload (cmp3)
 static love_inline word coin_lt(struct g *g, word a, word b) {
  if (coinp(a) && coinp(b) && coin_kind(a) != coin_kind(b)) return 0;
  word f = kind_get(g, coin_kind(coinp(a) ? a : b), KnLt);
@@ -1625,24 +1498,22 @@ static lvm(lvm_coin_cmp) {                                   // g->b = code << 1
  Sp = dst; Ip = (union u*) numap_drive;
  love_musttail return Continue(); }
 
-// the `<` / `<=` lane (op is vop_lt or vop_le). an array operand -> elementwise
-// mask (lvm_vbin); a top-level float/complex chain is IEEE-faithful (NaN ->
-// unordered -> false), so e.g. (<= nan nan) is zero.
+// the four comparisons: a tray -> an elementwise mask; floats keep IEEE, (<= nan nan) is 0
 static lvm(lvm_cmp_ord) {
  int op = (int) g->b;
  word a = Sp[0], b = Sp[1]; intptr_t r;
- if (trayp(a) || trayp(b)) { g->b = (word) (op); love_musttail return Ap(lvm_vbin, g); }      // array -> elementwise
- if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) {                                             // a coin's own order
+ if (trayp(a) || trayp(b)) { g->b = (word) (op); love_musttail return Ap(lvm_vbin, g); }
+ if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) {
   g->b = (word) (op == vop_lt ? 0 : op == vop_gt ? 1 : op == vop_le ? 3 : 2);                // le: !(b<a), ge: !(a<b)
   love_musttail return Ap(lvm_coin_cmp, g); }
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
- if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: the true-blue lattice (cmp_rank)
- else if (!(isnum(a) || twinp(a))) {                       // same non-number band: via cmp3
-  Pack(g);                                                 // packed: its walks take the gap
+ if (ra != rb) r = vcmp_int(op, ra, rb);
+ else if (!(isnum(a) || twinp(a))) {
+  Pack(g);                                                 // cmp3's walks take the gap
   intptr_t c = cmp3(g, a, b);
   if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
   r = vcmp_int(op, c, 0); }
- else if (twinp(a) || twinp(b)) {                          // complex: lexicographic, per op
+ else if (twinp(a) || twinp(b)) {
   flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
   r = ar != br ? vcmp_flo(op, ar, br)
               : vcmp_flo(op, twinp(a) ? twin_im(a) : 0, twinp(b) ? twin_im(b) : 0); }
@@ -1650,51 +1521,38 @@ static lvm(lvm_cmp_ord) {
  else if (bigp(a) || bigp(b)) r = vcmp_int(op, big_cmp(a, b), 0);
  else r = vcmp_int(op, toint(a), toint(b));
  love_musttail return Push(r ? putcharm(1) : zero); }
-// all four carry their own vop (both-fixnum fast path: tagged order is monotonic),
-// and every lane under them takes the op -- cmp_ord, vbin_fill, cbin_fill, obin_elem --
-// so no one of them reaches another by reversing its operands. NOR MAY IT: Have
-// restarts the instruction it sits under, and Ip does not move between a nif and the
-// tray lane's allocation, so a body that swaps Sp swaps again after a collection and
-// answers the other comparison, in silence. cond fusion: when the fast path sees
-// lvm_cond next it branches directly (true -> Ip+3, false -> Ip[2].m) instead of
-// materializing a boolean and paying a second dispatch; the slow path falls through
-// to the retained lvm_cond.
+// each carries its own vop down every lane, never one reaching another by swapping operands:
+// Have restarts the op, so a swap of Sp swaps again after a collection. lvm_cond next fuses
 cmp_lt(lvm_lt, vop_lt) cmp_lt(lvm_le, vop_le)
 cmp_lt(lvm_gt, vop_gt) cmp_lt(lvm_ge, vop_ge)
 #undef cmp_lt
 
-// (max a b) / (min a b): the greater or the lesser by the order `<` keeps, across kinds
-// too, and the operand itself, not a copy; a tray operand -> elementwise with broadcast,
-// in the operands' own type. the extreme OF a tray is amax/amin (lvm_aextreme)
+// (max a b) (min a b) by `<`'s order, the operand itself; a tray -> elementwise (amax is aextreme)
 static lvm(lvm_extreme2) {
  int ismax = (int) g->b;
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) { g->b = (word) (ismax ? vop_max : vop_min); love_musttail return Ap(lvm_vbin, g); }
  if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) { g->b = (word) (4 | ismax); love_musttail return Ap(lvm_coin_cmp, g); }   // max asks b < a, min a < b
- Pack(g);                                                  // packed: cmp3's walks take the gap
+ Pack(g);
  intptr_t c = cmp3(g, a, b);
  if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
  love_musttail return Push((ismax ? c >= 0 : c <= 0) ? a : b); }
 lvm(lvm_max2) { g->b = (word) 1; love_musttail return Ap(lvm_extreme2, g); }
 lvm(lvm_min2) { g->b = (word) 0; love_musttail return Ap(lvm_extreme2, g); }
 
-// comparison from a 3-way sign: a bignum is always out of machine-int range, so
-// it orders against any int element by its sign alone -- exactly
+// a bignum is out of machine-int range, so it orders against an int element by sign alone
 static intptr_t vcmp_sign(int op, int s) {
  switch (op) {
   case vop_lt: return s < 0; case vop_le: return s <= 0;
   case vop_gt: return s > 0; case vop_ge: return s >= 0;
   default: return s == 0; } }                   // vop_eq
 
-// the broadcast dim: a size-1 axis takes the other size -- including 0, so an
-// empty axis stays empty (a max would fill one element out of an empty operand)
+// a size-1 axis takes the other size, 0 included: a max would fill an empty axis
 static love_inline uintptr_t bdim(uintptr_t da, uintptr_t db) {
  return da == 1 ? db : db == 1 ? da : da; }
 
-// the broadcast plumbing shared by every elementwise lane; the shape walk runs
-// twice (gate before Have, fill after), re-deriving each time (operands move).
-// bshape: the result rank in *R, and the broadcast element count, or (uintptr_t) -1
-// on non-conformance.
+// the broadcast walk runs twice, gate before the Have and fill after, as the operands move.
+// -> the element count and the rank in *R, or -1 for non-conformance
 uintptr_t bshape(word a, word b, uintptr_t *R) {
  bool atray = trayp(a), btray = trayp(b);
  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0, n = 1;
@@ -1706,8 +1564,7 @@ uintptr_t bshape(word a, word b, uintptr_t *R) {
   n = mulsat(n, bdim(da, db)); }
  return n; }
 
-// fill shape[0..R) with the broadcast shape of a and b (conformance already
-// gated by bshape).
+// the broadcast shape, conformance gated by bshape
 void bshape_put(uintptr_t *shape, uintptr_t R, word a, word b) {
  bool atray = trayp(a), btray = trayp(b);
  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
@@ -1716,9 +1573,7 @@ void bshape_put(uintptr_t *shape, uintptr_t R, word a, word b) {
             db = (btray && k < rb) ? tray(b)->shape[rb - 1 - k] : 1;
   shape[R - 1 - k] = bdim(da, db); } }
 
-// c[j]: the operand's flat-offset contribution of result axis j (0 when that
-// axis is absent in the operand or is a size-1 broadcast axis); v == 0 reads
-// a scalar operand (all zeros).
+// c[j]: axis j's flat-offset stride, 0 where absent or broadcast; v == 0 is a scalar
 void bstride(struct tray *v, uintptr_t R, intptr_t *c) {
  for (uintptr_t j = 0; j < R; j++) c[j] = 0;
  if (!v) return;
@@ -1727,20 +1582,18 @@ void bstride(struct tray *v, uintptr_t R, intptr_t *c) {
   intptr_t j = o + (intptr_t) R - (intptr_t) v->rank;
   c[j] = v->shape[o] == 1 ? 0 : s, s *= (intptr_t) v->shape[o]; } }
 
-// fill the (already-shaped) result r with a `op` b, broadcasting. all the
-// &-taking stack arrays (strides, odometer) live here so the lvm wrapper stays
-// TCO-clean. no allocation inside, so operand pointers can't move under us.
+// r = a op b, broadcasting. the &-taken stack arrays live here, so the wrapper keeps its tail
+// call; no allocation, so the operands stay put
 static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool fdom) {
  uintptr_t R = r->rank, n = tray_nelem(r);
  bool atray = trayp(a), btray = trayp(b);
  struct tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
- // contiguous monotype fast path: no broadcasting, so the odometer and dispatch
- // vanish -- raw pointers, the op hoisted once, a body the compiler vectorizes.
- // mixed/bignum/broadcast falls through to the general loop; results bit-identical.
+ // no broadcast and one type: raw pointers, the op hoisted, a body that vectorizes;
+ // bit-identical to the general loop
  bool cmpf = op >= vop_lt,
       aok = !atray || tray_nelem(va) == n, bok = !btray || tray_nelem(vb) == n,
       nobig = !((!atray && bigp(a)) || (!btray && bigp(b)));
- // the operand shapes unswitched, a loop each: the tray-or-scalar test stays out of the body
+ // unswitched, a loop per operand shape
  #define VBL(T, A, B, SA, SB, BODY) do { \
   if (atray && btray) for (uintptr_t p = 0; p < n; p++) { T av = A[p], bv = B[p]; BODY; } \
   else if (atray) for (uintptr_t p = 0; p < n; p++) { T av = A[p], bv = SB; BODY; } \
@@ -1754,7 +1607,7 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
     #define VBF(E) VBL(flo_t, ap, bp, sa, sb, rp[p] = (E) ? 1 : 0)
     switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
       case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return;
-      case vop_eq: VBF(same_flo(av,bv)); return; }   // a NaN is (), and = holds over it
+      case vop_eq: VBF(same_flo(av,bv)); return; }   // a NaN is (), = holds over it
     #undef VBF
    } else { flo_t *rp = (flo_t*) tray_data(r);
     #define VBF(E) VBL(flo_t, ap, bp, sa, sb, rp[p] = (E))
@@ -1765,7 +1618,7 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
     #undef VBF
    }
   } else if (fdom && (!atray || va->type <= love_R) && (!btray || vb->type <= love_R)) {
-   // a float op with an int tray on a side, a mask most often: the ints widened in the loop
+   // an int tray on a side, a mask most often: widened in the loop
    bool az = atray && va->type == love_Z, bz = btray && vb->type == love_Z;
    flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
    flo_t *af = atray && !az ? (flo_t*) tray_data(va) : 0, *bf = btray && !bz ? (flo_t*) tray_data(vb) : 0;
@@ -1797,7 +1650,7 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
    intptr_t sia = atray ? 0 : toint(a),
             sib = btray ? 0 : toint(b),
             *ap = atray ? (intptr_t*) tray_data(va) : 0, *bp = btray ? (intptr_t*) tray_data(vb) : 0,
-            *rp = (intptr_t*) tray_data(r);   // r is love_Z for both int-arith and the mask
+            *rp = (intptr_t*) tray_data(r);   // love_Z, arithmetic or mask
    if (cmpf) {
     #define VBF(E) VBL(intptr_t, ap, bp, sia, sib, rp[p] = (E) ? 1 : 0)
     switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
@@ -1816,11 +1669,10 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
  #undef VBL
  struct bcast w; bc_open(&w, va, vb, R, r->shape);
  bool cmp = op >= vop_lt;
- // the int domain demotes a bignum scalar by low bits for arithmetic, but a
- // comparison against one is decided exactly by its sign below
+ // a bignum scalar demotes by low bits for arithmetic, but compares exactly by its sign
  flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
  intptr_t ia = atray ? 0 : toint(a), ib = btray ? 0 : toint(b);
- bool abig = !atray && bigp(a), bbig = !btray && bigp(b);   // at most one (the other is an array)
+ bool abig = !atray && bigp(a), bbig = !btray && bigp(b);   // at most one
  int asign = abig ? (big(a)->slen < 0 ? -1 : 1) : 0,
      bsign = bbig ? (big(b)->slen < 0 ? -1 : 1) : 0;
  for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
@@ -1831,14 +1683,13 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
    else tray_put_flo(r, p, vop_flo(op, av, bv)); }
   else {
    intptr_t av = atray ? tray_get_int(va, oa) : ia, bv = btray ? tray_get_int(vb, ob) : ib;
-   if (cmp) {                                    // bignum side (if any) sorts by sign: a-b ~ asign, or -bsign
+   if (cmp) {                                    // a - b ~ asign, or -bsign
     intptr_t t = (abig || bbig) ? vcmp_sign(op, abig ? asign : -bsign) : vcmp_int(op, av, bv);
     tray_put_int(r, p, t ? 1 : 0); }
    else tray_put_int(r, p, vop_int(op, av, bv)); } } }
 
-// `/` over the integer domain: true if some element divides inexactly, so the
-// whole result promotes to f64 (a bignum scalar forces the float lane); `//` only
-// if some divisor is 0, as the scalar's. called only after conformance is checked.
+// `/` over ints goes float when some element divides inexactly, `//` when some divisor is 0,
+// as the scalars do; only after conformance
 static love_noinline bool vquot_needs_float(int op, word a, word b) {
  bool atray = trayp(a), btray = trayp(b);
  if (op == vop_fquot && !btray) return b == putcharm(0);
@@ -1858,33 +1709,27 @@ lvm(lvm_vbin) {
  int op = (int) g->b;
  word a = Sp[0], b = Sp[1];
  bool atray = trayp(a), btray = trayp(b);
- // complex lane first (a complex scalar isn't isnum, so it must divert before
- // the gate below); mixing love_C with love_O is unsupported -- the love_O lane wins
+ // complex first, as a complex scalar isn't isnum; with love_O, the love_O lane wins
  if (((atray && tray(a)->type == love_C) || (btray && tray(b)->type == love_C) || twinp(a) || twinp(b))
      && !(atray && tray(a)->type == love_O) && !(btray && tray(b)->type == love_O)) {
   if (vop_bitp(op)) love_musttail return Push(ZeroPoint);   // no bits on a complex
   g->b = (word) (op); love_musttail return Ap(lvm_cbin, g); }
- if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
-  love_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
+ if (!(atray || isnum(a)) || !(btray || isnum(b)))
+  love_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: 0, not ()
  if ((atray && tray(a)->type == love_O) || (btray && tray(b)->type == love_O)) {
-  // boxed cells are not the word lane: a big refuses the bits on a star, so the
-  // object tray refuses them whole rather than answering per-element zero.
+  // boxed cells are not the word lane: the bits refused whole, not per element
   if (vop_bitp(op)) love_musttail return Push(ZeroPoint);
-  g->b = (word) (op); love_musttail return Ap(lvm_obin, g); }                   // object array -> promoting lane
- // compute-type = max element type; a scalar int contributes the lowest type
- // (i8) so it never widens an int array, a scalar float forces the float lane.
+  g->b = (word) (op); love_musttail return Ap(lvm_obin, g); }
+ // the max element type; a scalar int never widens an int tray, a scalar float goes float
  int ta = atray ? (int) tray(a)->type : gemp(a) ? (int) love_R : (int) love_Z,
      tb = btray ? (int) tray(b)->type : gemp(b) ? (int) love_R : (int) love_Z,
      ct = ta > tb ? ta : tb;
  bool fdom = ct >= love_R, cmp = op >= vop_lt;
  if (vop_bitp(op) && fdom) love_musttail return Push(ZeroPoint);   // no bits on a gem
- uintptr_t R, n = bshape(a, b, &R);                // conformance + result rank and size
- if (n == (uintptr_t) -1) love_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // non-conformant `=` -> 0
- // `/` over an all-integer broadcast promotes the whole result to f64 the moment
- // any element divides inexactly (matching the scalar `/`); `//` (vop_fquot) stays
- // integer unless it divides by 0. sound only after conformance is known good.
+ uintptr_t R, n = bshape(a, b, &R);
+ if (n == (uintptr_t) -1) love_musttail return Push(op == vop_eq ? zero : ZeroPoint);
  if ((op == vop_quot || op == vop_fquot) && !fdom && vquot_needs_float(op, a, b)) fdom = true, ct = love_R;
- enum tray_type rt = cmp ? love_Z : (enum tray_type) ct;   // compare -> 0/1 Z mask
+ enum tray_type rt = cmp ? love_Z : (enum tray_type) ct;   // a compare: a Z mask
  uintptr_t bytes = tray_bytes(rt, R, n);
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1];                                       // re-read post-Have
@@ -1893,8 +1738,7 @@ lvm(lvm_vbin) {
  vbin_fill(r, a, b, op, fdom);
  love_musttail return Push(word(r)); }
 
-// --- dyadic math map with broadcasting (pow / atan2 over arrays): lvm_vbin's
-// float-domain twin -- the result is always a float array, each element fn(av, bv)
+// pow, atan2 and the like, broadcasting: lvm_vbin's float twin
 static love_noinline void vmap2_fill(struct tray *r, word a, word b, flo_t (*fn)(flo_t, flo_t)) {
  uintptr_t R = r->rank, n = tray_nelem(r);
  bool atray = trayp(a), btray = trayp(b);
@@ -1910,7 +1754,7 @@ lvm(lvm_vmap2) {
  flo2 fn = (flo2) (uintptr_t) g->b;
  word a = Sp[0], b = Sp[1];
  bool atray = trayp(a), btray = trayp(b);
- if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
+ if (!(atray || isnum(a)) || !(btray || isnum(b)))
   love_musttail return Push(ZeroPoint);
  uintptr_t R, n = bshape(a, b, &R);
  if (n == (uintptr_t) -1) love_musttail return Push(ZeroPoint);

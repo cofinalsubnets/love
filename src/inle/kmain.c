@@ -8,35 +8,30 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>      // the E numbers only (the host's, linux's) -- no errno variable down here
+#include <errno.h>      // the E numbers only: no errno variable down here
 
 uint64_t kticks;
-// the timer runs at 100 Hz on both arches (mkvec.l's PIT divisor, a64's cntfrq/100),
-// so one tick is this many ms -- what every deadline below rounds up to.
+// 100 Hz on every arch (mkvec.l's PIT divisor, a64's cntfrq/100): every deadline rounds up to it
 #define k_tick_ms 10
 static uintptr_t k_ticks_for(uintptr_t ms) { return (ms + k_tick_ms - 1) / k_tick_ms; }
-// higher-half direct map offset: physical P is at khhdm + P, off kboot's hhdm. set
-// before archinit, so arch code can use it for MMIO.
+// physical P is at khhdm + P; set before archinit, so arch code can use it for MMIO
 uintptr_t khhdm;
-// the window that runs: the hhdm carries NX for the whole higher half (src/inle/mkboot.l),
-// so the image window (k_xw) is the same pages without the bit, which is what code needs.
-// hosted, khhdm is 0 and the heap runs where it lies
+// the hhdm is NX throughout (mkboot.l), so code runs through the image window k_xw;
+// hosted, khhdm is 0
 char *code_window(char *p) { return khhdm ? (char*)((uintptr_t) p - khhdm + k_xw) : p; }
 
 #include "ffalloc.h"
 static struct mem *kmem;
 
-// total free RAM in kmem, in words -- meminit sums it; it bounds the collector (g->budget).
+// free RAM in words, summed by meminit: it bounds the collector
 static uintptr_t kram_words;
 
 static struct cb *kcb;
-// the console's picture store: three screenfuls deep, so a program putting up its next
-// frame before taking down the last has room for both and a stretch; 8 MB at least, 24 at
-// most -- a dense screen's is capped, and a machine that cannot spare it runs text alone
+// the picture store: three screenfuls, 8 MB at least, a dense screen's capped
 static uint32_t k_sn(uintptr_t rows, uintptr_t cols) {
   uint32_t const n = rows * cols <= 16384u ? (uint32_t) (rows * cols) : 16384u, sn = 3u * n * 512u;
   return (uint32_t) cb_shead + (sn > 8u << 20 ? sn : 8u << 20); }
-// the console's history: five hundred lines, fewer past 1 MB of them
+// five hundred lines of history, fewer past 1 MB
 static uint32_t k_hl(uintptr_t cols) {
   uint32_t const most = (uint32_t) ((1u << 20) / cb_hsize(1, cols));
   return most < 500u ? most : 500u; }
@@ -49,22 +44,17 @@ static struct {
   uint8_t scale;
   uint32_t cap_px; } kfb;            // scale = px per glyph px; cap_px = the paper's bound
 
-// keyboard input: kb_int decodes scancodes into the ascii queue (q/qh/qt) kb_readn and
-// (key) drain, g holds the modifier flags, `raw` arms the scancode tap (r/rh/rt) beside it.
-// the history's scroll is only asked for here (peer, snap) and done where the console paints.
-// a paste streams through the same queue (pasting, its bracket, the byte before), and a
-// pointer's press anchors a selection (anchor, the ticks it came at, clicks in a row; at,
-// the cell it was last over). a window holding the paper (kpaper) takes the pointer whole on
-// a ring of its own (pq/pqh/pqt) and hears the paper's size change (sw, sh).
+// kb_int decodes into q/qh/qt; g the modifiers; raw arms the scancode tap r/rh/rt. peer and
+// snap ask for history scroll. a paste streams through q (pasting, pbr, pprev); a press anchors
+// a selection (anchor, tp, clicks; at the cell). a window holding the paper (hold) takes the
+// pointer on pq/pqh/pqt and hears the paper's size (sw, sh)
 static struct { uint8_t g, q[64], qh, qt; uint16_t lost;
                 uint8_t raw, r[64], rh, rt;
                 int16_t peer; uint8_t snap;          // shift+pgup/pgdn asks, a key snaps back
                 uint8_t pasting, pbr, pprev, clicks;
                 intptr_t anchor; uint64_t tp; uint32_t at;
                 uint8_t hold, pqh, pqt; uint16_t pq[16][4], sw, sh; } kkb;
-// enqueue one input byte; the COM1 serial RX ap (k_uart) feeds the same queue. an interrupt
-// cannot wait, so the ring is bounded: a drop is counted (serial_flush says how many fell)
-// and the count saturates rather than wrapping.
+// k_uart feeds the same queue; an interrupt cannot wait, so a drop is counted, saturating
 void kq(uint8_t b) {
   uint8_t n = (kkb.qt + 1) & 63;
   if (n != kkb.qh) kkb.q[kkb.qt] = b, kkb.qt = n;
@@ -74,36 +64,31 @@ static int kqpop(void) {                   // dequeue one byte, -1 if empty
   int b = kkb.q[kkb.qh];
   return kkb.qh = (kkb.qh + 1) & 63, b; }
 
-// the console's font: glyphs and their size; kfb.scale says how large, paint.c the palette.
+// kfb.scale says how large, paint.c the palette
 static struct font const kface = { (uint8_t const*) cleat_8x16, 8, 16 };
 
-// the seat hooks src/love/fd.c branches to on a negative osv (weak no-ops there)
+// fd.c branches to these on a negative osv
 void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct wait_fd*, int, uintptr_t),
-     k_seat_init(void);                // src/inle/sys.c: arm environ + the std streams
+     k_seat_init(void);                // sys.c: environ and the std streams
 bool k_ready(int fd, int events);
 
-// the panic-time console: the ring buffer (kcb) when there is one, mirrored to serial.
-// takes no l state, so it runs from a fault handler with no live `struct g`.
+// the panic-time console: no l state, so it runs from a fault handler
 void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
 void kputs(char const *s) { bput_s(kputc, s); }
 void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
-// the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
+// the kernel-only nifs (defs[] below), bracketed by the linker
 extern struct def const __start_knifs[], __stop_knifs[];
-// the bracket, for the image codec's nif slice (src/love/snap.c's weak default answers none)
+// for the image codec's nif slice
 uintptr_t knifs_slice(struct def const **s) {
   return *s = __start_knifs, (uintptr_t)(__stop_knifs - __start_knifs); }
-// the metal image's far edge, patched into the file by the projection (src/tools/kproject.l):
-// the flat link's kimage_end. unpatched, the memmap excludes nothing and the heap eats it.
+// the metal image's far edge, patched in by kproject.l; unpatched, the heap eats the image
 uintptr_t const k_image_top = 1;
-// ..and where the pie's base landed, and the copy of its data as the pie has it: what a
-// process laid from this image starts from (x64/proc.c). unpatched, 0: there is none
+// where the pie's base landed and its data copy, for x64/proc.c; unpatched, none
 uintptr_t const k_pie_base = 0, k_pie_data = 0;
 
 #include "quay.h"
 #include <stdarg.h>
-// kboot -- the machine as the door found it, filled before kmain reads it (pvh_to_kboot off
-// hvm_start_info, the UEFI loader off the firmware, the a64 stub off the DTB). nothing below
-// asks which door answered.
+// the machine as the door found it (pvh, uefi, a64's dtb), filled before kmain reads it
 struct k_boot kboot;
 
 #define kb_code_lshift 0x2a
@@ -123,19 +108,15 @@ struct k_boot kboot;
 #define kb_flag_ctl (kb_flag_lctl|kb_flag_rctl)
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
 
-// --- vfs-shaped source table ----------------------------------------------
-// k_sources[] holds per-fd vtables and love_fd_port_vt routes each call through k_sources[fd].
-// a NULL slot is "no method" and the dispatcher skips it: writes discard, reads answer the
-// end, ready answers false. `state` is per-instance scratch, a ramfs fd's handle. the table
-// grows in the kernel's own heap through k_source_open, up to k_fd_most rows.
+// the source table: each fd's row of methods, a NULL one skipped (writes discard, reads
+// the end, ready false); state is per row. grows through k_source_open to k_fd_most
 void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
 void kfree(void *p), k_drop(void *p);
 
 struct k_source {
-  // the read door (love.h's readn contract, one fd deeper): >0 bytes, 0 nothing, -1 end
+  // love.h's readn, one fd deeper: >0 bytes, 0 nothing, -1 end
   intptr_t (*readn)(int fd, unsigned char *dst, uintptr_t n),
-  // the same contract mirrored: >0 = bytes taken, 0 = busy, -1 = gone. a row carrying one
-  // is asked instead of putc, so the ramfs can refuse rather than drop a byte in silence.
+  // >0 taken, 0 busy, -1 gone; asked before putc, so the ramfs can refuse a byte, not drop it
            (*writen)(int fd, unsigned char const *src, uintptr_t n);
   bool (*ready)(int fd);                // non-blocking probe
   void (*putc)(int fd, int c),
@@ -143,14 +124,12 @@ struct k_source {
        (*close)(int fd),                // release per-fd state
        *state; };
 
-// a seat with no keyboard interrupt (wasm) looks here whenever a task asks after a key,
-// and is told the room left, so a burst waits in its own buffer. metal has nothing to do.
+// a seat with no keyboard interrupt (wasm) is asked whenever a task wants a key, told the room
 __attribute__((weak)) void k_kb_sync(int room) { (void) room; }
 void k_kb_poll(void) { k_kb_sync(63 - ((kkb.qt - kkb.qh) & 63)); }
 
-// a paste arriving in pieces (a seat's clipboard): each piece as quay lays a paste's bytes,
-// the program's bracket around the whole when it asked, and the view brought home as a key
-// does. k_paste_end closes it; a seat calls it once its paste has run dry
+// a seat's paste in pieces: the bracket around the whole when the program asked, the view
+// brought home; k_paste_end once it runs dry
 void k_paste_in(uint8_t const *s, long n) {
   if (!kkb.pasting) {
     kkb.pasting = 1, kkb.pprev = 0, kkb.pbr = kcb && kcb->flag & cb_paste, kkb.snap = 1;
@@ -164,16 +143,13 @@ void k_paste_end(void) {
   if (kkb.pbr) for (char const *p = cb_pshut; *p; p++) kq((uint8_t) *p);
   kkb.pasting = 0; }
 
-// a selection's text to a seat that can carry it out (a page's clipboard); metal has none
+// to a seat's clipboard; metal has none
 __attribute__((weak)) void k_copy_out(uint8_t const *s, uintptr_t n) { (void) s, (void) n; }
 
-// a pointer at a pixel of the paper: how 0 a press, 1 a release, 2 a move; b the button (0 1
-// 2, 64 65 the wheel, 3 none held) with modifiers 4 shift 8 meta 16 ctrl. a window holding the
-// paper takes it as it is; else it lands on the console cell under it, a move once a cell. a
-// program that asked for the mouse gets its report (cb_mouse); else, or with shift, the left
-// button selects -- a second or third press in quick succession on the same cell takes the
-// word or the line -- and the release carries the text out, and the wheel scrolls the
-// history, or on the alternate screen sends three arrows
+// how 0 press, 1 release, 2 move; b the button (0 1 2, 64 65 the wheel, 3 none) | 4 shift
+// 8 meta 16 ctrl. a window holding the paper takes it whole; else the console cell under it,
+// a move once a cell: the mouse report if asked (cb_mouse), else (or with shift) the left
+// button selects (a second, third quick press the word, the line), the wheel scrolls
 void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x) {
   if (kkb.hold) {
     uint8_t const n = (kkb.pqt + 1) & 15;
@@ -210,8 +186,7 @@ void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x) {
     if (t) cb_copied(kcb, t, kcb->sel0, kcb->sel1), k_copy_out(t, n), k_drop(t); }
   fbdraw(); }
 
-// slot 0: PS/2 keyboard. drains what the interrupt queued and answers 0 when there is
-// nothing -- never the end, the kb queue being endless. the scheduler owns the wait.
+// slot 0: the keyboard; 0 when empty, never the end
 static intptr_t kb_readn(int fd, unsigned char *dst, uintptr_t n) {
   k_kb_poll();
   uintptr_t k = 0;
@@ -220,9 +195,7 @@ static intptr_t kb_readn(int fd, unsigned char *dst, uintptr_t n) {
 
 static bool kb_ready(int fd) { return k_kb_poll(), kkb.qh != kkb.qt; }
 
-// the console's cluster pool grown when it fills: twice the slots past the header's, the
-// screen laid again in a bigger block. a program's write grows it; kputc, which may run
-// from a fault, keeps what there is
+// the cluster pool doubled when full; kputc, which may run from a fault, never grows it
 static void k_cb_grow(void) {
   uint32_t const most = cb_clumax - cb_nclu, add = kcb->cx ? kcb->cx : cb_nclu,
                  cx = add < most - kcb->cx ? kcb->cx + add : most;
@@ -232,15 +205,15 @@ static void k_cb_grow(void) {
   memcpy(c, kcb, n);
   cb_xclu(c, cx);
   struct cb *const old = kcb;
-  kcb = c, kfree(old); }   // published whole before the old goes, as k_cb_remake does
+  kcb = c, kfree(old); }   // published whole before the old goes
 
-// slot 1: serial console -- the framebuffer when there is one, always mirrored to COM1.
+// slot 1: the console, mirrored to COM1
 static void serial_putc1(int fd, int c) {
   if (kcb) cb_putc(kcb, c);
   if (kcb && kcb->cfull && kcb->cx < cb_clumax - cb_nclu) k_cb_grow();
   serial_putc(c); }
 
-// kq's drops, said before the frame goes up.
+// kq's drops, said before the frame goes up
 static void serial_flush(int fd) {
   if (kkb.lost) {
     char d[6];
@@ -253,8 +226,8 @@ static void serial_flush(int fd) {
     for (char const *s = " bytes\n"; *s; s++) serial_putc1(1, *s); }
   if (!kkb.hold) fbdraw(); }
 
-// the boot rows stay static: the console is how the kernel says an allocation failed, so it
-// cannot need one. err carries its own fd, so out can ride a pipe while a scare stays here.
+// static: the console is how an allocation failure is said. err has its own fd, so out
+// can ride a pipe while a scare stays here
 static struct k_source k_boot[] = {
   [0] = { .readn = kb_readn,    .ready = kb_ready    },
   [1] = { .putc = serial_putc1, .flush = serial_flush },
@@ -262,19 +235,17 @@ static struct k_source k_boot[] = {
 static struct k_source *k_sources = k_boot;
 static int k_sources_n = (int) countof(k_boot);
 
-// the row for fd, or NULL -- the file's one bounds check; no dispatcher carries a limit.
+// the file's one bounds check
 static love_inline struct k_source *k_source(int fd) {
  return fd >= 0 && fd < k_sources_n ? &k_sources[fd] : NULL; }
 
-// in range is not open: a closed row is zeroed where it stands, never removed, so k_source
-// keeps answering it. carrying any method at all is what live means.
+// a closed row is zeroed in place, never removed: any method at all is live
 static love_inline bool k_row_live(int fd) {
  struct k_source const *s = k_source(fd);
  return s && (s->readn || s->writen || s->putc || s->flush || s->ready || s->close); }
 
-// answer fd's row, doubling the table first if need be (no realloc down here, and the
-// static boot table is never freed). NULL is no memory or no such row, a refusal the
-// caller must read. the ceiling keeps the doubling inside an int.
+// fd's row, doubling the table first (no realloc down here; the boot table is never freed).
+// NULL must be read; the ceiling keeps the doubling inside an int
 #define k_fd_most (1 << 16)
 static struct k_source *k_source_open(int fd) {
  if (fd < 0 || fd >= k_fd_most) return NULL;
@@ -290,18 +261,14 @@ static struct k_source *k_source_open(int fd) {
   k_sources = t, k_sources_n = m; }
  return &k_sources[fd]; }
 
-// --- rung 4: a task's stdio ---------------------------------------------------
-// a task wears a chain (i o e) of real ports (prel's `wear`, hook 6) and io_route swaps
-// the folded in/b/err for them, so io_fd already answers the row: nothing to translate.
+// a task wears (i o e) real ports (prel's wear) and io_route swaps them in, so io_fd is the row
 
-// the running task's pid: the run ring's head is the running task (love.c), its pid at
-// node[2]. the main task wears the zero point and reads 0, which no spawned pid can be.
+// the run ring's head runs (love.c), its pid at node[2]; the main task reads 0
 static love_inline intptr_t k_cur_pid(struct g *g) {
  union u *t = core_of(g)->tasks;
  return t && (t[2].x & 1) ? getcharm(t[2].x) : 0; }
 
-// the row-level motions, on an already-resolved fd -- the port dispatchers below resolve
-// through the seat first, where the syscall door and the raw-fd lanes do not.
+// on a resolved fd: the syscall door and the raw-fd lanes skip the seat
 intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) {
  struct k_source *s = k_source(fd);
  if (!s || !s->readn) return -1;
@@ -315,16 +282,14 @@ intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
  for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
  return (intptr_t) n; }
 
-// the port lanes love_fd_port_vt (src/love/fd.c) takes on a negative osv: the seat translation,
-// then the rows. busy and end are distinct here, which read(2) cannot carry.
+// fd.c's port lanes on a negative osv: busy and end are distinct, as read(2) cannot say
 intptr_t k_port_readn(struct g *g, unsigned char *dst, uintptr_t n) {
  return k_row_read((int) io_fd(g->io), dst, n); }
 
 struct g *k_port_writen(struct g *g, unsigned char const *src, uintptr_t n) {
  return g->b = k_row_write((int) io_fd(g->io), src, n), g; }
 
-// src/inle/sys.c's door: the POSIX shapes over the same rows. the port layer says end with -1
-// and read(2) with 0, so the ends are translated here and not in the syscall table.
+// sys.c's posix door: read(2) says end with 0, the rows with -1
 long k_fd_write(int fd, void const *b, long n) { return
  n < 0 ? -22 : (long) k_row_write(fd, (unsigned char const *) b, (uintptr_t) n); }
 
@@ -348,29 +313,27 @@ struct g *k_port_flush(struct g *g) {
  if (s && s->flush) s->flush(fd);
  return g; }
 
-// love_fd_close's inle lane (src/love/fd.c). statics have NULL close -- nothing to release.
+// fd.c's love_fd_close on inle; the boot rows have no close
 void k_row_close(int fd) {
  struct k_source *s = k_source(fd);
  if (s && s->close) s->close(fd); }
 
-// no write-direction probe: a row that can take a byte can always take one, so out is ready
+// a row that can take a byte always can: out is always ready
 bool k_ready(int fd, int events) {
  if (fd < 0) return true;
  if (events != wait_in) return true;
  struct k_source *s = k_source(fd);
  return s && s->ready && s->ready(fd); }
 
-// a read on fd would wait: a row that can say it is not ready says so. a file always reads
+// a file always reads
 bool k_fd_blocks(int fd) {
  struct k_source *s = k_source(fd);
  return s && s->ready && !s->ready(fd); }
 
-// multi-source wait; ms=0 is infinite, and every answer is recorded in `revents` so the
-// scheduler skips re-asking. a seat with no timer interrupt (wasm) catches kticks up here.
+// a seat with no timer interrupt (wasm) catches kticks up here
 __attribute__((weak)) void k_tick_sync(void) { }
 
-// parked: the console takes a frame before the machine stops, or an idle screen would hold
-// one half of the cursor blink (fbdraw's phase is kticks & 64) for as long as it sat.
+// a frame before the machine stops, or an idle screen holds half a cursor blink
 static void k_park(void) {
   if (!kkb.hold) fbdraw();
   k_horn_poll();
@@ -389,14 +352,12 @@ void k_wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
     if (any || (ms && kticks >= deadline)) return;
     k_park(); } }
 
-// milliseconds since the epoch: one scale for deadlines, (clock t) and every mtime. the
-// date rides kboot; where nobody knew it this is ms since boot and says so by reading 1970.
+// ms since the epoch, for deadlines, (clock t) and mtimes; with no date in kboot, since boot
 uintptr_t k_clock_ms(void) {
   k_tick_sync();
   return (uintptr_t) (kboot.date * 1000 + kticks * k_tick_ms); }
 
-// pure time-wait; ms=0 is infinite. a seat that can sleep finer than the tick (src/inle/wasm's
-// nanosleep) takes a short sleep whole and answers true; metal rounds up to the tick.
+// ms 0 is forever. a seat that sleeps finer than the tick (wasm) answers true; metal rounds up
 __attribute__((weak)) bool k_nap(uintptr_t ms) { return (void) ms, false; }
 void k_sleep(uintptr_t ms) {
   if (ms && ms < k_tick_ms && k_nap(ms)) return;
@@ -436,13 +397,11 @@ _Static_assert(countof(kb2ascii) == countof(shift_kb2ascii), "one scancode table
 #define kb_code_end 79
 #define kb_code_pgup 73
 #define kb_code_pgdn 81
-// the scancode tap: arm it, then drain. a code is the PS/2 byte with the 0xe0 prefix
-// folded onto the one that follows (bit 7 is the break bit, so an extended key wears 0x100).
+// a code is the PS/2 byte, an 0xe0 prefix folded into 0x100 on the next (bit 7 the break)
 void k_scan_arm(int on) { kkb.raw = on ? 1 : 0, kkb.rh = kkb.rt = 0; }
-// ..and whether anything is listening. a seat that is HANDED codes rather than interrupted
-// by them asks before it leaves a lane full: nothing reads it, so nothing empties it.
+// a seat handed its codes asks before leaving a lane full that nothing would empty
 bool k_scan_armed(void) { return kkb.raw != 0; }
-// a seat whose codes are polled rather than interrupted (src/inle/wasm) fills the tap here
+// a seat whose codes are polled (wasm) fills the tap here
 __attribute__((weak)) void k_scan_sync(void) { }
 int k_scan_pop(void) {
   if (kkb.rh == kkb.rt) k_scan_sync();
@@ -456,16 +415,13 @@ int k_scan_pop(void) {
 static void kraw(uint8_t b) {
   uint8_t n = (kkb.rt + 1) & 63;
   if (n != kkb.rh) kkb.r[kkb.rt] = b, kkb.rt = n; }
-// the tap alone: a code whose text arrives on its own lane (src/inle/wasm's scan ring)
+// a code whose text arrives on its own lane (wasm's scan ring)
 void k_scan_put(uint8_t b) { if (kkb.raw) kraw(b); }
-// the paper changed under a writer of its own (src/inle/doom.c's frame): a seat whose paper a
-// page shows, rather than a display scanning it out, wants to hear (src/inle/wasm).
+// the paper drawn by a writer of its own (doom.c): a page showing it wants to hear (wasm)
 __attribute__((weak)) void k_fb_touch(void) { }
 
-// decode a PS/2 scancode (interrupt context) into input bytes: arrows, Home, End, PgUp,
-// PgDn and Delete as ANSI escapes, Ctrl+Home/End as `ESC [ 1 ; 5 H/F`, Ctrl+letter as the
-// control byte. Shift+PgUp/PgDn look back through the console's history instead, half a
-// screen a press, and any other key brings the view home.
+// interrupt context: arrows, Home, End, PgUp, PgDn, Delete as ANSI escapes, Ctrl+Home/End as
+// `ESC [ 1 ; 5 H/F`, Ctrl+letter its control byte; Shift+PgUp/PgDn scroll half a screen
 void kb_int(const uint8_t code) {
   if (kkb.raw) kraw(code);
   if (code == kb_code_extend) { kkb.g |= kb_flag_extend; return; }
@@ -514,73 +470,60 @@ void kb_int(const uint8_t code) {
 
 void *kmallocw(uintptr_t n) { return ff_alloc(&kmem, n); }
 
-// n words starting on a multiple of a bytes, freed by kfree like any other
+// n words aligned to a bytes, freed by kfree
 void *kmallocwa(uintptr_t n, uintptr_t a) { return ff_alloc_aligned(&kmem, n, a); }
 
 void kfree(void *p) { ff_free(&kmem, p); }
 
-// the small objects -- a row's state, the tables, the ramfs's bytes -- ride malloc, one fit
-// for everything small; kmallocw keeps the pages and regions
+// small objects ride malloc; kmallocw keeps the pages and regions
 void *k_grab(uintptr_t n) { return malloc(n); }
 void k_drop(void *p) { free(p); }
 
 
-// --- the ramfs: the baked tree, and the copies writes make -----------------
-// the initrd is read-only bytes and one row per file. reads come straight off it; the first
-// write copies that file into the kernel heap and the entry reads the copy ever after.
-// k_grab/k_drop rather than alloc: a vt method is handed an fd and nothing else, so g
-// is out of reach at the door that grows a file. ms is the source's baked mtime.
-// the initrd is the source the artifact carries (srctree, through src/love/vfs.c): its index
-// lays the rows at boot, and each section decodes into the kernel heap at the first read of
-// a file in it.
+// the ramfs: the initrd (srctree through vfs.c) lays one row per file at boot, each section
+// decoding at its first read; the first write copies a file into the heap. k_grab, not alloc:
+// a vt method has no g. ms is the baked mtime
 #include "archive/ustar.h"
 #include "archive/srctree.h"
 #include "vfs.h"
-// the tree's rows live under /love, read-only, so a module loads from bytes the shell
-// cannot have edited. the root holds src/inle/rootfs/, a second tar walked with no prefix.
+// the tree lives read-only under /love, so a module loads bytes the shell cannot have edited;
+// the root holds src/inle/rootfs/, a second tar with no prefix
 static char const k_home[] = "home";
 static char const k_tree[] = "love";
 
-// an object in this link may bake files of its own: a strong k_baked overrides this weak
-// nothing. asked twice -- with no room for the count, then to fill -- so the table is ours.
+// a strong k_baked bakes this link's own files: asked for the count, then to fill
 __attribute__((weak)) int k_baked(struct vfs_file *rows, int cap) {
   return (void) rows, (void) cap, 0; }
 
-// /proc/vt -- the console's colours as files, xterm-256 indices in decimal. an ordinary
-// entry each: the open refreshes a read off the live pen, the close applies a write.
-// font takes a font src/apps/font.l laid, for the code points the built-in one lacks; an
-// empty write drops it.
+// /proc/vt: the colours as xterm-256 indices, refreshed at open, applied at close; font
+// takes a font.l font for the code points the built-in lacks, an empty write drops it
 static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg",
                   k_vtscale[] = "proc/vt/scale", k_vtfont[] = "proc/vt/font";
-// /proc/lift -- a path written here asks the seat to carry that file out of the machine
-// (the page saves a download); a seat with nowhere to put it does nothing.
+// /proc/lift: a path written asks the seat to carry that file out (the page's download)
 static char const k_plift[] = "proc/lift";
 __attribute__((weak)) void k_lift_ask(unsigned char const *p, uintptr_t n) { (void) p; (void) n; }
-// and the two the open fills from the running machine, below the grow door they need
+// filled at open from the running machine, below the grow door they need
 static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
-// and the boot line, the one row that answers what this machine was asked to run.
 static char const k_pcmd[] = "proc/cmdline";
-// and the heap image the door handed in, read-only, for a process to wake from
+// the image the door handed in, for a process to wake from
 static char const k_pimg[] = "proc/image";
-// and the file the door carried in beside the kernel, read-only
+// the file the door carried in beside the kernel
 static char const k_pinitrd[] = "proc/initrd";
-// /dev/{null,zero}: neither holds bytes -- null is the source table's empty slot, zero that
-// slot with a read door. the entries below exist only so stat and dents can see them.
+// null is the table's empty slot, zero that slot with a read door: entries only for stat and dents
 static char const k_dnull[] = "dev/null", k_dzero[] = "dev/zero";
-// 0 is neither, 1 null, 2 zero.
+// 0 neither, 1 null, 2 zero
 static int k_dev_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_dnull - 1 && !memcmp(p, k_dnull, n)) return 1;
   if (n == sizeof k_dzero - 1 && !memcmp(p, k_dzero, n)) return 2;
   return 0; }
 static intptr_t k_zero_readn(int fd, unsigned char *dst, uintptr_t n) {
   return memset(dst, 0, n), (intptr_t) n; }
-// null takes every byte. a row with no hook at all is not a row: k_dup_row refuses to clone
-// one, and `2>/dev/null` is a dup of exactly that onto a child's stderr.
+// a row with no hook is no row (k_dup_row refuses it), and 2>/dev/null dups this one
 static intptr_t k_null_writen(int fd, unsigned char const *src, uintptr_t n) {
   return (intptr_t) n; }
 static bool k_dev_ready(int fd) { return true; }
 
-// 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale, 4 the lift, 5 the font.
+// 0 neither, 1 fg, 2 bg, 3 the glyph scale, 4 the lift, 5 the font
 static int k_vt_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_vtfg - 1 && !memcmp(p, k_vtfg, n)) return 1;
   if (n == sizeof k_vtbg - 1 && !memcmp(p, k_vtbg, n)) return 2;
@@ -592,11 +535,8 @@ static int k_vt_slot(char const *p, uintptr_t n) {
 static bool k_vt_rescale(unsigned v);                // below, with fbdraw's cached cursor
 static void fbwash(void);                            // below: the whole paper again
 
-// --- /mnt/host: the seat's own files ------------------------------------------------
-// a seat with files of its own -- the page's folder or the browser's private storage, a
-// directory under node -- answers k_host, and everything beneath the mount is asked of it:
-// one call an operation, the path relative to the mount, 0 or a count or -errno back. a
-// seat without (metal) answers kh_here 0, and no mount is laid.
+// /mnt/host: a seat with files of its own (the page's storage, a node directory) answers
+// k_host, one call an operation, the path relative to the mount; metal's kh_here is 0, no mount
 enum { kh_here, kh_stat, kh_open, kh_pread, kh_pwrite, kh_trunc, kh_close, kh_fstat,
        kh_list, kh_mkdir, kh_rmdir, kh_unlink, kh_rename };
 __attribute__((weak)) long k_host(long op, long a, long b, long c, long d, long e) {
@@ -605,24 +545,20 @@ __attribute__((weak)) long k_host(long op, long a, long b, long c, long d, long 
 static char const k_mnt[] = "mnt/host";
 #define k_mnt_n (sizeof k_mnt - 1)
 static bool k_mnt_up;                          // k_fs_init laid the mount
-// a canonical path -> where its tail under the mount starts in it, k_mnt_n for the mount
-// itself (an empty tail); -1 for a path elsewhere
+// where a path's tail under the mount starts, k_mnt_n for the mount itself, -1 elsewhere
 static intptr_t k_hosted(char const *cp, uintptr_t cn) {
   if (!k_mnt_up || cn < k_mnt_n || memcmp(cp, k_mnt, k_mnt_n)) return -1;
   if (cn == k_mnt_n) return (intptr_t) cn;
   return cp[k_mnt_n] == '/' ? (intptr_t) k_mnt_n + 1 : -1; }
 
-// a move or a removal leaves these be besides the tree: a special row, and every directory
-// above one, whose rename would carry them out from under their names
+// a move or a removal leaves these be: a special row, and every directory above one
 static char const *const k_pins[] = { k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_plift,
                                       k_pmem, k_pgauge, k_pcmd, k_dnull, k_dzero, k_mnt };
-// the namespace: entries in the kernel heap, one per baked row, growing as create and mkdir
-// add paths. the cwd is canonical ("" the root); chdir writes it, and the boot seat is the home.
+// one entry per baked row, growing with create and mkdir. the cwd is canonical ("" the root)
 static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pins,
                            .npins = countof(k_pins), .grab = k_grab, .drop = k_drop, .now = k_clock_ms };
 
-// lay the table on first use: every baked row live off .rodata, plus the rows below.
-// idempotent, and a refusal leaves the console standing (the caller answers ENOMEM).
+// laid on first use, idempotent; a refusal leaves the console standing (ENOMEM)
 static bool k_fs_init(void) {
   if (k_fs.ents) return true;
   if (!k_fs.bakes && !vfs_untar(&k_fs, k_tree, srctree, srctree_len, rootfs, rootfs_len)) return false;
@@ -635,8 +571,7 @@ static bool k_fs_init(void) {
     if (kboot.image_len) xr[m++] = (struct vfs_file) { k_pimg, kboot.image, kboot.image_len, 0 };
     if (kboot.initrd_len) xr[m++] = (struct vfs_file) { k_pinitrd, kboot.initrd, kboot.initrd_len, 0 };
     k_fs.extra = xr, k_fs.extra_n = m; }
-  // the rows past the baked ones, each laid empty and owned; one with `to` is a link, its
-  // target heap because k_ent_gc frees it, and a strdup that refuses leaves a plain directory
+  // laid empty and owned; one with `to` is a link, its target heap since k_ent_gc frees it
   static struct { char const *path, *to; uintptr_t mode; bool dir; } const rows[] = {
     { "tmp", NULL, 0755, true },
     { k_vtfg, NULL, 0644, false }, { k_vtbg, NULL, 0644, false },     // the console's colours
@@ -664,20 +599,18 @@ static bool k_fs_init(void) {
                                 .dir = rows[k].dir || (rows[k].to && !to), .to = to }; }
   return true; }
 
-// one open file: which entry, where in it, whether writes are allowed. rides the row's
-// `state`, which the close door frees.
+// one open file, on the row's state, which the close frees
 struct k_fh { int i, vt, refs; uintptr_t pos; bool w; };   // refs: the rows a dup shares it across
 
 static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n);
 
-// the handle behind an fd, NULL for a row that is not the ramfs's: `state` is scratch of
-// whatever kind, so the readn method is what says it means a file handle.
+// the handle behind an fd, NULL for a non-ramfs row: the readn method says what state is
 static love_inline struct k_fh *k_fh(int fd) {
   struct k_source *s = k_source(fd);
   return s && s->readn == ram_readn ? s->state : NULL; }
 
 
-// src/inle/sys.c's seek: a negative errno, the sign every C face here wears; whence is SEEK_*.
+// sys.c's seek, -errno on failure; whence is SEEK_*
 static struct k_hf *k_hf(int fd);
 static long k_host_lseek(struct k_hf *f, long off, int whence);
 long k_fd_lseek(int fd, long off, int whence) {
@@ -692,7 +625,7 @@ long k_fd_lseek(int fd, long off, int whence) {
   if (at < 0) return -22;
   return (long) (h->pos = (uintptr_t) at); }
 
-// ..and its truncate: cut, or stretched with zeros; a reader's row is refused as linux does
+// truncate: cut, or stretched with zeros; a reader's row is refused, as linux does
 long k_fd_truncate(int fd, long n) {
   if (!k_row_live(fd)) return -9;                        // EBADF
   struct k_hf *hf = k_hf(fd);
@@ -707,11 +640,10 @@ long k_fd_truncate(int fd, long n) {
   e->len = (uintptr_t) n, e->ms = k_clock_ms();
   return 0; }
 
-// entry i's bytes <- the pen, at the open of a read. memory refusing leaves the last
-// content standing: a stale number is answerable, an open that failed here would not be.
+// at the open of a read; memory refusing leaves the last content, a stale number answerable
 static void k_vt_read(int i, int slot) {
-  // serial-only: no console to ask, so the file reads empty rather than the last write
-  if (!kcb || slot >= 4) { k_fs.ents[i].len = 0; return; }   // ..and the lift and the font are written, never read
+  // serial-only: empty rather than the last write
+  if (!kcb || slot >= 4) { k_fs.ents[i].len = 0; return; }   // the lift and the font are written, never read
   // the colours come off the pen, the scale off the paper
   unsigned v = slot == 3 ? kfb.scale : cb_val(slot == 1 ? kcb->def_fg : kcb->def_bg) & 255u;
   char d[4]; int n = 0;
@@ -723,8 +655,7 @@ static void k_vt_read(int i, int slot) {
   memcpy(k_fs.ents[i].bytes, d, (uintptr_t) n);
   k_fs.ents[i].len = (uintptr_t) n; }
 
-// the font <- a write's bytes: vetted, then copied out of the entry, whose bytes move on
-// the next write. a font that fails the vetting leaves the one in use; none drops it.
+// vetted, then copied out of the entry, whose bytes move on the next write; a failure keeps the old
 static void k_vt_font(unsigned char const *b, uintptr_t n) {
   uint8_t *q = 0;
   if (n) {
@@ -734,8 +665,7 @@ static void k_vt_font(unsigned char const *b, uintptr_t n) {
   kqf = q;
   if (kcb) fbwash(); }
 
-// the pen <- entry i's bytes, at the close of a write. a leading number is the whole
-// grammar; no number, or one past the palette's 256, leaves the console alone.
+// at the close of a write: a leading number is the grammar, past 256 or none leaves the console
 static void k_vt_write(int i, int slot) {
   unsigned char const *b = k_fs.ents[i].bytes;
   uintptr_t len = k_fs.ents[i].len, j = 0;
@@ -753,9 +683,7 @@ static void k_vt_write(int i, int slot) {
   cb_recolor(kcb, slot == 1 ? cb_ink(cb_idx, v) : kcb->def_fg,
                   slot == 1 ? kcb->def_bg : cb_ink(cb_idx, v)); }
 
-// --- /proc's live rows ------------------------------------------------------------
-// filled at the open, off state only this side of the door can see: the kernel's own free
-// list and the collector's counters. `key value` lines, words throughout.
+// /proc's live rows, filled at open from the free list and the collector: `key value` lines, in words
 static int k_proc_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_pmem - 1 && !memcmp(p, k_pmem, n)) return 1;
   if (n == sizeof k_pgauge - 1 && !memcmp(p, k_pgauge, n)) return 2;
@@ -784,14 +712,14 @@ static int k_meminfo(char *b) {
   at = k_row(b, at, "free-blocks", blocks);
   at = k_row(b, at, "free-largest", big);
   at = k_row(b, at, "free-ordered", up);
-  // heap bytes only: a baked row costs the image, not the RAM this file is about.
+  // heap bytes only: a baked row costs the image, not the RAM
   uintptr_t ents = 0, bytes = 0;
   for (int i = 0; i < k_fs.n; i++)
     if (k_fs.ents[i].live) ents++, bytes += k_fs.ents[i].own ? k_fs.ents[i].cap : 0;
   at = k_row(b, at, "fs-entries", ents);
   return k_row(b, at, "fs-heap-bytes", bytes); }
 
-// src/love/love.c's lvm_gauge roster, spelled out: the same sixteen, named rather than indexed.
+// love.c's lvm_gauge roster, named
 static int k_gauge(char *b, struct g const *g) {
   int at = k_row(b, 0, "pool-words", g->len);
   at = k_row(b, at, "heap-words", (uintptr_t) (g->hp - ptr(g)));
@@ -810,8 +738,7 @@ static int k_gauge(char *b, struct g const *g) {
   at = k_row(b, at, "minor-peak", g->minor_hi);
   return k_row(b, at, "major-peak", g->major_hi); }
 
-// the boot line as love spells it: the program word, then the raw boot line, the way linux
-// writes its own, so the quoting a reader sees is the quoting the boot handed over.
+// the program word, then the raw boot line, as linux writes its own
 static int k_bootline(char *b) {
   int at = 0;
   for (char const *k = "love"; *k; k++) b[at++] = *k;
@@ -821,8 +748,7 @@ static int k_bootline(char *b) {
   b[at++] = '\n';
   return at; }
 
-// entry i's bytes <- the machine, at the open of a read; a refusal leaves the last content
-// standing, a stale row being answerable where a failed open is not.
+// at the open of a read; a refusal leaves the last content
 static void k_proc_read(int i, int slot) {
   if (slot == 2 && !love_system) return;          // no process to ask; meminfo is ours alone
   char b[768];
@@ -872,8 +798,7 @@ static void ram_close(int fd) {
   if (h && k_fs.ents[h->i].refs) k_fs.ents[h->i].refs--, vfs_gc(&k_fs, h->i);
   k_drop(h); }
 
-// the lowest free row at or past the boot rows -- POSIX's rule, which scripts lean on. a row
-// is free when it carries no method at all. the floor is F_DUPFD's; every caller else passes 0.
+// the lowest free row at or past floor (F_DUPFD's, else 0): POSIX's rule, which scripts lean on
 static int k_fd_free_at(int at) {
   int lo = at > (int) countof(k_boot) ? at : (int) countof(k_boot);
   for (int i = lo; i < k_sources_n; i++)
@@ -881,7 +806,7 @@ static int k_fd_free_at(int at) {
   return k_sources_n > lo ? k_sources_n : lo; }
 static int k_fd_free(void) { return k_fd_free_at(0); }
 
-// one open host file, shared by its dups: so the offset is too, as POSIX has it
+// shared by its dups, so the offset is too, as POSIX has it
 struct k_hf { long h; uintptr_t pos; int refs; bool w; };
 static intptr_t host_readn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_hf *f = k_source(fd)->state;
@@ -937,10 +862,8 @@ static int k_host_open(char const *p, uintptr_t n, char m) {
                            .ready = ram_ready, .close = host_close, .state = f };
   return fd; }
 
-// open a path -> an fd or a negative errno. m is r read, w truncate, a append, c and o write
-// in place from the start; w a and c create an absent path whose parent is a directory,
-// for r and o absence stays absence. a directory does
-// not open: readdir is its read door. the love doors flatten the errno in the marshaling.
+// -> an fd | -errno. m: r read, w truncate, a append, c and o in place from the start; w a c
+// create under a directory parent. a directory does not open: readdir is its read door
 love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (m != 'r' && m != 'w' && m != 'a' && m != 'c' && m != 'o') return -EINVAL;
   if (!k_fs_init()) return -ENOMEM;
@@ -949,10 +872,10 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (cn < 0) return (int) cn;
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);
   if (ho >= 0) return k_host_open(cp + ho, (uintptr_t) (cn - ho), m);
-  if (vfs_ro(&k_fs, cp, (uintptr_t) cn)) {                // the tree: read only, and the mount a directory
+  if (vfs_ro(&k_fs, cp, (uintptr_t) cn)) {                // the tree is read only, the mount a directory
     if (m != 'r') return -EROFS;
     if (cn == (intptr_t) sizeof k_tree - 1) return -EISDIR; }
-  // the ramfs does not read its own mode bits, so 0444 is a label and this is the refusal
+  // the ramfs reads no mode bits: 0444 is a label, and this the refusal
   if (k_proc_slot(cp, (uintptr_t) cn) && m != 'r') return -EROFS;
   if (!cn) return -EISDIR;                       // the root is a directory
   { int dv = k_dev_slot(cp, (uintptr_t) cn);     // no handle, no bytes, no entry
@@ -960,8 +883,7 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
       int dfd = k_fd_free();
       struct k_source *ds = k_source_open(dfd);
       if (!ds) return -ENOMEM;
-      // null keeps no readn (k_row_read answers end for want of one) but still says
-      // ready: a source that never answers ready parks its reader for good.
+      // null has no readn (k_row_read answers the end) but says ready, or its reader parks for good
       *ds = dv == 2 ? (struct k_source) { .readn = k_zero_readn, .ready = k_dev_ready }
                     : (struct k_source) { .writen = k_null_writen, .ready = k_dev_ready };
       return dfd; } }
@@ -969,8 +891,7 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (i >= 0 && k_fs.ents[i].dir) return -EISDIR;
   bool made = false;
   if (i < 0) {
-    // 'r' misses stay one k_find, the load path's probe lane; only a create pays k_dirp,
-    // so a file never shadows a synthesized directory.
+    // an 'r' miss stays one vfs_find; only a create pays vfs_dirp, so a file never shadows a directory
     if (m == 'r' || m == 'o') return -ENOENT;
     if (vfs_dirp(&k_fs, cp, (uintptr_t) cn)) return -EISDIR;
     int e = vfs_parent_ok(&k_fs, cp, (uintptr_t) cn);
@@ -982,10 +903,10 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   struct k_source *s = h ? k_source_open(fd) : NULL;   // the grow door; NULL is no memory
   if (!s) {
     k_drop(h);
-    // an open that refuses leaves the tree as it found it -- a file it minted goes too
+    // a refused open leaves the tree as it was: a file it minted goes too
     if (made) k_fs.ents[i].live = false, vfs_gc(&k_fs, i);
     return -ENOMEM; }
-  // the truncate lands last, past every way this can still fail (same law).
+  // the truncate lands last, past every way this can still fail
   uintptr_t len = 0;
   struct vfs_ent *e = &k_fs.ents[i];
   int vt = k_vt_slot(cp, (uintptr_t) cn);
@@ -999,22 +920,19 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
-// the open/close nifs are src/love/posix.c's: its open(2)/close(2) land in src/inle/sys.c's arms,
-// so the ramfs answers the same door and a directory opens as a dents row.
+// open and close are posix.c's, through sys.c's arms: a directory opens as a dents row
 
-// --- the file nifs: stat, readdir, lseek, openfd ---------------------------
-// doc/misc/posix.md's conventions exactly: kore reads these shapes and a wrong one is silent
+// the file nifs: doc/misc/posix.md's shapes exactly, which kore reads in silence
 #define k_mode_file 0100000            // (& mode 61440) = 32768: a regular file
 #define k_mode_dir  0040000            //                = 16384: a directory
 #define k_mode_lnk  0120000            //                = 40960: a symlink
 
-// (stat path) -> (size mtime-ms mode ns) | (). ns is the ms date times a million, this
-// clock's last hand being the millisecond. ino, nlink, uid and dev are src/inle/sys.c's to invent.
+// (stat path) -> (size mtime-ms mode ns) | (); ns is the ms date times a million. ino, nlink,
+// uid and dev are sys.c's to invent
 struct k_st { uintptr_t size, ms, mode; };
 
-// -> 0, or -ENOENT. a synthesized directory -- a prefix with children but no entry of its
-// own, and the root -- answers like any other, which is why this fills a struct and not an
-// entry index: it has no row to point at.
+// -> 0 | -ENOENT. fills a struct, not an index: a synthesized directory (the root, a bare
+// prefix) has no row
 love_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool follow) {
   char cp[256];
   intptr_t cn;
@@ -1029,14 +947,13 @@ love_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool f
     return e; }
   int i = vfs_find(&k_fs, cp, (uintptr_t) cn);
   uintptr_t kid;
-  // lstat, the only reason the walk left the last name alone: the link itself, sized by
-  // its target the way stat(2) has it.
+  // lstat: the link itself, sized by its target as stat(2) has it
   if (!follow && i >= 0 && k_fs.ents[i].to)
     return *st = (struct k_st) { strlen(k_fs.ents[i].to), k_fs.ents[i].ms,
                                  k_mode_lnk | 0777 }, 0;
   if (i >= 0 && !k_fs.ents[i].dir) {
     int vt = k_vt_slot(cp, (uintptr_t) cn);
-    if (vt) k_vt_read(i, vt);                        // so a size is the pen's, not the last read's
+    if (vt) k_vt_read(i, vt);                        // a size is the pen's, not the last read's
     int ps = k_proc_slot(cp, (uintptr_t) cn);
     if (ps) k_proc_read(i, ps);
     st->size = vfs_size(&k_fs, i), st->ms = k_fs.ents[i].ms,
@@ -1049,19 +966,15 @@ love_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool f
   else return -ENOENT;
   return 0; }
 
-// --- rung 4: pipes, and the fd plumbing over them ---------------------------
-// a pipe is a k_source pair over one byte queue in the kernel heap: the read end answers 0
-// while a writer is open and -1 when the last one closes, which is what the scheduler parks
-// on, and each end counts its holders so the queue frees when both reach zero. the queue
-// grows rather than capping: the writer's zputc retries once and then drops the byte.
+// pipes: a k_source pair over one heap queue, each end counting holders. the read end answers
+// 0 while a writer is open, -1 after; the queue grows, and a refused grow drops the byte
 struct k_pipe { unsigned char *buf; uintptr_t cap, rp, wp; int rrefs, wrefs; };
 
 static struct k_pipe *k_pipe_of(int fd) {
   struct k_source *s = k_source(fd);
   return s ? s->state : NULL; }
 
-// a queue's two motions, the pipe's and the pty's: up to n bytes out (0 when empty), and n
-// bytes in (-1 when memory refuses)
+// the pipe's and the pty's: up to n out (0 empty), n in (-1 when memory refuses)
 static intptr_t q_get(struct k_pipe *p, unsigned char *dst, uintptr_t n) {
   uintptr_t a = p->wp - p->rp;
   if (!a) return 0;
@@ -1097,8 +1010,7 @@ static intptr_t pipe_readn(int fd, unsigned char *dst, uintptr_t n) {
 
 static intptr_t pipe_writen(int fd, unsigned char const *src, uintptr_t n) {
   struct k_pipe *p = k_pipe_of(fd);
-  // no readers is gone, not busy; with no SIGPIPE the writer only learns if it looks, so
-  // the run is dropped as the host drops one on EPIPE and a `yes` into a dead pipe spins.
+  // no readers is gone; with no SIGPIPE the run drops as on EPIPE, and a `yes` into a dead pipe spins
   if (!p || !p->rrefs) return -1;
   return q_put(p, src, n); }
 
@@ -1123,20 +1035,15 @@ static void pipe_wclose(int fd) {
   if (s) *s = (struct k_source) {0};
   if (p) p->wrefs--, pipe_free(p); }
 
-// a duped row that carries no state of its own (a console twin) still owes
-// k_fd_free a way back to empty.
+// a stateless dup (a console twin) still owes k_fd_free a way back to empty
 static void k_row_zero(int fd) {
   struct k_source *s = k_source(fd);
   if (s) *s = (struct k_source) {0}; }
 
-// --- the pty: a terminal where the host would hand out /dev/pts ----------------------
-// three rows over one k_pty. the master is the terminal's side, a mitty's pane: its writes
-// are keys, run through the line discipline into `in`, and its reads drain `out`. the slave
-// is the program's: it reads `in` and writes `out`, a \n going out as \r\n while opost
-// holds. a key that raises a signal (^C ^\ ^Z) puts its number on the signal row, which the
-// task that tethered the pane reads and answers with `still`: only love can end a task.
-// cooked, a read takes one line at most and none until it is whole; ^D on an empty line is
-// one read's end. raw (raw 1) clears icanon, echo, isig and icrnl, as the host's does.
+// the pty: master, slave and signal rows over one k_pty. the master (a mitty pane) writes keys
+// through the line discipline into in and reads out; the slave the other way, \n as \r\n under
+// opost. ^C ^\ ^Z put a signal on the signal row for the tethering task to answer with still.
+// cooked, a read takes at most one whole line, ^D on an empty one the end; raw as the host's
 enum { pt_icanon = 1, pt_echo = 2, pt_isig = 4, pt_icrnl = 8, pt_opost = 16 };
 struct k_pty { struct k_pipe in, out, ed, sig; int mrefs, srefs, grefs, eofs;
                unsigned flags; uint16_t rows, cols; intptr_t fg; };
@@ -1288,9 +1195,8 @@ static int k_fd_pty(int fds[3]) {
     *r = rows[i], fds[i] = fd; }
   return 0; }
 
-// clone src's row into a fresh fd. a pipe end shares the queue and bumps its side's count; a
-// ramfs fd clones the handle, so the offset diverges where POSIX shares it; a boot twin gets
-// k_row_zero so its close frees the row.
+// a pipe end shares the queue and counts its side; a ramfs fd shares the handle; a boot twin
+// gets k_row_zero so its close frees the row
 love_noinline static int k_dup_row(int src, int at) {
   struct k_source *s = k_source(src);
   if (!s || !(s->readn || s->writen || s->putc)) return -1;
@@ -1310,8 +1216,7 @@ love_noinline static int k_dup_row(int src, int at) {
   else if (s->readn == pty_greadn) ((struct k_pty*) s->state)->grefs++;
   else if (!t->close) t->close = k_row_zero;
   return fd; }
-// src/inle/sys.c's doors over the same motions: fcntl's F_DUPFD (at = the floor)
-// and dup3. src == dst is dup3's own refusal; the love face answers () there.
+// sys.c's F_DUPFD (at the floor) and dup3; src == dst is dup3's refusal
 long k_fd_dup(int src, int at) {
   if (at < 0 || at >= k_fd_most) return -EINVAL;
   int fd = k_dup_row(src, at);
@@ -1330,8 +1235,7 @@ long k_fd_dup3(int src, int dst) {
   *n = (struct k_source) {0};                   // the temp row retires; its state moved whole
   return dst; }
 
-// the row mechanics of pipe(2), g-free: two rows over one queue. src/inle/sys.c's
-// pipe2 arm calls it with the caller's own int pair.
+// pipe(2)'s rows, g-free, for sys.c's pipe2
 long k_fd_pipe(int fds[2]) {
   struct k_pipe *p = k_grab(sizeof *p);
   if (!p) return -ENOMEM;
@@ -1350,9 +1254,8 @@ long k_fd_pipe(int fds[2]) {
   fds[0] = rfd, fds[1] = wfd;
   return 0; }
 
-// --- directory rows: opendir(2)'s door, src/inle/sys.c's only caller ------------
-// a directory opens as a row with a close and a dents cursor: read(2) on it is EISDIR. the
-// cursor is the entry the next name's scan starts at, so no state outlives the call but that.
+// directory rows, for sys.c's opendir: a close and a dents cursor (read is EISDIR); the cursor
+// is where the next scan starts, the only state between calls
 struct k_dh { uintptr_t pn; int at; char p[256]; };
 static void k_dir_close(int fd) {
  struct k_source *s = k_source(fd);
@@ -1360,8 +1263,7 @@ static void k_dir_close(int fd) {
  k_drop(s->state);
  *s = (struct k_source) {0}; }
 
-// a host directory opens as its whole listing, taken once: a kind byte (d or f), the
-// name, a NUL, each; the cursor walks it
+// a host directory's whole listing, taken once: a kind byte (d f), the name, a NUL each
 struct k_hd { char *b; long n, at, k; };
 static void k_hdir_close(int fd) {
  struct k_source *s = k_source(fd);
@@ -1402,8 +1304,7 @@ long k_fs_opendir(char const *p, uintptr_t pn) {
  *s = (struct k_source) { .close = k_dir_close, .state = h };
  return fd; }
 
-// linux_dirent64: 19 header bytes then the name, NUL kept, the record rounded
-// to 8 -- so every record stays 8-aligned in the caller's buffer.
+// linux_dirent64: 19 header bytes, the name with its NUL, rounded to 8
 struct k_dent { unsigned long ino; long off; unsigned short reclen;
                 unsigned char type; char name[]; };
 static long k_host_dents(struct k_hd *h, void *buf, long cap) {
@@ -1445,8 +1346,8 @@ long k_fd_dents(int fd, void *buf, long cap) {
   h->at = cur; }
  return off; }
 
-// fstat(2)'s row face: the ramfs handle answers its entry, a pipe end is a fifo, a
-// directory row its tree, the boot rows a character device. struct stat is src/inle/sys.c's.
+// fstat(2): a ramfs handle its entry, a pipe a fifo, a directory row its tree, the boot rows
+// a character device; struct stat is sys.c's
 long k_fd_stat(int fd, struct k_st *st) {
   if (!k_row_live(fd)) return -EBADF;
   struct k_source *s = k_source(fd);
@@ -1478,15 +1379,13 @@ long k_fd_stat(int fd, struct k_st *st) {
   st->mode = 0020000 | 0620;                    // the console twins: a character device
   return 0; }
 
-// (getpid _) -> the running task's pid, a charm; the main task reads 0. src/love/main.c's
-// getpid nif branches here on a negative osv, its own answer being the constant 1.
+// (getpid _): the main task reads 0; main.c's getpid branches here on a negative osv
 lvm(k_lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
   love_musttail return Next(1); }
 
-// --- rung 5: the disk -- the block door src/apps/fat.l rides, driven by src/inle/blk.c. DMA
-// rides a love string's own heap bytes: nothing allocates between post and completion, so
-// the collector cannot move the buffer under the device.
+// the disk, fat.l's block door over blk.c. DMA rides a love string's own bytes: nothing
+// allocates between post and completion, so the collector cannot move them
 // (disk _)         -> the sector count, 0 when no disk.
 // (disk-read l n)  -> a string of n*512 bytes off sector l | ().
 // (disk-write l s) -> the sectors written | () (s must be whole sectors).
@@ -1524,8 +1423,8 @@ static lvm(lvm_disk_write) {
   Sp[1] = k_disk_write(Sp[0], Sp[1]);
   love_musttail return Nextp(1, 1); }
 
-// (fetch url path): the page's network where a seat has one (src/inle/wasm) -- the bytes at
-// URL laid as the ramfs file at PATH, 0 or -errno; metal has no door and says so
+// (fetch url path): url laid as the ramfs file at path where a seat has a network (wasm),
+// 0 | -errno
 __attribute__((weak)) long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
   return (void) url, (void) un, (void) path, (void) pn, -ENOSYS; }
 love_noinline static word k_lvm_fetch(word uw, word pw) {
@@ -1536,8 +1435,8 @@ static lvm(lvm_fetch) {
   Sp[1] = k_lvm_fetch(Sp[0], Sp[1]);
   love_musttail return Nextp(1, 1); }
 
-// (kexec path cmd): boot the ramfs module at path with cmd as its boot line, in place of this
-// one -- src/inle/wasm can, metal cannot yet. answers only on refusal, -errno.
+// (kexec path cmd): boot the ramfs module at path with cmd, in place of this one (wasm only);
+// answers -errno on refusal
 __attribute__((weak)) long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
   return (void) p, (void) pn, (void) cmd, (void) cn, -ENOSYS; }
 love_noinline static word k_lvm_kexec(word pw, word cw) {
@@ -1548,8 +1447,7 @@ static lvm(lvm_kexec) {
   Sp[1] = k_lvm_kexec(Sp[0], Sp[1]);
   love_musttail return Nextp(1, 1); }
 
-// --- the SVM spike (x64 only; src/inle/x64/svm.c). (svm ()) is the capability, (svm-run ())
-// runs one guest, answering (exitcode rax rip) or ().
+// the svm spike (x64/svm.c): (svm ()) the capability, (svm-run ()) one guest -> (exitcode rax rip) | ()
 #if defined(__x86_64__) && !defined(INLE_DROID)
 
 static lvm(lvm_svm) {
@@ -1559,8 +1457,7 @@ static lvm(lvm_svm) {
 love_noinline static struct g *k_svm_run(struct g *g) {
   uint64_t code = 0, rax = 0, rip = 0;
   if (!k_svm_ok()) return g->sp[0] = ZeroPoint, g;
-  // the spike's pages ride a love string's own bytes, safe for blk.c's reason: nothing
-  // allocates between the carve and the vmrun, so the VMCB cannot move under the CPU.
+  // the pages ride a string's bytes, as blk.c's: nothing allocates before the vmrun
   if (!ok(g = str0(g, k_svm_need()))) return g;      // OOM: the wrapper ghelps
   if (k_svm_spike(txt(g->sp[0]), &code, &rax, &rip) < 0)
     return g->sp[1] = ZeroPoint, g->sp += 1, g;
@@ -1576,8 +1473,7 @@ love_noinline static struct g *k_svm_run(struct g *g) {
 static lvm(lvm_svm_run) {
   LvmCall(g, k_svm_run) }
 
-// ..and its Intel twin (src/inle/x64/vmx.c). (vmx-run ()) answers four numbers where the SVM
-// door answers three: the last is the VM-instruction error, all a refused entry has to say.
+// x64/vmx.c's twin: a fourth number, the VM-instruction error, all a refused entry can say
 
 static lvm(lvm_vmx) {
   Sp[0] = k_vmx_ok() ? putcharm(1) : ZeroPoint;
@@ -1600,14 +1496,10 @@ static lvm(lvm_vmx_run) {
   LvmCall(g, k_vmx_run) }
 #endif
 
-// --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd, chmod, utime.
-// doc/misc/posix.md's conventions: an effect answers 0 | -errno (the host's numbers negated)
-// | EINVAL on misuse, cwd the string | (). the environment is a tablet in the boot text.
+// the writable tree, posix.md's shapes: an effect 0 | -errno | EINVAL on misuse, cwd the string | ()
 
-// --- the path faces ------------------------------------------------------
-// k_fs_* take (bytes, len) and answer 0 or a negative errno, as k_fd_* and k_parent_ok do --
-// the one sign __love_inle owes its caller, so src/inle/sys.c hands these out with no flip.
-// love_noinline is load-bearing: cp[256] in an lvm's own frame would block its musttail.
+// k_fs_* take (bytes, len) -> 0 | -errno, the sign sys.c hands out unflipped. love_noinline
+// is load-bearing: cp[256] in an lvm's own frame would block its musttail
 love_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
@@ -1656,8 +1548,7 @@ love_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   vfs_gc(&k_fs, i);                                   // last close frees them
   return 0; }
 
-// (symlink target path). the target is stored as given, the way readlink(2) owes it back,
-// and canonicalized against the link's own place only when k_walk follows it.
+// the target is stored as given, canonicalized against the link's place only when followed
 love_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
@@ -1678,8 +1569,7 @@ love_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintp
   k_fs.ents[i].to = q;
   return 0; }
 
-// (readlink path): the target, unfollowed and untruncated -- the byte count back, as
-// readlink(2) answers it, and -EINVAL where the path is not a link at all.
+// (readlink path): the target unfollowed, the byte count back; -EINVAL for a non-link
 love_noinline intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintptr_t n) {
   char cp[256];
   intptr_t cn;
@@ -1696,8 +1586,8 @@ love_noinline intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintp
   memcpy(b, k_fs.ents[i].to, tn);
   return (intptr_t) tn; }
 
-// (rename old new): a file moves whole, a target file unlinked under it; a directory
-// carries everything beneath it, the copies staged first so a refusal leaves the tree whole.
+// (rename old new): a target file is unlinked under it; a directory's copies are staged
+// first, so a refusal leaves the tree whole
 struct k_ren { struct k_ren *next; int i; char *q; };
 love_noinline int k_fs_rename(char const *o, uintptr_t olen,
                                    char const *n, uintptr_t nlen) {
@@ -1779,7 +1669,7 @@ love_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
   memcpy(k_fs.cwd, cp, (uintptr_t) cn), k_fs.cwd_n = (uintptr_t) cn;
   return 0; }
 
-// the seat into a caller's buffer, 0 ok or -ERANGE -- getcwd(2)'s own refusal
+// getcwd(2): 0 | -ERANGE
 int k_fs_getcwd(char *b, uintptr_t n) {
   if (n < k_fs.cwd_n + 2) return -ERANGE;            // '/' + the seat + the NUL
   b[0] = '/';
@@ -1787,7 +1677,7 @@ int k_fs_getcwd(char *b, uintptr_t n) {
   b[1 + k_fs.cwd_n] = 0;
   return 0; }
 
-// a process's cwd and the fs's own trade places, around one of its calls (src/inle/sys.c)
+// a process's cwd and the fs's trade places around one of its calls (sys.c)
 void k_fs_cwd_swap(char *cwd, uintptr_t *n) {
   char t[sizeof k_fs.cwd];
   uintptr_t tn = k_fs.cwd_n;
@@ -1795,8 +1685,7 @@ void k_fs_cwd_swap(char *cwd, uintptr_t *n) {
   memcpy(k_fs.cwd, cwd, *n), k_fs.cwd_n = *n;
   memcpy(cwd, t, tn), *n = tn; }
 
-// the two attribute writers land on the entry, so a synthesized directory takes either as
-// a no-op: it has no row to keep bits on, and its date is its children's.
+// on the entry: a synthesized directory takes either as a no-op, having no row
 love_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
@@ -1825,13 +1714,11 @@ love_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
 
 static lvm(kreset) { return k_reset(), g; }
 
-// the cursor as last painted. quay marks the row of every grid write and the cursor is not
-// one, so the renderer owns it or the block stays where it last was.
+// quay marks no row for the cursor, so the renderer owns it
 static uint32_t fbcur = ~0u, fbview;   // the cursor last painted, and the view it was under
 static bool fbblink;
 
-// repaint what moved: quay marks each written row in cb->dmg and a renderer reads-and-clears
-// (quay.h). love flushes per write, so painting it all here is a blit per character printed.
+// repaint the rows quay marked in cb->dmg, reading and clearing them
 void fbdraw(void) {
   if (!kcb) return;                    // serial-only: no framebuffer console
   uint16_t const rows = kcb->rows, cols = kcb->cols;
@@ -1839,12 +1726,11 @@ void fbdraw(void) {
   if (ask || kkb.snap) kkb.peer = 0, kkb.snap = 0, cb_peer(kcb, back < 0 ? 0u : (uint32_t) back);
   bool const blink = (kticks & 64) != 0;
   uint32_t const cur = kcb->flag & cb_show ? kcb->wpos : ~0u;
-  // a hidden cursor's row is ~0u, which no row index equals, so it matches nothing.
+  // a hidden cursor's row is ~0u, matching nothing
   uint32_t const was = fbcur == ~0u ? ~0u : fbcur / cols + fbview,
                  now = cur == ~0u ? ~0u : cur / cols + kcb->view;
   bool const moved = cur != fbcur || blink != fbblink;
-  // the paper is minted per frame, never per row: kticks moves under the timer ISR, so a
-  // re-read of the blink phase mid-frame could paint one row lit and the next dark.
+  // the blink phase read once a frame: kticks moves under the timer ISR
   struct cb_paper const paper = { kfb._, kfb.pitch, kfb.width, kfb.height, kfb.scale };
   bool painted = false;
   for (uint16_t i = 0; i < rows; i++) {
@@ -1853,15 +1739,11 @@ void fbdraw(void) {
       cb_paint(&paper, kcb, &kface, kqf, i, 0, 0, blink ? cur : ~0u), painted = true; }
   for (int k = 0; k < 8; k++) kcb->dmg[k] = 0;
   fbcur = cur, fbblink = blink, fbview = kcb->view;
-  // a seat that SHOWS this paper rather than scanning it out hears about it here, and here
-  // is the only honest place: the console's bytes leave by the serial door BEFORE the
-  // glyphs land, so a seat that took the write for its cue would carry the screen from
-  // just before it. only when something was actually drawn -- an idle park paints nothing.
+  // a seat showing this paper hears here, not at the write: the serial bytes leave before the
+  // glyphs land. only when something was drawn
   if (painted) k_fb_touch(); }
 
-// the whole paper down, and the screen owed back in full. the pixels moved under the grid
-// -- a new stride, or a new size -- so every row is dirty and the strip past the last row
-// is no cell's to paint.
+// the pixels moved under the grid: every row dirty, the strip past the last row cleared
 static void fbwash(void) {
   fbcur = ~0u;                         // the cached cursor indexed the grid as it was
   for (int k = 0; k < 8; k++) kcb->dmg[k] = ~(uint32_t) 0;
@@ -1869,11 +1751,8 @@ static void fbwash(void) {
     for (uintptr_t x = 0; x < kfb.width; x++) kfb._[y * kfb.pitch + x] = 0;
   if (!kkb.hold) fbdraw(); }
 
-// the console re-made for whatever kfb now says -- both doors below want exactly this. the
-// screen comes across by cb_regrid, text and the pictures the new store holds.
-// kcb is published only once the new grid is whole, and the old buffer freed after, fbdraw
-// being able to run from a fault handler; a refusal leaves the console standing, so the
-// allocation comes first.
+// the console re-made for kfb, text and pictures across by cb_regrid. kcb is published only
+// once whole and the old freed after (fbdraw may run from a fault); a refusal keeps the old
 static bool k_cb_remake(void) {
   uintptr_t const rows = kfb.height / (kface.h * kfb.scale),
                   cols = kfb.width / (kface.w * kfb.scale);
@@ -1899,12 +1778,11 @@ static bool k_vt_rescale(unsigned v) {
   if (k_cb_remake()) return true;
   return kfb.scale = was, false; }
 
-// the paper itself moved: a canvas the reader resized. the pixels have to land inside the
-// reservation fbinit was given -- everything below it went to the heap at boot.
+// a canvas the reader resized: it must land inside fbinit's reservation, the rest is the heap's
 bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale) {
   if (!kcb || !kfb._ || !w || !h) return false;
   if ((uintptr_t) pitch * h > kfb.cap_px) return false;
-  // every field here is 16 bits wide, so the bound is the type's and not a policy.
+  // every field here is 16 bits wide: the bound is the type's
   if (w > 0xffffu || h > 0xffffu || pitch > 0xffffu || w > pitch) return false;
   if (scale > 8) return false;
   uint16_t const ow = kfb.width, oh = kfb.height, op = kfb.pitch;
@@ -1915,22 +1793,19 @@ bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale) {
   kfb.width = ow, kfb.height = oh, kfb.pitch = op, kfb.scale = os;
   return false; }
 
-// the framebuffer as a program may borrow it whole: base, size, stride in pixels. false
-// where the door handed over none (PVH), the caller's cue to want the ESP door instead.
+// the framebuffer whole for a program: base, size, stride in pixels; false with none (PVH),
+// the cue to want the ESP door
 bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) {
   if (!kfb._) return false;
   *p = kfb._, *w = kfb.width, *h = kfb.height, *pitch = kfb.pitch;
   return true; }
 
-// the glyph scale the console stands at, wherever it was set (/proc/vt/scale, a page's
-// resize); 0 with no framebuffer
+// the console's glyph scale, 0 with no framebuffer
 uintptr_t k_fb_scale(void) { return kfb._ ? kfb.scale : 0; }
 
-// (tty fd) -- the console as (rows . cols), off the framebuffer's pixels and the glyph scale
-// (cbinit); it is not 80x25 here. serial-only there is no grid and the answer is ENOTTY's
-// nom. the operand routes as every io op's does: the rows are one table shared by every
-// task, and 0 1 2 are the numeric spellings of in/out/err, so a task wearing a pipe is
-// asked about the pipe. only a charm past 2 is a raw row.
+// (tty fd) -> (rows . cols), off the pixels and the glyph scale | ENOTTY's nom serial-only.
+// 0 1 2 route as every io op's, so a task wearing a pipe is asked about the pipe; only a
+// charm past 2 is a raw row
 static intptr_t k_ttyfd(struct g *g, word x) {
   if (charmp(x) && getcharm(x) >= 0 && getcharm(x) <= 2)
     x = word(getcharm(x) == 0 ? &love_stdin : getcharm(x) == 1 ? &love_stdout : &love_stderr);
@@ -1991,8 +1866,8 @@ static lvm(lvm_kraw) {
   Sp[0] = t || k_console_in(fd) ? ZeroPoint : love_err(g, ENOTTY);
   love_musttail return Next(1); }
 
-// a row's terminal, for src/inle/sys.c's ioctl: 0, or -ENOTTY where the row has none. set
-// 1 or 0 makes input raw or cooked first; the console keeps no discipline, only the answer
+// sys.c's ioctl: 0 | -ENOTTY. set 1 or 0 makes input raw or cooked first; the console keeps
+// no discipline, only the answer
 static bool k_con_raw;
 int k_fd_term(int fd, int set, int *raw, uintptr_t *rows, uintptr_t *cols) {
   struct k_source const *s = k_source(fd);
@@ -2006,9 +1881,8 @@ int k_fd_term(int fd, int set, int *raw, uintptr_t *rows, uintptr_t *cols) {
   *cols = t ? t->cols : kcb ? kcb->cols : 80;
   return 0; }
 
-// (kproc argv env) -- a program in memory of its own (src/inle/sys.c's processes): argv and env
-// each its words with a NUL after every one, its stdio this task's own. -> (pid . the read end
-// of a pipe that ends when the process does), or the refusal
+// (kproc argv env): a process of its own (sys.c), argv and env NUL-separated, this task's
+// stdio -> (pid . a pipe's read end that ends with it) | the refusal
 long k_proc_new(char const *av, uintptr_t an, char const *ev, uintptr_t en, int const fds[3], int *wr);
 long k_proc_reap(long pid);
 love_noinline static struct g *k_kproc(struct g *g) {
@@ -2031,8 +1905,8 @@ static lvm(lvm_kreap) {
   Sp[0] = r == -EAGAIN ? ZeroPoint : r < 0 ? love_err(g, (int) -r) : putcharm(r);
   love_musttail return Next(1); }
 
-// (kpump _) -- a turn for each process the kernel itself runs (sys.c's k_proc_pump): 0 when
-// there are none, 1 when each waits on a call, 2 when one wants another turn
+// (kpump _): a turn for each process the kernel runs (sys.c's k_proc_pump): 0 none, 1 all
+// waiting on a call, 2 one wants another turn
 long k_proc_pump(void);
 static lvm(lvm_kpump) {
   Sp[0] = putcharm(k_proc_pump());
@@ -2054,9 +1928,8 @@ love_noinline static struct g *k_openpty(struct g *g) {
 static lvm(lvm_kopenpty) {
   LvmCall(g, k_openpty) }
 
-// --- the paper for a window of its own: the framebuffer held away from the console, which
-//     keeps its text and paints it all again when the paper comes back, and the keys as
-//     set-1 codes off the tap beside their text on the console's queue ---
+// the paper for a window of its own: held away from the console, which repaints when it comes
+// back; the keys as set-1 codes off the tap beside their text
 static struct g *k_charms(struct g *g, intptr_t const *v, int n) {
   if (!ok(g = have(g, n * Width(struct chain)))) return g;
   word l = ZeroPoint;
@@ -2073,9 +1946,8 @@ love_noinline static struct g *k_paper(struct g *g) {
   kkb.sw = kfb.width, kkb.sh = kfb.height;
   intptr_t const v[2] = { kfb.width, kfb.height };
   return k_charms(g, v, 2); }
-// (kshow cask y0 y1) -- rows y0..y1 of a paper the screen's size (w x h pixels, 32 bits
-// each, as paint.c lays them) onto the framebuffer -> the rows shown; 0 when the paper is
-// not held or no longer fits the screen
+// (kshow cask y0 y1): rows y0..y1 of a screen-sized paper (32-bit pixels, as paint.c lays them)
+// -> the rows shown; 0 when the paper is not held or no longer fits
 love_noinline static struct g *k_show(struct g *g) {
   uintptr_t n = 0;
   uint8_t const *s = cask_bytes(g->sp[0], &n);
@@ -2127,24 +1999,20 @@ static lvm(key) {
  Sp[0] = putcharm(b < 0 ? 0 : b);
  love_musttail return Next(1); }
 
-// (color fg bg) -- xterm-256 indices, the attribute and every cell already on the screen.
-// two in and one out, so the answer lands in the deeper slot and Sp moves by one.
+// (color fg bg): xterm-256 indices, the attribute and every cell on screen; two in, one out
 static lvm(color) {
  uint8_t fg = getcharm(Sp[0]), bg = getcharm(Sp[1]);
  if (kcb) cb_recolor(kcb, cb_ink(cb_idx, fg), cb_ink(cb_idx, bg));
  Sp[1] = ZeroPoint;
  love_musttail return Nextp(1, 1); }
 
-// (fault n) -- raise a CPU exception to exercise the ap in arch.c; n mirrors the x64 vector
-// numbers. the ap halts, so what follows the call is reachable only if the fault missed.
+// (fault n): a CPU exception for arch.c's ap, n x64's vector numbers; what follows runs only on a miss
 static lvm(lvm_fault) {
   k_fault_trigger(getcharm(Sp[0]));
   love_musttail return Next(1); }
 
-// (quit code) -- the exit door, with two rooms behind it. a task with a pid quits as _exit
-// (src/love/task.c, lvm_task_quit): the code is what `wait` (catch) answers. without one,
-// the exit is the machine's: reset -- test/kernel/kore0.l pins (: (quit n) n) one door deeper.
-// src/love/main.c's quit nif branches here on a negative osv: the task/machine door.
+// (quit code): a task with a pid quits as _exit (task.c), the code what `wait` answers; else
+// the machine resets (test/kernel/kore0.l). main.c's quit branches here on a negative osv
 lvm(k_lvm_quit) {
   if (k_cur_pid(g)) love_musttail return Ap(lvm_task_quit, g);
   k_reset();
@@ -2180,8 +2048,7 @@ static union u
   nif_kshow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kshow}, {lvm_ret0}},
   nif_kscan[] = {{lvm_kscan}, {lvm_ret0}};
 
-// every free range kboot reports goes onto the list as a free does: in address order, merged
-// with a range it touches, whatever order the map gave them in
+// in address order and merged, whatever order the map gave
 static bool meminit(void) {
   if (!kboot.ram_n) return false;
   for (uint32_t i = 0; i < kboot.ram_n; i++) {
@@ -2191,8 +2058,7 @@ static bool meminit(void) {
     ff_free(&kmem, ff_body(m)); }
   return true; }
 
-// how many pixels a glyph pixel gets: the door's, where it knows the screen better than
-// the pixel count does, else the largest that still leaves 80 columns and 24 rows.
+// the door's scale where it knows the screen better, else the largest leaving 80x24
 static uint8_t fbscale(void) {
   uint8_t s = 1;
   while (s < 8 && kfb.width / (kface.w * (s + 1u)) >= 80
@@ -2206,7 +2072,7 @@ static bool fbinit(void) {
   kfb.height = kboot.fb.h;
   kfb.pitch  = kboot.fb.pitch_px;
   kfb.scale  = kboot.fb.scale ? kboot.fb.scale : fbscale();
-  // a door that named no reservation cannot be resized, so its paper is its own size.
+  // with no reservation the paper cannot be resized
   kfb.cap_px = kboot.fb.cap_px ? kboot.fb.cap_px : (uint32_t) kfb.width * kfb.height;
   return true; }
 
@@ -2225,23 +2091,19 @@ static bool cbinit(void) {
   cb_fill(kcb, 0);
   return true; }
 
-// the kernel's own nifs ride knifs, a section apart: the one binary is also the hosted
-// love, whose book must not carry reset, fault, the disk or the virt doors. kmain drains
-// love_nifs and then this bracket, indexed by position -- so the order is append-only.
+// knifs, apart from love_nifs: the hosted book must not carry reset, fault, the disk or the
+// virt doors. indexed by position after love_nifs, so append only
 static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"reset", {.k = nif_reset}},
   {"draw", {.k = nif_draw}},
   {"key", {.k = nif_key}},
   {"fault", {.k = nif_fault}},
-  // the posix surface is src/love/posix.c's and src/love/main.c's, linked whole: their nifs land in
-  // this section and quit/getpid branch to k_lvm_quit / k_lvm_getpid on a negative osv.
-  // rung 5: the raw block door. no host twin (the host has no raw disk), so the shapes are
-  // love's: absence and refusal answer (), presence is the green sector count.
+  // posix.c's and main.c's nifs land in love_nifs; quit and getpid branch here on a negative osv.
+  // the raw disk has no host twin: absence and refusal answer (), presence the sector count
   {"disk", {.k = nif_disk}},
   {"disk-read", {.k = nif_disk_read}},
   {"disk-write", {.k = nif_disk_write}},
-  // x64 only, so a reader asks (elem 'svm (names ())) first: elsewhere the nom is not in
-  // the book, and reading it is missing rather than absence.
+  // x64 only: ask (elem 'svm (names ())) first, else the read is missing, not absence
 #if defined(__x86_64__) && !defined(INLE_DROID)
   {"svm", {.k = nif_svm}},
   {"svm-run", {.k = nif_svm_run}},
@@ -2249,7 +2111,7 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"vmx-run", {.k = nif_vmx_run}},
 #endif
   {"color", {.k = nif_color}},
-  // the console's own size; the no-op roster below pins `tty` only where a seat lacks it
+  // the no-op roster below pins tty only where a seat lacks it
   {"tty", {.k = nif_tty}},
   {"settty", {.k = nif_ksettty}},
   {"ttyfg", {.k = nif_kttyfg}},
@@ -2258,62 +2120,54 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"openpty", {.k = nif_kopenpty}},
   {"fetch", {.k = nif_fetch}},
   {"kexec", {.k = nif_kexec}},
-  // processes: programs in memory of their own, where a seat can run them (src/inle/sys.c)
+  // where a seat can run them (sys.c)
   {"kproc", {.k = nif_kproc}},
   {"kreap", {.k = nif_kreap}},
   {"kpump", {.k = nif_kpump}},
-  // a window's paper (src/inle/seat.l's kwin-events)
+  // seat.l's kwin-events
   {"kpaper", {.k = nif_kpaper}},
   {"kshow", {.k = nif_kshow}},
   {"kscan", {.k = nif_kscan}} };
 
-// the kore cat is catted from the ramfs at boot, so only the order is baked: one roster line
+// the kore cat is read off the ramfs at boot: only the order is baked
 static char const src_korelist[] =
 #include "korelist.h"
 ;
 static char const src_seat[] =
 #include "seat.h"
 ;
-// a task as a process (src/inle/tasks.l): a woken image carries it, src/love/main.c's bake
+// tasks.l: a woken image carries it, from main.c's bake
 static char const src_tasks[] =
 #include "tasks.h"
 ;
-// the crew roster: not in the kernel's cat, so the kernel carries the order and the members
-// are read off /love at the first ask. a path list, because a module's name does not say
-// which file holds it and sb spans three that load in the order given.
+// the crew's order, its members read off /love at the first ask; paths, as a module's name
+// does not say its file and sb spans three, loaded in order
 static char const src_crewlist[] =
 #include "crewlist.h"
 ;
 
 void kmain(void) {
 #if defined(__x86_64__) && !defined(INLE_DROID)
- // enable x87/SSE before any other C runs: a compiler vectorizes freely on x64 (even a struct
- // copy is movups) and that #UDs into a triple fault with no output while SSE is masked.
+ // before any other C: a struct copy may be movups, a silent triple fault while SSE is masked
  k_sse_enable();
 #endif
- // which kernel: -1, we are it. on metal __love_start is not the entry, so the value is written
- // here before any libc member can ask -- unwritten, the lazy probe issues a real `syscall`
- // into our own #UD handler. the seat arming rides with it (src/inle/sys.c).
+ // -1, we are the kernel: written before any libc member asks, or its lazy probe issues a real
+ // syscall into our own #UD handler. the seat arms with it (sys.c)
  __love_osv = -1;
  k_seat_init();
  khhdm = kboot.hhdm;
  archinit();
- // the wall date: whatever the door left in kboot, else the RTC, which archinit has just
- // made reachable (the a64 read is device memory, and mmio_map lays it).
+ // the door's date, else the RTC, reachable once archinit has mapped it
  if (!kboot.date) kboot.date = k_rtc();
  serial_init();
- // the heap (meminit) is the only hard requirement: with fbinit or cbinit failing, kcb
- // stays null and the kernel runs headless on the serial console alone.
+ // only meminit is required: without fbinit or cbinit the kernel runs on serial alone
  if (meminit()) {
-  if (fbinit()) cbinit();        // the framebuffer console; the palette is a table now
-  // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
-  // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
+  if (fbinit()) cbinit();        // the framebuffer console
+ // kmallocw memory, so pa = va - khhdm holds for everything the device reads
   k_blk_init(kmallocwa(b2w(320), 16));
-  // the sound card: command rings, buffer list and position buffer in one block, 128-aligned
-  // inside (hda.c lays it); the sample ring is its own
+ // hda: rings, buffer list and position buffer in one 128-aligned block; the sample ring apart
   k_hda_init(kmallocwa(b2w(3840), 128));
-  // the wake: baked_pick reads the projection's re-based image off the same two symbols
-  // the hosted start does; any problem answers NULL and the egg bakes from source below.
+ // baked_pick reads the projection's re-based image as the hosted start does; NULL bakes the egg
   struct g *g = NULL;
   uintptr_t blen = 0;
   void const *bimg = NULL;
@@ -2324,46 +2178,40 @@ void kmain(void) {
   char const *s = woke ? "; inle -- image awake\n" : "; inle -- baking the egg\n";
   for (; *s; s++) serial_putc(*s);
   if (!woke) g = ini();
-  // the nif rows: a woken book has them already, mopped as the hosted bake left it
+  // a woken book has them, mopped as the hosted bake left it
   if (!woke) g = defn(g, __start_love_nifs,
                          (uintptr_t)(__stop_love_nifs - __start_love_nifs));
-  // ..then the kernel's own bracket, on both lanes (a hosted bake has none), so a kernel row
-  // wins any name it shares
+  // then the kernel's own, on both lanes, so a kernel row wins any name it shares
   g = defn(g, __start_knifs,
               (uintptr_t)(__stop_knifs - __start_knifs));
-  // bound the generational collector to the device's RAM (the Appel knob): unbounded, the
-  // nursery's resizer grows and gen_major's all-survive sizing asks kmallocw for a block
-  // bigger than physical RAM. the budget counts every pool but not a resize, which holds
-  // the old pair beside the new; a third leaves RAM for that
+  // the budget counts every pool but not a resize, which holds the old pair beside the new;
+  // a third of RAM leaves room for that
   if (ok(g)) g->budget = kram_words / 3;
-  // the kore ROSTER (rung 3): the cat itself is read off the ramfs below.
+  // the kore roster; the cat itself is read off the ramfs below
   g = strof(g, src_korelist);
   struct def kd[] = {{"korelist", {.x = pop1(g)}}};
   g = defn(g, kd, countof(kd));
   g = strof(g, src_crewlist);
   struct def cd[] = {{"crewlist", {.x = pop1(g)}}};
   g = defn(g, cd, countof(cd));
-  // the boot cmdline, raw; the boot text below splits it into the argv shape.
+  // the boot cmdline, raw; the boot text splits it into argv
   g = strof(g, kboot.cmdline);
   struct def bd[] = {{"bootline", {.x = pop1(g)}}};
   g = defn(g, bd, countof(bd));
-  // the egg lane: the prel and the module layers; the seat text below runs on both lanes
+  // the egg lane; the seat text below runs on both
   struct g *r = g;
   if (!woke) {
    r = cats_egg(g);
-   r = cats_lib(r);                                  // register every baked module; the uses below are splices
+   r = cats_lib(r);                                  // the uses below are splices
    r = evals_(r,
-    // verbs first: this machine's userland is a verb table the cat's apps pin into as they
-    // load, and the boot cmdline's program seat reads the registry.
+    // verbs first: the cat's apps pin into its table, and the cmdline's program word reads it
     "(borrow 'verbs)"
-    "(borrow 'uu) (: uu (cite 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
-    "(borrow 'cli)");                                        //   one-name `uu` surface on this target too
+    "(borrow 'uu) (: uu (cite 'uu))"                         // the uu kernel the corpus's uu files drive
+    "(borrow 'cli)");
    r = evals_(r, src_tasks); }
-  // the seat text, both lanes (src/inle/seat.l, laid by lcat): what this machine is that a
-  // host is not. over a woken book these shadow the hosted bindings.
+  // seat.l: what this machine is that a host is not, shadowing a woken book's bindings
   r = evals_(r, src_seat);
-  // a woken image's crew captured the seat-doors wrappers (src/love/main.c), which read the live
-  // door off the tablet -- aim them at this seat's shim. the egg book has no tablet.
+  // a woken crew's seat-doors wrappers (main.c) read the door off the tablet: aim them here
   r = evals_(r,
    "(? (elem 'seat-doors (names ()))"
    "   (: _ (pin seat-doors 0 spawn) _ (pin seat-doors 1 spawnio)"
@@ -2372,21 +2220,18 @@ void kmain(void) {
    "      _ (pin seat-doors 7 settty) _ (pin seat-doors 8 raw) _ (pin seat-doors 9 ttyfg)"
    "      (pin seat-doors 10 ttypg))"
    "   0)");
-  // the session: a fresh writable layer, so the shell's defglobs never land in the base
+  // a fresh writable layer, so the shell's defglobs never land in the base
   r = love_open(r);
-  // an unbound mention raises missing at every define that names one, and bao's file-help
-  // folds a real quit, so one absent nif in the cat resets the machine at load. pin a no-op
-  // for whichever host nifs the cat mentions and this seat lacks -- self-retiring, since a
-  // rung landing the real nif takes its name off by existing. signal ignores.
+  // one absent nif the cat mentions would raise missing and bao's file-help quits the machine:
+  // pin a no-op for each this seat lacks, retiring as the real nif lands. signal ignores
   r = evals_(r,
    "(: (signal n h) ())"
    "(map (\\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))"
    "     '(hardlink spawn spawnmap fork exec herald wait still"
    "       getpid getuid seal ttyfg setpg umask rusage rlimit setrlimit glean pipe fdopen dup dup2 connect listen"
    "       bind accept recv send farend hark tty))");
-  // then the kore cat through the stream shell: the line is seatless here, so every member's
-  // own seat sits out and the whole userland lands. built off /love, korelist being the
-  // baked roster. egg lane only: re-loading over a woken image re-pins every sealed verb.
+  // the kore cat through the stream shell, seatless so the whole userland lands. egg lane
+  // only: re-loading over a woken image re-pins every sealed verb
   if (!woke) {
   r = evals_(r,
    "(: (kwords s i j acc)"
@@ -2401,12 +2246,10 @@ void kmain(void) {
    "   korecat (kcat (kwords korelist 0 0 ())))");
   r = evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (. (peep korecat i 0) (g (+ 1 i))))) 0)))");
   }
-  // the crew hangs off the registry's miss, re-armed on every boot including a woken
-  // image's: the load is idempotent, its own `source` row the guard.
+  // the crew off the registry's miss, every boot: the load is idempotent, its source row the guard
   r = evals_(r, "((cite 'verbs 'fills) crewload)");
-  // now the line wears its real shape and the program word dispatches off the registry.
-  // an empty line is a mitty on the console, lush in its first pane; when its last pane
-  // ends, or it cannot start, the console shell stands in, the toolbox warm.
+  // the program word dispatches off the registry. an empty line is a mitty, lush in its
+  // first pane; once that ends or fails, the console shell
   r = evals_(r, "(: cmdline (. \"love\" bootargv) argv cmdline)");
   r = evals_(r,
    "(? (two? bootargv)"
@@ -2422,7 +2265,7 @@ void kmain(void) {
    "(: pr (k-prog (. \"mitty\" (. \"--here\" ())))"
    "   (? (two? pr) (trap (\\ _ ((cap pr) (cup pr))) () (\\ a b 0)) 0))");
   r = evals_(r, "(cite 'cli 'shell 0)");
-  // a terminal scare gets the honest face on the serial console before reset
+  // a terminal scare's face on serial before reset
   if (code_of(r) == status_scare) scare_face(r);
   fin(r); }
  k_reset(); }

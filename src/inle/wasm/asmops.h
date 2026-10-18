@@ -1,11 +1,8 @@
-// asmops -- the wasm "privileged instructions". there are none: the machine is the
-// page's worker, and everything the kernel would say in assembler goes out through the
-// module's one import, __love_sys, as a hypercall wearing linux's number (src/inle/wasm/arch.c).
-// what the other three asmops.h say once per operation, this one says once per name.
+// asmops for wasm: there are no privileged instructions, so each goes out as a hypercall
+// through the module's one import, __love_sys, under linux's number (arch.c)
 #pragma once
 #include <stdint.h>
 
-// the idle wait, kmain's kwait: the x64 twin is `hlt`, the a64 one `wfi`. here it is a
-// hypercall that returns at the next tick or key, and arch.c drains the keys behind it.
+// kmain's kwait (hlt, wfi): returns at the next tick or key; arch.c drains the keys
 void k_idle(void);
 static inline void k_wait(void) { k_idle(); }

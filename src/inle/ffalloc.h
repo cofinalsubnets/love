@@ -1,6 +1,5 @@
-// ffalloc.h -- the first-fit free list, one copy for the kernel and the boards. the list
-// is kept in address order so a free coalesces with its neighbour; lengths are in words,
-// header included. each seat owns its root and the region it feeds it.
+// ffalloc.h -- the first-fit free list for the kernel and the boards: address order so a free
+// coalesces; lengths in words, header included
 #pragma once
 #include "../love/love.h"
 
@@ -14,13 +13,11 @@ static love_inline struct mem *after(struct mem *r) {
 
 static love_inline void *ff_body(struct mem *m) { return &m->next; }
 
-// a request this big comes off the top of the highest block that holds it, anything less off
-// the bottom of the lowest: long-lived small blocks (files, tables, malloc's arenas) pile up
-// low and the high end stays whole for the heap's pools
+// this big or more comes off the top of the highest fit, less off the bottom of the lowest:
+// small long-lived blocks pile up low, the high end stays whole for the heap's pools
 #define ff_big ((uintptr_t) (4u << 20) / sizeof(uintptr_t))
 
-// where in t a body of n words aligned to a bytes starts its block -> that header; 0 when it
-// does not fit. a gap left below is a block of its own, so never a single word
+// the header of an n-word body aligned to a in t, 0 if none fits; a gap below is a block, never one word
 static love_inline uintptr_t ff_fit(struct mem *t, uintptr_t n, uintptr_t a, bool top) {
   uintptr_t const W = sizeof(uintptr_t), lo = (uintptr_t) t, hi = (uintptr_t) after(t);
   uintptr_t h;
@@ -33,8 +30,7 @@ static love_inline uintptr_t ff_fit(struct mem *t, uintptr_t n, uintptr_t a, boo
     if (h - lo == W) h += a; }
   return h >= lo && h <= hi && (hi - h) / W >= n + 1 ? h : 0; }
 
-// carve the block at h out of *b, n words of body: the gap below stays on the list as *b,
-// what is left above as the block after it, or goes with the carve when it would be one word
+// carve h out of *b: the gap below stays as *b, the rest above follows it unless one word
 static love_inline void *ff_carve(struct mem **b, uintptr_t h, uintptr_t n) {
   struct mem *t = *b, *nx = t->next, *u = (struct mem*) h;
   uintptr_t const hi = (uintptr_t) after(t), W = sizeof(uintptr_t);
@@ -48,9 +44,7 @@ static love_inline void *ff_carve(struct mem **b, uintptr_t h, uintptr_t n) {
   u->len = w;
   return ff_body(u); }
 
-// n words whose body is aligned to a bytes (a power of two, a word or more), NULL when no
-// block holds them. the fit is the same as ff_alloc's, the gap below the aligned start
-// handed back to the list rather than padded over
+// a: a power of two, a word or more; the gap below goes back to the list, never padded
 static love_inline void *ff_alloc_aligned(struct mem **fl, uintptr_t n, uintptr_t a) {
   if (!n) return NULL;
   bool const top = n >= ff_big;
@@ -61,7 +55,6 @@ static love_inline void *ff_alloc_aligned(struct mem **fl, uintptr_t n, uintptr_
     if (x) { b = q, h = x; if (!top) break; } }
   return b ? ff_carve(b, h, n) : NULL; }
 
-// n words, NULL when no block holds them
 static love_inline void *ff_alloc(struct mem **fl, uintptr_t n) {
   return ff_alloc_aligned(fl, n, sizeof(uintptr_t)); }
 

@@ -3,23 +3,18 @@
 #include "archive/srctree.h"
 #include <string.h>
 
-// (tree-tar name) -> that section of the carried source as a tar of its own; (tree-tar 0) ->
-// every section joined, the whole tar the tree cut to. () where none is carried, the name
-// is no section's, or it will not decode.
+// (tree-tar name) -> that section of the carried source as a tar; (tree-tar 0) -> the whole
+// tar. () where none is carried, no such section, or it won't decode
 // (tree-head 0) -> the sections, [name codec raw packed crc32 decoded?] each, the index first.
 // (runtime-gz "x64"|"a64"|"rv64"|"i386") -> that ISA's moonlibc archive, deflated;
-// (runtime-gz "id") -> the pure tree-slice hash they were cut from (moon.l's rtcid),
-// which moon.l's rtcarried consumes. () when none is carried.
-// src/tools/mksrc.l lays the source and src/tools/mkrt.l the rest; a link that takes neither
-// object names src/love/noblob.c instead, so the length alone says whether anything is aboard.
-// the source opens through src/love/lovefs.c, the tree /love serves.
+// (runtime-gz "id") -> the tree-slice hash they were cut from (moon.l's rtcid). () when none.
+// mksrc.l and mkrt.l lay the blobs; a link without them takes noblob.c, so a length 0 is none
 extern const unsigned char
  rtgz_x64[], rtgz_a64[], rtgz_rv64[], rtgz_i386[], rtgz_id[];
 extern const uintptr_t
  rtgz_x64_len, rtgz_a64_len, rtgz_rv64_len, rtgz_i386_len, rtgz_id_len;
 
-// the "c" section's crc32 over its length, off the container's header with nothing decoded:
-// what an image names as the C that baked it (snap.c's header src). 0 where none is carried
+// the "c" section's crc32 and length, off the header undecoded: snap.c's header src. 0 = none
 uint64_t image_carried_c(void) {
  unsigned char const *z = srctree;
  if (srctree_len < 12 || memcmp(z, "lovetree", 8)) return 0;
@@ -80,8 +75,7 @@ static love_inline struct g *host_rtgz(struct g *g) {
  if (strp(a)) {
   const char *s = (const char*) txt(a);
   uintptr_t sl = len(a);
-  // the canonical ISA words (src/love/boot/prel.l's arch-canon); the width is spelled
-  // beside the name and has to travel with it -- a shorter word here answers nothing
+  // prel.l's arch-canon words; the length test travels with each spelling
   if      (sl == 3 && !memcmp(s, "x64",   3)) p = rtgz_x64,   n = rtgz_x64_len;
   else if (sl == 3 && !memcmp(s, "a64",   3)) p = rtgz_a64,   n = rtgz_a64_len;
   else if (sl == 4 && !memcmp(s, "rv64",  4)) p = rtgz_rv64,  n = rtgz_rv64_len;

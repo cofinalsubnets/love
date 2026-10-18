@@ -1,13 +1,5 @@
-// qemu MPS2+ AN500 (Cortex-M7) frontend for love -- the SIM port. The console
-// and the clock ride ARM semihosting (qemu -semihosting), so where teensy41
-// talks LPUART and rp2040 talks UART0, this port's "metal" is qemu itself:
-// the same CPU as both boards (a Cortex-M7), none of the wiring. It is also
-// the first love built END TO END by mooncc: love.c + the lm math floor +
-// libc + this file all compile -t thumb2 (src/inle/mps2/Makefile); only start.S
-// (vectors + the semihosting trampoline) and the final ld are arm-none-eabi.
-// The boot bakes the egg from source on the M7 -- the whole self-hosting
-// double-bake runs under emulation -- then the driver tail asserts a few
-// spec laws and exits through m7exit, so `make test_mps2` sees 42.
+// qemu MPS2+ AN500 (Cortex-M7) frontend: console and clock over ARM semihosting. all C is
+// mooncc -t thumb2; only start.S and the final ld are arm-none-eabi. exit 42 = the laws hold
 #include "../../love/love.h"
 #include "../bput.h"
 
@@ -16,8 +8,7 @@
 #endif
 
 // --- semihosting ----------------------------------------------------------
-// start.S: sh_call(op, arg) lands op/arg in r0/r1 (AAPCS did it already) and
-// traps via bkpt 0xAB; qemu answers in r0.
+// start.S: op/arg in r0/r1, bkpt 0xAB, the answer in r0
 uintptr_t sh_call(uintptr_t op, uintptr_t arg);
 #define SH_WRITEC 0x03           // arg = &byte
 #define SH_CLOCK  0x10           // centiseconds since start
@@ -32,8 +23,7 @@ static void sh_putc(int c) { char b = (char) c; sh_call(SH_WRITEC, (uintptr_t) &
 
 uintptr_t love_clock(void) { return sh_call(SH_CLOCK, 0) * 10; }   // cs -> ms
 
-// any fault vectors here (start.S): name the stacked pc/lr, then exit 98 --
-// loud and greppable where the bare M7 would sit in a lockup.
+// every fault vectors here (start.S): name the stacked pc/lr, exit 98
 static void sh_hex(uintptr_t v) { bput_x(sh_putc, v, 8); }
 
 void fault_report(uintptr_t *frame) {    // frame: r0 r1 r2 r3 r12 lr pc xPSR
@@ -45,29 +35,21 @@ void fault_report(uintptr_t *frame) {    // frame: r0 r1 r2 r3 r12 lr pc xPSR
   m7_exit(98); }
 
 // --- console input: CMSDK APB UART0 ---------------------------------------
-// Output rides semihosting (sh_putc, unbuffered and free), but INPUT needs a
-// pollable source -- semihosting READC blocks the whole VM with no readiness
-// probe, so the honest ready(0) below reads UART0's RX-full flag instead.
-// qemu maps UART0 at 0x40004000 and feeds it from -serial; the gate's
-// </dev/null run simply never sees RX full.
+// output rides semihosting, input UART0: semihosting READC blocks the vm with no readiness probe
 #define UART0_BASE 0x40004000u
 #define UREG(o) (*(volatile uint32_t *)(UART0_BASE + (o)))
 static void uart_init(void) { UREG(0x10) = 16; UREG(0x08) = 3; }   // min bauddiv; TX+RX enable
 static int uart_rx_ready(void) { return !!(UREG(0x04) & 2); }      // STATE bit1 = RX full
 
 // --- cooperative waits ----------------------------------------------------
-// The teensy shapes: no IRQs, so spin against an love_clock deadline (ms;
-// 0 means forever). Under qemu the spin costs nothing real.
+// no IRQs: spin against a love_clock deadline (ms; 0 = forever)
 void love_sleep(uintptr_t ms) {
   if (!ms) { for (;;) if (uart_rx_ready()) return; }   // wait forever -- but wake on input
   uintptr_t start = love_clock();
   while (love_clock() - start < ms) ; }
 
-// the readiness law (src/love/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
-// ready -- a string port waits on nothing external, and answering "not ready"
-// parks its task on a wait no scheduler can satisfy (lvm_sound's park law
-// spins sound -> yield -> sound forever: the Enter-key freeze, walled here
-// and on teensy silicon alike). fd 0 is the honest poll; others nominal.
+// a negative fd (a string port) is always ready, or its task parks on a wait nothing
+// satisfies; fd 0 is the real poll
 bool ready(int fd, int events) { return fd || events != wait_in ? 1 : uart_rx_ready(); }
 
 void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
@@ -78,9 +60,7 @@ void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
     if (ms && love_clock() - start >= ms) return; } }
 
 // --- port vtable ----------------------------------------------------------
-// Console bytes in from UART0 (pollable, never EOF -- a live wire, so a dry
-// read is 0 and never -1), out through semihosting. This used to spin in
-// uart_getc until a byte arrived, which stopped the vm rather than the task.
+// in from UART0, a live wire: a dry read is 0, never EOF. out through semihosting
 static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   uintptr_t k = 0;
   while (k < n && uart_rx_ready()) dst[k++] = (unsigned char) (UREG(0x00) & 0xff);
@@ -100,8 +80,7 @@ struct port_vt const love_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 #include "../../love/fdrow.h"                       // love_fd_readn / love_fd_say off the two above
 
 // --- the exit builtin -----------------------------------------------------
-// (m7exit code) -- leave the machine through semihosting with `code` as the
-// qemu exit status. The driver tail's last word.
+// (m7exit code): code becomes qemu's exit status
 static lvm(m7exit) {
   m7_exit(getcharm(Sp[0]));
   return Continue(); }                       // unreached
@@ -110,8 +89,7 @@ static union u const nif_m7exit[] = {{m7exit}, {lvm_ret0}};
 static struct def defs[] = { {"m7exit", {.k = nif_m7exit}} };
 
 // --- the arena ------------------------------------------------------------
-// The first-fit free list (ffalloc.h), fed the AN500's 16 MB PSRAM (mps.ram at
-// 0x60000000) by address -- no linker section, the region is just there.
+// ffalloc over the AN500's 16 MB PSRAM at 0x60000000, by address: no linker section
 #include "../ffalloc.h"
 
 // the seat check: the egg hatched into the self-hosted ev, and a closure runs through the heap
@@ -119,9 +97,7 @@ static struct def defs[] = { {"m7exit", {.k = nif_m7exit}} };
 static struct mem *freelist;
 
 #define POOL ((uint8_t*) 0x60000000u)
-#define POOL_BYTES ((16u << 20) - 64)   // 64B short of the region edge: a one-past
-                                        // read at a block boundary stays inside PSRAM
-                                        // (a bus fault at 0x61000000 otherwise)
+#define POOL_BYTES ((16u << 20) - 64)   // a one-past read at the edge stays inside PSRAM
 
 static void *mallocw(uintptr_t n) { return ff_alloc(&freelist, n); }
 
@@ -130,19 +106,14 @@ void *malloc(size_t n) { return mallocw(b2w(n)); }
 void free(void *p) { ff_free(&freelist, p); }
 
 #ifdef WAKER
-// --- the waker (-D WAKER): the CROSS-BINARY wake proof ----------------------
-// a DIFFERENT binary from the baker (different main.o, different layout):
-// read love.img back through semihosting, wake it, run the driver laws.
-// exit 42 = a portable image wakes outside its baking binary.
+// --- the waker (-D WAKER): wakes the baker's love.img in a different binary; 42 = it woke
 #define SH_OPEN  0x01
 #define SH_CLOSE 0x02
 #define SH_READ  0x06
 #define SH_FLEN  0x0C
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
-// the arena starts OFF the baker's base, so a woken value that secretly depends on where
-// the baker's pool sat dies here and not on silicon. an OFFSET, not a half: the wake wants
-// the image expanded plus half again, and the read buffer besides, so a corpus that fits
-// the bake must fit the wake.
+// off the baker's base, so a value depending on the old pool address dies here; an offset,
+// not a half, so a corpus that fits the bake fits the wake
 #define WAKE_OFF (1u << 20)
 int main(void) {
   sh_puts("\n; src/inle/mps2 waker -- cross-binary wake\n");
@@ -160,7 +131,7 @@ int main(void) {
   uintptr_t fl[1] = { (uintptr_t) fd };
   uintptr_t len = sh_call(SH_FLEN, (uintptr_t) fl);
   sh_puts("; image bytes "); sh_hex(len); sh_putc('\n');
-  // carve the read buffer off the TOP of the pool; the freelist keeps the rest
+  // the read buffer off the top of the pool
   char *buf = (char*) POOL + POOL_BYTES - ((len + 63u) & ~63u);
   freelist->len = (POOL_BYTES - WAKE_OFF - ((len + 63u) & ~63u)) / sizeof(uintptr_t);
   uintptr_t rd[3] = { (uintptr_t) fd, (uintptr_t) buf, len };
@@ -179,9 +150,9 @@ int main(void) {
     "(: ok (&& "
     SEAT_OK
 #ifdef BAKER_RUNE
-    "          (! ((cite ()) = ())))"           // the module registry is live: rune registered
+    "          (! ((cite ()) = ())))"           // rune registered
 #else
-    "          1)"                              // no rune here: the seat check is the whole verdict
+    "          1)"
 #endif
     "   _ (putc 10) _ (puts \"; the image woke -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
@@ -191,22 +162,13 @@ int main(void) {
   return 0; }
 #else
 #ifdef BAKER
-// --- the baker (-D BAKER): the bake as a BUILD-TIME event -------------------
-// bake the corpus on the emulated M7, then DUMP the heap image to a host file
-// via semihosting -- the teensy embeds the blob in flash and WAKES from it
-// (its egg lane stays as the fallback). No port nifs are installed before the
-// bake and the absolute guard rejects everything, so the image is fully
-// SYMBOLIC (heap offsets + lvm/immortal table indices): wakeable in any
-// binary compiled from the same love.c at the same word size.
+// --- the baker (-D BAKER): bake the corpus, dump the image to a host file (the teensy's flash
+// blob). no port nifs before the dump, so the image is symbolic: wakeable by any same-word build
 #define SH_OPEN  0x01
 #define SH_WRITE 0x05
 #define SH_CLOSE 0x02
-// the offender log rides the BAKER'S OWN frame -- the guard is told which object carries
-// each absolute, so naming them needs nothing of the core's. quads: obj-off, val, obj-hot.
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
-// THE BAKED MODULE, the one this baker wants: rune is a plain text every consumer loads
-// through `borrow`, so the wrapper is here -- the shell core rides post now. the source
-// strings carry no absolutes, so the absguard stays satisfied.
+// rune is a plain text consumers borrow, so its module wrapper is here
 static char const src_mods[] =
 #ifdef BAKER_RUNE
 "(module 'rune "
@@ -221,8 +183,7 @@ int main(void) {
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
-  struct g *g = ini();          // NO defn: a port nif in the book would
-                                    // ride into the image as a dead absolute
+  struct g *g = ini();          // no defn: a port nif would ride into the image as an absolute
   if (ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
   struct g *r = egg(g,
 #include "egg.h"
@@ -236,17 +197,14 @@ int main(void) {
   r = evals_(r, src_mods);
   r = evals_(r,
 #ifdef BAKER_RUNE
-    // the PLAYDATE corpus: rune (registered module) + the cas workbench, no
-    // bao -- the device has no shell, the crank is the interface. cas's
-    // crank/pushed/cur_set refs stay symbolic (unbound here); the device
-    // defn's them post-wake and the book resolves them live.
+    // the playdate corpus: rune + cas; cas's crank/pushed/cur_set stay unbound until the device defn's them
     "(borrow 'rune)"
     " "
 #include "cas.h"
 #else
     "(borrow 'cli)"
 #endif
-    "(: _ (pull book 'born 0)"            // this boot's cost, not the image's: off before the dump
+    "(: _ (pull book 'born 0)"            // this boot's cost, not the image's
     "   _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ok(r)) {
     if (code_of(r) == status_scare) scare_face(r);
@@ -262,14 +220,9 @@ int main(void) {
       sh_hex(bad.q[3 * i + 1]); sh_putc(' ');
       sh_hex(bad.q[3 * i + 2]); sh_putc('\n'); }
     m7_exit(4); }
-  // THE BAKED RUNTIME GOES BEFORE THE PROOF DOES, and on 16 MB that is the whole
-  // margin: img is alloc'd and outlives r, the wake wants a second pool the size of
-  // the first, and holding a spent heap through it left the arena 14 KB short of a
-  // 6 MB ask with 10.9 MB free but in four pieces.
+  // r goes before the round trip: on 16 MB the wake's second pool needs the room
   fin(r);
-  // round-trip PROOF before the file exists: wake the buffer we just dumped
-  // and run a law through the woken heap. (same-binary wake -- the cross-
-  // binary truth is the teensy's -- but it catches every codec desync here.)
+  // a same-binary round trip before the file exists: catches a codec desync
   struct g *g2 = love_image_load(img, len, 0);
   if (!g2) { sh_puts("; round-trip load FAILED\n"); m7_exit(7); }
   struct g *r2 = evals_(g2,
@@ -297,10 +250,7 @@ int main(void) {
 #else
 
 // --- entry ----------------------------------------------------------------
-// start.S enabled the FPU; qemu loaded .data/.bss straight into RAM. Bake the
-// egg (compile the compiler with the C evaluator, recompile it with itself),
-// then the driver tail: assert a few spec laws over the hatched image and
-// exit with the verdict. 42 = the egg hatched and the laws hold on the M7.
+// start.S enabled the FPU; qemu loaded .data/.bss. bake the egg, then the seat check
 int main(void) {
   uart_init();
   for (char const *s = "\n; src/inle/mps2 -- baking the egg on the M7\n"; *s; s++)
@@ -320,7 +270,6 @@ int main(void) {
 #include "post.h"
     );
   r = evals_(r,
-    // the driver tail: the seat check, alive on the M7.
     "(: ok "
     SEAT_OK
     "   _ (putc 10) _ (puts \"; the egg hatched -- love on the M7\") _ (putc 10)"

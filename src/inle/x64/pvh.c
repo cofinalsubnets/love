@@ -1,8 +1,5 @@
-// PVH -> kboot: the C half of mkboot.l's hand-off. Runs high, paging on, with
-// the stub's hhdm window (0xffff8000_00000000 over physical 0..4G) already
-// mapped; reads qemu's hvm_start_info (the e820 map) and fills kboot, the way
-// every door fills it before kmain reads it. Headless by construction -- PVH
-// hands over no framebuffer, so has_fb stays false and kmain runs on serial.
+// PVH -> kboot: the C half of mkboot.l's hand-off. runs high, paging on, the stub's hhdm
+// window over physical 0..4G mapped; reads hvm_start_info's e820 map. no framebuffer: serial only
 #include "k.h"
 
 #define pvh_hhdm 0xffff800000000000ull
@@ -16,10 +13,8 @@ struct hvm_start_info {
 struct hvm_memmap_entry { uint64_t addr, size; uint32_t type, reserved; };
 struct hvm_modlist_entry { uint64_t paddr, size, cmdline_paddr, reserved; };
 
-// the physical footprint qemu loaded us into -- which e820 still calls usable
-// RAM (the PVH loader reserves nothing). hand it to the heap and the kernel
-// eats itself. a VALUE the projection patches into the file (src/tools/kproject.l),
-// where the flat link's kimage_end symbol used to stand.
+// the image's top, patched in by src/tools/kproject.l: e820 still calls the image usable
+// RAM, so pvh_give must carve it out
 extern uintptr_t const k_image_top;
 
 

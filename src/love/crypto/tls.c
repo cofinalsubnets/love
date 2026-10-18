@@ -7,13 +7,13 @@
 #include <stdint.h>
 #include <string.h>
 
-// --- chacha20 (rfc 8439 §2.3) -----------------------------------------------------
+// chacha20 (rfc 8439 §2.3)
 #define ROTL(x, n) (((x) << (n)) | ((x) >> (32 - (n))))
 #define QR(a, b, c, d) \
  (a += b, d ^= a, d = ROTL(d, 16), c += d, b ^= c, b = ROTL(b, 12), \
   a += b, d ^= a, d = ROTL(d, 8),  c += d, b ^= c, b = ROTL(b, 7))
 
-// one 20-round block, keystream out little-endian.
+// one 20-round block, keystream out little-endian
 static void cc_block(const uint32_t in[16], uint8_t out[64]) {
  uint32_t x[16];
  memcpy(x, in, sizeof x);
@@ -27,7 +27,7 @@ static void cc_block(const uint32_t in[16], uint8_t out[64]) {
   out[4*i] = (uint8_t) v;         out[4*i+1] = (uint8_t) (v >> 8);
   out[4*i+2] = (uint8_t) (v >> 16); out[4*i+3] = (uint8_t) (v >> 24); } }
 
-// xor txt with the keystream from block ctr on. encrypt and decrypt are one act.
+// xor txt with the keystream from block ctr on: encrypt and decrypt are one act
 static void cc_xor(const uint8_t *key, const uint8_t *nonce, uint32_t ctr,
                    const uint8_t *txt, uint8_t *out, uintptr_t n) {
  uint32_t st[16] = {0x61707865, 0x3320646e, 0x79622d32, 0x6b206574};
@@ -40,10 +40,10 @@ static void cc_xor(const uint8_t *key, const uint8_t *nonce, uint32_t ctr,
   cc_block(st, ks);
   for (uintptr_t j = 0; j < r; j++) out[o + j] = txt[o + j] ^ ks[j]; } }
 
-// --- poly1305 (rfc 8439 §2.5), five 26-bit limbs ----------------------------------
+// poly1305 (rfc 8439 §2.5), five 26-bit limbs
 #define M26 0x3ffffff
 
-// r, clamped by the masks folded into the split (§2.5.1).
+// r, clamped by the masks folded into the split (§2.5.1)
 static void po_r(const uint8_t *k, uint64_t r[5]) {
  uint32_t t0 = ld32le(k), t1 = ld32le(k + 4), t2 = ld32le(k + 8), t3 = ld32le(k + 12);
  r[0] = t0 & M26;
@@ -52,8 +52,7 @@ static void po_r(const uint8_t *k, uint64_t r[5]) {
  r[3] = ((t2 >> 14) | (t3 << 18)) & 0x3f03fff;
  r[4] = (t3 >> 8) & 0x00fffff; }
 
-// h += the 16 bytes at p; hi is the 2^128 term (2^24 for a full block, 0 for the
-// padded final one, whose 0x01 already sits inside the sixteen).
+// h += the 16 bytes at p; hi the 2^128 term: 2^24 for a full block, 0 for the padded final one
 static void po_absorb(uint64_t h[5], const uint8_t *p, uint64_t hi) {
  uint32_t t0 = ld32le(p), t1 = ld32le(p + 4), t2 = ld32le(p + 8), t3 = ld32le(p + 12);
  h[0] += t0 & M26;
@@ -62,8 +61,7 @@ static void po_absorb(uint64_t h[5], const uint8_t *p, uint64_t hi) {
  h[3] += ((t2 >> 14) | ((uint64_t) t3 << 18)) & M26;
  h[4] += (t3 >> 8) | hi; }
 
-// h = h * r mod 2^130 - 5. the modulus never appears: what runs past 2^130 comes
-// back at the bottom times five, which is what the s1..s4 terms are.
+// h = h * r mod 2^130 - 5: the s1..s4 terms fold what runs past 2^130 back in times five
 static void po_mul(uint64_t h[5], const uint64_t r[5]) {
  uint64_t
   h0 = h[0], h1 = h[1], h2 = h[2], h3 = h[3], h4 = h[4],
@@ -81,8 +79,7 @@ static void po_mul(uint64_t h[5], const uint64_t r[5]) {
  d4 += c; c = d4 >> 26; h[4] = d4 & M26;
  h[0] += c * 5; c = h[0] >> 26; h[0] &= M26; h[1] += c; }
 
-// the conditional subtract is a mask, never an if: both h and h-p are always
-// computed and one is selected, so nothing branches on the accumulator.
+// the conditional subtract is a mask, never an if: nothing branches on the accumulator
 static void po_fin(const uint64_t h[5], const uint8_t *key, uint8_t out[16]) {
  int64_t
   h0 = (int64_t) h[0], h1 = (int64_t) h[1], h2 = (int64_t) h[2],
@@ -127,9 +124,9 @@ static void po_mac(const uint8_t *key, const uint8_t *msg, uintptr_t n,
   po_absorb(h, pad, 0); po_mul(h, r); }
  po_fin(h, key, out); }
 
-// --- aes (fips 197) and gcm (sp 800-38d) ---------------------------------------------
-// the s-box is a table, so an encryption's memory reads follow its key and data: not
-// constant time against a cache-watching neighbour. ghash is masks, never a branch.
+// aes (fips 197) and gcm (sp 800-38d)
+// the s-box is a table, so aes is not constant time against a cache-watching neighbour;
+// ghash is masks, never a branch
 static uint8_t const aes_sbox[256] = {
  0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
  0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
@@ -228,9 +225,8 @@ static void gcm_tag(const struct aes_ks *s, const uint8_t iv[12], const uint8_t 
  gh_all(h, aad, na, ct, nc, tag);
  for (int i = 0; i < 16; i++) tag[i] ^= e[i]; }
 
-// --- the nifs -----------------------------------------------------------------------
-// str0 can collect, so the result is allocated first and the arguments re-read
-// off the stack after it: the pointers a C local held are stale across the bump.
+// the nifs
+// str0 can collect: the result first, then the arguments re-read off the stack
 // FIXME why is this noinline?
 static love_inline struct g *host_chacha20(struct g *g) {
  word kw = g->sp[0], nw = g->sp[1], cw = g->sp[2], tw = g->sp[3];
@@ -260,9 +256,7 @@ love_noinline static struct g *host_poly1305(struct g *g) {
  return g; }
 static lvm(lvm_poly1305) LvmCall(g, host_poly1305)
 
-// (aes-gcm-seal key iv aad pt) -> ct and its 16-byte tag; (aes-gcm-open key iv aad ctag)
-// -> pt, or () when the tag does not hold -- checked before a byte is deciphered. a key
-// of 16 or 32 bytes, a 12-byte iv; anything else is () too
+// the tag is checked before a byte is deciphered; a 16 or 32 byte key, a 12-byte iv, else ()
 static int gcm_args(struct g *g, int open) {
  word kw = g->sp[0], iw = g->sp[1], aw = g->sp[2], tw = g->sp[3];
  return strp(kw) && strp(iw) && strp(aw) && strp(tw) && (len(kw) == 16 || len(kw) == 32)

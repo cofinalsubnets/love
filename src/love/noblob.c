@@ -1,13 +1,6 @@
-// src/love/noblob.c -- what src/love/src.c's carried blobs mean in a link that carries none.
-// out/src.o (src/tools/mksrc.l) lays the source archive and out/moonlibc.o (src/tools/mkrt.l)
-// the per-ISA runtimes; a link that takes neither -- love0, and the gate links that
-// build the artifact's C with no laid objects under them -- names this instead.
-//
-// its own translation unit for the reason main0.c is: this is a LINK's answer, not a
-// seat's. common.mk keeps it out of host_c and each link that wants it names it, so a
-// link with two of these collides and a link with none fails to link. the length alone
-// says whether anything is carried, which is why the byte arrays are one zero and not
-// empty -- a zero-length array is not a definition every compiler will lay.
+// noblob.c -- src.c's carried blobs for a link without out/src.o and out/moonlibc.o (love0,
+// gate links). kept out of host_c: each link names it or the laid objects, never both.
+// the length says whether anything is carried; the arrays are one zero, as [0] is not portable
 #include "love.h"
 
 const unsigned char srctree[1] = {0};

@@ -1,7 +1,6 @@
 // src/love/picture/jpeg.c
 // (jpeg-encode w h rgba q) -> a baseline jfif of the w*h rgba image at quality 1..100 | ()
-// jpeg's own tables (itu t.81 annex k) scaled by quality as libjpeg scales them, 4:2:0
-// chroma, alpha dropped. the stream is sized by a counting pass, then written.
+// t.81 annex k's tables scaled as libjpeg scales them, 4:2:0, alpha dropped; sized by a counting pass
 // (jpeg-pixels s o) -> the rgba of a baseline or progressive jpeg, grey, ycbcr (rgb by
 // adobe's word), or cmyk (ycck by adobe's), any sampling, laid upright by exif orientation o
 // (1..8) | why not: 1 not a jpeg, 2 cut short, 3 a kind it can't read (arithmetic,
@@ -214,9 +213,8 @@ static lvm(lvm_jpeg) LvmCall(g, host_jpeg)
 
 LvDef("jpeg-encode", jpeg, 4, "jpeg");
 
-// ---- decoding ---------------------------------------------------------------------------
-// coefficients land in a scratch string, 128 bytes a block, and each block's samples are
-// then written over the front half of its own place; chroma is upsampled linearly.
+// decoding: coefficients in a scratch string, 128 bytes a block, each block's samples then
+// written over its own front half; chroma upsampled linearly
 
 struct jd_huff { uint16_t fast[512]; uint32_t first[17]; uint16_t count[17], off[17];
                  uint8_t vals[256]; int ok; };

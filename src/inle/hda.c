@@ -1,26 +1,7 @@
-// hda -- the sound card: Intel HD Audio, polled, one output stream. the body of
-// love.h's k_horn_* C face on inle; src/love/horn.c's port stands over it, and
-// src/inle/doomsnd.c's mixer calls it directly.
-//
-// x64 finds the controller by PCI class (04.03 -- every laptop and desktop of the
-// last fifteen years, and qemu's `-device intel-hda`); BAR0 is the register file.
-// commands ride the CORB/RIRB rings (the immediate registers are optional silicon
-// and qemu has none); the codec walk starts at each present codec's audio function
-// group, takes every output pin that is wired to something (a speaker, a headphone
-// jack, a line out) and routes it back through selectors and mixers to a DAC,
-// unmuting as it goes. every DAC found is given stream 1, so speakers and
-// headphones play the one ring together.
-//
-// the stream is a 128K sample ring under a 32-entry buffer descriptor list, and
-// the write door is the ring: land what fits behind the DMA head, answer 0 when
-// full. the play position comes off the DMA position buffer (LPIB where a
-// controller has not written one yet), and everything the head has passed is
-// zeroed by k_horn_poll -- a writer that stops leaves silence, not a loop of its
-// last second. no interrupts: blk.c's posture, for blk.c's reason.
-//
-// every DMA address the device sees is PHYSICAL: pa = va - khhdm, which holds
-// for kmallocw memory and not for image statics, so the rings and the sample
-// buffer are all heap.
+// hda -- Intel HD Audio, polled, one output stream: inle's k_horn_* (love.h). commands ride
+// CORB/RIRB (qemu has no immediate registers); every wired output pin is routed to a DAC on
+// stream 1. k_horn_poll zeroes what the head has passed, so a stopped writer leaves silence.
+// DMA addresses are physical (va - khhdm), true only of heap memory, so every ring is heap
 #include "k.h"
 #include "asmops.h"
 #include "mmio.h"
@@ -32,9 +13,8 @@ void serial_putc(int);
 static void hputs(char const *s) { bput_s(serial_putc, s); }
 static void hputn(uintptr_t v) { bput_n(serial_putc, v, 10); }
 
-#define hda_ring   (128u << 10)      // 0.68 s at 48k stereo: deep enough that a slow
-                                     // frame loop never underruns; a writer wanting less
-                                     // lag keeps its lead short (k_horn_lag)
+#define hda_ring   (128u << 10)      // 0.68 s at 48k stereo; a writer wanting less lag keeps
+                                     // its lead short (k_horn_lag)
 #define hda_bdln   32                // ring / bdl entries = 4K apiece
 #define hda_lead   4096u             // the head's prefetch margin: never land closer than this
 #define hda_spin   (1u << 24)        // a dead device is a refusal, never a hang
@@ -54,7 +34,6 @@ static struct {
 } khda;
 
 #if defined(__x86_64__) && !defined(INLE_DROID)
-// --- PCI config space ------------------------------------------------------
 static void pci_w8(uint32_t bdf, uint32_t off, uint32_t v) {
   uint32_t sh = 8 * (off & 3), w = pci_r32(bdf, off) & ~(0xffu << sh);
   pci_w32(bdf, off, w | (v & 0xff) << sh); }
@@ -87,9 +66,7 @@ static uint32_t hda_find(void) {
       if ((pci_r32(bdf, 8) >> 8) == 0x040300) return bdf; } }
   return ~0u; }
 
-// --- the command rings -----------------------------------------------------
-// one verb to the codec at cad, its response back. an unsolicited response in the
-// RIRB is skipped. -> 0, or -1 when nothing answered.
+// one verb to the codec at cad -> 0, or -1 when nothing answered
 static int hda_cmd(uint32_t nid, uint32_t verb, uint32_t *resp) {
   volatile uint8_t *m = khda.mm;
   uint16_t wp = (uint16_t) ((khda.corbwp + 1) % khda.corbn);
@@ -102,8 +79,7 @@ static int hda_cmd(uint32_t nid, uint32_t verb, uint32_t *resp) {
     uint16_t rp = (uint16_t) ((khda.rirbrp + 1) % khda.rirbn);
     uint32_t r = r32(khda.rirb + 8 * rp), ex = r32(khda.rirb + 8 * rp + 4);
     khda.rirbrp = rp;
-    // the response count is met at every answer (RINTCNT 1): clearing the flag is
-    // what lets the next verb through -- qemu holds the CORB until it is
+    // with RINTCNT 1, clearing the flag lets the next verb through: qemu holds the CORB until then
     w8(m + 0x5d, 0x05);
     if (ex & 0x10) continue;                          // unsolicited: not ours
     return *resp = r, 0; }
@@ -114,7 +90,6 @@ static uint32_t param(uint32_t nid, uint32_t p) {
   return hda_cmd(nid, 0xf0000 | p, &r) ? 0 : r; }
 static void verb(uint32_t nid, uint32_t v) { uint32_t r; hda_cmd(nid, v, &r); }
 
-// --- the codec walk --------------------------------------------------------
 static uint32_t afg_nid;
 
 static int wtype(uint32_t nid) { return (int) (param(nid, 9) >> 20 & 0xf); }
@@ -130,8 +105,7 @@ static uint32_t conn(uint32_t nid, uint32_t i) {
 
 static uint32_t conn_n(uint32_t nid) { return param(nid, 0xe) & 0x7f; }
 
-// unmute an amp at 0 dB: the caps' offset is the 0 dB step. a widget without the
-// override bit wears the function group's caps.
+// unmute at 0 dB, the caps' offset; without the override bit a widget wears the group's caps
 static void unmute(uint32_t nid, int out, uint32_t idx) {
   uint32_t caps = param(nid, 9);
   if (!(caps & (out ? 4 : 2))) return;
@@ -141,8 +115,7 @@ static void unmute(uint32_t nid, int out, uint32_t idx) {
 static void power_up(uint32_t nid) {
   if (param(nid, 9) & 1 << 10) verb(nid, 0x70500); }
 
-// from a pin back to a DAC, depth-first, selecting and unmuting the way home.
-// -> 1 when a DAC was reached under nid.
+// from a pin back to a DAC, depth-first, selecting and unmuting the way home
 static int route(uint32_t nid, int depth) {
   int t = wtype(nid);
   if (t == 0) {                                     // an audio output: the DAC
@@ -185,7 +158,6 @@ static void codec_walk(void) {
       if (param(w, 0xc) & 1 << 16) verb(w, 0x70c02);                     // EAPD on
       khda.pins++; } } }
 
-// --- the controller --------------------------------------------------------
 static int spin_until(volatile uint8_t *p, uint8_t mask, uint8_t want) {
   for (uint32_t i = 0; i < hda_spin; i++) if ((r8(p) & mask) == want) return 0;
   return -1; }
@@ -196,21 +168,20 @@ static int hda_bring_up(uint32_t bdf, void *dma) {
   khda.vendor = pci_r32(bdf, 0) & 0xffff;
   pci_d0(bdf);
   pci_w32(bdf, 4, pci_r32(bdf, 4) | 6 | 1 << 10);   // memory + bus master, INTx off
-  // the snoop quirks the linux driver carries: DMA that bypasses the cache reads a
-  // stale ring. intel: TCSEL to class 0 and DEVC's NOSNOOP off; amd/ati: the SB450 bit
+  // linux's snoop quirks, or the DMA reads a stale ring: intel TCSEL 0 and NOSNOOP off; amd/ati SB450
   if (khda.vendor == 0x8086) {
     pci_w8(bdf, 0x44, pci_r8(bdf, 0x44) & ~7u);
     pci_w32(bdf, 0x78, pci_r32(bdf, 0x78) & ~(1u << 11)); }
   else if (khda.vendor == 0x1022 || khda.vendor == 0x1002)
     pci_w8(bdf, 0x42, (pci_r8(bdf, 0x42) & ~7u) | 2);
   volatile uint8_t *m = khda.mm = (volatile uint8_t*) (khhdm + bar);
-  // the block: CORB 1K, RIRB 2K, BDL 512, the position buffer 256; all 128-aligned
+  // CORB 1K, RIRB 2K, BDL 512, the position buffer 256; all 128-aligned
   khda.corb = dma;
   khda.rirb = khda.corb + 1024;
   khda.bdl  = khda.corb + 3072;
   khda.pos  = khda.corb + 3584;
   for (uint32_t i = 0; i < 3840; i++) khda.corb[i] = 0;
-  // controller reset: CRST low, then high, then the codecs get their 25 frames
+  // CRST low, then high, then the codecs get their 25 frames
   w32(m + 0x08, r32(m + 0x08) & ~1u);
   if (spin_until(m + 0x08, 1, 0)) return 0;
   w32(m + 0x08, r32(m + 0x08) | 1);
@@ -222,7 +193,7 @@ static int hda_bring_up(uint32_t bdf, void *dma) {
   if (!(gcap & 1) && (vtop(khda.corb) >> 32)) return hputs("sound: hda is 32-bit, dma above 4G\r\n"), 0;
   khda.sd = 0x80 + 0x20 * iss;                      // the first output descriptor
   w32(m + 0x20, 0);                                 // no interrupts, ever
-  // CORB: sized to the largest the silicon takes, reset the read pointer, run
+  // CORB: the largest size the silicon takes
   uint8_t cs = r8(m + 0x4e), sz = cs & 0x40 ? 2 : cs & 0x20 ? 1 : 0;
   khda.corbn = sz == 2 ? 256 : sz == 1 ? 16 : 2;
   w8(m + 0x4c, 0);
@@ -235,7 +206,7 @@ static int hda_bring_up(uint32_t bdf, void *dma) {
   w16(m + 0x4a, 0);
   for (uint32_t i = 0; i < 1u << 12; i++) (void) r16(m + 0x4a);
   khda.corbwp = 0;
-  // RIRB likewise; RINTCNT 1 so the write pointer moves per response
+  // RIRB likewise; RINTCNT 1
   uint8_t rs = r8(m + 0x5e); sz = rs & 0x40 ? 2 : rs & 0x20 ? 1 : 0;
   khda.rirbn = sz == 2 ? 256 : sz == 1 ? 16 : 2;
   w8(m + 0x5c, 0);
@@ -245,12 +216,11 @@ static int hda_bring_up(uint32_t bdf, void *dma) {
   w16(m + 0x58, 0x8000);
   w16(m + 0x5a, 1);
   khda.rirbrp = 0;
-  // DMA run + the response interrupt ENABLED: with INTCTL zero it reaches no vector,
-  // but it is what raises RIRBSTS's flag, and clearing that flag (hda_cmd) is what
-  // re-arms the CORB after every RINTCNT-th response -- qemu drains nothing otherwise
+  // the response interrupt enabled: INTCTL 0 keeps it off every vector, but it raises the
+  // RIRBSTS flag hda_cmd clears, without which qemu drains nothing
   w8(m + 0x5c, 0x03);
   w8(m + 0x4c, 0x02);
-  // the DMA position buffer: 8 bytes per stream, enabled by its low bit
+  // the position buffer: 8 bytes per stream, enabled by its low bit
   w32(m + 0x70, (uint32_t) vtop(khda.pos) | 1);
   w32(m + 0x74, (uint32_t) (vtop(khda.pos) >> 32));
   // every codec that answered the reset
@@ -272,9 +242,7 @@ static void hda_scan(void *dma) {
     hputs(" dac "); hputn((uint64_t) khda.dacs); hputs("\r\n");
     khda.mm = NULL; } }
 
-// --- the stream: the C face ------------------------------------------------
-// the play position as a running count: the position buffer's word, LPIB where it
-// is still zero, unwrapped against the last reading
+// the play position as a running count: the position buffer, LPIB while it reads zero
 static void hda_head(void) {
   volatile uint8_t *sd = khda.mm + khda.sd;
   uint32_t p = r32(khda.pos + 8 * ((khda.sd - 0x80) / 0x20));
@@ -284,7 +252,7 @@ static void hda_head(void) {
   if (nh < khda.hw) nh += hda_ring;
   khda.hw = nh; }
 
-// silence what the head has played: [zpos, hw), at most one ring's worth
+// silence [zpos, hw), at most one ring's worth
 static void hda_silence(void) {
   if (khda.hw - khda.zpos > hda_ring) khda.zpos = khda.hw - hda_ring;
   while (khda.zpos < khda.hw) {
@@ -298,8 +266,7 @@ void k_horn_poll(void) {
   hda_head();
   hda_silence(); }
 
-// the stream format word, per rate: base 48k or 44.1k, a multiplier, a divisor;
-// 16-bit stereo in the low byte
+// base 48k or 44.1k, a multiplier, a divisor; 16-bit stereo in the low byte
 static uint32_t hda_fmt(int rate) {
   switch (rate) {
     case 48000: return 0x0011;
@@ -319,7 +286,6 @@ int k_horn_open(int rate) {
   uint32_t fmt = hda_fmt(rate);
   if (!fmt) return -1;
   volatile uint8_t *sd = khda.mm + khda.sd;
-  // reset the descriptor, then lay the ring under it
   w8(sd + 0, 0);
   w8(sd + 0, 1);
   spin_until(sd + 0, 1, 1);
@@ -380,8 +346,7 @@ void k_horn_close(void) {
   w8(khda.mm + khda.sd, 0);
   khda.open = 0; }
 
-// the boot door: dma is one kmallocw block (>= 3840 bytes, 128-aligned) the command rings,
-// the buffer list and the position buffer live in for the machine's life
+// dma: one kmallocw block (>= 3840 bytes, 128-aligned) for the rings, for the machine's life
 void k_hda_init(void *dma) {
   if (!dma) return;
   void *kmallocw(uintptr_t);
@@ -395,11 +360,7 @@ void k_hda_init(void *dma) {
     hputs(" pin\r\n"); } }
 
 #else
-// no PCI walk on this machine, so no controller, and nothing to poll for a head that
-// never moves. the horn's four faces are this file's wherever the seat has no card of
-// its own: a machine without one has a horn that refuses, which is a fact about the
-// hardware and belongs beside the driver rather than in a default somebody else carries.
-// wasm's card is the page (src/inle/wasm/horn.c), and answers them there.
+// no PCI walk here: a horn that refuses, except where wasm/horn.c or droid has a card
 void k_hda_init(void *dma) { (void) dma; }
 void k_horn_poll(void) { }
 #if !defined(__wasm__) && !defined(INLE_DROID)
