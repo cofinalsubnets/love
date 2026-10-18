@@ -429,16 +429,13 @@ void __love_sicanon(void const *n, siginfo_t *o) {
   else memcpy(o, n, sizeof *o); }         /* linux: the native record IS canonical */
 
 /* a mask, bit (sig-1), signals 1..31; the rt band has no freebsd twin and drops */
-unsigned long __love_maskfb(unsigned long m) {
+static unsigned long os_mask(unsigned long m, signed char const *to) {
   unsigned long o = 0;
   for (int s = 1; s < 32; s++)
-    if (m & (1UL << (s - 1))) { long t = os_sigfb[s]; if (t > 0) o |= 1UL << (t - 1); }
+    if (m & (1UL << (s - 1))) { long t = to[s]; if (t > 0) o |= 1UL << (t - 1); }
   return o; }
-unsigned long __love_maskcan(unsigned long m) {
-  unsigned long o = 0;
-  for (int s = 1; s < 32; s++)
-    if (m & (1UL << (s - 1))) { long t = os_sigcan[s]; if (t > 0) o |= 1UL << (t - 1); }
-  return o; }
+unsigned long __love_maskfb(unsigned long m) { return os_mask(m, os_sigfb); }
+unsigned long __love_maskcan(unsigned long m) { return os_mask(m, os_sigcan); }
 
 /* open flags: the access mode rides, named bits translate, the rest drop. the BSDs agree
  * but for NOCTTY (macos 0x20000), DIRECTORY and CLOEXEC */
