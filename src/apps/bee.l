@@ -1780,7 +1780,7 @@
          ps (? (two? (stat "\(hub)/.sb")) (chomp (lush-out "sb -C \(sh-quote hub) psid")) "")
          qs (? (0 < #ps) (filter (l \ starts? l "queue/") (lines (lush-out "sb -C \(sh-quote hub) ledger"))) ())
          [1 ("door: box " + (? (two? b) (b 1 "name") "(no card)") + ", hub " + (? (0 < #ps) ps "(none)")
-             + foldl (\ a l "\(s)\nledger \(l)") "" qs)])
+             + foldl (\ a l "\(a)\nledger \(l)") "" qs)])
      (door-run oc sr)
       (: w (words oc) n #w
          (last k) (? (k <= n) (drop (n - k) w) ())

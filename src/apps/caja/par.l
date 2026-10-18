@@ -338,7 +338,7 @@
         'hrule ["\\hrule\(dim-tex "width" (t 1))\(dim-tex "height" (t 2))\(dim-tex "depth" (t 3))\\relax " 0]
         'hbox ["\\hbox\(t 1 = () ? "" " to\(t 1)sp"){\(cp-tex (t 2))}" 0]
         'set (: k (t 1) v (t 2) nm "\\\(k)"
-                [(? (k = 'parshape) "\(nm) \(#v)\(cats (map (e \ " \(e 0)sp \(e 1)sp") v))\\relax "
+                [(? (k = 'parshape) "\(nm) \(#v)\(join "" (map (e \ " \(e 0)sp \(e 1)sp") v))\\relax "
                     (elem k glue-params) "\(nm)=\(glue-tex v)\\relax "
                     (elem k dimen-params) "\(nm)=\(v)sp\\relax "
                     "\(nm)=\(v)\\relax ")

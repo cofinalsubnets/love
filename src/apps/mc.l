@@ -172,7 +172,7 @@
  ; is there, else decoded when cheap or when the frame has budget, else "..." and owed
  (mc-thumbat s q st cols rows gm)
   (: sz <st
-     key "\(q) \(st 1)) \(sz) \(cols) \(rows) \(gm)"
+     key "\(q) \(st 1) \(sz) \(cols) \(rows) \(gm)"
      hit (s 'cache key)
      (? (hit != ()) hit
         (s 'cap < sz) "too big to show, \(sz // 1048576) MB"
