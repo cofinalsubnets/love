@@ -1,23 +1,16 @@
-// Freestanding-kernel glue shared by kmain.c and the per-arch backends.
-// Combines the former src/inle/k.h (kernel logging) and free/k_boot.h (the boot
-// hand-off struct).
+// kernel glue shared by kmain.c and the per-arch backends: logging and the boot hand-off
 #pragma once
 #include "love.h"
 
 void kputc(int c), kputs(char const *s), kputn(uintptr_t n, int base);
 
-// k_boot -- the small struct the bootloader hand-off populates before
-// kmain() runs. kmain.c reads this in meminit/fbinit; each door fills it
-// its own way (pvh_to_kboot, the UEFI loader, dtb.c). Adding a new backend
-// is just "write something that fills kboot, then jump to kmain."
+// k_boot: each door fills it its own way (pvh_to_kboot, the UEFI loader, dtb.c), then kmain runs
 #include <stdint.h>
 #include <stdbool.h>
 
-// khhdm -- the higher-half direct-map offset (physical P is reachable at
-// khhdm + P). Defined in kmain.c. 0 means identity-mapped.
+// the higher-half direct map: physical P at khhdm + P; 0 = identity-mapped
 extern uintptr_t khhdm;
-// the image window: physical P runs at k_xw + P. x64's kernel runs in the upper half,
-// leaving the lower to a process; the other arches run where they lie
+// the image window: physical P runs at k_xw + P. x64 runs high, leaving the low half to a process
 #if defined(__x86_64__)
 #define k_xw 0xffffff8000000000ull
 #else
@@ -27,8 +20,7 @@ extern uint64_t kticks;                // timer ticks, counted up by the arch's 
 extern uint8_t vectors[];              // the trap entry (mkvec.l)
 void fbdraw(void);                     // kmain.c: paint the console ring to the framebuffer
 
-// the sound card (src/inle/hda.c): probe at boot with one DMA block, and the poll the
-// idle wait rides -- it reads the play position and silences what has played
+// hda.c: probe with one DMA block; the idle wait's poll silences what has played
 void k_hda_init(void *dma), k_horn_poll(void);
 
 // the arch backend (<a>/arch.c) gives kmain these
@@ -43,57 +35,37 @@ int k_svm_spike(void *mem, uint64_t *code, uint64_t *rax, uint64_t *rip),
 
 #define k_boot_ram_max 64
 
-struct k_boot {
+struct k_boot {                       // uefi/loader.c copies this layout by hand
  uint32_t ram_n;
  struct { uintptr_t base, len; } ram[k_boot_ram_max];
- uintptr_t hhdm;                     // 0 means identity-mapped (UEFI path)
+ uintptr_t hhdm;                     // 0 means identity-mapped
  struct {
   void    *base;                    // framebuffer linear address
   uint16_t w, h;                    // pixels
   uint32_t pitch_px;                // pixels per scanline (not bytes)
-  // pixels per glyph pixel. 0 is the ordinary case -- the console picks one off the
-  // size (kmain's fbscale). a door that knows the screen better than its pixel count
-  // does, a page with a device ratio, names it here instead.
-  uint8_t  scale;
-  // the most pixels this paper may ever hold. a door that can be RESIZED under the
-  // running machine (the wasm seat's canvas) reserves its largest here, so a later
-  // w/h lands inside memory the heap was never given. 0 is "what w*h says", which is
-  // every door whose screen cannot change size.
+  uint8_t  scale;                   // pixels per glyph pixel; 0 = kmain's fbscale picks
+  // the most pixels a resizable screen (the wasm canvas) may ever hold, kept out of the heap; 0 = w*h
   uint32_t cap_px;
  } fb;
  bool has_fb; // FIXME how is this different from fb.base == NULL
- // the wall date at boot, UNIX SECONDS -- what makes love_clock a clock and not an
- // uptime. NO door answers it now, so every one falls back to the machine's RTC
- // in kmain -- a door that learns a date may still fill this. 0 is "nobody
- // knew", not midnight 1970: a stat
- // then reads as its own uptime, which is wrong but at least visibly so.
- uint64_t date;
- // the boot command line, copied whole at hand-off (PVH's start_info, the DTB's
- // /chosen bootargs, and love.cmd beside love.elf on an ESP, firmware carrying
- // no line of its own). "" is a plain boot: the love-side split leaves cmdline
- // seatless and the console shell takes over.
- char cmdline[256];
- // a heap image the door carries (the wasm page fetches one beside the module and hands it
- // over): kmain wakes it before it asks baked_pick. 0 = none, ask.
+ uint64_t date;                      // the wall date at boot, unix seconds; 0 = unknown, kmain asks the rtc
+ char cmdline[256];                  // "" is a plain boot: the console shell
+ // a heap image the door carries (the wasm page's), woken before baked_pick; 0 = none
  void const *image;
  uintptr_t image_len;
- // a file the door carries in beside the kernel (qemu's -initrd, PVH's first module), read-only
- // at /proc/initrd. 0 = none
+ // qemu's -initrd or PVH's first module, read-only at /proc/initrd; 0 = none
  void const *initrd;
  uintptr_t initrd_len; };
 
 extern struct k_boot kboot;
 
-// copy a hand-off cmdline into kboot; n bounds a source that may not be
-// NUL-terminated (the DTB prop), ~0 for the C-string doors.
+// n bounds a source that may not be NUL-terminated (the DTB prop); ~0 for a C string
 static inline void k_cmdline(char const *s, uintptr_t n) {
  uintptr_t i = 0;
  for (; i < n && i + 1 < sizeof kboot.cmdline && s[i]; i++) kboot.cmdline[i] = s[i];
  kboot.cmdline[i] = 0; }
 
-// hand kmain one usable span of RAM. every backend walks its own map (PVH's
-// e820, the DTB's /memory) and lands here; a span too small to hold a pointer
-// pair is not worth a row.
+// one usable span of RAM from a door's map; one too small for a pointer pair is dropped
 static inline void k_ram_give(uint64_t base, uint64_t len) {
  if (len < 2 * sizeof(uintptr_t) || kboot.ram_n >= k_boot_ram_max) return;
  kboot.ram[kboot.ram_n].base = base;

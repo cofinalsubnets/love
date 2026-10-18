@@ -1,8 +1,6 @@
-// src/love/picture/gif.c
-// (gif-frame s o canvas trans) -> canvas with the image whose descriptor is at s[o] laid on
-// it, its trans index (-1 none) left see-through | why not: 1 not a gif, 2 not an image
-// there, 3 a bad canvas. (gif-clear s o canvas) -> canvas with that image's box cleared.
-// the canvas is the screen's w*h rgba; an image is clipped to it, lzw read as far as it goes.
+// gif.c -- (gif-frame s o canvas trans): the image at s[o] laid on a w*h rgba canvas, trans
+// (-1 none) see-through | why not: 1 not a gif, 2 not an image there, 3 a bad canvas.
+// (gif-clear s o canvas) clears that image's box. clipped to the canvas, lzw read as far as it goes
 #include "love.h"
 #include "bytes.h"
 #include <stdint.h>

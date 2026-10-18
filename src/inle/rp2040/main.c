@@ -1,17 +1,6 @@
-// Raspberry Pi Pico (RP2040) firmware -- every C file compiled by mooncc -t
-// thumb1 (Cortex-M0+, ARMv6-M). No Pico SDK, no CMake, no vendor headers.
-//
-// NOT love, for the same reason the nucleo446 is not: the 264 KB SRAM is under
-// the arena even a prel-only bake wants, so this is the TOOLCHAIN on silicon.
-// v6-M is the LEANEST target this compiler has -- no FPU at all (every float
-// and double is a libcall), no hardware divide (so is every / and %), and only
-// the low registers for most instructions. test_mps2_t1 runs that ISA under
-// qemu's M7; this port is the same lane on the chip it was written for.
-//
-// Boot, first-light the LED, banner the clock over UART0, then run the battery
-// and let the LED say how it went -- slow blink all green, fast blink a miss.
-// The console is UART0 on GPIO0(TX)/GPIO1(RX) at 115200 8N1, reachable over any
-// USB-serial adapter.
+// raspberry pi pico (RP2040) firmware, mooncc -t thumb1, no SDK. not love: 264 KB is under
+// any bake's arena, so this runs the toolchain's battery on silicon (test_mps2_t1's ISA) --
+// LED slow blink all green, fast a miss. console UART0 on GPIO0/1 at 115200 8N1
 #include <stdint.h>
 #include "rp2040.h"
 #include "../bput.h"
@@ -21,9 +10,7 @@ static void puts_(const char *s) {
 
 static void putu(uint32_t v) { bput_n(serial_putc, v, 10); }
 
-// --- the battery ----------------------------------------------------------
-// volatile inputs keep every operand a runtime value, so nothing here folds at
-// compile time into the answer it is supposed to be computing.
+// volatile inputs, so nothing folds at compile time into its answer
 static volatile double da = 2.5, db = -1.25, one = 1.0, two = 2.0, big = 1e9;
 static volatile float ff = 1.5f;
 static volatile long long p64 = 0x123456789ABLL;
@@ -86,8 +73,7 @@ static int run(void) {
   return ok; }   // 32
 
 int main(void) {
-  // first light before anything else: a board that dies later still shows the
-  // vector table + crt0 + clock bring-up worked.
+  // first light before anything else
   gpio_init(LED_PIN); gpio_set_dir(LED_PIN, 1); gpio_put(LED_PIN, 1);
   serial_init();
   puts_("\n; mooncc/rp2040 (cortex-m0+, thumb1)\n");
@@ -95,7 +81,7 @@ int main(void) {
   puts_(r <= 100 ? "; all " : "; FAILED at ");
   putu((uint32_t)(r <= 100 ? r : r - 100));
   puts_(r <= 100 ? "/32 green\n" : "\n");
-  // the LED is the status channel when no terminal is watching.
+  // the LED is the status channel when no terminal is watching
   uint32_t half = r <= 100 ? 500u : 120u;
   for (;;) {
     gpio_put(LED_PIN, 1); { uint32_t t = clock_ms(); while (clock_ms() - t < half) {} }

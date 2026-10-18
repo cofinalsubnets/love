@@ -1,12 +1,11 @@
-// src/love/vfs.c -- the tree both seats serve (vfs.h): the entry table over baked rows, the
-// lookups, and the copies a write makes. inle's whole namespace rides it, and the host's /love.
+// vfs.c -- the tree inle and the host's /love serve (vfs.h): the entry table over baked rows,
+// the lookups, and the copies a write makes
 #include "vfs.h"
 #include "archive/ustar.h"
 #include <errno.h>
 #include <string.h>
 
-// one ustar pass over a seat's tar: count with rows NULL, fill on the second. a symlink
-// lands as a row whose target rides lnks[k].
+// one ustar pass: count with rows NULL, fill on the second; a symlink's target rides lnks[k]
 static int vfs_tar_walk(struct vfs *v, unsigned char const *t, uintptr_t n, struct vfs_brow *rows, char **lnks) {
  int k = 0;
  for (uintptr_t o = 0; o + 512 <= n && t[o];) {
@@ -82,8 +81,7 @@ int vfs_lay(struct vfs *v, int more) {
  uintptr_t now = v->now();
  for (int i = 0; i < n; i++) {
   struct vfs_file const *f = vfs_bake_row(v, i);
-  // a dateless row reads as now: the carried tree stamps 0, and 0 is how a stat says "not
-  // there" -- cook then refuses to make a leaf that is right there
+  // a dateless row reads as now: a stat's 0 says "not there", and cook would refuse the leaf
   t[i] = (struct vfs_ent) { .path = f->path, .bake = i, .ms = f->ms ? f->ms : now,
                             .mode = 0644, .live = true }; }
  memset(t + n, 0, (uintptr_t) more * sizeof *t);
@@ -110,8 +108,7 @@ bool vfs_ro(struct vfs const *v, char const *cp, uintptr_t cn) {
  uintptr_t r = strlen(v->ro);
  return cn >= r && !memcmp(cp, v->ro, r) && (cn == r || cp[r] == '/'); }
 
-// ..and a move or a removal leaves these be besides: a special row, and every directory
-// above one or above the mount, whose rename would carry them out from under their names
+// nor moved or removed: a special row, or a directory above one or above the mount
 bool vfs_pinned(struct vfs const *v, char const *cp, uintptr_t cn) {
  if (vfs_ro(v, cp, cn)) return true;
  for (uintptr_t i = 0; cn && i <= v->npins; i++) {
@@ -128,8 +125,7 @@ int vfs_find(struct vfs const *v, char const *p, uintptr_t n) {
   if (v->ents[i].live && q && strlen(q) == n && !memcmp(q, p, n)) return i; }
  return -1; }
 
-// an expansion restarts the walk rather than splicing, and the budget is spent per
-// resolution, so a chain and a deep path draw on the same 32
+// an expansion restarts the walk; the budget is per resolution, so chain and depth share 32
 #define vfs_hops 32
 intptr_t vfs_walk(struct vfs const *v, char const *p, uintptr_t pn, char *out, bool leaf) {
  char in[256], nx[256];
@@ -155,8 +151,7 @@ intptr_t vfs_walk(struct vfs const *v, char const *p, uintptr_t pn, char *out, b
    int e = n ? vfs_find(v, out, n) : -1;
    if (e < 0 || !v->ents[e].to) continue;
    if (++hop > vfs_hops) return -ELOOP;
-   // the target is canonicalized here and loses the leading slash entry paths lack; the
-   // rebuilt line wears one, or the walk seeds from the cwd
+   // entry paths lack the leading slash: the rebuilt line wears one, or the walk seeds from the cwd
    uintptr_t tn = lnk_canon(out, v->ents[e].to, nx + 1, sizeof nx - 1) + 1;
    nx[0] = '/';
    uintptr_t rest = inn - k;
@@ -237,7 +232,7 @@ int vfs_parent_ok(struct vfs const *v, char const *p, uintptr_t n) {
  uintptr_t junk;
  return vfs_kids(v, p, dn, &junk) ? 0 : -ENOENT; }
 
-// a slot for a fresh entry: a retired one first, else the table doubles. -1 is a refusal.
+// a slot for a fresh entry: a retired one first, else the table doubles; -1 a refusal
 int vfs_slot(struct vfs *v) {
  for (int i = 0; i < v->n; i++) if (!v->ents[i].path) return i;
  if (v->n == v->cap) {
@@ -254,8 +249,7 @@ char *vfs_strdup(struct vfs *v, char const *p, uintptr_t n) {
  if (q) memcpy(q, p, n), q[n] = 0;
  return q; }
 
-// free a dead, unheld entry's storage and retire the slot. unlink and the last close both
-// land here, so an open fd keeps its file until it lets go.
+// retire a dead, unheld entry: unlink and the last close both land here
 void vfs_gc(struct vfs *v, int i) {
  struct vfs_ent *e = &v->ents[i];
  if (e->live || e->refs || !e->path) return;
@@ -264,7 +258,7 @@ void vfs_gc(struct vfs *v, int i) {
  if (e->to) v->drop((void*) e->to);
  *e = (struct vfs_ent) {0}; }
 
-// a fresh live entry at canonical path p; the caller has asked vfs_parent_ok. -1 is memory.
+// a fresh live entry at canonical path p, after vfs_parent_ok; -1 is memory
 int vfs_create(struct vfs *v, char const *p, uintptr_t n, bool dir, uintptr_t mode) {
  char *q = vfs_strdup(v, p, n);
  if (!q) return -1;
@@ -274,8 +268,8 @@ int vfs_create(struct vfs *v, char const *p, uintptr_t n, bool dir, uintptr_t mo
                                  .own = true, .heap = true, .dir = dir, .live = true };
  return i; }
 
-// room for `need` bytes in entry i's heap copy, the baked blob brought across at the first
-// write. false is a refusal the caller must read and say; nothing is dropped quietly.
+// room for need bytes in entry i's heap copy, the baked blob brought across at the first
+// write; false is a refusal the caller must say
 bool vfs_fit(struct vfs *v, int i, uintptr_t need) {
  struct vfs_ent *e = &v->ents[i];
  if (need > (uintptr_t) INTPTR_MAX) return false;   // the doubling below stays in range

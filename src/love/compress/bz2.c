@@ -1,5 +1,4 @@
-// src/love/compress/bz2.c -- bzip2, both directions. the whole stream is here: its blocks are laid on
-// bit boundaries, so there is no byte-aligned container for src/apps/bz2.l to hold.
+// bz2.c -- bzip2, both directions, whole streams: blocks lie on bit boundaries, so bz2.l holds none
 //   (bz2e s level)   bytes -> a .bz2 stream, level 1..9 the block in 100k | ()
 //   (bz2d s)         every .bz2 stream in s -> their bytes | 1 format, 2 corrupt, 3 end, 4 check,
 //                    5 past BZ_OUTMAX
@@ -7,8 +6,6 @@
 //   (bz2-step st b eof)  the next block (or a stream's head or end) off b at st's bit ->
 //                    (bytes . k), k whole bytes of b now behind it | -1 more of b wanted |
 //                    0 every stream read | bz2d's codes. eof: b is all there is
-// the coder is bzip2's pipeline: runs of four, the rotations sorted by prefix doubling,
-// move-to-front with the zero runs in RUNA/RUNB, and 2..6 huffman tables refined four times.
 #ifndef BZ_STANDALONE
 #include "love.h"
 #include "bytes.h"
@@ -27,7 +24,7 @@
 static void bz_crcs(uint32_t *t) {               // CRC-32/BZIP2: cksum's msb-first register
  for (uint32_t i = 0; i < 256; i++) t[i] = crc_msb(0, (uint8_t) i); }
 
-// --- a growing byte sink, msb-first bits -----------------------------------------------------
+// a growing byte sink, msb-first bits
 struct bz_w { uint8_t *p; uintptr_t n, cap; uint64_t acc; unsigned k; int bad, big, fix; };   // fix: p is the caller's, never grown
 
 static void bw_byte(struct bz_w *w, uint8_t b) {
@@ -47,7 +44,6 @@ static void bw_put(struct bz_w *w, uint32_t v, unsigned k) {   // k <= 32
 
 static void bw_flush(struct bz_w *w) { if (w->k) bw_put(w, 0, 8 - w->k); }
 
-// --- the coder --------------------------------------------------------------------------------
 struct bz_e {
  uint8_t *blk;                                  // the block after runs of four
  uint32_t *sa, *rk, *tmp, *cnt;                 // the rotation sort
@@ -56,8 +52,7 @@ struct bz_e {
  uint8_t len[6][258]; uint32_t code[6][258];
  uint32_t crct[256]; };
 
-// the rotations of b[0..n) in order, into sa: prefix doubling over ranks, one stable
-// counting sort a round. equal rotations may land in any order -- they read the same.
+// prefix doubling, one stable counting sort a round; equal rotations land in any order
 static void bz_sort(struct bz_e *e, uintptr_t n) {
  uint32_t *sa = e->sa, *rk = e->rk, *tmp = e->tmp, *cnt = e->cnt;
  const uint8_t *b = e->blk;
@@ -86,8 +81,7 @@ static void bz_sort(struct bz_e *e, uintptr_t n) {
   nc = r + 1;
   if (nc == n) break; } }
 
-// huffman lengths for f[0..n), none over lim: a zero count is taken as one, since every
-// symbol wants a code, and counts are halved until the tree fits.
+// none over lim: a zero count is taken as one (every symbol wants a code), halved until it fits
 static void bz_lens(uint8_t *len, const uint32_t *f0, unsigned n, unsigned lim) {
  uint32_t f[258], w[516]; int par[516], act[516];
  for (unsigned i = 0; i < n; i++) f[i] = f0[i] ? f0[i] : 1;
@@ -253,7 +247,6 @@ static int bz_enc(const uint8_t *s, uintptr_t n, unsigned level, struct bz_w *w)
  bz_efree(e);
  return w->bad ? -1 : 0; }
 
-// --- the decoder ------------------------------------------------------------------------------
 struct bz_r { const uint8_t *p; uintptr_t i, n; uint64_t acc; unsigned k; };
 
 static void br_fill(struct bz_r *r) {            // at least 57 bits in hand; zeros past the end
@@ -421,10 +414,7 @@ static int bz_dec(const uint8_t *s, uintptr_t n, struct bz_w *w) {
  alloc(d, 0);
  return w->bad ? -1 : rc; }
 
-// --- a block at a time --------------------------------------------------------------------
-// bz_dec's walk cut at its blocks: the state is where in the input the next one starts and
-// what the stream has said so far. a block that runs past what the caller holds is left
-// unread for a longer try -- the caller holds more than any block can take
+// bz_dec's walk cut at its blocks; one running past what the caller holds waits for a longer try
 #define BZ_MAGIC 0x627a3273u
 struct bz_st { uint64_t magic, bit; uint32_t mode, level, all, nstream; };
 enum { BZ_MORE = 10, BZ_DONE = 11 };
@@ -458,7 +448,7 @@ static int bz_step(struct bz_st *S, struct bz_d *d, const uint8_t *s, uintptr_t 
  return 2; }
 
 #ifndef BZ_STANDALONE
-// ===== the nifs: str0 may collect, so a string is re-read off the stack after it =====
+// the nifs: str0 may collect, so a string is re-read off the stack after it
 love_noinline static struct g *host_bz2e(struct g *g) {
  word sw = g->sp[0], lw = g->sp[1];
  if (!strp(sw) || !oddp(lw) || getcharm(lw) < 1 || getcharm(lw) > 9) {
@@ -472,8 +462,7 @@ love_noinline static struct g *host_bz2e(struct g *g) {
  if (w.p) alloc(w.p, 0);
  return g; }
 
-// every stream in s into exactly cap bytes of out, for a C caller with no g (src/love/archive/srctree.c)
-// -> cap, or -1 for a stream that is torn or says more or less than that
+// for a C caller with no g (srctree.c): exactly cap bytes into out -> cap, else -1
 intptr_t bz2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
  struct bz_w w = { .p = out, .cap = cap, .fix = 1 };
  return bz_dec(s, n, &w) || w.n != cap ? -1 : (intptr_t) cap; }

@@ -1,6 +1,5 @@
-// bput.h -- text and numbers onto a byte sink, for the doors that talk on the wire alone:
-// the kernel's probes and panic console, the boards' fault reports and batteries. put is
-// the sink, one byte a call. no division wider than a word, so a thumb board needs no helper.
+// bput.h -- text and numbers onto a one-byte-a-call sink, for the kernel's and boards' wire-only
+// doors. no division wider than a word, so a thumb board needs no helper
 #pragma once
 #include <stdint.h>
 

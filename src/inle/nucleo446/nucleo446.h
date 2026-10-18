@@ -1,15 +1,6 @@
-// Nucleo-F446RE (ST STM32F446RE) register map -- bare metal, no HAL.
-//
-// The F446 is a Cortex-M4 (ARMv7E-M, FPv4-SP-D16: a SINGLE-precision FPU, so
-// the firmware compiles `mooncc -t thumb2sp` -- f64 transfers ride the d-regs,
-// f64 arithmetic softens to __aeabi_* libgcc calls, the playdate lane). Boots
-// from the 512 KB flash at 0x08000000 (aliased at 0), runs RAM out of the
-// 128 KB SRAM at 0x20000000. Only the registers this port touches: RCC + PWR
-// + FLASH for the 180 MHz PLL bring-up, USART2 for the ST-LINK VCP console,
-// TIM2 as the microsecond timer, GPIOA/GPIOC for the LD2 LED and the user
-// button. Values from RM0390; the Nucleo board facts (LD2 = PA5, button =
-// PC13, USART2 PA2/PA3 = the VCP, 8 MHz HSE-bypass from the ST-LINK MCO)
-// from UM1724.
+// nucleo-F446RE (STM32F446RE) register map, only what this port touches: values from RM0390,
+// board facts from UM1724. a single-precision FPU, so `mooncc -t thumb2sp`: f64 arithmetic
+// softens to __aeabi_* calls
 #pragma once
 #include <stdint.h>
 
@@ -35,7 +26,7 @@
 #define RCC_CR_PLLON   (1u << 24)
 #define RCC_CR_PLLRDY  (1u << 25)
 
-// PLL: 8 MHz HSE / M(4) * N(180) / P(2) = 180 MHz core; Q(8) idles (no USB).
+// PLL: 8 MHz HSE / M(4) * N(180) / P(2) = 180 MHz core; Q(8) idles (no USB)
 #define PLLCFGR_180 (4u | (180u << 6) | (0u << 16) | (1u << 22) | (8u << 24))
 
 #define CFGR_SW_MASK  3u

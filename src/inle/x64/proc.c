@@ -1,8 +1,6 @@
-// src/inle/x64/proc.c -- a process on x64: a program in an address space of its own, the lower
-// half, run in ring 3. its `syscall` comes back through LSTAR (mkvec.l) to k_proc_call, as a
-// wasm process's calls come through the page; the kernel's half is shared and supervisor-only.
-// each has a kernel stack of its own, and runs a turn at a time from sys.c's pump: a turn ends
-// at a call that must wait, at the timer, or at the end.
+// proc.c -- an x64 process: the lower half, ring 3, its syscall through LSTAR (mkvec.l) to
+// k_proc_call; the kernel's half shared, supervisor-only. it runs a turn at a time from sys.c's
+// pump, ending at a call that must wait, the timer, or the end
 #include "../../apps/moon/lib/moonlibc/impl.h"
 #include <stdint.h>
 #include <stdbool.h>
@@ -136,9 +134,8 @@ static bool k_ustr(struct k_uctx const *c, uint64_t p) {
     if (memchr((void*) (uintptr_t) va, 0, (size_t) (4096 - (va & 4095)))) return true;
   return false; }
 
-// the memory a call's pointers name, in the process's own, before the kernel touches it:
-// 0, or -EFAULT. a call this does not know answers -ENOSYS, so nothing unchecked reaches
-// k_proc_call
+// a call's pointers checked against the process's memory -> 0, or -EFAULT; an unknown call
+// is -ENOSYS, so nothing unchecked reaches k_proc_call
 static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint64_t d,
                     uint64_t e, uint64_t f, uint64_t g) {
   bool ok;
@@ -338,9 +335,8 @@ static long k_uload(struct k_uctx *c, uint8_t const *e, uintptr_t n, uint64_t *p
   c->pc = base + h->e_entry;
   return k_uok(c, c->pc, 1) ? 0 : -ENOEXEC; }
 
-// love itself, laid from the kernel's own image: each of the pie's loads shared read-only off
-// the kernel's pages, but the first writable one, its own pages started from the copy the
-// projection keeps as the pie has it, base 0 -> 0, the entry in c->pc; -ENOSYS with no copy
+// love itself from the kernel's image: its loads shared read-only, but the first writable one,
+// fresh from the projection's copy -> 0, the entry in c->pc; -ENOSYS with no copy
 static long k_uload_love(struct k_uctx *c, uint64_t *phdr, uint64_t *phn) {
   if (!k_pie_base || !k_pie_data) return -ENOSYS;
   Elf64_Ehdr const *h = (Elf64_Ehdr const*) k_pie_base;
@@ -372,9 +368,8 @@ static void k_ufree(struct k_uctx *c) {
   k_drop(c->mm);
   k_drop(c); }
 
-// the seat's door (sys.c): pid's program, the ELF in code, laid on argv av and environment ev
-// and kept in pid's record, its first turn yet to come -> 0; -errno where it cannot run. a
-// word without code is love's, laid from the kernel's own image
+// sys.c's door: pid's ELF in code laid on av and ev, its first turn to come -> 0 or -errno;
+// no code is love's own image
 long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintptr_t en,
                   char const *code, uintptr_t cn) {
   void **seat = k_proc_seat(pid);

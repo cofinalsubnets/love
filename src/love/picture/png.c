@@ -1,8 +1,7 @@
-// src/love/picture/png.c
-// (png-unfilter s o rows n bpp) -> one pass's rows from offset o of s with their filters
-// undone and filter bytes dropped, rows*n bytes | () for a bad filter or too few bytes
-// (png-lay canvas cw frame fw x y op) -> the canvas, cw pixels wide, with an apng frame's
-// rgba laid at x y: op 0 overwrites the box, 1 lays it over what is there | ()
+// png.c -- (png-unfilter s o rows n bpp) -> one pass's rows from offset o of s unfiltered,
+// rows*n bytes | () for a bad filter or too few bytes
+// (png-lay canvas cw frame fw x y op) -> the canvas with an apng frame's rgba laid at x y:
+// op 0 overwrites the box, 1 lays it over | ()
 #include "love.h"
 #include <stdint.h>
 #include <string.h>

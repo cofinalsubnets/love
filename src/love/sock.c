@@ -1,16 +1,7 @@
 // FIXME merge into posix.c?
-// src/love/sock.c -- every socket nif. three make a socket -- connect, listen, bind, POSIX's
-// three verbs -- and each takes its address as data, the family named at its head: tcp,
-// udp, icmp, unix (the section below). accept, seal, recv, send and farend work the port one made.
-// auto-globbed and LvNif-registered. every nif mirrors main.c's lvm_open: produce an OS
-// fd, hand it to host_port -> a heap port carrying a close finalizer. once an fd is a
-// port, read and write come free through fgetc/fputc.
-// every nif here parks rather than blocking (love.h's nif park: leave Ip unadvanced and
-// yield, so the op re-runs) -- accept and recv on their fd, connect on its handshake.
-// nothing in this file waits: an address takes a dotted quad, and a name resolves one
-// layer up in love, where the lookup itself can park.
-// the answers wear posix.c's convention: a port on success, the errno's nom on a failure,
-// 'badarg on a call refused before any syscall. hot? is the success test.
+// src/love/sock.c -- the socket nifs: connect, listen and bind take an address as data;
+// accept, seal, recv, send and farend work the port. each parks, never blocks: Ip
+// unadvanced and yield, so the op re-runs. answers a port, the errno's nom, or 'badarg
 #define _GNU_SOURCE     // SOCK_CLOEXEC
 #include "love.h"
 #include <unistd.h>
@@ -25,16 +16,12 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-// every socket fd is close-on-exec: no child inherits one, and a server that re-execs
-// does not carry its own listener across (SO_REUSEADDR does not permit two live ones).
+// a re-exec'd server must not carry its listener across: SO_REUSEADDR allows no two live ones
 #define cloexec(fd) do { if ((fd) >= 0) fcntl((fd), F_SETFD, FD_CLOEXEC); } while (0)
 
-// a datagram caps at one ethernet MTU.
-#define DgMax 1472
+#define DgMax 1472   // one ethernet MTU
 
-// the fd a syscall helper answered, or its negated errno -> the port pushed, or the
-// errno's nom. a refused port allocation closes the fd and hands the not-ok g up, where
-// the wrapper ghelps: heap exhaustion is a scare here as everywhere.
+// fd or a negated errno -> the port or the nom pushed; a refused allocation closes the fd
 love_noinline static struct g *host_port(struct g *g, int fd) {
  if (fd < 0) return push(g, 1, love_err(g, -fd));
  cloexec(fd);
@@ -42,50 +29,32 @@ love_noinline static struct g *host_port(struct g *g, int fd) {
  if (!ok(g)) close(fd);
  return g; }
 
-// a dotted quad and nothing else -> the address in host order, or -1. all `connect`
-// accepts: getaddrinfo has no nonblocking form and can burn fifteen seconds of dead vm,
-// so names resolve one layer up in love, where a lookup can park -- src/apps/dns.l's `dial`.
+// a dotted quad only: getaddrinfo cannot park, so names resolve in love (src/apps/dns.l's dial)
 static int quad(struct str *hv, uint32_t *out) {
  struct in_addr a;                               // bytes are NUL-terminated where they lie
  if ((uintptr_t) hv->len != strlen(hv->bytes) || inet_pton(AF_INET, hv->bytes, &a) != 1) return -1;
  return *out = ntohl(a.s_addr), 0; }
 
-// the backlog is the accept queue, and a server that twirls a task per client is off
-// serving rather than sitting in accept. too small and the kernel drops SYNs into an
-// exponential retry that reads as our latency (1s at 25 arrivals, 30s at 100). 512 is
-// the measured floor for a flat curve at 400 simultaneous clients.
-// a constant and not an operand: `listen` is 1-ary everywhere, and a second operand
-// would make every (listen port) a truthy closure, so failures would test as successes.
-// test/host/nifpark.l's law 5 knows this number -- it fills the queue to stall a connect,
-// the only way to reach the write-direction park offline. move one and move both.
+// smaller and dropped SYNs retry as latency under load. not an operand: a 2-ary listen
+// would make (listen port) a truthy partial. test/host/nifpark.l's law 5 fills this queue
 #define listen_backlog 512
 
-// --- the address, as data -------------------------------------------------------
-// every nif that makes a socket takes one operand: the address, a list whose head names the
-// family and whose rest is what that family needs, options last. the family picks the
-// socket(2) triple and the sockaddr, so a new family is a row here and not a nif.
+// the address: a list headed by its family, options last; no quad takes every address
 //   connect  (tcp "1.2.3.4" 80)   (unix "/tmp/.X11-unix/X0")
-//   listen   (tcp 80)  or a bare port, which is tcp   (tcp "127.0.0.1" 80)   (unix "/run/x.sock")
-//   bind     (udp 53)   (udp "127.0.0.1" 53)   (icmp)   (icmp6)   -- options after: (icmp ttl)
-//            asks each datagram's ttl, (icmp6 ttl) its hop limit, and errs the icmp errors
-//            routers send back about our echoes (traceroute's time-exceeded)
-// a listen or bind without a quad takes every address
-// icmp is linux's unprivileged echo socket, or where that is refused a raw one (root's, and
-// the bsds' only kind) dressed as it: recv and send answer and take the same bytes either
-// way. icmp6 is the same pair over ipv6, and the only family that speaks it.
-// a host is a dotted quad, or v6 text for an icmp6 peer: names resolve one layer up (src/apps/dns.l).
+//   listen   (tcp 80) or a bare port   (tcp "127.0.0.1" 80)   (unix "/run/x.sock")
+//   bind     (udp 53)   (udp "127.0.0.1" 53)   (icmp)   (icmp6)   options: ttl, errs
+// icmp is linux's echo socket, or where refused a raw one dressed as it, same bytes either
+// way; icmp6 is the one ipv6 family
 enum { FamTcp = 1, FamUdp, FamIcmp, FamIcmp6, FamUnix };
 enum { HowConnect = 1, HowListen, HowBind };
 struct saddr { int fam, port, ttl, errs; uint32_t ip; struct str *path; };
 
-// is x the symbol spelled s
 static int nom_is(word x, char const *s) {
  if (!x || !namep(x)) return 0;
  struct str *n = str(nom(x)->name);
  size_t k = strlen(s);
  return n->len == k && !memcmp(n->bytes, s, k); }
 
-// the next element of a list walk, or 0 past its end
 static word nth_take(word *x) {
  if (!chainp(*x)) return 0;
  word v = (word) two(*x)->a;
@@ -96,8 +65,7 @@ static int port_of(word v) {
  intptr_t p = v && oddp(v) ? getcharm(v) : -1;
  return p >= 0 && p <= 65535 ? (int) p : -1; }
 
-// the address operand -> a, or -1 for one this verb cannot take. read afresh on every
-// call: a path points into the heap, and a collection between calls moves it
+// -1 for an address this verb cannot take. read afresh per call: a path points into the heap
 static int parse_addr(word x, int how, struct saddr *a) {
  memset(a, 0, sizeof *a);
  if (how == HowListen && oddp(x)) return a->fam = FamTcp, (a->port = port_of(x)) < 0 ? -1 : 0;
@@ -124,8 +92,7 @@ static int parse_addr(word x, int how, struct saddr *a) {
   else return -1;
  return 0; }
 
-// the fd for a, or a negated errno: socket(2) by the family's row, then the verb's own
-// steps. a connect leaves the socket nonblocking with its handshake in flight
+// the fd or a negated errno; a connect leaves it nonblocking, its handshake in flight
 love_noinline static int call_sock(struct saddr const *a, int how) {
  int un = a->fam == FamUnix, v6 = a->fam == FamIcmp6, raw = 0;
  int type = a->fam == FamTcp || un ? SOCK_STREAM : SOCK_DGRAM;
@@ -143,7 +110,7 @@ love_noinline static int call_sock(struct saddr const *a, int how) {
  struct sockaddr_in6 i6 = {0};                   // an icmp6 bind is to any address
  i6.sin6_family = AF_INET6;
  in.sin_family = AF_INET;
- in.sin_addr.s_addr = htonl(a->ip);                // 0, INADDR_ANY, unless one was named
+ in.sin_addr.s_addr = htonl(a->ip);                // 0 is INADDR_ANY
  in.sin_port = htons((uint16_t) a->port);
  if (un) ua.sun_family = AF_UNIX, memcpy(ua.sun_path, a->path->bytes, a->path->len);
  struct sockaddr *sa = un ? (struct sockaddr*) &ua : v6 ? (struct sockaddr*) &i6 : (struct sockaddr*) &in;
@@ -153,12 +120,11 @@ love_noinline static int call_sock(struct saddr const *a, int how) {
   int fl = fcntl(fd, F_GETFL);
   if (fl >= 0) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
   do r = connect(fd, sa, sl); while (r < 0 && errno == EINTR);
-  // EINPROGRESS and no EALREADY: this is the first connect on a fresh socket
-  if (r == 0 || errno == EINPROGRESS) return fd; }
+  if (r == 0 || errno == EINPROGRESS) return fd; }   // no EALREADY: a fresh socket
  else {
   int one = 1;
-  struct stat st;                                // a stale socket file from a dead listener
-  if (un) { if (!lstat(ua.sun_path, &st) && S_ISSOCK(st.st_mode)) unlink(ua.sun_path); }  // anything else stays
+  struct stat st;
+  if (un) { if (!lstat(ua.sun_path, &st) && S_ISSOCK(st.st_mode)) unlink(ua.sun_path); }  // a dead listener's; anything else stays
   else setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
   if (a->ttl && v6) setsockopt(fd, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, &one, sizeof one);
   else if (a->ttl && !raw) setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &one, sizeof one);   // linux's number
@@ -177,8 +143,6 @@ static int mk_sock(struct g *g, void *env) {
  int how = ((struct sock_how*) env)->how;
  return parse_addr(g->sp[0], how, &a) ? -EINVAL : call_sock(&a, how); }
 
-// a listener or a bound socket for the address on top of the stack: pushes the port, or
-// the errno's nom, or 'badarg for an address this verb cannot take
 love_noinline static struct g *host_sock(struct g *g, int how) {
  struct saddr a;
  if (parse_addr(g->sp[0], how, &a)) return push(g, 1, badarg(g));
@@ -187,9 +151,8 @@ love_noinline static struct g *host_sock(struct g *g, int how) {
  if (!ok(g = love_fd_retry(g, &fd, mk_sock, &h))) return g;
  return host_port(g, fd); }
 
-// a connect's first half, over the address in place: its fd as a charm for the second ap,
-// or the errno's nom. a unix connect to a listener whose queue is full answers EAGAIN at
-// once rather than in flight; the address is left where it was, the ap's cue to park
+// a connect's first half: the fd as a charm, or the nom. a unix connect to a full queue
+// answers EAGAIN at once, and the address left in place is the cue to park
 love_noinline static struct g *host_conn(struct g *g) {
  struct sock_how h = { HowConnect };
  int fd = mk_sock(g, &h);
@@ -197,8 +160,7 @@ love_noinline static struct g *host_conn(struct g *g) {
  if (fd == -EAGAIN) return g;
  return g->sp[0] = fd < 0 ? love_err(g, -fd) : putcharm(fd), g; }
 
-// (connect addr) -- a stream to a listener, in two aps because the handshake parks and the
-// first is not re-runnable once it has sent a SYN. the port | the errno's nom | 'badarg
+// (connect addr): two aps, since the first is not re-runnable once it sent a SYN
 static lvm(lvm_connect) {
  struct saddr a;
  if (parse_addr(Sp[0], HowConnect, &a)) love_musttail return Answer(badarg(g));
@@ -207,9 +169,7 @@ static lvm(lvm_connect) {
  if (chainp(Sp[0])) { g->next_wake_at = love_clock() + 1; love_musttail return Ap(lvm_yield_sw, g); }
  love_musttail return Next(1); }
 
-// the second ap: the handshake, waited on by the scheduler. SO_ERROR reads 0 on a socket
-// still trying, so POLLOUT first and the error after is the one order that tells
-// "connected" from "refused".
+// SO_ERROR reads 0 while still trying: POLLOUT first, then the error, tells connected from refused
 static lvm(lvm_connectw) {
  if (!charmp(Sp[0])) love_musttail return Next(1);   // the first ap's nom rides through
  int fd = (int) getcharm(Sp[0]);
@@ -223,15 +183,11 @@ static lvm(lvm_connectw) {
   close(fd); love_musttail return Answer(love_err(g, err ? err : errno)); }
  LvmCallp(g, 1, host_port, fd) }                // [fd] -> [port]
 
-// (listen addr) -- a stream listener; `accept` takes its clients. (bind addr) -- a datagram
-// socket; `recv` and `send` carry its datagrams. each the port | the errno's nom | 'badarg
 static lvm(lvm_listen) LvmCallp(g, 1, host_sock, HowListen)
 static lvm(lvm_bind) LvmCallp(g, 1, host_sock, HowBind)
 
-// accept(2) without waiting: >=0 the fd, else a negated errno -- -EAGAIN is "nobody there
-// yet", the park the wrapper reads by name. the O_NONBLOCK toggle is per call for main.c's
-// reason: the flags ride the open file description a forked child shares. errno is read
-// before the restore, which is an fcntl and may set its own.
+// -EAGAIN is the park. O_NONBLOCK per call: the flags ride a description a forked child
+// shares. errno is read before the restoring fcntl
 love_noinline static int call_accept(int lfd) {
  int fl = fcntl(lfd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
  if (off) fcntl(lfd, F_SETFL, fl | O_NONBLOCK);
@@ -246,10 +202,7 @@ love_noinline static struct g *host_accept(struct g *g, int fd) {
  if (!ok(g = love_fd_retry(g, &fd, mk_accept, NULL))) return g;
  return host_port(g, fd); }
 
-// (accept l) -- take the next client on listener port `l` and wrap its fd as a port. an
-// empty backlog parks the task on the listener's fd, so the scheduler folds it into the
-// same wait as every other quiet fd; nothing is consumed, so the re-run is exact.
-// 'badarg on a non-port, the errno's nom on a real accept() failure.
+// (accept l): an empty backlog parks on l's fd; nothing is consumed, so the re-run is exact
 static lvm(lvm_accept) {
  int lfd = (int) port_fd(Sp[0]);
  if (lfd < 0) love_musttail return Answer(badarg(g));
@@ -257,16 +210,12 @@ static lvm(lvm_accept) {
  if (fd == -EAGAIN) { g->next_wait_fd = lfd; love_musttail return Ap(lvm_yield_sw, g); }
  LvmCallp(g, 1, host_accept, fd) }              // [l] -> [conn]
 
-// (shutdown s how) -- half-close a socket port. `how` is the POSIX SHUT_* fixnum: 0 read,
-// 1 write, 2 both. the load-bearing case is (shutdown s 1) after a stdin-EOF, so the peer
-// sees EOF instead of a hung half-open socket. answers the port; a no-op on misuse.
-// shutting the write half lands the write run first, or a door that answers short
-// truncates the response. kiosko's shape is `(say c body) (seal c 1) (close c)`.
+// (seal s how): shutdown(2), how a SHUT_* number; answers s. a write half lands its run first
 static lvm(lvm_shutdown) {
  int fd = (int) port_fd(Sp[0]);
  if (fd >= 0 && oddp(Sp[1])) {
   intptr_t how = getcharm(Sp[1]);
-  if (how >= 1 && how <= 2) {                 // fd >= 0 already proved it a port
+  if (how >= 1 && how <= 2) {                 // fd >= 0 proved it a port
    struct io *io = (struct io*) Sp[0];
    g->io = io;
    Pack(g);
@@ -278,25 +227,17 @@ static lvm(lvm_shutdown) {
     love_musttail return Ap(lvm_yield_sw, g); }
    Unpack(g); }
   if (how >= 0 && how <= 2) shutdown(fd, (int) how); }
- // stack: [s, how, ...] -> [s, ...]
  Sp[1] = Sp[0];
  love_musttail return Nextp(1, 1); }
 
-// --- datagrams ----------------------------------------------------------------------
+// datagrams
 //   (recv p)            -> (peer bytes) | (peer bytes ttl) | a nom | 'badarg   [parks]
 //   (send p peer bytes) -> p | a nom | 'badarg
-// a peer is ("1.2.3.4" port): the shape recv answers is the shape send takes, so a reply
-// goes back to (car d). an icmp socket's port is its echo id, and send does not read it.
-// send's peer may carry ttl N after the port, the ttl (v6's hop limit) of this packet and
-// the socket's later ones. an icmp socket bound with errs answers a router's error about
-// one of our echoes as (router bytes ttl (type code)): the bytes are the echo we sent, as
-// far as the error quotes it, and ttl may be (); linux's echo socket brings them off its
-// error queue, a raw one cuts them out of the icmp message.
-// the ttl rides when the socket was bound asking for it, and always off a raw one. a quiet
-// socket parks the task on its fd, like accept: "nothing else to do" is the scheduler's
-// judgement, not this nif's.
+// a peer is ("1.2.3.4" port), the same shape both ways; an icmp port is its echo id, unread
+// by send. send's peer may add ttl N (sticky on the socket). bound with errs, a router's
+// error about our echo answers (router bytes ttl (type code)), bytes the quoted echo, ttl
+// maybe (). the ttl rides when bound asking for it, and always off a raw socket
 
-// the dotted quad of a, into q -> its length
 static int quad_show(char *q, uint32_t a) {
  int k = 0;
  for (int i = 3; i >= 0; i--) {
@@ -307,8 +248,7 @@ static int quad_show(char *q, uint32_t a) {
   if (i) q[k++] = '.'; }
  return k; }
 
-// (farend s) -> ("quad" port), the far end of a connected socket, v6 text in the quad's
-// place; the errno's nom when there is none (enotconn), 'badarg on a non-port
+// (farend s) -> ("quad" port), v6 text in the quad's place
 love_noinline static struct g *host_farend(struct g *g, int fd) {
  union { struct sockaddr_in in; struct sockaddr_in6 in6; } a;
  socklen_t n = sizeof a;
@@ -327,8 +267,7 @@ love_noinline static struct g *host_farend(struct g *g, int fd) {
  g->sp[0] = word(c + 0);
  return g; }
 
-// one datagram and who sent it. the sockaddr and the control buffer are &-taken here, so
-// the lvm wrapper stays TCO-clean; what it needs back rides in the caller's rbuf
+// the &-taken buffers live here, so the lvm wrapper stays TCO-clean
 struct rmeta { uint32_t ip; int port, ttl, v6, err, etype, ecode; unsigned char ip6[16]; };
 struct rbuf { char b[DgMax + 60]; struct rmeta m; };   // room for a raw socket's ip header
 love_noinline static ssize_t call_recv(int fd, struct rbuf *r) {
@@ -358,9 +297,7 @@ love_noinline static ssize_t call_recv(int fd, struct rbuf *r) {
 // linux's sock_extended_err, the error queue's cmsg; the offender's sockaddr follows it
 struct eerr { uint32_t errnum; uint8_t origin, type, code, pad; uint32_t info, data; };
 
-// the error queue asked for on fd: 1 for v4's, 2 for v6's, 0 for none (IPPROTO_IP is 0, so
-// the level itself cannot say it) -- and none on the bsds, which have no error queue and
-// refuse the option's name
+// 1 for v4's error queue, 2 for v6's, 0 for none (IPPROTO_IP is 0) or on the bsds
 static int errq_of(int fd) {
  union { struct sockaddr_in in; struct sockaddr_in6 in6; } a;
  socklen_t n = sizeof a;
@@ -370,7 +307,7 @@ static int errq_of(int fd) {
  int v6 = a.in.sin_family == AF_INET6, lv = v6 ? IPPROTO_IPV6 : IPPROTO_IP;
  return getsockopt(fd, lv, v6 ? IPV6_RECVERR : IP_RECVERR, &on, &k) == 0 && on ? 1 + v6 : 0; }
 
-// one icmp error off the queue: the echo it is about, the router in the peer's place
+// the router in the peer's place
 love_noinline static ssize_t call_recv_err(int fd, struct rbuf *r, int q) {
  int lv = q == 2 ? IPPROTO_IPV6 : IPPROTO_IP;
  union { struct sockaddr_in in; struct sockaddr_in6 in6; } peer;
@@ -389,7 +326,7 @@ love_noinline static ssize_t call_recv_err(int fd, struct rbuf *r, int q) {
    if (c->cmsg_level != lv || c->cmsg_type != (lv == IPPROTO_IP ? IP_RECVERR : IPV6_RECVERR)) continue;
    struct eerr e;
    memcpy(&e, CMSG_DATA(c), sizeof e);
-   if (e.origin != 2 && e.origin != 3) continue;   // icmp's, icmp6's; a local error is not a router's
+   if (e.origin != 2 && e.origin != 3) continue;   // icmp's, icmp6's: not a local error
    union { struct sockaddr_in in; struct sockaddr_in6 in6; } o;
    memcpy(&o, CMSG_DATA(c) + sizeof e, sizeof o);
    r->m.ttl = -1, r->m.err = 1, r->m.etype = e.type, r->m.ecode = e.code, r->m.port = 0;
@@ -398,8 +335,7 @@ love_noinline static ssize_t call_recv_err(int fd, struct rbuf *r, int q) {
    else r->m.ip = ntohl(o.in.sin_addr.s_addr);
    return n; } } }
 
-// an echo socket's datagram, its error queue first when it asked for one: an error pending
-// there fails an ordinary read once, so that failure is the queue's news, read again
+// the error queue first: a pending error fails an ordinary read once, so read again
 love_noinline static ssize_t call_recv_q(int fd, struct rbuf *r) {
  int q = errq_of(fd);
  for (int tries = 0; ; tries++) {
@@ -407,19 +343,15 @@ love_noinline static ssize_t call_recv_q(int fd, struct rbuf *r) {
   ssize_t n = call_recv(fd, r);
   if (n >= 0 || n == -EAGAIN || !q || tries) return n; } }
 
-// the raw icmp socket standing in for an echo socket: its id is the pid's low bits, where
-// linux's kernel picks one, fills it in, and filters to the replies bearing it
+// a raw icmp socket's echo id is the pid's low bits; an echo socket's kernel picks and filters its own
 static int is_raw(int fd) {
  int t = 0;
  socklen_t n = sizeof t;
  return getsockopt(fd, SOL_SOCKET, SO_TYPE, &t, &n) == 0 && t == SOCK_RAW; }
 static unsigned echo_id(void) { return (unsigned) getpid() & 0xffff; }
 
-// the next echo reply to us, its ip header off and that header's ttl kept, or an error a
-// router sent about one of our echoes (time exceeded, unreachable) with the echo it quotes
-// cut out; the rest of what a raw socket hears (our own requests on loopback, other pings'
-// replies, v6's neighbour talk) is skipped. a v6 one brings no header, and its hop limit
-// came as a cmsg
+// our next echo reply (header off, its ttl kept), or a router's error quoting our echo; all
+// else a raw socket hears is skipped. v6 brings no header, its hop limit as a cmsg
 static int ours(unsigned char const *b, unsigned type) {
  return b[0] == type && (unsigned) (b[4] << 8 | b[5]) == echo_id(); }
 love_noinline static ssize_t call_recv_raw(int fd, struct rbuf *r) {
@@ -439,9 +371,7 @@ love_noinline static ssize_t call_recv_raw(int fd, struct rbuf *r) {
   memmove(r->b, r->b + q, (size_t) (n - q));
   return n - q; } }
 
-// the datagram's bytes and its peer's address as strings, then the list over them: pushes
-// (("quad" port) bytes), (("quad" port) bytes ttl), or for an error (("quad" 0) bytes ttl
-// (type code)) with ttl () when it is not known; v6 text in the quad's place
+// pushes the recv shapes above; an error's peer port is 0
 love_noinline static struct g *host_dgram(struct g *g, char const *b, uintptr_t n, struct rmeta const *m) {
  char q[INET6_ADDRSTRLEN];
  int k = m->v6 ? (int) strlen(inet_ntop(AF_INET6, m->ip6, q, sizeof q)) : quad_show(q, m->ip);
@@ -453,7 +383,7 @@ love_noinline static struct g *host_dgram(struct g *g, char const *b, uintptr_t 
  memcpy(txt(g->sp[0]), q, (size_t) k), len(g->sp[0]) = (uintptr_t) k;
  if (!ok(g = have(g, 8 * Width(struct chain)))) return g;
  struct chain *c = bump(g, 8 * Width(struct chain));
- word host = g->sp[0], bytes = g->sp[1];         // read after have, which may move them
+ word host = g->sp[0], bytes = g->sp[1];         // after have, which may move them
  word tail = ZeroPoint;
  if (m->err) {
   ini_chain(c + 5, putcharm(m->ecode), ZeroPoint);
@@ -472,11 +402,8 @@ love_noinline static struct g *host_dgram(struct g *g, char const *b, uintptr_t 
 static lvm(lvm_recv) {
  int fd = (int) port_fd(Sp[0]);
  if (fd < 0) love_musttail return Answer(badarg(g));
- // a stack buffer is safe in an lvm_ only while its address never reaches the tail, and
- // every exit here unwinds the frame first; love_musttail refuses at compile if one did not.
- struct rbuf r;
+ struct rbuf r;                                // safe while its address never reaches a tail call
  ssize_t n = is_raw(fd) ? call_recv_raw(fd, &r) : call_recv_q(fd, &r);
- // no datagram yet -> park on the socket; nothing was taken off the wire, so the op re-runs
  if (n == -EAGAIN) { g->next_wait_fd = fd; love_musttail return Ap(lvm_yield_sw, g); }
  if (n < 0) love_musttail return Answer(love_err(g, (int) -n));
  LvmCallp(g, 1, host_dgram, r.b, (uintptr_t) n, &r.m) }   // [p] -> [(peer bytes ..)]
@@ -507,9 +434,8 @@ love_noinline static ssize_t call_send(int fd, struct peer const *pe, void const
  while (w < 0 && errno == EINTR);
  return w < 0 ? -errno : w; }
 
-// an echo request through a raw socket: our id and the checksum written into a copy, the
-// two things linux's echo socket fills in itself -- v6's checksum the kernel writes for
-// any raw icmp6 socket. it takes only echo requests, as that does
+// a raw echo request: our id and the v4 checksum into a copy, as an echo socket would fill
+// in; the kernel sums any raw icmp6. echo requests only
 love_noinline static ssize_t call_send_raw(int fd, struct peer const *pe, void const *p, size_t n) {
  unsigned char b[DgMax];
  if (n < 8 || n > sizeof b || *(unsigned char const*) p != (pe->v6 ? 128 : 8)) return -EINVAL;

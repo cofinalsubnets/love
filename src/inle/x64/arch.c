@@ -1,22 +1,16 @@
-// x64 architecture-specific C: CPU-exception handling and the COM1
-// serial console. the stubs in mkvec.l (exc_stub_0 .. exc_stub_31,
-// funnelling through exc_common) build the frame below and call
-// k_exception; uart_isr funnels IRQ4 into k_uart (see the bottom).
+// x64 C: CPU exceptions (mkvec.l's stubs, through exc_common), the COM1 console, the RTC
 #include <stdint.h>
-#include "asmops.h"                    // the privileged instructions, both spellings
-#include "k.h"                       // kboot, and kputc/kputs/kputn (src/inle/kmain.c)
+#include "asmops.h"
+#include "k.h"
 void k_halt(void);
 
-// the frame exc_common hands us, lowest address (rsp) first:
-//   the push15 saved registers, then the stub's (vector, error code),
-//   then the iret frame the CPU pushed on exception entry.
+// exc_common's frame from rsp up: the push15 registers, the stub's (vector, error), the iret frame
 struct k_frame {
   uint64_t r15, r14, r13, r12, r11, r10, r9, r8,
            rdi, rsi, rdx, rcx, rbx, rax, rbp,
            vector, error, rip, cs, rflags, rsp, ss; };
 
-// panic-path console output rides kputc/kputs/kputn: no love state, so a fault
-// handler with nothing live can still say what happened
+// the panic path rides kputc/kputs/kputn, which need no love state
 
 static char const *const exc_name[32] = {
   [0]  = "#DE", [1]  = "#DB", [2]  = "NMI", [3]  = "#BP", [4]  = "#OF",
@@ -25,18 +19,14 @@ static char const *const exc_name[32] = {
   [17] = "#AC", [18] = "#MC", [19] = "#XM", [20] = "#VE", [21] = "#CP", };
 
 
-// every CPU exception (vectors 0..31) arrives here via exc_common.
-// fr->rip is the faulting instruction: a __builtin_trap() faults with
-// fr->vector == 6 and fr->rip at its ud2, so it maps straight back to
-// whichever guard fired. faults are not resumed -- returning from
-// #UD/#GP/#PF would just re-execute the instruction and fault again.
-// one from ring 3 is a process's, and ends it instead of the machine.
-void k_proc_fault(uint64_t vector);   // x64/proc.c: a process's fault ends the process
+// vectors 0..31; a __builtin_trap is #UD with rip at its ud2. never resumed: it would only
+// fault again. one from ring 3 ends its process instead of the machine
+void k_proc_fault(uint64_t vector);   // x64/proc.c
 void k_exception(struct k_frame *fr) {
   if (fr->cs & 3) k_proc_fault(fr->vector);
   k_cli();                             // no interrupts while reporting
   static int nested;
-  if (nested) k_halt();                // faulted while reporting -- stop
+  if (nested) k_halt();                // faulted while reporting
   nested = 1;
 
   char const *name = fr->vector < 32 ? exc_name[fr->vector] : 0;
@@ -46,7 +36,7 @@ void k_exception(struct k_frame *fr) {
   kputn(fr->rip, 16);
   kputs(" err=");
   kputn(fr->error, 16);
-  if (fr->vector == 14) {              // #PF: also the faulting address
+  if (fr->vector == 14) {
     kputs(" cr2="), kputn(k_rd_cr2(), 16); }
   kputc('\n');
   fbdraw();
@@ -54,21 +44,11 @@ void k_exception(struct k_frame *fr) {
   k_halt();
 }
 
-// --- COM1 serial console ---------------------------------------------
-// a 16550 UART at the legacy COM1 I/O ports, used as a second console
-// alongside the framebuffer -- and the only console when no framebuffer
-// is present. output (serial_putc) is also the reliable panic channel:
-// it touches nothing but I/O ports, so it still works when the heap,
-// console buffer, or framebuffer are unusable. input is interrupt-
-// driven: serial_init enables the UART receive interrupt (IRQ4),
-// uart_isr (mkvec.l) funnels it here, and k_uart drains every ready
-// byte into the same input queue kb_int feeds. bytes pass through
-// verbatim -- a serial terminal already sends CR for Enter, DEL for
-// Backspace, and ESC-prefixed arrow sequences, all of which the l
-// line editor decodes directly.
+// COM1, a 16550: a second console, the only one without a framebuffer, and the panic channel,
+// touching nothing but I/O ports. input rides IRQ4 into kb_int's queue, bytes verbatim
 #define COM1 0x3f8
 
-// called once from kmain, just after archinit (so the IDT is live).
+// once from kmain, after archinit (the IDT is live)
 void serial_init(void) {
   k_outb(COM1 + 1, 0x00);    // interrupts off while configuring
   k_outb(COM1 + 3, 0x80);    // DLAB: address the divisor latch
@@ -79,15 +59,12 @@ void serial_init(void) {
   k_outb(COM1 + 4, 0x0b);    // DTR, RTS, OUT2 (OUT2 gates the IRQ line)
   k_outb(COM1 + 1, 0x01); }  // IER: interrupt when receive data arrives
 
-// --- the wall clock: the mc146818 CMOS RTC ---------------------------
-// No door answers a boot date, so this is what makes (clock 0) and every mtime a
-// DATE rather than an uptime -- on every door, the gate's included.
-// -> UNIX SECONDS, or 0 when the chip says nothing.
+// the mc146818 RTC: no door answers a boot date, so (clock 0) is a date only through this.
+// -> unix seconds, or 0 when the chip says nothing
 static uint8_t cmos(uint8_t r) { return k_outb(0x70, r), k_inb(0x71); }
 static uint32_t unbcd(uint32_t v) { return (v >> 4) * 10u + (v & 15); }
 
-// days since 1970-01-01, civil. the year is shifted to start in March so the leap
-// day lands at its END -- which is why there is no month-length table here.
+// days since 1970-01-01; the year starts in March, so the leap day lands at its end
 static int64_t civil_days(int64_t y, uint32_t m, uint32_t d) {
   y -= m <= 2;
   int64_t era = (y >= 0 ? y : y - 399) / 400;
@@ -97,8 +74,7 @@ static int64_t civil_days(int64_t y, uint32_t m, uint32_t d) {
   return era * 146097 + (int64_t) doe - 719468; }
 
 uint64_t k_rtc(void) {
-  // seconds and minutes live in separate registers, so a read across the tick
-  // answers 10:59:60 -- wait the update out. BOUNDED: an absent chip reads 0xff.
+  // wait an update out, or a read across the tick tears; bounded, as an absent chip reads 0xff
   for (int i = 0; i < 100000 && cmos(0x0a) & 0x80; i++) {}
   uint32_t st = cmos(0x0b), s = cmos(0), mi = cmos(2), h = cmos(4),
            d = cmos(7), mo = cmos(8), y = cmos(9),
@@ -107,29 +83,24 @@ uint64_t k_rtc(void) {
   if (!(st & 4)) s = unbcd(s), mi = unbcd(mi), h = unbcd(h), d = unbcd(d),
                  mo = unbcd(mo), y = unbcd(y);  // BCD unless bit 2 says binary
   if (!(st & 2)) h = pm ? h % 12 + 12 : h % 12;
-  // no chip, or one nobody set: answer NOTHING rather than a plausible wrong date.
+  // no chip, or one nobody set: nothing rather than a plausible wrong date
   if (!mo || mo > 12 || !d || d > 31 || h > 23 || mi > 59 || s > 60) return 0;
   return (uint64_t) (civil_days(2000 + (int64_t) y, mo, d) * 86400
                      + h * 3600 + mi * 60 + s); }
 
 void serial_putc(int c) {
   if (c == '\n') serial_putc('\r');
-  // bounded spin on "transmit holding register empty" so an absent or
-  // wedged port cannot hang output.
+  // bounded, so an absent or wedged port cannot hang output
   for (int i = 0; i < 100000 && !(k_inb(COM1 + 5) & 0x20); i++) {}
   k_outb(COM1, (uint8_t) c); }
 
-// IRQ4 handler body, reached from uart_isr. one interrupt can cover
-// several received bytes, so drain the FIFO completely. kq lives in
-// k/main.c -- the same input queue the PS/2 keyboard path enqueues to.
+// IRQ4, from uart_isr: one interrupt can cover several bytes, so drain the FIFO
 void kq(uint8_t);
 void k_uart(void) {
   while (k_inb(COM1 + 5) & 0x01)        // LSR bit 0: receive data ready
     kq(k_inb(COM1)); }
 
-// (fault n) backend: deliberately raise a CPU exception, indexed by
-// the x86 vector numbers that name it. does not return -- k_exception
-// reports and halts.
+// (fault n): raise exception vector n; k_exception reports and halts
 void k_fault_trigger(intptr_t n) {
   switch (n) {
     case 0:   // #DE: integer divide by zero

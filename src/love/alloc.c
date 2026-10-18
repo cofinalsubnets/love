@@ -1,16 +1,6 @@
-// src/love/alloc.c -- the runtime's heap over malloc and free, for a seat whose memory already
-// is those. every pool the collector takes comes through alloc: the nursery that IS g,
-// the major pool, the remembered set, and the image codec's scratch.
-//
-// a plain definition, not a weak default in the runtime. a seat with a heap of its own
-// defines alloc itself and does not link this; a seat that links both collides here
-// and says so; a seat that links neither fails to link, which is the right answer for a
-// runtime with nowhere to put its pools. the alternative -- a weak body in love.c --
-// answers quietly in both directions, and which way it went is a question about one
-// link's object set rather than anything the source says.
-//
-// separate from src/love/bare.c because the two ask different questions: bare.c is what a seat
-// with no src/love/fd.c owes the runtime's doors, and having a heap is not having an fd.
+// src/love/alloc.c -- the runtime's heap over malloc and free: every pool the collector takes
+// comes through alloc. a plain definition, not a weak default: a seat with its own heap
+// defines alloc instead of linking this, and linking both collides loudly
 #include "love.h"
 
 void *alloc(void *p, size_t n) { return n ? malloc(n) : (free(p), NULL); }

@@ -1,8 +1,5 @@
-// src/love/lovefs.c -- /love on the host: the tree the binary carries, through the vfs inle's
-// kernel serves its namespace with (vfs.h), to this process alone. posix.c's open, stat,
-// lstat, readdir and readlink ask here before the OS; inle's kernel serves /love itself, so on
-// that seat nothing here answers. a child that is not love cannot see it. the same open tree
-// backs src.c's tree nifs and the bake (main.c).
+// src/love/lovefs.c -- /love on the host: the carried tree through vfs.h, to this process alone.
+// posix.c asks here before the OS; under inle the kernel serves /love and nothing here answers
 #include "love.h"
 #include "vfs.h"
 #include "archive/srctree.h"
@@ -11,8 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-// the tree, opened at the first ask: the binary's own does not move while it runs, so one
-// per process stands (the rare static). nothing here writes it, so nothing is let go.
+// opened at the first ask; the carried tree never changes, so a process-wide static stands
 static struct lovefs { struct vfs v; bool tried, ok; } lovefs;
 
 static void *lovefs_grab(uintptr_t n) { return alloc(NULL, n); }
@@ -35,9 +31,8 @@ struct tree *tree_carried(void) {
  struct vfs *v = lovefs_vfs();
  return v ? &v->src : NULL; }
 
-// a path -> where it falls: -1 not the tree's (the OS answers), -2 absent under /love, -3 a
-// directory, else the entry it names. c takes the canonical path ("love/.."), cap 256.
-// absolute paths only: the host's cwd is never under /love.
+// -1 not the tree's (the OS answers), -2 absent under /love, -3 a directory, else the entry.
+// c takes the canonical path ("love/.."), cap 256; absolute only, the cwd is never under /love
 intptr_t lovefs_at(char const *p, char *c, uintptr_t *cn) {
  if (__love_osv < 0 || !p || p[0] != '/' || !srctree_len) return -1;
  intptr_t n = path_canon(c, 0, p, strlen(p), 256);
@@ -58,9 +53,8 @@ int lovefs_child(char const *c, uintptr_t cn, int *cur, char const **name, uintp
  struct vfs *v = lovefs_vfs();
  return v ? vfs_child(v, c, cn, cur, name, len, dir) : -1; }
 
-// a read port over entry i's bytes, its section decoded now if no read has yet. they stay for
-// the life of the process, so the cell holds their address and the cursor as charms,
-// nothing to trace. a section that will not decode is EIO.
+// a read port over entry i's decoded bytes: they live as long as the process, so the cell
+// holds their address as a charm, nothing to trace
 struct lovefs_port { struct io io; word at, len, pos; };
 static struct g *lovefs_flush(struct g *g) { return g; }
 static intptr_t lovefs_readn(struct g *g, unsigned char *dst, uintptr_t n) {

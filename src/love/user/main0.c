@@ -1,25 +1,14 @@
-// src/love/user/main0.c -- love0's seat, the third of the three: main.c is hosted love's,
-// kmain.c is inle's, this is the ambient-cc bootstrap's. it lays the blob the
-// shipped love carries, so it carries none itself, and its whole job is the corpus --
-// a build tool from the command line, the self-test with no arguments.
-//
-// its own translation unit because that IS the seat boundary. common.mk keeps this
-// file out of host_c and the Makefile names it into love0_o, the way src/love/cats.c is
-// named out of love0's list: main.c holds what both seats do, and the two things only
-// love0 does -- the pasted boot texts and the twice-run corpus -- live here.
+// src/love/user/main0.c -- love0's boot, the ambient-cc bootstrap: a build tool with args, the
+// corpus self-test without. common.mk keeps it out of host_c; the Makefile names it into love0_o
 #include "love.h"
 #include <stdlib.h>
 #include <string.h>
 
-// the null seat is src/love/user/nokern.c's and the carried blobs src/love/noblob.c's -- love0 has no
-// kmain.c under it and lays the archives rather than carrying them, and so does every
-// gate link that builds this C set. both are named into love0_o beside this file.
-// love0 has no moonlibc either, so __love_osv is src/love/love.c's weak one, which reads 0.
+// nokern.c and noblob.c link beside this; no moonlibc, so __love_osv is love.c's weak 0
 
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
 static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/love/boot/post.l) drinks the corpus
-// the groups love0 evaluates as ONE text apiece: a text is read whole before its first
-// form runs, so joining at boot keeps that seam where the pasted headers had it.
+// each group evaluates as one text: a text is read whole before its first form runs
 static char const *const mods0[] = { src0_holo, src0_x64, src0_a64, NULL };
 static char const *const prelpost0[] = { src0_prel, src0_post, NULL };
 static char const *const prelev0[] = { src0_prel, src0_ev, NULL };
@@ -37,11 +26,8 @@ static struct g *evals0(struct g *g, char const *const *v) {
   g = evals_(g, t);
   return alloc(t, 0), g; }
 
-// with args, run the build tool (lcat / gen_data) through the CLI driver.
-// with no args, self-test: eval prel, load bao (the shell core) as a module, and run
-// the baked corpus via c0, then bootstrap the self-hosted ev (egg) and run the corpus
-// again through it. the three bake words are the full love's: they stand in the
-// signature so main() has one call for both seats, and love0 has no bake verb.
+// with args, the build tool through the cli driver; without, the corpus via c0, then again
+// via the self-hosted ev. the bake words are unused: main() has one call for both builds
 struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
                 char const *bake_out) {
   (void) bake, (void) bake_load, (void) bake_out;
