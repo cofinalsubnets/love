@@ -21,6 +21,16 @@
 ;                                      (door ..) in a long wall: it opens as the level starts,
 ;                                      shuts once the player is out, and the car goes leave
 ;                                      metres along its length, the sign its way, and is gone
+;   (bin [x y z] width depth height TEXTURE SIGN)  a rubbish bin standing at x y z: narrower
+;                                      at its foot, its corners cut, capped, hollow up top and
+;                                      open on every side there, SIGN () or a texture on each
+;                                      side below; solid
+;   (window [x y z] [x y z] TEXTURE)   an opening carved between two corners, a pane of glass
+;                                      across its middle the thin way: what is beyond it
+;                                      seen through the texture, the light on it; solid
+;   (decal [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)  a picture laid on a surface,
+;                                      its middle at x y z, facing n, its top toward u; its
+;                                      texture's holes show what is under it
 ;   (strip-light [x y z])              a light strip along z, its face at y
 ;   (bulb [x y z] (rgb r g b))         a bare bulb, its light
 ;   (poster [x y z] width height FILE) on the wall nearest, the middle of its foot at x y z;
@@ -38,7 +48,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of start room air solid box prism cut door train strip-light bulb poster sign
+(module (scenery level-of start room air solid box prism cut door train bin decal window strip-light bulb poster sign
          across stammer buzz breathe texture skin textures repeat mirror-x mirror-z rgb)
 (borrow 'view)                          ; min2 max2
 (borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
@@ -70,6 +80,44 @@
  (door at w h) (: u "(door [x y z] width height)" (part 'door [['at (P at u)] ['w (N w u)] ['h (N h u)]]))
  (train lo hi d leave) (: u "(train [x y z] [x y z] (door [x y z] width height) leave)"
    (kind? d ['door] ? (part 'car [['lo (P lo u)] ['hi (P hi u)] ['door d] ['leave (N leave u)]]) (no u d)))
+ ; ..a window: its opening, and its pane
+ (window lo hi t) (: u "(window [x y z] [x y z] TEXTURE)" a (P lo u) b (P hi u)
+   (texture? t ? [(air (box a b)) (part 'pane [['lo (lo2 a b)] ['hi (hi2 a b)] ['tex t]])] (no u t)))
+ ; ..a decal: its middle, and points a metre on along its facing and its up
+ (decal at n up w h t) (: u "(decal [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)" a (P at u) nn (P n u) uu (P up u)
+   (texture? t ? (part 'decal [['at a] ['np (map (k \ a k + nn k) ^3)] ['up (map (k \ a k + uu k) ^3)] ['w (N w u)] ['h (N h u)] ['tex t]])
+      (no u t)))
+ ; ..a bin: brushes, its body's sides and corners cut in toward its foot, hollow up top with an
+ ; opening into it on each side, and a cap a little wider over all; its sign on each side
+ bin-dark (texture 8 8 1 '((fill 0.12) (noise 2 0.3)))
+ (bin at w d h t sg) (: u "(bin [x y z] width depth height TEXTURE SIGN)" p (P at u) x (p 0) y (p 1) z (p 2)
+   (? (!(texture? t)) (no u t) (!(sg = () || texture? sg)) (no u sg)
+      (: W (0.5 * N w u) D (0.5 * N d u) H (N h u) k (0.12 * min2 W D) c (0.2 * min2 W D) y1 (y + H)
+         (sx i) (i ? 1.0 -1.0)
+         ; ..each side through its top edge and its foot k in; each corner c off its top's
+         sides [[[(x + W) y1 (z - D)] [(x + W) y1 (z + D)] [(x + W - k) y (z - D)]]
+                [[(x - W) y1 (z - D)] [(x - W) y1 (z + D)] [(x - W + k) y (z - D)]]
+                [[(x - W) y1 (z + D)] [(x + W) y1 (z + D)] [(x - W) y (z + D - k)]]
+                [[(x - W) y1 (z - D)] [(x + W) y1 (z - D)] [(x - W) y (z - D + k)]]]
+         corners (map (i \ (: a (sx (i % 2)) b (sx (i // 2)) cx (x + a * W) cz (z + b * D)
+                               [[(cx - a * c) y1 cz] [cx y1 (cz - b * c)] [(cx - a * (c + k)) y (cz - b * k)]]))
+                      ^4)
+         body (foldl (\ b q (cut (q 0) (q 1) (q 2) b)) (solid (box [(x - W) y (z - D)] [(x + W) y1 (z + D)])) (sides + corners))
+         i0 (y1 - 0.5 * H) i1 (y1 - 0.04) iw (W - 0.5 * k - 0.03) id (D - 0.5 * k - 0.03)
+         o0 (y1 - 0.4 * H) o1 (y1 - 0.1 * H) sl (0.7 * W) sd (0.7 * D)
+         hollow [(box [(x - iw) i0 (z - id)] [(x + iw) i1 (z + id)])
+                 (box [x o0 (z - sd)] [(x + W + 0.01) o1 (z + sd)]) (box [(x - W - 0.01) o0 (z - sd)] [x o1 (z + sd)])
+                 (box [(x - sl) o0 z] [(x + sl) o1 (z + D + 0.01)]) (box [(x - sl) o0 (z - D - 0.01)] [(x + sl) o1 z])]
+         ; ..the sign a third of the way up each side, a hair off it, leaning as it leans
+         ys (y + 0.33 * H) e (0.67 * k - 0.004) sz (0.42 * H) L (sqrt (H * H + k * k))
+         signs (sg = () ? ()
+                  [(decal [(x + W - e) ys z] [(H / L) (0.0 - k / L) 0.0] [(k / L) (H / L) 0.0] sz sz sg)
+                   (decal [(x - W + e) ys z] [(0.0 - H / L) (0.0 - k / L) 0.0] [(0.0 - k / L) (H / L) 0.0] sz sz sg)
+                   (decal [x ys (z + D - e)] [0.0 (0.0 - k / L) (H / L)] [0.0 (H / L) (k / L)] sz sz sg)
+                   (decal [x ys (z - D + e)] [0.0 (0.0 - k / L) (0.0 - H / L)] [0.0 (H / L) (0.0 - k / L)] sz sz sg)])
+         [(skin {'all t} body) (map (b \ skin {'all bin-dark} (air b)) hollow)
+          (skin {'all t} (solid (box [(x - W - 0.02) y1 (z - D - 0.02)] [(x + W + 0.02) (y1 + 0.05) (z + D + 0.02)])))
+          signs])))
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
  (bulb at c) (: u "(bulb [x y z] (rgb r g b))" (colour? c ? (part 'bulb [['at (P at u)] ['c c] ['how ()]]) (no u c)))
  (poster at w h file) (: u "(poster [x y z] width height FILE)"
@@ -97,7 +145,7 @@
    (tablet? s && all (k \ elem k ['wall 'floor 'ceiling 'door 'train] && texture? (s k)) (keys s) ? (part 'textures [['set s]]) (no u s)))
  ; --- repeat and mirror: copies with every point moved, and a start's bearing turned ---
  (flat x) (? (tablet? x) [x] (atom? x) () (cats (map flat x)))
- (re g b p) (: q (foldl (\ q k (with q k (g (p k)))) p (filter (k \ elem k (keys p)) ['at 'lo 'hi]))
+ (re g b p) (: q (foldl (\ q k (with q k (g (p k)))) p (filter (k \ elem k (keys p)) ['at 'lo 'hi 'np 'up]))
    q2 (elem 'pts (keys q) ? (with q 'pts (map g (q 'pts))) q)
    q3 (elem 'cuts (keys q2) ? (with q2 'cuts (map (c \ map g c) (q2 'cuts))) q2)
    q4 (elem 'door (keys q3) ? (with q3 'door (re g b (q3 'door))) q3)
@@ -112,11 +160,12 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; ..the textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'decal 'pane 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
-   used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ b 'skin k) (sort (keys (b 'skin)))) bs)))
+   used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ b 'skin k) (sort (keys (b 'skin)))) bs)
+                                                     + map (d \ d 'tex) (of 'decal + of 'pane)))
    (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
    (skin-of b) (: s (b 'skin) (cats (map (k \ (k = 'all ? (map (c \ [c (tname (s k))]) ['wall 'floor 'ceiling])
                                                  [[(k = 'walls ? 'wall k) (tname (s k))]]))
@@ -135,6 +184,8 @@
        'strips (map (s \ (: a (s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'across (s 'across) 'how (s 'how)})) (of 'strip))
        'bulbs (map (b \ {'at (b 'at) 'c (b 'c) 'how (b 'how)}) (of 'bulb))
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
+       'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex))}) (of 'pane))
+       'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
        'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'text (s 'text) 'c (s 'c) 'how (s 'how)})) (of 'sign))
        'textures (map (k \ tex k (dflt k)) (filter (k \ elem k (keys dflt)) ['wall 'floor 'ceiling 'door 'train])
                   + map (i \ tex (tname (used i)) (used i)) ^#used)})))

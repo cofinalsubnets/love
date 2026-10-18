@@ -43,6 +43,23 @@
               (rows 14 30 (rgb 0.06 0.07 0.09))
               (rows 33 36 (rgb 0.6 0.08 0.06))
               (cols 0 1 0.35))))
+;; ..glass, faintly green, smeared
+(: glass (texture 64 64 2
+          '((fill (rgb 0.6 0.74 0.7))
+            (noise 24 8 0.12)
+            (patches 10 0.2 (shade 1.08)))))
+;; ..the bins: pale blue steel, and their sign, a figure dropping litter in a ring
+(: binmetal (texture 32 64 0.6
+             '((fill (rgb 0.62 0.67 0.74))
+               (noise 12 0.5 0.07))))
+(: binsign (texture 64 64 0.3
+            '((fill hole)
+              (disc 32 32 30 (grey 0.92)) (disc 32 32 26 hole)
+              (disc 25 17 4 (grey 0.92))
+              (rect 21 22 29 39 (grey 0.92)) (rect 28 24 38 28 (grey 0.92))
+              (rect 21 39 24 51 (grey 0.92)) (rect 26 39 29 51 (grey 0.92))
+              (rect 36 37 46 39 (grey 0.92)) (rect 37 39 45 51 (grey 0.92))
+              (disc 39 32 2 (grey 0.92)))))
 
 (level "the station"
   (textures {'wall wall 'floor tiles 'ceiling panels 'door steel 'train carbody})
@@ -80,4 +97,16 @@
   (repeat 5 [2 0 0] [(across (strip-light [0 5 4]))])
   (stammer (across (strip-light [0 5 12])))
   (buzz (sign [0 3.2 15.9] 0.45 "EXIT" (rgb 0.2 1 0.35)))
-  (poster [-4.7 1.2 6.4] 0.7 1.0 ()))
+  (poster [-4.7 1.2 6.4] 0.7 1.0 ())
+  ; inside the easternmost block, a room no one can reach: a window in its west face onto the
+  ; chamber beside it, a light, and a door in its east wall
+  (room [11.3 0 0.3] [18.7 3.2 3.7])
+  (window [10.95 0.9 0.6] [11.35 2.6 3.4] glass)
+  (strip-light [15 3.2 2])
+  (door [18.7 0 2] 1.2 2.2)
+  ; the bins: against the blocks either side of the hallway on the platform, at its ends,
+  ; and in each wing against the front block
+  (mirror-x 0
+   [(bin [-5 0 -0.4] 0.6 0.45 0.95 binmetal binsign)
+    (bin [-21.5 0 -0.4] 0.6 0.45 0.95 binmetal binsign)
+    (bin [-15 0 4.4] 0.6 0.45 0.95 binmetal binsign)]))

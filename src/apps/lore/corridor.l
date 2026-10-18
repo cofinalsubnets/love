@@ -80,9 +80,11 @@
  (P ax al y ac) (ax = 'z ? [al y ac] [ac y al])
  (along ax) (ax @ 'z [1.0 0.0 0.0] [0.0 0.0 1.0])
  (across ax) (ax @ 'z [0.0 0.0 1.0] [1.0 0.0 0.0])
+ ; ..the room x z is in, or nearest: of rooms one inside another, the innermost
  (room-at lv x z) (: rs (lv 'rooms)
    (gap r) (sq (max2 0.0 (max2 (r 0 - x) (x - r 2))) + sq (max2 0.0 (max2 (r 1 - z) (z - r 3))))
-   (foldl (\ b r (gap r < gap b ? r b)) <rs >rs))
+   (area r) ((r 2 - r 0) * (r 3 - r 1))
+   (foldl (\ b r (gap r < gap b || (gap r = gap b && area r < area b) ? r b)) <rs >rs))
  ; ..a room's box as a mask of places, a little past its walls: what its lamps reach
  (inside r) (\ X Y Z ((r 0 - 0.11 < X) * (X < r 2 + 0.11) * (r 1 - 0.11 < Z) * (Z < r 3 + 0.11)))
  ; ..the wall of x z's room nearest it: [ax at lo hi n], n into the room
@@ -241,6 +243,18 @@
  (coarse? lps) (\ ps c (: lo (map (k \ foldl (\ a p (min2 a (p k))) 1e9 ps) ^3) hi (map (k \ foldl (\ a p (max2 a (p k))) -1e9 ps) ^3)
    (d p) (sqrt (net (map (k \ sq (max2 0.0 (max2 (lo k - p k) (p k - hi k)))) ^3)))
    (any (lp \ any (p \ (: dd (d p) (dd < lp 'r && 6.0 * c > dd + 0.5))) (lp 'at)) lps)))
+ ; ..a pane: a sheet each way across the middle of its thin side, glass of its texture, the
+ ; light on it its sheen
+ (pane-mesh p tt) (: lo (p 'lo) hi (p 'hi) ax ((hi 0 - lo 0) < (hi 2 - lo 2) ? 0 2) al (2 - ax) m (0.5 * (lo ax + hi ax))
+   i (tix tt (p 'tex)) t (tt i) W (hi al - lo al) H (hi 1 - lo 1) g [0.14 0.15 0.15]
+   (pt a y) (ax = 0 ? [m y a] [a y m]) e (map (k \ k = al ? 1.0 0.0) ^3) n (map (k \ k = ax ? 1.0 0.0) ^3)
+   (uv q) [(t 1 / W * (q al - lo al)) (t 2 / H * (hi 1 - q 1))]
+   (mesh-join [(sheets (pt (lo al) (lo 1)) [0.0 H 0.0] (c* W e) n uv (-3 - i) g)
+               (sheets (pt (lo al) (lo 1)) [0.0 H 0.0] (c* W e) (c* -1.0 n) uv (-3 - i) g)]))
+ ; ..a decal's sheet, its texture tex tw by th
+ (decal-mesh d tt) (: a (d 'at) n (unit (c+ (d 'np) (c* -1.0 a))) u (unit (c+ (d 'up) (c* -1.0 a))) r (cross u n)
+   w (d 'w) h (d 'h) i (tix tt (d 'tex)) t (tt i) o (c+ a (c+ (c* (-0.5 * w) r) (c* (-0.5 * h) u)))
+   (sheets o (c* h u) (c* w r) n (q \ (: e (c+ q (c* -1.0 o)) [(t 1 / w * dot e r) (t 2 / h * (h - dot e u))])) i white))
  (file-of dir p) (p 'file @ () () f (f 0 @ 47 f (dir + f)))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
  ;     dir the level's folder, for its pictures ---
@@ -250,7 +264,8 @@
    pm (map (i \ poster-mesh lv (ps i) (#tt + i) (shape (ptex i 0) 1) (shape (ptex i 0) 0)) ^#ps)
    bs (brushes-of lv)
    ; ..the world in chunks chunk-m square, so a frame draws only those in view, nearest first
-   cks (map mesh-pack (brush-chunks bs [cell-top cell (coarse? (cats (map (l \ l 'lamps) ls)))] (look tt) chunk-m + pm))
+   cks (map mesh-pack (brush-chunks bs [cell-top cell (coarse? (cats (map (l \ l 'lamps) ls)))] (look tt) chunk-m
+                       + pm + map (d \ decal-mesh d tt) (peep lv 'decals ())))
    drs (map (d \ mesh-pack (door-mesh d tt)) (lv 'doors))
    ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds
    ; only the lights that change
@@ -263,7 +278,8 @@
    cars (map (c \ (: b (mesh-pack (car-mesh c tt)) d (mesh-pack (car-door c tt)) lp (car-lamp c)
                      {'body b 'body-lit (clit lp b) 'door d 'door-lit (clit lp d) 'bar (mesh-pack (car-bar c))}))
              (peep lv 'cars ()))
-   {'chunks (map (pk \ {'pk pk 'lit (lit pk) 'lo (map (k \ amin (pk 'cols k)) ^3) 'hi (map (k \ amax (pk 'cols k)) ^3)}) cks)
+   {'panes (map (p \ (: pk (mesh-pack (pane-mesh p tt)) {'pk pk 'lit (lit pk)})) (peep lv 'panes ()))
+    'chunks (map (pk \ {'pk pk 'lit (lit pk) 'lo (map (k \ amin (pk 'cols k)) ^3) 'hi (map (k \ amax (pk 'cols k)) ^3)}) cks)
     'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs
     'texs (map (t \ swatch (t 'w) (t 'h) (t 'layers)) txs + ptex)})
  ; --- the frame: the rooms and doors lit by the lights as bright as they are now, then
@@ -300,7 +316,8 @@
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (cats (map (i \ cats (map (q \ ((q 1 * ks i) @ 0.0 () b [(mesh-shine (q 0) b)])) (sc 'lights i key))) ^#ks))
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
-   all (cars + doors + hall + by 'shine + map mesh-glow (by 'glow))
+   glass (map (c \ relit (c 'pk) (c 'lit)) (sc 'panes))
+   all (cars + doors + hall + by 'shine + glass + map mesh-glow (by 'glow))
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) [0.0 0.0 0.0 30.0 60.0] 8 gain 0))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
@@ -345,10 +362,15 @@
    (shut? i) (: d (lv 'doors i) al (d 'ax = 'z ? x z) ac (d 'ax = 'z ? z x)
      (st 'doors i < 0.85 && mag (al - d 'c) < 0.5 * d 'w + r && d 'a - r < ac && ac < d 'b + r))
    fl (st 'py - eye-h)
+   ; ..a pane stops a body, a hand either side of it, where it spans feet or head
+   (pane? q) (any (p \ (: lo (p 'lo) hi (p 'hi) th 0.1
+                       (lo 0 - th < q 0 && q 0 < hi 0 + th && lo 2 - th < q 1 && q 1 < hi 2 + th
+                        && any (y \ lo 1 <= y && y <= hi 1) [(fl + 0.3) (fl + 1.7)])))
+               (peep lv 'panes ()))
    (air q) (: on (filter (i \ car-track? (cs i) (q 0) (q 1)) ^#cs)
      (two? on ? (all (i \ car-free? (cs i) (st 'cars i) (q 0) (q 1)) on)
         (brush-medium bs [(q 0) (fl + 0.3) (q 1)] = 1 && brush-medium bs [(q 0) (fl + 1.7) (q 1)] = 1)))
-   (all air pts && !(any shut? ^#(lv 'doors))))
+   (all air pts && !(any pane? pts) && !(any shut? ^#(lv 'doors))))
  (put! st x z) (walk-slide st x z corridor-free?)
  ; ..the corridor's own keys, over view's
  corridor-binds {112 'where}

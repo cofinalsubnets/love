@@ -129,6 +129,22 @@
  (test (m -9.0 0.3 -0.05 = 1) (m 9.0 0.3 -0.05 = 1) (m 0.0 0.3 -0.05 = 1)
        (m -9.0 0.3 -4.44 = 0) (m 9.0 0.3 -4.44 = 0) (m 0.0 0.3 -4.44 = 1)
        (m 0.0 -0.5 -6.0 = 1) (m 0.0 -1.1 -6.0 = 0) (m 0.0 -0.5 -2.0 = 0)))
+; a bin: solid at its foot, hollow up top and open on every side there, capped, a sign on each
+; side; a window: glass between two rooms that stops a walk where its sill does not, and a lamp
+; in the room within a room lights that room
+(: tq "(: m (texture 8 8 1 '((fill 0.5)))) "
+   (lq s) (corridor-read (tq + "(level \"t\" " + s + ")"))
+   bl (lq "(room [0 0 0] [4 3 4]) (bin [2 0 2] 0.6 0.45 0.95 m m)")
+   bb (corridor-new 8 8 bl "" 'sc 'brushes) (bm x y z) (brush-medium bb [x y z])
+   wl (lq "(room [0 0 0] [4 3 4]) (room [0 0 4.3] [4 3 8]) (window [1 0 3.95] [3 2.5 4.35] m) (start [2 0 3] 0 0)")
+   ws (corridor-new 8 8 wl "")
+   nest (lq "(room [0 0 0] [10 3 10]) (room [2 0 2] [5 3 5]) (strip-light [3.5 3 3.5])")
+   ns (corridor-new 8 8 nest "") lp (ns 'sc 'lights 0 'lamps 0 'keep)
+ (test (bm 2.0 0.3 2.0 = 0) (bm 2.0 0.75 2.0 = 1) (bm 2.29 0.75 2.0 = 1) (bm 2.0 0.75 2.22 = 1) (bm 2.0 0.97 2.0 = 0)
+       (bm 2.0 0.3 2.27 = 1) (#(bl 'decals) = 4) (#(bl 'panes) = 0)
+       (#(wl 'panes) = 1) (corridor-free? ws 2.0 3.5) (!(corridor-free? ws 2.0 4.15)) (corridor-free? ws 3.5 4.15 = 0)
+       (#(ws 'sc 'panes) = 1) (peep (ws 'sc 'panes 0 'pk 'tris) 3 0 = -3)
+       (lp 3.5 1.0 3.5 = 1) (lp 8.0 1.0 8.0 = 0)))
 ; a car: its door opens at the start and stays open while the player is in; walls and the shut
 ; door stop a walk; out, it shuts, reopening for a step back; then it leaves, and the edge stops
 ; a walk; each change cried, the car drawn only while it stands, its sounds in range
