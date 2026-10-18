@@ -5391,6 +5391,8 @@
    (nobi? g nm) (drop 8 (g 'mo) @ r (two? r && (<r = 1 || elem nm <r)))
    (falgn g) (drop 9 (g 'mo) @ r (two? r && charm? <r ? <r 0))   ; -falign-functions=N
    (nsib? g) (drop 10 (g 'mo) @ r (two? r && <r))  ; -fno-optimize-sibling-calls: a call stays a call
+   (avz? g) (drop 11 (g 'mo) @ r (two? r && <r))   ; -ftrivial-auto-var-init=zero
+   (ibt? g) (x64t? g && drop 12 (g 'mo) @ r (two? r && <r))   ; -fcf-protection=branch: x86's endbr pads
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
    ; the chunks of n bytes at an a-aligned address: (pos width) each, widest first
    (alchunks n a)
@@ -5427,9 +5429,19 @@
    bp-auti '(raw (191 35 3 213))                    ; autiasp
    bp-btic '(raw (95 36 3 213))                     ; bti c
    bp-btij '(raw (159 36 3 213))                    ; bti j
+   bp-endbr64 '(raw (243 15 30 250))
+   bp-endbr32 '(raw (243 15 30 251))
+   ; a landing pad's bytes: bti c, or x86's endbr
+   (lpad? g) (bp? g 'bti || ibt? g)
+   (lpad g) (? !(ibt? g) bp-btic (ia32? g) bp-endbr32 bp-endbr64)
+   ; under ibt every indirect target lands on endbr: a table's cases, a label whose address is
+   ; taken, and the return from a returns-twice call, which a longjmp reaches by an indirect jmp
    (bprot g fs)
-    (: pac (bp? g 'pac) bti (bp? g 'bti)
-       tl (bti ? (foldl (t \ f \ (two? f && <f = 'jmpt ? (foldl (t2 \ L \ pin t2 L 1) t (f 3)) t)) {} fs))
+    (: pac (bp? g 'pac) bti (bp? g 'bti) ibt (ibt? g)
+       tl (bti || ibt ? (foldl (t \ f \ (? !(two? f) t
+                                         (<f = 'jmpt) (foldl (t2 \ L \ pin t2 L 1) t (f 3))
+                                         (ibt && <f = 'la && starts? (show (f 2)) "\(g 'fn).") (pin t (f 2) 1)
+                                         t)) {} fs))
        (go l acc)
         (!(two? l) ? (rev acc)
            (<l @ f
@@ -5438,18 +5450,20 @@
                  (bti && two? f && <f = 'label && peep tl (f 1) ()) (go >l (bp-btij . f . acc))
                  (bti && two? f && <f = 'jmpr && nelem (f 1) '(r16 r17))
                   (go >l (['jmpr 'r16] . ['mov 'r16 (f 1)] . acc))
+                 (ibt && two? f && <f = 'label && peep tl (f 1) ()) (go >l (lpad g . f . acc))
+                 (ibt && two? f && <f = 'call && elem (show (f 1)) twicefns) (go >l (lpad g . f . acc))
                  (go >l (f . acc)))))
-       (pac || bti ? (go fs ()) fs))
+       (pac || bti || ibt ? (go fs ()) fs))
    ; the entry's bti c, once the unit is laid: a fn another unit may call, or one whose address
    ; is taken, lands its indirect calls on it -- unless paciasp, a landing pad itself, leads.
    ; its slot is laid with the body, right behind the fn's own label
    (btiat nm fs) (: L ['label (name nm)]
                     (go l) (!(two? l) ? l (<l = L ? (<l . '(btislot) . >l) (<l . go >l)))
                     (go fs))
-   (btic fm on)
+   (btic g fm on)
     (: (go l acc)
         (!(two? l) ? (rev acc)
-           (<l = '(btislot) ? (go >l (on && <>l != bp-paci ? (bp-btic . acc) acc))
+           (<l = '(btislot) ? (go >l (on && <>l != bp-paci ? (lpad g . acc) acc))
               (go >l (<l . acc))))
        (go fm ()))
    ; shrink-wrap: code the entry reaches without the frame runs without it. the prologue ((sub sp sp N)
@@ -7788,7 +7802,8 @@
            (: _ (psreset g)
               p <ps
               ty <>p
-              init <>>p
+              ; -ftrivial-auto-var-init=zero: no initializer is a zero one
+              init (avz? g && atom? <>>p && !(gvarr? ty) ? (aggish? ty ? ['init ()] ['num 0]) <>>p)
               ; a `register T v asm("reg")` local naming a register the asm surface cannot
               (? (two? >>>p && <>>>p && (gas-regname (gtgt g) <>>>p @ r9 !(nom? r9 && asmreg? g r9)))
                   (nolane g "no lane for a register variable in \(<>>>p)\(ontgt g)")
@@ -7797,6 +7812,7 @@
                       (nolane g "a variable-length array cannot take an initializer")
                      !(elem (gtgt g) '(x64 a64 rv64 i386 i386m16 thumb2 thumb2sp arm))
                       (nolane g "no lane for a variable-length array\(ontgt g)")
+                     (avz? g) (nolane g "-ftrivial-auto-var-init=zero and a variable-length array")
                      (vone ps env2 acc p ty))
                  (: span (aup (tsz g ty) 8)
               off (naslot g span (max (tal g ty) (4 < #p ? (p 4) 0)))   ; a record's fifth slot: its own ask
@@ -11227,7 +11243,7 @@
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () ()])}   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls]
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () ()])}   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt]
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
        ainls (two? xtra && 5 < #xtra ? (xtra 5))
@@ -11322,7 +11338,7 @@
                            (go (keys (g 'alias)) ()))
                      ; an aligned(N) fn, or -falign-functions', floored at 2 by the parity law
                      an (peep (g 'aligns) nm 2 @ a (max (max a 2) (falgn g)))
-                     fm (['align an] . al2 + (bp? g 'bti ? (btiat nm r) r))
+                     fm (['align an] . al2 + (lpad? g ? (btiat nm r) r))
                      ; a fn that named its section leaves .text for that stream, its align riding out as the section's grain
                      sc (peep (g 'sects) nm ())
                      _ (nm = "main" ? (pin g 'saw 1))
@@ -11381,7 +11397,7 @@
                           (foldl (a \ f \ <f = 'fn && !(laid <>f) ? (<>f . a) a) () <>ast))
                        ; who may reach a fn by an indirect call: another unit, unless it is static;
                        ; else an address taken in code (la), in data, in an asm, or by an alias
-                       tk (bp? g 'bti ?
+                       tk (lpad? g ?
                              (: t {}
                                 _ (foldl (_ \ k \ g 'glob k @ e (two? e ? (cg-srefs <>>e t, 0) 0)) 0 (keys (g 'glob)))
                                 _ (foldl (_ \ s \ (pin t s 1, 0)) 0 atg)
@@ -11393,8 +11409,8 @@
                                 _ (foldl (_ \ x \ (lafs (x 1), 0)) 0 (g 'xfns))
                                 n))
                        (bton nm) (peep sfns nm 'no = 'no || peep tk (name nm) ())
-                       _ (bp? g 'bti ? (foldl (_ \ k \ (pin lfm k (btic (lfm k) (bton k)), 0)) 0 (keys lfm)))
-                       _ (pin g 'xfns (map (x \ [(x 0) (bp? g 'bti ? (btic (x 1) (bton (x 3))) (x 1)) (x 2)]) (g 'xfns)))
+                       _ (lpad? g ? (foldl (_ \ k \ (pin lfm k (btic g (lfm k) (bton k)), 0)) 0 (keys lfm)))
+                       _ (pin g 'xfns (map (x \ [(x 0) (lpad? g ? (btic g (x 1) (bton (x 3))) (x 1)) (x 2)]) (g 'xfns)))
                        txt (foldl (a \ f \ (: u (<f = 'fn ? (lfm <>f))
                                             (two? u ? (revcat u a) a)))
                                   () <>ast)

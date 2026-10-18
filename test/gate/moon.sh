@@ -55,6 +55,10 @@ for f in test/cc/*.c; do
   "$ho/.ccb"; a=$?
   $cc_g -O0 -o "$ho/.ccbg" "$f" && "$ho/.ccbg"; b=$?
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
+  # ..and again with the hardening flags, which change no answer
+  moonrun -fcf-protection=full -ftrivial-auto-var-init=zero "$f" "$ho/.ccb" > /dev/null 2>&1 || fail "mooncc -fcf-protection -ftrivial-auto-var-init compile $f"
+  "$ho/.ccb"; c=$?
+  [ $a -eq $c ] || fail "mooncc battery $f hardened (ours $c, unhardened $a)"
 done
 
 # kernel objects: -mno-sse keeps a variadic's prologue off the xmm file, a data symbol
@@ -497,13 +501,61 @@ moonrun -O2 -mno-red-zone -c -o "$ho/.rz.o" "$ho/.rz.c" > /dev/null 2>&1 || fail
 objdump -d "$ho/.rz.o" | grep -q -- '-0x[0-9a-f]*(%rsp)' && fail "-mno-red-zone: a store below sp"
 # what mooncc does not honour refuses by name, exit 2
 for fl in -fwrapv -fno-strict-overflow -fpatchable-function-entry=2,1 -mcmodel=kernel -fstack-protector-strong \
-          -ftrivial-auto-var-init=zero -fcf-protection=branch -fno-such-flag -mno-such-flag; do
+          -fno-such-flag -mno-such-flag; do
   moonrun $fl -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?
   [ $r -eq 2 ] && grep -q -- "$fl" "$ho/.fl.err" || fail "$fl: exit $r, not refused by name"
 done
 moonrun -fno-strict-aliasing -fno-common -fno-pie -fno-asynchronous-unwind-tables -ffunction-sections -mtune=generic \
   -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a flag taken as it stands was refused"
 echo "mooncc: -f[un]signed-char held to gcc, the -f flags that change the object do, the rest refuse by name"
+
+# -ftrivial-auto-var-init=zero: every automatic without an initializer reads zero, over a dirty stack
+cat > "$ho/.avz.c" <<'EOF'
+struct s { int a[3]; char c; long l; };
+__attribute__((noinline)) static void dirty(void) { volatile char b[256]; for (int i = 0; i < 256; i++) b[i] = (char) 0xa5; }
+__attribute__((noinline)) static int probe(void) {
+  int x; long y; char z[40]; struct s w; double d; int *p;
+  int n = x + (int) y + d + (p != 0) + w.c + (int) w.l;
+  for (int i = 0; i < 40; i++) n += z[i];
+  for (int i = 0; i < 3; i++) n += w.a[i];
+  return n; }
+int main(void) { dirty(); return probe(); }
+EOF
+moonrun -ftrivial-auto-var-init=zero -o "$ho/.avz" "$ho/.avz.c" > /dev/null 2>&1 || fail "-ftrivial-auto-var-init=zero compile"
+"$ho/.avz" || fail "-ftrivial-auto-var-init=zero left a local unzeroed ($?)"
+printf 'int f(int n) { char v[n]; return v[0]; }\n' > "$ho/.avzv.c"
+moonrun -ftrivial-auto-var-init=zero -c -o /dev/null "$ho/.avzv.c" > /dev/null 2>&1 && fail "-ftrivial-auto-var-init=zero took a VLA it does not zero"
+# -fcf-protection=branch: endbr where an indirect branch lands -- an entry another unit or a
+# pointer reaches, a table's case, a label whose address is taken, a returns-twice call's return
+cat > "$ho/.ibt.c" <<'EOF'
+#include <setjmp.h>
+int g(int);
+static int hid(int x) { return g(x) + 1; }
+static int taken(int x) { return x * 2; }
+int (*fp)(int) = taken;
+int ext(int x) { return hid(x) + hid(x + 1); }
+int sw(int x) { switch (x) { case 0: return g(3); case 1: return g(9); case 2: return g(1); case 3: return g(7);
+  case 4: return g(5); case 5: return g(4); case 6: return g(8); case 7: return g(2); } return 0; }
+int cg(int i) { static void *t[] = { &&a, &&b }; goto *t[i & 1]; a: return 1; b: return 2; }
+jmp_buf jb;
+int sj(void) { if (setjmp(jb)) return 1; return g(0); }
+EOF
+moonrun -fno-inline -fcf-protection=branch -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=branch compile"
+objdump -d --no-show-raw-insn "$ho/.ibt.o" > "$ho/.ibt.d"
+ibt() { awk -v f="<$1>:" '$2 == f { on = 1; next } /^[0-9a-f]+ </ { on = 0 } on && /endbr64/ { n++ } END { print n + 0 }' "$ho/.ibt.d"; }
+[ "$(ibt hid)" = 0 ] || fail "-fcf-protection: a static fn no pointer reaches landed an endbr"
+for f in taken ext; do [ "$(ibt $f)" = 1 ] || fail "-fcf-protection: $f has no endbr at its entry"; done
+[ "$(ibt sw)" -ge 9 ] || fail "-fcf-protection: a jump table's cases land without endbr ($(ibt sw))"
+[ "$(ibt cg)" = 3 ] || fail "-fcf-protection: a computed goto's labels land without endbr ($(ibt cg))"
+[ "$(ibt sj)" = 2 ] || fail "-fcf-protection: setjmp's return lands without endbr"
+readelf -n "$ho/.ibt.o" | grep -q 'x86 feature: IBT$' || fail "-fcf-protection=branch: no IBT mark"
+moonrun -fcf-protection=full -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=full compile"
+readelf -n "$ho/.ibt.o" | grep -q 'x86 feature: IBT, SHSTK' || fail "-fcf-protection=full: no IBT, SHSTK mark"
+moonrun -t i386 -fcf-protection=branch -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=branch on i386"
+objdump -d "$ho/.ibt.o" | grep -q endbr32 || fail "-fcf-protection on i386 laid no endbr32"
+[ "$(printf '__CET__\n' | moonrun -fcf-protection -E - | tail -1 | tr -d ' ')" = 3 ] || fail "-fcf-protection: __CET__ is not 3"
+moonrun -t a64 -fcf-protection=branch -c -o /dev/null "$ho/.ibt.c" > /dev/null 2>&1 && fail "-fcf-protection taken on a64"
+echo "mooncc: -ftrivial-auto-var-init=zero zeroes every automatic, -fcf-protection lands every indirect branch on endbr"
 
 # -- C11 conditional features (6.10.8.3), per target
 # ours alone (gcc has atomics): a claimed absence sends portable code down a fallback

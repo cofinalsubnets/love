@@ -420,8 +420,8 @@
    ; so -- gnulib picks its extern-inline scheme by it
    gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0" "__GNUC_STDC_INLINE__=1")
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc})
-    (un ? (stddefs tgt sw + booldefs dia + ds) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + stddefs tgt sw
+   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf})
+    (un ? (stddefs tgt sw + booldefs dia + ds) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + stddefs tgt sw
                  ; our libc is the one in this link and carries its whole surface on every
                  ; kernel: a source asks it what it may call, never the kernel.
                  + '("LvMoonlibc=1")
@@ -478,7 +478,15 @@
            [".ARM.attributes" 1879048195 0 1                                         ; SHT_AARCH64_ATTRIBUTES
              [['raw ([65] + le32 35 + o-strbytes "aeabi_feature_and_bits"
                      + [0 1 0 0 b 1 p 2 0])]]]]))                              ; optional, uleb; bti pac gcs
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns}))
+   ; -fcf-protection's mark, gcc's bytes: x86's feature_1_and, ibt 1 and shstk 2, its data
+   ; padded to the class's word
+   (cfsecs cf tgt)
+    (!cf ? ()
+       (: w (tgt = 'x64 ? 8 4)
+          [[".note.gnu.property" 7 2 w
+             [['raw (le32 4 + le32 (w + 8) + le32 5 + o-strbytes "GNU" + [0]
+                     + le32 3221225474 + le32 4 + le32 cf + (w = 8 ? (le32 0)))]]]]))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames]
        ; wasm rides gen's rv64 lane whole (src/love/holo/wasmfn.l is the machine under it) and
@@ -486,14 +494,14 @@
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns]] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1)]] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
            (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
               (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                          + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
-                         + bpsecs bp)
+                         + bpsecs bp + cfsecs cf tgt)
                  ; the file-scope asm's sections, and the names its .globl exports by where they landed
                  at (two? asecs ? asecs [() () () ()])
                  fns (fnames + filter (s \ !(elem s fnames)) (at 1))
@@ -1229,7 +1237,6 @@
             "-fno-asynchronous-unwind-tables" "-fno-unwind-tables" "-fno-exceptions" "-fno-stack-check"
             "-fno-stack-clash-protection" "-fno-stack-protector" "-fno-addrsig" "-fno-ident"
             "-fno-dwarf2-cfi-asm" "-fno-semantic-interposition" "-fintegrated-as" "-fno-integrated-as"
-            "-ftrivial-auto-var-init=uninitialized" "-fcf-protection=none"
             "-fvisibility=default" "-fstrict-flex-arrays" "-fms-extensions")
    fhint '("-ffunction-sections" "-fno-function-sections" "-fdata-sections" "-fno-data-sections"
            "-fconserve-stack" "-fno-inline-functions-called-once" "-fno-partial-inlining"
@@ -1266,7 +1273,7 @@
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
-                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum ()}
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1340,6 +1347,14 @@
           ("-fno-omit-frame-pointer" . r) (flags r (pin t 'kfp 1))
           ((a . r) && elem a '("-fpic" "-fPIC" "-fpie" "-fPIE")) (flags r (pin t 'pic a))
           ; an enum's width is the ABI's (parse.l's ety): short on the AAPCS32 targets alone
+          ; -ftrivial-auto-var-init=zero: an automatic without an initializer starts zeroed
+          ("-ftrivial-auto-var-init=zero" . r) (flags r (pin t 'avz 1))
+          ("-ftrivial-auto-var-init=uninitialized" . r) (flags r (pin t 'avz ()))
+          ; -fcf-protection=branch: an indirect branch lands on endbr (x86's ibt); full adds the
+          ; shadow stack, which needs nothing of the code but its mark, and return the same
+          ((a . r) && elem a '("-fcf-protection=branch" "-fcf-protection=full" "-fcf-protection")) (flags r (pin t 'cfb (a = "-fcf-protection=branch" ? 1 3)))
+          ("-fcf-protection=return" . r) (flags r (pin t 'cfb 2))
+          ("-fcf-protection=none" . r) (flags r (pin t 'cfb ()))
           ("-fshort-enums" . r) (flags r (pin t 'senum 's))
           ("-fno-short-enums" . r) (flags r (pin t 'senum 'n))
           ; -ffixed-x18: the platform register stays out of allocation, which on a64 it always
@@ -1473,6 +1488,7 @@
        _ (f 'kfp && f 'tgt != 'a64 && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
        _ (f 'senum && (elem (f 'tgt) '(thumb1 thumb2 thumb2sp arm) @ a32 (f 'senum = 's ? !a32 a32)) &&
           udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
+       _ (f 'cfb && !(elem (f 'tgt) '(x64 i386 i386m16)) && udie 2 "cc: -fcf-protection lays on x86 only")
        ; pc-relative code on x64, a64 and rv64; i386 and the arm targets address absolutely
        _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
        ; no nest on disk anywhere: the carried source answers, in memory --
