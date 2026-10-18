@@ -318,7 +318,8 @@
    hdword {"section" 1 "__section__" 1 "alias" 1 "__alias__" 1 "weak" 1 "__weak__" 1
            "always_inline" 1 "__always_inline__" 1 "noinline" 1 "__noinline__" 1 "used" 1
            "__used__" 1 "gnu_inline" 1 "__gnu_inline__" 1 "aligned" 1 "__aligned__" 1 "_Alignas" 1
-           "patchable_function_entry" 1 "__patchable_function_entry__" 1}
+           "patchable_function_entry" 1 "__patchable_function_entry__" 1
+           "no_stack_protector" 1 "__no_stack_protector__" 1 "stack_protect" 1 "__stack_protect__" 1}
    (hdhits ts)
     (: (go s d acc) (atom? s ? acc
                        (<s @ t
@@ -2404,7 +2405,41 @@
               (pcln ps <b (two? sig ? <sig 'int) @ r
                  (r = 'bad ? (clblame "a jump into the scope of a cleanup variable") [r <>b]))
               b)
-       (two? b2 ? [['fn name prms <b2] <>b2]))
+       b3 (two? b2 && sspfn? ps prms <b2 ? [(sspw ps <b2 (two? sig ? <sig 'int)) <>b2] b2)
+       (two? b3 ? [['fn name prms <b3] <>b3]))
+
+   ; -- the stack protector: a canary set at entry, checked on every way out (gen lays both).
+   ; 'ssp is 1|2 (strong; -fstack-protector protects that superset), 3 all, 4 the attribute alone
+   (sspfn? ps prms body)
+    (ps 'ssp @ lv
+       (? (!lv || ps 'curssp = 'no) ()
+          (lv = 3 || ps 'curssp) 1
+          (lv < 4) (sspstrong? prms body)
+          ()))
+   ; an array or aggregate local, a VLA, alloca, or the address of a local or param
+   (sspstrong? prms body)
+    (: (dnames x acc) (? (atom? x) acc
+                         (<x = 'decl && two? >x) (foldl (a \ d \ (two? d ? (<d . a) a)) acc <>x)
+                         (dnames >x (dnames <x acc)))
+       ns (dnames body (map cap prms))
+       (lroot e) (? (atom? e) () (<e = 'var) <>e (<e = 'dot) (lroot <>e) ())
+       (hit? x) (? (atom? x) ()
+                   (<x = 'decl && two? >x)
+                    (any (d \ two? d && two? <>d && elem <<>d '(arr varr struct union)) <>x)
+                   (<x = 'addr && two? >x && elem (lroot <>x) ns) 1
+                   (<x = 'call && two? >x) (<>x @ ('var n) (elem n '("alloca" "__builtin_alloca") || any hit? x) (any hit? x))
+                   (any hit? x))
+       (hit? body))
+   (sspw ps body rty)
+    (: (fresh s) (1 + peep ps 'sspid 0 @ n (pin ps 'sspid n, s + show n))
+       chk '(ssp chk)
+       (w s) (? (atom? s) s
+                (<s = 'ret)
+                 (? (two? >>s || atom? <>s) ['blk [chk s]]        ; a musttail's check runs before its call
+                    (rty = 'void) ['blk [['expr (w <>s)] chk '(ret ())]]
+                    (fresh "__ssp_ret_" @ t ['blk [['decl [[t rty (w <>s)]]] chk ['ret ['var t]]]]))
+                (map w s))
+       ['blk ['(ssp set) (w body) chk]])
 
    ; -- cleanup: the pending marker a declaration left, taken once by the block that holds it
    (clpop ps) (ps 'clpend @ m (pin ps 'clpend (), m))
@@ -2557,6 +2592,8 @@
          (hwin hw "aligned" "__aligned__" || elem "_Alignas" hw ? (alignat? ps ts @ an (an ? (pin ps 'curalign an))))),
       (two? (peep ps 'curpfe ()) ? ()
          (hwin hw "patchable_function_entry" "__patchable_function_entry__" ? (pfeat? ts @ pf (two? pf ? (pin ps 'curpfe pf))))),
+      (hwin hw "no_stack_protector" "__no_stack_protector__" ? (pin ps 'curssp 'no)),
+      (peep ps 'curssp () ? () (hwin hw "stack_protect" "__stack_protect__" ? (pin ps 'curssp 1))),
       ptop9 ps ts))
    (ptop9 ps ts)
     (? (peekp ts ";") ['(tdef) >ts]           ; a stray top-level `;` -- an empty declaration
@@ -2733,7 +2770,7 @@
    (cparse-d ts tgt dia) (cparse-o ts tgt dia {})
    ; opts: the driver's language flags beyond the dialect ('swch, -fshort-wchar)
    (cparse-o ts tgt dia opts)
-    (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch))
+    (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch) 'ssp (opts 'ssp))
        toks (fsbody ts) spans (fspans ts)
        ; a unit with no `mode(M)` or `__mode__(M)` has no mode attribute, so modeat's walk
        ; of every declaration is skipped; pfail's re-parse walks it again
@@ -2806,6 +2843,7 @@
             pin ps 'curused (),
             pin ps 'curalign (),
             pin ps 'curpfe (),
+            pin ps 'curssp (),
             pin ps 'scopacc (),        ; what a file-scope specifier bound is nobody's to take back
             pin ps 'cursect ()))
        (tops ts2 acc)

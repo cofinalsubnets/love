@@ -1169,7 +1169,7 @@ fn that calls; clang's a64 leaves keep none either), `-fshort-enums` on the AAPC
 - `-fpatchable-function-entry=N,M` and its attribute: N nops, M ahead of the entry and the rest
   after its bti or endbr, a word to each pad in `__patchable_function_entries`; x64 i386 a64 rv64.
 - `-ftrivial-auto-var-init=zero`: an automatic without an initializer takes a zero one (cgdecl);
-  a VLA refuses.
+  a VLA's block zeroes word by word.
 - `-fcf-protection=branch|return|full` on x86: endbr where an indirect branch lands (an entry
   another unit or a pointer reaches, a table's case, a label whose address is taken, a returns-twice
   call's return), the feature_1_and note, `__CET__`.
@@ -1177,11 +1177,18 @@ fn that calls; clang's a64 leaves keep none either), `-fshort-enums` on the AAPC
   again (`nar32`), as `u32nar?` re-narrows a uint. a wrapper on cgexpr that asked `peekty` each node's
   C type was tried and grew without bound: peekty goes back through expression codegen, so every
   level re-typed its subtree.
+- `-fstack-protector[-strong|-all|-explicit]` and the `stack_protect`/`no_stack_protector`
+  attributes on x64 i386 a64: parse.l's `sspw` sets a canary at entry and checks it before every
+  return (gen.l's `sspblob`, raw blobs at fp-16, a cell fnreset keeps; the fn keeps its frame link,
+  no repack, shrink-wrap or inlining). plain `-fstack-protector` protects as `-strong` does, a
+  superset. the guard: `__stack_chk_guard` (or `-mstack-protector-guard-symbol=`), x86's
+  `-mstack-protector-guard=tls` off fs or gs (`-reg=`, `-offset=`, a symbol), a64's `=sysreg`.
+  moonlibc lays no `__stack_chk_guard` or `__stack_chk_fail`: the kernel brings its own.
 
 **taken as they stand:** `-fno-strict-aliasing` (memfw forgets on any root that may overlap),
 `-fno-delete-null-pointer-checks`, `-fno-common` (a tentative lays as a definition), `-fno-pie`,
 `-fomit-frame-pointer`, the absent-feature `-fno-*` (unwind tables, stack check and clash
-protection, canary, addrsig, ident), `-fstrict-flex-arrays[=N]` (`__builtin_object_size` answers
+protection, addrsig, ident), `-fstrict-flex-arrays[=N]` (`__builtin_object_size` answers
 its unknown), `-fms-extensions`, the placement, alignment, inlining and diagnostic hints,
 `-mno-red-zone` (no store below sp), `-mtune=`.
 
@@ -1189,7 +1196,7 @@ its unknown), `-fms-extensions`, the placement, alignment, inlining and diagnost
 - R3 the x64 kernel `-m` set: `-mcmodel=kernel` (32S, no abs32), the retpoline and return thunks
   (`-mretpoline-external-thunk`, `-mindirect-branch-cs-prefix`, `-mfunction-return=thunk-extern`;
   callr/jmpr/jmpt and ret), `-mstack-alignment=`, `-mskip-rax-setup`, `-mno-fp-ret-in-387`.
-- R4 `-fstack-protector-strong` with `-mstack-protector-guard-reg=gs` and `-symbol=`.
+- `-fstack-protector` on rv64, thumb and arm: the canary has no cell there yet.
 - `-fno-omit-frame-pointer` off a64: x64 addresses its frame off sp and keeps no rbp.
 
 **measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,

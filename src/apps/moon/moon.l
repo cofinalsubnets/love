@@ -126,6 +126,8 @@
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; __CHAR_UNSIGNED__ follows the target and -f[un]signed-char
    (uchar? tgt uc) (uc @ 'u 1 's 0 (elem "__CHAR_UNSIGNED__" (archdefs tgt) ? 1 0))
+   ; gcc's spelling of the -fstack-protector level
+   (sspdefs sp) (sp @ 1 ["__SSP__=1"] 2 ["__SSP_STRONG__=2"] 3 ["__SSP_ALL__=3"] 4 ["__SSP_EXPLICIT__=4"] ())
    (chdefs tgt uc) (filter (d \ d != "__CHAR_UNSIGNED__") (archdefs tgt) + (uchar? tgt uc = 1 ? ["__CHAR_UNSIGNED__"] ()))
    ; the OS predefines: gcc's spellings but the unprefixed linux/unix, which collide with
    ; identifiers. takes a flag's text or love-os's nom; 'inle refuses: a compile there owes -os
@@ -360,8 +362,8 @@
    gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0" "__GNUC_STDC_INLINE__=1")
    ; bool/true/false bare, as C23; an iso -std keeps them plain names
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf})
-    (un ? (stddefs tgt sw + booldefs dia + ds) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + stddefs tgt sw
+   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf 'ssp sp})
+    (un ? (stddefs tgt sw + booldefs dia + ds) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + (sspdefs sp) + stddefs tgt sw
                  ; our libc carries its whole surface on every kernel: a source asks it, not the kernel
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
@@ -378,7 +380,7 @@
        (f ? ["__FILE__=\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] [c])) (chars f)))\""]))
    ; the shared front end: source -> (1 ast stag sigs ..) | a fatal exit. the -D lines prepend
    ; to the text before the one lex, stamped 1-k..0, so every source line keeps its number
-   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc}))
+   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc 'ssp sp}))
     (: ds9 (cc-defs t + filedef src mp)
        ; `-` is stdin, for every door; cdir answers "" (the cwd). then disk, then vb by key
        r (src = "-" ? [1 (slurp in)]
@@ -392,7 +394,7 @@
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
-       ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc)})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
+       ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ps))
    ; a relocatable object: the standard sections + symbols + relocations, plus one section per
@@ -417,12 +419,28 @@
           [[".note.gnu.property" 7 2 w
              [['raw (le32 4 + le32 (w + 8) + le32 5 + o-strbytes "GNU" + [0]
                      + le32 3221225474 + le32 4 + le32 cf + (w = 8 ? (le32 0)))]]]]))
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe}))
+   ; the stack protector's guard, (mode reg symbol offset): 'global a symbol's word, 'tls x86's
+   ; segment off fs or gs, 'sysreg an a64 system register's pointer
+   (sspguard f)
+    (: tgt (f 'tgt) x86 (elem tgt '(x64 i386))
+       m (f 'sspm || (f 'sspr || f 'ssps ? (x86 ? 'tls 'sysreg) 'global))
+       r (f 'sspr || (m = 'tls ? (tgt = 'x64 ? "fs" "gs")))
+       o (charm? (f 'sspo) ? (f 'sspo) (m = 'tls ? (tgt = 'x64 ? 40 20) 0))
+       (? !(elem tgt '(x64 i386 a64)) (udie 2 "cc: -fstack-protector -- no canary lane on \(tgt)")
+          (x86 ? (m = 'sysreg) (m = 'tls)) (udie 2 "cc: -mstack-protector-guard=\(m) -- no such guard on \(tgt)")
+          (m = 'tls && !(elem r '("fs" "gs"))) (udie 2 "cc: -mstack-protector-guard-reg=\(r) -- x86's guard sits off fs or gs")
+          (m = 'sysreg && !(elem r '("sp_el0" "tpidr_el0" "tpidr_el1" "tpidrro_el0")))
+           (udie 2 "cc: -mstack-protector-guard-reg=\(r) -- no lane for that system register")
+          (m = 'sysreg && !(0 <= o <= 32760 && o % 8 = 0))
+           (udie 2 "cc: -mstack-protector-guard-offset=\(o) -- a64's is a word offset under 32768")
+          (!x86 && f 'ssps) (udie 2 "cc: -mstack-protector-guard-symbol -- x86 only")
+          [m r (f 'ssps || (m = 'global ? "__stack_chk_guard")) o]))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe] pfes] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg] pfes] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
@@ -1017,7 +1035,7 @@
    fsound '("-fno-strict-aliasing" "-fstrict-aliasing" "-fno-delete-null-pointer-checks" "-fdelete-null-pointer-checks" "-fno-common"
             "-fno-pie" "-fno-PIE" "-fno-pic" "-fno-PIC" "-fomit-frame-pointer" "-fno-plt"
             "-fno-asynchronous-unwind-tables" "-fno-unwind-tables" "-fno-exceptions" "-fno-stack-check"
-            "-fno-stack-clash-protection" "-fno-stack-protector" "-fno-addrsig" "-fno-ident"
+            "-fno-stack-clash-protection" "-fno-addrsig" "-fno-ident"
             "-fno-dwarf2-cfi-asm" "-fno-semantic-interposition" "-fintegrated-as" "-fno-integrated-as"
             "-fvisibility=default" "-fstrict-flex-arrays" "-fms-extensions")
    fhint '("-ffunction-sections" "-fno-function-sections" "-fdata-sections" "-fno-data-sections"
@@ -1047,7 +1065,8 @@
    ; would fail the consumers' destructure exactly when the flag is absent
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
-                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()}
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
+                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1121,6 +1140,16 @@
            (: ws (split "," w) n (tonum <ws) k (two? >ws ? (tonum <>ws) 0)
               (charm? n && charm? k && 0 <= k <= n ? (flags r (pin t 'pfe (n = 0 ? () [n k])))
                  (udie 2 "cc: -fpatchable-function-entry=\(w) -- N, or N,M with M at most N")))
+          ; -fstack-protector*: 1 and 2 protect as -strong, 3 every fn, 4 the stack_protect attribute's
+          ("-fstack-protector" . r) (flags r (pin t 'ssp 1))
+          ("-fstack-protector-strong" . r) (flags r (pin t 'ssp 2))
+          ("-fstack-protector-all" . r) (flags r (pin t 'ssp 3))
+          ("-fstack-protector-explicit" . r) (flags r (pin t 'ssp 4))
+          ("-fno-stack-protector" . r) (flags r (pin t 'ssp ()))
+          ((("-mstack-protector-guard=" + w) . r) && elem w '("global" "tls" "sysreg")) (flags r (pin t 'sspm (intern w)))
+          ((("-mstack-protector-guard-reg=" + w) . r) && #w) (flags r (pin t 'sspr w))
+          ((("-mstack-protector-guard-symbol=" + w) . r) && #w) (flags r (pin t 'ssps w))
+          ((("-mstack-protector-guard-offset=" + w) . r) && #w) (flags r (pin t 'sspo (tonum w)))
           ; an enum's width is the ABI's (parse.l's ety): short on the AAPCS32 targets alone
           ("-fshort-enums" . r) (flags r (pin t 'senum 's))
           ("-fno-short-enums" . r) (flags r (pin t 'senum 'n))
@@ -1224,6 +1253,7 @@
        _ (f 'cfb && !(elem (f 'tgt) '(x64 i386 i386m16)) && udie 2 "cc: -fcf-protection lays on x86 only")
        _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
        _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
+       _ (f 'ssp && pin f 'sspg (sspguard f))
        ; no nest on disk: the carried source, pinned once so every TU shares one inflate
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)
