@@ -1,27 +1,20 @@
-; layer-2 spike: abstract KIND INFERENCE over `:` bindings via a seminaive
-; fixpoint, the kinds-lattice as the abstract domain. the payoff is DEVIRT --
-; a +/* (or apply) site whose operand kinds are statically numeric can skip the
-; generic NxN dispatch table and jump straight to the numeric lane.
-;
-; WHY a fixpoint (not just a tree walk, which const-fold needs): kinds flow
-; THROUGH bindings, and `:` is letrec* -- bindings can reference each other (even
-; cyclically), so the env must be iterated to a fixpoint. the lattice has finite
-; height and the transfer functions are monotone, so `join`-update terminates.
-; this is a datalog engine specialized to a lattice domain.
+; abstract kind inference over `:` bindings by a seminaive fixpoint, the kinds-lattice the domain;
+; the payoff is devirt: a +/* site with statically numeric operands skips the generic dispatch.
+; a fixpoint, not a tree walk: `:` is letrec*, so kinds flow through (even cyclic) bindings. the
+; lattice has finite height and the transfers are monotone, so the join-update terminates.
 
 (:
- ; --- the kinds-lattice abstract domain: the tier spine N<Z<R<C, str/list as
- ;     incomparable branches that join UP to top; bot = unreached/unknown. ---
+ ; --- the domain: the tier spine N<Z<R<C, str/list incomparable, joining up to top; bot = unknown
  (rank k) (? (= k 'bot) 0 (= k 'charm) 1 (= k 'whole) 2 (= k 'real) 3 (= k 'cplx) 4 (= k 'top) 5 -1)
- (num? k) (: r (rank k) (&& (< 0 r) (< r 5)))               ; charm..cplx are the numeric lane
+ (num? k) (: r (rank k) (&& (< 0 r) (< r 5)))
  (join a b) (? (= a 'bot) b (= b 'bot) a (= a b) a
-              (&& (num? a) (num? b)) (? (< (rank a) (rank b)) b a)   ; higher tier wins
+              (&& (num? a) (num? b)) (? (< (rank a) (rank b)) b a)   ; the higher tier wins
               'top)                                          ; mixed branches -> top
 
  ; --- transfer functions: a kind for an op given its operands' kinds ---
- (tnum a b) (? (a = 'bot || b = 'bot) 'bot                 ; an operand not yet known -> stay bot
-              (num? a && num? b) (: j (join a b) (j = 'charm ? 'whole j))  ; +/* may OVERFLOW charm -> whole
-              'top)                                          ; non-numeric +/* (cat/generic) -> give up
+ (tnum a b) (? (a = 'bot || b = 'bot) 'bot                 ; an operand not yet known stays bot
+              (num? a && num? b) (: j (join a b) (j = 'charm ? 'whole j))  ; +/* may overflow charm
+              'top)                                          ; non-numeric +/*: give up
 
  ; --- env: an assoc (name . kind); a missing name reads bot ---
  (look env x) (? (atom? env) 'bot (: p <env (x = <p ? >p (look >env x))))
@@ -29,19 +22,19 @@
 
  ; --- kindof: abstract-evaluate an expression under env ---
  (kindof env e) (?
-   (charm? e) 'charm                                         ; a fixnum literal
+   (charm? e) 'charm
    (string? e) 'str
-   (nom? e) (look env e)                                     ; a variable reference
+   (nom? e) (look env e)
    (atom? e) 'top
    (: h <e a <>e b <>>e
      (? (h = '+ || h = '*) (tnum (kindof env a) (kindof env b))
-        (h = '?) (join (kindof env b) (kindof env <>>>e))   ; (? c a b) -> join the branches
-        'top)))                                              ; lambda / unknown form -> top
+        (h = '?) (join (kindof env b) (kindof env <>>>e))   ; join the branches
+        'top)))                                              ; lambda / unknown form
 
  ; --- the seminaive FIXPOINT over the flat (n1 e1 n2 e2 ..) binding list ---
  (pairs bs) (? (atom? bs) () (atom? >bs) () ((<bs . <>bs) . pairs >>bs))
  (alle a b) (? (atom? a) 1 (: p <a (>p = look b <p && alle >a b)))
- (enveq a b) (alle a b && alle b a)                          ; same name->kind both ways = fixpoint
+ (enveq a b) (alle a b && alle b a)                          ; a fixpoint: same name->kind both ways
  (step ps env) (foldl (env \ p \ joininto env <p (kindof env >p)) env ps)
  (fix ps env) (: e2 (step ps env) (enveq env e2 ? env (fix ps e2)))
  (infer bs) (fix (pairs bs) 0)

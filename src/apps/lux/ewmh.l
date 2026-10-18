@@ -1,20 +1,13 @@
-; src/apps/lux/ewmh.l -- EWMH + docks: the protocol tax that separates "manages my windows"
-; from "my taskbar, pager, and fullscreen video work". Three pieces:
-;   * a support window advertising _net_supporting_wm_check + _net_wm_name
-;     ("lux / love VERSION");
-;   * root properties a pager reads (_NET_SUPPORTED/_NET_CLIENT_LIST/
-;     _net_active_window/_net_current_desktop/_net_wm_desktop), re-published by
-;     ewmh-sync whenever the sheaf changes (a change-guard skips the no-ops);
-;   * struts: a dock's _net_wm_strut_partial shrinks the tiling rect
-;     (avoidStruts); ewmh-toggle flips it live (ToggleStruts, sup+b).
-; The strut arithmetic and the property encodings are pure (jug-testable), so
-; test/law/lux.l asserts them; the ewst tablet is the module's one mutable cell (the
-; evq pattern). Loads after src/apps/lux/{layout,wire}.l. a body-less `:` -- leaks all.
-(borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
+; src/apps/lux/ewmh.l -- EWMH + docks, so taskbars, pagers and fullscreen work:
+;   * a support window advertising _net_supporting_wm_check + _net_wm_name;
+;   * root properties a pager reads, re-published by ewmh-sync when the sheaf changes;
+;   * struts: a dock's _net_wm_strut_partial shrinks the tiling rect; ewmh-toggle flips it.
+; the strut arithmetic and encodings are pure; ewst is the one mutable cell. a body-less
+; `:` -- leaks all.
+(borrow 'xwire)
 (:
-   ; --- pure: strut arithmetic. a strut is (left right top bottom ls le rs re
-   ;     ts te bs be): root-relative reserved widths, then each edge's span;
-   ;     shrinking clamps a screen off an edge only where the span meets it. ---
+   ; --- strut arithmetic. a strut is (left right top bottom ls le rs re ts te bs be):
+   ;     reserved widths, then each edge's span, clamping a screen only where it meets ---
    (strut-parse vals) (? (#vals >= 12) (take 12 vals)                              ; _partial: the strut and its spans
                          (#vals >= 4) (take 4 vals + '(0 65535 0 65535 0 65535 0 65535))   ; _strut: the whole edge
                          ())
@@ -27,7 +20,7 @@
        y2 (xs? (st 10) (st 11) ? (mn2 (ry r + rh r) (shp - st 3)) (ry r + rh r))
        (rct x1 y1 (mx2 0 (x2 - x1)) (mx2 0 (y2 - y1))))
 
-   ; --- the EWMH state: one tablet (the evq pattern) ---
+   ; --- the EWMH state: one tablet ---
    ewst {'avoid 1 'struts () 'last ()}
    (ewmh-atom nm) (peep (peep ewst 'atoms (tablet 1)) nm 0)
    (ewmh-rect scrn swp shp)                                                      ; a screen's tiling rect: minus the struts reaching it (when avoiding)
@@ -69,7 +62,7 @@
                  "_NET_WM_STRUT" "_NET_WM_STRUT_PARTIAL" "_NET_WM_WINDOW_TYPE"
                  "_NET_DESKTOP_GEOMETRY" "_NET_DESKTOP_VIEWPORT" "_NET_WORKAREA" "_NET_DESKTOP_NAMES"
                  "_NET_WM_WINDOW_TYPE_DOCK" "_NET_WM_WINDOW_TYPE_DIALOG" "_NET_WM_WINDOW_TYPE_NOTIFICATION" "_NET_FRAME_EXTENTS"
-                 "WM_CHANGE_STATE")                                              ; ICCCM iconify (minimizeEventHook); interned, not advertised as _net_
+                 "WM_CHANGE_STATE")                                              ; ICCCM iconify; not advertised
    (ewmh-init s root idbase tags)
     (: at (tablet 8)
        _ (each ewmh-atoms (nm \ pin at nm (x-intern s nm)))
@@ -87,24 +80,22 @@
         x-chprop8 s root (a "_NET_DESKTOP_NAMES") utf8 (ewmh-names tags),
         x-flush s))
 
-   ; --- sync: publish the sheaf whenever it changed (pagers track us); scrn is the
-   ;     root rect, so the desktop's shape and workarea follow the screen and the struts ---
+   ; --- sync: publish the sheaf when it changed; scrn is the root rect ---
    (ewmh-sync s sh scrn)
     (: wins (wswins sh) cur (wscur sh - 1)
-       foc (wsfoc sh ? (wsfoc sh) 0)                                             ; a focused float is what a taskbar must highlight,
-       wa (ewmh-rect scrn (scrn 2) (scrn 3))                                     ; and wsfoc names one
+       foc (wsfoc sh ? (wsfoc sh) 0)                                             ; wsfoc names a focused float too
+       wa (ewmh-rect scrn (scrn 2) (scrn 3))
        key [cur foc wins scrn wa]
        (key = ewst 'last ? 0
           (: _ (pin ewst 'last key) root (peep ewst 'root 0) tags (map cap (wsboard sh))
              (x-chprop32 s root (ewmh-atom "_NET_DESKTOP_GEOMETRY") 6 [(scrn 2) (scrn 3)],
               x-chprop32 s root (ewmh-atom "_NET_WORKAREA") 6 (ewmh-per tags wa),      ; the root minus every strut, per desktop
               x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins,
-              x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins,   ; libwnck creates its windows off this list (no stacking =
-                                                                                     ; an empty taskbar); wswins is tiles-then-floats = bottom to top
+              x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins,   ; libwnck's taskbar reads this; wswins is bottom to top
               x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 [cur],
               x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 [foc],
-              map (p \ (<p - 1 @ t                                               ; every window wears its workspace -- a float's
-                          (map (w \ x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 [t]) (zrow <>p)))) (wsboard sh),   ; tag is the zipper that holds it
+              map (p \ (<p - 1 @ t                                               ; every window wears its workspace
+                          (map (w \ x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 [t]) (zrow <>p)))) (wsboard sh),
               x-flush s))))
 
    ; --- ClientMessage (event 33) field reads, off the raw bytes ---

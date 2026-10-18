@@ -493,6 +493,12 @@
        m (? (#ia < #ib) -1 (#ib < #ia) 1 (lex 0 @ r (r @ 0 (frc 0) r)))
        (? (sa < sb) -1 (sb < sa) 1 (sa < 0) (0 - m) m))
    (usort-cmpstr a b) (? (a < b) -1 (b < a) 1 0)
+   ; -z's records: the files (- stdin) read whole and cut at each NUL; die has one that
+   ; will not read
+   (uzrecs fs die)
+    (: t (cats (map (f \ (f = "-" ? (slurp in) (uread f @ r (two? r ? <>r (die f))))) (two? fs ? fs ["-"])))
+       ps (usplit 0 t)
+       (two? ps && <(rev ps) = "" ? (rev >(rev ps)) ps))
    ; one key's reading of a line, taken ONCE per line and not per comparison: the
    ; text, folded, or the numeric reading, per the key's own letters
    (usort-keyof ln k sep)
@@ -584,9 +590,7 @@
        keys (two? kt ? (map (glob * kspec) kt) [[0 0 b? f? n? r? h? V?]])
        ; the lines off the reading floor; a miss leaves 2. -z's records end with a NUL, read
        ; whole and cut
-       (rd fs) (z? ? (: t (cats (map (f \ (f = "-" ? (slurp in) (uread f @ r (two? r ? <>r (sdie ("cannot read: " + f)))))) (two? fs ? fs ["-"])))
-                        ps (usplit 0 t)
-                        (two? ps && <(rev ps) = "" ? (rev >(rev ps)) ps))
+       (rd fs) (z? ? (uzrecs fs (f \ sdie ("cannot read: " + f)))
                 (: box {}
                    (dot ln term?) (pin box 'l (ln . box 'l), 1)
                    st (ulines "sort" dot fs)
@@ -735,7 +739,7 @@
     (: neg (0 < #w && w 0 = 45) b (0 < #w && (w 0 = 45 || w 0 = 43) ? (snip w 1 #w) w)
        pf (b @ (i + "." + f) [i f] [b ""]) ip <pf fp <>pf
        ds (ip + fp)
-       (0 < #ds && all digit? (chars ds) ? [(neg ? (0 - unum ds) (unum ds)) #fp]))
+       (udigs? ds ? [(neg ? (0 - unum ds) (unum ds)) #fp]))
    (seq-main as)
     (: (numw? w) (1 < #w && (w 0 = 45 || w 0 = 43) && (digit? (w 1) || w 1 = 46))
        ; -s and -f with their value in the next word take it along
@@ -1023,9 +1027,7 @@
             say out (slurp o), put out end))
        ; cut terminates every line it writes, so the source's own end says nothing
        (dot ln term?) (((fspec ? fieldline charline) ln), 1)
-       (z? ? (: t (cats (map (f \ (f = "-" ? (slurp in) (uread f @ r (two? r ? <>r (udie 1 ("cut: " + f + ": No such file or directory")))))) (two? fs ? fs ["-"])))
-                ps (usplit 0 t)
-                ((each (two? ps && <(rev ps) = "" ? (rev >(rev ps)) ps) (r \ dot r 1)), flush out, 0))
+       (z? ? ((each (uzrecs fs (f \ udie 1 ("cut: " + f + ": No such file or directory"))) (r \ dot r 1)), flush out, 0)
         (ulines "cut" dot fs)))
 
    ; ---- the byte loops, natively -------------------------------------------------
@@ -1347,17 +1349,21 @@
              (c < 128 ? (put o c) (say o (snip s k k2)),
               go k2 (ucol col c n) (ublank? c ? lead 0)))))
        (go 0 0 1))
-   (expand-main as)
+   ; expand's and unexpand's flags, letters in ok -> [t tab-size operands], -t's size else 8
+   (utabflags nm as ok)
     (: t {}
        o (uopt as t '(116) '(101) ())
-       _ (two? o ? () (udie 2 "expand: -t wants a tab size"))
-       _ (uoptbad as t "ti" @ c (!c ? () (udie 2 ("expand: unknown option -" + string c))))
+       _ (two? o ? () (udie 2 (nm + ": -t wants a tab size")))
+       _ (uoptbad as t ok @ c (!c ? () (udie 2 (nm + ": unknown option -" + string c))))
        v (uoptv t 116)
        n (string? v ? (uatoi v) 8)
-       _ (0 < n ? () (udie 2 "expand: tab size must be positive"))
-       i? (peep t 105 0)
-       (dot ln term?) (say out (uexpand n i? ln), term? ? (put out 10) 0, 1)
-       (ulines "expand" dot <>>o))
+       _ (0 < n ? () (udie 2 (nm + ": tab size must be positive")))
+       [t n <>>o])
+   (expand-main as)
+    (utabflags "expand" as "ti" @ [t n fs]
+     (: i? (peep t 105 0)
+        (dot ln term?) (say out (uexpand n i? ln), term? ? (put out 10) 0, 1)
+        (ulines "expand" dot fs)))
 
    ; -- unexpand: blanks back to tabs -- only the ones a line opens with unless -a
    ; takes every run (-t says a size and means -a too). a tab lands only where it
@@ -1380,16 +1386,10 @@
               go k2 cv -1 (ublank? c ? lead 0)))))
        (go 0 0 -1 1))
    (unexpand-main as)
-    (: t {}
-       o (uopt as t '(116) '(101) ())
-       _ (two? o ? () (udie 2 "unexpand: -t wants a tab size"))
-       _ (uoptbad as t "ta" @ c (!c ? () (udie 2 ("unexpand: unknown option -" + string c))))
-       v (uoptv t 116)
-       n (string? v ? (uatoi v) 8)
-       _ (0 < n ? () (udie 2 "unexpand: tab size must be positive"))
-       a? (string? v ? 1 (peep t 97 0))
-       (dot ln term?) (say out (uunexpand n a? ln), term? ? (put out 10) 0, 1)
-       (ulines "unexpand" dot <>>o))
+    (utabflags "unexpand" as "ta" @ [t n fs]
+     (: a? (string? (uoptv t 116) ? 1 (peep t 97 0))
+        (dot ln term?) (say out (uunexpand n a? ln), term? ? (put out 10) 0, 1)
+        (ulines "unexpand" dot fs)))
 
    ; ---- the line endings: dos2unix, unix2dos, mac2unix -------------------------
    ; three names, one walk. in place keeps the mode, leaves a binary file alone, and does not
@@ -1772,13 +1772,8 @@
            (go n (d = 2 ? 3 (d + 2)) acc))
        (n0 < 2 ? () (go n0 2 ())))
    (factor-main as)
-    (: (dig? s) (: n #s
-                   (go k) (? (n <= k) (0 < n)
-                             (48 <= s k <= 57) (go (k + 1))
-                             0)
-                   (go 0))
-       (one w ok)
-        (!(dig? w) ?
+    (: (one w ok)
+        (!(udigs? w) ?
          (say err ("factor: '" + w + "' is not a valid positive integer"),
           put err 10, 0)
          (say out (w + ":"),

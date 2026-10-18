@@ -1,16 +1,13 @@
-; holo's system lane byte-exact against llvm-mc: each op has one encoding and a small operand
-; space, so llvm-mc assembles its own spelling and the bytes must match. the a64 op tables and
-; riscv's csr table are read from holo's sources, so a new row is checked with no edit here; x86
-; enumerates its register file. SYSDIFF_ARCH=x64|a64|rv64 narrows, default all three.
-;   out/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
+; holo's system lane byte-exact against llvm-mc. the a64 and riscv tables are read from
+; holo's sources, so a new row is checked with no edit here; x86 enumerates its registers.
+; SYSDIFF_ARCH=x64|a64|rv64 narrows, default all three; exit 1 on any disagreement
 
 (borrow 'posix)
 (reads (open "src/love/holo/holo.l" "r"))
 (reads (open "src/love/holo/x64.l" "r"))
 (reads (open "src/love/holo/a64.l" "r"))
 (reads (open "src/love/holo/rv64.l" "r"))
-; holo rides module 'holo: reading the source registers it, and the names come
-; through the door rather than off this file's layer.
+; reading the source registers module 'holo; the names come through the door
 (borrow 'holo)
 
 (:
@@ -39,7 +36,7 @@
  (wrf p t) (open p "w" @ q (say q t, close q))
  tmpd "out"
 
- ; --- the 'key names of a `name {..}` tablet literal in a64.l, source order ---
+ ; --- the 'key names of a `name {..}` tablet literal, source order ---
  a64src (rdf "src/love/holo/a64.l")
  rv64src (rdf "src/love/holo/rv64.l")
  (table-in src nm)
@@ -70,8 +67,8 @@
                 out (table "a64-barrier-opts"))
      out (foldl (a \ f \ a + foldl (b \ i \ b + [[['msri (intern f) i] ("msr " + f + ", #" + show i) ()]]) () ^16)
                 out (table "a64-pstate"))
-     ; the sys family: llvm-mc knows which operations take a register and refuses the
-     ; other spelling; offer both, and `pair` demands the accepted one matched.
+     ; sys: llvm-mc refuses the spelling an op does not take; offer both, `pair` demands
+     ; the accepted one matched
      out (foldl (a \ row \ <row @ ir
                            (foldl (b \ o \ (ir + " " + o) @ pk
                                            (b + [[[(intern ir) (intern o) 'r7] (ir + " " + o + ", x7") pk]
@@ -114,20 +111,18 @@
      (out + foldl (a \ n \ a + [[[(intern n)] n ()]]) ()
             '("cli" "sti" "hlt" "ud2" "iretq" "swapgs" "rdmsr" "wrmsr" "cpuid" "rdtsc")))
 
- ; the riscv register file, holo's name on the left and the disassembler's on the right. zr is
- ; x0, which nothing but the system lane ever names.
+ ; the riscv register file, holo's name then the disassembler's
  rv-r2x '((r0 "a0") (r1 "a1") (r3 "a3") (r8 "t0") (r13 "s2") (sp "sp") (fp "s0") (lr "ra") (zr "zero"))
  (cases-rv _)
-  (: ; every named CSR read and written -- the table that would otherwise ship a wrong number
+  (: ; every named CSR read and written
      out (foldl (a \ c \ a + [[['csrr 'r0 (intern c)] ("csrr a0, " + c) ()]
                              [['csrw (intern c) 'r0] ("csrw " + c + ", a0") ()]])
                 () (table-in rv64src "rv-csrnames"))
-     ; the register file, one csr each way
      out (foldl (a \ p \ (: r <p x <>p
                             (a + [[['csrr r 'mstatus] ("csrr " + x + ", mstatus") ()]
                                   [['csrw 'mtvec r] ("csrw mtvec, " + x) ()]])))
                 out rv-r2x)
-     ; the write pseudos and the read-modify-write forms they are made of, one funct3 apiece
+     ; the write pseudos and the read-modify-write forms they are made of
      out (foldl (a \ op \ a + foldl (b \ p \ (: r <p x <>p
                                                 (b + [[[(intern op) 'sstatus r] (op + " sstatus, " + x) ()]])))
                                     () rv-r2x)
@@ -136,14 +131,13 @@
                                                 (b + [[[(intern op) 'r0 'sie r] (op + " a0, sie, " + x) ()]])))
                                     () rv-r2x)
                 out '("csrrw" "csrrs" "csrrc"))
-     ; the 5-bit immediate forms, at both ends of the field and inside it
+     ; the 5-bit immediate forms
      out (foldl (a \ op \ a + foldl (b \ u \ b + [[[(intern op) 'sstatus u] (op + " sstatus, " + show u) ()]])
                                     () '(0 1 2 15 16 31))
                 out '("csrwi" "csrsi" "csrci"))
      out (foldl (a \ op \ a + foldl (b \ u \ b + [[[(intern op) 'r0 'mie u] (op + " a0, mie, " + show u) ()]])
                                     () '(0 1 2 15 16 31))
                 out '("csrrwi" "csrrsi" "csrrci"))
-     ; the tlb flush over both slots, then the words that take no operand at all
      out (foldl (a \ p \ (: r <p x <>p
                             (a + [[['sfence r 'zr] ("sfence.vma " + x + ", zero") ()]
                                   [['sfence 'zr r] ("sfence.vma zero, " + x) ()]])))
@@ -155,11 +149,9 @@
  ro-reject "expected writable system register"
  wo-reject "expected readable system register"
  (llvm arch asms)
-  ; the triple is llvm's word: arch-uname maps uname's machine to it. llvm-mc refuses an
-  ; unknown target, so a stray name would read as 0 encodings.
+  ; llvm-mc refuses an unknown triple, so a stray name would read as 0 encodings
   (: triple (peep arch-uname (archof arch) "x86_64")
-     ; a64: the extensions holo's names come from (pan, mte, sve, sme, pauth keys, the range
-     ; and outer-shareable tlbis, dc cvap), so a name is held to its word, not refused for its level
+     ; a64: the extensions holo's names come from, so a name is not refused for its level
      mattr (? (arch = "rv64") " -mattr=+m,+f,+d,+zicsr,+zifencei"
               (arch = "a64") " -mattr=+v9.4a,+sve,+sme,+mte,+pauth,+tlb-rmi,+ccdp,+ssbs,+dit,+ras,+gic-v3"
               "")
@@ -169,7 +161,7 @@
      _ (lay asms)
      _ (sh ("llvm-mc -triple=" + triple + mattr + " --show-encoding < " + tmpd + "/.sysd.in > "
             + tmpd + "/.sysd.out 2> " + tmpd + "/.sysd.err"))
-     ; pass 1: the rejected line numbers (0-based case index) and their reasons
+     ; pass 1: the rejected case indices and their reasons
      bad (foldl (a \ ln \ idx-of ln "<stdin>:" @ i
                           (!(charm? i) ? a
                              (: j (idx-from ln ":" (i + 8))

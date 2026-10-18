@@ -1,6 +1,5 @@
-; src/apps/forge.l -- nifs written in love. a kernel is a src/love/holo IR program plus an honest
-; interpreted twin. forge assembles the program for the cpu it is running on and installs it
-; through the `nif` seam; the twin runs everywhere the native cannot. `(borrow "src/apps/forge.l")`:
+; src/apps/forge.l -- nifs written in love: a holo IR kernel plus an interpreted twin, assembled
+; for this cpu and installed through the `nif` seam; the twin runs where the native cannot.
 ;
 ;   (forge-put nom arity mkir twin) -> register one kernel; mkir is a thunk, twin the fallback
 ;   (forge-fit ())                  -> assemble + install the whole roster -> the fitted count
@@ -8,22 +7,12 @@
 ;   (forge-why ())                  -> ((reason nom ..) . count) rows -- why a decline declined
 ;   (forge-fitted? ())              -> how many kernels are running native right now
 ;
-; the twin is the definition, the native an optimisation: every guard deopts into the twin, so
-; a shape the IR does not say costs speed and nothing else (x64 forges; elsewhere `no-abi`).
-;
-; mkir is a thunk because the IR carries live addresses -- read with `apof`, moved by aslr every
-; run, so built at fit time and never kept. the fit is a batch, all assembling before any
-; installs: `nif` mmaps a page-rounded arena per call, so a roster of n costs n pages and n vmas.
-;
-; a native cell does not survive a bake and does not say so: the image codec reverts it to its
-; twin, so a woken image is correct and slow until `forge-fit` runs again (~0.1 ms each).
-;
-; it needs the glaze module, not the hook: the seal pulls `nif`/`nifx` off the book every boot,
-; leaving `(cite 'glaze 'nif)`. LOVE_NO_GLAZE=1 clears the hook, keeps the module.
-;
-; the bar for a new kernel is not "is it hot" -- against gcc the three below merely draw. it is
-; a constant known only at run time (sat/flat.l bakes an instance's nvars in as immediates), or
-; a twin of interpreted love, where the kernel buys vocabulary (gz.l's match finder, 2.7x).
+; the twin is the definition: every guard deopts into it, so an unsaid shape costs only speed.
+; mkir is a thunk because the IR carries live (aslr) addresses. the fit is a batch: `nif`
+; mmaps a page-rounded arena per call.
+; a native cell reverts to its twin across a bake, so a woken image is slow until forge-fit runs.
+; it needs the glaze module, not the hook: LOVE_NO_GLAZE=1 clears the hook, keeps the module.
+; the bar for a new kernel is a run-time constant or a twin of interpreted love, not mere heat.
 (:
    ; --- the ABI kit -------------------------------------------------------------------
    ; the lvm calling convention, as holo's abstract registers:
@@ -31,10 +20,7 @@
    ; r0/r7/r8/r9/r10 are caller-saved and free; r3/r11-r14 are callee-saved and must be
    ; pushed. every guard jumps to the label `deopt`, which the epilogue below plants.
    ; guards come before any push, so the machine sp is balanced on the deopt path too.
-   ;
-   ; that binding is x64's, spelled and not derived: the lvm ABI is each platform's own C
-   ; convention, so r1 is Sp here and Ip on a64, and holo would assemble the wrong role in
-   ; silence -- `forge-abi?` holds the twins in force until a target has its row.
+   ; that binding is x64's, spelled not derived; `forge-abi?` keeps other targets on the twins.
    forge-trayk (apof (iota 0))                      ; a tray's ap word, live in this process
    forge-chaink (apof '(1 2))                       ; a chain's
    (forge-guard i k)                                ; Sp[i] must be an object of kind k
@@ -47,27 +33,19 @@
    ; pointer: an even pointer is already the value, and tagging one answers a fixnum mid-heap.
    forge-epi '((shl r0 1) (or r0 r0 1) (st r1 0 r0) (add r5 r5 16) (ld r7 r5 0) (jmpr r7))
    forge-epi-ptr '((st r1 0 r0) (add r5 r5 16) (ld r7 r5 0) (jmpr r7))
-   ; -- the room guard. a native body's registers are not GC roots (the collector walks g, Sp
-   ; and Ip), so a kernel never calls the collector: it proves Sp - Hp >= b with the type guards
-   ; and ahead of any store, so the deopt path has touched nothing. `b` is reservation plus
-   ; slack, never the exact need.
-   ; the lane not taken: `Have` tail-calls lvm_gc and resumes at g->ip, which in a nif cell is
-   ; the cell, so the second go finds room -- but it wants lvm_gc's live address (symtab + load
-   ; bias, host-only) for a path that lands in a correct twin anyway.
+   ; the room guard: a native body's registers are not GC roots, so a kernel never calls the
+   ; collector -- it proves Sp - Hp >= b ahead of any store. `b` is reservation plus slack.
    (forge-room b) [['lea 'r7 'r2 b] '(cmp r1 r7) '(br below deopt)]
    ; the same guard with the size only known at run time -- `r` the byte count, `slack` on top.
    ; it jumps to `deoptp`, the unwinding deopt: such a kernel has pushed the callee-saved file.
    (forge-roomr r slack) [['leax 'r7 'r2 r 1 slack] '(cmp r1 r7) '(br below deoptp)]
-   ; -- the callee-saved file: five more registers, a working set a nested loop fits in.
-   ; save only after the type guards, which deopt to the bare `deopt` with the stack as the
-   ; caller left it; everything past a save deopts through `forge-unwind`, which pops the file
-   ; back. an unbalanced stack is not a wrong answer, it is a return into another frame.
+   ; the callee-saved file: save only after the type guards (they deopt to the bare `deopt`);
+   ; past a save, deopt through `forge-unwind`, which pops it -- the stack must balance.
    forge-save '((push r3) (push r11) (push r12) (push r13) (push r14))
    forge-restore '((pop r14) (pop r13) (pop r12) (pop r11) (pop r3))
    forge-unwind ('(label deoptp) . (forge-restore + '((jmp deopt))))
-   ; -- one love value handed through `nifx`'s extras slot, in the cell at Ip+32. unlike an `li`
-   ; immediate it is GC-walked and image-encoded, which is the door for a constant a kernel
-   ; cannot spell: a list-builder's zero point is `&mint_zero`, which no book name hands out.
+   ; one love value handed through `nifx`'s extras slot (Ip+32): GC-walked and image-encoded,
+   ; for a constant a kernel cannot spell as an `li`.
    (forge-extras d) [['ld d 'r5 32]]
    ; the deopt tail: Ip <- the interp twin (Ip[1]), then enter it with the args still on Sp.
    ; arity 1 enters at its first word; arity>=2 skips the twin's own curry preamble.
@@ -83,8 +61,7 @@
    (forge-no k nom) (pin forge-tally [k nom] (1 + peep forge-tally [k nom] 0), ())
    (forge-why _) (map (k \ k . peep forge-tally k 0) (keys forge-tally))
    (forge-fitted? _) #(keys forge-nat)
-   ; a row is (nom arity mkir twin extras). the no-extras marker is the nom 'none and never
-   ; (), which is a legal value to hand a kernel and would install through the wrong seam.
+   ; a row is (nom arity mkir twin extras); no extras is the nom 'none, since () is a legal value.
    (forge-put nom arity mkir twin) (forge-putx nom arity mkir twin 'none)
    (forge-putx nom arity mkir twin extras)
     (pin forge-roll () (peep forge-roll () () + [[nom arity mkir twin extras]]),
@@ -93,26 +70,22 @@
    forge-of forge-fits
 
    ; --- the fit -----------------------------------------------------------------------
-   ; one door, bound once: a missing module answers () and any tablet nets 1 whatever it holds,
-   ; so `!` here is the presence test. no glaze, and the roster stays interpreted.
+   ; a missing module answers () and any tablet nets 1, so `!` is the presence test.
    forge-glaze (cite 'glaze)
    forge-seam (cite 'glaze 'nif)
    forge-seamx (cite 'glaze 'nifx)                  ; the same door, one extras slot wider
    forge-arch love-arch
    forge-abi? (forge-arch = 'x64)               ; the targets the kit above spells
    forge-asm (cite 'holo 'assemble)
-   ; assemble one kernel -> its bytes | (). the deopt tail is the module's (arity-determined),
-   ; the epilogue the kernel's (only it knows whether r0 ends holding a number or a pointer).
-   ; trapped because holo raises on an op it cannot lower, which would take the rest of the
-   ; roster down with it; the raise's tag is what the census records, so the kernel names itself.
+   ; assemble one kernel -> its bytes | (). the deopt tail is the module's, the epilogue the
+   ; kernel's. trapped, since holo raises on an op it cannot lower; the raise's tag is tallied.
    (forge-lay row)
     (: nom <row  ar <>row  mkir <>>row
        bs (trap (_ \ peep (forge-asm forge-arch (mkir 0 + forge-deopt ar)) 'bytes 0)
                 () (a \ b \ (forge-no a nom, 'raised)))
-       ; a nom, not (): a bare () reads as "assembled to nothing" and tallies the miss twice.
+       ; a nom, not (): () would read as "assembled to nothing" and tally the miss twice.
        (bs @ (_ . _) bs 'raised () (forge-no 'no-bytes nom)))
-   ; a decline is never a raise: a missing glaze and a target with no ABI row both leave the
-   ; roster interpreted and say so by name in `forge-why`.
+   ; a decline is never a raise: it leaves the roster interpreted and says so in `forge-why`.
    (forge-fit _)
     (? !forge-glaze (forge-no 'no-seam forge-arch, 0)
        !forge-abi? (forge-no 'no-abi forge-arch, 0)
@@ -127,13 +100,9 @@
                          (pin forge-fits nom j, pin forge-nat nom 1, n + 1))))))
              0 laid)))
 
-   ; =======================================================================================
-   ; the kernels
-   ; =======================================================================================
-   ; (aall v) -- the conjunction reduction over a tray: every element positive. the native says the
-   ; love_Z lane and nothing else; a scalar, a float/complex/object tray and a fixnum all deopt.
+   ; --- the kernels ---------------------------------------------------------------------
+   ; (aall v) -- every element positive. the native says love_Z trays only; the rest deopt.
    ; tray layout: [0] ap, [8] type, [16] rank, [24] shape.., data at 24+rank*8.
-   ; the weakest of the three -- gcc hoists the C nif's per-element type test out by itself.
    (forge-aall-ir _)
     (forge-guard 0 forge-trayk
     + '((ld r7 r0 8) (cmp r7 0) (br ne deopt)                ; type must be love_Z
@@ -150,12 +119,9 @@
     + forge-epi)
    _ (forge-put 'aall 1 forge-aall-ir aall)
 
-   ; (outer a b) -- the outer product over two love_Z trays: rank ra+rb, M*N cells, written
-   ; in one sequential sweep (j fastest) so the destination pointer only ever walks.
+   ; (outer a b) -- outer product of two love_Z trays, rank ra+rb, written in one sweep (j fastest).
    ; regs: r3=M r11=a-data r12=b-data r13=dest r14=N, r0/r7/r8/r9/r10 scratch.
-   ; M, N and the rank come off the two shapes, so the size is known before a byte is allocated:
-   ; `forge-roomr` proves the room and the twin takes the near-full heap. the one row here that
-   ; beats a real cc.
+   ; the size is known from the shapes, so `forge-roomr` proves room before allocating.
    (forge-outer-ir _)
     ([ '(ld r0 r1 0) '(test r0 1) '(br ne deopt)
        ['li 'r8 forge-trayk] '(ld r7 r0 0) '(cmp r7 r8) '(br ne deopt)
@@ -207,16 +173,10 @@
      + (forge-restore + (forge-epi-ptr + forge-unwind)))))
    _ (forge-put 'outer 2 forge-outer-ir outer)
 
-   ; (inner a b) -- +.x over two love_Z trays: contract a's last axis with b's first (1D.1D a
-   ; dot, 2D.2D a matmul). ikj order, the accumulator in memory, and the addressing carried in
-   ; walking pointers -- Arow by K*8, Brow by N*8, Crow by N*8 -- where the C recomputes i*N+j
-   ; per element. that is the whole difference, and it draws with gcc.
-   ; regs: r11=Arow r13=Crow r14=N r3=K, r0/r7/r8/r9/r10/r12 scratch;
-   ; [sp+0]=Cend [sp+8]=B data [sp+16]=the result.
-   ; the shape guards sit after `forge-save` and deopt through `deoptp` -- ten values to check
-   ; and five caller-saved registers to check them in; only the type guards, ahead of any push,
-   ; can use the bare `deopt`. n<=1 hands back to the twin, where the C answers a boxed scalar:
-   ; a different object and a different allocation, and a kernel that says one shape says one.
+   ; (inner a b) -- +.x over two love_Z trays: a's last axis against b's first. ikj order,
+   ; addressing in walking pointers. regs: r11=Arow r13=Crow r14=N r3=K, r0/r7-r10/r12 scratch;
+   ; [sp+0]=Cend [sp+8]=B data [sp+16]=the result. shape guards follow `forge-save`, so deopt
+   ; through `deoptp`. n<=1 goes to the twin, where the C answers a boxed scalar.
    (forge-inner-ir _)
     ([ '(ld r0 r1 0) '(test r0 1) '(br ne deopt)
        ['li 'r8 forge-trayk] '(ld r7 r0 0) '(cmp r7 r8) '(br ne deopt)

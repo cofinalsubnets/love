@@ -75,6 +75,11 @@
           (b = "https:") 1
           (b = "http:" && a = "http:")))
    (ww-nohop url to) [1 ("www: " + wg-plain url + " sends us to " + wg-plain to + ", which is not followed")]
+   ; a redirect from url to to, followed while hops last and the hop is allowed
+   (ww-follow url to hops)
+    (? (hops < 1) [1 "www: too many redirects"]
+       !(ww-hop? url to) (ww-nohop url to)
+       (ww-get to (hops - 1)))
    ; what a person typed -> a url: a scheme stays, a file here opens as file:, the rest is https
    (ww-arg s)
     (? (0 <= fsub s "://" 0) s
@@ -104,10 +109,7 @@
                 (: code <r hd (r 1)
                    loc (wg-header hd "location")
                    (? (300 <= code < 400 && string? loc)
-                       (: to (ww-resolve url loc)
-                          (? (hops < 1) [1 "www: too many redirects"]
-                             !(ww-hop? url to) (ww-nohop url to)
-                             (ww-get to (hops - 1))))
+                       (ww-follow url (ww-resolve url loc) hops)
                       (: ct (wg-header hd "content-type")
                          k (ww-kind (? (string? ct) ct ""))
                          b (? k (ww-body (? (string? ct) ct "") (wg-header hd "content-encoding") (r 2)) ())
@@ -242,10 +244,7 @@
                                      (? (starts? mime "text/gemini") [0 u 'html (ww-gtext body) 200]
                                         (starts? mime "text/") [0 u 'text body 200]
                                         [1 ("www: " + url + " is " + meta + ", not a page")]))
-                      (code < 40) (: to (ww-resolve url meta)
-                                     (? (hops < 1) [1 "www: too many redirects"]
-                                        !(ww-hop? url to) (ww-nohop url to)
-                                        (ww-get to (hops - 1))))
+                      (code < 40) (ww-follow url (ww-resolve url meta) hops)
                       (code < 60) [1 ("www: " + url + " -- " + hd)]
                       [1 ("www: " + url + " wants a client certificate (" + hd + ")")]))))))
 

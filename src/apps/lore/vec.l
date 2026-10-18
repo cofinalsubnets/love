@@ -2,7 +2,7 @@
 ; for one pixel or for a whole screen of them, and the arithmetic of each. and the hash's
 ; value noise, eased between its lattice, for any texture a scene lays; the dice a scene
 ; throws; and points as a camera tablet sees them ('e 'f 'r 'u the eye and its axes, 'w 'h 'foc).
-(module (vec sat sq mag frac c* cm c+ cmix dot unit cross lerp turn side vn rnd rnd-new sight spot)
+(module (vec sat sq mag frac c* cm c+ c- cmix dot unit cross lerp turn side vn rnd rnd-new sight spot)
 (borrow 'view)                          ; the hash, min2 max2 flo over
 (:
  (sat v) (min 1.0 (max 0.0 v))
@@ -12,6 +12,7 @@
  (c* k a) [(k * a 0) (k * a 1) (k * a 2)]
  (cm a b) [(a 0 * b 0) (a 1 * b 1) (a 2 * b 2)]
  (c+ a b) [(a 0 + b 0) (a 1 + b 1) (a 2 + b 2)]
+ (c- a b) [(a 0 - b 0) (a 1 - b 1) (a 2 - b 2)]
  (cmix a b m) [(a 0 + m * (b 0 - a 0)) (a 1 + m * (b 1 - a 1)) (a 2 + m * (b 2 - a 2))]
  (dot a b) (a 0 * b 0 + a 1 * b 1 + a 2 * b 2)
  (unit a) (c* (1.0 / sqrt (max2 1e-12 (dot a a))) a)

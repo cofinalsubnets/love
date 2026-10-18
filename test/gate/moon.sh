@@ -55,6 +55,10 @@ for f in test/cc/*.c; do
   "$ho/.ccb"; a=$?
   $cc_g -O0 -o "$ho/.ccbg" "$f" && "$ho/.ccbg"; b=$?
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
+  # ..and again with the hardening flags, which change no answer
+  moonrun -fcf-protection=full -ftrivial-auto-var-init=zero "$f" "$ho/.ccb" > /dev/null 2>&1 || fail "mooncc -fcf-protection -ftrivial-auto-var-init compile $f"
+  "$ho/.ccb"; c=$?
+  [ $a -eq $c ] || fail "mooncc battery $f hardened (ours $c, unhardened $a)"
 done
 
 # kernel objects: -mno-sse keeps a variadic's prologue off the xmm file, a data symbol
@@ -436,6 +440,209 @@ fi
 moonrun -ffixed-x18 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffixed-x18 taken on x64"
 moonrun -t a64 -ffixed-x20 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffixed-x20 was ignored"
 echo "mooncc: -fshort-wchar, -fmacro-prefix-map and -ffixed-x18 do what they say, held to gcc"
+
+# -funsigned-char / -fsigned-char: plain char's sign in code, in #if and in the predefines
+cat > "$ho/.uch.c" <<'EOF'
+#include <limits.h>
+#if '\xc8' > 0
+#define PP 1
+#else
+#define PP 0
+#endif
+#ifdef __CHAR_UNSIGNED__
+#define PU 1
+#else
+#define PU 0
+#endif
+int main(void) {
+  char c = (char) 200, m = -1;
+  return (c == 200) + 2 * (CHAR_MIN == 0) + 4 * PU + 8 * (m > 0) + 16 * ('\xc8' == 200) + 32 * PP; }
+EOF
+for fl in -funsigned-char -fsigned-char; do
+  moonrun $fl -o "$ho/.uch" "$ho/.uch.c" > /dev/null 2>&1 || fail "$fl compile"
+  "$ho/.uch"; a=$?
+  $cc_g -O0 $fl -o "$ho/.uchg" "$ho/.uch.c" > /dev/null 2>&1 && "$ho/.uchg"; b=$?
+  [ $a -eq $b ] || fail "$fl: ours $a gcc $b"
+done
+[ $a -eq 0 ] || fail "-fsigned-char on x64 answered $a, want 0"
+cat > "$ho/.sch.c" <<'EOF'
+_Static_assert((char) -1 < 0, "signed");
+_Static_assert('\xc8' < 0, "a one-char constant");
+EOF
+moonrun -t a64 -fsigned-char -c -o /dev/null "$ho/.sch.c" > /dev/null 2>&1 || fail "-fsigned-char on a64: char stays unsigned"
+
+# -fno-jump-tables, -fno-builtin, -fno-optimize-sibling-calls, -falign-functions: each changes the object
+cat > "$ho/.fl.c" <<'EOF'
+int g(int);
+int sw(int x) { switch (x) { case 0: return g(3); case 1: return g(9); case 2: return g(1); case 3: return g(7);
+  case 4: return g(5); case 5: return g(4); case 6: return g(8); case 7: return g(2); } return 0; }
+void *memset(void *, int, unsigned long);
+void clr(char *p) { memset(p, 0, 16); }
+int tail(int x) { return g(x + 1); }
+int al(int x) { return x * 3; }
+EOF
+fdis() { moonrun -O2 "$@" -c -o "$ho/.fl.o" "$ho/.fl.c" > /dev/null 2>&1 || fail "$* compile"
+         objdump -d --no-show-raw-insn "$ho/.fl.o"; }
+fdis | grep -q 'jmp *\*' || fail "the switch laid no jump table to begin with"
+fdis -fno-jump-tables | grep -q 'jmp *\*' && fail "-fno-jump-tables laid a jump table"
+fnm() { fdis "$@" > /dev/null; nm "$ho/.fl.o" | grep -c ' U memset$'; }
+[ "$(fnm)" = 0 ] || fail "memset was a call to begin with"
+[ "$(fnm -fno-builtin)" = 1 ] || fail "-fno-builtin spliced memset"
+[ "$(fnm -fno-builtin-memset)" = 1 ] || fail "-fno-builtin-memset spliced memset"
+fdis | grep -A12 '<tail>:' | grep -q 'call' && fail "tail laid a call to begin with"
+fdis -fno-optimize-sibling-calls | grep -A12 '<tail>:' | grep -q 'call' || fail "-fno-optimize-sibling-calls jumped to g"
+moonrun -falign-functions=64 -c -o "$ho/.fl.o" "$ho/.fl.c" > /dev/null 2>&1 || fail "-falign-functions compile"
+for a in $(nm "$ho/.fl.o" | awk '$2 == "T" { print $1 }'); do
+  [ $((0x$a % 64)) -eq 0 ] || fail "-falign-functions=64 left a fn at 0x$a"
+done
+# -mno-red-zone is taken as it stands: no store below sp anywhere in a leaf with locals
+printf 'int lf(int a, int b) { int t[4] = { a, b, a + b, a - b }; return t[a & 3] * t[b & 3]; }\n' > "$ho/.rz.c"
+moonrun -O2 -mno-red-zone -c -o "$ho/.rz.o" "$ho/.rz.c" > /dev/null 2>&1 || fail "-mno-red-zone compile"
+objdump -d "$ho/.rz.o" | grep -q -- '-0x[0-9a-f]*(%rsp)' && fail "-mno-red-zone: a store below sp"
+# what mooncc does not honour refuses by name, exit 2
+for fl in -mcmodel=kernel -fstack-protector-strong -fno-such-flag -mno-such-flag; do
+  moonrun $fl -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?
+  [ $r -eq 2 ] && grep -q -- "$fl" "$ho/.fl.err" || fail "$fl: exit $r, not refused by name"
+done
+moonrun -fno-strict-aliasing -fno-common -fno-pie -fno-asynchronous-unwind-tables -ffunction-sections -mtune=generic \
+  -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a flag taken as it stands was refused"
+echo "mooncc: -f[un]signed-char held to gcc, the -f flags that change the object do, the rest refuse by name"
+
+# -ftrivial-auto-var-init=zero: every automatic without an initializer reads zero, over a dirty stack
+cat > "$ho/.avz.c" <<'EOF'
+struct s { int a[3]; char c; long l; };
+__attribute__((noinline)) static void dirty(void) { volatile char b[256]; for (int i = 0; i < 256; i++) b[i] = (char) 0xa5; }
+__attribute__((noinline)) static int probe(void) {
+  int x; long y; char z[40]; struct s w; double d; int *p;
+  int n = x + (int) y + d + (p != 0) + w.c + (int) w.l;
+  for (int i = 0; i < 40; i++) n += z[i];
+  for (int i = 0; i < 3; i++) n += w.a[i];
+  return n; }
+int main(void) { dirty(); return probe(); }
+EOF
+moonrun -ftrivial-auto-var-init=zero -o "$ho/.avz" "$ho/.avz.c" > /dev/null 2>&1 || fail "-ftrivial-auto-var-init=zero compile"
+"$ho/.avz" || fail "-ftrivial-auto-var-init=zero left a local unzeroed ($?)"
+# ..a VLA's block too, every time its declaration runs
+cat > "$ho/.avzv.c" <<'EOF'
+__attribute__((noinline)) static void dirty(void) { volatile char b[512]; for (int i = 0; i < 512; i++) b[i] = (char) 0xa5; }
+__attribute__((noinline)) static int vla(int n) { char v[n]; int s = 0; for (int i = 0; i < n; i++) s += v[i]; return s; }
+int main(void) { int s = 0; for (int k = 1; k < 90; k += 7) { dirty(); s += vla(k); } return s != 0; }
+EOF
+moonrun -ftrivial-auto-var-init=zero -o "$ho/.avzv" "$ho/.avzv.c" > /dev/null 2>&1 || fail "-ftrivial-auto-var-init=zero compile (a VLA)"
+"$ho/.avzv" || fail "-ftrivial-auto-var-init=zero left a VLA unzeroed"
+# -fcf-protection=branch: endbr where an indirect branch lands -- an entry another unit or a
+# pointer reaches, a table's case, a label whose address is taken, a returns-twice call's return
+cat > "$ho/.ibt.c" <<'EOF'
+#include <setjmp.h>
+int g(int);
+static int hid(int x) { return g(x) + 1; }
+static int taken(int x) { return x * 2; }
+int (*fp)(int) = taken;
+int ext(int x) { return hid(x) + hid(x + 1); }
+int sw(int x) { switch (x) { case 0: return g(3); case 1: return g(9); case 2: return g(1); case 3: return g(7);
+  case 4: return g(5); case 5: return g(4); case 6: return g(8); case 7: return g(2); } return 0; }
+int cg(int i) { static void *t[] = { &&a, &&b }; goto *t[i & 1]; a: return 1; b: return 2; }
+jmp_buf jb;
+int sj(void) { if (setjmp(jb)) return 1; return g(0); }
+EOF
+moonrun -fno-inline -fcf-protection=branch -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=branch compile"
+objdump -d --no-show-raw-insn "$ho/.ibt.o" > "$ho/.ibt.d"
+ibt() { awk -v f="<$1>:" '$2 == f { on = 1; next } /^[0-9a-f]+ </ { on = 0 } on && /endbr64/ { n++ } END { print n + 0 }' "$ho/.ibt.d"; }
+[ "$(ibt hid)" = 0 ] || fail "-fcf-protection: a static fn no pointer reaches landed an endbr"
+for f in taken ext; do [ "$(ibt $f)" = 1 ] || fail "-fcf-protection: $f has no endbr at its entry"; done
+[ "$(ibt sw)" -ge 9 ] || fail "-fcf-protection: a jump table's cases land without endbr ($(ibt sw))"
+[ "$(ibt cg)" = 3 ] || fail "-fcf-protection: a computed goto's labels land without endbr ($(ibt cg))"
+[ "$(ibt sj)" = 2 ] || fail "-fcf-protection: setjmp's return lands without endbr"
+readelf -n "$ho/.ibt.o" | grep -q 'x86 feature: IBT$' || fail "-fcf-protection=branch: no IBT mark"
+moonrun -fcf-protection=full -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=full compile"
+readelf -n "$ho/.ibt.o" | grep -q 'x86 feature: IBT, SHSTK' || fail "-fcf-protection=full: no IBT, SHSTK mark"
+moonrun -t i386 -fcf-protection=branch -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=branch on i386"
+objdump -d "$ho/.ibt.o" | grep -q endbr32 || fail "-fcf-protection on i386 laid no endbr32"
+[ "$(printf '__CET__\n' | moonrun -fcf-protection -E - | tail -1 | tr -d ' ')" = 3 ] || fail "-fcf-protection: __CET__ is not 3"
+moonrun -t a64 -fcf-protection=branch -c -o /dev/null "$ho/.ibt.c" > /dev/null 2>&1 && fail "-fcf-protection taken on a64"
+echo "mooncc: -ftrivial-auto-var-init=zero zeroes every automatic, -fcf-protection lands every indirect branch on endbr"
+
+# -fwrapv and -fno-strict-overflow: an int's + - * << and - wrap at 32 bits in every lane (an
+# immediate, a register pair, the shuttle, a shift, a fold, a loop's counter), held to gcc's
+cat > "$ho/.wv.c" <<'EOF'
+#include <stdio.h>
+#include <limits.h>
+#define N __attribute__((noinline))
+N long add1(int x) { return (long) (x + 1); }
+N long addv(int x, int y) { return (long) (x + y); }
+N long subv(int x, int y) { return (long) (x - y); }
+N long mulv(int x, int y) { return (long) (x * y); }
+N int  half(int x) { return (x * 2) / 2; }
+N int  gt(int x) { return x + 1 > x; }
+N long mul3(int x) { return (long) (x * 3); }
+N long mul8(int x) { return (long) (x * 8); }
+N long mul10(int x) { return (long) (x * 10); }
+N long shl1(int x) { return (long) (x << 1); }
+N long neg(int x) { return (long) -x; }
+N long preinc(int x) { long l = ++x; return l; }
+N long pluseq(int x) { return (long) (x += 1); }
+N long sum(int *a, int n) { int s = 0; for (int i = 0; i < n; i++) s += a[i]; return (long) s; }
+N long idx(int x) { static char b[16]; char *p = b + 8; return (long) ((p + (x + 1)) - b); }
+N long tern(int x, int c) { return (long) (c ? x + 1 : x - 1); }
+N long kfold(void) { int m = INT_MAX; return (long) (m + 1); }
+N unsigned long sh(int x) { return (unsigned long) (x + x) >> 1; }
+int main(void) {
+  int a[3] = { INT_MAX, 1, 1 };
+  long r[] = { add1(INT_MAX), addv(INT_MAX, 1), subv(INT_MIN, 1), mulv(65536, 65536), half(INT_MAX), gt(INT_MAX),
+               mul3(INT_MAX), mul8(INT_MAX), mul10(INT_MAX), shl1(INT_MAX), neg(INT_MIN), preinc(INT_MAX), pluseq(INT_MAX),
+               sum(a, 3), tern(INT_MAX, 1), tern(INT_MIN, 0), kfold(), (long) sh(INT_MAX) };
+  unsigned h = 0;
+  for (unsigned i = 0; i < sizeof r / sizeof *r; i++) { printf("%u %ld\n", i, r[i]); h = h * 31 + (unsigned) r[i] + (unsigned) (r[i] >> 32); }
+  return h & 255; }
+EOF
+cat > "$ho/.wvl.c" <<'EOF'
+#define N __attribute__((noinline))
+N int iv(int s) { int c = 0; for (int i = s; i > 0 && c < 10; i++) c++; return c; }
+N int iv2(int s) { int c = 0; for (int i = s; i > 0; i += 1000000000) c++; return c; }
+N long ar(int s) { int a[4] = { 0 }; long t = 0; for (int i = s; i >= s - 3 && i < s + 9; i--) t += (long) i; return t; }
+int main(void) { return iv(2147483645) * 10 + iv2(1) + (ar(-2147483647) == 2 ? 100 : 0); }
+EOF
+$cc_g -O2 -fwrapv -o "$ho/.wvg" "$ho/.wv.c" > /dev/null 2>&1 && "$ho/.wvg" > "$ho/.wvg.txt"
+for fl in -fwrapv -fno-strict-overflow; do
+  moonrun $fl -o "$ho/.wv" "$ho/.wv.c" > /dev/null 2>&1 || fail "$fl compile"
+  "$ho/.wv" | cmp -s - "$ho/.wvg.txt" || fail "$fl: an int's arithmetic answers other than gcc -fwrapv's"
+done
+moonrun -fwrapv -o "$ho/.wvl" "$ho/.wvl.c" > /dev/null 2>&1 || fail "-fwrapv compile (a loop)"
+"$ho/.wvl"; a=$?
+$cc_g -O2 -fwrapv -o "$ho/.wvlg" "$ho/.wvl.c" > /dev/null 2>&1 && "$ho/.wvlg"; b=$?
+[ $a -eq 33 ] && [ $a -eq $b ] || fail "-fwrapv: a counter past INT_MAX (ours $a gcc $b, want 33)"
+echo "mooncc: -fwrapv wraps an int's arithmetic at 32 bits in every lane, held to gcc"
+
+# -fpatchable-function-entry=N,M: N nops, M ahead of the entry, a word to each pad's start in
+# __patchable_function_entries; the attribute overrides per fn, (0,0) being the kernel's notrace
+cat > "$ho/.pfe.c" <<'EOF'
+int g(int);
+int f(int x) { return g(x) + 1; }
+__attribute__((patchable_function_entry(0, 0))) int nt(int x) { return g(x) * 2; }
+__attribute__((patchable_function_entry(3, 1))) int own(int x) { return g(x) - 3; }
+EOF
+pfe() { awk -v f="<$1>:" '$2 == f { on = 1; next } /^[0-9a-f]+ </ { on = 0 } on { print $2 }' "$ho/.pfe.d" | head -"$2" | tr '\n' ' '; }
+moonrun -fpatchable-function-entry=4,2 -c -o "$ho/.pfe.o" "$ho/.pfe.c" > /dev/null 2>&1 || fail "-fpatchable-function-entry compile"
+objdump -d --no-show-raw-insn "$ho/.pfe.o" > "$ho/.pfe.d"
+[ "$(pfe f 2)" = "nop nop " ] || fail "-fpatchable-function-entry=4,2: f does not open on 2 nops ($(pfe f 2))"
+[ "$(pfe nt 1)" != "nop " ] || fail "patchable_function_entry(0,0) still padded nt"
+[ "$(pfe own 2)" = "nop nop " ] || fail "patchable_function_entry(3,1): own does not open on 2 nops"
+# a word per padded fn, each at its fn's entry less its pre-nops: f at -2, own at -1
+readelf -rW "$ho/.pfe.o" | awk '/__patchable_function_entries/ { on = 1; next } /^Relocation section/ { on = 0 } on && /R_X86_64_64/ { print $NF }' > "$ho/.pfe.r"
+[ "$(wc -l < "$ho/.pfe.r")" = 2 ] || fail "-fpatchable-function-entry: $(wc -l < "$ho/.pfe.r") entries, want 2 (nt has none)"
+for fn in f:2 own:1; do
+  a=$(nm "$ho/.pfe.o" | awk -v n="${fn%:*}" '$3 == n { print $1 }')
+  grep -qx "$(printf %x $((0x$a - ${fn#*:})))" "$ho/.pfe.r" || fail "-fpatchable-function-entry: no entry at ${fn%:*}'s pad"
+done
+moonrun -t a64 -mbranch-protection=bti -fpatchable-function-entry=2 -c -o "$ho/.pfe.o" "$ho/.pfe.c" > /dev/null 2>&1 || fail "-fpatchable-function-entry on a64"
+if command -v llvm-objdump > /dev/null; then
+  llvm-objdump -d --no-show-raw-insn "$ho/.pfe.o" > "$ho/.pfe.d"
+  [ "$(pfe f 3)" = "bti nop nop " ] || fail "-fpatchable-function-entry=2 on a64: f opens on $(pfe f 3), not bti nop nop"
+fi
+moonrun -t rv64 -fpatchable-function-entry=2 -c -o /dev/null "$ho/.pfe.c" > /dev/null 2>&1 || fail "-fpatchable-function-entry on rv64"
+moonrun -t thumb2 -fpatchable-function-entry=2 -c -o /dev/null "$ho/.pfe.c" > /dev/null 2>&1 && fail "-fpatchable-function-entry taken on thumb2"
+moonrun -fpatchable-function-entry=1,2 -c -o /dev/null "$ho/.pfe.c" > /dev/null 2>&1 && fail "-fpatchable-function-entry=1,2 taken"
+echo "mooncc: -fpatchable-function-entry lays each fn's nop pad and its word, the attribute per fn"
 
 # -- C11 conditional features (6.10.8.3), per target
 # ours alone (gcc has atomics): a claimed absence sends portable code down a fallback

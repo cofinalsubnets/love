@@ -1,5 +1,5 @@
-; src/apps/av.l -- the decoder door's one list: a stream in, whichever codec claims it, out the
-; horn. each codec module NAME answers NAME-sniff NAME-meta NAME-format NAME-pump (notes/plan/av.md).
+; src/apps/av.l -- the decoder door: a stream in, whichever codec claims it, out the horn.
+; each codec module NAME answers NAME-sniff NAME-meta NAME-format NAME-pump.
 ; `(borrow 'av)`, then:
 ;
 ;   (av-codecs)        -> [[name sniff meta format pump] ..], the codecs in sniffing order
@@ -7,24 +7,19 @@
 ;   (av-open q)        -> [name m h], the codec, its meta and the audio bytes held | why not
 ;   (av-play q)        -> 0 when q has played out the horn to its end | why not
 ;   (av-pcm f emit)    -> an emit that turns f-shaped samples into the horn's s16 for emit
-;   (av-uri u)         -> [q info] for a path or an http(s) stream (src/apps/icy.l), info its
-;                         tablet ({} for a file) | why not
-;   (av-head q f h0)   -> [r h]: the head of q, h0 what is held already, read until f answers
-;                         r of h -- 'short when the stream ended first, or why when the head
-;                         passes av-cap. every tool reads a head through it (av.md, the door's
-;                         reading). f may answer ['more N] (nothing decides before byte N),
-;                         'more (twice what is held), or ['skip A B R]: bytes A..B hold nothing
-;                         wanted, R takes their place, and they leave the port without being held
-;   (av-patch path at s) -> 0 | why: s laid over the file at byte at, in place -- the header a
-;                         tool wrote ahead of what it streamed, its sizes known at the end
-;   (av-head-all q f h0), (av-open-all q)  the same, skipping nothing: for what keeps every
-;                         byte of a head (metaflac, the flac encoder copying blocks)
+;   (av-uri u)         -> [q info] for a path or an http(s) stream (icy.l) | why not
+;   (av-head q f h0)   -> [r h]: the head of q read until f answers r -- 'short when the
+;                         stream ended first, why past av-cap. f may answer ['more N],
+;                         'more (twice what is held), or ['skip A B R]: bytes A..B are
+;                         replaced by R and leave the port without being held
+;   (av-patch path at s) -> 0 | why: s laid over the file at byte at, in place
+;   (av-head-all q f h0), (av-open-all q)  the same, skipping nothing
 (module (av av-codecs av-codec av-open av-open-all av-play av-pcm av-uri av-head av-head-all av-cap av-patch)
 (borrow 'wav)
 (:
    open (cite 'posix 'open) close (cite 'posix 'close)
-   ; cited when asked, so a codec's module may bake after this one. a wav's meta is its
-   ; own format: wav-format looks one up by name
+   ; cited when asked, so a codec's module may bake after this one. a wav's meta is
+   ; its own format
    (av-codecs _) [["wav" (cite 'wav 'wav-sniff) (cite 'wav 'wav-meta) (m \ m) (cite 'wav 'wav-pump)]
                   ["flac" (cite 'flac 'flac-sniff) (cite 'flac 'flac-meta) (cite 'flac 'flac-format) (cite 'flac 'flac-pump)]
                   ["ogg" (cite 'ogg 'ogg-sniff) (cite 'ogg 'ogg-meta) (cite 'ogg 'ogg-format) (cite 'ogg 'ogg-pump)]
@@ -38,12 +33,11 @@
          (charm? ((cite 'posix 'lseek) fd at 0))
           (: p (fdopen fd) _ (say p s) _ (flush p) (close p, 0))
          (: _ (close fd) "cannot seek in \(path)")))
-   ; gulps are kept as a list and joined once a step; f runs only when the head has grown to
-   ; what it asked, so a head costs a parse a block, not a parse a gulp
+   ; gulps are joined once a step, and f runs only once the head grew to what it asked
    (av-head q f h0) (av-read q f h0 1)
    (av-head-all q f h0) (av-read q f h0 0)
    (av-read q f h0 skip?)
-    (: ; h grown to n bytes, or as far as the stream goes
+    (:
        (fill h n) (: (go acc len) (? (len >= n) (cats (rev acc))
                                      (wav-gulp q @ g (string? g ? (go (g . acc) (len + #g)) (cats (rev acc)))))
                      (go [h] #h))

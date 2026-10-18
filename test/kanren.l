@@ -1,5 +1,5 @@
-; kanren: unify, var and the operators are global, the rest rides (cite 'kanren).
-; unord_eq is an unordered list equality, since search order is unspecified
+; unify, var and the operators are global, the rest rides (cite 'kanren).
+; search order is unspecified, hence unord_eq
 (: K (cite 'kanren)
    est (K 'est)  query (K 'query)  rel (K 'rel)  sX (K 'sX)  slist (K 'slist)
    smap (K 'smap)  sno (K 'sno)  stake (K 'stake)  walk (K 'walk)  s_app (K 's_app)
@@ -22,9 +22,9 @@
 ((_ \ '(1 2)) @ d
  ('(3 4 1 2) = slist (s_plus d '(3 4))
   && '(1 2 3 4) = slist (s_app d '(3 4))))
-; --- unification + reification through `query` ---
+; --- unification + reification ---
 ('((a 1)) = query 0 '(a) (\\\ a (est a 1)))
-(() = (query 0 '(a) (\\\ a (&&& (est a 1) (est a 2)))))               ; 1 and 2 don't unify -> no answer
+(() = (query 0 '(a) (\\\ a (&&& (est a 1) (est a 2)))))
 ('((a (1 2 (3 (4))) b (3 (4)) c 4))
    = query 0 '(a b c) (\\\ a b c (&&& (est a [1 2 b])
                                      (est b [3 [c]])
@@ -33,7 +33,7 @@
  (query 0 '(a b c) (\\\ a b c (||| (&&& (est a 1) (est b 2) (est c 3))
                                    (&&& (est a 4) (est b 5) (est c 6))
                                    (&&& (est a 7) (est b 8) (est c 9))))))
-; --- an infinite stream, fairly enumerated via zz-delay ---
+; --- an infinite stream, fairly enumerated ---
 (unord_eq '((a 0) (a 1) (a 2) (a 3) (a 4) (a 5) (a 6) (a 7) (a 8) (a 9))
  (query 10 '(a) (\\\ a
   (: (never s) ((||| (_ \ sno) (zz never)) s)
@@ -43,13 +43,13 @@
 (: n (nom 0) v (var 'v)
    r (unify empty_dict ['app n v] ['app n 'y])
  (!(ufail? r) && 'y = walk r v))
-; --- disequality: the constraint store rides beside `unify`, order-free ---
+; --- disequality, order-free ---
 ('((a 2)) = query 0 '(a) (\\\ a (&&& (dif a 1) (est a 2))))
 (() = (query 0 '(a) (\\\ a (&&& (dif a 1) (est a 1)))))      ; the constraint fires later
 (() = (query 0 '(a) (\\\ a (&&& (est a 1) (dif a 1)))))      ; ..and the other order too
 ('((a 1)) = query 0 '(a) (\\\ a (&&& (est a 1) (dif a 2))))  ; can never be equal -> nothing to watch
 (() = (query 0 '(a b) (\\\ a b (&&& (dif a b) (est a b)))))  ; two holes told apart, then joined
-; a disequality over a pair is one constraint, not two: it fails only when both halves land
+; a pair disequality is one constraint: it fails only when both halves land
 ((a \ b \ &&& (dif [a b] [1 2]) (est a 1)) @ g
  ('((a 1 b 3)) = query 0 '(a b) (\\\ a b (&&& (g a b) (est b 3)))
   && () = query 0 '(a b) (\\\ a b (&&& (g a b) (est b 2)))))
@@ -57,7 +57,7 @@
 ('((t (1 2))) = query 0 '(t) (\\\ t (&&& (absent 'x t) (est t '(1 2)))))
 (() = (query 0 '(t) (\\\ t (&&& (absent 'x t) (est t '(1 x))))))
 (() = (query 0 '(t) (\\\ t (&&& (est t '(1 (x))) (absent 'x t)))))    ; and it looks deep
-; --- a type constraint over any predicate: (apt nom? x) is symbolo ---
+; --- (apt nom? x) is symbolo ---
 ('((a foo)) = query 0 '(a) (\\\ a (&&& (apt nom? a) (est a 'foo))))
 (() = (query 0 '(a) (\\\ a (&&& (apt nom? a) (est a 1)))))
 ; --- the extra-logical three: soft cut, commit, negation as failure ---
@@ -80,14 +80,14 @@
 
   ; --- relations as algebra: === unifies, =/= separates, + is or, * is and ---
   (:  ; a plant cladogram
-  (diverges a b) (((a === 'spermatophytes) * (b === 'angiosperms))    ; seed plants -> flowering plants
-                + ((a === 'angiosperms)    * (b === 'monocots))       ; angiosperms split into
-                + ((a === 'angiosperms)    * (b === 'eudicots)))      ;   monocots | eudicots
-  (descends a c) (rel (\\\ b (load ((diverges a b) * (diverges b c)))))    ; c descends from a, two splits down
+  (diverges a b) (((a === 'spermatophytes) * (b === 'angiosperms))
+                + ((a === 'angiosperms)    * (b === 'monocots))
+                + ((a === 'angiosperms)    * (b === 'eudicots)))
+  (descends a c) (rel (\\\ b (load ((diverges a b) * (diverges b c)))))    ; two splits down
   (boolean x) ((x === 0) + (x === 1))
   (test
-   (unord_eq '((k monocots) (k eudicots)) (query 0 '(k) (\\\ k (load (diverges 'angiosperms k)))))      ; daughter clades of angiosperms (OR)
-   (unord_eq '((g monocots) (g eudicots)) (query 0 '(g) (\\\ g (load (descends 'spermatophytes g)))))   ; two splits below seed plants
+   (unord_eq '((k monocots) (k eudicots)) (query 0 '(k) (\\\ k (load (diverges 'angiosperms k)))))
+   (unord_eq '((g monocots) (g eudicots)) (query 0 '(g) (\\\ g (load (descends 'spermatophytes g)))))
    ; a clade is not its own daughter
    (unord_eq '((k eudicots)) (query 0 '(k) (\\\ k (load ((diverges 'angiosperms k) * (k =/= 'monocots))))))
    ; sat: (x|y)&(!x|z) as a product of sums
@@ -96,5 +96,5 @@
         * ((x === 1) + (y === 1))
         * ((x === 0) + (z === 1))))) @ sat
     (elem '(x 0 y 1 z 1) sat,        ; a model
-     !(elem '(x 0 y 0 z 1) sat))))), ; x=0,y=0 violates (x|y) -> not a model
+     !(elem '(x 0 y 0 z 1) sat))))), ; violates (x|y)
   0))                                ; the outer body: nothing leaks

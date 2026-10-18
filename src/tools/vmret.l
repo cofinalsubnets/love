@@ -1,31 +1,20 @@
 #!/usr/bin/env l
-; vmret.l -- flag lvm_* VM-instruction aps that contain a `ret`.
-;
-; The l VM is
-; threaded: every lvm_* opcode ap should tail-jump to the next, never
-; emit an ordinary `ret`. This tool disassembles an ELF (shelling out to
-; objdump / llvm-objdump via the `hark` nif) and reports every lvm_* function
-; whose body still contains a `ret` -- a first-pass heuristic, expect false
-; positives. It is cross-arch: it reads e_machine and picks a per-arch return
-; mnemonic, preferring multi-target llvm-objdump for non-x86 images.
-;
-; Usage: l vmret.l ELF [--prefix prefix] [--objdump PATH]
-; Exit:  0 = all clean, 1 = suspects found, 2 = usage/tool error.
-;
-; This needs the host-only `hark`/`getenv` nifs (subprocess + environment).
+; vmret.l -- flag lvm_* aps whose disassembly holds a `ret`: the vm is threaded, so each
+; should tail-jump. a heuristic (expect false positives); cross-arch by e_machine.
+; usage: l vmret.l ELF [--prefix prefix] [--objdump PATH]
+; exit:  0 = all clean, 1 = suspects found, 2 = usage/tool error. needs the host `hark` nif.
 
 (borrow 'posix)
 (: (die m)   (say err "vmret: ", say err m, say err "\n", quit 2)
    (usage 0) (say out "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]\n", quit 0))
 
-; --- character classes + cursors over a line (string s) --------------
-; ws = Python \s within a line (space tab cr ff vtab); hex = [0-9a-fa-f].
+; --- character classes + cursors over a line (string s); ws = space tab cr ff vtab ---
 (: (ws?  c) (any (x \ x = c) [32 9 13 12 11])
    (hex? c) (48 <= c <= 57 || 97 <= c <= 102 || 65 <= c <= 70)
    (skip-ws    s i) (i >= #s || !(ws? (peep s i 0)) ? i (skip-ws    s (i + 1)))
    (skip-hex   s i) (i >= #s || !(hex? (peep s i 0)) ? i (skip-hex   s (i + 1)))
    (skip-nonws s i) (i >= #s ||   ws? (peep s i 0)  ? i (skip-nonws s (i + 1)))
-   ; one past the last non-ws char (0 if the line is all whitespace).
+   ; one past the last non-ws char (0 if the line is all whitespace)
    (trim-end s) (foldl (\ e i (ws? (peep s i 0) ? e (i + 1))) 0 ^#s)
    (dash? a) (0 < #a && 45 = peep a 0 0))
 
@@ -66,8 +55,7 @@
             (any (= w) PREFIXES ? (f te) w))))) 0))
 
 ; --- per-arch return-mnemonic matchers --------------------------------
-; x86: ^l?ret[a-z]*$ (ret/retq/lret/...; not iret). arm: ^ret(aa|ab)?$
-; (iret/eret never match).
+; x86: ^l?ret[a-z]*$ (not iret). arm: ^ret(aa|ab)?$ (not eret)
 (: (lower? s i) (i < #s ? (peep s i 0 @ c (97 <= c <= 122 ? (lower? s (i + 1)) 0)) 1)
    (ret-tail? r) (starts? r "ret" && lower? r 3)
    (retx?  m) (ret-tail? m || 108 = peep m 0 0 && ret-tail? (snip m 1 #m))
@@ -82,13 +70,9 @@
     0 0))
 
 ; --- elf64 symbol sizes: bound each function to its real extent -------
-; The text scan charges any `ret` in inter-function padding to the nearest
-; preceding <name>: header (e.g. a stray aligned `ret` after a clean tail-jump).
-; Reading each func symbol's st_size from .symtab lets us drop instructions past
-; a function's [start, start+size). elf64 le is asserted in the driver below.
-; Addresses can be high-half (a kernel image links at 0xffffffff80000000), which
-; overflows a fixnum -- so u64/big/hex->int use `+`/`*` (which promote to bignum),
-; never bitwise `<<`/`|` (which would not), keeping the values exact.
+; a `ret` in inter-function padding would be charged to the preceding header, so each
+; func's st_size from .symtab bounds it. addresses may be high-half and overflow a fixnum,
+; so u64 and hex->int use `+`/`*` (which promote), never `<<`/`|`.
 (: (hex->int s) (foldl (\ acc i (: c (peep s i 0)
                                    v (? (48 <= c <= 57)  (c - 48)
                                         (97 <= c <= 102) (c - 87)
@@ -119,15 +103,12 @@
         (st ? (collect-syms d <st (>st // 24) 0 (tablet 0)) (tablet 0))))
 
 ; --- the scan, grouping by function header ----------------------------
-; close the current watched function: flag it iff it collected any rets.
+; close the current watched function: flag it iff it collected any rets
 (: (close name watching rets flagged)
    (watching && two? rets ? ((name . rev rets) . flagged) flagged))
 
-; -> (flagged . total), where flagged = ((name . rets) ...), total = count of
-; prefix* functions seen. prefix, the ret matcher, and a function-start -> size
-; map are captured. lim = end of the current function's symtab extent; a `ret`
-; at or past it is padding (an orphan in the gap before the next symbol), not
-; the function's -- so it does not count. unsized symbols -> lim big (old behavior).
+; -> (flagged . total), flagged = ((name . rets) ..), total the prefix* functions seen. lim
+; ends the function's symtab extent; a `ret` at or past it is padding. unsized -> BIG.
 (: (scan-all ls prefix ret? sizes)
    ((: (loop ls name watching lim rets flagged total)
        (ls @ (line . rest)
@@ -158,8 +139,7 @@
    (maxlen fl) (foldl (\ m e (#<e @ l (m < l ? l m))) 0 fl)
    (join-rets rs) (rs @ (a . u) ("0x" + a + (u @ (_ . _) (", " + join-rets u) "")) ""))
 
-; sort the flagged entries by function name (ascending), matching .py.
-; the merge split counts the spine (entries are chains; $ is the net sum), so fold.
+; sort the flagged by name; the merge split counts the spine ($ is the net sum), so fold
 (: (emerge a b) (two? a ? (two? b ?
                      (str< <<a <<b ?
                         (<a . emerge >a b) (<b . emerge a >b))
@@ -181,8 +161,7 @@
       (parse-args >args a prefix od)))))
 
 ; --- try candidate disassemblers in order ----------------------------
-; (hark ...) returns (status . output) when the tool ran, else a fixnum errno
-; (spawn failed -> try the next). -> (cand status . output) or 0 if exhausted.
+; hark: (status . output) when the tool ran, else an errno. -> (cand status . output) or 0
 (: (try-cands cs elf)
    (two? cs ?
       (hark [<cs "-d" "--no-show-raw-insn" elf] @ r
@@ -213,9 +192,8 @@
                (say err "vmret: note: ", say err base,
                 say err " is an unrecognized arch (0x", putbn err mach 16,
                 say err "); falling back to the generic `ret` matcher\n", 0))
-   ; objdump preference: GNU objdump for x86 (host-arch), llvm-objdump for the
-   ; cross arches; an explicit --objdump or $objdump wins. execvp does the PATH
-   ; search, so a candidate that isn't found just spawn-fails -> next one.
+   ; GNU objdump for x86 (host-arch), llvm-objdump for the cross arches; --objdump or
+   ; $OBJDUMP wins. a candidate not found just spawn-fails to the next.
    cands    (filter id [od (getenv "OBJDUMP")
                          (x86? ? "objdump" "llvm-objdump") (x86? ? "llvm-objdump" "objdump")])
    chosen   (try-cands cands path)

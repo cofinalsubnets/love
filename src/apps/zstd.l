@@ -1,27 +1,19 @@
 ; src/apps/zstd.l -- the zstandard frame (rfc 8878) over src/love/compress/zstd.c's blocks.
-; `(borrow 'zstd)`, then:
-;   (zstd-pack s level) -> the .zst bytes of s, level 1..19: one frame, its size and checksum
-;   (zstd-unpack s)     -> (1 bytes) | a word saying why not ('format 'corrupt 'end 'check 'big
-;                          'dict): every frame in s, the skippable ones passed over, each
-;                          frame's size and checksum held where it says them
-;   (zstd-pull rd)      -> g, a reader over the frames as they come: (zstd-next g) the next
-;                          block's bytes, "" once done, and g's 'ans then (1 n) | the word
-;   (zstd-unf rd mk)    -> (1 n) | the word | 'no: off rd, out through the writer mk answers
-;                          (1 w), or () for 'no
-; the codec is C (zstde, zstd-d, and zstd-new zstd-block zstd-sum); the frame read is here, where
-; its fields are plain to read.
+;   (zstd-pack s level) -> one .zst frame of s, level 1..19, with size and checksum
+;   (zstd-unpack s)     -> (1 bytes) | 'format 'corrupt 'end 'check 'big 'dict; skippable frames passed
+;   (zstd-pull rd)      -> g: (zstd-next g) the next block's bytes, "" once done, then g's 'ans
+;   (zstd-unf rd mk)    -> (1 n) | the word | 'no, out through the writer mk answers (1 w)
 (module 'zstd
 (borrow 'bytes)
 (borrow 'tar)
 
 (: (zstd-pack s level) (zstde s level)
    zstd-magic 4247762216               ; 28 b5 2f fd, little-endian
-   zstd-wmax 134217728                 ; the window past which a frame is refused, zstd's own
+   zstd-wmax 134217728                 ; the largest window taken, zstd's own
    (zs-fin g a) (pins g 'mode 'end 'ans a, "")
    (zs-skip src n)                     ; n bytes passed over -> 1 | 0 where the input ends first
     (n <= 0 ? 1 (tar-take src (min n 65536) @ b (#b = 0 ? 0 (zs-skip src (n - #b)))))
-   ; a frame header past its magic -> [window fcs check] | a word. d the descriptor byte: the
-   ; content size's width, single segment, reserved, checksum, the dictionary id's width
+   ; a frame header past its magic -> [window fcs check] | a word; d the descriptor byte
    (zs-head d r)
     (: ss (d >> 5 & 1)   dn ([0 1 2 4] (d & 3))   fz ([ss 2 4 8] (d >> 6))   fo (1 - ss + dn)
        fcs (fz = 0 ? () (rdle r fo fz + (fz = 2 ? 256 0)))
@@ -40,7 +32,7 @@
            (: h (tar-peek src 4)   v (#h = 4 ? (rdle h 0 4) 0)
               (? (#h = 0) (zs-fin g (g 'any = 1 ? [1 (g 'n)] 'format))
                  (#h < 4) (zs-fin g (snip "\x28\xb5\x2f\xfd" 0 #h = h ? 'end 'format))
-                 (v & 4294967280 = 407710288)    ; a skippable frame: its length, and that passed over
+                 (v & 4294967280 = 407710288)    ; a skippable frame, passed over
                   (tar-take src 8 @ k
                      (#k < 8 || zs-skip src (rdle k 4 4) = 0 ? (zs-fin g 'end)
                         (pin g 'any 1, zstd-next g)))
@@ -55,7 +47,7 @@
                                 (st = () ? (zs-fin g 'big)
                                    (pins g 'st st 'fcs (fr 1) 'ck (fr 2) 'fn 0 'mode 'block,
                                     zstd-next g)))))))))
-          (m = 'block)                    ; a block whole, its header first: raw, one byte run, coded
+          (m = 'block)                    ; a block, its header first
            (: h (tar-take src 3)   v (#h = 3 ? (rdle h 0 3) 0)   k (v >> 1 & 3 = 1 ? 1 (v >> 3))
               b (#h = 3 ? (tar-take src k) "")
               (? (#h < 3 || #b < k) (zs-fin g 'end)
@@ -69,7 +61,7 @@
                 (ck = 1 && c != zstd-sum (g 'st)) (zs-fin g 'check)
                 (pins g 'st () 'any 1 'mode 'frame, zstd-next g)))))
    (zs-once s) ({0 s} @ t (_ \ (peep t 0 "" @ p (pin t 0 "", p))))
-   ; one frame that says its size decodes at once in C; anything else, or a fault, is walked
+   ; a frame that says its size decodes at once in C; anything else is walked
    (zstd-unpack s) (zstd-d s @ u (string? u ? [1 u] (zs-walk s)))
    (zs-walk s)
     (: g (zstd-pull (zs-once s))
@@ -77,8 +69,7 @@
                   (#p = 0 ? (atom? (g 'ans) ? (g 'ans) [1 (two? acc ? (cats (rev acc)) "")])
                      (go (p . acc))))
        (go ()))
-   ; mk is asked for the writer before the first byte out; a stream that fails before any
-   ; is said without it
+   ; mk is asked for the writer before the first byte out; an early failure never asks
    (zstd-unf rd mk)
     (: g (zstd-pull rd)   p (zstd-next g)
        (#p = 0 && atom? (g 'ans) ? (g 'ans)
@@ -90,14 +81,9 @@
 )
 ) ; module 'zstd
 
-; --- the face -----------------------------------------------------------------------
-; `love zstd`, `unzstd`, `zstdcat`: zstd 1.5's flag spelling, messages and statuses (0, 1 for
-; any failure) over the module above. unlike gzip, the input is kept unless --rm.
-;
-;   zstd [-dcfkqtvz] [-#] [--rm] [-o FILE] [FILE..]
-;   unzstd = zstd -d      zstdcat = zstd -dcf
-;
-; no file, or a bare -, is the filter. -T, --ultra, --[no-]progress, --[no-]check are taken.
+; --- the face ---
+; `love zstd`, `unzstd`, `zstdcat`: zstd 1.5's flags, messages and statuses (0, 1 for any
+; failure). unlike gzip, the input is kept unless --rm.
 (module 'zstdcmd
 (borrow 'zstd)
 (borrow 'posix)
@@ -126,11 +112,10 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (? (peep t 'o ()) (t 'o)
        (peep t 'd 0) (zsc-suf p @ x (x ? (snip p 0 (#p - #<x) + <>x) ()))
        (p + ".zst"))
-   (zsc-done t p st dst)               ; the input's mode and time carried, the input gone on --rm
+   (zsc-done t p st dst)               ; carries mode and time; removes the input on --rm
     (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)),
      peep t 'rm 0 && unlink p, 0)
-   ; a file decompressed as it comes off the disk: the output opened before the first byte,
-   ; its mode and time laid after the last, and taken away again if the stream fails partway
+   ; decompress as read: the output opened at the first byte, removed if the stream fails
    (zsc-unone t p st)
     (open p "r" @ q
        (!(hot? q) ? (zsc-say t ("can't stat " + p + " : No such file or directory -- ignored"), 1)
@@ -179,8 +164,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (two? (tty out) && !(peep t 'f 0)) (zsc-say t "stdout is a console, aborting", 1)
        (say out (zstd-pack (slurp in + "") (peep t 'lvl 3)), 0))
 
-   ; the cli walker in gnu order. -d, -z and -t decide the direction by the last one said;
-   ; a level is a word of digits, -19, or --fast, and the last one stands
+   ; the cli walker in gnu order: the last of -d -z -t and the last level stand
    zsc-longs {"stdout" 99 "decompress" 100 "uncompress" 100 "compress" 122 "keep" 107 "force" 102
               "test" 116 "quiet" 113 "verbose" 118 "help" 104 "version" 86 "rm" 82 "ultra" 85
               "threads" 84 "progress" 80 "no-progress" 80 "check" 67 "no-check" 78 "sparse" 83

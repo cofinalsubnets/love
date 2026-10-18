@@ -1,10 +1,10 @@
-; test/patch.l -- the patch groupoid: distribution, namespace and repo-state as one algebra, commute underneath
+; test/patch.l -- the patch groupoid: distribution, namespace and repo state as one algebra, commute underneath
 ; test/uupatch.l is the uu twin, name for name
-; the named-slot model: a tree is a (key . value) assoc, a patch one slot-change in context, commute the partial swap
+; the named-slot model: a tree is a (key . value) assoc, a patch one slot change in context, commute the partial swap
 ; the corpus is one scope: shared helpers carry pt-
 
 (:
- ; the shared kit: sequences, trees, paths, patch shapes, the clash cell, patterns
+ ; the shared kit
  (pt-htake s n) (n < 1 ? () (<s . pt-htake >s (n - 1)))
  (pt-hdrop s n) (n < 1 ? s (pt-hdrop >s (n - 1)))
  (pt-hcat a b) (atom? a ? b (<a . pt-hcat >a b))
@@ -93,7 +93,7 @@
    (commute px py @ c (pt-heq (commute <c <>c)
                            [px py]))                      ; ...and back to p;q
    !(commute p1 p2)                                                  ; same slot -> no commute
-   (pt-heq p1 p1) !(pt-heq px py)),                                        ; leq itself is honest
+   (pt-heq p1 p1) !(pt-heq px py)),                                        ; heq is honest
 
   ; (L2) inverse round-trips in context; invert is its own inverse
   (: t0 (pt-tset () 'x 5) p (chg 'x 5 9)
@@ -287,14 +287,10 @@
   0))
 
 ; --- the tree lift rung: a hunk gets a path; a shallow splice re-aims a deeper patch's path ---
-; lanes by path relation: same (the positional shift), inq/inp (the deeper re-aims at the crossing; inside is a dependency), apart
+; lanes by path relation: same (positional shift), inq/inp (re-aim at the crossing; inside is a dependency), apart
 ; at a crossing >= is sound where the seam needed >: a path component names a survivor, not a seam
 
 (:
- ; --- the sequence kit (local) ---
-
- ; --- the tree kit: navigate to a path's sequence, lay a new one back ---
-
  ; --- patches: (tp path i olds news) -- a hunk with a postcode ---
  (apon t p) (pt-tlay t (pt-pp p) (pt-splice (pt-tnav t (pt-pp p)) (pt-pi p) #(pt-po p) (pt-pn p)))
  (applall t ps) (foldl apon t ps)
@@ -303,8 +299,6 @@
                  && (pt-tnav t (pt-pp p) @ s
                      ((pt-pi p + #(pt-po p)) <= #s
                          && pt-heq (pt-seg s (pt-pi p) #(pt-po p)) (pt-po p))))
-
- ; --- path surgery + the path relation ---
 
  ; --- commute: four lanes; re-aim the index at 'same, the path at the crossings ---
  (commute p q)
@@ -543,9 +537,9 @@
   0))
 
 ; --- the clash-segments rung: the conflictor cell lifted to sequences ---
-; state alone cannot delimit a first rival's footprint, so merge2 (both hunks in hand) makes the bubble
-; and pull answers only what state can: plain, settled (non-empty news), join, breach no-op
-; the bubble is one element (hull + rivals ordered by hval), so downstream seats stay fixed
+; state alone cannot delimit a first rival's footprint, so merge2 (both hunks in hand) makes the bubble;
+; pull answers only plain, settled (non-empty news), join, breach no-op
+; the bubble is one element (hull + rivals ordered by hval), so later seats stay fixed
 
 (:
  ; --- the sequence kit (local) ---
@@ -670,7 +664,7 @@
       (pt-heq (pt-hdrop m 2) '(e)))),
 
   ; the boundary: a first rival by pull no-ops (merge2's job), a repeated deletion rests in breach,
-  ;      a stray mismatch rides through
+  ; a stray mismatch rides through
   (: dl (pt-hunk 3 '(d) ()) s1 (apon s0 dl)
      (test
       (pt-heq (pull (apon s0 p) q) (apon s0 p))
@@ -716,8 +710,6 @@
 (:
  ; --- the tree kit (local) ---
  (invert p) (pt-tp (pt-pp p) (pt-pi p) (pt-pn p) (pt-po p))
-
- ; --- the pattern kit: a (mv v) cell is a variable; ground content never spells one ---
 
  ; --- apply: match the olds, lay the news instantiated ---
  (valid t q) (pt-pathok t (pt-pp q)
@@ -864,8 +856,6 @@
 ; overlapping seats can both land and disagree, so a refusal is earned
 
 (:
- ; --- the tree + pattern kit (trimmed, local) ---
-
  ; --- a rule at a seat: rw answers (tree) or (), rw2 sequences two ---
  (rw R path t)
    (: sub (pt-tnav t path)

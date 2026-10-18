@@ -1,7 +1,5 @@
-; src/apps/tui.l -- the parts every full-screen app repeats. cli's `stage` already brackets
-; raw mode and the alternate screen, decodes keys and re-reads the tty; what it does not
-; carry is the two pieces each app was writing again: where the window sits, and how to
-; put a frame on the screen without repainting all of it.
+; src/apps/tui.l -- what cli's `stage` does not carry for a full-screen app: where the window
+; sits, and putting a frame on the screen without repainting all of it.
 ;
 ;   (tui-settle cur top rows)              -> the new top
 ;   (tui-fresh box h geo key rows stat cr cc) -> the escapes for this frame
@@ -9,25 +7,15 @@
 ; both are pure but for tui-fresh's one pin, so an app stays testable headless.
 (module '(tui tui-settle tui-fresh)
 (:
-   ; the window follows the cursor only far enough to hold it, which is what makes a
-   ; page read as a page and not as a jump. rows is the body's height; for a view with
-   ; a stride (lupa's sixteen bytes a row) settle the row index and scale the answer
+   ; the window follows the cursor only far enough to hold it. rows is the body's height; for a
+   ; strided view settle the row index and scale the answer
    (tui-settle cur top rows)
     (? (cur < top) cur (top + rows <= cur) (cur - rows + 1) top)
 
-   ; a full redraw a keystroke is the flicker: the screen is cleared line by line and
-   ; rewritten while the terminal draws it. so keep the rows the last frame put there,
-   ; place only the ones that differ, and bracket the lot in synchronised-output mode
-   ; (DEC 2026) so a scroll lands in one piece -- a terminal that does not know 2026
-   ; ignores it, as does quay.
-   ;
-   ; box is the app's own state tablet; 'lastr on it is this function's business alone.
-   ; geo is whatever the app calls "the view has not moved" -- when it differs the rows
-   ; are placed from the top instead of diffed, since they no longer line up. key is an
-   ; optional content key: when the app can say the body is a pure function of it, an
-   ; equal key means nothing in the body can have changed and the rows are not walked at
-   ; all. () means no such key, and then the rows are always compared -- so the presence
-   ; test is against (), not truth: a key of 0 or (0 0) is a key like any other.
+   ; a full redraw per key flickers, so place only the rows that differ from the last frame,
+   ; bracketed in synchronised output (DEC 2026, ignored where unknown). 'lastr on box is this
+   ; function's alone. a changed geo places rows from the top. key, when not (), says the body
+   ; is a pure function of it, so an equal key skips the walk; 0 is a key like any other.
    (tui-fresh box h geo key rows stat cr cc)
     (: e (string 27)
        old (box 'lastr)                           ; [geo key rows status]

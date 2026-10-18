@@ -1,5 +1,5 @@
-; test/host/stones.l -- the canyon and the bowl, headless
-; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/stones.l | out/love
+; test/host/stones.l -- the canyon and the bowl, headless. a crew module, not in the corpus:
+; cat test/00-init.l test/host/00-host.l test/host/stones.l | out/love
 
 (borrow 'stones)
 (borrow 'vec)
@@ -8,7 +8,7 @@
 
    ; the cell row the words n first appear on, or -1
 (: (row-of s n) (:- (go 0) (go i) (i + #n <= #s ? (n = snip s i (i + #n) ? (h-count (snip s 0 i) "\r\n") (go (i + 1))) -1))
-   day0 (1.0 * 1790812800)                          ; 2026-10-01, midnight on the wall clock
+   day0 (1.0 * 1790812800)                          ; 2026-10-01 midnight, wall clock
    (at hr sd) (stones-new 80 48 [(day0 + hr * 3600.0) 3600] sd)
    (keys! st ks) (each ks (k \ (stones-step st (stones-kb k), stones-move st)))
    (ang b) (: x (b 0 + 1e-9) a (atan ((b 2 - zc) / x)) (x < 0.0 ? (a + pi) a)))

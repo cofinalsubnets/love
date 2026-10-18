@@ -7,7 +7,7 @@
    (short as) ({} @ t (uopt as t '(109) '(101) ())))
 
 (test
- ; --- uopt1: one word into its letters ------------------------------------------------
+ ; --- uopt1: one word into its letters ---
  (["-q" "-e"] = (uopt1 "-qe" () "e"))           ; the chain ends on a value letter
  (["-q" "-e" "X"] = (uopt1 "-qeX" () "e"))      ; ..taking the rest of its own word
  (["-l" "-a"] = (uopt1 "-la" () ""))
@@ -16,7 +16,7 @@
  !(uopt1 "file" () "")
  !(uopt1 "-" () "")
 
- ; --- uopt: the short lane, which the long one leaves alone ---------------------------
+ ; --- uopt: the short lane, which the long one leaves alone ---
  ([119] = (keysof (walk ["-w" "4" "f"])))
  ("4" = (uoptv <(walk ["-w" "4" "f"]) 119))
  ("4" = (uoptv <(walk ["-w4" "f"]) 119))                ; the value glued to its letter
@@ -25,7 +25,7 @@
  !(walk ["-w"])                                         ; a value flag with nothing behind
  (["--width" "2"] = <>>(walk ["--" "--width" "2"]))     ; -- ends the flags
 
- ; --- the long lane -------------------------------------------------------------------
+ ; --- the long lane ---
  ("20" = (uoptv <(walk ["--width" "20" "f"]) 119))
  ("20" = (uoptv <(walk ["--width=20" "f"]) 119))        ; ..or glued behind its =
  (["f"] = <>>(walk ["--width=20" "f"]))
@@ -36,23 +36,23 @@
  ("x" = (uoptv <(walk ["-w20" "--text=x" "f"]) 116))
  ([112 119] = (keysof (walk ["--port" "80" "-w" "4"])))
 
- ; --- what the long lane refuses ------------------------------------------------------
+ ; --- what the long lane refuses ---
  ; a name the map does not carry ends the flags and is an operand
  (["--nope" "f"] = <>>(walk ["--nope" "f"]))
  !(keysof (walk ["--nope" "f"]))
  ; a glued value on a flag that takes none, rather than a value silently dropped
  (["--no-build=7" "f"] = <>>(walk ["--no-build=7" "f"]))
- !(walk ["--width"])                                    ; and a value flag left empty
+ !(walk ["--width"])
  ; () is no map
  (["--width" "9" "f"] = <>>(short ["--width" "9" "f"]))
 
- ; --- uoptv, and the stacking lane ----------------------------------------------------
+ ; --- uoptv, and the stacking lane ---
  !(uoptv <(walk ["-w" "4"]) 116)                        ; a flag that was never given
  !(uoptv <(walk ["--no-build"]) 'nb)                    ; a flag with no value is not one
  ; a key in `reps` stacks into the second slot (sed -e, grep -e)
  (["a" "b"] = <>({} @ t (uopt ["-e" "a" "-e" "b" "f"] t '(101) '(101) ())))
 
- ; --- the three readings an applet owes over the walk ---------------------------------
+ ; --- the three readings an applet owes over the walk ---
  ; the short lane takes any letter; uoptun answers the one the applet did not name
  (122 = (uoptun <(walk ["-w" "4" "-z" "f"]) '(119 116 112)))
  !(uoptun <(walk ["-w" "4" "f"]) '(119 116 112))

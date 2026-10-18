@@ -1,17 +1,13 @@
-; src/apps/gif.l -- gif encoding, an rgba image or a run of them to a gif89a, and decoding.
-; `(borrow 'gif)`, then:
-;
+; src/apps/gif.l -- gif encoding, an rgba image or a run of them to a gif89a, and decoding:
 ;   (gif-encode w h rgba)   -> the gif's bytes
 ;   (gif-anim w h fs)       -> a looping gif of fs, ((rgba ms) ..) as gif-frames answers them
 ;   (gif-decode s)          -> (w h rgba), the first frame | a string saying why not
-;   (gif-frames s most)     -> (w h ((rgba ms) ..)), each frame as shown and how long,
-;                              at most most of them | why not
+;   (gif-frames s most)     -> (w h ((rgba ms) ..)), at most most frames as shown | why not
 ;   (gif-palette px n room) -> (rgbs index-of key-fn), at most room colours (sixel's too)
 ;
-; decoding is src/love/picture/gif.c's, frame by frame onto the screen; disposal 2 clears a
-; frame's box to see-through (as browsers do) and 3 restores what was under it.
-; a pixel under half alpha is the transparent index. up to 256 colours stay exact; past
-; that each channel is cut to 5 bits and a median cut over what is left picks the palette.
+; decoding is gif.c's frame by frame; disposal 2 clears a frame's box to see-through, 3
+; restores what was under it. a pixel under half alpha is transparent. up to 256 colours
+; stay exact; past that each channel is cut to 5 bits and a median cut picks the palette
 (module (gif gif-encode gif-anim gif-decode gif-frames gif-palette gif-key gif-frame)
 (borrow 'bytes)
 (:
@@ -131,9 +127,8 @@
         + (trans ? (gif-bytes [33 249 4 1 0 0 nc 0]) "")
         + gif-place w h 0 + string mcs + codes + string 59))
 
-   ; frames as gif-frames answers them, ((rgba ms) ..), to a gif that loops for good: each
-   ; frame its own table, and cleared after it is shown (disposal 2), so each is as given.
-   ; a delay is centiseconds on the wire, and under 2 most viewers show as 10
+   ; frames ((rgba ms) ..) to a gif that loops for good: each its own table, cleared after it
+   ; is shown (disposal 2). a delay is centiseconds, and under 2 most viewers show as 10
    (gif-anim w h fs)
     (: (frame f) (gif-image w h (f 0) @ [s table trans nc mcs codes]
                    (: cs (f 1 // 10)
@@ -143,7 +138,7 @@
         + gif-bytes [33 255 11] + "NETSCAPE2.0" + gif-bytes [3 1 0 0 0]
         + cats (map frame fs) + string 59))
 
-   ; --- decoding, over src/love/picture/gif.c's gif-frame and gif-clear ----------------------------
+   ; --- decoding, over gif.c's gif-frame and gif-clear ---
    ; the offset past the sub-blocks that start at p and their empty one
    (gif-skip s p) (? (#s <= p) #s (s p = 0) (p + 1) (gif-skip s (p + 1 + s p)))
    ; the palette's length in bytes by a flags byte
