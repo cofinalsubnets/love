@@ -330,9 +330,15 @@ test_kore: host
 	@for p in $(kore_parts); do $(gsh) test/kore/$$p.sh $(ho) $m || exit 1; done
 $(kore_parts:%=test_kore_%): test_kore_%: host
 	@$(gsh) test/kore/$*.sh $(ho) $m
+# the fuzz lanes run capped: a heap budget, so a runaway corpus dies ;; oom, and a clock, since
+# near the budget the collector slows quadratically before it gives up
+fuzzlate = [ $$? -ne 124 ] || echo "  (it ran out its clock)"
 # grep + sed against GNU over seeded random patterns; skips without GNU (checks --version,
-# `grep` may be ugrep)
-gate_m += test_refuzz
+# `grep` may be ugrep). each tool run peaks ~15 MB, the lane ~2 min
+test_refuzz: host
+	@echo TEST test/gate/refuzz.sh
+	@LOVE_BUDGET_MB=200 timeout 900 $(gsh) test/gate/refuzz.sh $m \
+	  || { $(fuzzlate); echo "FAIL refuzz -- grep or sed parted from GNU, or died"; exit 1; }
 # cook against GNU make differentially (an unknown builtin expands empty in silence); skips
 # without GNU make
 gate_m += test_cookdiff
@@ -412,10 +418,11 @@ test_clay: host
 	                       diff -u $$d $$o | head -20; exit 1; }; done
 	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h and src/love/love_data.ld regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
-# test_moonfuzz -- each test/cc file mutated eight ways: no scare, no hang, G1 where it parses
+# test_moonfuzz -- each test/cc file mutated eight ways: no scare, no hang, G1 where it parses.
+# mooncc runs in this process, so the budget reaches it (peak ~215 MB, passes at 60; ~1 min)
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 8 mutants per file over test/cc)"
-	@$m -l test/gate/moonfuzz.l < /dev/null
+	@LOVE_BUDGET_MB=400 timeout 600 $m -l test/gate/moonfuzz.l < /dev/null || { $(fuzzlate); exit 1; }
 # test_forge -- love-written nifs, assembled via holo, must agree with the C nif they deopt
 # into; zero kernels fitted fails
 test_forge: host
@@ -908,17 +915,18 @@ test_uulean: host
 endif
 
 # random IR via holo, disassembled (objdump, llvm-mc), checked against intent; a missing
-# disassembler skips its lane. sysdiff.l for system ops, rvc.l checks each RVC squeeze
+# disassembler skips its lane. sysdiff.l for system ops, rvc.l checks each RVC squeeze.
+# peaks ~120 MB, rvc ~310 MB and ~13 min; the disassemblers are not love and take no budget
 test_holofuzz: host
 	@echo TEST test/holo/fuzz/fuzz.l "(holo x64+a64+riscv encoder differential fuzz)"
-	@FUZZ_N=8 FUZZ_SEED=20250717 $m test/holo/fuzz/fuzz.l \
-	  || { echo "FAIL holofuzz -- a holo encoding disagrees with its disassembler"; exit 1; }
+	@FUZZ_N=8 FUZZ_SEED=20250717 LOVE_BUDGET_MB=400 timeout 300 $m test/holo/fuzz/fuzz.l \
+	  || { $(fuzzlate); echo "FAIL holofuzz -- a holo encoding disagrees with its disassembler"; exit 1; }
 	@if command -v llvm-mc >/dev/null 2>&1; then \
-	   $m test/holo/fuzz/sysdiff.l \
-	     || { echo "FAIL sysdiff -- a holo SYSTEM encoding disagrees with llvm-mc"; exit 1; }; \
+	   LOVE_BUDGET_MB=400 timeout 120 $m test/holo/fuzz/sysdiff.l \
+	     || { $(fuzzlate); echo "FAIL sysdiff -- a holo SYSTEM encoding disagrees with llvm-mc"; exit 1; }; \
 	 else . test/gate/skip.sh; gate_partly "  (sysdiff skipped: no llvm-mc)"; fi
-	@$m test/holo/fuzz/rvc.l \
-	  || { echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
+	@LOVE_BUDGET_MB=400 timeout 2700 $m test/holo/fuzz/rvc.l \
+	  || { $(fuzzlate); echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
 # generated uu corpora: a design's code as uu terms, so its *law.l proves theorems of the
 # implementation. `make <stem>` refreshes, test_<stem> diffs
 # $1 the stem, $2 its generator under src/tools/, $3 the source it reads
