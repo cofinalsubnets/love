@@ -2096,13 +2096,15 @@
                       [tag ['\ e <r] <>r])
        (<x . map dforest >x))
    (dspecial? ('? || '\ || ':)) 1
-   (dsimp x)                                                                  ; reduce to first-order: beta unary lambdas, flatten curried heads
+   (dsimp x) (dsimpm (macro-names 0) x)                                     ; reduce to first-order: beta unary lambdas, flatten curried heads
+   ; a macro takes its args whole, so its call never flattens: ((list a b) i) indexes, (list a b i) is longer
+   (dsimpm ms x)
     (? (atom? x)   x
        (dquote? x) x
-       (: y (dsimp <x . map dsimp >x) h <y as >y
+       (: y (dsimpm ms <x . map (dsimpm ms) >x) h <y as >y
           (? (atom? h) y
-             (<h = '\ && 3 = #h && 1 = #as && dbeta? <>h <as <>>h) (dsimp (dsub <>h <as <>>h))
-             (atom? <h && !(dspecial? <h))                 (dsimp (<h . >h + as))
+             (<h = '\ && 3 = #h && 1 = #as && dbeta? <>h <as <>>h) (dsimpm ms (dsub <>h <as <>>h))
+             (atom? <h && !(dspecial? <h) && !(elem <h ms)) (dsimpm ms (<h . >h + as))
              y)))
    ; jot only: (jot N) is the chain the folds iterate and the loop never builds; iota is the array, which a foldl answers z over
    (djot? s) (two? s && <s = 'jot && 2 = #s)                 ; (jot N)
