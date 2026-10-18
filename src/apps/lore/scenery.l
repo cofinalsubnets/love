@@ -98,10 +98,10 @@
       (no u t)))
  ; ..a bin: brushes, its body's sides and corners cut in toward its foot, hollow up top with an
  ; opening into it on each side, and a cap a little wider over all; its sign on each side
- bin-dark (texture 8 8 1 '((fill 0.12) (noise 2 0.3)))
  (bin at w d h t sg) (: u "(bin [x y z] width depth height TEXTURE SIGN)" p (P at u) x (p 0) y (p 1) z (p 2)
    (? (!(texture? t)) (no u t) (!(sg = () || texture? sg)) (no u sg)
-      (: W (0.5 * N w u) D (0.5 * N d u) H (N h u) k (0.12 * min2 W D) c (0.2 * min2 W D) y1 (y + H)
+      (: dk (texture 8 8 1 '((fill 0.12) (noise 2 0.3)))
+         W (0.5 * N w u) D (0.5 * N d u) H (N h u) k (0.12 * min2 W D) c (0.2 * min2 W D) y1 (y + H)
          (sx i) (i ? 1.0 -1.0)
          ; ..each side through its top edge and its foot k in; each corner c off its top's
          sides [[[(x + W) y1 (z - D)] [(x + W) y1 (z + D)] [(x + W - k) y (z - D)]]
@@ -126,7 +126,7 @@
                    (decal [x ys (z - D + e)] [0.0 (0.0 - k / L) (0.0 - H / L)] [0.0 (H / L) (0.0 - k / L)] sz sz sg)])
          ; ..small enough that its faces go uncut, lit at their corners
          [(map (b \ with b 'whole 1)
-               ([(skin {'all t} body)] + map (b \ skin {'all bin-dark} (air b)) hollow
+               ([(skin {'all t} body)] + map (b \ skin {'all dk} (air b)) hollow
                 + [(skin {'all t} (solid (box [(x - W - 0.02) y1 (z - D - 0.02)] [(x + W + 0.02) (y1 + 0.05) (z + D + 0.02)])))]))
           signs])))
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
