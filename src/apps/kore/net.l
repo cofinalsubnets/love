@@ -29,14 +29,18 @@
     0 (c @ 255 (pin st 'm 1, ["" ""])
            (0 && st 'cr) (pin st 'cr 0, ["" ""])
            (pin st 'cr (c = 13), [(string c) ""]))
-    1 (? (c = 255) (pins st 'm 0 'cr 0, [(string 255) ""])
-         (251 <= c <= 254) (pins st 'm 2 'v c, ["" ""])
-         (c = 250) (pin st 'm 3, ["" ""])
-         (pin st 'm 0, ["" ""]))
+    1 (tn-iac st c)
     2 (pin st 'm 0, ["" (tn-opt st (st 'v) c)])
     3 (c @ 255 (pin st 'm 4) 0, ["" ""])
     (pin st 'm (c @ 240 0 3), ["" ""]))
 
+   ; a byte past IAC, telnet's and telnetd's alike: 255 again is data, a verb waits for its
+   ; option, SB opens a subnegotiation (its bytes, which telnetd keeps, gathered afresh)
+   (tn-iac st c)
+    (? (c = 255) (pins st 'm 0 'cr 0, [(string 255) ""])
+       (251 <= c <= 254) (pins st 'm 2 'v c, ["" ""])
+       (c = 250) (pins st 'm 3 'sb "", ["" ""])
+       (pin st 'm 0, ["" ""]))
    ; a verb about option x -> the reply owed. a request for what is already on, or a refusal
    ; of what is already off, answers nothing, lest two agreeable ends acknowledge forever
    (tn-opt st v x)
@@ -109,11 +113,7 @@
            (? (c = 255) (pin st 'm 1, ["" ""])
               (st 'cr = 1 && (c = 10 || c = 0)) (pin st 'cr 0, ["" ""])
               (pin st 'cr (c = 13 ? 1 0), [(string c) ""]))
-          (m = 1)
-           (? (c = 255) (pins st 'm 0 'cr 0, [(string 255) ""])
-              (251 <= c <= 254) (pins st 'm 2 'v c, ["" ""])
-              (c = 250) (pins st 'm 3 'sb "", ["" ""])
-              (pin st 'm 0, ["" ""]))
+          (m = 1) (tn-iac st c)
           (m = 2) (pin st 'm 0, ["" (td-opt (st 'v) c)])
           (m = 3) (c = 255 ? (pin st 'm 4) (pin st 'sb (st 'sb + string c)), ["" ""])
           ((? (c = 240) (pin st 'm 0, td-sb (st 'sb) pty)
@@ -259,20 +259,41 @@
                   "\(us // 1000).\(snip "00\(f)" (#f - 1) (#f + 2))")
    (ping-main as) (ping-run 0 as)
    (ping6-main as) (ping-run 1 as)
-   ; v6 when ping6, or ping's -6, or a host with a colon; -4 holds ping to v4
+   ; ping's and traceroute's options -> the operands, one host. vals take a value; ok are all
+   (ping-ops as t vals ok nm use)
+    (: o (uopt as t vals () ())
+       _ (two? o ? 0 (udie 2 use))
+       _ (uoptbad as t ok @ u (!u ? 0 (udie 2 "\(nm): unknown option -\(string u)\n\(use)")))
+       ops (o 2)
+       (two? ops && atom? >ops ? ops (udie 2 use)))
+   ; v6 when ping6 or traceroute6, or -6, or a host with a colon; -4 holds to v4
+   (ping-six six? t host) (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 (cite 'dns 'dns-colon? host))
+   ; the host's first address, shown
+   (ping-addr six host nm)
+    (: D (cite 'dns)
+       ad (? six (D 'resolve6 host)
+             (two? (D 'dns-quad host)) (map (D 'dns-show) (D 'dns-quad host))
+             (map (D 'dns-show) (D 'resolve host)))
+       (two? ad ? <ad (udie 1 "\(nm): bad address '\(host)'")))
+   ; an icmp echo socket, k (bind's 'ttl or 'errs) riding its replies
+   (ping-sock six k nm)
+    (bind [(six ? 'icmp6 'icmp) k] @ p
+     (nom? p ?
+      (udie 2 "\(nm): no icmp\(six ? "6" "") echo socket here (\(p)); it wants root, or on linux your group in net.ipv4.ping_group_range")
+      p))
+   ; echo request n, size bytes of payload counting up
+   (ping-pkt six n size)
+    (string (six ? 128 8) + string 0 + "\x00\x00\x00\x00" + string (n >> 8 & 255) + string (n & 255)
+     + catmap (i \ string (i & 255)) ^size)
    (ping-run six? as)
     (: t {}
        nm (six? ? "ping6" "ping")
        use (six? ? ping6-usage ping-usage)
-       o (uopt as t '(99 105 87 115) () ())
-       _ (two? o ? 0 (udie 2 use))
-       _ (uoptbad as t (six? ? '(99 105 87 115 113) '(99 105 87 115 113 52 54)) @ u (!u ? 0 (udie 2 "\(nm): unknown option -\(string u)\n\(use)")))
-       ops (o 2)
-       _ (two? ops && atom? >ops ? 0 (udie 2 use))
+       ops (ping-ops as t '(99 105 87 115) (six? ? '(99 105 87 115 113) '(99 105 87 115 113 52 54)) nm use)
        (num c d lo) (uoptv t c @ v
                        (!v ? d (unum v @ n (charm? n && lo <= n ? n (udie 2 "\(nm): bad -\(string c) \(v)")))))
        host <ops
-       six (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 (cite 'dns 'dns-colon? host))
+       six (ping-six six? t host)
        count (num 99 () 1)
        size (num 115 56 0)
        cap (six ? 1452 1464)                          ; one datagram on a 1500-byte link
@@ -280,20 +301,11 @@
        ms (uoptv t 105 @ v (!v ? 1000 (ping-ms v @ m (charm? m && 0 < m ? m (udie 2 "\(nm): bad -i \(v)")))))
        wait (uoptv t 87 @ v (!v ? 10000 (ping-ms v @ m (charm? m ? m (udie 2 "\(nm): bad -W \(v)")))))
        quiet (peep t 113 0)
-       D (cite 'dns)
-       ad (? six (D 'resolve6 host)
-             (two? (D 'dns-quad host)) (map (D 'dns-show) (D 'dns-quad host))
-             (map (D 'dns-show) (D 'resolve host)))
-       _ (two? ad ? 0 (udie 1 "\(nm): bad address '\(host)'"))
-       ip <ad
-       p (bind [(six ? 'icmp6 'icmp) 'ttl])
-       _ (nom? p ?
-            (udie 2 "\(nm): no icmp\(six ? "6" "") echo socket here (\(p)); it wants root, or on linux your group in net.ipv4.ping_group_range") 0)
+       ip (ping-addr six host nm)
+       p (ping-sock six 'ttl nm)
        _ (say out "PING \(host) (\(ip)): \(size) data bytes\n", flush out)
        st {'sent 0 'got 0 'min () 'max 0 'sum 0}
        at {}                                   ; seq -> the nclock it went at
-       (pkt n) (string (six ? 128 8) + string 0 + "\x00\x00\x00\x00" + string (n >> 8 & 255) + string (n & 255)
-                + catmap (i \ string (i & 255)) ^size)
        ; the replies, as they come: each seq once, its round trip off its send time
        (rx _)
         (: d (recv p)
@@ -324,7 +336,7 @@
        _ (hot? sg ? (twirl (_ \ (await sg, sigtake sg, fin 0)) 0) 0)
        (tx n)
         (charm? count && count <= n ? 0
-         (pin at (n & 65535) (nclock 0), send p [ip 0] (pkt (n & 65535)) @ w (nom? w ? (udie 1 "\(nm): sendto: \(w)") 0), pin st 'sent (st 'sent + 1), charm? count && count <= n + 1 ? 0 (rest ms), tx (n + 1)))
+         (pin at (n & 65535) (nclock 0), send p [ip 0] (ping-pkt six (n & 65535) size) @ w (nom? w ? (udie 1 "\(nm): sendto: \(w)") 0), pin st 'sent (st 'sent + 1), charm? count && count <= n + 1 ? 0 (rest ms), tx (n + 1)))
        _ (tx 0)
        ; the last echoes get up to -W to come home
        t1 (clock 0)
@@ -347,12 +359,7 @@
     (: t {}
        nm (six? ? "traceroute6" "traceroute")
        use (six? ? tr6-usage tr-usage)
-       o (uopt as t '(102 109 113 119) () ())
-       _ (two? o ? 0 (udie 2 use))
-       _ (uoptbad as t (six? ? '(102 109 113 119 110 73) '(102 109 113 119 110 73 52 54)) @ u
-            (!u ? 0 (udie 2 "\(nm): unknown option -\(string u)\n\(use)")))
-       ops (o 2)
-       _ (two? ops && atom? >ops ? 0 (udie 2 use))
+       ops (ping-ops as t '(102 109 113 119) (six? ? '(102 109 113 119 110 73) '(102 109 113 119 110 73 52 54)) nm use)
        (num c d lo) (uoptv t c @ v
                        (!v ? d (unum v @ n (charm? n && lo <= n && n <= 255 ? n (udie 2 "\(nm): bad -\(string c) \(v)")))))
        first (num 102 1 1) most (num 109 30 1) nq (num 113 3 1)
@@ -361,19 +368,11 @@
        names? !(peep t 110 0)
        host <ops
        D (cite 'dns)
-       six (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 (D 'dns-colon? host))
-       ad (? six (D 'resolve6 host)
-             (two? (D 'dns-quad host)) (map (D 'dns-show) (D 'dns-quad host))
-             (map (D 'dns-show) (D 'resolve host)))
-       _ (two? ad ? 0 (udie 1 "\(nm): bad address '\(host)'"))
-       ip <ad
-       p (bind [(six ? 'icmp6 'icmp) 'errs])
-       _ (nom? p ?
-            (udie 2 "\(nm): no icmp\(six ? "6" "") echo socket here (\(p)); it wants root, or on linux your group in net.ipv4.ping_group_range") 0)
+       six (ping-six six? t host)
+       ip (ping-addr six host nm)
+       p (ping-sock six 'errs nm)
        size (8 + 32)
        _ (say out "\(nm) to \(host) (\(ip)), \(most) hops max, \(size + (six ? 40 20)) byte packets\n", flush out)
-       (pkt n) (string (six ? 128 8) + string 0 + "\x00\x00\x00\x00" + string (n >> 8 & 255) + string (n & 255)
-                + catmap (i \ string (i & 255)) ^32)
        ; a router's name, once each: its PTR off the first nameserver, else its address
        names {}
        ns (D 'dns-servers "/etc/resolv.conf" @ s (two? s ? <s))
@@ -409,7 +408,7 @@
              (: n (peep t 'seq 0 @ v
                      (pin t 'seq (v + 1 & 65535), v))
                 t0 (nclock 0)
-                _ (send p [ip 0 'ttl h] (pkt n))
+                _ (send p [ip 0 'ttl h] (ping-pkt six n 32))
                 d (answer n (clock 0 + wait))
                 (!d ?
                    (say out " *", flush out, probe (k + 1) last done)
