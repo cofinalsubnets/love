@@ -1,11 +1,7 @@
-; wad -- a doom map walked, read from its wad by the unofficial doom specs and drawn by facets
-; (src/love/raster.c) with no bsp renderer: each subsector a floor and a ceiling fan, cut from
-; the box of the map by the nodes' partition lines and its own segs; each side its upper,
-; middle and lower quads; each thing a sprite turned to the eye. a sector is a batch, so what
-; moves is laid again alone; its light is the vertex colour, and fog toward black the distance.
-;
+; wad -- a doom map walked, read by the unofficial doom specs and drawn by facets, no bsp:
+; each subsector a floor and ceiling fan cut by the nodes' lines and its segs; each side three
+; quads; each thing a sprite turned to the eye. a sector is a batch, laid again alone when it moves
 ; run: love lore wad FILE [MAP] [--kitty|--cells|--window] [--scale 1|2|4|8]
-;      view's walking keys, a d to strafe, r to run, e or space to use, f to fire, 1-6 the guns; q or esc leaves
 (module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-free? wad-size wad-sector wad-usage wad-mixer wad-open)
 (borrow 'posix)
 (borrow 'rove)                          ; pad, for the status row
@@ -52,9 +48,9 @@
        'nodes (recs (L "NODES") 28 (\ b o [(1.0 * s16 b o) (1.0 * s16 b (o + 2)) (1.0 * s16 b (o + 4)) (1.0 * s16 b (o + 6)) (u16 b (o + 24)) (u16 b (o + 26))]))
        'things (recs (L "THINGS") 10 (\ b o [(s16 b o) (s16 b (o + 2)) (s16 b (o + 4)) (u16 b (o + 6)) (u16 b (o + 8))]))}))
  ; --- the pictures: the palette; a patch's posts laid into a texture; flats; the textures
- ;     TEXTURE1 and 2 compose from PNAMES' patches ---
- ; ..PLAYPAL's palettes past the first, each as how it moves the first's colours: per channel
- ;   [scale offset], fitted over the 256 -- doom's hurt reds, pickup golds and the suit's green
+;     TEXTURE1 and 2 compose from PNAMES' patches ---
+ ; ..PLAYPAL's palettes past the first, each how it moves the first's colours: per channel
+ ;   [scale offset], fitted over the 256
  (tints w) (: b (lump w "PLAYPAL") n (string? b ? (#b // 768) 0)
    (ch k c) (gem-tray [256] (map (i \ 1.0 * b (768 * k + 3 * i + c)) ^256))
    (fit X Y) (: mx (net X / 256.0) my (net Y / 256.0) v (net ((X - mx) * (X - mx))) cv (net ((X - mx) * (Y - my)))
@@ -137,9 +133,8 @@
    2019 ['ar 200 200] 2007 ['bul 10 200] 2048 ['bul 50 200] 2008 ['shl 4 50] 2049 ['shl 20 50] 8 ['bul 10 200]
    2001 ['gun 2 8] 2002 ['gun 3 20] 2003 ['gun 4 2] 2004 ['gun 5 40] 2010 ['rkt 1 50] 2046 ['rkt 5 50] 2047 ['cel 20 300]
    17 ['cel 100 300] 2025 ['suit 2100 0] 5 ['key 'b 0] 40 ['key 'b 0] 6 ['key 'y 0] 39 ['key 'y 0] 13 ['key 'r 0] 38 ['key 'r 0]}
- ; ..a gun: [sprite flash ammo pellets damage dice spread frames reach flashes missile], its firing a
- ;   frame letter a tic and its flash's, "." none, as the DeHackEd docs list the states; a missile
- ;   [sprite speed damage dice splash]
+ ; ..a gun: [sprite flash ammo pellets damage dice spread frames reach flashes missile], frames a
+ ;   letter a tic and its flash's, "." none (DeHackEd states); a missile [sprite speed damage dice splash]
  guns [["PUNG" () () 1 2 10 0.0 "BBBBCCCCDDDDDCCCCBBBBB" 64.0 "" ()]
        ["PISG" "PISF" 'bul 1 5 3 0.05 "AAAABBBBBBCCCCBBBBB" 4096.0 "....AAAAAAA" ()]
        ["SHTG" "SHTF" 'shl 7 5 3 0.2 "AAAAAAAAAABBBBBCCCCCDDDDCCCCCBBBBBAAAAAAAAAA" 4096.0 "...AAAABBB" ()]
@@ -180,8 +175,8 @@
    (go (#ns = 0 ? 32768 (#ns - 1)) #ns))
  ; --- the scene: per sector a batch, its floor and ceiling and the sides facing into it ---
  sky-flat "F_SKY1"
- ; ..a sky ceiling hides what is past it: drawn white so bright it is a pure colour the palette
- ;   lacks, through any fog, then the sky in its place
+ ; ..a sky ceiling is drawn in a pure colour the palette lacks, bright through any fog, then
+ ;   the sky laid in its place
  (sky-mark pal) <(filter (m \ !(aany (pal = m))) [65535 65280 16776960 16711935 255 16711680] @ () [65535] l l)
  (sky-lit m) [(m >> 16 > 0 ? 1000.0 0.0) ((m >> 8) & 255 > 0 ? 1000.0 0.0) (m & 255 > 0 ? 1000.0 0.0)]
  (lit L) (: k (max2 0.0 (min2 1.0 (L / 255.0))) [k k k])
@@ -221,8 +216,8 @@
                         (face (M 'secs (d 5)) [a b ((d 0 + t) . cup d) B l] (sc 'ti) (sc 'th))))
                  (filter (l \ l 3 = 48) (M 'lines))))
    (two? ws ? [(pack (join ws))] ()))
- ; ..a subsector's polygon, each edge pushed out a unit, its corners mitred: neighbours cut
- ;   apart in floats, and a floor and the wall on its edge, overlap rather than leave pixels between
+ ; ..a subsector's polygon, each edge pushed out a unit, corners mitred, so neighbours overlap
+ ;   rather than leave pixels between
  (grow P) (: n #P
    ar (net (map (i \ (: a (P i) b (P ((i + 1) % n)) (a 0 * b 1 - b 0 * a 1))) ^n)) sg (ar < 0.0 ? -1.0 1.0)
    (nrm a b) (: dx (b 0 - a 0) dy (b 1 - a 1) l (max2 1e-9 (sqrt (dx * dx + dy * dy))) [(sg * dy / l) (0.0 - sg * dx / l)])
@@ -329,9 +324,8 @@
    f5 (bh = 0 ? f4 (pin (pin (iota (w * h) * 0) (iota (w * vh)) f4) (iota (w * bh) + w * vh) (bar-px st w bh)))
    k (flash st) T (peep (sc 'tints) k ())
    (k > 0 && two? T ? (tinted f5 T) f5))
- ; --- the status bar: STBAR's 320 by 32 and what lies over it, placed by eye in its own artwork:
- ;     the ammo's box 0-46, health's 48-104, the arms' panel 104-143 over the frags', the face's
- ;     143-178, armor's 178-236, the keys' 236-249, the ammo counts' rows 5 11 17 23 ---
+ ; --- the status bar: STBAR's 320 by 32 and what lies over it, placed by eye: ammo 0-46,
+ ;     health 48-104, arms 104-143, face 143-178, armor 178-236, keys 236-249 ---
  (bar? st) (string? (lump (st 'wd) "STBAR"))
  ; ..a picture at x y, moved by its own offsets as doom places one
  (at-pic st k x y) (: b (lump (st 'wd) k) (string? b ? [[(x - s16 b 4) (y - s16 b 6) b]] ()))
@@ -357,9 +351,8 @@
    (peep cache id () @ () (: O (compose pal 320 32 ps) I (iota (O != -1)) B (pin base I (peep O I 0)) _ (pin cache id B) B) B B))
  ; ..and drawn w by bh, each pixel the bar's nearest
  (bar-px st w bh) (: J (iota (w * bh)) (peep (bar-pic st) (J // w * 32 // bh * 320 + J % w * 320 // w) 0))
- ; --- the face: hurt by how low health is, five ways; dead; a grin for a new gun, a wince at a
- ;     big hit, a look toward what hurt it, a grimace hurt head on or firing on and on; else
- ;     looking about ---
+ ; --- the face: hurt five ways by health; dead; a grin for a new gun, a wince at a big hit, a
+ ;     look toward what hurt it, a grimace hurt head on or firing on; else looking about ---
  (mug st) (: t (st 't) p (show (min2 4 ((100 - min2 100 (max2 0 (st 'hp))) * 5 // 101)))
    (? (st 'hp <= 0) "STFDEAD0"
       (peep st 'fgrin 0 > t) ("STFEVL" + p)
@@ -369,8 +362,7 @@
       ("STFST" + p + show (peep st 'flook 1))))
  ; ..a look about every half second or so
  (glance st) (st 't >= peep st 'fnext 0 ? (pins st 'flook (rand 3) 'fnext (st 't + 17 + rand 35)) st)
- ; --- what was said, top left in the wad's own font for four seconds: STCFN's glyphs by their
- ;     codes, a space 4 wide ---
+ ; --- what was said, top left in STCFN's glyphs for four seconds, a space 4 wide ---
  (said st f w h vh) (: m (peep st 'msg "") _ (m != peep st 'msgw "" ? (pins st 'msgw m 'msgt (st 't)) 0)
    (? (m = "" || st 't - peep st 'msgt 0 >= 140 || !(bar? st)) f
       (: s (h / 200.0) u (upper m) wd (st 'wd)
@@ -437,9 +429,9 @@
  ; ..the solid things, as trays, laid again each tic
  (solids st) (: os (filter (o \ o 'solid = 1 && o 'gone = 0) (st 'objs)) (col f) (gem-tray [#os] (map f os))
    {'n #os 'x (col (o \ o 'x)) 'z (col (o \ o 'z)) 'r (col (o \ o 'r))})
- ; ..a body r round from ox oz, its feet at fl, free to stand at x z: no line too high, too low or
- ;   shut within r, none crossed on the way, no solid thing come nearer than r, and a monster
- ;   (mon) kept off the player and the lines that bar monsters
+ ; ..a body r round from ox oz, feet at fl, free to stand at x z: no line too high, low or shut
+ ;   within r, none crossed, no solid thing nearer than r; a monster (mon) kept off the player
+ ;   and the lines that bar monsters
  (free-at st x z ox oz fl r mon) (: L (st 'lines)
    dx (L 'bx - L 'ax) dy (L 'by - L 'ay) t (max (min (((x - L 'ax) * dx + (z - L 'ay) * dy) / (dx * dx + dy * dy + 1e-9)) 1.0) 0.0)
    ex (L 'ax + t * dx - x) ey (L 'ay + t * dy - z) near (ex * ex + ey * ey < r * r)
@@ -550,7 +542,7 @@
  (shine st) (: sc (st 'sc) t (st 't) ch {}
    _ (each (st 'lights) (L \ (: v (glow L t) (v = L 'now ? 0 (: _ (pin L 'now v) (pin ch (L 's) (1.0 * v / max2 1 (L 'hi))))))))
    (#(keys ch) = 0 ? st (: _ (pin sc 'secs (remap (sc 'secs) (\ i b (peep ch i -1.0 < 0.0 ? b (tint sc i b (ch i)))))) st)))
- ; --- the sounds: a DS lump is format 3, a rate, a count, then that many unsigned bytes, 16 of
+ ; --- the sounds: a DS lump is format 3, rate, count, then that many unsigned bytes, 16 of
  ;     padding at either end; mixed by mixer.l, whole within 200, gone past 1200 ---
  (spot o) [(o 'x) (o 'z)]
  (yell st o k) (peep cries (o 'spr) () @ () st c (: e (c k) (mix-cry st (string? e ? e (e (rand #e))) (spot o))))
@@ -622,9 +614,8 @@
           'bite (close ? (strike (4 * (1 + rand 10))) 0)
           'ball (close ? (strike (3 * (1 + rand 8))) (vis ? (launch st o (o 'x) (o 'z) (o 'y + 32.0) (bearing (T 0 - o 'x) (T 1 - o 'z)) (m 10)) 0))
           _ 0))
- ; ..a walking frame's step, doom's way: on along its heading while that goes and its count
- ;   lasts, else toward the mark -- the diagonal, either axis, the old heading, any, and last back
- ;   the way it came
+ ; ..a walking frame's step, doom's way: on along its heading while it goes and its count lasts,
+ ;   else toward the mark -- diagonal, either axis, the old heading, any, last the way it came
  (chase st o tx tz) (: v (1.0 * o 'm 2) dx (tx - o 'x) dz (tz - o 'z) md (peep o 'md -1)
    (go k) (: a (k * pi / 4.0) x (o 'x + v * sin a) z (o 'z + v * cos a)
             (free-at st x z (o 'x) (o 'z) (o 'y) (o 'r) 1 ? (: _ (place (st 'M) (pins o 'x x 'z z 'th a 'md k)) 1) 0))
@@ -719,9 +710,9 @@
    s2 (foldl (\ s c (peep (s 'spec) (c 1) 0 = 0 ? s (act s (c 1) 'w))) s (crossed s x0 z0 (s 'px) (s 'pz)))
    (take (pin s2 'py (1.0 * (s2 'M 'secs (wad-sector (s2 'M) (s2 'px) (s2 'pz)) 0) + eye-h))))
  (pick st k) (elem k (st 'has) && k != st 'gun ? (pins st 'gnext k 'gcd 0) st)
- ; ..a key held drives the body each tic, doom's way: held while its last press is within three
- ;   tics; a thrust of 25 (walk) or 50 (run) over 32 a tic ahead, 24 or 40 aside; a turn of 640 or
- ;   1280 of a 65536 turn, the slow one the first 6 tics unless running
+ ; ..a key held drives the body each tic while its last press is within three tics: thrust 25
+ ;   (walk) or 50 (run) over 32 ahead, 24 or 40 aside; turn 640 or 1280 of 65536, the slow one
+ ;   the first 6 tics unless running
  drives ['forward 'back 'strafe-left 'strafe-right 'turn-left 'turn-right]
  (held? st a) (st 't - peep (st 'hk) a -99 <= 3)
  (drive st) (: run (st 'run = 1) (on a) (held? st a ? 1.0 0.0)

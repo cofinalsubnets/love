@@ -1,24 +1,23 @@
-; test/law/kore.l -- the kore laws: the diffs' projections and minimality against an lcs
-; oracle with a seeded fuzz, the tool floors to their GNU faces, the regex floor by hand,
-; and a seeded fuzz over bc's algebra. reads the leaked globals of the kore toolboxes.
+; test/law/kore.l -- the kore laws: diffs against an lcs oracle with a seeded fuzz, the tool
+; floors to their GNU faces, the regex floor by hand, a seeded fuzz over bc's algebra
 
 ; --- the classic: Myers' own worked example, D = 5 ---
 (: A '(a b c a b b a) B '(c b a b a c) s (myers A B)
    (test
-      (dold s = A) (dnew s = B)                             ; the script spells both sides
+      (dold s = A) (dnew s = B)
       (dcost s = 5)))                                       ; the paper's shortest path
 
 ; --- the edges: empties, equal, disjoint, a lone keep ---
 (: s1 (myers () '(1 2)) s2 (myers '(1 2) ()) s3 (myers '(1 2 3) '(1 2 3)) s4 (myers '(1 2) '(3 4))
    (test
-      !(myers () ())                                        ; nothing to nothing is nothing
-      (dnew s1 = '(1 2)) !(dold s1) (dcost s1 = 2)          ; all adds
-      (dold s2 = '(1 2)) !(dnew s2) (dcost s2 = 2)          ; all dels
-      (dold s3 = '(1 2 3)) (dnew s3 = '(1 2 3)) (dcost s3 = 0)         ; equal: all keeps
-      (dcost s4 = 4)                                        ; disjoint: total replacement
+      !(myers () ())
+      (dnew s1 = '(1 2)) !(dold s1) (dcost s1 = 2)
+      (dold s2 = '(1 2)) !(dnew s2) (dcost s2 = 2)
+      (dold s3 = '(1 2 3)) (dnew s3 = '(1 2 3)) (dcost s3 = 0)
+      (dcost s4 = 4)
       (myers '(1) '(1) = '((keep 1)))
       (dcost (myers '(a) '(b)) = 2)
-      (dcost (myers '(x a b c) '(a b c y)) = 2)))           ; one del + one add around the shared run
+      (dcost (myers '(x a b c) '(a b c y)) = 2)))
 
 ; --- the seeded fuzz: dcost = n + m - 2*lcs, and the projections spell the inputs back ---
 (: (lcslen a b)
@@ -32,7 +31,7 @@
                       goj i (j + 1))))
        (goi i) (n < i ? (get n m) (goj i 1, goi (i + 1)))
        (goi 1))
-   (rlist i st acc) (i < 1 ? [acc st]                       ; a random list over the alphabet 1..4; answers (list state)
+   (rlist i st acc) (i < 1 ? [acc st]                       ; a random list over 1..4, and the state
                        (random st 4 @ r (rlist (i - 1) >r ((1 + <r) . acc))))
    (fz i st)
     (i < 1 ? 'ok
@@ -47,8 +46,7 @@
    r (fz 100 (wheel 7))
    (test (r = 'ok)))
 
-; --- patience: the projections hold, minimality is traded (never below myers), and
-; the unique-in-both lines land as keeps ---
+; --- patience: projections hold, never below myers, unique-in-both lines land as keeps ---
 (: (keeps s) (map caup (filter (o \ <o = 'keep) s))
    A '(a b c a b b a) B '(c b a b a c)
    s (patience A B)                                             ; no unique-both line here ...
@@ -88,9 +86,9 @@
 (: t "a\nb\n" u "a\n\nb\n"
    (test
       (lines t = '("a" "b")) (unlines '("a" "b") = t)
-      (unlines (lines t) = t) (unlines (lines u) = u)             ; round trips, empty line included
-      !(lines "") !(unlines ())                                   ; nothing bridges to nothing
-      (#(lines "\n") = 1) (unlines (lines "\n") = "\n")           ; one empty line, kept
+      (unlines (lines t) = t) (unlines (lines u) = u)
+      !(lines "") !(unlines ())
+      (#(lines "\n") = 1) (unlines (lines "\n") = "\n")
       (#(lines u) = 3)
       (lines "a\nb" = '("a" "b")) (unlines (lines "a\nb") = t)))       ; the one normalization
 
@@ -102,7 +100,7 @@
    x2 "@@ -2,3 +2,3 @@\n b\n-c\n+C\n d\n@@ -6,3 +6,3 @@\n f\n-g\n+G\n h\n"
    (test
       (d1 = x1) (s2 = x2)
-      !(udiff "a" "b" at at)                                      ; agreement is nothing
+      !(udiff "a" "b" at at)
       (udiff "a" "b" "" "x\n" = "--- a\n+++ b\n@@ -0,0 +1 @@\n+x\n")
       (udiff "a" "b" "x\n" "" = "--- a\n+++ b\n@@ -1 +0,0 @@\n-x\n")))
 
@@ -131,16 +129,14 @@
       (ubase "b" "b" = "b")                                        ; the suffix never eats the whole name
       (udir "/a/b" = "/a") (udir "a" = ".") (udir "/" = "/")
       (udir "a/" = ".") (udir "/a/b/" = "/a")
-      ; the quote-blind split is post.l's `words`
       (words " a  bb\tc\n" = '("a" "bb" "c"))
       (words "x" = '("x"))
       !(words "  \n") !(words "")))
 
-; --- the field floor: usplit keeps the empty tail (cut's face), uspec/upick read cut's
-; list, uset expands tr's ranges and escapes ---
+; --- the field floor: usplit keeps the empty tail (cut's face), uset reads tr's sets ---
 (: (test
       (usplit 58 "a:b:c" = '("a" "b" "c"))
-      (usplit 58 "a:" = '("a" ""))                                 ; the kept empty tail
+      (usplit 58 "a:" = '("a" ""))
       (usplit 58 "" = '(""))
       (ujoinc 58 '("a" "" "c") = "a::c")
       (ujoinc 58 '("a" "b") = ("a" + (":" + "b")))
@@ -150,7 +146,7 @@
       (uset "a-c" = '(97 98 99))
       (uset "abc" = '(97 98 99))
       (uset "x-" = '(120 45)) (uset "-x" = '(45 120))              ; an edge dash stays literal
-      (uset "\\n\\t" = '(10 9))                                    ; the escapes
+      (uset "\\n\\t" = '(10 9))
       (uset "α-γ日" = '(945 946 947 26085))                         ; code points, ranges too
       (uset "\\日-" = '(26085 45))))
 
@@ -204,8 +200,7 @@
       (uoct "755" = 493) (uoct "644" = 420) (uoct "0" = 0) (uoct "7" = 7)
       (rp-parts "/a//b/" = '("a" "b")) (rp-parts "a" = '("a")) !(rp-parts "///")))
 
-; --- the record floor (core.l): paste's delimiters, split's suffix and size words, join's
-; field split, od's three readings ---
+; --- the record floor (core.l): paste's delimiters, split's suffixes and sizes, join, od ---
 (: (test
       (udels ":|" = '(":" "|"))
       (udels "\\t" = '("\t")) (udels "\\0" = '(""))       ; POSIX's \0 is the empty one
@@ -251,7 +246,7 @@
       (ushq ("a" + string 1 + "b") = "'a'$'\\001''b'")
       (ushq "" = "''")
       ; a device number is one packed word, and linux splits it unevenly
-      (ust-major 54 = 0) (ust-minor 54 = 54)              ; a plain filesystem
+      (ust-major 54 = 0) (ust-minor 54 = 54)
       (ust-major 259 = 1) (ust-minor 259 = 3)             ; /dev/null: 1,3
       (ust-major 1050 = 4) (ust-minor 1050 = 26)          ; a tty: 4,26
       (ust-major 66306 = 259) (ust-minor 66306 = 2)       ; nvme: a major past 8 bits
@@ -262,7 +257,6 @@
       (udf-up 5 0 = 0)
       (udf-pct 12123 113829 = "10%") (udf-pct 22091993 2714191 = "90%")
       (udf-pct 0 1024 = "0%") (udf-pct 1 1 = "50%") (udf-pct 0 0 = "-")
-      ; a mount line's octal escapes, read back
       (udf-esc "/mnt/plain" = "/mnt/plain")
       (udf-esc "/mnt/a\\040b" = "/mnt/a b")
       (udf-esc "/mnt/a\\011b\\012c\\134d" = ("/mnt/a" + string 9 + "b" + string 10 + "c\\d"))
@@ -300,7 +294,7 @@
    h (<(sec 2))
    (test
       (pt-hdr "@@ -1,8 +1,8 @@" = '(1 8 1 8))
-      (pt-hdr "@@ -3 +4,2 @@ fn()" = '(3 1 4 2))                          ; a bare seat is one line
+      (pt-hdr "@@ -3 +4,2 @@ fn()" = '(3 1 4 2))                          ; a bare start is one line
       (pt-hdr "@@ -0,0 +1,2 @@" = '(0 0 1 2))
       !(pt-hdr "@@ nope")
       (pt-hname "--- a/sub/f.txt\t2026-08-17 09:46:51" = "a/sub/f.txt")
@@ -320,8 +314,7 @@
       (pt-seek (pt-pairs "") () -1 = '(1 0))                              ; a create's -0,0
       !(pt-seek (pt-pairs "q\n") '("a") 0)))
 
-; --- the scan floor (scan.l): the machine-code byte scan against its love walk, over every
-; length across the word and tail seams, every start, charms present and absent. the
+; --- the scan floor (scan.l): the byte scan against its love walk, every length and start.
 ; register roles differ per arch (r1 is Sp on x64, Ip on a64), so this is its a64 gate ---
 (: sc (cite 'scan 'scanner ())
    tw (cite 'scan 'walk)
@@ -342,8 +335,7 @@
       (sc big 122 0 = (tw big 122 0))                          ; absent over 5000 bytes
       (sc (big + "z") 122 0 = 5000)))                          ; and present at the very last
 
-; --- the byte loops (core.l): xlat and the kb64 kernel against their love walks, every
-; length across the seams, high bytes, a table that drops, squeezes and maps. kb64's a64 gate ---
+; --- the byte loops (core.l): xlat and the kb64 kernel against their love walks; kb64's a64 gate ---
 (: kx xlat kb (kb64 0)
    (mk o n k) (n <= 0 ? (slurp o) (put o (k % 256), mk o (n - 1) (k * 7 + 3)))
    ; a-z up, digits dropped, 32 and 128..255 squeezed, the rest through
@@ -365,7 +357,7 @@
       (sweep 0)
       (xagree big) (bagree big) (xagree same) (bagree same)
       (kb64-walk "abc" ub64set (cask 4) = 4)
-      (ubenc ub64set 6 "hello, world" = "aGVsbG8sIHdvcmxk")     ; the coder over the kernel + tail
+      (ubenc ub64set 6 "hello, world" = "aGVsbG8sIHdvcmxk")
       (ubenc ub64set 6 "hello" = "aGVsbG8=")))
 
 ; --- the regex door (post.l's re): the BRE faces, by hand ---
@@ -375,7 +367,7 @@
    (test
       (ok "" "anything") (ok "" "")                            ; the empty pattern matches every line
       (ok "a" "bab") (no "a" "xyz")
-      (ok "b.c" "abzcd") (no "b.c" "bc")                       ; . wants one charm
+      (ok "b.c" "abzcd") (no "b.c" "bc")
       (ok "^ab" "abc") (no "^b" "abc")                         ; ^ anchors the head ...
       (ok "c$" "abc") (no "b$" "abc")                          ; ... $ the tail
       (ok "^abc$" "abc") (no "^abc$" "abcd") (ok "a^b" "a^b")  ; elsewhere they are ink
@@ -445,8 +437,7 @@
       (refind <>(rebre "bb") "abbc" 0 = '(1 1 3 ()))
       (refind <>(rebre "b*") "abbc" 1 = '(1 1 3 ()))           ; greedy at its own start
       !(refind <>(rebre "zz") "abbc" 0)
-      ; the group spans (\1's food): numbered in \( order, a repeated group its last
-      ; iteration -- GNU's \1
+      ; the group spans: numbered in \( order, a repeated group its last iteration (GNU's \1)
       (refind <>(rebre "\\(b*\\)c") "abbc" 0 = '(1 1 4 ((1 1 3))))
       (refind <>(rebre "\\(a\\(b\\)\\)") "ab" 0 = '(1 0 2 ((1 0 2) (2 1 2))))
       (refind <>(rebre "\\(ab\\)*x") "ababx" 0 = '(1 0 5 ((1 2 4))))
@@ -456,7 +447,7 @@
       (refind <>(reere "(a|ab)(c|bcd)") "abcd" 0 = '(1 0 4 ((1 0 1) (2 1 4))))
       (refind <>(reere "(a|ab){1,2}") "aab" 0 = '(1 0 3 ((1 1 3))))
       (refind <>(reere "()*x") "x" 0 = '(1 0 1 ((1 0 0))))         ; an empty iteration reports its group
-      (<>>(rebre "\\(a\\)\\(b\\)") = 2)                        ; rebre counts its groups
+      (<>>(rebre "\\(a\\)\\(b\\)") = 2)
       (<>>(rebre "ab") = 0)))
 
 ; --- the ERE door: the backslashes moved ---
@@ -474,20 +465,20 @@
 
 ; --- the sed floor (sed.l): the substitution to its GNU face, what the parser takes and refuses ---
 (: (sub p r s g?) (rebre p @ b <>(usub <>b r s g?))
-   (sp s) (sparse s ())                                          ; the BRE door, the default
+   (sp s) (sparse s ())
    (test
       (sub "b" "X" "abc" () = "aXc") (sub "z" "X" "abc" () = "abc")
-      <(usub <>(rebre "b") "X" "abc" ())                         ; the changed bit ...
-      !<(usub <>(rebre "z") "X" "abc" ())                        ; ... and its absence
-      (sub "b" "X" "abab" 1 = "aXaX")                            ; g takes every match
-      (sub "b" "X" "abab" () = "aXab")                           ; bare s takes the first
+      <(usub <>(rebre "b") "X" "abc" ())
+      !<(usub <>(rebre "z") "X" "abc" ())
+      (sub "b" "X" "abab" 1 = "aXaX")
+      (sub "b" "X" "abab" () = "aXab")
       (sub "x*" "-" "abc" 1 = "-a-b-c-")                         ; the empty-match step rule
       (sub "x*" "-" "xbz" 1 = "-b-z-")                           ; ... and the discard after a real match
       (sub "x*" "-" "xx" 1 = "-")
       (sub "x*" "-" "a…b" 1 = "-a-…-b-")                         ; the step is a character, never a byte of one
       (sub "\\(a\\|ab\\)b*" "<&>" "abb" () = "<abb>")              ; the longest match is the one replaced
-      (sub "b" "[&]" "abc" () = "a[b]c")                         ; & is the whole match
-      (sub "\\(b*\\)c" "[\\1]" "xbbc" () = "x[bb]")              ; \1 reads the group span
+      (sub "b" "[&]" "abc" () = "a[b]c")
+      (sub "\\(b*\\)c" "[\\1]" "xbbc" () = "x[bb]")
       (sub "a\\(b\\)\\?c" "<\\1>" "ac" () = "<>")                ; an unmatched group is ""
       (sub "b" "\\&\\\\" "abc" () = "a&\\c")                     ; \& and \\ stay ink
       (sub "^a" "X" "aaa" 1 = "Xaa")                             ; the anchor can't re-fire
@@ -501,8 +492,7 @@
       (two? (sp "s/\\(a\\|b\\)/x/")) (two? (sparse "s/(a|b)/x/" 1))
       (two? (sparse "/a|b/d" 1))))
 
-; --- the /proc floor (proc.l): the stat split, the clocks, the tty name, the uptime phrase.
-; the faces read live clocks and cannot be smoked byte for byte, so the family is held here ---
+; --- the /proc floor (proc.l): the faces read live clocks, so the family is held here ---
 (: (test
       ; the comm runs from the first ( to the last ): a name may hold either, or spaces
       (ustatf "42 (bash) S 7 42 42 1024 99" = '(42 "bash" "S" "7" "42" "42" "1024" "99"))
@@ -586,7 +576,6 @@
       (aw-lex "a/b" = '((name "a") (op "/") (name "b") (eof "")))
       (aw-lex "/a/" = '((ere "a") (eof "")))
       (aw-lex "f(" = '((fname "f") (op "(") (eof "")))         ; a glued ( makes a call
-      ; and the shapes the parser owes the evaluator
       (aw-program (aw-lex "{print}") {} () = '((item () ((print () ())))))
       (aw-program (aw-lex "BEGIN{x=1}") {} () = '((begin ((expr (assign "=" (var "x") (num 1)))))))
       (aw-program (aw-lex "/a/,/b/{}") {} () = '((range (ere "a") (ere "b") ())))))
@@ -599,14 +588,13 @@
        st (pgnew t w h)
        (pgload st ls "t",
         st))
-   (pg-run ls w h fl keys)                      ; the state after the keys
+   (pg-run ls w h fl keys)
     (pg-mk ls w h fl @ st (foldl (a \ c \ pgstep st c) 0 (pg-bytes keys), st))
    (pg-top ls w h fl keys) (pg-run ls w h fl keys 'top)
    ten '("l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8" "l9" "l10")
    caps '("a" "b" "c" "d" "e" "f" "ALPHA" "h" "i" "j")
    (test
-      ; the wrap: fragments at the width, a tab to the next 8th column, a control
-      ; byte as ^X, and a utf-8 tail byte no column of its own
+      ; the wrap: width fragments, a tab to the next 8th column, a control as ^X, a utf-8 tail no column
       (pgwrap 4 "abcdefghij" = '("abcd" "efgh" "ij"))
       (pgwrap 4 "abcd" = '("abcd"))
       (pgwrap 4 "" = '(""))                     ; a blank line is a row like any other
@@ -698,7 +686,6 @@
    (stm s) <(bc-stmt (bc-lex s))
    (refuses? th) (trap (_ \ (th 0, 0)) () (a \ b \ 1))
    (test
-      ; the scale rules, one line each
       (bn-add [15 1] [15 1] = [30 1])                        ; + and - keep the wider
       (bn-add [1 0] [5 3] = [1005 3])
       (bn-sub [1 0] [5 3] = [995 3])
@@ -770,8 +757,7 @@
       (refuses? (_ \ bc-expr (bc-lex "1+")))
       (refuses? (_ \ bc-stmt (bc-lex "while 1")))))
 
-; --- bc's algebra over a seeded draw: writer and reader inverse, + and * commute, the
-; remainder below the divisor, the root squaring back inside its ulp ---
+; --- bc's algebra, seeded: writer/reader inverse, + and * commute, remainder below divisor, root within its ulp ---
 (: st (bc-state 0)
    _ (pin st 'obase 10)
    (rnum s) (: a (random s 100000) b (random >a 5) c (random >b 2)
@@ -801,10 +787,10 @@
 (: dos "a\r\nb\r\nc\r\n" unx "a\nb\nc\n"
    (test
       (ucrlf dos = unx) (ulfcr unx = dos)
-      (ucrlf unx = unx)                          ; already unix: nothing to do
+      (ucrlf unx = unx)
       (ulfcr dos = dos)                          ; already dos: not doubled to \r\r\n
-      (ucrlf (ucrlf dos) = unx) (ulfcr (ulfcr unx) = dos)         ; both idempotent
-      (ulfcr (ucrlf dos) = dos) (ucrlf (ulfcr unx) = unx)         ; ..and each other's inverse
+      (ucrlf (ucrlf dos) = unx) (ulfcr (ulfcr unx) = dos)
+      (ulfcr (ucrlf dos) = dos) (ucrlf (ulfcr unx) = unx)
       ; a lone cr is the classic mac break, and it is mac2unix's and not dos2unix's
       (ucrlone "a\rb\r" = "a\nb\n") (ucrlone dos = dos) (ucrlf "a\rb\r" = "a\rb\r")
       ; a cr that is not a line ending survives dos2unix -- only the pair is a break

@@ -1,31 +1,13 @@
 ; manifest -- the spreadsheet: a ship's manifest for values.
-;
-; every cell is a love expression, read repl-style (wrapped in parens, so
-; infix goes bare: `a1 * 2`). a cell that names other cells compiles as a
-; lambda over its dependencies -- b1 holding "a1 * 7" becomes (\ a1 (a1 * 7))
-; applied to a1's worth -- computed on demand, memoized, a visiting set
-; standing watch for cycles. an empty cell is (), the unit, so it rides
-; through any arithmetic the way nothing should. a bare unknown name is its
-; own spelling (labels for free); known globals stay free, so a cell may use
-; the whole language -- and a cell may hold a function: g1 = "(+ 2)" and
-; h1 = "(g1 40)" is 42. everything is a function, now with a cursor.
-;
-; the sheet is a little book: slot 0 the sources (nom -> string), slot 1 the
-; worth cache (cleared whole on any edit -- the painter refills only what it
-; shows), slot 2 the visiting watch.
-;
-; run: love manifest [FILE]   -- bare, it sails without one
-; keys: arrows/hjkl move . enter edits the cell (= starts fresh) . x clears
-;       w stows . q stows and steps ashore . ^C abandons ship . eof leaves
-;
-; the engine is pure core (ev/sound/tap), and every key is a pure step on a state
-; tablet and every frame a pure lay into a port -- only `manifest` ties the tty, on
-; cli's stage. test/host/manifest.l probes the engine, and the tui end to end through
-; a pty with the cb screen as the witness.
-;
-; the export list is the engine a caller can hold, the headless tui, and the verb;
-; the reader and the dep walk are this file's own business. quoted, per prel's note
-; on the list head.
+; a cell is a love expression read repl-style (infix bare: `a1 * 2`); one naming other cells
+; compiles as a lambda over them, applied to their worths, memoized, cycles watched. an empty
+; cell is (); an unknown name is its own spelling; a cell may hold a function.
+; the sheet: slot 0 sources (nom -> string), 1 the worth cache (cleared on any edit),
+; 2 the visiting set, 3 the whirl count.
+; run: love manifest [FILE]
+; keys: arrows/hjkl move . enter edits (= fresh) . x clears . w stows . q stows, leaves . ^C abandons
+; every key is a pure step on a state tablet and every frame a pure lay into a port;
+; test/host/manifest.l probes the engine and the tui through a pty.
 (module '(manifest manifest-main manifest-new manifest-frame manifest-key
           sheet cell cell! worth face stow unstow)
 (borrow 'posix)
@@ -40,24 +22,18 @@
            97 <= s 0 <= 122 &&
            (: (digs i) (i >= t || (48 <= s i <= 57 ? (digs (i + 1))))) 1)))
 
- ; --- the book of known names, laid once on first use: a name off this
- ; book and off the sheet is a label and binds to its own spelling ---
+ ; --- known names, laid on first use: a name off this book and the sheet is a label ---
  known {}
  (knowns _) (0 = #known ?
                   (map (n \ pin known n 1) (names ()),
-                   ; the reader-emitted noms ride formulas but sit off the book (the egg mops
-                   ; them): @(..) reads as (tuple ..), backtick as (list ..), the printer round-
-                   ; trips spread/mono. off `known` they'd be collected as deps and the formula
-                   ; lambda would shadow the real constructor -- which only ever worked because
-                   ; feel's fold resolved the head shadow-blind at compile (the glaze compiles
-                   ; the honest lexical surface and applied the dep's spelling instead).
+                   ; the reader-emitted heads sit off the book; off `known` they'd be taken
+                   ; as deps and the formula lambda would shadow the real constructor
                    map (n \ pin known n 1) '(tuple list spread mono)),
              known)
  (label? n) (name? n && !(cell? n) && !(peep (knowns ()) n 0) && 97 <= string n 0 <= 122)
 
- ; --- dependencies: every cell-shaped or label name in the form, deduped,
- ; in first-sight order (quote interiors over-collect; binding is harmless
- ; there -- quoted data keeps its symbols) ---
+ ; --- dependencies: cell or label names in the form, deduped, first-sight order
+ ; (quote interiors over-collect harmlessly) ---
  (walkdeps f seen acc) (? (two? f)
                            (walkdeps >f seen (walkdeps <f seen acc))
                           ((cell? f || label? f) && !(peep seen f 0))
@@ -75,21 +51,18 @@
                  sh)
  (cell sh n) (sh 0 n)
 
- ; --- worth: demand-evaluate, memoize. the formula becomes a lambda over
- ; its deps and is applied to their worths (cells recurse; labels are their
- ; spelling), so nothing global is touched and no missing ever fires ---
+ ; --- worth: the formula as a lambda over its deps, applied to their worths, so nothing
+ ; global is touched ---
  (worth1 sh s) (glean s @ f
                   (atom? f ? s                          ; unreadable: the text itself
                    (: ds (deps f)
                       lam (ev $ !ds ? f (['\] + ds + [f]))
                       vs (map (d \ cell? d ? (worth sh d) (string d)) ds)
                       (foldl (a \ v \ v = whirl || a) 0 vs ?
-                         whirl                          ; a whirl dep taints (it would ride as the unit)
+                         whirl                          ; a whirl dep taints
                          (foldl id lam vs)))))
- ; a visiting-hit bumps the whirl count; any cell whose evaluation window saw
- ; a bump answers whirl itself, so the cycle wears its face at every cell on
- ; the loop (a bare whirl is a mint -- the unit -- and would otherwise ride
- ; through the arithmetic and let a circle quietly converge).
+ ; a visiting hit bumps the whirl count; a cell whose evaluation saw a bump answers whirl,
+ ; so every cell on the loop shows it (a bare mint would ride arithmetic as the unit)
  (worth sh n) (peep (sh 1) n none @ v
                  (? (v != none) v
                   (peep (sh 2) n 0) (pin sh 3 (1 + peep sh 3 0), whirl)
@@ -132,9 +105,8 @@
              (show v))
 
  ; --- the tui: a state tablet, a pure frame, a pure key -- cli's stage drives ---
- ; {'sh 'path 'cx 'cy 'top 'edit 'over 'w 'h}, the shape lupa and mc hold. the stage
- ; brackets raw mode and the alternate screen, re-reads the tty every keystroke (so a
- ; resize lands), and decodes keys through edkey; eof leaves.
+ ; {'sh 'path 'cx 'cy 'top 'edit 'over 'w 'h}; the stage brackets raw mode and re-reads
+ ; the tty every key
  (upto n f) (:- (go 0) (go i) (i < n ? (f i, go (i + 1))))
  (cnom cx cy) (name $ string (97 + cx) + show (cy + 1))
  (min2 a b) (a < b ? a b)
@@ -145,7 +117,7 @@
  (manifest-new sh path)
   (pins {} 'sh sh 'path path 'cx 0 'cy 0 'top 0 'edit () 'over () 'w 80 'h 24)
 
- ; top moves only far enough to keep the cursor on the screen, so a page reads as a page
+ ; top moves only enough to keep the cursor on screen
  (settle d h) (pin d 'top (tui-settle (d 'cy) (d 'top) (mrows h)))
 
  (drawcell j sh i cy sel) (: v (worth sh (cnom i cy))
@@ -196,8 +168,7 @@
       (say j ("\e[1;" + show (#(string cur) + 4 + #edit) + "H\e[?25h")),
      slurp j))
 
- ; one key, one step on the tablet. the codes are cli's edkey: arrows are the
- ; negatives, a byte is itself
+ ; one key, one step; codes are cli's edkey: arrows negative, a byte itself
  (manifest-key d k) (:
     sh (d 'sh) path (d 'path) cx (d 'cx) cy (d 'cy) edit (d 'edit)
     nc (mcols (d 'w))

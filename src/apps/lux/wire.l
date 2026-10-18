@@ -1,18 +1,9 @@
-; src/apps/lux/wire.l -- the x11 wire protocol: connect, the setup handshake, request
-; writers, the substructure redirect, keyboard mapping/grabs, and the event
-; decoder. Host-only (needs connect's unix family, src/love/sock.c). Every op takes the
-; socket port `s` explicitly -- no closure over a free `s` and no nif shadow (the
-; codec's byte writers call the real `put`/`get` nifs, never a wm helper).
+; src/apps/lux/wire.l -- the x11 wire protocol: handshake, requests, keyboard, events.
+; host-only (unix connect). every op takes the socket `s` explicitly, and the byte
+; writers call the real put/get nifs.
 ;
-; The screen record `(x-setup s)` returns: (root wpx hpx minkc maxkc idbase).
-; The event record `(x-next s)` returns: (code detail window state) -- enough for
-; MapRequest/DestroyNotify/ConfigureRequest/MapNotify/KeyPress; () at EOF. x-events
-; reads one as a window's events, the records a program with a window of its own takes.
-;
-; module 'xwire: every name below is exported, and a file that speaks X says
-; (borrow 'xwire) -- lux's own (ewmh, manage, config, lux) and the doom driver
-; (src/apps/doom.l), which is why this is a module and not a leak. a client with a window
-; of its own (doom, window.l) opens with x-open and lays it with x-window and the requests after.
+; (x-setup s) -> [root wpx hpx minkc maxkc idbase cmap vis depth]
+; (x-next s) -> [code detail window state raw]; () at eof
 (module '(xwire
   x-w8 x-w16 x-w32 x-flush x-r8 x-r16 x-r32 x-skip
   x-rstr x-pad4 x-wname x-rbytes u16 u32 evq x-reply
@@ -41,22 +32,19 @@
    (x-rstr s n) (jug 0 @ j (each ^n (i \ say j (string (see s))), slurp j))
    (x-pad4 n) (padk n 4)
    (x-wname s t) (each ^#t (i \ put s (t i)))
-   (x-rbytes s n) (map (i \ see s) ^n)       ; n raw bytes -> a list
-   (u16 l off) (rdle l off 2)                                          ; little-endian reads out of a byte list
+   (x-rbytes s n) (map (i \ see s) ^n)
+   (u16 l off) (rdle l off 2)                                          ; little-endian reads from a byte list
    (u32 l off) (rdle l off 4)
 
-   ; --- the reply/event demux. With SubstructureNotify selected, a request's
-   ;     reply arrives interleaved with events on the one socket -- byte0 marks
-   ;     which: 0 error, 1 reply, >=2 event. x-reply stashes events (in evq, a
-   ;     fifo) while it waits for a reply; x-next drains evq before the socket. ---
+   ; --- reply/event demux: byte0 0 error, 1 reply, >=2 event. x-reply stashes
+   ;     events in evq while it waits; x-next drains evq first ---
    evq {0 ()}
-   (x-reply s) (x-rbytes s 32 @ pkt                                              ; the next 32-byte reply header, events stashed; an error
-                (<pkt = 1 || (127 & <pkt) = 0 ? pkt                              ; packet also answers the wait (the window died mid-query --
-                 (pin evq 0 (evq 0 + [pkt]), x-reply s)))                        ; blocking forever on it would hang the whole wm)
+   (x-reply s) (x-rbytes s 32 @ pkt
+                (<pkt = 1 || (127 & <pkt) = 0 ? pkt                              ; an error answers the wait too (a dead window
+                 (pin evq 0 (evq 0 + [pkt]), x-reply s)))                        ; must not hang the wm)
 
-   ; --- connect + the setup handshake -> the screen record | (). auth is ()
-   ;     (an -ac server) or (name data) -- the mit-magic-cookie-1 pair a real
-   ;     server demands; xauth-cookie reads it out of ~/.Xauthority. ---
+   ; --- connect + setup -> the screen record | (). auth is () or the
+   ;     mit-magic-cookie-1 (name data) ---
    (x-connect path) (connect ['unix path])
    (x-wpad s t)                                                                  ; a string + its 4-byte padding
     (x-wname s t, (: (go i) (i < x-pad4 #t ? (put s 0, go (i + 1))) (go 0)))
@@ -82,7 +70,7 @@
              wpx (x-r16 s) hpx (x-r16 s)
              _ (x-skip s 8)                                                      ; mm sizes, min/max installed maps
              vis (x-r32 s) _ (x-r8 s) _ (x-r8 s)                                 ; root visual; backing-stores, save-unders
-             depth (x-r8 s) (x-r8 s,                                             ; root depth (a drawing client's PutImage needs it)
+             depth (x-r8 s) (x-r8 s,                                             ; root depth (PutImage needs it)
                              x-skip s (4 * alen - (32 + (vlen + x-pad4 vlen + (8 * nfmt + 40)))),
                              [root wpx hpx minkc maxkc idbase cmap vis depth]))))
    (scr-root sc) <sc  (scr-w sc) <>sc  (scr-h sc) <>>sc
@@ -90,133 +78,119 @@
    (scr-cmap sc) (sc 6)  (scr-visual sc) (sc 7)  (scr-depth sc) (sc 8)
 
    ; --- requests ---
-   (x-cwa-events s win mask)                                                     ; ChangeWindowAttributes: cweventMask
+   (x-cwa-events s win mask)                                                     ; cweventMask
     (x-w8 s 2, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w32 s 2048, x-w32 s mask)
-   (x-configure s win x y w h)                                                   ; ConfigureWindow: x y w h (border-width is x-border's alone)
+   (x-configure s win x y w h)                                                   ; border-width is x-border's alone
     (x-w8 s 12, x-w8 s 0, x-w16 s 7, x-w32 s win, x-w16 s 15, x-w16 s 0,
      x-w32 s x, x-w32 s y, x-w32 s w, x-w32 s h)
    (x-map s win)   (x-w8 s 8, x-w8 s 0, x-w16 s 2, x-w32 s win)
    (x-unmap s win) (x-w8 s 10, x-w8 s 0, x-w16 s 2, x-w32 s win)
    (x-focus s win) (x-w8 s 42, x-w8 s 1, x-w16 s 3, x-w32 s win, x-w32 s 0)      ; SetInputFocus, PointerRoot revert
-   (x-sync s) (x-w8 s 43, x-w8 s 0, x-w16 s 1, x-flush s, x-reply s)             ; GetInputFocus: a cheap round trip, the events so far stashed
-   (x-clear-enters s) (x-sync s, pin evq 0 (filter (p \ (127 & <p) != 7) (evq 0)))   ; drop the EnterNotify a paint of our own just caused
+   (x-sync s) (x-w8 s 43, x-w8 s 0, x-w16 s 1, x-flush s, x-reply s)             ; a round trip, events so far stashed
+   (x-clear-enters s) (x-sync s, pin evq 0 (filter (p \ (127 & <p) != 7) (evq 0)))   ; drop the EnterNotify our own paint caused
    (x-border s win px)                                                           ; ConfigureWindow border-width
     (x-w8 s 12, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w16 s 16, x-w16 s 0, x-w32 s px)
 
-   ; --- InternAtom (name -> atom), used as the redirect sync point ---
+   ; --- InternAtom; also the redirect sync point ---
    (x-intern s nm)
     (: n #nm
        _ (x-w8 s 16, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) / 4),
           x-w16 s n, x-w16 s 0, x-wname s nm,
           (: (go i) (i < x-pad4 n ? (put s 0, go (i + 1))) (go 0)),
           x-flush s)
-       hdr (x-reply s) (<hdr = 1 ? (u32 hdr 8)))                                 ; the atom; () when the round-trip answered with an error
+       hdr (x-reply s) (<hdr = 1 ? (u32 hdr 8)))                                 ; () on an error
 
-   ; --- GetProperty (opcode 20) -> (format nitems bytes); decoders on top ---
+   ; --- GetProperty -> (format nitems bytes) ---
    (x-getprop s win prop)
     (: _ (x-w8 s 20, x-w8 s 0, x-w16 s 6, x-w32 s win, x-w32 s prop,
           x-w32 s 0, x-w32 s 0, x-w32 s 1024, x-flush s)
        hdr (x-reply s)
-       (? !(<hdr = 1) [0 0 ()]                                                   ; the window died: no property
-          (: rlen (u32 hdr 4) fmt (hdr 1) n (u32 hdr 16)                        ; the reply's length in longs; the value's item count at 16
+       (? !(<hdr = 1) [0 0 ()]                                                   ; window died
+          (: rlen (u32 hdr 4) fmt (hdr 1) n (u32 hdr 16)
              bytes (x-rbytes s (rlen * 4))
-             [fmt n (take (n * (fmt // 8)) bytes)])))                            ; the value alone, its padding dropped
-   (x-atoms-of bytes) (#bytes < 4 ? ()                                           ; group 4 le bytes -> a 32-bit atom/window list
+             [fmt n (take (n * (fmt // 8)) bytes)])))                            ; padding dropped
+   (x-atoms-of bytes) (#bytes < 4 ? ()                                           ; 4 le bytes -> a 32-bit atom list
                          (u32 bytes 0 . x-atoms-of (drop 4 bytes)))
    (x-getprop-atoms s win prop) (x-atoms-of (x-getprop s win prop 2))
-   (x-has-atom s win propnm valnm) (: at (x-getprop-atoms s win (x-intern s propnm)) va (x-intern s valnm)   ; isInProperty
+   (x-has-atom s win propnm valnm) (: at (x-getprop-atoms s win (x-intern s propnm)) va (x-intern s valnm)
                                       (any (a \ a = va) at))
-   (x-getclass s win)                                                            ; wm_class (atom 67) = "instance\0class\0"; the class is the 2nd
+   (x-getclass s win)                                                            ; wm_class "instance\0class\0" -> the class
     (: bytes (x-getprop s win 67 2)
-       (go l seen acc) (? !(two? l) acc                                          ; walk past the first NUL, then collect to the next
+       (go l seen acc) (? !(two? l) acc
                           (<l = 0) (seen ? acc (go >l 1 acc))
                           (go >l seen (seen ? (acc + string <l) acc)))
        (go bytes 0 ""))
-   (x-transient s win) (x-getprop-atoms s win 68 @ a (two? a ? <a))              ; wm_transient_for (atom 68) -> the parent window | ()
+   (x-transient s win) (x-getprop-atoms s win 68 @ a (two? a ? <a))              ; wm_transient_for -> parent | ()
 
-   ; --- GetGeometry (opcode 14) -> the window's (x y w h) ---
+   ; --- GetGeometry -> (x y w h) ---
    (x-getgeom s win)
     (: _ (x-w8 s 14, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)
        hdr (x-reply s)
-       (? !(<hdr = 1) '(0 0 1 1)                                                 ; the window died: a harmless placeholder rect
+       (? !(<hdr = 1) '(0 0 1 1)                                                 ; window died
           [(u16 hdr 12) (u16 hdr 14) (u16 hdr 16) (u16 hdr 18)]))
-   (x-raise s win) (x-w8 s 12, x-w8 s 0, x-w16 s 4, x-w32 s win,                 ; ConfigureWindow cwstackMode=Above
+   (x-raise s win) (x-w8 s 12, x-w8 s 0, x-w16 s 4, x-w32 s win,                 ; stackMode=Above
                     x-w16 s 64, x-w16 s 0, x-w32 s 0)
-   (x-lower s win) (x-w8 s 12, x-w8 s 0, x-w16 s 4, x-w32 s win,                 ; ConfigureWindow cwstackMode=Below (a desktop stays under)
+   (x-lower s win) (x-w8 s 12, x-w8 s 0, x-w16 s 4, x-w32 s win,                 ; stackMode=Below
                     x-w16 s 64, x-w16 s 0, x-w32 s 1)
-   (x-kill s win) (x-w8 s 113, x-w8 s 0, x-w16 s 2, x-w32 s win)                 ; KillClient: the last resort -- it severs the whole
-                                                                                 ; connection, every window that client owns dies with it
-   (x-wmdel s win)                                                               ; ICCCM close: SendEvent a wm_delete_window ClientMessage --
-    (: pr (x-intern s "WM_PROTOCOLS") dl (x-intern s "WM_DELETE_WINDOW")         ; the client shuts one window, gracefully
+   (x-kill s win) (x-w8 s 113, x-w8 s 0, x-w16 s 2, x-w32 s win)                 ; KillClient: severs the whole connection
+   (x-wmdel s win)                                                               ; ICCCM close: wm_delete_window ClientMessage
+    (: pr (x-intern s "WM_PROTOCOLS") dl (x-intern s "WM_DELETE_WINDOW")
        (x-w8 s 25, x-w8 s 0, x-w16 s 11, x-w32 s win, x-w32 s 0,
         x-w8 s 33, x-w8 s 32, x-w16 s 0, x-w32 s win, x-w32 s pr,
         x-w32 s dl, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-w32 s 0))
-   (x-confnotify s win)                                                          ; ICCCM 4.1.5: a ConfigureRequest the layout overrules still
-    (: _ (x-w8 s 14, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)                ; gets an answer -- a synthetic ConfigureNotify carrying the
-       hdr (x-reply s)                                                           ; window's real geometry (VTE sizes its character grid off
-       (? !(<hdr = 1) 0                                                          ; what it believes the window is; silence = a garbled grid)
+   (x-confnotify s win)                                                          ; ICCCM 4.1.5: an overruled ConfigureRequest still gets
+    (: _ (x-w8 s 14, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)                ; a synthetic ConfigureNotify with the real geometry
+       hdr (x-reply s)                                                           ; (VTE sizes its grid off it)
+       (? !(<hdr = 1) 0
           (: gx (u16 hdr 12) gy (u16 hdr 14) gw (u16 hdr 16) gh (u16 hdr 18) bw (u16 hdr 20)
-             (x-w8 s 25, x-w8 s 0, x-w16 s 11, x-w32 s win, x-w32 s 131072,      ; SendEvent, mask StructureNotify
-              x-w8 s 22, x-w8 s 0, x-w16 s 0, x-w32 s win, x-w32 s win,          ; ConfigureNotify: event, window,
-              x-w32 s 0, x-w16 s gx, x-w16 s gy, x-w16 s gw, x-w16 s gh,         ; above-sibling None, the geometry,
-              x-w16 s bw, x-w16 s 0, x-w32 s 0))))                               ; border, override-redirect 0, pad
+             (x-w8 s 25, x-w8 s 0, x-w16 s 11, x-w32 s win, x-w32 s 131072,
+              x-w8 s 22, x-w8 s 0, x-w16 s 0, x-w32 s win, x-w32 s win,
+              x-w32 s 0, x-w16 s gx, x-w16 s gy, x-w16 s gw, x-w16 s gh,
+              x-w16 s bw, x-w16 s 0, x-w32 s 0))))
    (x-delprop s win prop) (x-w8 s 19, x-w8 s 0, x-w16 s 3, x-w32 s win, x-w32 s prop)   ; DeleteProperty
-   (x-grabbtn s win)                                                             ; GrabButton 1/2/3, AnyModifier, pointer sync: a click on a
-    (: (one b) (x-w8 s 28, x-w8 s 0, x-w16 s 6, x-w32 s win,                     ; managed window freezes until x-replay hands it back to the
-                x-w16 s 4, x-w8 s 0, x-w8 s 1, x-w32 s 0,                        ; app unstolen (click-to-focus). buttons 4/5 (the wheel) stay
-                x-w32 s 0, x-w8 s b, x-w8 s 0, x-w16 s 32768)                    ; ungrabbed -- scroll never rides through the wm
+   (x-grabbtn s win)                                                             ; GrabButton 1/2/3 sync: a click freezes until x-replay
+    (: (one b) (x-w8 s 28, x-w8 s 0, x-w16 s 6, x-w32 s win,                     ; (click-to-focus); the wheel stays ungrabbed
+                x-w16 s 4, x-w8 s 0, x-w8 s 1, x-w32 s 0,
+                x-w32 s 0, x-w8 s b, x-w8 s 0, x-w16 s 32768)
        (one 1, one 2, one 3))
    (x-replay s) (x-w8 s 35, x-w8 s 2, x-w16 s 2, x-w32 s 0)                      ; AllowEvents ReplayPointer, CurrentTime
    (x-allow-async s) (x-w8 s 35, x-w8 s 1, x-w16 s 2, x-w32 s 0)                 ; AllowEvents AsyncPointer: thaw a sync grab without replaying
-   (x-grabptr s win)                                                             ; GrabPointer, async, ButtonRelease(8)|PointerMotion(64) -- the drag catch
+   (x-grabptr s win)                                                             ; GrabPointer: ButtonRelease|PointerMotion, the drag
     (x-w8 s 26, x-w8 s 0, x-w16 s 6, x-w32 s win,
      x-w16 s 72, x-w8 s 1, x-w8 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s,
-     x-reply s)                                                                  ; a reply (the grab status) -- read it to keep the demux synced
+     x-reply s)                                                                  ; the grab status: read to keep the demux synced
    (x-ungrabptr s) (x-w8 s 27, x-w8 s 0, x-w16 s 2, x-w32 s 0)                   ; UngrabPointer, CurrentTime
-   (x-warp s win x y) (x-w8 s 41, x-w8 s 0, x-w16 s 6, x-w32 s 0, x-w32 s win,   ; WarpPointer to (x y) in win, from anywhere
+   (x-warp s win x y) (x-w8 s 41, x-w8 s 0, x-w16 s 6, x-w32 s 0, x-w32 s win,
                        x-w16 s 0, x-w16 s 0, x-w16 s 0, x-w16 s 0, x-w16 s x, x-w16 s y)
    (x-queryptr s win)                                                            ; QueryPointer -> the pointer's root (x y)
     (: _ (x-w8 s 38, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)
        hdr (x-reply s)
        (<hdr = 1 ? [(i16 hdr 16) (i16 hdr 18)] '(0 0)))
 
-   ; --- QueryTree (opcode 15) + GetWindowAttributes (opcode 3): at startup we
-   ;     adopt the windows that mapped before the redirect took hold (closing the
-   ;     race) and any survivors of a restart-in-place. ---
+   ; --- at startup adopt windows mapped before the redirect, and restart survivors ---
    (x-querytree s win)
     (: _ (x-w8 s 15, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)
        hdr (x-reply s)
-       ; presence rides out of band: (1 windows) on success, () when the query
-       ; failed. a root with no children is a real answer and so is a garbled
-       ; reply, and the bare list cannot tell them apart -- which is how a
-       ; desynced connection read as "there are no windows", the startup sweep
-       ; adopted nothing, and lux ran on for good with an empty client list. the
-       ; house law (AGENTS.md): carry presence in a wrapper tested with two?,
-       ; never in the value's own emptiness. QueryTree on the root cannot fail
-       ; for any legitimate reason -- the root id is always valid -- so this ()
-       ; is precisely a garble detector, and it used to throw the detection away.
+       ; presence rides out of band: [1 windows], or () when the query failed --
+       ; QueryTree on the root cannot fail legitimately, so () means a garbled reply
        (? !(<hdr = 1) ()
           (: n (u16 hdr 16) bytes (x-rbytes s (u32 hdr 4 * 4))
              [1 (take n (x-atoms-of bytes))])))
-   (x-attrs s win)                                                               ; -> (map-state override-redirect); map-state 2 = IsViewable
+   (x-attrs s win)                                                               ; -> (map-state override-redirect); 2 = IsViewable
     (: _ (x-w8 s 3, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)
        hdr (x-reply s)
-       (? !(<hdr = 1) '(0 1)                                                    ; the window died: reads as unmanageable
-          (x-rbytes s (u32 hdr 4 * 4),                                          ; drain the trailing reply data
+       (? !(<hdr = 1) '(0 1)                                                    ; window died: unmanageable
+          (x-rbytes s (u32 hdr 4 * 4),                                          ; drain the reply data
            [(hdr 26) (hdr 27)])))
-   (x-manageable? s win) (x-attrs s win @ a (<a = 2 && <>a = 0))                 ; viewable and not override-redirect
+   (x-manageable? s win) (x-attrs s win @ a (<a = 2 && <>a = 0))
 
-   ; --- become the wm: SubstructureRedirect|Notify on the root, synced by an
-   ;     intern round-trip. 1 = we hold it, 0 = another wm -- the Access error
-   ;     arrives before the intern reply, so x-reply answers the intern wait
-   ;     with the error packet: refusal reads as the intern's () ---
-   (x-redirect s root)                                                           ; substructure redirect+notify, and the root's own
-    (x-cwa-events s root 1703936,                                                ; StructureNotify: randr reshapes it under us
+   ; --- become the wm: 1 = we hold it, 0 = another wm (the Access error answers the
+   ;     intern wait, so refusal reads as the intern's ()) ---
+   (x-redirect s root)                                                           ; substructure redirect+notify, and root StructureNotify
+    (x-cwa-events s root 1703936,                                                ; (randr reshapes it)
      x-intern s "WM_STATE" ? 1 0)
 
-   ; --- RandR 1.5: the monitors are the screens. QueryExtension (opcode 98) finds
-   ;     the major opcode + event base; RRQueryVersion, RRSelectInput on the root
-   ;     (screen/crtc/output/resource change), then RRGetMonitors on demand. ---
+   ; --- RandR 1.5: the monitors are the screens ---
    (i16 l off) (u16 l off @ v (v < 32768 ? v (v - 65536)))
    (x-queryext s nm)                                                            ; -> (major-opcode first-event) | ()
     (: n #nm
@@ -226,16 +200,16 @@
           x-flush s)
        hdr (x-reply s)
        (<hdr = 1 && hdr 8 ? [(hdr 9) (hdr 10)]))
-   (x-randr-init s root)                                                        ; -> (opcode event-base) once 1.5 answers, else ()
+   (x-randr-init s root)
     (x-queryext s "RANDR" @ ext
        (!ext ? ()
           (: op <ext
-             _ (x-w8 s op, x-w8 s 0, x-w16 s 3, x-w32 s 1, x-w32 s 5, x-flush s)   ; RRQueryVersion 1.5
+             _ (x-w8 s op, x-w8 s 0, x-w16 s 3, x-w32 s 1, x-w32 s 5, x-flush s)
              hdr (x-reply s)
              (? !(<hdr = 1 && (u32 hdr 8 > 1 || u32 hdr 12 >= 5)) ()
-                (x-w8 s op, x-w8 s 4, x-w16 s 3, x-w32 s root, x-w16 s 71, x-w16 s 0,   ; RRSelectInput: screen|crtc|output|resource
+                (x-w8 s op, x-w8 s 4, x-w16 s 3, x-w32 s root, x-w16 s 71, x-w16 s 0,   ; screen|crtc|output|resource
                  x-flush s, ext)))))
-   (x-monitors s rr root)                                                       ; RRGetMonitors, active only -> ((x y w h)..), primary first
+   (x-monitors s rr root)                                                       ; active only, primary first
     (: _ (x-w8 s <rr, x-w8 s 42, x-w16 s 3, x-w32 s root, x-w8 s 1, x-w8 s 0, x-w16 s 0, x-flush s)
        hdr (x-reply s)
        (? !(<hdr = 1) ()
@@ -245,23 +219,13 @@
                             . go (i + 1) (off + 24 + 4 * u16 b (off + 6))))
              (go 0 0))))
 
-   ; --- keyboard: GetKeyboardMapping -> a keysym->keycode map; GrabKey ---
-   (x-keymap s mink maxk syms)                                                   ; syms = the keysyms we want located
+   ; --- keyboard ---
+   (x-keymap s mink maxk syms)                                                   ; syms: the keysyms to locate
     (: nkc (1 + (maxk - mink))
        _ (x-w8 s 101, x-w8 s 0, x-w16 s 2, x-w8 s mink, x-w8 s nkc, x-w16 s 0, x-flush s)
-       hdr (x-reply s)                                                           ; via the demux -- an event mid-wait must not desync us
-       ; ..and neither must an error. x-reply answers the wait on an error
-       ; packet too (a blocking wait would hang the whole wm), and on one, byte 1
-       ; is the error code -- so reading nkc*kpc keysyms off the stream would eat
-       ; nkc*code words of the next reply and desync the connection for good.
-       ; every other reply reader in this file guards on (<hdr = 1); this was
-       ; the one that did not, and it is the only unguarded one that consumes
-       ; variable-length data off an unvalidated byte. a desync here is silent and
-       ; permanent: the next QueryTree reads as garbage, x-querytree answers the
-       ; empty list, and lux's startup sweep adopts nothing while printing X
-       ; errors whose codes (0, 159) are not even valid -- the tell that the bytes
-       ; are misaligned rather than the server complaining. 0 keysyms degrades to
-       ; "no chords", the inert value this file answers everywhere else. --
+       hdr (x-reply s)
+       ; an error reply must not be read as keysyms: it would desync the connection
+       ; for good. 0 keysyms = "no chords"
        kpc (<hdr = 1 ? (hdr 1) 0)
        km (tablet 8)
        ((: (go i) (i < nkc * kpc ?
@@ -275,24 +239,23 @@
                             (x-w8 s 33, x-w8 s 1, x-w16 s 4, x-w32 s root,
                              x-w16 s lib, x-w8 s kc, x-w8 s 1, x-w8 s 1,
                              x-w8 s 0, x-w8 s 0, x-w8 s 0))
-   (x-ungrabkeys s root) (x-w8 s 34, x-w8 s 0, x-w16 s 3,                        ; UngrabKey AnyKey/AnyModifier: a regrab starts clean
+   (x-ungrabkeys s root) (x-w8 s 34, x-w8 s 0, x-w16 s 3,                        ; a regrab starts clean
                           x-w32 s root, x-w16 s 32768, x-w16 s 0)
 
-   ; --- AllocNamedColor (85): a color NAME -> a pixel (the config's border colors) ---
+   ; --- AllocNamedColor: a color name -> a pixel ---
    (x-color s cmap nm)
     (: n #nm
        _ (x-w8 s 85, x-w8 s 0, x-w16 s (3 + (n + x-pad4 n) / 4),
           x-w32 s cmap, x-w16 s n, x-w16 s 0, x-wpad s nm, x-flush s)
-       hdr (x-reply s) (<hdr = 1 ? (u32 hdr 8) 0))                               ; an error answers the wait: pixel 0, not a garbage id
-   (x-borderpix s win px)                                                        ; ChangeWindowAttributes cwborderPixel
+       hdr (x-reply s) (<hdr = 1 ? (u32 hdr 8) 0))                               ; error: pixel 0
+   (x-borderpix s win px)                                                        ; cwborderPixel
     (x-w8 s 2, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w32 s 8, x-w32 s px)
-   (x-bgpix s win px)                                                            ; ChangeWindowAttributes cwbackPixel
+   (x-bgpix s win px)                                                            ; cwbackPixel
     (x-w8 s 2, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w32 s 2, x-w32 s px)
-   (x-clear s win)                                                               ; ClearArea, the whole window, no exposures:
-    (x-w8 s 61, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w32 s 0, x-w32 s 0)          ; repaints its background around mapped children
+   (x-clear s win)                                                               ; ClearArea, no exposures: repaints the
+    (x-w8 s 61, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w32 s 0, x-w32 s 0)          ; background around mapped children
 
-   ; --- the root cursor (setDefaultCursor xC_left_ptr): OpenFont "cursor" (45),
-   ;     CreateGlyphCursor (94, glyph 68/69, black on white), cwa cwcursor ---
+   ; --- root cursor xC_left_ptr: OpenFont "cursor", CreateGlyphCursor, cwcursor ---
    (x-cursor s root fid cid)
     (x-w8 s 45, x-w8 s 0, x-w16 s 5, x-w32 s fid,
      x-w16 s 6, x-w16 s 0, x-wpad s "cursor",
@@ -300,16 +263,15 @@
      x-w16 s 68, x-w16 s 69,
      x-w16 s 0, x-w16 s 0, x-w16 s 0,
      x-w16 s 65535, x-w16 s 65535, x-w16 s 65535,
-     x-w8 s 46, x-w8 s 0, x-w16 s 2, x-w32 s fid,                                ; CloseFont: the cursor keeps its glyphs
+     x-w8 s 46, x-w8 s 0, x-w16 s 2, x-w32 s fid,                                ; the cursor keeps its glyphs
      x-w8 s 2, x-w8 s 0, x-w16 s 4, x-w32 s root, x-w32 s 16384, x-w32 s cid)
 
-   ; --- ~/.Xauthority: big-endian length-prefixed records; find the display's
-   ;     mit-magic-cookie-1 -> (name data), or (). The parser is pure (bytes in
-   ;     a string); xauth-cookie is the host loader over open/slurp. ---
+   ; --- ~/.Xauthority: big-endian length-prefixed records -> the display's
+   ;     mit-magic-cookie-1 (name data) | () ---
    (xauth-parse b disp)
     (: n #b
        (fld i) (: ln (b i << 8 | b (i + 1)) e (i + 2 + ln) [(snip b (i + 2) e) e])
-       (go i) (n - i < 10 ? ()                                                   ; too short for another record
+       (go i) (n - i < 10 ? ()
                  (: ad (fld (i + 2)) nu (fld <>ad) nm (fld <>nu) da (fld <>nm)
                     (<nu = disp && <nm = "MIT-MAGIC-COOKIE-1" ? [<nm <da]
                      (go <>da))))
@@ -318,8 +280,7 @@
     (open path "r" @ p
        (hot? p ? (slurp p @ b (close p, xauth-parse b disp))))
 
-   ; --- a client of our own: DISPLAY -> the unix socket and the screen, the cookie off
-   ;     XAUTHORITY or ~/.Xauthority. [s sc], or a nom: 'no-display, 'refused ---
+   ; --- a client of our own: [s sc], or 'no-display | 'refused ---
    (x-dispnum d) (#d < 2 ? "0"
                     (: b (snip d 1 #d)
                        (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))
@@ -332,8 +293,7 @@
           (x-setup s (xauth-cookie (x-authfile 0) dn) @ sc
              (two? sc ? [s sc] (close s, 'refused)))))
 
-   ; --- a window of ours: CreateWindow at the parent's depth and visual, a black back
-   ;     pixel and the events in mask; a GC; a title; the delete protocol ---
+   ; --- a window of ours: black back pixel, the events in mask ---
    (x-window s win parent w h mask)
     (x-w8 s 1, x-w8 s 0, x-w16 s 10, x-w32 s win, x-w32 s parent,
      x-w16 s 0, x-w16 s 0, x-w16 s w, x-w16 s h, x-w16 s 0, x-w16 s 1, x-w32 s 0,
@@ -343,16 +303,13 @@
     (#t @ n
        (x-w8 s 18, x-w8 s 0, x-w16 s (6 + (n + x-pad4 n) // 4), x-w32 s win,
         x-w32 s 39, x-w32 s 31, x-w8 s 8, x-w8 s 0, x-w16 s 0, x-w32 s n, x-wpad s t))
-   (x-protocols s win)                                                           ; WM_PROTOCOLS = [WM_DELETE_WINDOW]; answers the atom
+   (x-protocols s win)                                                           ; answers the delete atom
     (: pr (x-intern s "WM_PROTOCOLS") dl (x-intern s "WM_DELETE_WINDOW")
        ((x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s win, x-w32 s pr, x-w32 s 4,
          x-w8 s 32, x-w8 s 0, x-w16 s 0, x-w32 s 1, x-w32 s dl),
         dl))
-   ; a held key, by default, is a release and a press every 40 ms after the server's delay,
-   ; which reads as the key going up. XKB's detectable autorepeat turns a held key into
-   ; presses only: QueryExtension for the opcode, XkbUseExtension, then PerClientFlags
-   ; (UseCoreKbd, change and value both the DetectableAutoRepeat bit). a server without
-   ; XKB answers no opcode, and the keys stay as they were
+   ; XKB detectable autorepeat: a held key repeats presses only, no fake releases.
+   ; a server without XKB keeps its default
    (x-autorepeat s)
     (: n #"XKEYBOARD"
        _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) // 4), x-w16 s n, x-w16 s 0, x-wpad s "XKEYBOARD", x-flush s)
@@ -364,9 +321,8 @@
            x-w8 s op, x-w8 s 21, x-w16 s 7, x-w16 s 256, x-w16 s 0, x-w32 s 1, x-w32 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s,
            x-reply s,
            1)))
-   ; PutImage of pixel rows y..y+n of fb, w pixels wide at 32 bpp. a request's length is 16
-   ; bits of words, so a band holds at most 262112 bytes whatever the width: a wide window
-   ; makes fat rows, and one request past the limit reads as opcodes to the server
+   ; PutImage rows y..y+n at 32 bpp. a request length is 16 bits of words, so a
+   ; band is at most 262112 bytes whatever the width
    (x-putrows s win gc depth fb w y n)
     (: rb (w * 4)
        band (262112 // rb @ v (v < 1 ? 1 (min 64 v)))
@@ -392,46 +348,40 @@
                      go (k + 1)))
                  km)
        (go 0))
-   ; a KeyPress's keysym: shift (or caps lock, on a letter) takes the second column; 0 for none
+   ; a KeyPress's keysym: shift (or caps lock on a letter) takes column 2; 0 for none
    (x-sym km kc st)
     (peep km kc () @ p
        (? !(two? p) 0
           (: lower <p upper <>p
              letter (97 <= lower <= 122)
              (st & 1 != 0 || letter && st & 2 != 0 ? (0 < upper ? upper lower) lower))))
-   ; a keysym as the text it types: latin-1 and unicode keysyms as utf-8, "" for the rest
-   ; and for any key under ctrl or alt
+   ; keysym -> utf-8 text; "" for the rest and under ctrl or alt
    (x-text sym st)
     (? (st & 12 != 0) ""
        (32 <= sym <= 126) (string sym)
        (160 <= sym <= 255) (utf8 sym)
        (16777216 <= sym <= 17891327) (utf8 (sym - 16777216))
        "")
-   ; a keycode -> the key's place as a PS/2 set-1 code, the one inle's tap answers. less 8
-   ; it is linux's code, which is set 1's own up to the keypad and F11 F12; the extended
-   ; keys wear 0xe0 folded onto 0x100. () for a key set 1 has no code for
+   ; keycode -> PS/2 set-1 code (inle's tap). less 8 it is linux's code, set 1's own
+   ; below the keypad; extended keys are 0xe0 folded onto 0x100. () for none
    x-set1-ext {96 284 97 285 98 309 99 311 100 312 102 327 103 328 104 329 105 331 106 333
                107 335 108 336 109 337 110 338 111 339 125 347 126 348 127 349}
    (x-set1 kc) (kc - 8 @ e (? (0 < e < 84 || 86 <= e <= 88) e (peep x-set1-ext e ())))
 
-   ; --- the event decoder: one 32-byte event -> (code detail window state) | ()
-   ;     code 0 = X error (window is garbage). window at byte 8, state at byte 28,
-   ;     detail (keycode) at byte 1 -- enough for every event the wm handles. ---
-   (x-decode pkt) [(127 & <pkt) (pkt 1) (u32 pkt 8) (u16 pkt 28) pkt]         ; code, detail(keycode), window@8, state@28, + the raw bytes
-   (x-next s)                                                                    ; a stashed event first, else the socket
+   ; --- the event decoder: code 0 = X error (window is garbage) ---
+   (x-decode pkt) [(127 & <pkt) (pkt 1) (u32 pkt 8) (u16 pkt 28) pkt]
+   (x-next s)                                                                    ; a stashed event first
     (evq 0 @ q
        (two? q ? (pin evq 0 >q, x-decode <q)
         (see s @ b0
            (b0 = -1 ? ()
             ((b0 . x-rbytes s 31) @ pkt
-               (b0 = 1 ? (x-skip s (4 * u32 pkt 4), x-next s)                    ; an orphaned reply (its wait ended on an error): drain + skip
+               (b0 = 1 ? (x-skip s (4 * u32 pkt 4), x-next s)                    ; an orphaned reply: skip
                 (x-decode pkt)))))))
    (ev-code e) <e  (ev-detail e) <>e  (ev-window e) (e 2)  (ev-state e) (e 3)
    (ev-raw e) (e 4)
-   ; --- a window's events, as every backend answers them: [down key] [up key] [text s]
-   ;     [press b x y] [release b x y] [move x y] [size w h] [close]. a key is its set-1
-   ;     code; a KeyPress is a down and the text it types. km is x-keysyms', dl the
-   ;     WM_DELETE_WINDOW atom. an X event -> a list of them, () for one that says none ---
+   ; --- a window's events: [down key] [up key] [text s] [press b x y] [release b x y]
+   ;     [move x y] [size w h] [close]; a key is its set-1 code ---
    (x-events e km dl)
     (: c (ev-code e) kc (ev-detail e) st (ev-state e) raw (ev-raw e)
        (? (c = 2 || c = 3)
@@ -441,5 +391,5 @@
           (c = 6) [['move (i16 raw 24) (i16 raw 26)]]
           (c = 22) [['size (u16 raw 20) (u16 raw 22)]]
           (c = 17 || (c = 33 && u32 raw 12 = dl)) [['close]]
-          ())))                                                        ; the 32 raw bytes (ConfigureRequest reads its geometry here)
+          ())))
 ) ; module xwire

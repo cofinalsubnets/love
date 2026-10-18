@@ -20,16 +20,8 @@
 ;   -w secs   give up a connect, or quit when neither way moves, after secs; not the accept
 ;   -z        connect to each port, lo-hi a range, and close at once; 0 when any took
 ;
-; secs are udur's: 3, 1.5, 2m. either way a bidirectional pump, stdin -> socket and
-; socket -> stdout, two tasks each parked in a port read on its own fd; the scheduler
-; polls the fds, so no select loop. run it straight -- prel is already in the egg, so
-; no `-l src/love/boot/prel.l`:
-;   out/love src/apps/nc.l host port
-; or as kore's `nc` applet (src/apps/kore/kore.l).
-
-; one define: the body-less top-level `:` leaks nc-main and nothing else; the seat at the
-; bottom fires it only when this file was invoked, so a multi-call cat stays quiet.
-; dns splices for nc's own compile and leaves the session's book alone.
+; secs are udur's: 3, 1.5, 2m. a bidirectional pump: two tasks each parked in a port
+; read on its own fd, so no select loop. also kore's `nc` applet.
 (module (nc nc-main)
 (borrow 'dns)
 
@@ -55,7 +47,7 @@
     offs {}   ; each direction's offset, for -o
     (note m) (t 118 ? (say err (m + "\n"), flush err) 0)
 
-    ; -o: s as traditional netcat's hex lines -- dir (> or <), the offset, 16 bytes, their text
+    ; -o: traditional netcat's hex lines -- dir (> or <), offset, 16 bytes, their text
     (dump dir s) (!dumpf ? 0 (peep offs dir 0 @ o (pin offs dir (o + #s), dline dir s o 0)))
     (dline dir s o k)
      (#s <= k ? (flush dumpf)
@@ -72,8 +64,7 @@
     ; s out through f: whole, or with -i a line at a time, i ms apart
     (paced f s) (i < 0 ? (f s) (map (l \ (f l, pin seen 0 (clock 0), rest i)) (pieces s)))
 
-    ; src to dst a chunk at a time until src's eof: see refills and parks, chug takes
-    ; the rest of what is read. the flush keeps stdout prompt and is a no-op on a socket
+    ; src to dst a chunk at a time until eof; the flush keeps stdout prompt
     (pump src dst dir) (see src @ c
                           (c = -1 ? 0
                              (: b (dir = 62 ? (crlf (unsee src c, chug src)) (unsee src c, chug src))
@@ -85,13 +76,11 @@
     ; with -w: answer once neither way has moved for w ms
     (idle _) (clock (seen 0) @ gap (w <= gap ? 0 (rest (w - gap), idle 0)))
 
-    ; wait out the inbound pump: to the peer's eof, or with -q at most q ms, when a
-    ; watchdog task freezes it
+    ; wait out the inbound pump: to the peer's eof, or with -q at most q ms
     (linger d) (q < 0 ? (catch d) (twirl (_ \ (rest q, freeze d)) () @ g (catch d, freeze g)))
 
-    ; a conversation: stdin outward in `up`, inward to stdout in `down`. all of stdin goes
-    ; before teardown; then the peer must end it, or -q runs out. with -w, `dog` ends both
-    ; when idle
+    ; a conversation: all of stdin goes before teardown; then the peer ends it, or -q
+    ; runs out. with -w, `dog` ends both when idle
     (converse upf downf s) (: _ (pin seen 0 (clock 0))
                               down (twirl downf 0)
                               up (twirl upf 0)
@@ -121,8 +110,8 @@
                        (ddown p to)))
     (dtalk p to) (converse (_ \ t 100 ? 0 (dup p to)) (_ \ ddown p to) p)
 
-    ; server: listen on la, named name, accept a client and talk; with -k the next, until
-    ; killed. a unix peer has no address to say, so its path stands in
+    ; server: accept a client and talk; with -k the next, until killed. a unix peer
+    ; has no address, so its path stands in
     (serve la name)
      (: l (listen la)
         (go _) (accept l @ c
@@ -162,8 +151,8 @@
            (n = 0 && pv) (srv (sv ? (quad sv)) (portof pv))
            (die usage)))
 
-    ; one connect to the address ca, given up after w ms with -w: the port, or the
-    ; refusal's nom. a frozen catch answers 0, so the answer rides wrapped
+    ; one connect, given up after w ms with -w: the port, or the refusal's nom. a
+    ; frozen catch answers 0, so the answer rides wrapped
     (conn ca) (w < 0 ? (connect ca)
                  (: r (twirl (_ \ [1 (connect ca)]) ())
                         d (twirl (_ \ (rest w, freeze r)) ())
@@ -212,9 +201,8 @@
        (#ops = 2) (t 117 ? (uclient <ops (portof <>ops)) (client <ops (portof <>ops)))
        (die usage))))
 
-; the seat: fire nc-main iff this file sits in the program seat of the real command line --
-; the positional program or a `-l` preload -- with the args after it. `cmdline` is the
-; full C argv, so both load orders read the same; kore's dispatcher calls nc-main itself.
+; fire nc-main only when this file is the program of the real command line (positional
+; or `-l`); kore's dispatcher calls nc-main itself.
 (: s (cite 'verbs 'fire ["nc" "nc.l"])
    (two? s ? (nc-main >s)))
 ) ; module nc

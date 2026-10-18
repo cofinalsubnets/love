@@ -1,6 +1,5 @@
 ; test/host/grass.l -- grass simulator 1988, headless: clock and sky, water, the dance, the words,
-; the week's end, the song, the frame.
-; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/grass.l | out/love
+; the week's end, the song, the frame. a crew module, not in the corpus
 
 (borrow 'grass)
 (borrow 'score)   ; the tune's reader, for the song laws

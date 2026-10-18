@@ -1,5 +1,5 @@
-; test/host/mitty.l -- mitty over real ptys: pty -> parser -> grid, replies home, panes, stages,
-; faces, the bar, the saver, the server. interactive berthing stays a live probe.
+; test/host/mitty.l -- mitty over real ptys: pty -> parser -> grid, replies home, panes,
+; stages, faces, the bar, the saver, the server. interactive berthing stays a live probe.
 ; not in the corpus: the screen nifs are not in love0. run: cat test/00-init.l test/host/00-host.l test/host/mitty.l | out/love
 
 (borrow "src/apps/mitty/mooring.l")
@@ -37,7 +37,7 @@
   waitfor <md,
   close >md))
 
-; a dsr answer rides home to the child in order; it says the bytes back through cat -v.
+; a dsr answer rides home to the child in order, said back through cat -v.
 ; raw -echo: a cooked slave holds input until a newline, and echoes it onto the grid
 (: md (tether ["sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 | cat -v"])
  s (h-mkscr 5 20)
@@ -68,8 +68,8 @@
        (has? outb "\xc3\xa9z"),
   close >md))
 
-; many panes on one wharf: mitty's entry needs a tty and blocks, so these drive its pieces
-; directly, minus the terminal. a pane is (box master pid)
+; many panes on one wharf: mitty's entry needs a tty and blocks, so these drive its
+; pieces directly. a pane is (box master pid)
 (: (mkhb r c argv)
     (: p0 (hopen argv r c)
        panes {}
@@ -95,7 +95,7 @@
  _ (waitfor (hpid (hpane hb 1)))
  _ (close (hmas (hpane hb 1)))
 
- ; a split re-opens both screens: 21 columns are 10 + bar + 10, each pty told
+ ; a split re-opens both screens: 21 columns are 10 + bar + 10
  hb2 (mkhb 10 21 ["sh" "-c" "sleep 30"])
  _ (hsplit hb2 'beside)
  ; both pids, before hshut drops the panes that hold them
@@ -115,7 +115,7 @@
  (test (has? f2 "\e[1;1H")
        (has? f2 "\e[1;11H")
        (has? f2 limn-down)
-       ; not row 1: the cursor lands at 1;12 even if the pane painter ignored pane 2
+       ; not row 1: the cursor lands at 1;12 even if the painter ignored pane 2
        (has? f2 "\e[2;12H")                ; pane 2's second row, one past the bar
        (has? f2 "\e[10;12H")
        (has? f2 "\e[10;1H"),            ; pane 1's last row, at the wharf's edge
@@ -141,8 +141,8 @@
   waitfor p1, waitfor p2,                 ; reap, or they outlive the file
   map (t \ (landed? t ? (catch t) (freeze t))) (hb2 'jobs)))
 
-; a stage of this process berths like a child: a key is a step and a repaint, a split
-; re-shows it, the tick door paints on a yes, its last step shuts the pane
+; a stage berths like a child: a key is a step and a repaint, a split re-shows it, the
+; tick door paints on a yes, its last step shuts the pane
 (: (scrof hb id) (peep (hbox (hpane hb id)) () 0)
    keys {} ticks {}
    sg (mitty-stage (w \ h \ ("\e[H\e[2J" + show w + "x" + show h + " k" + show (peep keys () 0) + " t" + show (peep ticks () 0)))
@@ -252,8 +252,8 @@
   (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md)),
   close m))
 
-; C-a v typed over a real pty: the prefix lives in the key pump. a fresh pty reports 0x0,
-; so mitty falls back to 24x80: 39 + bar + 40
+; C-a v over a real pty: the prefix lives in the key pump. a fresh pty reports 0x0, so
+; mitty falls back to 24x80: 39 + bar + 40
 (: md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
              "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"sleep 5\"]))"])
  _ (test (two? md))
@@ -267,8 +267,8 @@
   (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md)),
   close m))
 
-; the outer terminal: shift+PgUp brings back scrolled TOPMARK; the child's mouse and paste
-; wishes pass out, a click and paste pass in. the script rides BK, past three quotings
+; the outer terminal: shift+PgUp brings back scrolled TOPMARK; the child's mouse and
+; paste wishes pass out, a click and paste pass in. the script rides BK, past three quotings
 (: _ (setenv "BK" ("printf 'TOPMARK" + cats (map (_ \ "\\n") (jot 30)) + "'; stty raw -echo; "
                  + "printf '\\033[?1000h\\033[?1006h\\033[?2004h'; r=$(dd bs=1 count=33 2>/dev/null); "
                  + "printf '%s' \"$r\" | cat -v; sleep 1"))
@@ -312,7 +312,7 @@
   (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md)),
   close m))
 
-; and as sixels to a terminal whose DA says 4: laid once, not again when the child writes elsewhere
+; and as sixels where DA says 4: laid once, not again when the child writes elsewhere
 (: (count h n i k) (i + #n < #h + 1 ? (count h n (i + 1) (n = snip h i (i + #n) ? (k + 1) k)) k)
  _ (setenv "BS" "sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 1; printf '\\033[5;1Hzz'; sleep 1")
  md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"

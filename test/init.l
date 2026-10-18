@@ -1,13 +1,13 @@
 ; --- the init nifs, host only: spawn/wait, and glean, which is waitpid(-1, WNOHANG):
 ; (pid . status) reaped, () none pending, 'echild no children left ---
 (hosted ? (do
-  (: (glean-until n)                                   ; glean, paced, to a (pid . status) pair (or steps out)
+  (: (glean-until n)                                   ; glean, paced, to a (pid . status) pair
        (glean 0 @ ev (? (two? ev) ev (n < 1) () (rest 2, glean-until (n - 1))))
      _ (test
          ; spawn is non-blocking: a real live pid, the child runs on
          (spawn ["sleep" "5"] @ p
           (charm? p && 0 < p
-              ; a child alive, none exited -> glean is the real () (not charm 0), nil?-true
+              ; a child alive, none exited -> glean is the real (), not charm 0
            && glean 0 = () && !(glean 0) && !(charm? (glean 0))
               ; kill it, then glean the zombie -> (pid . 128+sig)
            && (: _ (still p 9) r (glean-until 200)
@@ -18,34 +18,33 @@
          (0 = wait (spawn ["true"]))
          (3 = wait (spawn ["sh" "-c" "exit 3"]))
          ; the () answers are the zero point, not charm 0
-         !(close -1)                                         ; closing nothing still answers ok
-         ((getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY") = ())             ; getenv absent -> the real ()
+         !(close -1)
+         ((getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY") = ())
          !(charm? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY"))))
 
 
   ; --- the fs nifs: stat readdir unlink lseek ---
   (: d ("out/.fs-nif-probe." + show (getpid 0)) f (d + "/x")   ; per process: shards run at once
-     _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
-     _ (unlink f)                                     ; a clean slate, tolerated if absent
-     ; write 5 bytes through the port lane, then measure with stat
+     _ (mkdir d 493)
+     _ (unlink f)
+     ; write 5 bytes through the port lane, then stat
      _ (open f "w" @ p (say p "hello", flush p, close p))
      st (stat f)
      (test
       ; stat: (size mtime mode) -- 5 bytes, an mtime on the (clock t) ms scale, a file mode
       (two? st) (5 = <st)
-      (1600000000000 < <>st)         ; ms, not seconds (a 2020s stamp)
+      (1600000000000 < <>st)         ; ms, not seconds
       (32768 = 61440 & <>>st)        ; s_ifmt bits say regular file
       ; a directory wears the dir bits; a missing path is its nom
       (16384 = 61440 & <>>(stat d))
       ((stat (f + "-absent")) = 'enoent) !(charm? (stat (f + "-absent")))
-      ; readdir: our one entry, as a string; a missing dir is its nom
       (readdir d @ l (two? l && "x" = <l && atom? >l))
       ((readdir (d + "-absent")) = 'enoent)
       ; lseek rides the raw openfd lane: end is the size, set returns the offset
       (openfd f 0 @ fd
        (5 = lseek fd 0 2 && 1 = lseek fd 1 0 && 3 = lseek fd 2 1
         && !(close fd)))
-      ('ebadf = (lseek -1 0 0))                     ; a bad fd is its nom
+      ('ebadf = (lseek -1 0 0))
       ; an unknown whence is 'einval and moves nothing
       (openfd f 0 @ fd
        (2 = lseek fd 2 0 && 'einval = lseek fd 0 7 && 'einval = lseek fd 0 -3
@@ -59,7 +58,7 @@
       ; close of a stranger, or a second close, is 'ebadf
       (: fd (openfd f 0) a (close fd) b (close fd) (!a && 'ebadf = b))
       ('ebadf = (close 4096))
-      ; unlink: () ok, then the file really is gone, and a re-unlink says so
+      ; unlink: () ok, then gone, and a re-unlink says so
       !(unlink f)
       ((stat f) = 'enoent) ((readdir d) = ())
       ('enoent = (unlink f))

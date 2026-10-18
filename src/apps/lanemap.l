@@ -12,10 +12,9 @@
 ;                   (love bee --lanes-map)
 ;   (lanes-covers mk) test/test.mk's text -> lane -> the lanes it runs: its prerequisites and the
 ;                   targets of its recipe's $(MAKE) lines, read as written
-;   (lanes-plan paths baked covers)  the lanes a change owes, in the order to run them:
-;                   [[lane heavy? cost why] ..]. light before heavy, cheap first, a lane another
-;                   owed lane runs dropped, test always and test_slow last. why is the paths that
-;                   owed it
+;   (lanes-plan paths baked covers)  the lanes a change owes, in run order: [[lane heavy? cost
+;                   why] ..]. light before heavy, cheap first, a lane another runs dropped, test
+;                   always and test_slow last. why is the paths that owed it
 ;   (lanes-lines plan)  the plan as `lane light|heavy cost why` lines (love bee --lanes)
 ;
 ; a glob's `*` crosses `/`; "baked" is the crew roster ($(ho)/.dist.list), not a glob. every

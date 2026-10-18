@@ -1,4 +1,4 @@
-; --- limn, the cell painter: a grid of cells in, escapes out; 0-based in, 1-based on the wire ---
+; --- limn, the cell painter: a grid of cells in, escapes out; 0-based in, 1-based on the wire
 (borrow "src/apps/mitty/limn.l")
 
 ; sub? searches from i, at? is the exact-position twin
@@ -10,7 +10,7 @@
    (paint s r c row0 col0)                     ; limn one whole grid into a jug
     (jug 0 @ j (limn-rows j s r c row0 col0 0 -1 0, slurp j))
 
-; --- the address: 0-based in, 1-based out, row then col ---
+; --- the address: row then col
    _ (test
       ("\e[1;1H" = limn-go 0 0)
       ("\e[3;12H" = limn-go 2 11)
@@ -23,12 +23,12 @@
       (2 = #(limn-glyph 233))                        ; é
       (3 = #(limn-glyph 9474))                       ; │ the box glyph
       (4 = #(limn-glyph 128512))                     ; past the bmp: the cell holds it whole
-      (limn-down = limn-glyph 9474)                  ; the two spellings of one line
+      (limn-down = limn-glyph 9474)
       (limn-across = utf8 9472)
-      (limn-glyph 201 = limn-glyph 201))              ; cached, and equal to itself
+      (limn-glyph 201 = limn-glyph 201))              ; cached
 
 ; --- the pen: a face byte and two colour words; one sgr per change, from zero.
-;     a colour's top byte is its kind: 0 default, 1 index, 2 rgb ---
+; a colour's top byte is its kind: 0 default, 1 index, 2 rgb
    _ (: (idx v) ((1 << 24) | v) (rgb v) ((2 << 24) | v)
         _ (test
            ("\e[0;39;49m" = limn-sgr (limn-pen 0 0 0))
@@ -82,8 +82,8 @@
         _ (test
            (sub? f "\e[6;10H" 0)                      ; row 0 of the grid at (5,9)
            (sub? f "\e[7;10H" 0)                      ; row 1 at the same column
-           (sub? f "\e[8;10H" 0)                      ; row 2
-           (sub? f "ab" 0)                            ; and the glyphs came through
+           (sub? f "\e[8;10H" 0)
+           (sub? f "ab" 0)
            !(sub? f "\e[1;1H" 0)))                    ; never the home cell
 
 ; --- a blank cell is a space, so no stale glyph survives under a pane ---
@@ -102,7 +102,7 @@
                           (at? t sb i) (cnt t sb (i + 1) (n + 1))
                           (cnt t sb (i + 1) n))
         _ (test
-           (0 <= p)                                   ; a pen came back out
+           (0 <= p)
            (1 = cnt f "\e[0;" 0 0)))                  ; and exactly one SGR was said
 
 ; --- the bars, straight off wharf-bars' list: (dir row col len) ---
@@ -110,7 +110,7 @@
         _ (limn-bars j '((across 4 0 3) (down 0 7 2)))
         f (slurp j)
         _ (test
-           (sub? f "\e[5;1H" 0)                       ; the across bar's origin
+           (sub? f "\e[5;1H" 0)
            (sub? f (limn-across + limn-across + limn-across) 0)
            (sub? f "\e[1;8H" 0)                       ; the down bar, row by row
            (sub? f "\e[2;8H" 0)))
@@ -124,8 +124,8 @@
         _ (test (sub? home "cd" 0) (sub? home "ef" 0) !(sub? home "ab" 0)
                 (sub? back "ab" 0) (sub? back "cd" 0) !(sub? back "ef" 0)))
 
-; --- a picture: ▀ blocks to a plain terminal, kitty's own picture to one that takes them,
-;     sent once and placed each time ---
+; --- a picture: ▀ blocks to a plain terminal, kitty's picture to one that takes them,
+; sent once and placed each time
    _ (: s (mkscr 2 6)
         _ (scribe s ("\e_Ga=T,f=24,s=10,v=12,q=2;" + cats (map (_ \ "/wAA") (jot 120)) + "\e\\"))
         blocks (paint s 2 6 0 0)
@@ -172,7 +172,7 @@
         _ (scribe s ("\e[?2027h\u{2764}\u{fe0f}x\u{4e16}" + fam + "y"))
         f (paint s 1 10 0 0)
         _ (test (sub? f "\e[2X\e7\u{2764}\u{fe0f}\e8\e[2Cx" 0)
-                (sub? f "x\u{4e16}" 0)                    ; a plain wide char
+                (sub? f "x\u{4e16}" 0)
                 (sub? f ("\e[2X\e7" + fam + "\e8\e[2Cy") 0)))
 
 ; --- a selected cell wears the reverse face ---

@@ -1,23 +1,11 @@
 ; src/tools/hue2vim.l -- write the vim syntax for .l out of src/apps/vi/hue.l's class table
-; and the vocabulary the running binary answers to. `make syntax` runs it, into
-; out/syntax.vim (the Makefile), and the Makefile installs that:
+; and the vocabulary the running binary answers to; `make syntax` runs it:
 ;
 ;   cat src/apps/vi/config.l src/apps/vi/hue.l src/tools/hue2vim.l | out/love
 ;
-; the file is built and never checked in, which is the point of the whole tool:
-; the syntax used to carry a hand-curated copy of the vocabulary, with a comment
-; asking a human to re-probe it on every rename. a promise only prose keeps is
-; a promise already breaking -- and so is one that needs a human to re-run a
-; command. `make -C u test_hue` asks the one thing a build cannot: whether
-; this ran to the end and meant it.
-;
-; the one place the two interpreters differ. hue-lex takes the first row that
-; claims a token, so the table reads top-down. vim takes the last match that
-; claims a character (its keywords beat all of it either way). so the syn lines
-; go out in reverse table order and vim reproduces the table's own priority --
-; sigils before numbers before atoms before strings before comments, exactly as
-; the hand-written file used to arrange by hand and explain in a paragraph.
-(borrow 'vi) ; hue's table rides module 'vi -- the cat registered it just above
+; hue-lex takes the first row that claims a token, vim the last match, so the syn lines go
+; out in reverse table order.
+(borrow 'vi) ; hue's table rides module 'vi
 
 (borrow 'posix)
 (: (line s) (say out s, put out 10)
@@ -44,20 +32,10 @@
    (grp r) ("Love" + (cap1 (string (hue-cls r))))
 
    ; --- the vocabulary ---------------------------------------------------------
-   ; every word lane asks src/apps/vi/hue.l's probes -- there is no list here either.
-   ; a lane claims its words and no later lane re-declares them: vim would accept
-   ; the duplicate, but the file would be lying about which lane owns the name,
-   ; and the painter (one tablet, earlier row wins) does not lie about it.
-   ;
-   ; the hue-* bindings are dropped: they are in the book only because this
-   ; generator loads hue.l to read its table. they are the tool, not the language.
-   ; the book is only the language once it has been sealed, and `book` is the
-   ; tell: src/love/main.c pulls it -- with nif/nifx -- at the end of every boot, so a
-   ; run that can still see it is one where the seal did not happen. writing the
-   ; compiler's own internals into the syntax file would be freezing build state
-   ; and calling it the language, so this dies loudly rather than emit a file that
-   ; looks fine and is wrong. unreachable while the seal holds, which is the point:
-   ; it is what notices if the seal ever goes lane-dependent again.
+   ; every word lane asks hue.l's probes. a lane claims its words and no later lane
+   ; re-declares them, as the painter (earlier row wins) reads it. hue-* are the tool,
+   ; not the language. `book` still bound means the seal did not run: die rather than
+   ; write build state into the syntax.
    _ (elem 'book (names ())
       ? (say err "hue2vim: `book` is still on the book -- the seal did not run, and that is build state, not the language",
          put err 10, quit 1))
@@ -75,9 +53,7 @@
                     kwlines g (drop 8 ws)))
 
    ; --- one tag, one vim rendering ---------------------------------------------
-   ; the tag set is closed at eight, so this dispatch is the whole other half of
-   ; src/apps/vi/hue.l's lexer. a class wanting a shape neither can say means a new
-   ; tag, in both -- never a hand-patch here.
+   ; the tag set is closed, the twin of hue.l's lexer: a new shape is a new tag in both
    stop (" \\t\\n" + (clesc hue-stop))         ; what ends a token, as a collection
    sig  (clesc hue-sigils)
    (vim r)
@@ -95,14 +71,12 @@
                line ("syn region " + g + " start='\\z(" + q + "\\{3,}\\)' end='\\z1'")))
           'mark
            (line ("syn match " + g + " \"" + string a + "[^" + stop + "]*\""))
-          ; sep: one byte standing alone, and a tag of its own because both
-          ; readings reach a tag through its first row, so a second row under
-          ; one tag would be read by neither
+          ; sep: one byte standing alone; a tag of its own since both readings reach a tag
+          ; through its first row only
           'sep
            (line ("syn match " + g + " \"" + string a + "\""))
           'num
-           ; hex first: `0x1f` would otherwise take the plain-integer match on its
-           ; leading 0 and leave the rest bare, which is a worse lie than no colour
+           ; hex first, or `0x1f` takes the plain-integer match on its 0
            (line ("syn match " + g + " \"\\<-\\?0[xX]\\x\\+\\>\""),
             line ("syn match " + g + " \"\\<-\\?\\d\\+\\>\""),
             line ("syn match " + g + " \"\\<-\\?\\d\\+\\.\\d*\\([eE][-+]\\?\\d\\+\\)\\?\\>\""),
@@ -110,16 +84,13 @@
             line ("syn match " + g + " \"\\<-\\?\\d\\+[eE][-+]\\?\\d\\+\\>\""))
           'word (kwlines g (wtab (hue-cls r)))
           'punct
-           ; the valence law as vim reads it: a punct run leads a token (the
-           ; lookbehind), and it is monadic when the full run touches a datum
-           ; start. the excluded set carries the sigil chars themselves so a
-           ; greedy run cannot backtrack and split itself.
+           ; the valence law: a punct run leads a token (the lookbehind), monadic when the
+           ; whole run touches a datum. the excluded set holds the sigils so it cannot backtrack
            (a = 'glued ?
                (line ("syn match " + g + " \"[A-Za-z0-9_]\\@<![" + sig
                       + "]\\+\\ze[^ \\t),;" + sig + "]\""))
               (line ("syn match " + g + " \"[A-Za-z0-9_]\\@<![" + sig + "]\\+\"")))
-          ; the delimiters ride the list regions at the foot of the file, where
-          ; the rainbow levels need them; nothing to emit here
+          ; the delimiters ride the list regions at the foot
           ()))
 
    ; --- the rainbow levels: vim-only presentation, dark then light -------------
@@ -142,12 +113,8 @@
    pgroup (grp <(hue-tagged 'delim))
    cluster (join ((map grp (filter (r \ hue-tag r != 'delim) hue-classes)) + '("LoveTodo")) ",")
 
-   ; the delim row's bytes read as pairs -- (0,1) then (2,3) then (4,5) -- and one
-   ; region takes them all, so a level is one region however its list is bracketed.
-   ; a region per pair instead would need the rainbow's contains= to name three
-   ; regions a level, and buys only the mis-colouring of `(a]`, which is libra's
-   ; to say and not a highlighter's. `[` is the one byte vim's regex would read
-   ; as a collection; `(`, `{` and `}` are literal under default magic.
+   ; the delim row's bytes read as pairs, all in one region a level, so `(a]` is libra's to
+   ; flag. `[` is the one byte vim's regex reads as a collection
    (vim-brk c) (c @ 91 "\\[" (string c))
    brkpairs
     (: (go j k a) (#hue-brk <= j ? a

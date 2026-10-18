@@ -1,8 +1,7 @@
-; src/apps/qlog.l -- a queue as a signed log (notes/plan/hive-decentral.md, rung 1). each write is
-; an entry: the queue (NAME@BOX, BOX its hub's), its term, seq and prev (the hash of the entry
-; before it), when, by whom and through which tool, the hash of the queue's text after it, the
-; writer's chain and its sig over all of that. a queue's state is the text of the last entry of
-; its longest valid chain; sb keeps the entries as a ledger and the texts as blobs.
+; src/apps/qlog.l -- a queue as a signed log. each write is an entry: the queue (NAME@BOX),
+; its term, seq and prev (the hash of the entry before), when, by whom, through which tool, the
+; hash of the queue's text after it, and the writer's chain and sig over all of that. a queue's
+; state is the text of the last entry of its longest valid chain.
 ;
 ;   (qlog-make q seq prev by call th seal)   an entry's text, signed by seal [key chain]
 ;   (qlog-read s)                            an entry's fields as a tablet | () unless canonical
@@ -14,8 +13,7 @@
 ;   (qlog-trust 0)                           [root revoked]: the lineage this box trusts and the
 ;                                            keys it no longer does, where bee keeps them
 ;
-; term is 0 until terms (rung 3). an entry is laid out one way only, and a text that is not that
-; way is not an entry, so its sig covers exactly what it says.
+; term is 0 for now. an entry is laid out one way only, so its sig covers exactly what it says.
 (module (qlog qlog-make qlog-read qlog-hash qlog-who qlog-step qlog-may? qlog-trust)
 (borrow 'posix)
 (borrow 'bytes)

@@ -1,29 +1,17 @@
-; src/tools/mksrc.l -- lay the source container (src/tools/selfpack.l's) into an ELF object, so
-; the artifact can hand out its own source with nothing on the box.
-;
+; src/tools/mksrc.l -- lay the source container (selfpack.l's) into an ELF object
 ;   love src/tools/mksrc.l src.tree out.o [arch]     arch defaults to x64
-;
-; the object holds two symbols in .rodata and nothing else:
-;
-;   srctree_len   an 8-byte little-endian length, at offset 0 (so it is 8-aligned)
-;   srctree       the container's bytes, right behind it
-;
-; a link that takes no such object names src/love/noblob.c, whose zero length says none
-; is carried.
-; no unconditional (borrow 'holo): it resolves off a nest (~/.love), which a fresh seed tree
-; does not have, so make hands holo in as a cat (-l $(ho)/.mksys-cat.l).
+; .rodata holds srctree_len (8-byte le, offset 0) then srctree, the bytes
+; holo comes in as a cat (-l), not a borrow: a fresh seed tree has no nest
 
 (borrow 'posix)
-(lit? (cite 'holo 'objelf) ? (borrow 'holo) 0)   ; splice the assembler when this love is baked; the guard below says so when not
+(lit? (cite 'holo 'objelf) ? (borrow 'holo) 0)   ; splice the assembler when baked
 
 (: (mksrc-slurp p) (uread p @ [1 s] [1 (s + "")] ())
    (mksrc-die m) (udie 1 ("mksrc: " + m))
 
-   ; a little-endian 8-byte word, the width src/love/src.c reads it at
    (mksrc-le8 v i acc) (i = 8 ? acc (mksrc-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
 
-   ; a cross arch's backend joins at runtime from the tree text (the baked holo carries the
-   ; native one only); an unbaked love has no holo at all, and says so
+   ; a cross backend loads from the tree text; an unbaked love has no holo
    (mksrc-be arch)
     (lit? (cite 'holo 'objelf) ? (mksrc-be2 arch)
        (mksrc-die "no holo aboard -- this love is unbaked (make host bakes it)"))
@@ -37,9 +25,7 @@
     (sound cl @ 'torn (mksrc-die "torn backend text")
                 (a . u) (ev a, mksrc-rdev u))
 
-   ; a wasm object is the gen tuple as text (src/apps/moon/moon.l): the forms in the data slot,
-   ; the two names in the globals slot, and the container behind the text as (blob 0), the
-   ; container moon.l's wasm-tu reads
+   ; a wasm object is the gen tuple as text, the container behind it as (blob 0)
    (mksrc-wasm dst forms s)
     (: q (open dst "w")
        _ (!(hot? q) ? (mksrc-die ("cannot write " + dst)))
@@ -53,15 +39,13 @@
        s <>g
        n #s
        _ (n < 1 ? (mksrc-die (src + " is empty")))
-       ; the container rides as a BLOB -- the string itself, one item carrying every byte
-       ; (holo.l's item-len) -- through lay, the walk and the write, on either lane
+       ; the container rides as one blob item carrying every byte
        forms ['(label srctree_len) ['raw (mksrc-le8 n 0 ())]
               '(label srctree)     ['raw [(arch = 'wasm ? '(blob 0) s)]]]
        (arch = 'wasm ? (mksrc-wasm dst forms s)
         (write-bytes dst (objelf arch () () () '("srctree" "srctree_len") () () () () () forms))))
 
-   ; argv's head is this script's own path. the arch arrives as text and `name` interns it
-   ; to the symbol the backend table is keyed by (a `mint` would be == to nothing)
+   ; `name` interns the arch to the symbol backends is keyed by (a `mint` would match nothing)
    (mksrc-main av)
     (#av @ n
        (2 <= n ? (mksrc (3 <= n ? (name <>>av) 'x64) <av <>av)

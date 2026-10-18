@@ -1,28 +1,20 @@
-; src/apps/vi/vi.l -- the terminal face over src/apps/vi/core.l: read keys off `in`,
-; blit vframe's escapes onto `out`, perform the write requests the ex commands
-; leave on the state. a toolbox-style file (kore is its door: `kore vi FILE`);
-; loads after core.l/re.l/vi core in the kore cat and rides the u-floor (uread,
-; udie) and text.l's lines/unlines.
-;
-; the visit is a mitty where the seat carries one -- each buffer a stage in a
-; pane, split by :sp/:vs or the prefix -- and cli's `stage` otherwise: raw tty, the
-; alternate screen, one key a step through cli's edkey (arrows, alt letters, a bare
-; escape after a beat), and port EOF leaves -- a piped script (the smoke lane) ends
-; with :wq and never dangles.
+; src/apps/vi/vi.l -- the terminal face over core.l: keys off `in`, vframe's escapes onto
+; `out`, and the write requests ex leaves on the state. kore is its door (`kore vi FILE`).
+; a mitty where the seat has one, else cli's stage: raw tty, alternate screen, port EOF
+; leaves, so a piped script ending :wq never dangles
 (module 'vi
 (borrow 'kore) ; the text/u floors
 (borrow 'posix)
 
 (:
-   ; a state for a file, read or new; the pens are the face's to hand over -- they
-   ; want $colorterm and the user's own theme file, and the engine reads neither
+   ; a state for a file, read or new
    (vi-open f)
     (: r (0 < #f ? (uread f))
        st (vnew (two? r ? (lines <>r)) f)
        (0 < #f && atom? r ? (vmsg st (f + ": new file")),
         (vi-theme st ())))
-   ; the pens, and the door :colorscheme rings to swap them: the face reads the env
-   ; and the theme file, the engine neither
+   ; the pens, and the door :colorscheme rings to swap them: the face reads the env and the
+   ; theme file, the engine neither
    (vi-theme st nm)
     (pin st 'pens (hues-wake nm), pin st 'theme (hue-name nm),
      pin st 'retheme (n \ two? (hue-theme-of n) ? (hues-wake n) ()),
@@ -40,10 +32,8 @@
                       (pin s2 'quit (),                   ; a failed wq must not quit
                        vmsg s2 ("cannot write " + nm))))
                 (pin s2 'quit (), vmsg s2 "no file name")))))
-   ; the ex read requests: (name) means put that file in the buffer. a name
-   ; that does not open is not an error -- it is a new file, the same welcome
-   ; the startup above gives one. presence is uread's (1 text) wrapper, not
-   ; the text: an empty file is a real file with nothing in it.
+   ; the ex read requests: (name) put in the buffer; one that does not open is a new file.
+   ; presence is uread's (1 text), so an empty file is a real file
    (doe s2)
     (s2 'doe @ rq
        (atom? rq ? s2
@@ -53,15 +43,14 @@
              (vload s2 (two? r ? (lines <>r)) nm,
               vmsg s2 (two? r ? (nm + ": " + show #(s2 'lines) + " lines")
                           (nm + ": new file"))))))
-   ; the ex split requests: (dir name) means another buffer, on name or fresh, beside
-   ; or under this one. split is the mitty's door, or () on a seat with no mitty
+   ; the ex split requests: (dir name), another buffer beside or under; split is the mitty's
+   ; door, or () with no mitty
    (dos s2 split)
     (s2 'dos @ rq
        (atom? rq ? s2
           (pin s2 'dos (), split ? (split <rq <>rq) (vmsg s2 "no splits on this seat"), s2)))
-   ; the picker requests: (word query) opens seek over the tree under the working directory
-   ; -- :find its files, :grep every line of them -- in the buffer's place on the screen.
-   ; a pick opens the file there, a line's on its row; esc goes back to the buffer
+   ; the picker requests: (word query) opens seek under the cwd -- :find files, :grep lines --
+   ; in the buffer's place; a pick opens the file there, a line on its row; esc goes back
    (dof s2)
     (s2 'dof @ rq
        (atom? rq ? s2
@@ -87,28 +76,23 @@
     (: d (s2 'seek)
        ((cite 'seek 'seek-key) d c,
         d 'over ? (pins s2 'seek () 'lastr (), d 'pick @ it (it ? (vpicked s2 it) 0)) 0))
-   ; the explore requests: (dir) goes to the face's 'explore door (state dir), which lays
-   ; mc beside the buffer; a seat with no such door has no explorer
+   ; the explore requests: (dir) to the face's 'explore door (state dir); none, no explorer
    (dex s2 ex)
     (s2 'dex @ rq
        (atom? rq ? s2
           (pin s2 'dex (), ex ? (ex s2 <rq) (vmsg s2 "no explorer on this seat"), s2)))
-   ; the ex words the engine does not know: (word arg) goes to the face's ex door,
-   ; which answers true when it took it and the complaint stands otherwise
+   ; ex words the engine does not know: (word arg) to the face's ex door, which answers true
+   ; when it took it, else the complaint stands
    (dox s2 ex)
     (s2 'dox @ rq
        (atom? rq ? s2
           (pin s2 'dox (),
            ex ? (s2 'msg @ m (pin s2 'msg "", ex s2 <rq <>rq ? 0 (pin s2 'msg m))) 0,
            s2)))
-   ; the face: cli's triple over a state and a paste, with the doors a host lends it
-   ; -- 'split (dir name), 'ex (state word arg), 'explore (state dir) and 'reg, a box the
-   ; register is kept in between steps so every buffer on a wharf shares one; any may be
-   ; missing. the paste takes a register's value: a put in normal mode, the text typed in
-   ; insert.
-   ; the stage hides the cursor; vi's frame places it, so the frame shows it. vfresh,
-   ; not vframe: a full redraw a keystroke is what the flicker is, and it writes only
-   ; the rows that changed since the last
+   ; the face: cli's triple and a paste over a state, with the doors a host lends it, any
+   ; missing: 'split (dir name), 'ex (state word arg), 'explore (state dir), 'reg a box
+   ; holding the register between steps so every buffer shares one. the paste puts in normal
+   ; mode, types in insert. vfresh, not vframe: it writes only the rows that changed
    (vi-face st doors)
     (: box (doors 'reg)
        (load _) (box ? (pin st 'reg (peep box () (st 'reg))) 0)
@@ -121,21 +105,18 @@
       (_ \ (st 'quit))
       (v \ (? (elem (st 'mode) '(i c s)) (type (text v))
               (pin st 'reg v, vstep st 112, keep ())))])
-   ; a buffer handed over from elsewhere (ex's `vi`), visited full screen on cli's stage:
-   ; its lines, its file, whether it already differs from that file, the line to open on
+   ; a buffer handed over (ex's `vi`), full screen: lines, file, already dirty?, the line to open
    (vi-buffer ls f dirty row)
     (: st (vi-open "")
        _ (vload st ls f)
        _ (pins st 'dirty dirty 'row (0 < row ? (row - 1) 0))
        fc (vi-face st {})
        (stage (fc 0) (fc 1) (fc 2)))
-   ; the visit: on a mitty where the seat has one -- every buffer a stage in a pane
-   ; of its own, :sp and :vs and the prefix's C-a s and C-a v opening another, :q
-   ; shutting the one it is typed in, one register between them -- else cli's stage,
-   ; one buffer full screen
+   ; the visit: on a mitty every buffer a pane (:sp :vs, C-a s, C-a v), one register between
+   ; them; else cli's stage, one buffer full screen
    (vi-main as)
     (: f (two? as ? <as "")
-       ; vi reads no options: a dash word would open a new file named after it
+       ; vi reads no options: a dash word would open a file named after it
        _ (1 < #f && f 0 = 45 ? (udie 2 ("vi: unknown option " + f)))
        st (vi-open f)
        br (cite 'mitty)
@@ -144,7 +125,7 @@
              (stage-of s) (: fc (vi-face s {'split split 'explore explore 'reg (hb 'clip)})
                               sg (br 'mitty-stage (fc 0) (fc 1) (fc 2))
                               (pin sg 'paste (fc 3), sg))
-             ; a buffer's pane, kept on it so a door working on the buffer can show it again
+             ; a buffer's pane, kept on it so a door can show it again
              (berth-of s r c) (br 'hopen-stage (stage-of s) r c @ p (pin s 'vpane p, p))
              (split d nm) (br 'hberth hb d 50 (berth-of (vi-open nm) 1 1))
              ; :ex -- mc in a pane beside, its enter on a file opening that file in s

@@ -1,5 +1,4 @@
-; test/host/court.l -- the courtyard, headless
-; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/court.l | out/love
+; test/host/court.l -- the courtyard, headless. a crew module, not in the corpus
 
 (borrow 'court)
 (borrow 'vec)

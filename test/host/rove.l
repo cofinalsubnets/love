@@ -1,6 +1,6 @@
-; test/host/rove.l -- the rove engine and the tower's climb, headless: delve, fov, the painter,
-; the helm, the words, the floors, the climb end to end. test/host/tty.l plays the tty runner.
-; not in the corpus: it leaks its helpers. run: cat test/00-init.l test/host/rove.l | out/love
+; test/host/rove.l -- the rove engine and the tower's climb, headless; test/host/tty.l
+; plays the tty runner. not in the corpus: it leaks its helpers.
+; run: cat test/00-init.l test/host/rove.l | out/love
 
 (borrow 'rove)
 (borrow 'tower)
@@ -180,8 +180,8 @@
 (: d <(delve 60 20 (wheel 11) (plan 2))
  (test (2 = #(filter (i \ 2 = dat d (i % 60) (i // 60)) ^(60 * 20)))))
 
-; a car hits for ten and honks, puts you aside and keeps its heading; walking into one is the
-; same hurt, and it is never struck
+; a car hits for ten and honks, puts you aside and keeps its heading; walking into one
+; hurts the same, and it is never struck
 (: g (hand-g ())
    c (car-new 2 1 -1 0 196)
    (pin g 'ms [c],
@@ -415,7 +415,7 @@
    (dput d 7 3 1,
     test (all (= 60) on) !(any (= 60) off) ('(1 1) = tap 1 1) (60 = tap 0 0)))
 
-; live cells (water, coals) are found once and repainted alone, each under a cursor move,
+; live cells (water, coals) are found once and repainted alone under a cursor move,
 ; none under a wrapped note or a sign's box
 (: g (hand-g ())
    d (g 'd)
@@ -462,7 +462,7 @@
   crawl-turn g [1 0],
   test (40 = g 'p 'hp)))
 
-; mending 2 a turn against a worst bite of 3, one mob is a nuisance; two kill a climber standing still
+; mending 2 a turn against a bite of 3: one mob is a nuisance, two kill a climber standing still
 (: g (hand-g ())
    _ (pin g 'ms [(mob-new 4 2 1) (mob-new 4 2 2)])
    (go n) (? (g 'over) n (60 < n) n (crawl-turn g 46, go (n + 1)))
@@ -599,8 +599,8 @@
        ('(1 1) = tap (p 'x + 3) (p 'y + 3))
        ('(-1 1) = tap (p 'x - 4) (p 'y + 3))))
 
-; a tap while she speaks is the choice it lands on: on 24 rows her first page's choices
-; are rows 12 to 14. off a choice it shows the page again; a page without choices closes
+; a tap while she speaks is the choice it lands on (rows 12 to 14 on 24 rows); off a
+; choice it shows the page again; a page without choices closes
 (: g (hand-g ())
    _ (pins (g 'd) 'rows 24 'cols 80)
    _ (talk g 'start)
@@ -613,8 +613,8 @@
        (talk g 'bye, pin g 'talk (), 0 = tap (g 'p 'x + 9) (g 'p 'y + 1))   ; a sign takes a tap as a key
        (pin g 'sign (), '(1 0) = tap (g 'p 'x + 9) (g 'p 'y + 1))))
 
-; the vale: the last floor, three screens tall, lit, laid not delved: a road, seven stones
-; and a gap round the fire, her beside it, the cottage, its house and attic
+; the vale: the last floor, three screens tall, lit, laid not delved: a road, seven
+; stones and a gap round the fire, her beside it, the cottage, its house and attic
 (: g (crawl-new 60 22 (wheel 3))
    _ (ascend g, ascend g, ascend g)
    d (g 'd) w 60 h (d 'h)
@@ -640,8 +640,8 @@
        (filter (i \ 'sign = <(g 'loot i)) (keys (g 'loot)) @ si   ; one wooden sign, on grass, by the foot
           (two? si && atom? >si && 1 = t (<si % w) (<si // w) && h - 5 = <si // w))))
 
-; the story: the box in the attic names the token; out with it she is gone, the walls draw
-; in to a ring, a strike puts you back, and the point is the end
+; the story: the attic box names the token; out with it she is gone, the walls draw in
+; to a ring, a strike puts you back, and the point is the end
 (: g (crawl-new 60 22 (wheel 3))
    _ (ascend g, ascend g, ascend g)
    d (g 'd) w 60
@@ -700,8 +700,8 @@
  (test ('won = g 'over) (0 <= m) (m < 40) (0 = circle-r g) (done? g)
        (g 'p 'x = g 'cx) (g 'p 'y = g 'cy)))
 
-; her talk: a digit takes a branch, another key shows the page again, a leaf closes; she
-; leaves once you come out with the token, spoken to or not
+; her talk: a digit takes a branch, another key shows the page again, a leaf closes;
+; she leaves once you come out with the token
 (: g (crawl-new 60 22 (wheel 3))
    _ (ascend g, ascend g, ascend g)
    h (g 'her)
@@ -775,8 +775,8 @@
 ; the last hit opens slop's walk on the climb's own stage, not the verb: a missed cite ends silently
 (test !(() = cite 'slop 'slop-walk))
 
-; the horn's lead: a fifth of a second if the box keeps up, else 2.5 gaps, a second at most;
-; the pacer holds a gap at its recent worst and lets it go by the clock
+; the horn's lead: a fifth of a second if the box keeps up, else 2.5 gaps, a second at
+; most; the pacer holds a gap at its recent worst and lets it go by the clock
 (test (song-lead-of 0.0 = song-lead) (song-lead-of 33.0 = song-lead)
       (song-lead < song-lead-of 200.0 < song-lead-max) (song-lead-of 200.0 = int (0.5 * song-rate))
       (song-lead-of 5000.0 = song-lead-max))
@@ -787,8 +787,8 @@
  (test (g0 = law 0.0 (1.0 * (t1 - t0))) (g1 = law g0 (1.0 * (t2 - t1))) (g2 = law g1 d2)
        (55.0 <= g1)
        (d2 < 300.0 && d2 < g1 * 0.9 ? (g1 * 0.9 < g2 <= g1) 1)))   ; a long gap held over a short one after it
-; the filler feeds up to the lead, boundedly even past the card's ring; the lag counts what the
-; port still holds, so two seconds said at once are two seconds of lag less what played
+; the filler feeds up to the lead, bounded even past the card's ring; the lag counts what
+; the port still holds
 (: h (horn song-rate 2)
    z (string (cask (4 * 480)))
    (feed _) (say h z)
@@ -839,8 +839,8 @@
 (crawl-new 60 20 (wheel 3) @ g
  (test (#(g 'd 'rooms) <= #(keys (g 'loot)))))
 
-; the music: a floor's bar off the cycle, the circle's off the ring. no gate can listen, so
-; this holds the slots, their count, and each rule's bar as the cycle runs on
+; the music: no gate can listen, so this holds the slots, their count, and each rule's
+; bar as the cycle runs on
 (: g (crawl-new 60 22 (wheel 3))
    _ (ascend g, ascend g, ascend g)
    (vat st) (pins g 'phase 'ring 'r (8 - st) 'r0 8, song-vol g)
@@ -885,7 +885,7 @@
   !(() = tower-tune 3 0 0) !(() = tower-tune 4 0 8)))
 
 ; a seeded random walk holds every invariant. the wheel is boxed, {(wheel 99)}: a bare
-; {wheel 99} rolls () forever, and three hundred passes hold anything
+; {wheel 99} rolls () forever
 (: g (crawl-new 60 20 (wheel 3))
    kb {(wheel 99)}
    dirs [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 -1] [1 -1] [-1 1] 46 62]
@@ -926,7 +926,7 @@
        (1 < #greys)                                    ; a grade, not a flat grey
        (tablet? gsk) !(gsk 'hedge) !(() = gsk 'ground)))
 
-; sign-over keeps every cell of the rows it covers, or the last frame shows past the box.
+; sign-over keeps every cell of the rows it covers, or the last frame shows past the box;
 ; rows end on \e[K, an escape with no m
 (: sw 40
    srow ("\e[38;5;34m" + string (map (_ \ 46) ^sw) + "\e[0m\e[K")

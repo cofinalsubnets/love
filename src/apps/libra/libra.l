@@ -1,20 +1,15 @@
 #!/usr/bin/env -S love -l
-; libra ⚖ -- the scales: the .l balance tool. it weighs a file two ways and they
-; are the same weighing -- `libra` says what is wrong with it, and `libra doc`
-; lifts its header out as a document. one scanner (src/apps/libra/lint.l) under both, so the
-; gate and the doc lifter can never disagree about what a paren or a comment is.
+; libra ⚖ -- the .l balance tool. `libra` says what is wrong with a file, and
+; `libra doc` lifts its header out as a document. one scanner (lint.l) under both,
+; so the gate and the doc lifter agree on what a paren or a comment is.
 ;
-; usage:  libra file ..      weigh them: balance is the default verb, so a bare
-;                            file list is the whole command
+; usage:  libra file ..      weigh them: balance is the default verb
 ;         libra doc file     its header as a document -- md, -ht html, -rf man
 ;     or: love -l src/apps/libra/libra.l ..
 ;
-; settings come from src/apps/libra/salt.l -- ~/.love/etc/libra.l, then ./.libra.l over it.
-; the rules, what they mean, and which fail a gate: doc/misc/libra.md.
+; settings: salt.l -- ~/.love/etc/libra.l, then ./.libra.l over it.
 
-; the head names the exports, so the scanner's ~30 helpers stay off the tablet;
-; lint and salt are spliced in here rather than at the top level, where a catted
-; libra would hand the whole session their names as well as its own.
+; the head names the exports, so the scanner's helpers stay off the tablet;
 ; `fatal?` is out because test/host/libra.l pins the gate rule against it.
 (module (libra libra-main libra-check libra-doc ldoc-head ldoc-md fatal?)
 (borrow 'lint)
@@ -35,8 +30,7 @@
 
    ; --- the verbs ------------------------------------------------------------
 
-   ; balance alone fails. the other rules speak -- an editing aid, read by hand --
-   ; and nothing promotes one, so libra never refuses a file over a habit.
+   ; balance alone fails; the other rules only speak
    (fatal? w) (<>>>w = 'balance)
    (tally-fatal ws) (foldl (a \ w \ fatal? w ? (a + 1) a) 0 ws)
 
@@ -50,29 +44,24 @@
                 (foldl (\ _ w (say err (warnline <fs w), 0)) 0 bw,
                  libra-check-files conf >fs (bad + tally-fatal bw))))))
 
-   ; the count is the status, answered and not quit with: every arm below is
-   ; libra-main's own tail, so a caller already in this image reads it as a charm
+   ; the count is the status, answered not quit with: a caller in this image reads it
    (libra-check conf fs) (0 < libra-check-files conf fs 0)
 
    (flag? x) (0 < #x && x 0 = 45)
    files (filter (nil? * flag?))
 
    ; --- the header, as a document --------------------------------------------
-   ; a text walk, and it has to be: no reader in the tree keeps comments, so a
-   ; header lifted from a datum would be empty.
-   ;
-   ; the header runs to the first line carrying code, blanks included -- not to
-   ; the first blank line, which would cut most of the corpus's headers in half.
+   ; a text walk: no reader keeps comments. the header runs to the first line
+   ; carrying code, blanks included
    (dblank? s) !(0 < #(ltrim s))
-   ; one leading space off, so `;   foo` keeps the display's two and a bare `;`
-   ; is the blank line it looks like
+   ; one leading space off, so a bare `;` is a blank line
    (dbody s) (#s @ n (0 < n && s 0 = 32 ? (snip s 1 n) s))
    (dcmts src) ({} @ t (each (lint-cmts src) (c \ pin t <c c), t))
    (dalone ln c) (<>c - 1 @ k
                     (dblank? (snip ln 0 k) ? [1 (snip ln 0 k + dbody <>>c)] ()))
    (drtrim l) (two? l ? (drtrim >l @ r (two? r || !(dblank? <l) ? (<l . r) ())))
 
-   ; a `#!` line is a seat, not a sentence -- six crew tools open with one
+   ; a `#!` line is skipped
    (ldoc-head src)
     (: t (dcmts src)
        (g ls k acc)
@@ -80,17 +69,16 @@
            (: c (t k)
               a (two? c ? (dalone <ls c) ())      ; the line's own sentence, if it is one
               (? (atom? a) (dblank? <ls ? (g >ls (k + 1) ("" . acc))
-                             (drtrim (rev acc)))   ; ..else this line is code: the header ends
-                 (<>>>c = 'bang) (g >ls (k + 1) acc)             ; the seat line says nothing
+                             (drtrim (rev acc)))   ; code: the header ends
+                 (<>>>c = 'bang) (g >ls (k + 1) acc)
                  (g >ls (k + 1) (<>a . acc)))))
        (g (linesof src) 1 ()))
 
-   ; the prose is taken as written; three of its habits carry structure markdown
-   ; would fill flat -- a `--- name ---` banner is a heading, an indented run is a
-   ; fence because its alignment is the content, and a leading is bolded.
+   ; prose as written, but a `--- name ---` banner is a heading, an indented run
+   ; a fence (its alignment is the content), and a list item stays an item
    (dind s) (: n #s (g i) (i < n && (s i = 32 || s i = 9) ? (g (i + 1)) i) (g 0))
    (ddashy? c) (c = 45 || c = 32)
-   ; `--- name ------------` -> [1 "name"]; dashes both sides are marker and padding
+   ; `--- name ------------` -> [1 "name"]
    (dbanner s)
     (#s @ n
        (? !(3 <= n && snip s 0 3 = "---") ()
@@ -103,17 +91,15 @@
    ; a display: the run of indented lines at the head of ls, and what is left.
    (dtake ls) (:- (g ls ()) (g l acc)
     (atom? l || dblank? <l || !(0 < dind <l) ? [(rev acc) l] (g >l (<l . acc))))
-   ; ..fenced, dedented by its own least indent: the alignment inside a display is
-   ; the content, the margin in front of it is not
+   ; ..fenced, dedented by its own least indent
    (dmin a b) (a < b ? a b)
    (dfence ls)
     (foldl (a \ s \ dblank? s ? a (dmin a (dind s))) #<ls ls @ k
        ("```\n" + foldl (+) "" (map (s \ snip s (dmin k #s) #s + "\n") ls)
         + "```\n"))
 
-   ; the header as markdown text; lapiz decides what a document is, and every
-   ; surface it has then arrives free. li: last line was a list item or its wrap
-   ; -- an indented line means two different things depending on it.
+   ; the header as markdown. li: last line was a list item or its wrap, which
+   ; decides what an indented line means
    (ldoc-md src)
     (: (go ls li acc)
         (atom? ls ? acc
@@ -130,10 +116,8 @@
        (go (ldoc-head src) 0 ""))
 
    ; --- doc ------------------------------------------------------------------
-   ; the `# name` is not decoration -- papel reads a page's title, anchors and
-   ; contents nav off the headings, so without it a page carries no navigation.
-   ; lapiz loads here, not at the top: `make lint` runs check over every tracked
-   ; .l and pays for whatever this file names.
+   ; the `# name` carries a page's title and nav. lapiz loads here, not at the
+   ; top: `make lint` runs check over every .l and pays for what this file names
    (libra-doc-files fs surf bad)
     (atom? fs ? bad
        (uread <fs @ r
@@ -150,8 +134,7 @@
     (surf @ 'md 0 (borrow 'lapiz),
      0 < libra-doc-files fs surf 0)
 
-   ; above its reader: only lambda-to-lambda recursion resolves lazily, so a
-   ; closure over a later non-lambda binding of this `:` raises missing usage at load.
+   ; above its reader: only lambda-to-lambda recursion resolves lazily
    usage """
     usage: libra [check] FILE ..   balance: path:line:col: on err, quiet when
                                    clean, exit 1. THE DEFAULT.
@@ -163,34 +146,29 @@
     """
 
    libra-help ("libra ⚖ -- the .l balance tool.\n" + usage)
-   ; the config is read once, here, and handed down -- never re-read per file
+   ; the config is read once, here, and handed down
    (libra-main as)
     (: conf (salt 'libra)
        v (two? as ? <as "")
        r >as
-       ; `files` drops every dash word, so one nobody meant used to leave no files and
-       ; a green 0. the two libra reads are named here and the rest is a mistake
+       ; `files` drops every dash word: name the known ones, refuse the rest
        bad (<(filter (x \ flag? x && !(elem x '("-ht" "-rf"))) as))
        (? (string? bad) (say err ("libra: unknown option " + bad), put err 10, 2)
           (v = "check") (libra-check conf (files r))
           (v = "doc")   (libra-doc (files r) (? (elem "-ht" r) 'ht
                                                 (elem "-rf" r) 'rf
                                                 'md))
-          (v = "")      (say err usage, 1)            ; nothing named, nothing to weigh
-          ; no verb: the whole line is files. so an unknown verb reads as a
-          ; filename and says "cannot open" rather than "no such verb"
+          (v = "")      (say err usage, 1)
+          ; no verb: the whole line is files, so an unknown verb says "cannot open"
           (libra-check conf (files as))))
 )
 
-; the verb, and the seat (kiosko's shape): the table makes `love libra ..` a word
-; on the artifact, the seat fires libra-main iff this file sits in the program
-; seat of the real command line. body-having, so nothing leaks.
+; the verb, and the seat: `love libra ..` is a word on the artifact, and libra-main
+; fires iff this file is the program of the real command line
 (: door (udoor 'libra libra-main libra-help 1 1)
    _ (cite 'verbs 'enlist 'libra door ['self])
    s (cite 'verbs 'fire ["libra" "libra.l"])
-   ; quit, never return: the shebang's -l makes this a preload, so a path that
-   ; merely answers leaves cli holding our arguments and loads the first as a
-   ; program. the seat miss does return -- that arm is (borrow 'libra).
-   ; the status is libra-main's now, so the seat carries it out rather than 0.
+   ; quit, never return: the shebang's -l makes this a preload, so answering
+   ; would load our first argument as a program. the seat miss does return
    (two? s ? (door >s @ r (quit (charm? r ? r 0)))))
 ) ; module libra

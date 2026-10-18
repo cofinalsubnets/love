@@ -1,9 +1,8 @@
 ; test/uumxlaw.l -- the laws of love's `+` and `*` dispatch, proved of test/uumx.l's table
-; every proof is `idpath true` over a bounded forall; that a lane names its C function is the fuzz's.
+; every proof is `idpath true` over a bounded forall
 (test (elem 'vof (names ())))
 
-; --- the roster's shape, said once: every forall below ranges over mxnk itself,
-; --- never a written count (too short a count passes green and says nothing) ---
+; --- every forall ranges over mxnk itself: a written count too short passes green ---
 (test
  (14 = (vof 0 'mxnk))
  (12 = (vof 0 'mxnl))
@@ -22,9 +21,8 @@
      true)
    (idpath true)))
 
-; --- dispatch commutes up to mirror: a symmetric lane orients itself, the
-; --- positional bin_a/bin_b pair carries orientation in the name, and the table
-; --- adds none of its own. mirror being an involution is half the claim ---
+; --- dispatch commutes up to mirror: the positional bin_a/bin_b pair carries
+; --- orientation in the name, the table adds none. mirror being an involution is half ---
 (test
  (defq mx-mirror-involutive
    (paths bool (mxall mxnl (lam l (nateqb (mxmirror (mxmirror l)) l))) true)
@@ -38,11 +36,11 @@
 
 ; --- the partition, named: the numeric band, the text band, and kmint alone ---
 (test
- ; a point lands in kmint's band; mxnumeric is mx.l's mx-numk, lifted
+ ; mxnumeric is mx.l's mx-numk, lifted
  (defn mxiff (pi a bool (pi b bool bool))            ; uuval's beqb sorts after this file
    (lam a (lam b (orb (andb a b) (andb (negb a) (negb b))))))
  (defn mxpoint (pi k nat bool) (lam k (nateqb (mxband k) (mxband mxKMint))))
- ; exactly mx-numk is the numeric band: mx-numk, the row rosters and the quotient agree
+ ; exactly mx-numk is the numeric band
  (defq mx-numerics-one-band
    (paths bool
      (mxall mxnk (lam k (mxiff (mxnumeric k) (nateqb (mxband k) (mxband mxKCharm)))))
@@ -52,7 +50,7 @@
  (defq mx-nom-is-point
    (paths nat (mxband mxKNom) (mxband mxKMint)) (idpath (mxband mxKMint)))
  ; kmint and KNom alone in the point lane: the dispatchers early-out on a point
- ; before the table, so a third kind there would escape the matrix modelled here
+ ; before the table, so a third kind there would escape this matrix
  (defq mx-points-alone
    (paths bool
      (mxall mxnk (lam k (mxiff (mxpoint k) (orb (nateqb k mxKMint) (nateqb k mxKNom)))))
@@ -106,8 +104,7 @@
      true)
    (idpath true)))
 
-; --- the compose cell: the lane test/uuhom.l's homcomp monoid is about, pinned here
-; --- guard: uuhom's terms load earlier by sort order and must be up ---
+; --- the compose cell, the lane of test/uuhom.l's homcomp monoid; uuhom loads earlier ---
 (test (two? (peep GLOB 'homcomp 0))
         (two? (peep GLOB 'hom-assoc 0))
         (two? (peep GLOB 'idfun 0)))
@@ -120,8 +117,7 @@
  (defq mx-church-add-diag (paths nat (mxadd mxKHot mxKHot) mxLaddh) (idpath mxLaddh))
  (defq mx-church-lanes-apart (paths bool (nateqb mxLaddh mxLcompose) false) (idpath false)))
 
-; --- planted faults: each load-bearing claim's false twin must be refused, lest a
-; --- vacuous forall paint the theorems above green ---
+; --- planted faults: each claim's false twin is refused, lest a vacuous forall pass ---
 (hear (p \ e \ peep HELPC () 0 @ h (h ? (h p e) 0)))
 (test
  ; the cartesian cell is not the zero

@@ -1,14 +1,12 @@
 ; test/front/hornseat.l -- the horn's seat door, and the ring a card pulls it through.
-; runs under out/frontseat (test/front/main.c with -D love_horn_seat=1), where
-; src/love/horn.c asks k_horn_* for the device: the lane inle and the playdate run, which
-; no other gate reaches. the frontend's device is src/love/hornring.h's ring; (tapped ())
-; drains it as a card would, and at 1024 frames against writes of a few hundred every law
-; rides a real push, pull and wrap. horn_land widens a mono port to stereo for a device,
-; never for the sink: test/front/horn.l taps a mono port as mono, this sees it as stereo.
+; runs under out/frontseat (test/front/main.c, -D love_horn_seat=1): horn.c asks k_horn_* for the
+; device, the lane inle and the playdate run. the device is hornring.h's ring; (tapped ()) drains it
+; as a card would; 1024 frames against writes of a few hundred, so every law rides a real push, pull
+; and wrap. horn_land widens mono to stereo for a device, never for the sink (test/front/horn.l)
 
 (: (ramp n) (string (map (i \ i % 251) (jot n))))
 
-; --- a stereo port goes down as it is -------------------------------------------
+; --- a stereo port goes down as it is ---
 (: h (horn 44100 2)
    _ (assert !(nom? h))
    pcm (ramp 1600)                              ; 400 stereo frames, inside the ring
@@ -21,9 +19,8 @@
     assert (44100 = taprate ()),
     assert (2 = tapchans ())))
 
-; --- ..and a mono one is doubled before it arrives -------------------------------
-; the port still calls itself mono; what reached the device is twice the bytes, each
-; sample said on both channels. this is the law test/front/horn.l's sink lane inverts.
+; --- ..and a mono one is doubled before it arrives ---
+; the port still calls itself mono; each sample lands on both channels (horn.l's sink lane inverts this)
 (: h (horn 44100 1)
    _ (assert !(nom? h))
    pcm (ramp 800)                               ; 400 mono frames
@@ -36,10 +33,9 @@
     (assert (foldl (a \ i \ a && ((got (4 * i) = pcm (2 * i)) && ((got ((4 * i) + 1) = pcm ((2 * i) + 1)) && ((got ((4 * i) + 2) = pcm (2 * i)) && (got ((4 * i) + 3) = pcm ((2 * i) + 1))))))
                    1 (jot 400)))))
 
-; --- the ring wraps, and nothing is lost or reordered across it ------------------
-; 1024 frames deep, so eight rounds of 400 carry the free-running indices past the end
-; three times over. a ring that masked its indices in place, or compared them wrongly at
-; the seam, loses a frame exactly here and nowhere in the laws above.
+; --- the ring wraps, and nothing is lost or reordered across it ---
+; 1024 frames deep: eight rounds of 400 carry the free-running indices past the end three times,
+; where a ring masking its indices in place, or comparing them wrongly at the seam, loses a frame
 (: h (horn 44100 2)
    _ (assert !(nom? h))
    (round i) (: pcm (ramp (1600 + (4 * i)))      ; a different whole-frame length each time
@@ -47,17 +43,12 @@
                 _ (flush h)
                 got (tapped ())
                 (assert (pcm = got)))
-   ; `map`, not a `&&` fold: assert answers falsy when it passes, so a fold over && stops
-   ; after round 0 and the seven rounds that cross the seam never run at all. that
-   ; spelling passed a ring provably losing a frame from round 1 on.
+   ; `map`, not a `&&` fold: assert answers falsy when it passes, so the fold would stop after round 0
    (map round (jot 8)))
 
-; --- a starved ring answers silence, not the last frame --------------------------
-; nothing has been written since the drain above, so a pull finds nothing. (tapped ())
-; laying nothing back says only that -- it lays the frames that were real, so a card
-; holding its last frame instead of zeroing reads the same from there. (starved n) is
-; the other half: it pulls into buffers a card would have handed in, dirty, and counts
-; what came back loud. holding the last frame rings a tone under a stall.
+; --- a starved ring answers silence, not the last frame ---
+; (tapped ()) lays only the real frames, so it can't see a card holding its last frame; (starved n)
+; pulls into dirty buffers as a card hands them and counts what came back loud
 (horn 44100 2 @ h
  (assert (0 = horn-lag h),
   assert ("" = tapped ()),
@@ -68,10 +59,8 @@
   assert (0 < (starved 64)),
   tapped ()))                                   ; drained again, for the law below
 
-; --- the lag is the device's number, not a clock's --------------------------------
-; the sink reckons what is played from love_clock at the nominal rate, so its lag drifts
-; with the wall. a seat answers k_horn_lag, which is what the ring actually holds --
-; exact, and the number backpressure is owed.
+; --- the lag is the device's number, not a clock's ---
+; the sink reckons its lag from love_clock and drifts; a seat answers k_horn_lag, what the ring holds
 (horn 44100 2 @ h
  (say h (ramp 400),                             ; 100 frames
   flush h,
@@ -82,10 +71,9 @@
   tapped (),
   assert (0 = horn-lag h)))
 
-; --- a port opened on the seat takes it from the ports before ---------------------
-; the seat is one device. a port dropped while another plays is closed by its finalizer
-; whenever a collection finds it dead; that close is the dropped port's, and must not
-; shut the device the newer one holds. a major here runs it, between the say and the read
+; --- a port opened on the seat takes it from the ports before ---
+; a dropped port's finalizer close must not shut the device the newer port holds;
+; a major here runs it, between the say and the read
 (: (dropped _) (: h (horn 44100 2) _ (say h (ramp 400)) _ (flush h) 0)
    _ (dropped 0)
    h (horn 44100 2) _ (say h (ramp 400)) _ (flush h)
@@ -93,7 +81,7 @@
    (assert (100 = horn-lag h),
     tapped ()))
 
-; --- misuse is the port's, not the door's ----------------------------------------
+; --- misuse is the port's, not the door's ---
 (assert (nom? (horn 10 2)),
  assert (nom? (horn 44100 3)),
  assert (nom? (horn 44100 0)))
