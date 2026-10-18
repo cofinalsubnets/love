@@ -536,10 +536,16 @@
      !(elem ta '(long ulong llong ullong) ||
        elem tb '(long ulong llong ullong)) &&
      (u32? g ta || u32? g tb))
-   (rbin g ta tb) (u32bin? g ta tb ? 'uint (ubin !(ilp32? g) ta tb))
+   ; ..and under -fwrapv a 32-bit signed one: an int op int is typed 'int, + - * sign-extend again
+   (wrapv? g) (drop 13 (g 'mo) @ r (two? r && <r))
+   (s32? ty) (elem ty '(int short schar char cchar uchar ushort bool))
+   (s32bin? g ta tb) (wrapv? g && !(ilp32? g) && s32? ta && s32? tb)
+   (rbin g ta tb) (? (u32bin? g ta tb) 'uint (s32bin? g ta tb) 'int (ubin !(ilp32? g) ta tb))
    ; does a 32-bit unsigned result owe its re-narrow? + - * carry out of the word; | ^ with a
    ; sign-extended operand (a signed type, a negative literal) spread its top into the result
    (u32nar? g op ta tb sx) (u32bin? g ta tb && (elem op '(+ - *) || elem op '(| ^) && sx))
+   ; the re-narrow a 32-bit result owes: zx4, sx4 or none
+   (nar32 g op ta tb sx) (? (u32nar? g op ta tb sx) 'zx4 (s32bin? g ta tb && elem op '(+ - *)) 'sx4 ())
    ; what C calls the literal: an unsuffixed literal that fits is an int, so `uint x * <lit>`
    ; wraps; one too wide is long and the result must not wrap -- hence the range test
    (numty n) (? (fits32 n) 'int (n > 9223372036854775807) 'ulong 'long)   ; past long, only unsigned long holds it
@@ -740,13 +746,13 @@
              iop (irop op)
              ; a bare constant reads as int; a coated one carries its type, so `uint op <lit>`
              ; wraps and `uint op (ulong)k` widens, as C says
-             u32 (u32nar? g op aty nty (sn < 0 || !(usg? aty)))
+             u32 (nar32 g op aty nty (sn < 0 || !(usg? aty)))
              (? (iop = 'no) 'no
                 !(imma g iop sn) 'no
                 (: rt (ptr? aty ? aty (rbin g aty nty))
                    (sn = 0 && elem op '(+ -) ? (mkv rt rA (vfs av))
                       (: rd (wnt || rdst g rA)
-                         fs (vfs av + [[iop rd rA sn]] + (u32 ? [['zx4 rd]]))
+                         fs (vfs av + [[iop rd rA sn]] + (u32 ? [[u32 rd]]))
                          (rpeq? g rd rA ? () (rfree g rA),
                           mkv rt rd fs))))))))
    (ldop ty) (ty @ ('char || 'schar) 'ld1 'short 'ld2 'int 'ld4
@@ -2887,8 +2893,10 @@
               ; -1ull stays unsigned and -1u wraps at 32 bits, not 64; an unsigned char or short promotes
               ; to int first (6.3.1.1), so its ~ and - are int and nothing re-narrows
               (: uty (elem op '(neg bnot) && usg? (vty r) && !(elem (vty r) '(uchar cchar ushort)))
-                 renar (uty ? (vty r @ 'uint '((zx4 r0))))
-                 (mkv (uty ? (vty r) 'long) 'r0
+                 ; ..and under -fwrapv an int's - wraps: -INT_MIN is INT_MIN
+                 sty (op = 'neg && !uty && s32bin? g (vty r) 'int)
+                 renar (? uty (vty r @ 'uint '((zx4 r0))) sty '((sx4 r0)) ())
+                 (mkv (? uty (vty r) sty 'int 'long) 'r0
                     (tor0 g r +
                      (op @ 'neg '((neg r0))
                            'bnot '((not r0))
@@ -3887,8 +3895,9 @@
             (: uL (usg? (vty a))                             ; a `>>` on an unsigned left operand is logical (shr, not sar)
                ; << carries out of a 32-bit unsigned like + - * do, so it re-narrows; >> stays inside a canonical value
                u32 (op = 'shl && u32? g (vty a))
-               (nar r) (u32 ? [['zx4 r]])
-               rt (? (u32? g (vty a)) 'uint uL 'ulong 'long) ; the shift result keeps the left operand's type
+               s32 (s32bin? g (vty a) 'int)                 ; ..and under -fwrapv an int's sign-extends
+               (nar r) (? u32 [['zx4 r]] (s32 && op = 'shl) [['sx4 r]] ())
+               rt (? (u32? g (vty a)) 'uint s32 'int uL 'ulong 'long) ; the shift result keeps the left operand's type
                iop (op = 'shl ? 'shl (uL ? 'shr 'sar))
                vop (op = 'shl ? 'shlv (uL ? 'shrv 'sarv))
                kc (knum g rhs)
@@ -3943,7 +3952,7 @@
                               pa (ptr? ta) pb (ptr? tb)
                               unsg (cmpu g ta9 tb9)                      ; divide and compare take the common type's signedness -- see cmpu
                               u32 (u32bin? g ta9 tb9)                  ; a 32-bit unsigned result wraps -- see u32bin?
-                              nar (u32 ? '((zx4 r0)))               ; the shuttle always lands in r0 (back)
+                              nar (? u32 '((zx4 r0)) (s32bin? g ta9 tb9 && elem op '(+ - *)) '((sx4 r0)) ())   ; the shuttle always lands in r0 (back)
                               nty (rbin g ta9 tb9)                      ; C's own result type, as every lane types it
                               (? (d128? ta || d128? tb)
                                   ; the wide shuttle: the left rides its cell, the right the r2:r0 protocol; a product with both hi halves zero is one mulq
@@ -4162,10 +4171,10 @@
                                          (elem op '(+ - * & | ^))
                                           (: iop2 (irop op)
                                              rd (wnt && !(rpeq? g wnt rB) ? wnt (rdst g rA))
-                                             u32 (u32nar? g op ta9 tb9 !(usg? ta9 && usg? tb9))
+                                             u32 (nar32 g op ta9 tb9 !(usg? ta9 && usg? tb9))
                                              ; holo reorders a commutative rd == rB; sub cannot, and a borrowed left with a dry pool lands rd on rB's r0
                                              (op = '- && rpeq? g rd rB ? (shut ())
-                                                (pre + [[iop2 rd rA rB]] + (u32 ? [['zx4 rd]]) @ fs
+                                                (pre + [[iop2 rd rA rB]] + (u32 ? [[u32 rd]]) @ fs
                                                    (rfree g rB, rpeq? g rd rA ? () (rfree g rA),
                                                     mkv (rbin g ta9 tb9) rd fs))))
                                          (shut ()))))))))))))))
@@ -11243,7 +11252,7 @@
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () ()])}   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt]
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () ()])}   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv]
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
        ainls (two? xtra && 5 < #xtra ? (xtra 5))

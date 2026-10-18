@@ -500,8 +500,7 @@ printf 'int lf(int a, int b) { int t[4] = { a, b, a + b, a - b }; return t[a & 3
 moonrun -O2 -mno-red-zone -c -o "$ho/.rz.o" "$ho/.rz.c" > /dev/null 2>&1 || fail "-mno-red-zone compile"
 objdump -d "$ho/.rz.o" | grep -q -- '-0x[0-9a-f]*(%rsp)' && fail "-mno-red-zone: a store below sp"
 # what mooncc does not honour refuses by name, exit 2
-for fl in -fwrapv -fno-strict-overflow -fpatchable-function-entry=2,1 -mcmodel=kernel -fstack-protector-strong \
-          -fno-such-flag -mno-such-flag; do
+for fl in -fpatchable-function-entry=2,1 -mcmodel=kernel -fstack-protector-strong -fno-such-flag -mno-such-flag; do
   moonrun $fl -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?
   [ $r -eq 2 ] && grep -q -- "$fl" "$ho/.fl.err" || fail "$fl: exit $r, not refused by name"
 done
@@ -556,6 +555,57 @@ objdump -d "$ho/.ibt.o" | grep -q endbr32 || fail "-fcf-protection on i386 laid 
 [ "$(printf '__CET__\n' | moonrun -fcf-protection -E - | tail -1 | tr -d ' ')" = 3 ] || fail "-fcf-protection: __CET__ is not 3"
 moonrun -t a64 -fcf-protection=branch -c -o /dev/null "$ho/.ibt.c" > /dev/null 2>&1 && fail "-fcf-protection taken on a64"
 echo "mooncc: -ftrivial-auto-var-init=zero zeroes every automatic, -fcf-protection lands every indirect branch on endbr"
+
+# -fwrapv and -fno-strict-overflow: an int's + - * << and - wrap at 32 bits in every lane (an
+# immediate, a register pair, the shuttle, a shift, a fold, a loop's counter), held to gcc's
+cat > "$ho/.wv.c" <<'EOF'
+#include <stdio.h>
+#include <limits.h>
+#define N __attribute__((noinline))
+N long add1(int x) { return (long) (x + 1); }
+N long addv(int x, int y) { return (long) (x + y); }
+N long subv(int x, int y) { return (long) (x - y); }
+N long mulv(int x, int y) { return (long) (x * y); }
+N int  half(int x) { return (x * 2) / 2; }
+N int  gt(int x) { return x + 1 > x; }
+N long mul3(int x) { return (long) (x * 3); }
+N long mul8(int x) { return (long) (x * 8); }
+N long mul10(int x) { return (long) (x * 10); }
+N long shl1(int x) { return (long) (x << 1); }
+N long neg(int x) { return (long) -x; }
+N long preinc(int x) { long l = ++x; return l; }
+N long pluseq(int x) { return (long) (x += 1); }
+N long sum(int *a, int n) { int s = 0; for (int i = 0; i < n; i++) s += a[i]; return (long) s; }
+N long idx(int x) { static char b[16]; char *p = b + 8; return (long) ((p + (x + 1)) - b); }
+N long tern(int x, int c) { return (long) (c ? x + 1 : x - 1); }
+N long kfold(void) { int m = INT_MAX; return (long) (m + 1); }
+N unsigned long sh(int x) { return (unsigned long) (x + x) >> 1; }
+int main(void) {
+  int a[3] = { INT_MAX, 1, 1 };
+  long r[] = { add1(INT_MAX), addv(INT_MAX, 1), subv(INT_MIN, 1), mulv(65536, 65536), half(INT_MAX), gt(INT_MAX),
+               mul3(INT_MAX), mul8(INT_MAX), mul10(INT_MAX), shl1(INT_MAX), neg(INT_MIN), preinc(INT_MAX), pluseq(INT_MAX),
+               sum(a, 3), tern(INT_MAX, 1), tern(INT_MIN, 0), kfold(), (long) sh(INT_MAX) };
+  unsigned h = 0;
+  for (unsigned i = 0; i < sizeof r / sizeof *r; i++) { printf("%u %ld\n", i, r[i]); h = h * 31 + (unsigned) r[i] + (unsigned) (r[i] >> 32); }
+  return h & 255; }
+EOF
+cat > "$ho/.wvl.c" <<'EOF'
+#define N __attribute__((noinline))
+N int iv(int s) { int c = 0; for (int i = s; i > 0 && c < 10; i++) c++; return c; }
+N int iv2(int s) { int c = 0; for (int i = s; i > 0; i += 1000000000) c++; return c; }
+N long ar(int s) { int a[4] = { 0 }; long t = 0; for (int i = s; i >= s - 3 && i < s + 9; i--) t += (long) i; return t; }
+int main(void) { return iv(2147483645) * 10 + iv2(1) + (ar(-2147483647) == 2 ? 100 : 0); }
+EOF
+$cc_g -O2 -fwrapv -o "$ho/.wvg" "$ho/.wv.c" > /dev/null 2>&1 && "$ho/.wvg" > "$ho/.wvg.txt"
+for fl in -fwrapv -fno-strict-overflow; do
+  moonrun $fl -o "$ho/.wv" "$ho/.wv.c" > /dev/null 2>&1 || fail "$fl compile"
+  "$ho/.wv" | cmp -s - "$ho/.wvg.txt" || fail "$fl: an int's arithmetic answers other than gcc -fwrapv's"
+done
+moonrun -fwrapv -o "$ho/.wvl" "$ho/.wvl.c" > /dev/null 2>&1 || fail "-fwrapv compile (a loop)"
+"$ho/.wvl"; a=$?
+$cc_g -O2 -fwrapv -o "$ho/.wvlg" "$ho/.wvl.c" > /dev/null 2>&1 && "$ho/.wvlg"; b=$?
+[ $a -eq 33 ] && [ $a -eq $b ] || fail "-fwrapv: a counter past INT_MAX (ours $a gcc $b, want 33)"
+echo "mooncc: -fwrapv wraps an int's arithmetic at 32 bits in every lane, held to gcc"
 
 # -- C11 conditional features (6.10.8.3), per target
 # ours alone (gcc has atomics): a claimed absence sends portable code down a fallback

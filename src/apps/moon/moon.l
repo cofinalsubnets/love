@@ -486,7 +486,7 @@
           [[".note.gnu.property" 7 2 w
              [['raw (le32 4 + le32 (w + 8) + le32 5 + o-strbytes "GNU" + [0]
                      + le32 3221225474 + le32 4 + le32 cf + (w = 8 ? (le32 0)))]]]]))
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames]
        ; wasm rides gen's rv64 lane whole (src/love/holo/wasmfn.l is the machine under it) and
@@ -494,7 +494,7 @@
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1)]] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv]] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
@@ -1273,7 +1273,7 @@
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
-                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb ()}
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1339,9 +1339,10 @@
           ("-falign-functions" . r) (flags r (pin t 'falg 16))
           ("-fno-align-functions" . r) (flags r (pin t 'falg ()))
           ("-fno-optimize-sibling-calls" . r) (flags r (pin t 'nsib 1))
-          ; an int's + - * stand 64 bits wide where they are read, as C's undefined overflow allows:
-          ; -fwrapv and -fno-strict-overflow ask the 32-bit wrap, and refuse below
-          ((a . r) && elem a '("-fno-wrapv" "-fstrict-overflow")) (flags r t)
+          ; -fwrapv and -fno-strict-overflow: an int's + - * << wrap at 32 bits where they are read,
+          ; where C's undefined overflow lets them stand 64 bits wide
+          ((a . r) && elem a '("-fwrapv" "-fno-strict-overflow")) (flags r (pin t 'wrapv 1))
+          ((a . r) && elem a '("-fno-wrapv" "-fstrict-overflow")) (flags r (pin t 'wrapv ()))
           ("-foptimize-sibling-calls" . r) (flags r (pin t 'nsib ()))
           ; a frame on every fn that calls (moon-cc refuses the targets that keep none)
           ("-fno-omit-frame-pointer" . r) (flags r (pin t 'kfp 1))
