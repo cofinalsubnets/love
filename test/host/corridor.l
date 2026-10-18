@@ -162,6 +162,20 @@
        (mag (feet dn) < 1e-6) (#ms = 2)
        (#(m0 0) = 8 * 12 * grav-n) (#(m0 1) = 4 * 4 * 3 * grav-n) (peep (m0 1) 3 0 = -2)
        (net (ys m1 > ys m0) > grav-n // 2) (net (ys m2 < ys (motes-at (ms 1) 0.0)) > grav-n // 2)))
+;; a street: no face over it, the sky drawn there and none under a ceiling; its walls lit by
+; the sun on the side it shines on; the sky's hour and cover, a wrong cover refused
+(: sl (lv "(sky 17 'clear) (room [0 0 0] [4 3 4]) (street [0 0 4.3] [10 12 14]) (air (box [1 0 3.9] [3 2.5 4.4])) (start [2 0 2] 0 0)")
+   ss (corridor-new 40 24 sl "")
+   (blue f) (net ((f & 255) > 120))
+   (red f) (net (f >> 16 & 255))
+   sky-up (blue (corridor-pens (pins ss 'px 5.0 'pz 9.0 'ph 1.4)))
+   roof-up (blue (corridor-pens (pins ss 'px 2.0 'pz 2.0 'ph 1.4)))
+   east (red (corridor-pens (pins ss 'px 5.0 'pz 9.0 'th (pi / 2.0) 'ph 0.0)))
+   west (red (corridor-pens (pins ss 'px 5.0 'pz 9.0 'th (0.0 - pi / 2.0) 'ph 0.0)))
+   fs (brush-faces (ss 'sc 'brushes))
+   (lids y) (#(filter (f \ f 1 1 < -0.5 && mag (f 0 0 1 - y) < 0.01) fs))
+ (test (sl 'sky 'hour = 17.0) (sl 'sky 'cover = 'clear) (has? (lv "(room [0 0 0] [1 1 1]) (sky 17 'stormy)") "(sky hour COVER)")
+       (lids 12.0 = 0) (lids 3.0 > 0) (sky-up > 200) (roof-up = 0) (east > west)))
 ; a car: its door opens at the start and stays open while the player is in; walls and the shut
 ; door stop a walk; out, it shuts, reopening for a step back; then it leaves, and the edge stops
 ; a walk; each change cried, the car drawn only while it stands, its sounds in range

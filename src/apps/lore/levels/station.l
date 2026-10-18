@@ -60,6 +60,25 @@
               (rect 21 39 24 51 (grey 0.92)) (rect 26 39 29 51 (grey 0.92))
               (rect 36 37 46 39 (grey 0.92)) (rect 37 39 45 51 (grey 0.92))
               (disc 39 32 2 (grey 0.92)))))
+; ..the street: paving slabs a metre square, worn, in pale joints
+(: paving (texture 64 64 2
+           '((fill (rgb 0.5 0.49 0.46))
+             (checker 32 32 (rgb 0.47 0.46 0.44))
+             (noise 7 0.08)
+             (patches 6 0.15 (shade 0.9))
+             (grid 32 32 1 (rgb 0.62 0.6 0.56)))))
+; ..the buildings: concrete storeys four metres, a band of dark glass along each
+(: facade (texture 64 64 4
+           '((fill (rgb 0.62 0.6 0.56))
+             (noise 9 0.05)
+             (within 0 18 64 44
+               (fill (rgb 0.16 0.2 0.25))
+               (noise 5 0.08)
+               (cols 0 4 (rgb 0.62 0.6 0.56)) (cols 30 34 (rgb 0.62 0.6 0.56)) (cols 62 64 (rgb 0.62 0.6 0.56)))
+             (rows 44 47 (rgb 0.45 0.44 0.41)))))
+; ..the planters' stone
+(: stone (texture 32 32 1
+          '((fill (rgb 0.56 0.54 0.5)) (noise 4 0.1) (grid 16 32 1 0.4))))
 
 (level "the station"
   (textures {'wall wall 'floor tiles 'ceiling panels 'door steel 'train carbody})
@@ -95,11 +114,21 @@
   (grav [-2.7 0 16.3] [-0.7 9 18.3] 'down)
   (air (box [0.9 0 15.9] [2.5 2.6 16.4]))
   (air (box [-2.5 0 15.9] [-0.9 2.6 16.4]))
-  ; ..and at their heads, street level, each a doorway north
+  ; ..and at their heads a lobby, each a doorway north, the lobby's own north onto the street
   (room [-5 9 18.6] [5 12.5 26])
   (air (box [0.9 9 18.2] [2.5 11.6 18.7]))
   (air (box [-2.5 9 18.2] [-0.9 11.6 18.7]))
   (strip-light [0 12.5 22])
+  (air (box [-1.6 9 25.9] [1.6 11.8 26.6]))
+  ; the street: a plaza among buildings eighteen metres high, under a late afternoon sky
+  (sky 17 'partly)
+  (skin {'floor paving 'walls facade} (street [-16 9 26.5] [16 27 56]))
+  (buzz (sign [0 12.6 26.5] 0.5 "STATION" (rgb 0.3 0.75 1)))
+  (skin {'all stone} (solid (box [-9 9 36] [-4 9.7 42])))
+  (skin {'all stone} (solid (box [4 9 36] [9 9.7 42])))
+  (skin {'all stone} (solid (box [-2.5 9 47] [2.5 9.5 50])))
+  (bin [3 9 27.2] 0.6 0.45 0.95 binmetal binsign)
+  (bin [-3 9 27.2] 0.6 0.45 0.95 binmetal binsign)
   ; the light: strips across the ceiling, one failing at the north end; a sign on the
   ; north wall
   (repeat 5 [2 0 0] [(across (strip-light [0 5 4]))])

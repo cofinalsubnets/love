@@ -4,7 +4,8 @@
 ; baked into its corners.
 ; a plane is [n d], holding the points p with dot n p <= d. brush-prism's plan ps is [x z]
 ; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
-; corners, facing, and the brush index; brush-mesh's (look n p b) answers [tex u v].
+; corners, facing, and the brush index; brush-mesh's (look n p b) answers [tex u v]. a brush
+; 'open 1 has no top face, and one 'whole 1 is never cut on the grid.
 (module (brush brush brush-box brush-prism brush-cut brush-move brush-mirror brush-medium brush-mesh brush-chunks brush-faces)
 (borrow 'view)                          ; min2 max2
 (borrow 'vec)                           ; triples
@@ -75,7 +76,9 @@
      (cats (map (p \ (: c (mid p) fr (brush-medium bs (c+ c (c* 1e-3 n))) bk (brush-medium bs (c+ c (c* -1e-3 n)))
                       (fr = bk || any (k \ on-face? (bs k) c n) later ? () [[p (fr = 1 ? n (c* -1.0 n)) i]])))
                 ps)))
-   (cats (map (i \ (: b (bs i) (cats (map (j \ (#(b 'faces j) >= 3 ? (piece i b j) ())) ^#(b 'planes))))) ^nb)))
+   ; ..and a brush marked open has no top: the sky shows there
+   (shut? b j) (!(peep b 'open 0) || b 'planes j 0 1 < 0.5)
+   (cats (map (i \ (: b (bs i) (cats (map (j \ (#(b 'faces j) >= 3 && shut? b j ? (piece i b j) ())) ^#(b 'planes))))) ^nb)))
  (grid ps cell) (: bx (box-of ps)
    (lines k) (: a (int (bx 0 k / cell) - 1) z (int (bx 1 k / cell) + 1)
      (map (i \ [(map (m \ m = k ? 1.0 0.0) ^3) (cell * (a + i))]) ^(z - a + 1)))

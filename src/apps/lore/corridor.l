@@ -19,6 +19,7 @@
 (borrow 'flicker)                       ; how the lights stammer, buzz and breathe
 (borrow 'walk)                          ; the keys, and a step slid along a wall
 (borrow 'mixer)                         ; the sounds, mixed into the horn
+(borrow 'sky)                           ; the sun, its light, the sky's colour
 (:
  fps 20
  eye-h 1.6 body-r 0.25
@@ -111,7 +112,7 @@
  ;     its wall; the surfaces where air meets solid, textured by the way they face ---
  (brush-of r) (: sh (r 'shape)
    b0 (sh 'box @ () (: p (sh 'prism) (brush-prism (r 'air) (p 0) (p 1) (p 2))) bx (brush-box (r 'air) (bx 0) (bx 1)))
-   (pins (foldl (\ b c (brush-cut b (c 0) (c 1) (c 2))) b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0)))
+   (pins (foldl (\ b c (brush-cut b (c 0) (c 1) (c 2))) b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0) 'open (peep r 'open 0)))
  (doorway d) (: ax (d 'ax) p (P ax (d 'c - 0.5 * d 'w) (d 'y) (d 'a - 0.02)) q (P ax (d 'c + 0.5 * d 'w) (d 'y + d 'h) (d 'b + 0.02))
    (brush-box 1 [(min2 (p 0) (q 0)) (d 'y) (min2 (p 2) (q 2))] [(max2 (p 0) (q 0)) (d 'y + d 'h) (max2 (p 2) (q 2))]))
  (brushes-of lv) (map brush-of (lv 'brushes) + map doorway (lv 'doors))
@@ -211,6 +212,10 @@
   1.0)
  (corridor-ks sc mt ds) (map (i \ bright (sc 'lights i 'how) mt i ds) ^#(sc 'lights))
  amb [0.025 0.025 0.03]
+ ; the sky's day, an equinox, and its latitude; asked every sky-k of kitty's pixels
+ sky-day 20716.0
+ lat (40.7 * pi / 180.0)
+ sky-k 2
  ; --- the textures: the level's, then a grid for any of wall floor ceiling door it has
  ;     not, and train where it has a car, then the posters' ---
  grid-layers '((fill 0.55) (grid 16 16 1 0.47) (grid 64 64 1 0.35))
@@ -273,6 +278,12 @@
    w (d 'w) h (d 'h) i (tix tt (d 'tex)) t (tt i) o (c+ a (c+ (c* (-0.5 * w) r) (c* (-0.5 * h) u)))
    (sheets o (c* h u) (c* w r) n (q \ (: e (c+ q (c* -1.0 o)) [(t 1 / w * dot e r) (t 2 / h * (h - dot e u))])) i white))
  (file-of dir p) (p 'file @ () () f (f 0 @ 47 f (dir + f)))
+ ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
+ ; corridor's gain; () when it has none
+ (sky-of lv) (peep lv 'sky () @ () ()
+   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4) 'smooth)
+        lt (sky-light (sky-sun sim 0.0 lat) wx sim)
+        {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
  ;     dir the level's folder, for its pictures ---
  (scene lv dir) (: ps (lv 'posters) ls (lights-of lv)
@@ -289,7 +300,14 @@
    ; only the lights that change
    dyn (filter (i \ two? (ls i 'how)) ^#ls) still (filter (i \ atom? (ls i 'how)) ^#ls)
    (ch pk l) (foldl (a \ c+ a * mesh-lamp pk) [0.0 0.0 0.0] (l 'lamps))
-   (lit pk) {'base (foldl (a \ c+ a * ch pk * ls) (c+ amb (c* 0.0 (pk 'cols 0 @ z [z z z]))) still)
+   ; ..the sky at the level's hour, and in its streets the sky's light and the sun's on what
+   ; faces them, scaled to the gain the sky is seen through
+   sk (sky-of lv) ob (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0) bs))
+   (daylit pk) (: c (pk 'cols) lt (sk 'lt) s (lt 'sun) X (c 0 + 0.05 * c 5) Y (c 1 + 0.05 * c 6) Z (c 2 + 0.05 * c 7)
+     m (min 1.0 (foldl (\ a b (a + (b 0 0 < X) * (X < b 1 0) * (b 0 1 < Y) * (Y < b 1 1 + 0.1) * (b 0 2 < Z) * (Z < b 1 2))) (X * 0.0) ob))
+     a (m * (0.5 + 0.5 * c 6) * sk 'k) d (m * max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (lt 'sunk * sk 'k))
+     (map (j \ a * lt 'amb j + d * lt 'sunc j) ^3))
+   (lit pk) {'base (foldl (a \ c+ a * ch pk * ls) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c* 0.0 (pk 'cols 0 @ z [z z z])))) still)
              'chs (map (ch pk * ls) dyn)}
    ; ..a car lit where it stands, and by its own lamp, which goes with it
    (clit lp pk) (: l (lit pk) (pin l 'base (c+ (l 'base) (mesh-lamp pk lp))))
@@ -301,7 +319,7 @@
     'chunks (map (pk \ (: lo (map (k \ amin (pk 'cols k)) ^3) hi (map (k \ amax (pk 'cols k)) ^3)
                           {'pk pk 'lit (lit pk) 'lo lo 'hi hi 'mid (map (k \ 0.5 * (lo k + hi k)) ^3)
                            'rad (0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))})) cks)
-    'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs
+    'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs 'sky sk 'open ob
     'texs (map (t \ swatch (t 'w) (t 'h) (t 'layers)) txs + ptex)})
  ; --- a grav shaft's motes: each a speck of three crossed squares, both ways round, a glow;
  ;     its own height, speed, and turn about the middle, from its number ---
@@ -331,7 +349,13 @@
  (corridor-pens st) (: k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (corridor-ks sc (st 'mt) ds)
    e [(st 'px) (st 'py) (st 'pz)]
-   v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 60.0)
+   ; ..under a sky, the sky where nothing is drawn; out in a street, seen further, its haze
+   ; for fog
+   sk (sc 'sky) sim (tablet? sk ? (sk 'sim + st 'mt) 0.0)
+   out (tablet? sk && any (b \ !(any (k \ e k <= b 0 k || b 1 k + 0.1 <= e k) ^3)) (sc 'open))
+   v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 (out ? 150.0 60.0))
+   fog (out ? (: hz (mesh-haze v (sk 'lt) (sk 'wx) sim) [(sk 'k * hz 0) (sk 'k * hz 1) (sk 'k * hz 2) 50.0 150.0]) [0.0 0.0 0.0 30.0 60.0])
+   bare (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (k @ 1 1 (sky-k * k))) 0)
    dk (map (i \ ks i) (sc 'dyn))
    (relit pk l) (mesh-lamps! pk (l 'base) (l 'chs) dk 1.0)
    ; ..the chunks whose ball is on the inside of each plane of the view, nearest first
@@ -360,7 +384,7 @@
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
    glass (map (c \ relit (c 'pk) (c 'lit)) (sc 'panes))
    all (cars + doors + hall + by 'shine + glass + by 'glow + map (m \ motes-at m (st 'mt)) (sc 'motes))
-   (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) [0.0 0.0 0.0 30.0 60.0] 8 gain 0))
+   (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog 8 gain bare))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
  (corridor-frame st) (: w (st 'w) h (st 'h) f (corridor-pens st) r (h // 2)
