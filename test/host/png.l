@@ -1,6 +1,6 @@
-; test/host/png.l -- src/apps/png.l and png.c's unfilter: hand-worked rows, then (with PIL and
-; magick) every colour type, depth and interlace held to magick's rgba; apng by its frames' sums
-; and PIL's; then the refusals.
+; test/host/png.l -- png.l and png.c's unfilter: hand-worked rows, then (with PIL and magick)
+; every colour type, depth and interlace held to magick's rgba; apng by frame sums and PIL's;
+; then the refusals.
 ;   cat test/00-init.l test/host/png.l | out/love
 (borrow 'posix)
 (borrow 'gz)
@@ -85,10 +85,8 @@ for n in (2, 4, 16, 256):
         (gate-partly "png: no python3 PIL or magick, images skipped"))
 
    ; apng
-   ; muxed by hand, 24x16: five palette frames under one PLTE and tRNS (index 0 clear, 1
-   ; half). the first overwrites the canvas and stays; then over and cleared, over and put
-   ; back, overwritten and kept, over and put back. each composed frame by its sha-256, as
-   ; the spec's rule written out below gives it; a delay num/den in ms, a den of 0 is 100
+   ; muxed by hand, 24x16: five palette frames under one PLTE and tRNS, each composed frame by
+   ; its sha-256 per the spec's rule (written out below); a delay num/den in ms, a den of 0 is 100
    (nib c) (? (c < 58) (c - 48) (c - 87))
    (unx h) (cask (#h // 2) @ c (map (i \ pin c i (nib (h (2 * i)) * 16 + nib (h (2 * i + 1)))) (jot (#h // 2)),
                                string c))

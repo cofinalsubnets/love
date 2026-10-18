@@ -1,5 +1,5 @@
-; the editor, history zipper and parseall: cli's exports, reached through (cite 'cli)
-; (ed u l r d) builds a buffer; b4 and b7 read it back as a list, b7 with the history
+; the editor, history zipper and parseall, through (cite 'cli). (ed u l r d) builds a
+; buffer; b4 and b7 read it back as a list, b7 with the history
 
 (: B (cite 'cli)
    ednew (B 'ednew)       edstep (B 'edstep)     edput (B 'edput)       ednl (B 'ednl)
@@ -136,16 +136,16 @@
   (tap [27 91 60 48 59 49 59 49 109] @ p                             ; ..and the release
    (0 = (edkey p) && [0 0] = edtap ()))
    ; --- parseall: a line is one expression; floats; the more-sentinel ---
-   ; a single datum comes back as-is, so a leading monadic stays fused: "+(-3)" is -3
-  ('((1 2 3)) = (parseall '(49 32 50 32 51)))            ; "1 2 3" -> the application
-  ('((1 2)) = (parseall '(40 49 32 50 41)))              ; "(1 2)" -> the one form, as-is
-  (-3 = (ev <(parseall '(43 40 45 51 41))))              ; "+(-3)" -> monadic net = -3
+   ; a single datum comes back as-is, so "+(-3)" stays fused
+  ('((1 2 3)) = (parseall '(49 32 50 32 51)))            ; "1 2 3", the application
+  ('((1 2)) = (parseall '(40 49 32 50 41)))              ; "(1 2)", as-is
+  (-3 = (ev <(parseall '(43 40 45 51 41))))              ; "+(-3)", monadic net
   (() = (parseall ()))
   !(two? (parseall '(40 49)))
   (1.5 = <(parseall '(49 46 53)))
   (1000.0 = <(parseall '(49 101 51)))
   (two? <(parseall '(49 46 50 46 51)))      ; "1.2.3": a digit-led run factors
-   ; the more-sentinel: an unclosed shape is m (not two?); a complete datum is
+   ; the more-sentinel: an unclosed shape is m (not two?)
   !(two? (parseall '(40 43 32 49)))                   ; "(+ 1" unclosed
   (two? (parseall '(49 32 43)))                       ; "1 +" complete (the curry partial)
   (two? (parseall '(49 32 63 32 39 97)))              ; "1 ? 'a" complete (curried cond)

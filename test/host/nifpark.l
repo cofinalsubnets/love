@@ -1,6 +1,5 @@
-; test/host/nifpark.l -- a nif that cannot answer yet parks its task, not the vm
-; each law is a ticker that advances only if the task under test yields. run bare by
-; test/host/run.l under a timeout (failures are hangs), hence the posix borrow here
+; a nif that cannot answer yet parks its task, not the vm: a ticker advances only if
+; the task under test yields. run bare under a timeout (a failure hangs), hence posix
 (cite 'posix ? (borrow 'posix) ())
 
 (: (ticker n) (twirl (_ \ ((: (go u) (pin n 0 (1 + peep n 0 0),
@@ -23,7 +22,7 @@
    _ (close l)
    _ (assert (0 < k)))                  ; a blocking accept never gets here at all
 
-; law 2: recv parks on a quiet socket; a peer is (ipv4 << 16) | port, as src/love/sock.c packs it
+; law 2: recv parks on a quiet socket; a peer is (ipv4 << 16) | port
 (: up (test-bind 0)
    p (up 1)
    n {}
@@ -39,7 +38,7 @@
     assert (0 < k)
            (got = "ping")))           ; and the datagram still arrives whole
 
-; law 3: wait parks while a child is up; a poll, not an fd wait, so only that a peer runs is pinned
+; law 3: wait parks while a child is up; a poll, so only that a peer runs is pinned
 (: n {}
    t (ticker n)
    r (tether '("sleep" "0.3"))
@@ -49,8 +48,8 @@
     assert (0 < peep n 0 0)         ; 0 with the blocking waitpid back in
            (st = 0)))                 ; ... and the child's status is still exact
 
-; law 4: hark parks through the drain, not just the reap
-; the child is slow in the middle: one that writes all at once lets a blocking drain pass
+; law 4: hark parks through the drain, not just the reap; the child pauses mid-output,
+; or a blocking drain would pass
 (: n {}
    t (ticker n)
    r (hark '("sh" "-c" "echo one; sleep 0.2; echo two"))
@@ -60,10 +59,8 @@
            (>r = "one\ntwo\n")))  ; ... and the capture is still whole
 
 ; law 5: connect parks on the handshake, the write-direction park
-; the stall is a full accept queue (an unroutable address fails at once): this knows
-; src/love/sock.c's listen_backlog, 512; linux queues one more, so backlog+1 fills it.
-; the fill closes as it goes: a hangup does not free an unaccepted slot
-; closing the listener resets the stalled handshake, and catch reaps its nom
+; the stall is a full accept queue: listen_backlog 512, and linux queues one more.
+; a hangup does not free an unaccepted slot, so the fill closes as it goes
 (: pl (test-listen 0)
    port <pl
    l (pl 1)
