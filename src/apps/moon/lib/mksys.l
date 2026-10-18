@@ -84,8 +84,9 @@
          (ret)
          (label sj-mac)
          (li r6 1)
-         (li r0 33554480)            ; xnu's sigprocmask 48, a 4-byte set
-         (sys)
+         (sub sp sp 8)
+         (call __love_macmask)       ; xnu's sigprocmask, a 4-byte set: by libSystem or the trap
+         (add sp sp 8)
          (li r0 0)
          (ret)
 
@@ -121,8 +122,9 @@
          (jmp lj-file)
          (label lj-mac)
          (li r6 3)
-         (li r0 33554480)            ; xnu's sigprocmask
-         (sys)
+         (sub sp sp 8)
+         (call __love_macmask)       ; rbp and rbx ride the call
+         (add sp sp 8)
          (label lj-file)
          (mov r0 r4)                 ; rax <- val, before rbp is restored
          (ld r4  r3 8)               ; rbp
