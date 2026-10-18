@@ -273,6 +273,22 @@
                              (go >s d))
                          (go >s d))))
        (go ts 0))
+   ; `patchable_function_entry(N)` or `(N, M)`, to the first depth-0 `;` or `{` -> (N M) | ()
+   (pfeat? ts)
+    (: (num t) (tkk t = 'num ? (tkv t))
+       (go s d) (atom? s ? ()
+                   (<s @ t
+                      (? (d < 1 && (tp? t ";" || tp? t "{")) ()
+                         (tp? t "(") (go >s (d + 1))
+                         (tp? t ")") (go >s (d - 1))
+                         (0 < d && (idv? t "patchable_function_entry" || idv? t "__patchable_function_entry__") &&
+                          peekp >s "(" && two? >>s && charm? (num <>>s))
+                          (: n (num <>>s) r >>>s
+                             (? (peekp r ")") [n 0]
+                                (peekp r "," && two? >r && charm? (num <>r)) [n (num <>r)]
+                                (go >s d)))
+                         (go >s d))))
+       (go ts 0))
    ; one `aligned` ask, the tokens after the word -> (N rest): bare is the target's widest,
    ; a constant expression folds, one that will not fold asks nothing
    (palask ps ts)
@@ -301,7 +317,8 @@
    ; words are absent answers () having looked at nothing else, so ptop runs only the rest
    hdword {"section" 1 "__section__" 1 "alias" 1 "__alias__" 1 "weak" 1 "__weak__" 1
            "always_inline" 1 "__always_inline__" 1 "noinline" 1 "__noinline__" 1 "used" 1
-           "__used__" 1 "gnu_inline" 1 "__gnu_inline__" 1 "aligned" 1 "__aligned__" 1 "_Alignas" 1}
+           "__used__" 1 "gnu_inline" 1 "__gnu_inline__" 1 "aligned" 1 "__aligned__" 1 "_Alignas" 1
+           "patchable_function_entry" 1 "__patchable_function_entry__" 1}
    (hdhits ts)
     (: (go s d acc) (atom? s ? acc
                        (<s @ t
@@ -346,6 +363,7 @@
                  pin t 'anames {},        ; a file-scope asm label: nm -> its symbol
                  pin t 'currstr (),               ; ..accumulating for the current declaration
                  pin t 'aligns {},        ; global name -> its aligned(N)
+                 pin t 'pfes {},          ; fn name -> its patchable_function_entry (N M)
                  pin t 'locals {},        ; local/param name -> its declared type
                  pin t 'globals {},       ; file-scope name -> ty
                  pin t 'hoist (),                 ; block-scope `extern` decls, hoisted as ('xdecl ..)
@@ -407,7 +425,7 @@
    ; char is three types (C11 6.2.5p15): 'schar, 'uchar, and plain char -- 'char where the ABI
    ; makes it signed, 'cchar where unsigned. each symbol's sign is its own
    (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp arm))   ; bit-fields laid by AAPCS
-   (pchar ps) (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp arm) ? 'cchar 'char)
+   (pchar ps) (ps 'uch @ 1 'cchar 0 'char (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp arm) ? 'cchar 'char))   ; -f[un]signed-char's, else the ABI's
    (pw64 ps) !(pst32? ps)                          ; is long 8 bytes?
    (psword ps) (pst32? ps ? 4 8)
    (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t
@@ -2537,6 +2555,8 @@
          (pin ps 'curlink (leadkw? ps ts 'inline && !!(leadextern? ps ts) = !!(hwin hw "gnu_inline" "__gnu_inline__") ? 'inl 'ext))),
       (peep ps 'curalign () ? ()
          (hwin hw "aligned" "__aligned__" || elem "_Alignas" hw ? (alignat? ps ts @ an (an ? (pin ps 'curalign an))))),
+      (two? (peep ps 'curpfe ()) ? ()
+         (hwin hw "patchable_function_entry" "__patchable_function_entry__" ? (pfeat? ts @ pf (two? pf ? (pin ps 'curpfe pf))))),
       ptop9 ps ts))
    (ptop9 ps ts)
     (? (peekp ts ";") ['(tdef) >ts]           ; a stray top-level `;` -- an empty declaration
@@ -2713,7 +2733,7 @@
    (cparse-d ts tgt dia) (cparse-o ts tgt dia {})
    ; opts: the driver's language flags beyond the dialect ('swch, -fshort-wchar)
    (cparse-o ts tgt dia opts)
-    (: ps (pin (psnew-d tgt dia) 'swch (opts 'swch))
+    (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch))
        toks (fsbody ts) spans (fspans ts)
        ; a unit with no `mode(M)` or `__mode__(M)` has no mode attribute, so modeat's walk
        ; of every declaration is skipped; pfail's re-parse walks it again
@@ -2742,6 +2762,7 @@
            ; a function may name its section and alignment too (where code lands, its spacing)
             sc && fnp ? (pin (ps 'sects) <>f sc),
             an && fnp ? (pin (ps 'aligns) <>f an),
+            (ps 'curpfe @ pf (two? pf && fnp ? (pin (ps 'pfes) <>f pf))),
             <f = 'gdecl && (st || sc || an) ?
               (: (go2 prs) (atom? prs ? 1
                               (<<prs @ nm
@@ -2784,6 +2805,7 @@
             pin ps 'curnoinl (),
             pin ps 'curused (),
             pin ps 'curalign (),
+            pin ps 'curpfe (),
             pin ps 'scopacc (),        ; what a file-scope specifier bound is nobody's to take back
             pin ps 'cursect ()))
        (tops ts2 acc)
@@ -2793,7 +2815,7 @@
            (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
                       [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames)])
+                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes)])
            (ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why
