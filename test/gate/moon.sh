@@ -437,6 +437,74 @@ moonrun -ffixed-x18 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffix
 moonrun -t a64 -ffixed-x20 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffixed-x20 was ignored"
 echo "mooncc: -fshort-wchar, -fmacro-prefix-map and -ffixed-x18 do what they say, held to gcc"
 
+# -funsigned-char / -fsigned-char: plain char's sign in code, in #if and in the predefines
+cat > "$ho/.uch.c" <<'EOF'
+#include <limits.h>
+#if '\xc8' > 0
+#define PP 1
+#else
+#define PP 0
+#endif
+#ifdef __CHAR_UNSIGNED__
+#define PU 1
+#else
+#define PU 0
+#endif
+int main(void) {
+  char c = (char) 200, m = -1;
+  return (c == 200) + 2 * (CHAR_MIN == 0) + 4 * PU + 8 * (m > 0) + 16 * ('\xc8' == 200) + 32 * PP; }
+EOF
+for fl in -funsigned-char -fsigned-char; do
+  moonrun $fl -o "$ho/.uch" "$ho/.uch.c" > /dev/null 2>&1 || fail "$fl compile"
+  "$ho/.uch"; a=$?
+  $cc_g -O0 $fl -o "$ho/.uchg" "$ho/.uch.c" > /dev/null 2>&1 && "$ho/.uchg"; b=$?
+  [ $a -eq $b ] || fail "$fl: ours $a gcc $b"
+done
+[ $a -eq 0 ] || fail "-fsigned-char on x64 answered $a, want 0"
+cat > "$ho/.sch.c" <<'EOF'
+_Static_assert((char) -1 < 0, "signed");
+_Static_assert('\xc8' < 0, "a one-char constant");
+EOF
+moonrun -t a64 -fsigned-char -c -o /dev/null "$ho/.sch.c" > /dev/null 2>&1 || fail "-fsigned-char on a64: char stays unsigned"
+
+# -fno-jump-tables, -fno-builtin, -fno-optimize-sibling-calls, -falign-functions: each changes the object
+cat > "$ho/.fl.c" <<'EOF'
+int g(int);
+int sw(int x) { switch (x) { case 0: return g(3); case 1: return g(9); case 2: return g(1); case 3: return g(7);
+  case 4: return g(5); case 5: return g(4); case 6: return g(8); case 7: return g(2); } return 0; }
+void *memset(void *, int, unsigned long);
+void clr(char *p) { memset(p, 0, 16); }
+int tail(int x) { return g(x + 1); }
+int al(int x) { return x * 3; }
+EOF
+fdis() { moonrun -O2 "$@" -c -o "$ho/.fl.o" "$ho/.fl.c" > /dev/null 2>&1 || fail "$* compile"
+         objdump -d --no-show-raw-insn "$ho/.fl.o"; }
+fdis | grep -q 'jmp *\*' || fail "the switch laid no jump table to begin with"
+fdis -fno-jump-tables | grep -q 'jmp *\*' && fail "-fno-jump-tables laid a jump table"
+fnm() { fdis "$@" > /dev/null; nm "$ho/.fl.o" | grep -c ' U memset$'; }
+[ "$(fnm)" = 0 ] || fail "memset was a call to begin with"
+[ "$(fnm -fno-builtin)" = 1 ] || fail "-fno-builtin spliced memset"
+[ "$(fnm -fno-builtin-memset)" = 1 ] || fail "-fno-builtin-memset spliced memset"
+fdis | grep -A12 '<tail>:' | grep -q 'call' && fail "tail laid a call to begin with"
+fdis -fno-optimize-sibling-calls | grep -A12 '<tail>:' | grep -q 'call' || fail "-fno-optimize-sibling-calls jumped to g"
+moonrun -falign-functions=64 -c -o "$ho/.fl.o" "$ho/.fl.c" > /dev/null 2>&1 || fail "-falign-functions compile"
+for a in $(nm "$ho/.fl.o" | awk '$2 == "T" { print $1 }'); do
+  [ $((0x$a % 64)) -eq 0 ] || fail "-falign-functions=64 left a fn at 0x$a"
+done
+# -mno-red-zone is taken as it stands: no store below sp anywhere in a leaf with locals
+printf 'int lf(int a, int b) { int t[4] = { a, b, a + b, a - b }; return t[a & 3] * t[b & 3]; }\n' > "$ho/.rz.c"
+moonrun -O2 -mno-red-zone -c -o "$ho/.rz.o" "$ho/.rz.c" > /dev/null 2>&1 || fail "-mno-red-zone compile"
+objdump -d "$ho/.rz.o" | grep -q -- '-0x[0-9a-f]*(%rsp)' && fail "-mno-red-zone: a store below sp"
+# what mooncc does not honour refuses by name, exit 2
+for fl in -fwrapv -fno-strict-overflow -fpatchable-function-entry=2,1 -mcmodel=kernel -fstack-protector-strong \
+          -ftrivial-auto-var-init=zero -fcf-protection=branch -fno-such-flag -mno-such-flag; do
+  moonrun $fl -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?
+  [ $r -eq 2 ] && grep -q -- "$fl" "$ho/.fl.err" || fail "$fl: exit $r, not refused by name"
+done
+moonrun -fno-strict-aliasing -fno-common -fno-pie -fno-asynchronous-unwind-tables -ffunction-sections -mtune=generic \
+  -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a flag taken as it stands was refused"
+echo "mooncc: -f[un]signed-char held to gcc, the -f flags that change the object do, the rest refuse by name"
+
 # -- C11 conditional features (6.10.8.3), per target
 # ours alone (gcc has atomics): a claimed absence sends portable code down a fallback
 # cok/cno TGT SRC MSG: mooncc -t TGT builds (cok) or refuses (cno) the printf format SRC

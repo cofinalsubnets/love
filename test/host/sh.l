@@ -171,7 +171,14 @@
   ["exec echo hi | cat; echo end" "hi\nend\n"] ; in a stage it replaces only the stage
   ; a trap's blocked mask does not ride the exec: its own INT kills it (130)
   ["trap 'echo T' INT; exec out/love out/lush -c 'kill -INT $$; echo NOT'" "" 130]
-  ["type exec" "exec is a shell builtin\n"]])
+  ["type exec" "exec is a shell builtin\n"]
+  ; in a $( ) it replaces only the subshell, its status the substitution's
+  ["x=$(exec echo hi); echo \"got $x\"" "got hi\n" 0]
+  ["x=$(echo a; exec sh -c 'echo b; exit 3'; echo c); echo \"$x $?\"" "a\nb 3\n"]
+  ["x=$(exec nosuchcmd123 2>/dev/null); echo \"[$x] $?\"" "[] 127\n"]
+  ; ..and a bare exec's redirects end with it
+  ["{ x=$(exec 2>/dev/null); echo e >&2; } 2>&1" "e\n"]
+  ["exec 3>&1; x=$(exec 3>/dev/null; echo in >&3); echo \"kept [$x]\" >&3" "kept []\n"]])
 
 ; (sh-plan S ast) answers a plan fired with its state, so twice runs twice; the function
 ; book holds plans (closures, never two?), absence the sh-nofn mint

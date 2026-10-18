@@ -151,6 +151,9 @@
           'thumb1                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_ARCH_6M__")   ; gcc's for -mcpu=cortex-m0
           ('i386 || 'i386m16)          '("__i386__" "__i386" "__ILP32__")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
+   ; ..with __CHAR_UNSIGNED__ as plain char's sign comes out of the target and -f[un]signed-char
+   (uchar? tgt uc) (uc @ 'u 1 's 0 (elem "__CHAR_UNSIGNED__" (archdefs tgt) ? 1 0))
+   (chdefs tgt uc) (filter (d \ d != "__CHAR_UNSIGNED__") (archdefs tgt) + (uchar? tgt uc = 1 ? ["__CHAR_UNSIGNED__"] ()))
    ; the OS predefines: -os picks, and unnamed is the ground we stand on, never a fixed
    ; kernel. all three spellings gcc gives a linux ELF target -- st.c asks `#if
    ; defined(__linux)` for <pty.h>, and one missing is a header silently not included. the
@@ -417,8 +420,8 @@
    ; so -- gnulib picks its extern-inline scheme by it
    gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0" "__GNUC_STDC_INLINE__=1")
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp})
-    (un ? (stddefs tgt sw + booldefs dia + ds) (archdefs tgt + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + stddefs tgt sw
+   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc})
+    (un ? (stddefs tgt sw + booldefs dia + ds) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + stddefs tgt sw
                  ; our libc is the one in this link and carries its whole surface on every
                  ; kernel: a source asks it what it may call, never the kernel.
                  + '("LvMoonlibc=1")
@@ -435,7 +438,7 @@
                  (<l @ [o n] (starts? src o ? (n + snip src #o #src) (go >l))))
        f (go mp)
        (f ? ["__FILE__=\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] [c])) (chars f)))\""]))
-   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp}))
+   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc}))
     (: ds9 (cc-defs t + filedef src mp)
        ; `-` is read here and nowhere else, so every door onto a TU gets stdin for free; cdir
        ; answers "" for it, which is the cwd, gcc's rule for a source with no directory.
@@ -452,7 +455,7 @@
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
-       ps (cparse-o <>pp tgt dia {'swch sw})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
+       ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc)})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ps))
    ; a relocatable object: text/data/.bss/love_nifs/.image sections + symbols + relocations
@@ -475,7 +478,7 @@
            [".ARM.attributes" 1879048195 0 1                                         ; SHT_AARCH64_ATTRIBUTES
              [['raw ([65] + le32 35 + o-strbytes "aeabi_feature_and_bits"
                      + [0 1 0 0 b 1 p 2 0])]]]]))                              ; optional, uleb; bti pac gcs
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames]
        ; wasm rides gen's rv64 lane whole (src/love/holo/wasmfn.l is the machine under it) and
@@ -483,7 +486,7 @@
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp]] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns]] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
@@ -1158,10 +1161,10 @@
    ; -nostdlib family turns the driver's libc off, and any other dash arg refuses.
    (glu? a ch) (2 < #a && a 0 = 45 && a 1 = ch)
    ; the cc-driver tolerance: every cc accepts the advisory families -- warnings, -O, -g,
-   ; -pipe, -std= (we speak the one dialect we speak), -static (the output already is), the
-   ; -f codegen-hygiene family -- so `CC=mooncc` drives a make recipe written for gcc/clang
-   ; unchanged. what would change the artifact stays loud: -m.., and -Wl,/-Wa,/-Wp,,
-   ; whose payload is real arguments.
+   ; -pipe, -std= (we speak the one dialect we speak), -static (the output already is) -- so
+   ; `CC=mooncc` drives a make recipe written for gcc/clang unchanged. an -f or -m flag is
+   ; one by one (fok? below): what mooncc does not honour refuses by name, and so do -Wl,/-Wa,
+   ; /-Wp,, whose payload is real arguments.
    ; -lm and its family ride through too: the driver pulls its runtime by need, so the
    ; libc/libm/libdl a recipe asks for is already in the artifact before it asks. a name we
    ; cannot satisfy lands at the link as a named undefined reference, and a real third-party
@@ -1207,12 +1210,38 @@
                  0)
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
-             starts? a "-f" || glu? a 108 || glu? a 76 ||
+             glu? a 108 || glu? a 76 ||
              starts? a "-W" &&
              !(starts? a "-Wl," || starts? a "-Wa," || starts? a "-Wp,"))
    ; the -nostdlib family: freestanding on any cc's surface -- the driver supplies no
    ; runtime, and an owed symbol is an undefined reference, so rtpull says so rather than
    ; pulling.
+   ; the -f flags taken as they stand, each because the code already is what it asks:
+   ; types never order memory (memfw forgets on any root that may overlap), no check is
+   ; folded away on a deref, a tentative definition lays as a definition, the
+   ; code is pc-relative (fpic? refuses the targets it is not), no unwind table, stack probe,
+   ; canary, address-significance table or ident note is laid, the object is our assembler's,
+   ; and __builtin_object_size answers its unknown at every flex-array level. the hints below
+   ; them change nothing a program can see: placement, alignment past a function's, inlining
+   ; and the diagnostics' face
+   fsound '("-fno-strict-aliasing" "-fstrict-aliasing" "-fno-delete-null-pointer-checks" "-fdelete-null-pointer-checks" "-fno-common"
+            "-fno-pie" "-fno-PIE" "-fno-pic" "-fno-PIC" "-fomit-frame-pointer" "-fno-plt"
+            "-fno-asynchronous-unwind-tables" "-fno-unwind-tables" "-fno-exceptions" "-fno-stack-check"
+            "-fno-stack-clash-protection" "-fno-stack-protector" "-fno-addrsig" "-fno-ident"
+            "-fno-dwarf2-cfi-asm" "-fno-semantic-interposition" "-fintegrated-as" "-fno-integrated-as"
+            "-ftrivial-auto-var-init=uninitialized" "-fcf-protection=none"
+            "-fvisibility=default" "-fstrict-flex-arrays" "-fms-extensions")
+   fhint '("-ffunction-sections" "-fno-function-sections" "-fdata-sections" "-fno-data-sections"
+           "-fconserve-stack" "-fno-inline-functions-called-once" "-fno-partial-inlining"
+           "-fno-tree-vectorize" "-fno-unroll-loops" "-fno-reorder-blocks" "-fno-gcse"
+           "-fno-var-tracking" "-fno-var-tracking-assignments" "-fcolor-diagnostics"
+           "-fno-color-diagnostics" "-fno-caret-diagnostics" "-fno-diagnostics-show-caret")
+   (fok? a) (elem a fsound || elem a fhint || starts? a "-fstrict-flex-arrays=" ||
+             starts? a "-falign-loops" || starts? a "-falign-jumps" || starts? a "-falign-labels" ||
+             starts? a "-fno-align-loops" || starts? a "-fno-align-jumps" || starts? a "-fno-align-labels" ||
+             starts? a "-fdiagnostics-" || starts? a "-fmessage-length=" || starts? a "-fdebug-prefix-map=")
+   ; the -m flags taken as they stand: x64 code never stores below sp, and a tuning is a hint
+   (mok? a) (a = "-mno-red-zone" || a = "-mred-zone" || starts? a "-mtune=")
    (nostd? a) (a = "-nostdlib" || a = "-nostartfiles" ||
                a = "-nodefaultlibs" || a = "-ffreestanding")
    ; -mbranch-protection's words: clang's leaf, b-key, pc and standard (gcs) have no lane here
@@ -1237,7 +1266,7 @@
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
-                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz ()}
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1287,6 +1316,32 @@
           ; stub's strings). -fno-short-wchar is the default it names
           ("-fshort-wchar" . r) (flags r (pin t 'swch 1))
           ("-fno-short-wchar" . r) (flags r (pin t 'swch ()))
+          ; -funsigned-char / -fsigned-char: plain char's sign over the target's own (the kernel
+          ; asks unsigned on every arch)
+          (("-funsigned-char" || "-fno-signed-char") . r) (flags r (pin t 'uch 'u))
+          (("-fsigned-char" || "-fno-unsigned-char") . r) (flags r (pin t 'uch 's))
+          ("-fno-jump-tables" . r) (flags r (pin t 'njt 1))
+          ("-fjump-tables" . r) (flags r (pin t 'njt ()))
+          ; -fno-builtin: a plain memset or memcpy is a call, never spliced; -fno-builtin-NAME
+          ; names one (the only two gen splices by their plain name)
+          ("-fno-builtin" . r) (flags r (pin t 'nbi 1))
+          ((("-fno-builtin-" + w) . r) && #w) (flags r (t 'nbi = 1 ? t (fpush t 'nbi w)))
+          ("-fbuiltin" . r) (flags r (pin t 'nbi ()))
+          ; -falign-functions=N: every fn at N or its own wider; bare, gcc's 16
+          ((("-falign-functions=" + w) . r) && #w) (flags r (pin t 'falg (tonum w)))
+          ("-falign-functions" . r) (flags r (pin t 'falg 16))
+          ("-fno-align-functions" . r) (flags r (pin t 'falg ()))
+          ("-fno-optimize-sibling-calls" . r) (flags r (pin t 'nsib 1))
+          ; an int's + - * stand 64 bits wide where they are read, as C's undefined overflow allows:
+          ; -fwrapv and -fno-strict-overflow ask the 32-bit wrap, and refuse below
+          ((a . r) && elem a '("-fno-wrapv" "-fstrict-overflow")) (flags r t)
+          ("-foptimize-sibling-calls" . r) (flags r (pin t 'nsib ()))
+          ; a frame on every fn that calls (moon-cc refuses the targets that keep none)
+          ("-fno-omit-frame-pointer" . r) (flags r (pin t 'kfp 1))
+          ((a . r) && elem a '("-fpic" "-fPIC" "-fpie" "-fPIE")) (flags r (pin t 'pic a))
+          ; an enum's width is the ABI's (parse.l's ety): short on the AAPCS32 targets alone
+          ("-fshort-enums" . r) (flags r (pin t 'senum 's))
+          ("-fno-short-enums" . r) (flags r (pin t 'senum 'n))
           ; -ffixed-x18: the platform register stays out of allocation, which on a64 it always
           ; is (holo/a64.l: x16..x18 are sayable, never allocated). any other -ffixed- names a
           ; register we would have to take out of the pool, and refuses until we can
@@ -1366,10 +1421,12 @@
           ; -Os/-Oz ask for size: returns share one epilogue. any other -O asks it back off
           ((a . r) && starts? a "-O") (flags r (pin t 'osz (elem a ["-Os" "-Oz"])))
           ((a . r) && tol? a) (flags r t)
+          ((a . r) && (fok? a || mok? a)) (flags r t)
           ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
           ; input, the source on stdin, which every configure probe writes before it
           ; trusts a flag.
           ("-" . r) (flags r (fpush t 'ins "-"))
+          ((a . _) && (starts? a "-f" || starts? a "-m")) (udie 2 "cc: \(a) -- mooncc does not honour it")
           (("-" + _) . _) (udie 2 usage)
           (a . r) (flags r (fpush t 'ins a)))
    ; every cc says its sentence, the internal ones too: gen and holo raise noms
@@ -1411,6 +1468,13 @@
        _ ((f 'sal || two? (f 'bp)) && f 'tgt != 'a64 &&
           udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
        _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")
+       ; a64 keeps its frame record on every fn that calls, as clang's leaves go without; x64 and
+       ; the rest address the frame off sp
+       _ (f 'kfp && f 'tgt != 'a64 && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
+       _ (f 'senum && (elem (f 'tgt) '(thumb1 thumb2 thumb2sp arm) @ a32 (f 'senum = 's ? !a32 a32)) &&
+          udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
+       ; pc-relative code on x64, a64 and rv64; i386 and the arm targets address absolutely
+       _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
        ; no nest on disk anywhere: the carried source answers, in memory --
        ; pinned once here so every TU and the runtime share the one inflate.
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))

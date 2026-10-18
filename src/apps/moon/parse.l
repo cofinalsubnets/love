@@ -448,7 +448,7 @@
    ; signed (x86-64, wasm's C conventions), 'cchar where unsigned (AAPCS64, AAPCS32, RISC-V). each
    ; symbol's sign is its own, so nothing past here asks the target
    (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp arm))   ; a64 and the thumbs lay bit-fields by AAPCS
-   (pchar ps) (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp arm) ? 'cchar 'char)
+   (pchar ps) (ps 'uch @ 1 'cchar 0 'char (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp arm) ? 'cchar 'char))   ; -f[un]signed-char's, else the ABI's
    (pw64 ps) !(pst32? ps)                          ; is long 8 bytes? the const folder's one question
    (psword ps) (pst32? ps ? 4 8)
    (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t: sizeof folds wear this coat
@@ -2941,7 +2941,7 @@
    (cparse-d ts tgt dia) (cparse-o ts tgt dia {})
    ; opts: what the driver's flags say about the language beyond the dialect ('swch, -fshort-wchar)
    (cparse-o ts tgt dia opts)
-    (: ps (pin (psnew-d tgt dia) 'swch (opts 'swch))
+    (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch))
        toks (fsbody ts) spans (fspans ts)
        ; does the unit name volatile anywhere? mooncc's types carry no qualifier, so a unit that
        ; does keeps every load and store where the source put it (gen's memfw stands down)

@@ -28,10 +28,10 @@
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l"] ["test_hostnif"] ""]
-     ["" ["src/love/snap.c" "src/love/image.c" "Makefile" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
+     ["" ["src/love/snap.c" "src/love/image.c" "Makefile" "common.mk" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
      ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_quick"] ""]
-     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*` and the `Makefile`"
-      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile"] ["test_gcstress"]
+     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk`"
+      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile" "common.mk"] ["test_gcstress"]
       ", in the queue's union; a `.l`, doc, app or test diff never owes it"]
      ["what the bake runs, `src/love/{gc,snap,image,ev,io,love,map,tablet,alloc}.c` and the glaze"
       ["src/love/gc.c" "src/love/snap.c" "src/love/image.c" "src/love/ev.c" "src/love/io.c" "src/love/love.c"

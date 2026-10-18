@@ -374,7 +374,8 @@
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    (a8? g) (a64? g || rv64? g)                        ; the 8-gp-arg LP64 pair: a64 + riscv share the AAPCS64 shapes
    (f32abi? g) (x64? g || a8? g)                      ; a prototyped float crosses a call as binary32 in its float register
-   (gchar g) (elem (peep g 'tgt 'x64) '(a64 rv64 thumb1 thumb2 thumb2sp arm) ? 'cchar 'char)   ; plain char, as parse.l's pchar
+   (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
+                (elem (peep g 'tgt 'x64) '(a64 rv64 thumb1 thumb2 thumb2sp arm) ? 'cchar 'char)))
    (arm? g) (a64? g || t32? g || rv64? g)             ; the lr-push / fp-base frame family (riscv rides it whole)
    ; the 32-bit x86 seats (SysV i386, cdecl; i386m16 its 16-bit face): thumb's word and pair,
    ; x64's instructions, and every argument on the stack
@@ -1413,14 +1414,14 @@
    ; shadows it or the fn is the library's own). no memmove: bcopy interleaves loads and stores
    (meminl g) (8 * wsize g)                          ; the widest expansion: 8 words either way
    (memk g e) (knum g e @ k (two? k ? <k (cfold !(ilp32? g) e @ v (cint? v ? v ()))))
-   (memnm? bi nm) (bi = nm || bi = "__builtin_\(nm)")
+   (memnm? g bi nm) (bi = nm && !(nobi? g nm) || bi = "__builtin_\(nm)")
    (memok? g env bi args)                            ; may this call expand at all?
     (3 = #args && !(abl? g 'meminl) && bad? (vent g env bi) && !(g 'fn = bi))
    (cgmem g env bi args)                             ; -> the value | 'no (leave it a call)
     (!(memok? g env bi args) ? 'no
        (memk g (args 2) @ n9
           (? (!(charm? n9) || n9 < 0 || meminl g < n9) 'no
-             (memnm? bi "memset")
+             (memnm? g bi "memset")
               (memk g <>args @ c9
                  (!(charm? c9) ? 'no
                     ; the destination is an argument, not an address the fn keeps: argpos,
@@ -1433,7 +1434,7 @@
                              (mkv '(ptr void) 'r0 $
                               relean (tor0 g dv) + [['mov 'r1 'r0] ['li 'r2 v9]] +
                               (sal? g ? (bseta 0 n9 (memal g env <args)) (bset g 0 n9 ()))))))))
-             (memnm? bi "memcpy")
+             (memnm? g bi "memcpy")
               ; the destination parks in a pool seat, never on the machine stack (sp motion costs
               ; a musttail fn its tail); a pool seat cannot survive a call, so a callish arg declines
               (callish? <args || callish? <>args ? 'no
@@ -4505,7 +4506,8 @@
    ; a musttail call is its author's word that nothing reads the frame past the jump, so a value
    ; escape still jumps; a frame address laid since the last call (an arg) still refuses (lw), a
    ; best-effort net -- one reaching the callee through memory goes unseen
-   (sibcall g fs) (g 'fesc || g 'fescv && abl? g 'fescv || v6m? g ?   ; v6m: the pop-pc epilogue cannot restore lr for a tail-jmp, so no sibcall
+   (sibcall g fs) (? (nsib? g) (anymust? fs ? (nolane g "a musttail call, and -fno-optimize-sibling-calls") fs)
+                     (g 'fesc || g 'fescv && abl? g 'fescv || v6m? g) ; v6m: the pop-pc epilogue cannot restore lr for a tail-jmp, so no sibcall
                       (anymust? fs ? (scare 'musttail-escape (g 'fn)), fs)
                      (peep g 'epi epi @ ej
                       (sibs g fs () (elabsx fs {} ej) (g 'homes) ej ['callr (pkr g)])))
@@ -5384,6 +5386,11 @@
    (old86? g) (ia32? g ? (drop 3 (g 'mo) @ r (two? r && <r)) 0)
    (osz? g) (drop 4 (g 'mo) @ r (two? r && <r))   ; -Os: for size
    (nofp? g) (drop 5 (g 'mo) @ r (two? r && <r))  ; -mno-sse and kin: no float register
+   (njt? g) (drop 7 (g 'mo) @ r (two? r && <r))   ; -fno-jump-tables: a switch is a chain of compares
+   ; -fno-builtin: 1 every plain name a call, else the names -fno-builtin-NAME gave
+   (nobi? g nm) (drop 8 (g 'mo) @ r (two? r && (<r = 1 || elem nm <r)))
+   (falgn g) (drop 9 (g 'mo) @ r (two? r && charm? <r ? <r 0))   ; -falign-functions=N
+   (nsib? g) (drop 10 (g 'mo) @ r (two? r && <r))  ; -fno-optimize-sibling-calls: a call stays a call
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
    ; the chunks of n bytes at an a-aligned address: (pos width) each, widest first
    (alchunks n a)
@@ -8957,7 +8964,7 @@
        span (hi - lo + 1)
        (? (wasm? g || t32? g) 'no               ; no memory table on wasm; t32's REL lane is unproven here
           (any (e2 \ two? <e2) cases) 'no         ; a range rides the chain
-          (abl? g 'jtab) 'no
+          (abl? g 'jtab || njt? g) 'no            ; -fno-jump-tables, as the kernel's retpoline asks
           (n9 < 6) 'no                             ; fewer cases than a table is worth
           (4096 < span) 'no                         ; ..and a span no table should cover
           (3 * n9 < span) 'no                     ; too sparse: a third full is the floor
@@ -11220,7 +11227,7 @@
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () ()])}   ; the -m asks: [strict-align branch-protection regparm pre-686 -Os no-float]
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () ()])}   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls]
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
        ainls (two? xtra && 5 < #xtra ? (xtra 5))
@@ -11313,8 +11320,8 @@
                                          (go >l (g 'alias <l = nm ?
                                                    (['label (name <l)] . a2) a2)))
                            (go (keys (g 'alias)) ()))
-                     ; an aligned(N) fn, floored at 2 by the parity law
-                     an (peep (g 'aligns) nm 2 @ a (a < 2 ? 2 a))
+                     ; an aligned(N) fn, or -falign-functions', floored at 2 by the parity law
+                     an (peep (g 'aligns) nm 2 @ a (max (max a 2) (falgn g)))
                      fm (['align an] . al2 + (bp? g 'bti ? (btiat nm r) r))
                      ; a fn that named its section leaves .text for that stream, its align riding out as the section's grain
                      sc (peep (g 'sects) nm ())
