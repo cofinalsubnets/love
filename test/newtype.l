@@ -104,7 +104,7 @@
     (1 /// 6 = (1 /// 3) /// 2)  (2 = (4 /// 3) /// (2 /// 3))   ; a rational operand divides exactly
     !(1 /// 0)  !(/// [1 0])  !((1 /// 3) /// 0)  !((1 /// 3) /// (1 /// 0))   ; by zero -> ()
     !("ab" /// 2)  !(2 /// "ab")  !([1 2] /// 3)
-    ; a float has no gcd: a rational meeting one answers the float, the inexact winning
+    ; a float meeting a rational wins
     (gem? (0.5 + 1 /// 3))  (0.5 + 1 /// 3 = 0.5 + 1 / 3)  (gem? ((1 /// 3) + 0.5))
     (gem? (0.5 * 1 /// 3))  (gem? (0.5 - 1 /// 3))  (gem? ((1 /// 3) / 0.5))  ((1 /// 2) * 0.5 = 0.25)
     (gem? (2.5 /// 1))  (2.5 = 2.5 /// 1)  (2.0 = 1 /// 0.5)  (0.25 = (1 /// 2) /// 2.0)  !(1.0 /// 0)
