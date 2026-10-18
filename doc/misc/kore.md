@@ -571,9 +571,11 @@ What is man's own is the search path, the decompression, and the handing over.
   terminal and a pipe is not one. With one, bold and underline ride through the pager: an SGR
   sequence costs no column there and a wrap re-opens it on the next row.
 
-**mdoc is not read.** A BSD-style page (`.Dd`/`.Sh`/`.Nm` — about one man1 page in twenty-five
-here) is a different macro set, and rendering it through the man-macro reader produces a page
-of macro names rather than prose. So it is named as unsupported instead of rendered wrong.
+**mdoc is read through man.** A BSD-style page (`.Dd`/`.Sh`/`.Nm`, about one man1 page in
+twenty-five here) is laid as the man macros the reader knows before the scrub runs: its blocks
+as `.SH`, `.TP`, `.IP`, `.RS` and `.nf`, its inline macros as fonts and words. A page's own
+`.de` macros run their bodies with their arguments. On a terminal the names are one walk:
+`:n` and `:p` go between their pages, and a name with no page is said first and left out.
 Also absent: `apropos`/`whatis`, the cat cache, and `.so` chains deeper than one.
 
 ## www (src/apps/kore/www.l)
