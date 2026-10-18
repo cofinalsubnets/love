@@ -1,49 +1,47 @@
 #ifndef _LOVE_SYS_MTIO_H
 #define _LOVE_SYS_MTIO_H
-/* freestanding sys/mtio.h for cc: magnetic-tape ioctls. the struct/op set tar's
- * rmt client speaks; values match linux <sys/mtio.h>. */
+/* magnetic-tape ioctls, as tar's rmt client speaks them; linux's values */
 #include <sys/ioctl.h>
 
 struct mtop {
-	short mt_op;    /* operation, one of the MT* below */
-	int   mt_count; /* repeat count */
+	short mt_op;
+	int   mt_count;
 };
 
-/* mt_op operations */
 #define MTRESET  0
 #define MTFSF    1  /* forward space over file mark */
 #define MTBSF    2  /* backward space over file mark */
 #define MTFSR    3  /* forward space record */
 #define MTBSR    4  /* backward space record */
-#define MTWEOF   5  /* write file mark */
-#define MTREW    6  /* rewind */
+#define MTWEOF   5
+#define MTREW    6
 #define MTOFFL   7  /* rewind and unload */
 #define MTNOP    8  /* no-op, sets status */
 #define MTRETEN  9  /* retension */
 #define MTBSFM   10 /* backward space file mark, position at eof */
 #define MTFSFM   11 /* forward space file mark, position at bof */
 #define MTEOM    12 /* goto end of recorded media */
-#define MTERASE  13 /* erase */
+#define MTERASE  13
 #define MTRAS1   14
 #define MTRAS2   15
 #define MTRAS3   16
-#define MTSETBLK 20 /* set block length */
+#define MTSETBLK 20
 #define MTSETDENSITY 21
 #define MTSEEK   22
 #define MTTELL   23
 
 struct mtget {
-	long mt_type;   /* type of magtape device */
-	long mt_resid;  /* residual count */
-	long mt_dsreg;  /* status register */
-	long mt_gstat;  /* generic status */
-	long mt_erreg;  /* error register */
-	int  mt_fileno; /* file number of current position */
-	int  mt_blkno;  /* block number of current position */
+	long mt_type;
+	long mt_resid;
+	long mt_dsreg;
+	long mt_gstat;
+	long mt_erreg;
+	int  mt_fileno;
+	int  mt_blkno;
 };
 
 struct mtpos {
-	long mt_blkno; /* current block number */
+	long mt_blkno;
 };
 
 #define MTIOCTOP _IOW('m', 1, struct mtop)

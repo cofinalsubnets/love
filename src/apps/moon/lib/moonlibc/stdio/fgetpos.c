@@ -1,6 +1,5 @@
 #include "../impl.h"
 
-/* ---- fgetpos, fsetpos: a position is ftello's offset ---- */
 int fgetpos(FILE *f, fpos_t *p) {
   off_t o = ftello(f);
   if (o < 0) return -1;

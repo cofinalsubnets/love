@@ -1,8 +1,5 @@
-/* src/apps/moon/lib/moonlibc/cdiv.c -- C99 complex division by a complex divisor: the two
- * helpers gcc's lowering calls, libgcc's steps exactly, so a quotient's bits are gcc's. a
- * float quotient divides in double (libgcc's arm builds too, soft or single-precision); a
- * double one scales by the larger divisor part (smith). either recovers the infinities and
- * zeros a nan+nan answer lost (annex G). */
+/* complex division helpers gcc's lowering calls, in libgcc's exact steps: float divides
+ * in double, double scales smith-style; both recover annex G's infinities and zeros */
 #include <stdint.h>
 
 typedef union { double d; uint64_t u; } cdv_d;

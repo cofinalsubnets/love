@@ -10,11 +10,11 @@ off_t lseek(int fd, off_t off, int wh) {
     return r; }
 #endif
 #ifdef __ILP32__
-  off_t r;                                                    /* _llseek: the offset split, the answer laid */
+  off_t r;                                                    /* _llseek: offset hi, lo; result by pointer */
   long e = er(sc5(NR__llseek, fd, (long) (off >> 32), (long) off, (long) &r, wh));
   return e < 0 ? -1 : r;
 #else
-  if (__love_osv == 3) return er(sc4(NR_lseek, fd, 0, off, wh));   /* the classic PAD */
+  if (__love_osv == 3) return er(sc4(NR_lseek, fd, 0, off, wh));   /* netbsd pads before the offset */
   return er(sc3(NR_lseek, fd, off, wh));
 #endif
 }

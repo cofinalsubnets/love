@@ -1,9 +1,8 @@
 #include "../impl.h"
 
-/* the BSDs' msghdr has int-wide lengths and their cmsg an int-wide head (__love_cmh
- * says where its data sits), so each head is laid again in the BSD's shape. under SOL_SOCKET
- * only SCM_RIGHTS is spelled; an unmapped type refuses loudly. control rides
- * a fixed scratch -- a bigger one refuses, never a torn walk. */
+/* the BSDs' msghdr lengths and cmsg head are int-wide (__love_cmh says where the data
+ * sits), so each head is laid again. of SOL_SOCKET only SCM_RIGHTS passes; control rides a
+ * fixed scratch, and a bigger one refuses */
 long sendmsg(int fd, struct msghdr const *m, int fl) {
   if (__love_osv < 2) return er(sc3(NR_sendmsg, fd, (long) m, fl));
   struct sockaddr_storage sa;

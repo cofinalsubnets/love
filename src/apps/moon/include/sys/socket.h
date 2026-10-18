@@ -3,14 +3,13 @@
 typedef unsigned int socklen_t;
 typedef unsigned short sa_family_t;
 struct sockaddr { sa_family_t sa_family; char sa_data[14]; };
-/* big enough for any address the seam speaks (glibc's is 128 bytes) */
+/* 128 bytes, as glibc's */
 struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define AF_UNSPEC 0
 #define AF_UNIX   1
 #define AF_LOCAL  1
 #define AF_INET   2
 #define AF_INET6 10
-/* the PF_ twins: the same numbers, the spelling socket(2) callers still use */
 #define PF_UNSPEC AF_UNSPEC
 #define PF_UNIX   AF_UNIX
 #define PF_LOCAL  AF_LOCAL
@@ -71,7 +70,7 @@ int getsockname(int, struct sockaddr*, socklen_t*);
 int getpeername(int, struct sockaddr*, socklen_t*);
 long recvfrom(int, void*, unsigned long, int, struct sockaddr*, socklen_t*);
 long sendto(int, void const*, unsigned long, int, struct sockaddr const*, socklen_t);
-/* scatter-gather + ancillary (SCM_RIGHTS fd passing), glibc x86-64 layout */
+/* glibc x86-64's layout */
 struct iovec { void *iov_base; unsigned long iov_len; };
 struct msghdr {
   void *msg_name; socklen_t msg_namelen;

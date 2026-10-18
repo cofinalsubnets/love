@@ -1,5 +1,5 @@
 #ifndef _LOVE_STDNORETURN_H
 #define _LOVE_STDNORETURN_H
-/* a hint only -- codegen owes it nothing */
+/* a hint only */
 #define noreturn
 #endif

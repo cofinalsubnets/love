@@ -7,7 +7,7 @@ typedef unsigned int uid_t;
 typedef unsigned int gid_t;
 typedef unsigned int id_t;
 typedef unsigned int mode_t;
-#ifdef __ILP32__                /* the 64-bit file and time words a 32-bit long cannot hold */
+#ifdef __ILP32__
 typedef long long off_t;
 typedef unsigned long long dev_t;
 typedef unsigned long long ino_t;
@@ -24,9 +24,7 @@ typedef unsigned long nlink_t;
 typedef long   suseconds_t;
 typedef long   blksize_t;
 typedef long   clock_t;
-/* the BSD spellings glibc carries under _DEFAULT_SOURCE -- darkhttpd casts a
- * PF_ constant through (u_char), and a missing type name reads as a parse error
- * at the token AFTER the cast, which names nothing. */
+/* the bsd spellings glibc carries under _DEFAULT_SOURCE */
 typedef unsigned char  u_char;
 typedef unsigned short u_short;
 typedef unsigned int   u_int;
@@ -35,5 +33,5 @@ typedef unsigned short ushort;
 typedef unsigned int   uint;
 typedef unsigned long  ulong;
 typedef char          *caddr_t;
-#include <sys/select.h>   /* glibc pulls it in from here, and sources lean on that */
+#include <sys/select.h>   /* as glibc does */
 #endif

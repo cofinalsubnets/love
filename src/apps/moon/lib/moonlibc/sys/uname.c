@@ -2,9 +2,8 @@
 #include <sys/sysctl.h>
 #include "../impl.h"
 
-/* one kern.* or hw.* string into a field, cut to its 64. freebsd's version ends in a
- * newline and carries tabs, which its own libc turns to spaces; so does this. macos's
- * runs past the field, and a short buffer would answer nothing at all */
+/* a kern.* or hw.* string into a field, cut to 64. freebsd's version carries a newline and
+ * tabs, which its libc turns to spaces; macos's runs past the field */
 static void uts_mib(int a, int b, char *out) {
   int mib[2] = { a, b };
   char t[256];
@@ -16,7 +15,7 @@ static void uts_mib(int a, int b, char *out) {
   for (char *p = out; *p; p++) if (*p == '\n' || *p == '\t') *p = ' ';
   for (size_t k = strlen(out); k && out[k - 1] == ' '; k--) out[k - 1] = 0; }
 
-/* linux and inle answer the call; the BSDs have no such door, so it is read by sysctl */
+/* the BSDs have no uname call */
 int uname(struct utsname *u) {
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();

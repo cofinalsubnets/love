@@ -1,8 +1,6 @@
 #ifndef _LOVE_STDCKDINT_H
 #define _LOVE_STDCKDINT_H
-/* C23 7.20 checked integer arithmetic. cc has no _Bool keyword, so the
-   result narrows to int (0/1) -- the same truth value. gen.l lowers
-   __builtin_{add,sub,mul}_overflow. */
+/* c23 checked arithmetic, answering an int 0 or 1 */
 #define ckd_add(r, a, b) ((int) __builtin_add_overflow((a), (b), (r)))
 #define ckd_sub(r, a, b) ((int) __builtin_sub_overflow((a), (b), (r)))
 #define ckd_mul(r, a, b) ((int) __builtin_mul_overflow((a), (b), (r)))

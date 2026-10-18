@@ -1,11 +1,7 @@
 #ifndef _LOVE_PTHREAD_H
 #define _LOVE_PTHREAD_H
-/* the minimal threads: create, join, exit, self, equal -- linux only (clone, a futex join); on
-   another kernel pthread_create answers EAGAIN. each thread gets an 8M stack and ignores its
-   attributes. malloc and free lock once a second thread exists; errno is one for the whole
-   process, and stdio streams take no lock. mutexes (normal, errorcheck, recursive), conditions,
-   rwlocks, once and keys are futex words, process-private; their attributes but a mutex's kind
-   are taken and ignored. */
+/* minimal threads, linux only (elsewhere create answers EAGAIN), 8M stacks, attributes but a
+   mutex's kind ignored. errno is process-wide and stdio takes no lock */
 #include <sys/types.h>
 #include <time.h>
 typedef unsigned long pthread_t;

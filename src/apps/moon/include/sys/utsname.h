@@ -1,7 +1,6 @@
 #ifndef _LOVE_SYS_UTSNAME_H
 #define _LOVE_SYS_UTSNAME_H
-/* linux's new_utsname: six fields of 65, which the call fills in place. the BSDs have no
- * such call, and the member builds the same struct from kern.* and hw.machine */
+/* linux's new_utsname, filled in place; the bsds build it from kern.* and hw.machine */
 struct utsname {
   char sysname[65];
   char nodename[65];

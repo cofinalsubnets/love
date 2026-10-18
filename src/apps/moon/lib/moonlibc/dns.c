@@ -1,11 +1,7 @@
-/* src/apps/moon/lib/moonlibc/dns.c -- getaddrinfo: the numeric slice, then the NAME
- * half over /etc/hosts and a UDP A query to /etc/resolv.conf's server. */
+/* getaddrinfo: a dotted quad, /etc/hosts, then a UDP A query to resolv.conf's servers */
 #include "impl.h"
 #include <arpa/inet.h>
 
-/* ---- getaddrinfo, the numeric slice: dotted-quad IPv4 + localhost + a decimal
- * port -- exactly what the host seam speaks (src/love/sock.c resolves numbers; DNS
- * stays a post-rung nicety). one malloc'd block carries result + address. ---- */
 struct __sain { unsigned short fam; unsigned short port; unsigned int addr; char pad[8]; };   /* sockaddr_in, 16 bytes */
 struct __gai { struct addrinfo ai; struct __sain sa; };
 static int __quad(char const *s, unsigned int *out) {   /* host order */
@@ -13,12 +9,8 @@ static int __quad(char const *s, unsigned int *out) {   /* host order */
   if (inet_pton(AF_INET, s, b) != 1) return -1;
   *out = (unsigned) b[0] << 24 | (unsigned) b[1] << 16 | (unsigned) b[2] << 8 | b[3];
   return 0; }
-/* ---- the NAME half: /etc/hosts, then a UDP A query to /etc/resolv.conf's
- * nameservers -- the smallest resolver that keeps `connect host port` (nc)
- * and svalbard's http pull real on the raw default binary. IPv4 A records only,
- * first answer wins; 2 tries x ~2.5s per nameserver, up to 3 nameservers,
- * 127.0.0.1 when resolv.conf names none (musl's fallback). all addresses
- * move in HOST order here; getaddrinfo's htonl is the one wire flip. ---- */
+/* IPv4 only, first A wins; 2 tries x 2.5s for each of up to 3 nameservers.
+ * addresses move in host order; getaddrinfo's htonl is the one wire flip */
 static int __hline(char *ln, char const *host, unsigned int *out) {
   char *p = ln;
   while (*p == ' ' || *p == 9) p++;

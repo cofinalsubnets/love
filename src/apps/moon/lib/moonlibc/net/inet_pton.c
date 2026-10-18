@@ -1,9 +1,7 @@
 #include "../impl.h"
 #include <arpa/inet.h>
 
-/* text -> network-order bytes: 1, or 0 for text that is not an address. a quad is four
- * decimal octets with no leading zeros; a v6 address is up to eight hex groups of one to
- * four digits, one :: for a run of zero groups, and a quad in its last 32 bits */
+/* a quad's octets take no leading zeros */
 static int pton4(char const *s, unsigned char *d) {
   unsigned char q[4];
   int n = 0, digits = 0;
@@ -27,7 +25,7 @@ static int hexv(int c) {
 
 static int pton6(char const *s, unsigned char *d) {
   unsigned char a[16] = {0};
-  int n = 0, gap = -1, digits = 0;             /* n bytes laid; gap where :: stood */
+  int n = 0, gap = -1, digits = 0;             /* gap: where :: stood */
   unsigned v = 0;
   char const *grp = s;
   if (*s == ':' && *++s != ':') return 0;      /* a lone leading colon */

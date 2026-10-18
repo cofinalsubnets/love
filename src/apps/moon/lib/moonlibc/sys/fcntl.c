@@ -5,12 +5,9 @@ int fcntl(int fd, int cmd, ...) {
   long arg = va_arg(ap, long);
   va_end(ap);
   if (__love_osv >= 2) {
-    /* DUPFD/GETFD/SETFD/GETFL/SETFL share their numbers; the rest translate.
-     * SETFL's status flags and GETFL's answer wear the other kernel's bits;
-     * the record-lock trio takes each BSD's numbers (fb 11/12/13, nb 7/8/9)
-     * and the shared {start,len,pid,type,whence} prefix -- freebsd alone
-     * appends sysid, which the wider scratch carries for both. */
-    int nb = __love_osv >= 3;             /* macos takes netbsd's lock numbers, and its record is the prefix */
+    /* DUPFD..SETFL share numbers, the status flags translate; the lock trio is fb 11-13,
+     * nb 7-9, on a {start len pid type whence} record that freebsd extends by sysid */
+    int nb = __love_osv >= 3;             /* macos takes netbsd's numbers and record */
     if (cmd == F_SETFL) arg = __love_ofb(arg);
     else if (cmd == F_DUPFD_CLOEXEC) cmd = __love_osv == 4 ? 67 : nb ? 12 : 17;
     else if (cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW) {

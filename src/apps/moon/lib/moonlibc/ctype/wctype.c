@@ -2,9 +2,8 @@
 #include <wctype.h>
 #include "ucd.h"
 
-/* ---- wctype: a wide character in ascii classifies as its byte does. past ascii the C locale
- * gives it no class and no case, and a UTF-8 LC_CTYPE (num.c's setlocale) the unicode floor's
- * (ucd.c), glibc's C.UTF-8: digits stay 0-9, and graph and punct are print's less the rest ---- */
+/* ascii classifies as its byte; past it the C locale gives no class or case, and a UTF-8
+ * LC_CTYPE the unicode floor's, as glibc's C.UTF-8: digits stay 0-9 */
 #define ASC(w) ((w) < 128)
 #define UNI(w) (__love_utf8 && (w) <= 0x10ffff)
 static int walpha(wint_t w) { return __ucd_in(ucd_alpha, w); }

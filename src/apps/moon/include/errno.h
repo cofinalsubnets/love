@@ -1,6 +1,6 @@
 #ifndef _LOVE_ERRNO_H
 #define _LOVE_ERRNO_H
-/* glibc's errno is thread-local behind a call */
+/* glibc's spelling; here one errno for the process */
 int *__errno_location(void);
 #define errno (*__errno_location())
 #define EPERM           1
@@ -13,10 +13,7 @@ int *__errno_location(void);
 #define ENOEXEC         8
 #define EBADF           9
 #define ECHILD          10
-/* 1..10 are V7's, one table; from 11 the kernels part ways. these are the
- * CANONICAL (linux) values on every lane -- a freebsd kernel's answers
- * translate through moonlibc's row (os.c) before anything reads errno.
- * 41 and 58 are blanks, and 41 doubles as the no-canonical-concept answer. */
+/* linux's values on every kernel, the bsds' translated; 41 answers one with no linux twin */
 #define EAGAIN          11
 #define EWOULDBLOCK     11
 #define ENOMEM          12

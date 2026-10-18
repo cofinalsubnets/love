@@ -3,12 +3,8 @@
 typedef int sig_atomic_t;
 #include <sys/types.h>
 typedef struct { unsigned long long __v[16]; } sigset_t;   /* 128 bytes, glibc-sized; the kernel's 64 signals in __v[0] */
-/* the canonical (linux) siginfo, 128 bytes: the head, then a union whose lanes
- * are the faulting address and the child that stopped. the BSDs order the head
- * differently -- and netbsd unions the same two lanes where freebsd lays them
- * flat -- so sigaction.c's shim translates into this one shape and a handler
- * reads the same layout on every kernel. the head pads to 16 where a pointer is 8;
- * i386's union follows at 12. */
+/* linux's 128-byte siginfo on every kernel: the bsds' differ, and the sigaction shim
+ * translates. the head pads to 16 where a pointer is 8; i386's union follows at 12 */
 typedef struct {
   int si_signo, si_errno, si_code;
 #ifndef __ILP32__
@@ -24,15 +20,12 @@ typedef struct {
 #endif
   } __sifields;
 } siginfo_t;
-/* the lanes overlap, so a handler reads the one its signal names: an address for
- * a fault, a sender otherwise, and a status only for SIGCHLD. */
+/* overlapping: si_addr for a fault, si_pid otherwise, si_status only for SIGCHLD */
 #define si_addr   __sifields.__addr
 #define si_pid    __sifields.__chld.__pid
 #define si_uid    __sifields.__chld.__uid
 #define si_status __sifields.__chld.__status
 struct sigaction {
-  /* a union, so `sa.sa_handler = h` keeps working unchanged: both spellings are
-   * one pointer slot, which is what every kernel's shape holds here too. */
   union {
     void (*sa_handler)(int);
     void (*sa_sigaction)(int, siginfo_t *, void *);
@@ -53,7 +46,7 @@ struct sigaction {
 #define SIGFPE   8
 #define SIGSEGV 11
 #define SIGBUS   7
-/* sa_flags, Linux's values (the same on every arch we speak) */
+/* sa_flags: linux's values, the same on every arch */
 #define SA_NOCLDSTOP 1
 #define SA_NOCLDWAIT 2
 #define SA_SIGINFO   4
@@ -61,11 +54,10 @@ struct sigaction {
 #define SA_RESTART   0x10000000
 #define SA_NODEFER 1073741824
 #define SA_RESETHAND 0x80000000
-void *signal(int, void*);        /* returns the old handler; love.c ignores it */
+void *signal(int, void*);
 int raise(int);
 int sigaction(int, struct sigaction const*, struct sigaction*);
 int sigemptyset(sigset_t*);
-/* the host seam's tail (rung 2) */
 #define SIGHUP   1
 #define SIGQUIT  3
 #define SIGKILL  9
@@ -84,9 +76,7 @@ int sigemptyset(sigset_t*);
 #define SIG_BLOCK   0
 #define SIG_UNBLOCK 1
 #define SIG_SETMASK 2
-/* the rest of the 32 the permutation in os.c covers. SIGSYS is the sharp one --
- * 31 here and 12 on the BSDs -- so the name translates where a bare number does
- * not. STKFLT and PWR have no BSD twin, and a sigaction on them refuses there. */
+/* linux numbers, translated for the bsds: SIGSYS is 12 there, STKFLT and PWR are absent */
 #define SIGSTKFLT 16
 #define SIGURG    23
 #define SIGXCPU   24
@@ -96,15 +86,14 @@ int sigemptyset(sigset_t*);
 #define SIGIO     29
 #define SIGPWR    30
 #define SIGSYS    31
-/* one past the highest signal, as glibc counts them (the real-time ones too): a size for a
-   table indexed by signal number */
+/* one past the highest signal, real-time ones included, as glibc counts */
 #define NSIG      65
 #define _NSIG     NSIG
 int kill(pid_t, int);
 int sigaddset(sigset_t*, int);
 int sigismember(sigset_t const*, int);
 int sigprocmask(int, sigset_t const*, sigset_t*);
-/* an alternate signal stack, in linux's shape on every arch (sigaltstack.c reorders it for the BSDs) */
+/* linux's shape on every kernel; reordered for the bsds underneath */
 typedef struct { void *ss_sp; int ss_flags; size_t ss_size; } stack_t;
 #define SS_ONSTACK  1
 #define SS_DISABLE  2
