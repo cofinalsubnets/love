@@ -175,7 +175,10 @@
   ; in a $( ) it replaces only the subshell, its status the substitution's
   ["x=$(exec echo hi); echo \"got $x\"" "got hi\n" 0]
   ["x=$(echo a; exec sh -c 'echo b; exit 3'; echo c); echo \"$x $?\"" "a\nb 3\n"]
-  ["x=$(exec nosuchcmd123 2>/dev/null); echo \"[$x] $?\"" "[] 127\n"]])
+  ["x=$(exec nosuchcmd123 2>/dev/null); echo \"[$x] $?\"" "[] 127\n"]
+  ; ..and a bare exec's redirects end with it
+  ["{ x=$(exec 2>/dev/null); echo e >&2; } 2>&1" "e\n"]
+  ["exec 3>&1; x=$(exec 3>/dev/null; echo in >&3); echo \"kept [$x]\" >&3" "kept []\n"]])
 
 ; (sh-plan S ast) answers a plan fired with its state, so twice runs twice; the function
 ; book holds plans (closures, never two?), absence the sh-nofn mint
