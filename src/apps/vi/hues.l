@@ -1,17 +1,13 @@
-; src/apps/vi/hues.l -- the paint for the languages that are not .l: c, js, awk, css,
-; html, sh, make, json, diff, roff, assembly and markdown. each lexer answers what
-; hue-lex does, (lx s in keep) -> [runs out], so the painter, the carry fold and %
-; take any of them. the file name decides, else a #! naming a shell or an awk;
-; `in` is 0 at the top and whatever a line left open.
+; src/apps/vi/hues.l -- the paint for languages that are not .l. each lexer answers as
+; hue-lex does, (lx s in keep) -> [runs out]; `in` is 0 at the top, else what a line left open.
 (module 'vi
 (:
-   ; class -> vim group for the classes only these lexers emit; comment string
-   ; number const are hue.l's own and paint as they do there
+   ; class -> vim group for the classes only these lexers emit
    hues-classes
     '((keyword Statement) (type Type) (pre PreProc) (func Function)
       (var Identifier) (attr Type) (ent Special) (added Function) (removed Operator))
 
-   ; --- bytes -----------------------------------------------------------------
+   ; --- bytes ---
    (hues-dig? c) (48 <= c <= 57)
    (hues-alf? c) (97 <= c <= 122 || 65 <= c <= 90 || c = 95)
    (hues-idc? c) (hues-alf? c || hues-dig? c)
@@ -52,10 +48,9 @@
        (go (i + 1)))
    (hues-kws rows) (foldl (b \ r \ foldl (b2 \ w \ pin b2 w <r) b (words <>r)) (tablet ()) rows)
 
-   ; --- c, js and awk: one lexer, a spec apiece -----------------------------
-   ; the spec: 'kw words, 'q quotes, 'ln the line comment, 'bc /* */, 'cpp #lines,
-   ; 'fld awk's $fields, 'rx /regex/ where an operand is due. carry: 1 inside /* */,
-   ; 2 inside a js `template`
+   ; --- c, js and awk: one lexer, a spec apiece ---
+   ; the spec: 'kw words, 'q quotes, 'ln line comment, 'bc /* */, 'cpp #lines, 'fld awk's
+   ; $fields, 'rx /regex/ where an operand is due. carry: 1 in /* */, 2 in a js `template`
    hues-c
     {'kw (hues-kws
           '((keyword "if else for while do switch case default break continue return goto sizeof _Alignof alignof _Generic asm __asm__ __attribute__ typeof __typeof__ _Static_assert static_assert")
@@ -114,7 +109,7 @@
    (hues-js s in keep) (hues-cl hues-jsp s in keep)
    (hues-awk s in keep) (hues-cl hues-awkp s in keep)
 
-   ; --- css -------------------------------------------------------------------
+   ; --- css ---
    ; the mode m: 0 a rule's start, 1 a selector, 2 a value. a declaration opens on
    ; `name:` in a segment no { ends. carry: 0 or 2 by mode, plus 1 inside /* */
    (hues-css s in keep)
@@ -157,7 +152,7 @@
                  (val i c acc))))
        (in @ 1 (cm 0 0 () 0) 2 (w 0 () 2) 3 (cm 0 0 () 2) (w 0 () 0)))
 
-   ; --- html ------------------------------------------------------------------
+   ; --- html ---
    ; carry: 0 text, 1 inside <!-- -->, ['tag name closing?] inside a tag, and
    ; [css in] or [js in] inside a style or script body, the inner lexer's own
    (hues-ent s i)                                      ; i past the &: past the ;, or ()
@@ -203,7 +198,7 @@
           (<in = 'tag) (tag 0 (in 1) (in 2) ())
           (emb <in 0 <>in ())))
 
-   ; --- sh --------------------------------------------------------------------
+   ; --- sh ---
    ; carry: 1 inside '...', 2 inside "...", or a heredoc's terminator, a text.
    ; mk is make's recipe line, where $(..) is make's and runs to its mate
    hues-shkw
@@ -267,7 +262,7 @@
           (in = 2) (dq 0 0 () ())
           (w 0 () ())))
 
-   ; --- make ------------------------------------------------------------------
+   ; --- make ---
    ; a tab-led line is a recipe and reads as sh. otherwise the head decides: a
    ; directive, a NAME = of any flavour, or the targets before a rule's colon
    hues-mkdirs (words "include -include sinclude ifeq ifneq ifdef ifndef else endif define endef export unexport override undefine vpath private")
@@ -303,7 +298,7 @@
              t (rest t (emit () 'func lead t))
              (rest lead ()))))
 
-   ; --- json ------------------------------------------------------------------
+   ; --- json ---
    ; a string before a : is a key. jsonc's // comments too; nothing spans lines
    (hues-json s in keep)
     (:- (w 0 ()) n #s
@@ -320,7 +315,7 @@
                                 (w j (? (elem (snip s i j) '("true" "false" "null")) (emit acc 'const i j) acc)))
                (w (i + 1) acc)))))
 
-   ; --- diff ------------------------------------------------------------------
+   ; --- diff ---
    ; unified and normal: a line is one class, told by how it starts
    hues-dhead '("+++" "---" "diff " "index " "new file" "deleted file" "old mode" "new mode"
                 "similarity" "rename " "Only in " "Binary files")
@@ -335,7 +330,7 @@
        e (hue-at? s 0 "@@" ? (hues-find s 2 "@@" @ j (j < n ? (j + 2) n)) 0)
        [(? !keep () (0 < e) [['ent 0 e]] (nom? k) [[k 0 n]] ()) 0])
 
-   ; --- roff ------------------------------------------------------------------
+   ; --- roff ---
    ; a request line's name, its "arguments", escapes anywhere, and \" to the end
    (hues-resc s i)                                     ; s i is \: past the escape
     (: n #s c (i + 1 < n ? (s (i + 1)) 0) d (i + 2) a (d < n ? (s d) 0)
@@ -365,11 +360,9 @@
                  (w e (emit () 'keyword 0 e) 1)))
           (w 0 () ())))
 
-   ; --- assembly --------------------------------------------------------------
-   ; gas in any dialect: at&t's %reg and $imm, intel's bare names and sizes, a64,
-   ; rv64 and arm. a statement's head is a label, a .directive or the mnemonic;
-   ; # comments unless an arm immediate follows, @ where arm32 has it. carry: 1
-   ; inside /* */
+   ; --- assembly ---
+   ; gas in any dialect. a statement's head is a label, a .directive or the mnemonic; #
+   ; comments unless an arm immediate follows, @ where arm32 has it. carry: 1 inside /* */
    hues-regs
     (hues-kws '((var "rax rbx rcx rdx rsi rdi rbp rsp rip eax ebx ecx edx esi edi ebp esp eip ax bx cx dx si di bp al bl cl dl ah bh ch dh sil dil bpl spl cs ds es fs gs ss sp lr pc fp xzr wzr zero ra gp tp")
                 (type "byte word dword qword tbyte oword xmmword ymmword zmmword ptr offset")))
@@ -428,7 +421,7 @@
                  (w (i + 1) acc 0))))
        (in = 1 ? (cm 0 0 () 1) (w 0 () 1)))
 
-   ; --- which lexer -----------------------------------------------------------
+   ; --- which lexer ---
    (hues-pairs t rows) (foldl (b \ r \ pin b <r <>r) t rows)
    hues-exts
     (hues-pairs (tablet ())
@@ -444,7 +437,7 @@
        ("makefile" make) ("assembly" asm) ("gas" asm)))
    hues-mknames '("Makefile" "makefile" "GNUmakefile" "Cookfile")
 
-   ; --- markdown --------------------------------------------------------------
+   ; --- markdown ---
    ; the block a line opens, then the inline spans. a fence naming a language this
    ; file knows is lexed as that language. carry: 0, or ['fence char length lang
    ; inner] inside a fence
@@ -543,7 +536,7 @@
     'asm hues-asm
     'md (hues-mdlx ()))
 
-   ; --- the pens: hue.l's, and one per class above ------------------------------
+   ; --- the pens: hue.l's, and one per class above ---
    (hues-pens rows deep)
     (foldl (b \ c \ (: r (filter (r \ <r = hue-grp c) rows)
                        (two? r ? (pin b (hue-cls c) (hue-pen <r deep)) b)))

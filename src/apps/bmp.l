@@ -1,16 +1,13 @@
 ; src/apps/bmp.l -- windows' pictures: bmp and the ico and cur that hold them, read.
-; `(borrow 'bmp)`, then:
 ;
 ;   (bmp-size s)    -> (w h) off the header | a string saying why not
 ;   (bmp-decode s)  -> (w h rgba) | a string saying why not
 ;   (ico-size s)    -> (w h) of the icon it would show | why not
 ;   (ico-decode s)  -> (w h rgba) of its largest, deepest picture | why not
 ;
-; rgba is w*h*4 bytes. a bmp's header is the core one or info to v5; 1, 4 and 8 bits a
-; pixel take a palette (rle8 and rle4 too, a pixel no run reaches its colour 0), 16 and 32
-; their masks or the default ones, 24 three bytes. alpha is the mask's where there is one,
-; else 255. an icon's picture is a png or a bmp without its file header, twice as tall for
-; the and-mask under it that says what is clear; at 32 bits its own alpha says it instead.
+; rgba is w*h*4 bytes. under rle a pixel no run reaches is colour 0; alpha is the mask's
+; where there is one, else 255. an icon's bmp is twice as tall for the and-mask under it,
+; except at 32 bits, where its own alpha says what is clear.
 (module (bmp bmp-size bmp-decode ico-size ico-decode)
 (borrow 'bytes)
 (:
@@ -22,9 +19,8 @@
        (m = 0 ? [0 0] [sh (m >> sh)]))
    (bmp-chan v mk) (mk 1 = 0 ? 255 (((v >> mk 0) & mk 1) * 255 // mk 1))
 
-   ; the dib whose header sits at a -> [w h bpp comp masks pal data top] | why not. at is
-   ; the bytes past the header and palette where no file header names the pixels; tall
-   ; halves the height (an icon's), masks [r g b a] as bmp-mask lays them
+   ; the dib whose header sits at a -> [w h bpp comp masks pal data top] | why not. at:
+   ; where the pixels start when no file header names them; tall halves the height
    (bmp-head s a at tall)
     (: hs (#s < a + 16 ? 0 (rdle s a 4))
        core (hs = 12)
@@ -115,8 +111,7 @@
    (bmp-decode s) (bmp-file s @ hd (string? hd ? hd (bmp-pixels s hd)))
 
    ; --- icons ------------------------------------------------------------------------------
-   ; the directory's best entry -> [w h bpp size at] | why not: the most pixels, then the
-   ; deepest, as a viewer picks
+   ; the directory's best entry -> [w h bpp size at] | why not: most pixels, then deepest
    (ico-entry s)
     (: n (#s < 6 ? 0 (rdle s 4 2))
        (ent i) (: e (6 + 16 * i)

@@ -1,12 +1,12 @@
-; test/host/apartment.l -- the glass cube on the plain, headless: the lay, glass that holds, the
-; talk through the pane, the ending, the song into a jug. not in the corpus: a crew module.
+; test/host/apartment.l -- the glass cube on the plain, headless: the lay, the glass, the talk,
+; the ending, the song into a jug. a crew module, not in the corpus.
 ; run: cat test/00-init.l test/host/00-host.l test/host/apartment.l | out/love
 
 (borrow 'apartment)
-(borrow 'rove)        ; dat, open?, the words
+(borrow 'rove)
 
 (: (range a b) (map (+ a) ^(b - a))
-   ; the cells you can walk to from where you stand, eight ways at a step
+   ; the cells walkable from here, eight ways a step
    (reach g) (: d (g 'd) w (d 'w) h (d 'h) seen {}
                 (nbs i) (: x (i % w) y (i // w)
                            (filter (j \ 0 <= j)

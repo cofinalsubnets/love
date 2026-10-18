@@ -1,12 +1,8 @@
-; src/tools/xbell.l -- the daily bell thread on x: B(n) as a png, posted as
-; a reply to the post before it. a timer runs it; a run posts one number, and
-; only while the thread is behind the day (utc).
+; src/tools/xbell.l -- the daily bell thread on x: B(n) as a png, replying to the post before
+; it; a timed run posts one number, only while the thread is behind the day (utc).
 ;   love src/tools/xbell.l [--dry-run | --init N ID [AT] | --whoami]
-; --dry-run draws next.png; --init lays a state, never over one: next is B(N),
-; replying to post ID, and B(N - 1) is due on post AT's day (else ID's);
-; --whoami checks the keys (one paid read). $XBELL_DIR (~/.local/share/xbell)
-; holds x.com.oauth.secret ($XBELL_KEYS; oauth 1.0a `name: value` lines),
-; config.l, state.l (n reply-id row, the bell triangle's row n), next.png, log.
+; --init lays a state, never over one: next is B(N) replying to ID, B(N - 1) due on AT's day.
+; $XBELL_DIR (~/.local/share/xbell): x.com.oauth.secret ($XBELL_KEYS), config.l, state.l, next.png, log
 (borrow 'json)
 (borrow 'bytes)
 (borrow 'posix)
@@ -48,8 +44,7 @@
                               (go (n // 36) (string (digits (n % 36)) + acc)))
               (go n ""))
 
-   ; drawing. the console's terminus 8x16, read back once through the painter:
-   ; glyph c -> 16 row bytes
+   ; drawing: the console's terminus 8x16, glyph c -> 16 row bytes
    glyphs
     (: cs digits n #cs
        scr (screen (cask (screen () 1 n)) 1 n)
@@ -84,17 +79,14 @@
    ; blank pixels for a short last line
    (rep blank k scale) (snip blank 0 (k * 8 * scale * 4))
 
-   ; base 256 on a fixed cols x rows terminal: a byte a pixel, two pixels a cell
-   ; (a half block, its top the foreground). the top byte sits in the bottom
-   ; right corner and the rest fill each pixel row right to left, rows rising,
-   ; so the number piles up like sand; black above it is not written yet
+   ; base 256 on a cols x rows terminal, two pixels a half-block cell; the top byte sits
+   ; bottom right and the rest fill right to left, rows rising
    (b256 n) (: (go n acc) (n < 256 ? (n . acc)
                               (go (n // 256) ((n % 256) . acc)))
                (go n ()))
    esc (string 27)
    upper (string [226 150 128])                  ; u+2580, the upper half block
-   ; a byte's colour: matplotlib's magma with 0 pure black, each step brighter
-   ; than the last (relative luminance) and all 256 distinct, so it reads back
+   ; magma with 0 pure black, each step brighter and all 256 distinct, so it reads back
    magma (cats [
     "00000001000501010601010802010902020b02020d03030f030312040414050416060518"
     "06051a07061c08071e0907200a08220b09240c09260d0a290e0b2b100b2d110c2f120d31"
@@ -251,7 +243,7 @@
    ; the index the thread should have reached today, from config's anchor
    (due _) (: a (cfg 'anchor-day 0)
               (cfg 'anchor-n 0 + today 0 - (string? a ? (day-of a) a)))
-   ; a post id's day: the id's top bits are ms since twitter's epoch
+   ; a post id's top bits are ms since twitter's epoch
    (id-day id) (((read id >> 22) + 1288834974657) // 86400000)
 
    ; the run

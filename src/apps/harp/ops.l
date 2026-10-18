@@ -1,6 +1,6 @@
-; ops -- voices as small graphs of operators for the tones kernel (src/love/audio/tones.c): an
-; operator's row laid from a tablet, a voice in play's shape, and the kernel's arithmetic again in
-; love, closed forms a frame at a time, to hold the kernel to.
+; ops -- voices as small operator graphs for the tones kernel (tones.c): an operator's row
+; from a tablet, a voice in play's shape, and the kernel's arithmetic again in love, closed
+; forms a frame at a time, to hold the kernel to.
 ;   (ops-row o)        an operator's 49 numbers from a tablet: 'f 'slide 'drop 'kappa 'wave 'mod
 ;                      'depth 'fb 'l 'r 'vib 'vrate 'trem 'trate 'lvl, 'segs [[t0 kind a b c] ..],
 ;                      'at the frame its voice starts; what is missing 0, 'mod -1, 'lvl 1
@@ -23,7 +23,7 @@
     (1.0 * #ss)] + catmap (map (* 1.0)) ss + map (_ \ 0.0) ^(5 * (6 - #ss))))
  (ops-rows os) (gem-tray [(width * #os)] (catmap ops-row os))
  kern (cite 'dsp 'tones)
- ; ..the reference where the seat has no kernel, or the first operator asks for it ('ref 1)
+ ; the reference where there is no kernel, or the first operator asks ('ref 1)
  (ops-run R os st n f0 rate) (kern && !(peep <os 'ref 0) ? (kern R st n f0 rate) (ops-ref os st n f0 rate))
 
  ; --- the reference: each frame by its closed form ---
@@ -56,8 +56,8 @@
    (side key) (: S (foldl (\ acc j (acc + outs j * peep (os j) key 0.0)) (iota n * 0.0) ^k) (map (i \ peep S i 0.0) ^n))
    (gem-tray [(2 * n + 2 * k)] (side 'l + side 'r + catmap ys ^k)))
 
- ; --- a voice: the kernel run for the frames asked, the outputs carried; asked for frames out
- ;     of their order (a law's look), it runs again from the start to reach them ---
+ ; --- a voice: the kernel run for the frames asked, outputs carried; frames asked out of
+ ;     order rerun from the start ---
  (ops-voice os at end gl gr rate) (: k #os os0 (map (o \ pin o 'at at) os) R (ops-rows os0) box {'next at 'ys ()}
    S (iota (2 * k) + 0)
    (run f0 n) (: r (ops-run R os0 (box 'ys) n f0 rate) (pins box 'next (f0 + n) 'ys (peep r (S + 2 * n) 0.0), r))

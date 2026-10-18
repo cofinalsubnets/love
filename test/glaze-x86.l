@@ -1,5 +1,5 @@
-; glaze-x86 -- the glaze's x86-64 native-codegen tests; run once by `make test_glaze` only (a re-cat clobbers base-ev)
-; blocks compile through base-ev: global ev is auto-ev. the emit block shadows ev -> base-ev, the auto block keeps auto-ev
+; glaze-x86 -- the glaze's x86-64 native-codegen tests; run once, by `make test_glaze` only (a re-cat clobbers base-ev)
+; blocks compile through base-ev; the emit block shadows ev -> base-ev, the auto block keeps auto-ev
 ; the guard runs before the binds below: a body-less top-level `:` lands its names on the book
 (assert (elem 'glaze (cite ()))
         (400 < #(keys (cite 'glaze)))
@@ -26,7 +26,7 @@
       f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
     _ (assert
   (lit? f) (lit? g)                                          ; native closures are applicable values
-  (31 = (f 10)) (315 = (g 10))                               ; they compute
+  (31 = (f 10)) (315 = (g 10))
   ((\ x (+ (* x 3) 1)) = f)                                  ; ... and are =-identical to their source
   !(f = (\ x (+ (* x 3) 2)))
   (f = (jit '(\ x (+ (* x 3) 1))))                           ; two natives, same source
@@ -34,27 +34,27 @@
   (: idn (jit '(\ x x)) (&& (5 = (idn 5)) ('(1 2) = (idn '(1 2))) ('a = (idn 'a)) (= (:) (idn (:)))))
   (: pls (jit '(\ x (+ x 1))) (&& (6 = (pls 5)) ((+ '(1 2) 1) = (pls '(1 2)))))   ; native == interp on a non-fixnum
   (: q (jit '(\ n (+ (* n 3) 1))) (&& (31 = (q 10)) ((\ n (+ (* n 3) 1)) = q) (q = f)))  ; arity-1 leaf, non-x param (= f up to alpha)
-  ('(2 4 6) = (map (jit '(\ x (+ x 1))) '(1 3 5)))           ; compose with higher-order fns
+  ('(2 4 6) = (map (jit '(\ x (+ x 1))) '(1 3 5)))
   ((isum 1000) = (g 1000))                                   ; the loop agrees with the interpreter
   (9000000000000000000 = ((jit '(\ x (* x x))) 3000000000))  ; overflow -> deopt -> correct bignum
-  (1 = ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jit ['\ 'x ['* 'x i]]) 7) (* 7 i)))) a)) 0 1))    ; agree 0..60
+  (1 = ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jit ['\ 'x ['* 'x i]]) 7) (* 7 i)))) a)) 0 1))
   ; comparisons (-> 0/1) and conditionals
   (: lt (jit '(\ x (< x 5))) (&& (1 = (lt 3)) (1 = (lt -2)) (0 = (lt 5)) (0 = (lt 9))))
   (: ab (jit '(\ x (? (< x 0) (- 0 x) x))) (&& (7 = (ab -7)) (7 = (ab 7)) (0 = (ab 0))))   ; abs
-  ((\ x (? (< x 0) (- 0 x) x)) = (jit '(\ x (? (< x 0) (- 0 x) x))))                        ; transparent
+  ((\ x (? (< x 0) (- 0 x) x)) = (jit '(\ x (? (< x 0) (- 0 x) x))))
   (: cap50 (jitsum '(? (< i 50) i 0)) c50 ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
      (= c50 (cap50 1000)))                                                                  ; loop with a conditional body
   ; call-out bridge: a native counted loop calling an interp closure each step
-  (: (isum clos n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clos i))) a)) 0 0)              ; the faithful interp twin
+  (: (isum clos n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clos i))) a)) 0 0)
      sq (\ i (* i i))  co (jitcalloutsum sq)
-     (&& (lit? co) (0 = (co 0)) (30 = (co 5)) (285 = (co 10)) ((co 8) = (isum sq 8))         ; fixnum fast path
+     (&& (lit? co) (0 = (co 0)) (30 = (co 5)) (285 = (co 10)) ((co 8) = (isum sq 8))
          ; gate 1: a float-returning callee deopts to the interp twin
          (: cf (jitcalloutsum (\ i (* i 0.5))) (&& (7.5 = (cf 6)) ((cf 20) = (isum (\ i (* i 0.5)) 20))))
          ; gate 2: a sum leaving fixnum range deopts -> bignum
          (: cb (jitcalloutsum (\ i 1000000000000000000)) (&& ((cb 100) = (isum (\ i 1000000000000000000) 100))
                                                              (100000000000000000000 = (cb 100)))) ; == interp bignum
          ; * fold: product of (F i)
-         (: iprod (\ f n ((: (go i a) (? (< i n) (go (+ i 1) (* a (f i))) a)) 0 1))                ; the faithful interp product twin
+         (: iprod (\ f n ((: (go i a) (? (< i n) (go (+ i 1) (* a (f i))) a)) 0 1))
             inc (\ i (+ i 1))  pr (jitcalloutx inc '(\ n 0) '* 'i 'i 'x64)                               ; native product of (i+1) = n!
             (&& (lit? pr) (1 = (pr 0)) (120 = (pr 5)) ((pr 6) = (iprod inc 6))                     ; fast path: 5!=120, empty=1 (product identity)
                 (: pf (jitcalloutx (\ i (+ i 0.5)) '(\ n 0) '* 'i 'i 'x64)                               ; gate 1: float result -> deopt -> interp product
@@ -110,7 +110,7 @@
   ; heap result (jitfr): a float-result leaf boxes on the heap -- a gem out, == interp, transparent, deopts
   (: fr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'x64)  ifr (\ x (+ (* x 1.5) 2.0))
      (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (ifr 7) (fr 7))                  ; a float box; 4*1.5+2=8.0; == interp
-         (lit? fr) ((\ x (+ (* x 1.5) 2.0)) = fr)                         ; applicable + =-identical to source
+         (lit? fr) ((\ x (+ (* x 1.5) 2.0)) = fr)
          (= (map ifr '(1 2 3)) (map fr '(1 2 3)))                         ; composes with map, == interp
          (= (ifr (:)) (fr (:)))))                                         ; non-fixnum arg -> fxv deopt -> interp
   (: frz (jitfr '(\ x (/ (- x x) (- x x))) 'x64) (&& (gem? (frz 5)) (0.0 = (frz 5))))   ; 0/0 -> NaN -> 0.0 (mk_gem's law)
@@ -118,10 +118,10 @@
   (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'x64)  b (gfr 4)  _ (tally (jot 200000))  (8.0 = b))   ; the box survives a forced GC
   (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'x64)  ys (map gfr (jot 4000))  zs (map (\ x (+ (* x 1.5) 2.0)) (jot 4000)) (= ys zs))  ; 4000 boxes under GC pressure == interp
   ; comparison result codes
-  (: le (jit '(\ x (<= x 5))) (&& (1 = (le 5)) (1 = (le 3)) (0 = (le 6))))            ; setcc <=
-  (: gt (jit '(\ x (>  x 5))) (&& (1 = (gt 6)) (0 = (gt 5)) (0 = (gt 2))))            ; setcc >
-  (: ge (jit '(\ x (>= x 5))) (&& (1 = (ge 5)) (1 = (ge 9)) (0 = (ge 4))))            ; setcc >=
-  (: eq (jit '(\ x (= x 5))) (&& (1 = (eq 5)) (0 = (eq 4)) (0 = (eq 6))))            ; setcc =
+  (: le (jit '(\ x (<= x 5))) (&& (1 = (le 5)) (1 = (le 3)) (0 = (le 6))))
+  (: gt (jit '(\ x (>  x 5))) (&& (1 = (gt 6)) (0 = (gt 5)) (0 = (gt 2))))
+  (: ge (jit '(\ x (>= x 5))) (&& (1 = (ge 5)) (1 = (ge 9)) (0 = (ge 4))))
+  (: eq (jit '(\ x (= x 5))) (&& (1 = (eq 5)) (0 = (eq 4)) (0 = (eq 6))))
   ; multi-arg (cgn) op dispatch
   (: mdn (jit2 '(\ x y (% x y))) (&& (1 = (mdn 8 7)) (-1 = (mdn -8 7)) (0 = (mdn 14 7))))   ; idivseq-mn %
   (: ban (jit2 '(\ x y (& x y))) (&& (8 = (ban 10 12)) (4 = (ban 4 5))))                    ; cgn -> bitseq
@@ -139,8 +139,8 @@
   (= "4616189618054758400" (show (fbits 4.0)))                                              ; fbits: 4.0 -> 0x4010000000000000
   (: flt (jitf '(\ x (< (* x 1.5) 10.0)))
      (&& (1 = (flt 6)) (0 = (flt 7)) (1 = (flt 0)) (1 = (flt -3))                           ; 1.5x < 10  <=> x < 6.67
-         ((\ x (< (* x 1.5) 10.0)) = flt)                                                   ; transparent (=/show)
-         (= ((\ x (< (* x 1.5) 10.0)) '(1 2)) (flt '(1 2)))))                               ; non-fixnum arg -> deopt -> interp
+         ((\ x (< (* x 1.5) 10.0)) = flt)
+         (= ((\ x (< (* x 1.5) 10.0)) '(1 2)) (flt '(1 2)))))
   (: fle (jitf '(\ x (<= (+ (* x x) 2.0) 38.0))) (&& (1 = (fle 6)) (0 = (fle 7)) (1 = (fle -6))))   ; x*x+2 <= 38 <=> |x|<=6
   (: fgt (jitf '(\ x (> (/ 100.0 x) 7.0)))       (&& (1 = (fgt 10)) (0 = (fgt 20)) (1 = (fgt 5))))  ; 100/x > 7 <=> 0<x<14.3
   (: fge (jitf '(\ x (>= (- (* x 0.5) 1.0) 2.0))) (&& (1 = (fge 6)) (0 = (fge 5))))                 ; x/2-1 >= 2 <=> x>=6
@@ -176,7 +176,7 @@
 (: sref ((: (go i a) (i < 30 ? (go (i + 1) (a + rc-sq i)) a)) 0 0))
 (: fref ((: (go i a) (i < 20 ? (go (i + 1) (a + rc-half i)) a)) 0 0))
 (: bref ((: (go i a) (i < 100 ? (go (i + 1) (a + rc-big i)) a)) 0 0))
-(: _ (assert (lit? rc-ssum) (285 = (rc-ssum 10)) ((rc-ssum 30) = sref)             ; fixnum fast path == interp
+(: _ (assert (lit? rc-ssum) (285 = (rc-ssum 10)) ((rc-ssum 30) = sref)
         (95.0 = (rc-fsum 20)) ((rc-fsum 20) = fref)                                ; gate 1: float call-out -> gem, == interp
         (100000000000000000000 = (rc-bsum 100)) ((rc-bsum 100) = bref)             ; gate 2: sum overflows fixnum -> bignum, == interp
         (8999995500000500000 = (rc-ssum 3000000)))                                 ; gate 2 boundary: sum in [2^62,2^63) -> bignum
@@ -186,7 +186,7 @@
 (: (rc-summer f) (n \ (: (go i a) (i < n ? (go (i + 1) (a + f i)) a)) 0 0))     ; captured: (\ f n ..)
 (: (rc-hosum f n) ((: (go i a) (i < n ? (go (i + 1) (a + f i)) a)) 0 0))        ; multi-arg: f a genuine 2nd frame arg
 (: cs (rc-summer rc-sq)  cf (rc-summer rc-half)  cb (rc-summer rc-big)
-   _ (assert (lit? cs) (285 = (cs 10)) ((cs 30) = sref)                                    ; captured fixnum fast path == interp
+   _ (assert (lit? cs) (285 = (cs 10)) ((cs 30) = sref)
         (95.0 = (cf 20)) ((cf 20) = fref)                                                  ; gate 1 (captured float)
         (100000000000000000000 = (cb 100)) ((cb 100) = bref)                              ; gate 2 (captured overflow -> bignum)
         (8999995500000500000 = (cs 3000000))                                             ; gate 2 boundary (captured)
@@ -209,7 +209,7 @@
 (: _ (: n0 (peep fires () 0)
        wk (ev '(\ l k a ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) k) (+ a 1) a)) a)) l a)))
        ; references are literals: any in-file reference closure would amble too
-       (assert (fired? n0)                                        ; the walker ambled at creation
+       (assert (fired? n0)
           (29 = (wk am-l 3 0)) (29 = (am-cnt am-l 3 0))           ; fast path; i%7==3 for i in 1..200 -> 29
           (4611686018427387932 = (wk am-l 3 4611686018427387903)) ; +1 past max fixnum -> restart -> bignum
           (30.5 = (wk am-l 3 1.5))                                ; gem acc -> arith guard deopt -> generic +
@@ -281,7 +281,7 @@
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
     (23 = ((ev '(\ x (+ (* x 2) 3))) 10))
-    (((base-ev '(\ x (+ (* x 9) 4))) 11) = ((ev '(\ x (+ (* x 9) 4))) 11))      ; native leaf == interp
+    (((base-ev '(\ x (+ (* x 9) 4))) 11) = ((ev '(\ x (+ (* x 9) 4))) 11))
     (: ny (ev '(\ y (+ y 1))) (&& (6 = (ny 5)) ((\ y (+ y 1)) = ny)))   ; arity-1 leaf, non-x param, auto-natived
     (3 = ((ev '(\ x (cap x))) '(3 4)))                         ; non-qualifying -> interpreter
     ((base-ev '(+ 1 2 3)) = (ev '(+ 1 2 3)))                   ; non-lambda forms unaffected (ev == base-ev; curried + nets 27, not 6)
@@ -291,7 +291,7 @@
     (: L1 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0))
        f  (ev L1)
        (&& (= f (ev L1)) (3496500 = (f 1000)) (two? (thcount (tloop L1)))
-           (= (ev L1) (ev L1))))                                  ; cache: same source -> same native (compiled once, memoized)
+           (= (ev L1) (ev L1))))                                  ; same source -> same native, memoized
     ; loop with a conditional body (sum i for i<50, capped) auto-detected
     (: L2 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0))
        h  (ev L2)  c ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
@@ -310,7 +310,7 @@
                       (4660046610375530309 = (nf 91))                              ; fib(91) -> deopt -> bignum
                       (354224848179261915075 = (nf 100))                           ; fib(100) overflows -> deopt to the thread, exact bignum
                       (40 = ((show nf) 0))))                                       ; the native shows as its lambda: the deopt is its thread
-    ; a constant-scaled (* 2 b) update: pell(60) overflows int64, and the deopted loop must equal the interpreted one exactly
+    ; a constant-scaled (* 2 b) update: pell(60) overflows int64; the deopted loop must equal interp exactly
     (: PL '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ (* 2 b) a)) a)) 0 0 1))
        pf (ev PL)  (&& (two? (tloop PL)) (= ((base-ev PL) 60) (pf 60)) (= 12 (pf 4))))  ; pell(60) deopt == interp; pell(4)=12 in-range
     (= (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1))))
@@ -323,14 +323,14 @@
     ; float-result leaf auto-natived -> a heap-boxed gem, == interp, transparent
     (: fr (ev '(\ x (+ (* x 1.5) 2.0)))
        (&& (gem? (fr 4)) (8.0 = (fr 4)) (= ((base-ev '(\ x (+ (* x 1.5) 2.0))) 7) (fr 7))
-           ((\ x (+ (* x 1.5) 2.0)) = fr)))                     ; =-identical to source
+           ((\ x (+ (* x 1.5) 2.0)) = fr)))
     (qualfr '(\ x (/ (+ x 1.0) 2.0)))                          ; float-division leaf: param floated at first use -> sound
-    !(qualfr '(\ x (+ (* x 3) 1.5)))                           ; param inside an INT subexpr (* x 3) -> late promotion diverges -> rejected
+    !(qualfr '(\ x (+ (* x 3) 1.5)))                           ; (* x 3) is int: late promotion diverges -> rejected
     !(qualfr '(\ x (/ x 2)))                                   ; int/int division: result type value-dependent -> rejected
     !(qualfr '(\ x (+ (* x 2) 3)))                             ; an all-integer leaf is no float result (qual handles it)
-    (: ii (ev '(\ x (+ (* x 2) 3))) (&& (7 = (ii 2)) !(gem? (ii 2)))))   ; ... and stays a fixnum (qualfr did not steal it)
- _ (assert    ; d-dimensional float-recurrence grids auto-glazed from source -> native whole-grid kernel, bit-exact (== interp)
-    ; D=2 -- the mandelbrot 64x64 grid (M=2 invariants, N=2 fvars), the canonical instance -> checksum 87130
+    (: ii (ev '(\ x (+ (* x 2) 3))) (&& (7 = (ii 2)) !(gem? (ii 2)))))   ; qualfr did not steal it
+ _ (assert    ; d-dimensional float-recurrence grids auto-glazed to a native whole-grid kernel, bit-exact
+    ; D=2 -- the mandelbrot 64x64 grid (M=2 invariants, N=2 fvars) -> checksum 87130
     (: g2 '(: (mand cx cy zx zy it)
                (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
                   (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
@@ -343,7 +343,7 @@
               (row px acc) (? (< px 64) (row (+ px 1) (+ acc (mand (- (* px 0.046875) 2.0) 0.0 0.0 0.0 0))) acc)
             (row 0 0))
        (&& !(= (autonat g1) g1) (= (base-ev g1) (ev g1))))
-    ; D=3 -- an 8x8x8 nest, M=3 invariants (cx cy cz), cz=pz*0.01 shifting zy -> native == interp (exercises r12 push/pop)
+    ; D=3 -- an 8x8x8 nest, M=3 invariants, cz=pz*0.01 shifting zy (exercises r12 push/pop)
     (: g3 '(: (mand cx cy cz zx zy it) (? (&& (< it 50) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mand cx cy cz (+ (- (* zx zx) (* zy zy)) cx) (+ (+ (* (* 2.0 zx) zy) cy) cz) (+ it 1)) it)
               (lz px py pz acc) (? (< pz 8) (lz px py (+ pz 1) (+ acc (mand (- (* px 0.046875) 2.0) (- (* py 0.046875) 1.5) (* pz 0.01) 0.0 0.0 0))) acc)
               (ly px py acc) (? (< py 8) (ly px (+ py 1) (+ acc (lz px py 0 0))) acc)
@@ -455,7 +455,7 @@
                 h (tablet 0) _ (pin h 1 10) _ (pin h 98 20) _ (pin h 195 30) _ (pin h 292 40) _ (pin h 389 50)
                 (msum h 0 0))
        (&& !(= (autogroup rmap) rmap) (150 = (ev rmap)) (= (base-ev rmap) (ev rmap))))
-    ; the hash bench end to end: plift hoists scan, mapfix maps its peep, the allocating fns stay interpreted
+    ; the hash bench: plift hoists scan, mapfix maps its peep, the allocating fns stay interpreted
     (: rhash '(: (hash-run n) (: h (tablet 0)
                   (ins i)      (? (< i n) (: _ (pin h (+ 1 (* 97 i)) i) (ins (+ i 1))) h)
                   (scan i acc) (? (< i n) (scan (+ i 1) (+ acc (peep h (+ 1 (* 97 i)) 0))) acc)
@@ -499,32 +499,32 @@
     ; decline 1: a non-period-2 filter (>2) is left to defoliate; value preserved
     (: lcdec '(: (f n) (foldl (+) 0 (map (\ x (+ x 1)) (filter (\ x (> x 2)) (jot n)))) (f 10))
        (= (base-ev lcdec) (ev lcdec)))                                                        ; keep>2,+1 -> defoliate
-    ; decline 2: a piecewise body quals but is not polynomial -> the difference table never dies -> declines
+    ; decline 2: a piecewise body is not polynomial -> the difference table never dies
     (: lcnp '(: (f n) (foldl (+) 0 (map (\ x (? (< x 5) (* x x) 0)) (jot n))) (f 12))
        (= (base-ev lcnp) (ev lcnp)))                                                          ; 0+1+4+9+16 = 30, defoliated/interpreted
     ; a named-let accumulator with a polynomial step closes too; "fired" is checked through show
     (: lcacc '(: (hof i acc) (? (< i 100) (hof (+ i 1) (+ acc (+ i (+ i i)))) acc) (hof 0 0))
        (&& !(= (show (autogroup lcacc)) (show lcacc)) (14850 = (ev lcacc)) (= (base-ev lcacc) (ev lcacc))))   ; Σ 3k for k<100 = 3·4950
-    ; the guard keeps the rewritten function faithful at a non-zero start (i=50, i>=N) -- reused at two starts
+    ; the guard keeps the rewrite faithful at a non-zero start (i=50, i>=N), reused at two starts
     (: lcacc2 '(: (hof i acc) (? (< i 100) (hof (+ i 1) (+ acc (+ i (+ i i)))) acc) (+ (hof 0 0) (* 7 (hof 50 1000))))
        (= (base-ev lcacc2) (ev lcacc2)))                                                       ; (hof 0 0) + 7*(hof 50 1000), closed form reused
-    ; decline: a non-polynomial accumulator body (%) -> difference table never dies -> stays a loop, value kept
+    ; decline: a non-polynomial accumulator (%) stays a loop, value kept
     (: lcaccd '(: (g i acc) (? (< i 50) (g (+ i 1) (+ acc (% (* i i) 7))) acc) (g 0 0))
        (= (base-ev lcaccd) (ev lcaccd)))
     ; castbuild: a string-accumulator loop rewrites to a threaded jug
     (: cb1 '(: (build n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string (+ 48 (% i 10))))) s) (go 0 "")) (tally (build 100)))
        (&& !(= (castbuild cb1) cb1) (100 = (ev cb1)) (= (base-ev cb1) (ev cb1))))             ; a 100-char build -> jug, == interp
-    ; the strcat bench shape: strhash glazes (string lane) while strbuild fills a cask -- both in one form, hash exact
+    ; the strcat bench: strhash glazes (string lane) while strbuild fills a cask, hash exact
     (: cb2 '(: hmod 1000000007 (strhash s) (: n (tally s) (go i h) (? (< i n) (go (+ i 1) (% (+ (* h 31) (peep s i 0)) hmod)) h) (go 0 0))
                (strbuild n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string (+ 48 (% i 10))))) s) (go 0 "")) (strhash (strbuild 500)))
        (&& !(= (castbuild cb2) cb2) (= (base-ev cb2) (ev cb2))))                              ; build 500 chars then rolling-hash
     ; multi-char append (the say path): a 2-char piece per step -> (say s (string [.. ..]))
     (: cb3 '(: (build n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string [(+ 65 (% i 5)) 45]))) s) (go 0 "")) (tally (build 30)))
        (&& !(= (castbuild cb3) cb3) (60 = (ev cb3)) (= (base-ev cb3) (ev cb3))))              ; 30 steps x 2 chars = 60
-    ; orientation: the recursion in the else branch -- (? (>= i n) s (go ..)) -- handled, branch order preserved
+    ; the recursion in the else branch: handled, branch order preserved
     (: cb4 '(: (build n) (: (go i s) (? (>= i n) s (go (+ i 1) (+ s (string 88)))) (go 0 "")) (tally (build 40)))
        (&& !(= (castbuild cb4) cb4) (40 = (ev cb4)) (= (base-ev cb4) (ev cb4))))
-    ; decline: s is also read (via (tally s)) so the recur arg is not a bare (+ s X) -> not a pure append -> left alone
+    ; decline: s is also read (tally s), so the recur arg is no pure append -> left alone
     (: cb5 '(: (build n) (: (go i s) (? (< i n) (go (+ i 1) (? (< (tally s) 3) (+ s (string 65)) s)) s) (go 0 "")) (tally (build 10)))
        (&& (= (castbuild cb5) cb5) (= (base-ev cb5) (ev cb5))))                               ; not rewritten, value still exact
     ; all/any: an early-exit loop answering 0/1, run off or short-circuited, with or without a producer
@@ -556,7 +556,7 @@
                 Q '(mul (add (var) (lit 1)) (add (var) (lit 2)))
                 (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ev1 Q i))) a)) 0 0)  (run 50))
        (&& !(= (autogroup sp2) sp2) (= (base-ev sp2) (ev sp2))))   ; sum (i+1)(i+2) i<50, native == interp
-    ; autospec is a no-op without both a defined fn and a static-data binding -> a plain fib group is byte-unchanged
+    ; autospec is a no-op without a defined fn and a static-data binding: a plain fib group is byte-unchanged
     (: nf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 10))
        (= (autospec nf) nf))
     ; the descent guard: a static-list recursion on a counter shrinks its static weight each level, so it terminates
@@ -614,13 +614,13 @@
     ; nested compound: && of a cmp and an ||, guarding an abs -- all collapse to ?
     (: bnest '(: (f x) (? (&& (> x 0) (|| (< x 5) (> x 10))) (abs x) 0) (f 3))
        (&& !(= (autogroup bnest) bnest) (3 = (ev bnest)) (= (base-ev bnest) (ev bnest))))    ; 3>0 && 3<5 -> abs 3 = 3
-    ; bail: || whose first operand is a recursive call would duplicate it -> left un-lowered -> f interprets (sound)
+    ; bail: || whose first operand is a recursive call would duplicate it -> f interprets (sound)
     (: bbail '(: (g n) (? (< n 1) 0 (+ n (g (- n 1)))) (f n) (? (|| (g n) (< n 0)) 1 0) (f 5))
        (= (base-ev bbail) (ev bbail)))                                                        ; (|| g(5)=15 ..) truthy -> 1, interpreted (g still glazes)
     ; || and abs nested in a loop accumulator
     (: bdeep '(: (f n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0))) a)) 0 0) (f 1000))
        (&& !(= (autogroup bdeep) bdeep) (= (base-ev bdeep) (ev bdeep))))                     ; native == interp on the nested ||/abs loop
-    ; a debool'd helper called by a loop sibling -- clamp (||/abs) glazes as a group fn, run_go calls it native
+    ; a debool'd helper called by a loop sibling: clamp glazes as a group fn, run_go calls it native
     (: bclamp '(: (clamp i) (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0)
                   (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clamp i))) a)) 0 0) (run 1000))
        (&& !(= (autogroup bclamp) bclamp) (= (base-ev bclamp) (ev bclamp)))))                ; native == interp; clamp a glazed sibling
@@ -633,7 +633,6 @@
       ; an unbound name reads (), and (() x) = 1 fakes a pass: assert these are bound
       (lit? assemble) (lit? jitir) (lit? jitnir) (lit? jitgroupir) (lit? coreir) (lit? deoptir)
       (lit? cggir) (lit? cggvir) (lit? consir) (lit? mkhir) (lit? mkouterir)
-      ; x86 native == interp
       (31 = ((jitir '(\ x (+ (* x 3) 1)) 'x64) 10))
       (= ((ev '(\ x (+ (* x 3) 1))) 10) ((jitir '(\ x (+ (* x 3) 1)) 'x64) 10))
       (49 = ((jitir '(\ x (* x x)) 'x64) 7))
@@ -647,16 +646,16 @@
       (16000000000000000001 = ((jitir '(\ x (+ 1 (* x x))) 'x64) 4000000000))             ; mid-nest overflow: sp unwind on deopt
       (= (// 10 0) ((jitir '(\ x (// x 0)) 'x64) 10))                                      ; /-by-0 guard -> deopt -> interp
       (= (+ '(1 2) 1) ((jitir '(\ x (+ x 1)) 'x64) '(1 2)))                                ; non-fixnum arg -> deopt -> interp
-      ((\ x (+ (* x 3) 1)) = (jitir '(\ x (+ (* x 3) 1)) 'x64))                            ; =-identical to source (transparent)
-      (= '(2 4 6) (map (jitir '(\ x (+ x 1)) 'x64) '(1 3 5)))                              ; composes with higher-order fns
-      (= 1 ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jitir ['\ 'x ['* 'x i]] 'x64) 7) (* 7 i)))) a)) 0 1))     ; agree 0..60
+      ((\ x (+ (* x 3) 1)) = (jitir '(\ x (+ (* x 3) 1)) 'x64))
+      (= '(2 4 6) (map (jitir '(\ x (+ x 1)) 'x64) '(1 3 5)))
+      (= 1 ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jitir ['\ 'x ['* 'x i]] 'x64) 7) (* 7 i)))) a)) 0 1))
       ; n-ary lane (jitnir)
       (7 = ((jitnir '(\ x y (+ x y)) 'x64) 3 4)) (7 = (((jitnir '(\ x y (+ x y)) 'x64) 3) 4))      ; saturated + curried
       (= ((ev '(\ x y (- (* x x) y))) 5 3) ((jitnir '(\ x y (- (* x x) y)) 'x64) 5 3))
       (16000000000000000000 = ((jitnir '(\ x y (- (* x x) y)) 'x64) 4000000000 0))                 ; overflow -> deopt -> bignum
       (13 = ((jitnir '(\ x y z (+ (+ x y) (* z 2))) 'x64) 1 2 5))
       (13 = (((jitnir '(\ x y z (+ (+ x y) (* z 2))) 'x64) 1) 2 5))                                 ; arity-3, saturate at any split
-      ((\ x y z (+ (+ x y) (* z 2))) = (jitnir '(\ x y z (+ (+ x y) (* z 2))) 'x64))                ; =-identical to source
+      ((\ x y z (+ (+ x y) (* z 2))) = (jitnir '(\ x y z (+ (+ x y) (* z 2))) 'x64))
       (16000000000000000005 = ((jitnir '(\ x y z (+ (+ (* x x) y) z)) 'x64) 4000000000 0 5))        ; deopt through a middle param
       (3 = ((jitnir '(\ x y (// x y)) 'x64) 13 4)) (1 = ((jitnir '(\ x y (% x y)) 'x64) 8 7))       ; n-ary // and %
       ; a64: the same source assembles, and differs from x64
@@ -692,8 +691,8 @@
          (jitgroupir [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64))                 ; two natives, same source -> = (transparent)
       ; jitgroupirx takes its deopt target directly; a native is its twin to `=`
       (: dfs [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))]  dopt (jitgroupir dfs 'fib 'x64)
-         (&& (55 = ((jitgroupirx dfs 'fib 'x64 dopt) 10))                                     ; runs correct
-             (= (jitgroupirx dfs 'fib 'x64 dopt) (jitgroupirx dfs 'fib 'x64 dopt))))         ; one twin -> =
+         (&& (55 = ((jitgroupirx dfs 'fib 'x64 dopt) 10))
+             (= (jitgroupirx dfs 'fib 'x64 dopt) (jitgroupirx dfs 'fib 'x64 dopt))))
       ; string lane: s kind-guarded and passed raw
       (: data (string [72 105 90 33 65])                                                                         ; "HiZ!A": byte-sum 365, len 5
          sbn (jitgroupir [(. '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))] 'sb 'x64)              ; recursive byte-sum

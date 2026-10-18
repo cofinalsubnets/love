@@ -2,13 +2,12 @@
 ;
 ;   love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-P PERM].. MAIN.l [FILE..]
 ;
-; the app is a NativeActivity with no dex: src/apps/droid/bridge.c, built here by our own
-; `mooncc -t a64 -shared`, owns the window, the input queue and logcat, and starts LOVE (an a64
-; love, already baked -- the library directory it runs from is read-only) as its child, laid in
-; the apk as lib/arm64-v8a/liblove.so. MAIN.l and the FILEs ride as assets, laid in the app's
-; data directory, love's cwd and HOME, and love runs MAIN.l there. the apk is signed with apk
-; signature scheme v2 by a p-256 key kept in ~/.love/etc/apk.pem with its certificate, made on
-; first use: android takes an update only under the same certificate, so keep that file.
+; the app is a NativeActivity with no dex: bridge.c, built by our `mooncc -t a64 -shared`, owns
+; the window, input and logcat and starts LOVE (an a64 love, already baked: its library
+; directory is read-only) from lib/arm64-v8a/liblove.so. MAIN.l and the FILEs ride as assets
+; in the app's data directory, love's cwd and HOME. the apk is signed (scheme v2) by a p-256
+; key in ~/.love/etc/apk.pem, made on first use: android takes an update only under the same
+; certificate, so keep that file.
 ;
 ; the face (the wire is bridge.c's header):
 ;   (face-open _)        -> a port to the bridge, () when not under one
@@ -35,8 +34,8 @@
 
    ; --- the binary manifest (android's axml) ---
    ; an element is [tag attrs kids], an attribute [android? name kind value], kind 'int 'hex
-   ; 'bool or 'str. android's attributes are known by resource id, which the map chunk gives
-   ; the first strings of the pool, so those lead it, in id order.
+   ; 'bool or 'str. attributes are known by resource id, which the map chunk gives the first
+   ; strings of the pool, so those lead it, in id order.
    ax-uri "http://schemas.android.com/apk/res/android"
    ax-rid {"label" 0x01010001 "name" 0x01010003 "hasCode" 0x0101000c "debuggable" 0x0101000f
            "exported" 0x01010010 "configChanges" 0x0101001f "value" 0x01010024

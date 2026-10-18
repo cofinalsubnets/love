@@ -1,5 +1,5 @@
-; the just lattice, the center that walks it, and the tonnetz. ratios are exact, so lattice
-; laws are equalities; the walk is floats over integer points, so its laws are where it lands.
+; the just lattice, the center that walks it, and the tonnetz. ratios are exact, so
+; lattice laws are equalities; the walk is floats, so its laws are where it lands
 (borrow 'harp)
 (borrow 'just)
 (borrow 'drift)
@@ -9,7 +9,7 @@
    (dr-rots l) (map (i \ drop i l + take i l) ^#l)
    (dr-pow r k) (k < 1 ? 1 (r * dr-pow r (k - 1)))
    (dr-all l) (!(two? l) ? 1 (<l ? (dr-all >l) 0))
-   ; --- the lattice ---------------------------------------------------------------
+   ; --- the lattice ---
    _ (test ; a ratio is its prime exponents, and back
            ([-4 4 -1 0] = monzo (81 /// 80))
            ((81 /// 80) = unmonzo [-4 4 -1 0])
@@ -33,7 +33,7 @@
    _ (test ((dr-pow (3 /// 2) 4 * (1 /// 4) * (4 /// 5)) = jcomma 'syntonic)
            ((5 /// 3) * rinv (9 /// 8) = (40 /// 27))
            (dr-near (cents (40 /// 27)) (cents (3 /// 2) - cents (jcomma 'syntonic))))
-   ; --- the euclidean bridge --------------------------------------------------------
+   ; --- the euclidean bridge ---
    _ (test ; log2 3/2's convergents: the equal divisions with the best fifths
            ([12 41 53] = map (x \ x 1) (filter (x \ elem (x 1) [12 41 53])
                                               (convergents (cfrac (log 1.5 / log 2) 8))))
@@ -48,7 +48,7 @@
    _ (test (pdiss [1 (5 /// 4) (3 /// 2)] < pdiss [1 (16 /// 15) (45 /// 32)])
            (0.0 = pdiss [1]))
 
-   ; --- the walk --------------------------------------------------------------------
+   ; --- the walk ---
    maj [1 (5 /// 4) (3 /// 2)]
    _ (test ; a phrase at home pulls nowhere; a major one leans up the fifths and thirds
            (tension [1 2 4] = [0.0 0.0 0.0])
@@ -79,12 +79,12 @@
    held (drift-walk {'lean 1.0 'home 0.5} [maj] 16)
    _ (test (lnorm ((last held) 'pos) < lnorm ((last far) 'pos)))
 
-   ; --- the tonnetz and the chooser ------------------------------------------------
+   ; --- the tonnetz and the chooser ---
    cmaj (triad [0 0 0] 'maj)
    _ (test ; a flip keeps two notes and undoes itself
            (dr-all (map (f \ 2 = common (ttones cmaj) (ttones (tflip cmaj f))) ['P 'R 'L]))
            (dr-all (map (f \ tflip (tflip cmaj f) f = cmaj) ['P 'R 'L]))
-           ; twelve-tone cycles do not close: PL thrice misses by the diesis, PR four times by 4 minor thirds vs an octave
+           ; PL thrice misses by the diesis, PR four times by 4 minor thirds vs an octave
            ([[0 -3 0] 'maj] = last (twalk cmaj ['P 'L 'P 'L 'P 'L]))
            (dr-near (cents (jcomma 'diesis)) (1200.0 - cents (unpoint [0 3 0])))
            ([[4 -4 0] 'maj] = last (twalk cmaj ['P 'R 'P 'R 'P 'R 'P 'R]))
@@ -98,7 +98,7 @@
            ; a dear repeat, so the chooser alternates
            (dr-all (map (i \ picks i != picks (i + 1)) ^5)))
 
-   ; --- into harp -------------------------------------------------------------------
+   ; --- into harp ---
    song (drift-song {} [maj [[1 (5 /// 4) (3 /// 2)]]] 2)
    evs  (song (qi 0) (qi 2))
    (test (6 = #evs)                                    ; three in turn, then a chord of three
@@ -106,5 +106,4 @@
          (dr-near (semis (5 /// 4)) ((evv (evs 1)) 'note))
          (dr-near (semis (3 /// 2)) ((evv <((tune (3 /// 2) (pure 1)) (qi 0) (qi 1))) 'note))))
 
-; the sentinel the gate reads
 (say out "test/law/drift: the just lattice, the walk, the tuning\n")

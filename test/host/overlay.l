@@ -21,7 +21,7 @@
  sg2 ('(g1 (rect) window) . '(g2 (window) top) . lux-sigs)
  (test !(chk1 lux-dom sg2 '(: (g1 r) (zfoc (cap r))))       ; unknown arg: consistent
          !(chk1 lux-dom sg2 '(: (g2 w) (zins w)))             ; partial app: open, not a clash
-         (two? (chk1 lux-dom sg2 '(: (g1 r) (zfoc r)))),           ; a rect in the zipper seat: flagged
+         (two? (chk1 lux-dom sg2 '(: (g1 r) (zfoc r)))),           ; a rect in the zipper slot: flagged
 
   ; leg 3: uu, baked -- define, certify, compute
   uu 'defn 'boot-add '(pi m nat (pi n nat nat))
@@ -154,7 +154,7 @@
           (!(zc = zm) ? (dot [(\ genfuzz-diverged) i r w zc zm], 0)
              (fuzz (i - 1) (rnd s2) zc (r = 0 ? (nid + 1) nid)))))
  _ (test (fuzz 100 424242 (zmk 0 () ()) 1))
- ; and the accessors/row through the translated lane, spot-checked
+ ; the accessors/row through the translated lane, spot-checked
  z0 (zmk 5 [2] [7 9])
  (test (zrow z0 = decl (vof 0 ['gen-zrow (encz z0)]))
        (<(zrev z0) = vof 0 ['zfoc ['gen-zrev (encz z0)]])
