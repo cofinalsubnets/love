@@ -107,20 +107,19 @@
  ; -- its share of the sun past what stands between, of the sky's light, and () or the
  ; [r g b] it takes besides -- trays or numbers; the colour the light on it times its own,
  ; gain over all. the scene [verts tris] mesh-frame draws
- (mesh-bake pk lt light gain) (baked pk lt light gain 0)
- ; ..or the sun's light apart, for a frame that shades by the sun's view: 11 a vertex, the
- ; light from the sky and round about, then the sun's
- (mesh-bake-sun pk lt light gain) (baked pk lt light gain 1)
- (baked pk lt light gain apart) (: c (pk 'cols) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
+ (mesh-bake pk lt light gain) (: c (pk 'cols) n (pk 'n) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
    L (light c)
    sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
-   (glow k) (two? (L 2) ? (L 2 k) 0.0)
-   (lit k) (gain * c (8 + k) * ((L 1) * amb k + sun * sc k + glow k))
-   (sky k) (gain * c (8 + k) * ((L 1) * amb k + glow k))
-   (sn k) (gain * c (8 + k) * sun * sc k)
-   [(lace ([(c 0) (c 1) (c 2) (c 3) (c 4)]
-           + (apart ? [(sky 0) (sky 1) (sky 2) (sn 0) (sn 1) (sn 2)] [(lit 0) (lit 1) (lit 2)])))
-    (pk 'tris)])
+   (lit k) (gain * c (8 + k) * ((L 1) * amb k + sun * sc k + (two? (L 2) ? (L 2 k) 0.0)))
+   [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
+ ; ..or the sun's light apart, for a frame that shades by the sun's view: 11 a vertex, the
+ ; light from the sky and round about, then the sun's
+ (mesh-bake-sun pk lt light gain) (: c (pk 'cols) n (pk 'n) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
+   L (light c)
+   sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
+   (sky k) (gain * c (8 + k) * ((L 1) * amb k + (two? (L 2) ? (L 2 k) 0.0)))
+   (lit k) (gain * c (8 + k) * sun * sc k)
+   [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (sky 0) (sky 1) (sky 2) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
  ; the sun's view of a place round c: along its light, half metres either side and deep
  ; along it, its matrix for facets
  (mesh-sun-view lt c half deep) (: s (lt 'sun)

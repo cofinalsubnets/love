@@ -3,7 +3,7 @@
 ; line of sight; the painter says a frame into any port, each cell's face the game's own, so
 ; frames run headless; then the helm, the sign box, the ~ and {brace} words, paced keys, and
 ; the horn's lead paced by the frame gap.
-(module (rove cell-of choice-line floor-new lay-stairs room-apart? room-mid cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
+(module (rove cell-of choice-line floor-new room-apart? room-mid cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
          fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap legible-lum lim lit? mix mob-at mob-spots note
          nth-on oct-at open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-frame sign-over sign-pen
@@ -38,11 +38,6 @@
                            c (cos a) s (sin a)
                            [(cx + int (rx * c + (0.0 < c ? 0.5 -0.5)))
                             (cy + int (ry * s + (0.0 < s ? 0.5 -0.5)))])
- ; the way in at the last room, the stair at the first, and with more a second at the next
- (lay-stairs d more) (: rms (d 'rooms)
-                      (pins d 'in (room-mid (last rms)) 'stair (room-mid <rms),
-                       dput d <(d 'stair) <>(d 'stair) 2,
-                       more ? (room-mid (rms 1) @ s2 (dput d <s2 <>s2 2))))
 
  ; a spun rng: the functional state in a box, one draw steps it
  (roll sb n) (random (peep sb () 0) n @ p (pin sb () >p, <p))
@@ -79,8 +74,11 @@
      (: r1 '(1 1 3 3) r2 [(w - 4) (h - 4) 3 3]
         (carve 1 1 3 3, carve (w - 4) (h - 4) 3 3,
          lash (room-mid r1) (room-mid r2), pin d 'rooms [r2 r1]))),
-   ; a second stair where the floor has a room to spare
-    lay-stairs d (2 < #(d 'rooms)),
+    (pins d 'in (room-mid (last (d 'rooms)))
+            'stair (room-mid <(d 'rooms))),
+    dput d <(d 'stair) <>(d 'stair) 2,
+   ; ..and a second stair in another room, where the floor has one to spare
+    (? (2 < #(d 'rooms)) (room-mid (d 'rooms 1) @ s2 (dput d <s2 <>s2 2))),
     d . peep sb () 0))
 
  ; a list dealt out in a random order, and the first n of one

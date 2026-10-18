@@ -55,7 +55,16 @@
  ; --- text for the screen -------------------------------------------------------------------
  ; a line with its control bytes shown as ^X and its tabs laid to stops of 8: no escape a
  ; sender wrote reaches the terminal
- (chucho-vis l) (tui-vis l 0)
+ (chucho-vis l)
+  (: j (jug 0) n #l
+     (go i col)
+      (n <= i ? (slurp j)
+         (l i @ c
+            (? (c = 9) (8 - col % 8 @ k (say j (edfit "" k " "), go (i + 1) (col + k)))
+               (c = 13) (go (i + 1) col)
+               (c < 32 || c = 127) (say j "^\(string (c = 127 ? 63 (c + 64)))", go (i + 1) (col + 2))
+               (put j c, go (i + 1) (col + (128 <= c < 192 ? 0 1))))))
+     (go 0 0))
  ; a long line broken at a space where one falls in the second half, else hard
  (chucho-wrap l w)
   (? (w < 8 || swidth l <= w) [l]

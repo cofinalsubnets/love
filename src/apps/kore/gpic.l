@@ -74,8 +74,31 @@
      (? (gr-blank? c || c = 10) (gr-adv g, gp-skip-space g)
         (c = 92 && gr-c1 g = 10) (gr-adv g, gr-adv g, gp-skip-space g)
         0))
-   ; a quoted string's \" is a quote; a delimited body may hold a quoted string
-   (gp-delim g) (gr-body g gp-skip-space 1)
+   ; a quoted string, the quote taken: \" is a quote, any other backslash stays
+   (gp-string g)
+    (: o (jug 0)
+       (go _) (gr-c g @ c
+               (? (c < 0 || c = 10) (gp-err g "newline in string")
+                  (c = 34) (gr-adv g, slurp o)
+                  (c = 92 && gr-c1 g = 34) (gr-adv g, gr-adv g, put o 34, go 0)
+                  (c = 92 && 0 <= gr-c1 g) (gr-adv g, put o 92, put o (gr-c g), gr-adv g, go 0)
+                  (put o c, gr-adv g, go 0)))
+       (go 0))
+   ; a delimited body: {..} nested, or any other character to its twin. a quoted string
+   ; inside may hold either
+   (gp-delim g)
+    (: _ (gp-skip-space g)
+       d (gr-c g) o (jug 0)
+       _ (d < 0 ? (gp-err g "missing delimiter") (gr-adv g))
+       cl (d = 123 ? 125 d)
+       (go n) (gr-c g @ c
+               (? (c < 0) (gp-err g "end of file in a delimited body")
+                  (c = cl && n = 0) (gr-adv g, slurp o)
+                  (c = 34) (put o c, gr-adv g, gr-strraw g o, go n)
+                  (d = 123 && c = 123) (put o c, gr-adv g, go (n + 1))
+                  (d = 123 && c = 125) (put o c, gr-adv g, go (n - 1))
+                  (put o c, gr-adv g, go n)))
+       (go 0))
    ; a numeral's value as groff's pic reads one: the whole part by tens, each figure of the
    ; fraction a tenth of the last one's weight, then times 10^exponent. not the nearest
    ; double (0.3 reads 0.30000000000000004), and every place it matters says so
@@ -114,13 +137,13 @@
    ; copy "file", copy [file] thru body|macro [until "word"]: laid out as text and pushed
    (gp-copy g)
     (: _ (gr-skip-blanks g)
-       file (gr-c g = 34 ? (gr-adv g, gr-string g 1))
+       file (gr-c g = 34 ? (gr-adv g, gp-string g))
        _ (gr-skip-blanks g)
        thru (gr-take-word g "thru" ? (gr-thru g gp-delim))
        _ (gr-skip-blanks g)
        until (gr-looking? (gr-top g) "until" ?
               (map (_ \ gr-adv g) ^5, gr-skip-blanks g,
-               gr-c g = 34 ? (gr-adv g, gr-string g 1) (gr-word g)))
+               gr-c g = 34 ? (gr-adv g, gp-string g) (gr-word g)))
        text (string? file ?
              (uread file @ r (two? r ? <>r (gp-err g ("cannot open " + file)))))
        (!(string? thru) ?
@@ -153,7 +176,7 @@
                 (c = 10) (gr-adv g, tok 'nl "newline")
                 (c = 59) (gr-adv g, tok 'nl ";")
                 (digit? c || (c = 46 && digit? c1)) (gp-number g @ r (tok <r <>r))
-                (c = 34) (gr-adv g, tok 'str (gr-string g 1))
+                (c = 34) (gr-adv g, tok 'str (gp-string g))
                 (gr-alpha? c) (gp-lex-word g (gr-word g) tok)
                 (c = 46 && gr-alpha? c1) (gr-adv g, tok 'dot (gr-word g))
                 ((: (go l) (? (atom? l) (string c) (gr-looking? s <l) <l (go >l))

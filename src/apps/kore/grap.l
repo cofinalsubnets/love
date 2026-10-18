@@ -111,10 +111,9 @@
    ; a numeral as the nearest double, as atof reads it
    (gr-atof t)
     (: n #t
-       ; d counts the figures after the point into f
-       (go i m f d) (i < n && digit? (t i) ? (go (i + 1) (m * 10 + t i - 48) (f + d) d) [i m f])
-       a (go 0 0 0 0)
-       b (<a < n && t <a = 46 ? (go (<a + 1) (a 1) 0 1) a)
+       (go i m f) (i < n && digit? (t i) ? (go (i + 1) (m * 10 + t i - 48) f) [i m f])
+       a (go 0 0 0)
+       b (<a < n && t <a = 46 ? (: (fr i m f) (i < n && digit? (t i) ? (fr (i + 1) (m * 10 + t i - 48) (f + 1)) [i m f]) (fr (<a + 1) (a 1) 0)) a)
        i <b m (b 1) f (b 2)
        p (gr-expo t i - f)
        (? (m = 0) 0.0 (0 <= p) (gr-dbl (m * 10 ** p) 1) (gr-dbl m (10 ** (0 - p)))))
@@ -153,29 +152,24 @@
     (: o (jug 0)
        (go _) (gr-wc? (gr-c g) ? (put o (gr-c g), gr-adv g, go 0) (slurp o))
        (go 0))
-   ; a quoted string, the quote taken: \" stays as it is written, the quote kept, or with
-   ; q is a bare quote
-   (gr-string g q)
+   ; a quoted string, the quote taken: \" stays as it is written, the quote kept
+   (gr-string g)
     (: o (jug 0)
        (go _) (gr-c g @ c
                (? (c < 0 || c = 10) (gr-err g "newline in string")
                   (c = 34) (gr-adv g, slurp o)
-                  (q && c = 92 && gr-c1 g = 34) (gr-adv g, gr-adv g, put o 34, go 0)
                   (c = 92 && 0 <= gr-c1 g) (gr-adv g, put o 92, put o (gr-c g), gr-adv g, go 0)
                   (put o c, gr-adv g, go 0)))
        (go 0))
-   ; a delimited body: {..} nested, or any other character to its twin, the space before it
-   ; taken by skip; with q a quoted string inside may hold either
-   (gr-delim g) (gr-body g gr-skip-space 0)
-   (gr-body g skip q)
-    (: _ (skip g)
+   ; a delimited body: {..} nested, or any other character to its twin
+   (gr-delim g)
+    (: _ (gr-skip-space g)
        d (gr-c g) o (jug 0)
        _ (d < 0 ? (gr-err g "missing delimiter") (gr-adv g))
        cl (d = 123 ? 125 d)
        (go n) (gr-c g @ c
                (? (c < 0) (gr-err g "end of file in a delimited body")
                   (c = cl && n = 0) (gr-adv g, slurp o)
-                  (q && c = 34) (put o c, gr-adv g, gr-strraw g o, go n)
                   (d = 123 && c = 123) (put o c, gr-adv g, go (n + 1))
                   (d = 123 && c = 125) (put o c, gr-adv g, go (n - 1))
                   (put o c, gr-adv g, go n)))
@@ -240,12 +234,12 @@
    ; copy "file", copy [file] thru body|macro [until "word"]: laid out as text and pushed
    (gr-copy g)
     (: _ (gr-skip-blanks g)
-       file (gr-c g = 34 ? (gr-adv g, gr-string g 0))
+       file (gr-c g = 34 ? (gr-adv g, gr-string g))
        _ (gr-skip-blanks g)
        thru (gr-take-word g "thru" ? (gr-thru g gr-delim))
        _ (gr-skip-blanks g)
        until (gr-take-word g "until" ?
-              (gr-skip-blanks g, gr-c g = 34 ? (gr-adv g, gr-string g 0) (gr-word g)))
+              (gr-skip-blanks g, gr-c g = 34 ? (gr-adv g, gr-string g) (gr-word g)))
        text (string? file ?
              (uread file @ r (two? r ? <>r (gr-err g "can't open file \(file)"))))
        (!(string? thru) ?
@@ -301,7 +295,7 @@
                 (c = 10) (gr-adv g, tok 'nl "\n")
                 (c = 59) (gr-adv g, tok 'nl ";")
                 (digit? c || (c = 46 && digit? c1)) (tok 'num (gr-atof (gr-numeral g)))
-                (c = 34) (gr-adv g, tok 'str (gr-string g 0))
+                (c = 34) (gr-adv g, tok 'str (gr-string g))
                 (gr-alpha? c) (gr-lex-word g (gr-word g) tok)
                 ((: (go l) (? (atom? l) (string c) (gr-looking? s <l) <l (go >l))
                     (go gr-ops)) @ op

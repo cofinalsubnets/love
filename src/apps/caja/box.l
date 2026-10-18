@@ -79,21 +79,6 @@
    ; --- packaging (tex.web 644-679) -----------------------------------------------------
    (order tot) (? (tot 3 != 0) 3 (tot 2 != 0) 2 (tot 1 != 0) 1 0)
    (add! tot o v) (pin tot o (tot o + v))
-   ; the glue set to make up x, and J's badness with it; ov runs on an overfull box
-   (glue-set J r p0 x st sh ov)
-    (pin J 'badness 0,
-     (? (x > 0)
-        (order st @ o
-           (pins r 'gorder o 'gsign 1,
-            st o != 0 ? (pin r 'gset (x / st o)) (pins r 'gsign 0 'gset 0.0),
-            o = 0 && p0 != () ? (pin J 'badness (cb-badness x (st 0)))))
-        (x < 0)
-        (order sh @ o
-           (pins r 'gorder o 'gsign 2,
-            sh o != 0 ? (pin r 'gset ((0 - x) / sh o)) (pins r 'gsign 0 'gset 0.0),
-            (? (sh o < 0 - x && o = 0 && p0 != ()) (pin J 'badness 1000000, pin r 'gset 1.0, ov ())
-               (o = 0 && p0 != ()) (pin J 'badness (cb-badness (0 - x) (sh 0))))))),
-     r)
    (cb-hpack J p0 w m)
     (: r (cb-null-box 0) _ (pin r 'list p0)
        st {0 0 1 0 2 0 3 0} sh {0 0 1 0 2 0 3 0}
@@ -134,12 +119,26 @@
        w2 (m @ 'additional (dims 'x + w) w)
        _ (pin r 'width w2)
        x (w2 - dims 'x)
-       ; the overfull rule, where TeX would lay one
-       (glue-set J r p0 x st sh
-          (_ \ (J 'params 'overfullrule > 0 && 0 - x - sh 0 > J 'params 'hfuzz ?
-                   (: (last q) (q 'link = () ? q (last (q 'link)))
-                      nr (cb-rule (J 'params 'overfullrule) null-flag null-flag)
-                      (pin (last p0) 'link nr))))))
+       (pin J 'badness 0,
+        (? (x > 0)
+           (order st @ o
+              ((pins r 'gorder o 'gsign 1),
+               st o != 0 ? (pin r 'gset (x / st o)) (pins r 'gsign 0 'gset 0.0),
+               o = 0 && p0 != () ? (pin J 'badness (cb-badness x (st 0)))))
+           (x < 0)
+           (order sh @ o
+              ((pins r 'gorder o 'gsign 2),
+               sh o != 0 ? (pin r 'gset (-x / sh o)) (pins r 'gsign 0 'gset 0.0),
+               (? (sh o < 0 - x && o = 0 && p0 != ())
+                  (: _ (pin J 'badness 1000000) _ (pin r 'gset 1.0)
+                     over (0 - x - sh 0)
+                     ; the overfull rule, where TeX would lay one
+                     (J 'params 'overfullrule > 0 && over > J 'params 'hfuzz ?
+                        (: (last q) (q 'link = () ? q (last (q 'link)))
+                           nr (cb-rule (J 'params 'overfullrule) null-flag null-flag)
+                           (pin (last p0) 'link nr))))
+                  (o = 0 && p0 != ()) (pin J 'badness (cb-badness (0 - x) (sh 0))))))),
+        r))
    (cb-vpack J p h m) (cb-vpackage J p h m max-dimen)
    (cb-vpackage J p0 h m l)
     (: r (cb-null-box 0) _ (pins r 'type 1 'list p0)
@@ -166,7 +165,20 @@
        h2 (m = 'additional ? (dims 'x + h) h)
        _ (pin r 'height h2)
        x (h2 - dims 'x)
-       (glue-set J r p0 x st sh (_ \ 0)))
+       (pin J 'badness 0,
+        (? (x > 0)
+           (order st @ o
+              (pin r 'gorder o, pin r 'gsign 1,
+               st o != 0 ? (pin r 'gset (x / st o)) (pins r 'gsign 0 'gset 0.0),
+               o = 0 && p0 != () ? (pin J 'badness (cb-badness x (st 0)))))
+           (x < 0)
+           (order sh @ o
+              (pin r 'gorder o, pin r 'gsign 2,
+               sh o != 0 ? (pin r 'gset ((0 - x) / sh o)) (pins r 'gsign 0 'gset 0.0),
+               (? (sh o < 0 - x && o = 0 && p0 != ())
+                  (pin J 'badness 1000000, pin r 'gset 1.0)
+                  (o = 0 && p0 != ()) (pin J 'badness (cb-badness (0 - x) (sh 0))))))),
+        r))
 
    ; --- the DVI buffer (tex.web 595-601) --------------------------------------------------
    (dvi-out J b)

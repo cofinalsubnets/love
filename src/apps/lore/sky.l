@@ -48,7 +48,13 @@
  (lap wx r k) (peep wx 'per 0 @ p (p = 0 ? r (floor (r * k * p / cloud-n + 0.5) * cloud-n / (k * p))))
  ; the clouds' thickness, a square that tiles: value noise on lattices that wrap
  (cloud-map _) (: n cloud-n i (iota (n * n)) u (i % n / (1.0 * n)) v (i // n / (1.0 * n))
-   (0.55 * vnw (u * 8.0) (v * 8.0) 61 8 + 0.3 * vnw (u * 16.0) (v * 16.0) 62 16 + 0.15 * vnw (u * 32.0) (v * 32.0) 63 32))
+   (vp x z s p) (: ix (floor x) iz (floor z) ux (x - ix) uz (z - iz)
+                   ex (ux * ux * (3.0 - 2.0 * ux)) ez (uz * uz * (3.0 - 2.0 * uz))
+                   (h a c) (throw (a % p) (c % p) s 1024 / 1023.0)
+                   q0 (h ix iz) q1 (h (ix + 1) iz) q2 (h ix (iz + 1)) q3 (h (ix + 1) (iz + 1))
+                   lo (q0 + ex * (q1 - q0)) hi (q2 + ex * (q3 - q2))
+                   (lo + ez * (hi - lo)))
+   (0.55 * vp (u * 8.0) (v * 8.0) 61 8 + 0.3 * vp (u * 16.0) (v * 16.0) 62 16 + 0.15 * vp (u * 32.0) (v * 32.0) 63 32))
  maps {}
  ; ..and where the clouds' thickness stands at each hundredth of the sky, so a cover's
  ; share is the share of sky its clouds take: thick's own mix of the map, shuffled, with

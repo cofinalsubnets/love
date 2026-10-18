@@ -71,19 +71,23 @@
          (val + snip w n #w) w))
    (unseat w) (!(string? w) ? w (unpre (unpre w "$HOME" (getenv "HOME")) "$PWD" (cwd 0)))
    (unseatl l) (atom? l ? l (map unseat l))
-   ; dbl is `tgt:: ..`, the one place a second recipe does not replace the first: make runs
-   ; every such rule's steps, in the order written. reg's rule -- a later recipe wins -- is `:`'s.
-   (reg-by dbl item ing oo steps)
+   (reg item ing oo steps)
    (: at (unseat item) ins (unseatl ing) ors (unseatl oo)
       prev (cards at)
       (prev ?
-         (pin cards at (adds <prev ins .  adds <>prev ors .  (dbl ? (>>prev + steps) (two? steps ? steps >>prev))))
+         (pin cards at (adds <prev ins .  adds <>prev ors .  (two? steps ? steps >>prev)))
          (pin cards at (ins . ors . steps),
           peep check 0 0 ? 0 (pin check 0 at),
           at)))
-   (reg item ing oo steps) (reg-by 0 item ing oo steps)
+   ; `tgt:: ..` is the one place a second recipe does not replace the first: make runs every
+   ; such rule's steps, in the order written. reg's rule -- a later recipe wins -- is `:`'s.
    ; the targets carrying a target-specific variable -- see classify. recur asks.
    tvarbox {}
+   (regd item ing oo steps)
+   (: at (unseat item) ins (unseatl ing) ors (unseatl oo)
+      prev (cards at)
+      (prev ? (pin cards at (adds <prev ins . adds <>prev ors . >>prev + steps))
+         (reg item ing oo steps)))
    ; the public Cookfile API: (recipe item ingredients steps) -- no order-only prereqs.
    (recipe item ingredients steps) (reg item ingredients 0 steps)
 
@@ -1097,7 +1101,7 @@
                              ; prerequisites arriving after their recipe still read short.
                              (each tgts (t \ (: it (mk-item t) ps (map mk-item prs)
                                                 all (adds <(peep cards (unseat it) '(())) ps)
-                                                (reg-by dbl it ps (map mk-item oos)
+                                                ((dbl ? regd reg) it ps (map mk-item oos)
                                                      (expand-steps raws it all "" as)))))))))))))
       ; make's .DEFAULT_GOAL overrides "first rule declared" -- it is a plain
       ; variable, so it survives the dot-target drop above and lands in `as`.

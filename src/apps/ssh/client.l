@@ -278,7 +278,15 @@
     (see in @ ch
        (ch = -1 ? (ssh-send t (u8 96 + u32 (t 'rch)))
           (: _ (unsee in ch)
-             (ch-put t (chug in) (_ \ rest 5), pump t))))
+             s (chug in)
+             (put1 i) (#s <= i ? 0
+                         (min (t 'rmax) (t 'rwin) @ room
+                            (room < 1 ? (rest 5, put1 i)
+                               (min room (#s - i) @ n
+                                  (pin t 'rwin (t 'rwin - n),
+                                   ssh-send t (u8 94 + u32 (t 'rch) + sstr (snip s i (i + n))),
+                                   put1 (i + n))))))
+             (put1 0, pump t))))
    ; the channel's traffic until it closes -> the exit status
    (drain t)
     (ssh-next t @ p
@@ -340,18 +348,6 @@
    (ch-req t c) (: nm (g-str c) wr? (g-u8 c)
                    ((? (nm = "exit-status") (pin t 'status (g-u32 c)) (nm = "exit-signal") (pin t 'status 255) 0),
                     wr? ? (ssh-send t (u8 100 + u32 (t 'rch))) 0))
-   ; s into the channel inside the peer's window and packet size, wait run while the window
-   ; is shut -> 1, or 0 once the channel closed
-   (ch-put t s wait)
-    (: (go i) (? (#s <= i) 1
-                 (t 'closed = 1) 0
-                 (min (t 'rmax) (t 'rwin) @ room
-                    (room < 1 ? (wait (), go i)
-                       (min room (#s - i) @ n
-                          (pin t 'rwin (t 'rwin - n),
-                           ssh-send t (u8 94 + u32 (t 'rch) + sstr (snip s i (i + n))),
-                           go (i + n))))))
-       (go 0))
    ; one packet into the channel's state -> 0 once it can bring no more
    (ch-pull t)
     ((t 'closed = 1 ? () (ssh-next t)) @ p
@@ -375,7 +371,16 @@
        (? (0 <= k) (ch-read t (k + 1))
           (t 'eof = 1) ()
           (ch-pull t, ch-line t)))
-   (ch-write t s) (ch-put t s (_ \ ch-pull t))
+   (ch-write t s)
+    (: (go i) (? (#s <= i) 1
+                 (t 'closed = 1) 0
+                 (min (t 'rmax) (t 'rwin) @ room
+                    (room < 1 ? (ch-pull t, go i)
+                       (min room (#s - i) @ n
+                          (pin t 'rwin (t 'rwin - n),
+                           ssh-send t (u8 94 + u32 (t 'rch) + sstr (snip s i (i + n))),
+                           go (i + n))))))
+       (go 0))
    (ch-end t)
     (t 'closed = 1 ? 0 (ssh-send t (u8 96 + u32 (t 'rch))),
      (: (go _) (t 'closed = 1 ? (t 'status) (ch-pull t, go 0)) (go 0)))

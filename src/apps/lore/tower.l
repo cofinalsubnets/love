@@ -61,9 +61,14 @@
                                  pin d 'rooms ([(x0 + 1) (y0 + 1) (bw - 2) (bh - 2)] . d 'rooms)))))
    (pairs l) (two? >l ? ([<l (l 1)] . pairs >l) ())
    _ (each (pairs ys) (yy \ each (pairs xs) (xx \ build <xx <>xx <yy <>yy)))
+   rms (d 'rooms)
    ; a floor too small for three buildings is delved instead, like any other
-   (#(d 'rooms) < 3 ? (delve w h st (plan 2))
-    (lay-stairs d 1, d . peep sb () 0)))
+   (#rms < 3 ? (delve w h st (plan 2))
+    (: _ (pins d 'in (room-mid (last rms)) 'stair (room-mid <rms))
+       _ (dput d <(d 'stair) <>(d 'stair) 2)
+       s2 (room-mid (rms 1))
+       (dput d <s2 <>s2 2,
+        d . peep sb () 0))))
 
 
 
@@ -121,9 +126,14 @@
                    pin d 'rooms (rm . d 'rooms),
                    try (n - 1)))))))
    _ (try (w * h // 25))
+   rms (d 'rooms)
    ; a floor too cramped for two platforms is delved instead, like any other
-   (#(d 'rooms) < 2 ? (delve w h st (plan 3))
-    (lay-stairs d 1, d . peep sb () 0)))
+   (#rms < 2 ? (delve w h st (plan 3))
+    (: _ (pins d 'in (room-mid (last rms)) 'stair (room-mid <rms))
+       _ (dput d <(d 'stair) <>(d 'stair) 2)
+       s2 (room-mid (rms 1))
+       (dput d <s2 <>s2 2,
+        d . peep sb () 0))))
 
  ; a floor is delved or laid by its tier
  (carve-floor w h st lvl) (lvl @ 2 (city w h st) 3 (sky w h st) (delve w h st (plan lvl)))
