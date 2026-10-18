@@ -220,7 +220,7 @@ spectrum, q quits."
        sc (map (y \ (k0 + cy - y) @ k (row k (y = cy ? mk ()) (klo <= k <= khi))) ^body)
        rows (tall ? (map ((r . s) \ fill r besidew + s) (zip sc (column t body (w - besidew - 4) on c))) sc)
        top (sgr "7" (pad (w < 50 ? "  tuner  A4 \(t 'ref)  \(t 'src)  level \(int (t 'lvl))"
-                                "  love tuner   A4 = \(t 'ref) Hz   \(t 'src)   level \(int (t 'lvl))")) w)
+                                "  love tuner   A4 = \(t 'ref) Hz   \(t 'src)   level \(int (t 'lvl))") w))
        keys "a/A A4 ∓1 Hz  s spectrum  q quit"
        bot (sgr "2" (pad ((? (w < 64) "  " (w < 84) "  ━ semitone  ╺━ ¼  · ⅛    "
                              "  ━ semitone  ╺━ quarter tone  · eighth tone    ") + keys) w))
