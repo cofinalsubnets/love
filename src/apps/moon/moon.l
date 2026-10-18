@@ -486,15 +486,15 @@
           [[".note.gnu.property" 7 2 w
              [['raw (le32 4 + le32 (w + 8) + le32 5 + o-strbytes "GNU" + [0]
                      + le32 3221225474 + le32 4 + le32 cf + (w = 8 ? (le32 0)))]]]]))
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes]
        ; wasm rides gen's rv64 lane whole (src/love/holo/wasmfn.l is the machine under it) and
        ; lays no ELF: its object is the gen tuple as text, read back by the wasm link. gen
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv]] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe] pfes] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
@@ -1273,7 +1273,7 @@
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
-                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv ()}
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1356,6 +1356,12 @@
           ((a . r) && elem a '("-fcf-protection=branch" "-fcf-protection=full" "-fcf-protection")) (flags r (pin t 'cfb (a = "-fcf-protection=branch" ? 1 3)))
           ("-fcf-protection=return" . r) (flags r (pin t 'cfb 2))
           ("-fcf-protection=none" . r) (flags r (pin t 'cfb ()))
+          ; -fpatchable-function-entry=N[,M]: N nops at every fn's entry, M of them ahead of it,
+          ; each pad's address in __patchable_function_entries
+          ((("-fpatchable-function-entry=" + w) . r) && #w)
+           (: ws (split "," w) n (tonum <ws) k (two? >ws ? (tonum <>ws) 0)
+              (charm? n && charm? k && 0 <= k <= n ? (flags r (pin t 'pfe (n = 0 ? () [n k])))
+                 (udie 2 "cc: -fpatchable-function-entry=\(w) -- N, or N,M with M at most N")))
           ("-fshort-enums" . r) (flags r (pin t 'senum 's))
           ("-fno-short-enums" . r) (flags r (pin t 'senum 'n))
           ; -ffixed-x18: the platform register stays out of allocation, which on a64 it always
@@ -1490,6 +1496,7 @@
        _ (f 'senum && (elem (f 'tgt) '(thumb1 thumb2 thumb2sp arm) @ a32 (f 'senum = 's ? !a32 a32)) &&
           udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
        _ (f 'cfb && !(elem (f 'tgt) '(x64 i386 i386m16)) && udie 2 "cc: -fcf-protection lays on x86 only")
+       _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
        ; pc-relative code on x64, a64 and rv64; i386 and the arm targets address absolutely
        _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
        ; no nest on disk anywhere: the carried source answers, in memory --

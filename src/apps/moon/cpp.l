@@ -41,7 +41,7 @@
              "noplt" 'hint "nocf_check" 'hint "indirect_branch" 'hint "function_return" 'hint
              "common" 'hint "nocommon" 'hint
              "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'do "vector_size" 'no
-             "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'no
+             "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'do
              ; i386's conventions: gcc ignores them on every target mooncc lays, so a skip is exact
              "regparm" 'hint "stdcall" 'hint "fastcall" 'hint "thiscall" 'hint "ms_abi" 'no "pcs" 'no
              "long_call" 'no "short_call" 'no "scalar_storage_order" 'no "target_clones" 'no

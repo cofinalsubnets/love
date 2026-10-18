@@ -500,7 +500,7 @@ printf 'int lf(int a, int b) { int t[4] = { a, b, a + b, a - b }; return t[a & 3
 moonrun -O2 -mno-red-zone -c -o "$ho/.rz.o" "$ho/.rz.c" > /dev/null 2>&1 || fail "-mno-red-zone compile"
 objdump -d "$ho/.rz.o" | grep -q -- '-0x[0-9a-f]*(%rsp)' && fail "-mno-red-zone: a store below sp"
 # what mooncc does not honour refuses by name, exit 2
-for fl in -fpatchable-function-entry=2,1 -mcmodel=kernel -fstack-protector-strong -fno-such-flag -mno-such-flag; do
+for fl in -mcmodel=kernel -fstack-protector-strong -fno-such-flag -mno-such-flag; do
   moonrun $fl -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?
   [ $r -eq 2 ] && grep -q -- "$fl" "$ho/.fl.err" || fail "$fl: exit $r, not refused by name"
 done
@@ -606,6 +606,37 @@ moonrun -fwrapv -o "$ho/.wvl" "$ho/.wvl.c" > /dev/null 2>&1 || fail "-fwrapv com
 $cc_g -O2 -fwrapv -o "$ho/.wvlg" "$ho/.wvl.c" > /dev/null 2>&1 && "$ho/.wvlg"; b=$?
 [ $a -eq 33 ] && [ $a -eq $b ] || fail "-fwrapv: a counter past INT_MAX (ours $a gcc $b, want 33)"
 echo "mooncc: -fwrapv wraps an int's arithmetic at 32 bits in every lane, held to gcc"
+
+# -fpatchable-function-entry=N,M: N nops, M ahead of the entry, a word to each pad's start in
+# __patchable_function_entries; the attribute overrides per fn, (0,0) being the kernel's notrace
+cat > "$ho/.pfe.c" <<'EOF'
+int g(int);
+int f(int x) { return g(x) + 1; }
+__attribute__((patchable_function_entry(0, 0))) int nt(int x) { return g(x) * 2; }
+__attribute__((patchable_function_entry(3, 1))) int own(int x) { return g(x) - 3; }
+EOF
+pfe() { awk -v f="<$1>:" '$2 == f { on = 1; next } /^[0-9a-f]+ </ { on = 0 } on { print $2 }' "$ho/.pfe.d" | head -"$2" | tr '\n' ' '; }
+moonrun -fpatchable-function-entry=4,2 -c -o "$ho/.pfe.o" "$ho/.pfe.c" > /dev/null 2>&1 || fail "-fpatchable-function-entry compile"
+objdump -d --no-show-raw-insn "$ho/.pfe.o" > "$ho/.pfe.d"
+[ "$(pfe f 2)" = "nop nop " ] || fail "-fpatchable-function-entry=4,2: f does not open on 2 nops ($(pfe f 2))"
+[ "$(pfe nt 1)" != "nop " ] || fail "patchable_function_entry(0,0) still padded nt"
+[ "$(pfe own 2)" = "nop nop " ] || fail "patchable_function_entry(3,1): own does not open on 2 nops"
+# a word per padded fn, each at its fn's entry less its pre-nops: f at -2, own at -1
+readelf -rW "$ho/.pfe.o" | awk '/__patchable_function_entries/ { on = 1; next } /^Relocation section/ { on = 0 } on && /R_X86_64_64/ { print $NF }' > "$ho/.pfe.r"
+[ "$(wc -l < "$ho/.pfe.r")" = 2 ] || fail "-fpatchable-function-entry: $(wc -l < "$ho/.pfe.r") entries, want 2 (nt has none)"
+for fn in f:2 own:1; do
+  a=$(nm "$ho/.pfe.o" | awk -v n="${fn%:*}" '$3 == n { print $1 }')
+  grep -qx "$(printf %x $((0x$a - ${fn#*:})))" "$ho/.pfe.r" || fail "-fpatchable-function-entry: no entry at ${fn%:*}'s pad"
+done
+moonrun -t a64 -mbranch-protection=bti -fpatchable-function-entry=2 -c -o "$ho/.pfe.o" "$ho/.pfe.c" > /dev/null 2>&1 || fail "-fpatchable-function-entry on a64"
+if command -v llvm-objdump > /dev/null; then
+  llvm-objdump -d --no-show-raw-insn "$ho/.pfe.o" > "$ho/.pfe.d"
+  [ "$(pfe f 3)" = "bti nop nop " ] || fail "-fpatchable-function-entry=2 on a64: f opens on $(pfe f 3), not bti nop nop"
+fi
+moonrun -t rv64 -fpatchable-function-entry=2 -c -o /dev/null "$ho/.pfe.c" > /dev/null 2>&1 || fail "-fpatchable-function-entry on rv64"
+moonrun -t thumb2 -fpatchable-function-entry=2 -c -o /dev/null "$ho/.pfe.c" > /dev/null 2>&1 && fail "-fpatchable-function-entry taken on thumb2"
+moonrun -fpatchable-function-entry=1,2 -c -o /dev/null "$ho/.pfe.c" > /dev/null 2>&1 && fail "-fpatchable-function-entry=1,2 taken"
+echo "mooncc: -fpatchable-function-entry lays each fn's nop pad and its word, the attribute per fn"
 
 # -- C11 conditional features (6.10.8.3), per target
 # ours alone (gcc has atomics): a claimed absence sends portable code down a fallback

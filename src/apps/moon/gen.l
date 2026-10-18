@@ -5469,6 +5469,20 @@
    (btiat nm fs) (: L ['label (name nm)]
                     (go l) (!(two? l) ? l (<l = L ? (<l . '(btislot) . >l) (<l . go >l)))
                     (go fs))
+   ; -fpatchable-function-entry's pad: N nops, M of them ahead of the entry, the rest behind
+   ; it (and its landing pad); each pad's start is a word in __patchable_function_entries
+   (pfeof g nm) (peep (g 'pfes) nm (drop 14 (g 'mo) @ r (two? r ? <r ())) @ p (two? p && 0 < <p ? p ()))
+   (pnops g k) (map (_ \ (? (x64t? g) '(raw (144)) (a64? g) '(raw (31 32 3 213)) '(raw (19 0 0 0)))) ^k)
+   (pfelab nm) (name ".pfe.\(nm)")
+   (pfepre g nm pf) (two? pf ? (pin g 'pfel (pfelab nm . g 'pfel), ['label (pfelab nm)] . pnops g (pf 1)))
+   (pfepost g nm pf fs)
+    (? !(two? pf) fs
+       (: L ['label (name nm)] k (<pf - pf 1)
+          (go l) (? !(two? l) l
+                    (<l = L && two? >l && <>l = '(btislot)) (<l . <>l . pnops g k + >>l)
+                    (<l = L) (<l . pnops g k + >l)
+                    (<l . go >l))
+          (go fs)))
    (btic g fm on)
     (: (go l acc)
         (!(two? l) ? (rev acc)
@@ -11252,7 +11266,9 @@
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () ()])}   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv]
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry]
+          'pfes (two? xtra && 13 < #xtra ? (xtra 13) {})   ; fn name -> its own patchable_function_entry (N M)
+          'pfel ()}                                 ; the pads laid, newest first
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
        ainls (two? xtra && 5 < #xtra ? (xtra 5))
@@ -11347,7 +11363,8 @@
                            (go (keys (g 'alias)) ()))
                      ; an aligned(N) fn, or -falign-functions', floored at 2 by the parity law
                      an (peep (g 'aligns) nm 2 @ a (max (max a 2) (falgn g)))
-                     fm (['align an] . al2 + (lpad? g ? (btiat nm r) r))
+                     pf (pfeof g nm)
+                     fm (['align an] . pfepre g nm pf + al2 + pfepost g nm pf (lpad? g ? (btiat nm r) r))
                      ; a fn that named its section leaves .text for that stream, its align riding out as the section's grain
                      sc (peep (g 'sects) nm ())
                      _ (nm = "main" ? (pin g 'saw 1))
@@ -11511,7 +11528,14 @@
                                      (go l 16))
                      (rev (<r 'xfns) @ src
                         (map (nm \ [nm (forsec nm src) (grain nm src)]) (noms src ()))))
+             ; the pads' words, a fixup to each: what ftrace and the kernel's call padding walk
+             ; ..only those whose label the text still lays, once each
+             pfs (: lt (foldl (t \ f \ (two? f && <f = 'label ? (pin t (<>f) 1) t)) {} (<>r + catall (map (x \ x 1) xfns)))
+                    ls (foldl (a \ L \ (lt L && !(elem L a) ? (L . a) a)) () (<r 'pfel))
+                    w (ilp32? <r ? 4 8)
+                    (two? ls ? [["__patchable_function_entries"
+                                 (['align w] . map (L \ ['raw [['fix w (w = 4 ? 'abs32 'abs64) L 0]]]) ls) ()]]))
              [1 <>r <dat fnames gnames
-                <>dat <>>dat (lnames + lals) <>>>dat <>>>>dat <>>>>>dat
+                <>dat <>>dat (lnames + lals) (<>>>dat + pfs) <>>>>dat <>>>>>dat
                 xfns (asecs-live <r [<>r (map (x \ x 1) xfns)])]))))
 ) ; module 'moon

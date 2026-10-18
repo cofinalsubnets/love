@@ -317,6 +317,22 @@
                              (go >s d))
                          (go >s d))))
        (go ts 0))
+   ; `patchable_function_entry(N)` or `(N, M)`, to the first depth-0 `;` or `{` -> (N M) | ()
+   (pfeat? ts)
+    (: (num t) (tkk t = 'num ? (tkv t))
+       (go s d) (atom? s ? ()
+                   (<s @ t
+                      (? (d < 1 && (tp? t ";" || tp? t "{")) ()
+                         (tp? t "(") (go >s (d + 1))
+                         (tp? t ")") (go >s (d - 1))
+                         (0 < d && (idv? t "patchable_function_entry" || idv? t "__patchable_function_entry__") &&
+                          peekp >s "(" && two? >>s && charm? (num <>>s))
+                          (: n (num <>>s) r >>>s
+                             (? (peekp r ")") [n 0]
+                                (peekp r "," && two? >r && charm? (num <>r)) [n (num <>r)]
+                                (go >s d)))
+                         (go >s d))))
+       (go ts 0))
    ; one `aligned` ask, the tokens after the word -> (N rest): bare is the target's widest, a
    ; parenthesised constant expression folds (the kernel's `2 * sizeof(unsigned long)`), and one
    ; that will not fold asks nothing
@@ -380,6 +396,7 @@
                  pin t 'anames {},        ; a file-scope declarator's asm label: nm -> the symbol it is laid as
                  pin t 'currstr (),               ; ...accumulating for the declaration being parsed, like curweak
                  pin t 'aligns {},        ; global name -> its __attribute__((aligned(N))) boundary
+                 pin t 'pfes {},          ; fn name -> its patchable_function_entry (N M)
                  pin t 'locals {},        ; local/param name -> its declared type (for parse-time sizeof folding)
                  pin t 'globals {},       ; file-scope name -> ty, so sizeof over a global settles at parse too
                  pin t 'hoist (),                 ; block-scope `extern` decls, lifted to the TU's top as ('xdecl ..)
@@ -2740,6 +2757,7 @@
      (peep ps 'curlink () ? ()
         (pin ps 'curlink (leadkw? ps ts 'inline && !!(leadextern? ps ts) = !!(gnuinlany? ts) ? 'inl 'ext))),
      (peep ps 'curalign () ? () (alignat? ps ts @ an (an ? (pin ps 'curalign an)))),
+     (two? (peep ps 'curpfe ()) ? () (pfeat? ts @ pf (two? pf ? (pin ps 'curpfe pf)))),
      ptop9 ps ts)
    (ptop9 ps ts)
     (? (peekp ts ";") ['(tdef) >ts]           ; a stray top-level `;` -- an empty declaration
@@ -2967,6 +2985,7 @@
            ; where the code lands is the point, and the align is what pins the spacing
             sc && fnp ? (pin (ps 'sects) <>f sc),
             an && fnp ? (pin (ps 'aligns) <>f an),
+            (ps 'curpfe @ pf (two? pf && fnp ? (pin (ps 'pfes) <>f pf))),
             <f = 'gdecl && (st || sc || an) ?
               (: (go2 prs) (atom? prs ? 1
                               (<<prs @ nm
@@ -3011,6 +3030,7 @@
             pin ps 'curnoinl (),
             pin ps 'curused (),
             pin ps 'curalign (),
+            pin ps 'curpfe (),
             pin ps 'scopacc (),        ; what a file-scope specifier bound is nobody's to take back
             pin ps 'cursect ()))
        (tops ts2 acc)
@@ -3020,7 +3040,7 @@
            (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
                       [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames)])
+                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes)])
            (ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why
