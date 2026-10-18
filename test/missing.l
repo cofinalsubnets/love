@@ -2,9 +2,9 @@
 ; with nothing heard it reads the zero point. welp answers it quietly; test-strict ends the run
 (hear welp)
 (test
- ((:) = an-never-defined)                      ; the floor handler: the zero point
- !an-never-defined                               ; ... so a missing name is false
- !(nom? an-never-defined))                       ; ... the zero point (absence): not a nom -- anonymous and empty
+ ((:) = an-never-defined)                      ; the floor handler
+ !an-never-defined
+ !(nom? an-never-defined))                       ; the zero point is not a nom
 (hear 0)
 
 ; a name bound to 0 is in the book: an armed help never hears it
@@ -32,7 +32,7 @@
 (test
  (99 = (: a an-outer an-outer 2 a))              ; the bare pre-pin read is the book's an-outer
  ((:) = (: a an-local an-local 2 a))            ; ... and of nothing, the zero point
- (2 = (: a an-local an-local 2 an-local))        ; the body reads the local, post-pin
+ (2 = (: a an-local an-local 2 an-local))
  ((:) = (: f (_ \ an-cell) v (f 0) an-cell 5 v))  ; the closure's read is the cell: the point pre-pin
  (5 = (: f (_ \ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the value, once pinned
 (hear 0)

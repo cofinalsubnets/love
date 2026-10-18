@@ -1,7 +1,6 @@
 ; src/apps/ssh/client.l -- an ssh-2 client: transport (RFC 4253), publickey auth (4252), one
-; session channel (4254). one of everything: curve25519-sha256 for the exchange, an
-; ssh-ed25519 host key, chacha20-poly1305@openssh.com both ways, and an ed25519
-; identity, bare or as ssh-keygen locks one -- what a modern OpenSSH offers first.
+; session channel (4254): curve25519-sha256, an ssh-ed25519 host key, chacha20-poly1305
+; both ways, an ed25519 identity bare or locked -- what a modern OpenSSH offers first.
 ;
 ;   (ssh-dial host port)          connect, exchange keys, check the host -> session | a reason string
 ;   (ssh-auth t user seed pub)    publickey auth -> 1 | a reason string
@@ -13,10 +12,9 @@
 ;   (ssh-keyparts path txt ask)   the same with the comment -> [seed pub comment] | a reason
 ;   (ssh-keyhead path txt)        the cleartext half, no passphrase -> [cipher pub] | a reason
 ;
-; the session is a tablet like tls's: the socket, a pending run, a sequence number and
-; key pair each way, the session id. the chacha key is 64 bytes, the payload key first
-; and the length key second; openssh's nonce is the sequence number, which is the IETF
-; nif's nonce with the counter's high word zero ahead of it.
+; the session is a tablet: socket, pending run, sequence number and keys each way, session
+; id. the 64-byte chacha key is payload key then length key; the nonce is the sequence
+; number, the IETF nif's nonce with the counter's high word zero.
 (module 'ssh
 (borrow 'tls)
 (borrow 'dns)
@@ -48,8 +46,8 @@
    (g-str c) (: n (g-u32 c) i (g-skip c n) (snip (c 's) i (i + n)))
    (g-names c) (g-str c @ s (#s = 0 ? () (split s 44)))
 
-   ; a peer's text for our terminal: c0 but tab and newline, del, c1 (u+0080..u+009f) and
-   ; any byte outside well-formed utf-8 are dropped -- the reach of openssh's strnvis
+   ; a peer's text for our terminal: c0 but tab and newline, del, c1 and malformed utf-8
+   ; dropped, as openssh's strnvis
    (ssh-clean s)
     (: n #s
        (cont? i) (i < n && 127 < s i && s i < 192)
@@ -84,7 +82,7 @@
        pad (pd < 4 ? (pd + 8) pd)
        body (u8 pad + p + zeros pad)
        len (u32 #body)
-       (seq = m32 ? (: s (t 's) (hot? s ? (close s) 0, ()))        ; the next would wrap and reuse a nonce: hang up
+       (seq = m32 ? (: s (t 's) (hot? s ? (close s) 0, ()))        ; a wrap would reuse a nonce: hang up
           (pin t 'sseq (seq + 1),
            enc ?
              (: n (nonce seq) el (chacha20 <>k n 0 len) eb (chacha20 <k n 1 body)
@@ -97,7 +95,7 @@
    (ssh-recv t)
     (: k (t 'sk) seq (t 'rseq)
        _ (pin t 'rseq (seq + 1 & m32))
-       h (seq = m32 ? () (rd t 4))                   ; a wrapped sequence number ends it, as sending does
+       h (seq = m32 ? () (rd t 4))                   ; a wrapped sequence number ends it
        (? (atom? h) ()
           (atom? k) (be32 <>h 0 @ len                            ; pre-newkeys: rfc 4253 6.1 caps a packet at 35000
                        (35000 < len ? () (rd t len @ r (two? r ? (unpad <>r) ()))))
@@ -109,9 +107,8 @@
                    (snip <>r len (len + 16) != poly1305 (polykey <k n) (el + eb) ? ()
                       (unpad (chacha20 <k n 1 eb))))))))
 
-   ; the next payload that is not transport noise: ignore, debug and ext-info pass, a
-   ; banner goes to stderr, a global request is refused, a disconnect is the end. under
-   ; strict kex ('strict, agreement to newkeys) any of that noise ends the connection
+   ; the next payload that is not transport noise (ignore, debug, ext-info pass; a banner to
+   ; stderr; a global request refused; disconnect ends). under strict kex any noise ends it
    (ssh-next t)
     (ssh-recv t @ p
        (? !(string? p) ()
@@ -126,8 +123,7 @@
    (expect t ty) (ssh-next t @ p (string? p && p 0 = ty ? p ()))
 
    ; --- the version lines ---
-   ; a crlf-terminated line, bytes gathered in a list and capped at 255 (rfc 4253 4.2);
-   ; overlong or eof ends the session
+   ; a crlf line, capped at 255 (rfc 4253 4.2); overlong or eof ends the session
    (rdline t)
     (: (go acc n) (255 < n ? ()
                      (rd t 1 @ r
@@ -224,7 +220,7 @@
    ; the cipher's key length, 0 for none, -1 for what is not read
    (key-len ciph) (? (ciph = "none") 0 (ciph = "aes128-ctr") 16 (ciph = "aes192-ctr") 24
                      (ciph = "aes256-ctr") 32 -1)
-   ; the private section in the clear: bcrypt_pbkdf gives the aes key and then the iv
+   ; the private section in the clear: bcrypt_pbkdf gives the aes key, then the iv
    (unlock kl ko pass enc)
     (: salt (g-str ko) rounds (g-u32 ko)
        kiv (bcrypt-pbkdf pass salt rounds (kl + 16))
@@ -303,7 +299,7 @@
    ; the terminal's size as the wire's cols, rows and two zero pixel counts
    (geom _) (: a (tty 1) sz (two? a ? a (tty 0))
                ((two? sz ? (u32 >sz + u32 <sz) (u32 80 + u32 24)) + u32 0 + u32 0))
-   ; SIGWINCH (28 on linux and the BSDs) queued to a signalfd; each wake sends the size now
+   ; SIGWINCH (28 on linux and the BSDs) to a signalfd; each wake sends the size
    (winch t sig) (await sig, sigtake sig, chreq t "window-change" 0 (geom 0), winch t sig)
 
    ; a session channel asked for: (k c), c past the confirmation's channel, or no if refused
@@ -337,7 +333,7 @@
    ; one task drives it: a read pulls packets until it has enough, stderr goes to ours
    (ssh-open t cmd)
     (session t "the server refused a session channel"
-       (c \ (: rch (g-u32 c) rwin (g-u32 c) rmax (g-u32 c)       ; in wire order: pins evaluates last first
+       (c \ (: rch (g-u32 c) rwin (g-u32 c) rmax (g-u32 c)       ; bound in wire order, not as pins' arguments
                 (pins t 'rch rch 'rwin rwin 'rmax rmax 'used 0 'status -1 'rbuf "" 'eof 0 'closed 0,
                  chreq t "exec" 1 (sstr cmd),
                  reply t ? 1 ("the server would not run " + cmd)))))

@@ -1,31 +1,21 @@
-; src/tools/wm2uu.l -- stage 3 of the verified-lux ladder: the .l -> uu translator.
-; Reads src/apps/lux/core.l's zipper ops as data and emits uu terms in the model's
-; vocabulary, kind-directed by src/apps/lux/sigs.l (the overlay's boundary table is
-; the type oracle): a cap on a zipper is zfoc, on a row hd0; cap-of-cup is zup,
-; cap-of-cup-of-cup is zdn (the glued <>z / <>>z factor to those chains);
-; ></link and +/cat/rev are ncons/lapp/lrev; a two? test cases on a
-; row's length (nat_rect) or witnesses a zipper nonempty (the model's stk IS
-; the nonempty zipper, so core.l's ()-lane erases -- zins's make-a-singleton
-; else included); =/!= case through bool_rect on nateqb; local (: ..) chains
-; become definitional lets; znub's filter shape is nfilt; zdel answers the
-; model's Maybe (a zipper result wraps ii2, the bare () becomes ii1 tt).
-; The output defn-certifies in the kernel (boot/post.l leg 6), answers the
-; seeded fuzz exactly as core.l does, and lands convertible with the hand
-; model -- stage 4's idpath bridges ride that. (wm2uu forms sigs) answers
-; ((gen-name uu-type uu-term) ..) for the twelve ops in w2-want.
-;
+; src/tools/wm2uu.l -- the .l -> uu translator: reads lux/core.l's zipper ops as data and
+; emits uu terms in the model's vocabulary, kind-directed by lux/sigs.l: a cap on a zipper
+; is zfoc, on a row hd0; <>z is zup, <>>z zdn; . + rev are ncons lapp lrev; two? cases on
+; a row's length or witnesses a zipper nonempty (the model's stk is the nonempty zipper, so
+; core.l's ()-lane erases); = != case through bool_rect on nateqb; (: ..) chains become
+; lets; znub's filter is nfilt; zdel answers a Maybe (ii2 a zipper, ii1 tt for ()).
+; (wm2uu forms sigs) -> ((gen-name uu-type uu-term) ..) for the ops in w2-want.
 ; a body-less `:` -- the w2-* vocabulary leaks; none shadows a nif.
 (:
    (w2-sigof sigs nm) (? (atom? sigs) ()
                          (nm = <<sigs) <sigs
                          (w2-sigof >sigs nm))
    (w2-zip ps ks) (two? ps ? ([<ps <ks] . w2-zip >ps >ks))
-   ; the list ctor: `list` is what [..] and the ` sigil read to.
+   ; `list` is what [..] and the ` sigil read to
    (w2-list? 'list) 1
-   ; and so does negation: `!` is the sigil, `nil?` what opfix factors it to.
-   ; the forms arrive factored, so match the core word and the surface one both.
+   ; the forms arrive factored: match the core word and the surface one both
    (w2-not? ('! || 'nil?)) 1
-   ; ..and the pair ops: . is the cons, + is cat on a row.
+   ; . is the cons, + is cat on a row
    (w2-link? '.) 1
    (w2-cat? ('+ || 'cat)) 1
 
@@ -35,12 +25,9 @@
    (w2-pi ps ks res) (atom? ps ? res ['pi <ps (w2-ty <ks) (w2-pi >ps >ks res)])
    (w2-lams ps b) (atom? ps ? b ['lam <ps (w2-lams >ps b)])
 
-   ; --- the wanted ops and their emitted names. zmk/zfoc are not wanted:
-   ;     they are the representation vocabulary the rules target (a generated
-   ;     zfoc would be (lam z (zfoc z)), a self-reference) -- they live in
-   ;     test/uu.l's substrate. the name map is a slot so a driver can emit
-   ;     under gen-* names (the gate's bridges) or the model's own names
-   ;     (stage 5's test/uuwm.l) ---
+   ; --- the wanted ops and their emitted names. zmk/zfoc are the representation the rules
+   ;     target (a generated zfoc would be self-referent). the name map is a slot so a
+   ;     driver emits gen-* names or the model's own ---
    w2-want '(zrow zrev zfocup zfocdn zswapup zswapdn zmaster zins znub zdel)
    w2-gmap '((zrow gen-zrow) (zrev gen-zrev)
              (zfocup gen-zfocup) (zfocdn gen-zfocdn) (zswapup gen-zswapup)

@@ -2,8 +2,7 @@
 ;
 ;   (window-here? _)          whether there is a screen to open one on
 ;   (window-open w h title)   a window, or a nom: 'no-display 'refused 'no-paper
-;   (window-paper win)        its paper: a cask of w x h 32-bit pixels, 0x00rrggbb, the form
-;                             src/love/quay/paint.c lays and `dye` paints into
+;   (window-paper win)        its paper: a cask of w x h pixels 0x00rrggbb, what `dye` paints
 ;   (window-size win)         (w h)
 ;   (window-show win y0 y1)   the paper's rows y0..y1-1 out to the screen
 ;   (window-events win)       the records waiting, () when none; never blocks
@@ -14,16 +13,12 @@
 ;   (window-wets sc)          the rows of quay screen sc dirty since the last asking (wet clears)
 ;
 ; the records: [down key] [up key] [text s] [press b x y] [release b x y] [move x y]
-; [size w h] [close] [paste s] [lost sel]. a key is its PS/2 set-1 code, where it sits and
-; not what it types; text is what it types; a lost sel is a selection another took. a size
-; is a fresh paper, black, for the program to draw again.
-; on X it is a window of its own over the wire (src/apps/lux/wire.l); on inle it is the
-; whole screen (src/inle/seat.l's kwin-events over kmain.c's kpaper kshow kscan), and
-; w h are the screen's whatever was asked; under android's bridge (LOVE_FACE, the wire in
-; src/apps/droid/bridge.c) it is the whole screen over LOVE_FACE_SCALE, 2 unless said,
-; taken from its next frame's 'S' record on. a tablet of 'w 'h 'paper alone is a window with
-; no screen, a law's: it shows nothing, and its events are what was left in its 'evq. off
-; X a selection is the window's own, held and given back.
+; [size w h] [close] [paste s] [lost sel]. a key is its PS/2 set-1 code (where it sits);
+; text is what it types. a size is a fresh black paper to draw again.
+; on X a window of its own (lux/wire.l); on inle and under android's bridge (LOVE_FACE,
+; scaled by LOVE_FACE_SCALE, 2 unless said) the whole screen, whatever w h asked.
+; a tablet of 'w 'h 'paper alone is a law's screenless window: it shows nothing and its
+; events are its 'evq. off X a selection is the window's own.
 (module '(window window-here? window-open window-paper window-size window-show window-events window-close
           window-own window-ask window-typing window-wets)
 (borrow 'xwire)
@@ -68,8 +63,8 @@
                  + zip (map (+ 131) ^12) [59 60 61 62 63 64 65 66 67 68 87 88]
                  + zip [66 67 61 62 111 112 19 20 21 22 122 123 92 93 124 59 60 113 114 57 58 115 55 56 68 69 70 71 72 73 74 75 76]
                        [28 14 15 57 1 339 328 336 331 333 327 335 329 337 338 42 54 29 285 56 312 58 51 52 41 12 13 26 27 43 39 40 53]))
-   ; the keys a phone's keyboard lacks, a row of two under the paper while it types:
-   ; [label key text]. ctrl and alt hold for the next key, off the row or the keyboard
+   ; the keys a phone's keyboard lacks, a row under the paper while it types: [label key
+   ; text]. ctrl and alt hold for the next key
    droid-row [["esc" 1 ""] ["|" 43 "|"] ["-" 12 "-"] ["home" 327 ""] ["↑" 328 ""] ["end" 335 ""] ["pgup" 329 ""]
               ["tab" 15 ""] ["ctrl" 29 ""] ["alt" 56 ""] ["←" 331 ""] ["↓" 336 ""] ["→" 333 ""] ["pgdn" 337 ""]]
    droid-rowh 96                                       ; two keys of three cells
@@ -101,8 +96,8 @@
                                 (pin win 'held (elem k held ? (filter (m \ m != k) held) (k . held)),
                                  droid-row-show win, ()))
           (droid-key win k t)))
-   ; a record -> the window's events. a key's text is what android's map types under its
-   ; meta state, c; a touch is the left button, or a key of the row
+   ; a record -> the window's events. a key's text is android's map under meta state c; a
+   ; touch is the left button, or a key of the row
    (droid-events win r)
     (r @ [k a b c]
        (? (k = 83) (: _ (pin win 'H (c // droid-scale)) [['size (b // droid-scale) (c // droid-scale - win 'row)]])
@@ -146,13 +141,12 @@
           (win 'how = 'droid) (droid-send win a (b - a) (snip (win 'paper) (a * win 'w * 4) (b * win 'w * 4)))
           0))
 
-   ; a size the paper has already is no news: X says one for every move
+   ; a size the paper already has is no news: X says one for every move
    (resized win r)
     (? (<r != 'size) [r]
        (r 1 = win 'w && r 2 = win 'h) ()
        (pins win 'w (r 1) 'h (r 2) 'paper (cask (r 1 * r 2 * 4)), [r]))
-   ; every X event waiting, those a reply left behind too; an Expose ships the paper
-   ; again, once for the lot
+   ; every X event waiting, a reply's leftovers too; Exposes ship the paper once for the lot
    (x-pending win)
     (: s (win 's)
        (go acc ex) (? !(cue? s || two? (evq 0)) [(rev acc) ex]
@@ -161,7 +155,7 @@
                             (ev-code e = 12) (go acc 1)
                             (go (rev (x-ev win e) + acc) ex))))
        (go () 0))
-   ; one event: the selections' four are the window's to answer, an input's time is kept
+   ; one event: the selections' four are the window's to answer; an input's time is kept
    ; for taking one
    (x-ev win e)
     (: c (ev-code e) raw (ev-raw e)
@@ -189,8 +183,8 @@
                        (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
                        (go 0 ()))
 
-   ; --- the selections. off X the window keeps them; on X it owns one, serves its text to
-   ;     whoever asks, and asks the owner of another onto a property of its own ---
+   ; --- the selections. off X the window keeps them; on X it owns one, serves it, and
+   ;     asks another's owner onto a property of its own ---
    (clip win) (peep win 'clip () @ c (? (tablet? c) c (pin win 'clip (tablet 4) @ w (w 'clip))))
    (window-own win sel text)
     (pin (clip win) sel text, win 'how = 'x ? (x-own win (x-sel win sel)) 0)
@@ -199,8 +193,8 @@
        (pin win 'said (peep win 'said () + [['paste (peep (clip win) sel "")]]), 0))
    (x-sel win sel) (sel = 'clipboard ? (win 'cb) 1)
    (x-name win a) (? (a = 1) 'primary (a = win 'cb) 'clipboard ())
-   ; the socket's writers are the painter and the events: a turn runs from a request's
-   ; first byte to its flush
+   ; the painter and the events share the socket: a turn runs from a request's first byte
+   ; to its flush
    (x-hold win) (0 < win 'x ? (rest 1, x-hold win) (pin win 'x 1))
    (x-let win) (pin win 'x 0)
    (x-own win a)                                       ; SetSelectionOwner
@@ -213,8 +207,8 @@
         x-w32 s (win 'prop), x-w32 s (win 'time), x-flush s, x-let win, 0))
    ; another client took one of ours
    (x-lost win raw) (x-name win (u32 raw 12) @ n (? (atom? n && n != ()) (pin (clip win) n (), [['lost n]]) ()))
-   ; another client asks for one of ours: as utf-8 or latin-1 text, or which targets there
-   ; are. the answer rides a property of the asker's and a SelectionNotify
+   ; another client asks for one of ours (utf-8, latin-1, or the targets); the answer rides
+   ; its property and a SelectionNotify
    (x-serve win raw)
     (: s (win 's) rq (u32 raw 12) sel (u32 raw 16) ty (u32 raw 20) pr0 (u32 raw 24)
        tx (x-name win sel @ n (? (atom? n && n != ()) (peep (clip win) n ()) ()))
@@ -240,8 +234,8 @@
        hdr (x-reply s)
        (? !(<hdr = 1) () [(u32 hdr 8) (hdr 1) (take (u32 hdr 16) (x-rbytes s (4 * u32 hdr 4)))]))
    (x-text-of ty bs) (ty = 31 ? (cats (map utf8 bs)) (string bs))
-   ; the owner's answer: none as utf-8 asks again as latin-1; a paste past what one property
-   ; carries comes INCR, in pieces on our property, each after we take the last
+   ; the owner's answer: none as utf-8 asks again as latin-1; a paste too big for one
+   ; property comes INCR, a piece at a time on ours
    (x-got win raw)
     (: ty (u32 raw 16) pr (u32 raw 20)
        (? (pr = 0) (ty = win 'utf8 ? (x-ask win (u32 raw 12) 31, ()) [['paste ""]])

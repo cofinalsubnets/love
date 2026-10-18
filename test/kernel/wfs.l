@@ -1,7 +1,6 @@
-; test/kernel/wfs.l -- the writable tree on inle: create, mkdir, rmdir, unlink, rename,
-; chdir/cwd, chmod, utime, and the environment. the shapes are the host's exactly: an effect
-; answers () | an errno nom | 'badarg, a value the value | () | a nom | 'badarg. kernel only;
-; everything made here is unmade at the foot. each law is its own assert argument.
+; test/kernel/wfs.l -- the writable tree on inle. the shapes are the host's: an effect answers
+; () | an errno nom | 'badarg, a value the value | () | a nom | 'badarg. kernel only;
+; everything made here is unmade at the foot
 
 (: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
    (wr p s) (open p "w" @ q (port? q ? (say q s, close q, 1) 0))
@@ -9,7 +8,7 @@
    f (d + "/a")
    e (d + "/e")
  (test
-   ; -- create: `w` under a live directory mints the file; `a` does too --
+   ; -- create: `w` and `a` under a live directory mint the file
    !(mkdir d 493)
    (wr f "five!")
    ("five!" = rd f)
@@ -20,17 +19,17 @@
    (open (d + "/b") "a" @ q (port? q ? (close q, 1) 0))
    (two? (stat (d + "/b")))
    !(port? (open "/no-such-dir/x" "w"))      ; an absent parent refuses
-   ; -- unlink: the entry leaves the tree; absence and misuse answer the host's way --
+   ; -- unlink
    !(unlink (d + "/b"))
    (stat (d + "/b") = 'enoent)
    (nom? (unlink (d + "/b")))                   ; gone is a live errno
-   ('eisdir = unlink d)                     ; a directory refuses
-   ('badarg = unlink 7)                     ; misuse
-   ; -- mkdir/rmdir: a directory is a thing now, empty and stattable --
+   ('eisdir = unlink d)
+   ('badarg = unlink 7)
+   ; -- mkdir/rmdir
    !(mkdir e 493)
    (16384 = 61440 & <>>(stat e))
    (readdir e = ())                         ; empty, told from absent by stat
-   ('eexist = mkdir e 493)                  ; again
+   ('eexist = mkdir e 493)
    ('erofs = mkdir "src" 493)              ; the tree under /love is nobody's to write
    ('erofs = unlink "src/apps/json.l")
    ('erofs = rename "src/apps/json.l" (d + "/j"))
@@ -41,16 +40,16 @@
    ('erofs = rename f "/proc/lift")            ; and is not replaced under a move
    ('erofs = rmdir "/proc")
    ('eexist = mkdir "/usr/bin" 493)      ; a baked prefix is a directory too
-   ('enotdir = mkdir (f + "/x") 493)       ; under a file
-   ('enoent = mkdir "/hole/x" 493)         ; under a hole
+   ('enotdir = mkdir (f + "/x") 493)
+   ('enoent = mkdir "/hole/x" 493)
    ('badarg = mkdir 7 493)
    (wr (e + "/k") "y")
-   ('enotempty = rmdir e)                   ; occupied
+   ('enotempty = rmdir e)
    !(unlink (e + "/k"))
    !(rmdir e)
-   ('enoent = rmdir e)                      ; and gone
-   ('enotdir = rmdir f)                     ; a file was never a directory
-   ; -- rename: a file moves whole; a target file is replaced under it --
+   ('enoent = rmdir e)
+   ('enotdir = rmdir f)
+   ; -- rename: a target file is replaced under it
    !(rename f (d + "/z"))
    (stat f = 'enoent)
    (5 = <(stat (d + "/z")))
@@ -66,8 +65,7 @@
    ("1" = rd (d + "/ee/x"))
    (stat (d + "/dd") = 'enoent)
    ('einval = rename d (d + "/in"))        ; a real einval: the name parts it from 'badarg
-   ; -- chdir/cwd: the cwd is a kernel string; /home is the boot seat and the corpus
-   ; stands at the tree's top --
+   ; -- chdir/cwd: /home is the boot cwd; the corpus stands at the tree's top
    ("/love" = cwd 0)
    !(chdir "src/apps/kore")
    ("/love/src/apps/kore" = cwd 0)
@@ -75,16 +73,14 @@
    (elem "kore.l" (readdir "."))
    !(chdir "..")
    ("/love/src/apps" = cwd 0)            ; .. unwinds ONE component
-   ; the seat has to go back to the tree's top by hand. this file is one member of a
-   ; corpus the runner loads by RELATIVE path, so a cwd left anywhere else takes every
-   ; member after this one down with a no-corpus-member -- which reads as a missing
-   ; file and not as the walk that moved.
+   ; back to the tree's top by hand: the corpus loads by relative path, so a cwd left elsewhere
+   ; fails every later member as a missing file
    !(chdir "/love")
    ("/love" = cwd 0)
-   (nom? (chdir f))                             ; a file is no seat
+   (nom? (chdir f))                             ; a file is no cwd
    (nom? (chdir "/nope"))
    ('badarg = chdir 7)
-   ; -- chmod and utime: the bits and the date land, and stat reads them back --
+   ; -- chmod and utime land, and stat reads them back
    !(chmod f 384)
    (384 = <>>(stat f) - 32768)
    !(utime f 1600000000000)
@@ -93,8 +89,8 @@
    (1600000000000 < <>(stat f))
    ('badarg = chmod 7 384)
    ('enoent = chmod (d + "/ghost") 384)
-   ; -- the environment: a tablet behind the host's three doors. the seat carries
-   ; HOME and COLORTERM from the boot, two rows before anything is set --
+   ; -- the environment: a tablet behind the host's three doors; HOME and COLORTERM come
+   ; from the boot
    ("/home" = getenv "HOME")
    ("truecolor" = getenv "COLORTERM")
    (getenv "WFS" = ())                      ; unset is the real ()
@@ -110,16 +106,15 @@
    (3 = #(environ 0))
    ('badarg = setenv 7 "x")
    (getenv 7 = ())
-   ; -- which kernel this is: the name a hosted seat probes for, said outright here --
+   ; -- which kernel this is
    ('inle = love-os)
    ("Inle" = os-uname love-os)
-   ; -- symlinks: a name for a name, and the one door /usr/bin is laid through --
-   ; stat FOLLOWS and readlink does not, which is what lets a link be seen at all.
+   ; -- symlinks: stat follows and readlink does not
    (wr f "five!")
    !(symlink f (d + "/ln"))
-   ("five!" = rd (d + "/ln"))                 ; open follows
+   ("five!" = rd (d + "/ln"))
    (5 = <(stat (d + "/ln")))                    ; and so does stat
-   (f = readlink (d + "/ln"))                 ; readlink does not
+   (f = readlink (d + "/ln"))
    ('einval = readlink f)                     ; a plain file is not a link
    ('enoent = readlink (d + "/nope"))
    ('eexist = symlink f (d + "/ln"))          ; one name, laid once
@@ -138,7 +133,7 @@
    !(unlink (d + "/loopa")) !(unlink (d + "/loopb"))
    ('enoent = stat (d + "/ln"))
    ("five!" = rd f)                           ; unlinking the link left the file
-   ; -- and the tree (and the tablet) go back the way they came --
+   ; -- the tree and the tablet go back the way they came
    !(setenv "WFS" ())
    !(unlink f)
    !(unlink (d + "/ee/x"))

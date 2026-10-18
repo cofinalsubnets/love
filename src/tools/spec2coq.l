@@ -1,57 +1,31 @@
-; spec2coq: generate Coq from test/spec.l, in love.
-;
-; The generated half of the verification (see test/proof/rocq/spec.v for the hand-written
-; laws -- the half a generator structurally can't do). Each top-level (assert ..)
-; operand is `opfix`-factored (infix -> prefix) and translated to a Coq theorem
-; closed by vm_compute, over models that together cover every exact, computable
-; domain in the corpus:
-;   * computational (Z / list Z / assoc lists) for value equalities: church
-;     numerals (app), the integer algebra (+ - * // % & | ^ << >>, comparisons),
-;     nilp / sat / abs / gcd, lists / strings / arrays (asum/amax/.., iota),
-;     array-valued = (broadcast / append / repeat), hashes & peep; the list
-;     functions (map/filter/foldl/foldr/sort/rev/cat/take/drop/..) with their
-;     function arguments -- sections, escaped operators, one-param integer
-;     lambdas -- as Coq funs (direct beta and n-fold compose ride the same lane);
-;     predicates as integers (love's =/</! answer 1|0 charms; Z.b2z bridges).
-;   * the unit lane: () (and a fresh mint) is the unit of + alone -- joining nothing
-;     on. every numeric lane absorbs it (nothing to compute with), as * always did --
-;     modeled over option Z / option (list Z), None the unit, uop/ulop lifted for +,
-;     uabs/umul/ulmul absorbing.
-;   * text as spelling (the symbol-as-spelling lane): symbols and strings are
-;     their byte lists under + (concat) and * (repeat), equality band-guarded
-;     (symbol never = string).
-;   * a kind lattice (value tags) for the type predicates (fixp/chainp/strp/..) and
-;     the band order (symbol < string < number < chain < map); cross-band = is false.
-;   * gaussian twins (exact complex over Z as (re,im) pairs): twin/conj/i literals,
-;     + - * and negation, = numeric within the band, order and sign lex on (re,im),
-;     $ the real part of a twin the gate passes -- the part the gate itself reads.
-;   * lambdas as de Bruijn terms: function = is alpha + structural (never eta/beta),
-;     so two lambda literals compare by lteqb on their ltm translations; < answers
-;     nothing, a closure nets 1, and a closure never = a plain nom.
-;   * == on literals and the unit-reading forms ((:) (?) (\) '(), a fallen-through
-;     cond, && / || landing on nothing): interned noms and charms are ==-equal by
-;     value, fresh allocations (quoted lists, lambdas) never are, () is not 0.
-; Left to the hand-written laws: the float tier and transcendental complex (not
-; vm_compute-able, the honest misses) and the universally-quantified laws. Untranslatable asserts are
-; skipped and counted -- never silently dropped (the trailing comment reports it).
-; Z not nat: (3 3 3) = 3^27 would blow up unary-nat vm_compute.
-; Reads test/spec.l, writes Coq to `out`.  Run: out/love src/tools/spec2coq.l > test/proof/rocq/gen.v
+; spec2coq: generate Coq from test/spec.l, the generated half beside test/proof/rocq/spec.v's
+; hand-written laws. each (test ..) operand is opfix-factored and translated to a theorem
+; closed by vm_compute, over models covering every exact, computable domain in the corpus:
+;   * Z / list Z / assoc lists for value equalities: integer algebra, lists, strings, arrays,
+;     hashes, list functions with their function arguments as Coq funs; predicates as 1|0
+;   * the unit lane: () is the unit of + alone, absorbed by every other numeric op (option Z)
+;   * text as spelling: strings are byte lists under + and *; a symbol never = a string
+;   * a kind lattice for the type predicates and the band order symbol<string<number<chain<map
+;   * gaussian twins over Z as (re,im): order and sign lex, truth and $ read the real part
+;   * lambdas as de Bruijn terms: function = is alpha + structural, never eta/beta
+;   * == on literals: interned noms and charms by value, fresh allocations never, () is not 0
+; floats, transcendental complex and quantified laws are left to spec.v; untranslatable
+; asserts are counted as UNMODELED, never silently dropped. Z not nat: (3 3 3) = 3^27.
+;   out/love src/tools/spec2coq.l > test/proof/rocq/gen.v
 
 (borrow 'posix)
-(: join (foldl (+) "")                           ; join a list of strings with + (was `cat`, which shadowed the global dyadic cat)
-   ; the four interning tables, hoisted to the head of the chain: bound down beside their
-   ; readers, a capturing closure resolves them as a global import and the runtime says
-   ; ";; missing vtab" &c. bound first, they resolve lexically and it is quiet.
+(: join (foldl (+) "")                           ; join a list of strings
+   ; the interning tables lead the chain: bound beside their readers, a capturing closure
+   ; resolves them as a global import (";; missing vtab")
    vtab {} vc {}      ; lambda params in flight: nom -> coq var; vc the freshness counter
    ltab {} lc {}      ; free noms/operator heads -> lo index; lc the counter
 
-   ; read a file's top-level forms as data (the reader strips ; comments)
 
    ; exactly three elements? (structural chainp, never `!`: '(0) nets zero)
    (len3? [_ _ _]) 1
    ; opfix wraps an operator form one layer ((f) == f); unwrap a 1-element list
    (unwrap r) (two? r && atom? >r ? <r r)
-   (fix1 x) (unwrap (unglue (opfix x)))          ; unglue: the glued lane emits values, and this file matches words
+   (fix1 x) (unwrap (unglue (opfix x)))          ; unglue: this file matches words, not glued values
 
    ; an integer binary operator symbol -> its Coq function (prefix), else 0
    (binop h) (h @ '+ "Z.add"   '- "Z.sub"  '* "Z.mul"
@@ -67,12 +41,11 @@
    bs '\                                                ; the quote symbol \ (for '(..) z-list data)
    (zel? e) (charm? e || e = ())                      ; a charm element, or the unit (reads 0)
    (zlist? l) (two? l ? (zel? <l && zlist? >l) (l = ()))  ; proper list of them (ends in (), not any atom)
-   ; a nettable quoted list may also hold noms (each nets its spelling) -- good for the
-   ; measure lanes (sat/net/tally) only: extraction or elementwise = would conflate a
-   ; nom with its net (caup answers the symbol, never a number)
+   ; a quoted list that may hold noms (each nets its spelling): the measure lanes only, since
+   ; extraction or elementwise = would conflate a nom with its net
    (znlist? l) (two? l ? ((zel? <l || nom? <l) && znlist? >l) (l = ()))
    (qnlist? x) (two? x && <x = bs && un2? x && znlist? <>x)
-   (qlist? x) (two? x && <x = bs && un2? x && zlist? <>x)  ; '(1 2 3): \ + a z-list, exactly 2 (a lambda is 3+)
+   (qlist? x) (two? x && <x = bs && un2? x && zlist? <>x)  ; '(1 2 3) (a lambda is 3+)
    (arrv? x)  (two? x && <x = 'tuple && zlist? >x)      ; @(1 2 3) = (tuple 1 2 3): a z-array
    (iotav? x) (two? x && <x = 'iota && un2? x && intv? <>x)  ; (iota n): the z-array 0..n-1
    (un2? x) (two? >x && atom? >>x)                      ; a 2-element (op arg) form
@@ -104,7 +77,7 @@
    (unit? x)  (x = () || mintv? x)
    ; a unit among the elements (never a proper list's own terminal ())
    (hasu? x)  (? (unit? x) 1 (two? x) (hasu? <x || (two? >x ? (hasu? >x) 0)) 0)
-   (uzf h) (binop h || shiftf h || (h = '/ ? "Z.div" 0))  ; / only ever meets its unit (the Some/Some lane never fires)
+   (uzf h) (binop h || shiftf h || (h = '/ ? "Z.div" 0))  ; / only ever meets its unit
    ; scalar u-tree: + - * recurse; the narrower ops take their unit directly
    (uz? x) (? (unit? x) 1  (intv? x) 1
               (x @ [h i j] (? (elem h '(+ - *)) (uz? i && uz? j)
@@ -115,8 +88,7 @@
               (<x = '*) ("(umul " + tuz <>x + " " + tuz <>>x + ")")   ; * : the unit annihilates
               (<x = '+) ("(uop " + uzf <x + " " + tuz <>x + " " + tuz <>>x + ")")   ; + : it rides
               ("(uabs " + uzf <x + " " + tuz <>x + " " + tuz <>>x + ")"))            ; the numeric lanes absorb
-   ; list u-tree: a unit on either side of + answers the list side; under * it
-   ; annihilates (() is the zero -- the associativity law)
+   ; list u-tree: a unit on either side of + answers the list side; under * it annihilates
    (ul? x) (? (lst? x) 1
               !(len3? x && (<x = '+ || <x = '*)) 0
               ((unit? <>x && ul? <>>x) || (ul? <>x && unit? <>>x)))
@@ -124,9 +96,8 @@
               (<x = '*) ("(ulmul " + tul <>x + " " + tul <>>x + ")")
               ("(ulop " + tul <>x + " " + tul <>>x + ")"))
 
-   ; -- text as spelling: strings are byte lists under + (concat) and * (repeat); a symbol is
-   ;    a point under both, the identity and the absorber, and stays out of this lane.
-   ;    equality is band-guarded (a symbol never = a string, whatever the spelling)
+   ; -- text as spelling: strings are byte lists under + (concat) and * (repeat); a symbol
+   ;    stays out of this lane, and a symbol never = a string
    (qnom? x) (two? x && <x = bs && un2? x && nom? <>x)     ; 'ef
    (txt? x) (? (string? x) 1
                (atom? x) 0
@@ -143,13 +114,10 @@
                     '* ("(srep (Z.abs_nat " + tv <>>x + ") " + ttl <>x + ")")
                     (ttl <>x)))                             ; string: the spelling itself
 
-   ; -- gaussian twins: exact complex over Z as (re im) pairs -- conj negates im, the
-   ;    unit rides + and - (under * it annihilates, out of this band's reach), and
-   ;    the sign (so the order too) is lex on (re, im);
-   ;    $ of a lex-positive twin is its magnitude (the corpus instances are pythagorean)
+   ; -- gaussian twins: exact complex over Z as (re im) pairs; the unit rides + and -, the
+   ;    sign and order are lex on (re, im)
    (twinv? x) (len3? x && <x = 'twin && charm? <>x && charm? <>>x)
-   ; a twin/conj/i anywhere in the term: the gate into the gaussian lane (a bare charm
-   ; or unit is gaussian-coercible, but only in gaussian company)
+   ; a twin/conj/i anywhere: the gate into the gaussian lane (a charm or unit joins only then)
    (hasg? x) (? (nom? x) (elem x '(i twin conj)) (two? x) (hasg? <x || hasg? >x) 0)
    (gneg? x) (two? x && un2? x && two? <x &&
               (<x @ s (un2? s && <s = '- && <>s = 0)))        ; ((- 0) g): negation
@@ -157,8 +125,7 @@
               (atom? x) 0
               (gneg? x) (gz? <>x)
               (<x @ ('conj && un2? x) (gz? <>x)
-                    ; a unit under * or - leaves the band (the numeric lanes absorb),
-                    ; so only + lets it ride here; the rest demand both sides gaussian-proper
+                    ; a unit under * or - leaves the band, so only + lets it ride
                     ((('* || '-)) && len3? x) (gz? <>x && gz? <>>x && !(hasu? <>x) && !(hasu? <>>x))
                     ('+ && len3? x) (gz? <>x && gz? <>>x)
                     0))
@@ -180,11 +147,9 @@
                && two? (gels x) && allg? (gels x))
    (tgsum l) (two? >l ? ("(gadd " + tg <l + " " + tgsum >l + ")") (tg <l))
 
-   ; -- lambdas as data: love's function = is alpha + structural (no eta/beta/numeral
-   ;    bridge), so a lambda literal translates to a de Bruijn term (ltm) and alpha-
-   ;    equality is lteqb, plain structural equality on the indices. a bound param is
-   ;    its lv depth, a free nom or operator head interns to an lo index (ltab), a
-   ;    literal is ln; quote data and special forms in a body stay out
+   ; -- lambdas as data: a lambda literal translates to a de Bruijn term and = is lteqb. a
+   ;    bound param is LV depth, a free nom or head interns to LO (ltab), a literal is LN;
+   ;    quote data and special forms in a body stay out
    (lidx nm) (peep ltab nm 0 ||
               (: n (1 + peep lc 0 0) _ (pin lc 0 n) _ (pin ltab nm n) n))
    (idxof nm l k) (? (atom? l) -1 (<l = nm) k (idxof nm >l (k + 1)))
@@ -206,8 +171,8 @@
                              (r ? (llwrap r #ps) 0)))
    (llwrap s n) (0 < n ? (llwrap ("(LLam " + s + ")") (n - 1)) s)
 
-   ; -- forms that read the unit: (:) (?) (\) and '(), a cond whose literal tests all
-   ;    fail with no else, a map over (), && / || landing on nothing (the and-or-unit law)
+   ; -- forms that read the unit: (:) (?) (\) '(), a cond with all literal tests failing and
+   ;    no else, a map over (), && / || landing on nothing
    (qempty? x) (two? x && <x = bs && un2? x && <>x = ())   ; '()
    (nothing? x) (x = 0 || x = ())
    (condu? l) (? (atom? l) 1                                    ; pairs exhausted, no else: the unit
@@ -224,9 +189,8 @@
                  (<x @ '? (condu? >x)  '&& (andu? >x)  '|| (allnothing? >x)
                        ('map && len3? x) (<>>x = ())
                        0))
-   ; == on literals: noms intern (spelling decides), a charm is its tagged word, every
-   ; unit-reading form is the one unit; a quoted nonempty list or a lambda is a fresh
-   ; allocation, never ==-equal to another; and the unit is ==-distinct from 0
+   ; == on literals: noms intern, a charm is its word, every unit-reading form is the one
+   ; unit; a quoted nonempty list or a lambda is fresh, never ==; the unit is not == 0
    (qplist? x) (two? x && <x = bs && un2? x && two? <>x)
    (idv a b) (? (qnom? a && qnom? b) (<>a = <>b ? "true" "false")
                 (unitv? a && unitv? b) "true"
@@ -244,8 +208,7 @@
                                0)))
    (lst? x) (? (qlist? x) 1  (string? x) 1
                (atom? x) 0
-               ; + is three lanes: append, and either side degenerating when a number
-               ; meets a list (the associativity law)
+               ; + is append, or degenerate when a number meets a list (the associativity law)
                (x @ ['+ a b] ((intv? a && lst? b) || (lst? a && (lst? b || intv? b)))
                     ['* a b] (lst? a && intv? b)                          ; repeat
                     ['map a b]    (tfn a && lst? b)
@@ -258,11 +221,8 @@
                     ['jot a]      (intv? a)
                     0))
    (listv? x) (arr? x || lst? x)                     ; any collection value
-   ; the list reducers (love surface -> coq): net -> asum, prod -> aprod, max/min, tally -> count
    (lop? h) (elem h '(net prod tally max min))
-   ; the saturate head, every spelling it reaches here in: opfix canonicalises the glued
-   ; $x to `sat`, `($ x)` keeps `$`, and sat and saturate are one nif under two names --
-   ; so the one spelling that never arrives is the long one
+   ; the saturate head in each spelling it arrives in: opfix makes glued $x `sat`, ($ x) keeps `$`
    (satf h) (elem h '(sat saturate $))
    ; a hash literal {k v ..} = (hash k v ..): an assoc list of fixnum chains (even count)
    (even? l) (two? l ? !(even? >l) 1)
@@ -275,14 +235,14 @@
    (zv e) (? (charm? e) (tv e) (nom? e) (show (net e)) "0")
    (joinl l) (two? l ? (zv <l + (two? >l ? ";" "") + joinl >l) "")
    (joinb s i) (i < tally s ? (show (s i) + (i + 1 < tally s ? ";" "") + joinb s (i + 1)) "")
-   (tl x) (? (qnlist? x) ("[" + joinl <>x + "]")     ; covers qlist? too; noms reach here via the measure lanes only
-             (arrv? x)   ("[" + joinl >x + "]")      ; tuple: the elements are the cup
-             (iotav? x)  ("(iotaZ " + tv <>x + ")")  ; spec.v's iota, Z-arg face
+   (tl x) (? (qnlist? x) ("[" + joinl <>x + "]")     ; noms only via the measure lanes
+             (arrv? x)   ("[" + joinl >x + "]")
+             (iotav? x)  ("(iotaZ " + tv <>x + ")")
              (string? x) ("[" + joinb x 0 + "]")
              (<x @ h                                          ; the broadcast / append / repeat ops
                 (? (h = '+)  (? (arr? x)    ("(vaddt " + tl <>x + " " + tl <>>x + ")")
-                                  (intv? <>x)  (tl <>>x)   ; degenerate: a number against a list arrives as the unit
-                                  (intv? <>>x) (tl <>x)    ; ... either side (the associativity law)
+                                  (intv? <>x)  (tl <>>x)   ; a number against a list is the unit
+                                  (intv? <>>x) (tl <>x)
                                   ("(" + tl <>x + " ++ " + tl <>>x + ")"))              ; list append
                    (h = '*)  (arr? x ? ("(vscale " + tv <>>x + " " + tl <>x + ")")   ; array scale
                                   ("(srep (Z.abs_nat " + tv <>>x + ") " + tl <>x + ")")) ; list repeat
@@ -301,15 +261,14 @@
                         'jot    ("(iotaZ " + tv <>x + ")")
                         "[]"))))
 
-   ; integer-valued term? a fixnum, a bound lambda param, an operator tree, a list
-   ; reducer/indexer, a fold, a beta/compose application, a numeral spine -- or a
-   ; predicate (love's =/</! answer the charms 1|0; Z.b2z carries them into Z)
+   ; integer-valued term? a fixnum, a bound param, an operator tree, a reducer or indexer,
+   ; a fold, a beta/compose, a numeral spine, or a predicate (its 1|0 charm)
    (intv? x) (? (charm? x) 1
                 (nom? x) (peep vtab x 0 ? 1 0)
                 (two? x) (<x @ h
                             (? (binop h)     (len3? x &&
                                               (elem h '(& | ^)             ; bitwise is the word lane:
-                                               ? (wz? <>x && wz? <>>x)        ; a big operand answers (), off the Z model
+                                               ? (wz? <>x && wz? <>>x)        ; a big operand leaves Z
                                                  (intv? <>x && intv? <>>x)))
                                (shiftf h)    (len3? x && charm? <>x && charm? <>>x)
                                (satf h)        (un2? x && (intv? <>x || listv? <>x || hashv? <>x ||
@@ -328,29 +287,25 @@
                                (tp x @ p (p ? 1 0))))                      ; a predicate, as its 1|0 charm
                 0)
    (allv? l) (two? l ? (intv? <l && allv? >l) (atom? l))
-   ; a closed tree of numeric literals under any modelled binary op: evaluable with no free
-   ; vars, so we can check its actual value. the Coq model has only Vz (fixnum) for integers
-   ; -- no big kind -- so an expr that overflows a charm (e.g. (* 2 2^61) = 2^62) is
-   ; unmodellable for a charm? test and must skip, not masquerade as Vz. the whole binop
-   ; row, not just +/-/*: a narrow op widens on a zero divisor -- (% 7 0) is 0.0 and
-   ; (// 7 0) is infinity -- and the kind lattice here is syntactic, so it cannot see that.
-   ; the value can, which is what this asks. (used by tk below.)
+   ; a closed tree of numeric literals under a modelled op, so its value can be checked: the
+   ; model has no big kind, and a narrow op widens on a zero divisor ((% 7 0) is 0.0), which
+   ; the syntactic kind lattice cannot see (tk)
    (concrete-int? x) (two? x ? (len3? x && binop <x &&
                                   concrete-int? <>x && concrete-int? <>>x)
                           (!(nom? x) && atom? x))
 
    ; translate an integer-valued term to a Coq Z expression
-   (tv x) (? (charm? x) (x < 0 ? ("(" + show x + ")") (show x))  ; parens: `Z.eqb -2` parses as subtraction
+   (tv x) (? (charm? x) (x < 0 ? ("(" + show x + ")") (show x))  ; `Z.eqb -2` would parse as subtraction
              (nom? x) (peep vtab x "?")                          ; a lambda param in flight
              (: h <x b (binop h)
-                (? b ("(" + b + " " + tv <>x + " " + tv <>>x + ")")   ; (Z.add a b) / (Z.gcd a b)
+                (? b ("(" + b + " " + tv <>x + " " + tv <>>x + ")")
                    (shiftf h) ("(" + shiftf h + " " + tv <>x + " " + tv <>>x + ")")
                    (satf h)        (? (lamform? <>x || hashv? <>x) "1"          ; a closure nets 1, and a tablet is one
                                         (hasg? <>x && glist? <>x) ("(gsat " + tgsum (gels <>x) + ")")
                                         (listv? <>x || qnlist? <>x) ("(satZ (asum " + tl <>x + "))")
-                                        ("(satZ " + tv <>x + ")"))  ; $list / $int -- spec.v's clamp, floor and ceiling
-                   (h = 'net)   ("(asum " + tl <>x + ")")   ; net/+list -- the sum
-                   (h = 'tally) ("(Z.of_nat (length " + tl <>x + "))")  ; count
+                                        ("(satZ " + tv <>x + ")"))  ; spec.v's clamp
+                   (h = 'net)   ("(asum " + tl <>x + ")")
+                   (h = 'tally) ("(Z.of_nat (length " + tl <>x + "))")
                    (h = 'max)  ("(amax " + tl <>x + ")")
                    (h = 'min)  ("(amin " + tl <>x + ")")
                    (h = 'prod) ("(aprod " + tl <>x + ")")
@@ -361,7 +316,7 @@
                    (h = 'foldl) ("(fold_left " + tfn2 <>x + " " + tl <>>>x + " " + tv <>>x + ")")
                    (h = 'foldr) ("(fold_right " + tfn2 <>x + " " + tv <>>x + " " + tl <>>>x + ")")
                    (h = 'peep)  (hashv? <>x ? ("(hget " + th <>x + " " + tv <>>x + " " + tv <>>>x + ")")
-                                     ("(nth (Z.to_nat " + tv <>>x + ") " + tl <>x + " " + tv <>>>x + ")"))  ; hash lookup / array index
+                                     ("(nth (Z.to_nat " + tv <>>x + ") " + tl <>x + " " + tv <>>>x + ")"))
                    (hashv? h)     ("(hget " + th h + " " + tv <>x + " 0)")  ; ({..} k) -- lookup, default 0
                    (two? h && tfn h) ("(" + tfn h + " " + tv <>x + ")")  ; beta / applied section
                    (charm? h && allv? x) (spine (tv h) >x)               ; (app .. ..) power spine
@@ -369,10 +324,8 @@
                    (tp x @ p ("(Z.b2z " + p + ")")))))                 ; the predicate's charm
    (spine acc rest) (two? rest ? (spine ("(appZ " + acc + " " + tv <rest + ")") >rest) acc)
 
-   ; the kind tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable.
-   ; an int-shaped expression that is closed answers by its value's kind, not its shape:
-   ; a narrow op widens on a zero divisor ((% 7 0) is 0.0), and a big overflows the lattice,
-   ; which has no big kind -- so that one skips rather than masquerading as Vz.
+   ; the kind tag of a literal for the type predicates, "Vbot" if untaggable; a closed int
+   ; expression answers by its value's kind (a zero divisor widens, a big skips)
    (tk x) (? (unitv? x) "Vunit"                                        ; () and every form that reads it
              (intv? x) (? !(concrete-int? x) "Vz"
                           (ev x @ v (? (charm? v) "Vz" (gem? v) "Vflo" "Vbot")))
@@ -390,7 +343,7 @@
                   'tablet? "tabp"  'set? "setp"   'constellation? "nump"
                   'whole? "whole"  'atom? "atomp" 'packp "packp"
                   'lit? "lamp" 0)
-   ; cross-kind order: symbol<string<number<chain<map by band; same band stays value/lex
+   ; cross-band order: symbol<string<number<chain<map; same band stays value/lex
    (ordop? h) (elem h '(< <= > >=))
    (litband x) (tk x @ t
                  (? (t = "Vbot") -1  (t = "Vunit") -1                 ; the unit stays out of the band order
@@ -404,19 +357,18 @@
                     '>  ("(Z.ltb " + b + " " + a + ")")  ("(Z.leb " + b + " " + a + ")")))
 
    ; translate a top-level predicate to a Coq bool, or 0 if not translatable.
-   ; `!` factors to `nilp`: (nil? x) is the bit "x is nothing" (x <= 0 for integers);
-   ; (nil? (nil? x)) is `!!x`, x truthy -- the negation of the inner bit.
+   ; `!` factors to nil?: the bit "x is nothing" (x <= 0 for integers)
    (tp f) (atom? f ? 0
              (<f @ h
                 (? (h = 'nil?) (<>f @ a
                                    (? (intv? a)  ("(Z.leb " + tv a + " 0)")
-                                      (listv? a) ("(Z.leb (asum " + tl a + ") 0)")   ; !list: net <= 0
+                                      (listv? a) ("(Z.leb (asum " + tl a + ") 0)")
                                       (unitv? a) "true"                              ; the unit is nothing
-                                      (lamform? a || hashv? a) "false"                ; a closure nets 1: something, and so does a tablet
+                                      (lamform? a || hashv? a) "false"                ; a closure or tablet nets 1
                                       (hasg? a && gz? a) ("(negb (gpos " + tg a + "))")  ; a twin is true iff lex-positive
                                       (hasg? a && glist? a) ("(negb (gpos " + tgsum (gels a) + "))")
                                       (tp a @ p (p ? ("(negb " + p + ")") 0))))
-                   (kpred h)  (tk <>f @ t (t = "Vbot" ? 0 ("(" + kpred h + " " + t + ")")))  ; (charm? 5), (two? '(..))..
+                   (kpred h)  (tk <>f @ t (t = "Vbot" ? 0 ("(" + kpred h + " " + t + ")")))
                    (h = 'elem) (len3? f && intv? <>f && lst? <>>f ?
                                      ("(existsb (Z.eqb " + tv <>f + ") " + tl <>>f + ")") 0)
                    (h = 'all) (len3? f && lst? <>>f && tfb <>f ?
@@ -424,33 +376,30 @@
                    (h = 'any) (len3? f && lst? <>>f && tfb <>f ?
                                  ("(existsb " + tfb <>f + " " + tl <>>f + ")") 0)
                    !(len3? f) 0
-                   (h = '==) (idv <>f <>>f)                        ; == on literals: the verdict, or 0 (skip)
+                   (h = '==) (idv <>f <>>f)                        ; the verdict, or 0 (skip)
                    (h = '=) (? (intv? <>f && intv? <>>f)   ("(Z.eqb " + tv <>f + " " + tv <>>f + ")")
-                                 (listv? <>f && listv? <>>f) ("(leqb " + tl <>f + " " + tl <>>f + ")")  ; list/array =
-                                 ; gaussian =: numeric within the band, so a zero-im twin equals its charm
+                                 (listv? <>f && listv? <>>f) ("(leqb " + tl <>f + " " + tl <>>f + ")")
+                                 ; gaussian =: numeric within the band, a zero-im twin = its charm
                                  ((hasg? <>f || hasg? <>>f) && gz? <>f && gz? <>>f)
                                    ("(geqb " + tg <>f + " " + tg <>>f + ")")
-                                 ; lambda =: alpha + structural on the de Bruijn terms
                                  (lamform? <>f && lamform? <>>f)
                                    (: a (lt <>f ()) b (lt <>>f ())
                                       (a && b ? ("(lteqb " + a + " " + b + ")") 0))
-                                 ; no eta: a literal closure never = a plain nom (a nif/ap value)
+                                 ; no eta: a closure never = a plain nom
                                  ((lamform? <>f && nom? <>>f) || (nom? <>f && lamform? <>>f)) "false"
-                                 ; the unit lanes: a mint rides an OP like a unit but never stands as an
-                                 ; = side itself (two mints are distinct; only a literal () compares)
+                                 ; a mint rides an op like a unit but never stands as an = side
                                  (!(mintv? <>f) && !(mintv? <>>f) &&
                                   (hasu? <>f || hasu? <>>f) && uz? <>f && uz? <>>f)
-                                   ("(ueq " + tuz <>f + " " + tuz <>>f + ")")          ; the unit rides, scalars
+                                   ("(ueq " + tuz <>f + " " + tuz <>>f + ")")
                                  (!(mintv? <>f) && !(mintv? <>>f) &&
                                   (hasu? <>f || hasu? <>>f) && ul? <>f && ul? <>>f)
-                                   ("(uleq " + tul <>f + " " + tul <>>f + ")")         ; the unit rides, lists
+                                   ("(uleq " + tul <>f + " " + tul <>>f + ")")
                                  (txt? <>f && txt? <>>f)
                                    (tband <>f = tband <>>f ?
-                                    ("(leqb " + ttl <>f + " " + ttl <>>f + ")") 0)     ; text: same band, same spelling
+                                    ("(leqb " + ttl <>f + " " + ttl <>>f + ")") 0)     ; same band, same spelling
                                  (litband <>f >= 0 && litband <>>f >= 0 &&
-                                  litband <>f != litband <>>f) "false"                 ; cross-band = is false
+                                  litband <>f != litband <>>f) "false"
                                  0)
-                   ; gaussian ordering is lex on (re, im)
                    (ordop? h && (hasg? <>f || hasg? <>>f) && gz? <>f && gz? <>>f)
                      (: a (tg <>f) b (tg <>>f)
                         (h @ '<  ("(gltb " + a + " " + b + ")")
@@ -459,8 +408,8 @@
                                  ("(negb (gltb " + a + " " + b + "))")))
                    ; functions carry no strict order: < and > answer nothing
                    ((h = '< || h = '>) && lamform? <>f && lamform? <>>f) "false"
-                   (xband? f) (xband f)                               ; cross-kind ordering: symbol<string<number<chain<map
-                   (ordop? h && lst? <>f && lst? <>>f)                ; same-band chain/string order is lex
+                   (xband? f) (xband f)
+                   (ordop? h && lst? <>f && lst? <>>f)                ; same-band order is lex
                      (: a (tl <>f) b (tl <>>f)
                         (h @ '<  ("(lexltb " + a + " " + b + ")")
                              '>  ("(lexltb " + b + " " + a + ")")
@@ -472,16 +421,15 @@
                              '>  ("(Z.ltb " + b + " " + a + ")")
                              '<= ("(Z.leb " + a + " " + b + ")")
                                  ("(Z.leb " + b + " " + a + ")")))
-                   !(intv? <>f && intv? <>>f) 0                       ; the within-band ordering ops below stay integer-only
+                   !(intv? <>f && intv? <>>f) 0
                    (h @ '<  ("(Z.ltb " + tv <>f + " " + tv <>>f + ")")
                         '<= ("(Z.leb " + tv <>f + " " + tv <>>f + ")")
                         '>  ("(Z.ltb " + tv <>>f + " " + tv <>f + ")")
                         '>= ("(Z.leb " + tv <>>f + " " + tv <>f + ")")
                         0))))
 
-   ; the original assert (infix, as in spec.l) shown above each theorem. Coq
-   ; comments nest: a shown `(*)` (the escaped operator) opens one and swallows
-   ; the file, so pad the two magic pairs apart.
+   ; the assert shown above each theorem; Coq comments nest, so a shown `(*)` or `*)` pair
+   ; is padded apart
    (esc s) (#s @ n
               ((: (go i acc)
                  (i < n ?
@@ -493,12 +441,12 @@
    (thm n f s) ("(* " + esc (show f) + " *)\nTheorem gen_" + show n + " : " + s
                 + " = true.  Proof. vm_compute. reflexivity. Qed.\n")
 
-   nt {} ns {}                                          ; translated / seen counters
+   nt {} ns {}                                          ; translated / seen
    (bump b) (pin b 0 (1 + peep b 0 0))
    (walkops ops) (!ops ? 0
                  (: f <ops _ (bump ns) s (tp (fix1 f))
                     _ (s ? (bump nt, dot (thm (peep nt 0 0) f s))
-                           (say err ("  UNMODELED: " + show f + "\n")))   ; loud: an assert the generator can't translate -> never proved
+                           (say err ("  UNMODELED: " + show f + "\n")))
                     (walkops >ops)))
    (walk fs) (!fs ? 0
                 (: f <fs
@@ -531,15 +479,13 @@
      "Definition amin (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.min x xs end.\n"
      "Fixpoint leqb (a b:list Z):bool := match a,b with nil,nil=>true | x::a',y::b'=>andb (Z.eqb x y) (leqb a' b') | _,_=>false end.\n"
      "Fixpoint vaddz (a b:list Z):list Z := match a,b with x::a',y::b'=>(x+y)::vaddz a' b' | _,_=>nil end.\n"
-     ; love adds galaxies elementwise only at equal length; a length mismatch answers () (net 0). the
-     ; length guard makes the model faithful (a truncating vaddt would net the common prefix -- wrong).
+     ; love adds elementwise only at equal length; a mismatch answers () (net 0)
      "Definition vaddt (a b:list Z):list Z := if Nat.eqb (length a) (length b) then vaddz a b else nil.\n"
      "Definition vquot (c:Z):list Z->list Z := map (fun e=>Z.quot e c).\n"
      "Fixpoint hget (m:list (Z*Z)) (k d:Z):Z := match m with nil=>d | p::m' => if Z.eqb k (fst p) then snd p else hget m' k d end.\n"
-     ; the word shifts: the count rides mod 64, >> is arithmetic (Z.shiftr on negatives)
+     ; >> is arithmetic (Z.shiftr on negatives)
      "Definition shlz (a b:Z):Z := Z.shiftl a b.  Definition shrz (a b:Z):Z := Z.shiftr a b.\n"
-     ; the unit lane: None is (). it rides through every lifted dyadic untouched --
-     ; except *, where () is the zero and the zero annihilates (the associativity law)
+     ; None is (): it rides every lifted dyadic, except * where it annihilates
      "Definition uop (f:Z->Z->Z) (a b:option Z) : option Z := match a,b with None,x=>x | x,None=>x | Some x, Some y => Some (f x y) end.\n"
      "Definition uabs (f:Z->Z->Z) (a b:option Z) : option Z := match a,b with Some x, Some y => Some (f x y) | _,_ => None end.\n"
      "Definition umul (a b:option Z) : option Z := match a,b with Some x, Some y => Some (x*y) | _,_ => None end.\n"
@@ -548,32 +494,24 @@
      "Definition unet (a:option Z) : Z := match a with None => 0 | Some z => z end.\n"
      "Definition ulop (a b:option (list Z)) : option (list Z) := match a,b with None,x=>x | x,None=>x | Some x, Some y => Some (x++y) end.\n"
      "Definition uleq (a b:option (list Z)) : bool := match a,b with None,None=>true | Some x, Some y => leqb x y | _,_=>false end.\n"
-     ; insertion sort, parameterized by the goes-before test (sortby's comparator)
      "Fixpoint insZ (le:Z->Z->bool) (x:Z) (l:list Z) : list Z := match l with nil => x::nil | y::t => if le x y then x::y::t else y::insZ le x t end.\n"
      "Fixpoint insortby (le:Z->Z->bool) (l:list Z) : list Z := match l with nil => nil | x::t => insZ le x (insortby le t) end.\n"
      "Definition insort := insortby Z.leb.\n"
-     ; same-band chain/string order: lexicographic, a proper prefix sorts first
+     ; lexicographic, a proper prefix first
      "Fixpoint lexltb (a b:list Z) : bool := match a,b with nil,nil=>false | nil,_=>true | _,nil=>false | x::a',y::b' => orb (Z.ltb x y) (andb (Z.eqb x y) (lexltb a' b')) end.\n"
-     ; gaussian twins: exact complex over Z as (re, im) pairs; the sign (and the order) is lex
      "Definition gadd (a b:Z*Z):Z*Z := (fst a + fst b, snd a + snd b).\n"
      "Definition gsub (a b:Z*Z):Z*Z := (fst a - fst b, snd a - snd b).\n"
      "Definition gmul (a b:Z*Z):Z*Z := (fst a * fst b - snd a * snd b, fst a * snd b + snd a * fst b).\n"
      "Definition gconj (a:Z*Z):Z*Z := (fst a, - snd a).\n"
      "Definition geqb (a b:Z*Z):bool := andb (Z.eqb (fst a) (fst b)) (Z.eqb (snd a) (snd b)).\n"
      "Definition gltb (a b:Z*Z):bool := orb (Z.ltb (fst a) (fst b)) (andb (Z.eqb (fst a) (fst b)) (Z.ltb (snd a) (snd b))).\n"
-     ; the truth gate is the real part, not the total order -- `gltb` stays
-     ; lexicographic because sorting needs totality, but truth cannot depend on
-     ; which root of x^2+1 we named `i` (conjugation is a field automorphism, and
-     ; C admits no order compatible with its arithmetic). so a pure phase is blue.
+     ; truth is the real part, not the lex order: it cannot depend on which root of x^2+1 is `i`
      "Definition gpos (a:Z*Z):bool := Z.ltb 0 (fst a).\n"
-     ; $ of a twin: its real part once the gate passes, else the 0 floor -- the same
-     ; part the gate reads, so clamp and gate agree; the magnitude is abs's
+     ; $ of a twin: its real part once the gate passes, else 0, so clamp and gate agree
      "Definition gsat (a:Z*Z):Z := if gpos a then satZ (fst a) else 0.\n"
-     ; de Bruijn lambda terms: love compares functions by alpha + structure (no eta/beta/numeral bridge),
-     ; which is plain structural equality on the de Bruijn form
      "Inductive ltm := LV (n:nat) | LO (o:Z) | LN (z:Z) | LAp (f a:ltm) | LLam (b:ltm).\n"
      "Fixpoint lteqb (a b:ltm):bool := match a,b with LV n,LV m=>Nat.eqb n m | LO n,LO m=>Z.eqb n m | LN n,LN m=>Z.eqb n m | LAp f x,LAp g y=>andb (lteqb f g) (lteqb x y) | LLam s,LLam t=>lteqb s t | _,_=>false end.\n"
-     ; the kind lattice: a value's tag, for the type predicates (a literal's kind is syntactic; vkind/vband avoid spec.v's value/band)
+     ; the kind lattice (vkind/vband avoid spec.v's value/band)
      "Inductive vkind := Vz | Vflo | Vcx | Vstr | Vsym | Vpair | Vmap | Varr | Vunit | Vbot.\n"
      "Definition fixp  v := match v with Vz   => true | _ => false end.\n"
      "Definition flop  v := match v with Vflo => true | _ => false end.\n"
@@ -588,7 +526,7 @@
      "Definition nump  v := match v with Vz|Vflo|Vcx|Varr => true | _ => false end.\n"
      "Definition packp v := match v with Vflo|Vcx|Varr => true | _ => false end.\n"
      "Definition atomp v := match v with Vpair => false | _ => true end.\n"
-     "Definition lamp  v := match v with Vmap => true | _ => false end.\n"   ; lit? = the top region (map + the unmodeled fns/hots); among modeled kinds only Vmap qualifies
+     "Definition lamp  v := match v with Vmap => true | _ => false end.\n"   ; among modeled kinds only Vmap is lit?
      "Definition vband v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vunit|Vbot => 9 end.\n\n"]))
    _ (say err "spec2coq: UNMODELED asserts (seen but never proved) --\n")
    _ (walk (forms (open "test/spec.l" "r")))

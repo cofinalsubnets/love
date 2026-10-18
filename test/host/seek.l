@@ -62,6 +62,11 @@
    fx ((cite 'vi 'vi-face) st {'explore (\ s dd (pin xs () dd))})
    _ (each (map (i \ ":ex b\r" i) ^#":ex b\r") (c \ (fx 1) c), test ((peep xs () 0) = "b"))
    _ (vk ":ex\r", test ((st 'msg) = "no explorer on this seat"))
+   ;; a paste in insert mode is text, not typing: :set ai adds no indent to its lines
+   sp ((cite 'vi 'vi-open) "")
+   fp ((cite 'vi 'vi-face) sp {})
+   _ ((fp 1) 105, (fp 3) ['chr "  a\nb"],
+      test ((sp 'lines) = ["  a" "b"]) (sp 'ai))
    _ (chdir "../.."))
 
 (test_fin ())

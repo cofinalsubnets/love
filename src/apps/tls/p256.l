@@ -6,22 +6,16 @@
 ;   (p256-sign-k d h k)      [r s] for a digest h and a nonce k given, 32 bytes each | ()
 ;   (p256-nonce d h)         rfc 6979's nonce for key d and digest h, hmac-sha-256
 ;
-; a secret is never a bignum, whose length and every operation on it would talk. scalars are
-; 32-byte strings; field and scalar elements are ten 26-bit limbs, little-endian, each a charm.
-; a limb product is under 2^52 and no sum here passes 2^58, inside love's 63-bit charm, so
-; every + - * & | ^ >> is one tier whatever the values. products are montgomery's with a fixed
-; carry chain, a conditional subtract is a mask (a borrow's sign shifted across), and the only
-; `?` in the arithmetic reads a loop counter or a public exponent's bit. points are projective
-; and added by renes, costello and batina's complete formula for a = -3 (2016, algorithm 4),
-; so doubling, the identity and equal points take the one path. the scalar walks 4-bit windows
-; from the top, its table entry built by masking all sixteen. rfc 6979's hmac reads sha-256's
-; hex back by masks too.
-;
-; what that leans on: a charm op's cost is its operands' tier, never their value (true of the
-; lvm and the glaze on the 64-bit seats; a 32-bit seat's narrower charm would promote);
-; list and string reads at public positions; sha256's nif, whose hex face indexes a 16-byte
-; table by the digest's nibbles. a key's pem goes through base64 by branches, a once-a-load
-; leak this does not close
+; a secret is never a bignum, whose length and operations would talk. scalars are 32-byte
+; strings; field elements are ten 26-bit limbs, little-endian, each a charm: no sum passes
+; 2^58, so every op stays one tier. montgomery products with a fixed carry chain, conditional
+; subtracts by mask, and `?` only on a loop counter or a public exponent's bit. points are
+; projective, added by renes-costello-batina's complete formula for a = -3 (algorithm 4),
+; so doubling, identity and equal points take one path. 4-bit windows from the top, each
+; table entry built by masking all sixteen.
+; leans on: a charm op's cost is its operands' tier, never their value (64-bit seats);
+; reads at public positions; sha256's hex face. a key's pem goes through base64 by
+; branches, a once-a-load leak this does not close
 (module 'tls
 (borrow 'bytes)
 (borrow 'hashes)
@@ -32,8 +26,7 @@
    (p2-zip f a b) (? (atom? a) () ((f <a <b) . (p2-zip f >a >b)))
    (p2-limbs x) (map (i \ x >> (26 * i) & p2-m) ^10)   ; a public value's limbs
    (p2-num l) (foldl (a \ v \ a << 26 | v) 0 (rev l))  ; ..and back, for a public result
-   ; ten limbs from bit o of a little-endian number of nb bytes, byte j being (b j), by shifts
-   ; fixed by position alone
+   ; ten limbs from bit o of a little-endian number of nb bytes, (b j) byte j, shifts fixed by position
    (p2-rd b nb o)
     (map (i \ (: lo (o + 26 * i)
                  js (filter (j \ lo <= 8 * j + 7 && 8 * j <= lo + 25) ^nb)
@@ -59,8 +52,8 @@
        (go 1 1))
    ; a modulus as the product reads it: [limbs n0]
    (p2-md n) [(p2-limbs n) ((p2-m + 1 - p2-inv26 (n & p2-m)) & p2-m)]
-   ; a b / 2^260 mod n, a and b under 2n. each row adds a_i b and the multiple of n that
-   ; clears the low limb, then drops that limb: a limb gathers under 20 products, < 2^57
+   ; a b / 2^260 mod n, a and b under 2n: each row adds a_i b and the multiple of n
+   ; that clears the low limb, then drops it; a limb stays < 2^57
    (p2-mm a b md)
     (: n <md n0 (md 1)
        (row t ai)

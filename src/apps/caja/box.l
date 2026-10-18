@@ -1,17 +1,9 @@
 ; src/apps/caja/box.l -- caja's boxes: TeX's node lists, the packager and the DVI shipper.
-; `(borrow 'caja-box)`. tex.web parts 10, 32 and 33, section for section:
-;
-;   nodes     (cb-char J f c) (cb-rule w h d) (cb-glue w st sto sh sho) (cb-kern w)
-;             (cb-penalty n) (cb-math w s) (cb-leaders kind box glue) (cb-list nodes)
-;   packing   (cb-hpack J p w m) (cb-vpack J p h m) (cb-vpackage J p h m l): m is 'exactly
-;             or 'additional; the box answered, and J's 'badness set as last_badness is
-;   fonts     (cb-font J name area bytes size) -> the font's internal number
-;   the job   (cb-job 0) a fresh one; (cb-ship J box) a page out; (cb-dvi J) the file
-;
-; a node is a tablet with tex.web's type code under 'type (0 hlist .. 13 unset) and
-; 'char for a character; 'link is the next node, () for null. a glue spec is its own
-; tablet, shared between nodes as tex.web shares it. dimensions are scaled points, and
-; glue_set is a double, as TeX Live's glue_ratio is.
+; tex.web parts 10, 32 and 33, section for section. m is 'exactly or 'additional; a pack
+; sets J's 'badness as last_badness. (cb-font J name area bytes size) -> its internal number
+; a node is a tablet, tex.web's type code under 'type (0 hlist .. 13 unset), 'char for a
+; character; 'link the next, () for null. a glue spec is a shared tablet. dimensions are
+; scaled points; glue_set a double, as TeX Live's glue_ratio
 (module (caja-box cb-char cb-rule cb-glue cb-kern cb-penalty cb-math cb-leaders cb-list
          cb-null-box cb-hpack cb-vpack cb-vpackage cb-font cb-job cb-ship cb-dvi cb-badness
          cb-param cb-set-param)
@@ -36,7 +28,6 @@
    (cb-kern w) {'type 11 'sub 0 'width w 'link ()}
    (cb-penalty n) {'type 12 'sub 0 'penalty n 'link ()}
    (cb-math w s) {'type 9 'sub s 'width w 'link ()}
-   ; link a love list of nodes; the first, or ()
    ; link a love list of nodes, a () among them left out; the first, or ()
    (cb-list ns0)
     (: ns (filter (!= ()) ns0)

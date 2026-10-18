@@ -1,7 +1,5 @@
-; mesh -- what a level drawn in triangles rides: meshes as lists, built from a few shapes
-; and joined, lit once by the sky's sun or by lamps, packed into trays for facets
-; (src/love/raster.c); a camera; textures, drawn or from a picture, and their levels; and
-; the frame out to the terminal, as half blocks or as kitty's pixels, or into a window.
+; mesh -- levels drawn in triangles: meshes built from shapes, lit by sun or lamps, packed
+; for facets; a camera; textures; the frame out as half blocks, kitty's pixels, or a window.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
@@ -9,12 +7,11 @@
          mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-show mesh-win mesh-gone)
 (borrow 'view)
-(borrow 'window)                        ; --window: the frame on a window's paper
+(borrow 'window)
 (borrow 'vec)
 (borrow 'sky)
 (:
- ; a mesh: [vs ts], each vertex [x y z u v nx ny nz r g b] -- place, texels, normal, the
- ; surface's own colour -- and each triangle [a b c tex], tex -1 for none
+ ; a mesh: [vs ts], each vertex [x y z u v nx ny nz r g b], each triangle [a b c tex], tex -1 none
  (mesh vs ts) [vs ts]
  (mesh-join ms) (: (go ms k vs ts) (atom? ms ? (mesh (cats (rev vs)) (cats (rev ts)))
                    (: m <ms (go >ms (k + #(m 0)) (m 0 . vs) (map (t \ [(t 0 + k) (t 1 + k) (t 2 + k) (t 3)]) (m 1) . ts))))
@@ -26,8 +23,7 @@
                      [(p 0 + d 0) (v 1 + d 1) (p 1 + d 2) (v 3) (v 4) (q 0) (v 6) (q 1) (v 8) (v 9) (v 10)]))
               (m 0))
          (m 1)))
- ; four corners going round, their texels, a texture and a colour: two triangles, the
- ; front the side the corners turn anticlockwise from
+ ; four corners, their texels, a texture and a colour: two triangles, front where they turn anticlockwise
  (mesh-quad ps uvs tex col) (: n (unit (cross (c- (ps 3) (ps 0)) (c- (ps 1) (ps 0))))
    (mesh (map (i \ ps i + uvs i + n + col) ^4) [[0 1 2 tex] [0 2 3 tex]]))
  ; a box about c, half sizes h, turned by yaw; its texels k a unit
@@ -57,27 +53,22 @@
        (\ i j (: a (tau * i / n) r (prof j 0)
                   [(r * sin a) (prof j 1) (r * cos a) (k * a * prof 0 0) (k * len j)]))
        tex col))
- ; a flat sheet from the corner o along U and V, nu by nv cells, its front toward n,
- ; (uv p) the texels at a place p
+ ; a flat sheet from o along U and V, nu by nv cells, front toward n, (uv p) the texels at p
  (mesh-sheet o U V nu nv n uv tex col)
   (: fl (dot (cross V U) n < 0.0) A (fl ? V U) B (fl ? U V) a (fl ? nv nu) b (fl ? nu nv)
      (mesh-grid a b (\ i j (: p (c+ o (c+ (c* (1.0 * i / a) A) (c* (1.0 * j / b) B))) (p + uv p))) tex col))
- ; a tube from a to b, radius r, n sides, open at its ends: its texture tex, -1 for none,
- ; laid ts metres a texel round it and along it
+ ; an open tube from a to b, radius r, n sides, ts metres a texel
  (mesh-rod a b r col n tex ts) (: ax (c- b a) u (unit ax) p1 (side u) p2 (cross u p1) L (sqrt (dot ax ax))
    (ring c k) (map (j \ (: an (tau * j / n) o (c+ (c* (cos an) p1) (c* (sin an) p2))
                           (c+ c (c* r o) + [(r * an / ts) (k * L / ts)] + o + col))) ^(n + 1))
    (mesh (cat (ring a 0.0) (ring b 1.0))
          (cats (map (j \ (: m (n + 1 + j) [[j (j + 1) (m + 1) tex] [j (m + 1) m tex]])) ^n))))
- ; triangles by the tray, n at once, each its own three vertices, for facets: ps three
- ; corners [x y z] of trays n long, sky and sun the [r g b] light on them from the sky and
- ; from the sun, trays or numbers, the same at all three; tex the triangles' texture, -1
- ; for none, -2 a glow. [verts tris], 11 a vertex
+ ; n triangles by the tray for facets: ps three corners [x y z] of n-trays, sky and sun their
+ ; [r g b] light, tex -1 none, -2 a glow. [verts tris], 11 a vertex
  (mesh-dots ps sky sun tex) (: n #(ps 0 0) i (iota n)
    (vtx q) [(ps q 0) (ps q 1) (ps q 2) 0.0 0.0 (sky 0) (sky 1) (sky 2) (sun 0) (sun 1) (sun 2)]
    [(lace (cats (map vtx ^3))) (int (lace [(i * 3) (i * 3 + 1) (i * 3 + 2) tex]))])
- ; the vertices' first m parts as trays, and their places [x y z], read by index in one
- ; step where a list walks; a triangle t's corners
+ ; the vertices' first m parts as trays, and their places [x y z], indexable; a triangle t's corners
  (columns vs m) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^m))
  (places vs) (columns vs 3)
  (at3 P i) [(peep (P 0) i 0.0) (peep (P 1) i 0.0) (peep (P 2) i 0.0)]
@@ -99,47 +90,36 @@
    _ (each (m 1) (t \ (corners P t @ [a b c]
                         (cross (c- c a) (c- b a) @ n (add (t 0) n, add (t 1) n, add (t 2) n)))))
    (mesh (map (q \ (: v <q n (unit (peep acc <>q [0.0 1.0 0.0])) (take 5 v + n + drop 8 v))) (indexed vs)) (m 1)))
- ; a mesh packed for drawing: its vertices as columns, trays [x y z u v nx ny nz r g b],
- ; and its triangles as the tray facets takes
+ ; a mesh packed for drawing: its vertices as 11 column trays, its triangles as facets' tray
  (mesh-pack m) (: vs (m 0) n #vs ft (cats (m 1))
    {'n n 'cols (columns vs 11) 'tris (star-tray [#ft] ft)})
- ; ..lit by the sky's sun and its ambient: (light cols) says each vertex's [sun sky glow]
- ; -- its share of the sun past what stands between, of the sky's light, and () or the
- ; [r g b] it takes besides -- trays or numbers; the colour the light on it times its own,
- ; gain over all. the scene [verts tris] mesh-frame draws
+ ; ..lit by sun and ambient: (light cols) gives each vertex's [sun sky glow] shares, glow ()
+ ; or an [r g b]; the scene [verts tris] mesh-frame draws
  (mesh-bake pk lt light gain) (: c (pk 'cols) n (pk 'n) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
    L (light c)
    sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
    (lit k) (gain * c (8 + k) * ((L 1) * amb k + sun * sc k + (two? (L 2) ? (L 2 k) 0.0)))
    [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
- ; ..or the sun's light apart, for a frame that shades by the sun's view: 11 a vertex, the
- ; light from the sky and round about, then the sun's
+ ; ..or the sun's light apart, for a frame shaded by the sun's view: 11 a vertex
  (mesh-bake-sun pk lt light gain) (: c (pk 'cols) n (pk 'n) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
    L (light c)
    sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
    (sky k) (gain * c (8 + k) * ((L 1) * amb k + (two? (L 2) ? (L 2 k) 0.0)))
    (lit k) (gain * c (8 + k) * sun * sc k)
    [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (sky 0) (sky 1) (sky 2) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
- ; the sun's view of a place round c: along its light, half metres either side and deep
- ; along it, its matrix for facets
+ ; the sun's view matrix round c: half metres either side, deep along the light
  (mesh-sun-view lt c half deep) (: s (lt 'sun)
    r (unit (mag (s 1) < 0.99 ? (cross [0.0 1.0 0.0] s) [1.0 0.0 0.0])) u (cross s r)
    (row a k) [(a 0 / k) (a 1 / k) (a 2 / k) (0.0 - dot a c / k)]
    (gem-tray [16] (row r half + row u half + row (c- [0.0 0.0 0.0] s) deep + [0.0 0.0 0.0 1.0])))
- ; ..and what it sees there of the scene [verts tris], baked with the sun apart: an n by n
- ; tray of depths, for mesh-frame's sun
+ ; ..and its n by n depth tray of a sun-apart scene, for mesh-frame's sun
  (mesh-sun-map sv sc n)
    (facets n n -1 sv (sc 0) (sc 1) () [(gem-tray [6] [0.0 0.0 0.0 0.0 0.0 16.0]) () ()])
- ; ..the open sky's light alone, the sun on everything: what a level with nothing to cast
- ; a shadow lights by
+ ; ..the light for a level with nothing to cast a shadow
  (mesh-open c) [1.0 (0.6 + 0.4 * c 6) ()]
- ; --- lamps, for a scene lit from within: {'at points 'c [r g b] 'r reach}, and 'n a
- ;     facing, 'soft a size, 'wrap and 'keep a mask of places, all optional. its light c
- ;     at a metre, shared among its points, falls off by the square of the distance and
- ;     to none at its reach; a facing lamp's mostly forward. 'wrap w lets it round onto a
- ;     surface it only grazes, for the light a glow scatters and the room throws back.
- ;     no lamp casts a shadow: (keep X Y Z) says where it reaches, 1 or 0, so it does not
- ;     light the far side of a wall ---
+ ; --- lamps: {'at points 'c [r g b] 'r reach}, optional 'n a facing, 'soft, 'wrap, 'keep.
+ ;     c at a metre, shared among the points, falls off by the square to none at the reach.
+ ;     no shadows: (keep X Y Z) 1 or 0 says where it reaches ---
  ; a lamp's light on each vertex of a packed mesh: [r g b] trays, before the surface's colour
  (mesh-lamp pk lp) (: c (pk 'cols) X (c 0) Y (c 1) Z (c 2) ps (lp 'at) r (lp 'r) fn (peep lp 'n ())
    s2 (sq (peep lp 'soft 0.1)) wr (peep lp 'wrap 0.0)
@@ -149,14 +129,12 @@
              (lam * em * sq (sat (1.0 - sq (d2 / (r * r)))) / (d2 + s2)))
    k (foldl (\ a p (a + one p)) (X * 0.0) ps / #ps)
    (c* (peep lp 'keep () @ () k f (k * f X Y Z)) (lp 'c)))
- ; ..and the mesh lit by them: amb [r g b] everywhere, each lamp's light (chs, mesh-lamp's)
- ; times its ks, through the surface's own colour, gain over all: [verts tris] 8 a vertex
+ ; ..and the mesh lit by amb [r g b] plus each lamp's chs times its ks: [verts tris] 8 a vertex
  (mesh-lamps pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
    (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
    [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
- ; ..the same, written into one buffer the packed mesh keeps, its places and texels laid
- ; once and only its colours each call: what a scene relit every frame draws. the last
- ; call's answer is the buffer, so a mesh is lit this way once a frame
+ ; ..the same into one buffer the packed mesh keeps, only colours rewritten: each call
+ ; overwrites the last answer, so once a frame
  (mesh-lamps! pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
    (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
    i (iota n * 8)
@@ -164,10 +142,10 @@
    [(foldl (\ v k (pin v (i + 5 + k) (lit k))) buf ^3) (pk 'tris)])
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
- ; ..and a scene's triangles made glows, added over what is behind them: a copy
+ ; ..a copy of a scene with its triangles made glows
  (mesh-glow sc) (: ts (sc 1 + 0) [(sc 0) (pin ts (iota (#ts // 4) * 4 + 3) -2)])
- ; --- textures: w by h, (f x y) a colour [r g b] 0 to 1 or () for a hole; each level
- ;     half the last each way, a texel the mean of four, a hole where two or more were ---
+ ; --- textures: w by h, (f x y) a colour [r g b] 0 to 1 or () a hole; each level halves,
+ ;     a texel the mean of four, a hole where two or more were ---
  (q v) (int (sat v * 255.0 + 0.5))
  (word c) ((q (c 0) << 16) | (q (c 1) << 8) | q (c 2))
  (mesh-pic w h f)
@@ -181,19 +159,17 @@
      (go m n l) (lay m n l . (m < 2 || n < 2 ? () (go (m // 2) (n // 2) (down m n l))))
      (go w h l0))
  (mesh-tex n f) (mesh-pic n n f)
- ; ..from a picture's rgba bytes sw by sh, as png-decode answers them, each texel the mean
- ; of the pixels under it; a hole where they are mostly clear
+ ; ..from rgba bytes sw by sh (png-decode's), a hole where mostly clear
  (mesh-rgba sw sh b w h)
   (mesh-pic w h (\ x y (: x0 (x * sw // w) x1 (max2 (x0 + 1) ((x + 1) * sw // w))
                           y0 (y * sh // h) y1 (max2 (y0 + 1) ((y + 1) * sh // h))
                           os (cats (map (j \ map (i \ 4 * (j * sw + i)) (map (+ x0) ^(x1 - x0))) (map (+ y0) ^(y1 - y0))))
                           (px k) (foldl (\ a o (a + b (o + k))) 0 os / (255.0 * #os))
                           (px 3 < 0.5 ? () [(px 0 / px 3) (px 1 / px 3) (px 2 / px 3)]))))
- ; --- the view: a screen w by h, the eye at e facing th and tilted up by ph, fov wide
- ;     across, nothing nearer than near nor past far; 'cam the matrix facets takes, clip
- ;     space gl's with z ahead ---
+ ; --- the view: w by h, the eye at e facing th tilted up by ph, fov across; 'cam the
+ ;     matrix facets takes, gl clip space ---
  (mesh-view w h e th ph fov near far) (mesh-eye w h e th ph 0.0 fov near far)
- ; ..and the head tilted ro toward its right shoulder as well
+ ; ..and rolled ro toward the right
  (mesh-eye w h e th ph ro fov near far)
   (: st (sin th) ct (cos th) sp (sin ph) cp (cos ph) cr (cos ro) sr (sin ro)
      r0 [ct 0.0 (0.0 - st)] u0 [(0.0 - st * sp) cp (0.0 - ct * sp)] f [(st * cp) sp (ct * cp)]
@@ -219,10 +195,8 @@
    cx (floor (w / 2.0 + foc * (X * r 0 + Y * r 1 + Z * r 2) / zs))
    cy (floor (h / 2.0 - foc * (X * u 0 + Y * u 1 + Z * u 2) / zs))
    (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx)))
- ; lore's sky through the eye's gain, for mesh-frame's bare: k 1 the colours of the pixels
- ; S of the view v left bare, the stars ss (sky-stars) a pixel each among them; k past 1 the sky
- ; asked at the corners of k by k squares and shaded across each by facets, on the pixels
- ; the scene left bare, and by night the stars put on where it left them
+ ; lore's sky for mesh-frame's bare: k 1 asks every bare pixel, stars ss a pixel each; k past
+ ; 1 asks k by k corners and shades between by facets, stars put on by night
  (mesh-sky ss lt wx e sim t0 k)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
@@ -232,8 +206,7 @@
         [(v \ -1)
          (\ v f B (: g (sky-grid v lt wx e sim k f) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
                      (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-of lt wx X Y Z (e 0) (e 2) sim) ix)))))]))
- ; the sky over the view's bare pixels in the frame f, asked every k pixels across and
- ; down, a flat tray
+ ; the sky over f's bare pixels, asked every k pixels, a flat tray
  (sky-grid v lt wx e sim k f)
   (: w (v 'w) h (v 'h) gw (w // k + 2) gh (h // k + 2) G (iota (gw * gh)) gi (G % gw) gj (G // gw)
      d (rays v (1.0 * k * gi) (1.0 * k * gj))
@@ -250,12 +223,9 @@
  (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e)
    c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
    [(255.0 * peep (c 0) 0 0.0) (255.0 * peep (c 1) 0 0.0) (255.0 * peep (c 2) 0 0.0)])
- ; a frame, a flat tray of colours w*h long: the scene [verts tris], each a tray or a
- ; list of batches, or [verts tris sun] baked with the sun apart and sun () or [view depths
- ; bias] its view (mesh-sun-view and -map) and its slack, with its textures, fog [r g b near far] 0 to 255, facets's flags and
- ; the eye's gain (sky-tone's, 0 for none); and where it left the screen bare, bare: a
- ; colour, (\ v S ..) the colours of pixels S of the view, or [base over]: (base v) the
- ; ground drawn over, and (over v f B) the frame f finished
+ ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
+ ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
+ ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes
  (mesh-frame v sc texs fog flags gain bare) (: B (two? bare ? (<bare v) -1)
    sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
    o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
@@ -264,13 +234,11 @@
       (: S (iota (f = -1)) (#S = 0 ? f (pin f S (charm? bare ? bare (bare v S)))))))
  ; a frame's colours as [r g b] trays, 0 to 1
  (mesh-flat f) [((f >> 16 & 255) / 255.0) ((f >> 8 & 255) / 255.0) ((f & 255) / 255.0)]
- ; ..and as half-block cells: 24-bit, or the 256 cube dithered by bay; bands view's words
+ ; ..as half-block cells: 24-bit, or the 256 cube dithered by bay
  (mesh-cells f w h deep bay bands) (: c (mesh-flat f)
    (deep ? (view-deep-frame w h (view-deep-pens c) bands)
       (view-cube-pens c bay @ px (view-frame w h (y \ peep px (iota w + w * y) 0) bands))))
- ; ..or as kitty's pixels over cols by rows cells from the cursor, which stays, under any
- ; text put over them: image id,
- ; the rgb in base64 4096 bytes a chunk
+ ; ..or as kitty image id over cols by rows cells from the cursor, which stays
  (mesh-kitty f w h cols rows id) (: b (frame-bytes f 2 1) n #b o (jug 0)
    (go i) (: j (min n (i + 4096))
              (say o (esc + "_G" + (i = 0 ? ("a=T,f=24,q=2,C=1,z=-1,i=" + show id + ",s=" + show w + ",v=" + show h
@@ -278,31 +246,23 @@
                      + "m=" + (j < n ? "1" "0") + ";" + snip b i j + esc + "\\"),
               j < n ? (go j) (slurp o)))
    (go 0))
- ; ..a terminal that shows kitty's pixels, by what it says of itself: mitty, kitty,
- ; ghostty, wezterm
+ ; ..a terminal that shows kitty's pixels, by its environment
  (mesh-kitty? _) (: (has e s) (has? (getenv e) s)
    (? (0 < #(getenv "MITTY")) 1 (has "TERM" "kitty") 1 (0 < #(getenv "KITTY_WINDOW_ID")) 1
       (has "TERM_PROGRAM" "ghostty") 1 (has "TERM_PROGRAM" "WezTerm") 1 0))
  ; ..and a picture taken down
  (mesh-kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\"
- ; --- the screen a first-person level shows its frames on: 'kitty 1 for kitty's pixels,
- ;     'win a window, else half blocks ---
- ; ..'kitty or 'cells as a level's words said it, or what the terminal says of itself; a
- ; window is no kitty
+ ; --- a level's screen: 'kitty 1 kitty's pixels, 'win a window, else half blocks ---
  (mesh-mode md) (md @ 'kitty 1 'cells 0 'window 0 (mesh-kitty? ()))
- ; ..w cells by r rows, two pixels a row, and its dither; under kitty 'kp pixels a column
- ; and twice that a row, for a picture about kitty-w pixels across; in a window a cell is
- ; 8 by 16 of its pixels, a picture's pixel 'scale by 'scale of them -- 1 2 4 or 8, 2
- ; unless said -- so 'kp is 8 over it
+ ; ..w cells by r rows, two pixels a row; 'kp pixels a column: kitty aims at kitty-w across,
+ ; a window's 8 by 16 cell over 'scale (1 2 4 or 8, else 2)
  kitty-w 640
  (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
  (mesh-size st w r) (: h (2 * r) s (mesh-scale st)
    (pins (view! st w h r) 'bay (view-bayer w h)
          'kp (? (tablet? (peep st 'win ())) (8 // s) (st 'kitty) (max2 1 (kitty-w // w // s)) 1)))
- ; ..a frame f of the state's 'kp: kitty's pictures go up as ids 7 and 8 by turns, the last
- ; taken down only once the next is over it, the two in one synchronised update -- one id
- ; put up again would go blank first -- with text over them; or the cells, with view's
- ; bands over them
+ ; ..a frame f: kitty alternates ids 7 and 8 in one synchronised update, the old taken down
+ ; once the new is over it (one id reused blanks first); or the cells, bands over them
  (mesh-show st f text bands) (: w (st 'w) h (st 'h) k (peep st 'kp 1)
    (? (peep st 'win ()) (mesh-win st f bands)
       (st 'kitty)
@@ -310,16 +270,14 @@
          (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
           + text + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
- ; ..or onto a window's paper and shown, each of the picture's pixels a square of the
- ; scale's, view's bands painted over it by the console's painter a cell 8 by 16, and 'over's, the help,
- ; over those; answers "", there being nothing for the terminal
+ ; ..or onto a window's paper, bands then 'over painted on in 8 by 16 cells; answers ""
  (mesh-win st f bands) (: win (st 'win) s (mesh-scale st) k (st 'kp) w (k * st 'w) h (k * st 'h)
    wh (window-size win) W <wh H (wh 1) P (window-paper win)
    _ (frame-paint f w s P W)
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    ov (peep st 'over {}) _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
    (window-show win 0 H, ""))
- ; ..a band [x0 cells fg bg] on cell row r: its pens 24-bit, six bits a channel, or the 256
+ ; ..a band [x0 cells fg bg] on cell row r: pens six bits a channel, or the 256
  (mesh-band st P W H r bd) (: x0 (bd 0) cs (bd 1) n #cs
    (pen p bg) (? !(st 'deep) (esc + "[" + (bg ? "48" "38") + ";5;" + show p + "m")
                  (: (ch k) (show ((p >> k & 63) * 255 // 63))

@@ -1,22 +1,12 @@
 ; src/apps/wav.l -- wav reading, pcm conversion to the horn's s16, and aplay over both.
-; `(borrow 'wav)`, then:
-;
-;   (wav-head s)        -> a format tablet with 'at and 'len, the data chunk's offset and
-;                          length (-1 to the end) | 'raw not a wav | 'more | why not
-;   (wav-format name)   -> the format tablet aplay's -f names, case aside | ()
-;   (wav-pcm f n c)     -> n frames of cask c in format f, as interleaved s16le of one or
-;                          two channels: a cask
-;   wav-sniff wav-meta wav-pump   the decoder door (notes/plan/av.md); a wav's meta is its
-;                          own format
-;   (wav-s16 nm m)      -> the format tablet of a decoder's s16 named nm, in m's shape
-;   (wav-gulp q) (wav-drain hn)  a port's next bytes (() at its end); a horn waited out
-;   (aplay-main as)     -> the verb: `love aplay [-q] [-t wav|raw] [-f F] [-c N] [-r N]
-;                          [-d SECS] [-s FRAMES] [FILE..]`
-;
+;   (wav-head s)      -> a format tablet with 'at, 'len (-1 to the end) | 'raw | 'more | why not
+;   (wav-format name) -> the format tablet aplay's -f names, case aside | ()
+;   (wav-pcm f n c)   -> n frames of cask c in format f as interleaved s16le, 1 or 2 channels
+;   wav-sniff wav-meta wav-pump   the decoder door; (wav-s16 nm m) a decoder's s16 format
+;   (aplay-main as)   -> `love aplay`
 ; a format tablet: 'name 'desc as aplay spells them, 'w bytes a sample, 'bits significant,
-; 'kind (s u f mu a), 'big, and for a stream 'ch 'rate 'align. conversion is ffmpeg's:
-; integers floor down to 16 bits, floats round half to even and saturate, the laws are g.711's.
-; past two channels the first two are played. a stream is read a gulp at a time.
+; 'kind (s u f mu a), 'big, for a stream 'ch 'rate 'align. conversion is ffmpeg's: integers
+; floor to 16 bits, floats round half to even and saturate. past two channels, two play.
 (module (wav wav-head wav-format wav-pcm wav-desc wav-sniff wav-meta wav-pump wav-gulp wav-drain wav-s16
              aplay-main aplay-usage)
 (borrow 'bytes)
@@ -24,7 +14,7 @@
    peepv (cite 'guts 'peepv) pinv (cite 'guts 'pinv)
    open (cite 'posix 'open) close (cite 'posix 'close)
 
-   ; --- the formats ----------------------------------------------------------
+   ; --- the formats ---
    ; one row per name: width, significant bits, kind, big, words
    wav-rows [["S8" 1 8 's 0 "Signed 8 bit"] ["U8" 1 8 'u 0 "Unsigned 8 bit"]
              ["S16_LE" 2 16 's 0 "Signed 16 bit Little Endian"] ["S16_BE" 2 16 's 1 "Signed 16 bit Big Endian"]
@@ -51,7 +41,7 @@
    (wav-desc f) ("\(f 'desc), Rate \(f 'rate) Hz, "
                  + (f 'ch @ 1 "Mono" 2 "Stereo" n "Channels \(n)"))
 
-   ; --- the RIFF walk --------------------------------------------------------
+   ; --- the RIFF walk ---
    (wav-hex n) (: d "0123456789abcdef" (string (map (k \ d ((n >> k) & 15)) [12 8 4 0])))
    ; the fmt chunk at p, of size z -> a format tablet | why not
    (wav-fmt s p z)
@@ -79,19 +69,19 @@
                                   (pins f 'at (i + 8) 'len (z = 0 || z = 4294967295 ? -1 z) 'skip (rev sk)))
                  (id = "fmt ") (? (#s < i + 8 + z) ['more (i + 8 + z)]
                                   (wav-fmt s (i + 8) z @ g (string? g ? g (go nx g sk))))
-                 ; a big chunk not yet held is skipped unread, an empty one of its id in its place
+                 ; a big chunk not yet held is skipped unread, an empty one in its place
                  (#s < nx && 65536 < z) ['skip i nx (id + string [0 0 0 0])]
                  (go nx f (id . sk)))))
        (? (#s < 12) (#s < 4 || "RIFF" = snip s 0 4 ? 'more 'raw)
           ("RIFF" = snip s 0 4 && "WAVE" = snip s 8 12) (go 12 () ())
           'raw))
 
-   ; --- the samples ----------------------------------------------------------
+   ; --- the samples ---
    ; n samples of w <= 4 bytes at byte off, a frame apart: an unsigned tray
    (wav-word c n align off w big)
     (? (!big || w = 1) (peepv c off w align n)
        (foldl (\ a j (a + ((peepv c (off + j) 1 align n) << (8 * (w - 1 - j))))) 0 ^w))
-   ; mag rounded half to even off (N >> s), saturated as ffmpeg's av_clip_int16
+   ; rounded half to even off (N >> s), saturated as ffmpeg's av_clip_int16
    (wav-round sgn N s big)
     (: q (N >> s) r (N - (q << s)) half ((1 << s) >> 1)
        up ((s > 0) * ((r > half) + (r = half) * (q & 1)))
@@ -125,7 +115,7 @@
        (n = 0 ? out
         (each ^o (k \ pinv out (2 * k) 2 (2 * o) (wav-chan f n c k)), out)))
 
-   ; --- the decoder door ------------------------------------------------------
+   ; --- the decoder door ---
    ; the port's next bytes, () at its end
    (wav-gulp q) (see q @ -1 () c (unsee q c, chug q))
    ; the horn's close drops what it holds, so it is waited out first
@@ -147,17 +137,17 @@
                                  (: g2 (cut g left) (go (r + g2) (left < 0 ? left (left - #g2))))))))
        (cut h0 (m 'len) @ h1 (go h1 (m 'len < 0 ? -1 (m 'len - #h1)))))
 
-   ; --- the verb -------------------------------------------------------------
+   ; --- the verb ---
    aplay-usage "usage: aplay [-q] [-t wav|raw] [-f FORMAT] [-c N] [-r RATE] [-d SECS] [-s FRAMES] [FILE..]
   -f is one of S8 U8 S16_LE S16_BE U16_LE U16_BE S24_LE S24_BE U24_LE U24_BE S32_LE S32_BE
   U32_LE U32_BE FLOAT_LE FLOAT_BE FLOAT64_LE FLOAT64_BE MU_LAW A_LAW S24_3LE S24_3BE U24_3LE
   U24_3BE, or cd, cdr, dat; raw defaults to U8, 8000 Hz, mono. the horn picks the device:
   HORN=PATH names one, HORN=none plays to a sink that keeps time."
    (aplay-fail m) (say err "aplay: \(m)\n", flush err, 1)
-   ; held bytes then the port's gulps, a whole frame at a time, out the horn
+   ; held bytes then the port's gulps, whole frames, out the horn
    (aplay-pump q h0 f left cap hn)
     (: align (f 'align)
-       ; the whole frames held go out before the end is asked, so the last gulp plays too
+       ; the frames held go out before the end is asked, so the last gulp plays too
        (go h left cap)
         (: k (#h // align @ j (cap < 0 ? j (min j cap)))
            (? (0 < k) (: m (k * align) c (cask m)
@@ -167,10 +157,10 @@
               (wav-gulp q @ g (? !(string? g) 1 (: g2 (left < 0 || #g <= left ? g (snip g 0 left))
                                                    (go (h + g2) (left < 0 ? left (left - #g2)) cap))))))
        (go (left < 0 || #h0 <= left ? h0 (snip h0 0 left)) (left < 0 ? left (max 0 (left - #h0))) cap))
-   ; one input, its port q named nm: read the head, open the horn, pump
+   ; one input, port q named nm: read the head, open the horn, pump
    (aplay-one o q nm)
     (: (more h) (see q @ -1 h c (unsee q c, h + chug q))
-       ; -> [what wav-head says, the bytes read for it]; a short head that is no RIFF is raw
+       ; -> [wav-head's answer, the bytes read]; a short head with no RIFF is raw
        rh (o 't @ 'raw ['raw (more "")]
            (cite 'av 'av-head q wav-head "" @ ['short h] [(snip h 0 4 @ "RIFF" 'more 'raw) h] x x))
        hb <>rh

@@ -1,51 +1,43 @@
-; mc -- a two-pane file browser on the stage lupa and design share. each pane holds its
-; own directory, tab crosses between them, enter descends and "u" climbs. a name wears
-; the colour ls gives its class, off the same four the lstat already answers.
+; mc -- a two-pane file browser on the stage lupa and design share. a name wears the
+; colour ls gives its class.
 ;
 ;   j k / arrows  the cursor      ^b ^f  a page        g G  the ends
 ;   tab  the other pane           enter  descend (a file: to whoever lent mc 'open)
 ;   u  the parent
-;   v ^q  quick view: the other pane shows the cursor's entry -- a picture fitted, text's
-;         first lines, a directory's count; again to go back
+;   v ^q  quick view of the cursor's entry in the other pane; again to go back
 ;   t  thumbnails: the other pane lays the active pane's pictures as a grid
-;   /  find: every file under the pane's directory, narrowed as it is typed at (seek.l);
-;      enter takes the pane to the file, esc back
+;   /  find under the pane's directory, narrowed as typed (seek.l); enter goes, esc back
 ;   r  re-read the pane           q  leave
 ;
-; pictures are drawn by kore pic (src/apps/kore/pic.l): in blocks, or sixel or kitty's graphics
-; where the terminal answers to them and -g does not say otherwise. a thumbnail is cached by
-; path, mtime and size in cells; one that is dear to decode waits for the keys to rest.
+; pictures by kore pic: blocks, or sixel/kitty where the terminal answers and -g allows.
+; thumbnails cache by path, mtime and cell size; a dear decode waits for the keys to rest.
 ;
-; every key is a pure step on the state and every frame a pure lay into a port, so the
-; tool gates headless; only mc-run ties the tty, on a stage like cli's.
-; usage: love mc [-g block|sixel|kitty|auto] [DIR [DIR]]
+; every key is a pure step on the state and every frame a pure lay, so the tool gates
+; headless; only mc-run ties the tty.
 (module (mc mc-main mc-run mc-new mc-key mc-frame mc-read mc-pane mc-at mc-goto mc-cell mc-vis)
 (borrow 'posix)
 (borrow 'tui)
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
 (:
- mc-kitkeys "i=7,p=1,C=1,"          ; kitty's keys: image 7, placement 1, cursor stays
+ mc-kitkeys "i=7,p=1,C=1,"          ; image 7, placement 1, cursor stays
  (mc-rfind s b) (: (go k) (? (k < 0) (0 - 1) (s k = b) k (go (k - 1))) (go (#s - 1)))
 
- ; --- an entry is [name mode size], the mode an LSTAT's: a link is a link here -------
+; --- an entry is [name mode size], the mode an lstat's ---
  (mc-join d n) (d @ "/" "/\(n)" "\(d)/\(n)")
  (mc-dir? e) (16384 = e 1 & 61440)
  (mc-link? e) (40960 = e 1 & 61440)
- ; is the path a directory with the links FOLLOWED -- what enter asks, since a link to
- ; a directory is one to walk into even though its own mode says otherwise
+; a directory with links followed: a link to a directory is one to walk into
  (mc-dirat? q) (stat q @ st (two? st && 16384 = st 2 & 61440))
- ; the sgr a name wears, "" for none: ls's four classes (src/apps/kore/fs.l's uls-hue). only a
- ; broken link costs a second call, since only the stat behind a link can miss.
+; the sgr a name wears, "" for none: ls's four classes. only a broken link costs a
+; second stat.
  (mc-hue d e)
   (? (mc-dir? e) "\e[1;34m"
      (mc-link? e) (two? (stat (mc-join d <e)) ? "\e[36m" "\e[31m")
      (e 1 & 73) "\e[32m"
      "")
  (mc-ent d n) (lstat (mc-join d n) @ st (two? st ? [n (st 2) <st]))
- ; a directory's rows: "..", then the directories, then the rest, each by name. a name
- ; that will not stat is dropped, the way ls drops it, and the root owes no "..".
- ; a path that is no directory answers () -- which is what lets mc-cd refuse a move
- ; rather than stand the pane on nothing.
+; a directory's rows: "..", then directories, then the rest, by name; an unstattable
+; name dropped, the root owes no "..". no directory answers (), so mc-cd refuses
  (mc-read d)
   (!(mc-dirat? d) ? ()
      (: ns (readdir d)
@@ -55,22 +47,20 @@
         fs (sortby by (filter (nil? * mc-dir?) es))
         (d @ "/" (ds + fs) ([".." 16384 0] . ds + fs))))
 
- ; --- a pane: {'dir 'es 'cur 'top} --------------------------------------------------
+; --- a pane: {'dir 'es 'cur 'top} ---
  (mc-pane d) (pins {} 'dir d 'es (mc-read d) 'cur 0 'top 0)
  (mc-at p) <(drop (p 'cur) (p 'es))
- ; the cursor, and the window that follows it. top moves only far enough to keep the
- ; cursor on the screen, which is what makes ^f read as a page and not as a jump.
+; top moves only enough to keep the cursor on screen, so ^f reads as a page
  (mc-goto p i n)
   (: es (p 'es) m #es
      c (? (i < 0) 0 (m <= i) (m ? (m - 1) 0) i)
      t (p 'top)
      t2 (tui-settle c t n)
      (pins p 'cur c 'top (t2 < 0 ? 0 t2)))
- ; a pane that cannot read the new directory keeps the one it has, so an unreadable
- ; path is a key that did nothing rather than an empty pane with no way back.
+; an unreadable directory keeps the pane where it was
  (mc-cd p d) (mc-read d @ es (two? es ? (pins p 'dir d 'es es 'cur 0 'top 0) p))
  (mc-parent d) (mc-rfind d 47 @ k (? (d = "/") "/" (k < 1) "/" (snip d 0 k)))
- ; a directory is entered; a file goes to 'open, when whoever runs mc lent one (vi's :ex)
+; a file goes to 'open when whoever runs mc lent one (vi's :ex)
  (mc-enter s p)
   (mc-at p @ e
      (? (atom? e) p
@@ -79,11 +69,10 @@
                                      !(nil? (s 'open)) ((s 'open) q, p)
                                      p))))
 
- ; --- the step: every arm answers the state, so an idle key answers it unchanged -----
+; --- the step: every arm answers the state ---
  ; 'qv is the other pane's use: 0 its own listing, 1 quick view, 2 thumbnails
  (mc-act s) (s $ s 'act ? 'r 'l)
- ; / : the files under the active pane's directory, in a picker drawn in mc's place; a
- ; pick takes the pane to the file's directory with the cursor on it
+; / : a picker in mc's place over the pane's files; a pick moves the pane to it
  (mc-find s p)
   (: d (p 'dir)
      (rel f) (starts? f "\(d)/" ? (snip f (#d + 1) #f) f)
@@ -115,8 +104,8 @@
    47            (mc-find s p, s)
    (113 || -7) (pin s 'over 1))))
 
- ; --- looking inside: text, bytes and directories ------------------------------------
- ; the first n bytes of a regular file, "" of anything else -- opening a fifo would park
+; --- looking inside ---
+; the first n bytes of a regular file, "" else -- opening a fifo would park
  (mc-peek q n)
   (stat q @ st
      (!(two? st && 32768 = st 2 & 61440) ? ""
@@ -124,7 +113,7 @@
            (!(hot? p) ? ""
               (: b (cask n) k (swig p b) (close p,
                                           (charm? k && 0 < k ? (snip (string b) 0 k) "")))))))
- ; a line with its control bytes shown: a tab to the next stop of 8, the rest as ^X
+; control bytes shown: tab to the next stop of 8, the rest as ^X
  (mc-vis l)
   (: j (jug 0)
      (go i col)
@@ -143,8 +132,7 @@
                 (mc-hx o 6 + " " + catmap (i \ i < m ? (" " + mc-hx (b (o + i)) 2) "   ") ^k + "  "
                  + catmap (i \ (b (o + i) @ c (32 <= c < 127 ? (snip b (o + i) (o + i + 1)) "."))) ^m))
      (map (r \ row (r * k)) ^(min n ((#b + k - 1) // k))))
- ; the head of a file as rows: its lines, or a dump where a nul says it is not text. a
- ; line the peek cut short is left off
+; the head of a file as rows, or a dump when it holds a nul; a line the peek cut is dropped
  (mc-text b n w)
   (? (#b = 0) ["(empty)"]
      (mc-nul? b) (mc-dump b n w)
@@ -156,9 +144,9 @@
      (atom? ns && ns != () ? ["cannot read"]
         (#ns @ m ([(show m + (m @ 1 " entry" " entries")) ""] + take (n - 2) (sort ns)))))
 
- ; --- pictures ----------------------------------------------------------------------
- ; a picture fitted to cols by rows cells, never enlarged, by pic's nearest sampler ->
- ; [cells-wide rows graphic]: block rows and "", or blank rows under a sixel or kitty's
+; --- pictures ---
+; fitted to cols x rows cells, never enlarged -> [cells-wide rows graphic]: block rows
+; and "", or blank rows under a sixel or kitty graphic
  (mc-thumb im cols rows gm cw ch deep)
   (: kp (cite 'kore)
      (near s) (kp 'pic-near im 0 0 s (max 1 (int (im 0 / s))) (max 1 (int (im 1 / s))))
@@ -168,8 +156,8 @@
            sm (near (max 1.0 (max (im 0 / (cols * cw)) (im 1 / ph2))))
            g (gm @ "sixel" (kp 'pic-sixel sm) (kp 'pic-kits sm mc-kitkeys))
            [((sm 0 + cw - 1) // cw) (map (_ \ "") ^((sm 1 + ch - 1) // ch)) g])))
- ; the thumbnail of the picture at q, or a string saying why none: from the cache when it
- ; is there, else decoded when cheap or when the frame has budget, else "..." and owed
+; a thumbnail, or a string saying why none: cached, else decoded when cheap or in budget,
+; else "..." and owed
  (mc-thumbat s q st cols rows gm)
   (: sz <st
      key "\(q) \(st 1) \(sz) \(cols) \(rows) \(gm)"
@@ -185,7 +173,7 @@
              pin (s 'cache) key th,
              th))
         (pin s 'owe 1, "...")))
- ; a picture in the quick view: the thumbnail centred, its name and what it is under it
+; quick view of a picture: centred, its name and kind under it
  (mc-pic s q nm st k b w n)
   (: d (cite 'kore 'pic-size b)
      tag (two? d ? "\(d 0)x\(d 1)  \(k)" (show k))
@@ -195,7 +183,7 @@
      blk (map (r \ edfit "" lp " " + r) art + ["" " \(nm)" " \(tag)"])
      top (max 0 ((n - #blk) // 2))
      [(map (_ \ "") ^top + blk) (? (string? th) () (th 2 = "") () [lp top (th 2)])])
- ; the other pane in quick view -> [rows graphic], graphic () or [col row string] in it
+; quick view -> [rows graphic], graphic () or [col row string]
  (mc-look s p w n)
   (: e (mc-at p)
      q (two? e ? (mc-join (p 'dir) <e) (p 'dir))
@@ -205,8 +193,7 @@
         !(32768 = st 2 & 61440) [[" not a regular file"] ()]
         (: b (mc-peek q 4096) k (cite 'kore 'pic-kind b)
            (k != () ? (mc-pic s q <e st k b w n) [(mc-pad (mc-text b n (w - 1))) ()]))))
- ; the other pane in thumbnails: the active pane's pictures by name, tiles of block art
- ; with a name under each, the page the cursor's picture is on, its name reversed
+; thumbnails: the page of the active pane's pictures holding the cursor's, its name reversed
  mc-tw 14
  mc-th 6
  (mc-grid s p w n)
@@ -228,14 +215,12 @@
      rows (catmap band ^(min nr ((#pg + nc - 1) // nc)))
      [(two? es ? rows [" no pictures here"]) ()])
 
- ; --- the frame ---------------------------------------------------------------------
- ; the two panes side by side with a rule between, a header each, the cursor's path
- ; underneath and the keys along the bottom. every row is cut to the screen and cleared
- ; to its end, so a narrow terminal loses the right pane's tail and nothing else.
+; --- the frame ---
+; every row is cut to the screen and cleared to its end, so a narrow terminal loses
+; the right pane's tail and nothing else.
  (mc-size e) (mc-dir? e ? "<dir>" (show (e 2)))
- ; sel: 0 none, 1 the active pane's cursor, 2 the other pane's -- the idle pane keeps
- ; a mark so tab comes back to where it left, without claiming the eye the active one has
- (mc-cell d e w sel)                           ; one listing row, fitted plain then dressed
+; sel: 0 none, 1 the active cursor, 2 the idle pane's mark (so tab comes back)
+ (mc-cell d e w sel)
   (: sz (mc-size e)
      k (w - #sz - 2)
      txt (" " + edfit <e (k < 1 ? 1 k) " " + " \(sz)")
@@ -251,9 +236,8 @@
         (mc-cell (p 'dir) <(drop i es) w (? (i != p 'cur) 0 act? 1 2))))
  (mc-head d w) ("\e[7m" + edfit (" " + d) w " " + "\e[0m")
  mc-keys " tab pane  enter in  u up  / find  v view  t thumbs  r reread  q quit"
- ; a graphic goes out after the text, at its place, since text laid over it may wipe it:
- ; a sixel whole every frame; kitty's sent once as image 7 and then placed again by id,
- ; every picture let go when it changes
+; a graphic goes out after the text, which may wipe it: a sixel every frame; kitty's
+; sent once as image 7, then placed by id, let go when it changes
  (mc-gfx s x0 y0 g)
   (: e (string 27)
      at (two? g ? "\(e)[\(y0 + g 1);\(x0 + g 0)H" "")
@@ -289,18 +273,16 @@
       say j (mc-gfx s (a = 0 ? (lw + 2) 1) 2 (v 1)),
       slurp j)))
 
- ; --- the runner: the tool on a stage ------------------------------------------------
- ; 'gm the graphics (block sixel kitty) and 'cw 'ch a cell's pixels; 'cache the drawn
- ; thumbnails; a decode past 'cheap bytes spends 'budget, and a frame that could not
- ; afford one sets 'owe; past 'cap bytes a picture is only named
+; --- the runner ---
+; 'gm graphics, 'cw 'ch a cell's pixels; a decode past 'cheap bytes spends 'budget and
+; a frame that could not afford one sets 'owe; past 'cap a picture is only named
  (mc-new ld rd)
   (pins {} 'l (mc-pane ld) 'r (mc-pane rd) 'act 0 'rows 20 'over 0 'qv 0
         'gm "block" 'cw 8 'ch 16 'deep (cite 'kore 'pic-deep 0) 'cache {}
         'cheap 65536 'cap 33554432 'budget 1000 'owe 0 'shown "")
  ; a key within k ms: 1, else ()
  (mc-rest k) (? (k < 1) () (cue? 0) 1 (rest 10, mc-rest (k - 10)))
- ; cli's stage, but a thumbnail still owed waits for the keys to rest a beat and is then
- ; decoded, one a beat, so a cursor run over pictures never stalls on each
+; an owed thumbnail waits for the keys to rest, then decodes one a beat
  (mc-loop s)
   (: g (ttysize 7 19)
      (say out (mc-frame s (g 1) <g),

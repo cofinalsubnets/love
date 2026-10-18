@@ -1,11 +1,8 @@
 ; src/apps/vi/config.l -- the theme: molokai, two hues our own, as plain data the painter reads.
-; src/apps/lux/config.l is the shape -- a body-less `:`, values not code.
 ;
-; keyed by vim highlight group, not syntax class: hue.l says a comment is a Comment, this
-; says what a Comment looks like, so the generated vim syntax emits plain `hi def link`
-; lines while the painter gets the same colours from this table. the values are molokai's
-; (Tomas Restrepo's, after Wimer Hazenberg's monokai), the cterm numbers its 256-colour
-; fallback; Identifier and Special are the tree's own, a warmer amber and a cooler cyan.
+; keyed by vim highlight group, not syntax class: hue.l says a comment is a Comment, this says
+; what a Comment looks like. the values are molokai's (Tomas Restrepo's, after Wimer
+; Hazenberg's monokai), the cterm numbers its 256-colour fallback.
 ;
 ; a row is `(group cterm256 "#rrggbb" faces)`, faces drawn from (bold italic).
 (module 'vi
@@ -24,12 +21,10 @@
       (Type       81  "#66D9EF" ())          ; these two paint only src/apps/vi/hues.l's classes
       (PreProc    118 "#A6E22E" ()))
 
-   ; the named themes, chosen by a bare name in the theme file or by :colorscheme. molokai,
-   ; the default, keeps the terminal's own ground; the others carry Normal (the text and
-   ; its ground) and Visual (the selection), whose ground is a fifth and sixth column,
-   ; cterm256 and "#rrggbb". nord's, tokyo-night's and solarized's values are upstream's
-   ; (LICENSE); paper is the tree's own, the web pages' light palette; each cterm is the
-   ; xterm-256 cell nearest its colour, a hue kept to the colour cube
+   ; the named themes, by a bare name in the theme file or :colorscheme. molokai keeps the
+   ; terminal's ground; the others carry Normal and Visual, whose ground is a fifth and sixth
+   ; column, cterm256 and "#rrggbb". nord's, tokyo-night's and solarized's values are
+   ; upstream's (LICENSE); paper is the tree's own
    hue-themes
     [['molokai hue-theme]
      ['nord
@@ -93,24 +88,18 @@
          (Type       24  "#1f6f78" ())
          (PreProc    58  "#6b5a1e" ()))]]
 
-   ; the page palettes: a role a row, `(role "#rrggbb")`, and a scheme is one palette or
-   ; a light/dark pair. hueweb spells each role as the css variable of the same name
-   ; (--bg, --fg ..), so a sheet built on hw-vars answers to the reader's theme by
-   ; construction, and every sheet in the tree reads its colours off this table.
+   ; the page palettes: `(role "#rrggbb")` rows, a scheme one palette or a light/dark pair.
+   ; hueweb spells each role as the css variable of the same name (--bg, --fg ..)
    hue-page
     '((paper ((bg "#fffdf9") (fg "#1f1c19") (dim "#6f6862") (rule "#e6e0d6") (link "#8a4b2a") (pre "#f4f0e9"))
              ((bg "#16151a") (fg "#e8e4dd") (dim "#9a938b") (rule "#2e2b33") (link "#e0a06a") (pre "#1e1d24")))
-      ; tokyo-night, the front page's: periwinkle on polar-night blue, dark only, and the
-      ; roles that page adds -- code text and its edge, the pre slab, muted heads, the
-      ; footer, the hover hash, the glow's rgb, the terminal's rim, the crew's lights
+      ; tokyo-night, the front page's: dark only, with the roles that page adds
       (tokyo-night ((bg "#04060e") (fg "#c0caf5") (dim "#565f89") (rule "#3b4261") (link "#7aa2f7") (pre "#1f2335")
                     (code "#a9b1d6") (edge "#292e42") (slab "#16161e") (mute "#737aa2") (faint "#414868")
                     (hash "#545c7e") (em "#9aa5ce") (glow "122,162,247") (rim "#34406e")
                     (red "#f7768e") (cyan "#7dcfff") (teal "#73daca"))))
 
-   ; the user's own rows, read as data (never evaled) at editor birth and folded
-   ; over the above -- kore ships as a baked image, so editing this file is not a
-   ; knob anyone downstream has. same row shape; a file with no rows in it means
-   ; no overrides, which is a perfectly good thing for a theme file to mean.
+   ; the user's own rows, read as data (never evaled) at editor start and folded over the
+   ; above; same row shape
    hue-theme-file "/.love/hue.l")
 ) ; module 'vi

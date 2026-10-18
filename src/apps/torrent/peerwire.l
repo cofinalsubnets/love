@@ -23,8 +23,8 @@
                   w (twirl (_ \ (rest ms, freeze r)) ())
                   v (catch r)
                   (freeze w, two? v ? <v))
- ; c's read-ahead at least n bytes long -> 1 | () at the end. every byte taken is kept in
- ; 'pend at once, so a read a watchdog stops loses nothing
+ ; c's read-ahead at least n bytes long -> 1 | () at the end. every byte is kept in 'pend
+ ; at once, so a read a watchdog stops loses nothing
  (pw-fill c n) (? (n <= #(c 'pend)) 1
                   (: s (c 's) b (see s)
                      (b = -1 ? () (pin c 'pend (c 'pend + string b + chug s), pw-fill c n))))
@@ -54,7 +54,7 @@
  (pw-next c ms) (within ms (_ \ (? !(pw-fill c 4) 'gone
                    (rdbe (c 'pend) 0 4 @ n
                       (? (n = 0) (pw-rd c 4, 'alive)
-                         (262144 < n - 9) 'gone             ; a block is 16 KiB, a piece message no more
+                         (262144 < n - 9) 'gone             ; a block is 16 KiB; a piece message no more
                          !(pw-fill c (4 + n)) 'gone
                          (pw-rd c (4 + n) @ b [(b 4) (snip b 5 #b)]))))))
  (pw-send c id p) (pw-wr c (wrbe (1 + #p) 4 + string id + p))

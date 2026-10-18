@@ -1,26 +1,15 @@
-; src/apps/tfm.l -- TeX font metrics: the TFM file, read. `(borrow 'tfm)`:
-;
-;   (tfm-pl s)     -> (pl msgs)   the property list tftopl writes for the bytes s, and what
-;                                 it says on the terminal; pl is "" when it gives up
-;   (tfm-read s sz) -> font | 'badtfm  the font as TeX loads it, every dimension scaled to
-;                                 sz (-1000 the design size, >= 0 an at size in sp, < 0 a
-;                                 scale of -sz/1000), refused where TeX refuses it
+; src/apps/tfm.l -- TeX font metrics, read. `(borrow 'tfm)`:
+;   (tfm-pl s)      -> (pl msgs)  tftopl's property list for s and its terminal; pl "" when it gives up
+;   (tfm-read s sz) -> font | 'badtfm  as TeX loads it, scaled to sz (-1000 the design size,
+;                      >= 0 an at size in sp, < 0 a scale of -sz/1000)
 ;   (xn-over-d x n d) -> x*n/d as TeX rounds it
-;   (tfm-sizes s)  -> sizes | why  the twelve sizes and the subfiles' base addresses, or
-;                                 tftopl's reason for refusing the file
-;
-; a TFM is a font's metrics and nothing of its shapes: twelve 16-bit sizes (lf lh bc ec nw
-; nh nd ni nl nk ne np), a header (checksum, design size, coding scheme, family, face),
-; four bytes of char_info per character indexing the width, height, depth and italic
-; tables, then the lig/kern program, the kerns, the extensible recipes and the font's
-; parameters. a dimension is a fix_word: four bytes, signed, twenty bits of fraction.
-;
-; tfm-pl is Knuth's TFtoPL, section for section, so that its answers can be held to
-; tftopl's byte for byte. it corrects a bad file as tftopl does -- in place, on its own
-; copy of the bytes -- and says so.
+;   (tfm-sizes s)   -> sizes | why  the twelve sizes and the subfiles' bases, or tftopl's refusal
+; a dimension is a fix_word: four bytes, signed, twenty bits of fraction.
+; tfm-pl is Knuth's TFtoPL section for section, held to tftopl byte for byte; it corrects a
+; bad file as tftopl does, on its own copy of the bytes, and says so.
 (module (tfm tfm-pl tfm-sizes tfm-read xn-over-d)
 (:
-   ; --- the output: a jug, a nesting level, and the lines tftopl would print --------
+   ; --- the output: a jug, a nesting level, and the lines tftopl would print ---
    (st-new s)
     (: n #s t (cask (n + 4)) (pour t 0 s 0 n,
                               {'t t 'o (jug 0) 'm (jug 0) 'lv 0 'perfect 1 'ft 0 'bchar 256 'blabel 32767}))
@@ -36,7 +25,7 @@
    (bad st m) (pin st 'perfect 0, msg st ("Bad TFM file: " + m + "\n"))
    (octal c) ("'" + string (48 + c // 64 % 8) + string (48 + c // 8 % 8) + string (48 + c % 8))
 
-   ; --- values ---------------------------------------------------------------------
+   ; --- values ---
    (out-bcpl st k)
     (: _ (out st " ")
        (go j l) (0 < l ?
@@ -83,7 +72,7 @@
                     (fn <= dn ? () (go fn dn)))
        (go (10 * f + 5) 10))
 
-   ; --- the header ------------------------------------------------------------------
+   ; --- the header ---
    (check-bcpl st k l)
     (: _ (l <= b st k ? (bad st "String is too long; I've shortened it drastically.", bset st k 1))
        (go j) (j <= k + b st k ?
@@ -120,7 +109,7 @@
         left st, out st "CHECKSUM", out-octal st cs 4, right st,
         (lh > 17 && 127 < b st rw ? (left st, out st "SEVENBITSAFEFLAG TRUE", right st))))
 
-   ; --- the parameters and the fix_word checks ----------------------------------------
+   ; --- the parameters and the fix_word checks ---
    (check-fix st k what i)
     (0 < b st k && b st k < 255 ?
        (bset st k 0, bset st (k + 1) 0, bset st (k + 2) 0, bset st (k + 3) 0,
@@ -163,7 +152,7 @@
         each (h 'italic) (h 'ni) "Italic correction",
         each (h 'kern) (h 'nk) "Kern"))
 
-   ; --- char_info --------------------------------------------------------------------
+   ; --- char_info ---
    (ci h c) (4 * (h 'char + c))
    (widx st h c) (b st (ci h c))
    (hidx st h c) (b st (ci h c + 1) // 16)
@@ -179,7 +168,7 @@
     (pin st 'perfect 0,
      msg st (" \n" + what + " index for character " + octal c + " is too large;\nso I reset it to zero.\n"))
 
-   ; --- the lig/kern program -----------------------------------------------------------
+   ; --- the lig/kern program ---
    ; activity: 0 unreachable, 1 passed through, 2 accessible
    (act st i) (peep (st 'act) i 0)
    (act! st i v) (pin (st 'act) i v)
@@ -291,7 +280,7 @@
            (st 'lv = 2 ? (right st)))
        (go 0 (st 'labels)))
 
-   ; --- ligature cycles: tftopl's ordered hash, f(x,y) by depth-first evaluation -------
+   ; --- ligature cycles: tftopl's ordered hash, f(x,y) by depth-first evaluation ---
    (cycles st h)
     (: hs 5003 hk {} cls {} lz {} n {'n 0 'x 256 'y 256 'l ()}
        (hget i) (peep hk i 0)
@@ -369,7 +358,7 @@
                           go c (d + 1)))))
        (go 0 0))
 
-   ; --- the characters ---------------------------------------------------------------
+   ; --- the characters ---
    (do-char st h c)
     (: _ (left st) _ (out st "CHARACTER") _ (out-char st c) _ (out-ln st)
        _ (left st) _ (out st "CHARWD")
@@ -412,7 +401,7 @@
                   right st)))),
         right st))
 
-   ; --- the font as TeX loads it (tex.web 560-575) --------------------------------------
+   ; --- the font as TeX loads it (tex.web 560-575) ---
    ; x*n/d to the scaled point, as tex.web 107 does it; a quotient past 2^15 is an
    ; arithmetic error, and the partial answer stands
    (xn-over-d x n d)
@@ -484,8 +473,7 @@
                  'bchar bchar 'blabel (blabel < nl ? blabel)
                  'fbchar (exists bchar ? 256 bchar)}))))
 
-   ; --- the sizes, as tftopl vets them: a tablet of sizes and base addresses, or the
-   ;     reason it gives up ----------------------------------------------------------
+   ; --- the sizes, as tftopl vets them: sizes and base addresses, or why it gives up ---
    (tfm-sizes s)
     (: n #s
        (at k) (k < n ? (s k) 0)

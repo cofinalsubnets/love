@@ -1,6 +1,6 @@
-; test/host/luxui-probe.l -- the lux ui probe, spawned by test/host/luxui.l with clean X streams:
-; drives lux with synthetic input (xtest, EWMH SendEvent) and asserts every effect off the server.
-; loaded with -l after core, layout and wire, no test/00-init.l: posix is borrowed here.
+; test/host/luxui-probe.l -- spawned by test/host/luxui.l with clean X streams: drives lux with
+; synthetic input (xtest, EWMH SendEvent) and asserts every effect off the server.
+; loaded with -l after core, layout and wire, without test/00-init.l
 (cite 'posix ? (borrow 'posix) ())
 
 (borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
@@ -16,7 +16,6 @@
 
       ; lux is up when ewmh-init has stamped the root
       _ (waitp "wm-up" (u \ two? (x-getprop-atoms s root (x-intern s "_NET_SUPPORTED"))) 100)
-      ; the wm's name
       sup (x-getprop-atoms s root (x-intern s "_NET_SUPPORTING_WM_CHECK") @ c (two? c ? <c 0))
       _ (must "wm-name" (x-getprop s sup (x-intern s "_NET_WM_NAME") @ [8 n b]
                           (foldl (a \ c \ a + string c) "" b @ nm
@@ -125,8 +124,8 @@
       _ (cmsg w1 a-st 0 a-mv a-mh, rest 150)
       _ (must "unmax-unstamped-float-kept" (rgeo w1 = g2))
 
-      ; 5. a second client tiles alongside; _net_close_window fells it by KillClient (no
-      ; wm_delete_window), read through a fresh connection since the dead client's stream echoes stale replies
+      ; 5. a second client tiles alongside; _net_close_window fells it by KillClient (no wm_delete_window),
+      ; read through a fresh connection: the dead client's stream echoes stale replies
       s2 (connect ['unix dpy])
       sc2 (x-setup s2 ())
       w2 (scr-idbase sc2)
