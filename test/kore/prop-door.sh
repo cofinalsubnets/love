@@ -2,8 +2,7 @@
 # test/kore/prop-door.sh -- --help and --version at the door
 . "$(dirname "$0")/common.sh"
 
-# the door answers both flags for every applet, and the nested lane (`kore TOOL`) and the
-# verb lane (`love TOOL`) agree
+# the door answers both flags for every applet, by the egg-booted lane and the image's verbs
 hv "awk -h"          '^usage: awk'   korerun awk -h
 hv "awk --help"      '^usage: awk'   korerun awk --help
 hv "awk --version"   '^awk / love ' korerun awk --version
@@ -13,8 +12,8 @@ hv "cat --help"      '^usage: cat'   korerun cat --help
 hv "sed --version"   '^sed / love ' korerun sed --version
 hv "bc --version"    '^bc / love '  korerun bc --version
 hv "ls -l --help"    '^usage: ls'    korerun ls -l --help
-hv "kore --help"     '^kore -- the'  "$m" kore --help
-hv "kore --version"  '^kore / love ' "$m" kore --version
+# kore names the userland, not a verb: `love kore` is a file the binary does not find
+"$m" kore true > "$o" 2>&1 && fail "love kore is still a verb"
 # ..and letters that are not the door's: grep -h, ls -h's sizes, echo's word back
 printf 'a\nb\n' > "$ho/.hv1"; printf 'a\nX\n' > "$ho/.hv2"
 both "grep -h is grep's own" grep -h a "$ho/.hv1" "$ho/.hv2"

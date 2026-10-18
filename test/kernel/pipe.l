@@ -67,7 +67,7 @@
 
 ; spawn maps argv onto a love main, the pid is the task pid, wait is catch; the corpus runs
 ; unseated in the main task
-(spawn ["kore" "echo" "rung4"] @ p
+(spawn ["echo" "rung4"] @ p
  (test (charm? (getpid 0)) (0 = getpid 0)
        (charm? p) (0 < p) (0 = wait p)))
 
@@ -77,15 +77,15 @@
 
 ; the seat: a stage's out rides the pipe; the parent closes its end and still reads it whole
 (: pp (pipe 0) rfd <pp wfd >pp
-   p (spawnmap ["kore" "echo" "seated"] [(1 . wfd)] [rfd wfd] -1 0)
+   p (spawnmap ["echo" "seated"] [(1 . wfd)] [rfd wfd] -1 0)
    _ (close wfd)
    s (slurp (fdopen rfd))
  (test (0 = wait p) (s = "seated\n")))
 
 ; echo | wc -l by hand: the seat carries fd 0 as well as fd 1
 (: pa (pipe 0) pb (pipe 0)
-   p1 (spawnmap ["kore" "echo" "a b"] [(1 . >pa)] () -1 0)
-   p2 (spawnmap ["kore" "wc" "-l"]
+   p1 (spawnmap ["echo" "a b"] [(1 . >pa)] () -1 0)
+   p2 (spawnmap ["wc" "-l"]
                 [(0 . <pa) (1 . >pb)] () -1 0)
    _ (close >pa, close <pa, close >pb)
    s (slurp (fdopen <pb))

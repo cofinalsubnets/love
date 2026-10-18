@@ -36,12 +36,12 @@
    _ (: p (open (sroot + "/sub/index.html") "w") _ (say p page) (close p))
    love <cmdline
    hp (test-free 0)
-   hs (tether [love "kore" "httpd" "-p" (show hp) "-h" sroot])
+   hs (tether [love "httpd" "-p" (show hp) "-h" sroot])
    _ (test-up hp)
    none (test-free 0)                      ; a port of ours, its listener gone
    hbase ("http://127.0.0.1:" + show hp)
-   (wo args) (hark ([love "kore" "wget"] + args))
-   (wq args) (hark ["sh" "-c" (foldl (a \ w \ a + " '" + w + "'") ("'" + love + "' kore wget") args + " 2>/dev/null")])
+   (wo args) (hark ([love "wget"] + args))
+   (wq args) (hark ["sh" "-c" (foldl (a \ w \ a + " '" + w + "'") ("'" + love + "' wget") args + " 2>/dev/null")])
    so (wq ["-O" "-" (hbase + "/blob.bin")])                           ; not -q: its words are err's, dropped
    sq (wo ["-q" "-O" "-" (hbase + "/blob.bin")])
    sr (wo ["-q" "-O" "-" (hbase + "/sub")])                           ; 301 to /sub/, its index

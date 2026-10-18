@@ -14,13 +14,13 @@
                             (go (i + 1) acc)))))
               0 0)
 
-   ; the doc's own spelling: kore ls | kore wc -l, the line count = the tree's
-   r1 (sh-line shS "kore ls src/apps/kore | kore wc -l > /tmp/l-sh-pipe")
+   ; ls | wc -l: the line count = the tree's
+   r1 (sh-line shS "ls src/apps/kore | wc -l > /tmp/l-sh-pipe")
    s1 (rd "/tmp/l-sh-pipe")
    _  (unlink "/tmp/l-sh-pipe")
 
    ; and a byte-exact tail, where wc's padding is width one
-   r2 (sh-line shS "kore echo hi | kore wc -c > /tmp/l-sh-wc")
+   r2 (sh-line shS "echo hi | wc -c > /tmp/l-sh-wc")
    s2 (rd "/tmp/l-sh-wc")
    (unlink "/tmp/l-sh-wc",
 
@@ -30,7 +30,7 @@
 ; no fork aboard: a compound stage -- a function, a ( ) -- runs as a task on a copy of the
 ; shell's state, so it runs in a pipe and in the background, and what it sets stays its own
 (: (lush-krd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))   ; rd is the form above's alone
-   _  (sh-line shS "lush_kf() { echo fn; }; lush_kf | kore cat > /tmp/l-sh-fnp")
+   _  (sh-line shS "lush_kf() { echo fn; }; lush_kf | cat > /tmp/l-sh-fnp")
    s1 (lush-krd "/tmp/l-sh-fnp")
    _  (sh-line shS "lush_kv=p; ( lush_kv=s ); echo $lush_kv > /tmp/l-sh-sub")
    s2 (lush-krd "/tmp/l-sh-sub")
