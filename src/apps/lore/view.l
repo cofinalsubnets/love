@@ -6,6 +6,7 @@
          view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
          view-deep? view-words view-flag view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
+         view-cells view-pen view-band
          view-rescale)
 (borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
@@ -154,8 +155,12 @@
  ; ..or as bands, a row's [x0 cells fg bg], its pens 24-bit six bits a channel or the 256
  (view-help-bands st ls) (view-help-box ls (st 'w) (st 'h // 2) @ [x0 y0 rows]
    (: dp (st 'deep) fg (dp ? (55 << 12 | 53 << 6 | 50) 253) bg (dp ? (6 << 12 | 5 << 6 | 5) 235)
-      (cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
-      (foldl (t \ i \ pin t (y0 + i) [x0 (cells (rows i)) fg bg]) {} ^#rows)))
+      (foldl (t \ i \ pin t (y0 + i) [x0 (view-cells (rows i)) fg bg]) {} ^#rows)))
+ ; a band's text a cell at a time, each one character, and a pen [r g b n] as deep or the 256 has it
+ (view-cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
+ (view-pen deep v) (deep ? (: (q x) ((x * 63 + 127) // 255) (q (v 0) * 4096 + q (v 1) * 64 + q (v 2))) (v 3))
+ ; ..and a line s laid as the band on row r, light on bg
+ (view-band st s r bg) {(r - 1) [0 (view-cells s) (view-pen (st 'deep) [240 240 240 255]) (view-pen (st 'deep) bg)]}
  ; a level lv on a stage already raised, a frame a tick. lv: 'new (w h) its state, 'size
  ; (st w r), 'frame (st), 'key (st action), 'tick (st), 'fps, 'linger once 'done, 'next
  ; [module walk] or (), 'song (hn) a feeder of (st), hn () with no horn, fed every frame;

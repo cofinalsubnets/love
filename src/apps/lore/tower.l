@@ -25,9 +25,8 @@
  street-x 9                                             ; a block's stride across, and along
  street-y 6
  (city w h st) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'lane {} 'solid '(6)}
+   d (pins (floor-new w h) 'lane {} 'solid '(6))
    sb {st}
-   (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
    ; where the streets start: from a, at the stride and a jitter, the last one at lim
    (spine a lim step jit) (:- (go a [a])
      (go x acc) (x + step + roll sb jit @ nx
@@ -62,14 +61,9 @@
                                  pin d 'rooms ([(x0 + 1) (y0 + 1) (bw - 2) (bh - 2)] . d 'rooms)))))
    (pairs l) (two? >l ? ([<l (l 1)] . pairs >l) ())
    _ (each (pairs ys) (yy \ each (pairs xs) (xx \ build <xx <>xx <yy <>yy)))
-   rms (d 'rooms)
    ; a floor too small for three buildings is delved instead, like any other
-   (#rms < 3 ? (delve w h st (plan 2))
-    (: _ (pins d 'in (mid (last rms)) 'stair (mid <rms))
-       _ (dput d <(d 'stair) <>(d 'stair) 2)
-       s2 (mid (rms 1))
-       (dput d <s2 <>s2 2,
-        d . peep sb () 0))))
+   (#(d 'rooms) < 3 ? (delve w h st (plan 2))
+    (lay-stairs d 1, d . peep sb () 0)))
 
 
 
@@ -91,10 +85,9 @@
              ("█" 170 133)                              ; orchid
              ("█" 168 132))                             ; pale violet red
  (sky w h st) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'tint {} 'solid '(6)}
+   d (pins (floor-new w h) 'tint {} 'solid '(6))
    sb {st}
    _ (each ^(w * h) (i \ pin (d 't) i 6))            ; the void this floor is carved out of
-   (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
    (rhomb cx cy a b f) (each ^(2 * b + 1) (j \ each ^(2 * a + 1)
                                                 (i \ (: x (cx - a + i) y (cy - b + j)
                                                         (|(x - cx) * b + |(y - cy) * a <= a * b ? (f x y))))))
@@ -112,34 +105,25 @@
                       (go (mx ? (x + sx) x) (my ? (y + sy) y) (e + (mx ? dy) + (my ? dx)))))
      (go ax ay (dx + dy)))
    ; a cell of void between any two platforms' bounds -- a rhombus leaves its corners
-   ; empty, so two that nearly touch still have the void between them
-   (apart? rm) (all (o \ 1 + peep rm 0 0 + peep rm 2 1 <= peep o 0 0 ||
-                         1 + peep o 0 0 + peep o 2 1 <= peep rm 0 0 ||
-                         1 + peep rm 1 0 + peep rm 3 1 <= peep o 1 0 ||
-                         1 + peep o 1 0 + peep o 3 1 <= peep rm 1 0))
-   ; ..and a platform stands off the last one both ways, so the stairway between them
-   ; is a diagonal: that is what makes them look to be at different heights
+   ; empty, so two that nearly touch still have the void between them -- and a platform
+   ; stands off the last one both ways, so the stairway between them is a diagonal: that
+   ; is what makes them look to be at different heights
    (askew? m o) (2 <= |(<m - <o) && 2 <= |(<>m - <>o))
    (try n) (0 < n ?
             (: a (plat-from + roll sb plat-by) b (a // 2)
                (w <= 2 * a + 3 || h <= 2 * b + 3 ? (try (n - 1))
                 (: cx (a + 1 + roll sb (w - 2 * a - 2)) cy (b + 1 + roll sb (h - 2 * b - 2))
                    rm [(cx - a) (cy - b) (2 * a + 1) (2 * b + 1)]
-                 (? !(apart? rm (d 'rooms)) (try (n - 1))
-                    (d 'rooms && !(askew? (mid rm) (mid <(d 'rooms)))) (try (n - 1))
-                  (d 'rooms ? (walk (mid rm) (mid <(d 'rooms))),
+                 (? !(room-apart? rm (d 'rooms)) (try (n - 1))
+                    (d 'rooms && !(askew? (room-mid rm) (room-mid <(d 'rooms)))) (try (n - 1))
+                  (d 'rooms ? (walk (room-mid rm) (room-mid <(d 'rooms))),
                    plat cx cy a b #(d 'rooms),
                    pin d 'rooms (rm . d 'rooms),
                    try (n - 1)))))))
    _ (try (w * h // 25))
-   rms (d 'rooms)
    ; a floor too cramped for two platforms is delved instead, like any other
-   (#rms < 2 ? (delve w h st (plan 3))
-    (: _ (pins d 'in (mid (last rms)) 'stair (mid <rms))
-       _ (dput d <(d 'stair) <>(d 'stair) 2)
-       s2 (mid (rms 1))
-       (dput d <s2 <>s2 2,
-        d . peep sb () 0))))
+   (#(d 'rooms) < 2 ? (delve w h st (plan 3))
+    (lay-stairs d 1, d . peep sb () 0)))
 
  ; a floor is delved or laid by its tier
  (carve-floor w h st lvl) (lvl @ 2 (city w h st) 3 (sky w h st) (delve w h st (plan lvl)))
@@ -417,7 +401,7 @@
    ov (d 'over)                                       ; the vale's: a face laid over a lit cell, or ()
    ; a floor lit end to end says so, and no table of every cell is asked per cell
    lit-all? (peep d 'lit 0)
-   spot (foldl (t \ e \ pin t (e 'x + w * e 'y) e) {} ents)
+   spot (mob-spots w ents)
    (i \ (: lit (lit-all? || peep vis i 0)
            e (lit ? (spot i))
            o (lit && ov ? (ov (i % w) (i // w)))
@@ -1273,24 +1257,14 @@
                 (pins g 'token tk 'sign (box-ttl . map (l \ fill l [tk]) box-lines))))
 
  ; the tree: a node's sign is its lines, then its choices numbered, then the foot
- (talk-node k) (: (go (e . u)) (<e @ ^k e (go u)) (go her-tree))
-
- ; a choice's line is marked off between the bytes 1 and 2, which fit paints as a button
- (choice-line c) (string 1 + " " + show <c + "  " + c 1 + " " + string 2)
- (talk g k) (: nd (talk-node k)
-               txt (nd 1) chs (nd 2)
-               ks (map (show * cap) chs)
-               lines (txt + (two? chs ? [""] ()) + map choice-line chs
-                          + ["" (fill talk-foot [(two? chs ? (join ", " ks) "any key")])])
-               (pins g 'talk k 'sign (her-ttl . lines)))
+ (talk-node k) (tree-node her-tree k)
+ (talk g k) (: nd (talk-node k) (pins g 'talk k 'sign (her-ttl . tree-lines (nd 1) (nd 2) talk-foot)))
 
 
  ; the key at a node: a digit picks its choice, anything else at a node with choices
  ; shows it again, and a node without them closes
  (talk-key g k) (: nd (talk-node (g 'talk)) chs (nd 2)
-                 (atom? chs ? (pin g 'talk ())
-                  (: c (filter (c \ 48 + <c = k) chs)
-                   (talk g (two? c ? (<c 2) (g 'talk))))))
+                 (atom? chs ? (pin g 'talk ()) (talk g (tree-next chs k (g 'talk)))))
  (meet-her-vale g) (pin g 'talked 1, talk g 'start)
 
 
@@ -1304,12 +1278,9 @@
  ; a point of the octagon: k of eight, clockwise from the right of the top pair -- the
  ; octagon stands turned an eighth of a slice, a flat side up -- and the eighth is the
  ; left of that pair
- (oct-pt fx fy k) (: a (k * 0.7853981633974483 - 1.1780972450961724)
-                     c (cos a) s (sin a)
-                     [(fx + int (oct-x * c + (0.0 < c ? 0.5 -0.5)))
-                      (fy + int (oct-y * s + (0.0 < s ? 0.5 -0.5)))])
+ (oct-pt fx fy k) (oct-at fx fy oct-x oct-y k)
  (vale w h rows) (:
-   d {'w w 'h h 'rows rows 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'exits {}}
+   d (pins (floor-new w h) 'rows rows 'exits {})
    cx (w // 2)
    cy (h // 2 - rows // 2) ry (rows * 2 // 3)
    rx (: m (w // 2 - 2) n (2 * ry + 4) (m < n ? m n))
@@ -1343,8 +1314,7 @@
 
  ; the house: one room of boards with a door south and a stair up; the attic over it.
  ; each is painted at the screen's height, the rows past it blank
- (room w h rows cols) (: d {'w w 'h h 'rows rows 'cols cols 't (cask (w * h)) 'seen (cask (w * h))
-                            'rooms () 'exits {}}
+ (room w h rows cols) (: d (pins (floor-new w h) 'rows rows 'cols cols 'exits {})
                          (each ^(h - 2) (j \ each ^(w - 2) (i \ dput d (1 + i) (1 + j) 1)),
                           (pins d 'th th-house 'sd 2)))
  (house rows cols) (room house-w house-h rows cols @ d
@@ -1448,11 +1418,10 @@
                     f (:- (slurp j) j
                        (paint (jug 0) d (cell-face d (g 'vis) (g 'loot) (ents g))
                         (g 'msg) (crawl-bar g)))
-                    sg (g 'sign) cols (peep d 'cols (d 'w))
+                    cols (peep d 'cols (d 'w))
                     ; ..laid at the screen's width, which a room may be narrower than;
                     ; where it lands is kept, for the live painter to keep out of
-                    (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()),
-                     two? sg ? (sign-over f <sg >sg 1 rows cols) f))
+                    (sign-frame d f (g 'sign) rows cols))
  (live-frame g) (: d (g 'd) (:- (slurp j) j
                    (paint-live (jug 0) d (g 'vis) (cell-face d (g 'vis) (g 'loot) (ents g)) (live-cells d (g 'loot)))))
 

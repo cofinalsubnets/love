@@ -38,19 +38,26 @@
    (i < 0 || j < i ? {} (foldl (\ t k (pin t (ls k 0) (ls k))) {} (map (+ (i + 1)) ^(j - i - 1)))))
  (recs b k f) (map (i \ f b (k * i)) ^(#b // k))
  (u16 b o) (rdle b o 2)
+ ; ..one laid out by a spec, a letter a field: s an s16, f one as a float, u a u16, n a name,
+ ; x two bytes passed over
+ (rec spec b o) (:- (go 0 o)
+   (go i o) (i < #spec ?
+     (spec i @ 110 ((nm b o) . go (i + 1) (o + 8))
+               120 (go (i + 1) (o + 2))
+               c ((c @ 102 (1.0 * s16 b o) 115 (s16 b o) (u16 b o)) . go (i + 1) (o + 2)))))
  ; --- the map: vertexes, lines, sides, sectors, segs, subsectors, nodes and things, each a list ---
  (wad-map w m) (: i (peep (w 'ix) m -1) n #(w 'ls)
    L (foldl (\ t k (i + k < n ? (pin t (w 'ls (i + k) 0) (body w (w 'ls (i + k)))) t)) {} (map (+ 1) ^10))
    (? (i < 0 || !(string? (L "SECTORS"))) ()
       {'name m
-       'vs (recs (L "VERTEXES") 4 (\ b o [(1.0 * s16 b o) (1.0 * s16 b (o + 2))]))
-       'lines (recs (L "LINEDEFS") 14 (\ b o (map (k \ u16 b (o + 2 * k)) ^7)))
-       'sides (recs (L "SIDEDEFS") 30 (\ b o [(s16 b o) (s16 b (o + 2)) (nm b (o + 4)) (nm b (o + 12)) (nm b (o + 20)) (u16 b (o + 28))]))
-       'secs (recs (L "SECTORS") 26 (\ b o [(s16 b o) (s16 b (o + 2)) (nm b (o + 4)) (nm b (o + 12)) (s16 b (o + 20)) (u16 b (o + 22)) (u16 b (o + 24))]))
-       'segs (recs (L "SEGS") 12 (\ b o (map (k \ u16 b (o + 2 * k)) ^6)))
-       'ssecs (recs (L "SSECTORS") 4 (\ b o [(u16 b o) (u16 b (o + 2))]))
-       'nodes (recs (L "NODES") 28 (\ b o [(1.0 * s16 b o) (1.0 * s16 b (o + 2)) (1.0 * s16 b (o + 4)) (1.0 * s16 b (o + 6)) (u16 b (o + 24)) (u16 b (o + 26))]))
-       'things (recs (L "THINGS") 10 (\ b o [(s16 b o) (s16 b (o + 2)) (s16 b (o + 4)) (u16 b (o + 6)) (u16 b (o + 8))]))}))
+       'vs (recs (L "VERTEXES") 4 (rec "ff"))
+       'lines (recs (L "LINEDEFS") 14 (rec "uuuuuuu"))
+       'sides (recs (L "SIDEDEFS") 30 (rec "ssnnnu"))
+       'secs (recs (L "SECTORS") 26 (rec "ssnnsuu"))
+       'segs (recs (L "SEGS") 12 (rec "uuuuuu"))
+       'ssecs (recs (L "SSECTORS") 4 (rec "uu"))
+       'nodes (recs (L "NODES") 28 (rec "ffffxxxxxxxxuu"))
+       'things (recs (L "THINGS") 10 (rec "sssuu"))}))
  ; --- the pictures: the palette; a patch's posts laid into a texture; flats; the textures
  ;     TEXTURE1 and 2 compose from PNAMES' patches ---
  ; ..PLAYPAL's palettes past the first, each as how it moves the first's colours: per channel
@@ -390,13 +397,9 @@
  (status st) (: g (guns (st 'gun)) a (g 2)
    ("HP \(st 'hp)  AR \(st 'ar)  " + (a = () ? "" "AMMO \(st a)  ") + (g 0 @ "PUNG" "FIST" "PISG" "PISTOL" "SHTG" "SHOTGUN" "CHGG" "CHAINGUN" "MISG" "ROCKETS" _ "PLASMA") + (st 'run = 1 ? "  RUN" "")
     + (two? (st 'keys) ? ("  KEYS " + foldl (\ a k (a + show k)) "" (st 'keys)) "") + "  " + peep st 'msg ""))
- (band st s r) (: deep (st 'deep)
-   (pen v) (deep ? (: (q x) ((x * 63 + 127) // 255) (q (v 0) * 4096 + q (v 1) * 64 + q (v 2))) (v 3))
-   (cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
-   {(r - 1) [0 (cells s) (pen [240 240 240 255]) (pen [20 20 20 233])]})
  (wad-frame st) (: w (st 'w) r (st 'h // 2) s (snip (pad (" " + status st) w " ") 0 w)
    (bar? st ? (mesh-show st (wad-pens st) "" {})
-              (mesh-show st (wad-pens st) (esc + "[" + show r + ";1H" + esc + "[0;37;40m" + s + esc + "[0m") (band st s r))))
+              (mesh-show st (wad-pens st) (esc + "[" + show r + ";1H" + esc + "[0;37;40m" + s + esc + "[0m") (view-band st s r [20 20 20 233]))))
  ; --- the state: the map, its things, the movers, and the player: body, health, armor, guns, keys ---
  ; ..where a thing stands: its sector's floor, ceiling and light
  (place M o) (: S (M 'secs (wad-sector M (o 'x) (o 'z))) (pins o 'y (1.0 * S 0) 'ceil (1.0 * S 1) 'k (lit (S 4) 0)))

@@ -2,7 +2,7 @@
 ; for one pixel or for a whole screen of them, and the arithmetic of each. and the hash's
 ; value noise, eased between its lattice, for any texture a scene lays; the dice a scene
 ; throws; and points as a camera tablet sees them ('e 'f 'r 'u the eye and its axes, 'w 'h 'foc).
-(module (vec sat sq mag frac c* cm c+ cmix dot unit cross lerp turn side vn rnd rnd-new sight spot)
+(module (vec sat sq mag frac c* cm c+ c- cmix dot unit cross lerp turn side vn vnw rnd rnd-new sight spot)
 (borrow 'view)                          ; the hash, min2 max2 flo over
 (:
  (sat v) (min 1.0 (max 0.0 v))
@@ -12,6 +12,7 @@
  (c* k a) [(k * a 0) (k * a 1) (k * a 2)]
  (cm a b) [(a 0 * b 0) (a 1 * b 1) (a 2 * b 2)]
  (c+ a b) [(a 0 + b 0) (a 1 + b 1) (a 2 + b 2)]
+ (c- a b) [(a 0 - b 0) (a 1 - b 1) (a 2 - b 2)]
  (cmix a b m) [(a 0 + m * (b 0 - a 0)) (a 1 + m * (b 1 - a 1)) (a 2 + m * (b 2 - a 2))]
  (dot a b) (a 0 * b 0 + a 1 * b 1 + a 2 * b 2)
  (unit a) (c* (1.0 / sqrt (max2 1e-12 (dot a a))) a)
@@ -21,13 +22,15 @@
  (turn d k ang) (: c (cos ang) sn (sin ang)
                    (c+ (c+ (c* c d) (c* sn (cross k d))) (c* (dot k d * (1.0 - c)) k)))
  (side d) (unit (cross d (mag (d 1) < 0.95 ? [0.0 1.0 0.0] [1.0 0.0 0.0])))
- ; value noise: the hash on a lattice, eased between
- (vn x z s) (: ix (floor x) iz (floor z) ux (x - ix) uz (z - iz)
-               ex (ux * ux * (3.0 - 2.0 * ux)) ez (uz * uz * (3.0 - 2.0 * uz))
-               (h i k) (throw i k s 1024 / 1023.0)
-               p (h ix iz) q (h (ix + 1) iz) r (h ix (iz + 1)) t (h (ix + 1) (iz + 1))
-               lo (p + ex * (q - p)) hi (r + ex * (t - r))
-               (lo + ez * (hi - lo)))
+ ; value noise: the hash on a lattice, eased between; the lattice wrapping every n, or never at 0
+ (vn x z s) (vnw x z s 0)
+ (vnw x z s n) (: ix (floor x) iz (floor z) ux (x - ix) uz (z - iz)
+                  ex (ux * ux * (3.0 - 2.0 * ux)) ez (uz * uz * (3.0 - 2.0 * uz))
+                  (w i) (n = 0 ? i (i % n))
+                  (h i k) (throw (w i) (w k) s 1024 / 1023.0)
+                  p (h ix iz) q (h (ix + 1) iz) r (h ix (iz + 1)) t (h (ix + 1) (iz + 1))
+                  lo (p + ex * (q - p)) hi (r + ex * (t - r))
+                  (lo + ez * (hi - lo)))
  ; the dice: an lcg on g's 's, each throw in [0 1)
  (rnd-new seed) {'s (seed % 2147483647 + 1)}
  (rnd g) (: s ((g 's * 1103515245 + 12345) % 2147483648) (pin g 's s, s / 2147483648.0))

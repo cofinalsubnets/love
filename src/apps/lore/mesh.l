@@ -16,7 +16,6 @@
  ; a mesh: [vs ts], each vertex [x y z u v nx ny nz r g b] -- place, texels, normal, the
  ; surface's own colour -- and each triangle [a b c tex], tex -1 for none
  (mesh vs ts) [vs ts]
- (sub a b) [(a 0 - b 0) (a 1 - b 1) (a 2 - b 2)]
  (mesh-join ms) (: (go ms k vs ts) (atom? ms ? (mesh (cats (rev vs)) (cats (rev ts)))
                    (: m <ms (go >ms (k + #(m 0)) (m 0 . vs) (map (t \ [(t 0 + k) (t 1 + k) (t 2 + k) (t 3)]) (m 1) . ts))))
                    (go ms 0 () ()))
@@ -29,7 +28,7 @@
          (m 1)))
  ; four corners going round, their texels, a texture and a colour: two triangles, the
  ; front the side the corners turn anticlockwise from
- (mesh-quad ps uvs tex col) (: n (unit (cross (sub (ps 3) (ps 0)) (sub (ps 1) (ps 0))))
+ (mesh-quad ps uvs tex col) (: n (unit (cross (c- (ps 3) (ps 0)) (c- (ps 1) (ps 0))))
    (mesh (map (i \ ps i + uvs i + n + col) ^4) [[0 1 2 tex] [0 2 3 tex]]))
  ; a box about c, half sizes h, turned by yaw; its texels k a unit
  (mesh-box c h yaw tex col k)
@@ -65,7 +64,7 @@
      (mesh-grid a b (\ i j (: p (c+ o (c+ (c* (1.0 * i / a) A) (c* (1.0 * j / b) B))) (p + uv p))) tex col))
  ; a tube from a to b, radius r, n sides, open at its ends: its texture tex, -1 for none,
  ; laid ts metres a texel round it and along it
- (mesh-rod a b r col n tex ts) (: ax (sub b a) u (unit ax) p1 (side u) p2 (cross u p1) L (sqrt (dot ax ax))
+ (mesh-rod a b r col n tex ts) (: ax (c- b a) u (unit ax) p1 (side u) p2 (cross u p1) L (sqrt (dot ax ax))
    (ring c k) (map (j \ (: an (tau * j / n) o (c+ (c* (cos an) p1) (c* (sin an) p2))
                           (c+ c (c* r o) + [(r * an / ts) (k * L / ts)] + o + col))) ^(n + 1))
    (mesh (cat (ring a 0.0) (ring b 1.0))
@@ -77,14 +76,17 @@
  (mesh-dots ps sky sun tex) (: n #(ps 0 0) i (iota n)
    (vtx q) [(ps q 0) (ps q 1) (ps q 2) 0.0 0.0 (sky 0) (sky 1) (sky 2) (sun 0) (sun 1) (sun 2)]
    [(lace (cats (map vtx ^3))) (int (lace [(i * 3) (i * 3 + 1) (i * 3 + 2) tex]))])
- ; the vertices' places as trays [x y z], read by index in one step where a list walks
- (places vs) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^3))
+ ; the vertices' first m parts as trays, and their places [x y z], read by index in one
+ ; step where a list walks; a triangle t's corners
+ (columns vs m) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^m))
+ (places vs) (columns vs 3)
  (at3 P i) [(peep (P 0) i 0.0) (peep (P 1) i 0.0) (peep (P 2) i 0.0)]
+ (corners P t) [(at3 P (t 0)) (at3 P (t 1)) (at3 P (t 2))]
  ; ..each with its index, in order
  (indexed l) (rev (<>(foldl (\ st v [(<st + 1) ([v <st] . <>st)]) [0 ()] l)))
  ; only the triangles whose middles (keep? x y z)
  (mesh-keep m keep?) (: P (places (m 0))
-   (mesh (m 0) (filter (t \ (: a (at3 P (t 0)) b (at3 P (t 1)) c (at3 P (t 2))
+   (mesh (m 0) (filter (t \ (corners P t @ [a b c]
                              (keep? ((a 0 + b 0 + c 0) / 3.0) ((a 1 + b 1 + c 1) / 3.0) ((a 2 + b 2 + c 2) / 3.0))))
                        (m 1))))
  ; ..or only those whose corners all (keep? x y z)
@@ -94,37 +96,37 @@
  ; each vertex's normal the sum of its faces', weighed by their size
  (mesh-normals m) (: vs (m 0) P (places vs) acc {}
    (add i n) (pin acc i (peep acc i [0.0 0.0 0.0] @ o [(o 0 + n 0) (o 1 + n 1) (o 2 + n 2)]))
-   _ (each (m 1) (t \ (: a (at3 P (t 0)) b (at3 P (t 1)) c (at3 P (t 2))
-                        n (cross (sub c a) (sub b a))
-                        (add (t 0) n, add (t 1) n, add (t 2) n))))
+   _ (each (m 1) (t \ (corners P t @ [a b c]
+                        (cross (c- c a) (c- b a) @ n (add (t 0) n, add (t 1) n, add (t 2) n)))))
    (mesh (map (q \ (: v <q n (unit (peep acc <>q [0.0 1.0 0.0])) (take 5 v + n + drop 8 v))) (indexed vs)) (m 1)))
  ; a mesh packed for drawing: its vertices as columns, trays [x y z u v nx ny nz r g b],
  ; and its triangles as the tray facets takes
  (mesh-pack m) (: vs (m 0) n #vs ft (cats (m 1))
-   {'n n 'cols (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^11) 'tris (star-tray [#ft] ft)})
+   {'n n 'cols (columns vs 11) 'tris (star-tray [#ft] ft)})
  ; ..lit by the sky's sun and its ambient: (light cols) says each vertex's [sun sky glow]
  ; -- its share of the sun past what stands between, of the sky's light, and () or the
  ; [r g b] it takes besides -- trays or numbers; the colour the light on it times its own,
  ; gain over all. the scene [verts tris] mesh-frame draws
- (mesh-bake pk lt light gain) (: c (pk 'cols) n (pk 'n) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
-   L (light c)
-   sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
-   (lit k) (gain * c (8 + k) * ((L 1) * amb k + sun * sc k + (two? (L 2) ? (L 2 k) 0.0)))
-   [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
+ (mesh-bake pk lt light gain) (baked pk lt light gain 0)
  ; ..or the sun's light apart, for a frame that shades by the sun's view: 11 a vertex, the
  ; light from the sky and round about, then the sun's
- (mesh-bake-sun pk lt light gain) (: c (pk 'cols) n (pk 'n) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
+ (mesh-bake-sun pk lt light gain) (baked pk lt light gain 1)
+ (baked pk lt light gain apart) (: c (pk 'cols) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
    L (light c)
    sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
-   (sky k) (gain * c (8 + k) * ((L 1) * amb k + (two? (L 2) ? (L 2 k) 0.0)))
-   (lit k) (gain * c (8 + k) * sun * sc k)
-   [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (sky 0) (sky 1) (sky 2) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
+   (glow k) (two? (L 2) ? (L 2 k) 0.0)
+   (lit k) (gain * c (8 + k) * ((L 1) * amb k + sun * sc k + glow k))
+   (sky k) (gain * c (8 + k) * ((L 1) * amb k + glow k))
+   (sn k) (gain * c (8 + k) * sun * sc k)
+   [(lace ([(c 0) (c 1) (c 2) (c 3) (c 4)]
+           + (apart ? [(sky 0) (sky 1) (sky 2) (sn 0) (sn 1) (sn 2)] [(lit 0) (lit 1) (lit 2)])))
+    (pk 'tris)])
  ; the sun's view of a place round c: along its light, half metres either side and deep
  ; along it, its matrix for facets
  (mesh-sun-view lt c half deep) (: s (lt 'sun)
    r (unit (mag (s 1) < 0.99 ? (cross [0.0 1.0 0.0] s) [1.0 0.0 0.0])) u (cross s r)
    (row a k) [(a 0 / k) (a 1 / k) (a 2 / k) (0.0 - dot a c / k)]
-   (gem-tray [16] (row r half + row u half + row (sub [0.0 0.0 0.0] s) deep + [0.0 0.0 0.0 1.0])))
+   (gem-tray [16] (row r half + row u half + row (c- [0.0 0.0 0.0] s) deep + [0.0 0.0 0.0 1.0])))
  ; ..and what it sees there of the scene [verts tris], baked with the sun apart: an n by n
  ; tray of depths, for mesh-frame's sun
  (mesh-sun-map sv sc n)

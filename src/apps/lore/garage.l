@@ -66,7 +66,7 @@
 
  ; --- laying the garage ---------------------------------------------------------------
  (garage-lay w h sb) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'rows h 'cols w 'solid '(0 2 3 6)}
+   d (pins (floor-new w h) 'rows h 'cols w 'solid '(0 2 3 6))
    _ (each ^(w * h) (i \ pin (d 't) i 1))
    ; the walls, and the pilasters along their inner faces
    _ (each ^w (x \ (dput d x 0 0, dput d x (h - 1) 0)))
@@ -168,7 +168,7 @@
  (ramp-pen rp v) (cite 'slop 'slop-ramp-pen rp 3.0 v)
  (garage-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
    ents ((g 'p) . g 'ms)
-   spot (foldl (t \ e \ pin t (e 'x + w * e 'y) e) {} ents)
+   spot (mob-spots w ents)
    wrecks (foldl (t \ c \ foldl (t2 \ cl \ pin t2 <cl [(cl 1) (cl 2)]) t (car-cells c w)) {} (d 'cars))
    ; the floor is slop's skin as half blocks; what stands on it stands on the lower half
    (ground-pen rp x y) (cite 'slop 'slop-under sk (ramp-pen rp) x y)
@@ -188,9 +188,7 @@
  (garage-bar g) (fill w-bar ["the garage" (g 'tn)])
  (garage-frame g) (: d (g 'd) rows (d 'rows) cols (d 'cols)
    f (:- (slurp j) j (paint (jug 0) d (garage-face g) (g 'msg) (garage-bar g)))
-   sg (g 'sign)
-   (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()),
-    two? sg ? (sign-over f <sg >sg 1 rows cols) f))
+   (sign-frame d f (g 'sign) rows cols))
 
  ; --- the tune: machinery, a layer a line of the stack; a ; at a line's front silences it,
  ; and the lines under the stack are spares to swap in. harp is cited, never borrowed:
