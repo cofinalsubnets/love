@@ -35,6 +35,37 @@
    !<(edln (ed-keys [27 91 66 13]) "" [abc])           ; down (no newer) -> ""
    ([120] = <(edln (ed-keys [120 27 91 65 27 91 66 13]) "" [abc]))))      ; x, up, down -> "x"
 
+; --- edlnc's ^R: the history searched back from the newest; a key of the line takes the match
+(: ed-lnc (k \ p \ h \ c \ cite 'cli 'edlnc k p h c)
+   (ed-bs s) (map s ^#s)
+   (ed-ln k h) (string <(test-mute (_ \ ed-lnc (ed-keys (ed-bs k)) "" (map ed-bs h) ())))
+   ; (f 0)'s stdout, caught in a pipe: a few lines, so it never fills
+   (ed-said f) (: _ (flush out) pp (pipe 0) s (dup 1)
+                  _ (dup2 >pp 1, close >pp)
+                  _ (mind f () (_ \ (flush out, dup2 s 1, close s)))
+                  q (fdopen <pp) r (slurp q)
+                  (close q, r))
+   ed-hist ["make test" "ls -l" "echo hi"])
+(: _ (test
+   ("ls -l" = ed-ln "\x12ls\r" ed-hist)
+   ("make test" = ed-ln "\x12e\r" ed-hist)              ; the newest holding it
+   ("echo hi" = ed-ln "\x12e\x12\r" ed-hist)            ; ^R again: the next older
+   ("make test" = ed-ln "\x12e\x12\x7f\r" ed-hist)      ; a backspace goes back a step
+   ("x" = ed-ln "x\x12m\x07\r" ed-hist)                 ; ^G: the line as it was
+   ("make test" = ed-ln "\x12ez\r" ed-hist)             ; a failing search keeps the last match
+   ("" = ed-ln "\x12q\r" ed-hist)                       ; none at all: the draft
+   ("echo hi!" = ed-ln "\x12ech\x05!\r" ed-hist)        ; ^E takes it, then edits it
+   ("echo hi" = ed-ln "\x12ls\e[A\r" ed-hist)           ; up from the match: the one older
+   ("x" = ed-ln "x\x12mak\e[B\r" ed-hist)))             ; down from the newest: the draft
+
+; the search shows its query; a tab's candidate list is followed by the prompt, so the line
+; it redraws is not indented by a prompt that is not there
+(: _ (hosted ? (test
+   (has? (ed-said (_ \ ed-lnc (ed-keys (ed-bs "\x12ls\r")) "P> " (map ed-bs ed-hist) ())) "(reverse-i-search)`ls': ")
+   (has? (ed-said (_ \ ed-lnc (ed-keys (ed-bs "\x12lz\r")) "P> " (map ed-bs ed-hist) ())) "(failed reverse-i-search)`lz': ")
+   (: s (ed-said (_ \ ed-lnc (ed-keys (ed-bs "f\t\r")) "P> " () (_ \ [[111] "foo" "fob"])))
+      (has? (snip s (findsub s "foo  fob\n") #s) "P> ")))))
+
 ; a bracketed paste is text: a break (crlf one) splits the line, submits nothing; a tab stays
 (: _ (test
    ("ab\nc" = string (edraw (ed-keys [97 27 91 50 48 48 126 98 10 99 27 91 50 48 49 126 13]) ""))

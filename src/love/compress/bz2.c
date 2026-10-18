@@ -485,14 +485,9 @@ static struct str *bz_cask(word x) {
  struct str *s = cask_str(x);
  return s && s->len == sizeof(struct bz_st) && ((struct bz_st*) s->bytes)->magic == BZ_MAGIC ? s : NULL; }
 love_noinline static struct g *host_bz2_new(struct g *g) {
- uintptr_t sreq = str_width(sizeof(struct bz_st)), breq = Width(struct cask) + Width(struct tag);
- if (!ok(g = have(g, sreq + breq))) return g;
- struct str *s = ini_str(bump(g, sreq), sizeof(struct bz_st));
- memset(s->bytes, 0, sizeof(struct bz_st));
- ((struct bz_st*) s->bytes)->magic = BZ_MAGIC;
- union u *k = bump(g, breq);
- cask(k)->ap = lvm_cask, cask(k)->str = s;
- tagthread(k, Width(struct cask));
+ union u *k = new_cask(&g, sizeof(struct bz_st), sizeof(struct bz_st));
+ if (!k) return g;
+ ((struct bz_st*) cask(k)->str->bytes)->magic = BZ_MAGIC;
  return g->sp[0] = word(k), g; }
 love_noinline static struct g *host_bz2_step(struct g *g) {
  struct str *cs = bz_cask(g->sp[0]);

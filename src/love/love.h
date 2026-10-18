@@ -1056,6 +1056,9 @@ static love_inline struct tag { union u *head; union u end[]; } *ttag(struct g*g
  return (struct tag*) k; }
 static love_inline union u *tag_head(struct tag *t) {
  return cell(word(t->head) & ~(word) 3); }
+// a cask over a fresh n-byte string, its first `clear` bytes zeroed, for a host lane to lay a C
+// state into; NULL when the room was refused (*gp is then not ok)
+union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear);
 
 // a non-allocating walk's scratch, the free room [hp, sp): true only if its vm op packed first
 static love_inline word *gap(struct g *g, word **top) {
