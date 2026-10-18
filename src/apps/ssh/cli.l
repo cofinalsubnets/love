@@ -1,6 +1,5 @@
-; src/apps/ssh/cli.l -- the ssh and sshd commands over the module: flags, keys, known_hosts and
-; the one user served. src/apps/ssh/ssh.l is the door that loads it all from source; baked into
-; the image, kore reaches both as (cite 'ssh-cli ..).
+; src/apps/ssh/cli.l -- the ssh commands over the module: flags, keys, known_hosts and the one
+; user served. kore reaches them as (cite 'ssh-cli ..).
 ;
 ;   ssh [-p port] [-i identity] [-l user] [-t | -T] [-o option=value] [user@]host [command ..]
 ;       -o UserKnownHostsFile=path, -o StrictHostKeyChecking=ask|accept-new|yes|no, -o IdentityFile=path
@@ -17,9 +16,8 @@
 (borrow 'bytes)
 (borrow 'hashes)
 
-; what ssh and scp share: the options and their defaults, and the login -- dial, the host key
-; held to known_hosts, the identity, publickey auth. a failure is said as prog's and leaves
-; with 255 through udie; the mains answer their status, and the seat (ssh.l) quits with it
+; what ssh and scp share: options and the login -- dial, the host key held to known_hosts,
+; the identity, publickey auth. a failure leaves with 255 through udie; the mains answer status
 (:
    (cl-die prog m) (udie 255 (prog + ": " + m))
    (cl-env k d) (: v (getenv k) (string? v ? v d))
@@ -37,8 +35,8 @@
               (elem w ["ask" "accept-new" "yes" "no"] ? (pin o 'shk w)
                  (cl-die prog ("unsupported StrictHostKeyChecking value " + v))))
           (cl-die prog ("unsupported option " + k))))
-   ; known_hosts as openssh reads it. a name list holds plain names, [host]:port and
-   ; |1|salt|hash (hmac-sha1 of the name keyed by the salt); wildcards and ! are not read
+   ; known_hosts names: plain, [host]:port and |1|salt|hash (hmac-sha1 keyed by the salt);
+   ; wildcards and ! are not read
    (kh-low s) (string (map (i \ (: c (s i) (64 < c && c < 91 ? (c + 32) c))) (jot #s)))
    (kh-name host port) (: h (kh-low host) (port = 22 ? h ("[" + h + "]:" + show port)))
    (kh-hmac1 k m)
@@ -50,10 +48,9 @@
                          (: f (split p 124) (#f = 4 && kh-hmac1 (b64d (f 2)) name = b64d (f 3) ? 1 0))
                          (kh-low p = name ? 1 0)))
                  (split pats 44)))
-   ; -> [verdict line type ca]. verdicts by rank: 'revoked (the key is on an @revoked line,
-   ; whatever its names), 'ok, 'bad (another ed25519 key), 'other (known only under
-   ; another key type), 'new. ca is 1 when a @cert-authority line names the host: no
-   ; certificate is read here, so such a line is skipped, never trusted
+   ; -> [verdict line type ca]. verdicts by rank: 'revoked (on an @revoked line), 'ok, 'bad
+   ; (another ed25519 key), 'other (known under another type), 'new. ca is 1 when a
+   ; @cert-authority line names the host: skipped, never trusted
    (kh-check path name key)
     (: q (open path "r")
        txt (hot? q ? (: s (slurp q) (close q, s)) "")
@@ -76,8 +73,7 @@
    (kh-add path name key)
     (: q (open path "a")
        (? (hot? q) (say q (name + " ssh-ed25519 " + b64e key 1 + "\n"), close q, 1) 0))
-   ; a line off the controlling terminal after a prompt, echoed or not -> the line, or ()
-   ; when there is no terminal to ask on
+   ; a line off the controlling terminal after a prompt -> the line, or () with no terminal
    (ttyask prompt echo)
     (: q (open "/dev/tty" "r")
        (? !(hot? q) ()
@@ -155,9 +151,8 @@
     st (ssh-run t cmd pty?)
     (st < 0 ? 255 st)))
 
-; sshd serves the user it runs as. the host key is -h's, else the system's when this user
-; can read it, else one of its own at ~/.ssh/sshd_ed25519_key, made on first use and said.
-; it never detaches (-D is taken for openssh's sake) and logs to stderr (-e likewise).
+; sshd serves the user it runs as. the host key is -h's, else the system's if readable, else
+; ~/.ssh/sshd_ed25519_key, made on first use. never detaches; logs to stderr (-D -e accepted)
 (: (sshd-main as)
  (:
     usage "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
@@ -202,11 +197,9 @@
     (die ("cannot listen on port " + show (o 'port) + " (" + show r + ")"))))
 ; --- scp: rcp's protocol over an exec channel (OpenSSH's scp -O) ---
 ; one engine, two carriers: io is a tablet of 'rd (n -> bytes | ()), 'line (-> through a
-; newline | ()), 'wr (bytes ->) and 'err (a message the peer or we should see). the client
-; carries it over ssh-open's channel; `scp -t` and `scp -f` carry it over stdin and stdout,
-; the ends a remote shell runs. a name with a slash, or . or .., is refused on receipt;
-; the client takes at the top only the names it asked for, and a mode loses its setuid,
-; setgid and sticky bits, and the umask's too without -p.
+; newline | ()), 'wr (bytes ->) and 'err. the client rides ssh-open's channel, `scp -t`/`-f`
+; stdin and stdout. a received name with a slash, or . or .., is refused; the client takes at
+; the top only the names it asked for; a mode loses setuid/setgid/sticky, and the umask without -p
 (:
    sc-match (cite 'glob 'match)
    (sc-oct m) (: (d k) (string (48 + (m >> k & 7))) (d 9 + d 6 + d 3 + d 0))
@@ -521,9 +514,8 @@
                         + p + ".pub\nThe key fingerprint is:\n" + kg-fpr (kg-blob pub) + " " + cm + "\n")),
            0)))))
 
-; ssh-copy-id: the identity's public line onto the far end's authorized_keys, by a shell
-; there: ~/.ssh (or -t's directory) made 700 and the file 600, a key already there skipped. the
-; login is ssh's, its own identity (-o IdentityFile picks another); -n says what it would do,
+; ssh-copy-id: the identity's public line onto the far end's authorized_keys by a shell there:
+; the directory 700, the file 600, a key already there skipped; -n says what it would do,
 ; -f skips the check
 (: (copyid-main as)
  (:

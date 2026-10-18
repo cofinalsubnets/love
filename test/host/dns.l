@@ -1,6 +1,5 @@
-; test/host/dns.l -- the resolver, offline: the nameserver is a love task on loopback UDP, and
-; nothing reads the machine's /etc. run by test/host/run.l under a timeout, as a resolver that
-; stops parking stops the vm; checks are `assert`, with no test/00-init.l ahead.
+; test/host/dns.l -- the resolver offline: the nameserver is a love task on loopback UDP, nothing
+; reads /etc. run by test/host/run.l under a timeout, as a resolver that stops parking stops the vm
 (cite 'posix ? (borrow 'posix) ())
 
 (: _ (borrow 'dns))
@@ -10,13 +9,13 @@
 ; answer `q` with one a record for `addr`, or TC set and no records; the answer's name
 ; is a compression pointer, as a real server sends
 (: (dns-reply q addr tc)
-    (snip q 0 2                                     ; the id, echoed
+    (snip q 0 2
      + wrbe (tc ? 33664 33152) 2                  ; qr|RD|ra, and TC if asked
      + wrbe 1 2 + wrbe (tc ? 0 1) 2 + wrbe 0 2 + wrbe 0 2
-     + snip q 12 #q                          ; the question, verbatim
+     + snip q 12 #q
      + (tc ? "" (string 192 + string 12             ; name: a pointer to offset 12
            + wrbe 1 2 + wrbe 1 2              ; type A, class in
-           + wrbe 0 2 + wrbe 60 2             ; ttl
+           + wrbe 0 2 + wrbe 60 2
            + wrbe 4 2
            + string (addr >> 24 & 255) + string (addr >> 16 & 255)
            + string (addr >> 8 & 255) + string (addr & 255))))
@@ -25,25 +24,24 @@
    (nameserver p addr tc)
     (twirl (_ \ (recv p @ d
                  (send p <d (dns-reply <>d addr tc),
-                  rest 20,                            ; let the datagram leave
+                  rest 20,
                   close p, 1))) ()))
 
 ; --- law 1: a query goes out, an answer comes back, the address is exact
 (: sp (test-bind 0)
    port <sp
-   s (nameserver (sp 1) 16909060 ())                    ; 1.2.3.4
+   s (nameserver (sp 1) 16909060 ())
    _ (rest 20)                                        ; s reaches its park
    a (dns-ask 2130706433 port "ab.cd" 2000)
    _ (catch s)
    _ (assert (two? a)
              (<a = 16909060)
-             !(two? >a)))                          ; exactly one a record
+             !(two? >a)))
 
-; --- law 2: a nameserver that never answers gives up, and does not hang
-; the deadline is a park, not a poll; the elapsed time pins that it waited
-(: none (test-free 0)      ; a port of ours, its socket gone
+; --- law 2: a silent nameserver gives up, by a park not a poll
+(: none (test-free 0)
    t0 (clock 0)
-   a (dns-ask 2130706433 none "ab.cd" 200)            ; nothing is bound there
+   a (dns-ask 2130706433 none "ab.cd" 200)
    ms (clock 0 - t0)
    _ (assert !(two? a)
              (200 <= ms)
@@ -68,23 +66,22 @@
    c (open cp "w")
    _ (say c "search one.test two.test\nnameserver 9.9.9.9\n")
    _ (close c)
-   ; no nameserver is reachable from here, so an answer proves hosts was enough
+   ; no nameserver is reachable, so an answer proves hosts was enough
    a (resolve-in cp hp "ab.cd")
    _ (assert (two? a) (<a = 16909060))
-   ; the conf parse, read back through the door that uses it
    ns (dns-servers cp)
    _ (assert (two? ns)
              (<<ns = 151587081)                  ; 9.9.9.9
-             (><ns = 53))                        ; ... and resolv.conf means 53
+             (><ns = 53))                        ; resolv.conf means 53
    _ (assert (dns-conf cp "search" = '("one.test" "two.test"))))
 
 ; --- law 5: an empty resolv.conf still names a server
-; 127.0.0.1, as musl and moonlibc fall back
+; 127.0.0.1, the libc fallback
 (dns-servers (dns-dir + "/nope") @ ns
    (assert (two? ns) (<<ns = 2130706433)))
 
 ; --- law 6: a whole answer read back, every record type nslookup shows
-; cname, a, two aaaas (a zero run folds, a single zero stays), mx, a two-string txt, ns, ptr
+; two aaaas: a zero run folds, a single zero stays
 (: q0 (dns-qtype 4661 "ex.test" 1)
    ptr (string 192 + string 12)
    (rr ty rd) (ptr + wrbe ty 2 + wrbe 1 2 + wrbe 0 2 + wrbe 60 2 + wrbe #rd 2 + rd)
@@ -103,14 +100,13 @@
              (<(dns-records (resp 33155) 4661) = 3)            ; NXDOMAIN's rcode
              (dns-records (resp 33152) 4662 = ())            ; another question's answer
              (dns-name (snip q0 0 12 + ptr) 12 = ()))         ; a pointer to itself
-   ; the edns query is the plain one with an OPT record added and counted
+   ; the edns query is the plain one plus a counted OPT record
    qe (dns-qedns 4661 "ex.test" 1)
    _ (assert (snip qe 0 10 = snip q0 0 10) (qe 11 = 1)
              (snip qe 12 #q0 = snip q0 12 #q0)
              (snip qe #q0 #qe = string 0 + wrbe 41 2 + wrbe 1232 2 + wrbe 0 2 + wrbe 0 2 + wrbe 0 2)))
 
-; --- law 7: resolve6's pieces -- an aaaa asked and read back as text, hosts' v6 lines
-; the query carries edns, so the question the reply echoes stops short of its 11-byte OPT
+; --- law 7: resolve6's pieces; the reply echoes the question short of its 11-byte OPT
 (: sp (test-bind 0)
    port <sp
    v6 (catmap string [32 1 13 184 0 0 0 0 0 0 0 0 0 0 0 1])

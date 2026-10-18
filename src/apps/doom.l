@@ -1,30 +1,16 @@
-; src/apps/doom.l -- doom on the host, in an X window: the driver over the X wire
-; (src/apps/lux/wire.l) and the verb.
-;
+; src/apps/doom.l -- doom on the host in an X window, and the verb.
 ;   love doom [-iwad FILE] [-display :N] [-frames N]
-;
-; from a love with no doom in it, the verb lays this binary's source under ./love-<ver>/,
-; fetches doomgeneric and the shareware IWAD there, builds DOOM=1 once and runs that binary
-; (doom-nest below); from one built with DOOM=1 it is the window right away. on inle the
-; game is in the kernel and runs whole on the console, or the machine lays the nest off
-; its own tree, fetches the pair off the same hosts through the page's network, builds
-; the module with the game inside and boots that (doom-nest-inle).
-;
-; the game is C, linked into this binary by the DOOM=1 lane (src/inle/doom.c's host
-; doors: doom-start / doom-tick / doom-frame / doom-key); this file is the window.
-; one 640x400 window over the X wire's own requests (x-open, x-window, x-putrows), the
-; keyboard read as KeyPress/KeyRelease and respelled from keysyms to doomkeys.h's codes,
-; with XKB's detectable autorepeat on so a held key is not a release every 40 ms. the socket is polled
-; between frames (cue?), never waited on: doom's own tick keeps the clock.
-; sound rides the horn's C face inside the mixer, so `HORN=none love doom` is a
-; silent game and HORN=/dev/snd/pcmC1D0p names a card (src/love/horn.c).
-; -frames N ends the game after N drawn frames: the gate's door, and nobody else's.
+; the game is C, linked in by the DOOM=1 lane (src/inle/doom.c's doom-start/-tick/-frame/-key);
+; a love without it lays a nest that builds one (doom-nest). on inle the game runs whole on
+; the console, or the machine builds and boots a module with it (doom-nest-inle).
+; keys come from keysyms with XKB's detectable autorepeat, so a held key is not a release
+; every 40 ms. the socket is polled between frames, never waited on: doom's tick keeps the
+; clock. HORN=none is a silent game. -frames N ends after N drawn frames, for the gate.
 (module 'doom
 (borrow 'xwire)
 (borrow 'posix)
 (:
-   ; a keysym -> doomkeys.h's code, () for one doom has no name for. letters arrive
-   ; lower-case (the unshifted column), which is what doom's menus want.
+   ; a keysym -> doomkeys.h's code, () for none. letters arrive lower-case, as the menus want
    doomkeys {65361 172 65362 173 65363 174 65364 175                              ; arrows
              65307 27 65293 13 65289 9 65288 127 65299 255                       ; esc enter tab backspace pause
              65505 182 65506 182 65507 163 65508 163 65513 184 65514 184          ; shifts fire alts
@@ -59,24 +45,19 @@
                           loop (n + drew)))))
        (loop 0))
 
-   ; --- the nest: a love with doom in it, laid in ./love-<ver>/ off this binary's source --
-   ; `love doom` from a binary that carries no doom lays this binary's source under
-   ; ./love-<ver>/ (the source verb's lay: files, no build), fetches doomgeneric and the
-   ; shareware IWAD into its dl/ with wget, builds `cook host DOOM=1 LOVE=<this binary>`
-   ; there ONCE -- the artifact is the toolchain: its egg lane stands in for love0, its own
-   ; mooncc compiles every object, and no bootstrap love is built -- and execs that binary's
-   ; doom. the nest is kept, so the next `love doom` is one exec. nothing outside the
-   ; current directory is written.
+   ; --- the nest: this binary's source laid under ./love-<ver>/ (no build), doomgeneric and
+   ; the IWAD fetched into its dl/, `cook host DOOM=1 LOVE=<this binary>` built once -- the
+   ; artifact is the toolchain, no bootstrap love -- and its doom exec'd. the nest is kept, so
+   ; the next run is one exec; nothing outside the current directory is written ---
    wad-url "https://raw.githubusercontent.com/Daivuk/PureDOOM/master/doom1.wad"
    dg-url "https://codeload.github.com/ozkl/doomgeneric/tar.gz/refs/heads/master"
-   ; the machine under a page fetches through the browser, and codeload answers no
-   ; cross-origin fetch: there the tree is laid a file at a time off the raw host, its
-   ; roster the api's listing (both answer any origin)
+   ; under a page, codeload answers no cross-origin fetch: the tree is laid a file at a
+   ; time off the raw host, its roster the api's listing
    dg-tree "https://api.github.com/repos/ozkl/doomgeneric/git/trees/master?recursive=1"
    dg-raw "https://raw.githubusercontent.com/ozkl/doomgeneric/master/"
    (note s) (say err (";; " + s + "\n"), flush err)
-   ; spawn in dir, wait -> status. the cwd comes back only after the wait: on inle it is
-   ; the machine's one cwd, and a task spawned there would be moved with it
+   ; spawn in dir, wait -> status. cwd comes back only after the wait: on inle it is the
+   ; machine's one cwd and the task would move with it
    (run-in dir argv)
     (: here (cwd 0)
        _ (chdir dir)
@@ -89,8 +70,8 @@
        (cite 'kore 'wget-main ["-q" "-O" path url] @ rc
           (rc @ 0 0 (unlink path, rc))))
    (fetch url path) (two? (stat path) ? 0 (note ("fetching " + url), grab url path))
-   ; the listing's blobs under doomgeneric/: the fields come in order, so each "path"
-   ; is the text between the next two quotes and its kind sits before the next "path"
+   ; the listing's blobs under doomgeneric/: each "path" is the text between the next two
+   ; quotes, its kind before the next "path"
    (dg-blobs s)
     (: (upto p i c) (i < #p && p i != c ? (upto p (i + 1) c) i)
        (path p) (: a (upto p 0 34) b (upto p (a + 1) 34) (b < #p ? (snip p (a + 1) b) ""))
@@ -120,21 +101,20 @@
               (rename "\(dl)/doomgeneric-master" "\(dl)/doomgeneric") 0),
            unlink "\(dl)/pax_global_header",              ; the tarball's pax row, laid as a file
            two? (stat "\(dl)/doomgeneric") ? 0 1)))
-   ; the nest's IWAD rides the exec unless the caller named one: the nest's cwd is the caller's
+   ; the nest's IWAD rides the exec unless one is named: the nest's cwd is the caller's
    (nest-args dl as) (any (= "-iwad") as ? as ("-iwad" . "\(dl)/doom1.wad" . as))
-   ; the pair the DOOM=1 lane wants, fetched into DL once: 0 when both stand there. the
-   ; tree comes as the tarball where a socket is ours, and file by file where the
-   ; network is a page's fetch door (kore's wget rides the same door)
+   ; the pair DOOM=1 wants, fetched into dl once -> 0 when both stand. the tarball where a
+   ; socket is ours, file by file through a page's fetch door
    (doom-fetch dl)
     (: _ (mkdir dl 493)
        r1 (fetch wad-url "\(dl)/doom1.wad")
        r2 (elem 'fetch (names ()) ? (dg-lay dl) (dg-tar dl))
        (r1 != 0 || r2 != 0 ? 1 0))
    (doom-aboard? dl) (two? (stat "\(dl)/doom1.wad") && two? (stat "\(dl)/doomgeneric"))
-   ; the three rungs both nests climb: source laid under here, downloads in dl, the build.
-   ; answers the sentence to fail with, or () when the nest stands ready; arm runs before cook
+   ; the three rungs: source laid, downloads, the build -> the sentence to fail with, or ()
+   ; when ready; arm runs before cook
    (nest-lay here nest dl arm cook)
-    (cite 'source 'src-nest here,                         ; laid once, shared by every verb
+    (cite 'source 'src-nest here,
      (? (atom? (stat "\(nest)/Makefile")) "the source did not lay under \(here)"
         (doom-fetch dl) "the downloads did not land"
         (: _ (arm 0)
@@ -144,7 +124,7 @@
     (: exe (selfpath 0)
        here (cwd 0)
        nest "\(here)/love-\(love-version)"
-       bin "\(nest)/out/doom/love"      ; the doom flavour's own tree (common.mk's hsuf)
+       bin "\(nest)/out/doom/love"      ; the doom flavour's own tree
        dl "\(nest)/dl"
        (fail s) (say err "doom: \(s)\n", 1)
        (enter _) (: e (setenv "LOVE_DOOM_NEST" "1",
@@ -161,11 +141,9 @@
              (string? m ? (fail m) (enter 0)))))
 
    (inle? _) (elem 'love-os (names ()) ? (elem (ev 'love-os) '(inle wasm)) 0)
-   ; --- the nest on inle: the same lay, off this machine's own tree, with the page's
-   ; fetch door as the network and no binary to exec -- cook runs as
-   ; a task under the same registry, seed's way, and LOVE=love names this kernel as the
-   ; toolchain. the module it lays cannot be run from here, so the machine boots it
-   ; (kexec) in place of this one, and that one carries the game
+   ; --- the nest on inle: the same lay off this machine's tree, cook a task under the same
+   ; registry with LOVE=love naming this kernel. the module cannot run from here, so the
+   ; machine boots it (kexec) in place of this one
    (doom-nest-inle _)
     (: here (cwd 0)
        nest ((here @ "/" "" here) + "/love-\(love-version)")     ; the page's shell sits at /
@@ -177,8 +155,7 @@
                     (fail "cannot boot \(mod) (\(e))"))
        (? !(elem 'kexec (names ())) (fail "this machine cannot boot what it builds")
           (two? (stat mod)) (enter 0)
-          ; a task shares no environment with its spawner on this seat, so what cook is
-          ; told goes on its line
+          ; a task shares no environment with its spawner here, so cook's settings go on its line
           (nest-lay here nest dl (_ \ note "building this machine's love with doom inside")
                     ["cook" "wasm" "DOOM=1" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"] @ m
              (? (string? m) (fail m)
@@ -193,8 +170,7 @@
        wad (opt as "-iwad" (two? (stat "dl/doom1.wad") ? "dl/doom1.wad" nestwad))
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (opt as "-frames" () @ f (string? f ? (digits f) 0))
-       ; on inle the game is linked in or it is not: no window, no nest, and nothing to
-       ; fetch with -- the WAD is a baked file and (doom ()) runs it whole
+       ; on inle the game is linked in or not: the WAD is a baked file and (doom ()) runs it whole
        (? (inle? 0) (elem 'doom (names ()) ? (doom ()) (doom-nest-inle 0))
           !(elem 'doom-start (names ())) (doom-nest as)
           (atom? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
@@ -202,7 +178,7 @@
              (? (o = 'no-display) (say err ("doom: no display :" + x-dispnum (string? disp ? disp "") + "\n"), 1)
                 !(two? o) (say err "doom: the display refused us\n", 1)
                 (: s <o sc <>o win (scr-idbase sc) gc (scr-idbase sc + 1)
-                   n (x-window s win (scr-root sc) 640 400 131075,      ; KeyPress|KeyRelease|StructureNotify
+                   n (x-window s win (scr-root sc) 640 400 131075,
                       x-gc s gc win,
                       x-title s win "doom",
                       x-protocols s win,

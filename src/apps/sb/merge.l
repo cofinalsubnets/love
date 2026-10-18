@@ -1,29 +1,24 @@
-; src/apps/sb/merge.l -- diff3: the three-way line merge svalbard falls to when two
-; patches write one path from a shared base. a hunk records the hash it expected (its
-; `old`), so the base is already in the store.
+; src/apps/sb/merge.l -- diff3: the three-way line merge for two patches writing one path
+; from a shared base.
 ;
-; myers each side against the base, then read each script as one part per slot, slots
-; alternating gap/line/../gap: a substitution moves a line slot only, an insertion a gap
-; slot only, so disjoint edits never share a slot. a maximal run where either side
-; differs from the base resolves by comparison:
+; myers each side against the base, read as slots alternating gap/line/../gap: a substitution
+; moves a line slot, an insertion a gap slot. a maximal run where either side differs from
+; the base resolves by comparison:
 ;   ours = theirs   -> both made the same edit, take it (convergent)
 ;   ours = base     -> only theirs moved, take theirs
 ;   theirs = base   -> only ours moved, take ours
 ;   otherwise       -> a true overlap: markers, and the caller counts it
-; adjacent edits with no stable line between them conflict, the textbook diff3.
-;
-; rides module 'sb (the wrap below); loads after src/apps/kore/{text,diff}.l and captures
-; lines/unlines and myers at its define. a final unterminated line gains its newline.
+; adjacent edits with no stable line between them conflict. a final unterminated line gains
+; its newline.
 
 (module 'sb
-(borrow 'kore) ; the text/diff floors (myers, lines) ride module 'kore
+(borrow 'kore) ; myers, lines
 (:
    ; the 'adds sitting at the front of a script (a del's replacement)
    (m3grab m a) (two? m && <<m = 'add ? (m3grab >m (<><m . a)) [m (rev a)])
 
-   ; a myers script -> the 2n+1 slots, gap line gap line .. gap. an 'add after a
-   ; keep is an insertion and lands in the pending gap; the 'adds after a del are
-   ; that line's replacement and land in its line slot.
+   ; a myers script -> the 2n+1 slots, gap line .. gap. an 'add after a keep lands in the
+   ; open gap; the 'adds after a del are that line's replacement, in its line slot
    (m3parts sc)
     (:- (go sc () ())
      (go m gp acc)
@@ -43,8 +38,7 @@
    (m3marks ob tb ol tl)
     ((("<<<<<<< " + ol) . ob) + ("=======" . (tb + [(">>>>>>> " + tl)])))
 
-   ; walk the three part-lists in step, chunking stable runs and resolving
-   ; unstable ones. answers (chunks nconflicts), chunks newest-first.
+   ; walk the three part-lists in step -> (chunks nconflicts), chunks newest-first
    (m3go bs os ts ol tl acc nc)
     (? (atom? bs) [acc nc]
        (<os = <bs && <ts = <bs) (m3go >bs >os >ts ol tl (<bs . acc) nc)
@@ -59,8 +53,7 @@
              (tb = bb) (m3go <r <>r <>>r ol tl (ob . acc) nc)        ; only ours moved
              (m3go <r <>r <>>r ol tl (m3marks ob tb ol tl . acc) (nc + 1)))))
 
-   ; the entry: three texts + the two side labels -> (mergedtext nconflicts).
-   ; nconflicts is 0 when the merge came out clean.
+   ; three texts + the two side labels -> (mergedtext nconflicts)
    (diff3 base ours theirs ol tl)
     (: b (lines base)
        bp (m3base b)

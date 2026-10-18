@@ -1,7 +1,6 @@
 #!/usr/bin/env -S love -l
-; src/apps/harp/play.l -- harp's voices and its verb: a pattern (src/apps/harp/harp.l) is
-; asked for one cycle at a time, its onsets become voices, and the voices are summed
-; into PCM that goes out the horn (src/love/horn.c) or into a .wav.
+; src/apps/harp/play.l -- harp's voices and verb: a pattern's onsets, a cycle at a time,
+; become voices summed into PCM, out the horn or into a .wav.
 ;
 ;   love src/apps/harp/play.l [-n CYCLES] [-c CPS] [-r RATE] [-g GAIN] [-o FILE] [-p] PATTERN..
 ;
@@ -11,11 +10,8 @@
 ;   harp '(jux rev (hit (mini "bd sn hh cp")))'   a parenthesised arg is love
 ;   HORN=none harp 'bd sn'            the timed sink: right speed, no sound
 ;
-; a voice is a function from a tray of frame numbers to a tray of amplitudes: one
-; expression over `iota`, no per-sample loop. a note starting mid-chunk is gated by
-; `(t >= 0)`, a tray, so one closure is right in every chunk it touches.
-; a module, since a roster file is catted into the global scope: harp's rev and every
-; spliced at top level would shadow the prel for everything after it.
+; a voice maps a tray of frame numbers to a tray of amplitudes; a note starting mid-chunk
+; is gated by `(t >= 0)`. a module, so harp's names do not shadow the prel at top level.
 (module '(play harp-main harp-usage harp-wav harp-horn harp-print harp-read harp-run
          harp-scale harp-chunk mkvoice cyc-voices mixdown pack song-out
          twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice held-ops)
@@ -23,34 +19,26 @@
 (borrow 'bytes)
 (borrow 'ops)                           ; the voices' operators, run by tones
 (:
-   ; the fs doors by VALUE, off their module: a module layer does not see the
-   ; session's posix splice, and a seat carrying none (src/inle/wasm) holds () here --
-   ; which only the two paths that want a file ever ask for.
+   ; the fs doors by value: a module layer does not see the posix splice; () where there is none
    open (cite 'posix 'open) close (cite 'posix 'close)
    twopi tau
    ln2-12 0.05776226504666211               ; ln 2 / 12, one semitone
-   ; white noise off the frame number: the same frame always draws the same sample,
-   ; so a re-render is identical and a voice may be evaluated in any chunk.
+   ; white noise off the frame number, so any chunk renders the same sample
    (vnoise ix)
     (: a (ix * 1103515245 + 12345 & 4294967295)
        b ((a ^ a >> 16) * 2246822507 & 4294967295)
        c ((b ^ b >> 13) * 3266489909 & 4294967295)
        ((c >> 16 & 65535) * 0.000030517578125 - 1.0))
 
-   ; --- the kit. each takes (t ix ph): seconds since the onset (clamped at 0), the
-   ;     absolute frame numbers, and the note's phase in cycles -- t times the
-   ;     frequency for a held note, the integral of a moving one for a slide, so a
-   ;     shape never sees a frequency and every pitched one glides. all three are
-   ;     trays. ---
-   ; a kick is one falling sine: the phase is the integral of 46 + 88e^(-34t), in
-   ; closed form, because a per-sample oscillator would need state and this does not.
+   ; --- the kit. each takes trays (t ix ph): seconds since onset (clamped at 0), absolute
+   ;     frames, and the phase in cycles, so a shape never sees a frequency. ---
+   ; a kick is one falling sine, its phase the closed-form integral of 46 + 88e^(-34t)
    (i-bd t ix ph) (sin ((t * 46.0 + 2.6 * (1.0 - exp (t * -34.0))) * tau)
                   * exp (t * -8.0))
    (i-sn t ix ph) ((vnoise ix * 0.75 + sin (t * tau * 190.0) * 0.5) * exp (t * -24.0))
    (i-hh t ix ph) (vnoise ix * 0.5 * exp (t * -95.0))
    (i-oh t ix ph) (vnoise ix * 0.4 * exp (t * -13.0))
-   ; a clap is a short chatter then a tail: the chatter is a duty cycle on t, so it
-   ; is still one expression
+   ; a clap: a short chatter (a duty cycle on t) then a tail
    (i-cp t ix ph) ((t * 220.0 % 1.0 < 0.45) * (t < 0.028) + (t >= 0.028) @ g
                     (vnoise ix * 0.55 * g * exp (t * -17.0)))
    (i-rim t ix ph) (sin (t * tau * 1650.0) * 0.7 * exp (t * -150.0))
@@ -64,8 +52,7 @@
    (i-tri t ix ph) (: u (ph % 1.0)
                      v (u * 4.0)
                      ((u < 0.5) * (v - 1.0) + (u >= 0.5) * (3.0 - v)))
-   ; a music box's tine, an octave up: the note, a partial an octave and a fifth over
-   ; it that dies fast, a bright one that dies faster
+   ; a music box's tine, an octave up, with two fast-dying partials
    (i-box t ix ph) (ph * tau * 2.0 @ w
                      (sin w + 0.3 * sin (w * 3.0) * exp (t * -6.0) + 0.15 * sin (w * 5.8) * exp (t * -9.0)))
    ; a wind chime's tube, two octaves up: inharmonic partials over a long ring
@@ -80,27 +67,22 @@
     "tri" [0.30 1 i-tri]  "box" [1.20 1 i-box]  "chime" [3.0 1 i-chime])
 
    ; --- an event's value -> a voice ------------------------------------------
-   ; the value is a tablet from the control words, a bare string from `hit`, or a
-   ; bare number from a note pattern with nothing wrapped round it.
+   ; the value is a tablet of control words, a string from `hit`, or a bare note number
    (vname v) (? (tablet? v) (peep v 's "sin") (string? v) v "sin")
-   ; peep's default cannot be (): 0 is a real gain and a real note, and `nil? 0` is
-   ; true here, so a missing key is asked for by a symbol nothing else can be.
+   ; 'none, not (): 0 is a real gain and note, and `nil? 0` is true
    (vnum v k d) ((? (tablet? v) (peep v k 'none) (charm? v) (k @ 'note v 'none) 'none) @ r
                  (r @ 'none d r))
-   ; the phase in cycles at t of a note at f gliding at k nepers a second: the
-   ; integral of f e^(kt), and f t when it holds. k is what a slide comes to
+   ; the phase in cycles at t of a note at f gliding at k nepers/s: the integral of f e^(kt)
    (vphase t f k) (k = 0.0 ? (t * f) (f * (exp (t * k) - 1.0) / k))
-   ; --- the kit again as tones' operators (ops.l), the same sounds run in C: each pitched
-   ;     timbre its partials [ratio level decay wave], each drum its operators; the clap's
-   ;     chatter is no operator, and stays the shape above ---
+   ; --- the kit again as ops.l operators: each pitched timbre its partials [ratio level decay
+   ;     wave], each drum its operators; the clap stays the shape above ---
    partials {"sin" [[1.0 1.0 0.0 0]] "saw" [[1.0 1.0 0.0 5]] "sqr" [[1.0 1.0 0.0 6]] "tri" [[1.0 1.0 0.0 4]]
              "box" [[2.0 1.0 0.0 0] [6.0 0.3 6.0 0] [11.6 0.15 9.0 0]]
              "chime" [[4.0 1.0 0.0 0] [11.04 0.5 2.0 0] [21.6 0.25 4.0 0]]}
    kit {"bd" [{'f 46.0 'drop 2.6 'kappa 34.0 'd 8.0}] "sn" [{'wave 7 'lvl 0.75 'd 24.0} {'f 190.0 'lvl 0.5 'd 24.0}]
         "hh" [{'wave 7 'lvl 0.5 'd 95.0}] "oh" [{'wave 7 'lvl 0.4 'd 13.0}] "rim" [{'f 1650.0 'lvl 0.7 'd 150.0}]
         "tom" [{'f 96.0 'drop 1.4 'kappa 22.0 'd 11.0}]}
-   ; ..a held note's operators: venv's rise, then half the level held and half dying over d
-   ;   seconds, each partial's own decay over both
+   ; a held note's operators: venv's rise, half the level held and half dying over d
    (held-ops nm f d) (cats (map (p \ [{'f (f * p 0) 'wave (p 3) 'l (0.5 * p 1) 'segs [[0.0 2 420.0 (p 2 * ops-db) 0.0]]}
                                       {'f (f * p 0) 'wave (p 3) 'l (0.5 * p 1) 'segs [[0.0 2 420.0 ((2.6 / d + p 2) * ops-db) 0.0]]}])
                                (peep partials nm ())))
@@ -121,8 +103,7 @@
                           tp (t * (t > 0.0))
                           e  (ins 1 ? (venv tp dur) 1.0)
                           (sh tp ix (vphase tp f k) * e * (t >= 0.0) * (t < dur))))
-             ; ..as operators where the kit has them, in the time of frames: speed scales
-             ;   every rate, and the note ends at dur over it
+             ; as operators where the kit has them: speed scales every rate
              nm (vname v) pr (peep partials nm ()) dk (peep kit nm ())
              gate [[(dur / spd) 1 0.0 0.0 0.0]]
              os (? (two? pr) (map (p \ {'f (f * p 0 * spd) 'slide (k * spd) 'wave (p 3) 'l (p 1)
@@ -133,9 +114,8 @@
              (two? os ? (ops-voice os st end (amp * (1.0 - pn)) (amp * pn) rate) [end fn (amp * (1.0 - pn)) (amp * pn)]))))
 
    ; --- mixing and packing ---------------------------------------------------
-   ; every live voice is evaluated over the whole chunk and summed. the cost is one
-   ; pass per voice per chunk in C, so a busy cycle is a handful of tray ops.
-   ; ..and a voice panned hard adds nothing to its far side, so that side is left as it is
+   ; every live voice is evaluated over the whole chunk and summed; a hard-panned voice
+   ; skips its far side.
    (mixdown vs base n)
     (: ix (iota n + base)
        z  (ix * 0.0)
@@ -144,20 +124,15 @@
                    ([_ f yl yr] . u) (f ix @ y            ; the wave, once: it is a C pass
                                         (go u (side L y yl) (side R y yr))))
        (go vs z z))
-   ; one voice at full scale reaches 0.6 of the range, so a handful may stack before
-   ; the saturation bites. -g moves the whole mix under that ceiling.
+   ; one voice at full scale reaches 0.6 of the range; -g moves the mix under that ceiling
    harp-scale 20000.0
    (clip g x) (int (x * g) @ v (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
-   ; ..and the same saturation over a whole tray, as arithmetic: `// 1` truncates toward
-   ; zero exactly where `int` does, and the two comparisons are masks.
+   ; the same saturation over a tray: `// 1` truncates toward zero as `int` does
    (clipv g t) (: v (t * g // 1)
                   hi (v > 32767)  lo (v < -32768)
                   (v * (1 - hi) * (1 - lo) + hi * 32767 + lo * -32768))
-   ; two trays of floats out as interleaved 16-bit little-endian frames, which is what
-   ; the horn's write path wants. guts' pinv lays a whole channel in one call: its stride
-   ; is the frame and its width the sample, so THE INTERLEAVE IS THE CALL. the byte loop
-   ; below is the same answer a dispatch at a time -- it is what a seat with no host glob
-   ; runs, and what the fast path is read against (test/law/harp.l asks them of each other).
+   ; two float trays out as interleaved 16-bit le frames. pinv lays a channel per call (stride the
+   ; frame, width the sample); the byte loop is the fallback, and test/law/harp.l checks one against the other.
    (pack lr n g)
     (: L <lr  R >lr  c (cask (n * 4))
        lay (cite 'guts 'pinv)
@@ -170,8 +145,7 @@
                  lay c 2 2 4 (clipv g R),
                  string c)
           (string (go 0))))
-   ; a song's next n frames out its port 'h at gain g: its voices 'vs, [start voice] each,
-   ; let go once finished and summed once begun, and its frames written 'fpos moved on
+   ; a song's next n frames out its port 'h at gain g; finished voices dropped, 'fpos moved on
    (song-out s n g) (: base (s 'fpos)
                        live (filter (p \ p 1 0 >= base) (s 'vs))
                        now (filter (p \ p 0 < base + n) live)
@@ -180,19 +154,15 @@
 
    ; --- the run: cycles in, chunks out ---------------------------------------
    harp-chunk 2048
-   ; a cycle's onsets, as voices, with the start frame each one lands on.
-   ; THIS IS THE BOUNDARY. cycle time is a `///` rational and frame time is an
-   ; integer, and qnum is the one crossing: a rational that reached the tray lane
-   ; would answer () rather than promoting it, and the voice would go silent with
-   ; nothing said. nothing downstream of here holds a rational.
+   ; a cycle's onsets as voices with their start frames. the one crossing from `///` cycle time
+   ; to integer frames is qnum: a rational on the tray lane would answer () in silence.
    (cyc-voices p c c0 spc rate)
     (filter two?
             (map (x \ mkvoice ((c - c0) * spc + int (spc * qnum (evwb x - qi c)))
                               (evv x) rate)
                  (filter onset? (p (qi c) (qi (c + 1))))))
-   ; the write head walks the whole run in chunks. voices are pulled in a cycle at a
-   ; time, just before the chunk that can hear them, and dropped when their end frame
-   ; is behind the head -- so the live list is only ever what is actually sounding.
+   ; the write head walks the run in chunks; a cycle's voices join just before the chunk that
+   ; hears them and drop once behind the head.
    (harp-run p c0 ncyc rate cps tail g emit)
     (: spc   (int (rate / cps))
        total (ncyc * spc + tail)
@@ -239,14 +209,9 @@
    ; --- the verb -------------------------------------------------------------
    harp-usage "usage: harp [-n N] [-c CPS] [-r RATE] [-g GAIN] [-o F.wav] [-p] [-s SCORE] PATTERN..
        harp --check SCORE"
-   ; a bare argument is mini-notation for `hit`; one that opens a paren is love, read
-   ; and evaluated with the harp module already spliced; -s is a score file
-   ; (src/apps/harp/score.l), its bars the cycles unless -n says. several arguments stack.
-   ; a parenthesised text is love over harp's names: ev runs in the global scope, where
-   ; harp is not, so harp is spliced there first -- once, and before the text is read,
-   ; since a name folds into a form at its compile and the prel already owns rand, sine
-   ; and rev. blanks and comment lines before the paren are passed over, so a loop file
-   ; may open with a word about itself
+   ; a bare argument is mini-notation for `hit`; one opening a paren is love, read after
+   ; harp is spliced into the global scope (once, before reading, since names fold at compile).
+   ; leading blanks and comment lines are skipped. -s is a score file. several arguments stack.
    (harp-lead a) (:- (go 0) n #a
                   (go i) (? (i >= n) i
                             (32 >= a i) (go (i + 1))
@@ -306,6 +271,6 @@
    _ (pins (cite 'verbs 'tab) 'harp (udoor 'harp harp-main harp-usage 0 0)))
 ) ; module play
 
-; the seat: fire only when this file is the program on the real command line.
+; fire only when this file is the program on the real command line.
 (: s (cite 'verbs 'fire ["harp" "play.l"])
    (two? s ? (quit (cite 'play 'harp-main >s))))

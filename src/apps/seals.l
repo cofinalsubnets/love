@@ -1,20 +1,15 @@
-; src/apps/seals.l -- the hive's keys and cards. a key is an ed25519 pair a box or a session
-; holds; a card is `key value` lines, signed by the key above it, saying whose a public key
-; is. a chain is a leaf's card, then its signer's, up to a card the lineage's root signed,
-; and checking one needs only that root's public key (doc/bee.md, KEYS).
-;
-;   (seal-key 0)                        a fresh [seed pub], off /dev/urandom
+; src/apps/seals.l -- the hive's keys and cards. a key is an ed25519 [seed pub]; a card is
+; `key value` lines signed by the key above it. a chain runs from a leaf's card up to one
+; the lineage's root signed, and checks with that root's public key alone
 ;   (seal-keytext k) (seal-keyof s)     a key as text, and back -> [seed pub] | ()
-;   (seal-keywrite path k)              a new file, 0600, never over one -> 1 | a reason
+;   (seal-keywrite path k)              a new file, never over one -> 1 | a reason
 ;   (seal-keyread path)                 -> [seed pub] | a reason
-;   (seal-card k fields)                fields, [key value] pairs, signed by k: the card's text
+;   (seal-card k fields)                [key value] pairs signed by k: the card's text
 ;   (seal-chain s)                      a chain's text -> its cards | a reason
 ;   (seal-check s root now revoked)     the leaf's fields as a tablet | a reason
-;
-; a card's fields are lineage, name, kind (cell | box), pub, issued and expires (seconds),
-; then the signer's parent and sig, which seal-card writes. keys are lowercase hex, 64
-; digits; sig is 128. cards in a chain are parted by a blank line. a cell's name is
-; NAME@BOX, BOX its signer's name, so no box speaks for another's sessions.
+; a card's fields: lineage name kind (cell | box) pub issued expires (seconds), then parent
+; and sig. keys are 64 lowercase hex digits, sig 128; cards part at a blank line. a cell's
+; name is NAME@BOX, BOX its signer's name, so no box speaks for another's sessions
 (module (seals seal-key seal-keytext seal-keyof seal-keywrite seal-keyread seal-card seal-chain seal-check seal-hex?)
 (borrow 'posix)
 (borrow 'bytes)

@@ -1,45 +1,23 @@
-; --- test/proto/dest.l: the DESTINATION vocabulary, modeled -- a gen.l design spike ---
-; a runnable companion to (the catalog; the gap it chases is
-; scored in): TWO code generators over one C-shaped AST, emitting
-; one holo-flavored IR. `cv` is the r0 protocol as gen.l has it today --
-; every expression lands its value in r0 and the consumer relocates it. `ck` passes the
-; CONSUMER down instead, a destination die:
-;
-;   ('reg r)    deliver into r -- a home, a cs seat, an argument seat
-;   ('mem b o)  deliver through a store -- the member-store fold becomes a non-event
-;   ('br lt lf) a control destination: compares branch, && threads labels, no 0/1
-;               reify; either label may be 'fall (the caller lays that arm next)
-;   'tail       the return object itself -- a call here is a sibcall by construction
-;   ()          the degenerate die: r0, so an unmigrated consumer keeps reading r0
-;
-; this is ev.l's emitter shape -- (\ k n ..), the continuation in hand at emission,
-; the thread built toward Answer -- worn by a register machine: fix R = "a returned
-; value" and work in Hom(-, R); passing the die down is the hom functor's contravariant
-; leg, defunctionalized (a C expression's continuations form this small closed set).
-; the literature calls it destination-driven code generation (Dybvig & Burger).
-; the design said once, both machines:.
-;
+; test/proto/dest.l -- destination-driven codegen, modeled: a gen.l design spike.
+; two generators over one C-shaped AST, one holo-flavored IR. `cv` is gen.l's r0 protocol
+; (every value lands in r0, the consumer relocates it); `ck` passes the consumer down, a die:
+;   ('reg r)    deliver into r
+;   ('mem b o)  deliver through a store
+;   ('br lt lf) branch on the value, no 0/1 reify; either label may be 'fall
+;   'tail       the return itself: a call here is a sibcall
+;   ()          r0, so an unmigrated consumer keeps reading r0
 ; run: cat test/00-init.l test/proto/dest.l | out/love    ; dots, then `dest: ok`
-;
-; the laws, gen.l's machinery named in brackets:
-;   * p->f = 7 is ONE si form            [the addressing/store folds, by construction]
-;   * y = y + 1 into y's home is ONE alu [the want hint promoted to the contract]
-;   * if (x<y && y<3) has ZERO set forms [cbinl/tbr/fcb collapse into the ('br) lane]
-;   * return f(x,3) ends in jmp          [sibcall/musttail by construction]
-;   * (ck e ()) == (cv e) on leaves      [migration: () is today's protocol -- lane by lane]
-; NOT modeled: residency across statements/calls (the seats/vmap/cs question is
-; orthogonal -- a destination can BE a home, which is why the two compose), pool spill,
-; and the arg-seat ordering law (a later arg READING an earlier seat must park -- the
-; argseal's shape; these laws' args are non-interfering on purpose).
+; not modeled: residency across statements, pool spill, and the arg ordering law
+; (a later arg reading an earlier arg register must park; these args never interfere)
 
-(: G (tablet 0)                                    ; the label mint, gen.l's nlab shape
+(: G (tablet 0)                                    ; the label mint
    (relab _) (pin G 'n 0)
    (nlab _) (: k (peep G 'n 0) (pin G 'n (k + 1), intern ("l" + show k)))
-   (site n env) (assoc n env)                      ; env entry: (name slot off) | (name home r)
+   (site n env) (assoc n env)                      ; (name slot off) | (name home r)
    (heads fs) (map cap fs)
 
-   ; --- cv: the r0 protocol (gen.l today). value lands in r0; compounds shuttle the
-   ; left through an sp cell (spush2's shape); a relation reifies 0/1 via set. ---
+   ; --- cv: the r0 protocol. compounds shuttle the left through an sp cell; a
+   ; relation reifies 0/1 via set ---
    shov '((sub sp sp 8) (st sp 0 r0))
    shpo '((ld r1 sp 0) (add sp sp 8))
    (cv e env)
@@ -54,7 +32,7 @@
           'call (argcv <>>e '(r6 r5) env + [['call <>e]])
           [['bad]])
    (argcv as ss env) (atom? as ? () (cv <as env + [['mov <ss 'r0]] + argcv >as >ss env))
-   (cvs s env)                                     ; statements: asn / if / ret
+   (cvs s env)                                     ; asn / if / ret
     (<s @ 'asn (: lv <>s
                   (<lv = 'loc
                    ? (: e9 (site <>lv env)
@@ -66,16 +44,14 @@
           'ret (cv <>s env + [['ret]])
           [['bad]])
 
-   ; --- ck: the destination generator. the die is ev's k defunctionalized; rd9 is
-   ; karg/kim fusion worn by a register machine (an operand that already sits
-   ; somewhere costs zero forms). a subexpression only ever writes its own die and
-   ; scratches strictly below it in the pool -- the alsafe? discipline's shape. ---
+   ; --- ck: the die is ev's k defunctionalized. an operand that already sits somewhere
+   ; costs zero forms; a subexpression writes only its die and scratches below it ---
    (negrel r) (r @ 'lt 'ge  'ge 'lt  'le 'gt  'gt 'le  'eq 'ne  'eq)
    (brto rel lt lf)
     (? (lf = 'fall) [['br rel lt]]
        (lt = 'fall) [['br (negrel rel) lf]]
        [['br rel lt] ['jmp lf]])
-   (rd9 e env pool)                                ; operand read -> (x forms)
+   (rd9 e env pool)                                ; -> (x forms)
     (<e @ 'k [<>e ()]
           'v (: s9 (site <>e env) (<>s9 = 'home ? [<>>s9 ()] (: s <pool [s [['ld s 'r4 <>>s9]]])))
           (: s <pool [s (ck e env >pool ['reg s])]))
@@ -107,8 +83,8 @@
                               (: pa (rd9 e env pool) (<>pa + [['cmp <pa 0]] + brto 'ne lt lf))))
                  [['bad]])))
    (argck as ss env pool) (atom? as ? () (ck <as env pool ['reg <ss] + argck >as >ss env pool))
-   (base9 lv env pool)                             ; a store's base: a homed obj ALIASES
-    (: obj <>lv                                    ; its home -- zero forms
+   (base9 lv env pool)                             ; a homed obj aliases its home: zero forms
+    (: obj <>lv
        (<obj = 'v ? (: s8 (site <>obj env) (<>s8 = 'home ? [<>>s8 ()] (: s <pool [s [['ld s 'r4 <>>s8]]])))
                     (: s <pool [s (ck obj env >pool ['reg s])])))
    (cks s env pool)
@@ -122,23 +98,21 @@
                   + [['jmp ld] ['label le]] + cks <>>>s env pool + [['label ld]]))
           'ret (ck <>s env pool 'tail)
           [['bad]])
-   P '(r10 r11))                                   ; the scratch pool (clear of seats/homes)
+   P '(r10 r11))                                   ; the scratch pool, clear of homes
 
-; --- law: the member store. p->f = 7 -- seven forms become one si. ---
+; --- law: the member store. p->f = 7 is one si ---
 (: s1 '(asn (fld (v p) 8) (k 7)) e1 '((p home r9)))
 (test (cvs s1 e1 = '((mov r0 r9) (sub sp sp 8) (st sp 0 r0) (li r0 7)
                       (ld r1 sp 0) (add sp sp 8) (st r1 8 r0)))
       (cks s1 e1 P = '((si r9 8 7))))
 
-; --- law: the home write. y = y + 1 -- the shuttle dance becomes one alu form
-; (the ++ residency story in one line: dest = the home, operand = an immediate). ---
+; --- law: the home write. y = y + 1 into y's home is one alu form ---
 (: s2 '(asn (loc y) (bin add (v y) (k 1))) e2 '((y home r8)))
 (test (8 = tally (cvs s2 e2))
       (cks s2 e2 P = '((add r8 r8 1))))
 
-; --- law: control destinations. if (x<y && y<3) z=1; else z=0; -- cv reifies each
-; relation (set) then retests; ck branches straight off the compares: zero set forms,
-; both stores land as si through the slot destination. ---
+; --- law: control destinations. if (x<y && y<3): ck branches straight off the
+; compares, zero set forms; both stores land as si ---
 (: s3 '(if (and (rel lt (v x) (v y)) (rel lt (v y) (k 3)))
            (asn (loc z) (k 1))
            (asn (loc z) (k 0)))
@@ -153,8 +127,8 @@
            (b3 = '((cmp r8 r9) (br ge l0) (cmp r9 3) (br ge l0)
                    (si r4 -8 1) (jmp l1) (label l0) (si r4 -8 0) (label l1)))))
 
-; --- law: the tail. return f(x, 3) -- cv stages every arg through r0 and ends
-; call;ret; ck delivers each arg into its seat and the call IS the jump. ---
+; --- law: the tail. return f(x, 3): ck delivers each arg into its register and the
+; call is the jump ---
 (: s4 '(ret (call f ((v x) (k 3)))) e4 '((x home r8)))
 (: a4 (cvs s4 e4)
    _ (test (6 = #a4)
@@ -162,9 +136,8 @@
            ('call = <<>(rev a4))
            (cks s4 e4 P = '((mov r6 r8) (li r5 3) (jmp f)))))
 
-; --- law: the degenerate die. () wants the protocol register, so a leaf compiles
-; byte-for-byte as cv does -- which is what makes the migration lane-by-lane: an
-; unmigrated consumer keeps finding its value in r0. compounds only improve. ---
+; --- law: the degenerate die. () compiles a leaf exactly as cv does, so migration
+; goes lane by lane; compounds only improve ---
 (: e5 '((z slot -8) (y home r9)))
 (test (cv '(k 7) e5 = ck '(k 7) e5 P ())
       (cv '(v z) e5 = ck '(v z) e5 P ())

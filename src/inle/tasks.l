@@ -1,28 +1,26 @@
-; src/inle/tasks.l -- a task as a process: the shell's own stages run in its heap, each a
-; twirled task with its own stdio, group and status. the kernel's processes are these, and a
-; process on inle runs the shell's compound stages the same way. src/tools/lcat.l lays it as
-; one literal; src/inle/kmain.c runs it on the egg lane, src/love/main.c bakes it.
+; src/inle/tasks.l -- a task as a process: the shell's stages run in its heap, each a
+; twirled task with its own stdio, group and status; the kernel's processes are these.
+; lcat.l lays it as one literal; kmain.c runs it on the egg lane, main.c bakes it.
 (: task-grp {} task-ends {} task-died {} task-held {}
    task-close (cite 'posix 'close)
    (task-slot w n) (? !(two? w) () (n = 0) <w (task-slot >w (n - 1)))
    ; a console-numbered fd is the parent's view of it, so 2>&1 follows what the parent wears;
-   ; anything higher is duped, the port owning the copy from there
+   ; anything higher is duped, the port owning the copy
    (task-port w n f) (? !(charm? f) (task-slot w n) (f < 0) (task-slot w n) (f < 3) (task-slot w f)
                         (fdopen (dup f)))
    (task-own fs ps) (? !(two? fs) ()
                        (charm? <fs && 2 < <fs) (<ps . task-own >fs >ps)
                        (task-own >fs >ps))
-   ; pr is (f . args), or () for a word nothing answers. the child's stdio is seated in the
-   ; parent, twirl not switching, so it is laid before the child's first read; the parent takes
-   ; its own back on the next line. a group is the pid of the task that leads it; fgf hands it
-   ; the terminal when fg says so.
+   ; pr is (f . args), or () for a word nothing answers. twirl doesn't switch, so the child's
+   ; stdio is worn in the parent before its first read, and the parent takes its own back
+   ; next. a group is its leader's pid; fgf hands it the terminal when fg says so.
    (task-run pr argv f0 f1 f2 pg fg fgf)
      (: w (worn ())
         kw [(task-port w 0 f0) (task-port w 1 f1) (task-port w 2 f2)]
-        own (task-own [f0 f1 f2] kw)              ; the ends duped for it, which a stop closes
+        own (task-own [f0 f1 f2] kw)              ; duped for it; a stop closes them
         _ (wear kw)
-        ; the help is the exit door too: a kore main leaves deep by scaring 'leave with its
-        ; status, and a plain scare would flatten every usage code to 1
+        ; hear is the exit door too: a kore main leaves by scaring 'leave with its status, and
+        ; a plain scare would flatten every usage code to 1
         p (twirl (_ \ (: _ (hear (a \ b \ (a == 'leave ? (quit b)
                                              (say err ";; ", print err a, say err " ", print err b,
                                               put err 10, quit 1))))
@@ -37,8 +35,8 @@
          (charm? gp && charm? fg && 0 < fg ? (fgf gp) 0)))
    ; a task this door started and nobody has waited for yet
    (task? p) (charm? p && (!(charm? (peep task-ends p 0)) || charm? (task-died p) || charm? (task-held p)))
-   ; a child's fd map under the stdio the running task wears: its ports first, as 0 1 2, so
-   ; a source under 3 later in the map reads them too
+   ; a child's fd map under the running task's stdio: its ports first, as 0 1 2, so a
+   ; source under 3 later in the map reads them too
    (task-worn m) (: w (worn ())
                     (go i l) (? !(two? l) m (port? <l) ((i . <l) . go (i + 1) >l) (go (i + 1) >l))
                     (two? w ? (go 0 w) m))
@@ -46,11 +44,9 @@
    (task-mem gp ks) (? !(two? ks) ()
                        (gp = task-grp <ks && !(landed? <ks)) (<ks . task-mem gp >ks)
                        (task-mem gp >ks))
-   ; kill at task granularity: a stop holds the task (pause), wait answering 256+sig for it; a
-   ; cont lets it go on (resume); any other signal ends it where it stands, closing the ends it
-   ; was handed, wait answering 128+sig. each status is laid before the task moves, since the
-   ; waiter wakes the moment the task is held or gone -- and an end closes before it is gone, so
-   ; a waiter that reads it next finds the end, however the closes yield
+   ; kill per task: a stop holds it (pause), wait answering 256+sig; cont resumes; any other
+   ; signal ends it, closing its ends, wait answering 128+sig. each status is laid before
+   ; the task moves (the waiter wakes at once), and an end closes before the task is gone.
    (task-stop t sig)
      (? (sig = 18) (pull task-held t 0, resume t)
         (19 <= sig <= 22) (pin task-held t (256 + sig), pause t)

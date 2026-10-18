@@ -33,9 +33,8 @@
               ["NODES" ""]
               ["SECTORS" (wad-t-cat [(wad-t-w16 0) (wad-t-w16 128) (wad-t-name "FLR") (wad-t-name "F_SKY1") (wad-t-w16 255) (wad-t-w16 0) (wad-t-w16 0)])]
               ["REJECT" ""] ["BLOCKMAP" ""]]
-   ; ..and a second: the room, and north of it a door shut (a sector floor and ceiling 0) whose
-   ;   line is a door's (special 1), a zombieman past it, a health bonus on the way; one node
-   ;   between them
+   ; ..and a second: north of the room a shut door (sector floor and ceiling 0, line special 1),
+   ;   a zombieman past it, a health bonus on the way; one node between them
    (wad-t-side up mid s) (wad-t-cat [(wad-t-w16 0) (wad-t-w16 0) (wad-t-name up) (wad-t-name "-") (wad-t-name mid) (wad-t-w16 s)])
    (wad-t-recs rs) (wad-t-cat (map (r \ wad-t-cat (map wad-t-w16 r)) rs))
    wad-t-map2 [["THINGS" (wad-t-recs [[128 64 90 1 7] [128 384 270 3004 7] [128 128 0 2014 7]])]
@@ -107,8 +106,7 @@
    _ (wad-tics st 5)
    _ (test (st 'dc = 0) (rgb (peep (wad-pens st) (39 * 64 + 32) 0) = g0))
 
-   ; walked: free in the room, not at the wall; north stops short of the barrel, and beside it
-   ;   short of the wall
+   ; walked: free in the room, not at the wall; north stops short of the barrel, beside it of the wall
    _ (test (wad-free? st 128.0 128.0) !(wad-free? st 128.0 250.0) !(wad-free? st 4.0 128.0))
    s (foldl (\ s _ (wad-tics (wad-step s 'forward) 1)) (pin st 'dt 0.25) ^40)
    _ (test (s 'pz > 150.0) (s 'pz < 167.0) (s 'px = 128.0))
@@ -165,8 +163,8 @@
    _ (test (zom r 'st = 'die) (r 'rkt = 1) (any (o \ o 'proj = 1 && o 'boom > 0) (r 'objs)))
    _ (test (elem "RLAUNC" (heard r)) (elem "BAREXP" (heard r)) (any (n \ elem n ["PODTH1" "PODTH2" "PODTH3"]) (heard r)))
 
-   ; the body: a push glides on and slows; a strafe goes sideways; a gun changed comes down, then up
-   ; (the state is one tablet, ticked in place: what to compare is read off first)
+   ; the body: a push glides and slows; a strafe goes sideways; a gun changed comes down, then up.
+   ; (one tablet ticked in place: read what to compare first)
    ; ..a press drives three tics, doom's thrust of 25/32 a tic, then friction slows it
    g (wad-tics (wad-step (wad-new 64 40 wd M) 'forward) 1) z1 (g 'pz) v1 (g 'vz)
    g (wad-tics g 2) v3 (g 'vz) z3 (g 'pz)

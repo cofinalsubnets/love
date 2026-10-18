@@ -1,5 +1,5 @@
-; test/host/mc.l -- the two-pane browser, headless: every key a pure step, every frame a pure
-; lay, every row exactly the screen's width even when a name wears colour
+; test/host/mc.l -- the two-pane browser, headless: keys and frames are pure, every row
+; exactly the screen's width even when a name wears colour
 ; run: cat test/00-init.l test/host/00-host.l test/host/mc.l | out/love
 
 (borrow 'posix)
@@ -12,7 +12,6 @@
               rmdir (R + "/sub"),
               rmdir R)
 
-   ; one of each class mc paints
    _ (scrub ())
    _ (mkdir R 493)
    _ (mkdir (R + "/sub") 493)
@@ -56,8 +55,8 @@
    _ (mc-key s 106, test (1 = s 'l 'cur))
    _ (mc-key s -9, test (2 = s 'l 'cur))
    _ (mc-key s 107, test (1 = s 'l 'cur))
-   _ (mc-key s 71, test (5 = s 'l 'cur))          ; G
-   _ (mc-key s 103, test (0 = s 'l 'cur))         ; g
+   _ (mc-key s 71, test (5 = s 'l 'cur))
+   _ (mc-key s 103, test (0 = s 'l 'cur))
    _ (mc-key s 9, test (1 = s 'act))              ; tab crosses
    _ (mc-key s 9, test (0 = s 'act))
    _ (mc-key s 106, test ("sub" = <(mc-at (s 'l))))
@@ -172,8 +171,7 @@
    q3 (pins (mc-new P P) 'cap 10)
    _ (mc-key q3 106, mc-key q3 118)
    _ (test (any? (mc-frame q3 70 16) "too big to show") (any? (mc-frame q3 70 16) "8x6  png"))
-   ; sixel and kitty lay the picture after the text; kitty drops the old one only when it
-   ; changed or the view closes
+   ; sixel and kitty lay the picture after the text; kitty drops the old one only on change or close
    q4 (pins (mc-new P P) 'gm "sixel" 'cw 2 'ch 4)
    _ (mc-key q4 106, mc-key q4 118)
    s1 (mc-frame q4 70 16)

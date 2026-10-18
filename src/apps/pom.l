@@ -1,14 +1,12 @@
-; pom -- the phase of the moon, after the bsd game by way of pcal's arithmetic. utc,
-; the hour its finest grain, as the original.
+; pom -- the phase of the moon, after the bsd game by way of pcal's arithmetic. utc, to
+; the hour.
 ;   pom          the moon now, one line
 ;   pom -e       the date, the phase and the moon drawn to the terminal
 ;   pom -d       every hour of the month; with -e, redrawn in place
 ;   pom -p [N]   the moon now, N pixels square in half-blocks
 ;   pom -s [N]   the moon now as the pom saver draws it, its seas and dark limb
-;   pom -n [N]   the moon now drawn naturally: lit as the moon scatters sunlight, its seas
-;                soft, tycho and copernicus bright, earthshine on the dark side
+;   pom -n [N]   the moon now drawn naturally: seas soft, craters bright, earthshine
 ;   pom [[[[[cc]yy]mm]dd]HH]  another hour, date(1)'s order
-; usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N] | -s [N] | -n [N]
 (module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art
              pom-pixels pom-now pom-cells pom-tint pom-tc pom-xterm pom-lit
              pom-lit? pom-mare? pom-face pom-moon pom-glow pom-natural)
@@ -94,8 +92,8 @@
      (go (1 - inc / 2) 0))
 
  ; --- pixels -----------------------------------------------------------------------
- ; the moon n by n at phase p: the lit side on the right waxing, the left waning, the
- ; dark limb dim so a new moon is still a disc, () outside it
+ ; the moon n by n at phase p: lit on the right waxing, the left waning, the dark limb
+ ; dim so a new moon is still a disc, () outside it
  pom-lit 0xffd787
  pom-dim 0x4e4e4e
  (pom-pixels p n)
@@ -105,8 +103,7 @@
                     (p < 0.5 ? (w * k < x) (x < 0 - w * k)) pom-lit
                     pom-dim))
      (map (i \ map (px i) ^n) ^n))
- ; lit at (nx ny) on the unit disc: the terminator is an ellipse cos 2πp wide, waxing
- ; lights the right side and waning the left
+ ; lit at (nx ny) on the unit disc: the terminator is an ellipse cos 2πp wide
  (pom-lit? p nx ny) (: s (sqrt (max 0.0 (1.0 - ny * ny))) k (cos (tau * p))
                       (p < 0.5 ? (nx > k * s) (nx < 0 - k * s)))
  ; the seas, roughly where they lie: [x y radius] on the unit disc, north up
@@ -121,12 +118,10 @@
  (pom-moon p n) (: (px i j) (pom-face p ((j + 0.5) * 2 / n - 1) ((i + 0.5) * 2 / n - 1)
                               @ k (charm? k ? (xrgb k)))
                    (map (i \ map (j \ px i j) ^n) ^n))
- ; --- the moon drawn naturally: the sun's way by the phase (behind at new, round the right
- ; through the first quarter, from the eye at full); lit as the moon scatters it -- lommel
- ; and seeliger's law, which leaves a full moon nearly flat to its limb -- with a little
- ; lambert; the seas soft-edged and bluer, the highlands mottled, tycho and copernicus
- ; bright and tycho's rays faint; earthshine on the dark side, most near new; the light
- ; toned as the sky's is. rgb as 0xrrggbb at (nx ny) on the unit disc, () off it ---
+ ; --- the moon drawn naturally: lommel-seeliger with a little lambert (a full moon nearly
+ ; flat to its limb), the sun's way by the phase; seas soft and bluer, highlands mottled,
+ ; tycho and copernicus bright; earthshine on the dark side, most near new.
+ ; rgb as 0xrrggbb at (nx ny) on the unit disc, () off it ---
  craters [[-0.12 0.64 0.05 0.5] [-0.33 0.06 0.04 0.3] [0.42 -0.38 0.03 0.25]]
  ; the seas, north up: the saver's maria and nectaris beside them
  seas [[-0.35 -0.45 0.28] [0.18 -0.38 0.17] [0.3 -0.05 0.2] [0.68 -0.3 0.12]
@@ -160,8 +155,8 @@
  (pom-now _) (: s (clock 0 // 1000) gt (civil (s // 86400))
                (pom-phase (s % 86400 // 3600) <>gt <>>gt <gt))
 
- ; a grid of rgb or (), two rows to a cell: ▀ in the top's ink on the bottom's ground, ▄ or
- ; ▀ alone for one, a space for none. truecolor when tc, else xterm's nearest of 256
+ ; a grid of rgb or (), two rows to a cell: ▀ ink over ground, ▄ or ▀ alone for one, a
+ ; space for none. truecolor when tc, else xterm's nearest of 256
  (pom-tc _) (elem (getenv "COLORTERM") ["truecolor" "24bit"])
  (rgb x) [(x // 65536) (x // 256 % 256) (x % 256)]
  ; an xterm pen of the cube or the grey ramp as rgb, pom-xterm's inverse there
@@ -206,8 +201,8 @@
         (go 1 d e)))
  ; the operand in pairs from the right: HH, then dd, mm, yy, cc
  (pairs op) (: (go i) (i < #op ? (snip op i (i + 2) . go (i + 2))) (rev (go 0)))
- ; -p [N]: the moon now, N pixels square, 8 unless said and rounded up to even; -s the
- ; saver's moon the same way, 24 unless said
+ ; -p [N]: the moon N pixels square, 8 unless said, rounded up to even; -s the saver's,
+ ; 24 unless said
  (pom-show draw d as)
   (? (two? as && (two? >as || !(digits? <as)))
      (say err (pom-usage + "\n"), flush err, 1)

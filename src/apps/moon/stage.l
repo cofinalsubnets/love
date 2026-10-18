@@ -1,8 +1,6 @@
-; src/apps/moon/stage.l -- the pipeline's types: gen.l's pass contracts as an overlay domain + sig
-; table, checked by the moon gate. gen.l is read as data, never evaled, and nothing here rides
-; an image. a die is the stage a form list is at: a cleanup pass is stage-preserving ((a) a), a
-; staging pass advances through a concrete die, so the chain types in exactly one order. a new
-; pass declares its sig here. the checker is gradual: a local name reads bot and binds nothing.
+; src/apps/moon/stage.l -- gen.l's pass contracts as an overlay domain + sig table, checked by
+; the moon gate; gen.l is read as data, never evaled. a die is the stage a form list is at: a
+; cleanup pass is ((a) a), a staging pass advances a die. a new pass declares its sig here.
 
 (borrow 'posix)
 
@@ -15,23 +13,18 @@
    (stage-okr bd decl) (elem bd '(top bot) || bd = decl)
    stage-dom (hash 'dice stage-dies 'ctors () 'tr stage-tr 'join stage-join
                    'litdie stage-lit 'okr stage-okr)
-   stage-sigs '((cgfn (gst top) top)                ; sigged so its body -- both chains -- is walked
-                                                    ; (params gradual: a sig VARIABLE there would ride rigid into every concrete seam)
-                ; the build tail: vrfix advances (build's assembled list carries mints -- the
-                ; vreg shadow 5.1a -- and no vreg may reach sibcall/soften,
-                ; which reason about the physical file), then sibcall + the sweeps preserve
+   stage-sigs '((cgfn (gst top) top)                ; sigged so its body is walked; a sig variable would ride rigid
+                ; vrfix advances: no vreg may reach sibcall/soften, which read the physical file
                 (vrfix (gst ir-vreg) ir-chosen)
                 (sibcall (gst a) a) (soften (gst a) a) (a4ize (a) a)
                 (cfoldir (gst a) a) (deadcell (a) a) (deaddef (a) a) (spmerge (a) a)
                 (stld (gst a) a) (copyprop (a) a) (rezx (a) a) (addrfold (gst a) a) (laacse (gst a) a) (hz4 (gst a) a) (addk (a) a) (memfw (a) a) (cmpfuse (a) a)
                 (deadst (gst a) a) (repack (gst a) a)
-                ; the post-choice chain advances: deadlab must never touch what the
-                ; rankers read, unframe re-addresses before jr0 retargets, unhome
-                ; renames last, cskeep sees only what ships -- one order types
+                ; the post-choice chain: one order types
                 (deadlab (ir-chosen) ir-nolab)
-                (wpair (gst ir-nolab) ir-nolab)      ; renames and drops, like coal
-                (recse (gst ir-nolab) ir-nolab)      ; renames, like coal
-                (coal (gst ir-nolab) ir-nolab)       ; stage-preserving: it renames, never re-addresses
+                (wpair (gst ir-nolab) ir-nolab)
+                (recse (gst ir-nolab) ir-nolab)
+                (coal (gst ir-nolab) ir-nolab)       ; renames, never re-addresses
                 (unframe (gst ir-nolab) ir-noframe)
                 (rvunframe (gst ir-noframe) ir-noframe)
                 (jr0 (gst ir-noframe) ir-jmpfix)
