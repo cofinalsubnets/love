@@ -7,7 +7,7 @@
 ; corridor-watch reads the disk, and only corridor-walk and corridor-run touch the tty.
 (module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds
          corridor-move corridor-frame corridor-pens corridor-opts corridor-read corridor-load
-         corridor-watch corridor-free? corridor-ks corridor-sound fps eye-h body-r)
+         corridor-watch corridor-free? corridor-ks corridor-sound motes-at fps eye-h body-r grav-n)
 (borrow 'rove)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -24,6 +24,7 @@
  eye-h 1.6 body-r 0.25
  walk-v 1.8 turn-v 1.6 tilt-v 1.2         ; metres, and radians, a second
  door-v 1.4 door-near 2.4 door-t 0.03     ; the doors: their pace, how near opens one, half their thickness
+ grav-v 1.4 grav-n 60                    ; a grav shaft: how fast it carries, its motes
  car-t 0.08 car-wait 0.6 car-hold 1.5 car-acc 1.2  ; a car: its walls' thickness, the seconds before its door
                                                   ; opens and after it shuts, how fast it gathers speed
  chunk-m 8.0 cell 0.25 cell-top 2.0                   ; how fine the surfaces are cut near a lamp, for the
@@ -110,7 +111,7 @@
  ;     its wall; the surfaces where air meets solid, textured by the way they face ---
  (brush-of r) (: sh (r 'shape)
    b0 (sh 'box @ () (: p (sh 'prism) (brush-prism (r 'air) (p 0) (p 1) (p 2))) bx (brush-box (r 'air) (bx 0) (bx 1)))
-   (pin (foldl (\ b c (brush-cut b (c 0) (c 1) (c 2))) b0 (r 'cuts)) 'skin (r 'skin)))
+   (pins (foldl (\ b c (brush-cut b (c 0) (c 1) (c 2))) b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0)))
  (doorway d) (: ax (d 'ax) p (P ax (d 'c - 0.5 * d 'w) (d 'y) (d 'a - 0.02)) q (P ax (d 'c + 0.5 * d 'w) (d 'y + d 'h) (d 'b + 0.02))
    (brush-box 1 [(min2 (p 0) (q 0)) (d 'y) (min2 (p 2) (q 2))] [(max2 (p 0) (q 0)) (d 'y + d 'h) (max2 (p 2) (q 2))]))
  (brushes-of lv) (map brush-of (lv 'brushes) + map doorway (lv 'doors))
@@ -193,7 +194,12 @@
    (side (d 'a) -0.01 + side (d 'b) 0.01))
  (lights-of lv) (map (strip-light lv) (lv 'strips) + map (bulb-light lv) (lv 'bulbs)
                  + map (sign-light lv) (lv 'signs)
-                 + cats (map (i \ door-lights lv i (lv 'doors i)) ^#(lv 'doors)))
+                 + cats (map (i \ door-lights lv i (lv 'doors i)) ^#(lv 'doors))
+                 + map (grav-light lv) (peep lv 'gravs ()))
+ ; ..a grav shaft's glow, up from its foot and down from its head
+ (grav-light lv g) (: lo (g 'lo) hi (g 'hi) x (0.5 * (lo 0 + hi 0)) z (0.5 * (lo 2 + hi 2)) k (inside (room-at lv x z)) c [0.25 0.55 0.8]
+   (light [{'at [[x (lo 1 + 0.05) z]] 'n [0.0 1.0 0.0] 'c c 'r 5.0 'soft 0.4 'keep k}
+           {'at [[x (hi 1 + 2.9) z]] 'n [0.0 -1.0 0.0] 'c c 'r 5.0 'soft 0.4 'keep k}] () () ()))
  ; ..how bright a light is at mt seconds, the doors open by ds: steady; a strip failing,
  ; mostly on and now and then stammering off; a tube's buzz; a bulb breathing; a door's
  ; lamp by its door. sd keeps two failing lights out of step
@@ -242,7 +248,13 @@
  ; changes the more across a cell the nearer it is
  (coarse? lps) (\ ps c (: lo (map (k \ foldl (\ a p (min2 a (p k))) 1e9 ps) ^3) hi (map (k \ foldl (\ a p (max2 a (p k))) -1e9 ps) ^3)
    (d p) (sqrt (net (map (k \ sq (max2 0.0 (max2 (lo k - p k) (p k - hi k)))) ^3)))
-   (any (lp \ any (p \ (: dd (d p) (dd < lp 'r && 6.0 * c > dd + 0.5))) (lp 'at)) lps)))
+   ; ..and only where the lamp's mask lets it shine on the piece somewhere
+   (cl p) (map (k \ min2 (hi k) (max2 (lo k) (p k))) ^3)
+   (lit? lp p) (peep lp 'keep () @ () 1
+     k (: q (cl p) (any (r \ k (r 0) (r 1) (r 2) > 0)
+                        [q [(lo 0) (q 1) (lo 2)] [(hi 0) (q 1) (lo 2)] [(lo 0) (q 1) (hi 2)] [(hi 0) (q 1) (hi 2)]
+                         [(0.5 * (lo 0 + hi 0)) (q 1) (0.5 * (lo 2 + hi 2))]])))
+   (any (lp \ any (p \ (: dd (d p) (dd < lp 'r && 6.0 * c > dd + 0.5 && lit? lp p))) (lp 'at)) lps)))
  ; ..a pane: a sheet each way across the middle of its thin side, glass of its texture, the
  ; light on it its sheen
  (pane-mesh p tt) (: lo (p 'lo) hi (p 'hi) ax ((hi 0 - lo 0) < (hi 2 - lo 2) ? 0 2) al (2 - ax) m (0.5 * (lo ax + hi ax))
@@ -251,6 +263,11 @@
    (uv q) [(t 1 / W * (q al - lo al)) (t 2 / H * (hi 1 - q 1))]
    (mesh-join [(sheets (pt (lo al) (lo 1)) [0.0 H 0.0] (c* W e) n uv (-3 - i) g)
                (sheets (pt (lo al) (lo 1)) [0.0 H 0.0] (c* W e) (c* -1.0 n) uv (-3 - i) g)]))
+ ; ..a packed mesh as its own light at brightness b, a glow when key says, kept on it while
+ ; b holds
+ (shine-at pk b key) (? (peep pk 'sb () = b) (pk 'sv)
+                        (: v (mesh-shine pk b) w (key = 'glow ? (mesh-glow v) v) _ (pins pk 'sb b 'sv w) w))
+ (mid3 vs) (c* (1.0 / #vs) (foldl (\ a v [(a 0 + v 0) (a 1 + v 1) (a 2 + v 2)]) [0.0 0.0 0.0] vs))
  ; ..a decal's sheet, its texture tex tw by th
  (decal-mesh d tt) (: a (d 'at) n (unit (c+ (d 'np) (c* -1.0 a))) u (unit (c+ (d 'up) (c* -1.0 a))) r (cross u n)
    w (d 'w) h (d 'h) i (tix tt (d 'tex)) t (tt i) o (c+ a (c+ (c* (-0.5 * w) r) (c* (-0.5 * h) u)))
@@ -264,8 +281,9 @@
    pm (map (i \ poster-mesh lv (ps i) (#tt + i) (shape (ptex i 0) 1) (shape (ptex i 0) 0)) ^#ps)
    bs (brushes-of lv)
    ; ..the world in chunks chunk-m square, so a frame draws only those in view, nearest first
+   (on m) [(mid3 (m 0)) m]
    cks (map mesh-pack (brush-chunks bs [cell-top cell (coarse? (cats (map (l \ l 'lamps) ls)))] (look tt) chunk-m
-                       + pm + map (d \ decal-mesh d tt) (peep lv 'decals ())))
+                                    (map on (pm + map (d \ decal-mesh d tt) (peep lv 'decals ())))))
    drs (map (d \ mesh-pack (door-mesh d tt)) (lv 'doors))
    ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds
    ; only the lights that change
@@ -278,10 +296,34 @@
    cars (map (c \ (: b (mesh-pack (car-mesh c tt)) d (mesh-pack (car-door c tt)) lp (car-lamp c)
                      {'body b 'body-lit (clit lp b) 'door d 'door-lit (clit lp d) 'bar (mesh-pack (car-bar c))}))
              (peep lv 'cars ()))
-   {'panes (map (p \ (: pk (mesh-pack (pane-mesh p tt)) {'pk pk 'lit (lit pk)})) (peep lv 'panes ()))
-    'chunks (map (pk \ {'pk pk 'lit (lit pk) 'lo (map (k \ amin (pk 'cols k)) ^3) 'hi (map (k \ amax (pk 'cols k)) ^3)}) cks)
+   {'motes (map motes-of (peep lv 'gravs ()))
+    'panes (map (p \ (: pk (mesh-pack (pane-mesh p tt)) {'pk pk 'lit (lit pk)})) (peep lv 'panes ()))
+    'chunks (map (pk \ (: lo (map (k \ amin (pk 'cols k)) ^3) hi (map (k \ amax (pk 'cols k)) ^3)
+                          {'pk pk 'lit (lit pk) 'lo lo 'hi hi 'mid (map (k \ 0.5 * (lo k + hi k)) ^3)
+                           'rad (0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))})) cks)
     'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs
     'texs (map (t \ swatch (t 'w) (t 'h) (t 'layers)) txs + ptex)})
+ ; --- a grav shaft's motes: each a speck of three crossed squares, both ways round, a glow;
+ ;     its own height, speed, and turn about the middle, from its number ---
+ (hash01 i) (: h (sin (i * 12.9898 + 78.233) * 43758.5453) (h - floor h))
+ mote-s 0.03
+ (motes-of g) (: s mote-s o 0.0 n grav-n
+   cs [[(0.0 - s) (0.0 - s) o] [s (0.0 - s) o] [s s o] [(0.0 - s) s o]
+       [o (0.0 - s) (0.0 - s)] [o (0.0 - s) s] [o s s] [o s (0.0 - s)]
+       [(0.0 - s) o (0.0 - s)] [s o (0.0 - s)] [s o s] [(0.0 - s) o s]] I (iota n) lo (g 'lo) hi (g 'hi) R (0.4 * min2 (hi 0 - lo 0) (hi 2 - lo 2))
+   (r k) (gem-tray [n] (map (i \ hash01 (i + 101 * k)) ^n))
+   C (iota (12 * n)) ci (C // n)
+   (cor k) (peep (gem-tray [12] (map (c \ c k) cs)) ci 0.0)
+   ts (cats (map (q \ (: (v c) ((4 * q + c) * n) (cats (map (i \ [[(v 0 + i) (v 1 + i) (v 2 + i) -2] [(v 0 + i) (v 2 + i) (v 1 + i) -2]
+                                                                     [(v 0 + i) (v 2 + i) (v 3 + i) -2] [(v 0 + i) (v 3 + i) (v 2 + i) -2]]) ^n)))) ^3))
+   {'x (0.5 * (lo 0 + hi 0)) 'z (0.5 * (lo 2 + hi 2)) 'y0 (lo 1) 'H (hi 1 + 2.8 - lo 1) 'up (g 'dir = 'up ? 1.0 -1.0)
+    'h (r 0) 'rad (R * sqrt (r 1)) 'a (tau * r 2) 'sp (0.6 + 0.8 * r 3) 'w (0.3 + 0.6 * r 4)
+    'ix (C % n) 'ox (cor 0) 'oy (cor 1) 'oz (cor 2) 'tris (star-tray [(4 * #ts)] (cats ts))})
+ ; ..where they have got to at mt: [verts tris], brightest midway along the shaft
+ (motes-at m mt) (: u (m 'h + m 'up * m 'sp * grav-v * mt / m 'H) f (u - floor u)
+   an (m 'a + m 'w * mt) X (m 'x + m 'rad * cos an) Z (m 'z + m 'rad * sin an) Y (m 'y0 + m 'H * f)
+   b (0.9 * sin (pi * f)) ix (m 'ix) (g t) (peep t ix 0.0) B (g b)
+   [(lace [(g X + m 'ox) (g Y + m 'oy) (g Z + m 'oz) 0.0 0.0 (0.45 * B) (0.75 * B) B]) (m 'tris)])
  ; --- the frame: the rooms and doors lit by the lights as bright as they are now, then
  ;     what shines, then the glows; out as half blocks or kitty's pixels ---
  fov 1.5
@@ -292,12 +334,12 @@
    v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 60.0)
    dk (map (i \ ks i) (sc 'dyn))
    (relit pk l) (mesh-lamps! pk (l 'base) (l 'chs) dk 1.0)
-   ; ..the chunks some corner of whose box is inside each plane of the view, nearest first
-   cam (v 'cam) (row i p) (peep cam (4 * i) 0.0 * p 0 + peep cam (4 * i + 1) 0.0 * p 1 + peep cam (4 * i + 2) 0.0 * p 2 + peep cam (4 * i + 3) 0.0)
-   (seen? c) (: lo (c 'lo) hi (c 'hi)
-     qs (map (j \ (: p [(j % 2 ? (hi 0) (lo 0)) (j // 2 % 2 ? (hi 1) (lo 1)) (j // 4 ? (hi 2) (lo 2))] [(row 0 p) (row 1 p) (row 2 p) (row 3 p)])) ^8)
-     !(any (out \ !(any (q \ !(out q)) qs)) [(q \ q 0 < 0.0 - q 3) (q \ q 0 > q 3) (q \ q 1 < 0.0 - q 3) (q \ q 1 > q 3) (q \ q 2 < 0.0 - q 3) (q \ q 2 > q 3)]))
-   (far c) (net (map (k \ sq (0.5 * (c 'lo k + c 'hi k) - e k)) ^3))
+   ; ..the chunks whose ball is on the inside of each plane of the view, nearest first
+   cam (v 'cam) (row i) (map (j \ peep cam (4 * i + j) 0.0) ^4)
+   pls (map (q \ (: a (row (q 0)) b (row 3) s (q 1) n (map (j \ b j + s * a j) ^4) (: s (1.0 / sqrt (sq (n 0) + sq (n 1) + sq (n 2))) (map (x \ s * x) n))))
+            [[0 1.0] [0 -1.0] [1 1.0] [1 -1.0] [2 1.0] [2 -1.0]])
+   (seen? c) (: m (c 'mid) r (0.0 - c 'rad) !(any (n \ n 0 * m 0 + n 1 * m 1 + n 2 * m 2 + n 3 < r) pls))
+   (far c) (net (map (k \ sq (c 'mid k - e k)) ^3))
    cks (sc 'chunks)
    hall (map (q \ (: c (cks (q 1)) (relit (c 'pk) (c 'lit)))) (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i)) ^#cks))))
    ; ..each door slid open along its wall into the wall's thickness
@@ -314,10 +356,10 @@
                              (moved (mesh-shine (cs 'bar) 3.0) (cs 'bar) k o)])))
                ^#(peep lv 'cars ())))
    ; ..what shines and glows, at each light's brightness; none where it is out
-   (by key) (cats (map (i \ cats (map (q \ ((q 1 * ks i) @ 0.0 () b [(mesh-shine (q 0) b)])) (sc 'lights i key))) ^#ks))
+   (by key) (cats (map (i \ cats (map (q \ ((q 1 * ks i) @ 0.0 () b [(shine-at (q 0) b key)])) (sc 'lights i key))) ^#ks))
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
    glass (map (c \ relit (c 'pk) (c 'lit)) (sc 'panes))
-   all (cars + doors + hall + by 'shine + glass + map mesh-glow (by 'glow))
+   all (cars + doors + hall + by 'shine + glass + by 'glow + map (m \ motes-at m (st 'mt)) (sc 'motes))
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) [0.0 0.0 0.0 30.0 60.0] 8 gain 0))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
@@ -385,7 +427,17 @@
              want (sq (p 0 - x) + sq (p 2 - z) < sq door-near ? 1.0 0.0)
              (want < o ? (max2 want (o - door-v * dt)) (min2 want (o + door-v * dt))))
    _ (pins st 'mt (st 'mt + dt) 'doors (map go ^#(lv 'doors)))
+   _ (grav-step st dt)
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(peep lv 'cars ())))
+ ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in
+ (grav-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) v (peep st 'gv 0.0)
+   in (filter (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (peep (st 'lvl) 'gravs ()))
+   (two? in
+    ? (: g <in d ((g 'dir = 'up ? (g 'hi 1) (g 'lo 1)) - fl)
+         want ((d < 0.0 ? -1.0 1.0) * grav-v * sat (mag d / 0.8 + 0.08)) v2 (v + (want - v) * sat (3.0 * dt))
+         m (v2 * dt) step (mag m > mag d ? d m)
+         (pins st 'py (fl + step + eye-h) 'gv v2))
+      (pin st 'gv 0.0)))
  ; ..a car's next moment: the door opens as the level starts and stays open while the player
  ; is anywhere in its track; once they are out it shuts, opening again if they come back
  ; before it is home; held shut a moment, the car gathers speed along its track and is gone

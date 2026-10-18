@@ -156,7 +156,8 @@
  ; ..the same, written into one buffer the packed mesh keeps, its places and texels laid
  ; once and only its colours each call: what a scene relit every frame draws. the last
  ; call's answer is the buffer, so a mesh is lit this way once a frame. amb, chs and gain
- ; are the first call's every call, so after it only the vertices some lamp reaches change
+ ; are the first call's every call, so after it only the vertices some lamp reaches change,
+ ; and only when ks does
  (mesh-lamps! pk amb chs ks gain)
   (: (lit c8 base chs j) (gain * c8 j * foldl (\ a i (a + ks i * chs i j)) (base j) ^#chs)
      (pins3 v ix l) (foldl (\ v k (pin v (ix + 5 + k) (l k))) v ^3)
@@ -167,7 +168,9 @@
            on (iota (foldl (\ a ch (a + ch 0 + ch 1 + ch 2)) z chs > 0.0)) (g t) (peep t on 0.0)
            _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (ch \ map g ch) chs)})
            [v (pk 'tris)])
-      b (: lv (pk 'live) [(pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs))) (pk 'tris)])))
+      ; ..and nothing written while the lamps stand where they stood
+      b (: lv (pk 'live) [(#(lv 'ix) = 0 || peep lv 'ks () = ks ? b (: _ (pin lv 'ks ks) (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs)))))
+                          (pk 'tris)])))
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
  ; ..and a scene's triangles made glows, added over what is behind them: a copy

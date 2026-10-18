@@ -86,13 +86,15 @@
  (grids ps c fine split?) (c <= fine ? (grid ps fine)
    (cats (map (p \ (split? p c ? (grids p (0.5 * c) fine split?) [p])) (grid ps c))))
  ; ..cell a number, or [coarse fine split?]
- (brush-mesh bs cell look) (mesh-join (brush-chunks bs cell look 1e9))
- ; ..and in meshes a chunk each, the pieces k metres square in plan
- (brush-chunks bs cell look k)
+ (brush-mesh bs cell look) (mesh-join (brush-chunks bs cell look 1e9 ()))
+ ; ..and in meshes a chunk each, the pieces k metres square in plan, and with them more
+ ; meshes, each [p mesh], in the chunk p is in
+ (brush-chunks bs cell look k more)
   (: fs (brush-faces bs)
-     (cut ps) (charm? cell || gem? cell ? (grid ps cell) (grids ps (cell 0) (cell 1) (cell 2)))
+     ; ..a brush marked whole goes uncut
+     (cut ps b) (? (peep b 'whole 0) [ps] (charm? cell || gem? cell) (grid ps cell) (grids ps (cell 0) (cell 1) (cell 2)))
      fine (charm? cell || gem? cell ? cell (cell 1))
-     pcs (cats (map (f \ map (p \ [p (f 1) (f 2)]) (cut (f 0))) fs))
+     pcs (cats (map (f \ map (p \ [p (f 1) (f 2)]) (cut (f 0) (bs (f 2)))) fs))
      ; ..every corner, a millimetre a step, so a piece takes on its edges the corners of the
      ; finer pieces beside it, and no crack opens between them
      (key p) (: (r v) (int (floor (v * 1000.0 + 0.5))) (show [(r (p 0)) (r (p 1)) (r (p 2))]))
@@ -116,7 +118,8 @@
           (: m #ps ps2 (ps + [(mid ps0)])
              (two a b) (dot (cross (sub (ps2 b) (ps2 m)) (sub (ps2 a) (ps2 m))) n > 0.0 ? [m a b tex] [m b a tex])
              (mesh (map (vert n b) ps2) (map (i \ two i ((i + 1) % m)) ^m)))))
-     (at pc) (: m (mid (pc 0)) (show [(int (floor (m 0 / k))) (int (floor (m 2 / k)))]))
-     by (foldl (\ t pc (pin t (at pc) (fan (pc 0) (pc 1) (bs (pc 2)) . peep t (at pc) ()))) {} pcs)
+     (ck m) (show [(int (floor (m 0 / k))) (int (floor (m 2 / k)))])
+     by (foldl (\ t pc (: q (ck (pc 0)) (pin t q (pc 1 . peep t q ())))) {}
+               (map (pc \ [(mid (pc 0)) (fan (pc 0) (pc 1) (bs (pc 2)))]) pcs + more))
      (map (q \ mesh-join (rev (by q))) (sort (keys by)))))
 ) ; module brush

@@ -145,6 +145,23 @@
        (#(wl 'panes) = 1) (corridor-free? ws 2.0 3.5) (!(corridor-free? ws 2.0 4.15)) (corridor-free? ws 3.5 4.15 = 0)
        (#(ws 'sc 'panes) = 1) (peep (ws 'sc 'panes 0 'pk 'tris) 3 0 = -3)
        (lp 3.5 1.0 3.5 = 1) (lp 8.0 1.0 8.0 = 0)))
+; a grav shaft: walked into, it carries up to its head, eased in, and out north is street level;
+; its twin carries down; motes stream through each the way it goes
+(: gl (lv "(room [0 0 0] [8 3 4]) (start [2 0 2] 0 0)
+          (grav [1 0 4.3] [3 6 6.3] 'up) (air (box [1.2 0 3.9] [2.8 2.5 4.4]))
+          (grav [5 0 4.3] [7 6 6.3] 'down) (air (box [5.2 0 3.9] [6.8 2.5 4.4]))
+          (room [0 6 6.6] [8 9 9]) (air (box [1.2 6 6.2] [2.8 8.5 6.7])) (air (box [5.2 6 6.2] [6.8 8.5 6.7]))")
+   (feet st) (st 'py - eye-h) (moves st n) (each ^n (_ \ corridor-move st), st)
+   g0 (corridor-new 40 24 gl "") fu (feet (moves (steps g0 107 32) 40)) ft (feet (moves g0 160))
+   fo (feet (steps g0 107 25)) oz (g0 'pz)
+   dn (moves (pins (corridor-new 40 24 gl "") 'px 6.0 'pz 5.3 'py (6.0 + eye-h)) 200)
+   ms (g0 'sc 'motes) m0 (motes-at (ms 0) 0.0) m1 (motes-at (ms 0) 0.2) m2 (motes-at (ms 1) 0.2)
+   (ys m) (peep (m 0) (iota grav-n * 8 + 1) 0.0)
+ (test (#(gl 'gravs) = 2) (gl 'gravs 0 'dir = 'up) (has? (lv "(room [0 0 0] [1 1 1]) (grav [0 0 0] [1 1 1] 'sideways)") "(grav [x y z] [x y z] DIR)")
+       (0.5 < fu < 6.0) (mag (ft - 6.0) < 1e-6) (fo = ft) (oz > 6.6)
+       (mag (feet dn) < 1e-6) (#ms = 2)
+       (#(m0 0) = 8 * 12 * grav-n) (#(m0 1) = 4 * 4 * 3 * grav-n) (peep (m0 1) 3 0 = -2)
+       (net (ys m1 > ys m0) > grav-n // 2) (net (ys m2 < ys (motes-at (ms 1) 0.0)) > grav-n // 2)))
 ; a car: its door opens at the start and stays open while the player is in; walls and the shut
 ; door stop a walk; out, it shuts, reopening for a step back; then it leaves, and the edge stops
 ; a walk; each change cried, the car drawn only while it stands, its sounds in range

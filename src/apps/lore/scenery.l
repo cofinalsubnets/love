@@ -25,6 +25,11 @@
 ;                                      at its foot, its corners cut, capped, hollow up top and
 ;                                      open on every side there, SIGN () or a texture on each
 ;                                      side below; solid
+;   (grav [x y z] [x y z] DIR)         a grav shaft: a column of air over the plan between the
+;                                      corners, from the lower's floor to a room's height over
+;                                      the upper's, motes of light streaming through it; who
+;                                      stands in it is carried 'up to the upper floor or 'down
+;                                      to the lower
 ;   (window [x y z] [x y z] TEXTURE)   an opening carved between two corners, a pane of glass
 ;                                      across its middle the thin way: what is beyond it
 ;                                      seen through the texture, the light on it; solid
@@ -48,7 +53,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of start room air solid box prism cut door train bin decal window strip-light bulb poster sign
+(module (scenery level-of start room air solid box prism cut door train bin decal window grav strip-light bulb poster sign
          across stammer buzz breathe texture skin textures repeat mirror-x mirror-z rgb)
 (borrow 'view)                          ; min2 max2
 (borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
@@ -80,6 +85,10 @@
  (door at w h) (: u "(door [x y z] width height)" (part 'door [['at (P at u)] ['w (N w u)] ['h (N h u)]]))
  (train lo hi d leave) (: u "(train [x y z] [x y z] (door [x y z] width height) leave)"
    (kind? d ['door] ? (part 'car [['lo (P lo u)] ['hi (P hi u)] ['door d] ['leave (N leave u)]]) (no u d)))
+ ; ..a grav shaft: its column, a room, and which way it carries
+ grav-head 3.0
+ (grav lo hi dir) (: u "(grav [x y z] [x y z] DIR)" a (lo2 (P lo u) (P hi u)) b (hi2 (P lo u) (P hi u))
+   (elem dir ['up 'down] ? [(room a [(b 0) (b 1 + grav-head) (b 2)]) (part 'grav [['lo a] ['hi b] ['dir dir]])] (no u dir)))
  ; ..a window: its opening, and its pane
  (window lo hi t) (: u "(window [x y z] [x y z] TEXTURE)" a (P lo u) b (P hi u)
    (texture? t ? [(air (box a b)) (part 'pane [['lo (lo2 a b)] ['hi (hi2 a b)] ['tex t]])] (no u t)))
@@ -115,8 +124,10 @@
                    (decal [(x - W + e) ys z] [(0.0 - H / L) (0.0 - k / L) 0.0] [(0.0 - k / L) (H / L) 0.0] sz sz sg)
                    (decal [x ys (z + D - e)] [0.0 (0.0 - k / L) (H / L)] [0.0 (H / L) (k / L)] sz sz sg)
                    (decal [x ys (z - D + e)] [0.0 (0.0 - k / L) (0.0 - H / L)] [0.0 (H / L) (0.0 - k / L)] sz sz sg)])
-         [(skin {'all t} body) (map (b \ skin {'all bin-dark} (air b)) hollow)
-          (skin {'all t} (solid (box [(x - W - 0.02) y1 (z - D - 0.02)] [(x + W + 0.02) (y1 + 0.05) (z + D + 0.02)])))
+         ; ..small enough that its faces go uncut, lit at their corners
+         [(map (b \ with b 'whole 1)
+               ([(skin {'all t} body)] + map (b \ skin {'all bin-dark} (air b)) hollow
+                + [(skin {'all t} (solid (box [(x - W - 0.02) y1 (z - D - 0.02)] [(x + W + 0.02) (y1 + 0.05) (z + D + 0.02)])))]))
           signs])))
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
  (bulb at c) (: u "(bulb [x y z] (rgb r g b))" (colour? c ? (part 'bulb [['at (P at u)] ['c c] ['how ()]]) (no u c)))
@@ -160,7 +171,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; ..the textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'decal 'pane 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'decal 'pane 'grav 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -177,13 +188,14 @@
        'start (of 'start @ () {'at [0.0 0.0] 'y 0.0 'deg 0.0 'pitch 0.0}
                           s (: a (<s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'deg (<s 'deg) 'pitch (<s 'pitch)}))
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
-       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b)}) bs)
+       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0)}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1)])) (of 'door))
        'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
        'strips (map (s \ (: a (s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'across (s 'across) 'how (s 'how)})) (of 'strip))
        'bulbs (map (b \ {'at (b 'at) 'c (b 'c) 'how (b 'how)}) (of 'bulb))
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
+       'gravs (map (g \ {'lo (g 'lo) 'hi (g 'hi) 'dir (g 'dir)}) (of 'grav))
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex))}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
        'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'text (s 'text) 'c (s 'c) 'how (s 'how)})) (of 'sign))

@@ -89,9 +89,17 @@
   ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
   (train [-9 0 -7.24] [9 2.3 -4.64] (door [0 0 -4.64] 1.4 2.0) -55)
   (repeat 7 [6 0 0] [(across (strip-light [-18 3.5 -2.4]))])
-  ; the way out north: a door, and a corridor beyond
-  ;(room [-1.2 0 32.2] [1.2 2.6 40])
-  ;(door [0 0 32.1] 1.2 2.2)
+  ; the way out north: two grav shafts behind the hall's north wall, either side of the sign;
+  ; facing them, up on the right and down on the left, each a doorway at its foot
+  (grav [0.7 0 16.3] [2.7 9 18.3] 'up)
+  (grav [-2.7 0 16.3] [-0.7 9 18.3] 'down)
+  (air (box [0.9 0 15.9] [2.5 2.6 16.4]))
+  (air (box [-2.5 0 15.9] [-0.9 2.6 16.4]))
+  ; ..and at their heads, street level, each a doorway north
+  (room [-5 9 18.6] [5 12.5 26])
+  (air (box [0.9 9 18.2] [2.5 11.6 18.7]))
+  (air (box [-2.5 9 18.2] [-0.9 11.6 18.7]))
+  (strip-light [0 12.5 22])
   ; the light: strips across the ceiling, one failing at the north end; a sign on the
   ; north wall
   (repeat 5 [2 0 0] [(across (strip-light [0 5 4]))])
