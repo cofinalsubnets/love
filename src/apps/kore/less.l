@@ -14,7 +14,7 @@
    pg-ere (cite 're 'reere) pg-fold (cite 're 'refold) pg-find (cite 're 'refind)
 
    pg-help
-    "  kore less -- the pager (`more` is the same door)
+    "  less -- the pager (`more` is the same door)
 
   SPACE  f  ^F  ^V     forward one screenful      N SPACE   forward N lines
   b  ^B                back one screenful         N b       back N lines

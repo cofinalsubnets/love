@@ -11,12 +11,12 @@
                  (moor (hbox p) (hmas p) (), wait pid, freeze w, hscreen-text p @ r (close (hmas p), r))))
 
 ; a child's output lands on its pane's grid, its \n as \r\n
-(hopen ["kore" "echo" "hi there"] 4 20 @ p
+(hopen ["echo" "hi there"] 4 20 @ p
  (: rows (kp-run p)
   (test (two? p) ("hi there" = <rows) (4 = #rows))))
 
 ; a line typed into the pane: the discipline echoes it, cat writes it back, ^D ends cat
-(hopen ["kore" "cat"] 4 20 @ p
+(hopen ["cat"] 4 20 @ p
  (: m (hmas p)
     _ (say m "abc\r", put m 4, flush m)
     rows (kp-run p)

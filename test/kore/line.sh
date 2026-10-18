@@ -19,12 +19,12 @@ for c in "-c 3" "-c3" "-c 0" "-c 100" "-c -2" "-c -100" "-c +3" "-n 2 -c 3" "-c 
   # shellcheck disable=SC2086
   both "head $c"  head $c "$ho/.cu1" "$ho/.cu2"
 done
-[ "$(korerun head -c 48 /dev/zero | wc -c)" -eq 48 ] || fail "kore head -c must stop reading"
+[ "$(korerun head -c 48 /dev/zero | wc -c)" -eq 48 ] || fail "head -c must stop reading"
 for c in "-c 3" "-c3" "-c 0" "-n 0" "-c 100" "-c +3" "-c +0" "-n +0" "-c +100" "-n 2 -c 3" "-c 3 -n 2" "--bytes=+4" "-c 1b"; do
   # shellcheck disable=SC2086
   both "tail $c"  tail $c "$ho/.cu1" "$ho/.cu2"
 done
-korerun head -c 3x "$ho/.cu1" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore head -c 3x must refuse (rc $r)"
+korerun head -c 3x "$ho/.cu1" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "head -c 3x must refuse (rc $r)"
 both "tail -n +2 many"  tail -n +2 "$ho/.cu1" "$ho/.cu2"
 both "head -n -1 many"  head -n -1 "$ho/.cu1" "$ho/.cu2"
 printf 'x\ny' > "$ho/.cun"                  # no trailing newline: the clip must keep that
@@ -103,11 +103,11 @@ rm -rf "$L"
 T=$ho/.tailf; rm -rf "$T"; mkdir "$T"; printf '1\n2\n3\n' > "$T/f"
 # the tail names its own pid: in the tool shell $! is a fork
 MT=$PWD/$m
-LOVE_NO_IMAGE= /bin/sh -c 'echo $$ > "$1.pid"; exec "$0" kore tail -n 2 -f -s 0.1 "$1"' "$MT" "$T/f" > "$T/o1" 2>&1 &
+LOVE_NO_IMAGE= /bin/sh -c 'echo $$ > "$1.pid"; exec "$0" tail -n 2 -f -s 0.1 "$1"' "$MT" "$T/f" > "$T/o1" 2>&1 &
 sleep 0.5; echo 4 >> "$T/f"; sleep 0.4; printf 'five' >> "$T/f"; sleep 0.4; kill "$(cat "$T/f.pid")"; wait
 [ "$(cat "$T/o1")" = "$(printf '2\n3\n4\nfive')" ] || fail "kore tail -f: $(tr '\n' '|' < "$T/o1")"
 printf 'a\n' > "$T/g"
-LOVE_NO_IMAGE= /bin/sh -c 'echo $$ > "$1.pid"; exec "$0" kore tail -F -s 0.1 -n 1 "$1"' "$MT" "$T/g" > "$T/o2" 2> /dev/null &
+LOVE_NO_IMAGE= /bin/sh -c 'echo $$ > "$1.pid"; exec "$0" tail -F -s 0.1 -n 1 "$1"' "$MT" "$T/g" > "$T/o2" 2> /dev/null &
 sleep 0.4; echo b >> "$T/g"; sleep 0.3; echo new > "$T/g2"; mv "$T/g2" "$T/g"; sleep 0.4
 : > "$T/g"; echo c >> "$T/g"; sleep 0.4; kill "$(cat "$T/g.pid")"; wait
 [ "$(tr '\n' '|' < "$T/o2")" = "a|b|new|c|" ] || fail "kore tail -F: $(tr '\n' '|' < "$T/o2")"
@@ -130,11 +130,11 @@ rm -f "$W" "$W.j" "$W.t"
 TI=$ho/.teei; M2=$PWD/$m; rm -f "$TI.f"; mkfifo "$TI.f"
 ( k=0; while [ $k -lt 50 ]; do
     for p in $(pgrep -x love); do
-      tr '\0' ' ' 2>/dev/null < /proc/$p/cmdline | grep -q "kore tee -i $TI" && { grep SigIgn /proc/$p/status; kill $p; exit 0; }
+      tr '\0' ' ' 2>/dev/null < /proc/$p/cmdline | grep -q "tee -i $TI" && { grep SigIgn /proc/$p/status; kill $p; exit 0; }
     done; k=$((k + 1)); sleep 0.1
   done ) > "$TI.m" &
 # a real process: the tool shell runs kore's tools aboard
-LOVE_NO_IMAGE= /bin/sh -c 'exec "$0" kore tee -i "$1" <> "$2" > /dev/null' "$M2" "$TI" "$TI.f"; wait
+LOVE_NO_IMAGE= /bin/sh -c 'exec "$0" tee -i "$1" <> "$2" > /dev/null' "$M2" "$TI" "$TI.f"; wait
 sgm=$(awk '{ print $2 }' "$TI.m"); [ $(( 0x${sgm:-0} & 2 )) -eq 2 ] || fail "kore tee -i: SigIgn $sgm"
 printf 'a\nb\n' | korerun tee -p "$TI" > /dev/null && [ "$(cat "$TI")" = "$(printf 'a\nb')" ] || fail "kore tee -p"
 rm -f "$TI" "$TI.m" "$TI.f"

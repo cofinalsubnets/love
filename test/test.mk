@@ -321,7 +321,7 @@ test_sb: host out$(hsuf)/sb
 	@echo TEST src/apps/sb/sb.l + test/host/sb.l
 	@cat test/00-init.l test/host/sb.l | $(gsh) test/gate/run.sh sb "$m" "sb: ok"
 # the kore smokes run through the crew layer, warm per spawn
-korerun = $m kore
+korerun = $m
 # the roster is spelled: test/kore/common.sh is dotted, never run. `make test_kore_sed` runs one
 kore_parts = laws diff toolchain line sort ls grep field column encode fs sed proc \
   procfs sh fork awk find record sum expr bc stat time patch pager top lapiz archive \
@@ -348,7 +348,7 @@ test_seed: $(ho)/love
 	  || { tail -20 $(ho)/.test_seed.out; echo "FAIL love seed"; exit 1; }
 	@tail -1 $(ho)/.test_seed.out
 	@rm -rf $(ho)/.seedtest
-# vi: the modal engine's laws, then scripted `kore vi` sessions over a pipe
+# vi: the modal engine's laws, then scripted `love vi` sessions over a pipe
 test_vi: host
 	@echo TEST src/apps/{tui,vi/hue,vi/hues,vi/core}.l test/law/{tui,vi}.l
 	@cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/libra/lint.l \
@@ -996,10 +996,10 @@ test_kverb: host
 test_kboot: host $(S)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
 	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
-	@$m $(S)/tools/kboot.l $(k_elf) "kore ls /love/src/apps/kore" "kore.l"
-	@$m $(S)/tools/kboot.l $(k_elf) "kore wc /love/src/apps/json.l" "/love/src/apps/json.l" $$(wc -c < $(S)/apps/json.l)
+	@$m $(S)/tools/kboot.l $(k_elf) "ls /love/src/apps/kore" "kore.l"
+	@$m $(S)/tools/kboot.l $(k_elf) "wc /love/src/apps/json.l" "/love/src/apps/json.l" $$(wc -c < $(S)/apps/json.l)
 	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"cd /love/src/apps/kore; pwd\"" "/love/src/apps/kore"
-	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"kore ls /love/src/apps/kore | kore wc -l\"" $$(ls $(S)/apps/kore | wc -l)
+	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"ls /love/src/apps/kore | wc -l\"" $$(ls $(S)/apps/kore | wc -l)
 
 # the vmx laws boot on a bee host with cap vt-x (kvm, -cpu host); test_extra only
 test_kernel_vmx: host $(S)/tools/ktest.l

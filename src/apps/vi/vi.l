@@ -1,6 +1,6 @@
 ; src/apps/vi/vi.l -- the terminal face over src/apps/vi/core.l: read keys off `in`,
 ; blit vframe's escapes onto `out`, perform the write requests the ex commands
-; leave on the state. a toolbox-style file (kore is its door: `kore vi FILE`);
+; leave on the state. a toolbox-style file (kore is its door: `love vi FILE`);
 ; loads after core.l/re.l/vi core in the kore cat and rides the u-floor (uread,
 ; udie) and text.l's lines/unlines.
 ;

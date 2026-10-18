@@ -25,7 +25,7 @@
 ; the parsers are peg's (src/love/boot/post.l): a parser is (\ s y n), payloads are lists.
 
 ; the head names the exports; the rest stays off the tablet. htb hti hq mget serve papel's
-; template, hpe kore www. a consumer says (borrow 'lapiz) or (cite 'lapiz 'md->ht).
+; template, hpe `love www`. a consumer says (borrow 'lapiz) or (cite 'lapiz 'md->ht).
 (module (lapiz mdread mdshow htread htshow rfread rfshow ttyshow ttlinks ttpage ttpics
          md->ht ht->md md->rf rf->md rf->tty md->tty ht->tty convert  htb hti hq hpe mget)
 

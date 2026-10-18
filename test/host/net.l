@@ -56,7 +56,7 @@
        close p))
    srv (tether [love sfile])
    _ (test-until (s \ !(two? s)) (_ \ (stat (dir + "/up"))))   ; its listen, before our connect
-   r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
+   r (tether [love "telnet" "127.0.0.1" (show port)])
    _ (test (two? r))
    m >r
    ; type only once the greeting is up: by then the echo is taken and the terminal raw
@@ -77,10 +77,10 @@
            (0 <= fsub txt "got it" 0)
            (0 <= fsub txt "Connection closed by foreign host." 0)
            (<st2 = 0))
-   r2 (tether [love "kore" "telnet" "127.0.0.1" "1"])
+   r2 (tether [love "telnet" "127.0.0.1" "1"])
    t2 (slurp >r2)
    _ (test (0 <= fsub t2 "telnet: cannot connect to 127.0.0.1 port 1" 0) (<(h-waitfor <r2) = 1))
-   r3 (tether [love "kore" "telnet" "127.0.0.1" "http"])
+   r3 (tether [love "telnet" "127.0.0.1" "http"])
    (test (0 <= fsub (slurp >r3) "telnet: not a port: http" 0) (<(h-waitfor <r3) = 2),
     0))
 
@@ -97,9 +97,9 @@
            (K 'td-esc ("q" + string 255) = "q" + string 255 + string 255))
    love <cmdline
    port (test-free 0)
-   srv (tether [love "kore" "telnetd" "-p" (show port) "-b" "127.0.0.1" "-l" "/bin/sh" "-f" "/dev/null"])
+   srv (tether [love "telnetd" "-p" (show port) "-b" "127.0.0.1" "-l" "/bin/sh" "-f" "/dev/null"])
    _ (test-up port)
-   r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
+   r (tether [love "telnet" "127.0.0.1" (show port)])
    m >r
    _ (rest 500)                                  ; the options settled, the shell's prompt up
    _ (say m "echo td-$((6*7))\rexit\r", flush m)
@@ -119,7 +119,7 @@
    dm >dv
    (line a) (see dm @ c (c < 0 || c = 10 ? a (line (a + string c))))
    path (line "" @ l (0 < #l && l (#l - 1) = 13 ? (snip l 0 (#l - 1)) l))
-   mc (tether [love "kore" "microcom" "-s" "9600" path])
+   mc (tether [love "microcom" "-s" "9600" path])
    mm >mc
    _ (rest 400)
    _ (say mm "ping", flush mm)
@@ -130,7 +130,7 @@
    st (h-waitfor <mc)
    _ (still <dv 15)
    _ (h-waitfor <dv)
-   bad (: r (tether [love "kore" "microcom" "-d" "5" path]) t (slurp >r) [t <(h-waitfor <r)])
+   bad (: r (tether [love "microcom" "-d" "5" path]) t (slurp >r) [t <(h-waitfor <r)])
    (test (got = "ping") (shown = "pong") (<st = 0)
          (0 <= fsub <bad "microcom: -d is not supported" 0) (bad 1 = 1)))
 
@@ -160,7 +160,7 @@
    0)
 "),
        close p))
-   (run args) (: r (tether (love . "kore" . args)) t (slurp >r) [t <(h-waitfor <r)])
+   (run args) (: r (tether (love . args)) t (slurp >r) [t <(h-waitfor <r)])
    srv (tether [love nfile])
    _ (test-until (s \ !(two? s)) (_ \ (stat (nfile + ".up"))))   ; its bind, before our queries
    a (run ["nslookup" ("-port=" + show np) "box.test" "127.0.0.1"])
@@ -183,7 +183,7 @@
    ; the raw sockets, in a namespace where unshare and ip can make one (99 when not)
    (inns cmd) (: r (tether ["/bin/sh" "-c" ("unshare -rn sh -c 'ip link set lo up' 2>/dev/null || exit 99; "
                                            + "exec unshare -rn sh -c 'ip link set lo up && exec " + love
-                                           + " kore " + cmd + "'")])
+                                           + " " + cmd + "'")])
                  t (slurp >r) [t <(h-waitfor <r)])
    rw (inns "ping -c 2 -i 0.2 127.0.0.1")
    _ (rw 1 = 99 ? 0
@@ -226,14 +226,14 @@ nsenter -t $R -n sh -c 'ip link set lo up
 nsenter -t $D -n sh -c 'ip link set lo up
   ip addr add 10.2.0.2/24 dev d0; ip -6 addr add fd02::2/64 dev d0 nodad; ip link set d0 up
   ip route add default via 10.2.0.1; ip -6 route add default via fd02::1' || exit 99
-$LOVE kore ping6 -c 1 -W 2 fd02::2 > /dev/null
+$LOVE ping6 -c 1 -W 2 fd02::2 > /dev/null
 for mode in raw echo; do
   [ $mode = echo ] && echo '0 0' > /proc/sys/net/ipv4/ping_group_range
   echo \"== $mode\"
-  $LOVE kore traceroute -n -q 1 -w 1 10.2.0.2
-  $LOVE kore traceroute -n -q 1 -w 1 -m 3 10.3.0.9
-  $LOVE kore traceroute6 -n -q 1 -w 1 fd02::2
-  $LOVE kore traceroute6 -n -q 1 -w 1 -m 3 fd03::9
+  $LOVE traceroute -n -q 1 -w 1 10.2.0.2
+  $LOVE traceroute -n -q 1 -w 1 -m 3 10.3.0.9
+  $LOVE traceroute6 -n -q 1 -w 1 fd02::2
+  $LOVE traceroute6 -n -q 1 -w 1 -m 3 fd03::9
 done
 kill $R $D
 ",
@@ -251,7 +251,7 @@ kill $R $D
    ; the marks: v4's unreachable codes, v6's, and a time exceeded that marks nothing
    _ (test (K 'tr-mark 0 3 1 = " !H") (K 'tr-mark 0 3 3 = "") (K 'tr-mark 0 11 0 = "")
            (K 'tr-mark 1 1 0 = " !N") (K 'tr-mark 1 1 4 = "") (K 'tr-mark 1 3 0 = ""))
-   lo (: r (tether [love "kore" "traceroute" "-n" "-q" "1" "127.0.0.1"]) t (slurp >r) [t <(h-waitfor <r)])
+   lo (: r (tether [love "traceroute" "-n" "-q" "1" "127.0.0.1"]) t (slurp >r) [t <(h-waitfor <r)])
    (has? <lo "no icmp echo socket" ? (test (lo 1 = 2))
     (test (has? <lo "traceroute to 127.0.0.1 (127.0.0.1), 30 hops max, 60 byte packets")
           (has? <lo " 1  127.0.0.1  ") (lo 1 = 0))))
@@ -262,7 +262,7 @@ kill $R $D
    root net-root
    _ (hark ["rm" "-rf" root], mkdir root 493)
    _ (open (root + "/index.html") "w" @ p (say p "<p>served</p>", close p))
-   (run args) (: r (tether (love . "kore" . "httpd" . args)) t (slurp >r) [t <(h-waitfor <r)])
+   (run args) (: r (tether (love . "httpd" . args)) t (slurp >r) [t <(h-waitfor <r)])
    a (run ["-p" "nohost:8080" "-h" root])
    b (run ["-c" "/etc/httpd.conf"])
    c (run ["-h" (root + "/none")])
@@ -275,14 +275,14 @@ kill $R $D
    port (test-free 0)
    (fetch _) (K 'wg-once 0 "127.0.0.1" port "/")
    (try k) (fetch 0 @ r (? (two? r) r (k < 1) r (rest 50, try (k - 1))))
-   srv (tether [love "kore" "httpd" "-f" "-p" ("0.0.0.0:" + show port) "-h" root])
+   srv (tether [love "httpd" "-f" "-p" ("0.0.0.0:" + show port) "-h" root])
    g (try 100)
    _ (test (two? g) (<g = 200) (g 2 = "<p>served</p>"))
    _ (still <srv 15)
    _ (h-waitfor <srv)
    ; a bare port is loopback's alone: 127.0.0.2 reaches every address on linux, not 127.0.0.1
    p2 (test-free 0)
-   srv2 (tether [love "kore" "httpd" "-f" "-p" (show p2) "-h" root])
+   srv2 (tether [love "httpd" "-f" "-p" (show p2) "-h" root])
    (try2 k) (K 'wg-once 0 "127.0.0.1" p2 "/" @ r (? (two? r) r (k < 1) r (rest 50, try2 (k - 1))))
    g2 (try2 100)
    (test (two? g2) (<g2 = 200) (atom? (K 'wg-once 0 "127.0.0.2" p2 "/")),

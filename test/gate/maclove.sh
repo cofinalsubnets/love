@@ -26,8 +26,8 @@ $box "cat > $rd/hot.prof" < src/tools/hot.prof || fail "the box could not take h
 $box "cd $rd && env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT=$rd/hot.prof ./love.raw bake -o love -l dist-cat.l" \
   || fail "the bake on the box"
 
-out=$($box "cd $rd && ./love -e '(+ 1 2)' && ./love -e '(show love-os)' && ./love kore uname -s \
-  && ./love lush -c 'for i in 1 2 3; do echo \$i; done | ./love kore wc -l' \
+out=$($box "cd $rd && ./love -e '(+ 1 2)' && ./love -e '(show love-os)' && ./love uname -s \
+  && ./love lush -c 'for i in 1 2 3; do echo \$i; done | ./love wc -l' \
   && printf '#include <stdio.h>\nint main(void) { puts(\"native\"); return 7; }\n' > h.c \
   && ./love cc h.c -o h && { ./h; echo \"rc=\$?\"; }; od -An -tx1 -N4 h | tr -d \" \" | head -1 \
   && printf 'double CFAbsoluteTimeGetCurrent(void);\nint main(void) { return CFAbsoluteTimeGetCurrent() > 7e8 ? 9 : 1; }\n' > cf.c \

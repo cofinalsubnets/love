@@ -25,18 +25,16 @@ echo only > "$D/a/oa"; echo only > "$D/b/ob"; echo d > "$D/a/s/deep/g"; echo e >
 echo k > "$D/a/x"; echo q > "$D/a/onlyd/z"
 for f in -u -ru -rq -q -ruN -rNq "-r -u"; do
   # shellcheck disable=SC2086
-  (cd "$D" && diff $f a b | sed -E 's/^(---|\+\+\+) ([^	]*)	.*/\1 \2/' > "$ag"; LOVE_NO_IMAGE= "$M" kore diff $f a b > "$ao"; r=$?; [ $r -eq 1 ]) || fail "kore diff $f a b exit"
+  (cd "$D" && diff $f a b | sed -E 's/^(---|\+\+\+) ([^	]*)	.*/\1 \2/' > "$ag"; LOVE_NO_IMAGE= "$M" diff $f a b > "$ao"; r=$?; [ $r -eq 1 ]) || fail "kore diff $f a b exit"
   same "diff $f a b"
 done
-(cd "$D" && diff -uN a/f nosuch | sed -E 's/^(---|\+\+\+) ([^	]*)	.*/\1 \2/' > "$ag"; LOVE_NO_IMAGE= "$M" kore diff -uN a/f nosuch > "$ao"); same "diff -N"
-(cd "$D" && diff -u a/f b | tail -n +3 > "$ag"; LOVE_NO_IMAGE= "$M" kore diff -u a/f b | tail -n +3 > "$ao"); same "diff FILE DIR"
+(cd "$D" && diff -uN a/f nosuch | sed -E 's/^(---|\+\+\+) ([^	]*)	.*/\1 \2/' > "$ag"; LOVE_NO_IMAGE= "$M" diff -uN a/f nosuch > "$ao"); same "diff -N"
+(cd "$D" && diff -u a/f b | tail -n +3 > "$ag"; LOVE_NO_IMAGE= "$M" diff -u a/f b | tail -n +3 > "$ao"); same "diff FILE DIR"
 rm -rf "$D"
 # kore dispatches on argv[0], so a link named `diff` is diff
-printf '#!/bin/sh\nn=$(basename -- "$0")\nLOVE_NO_IMAGE= exec "%s" kore "$n" "$@"\n' "$PWD/$m" > "$ho/.koreshim"
+printf '#!/bin/sh\nn=$(basename -- "$0")\nLOVE_NO_IMAGE= exec "%s" "$n" "$@"\n' "$PWD/$m" > "$ho/.koreshim"
 chmod 755 "$ho/.koreshim"
 ln -sf .koreshim "$ho/diff"
 "$ho/diff" "$ho/.au1" "$ho/.au2" > "$ho/.kore-sym.out" 2>&1; r=$?
 [ $r -eq 1 ] && cmp -s "$ho/.kore-diff.out" "$ho/.kore-sym.out" \
   || fail "kore argv0 symlink (exit $r)"
-korerun bogus > /dev/null 2>&1; r=$?
-[ $r -eq 2 ] || fail "kore usage (exit $r)"

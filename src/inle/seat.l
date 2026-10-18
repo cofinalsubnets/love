@@ -81,9 +81,6 @@
                       (!(nil? v) ? (v . as)
                          (k-tool (intern (b + "-main")) as @ k
                             (? (two? k) k
-                               ; `kore TOOL ..` where no dispatcher registered one: the test
-                               ; kernel bakes the applets
-                               (b = "kore" && two? as) (k-tool (intern (<as + "-main")) >as)
                                (two? (stat a0)) (k-progf a0 as h)
                                ; a path the seat has not got is looked for on the tarball, so
                                ; `love test/kernel/all.l` names the corpus from any seat

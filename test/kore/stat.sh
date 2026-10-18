@@ -182,9 +182,9 @@ head -c 5000 /dev/zero > "$U/t/a/f.log"; head -c 9000 /dev/zero > "$U/t/a/b/g.tx
 ln -s ../../outside "$U/t/c/lo"
 for c in "t" "--max-depth=1 t" "-d 0 t" "--exclude=*.log t" "-a --exclude=*.log t" "-L t/c" "-x t" "--apparent-size t" "-b t" "--summarize --total t" "-ah --all t"; do
   # shellcheck disable=SC2086
-  (cd "$U" && du $c | sort) > "$g"; (cd "$U" && LOVE_NO_IMAGE= "$PWD/../../$m" kore du $c | sort) > "$o"; same "du $c"
+  (cd "$U" && du $c | sort) > "$g"; (cd "$U" && LOVE_NO_IMAGE= "$PWD/../../$m" du $c | sort) > "$o"; same "du $c"
 done
-(cd "$U" && du -0 t | tr '\0' '\n' | sort) > "$g"; (cd "$U" && LOVE_NO_IMAGE= "$PWD/../../$m" kore du -0 t | tr '\0' '\n' | sort) > "$o"; same "du -0"
+(cd "$U" && du -0 t | tr '\0' '\n' | sort) > "$g"; (cd "$U" && LOVE_NO_IMAGE= "$PWD/../../$m" du -0 t | tr '\0' '\n' | sort) > "$o"; same "du -0"
 rm -rf "$U"
 # df -T, -H, -t and -x by type, against gnu on this box's mounts; a row holds its name,
 # size or type, and mount point, the header whole
@@ -197,7 +197,7 @@ done
 MT=$PWD/$ho/.mkt; rm -rf "$MT"; mkdir "$MT"
 n1=$(korerun mktemp --tmpdir="$MT" --suffix=.txt); case "$n1" in "$MT"/tmp.??????????.txt) [ -f "$n1" ] || fail "kore mktemp --suffix made nothing";; *) fail "kore mktemp --suffix: $n1";; esac
 n2=$(TMPDIR="$MT" korerun mktemp --tmpdir -u); case "$n2" in "$MT"/tmp.??????????) [ ! -e "$n2" ] || fail "kore mktemp --dry-run made one";; *) fail "kore mktemp --tmpdir: $n2";; esac
-n3=$(cd "$MT" && LOVE_NO_IMAGE= "$PWD/../../$m" kore mktemp --suffix .c fooXXXXXX); case "$n3" in foo??????.c) ;; *) fail "kore mktemp TEMPLATE --suffix: $n3";; esac
+n3=$(cd "$MT" && LOVE_NO_IMAGE= "$PWD/../../$m" mktemp --suffix .c fooXXXXXX); case "$n3" in foo??????.c) ;; *) fail "kore mktemp TEMPLATE --suffix: $n3";; esac
 rm -rf "$MT"
 # stat -f: gnu's first three lines, and a -c of the fields that hold still
 for d in / /tmp; do
@@ -216,7 +216,7 @@ if [ -n "$G2" ]; then
     # shellcheck disable=SC2086
     chreset; { (cd "$CH" && $c; echo "rc=$?"); chlay; } > "$g" 2>&1
     # shellcheck disable=SC2086
-    chreset; { (cd "$CH" && LOVE_NO_IMAGE= "$PWD/../../$m" kore $c; echo "rc=$?"); chlay; } > "$o" 2>&1
+    chreset; { (cd "$CH" && LOVE_NO_IMAGE= "$PWD/../../$m" $c; echo "rc=$?"); chlay; } > "$o" 2>&1
     same "$c"
   done
   rm -rf "$CH"

@@ -6,7 +6,7 @@
 ; then hand the console to lush (src/apps/lush.l, catted to /lib/sh.l) and never exit (pid 1 leaving panics the kernel).
 ;
 ; packaged by the Makefile as /init (this file, shebang -> /bin/love), beside /bin/love,
-; /bin/kore (+ applet symlinks) and /lib/sh.l. boot line:
+; the applet symlinks onto /lib/kore.l, and /lib/sh.l. boot line:
 ;   qemu ... -kernel <bzImage> -initrd initramfs.cpio.gz -append "console=ttys0 rdinit=/init"
 ;
 ; safe to dry-run on the host: `out/love init/boot.l` sees getpid != 1, prints the
@@ -28,12 +28,12 @@
    ; one use -- compile is per-binding, so (sh 0) compiles after the splice.
    (console _) ["/bin/love" "-l" "/lib/sh.l" "-e" "(: _ (borrow 'lush) (sh 0))"]
 
-   ; a boot self-check: run a real userland command (kore, forked + captured) so the
+   ; a boot self-check: run a real userland command (kore's ls, forked + captured) so the
    ; console shows the base system works end to end before we hand off the tty. `hark`
-   ; returns (exit . stdout); the shebang on /bin/kore points at /bin/love.
+   ; returns (exit . stdout); /bin/ls links to /lib/kore.l, whose shebang is /bin/love.
    (selfcheck _)
-     (hark ["/bin/kore" "ls" "/proc"] @ r
-        (say1 ("-- self-check: kore ls /proc -> exit " + show <r
+     (hark ["/bin/ls" "/proc"] @ r
+        (say1 ("-- self-check: ls /proc -> exit " + show <r
                + ", " + show #>r + " bytes --")))
 
    ; pid 1's forever loop: harvest every child (waitpid(-1) via `glean`). the console dying

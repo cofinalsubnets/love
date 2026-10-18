@@ -12,7 +12,7 @@
 ;      enter takes the pane to the file, esc back
 ;   r  re-read the pane           q  leave
 ;
-; pictures are drawn by kore pic (src/apps/kore/pic.l): in blocks, or sixel or kitty's graphics
+; pictures are drawn by `love pic` (src/apps/kore/pic.l): in blocks, or sixel or kitty's graphics
 ; where the terminal answers to them and -g does not say otherwise. a thumbnail is cached by
 ; path, mtime and size in cells; one that is dear to decode waits for the keys to rest.
 ;

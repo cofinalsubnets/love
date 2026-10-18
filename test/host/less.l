@@ -12,7 +12,7 @@
    ; keys are typed before raw mode, so "\n" flushes the canonical line; "qq" so a
    ; failed quit or the help page can't park slurp forever
    (run keys args)
-    (: r (tether (cat [love "kore" "less"] args))
+    (: r (tether (cat [love "less"] args))
        _ (test (two? r))
        m >r
        _ (settty m 10 40)
@@ -56,7 +56,7 @@
    _ (test (<>r9 = 0) (has? <r9 "alpha"))
 
    ; a pipe is the text and /dev/tty the keyboard
-   ra (: r (tether ["sh" "-c" (love + " kore head -3 " + f + " | " + love + " kore more")])
+   ra (: r (tether ["sh" "-c" (love + " head -3 " + f + " | " + love + " more")])
          _ (test (two? r))
          m >r
          _ (settty m 10 40)

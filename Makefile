@@ -592,12 +592,10 @@ $(distro_img): src/apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 # in love-raw -- and an initramfs with no /apps/dns.l answers that with a scare that takes
 # the whole cat down. The symptom is every applet gone, not a quiet nc.
 	@cp src/apps/dns.l $(distro_root)/apps/dns.l
-	@{ echo '#!/bin/love'; cat $(korefiles); } > $(distro_root)/bin/kore && chmod 755 $(distro_root)/bin/kore
-	@for a in $(distro_applets); do ln -sf kore $(distro_root)/bin/$$a; done
-	@ln -sf kore $(distro_root)/bin/sh
-	@ln -sf kore $(distro_root)/bin/lush
-	@( cd $(distro_root) && $(mabs) kore find . | $(mabs) cpio -o --quiet ) | $(mabs) gzip > $@
-	@echo "  packed $$($(mabs) gzip -l $@ | $(mabs) kore awk 'NR==2{print $$2}') bytes -> $@"
+	@{ echo '#!/bin/love'; cat $(korefiles); } > $(distro_root)/lib/kore.l && chmod 755 $(distro_root)/lib/kore.l
+	@for a in $(distro_applets) sh lush; do ln -sf ../lib/kore.l $(distro_root)/bin/$$a; done
+	@( cd $(distro_root) && $(mabs) find . | $(mabs) cpio -o --quiet ) | $(mabs) gzip > $@
+	@echo "  packed $$($(mabs) gzip -l $@ | $(mabs) awk 'NR==2{print $$2}') bytes -> $@"
 
 # Direct kernel boot, no bootloader: rdinit=/init makes love pid 1. KVM when the host
 # offers it -- TCG is too slow to reach the console inside a smoke window.
@@ -623,7 +621,7 @@ distro-smoke: $(distro_img)
 	@grep -q "love as PID 1" $(distro_dir)/boot.log && echo "  OK love is pid 1" || { echo "  FAIL not pid 1"; exit 1; }
 	@grep -q "mount proc on /proc -> ok" $(distro_dir)/boot.log && echo "  OK /proc mounted" || { echo "  FAIL /proc"; exit 1; }
 	@grep -q "start the console shell" $(distro_dir)/boot.log && echo "  OK reached shell handoff" || { echo "  FAIL no shell"; exit 1; }
-	@grep -qE "kore ls /proc -> exit 0, [1-9]" $(distro_dir)/boot.log && echo "  OK kore userland runs (ls /proc, forked+captured)" || { echo "  FAIL userland self-check"; exit 1; }
+	@grep -qE "ls /proc -> exit 0, [1-9]" $(distro_dir)/boot.log && echo "  OK kore userland runs (ls /proc, forked+captured)" || { echo "  FAIL userland self-check"; exit 1; }
 	@echo "-- distro smoke passed --"
 
 ko = out$(hsuf)
@@ -1004,11 +1002,11 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # `#!/usr/bin/env -S love -l` would re-exec the wrong interpreter, so it installs as a COPY
 # with line 1 rewritten -- which is what a package wants anyway. The pattern matches both
 # shebang forms, leaving a trailing ` -l` alone.
-# the sed these recipes spawn is OURS: kore is the installed binary's own verb now
+# the sed these recipes spawn is OURS: kore's tools are the installed binary's own verbs
 # (the layered bake). LOVE_NO_IMAGE= (empty = UNSET) leads,
 # for $(hcc)'s reason: the root exports it=1 for the corpus, and an egg-booted love has
-# no verbs -- `kore` would read as a filename.
-korecmd = LOVE_NO_IMAGE= $(ho)/love kore
+# no verbs -- `sed` would read as a filename.
+korecmd = LOVE_NO_IMAGE= $(ho)/love
 ifeq ($(BIN),love)
 # the chmod repairs the target when the source came through svalbard, which does not carry
 # the executable bit -- without it the link resolves to a 644 file and every exec EACCESes.
@@ -1021,7 +1019,7 @@ endif
 
 # ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore sb mooncc cook libra lux bao lush
+binnames = $(BIN) sb mooncc cook libra lux bao lush
 mannames = $(BIN) cook lush
 # the default nest is the one install: `love nest -y` (src/apps/source.l) copies the binary
 # in, newer builds only, and links lush, which runs every other verb by name. a real PREFIX,
@@ -1083,23 +1081,6 @@ $d/bin/cook $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)
-
-# kore, the multi-call toolbox: the util picked off the command line or off argv[0] through
-# a tool-named symlink. It shadows nothing here -- only `kore` lands on PATH, and the distro
-# symlinks the tool names where shadowing is the point.
-# A VERB SHIM: the installed binary carries the crew in its own layered image, so
-# there is no sibling image and no wake spelling -- the
-# picker wakes the crew layer off the `kore` verb, same warm start as ever.
-# `n` comes off $0 UNCHASED where `h` is the chased path: a tool symlink must arrive as its
-# own name for the argv[0] door, and only the real file's dir has the $(BIN) sibling.
-$d/bin/kore: $(MAKEFILE_LIST)
-	@echo '$(t_cat)	'$(abspath $@)
-	@install -d $(dir $@)
-	@{ echo '#!/bin/sh'; \
-	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
-	   echo 'n=$$(basename -- "$$0")'; \
-	   echo 'case "$$n" in kore) LOVE_NO_IMAGE= exec "$$h/$(BIN)" kore "$$@";; *) LOVE_NO_IMAGE= exec "$$h/$(BIN)" kore "$$n" "$$@";; esac'; } > $@
-	@chmod 755 $@
 
 # sb 🌱 and lush 🐚, each its own catted script: their sources carry no shebangs, so the
 # interpreter line then a plain cat. Each SEAT fires on the installed name -- lush's on its

@@ -748,7 +748,7 @@
              sent (up 0)
              (? (0 < sent) (catch d, 0) (bye 0, (os-tls 'tls-close) t, 0)))))
 
-   os-usage "usage: openssl COMMAND [ARGS..]   (love kore's subset; not OpenSSL)
+   os-usage "usage: openssl COMMAND [ARGS..]   (kore's subset; not OpenSSL)
 commands:
   x509 [-in F] [-inform PEM|DER] [-noout] [-text] [-subject] [-issuer] [-dates] [-serial]
        [-fingerprint] [-md5|-sha1|-sha256..] [-ext NAMES] [-pubkey] [-outform PEM|DER] [-out F]
@@ -777,7 +777,7 @@ commands:
                   "rand" (os-rand a)
                   ("base64" || "enc") (? (c = "enc" && !(elem "-base64" a)) (say err "enc: only -base64 is here\n", 1)
                                          (os-b64 (filter (w \ w != "-base64") a)))
-                  "version" (say out "love kore openssl (a subset; not OpenSSL)\n", 0)
+                  "version" (say out "love openssl (a subset; not OpenSSL)\n", 0)
                   "help" (say out os-usage, 0)
                   (say err ("Invalid command '" + c + "'; type \"help\" for a list.\n" + os-usage), 1))))))
 ) ; module kore

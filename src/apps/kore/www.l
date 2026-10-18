@@ -12,7 +12,7 @@
 (:
    ww-usage "usage: www [-w COLS] URL|FILE"
    ww-help
-    "  kore www -- a web page, its links numbered [n]
+    "  www -- a web page, its links numbered [n]
 
   N RETURN          follow link N              N U       show link N's url
   TAB  shift-TAB    the next / last link       RETURN    follow it (a field: fill it in)

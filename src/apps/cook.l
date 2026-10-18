@@ -338,7 +338,7 @@
 ; automatics; each recipe line runs via ("sh" "-c" line). see test/host/cook.l.
 ;
 ; $(wildcard) prefers pure love: lush's glob (src/apps/lush.l, the mask law) over readdir/stat, so
-; `kore make` globs before a shell exists; where it is not aboard globw below keeps the POSIX
+; `love make` globs before a shell exists; where it is not aboard globw below keeps the POSIX
 ; shell-out lane. the probe names sh-line and not the module: module 'lush starts at the floor
 ; in src/love/boot/post.l, so its presence says nothing about the shell itself being aboard.
 (? (lit? (cite 'lush 'sh-line)) 0

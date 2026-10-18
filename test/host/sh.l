@@ -644,11 +644,11 @@
 ; a crew main answers its status to an in-image caller, a deep failure too
 (: C (cite 'verbs 'call)
    (test (1 = C 'cook ["-f" "/nonexistent-qq.mk"]) (2 = C 'sb ["no-such-verb"])
-         (2 = C 'kore ["httpd" "-z"])))
+         (2 = C 'httpd ["-z"])))
 ; a trait may turn on the call: love's bake and wake exec, by a path to this binary too
 (: H (cite 'verbs 'holds)
    (test (1 = H 'love 'exec ["bake"]) (1 = H 'love 'exec ["wake" "x"]) (0 = H 'love 'exec ["-e" "1"])
-         (1 = sh-exec? ["out/love" "bake"]) (0 = sh-exec? ["out/love" "kore" "ls"])
+         (1 = sh-exec? ["out/love" "bake"]) (0 = sh-exec? ["out/love" "ls"])
          (0 = (sh-forkok? shS) ["out/love" "bake"] [(0 . 5)])))
 
 ; a readonly assignment is fatal to a script, from every setter
