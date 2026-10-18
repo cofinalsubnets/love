@@ -2636,7 +2636,14 @@
               edstep t (edkey ip),
               t 'ev @- (loop ()) (-7 || 4) eofsym 10 (edbelow t, putc 10, edchars t)))
 
-   ; the shell line reader: edraw + command history + tab completion
+   ; back to the buffer's top row, cleared, prompt pr drawn again: its width
+   (edreprompt t pr)
+     ((0 < peep t 'row 0 ? (csi (t 'row) 65) ()),
+      putc 13, putc 27, putc 91, putc 74,
+      puts pr, pins t 'row 0 'was 0,
+      edwide pr)
+
+   ; the shell line reader: edraw + command history + tab completion + ^R search
    (edlnc ip pr hist comp)
      (: pl (puts pr, edwide pr) hn #hist t (ednew ())
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
@@ -2644,9 +2651,29 @@
           (: nd (i = 0 ? (revcat (t 'l) (t 'r)) draft)  ; save the live draft once, the instant up leaves it
              (pins t 'l (rev (ni = 0 ? nd (hnth (ni - 1)))) 'r (),
               loop ni nd))
-        (loop i draft)
-          (edrender pl t,
-           edstep t (edkey ip),
+        (hfrom q k)                                   ; the first hist index from k holding q, or -1
+          (: (go j h) (? (atom? h) -1 (0 <= findsub (string <h) q) j (go (j + 1) >h))
+             (go k (drop k hist)))
+        (rlabel q ok) ("(" + (ok ? "" "failed ") + "reverse-i-search)`" + q + "': ")
+        ; ^R: fs the search's [query match found] frames, newest first, a backspace popping one.
+        ; sv the line as it was, back on ^G; any other key takes the match and goes to the line
+        (hunt i draft sv fs)
+          (: q (<fs 0) j (<fs 1)
+             _ (j < 0 ? (edload t sv)
+                  (: h (hnth j) at (findsub (string h) q)
+                     (pins t 'u () 'l (rev (take at h)) 'r (drop at h) 'd ())))
+             _ (edrender (edreprompt t (rlabel q (<fs 2))) t)
+             c (edkey ip)
+             (more q2 k) (hfrom q2 k @ m (hunt i draft sv ([q2 (m < 0 ? j m) (0 <= m)] . fs)))
+             (? (32 <= c < 127 || 127 < c < 256) (more (q + string c) (max j 0))
+                (c = 18) (q = "" ? (hunt i draft sv fs) (more q (j + 1)))
+                (c = 127 || c = 8) (hunt i draft sv (two? >fs ? >fs fs))
+                (c = 7) (edload t sv, edreprompt t pr, loop i draft)
+                (edreprompt t pr,
+                 key (j < 0 ? i (j + 1)) (j < 0 || 0 < i ? draft (revcat (sv 1) (sv 2))) c)))
+        (loop i draft) (edrender pl t, key i draft (edkey ip))
+        (key i draft c)
+          (edstep t c,
            (t 'ev @ 0 (loop i draft)
               (-7 || 4) 'eof
               10 (: ln (edbelow t, putc 10, edchars t)
@@ -2659,8 +2686,11 @@
                          (: _ (pin t 'l (foldl (a \ ch \ ch . a) (t 'l) <cl))
                             cs >cl
                           (two? cs && two? >cs ?
-                            (puts $ "\n" + foldl (a \ s \ 0 = #a ? s "\(a)  \(s)") "" cs + "\n"),
+                            (edbelow t,
+                             puts $ "\n" + foldl (a \ s \ 0 = #a ? s "\(a)  \(s)") "" cs + "\n",
+                             pin t 'row 0, edreprompt t pr),   ; the list, then the prompt under it
                            loop i draft)))))
+              18 (hunt i draft (edframe t) [["" -1 1]])
               -8 (recall i (i >= hn ? i (i + 1)) draft)   ; up: older
               -9 (recall i (0 >= i  ? i (i - 1)) draft)    ; down: newer
               (loop i draft)))
