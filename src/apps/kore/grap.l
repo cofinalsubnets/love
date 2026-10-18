@@ -645,7 +645,7 @@
        width (w != () ? (w + 0.00001) (gr-fl (foldl (m \ s \ max m #<s) 0 ss) / 15))
        _ (gr-ol g "\ttextht = 0.166667")
        _ (lr || w != () ? (gr-ol g "\ttextwid = \(gr-g width)") 0)
-       body (cats (map (s \ " \"\(<s)\"\(s 1)") ss))
+       body (join "" (map (s \ " \"\(<s)\"\(s 1)") ss))
        at (sd @ 'bot " with .n at Frame.s - (0,2 * textht)"
                'top " with .s at Frame.n + (0,2 * textht)"
                'left " wid textwid with .e at Frame.w - (0.2,0)"

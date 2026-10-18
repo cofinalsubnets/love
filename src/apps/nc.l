@@ -61,7 +61,7 @@
      (#s <= k ? (flush dumpf)
         (: e (min #s (k + 16)) b (chars (snip s k e))
            hx (catmap (c \ " " + zpad 2 (radix c 16)) b)
-           pad (catmap (_ \ "   ") ^(16 - #b))
+           pad (join "" (map (_ \ "   ") ^(16 - #b)))
            tx (string (map (c \ 32 <= c < 127 ? c 46) b))
            (say dumpf "\(string dir) \(zpad 8 (radix (o + k) 16))\(hx)\(pad) # \(tx)\n",
             dline dir s o e)))

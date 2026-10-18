@@ -94,7 +94,7 @@
                       (av-t-rd (dir + "/m.wav") @ a (av-t-rd (dir + "/l.wav") @ b (snip a 0 44 = snip b 0 44 && #a = #b)))
                       ; with no -w -s or -t it plays: HORN=none keeps the 1.3 s
                       (: t0 (clock 0) r (sh "HORN=none ../love mpg123 c0.mp3") (r = (0 . "") && 1000 <= clock 0 - t0))
-                      (sh ("HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) (puts (show (av-open (open \"c0.mp3\" \"r\") @ [n m h] [n (m (quote total)) (m (quote tags))] w w))) (puts (show (av-play (open \"c0.mp3\" \"r\")))) (quit 0)' 2>&1")
+                      (sh ("HORN=none ../love -e '(borrow (quote posix), borrow (quote av), (puts (show (av-open (open \"c0.mp3\" \"r\") @ [n m h] [n (m (quote total)) (m (quote tags))] w w))), (puts (show (av-play (open \"c0.mp3\" \"r\")))), quit 0)' 2>&1")
                          = (0 . "(\"mp3\" 57330 (\"TITLE=c0\"))0"))
                       ; entered mid-way, a few frames on it plays what the whole stream does
                       (: s (av-t-rd (dir + "/c2.mp3")) m (pins (mp3-meta s) 'skip 0 'total 0) b {'l ()}
