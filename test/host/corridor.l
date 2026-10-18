@@ -41,7 +41,7 @@
 (: tx "(: rust (texture 32 32 1 '((fill (rgb 0.4 0.2 0.1)) (noise 3 0.2)))) "
    (lt s) (corridor-read (tx + "(level \"t\" " + s + ")"))
    st (corridor-new 8 8 (lt "(skin {'walls rust} (room [0 1 0] [2 3.6 2]))") "")
-   pk (st 'sc 'hall) cs (pk 'cols) (c k i) (peep (cs k) i 0.0)
+   pk (st 'sc 'chunks 0 'pk) cs (pk 'cols) (c k i) (peep (cs k) i 0.0)
    wall (filter (i \ mag (c 6 i) < 0.1) ^(pk 'n))
    two (corridor-read (tx + "(: moss (texture 16 16 1 '((fill (rgb 0.2 0.4 0.1)))))
                          (level \"t\" (skin {'walls rust} (room [0 0 0] [2 2 2])) (skin {'floor moss 'walls rust} (room [0 0 2.2] [2 2 4])))"))
@@ -52,7 +52,7 @@
         = [['wall 0] ['floor 0] ['ceiling 0]])
        (map (t \ t 'name) (two 'textures) = [0 1]) (two 'brushes 1 'skin = [['wall 0] ['floor 1]])
        ; ..each face drawn with the texture its skin names: moss on the second room's floor
-       (: ts (corridor-new 8 8 two "" 'sc 'hall 'tris) (aany (peep ts (iota (#ts // 4) * 4 + 3) -1 = 1)))
+       (: ts (corridor-new 8 8 two "" 'sc 'chunks 0 'pk 'tris) (aany (peep ts (iota (#ts // 4) * 4 + 3) -1 = 1)))
        (has? (lv "(skin {'walls (texture 32 32 1 '((fill 1) (stripes 4 2 (grey 0.5))))} (room [0 0 0] [2 2 2]))")
              "in a texture, (stripes 4 2 (grey 0.5)) -- it reads (stripes every w slant PAINT)")
        (has? (lv "(skin {'walls (texture 32 32 0 '((fill 1)))} (room [0 0 0] [2 2 2]))") "(texture width height metres LAYERS)")

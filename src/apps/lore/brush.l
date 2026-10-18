@@ -5,7 +5,7 @@
 ; a plane is [n d], holding the points p with dot n p <= d. brush-prism's plan ps is [x z]
 ; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
 ; corners, facing, and the brush index; brush-mesh's (look n p b) answers [tex u v].
-(module (brush brush brush-box brush-prism brush-cut brush-move brush-mirror brush-medium brush-mesh brush-faces)
+(module (brush brush brush-box brush-prism brush-cut brush-move brush-mirror brush-medium brush-mesh brush-chunks brush-faces)
 (borrow 'view)                          ; min2 max2
 (borrow 'vec)                           ; triples
 (borrow 'mesh)
@@ -81,12 +81,42 @@
      (map (i \ [(map (m \ m = k ? 1.0 0.0) ^3) (cell * (a + i))]) ^(z - a + 1)))
    pls (cats (map lines ^3))
    (foldl (\ l pl (cats (map (p \ (crosses? p pl ? (filter (q \ #q >= 3 && area q > 1e-8) (split p pl)) [p])) l))) [ps] pls))
- (brush-mesh bs cell look)
+ ; ..or cut coarse and each piece again at half while (split? ps c) says it is too coarse,
+ ; down to fine: every size a power of two of fine, so the lines are the fine grid's
+ (grids ps c fine split?) (c <= fine ? (grid ps fine)
+   (cats (map (p \ (split? p c ? (grids p (0.5 * c) fine split?) [p])) (grid ps c))))
+ ; ..cell a number, or [coarse fine split?]
+ (brush-mesh bs cell look) (mesh-join (brush-chunks bs cell look 1e9))
+ ; ..and in meshes a chunk each, the pieces k metres square in plan
+ (brush-chunks bs cell look k)
   (: fs (brush-faces bs)
-     ; ..a piece of brush b's fanned from its first corner, turned to face n
-     (fan ps n b) (: k (look n (mid ps) b) tex (k 0)
-       vs (map (p \ (look n p b @ t [(p 0) (p 1) (p 2) (t 1) (t 2) (n 0) (n 1) (n 2) 1.0 1.0 1.0])) ps)
+     (cut ps) (charm? cell || gem? cell ? (grid ps cell) (grids ps (cell 0) (cell 1) (cell 2)))
+     fine (charm? cell || gem? cell ? cell (cell 1))
+     pcs (cats (map (f \ map (p \ [p (f 1) (f 2)]) (cut (f 0))) fs))
+     ; ..every corner, a millimetre a step, so a piece takes on its edges the corners of the
+     ; finer pieces beside it, and no crack opens between them
+     (key p) (: (r v) (int (floor (v * 1000.0 + 0.5))) (show [(r (p 0)) (r (p 1)) (r (p 2))]))
+     seen (foldl (\ t pc (foldl (\ t p (pin t (key p) 1)) t (pc 0))) {} pcs)
+     (on a b) (: d (sub b a)
+       ts (cats (map (k \ (: lo (min2 (a k) (b k)) hi (max2 (a k) (b k))
+                        (hi - lo < 1e-6 ? ()
+                           (: m0 (int (floor (lo / fine)) + 1) m1 (int (floor ((hi - 1e-6) / fine)))
+                              (map (m \ (fine * m - a k) / d k) (map (+ m0) ^(max2 0 (m1 - m0 + 1))))))))
+                     ^3))
+       hit (filter (t \ 1e-6 < t && t < 1.0 - 1e-6 && peep seen (key (c+ a (c* t d))) 0) ts)
+       (map (t \ c+ a (c* t d)) (foldl (\ l t (any (u \ mag (u - t) < 1e-6) l ? l (l + [t]))) () (sort hit))))
+     (edged ps) (: n #ps (cats (map (i \ (: a (ps i) b (ps ((i + 1) % n)) (a . on a b))) ^n)))
+     ; ..a piece of brush b's fanned from its first corner, or from its middle when its edges
+     ; took on corners, turned to face n
+     (vert n b p) (look n p b @ t [(p 0) (p 1) (p 2) (t 1) (t 2) (n 0) (n 1) (n 2) 1.0 1.0 1.0])
+     (fan ps0 n b) (: ps (edged ps0) tex (look n (mid ps0) b 0)
        (one a b c) (dot (cross (sub (ps c) (ps a)) (sub (ps b) (ps a))) n > 0.0 ? [a b c tex] [a c b tex])
-       (mesh vs (map (i \ one 0 (i + 1) (i + 2)) ^(#ps - 2))))
-     (mesh-join (cats (map (f \ map (p \ fan p (f 1) (bs (f 2))) (grid (f 0) cell)) fs)))))
+       (#ps = #ps0
+        ? (mesh (map (vert n b) ps) (map (i \ one 0 (i + 1) (i + 2)) ^(#ps - 2)))
+          (: m #ps ps2 (ps + [(mid ps0)])
+             (two a b) (dot (cross (sub (ps2 b) (ps2 m)) (sub (ps2 a) (ps2 m))) n > 0.0 ? [m a b tex] [m b a tex])
+             (mesh (map (vert n b) ps2) (map (i \ two i ((i + 1) % m)) ^m)))))
+     (at pc) (: m (mid (pc 0)) (show [(int (floor (m 0 / k))) (int (floor (m 2 / k)))]))
+     by (foldl (\ t pc (pin t (at pc) (fan (pc 0) (pc 1) (bs (pc 2)) . peep t (at pc) ()))) {} pcs)
+     (map (q \ mesh-join (rev (by q))) (sort (keys by)))))
 ) ; module brush

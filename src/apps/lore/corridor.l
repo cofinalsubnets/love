@@ -26,7 +26,8 @@
  door-v 1.4 door-near 2.4 door-t 0.03     ; the doors: their pace, how near opens one, half their thickness
  car-t 0.08 car-wait 0.6 car-hold 1.5 car-acc 1.2  ; a car: its walls' thickness, the seconds before its door
                                                   ; opens and after it shuts, how fast it gathers speed
- cell 0.25                                ; how fine the surfaces are cut, for the light
+ chunk-m 8.0 cell 0.25 cell-top 2.0                   ; how fine the surfaces are cut near a lamp, for the
+                                          ; light, and how coarse far from every one
  watch-every 10                           ; frames between looks at the files
  the-level "src/apps/lore/levels/hall.l"
  ; --- the level, read: (corridor-read s) runs a level file's text into a tablet {'name 'start
@@ -235,6 +236,11 @@
  (poster-mesh lv p tex tw th) (: a (p 'at) hg (hang lv (a 0) (a 1)) n (hg 1) rt (hg 2) w (a 3) h (a 4)
    o (c+ (c+ (hg 0) (c* 0.006 n)) (c+ [0.0 (a 2) 0.0] (c* (-0.5 * w) rt)))
    (sheets o [0.0 h 0.0] (c* w rt) n (q \ (: d (c+ q (c* -1.0 o)) [(1.0 * tw / w * dot d rt) (1.0 * th / h * (h - d 1))])) tex white))
+ ; ..whether a piece of surface c across is too coarse for the lamps lps: a lamp's light
+ ; changes the more across a cell the nearer it is
+ (coarse? lps) (\ ps c (: lo (map (k \ foldl (\ a p (min2 a (p k))) 1e9 ps) ^3) hi (map (k \ foldl (\ a p (max2 a (p k))) -1e9 ps) ^3)
+   (d p) (sqrt (net (map (k \ sq (max2 0.0 (max2 (lo k - p k) (p k - hi k)))) ^3)))
+   (any (lp \ any (p \ (: dd (d p) (dd < lp 'r && 6.0 * c > dd + 0.5))) (lp 'at)) lps)))
  (file-of dir p) (p 'file @ () () f (f 0 @ 47 f (dir + f)))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
  ;     dir the level's folder, for its pictures ---
@@ -243,7 +249,8 @@
    ptex (map (p \ poster-tex (file-of dir p) (p 'at 3) (p 'at 4)) ps)
    pm (map (i \ poster-mesh lv (ps i) (#tt + i) (shape (ptex i 0) 1) (shape (ptex i 0) 0)) ^#ps)
    bs (brushes-of lv)
-   hall (mesh-pack (mesh-join (brush-mesh bs cell (look tt) . pm)))
+   ; ..the world in chunks chunk-m square, so a frame draws only those in view, nearest first
+   cks (map mesh-pack (brush-chunks bs [cell-top cell (coarse? (cats (map (l \ l 'lamps) ls)))] (look tt) chunk-m + pm))
    drs (map (d \ mesh-pack (door-mesh d tt)) (lv 'doors))
    ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds
    ; only the lights that change
@@ -256,7 +263,8 @@
    cars (map (c \ (: b (mesh-pack (car-mesh c tt)) d (mesh-pack (car-door c tt)) lp (car-lamp c)
                      {'body b 'body-lit (clit lp b) 'door d 'door-lit (clit lp d) 'bar (mesh-pack (car-bar c))}))
              (peep lv 'cars ()))
-   {'hall hall 'hall-lit (lit hall) 'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs
+   {'chunks (map (pk \ {'pk pk 'lit (lit pk) 'lo (map (k \ amin (pk 'cols k)) ^3) 'hi (map (k \ amax (pk 'cols k)) ^3)}) cks)
+    'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs
     'texs (map (t \ swatch (t 'w) (t 'h) (t 'layers)) txs + ptex)})
  ; --- the frame: the rooms and doors lit by the lights as bright as they are now, then
  ;     what shines, then the glows; out as half blocks or kitty's pixels ---
@@ -268,7 +276,14 @@
    v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 60.0)
    dk (map (i \ ks i) (sc 'dyn))
    (relit pk l) (mesh-lamps! pk (l 'base) (l 'chs) dk 1.0)
-   hall (relit (sc 'hall) (sc 'hall-lit))
+   ; ..the chunks some corner of whose box is inside each plane of the view, nearest first
+   cam (v 'cam) (row i p) (peep cam (4 * i) 0.0 * p 0 + peep cam (4 * i + 1) 0.0 * p 1 + peep cam (4 * i + 2) 0.0 * p 2 + peep cam (4 * i + 3) 0.0)
+   (seen? c) (: lo (c 'lo) hi (c 'hi)
+     qs (map (j \ (: p [(j % 2 ? (hi 0) (lo 0)) (j // 2 % 2 ? (hi 1) (lo 1)) (j // 4 ? (hi 2) (lo 2))] [(row 0 p) (row 1 p) (row 2 p) (row 3 p)])) ^8)
+     !(any (out \ !(any (q \ !(out q)) qs)) [(q \ q 0 < 0.0 - q 3) (q \ q 0 > q 3) (q \ q 1 < 0.0 - q 3) (q \ q 1 > q 3) (q \ q 2 < 0.0 - q 3) (q \ q 2 > q 3)]))
+   (far c) (net (map (k \ sq (0.5 * (c 'lo k + c 'hi k) - e k)) ^3))
+   cks (sc 'chunks)
+   hall (map (q \ (: c (cks (q 1)) (relit (c 'pk) (c 'lit)))) (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i)) ^#cks))))
    ; ..each door slid open along its wall into the wall's thickness
    doors (map (i \ (: pk (sc 'doors i) b (relit pk (sc 'doors-lit i)) d (lv 'doors i)
                       ix (iota (pk 'n) * 8 + (d 'ax = 'z ? 0 2))
@@ -284,7 +299,8 @@
                ^#(peep lv 'cars ())))
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (cats (map (i \ cats (map (q \ ((q 1 * ks i) @ 0.0 () b [(mesh-shine (q 0) b)])) (sc 'lights i key))) ^#ks))
-   all ([hall] + doors + cars + by 'shine + map mesh-glow (by 'glow))
+   ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
+   all (cars + doors + hall + by 'shine + map mesh-glow (by 'glow))
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) [0.0 0.0 0.0 30.0 60.0] 8 gain 0))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again

@@ -155,12 +155,19 @@
    [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
  ; ..the same, written into one buffer the packed mesh keeps, its places and texels laid
  ; once and only its colours each call: what a scene relit every frame draws. the last
- ; call's answer is the buffer, so a mesh is lit this way once a frame
- (mesh-lamps! pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
-   (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
-   i (iota n * 8)
-   buf (peep pk 'buf () @ () (: v (foldl (\ v k (pin v (i + k) (c k))) (iota (8 * n) * 0.0) ^5) (pin pk 'buf v, v)) v v)
-   [(foldl (\ v k (pin v (i + 5 + k) (lit k))) buf ^3) (pk 'tris)])
+ ; call's answer is the buffer, so a mesh is lit this way once a frame. amb, chs and gain
+ ; are the first call's every call, so after it only the vertices some lamp reaches change
+ (mesh-lamps! pk amb chs ks gain)
+  (: (lit c8 base chs j) (gain * c8 j * foldl (\ a i (a + ks i * chs i j)) (base j) ^#chs)
+     (pins3 v ix l) (foldl (\ v k (pin v (ix + 5 + k) (l k))) v ^3)
+     (peep pk 'buf () @
+      () (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0) i (iota n * 8)
+           base (map (j \ z + amb j) ^3) c8 (map (j \ c (8 + j)) ^3)
+           v (pins3 (foldl (\ v k (pin v (i + k) (c k))) (iota (8 * n) * 0.0) ^5) i (lit c8 base chs))
+           on (iota (foldl (\ a ch (a + ch 0 + ch 1 + ch 2)) z chs > 0.0)) (g t) (peep t on 0.0)
+           _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (ch \ map g ch) chs)})
+           [v (pk 'tris)])
+      b (: lv (pk 'live) [(pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs))) (pk 'tris)])))
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
  ; ..and a scene's triangles made glows, added over what is behind them: a copy
