@@ -74,7 +74,8 @@ static lvm_t *const image_extra_aps[] = {
  lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_unc,
  lvm_fputbn, lvm_yield_sw, lvm_yield_nif, lvm_task_exit,
  _lvm_yieldk,     // a task parked mid-yield carries it
- lvm_deferfwd };  // a deferred native whose compile declined
+ lvm_deferfwd,    // a deferred native whose compile declined
+ lvm_firstcall }; // ..and one not called yet
 // a data object's words, as the gc sizes it. d carries the kind, s the length words: two
 // homes only in a fused load, the ap decoded into the pool while the payload is still in the blob
 static uintptr_t image_datasize(union u *d, void const *s) {

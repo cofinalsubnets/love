@@ -426,7 +426,7 @@ lvm(lvm_natp) {
  word x = Sp[0];
  union u *k = evenp(x) ? cell(x) : NULL, *e = k && k->ap == lvm_cur ? k + 2 : k;
  int nat = e && (code_in(g, (uintptr_t)(e->ap == lvm_lazy ? k[-1].ap : e->ap))
-                 || (e->ap == lvm_deferfwd && k[-1].ap == lvm_deferfwd));   // a deferred one that declined: its twin still at value[1]
+                 || ((e->ap == lvm_deferfwd || e->ap == lvm_firstcall) && k[-1].ap == e->ap));   // a deferred one, declined or not called yet: its twin still at value[1]
  love_musttail return Answer(putcharm(nat)); }
 // (arena 0) -> [mapped bumped free spans]: the code arena's bytes and its free list's length
 lvm(lvm_arena) {
