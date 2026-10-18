@@ -24,10 +24,12 @@
    lo 24 hi 1200                                    ; its lags: 2 kHz down to 40 Hz
    linger 2500                                      ; ms a reading stands once the sound stops
    tuner-usage "usage: love tuner [-a HZ] [-d DEV] [--demo] [--window]
-listen and show the pitch on a scale of eighth tones, A4 at HZ (440); DEV is the capture
-device (HORN_IN's word otherwise), and --demo glides a sine instead; --window draws in a
-window, where a tap on its left, middle or right third is a, s or A. a/A move A4, s the
-spectrum, q quits."
+show the pitch heard, in eighth tones
+  -a HZ      the pitch of A4 (default 440)
+  -d DEV     the capture device (default HORN_IN)
+  --demo     a gliding sine instead of the microphone
+  --window   draw in a window (tap left, middle, right for a, s, A)
+keys: a/A move A4, s shows the spectrum, q quits"
 
    (hue o) (hues (max 0 (min 8 o)))
    (ink o s) (sgr "38;5;\(hue o)" s)

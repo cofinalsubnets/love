@@ -436,15 +436,14 @@ force_src: ;
 # the roster is the bake section, what a carried-source bake decodes alone (main.c).
 $(src_tree): force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) set $(ho)/.dist.list $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(ho)/.dist.list $(dist_drop)
 
 out/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(hosta)
-# the build stamp is 0, not the set's: recording hot.prof moves that stamp
 out/prof/src.tree: force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) 0 $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
 out/prof/src.o: out/prof/src.tree src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l out/prof/src.tree $@ $(hosta)
@@ -1023,8 +1022,8 @@ endif
 # spellings of a list is how they drift.
 binnames = $(BIN) kore sb mooncc cook libra lux bao lush
 mannames = $(BIN) cook lush
-# the default nest is the one install: `love nest -y` (src/apps/source.l) copies the binary
-# in, newer builds only, and links lush, which runs every other verb by name. a real PREFIX,
+# the default nest is the one install: `love nest` (src/apps/source.l) copies the binary
+# in and links lush, which runs every other verb by name. a real PREFIX,
 # DESTDIR or BIN keeps the whole roster as files
 nestnames = $(BIN) lush
 ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love|.love/|$(HOME)/)
@@ -1056,7 +1055,7 @@ nestlaid = $(if $(nested),$(patsubst %,$d/bin/%,$(nestnames)) $(patsubst %,$(com
 install: $(installs) $(if $(nested),nest-self)
 .PHONY: nest-self
 nest-self: $(ho)/love
-	@LOVE_NO_IMAGE= $(ho)/love nest -y
+	@LOVE_NO_IMAGE= $(ho)/love nest
 uninstall:
 	@echo '$(t_rm)	'$(abspath $(installs) $(nestlaid))
 	@rm -f $(installs) $(nestlaid)

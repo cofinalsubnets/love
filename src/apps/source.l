@@ -3,8 +3,6 @@
 (borrow 'tar)
 
 (borrow 'posix)
-; civil, for a stamp's date (src/love/boot/post.l)
-(borrow 'cal)
 (: (src-die m) (udie 1 ";; \(m)")
 
    ; a leading dash is never the positional directory, so a mistyped flag lays nothing
@@ -237,12 +235,9 @@
 
    (seed-usage _) (puts """
     usage: love seed [-g] [ARCH] [DIR]
-      lay this binary's source under DIR (default .) and rebuild it there;
-      the result has to BE this binary, byte for byte.
-      ARCH    x64 | a64 | rv64 -- an egg for that machine instead, DIR/love-ARCH.
-              its first run there bakes it in place, so it must sit somewhere writable
-      -g      gregarious: the ambient cc and tools build, ours fill the gaps.
-              without it ours go throughout, whatever PATH holds
+    lay this binary's source under DIR (default .) and rebuild it, byte for byte
+      ARCH   x64 | a64 | rv64: build for that machine instead, as DIR/love-ARCH
+      -g     build with the system cc and tools, ours filling the gaps
 
     """)
 
@@ -349,25 +344,7 @@
         puts ";; wrote \(out) (\(arch))\n",
         0))
 
-   ; -- nest: this binary laid as the user's love under ~/.love/bin, the tools linked to it --
-   ; the build stamp is the carried tree's STAMP (src/tools/selfpack.l lays it: the newest patch
-   ; time in the set it was cut from); 0 where this binary carries no source, or no stamp in it
-   (nest-stamp _)
-    (uread "/love/STAMP" @ [1 s] (: v <(sound (s + "")) (charm? v ? v 0)) 0)
-   ; a stamp as its utc minute, which is what a person compares
-   (nest-when t)
-    (t < 1 ? "unstamped"
-       (: d (civil (t // 86400)) m (t % 86400 // 60)
-          (two x) (x < 10 ? "0\(x)" (show x))
-          "\(<d)-\(two <>d)-\(two <>>d) \(two (m // 60)):\(two (m % 60)) utc"))
-   ; the installed love's stamp, asked of it: 0 when it has none to give. its verbs are
-   ; read first, so a love older than nest is never handed a word it would complain about
-   (nest-theirs p)
-    (: vs (hark [p "verbs"])
-       has (<vs = 0 && elem "nest" (lines >vs))
-       r (has ? (hark [p "nest" "--stamp"]) [1 ""])
-       v (? (<r = 0) <(sound >r) 0)
-       (charm? v ? v 0))
+   ; -- nest: this binary laid as the user's love under ~/.love/bin, lush linked to it --
    (nest-read p) (uread p @ [1 s] (s + "") ())
    ; the one tool linked to love by its own name, the argv[0] door: lush, autonomous by
    ; default, runs every other verb by name (`lush -c 'mooncc ..'`), PATH or no PATH
@@ -384,139 +361,55 @@
    (nest-stale bin)
     (filter (nm \ 0 < #nm && nm 0 != 46 && !(elem nm nest-keep) && nest-laid? "\(bin)/\(nm)")
             (two? (stat bin) ? (readdir bin) ()))
-   ; a ~/.local/bin link into the nest whose name the nest no longer holds, or will not
-   (nest-stale-compat home bin gone)
+   ; a ~/.local/bin link into the nest whose name the nest no longer holds
+   (nest-stale-compat home bin)
     (: d "\(home)/.local/bin"
        (filter (nm \ 0 < #nm && nm 0 != 46 && readlink "\(d)/\(nm)" = "\(bin)/\(nm)"
-                     && (elem nm gone || !(two? (stat "\(bin)/\(nm)"))))
+                     && !(two? (stat "\(bin)/\(nm)")))
                (two? (stat d) ? (readdir d) ())))
-
-   ; the verdict: 'fresh (none there) 'older 'same (these bytes) 'twin (one stamp, other
-   ; bytes) 'newer, or 'other (a stamp is 0, so no order). a tool's 'was is its link's
-   ; target, "a file", or "" when absent
-   (nest-vd old new mine theirs)
-    (? !(string? old) 'fresh (old = new) 'same (theirs < 1 || mine < 1) 'other
-       (theirs < mine) 'older (theirs = mine) 'twin 'newer)
-   (nest-plan f?)
-    (: home (getenv "HOME")
-       _ (string? home && #home ? 0 (src-die "nest: no HOME"))
-       me (selfpath 0)
-       _ (string? me ? 0 (src-die "nest: cannot find this binary"))
-       bin "\(home)/.love/bin" dst "\(bin)/love"
-       new (nest-read me)
-       _ (string? new ? 0 (src-die "nest: cannot read \(me)"))
-       old (two? (stat dst) ? (nest-read dst))
-       mine (nest-stamp 0)
-       theirs (string? old ? (nest-theirs dst) 0)
-       vd (nest-vd old new mine theirs)
-       lay (elem vd '(fresh older other) || f? && !(vd = 'same))
-       (tool nm) (: p "\(bin)/\(nm)" l (readlink p)
-                    was (? (string? l) l (two? (stat p)) "a file" "")
-                    {'nm nm 'was was 'act (was = "love" ? 'keep 'link)})
-       gone (nest-stale bin)
-       {'home home 'bin bin 'dst dst 'me me 'new new 'mine mine 'theirs theirs 'verdict vd
-        'lay (lay ? 'lay 'keep) 'tools (map tool nest-tools)
-        'gone gone 'gonec (nest-stale-compat home bin gone)})
-   ; the verdict, said
-   (nest-verdict pl) (pl 'verdict @
-    'fresh "the nest has no love yet"
-    'older "the nest's love is older"
-    'same "the nest's love is this very build"
-    'twin "the nest's love has this stamp but other bytes"
-    'other "the nest's love is another build, and one of the two is unstamped: no order"
-    "the nest's love is newer")
-   ; a tool's line: what it is, and what it becomes
-   (nest-tool-line pl t)
-    (: nm (t 'nm) was (t 'was) pad (fill1 8 nm)
-       (? (t 'act = 'link) "\(pad)\(#was ? was "absent") -> love"
-          (was = "love") "\(pad)love"
-          "\(pad)\(#was ? was "absent"), kept"))
-   (fill1 n s) (n <= #s ? "\(s) " (fill1 n "\(s) "))
-   ; the plan, said: every line a person needs to say yes to it
-   (nest-lines pl)
-    (["~/.love/bin/love: \(nest-when (pl 'theirs))\(pl 'verdict = 'fresh ? " (none)" ""), this build: \(nest-when (pl 'mine))"
-      (nest-verdict pl)
-      (pl 'lay = 'lay ? "lay this build as ~/.love/bin/love" "leave ~/.love/bin/love as it is")
-      "the tools:"]
-     + map (t \ "  \(nest-tool-line pl t)") (pl 'tools)
-     + map (nm \ "  \(fill1 8 nm)laid by an earlier install, removed") (pl 'gone)
-     + map (nm \ "  ~/.local/bin/\(nm) removed") (pl 'gonec))
    ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not
    ; ours already is left alone
    (nest-compat home bin nm)
     (: d "\(home)/.local/bin" p "\(d)/\(nm)" to "\(bin)/\(nm)"
        (!(two? (stat d)) || string? (readlink p) || two? (stat p) ? 0 (symlink to p)))
-   ; the plan carried out: the lines it says of what it did
-   (nest-apply pl)
-    (: home (pl 'home) bin (pl 'bin) dst (pl 'dst)
-       _ (mkdir "\(home)/.love" 493) _ (mkdir bin 493)
-       laid (pl 'lay = 'lay ?
-               (: tmp "\(bin)/.love.new"
-                  q (open tmp "w")
-                  _ (hot? q ? (say q (pl 'new), close q) (src-die "nest: cannot write \(tmp)"))
-                  _ (chmod tmp 493)
-                  ; the copy runs before it takes the name: a binary cut short, or one a
-                  ; gate left half-built, never becomes the love on PATH
-                  ok (hark [tmp "-e" "1 + 1"])
-                  _ (<ok = 0 && >ok = "2\n" ? 0
-                       (unlink tmp, src-die "nest: the copy does not run; nothing replaced"))
-                  e (rename tmp dst)
-                  ((!e ? 0 (unlink tmp, src-die "nest: cannot rename over \(dst)")),
-                   ["~/.love/bin/love is now \(nest-when (pl 'mine))\(pl 'verdict @ 'fresh "" ", was \(nest-when (pl 'theirs))")"])))
-       ; a link to love wants a love to point at
-       there (two? (stat dst))
-       (link t) ("\(bin)/\(t 'nm)" @ p
-                   (unlink p, symlink "love" p,
-                    readlink p = "love"))
-       ls (there ? (filter (t \ t 'act = 'link && link t) (pl 'tools)))
-       _ (each (pl 'gone) (nm \ unlink "\(bin)/\(nm)"))
-       _ (each (pl 'gonec) (nm \ unlink "\(home)/.local/bin/\(nm)"))
-       gn (pl 'gone + map (nm \ "~/.local/bin/\(nm)") (pl 'gonec))
-       ((there ? (each ("love" . map (t \ t 'nm) (pl 'tools)) (nest-compat home bin)) 0),
-        laid + (two? ls ? ["linked \(foldl (a \ t \ "\(a) \(t 'nm)") (<ls 'nm) >ls)"])
-        + (two? gn ? ["removed \(foldl (a \ n \ "\(a) \(n)") <gn >gn)"])))
-   (nest-usage _)
-    (say err "usage: love nest [-f] [-y | -n] [--stamp]
-  lay this binary as ~/.love/bin/love and link its tools beside it. on a terminal the
-  nest opens as a floor to walk; -y and -n are the plain ways, and the one taken
-  anywhere else
-  -y, --yes      do it: a newer build there, or one of this stamp, is kept unless -f
-  -n, --dry-run  say the plan and leave
-  -f, --force    lay this build whatever is there
-  --stamp        print this build's stamp and leave
-")
+   ; lays new as dst unless it is there already: 'laid or 'same
+   (nest-lay bin dst new)
+    (? (nest-read dst = new) 'same
+       (: tmp "\(bin)/.love.new"
+          q (open tmp "w")
+          _ (hot? q ? (say q new, close q) (src-die "nest: cannot write \(tmp)"))
+          _ (chmod tmp 493)
+          ; the copy runs before it takes the name: a binary cut short, or one a
+          ; gate left half-built, never becomes the love on PATH
+          ok (hark [tmp "-e" "1 + 1"])
+          _ (<ok = 0 && >ok = "2\n" ? 0
+               (unlink tmp, src-die "nest: the copy does not run; nothing replaced"))
+          (!(rename tmp dst) ? 'laid (unlink tmp, src-die "nest: cannot rename over \(dst)"))))
+   nest-usage "usage: love nest
+install this binary as ~/.love/bin/love, with lush beside it
+"
    (nest-main as)
-    (: known ["-f" "--force" "-y" "--yes" "-n" "--dry-run" "--stamp"]
-       bad (filter (a \ !(elem a known)) as)
-       _ (two? bad ?
-            (? (src-help? <bad) (nest-usage 0, quit 0)
-               (src-vers? <bad) (src-vers "nest")
-               (say err "love nest: unknown option \(<bad)\n", nest-usage 0, quit 2))
+    (: _ (two? as ?
+            (? (src-help? <as) (puts nest-usage, quit 0)
+               (src-vers? <as) (src-vers "nest")
+               (say err "love nest: unknown option \(<as)\n", say err nest-usage, quit 2))
             0)
-       (has? a b) (elem a as || elem b as)
-       f? (has? "-f" "--force") y? (has? "-y" "--yes") n? (has? "-n" "--dry-run")
-       _ (elem "--stamp" as ? (puts "\(nest-stamp 0)\n", quit 0) 0)
-       pl (nest-plan f?)
-       (say1 m) (puts "love nest: \(m)\n")
-       (sayall ls) (each ls (l \ puts "\(l)\n"))
-       floor (cite 'roost 'roost-run)
-       term (two? (tty 0) && two? (tty 1))
-       (? n? (sayall (nest-lines pl), 0)
-          (term && !y? && floor)
-          (floor pl @ r
-             (r = 'apply ? (sayall (map (l \ "love nest: \(l)") (nest-apply pl)), 0)
-                (say1 "nothing changed", 0)))
-          ; the plain way: a build no newer is kept, and says why
-          (pl 'verdict @ vd
-             ((elem vd '(newer twin) && !f? ?
-                 (say err ("love nest: ~/.love/bin/love is \(nest-when (pl 'theirs)), this is \(nest-when (pl 'mine))"
-                           + (vd = 'twin ? ", a different build" "")
-                           + " -- -f lays this one\n"),
-                  quit 1)
-                 0),
-              (vd = 'same ? (say1 "~/.love/bin/love is this build already, \(nest-when (pl 'mine))") 0),
-              sayall (map (l \ "love nest: \(l)") (nest-apply pl)),
-              0))))
+       home (getenv "HOME")
+       _ (string? home && #home ? 0 (src-die "nest: no HOME"))
+       me (selfpath 0)
+       _ (string? me ? 0 (src-die "nest: cannot find this binary"))
+       new (nest-read me)
+       _ (string? new ? 0 (src-die "nest: cannot read \(me)"))
+       bin "\(home)/.love/bin"
+       _ (mkdir "\(home)/.love" 493) _ (mkdir bin 493)
+       r (nest-lay bin "\(bin)/love" new)
+       _ (each nest-tools (nm \ "\(bin)/\(nm)" @ p (readlink p = "love" ? 0 (unlink p, symlink "love" p))))
+       _ (each (nest-stale bin) (nm \ unlink "\(bin)/\(nm)"))
+       _ (each (nest-stale-compat home bin) (nm \ unlink "\(home)/.local/bin/\(nm)"))
+       _ (each ("love" . nest-tools) (nest-compat home bin))
+       (puts (r = 'same ? "love nest: ~/.love/bin/love is already this build (\(love-build 0))\n"
+                          "love nest: installed ~/.love/bin/love (\(love-build 0))\n"),
+        0))
 
    ; -- lux: the window manager, a verb over the source this binary carries. its modules
    ;    read in the Makefile's order (luxfiles), so the wm and its love never skew; it

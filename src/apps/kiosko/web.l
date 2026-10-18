@@ -90,16 +90,11 @@
                           md? (sv-doc p <>r ())
                           (sv-page p (hw-body p <>r) [(p + ".md") "the header, as a document"]))))]))))
 
-   sv-usage "love web -- the tree in a browser, painted on the way out
-usage: love web [-p [IP:]PORT] [-n] [DIR]
-  -p, --port PORT   the port to listen on (default 8080), on 127.0.0.1 alone; IP:PORT
-                    names the address, 0.0.0.0:PORT every one
+   sv-usage "usage: love web [-p [IP:]PORT] [-n] [DIR]
+serve a source tree to a browser
+  -p, --port PORT   listen on PORT (default 8080, on 127.0.0.1); IP:PORT picks the address
   -n, --no-build    serve DIR as it is
-  DIR               the tree to serve (default .)
-a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. the github
-page is laid first -- make web site-wasm -- and the machine is the page, at /.
-where DIR is no tree the source aboard is laid under it first (`love source`) and that
-tree is served. this binary drives the page's build; no love is compiled for it.
+  DIR               the tree (default .); with no tree there, this binary's source is laid out first
 "
    (sv-die c m) (udie c ("web: " + m))
 

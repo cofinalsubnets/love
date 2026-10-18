@@ -101,14 +101,14 @@
 (module 'zstdcmd
 (borrow 'zstd)
 (borrow 'posix)
-(: zsc-help "zstd -- zstandard in love (src/love/compress/zstd.c is the codec)
+(: zsc-help "zstd -- the zstandard compressor
 usage: zstd [-cdfkqtvz] [-#] [--rm] [-o FILE] [FILE..]
   -z  compress (the default)            -d  decompress (unzstd)
   -c  write on stdout                   -o FILE  write FILE, one input
   -k  keep the input (the default)      --rm  remove the input once done
   -f  overwrite an existing output      -t  test the files, write nothing
   -q  say less                          -v  say more, on err
-  -#  the level, 1 to 19 (3)            -T#, --ultra, --[no-]check: taken
+  -#  the level, 1 to 19 (3)            -T#, --ultra, --[no-]check: accepted, ignored
 no file, or a bare -, is the filter: stdin -> stdout"
    zsc-sufs [[".zst" ""] [".tzst" ".tar"]]
 

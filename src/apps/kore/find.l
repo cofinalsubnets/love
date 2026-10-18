@@ -200,7 +200,7 @@
        ws (filter (w \ !(w = "-depth")) <d) maxd <>d mind <>>d
        pr (two? ws ? (fi-or ws) [['true] ()])
        _ (two? pr && atom? <>pr ? ()
-          (udie 1 "usage: find [-L] [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"))
+          (udie 1 "usage: find [-L] [PATH..] [EXPR]"))
        e (fi-acts? <pr ? <pr ['and <pr ['print]])
        st {}
        _ (pins st 'now (clock 0) 'L (L? ? 1 0) 'depth (elem "-depth" <d || has-delete? e ? 1 0))

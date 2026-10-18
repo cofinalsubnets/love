@@ -867,8 +867,7 @@ define j(n, x) {
                (c = 97) (dc-args st 1 0 @ r
                            ((two? r ?
                                (<<>r @ v
-                                  (say err "dc: warning: 'a' command is deprecated\n\t(contact <bug-dc@gnu.org> if you actually use it)\n",
-                                   dc-push st (string? v ? (#v ? (string (v 0)) "") (string (dc-int v % 256 & 255)))))
+                                  (dc-push st (string? v ? (#v ? (string (v 0)) "") (string (dc-int v % 256 & 255)))))
                                0),
                             go (i + 1)))
                (elem c [115 108 83 76 58 59])
