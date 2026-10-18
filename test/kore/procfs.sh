@@ -65,6 +65,14 @@ done
 korerun ps -u root | awk '{ print $1 }' | grep -qx 1 || fail "kore ps -u root"
 korerun ps -o bogus > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore ps -o bogus ($r)"
 korerun ps -p 999999999 > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore ps -p of no pid ($r)"
+# args with control bytes, procps's utf-8 face: a newline a space, the rest ?, C1 too; -f matches that face
+qa=$(printf 'kq\tb\nc\001d\177e \303\251\302\233f')
+sh -c 'sleep 30; :' kq "$qa" & pq=$!; sleep 0.3
+for c in "ps -o args= -p $pq" "pgrep -a -f kq.b" "pgrep -f kq\\?b"; do
+  # shellcheck disable=SC2086
+  LC_ALL=C.UTF-8 $c > "$g" 2>&1; LC_ALL=C.UTF-8 korerun $c > "$o" 2>&1; same "$c, a control byte"
+done
+kill $pq; wait $pq 2> /dev/null
 # pgrep -l -a -c -d -n -o -f -x -u and a miss, over two naps of our own; pkill -e -n the newest alone
 PN=$PWD/$ho/.kore-pgnap; cp "$(command -v sleep)" "$PN"; chmod 755 "$PN"
 "$PN" 30 & pa=$!; sleep 0.3; "$PN" 31 & pb=$!; sleep 0.3
