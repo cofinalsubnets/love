@@ -90,6 +90,7 @@
    ; bytes -> a canonical bracket: ']' first, '^' not first, '-' last, no nul
    (lex-brtext bs neg)
     (: has {} _ (map (b \ pin has b 1) bs)
+       _ (has 0 ? (lex-die "a nul byte in a pattern") ())
        mid (filter (b \ has b && b != 93 && b != 45 && b != 94) (map (+ 1) (jot 255)))
        _ (two? mid || has 93 || has 45 || has 94 ? () (lex-die "an empty bracket"))
        ("[" + (neg ? "^" "") + (has 93 ? "]" "") + string mid + (has 94 ? "^" "") + (has 45 ? "-" "") + "]"))
@@ -118,7 +119,9 @@
    ; each definition translates seeing the ones before it
    (lex-defs ds) (foldl (acc \ d \ acc + [[<d (lex-ere acc <>d)]]) () ds)
    ; -- regcomp's program, read back: (op x y bytes) by pc. the block is a header, np instructions
-   ; (op x y, and a pointer's room), then the sets' byte maps; byte mode keeps no ranges --
+   ; (op x y, and a pointer's room), then the sets: a byte map, then neg; byte mode keeps no ranges.
+   ; regcomp leaves nul out of every set, its text never holding one; a scanner's does, and a
+   ; negated set takes it, as flex's [^\n] does --
    (lex-i32 b o) (: v (b o + 256 * b (o + 1) + 65536 * b (o + 2) + 16777216 * b (o + 3))
                     (v < 2147483648 ? v (v - 4294967296)))
    (lex-prog e)
@@ -126,7 +129,8 @@
        _ (string? b ? () (lex-die ("regcomp refuses " + e)))
        np (lex-i32 b 0) ns (lex-i32 b 4)
        _ (#b = 40 + 24 * np + 56 * ns ? () (lex-die "regcomp's program is not the block this reads"))
-       (set k) (: o (40 + 24 * np + 56 * k) (filter (c \ ((b (o + (c >> 3)) >> (c & 7)) & 1)) (jot 256)))
+       (set k) (: o (40 + 24 * np + 56 * k)
+                  (filter (c \ (c = 0 ? (lex-i32 b (o + 32) != 0) ((b (o + (c >> 3)) >> (c & 7)) & 1))) (jot 256)))
        sets (map set (jot ns))
        (map (pc \ (: o (40 + 24 * pc) op (lex-i32 b o) x (lex-i32 b (o + 4)) y (lex-i32 b (o + 8))
                     [op x y (op = 2 ? (sets x) ())]))
@@ -158,7 +162,7 @@
                                (elem op [0 1 2 12]) (go >l (i . acc))
                                (lex-die "an anchor, an assertion or a back-reference in a rule"))))
            (sort (go l ())))
-       (bytes i) (nd i @ f (<f @ 0 [<>f] 1 (map (+ 1) (jot 255)) 2 (f 3) ()))
+       (bytes i) (nd i @ f (<f @ 0 [<>f] 1 (jot 256) 2 (f 3) ()))
        ; byte classes: the bytes no consuming node tells apart share one
        sig (: t {} _ (map (i \ (elem <(nd i) [0 1 2] ? (map (c \ pin t c (i . peep t c ())) (bytes i)) 0)) (jot N)) t)
        cid {} reps {}
