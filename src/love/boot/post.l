@@ -2064,7 +2064,7 @@
 ; a forked lush child calls cli-line too, in place of exec'ing this binary.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage stage-run ttysize ttytake ttygive edkey edtap edgc
-          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers udoor edcmd edsgr edwide edcut edpad edfit sgr
+          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers love-build udoor edcmd edsgr edwide edcut edpad edfit sgr
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -2566,6 +2566,11 @@
    ; bare letters are free -- posix or gnu has spoken for one in a few places, and there the
    ; long form is the only answer. answers the main a verb registry takes.
    (uvers nm) "\(nm) / love \(love-version)"                           ; the --version answer, one spelling for every tool
+   ; this build's name: the version and a short hash of the source it carries, off the
+   ; carried tree's section crcs. same source, same name; no source, the version alone
+   (love-build _)
+    (tree-head 0 @ () "love \(love-version)"
+       h "love \(love-version) \(snip (cite 'hashes 'sha256 (show (map (s \ [<s (s 2) (s 4)]) h))) 0 8)")
    (udoor nm f u h? v?)
     (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one
                    (puts (n && x (n - 1) = 10 ? x "\(x)\n"), flush out, 0))
@@ -2693,7 +2698,7 @@
                             (hot? q ? (reads q) (say err "love: cannot open \(p)\n", cli-leave 1)))
                (eval1 s) (sounds s @ 'torn (say err "love: -e: unfinished form\n", cli-leave 2)
                                     (d @ (a . u)) (ev 'ev (atom? u ? a d)))   ; many datums fold to one application
-               v-msg "love \(love-version)\n"
+               v-msg "\(love-build 0)\n"
                h-msg
                """
                usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]

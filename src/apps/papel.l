@@ -264,12 +264,12 @@ table{border-collapse:collapse}
       n))
 
 ; --- the command line ---------------------------------------------------------------------
-(: papel-usage "papel -- the static site (markdown -> html, through lapiz, built by cook)
+(: papel-usage "papel -- a static site from markdown
 usage: papel [-o OUT] [-t TITLE] [SRC ..]
   -o, --out DIR     where the site is written (default out/site)
   -t, --title NAME  the site name, used in the header and on the index (default papel)
   -q, --quiet       write the site and say nothing
-  -s, --serve PORT  build, then hand OUT to kiosko and serve it on PORT
+  -s, --serve PORT  build, then serve the site on PORT
   SRC               a .md file or a directory of them; with none, README.md and doc/
 "
    pm (:

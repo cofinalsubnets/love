@@ -536,7 +536,6 @@
    _ (map (f \ (? (#f = 64) (unlink (".sb/derive/" + f)) ())) (readdir ".sb/derive"))
    hset (setof (psid head1))                             ; a past head stays a name
    hnone (setof (sha256 "no such set"))
-   hst (sb-stamp ()) hstn (set-stamp (head ()))
    _ (unlink ".sb/head") old (head ())
    _ (chdir "../../.."))
 
@@ -549,7 +548,7 @@
  (0 < ns) (<>back = "the worker's\n") (<>wmore = "the hub's again\n")
  (sha256 <>hfile = hps)
  (own = 'took) (again = 'again) (other = ()) (dead = 'took)
- (show hset = show [head1]) !(two? hnone) hst (0 < hstn)
+ (show hset = show [head1]) !(two? hnone)
  (show old = show (sort [nb nm nwk])))
 
 

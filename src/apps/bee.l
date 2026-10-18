@@ -1811,7 +1811,7 @@
          door (\ _ (? (0 < #bx) (relay bx "" "--door") [1 ""]))
          [["love, nested in ~/.love/bin"
            (\ _ (two? (stat "\(bee-home)/.love/bin/love") && two? (stat "\(bee-home)/.love/bin/lush")))
-           (\ _ "in a love tree (a seed, or love source DIR): make, then ./out/love nest -y")]
+           (\ _ "in a love tree (a seed, or love source DIR): make, then ./out/love nest")]
           ["the hub named: (hub NAME@BOX) in ~/.love/etc/bee.l"
            (\ _ (0 < at && 0 < #bx))
            (\ _ "mkdir -p \(etc) && echo '(hub hub@BOX)' >> \(etc)/bee.l   # BOX: the box that keeps the queue's hub")]

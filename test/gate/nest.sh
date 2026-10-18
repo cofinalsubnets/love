@@ -1,10 +1,8 @@
 #!/bin/sh
 # test/gate/nest.sh -- `love nest`, the binary laying itself as the user's love, in a
-# HOME of its own: the plan said (-n) and done (-y), the same build again, an older love,
-# an unstamped one, and -- where this build is stamped -- a newer one, one of the same stamp
-# with other bytes, and -f. a stamp of 0 orders nothing: either side unstamped, other bytes lay. off a terminal a bare
-# `love nest` is -y's; the floor (src/apps/lore/roost.l) is test/host/roost.l's. the installed love is a script where the
-# case wants a stamp no build here carries; it answers `verbs` and `nest --stamp`.
+# HOME of its own: a fresh nest, the same build again, another love replaced, what earlier
+# installs laid pruned, and the build's name, a short hash of the source it carries, in
+# --version and in nest's line.
 #
 # usage: sh test/gate/nest.sh LOVE
 set -u
@@ -15,24 +13,20 @@ fails=0
 fail() { echo "FAIL nest: $*"; fails=$((fails+1)); }
 fresh() { rm -rf "$H"; mkdir -p "$H/.local/bin"; }
 nest() { HOME=$H "$love" nest "$@" 2>&1; }
-fake() { printf '#!/bin/sh\n[ "$1" = verbs ] && { echo nest; exit 0; }\necho %s\n' "$1" > "$H/.love/bin/love"
-         chmod 755 "$H/.love/bin/love"; }
 
-mine=$("$love" nest --stamp)
-[ "$mine" -ge 0 ] 2>/dev/null || fail "--stamp answers no number: '$mine'"
-# built in a nest, the binary carries the set's stamp: sb's own answer, to the second
-if [ -d .sb ]; then
-  set_stamp=$("$love" sb stamp)
-  [ "$mine" = "$set_stamp" ] || fail "built in a nest, the stamp is $mine, the set's is $set_stamp"
-fi
+# the name: love, the version, and 8 hex of the carried source; the same on every ask
+ver=$("$love" --version)
+case $ver in "love $(cat VERSION) "[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+  *) fail "--version said: $ver";; esac
+[ "$("$love" --version)" = "$ver" ] || fail "--version moved between two asks"
+cp "$love" "$PWD/out/.nest-twin"
+[ "$("$PWD/out/.nest-twin" --version)" = "$ver" ] || fail "a copy of these bytes has another name"
+rm -f "$PWD/out/.nest-twin"
 
 fresh
-out=$(nest -n); st=$?
-[ $st = 0 ] || fail "-n exits $st"
-case $out in *"the nest has no love yet"*"lush     absent -> love"*) ;; *) fail "-n said: $out";; esac
-[ -e "$H/.love/bin/love" ] && fail "-n laid a love"
-out=$(nest -y); st=$?
+out=$(nest); st=$?
 [ $st = 0 ] || fail "a fresh nest exits $st: $out"
+[ "$out" = "love nest: installed ~/.love/bin/love ($ver)" ] || fail "a fresh nest said: $out"
 cmp -s "$love" "$H/.love/bin/love" || fail "a fresh nest did not lay this binary"
 [ "$(readlink "$H/.love/bin/lush")" = love ] || fail "lush is not linked to love"
 for t in kore sb cook libra mooncc lux; do
@@ -51,10 +45,9 @@ printf '#!/bin/sh\nexec "$h/love" -e "((cite '"'"'cli '"'"'shell) 0)" "$@"\n' > 
 ln -sf "$PWD/src/apps/papel.l" "$b/papel"
 echo 'mine' > "$b/seed"; ln -sf "$b/seed" "$l/seed"
 ln -sf "$b/gone" "$l/gone"
-out=$(nest -n)
-case $out in *"kore     laid by an earlier install, removed"*) ;; *) fail "-n did not plan the pruning: $out";; esac
 out=$(nest); st=$?
 [ $st = 0 ] || fail "the pruning nest exits $st: $out"
+[ "$out" = "love nest: ~/.love/bin/love is already this build ($ver)" ] || fail "the same build again said: $out"
 for t in kore mooncc ai lux bao papel; do
   [ -e "$b/$t" ] || [ -L "$b/$t" ] && fail "$t was not pruned"
 done
@@ -62,42 +55,23 @@ for t in kore mooncc ai lux gone; do [ -L "$l/$t" ] && fail "~/.local/bin/$t was
 [ "$(cat "$b/seed")" = mine ] || fail "a file the nest did not lay was touched"
 [ "$(readlink "$l/seed")" = "$b/seed" ] || fail "a link to a file the nest did not lay was touched"
 
+# any other love is replaced, older or not; lush is linked again if it went
+printf '#!/bin/sh\necho 4000000000\n' > "$b/love"; rm -f "$b/lush"
 out=$(nest); st=$?
-[ $st = 0 ] || fail "the same build again exits $st"
-case $out in *"this build already"*) ;; *) fail "the same build again said: $out";; esac
+[ $st = 0 ] || fail "over another love exits $st: $out"
+[ "$out" = "love nest: installed ~/.love/bin/love ($ver)" ] || fail "over another love said: $out"
+cmp -s "$love" "$b/love" || fail "another love was not replaced"
+[ "$(readlink "$b/lush")" = love ] || fail "lush was not linked again"
 
-printf '#!/bin/sh\nexit 1\n' > "$H/.love/bin/love"     # older than nest: no verbs to ask
-out=$(nest); st=$?
-[ $st = 0 ] || fail "over an older love exits $st: $out"
-cmp -s "$love" "$H/.love/bin/love" || fail "an older love was not replaced"
-
-fake 0
-out=$(nest); st=$?
-[ $st = 0 ] || fail "over an unstamped love exits $st: $out"
-cmp -s "$love" "$H/.love/bin/love" || fail "an unstamped love was not replaced"
-
-if [ "$mine" -gt 0 ]; then
-  fake 4000000000
-  out=$(nest); st=$?
-  [ $st = 1 ] || fail "over a newer love exits $st, wanted 1"
-  case $out in *"-f lays this one"*) ;; *) fail "over a newer love said: $out";; esac
-
-  fake "$mine"
-  out=$(nest); st=$?
-  [ $st = 1 ] || fail "over the same stamp, other bytes, exits $st, wanted 1"
-  out=$(nest -f); st=$?
-  [ $st = 0 ] || fail "-f exits $st"
-  cmp -s "$love" "$H/.love/bin/love" || fail "-f did not replace"
-else
-  fake 4000000000                                       # this build is unstamped: no order
-  out=$(nest); st=$?
-  [ $st = 0 ] || fail "an unstamped build over a stamped love exits $st: $out"
-  cmp -s "$love" "$H/.love/bin/love" || fail "an unstamped build was not laid over a stamped love"
-fi
-
-out=$(nest -z); st=$?
-[ $st = 2 ] || fail "an unknown option exits $st, wanted 2"
+# no flags: a word is refused, and the old ones with it
+for o in -z -y -f -n --stamp; do
+  out=$(nest $o); st=$?
+  [ $st = 2 ] || fail "nest $o exits $st, wanted 2"
+done
+out=$(nest -h); st=$?
+[ $st = 0 ] || fail "nest -h exits $st"
+case $out in "usage: love nest"*) ;; *) fail "nest -h said: $out";; esac
 
 rm -rf "$H"
 [ $fails = 0 ] || { echo "FAIL nest ($fails)"; exit 1; }
-echo "nest: the binary lays itself newer-only (unstamped: by bytes, stamp $mine), links lush, prunes what earlier installs laid, and -f overrides"
+echo "nest: the binary lays itself as $ver, links lush, prunes what earlier installs laid"
