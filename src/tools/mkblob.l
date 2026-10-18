@@ -15,8 +15,8 @@
 (borrow 'posix)
 (lit? (cite 'holo 'objelf) ? (borrow 'holo) 0)   ; splice the assembler when this love is baked
 
-(: (mkblob-slurp p) (uread p @ [1 s] [1 (s + "")] ())
-   (mkblob-die m) (udie 1 ("mkblob: " + m))
+(: (mkblob-slurp p) (uread p @ [1 s] [1 "\(s)"])
+   (mkblob-die m) (udie 1 "mkblob: \(m)")
 
    ; text -> the byte list `raw` takes, built from the tail so the walk is a tail call
    (mkblob-bytes s i acc) (i < 0 ? acc (mkblob-bytes s (i - 1) (s i . acc)))
@@ -31,10 +31,10 @@
    (mkblob-be2 arch)
     (lit? (backends arch) ? 0
        ; the backend file is the canonical arch word now -- one spelling, no map
-       (: f ("src/love/holo/" + string arch + ".l")
+       (: f "src/love/holo/\(arch).l"
           q (open f "r")
           (q ? (mkblob-rdev (flow q), close q)
-           (mkblob-die ("no backend aboard and no text at " + f)))))
+           (mkblob-die "no backend aboard and no text at \(f)"))))
    (mkblob-rdev cl)
     (sound cl @ 'torn (mkblob-die "torn backend text")
                 (a . u) (ev a, mkblob-rdev u))
@@ -44,22 +44,22 @@
    ; bytes behind the text as (blob 0) in moon.l's wasm-tu container
    (mkblob-wasm dst forms syms s)
     (: q (open dst "w")
-       _ (!(hot? q) ? (mkblob-die ("cannot write " + dst)))
+       _ (!(hot? q) ? (mkblob-die "cannot write \(dst)"))
        t (show [() forms () syms () () () () () () () ()])
-       (say q ("wo1 " + show #t + " " + show #s + "\n" + t + s), close q))
+       (say q "wo1 \(#t) \(#s)\n\(t)\(s)", close q))
 
    (mkblob arch src dst sym)
-    (: _ (arch = 'wasm ? 0 (mkblob-be arch))
+    (: _ (arch @ 'wasm 0 (mkblob-be arch))
        g (mkblob-slurp src)
-       _ (atom? g ? (mkblob-die $ "cannot read " + src))
+       _ (atom? g ? (mkblob-die "cannot read \(src)"))
        s <>g
        n #s
-       _ (0 < n ? 0 (mkblob-die (src + " is empty")))
-       lsym (sym + "_len")
+       _ (0 < n ? 0 (mkblob-die "\(src) is empty"))
+       lsym "\(sym)_len"
        ; the payload rides as a BLOB -- the string itself, one item holding every byte
        ; (holo.l's item-len) -- so a wad costs a cell here and not four million
        forms [['label (nom lsym)] ['raw (mkblob-le8 n 0 ())]
-              ['label (nom sym)]  ['raw [(arch = 'wasm ? '(blob 0) s)]]]
+              ['label (nom sym)]  ['raw [(arch @ 'wasm '(blob 0) s)]]]
        (arch = 'wasm ? (mkblob-wasm dst forms [sym lsym] s)
         (write-bytes dst (objelf arch () () () [sym lsym] () () () () () forms))))
 

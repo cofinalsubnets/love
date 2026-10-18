@@ -74,11 +74,10 @@
                (<fs . pre >fs))
    (emit1 g)
     (: nm (g 0) fs (plift (g 1))
-       (each fs (f \ puts $ "\n ; " + string nm + "  " + show f),
-        puts $ "\n (defn " + string nm + " nlist",
+       (each fs (f \ puts "\n ; \(nm)  \(f)"),
+        puts "\n (defn \(nm) nlist",
         each fs (f \ lift1 f @ q
-                       (puts $ "\n    (ncons " + show (q 0) + " (ncons " + show (q 1)
-                               + " (ncons " + show (q 2) + " (ncons " + show (q 3))),
+                       (puts "\n    (ncons \(q 0) (ncons \(q 1) (ncons \(q 2) (ncons \(q 3)")),
         puts $ "\n    nnil" + ")" * 4 * #fs + ")",
         ()))
 

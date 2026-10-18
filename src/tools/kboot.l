@@ -26,7 +26,7 @@
    miss ((: (g w acc) (atom? w ? (rev acc)
                        (g >w (has? out <w ? acc (<w . acc))))) want ())
    (atom? miss
-    ? (puts ("kboot ok: " + app), putc 10)
-      (say err ("test_kboot FAILED: " + app), put err 10,
-       each miss (m \ (say err ("  missing: " + m), put err 10)),
+    ? (puts "kboot ok: \(app)\n")
+      (say err "test_kboot FAILED: \(app)\n",
+       each miss (m \ say err "  missing: \(m)\n"),
        say err out, put err 10, quit 1)))

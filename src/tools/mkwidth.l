@@ -9,33 +9,33 @@
 ; U+4DC0..U+4DFF are 2; the rest is 1. prints the array, each entry cp * 4 + w opening a
 ; run of width w that lasts to the next entry.
 (borrow 'posix)
-(: (rd p) (uread p @ [1 s] (s + "") (die ("cannot read " + p)))
-   (die m) (udie 1 ("mkwidth: " + m))
+(: (rd p) (uread p @ [1 s] "\(s)" (die "cannot read \(p)"))
+   (die m) (udie 1 "mkwidth: \(m)")
    (hex s) (foldl (a \ c \ a * 16 + hexv c) 0 (chars s))
    ; a data line as its fields, the comment gone and each field cut to its first word
    (fields ln) (map (f \ words f @ w (two? w ? <w "")) (split ";" <(split "#" ln)))
    (span f) (split ".." f @ p [(hex <p) (hex (two? >p ? <>p <p))])
    ; every data line of file as its fields
-   (rows file) (filter (r \ two? r && #<r) (map fields (lines (rd (dir + "/" + file)))))
+   (rows file) (filter (r \ two? r && #<r) (map fields (lines (rd "\(dir)/\(file)"))))
    (fill t lo hi w) (hi < lo ? t (fill (pin t lo w) (lo + 1) hi w))
    (fillf t f w) (span f @ s (fill t (s 0) (s 1) w))
    dir (two? >argv ? <>argv (die "usage: love src/tools/mkwidth.l UCD-DIR"))
    t {}
    _ (each (rows "EastAsianWidth.txt")
-       (r \ (r 1 = "W" || r 1 = "F") ? (fillf t <r 2) 0))
+       (r \ r 1 @ ("W" || "F") (fillf t <r 2) 0))
    _ (each (rows "UnicodeData.txt")
-       (r \ (r 2 = "Mn" || r 2 = "Me" || r 4 = "NSM") ? (pin t (hex <r) 0) 0))
+       (r \ r 2 = "Mn" || r 2 = "Me" || r 4 = "NSM" ? (pin t (hex <r) 0) 0))
    _ (each (rows "HangulSyllableType.txt")
-       (r \ (r 1 = "V" || r 1 = "T") ? (fillf t <r 0) 0))
+       (r \ r 1 @ ("V" || "T") (fillf t <r 0) 0))
    _ (each (rows "DerivedCoreProperties.txt")
-       (r \ r 1 = "Default_Ignorable_Code_Point" ? (fillf t <r 0) 0))
+       (r \ r 1 @ "Default_Ignorable_Code_Point" (fillf t <r 0) 0))
    _ (pin t 173 1)
    _ (fill t 4447 4447 2)
    _ (fill t 12872 12879 2)
    _ (fill t 19904 19967 2)
    ; the runs: an entry wherever the width changes, a gap in the keys reading as 1
    (go ks prev pw acc)
-    (atom? ks ? (rev (pw = 1 ? acc ((prev + 1) * 4 + 1 . acc)))
+    (atom? ks ? (rev (pw @ 1 acc ((prev + 1) * 4 + 1 . acc)))
        (: k <ks w (t k)
           gap (k > prev + 1 && pw != 1)
           acc1 (gap ? ((prev + 1) * 4 + 1 . acc) acc)
@@ -43,13 +43,13 @@
           (go >ks k w (w = pw1 ? acc1 (k * 4 + w . acc1)))))
    runs (go (sort (keys t)) -1 1 [1])
    ; a C array, ninety-odd columns a line
-   (clay l ln) (atom? l ? (puts (ln + " };\n"))
+   (clay l ln) (atom? l ? (puts "\(ln) };\n")
                   (show <l + (two? >l ? "," "") @ e
-                     (#ln + #e > 92 ? (puts (ln + "\n"), clay l "  ") (clay >l (ln + " " + e)))))
-   (arr ty nm l) (clay l ("static " + ty + " const " + nm + "[" + show #l + "] = {"))
+                     (#ln + #e > 92 ? (puts "\(ln)\n", clay l "  ") (clay >l "\(ln) \(e)"))))
+   (arr ty nm l) (clay l "static \(ty) const \(nm)[\(#l)] = {")
    ; a run table as its entries' low halves, and where each plane's entries start
-   (packed nm l) (arr "uint16_t" nm (map (x \ x & 65535) l),
-                  arr "uint16_t" (nm + "_p") (map (k \ #(filter (x \ (x >> 16) < k) l)) ^18))
+   (packed nm l) (arr "uint16_t" nm (map (& 65535) l),
+                  arr "uint16_t" "\(nm)_p" (map (k \ #(filter (x \ (x >> 16) < k) l)) ^18))
    ; the widths, four to a byte
    ws (map (x \ x & 3) runs)
    (quads l) (atom? l ? () ((foldl (\ a k (a | ((peep l k 0) << (2 * k)))) 0 ^4) . quads (drop 4 l)))
