@@ -197,7 +197,7 @@
 ; a value import: one verdict for one body, the same natives under either spelling
 (: G (cite 'glaze)
    gzsp-body '(? (n <= i) acc (? (s i = 32) (emit acc 'sp i (i + 1)) (? (s i = 10) (emit acc 'nl i (i + 1)) (? (s i = 9) (emit acc 'tab i (i + 1)) (? (s i < 48) (emit acc 'punct i (i + 1)) (? (s i < 58) (emit acc 'digit i (i + 1)) (? (s i < 65) (emit acc 'sym i (i + 1)) (emit acc 'word i (i + 1)))))))))
-   (gzsp-n src) (: a (peep fires () 0) lx (ev src 1) [(peep fires () 0 - a) (nat? lx) (lx "a 1" 3 0 ())])
-   gzsp-sib (gzsp-n ['\ 'keep [': '(emit acc k a b) '(keep && a < b ? ([k a b] . acc) acc) '(lx s n i acc) gzsp-body 'lx]])
-   gzsp-val (gzsp-n ['\ 'keep [': '(mk-emit kp) '(\ acc k a b (kp && a < b ? ([k a b] . acc) acc)) 'emit '(mk-emit keep) '(lx s n i acc) gzsp-body 'lx]])
-   (? G (test (gzsp-sib = gzsp-val)) 0))
+   (gzsp-n src) (: F (ev 'fires) a (peep F () 0) lx (ev src 1) [(peep F () 0 - a) (nat? lx) (lx "a 1" 3 0 ())])
+   (? G (test ((gzsp-n ['\ 'keep [': '(emit acc k a b) '(keep && a < b ? ([k a b] . acc) acc) '(lx s n i acc) gzsp-body 'lx]])
+              = gzsp-n ['\ 'keep [': '(mk-emit kp) '(\ acc k a b (kp && a < b ? ([k a b] . acc) acc)) 'emit '(mk-emit keep) '(lx s n i acc) gzsp-body 'lx]]))
+      0))
