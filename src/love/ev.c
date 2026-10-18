@@ -695,13 +695,21 @@ static love_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
  // the stale closure; the imports kept
  for (d = lam; ok(g) && chainp(d); d = B(d)) g = lset(g, A(d), LThread, zero);
 
- // ndef: def with each closure for its source, consed over the reversed def into literal order
+ // ndef: def with each closure for its source, consed over the reversed def into literal order.
+ // lam runs in that order too, matched by place: a let may bind one name twice
+ word dl = lam;
+ mm(g, &dl);
  for (e = nom, v = def; ok(g) && chainp(e); e = B(e), v = B(v)) {
   word nv;
   if (lambp(g, A(v))) {
-   d = assq(g, lam, A(e));
+   d = A(dl);
+   // a name this binding's body calls is its latest binding before this one, else the latest
+   g = append(push(g, 2, B(dl), lam));
+   if (ok(g)) g = eset(g, c, ELams, pop1(g));
+   dl = B(dl);
    size_t nb = llen(lget(g, d, LImps)); // frozen: sites already applied it
    g = c0_lambda(g, c, lget(g, d, LImps), BA(v));
+   if (ok(g)) g = eset(g, c, ELams, lam);
    if (!ok(g)) return forget();
    g = lset(g, d, LThread, A(g->sp[0]));        // the pair stays on the stack: either
    if (ok(g)) g = lset(g, d, LImps, B(g->sp[0]));   // put can move it
