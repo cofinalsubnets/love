@@ -1871,6 +1871,17 @@
       ((unhome g9 keep) = keep)
       ((unhome g9 ren9) = '((ldu1 r0 r6 0) (ret)))))
 
+; -- the kernel's thunks, last over x64's code: an indirect branch by its register's thunk, a cs
+; prefix through r8-r15, a return by the return thunk; without the asks the code stands
+(: (gT9 xk) {'tgt 'x64 'mo [() () () () () () () () () () () () () () () () xk]}
+   fs9 '((callr r3) (callr r10) (jmpr r0) (jmpt r9 tl (L1 L2)) (ret))
+   _ (test
+      ((thunks (gT9 ()) fs9) = fs9)
+      ((thunks (gT9 '(thk cs rth)) fs9) =
+       ['(call __x86_indirect_thunk_rbx) '(raw (46)) '(call __x86_indirect_thunk_r11)
+        '(jmp __x86_indirect_thunk_rax) '(raw (46)) '(jmp __x86_indirect_thunk_r10) '(jmp __x86_return_thunk)])
+      ((thunks (gT9 '(rth)) fs9) = '((callr r3) (callr r10) (jmpr r0) (jmpt r9 tl (L1 L2)) (jmp __x86_return_thunk)))))
+
 ; -- the destination die at a compare: with no call on either side, cbranch's left aims at its
 ; park and the bridge mov dies; a call on either side keeps the left's sp cell.
 (: (brid fs) #(filter (f \ two? f && <f = 'mov && <>>>f = 'r0) fs)

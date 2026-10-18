@@ -1724,9 +1724,11 @@
                    pin g 'slots ([off n] . g 'slots),
                    off))
    ; ..one aligned for a type that asks more than the word: the frame base holds 16 (8 under
-   ; AAPCS32), so a cell's offset rounds to the ask up to that; past it no fixed offset can
+   ; AAPCS32 and -mstack-alignment=8), so a cell's offset rounds to the ask up to that; past it
+   ; no fixed offset can
+   (fbal g) (t32? g || x86k? g 'sa8 ? 8 16)
    (naslot g n a)
-    (: fb (t32? g ? 8 16) a2 (min a fb)
+    (: fb (fbal g) a2 (min a fb)
        (a2 <= 8 ? (nslot g n)
           (: e (aup (peep g 'off 0 + n) a2) off (0 - e)
              (pin g 'off e,
@@ -3480,7 +3482,7 @@
              clean (0 < ovblk ? [['add 'sp 'sp ovblk]])
              pf (pad + pushcat ovr () + pushcat rgr ())
              ; al = #xmm after the pops (r0 is no x64 arg register); on arm r0 is arg 0, so no al there
-             setal (va? && !(arm? g) && !(ia32? g) ? [['li 'r0 nxmm]])
+             setal (va? && !(arm? g) && !(ia32? g) && !(x86k? g 'nal) ? [['li 'r0 nxmm]])
              ; caller-saved homes spill before the pops and reload after the clean, filtered to the
              ; statement's wrapset (g 'stwrap). a wasm call writes only argument registers
              hs (: h9 (g 'homes) w9 (peep g 'stwrap 'all)
@@ -5226,7 +5228,7 @@
    ; x64: (ld X b o) .. (jmpr X) -> (jmpm b o), the load sinking past forms that leave X and b alone
    ; (b's own add folds into o). never off sp or fp, and X is no argument register
    (jmpm g fs)
-    (!(x64? g) ? fs
+    (!(x64? g) || x86k? g 'thk || x86k? g 'ibr ? fs
        (: ar (argr g)
           (sink X b o l acc n)                        ; -> [forms-between o' rest] | ()
            (!(two? l) || 8 < n ? ()
@@ -5249,6 +5251,20 @@
                        (two? k ? (<k + (['jmpm (f 2) (k 1)] . go (k 2)))
                           (f . go >l))))
           (go fs)))
+   ; -mindirect-branch=thunk-extern and -mfunction-return=thunk-extern, last over x64's code: an
+   ; indirect call or jump goes by the kernel's thunk for its register, a return by its return thunk
+   x86rn {'r0 "rax" 'r1 "rcx" 'r2 "rdx" 'r3 "rbx" 'r4 "rbp" 'r5 "rsi" 'r6 "rdi" 'r7 "r8"
+          'r8 "r9" 'r9 "r10" 'r10 "r11" 'r11 "r12" 'r12 "r13" 'r13 "r14" 'r14 "r15"}
+   (thunks g fs)
+    (: thk (x86k? g 'thk) rth (x86k? g 'rth) cs (x86k? g 'cs)
+       (via op r) (: s (intern "__x86_indirect_thunk_\(x86rn r)")
+                     ((cs && elem r '(r7 r8 r9 r10 r11 r12 r13 r14) ? ['(raw (46))]) + [[op s]]))
+       (one f) (? !(two? f) [f]
+                  (thk && <f = 'callr) (via 'call <>f)
+                  (thk && elem <f '(jmpr jmpt)) (via 'jmp <>f)
+                  (rth && f = '(ret)) [['jmp '__x86_return_thunk]]
+                  [f])
+       (thk || rth ? (catmap one fs) fs))
    ; an early exit lays last: (br cc L) run (label L) -> (br !cc K) (label L) .., (label K) run after
    ; the fn. the run may hold labels, no branch; a cold L (__builtin_expect(c, 0)) lets the run past
    ; its last test of L branch, and one that falls into L jumps there. a lone (jmp X) run is the br, to X
@@ -5315,6 +5331,7 @@
    (avz? g) (drop 11 (g 'mo) @ r (two? r && <r))   ; -ftrivial-auto-var-init=zero
    (ibt? g) (x64t? g && drop 12 (g 'mo) @ r (two? r && <r))   ; -fcf-protection=branch: x86's endbr pads
    (sspg g) (drop 15 (g 'mo) @ r (two? r ? <r))   ; -fstack-protector's guard (mode reg symbol offset)
+   (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk rth ibr cs
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
    ; the chunks of n bytes at an a-aligned address: (pos width) each, widest first
    (alchunks n a)
@@ -7728,6 +7745,8 @@
                       (nolane g "a variable-length array cannot take an initializer")
                      !(elem (gtgt g) '(x64 a64 rv64 i386 i386m16 thumb2 thumb2sp arm))
                       (nolane g "no lane for a variable-length array\(ontgt g)")
+                     (fbal g < tal g (varel ty))   ; its block rounds sp, aligned no further than the frame base
+                      (nolane g "a variable-length array of elements aligned past the stack's \(fbal g)")
                      (vone ps env2 acc p ty))
                  (: span (aup (tsz g ty) 8)
               off (naslot g span (max (tal g ty) (4 < #p ? (p 4) 0)))   ; a record's fifth slot: its own ask
@@ -9581,11 +9600,11 @@
    ; a case) stays; a ?: prunes only where ty types both arms alike, keeping that type by a cast. a
    ; splice's own labels (`e0) are reached from inside it alone
    (lbl? x) (? (atom? x) () (<x = 'lbl) !(string? <>x && starts? <>x "`") (elem <x '(case dflt)) 1 (lbl? <x || lbl? >x))
-   ; a local asking more alignment than the frame base (16, 8 under AAPCS32) lives in a char block of
+   ; a local asking more alignment than the frame base (fbal) lives in a char block of
    ; its size plus the ask, used through a pointer rounded up to the ask; an initializer builds in a
    ; compound literal and copies in. the rewrite stops past a decl that shadows the name
    (oalign g f)
-    (: fb (t32? g ? 8 16)
+    (: fb (fbal g)
        (ask p) (max (tal g <>p) (4 < #p ? (p 4) 0))
        (big? p) (!(gvarr? <>p) && fb < ask p)
        (shadow? it x) (two? it && <it = 'decl ? (any (q \ <q = x) <>it) 0)
@@ -10953,7 +10972,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (pushsv g (rjoin g (absg g (rawclean (a64sp g (a64mv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf)))))))))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (a64mv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf))))))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -11129,7 +11148,7 @@
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard]
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel]
           'pfes (two? xtra && 13 < #xtra ? (xtra 13) {})   ; fn name -> its own patchable_function_entry (N M)
           'pfel ()}                                 ; the pads laid, newest first
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),

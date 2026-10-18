@@ -435,12 +435,12 @@
            (udie 2 "cc: -mstack-protector-guard-offset=\(o) -- a64's is a word offset under 32768")
           (!x86 && f 'ssps) (udie 2 "cc: -mstack-protector-guard-symbol -- x86 only")
           [m r (f 'ssps || (m = 'global ? "__stack_chk_guard")) o]))
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg] pfes] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk] pfes] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
@@ -1061,12 +1061,13 @@
    ; the flags are one tablet, each a pin at its own arm; is ds ins libs fws collect reversed
    ; and are righted at the end, every other key last-one-wins
    (fpush t k v) (pin t k (v . t k))
+   (xkon t k) (elem k (t 'xk) ? t (fpush t 'xk k))
    ; every key seeded: a map pattern matches on presence, so a key pinned only with its flag
    ; would fail the consumers' destructure exactly when the flag is absent
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
-                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg ()}
+                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1210,6 +1211,30 @@
           ; and 32-bit units ask for 3)
           (("-mregparm=" + w) . r) (flags r (pin t 'rp (elem w ["0" "1" "2" "3"] ? (tonum w)
                                                      (udie 2 "cc: -mregparm=\(w) -- 0 to 3"))))
+          ; the x86-64 kernel's asks, words in 'xk: x64 code is rip-relative and its data words abs64,
+          ; which the kernel model and the small one both take; long double is double, returned in xmm0
+          ((a . r) && elem a ["-mcmodel=small" "-mcmodel=kernel" "-mno-fp-ret-in-387" "-mno-skip-rax-setup"
+                              "-mindirect-branch=keep" "-mfunction-return=keep"]) (flags r (fpush t 'x6f a))
+          (("-mcmodel=" + w) . r) (udie 2 "cc: -mcmodel=\(w) -- x64's code is rip-relative within 2GB: small and kernel")
+          ; an 8-aligned incoming stack: a local asking more is realigned through a pointer
+          (("-mstack-alignment=" + w) . r)
+           (? (w = "16") (flags r t)
+              (w = "8") (flags r (fpush (xkon t 'sa8) 'x6f "-mstack-alignment=8"))
+              (udie 2 "cc: -mstack-alignment=\(w) -- 8 or 16"))
+          ; varargs calls skip al, the count of vector registers
+          ("-mskip-rax-setup" . r) (flags r (fpush (xkon t 'nal) 'x6f "-mskip-rax-setup"))
+          ; indirect calls and jumps go through __x86_indirect_thunk_REG, returns through
+          ; __x86_return_thunk: the kernel lays both, mooncc only names them
+          ((a . r) && elem a ["-mindirect-branch=thunk-extern" "-mretpoline-external-thunk"]) (flags r (fpush (xkon t 'thk) 'x6f a))
+          ((("-mindirect-branch=" + w) . r) && elem w ["thunk" "thunk-inline"])
+           (udie 2 "cc: -mindirect-branch=\(w) -- mooncc lays no thunk body: thunk-extern names the kernel's")
+          ("-mfunction-return=thunk-extern" . r) (flags r (fpush (xkon t 'rth) 'x6f "-mfunction-return=thunk-extern"))
+          ((("-mfunction-return=" + w) . r) && elem w ["thunk" "thunk-inline"])
+           (udie 2 "cc: -mfunction-return=\(w) -- mooncc lays no thunk body: thunk-extern names the kernel's")
+          ; an indirect call or jump reads its target from a register, never memory
+          ("-mindirect-branch-register" . r) (flags r (fpush (xkon t 'ibr) 'x6f "-mindirect-branch-register"))
+          ; a cs prefix on a thunk call through r8-r15, room for the kernel to patch it inline
+          ("-mindirect-branch-cs-prefix" . r) (flags r (fpush (xkon t 'cs) 'x6f "-mindirect-branch-cs-prefix"))
           ; -Os/-Oz ask for size: returns share one epilogue. any other -O asks it back off
           ((a . r) && starts? a "-O") (flags r (pin t 'osz (elem a ["-Os" "-Oz"])))
           ((a . r) && tol? a) (flags r t)
@@ -1254,6 +1279,8 @@
        _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
        _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
        _ (f 'ssp && pin f 'sspg (sspguard f))
+       _ (two? (f 'x6f) && f 'tgt != 'x64 && udie 2 "cc: \(<(f 'x6f)) -- an x86-64 ask; no lane on \(f 'tgt)")
+       _ (elem 'thk (f 'xk) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
        ; no nest on disk: the carried source, pinned once so every TU shares one inflate
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)
