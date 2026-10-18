@@ -1,17 +1,13 @@
 ; src/apps/lux/layout.l -- layouts as data records, messages as symbols. a layout answers
-; two questions, both pure (no X, no sockets -- so this rides the corpus on every
-; target, test/law/lux.l asserts the geometry):
+; two questions, both pure (no X, no sockets):
 ;
 ;   (lay-tile lay rect z) -> (placements lay')   ; place the zipper's row in the rect
 ;   (lay-msg  lay msg  z) -> lay' | ()            ; () = "I don't take this message"
 ;
-; rect is (x y w h); a placement is (win x y w h) -- the shape src/apps/lux/lux.l's render
-; already configures. `z` is the focus zipper (src/apps/lux/core.l), so a layout sees both
-; the ordered row (zrow) and the focus (zfoc). Messages ride sendMessage: () back
-; means unhandled, so a modifier stack (rung 4) falls through cleanly. This rung
-; ships xmonad's ResizableTall (nmaster/ratio/per-slave heights), Full, and the
-; ||| choice + NextLayout. a body-less `:` -- the vocabulary leaks to the driver.
-(borrow 'wharf)    ; the bsp layout's plan algebra, src/apps/mitty/wharf.l
+; rect is (x y w h); a placement is (win x y w h). `z` is the focus zipper (core.l): the
+; row (zrow) and the focus (zfoc). () from a message means unhandled, so modifier stacks
+; fall through. a body-less `:` -- the vocabulary leaks to the driver.
+(borrow 'wharf)    ; the bsp layout's plan algebra
 (:
    ; --- geometry: a rect is (x y w h); splits return rect lists ---
    (rct x y w h) [x y w h]
@@ -36,7 +32,7 @@
    (placeat wins rects) (two? wins && two? rects ?                              ; zip windows with rects -> (win x y w h)..
                            ((<wins . <rects) . placeat >wins >rects))
    (posof x l) (: (go i m) (!(two? m) ? -1 (<m = x ? i (go (i + 1) >m))) (go 0 l))
-   (mx2 a b) (a < b ? b a)  (mn2 a b) (a < b ? a b)                          ; scalar max/min (max/min are array reducers)
+   (mx2 a b) (a < b ? b a)  (mn2 a b) (a < b ? a b)
    (padfr fr ns) (: (go i f) (i < ns ? ((two? f ? <f 1.0) .              ; a length-ns slave-frac list, padded with 1.0
                                         (go (i + 1) (two? f ? >f))))
                     (go 0 fr))
@@ -68,13 +64,11 @@
                (: sf (padfr (lay 4) #slaves) d (msg @ 'mirror-shrink -delta delta)
                 (rt-set lay 4 (rt-set sf idx (mx2 0.1 (sf idx + d)))))))))
 
-   ; --- Full: the focused window owns the whole rect; the rest go unplaced
-   ;     (the driver unmaps windows absent from the placements) ---
+   ; --- Full: the focused window owns the whole rect; the rest go unplaced (unmapped) ---
    full '(full)
    (full-tile lay rect z) (zfoc z @ f [(f ? [(f . rect)] ()) lay])
 
-   ; --- Dwindle: the golden spiral. Each window takes a phi-fraction of the
-   ;     remaining rect, the split axis alternating -- windows dwindle. Pure. ---
+   ; --- Dwindle: the golden spiral, each window a phi-fraction of the rest, axes alternating ---
    (dwindle ratio) ['dwindle ratio]
    (dw-go rect wins ratio axis)
     (? !(two? wins) ()
@@ -88,11 +82,9 @@
    (dw-msg lay msg z) (msg @ 'expand (rt-set lay 1 (lay 1 * 1.1))       ; expand/shrink nudge the spiral ratio
                              'shrink (rt-set lay 1 (mx2 1.05 (lay 1 / 1.1))))
 
-   ; --- BSP: mitty's wharf plan (src/apps/mitty/wharf.l) as a layout -- a binary tree of
-   ;     splits over the row's windows, kept in step with the row on every tile: a new
-   ;     window splits the focused one (else the last) along `dir` at `pct`, a gone one
-   ;     gives its half back to its sibling. gap is what a split spends between its
-   ;     halves, in the rect's own units: a cell in mitty, pixels here ---
+   ; --- BSP: mitty's wharf plan as a layout, synced with the row on every tile: a new window
+   ;     splits the focused one (else the last) along `dir` at `pct`, a gone one gives its half
+   ;     to its sibling. gap is between halves, in the rect's units ---
    ; the record: ['bsp plan dir pct gap], plan () until the first tile meets a window
    (bsp dir pct gap) ['bsp () dir pct gap]
    (bsp-sync plan row foc dir pct)
@@ -106,8 +98,7 @@
        bs (filter wharf-show? (wharf-layg plan (rh rect) (rw rect) (lay 4)))
        [(map (b \ [(wharf-id b) (rx rect + wharf-col b) (ry rect + wharf-row b) (wharf-cols b) (wharf-rows b)]) bs)
         ['bsp plan (lay 2) (lay 3) (lay 4)]])
-   ; the split holding the leaf id as a direct child, through f: f takes the node and the
-   ; side the leaf is on (0 the first half, 1 the second) and answers the node anew
+   ; the split holding leaf id as a direct child, through (f node side), side 0 or 1
    (bsp-at p id f) (two? p ? (p @ [d pct a b] (? (a = id) (f p 0) (b = id) (f p 1)
                                                   [d pct (bsp-at a id f) (bsp-at b id f)]))
                       p)
@@ -122,10 +113,9 @@
               'rotate (put (bsp-at plan foc (n \ s \ (n @ [d pct a b] [(d = 'stack ? 'beside 'stack) pct a b]))))
               ()))
 
-   ; --- modifiers: layout -> layout. a modifier record holds an inner layout;
-   ;     it transforms the inner's placements and/or intercepts its own messages,
-   ;     delegating the rest (() from lay-msg = unhandled, so the stack composes) ---
-   (with-border p b) [(p 0) (p 1) (p 2) (p 3) (p 4) b]    ; a 6th field: the border width hint
+   ; --- modifiers: a record holding an inner layout, transforming its placements and/or
+   ;     taking its own messages, delegating the rest ---
+   (with-border p b) [(p 0) (p 1) (p 2) (p 3) (p 4) b]    ; a 6th field: the border width
    (keep-border src dst) (#src < 6 ? dst (dst + [(src 5)]))            ; carry a border hint through a transform
 
    ; smartBorders: a lone tiled window (or a fullscreen one) wears no border ---
@@ -136,7 +126,7 @@
                            [pls2 ['smart <>res]])
    (sb-msg lay msg z) (lay-msg (lay 1) msg z @ r (r ? ['smart r]))
 
-   ; mirror (mkToggle (single MIRROR)): transpose every output rect. Starts off ---
+   ; mirror: transpose every output rect. starts off ---
    (mirror inner) ['mirror 0 inner]
    (mir-place p rect) ([(p 0) (rx rect + (p 2 - ry rect)) (ry rect + (p 1 - rx rect)) (p 4) (p 3)] @ base
                          (keep-border p base))                                    ; reflect across the rect's diagonal
@@ -150,8 +140,7 @@
      (msg @ 'mirror ['mirror (on ? 0 1) inner]                             ; Toggle mirror
       (lay-msg inner msg z @ r (r ? ['mirror on r]))))
 
-   ; toggleLayouts Full: hold the inner layout + a flag; ToggleLayout flips to
-   ;     Full (focus owns the whole rect) and back. Starts off. ---
+   ; toggleLayouts Full: the inner layout and a flag flipping to Full and back. starts off ---
    (toggle-full inner) ['toggle-lay 0 inner]
    (tf-tile lay rect z)
     (: on (lay 1) inner (lay 2)
@@ -162,9 +151,8 @@
      (msg @ 'toggle-layout ['toggle-lay (on ? 0 1) inner]
       (lay-msg inner msg z @ r (r ? ['toggle-lay on r]))))
 
-   ; minimize: filter the minimized windows out of the row before tiling (the
-   ;     driver then unmaps them, since they fall out of the placements). The
-   ;     message carries a window: (minimize-window w) hides, restore un-hides. ---
+   ; minimize: minimized windows leave the row before tiling. (minimize-window w) hides,
+   ;     restore un-hides ---
    (minimize inner) ['minimize () inner]
    (mn-tile lay rect z)
     (: mins (lay 1) inner (lay 2)
@@ -180,10 +168,8 @@
           (msg = 'restore) ['minimize (two? mins ? >mins ()) inner]            ; un-hide the most recent
           (lay-msg inner msg z @ r (r ? ['minimize mins r] ()))))
 
-   ; windowNavigation: pure 2D geometry. nav-target names the window nearest the
-   ;     focus in a direction ('left/'right/'up/'down); the driver refocuses or
-   ;     swaps to it (Go / Swap dir), since focus/swap are StackSet ops, not
-   ;     layout state. nav-swap gives the (focus target) pair to exchange. ---
+   ; windowNavigation: nav-target names the window nearest the focus in a direction
+   ;     ('left/'right/'up/'down) for the driver to focus or swap; nav-swap the pair ---
    (pcx p) (p 1 + p 3 // 2)  (pcy p) (p 2 + p 4 // 2)
    (in-dir dir fx fy px py) (dir @ 'left (px < fx) 'right (px > fx) 'up (py < fy) (py > fy))
    (dist2 ax ay bx by) ((ax - bx) * (ax - bx) + (ay - by) * (ay - by))
@@ -206,20 +192,16 @@
     (msg @ 'next-layout ['choice ((lay 1 + 1) % tally (lay 2)) (lay 2)]
      (lay-msg (ch-cur lay) msg z @ r (r ? (ch-put lay r))))
 
-   ; --- the book: one layout per tag, ((tag lay)..). a tag with no entry reads
-   ;     the default, so () is every workspace on the configured stack ---
+   ; --- the book: one layout per tag, ((tag lay)..); a tag with no entry reads the default ---
    (lays-of lb t d) (assoc t lb @ (_ . p . _) p d)
    (lays-put lb t l) ([t l] . filter (p \ <p != t) lb)
 
-   ; map over two lists in lockstep (prel has none) ---
+   ; map over two lists in lockstep
    (map2 f a b) (two? a && two? b ? (f <a <b . map2 f >a >b))
 
-   ; --- the dispatch: case on the record tag. The tag can also be a closure --
-   ;     the open lane: <lay a function answering ('tile lay rect z) ->
-   ;     (placements lay') and ('msg lay msg z) -> lay' | (), so a layout
-   ;     defined at the lux repl (or anywhere) enters the dispatch as plain
-   ;     data, no table edit -- the stumpwm move. Modifiers wrap it like any
-   ;     builtin (their delegation only calls lay-tile/lay-msg). ---
+   ; --- the dispatch: case on the record tag. the tag may be a function answering
+   ;     ('tile lay rect z) -> (placements lay') and ('msg lay msg z) -> lay' | (), so a
+   ;     layout defined at the repl enters as plain data ---
    (lay-tile lay rect z) (<lay @
     'rtall (rt-tile lay rect z)
     'full  (full-tile lay rect z)

@@ -1,24 +1,19 @@
 #!/usr/bin/env -S love -l
 ; src/apps/helm/sup.l -- the supervisor: units become processes, and stay processes.
 ;
-; perceive, decide, act. perceive is a PARK on a signalfd (src/posix.c's sigfd),
-; never a poll: SIGCHLD and SIGTERM are blocked at the source so they queue to an
-; fd, which is what makes a TERM a graceful event instead of a death, and love's
-; scheduler folds that fd in with every other parked task -- the control
-; socket's accept loop among them -- into one wait. so the moor answers while the
-; supervisor sleeps, and neither one spins.
+; perceive is a park on a signalfd, never a poll: SIGCHLD and SIGTERM queue to an fd,
+; so TERM is a graceful event, and the scheduler folds that fd into one wait with the
+; moor's accept loop. neither spins.
 ;
-; every child leads its OWN process group (spawnmap's pg 0), so stopping a unit
-; is one signal to a negative pid and takes the whole tree it forked.
+; every child leads its own process group, so one signal to -pid stops its whole tree.
 ;
-; all the live state is one book, `helm-cell`, because a supervisor IS its state
-; and there is exactly one per process. what rides it:
+; all live state is one book, `helm-cell` (one supervisor per process):
 ;   'units   the config's units, in file order
 ;   'conf    the path they were read from
 ;   'st      name -> a status tablet (state pid tries code since)
 ;   'pids    pid -> name, the reverse the reaper needs
-;   'order   the names that came up, newest first -- shutdown walks it as-is
-;   'events  the recent event lines, newest first: helm's whole journal
+;   'order   the names that came up, newest first
+;   'events  recent event lines, newest first: helm's journal
 (module 'helm
 (borrow 'posix)
 (: helm-cell {}
@@ -29,7 +24,7 @@
    hpatience 3000    ; ms a TERM'd child gets before the KILL
    hsteady   2000    ; ms of life that clears a service's restart count
 
-   ; --- the live state --------------------------------------------------------
+   ; --- the live state ---
    (helm-reset us)
     (hput 'units us, hput 'st {}, hput 'pids {}, hput 'order [], us)
    (hunits-now _) (hcell 'units [])
@@ -45,19 +40,16 @@
    (hmark nm k v) (pin (hstat nm) k v)
    (hup? nm)      (hstate nm @ s (s == 'up || s == 'done))
 
-   ; --- the narrator ----------------------------------------------------------
-   ; every event lands in a bounded ring the moor reads back, and on stderr
-   ; unless the config asked for quiet. this is the whole of helm's journal.
+   ; --- the narrator: a bounded ring the moor reads, and stderr unless quiet ---
    (htake l n) (n < 1 || atom? l ? () (<l . htake >l (n - 1)))
    (hnote s)
     (hput 'events (htake (s . hcell 'events []) 200),
      hcell 'quiet 0 ? 0 (say err ("helm: " + s + "\n"), flush err),
      s)
 
-   ; --- the child's environment -----------------------------------------------
-   ; set before the fork, put back after. love's tasks are cooperative and
-   ; spawnmap never parks, so nothing else can see the gap. there is no unsetenv
-   ; nif, so a name we invented goes back as empty rather than absent.
+   ; --- the child's environment ---
+   ; set before the fork, put back after; spawnmap never parks, so no task sees the gap.
+   ; no unsetenv nif: an invented name goes back as empty.
    (henv-pairs l) (atom? l || atom? >l ? []
                      (: k <l v <>l ([k v] . henv-pairs >>l)))
    (henv-with l f)
@@ -68,9 +60,8 @@
        (each old (\ [k v] (setenv k (string? v ? v ""))),
         r))
 
-   ; --- act: make the process -------------------------------------------------
-   ; stdin from /dev/null, stdout and stderr to the unit's log (appended) or to
-   ; ours. the fds the child dups are closed in it too, and in us right after.
+   ; --- act: make the process ---
+   ; stdin /dev/null, stdout and stderr to the unit's log (appended) or ours
    (hspawn u)
     (: argv (peep u 'exec [])
        lp   (u 'log)
@@ -89,10 +80,9 @@
         each cl (f \ close f),
         pid))
 
-   ; --- act: one unit up ------------------------------------------------------
-   ; a target has nothing to run, so reaching it is reaching its wants. a oneshot
-   ; BLOCKS -- that is the whole difference between the two running kinds, and
-   ; what makes `after` on a oneshot mean anything.
+   ; --- act: one unit up ---
+   ; a target is reached when its wants are. a oneshot BLOCKS, which is what gives
+   ; `after` on it meaning.
    (hstart1 u)
     (: nm   (u 'name)
        kind (u 'kind)
@@ -111,9 +101,8 @@
                  hnote (string kind + " " + string nm + " pid " + show pid),
                  kind == 'oneshot ? (hwait nm pid hpatience) 1)))))
 
-   ; --- perceive: a child died ------------------------------------------------
-   ; every dead pid comes through here, ours or not: pid 1 is handed reparented
-   ; orphans it never spawned, and harvesting them is its defining duty.
+   ; --- perceive: a child died ---
+   ; every dead pid comes here, ours or not: pid 1 reaps reparented orphans.
    (hreaped pid st)
     (: pids (hpids 0)
        nm   (pids pid)
@@ -129,8 +118,7 @@
              (hmark nm 'code st,
               hmark nm 'pid 0,
               hnote (string nm + " exited " + show st),
-             ; a reload can drop a unit while its child is still running: it is
-             ; still ours to reap, and there is no policy left to apply to it.
+             ; a reload can drop a unit whose child still runs: reap, no policy.
               (? !u (hmark nm 'state 'down)
                  (was == 'stopping || hcell 'shutting 0) (hmark nm 'state 'down)
                  (kind == 'oneshot) (hmark nm 'state (st == 0 ? 'done 'failed))
@@ -145,13 +133,10 @@
                         want ? (hnote (string nm + " gave up after " + show n + " restarts")) 0,
                         0)))))))))
 
-   ; drain every dead child: SIGCHLD coalesces, so one wake can owe several.
+   ; drain every dead child: SIGCHLD coalesces.
    (hdrain _) (glean 0 @ e (two? e ? (hreaped <e >e, hdrain 0) 0))
-   ; wait for one unit's pid to be gone. the condition is the UNIT's recorded
-   ; pid, not this loop's own glean, because either of two hands may do the
-   ; reaping -- this drain during boot, when hloop is not up yet, or hloop's own
-   ; once it is -- and hreaped clears the pid whichever it was. paced, not
-   ; blocking: `rest` yields, so the moor and every other task keep running.
+   ; wait for a unit's recorded pid to clear -- this drain during boot or hloop's after
+   ; may reap it. `rest` yields, so other tasks keep running.
    (hwait nm pid ms)
     (: t0 (clock 0)
        (go _) (hdrain 0,
@@ -160,9 +145,8 @@
                   (rest 5, go 0)))
        (go 0))
 
-   ; --- decide: dependency order ----------------------------------------------
-   ; `after` first, depth first, and `seen` is the seatbelt -- hcheck reports a
-   ; cycle, but a config edited under a running helm does not go back through it.
+   ; --- decide: dependency order ---
+   ; `after` first, depth first; `seen` guards a cycle in a config edited since hcheck.
    (hensure nm seen)
     (? (hup? nm) 1
        (elem nm seen) (hnote ("after cycles at " + string nm), 0)
@@ -177,17 +161,15 @@
             (each (peep u 'wants []) (w \ hensure w []), hstart1 u)
           (hensure nm [])))
 
-   ; the boot goal: the `default` target if the config names one, every runnable
-   ; unit in file order otherwise.
+   ; the `default` target if named, else every runnable unit in file order
    (hboot-all _)
     (hby (hunits-now 0) 'default @ d
        (d ? (hboot 'default)
           (each (hunits-now 0)
                 (u \ (u 'kind == 'target ? 0 (hensure (u 'name) []))))))
 
-   ; --- act: one unit down ----------------------------------------------------
-   ; 'stopping suspends the restart policy for exactly one exit. the negative pid
-   ; is the process group, so a service that forked is taken whole.
+   ; --- act: one unit down ---
+   ; 'stopping suspends the restart policy for one exit; -pid takes the group whole.
    (hstop1 nm)
     (: s   (hstat nm)
        pid (peep s 'pid 0)
@@ -201,16 +183,12 @@
 
    (hbounce nm) (hstop1 nm, hmark nm 'tries 0, hensure nm [])
 
-   ; shutdown walks 'order as it lies -- newest first is reverse start order,
-   ; which is dependents before the things they depend on. the flag suspends the
-   ; restart policy for the whole walk: a service dying while we take the system
-   ; down is the system going down, not a service that needs help.
+   ; shutdown walks 'order newest first: dependents before what they depend on. the flag
+   ; suspends restarts for the walk.
    (hshutdown _)
     (hput 'shutting 1, each (hcell 'order []) (nm \ hstop1 nm), hnote "all stopped", 1)
 
-   ; --- reload ----------------------------------------------------------------
-   ; re-read the config and adopt it. nothing is restarted: a reload is a READ,
-   ; and the moor is where you say (bounce 'x) if that is what you meant.
+   ; --- reload: re-read the config and adopt it; nothing restarts ---
    (hreload _)
     (: r  (hconf (hcell 'conf "/etc/helm.l"))
        us <r
@@ -218,7 +196,7 @@
         two? us ? (hput 'units us, hnote ("config: " + show #us + " units")) 0,
         #us))
 
-   ; --- the loop: park on the signal source -----------------------------------
+   ; --- the loop: park on the signal source ---
    (hloop sig)
     (await sig,
      (: ev (sigtake sig)
@@ -229,7 +207,7 @@
              (hnote ("signal " + show s + " -- shutting down"), hshutdown 0, 0)
            (hloop sig))))
 
-   ; --- introspection ---------------------------------------------------------
+   ; --- introspection ---
    (hpad s n) (n <= #s ? s (hpad (s + " ") n))
    (hstatus-line nm)
     (hstat nm @ s

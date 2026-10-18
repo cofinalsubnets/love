@@ -1,29 +1,17 @@
 ; src/apps/mitty/limn.l -- to limn is to paint: cb cells onto an outer terminal, as escapes.
-; the third piece of the pane story and the one every seat needs -- cb says what is
-; in a grid (bytes in, cells out), src/apps/mitty/wharf.l says where the rectangle is, and this
-; says a grid's cells at an origin. cells are the currency all three speak.
-; a module: `(borrow 'limn)` on the artifact, `(borrow "src/apps/mitty/limn.l")` off the tree.
-;
-; it takes a grid and an origin, never a plan and never a mitty: the bars come in as
-; wharf-bars' list, so nothing here knows what a pane or a buffer is, and one painter
-; serves panes of ptys and splits of one process alike.
-;
-; nothing is erased, and nothing needs to be -- a caller whose panes and bars tile its
-; wharf (src/apps/mitty/wharf.l's standing law) writes every cell every frame, so no stale glyph
-; can survive a layout change. a caller that leaves gaps owns them.
-;
-; host-only: `glass` is cb's nif (src/love/quay/nif.c), so this never joins the corpus --
-; test/limn.l is its gate.
+; cb says what is in a grid, wharf.l where the rectangle is, limn its cells at an origin.
+; it takes a grid and an origin, never a pane or a mitty; the bars come as wharf-bars' list.
+; nothing is erased: a caller whose panes and bars tile its wharf writes every cell every
+; frame. a caller that leaves gaps owns them.
+; host-only (`glass` is cb's nif), so not in the corpus; test/limn.l is its gate.
 (module '(limn limn-across limn-bars limn-down limn-glyph limn-glyphs limn-go limn-half limn-ink
           limn-pen limn-pics limn-placed limn-row limn-rows limn-run limn-sgr limn-sixel limn-sixes
           limn-spans limn-tile limn-unsix)
 (:
-   ; --- the pen: a cell's face byte and its two colour words (src/love/quay/quay.h), as one
-   ; number -- face | fg << 8 | bg << 34, a colour word being 26 bits. one SGR per pen
-   ; change, respecified from zero each time -- cheap, and never stale ----------
+   ; --- the pen: face | fg << 8 | bg << 34, a colour word being 26 bits. one SGR per pen
+   ; change, respecified from zero each time ----------
    (limn-pen g fg bg) (g >> 24 | fg << 8 | bg << 34)
-   ; a colour word's SGR, base 38 for the fg and 48 for the bg: the outer terminal's own
-   ; default, an xterm-256 index, or rgb
+   ; a colour word's SGR (base 38 fg, 48 bg): the terminal's default, an xterm-256 index, or rgb
    (limn-ink base k) (k & 16777215 @ v
                         ((k >> 24) @- (show (base + 1))
                          1 "\(base);5;\(v)"
@@ -34,8 +22,7 @@
                   + (fa & 128 ? ";8" "") + (fa & 32 ? ";9" "")
                   + ";" + limn-ink 38 (p >> 8 & 67108863) + ";" + limn-ink 48 (p >> 34) + "m"))
 
-   ; the grid holds codepoints and the outer terminal speaks utf-8: each rendered once
-   ; and cached. the blank is a space
+   ; codepoints rendered to utf-8 once and cached; the blank is a space
    limn-glyphs {}
    (limn-glyph cp) (limn-glyphs cp @ g
                       (string? g ? g
@@ -46,9 +33,8 @@
    limn-down (utf8 9474)                      ; │
    limn-across (utf8 9472)                    ; ─
 
-   ; a picture's tile as one ▀: its top half's colour over its bottom half's, each the mean
-   ; of the pixels the picture set there; a half with none is the cell's own bg. its SGR is
-   ; its own, so the pen after it is none (-1) and the next cell says its own
+   ; a picture's tile as one ▀: top half's mean colour over the bottom's, a bare half the cell's
+   ; bg. its SGR is its own, so the pen after it is none (-1)
    (limn-half s k y0 y1 w)
     (: (px x y) (tilepx s k x y)
        (sum x y a) (? (y1 <= y) a (w <= x) (sum 0 (y + 1) a)
@@ -68,17 +54,12 @@
           (two? bot) ("\e[0;38;2;" + rgb bot + ";" + bg + "m" + utf8 9604)
           ("\e[0;" + bg + "m ")))
 
-   ; ..or, where the outer terminal takes the pictures themselves (limn-pics), the cell's
-   ; ground for one to lie over
+   ; ..or, where the terminal takes the pictures themselves (limn-pics), the cell's ground
    (limn-bare s k) ("\e[0;" + limn-ink 48 (glass s k 2) + "m ")
 
-   ; paint row i from column q, threading the pen. the cells go out through limned
-   ; (src/love/quay/nif.c): a pen change as limn-sgr says it, a glyph and the rest of its
-   ; cluster, a selected cell in reverse, nothing for a wide char's tail, and a wide lead
-   ; with more to it (VS16, a ZWJ sequence, a mark) erased first and stepped past after,
-   ; since an outer terminal may draw it one column or several. it stops at a tile: a ▀
-   ; here (pk 0), bare ground for kitty's picture (1), or stepped over, a sixel's pixels
-   ; being in the text layer (2)
+   ; paint row i from column q, threading the pen, through limned. a wide lead with more to it
+   ; (VS16, ZWJ, a mark) is erased first and stepped past, since a terminal may draw it at any
+   ; width. at a tile: a ▀ (pk 0), bare ground for kitty (1), or stepped over for sixel (2)
    (limn-row j s c i q p pk)
     (q < c ?
        (([b t f fg bg] \
@@ -92,23 +73,18 @@
                 (p < 0 ? 0 (p >> 34))))
        p)
 
-   ; one pane: every grid row addressed at its own origin, which is the whole
-   ; difference between painting a rectangle and painting a run of full lines.
-   ; p is the pen carried in and answered back, so a caller threads it across panes.
-   ; a view looking v lines back shows the history first: row i is grid row i - v
+   ; one pane, every grid row at its own origin. p is the pen, threaded across panes.
+   ; a view v lines back shows history first: row i is grid row i - v
    (limn-rows j s r c row0 col0 i p pk)
     (i < r ?
        (say j (limn-go (row0 + i) col0),
         limn-rows j s r c row0 col0 (i + 1) (limn-row j s c (i - gaze s 8) 0 p pk) pk)
        p)
 
-   ; --- the pictures themselves, to an outer terminal that speaks kitty's graphics: each
-   ;     sent once, by an id made of the pane's number ib and the picture's gen (sent keeps
-   ;     which went), then placed over its tiles -- the part of it they show, clipped to the
-   ;     pane, stretched over the cells they fill. the caller clears the old placements
-   ;     first (a=d), so a picture that scrolled away is simply not placed again ---
-   ; slot -> [row col tx ty last-row last-col]: its top-left visible tile, where in the
-   ; picture that is, and how far its tiles run
+   ; --- the pictures to a kitty-graphics terminal: each sent once by an id of the pane's ib and
+   ;     its gen (sent keeps which), then placed over its tiles, clipped. the caller clears old
+   ;     placements first (a=d) ---
+   ; slot -> [row col tx ty last-row last-col]: its top-left visible tile and how far its tiles run
    (limn-spans s r c)
     (: t {} v (gaze s 8)
        (cell i q) (glass s ((i - v) * c + q) 0 @ g
@@ -119,9 +95,8 @@
                         0))
        (each ^r (i \ each ^c (q \ cell i q)),
         t))
-   ; what each picture's tiles show: [slot gen row col x y pw ph nc nr], its top-left tile
-   ; at row col of the pane, the part of it x y pw ph in its own pixels, over nc x nr cells.
-   ; the tiles count in the size they span, which a stretched one's own pixels are not
+   ; each picture's view: [slot gen row col x y pw ph nc nr] -- top-left tile, the part x y pw ph
+   ; in its own pixels, over nc x nr cells
    (limn-placed s r c)
     (: cw (gaze s 6) ch (gaze s 7) t (limn-spans s r c)
        (one sl) (: e (t sl) w (picture s sl 5) h (picture s sl 6) iw (picture s sl 0) ih (picture s sl 1)
@@ -149,11 +124,9 @@
               say j (limn-go (row0 + row) (col0 + col) + "\e_Ga=p,i=\(id),p=1,q=2,C=1,x=\(x),y=\(y),w=\(pw),h=\(ph),c=\(nc),r=\(nr)\e\\"))))
          (limn-placed s r c))
 
-   ; --- the pictures as sixels, for an outer terminal that draws those and not kitty's:
-   ;     the text layer holds them, so a tile is stepped over (pk 2) and a picture goes out
-   ;     again only when what its pane shows of it moves; the caller erases the cells the old
-   ;     ones sat on (limn-unsix) first. a sixel draws at the outer terminal's pixels, so the
-   ;     part shown is scaled to ow x oh a cell ---
+   ; --- the pictures as sixels: they live in the text layer, so a tile is stepped over (pk 2), a
+   ;     picture resent only when its shown part moves, and the caller erases the old cells
+   ;     first (limn-unsix). the part shown is scaled to ow x oh a cell ---
    ; a colour's register: the 6x6x6 cube's 216, then 24 greys past them
    (limn-reg r g b) (: hi (max r (max g b)) lo (min r (min g b))
                        (hi - lo < 12 ? (216 + ((r + g + b) * 23 + 382) // 765)
@@ -168,8 +141,8 @@
           (x = pos && c = ch ? (limn-sixrow j >l (pos + 1) ch (n + 1))
              (limn-sixrun j ch n, limn-sixrun j "?" (x - pos), limn-sixrow j >l (x + 1) c 1)))
        (limn-sixrun j ch n))
-   ; the part x y pw ph of a picture w wide (b its rgba bytes) as a sixel tw x th, nearest
-   ; pixel, a register defined where it is first used; a pixel the picture left is the ground
+   ; the part x y pw ph of a picture w wide (b rgba) as a tw x th sixel, nearest pixel; an unset
+   ; pixel is the ground
    (limn-sixel b w x y pw ph tw th)
     (: j (jug 0) def {}
        (reg tx ty) (((y + (ty * ph) // th) * w + (x + (tx * pw) // tw)) * 4 @ i
@@ -190,8 +163,7 @@
         bands 0,
         say j "\e\\",
         slurp j))
-   ; the placements ps of a pane at row0 col0 as sixels, each at ow x oh a cell; old holds
-   ; the ones already laid, by what they show, and new gets the ones used
+   ; a pane's placements ps as sixels; old holds those already laid, by what they show, new the used
    (limn-sixes j s ps row0 col0 ow oh old new)
     (: cw (gaze s 6) ch (gaze s 7)
        (map ([sl g row col x y pw ph nc nr] \

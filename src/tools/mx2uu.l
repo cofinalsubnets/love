@@ -1,19 +1,16 @@
 ; src/tools/mx2uu.l -- emit test/uumx.l: love's `+` and `*` dispatch matrices, read
-; from the table (src/love/mx.l) and lifted to uu terms, so the band lattice is a
-; theorem in the tree's own prover and not only in Rocq. Run on the host binary:
+; from src/love/mx.l and lifted to uu terms, so the band lattice is a theorem in the
+; tree's own prover too. Run on the host binary:
 ;
 ;   love src/tools/mx2uu.l > test/uumx.l        (or: make uumx)
 ;
-; the uu twin of src/tools/mx2coq.l, deriving the band partition the same way (kinds grouped by
-; row+column equality across both matrices), so the two exports cannot disagree about a band.
-; a kind is its index in mx.l's enum roster, a lane its index in appearance order, a band its
-; class id. a square is a grid (a list of rows), not a flat list: every walk rides `npred`,
-; O(index) under the eager NbE. every kind and lane is emitted by name, so test/uumxlaw.l
-; names a cell rather than counting to it: a bounded forall that stopped covering a grown
-; roster would be green for the wrong reason. untrusted like every translator here.
+; the uu twin of src/tools/mx2coq.l, deriving the band partition the same way, so the two
+; exports cannot disagree about a band. a square is a grid, not a flat list: every walk rides
+; `npred`, O(index) under the eager NbE. every kind and lane is emitted by name, so a bounded
+; forall that stopped covering a grown roster cannot pass for the wrong reason.
 ;
-; load the table first, in its own top-level form: the next form's bare mx-kinds /
-; mx-add / mx-mul references resolve at its compile, which must follow this run.
+; load the table first, in its own top-level form: the next form's bare mx-* references
+; resolve at its compile.
 (borrow 'posix)
 (reads (open "src/love/mx.l" "r"), ())
 
@@ -29,8 +26,8 @@
    (cell m i j) (m i j)                              ; a grid is indexed by application
    (rrow m i) (map (j \ cell m i j) ridx)
    (rcol m j) (map (i \ cell m i j) ridx)
-   ; a kind's dispatch signature: its row and column in both matrices -- equal
-   ; signature = same band. mx2coq derives the partition from this same datum.
+   ; a kind's dispatch signature: its row and column in both matrices; equal signature,
+   ; same band
    (sig i) [(rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i)]
    (idxin x l k) (? (atom? l) -1 (<l = x) k (idxin x >l (k + 1)))
    sigs ((: (go is acc) (? (atom? is) (rev acc)
@@ -44,16 +41,15 @@
 
    ; --- the noms the artifact wears ---
    (kn i) ("mx" + string (kinds i))                  ; mxkcharm ..
-   ; the table spells a lane as its C symbol (lvm_addn); the prefix says nothing
-   ; here, so it comes off -- mxLaddn, matching mx.v's Laddn.
+   ; a lane's C prefix comes off: lvm_addn -> mxLaddn, matching mx.v's Laddn
    (ln x) (string x @ t ("mxL" + (t @ ("lvm_" + r) r t)))
    lanes ((: (go rows acc)                           ; distinct lanes, appearance order
             (atom? rows ? (rev acc)
                (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
    (lcode x) (idxin x lanes 0)
-   ; mirror: the argument swap's action on lanes. the positional degenerate pair
-   ; trades places (bin_a answers the a operand, bin_b the b); the rest are fixed.
+   ; mirror: the argument swap's action on lanes. bin_a and bin_b trade places, the
+   ; rest are fixed
    (mir x) (string x @ t (t @ "lvm_bin_a" 'lvm_bin_b "lvm_bin_b" 'lvm_bin_a x))
 
    ; --- literals: an nlist row, and a grid of them under their row names ---

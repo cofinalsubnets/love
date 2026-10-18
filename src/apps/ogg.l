@@ -1,6 +1,5 @@
-; src/apps/ogg.l -- the ogg container (rfc 3533): pages, packets, the codec each logical stream
-; carries, and the decoder door over it, so av.l plays what is inside.
-; `(borrow 'ogg)`, then:
+; src/apps/ogg.l -- the ogg container (rfc 3533): pages, packets, each stream's codec, and
+; the decoder door over it, so av.l plays what is inside. `(borrow 'ogg)`, then:
 ;
 ;   (ogg-page s o)         -> the page at o: [type granule serial seq laces body end] | 'more | why
 ;   (ogg-cut s b ls)       -> a page body's packets: [closed open], open the packet that runs on
@@ -10,14 +9,12 @@
 ;                             header packets on that page | 'more | why not
 ;   (ogg-format m)         -> its codec's format tablet
 ;   (ogg-pump q h m emit)  -> each packet's samples to emit -> 0 | why not. a chained stream
-;                             (an internet radio's) plays on while its format holds, each new
-;                             link's 'tags pinned on m and its 'link counted up from 0
+;                             plays on while its format holds, 'tags and 'link updated on m
 ;   (ogg-sniff s)          -> 1 an ogg stream | 0 | 'more
 ;
-; a codec rides ogg as [name id? head format start]: (id? p) knows its first packet, (head ps)
-; reads its header packets -> m | 'more | why, (start m) -> a decoder, (packet granule) ->
-; samples | why, in format's shape. granule is the stream's length, given with the last
-; packet of its end page, -1 with every other.
+; a codec rides ogg as [name id? head format start]: (head ps) -> m | 'more | why, (start m)
+; -> a decoder (packet granule) -> samples | why. granule is the stream's length on the last
+; packet of its end page, -1 on every other.
 (module (ogg ogg-sniff ogg-meta ogg-format ogg-pump ogg-page ogg-cut
              opus-state opus-init opus-packet)
 (borrow 'bytes)
@@ -51,8 +48,8 @@
        [() (held + (string? tl ? tl ""))])
 
    ; --- the codecs ----------------------------------------------------------
-   ; flac (the ogg mapping 1.0): "\x7fFLAC" 1 0, a count, then "fLaC" and STREAMINFO; each later
-   ; header packet is one metadata block, and each audio packet one frame
+   ; flac (ogg mapping 1.0): "\x7fFLAC" 1 0, a count, then "fLaC" and STREAMINFO; then a
+   ; metadata block per header packet and a frame per audio packet
    (ogg-flac-head ps)
     (: p <ps
        (? (#p < 13 || p 5 != 1) "an Ogg FLAC mapping this can't read"
@@ -61,8 +58,7 @@
    ; a packet that is no frame (empty, cut, a bad crc) answers (), and the pump passes it over
    (ogg-flac-start m)
     (\ pkt gr (flac-frame pkt 0 (m 'bps) (m 'ch) @ (pcm . _) pcm _ ()))
-   ; vorbis: identification, comments and setup, then each audio packet a block; the end
-   ; page's granule cuts the last block to the stream's length
+   ; vorbis: identification, comments, setup, then a block per packet; the end granule cuts the last
    ; a comment header's tags, its vendor's length at o: vorbis's and opus's, the same shape
    (ogg-tags p o)
     (: vn (rdle p o 4) k (rdle p (o + 4 + vn) 4)
@@ -83,9 +79,8 @@
                       pcm (? !(string? pcm) ()                 ; a packet that is no block is passed over
                              (: k (#pcm // w) t (n 'n) c (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
                                 (pin n 'n (t + c), snip pcm 0 (c * w))))))))
-   ; opus (rfc 7845): OpusHead and OpusTags, then packets of 48 kHz audio; the head's
-   ; pre-skip comes off the front, and the end page's granule, which counts it, cuts the last;
-   ; its output gain (dB in Q7.8) scales every sample
+   ; opus (rfc 7845): OpusHead, OpusTags, then 48 kHz packets; pre-skip comes off the front, the
+   ; end granule (which counts it) cuts the last; the output gain is dB in Q7.8
    (ogg-op-head ps)
     (? (#ps < 2) 'more
        (: p <ps ch (#p > 9 ? (p 9) 0)
@@ -109,10 +104,9 @@
 
    ; --- the door ------------------------------------------------------------
    (ogg-sniff s) (? (#s < 4) (snip "OggS" 0 #s = s ? 'more 0) ("OggS" = snip s 0 4) 1 0)
-   ; a header packet is gathered a page at a time as its pieces, newest first, joined once it
-   ; closes: a long one costs a copy, not a copy a page. in flac's mapping a PICTURE or PADDING
-   ; block keeps only its first byte and closes as an empty padding block with the same last
-   ; flag -- a mapping's first packet (0x7f) and a frame (0xff) are never those kinds
+   ; a header packet gathers a page at a time as pieces, newest first, joined once it closes. in
+   ; flac's mapping a PICTURE or PADDING block keeps only its first byte and closes as an empty
+   ; padding block with the same last flag
    (ogg-open c p) (? !(string? p) ()
                      (<c = "flac" && 0 < #p && elem (p 0 & 127) [1 6]) {'drop (p 0)}
                      [p])
@@ -168,8 +162,8 @@
                      (: _ (pin m0 'tags (m 'tags), pin m0 'link (peep m0 'link 0 + 1))   ; tags first: a watcher reads 'link
                         (run h2 (m 'at) m (((ogg-codec (m 'ogg)) 4) m) () (m 'skip) 0))
                     "a chained stream changes its format"))
-       ; h the bytes, o the page, dec the decoder, held the packet running on, k packets yet
-       ; to pass over, ended once this stream's last page is read
+       ; h the bytes, o the page, held the packet running on, k packets to pass over,
+       ; ended once this stream's last page is read
        (run h o m dec held k ended)
         (ogg-page h o @
           'more (wav-gulp q @ g (? (string? g) (run (snip h o #h + g) 0 m dec held k ended)

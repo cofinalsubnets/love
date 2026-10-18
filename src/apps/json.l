@@ -1,10 +1,8 @@
-; src/apps/json.l -- json, so love can speak to things that are not love. it is the wire
-; format the outside world settled on (language servers, http apis, sway's ipc), and
-; nothing about it is lovely; this file is the translation desk, nothing more.
-; `(borrow 'json)`, then json-read and json-show.
+; src/apps/json.l -- json, the wire format the outside world speaks (language servers,
+; http apis, sway's ipc). `(borrow 'json)`, then json-read and json-show.
 ;
-; the mapping, a bijection in both directions:
-;   null    <-> json-null       a coin, like the booleans -- see the notes below
+; the mapping, both ways:
+;   null    <-> json-null       a coin, like the booleans
 ;   true    <-> json-true
 ;   false   <-> json-false
 ;   number  <-> charm / sun / big / gem     (the celestial ladder; exact where json is)
@@ -16,24 +14,20 @@
 (: jbool      (coin 'json-bool ())
    json-true  (jbool 1)
    json-false (jbool 0)
-   ; `&&` is value-preserving, so the bare conjunction answers () and not the bit a
-   ; predicate owes; `!!` is the clamp. same for json-null? below.
    (json-bool? v) (kind v = 'json-bool)
    (json-bool v)  (v ? json-true json-false)
 
-   ; null, on its own die -- payload 0 so it nets blue like the nothing it is, but
-   ; never `=` json-false.
+   ; null on its own die: payload 0 nets like nothing, but never `=` json-false.
    jnull          (coin 'json-null ())
    json-null      (jnull 0)
    (json-null? v) (kind v = 'json-null)
 
-   ; --- reading --------------------------------------------------------------------
+   ; --- reading ---
    (jws s i n)  (i < n && elem (s i) '(32 9 10 13) ? (jws s (i + 1) n) i)
 
    (jdigv c)    (48 <= c <= 57 ? (c - 48) -1)
 
-   ; a run of decimals -> `(value end). end = start means there were none, which the
-   ; callers check: json wants at least one digit everywhere it wants a digit.
+   ; a run of decimals -> `(value end); end = start means none, which callers check.
    (jdigits s i n) ((: (go k acc)
                        (k < n && -1 < jdigv (s k) ?
                           (go (k + 1) (acc * 10 + jdigv (s k)))
@@ -47,9 +41,8 @@
                              (v >= 0 ? (go (k + 1) (acc * 16 + v) (d - 1))))))
                     i 0 4)
 
-   ; \uxxxx, with the surrogate pair rejoined. a lone or unpaired surrogate is passed
-   ; through as itself rather than refused -- the text is still json, and refusing a whole
-   ; document over one bad code unit helps nobody.
+   ; \uxxxx, the surrogate pair rejoined; a lone surrogate passes through as itself
+   ; rather than refusing the whole document.
    (juni s i n)
     (jhex4 s i n @ (u k)
      (? !(55296 <= u <= 56319)
@@ -63,7 +56,7 @@
                     [(utf8 (65536 + (u - 55296) * 1024 + (v - 56320))) <>l]
                     [(utf8 u) k]))))))
 
-   ; the byte after the backslash. -1 for "no such escape", never () -- 0 is a fine byte.
+   ; the byte after the backslash; -1 for no such escape (0 is a fine byte).
    (jesc s i n) (i < n ?
                    (s i @ c
                       (c = 117 ? (juni s (i + 1) n)
@@ -91,14 +84,13 @@
 
    (jpow10 e) (e < 0 ? (1.0 / -e 10) (1.0 * e 10))
 
-   ; a whole int stays exact (charm -> sun -> big, whatever it needs); anything with a
-   ; fraction or an exponent becomes a gem, which is what json means by those.
+   ; a whole int stays exact (charm -> sun -> big); a fraction or exponent is a gem.
    (jnum s i n) (: neg (i < n && s i = 45)
                    a   (neg ? (i + 1) i)
                    ip  (jdigits s a n)
                    iv  <ip
                    b   <>ip
-                   (b = a ? ()                       ; a sign with no digits is nothing
+                   (b = a ? ()                       ; a sign with no digits
                       (: fd (b < n && s b = 46 ? (jdigits s (b + 1) n))
                          c  (two? fd ? <>fd b)
                          fv (two? fd ? <fd 0)
@@ -107,7 +99,7 @@
                          ex (ee && jexp s (c + 1) n)
                          d  (two? ex ? <>ex c)
                          (? (two? fd && fl = 0) ()   ; "1." is not json
-                            (ee && atom? ex)     ()   ; "1e" is not json either
+                            (ee && atom? ex)     ()   ; "1e" neither
                             (: sgn (neg ? -1 1)
                                (fl = 0 &&  !ee ?
                                   [(sgn * iv) d]
@@ -132,7 +124,7 @@
                         (e < n ? (s e @ 44 (go (e + 1) (<r . acc))
                                         93 [(rev (<r . acc)) (e + 1)]))))))))
 
-   ; a later duplicate key wins, which is what pin does and what every other reader does.
+   ; a later duplicate key wins.
    (jobj s i n) (jws s (i + 1) n @ a
     (a < n && s a = 125 ? [{} (a + 1)]
      (:- (go a {}) (go k acc)
@@ -148,21 +140,17 @@
    (jval s i n) (jws s i n @ a
                   (a < n ? (s a @ 34 (jstr s a n) 91 (jarr s a n) 123 (jobj s a n) (jlit s a n))))
 
-   ; --- the door in ----------------------------------------------------------------
-   ; (1 value), or () -- trailing junk after the document is a refusal, not a shrug.
+   ; --- the door in ---
+   ; (1 value), or () -- trailing junk is a refusal.
    (json-read s) (: n #s
                     r (jval s 0 n)
                     (two? r ? (jws s <>r n @ e (e < n ? () [1 <r]))))
 
-   ; --- writing --------------------------------------------------------------------
+   ; --- writing ---
    (jhexd v) (string (v + (v < 10 ? 48 87)))
 
-   ; bytes >= 128 ride out untouched: love strings are byte strings and json is utf-8, so
-   ; already-utf-8 text is already right. only the seven named escapes and the control
-   ; bytes need saying.
-   ; every byte is spelled (a literal or `string`), never built by +: mixed + is the
-   ; degenerate law now, so ("" + 34) answers "" -- the old byte-append spellings
-   ; silently erased the very quotes and brackets they meant to write.
+   ; bytes >= 128 ride out untouched (utf-8 already); only the named escapes and the
+   ; control bytes need saying. every byte is spelled, never built by +: ("" + 34) is "".
    (jqc c) (c @ 34 "\\\""  92 "\\\\"
                 10 "\\n"   13 "\\r"   9 "\\t"
                 8  "\\b"   12 "\\f"
@@ -174,18 +162,14 @@
    (jjoin xs) (atom? xs ? ""
                  ((: (go l acc) (two? l ? (go >l (acc + "," + <l)) acc)) >xs <xs))
 
-   ; show is the whole number lane -- it already lays a charm, a sun, a big and a gem down
-   ; the way json spells them. the guard is for what json has no word for: infinity and
-   ; friends show as names, so anything not starting with a digit or a minus becomes null
-   ; rather than riding out as text that no parser would take back.
+   ; show spells every number as json does; what it shows as a name (infinity and
+   ; friends) becomes null rather than text no parser takes back.
    (jnumshow v) (: t (show v)
                    c (0 < #t ? (t 0) 0)
                    (c = 45 || 48 <= c && c <= 57 ? t "null"))
 
-   ; the () = v test is exact -- true only for () itself, never 0 or "" (different bands)
-   ; -- so a bare () after a map or a filter writes `[]` with no renaming step. anything
-   ; json has no spelling for scares rather than riding out as a plausible null; trays
-   ; stay out of the contract (arrays are lists here).
+   ; () = v is true only for () itself, so a bare () writes `[]`. anything json cannot
+   ; spell scares rather than riding out as null; trays stay out (arrays are lists).
    (json-show v)
       (? (string? v)    (jqt v)
          (json-bool? v) (v ? "true" "false")

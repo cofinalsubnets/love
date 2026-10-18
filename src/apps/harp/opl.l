@@ -1,17 +1,14 @@
 ; opl -- two-operator FM instruments, as doom's GENMIDI bank lays them, played as harp's voices.
-; written from the YM3812 (OPL2) application manual's register meanings and the doom wiki's
-; GENMIDI layout; a voice is play's [end fn left right], its operators run by tones (ops.l).
-;   (opl-bank b)     the 175 instruments of an op2 file's bytes ("#OPL_II#") or of a wad's
-;                    GENMIDI lump, or () where b holds neither
-;   (opl-voice ins n vel pan at off rate)  instrument ins sounding midi note n (a float bends),
-;                    velocity 0..127, pan 0..1, from frame at; let go at frame off, () while held
-;   (opl-ops ins n vel pan at off rate)  the same voice's operators for tones, and its end: [os end]
+; from the YM3812 (OPL2) manual's register meanings and the doom wiki's GENMIDI layout.
+;   (opl-bank b)     the 175 instruments of an op2 file ("#OPL_II#") or a wad's GENMIDI, or ()
+;   (opl-voice ins n vel pan at off rate)  midi note n (a float bends), velocity 0..127, pan
+;                    0..1, from frame at; let go at frame off, () while held
+;   (opl-ops ins n vel pan at off rate)  that voice's operators for tones, and its end: [os end]
 ;   (opl-drum bank n)  the percussion instrument for midi note n, 35..81, or ()
-;   an instrument: {'name 'fixed 'note 'tune 'two 'vs}; 'vs one or two voices {'m 'c 'fb 'conn 'off},
-;   'm and 'c operators {'am 'vib 'egt 'ksr 'mul 'ar 'dr 'sl 'rr 'wave 'ksl 'tl}
+; an instrument: {'name 'fixed 'note 'tune 'two 'vs}; 'vs one or two voices {'m 'c 'fb 'conn 'off}
 (module (opl opl-bank opl-voice opl-ops opl-drum opl-freq)
-(borrow 'bytes)                         ; rdle
-(borrow 'ops)                           ; the voices, as tones' operators
+(borrow 'bytes)
+(borrow 'ops)
 (:
  (max2 a b) (a < b ? b a)
  (min2 a b) (a < b ? a b)
@@ -25,7 +22,7 @@
  (ins b i) (: o (8 + 36 * i) fl (rdle b o 2)
    {'name (cname b (8 + 36 * 175 + 32 * i)) 'fixed (fl & 1) 'two (fl >> 2 & 1) 'tune (b (o + 2)) 'note (b (o + 3))
     'vs ((fl >> 2 & 1) ? [(voice b (o + 4)) (voice b (o + 20))] [(voice b (o + 4))])})
- ; ..an op2's bytes, or a wad's GENMIDI found by its directory
+ ; an op2's bytes, or a wad's GENMIDI found by its directory
  (genmidi b) (? (snip b 0 8 = "#OPL_II#") b
                 (elem (snip b 0 4) ["IWAD" "PWAD"])
                 (: n (rdle b 4 4) d (rdle b 8 4)
@@ -38,9 +35,9 @@
  (opl-drum bank n) (35 <= n && n <= 81 ? (bank (128 + n - 35)) ())
 
  ; --- an operator's level: the envelope in dB of attenuation, 0 loud, 96 gone ---
- ; ..the manual's times at rate 1: attack 2826 ms, a decay or release over 96 dB 39281 ms; each
- ;   rate halves them, and key scaling lifts the rate by the note's octave, a quarter as much
- ;   with ksr off. rate 0 never moves; an attack at 15 is at once
+ ; the manual's times at rate 1: attack 2826 ms, 96 dB of decay or release 39281 ms; each rate
+ ; halves them, key scaling lifts the rate by octave (a quarter as much with ksr off). rate 0
+ ; never moves; an attack at 15 is at once
  ln2 0.6931471805599453
  (dbl r) (exp ((r - 1.0) * ln2))
  (times o n) (: oct (max2 0 (min2 7 (int n // 12 - 1))) kso (min2 15 (2 * oct + (int n % 12 >= 6 ? 1 0)))
@@ -49,8 +46,8 @@
     'dd (o 'dr = 0 ? 1e-6 (96.0 / (39.28064 / dbl (eff (o 'dr)))))
     'rd (o 'rr = 0 ? 1e-6 (96.0 / (39.28064 / dbl (eff (o 'rr)))))
     'sl (o 'sl = 15 ? 93.0 (3.0 * o 'sl)) 'egt (o 'egt)})
- ; ..held: the attack up as an amplitude, the decay down to the sustain level, held there, or on
- ;   down at the release rate where the patch does not sustain; t a number or a tray
+ ; the attack up as an amplitude, decay to sustain, held or on down at the release rate; t a
+ ; number or a tray
  (held E t) (: a (E 'ta) s (E 'sl) dd (E 'dd)
    up (log (max (t / max2 a 1e-9) 1e-5) * -8.685889638065035)
    d ((t - a) * dd) on (s + (t - a - s / dd) * E 'rd)
@@ -59,20 +56,17 @@
  ksl-db [0.0 3.0 1.5 6.0]
  (opl-freq n) (440.0 * exp ((n - 69.0) * ln2 / 12.0))
  mults [0.5 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 10.0 12.0 12.0 15.0 15.0]
- ; ..feedback's depth by its three bits, none to 4 pi, in cycles of the mean of the last two
- ;   outputs; the modulator's whole output moves the carrier 2 cycles
+ ; feedback's depth by its three bits, in cycles of the mean of the last two outputs; the
+ ; modulator's whole output moves the carrier 2 cycles
  fbs [0.0 0.03125 0.0625 0.125 0.25 0.5 1.0 2.0]
  fm-depth 2.0
- ; ..an operator's envelope as tones' segments: the attack's rise, the decay down to the
- ;   sustain level, held there or on down at the release rate; let go at to seconds (past
- ;   1e8, held), down from where it stood
+ ; the envelope as tones' segments, let go at to seconds (past 1e8 held), down from where it stood
  (segs E to) (: a (E 'ta) s (E 'sl) dd (E 'dd) t1 (a + s / dd)
    hs ((a > 0.0 ? [[0.0 1 0.0 (1.0 / a) 0.0]] ()) + [[a 0 0.0 dd 0.0] [t1 0 s (E 'egt = 1 ? 0.0 (E 'rd)) 0.0]])
    (to >= 1e8 ? hs (filter (q \ q 0 < to) hs + [[to 0 (held E to) (E 'rd) 0.0]])))
 
- ; --- a voice: each of the instrument's one or two, its note moved by the voice's offset, the
- ;     second detuned by the tune byte (128 none, 64 a semitone), a modulator and a carrier for
- ;     tones (ops.l); its end once let go is when what is heard has fallen 96 dB, at most 10 s on ---
+ ; --- a voice per instrument voice, the second detuned by the tune byte (128 none, 64 a
+ ;     semitone); its end is when it has fallen 96 dB, at most 10 s after let go ---
  (opl-ops I n vel pan at off rate) (: nb (I 'fixed = 1 ? (1.0 * I 'note) (1.0 * n))
    vdb (vel <= 0 ? 200.0 (log (vel / 127.0) * -17.37177927613007))
    to (off = () ? 1e9 ((off - at) * 1.0 / rate))

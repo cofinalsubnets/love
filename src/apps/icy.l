@@ -1,20 +1,18 @@
-; src/apps/icy.l -- a web radio stream as a port: http or https, the station's .pls or .m3u
-; followed, redirects followed, and a shoutcast or icecast server's in-band titles (icy) taken
-; out of the audio and kept. what reads the port is av.l's decoder door, as for a file.
-; `(borrow 'icy)`, then:
+; src/apps/icy.l -- a web radio stream as a port: http or https, .pls/.m3u and redirects
+; followed, and shoutcast/icecast in-band titles (icy) taken out of the audio and kept.
+; av.l's decoder door reads the port as a file. `(borrow 'icy)`, then:
 ;
-;   (icy-open u)     -> [q info] | why not: q the stream's audio bytes in order, a read
-;                       parking until they come; info a tablet: 'url where it ended up,
-;                       'name 'genre 'desc 'type 'br 'metaint off the headers, 'title the
-;                       latest StreamTitle as the stream goes, 'titles how many came, 'why
-;                       once it has ended
+;   (icy-open u)     -> [q info] | why not: q the audio bytes, a read parking until they
+;                       come; info a tablet: 'url where it ended up, 'name 'genre 'desc
+;                       'type 'br 'metaint off the headers, 'title the latest StreamTitle,
+;                       'titles how many came, 'why once it has ended
 ;   (icy-close info) -> 0: the stream stopped, q at its end
 ;   (icy-url u)      -> [tls? host port path] | ()
 ;   (icy-meta s)     -> a metadata block's StreamTitle | ()
 ;   (icy-list s)     -> the first stream a .pls or .m3u names | ()
 ;
-; the request is http/1.0, so no server chunks the body. a header past 64 KiB, a playlist
-; past 64 KiB and a ninth hop are refused; hls (#EXT-X-) is not read.
+; http/1.0, so no chunked body. a header or playlist past 64 KiB and more than nine
+; requests are refused; hls (#EXT-X-) is not read.
 (module (icy icy-open icy-close icy-url icy-meta icy-list icy-resolve)
 (borrow 'posix)
 (:
@@ -23,7 +21,7 @@
    icy-pltypes ["audio/x-scpls" "audio/scpls" "application/pls+xml" "audio/x-mpegurl" "audio/mpegurl"
                 "application/x-mpegurl" "application/vnd.apple.mpegurl"]
 
-   ; --- words and where: wget's ------------------------------------------------------
+   ; --- words and where: wget's ---
    icy-num (cite 'kore 'wg-digits)
    icy-url (cite 'kore 'wg-url)
    icy-resolve (cite 'kore 'wg-resolve)                  ; a location or playlist entry
@@ -34,7 +32,7 @@
    (icy-req [tls? host port path])
     "GET \(path) HTTP/1.0\r\nHost: \(host)\(port = (tls? ? 443 80) ? "" ":\(port)")\r\nUser-Agent: love/\(love-version)\r\nAccept: */*\r\nIcy-MetaData: 1\r\nConnection: close\r\n\r\n"
 
-   ; --- the wire, tcp or tls: tls's -----------------------------------------------------
+   ; --- the wire, tcp or tls ---
    wire (cite 'tls 'tls-wire)
    tsay (cite 'tls 'tls-say)
    hear (cite 'tls 'tls-hear)                            ; a run, () at the end
@@ -47,7 +45,7 @@
                    (go ""))
    (icy-all c b) (: (go b) (? (#b > icy-max) b (hear c @ g (string? g ? (go (b + g)) b))) (go b))
 
-   ; --- playlists -------------------------------------------------------------------
+   ; --- playlists ---
    (icy-pl? ty u b)
     (: t (lower (fsub ty ";" 0 @ k (k < 0 ? ty (snip ty 0 k)))) p (lower (icy-url u @ [_ _ _ p] p _ ""))
        h (lower (snip b 0 16))
@@ -60,7 +58,7 @@
        (? (two? fs) (<fs @ l (strip (snip l (fsub l "=" 0 + 1) #l)))
           (filter (l \ l 0 != 35 && l 0 != 91 && !(0 < fsub l "=" 0 && fsub l "://" 0 < 0)) ls @ (l . _) l _ ())))
 
-   ; --- the stream: audio out the pipe, each metadata block read for its title -----------
+   ; --- the stream: audio out the pipe, each metadata block read for its title ---
    (icy-meta m) (: k (fsub m "StreamTitle='" 0)
                    (? (k < 0) ()
                       (: a (k + 13) e (fsub m "';" a) z (fsub m (string [0]) a)
@@ -93,7 +91,7 @@
      (string? (info 'why) ? 0
       (pin info 'why "closed", close (info 'w), shut (info 'c), 0)))
 
-   ; --- one hop: the answer read, then followed, played, or refused ------------------------
+   ; --- one hop: the answer followed, played, or refused ---
    (icy-answer u hops c hd b)
     (: ls (icy-lines hd) st <ls h (icy-heads >ls)
        code (icy-num (snip st (fsub st " " 0 + 1) #st))

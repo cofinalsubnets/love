@@ -1,23 +1,13 @@
-; src/apps/tele/device.l -- a sim backend for tele's device seam, plus a roofline meter.
-;
-; tele.l owns the seam (the { gemm ew reduce transp } record + tl-use/tl-gemm/...);
-; the default backend `tl-cpu` is love's native array ops. this file adds `sim-dev`:
-; the exact same math, but every kernel meters itself -- flops done, bytes touched,
-; launches -- into `dv-stats`. `dv-roofline` then turns that tally into a time
-; estimate for a named device (peak TFLOP/s + memory GB/s), so you can size the
-; kernel decomposition (is this layer compute- or memory-bound?) before any silicon.
-;
-;   Run:  cat src/apps/tele/tele.l src/apps/tele/device.l | out/love      # then (tl-use sim-dev)
-;
-; a "kernel" here is coarse (one gemm / one elementwise / one reduce) -- roofline
-; granularity, the right altitude to answer "how big a gpu do I need" without a
-; warp simulator.
+; src/apps/tele/device.l -- sim-dev, a metered backend for tele's device seam, and a roofline.
+; same math as tl-cpu, but each kernel tallies flops, bytes and launches into dv-stats;
+; dv-roofline turns the tally into a time estimate for a named device.
+;   cat src/apps/tele/tele.l src/apps/tele/device.l | out/love      # then (tl-use sim-dev)
 
-(: ;; -- shape helpers (shape is a LIST -- walk it with cap/cup, like tele does) --
+(: ;; -- shape helpers (shape is a list) --
    (dv-prod l)   (two? l ? (<l * dv-prod >l) 1)
-   (dv-rows v)   <(shape v)                            ; axis 0
-   (dv-cols v)   <>(shape v)                           ; axis 1
-   (dv-cells v)  (tray? v ? (dv-prod (shape v)) 1)     ; product of the shape
+   (dv-rows v)   <(shape v)
+   (dv-cols v)   <>(shape v)
+   (dv-cells v)  (tray? v ? (dv-prod (shape v)) 1)
    dv-elsz 8                                           ; a gem is 8 bytes (f64)
 
    ;; -- the meter: a mutable tally the sim kernels feed --
@@ -28,35 +18,28 @@
     'byte   (b + peep dv-stats 'byte 0)
     'launch (1 + peep dv-stats 'launch 0))
 
-   ;; per-kernel flop / byte cost -- the roofline inputs.
-   ;;   gemm (m,k)x(k,n): 2mkn flops; reads A+B, writes C
-   ;;   ewise n cells    : n flops;    reads 2, writes 1
-   ;;   reduce n cells   : n flops;    reads 1, writes ~0
-   ;;   transp n cells   : 0 flops;    reads 1, writes 1 (pure data movement)
+   ;; per-kernel (flops . bytes): gemm 2mkn, reads A+B writes C; ew reads 2 writes 1
    (dv-gemm-cost a b) (: m (dv-rows a) k (dv-cols a) n (dv-cols b)
                        (2 * m * k * n . dv-elsz * (m * k + k * n + m * n)))
    (dv-ew-cost a)     (dv-cells a @ n (n . dv-elsz * 3 * n))
    (dv-red-cost a)    (dv-cells a @ n (n . dv-elsz * n))
    (dv-tr-cost a)     (dv-cells a @ n (0 . dv-elsz * 2 * n))
 
-   ;; -- the sim backend: tele's four kernels, native math wrapped in the meter.
-   ;; keys match tele's seam exactly (gemm/ew/reduce/transp); `ew` takes the op. --
+   ;; -- the sim backend: keys match tele's seam --
    sim-dev {'name "sim"
             'gemm   (a \ b \ (dv-gemm-cost a b @ c (dv-bump <c >c, inner a b)))
             'ew     (op \ a \ b \ (dv-ew-cost a @ c (dv-bump <c >c, op a b)))
             'reduce (a \ (dv-red-cost a @ c (dv-bump <c >c, net a)))
             'transp (m \ (dv-tr-cost m @ c (dv-bump <c >c, transp2 m)))}
 
-   ;; -- the roofline: turn the meter into a time estimate for a named device.
-   ;; spec = { name tflops gbps }: peak compute (TFLOP/s) and memory bw (GB/s).
-   ;; time = max(flops/peak, bytes/bw); intensity = flops/byte (the roofline knee).
+   ;; -- the roofline: spec = { name tflops gbps }; time = max(flops/peak, bytes/bw) --
    (device name tflops gbps) (hash 'name name 'tflops tflops 'gbps gbps)
    (dv-roofline spec)
       (: f  (peep dv-stats 'flop 0)   b (peep dv-stats 'byte 0)
          tf (peep spec 'tflops 0 * 1e12) bw (peep spec 'gbps 0 * 1e9)
-         tc (f / tf)  tm (b / bw)                       ; compute-time, memory-time (seconds)
+         tc (f / tf)  tm (b / bw)                       ; seconds
          t  (tc < tm ? tm tc)  bound (tc < tm ? "memory" "compute")
-         love (!b ? 0 (f / b))                            ; arithmetic intensity (flop/byte)
+         love (!b ? 0 (f / b))                            ; flop/byte
          (puts "-- roofline on ", puts (peep spec 'name "?"), putc 10,
           puts "   flops     = ", puts (show f), putc 10,
           puts "   bytes     = ", puts (show b), putc 10,
