@@ -187,7 +187,7 @@ static intptr_t image_imm_index(word v) {
 // stream. a chunk starts at an object boundary, so each one inflates and walks on its own
 #define StreamSegHead (2 * sizeof(uint64_t))
 #define StreamRow (4 * sizeof(uint64_t))                       // first word, raw offset, deflated offset, digest
-#define StreamZWords ((uintptr_t) 2 << 10)
+#define StreamZWords ((uintptr_t) 8 << 10)                     // ~16 KB raw: 2K deflated a third worse
 #ifndef ImageZStream
 #define ImageZStream 1
 #endif
