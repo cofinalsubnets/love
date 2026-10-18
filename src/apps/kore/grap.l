@@ -439,6 +439,9 @@
     (gr-k g 0 = 'name && gr-cname? g (gr-v g 0) ? (<>(gr-next g)) (gr-cur g))
    ; the value an axis keeps: its log on a log axis
    (gr-axv c ax v) (c (ax = 'x ? 'xlog 'ylog) ? (gr-log10 v) v)
+   ; ..a point's, where a log of nothing above zero ends the run
+   (gr-ptv c ax v)
+    (c (ax = 'x ? 'xlog 'ylog) && v <= 0 ? (scare 'gr-fatal "can't take log of \(ax) coord \(gr-g v)") (gr-axv c ax v))
    ; a value taken into an axis's range: a point's unless a coord said the axis, a tick's
    ; unless a coord said the other one
    (gr-extend c ax v) (gr-extend2 c ax v 0)
@@ -449,7 +452,7 @@
         (v < c l ? (pin c l v) 0, v > c u ? (pin c u v) 0)))
    ; a point [name x y] kept by its system -> its pic, xy_name(x,y)
    (gr-pt g p)
-    (: c (gr-coord g <p) x (gr-axv c 'x (p 1)) y (gr-axv c 'y (p 2))
+    (: c (gr-coord g <p) x (gr-ptv c 'x (p 1)) y (gr-ptv c 'y (p 2))
        (gr-extend c 'x x, gr-extend c 'y y,
         "xy_\(<p)(\(gr-g x),\(gr-g y))"))
    ; [coord] expr, expr, or the same in parens -> [name x y]
@@ -1036,7 +1039,8 @@
                   t (f = "-" ? (string? sin ? sin (slurp in)) (uread f @ r (two? r ? <>r)))
                   (string? t ? (gr-doc g f t, go >l)
                    (say err "grap: can't open \(f)\n", pin g 'status 1))))
-       (go (two? fs ? fs ["-"]),
+       (trap (_ \ go (two? fs ? fs ["-"])) ()
+             (a \ m \ (a @ 'gr-fatal (say err "grap: \(m) near \(gr-fline g)\n", pin g 'status 1) (scare a m))),
         [(g 'status) (slurp (g 'o))]))
 )
 ) ; module 'kore

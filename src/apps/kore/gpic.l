@@ -499,9 +499,11 @@
         (gp-op? g i "[" && gp-op? g (i + 1) "]") ['block (i + 2)]
         (k = 'str) [['text (gp-v g i)] (i + 1)]
         ()))
-   ; the nth object of a kind here, from the first or (back) from the last
+   ; the nth object of a kind here, from the first or (back) from the last: the enclosing
+   ; blocks' objects count too, as groff keeps one list
    (gp-nth-obj g ty n back)
-    (: os (back ? (g 'fr 'objs) (rev (g 'fr 'objs)))
+    (: (all f) (!(tablet? f) ? () (cat (f 'objs) (all (f 'up))))
+       os (back ? (all (g 'fr)) (rev (all (g 'fr))))
        (hit o) (two? ty ? (two? (o 'txt) && <(o 'txt) 's = <>ty) (o 'kw = ty))
        (go l k) (? (atom? l) () (hit <l) (k = 1 ? <l (go >l (k - 1))) (go >l k))
        (go os n))
@@ -590,7 +592,7 @@
     (gp-position g i @ [a j]
       (gp-w? g j "and" ? (gp-position g (j + 1) @ [b k] [(gp-interp e a b) k] ()))
       ())
-   (gp-interp e a b) [(<a + (<b - <a) * e) (a 1 + (b 1 - a 1) * e)]
+   (gp-interp e a b) [((1 - e) * <a + e * <b) ((1 - e) * a 1 + e * b 1)]   ; groff's order of operations, to the last bit
 
    ; -- objects --------------------------------------------------------------------
    ; an object is a tablet: 'ty its kind, 'kw what last and nth call it (arrow for a headed
@@ -838,8 +840,8 @@
        _ (gp-seg-close sp)
        _ (peep sp 'then 0 ? (pin sp 'segs (gp-seg-dflt g sp . sp 'segs)) 0)
        segs0 (rev (sp 'segs))
-       ; same: the last one's whole run, as one straight
-       lastl (peep sp 'same 0 ? (gp-last-of g (elem ty ['line 'arrow] ? ['line 'arrow] [ty])))
+       ; same: the last one's whole run, as one straight; a spline's is never kept
+       lastl (peep sp 'same 0 && ty != 'spline ? (gp-last-of g (elem ty ['line 'arrow] ? ['line 'arrow] [ty])))
        segs (? (two? segs0) segs0
                (tablet? lastl) [['rel (gp-sub (lastl 'en) (lastl 'st))]]
                [['rel (gp-mul (gp-unit d) (gp-dirlen g sp d))]])
@@ -959,14 +961,15 @@
            (: (names j acc) (gp-k g j = 'label && gp-op? g (j + 1) ":" ? (names (gp-skip-nl g (j + 2)) (gp-v g j . acc)) [acc j])
               ls (names i ())
               j (ls 1)
-              r (gp-object g j)
+              r (gp-k g j = 'troff ? () (gp-object g j))
               (label x) (map (nm \ pin (g 'fr 'labels) nm x) (ls 0))
               w (gp-v g j)
               (? (two? r) (label (r 0), r 1)
-                 ; a label on an assignment is where the picture has got to
+                 ; a label on an assignment or a troff line is where the picture has got to
                  (gp-k g j = 'word && (gp-op? g (j + 1) "=" || gp-op? g (j + 1) ":=") && !(elem w gp-reserved))
                   (label (fr 'here),
                    gp-expr g (j + 2) @ [e m] (gp-assign g w e (gp-op? g (j + 1) ":="), m) (gp-syn g (j + 2)))
+                 (gp-k g j = 'troff) (label (fr 'here), j)
                  (gp-position g j @ [p m] (label p, m) (gp-syn g j))))
           (k = 'word && elem v ["right" "left" "up" "down"]
                && (gp-k g (i + 1) = 'nl || gp-k g (i + 1) = 'eof || gp-k g (i + 1) = 'troff
@@ -1264,8 +1267,10 @@
        (? (lt = 'solid || r <= 0) ['solid]
           (o 'ty = 'circle)
            (lt = 'dashed ?
-            (: n (4 * (int (tau * r / (8 * w)) + 1)) d (w / r) step (tau / n)
-               (d * n >= tau ? ['solid] ['dash (map (k \ [(k * step - d / 2) (k * step + d / 2)]) ^n)]))
+            (: d (w / r) pi gp-pi
+               n (? (d < pi / 4) (4 * (int (tau * r / (8 * w)) + 1)) (d < pi / 2) 4 (d < pi) 2 0)
+               step (tau / n)
+               (n = 0 ? ['solid] ['dash (map (k \ [(k * step - d / 2) (k * step + d / 2)]) ^n)]))
             (: m (4 * int (tau * r / (4 * w))) n (m = 0 ? 2 m)
                ['dot (map (k \ k * (tau / n)) ^n)]))
           (: c (o 'c) p (o 'cw ? en st) q (o 'cw ? st en)
