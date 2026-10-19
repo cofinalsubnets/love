@@ -159,51 +159,42 @@
   (grav [-2.7 0 16.3] [-0.7 9 18.3] 'down)
   (air (box [0.9 0 15.9] [2.5 2.6 16.4]))
   (air (box [-2.5 0 15.9] [-0.9 2.6 16.4]))
-  ; ..and at their heads the station's concourse, each a doorway north; its front glass onto
-  ; the street, a doorway in the middle
-  (room [-12 9 18.6] [12 13.5 26])
+  ; ..and at their heads each a doorway north, straight out onto the pavement
   (air (box [0.9 9 18.2] [2.5 11.6 18.7]))
   (air (box [-2.5 9 18.2] [-0.9 11.6 18.7]))
-  (repeat 3 [8 0 0] [(repeat 2 [0 0 3.6] [(across (strip-light [-8 13.5 20.5]))])])
-  (buzz (sign [0 12.1 18.6] 0.5 "TRANSIT" (rgb 0.3 0.75 1)))
-  (mirror-x 0
-   [(solid (box [-4.3 9 21.9] [-3.7 13.5 22.5]))
-    (solid (box [-10 9 23.4] [-7 9.45 24]))
-    (window [-11.4 9.4 25.95] [-2.6 13 26.55] glass)])
-  (air (box [-2 9 25.9] [2 12 26.6]))
   ; the street outside under a smoggy evening overcast: pavements either side of the road,
-  ; a crossing from the station's door to the recruitment office's steps
+  ; a crossing from the shafts to the recruitment office's steps
   (sky 17.4 'overcast)
   (smog 0.75)
-  (skin {'floor asphalt 'walls facade} (street [-45 8.85 26.5] [45 45 62]))
-  (skin {'all paving} (solid (box [-45 8.85 26.5] [45 9 31])))
-  (skin {'all paving} (solid (box [-45 8.85 41] [45 9 46])))
-  (skin {'all kerb} (solid (box [-45 8.85 30.8] [45 9 31])))
-  (skin {'all kerb} (solid (box [-45 8.85 41] [45 9 41.2])))
-  (repeat 15 [6 0 0] [(decal [-42 8.86 36] [0 1 0] [1 0 0] 0.15 3 roadline)])
-  (decal [0 8.86 36] [0 1 0] [0 0 1] 4 9.8 zebra)
-  (buzz (sign [0 15.2 26.5] 0.6 "STATION" (rgb 0.3 0.75 1)))
-  (bin [3 9 27.2] 0.55 0.55 0.95 binmetal binsign)
-  (bin [-3 9 27.2] 0.55 0.55 0.95 binmetal binsign)
+  (skin {'floor asphalt 'walls facade} (street [-45 8.85 18.5] [45 45 54]))
+  (skin {'all paving} (solid (box [-45 8.85 18.5] [45 9 23])))
+  (skin {'all paving} (solid (box [-45 8.85 33] [45 9 38])))
+  (skin {'all kerb} (solid (box [-45 8.85 22.8] [45 9 23])))
+  (skin {'all kerb} (solid (box [-45 8.85 33] [45 9 33.2])))
+  (repeat 15 [6 0 0] [(decal [-42 8.86 28] [0 1 0] [1 0 0] 0.15 3 roadline)])
+  (decal [0 8.86 28] [0 1 0] [0 0 1] 4 9.8 zebra)
+  (buzz (sign [0 12.4 18.5] 0.6 "STATION" (rgb 0.3 0.75 1)))
+  (bin [4.5 9 19.2] 0.55 0.55 0.95 binmetal binsign)
+  (bin [-4.5 9 19.2] 0.55 0.55 0.95 binmetal binsign)
   ; ..and a basketball someone left out
-  (ball [5.5 9 28.5])
+  (ball [5.5 9 21])
   ; the UNN recruitment office across the road: five storeys of concrete, four buttresses
   ; sloping down from the top of the first to the pavement and from the top of the second
   ; reaching out over the street; between the middle two, steps up to its doors, shut, and
   ; its banner over them
-  (skin {'all unnwall} (solid (box [-18 8.85 46] [18 31.5 62])))
+  (skin {'all unnwall} (solid (box [-18 8.85 38] [18 31.5 54])))
   (repeat 4 [9 0 0]
-   [(skin {'all concrete} (solid (box [-14.3 9 44.8] [-12.7 32.2 46.1])))
-    (skin {'all concrete} (cut [-14.3 9 41.4] [-12.7 9 41.4] [-13.5 13.5 44.8] (solid (box [-14.3 9 41.4] [-12.7 13.5 44.8]))))
-    (skin {'all concrete} (cut [-14.2 16.2 46] [-12.8 16.2 46] [-13.5 18.9 33] (solid (box [-14.2 16.2 33] [-12.8 19.4 46]))))])
-  (repeat 4 [0 0.15 0.5] [(skin {'all concrete} (solid (box [-3.7 9 41.6] [3.7 9.15 46])))])
-  (air (box [-1.7 9.6 46] [1.7 12.6 46.7]))
-  (decal [0 11.1 46.69] [0 0 -1] [0 1 0] 3.4 3 unndoor)
-  (decal [0 16.6 45.97] [0 0 -1] [0 1 0] 5.4 8.1 unnbanner)
-  (bulb [0 12.45 46.4] (rgb 1 0.85 0.6))
+   [(skin {'all concrete} (solid (box [-14.3 9 36.8] [-12.7 32.2 38.1])))
+    (skin {'all concrete} (cut [-14.3 9 33.4] [-12.7 9 33.4] [-13.5 13.5 36.8] (solid (box [-14.3 9 33.4] [-12.7 13.5 36.8]))))
+    (skin {'all concrete} (cut [-14.2 16.2 38] [-12.8 16.2 38] [-13.5 18.9 25] (solid (box [-14.2 16.2 25] [-12.8 19.4 38]))))])
+  (repeat 4 [0 0.15 0.5] [(skin {'all concrete} (solid (box [-3.7 9 33.6] [3.7 9.15 38])))])
+  (air (box [-1.7 9.6 38] [1.7 12.6 38.7]))
+  (decal [0 11.1 38.69] [0 0 -1] [0 1 0] 3.4 3 unndoor)
+  (decal [0 16.6 37.97] [0 0 -1] [0 1 0] 5.4 8.1 unnbanner)
+  (bulb [0 12.45 38.4] (rgb 1 0.85 0.6))
   ; ..and the buildings either side of it
-  (skin {'all facade} (solid (box [-45 8.85 46] [-20 33 62])))
-  (skin {'all facade} (solid (box [20 8.85 46] [45 28 62])))
+  (skin {'all facade} (solid (box [-45 8.85 38] [-20 33 54])))
+  (skin {'all facade} (solid (box [20 8.85 38] [45 28 54])))
   ; the light: strips across the ceiling, one failing at the north end; a sign on the
   ; north wall
   (repeat 5 [2 0 0] [(across (strip-light [0 5 4]))])
