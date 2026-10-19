@@ -5,14 +5,16 @@
 ;   (resolve6 "example.org")     ; -> a list of ipv6 texts, the spelling `send` takes
 ;   (dial "example.org" 80)      ; -> a port, or ()  -- resolve, then connect
 ;   (resolve-in conf hosts name) ; the same, against named config paths
+;   (resolve-via conf hosts px name) ; and netd's socket px, asked when conf names no server
 ;
 ; a lookup is three tasks: receiver on the socket, watchdog on the clock, caller in
 ; `catch`; the first to finish wins. wire format after moonlibc's dns.c.
 ; /etc/hosts first, then resolv.conf's nameservers over udp, search domains on a miss.
+; android has no resolv.conf: there netd answers on /dev/socket/dnsproxyd, as it does bionic.
 ; no tcp fallback: a truncated answer is a scare. presence is a one-list (0.0.0.0 nets 0).
 (module (dns dial resolve dns-show
          dns-answers dns-ask dns-conf dns-query dns-servers
-         dns-hosts dns-labels resolve-in dns-quad
+         dns-hosts dns-labels resolve-in resolve-via dns-proxy dns-quad
          dns-qtype dns-qedns dns-raw dns-id dns-match? dns-name dns-records dns-v6
          resolve6 resolve6-in dns-hosts6 dns-colon? dns-walk6)
 (borrow 'posix)
@@ -268,10 +270,35 @@
         (x && two? x) (catmap (d \ ? (d 1 = 28) [(d 2)] ()) (x 2))
         (dns-walk6 su h)))
 
-   ; hosts first, then the name, then each search domain appended
-   (dns-lookup conf hosts h byhosts walk)
+   ; android's netd: getaddrinfo asked of it by name, family fam (2 or 10), a stream ->
+   ; the addresses, () on none or no netd. it answers "222\0", then per address a be32 1,
+   ; five be32s (flags family socktype protocol addrlen), the sockaddr, a be32 name length
+   ; and the name; a be32 0 ends. netd walks the search domains itself
+   dns-proxyd "/dev/socket/dnsproxyd"
+   (dns-proxy px h fam)
+    (? !(two? (stat px)) ()
+       (connect ['unix px] @ s
+        (? !(hot? s) ()
+           (: (be n v) (n = 0 ? v (see s @ c (c < 0 ? -1 (be (n - 1) (v * 256 + c)))))
+              (take n acc) (n = 0 ? (rev acc) (see s @ c (c < 0 ? () (take (n - 1) (c . acc)))))
+              (addr sa) (? (fam = 2 && 8 <= #sa) [(((sa 4 * 256 + sa 5) * 256 + sa 6) * 256 + sa 7)]
+                           (fam = 10 && 24 <= #sa) [(dns-v6 (string sa) 8)]
+                           ())
+              (go acc) (be 4 0 @ m
+                         (m != 1 ? acc
+                          (: _ (be 4 0, be 4 0, be 4 0, be 4 0)
+                             sa (take (be 4 0) ())
+                             _ (take (be 4 0) ())
+                             (go (acc + addr sa)))))
+              (say s ("getaddrinfo " + h + " ^ 0 " + show fam + " 1 0 0" + string [0]), flush s,
+               (take 4 () = [50 50 50 0] ? (go ()) ()) @ a (close s, a))))))
+
+   ; hosts first, then the name, then each search domain appended; netd's answer
+   ; when conf names no server and px stands
+   (dns-lookup conf hosts px h byhosts walk fam)
     (byhosts hosts h @ f
-       (two? f ? f
+       (? (two? f) f
+          (!(two? (dns-conf conf "nameserver")) && two? (stat px)) (dns-proxy px h fam)
           (: servers (dns-servers conf)
              a (walk servers h)
              (two? a ? a
@@ -279,8 +306,9 @@
                               (walk servers (h + "." + <ds) @ b
                                  (two? b ? b (go >ds))))
                    (go (dns-conf conf "search")))))))
-   (resolve-in conf hosts h) (dns-lookup conf hosts h dns-hosts dns-walk)
-   (resolve6-in conf hosts h) (dns-lookup conf hosts h dns-hosts6 dns-walk6)
+   (resolve-via conf hosts px h) (dns-lookup conf hosts px h dns-hosts dns-walk 2)
+   (resolve-in conf hosts h) (resolve-via conf hosts dns-proxyd h)
+   (resolve6-in conf hosts h) (dns-lookup conf hosts dns-proxyd h dns-hosts6 dns-walk6 10)
 
    (resolve h) (dns-quad h @ a (two? a ? a (resolve-in "/etc/resolv.conf" "/etc/hosts" h)))
    (resolve6 h) (dns-colon? h ? [h] (resolve6-in "/etc/resolv.conf" "/etc/hosts" h))

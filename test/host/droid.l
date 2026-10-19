@@ -26,6 +26,7 @@
    dr-eo (#dr-z - 22)
    dr-x (ap-axml (ap-manifest "pics.salt.t" "t" ()))
    dr-xp (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.RECORD_AUDIO"]))
+   dr-xn (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.INTERNET"]))
    (dr-walk x)
     (: (go i acc) (? (#x <= i) [i (rev acc)] (go (i + rdle x (i + 4) 4) (rdle x i 2 . acc))) (go 8 ()))
    (dr-pool x)
@@ -58,7 +59,9 @@
  (: p (dr-pool dr-x) !(any (x \ !(string? x)) p))
  (: w (dr-walk dr-xp) (<w = #dr-xp && #(w 1) = #((dr-walk dr-x) 1) + 2))
  (: p (dr-pool dr-xp) (elem "uses-permission" p && elem "android.permission.RECORD_AUDIO" p))
- !(elem "uses-permission" (dr-pool dr-x)))
+ ; the network with no -P, and once when -P names it too
+ (: p (dr-pool dr-x) (elem "uses-permission" p && elem "android.permission.INTERNET" p))
+ (dr-xn = dr-x))
 
 (test
  (snip dr-s (dr-co - 16) dr-co = "APK Sig Block 42")

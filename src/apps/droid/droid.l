@@ -71,11 +71,12 @@
             + ap-cat el ks
             + ax-chunk 0x103 16 (u32 1 + u32 -1 + u32 -1 + u32 (ix t))))
        (ax-chunk 3 8 (pool + rmap + nsc 0x100 + el root + nsc 0x101)))
-   ; ps the permissions asked, each android's full name
+   ; ps the permissions asked, each android's full name; the network is every app's
    (ap-manifest pkg label ps)
     ["manifest" [[1 "versionCode" 'int 1] [1 "versionName" 'str "1"] [0 "package" 'str pkg]]
       ([["uses-sdk" [[1 "minSdkVersion" 'int 26] [1 "targetSdkVersion" 'int 31]] ()]]
-       + map (p \ ["uses-permission" [[1 "name" 'str p]] ()]) ps +
+       + map (p \ ["uses-permission" [[1 "name" 'str p]] ()])
+             (elem ap-net ps ? ps ([ap-net] + ps)) +
       [["application" [[1 "label" 'str label] [1 "hasCode" 'bool 0] [1 "debuggable" 'bool 1]
                       [1 "extractNativeLibs" 'bool 1]]
          [["activity" [[1 "name" 'str "android.app.NativeActivity"] [1 "exported" 'bool 1]
@@ -148,11 +149,12 @@
     usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-b LINE] [-P PERM].. MAIN.l [FILE..]
       an android app (arm64) that runs MAIN.l: a window, touch and keys through the face
       (src/apps/droid/droid.l). LOVE is the a64 love it ships, baked; on an a64 machine
-      this one. -b starts LOVE on LINE's words instead, MAIN.l then optional. each PERM is a
-      permission the app asks for at its start, RECORD_AUDIO for the mic (android.permission.
-      unless named in full).
+      this one. -b starts LOVE on LINE's words instead, MAIN.l then optional. the app has the
+      network; each PERM is a permission it asks for at its start, RECORD_AUDIO for the mic
+      (android.permission. unless named in full).
       the key signing it lives in ~/.love/etc/apk.pem
     """)
+   ap-net "android.permission.INTERNET"           ; a normal permission: granted at install, never asked
    (ap-base p) (p @ (_ + "/" + s) (ap-base s) p)
    (ap-stem p) (ap-base p @ b (b @ (s + ".l") s b))
    (ap-or s d) (? (string? s) s d)

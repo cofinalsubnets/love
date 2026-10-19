@@ -861,6 +861,16 @@
 ; the --version answer: one spelling, name / love VERSION, for a symbol or a string name
 (test (uvers 'cat = "cat / love " + love-version) (uvers "mooncc" = "mooncc / love " + love-version))
 
+; android's names, reckoned off the id as bionic's getpwuid/getgrgid are, and back
+(test
+   (uidroid 0 = "root") (uidroid 1000 = "system") (uidroid 2000 = "shell") (uidroid 9999 = "nobody")
+   (uidroid 10123 = "u0_a123") (uidroid 110123 = "u1_a123") (uidroid 101000 = "u1_system")
+   (uidroid 99005 = "u0_i5") (uidroid 20123 = "u0_a123_cache") (uidroid 50123 = "all_a123")
+   (uidroid 1022 = "1022")                                          ; no fixed name: the number
+   (uidroid-of "u0_a123" = [1 10123]) (uidroid-of "u1_a123" = [1 110123]) (uidroid-of "shell" = [1 2000])
+   (uidroid-of "u1_system" = [1 101000]) (uidroid-of "u0_i5" = [1 99005])
+   !(uidroid-of "u0_zzz") !(uidroid-of "zzz") !(uidroid-of "ux_a1"))
+
 ; --- lex: the DFA against the one regex engine's longest match, rule by rule, over a seeded
 ; draw of texts (the earliest rule takes a tie); two-byte tables past 255 rules; dfa.c's
 ; refusals; the spec's errors by name ---

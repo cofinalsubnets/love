@@ -157,5 +157,28 @@
              (all (i \ charm? i && 0 <= i && i < 65536) ids)
              (any (i \ i != <ids) ids)))                         ; eight equal would be 2^-112
 
+; --- law 9: a conf naming no server asks netd on its socket, as bionic does; hosts still first
+(: px (dns-dir + "/dnsproxyd")
+   _ (unlink px)
+   l (listen ['unix px])
+   got {}
+   ; one address: a be32 1, flags family socktype protocol addrlen, a sockaddr_in, no name
+   (nd-addr q) (wrbe 1 4 + wrbe 0 4 + wrbe 2 4 + wrbe 1 4 + wrbe 6 4 + wrbe 16 4
+                + string 2 + string 0 + wrbe 0 2 + wrbe <(dns-quad q) 4 + wrbe 0 8 + wrbe 0 4)
+   s (twirl (_ \ (: _ (await l) c (accept l)
+                    (rd acc) (see c @ b (b <= 0 ? (catmap string (rev acc)) (rd (b . acc))))
+                    _ (pin got 'q (rd ()))
+                    (say c ("222" + string 0 + nd-addr "93.184.216.34" + nd-addr "10.0.0.1" + wrbe 0 4),
+                     flush c, close c, 1))) ())
+   _ (rest 20)
+   a (resolve-via (dns-dir + "/nope") (dns-dir + "/hosts") px "ex.am")
+   _ (catch s)
+   _ (assert (a = dns-quad "93.184.216.34" + dns-quad "10.0.0.1")
+             (got 'q = "getaddrinfo ex.am ^ 0 2 1 0 0")
+             (<(resolve-via (dns-dir + "/nope") (dns-dir + "/hosts") px "ab.cd") = 16909060)
+             !(dns-proxy (dns-dir + "/no-netd") "ex.am" 2))
+   _ (close l)
+   _ (unlink px))
+
 (hark ["rm" "-rf" dns-dir])
 (say out "dns: ok", putc 10)

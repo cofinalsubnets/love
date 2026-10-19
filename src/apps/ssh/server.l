@@ -6,7 +6,8 @@
 ;   (ssh-keyout seed pub comment pass rounds)  the key file's text, locked when pass is not ""
 ;   (ssh-keyfile path txt)              txt in a new file, 0600 -> 1 | reason
 ;   (ssh-authorized path)               the ed25519 keys authorized_keys grants
-;   (ssh-me _)                          this process's user off /etc/passwd: [name home shell]
+;   (ssh-me _)                          this process's user off /etc/passwd: [name home shell];
+;                                       where the file has no line, its name, HOME and SHELL
 ; hk is [seed pub]; keys is re-read at each login. no setuid: the server serves only the user
 ; it runs as. no rekey (answered with a disconnect), no forwarding, no subsystems.
 (module 'ssh
@@ -64,7 +65,9 @@
        (find ls) (atom? ls ? ()
                     (split <ls 58 @ f
                        (7 <= #f && unum (f 2) = uid ? [(f 0) (f 5) (f 6)] (find >ls))))
-       (find (split txt 10)))
+       (bare h) [(cite 'kore 'uidname "/etc/passwd" uid) h
+                 (getenv "SHELL" @ sh (string? sh ? sh (two? (stat "/bin/sh") ? "/bin/sh" "/system/bin/sh")))]
+       (find (split txt 10) @ me (two? me ? me (getenv "HOME" @ h (string? h ? (bare h))))))
    (sd-fpr pub) ("SHA256:" + b64e (sha (sstr "ssh-ed25519" + sstr pub)) 0)
    (sd-log quiet m) (quiet ? 0 (say err ("sshd: " + m + "\n"), flush err))
 
