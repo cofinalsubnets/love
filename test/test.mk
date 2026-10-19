@@ -225,13 +225,14 @@ test_hook: host
 test_glazebench: host
 	@echo TEST test/gate/glazebench.sh "(the benches glaze through the driver)"
 	@$(gsh) test/gate/glazebench.sh $m $a
-# test_glazefuzz -- 3000 random closures, glazed vs LOVE_NO_GLAZE=1; `fires=` proves work
+# test_glazefuzz -- 3000 random closures, glazed vs LOVE_NO_GLAZE=1; `fires=` proves work;
+# a budget makes a runaway corpus die ;; oom (peak ~95 MB)
 test_glazefuzz: host
 	@echo TEST test/gate/glazefuzz.l "(glaze differential fuzz: glazed vs interpreted)"
 	@on=out/.gfuzz_on.out; off=out/.gfuzz_off.out; \
-	  LOVE_NO_IMAGE=1 $m test/gate/glazefuzz.l > $$on 2>/dev/null \
+	  LOVE_NO_IMAGE=1 LOVE_BUDGET_MB=400 $m test/gate/glazefuzz.l > $$on 2>/dev/null \
 	    || { echo "FAIL glazefuzz: the GLAZED run died"; exit 1; }; \
-	  LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 $m test/gate/glazefuzz.l > $$off 2>/dev/null \
+	  LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 LOVE_BUDGET_MB=400 $m test/gate/glazefuzz.l > $$off 2>/dev/null \
 	    || { echo "FAIL glazefuzz: the INTERPRETED run died"; exit 1; }; \
 	  fon=`sed -n 's/^fires=//p' $$on`; foff=`sed -n 's/^fires=//p' $$off`; \
 	  [ -n "$$fon" ] && [ -n "$$foff" ] \
