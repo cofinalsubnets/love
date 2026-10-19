@@ -1,25 +1,13 @@
 ; `love lore corridor --level src/apps/lore/levels/station.l`
 (borrow 'scenery)
 
-; the textures, their layers listed at the top of src/apps/lore/swatch.l. the walls: pale
-; panels 1.3 wide, darker under a rail a metre up, a dark skirting and seams
-(: wall (texture 64 128 1.3
-         '((fill (rgb 0.66 0.7 0.68))
-           (rows 80 128 (rgb 0.5 0.54 0.52))
-           (rows 78 81 (rgb 0.42 0.45 0.44))
-           (noise 9 7 0.06)
-           (rows 124 128 0.16)
-           (cols 0 1 0.22) (cols 63 64 0.22))))
-; ..tiles half a metre, every other a shade darker, in dark grout
+; the textures, their layers listed at the top of src/apps/lore/swatch.l. the floor: tiles
+; half a metre, every other a shade darker, in dark grout
 (: tiles (texture 64 64 1
           '((fill (rgb 0.34 0.34 0.36))
             (checker 32 32 (rgb 0.3 0.31 0.33))
             (noise 5 0.1)
             (grid 32 32 1 0.12))))
-; ..pale panels 0.6 across
-(: panels (texture 64 64 1.2
-           '((fill 0.81) (noise 6 0.04)
-             (grid 32 32 1 0.3))))
 ; ..and the door: brushed steel in plates, a seam down the middle, a hazard band at its foot
 (: steel (texture 64 128 1
           '((fill (rgb 0.5 0.52 0.56))
@@ -80,27 +68,27 @@
                (cols 0 4 (rgb 0.27 0.27 0.29)) (cols 30 34 (rgb 0.27 0.27 0.29)) (cols 62 64 (rgb 0.27 0.27 0.29)))
              (rows 44 47 (rgb 0.17 0.17 0.18)))))
 ;; the street and the recruitment office
-; ..the road: steel plates, studded, in dark seams, and a crossing's pale bars
+; ..the road: steel plates, studded, in dark seams
 (: roadmetal (texture 64 64 2
               '((fill (rgb 0.3 0.31 0.33)) (noise 20 0.6 0.08)
                 (dots 8 8 1.2 (shade 1.3))
                 (patches 9 0.25 (shade 0.82))
                 (grid 32 32 1 (rgb 0.1 0.1 0.11)))))
-(: zebra (texture 64 16 1 '((fill hole) (stripes 16 9 0 (grey 0.85)) (noise 4 0.15))))
 (: kerb (texture 32 32 1 '((fill (rgb 0.36 0.36 0.36)) (noise 4 0.1) (grid 32 0 1 0.4))))
-; ..the office: board-marked concrete, its storeys four and a half metres with a band of
+; ..the office: poured concrete, its storeys four and a half metres with a band of
 ; narrow windows, and the buttresses bare
 (: unnwall (texture 64 64 4.5
-            '((fill (rgb 0.3 0.3 0.31)) (noise 11 0.08)
-              (patches 7 0.3 (shade 0.75))
+            '((fill (rgb 0.34 0.33 0.32)) (noise 3 0.05) (patches 3 0.18 (shade 0.88))
               (rows 0 2 (rgb 0.2 0.2 0.21))
               (within 0 22 64 46
                 (fill (rgb 0.04 0.06 0.09)) (noise 5 0.12) (patches 6 0.12 (rgb 0.4 0.75 1.0))
                 (cols 0 3 (rgb 0.27 0.27 0.28)) (cols 15 17 (rgb 0.27 0.27 0.28))
                 (cols 31 34 (rgb 0.27 0.27 0.28)) (cols 47 49 (rgb 0.27 0.27 0.28)) (cols 62 64 (rgb 0.27 0.27 0.28))))))
-(: concrete (texture 32 64 2
-             '((fill (rgb 0.33 0.33 0.34)) (noise 7 0.1) (patches 5 0.35 (shade 0.8))
-               (grid 0 8 1 (shade 0.88)))))
+; ..poured concrete, smooth, stained broadly, a pour's line every three metres and the
+; form ties' holes in rows between
+(: concrete (texture 128 128 6
+             '((fill (rgb 0.34 0.33 0.32)) (noise 6 0.05) (patches 6 0.18 (shade 0.88))
+               (rows 0 1 (shade 0.88)) (rows 64 65 (shade 0.88)) (dots 42.667 16 0.8 (shade 0.6)))))
 ; ..its doors: two leaves of blued steel, each a raised plate with its corners cut, a dark
 ; seam between, blue lights in the frame, a hazard band at the foot
 (: unndoor (texture 64 56 3.4
@@ -248,6 +236,37 @@
                   (whole (skin {'all darkmetal} (solid (box [(x - 0.42) y (z + 0.02)] [(x - 0.38) (y + 1.5) (z + 0.06)]))))
                   (whole (skin {'all darkmetal} (solid (box [(x + 0.38) y (z + 0.02)] [(x + 0.42) (y + 1.5) (z + 0.06)]))))
                   (whole (skin {'all darkmetal} (solid (box [(x - 0.42) (y + 0.6) (z + 0.02)] [(x + 0.42) (y + 0.64) (z + 0.06)]))))])
+;; the block across from the shop: its windows' dark glass
+(: darkpane (texture 16 16 1.6 '((fill (rgb 0.02 0.025 0.035)) (noise 4 0.35) (cols 0 1 (grey 0.1)) (rows 0 1 (grey 0.1)))))
+; ..a window 1.6 wide and 1.8 tall sunk half a metre into its south face at x, or its east
+; face at z, its sill at y
+(: (slot c y ax) (? (ax = 'z) [(skin {'all concrete} (air (box [(c - 1.9) y 32.9] [(c + 1.9) (y + 2) 34])))
+                               (decal [c (y + 1) 33.99] [0 0 -1] [0 1 0] 3.8 2 darkpane)]
+                    [(skin {'all concrete} (air (box [-34 y (c - 1.9)] [-32.9 (y + 2) (c + 1.9)])))
+                     (decal [-33.99 (y + 1) c] [1 0 0] [0 1 0] 3.8 2 darkpane)]))
+;; ..the grav shafts: walls of dark cabling bound in clamps, a plate floor and ceiling,
+; and on each a steel ring round a triangle of three glowing blue lamps
+(: cabling (texture 64 64 1.2
+            '((fill (rgb 0.04 0.04 0.05))
+              (cols 2 7 (rgb 0.1 0.1 0.12)) (cols 9 12 (rgb 0.07 0.08 0.1)) (cols 14 20 (rgb 0.12 0.12 0.13))
+              (cols 23 26 (rgb 0.05 0.08 0.13)) (cols 28 34 (rgb 0.1 0.1 0.11)) (cols 37 40 (rgb 0.13 0.06 0.05))
+              (cols 42 48 (rgb 0.11 0.11 0.12)) (cols 51 54 (rgb 0.08 0.08 0.1)) (cols 56 62 (rgb 0.12 0.12 0.14))
+              (cols 4 5 (shade 1.6)) (cols 16 17 (shade 1.6)) (cols 30 31 (shade 1.6)) (cols 44 45 (shade 1.6)) (cols 58 59 (shade 1.6))
+              (noise 2 12 0.3)
+              (rows 28 34 (rgb 0.2 0.2 0.22)) (rows 28 29 (rgb 0.3 0.3 0.33)) (rows 33 34 0.08))))
+(: shaftplate (texture 32 32 1 '((fill (rgb 0.15 0.16 0.18)) (noise 4 0.2) (grid 32 32 1 0.07))))
+(: gravring (texture 64 64 1.6 '((fill hole) (disc 32 32 31 (rgb 0.55 0.58 0.63)) (disc 32 32 27 (rgb 0.3 0.32 0.36)) (noise 6 0.15))))
+(: gravlamps (texture 64 64 1.6
+              '((fill hole)
+                (disc 32 18 8 (rgb 0.25 0.6 1)) (disc 20 39 8 (rgb 0.25 0.6 1)) (disc 44 39 8 (rgb 0.25 0.6 1))
+                (disc 32 18 4 (rgb 0.75 0.95 1)) (disc 20 39 4 (rgb 0.75 0.95 1)) (disc 44 39 4 (rgb 0.75 0.95 1)))))
+(: (shaft x) [(skin {'walls cabling 'floor shaftplate 'ceiling shaftplate} (room [(x - 1) -5 16.3] [(x + 1) 12 18.3]))
+              (decal [x -4.99 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravring) (ad [x -4.98 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravlamps)
+              (decal [x 11.99 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravring) (ad [x 11.98 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravlamps)
+              (window [(x - 0.8) -0.9 15.9] [(x + 0.8) 0.8 16.4] glass)])
+; ..the station's lamps: steel fittings, three-sided, on the walls
+(: sconcemetal (texture 16 16 0.5 '((fill (rgb 0.42 0.43 0.45)) (noise 4 0.15))))
+(: (lamp at n d) (sconce at n d 1.4 sconcemetal))
 ; ..the sweeper's roller about x, r round, an octagon across the road's way
 (: (roller x r) (: a (x - r) b (x + r) y0 8.85 y1 (8.85 + 2.0 * r) k (0.586 * r) p 23.2 q 26.8
    (whole (skin {'all drumsteel}
@@ -261,54 +280,66 @@
                  (solid (box [(x - 1.3) 20.6 21] [(x + 1.3) 22.6 30.5]))))))
 
 (level "the station"
-  (textures {'wall wall 'floor tiles 'ceiling panels 'door steel 'train carbody})
+  (textures {'wall concrete 'floor tiles 'ceiling concrete 'door steel 'train carbody})
   ; the start inside the car, facing its door
-  (start [0 0 -5.9] 0 0)
-  ; the hall, 38 metres across, five high and 16 long
-  (room [-19 0 0] [19 5 16])
+  (start [0 -5 -5.9] 0 0)
+  ; a dim light everywhere, the lamps' thrown back off the concrete
+  (ambient (rgb 0.15 0.15 0.16))
+  ; the hall, 38 metres across, ten high and 16 long
+  (room [-19 -5 0] [19 5 16])
   ; the platform, its floor a grate, and the track a metre below it running on into the
   ; tunnels, under the car's floor
-  (skin {'floor grate} (room [-24 0 -4.52] [24 3.5 0]))
-  (room [-24 -1 -7.6] [24 3.5 -4.52])
-  (room [-70 -1 -7.6] [70 3 -4.52])
+  (skin {'floor grate} (room [-24 -5 -4.52] [24 2 0]))
+  (room [-24 -6 -7.6] [24 2 -4.52])
+  (room [-70 -6 -7.6] [70 -2 -4.52])
   ; solid blocks standing in from the side walls, mirrored about x 0; the hallway between
   ; them and each wing's chamber south open onto the platform
   (mirror-x 0
-   [(solid (box [-19 0 0] [-11 5 4]))
-    (solid (box [-7 0 0] [-3 5 4]))
-    (solid (box [-15 0 8] [-11 5 10]))
-    (solid (box [-7 0 8] [-3 5 10]))
-    (solid (box [-19 0 16] [-3 5 10]))
-    (repeat 2 [4 0 0] [(across (strip-light [-13 5 6]))])
+   [(solid (box [-19 -5 0] [-11 5 4]))
+    (solid (box [-7 -5 0] [-3 5 4]))
+    (solid (box [-15 -5 8] [-11 5 10]))
+    (solid (box [-7 -5 8] [-3 5 10]))
+    (solid (box [-19 -5 16] [-3 5 10]))
+    ; ..the lamps, each looking along its wall, some across, some up or down it
+    (lamp [-3 -2.2 2] [1 0 0] [0 0 1])
+    (lamp [-3 -2.2 9] [1 0 0] [0 0 -1])
+    (lamp [-11 -2.2 2] [1 0 0] [0 0 1])
+    (lamp [-19 0.5 7] [1 0 0] [0 1 0])
+    (lamp [-3 1.5 13] [1 0 0] [0 -1 0])
+    (lamp [-15 -2.5 0] [0 0 -1] [1 0 0])
+    (lamp [-5 -2.5 0] [0 0 -1] [-1 0 0])
     ; ..the railing along the platform's edge, open across the car's door: a plinth, posts
     ; and a rail
-    (solid (box [-24 0 -4.52] [-1 0.4 -4.36]))
-    (repeat 16 [-1.52 0 0] [(solid (box [-1.06 0.4 -4.47] [-1 1.0 -4.41]))])
-    (solid (box [-24 1.0 -4.48] [-1 1.06 -4.4]))])
+    (solid (box [-24 -5 -4.52] [-1 -4.6 -4.36]))
+    (repeat 16 [-1.52 0 0] [(solid (box [-1.06 -4.6 -4.47] [-1 -4.0 -4.41]))])
+    (solid (box [-24 -4.0 -4.48] [-1 -3.94 -4.4]))])
   ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
-  (train [-9 0 -7.24] [9 2.3 -4.64] (door [0 0 -4.64] 1.4 2.0) -55)
-  (repeat 7 [6 0 0] [(across (strip-light [-18 3.5 -2.4]))])
+  (train [-9 -5 -7.24] [9 -2.7 -4.64] (door [0 -5 -4.64] 1.4 2.0) -55)
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
-  ; station's side, a narrow steel road, a crossing to the recruitment office's steps
+  ; station's side, a narrow steel road, and off it north by the shop a short street that
+  ; ends at a blank wall
   (sky 18.35 'mostly)
   (smog 0.9)
   (skin {'floor roadmetal 'walls facade} (street [-45 8.85 14] [45 45 47]))
   (skin {'all paving} (solid (box [-45 8.85 14] [45 9 22])))
-  (skin {'all paving} (solid (box [-45 8.85 28] [45 9 33])))
+  (skin {'all paving} (solid (box [-45 8.85 28] [-31 9 33])))
+  (skin {'all paving} (solid (box [-33 8.85 33] [-31 9 47])))
+  (skin {'all paving} (solid (box [-20 8.85 28] [45 9 33])))
+  (skin {'all paving} (solid (box [-20 8.85 33] [-18 9 47])))
+  (skin {'all concrete} (solid (box [-33 8.85 46.6] [-18 33 47])))
   (skin {'all kerb} (solid (box [-45 8.85 21.8] [45 9 22])))
-  (skin {'all kerb} (solid (box [-45 8.85 28] [45 9 28.2])))
-  (decal [0 8.86 25] [0 1 0] [0 0 1] 4 5.8 zebra)
+  (skin {'all kerb} (solid (box [-45 8.85 28] [-31 9 28.2])))
+  (skin {'all kerb} (solid (box [-20 8.85 28] [45 9 28.2])))
+  (skin {'all kerb} (solid (box [-31.2 8.85 28.2] [-31 9 47])))
+  (skin {'all kerb} (solid (box [-20 8.85 28.2] [-19.8 9 47])))
   ; ..across it from the office a great column, the third of its beams reaching over to it,
   ; and either side of the column a wing, upright at the pavement, rising, then level to
   ; meet it, the pavement going on round behind them; the shafts come up in the west wing,
-  ; a doorway north from each, and the east is an arch to walk under: a leg near eye high
-  ; to pull up onto, an arm rising from it to walk up, and a beam
+  ; a doorway north from each, its top chamfered; the east an arch to walk under, its leg
+  ; near eye high to pull up onto, a slope up from it to walk, and a level top
   (skin {'all concrete} (solid (box [3 9 15.8] [6 26 19.5])))
-  (skin {'all concrete} (cut [-5.5 10.6 19] [-5.5 10.6 15.8] [-0.65 13.4 15.8] (solid (box [-5.5 9 15.8] [3 13.4 19]))))
-  (skin {'all concrete} (cut [12 10.4 16] [12 10.4 19.3] [8 13.2 16] (solid (box [11 9 16] [12 11.1 19.3]))))
-  (skin {'all concrete} (cut [12 10.4 16] [12 10.4 19.3] [8 13.2 16]
-                         (cut [12 9.4 16] [12 9.4 19.3] [8 12.2 16] (solid (box [8 9.9 16] [12 13.2 19.3])))))
-  (skin {'all concrete} (solid (box [6 12.3 16] [8 13.2 19.3])))
+  (skin {'all concrete} (cut [-5.5 12.4 19] [-5.5 12.4 15.8] [-4.7 13.2 15.8] (solid (box [-5.5 9 15.8] [3 13.2 19]))))
+  (skin {'all concrete} (cut [12 10.4 16] [12 10.4 19.3] [8 13.2 16] (cut [11 9 16] [11 9 19.3] [6 12.3 16] (solid (box [6 9 16] [12 13.2 19.3])))))
   ; ..the station's sign on the wing, a room of the street's air before it to hang it on
   (skin {'all concrete} (room [-5.5 9 19] [3 13 19.6]))
   (buzz (sign [-0.0 12.2 19] 0.5 "STATION" (rgb 0.3 0.75 1)))
@@ -316,13 +347,14 @@
   (bin [8.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
   ; ..and a basketball someone left out on top of the arch
   (ball [7 13.2 17.65])
-  ; the way out north: two grav shafts behind the hall's north wall, either side of the sign;
-  ; facing them, up on the right and down on the left, each a doorway at its foot and one
-  ; at its head out of the wing
-  (grav [0.7 0 16.3] [2.7 9 18.3] 'up)
-  (grav [-2.7 0 16.3] [-0.7 9 18.3] 'down)
-  (air (box [0.9 0 15.9] [2.5 2.6 16.4]))
-  (air (box [-2.5 0 15.9] [-0.9 2.6 16.4]))
+  ; the way out north: two grav shafts behind the hall's north wall; facing them, up on the
+  ; right and down on the left, each a doorway at its foot and one at its head out of the
+  ; wing, a window a metre and a half over each doorway into its glow
+  (grav [0.7 -5 16.3] [2.7 9 18.3] 'up)
+  (grav [-2.7 -5 16.3] [-0.7 9 18.3] 'down)
+  (shaft 1.7) (shaft -1.7)
+  (air (box [0.9 -5 15.9] [2.5 -2.4 16.4]))
+  (air (box [-2.5 -5 15.9] [-0.9 -2.4 16.4]))
   (skin {'all concrete} (air (box [0.9 9 18.2] [2.5 11.6 19.1])))
   (skin {'all concrete} (air (box [-2.5 9 18.2] [-0.9 11.6 19.1])))
   ; the corner shop at the street's west end, three storeys, its floor a step below the
@@ -418,24 +450,30 @@
   (candle -0.21 9.6 32.792 0.28 wax) (candle -0.508 9.6 33.09 0.34 wax)
   (candle -0.508 9.6 33.51 0.24 wax) (candle -0.21 9.6 33.808 0.3 purplewax)
   (flames (rgb 1 0.62 0.25) [[0.21 9.925 33.808] [0.508 9.865 33.51] [0.508 9.905 33.09] [0.21 9.825 32.792] [-0.21 9.885 32.792] [-0.508 9.945 33.09] [-0.508 9.845 33.51]])
-  ; ..and the buildings either side of it
-  (skin {'all facade} (solid (box [-45 8.85 33] [-20 33 47])))
+  ; ..across from the shop, on the far corner of the short street, a block of bare
+  ; poured concrete, a storey over it: blind below, its top two storeys each a pair
+  ; of broad dark panes sunk deep in each face, a heavy lip round its roof
+  (skin {'all concrete} (solid (box [-45 8.85 33] [-33 26 47])))
+  (skin {'all concrete} (solid (box [-45 24.4 32.3] [-32.3 26.6 47])))
+  (map (q \ slot (q 0) (q 1) 'z) (cats (map (y \ map (x \ [x y]) [-42.4 -38]) [16.9 20.5])))
+  (map (q \ slot (q 0) (q 1) 'x) (cats (map (y \ map (z \ [z y]) [38.5 43.5]) [16.9 20.5])))
+  ; ..and a steel girder from its corner near the shop's roof, out to the office's first
+  ; beam, along through the points of all four and through the one on the column, and back
+  ; the same way to the building east; a red beacon flashing under it at each free point
+  (mirror-x 0 [(whole (skin {'all darkmetal} (solid (prism 0.8 [[-33.855 21.2 34.418] [-14.361 21.2 21.314] [-15.142 21.2 20.152] [-34.636 21.2 33.256]]))))])
+  (whole (skin {'all darkmetal} (solid (box [-15.2 21.2 20.2] [15.2 22 21.6]))))
+  (map (x \ blink (bulb [x 21.08 20.9] (rgb 1 0.06 0.03))) [-13.5 -4.5 13.5])
   (skin {'all facade} (solid (box [20 8.85 33] [45 28 47])))
-  ; the light: strips across the ceiling, one failing at the north end; a sign on the
-  ; north wall
-  (repeat 5 [2 0 0] [(across (strip-light [0 5 4]))])
-  (stammer (across (strip-light [0 5 12])))
-  (buzz (sign [0 3.2 15.9] 0.45 "EXIT" (rgb 0.2 1 0.35)))
-  (poster [-4.7 1.2 6.4] 0.7 1.0 ())
+  (poster [-4.7 -3.8 6.4] 0.7 1.0 ())
   ; inside the easternmost block, a room no one can reach: a window in its west face onto the
-  ; chamber beside it, a light, and a door in its east wall
-  (room [11.3 0 0.3] [18.7 3.2 3.7])
-  (window [10.95 0.9 0.6] [11.35 2.6 3.4] glass)
-  (strip-light [15 3.2 2])
-  (door [18.7 0 2] 1.2 2.2)
+  ; chamber beside it, a lamp, and a door in its east wall
+  (room [11.3 -5 0.3] [18.7 -1.8 3.7])
+  (window [10.95 -4.1 0.6] [11.35 -2.4 3.4] glass)
+  (lamp [13 -3.4 0.3] [0 0 1] [1 0 0])
+  (door [18.7 -5 2] 1.2 2.2)
   ; the bins: against the blocks either side of the hallway on the platform, at its ends,
   ; and in each wing against the front block
   (mirror-x 0
-   [(bin [-5 0 -0.4] 0.55 0.55 0.95 binmetal binsign)
-    (bin [-21.5 0 -0.4] 0.55 0.55 0.95 binmetal binsign)
-    (bin [-15 0 4.4] 0.55 0.55 0.95 binmetal binsign)]))
+   [(bin [-5 -5 -0.4] 0.55 0.55 0.95 binmetal binsign)
+    (bin [-21.5 -5 -0.4] 0.55 0.55 0.95 binmetal binsign)
+    (bin [-15 -5 4.4] 0.55 0.55 0.95 binmetal binsign)]))

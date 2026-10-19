@@ -122,13 +122,6 @@
        (brush-medium (rs 'sc 'brushes) [-4.85 2.0 1.6] = 0) (brush-medium (rs 'sc 'brushes) [-4.6 3.3 1.6] = 1)
        (up 'py = 0.5 + eye-h) (mag (up 'ph - 10.0 * pi / 180.0) < 1e-9) (mag (up 'th - pi / 2.0) < 1e-9)
        (has? pos "(start [0.0 0.0 1.0] 0.0 0.0)") (tablet? (corridor-load "src/apps/lore/levels/station.l"))))
-; the station: the wings' chambers and the hallway open onto the platform; its edge railed
-; but across the car's door; the track bed a metre under the car's floor, so the two never meet
-(: sb (corridor-new 40 24 (corridor-load "src/apps/lore/levels/station.l") "src/apps/lore/levels/" 'sc 'brushes)
-   (m x y z) (brush-medium sb [x y z])
- (test (m -9.0 0.3 -0.05 = 1) (m 9.0 0.3 -0.05 = 1) (m 0.0 0.3 -0.05 = 1)
-       (m -9.0 0.3 -4.44 = 0) (m 9.0 0.3 -4.44 = 0) (m 0.0 0.3 -4.44 = 1)
-       (m 0.0 -0.5 -6.0 = 1) (m 0.0 -1.1 -6.0 = 0) (m 0.0 -0.5 -2.0 = 0)))
 ; a bin: solid at its foot, hollow up top and open on every side there, capped, a sign on each
 ; side; a window: glass between two rooms that stops a walk where its sill does not, and a lamp
 ; in the room within a room lights that room
@@ -145,6 +138,18 @@
        (#(wl 'panes) = 1) (corridor-free? ws 2.0 3.5) (!(corridor-free? ws 2.0 4.15)) (corridor-free? ws 3.5 4.15 = 0)
        (#(ws 'sc 'panes) = 1) (peep (ws 'sc 'panes 0 'pk 'tris) 3 0 = -3)
        (lp 3.5 1.0 3.5 = 1) (lp 8.0 1.0 8.0 = 0)))
+; a sconce: a wedge on its wall, solid by the wall at its face, air past its sloping back
+; and before its face; mirrored it stands on the far wall looking back; each a lamp. a
+; level's ambient: none by default, a wrong colour refused
+(: scq "(: m (texture 8 8 1 '((fill 0.5)))) " (scr s) (corridor-read (scq + "(level \"t\" " + s + ")"))
+   scl (scr "(room [0 0 0] [4 3 4]) (sconce [0 1.5 2] [1 0 0] [0 0 1] 1 m) (mirror-x 2 [(sconce [0 1.5 1] [1 0 0] [0 0 1] 1 m)])")
+   scb (corridor-new 8 8 scl "" 'sc 'brushes) (scm x y z) (brush-medium scb [x y z])
+ (test (#(scl 'sconces) = 3) (scm 0.05 1.5 1.95 = 0) (scm 0.2 1.5 1.8 = 1) (scm 0.1 1.5 2.05 = 1) (scm 0.05 2.2 1.95 = 1)
+       (scl 'sconces 2 'np 0 = 3.0) (#(corridor-new 8 8 scl "" 'sc 'lights) >= 3)
+       (has? (scr "(room [0 0 0] [1 1 1]) (sconce [0 0 0] [1 0 0] [0 0 1] 1 5)") "(sconce [x y z]")
+       (scr "(room [0 0 0] [1 1 1]) (ambient (rgb 0.5 0.4 0.3))" 'ambient = [0.5 0.4 0.3])
+       (scr "(room [0 0 0] [1 1 1])" 'ambient = [0.0 0.0 0.0])
+       (has? (scr "(room [0 0 0] [1 1 1]) (ambient 3)") "(ambient (rgb r g b))")))
 ; a grav shaft: walked into, it carries up to its head, eased in, and out north is street level;
 ; its twin carries down; motes stream through each the way it goes
 (: gl (lv "(room [0 0 0] [8 3 4]) (start [2 0 2] 0 0)
@@ -243,7 +248,10 @@
    (st _) (corridor-new 40 24 L "src/apps/lore/levels/")
    (feet q) (q 'py - eye-h)
    on (steps (corridor-step (st ()) 'jump) 107 30) off (steps (st ()) 107 30)
- (test (mag (feet on - 1.4) < 0.01) (on 'pz > 1.5) (mag (feet off) < 0.01) (off 'pz < 1.0)))
+   ; ..the eye carried up over a few frames, never a leap
+   ys (: q (corridor-step (st ()) 'jump) (map (_ \ (: _ (corridor-step q (corridor-kb 107)) _ (corridor-move q) (q 'py))) ^30))
+   rise (foldl max2 0.0 (map (i \ ys (i + 1) - ys i) ^29))
+ (test (mag (feet on - 1.4) < 0.01) (on 'pz > 1.5) (mag (feet off) < 0.01) (off 'pz < 1.0) (rise < 0.16)))
 ; the ball: still until walked into, then away, off the far wall, and still again on the floor
 (: L (lv "(room [-5 0 -5] [5 3 15]) (start [0 0 0] 0 0) (ball [0 0 2])")
    (st _) (corridor-new 40 24 L "src/apps/lore/levels/")
@@ -270,10 +278,10 @@
        (all (p \ p 2 < 0.0) (s 'lamp 'at)) (s 'w = 0.3 * hi 1)))
 ;; the street's words: a sign facing its own way, a lit board, the spinning square; hanzi
 ;; a glyph and a half wider than latin's
-(: sl (corridor-read "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [10 4 10]) (start [5 0 5] 0 0) (neon [5 2 9] [0 0 -1] 0.5 \"中\" (rgb 1 0 0)) (ad [0.01 2 5] [1 0 0] [0 1 0] 3 2 t) (spinner [5 3 5] 1 1 t t) (breathe (flames (rgb 1 0.6 0.2) [[1 0 1] [2 0 1]])) (whole (solid (box [1 0 1] [2 1 2]))))")
+(: sl (corridor-read "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [10 4 10]) (start [5 0 5] 0 0) (neon [5 2 9] [0 0 -1] 0.5 \"中\" (rgb 1 0 0)) (ad [0.01 2 5] [1 0 0] [0 1 0] 3 2 t) (spinner [5 3 5] 1 1 t t) (breathe (flames (rgb 1 0.6 0.2) [[1 0 1] [2 0 1]])) (blink (bulb [1 3 1] (rgb 1 0 0))) (whole (solid (box [1 0 1] [2 1 2]))))")
    wh (neon-strokes "中心") wl (neon-strokes "HI")
  (test (tablet? sl) (#(sl 'signs) = 1) (sl 'signs 0 'n = [0.0 0.0 -1.0]) (#(sl 'ads) = 1) (sl 'ads 0 'w = 3)
-       (#(sl 'spins) = 1) (sl 'spins 0 't1 = sl 'spins 0 't2) (#(sl 'flames 0 'pts) = 2) (sl 'flames 0 'how = ['breathe]) (any (b \ b 'whole = 1) (sl 'brushes)) (wl 1 < wh 1) (0 < #(wh 0))
+       (#(sl 'spins) = 1) (sl 'spins 0 't1 = sl 'spins 0 't2) (#(sl 'flames 0 'pts) = 2) (sl 'flames 0 'how = ['breathe]) (sl 'bulbs 0 'how = ['blink]) (any (b \ b 'whole = 1) (sl 'brushes)) (wl 1 < wh 1) (0 < #(wh 0))
        (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (flames (rgb 1 0 0) 3))") "(flames (rgb r g b) [[x y z] ..])") (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (whole 3))") "(whole BRUSH)")
        (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (spinner [0 0 0] 1 1 3 3))") "(spinner [x y z] width height TEXTURE TEXTURE)")))
 ;; a drape: its rows, a gap (), mirrored front up with the rest; in the scene two

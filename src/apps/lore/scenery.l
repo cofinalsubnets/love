@@ -14,6 +14,8 @@
 ;   (sky hour COVER)                   the level's sky at that hour of the day, COVER 'clear
 ;                                      'partly 'mostly or 'overcast; none, and no street is lit
 ;   (smog k)                           the sky and its light browned toward orange, k 0 to 1
+;   (ambient (rgb r g b))              light everywhere under a roof at once, over the
+;                                      corridor's own dim
 ;   (air SHAPE) (solid SHAPE)          a brush: space starts solid, air carves it and solid
 ;                                      fills it again, the later winning; a room is an air box
 ;     (box [x y z] [x y z])            ..a box between two corners
@@ -50,6 +52,11 @@
 ;                                      front up when the rows run toward z, their points toward x
 ;   (strip-light [x y z])              a light strip along z, its face at y
 ;   (bulb [x y z] (rgb r g b))         a bare bulb, its light
+;   (sconce [x y z] [nx ny nz] [dx dy dz] length TEXTURE)  a lamp in a three-sided fitting on
+;                                      the wall facing n: its lit face standing out from the
+;                                      wall at x y z, looking d along it, length long across
+;                                      both, and its back sloping from the face's outer edge
+;                                      down to the wall; solid
 ;   (flames (rgb r g b) [[x y z] ..])  small flames, a candle's, standing at each point, all
 ;                                      one light between them
 ;   (poster [x y z] width height FILE) on the wall nearest, the middle of its foot at x y z;
@@ -65,7 +72,8 @@
 ;                                      turning slowly about its middle at x y z, the two
 ;                                      textures in turn round it
 ;   (across LIGHT)                     a strip turned across, along x
-;   (stammer LIGHT) (buzz LIGHT) (breathe LIGHT)  a light failing, buzzing or breathing
+;   (stammer LIGHT) (buzz LIGHT) (breathe LIGHT) (blink LIGHT)  a light failing, buzzing,
+;                                      breathing, or flashing as a mast's beacon does
 ;   (texture width height metres LAYERS)  a texture, width by height texels and metres wide
 ;                                      on a surface, painted by its layers (swatch.l), quoted
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
@@ -75,8 +83,8 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of start room street sky air solid box prism cut whole door train bin decal drape window grav ball smog ad spinner neon strip-light bulb flames poster sign
-         across stammer buzz breathe texture skin textures repeat mirror-x mirror-z rgb)
+(module (scenery level-of start room street sky ambient air solid box prism cut whole door train bin decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
+         across stammer buzz breathe blink texture skin textures repeat mirror-x mirror-z rgb)
 (borrow 'view)                          ; min2 max2
 (borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
 (:
@@ -98,6 +106,7 @@
  (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr || gem? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
+ (ambient c) (: u "(ambient (rgb r g b))" (colour? c ? (part 'ambient [['c c]]) (no u c)))
  ; ..a brush's shape, its kind and points; air and solid make it a brush
  (box lo hi) (: u "(box [x y z] [x y z])" (part 'box [['lo (P lo u)] ['hi (P hi u)]]))
  (prism h ps) (: u "(prism height [[x y z] ..])"
@@ -162,6 +171,17 @@
           signs])))
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
  (bulb at c) (: u "(bulb [x y z] (rgb r g b))" (colour? c ? (part 'bulb [['at (P at u)] ['c c] ['how ()]]) (no u c)))
+ ; ..a sconce: a box from a little inside the wall cut corner to corner, keeping the wall's
+ ; side, and its lamp; n and d kept as points a metre on, as a decal's are
+ sconce-d 0.25
+ (sconce at n d len t) (: u "(sconce [x y z] [nx ny nz] [dx dy dz] length TEXTURE)" a (P at u) nv (P n u) dv (P d u) L (N len u) s sconce-d
+   lv [(nv 1 * dv 2 - nv 2 * dv 1) (nv 2 * dv 0 - nv 0 * dv 2) (nv 0 * dv 1 - nv 1 * dv 0)]
+   (pt kn kd kl) (map (i \ a i + kn * nv i + kd * dv i + kl * lv i) ^3)
+   p0 (pt -0.05 (0.0 - s) (-0.5 * L)) p1 (pt s 0.0 (0.5 * L))
+   (? (!(texture? t)) (no u t)
+      [(whole (skin {'all t} (cut (pt s 0.0 0.0) (pt 0.0 (0.0 - s) 0.0) (pt s 0.0 1.0)
+                              (solid (box (map (i \ min2 (p0 i) (p1 i)) ^3) (map (i \ max2 (p0 i) (p1 i)) ^3))))))
+       (part 'sconce [['at a] ['np (map (i \ a i + nv i) ^3)] ['up (map (i \ a i + dv i) ^3)] ['len L] ['how ()]])]))
  (flames c ps) (: u "(flames (rgb r g b) [[x y z] ..])"
    (? (!(colour? c)) (no u c) (!(two? ps)) (no u ps)
       (part 'flame [['pts (map (p \ P p u) ps)] ['c c] ['how ()]])))
@@ -180,10 +200,11 @@
    (? (!(texture? t1)) (no u t1) (!(texture? t2)) (no u t2)
       (part 'spin [['at (P at u)] ['w (N w u)] ['h (N h u)] ['t1 t1] ['t2 t2]])))
  (across s) (kind? s ['strip] ? (with s 'across 1) (no "(across (strip-light ..))" s))
- (how w l) (kind? l ['strip 'bulb 'sign 'flame] ? (with l 'how [w]) (no ("(" + show w + " LIGHT), a strip-light, bulb, sign or flames") l))
+ (how w l) (kind? l ['strip 'bulb 'sconce 'sign 'flame] ? (with l 'how [w]) (no ("(" + show w + " LIGHT), a strip-light, bulb, sconce, sign or flames") l))
  (stammer l) (how 'stammer l)
  (buzz l) (how 'buzz l)
  (breathe l) (how 'breathe l)
+ (blink l) (how 'blink l)
  ; ..a texture, a value: its recipe checked here, so a bad layer stops the level at it
  (texture w h m ls) (: u "(texture width height metres LAYERS)"
    (? (!(charm? w && charm? h && 0 < w <= 512 && 0 < h <= 512)) (no u [w h])
@@ -218,7 +239,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; ..the textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'sky 'smog 'ad 'spin 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'sky 'smog 'ambient 'ad 'spin 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -242,10 +263,12 @@
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
        'strips (map (s \ (: a (s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'across (s 'across) 'how (s 'how)})) (of 'strip))
        'bulbs (map (b \ {'at (b 'at) 'c (b 'c) 'how (b 'how)}) (of 'bulb))
+       'sconces (map (q \ {'at (q 'at) 'np (q 'np) 'up (q 'up) 'len (q 'len) 'how (q 'how)}) (of 'sconce))
        'flames (map (q \ {'pts (q 'pts) 'c (q 'c) 'how (q 'how)}) (of 'flame))
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
        'gravs (map (g \ {'lo (g 'lo) 'hi (g 'hi) 'dir (g 'dir)}) (of 'grav))
        'balls (map (b \ b 'at) (of 'ball))
+       'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex))}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))

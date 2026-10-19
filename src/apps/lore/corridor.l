@@ -175,6 +175,14 @@
    tint (c* (1.0 / top) c)
    (light [{'at [p] 'c c 'r 6.0 'soft 0.35 'keep (inside r)}] (b 'how)
           [[(mesh-pack (nub p 0.04 (cmix tint white 0.55))) 4.0]] [[(mesh-pack (halo-ball p 0.35 tint)) 0.9]]))
+ ; ..a sconce: its face white-hot, standing out from the wall, its light thrown the way it looks
+ (sconce-light lv q) (: a (q 'at) n (c+ (q 'np) (c* -1.0 a)) d (c+ (q 'up) (c* -1.0 a)) l (cross n d) L (q 'len) s 0.25
+   (pt kn kd kl) (c+ a (c+ (c* kn n) (c+ (c* kd d) (c* kl l))))
+   p0 (pt 0.02 0.0 (-0.5 * L + 0.04)) p1 (pt (s - 0.02) 0.012 (0.5 * L - 0.04)) m (pt (0.5 * s) 0.1 0.0)
+   face (slab (map (i \ min2 (p0 i) (p1 i)) ^3) (map (i \ max2 (p0 i) (p1 i)) ^3) (_ \ [0.0 0.0]) -1 white)
+   (light [{'at (map (j \ pt (0.5 * s) 0.06 ((j + 0.5) / 4.0 * L - 0.5 * L)) ^4) 'n d 'c [1.9 1.8 1.6] 'r 7.5 'soft 0.3
+            'keep (inside (room-at lv (m 0) (m 2)))}]
+          (q 'how) [[(mesh-pack face) 3.0]] ()))
  ; ..candle flames, each a little upright tongue and a glow, one lamp among them all
  (flame-light lv q) (: ps (q 'pts) c (q 'c) k (inside (room-at lv (ps 0 0) (ps 0 2)))
    (tip p) (c+ p [0.0 0.03 0.0])
@@ -205,20 +213,23 @@
              [[(mesh-pack (nub p 0.035 [0.1 1.0 0.25])) 2.5]] ())])
    (side (d 'a) -0.01 + side (d 'b) 0.01))
  (lights-of lv) (map (strip-light lv) (lv 'strips) + map (bulb-light lv) (lv 'bulbs)
+                 + map (sconce-light lv) (peep lv 'sconces ())
                  + map (sign-light lv) (lv 'signs) + map (flame-light lv) (peep lv 'flames ())
                  + cats (map (i \ door-lights lv i (lv 'doors i)) ^#(lv 'doors))
                  + map (grav-light lv) (peep lv 'gravs ()))
- ; ..a grav shaft's glow, up from its foot and down from its head
- (grav-light lv g) (: lo (g 'lo) hi (g 'hi) x (0.5 * (lo 0 + hi 0)) z (0.5 * (lo 2 + hi 2)) k (inside (room-at lv x z)) c [0.25 0.55 0.8]
+ ; ..a grav shaft's glow, up from its foot, all round from its middle and down from its head
+ (grav-light lv g) (: lo (g 'lo) hi (g 'hi) x (0.5 * (lo 0 + hi 0)) z (0.5 * (lo 2 + hi 2)) k (inside (room-at lv x z)) c [0.3 0.65 1.0]
    (light [{'at [[x (lo 1 + 0.05) z]] 'n [0.0 1.0 0.0] 'c c 'r 5.0 'soft 0.4 'keep k}
+           {'at [[x (0.5 * (lo 1 + hi 1 + 3.0)) z]] 'c c 'r (0.5 * (hi 1 - lo 1) + 2.5) 'soft 0.6 'keep k}
            {'at [[x (hi 1 + 2.9) z]] 'n [0.0 -1.0 0.0] 'c c 'r 5.0 'soft 0.4 'keep k}] () () ()))
  ; ..how bright a light is at mt seconds, the doors open by ds: steady; a strip failing,
- ; mostly on and now and then stammering off; a tube's buzz; a bulb breathing; a door's
+ ; mostly on and now and then stammering off; a tube's buzz; a bulb breathing; a beacon, every one in time; a door's
  ; lamp by its door. sd keeps two failing lights out of step
  (bright how mt sd ds) ((two? how ? <how 'steady) @
   'stammer (flicker-stammer mt sd)
   'buzz (flicker-buzz mt)
   'breathe (flicker-pulse mt 0.7 0.3 1.7 sd)
+  'blink (flicker-blink mt 1.5 0.5 0.06)
   (a . u) (peep ds <u 0.0 @ d (a @ 'shut (d < 0.02 ? 1.0 0.0) (d < 0.02 ? 0.0 1.0)))
   1.0)
  (corridor-ks sc mt ds) (map (i \ bright (sc 'lights i 'how) mt i ds) ^#(sc 'lights))
@@ -369,13 +380,13 @@
      (by? lp) (any (p \ net (map (k \ sq (max2 0.0 (max2 (lo k - p k) (p k - hi k)))) ^3) < sq (lp 'r)) (lp 'at))
      (foldl (a \ c+ a * mesh-lamp pk) [0.0 0.0 0.0] (filter by? (l 'lamps))))
    ; ..the sky at the level's hour, and in its streets the sky's light and the sun's on what
-   ; faces them, scaled to the gain the sky is seen through
-   sk (sky-of lv) ob (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0) bs))
+   ; faces them, scaled to the gain the sky is seen through; the level's ambient off them
+   sk (sky-of lv) la (peep lv 'ambient [0.0 0.0 0.0]) ob (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0) bs))
    (daylit pk) (: c (pk 'cols) lt (sk 'lt) s (lt 'sun) X (c 0 + 0.05 * c 5) Y (c 1 + 0.05 * c 6) Z (c 2 + 0.05 * c 7)
      m (min 1.0 (foldl (\ a b (a + (b 0 0 < X) * (X < b 1 0) * (b 0 1 < Y) * (Y < b 1 1 + 0.1) * (b 0 2 < Z) * (Z < b 1 2))) (X * 0.0) ob))
      a (m * (0.5 + 0.5 * c 6) * sk 'k) d (m * max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (lt 'sunk * sk 'k))
-     (map (j \ a * lt 'amb j + d * lt 'sunc j) ^3))
-   (lit pk) {'base (foldl (a \ c+ a * ch pk * ls) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c* 0.0 (pk 'cols 0 @ z [z z z])))) still)
+     (map (j \ a * lt 'amb j + d * lt 'sunc j + (1.0 - m) * la j) ^3))
+   (lit pk) {'base (foldl (a \ c+ a * ch pk * ls) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ la (c* 0.0 (pk 'cols 0 @ z [z z z]))))) still)
              'chs (map (ch pk * ls) dyn)}
    ; ..a car lit where it stands, and by its own lamp, which goes with it
    (clit lp pk) (: l (lit pk) (pin l 'base (c+ (l 'base) (mesh-lamp pk lp))))
@@ -516,13 +527,20 @@
  jump-v 4.4                               ; up near a metre
  mantle-h 0.6                             ; how far over the feet a ledge is hoisted onto
  (put! st x z) (walk-slide st x z corridor-free?)
- ; ..in the air against a ledge no more than mantle-h over the feet, onto it, where a body fits;
- ; the ledge looked for a body's breadth on the way
+ hoist-s 0.35                             ; seconds a pull up takes
+ ; ..in the air against a ledge no more than mantle-h over the feet, a pull up onto it where
+ ; a body fits: the ledge looked for a body's breadth on the way, and stood on as far in
  (hoist! st x z) (: fl (st 'py - eye-h) dx (x - st 'px) dz (z - st 'pz) d (max2 1e-9 (sqrt (dx * dx + dz * dz)))
-   t (floor-at (st 'sc 'brushes) (x + body-r * dx / d) (z + body-r * dz / d) (fl + mantle-h)) y0 (st 'py)
+   cx (x + body-r * dx / d) cz (z + body-r * dz / d) t (floor-at (st 'sc 'brushes) cx cz (fl + mantle-h)) y0 (st 'py)
    (? (!(charm? t || gem? t) || t <= fl + 0.001 || t > fl + mantle-h + 0.001) 0
-      (: _ (pin st 'py (t + eye-h))
-         (corridor-free? st x z ? (: _ (pins st 'px x 'pz z 'fv 0.0) 1) (: _ (pin st 'py y0) 0)))))
+      (: _ (pin st 'py (t + eye-h)) ok (corridor-free? st cx cz) _ (pin st 'py y0)
+         (ok ? (: _ (pins st 'fv 0.0 'hoist {'y0 y0 'y1 (t + eye-h) 'x0 (st 'px) 'z0 (st 'pz) 'x1 cx 'z1 cz 'k 0.0}) 1) 0))))
+ ; ..the pull up under way: up first, then in over the edge, eased at both ends
+ (hoisting! st dt) (: h (st 'hoist) k (min2 1.0 (h 'k + dt / hoist-s)) (e a b u) (a + (b - a) * u * u * (3.0 - 2.0 * u))
+   a (min2 1.0 (k / 0.7)) b (max2 0.0 ((k - 0.4) / 0.6))
+   _ (pins st 'py (e (h 'y0) (h 'y1) a) 'px (e (h 'x0) (h 'x1) b) 'pz (e (h 'z0) (h 'z1) b) 'fv 0.0 'mf 0 'ms 0 'vx 0.0 'vz 0.0)
+   (pin st 'hoist (k >= 1.0 ? () (pin h 'k k))))
+ (hoisting? st) (tablet? (peep st 'hoist ()))
  ; ..the mouse's motion, as far as a pixel turns
  mouse-k 0.0025
  (corridor-look st dx dy) (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2})
@@ -533,7 +551,7 @@
  (corridor-step st a) (: dt (peep st 'dt (1.0 / fps))
    (go f s) (pins st 'mf (peep st 'mf 0 + f) 'ms (peep st 'ms 0 + s))
    (a @ 'forward (go 1 0) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
-      'jump (peep st 'fv 0.0 = 0.0 && peep st 'gv 0.0 = 0.0 ? (pin st 'fv jump-v) st)
+      'jump (peep st 'fv 0.0 = 0.0 && peep st 'gv 0.0 = 0.0 && !(hoisting? st) ? (pin st 'fv jump-v) st)
       x (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
          @ () (a = 'where ? (pin st 'pos (1 - peep st 'pos 0)) st)
            s s)))
@@ -543,13 +561,13 @@
                   (peep st 'fv 0.0 != 0.0 && !(corridor-free? st x z) && hoist! st x z ? st (put! st x z))))
    (pins st 'mf 0 'ms 0 'vx ((st 'px - x0) / dt) 'vz ((st 'pz - z0) / dt)))
  ; a frame's motion: the clock, each door toward open while the player is near it, and the cars
- (corridor-move st) (: dt (peep st 'dt (1.0 / fps)) _ (walk! st dt) lv (st 'lvl) x (st 'px) z (st 'pz)
+ (corridor-move st) (: dt (peep st 'dt (1.0 / fps)) up (hoisting? st) _ (up ? (hoisting! st dt) (walk! st dt)) lv (st 'lvl) x (st 'px) z (st 'pz)
    (go i) (: d (lv 'doors i) o (st 'doors i) p (P (d 'ax) (d 'c) 0.0 (0.5 * (d 'a + d 'b)))
              want (sq (p 0 - x) + sq (p 2 - z) < sq door-near ? 1.0 0.0)
              (want < o ? (max2 want (o - door-v * dt)) (min2 want (o + door-v * dt))))
    _ (pins st 'mt (st 'mt + dt) 'doors (map go ^#(lv 'doors)))
    _ (grav-step st dt)
-   _ (floor-step st dt)
+   _ (hoisting? st ? st (floor-step st dt))
    _ (each (peep st 'balls ()) (b \ ball-step st b dt))
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(peep lv 'cars ())))
  ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in
