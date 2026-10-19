@@ -20,8 +20,9 @@
    start (RECORD_AUDIO for the mic), NUL-separated; the input stream waits on the grant.
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
    directory before each start, which is love's cwd and HOME. love inherits the app's own
-   environment (what am, pm and settings need), and its PATH leads with DATA/bin, where love
-   is linked under its own name. when love ends it is started again; the app ends as android
+   environment (android's ANDROID_* and PATH; an app's uid is refused am, pm and settings,
+   which want the framework's java), and its PATH leads with DATA/bin, where love is linked
+   under its own name. when love ends it is started again; the app ends as android
    ends it. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
