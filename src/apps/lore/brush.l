@@ -6,7 +6,7 @@
 ; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
 ; corners, facing, and the brush index; brush-mesh's (look n b) answers (p \ [tex u v]). a brush
 ; 'open 1 has no top face, and one 'whole 1 is never cut on the grid.
-(module (brush brush brush-box brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-ray brush-mesh brush-chunks brush-faces)
+(module (brush brush brush-box brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-ray brush-mesh brush-chunks chunks-kept brush-faces)
 (borrow 'view)                          ; min2 max2
 (borrow 'vec)                           ; triples
 (borrow 'mesh)
@@ -88,22 +88,42 @@
  ; --- the surfaces: each face cut by the planes of the brushes it meets, a piece kept where
  ;     air meets solid and no later brush has a face on it, turned to the air; then cut on a
  ;     grid a cell wide, the same lines in every face so the edges meet ---
- (near? a b) (all (k \ a 'lo k - 0.01 <= b 'hi k && b 'lo k - 0.01 <= a 'hi k) ^3)
  (fbox f) (: bx (box-of f) {'lo (bx 0) 'hi (bx 1)})
  (on-face? b c n) (any (pl \ mag (mag (dot (pl 0) n) - 1.0) < 1e-6 && mag (side pl c) < 1e-4) (b 'planes)
                    && all (pl \ side pl c <= 1e-4) (b 'planes))
- (brush-faces bs) (: nb #bs
-   (piece i b j) (: f (b 'faces j) n (b 'planes j 0) fb (fbox f)
-     later (filter (k \ i < k && near? fb (bs k)) ^nb)
-     others (filter (k \ k != i && near? fb (bs k)) ^nb)
-     pls (cats (map (k \ bs k 'planes) others))
-     ps (foldl (\ l pl (cats (map (p \ (crosses? p pl ? (filter (q \ #q >= 3 && area q > 1e-8) (split p pl)) [p])) l))) [f] pls)
-     (cats (map (p \ (: c (mid p) fr (brush-medium bs (c+ c (c* 1e-3 n))) bk (brush-medium bs (c+ c (c* -1e-3 n)))
-                      (fr = bk || any (k \ on-face? (bs k) c n) later ? () [[p (fr = 1 ? n (c* -1.0 n)) i]])))
-                ps)))
+ (brush-faces bs) (faces-kept bs ())
+ ; ..a list as a tablet by place, read in a step
+ (tab l) (foldl (\ t x (pin t #t x)) {} l)
+ ; ..and with a keeper kp: {'kept (k f) ..} answers what a key k (a list of what it was
+ ; made of) was before, else (f ()),
+ ; so a face whose brush and the brushes near it are as they were is not worked again
+ (keep kp kf f) (? (tablet? kp) ((kp 'kept) (kf ()) f) (f ()))
+ (faces-kept bs kp) (: nb #bs bt (tab bs)
+   ; ..the brushes near a box, all weighed at once: each axis's ends as a tray
+   (ends f k) (gem-tray [nb] (map (b \ 1.0 * b f k) bs)) L (map (ends 'lo) ^3) H (map (ends 'hi) ^3)
+   (near fb) (: lo (fb 'lo) hi (fb 'hi)
+     (on k) ((H k >= lo k - 0.01) * (L k - 0.01 <= hi k)) I (iota (on 0 * on 1 * on 2))
+     (map (j \ peep I j 0) ^#I))
+   ; ..and the medium there, of only those: a brush holding a place a hair off the face is
+   ; near it
+   (medium ks p) (: (go l) (? (atom? l) 0 (inside? (bt <l) p) (bt <l 'air) (go >l)) (go (rev ks)))
+   ; ..a brush as a key says it, its planes all a face's pieces hang on, by number
+   ft (tablet? kp ? (tab (map (b \ (kp 'id) [(b 'planes) (b 'air) (peep b 'open 0)]) bs)) ())
+   (piece i b j) (: f (b 'faces j) n (b 'planes j 0) fb (fbox f) ks (near fb)
+     (rel k) (? (k < i) -1 (k > i) 1 0)
+     (key _) ['face j (ft i) (map (k \ [(rel k) (ft k)]) ks)]
+     ky (tablet? kp ? (key ()) ()) fi (tablet? kp ? ((kp 'id) ky) ())
+     qs (keep kp (_ \ ky) (_ \ (: later (filter (k \ i < k) ks)
+                            others (filter (k \ k != i) ks)
+                            pls (cats (map (k \ bt k 'planes) others))
+                            ps (foldl (\ l pl (cats (map (p \ (crosses? p pl ? (filter (q \ #q >= 3 && area q > 1e-8) (split p pl)) [p])) l))) [f] pls)
+                            (cats (map (p \ (: c (mid p) fr (medium ks (c+ c (c* 1e-3 n))) bk (medium ks (c+ c (c* -1e-3 n)))
+                                             (fr = bk || any (k \ on-face? (bt k) c n) later ? () [[p (fr = 1 ? n (c* -1.0 n))]])))
+                                       ps)))))
+     (map (m \ (: q (qs m) (tablet? kp ? [(q 0) (q 1) i [fi m]] [(q 0) (q 1) i]))) ^#qs))
    ; ..and a brush marked open has no top: the sky shows there
    (shut? b j) (!(peep b 'open 0) || b 'planes j 0 1 < 0.5)
-   (cats (map (i \ (: b (bs i) (cats (map (j \ (#(b 'faces j) >= 3 && shut? b j ? (piece i b j) ())) ^#(b 'planes))))) ^nb)))
+   (cats (map (i \ (: b (bt i) (cats (map (j \ (#(b 'faces j) >= 3 && shut? b j ? (piece i b j) ())) ^#(b 'planes))))) ^nb)))
  ; ..each axis in turn, a strip cut off what is left at each line that crosses it
  (slab ps k cell) (: bx (box-of ps) lo (bx 0 k) hi (bx 1 k) n (map (m \ m = k ? 1.0 0.0) ^3)
    m0 (int (floor ((lo + 1e-5) / cell)) + 1) m1 (int (floor ((hi - 1e-5) / cell)))
@@ -120,12 +140,22 @@
  (brush-mesh bs cell look) (mesh-join (brush-chunks bs cell look 1e9 ()))
  ; ..and in meshes a chunk each, the pieces k metres square in plan, and with them more
  ; meshes, each [p mesh], in the chunk p is in
- (brush-chunks bs cell look k more)
-  (: fs (brush-faces bs)
+ (brush-chunks bs cell look k more) (map (c \ (c 1) ()) (chunks-kept bs cell look k (map (m \ [(m 0) (m 1) ()]) more) ()))
+ ; ..each [key (_ \ mesh)], more's each [p mesh key], kept by kp as faces-kept keeps: what a face
+ ; is cut to by its corners, its brush's whole and (kp 'reach face) the light on it; its
+ ; triangles by that, its facing, (kp 'look b) and the cuts of the faces beside it, whose
+ ; corners its edges take; a chunk's key its faces' triangles', its mesh made on asking. (kp
+ ; 'id k) a number for key k, the same while it is kept
+ (chunks-kept bs cell look k more kp)
+  (: fs (faces-kept bs kp) nf #fs bt (tab bs) FT (tab fs)
      ; ..a brush marked whole goes uncut
      (cut ps b) (? (peep b 'whole 0) [ps] (charm? cell || gem? cell) (grid ps cell) (grids ps (cell 0) (cell 1) (cell 2 ps)))
      fine (charm? cell || gem? cell ? cell (cell 1))
-     pcs (cats (map (f \ map (p \ [p (f 1) (f 2)]) (cut (f 0) (bs (f 2)))) fs))
+     cks (tablet? kp ? (tab (map (f \ ['cut (f 3) (peep (bt (f 2)) 'whole 0) ((kp 'reach) (f 0))]) fs)) ())
+     CI (tablet? kp ? (tab (map (i \ (kp 'id) (cks i)) ^nf)) ())
+     LI (tablet? kp ? (tab (map (b \ (kp 'id) ((kp 'look) b)) bs)) ())
+     pcf (map (i \ (: f (FT i) (map (p \ [p (f 1) (f 2)]) (keep kp (_ \ cks i) (_ \ cut (f 0) (bt (f 2))))))) ^nf) PT (tab pcf)
+     pcs (cats pcf)
      ; ..every corner, a millimetre a step, so a piece takes on its edges the corners of the
      ; finer pieces beside it, and no crack opens between them
      (key p) (: (r v) (int (floor (v * 1000.0 + 0.5))) ((r (p 0) * 4194304 + r (p 1)) * 4194304 + r (p 2)))
@@ -151,8 +181,27 @@
           (: m #ps ps2 (ps + [(mid ps0)])
              (two a b) (dot (cross (sub (ps2 b) (ps2 m)) (sub (ps2 a) (ps2 m))) n > 0.0 ? [m a b tex] [m b a tex])
              (mesh (map (vert lk n) ps2) (map (i \ two i ((i + 1) % m)) ^m)))))
+     ; ..the faces beside each, all weighed at once as the brushes near a face are
+     (fends s k) (gem-tray [nf] (map (q \ 1.0 * box-of (q 0) s k) fs))
+     FL (tablet? kp ? (map (fends 0) ^3) ()) FH (tablet? kp ? (map (fends 1) ^3) ())
+     ; ..weighed among the faces of the brushes near each's own, as those are found
+     nb #bs (bends f k) (gem-tray [nb] (map (b \ 1.0 * b f k) bs)) BL (tablet? kp ? (map (bends 'lo) ^3) ()) BH (tablet? kp ? (map (bends 'hi) ^3) ())
+     BF (foldl (\ t i (: b (FT i 2) (pin t b (i . peep t b ())))) {} (rev ^nf))
+     (among b) (: lo (bt b 'lo) hi (bt b 'hi) (on k) ((BH k >= lo k - 0.02) * (BL k - 0.02 <= hi k)) I (iota (on 0 * on 1 * on 2))
+       cs (cats (map (j \ peep BF (peep I j 0) ()) ^#I)) T (floor (gem-tray [#cs] (map (c \ 1.0 * c) cs)))
+       [(tab cs) (map (k \ peep (FL k) T 0.0) ^3) (map (k \ peep (FH k) T 0.0) ^3)])
+     AM (tablet? kp ? (tab (map among ^nb)) ())
+     (beside i) (: a (AM (FT i 2)) bx (box-of (FT i 0)) (on k) ((a 2 k >= bx 0 k - 1e-3) * (a 1 k - 1e-3 <= bx 1 k))
+       I (iota (on 0 * on 1 * on 2)) (map (j \ CI (a 0 (peep I j 0))) ^#I))
+     fks (tablet? kp ? (tab (map (i \ (: f (FT i) ['fan (CI i) (beside i) (LI (f 2))])) ^nf)) ())
+     fid (tablet? kp ? (tab (map (i \ (kp 'id) (fks i)) ^nf)) ())
+     items (cats (map (i \ (: ms (keep kp (_ \ fks i) (_ \ map (pc \ [(mid (pc 0)) (fan (pc 0) (pc 1) (bt (pc 2)))]) (PT i)))
+                              id (tablet? kp ? (fid i) ())
+                              (map (m \ [(m 0) (m 1) id]) ms)))
+                      ^nf))
      (ck m) (show [(int (floor (m 0 / k))) (int (floor (m 2 / k)))])
-     by (foldl (\ t pc (: q (ck (pc 0)) (pin t q (pc 1 . peep t q ())))) {}
-               (map (pc \ [(mid (pc 0)) (fan (pc 0) (pc 1) (bs (pc 2)))]) pcs + more))
-     (map (q \ mesh-join (rev (by q))) (sort (keys by)))))
+     by (foldl (\ t pc (: q (ck (pc 0)) (pin t q (pc . peep t q ())))) {} (items + more))
+     (map (q \ (: its (rev (by q)) ky [q (map (x \ x 2) its)]
+                [ky (_ \ mesh-join (map (x \ x 1) its))]))
+          (sort (keys by)))))
 ) ; module brush

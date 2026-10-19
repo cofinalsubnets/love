@@ -5,7 +5,7 @@
 ; nothing outside: every light is a lamp (mesh.l), baked once into a channel and summed each
 ; frame by how bright it is just then. corridor-read, -new, -step, -move and -frame are pure;
 ; corridor-watch reads the disk, and only corridor-walk and corridor-run touch the tty.
-(module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds corridor-pick corridor-span
+(module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds corridor-pick corridor-span corridor-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline corridor-ray
          corridor-move corridor-frame corridor-pens corridor-opts corridor-read corridor-load
          corridor-watch corridor-free? corridor-ks corridor-sound motes-at fps eye-h body-r grav-n)
@@ -306,10 +306,24 @@
    (sheets o [0.0 h 0.0] (c* w rt) n (q \ (: d (c+ q (c* -1.0 o)) [(1.0 * tw / w * dot d rt) (1.0 * th / h * (h - d 1))])) tex white))
  ; ..whether a piece of surface c across is too coarse for the lamps lps: a lamp's light
  ; changes the more across a cell the nearer it is
- (coarse? lps) (: all-pts (cats (map (lp \ map (p \ [p (lp 'r) (peep lp 'keep ())]) (lp 'at)) lps))
+ ; ..the lamps' points, each [p r keep], numbered, and their places and reaches as trays
+ (lamp-pts lps) (: l (cats (map (lp \ map (p \ [p (lp 'r) (peep lp 'keep ())]) (lp 'at)) lps)) n #l
+   (col j) (gem-tray [n] (map (q \ 1.0 * q 0 j) l)) (tab f) (foldl (\ t q (pin t #t (f q))) {} l)
+   {'n n 'at (tab (q \ q)) 'ks (tab (q \ [(q 0) (q 1) (q 2 = () ? 0 1)])) 'mk (tab (q \ q 2 != ()))
+    'P (n = 0 ? () (map col ^3))
+    'R (n = 0 ? () (min (gem-tray [n] (map (q \ 1.0 * q 1) l)) (6.0 * cell-top - 0.5)))})
+ ; ..the numbers of those reaching face f, all weighed at once
+ (reach-ix lp f) (: flo (map (k \ foldl (\ a p (min2 a (p k))) 1e9 f) ^3) fhi (map (k \ foldl (\ a p (max2 a (p k))) -1e9 f) ^3)
+   (? (lp 'n = 0) ()
+      (: (out k) (: P (lp 'P k) (max 0.0 (max (flo k - P) (P - fhi k)))) dx (out 0) dy (out 1) dz (out 2) R (lp 'R)
+         I (iota (dx * dx + dy * dy + dz * dz < R * R))
+         (map (j \ peep I j 0) ^#I))))
+ ; ..what of the lamps a face's cut hangs on, as a key: wk too where one is masked
+ (reach-of lps wk id) (: all-pts (lamp-pts lps) ks (foldl (\ t j (pin t j (id (all-pts 'ks j)))) {} ^(all-pts 'n)) wi (id wk)
+   (\ f (: ix (reach-ix all-pts f) [(map ks ix) (any (all-pts 'mk) ix ? wi ())])))
+ (coarse? lps) (: all-pts (lamp-pts lps)
   ; ..asked of a face first, so its pieces weigh only the lamps that reach it
-  (\ f (: flo (map (k \ foldl (\ a p (min2 a (p k))) 1e9 f) ^3) fhi (map (k \ foldl (\ a p (max2 a (p k))) -1e9 f) ^3)
-     pts (filter (q \ net (map (k \ sq (max2 0.0 (max2 (flo k - q 0 k) (q 0 k - fhi k)))) ^3) < sq (min2 (q 1) (6.0 * cell-top - 0.5))) all-pts)
+  (\ f (: pts (map (all-pts 'at) (reach-ix all-pts f))
      (col j) (gem-tray [#pts] (map (q \ 1.0 * q 0 j) pts)) PX (col 0) PY (col 1) PZ (col 2) R (gem-tray [#pts] (map (q \ 1.0 * q 1) pts))
   (\ ps c (: lo (map (k \ foldl (\ a p (min2 a (p k))) 1e9 ps) ^3) hi (map (k \ foldl (\ a p (max2 a (p k))) -1e9 ps) ^3)
     (out k P) (max 0.0 (max (lo k - P) (P - hi k)))
@@ -394,17 +408,33 @@
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
  ;     dir the level's folder, for its pictures ---
- (scene lv dir) (: ps (lv 'posters)
+ (corridor-scene lv dir was) (scene lv dir was)
+ ; ..a part as a key says it: a tablet hashes as itself, so as its keys and values
+ (vals x) (? (tablet? x) (map (k \ [k (vals (x k))]) (sort (keys x))) (two? x) (map vals x) x)
+ (scene lv dir was) (: ps (lv 'posters)
+   ; ..what the scene before made, kept where it would be made the same, by a key saying
+   ; all it was made of; and a number for each key, the same while it is kept
+   old (tablet? was ? (peep was 'memo {}) {}) ov (peep old 'v {}) oi (peep old 'id {}) memo {'v {} 'id {} 'n (peep old 'n 0)}
+   (kept k f) (: c (peep ov k ()) v (two? c ? <c (f ())) (pin (memo 'v) k [v], v))
+   (idof k) (: i (peep oi k ()) j (i = () ? (memo 'n) i) _ (? (i = ()) (pin memo 'n (j + 1))) (pin (memo 'id) k j, j))
    txs (textures lv) tt (map (t \ [(t 'name) (t 'w) (t 'h) (t 'm)]) txs)
    ls (lights-of lv + map (ad-light lv txs tt) (peep lv 'ads ()) + map (spin-light lv txs) (peep lv 'spins ()))
    ptex (map (p \ poster-tex (file-of dir p) (p 'at 3) (p 'at 4)) ps)
-   pm (map (i \ poster-mesh lv (ps i) (#tt + i) (shape (ptex i 0) 1) (shape (ptex i 0) 0)) ^#ps)
+   (pm i) (poster-mesh lv (ps i) (#tt + i) (shape (ptex i 0) 1) (shape (ptex i 0) 0))
    bs (brushes-of lv)
    ; ..the world in chunks chunk-m square, so a frame draws only those in view, nearest first
-   (on m) [(mid3 (m 0)) m]
-   cks (map mesh-pack (brush-chunks bs [cell-top cell (coarse? (cats (map (l \ l 'lamps) ls)))] (look tt) chunk-m
-                                    (map on (pm + map (d \ decal-mesh d tt) (peep lv 'decals ()) + map (d \ drape-mesh d tt) (peep lv 'drapes ())))))
-   drs (map (d \ mesh-pack (door-mesh d tt)) (lv 'doors))
+   ; ..a lamp's mask is its room's or its car's, so a face a masked lamp reaches is kept by those too
+   lps (cats (map (l \ l 'lamps) ls)) wk [(lv 'rooms) (vals (peep lv 'cars ()))]
+   ti (idof tt) kp {'kept kept 'id idof 'reach (reach-of lps wk idof) 'look (b \ [ti (vals (peep b 'skin ())) (b 'lo 1)])}
+   (on m k) [(mid3 (m 0)) m k]
+   ds (peep lv 'decals ()) dps (peep lv 'drapes ())
+   (made k f) (: ky (idof [k ti]) [(kept ['mesh ky] f) ky])
+   more (map (i \ (: m (made ['poster (vals (ps i)) i (shape (ptex i 0))] (_ \ pm i)) (on (m 0) (m 1)))) ^#ps
+         + map (d \ (: m (made ['decal (vals d)] (_ \ decal-mesh d tt)) (on (m 0) (m 1)))) ds
+         + map (d \ (: m (made ['drape (vals d)] (_ \ drape-mesh d tt)) (on (m 0) (m 1)))) dps)
+   cks (map (c \ [(c 0) (kept ['pack (c 0)] (_ \ mesh-pack ((c 1) ())))])
+            (chunks-kept bs [cell-top cell (coarse? lps)] (look tt) chunk-m more kp))
+   drs (map (d \ kept ['door (vals d) tt] (_ \ mesh-pack (door-mesh d tt))) (lv 'doors))
    ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds
    ; only the lights that change
    dyn (filter (i \ two? (ls i 'how)) ^#ls) still (filter (i \ atom? (ls i 'how)) ^#ls)
@@ -422,19 +452,36 @@
    (lit pk) {'base (foldl (a \ c+ a * ch pk * ls) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ la (c* 0.0 (pk 'cols 0 @ z [z z z]))))) still)
              'chs (map (ch pk * ls) dyn)}
    ; ..a car lit where it stands, and by its own lamp, which goes with it
-   (clit lp pk) (: l (lit pk) (pin l 'base (c+ (l 'base) (mesh-lamp pk lp))))
-   cars (map (c \ (: b (mesh-pack (car-mesh c tt)) d (mesh-pack (car-door c tt)) lp (car-lamp c)
-                     {'body b 'body-lit (clit lp b) 'door d 'door-lit (clit lp d) 'bar (mesh-pack (car-bar c))}))
+   ; ..a chunk's light kept by what lights it: the lights that reach its box, in their places
+   ; ..a light as a key says it, its masks left to wk
+   lfs (map (l \ [(map (lp \ [(lp 'at) (peep lp 'n ()) (lp 'c) (lp 'r) (peep lp 'soft ()) (peep lp 'wrap ())]) (l 'lamps)) (vals (peep l 'how ()))]) ls) gk [la ob (vals (peep lv 'sky ())) dyn still wk]
+   ; ..the lights reaching a box, weighed all at once by their lamps' points
+   lq (cats (map (i \ cats (map (lp \ map (p \ [p (lp 'r) i]) (lp 'at)) (ls i 'lamps))) ^#ls)) nq #lq
+   (qcol f) (gem-tray [nq] (map (q \ 1.0 * f q) lq)) QP (map (k \ qcol (q \ q 0 k)) ^3) QR (qcol (q \ q 1))
+   QL (foldl (\ t q (pin t #t (q 2))) {} lq) LF (foldl (\ t f (pin t #t (idof f))) {} lfs) gi (idof gk)
+   (litk lo hi) (? (nq = 0) [gi]
+     (: (out k) (: P (QP k) (max 0.0 (max (lo k - P) (P - hi k)))) dx (out 0) dy (out 1) dz (out 2)
+        I (iota (dx * dx + dy * dy + dz * dz < QR * QR)) hit (foldl (\ t j (pin t (QL (peep I j 0)) 1)) {} ^#I)
+        [gi (map LF (sort (keys hit)))]))
+   (litk-of pk) (litk (map (j \ amin (pk 'cols j)) ^3) (map (j \ amax (pk 'cols j)) ^3))
+   ; ..a packed mesh's light, kept by what made it, k, and what lights its box
+   (lit-of k pk) (: lo (map (j \ amin (pk 'cols j)) ^3) hi (map (j \ amax (pk 'cols j)) ^3) (kept ['lit k (litk lo hi)] (_ \ lit pk)))
+   (clit lp pk k) (: l (lit-of k pk) {'base (c+ (l 'base) (mesh-lamp pk lp)) 'chs (l 'chs)})
+   cars (map (c \ (: ck [(vals c) tt] b (kept ['car ck] (_ \ mesh-pack (car-mesh c tt))) d (kept ['car-door ck] (_ \ mesh-pack (car-door c tt))) lp (car-lamp c)
+                     {'body b 'body-lit (kept ['car-lit ck (litk-of b)] (_ \ clit lp b ['car ck]))
+                      'door d 'door-lit (kept ['car-lit ck (litk-of d)] (_ \ clit lp d ['car-door ck]))
+                      'bar (kept ['car-bar ck] (_ \ mesh-pack (car-bar c)))}))
              (peep lv 'cars ()))
    {'motes (map motes-of (peep lv 'gravs ()))
-    'panes (map (p \ (: pk (mesh-pack (pane-mesh p tt)) {'pk pk 'lit (lit pk)})) (peep lv 'panes ()))
-    'chunks (map (pk \ (: lo (map (k \ amin (pk 'cols k)) ^3) hi (map (k \ amax (pk 'cols k)) ^3)
-                          {'pk pk 'lit (lit pk) 'lo lo 'hi hi 'mid (map (k \ 0.5 * (lo k + hi k)) ^3)
+    'panes (map (p \ (: k ['pane (vals p) tt] pk (kept k (_ \ mesh-pack (pane-mesh p tt))) {'pk pk 'lit (lit-of k pk)})) (peep lv 'panes ()))
+    'chunks (map (c \ (: pk (c 1) lo (map (k \ amin (pk 'cols k)) ^3) hi (map (k \ amax (pk 'cols k)) ^3)
+                          {'pk pk 'lit (kept ['lit (idof (c 0)) (litk lo hi)] (_ \ lit pk)) 'lo lo 'hi hi 'mid (map (k \ 0.5 * (lo k + hi k)) ^3)
                            'rad (0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))})) cks)
-    'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs 'sky sk 'open ob
+    'doors drs 'doors-lit (map (i \ lit-of ['door (vals (lv 'doors i)) tt] (drs i)) ^#drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs 'sky sk 'open ob
     'ball (two? (peep lv 'balls ()) ? (ball-mesh ()) ()) 'lit lit
     'spins (map (s \ spin-mesh s tt) (peep lv 'spins ()))
-    'texs (map (t \ swatch (t 'w) (t 'h) (t 'layers)) txs + ptex)})
+    'texs (map (t \ kept ['tex (t 'w) (t 'h) (t 'layers)] (_ \ swatch (t 'w) (t 'h) (t 'layers))) txs + ptex)
+    'memo memo})
  ; --- a grav shaft's motes: each a speck of three crossed squares, both ways round, a glow;
  ;     its own height, speed, and turn about the middle, from its number ---
  (hash01 i) (: h (sin (i * 12.9898 + 78.233) * 43758.5453) (h - floor h))
@@ -531,7 +578,7 @@
  ;     stands and looks, the clock, the doors ---
  (corridor-new w h lv dir) (: s (lv 'start)
    (corridor-size {'px (s 'at 0) 'pz (s 'at 1) 'py (s 'y + eye-h) 'th (s 'deg * pi / 180.0) 'ph (s 'pitch * pi / 180.0) 't 0 'mt 0.0
-                   'lvl lv 'sc (scene lv dir) 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'balls (balls-new lv) 'deep 0 'kitty 0 'kp 1
+                   'lvl lv 'sc (scene lv dir ()) 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'balls (balls-new lv) 'deep 0 'kitty 0 'kp 1
                    'done 0 'msg () 'msg-t 0.0 'err 0}
                   w (h // 2)))
  (corridor-size st w r) (mesh-size st w r)
@@ -753,7 +800,7 @@
                cs (#(peep lv 'cars ()) = #(peep st 'cars ()) ? (st 'cars) (cars-new lv))
                bl (#(peep lv 'balls ()) = #(peep st 'balls ()) ? (st 'balls) (balls-new lv))
                _ (each bl (b \ pin b 'pk ()))
-               (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir)) 'doors ds 'cars cs 'balls bl 'msg ("read " + st 'path + " again")
+               (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc)) 'doors ds 'cars cs 'balls bl 'msg ("read " + st 'path + " again")
                                'err 0 'msg-t (st 'mt))))))))
  (dir-of p) (: (go i) (i < 0 ? "" (p i = 47 ? (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
  ; --- the walk, on view's loop; corridor-run raises the stage ---
@@ -797,7 +844,7 @@
       (: lv (corridor-read t)
          (? (string? lv) (vi 'vmsg vs ("scene: " + lv), pins ed 'text t 'dirty 1)
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
-               _ (pins st 'lvl lv 'sc (scene lv (st 'dir)) 'doors ds 'cars (cars-new lv) 'balls (balls-new lv))
+               _ (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc)) 'doors ds 'cars (cars-new lv) 'balls (balls-new lv))
                (vi 'vmsg vs "scene read again", pins ed 'text t 'dirty 1))))))
  ; ..vi's cursor on the text's offset a, its line a third of the way down the pane
  (edit-at ed a) (: t (ed 'text) vs (ed 'vs) (bol i) (i < 0 || t i = 10 ? (i + 1) (bol (i - 1))) l0 (bol (a - 1))

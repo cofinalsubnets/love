@@ -184,6 +184,15 @@
  (test (has? dl1 "(move [") (has? dl1 " 0 0] (solid (box [1 0 3] [3 3 3.5])))") (dlo 0 > 1.05) (dink > 20)
        (dl2 = "  (solid (box [1 0 3] [3 3 3.5]))") (dg 'drag = ())
        (corridor-read "(level \"t\" (room [0 0 0] [4 3 6]) (move [1 0 0.5] (solid (box [0 0 1] [1 3 2]))) (start [2 0 2] 0 0))" 'brushes 1 'shape 'box 0 = [1.0 0.0 1.5])))
+; a scene made again from the one before keeps what is the same and comes out as one made
+; from nothing: after a solid moves, and after a lamp moves
+(: ksa "(level \"k\" (room [0 0 0] [6 3 6]) (solid (box [1 0 3] [2 1 4])) (sconce [0 1.5 2] [1 0 0] [0 0 1] 1.2 (texture 8 8 1 '((fill (rgb 0.5 0.5 0.5))))) (start [3 0 1] 0 0))"
+   ksb "(level \"k\" (room [0 0 0] [6 3 6]) (solid (box [1.5 0 3] [2.5 1 4])) (sconce [0 1.5 2] [1 0 0] [0 0 1] 1.2 (texture 8 8 1 '((fill (rgb 0.5 0.5 0.5))))) (start [3 0 1] 0 0))"
+   ksc "(level \"k\" (room [0 0 0] [6 3 6]) (solid (box [1.5 0 3] [2.5 1 4])) (sconce [0 1.5 3] [1 0 0] [0 0 1] 1.2 (texture 8 8 1 '((fill (rgb 0.5 0.5 0.5))))) (start [3 0 1] 0 0))"
+   (ksl t) (corridor-read t) (ksd sc) (show [(map (c \ [(c 'pk) (c 'lit)]) (sc 'chunks)) (sc 'texs)])
+   ks0 (corridor-scene (ksl ksa) "" ()) ks1 (corridor-scene (ksl ksb) "" ks0) ks2 (corridor-scene (ksl ksc) "" ks1)
+ (test (ksd ks1 = ksd (corridor-scene (ksl ksb) "" ())) (ksd ks2 = ksd (corridor-scene (ksl ksc) "" ()))
+       (ksd ks1 != ksd ks0) (0 < #(keys (ks2 'memo 'v)))))
 ; a grav shaft: walked into, it carries up to its head, eased in, and out north is street level;
 ; its twin carries down; motes stream through each the way it goes
 (: gl (lv "(room [0 0 0] [8 3 4]) (start [2 0 2] 0 0)
