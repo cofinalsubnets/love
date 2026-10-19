@@ -857,8 +857,10 @@
                  (#S = 0 ? f (pin f (peep (floor Y * w + floor X) S 0) edit-ink)))))
          es (cats (map (i \ cats (map (ps \ (#ps >= 3 ? (map (j \ [(c+ (ps j) off) (c+ (ps ((j + 1) % #ps)) off)]) ^#ps) ())) ((bs i) 'faces))) is))
          (foldl (\ f q (seg f (q 0) (q 1))) f es))))
+ ; ..the keys vi wants that the corridor's own keys leave out: backspace, tab, delete, home, end
+ edit-set1 {14 8 15 9 339 -4 327 -5 335 -6}
  ; ..a key for vi: what it typed, else the arrows as a terminal sends them
- (edit-bytes t k) (? (0 < #t) t (k @ -1 "\e[D" -2 "\e[C" -8 "\e[A" -9 "\e[B" 27 "\e" 13 "\r" 8 "\x7f" (charm? k && 0 < k ? (string k) "")))
+ (edit-bytes t k) (? (0 < #t) t (k @ -1 "\e[D" -2 "\e[C" -8 "\e[A" -9 "\e[B" -4 "\e[3~" -5 "\e[H" -6 "\e[F" 27 "\e" 13 "\r" 8 "\x7f" (charm? k && 0 < k ? (string k) "")))
  (edit-feed ed s) (: key ((ed 'fc) 1) (each ^#s (i \ key (s i))), pin ed 'dirty 1)
  (edit-focus ed f) (: _ (pins ed 'focus f 'dirty 1) (f = 'scene ? (edit-sync ed) ed))
  ; ..a ctrl-w's next key: w the other pane, h the scene, l vi
@@ -867,7 +869,7 @@
  (edit-events ed l) (: st (ed 'st) ly (ed 'lay)
    (? (atom? l) ed
       (: e <l nx (two? >l ? <>l ()) t0 (two? nx && <nx = 'text ? (nx 1) "")
-         k0 (? (0 < #t0) (t0 0) (peep view-set1 (e 1 @ c (charm? c ? c -99)) ()))
+         k0 (? (0 < #t0) (t0 0) (e 1 @ c (charm? c ? (peep view-set1 c (peep edit-set1 c ())) ())))
          ; ..a letter under a held ctrl is its control character
          cl (ed 'ctrl && charm? k0 && 97 <= k0 && k0 <= 122) k (cl ? (k0 - 96) k0) t (cl ? (string k) t0)
          md (e @- () ['down c] (elem c [29 285] ? 1 ()) ['up c] (elem c [29 285] ? 0 ()))
