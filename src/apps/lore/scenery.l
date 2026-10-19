@@ -18,6 +18,8 @@
 ;                                      fills it again, the later winning; a room is an air box
 ;     (box [x y z] [x y z])            ..a box between two corners
 ;     (prism height [[x y z] ..])      ..its floor plan going round, at the first point's height
+;   (whole BRUSH)                      the brush never cut finer near a lamp: a small thing's
+;                                      light as its corners have it
 ;   (cut [x y z] [x y z] [x y z] BRUSH)  the brush less what lies across the plane through
 ;                                      three points from its middle: a slope, a bevel
 ;   (door [x y z] width height)        a sliding door in the wall between two rooms, the
@@ -44,6 +46,8 @@
 ;                                      texture's holes show what is under it
 ;   (strip-light [x y z])              a light strip along z, its face at y
 ;   (bulb [x y z] (rgb r g b))         a bare bulb, its light
+;   (flames (rgb r g b) [[x y z] ..])  small flames, a candle's, standing at each point, all
+;                                      one light between them
 ;   (poster [x y z] width height FILE) on the wall nearest, the middle of its foot at x y z;
 ;                                      a png's path from the level's folder, or () for the
 ;                                      corridor's own
@@ -67,7 +71,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of start room street sky air solid box prism cut door train bin decal window grav ball smog ad spinner neon strip-light bulb poster sign
+(module (scenery level-of start room street sky air solid box prism cut whole door train bin decal window grav ball smog ad spinner neon strip-light bulb flames poster sign
          across stammer buzz breathe texture skin textures repeat mirror-x mirror-z rgb)
 (borrow 'view)                          ; min2 max2
 (borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
@@ -151,6 +155,9 @@
           signs])))
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
  (bulb at c) (: u "(bulb [x y z] (rgb r g b))" (colour? c ? (part 'bulb [['at (P at u)] ['c c] ['how ()]]) (no u c)))
+ (flames c ps) (: u "(flames (rgb r g b) [[x y z] ..])"
+   (? (!(colour? c)) (no u c) (!(two? ps)) (no u ps)
+      (part 'flame [['pts (map (p \ P p u) ps)] ['c c] ['how ()]])))
  (poster at w h file) (: u "(poster [x y z] width height FILE)"
    (string? file || file = () ? (part 'poster [['at (P at u)] ['w (N w u)] ['h (N h u)] ['file file]]) (no u file)))
  (sign at h text c) (: u "(sign [x y z] height TEXT (rgb r g b))"
@@ -166,7 +173,7 @@
    (? (!(texture? t1)) (no u t1) (!(texture? t2)) (no u t2)
       (part 'spin [['at (P at u)] ['w (N w u)] ['h (N h u)] ['t1 t1] ['t2 t2]])))
  (across s) (kind? s ['strip] ? (with s 'across 1) (no "(across (strip-light ..))" s))
- (how w l) (kind? l ['strip 'bulb 'sign] ? (with l 'how [w]) (no ("(" + show w + " LIGHT), a strip-light, bulb or sign") l))
+ (how w l) (kind? l ['strip 'bulb 'sign 'flame] ? (with l 'how [w]) (no ("(" + show w + " LIGHT), a strip-light, bulb, sign or flames") l))
  (stammer l) (how 'stammer l)
  (buzz l) (how 'buzz l)
  (breathe l) (how 'breathe l)
@@ -177,6 +184,7 @@
       (swatch-fault ls @ () {'kind 'texture 'w w 'h h 'm (f m) 'layers ls}
                          e (scare 'level ("in a texture, " + show (e 0) + " -- it reads " + e 1)))))
  (texture? t) (kind? t ['texture])
+ (whole b) (brush? b ? (with b 'whole 1) (no "(whole BRUSH)" b))
  (skin s b) (: u "(skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)"
    (? (!(brush? b)) (no u b) (!(tablet? s)) (no u s)
       (any (k \ !(elem k ['walls 'floor 'ceiling 'all]) || !(texture? (s k))) (keys s)) (no u s)
@@ -200,7 +208,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; ..the textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'decal 'pane 'grav 'ball 'sky 'smog 'ad 'spin 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'flame 'poster 'sign 'decal 'pane 'grav 'ball 'sky 'smog 'ad 'spin 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -224,6 +232,7 @@
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
        'strips (map (s \ (: a (s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'across (s 'across) 'how (s 'how)})) (of 'strip))
        'bulbs (map (b \ {'at (b 'at) 'c (b 'c) 'how (b 'how)}) (of 'bulb))
+       'flames (map (q \ {'pts (q 'pts) 'c (q 'c) 'how (q 'how)}) (of 'flame))
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
        'gravs (map (g \ {'lo (g 'lo) 'hi (g 'hi) 'dir (g 'dir)}) (of 'grav))
        'balls (map (b \ b 'at) (of 'ball))

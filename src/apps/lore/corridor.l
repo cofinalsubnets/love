@@ -175,6 +175,13 @@
    tint (c* (1.0 / top) c)
    (light [{'at [p] 'c c 'r 6.0 'soft 0.35 'keep (inside r)}] (b 'how)
           [[(mesh-pack (nub p 0.04 (cmix tint white 0.55))) 4.0]] [[(mesh-pack (halo-ball p 0.35 tint)) 0.9]]))
+ ; ..candle flames, each a little upright tongue and a glow, one lamp among them all
+ (flame-light lv q) (: ps (q 'pts) c (q 'c) k (inside (room-at lv (ps 0 0) (ps 0 2)))
+   (tip p) (c+ p [0.0 0.03 0.0])
+   (tongue p) (mesh-join [(slab (c+ p [-0.009 0.0 -0.009]) (c+ p [0.009 0.04 0.009]) (_ \ [0.0 0.0]) -1 (cmix c white 0.5))
+                          (slab (c+ p [-0.005 0.04 -0.005]) (c+ p [0.005 0.06 0.005]) (_ \ [0.0 0.0]) -1 c)])
+   (light [{'at (map tip ps) 'c c 'r 3.5 'soft 0.2 'keep k}] (q 'how)
+          [[(mesh-pack (mesh-join (map tongue ps))) 3.0]] [[(mesh-pack (mesh-join (map (p \ halo-ball (tip p) 0.12 c) ps))) 0.7]]))
  ; ..a glow round p, r across: three discs crossed, bright in the middle and gone at the
  ; edge, each seen from both sides
  (halo-ball p r col) (: n 12 z [0.0 0.0 0.0]
@@ -198,7 +205,7 @@
              [[(mesh-pack (nub p 0.035 [0.1 1.0 0.25])) 2.5]] ())])
    (side (d 'a) -0.01 + side (d 'b) 0.01))
  (lights-of lv) (map (strip-light lv) (lv 'strips) + map (bulb-light lv) (lv 'bulbs)
-                 + map (sign-light lv) (lv 'signs)
+                 + map (sign-light lv) (lv 'signs) + map (flame-light lv) (peep lv 'flames ())
                  + cats (map (i \ door-lights lv i (lv 'doors i)) ^#(lv 'doors))
                  + map (grav-light lv) (peep lv 'gravs ()))
  ; ..a grav shaft's glow, up from its foot and down from its head

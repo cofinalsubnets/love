@@ -165,6 +165,42 @@
               (rect 10 51 42 59 (rgb 1 1 0.5)) (rect 50 51 70 59 (rgb 1 1 0.5)))))
 (: spin1 (texture 64 48 5 '((fill (rgb 0.95 0.08 0.6)) (disc 32 22 15 (rgb 0.2 0.9 1)) (disc 32 22 9 (rgb 0.95 0.08 0.6)) (rect 6 40 58 44 (grey 0.97)))))
 (: spin2 (texture 64 48 5 '((fill (rgb 1 0.85 0.08)) (rect 0 0 64 6 0.05) (rect 0 42 64 48 0.05) (poly 10 34 32 10 54 34 (rgb 0.9 0.08 0.08)))))
+; ..the street sweeper: yellow paint scuffed, grey steel, a dark cab, the drums' worn
+; steel, and caution bars; the garage it came out of, ribbed, a bar of the same at its top
+; and its foot
+(: sweepyellow (texture 32 32 1.5 '((fill (rgb 0.86 0.64 0.06)) (noise 6 0.18) (patches 4 0.2 (shade 0.6)) (grid 32 0 1 (shade 0.5)))))
+(: sweepgrey (texture 32 32 1.5 '((fill (rgb 0.36 0.37 0.39)) (noise 6 0.15) (grid 16 16 1 (shade 0.6)))))
+(: cabglass (texture 32 32 1 '((fill (rgb 0.04 0.07 0.1)) (noise 8 0.3) (rows 0 4 (rgb 0.36 0.37 0.39)))))
+(: drumsteel (texture 32 32 1 '((fill (rgb 0.22 0.22 0.23)) (noise 3 12 0.35) (cols 0 2 (shade 0.5)))))
+(: hazard (texture 32 8 1 '((fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04)))))
+(: garage (texture 64 64 4.6
+           '((fill (rgb 0.3 0.31 0.32)) (noise 9 0.2) (grid 0 5 1 (shade 0.45)) (patches 6 0.3 (shade 0.75))
+             (within 0 0 64 6 (fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04)))
+             (within 0 58 64 64 (fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04))))))
+;; the memorial at the office's door
+; ..wax, brown and the one purple, and a candle: its four sides and its top as pictures
+(: wax (texture 8 16 0.1 '((fill (rgb 0.36 0.21 0.11)) (noise 2 6 0.2) (rows 0 1 (rgb 0.5 0.32 0.17)))))
+(: purplewax (texture 8 16 0.1 '((fill (rgb 0.24 0.06 0.4)) (noise 2 6 0.2) (rows 0 1 (rgb 0.36 0.14 0.52)))))
+(: (candle x y z h t) (: w 0.07 r 0.035 m (y + 0.5 * h)
+   [(decal [(x + r) m z] [1 0 0] [0 1 0] w h t) (decal [(x - r) m z] [-1 0 0] [0 1 0] w h t)
+    (decal [x m (z + r)] [0 0 1] [0 1 0] w h t) (decal [x m (z - r)] [0 0 -1] [0 1 0] w h t)
+    (decal [x (y + h) z] [0 1 0] [0 0 1] w w t)]))
+; ..a wreath: laurel round, white and red and yellow blooms on it, a black ribbon at its foot
+(: wreath (texture 64 64 1
+           '((fill hole) (disc 32 32 30 (rgb 0.1 0.26 0.1)) (disc 32 32 17 hole) (noise 3 0.45) (patches 3 0.35 (shade 0.55))
+             (disc 54.09 31.221 4.111 (grey 0.95)) (disc 54.827 38.159 3.712 (rgb 0.82 0.07 0.1)) (disc 51.29 45.474 3.252 (rgb 1 0.86 0.25)) (disc 43.139 50.715 3.327 (grey 0.95)) (disc 36.676 56.363 3.373 (rgb 0.95 0.55 0.7)) (disc 29.145 55.839 4.527 (grey 0.95)) (disc 20.15 51.813 4.567 (rgb 0.82 0.07 0.1)) (disc 14.429 49.691 3.605 (rgb 1 0.86 0.25)) (disc 11.94 40.963 3.632 (grey 0.95)) (disc 9.821 30.596 4.014 (rgb 0.95 0.55 0.7)) (disc 10.624 23.54 3.967 (grey 0.95)) (disc 14.191 19.534 3.488 (rgb 0.82 0.07 0.1)) (disc 21.127 11.494 3.64 (rgb 1 0.86 0.25)) (disc 28.345 8.976 3.62 (grey 0.95)) (disc 37.62 8.363 3.542 (rgb 0.95 0.55 0.7)) (disc 44.103 11.739 4.425 (grey 0.95)) (disc 50.002 18.251 4.572 (rgb 0.82 0.07 0.1)) (disc 53.107 22.436 4.26 (rgb 1 0.86 0.25))
+             (poly 27 46 37 46 42 64 32 57 22 64 (grey 0.03)))))
+; ..bouquets, in their paper
+(: posies (texture 32 32 0.5 '((fill hole) (poly 15.2 26 16.8 26 11.681 12 10.081 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 21.664 12 20.064 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 20.493 12 18.893 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 13.371 12 11.771 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 16.736 12 15.136 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 16.093 12 14.493 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.922 12 17.322 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 20.842 12 19.242 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 11.114 12 9.514 12 (rgb 0.16 0.42 0.12)) (disc 6.567 13.193 2.806 (grey 0.95)) (disc 19.917 6.93 3.323 (rgb 0.6 0.3 0.85)) (disc 24.905 13.916 2.243 (grey 0.95)) (disc 18.991 4.101 3.434 (rgb 0.6 0.3 0.85)) (disc 10.332 8.643 2.241 (grey 0.95)) (disc 21.274 14.331 2.974 (rgb 1 0.86 0.25)) (disc 10.617 6.407 2.843 (rgb 1 0.86 0.25)) (disc 24.53 8.578 3.483 (rgb 0.6 0.3 0.85)) (disc 8 10.923 3.213 (rgb 1 0.86 0.25)) (disc 8.418 7.66 3.21 (rgb 0.6 0.3 0.85)) (disc 16.016 14.639 2.911 (rgb 0.6 0.3 0.85)) (disc 9.797 7.126 3.563 (rgb 1 0.86 0.25)) (poly 8 18 24 18 18 32 14 32 (rgb 0.86 0.84 0.78)) (poly 8 18 24 18 23 20 9 20 (rgb 0.7 0.68 0.62)))))
+(: lilies (texture 32 32 0.5 '((fill hole) (poly 15.2 26 16.8 26 23.184 12 21.584 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 23.07 12 21.47 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 10.592 12 8.992 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 10.988 12 9.388 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 21.497 12 19.897 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 20.104 12 18.504 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 19.176 12 17.576 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 14.114 12 12.514 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.283 12 16.683 12 (rgb 0.16 0.42 0.12)) (disc 18.136 10.393 2.422 (grey 0.9)) (disc 18.769 12.84 3.404 (rgb 1 0.95 0.7)) (disc 24.988 9.986 2.823 (grey 0.9)) (disc 24.024 13.581 2.71 (grey 0.9)) (disc 24.155 8.66 3.438 (grey 0.97)) (disc 17.21 6.597 2.233 (grey 0.9)) (disc 9.472 9.612 2.704 (rgb 1 0.95 0.7)) (disc 19.49 6 3.451 (grey 0.9)) (disc 20.688 13.973 3.268 (rgb 1 0.95 0.7)) (disc 13.076 14.791 3.547 (grey 0.97)) (disc 25.099 8.398 3.234 (rgb 1 0.95 0.7)) (disc 16.607 9.39 3.495 (rgb 1 0.95 0.7)) (poly 8 18 24 18 18 32 14 32 (rgb 0.86 0.84 0.78)) (poly 8 18 24 18 23 20 9 20 (rgb 0.7 0.68 0.62)))))
+(: roses (texture 32 32 0.5 '((fill hole) (poly 15.2 26 16.8 26 13.132 12 11.532 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 17.419 12 15.819 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 14.979 12 13.379 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.255 12 16.655 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.56 12 16.96 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 10.717 12 9.117 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 9.984 12 8.384 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 21.525 12 19.925 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 13.431 12 11.831 12 (rgb 0.16 0.42 0.12)) (disc 10.687 14.952 2.858 (rgb 0.95 0.55 0.7)) (disc 15.527 11.03 2.411 (rgb 0.95 0.55 0.7)) (disc 9.032 14.184 2.746 (rgb 0.75 0.05 0.08)) (disc 19.428 4.704 3.262 (rgb 0.95 0.55 0.7)) (disc 6.856 12.581 3.353 (rgb 0.9 0.15 0.2)) (disc 15.455 11.907 3.43 (rgb 0.95 0.55 0.7)) (disc 21.762 8.696 3.219 (rgb 0.95 0.55 0.7)) (disc 14.892 14.291 3.43 (rgb 0.75 0.05 0.08)) (disc 6.718 9.444 2.561 (rgb 0.95 0.55 0.7)) (disc 14.723 10.893 2.621 (rgb 0.95 0.55 0.7)) (disc 22.67 10.314 2.948 (rgb 0.9 0.15 0.2)) (disc 17.685 13.946 3.155 (rgb 0.75 0.05 0.08)) (poly 8 18 24 18 18 32 14 32 (rgb 0.86 0.84 0.78)) (poly 8 18 24 18 23 20 9 20 (rgb 0.7 0.68 0.62)))))
+; ..a bouquet standing: two pictures in a vee opening toward the street
+(: (flowers x y z t) [(decal [x (y + 0.24) z] [0.7 0 -0.7] [0 1 0] 0.42 0.48 t) (decal [x (y + 0.24) z] [-0.7 0 -0.7] [0 1 0] 0.42 0.48 t)])
+; ..a wreath on its easel: two dark legs and a bar
+(: (easel x y z) [(decal [x (y + 1.25) z] [0 0 -1] [0 1 0] 1.15 1.15 wreath)
+                  (whole (skin {'all darkmetal} (solid (box [(x - 0.42) y (z + 0.02)] [(x - 0.38) (y + 1.5) (z + 0.06)]))))
+                  (whole (skin {'all darkmetal} (solid (box [(x + 0.38) y (z + 0.02)] [(x + 0.42) (y + 1.5) (z + 0.06)]))))
+                  (whole (skin {'all darkmetal} (solid (box [(x - 0.42) (y + 0.6) (z + 0.02)] [(x + 0.42) (y + 0.64) (z + 0.06)]))))])
 ; ..an office beam level over the street, its end cut to a wedge
 (: (beam x) (skin {'all concrete}
              (cut [(x + 1.3) 22.6 22.5] [(x - 1.3) 22.6 22.5] [x 21.6 21]
@@ -232,15 +268,15 @@
   (air (box [0.9 9 18.2] [2.5 11.6 19.1]))
   (air (box [-2.5 9 18.2] [-0.9 11.6 19.1]))
   ; the corner shop at the street's west end, three storeys, its floor a step below the
-  ; pavement: a window onto the street, steps down beside its east wall to its door, a sign
+  ; pavement: a window onto the street, steps down from the east to its door by the corner, a sign
   ; standing out from its front, and a spinner on its roof
   (skin {'all grime} (solid (box [-45 8.85 14] [-33 22.5 20.5])))
   (room [-44.5 8 14.5] [-33.5 12 20])
   (across (strip-light [-39 12 17.2]))
   (window [-42 9.3 19.95] [-35.5 11.6 20.55] glass)
-  (skin {'all concrete} (room [-33 8 15] [-31 9.2 20.5]))
-  (repeat 5 [0 -0.1667 -0.6] [(skin {'all concrete} (solid (box [-33 7 19.9] [-31 8.833 20.5])))])
-  (door [-33.25 8 16] 1.2 2.2)
+  (skin {'all concrete} (room [-33 8 18.4] [-28.4 9.2 20.2]))
+  (repeat 5 [-0.6 -0.1667 0] [(skin {'all concrete} (solid (box [-29 7 18.4] [-28.4 8.833 20.2])))])
+  (door [-33.25 8 19.2] 1.2 2.2)
   (skin {'all darkmetal} (solid (box [-34.4 12 20.5] [-34.1 19.8 22.2])))
   (shopsign -34.09 1)
   (shopsign -34.41 -1)
@@ -250,6 +286,23 @@
   ; east
   (ad [-24 19 14.03] [0 0 1] [0 1 0] 13 7 adredblue)
   (ad [44.97 28 30] [-1 0 0] [0 1 0] 12 6 adgreen)
+  ; ..a street sweeper parked by the west wall outside the shop's window, its headlights
+  ; on, a front drum and a rear, its cab glazed; the garage behind it shut, a strip over it
+  (whole (skin {'all drumsteel} (cut [-37.019 8.85 22.8] [-37.4 9.231 22.8] [-37.019 8.85 25.2] (cut [-37.4 9.769 22.8] [-37.019 10.15 22.8] [-37.4 9.769 25.2] (cut [-36.1 9.231 22.8] [-36.481 8.85 22.8] [-36.1 9.231 25.2] (cut [-36.481 10.15 22.8] [-36.1 9.769 22.8] [-36.481 10.15 25.2] (solid (box [-37.4 8.85 22.8] [-36.1 10.15 25.2]))))))))
+  (whole (skin {'all drumsteel} (cut [-41.186 8.85 22.75] [-41.45 9.114 22.75] [-41.186 8.85 25.25] (cut [-41.45 9.486 22.75] [-41.186 9.75 22.75] [-41.45 9.486 25.25] (cut [-40.55 9.114 22.75] [-40.814 8.85 22.75] [-40.55 9.114 25.25] (cut [-40.814 9.75 22.75] [-40.55 9.486 22.75] [-40.814 9.75 25.25] (solid (box [-41.45 8.85 22.75] [-40.55 9.75 25.25]))))))))
+  (whole (skin {'all sweepyellow} (solid (box [-37.6 10.15 22.7] [-35.9 10.45 25.3]))))
+  (decal [-35.89 10.3 24] [1 0 0] [0 1 0] 2.6 0.3 hazard)
+  (whole (skin {'all sweepyellow} (solid (box [-41.9 9.3 22.8] [-37.5 10.3 25.2]))))
+  (decal [-39.7 9.8 22.79] [0 0 -1] [0 1 0] 4.4 0.25 hazard)
+  (decal [-39.7 9.8 25.21] [0 0 1] [0 1 0] 4.4 0.25 hazard)
+  (whole (skin {'all sweepgrey 'walls cabglass} (cut [-38.5 12.2 23.1] [-38.5 12.2 24.9] [-38 11.4 23.1] (solid (box [-40.6 10.3 23.1] [-38 12.2 24.9])))))
+  (whole (skin {'all sweepgrey} (solid (box [-40.7 12.2 23] [-38.4 12.3 25]))))
+  (whole (skin {'all sweepyellow} (solid (box [-39.8 12.3 23.7] [-39.2 12.42 24.3]))))
+  (whole (skin {'all sweepyellow} (cut [-41.8 11.3 25.1] [-41.8 11.3 22.9] [-42.3 10.8 25.1] (solid (box [-42.3 10.3 22.9] [-40.6 11.3 25.1])))))
+  (bulb [-35.85 10.32 23.05] (rgb 1 0.95 0.82))
+  (bulb [-35.85 10.32 24.95] (rgb 1 0.95 0.82))
+  (decal [-44.97 10.75 25] [1 0 0] [0 1 0] 4.6 3.8 garage)
+  (strip-light [-44.8 12.9 25])
   ; the UNN recruitment office across the road: five storeys of concrete, four broad
   ; buttresses sloping down from the top of the first to the pavement; from high on the
   ; second each reaches out a beam, braced steeply at its root, level over the street;
@@ -271,6 +324,23 @@
   (decal [0 11.1 37.49] [0 0 -1] [0 1 0] 3.4 3 unndoor)
   (decal [0 15.3 36.88] [0 0 -1] [0 1 0] 3.6 4.8 unnbanner)
   (bulb [0 12.9 36.4] (rgb 1 0.85 0.6))
+  ; ..and at its door a memorial: wreaths on easels either side and one on the doors,
+  ; bouquets heaped along the wall and up the steps' ends, and on the landing eight candles
+  ; round, seven brown and lit, the purple one far left unlit
+  (easel -2.35 9.6 36.2) (easel 2.35 9.6 36.2)
+  (decal [0 11.6 37.47] [0 0 -1] [0 1 0] 0.8 0.8 wreath)
+  (flowers -2.955 9.6 36.62 posies) (flowers -2.544 9.6 36.62 lilies) (flowers -2.108 9.6 36.62 roses)
+  (flowers -1.853 9.6 36.62 posies) (flowers 1.851 9.6 36.62 lilies) (flowers 2.159 9.6 36.62 roses)
+  (flowers 2.518 9.6 36.62 posies) (flowers 2.951 9.6 36.62 lilies) (flowers -1.287 9.6 36.55 roses)
+  (flowers -0.571 9.6 36.55 posies) (flowers 0.059 9.6 36.55 lilies) (flowers 0.78 9.6 36.55 roses)
+  (flowers 1.359 9.6 36.55 posies) (flowers -2.85 9.15 28.85 posies) (flowers 2.85 9.15 28.85 lilies)
+  (flowers -2.85 9.3 29.35 lilies) (flowers 2.85 9.3 29.35 roses) (flowers -2.85 9.45 29.85 roses)
+  (flowers 2.85 9.45 29.85 posies) (flowers -2.85 9.6 30.35 posies) (flowers 2.85 9.6 30.35 lilies)
+  (candle 0.21 9.6 33.808 0.32 wax) (candle 0.508 9.6 33.51 0.26 wax)
+  (candle 0.508 9.6 33.09 0.3 wax) (candle 0.21 9.6 32.792 0.22 wax)
+  (candle -0.21 9.6 32.792 0.28 wax) (candle -0.508 9.6 33.09 0.34 wax)
+  (candle -0.508 9.6 33.51 0.24 wax) (candle -0.21 9.6 33.808 0.3 purplewax)
+  (flames (rgb 1 0.62 0.25) [[0.21 9.925 33.808] [0.508 9.865 33.51] [0.508 9.905 33.09] [0.21 9.825 32.792] [-0.21 9.885 32.792] [-0.508 9.945 33.09] [-0.508 9.845 33.51]])
   ; ..and the buildings either side of it
   (skin {'all facade} (solid (box [-45 8.85 33] [-20 33 47])))
   (skin {'all facade} (solid (box [20 8.85 33] [45 28 47])))

@@ -255,10 +255,11 @@
        (all (p \ p 2 < 0.0) (s 'lamp 'at)) (s 'w = 0.3 * hi 1)))
 ;; the street's words: a sign facing its own way, a lit board, the spinning square; hanzi
 ;; a glyph and a half wider than latin's
-(: sl (corridor-read "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [10 4 10]) (start [5 0 5] 0 0) (neon [5 2 9] [0 0 -1] 0.5 \"中\" (rgb 1 0 0)) (ad [0.01 2 5] [1 0 0] [0 1 0] 3 2 t) (spinner [5 3 5] 1 1 t t))")
+(: sl (corridor-read "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [10 4 10]) (start [5 0 5] 0 0) (neon [5 2 9] [0 0 -1] 0.5 \"中\" (rgb 1 0 0)) (ad [0.01 2 5] [1 0 0] [0 1 0] 3 2 t) (spinner [5 3 5] 1 1 t t) (breathe (flames (rgb 1 0.6 0.2) [[1 0 1] [2 0 1]])) (whole (solid (box [1 0 1] [2 1 2]))))")
    wh (neon-strokes "中心") wl (neon-strokes "HI")
  (test (tablet? sl) (#(sl 'signs) = 1) (sl 'signs 0 'n = [0.0 0.0 -1.0]) (#(sl 'ads) = 1) (sl 'ads 0 'w = 3)
-       (#(sl 'spins) = 1) (sl 'spins 0 't1 = sl 'spins 0 't2) (wl 1 < wh 1) (0 < #(wh 0))
+       (#(sl 'spins) = 1) (sl 'spins 0 't1 = sl 'spins 0 't2) (#(sl 'flames 0 'pts) = 2) (sl 'flames 0 'how = ['breathe]) (any (b \ b 'whole = 1) (sl 'brushes)) (wl 1 < wh 1) (0 < #(wh 0))
+       (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (flames (rgb 1 0 0) 3))") "(flames (rgb r g b) [[x y z] ..])") (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (whole 3))") "(whole BRUSH)")
        (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (spinner [0 0 0] 1 1 3 3))") "(spinner [x y z] width height TEXTURE TEXTURE)")))
 (test_fin ())
 (puts "corridor: ok\n")
