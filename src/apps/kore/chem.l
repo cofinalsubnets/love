@@ -82,38 +82,55 @@
             'atom "Last.\(ch-acorner a)"
             'ring "Last.V\(ch-vertex r a).\(ch-cmp a)"
             "Last.\(ch-cmp a)"))
-   ; a bond's from: a moiety's corner, a bond's end, a ring's vertex, a named place's side
-   (ch-from s x a)
-    (: k (s 'names x)
-       dot (: (go i) (? (i < 0) -1 (x i = 46) i (go (i - 1))) (go (#x - 1)))
-       (? (k = 'atom) "\(x).\(ch-acorner a)"
-          (k = 'bond) "\(x).end"
-          (tablet? k) "\(x).V\(ch-vertex k a).\(ch-cmp a)"
-          (0 <= dot && dot + 1 < #x && ch-upper? (x (dot + 1))) "\(x).\(ch-cmp a)"
-          "\(x) "))
+   ; a bond's from X ..: a named thing's place a ways (a moiety's corner, a bond's end, a
+   ; ring's vertex, another thing's compass point), .V a corner of the last, X.V one of X,
+   ; and anything else the rest of the line as it stands
+   (ch-from s l a)
+    (: x (two? l ? <l "") k (two? l ? (s 'names x))
+       (place p) (0 < #p && ch-upper? (p 0) && !(elem 46 (ch-chars p)))
+       dot (fsub x "." 0)
+       (? (k = 'atom) "from \(x).\(ch-acorner a)"
+          (k = 'bond) "from \(x).end"
+          (tablet? k) "from \(x).V\(ch-vertex k a).\(ch-cmp a)"
+          (k = 'other) "from \(x).\(ch-cmp a)"
+          (1 < #x && x 0 = 46 && ch-upper? (x 1)) "from Last\(x).\(ch-cmp a)"
+          (0 < dot && place (snip x 0 dot) && place (snip x (dot + 1) #x)) "from \(x).\(ch-cmp a)"
+          ("from " + ch-fields l)))
+   ; words as chem lays them back, each with a blank after, up to a comment
+   (ch-fields l) (atom? l || starts? <l "#" ? "" (<l + " " + ch-fields >l))
+   ; a word that turns a bond: one with a figure or a way anywhere in it
+   (ch-turn? w) (any digit? (ch-chars w) || any (d \ 0 <= fsub w d 0) (keys ch-dirs))
+   ; ..to: a leading integer's degrees, a way's by its exact name (else up), or no turn
+   (ch-turn w a)
+    (: n #w s (0 < n && elem (w 0) [43 45 92] ? 1 0)
+       (dig i) (i < n && digit? (w i) ? (dig (i + 1)) i)
+       (? (s < n && digit? (w s))
+           (w 0 = 92 ? 0 (int (gem (snip w s (dig s))) @ v (ch-norm (w 0 = 45 ? (0 - v) v))))
+          (any (d \ 0 <= fsub w d 0) (keys ch-dirs)) (peep ch-dirs w 0)
+          a))
 
    ; -- statements -----------------------------------------------------------------------
    (ch-o s t) (say (s 'o) t)
    (ch-ol s t) (ch-o s "\(t)\n")
    (ch-join ws) (atom? ws ? "" (foldl (a \ w \ "\(a) \(w)") <ws >ws))
-   ; [double|triple|front|back] bond [angle|dir] [length n] [from X | to X.. | pic..]
+   ; [double|triple|front|back] bond [turns] [length n] [from X | to X.. | pic..], walked as
+   ; chem walks it: turns and a length, then the rest is where it runs
    (ch-bond s pre ws)
     (: kind (<ws = "bond" ? "bond" (ch-bond-kinds <ws))
        rest (<ws = "bond" ? >ws >>ws)
-       (go l a len third)
-        (? (atom? l) [a len third]
-           (ch-num? <l) (go >l (ch-norm (ch-int <l)) len third)
-           (ch-dirs <l != ()) (go >l (ch-dirs <l) len third)
-           (<l = "length" && two? >l) (go >>l a (gem <>l) third)
-           (<l = "from" && two? >l) [a len ['from <>l]]
-           (<l = "to" && two? >l) [a 0 ['to (ch-join >l)]]
-           [a len ['pic (ch-join l)]])
-       r (go rest (s 'dir) (s 'db) ())
-       a <r len (r 1) th (r 2)
-       third (? (th = ()) "from \(ch-ref s a) "
-                (<th = 'from) "from \(ch-from s (th 1) a)"
-                (<th = 'to) "to \(th 1) "
-                "\(th 1) ")
+       (go l a len)
+        (? (atom? l) [a len ""]
+           (ch-turn? <l) (go >l (ch-turn <l a) len)
+           (starts? <l "leng") (go >>l a (two? >l ? (ch-num? <>l ? (gem <>l) 0) len))
+           (<l = "to") [a 0 (ch-fields l)]
+           (<l = "from") [a len (ch-from s >l a)]
+           (starts? <l "#") [a len ""]
+           [a len (ch-fields l)])
+       r (go rest (s 'dir) (s 'db))
+       a <r th (r 2)
+       ; a to anywhere in it, and the bond runs there, its length none
+       len (starts? th "to" || 0 <= fsub th " to " 0 ? 0 (r 1))
+       third (th = "" ? "from \(ch-ref s a) " th)
        (ch-ol s "\(pre)Last: \(kind)(\(ch-g len), \(a), \(third))",
         pins s 'last 'bond 'dir a))
    ; a moiety, placed against the last thing, or where its pic says
@@ -127,6 +144,7 @@
    (ch-bp s pre)
     (s 'dir @ a
      (ch-ol s "\(pre)Last: BP: \"\" ht 0 wid 0 with .\(ch-cmp (a + 180)) at \(ch-ref s a)",
+      pin (s 'names) "BP" 'other,
       pin s 'last 'other))
    ; a ring: [aromatic] ring|ringN|benzene|flatring [pointing D] [aromatic] [put M at N]..
    ; [double I,J ..] [pic..]

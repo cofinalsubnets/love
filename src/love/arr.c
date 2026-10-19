@@ -2,21 +2,25 @@
 #include "love.h"
 // the math floor is ours on every frontend (moonlibc's math/lm.c)
 #if Bits == 64
-double lm_sin(double), lm_cos(double), lm_atan2(double, double),
+double lm_sin(double), lm_cos(double), lm_atan2(double, double), lm_asin(double), lm_acos(double),
        lm_sqrt(double), lm_exp(double), lm_log(double), lm_pow(double, double);
 #define love_sin   lm_sin
 #define love_cos   lm_cos
 #define love_atan2 lm_atan2
+#define love_asin  lm_asin
+#define love_acos  lm_acos
 #define love_sqrt  lm_sqrt
 #define love_exp   lm_exp
 #define love_log   lm_log
 #define love_pow   lm_pow
 #else
-float lm_sinf(float), lm_cosf(float), lm_atan2f(float, float), lm_sqrtf(float),
-      lm_expf(float), lm_logf(float), lm_powf(float, float);
+float lm_sinf(float), lm_cosf(float), lm_atan2f(float, float), lm_asinf(float), lm_acosf(float),
+      lm_sqrtf(float), lm_expf(float), lm_logf(float), lm_powf(float, float);
 #define love_sin   lm_sinf
 #define love_cos   lm_cosf
 #define love_atan2 lm_atan2f
+#define love_asin  lm_asinf
+#define love_acos  lm_acosf
 #define love_sqrt  lm_sqrtf
 #define love_exp   lm_expf
 #define love_log   lm_logf
@@ -44,7 +48,7 @@ static love_inline flo_t love_atan(flo_t x) { return love_atan2(x, (flo_t) 1); }
  emit_int(_res, toint(a) c_op toint(b));                                    \
  love_musttail return Push(_res); }
 #define mvm1(n) lvm(lvm_##n) { g->b = (word) (uintptr_t) (love_##n); love_musttail return Ap(lvm_math1, g); }
-#define m1(_) _(sin) _(cos) _(tan) _(atan)   // the real-only unaries
+#define m1(_) _(sin) _(cos) _(tan) _(atan) _(asin) _(acos)   // the real-only unaries
 // rng state: a rank-1 tray of four 8-byte limbs, moved by memcpy (tray_put_int truncates on 32-bit)
 #define rng_state_len 4
 #define rng_payload_bytes (rng_state_len * 8)
