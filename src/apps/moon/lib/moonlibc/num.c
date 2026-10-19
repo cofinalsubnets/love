@@ -55,9 +55,10 @@ unsigned long strtoul(char const *s, char **endptr, int base) { return (unsigned
 unsigned long long strtoull(char const *s, char **endptr, int base) { return __strtou(s, endptr, base, ULLONG_MAX); }
 uintmax_t strtoumax(char const *s, char **endptr, int base) { return __strtou(s, endptr, base, ULLONG_MAX); }
 double atof(char const *s) { return strtod(s, 0); }
-/* libc math over lm.c; tan, the arcs and the hyperbolics are derived, a few ulp looser */
+/* libc math over lm.c; tan, log2, log10 and the hyperbolics are derived, a few ulp looser */
 double lm_sqrt(double), lm_exp(double), lm_log(double);
 double lm_sin(double), lm_cos(double), lm_atan2(double, double), lm_pow(double, double);
+double lm_asin(double), lm_acos(double);
 double sqrt(double x) { return lm_sqrt(x); }
 double exp(double x) { return lm_exp(x); }
 double log(double x) { return lm_log(x); }
@@ -67,8 +68,8 @@ double tan(double x) { return lm_sin(x) / lm_cos(x); }
 double pow(double x, double y) { return lm_pow(x, y); }
 double atan2(double y, double x) { return lm_atan2(y, x); }
 double atan(double x) { return lm_atan2(x, 1.0); }
-double asin(double x) { return lm_atan2(x, lm_sqrt(1.0 - x * x)); }
-double acos(double x) { return lm_atan2(lm_sqrt(1.0 - x * x), x); }
+double asin(double x) { return lm_asin(x); }
+double acos(double x) { return lm_acos(x); }
 double log2(double x) { return lm_log(x) * 1.4426950408889634; }
 double log10(double x) { return lm_log(x) * 0.4342944819032518; }
 double sinh(double x) { double e = lm_exp(x); return (e - 1.0 / e) / 2.0; }

@@ -84,6 +84,8 @@
       (nif_cos           "cos"           1 lvm_cos)
       (nif_tan           "tan"           1 lvm_tan)
       (nif_atan          "atan"          1 lvm_atan)
+      (nif_asin          "asin"          1 lvm_asin)
+      (nif_acos          "acos"          1 lvm_acos)
       (nif_atan2         "atan2"         2 lvm_atan2)
       (nif_exp           "exp"           1 lvm_exp)
       (nif_sqrt          "sqrt"          1 lvm_sqrt)

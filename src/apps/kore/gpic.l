@@ -324,33 +324,13 @@
           q (k % 4) sg (x < 0 ? -1 1)
           [(gr-dbl (sg * (? (q = 0) s (q = 1) c (q = 2) (0 - s) (0 - c))) one)
            (gr-dbl (? (q = 0) c (q = 1) (0 - s) (q = 2) (0 - c) s) one)]))
-   ; acos and atan2 as glibc's, the double nearest: the float guess taken a newton step on
-   ; in fixed point at 2^gp-fxp -> [T s c], the guess and its sin and cos by their series
-   gp-fxp 128
-   (gp-fx-sc x)
-    (: one (2 ** gp-fxp) r (gr-rat x) T ((<r * one) // r 1) T2 ((T * T) // one)
-       (ser t j acc) (t = 0 ? acc (ser ((0 - t * T2) // (one * j * (j + 1))) (j + 2) (acc + t)))
-       [T (ser T 2 0) (ser one 1 0)])
-   (gp-acos x)
-    (? (x >= 1) 0.0 (x <= -1) gp-pi
-       (: one (2 ** gp-fxp) rx (gr-rat x) X ((<rx * one) // rx 1)
-          (gp-fx-sc (atan2 (sqrt (1 - x * x)) x) @ [T s c] (gr-dbl (T + ((c - X) * one) // s) one))))
-   ; ..the sides over one denominator and scaled together, the angle's sign kept
-   (gp-atan2 y x)
-    (? (y = 0 || x = 0) (atan2 y x)
-       (: one (2 ** gp-fxp) ry (gr-rat y) rx (gr-rat x) ny (<ry * rx 1) nx (<rx * ry 1)
-          sh (gp-fxp - gr-bits (max (abs ny) (abs nx)))
-          (fit n) (sh < 0 ? (n // 2 ** (0 - sh)) (n * 2 ** sh))
-          Y (fit ny) X (fit nx)
-          (gp-fx-sc (atan2 y x) @ [T s c]
-           (gr-dbl (T + ((Y * c - X * s) // one * one) // ((X * c + Y * s) // one)) one))))
    ; cos and sin, glibc's
    (gp-sc a) (gp-sincos a @ [s c] [c s])
    (gp-func g f as)
     (: n #as (a k) (as k)
        (need m) (n = m ? 0 (gp-err g ("wrong number of arguments to " + f)))
        (f @ "sin" (need 1, <(gp-sincos (a 0))) "cos" (need 1, gp-sincos (a 0) 1)
-            "atan2" (need 2, a 0 = 0 && a 1 = 0 ? (gp-err g "atan2 argument out of domain") (gp-atan2 (a 0) (a 1)))
+            "atan2" (need 2, a 0 = 0 && a 1 = 0 ? (gp-err g "atan2 argument out of domain") (atan2 (a 0) (a 1)))
             "log" (need 1, a 0 <= 0 ? (gp-err g "log argument out of domain") (log (a 0) / log 10.0))
             "exp" (need 1, 10.0 ** a 0)
             "sqrt" (need 1, a 0 < 0 ? (gp-err g "sqrt argument out of domain") (sqrt (a 0)))
@@ -566,7 +546,7 @@
    ; the further end
    (gp-arc-bbox o)
     (: c (o 'c) s (o 'st) e (o 'en) u (gp-sub s c) v (gp-sub e c)
-       q0 (gp-atan2 (u 1) <u / (gp-pi / 2.0)) q1 (gp-atan2 (v 1) <v / (gp-pi / 2.0))
+       q0 (atan2 (u 1) <u / (gp-pi / 2.0)) q1 (atan2 (v 1) <v / (gp-pi / 2.0))
        a (o 'cw ? q1 q0) b0 (o 'cw ? q0 q1) sq (a < 0.0 ? (a + 4.0) a)
        (up b) (b <= sq ? (up (b + 4.0)) b) eq (up b0)
        r (max (gp-len u) (gp-len v))
@@ -830,7 +810,7 @@
    ; the chord as groff turns it; the start where the ends meet
    (gp-arc-centre st en r cw)
     (: h (gp-mul (gp-sub en st) 0.5) d (gp-len h) r1 (r <= 0 ? 0.25 r) r2 (r1 < d ? d r1)
-       al (gp-acos (d / r2)) t0 (gp-atan2 (h 1) <h) t (cw ? (t0 - al) (t0 + al))
+       al (acos (d / r2)) t0 (atan2 (h 1) <h) t (cw ? (t0 - al) (t0 + al))
        (st = en ? st (gp-sincos t @ [sn cs] [(cs * r2 + <st) (sn * r2 + st 1)])))
    (gp-make-block g sp)
     (: os (sp 'objs)
@@ -1200,7 +1180,7 @@
                ['dot (go 0 0.0 ()) r]))
           (: p (o 'cw ? en st) q (o 'cw ? st en) c (gp-arc-ctr p (o 'c) q)
              (c = () ? ['line]
-              (: a0 (gp-atan2 (p 1 - c 1) (<p - <c)) a1 (gp-atan2 (q 1 - c 1) (<q - <c))
+              (: a0 (atan2 (p 1 - c 1) (<p - <c)) a1 (atan2 (q 1 - c 1) (<q - <c))
                  (wrap t) (t < 0 ? (wrap (t + (pi + pi))) t)
                  tot (wrap (a1 - a0)) rad (gp-len (gp-sub c p))
                  (lt = 'dashed ?
@@ -1225,7 +1205,7 @@
        ; the point at length ld, put back on the ellipse
        (land zold z lold dl ld)
         (: zd (gp-add zold (gp-mul (gp-sub z zold) ((ld - lold) / dl)))
-           (on (gp-atan2 (zd 1 / dy) (<zd / dx))))
+           (on (atan2 (zd 1 / dy) (<zd / dx))))
        (lt = 'dashed ?
         (: n0 (8 * int (le / w / 8 + 0.5)) nmax (n0 < 8 ? 8 n0) dw (n0 < 8 ? (le / 8) w)
            nd (nmax // 2) gap ((le - dw * nd) / nd)
@@ -1244,12 +1224,12 @@
    ; the arcs from z0 to z1 round an ellipse of half-axes a, b about c, each fitted where
    ; its curvature is taken, halved until both ends sit on it -> pieces onto acc
    (gp-ell-arc c z0 z1 a b acc)
-    (: zl (gp-mul (gp-add z0 z1) 0.5) psi (gp-atan2 (zl 1 / b) (<zl / a)) zm (gp-sc psi @ [cs sn] [(a * cs) (b * sn)])
+    (: zl (gp-mul (gp-add z0 z1) 0.5) psi (atan2 (zl 1 / b) (<zl / a)) zm (gp-sc psi @ [cs sn] [(a * cs) (b * sn)])
        a2 (a * a) a4 (a2 * a2) b2 (b * b) b4 (b2 * b2) e2 (a2 - b2)
        t (a4 * zm 1 * zm 1 + b4 * <zm * <zm)
        rho (sqrt (t / a4 / b4 * t / a4 / b4 * t))
        m [(e2 * <zm / a2 * <zm / a2 * <zm) (-1.0 * e2 * zm 1 / b2 * zm 1 / b2 * zm 1)]
-       p0 (gp-atan2 (z0 1 - m 1) (<z0 - <m)) p1 (gp-atan2 (z1 1 - m 1) (<z1 - <m))
+       p0 (atan2 (z0 1 - m 1) (<z0 - <m)) p1 (atan2 (z1 1 - m 1) (<z1 - <m))
        (off z p) (gp-sc p @ [cs sn] (gp-len (gp-sub z (gp-add [(rho * cs) (rho * sn)] m)) / sqrt (<z * <z + z 1 * z 1)))
        (off z0 p0 < 0.0001 && off z1 p1 < 0.0001 ? ([(gp-add m c) rho p0 p1] . acc)
         (gp-ell-arc c zm z1 a b (gp-ell-arc c z0 zm a b acc))))
@@ -1485,7 +1465,7 @@
                              + "\\lower\\graphtemp\\hbox to 0pt{" + box + "}}%\n"))))
             (gp-said ts)))
    ; a tpic arc runs clockwise down the page, so from the pic arc's end to its start
-   (gp-tx-ang g c p) (-1.0 * gp-atan2 (p 1 - c 1) (<p - <c))
+   (gp-tx-ang g c p) (-1.0 * atan2 (p 1 - c 1) (<p - <c))
    (gp-tx-arc g o)
     (: c (o 'c) ah (peep o 'ah 0) ccw !(o 'cw)
        st (o 'st) en (o 'en)
@@ -1511,7 +1491,7 @@
     (: m (gp-arc-ctr p c q) rr (show (gp-mi (gp-len (gp-sub c p) * g 'sf)))
        a1 (gp-tx-ang g m q) a2 (gp-tx-ang g m p)
        (gp-sp g ("ar " + gp-tx-xy g m + " " + rr + " " + rr + " " + gp-f a1 6 + " "
-                 + gp-f (a1 > a2 ? (gp-pi * 2.0 - gp-atan2 (p 1 - m 1) (<p - <m)) a2) 6)))
+                 + gp-f (a1 > a2 ? (gp-pi * 2.0 - atan2 (p 1 - m 1) (<p - <m)) a2) 6)))
    (gp-tx-head g o p u) (gp-tx-head2 g o p u (gp-retreat o))
    (gp-tx-head2 g o p u k)
     (gp-barbs o p u k @ [t v1 v2]

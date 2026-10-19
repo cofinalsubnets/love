@@ -62,6 +62,8 @@
     (8.0 = power 2.0 3.0) (gem-tray '(2) '(4.0 9.0) = power @(2.0 3.0) 2)
     (very-near (pi / 4) (atan 1.0)) (very-near (pi / 4) (atan2 1.0 1.0))
     (very-near pi (atan2 0 -1))
+    (very-near pi (acos -1)) (very-near (pi / 2) (asin 1)) (0.0 = acos 1) (very-near (pi / 2) (acos 0))
+    (very-near 0.3 (cos (acos 0.3))) (very-near -0.6 (sin (asin -0.6))) (gem-tray '(2) '(0.0 0.0) = asin @(0.0 0.0))
 
     ; --- non-numeric arg -> nil; nil itself counts as 0 ---
     !(sine "x")

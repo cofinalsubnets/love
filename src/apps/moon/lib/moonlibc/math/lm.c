@@ -1,6 +1,7 @@
 // the math floor: binary64 transcendentals in portable mooncc-subset c (no fma, int128, builtins).
 // taylor/exact-rational coefficients; sqrt exact, exp/log <= 1 ulp, sin/cos ~0.74 ulp at every
-// magnitude, atan2 <= 3 ulp, pow <= 2 ulp typical (~40 at 1e+-300), exact for y in {2, 1, -1, 1/2}
+// magnitude, atan2 asin acos correctly rounded, pow <= 2 ulp typical (~40 at 1e+-300), exact for
+// y in {2, 1, -1, 1/2}
 #include <stdint.h>
 
 typedef union { double d; uint64_t u; } db;
@@ -256,53 +257,168 @@ double lm_cos(double x) {
   case 2: return -kcos(r, rl);
   default: return ksin(r, rl); } }
 
-// t in [0,1] against the nearest c in {0, 1/4, 1/2, 3/4, 1}: u = (t-c)/(1+ct), |u| <= ~1/7,
-// a 10-term taylor; t > 1 flips through pi/2 - atan(1/t)
-static const double ATC_H[] = { 0.0, 0x1.f5b75f92c80ddp-3, 0x1.dac670561bb4fp-2,
-  0x1.4978fa3269ee1p-1, 0x1.921fb54442d18p-1 };
-static const double ATC_L[] = { 0.0, 0x1.8ab6e3cf7afbdp-57, 0x1.a2b7f222f65e2p-56,
-  0x1.2419a87f2a458p-56, 0x1.1a62633145c07p-55 };
-static const double CVAL[] = { 0.0, 0.25, 0.5, 0.75, 1.0 };
-static double katan(double t) {                              // t in [0, 1]
- int i = t < 0.125 ? 0 : t < 0.375 ? 1 : t < 0.625 ? 2 : t < 0.875 ? 3 : 4;
- double u = i ? (t - CVAL[i]) / (1.0 + CVAL[i] * t) : t;
- double z = u * u;
- double p = -0x1.5555555555555p-2
-      + z * (0x1.999999999999ap-3
-      + z * (-0x1.2492492492492p-3
-      + z * (0x1.c71c71c71c71cp-4
-      + z * (-0x1.745d1745d1746p-4
-      + z * (0x1.3b13b13b13b14p-4
-      + z * (-0x1.1111111111111p-4
-      + z * (0x1.e1e1e1e1e1e1ep-5
-      + z * (-0x1.af286bca1af28p-5
-      + z *  0x1.8618618618618p-5))))))));
- double a = u + u * z * p;
- return i ? ATC_H[i] + (ATC_L[i] + a) : a; }
-static double lm_atan(double x) {
- uint64_t ax = mku(x) & 0x7fffffffffffffffull;
- if (x != x) return x;
- double t = mkd(ax), r;
- if (ax >= 0x7ff0000000000000ull) r = 0x1.921fb54442d18p+0;  // +-inf -> +-pi/2
- else if (t <= 1.0) r = katan(t);
- else r = 0x1.921fb54442d18p+0 + (0x1.1a62633145c07p-54 - katan(1.0 / t));
- return x < 0 ? -r : r; }
-static const double PI_H = 0x1.921fb54442d18p+1, PI_L = 0x1.1a62633145c07p-53;
+// double-double: hi + lo, |lo| <= ulp(hi)/2; ~2^-104 a step
+static void dd_add(double ah, double al, double bh, double bl, double *h, double *l) {
+ double s, e;
+ tsum(ah, bh, &s, &e);
+ e += al + bl;
+ *h = s + e; *l = e - (*h - s); }
+static void dd_mul(double ah, double al, double bh, double bl, double *h, double *l) {
+ double p, e;
+ dmul(ah, bh, &p, &e);
+ e += ah * bl + al * bh;
+ *h = p + e; *l = e - (*h - p); }
+static void dd_div(double ah, double al, double bh, double bl, double *h, double *l) {
+ double q = ah / bh, p, e;
+ dmul(q, bh, &p, &e);
+ double r = (((ah - p) - e) + al - q * bl) / bh;
+ *h = q + r; *l = r - (*h - q); }
+
+// atan(i/64) as double-doubles
+static const double AT64[][2] = {
+  { 0.0, 0.0 }, { 0x1.fff555bbb729bp-7, -0x1.220c39d4dff50p-61 },
+  { 0x1.ffd55bba97625p-6, -0x1.5ec431444912cp-60 }, { 0x1.7fb818430da2ap-5, -0x1.86ef8f794f105p-63 },
+  { 0x1.ff55bb72cfdeap-5, -0x1.c934d86d23f1dp-60 }, { 0x1.3f59f0e7c559dp-4, 0x1.ac4ce285df847p-58 },
+  { 0x1.7ee182602f10fp-4, -0x1.cfb654c0c3d98p-58 }, { 0x1.be39ebe6f07c3p-4, 0x1.f7b8f29a05987p-58 },
+  { 0x1.fd5ba9aac2f6ep-4, -0x1.cd37686760c17p-59 }, { 0x1.1e1fafb043727p-3, -0x1.b485914dacf8cp-59 },
+  { 0x1.3d6eee8c6626cp-3, 0x1.61a3b0ce9281bp-57 }, { 0x1.5c9811e3ec26ap-3, -0x1.054ab2c010f3dp-58 },
+  { 0x1.7b97b4bce5b02p-3, 0x1.347b0b4f881cap-58 }, { 0x1.9a6a8e96c8626p-3, 0x1.cf601e7b4348ep-59 },
+  { 0x1.b90d7529260a2p-3, 0x1.17b10d2e0e5abp-61 }, { 0x1.d77d5df205736p-3, 0x1.c648d1534597ep-57 },
+  { 0x1.f5b75f92c80ddp-3, 0x1.8ab6e3cf7afbdp-57 }, { 0x1.09dc597d86362p-2, 0x1.62e47390cb865p-56 },
+  { 0x1.18bf5a30bf178p-2, 0x1.30ca4748b1bf9p-57 }, { 0x1.278372057ef46p-2, -0x1.077cdd36dfc81p-56 },
+  { 0x1.362773707ebccp-2, -0x1.963a544b672d8p-57 }, { 0x1.44aa436c2af0ap-2, -0x1.5d5e43c55b3bap-56 },
+  { 0x1.530ad9951cd4ap-2, -0x1.2566480884082p-57 }, { 0x1.614840309cfe2p-2, -0x1.a725715711f00p-56 },
+  { 0x1.6f61941e4def1p-2, -0x1.c63aae6f6e918p-56 }, { 0x1.7d5604b63b3f7p-2, 0x1.69c885c2b249ap-56 },
+  { 0x1.8b24d394a1b25p-2, 0x1.b6d0ba3748fa8p-56 }, { 0x1.98cd5454d6b18p-2, 0x1.9e6c988fd0a77p-56 },
+  { 0x1.a64eec3cc23fdp-2, -0x1.24dec1b50b7ffp-56 }, { 0x1.b3a911da65c6cp-2, 0x1.ae187b1ca5040p-56 },
+  { 0x1.c0db4c94ec9f0p-2, -0x1.cc1ce70934c34p-56 }, { 0x1.cde53432c1351p-2, -0x1.a2cfa4418f1adp-56 },
+  { 0x1.dac670561bb4fp-2, 0x1.a2b7f222f65e2p-56 }, { 0x1.e77eb7f175a34p-2, 0x1.0e53dc1bf3435p-56 },
+  { 0x1.f40dd0b541418p-2, -0x1.a3992dc382a23p-57 }, { 0x1.0039c73c1a40cp-1, -0x1.b32c949c9d593p-55 },
+  { 0x1.0657e94db30d0p-1, -0x1.d5b495f6349e6p-56 }, { 0x1.0c6145b5b43dap-1, 0x1.974fa13b5404fp-58 },
+  { 0x1.1255d9bfbd2a9p-1, -0x1.2bdaee1c0ee35p-58 }, { 0x1.1835a88be7c13p-1, 0x1.c621cec00c301p-55 },
+  { 0x1.1e00babdefeb4p-1, -0x1.928df287a668fp-58 }, { 0x1.23b71e2cc9e6ap-1, 0x1.c421c9f38224ep-57 },
+  { 0x1.2958e59308e31p-1, -0x1.09e73b0c6c087p-56 }, { 0x1.2ee628406cbcap-1, 0x1.c5d5e9ff0cf8dp-55 },
+  { 0x1.345f01cce37bbp-1, 0x1.1021137c71102p-55 }, { 0x1.39c391cd4171ap-1, -0x1.2304331d8bf46p-55 },
+  { 0x1.3f13fb89e96f4p-1, 0x1.ecf8b492644f0p-56 }, { 0x1.445065b795b56p-1, -0x1.f76d0163f79c8p-56 },
+  { 0x1.4978fa3269ee1p-1, 0x1.2419a87f2a458p-56 }, { 0x1.4e8de5bb6ec04p-1, 0x1.4a33dbeb3796cp-55 },
+  { 0x1.538f57b89061fp-1, -0x1.1bb74abda520cp-55 }, { 0x1.587d81f732fbbp-1, -0x1.5e5c9d8c5a950p-56 },
+  { 0x1.5d58987169b18p-1, 0x1.0028e4bc5e7cap-57 }, { 0x1.6220d115d7b8ep-1, -0x1.2b785350ee8c1p-57 },
+  { 0x1.66d663923e087p-1, -0x1.6ea6febe8bbbap-56 }, { 0x1.6b798920b3d99p-1, -0x1.a80386188c50ep-55 },
+  { 0x1.700a7c5784634p-1, -0x1.8c34d25aadef6p-56 }, { 0x1.748978fba8e0fp-1, 0x1.7b2a6165884a1p-59 },
+  { 0x1.78f6bbd5d315ep-1, 0x1.406a089803740p-55 }, { 0x1.7d528289fa093p-1, 0x1.560821e2f3aa9p-55 },
+  { 0x1.819d0b7158a4dp-1, -0x1.bf76229d3b917p-56 }, { 0x1.85d69576cc2c5p-1, 0x1.6b66e7fc8b8c3p-57 },
+  { 0x1.89ff5ff57f1f8p-1, -0x1.55b9a5e177a1bp-55 }, { 0x1.8e17aa99cc05ep-1, -0x1.ec182ab042f61p-56 },
+  { 0x1.921fb54442d18p-1, 0x1.1a62633145c07p-55 },
+};
+// atan u = u + u z (q1 + z (q2 + ..)), z = u^2, |u| <= 2^-7: the q's to 1/17
+static const double ATQ[][2] = {
+  { -0x1.5555555555555p-2, -0x1.5555555555555p-56 }, { 0x1.999999999999ap-3, -0x1.999999999999ap-57 },
+  { -0x1.2492492492492p-3, -0x1.2492492492492p-57 }, { 0x1.c71c71c71c71cp-4, 0x1.c71c71c71c71cp-58 },
+  { -0x1.745d1745d1746p-4, 0x1.745d1745d1746p-59 }, { 0x1.3b13b13b13b14p-4, -0x1.3b13b13b13b14p-58 },
+  { -0x1.1111111111111p-4, -0x1.1111111111111p-60 }, { 0x1.e1e1e1e1e1e1ep-5, 0x1.e1e1e1e1e1e1ep-61 },
+};
+// atan t in double-double, t in [0, 1]: u = (t-c)/(1+ct) against the nearest c = i/64.
+// fast takes the series past u in double, ~2^-66 of u; else all of it in double-double
+static void katan(double th, double tl, int fast, double *h, double *l) {
+ int i = (int) (th * 64 + 0.5);
+ double c = i * 0x1p-6, uh = th, ul = tl, zh, zl, ph, pl;
+ if (i) {
+  double nh, nl, dh, dl;
+  tsum(th - c, tl, &nh, &nl);                                // th - c exact (sterbenz)
+  dmul(c, th, &ph, &pl);
+  dd_add(1.0, 0.0, ph, pl + c * tl, &dh, &dl);
+  dd_div(nh, nl, dh, dl, &uh, &ul); }
+ if (fast) {
+  double z = uh * uh, p = ATQ[7][0];
+  for (int k = 6; k >= 0; k--) p = ATQ[k][0] + z * p;
+  ph = uh * z * p, pl = 0.0; }
+ else {
+  dd_mul(uh, ul, uh, ul, &zh, &zl);
+  ph = ATQ[7][0], pl = ATQ[7][1];
+  for (int k = 6; k >= 0; k--) {
+   dd_mul(zh, zl, ph, pl, &ph, &pl);
+   dd_add(ATQ[k][0], ATQ[k][1], ph, pl, &ph, &pl); }
+  dd_mul(zh, zl, ph, pl, &ph, &pl);
+  dd_mul(uh, ul, ph, pl, &ph, &pl); }
+ dd_add(uh, ul, ph, pl, &ph, &pl);
+ dd_add(AT64[i][0], AT64[i][1], ph, pl, h, l); }
+static const double PI_H = 0x1.921fb54442d18p+1, PI_L = 0x1.1a62633145c07p-53,
+  PI2_H = 0x1.921fb54442d18p+0, PI2_L = 0x1.1a62633145c07p-54;
+// the angle of (b, a), both double-doubles >= 0 and not both 0, b's sign sx, rounded once:
+// the fast sum when 2^-60 of it cannot move the rounding, else the slow one
+static double katan2(double ah, double al, double bh, double bl, int sx) {
+ int sw = ah > bh;                                           // past pi/4: pi/2 - atan(b/a)
+ double nh = sw ? bh : ah, nl = sw ? bl : al, dh = sw ? ah : bh, dl = sw ? al : bl;
+ double th, tl, h, l, r;
+ dd_div(nh, nl, dh, dl, &th, &tl);
+ for (int fast = 1; ; fast = 0) {
+  katan(th, tl, fast, &h, &l);
+  if (sw) dd_add(PI2_H, PI2_L, -h, -l, &h, &l);
+  if (sx) dd_add(PI_H, PI_L, -h, -l, &h, &l);
+  r = h + l;
+  if (!fast || r == 0) return r;
+  double e = l - (r - h), ar = r < 0 ? -r : r;               // r + e is the sum, exactly
+  double u = ar - mkd(mku(ar) - 1);                          // the smaller ulp beside r
+  if ((e < 0 ? -e : e) + ar * 0x1p-60 < 0.5 * u) return r; } }
+// a tiny ratio's atan is a/b to the last bit, but for an exact tie, which atan's hair below
+// rounds down: a = b m, m the midpoint under q, odd parts equal. only a subnormal q can tie
+static uint64_t lm_odd(double d, int *e) {                  // d > 0 as m 2^e, m odd
+ uint64_t u = mku(d), m = u >> 52 ? (u & 0xfffffffffffffull) | 1ull << 52 : u;
+ *e = u >> 52 ? (int) (u >> 52) - 1075 : -1074;
+ while (!(m & 1)) m >>= 1, ++*e;
+ return m; }
+static double lm_tinyatan(double a, double b) {
+ double q = a / b;
+ uint64_t uq = mku(q), M = 2 * uq - 1;                      // the midpoint, M 2^-1075
+ if (uq == 0 || uq >> 52) return q;
+ int ea, eb;
+ uint64_t oa = lm_odd(a, &ea), ob = lm_odd(b, &eb);
+ return ob <= (1ull << 53) / M && oa == ob * M && ea == eb - 1075 ? mkd(uq - 1) : q; }
 double lm_atan2(double y, double x) {
- if (x != x || y != y) return DNan;
- uint64_t uy = mku(y), ux2 = mku(x);
- int sy = (int)(uy >> 63), sx = (int)(ux2 >> 63);
- uint64_t ay = uy & 0x7fffffffffffffffull, ax = ux2 & 0x7fffffffffffffffull;
- if (ay == 0)                                                // y = +-0
-  return sx ? (sy ? -PI_H : PI_H) : y;                       // x<0: +-pi; x>=0: +-0
- if (ax == 0) return sy ? -0x1.921fb54442d18p+0 : 0x1.921fb54442d18p+0;
- if (ax == 0x7ff0000000000000ull) {                          // x = +-inf
-  double q = ay == 0x7ff0000000000000ull ? (sx ? 3 * PI_H / 4 : PI_H / 4) : (sx ? PI_H : 0.0);
-  return sy ? -q : q; }
- if (ay == 0x7ff0000000000000ull) return sy ? -0x1.921fb54442d18p+0 : 0x1.921fb54442d18p+0;
- double a = lm_atan(mkd(ay) / mkd(ax));                      // |y/x| angle in [0, pi/2]
- if (sx) a = PI_H - (a - PI_L);                              // second quadrant
- return sy ? -a : a; }
+ if (x != x || y != y) return x + y;
+ uint64_t uy = mku(y), ux = mku(x);
+ int sy = (int) (uy >> 63), sx = (int) (ux >> 63);
+ uint64_t ay = uy & 0x7fffffffffffffffull, ax = ux & 0x7fffffffffffffffull;
+ double r;
+ if (ay == 0) return sx ? (sy ? -PI_H : PI_H) : y;           // x<0: +-pi; x>=0: +-0
+ if (ax == 0x7ff0000000000000ull)                            // x = +-inf
+  r = ay == 0x7ff0000000000000ull ? (sx ? 0x1.2d97c7f3321d2p+1 : 0x1.921fb54442d18p-1) : (sx ? PI_H : 0.0);
+ else if (ax == 0 || ay == 0x7ff0000000000000ull) r = PI2_H;
+ else {
+  double a = mkd(ay), b = mkd(ax);
+  if (!sx && a < b && a / b < 0x1p-60) r = lm_tinyatan(a, b);
+  else {
+   uint64_t m = ay > ax ? ay : ax;                           // the products stay normal
+   if (m < 0x20b0000000000000ull) a *= 0x1p600, b *= 0x1p600;
+   else if (m > 0x5f30000000000000ull) a *= 0x1p-600, b *= 0x1p-600;
+   r = katan2(a, 0.0, b, 0.0, sx); } }
+ return sy ? -r : r; }
+// sqrt(1 - x^2) in double-double, |x| < 1
+static void lm_cosarc(double x, double *h, double *l) {
+ double ah, al, bh, bl, wh, wl, ph, pl;
+ tsum(1.0, -x, &ah, &al);
+ tsum(1.0, x, &bh, &bl);
+ dd_mul(ah, al, bh, bl, &wh, &wl);
+ *h = lm_sqrt(wh);
+ dmul(*h, *h, &ph, &pl);
+ *l = (((wh - ph) - pl) + wl) / (2.0 * *h); }
+double lm_asin(double x) {
+ double ax = x < 0 ? -x : x, h, l;
+ if (x != x) return x + x;
+ if (ax > 1.0) return DNan;
+ if (ax < 0x1p-26) return x;                                 // asin x = x to the last bit
+ if (ax == 1.0) return x < 0 ? -PI2_H : PI2_H;
+ lm_cosarc(ax, &h, &l);
+ double r = katan2(ax, 0.0, h, l, 0);
+ return x < 0 ? -r : r; }
+double lm_acos(double x) {
+ double ax = x < 0 ? -x : x, h, l;
+ if (x != x) return x + x;
+ if (ax > 1.0) return DNan;
+ if (x == 1.0) return 0.0;
+ if (x == -1.0) return PI_H;
+ lm_cosarc(x, &h, &l);
+ return katan2(h, l, ax, 0.0, x < 0); }
 
 // |x|^y = exp(y ln|x|), the log and the product in double-double, exp taking the lo linearly
 static int lm_oddint(double y) {                             // 2 even int, 1 odd int, 0 not int
@@ -385,6 +501,8 @@ double lm_pow(double x, double y) {
 float lm_sinf(float x) { return (float) lm_sin(x); }
 float lm_cosf(float x) { return (float) lm_cos(x); }
 float lm_atan2f(float y, float x) { return (float) lm_atan2(y, x); }
+float lm_asinf(float x) { return (float) lm_asin(x); }
+float lm_acosf(float x) { return (float) lm_acos(x); }
 float lm_sqrtf(float x) { return (float) lm_sqrt(x); }
 float lm_expf(float x) { return (float) lm_exp(x); }
 float lm_logf(float x) { return (float) lm_log(x); }
