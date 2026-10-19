@@ -128,7 +128,10 @@
    ; 'text a macro's or a body's expansion, 'for a loop's body, run again while the loop holds
    (gr-src t k) {'t t 'i 0 'k k 'bol 1 'ln 0}
    (gr-top g) (g 'srcs @ s (two? s ? <s))
-   (gr-push g s) (pin g 'srcs (s . g 'srcs))
+   ; an expansion inside a copied line keeps that line's place
+   (gr-push g s)
+    (gr-top g @ t (tablet? t && t 'docln && !(s 'docln) ? (pin s 'docln (t 'docln)) 0,
+                   pin g 'srcs (s . g 'srcs)))
    (gr-pop g) (pin g 'srcs >(g 'srcs))
    (gr-at s k) (s 'i + k @ i (i < #(s 't) ? (s 't i) -1))
    (gr-c g) (gr-top g @ s (!(tablet? s) ? -1 (gr-at s 0)))
@@ -246,12 +249,18 @@
              (uread file @ r (two? r ? <>r (gr-err g "can't open file \(file)"))))
        (!(string? thru) ?
         (string? file ? (gr-push-file g file text) 0)
-        (gr-thru-lines g file text thru until @ body
-         (string? file ? (gr-push-file g file body) (gr-push g (gr-src body 'text))))))
+        (string? file ?
+         (gr-push-file g file (gr-thru-lines g file text thru until))
+         ; the graph's own lines one source each, last pushed first, each at the line after
+         ; its own, where plan 9's lexer stands when it reads one
+         (map (p \ gr-src (gr-thru-line thru <p) 'text @ s (pin s 'docln (p 1 + 1), gr-push g s))
+              (rev (gr-take-lines g until))))))
+   ; one of copy's lines through thru
+   (gr-thru-line thru l) "\(gr-subst thru (gr-words l))\n"
    ; copy's lines (the file's, else those after this one) up to until, each through thru
    (gr-thru-lines g file text thru until)
-    (: ls (string? file ? (gr-cut-until (lines text) until) (gr-take-lines g until))
-       (cats (map (l \ "\(gr-subst thru (gr-words l))\n") ls)))
+    (: ls (string? file ? (gr-cut-until (lines text) until) (map (p \ <p) (gr-take-lines g until)))
+       (cats (map (l \ gr-thru-line thru l) ls)))
    ; copy's thru: a macro by name, else a body read by delim
    (gr-thru g delim)
     (: _ (gr-skip-blanks g)
@@ -269,19 +278,19 @@
     (!(string? w) || atom? ls ? ls
      (gr-words <ls @ ws (two? ws && <ws = w ? () (<ls . gr-cut-until >ls w))))
    ; the lines after this one, off the graph, up to one opening with w (taken, not kept)
-   ; or the end
+   ; or the end -> [line its-line-number]
    (gr-take-lines g w)
     (: _ (gr-rest-line g) _ (gr-c g = 10 ? (gr-adv g) 0)
        (go acc) (gr-c g < 0 ? (rev acc)
-                 (: l (gr-rest-line g) _ (gr-c g = 10 ? (gr-adv g) 0)
+                 (: n (gr-fline g) l (gr-rest-line g) _ (gr-c g = 10 ? (gr-adv g) 0)
                     ws (gr-words l)
-                    (string? w && two? ws && <ws = w ? (rev acc) (go (l . acc)))))
+                    (string? w && two? ws && <ws = w ? (rev acc) (go ([l n] . acc)))))
        (go ()))
 
    ; -- the lexer ------------------------------------------------------------------
-   ; a token is [kind value]: 'num 'str 'name 'op 'nl 'eof 'troff 'pic 'body 'ifb 'sh
+   ; a token is [kind value line]: 'num 'str 'name 'op 'nl 'eof 'troff 'pic 'body 'ifb 'sh 'copy
    (gr-lex g)
-    (: s (gr-top g) ln (gr-fline g)
+    (: s (gr-top g) ln (tablet? s && s 'docln ? (s 'docln) (gr-fline g))
        (tok k v) [k v ln]
        (? !(tablet? s) (tok 'eof ())
           (#(s 't) <= s 'i)
@@ -310,7 +319,8 @@
           (gr-push g (gr-src (gr-subst m as) 'text),
            gr-lex g))
         (w = "define") (gr-define g, gr-lex g)
-        (w = "copy") (gr-copy g, gr-lex g)
+        ; copy lays its lines out and is a token of its own line, as plan 9's grammar has it
+        (w = "copy") (gr-copy g, tok 'copy ())
         (w = "for") (pin g 'forp 1, tok 'name w)
         (w = "if") (pin g 'ifp 1, tok 'name w)
         (w = "do" && g 'forp) (pin g 'forp 0, tok 'body (gr-delim g))
@@ -413,7 +423,8 @@
        (? (k = 'num) (gr-next g, v)
           (gr-op? g 0 "(") (: _ (gr-next g) e (gr-expr g) (gr-want-op g ")", e))
           (k = 'name && elem v gr-funcs) (gr-next g, gr-func g v (gr-callargs g))
-          (k = 'name) (gr-next g, gr-var g v)
+          ; a name is a variable once something set it; before, it is a syntax error
+          (k = 'name) (peep (g 'vars) v 'unset @ x (x = 'unset ? (gr-syn g) (gr-next g, x)))
           (gr-syn g)))
    ; an expression or a string, for print and sprintf's arguments
    (gr-sprintf g)
@@ -909,6 +920,8 @@
    (gr-finish g)
     (!(g 'drew) ? 0
      (: o (g 'o)
+        _ (g 'ht < 0 ? (pin g 'ht (gr-var g "frameht")) 0)
+        _ (g 'wid < 0 ? (pin g 'wid (gr-var g "framewid")) 0)
         _ (say o "\(g 'gname): [\n")
         cs (map (nm \ g 'cs nm) (g 'corder))
         ; the automatic ticks see the ranges the margins leave
@@ -919,7 +932,7 @@
          say o "\n] \(g 'gpos)\n")))
    (gr-new-graph g nm pos)
     (pins g 'gname nm 'gpos pos 'drew 0 'body (jug 0) 'cs {} 'corder () 'lines {}
-            'fsides {} 'auto ['bot 'left] 'autoin {} 'autopref {} 'ht 2.0 'wid 3.0 'ncoord 0 'nextx 1.0 'anyset 0)
+            'fsides {} 'auto ['bot 'left] 'autoin {} 'autopref {} 'ncoord 0 'nextx 1.0 'anyset 0)
 
    ; -- statements -------------------------------------------------------------------
    ; a statement ends at a newline or a semicolon; troff's lines, for and if do not
@@ -927,6 +940,7 @@
     (: k (gr-k g 0) v (gr-v g 0)
        (? (k = 'nl) (gr-next g)
           (k = 'eof) 0
+          (k = 'copy) (gr-next g)
           (k = 'troff) (gr-next g, gr-ol g v)
           (gr-w? g 0 "for") (gr-for g)
           (gr-w? g 0 "if") (gr-if g)
@@ -1030,6 +1044,8 @@
                      (gr-run-defs g d,
                       gr-o0 g ".lf \(k + sk) \(nm)\n")))
                _ (gr-new-graph g "Graph" "")
+               ; a frame no frame statement sized takes frameht and framewid, when it is drawn
+               _ (pins g 'ht -1 'wid -1)
                _ (pins g 'dflt (peep g 'dflt "gg") 'cur (peep g 'dbuf 0 ? 'buf (peep g 'dflt "gg")))
                ok (trap (_ \ (gr-run-body g (cats (map (x \ "\(x)\n") bl)) (k + 1), 1)) ()
                         (a \ m \ (a @ 'gr-err (gr-gave-up g nm m k bl pe pk, 0) (scare a m))))
@@ -1044,7 +1060,8 @@
    (gr-gave-up g nm m k bl pe pk)
     (: t (g 'errln = () ? (gr-fline g) (g 'errln))
        sk (g 'skew)
-       _ (say err "grap: \(m) near \(nm):\(t - 1)\n")
+       ; a syntax error is near its token's line, another the line before the lexer's
+       _ (say err "grap: \(m) near \(nm):\(g 'errln = () ? (t - 1) t)\n")
        rest (: (drop l j) (? (atom? l) () (t < j) l (drop >l (j + 1))) (drop bl (k + 1)))
        (gr-o0 g ".PE\n.lf \(t + sk)\n\(join "" (map (x \ "\(x)\n") rest))\(string? pe && t < pk ? "\(pe)\n" "")",
         pin g 'skew (sk - 1)))
@@ -1067,7 +1084,7 @@
    ; a run -> [status output]
    (gr-run as sin)
     (: g {'macros {} 'vars {} 'o (jug 0) 'status 0 'defs 0 'seed 1 'mark "\\(bu" 'skew 0}
-       _ (gr-setvar g "margin" 0.07)
+       _ (map (d \ gr-setvar g <d (d 1)) [["frameht" 2] ["framewid" 3] ["ticklen" 0.1] ["slop" 1.001]])
        fs (filter (a \ !(starts? a "-") || a = "-") as)
        (trap (_ \ gr-files fs sin (gr-doc g) (f \ (say err "grap: can't open \(f)\n", pin g 'status 1))) ()
              (a \ m \ (a @ 'gr-fatal (say err "grap: \(m) near \(gr-fline g)\n", pin g 'status 1) (scare a m))),
