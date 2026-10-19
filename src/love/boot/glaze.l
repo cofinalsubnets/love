@@ -263,6 +263,7 @@
    (acmp? op) (elem op '(< <= > >= =))
    (aquote? e) (two? e && (<e = '\) && 2 = #e)            ; the reader's quote: (\ X) at exactly two
    (aqnom? e) (aquote? e && nom? <>e)                          ; a point, so (a = 'sym) is raw identity
+   (astr? e) (? (aquote? e) 0  (string? e) 1  (two? e) (foldl (\ a x (a || astr? x)) 0 e)  0)   ; a bare text literal in e
    (amemq x l) (atom? l ? 0  (x = <l) 1  (amemq x >l))     ; interp's quote answers the source node, so two
    (aposq x l i) (x = <l ? i (aposq x >l (i + 1)))         ; =-equal quote nodes stay distinct slots
    (aq e acc) (? (aquote? e) (amemq e acc ? acc (e . acc))          ; never walk into quoted data
@@ -382,6 +383,7 @@
    ; infix span wraps), a value head is its nom. list/&&/|| have lowered themselves before this
    (adesug env ti ta e)
     (? (aquote? e) e
+       (string? e) ['\ e]                       ; a text literal is the quote of its own node, so it rides qs
        (atom? e) e
        ; the analyzer's uninterned tags, handed down by ala: ta = (apx n head args..) the apply,
        ; ti = (iop value args..) the VM op as a value, named back through aopv
@@ -511,8 +513,10 @@
        ; the gate reads an import (the self cell's row) as the sibling call it would be spelled as: a free head, no frame param
        envg (filter (v \ !(elem v simp)) envl)
        gcand (lts = 'bad ? () (filter (f \ !(f = self)) (foldl (\ ac i (aheads envg go i ac)) (aheads envg go body ()) inits)))
-       drok (lts != 'bad && (lp ? 1 (two? gcand || two? ins ? (aself? self body || adrv? envg self body && acells body <= 64) 1)))   ; free heads and inner lambdas ride only a body that a body that
+       drok (lts != 'bad && (lp ? 1 (two? gcand || two? ins ? (aself? self body || adrv? envg self body && acells body <= 64) 1)))   ; free heads and inner lambdas ride only a body that
                                                                          ; drives itself, or a param while small; a declining body or refused lets skip the walks
+       ; a text literal costs a quote slot and a native a leaf would not repay: only a body that loops or drives
+       txok (!(astr? M) || lp || aself? self body || adrv? envg self body)
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the cell's box slot 0
                                  (two? lfd ? (peep >lfd 0 0) 0))
@@ -570,7 +574,7 @@
                     (elem oop '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
                     (aseq cl as @ 'bad 'bad 1)))))
        ok (two? s && two? >s && all nom? ps && aparams? ps M
-           && a = #ps && 0 < a && lpok && drok && lts != 'bad && two? body
+           && a = #ps && 0 < a && lpok && drok && txok && lts != 'bad && two? body
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the bisect knob: splits the call machinery from the rest
            && all lit? gvals && all lit? ovals && nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48   ; slots are cheap once the prologue guards the room
            && all (amble-ok? ps shd kn 0 0 0) inits
@@ -581,7 +585,7 @@
                             (: bad (filter (x \ two? x && !(aquote? x) && !(amble-ok? envl shd kn go k 0 x)) >e)
                                (two? bad ? (small <bad) e)))
                why (? !(two? s && two? >s && all nom? ps && aparams? ps M && a = #ps && 0 < a) 'shape
-                      !lpok 'loop (lts = 'bad) 'lets !drok 'cost !(two? body) 'nobody
+                      !lpok 'loop (lts = 'bad) 'lets !drok 'cost !txok 'text !(two? body) 'nobody
                       !(all lit? gvals) ['globals (filter (p \ !(lit? <>p)) (map (f \ [f (gv f 0)]) gn))] !(all lit? ovals) 'ops
                       !(nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48) 'slots
                       !(all (amble-ok? ps shd kn 0 0 0) inits) 'inits
