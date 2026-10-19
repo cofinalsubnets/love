@@ -64,7 +64,6 @@ int dup2(int, int); int close(int); ssize_t read(int, void *, size_t); ssize_t w
 void _exit(int); pid_t waitpid(pid_t, int *, int); int kill(pid_t, int); int chdir(char const *);
 int open(char const *, int, ...); int unlink(char const *);
 int symlink(char const *, char const *); int mkdir(char const *, unsigned); char *getenv(char const *);
-extern char **environ;
 int socket(int, int, int); int bind(int, void const *, unsigned); int listen(int, int); int accept4(int, void *, void *, int);
 void *mmap(void *, size_t, int, int, int, long); int munmap(void *, size_t);
 int pthread_create(void *, void const *, void *(*)(void *), void *); int pthread_join(long, void **);
@@ -508,7 +507,8 @@ static void spawn(br *b) {
   ev[0] = home; ev[1] = tmp; ev[2] = face; ev[3] = horn; ev[4] = ear; ev[5] = path;
   int e = 6;                                   /* then the app's own, but for the ones set here */
   static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=" };
-  for (char **v = environ; v && *v && e < 63; v++) {
+  char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
+  for (char **v = envp ? *envp : 0; v && *v && e < 63; v++) {
     int mine = 0;
     for (unsigned i = 0; i < sizeof ours / sizeof *ours; i++) {
       char const *o = ours[i], *t = *v;
