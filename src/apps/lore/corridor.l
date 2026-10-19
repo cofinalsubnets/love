@@ -6,7 +6,7 @@
 ; frame by how bright it is just then. corridor-read, -new, -step, -move and -frame are pure;
 ; corridor-watch reads the disk, and only corridor-walk and corridor-run touch the tty.
 (module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds corridor-pick corridor-span
-         edit-new edit-events edit-paint edit-lay edit-main
+         edit-new edit-events edit-paint edit-lay edit-main edit-outline corridor-ray
          corridor-move corridor-frame corridor-pens corridor-opts corridor-read corridor-load
          corridor-watch corridor-free? corridor-ks corridor-sound motes-at fps eye-h body-r grav-n)
 (borrow 'rove)                          ; pad, for the bottom row
@@ -462,9 +462,11 @@
  gain 2.0
  ; ..the thing under a point x y of the screen: where the ray through it first comes out of
  ; the air, with the brush there and its source path, or ()
- (corridor-pick st x y) (: dm (mesh-dims st) w <dm h (dm 1) e [(st 'px) (st 'py) (st 'pz)]
-   v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 60.0) d (mesh-dirs v (y * w + x))
-   (brush-ray (st 'sc 'brushes) e d @ () () q (pin q 'src (peep (peep (st 'lvl 'brushes) (q 'b) {}) 'src ()))))
+ (corridor-pick st x y) (: r (corridor-ray st x y)
+   (brush-ray (st 'sc 'brushes) (r 0) (r 1) @ () () q (pin q 'src (peep (peep (st 'lvl 'brushes) (q 'b) {}) 'src ()))))
+ ; ..the eye, the ray's way through x y, and the view they are in
+ (corridor-ray st x y) (: dm (mesh-dims st) w <dm h (dm 1) e [(st 'px) (st 'py) (st 'pz)]
+   v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 60.0) [e (mesh-dirs v (y * w + x)) v])
  (corridor-pens st) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (corridor-ks sc (st 'mt) ds)
    e [(st 'px) (st 'py) (st 'pz)]
@@ -797,13 +799,64 @@
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
                _ (pins st 'lvl lv 'sc (scene lv (st 'dir)) 'doors ds 'cars (cars-new lv) 'balls (balls-new lv))
                (vi 'vmsg vs "scene read again", pins ed 'text t 'dirty 1))))))
- ; ..vi on the form that made what the scene's pixel x y shows
- (edit-pick ed x y) (: vi (ed 'vi) vs (ed 'vs) t (ed 'text) h (corridor-pick (ed 'st) x y)
+ ; ..vi's cursor on the text's offset a, its line a third of the way down the pane
+ (edit-at ed a) (: t (ed 'text) vs (ed 'vs) (bol i) (i < 0 || t i = 10 ? (i + 1) (bol (i - 1))) l0 (bol (a - 1))
+   r (net (map (i \ t i = 10) ^l0))
+   (pins vs 'row r 'col (a - l0) 'top (max2 0 (r - (ed 'lay 'rows) // 3)) 'tops 0, pin ed 'dirty 1, r))
+ ; ..what the scene's pixel x y shows chosen, vi on the form that made it, and a drag begun
+ ; from where it was hit: across the floor's level, or with shift held across the face hit,
+ ; squared to its nearest axis
+ (edit-pick ed x y) (: vi (ed 'vi) vs (ed 'vs) t (ed 'text) st (ed 'st) h (corridor-pick st x y)
    sp (tablet? h ? (corridor-span t (h 'src)) ())
-   (? (atom? sp) (vi 'vmsg vs (tablet? h ? "nothing in the text made that" "nothing there"))
-      (: a (sp 0) (bol i) (i < 0 || t i = 10 ? (i + 1) (bol (i - 1))) l0 (bol (a - 1))
-         r (net (map (i \ t i = 10) ^l0))
-         (pins vs 'row r 'col (a - l0) 'top (max2 0 (r - (ed 'lay 'rows) // 3)) 'tops 0, vi 'vmsg vs ("line " + show (r + 1)), pin ed 'dirty 1))))
+   (? (atom? sp) (pins ed 'sel () 'drag (), vi 'vmsg vs (tablet? h ? "nothing in the text made that" "nothing there"))
+      (: p (h 'p) hn (h 'n) ax (? (mag (hn 0) >= mag (hn 1) && mag (hn 0) >= mag (hn 2)) 0 (mag (hn 1) >= mag (hn 2)) 1 2)
+         n (? !(ed 'shift) [0.0 1.0 0.0] (map (i \ i = ax ? 1.0 0.0) ^3))
+         (pins ed 'sel (h 'src) 'drag {'p0 p 'n n 'c (dot n p) 'off [0.0 0.0 0.0]},
+          vi 'vmsg vs ("line " + show (edit-at ed (sp 0) + 1))))))
+ ; ..the drag to where the ray through x y meets its plane, a twentieth of a metre at a time
+ (edit-drag ed x y) (: g (ed 'drag) r (corridor-ray (ed 'st) x y) e (r 0) d (r 1) n (g 'n) k (dot n d)
+   t (mag k < 1e-6 ? -1.0 ((g 'c - dot n e) / k))
+   (t > 0.0 ? (: q (c+ e (c* t d)) (pin g 'off (map (i \ floor (20.0 * (q i - g 'p0 i) + 0.5) / 20.0) ^3))) g))
+ ; ..a number as the text says it, a twentieth at most
+ (edit-num x) (: k (floor (20.0 * x + 0.5)) (k % 20 = 0 ? (show (k // 20)) (show (k / 20.0))))
+ (edit-vec v) ("[" + edit-num (v 0) + " " + edit-num (v 1) + " " + edit-num (v 2) + "]")
+ (edit-lines t) (: (go i j acc) (? (i >= #t) (rev (j < i ? ((snip t j i) . acc) acc)) (t i = 10) (go (i + 1) (i + 1) ((snip t j i) . acc)) (go (i + 1) j acc))
+   (go 0 0 ()))
+ ; ..the drag let go: the chosen form in a (move ..) by as far, or its move's by further,
+ ; or none where that comes to nothing; vi's text that, undoably, and the scene read again
+ (edit-drop ed) (: g (ed 'drag) off (g 'off) t (ed 'text) vs (ed 'vs) vi (ed 'vi) sp (corridor-span t (ed 'sel))
+   _ (pin ed 'drag ())
+   (? (all (i \ off i = 0.0) ^3 || atom? sp) ed
+      (: a (sp 0) b (sp 1) ks (sx-kids t a) hd (two? ks ? (snip t (ks 0 0) (ks 0 1)) "")
+         vk (#ks = 3 && t (ks 1 0) = 91 ? (sx-kids t (ks 1 0)) ())
+         base (map (k \ <(sounds (snip t (k 0) (k 1))) @ n (charm? n || gem? n ? n 'no)) vk)
+         mv (hd = "move" && #base = 3 && !(elem 'no base))
+         to (map (i \ (mv ? (base i) 0) + off i) ^3) inner (mv ? (snip t (ks 2 0) (ks 2 1)) (snip t a b))
+         f2 (all (i \ mag (to i) < 0.025) ^3 ? inner ("(move " + edit-vec to + " " + inner + ")"))
+         t2 (snip t 0 a + f2 + snip t b #t) row (vs 'row) col (vs 'col) top (vs 'top)
+         _ (vi 'vsnap vs) _ (pins vs 'lines (edit-lines t2) 'row row 'col col 'top top 'dirty 1) _ (vi 'vgen vs)
+         _ (edit-sync ed)
+         (vi 'vmsg vs ("moved to " + edit-vec to), ed))))
+ ; ..the chosen form's brushes, outlined on the frame f through whatever is before them, as
+ ; far on as a drag has them
+ edit-ink 16756784
+ (edit-outline ed f) (: sel (ed 'sel) st (ed 'st)
+   (? (atom? sel) f
+      (: r (corridor-ray st 0 0) e (r 0) v (r 2) w (v 'w) h (v 'h) rt (v 'r) up (v 'u) fw (v 'f) me (c* -1.0 e)
+         foc (w / 2.0 / tan (fov / 2.0)) off (tablet? (ed 'drag) ? (ed 'drag 'off) [0.0 0.0 0.0])
+         lb (st 'lvl 'brushes) bs (st 'sc 'brushes) is (filter (i \ peep (lb i) 'src () = sel) ^#lb)
+         (pr p) (: d (c+ p me) z (dot d fw) [(w / 2.0 + foc * dot d rt / z) (h / 2.0 - foc * dot d up / z)])
+         (cl a b za zb) (c+ a (c* ((0.1 - za) / (zb - za)) (c+ b (c* -1.0 a))))
+         (ab x) (x < 0.0 ? (0.0 - x) x)
+         (seg f a b) (: za (dot (c+ a me) fw) zb (dot (c+ b me) fw)
+           (? (za < 0.1 && zb < 0.1) f
+              (: pa (pr (za < 0.1 ? (cl a b za zb) a)) pb (pr (zb < 0.1 ? (cl b a zb za) b))
+                 n (min2 3000 (floor (max2 (ab (pb 0 - pa 0)) (ab (pb 1 - pa 1)))) + 1)
+                 K (iota (n + 1)) X (pa 0 + (pb 0 - pa 0) * K / n) Y (pa 1 + (pb 1 - pa 1) * K / n)
+                 S (iota ((X >= 0.0) * (X < 1.0 * w) * (Y >= 0.0) * (Y < 1.0 * h)))
+                 (#S = 0 ? f (pin f (peep (floor Y * w + floor X) S 0) edit-ink)))))
+         es (cats (map (i \ cats (map (ps \ (#ps >= 3 ? (map (j \ [(c+ (ps j) off) (c+ (ps ((j + 1) % #ps)) off)]) ^#ps) ())) ((bs i) 'faces))) is))
+         (foldl (\ f q (seg f (q 0) (q 1))) f es))))
  ; ..a key for vi: what it typed, else the arrows as a terminal sends them
  (edit-bytes t k) (? (0 < #t) t (k @ -1 "\e[D" -2 "\e[C" -8 "\e[A" -9 "\e[B" 27 "\e" 13 "\r" 8 "\x7f" (charm? k && 0 < k ? (string k) "")))
  (edit-feed ed s) (: key ((ed 'fc) 1) (each ^#s (i \ key (s i))), pin ed 'dirty 1)
@@ -818,24 +871,28 @@
          ; ..a letter under a held ctrl is its control character
          cl (ed 'ctrl && charm? k0 && 97 <= k0 && k0 <= 122) k (cl ? (k0 - 96) k0) t (cl ? (string k) t0)
          md (e @- () ['down c] (elem c [29 285] ? 1 ()) ['up c] (elem c [29 285] ? 0 ()))
+         sh (e @- () ['down c] (elem c [42 54] ? 1 ()) ['up c] (elem c [42 54] ? 0 ()))
+         _ (sh != () ? (pin ed 'shift sh))
          _ (md != () ? (pin ed 'ctrl md) (e @- ()
             ['close] (pin ed 'quit 1)
             ['size w h] (: ly2 (edit-lay w h) (pins ed 'lay ly2 'scr (edit-screen ly2) 'dirty 1, corridor-size st (ly2 'pw) (ly2 'ph // 2)))
             ['press b x y] (? (x >= ly 'sw) (edit-focus ed 'vi)
                               (b = 3) (pins ed 'look 1 'lx x 'ly y)
                               (b = 1) (edit-focus ed 'scene, edit-pick ed (x // edit-s) (y // edit-s)))
-            ['release b x y] (b = 3 ? (pin ed 'look 0))
-            ['move x y] (ed 'look ? (corridor-look st (x - ed 'lx) (y - ed 'ly), pins ed 'lx x 'ly y))
+            ['release b x y] (? (b = 3) (pin ed 'look 0) (b = 1 && tablet? (ed 'drag)) (edit-drop ed))
+            ['move x y] (? (ed 'look) (corridor-look st (x - ed 'lx) (y - ed 'ly), pins ed 'lx x 'ly y)
+                           (tablet? (ed 'drag) && x < ly 'sw) (edit-drag ed (x // edit-s) (y // edit-s)))
             ['up c] (pin (ed 'held) c ())
             ['down c] (? (ed 'cw) (edit-cw ed k)
                          (k = 23 && (ed 'focus = 'scene || (ed 'vs 'mode) = 'n)) (pin ed 'cw 1)
                          (ed 'focus = 'vi) (edit-feed ed (edit-bytes t k))
+                         (k = 27) (pins ed 'sel () 'drag ())
                          (charm? k) (: a ((ed 'binds) k) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (corridor-step st a))))))
          (edit-events ed >l))))
  ; ..the scene painted on the left, vi's frame scribed and its rows laid on the right
  (edit-paint ed) (: ly (ed 'lay) W (ly 'W) H (ly 'H) win (ed 'win) P (window-paper win) st (ed 'st) scr (ed 'scr)
    cols (ly 'cols) rows (ly 'rows) tw (8 * cols) sw (ly 'sw)
-   _ (frame-paint (corridor-pens st) (ly 'pw) edit-s P W)
+   _ (frame-paint (edit-outline ed (corridor-pens st)) (ly 'pw) edit-s P W)
    fr ((ed 'fc) 0 cols rows)
    _ (? (0 < #fr || ed 'dirty)
         (: tb (cask (tw * rows * 16 * 4)) cur (gaze scr 0)
@@ -858,12 +915,12 @@
    ly (edit-lay (wh 0) (wh 1)) st (corridor-new (ly 'pw) (ly 'ph) lv dir)
    _ (string? lv0 ? (vi 'vmsg vs ("scene: " + lv0)))
    {'vi vi 'vs vs 'fc fc 'st st 'win win 'lay ly 'scr (edit-screen ly) 'text t 'focus 'vi 'cw 0 'held {}
-    'binds (view-bind view-binds corridor-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0})
+    'binds (view-bind view-binds corridor-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'drag ()})
  (edit-run p) (window-open 1280 720 "lore edit" @ win
    (? !(tablet? win) (say err ("lore edit: no window (" + show win + ")\n"), flush err, 1)
       (: ed (edit-new win ((cite 'vi) 'vi-open p) (dir-of p))
          (mind (_ \ edit-loop ed) () (_ \ window-close win), 0))))
- edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it, the right button held looks, the corridor's keys walk; :w writes, :q leaves)"
+ edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, the right button held looks, the corridor's keys walk; :w writes, :q leaves)"
  (edit-main as) (? (#as = 1) (edit-run <as) (say err (edit-usage + "\n"), flush err, 2))
  _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1))
  _ (cite 'lore 'lore-enlist 'edit (udoor 'edit edit-main edit-usage 1 1)))

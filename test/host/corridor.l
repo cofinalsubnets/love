@@ -170,6 +170,20 @@
    _ (edit-paint ed) edp (edw 'paper)
    (lit? x0 x1 y0 y1) (any (y \ any (x \ edp (4 * (y * 320 + x) + 1) != 0) (drop x0 ^x1)) (drop y0 ^y1))
  (test (edf = 'scene) (edv 'row = 1) (edv 'col = 2) (lit? 0 160 0 160) (lit? 160 320 0 16)))
+; a drag on the scene, shift held so it runs across the wall faced: the form it took outlined,
+; wrapped in a (move ..) by as far, and the scene read again with it there; dragged back, unwrapped
+(: dgv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload dgv ["(level \"t\"" "  (room [0 0 0] [4 3 6])" "  (solid (box [1 0 3] [3 3 3.5]))" "  (start [2 0 2] 0 0))"] "t.l")
+   dgw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} dg (edit-new dgw dgv "") dgl (dg 'lay)
+   dx (dgl 'sw // 2) dy (dgl 'ph // 2)
+   _ (edit-events dg [['down 42] ['press 1 dx dy] ['move (dx + 20) dy] ['release 1 (dx + 20) dy]])
+   dl1 (dgv 'lines 2) dlo (dg 'st 'lvl 'brushes 1 'shape 'box 0)
+   dink (net (edit-outline dg (corridor-pens (dg 'st)) = 16756784))
+   _ (edit-events dg [['press 1 (dx + 20) dy] ['move dx dy] ['release 1 dx dy] ['up 42]])
+   dl2 (dgv 'lines 2)
+ (test (has? dl1 "(move [") (has? dl1 " 0 0] (solid (box [1 0 3] [3 3 3.5])))") (dlo 0 > 1.05) (dink > 20)
+       (dl2 = "  (solid (box [1 0 3] [3 3 3.5]))") (dg 'drag = ())
+       (corridor-read "(level \"t\" (room [0 0 0] [4 3 6]) (move [1 0 0.5] (solid (box [0 0 1] [1 3 2]))) (start [2 0 2] 0 0))" 'brushes 1 'shape 'box 0 = [1.0 0.0 1.5])))
 ; a grav shaft: walked into, it carries up to its head, eased in, and out north is street level;
 ; its twin carries down; motes stream through each the way it goes
 (: gl (lv "(room [0 0 0] [8 3 4]) (start [2 0 2] 0 0)

@@ -80,11 +80,12 @@
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
 ;   (repeat n [dx dy dz] PARTS)        the parts n times, each that far on from the last
+;   (move [dx dy dz] PARTS)            the parts that far on
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of sourced start room street sky ambient air solid box prism cut whole door train bin decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
-         across stammer buzz breathe blink texture skin textures repeat mirror-x mirror-z rgb)
+         across stammer buzz breathe blink texture skin textures repeat move mirror-x mirror-z rgb)
 (borrow 'view)                          ; min2 max2
 (borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
 (:
@@ -232,6 +233,7 @@
    (elem 'deg (keys q5) ? (with q5 'deg (b (q5 'deg))) q5))
  (repeat n d ps) (: u "(repeat n [dx dy dz] PARTS)" dd (P d u)
    (charm? n ? (cats (map (i \ map (re (p \ [(p 0 + i * dd 0) (p 1 + i * dd 1) (p 2 + i * dd 2)]) (b \ b)) (flat ps)) ^n)) (no u n)))
+ (move d ps) (: u "(move [dx dy dz] PARTS)" dd (P d u) (map (re (p \ [(p 0 + dd 0) (p 1 + dd 1) (p 2 + dd 2)]) (b \ b)) (flat ps)))
  ; ..a mirror turns a drape over, so its rows run back to keep its front
  (flip p) (kind? p ['drape] ? (with p 'rows (map rev (p 'rows))) p)
  (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (flip * re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b)) l))
