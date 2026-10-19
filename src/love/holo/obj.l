@@ -464,7 +464,7 @@
        nloc #locnames nfun #funcnames nglob #globnames
        fstart (1 + nsec + nloc) gstart (fstart + nfun) estart (gstart + nglob)
        extidx (o-idx exts estart)
-       fnidx (o-idx (map name funcnames) fstart)   ; weak-target relocs bind these
+       fnidx (o-idx (map name funcnames) fstart)   ; relocs to a global bind these
        gidx (o-idx (map name globnames) gstart)
 
        symnames (map (s \ peep anames s s) (locnames + funcnames + globnames + map string exts))
@@ -500,11 +500,12 @@
        nsym (1 + nsec + nloc + nfun + nglob + #exts)
 
        ; -- the relocations, by the fixup's kind, never the section. --
-       ; a label -> (symidx base-addend): a weak symbol binds itself (base 0) so the linker can
-       ; redirect it, a label defined here its section symbol + offset, else its undef.
+       ; a label -> (symidx base-addend): a global binds itself (base 0), as gas does, so the
+       ; linker can redirect a weak one and modpost reads an export's name; a local label
+       ; its section symbol + offset, else its undef.
        (secsym lbl)
-        (? (o-has? wkset lbl && o-has? fnidx lbl) [(peep fnidx lbl 0) 0]
-           (o-has? wkset lbl && o-has? gidx lbl)  [(peep gidx lbl 0) 0]
+        (? (o-has? fnidx lbl) [(peep fnidx lbl 0) 0]
+           (o-has? gidx lbl)  [(peep gidx lbl 0) 0]
            (o-where lanes lbl @ w (two? w ? w [(peep extidx lbl 0) 0])))
        rabs (? a64 ra-abs64 rv rr-64 r-64)
        (o-rels rs)

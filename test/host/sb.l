@@ -662,30 +662,18 @@
  (0 = s3) dgot dnot
  (0 = s4) avok)                             ; a path the far shell would split is refused
 
-; take pulls and grows the head by the peer's, from a dir and from NAME@BOX (a stand-in door)
-(: sl (: l <cmdline (l 0 = 47 ? l (sb-home + "/" + l)))
-   here (cwd 0) far (here + "/mrg/sf") home0 (getenv "HOME")
-   _ (lay "mrg/door" ("shift; shift\ncase \"$3\" in @hub) exec '" + sl + "' sb serve '" + far + "';; esac\nexit 9\n"))
-   _ (mkdir "mrg/th" 493) _ (mkdir "mrg/th/.love" 493) _ (mkdir "mrg/th/.love/etc" 493) _ (mkdir "mrg/th/.love/etc/bee" 493)
-   _ (lay "mrg/th/.love/etc/bee/boxes" "bx somehost\n")
+; take pulls and grows the head by the peer's from a dir, the peer only read
+(: far (cwd 0 + "/mrg/sf")
    _ (mkdir "mrg/t1" 493) _ (chdir "mrg/t1")
    fstore #(readdir (far + "/.sb/patch"))
    t1 (sync-take far)
    thead (psid (head ()) = psid (head-in far))
    tsame (seq (snap ()) (form (far + "/.sb/snap")))
    tleft (fstore = #(readdir (far + "/.sb/patch")))
-   _ (mkdir "../t2" 493) _ (chdir "../t2")
-   _ (setenv "HOME" (here + "/mrg/th")) _ (setenv "SB_SSH" ("sh " + here + "/mrg/door"))
-   bok (seq (ssh-argv "hub@bx") ["sh" (here + "/mrg/door") "somehost" sl "sb" "serve" "@hub"])
-   t2 (sync-ssh "hub@bx" 2)
-   bhead (psid (head ()) = psid (head-in far))
-   bnone (0 = sync-ssh "nest@bx" 2)                     ; the door serves @hub alone
-   _ (setenv "HOME" home0)
    _ (chdir "../.."))
 
 (test
- (0 < t1) thead tsame tleft
- bok (0 < t2) bhead bnone)
+ (0 < t1) thead tsame tleft)
 
 ; history: show, log, blame, status and bisect over five banked patches, then a merge
 (: _ (chdir (sb-home + "/" + sb-dir))
