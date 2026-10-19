@@ -3,7 +3,8 @@
 ; sky, block clouds). cloud over the sun takes it off the scene. the cloud map is laid
 ; once a run; stars are points a scene lays a pixel each.
 ; time is local seconds 'sim and summer offset 'dst; rays are trays of unit [east up north].
-; weather (sky-weather cover style): cover 0 to 3; 'fall 0 none (default), 1 rain, 2 snow
+; weather (sky-weather cover style): cover 0 to 3; 'fall 0 none (default), 1 rain, 2 snow;
+; 'smog 0 (default) to 1, the smooth sky and its light browned toward orange
 (module (sky sky-sun sky-body sky-light sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-near sky-tone
          sky-irr sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
 (borrow 'view)
@@ -110,6 +111,9 @@
  ; what it sees -- greyer the more cloud -- and the eye's gain against the dark
  ; ..and what it lights: a times the sky's ambient and b times the sun's colour
  (sky-irr lt a b) (c+ (c* a (lt 'amb)) (c* b (lt 'sunc)))
+ ; ..smog, wx 'smog 0 to 1 of the way, browns what is seen and what it lights toward orange
+ (smoggy wx c) (: k (peep wx 'smog 0.0) l ((c 0 + c 1 + c 2) / 3.0)
+   (k = 0.0 ? c (cmix c [(1.45 * l) (0.85 * l) (0.42 * l)] k)))
  (sky-light s wx sim) (: sy (s 1)
    oc (sky-cover wx sim)
    csun (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim))
@@ -123,7 +127,7 @@
    amb0 (c+ (cmix night [0.42 0.47 0.56] day) (c* (tw * (1.0 - 0.5 * day)) [0.1 0.05 0.07]))
    grey (cmix night [0.5 0.51 0.53] day)
    amb (c* (f = 1 ? 0.8 1.0) (cmix amb0 grey (0.7 * oc)))
-   {'sun s 'day day 'tw tw 'sunk sunk 'sunc sunc 'amb amb 'cover oc 'csun csun
+   {'sun s 'day day 'tw tw 'sunk sunk 'sunc (smoggy wx sunc) 'amb (smoggy wx amb) 'cover oc 'csun csun
     'expo (1.0 + 1.2 * (1.0 - day) + 0.3 * oc)})
  ; --- the smooth sky. far weighs what lies past the moon, the sun's own disc: 0 is the
  ; sky nearer than it, what a body in front of it shows ---
@@ -147,7 +151,7 @@
               (c+ (c+ (sky-irr lt 1.15 (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * sy)))
                       (c* (lt 'tw) [0.5 0.22 0.14]))
                   (c* (1.0 - lt 'day) [0.06 0.05 0.045])))
-   (cmix sky0 cloudc cl))
+   (smoggy wx (cmix sky0 cloudc cl)))
  ; --- the pixel sky: the grass game's. its colours are xterm pens, said here as they
  ; are to show, and put back through the eye's tone so the frame shows them so ---
  (rgb x) [((x // 65536) / 255.0) ((x // 256 % 256) / 255.0) ((x % 256) / 255.0)]

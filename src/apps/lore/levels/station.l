@@ -76,9 +76,54 @@
                (noise 5 0.08)
                (cols 0 4 (rgb 0.62 0.6 0.56)) (cols 30 34 (rgb 0.62 0.6 0.56)) (cols 62 64 (rgb 0.62 0.6 0.56)))
              (rows 44 47 (rgb 0.45 0.44 0.41)))))
-; ..the planters' stone
-(: stone (texture 32 32 1
-          '((fill (rgb 0.56 0.54 0.5)) (noise 4 0.1) (grid 16 32 1 0.4))))
+;; the street and the recruitment office
+; ..the road: worn asphalt, its centre line, and a crossing's white bars
+(: asphalt (texture 64 64 3
+            '((fill (rgb 0.19 0.19 0.2)) (noise 3 0.15) (noise 17 0.1)
+              (patches 9 0.2 (shade 0.85)))))
+(: roadline (texture 8 8 1 '((fill (rgb 0.86 0.78 0.42)) (noise 2 0.15))))
+(: zebra (texture 64 16 1 '((fill hole) (stripes 16 9 0 (grey 0.85)) (noise 4 0.15))))
+(: kerb (texture 32 32 1 '((fill (rgb 0.6 0.59 0.56)) (noise 4 0.1) (grid 32 0 1 0.4))))
+; ..the office: board-marked concrete, its storeys four and a half metres with a band of
+; narrow windows, and the buttresses bare
+(: unnwall (texture 64 64 4.5
+            '((fill (rgb 0.55 0.54 0.52)) (noise 11 0.06)
+              (rows 0 2 (rgb 0.42 0.41 0.4))
+              (within 0 22 64 46
+                (fill (rgb 0.09 0.11 0.14)) (noise 5 0.12)
+                (cols 0 3 (rgb 0.5 0.49 0.47)) (cols 15 17 (rgb 0.5 0.49 0.47))
+                (cols 31 34 (rgb 0.5 0.49 0.47)) (cols 47 49 (rgb 0.5 0.49 0.47)) (cols 62 64 (rgb 0.5 0.49 0.47))))))
+(: concrete (texture 32 64 2
+             '((fill (rgb 0.6 0.59 0.56)) (noise 7 0.08) (patches 5 0.25 (shade 0.92))
+               (grid 0 8 1 (shade 0.88)))))
+; ..its doors: two bronze leaves, dark glass in each, their handles by the seam
+(: unndoor (texture 64 56 3.4
+            '((fill (rgb 0.32 0.26 0.18)) (noise 8 0.1)
+              (rect 5 5 29 51 (rgb 0.07 0.09 0.12)) (rect 35 5 59 51 (rgb 0.07 0.09 0.12))
+              (within 5 5 59 51 (patches 6 0.2 (shade 1.6)))
+              (cols 31 33 0.04)
+              (rect 27 20 29 36 (rgb 0.8 0.68 0.42)) (rect 35 20 37 36 (rgb 0.8 0.68 0.42)))))
+; ..and its banner: on blue in a gold edge, a triangle of three stars pointing down, two
+; hands raised under it, and UNN
+(: (star cx cy r c) ('poly . cats (map (k \ (: a (3.14159265 * (k / 5.0 - 0.5)) q (k % 2 = 0 ? r (0.4 * r))
+                                             [(cx + q * cos a) (cy + q * sin a)]))
+                                      ^10)
+                         + [c]))
+(: (hand cx s c) [['poly (cx - 4) 116 (cx + 4) 116 (cx + 5) 100 (cx - 5) 100 c]
+                  ['poly (cx - 6) 101 (cx + 6) 101 (cx + 7) 84 (cx - 7) 84 c]
+                  ['rect (cx - 7) 71 (cx - 4) 86 c] ['rect (cx - 3) 66 cx 86 c]
+                  ['rect (cx + 1) 67 (cx + 4) 86 c] ['rect (cx + 5) 72 (cx + 8) 86 c]
+                  ['poly (cx + s * 6) 99 (cx + s * 7) 91 (cx + s * 12) 82 (cx + s * 14) 85 (cx + s * 10) 99 c]])
+(: white '(grey 0.94))
+(: unnbanner (texture 96 144 4.4
+              (cats ['((fill (rgb 0.1 0.2 0.45)) (noise 30 0.08))
+                     [(star 36 26 9 white) (star 60 26 9 white) (star 48 46 9 white)]
+                     (hand 33 1 white) (hand 63 -1 white)
+                     '((rect 23 122 27 138 (grey 0.94)) (rect 33 122 37 138 (grey 0.94)) (rect 23 134 37 138 (grey 0.94))
+                       (rect 41 122 45 138 (grey 0.94)) (rect 51 122 55 138 (grey 0.94)) (poly 41 122 45 122 55 138 51 138 (grey 0.94))
+                       (rect 59 122 63 138 (grey 0.94)) (rect 69 122 73 138 (grey 0.94)) (poly 59 122 63 122 73 138 69 138 (grey 0.94))
+                       (rows 0 3 (rgb 0.8 0.65 0.25)) (rows 141 144 (rgb 0.8 0.65 0.25))
+                       (cols 0 3 (rgb 0.8 0.65 0.25)) (cols 93 96 (rgb 0.8 0.65 0.25)))])))
 
 (level "the station"
   (textures {'wall wall 'floor tiles 'ceiling panels 'door steel 'train carbody})
@@ -114,23 +159,51 @@
   (grav [-2.7 0 16.3] [-0.7 9 18.3] 'down)
   (air (box [0.9 0 15.9] [2.5 2.6 16.4]))
   (air (box [-2.5 0 15.9] [-0.9 2.6 16.4]))
-  ; ..and at their heads a lobby, each a doorway north, the lobby's own north onto the street
-  (room [-5 9 18.6] [5 12.5 26])
+  ; ..and at their heads the station's concourse, each a doorway north; its front glass onto
+  ; the street, a doorway in the middle
+  (room [-12 9 18.6] [12 13.5 26])
   (air (box [0.9 9 18.2] [2.5 11.6 18.7]))
   (air (box [-2.5 9 18.2] [-0.9 11.6 18.7]))
-  (strip-light [0 12.5 22])
-  (air (box [-1.6 9 25.9] [1.6 11.8 26.6]))
-  ; the street: a plaza among buildings eighteen metres high, under a late afternoon sky
-  (sky 17 'partly)
-  (skin {'floor paving 'walls facade} (street [-16 9 26.5] [16 27 56]))
-  (buzz (sign [0 12.6 26.5] 0.5 "STATION" (rgb 0.3 0.75 1)))
-  (skin {'all stone} (solid (box [-9 9 36] [-4 9.7 42])))
-  (skin {'all stone} (solid (box [4 9 36] [9 9.7 42])))
-  (skin {'all stone} (solid (box [-2.5 9 47] [2.5 9.5 50])))
-  (bin [3 9 27.2] 0.6 0.45 0.95 binmetal binsign)
-  (bin [-3 9 27.2] 0.6 0.45 0.95 binmetal binsign)
+  (repeat 3 [8 0 0] [(repeat 2 [0 0 3.6] [(across (strip-light [-8 13.5 20.5]))])])
+  (buzz (sign [0 12.1 18.6] 0.5 "TRANSIT" (rgb 0.3 0.75 1)))
+  (mirror-x 0
+   [(solid (box [-4.3 9 21.9] [-3.7 13.5 22.5]))
+    (solid (box [-10 9 23.4] [-7 9.45 24]))
+    (window [-11.4 9.4 25.95] [-2.6 13 26.55] glass)])
+  (air (box [-2 9 25.9] [2 12 26.6]))
+  ; the street outside under a smoggy evening overcast: pavements either side of the road,
+  ; a crossing from the station's door to the recruitment office's steps
+  (sky 17.4 'overcast)
+  (smog 0.75)
+  (skin {'floor asphalt 'walls facade} (street [-45 8.85 26.5] [45 45 62]))
+  (skin {'all paving} (solid (box [-45 8.85 26.5] [45 9 31])))
+  (skin {'all paving} (solid (box [-45 8.85 41] [45 9 46])))
+  (skin {'all kerb} (solid (box [-45 8.85 30.8] [45 9 31])))
+  (skin {'all kerb} (solid (box [-45 8.85 41] [45 9 41.2])))
+  (repeat 15 [6 0 0] [(decal [-42 8.86 36] [0 1 0] [1 0 0] 0.15 3 roadline)])
+  (decal [0 8.86 36] [0 1 0] [0 0 1] 4 9.8 zebra)
+  (buzz (sign [0 15.2 26.5] 0.6 "STATION" (rgb 0.3 0.75 1)))
+  (bin [3 9 27.2] 0.55 0.55 0.95 binmetal binsign)
+  (bin [-3 9 27.2] 0.55 0.55 0.95 binmetal binsign)
   ; ..and a basketball someone left out
-  (ball [1.5 9 30])
+  (ball [5.5 9 28.5])
+  ; the UNN recruitment office across the road: five storeys of concrete, four buttresses
+  ; sloping down from the top of the first to the pavement and from the top of the second
+  ; reaching out over the street; between the middle two, steps up to its doors, shut, and
+  ; its banner over them
+  (skin {'all unnwall} (solid (box [-18 8.85 46] [18 31.5 62])))
+  (repeat 4 [9 0 0]
+   [(skin {'all concrete} (solid (box [-14.3 9 44.8] [-12.7 32.2 46.1])))
+    (skin {'all concrete} (cut [-14.3 9 41.4] [-12.7 9 41.4] [-13.5 13.5 44.8] (solid (box [-14.3 9 41.4] [-12.7 13.5 44.8]))))
+    (skin {'all concrete} (cut [-14.2 16.2 46] [-12.8 16.2 46] [-13.5 18.9 33] (solid (box [-14.2 16.2 33] [-12.8 19.4 46]))))])
+  (repeat 4 [0 0.15 0.5] [(skin {'all concrete} (solid (box [-3.7 9 41.6] [3.7 9.15 46])))])
+  (air (box [-1.7 9.6 46] [1.7 12.6 46.7]))
+  (decal [0 11.1 46.69] [0 0 -1] [0 1 0] 3.4 3 unndoor)
+  (decal [0 16.6 45.97] [0 0 -1] [0 1 0] 5.4 8.1 unnbanner)
+  (bulb [0 12.45 46.4] (rgb 1 0.85 0.6))
+  ; ..and the buildings either side of it
+  (skin {'all facade} (solid (box [-45 8.85 46] [-20 33 62])))
+  (skin {'all facade} (solid (box [20 8.85 46] [45 28 62])))
   ; the light: strips across the ceiling, one failing at the north end; a sign on the
   ; north wall
   (repeat 5 [2 0 0] [(across (strip-light [0 5 4]))])
@@ -146,6 +219,6 @@
   ; the bins: against the blocks either side of the hallway on the platform, at its ends,
   ; and in each wing against the front block
   (mirror-x 0
-   [(bin [-5 0 -0.4] 0.6 0.45 0.95 binmetal binsign)
-    (bin [-21.5 0 -0.4] 0.6 0.45 0.95 binmetal binsign)
-    (bin [-15 0 4.4] 0.6 0.45 0.95 binmetal binsign)]))
+   [(bin [-5 0 -0.4] 0.55 0.55 0.95 binmetal binsign)
+    (bin [-21.5 0 -0.4] 0.55 0.55 0.95 binmetal binsign)
+    (bin [-15 0 4.4] 0.55 0.55 0.95 binmetal binsign)]))

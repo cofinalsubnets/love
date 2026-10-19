@@ -12,6 +12,7 @@
    bev '((fill 0.5) (bevel 16 16 2 1.0 0.0))
    inw '((fill 0.0) (within 0 0 8 8 (fill (rgb 1 0 0)) (shade 0.5)))
    nz (map (i \ at '((fill 1.0) (noise 4 0.2)) (i % 16) (i // 16) 0) ^256)
+   tri (paint1 '(poly 0 0 8 0 0 8 (rgb 1 0 0))) ring (paint1 '(poly 0 0 8 0 8 8 0 8 0 0 2 2 2 6 6 6 6 2 2 2 (rgb 1 0 0)))
    pic (swatch 8 4 '((fill 0.25) (cols 6 8 hole))) t0 (pic 0)
  ; starts grey; the later layer wins; a number is a grey
  (test (at () 0 0 = g 0.5) (at '((fill 0.2) (rows 0 1 0.7)) 3 0 = g 0.7) (at '((fill 0.2) (rows 0 1 0.7)) 3 1 = g 0.2)
@@ -34,6 +35,9 @@
        ; noise darkens by up to its amount
        (all (v \ 0.8 - 1e-9 <= v <= 1.0 + 1e-9) nz) (any (v \ v < 0.95) nz) (any (v \ v > 0.95) nz)
        (at inw 7 7 = [0.5 0.0 0.0]) (at inw 8 7 = g 0.0) (at inw 3 8 = g 0.0)
+       ; a polygon: inside its corners, a hole left in it where its edges go round twice
+       (tri 1 1 && tri 6 0 && !(tri 6 6) && !(tri 4 4)) (ring 0 0 && ring 7 7 && !(ring 4 4))
+       (swatch-fault '((poly 0 0 1 1 0.5)) 1 = "(poly x y x y x y .. PAINT)")
        ; deterministic
        (at '((patches 4 0.5 (rgb 1 0 0))) 9 9 = at '((patches 4 0.5 (rgb 1 0 0))) 9 9)
        ; faults: the layer not understood, and what it takes

@@ -13,6 +13,7 @@
 ;                                      to its top, lit by the sun and the sky
 ;   (sky hour COVER)                   the level's sky at that hour of the day, COVER 'clear
 ;                                      'partly 'mostly or 'overcast; none, and no street is lit
+;   (smog k)                           the sky and its light browned toward orange, k 0 to 1
 ;   (air SHAPE) (solid SHAPE)          a brush: space starts solid, air carves it and solid
 ;                                      fills it again, the later winning; a room is an air box
 ;     (box [x y z] [x y z])            ..a box between two corners
@@ -58,7 +59,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of start room street sky air solid box prism cut door train bin decal window grav ball strip-light bulb poster sign
+(module (scenery level-of start room street sky air solid box prism cut door train bin decal window grav ball smog strip-light bulb poster sign
          across stammer buzz breathe texture skin textures repeat mirror-x mirror-z rgb)
 (borrow 'view)                          ; min2 max2
 (borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
@@ -78,8 +79,9 @@
  (start at deg pitch) (: u "(start [x y z] bearing pitch)" (part 'start [['at (P at u)] ['deg (N deg u)] ['pitch (N pitch u)]]))
  (room lo hi) (: u "(room [x y z] [x y z])" (part 'room [['lo (P lo u)] ['hi (P hi u)] ['skin {}]]))
  (street lo hi) (: u "(street [x y z] [x y z])" (part 'room [['lo (P lo u)] ['hi (P hi u)] ['skin {}] ['open 1]]))
- (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
+ (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr || gem? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
+ (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
  ; ..a brush's shape, its kind and points; air and solid make it a brush
  (box lo hi) (: u "(box [x y z] [x y z])" (part 'box [['lo (P lo u)] ['hi (P hi u)]]))
  (prism h ps) (: u "(prism height [[x y z] ..])"
@@ -126,8 +128,9 @@
          hollow [(box [(x - iw) i0 (z - id)] [(x + iw) i1 (z + id)])
                  (box [x o0 (z - sd)] [(x + W + 0.01) o1 (z + sd)]) (box [(x - W - 0.01) o0 (z - sd)] [x o1 (z + sd)])
                  (box [(x - sl) o0 z] [(x + sl) o1 (z + D + 0.01)]) (box [(x - sl) o0 (z - D - 0.01)] [(x + sl) o1 z])]
-         ; ..the sign a third of the way up each side, a hair off it, leaning as it leans
-         ys (y + 0.33 * H) e (0.67 * k - 0.004) sz (0.42 * H) L (sqrt (H * H + k * k))
+         ; ..the sign a third of the way up each side, a hair off it, leaning as it leans, as
+         ; wide as the narrower side takes
+         ys (y + 0.33 * H) e (0.67 * k - 0.004) sz (min2 (0.42 * H) (1.3 * min2 W D)) L (sqrt (H * H + k * k))
          signs (sg = () ? ()
                   [(decal [(x + W - e) ys z] [(H / L) (0.0 - k / L) 0.0] [(k / L) (H / L) 0.0] sz sz sg)
                    (decal [(x - W + e) ys z] [(0.0 - H / L) (0.0 - k / L) 0.0] [(0.0 - k / L) (H / L) 0.0] sz sz sg)
@@ -180,7 +183,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; ..the textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'decal 'pane 'grav 'ball 'sky 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'decal 'pane 'grav 'ball 'sky 'smog 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -206,7 +209,7 @@
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
        'gravs (map (g \ {'lo (g 'lo) 'hi (g 'hi) 'dir (g 'dir)}) (of 'grav))
        'balls (map (b \ b 'at) (of 'ball))
-       'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover)})
+       'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex))}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
        'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'text (s 'text) 'c (s 'c) 'how (s 'how)})) (of 'sign))

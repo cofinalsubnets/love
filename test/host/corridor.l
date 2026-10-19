@@ -220,6 +220,15 @@
    wd (at2 (: q (st ()) _ (each ^10 (_ \ (corridor-step q 'forward, corridor-step q 'strafe-right, corridor-move q))) q))
  (test (w = k) (w 1 > 1.0) (mag (w 0) < 1e-9) (s 1 < -1.0) (d 0 > 1.0) (a 0 < -1.0) (mag (d 1) < 1e-9)
        (mag (sqrt (sq (wd 0) + sq (wd 1)) - w 1) < 1e-6) (wd 0 > 0.5)))
+; steps: climbed one at a time, and come down again
+(: L (lv "(room [-5 0 -5] [5 3 15]) (start [0 0 0] 0 0) (repeat 4 [0 0.15 0.5] [(solid (box [-2 0 2] [2 0.15 15]))])")
+   (st _) (corridor-new 40 24 L "src/apps/lore/levels/")
+   (feet q) (q 'py - eye-h) (moves q n) (each ^n (_ \ corridor-move q), q)
+   up (moves (steps (st ()) 107 40) 10) down (moves (steps (moves (steps (st ()) 107 40) 10) 106 40) 30)
+   edge (moves (pins (st ()) 'pz 5.0 'py (0.6 + eye-h) 'th (0.5 * pi)) 0)
+   off (moves (steps (moves (pins (st ()) 'pz 5.0 'py (0.6 + eye-h) 'th (0.5 * pi)) 2) 107 25) 30)
+ (test (mag (feet up - 0.6) < 0.01) (up 'pz > 4.0) (mag (feet down) < 0.01) (down 'pz < 1.5)
+       (mag (feet edge - 0.6) < 0.01) (off 'px > 2.5) (mag (feet off) < 0.01)))
 ; the ball: still until walked into, then away, off the far wall, and still again on the floor
 (: L (lv "(room [-5 0 -5] [5 3 15]) (start [0 0 0] 0 0) (ball [0 0 2])")
    (st _) (corridor-new 40 24 L "src/apps/lore/levels/")

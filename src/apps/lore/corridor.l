@@ -285,14 +285,14 @@
                         (: v (mesh-shine pk b) w (key = 'glow ? (mesh-glow v) v) _ (pins pk 'sb b 'sv w) w))
  (mid3 vs) (c* (1.0 / #vs) (foldl (\ a v [(a 0 + v 0) (a 1 + v 1) (a 2 + v 2)]) [0.0 0.0 0.0] vs))
  ; ..a decal's sheet, its texture tex tw by th
- (decal-mesh d tt) (: a (d 'at) n (unit (c+ (d 'np) (c* -1.0 a))) u (unit (c+ (d 'up) (c* -1.0 a))) r (cross u n)
+ (decal-mesh d tt) (: a (d 'at) n (unit (c+ (d 'np) (c* -1.0 a))) u (unit (c+ (d 'up) (c* -1.0 a))) r (cross n u)
    w (d 'w) h (d 'h) i (tix tt (d 'tex)) t (tt i) o (c+ a (c+ (c* (-0.5 * w) r) (c* (-0.5 * h) u)))
    (sheets o (c* h u) (c* w r) n (q \ (: e (c+ q (c* -1.0 o)) [(t 1 / w * dot e r) (t 2 / h * (h - dot e u))])) i white))
  (file-of dir p) (p 'file @ () () f (f 0 @ 47 f (dir + f)))
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
  ; corridor's gain; () when it has none
  (sky-of lv) (peep lv 'sky () @ () ()
-   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4) 'smooth)
+   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pin (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4) 'smooth) 'smog (peep s 'smog 0.0))
         lt (sky-light (sky-sun sim 0.0 lat) wx sim)
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
@@ -483,6 +483,7 @@
              (want < o ? (max2 want (o - door-v * dt)) (min2 want (o + door-v * dt))))
    _ (pins st 'mt (st 'mt + dt) 'doors (map go ^#(lv 'doors)))
    _ (grav-step st dt)
+   _ (floor-step st dt)
    _ (each (peep st 'balls ()) (b \ ball-step st b dt))
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(peep lv 'cars ())))
  ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in
@@ -494,6 +495,23 @@
          m (v2 * dt) step (mag m > mag d ? d m)
          (pins st 'py (fl + step + eye-h) 'gv v2))
       (pin st 'gv 0.0)))
+ ; ..what the feet stand on: a step up climbed, a step down or an edge fallen from to what
+ ; is under; not in a grav shaft nor on a car's track, whose floors are their own
+ climb-v 2.5 fall-g 9.8
+ ; ..the top of the floor within a few steps of fl, by halves to a hair, or () for none
+ (floor-at bs x z fl) (: (air? y) (brush-medium bs [x y z] = 1)
+   (top a b) (foldl (\ q _ (: m (0.5 * (q 0 + q 1)) (air? m ? [(q 0) m] [m (q 1)]))) [a b] ^7 @ q (q 1))
+   (dn i) (? (i > 12) () (air? (fl - 0.05 * i) ? (dn (i + 1)) (top (fl - 0.05 * i) (fl - 0.05 * (i - 1)))))
+   (up i) (? (i > 7) fl (air? (fl + 0.05 * i) ? (top (fl + 0.05 * (i - 1)) (fl + 0.05 * i)) (up (i + 1))))
+   (air? (fl - 0.01) ? (dn 1) (up 1)))
+ (floor-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) lv (st 'lvl)
+   shaft (any (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (peep lv 'gravs ()))
+   (? (shaft || any (c \ car-track? c x z) (peep lv 'cars ())) (pin st 'fv 0.0)
+      (: f (floor-at (st 'sc 'brushes) x z fl) v (peep st 'fv 0.0) got (charm? f || gem? f)
+         (? (got && f > fl + 0.001) (pins st 'py (min2 f (fl + climb-v * dt) + eye-h) 'fv 0.0)
+            (got && f >= fl - 0.001) (pin st 'fv 0.0)
+            (: v2 (v - fall-g * dt) n (fl + v2 * dt)
+               (got && n <= f ? (pins st 'py (f + eye-h) 'fv 0.0) (pins st 'py (n + eye-h) 'fv v2)))))))
  ; ..a ball's next moment: met by the player's feet it is kicked away along the line between,
  ; the harder as they came; then it falls, bounces off what is solid a little less each
  ; time, and rolls along the ground to a stop
