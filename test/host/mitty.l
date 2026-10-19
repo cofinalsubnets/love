@@ -360,36 +360,6 @@
          !(has? (hframe hb) "\e]52")
          !(() = peep (cite 'verbs 'tab) 'mitty ())))
 
-; hands: a model's tools on the mitty; its own pane refused, an open leaves the keyboard be
-(: hb (mitty-up 12 40)
-   own {-1}
-   hh (hhands hb own)
-   _ (pin hb 'more (_ \ hopen ["sh" "-c" "stty -echo; cat"] 1 1))
-   _ (hberth hb 'stack 50 (hb 'more ()))                    ; 1: cat
-   _ (pin own () (hb 'next))
-   _ (hberth hb 'beside 50 (hopen-stage (mitty-stage (\ w h "me") (\ c 0) (\ _ 0)) 1 1))   ; 2: the model
-   _ (hfresh hb)                                            ; 3: cat, on face 1
-   l (hh 'panes ())
-   _ (rest 300)
-   t (hh 'type "1" "hello\n")
-   r (hh 'read "1")
-   mine (hh 'type "2" "x")
-   o (hh 'open ())
-   f0 (hb 'focus)
-   _ (hh 'focus "1")
-   (test <l (has? (l 1) "1  window 0  a program") (has? (l 1) "2  window 0  a stage")
-         (has? (l 1) "(you)") (has? (l 1) "3  window 1")
-         <t (has? (t 1) "hello")
-         (has? (r 1) "hello")
-         !(<mine)
-         !(<(hh 'read "9")) !(<(hh 'read "x1"))
-         ("pane 4" = o 1) (3 = f0)                           ; opened on face 1, the keyboard still on 3
-         (0 = hb 'face) (1 = hb 'focus),
-    hh 'shut "3",
-    test (() = hpane hb 3) !(<(hh 'shut "2")),
-    map (n \ hshut hb n) [1 4],
-    map (t \ (landed? t ? (catch t) (freeze t))) (hb 'jobs)))
-
 ; the bar: the bottom row, the shown face lit; a click on a label shows that face; names off argv
 (: hb (mitty-up 10 40)
    _ (pins hb 'bar 1 'barx (_ \ "XTRA"))

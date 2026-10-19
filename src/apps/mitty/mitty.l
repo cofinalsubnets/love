@@ -8,7 +8,7 @@
 (module '(mitty mitty mitty-stage mitty-up hberth hsail hopen-stage
           hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands mitty-bee mitty-window mitty-keybytes mitty-main)
+          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hlr hbarat hdrag hmice hbarline hbarface hbartick hnote mitty-window mitty-keybytes mitty-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
@@ -519,71 +519,18 @@
      sg (mitty-stage (w \ h \ seek-frame d w h) step (_ \ 0))
      (pin sg 'name title, pin own () (hb 'next), hopen-stage sg 1 1))
 
- ; --- hands: the mitty as a model's tools see it -- every pane by id on every face, read
- ; as text, typed into, opened, focused, shut. own boxes the model's own pane, which it
- ; reads but never types into or shuts. every door answers [ok? text] ---
+ ; every pane by id on every face, and the face that holds one
  (hids hb) (wharf-panes (hb 'plan) + catmap (d \ wharf-panes <(hb 'faces d)) (hfaces hb))
  (hface-of hb id) (elem id (wharf-panes (hb 'plan)) ? (hb 'face)
                      (: ds (filter (d \ elem id (wharf-panes <(hb 'faces d))) (hfaces hb)) (two? ds ? <ds ())))
- (hjoin ls) (? (two? ls) (foldl (a \ l \ a + "\n" + l) <ls >ls) "")
- ; the pane named by a model's id, a string
- (hpane-at hb t) (: n (? (string? t && 0 < #t && all (c \ 47 < c < 58) (map t ^#t))
-                        (foldl (a \ c \ a * 10 + c - 48) 0 (map t ^#t)) -1)
-                    p (hpane hb n)
-                    (two? p ? [n p] ()))
- ; rows of a pane until it holds still: twice alike 150 ms apart, 5 s at most
- (hquiet p) (: (go a n) (: _ (rest 150) b (hscreen-text p) (? (b = a || n = 0) b (go b (n - 1))))
-               (go (hscreen-text p) 32))
- (htail rs n) (: (cut l) (? (two? l && 0 = #(<l)) (cut >l) l)
-                 (rev (take n (cut (rev rs)))))
- (hhands hb own)
-  (: (mine? n) (n = peep own () -1)
-     (miss t) [0 ("no pane " + show t)]
-     {'panes (_ \ [1 (hjoin (map (n \ (: p (hpane hb n) s (peep (hbox p) () 0)
-                                        (show n + "  window " + show (hface-of hb n) + "  "
-                                         + (hpty? p ? ("a program, pid " + show (hpid p)) "a stage")
-                                         + "  " + show (gaze s 2) + "x" + show (gaze s 1)
-                                         + (n = hb 'focus && hface-of hb n = hb 'face ? "  (the user's keyboard)" "")
-                                         + (mine? n ? "  (you)" ""))))
-                                  (sort (hids hb))))])
-      'read (t \ (hpane-at hb t @ q (two? q ? [1 (hjoin (hscreen-text (q 1)))] (miss t))))
-      'type (t \ x \ (hpane-at hb t @ q
-                        (? !(two? q) (miss t)
-                           (mine? <q) [0 "that is your own pane"]
-                           (: p (q 1) bs (map (c \ (hpty? p && c = 10 ? 13 c)) (map x ^#x))
-                              (map (c \ (hpty? p ? (put (hmas p) c) (hstage p 'step c, hshow p))) bs,
-                               hpty? p ? (flush (hmas p)) 0,
-                               hsoil hb,
-                               [1 (hjoin (htail (hquiet p) 24))])))))
-      'open (_ \ (hb 'more () @ p
-                    (? !(two? p) [0 "no pane opened"]
-                       (: n (hb 'next) f (hb 'focus)
-                          (hberth hb 'beside 50 p,
-                           charm? f ? (pin hb 'focus f, hsoil hb) 0,        ; the keyboard stays put
-                           [1 ("pane " + show n)])))))
-      'focus (t \ (hpane-at hb t @ q
-                     (? !(two? q) (miss t)
-                        (: d (hface-of hb <q) (hgo hb d, pin hb 'focus <q, hsoil hb, [1 ("pane " + t + " has the keyboard")])))))
-      'shut (t \ (hpane-at hb t @ q
-                    (? !(two? q) (miss t)
-                       (mine? <q) [0 "that is your own pane"]
-                       (hshut hb <q, [1 ("pane " + t + " is closed")]))))})
-
- ; a model's pane: bee's full screen as a stage, a session of the hive, with the mitty's
- ; hands; why not, as a note
- (mitty-bee hb) (: b (cite 'bee 'bee-main) own {-1}
-                 sg (? b (b ["--stage" (hhands hb own)]) "bee is not in this binary")
-                 _ (pin own () (hb 'next))                        ; the id hberth gives it next
-                 (? (tablet? sg) sg (hnote ("bee: " + (string? sg ? sg "cannot start")))))
  ; the launcher's list: the desktop's apps first, where this binary has them, then every verb
- mitty-apps ["lush" "bee" "vi" "mc" "top" "less" "man" "synth" "manifest" "story" "design" "lupa"
+ mitty-apps ["lush" "vi" "mc" "top" "less" "man" "synth" "manifest" "story" "design" "lupa"
             "harp" "pom" "doom" "grass" "chucho"]
  (mitty-launch hb sh me)
   (: vs (sort (map show (keys (cite 'verbs 'tab))))
      names (filter (n \ elem n vs) mitty-apps + filter (n \ !(elem n mitty-apps)) vs)
      (hpicker hb "open"
-              (map (n \ [n (? (n = "bee") (_ \ hopen-stage (mitty-bee hb) 1 1)
-                                (n = "lush") (_ \ hopen sh 1 1)
+              (map (n \ [n (? (n = "lush") (_ \ hopen sh 1 1)
                                 (_ \ hopen (string? me ? [me n] [n]) 1 1))])
                    names)))
  ; the switcher's: every pane on every face, picking one shows its face and gives it the keyboard
@@ -636,7 +583,6 @@
            (? serve (pins hb 'serve 1 'csize [r c] 'in () 'out ()) 0,
             pin hb 'more (_ \ hopen sh 1 1),
             pins hb 'bar 1 'mouse 1 'barx (mitty-barx 0) 'saver (mitty-saver 0), hbartick hb, hrelay hb,
-            pin (hb 'keys) 98 (_ \ hopen-stage (mitty-bee hb) 1 1),
             pin (hb 'keys) 32 (_ \ mitty-launch hb sh me),
             pin (hb 'keys) 119 (_ \ mitty-switch hb),
             hberth hb 'stack 50 p0,
