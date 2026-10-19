@@ -15,13 +15,18 @@ name=test_moon
 # the bootstrap compiler: love0 waking mooncc0.image
 moon0() { "$love0" wake out/mooncc0.image mooncc "$@"; }
 
+# ctab.l is c.lex through our lex: laid again, it must not move
+echo "LEX src/apps/moon/c.lex"
+"$m" lex -m moon -n clex-tab src/apps/moon/c.lex | cmp -s - src/apps/moon/ctab.l \
+  || fail "ctab.l is not c.lex's: love lex -m moon -n clex-tab src/apps/moon/c.lex > src/apps/moon/ctab.l"
+
 # -- the laws
 echo "CC src/apps/moon/{lex,cpp,parse,gen,val}.l test/law/moon.l"
 out=$ho/.test_moon.out
 { echo "(borrow 'holo)"
   cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l   # the kore floors register module 'kore
   echo "(borrow 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
-  cat src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
+  cat src/apps/moon/floor.l src/apps/moon/ctab.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
       src/love/holo/text.l src/love/holo/dialect.l src/love/holo/gas.l src/apps/moon/val.l src/apps/moon/gen.l
   echo "(borrow 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
   cat test/law/moon.l
