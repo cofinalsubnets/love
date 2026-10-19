@@ -150,6 +150,14 @@
        (scr "(room [0 0 0] [1 1 1]) (ambient (rgb 0.5 0.4 0.3))" 'ambient = [0.5 0.4 0.3])
        (scr "(room [0 0 0] [1 1 1])" 'ambient = [0.0 0.0 0.0])
        (has? (scr "(room [0 0 0] [1 1 1]) (ambient 3)") "(ambient (rgb r g b))")))
+; a pick: the ray through the screen's middle out of the room at its far wall, the room's
+; form said; a part in a mirror's list told its place there, both it and its twin; a path
+; finds its form's text, and a path to no form none
+(: pks "(level \"t\" (room [0 0 0] [4 3 4]) (mirror-x 2 [(solid (box [0 0 1] [1 3 2]))]) (start [2 0 2] 0 0))"
+   pkl (corridor-read pks) pkh (corridor-pick (corridor-new 160 100 pkl "") 80 50)
+   (pkt p) (corridor-span pks p @ () () q (snip pks (q 0) (q 1)))
+ (test (pkh 'src = [2]) (mag (pkh 'p 2 - 4.0) < 1e-9) (pkl 'brushes 1 'src = [3 2 1]) (pkl 'brushes 2 'src = [3 2 1])
+       (pkt [3 2 1] = "(solid (box [0 0 1] [1 3 2]))") (pkt [2] = "(room [0 0 0] [4 3 4])") (pkt [9] = ()) (pkt [3 2 7] = ())))
 ; a grav shaft: walked into, it carries up to its head, eased in, and out north is street level;
 ; its twin carries down; motes stream through each the way it goes
 (: gl (lv "(room [0 0 0] [8 3 4]) (start [2 0 2] 0 0)

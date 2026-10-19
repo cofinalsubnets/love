@@ -5,7 +5,7 @@
 ; nothing outside: every light is a lamp (mesh.l), baked once into a channel and summed each
 ; frame by how bright it is just then. corridor-read, -new, -step, -move and -frame are pure;
 ; corridor-watch reads the disk, and only corridor-walk and corridor-run touch the tty.
-(module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds
+(module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds corridor-pick corridor-span
          corridor-move corridor-frame corridor-pens corridor-opts corridor-read corridor-load
          corridor-watch corridor-free? corridor-ks corridor-sound motes-at fps eye-h body-r grav-n)
 (borrow 'rove)                          ; pad, for the bottom row
@@ -42,12 +42,43 @@
  ; ..a scare raised by a word given what it does not take says what it takes; any other is
  ; love's own
  (corridor-read s) (: r (trap (_ \ (sounds s @ 'torn ['torn]
-                                       ds (foldl (\ a d (ev 'ev d)) (ev 'ev '(borrow 'scenery)) ds)))
+                                       ds (foldl (\ a d (ev 'ev d)) (ev 'ev '(borrow 'scenery)) (src-last ds))))
                              () (\ a b ['scare a b]))
    (? (tablet? r) (r 'kind = 'level ? (check r) "the file's last form should be (level NAME PART ..)")
       (two? r && <r = 'scare) (r 1 = 'level ? (r 2) ";; \(r 1) \(r 2)")
       (two? r && <r = 'torn) "a form is not finished: a ( without its )"
       "the file's last form should be (level NAME PART ..)"))
+ ; ..the level's last form, each of its parts told its path down the source: the part's
+ ; place in (level ..), and in a repeat's or mirror's list of parts the place there too
+ (src-form p f) (: n (#f - 1) l (two? f ? (f n) ())
+   (? (two? f && elem <f ['mirror-x 'mirror-z 'repeat] && two? l && <l = 'list)
+      ['sourced ('list . p) (take n f + [('list . map (j \ src-form (p + [n j]) (l j)) (drop 1 ^#l))])]
+      (two? f) ['sourced ('list . p) f]
+      f))
+ (src-last ds) (: r (rev ds) d (two? r ? <r ())
+   (two? d && <d = 'level ? (rev ((take 2 d + map (k \ src-form [k] (d k)) (drop 2 ^#d)) . >r)) ds))
+ ; ..a source path's text: [from to] in s, or () where s has no such form. the text read as
+ ; the reader reads it, bracketed forms, strings and atoms, a [..]'s first part its second
+ ; as (list ..)'s is
+ (sx-skip s i) (? (i >= #s) i (elem (s i) [32 9 10 13]) (sx-skip s (i + 1))
+                  (s i = 59) (sx-skip s (sx-eol s i)) i)
+ (sx-eol s i) (? (i >= #s || s i = 10) i (sx-eol s (i + 1)))
+ (sx-end s i) (: c (s i)
+   (? (elem c [40 91 123]) (sx-close s (i + 1))
+      (c = 34) (sx-str s (i + 1))
+      (elem c [39 96 44]) (sx-end s (sx-skip s (i + 1)))
+      (sx-atom s i)))
+ (sx-close s i) (: j (sx-skip s i) (? (j >= #s) j (elem (s j) [41 93 125]) (j + 1) (sx-close s (sx-end s j))))
+ (sx-str s i) (? (i >= #s) i (s i = 92) (sx-str s (i + 2)) (s i = 34) (i + 1) (sx-str s (i + 1)))
+ (sx-atom s i) (? (i >= #s || elem (s i) [32 9 10 13 40 41 91 93 123 125 34 59]) i (sx-atom s (i + 1)))
+ (sx-kids s i) (: (go j acc) (: k (sx-skip s j)
+                                (? (k >= #s || elem (s k) [41 93 125]) (rev acc) (go (sx-end s k) ([k (sx-end s k)] . acc))))
+   (go (i + 1) ()))
+ (sx-tops s) (: (go j acc) (: k (sx-skip s j) (? (k >= #s) (rev acc) (go (sx-end s k) ([k (sx-end s k)] . acc)))) (go 0 ()))
+ (corridor-span s p) (: tops (sx-tops s) lv (two? tops ? <(rev tops) ())
+   (kid f k) (: ks (sx-kids s (f 0)) j (s (f 0) = 91 ? (k - 1) k) (0 <= j && j < #ks ? (ks j) ()))
+   (go f l) (? (atom? l) f (atom? f) () (go (kid f <l) >l))
+   (two? lv ? (go lv p) ()))
  (check lv) (: bs (lv 'brushes) hollow (filter (i \ empty? (bs i)) ^#bs)
    (? (two? hollow) "a brush with no inside: \(bs <hollow 'shape)"
       (atom? (lv 'rooms)) "a level needs a room"
@@ -427,6 +458,11 @@
  ;     what shines, then the glows; out as half blocks or kitty's pixels ---
  fov 1.5
  gain 2.0
+ ; ..the thing under a point x y of the screen: where the ray through it first comes out of
+ ; the air, with the brush there and its source path, or ()
+ (corridor-pick st x y) (: dm (mesh-dims st) w <dm h (dm 1) e [(st 'px) (st 'py) (st 'pz)]
+   v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 60.0) d (mesh-dirs v (y * w + x))
+   (brush-ray (st 'sc 'brushes) e d @ () () q (pin q 'src (peep (peep (st 'lvl 'brushes) (q 'b) {}) 'src ()))))
  (corridor-pens st) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (corridor-ks sc (st 'mt) ds)
    e [(st 'px) (st 'py) (st 'pz)]

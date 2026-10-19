@@ -6,7 +6,7 @@
 ; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
 ; corners, facing, and the brush index; brush-mesh's (look n b) answers (p \ [tex u v]). a brush
 ; 'open 1 has no top face, and one 'whole 1 is never cut on the grid.
-(module (brush brush brush-box brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-mesh brush-chunks brush-faces)
+(module (brush brush brush-box brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-ray brush-mesh brush-chunks brush-faces)
 (borrow 'view)                          ; min2 max2
 (borrow 'vec)                           ; triples
 (borrow 'mesh)
@@ -63,6 +63,28 @@
  ; --- the medium at a place: the last brush holding it says, and solid where none does ---
  (inside? b p) (all (pl \ side pl p <= 0.0) (b 'planes))
  (brush-medium bs p) (: (go l) (? (atom? l) 0 (inside? <l p) (<l 'air) (go >l)) (go (rev bs)))
+ ; --- a ray from e along v: where it first comes out of the air, {'t 'p 'b 'n} -- how far,
+ ;     the point, the brush that ends the air there and the face's facing toward the air --
+ ;     or () where it never does ---
+ ; ..the stretch t0 to t1 of the ray inside b, the planes it comes in and goes out by
+ (span b e v) (: (go l t0 t1 n0 n1)
+   (? (t1 < t0) ()
+      (atom? l) [t0 t1 n0 n1]
+      (: pl <l n (pl 0) a (pl 1 - dot n e) k (dot n v) t (a / (mag k < 1e-12 ? 1.0 k))
+         (? (mag k < 1e-12) (a < 0.0 ? () (go >l t0 t1 n0 n1))
+            (k > 0.0) (t < t1 ? (go >l t0 t n0 n) (go >l t0 t1 n0 n1))
+            (t > t0 ? (go >l t t1 n n1) (go >l t0 t1 n0 n1)))))
+   (go (b 'planes) -1e9 1e9 () ()))
+ (brush-ray bs e v) (: ivs (filter two? (map (i \ (span (bs i) e v @ () () s (s 1 > 0.001 ? (i . s) ()))) ^#bs))
+   (at t) (foldl (\ a q (q 1 <= t && t < q 2 ? q a)) () ivs)
+   (med t) (at t @ () 0 q (bs (q 0) 'air))
+   (go l) (? (atom? l) ()
+             (med (<l + 1e-4) != 0) (go >l)
+             (: t <l q (at (t + 1e-4)) a (at (t - 1e-4)) p (c+ e (c* t v))
+                (? (two? q && two? (q 3)) {'t t 'p p 'b (q 0) 'n (q 3)}
+                   (two? a && two? (a 4)) {'t t 'p p 'b (a 0) 'n (c* -1.0 (a 4))}
+                   ())))
+   (go (sort (filter (t \ t > 0.001) (cats (map (q \ [(q 1) (q 2)]) ivs))))))
  ; --- the surfaces: each face cut by the planes of the brushes it meets, a piece kept where
  ;     air meets solid and no later brush has a face on it, turned to the air; then cut on a
  ;     grid a cell wide, the same lines in every face so the edges meet ---
