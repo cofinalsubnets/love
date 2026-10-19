@@ -97,38 +97,40 @@
 (: concrete (texture 32 64 2
              '((fill (rgb 0.6 0.59 0.56)) (noise 7 0.08) (patches 5 0.25 (shade 0.92))
                (grid 0 8 1 (shade 0.88)))))
-; ..its doors: two bronze leaves, dark glass in each, their handles by the seam
+; ..its doors: two leaves of blued steel, each a raised plate with its corners cut, a dark
+; seam between, blue lights in the frame, a hazard band at the foot
 (: unndoor (texture 64 56 3.4
-            '((fill (rgb 0.32 0.26 0.18)) (noise 8 0.1)
-              (rect 5 5 29 51 (rgb 0.07 0.09 0.12)) (rect 35 5 59 51 (rgb 0.07 0.09 0.12))
-              (within 5 5 59 51 (patches 6 0.2 (shade 1.6)))
-              (cols 31 33 0.04)
-              (rect 27 20 29 36 (rgb 0.8 0.68 0.42)) (rect 35 20 37 36 (rgb 0.8 0.68 0.42)))))
-; ..and its banner: on black, two red hands held palms up, open, and over them the three
-; stars they have let go, a triangle pointing down; UNN across the wrists
+            '((fill (rgb 0.42 0.45 0.5)) (noise 20 0.6 0.06)
+              (poly 7 6 25 6 29 10 29 44 25 48 7 48 3 44 3 10 (shade 1.18))
+              (poly 39 6 57 6 61 10 61 44 57 48 39 48 35 44 35 10 (shade 1.18))
+              (rows 26 28 (shade 0.6))
+              (rows 0 2 0.12) (cols 0 2 0.12) (cols 62 64 0.12)
+              (cols 31 33 0.06)
+              (rect 0 18 2 36 (rgb 0.3 0.75 1)) (rect 62 18 64 36 (rgb 0.3 0.75 1))
+              (within 0 50 64 56 (fill 0.1) (stripes 8 4 -1 (rgb 0.85 0.65 0.1))))))
+; ..and its banner: on black, two red hands raised side by side, palms facing, fingers up,
+; and over them the three stars they have let go, a triangle pointing down; UNN across
+; the wrists
 (: (star cx cy r c) ('poly . cats (map (k \ (: a (3.14159265 * (k / 5.0 + 0.5)) q (k % 2 = 0 ? r (0.4 * r))
                                              [(cx + q * cos a) (cy + q * sin a)]))
                                       ^10)
                          + [c]))
-; ..a hand about its wrist at x y, open and turned up, its thumb out toward s, leaning out
-; a radians: the palm wider at its fingers, the fingers fanned and short as seen end on
-(: (hand x y s a c) (: (at b p) (: u (s * p 0) v (p 1) [(x + u * cos b - v * sin b) (y + u * sin b + v * cos b)])
-                       (pt p) (at a p)
-                       (part ps) ('poly . cats (map pt ps) + [c])
-                       (finger ox oy t n) (: dx (sin t) dy (0.0 - cos t) w 1.4
-                                            (part [[(ox - w * dy) (oy + w * dx)] [(ox + w * dy) (oy - w * dx)]
-                                                   [(ox + w * dy + n * dx) (oy - w * dx + n * dy)] [(ox - w * dy + n * dx) (oy + w * dx + n * dy)]]))
-                       ; ..the forearm bent back at the wrist, down and out
-                       [('poly . cats (map (at (-0.6 * a)) [[-4.5 1] [4.5 1] [5 34] [-5 34]]) + [c])
-                        (part [[-5.5 1] [5.5 1] [9.5 -10] [-9 -11]])
-                        (finger -7.5 -10 -0.45 9) (finger -3.6 -11 -0.15 11) (finger 0.6 -11 0.12 11.5) (finger 4.8 -10 0.4 10)
-                        (part [[5 -1] [10 -5] [18 -6] [18.5 -3] [10 2]])]))
+; ..a hand seen from its thumb's side, its wrist at x y, its palm toward s: the forearm
+; upright, the hand's edge from the back of it round the fingers' tips to the palm, the
+; thumb in front with its nail
+(: (hand x y s c nail) (: (part k ps) ('poly . cats (map (p \ [(x + s * p 0) (y + p 1)]) ps) + [k])
+                          [(part c [[-4 0] [4 0] [4.5 40] [-4.5 40]])
+                           (part c [[5 0] [6.5 -12] [6.5 -24] [5 -33] [2 -38] [-1.5 -37] [-3.5 -32] [-3 -26] [-1.5 -21] [-2 -16] [-4.5 -8] [-4.5 0]])
+                           (part c [[-4.5 -2] [-6 -8] [-6.8 -16] [-6.3 -24] [-4 -24.5] [-3.2 -17] [-2.5 -10]])
+                           (part nail [[-3.8 -19] [-6.1 -19] [-5.9 -23.4] [-4.2 -23.7]])
+                           (part '(shade 0.6) [[-1.5 -21] [2 -33] [2.8 -33] [-0.6 -21]])]))
 (: red '(rgb 0.78 0.07 0.05))
+(: pink '(rgb 0.95 0.45 0.4))
 (: white '(grey 0.95))
 (: unnbanner (texture 96 128 3.6
               (cats ['((fill (rgb 0.025 0.025 0.03)) (noise 30 0.1))
                      [(star 34 36 9 white) (star 62 36 9 white) (star 48 56 9 white)]
-                     (hand 37 102 -1 -0.55 red) (hand 59 102 1 0.55 red)
+                     (hand 39 100 -1 red pink) (hand 57 100 1 red pink)
                      '((rect 23 100 27 114 (grey 0.95)) (rect 33 100 37 114 (grey 0.95)) (rect 23 110 37 114 (grey 0.95))
                        (rect 41 100 45 114 (grey 0.95)) (rect 51 100 55 114 (grey 0.95)) (poly 41 100 45 100 55 114 51 114 (grey 0.95))
                        (rect 59 100 63 114 (grey 0.95)) (rect 69 100 73 114 (grey 0.95)) (poly 59 100 63 100 73 114 69 114 (grey 0.95)))])))
@@ -195,17 +197,22 @@
   ; buttresses sloping down from the top of the first to the pavement; from high on the
   ; second each reaches out a beam, braced steeply at its root, level over the street;
   ; between the middle two, steps up to its doors, shut, and its banner over them
-  (skin {'all unnwall} (solid (box [-18 8.85 36] [18 31.5 50])))
+  ; ..its three upper storeys over the two below, which stand back between the buttresses,
+  ; the middle bay deepest and bare but for the doors and the banner
+  (skin {'all concrete 'walls unnwall} (solid (box [-18 8.85 38] [18 18 50])))
+  (skin {'all concrete 'walls unnwall} (solid (box [-18 18 36] [18 31.5 50])))
+  (air (box [-3.2 9 37.9] [3.2 18 40]))
+  (skin {'all concrete} (solid (box [-3.2 8.85 39.9] [3.2 18 40.1])))
   (repeat 4 [9 0 0]
-   [(skin {'all concrete} (solid (box [-14.8 9 34.8] [-12.2 32.2 36.1])))
+   [(skin {'all concrete} (solid (box [-14.8 9 34.8] [-12.2 32.2 40.1])))
     (skin {'all concrete} (cut [-14.8 9 32] [-12.2 9 32] [-13.5 13.5 34.8] (solid (box [-14.8 9 32] [-12.2 13.5 34.8]))))
     (skin {'all concrete} (cut [-14.8 18.2 36] [-12.2 18.2 36] [-13.5 20.6 33.4] (solid (box [-14.8 18.2 33.4] [-12.2 22.6 36]))))
     (skin {'all concrete} (solid (box [-14.8 20.6 22] [-12.2 22.6 33.5])))])
-  (repeat 4 [0 0.15 0.5] [(skin {'all concrete} (solid (box [-3.2 9 31.6] [3.2 9.15 36])))])
-  (air (box [-1.7 9.6 36] [1.7 12.6 36.7]))
-  (decal [0 11.1 36.69] [0 0 -1] [0 1 0] 3.4 3 unndoor)
-  (decal [0 15.5 35.97] [0 0 -1] [0 1 0] 3.6 4.8 unnbanner)
-  (bulb [0 12.45 36.4] (rgb 1 0.85 0.6))
+  (repeat 4 [0 0.15 0.5] [(skin {'all concrete} (solid (box [-3.2 9 31.6] [3.2 9.15 40])))])
+  (air (box [-1.7 9.6 39.8] [1.7 12.6 40.5]))
+  (decal [0 11.1 40.49] [0 0 -1] [0 1 0] 3.4 3 unndoor)
+  (decal [0 15.3 39.88] [0 0 -1] [0 1 0] 3.6 4.8 unnbanner)
+  (bulb [0 12.9 39.4] (rgb 1 0.85 0.6))
   ; ..and the buildings either side of it
   (skin {'all facade} (solid (box [-45 8.85 36] [-20 33 50])))
   (skin {'all facade} (solid (box [20 8.85 36] [45 28 50])))
