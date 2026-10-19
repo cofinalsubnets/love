@@ -5,8 +5,8 @@
 # troff, -n, -t, -c and -tz -- and stdout and the exit status must agree. test/gpic/open
 # holds the cases not yet climbed: counted and named, never failing the gate. the chem-*
 # cases are groff chem's output and copy groff's chem.pic, which the run finds beside groff;
-# where it is missing they are left out. fz-* and fy-* are random pictures, kept once they
-# came out the same. every run is capped (2 GB, 20 s), one at a time: a runaway picture is
+# where it is missing they are left out. fz-* are random pictures, drawn by
+# test/gate/fzgen.l under a pinned seed. every run is capped (2 GB, 20 s), one at a time: a runaway picture is
 # a failure, not a machine brought down, and a reference that aborts (groff's -c now and
 # then) leaves its case without an oracle. with -v, the first lines of each difference.
 #
@@ -19,6 +19,8 @@ ref=/usr/bin/pic
 verbose=$2
 r=$(pwd)
 L=$r/$love
+# the fz-* cases: FZ_N drawn from test/gate/fzgen.l under FZ_SEED; a case that differs is printed
+seed=${FZ_SEED:-20261018} fzn=${FZ_N:-135}
 w=$(mktemp -d)
 trap 'rm -rf "$w"' EXIT
 chem=
@@ -28,8 +30,8 @@ for f in /usr/share/groff/*/tmac/chem.pic; do [ -f "$f" ] && { chem=$f; break; }
 run() {
   rm -rf "$w/c"; mkdir "$w/c"
   cp "$1"/*.pic "$w/c/" 2>/dev/null
-  # the random cases ride one file, one `@@ name` line before each
-  [ -f "$1/random.pack" ] && awk -v d="$w/c" '/^@@ /{close(f); f = d "/" $2; next} {print > f}' "$1/random.pack"
+  # the random cases are drawn here, from the seed
+  [ "$1" = test/gpic ] && "$L" "$r/test/gate/fzgen.l" gpic "$seed" "$fzn" "$w/c"
   if [ -n "$chem" ]; then cp "$chem" "$w/c/chem.pic"; else rm -f "$w/c"/chem-*.pic; fi
   for f in "$w/c"/*.pic; do
     [ -f "$f" ] || continue
@@ -42,6 +44,7 @@ run() {
     if cmp -s "$w/a" "$w/b"; then echo "ok $n"
     else
       echo "differs $n"
+      case $n in fz-*) sed 's/^/    | /' "$w/c/$n.pic" >&2 ;; esac
       [ -n "$verbose" ] && diff "$w/a" "$w/b" | head -8 >&2
     fi
   done
@@ -59,5 +62,5 @@ for m in "" -n -t -c -tz; do
   x=; [ "$s" -gt 0 ] && x=", $s without an oracle"
   echo "gpic: pic ${m:-(troff)}: $((k - d)) of $k gating identical$x; open $ok of $all"
 done
-[ $bad -eq 0 ] || { echo "FAIL gpic: $bad of $total differ from $ref"; exit 1; }
+[ $bad -eq 0 ] || { echo "FAIL gpic: $bad of $total differ from $ref (fz cases: FZ_SEED=$seed FZ_N=$fzn)"; exit 1; }
 echo "gpic: ok"
