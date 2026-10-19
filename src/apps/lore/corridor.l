@@ -113,7 +113,7 @@
  ;     its wall; the surfaces where air meets solid, textured by the way they face ---
  (brush-of r) (: sh (r 'shape)
    b0 (sh 'box @ () (: p (sh 'prism) (brush-prism (r 'air) (p 0) (p 1) (p 2))) bx (brush-box (r 'air) (bx 0) (bx 1)))
-   (pins (foldl (\ b c (brush-cut b (c 0) (c 1) (c 2))) b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0) 'open (peep r 'open 0)))
+   (pins (brush-cuts b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0) 'open (peep r 'open 0)))
  (doorway d) (: ax (d 'ax) p (P ax (d 'c - 0.5 * d 'w) (d 'y) (d 'a - 0.02)) q (P ax (d 'c + 0.5 * d 'w) (d 'y + d 'h) (d 'b + 0.02))
    (brush-box 1 [(min2 (p 0) (q 0)) (d 'y) (min2 (p 2) (q 2))] [(max2 (p 0) (q 0)) (d 'y + d 'h) (max2 (p 2) (q 2))]))
  (brushes-of lv) (map brush-of (lv 'brushes) + map doorway (lv 'doors))
@@ -297,6 +297,25 @@
  (decal-mesh d tt) (: a (d 'at) n (unit (c+ (d 'np) (c* -1.0 a))) u (unit (c+ (d 'up) (c* -1.0 a))) r (cross n u)
    w (d 'w) h (d 'h) i (tix tt (d 'tex)) t (tt i) o (c+ a (c+ (c* (-0.5 * w) r) (c* (-0.5 * h) u)))
    (sheets o (c* h u) (c* w r) n (q \ (: e (c+ q (c* -1.0 o)) [(t 1 / w * dot e r) (t 2 / h * (h - dot e u))])) i white))
+ ; ..a drape's sheet: each cell whose four corners are there two triangles, its texels laid
+ ; from the way it faces most, a floor's or a wall's; a corner's normal across its neighbours
+ (drape-mesh d tt) (: rs (d 'rows) i (tix tt (d 'tex)) t (tt i) k (t 1 / t 3) R #rs C #<rs
+   (at r c) ((r < 0) || (r >= R) || (c < 0) || (c >= C) ? () (rs r c))
+   (or a b) (a = () ? b a)
+   (nrm r c p) (: dr (c+ (or (at (r + 1) c) p) (c* -1.0 (or (at (r - 1) c) p))) dc (c+ (or (at r (c + 1)) p) (c* -1.0 (or (at r (c - 1)) p)))
+                  n (cross dr dc) (dot n n < 1e-12 ? [0.0 1.0 0.0] (unit n)))
+   pn (foldl (\ m q (: p (rs (q 0) (q 1)) (p = () ? m (pin m (q 0 * C + q 1) [p (nrm (q 0) (q 1) p)])))) {} (cats (map (r \ map (c \ [r c]) ^C) ^R)))
+   (face ks) (: s (foldl (\ a q (c+ a (pn q 1))) [0.0 0.0 0.0] ks)
+     (abs (s 1) >= max (abs (s 0)) (abs (s 2)) ? 1 (abs (s 0) > abs (s 2) ? 0 2)))
+   qs (cats (map (r \ cats (map (c \ (: ks [(r * C + c) (r * C + c + 1) ((r + 1) * C + c + 1) ((r + 1) * C + c)]
+                                        (all (q \ peep pn q () != ()) ks ? [[ks (face ks)]] ()))) ^(C - 1))) ^(R - 1)))
+   ; ..a vertex to each corner and way it is laid
+   ix (foldl (\ a q (foldl (\ a kk (: key (3 * kk + q 1) (peep (a 0) key () != () ? a [(pin (a 0) key (a 1)) (a 1 + 1) ([kk (q 1)] . a 2)])))
+                           a (q 0))) [{} 0 ()] qs)
+   (uv ax p) (? (ax = 1) [(k * p 0) (k * p 2)] (ax = 0) [(k * p 2) (0.0 - k * p 1)] [(k * p 0) (0.0 - k * p 1)])
+   (id q j) (peep (ix 0) (3 * (q 0 j) + q 1) 0)
+   (mesh (map (v \ (: e (pn (v 0)) (e 0 + uv (v 1) (e 0) + e 1 + white))) (rev (ix 2)))
+         (cats (map (q \ [[(id q 0) (id q 1) (id q 2) i] [(id q 0) (id q 2) (id q 3) i]]) qs))))
  (file-of dir p) (p 'file @ () () f (f 0 @ 47 f (dir + f)))
  ; --- the advertisements: each its own light, bright, and a lamp before it in the colour
  ;     its picture comes to on the whole; a spinner four of them round a square, turning ---
@@ -340,7 +359,7 @@
    ; ..the world in chunks chunk-m square, so a frame draws only those in view, nearest first
    (on m) [(mid3 (m 0)) m]
    cks (map mesh-pack (brush-chunks bs [cell-top cell (coarse? (cats (map (l \ l 'lamps) ls)))] (look tt) chunk-m
-                                    (map on (pm + map (d \ decal-mesh d tt) (peep lv 'decals ())))))
+                                    (map on (pm + map (d \ decal-mesh d tt) (peep lv 'decals ()) + map (d \ drape-mesh d tt) (peep lv 'drapes ())))))
    drs (map (d \ mesh-pack (door-mesh d tt)) (lv 'doors))
    ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds
    ; only the lights that change
@@ -494,24 +513,34 @@
      (two? on ? (all (i \ car-free? (cs i) (st 'cars i) (q 0) (q 1)) on)
         (brush-medium bs [(q 0) (fl + 0.3) (q 1)] = 1 && brush-medium bs [(q 0) (fl + 1.7) (q 1)] = 1)))
    (all air pts && !(any pane? pts) && !(any shut? ^#(lv 'doors))))
+ jump-v 4.4                               ; up near a metre
+ mantle-h 0.6                             ; how far over the feet a ledge is hoisted onto
  (put! st x z) (walk-slide st x z corridor-free?)
+ ; ..in the air against a ledge no more than mantle-h over the feet, onto it, where a body fits;
+ ; the ledge looked for a body's breadth on the way
+ (hoist! st x z) (: fl (st 'py - eye-h) dx (x - st 'px) dz (z - st 'pz) d (max2 1e-9 (sqrt (dx * dx + dz * dz)))
+   t (floor-at (st 'sc 'brushes) (x + body-r * dx / d) (z + body-r * dz / d) (fl + mantle-h)) y0 (st 'py)
+   (? (!(charm? t || gem? t) || t <= fl + 0.001 || t > fl + mantle-h + 0.001) 0
+      (: _ (pin st 'py (t + eye-h))
+         (corridor-free? st x z ? (: _ (pins st 'px x 'pz z 'fv 0.0) 1) (: _ (pin st 'py y0) 0)))))
  ; ..the mouse's motion, as far as a pixel turns
  mouse-k 0.0025
  (corridor-look st dx dy) (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2})
  ; ..the corridor's own keys, over view's
- corridor-binds {112 'where 119 'forward 115 'back 97 'strafe-left 100 'strafe-right}
+ corridor-binds {112 'where 119 'forward 115 'back 97 'strafe-left 100 'strafe-right 32 'jump}
  ; ..each action as far as the time since the last frame, 'dt, carries it; a step is a
  ; way to go, summed for the frame's walk
  (corridor-step st a) (: dt (peep st 'dt (1.0 / fps))
    (go f s) (pins st 'mf (peep st 'mf 0 + f) 'ms (peep st 'ms 0 + s))
    (a @ 'forward (go 1 0) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
+      'jump (peep st 'fv 0.0 = 0.0 && peep st 'gv 0.0 = 0.0 ? (pin st 'fv jump-v) st)
       x (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
          @ () (a = 'where ? (pin st 'pos (1 - peep st 'pos 0)) st)
            s s)))
  ; ..the frame's walk: the ways summed, no faster for two at once, and how fast it went
  (walk! st dt) (: f (peep st 'mf 0) s (peep st 'ms 0) n (sqrt (f * f + s * s)) th (st 'th) x0 (st 'px) z0 (st 'pz)
-   _ (? (n > 0) (: k (walk-v * dt / max2 1.0 n)
-                  (put! st (x0 + k * (f * sin th + s * cos th)) (z0 + k * (f * cos th - s * sin th)))))
+   _ (? (n > 0) (: k (walk-v * dt / max2 1.0 n) x (x0 + k * (f * sin th + s * cos th)) z (z0 + k * (f * cos th - s * sin th))
+                  (peep st 'fv 0.0 != 0.0 && !(corridor-free? st x z) && hoist! st x z ? st (put! st x z))))
    (pins st 'mf 0 'ms 0 'vx ((st 'px - x0) / dt) 'vz ((st 'pz - z0) / dt)))
  ; a frame's motion: the clock, each door toward open while the player is near it, and the cars
  (corridor-move st) (: dt (peep st 'dt (1.0 / fps)) _ (walk! st dt) lv (st 'lvl) x (st 'px) z (st 'pz)
@@ -533,7 +562,8 @@
          (pins st 'py (fl + step + eye-h) 'gv v2))
       (pin st 'gv 0.0)))
  ; ..what the feet stand on: a step up climbed, a step down or an edge fallen from to what
- ; is under; not in a grav shaft nor on a car's track, whose floors are their own
+ ; is under, a jump flown till it comes down on something; not in a grav shaft nor on a
+ ; car's track, whose floors are their own
  climb-v 2.5 fall-g 9.8
  ; ..the top of the floor within a few steps of fl, by halves to a hair, or () for none
  (floor-at bs x z fl) (: (air? y) (brush-medium bs [x y z] = 1)
@@ -545,8 +575,8 @@
    shaft (any (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (peep lv 'gravs ()))
    (? (shaft || any (c \ car-track? c x z) (peep lv 'cars ())) (pin st 'fv 0.0)
       (: f (floor-at (st 'sc 'brushes) x z fl) v (peep st 'fv 0.0) got (charm? f || gem? f)
-         (? (got && f > fl + 0.001) (pins st 'py (min2 f (fl + climb-v * dt) + eye-h) 'fv 0.0)
-            (got && f >= fl - 0.001) (pin st 'fv 0.0)
+         (? (got && v <= 0.0 && f > fl + 0.001) (pins st 'py (min2 f (fl + climb-v * dt) + eye-h) 'fv 0.0)
+            (got && v <= 0.0 && f >= fl - 0.001) (pin st 'fv 0.0)
             (: v2 (v - fall-g * dt) n (fl + v2 * dt)
                (got && n <= f ? (pins st 'py (f + eye-h) 'fv 0.0) (pins st 'py (n + eye-h) 'fv v2)))))))
  ; ..a ball's next moment: met by the player's feet it is kicked away along the line between,
@@ -675,7 +705,7 @@
                                         'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
                                (corridor-watch (corridor-size st w (h // 2)))))
                'size corridor-size 'frame corridor-frame 'key corridor-step 'look corridor-look
-               'binds (view-bind view-binds corridor-binds) 'listed (view-listed ['strafe-left 'strafe-right 'where 'finer 'coarser])
+               'binds (view-bind view-binds corridor-binds) 'listed (view-listed ['strafe-left 'strafe-right 'jump 'where 'finer 'coarser])
                'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
                'tick (st \ (walk-dt st,
                             corridor-move st,
@@ -688,7 +718,7 @@
                      lv (corridor-load p)
    (? (string? lv) (say err ("corridor: " + p + ": " + lv + "\n"), flush err, 1)
       (view-stage (pin o 'level p) (o2 \ corridor-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
- corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, h l turn, u n look, walk into a ball to kick it, p where you stand; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
+ corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, space jumps and pulls up onto a ledge, h l turn, u n look, walk into a ball to kick it, p where you stand; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for corridor-run, or () where one is wrong or said twice
  (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
                                     (view-arg "--level" 'level (w \ w))])

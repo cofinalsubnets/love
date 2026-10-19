@@ -229,6 +229,21 @@
    off (moves (steps (moves (pins (st ()) 'pz 5.0 'py (0.6 + eye-h) 'th (0.5 * pi)) 2) 107 25) 30)
  (test (mag (feet up - 0.6) < 0.01) (up 'pz > 4.0) (mag (feet down) < 0.01) (down 'pz < 1.5)
        (mag (feet edge - 0.6) < 0.01) (off 'px > 2.5) (mag (feet off) < 0.01)))
+; a jump: up near a metre and down again, onto a ledge too high to step, and none in the air
+(: L (lv "(room [-5 0 -5] [5 3 15]) (start [0 0 0] 0 0) (solid (box [-2 0 1] [2 1.1 15]))")
+   (st _) (corridor-new 40 24 L "src/apps/lore/levels/")
+   (feet q) (q 'py - eye-h) (moves q n) (each ^n (_ \ corridor-move q), q)
+   up (moves (corridor-step (st ()) 'jump) 13) twice (corridor-step (moves (corridor-step (st ()) 'jump) 20) 'jump)
+   down (moves (corridor-step (st ()) 'jump) 40)
+   on (steps (corridor-step (st ()) 'jump) 107 30) off (steps (st ()) 107 30)
+ (test (0.85 < feet up) (feet up < 1.05) (twice 'fv < 0.0) (mag (feet down) < 0.01)
+       (mag (feet on - 1.1) < 0.01) (on 'pz > 1.5) (mag (feet off) < 0.01) (off 'pz < 1.0)))
+; a wall near eye high: jumped at, pulled up onto; walked into, not
+(: L (lv "(room [-5 0 -5] [5 4 15]) (start [0 0 0] 0 0) (solid (box [-2 0 1] [2 1.4 15]))")
+   (st _) (corridor-new 40 24 L "src/apps/lore/levels/")
+   (feet q) (q 'py - eye-h)
+   on (steps (corridor-step (st ()) 'jump) 107 30) off (steps (st ()) 107 30)
+ (test (mag (feet on - 1.4) < 0.01) (on 'pz > 1.5) (mag (feet off) < 0.01) (off 'pz < 1.0)))
 ; the ball: still until walked into, then away, off the far wall, and still again on the floor
 (: L (lv "(room [-5 0 -5] [5 3 15]) (start [0 0 0] 0 0) (ball [0 0 2])")
    (st _) (corridor-new 40 24 L "src/apps/lore/levels/")
@@ -261,5 +276,15 @@
        (#(sl 'spins) = 1) (sl 'spins 0 't1 = sl 'spins 0 't2) (#(sl 'flames 0 'pts) = 2) (sl 'flames 0 'how = ['breathe]) (any (b \ b 'whole = 1) (sl 'brushes)) (wl 1 < wh 1) (0 < #(wh 0))
        (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (flames (rgb 1 0 0) 3))") "(flames (rgb r g b) [[x y z] ..])") (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (whole 3))") "(whole BRUSH)")
        (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (spinner [0 0 0] 1 1 3 3))") "(spinner [x y z] width height TEXTURE TEXTURE)")))
+;; a drape: its rows, a gap (), mirrored front up with the rest; in the scene two
+;; triangles to each four corners there, a vertex to each corner
+(: dl "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
+   dr " (drape t [[() [2 0.1 1] [3 0.1 1]] [[1 0.2 2] [2 0.3 2] [3 0.2 2]] [[1 0.1 3] [2 0.2 3] [3 0.1 3]]])"
+   d0 (corridor-read (dl + ")")) d1 (corridor-read (dl + dr + ")")) dm (corridor-read (dl + "(mirror-x 2 [" + dr + "]))"))
+   (verts l) (: st (corridor-new 8 8 l "") (net (map (c \ c 'pk 'n) (st 'sc 'chunks))))
+ (test (#(d1 'drapes) = 1) (d1 'drapes 0 'rows 0 0 = ()) (d1 'drapes 0 'rows 1 0 = [1.0 0.2 2.0])
+       (#(dm 'drapes) = 2) (dm 'drapes 1 'rows 0 0 = [1.0 0.1 1.0]) (dm 'drapes 1 'rows 0 2 = ())
+       (verts d1 - verts d0 = 8) (verts dm - verts d0 = 16)
+       (has? (corridor-read "(level \"t\" (room [0 0 0] [1 2 1]) (drape 3 [[[0 0 0]]]))") "(drape TEXTURE [[[x y z] ..] ..])")))
 (test_fin ())
 (puts "corridor: ok\n")

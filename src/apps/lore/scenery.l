@@ -21,7 +21,8 @@
 ;   (whole BRUSH)                      the brush never cut finer near a lamp: a small thing's
 ;                                      light as its corners have it
 ;   (cut [x y z] [x y z] [x y z] BRUSH)  the brush less what lies across the plane through
-;                                      three points from its middle: a slope, a bevel
+;                                      three points from its shape's middle, however many
+;                                      cuts are on it: a slope, a bevel
 ;   (door [x y z] width height)        a sliding door in the wall between two rooms, the
 ;                                      middle of its foot at x y z
 ;   (train [x y z] [x y z] DOOR leave) a car on rails, its inside between two corners and a
@@ -44,6 +45,9 @@
 ;   (decal [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)  a picture laid on a surface,
 ;                                      its middle at x y z, facing n, its top toward u; its
 ;                                      texture's holes show what is under it
+;   (drape TEXTURE [[[x y z] ..] ..])  a sheet through rows of points, () a gap: each four
+;                                      neighbours round two triangles, none by a gap; its
+;                                      front up when the rows run toward z, their points toward x
 ;   (strip-light [x y z])              a light strip along z, its face at y
 ;   (bulb [x y z] (rgb r g b))         a bare bulb, its light
 ;   (flames (rgb r g b) [[x y z] ..])  small flames, a candle's, standing at each point, all
@@ -71,7 +75,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of start room street sky air solid box prism cut whole door train bin decal window grav ball smog ad spinner neon strip-light bulb flames poster sign
+(module (scenery level-of start room street sky air solid box prism cut whole door train bin decal drape window grav ball smog ad spinner neon strip-light bulb flames poster sign
          across stammer buzz breathe texture skin textures repeat mirror-x mirror-z rgb)
 (borrow 'view)                          ; min2 max2
 (borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
@@ -119,6 +123,9 @@
  (decal at n up w h t) (: u "(decal [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)" a (P at u) nn (P n u) uu (P up u)
    (texture? t ? (part 'decal [['at a] ['np (map (k \ a k + nn k) ^3)] ['up (map (k \ a k + uu k) ^3)] ['w (N w u)] ['h (N h u)] ['tex t]])
       (no u t)))
+ (drape t rs) (: u "(drape TEXTURE [[[x y z] ..] ..])" (pg q) (q = () ? () (P q u))
+   (? (!(texture? t)) (no u t) (!(two? rs && all two? rs && all (r \ #r = #<rs) rs)) (no u rs)
+      (part 'drape [['tex t] ['rows (map (map pg) rs)]])))
  ; ..a bin: brushes, its body's sides and corners cut in toward its foot, hollow up top with an
  ; opening into it on each side, and a cap a little wider over all; its sign on each side
  (bin at w d h t sg) (: u "(bin [x y z] width depth height TEXTURE SIGN)" p (P at u) x (p 0) y (p 1) z (p 2)
@@ -197,23 +204,26 @@
    q2 (elem 'pts (keys q) ? (with q 'pts (map g (q 'pts))) q)
    q3 (elem 'cuts (keys q2) ? (with q2 'cuts (map (c \ map g c) (q2 'cuts))) q2)
    q4 (elem 'door (keys q3) ? (with q3 'door (re g b (q3 'door))) q3)
-   (elem 'deg (keys q4) ? (with q4 'deg (b (q4 'deg))) q4))
+   q5 (elem 'rows (keys q4) ? (with q4 'rows (map (map (p \ p = () ? () (g p))) (q4 'rows))) q4)
+   (elem 'deg (keys q5) ? (with q5 'deg (b (q5 'deg))) q5))
  (repeat n d ps) (: u "(repeat n [dx dy dz] PARTS)" dd (P d u)
    (charm? n ? (cats (map (i \ map (re (p \ [(p 0 + i * dd 0) (p 1 + i * dd 1) (p 2 + i * dd 2)]) (b \ b)) (flat ps)) ^n)) (no u n)))
- (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b)) l))
- (mirror-z c ps) (: z (N c "(mirror-z c PARTS)") l (flat ps) (l + map (re (p \ [(p 0) (p 1) (2.0 * z - p 2)]) (b \ 180.0 - b)) l))
+ ; ..a mirror turns a drape over, so its rows run back to keep its front
+ (flip p) (kind? p ['drape] ? (with p 'rows (map rev (p 'rows))) p)
+ (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (flip * re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b)) l))
+ (mirror-z c ps) (: z (N c "(mirror-z c PARTS)") l (flat ps) (l + map (flip * re (p \ [(p 0) (p 1) (2.0 * z - p 2)]) (b \ 180.0 - b)) l))
  ; --- the level: its parts sorted into what the corridor builds from ---
  (lo2 a b) (map (k \ min2 (a k) (b k)) ^3)
  (hi2 a b) (map (k \ max2 (a k) (b k)) ^3)
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; ..the textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'flame 'poster 'sign 'decal 'pane 'grav 'ball 'sky 'smog 'ad 'spin 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'sky 'smog 'ad 'spin 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
    used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ b 'skin k) (sort (keys (b 'skin)))) bs)
-                                                     + map (d \ d 'tex) (of 'decal + of 'pane + of 'ad)
+                                                     + map (d \ d 'tex) (of 'decal + of 'drape + of 'pane + of 'ad)
                                                      + cats (map (s \ [(s 't1) (s 't2)]) (of 'spin))))
    (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
    (skin-of b) (: s (b 'skin) (cats (map (k \ (k = 'all ? (map (c \ [c (tname (s k))]) ['wall 'floor 'ceiling])
@@ -239,6 +249,7 @@
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex))}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
+       'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex))}) (of 'drape))
        'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'ad))
        'spins (map (s \ {'at (s 'at) 'w (s 'w) 'h (s 'h) 't1 (tname (s 't1)) 't2 (tname (s 't2))}) (of 'spin))
        'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'n (peep s 'n ()) 'text (s 'text) 'c (s 'c) 'how (s 'how)})) (of 'sign))

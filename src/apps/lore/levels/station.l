@@ -165,11 +165,10 @@
               (rect 10 51 42 59 (rgb 1 1 0.5)) (rect 50 51 70 59 (rgb 1 1 0.5)))))
 (: spin1 (texture 64 48 5 '((fill (rgb 0.95 0.08 0.6)) (disc 32 22 15 (rgb 0.2 0.9 1)) (disc 32 22 9 (rgb 0.95 0.08 0.6)) (rect 6 40 58 44 (grey 0.97)))))
 (: spin2 (texture 64 48 5 '((fill (rgb 1 0.85 0.08)) (rect 0 0 64 6 0.05) (rect 0 42 64 48 0.05) (poly 10 34 32 10 54 34 (rgb 0.9 0.08 0.08)))))
-; ..the street sweeper: yellow paint scuffed, grey steel, a dark cab, the drums' worn
+; ..the street sweeper: yellow paint scuffed, a dark cab, the drums' worn
 ; steel, and caution bars; the garage it came out of, ribbed, a bar of the same at its top
 ; and its foot
 (: sweepyellow (texture 32 32 1.5 '((fill (rgb 0.86 0.64 0.06)) (noise 6 0.18) (patches 4 0.2 (shade 0.6)) (grid 32 0 1 (shade 0.5)))))
-(: sweepgrey (texture 32 32 1.5 '((fill (rgb 0.36 0.37 0.39)) (noise 6 0.15) (grid 16 16 1 (shade 0.6)))))
 (: cabglass (texture 32 32 1 '((fill (rgb 0.04 0.07 0.1)) (noise 8 0.3) (rows 0 4 (rgb 0.36 0.37 0.39)))))
 (: drumsteel (texture 32 32 1 '((fill (rgb 0.22 0.22 0.23)) (noise 3 12 0.35) (cols 0 2 (shade 0.5)))))
 (: grille (texture 32 8 1 '((fill (grey 0.05)) (cols 0 2 (rgb 0.86 0.64 0.06)) (cols 30 32 (rgb 0.86 0.64 0.06)) (grid 3 0 1 (grey 0.2)))))
@@ -195,36 +194,66 @@
 (: posies (texture 32 32 0.5 '((fill hole) (poly 15.2 26 16.8 26 11.681 12 10.081 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 21.664 12 20.064 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 20.493 12 18.893 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 13.371 12 11.771 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 16.736 12 15.136 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 16.093 12 14.493 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.922 12 17.322 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 20.842 12 19.242 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 11.114 12 9.514 12 (rgb 0.16 0.42 0.12)) (disc 6.567 13.193 2.806 (grey 0.95)) (disc 19.917 6.93 3.323 (rgb 0.6 0.3 0.85)) (disc 24.905 13.916 2.243 (grey 0.95)) (disc 18.991 4.101 3.434 (rgb 0.6 0.3 0.85)) (disc 10.332 8.643 2.241 (grey 0.95)) (disc 21.274 14.331 2.974 (rgb 1 0.86 0.25)) (disc 10.617 6.407 2.843 (rgb 1 0.86 0.25)) (disc 24.53 8.578 3.483 (rgb 0.6 0.3 0.85)) (disc 8 10.923 3.213 (rgb 1 0.86 0.25)) (disc 8.418 7.66 3.21 (rgb 0.6 0.3 0.85)) (disc 16.016 14.639 2.911 (rgb 0.6 0.3 0.85)) (disc 9.797 7.126 3.563 (rgb 1 0.86 0.25)) (poly 8 18 24 18 18 32 14 32 (rgb 0.86 0.84 0.78)) (poly 8 18 24 18 23 20 9 20 (rgb 0.7 0.68 0.62)))))
 (: lilies (texture 32 32 0.5 '((fill hole) (poly 15.2 26 16.8 26 23.184 12 21.584 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 23.07 12 21.47 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 10.592 12 8.992 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 10.988 12 9.388 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 21.497 12 19.897 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 20.104 12 18.504 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 19.176 12 17.576 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 14.114 12 12.514 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.283 12 16.683 12 (rgb 0.16 0.42 0.12)) (disc 18.136 10.393 2.422 (grey 0.9)) (disc 18.769 12.84 3.404 (rgb 1 0.95 0.7)) (disc 24.988 9.986 2.823 (grey 0.9)) (disc 24.024 13.581 2.71 (grey 0.9)) (disc 24.155 8.66 3.438 (grey 0.97)) (disc 17.21 6.597 2.233 (grey 0.9)) (disc 9.472 9.612 2.704 (rgb 1 0.95 0.7)) (disc 19.49 6 3.451 (grey 0.9)) (disc 20.688 13.973 3.268 (rgb 1 0.95 0.7)) (disc 13.076 14.791 3.547 (grey 0.97)) (disc 25.099 8.398 3.234 (rgb 1 0.95 0.7)) (disc 16.607 9.39 3.495 (rgb 1 0.95 0.7)) (poly 8 18 24 18 18 32 14 32 (rgb 0.86 0.84 0.78)) (poly 8 18 24 18 23 20 9 20 (rgb 0.7 0.68 0.62)))))
 (: roses (texture 32 32 0.5 '((fill hole) (poly 15.2 26 16.8 26 13.132 12 11.532 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 17.419 12 15.819 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 14.979 12 13.379 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.255 12 16.655 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.56 12 16.96 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 10.717 12 9.117 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 9.984 12 8.384 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 21.525 12 19.925 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 13.431 12 11.831 12 (rgb 0.16 0.42 0.12)) (disc 10.687 14.952 2.858 (rgb 0.95 0.55 0.7)) (disc 15.527 11.03 2.411 (rgb 0.95 0.55 0.7)) (disc 9.032 14.184 2.746 (rgb 0.75 0.05 0.08)) (disc 19.428 4.704 3.262 (rgb 0.95 0.55 0.7)) (disc 6.856 12.581 3.353 (rgb 0.9 0.15 0.2)) (disc 15.455 11.907 3.43 (rgb 0.95 0.55 0.7)) (disc 21.762 8.696 3.219 (rgb 0.95 0.55 0.7)) (disc 14.892 14.291 3.43 (rgb 0.75 0.05 0.08)) (disc 6.718 9.444 2.561 (rgb 0.95 0.55 0.7)) (disc 14.723 10.893 2.621 (rgb 0.95 0.55 0.7)) (disc 22.67 10.314 2.948 (rgb 0.9 0.15 0.2)) (disc 17.685 13.946 3.155 (rgb 0.75 0.05 0.08)) (poly 8 18 24 18 18 32 14 32 (rgb 0.86 0.84 0.78)) (poly 8 18 24 18 23 20 9 20 (rgb 0.7 0.68 0.62)))))
-; ..a bouquet standing: two pictures in a vee opening toward the street
-(: (flowers x y z t) [(decal [x (y + 0.24) z] [0.7 0 -0.7] [0 1 0] 0.42 0.48 t) (decal [x (y + 0.24) z] [-0.7 0 -0.7] [0 1 0] 0.42 0.48 t)])
-; ..a heap of them, n things strewn by seed sd: banked against a wall at z w from x a to b,
-; out d toward the street, h high at the wall and spilling to nothing, the ground under
-; each at (fl x z); each bouquet one picture, turned roughly to the street, and a few
-; wreaths leant into it
+;; ..heaped flowers, drifted like snow, the blooms close as a carpet
+(: heapwarm (texture 64 64 0.9
+           '((fill (rgb 0.1 0.24 0.08)) (noise 3 0.4) (dots 4 5 1.5 (rgb 0.16 0.38 0.12))
+             (disc 8.6 54.2 3.2 (rgb 0.82 0.07 0.1)) (disc 7.5 48.7 2.8 (rgb 0.95 0.55 0.7)) (disc 50.5 6.0 2.0 (rgb 0.95 0.55 0.7)) (disc 27.7 48.8 2.0 (rgb 0.95 0.55 0.7)) (disc 17.0 51.3 2.9 (grey 0.95)) (disc 57.7 2.0 2.0 (rgb 1 0.86 0.25)) (disc 57.7 66.0 2.0 (rgb 1 0.86 0.25)) (disc 0.6 56.4 3.1 (rgb 0.95 0.55 0.7)) (disc 64.6 56.4 3.1 (rgb 0.95 0.55 0.7)) (disc 46.5 33.8 3.2 (rgb 0.95 0.55 0.7)) (disc 35.4 22.1 3.1 (rgb 0.95 0.55 0.7)) (disc 60.9 59.3 2.7 (rgb 1 0.86 0.25)) (disc 59.0 6.4 3.0 (rgb 0.82 0.07 0.1)) (disc 7.7 21.3 3.2 (rgb 1 0.86 0.25)) (disc 59.9 27.0 3.3 (rgb 0.82 0.07 0.1)) (disc 19.4 37.6 3.4 (rgb 1 0.86 0.25)) (disc 25.2 54.6 2.8 (rgb 0.95 0.55 0.7)) (disc 26.5 11.1 2.9 (rgb 0.55 0.03 0.06)) (disc 5.5 42.5 2.2 (rgb 1 0.95 0.75)) (disc 33.3 25.2 2.8 (grey 0.95)) (disc 30.0 19.7 3.4 (rgb 1 0.55 0.15)) (disc 38.0 25.2 2.3 (rgb 1 0.86 0.25)) (disc 14.5 0.8 2.3 (rgb 1 0.86 0.25)) (disc 14.5 64.8 2.3 (rgb 1 0.86 0.25)) (disc 14.9 32.9 3.5 (rgb 1 0.55 0.15)) (disc 22.6 58.2 3.1 (rgb 1 0.55 0.15)) (disc -2.7 0.4 3.3 (rgb 1 0.86 0.25)) (disc -2.7 64.4 3.3 (rgb 1 0.86 0.25)) (disc 61.3 0.4 3.3 (rgb 1 0.86 0.25)) (disc 61.3 64.4 3.3 (rgb 1 0.86 0.25)) (disc 51.8 33.2 2.9 (rgb 0.95 0.55 0.7)) (disc 60.8 30.8 2.6 (rgb 1 0.86 0.25)) (disc 22.8 22.1 2.9 (rgb 1 0.55 0.15)) (disc 50.3 21.2 3.0 (rgb 0.82 0.07 0.1)) (disc 40.7 35.2 2.3 (grey 0.95)) (disc 51.1 51.0 3.3 (rgb 0.82 0.07 0.1)) (disc 2.1 60.4 2.1 (grey 0.95)) (disc 66.1 60.4 2.1 (grey 0.95)) (disc 18.6 10.7 2.4 (rgb 1 0.95 0.75)) (disc 42.0 41.5 2.5 (rgb 0.55 0.03 0.06)) (disc 31.8 7.3 2.5 (rgb 0.55 0.03 0.06)) (disc 57.6 32.6 2.3 (rgb 1 0.55 0.15)) (disc 27.6 -1.6 2.4 (rgb 0.95 0.55 0.7)) (disc 27.6 62.4 2.4 (rgb 0.95 0.55 0.7)) (disc 9.4 46.0 2.3 (rgb 1 0.86 0.25)) (disc -1.6 51.1 2.8 (rgb 0.82 0.07 0.1)) (disc 62.4 51.1 2.8 (rgb 0.82 0.07 0.1)) (disc 33.5 2.0 3.1 (rgb 0.55 0.03 0.06)) (disc 33.5 66.0 3.1 (rgb 0.55 0.03 0.06)) (disc 42.2 27.3 3.2 (rgb 1 0.95 0.75)) (disc 54.9 19.9 3.5 (rgb 1 0.95 0.75)) (disc 26.6 16.2 2.0 (grey 0.95)) (disc 37.8 13.9 3.4 (rgb 0.95 0.55 0.7)) (disc 22.2 13.2 3.1 (rgb 0.95 0.55 0.7)) (disc 37.9 31.5 3.5 (rgb 0.95 0.55 0.7)) (disc 18.9 32.0 2.5 (rgb 0.95 0.55 0.7)) (disc 21.0 -0.8 3.3 (rgb 0.55 0.03 0.06)) (disc 21.0 63.2 3.3 (rgb 0.55 0.03 0.06)) (disc 24.3 35.0 3.5 (rgb 1 0.86 0.25)) (disc 31.0 -0.9 2.4 (grey 0.95)) (disc 31.0 63.1 2.4 (grey 0.95)) (disc 5.4 10.9 3.5 (rgb 0.82 0.07 0.1)) (disc 17.2 21.3 2.8 (rgb 0.82 0.07 0.1)) (disc 55.5 38.7 3.5 (rgb 0.95 0.55 0.7)) (disc 8.7 35.3 2.2 (grey 0.95)) (disc 9.4 8.0 2.2 (rgb 1 0.55 0.15)) (disc 14.3 5.2 2.4 (rgb 0.82 0.07 0.1)) (disc 36.1 59.2 2.7 (rgb 0.82 0.07 0.1)) (disc 6.9 2.9 2.5 (rgb 1 0.55 0.15)) (disc 42.9 5.9 2.2 (grey 0.95)) (disc 12.0 50.3 2.9 (rgb 1 0.95 0.75)) (disc 18.8 16.2 2.8 (grey 0.95)) (disc 13.3 20.3 2.0 (rgb 0.82 0.07 0.1)) (disc 46.5 20.5 2.6 (rgb 0.95 0.55 0.7)) (disc 39.5 -1.3 2.9 (rgb 0.95 0.55 0.7)) (disc 39.5 62.7 2.9 (rgb 0.95 0.55 0.7)) (disc 42.4 16.6 2.9 (rgb 0.82 0.07 0.1)) (disc 50.7 37.1 3.5 (rgb 0.82 0.07 0.1)) (disc 55.2 9.9 2.8 (rgb 0.55 0.03 0.06)) (disc 4.9 60.8 2.3 (rgb 1 0.95 0.75)) (disc 18.8 57.2 2.2 (grey 0.95)) (disc -0.8 13.1 2.5 (rgb 1 0.86 0.25)) (disc 63.2 13.1 2.5 (rgb 1 0.86 0.25)) (disc 54.5 29.0 2.6 (rgb 0.55 0.03 0.06)) (disc 11.0 31.1 3.3 (rgb 0.95 0.55 0.7)) (disc 37.1 38.0 2.2 (rgb 0.82 0.07 0.1)) (disc 25.5 25.7 3.0 (rgb 0.82 0.07 0.1)) (disc 31.1 11.4 2.5 (rgb 0.95 0.55 0.7)) (disc 59.5 40.9 2.4 (rgb 0.55 0.03 0.06)) (disc 31.7 30.6 2.4 (rgb 0.95 0.55 0.7)) (disc 59.0 48.8 3.0 (rgb 0.55 0.03 0.06)) (disc 20.0 44.3 3.4 (rgb 0.55 0.03 0.06)) (disc 5.8 16.3 2.2 (grey 0.95)) (disc 58.2 61.4 2.2 (rgb 1 0.55 0.15)) (disc 26.9 7.8 2.3 (rgb 0.95 0.55 0.7)) (disc 1.5 36.4 2.0 (rgb 0.82 0.07 0.1)) (disc 65.5 36.4 2.0 (rgb 0.82 0.07 0.1)) (disc 50.1 43.7 2.8 (rgb 0.95 0.55 0.7)) (disc 40.7 46.2 3.2 (rgb 1 0.86 0.25)) (disc 12.7 59.1 3.0 (rgb 1 0.86 0.25)) (disc 47.7 41.0 3.0 (grey 0.95)) (disc 26.0 40.3 3.0 (rgb 0.95 0.55 0.7)) (disc 34.8 9.7 3.3 (rgb 0.95 0.55 0.7)) (disc 6.3 37.8 2.1 (grey 0.95)) (disc 42.0 1.3 2.8 (rgb 1 0.95 0.75)) (disc 42.0 65.3 2.8 (rgb 1 0.95 0.75)) (disc 32.7 47.2 2.3 (rgb 1 0.86 0.25)) (disc -2.3 45.2 3.4 (grey 0.95)) (disc 61.7 45.2 3.4 (grey 0.95)) (disc 54.5 55.6 2.6 (rgb 0.95 0.55 0.7)) (disc 59.7 15.9 2.4 (grey 0.95)) (disc 28.4 58.4 3.2 (rgb 1 0.55 0.15)) (disc 49.8 57.2 2.7 (rgb 0.82 0.07 0.1)) (disc 48.1 15.4 3.1 (rgb 0.82 0.07 0.1)) (disc 51.8 1.5 3.2 (grey 0.95)) (disc 51.8 65.5 3.2 (grey 0.95)) (disc 14.2 14.9 2.7 (rgb 1 0.95 0.75)) (disc 50.0 27.7 2.3 (rgb 0.95 0.55 0.7)) (disc 54.1 42.4 2.6 (rgb 0.82 0.07 0.1)) (disc 58.8 54.7 3.4 (grey 0.95)) (disc 40.8 58.4 2.8 (rgb 1 0.86 0.25)) (disc 34.0 28.4 2.2 (rgb 0.95 0.55 0.7)) (disc 16.7 24.3 2.2 (rgb 0.82 0.07 0.1)) (disc 35.8 54.0 2.9 (rgb 1 0.86 0.25)) (disc 41.7 20.1 2.5 (rgb 0.55 0.03 0.06)) (disc 0.6 7.8 2.5 (rgb 0.55 0.03 0.06)) (disc 64.6 7.8 2.5 (rgb 0.55 0.03 0.06)) (disc 47.5 24.4 3.4 (grey 0.95)) (disc 33.5 36.8 3.6 (rgb 0.82 0.07 0.1)) (disc 45.0 47.8 2.6 (rgb 0.55 0.03 0.06)) (disc 25.8 29.7 3.6 (rgb 1 0.86 0.25)) (disc 14.2 8.5 2.2 (rgb 0.95 0.55 0.7)) (disc 13.9 53.6 2.8 (rgb 0.95 0.55 0.7)) (disc 1.4 23.6 3.4 (rgb 0.82 0.07 0.1)) (disc 65.4 23.6 3.4 (rgb 0.82 0.07 0.1)) (disc -0.4 18.1 2.7 (rgb 1 0.86 0.25)) (disc 63.6 18.1 2.7 (rgb 1 0.86 0.25)) (disc 35.2 -1.5 2.3 (grey 0.95)) (disc 35.2 62.5 2.3 (grey 0.95)) (disc 29.7 50.9 2.6 (rgb 0.95 0.55 0.7)) (disc 46.7 6.6 2.2 (grey 0.95)) (disc 32.5 57.9 2.2 (rgb 0.95 0.55 0.7)) (disc 48.6 53.9 2.4 (rgb 0.82 0.07 0.1)) (disc 48.7 -0.7 2.3 (rgb 1 0.55 0.15)) (disc 48.7 63.3 2.3 (rgb 1 0.55 0.15)) (disc 9.0 16.4 2.1 (rgb 1 0.86 0.25)) (disc 14.1 47.6 2.4 (rgb 0.55 0.03 0.06)) (disc 22.2 5.9 3.6 (rgb 0.82 0.07 0.1)) (disc 3.5 32.5 2.3 (rgb 0.82 0.07 0.1)) (disc 43.3 52.9 2.8 (rgb 0.55 0.03 0.06)) (disc 23.4 18.7 2.2 (rgb 0.95 0.55 0.7)) (disc 47.8 60.3 2.2 (grey 0.95)) (disc 45.1 0.0 2.1 (grey 0.95)) (disc 45.1 64.0 2.1 (grey 0.95))
+             (noise 2 0.25) (patches 5 0.25 (shade 0.75)))))
+(: heappale (texture 64 64 0.9
+           '((fill (rgb 0.1 0.24 0.08)) (noise 3 0.4) (dots 4 5 1.5 (rgb 0.16 0.38 0.12))
+             (disc 61.2 60.7 2.1 (grey 0.95)) (disc 23.1 10.8 3.3 (rgb 1 0.86 0.25)) (disc 16.1 13.6 2.1 (grey 0.95)) (disc -0.0 40.9 3.3 (rgb 0.95 0.55 0.7)) (disc 64.0 40.9 3.3 (rgb 0.95 0.55 0.7)) (disc 60.8 34.8 2.7 (rgb 1 0.86 0.25)) (disc 57.7 55.7 2.6 (rgb 1 0.86 0.25)) (disc 58.1 27.1 3.4 (grey 0.95)) (disc 35.9 15.1 2.0 (rgb 1 0.86 0.25)) (disc 11.1 32.7 2.6 (rgb 0.95 0.55 0.7)) (disc 43.2 11.6 3.4 (rgb 0.6 0.3 0.85)) (disc 47.0 58.0 3.2 (rgb 0.82 0.07 0.1)) (disc 22.6 -1.2 3.5 (grey 0.95)) (disc 22.6 62.8 3.5 (grey 0.95)) (disc 41.9 16.0 2.4 (rgb 0.6 0.3 0.85)) (disc 32.1 53.2 2.6 (rgb 0.6 0.3 0.85)) (disc 58.9 46.3 2.8 (rgb 1 0.95 0.75)) (disc 60.2 52.1 3.3 (rgb 0.82 0.07 0.1)) (disc 17.2 58.3 2.5 (rgb 0.95 0.55 0.7)) (disc 36.0 32.5 3.0 (rgb 0.6 0.3 0.85)) (disc 20.0 13.3 2.8 (rgb 0.82 0.07 0.1)) (disc 56.5 50.2 2.5 (grey 0.95)) (disc 58.1 12.2 3.2 (grey 0.95)) (disc 36.8 3.1 2.9 (grey 0.95)) (disc 48.3 8.7 2.4 (rgb 1 0.95 0.75)) (disc 60.4 3.9 3.4 (grey 0.95)) (disc 3.6 23.1 2.4 (grey 0.95)) (disc 5.3 61.1 2.0 (grey 0.95)) (disc 47.0 33.5 2.0 (rgb 0.82 0.07 0.1)) (disc 2.8 -0.6 2.2 (grey 0.95)) (disc 2.8 63.4 2.2 (grey 0.95)) (disc 47.9 18.3 2.8 (rgb 1 0.86 0.25)) (disc 28.7 49.0 3.2 (rgb 1 0.86 0.25)) (disc 30.3 14.4 3.1 (rgb 1 0.86 0.25)) (disc 53.7 1.5 3.3 (grey 0.95)) (disc 53.7 65.5 3.3 (grey 0.95)) (disc 33.2 50.0 2.8 (rgb 1 0.86 0.25)) (disc 9.2 61.4 2.4 (rgb 0.82 0.07 0.1)) (disc 8.4 10.9 2.7 (rgb 1 0.95 0.75)) (disc 32.5 -1.1 3.5 (rgb 1 0.95 0.75)) (disc 32.5 62.9 3.5 (rgb 1 0.95 0.75)) (disc 14.9 28.5 2.4 (rgb 0.82 0.07 0.1)) (disc 14.6 50.7 3.0 (rgb 1 0.86 0.25)) (disc 0.3 2.3 2.7 (grey 0.95)) (disc 0.3 66.3 2.7 (grey 0.95)) (disc 64.3 2.3 2.7 (grey 0.95)) (disc 64.3 66.3 2.7 (grey 0.95)) (disc 32.8 5.6 2.2 (grey 0.95)) (disc 11.6 14.8 2.3 (rgb 0.95 0.55 0.7)) (disc 42.8 29.0 2.9 (rgb 0.6 0.3 0.85)) (disc 46.7 27.8 2.8 (rgb 0.82 0.07 0.1)) (disc 37.8 56.4 3.5 (rgb 0.82 0.07 0.1)) (disc 11.6 6.0 3.3 (rgb 1 0.86 0.25)) (disc 23.5 44.2 3.5 (rgb 1 0.86 0.25)) (disc 19.6 53.8 3.1 (grey 0.95)) (disc 29.7 56.9 3.0 (grey 0.95)) (disc 18.2 23.9 3.5 (grey 0.95)) (disc 14.0 31.4 2.2 (rgb 1 0.86 0.25)) (disc 25.1 29.6 3.2 (rgb 0.6 0.3 0.85)) (disc 56.8 16.3 2.2 (rgb 0.82 0.07 0.1)) (disc 54.4 41.0 3.5 (grey 0.95)) (disc 51.5 59.7 3.3 (rgb 1 0.86 0.25)) (disc 35.1 44.5 3.1 (grey 0.95)) (disc 37.5 52.3 2.2 (rgb 1 0.86 0.25)) (disc 43.6 51.8 2.1 (rgb 1 0.86 0.25)) (disc 27.1 21.0 2.4 (rgb 0.95 0.55 0.7)) (disc 50.1 36.7 2.2 (rgb 0.6 0.3 0.85)) (disc 26.4 41.5 2.6 (rgb 0.95 0.55 0.7)) (disc 21.2 47.7 3.1 (rgb 1 0.95 0.75)) (disc 34.1 12.0 3.3 (rgb 0.6 0.3 0.85)) (disc 52.2 49.1 2.3 (rgb 0.82 0.07 0.1)) (disc -1.8 48.7 2.6 (rgb 0.6 0.3 0.85)) (disc 62.2 48.7 2.6 (rgb 0.6 0.3 0.85)) (disc 16.3 40.0 3.3 (grey 0.95)) (disc 3.5 32.0 3.6 (rgb 1 0.86 0.25)) (disc 67.5 32.0 3.6 (rgb 1 0.86 0.25)) (disc 10.0 18.1 2.7 (grey 0.95)) (disc 23.5 34.4 2.6 (rgb 0.6 0.3 0.85)) (disc 13.1 43.3 2.8 (grey 0.95)) (disc 31.0 34.5 3.5 (grey 0.95)) (disc 16.5 20.0 2.5 (rgb 1 0.86 0.25)) (disc 41.8 25.1 3.3 (grey 0.95)) (disc 54.3 9.6 2.8 (grey 0.95)) (disc 7.2 52.4 2.6 (rgb 1 0.86 0.25)) (disc 13.7 22.8 2.5 (rgb 1 0.86 0.25)) (disc 10.7 28.3 2.5 (grey 0.95)) (disc 59.5 20.9 2.2 (rgb 1 0.95 0.75)) (disc 17.2 35.2 2.6 (rgb 1 0.86 0.25)) (disc 40.5 -2.0 3.1 (rgb 0.95 0.55 0.7)) (disc 40.5 62.0 3.1 (rgb 0.95 0.55 0.7)) (disc 39.8 42.9 2.6 (rgb 0.6 0.3 0.85)) (disc 28.2 5.6 3.5 (rgb 1 0.86 0.25)) (disc 61.5 8.1 2.0 (rgb 1 0.86 0.25)) (disc 46.9 41.7 2.0 (rgb 1 0.86 0.25)) (disc 20.2 59.3 2.2 (grey 0.95)) (disc 50.2 21.2 2.2 (rgb 1 0.86 0.25)) (disc 54.1 21.6 3.2 (rgb 0.82 0.07 0.1)) (disc 61.3 14.6 2.1 (rgb 0.6 0.3 0.85)) (disc 39.8 5.8 2.8 (rgb 0.6 0.3 0.85)) (disc 26.4 33.6 2.1 (grey 0.95)) (disc 28.9 37.8 2.2 (rgb 0.95 0.55 0.7)) (disc 12.8 58.8 3.3 (rgb 0.95 0.55 0.7)) (disc 20.1 19.2 2.2 (grey 0.95)) (disc 47.5 45.0 2.8 (grey 0.95)) (disc 44.0 55.6 3.0 (rgb 1 0.95 0.75)) (disc 54.4 33.2 2.1 (rgb 0.6 0.3 0.85)) (disc 42.7 2.2 2.5 (grey 0.95)) (disc 42.7 66.2 2.5 (grey 0.95)) (disc 40.7 47.0 3.5 (grey 0.95)) (disc 50.3 28.7 2.7 (rgb 1 0.86 0.25)) (disc 37.2 28.5 3.2 (rgb 0.82 0.07 0.1)) (disc 21.6 4.5 2.6 (rgb 0.6 0.3 0.85)) (disc 0.8 55.7 2.3 (rgb 1 0.86 0.25)) (disc 64.8 55.7 2.3 (rgb 1 0.86 0.25)) (disc 30.1 45.5 2.5 (rgb 0.82 0.07 0.1)) (disc 58.5 41.3 2.8 (rgb 1 0.95 0.75)) (disc 4.0 42.6 2.2 (rgb 0.82 0.07 0.1)) (disc 46.9 52.8 2.2 (rgb 0.6 0.3 0.85)) (disc 52.3 5.8 3.5 (grey 0.95)) (disc 6.5 35.7 2.1 (grey 0.95)) (disc 22.7 21.8 3.5 (rgb 0.82 0.07 0.1)) (disc 23.0 39.0 2.6 (rgb 1 0.86 0.25)) (disc 25.8 58.2 2.2 (rgb 0.82 0.07 0.1)) (disc 6.6 44.3 2.1 (rgb 1 0.86 0.25)) (disc -0.2 58.9 2.7 (grey 0.95)) (disc 63.8 58.9 2.7 (grey 0.95)) (disc 52.6 55.6 2.7 (rgb 0.6 0.3 0.85)) (disc 40.8 36.5 2.4 (rgb 0.6 0.3 0.85)) (disc 33.4 39.6 3.5 (rgb 1 0.95 0.75)) (disc 38.3 40.0 2.7 (rgb 0.6 0.3 0.85)) (disc 45.7 -1.9 2.4 (rgb 1 0.86 0.25)) (disc 45.7 62.1 2.4 (rgb 1 0.86 0.25)) (disc 11.4 53.3 2.5 (grey 0.95)) (disc 41.7 39.3 2.0 (rgb 0.6 0.3 0.85)) (disc 39.2 10.6 2.5 (rgb 0.6 0.3 0.85)) (disc 46.2 14.4 2.9 (rgb 1 0.95 0.75)) (disc 25.5 17.0 2.3 (grey 0.95)) (disc 23.0 7.4 2.1 (rgb 1 0.86 0.25)) (disc 29.1 61.5 2.1 (grey 0.95)) (disc 5.0 58.3 2.3 (rgb 1 0.86 0.25)) (disc 19.2 27.3 2.0 (rgb 0.6 0.3 0.85)) (disc 0.1 6.1 2.1 (rgb 0.6 0.3 0.85)) (disc 64.1 6.1 2.1 (rgb 0.6 0.3 0.85)) (disc 17.0 16.4 2.4 (rgb 0.95 0.55 0.7)) (disc 17.8 -2.2 2.6 (grey 0.95)) (disc 17.8 61.8 2.6 (grey 0.95)) (disc 57.5 35.0 2.5 (grey 0.95))
+             (noise 2 0.25) (patches 5 0.25 (shade 0.75)))))
+; ..a drift of them: a sheet over x a to b and z c to d, a point every e, (hf x z) above the
+; ground (fl x z h), and none past where hf has sunk well under it
+(: (drift t a b c d e hf fl)
+   (: nx (int (floor ((b - a) / e + 0.5))) nz (int (floor ((d - c) / e + 0.5)))
+      (pt x z) (: h (hf x z) (h < -0.2 ? () [x (fl x z h + h - 0.06) z]))
+      (drape t (map (j \ (: z (c + (d - c) * j / nz) (map (i \ pt (a + (b - a) * i / nx) z) ^(nx + 1)))) ^(nz + 1)))))
+(: (sm v) (: u (max 0.0 (min 1.0 v)) (u * u * (3.0 - 2.0 * u))))
+; ..a heap h high against a wall, out d from it reaching r, and sinking under past r
+(: (heap h r d) (: s (max 0.0 d / r) (h * (1.0 - s ** 1.6) - 0.25 * s)))
+; ..the higher of two heaps, rounded where they meet as a drift fills a corner
+(: (smax a b) (0.5 * (a + b + sqrt ((a - b) * (a - b) + 0.5))))
+; ..lumps on a heap, more the deeper it is
+(: (lumpy h x z) (h + sm (h / 0.5) * (0.2 * sin (3.1 * x + 1.7 * z) * sin (2.3 * z - 1.3 * x + 0.7)
+                                      + 0.1 * sin (7.3 * x + 0.4) * sin (6.1 * z + 1.9))))
+; ..bouquets and wreaths stood in a drift, n tried by seed sd over its x a to b and z c to
+; d; each bouquet a picture turned roughly to the street, leaning by s, each wreath leant
+; back into the heap
 (: (rnd i) (: v (sin (i * 12.9898 + 78.233) * 43758.5453) (v - floor v)))
 (: blooms [posies lilies roses])
-(: (strew x y z q f sd) (: t (rnd (sd + 0.61)) b (blooms (int (floor (2.99 * rnd (sd + 0.29)))))
-   (? (t < 0.09) [(decal [x (y + 0.4) z] (q 0) (q 1) 0.95 0.95 wreath)]
-      [(decal [x (y + 0.24) z] f [0 1 0] 0.42 0.48 b)])))
-(: (bank a b w d h n sd fl) (cats (map (i \ (: u (rnd (sd + i)) k (rnd (sd + i + 0.37) * rnd (sd + i + 0.83))
-                                          x (a + (b - a) * u) z (w - 0.12 - d * k)
-                                          y (fl x z + h * (1 - k) * (0.55 + 0.45 * rnd (sd + i + 0.17)) - 0.12)
-                                       (: a (rnd (sd + i + 0.53) - 0.5) (strew x y z [[0 0.45 -0.89] [0 0.89 0.45]] [a 0 -1] (sd + i)))))
-                                ^n)))
-; ..the same banked against a wall at x w, from z a to b, out d toward x's s side
-(: (side w s a b d h n sd fl) (cats (map (i \ (: u (rnd (sd + i)) k (rnd (sd + i + 0.37) * rnd (sd + i + 0.83))
-                                          z (a + (b - a) * u) x (w + s * (0.12 + d * k))
-                                          y (fl x z + h * (1 - k) * (0.55 + 0.45 * rnd (sd + i + 0.17)) - 0.12)
-                                       (: a (rnd (sd + i + 0.53) - 0.5) (strew x y z [[(0.45 * s) 0.45 -0.77] [0 0.89 0.45]] [(0.6 * s + a) 0 -1] (sd + i)))))
-                                ^n)))
-; ..the office's ground: the pavement, the steps up from it, the landing; the bays' floor
+(: (strew x y z s sd) (: t (rnd (sd + 0.61)) b (blooms (int (floor (2.99 * rnd (sd + 0.29)))))
+   (? (t < 0.12) [(decal [x (y + 0.4) z] [0 0.45 -0.89] [0 0.89 0.45] 0.95 0.95 wreath)]
+      [(decal [x (y + 0.24) z] [(rnd (sd + 0.53) - 0.5 + s) 0 -1] [0 1 0] 0.42 0.48 b)])))
+(: (plant n sd a b c d hf fl)
+   (cats (map (i \ (: x (a + (b - a) * rnd (sd + i)) z (c + (d - c) * rnd (sd + i + 0.37)) h (hf x z)
+                      (h < 0.15 ? () (strew x (fl x z h + h - 0.22) z (0.0 - 0.15 * x) (sd + i))))) ^n)))
+; ..the office's ground: the pavement, the steps up from it, the landing, and over the
+; steps under a deep drift their nosings' slope; the bays' floor, its sunken foot
 (: (stepy x z) (? (z < 28.6) 9.0 (min 9.6 (9.15 + 0.15 * floor ((z - 28.6) / 0.5)))))
-(: (bayy x z) 8.85)
+(: (stairg x z h) (: g (stepy x z) r (min 9.6 (max 9.0 (9.0 + 0.3 * (z - 28.1)))) (g + sm (h / 0.3) * (r - g))))
+(: (bayg x z h) (z < 33 ? 9.0 8.85))
+; ..the heaps: either side of the doors high on the wall, less before them, up the steps'
+; sides, and none round the candles; in a bay against its back and its buttresses; in an
+; outer bay the same, gone toward its open end at x o
+(: (stairh x z) (: ax (abs x) k (sm ((ax - 1.3) / 0.6))
+   wall (heap (1.4 + 1.2 * k) (2.2 + 1.2 * k) (36.9 - z)) side (heap (2.0 * sm ((z - 29.0) / 2.2)) 1.9 (3.2 - ax))
+   cl (sm ((sqrt (x * x + (z - 33.3) * (z - 33.3)) - 0.95) / 0.75))
+   (lumpy ((smax wall side + 0.25) * cl - 0.25) x z)))
+(: (bayh a b) (\ x z (lumpy (smax (heap 2.4 3.4 (35.0 - z)) (heap (1.8 * sm ((z - 29.4) / 2.4)) 1.8 (min (x - a) (b - x)))) x z)))
+(: (outh w o) (\ x z (: h (smax (heap 2.2 3.0 (35.0 - z)) (heap (1.6 * sm ((z - 29.4) / 2.4)) 1.6 (abs (x - w))))
+                       (lumpy ((h + 0.25) * sm ((abs (o - w) - abs (x - w) + 0.2) / 1.2) - 0.25) x z))))
 ; ..a wreath on its easel: two dark legs and a bar
 (: (easel x y z) [(decal [x (y + 1.25) z] [0 0 -1] [0 1 0] 1.15 1.15 wreath)
                   (whole (skin {'all darkmetal} (solid (box [(x - 0.42) y (z + 0.02)] [(x - 0.38) (y + 1.5) (z + 0.06)]))))
                   (whole (skin {'all darkmetal} (solid (box [(x + 0.38) y (z + 0.02)] [(x + 0.42) (y + 1.5) (z + 0.06)]))))
                   (whole (skin {'all darkmetal} (solid (box [(x - 0.42) (y + 0.6) (z + 0.02)] [(x + 0.42) (y + 0.64) (z + 0.06)]))))])
+; ..the sweeper's roller about x, r round, an octagon across the road's way
+(: (roller x r) (: a (x - r) b (x + r) y0 8.85 y1 (8.85 + 2.0 * r) k (0.586 * r) p 23.2 q 26.8
+   (whole (skin {'all drumsteel}
+           (cut [(a + k) y0 p] [a (y0 + k) p] [(a + k) y0 q] (cut [a (y1 - k) p] [(a + k) y1 p] [a (y1 - k) q]
+            (cut [b (y0 + k) p] [(b - k) y0 p] [b (y0 + k) q] (cut [(b - k) y1 p] [b (y1 - k) p] [(b - k) y1 q]
+             (solid (box [a y0 p] [b y1 q]))))))))))
 ; ..an office beam level over the street, its end cut to a wedge
 (: (beam x) (skin {'all concrete}
              (cut [(x + 1.3) 22.6 22.5] [(x - 1.3) 22.6 22.5] [x 21.6 21]
@@ -271,17 +300,22 @@
   (decal [0 8.86 25] [0 1 0] [0 0 1] 4 5.8 zebra)
   ; ..across it from the office a great column, the third of its beams reaching over to it,
   ; and either side of the column a wing, upright at the pavement, rising, then level to
-  ; meet it; the shafts come up under the west wing, a doorway north from each
-  (skin {'all concrete} (solid (box [3 9 14] [6 26 19.5])))
-  (skin {'all concrete} (cut [-5.5 13 19] [-5.5 13 14.5] [-2 17 14.5] (solid (box [-5.5 9 14.5] [3 17 19]))))
-  (skin {'all concrete} (cut [14.5 13 14.5] [14.5 13 19] [11 17 14.5] (solid (box [6 9 14.5] [14.5 17 19]))))
+  ; meet it, the pavement going on round behind them; the shafts come up in the west wing,
+  ; a doorway north from each, and the east is an arch to walk under: a leg near eye high
+  ; to pull up onto, an arm rising from it to walk up, and a beam
+  (skin {'all concrete} (solid (box [3 9 15.8] [6 26 19.5])))
+  (skin {'all concrete} (cut [-5.5 10.6 19] [-5.5 10.6 15.8] [-0.65 13.4 15.8] (solid (box [-5.5 9 15.8] [3 13.4 19]))))
+  (skin {'all concrete} (cut [12 10.4 16] [12 10.4 19.3] [8 13.2 16] (solid (box [11 9 16] [12 11.1 19.3]))))
+  (skin {'all concrete} (cut [12 10.4 16] [12 10.4 19.3] [8 13.2 16]
+                         (cut [12 9.4 16] [12 9.4 19.3] [8 12.2 16] (solid (box [8 9.9 16] [12 13.2 19.3])))))
+  (skin {'all concrete} (solid (box [6 12.3 16] [8 13.2 19.3])))
   ; ..the station's sign on the wing, a room of the street's air before it to hang it on
-  (room [-5.5 9 19] [3 13 19.6])
+  (skin {'all concrete} (room [-5.5 9 19] [3 13 19.6]))
   (buzz (sign [-0.0 12.2 19] 0.5 "STATION" (rgb 0.3 0.75 1)))
   (bin [-7.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
   (bin [8.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
-  ; ..and a basketball someone left out
-  (ball [10 9 21])
+  ; ..and a basketball someone left out on top of the arch
+  (ball [7 13.2 17.65])
   ; the way out north: two grav shafts behind the hall's north wall, either side of the sign;
   ; facing them, up on the right and down on the left, each a doorway at its foot and one
   ; at its head out of the wing
@@ -289,8 +323,8 @@
   (grav [-2.7 0 16.3] [-0.7 9 18.3] 'down)
   (air (box [0.9 0 15.9] [2.5 2.6 16.4]))
   (air (box [-2.5 0 15.9] [-0.9 2.6 16.4]))
-  (air (box [0.9 9 18.2] [2.5 11.6 19.1]))
-  (air (box [-2.5 9 18.2] [-0.9 11.6 19.1]))
+  (skin {'all concrete} (air (box [0.9 9 18.2] [2.5 11.6 19.1])))
+  (skin {'all concrete} (air (box [-2.5 9 18.2] [-0.9 11.6 19.1])))
   ; the corner shop at the street's west end, three storeys, its floor a step below the
   ; pavement: a window onto the street, steps down from the east to its door by the corner, a sign
   ; standing out from its front, and a spinner on its roof
@@ -311,25 +345,35 @@
   (ad [-24 19 14.03] [0 0 1] [0 1 0] 13 7 adredblue)
   (ad [44.97 28 30] [-1 0 0] [0 1 0] 12 6 adgreen)
   ; ..a street sweeper out of the garage, in the middle of the road before it, nose east,
-  ; headlights on: a cab-over truck's front, a grille and a raked windscreen, the cab and
-  ; hood and body yellow, a steel roller under each end
-  (whole (skin {'all drumsteel} (cut [-35.678 8.85 23.8] [-36 9.172 23.8] [-35.678 8.85 26.2] (cut [-36 9.628 23.8] [-35.678 9.95 23.8] [-36 9.628 26.2] (cut [-34.9 9.172 23.8] [-35.222 8.85 23.8] [-34.9 9.172 26.2] (cut [-35.222 9.95 23.8] [-34.9 9.628 23.8] [-35.222 9.95 26.2] (solid (box [-36 8.85 23.8] [-34.9 9.95 26.2]))))))))
-  (whole (skin {'all drumsteel} (cut [-39.628 8.85 23.8] [-39.95 9.172 23.8] [-39.628 8.85 26.2] (cut [-39.95 9.628 23.8] [-39.628 9.95 23.8] [-39.95 9.628 26.2] (cut [-38.85 9.172 23.8] [-39.172 8.85 23.8] [-38.85 9.172 26.2] (cut [-39.172 9.95 23.8] [-38.85 9.628 23.8] [-39.172 9.95 26.2] (solid (box [-39.95 8.85 23.8] [-38.85 9.95 26.2]))))))))
-  (whole (skin {'all sweepyellow} (solid (box [-40.5 9.75 23.75] [-34.6 10 26.25]))))
-  (whole (skin {'all sweepyellow} (cut [-34.9 10.95 23.75] [-34.5 10.55 23.75] [-34.9 10.95 26.25] (solid (box [-36.25 9.95 23.75] [-34.5 10.95 26.25])))))
-  (whole (skin {'all sweepyellow} (solid (box [-34.5 9.85 23.7] [-34.32 10.12 26.3]))))
-  (decal [-34.31 9.985 25] [1 0 0] [0 1 0] 2.6 0.27 hazard)
-  (decal [-34.495 10.4 25] [1 0 0] [0 1 0] 1.5 0.42 grille)
-  (whole (skin {'all sweepyellow} (cut [-36.75 12.4 23.85] [-36.25 11.6 23.85] [-36.75 12.4 26.15] (solid (box [-38.1 10.95 23.85] [-36.25 12.4 26.15])))))
-  (decal [-36.49 12.006 25] [0.848 0.53 0] [-0.53 0.848 0] 2.1 0.82 cabglass)
-  (decal [-37.25 11.85 23.84] [0 0 -1] [0 1 0] 1.3 0.75 cabglass)
-  (decal [-37.25 11.85 26.16] [0 0 1] [0 1 0] 1.3 0.75 cabglass)
-  (whole (skin {'all sweepyellow} (solid (box [-37.75 12.4 24.7] [-37.15 12.52 25.3]))))
-  (whole (skin {'all sweepyellow} (cut [-40.5 11.3 23.75] [-40.1 11.7 23.75] [-40.5 11.3 26.25] (solid (box [-40.5 10 23.75] [-38.1 11.7 26.25])))))
-  (decal [-39.3 10.55 23.74] [0 0 -1] [0 1 0] 2.4 0.25 hazard)
-  (decal [-39.3 10.55 26.26] [0 0 1] [0 1 0] 2.4 0.25 hazard)
-  (bulb [-34.47 10.45 24] (rgb 1 0.95 0.82))
-  (bulb [-34.47 10.45 26] (rgb 1 0.95 0.82))
+  ; headlights on: a big four-by-four's body, its hood sloping to the nose, a raked
+  ; windscreen and a cabin narrowing to its roof, all yellow, on a steel roller each end
+  (roller -35.5 0.75) (roller -39.2 0.75)
+  (whole (skin {'all sweepyellow}
+          (cut [-34.4 11 23.275] [-35.6 11.3 23.275] [-34.4 11 26.725]
+           (cut [-40.2 11 23.275] [-40.2 11 26.725] [-39.9 11.3 23.275]
+            (cut [-34.4 9 23.725] [-34.75 9 23.275] [-34.4 12 23.725]
+             (cut [-34.75 9 26.725] [-34.4 9 26.275] [-34.75 12 26.725]
+              (solid (box [-40.2 9.9 23.275] [-34.4 11.3 26.725]))))))))
+  (whole (skin {'all sweepyellow}
+          (cut [-35.55 11.3 23.5] [-36.35 12.4 23.5] [-35.55 11.3 26.5]
+           (cut [-40.1 11.3 23.5] [-40.1 11.3 26.5] [-39.8 12.4 23.5]
+            (cut [-36 11.3 23.425] [-40 11.3 23.425] [-36 12.4 23.675]
+             (cut [-36 11.3 26.575] [-40 11.3 26.575] [-36 12.4 26.325]
+              (solid (box [-40.1 11.25 23.425] [-35.5 12.4 26.575]))))))))
+  (whole (skin {'all sweepyellow} (solid (box [-34.4 9.95 23.2] [-34.22 10.25 26.8]))))
+  (whole (skin {'all sweepyellow} (solid (box [-38.2 12.4 24.775] [-37.8 12.55 25.225]))))
+  (decal [-34.21 10.1 25] [1 0 0] [0 1 0] 3.6 0.27 hazard)
+  (decal [-34.39 10.48 25] [1 0 0] [0 1 0] 1.95 0.45 grille)
+  (decal [-35.94 11.857 25] [0.809 0.588 0] [-0.588 0.809 0] 2.6 1.05 cabglass)
+  (decal [-39.948 11.903 25] [-0.965 0.263 0] [0.263 0.965 0] 2.3 0.7 cabglass)
+  (decal [-37.03 11.853 23.538] [0 0.222 -0.975] [0 0.975 0.222] 0.85 0.7 cabglass)
+  (decal [-38.7 11.853 23.538] [0 0.222 -0.975] [0 0.975 0.222] 2 0.7 cabglass)
+  (decal [-37.03 11.853 26.462] [0 0.222 0.975] [0 0.975 -0.222] 0.85 0.7 cabglass)
+  (decal [-38.7 11.853 26.462] [0 0.222 0.975] [0 0.975 -0.222] 2 0.7 cabglass)
+  (decal [-37.3 10.6 23.265] [0 0 -1] [0 1 0] 5 0.22 hazard)
+  (decal [-37.3 10.6 26.735] [0 0 1] [0 1 0] 5 0.22 hazard)
+  (bulb [-34.37 10.75 23.875] (rgb 1 0.95 0.82))
+  (bulb [-34.37 10.75 26.125] (rgb 1 0.95 0.82))
   ; ..the garage it came out of, shut, a strip over it
   (decal [-44.97 10.75 25] [1 0 0] [0 1 0] 4.6 3.8 garage)
   (strip-light [-44.8 12.9 25])
@@ -345,7 +389,7 @@
   (skin {'all concrete} (solid (box [-3.2 8.85 36.9] [3.2 18 37.1])))
   (repeat 4 [9 0 0]
    [(skin {'all concrete} (solid (box [-14.8 9 31.8] [-12.2 32.2 37.1])))
-    (skin {'all concrete} (cut [-14.8 9 29] [-12.2 9 29] [-13.5 13.5 31.8] (solid (box [-14.8 9 29] [-12.2 13.5 31.8]))))
+    (skin {'all concrete} (cut [-14.8 9 29] [-12.2 9 29] [-13.5 13.5 31.8] (solid (box [-14.8 9 29] [-12.2 13.5 33]))))
     (skin {'all concrete} (cut [-14.8 18.2 33] [-12.2 18.2 33] [-13.5 20.6 30.4] (solid (box [-14.8 18.2 30.4] [-12.2 22.6 33]))))])
   (beam -13.5) (beam -4.5) (beam 13.5)
   (skin {'all concrete} (solid (box [3.2 20.6 19.4] [5.8 22.6 30.5])))
@@ -357,23 +401,18 @@
   ; ..and at its door a memorial: wreaths on easels either side and one on the doors,
   ; bouquets heaped along the wall and up the steps' ends, and on the landing eight candles
   ; round, seven brown and lit, the purple one far left unlit
-  (easel -2.35 9.6 36.2) (easel 2.35 9.6 36.2)
-  ; ..mounds of them against the walls, deepest either side of the doors, down the stairs'
-  ; sides to the pavement, and along the bays either side
-  (bank -3.2 -1.5 36.9 2.2 1.1 110 100 stepy) (bank 1.5 3.2 36.9 2.2 1.1 110 300 stepy)
-  (bank -1.5 1.5 36.9 1.3 0.45 70 500 stepy)
-  (side -3.2 1 28.2 36.8 1.5 0.9 140 700 stepy) (side 3.2 -1 28.2 36.8 1.5 0.9 140 900 stepy)
-  (bank -12.2 -5.8 35 1.6 0.8 90 1100 bayy) (bank 5.8 12.2 35 1.6 0.8 90 1300 bayy)
-  (side -12.2 1 32 35 1.2 0.6 25 1500 bayy) (side -5.8 -1 32 35 1.2 0.6 25 1600 bayy)
-  (side 5.8 1 32 35 1.2 0.6 25 1700 bayy) (side 12.2 -1 32 35 1.2 0.6 25 1800 bayy)
+  (easel -2.1 9.6 34.4) (easel 2.1 9.6 34.4)
+  ; ..drifts of them against the walls, deepest either side of the doors, down the stairs'
+  ; sides to the pavement, and in the bays either side
+  (drift heapwarm -3.25 3.25 28.2 36.95 0.25 stairh stairg)
+  (plant 420 100 -3.2 3.2 28.4 36.9 stairh stairg)
+  (drift heappale -12.25 -5.75 28.4 35.05 0.25 (bayh -12.2 -5.8) bayg)
+  (drift heappale 5.75 12.25 28.4 35.05 0.25 (bayh 5.8 12.2) bayg)
+  (drift heapwarm -18.0 -14.75 28.4 35.05 0.25 (outh -14.8 -18.0) bayg)
+  (drift heapwarm 14.75 18.0 28.4 35.05 0.25 (outh 14.8 18.0) bayg)
+  (plant 260 1100 -12.2 -5.8 28.6 35 (bayh -12.2 -5.8) bayg) (plant 260 1300 5.8 12.2 28.6 35 (bayh 5.8 12.2) bayg)
+  (plant 130 1500 -18.0 -14.8 28.6 35 (outh -14.8 -18.0) bayg) (plant 130 1600 14.8 18.0 28.6 35 (outh 14.8 18.0) bayg)
   (decal [0 11.6 37.47] [0 0 -1] [0 1 0] 0.8 0.8 wreath)
-  (flowers -2.955 9.6 36.62 posies) (flowers -2.544 9.6 36.62 lilies) (flowers -2.108 9.6 36.62 roses)
-  (flowers -1.853 9.6 36.62 posies) (flowers 1.851 9.6 36.62 lilies) (flowers 2.159 9.6 36.62 roses)
-  (flowers 2.518 9.6 36.62 posies) (flowers 2.951 9.6 36.62 lilies) (flowers -1.287 9.6 36.55 roses)
-  (flowers -0.571 9.6 36.55 posies) (flowers 0.059 9.6 36.55 lilies) (flowers 0.78 9.6 36.55 roses)
-  (flowers 1.359 9.6 36.55 posies) (flowers -2.85 9.15 28.85 posies) (flowers 2.85 9.15 28.85 lilies)
-  (flowers -2.85 9.3 29.35 lilies) (flowers 2.85 9.3 29.35 roses) (flowers -2.85 9.45 29.85 roses)
-  (flowers 2.85 9.45 29.85 posies) (flowers -2.85 9.6 30.35 posies) (flowers 2.85 9.6 30.35 lilies)
   (candle 0.21 9.6 33.808 0.32 wax) (candle 0.508 9.6 33.51 0.26 wax)
   (candle 0.508 9.6 33.09 0.3 wax) (candle 0.21 9.6 32.792 0.22 wax)
   (candle -0.21 9.6 32.792 0.28 wax) (candle -0.508 9.6 33.09 0.34 wax)

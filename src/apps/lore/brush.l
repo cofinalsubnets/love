@@ -6,7 +6,7 @@
 ; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
 ; corners, facing, and the brush index; brush-mesh's (look n b) answers (p \ [tex u v]). a brush
 ; 'open 1 has no top face, and one 'whole 1 is never cut on the grid.
-(module (brush brush brush-box brush-prism brush-cut brush-move brush-mirror brush-medium brush-mesh brush-chunks brush-faces)
+(module (brush brush brush-box brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-mesh brush-chunks brush-faces)
 (borrow 'view)                          ; min2 max2
 (borrow 'vec)                           ; triples
 (borrow 'mesh)
@@ -51,9 +51,12 @@
              q [(a 0) 0.0 (a 1)] o (dot nn (sub m q) > 0.0 ? (c* -1.0 nn) nn)
              (plane o q))
    (brush air (map wall ^n + [[[0.0 -1.0 0.0] (0.0 - y0)] [[0.0 1.0 0.0] y1]])))
- (brush-cut b p q r) (: n (unit (cross (sub q p) (sub r p))) m (mid (cats (filter (f \ #f >= 3) (b 'faces))))
-   o (dot n (sub m p) > 0.0 ? (c* -1.0 n) n)
-   (brush (b 'air) (b 'planes + [(plane o p)])))
+ ; ..b less what lies across the plane through p q r from b's middle; brush-cuts each of cs's
+ ; [p q r] so, every one from the middle of b as it was given
+ (centre b) (mid (cats (filter (f \ #f >= 3) (b 'faces))))
+ (away m p q r) (: n (unit (cross (sub q p) (sub r p))) (plane (dot n (sub m p) > 0.0 ? (c* -1.0 n) n) p))
+ (brush-cut b p q r) (brush (b 'air) (b 'planes + [(away (centre b) p q r)]))
+ (brush-cuts b cs) (: m (centre b) (brush (b 'air) (b 'planes + map (c \ away m (c 0) (c 1) (c 2)) cs)))
  (brush-move b d) (brush (b 'air) (map (pl \ [(pl 0) (pl 1 + dot (pl 0) d)]) (b 'planes)))
  (brush-mirror b k c) (: (fl v) (map (i \ i = k ? (0.0 - v i) (v i)) ^3)
    (brush (b 'air) (map (pl \ (: n (pl 0) [(fl n) (pl 1 - 2.0 * c * n k)])) (b 'planes))))

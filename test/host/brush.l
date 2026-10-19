@@ -40,5 +40,11 @@
        (all (f \ f 2 = 0) alone) (any (f \ f 2 = 1) (brush-faces [room col]))
        ; 80 metre squares, two triangles each
        (#(mesh0 1) = 2 * 80)))
+;; a band cut from a box along both its sides, each side judged from the box's middle
+(: sky (brush-box 1 [0.0 0.0 0.0] [20.0 20.0 2.0])
+   band (brush-cuts (brush-box 0 [10.0 9.7 0.0] [14.5 12.7 1.0])
+                    [[[14.5 9.18 0.0] [14.5 9.18 1.0] [10.0 11.78 0.0]] [[14.5 10.1 0.0] [14.5 10.1 1.0] [10.0 12.7 0.0]]])
+   (m p) (brush-medium [sky band] p)
+ (test (m [12.25 10.94 0.5] = 0) (m [12.25 12.0 0.5] = 1) (m [12.25 10.0 0.5] = 1) (m [14.3 10.0 0.5] = 0) (m [10.3 12.3 0.5] = 0)))
 (test_fin ())
 (puts "brush: ok\n")
