@@ -124,6 +124,11 @@
           'thumb1                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_ARCH_6M__")   ; gcc's for -mcpu=cortex-m0
           ('i386 || 'i386m16)          '("__i386__" "__i386" "__ILP32__")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
+   ; __CHAR_UNSIGNED__ follows the target and -f[un]signed-char
+   (uchar? tgt uc) (uc @ 'u 1 's 0 (elem "__CHAR_UNSIGNED__" (archdefs tgt) ? 1 0))
+   ; gcc's spelling of the -fstack-protector level
+   (sspdefs sp) (sp @ 1 ["__SSP__=1"] 2 ["__SSP_STRONG__=2"] 3 ["__SSP_ALL__=3"] 4 ["__SSP_EXPLICIT__=4"] ())
+   (chdefs tgt uc) (filter (d \ d != "__CHAR_UNSIGNED__") (archdefs tgt) + (uchar? tgt uc = 1 ? ["__CHAR_UNSIGNED__"] ()))
    ; the OS predefines: gcc's spellings but the unprefixed linux/unix, which collide with
    ; identifiers. takes a flag's text or love-os's nom; 'inle refuses: a compile there owes -os
    (toos s) ((string? s ? (name s) s) @
@@ -357,8 +362,8 @@
    gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0" "__GNUC_STDC_INLINE__=1")
    ; bool/true/false bare, as C23; an iso -std keeps them plain names
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp})
-    (un ? (stddefs tgt sw + booldefs dia + ds) (archdefs tgt + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + stddefs tgt sw
+   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf 'ssp sp})
+    (un ? (stddefs tgt sw + booldefs dia + ds) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + (sspdefs sp) + stddefs tgt sw
                  ; our libc carries its whole surface on every kernel: a source asks it, not the kernel
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
@@ -375,7 +380,7 @@
        (f ? ["__FILE__=\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] [c])) (chars f)))\""]))
    ; the shared front end: source -> (1 ast stag sigs ..) | a fatal exit. the -D lines prepend
    ; to the text before the one lex, stamped 1-k..0, so every source line keeps its number
-   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp}))
+   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc 'ssp sp}))
     (: ds9 (cc-defs t + filedef src mp)
        ; `-` is stdin, for every door; cdir answers "" (the cwd). then disk, then vb by key
        r (src = "-" ? [1 (slurp in)]
@@ -389,7 +394,7 @@
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
-       ps (cparse-o <>pp tgt dia {'swch sw})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
+       ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ps))
    ; a relocatable object: the standard sections + symbols + relocations, plus one section per
@@ -406,19 +411,43 @@
            [".ARM.attributes" 1879048195 0 1                                         ; SHT_AARCH64_ATTRIBUTES
              [['raw ([65] + le32 35 + o-strbytes "aeabi_feature_and_bits"
                      + [0 1 0 0 b 1 p 2 0])]]]]))                              ; optional, uleb; bti pac gcs
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz}))
+   ; -fcf-protection's mark, gcc's bytes: x86's feature_1_and, ibt 1 and shstk 2, its data
+   ; padded to the class's word
+   (cfsecs cf tgt)
+    (!cf ? ()
+       (: w (tgt = 'x64 ? 8 4)
+          [[".note.gnu.property" 7 2 w
+             [['raw (le32 4 + le32 (w + 8) + le32 5 + o-strbytes "GNU" + [0]
+                     + le32 3221225474 + le32 4 + le32 cf + (w = 8 ? (le32 0)))]]]]))
+   ; the stack protector's guard, (mode reg symbol offset): 'global a symbol's word, 'tls x86's
+   ; segment off fs or gs, 'sysreg an a64 system register's pointer
+   (sspguard f)
+    (: tgt (f 'tgt) x86 (elem tgt '(x64 i386))
+       m (f 'sspm || (f 'sspr || f 'ssps ? (x86 ? 'tls 'sysreg) 'global))
+       r (f 'sspr || (m = 'tls ? (tgt = 'x64 ? "fs" "gs")))
+       o (charm? (f 'sspo) ? (f 'sspo) (m = 'tls ? (tgt = 'x64 ? 40 20) 0))
+       (? !(elem tgt '(x64 i386 a64)) (udie 2 "cc: -fstack-protector -- no canary lane on \(tgt)")
+          (x86 ? (m = 'sysreg) (m = 'tls)) (udie 2 "cc: -mstack-protector-guard=\(m) -- no such guard on \(tgt)")
+          (m = 'tls && !(elem r '("fs" "gs"))) (udie 2 "cc: -mstack-protector-guard-reg=\(r) -- x86's guard sits off fs or gs")
+          (m = 'sysreg && !(elem r '("sp_el0" "tpidr_el0" "tpidr_el1" "tpidrro_el0")))
+           (udie 2 "cc: -mstack-protector-guard-reg=\(r) -- no lane for that system register")
+          (m = 'sysreg && !(0 <= o <= 32760 && o % 8 = 0))
+           (udie 2 "cc: -mstack-protector-guard-offset=\(o) -- a64's is a word offset under 32768")
+          (!x86 && f 'ssps) (udie 2 "cc: -mstack-protector-guard-symbol -- x86 only")
+          [m r (f 'ssps || (m = 'global ? "__stack_chk_guard")) o]))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp]] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk] pfes] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
            (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
               (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                          + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
-                         + bpsecs bp)
+                         + bpsecs bp + cfsecs cf tgt)
                  ; the file-scope asm's sections, and the names its .globl exports by where they landed
                  at (two? asecs ? asecs [() () () ()])
                  fns (fnames + filter (s \ !(elem s fnames)) (at 1))
@@ -515,6 +544,20 @@
                 (call main)
                 (pop r6)
                 (ret))
+   ; dyld's exe enters by lc_main as main(argc, argv, envp, apple) on an aligned stack;
+   ; argv still points into the kernel's block, so argc is the word below it
+   crt0-macmain '((lea r6 r5 -8)
+                  (and sp sp -16)
+                  (li r5 4)
+                  (call __love_start)
+                  (mov r6 r0) (li r0 33554433) (sys)
+                  (label __love_start)
+                  (push r6)
+                  (lea r5 r6 8)
+                  (ld r6 r6 0)
+                  (call main)
+                  (pop r6)
+                  (ret))
    ; the i386 entry: argc at [esp], the vector's address and what ebx says of the kernel handed to
    ; __love_start as cdecl arguments with esp 16-aligned at the call, then exit_group 252 (exit 1,
    ; a BSD's, if it returns)
@@ -929,7 +972,7 @@
        runs (charm? dorg ? [['at org 'text 'rodata 'nifs]
                             ['copy dorg 'data 'bss]]
                            [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (mac? ? crt0-macos (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+       c9 (mac? ? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
        all (arm? || so ? srcs
                    (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
@@ -963,8 +1006,9 @@
    ; -pie links an et_dyn static-pie that slides its abs64 pointers at startup; the default is
    ; a fixed-base et_exec
    (glu? a ch) (2 < #a && a 0 = 45 && a 1 = ch)
-   ; the cc tolerance: advisory families (-W, -O, -g, -pipe, -f..) ride through so `CC=mooncc`
-   ; drives a gcc recipe; -Wl,/-Wa,/-Wp, carry real arguments and refuse. -L: we search no library
+   ; the cc tolerance: advisory families (-W, -O, -g, -pipe) ride through so `CC=mooncc`
+   ; drives a gcc recipe; an -f or -m is honoured or refuses by name (fok?), and -Wl,/-Wa,/-Wp,
+   ; carry real arguments and refuse. -L: we search no library
    ; path. -l/-L glued only, so a bare one refuses rather than eat the next word
    ; -- the dialects --
    ; -std= is loud: reading one dialect as another is worse than refusing. `moon`, the default, is
@@ -996,10 +1040,29 @@
                  0)
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
-             starts? a "-f" || glu? a 108 || glu? a 76 ||
+             glu? a 108 || glu? a 76 ||
              starts? a "-W" &&
              !(starts? a "-Wl," || starts? a "-Wa," || starts? a "-Wp,"))
    ; the -nostdlib family: no runtime, so an owed symbol is an undefined reference
+   ; the -f flags taken as they stand, the code already being what each asks (no unwind table,
+   ; canary or ident laid, pc-relative where fpic? allows), and the hints that change nothing seen
+   fsound '("-fno-strict-aliasing" "-fstrict-aliasing" "-fno-delete-null-pointer-checks" "-fdelete-null-pointer-checks" "-fno-common"
+            "-fno-pie" "-fno-PIE" "-fno-pic" "-fno-PIC" "-fomit-frame-pointer" "-fno-plt"
+            "-fno-asynchronous-unwind-tables" "-fno-unwind-tables" "-fno-exceptions" "-fno-stack-check"
+            "-fno-stack-clash-protection" "-fno-addrsig" "-fno-ident"
+            "-fno-dwarf2-cfi-asm" "-fno-semantic-interposition" "-fintegrated-as" "-fno-integrated-as"
+            "-fvisibility=default" "-fstrict-flex-arrays" "-fms-extensions")
+   fhint '("-ffunction-sections" "-fno-function-sections" "-fdata-sections" "-fno-data-sections"
+           "-fconserve-stack" "-fno-inline-functions-called-once" "-fno-partial-inlining"
+           "-fno-tree-vectorize" "-fno-unroll-loops" "-fno-reorder-blocks" "-fno-gcse"
+           "-fno-var-tracking" "-fno-var-tracking-assignments" "-fcolor-diagnostics"
+           "-fno-color-diagnostics" "-fno-caret-diagnostics" "-fno-diagnostics-show-caret")
+   (fok? a) (elem a fsound || elem a fhint || starts? a "-fstrict-flex-arrays=" ||
+             starts? a "-falign-loops" || starts? a "-falign-jumps" || starts? a "-falign-labels" ||
+             starts? a "-fno-align-loops" || starts? a "-fno-align-jumps" || starts? a "-fno-align-labels" ||
+             starts? a "-fdiagnostics-" || starts? a "-fmessage-length=" || starts? a "-fdebug-prefix-map=")
+   ; the -m flags taken as they stand: x64 never stores below sp, and a tuning is a hint
+   (mok? a) (a = "-mno-red-zone" || a = "-mred-zone" || starts? a "-mtune=")
    (nostd? a) (a = "-nostdlib" || a = "-nostartfiles" ||
                a = "-nodefaultlibs" || a = "-ffreestanding")
    ; -mbranch-protection's words: clang's leaf, b-key, pc and standard (gcs) have no lane here
@@ -1012,11 +1075,13 @@
    ; the flags are one tablet, each a pin at its own arm; is ds ins libs fws collect reversed
    ; and are righted at the end, every other key last-one-wins
    (fpush t k v) (pin t k (v . t k))
+   (xkon t k) (elem k (t 'xk) ? t (fpush t 'xk k))
    ; every key seeded: a map pattern matches on presence, so a key pinned only with its flag
    ; would fail the consumers' destructure exactly when the flag is absent
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
-                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz ()}
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
+                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1059,6 +1124,50 @@
           ; -fshort-wchar: wchar_t is unsigned short and L"" lays 16-bit units
           ("-fshort-wchar" . r) (flags r (pin t 'swch 1))
           ("-fno-short-wchar" . r) (flags r (pin t 'swch ()))
+          ; -f[un]signed-char: plain char's sign over the target's
+          (("-funsigned-char" || "-fno-signed-char") . r) (flags r (pin t 'uch 'u))
+          (("-fsigned-char" || "-fno-unsigned-char") . r) (flags r (pin t 'uch 's))
+          ("-fno-jump-tables" . r) (flags r (pin t 'njt 1))
+          ("-fjump-tables" . r) (flags r (pin t 'njt ()))
+          ; -fno-builtin[-NAME]: a plain memset or memcpy stays a call
+          ("-fno-builtin" . r) (flags r (pin t 'nbi 1))
+          ((("-fno-builtin-" + w) . r) && #w) (flags r (t 'nbi = 1 ? t (fpush t 'nbi w)))
+          ("-fbuiltin" . r) (flags r (pin t 'nbi ()))
+          ; -falign-functions=N: every fn at N or its own wider; bare, gcc's 16
+          ((("-falign-functions=" + w) . r) && #w) (flags r (pin t 'falg (tonum w)))
+          ("-falign-functions" . r) (flags r (pin t 'falg 16))
+          ("-fno-align-functions" . r) (flags r (pin t 'falg ()))
+          ("-fno-optimize-sibling-calls" . r) (flags r (pin t 'nsib 1))
+          ("-foptimize-sibling-calls" . r) (flags r (pin t 'nsib ()))
+          ; -fwrapv, -fno-strict-overflow: an int's arithmetic wraps at 32 bits where it is read
+          ((a . r) && elem a '("-fwrapv" "-fno-strict-overflow")) (flags r (pin t 'wrapv 1))
+          ((a . r) && elem a '("-fno-wrapv" "-fstrict-overflow")) (flags r (pin t 'wrapv ()))
+          ("-fno-omit-frame-pointer" . r) (flags r (pin t 'kfp 1))   ; a64's frame record (refused elsewhere)
+          ((a . r) && elem a '("-fpic" "-fPIC" "-fpie" "-fPIE")) (flags r (pin t 'pic a))
+          ("-ftrivial-auto-var-init=zero" . r) (flags r (pin t 'avz 1))
+          ("-ftrivial-auto-var-init=uninitialized" . r) (flags r (pin t 'avz ()))
+          ; -fcf-protection: 1 endbr (ibt), 2 the shadow stack's mark alone, 3 both
+          ((a . r) && elem a '("-fcf-protection=branch" "-fcf-protection=full" "-fcf-protection")) (flags r (pin t 'cfb (a = "-fcf-protection=branch" ? 1 3)))
+          ("-fcf-protection=return" . r) (flags r (pin t 'cfb 2))
+          ("-fcf-protection=none" . r) (flags r (pin t 'cfb ()))
+          ; -fpatchable-function-entry=N[,M]: N nops at each entry, M of them ahead of it
+          ((("-fpatchable-function-entry=" + w) . r) && #w)
+           (: ws (split "," w) n (tonum <ws) k (two? >ws ? (tonum <>ws) 0)
+              (charm? n && charm? k && 0 <= k <= n ? (flags r (pin t 'pfe (n = 0 ? () [n k])))
+                 (udie 2 "cc: -fpatchable-function-entry=\(w) -- N, or N,M with M at most N")))
+          ; -fstack-protector*: 1 and 2 protect as -strong, 3 every fn, 4 the stack_protect attribute's
+          ("-fstack-protector" . r) (flags r (pin t 'ssp 1))
+          ("-fstack-protector-strong" . r) (flags r (pin t 'ssp 2))
+          ("-fstack-protector-all" . r) (flags r (pin t 'ssp 3))
+          ("-fstack-protector-explicit" . r) (flags r (pin t 'ssp 4))
+          ("-fno-stack-protector" . r) (flags r (pin t 'ssp ()))
+          ((("-mstack-protector-guard=" + w) . r) && elem w '("global" "tls" "sysreg")) (flags r (pin t 'sspm (intern w)))
+          ((("-mstack-protector-guard-reg=" + w) . r) && #w) (flags r (pin t 'sspr w))
+          ((("-mstack-protector-guard-symbol=" + w) . r) && #w) (flags r (pin t 'ssps w))
+          ((("-mstack-protector-guard-offset=" + w) . r) && #w) (flags r (pin t 'sspo (tonum w)))
+          ; an enum's width is the ABI's (parse.l's ety): short on the AAPCS32 targets alone
+          ("-fshort-enums" . r) (flags r (pin t 'senum 's))
+          ("-fno-short-enums" . r) (flags r (pin t 'senum 'n))
           ; -ffixed-x18: a64 never allocates x18 anyway; any other -ffixed- refuses
           ("-ffixed-x18" . r) (flags r (pin t 'fx18 1))
           (("-ffixed-" + w) . _) (udie 2 "cc: -ffixed-\(w) -- mooncc reserves x18 on a64 only")
@@ -1116,11 +1225,37 @@
           ; and 32-bit units ask for 3)
           (("-mregparm=" + w) . r) (flags r (pin t 'rp (elem w ["0" "1" "2" "3"] ? (tonum w)
                                                      (udie 2 "cc: -mregparm=\(w) -- 0 to 3"))))
+          ; the x86-64 kernel's asks, words in 'xk: x64 code is rip-relative and its data words abs64,
+          ; which the kernel model and the small one both take; long double is double, returned in xmm0
+          ((a . r) && elem a ["-mcmodel=small" "-mcmodel=kernel" "-mno-fp-ret-in-387" "-mno-skip-rax-setup"
+                              "-mindirect-branch=keep" "-mfunction-return=keep"]) (flags r (fpush t 'x6f a))
+          (("-mcmodel=" + w) . r) (udie 2 "cc: -mcmodel=\(w) -- x64's code is rip-relative within 2GB: small and kernel")
+          ; an 8-aligned incoming stack: a local asking more is realigned through a pointer
+          (("-mstack-alignment=" + w) . r)
+           (? (w = "16") (flags r t)
+              (w = "8") (flags r (fpush (xkon t 'sa8) 'x6f "-mstack-alignment=8"))
+              (udie 2 "cc: -mstack-alignment=\(w) -- 8 or 16"))
+          ; varargs calls skip al, the count of vector registers
+          ("-mskip-rax-setup" . r) (flags r (fpush (xkon t 'nal) 'x6f "-mskip-rax-setup"))
+          ; indirect calls and jumps go through __x86_indirect_thunk_REG, returns through
+          ; __x86_return_thunk: the kernel lays both, mooncc only names them
+          ((a . r) && elem a ["-mindirect-branch=thunk-extern" "-mretpoline-external-thunk"]) (flags r (fpush (xkon t 'thk) 'x6f a))
+          ((("-mindirect-branch=" + w) . r) && elem w ["thunk" "thunk-inline"])
+           (udie 2 "cc: -mindirect-branch=\(w) -- mooncc lays no thunk body: thunk-extern names the kernel's")
+          ("-mfunction-return=thunk-extern" . r) (flags r (fpush (xkon t 'rth) 'x6f "-mfunction-return=thunk-extern"))
+          ((("-mfunction-return=" + w) . r) && elem w ["thunk" "thunk-inline"])
+           (udie 2 "cc: -mfunction-return=\(w) -- mooncc lays no thunk body: thunk-extern names the kernel's")
+          ; an indirect call or jump reads its target from a register, never memory
+          ("-mindirect-branch-register" . r) (flags r (fpush (xkon t 'ibr) 'x6f "-mindirect-branch-register"))
+          ; a cs prefix on a thunk call through r8-r15, room for the kernel to patch it inline
+          ("-mindirect-branch-cs-prefix" . r) (flags r (fpush (xkon t 'cs) 'x6f "-mindirect-branch-cs-prefix"))
           ; -Os/-Oz ask for size: returns share one epilogue. any other -O asks it back off
           ((a . r) && starts? a "-O") (flags r (pin t 'osz (elem a ["-Os" "-Oz"])))
           ((a . r) && tol? a) (flags r t)
+          ((a . r) && (fok? a || mok? a)) (flags r t)
           ; a bare `-` is an input, the source on stdin
           ("-" . r) (flags r (fpush t 'ins "-"))
+          ((a . _) && (starts? a "-f" || starts? a "-m")) (udie 2 "cc: \(a) -- mooncc does not honour it")
           (("-" + _) . _) (udie 2 usage)
           (a . r) (flags r (fpush t 'ins a)))
    ; every cc says its sentence: an internal raise from gen or holo becomes `cc: internal error`.
@@ -1151,6 +1286,15 @@
        _ ((f 'sal || two? (f 'bp)) && f 'tgt != 'a64 &&
           udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
        _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")
+       _ (f 'kfp && f 'tgt != 'a64 && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
+       _ (f 'senum && (elem (f 'tgt) '(thumb1 thumb2 thumb2sp arm) @ a32 (f 'senum = 's ? !a32 a32)) &&
+          udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
+       _ (f 'cfb && !(elem (f 'tgt) '(x64 i386 i386m16)) && udie 2 "cc: -fcf-protection lays on x86 only")
+       _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
+       _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
+       _ (f 'ssp && pin f 'sspg (sspguard f))
+       _ (two? (f 'x6f) && f 'tgt != 'x64 && udie 2 "cc: \(<(f 'x6f)) -- an x86-64 ask; no lane on \(f 'tgt)")
+       _ (elem 'thk (f 'xk) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
        ; no nest on disk: the carried source, pinned once so every TU shares one inflate
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)

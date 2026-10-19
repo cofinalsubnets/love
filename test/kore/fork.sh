@@ -6,29 +6,28 @@
 # here, so these assert the plumbing with the winner self-symlinked: pipes, redirects,
 # status, cmdsub, nesting, the symlink word
 fb=$HO/.forkbin
-mkdir -p "$fb"; ln -sf "$K" "$fb/kore"; ln -sf "$K" "$fb/wc"; ln -sf "$K" "$fb/sort"
+mkdir -p "$fb"; ln -sf "$K" "$fb/love"; ln -sf "$K" "$fb/wc"; ln -sf "$K" "$fb/sort"
 fsh() { PATH=$fb:$PATH LOVE_NO_IMAGE= "$m" sh -c "$1"; }
-[ "$(fsh 'kore echo hi | kore wc -l')" = "1" ] || fail "fork lane pipeline"
-[ "$(fsh 'kore seq 5 | wc -l')" = "5" ] || fail "fork lane symlink word"
-fsh 'kore false'; r=$?; [ $r -eq 1 ] || fail "fork lane status (rc $r)"
+[ "$(fsh 'love echo hi | love wc -l')" = "1" ] || fail "fork lane pipeline"
+[ "$(fsh 'love seq 5 | wc -l')" = "5" ] || fail "fork lane symlink word"
+fsh 'love false'; r=$?; [ $r -eq 1 ] || fail "fork lane status (rc $r)"
 # a lone foreground command forks too: status, redirects both ways, and a heredoc fed after the fork
 printf 'b\na\nc\n' > "$HO/.fork-in"
-[ "$(fsh 'kore sort '"$HO"'/.fork-in | kore tr -d "\n"')" = "abc" ] || fail "fork lane simple"
-[ "$(fsh 'sort < '"$HO"'/.fork-in | kore tr -d "\n"')" = "abc" ] || fail "fork lane simple stdin"
+[ "$(fsh 'love sort '"$HO"'/.fork-in | love tr -d "\n"')" = "abc" ] || fail "fork lane simple"
+[ "$(fsh 'sort < '"$HO"'/.fork-in | love tr -d "\n"')" = "abc" ] || fail "fork lane simple stdin"
 fsh 'sort '"$HO"'/.fork-in > '"$HO"'/.fork-o'
 [ "$(tr -d '\n' < "$HO/.fork-o")" = "abc" ] || fail "fork lane simple stdout"
-[ "$(fsh 'kore cat <<EOF
+[ "$(fsh 'love cat <<EOF
 deep
 EOF')" = "deep" ] || fail "fork lane simple heredoc"
-fsh 'kore grep -q zzz '"$HO"'/.fork-in'; r=$?; [ $r -eq 1 ] || fail "fork lane simple status (rc $r)"
-fsh 'kore sh -c "kore echo deep"' | grep -qx deep || fail "fork lane nested sh"
-[ "$(fsh 'echo n=$(kore echo abc | kore wc -c)')" = "n=4" ] || fail "fork lane cmdsub"
-fsh 'kore seq 3 > '"$HO"'/.fork-r' ; [ "$(wc -l < "$HO/.fork-r")" = "3" ] || fail "fork lane redirect"
+fsh 'love grep -q zzz '"$HO"'/.fork-in'; r=$?; [ $r -eq 1 ] || fail "fork lane simple status (rc $r)"
+fsh 'love sh -c "love echo deep"' | grep -qx deep || fail "fork lane nested sh"
+[ "$(fsh 'echo n=$(love echo abc | love wc -c)')" = "n=4" ] || fail "fork lane cmdsub"
+fsh 'love seq 3 > '"$HO"'/.fork-r' ; [ "$(wc -l < "$HO/.fork-r")" = "3" ] || fail "fork lane redirect"
 # the lane's reach is the binary: the child hands its line to cli-line, so `love -e` and
 # `love VERB` ride it, with their statuses
-ln -sf "$K" "$fb/love"
 [ "$(fsh 'echo x | love -e "(3 + 4)"')" = "7" ] || fail "fork lane love -e"
-[ "$(fsh 'echo x | love kore echo nested')" = "nested" ] || fail "fork lane love VERB"
+[ "$(fsh 'echo x | love echo nested')" = "nested" ] || fail "fork lane love VERB"
 fsh 'echo x | love -e "(quit 9)"'; r=$?; [ $r -eq 9 ] || fail "fork lane love status (rc $r)"
 # a rail that finishes is a 0: cli-line's answer is not a status
 fsh 'echo x | love -e "(3 + 4)"' >/dev/null; r=$?; [ $r -eq 0 ] || fail "fork lane love -e rc (rc $r)"
@@ -53,5 +52,5 @@ off='love -e "(nil? natjit)"'
 [ "$(fsh "LOVE_NO_GLAZE= $off")" = "0" ] || fail "fork lane empty LOVE_NO_GLAZE"
 # a bare word may want a terminal: it spawns only when it would inherit one; a pipe or a `<` on fd 0 forks
 [ "$(fsh 'echo "(puts \"bare\")" | love')" = "bare" ] || fail "fork lane bare word"
-[ "$(fsh 'kore seq 3 | sort | kore tr -d "\n"')" = "123" ] || fail "fork lane bare stage"
+[ "$(fsh 'love seq 3 | sort | love tr -d "\n"')" = "123" ] || fail "fork lane bare stage"
 echo "kore: the fork lane (self-PATH pipelines, status, cmdsub, nesting, love's own line) ok"

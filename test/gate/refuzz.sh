@@ -26,7 +26,7 @@ case $("$SED" --version 2>&1 | head -1) in *GNU*) ;;
 w=${TMPDIR:-/tmp}/refuzz.$$
 mkdir -p "$w" || exit 1
 trap 'rm -rf "$w"' EXIT INT TERM
-korerun() { LOVE_NO_IMAGE= "$m" kore "$@"; }
+korerun() { LOVE_NO_IMAGE= "$m" "$@"; }
 
 # the draw is made once in awk (a shell rng in $(..) never advances).
 # fields: BRE \t ERE(grep) \t ERE(sed) \t six subject lines joined by |

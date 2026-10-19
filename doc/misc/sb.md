@@ -25,7 +25,6 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | **`psid [SET]`** | the name of a set's state: the head's, or SET's | rev-parse | name a release |
 | **`paths A B`** | the paths two sets lay differently | diff --name-only | what an upgrade touches |
 | **`within A B`** | exit 0 when set A lies inside set B | merge-base --is-ancestor | is it newer |
-| **`stamp [SET]`** | the newest of a set's patch times, in seconds | log -1 --format=%ct | a build's stamp |
 | **`log PATH`** | the head's patches that write PATH, or a path under it, the fold's last first | log -- PATH | what touched a file |
 | **`show ID`** | a patch: time, note, deps, then each hunk as a diff | show | inspect |
 | **`blame PATH`** | each line of PATH in the head, after the patch that wrote it | blame | inspect |
@@ -35,6 +34,23 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | **`ledger NAME ..`** | a named value that moves only by compare-and-swap, every entry kept | a ref moved by `update-ref NEW OLD` | the shared queue sessions coordinate by |
 
 `-C DIR` before any verb runs it in the nest at DIR.
+
+What `sb`'s one-line help leaves out:
+
+- **`sync [--keep] PEER`** pulls what PEER has, pushes what it lacks, and settles both trees to
+  the union of their heads. Two patches on one path three-way merge; a true overlap lands in
+  markers and exits 1, to resolve and record. `--keep` only deposits: both stores fill and no
+  head moves. PEER is a nest directory, an `http://` remote (any static tree serving a `.sb/`;
+  pull only), `ssh://[USER@]HOST[:PORT]/PATH` (its side runs `sb serve PATH`; `SB_SSH` the ssh
+  words, `SB_LOVE` the far love), or `NAME@BOX`, the nest NAME that BOX's door serves.
+- **`sync --take PEER`** pulls only and grows the head by PEER's head: a new nest made from a hub.
+- **`unpack DIR [H..|-]`** writes the hashes named (`-` reads them from stdin), else the head's.
+- **`pack`** reads the new pack back before the old ones go; `sync` packs past 1024 loose blobs.
+- **`ledger`**: no NAME lists them; `NAME` prints what it holds; `--id` its hash, `--log` every
+  entry; `--was OLD FILE` moves it to FILE's text (`-` stdin) iff it stands at OLD (`none` for a
+  new one), else exits 1; `--text` the text a signed queue's head names.
+- **`bisect GOOD BAD [--] CMD ..`** runs CMD in each bank it lays: exit 0 good, 125 skip, else
+  bad. It names the first bad set and its patches, then lays the head back.
 
 A nest's tree realizes its *head*, the tips of a set kept in `.sb/head`, and its store may
 hold more: work deposited by another nest and not yet taken. `.sb/tips` stays the store's

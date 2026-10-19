@@ -62,7 +62,7 @@
 
 ; tether: a child holding its own pty echoes its line, cat repeats it, and ^C ends it:
 ; wait answers 128+2, the master reads the ^C's echo and then the end
-(tether ["kore" "cat"] @ r
+(tether ["cat"] @ r
  (: p <r mp >r
     _ (say mp "hi\r", flush mp)
     t (pt-take mp 8)
@@ -74,7 +74,7 @@
      test (charm? p) ("hi\r\nhi\r\n" = t) (p = g) (130 = st) ("^C" = tl))))
 
 ; the master closed is a hangup: a child that never reads still ends, as 128+1
-(tether ["kore" "sleep" "100"] @ r
+(tether ["sleep" "100"] @ r
  (: p <r _ (close >r) st (wait p)
   (test (charm? p) (129 = st))))
 
@@ -102,7 +102,7 @@
 
 ; ^Z holds the group in front (wait answers 256+20, the host's stopped status), and
 ; cont lets it go on: the line typed after it reads and comes back
-(tether ["kore" "cat"] @ r
+(tether ["cat"] @ r
  (: p <r mp >r
     _ (put mp 26, flush mp)
     st (wait p)

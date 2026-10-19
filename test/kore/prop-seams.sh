@@ -27,7 +27,7 @@ for f in .gs1 .gs2 .gs3 .gs4 .gs5 .gs6 .gs7; do
   done
 done
 korerun cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$o"; cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$g"
-cmp -s "$g" "$o" || fail "kore cat: operands joined across the seams"
+cmp -s "$g" "$o" || fail "cat: operands joined across the seams"
 # sed joins its operands: $ is the last file's last line, a middle file keeps its newline.
 # grep does not: its numbers restart per file
 for t in 'sed $d' 'sed $s/^/L/' "sed -n 2p" "sed 3q" "grep -n 000000002" "grep -c 0"; do

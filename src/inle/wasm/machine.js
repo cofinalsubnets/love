@@ -342,7 +342,7 @@ export async function loveMachine(root) {
   if (!window.isSecureContext)
     return halt(`the machine cannot run on this page: a browser only gives a page the memory it needs over https or from localhost. open it as http://localhost${port}/ -- from another machine an ssh tunnel gets you there (ssh -L ${location.port || 80}:127.0.0.1:${location.port || 80} ${location.hostname}) -- or serve it over https.`);
   if (!window.crossOriginIsolated)
-    return halt('the machine cannot run on this page: it arrived without the two headers that give it its memory, and the helper that adds them could not be installed. reloading once usually mends it.');
+    return halt('this page lacks the headers the machine needs, and could not add them. try reloading.');
 
   const link = new URLSearchParams(location.search);
   const url = p => new URL(p, import.meta.url);

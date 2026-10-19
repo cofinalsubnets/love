@@ -1,5 +1,5 @@
 ; src/apps/vi/vi.l -- the terminal face over core.l: keys off `in`, vframe's escapes onto
-; `out`, and the write requests ex leaves on the state. kore is its door (`kore vi FILE`).
+; `out`, and the write requests ex leaves on the state. kore is its door (`love vi FILE`).
 ; a mitty where the seat has one, else cli's stage: raw tty, alternate screen, port EOF
 ; leaves, so a piped script ending :wq never dangles
 (module 'vi

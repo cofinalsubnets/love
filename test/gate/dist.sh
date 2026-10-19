@@ -1,6 +1,6 @@
 #!/bin/sh
 # test/gate/dist.sh -- the artifact answers: verb dispatch (positional + argv[0]),
-# the nested kore dispatch, the bare cc door, the image chain, the in-image lane,
+# a tool's dispatch, the bare cc door, the image chain, the in-image lane,
 # -e still evals and `--` still forces the file. seconds; rides test_slow.
 #
 # usage: dist.sh MODE DIST
@@ -23,7 +23,7 @@ smoke)
   s=out/dist/.smoke
   rm -rf "$s"; mkdir -p "$s"
 
-  run "$dist" kore true                            || fail "kore true (the nested dispatch)"
+  run "$dist" true                                 || fail "true (a tool's dispatch)"
   # the source door, cheaply: the seed lays its tree and NOTHING ELSE -- no binary
   # beside the source, and no archive. the fixpoint stays
   # test_distboot's; THIS is the leg that keeps the verb from going dark between releases.
@@ -66,8 +66,8 @@ smoke)
   ln -sf "$dabs" "$s/sb"
   run "$s/sb" 2>&1 | grep -q "usage: sb"       || fail "the argv[0] door"
   # NOT a name already symlinked above -- `>` through a symlink writes the artifact
-  echo '(quit 7)' > "$s/kore"
-  ( cd "$s" && run "$dabs" -- kore ); [ $? -eq 7 ] || fail "-- should force the file lane"
+  echo '(quit 7)' > "$s/ls"
+  ( cd "$s" && run "$dabs" -- ls ); [ $? -eq 7 ] || fail "-- should force the file lane"
 
   # --- the in-image lane -------------------------------------------------------
   # one artifact on PATH under many names is the shape the whole thing turns on: lush
@@ -154,7 +154,7 @@ MK
   ( cd "$sabs/w" && PATH=/usr/bin:/bin run "$dabs" sh -c 'ls Makefile' ) 2>&1 | grep -q Makefile \
     || fail "a foreign ls must still spawn"
 
-  echo "test_dist: the artifact is multi-call -- sb/cook/kore/mooncc dispatch, files and -e untouched"
+  echo "test_dist: the artifact is multi-call -- sb/cook/mooncc and the tools dispatch, files and -e untouched"
   echo "test_dist: the in-image lane -- cook's lines and mooncc run in THIS image, byte-for-byte and semantics-for-semantics what a spawned sh gives"
   ;;
 

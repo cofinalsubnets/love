@@ -182,3 +182,17 @@
  (([oa-o1] < [oa-o2]) = !([oa-o2] < [oa-o1])) !([oa-o1] < [oa-o1])
  ((max [oa-o1] [oa-o2]) = (max [oa-o2] [oa-o1]))
  ("a" = peep oa-o1 0 ()) ("b" = peep oa-o1 1 ()) ("c" = peep oa-o2 0 ()) ("d" = peep oa-o2 1 ()))
+
+; a coin meets a tray in the object lane: its kind's method per cell, the broadcast the trays have
+(: oa-q (1 /// 3) oa-i (iota 4)
+   (oa-at t i) (peep t i ()))
+(test
+ ((1 /// 3) = oa-at (oa-i + oa-q) 0) ((10 /// 3) = oa-at (oa-i + oa-q) 3)
+ ((10 /// 3) = oa-at (oa-q + oa-i) 3) (4 = #(oa-i + oa-q))
+ (1 = oa-at (oa-i * oa-q) 3) ((-1 /// 3) = oa-at (oa-i - oa-q) 0) ((-8 /// 3) = oa-at (oa-q - oa-i) 3)
+ (9 = oa-at (oa-i / oa-q) 3)
+ ((9 /// 2) = peep ((top-tray [2 2] [1 2 3 4]) + (1 /// 2)) [1 1] ())
+ (gem? (oa-at ((iota 2 + 0.5) + oa-q) 0))                ; a float cell: the inexact wins
+ (aall ((oa-i < oa-q) = @(1 0 0 0))) (aall ((oa-q < oa-i) = @(0 1 1 1)))
+ (aall ((oa-i = oa-q) = @(0 0 0 0))) (aall ((@(1 (1 /// 3)) = oa-q) = @(0 1)))
+ !(oa-i & oa-q))

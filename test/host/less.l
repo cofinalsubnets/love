@@ -12,7 +12,7 @@
    ; keys are typed before raw mode, so "\n" flushes the canonical line; "qq" so a
    ; failed quit or the help page can't park slurp forever
    (run keys args)
-    (: r (tether (cat [love "kore" "less"] args))
+    (: r (tether (cat [love "less"] args))
        _ (test (two? r))
        m >r
        _ (settty m 10 40)
@@ -63,7 +63,7 @@
       (say q ".Dd June 1 2026\n.Dt BB 1\n.Os\n.Sh NAME\n.Nm bb\n.Nd second page\n", close q))
    _ (setenv "MANPATH" md)
    (manrun keys args)
-    (: r (tether (cat [love "kore" "man"] args))
+    (: r (tether (cat [love "man"] args))
        _ (test (two? r))
        m >r
        _ (settty m 10 40)
@@ -79,7 +79,7 @@
    _ (rmdir (md + "/man1")) _ (rmdir md)
 
    ; a pipe is the text and /dev/tty the keyboard
-   ra (: r (tether ["sh" "-c" (love + " kore head -3 " + f + " | " + love + " kore more")])
+   ra (: r (tether ["sh" "-c" (love + " head -3 " + f + " | " + love + " more")])
          _ (test (two? r))
          m >r
          _ (settty m 10 40)

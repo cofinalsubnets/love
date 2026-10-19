@@ -1079,15 +1079,13 @@ static love_inline word host_posix_chmod(struct g *g, word pw, word mw) {
  return chmod(p, (mode_t) getcharm(mw)) ? love_err(g, errno) : ZeroPoint; }
 LvmWord2(posix_chmod)
 
-static love_inline word host_posix_chown(struct g *g, word pw, word uw, word gw) {
+static love_inline word posix_own(struct g *g, word pw, word uw, word gw, int (*own)(char const*, uid_t, gid_t)) {
  char const *p = str_c(pw);
  if (!p || !charmp(uw) || !charmp(gw)) return badarg(g);
- return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? love_err(g, errno) : ZeroPoint; }
+ return own(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? love_err(g, errno) : ZeroPoint; }
+static love_inline word host_posix_chown(struct g *g, word pw, word uw, word gw) { return posix_own(g, pw, uw, gw, chown); }
+static love_inline word host_posix_lchown(struct g *g, word pw, word uw, word gw) { return posix_own(g, pw, uw, gw, lchown); }
 LvmWord3(posix_chown)
-static love_inline word host_posix_lchown(struct g *g, word pw, word uw, word gw) {
- char const *p = str_c(pw);
- if (!p || !charmp(uw) || !charmp(gw)) return badarg(g);
- return lchown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? love_err(g, errno) : ZeroPoint; }
 LvmWord3(posix_lchown)
 
 love_noinline static word host_posix_utime(struct g *g, word pw, word msw) {

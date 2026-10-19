@@ -989,8 +989,10 @@
           (: g (gcd (abs n) (abs d)) s (d < 0 ? -1 1)
            [(s * n // g) (s * d // g)]))
         (arg v) (? (coin? v) (load v) (two? v) v [v 1])       ; an operand as (n d): a bare star is n/1
-        ; a component is a plain star, never a coin, or gcd would not terminate
-        (nstar? v) (atom? v && (nil? * coin?) v && v = +v)   ; atom? first: a chain's net is a rational whose '= asks this again
+        ; a plain number, never a coin: atom? first, a chain's net is a rational whose '= asks this again
+        (pnum? v) (atom? v && (nil? * coin?) v && v = +v)
+        ; a component is an exact integer: a float or a twin has no gcd to reduce by
+        (nstar? v) (pnum? v && !(gem? v || twin? v))
         (ok? v) (nstar? v || two? v && all nstar? v)
         (q p) (1 = <>p ? <p (c p))                          ; a reduced (n d): the integer when d is 1, else struck
         (measure c) (: p (load c) q (<p / <>p)                ; n/d; a quotient lost to underflow
@@ -1001,6 +1003,9 @@
         (num? v) (nstar? v || coin? v && ok? (load v))      ; a number or a rational, never a text or a list
         (div x y) (ok? x && ok? y && <y != 0 ?              ; invert and multiply; by zero -> ()
                    (q (reduce (<x * <>y) (<>x * <y))))
+        ; an inexact operand: the op over the measures, and the inexact answer wins
+        (inex f a b) (: u (val a) w (val b) (pnum? u && pnum? w ? (f u w)))
+        (fquot a b) (inex (\ u w (w = 0 ? () (u / w))) a b)
         c (coin '/// (z \ {'star 1                               ; a rational is a star
          'net measure
          '< (\ a b (: x (arg a) y (arg b)                      ; cross-multiply, exact (d > 0)
@@ -1014,15 +1019,18 @@
                      (0 < <p ? (k + 1) k)))                  ; up from a positive trunc
          '+ (\ a b (: x (arg a) y (arg b)
              (ok? x && ok? y ?
-              (q (reduce (<x * <>y + <y * <>x) (<>x * <>y))))))
+              (q (reduce (<x * <>y + <y * <>x) (<>x * <>y)))
+              (inex (+) a b))))
          '* (\ a b (: x (arg a) y (arg b)
              (ok? x && ok? y ?
-              (q (reduce (<x * <y) (<>x * <>y))))))
+              (q (reduce (<x * <y) (<>x * <>y)))
+              (inex (*) a b))))
          '- (\ a b (: x (arg a) y (arg b)
              (ok? x && ok? y ?
-              (q (reduce (<x * <>y - <y * <>x) (<>x * <>y))))))
-         '/ (\ a b (div (arg a) (arg b)))}))
-        (strike a b) (num? a && num? b ? (div (arg a) (arg b)))  ; a zero or non-number operand -> ()
+              (q (reduce (<x * <>y - <y * <>x) (<>x * <>y)))
+              (inex (-) a b))))
+         '/ (\ a b (: x (arg a) y (arg b) (ok? x && ok? y ? (div x y) (fquot a b))))}))
+        (strike a b) (num? a && num? b ? (div (arg a) (arg b)) (fquot a b))  ; a zero or non-number operand -> (), a float the quotient
         (n \ (two? n ? (strike <n <>n)                         ; (/// (n d)) -- the list form
                        (strike n)))))                         ; (/// n d) -- the curried form, and 3 /// 4 spaced
 
@@ -2056,7 +2064,7 @@
 ; a forked lush child calls cli-line too, in place of exec'ing this binary.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage stage-run ttysize ttytake ttygive edkey edtap edgc
-          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers udoor edcmd edsgr edwide edcut edpad edfit sgr
+          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers love-build udoor edcmd edsgr edwide edcut edpad edfit sgr
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -2558,6 +2566,11 @@
    ; bare letters are free -- posix or gnu has spoken for one in a few places, and there the
    ; long form is the only answer. answers the main a verb registry takes.
    (uvers nm) "\(nm) / love \(love-version)"                           ; the --version answer, one spelling for every tool
+   ; this build's name: the version and a short hash of the source it carries, off the
+   ; carried tree's section crcs. same source, same name; no source, the version alone
+   (love-build _)
+    (tree-head 0 @ () "love \(love-version)"
+       h "love \(love-version) \(snip (cite 'hashes 'sha256 (show (map (s \ [<s (s 2) (s 4)]) h))) 0 8)")
    (udoor nm f u h? v?)
     (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one
                    (puts (n && x (n - 1) = 10 ? x "\(x)\n"), flush out, 0))
@@ -2636,7 +2649,14 @@
               edstep t (edkey ip),
               t 'ev @- (loop ()) (-7 || 4) eofsym 10 (edbelow t, putc 10, edchars t)))
 
-   ; the shell line reader: edraw + command history + tab completion
+   ; back to the buffer's top row, cleared, prompt pr drawn again: its width
+   (edreprompt t pr)
+     ((0 < peep t 'row 0 ? (csi (t 'row) 65) ()),
+      putc 13, putc 27, putc 91, putc 74,
+      puts pr, pins t 'row 0 'was 0,
+      edwide pr)
+
+   ; the shell line reader: edraw + command history + tab completion + ^R search
    (edlnc ip pr hist comp)
      (: pl (puts pr, edwide pr) hn #hist t (ednew ())
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
@@ -2644,9 +2664,29 @@
           (: nd (i = 0 ? (revcat (t 'l) (t 'r)) draft)  ; save the live draft once, the instant up leaves it
              (pins t 'l (rev (ni = 0 ? nd (hnth (ni - 1)))) 'r (),
               loop ni nd))
-        (loop i draft)
-          (edrender pl t,
-           edstep t (edkey ip),
+        (hfrom q k)                                   ; the first hist index from k holding q, or -1
+          (: (go j h) (? (atom? h) -1 (0 <= findsub (string <h) q) j (go (j + 1) >h))
+             (go k (drop k hist)))
+        (rlabel q ok) ("(" + (ok ? "" "failed ") + "reverse-i-search)`" + q + "': ")
+        ; ^R: fs the search's [query match found] frames, newest first, a backspace popping one.
+        ; sv the line as it was, back on ^G; any other key takes the match and goes to the line
+        (hunt i draft sv fs)
+          (: q (<fs 0) j (<fs 1)
+             _ (j < 0 ? (edload t sv)
+                  (: h (hnth j) at (findsub (string h) q)
+                     (pins t 'u () 'l (rev (take at h)) 'r (drop at h) 'd ())))
+             _ (edrender (edreprompt t (rlabel q (<fs 2))) t)
+             c (edkey ip)
+             (more q2 k) (hfrom q2 k @ m (hunt i draft sv ([q2 (m < 0 ? j m) (0 <= m)] . fs)))
+             (? (32 <= c < 127 || 127 < c < 256) (more (q + string c) (max j 0))
+                (c = 18) (q = "" ? (hunt i draft sv fs) (more q (j + 1)))
+                (c = 127 || c = 8) (hunt i draft sv (two? >fs ? >fs fs))
+                (c = 7) (edload t sv, edreprompt t pr, loop i draft)
+                (edreprompt t pr,
+                 key (j < 0 ? i (j + 1)) (j < 0 || 0 < i ? draft (revcat (sv 1) (sv 2))) c)))
+        (loop i draft) (edrender pl t, key i draft (edkey ip))
+        (key i draft c)
+          (edstep t c,
            (t 'ev @ 0 (loop i draft)
               (-7 || 4) 'eof
               10 (: ln (edbelow t, putc 10, edchars t)
@@ -2659,8 +2699,11 @@
                          (: _ (pin t 'l (foldl (a \ ch \ ch . a) (t 'l) <cl))
                             cs >cl
                           (two? cs && two? >cs ?
-                            (puts $ "\n" + foldl (a \ s \ 0 = #a ? s "\(a)  \(s)") "" cs + "\n"),
+                            (edbelow t,
+                             puts $ "\n" + foldl (a \ s \ 0 = #a ? s "\(a)  \(s)") "" cs + "\n",
+                             pin t 'row 0, edreprompt t pr),   ; the list, then the prompt under it
                            loop i draft)))))
+              18 (hunt i draft (edframe t) [["" -1 1]])
               -8 (recall i (i >= hn ? i (i + 1)) draft)   ; up: older
               -9 (recall i (0 >= i  ? i (i - 1)) draft)    ; down: newer
               (loop i draft)))
@@ -2685,7 +2728,7 @@
                             (hot? q ? (reads q) (say err "love: cannot open \(p)\n", cli-leave 1)))
                (eval1 s) (sounds s @ 'torn (say err "love: -e: unfinished form\n", cli-leave 2)
                                     (d @ (a . u)) (ev 'ev (atom? u ? a d)))   ; many datums fold to one application
-               v-msg "love \(love-version)\n"
+               v-msg "\(love-build 0)\n"
                h-msg
                """
                usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]
