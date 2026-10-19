@@ -382,6 +382,7 @@
    ; infix span wraps), a value head is its nom. list/&&/|| have lowered themselves before this
    (adesug env ti ta e)
     (? (aquote? e) e
+       (string? e) ['\ e]                       ; a text literal is the quote of its own node, so it rides qs
        (atom? e) e
        ; the analyzer's uninterned tags, handed down by ala: ta = (apx n head args..) the apply,
        ; ti = (iop value args..) the VM op as a value, named back through aopv
