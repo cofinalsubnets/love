@@ -159,7 +159,8 @@
  ; a level lv on a stage already raised, a frame a tick. lv: 'new (w h) its state, 'size
  ; (st w r), 'frame (st), 'key (st action), 'tick (st), 'fps, 'linger once 'done, 'next
  ; [module walk] or (), 'song (hn) a feeder of (st), hn () with no horn, fed every frame;
- ; optional 'binds 'listed 'win 'repeat ([pause gap] ms) and 'held (st) to stop a repeat.
+ ; optional 'binds 'listed 'win 'repeat ([pause gap] ms), 'walking the actions that repeat
+; and 'held (st) to stop a repeat.
  ; help shows in a terminal until the next key, which does nothing else; in a window while
  ; held. in a window the frame paints itself (mesh-show) and a cell is 8 by 16 pixels
  (view-walk lv) (:
@@ -184,7 +185,7 @@
                 (lv 'size st (sh 0) (sh 1), win ? 0 (say out (esc + "[2J")))))
    held {}
    rep (peep lv 'repeat view-repeat)
-   (hold? k) (elem (binds k) view-walking && (peep lv 'held (_ \ 1)) st)
+   (hold? k) (elem (binds k) (peep lv 'walking view-walking) && (peep lv 'held (_ \ 1)) st)
    ; ..a window's keys: a key down is its code by what it typed, else by its place; the
    ; help's key let go puts the help away
    (wgo l) (? (atom? l) ()

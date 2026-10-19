@@ -129,6 +129,8 @@
   (skin {'all stone} (solid (box [-2.5 9 47] [2.5 9.5 50])))
   (bin [3 9 27.2] 0.6 0.45 0.95 binmetal binsign)
   (bin [-3 9 27.2] 0.6 0.45 0.95 binmetal binsign)
+  ; ..and a basketball someone left out
+  (ball [1.5 9 30])
   ; the light: strips across the ceiling, one failing at the north end; a sign on the
   ; north wall
   (repeat 5 [2 0 0] [(across (strip-light [0 5 4]))])

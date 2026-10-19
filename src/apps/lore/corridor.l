@@ -21,9 +21,10 @@
 (borrow 'mixer)                         ; the sounds, mixed into the horn
 (borrow 'sky)                           ; the sun, its light, the sky's colour
 (:
- fps 20
+ fps 30
  eye-h 1.6 body-r 0.25
- walk-v 1.8 turn-v 1.6 tilt-v 1.2         ; metres, and radians, a second
+ walk-v 3.4 turn-v 2.0 tilt-v 1.2         ; metres, and radians, a second
+ ball-r 0.12 ball-e 0.72 ball-g 9.8 ball-kick 2.6  ; a ball: its radius, its bounce, the fall, the least kick
  door-v 1.4 door-near 2.4 door-t 0.03     ; the doors: their pace, how near opens one, half their thickness
  grav-v 1.4 grav-n 60                    ; a grav shaft: how fast it carries, its motes
  car-t 0.08 car-wait 0.6 car-hold 1.5 car-acc 1.2  ; a car: its walls' thickness, the seconds before its door
@@ -333,6 +334,7 @@
                           {'pk pk 'lit (lit pk) 'lo lo 'hi hi 'mid (map (k \ 0.5 * (lo k + hi k)) ^3)
                            'rad (0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))})) cks)
     'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs 'sky sk 'open ob
+    'ball (two? (peep lv 'balls ()) ? (ball-mesh ()) ()) 'lit lit
     'texs (map (t \ swatch (t 'w) (t 'h) (t 'layers)) txs + ptex)})
  ; --- a grav shaft's motes: each a speck of three crossed squares, both ways round, a glow;
  ;     its own height, speed, and turn about the middle, from its number ---
@@ -396,7 +398,10 @@
    (by key) (cats (map (i \ cats (map (q \ ((q 1 * ks i) @ 0.0 () b [(shine-at (q 0) b key)])) (sc 'lights i key))) ^#ks))
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
    glass (map (c \ relit (c 'pk) (c 'lit)) (sc 'panes))
-   all (cars + doors + hall + by 'shine + glass + by 'glow + map (m \ motes-at m (st 'mt)) (sc 'motes))
+   ; ..each ball where it is, made again only once it has moved
+   balls (map (b \ (: d (tablet? (b 'pk) ? (b 'pk) (: d (ball-pk sc b) (pin b 'pk d, d))) (relit (d 'pk) (d 'lit))))
+              (peep st 'balls ()))
+   all (balls + cars + doors + hall + by 'shine + glass + by 'glow + map (m \ motes-at m (st 'mt)) (sc 'motes))
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog 8 gain bare))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
@@ -419,7 +424,7 @@
  ;     stands and looks, the clock, the doors ---
  (corridor-new w h lv dir) (: s (lv 'start)
    (corridor-size {'px (s 'at 0) 'pz (s 'at 1) 'py (s 'y + eye-h) 'th (s 'deg * pi / 180.0) 'ph (s 'pitch * pi / 180.0) 't 0 'mt 0.0
-                   'lvl lv 'sc (scene lv dir) 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'deep 0 'kitty 0 'kp 1
+                   'lvl lv 'sc (scene lv dir) 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'balls (balls-new lv) 'deep 0 'kitty 0 'kp 1
                    'done 0 'msg () 'msg-t 0.0 'err 0}
                   w (h // 2)))
  (corridor-size st w r) (mesh-size st w r)
@@ -457,19 +462,28 @@
  mouse-k 0.0025
  (corridor-look st dx dy) (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2})
  ; ..the corridor's own keys, over view's
- corridor-binds {112 'where}
- ; ..each action as far as the time since the last frame, 'dt, carries it
+ corridor-binds {112 'where 119 'forward 115 'back 97 'strafe-left 100 'strafe-right}
+ ; ..each action as far as the time since the last frame, 'dt, carries it; a step is a
+ ; way to go, summed for the frame's walk
  (corridor-step st a) (: dt (peep st 'dt (1.0 / fps))
-   (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
-    @ () (a = 'where ? (pin st 'pos (1 - peep st 'pos 0)) st)
-      s s))
+   (go f s) (pins st 'mf (peep st 'mf 0 + f) 'ms (peep st 'ms 0 + s))
+   (a @ 'forward (go 1 0) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
+      x (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
+         @ () (a = 'where ? (pin st 'pos (1 - peep st 'pos 0)) st)
+           s s)))
+ ; ..the frame's walk: the ways summed, no faster for two at once, and how fast it went
+ (walk! st dt) (: f (peep st 'mf 0) s (peep st 'ms 0) n (sqrt (f * f + s * s)) th (st 'th) x0 (st 'px) z0 (st 'pz)
+   _ (? (n > 0) (: k (walk-v * dt / max2 1.0 n)
+                  (put! st (x0 + k * (f * sin th + s * cos th)) (z0 + k * (f * cos th - s * sin th)))))
+   (pins st 'mf 0 'ms 0 'vx ((st 'px - x0) / dt) 'vz ((st 'pz - z0) / dt)))
  ; a frame's motion: the clock, each door toward open while the player is near it, and the cars
- (corridor-move st) (: dt (peep st 'dt (1.0 / fps)) lv (st 'lvl) x (st 'px) z (st 'pz)
+ (corridor-move st) (: dt (peep st 'dt (1.0 / fps)) _ (walk! st dt) lv (st 'lvl) x (st 'px) z (st 'pz)
    (go i) (: d (lv 'doors i) o (st 'doors i) p (P (d 'ax) (d 'c) 0.0 (0.5 * (d 'a + d 'b)))
              want (sq (p 0 - x) + sq (p 2 - z) < sq door-near ? 1.0 0.0)
              (want < o ? (max2 want (o - door-v * dt)) (min2 want (o + door-v * dt))))
    _ (pins st 'mt (st 'mt + dt) 'doors (map go ^#(lv 'doors)))
    _ (grav-step st dt)
+   _ (each (peep st 'balls ()) (b \ ball-step st b dt))
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(peep lv 'cars ())))
  ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in
  (grav-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) v (peep st 'gv 0.0)
@@ -480,6 +494,75 @@
          m (v2 * dt) step (mag m > mag d ? d m)
          (pins st 'py (fl + step + eye-h) 'gv v2))
       (pin st 'gv 0.0)))
+ ; ..a ball's next moment: met by the player's feet it is kicked away along the line between,
+ ; the harder as they came; then it falls, bounces off what is solid a little less each
+ ; time, and rolls along the ground to a stop
+ (balls-new lv) (map (p \ {'p [(p 0) (p 1 + ball-r) (p 2)] 'v [0.0 0.0 0.0] 'q [1.0 0.0 0.0 0.0] 'kt -9.0 'rest 1 'pk ()})
+                     (peep lv 'balls ()))
+ (ball-step st b dt) (: p (b 'p) fl (st 'py - eye-h) dx (p 0 - st 'px) dz (p 2 - st 'pz) d (sqrt (dx * dx + dz * dz))
+   kick (d < body-r + ball-r && p 1 - ball-r < fl + 0.5 && st 'mt - b 'kt > 0.25)
+   _ (? kick (: th (st 'th) n (d > 0.001 ? [(dx / d) (dz / d)] [(sin th) (cos th)])
+                k (ball-kick + 1.3 * max2 0.0 (peep st 'vx 0.0 * n 0 + peep st 'vz 0.0 * n 1))
+                (pins b 'v [(k * n 0) (1.0 + 0.3 * k) (k * n 1)] 'kt (st 'mt) 'rest 0,
+                 mix-cry st "bounce" [(p 0) (p 2)])))
+   (b 'rest = 1 ? st (ball-fly st b dt)))
+ ; ..its flight in steps short beside its size: each way on its own, back off what it would
+ ; meet; among only the brushes and panes near it
+ (ball-fly st b dt) (: r ball-r p0 (b 'p) lv (st 'lvl)
+   bs (filter (c \ all (k \ c 'lo k - 1.0 <= p0 k && p0 k <= c 'hi k + 1.0) ^3) (st 'sc 'brushes))
+   (solid? q) (brush-medium bs q != 1
+               || any (w \ w 'lo 0 - 0.05 < q 0 && q 0 < w 'hi 0 + 0.05 && w 'lo 1 < q 1 && q 1 < w 'hi 1
+                            && w 'lo 2 - 0.05 < q 2 && q 2 < w 'hi 2 + 0.05) (peep lv 'panes ()))
+   n (max2 1 (min2 10 (int (mag3 (b 'v) * dt / (0.5 * r)) + 1))) h (dt / n)
+   (set3 p k x) (map (j \ j = k ? x (p j)) ^3)
+   (axis s k) (: p (s 0) v (s 1) vk (v k) q (set3 p k (p k + vk * h + (vk < 0.0 ? (0.0 - r) r)))
+     (? (solid? q) (: u (0.0 - ball-e * vk) gr (k = 1 && vk < 0.0)
+                      [p (set3 v k (gr && mag u < 0.5 ? 0.0 u)) (max2 (s 2) (mag vk)) (s 3 || gr)])
+        [(set3 p k (p k + vk * h)) v (s 2) (s 3)]))
+   (sub1 s _) (: v (s 1) (foldl axis [(s 0) [(v 0) (v 1 - ball-g * h) (v 2)] (s 2) (s 3)] ^3))
+   e (foldl sub1 [p0 (b 'v) 0.0 0] ^n) p (e 0)
+   ; ..on the ground it rolls, slowing, turning as far as it goes, and stops once slow
+   gnd (solid? [(p 0) (p 1 - r - 0.02) (p 2)]) f (gnd ? (max2 0.0 (1.0 - 0.7 * dt)) 1.0)
+   v (e 1 @ v [(f * v 0) (v 1) (f * v 2)])
+   still (gnd && mag3 v < 0.06)
+   _ (? gnd (pin b 'w [(v 2 / r) 0.0 (0.0 - v 0 / r)]))
+   q (b 'q) w (peep b 'w [0.0 0.0 0.0])
+   dq [(0.0 - dot w (drop 1 q)) 0.0 0.0 0.0]
+   wq (c+ (c* (q 0) w) (cross w (drop 1 q)))
+   q2 (map (j \ q j + 0.5 * dt * (j = 0 ? (dq 0) (wq (j - 1)))) ^4) ql (sqrt (net (map sq q2)))
+   _ (pins b 'p p 'v (still ? [0.0 0.0 0.0] v) 'q (map (x \ x / ql) q2) 'rest (still ? 1 0) 'pk ())
+   (e 2 > 1.2 ? (mix-cry st "bounce" [(p 0) (p 2)]) st))
+ ; ..its mesh about its middle: orange, three seams round it standing just proud, every
+ ; triangle's front outward
+ (ball-mesh _) (: r ball-r nl 8 nm 16 skin [0.85 0.33 0.08] seam [0.07 0.04 0.03]
+   (vx p k col) [(k * p 0) (k * p 1) (k * p 2) 0.0 0.0 (p 0) (p 1) (p 2) (col 0) (col 1) (col 2)]
+   body (map (q \ (: a (pi * (q // (nm + 1) / nl - 0.5)) o (tau * (q % (nm + 1)) / nm)
+                    (vx [(cos a * sin o) (sin a) (cos a * cos o)] r skin)))
+             ^((nl + 1) * (nm + 1)))
+   (at i j) (i * (nm + 1) + j)
+   bt (cats (map (k \ (: i (k // nm) j (k % nm) a (at i j) b (at i (j + 1)) c (at (i + 1) (j + 1)) d (at (i + 1) j)
+                        [[a b c -1] [a c d -1]]))
+                 ^(nl * nm)))
+   m 32
+   (band u v w) (cats (map (j \ (: t (tau * j / m) c (c+ (c* (cos t) u) (c* (sin t) v))
+                                  [(vx (unit (c+ c (c* 0.07 w))) (1.015 * r) seam) (vx (unit (c+ c (c* -0.07 w))) (1.015 * r) seam)]))
+                       ^(m + 1)))
+   (btris o) (cats (map (j \ (: a (o + 2 * j) [[a (a + 1) (a + 3) -1] [a (a + 3) (a + 2) -1]])) ^m))
+   x [1.0 0.0 0.0] y [0.0 1.0 0.0] z [0.0 0.0 1.0] o1 #body o2 (o1 + 2 * (m + 1)) o3 (o2 + 2 * (m + 1))
+   vs (body + band x z y + band y z x + band x y z)
+   (out t) (: a (vs (t 0)) b (vs (t 1)) c (vs (t 2)) e (take 3 a)
+     (dot (cross (c+ (take 3 c) (c* -1.0 e)) (c+ (take 3 b) (c* -1.0 e))) (c+ e (c+ (take 3 b) (take 3 c))) < 0.0
+      ? [(t 0) (t 2) (t 1) (t 3)] t))
+   (mesh-pack (mesh vs (map out (bt + btris o1 + btris o2 + btris o3)))))
+ ; ..the ball's mesh turned and moved to where it is, lit there
+ (ball-pk sc b) (: pk (sc 'ball) c (pk 'cols) p (b 'p) q (b 'q) w (q 0) x (q 1) y (q 2) z (q 3)
+   R [[(1.0 - 2.0 * (y * y + z * z)) (2.0 * (x * y - w * z)) (2.0 * (x * z + w * y))]
+      [(2.0 * (x * y + w * z)) (1.0 - 2.0 * (x * x + z * z)) (2.0 * (y * z - w * x))]
+      [(2.0 * (x * z - w * y)) (2.0 * (y * z + w * x)) (1.0 - 2.0 * (x * x + y * y))]]
+   (rot k o) (R k 0 * c o + R k 1 * c (o + 1) + R k 2 * c (o + 2))
+   pk2 {'n (pk 'n) 'tris (pk 'tris)
+        'cols [(rot 0 0 + p 0) (rot 1 0 + p 1) (rot 2 0 + p 2) (c 3) (c 4) (rot 0 5) (rot 1 5) (rot 2 5) (c 8) (c 9) (c 10)]}
+   {'pk pk2 'lit (sc 'lit pk2)})
  ; ..a car's next moment: the door opens as the level starts and stays open while any of the
  ; player is in its track; once they are out it shuts, opening again if they come back
  ; before it is home; held shut a moment, the car gathers speed along its track and is gone
@@ -506,6 +589,7 @@
    "chime" (: t (snd-t 1.0) a (t < 0.42) (tone f u) (sin (tau * f * u) * exp (-5.0 * u))
              [(0.35 * (a * tone 659.3 t + (1 - a) * tone 523.3 (t - 0.42))) snd-rate])
    "hiss" (: t (snd-t 0.7) [(0.25 * snd-noise t * exp (-4.0 * t) * min (t * 40.0) 1.0) snd-rate])
+   "bounce" (: t (snd-t 0.25) [(0.6 * sin (tau * 150.0 * t) * exp (-22.0 * t) + 0.25 * snd-noise t * exp (-60.0 * t)) snd-rate])
    "thud" (: t (snd-t 0.3) [(0.8 * sin (tau * 70.0 * t) * exp (-18.0 * t) + 0.15 * snd-noise t * exp (-40.0 * t)) snd-rate])
    "motor" (: t (snd-t 6.0) f0 90.0 k 110.0 up (min (t / 1.5) 1.0) down (min ((6.0 - t) / 2.0) 1.0)
              [(up * down * (0.3 * sin (tau * (f0 * t + 0.5 * k * t * t)) + 0.12 * snd-noise t)) snd-rate])
@@ -524,7 +608,9 @@
          (? (string? lv) (pins (seen! st) 'msg lv 'err 1 'msg-t (st 'mt))
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
                cs (#(peep lv 'cars ()) = #(peep st 'cars ()) ? (st 'cars) (cars-new lv))
-               (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir)) 'doors ds 'cars cs 'msg ("read " + st 'path + " again")
+               bl (#(peep lv 'balls ()) = #(peep st 'balls ()) ? (st 'balls) (balls-new lv))
+               _ (each bl (b \ pin b 'pk ()))
+               (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir)) 'doors ds 'cars cs 'balls bl 'msg ("read " + st 'path + " again")
                                'err 0 'msg-t (st 'mt))))))))
  (dir-of p) (: (go i) (i < 0 ? "" (p i = 47 ? (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
  ; --- the walk, on view's loop; corridor-run raises the stage ---
@@ -534,7 +620,8 @@
                                         'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
                                (corridor-watch (corridor-size st w (h // 2)))))
                'size corridor-size 'frame corridor-frame 'key corridor-step 'look corridor-look
-               'binds (view-bind view-binds corridor-binds) 'listed (view-listed ['where 'finer 'coarser])
+               'binds (view-bind view-binds corridor-binds) 'listed (view-listed ['strafe-left 'strafe-right 'where 'finer 'coarser])
+               'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
                'tick (st \ (walk-dt st,
                             corridor-move st,
                             (st 't % watch-every = 0 ? (corridor-watch st))))
@@ -546,7 +633,7 @@
                      lv (corridor-load p)
    (? (string? lv) (say err ("corridor: " + p + ": " + lv + "\n"), flush err, 1)
       (view-stage (pin o 'level p) (o2 \ corridor-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
- corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, p where you stand; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
+ corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, h l turn, u n look, walk into a ball to kick it, p where you stand; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for corridor-run, or () where one is wrong or said twice
  (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
                                     (view-arg "--level" 'level (w \ w))])
