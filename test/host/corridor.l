@@ -176,7 +176,7 @@
    (lids y) (#(filter (f \ f 1 1 < -0.5 && mag (f 0 0 1 - y) < 0.01) fs))
  (test (sl 'sky 'hour = 17.0) (sl 'sky 'cover = 'clear) (has? (lv "(room [0 0 0] [1 1 1]) (sky 17 'stormy)") "(sky hour COVER)")
        (lids 12.0 = 0) (lids 3.0 > 0) (sky-up > 200) (roof-up = 0) (east > west)))
-; a car: its door opens at the start and stays open while the player is in; walls and the shut
+; a car: its door opens at the start and stays open while any of the player is in; walls and the shut
 ; door stop a walk; out, it shuts, reopening for a step back; then it leaves, and the edge stops
 ; a walk; each change cried, the car drawn only while it stands, its sounds in range
 (: cl "(room [-30 0 -3.2] [30 3 6]) (start [0 0 -1.5] 0 0) (strip-light [0 3 3])
@@ -193,6 +193,8 @@
    closing (ph out)
    back (corridor-move (pins (moves (steps (moves (car-st ()) 40) 107 20) 3) 'pz -0.15))
    gone (moves (steps (moves (car-st ()) 40) 107 20) 300)
+   half (ph (moves (pins (moves (car-st ()) 40) 'pz -0.02) 200))
+   freed (steps (pins (moves (car-st ()) 40) 'pz -0.02) 107 10)
    edge (steps (pins gone 'th pi) 107 80)
    cries (map (q \ q 0) (peep gone 'sfx ()))
    (seen st) (corridor-pens (pins st 'px 0.0 'pz 3.0 'th pi 'ph 0.0))
@@ -203,7 +205,7 @@
        (ph (car-st ()) = 'wait) (inside = 'open) (opened 'cars 0 'door = 1.0)
        (shut 'pz < -0.2 - body-r + 0.01) (west 'px > -5.0 + body-r - 0.01) (west 'px < -4.5)
        (out 'pz > 0.2) (closing = 'shut)
-       (ph back = 'open)
+       (ph back = 'open) (half = 'open) (freed 'pz > 0.3)
        (ph gone = 'gone) (gone 'cars 0 'o = -40.0)
        (edge 'pz >= -0.12 + body-r - 0.01) (edge 'pz < 0.3)
        (elem "chime" cries) (elem "hiss" cries) (elem "thud" cries) (elem "motor" cries)

@@ -79,28 +79,31 @@
    ; ..and a brush marked open has no top: the sky shows there
    (shut? b j) (!(peep b 'open 0) || b 'planes j 0 1 < 0.5)
    (cats (map (i \ (: b (bs i) (cats (map (j \ (#(b 'faces j) >= 3 && shut? b j ? (piece i b j) ())) ^#(b 'planes))))) ^nb)))
- (grid ps cell) (: bx (box-of ps)
-   (lines k) (: a (int (bx 0 k / cell) - 1) z (int (bx 1 k / cell) + 1)
-     (map (i \ [(map (m \ m = k ? 1.0 0.0) ^3) (cell * (a + i))]) ^(z - a + 1)))
-   pls (cats (map lines ^3))
-   (foldl (\ l pl (cats (map (p \ (crosses? p pl ? (filter (q \ #q >= 3 && area q > 1e-8) (split p pl)) [p])) l))) [ps] pls))
+ ; ..each axis in turn, a strip cut off what is left at each line that crosses it
+ (slab ps k cell) (: bx (box-of ps) lo (bx 0 k) hi (bx 1 k) n (map (m \ m = k ? 1.0 0.0) ^3)
+   m0 (int (floor ((lo + 1e-5) / cell)) + 1) m1 (int (floor ((hi - 1e-5) / cell)))
+   (ok q) (#q >= 3 && area q > 1e-8)
+   (go p m acc) (? (m > m1 || cell * m >= hi - 1e-5) (ok p ? (p . acc) acc)
+     (: s (split p [n (cell * m)]) (go (s 1) (m + 1) (ok (s 0) ? (s 0 . acc) acc))))
+   (go ps m0 ()))
+ (grid ps cell) (foldl (\ l k (cats (map (p \ slab p k cell) l))) [ps] ^3)
  ; ..or cut coarse and each piece again at half while (split? ps c) says it is too coarse,
  ; down to fine: every size a power of two of fine, so the lines are the fine grid's
  (grids ps c fine split?) (c <= fine ? (grid ps fine)
    (cats (map (p \ (split? p c ? (grids p (0.5 * c) fine split?) [p])) (grid ps c))))
- ; ..cell a number, or [coarse fine split?]
+ ; ..cell a number, or [coarse fine on]: (on face) the split? for that face's pieces
  (brush-mesh bs cell look) (mesh-join (brush-chunks bs cell look 1e9 ()))
  ; ..and in meshes a chunk each, the pieces k metres square in plan, and with them more
  ; meshes, each [p mesh], in the chunk p is in
  (brush-chunks bs cell look k more)
   (: fs (brush-faces bs)
      ; ..a brush marked whole goes uncut
-     (cut ps b) (? (peep b 'whole 0) [ps] (charm? cell || gem? cell) (grid ps cell) (grids ps (cell 0) (cell 1) (cell 2)))
+     (cut ps b) (? (peep b 'whole 0) [ps] (charm? cell || gem? cell) (grid ps cell) (grids ps (cell 0) (cell 1) (cell 2 ps)))
      fine (charm? cell || gem? cell ? cell (cell 1))
      pcs (cats (map (f \ map (p \ [p (f 1) (f 2)]) (cut (f 0) (bs (f 2)))) fs))
      ; ..every corner, a millimetre a step, so a piece takes on its edges the corners of the
      ; finer pieces beside it, and no crack opens between them
-     (key p) (: (r v) (int (floor (v * 1000.0 + 0.5))) (show [(r (p 0)) (r (p 1)) (r (p 2))]))
+     (key p) (: (r v) (int (floor (v * 1000.0 + 0.5))) ((r (p 0) * 4194304 + r (p 1)) * 4194304 + r (p 2)))
      seen (foldl (\ t pc (foldl (\ t p (pin t (key p) 1)) t (pc 0))) {} pcs)
      (on a b) (: d (sub b a)
        ts (cats (map (k \ (: lo (min2 (a k) (b k)) hi (max2 (a k) (b k))

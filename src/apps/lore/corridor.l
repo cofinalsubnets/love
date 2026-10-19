@@ -251,15 +251,24 @@
    (sheets o [0.0 h 0.0] (c* w rt) n (q \ (: d (c+ q (c* -1.0 o)) [(1.0 * tw / w * dot d rt) (1.0 * th / h * (h - d 1))])) tex white))
  ; ..whether a piece of surface c across is too coarse for the lamps lps: a lamp's light
  ; changes the more across a cell the nearer it is
- (coarse? lps) (\ ps c (: lo (map (k \ foldl (\ a p (min2 a (p k))) 1e9 ps) ^3) hi (map (k \ foldl (\ a p (max2 a (p k))) -1e9 ps) ^3)
-   (d p) (sqrt (net (map (k \ sq (max2 0.0 (max2 (lo k - p k) (p k - hi k)))) ^3)))
-   ; ..and only where the lamp's mask lets it shine on the piece somewhere
-   (cl p) (map (k \ min2 (hi k) (max2 (lo k) (p k))) ^3)
-   (lit? lp p) (peep lp 'keep () @ () 1
-     k (: q (cl p) (any (r \ k (r 0) (r 1) (r 2) > 0)
-                        [q [(lo 0) (q 1) (lo 2)] [(hi 0) (q 1) (lo 2)] [(lo 0) (q 1) (hi 2)] [(hi 0) (q 1) (hi 2)]
-                         [(0.5 * (lo 0 + hi 0)) (q 1) (0.5 * (lo 2 + hi 2))]])))
-   (any (lp \ any (p \ (: dd (d p) (dd < lp 'r && 6.0 * c > dd + 0.5 && lit? lp p))) (lp 'at)) lps)))
+ (coarse? lps) (: all-pts (cats (map (lp \ map (p \ [p (lp 'r) (peep lp 'keep ())]) (lp 'at)) lps))
+  ; ..asked of a face first, so its pieces weigh only the lamps that reach it
+  (\ f (: flo (map (k \ foldl (\ a p (min2 a (p k))) 1e9 f) ^3) fhi (map (k \ foldl (\ a p (max2 a (p k))) -1e9 f) ^3)
+     pts (filter (q \ net (map (k \ sq (max2 0.0 (max2 (flo k - q 0 k) (q 0 k - fhi k)))) ^3) < sq (min2 (q 1) (6.0 * cell-top - 0.5))) all-pts)
+     (col j) (gem-tray [#pts] (map (q \ 1.0 * q 0 j) pts)) PX (col 0) PY (col 1) PZ (col 2) R (gem-tray [#pts] (map (q \ 1.0 * q 1) pts))
+  (\ ps c (: lo (map (k \ foldl (\ a p (min2 a (p k))) 1e9 ps) ^3) hi (map (k \ foldl (\ a p (max2 a (p k))) -1e9 ps) ^3)
+    (out k P) (max 0.0 (max (lo k - P) (P - hi k)))
+    ; ..and only where the lamp's mask lets it shine on the piece somewhere
+    (cl p) (map (k \ min2 (hi k) (max2 (lo k) (p k))) ^3)
+    (lit? kp p) (kp @ () 1
+      k (: q (cl p) (any (r \ k (r 0) (r 1) (r 2) > 0)
+                         [q [(lo 0) (q 1) (lo 2)] [(hi 0) (q 1) (lo 2)] [(lo 0) (q 1) (hi 2)] [(hi 0) (q 1) (hi 2)]
+                          [(0.5 * (lo 0 + hi 0)) (q 1) (0.5 * (lo 2 + hi 2))]])))
+    ; ..the lamps near enough, all at once, then their masks
+    (? (#pts = 0 || 6.0 * c - 0.5 <= 0.0) 0
+       (: dx (out 0 PX) dy (out 1 PY) dz (out 2 PZ) L (min R (6.0 * c - 0.5))
+          ix (iota (dx * dx + dy * dy + dz * dz < L * L))
+          (any (j \ (: i (peep ix j 0) (lit? (pts i 2) (pts i 0)))) ^#ix))))))))
  ; ..a pane: a sheet each way across the middle of its thin side, glass of its texture, the
  ; light on it its sheen
  (pane-mesh p tt) (: lo (p 'lo) hi (p 'hi) ax ((hi 0 - lo 0) < (hi 2 - lo 2) ? 0 2) al (2 - ax) m (0.5 * (lo ax + hi ax))
@@ -299,7 +308,10 @@
    ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds
    ; only the lights that change
    dyn (filter (i \ two? (ls i 'how)) ^#ls) still (filter (i \ atom? (ls i 'how)) ^#ls)
-   (ch pk l) (foldl (a \ c+ a * mesh-lamp pk) [0.0 0.0 0.0] (l 'lamps))
+   ; ..the lamps whose reach touches the mesh's box, the rest none
+   (ch pk l) (: c (pk 'cols) lo (map (k \ amin (c k)) ^3) hi (map (k \ amax (c k)) ^3)
+     (by? lp) (any (p \ net (map (k \ sq (max2 0.0 (max2 (lo k - p k) (p k - hi k)))) ^3) < sq (lp 'r)) (lp 'at))
+     (foldl (a \ c+ a * mesh-lamp pk) [0.0 0.0 0.0] (filter by? (l 'lamps))))
    ; ..the sky at the level's hour, and in its streets the sky's light and the sun's on what
    ; faces them, scaled to the gain the sky is seen through
    sk (sky-of lv) ob (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0) bs))
@@ -418,6 +430,8 @@
  ;     stands, its doorway while the door is open, and nowhere else, so the platform's edge
  ;     stops a walk once the car is gone ---
  (car-track? c x z) (: ac (c 'ax = 'z ? z x) (c 'c0 - car-t < ac && ac < c 'c1 + car-t))
+ ; ..and any of the body on it, so the door waits for the whole of the player
+ (car-near? c x z) (: ac (c 'ax = 'z ? z x) (c 'c0 - car-t - body-r < ac && ac < c 'c1 + car-t + body-r))
  (car-stands? s) (elem (s 'ph) ['wait 'open 'shut 'hold])
  (car-free? c s x z) (: al (c 'ax = 'z ? x z) ac (c 'ax = 'z ? z x) w (c 'side + c 'out * car-t)
    (car-stands? s && ((c 'a0 < al && al < c 'a1 && c 'c0 < ac && ac < c 'c1)
@@ -462,12 +476,12 @@
          m (v2 * dt) step (mag m > mag d ? d m)
          (pins st 'py (fl + step + eye-h) 'gv v2))
       (pin st 'gv 0.0)))
- ; ..a car's next moment: the door opens as the level starts and stays open while the player
- ; is anywhere in its track; once they are out it shuts, opening again if they come back
+ ; ..a car's next moment: the door opens as the level starts and stays open while any of the
+ ; player is in its track; once they are out it shuts, opening again if they come back
  ; before it is home; held shut a moment, the car gathers speed along its track and is gone
  ; once it is leave along. each change cries its sound from the doorway
  (car-at c o) (: p (P (c 'ax) (c 'dc + o) 0.0 (c 'side)) [(p 0) (p 2)])
- (car-step st c s dt) (: in (car-track? c (st 'px) (st 'pz)) t (s 't + dt) dr (s 'door) at (car-at c (s 'o))
+ (car-step st c s dt) (: in (car-near? c (st 'px) (st 'pz)) t (s 't + dt) dr (s 'door) at (car-at c (s 'o))
    (s 'ph @ 'wait (t < car-wait ? (pin s 't t, st) (pins s 'ph 'open 't 0.0, mix-cry (mix-cry st "chime" at) "hiss" at))
             'open (: d (min2 1.0 (dr + door-v * dt))
                     (d = 1.0 && !in ? (pins s 'door d 'ph 'shut, mix-cry (mix-cry st "chime" at) "hiss" at) (pin s 'door d, st)))

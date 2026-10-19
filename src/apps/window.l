@@ -6,6 +6,9 @@
 ;                             src/love/quay/paint.c lays and `dye` paints into
 ;   (window-size win)         (w h)
 ;   (window-show win y0 y1)   the paper's rows y0..y1-1 out to the screen
+;   (window-blit win pic w h s)  a picture w x h, 32-bit pixels as the paper's, out to the
+;                             screen's corner each pixel s x s, the server enlarging it; 0
+;                             where it cannot, the picture to be painted onto the paper
 ;   (window-events win)       the records waiting, () when none; never blocks
 ;   (window-close win)
 ;   (window-own win sel text) text held as the selection sel, 'primary or 'clipboard
@@ -23,7 +26,7 @@
 ; taken from its next frame's 'S' record on. a tablet of 'w 'h 'paper alone is a window with
 ; no screen, a law's: it shows nothing, and its events are what was left in its 'evq. off
 ; X a selection is the window's own, held and given back.
-(module '(window window-here? window-open window-paper window-size window-show window-events window-close
+(module '(window window-here? window-open window-paper window-size window-show window-blit window-events window-close
           window-own window-ask window-typing)
 (borrow 'xwire)
 (borrow 'posix)
@@ -144,6 +147,52 @@
           (win 'how = 'inle) (kshow (win 'paper) a b)
           (win 'how = 'droid) (droid-send win a (b - a) (snip (win 'paper) (a * win 'w * 4) (b * win 'w * 4)))
           0))
+
+   ; --- RENDER: a picture put up at its own size and drawn s times over by the server, so a
+   ;     frame ships its own pixels and not the window's. the format is the paper's: depth
+   ;     the window's, red at 16, green at 8, blue at 0, no alpha ---
+   (x-render win) (peep win 'rd () @ () (: r (x-render-init win) _ (pin win 'rd r) r) r r)
+   (x-render-init win)
+    (: s (win 's) ext (x-queryext s "RENDER")
+       (? !(two? ext) 0
+          (: op <ext
+             _ (x-w8 s op, x-w8 s 0, x-w16 s 3, x-w32 s 0, x-w32 s 11, x-flush s)        ; QueryVersion 0.11
+             v (x-reply s)
+             _ (x-w8 s op, x-w8 s 1, x-w16 s 1, x-flush s)                               ; QueryPictFormats
+             hdr (x-reply s)
+             n (<hdr = 1 ? (u32 hdr 8) 0) b (<hdr = 1 ? (x-rbytes s (4 * u32 hdr 4)) ())
+             (fmt i) (: o (28 * i)
+               (b (o + 4) = 1 && b (o + 5) = win 'depth && u16 b (o + 8) = 16 && u16 b (o + 10) = 255
+                && u16 b (o + 12) = 8 && u16 b (o + 16) = 0 && u16 b (o + 18) = 255 && u16 b (o + 22) = 0 ? (u32 b o) ()))
+             f (foldl (\ a i (a = () ? (fmt i) a)) () ^n)
+             (? (!(<v = 1) || f = ()) 0
+                {'op op 'fmt f 'pw 0 'ph 0 'sc 0 'made 0 'pm (win 'xw + 2) 'src (win 'xw + 3) 'dst (win 'xw + 4)}))))
+   ; ..the pixmap and its pictures made again whenever the picture's size or the scale changes;
+   ; a transform taking the window's place to the picture's, 1/s each way
+   (x-render-at win r w h s)
+    (? (r 'pw = w && r 'ph = h && r 'sc = s) 0
+       (: k (win 's) op (r 'op) m (65536 // s)
+          _ (r 'made ? (x-w8 k op, x-w8 k 7, x-w16 k 2, x-w32 k (r 'src),                 ; FreePicture
+                        x-w8 k op, x-w8 k 7, x-w16 k 2, x-w32 k (r 'dst),
+                        x-w8 k 54, x-w8 k 0, x-w16 k 2, x-w32 k (r 'pm)) 0)                 ; FreePixmap
+          _ (x-w8 k 53, x-w8 k (win 'depth), x-w16 k 4, x-w32 k (r 'pm), x-w32 k (win 'xw), x-w16 k w, x-w16 k h)
+          _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'src), x-w32 k (r 'pm), x-w32 k (r 'fmt), x-w32 k 0)
+          _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'dst), x-w32 k (win 'xw), x-w32 k (r 'fmt), x-w32 k 0)
+          _ (x-w8 k op, x-w8 k 28, x-w16 k 11, x-w32 k (r 'src), each [m 0 0 0 m 0 0 0 65536] (v \ x-w32 k v))
+          (pins r 'pw w 'ph h 'sc s 'made 1)))
+   (window-blit win pic w h s)
+    (: r (win 'how = 'x ? (x-render win) 0)
+       (? !(tablet? r) 0
+          (: k (win 's) op (r 'op)
+             _ (x-hold win)
+             _ (x-render-at win r w h s)
+             _ (x-putrows k (r 'pm) (win 'gc) (win 'depth) pic w 0 h)
+             _ (x-w8 k op, x-w8 k 8, x-w16 k 9, x-w8 k 1, x-w8 k 0, x-w16 k 0,               ; Composite, Src
+                x-w32 k (r 'src), x-w32 k 0, x-w32 k (r 'dst),
+                x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0,
+                x-w16 k (min (win 'w) (w * s)), x-w16 k (min (win 'h) (h * s)), x-flush k)
+             _ (x-let win)
+             1)))
 
    ; a size the paper has already is no news: X says one for every move
    (resized win r)

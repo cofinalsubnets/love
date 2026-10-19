@@ -319,15 +319,22 @@
          (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
           + text + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
- ; ..or onto a window's paper and shown, each of the picture's pixels a square of the
- ; scale's, view's bands painted over it by the console's painter a cell 8 by 16, and 'over's, the help,
- ; over those; answers "", there being nothing for the terminal
+ ; ..or to a window, each of the picture's pixels a square of the scale's: the picture sent
+ ; at its own size for the server to enlarge, else painted onto the paper and the paper
+ ; shown. view's bands are painted over it by the console's painter a cell 8 by 16, and
+ ; 'over's, the help, over those, and only their rows of the paper shown when the server
+ ; enlarged the rest; answers "", there being nothing for the terminal
  (mesh-win st f bands) (: win (st 'win) s (mesh-scale st) k (st 'kp) w (k * st 'w) h (k * st 'h)
    wh (window-size win) W <wh H (wh 1) P (window-paper win)
-   _ (frame-paint f w s P W)
+   Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
+   _ (frame-paint f w 1 Q w)
+   up (window-blit win Q w h s)
+   ov (peep st 'over {}) rs (sort (keys bands + keys ov))
+   _ (up && atom? rs ? 0 (frame-paint f w s P W))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
-   ov (peep st 'over {}) _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
-   (window-show win 0 H, ""))
+   _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
+   _ (? up (each rs (r \ window-show win (16 * r) (16 * r + 16))) (window-show win 0 H))
+   "")
  ; ..a band [x0 cells fg bg] on cell row r: its pens 24-bit, six bits a channel, or the 256
  (mesh-band st P W H r bd) (: x0 (bd 0) cs (bd 1) n #cs
    (pen p bg) (? !(st 'deep) (esc + "[" + (bg ? "48" "38") + ";5;" + show p + "m")

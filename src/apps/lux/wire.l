@@ -220,7 +220,7 @@
    (i16 l off) (u16 l off @ v (v < 32768 ? v (v - 65536)))
    (x-queryext s nm)                                                            ; -> (major-opcode first-event) | ()
     (: n #nm
-       _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) / 4),
+       _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) // 4),
           x-w16 s n, x-w16 s 0, x-wname s nm,
           (: (go i) (i < x-pad4 n ? (put s 0, go (i + 1))) (go 0)),
           x-flush s)

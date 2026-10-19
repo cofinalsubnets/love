@@ -1,12 +1,14 @@
 ; test/host/window.l -- a window on Xvfb, driven by a second wire (GetImage, XTEST, resize):
-; keys, pointer, size, selections and INCR; then `love synth -w` and `love lore corridor --window`.
+; keys, pointer, size, selections and INCR; a blit refused with no screen; then `love synth -w`
+; and `love lore corridor --window`.
 ; skips without Xvfb
 ; run: cat test/00-init.l test/host/window.l | out/love
 (borrow 'window)
 (borrow 'synth)   ; synth-trows
 (: w0 {'w 1 'h 1 'paper (cask 4)}
    _ (window-own w0 'clipboard "kept", window-ask w0 'clipboard, window-ask w0 'primary)
-   _ (test ([['paste "kept"] ['paste ""]] = window-events w0) (() = window-events w0))
+   _ (test ([['paste "kept"] ['paste ""]] = window-events w0) (() = window-events w0)
+           (window-blit w0 (cask 4) 1 1 2 = 0))
    xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
    _ (!(two? xv) ? (gate-skip "window: ok (no Xvfb, skipped)") 0)
