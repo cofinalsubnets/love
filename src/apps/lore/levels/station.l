@@ -172,6 +172,7 @@
 (: sweepgrey (texture 32 32 1.5 '((fill (rgb 0.36 0.37 0.39)) (noise 6 0.15) (grid 16 16 1 (shade 0.6)))))
 (: cabglass (texture 32 32 1 '((fill (rgb 0.04 0.07 0.1)) (noise 8 0.3) (rows 0 4 (rgb 0.36 0.37 0.39)))))
 (: drumsteel (texture 32 32 1 '((fill (rgb 0.22 0.22 0.23)) (noise 3 12 0.35) (cols 0 2 (shade 0.5)))))
+(: grille (texture 32 8 1 '((fill (grey 0.05)) (cols 0 2 (rgb 0.86 0.64 0.06)) (cols 30 32 (rgb 0.86 0.64 0.06)) (grid 3 0 1 (grey 0.2)))))
 (: hazard (texture 32 8 1 '((fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04)))))
 (: garage (texture 64 64 4.6
            '((fill (rgb 0.3 0.31 0.32)) (noise 9 0.2) (grid 0 5 1 (shade 0.45)) (patches 6 0.3 (shade 0.75))
@@ -196,6 +197,29 @@
 (: roses (texture 32 32 0.5 '((fill hole) (poly 15.2 26 16.8 26 13.132 12 11.532 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 17.419 12 15.819 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 14.979 12 13.379 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.255 12 16.655 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 18.56 12 16.96 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 10.717 12 9.117 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 9.984 12 8.384 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 21.525 12 19.925 12 (rgb 0.16 0.42 0.12)) (poly 15.2 26 16.8 26 13.431 12 11.831 12 (rgb 0.16 0.42 0.12)) (disc 10.687 14.952 2.858 (rgb 0.95 0.55 0.7)) (disc 15.527 11.03 2.411 (rgb 0.95 0.55 0.7)) (disc 9.032 14.184 2.746 (rgb 0.75 0.05 0.08)) (disc 19.428 4.704 3.262 (rgb 0.95 0.55 0.7)) (disc 6.856 12.581 3.353 (rgb 0.9 0.15 0.2)) (disc 15.455 11.907 3.43 (rgb 0.95 0.55 0.7)) (disc 21.762 8.696 3.219 (rgb 0.95 0.55 0.7)) (disc 14.892 14.291 3.43 (rgb 0.75 0.05 0.08)) (disc 6.718 9.444 2.561 (rgb 0.95 0.55 0.7)) (disc 14.723 10.893 2.621 (rgb 0.95 0.55 0.7)) (disc 22.67 10.314 2.948 (rgb 0.9 0.15 0.2)) (disc 17.685 13.946 3.155 (rgb 0.75 0.05 0.08)) (poly 8 18 24 18 18 32 14 32 (rgb 0.86 0.84 0.78)) (poly 8 18 24 18 23 20 9 20 (rgb 0.7 0.68 0.62)))))
 ; ..a bouquet standing: two pictures in a vee opening toward the street
 (: (flowers x y z t) [(decal [x (y + 0.24) z] [0.7 0 -0.7] [0 1 0] 0.42 0.48 t) (decal [x (y + 0.24) z] [-0.7 0 -0.7] [0 1 0] 0.42 0.48 t)])
+; ..a heap of them, n things strewn by seed sd: banked against a wall at z w from x a to b,
+; out d toward the street, h high at the wall and spilling to nothing, the ground under
+; each at (fl x z); each bouquet one picture, turned roughly to the street, and a few
+; wreaths leant into it
+(: (rnd i) (: v (sin (i * 12.9898 + 78.233) * 43758.5453) (v - floor v)))
+(: blooms [posies lilies roses])
+(: (strew x y z q f sd) (: t (rnd (sd + 0.61)) b (blooms (int (floor (2.99 * rnd (sd + 0.29)))))
+   (? (t < 0.09) [(decal [x (y + 0.4) z] (q 0) (q 1) 0.95 0.95 wreath)]
+      [(decal [x (y + 0.24) z] f [0 1 0] 0.42 0.48 b)])))
+(: (bank a b w d h n sd fl) (cats (map (i \ (: u (rnd (sd + i)) k (rnd (sd + i + 0.37) * rnd (sd + i + 0.83))
+                                          x (a + (b - a) * u) z (w - 0.12 - d * k)
+                                          y (fl x z + h * (1 - k) * (0.55 + 0.45 * rnd (sd + i + 0.17)) - 0.12)
+                                       (: a (rnd (sd + i + 0.53) - 0.5) (strew x y z [[0 0.45 -0.89] [0 0.89 0.45]] [a 0 -1] (sd + i)))))
+                                ^n)))
+; ..the same banked against a wall at x w, from z a to b, out d toward x's s side
+(: (side w s a b d h n sd fl) (cats (map (i \ (: u (rnd (sd + i)) k (rnd (sd + i + 0.37) * rnd (sd + i + 0.83))
+                                          z (a + (b - a) * u) x (w + s * (0.12 + d * k))
+                                          y (fl x z + h * (1 - k) * (0.55 + 0.45 * rnd (sd + i + 0.17)) - 0.12)
+                                       (: a (rnd (sd + i + 0.53) - 0.5) (strew x y z [[(0.45 * s) 0.45 -0.77] [0 0.89 0.45]] [(0.6 * s + a) 0 -1] (sd + i)))))
+                                ^n)))
+; ..the office's ground: the pavement, the steps up from it, the landing; the bays' floor
+(: (stepy x z) (? (z < 28.6) 9.0 (min 9.6 (9.15 + 0.15 * floor ((z - 28.6) / 0.5)))))
+(: (bayy x z) 8.85)
 ; ..a wreath on its easel: two dark legs and a bar
 (: (easel x y z) [(decal [x (y + 1.25) z] [0 0 -1] [0 1 0] 1.15 1.15 wreath)
                   (whole (skin {'all darkmetal} (solid (box [(x - 0.42) y (z + 0.02)] [(x - 0.38) (y + 1.5) (z + 0.06)]))))
@@ -286,21 +310,27 @@
   ; east
   (ad [-24 19 14.03] [0 0 1] [0 1 0] 13 7 adredblue)
   (ad [44.97 28 30] [-1 0 0] [0 1 0] 12 6 adgreen)
-  ; ..a street sweeper parked by the west wall outside the shop's window, its headlights
-  ; on, a front drum and a rear, its cab glazed; the garage behind it shut, a strip over it
-  (whole (skin {'all drumsteel} (cut [-37.019 8.85 22.8] [-37.4 9.231 22.8] [-37.019 8.85 25.2] (cut [-37.4 9.769 22.8] [-37.019 10.15 22.8] [-37.4 9.769 25.2] (cut [-36.1 9.231 22.8] [-36.481 8.85 22.8] [-36.1 9.231 25.2] (cut [-36.481 10.15 22.8] [-36.1 9.769 22.8] [-36.481 10.15 25.2] (solid (box [-37.4 8.85 22.8] [-36.1 10.15 25.2]))))))))
-  (whole (skin {'all drumsteel} (cut [-41.186 8.85 22.75] [-41.45 9.114 22.75] [-41.186 8.85 25.25] (cut [-41.45 9.486 22.75] [-41.186 9.75 22.75] [-41.45 9.486 25.25] (cut [-40.55 9.114 22.75] [-40.814 8.85 22.75] [-40.55 9.114 25.25] (cut [-40.814 9.75 22.75] [-40.55 9.486 22.75] [-40.814 9.75 25.25] (solid (box [-41.45 8.85 22.75] [-40.55 9.75 25.25]))))))))
-  (whole (skin {'all sweepyellow} (solid (box [-37.6 10.15 22.7] [-35.9 10.45 25.3]))))
-  (decal [-35.89 10.3 24] [1 0 0] [0 1 0] 2.6 0.3 hazard)
-  (whole (skin {'all sweepyellow} (solid (box [-41.9 9.3 22.8] [-37.5 10.3 25.2]))))
-  (decal [-39.7 9.8 22.79] [0 0 -1] [0 1 0] 4.4 0.25 hazard)
-  (decal [-39.7 9.8 25.21] [0 0 1] [0 1 0] 4.4 0.25 hazard)
-  (whole (skin {'all sweepgrey 'walls cabglass} (cut [-38.5 12.2 23.1] [-38.5 12.2 24.9] [-38 11.4 23.1] (solid (box [-40.6 10.3 23.1] [-38 12.2 24.9])))))
-  (whole (skin {'all sweepgrey} (solid (box [-40.7 12.2 23] [-38.4 12.3 25]))))
-  (whole (skin {'all sweepyellow} (solid (box [-39.8 12.3 23.7] [-39.2 12.42 24.3]))))
-  (whole (skin {'all sweepyellow} (cut [-41.8 11.3 25.1] [-41.8 11.3 22.9] [-42.3 10.8 25.1] (solid (box [-42.3 10.3 22.9] [-40.6 11.3 25.1])))))
-  (bulb [-35.85 10.32 23.05] (rgb 1 0.95 0.82))
-  (bulb [-35.85 10.32 24.95] (rgb 1 0.95 0.82))
+  ; ..a street sweeper out of the garage, in the middle of the road before it, nose east,
+  ; headlights on: a cab-over truck's front, a grille and a raked windscreen, the cab and
+  ; hood and body yellow, a steel roller under each end
+  (whole (skin {'all drumsteel} (cut [-35.678 8.85 23.8] [-36 9.172 23.8] [-35.678 8.85 26.2] (cut [-36 9.628 23.8] [-35.678 9.95 23.8] [-36 9.628 26.2] (cut [-34.9 9.172 23.8] [-35.222 8.85 23.8] [-34.9 9.172 26.2] (cut [-35.222 9.95 23.8] [-34.9 9.628 23.8] [-35.222 9.95 26.2] (solid (box [-36 8.85 23.8] [-34.9 9.95 26.2]))))))))
+  (whole (skin {'all drumsteel} (cut [-39.628 8.85 23.8] [-39.95 9.172 23.8] [-39.628 8.85 26.2] (cut [-39.95 9.628 23.8] [-39.628 9.95 23.8] [-39.95 9.628 26.2] (cut [-38.85 9.172 23.8] [-39.172 8.85 23.8] [-38.85 9.172 26.2] (cut [-39.172 9.95 23.8] [-38.85 9.628 23.8] [-39.172 9.95 26.2] (solid (box [-39.95 8.85 23.8] [-38.85 9.95 26.2]))))))))
+  (whole (skin {'all sweepyellow} (solid (box [-40.5 9.75 23.75] [-34.6 10 26.25]))))
+  (whole (skin {'all sweepyellow} (cut [-34.9 10.95 23.75] [-34.5 10.55 23.75] [-34.9 10.95 26.25] (solid (box [-36.25 9.95 23.75] [-34.5 10.95 26.25])))))
+  (whole (skin {'all sweepyellow} (solid (box [-34.5 9.85 23.7] [-34.32 10.12 26.3]))))
+  (decal [-34.31 9.985 25] [1 0 0] [0 1 0] 2.6 0.27 hazard)
+  (decal [-34.495 10.4 25] [1 0 0] [0 1 0] 1.5 0.42 grille)
+  (whole (skin {'all sweepyellow} (cut [-36.75 12.4 23.85] [-36.25 11.6 23.85] [-36.75 12.4 26.15] (solid (box [-38.1 10.95 23.85] [-36.25 12.4 26.15])))))
+  (decal [-36.49 12.006 25] [0.848 0.53 0] [-0.53 0.848 0] 2.1 0.82 cabglass)
+  (decal [-37.25 11.85 23.84] [0 0 -1] [0 1 0] 1.3 0.75 cabglass)
+  (decal [-37.25 11.85 26.16] [0 0 1] [0 1 0] 1.3 0.75 cabglass)
+  (whole (skin {'all sweepyellow} (solid (box [-37.75 12.4 24.7] [-37.15 12.52 25.3]))))
+  (whole (skin {'all sweepyellow} (cut [-40.5 11.3 23.75] [-40.1 11.7 23.75] [-40.5 11.3 26.25] (solid (box [-40.5 10 23.75] [-38.1 11.7 26.25])))))
+  (decal [-39.3 10.55 23.74] [0 0 -1] [0 1 0] 2.4 0.25 hazard)
+  (decal [-39.3 10.55 26.26] [0 0 1] [0 1 0] 2.4 0.25 hazard)
+  (bulb [-34.47 10.45 24] (rgb 1 0.95 0.82))
+  (bulb [-34.47 10.45 26] (rgb 1 0.95 0.82))
+  ; ..the garage it came out of, shut, a strip over it
   (decal [-44.97 10.75 25] [1 0 0] [0 1 0] 4.6 3.8 garage)
   (strip-light [-44.8 12.9 25])
   ; the UNN recruitment office across the road: five storeys of concrete, four broad
@@ -328,6 +358,14 @@
   ; bouquets heaped along the wall and up the steps' ends, and on the landing eight candles
   ; round, seven brown and lit, the purple one far left unlit
   (easel -2.35 9.6 36.2) (easel 2.35 9.6 36.2)
+  ; ..mounds of them against the walls, deepest either side of the doors, down the stairs'
+  ; sides to the pavement, and along the bays either side
+  (bank -3.2 -1.5 36.9 2.2 1.1 110 100 stepy) (bank 1.5 3.2 36.9 2.2 1.1 110 300 stepy)
+  (bank -1.5 1.5 36.9 1.3 0.45 70 500 stepy)
+  (side -3.2 1 28.2 36.8 1.5 0.9 140 700 stepy) (side 3.2 -1 28.2 36.8 1.5 0.9 140 900 stepy)
+  (bank -12.2 -5.8 35 1.6 0.8 90 1100 bayy) (bank 5.8 12.2 35 1.6 0.8 90 1300 bayy)
+  (side -12.2 1 32 35 1.2 0.6 25 1500 bayy) (side -5.8 -1 32 35 1.2 0.6 25 1600 bayy)
+  (side 5.8 1 32 35 1.2 0.6 25 1700 bayy) (side 12.2 -1 32 35 1.2 0.6 25 1800 bayy)
   (decal [0 11.6 37.47] [0 0 -1] [0 1 0] 0.8 0.8 wreath)
   (flowers -2.955 9.6 36.62 posies) (flowers -2.544 9.6 36.62 lilies) (flowers -2.108 9.6 36.62 roses)
   (flowers -1.853 9.6 36.62 posies) (flowers 1.851 9.6 36.62 lilies) (flowers 2.159 9.6 36.62 roses)
