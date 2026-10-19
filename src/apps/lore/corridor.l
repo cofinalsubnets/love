@@ -182,7 +182,9 @@
    (disc u v) (: rim (map (i \ (: a (tau * i / n) (vx (c+ p (c+ (c* (r * cos a) u) (c* (r * sin a) v))) z))) ^n)
      (mesh (vx p col . rim) (cats (map (i \ (: a (1 + i) b (1 + (i + 1) % n) [[0 a b -1] [0 b a -1]])) ^n))))
    (mesh-join [(disc [1.0 0.0 0.0] [0.0 1.0 0.0]) (disc [0.0 1.0 0.0] [0.0 0.0 1.0]) (disc [1.0 0.0 0.0] [0.0 0.0 1.0])]))
- (sign-light lv s) (: a (s 'at) hg (hang lv (a 0) (a 1)) n (hg 1) rt (hg 2) h (a 3)
+ (sign-light lv s) (: a (s 'at) sn (peep s 'n ())
+   hg (? (atom? sn) (hang lv (a 0) (a 1)) (: n (unit sn) [[(a 0) 0.0 (a 1)] n [(0.0 - n 2) 0.0 (n 0)]]))
+   n (hg 1) rt (hg 2) h (a 3)
    w (h * (neon-strokes (s 'text) 1)) o (c+ (c+ (hg 0) [0.0 (a 2) 0.0]) (c* (-0.5 * w) rt))
    sg (neon-sign (s 'text) o rt [0.0 1.0 0.0] n h (c* 0.7 (s 'c)))
    (light [(pin (sg 'lamp) 'keep (inside (room-at lv (a 0) (a 1))))] (s 'how)
@@ -289,6 +291,31 @@
    w (d 'w) h (d 'h) i (tix tt (d 'tex)) t (tt i) o (c+ a (c+ (c* (-0.5 * w) r) (c* (-0.5 * h) u)))
    (sheets o (c* h u) (c* w r) n (q \ (: e (c+ q (c* -1.0 o)) [(t 1 / w * dot e r) (t 2 / h * (h - dot e u))])) i white))
  (file-of dir p) (p 'file @ () () f (f 0 @ 47 f (dir + f)))
+ ; --- the advertisements: each its own light, bright, and a lamp before it in the colour
+ ;     its picture comes to on the whole; a spinner four of them round a square, turning ---
+ (avg-col txs nm) (: t <(filter (t \ t 'name = nm) txs) f (swatch-texel (t 'layers))
+   (c* (1.0 / 64.0) (foldl (\ a i (: c (f (t 'w * (i % 8) // 8) (t 'h * (i // 8) // 8)) (c = () ? a (c+ a c)))) [0.0 0.0 0.0] ^64)))
+ ad-shine 1.3
+ (ad-light lv txs tt d) (: a (d 'at) n (unit (c+ (d 'np) (c* -1.0 a))) p (c+ a (c* 0.8 n))
+   (light [{'at [p] 'n n 'c (c* 2.2 (avg-col txs (d 'tex))) 'r (0.9 * max2 (d 'w) (d 'h) + 6.0) 'soft 1.5 'wrap 0.3
+            'keep (inside (room-at lv (p 0) (p 2)))}]
+          () [[(mesh-pack (decal-mesh d tt)) ad-shine]] ()))
+ (spin-light lv txs s) (: p (c+ (s 'at) [0.0 (0.5 * s 'h) 0.0])
+   (light [{'at [p] 'c (c* 1.25 (c+ (avg-col txs (s 't1)) (avg-col txs (s 't2)))) 'r (s 'w + 10.0) 'soft 2.0
+            'keep (inside (room-at lv (p 0) (p 2)))}]
+          () () ()))
+ ; ..its four faces about its middle's foot, outward, the two pictures in turn
+ (spin-mesh s tt) (: w (s 'w) h (s 'h)
+   (face i) (: f (i * pi / 2.0) n [(sin f) 0.0 (cos f)] a [(0.5 * w * sin f) (0.5 * h) (0.5 * w * cos f)]
+     (decal-mesh {'at a 'np (c+ a n) 'up (c+ a [0.0 1.0 0.0]) 'w w 'h h 'tex (i % 2 = 0 ? (s 't1) (s 't2))} tt))
+   (mesh-pack (mesh-join (map face ^4))))
+ spin-v 0.35                              ; radians a second
+ ; ..turned to where it has got to at mt, shining
+ (spin-at s pk mt) (: c (pk 'cols) an (spin-v * mt) ca (cos an) sa (sin an) o (s 'at)
+   [(mesh-shine {'n (pk 'n) 'tris (pk 'tris)
+                 'cols [(o 0 + ca * c 0 + sa * c 2) (o 1 + c 1) (o 2 + ca * c 2 - sa * c 0) (c 3) (c 4)
+                        (ca * c 5 + sa * c 7) (c 6) (ca * c 7 - sa * c 5) (c 8) (c 9) (c 10)]}
+                ad-shine)])
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
  ; corridor's gain; () when it has none
  (sky-of lv) (peep lv 'sky () @ () ()
@@ -297,8 +324,9 @@
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
  ;     dir the level's folder, for its pictures ---
- (scene lv dir) (: ps (lv 'posters) ls (lights-of lv)
+ (scene lv dir) (: ps (lv 'posters)
    txs (textures lv) tt (map (t \ [(t 'name) (t 'w) (t 'h) (t 'm)]) txs)
+   ls (lights-of lv + map (ad-light lv txs tt) (peep lv 'ads ()) + map (spin-light lv txs) (peep lv 'spins ()))
    ptex (map (p \ poster-tex (file-of dir p) (p 'at 3) (p 'at 4)) ps)
    pm (map (i \ poster-mesh lv (ps i) (#tt + i) (shape (ptex i 0) 1) (shape (ptex i 0) 0)) ^#ps)
    bs (brushes-of lv)
@@ -335,6 +363,7 @@
                            'rad (0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))})) cks)
     'doors drs 'doors-lit (map lit drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs 'sky sk 'open ob
     'ball (two? (peep lv 'balls ()) ? (ball-mesh ()) ()) 'lit lit
+    'spins (map (s \ spin-mesh s tt) (peep lv 'spins ()))
     'texs (map (t \ swatch (t 'w) (t 'h) (t 'layers)) txs + ptex)})
  ; --- a grav shaft's motes: each a speck of three crossed squares, both ways round, a glow;
  ;     its own height, speed, and turn about the middle, from its number ---
@@ -401,7 +430,8 @@
    ; ..each ball where it is, made again only once it has moved
    balls (map (b \ (: d (tablet? (b 'pk) ? (b 'pk) (: d (ball-pk sc b) (pin b 'pk d, d))) (relit (d 'pk) (d 'lit))))
               (peep st 'balls ()))
-   all (balls + cars + doors + hall + by 'shine + glass + by 'glow + map (m \ motes-at m (st 'mt)) (sc 'motes))
+   spins (cats (map (i \ spin-at (lv 'spins i) (sc 'spins i) (st 'mt)) ^#(peep lv 'spins ())))
+   all (balls + cars + doors + hall + by 'shine + spins + glass + by 'glow + map (m \ motes-at m (st 'mt)) (sc 'motes))
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog 8 gain bare))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again

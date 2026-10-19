@@ -48,6 +48,14 @@
 ;                                      a png's path from the level's folder, or () for the
 ;                                      corridor's own
 ;   (sign [x y z] height TEXT (rgb r g b))  a neon sign on the wall nearest
+;   (neon [x y z] [nx ny nz] height TEXT (rgb r g b))  a neon sign whose foot's middle is at
+;                                      x y z, facing n
+;   (ad [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)  a lit advertisement, laid as a
+;                                      decal is, bright as its own light and lighting what
+;                                      is before it in its colours
+;   (spinner [x y z] width height TEXTURE TEXTURE)  a square of four lit advertisements
+;                                      turning slowly about its middle at x y z, the two
+;                                      textures in turn round it
 ;   (across LIGHT)                     a strip turned across, along x
 ;   (stammer LIGHT) (buzz LIGHT) (breathe LIGHT)  a light failing, buzzing or breathing
 ;   (texture width height metres LAYERS)  a texture, width by height texels and metres wide
@@ -59,7 +67,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of start room street sky air solid box prism cut door train bin decal window grav ball smog strip-light bulb poster sign
+(module (scenery level-of start room street sky air solid box prism cut door train bin decal window grav ball smog ad spinner neon strip-light bulb poster sign
          across stammer buzz breathe texture skin textures repeat mirror-x mirror-z rgb)
 (borrow 'view)                          ; min2 max2
 (borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
@@ -148,6 +156,15 @@
  (sign at h text c) (: u "(sign [x y z] height TEXT (rgb r g b))"
    (? (!(string? text)) (no u text) (!(colour? c)) (no u c)
       (part 'sign [['at (P at u)] ['h (N h u)] ['text text] ['c c] ['how ()]])))
+ (neon at n h text c) (: u "(neon [x y z] [nx ny nz] height TEXT (rgb r g b))"
+   (? (!(string? text)) (no u text) (!(colour? c)) (no u c)
+      (part 'sign [['at (P at u)] ['n (P n u)] ['h (N h u)] ['text text] ['c c] ['how ()]])))
+ ; ..an advertisement: a decal that is its own light
+ (ad at n up w h t) (: u "(ad [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)"
+   (decal at n up w h t @ d (tablet? d ? (pin d 'kind 'ad) (no u t))))
+ (spinner at w h t1 t2) (: u "(spinner [x y z] width height TEXTURE TEXTURE)"
+   (? (!(texture? t1)) (no u t1) (!(texture? t2)) (no u t2)
+      (part 'spin [['at (P at u)] ['w (N w u)] ['h (N h u)] ['t1 t1] ['t2 t2]])))
  (across s) (kind? s ['strip] ? (with s 'across 1) (no "(across (strip-light ..))" s))
  (how w l) (kind? l ['strip 'bulb 'sign] ? (with l 'how [w]) (no ("(" + show w + " LIGHT), a strip-light, bulb or sign") l))
  (stammer l) (how 'stammer l)
@@ -183,12 +200,13 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; ..the textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'decal 'pane 'grav 'ball 'sky 'smog 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'poster 'sign 'decal 'pane 'grav 'ball 'sky 'smog 'ad 'spin 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
    used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ b 'skin k) (sort (keys (b 'skin)))) bs)
-                                                     + map (d \ d 'tex) (of 'decal + of 'pane)))
+                                                     + map (d \ d 'tex) (of 'decal + of 'pane + of 'ad)
+                                                     + cats (map (s \ [(s 't1) (s 't2)]) (of 'spin))))
    (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
    (skin-of b) (: s (b 'skin) (cats (map (k \ (k = 'all ? (map (c \ [c (tname (s k))]) ['wall 'floor 'ceiling])
                                                  [[(k = 'walls ? 'wall k) (tname (s k))]]))
@@ -212,7 +230,9 @@
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex))}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
-       'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'text (s 'text) 'c (s 'c) 'how (s 'how)})) (of 'sign))
+       'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'ad))
+       'spins (map (s \ {'at (s 'at) 'w (s 'w) 'h (s 'h) 't1 (tname (s 't1)) 't2 (tname (s 't2))}) (of 'spin))
+       'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'n (peep s 'n ()) 'text (s 'text) 'c (s 'c) 'how (s 'how)})) (of 'sign))
        'textures (map (k \ tex k (dflt k)) (filter (k \ elem k (keys dflt)) ['wall 'floor 'ceiling 'door 'train])
                   + map (i \ tex (tname (used i)) (used i)) ^#used)})))
 (:: 'level (\ l ['level-of <l ('list . >l)]))
