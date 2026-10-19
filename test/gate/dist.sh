@@ -32,7 +32,7 @@ smoke)
   srcd=$(echo "$s"/love-*/)
   [ ! -e "$srcd/bin" ]                             || fail "love source laid a bin/ -- the tree is source, nothing else"
   [ ! -e "$srcd/out" ]                             || fail "love source laid an out/ beside the tree"
-  run "$dist" sb 2>&1 | grep -q "patch-set vcs"  || fail "sb usage"
+  run "$dist" sb 2>&1 | grep -q "usage: sb VERB" || fail "sb usage"
   run "$dist" mooncc 2>&1 | grep -q "usage: mooncc" || fail "mooncc verb usage"
   # the CC-under-make lane: the build recipes hand this command its image back
   # with `LOVE_NO_IMAGE=` (empty = unset, main.c) -- pin that an empty value

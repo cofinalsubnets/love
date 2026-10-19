@@ -198,7 +198,7 @@ if command -v zstd >/dev/null 2>&1; then
   cat "$ho/.arcb" "$ho/.arc1" > "$g"
   korerun zstdcat "$ho/.arcs.zst" > "$o"; cmp -s "$g" "$o" || fail "kore zstdcat of two frames"
 fi
-hv "zstd --help" '^zstd -- zstandard' korerun zstd --help
+hv "zstd --help" '^zstd -- the zstandard compressor' korerun zstd --help
 # tar beyond the bundled key: dashed letters, -C, members, f - both ways, J, a sniffed codec,
 # --strip-components, -O
 T=$HO/.arctar; rm -rf "$T"; mkdir -p "$T/o"

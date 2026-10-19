@@ -303,11 +303,12 @@ _4v
 1 2 ]
 e
 EOF
+  # gnu warns of 'a' on stderr, kore does not: those two lines come off gnu's side
   # a line at a time by number: under lush dc is a verb, and a verb in a read loop drinks its input
   nc=$(wc -l < "$ho/.kore-dc.cases"); i=1
   while [ $i -le $nc ]; do
     p=$(sed -n "${i}p" "$ho/.kore-dc.cases"); i=$((i + 1))
-    printf '%s\n' "$p" | dc > "$g" 2>&1; printf '%s\n' "$p" | korerun dc > "$o" 2>&1; same "dc [$p]"
+    printf '%s\n' "$p" | dc 2>&1 | sed "/'a' command is deprecated/d; /bug-dc@gnu.org/d" > "$g"; printf '%s\n' "$p" | korerun dc > "$o" 2>&1; same "dc [$p]"
   done
   printf '1 2+p\n' > "$ho/.kore-dc.f"
   dc -e '3 4*p' -f "$ho/.kore-dc.f" > "$g" 2>&1; korerun dc -e '3 4*p' -f "$ho/.kore-dc.f" > "$o" 2>&1; same "dc -e -f"

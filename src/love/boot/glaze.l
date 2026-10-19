@@ -80,6 +80,8 @@
    (buse? e P) (? (atom? e) 0  (<e = 'pin && <>e = P) 1  (foldl (a \ x \ a || buse? x P) 0 >e))   ; a cask: the guard wants the buf kind, not str
    (cuse? e P) (? (atom? e) 0  (elem <e '(cap cup two?) && <>e = P) 1  (foldl (a \ x \ a || cuse? x P) 0 >e))   ; a chain: raw, no entry guard, since two? is total
    (muse? e P) (? (atom? e) 0  ((<e = 'mpeep || <e = 'mpin) && <>e = P) 1  (foldl (a \ x \ a || muse? x P) 0 >e))   ; a map: raw, map-guarded
+   (puse? e P) (two? e ? (<e = 'peep && <>e = P ? 1 (foldl (a \ x \ a || puse? x P) 0 >e)) 0)
+   (tuse? e P) (two? e ? (<e = 'tally && <>e = P ? 1 (foldl (a \ x \ a || tuse? x P) 0 >e)) 0)
    ; a point key, (P = <..) or (<.. = P): raw word identity guarded nom|mint, since a charm
    ; could bridge (2 = 2.0)
    (nuse? e P)
@@ -1793,8 +1795,6 @@
           (': . (hasbody ? (unpair allp body) (cbflat allp)))))))
    ; --- mapfix: a group fn's param peep'd but never tally'd is a map, so (peep h k d) -> (mpeep h k d), the open-addressed
    ;     probe; the entry's mapkind guard backstops the guess -- a non-map arg deopts
-   (puse? e P) (two? e ? (<e = 'peep && <>e = P ? 1 (foldl (a \ x \ a || puse? x P) 0 >e)) 0)
-   (tuse? e P) (two? e ? (<e = 'tally && <>e = P ? 1 (foldl (a \ x \ a || tuse? x P) 0 >e)) 0)
    (peep->mpeep P e) (two? e ? (<e = 'peep && <>e = P ? ('mpeep . map (peep->mpeep P) >e) (map (peep->mpeep P) e)) e)
    (pin->mpin P e)   (two? e ? (<e = 'pin && <>e = P ? ('mpin . map (pin->mpin P) >e) (map (pin->mpin  P) e)) e)   ; a cask param is pin'd-not-peep'd so never in mps
    (mapfix-def def) (: nf <def body >def

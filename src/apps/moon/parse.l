@@ -289,6 +289,14 @@
                                 (go >s d)))
                          (go >s d))))
        (go ts 0))
+   ; the attribute groups right after a struct/union/enum body are the type's (gcc): past them
+   ; the declaration's own begin
+   (tyattr s)
+    (: (parn s n) (? (atom? s || n < 1) s
+                     (tp? <s "(") (parn >s (n + 1))
+                     (tp? <s ")") (parn >s (n - 1))
+                     (parn >s n))
+       (two? s && (idv? <s "__attribute__" || idv? <s "__attribute") && peekp >s "(" ? (tyattr (parn >>s 1)) s))
    ; one `aligned` ask, the tokens after the word -> (N rest): bare is the target's widest,
    ; a constant expression folds, one that will not fold asks nothing
    (palask ps ts)
@@ -1913,7 +1921,7 @@
           (: base <br ts0 <>br
              bq (qspec ps ts base)   ; _Generic's, staged below
              lal (specask ps ts)   ; an ask among the specifiers, every declarator's
-             sct (stat ? (secat? ts))   ; a block static's section
+             sct (stat ? (secat? ts @ sc (string? sc ? sc (secat? (tyattr ts0)))))   ; a block static's section, past a tag body too
              (peekp ts0 ";" ? [['decl ()] >ts0]   ; a bare definition (struct S {..};)
                 (: (one ts2)
                     (pdtor ps ts2 base @ dr
@@ -2578,23 +2586,27 @@
    (ptop ps ts)
     (hdhits ts @ hw
      ((peep ps 'curstat () ? () (leadstatic? ps ts ? (pin ps 'curstat 1))),
-      (peep ps 'cursect () ? () (hwin hw "section" "__section__" && secat? ts @ sc (sc ? (pin ps 'cursect sc)))),
-      (peep ps 'curalias () ? () (hwin hw "alias" "__alias__" && aliasat? ts @ al (al ? (pin ps 'curalias al)))),
-      (peep ps 'curweak () ? () (hwin hw "weak" "__weak__" ? (pin ps 'curweak 1))),
-      (peep ps 'curinl () ? () (hwin hw "always_inline" "__always_inline__" ? (pin ps 'curinl 1))),
-      (peep ps 'curnoinl () ? () (hwin hw "noinline" "__noinline__" ? (pin ps 'curnoinl 1))),
-      (peep ps 'curused () ? () (hwin hw "used" "__used__" ? (pin ps 'curused 1))),
+      pinat ps ts hw,
       ; C99 inline: plain `inline` lays no external definition, `extern inline` does;
       ; gnu_inline (gnu89's) the other way about
       (peep ps 'curlink () ? ()
          (pin ps 'curlink (leadkw? ps ts 'inline && !!(leadextern? ps ts) = !!(hwin hw "gnu_inline" "__gnu_inline__") ? 'inl 'ext))),
-      (peep ps 'curalign () ? ()
-         (hwin hw "aligned" "__aligned__" || elem "_Alignas" hw ? (alignat? ps ts @ an (an ? (pin ps 'curalign an))))),
-      (two? (peep ps 'curpfe ()) ? ()
-         (hwin hw "patchable_function_entry" "__patchable_function_entry__" ? (pfeat? ts @ pf (two? pf ? (pin ps 'curpfe pf))))),
-      (hwin hw "no_stack_protector" "__no_stack_protector__" ? (pin ps 'curssp 'no)),
-      (peep ps 'curssp () ? () (hwin hw "stack_protect" "__stack_protect__" ? (pin ps 'curssp 1))),
       ptop9 ps ts))
+   ; the attributes a declaration names, hw its head words. ptop reads them at entry, where the
+   ; scans stop at the first `{`, and ptop9 again past a struct/union/enum body
+   (pinat ps ts hw)
+    ((peep ps 'cursect () ? () (hwin hw "section" "__section__" && secat? ts @ sc (sc ? (pin ps 'cursect sc)))),
+     (peep ps 'curalias () ? () (hwin hw "alias" "__alias__" && aliasat? ts @ al (al ? (pin ps 'curalias al)))),
+     (peep ps 'curweak () ? () (hwin hw "weak" "__weak__" ? (pin ps 'curweak 1))),
+     (peep ps 'curinl () ? () (hwin hw "always_inline" "__always_inline__" ? (pin ps 'curinl 1))),
+     (peep ps 'curnoinl () ? () (hwin hw "noinline" "__noinline__" ? (pin ps 'curnoinl 1))),
+     (peep ps 'curused () ? () (hwin hw "used" "__used__" ? (pin ps 'curused 1))),
+     (peep ps 'curalign () ? ()
+        (hwin hw "aligned" "__aligned__" || elem "_Alignas" hw ? (alignat? ps ts @ an (an ? (pin ps 'curalign an))))),
+     (two? (peep ps 'curpfe ()) ? ()
+        (hwin hw "patchable_function_entry" "__patchable_function_entry__" ? (pfeat? ts @ pf (two? pf ? (pin ps 'curpfe pf))))),
+     (hwin hw "no_stack_protector" "__no_stack_protector__" ? (pin ps 'curssp 'no)),
+     (peep ps 'curssp () ? () (hwin hw "stack_protect" "__stack_protect__" ? (pin ps 'curssp 1))))
    (ptop9 ps ts)
     (? (peekp ts ";") ['(tdef) >ts]           ; a stray top-level `;` -- an empty declaration
        ; a leading __extension__ strips before the keyword checks (`__extension__ typedef`)
@@ -2620,7 +2632,8 @@
              (: base <br ts0 <>br
                 gbq (qspec ps ts base)  ; the run's mask, _Generic's
                 (peekp ts0 ";" ? ['(tdef) >ts0]     ; a bare struct/enum definition
-                   (: sr (pstars ts0 base)
+                   (: _ (tyattr ts0 @ ta (pinat ps ta (hdhits ta)))   ; what a tag body hid from ptop
+                      sr (pstars ts0 base)
                       rty <sr ts1 (pquals <>sr)
                       ; the first declarator: a plain name, or a paren declarator through pdtor,
                       ; the leading stars already in rty. -> (name rest ty prms), ty () if plain

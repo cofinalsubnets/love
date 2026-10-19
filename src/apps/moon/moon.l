@@ -435,6 +435,13 @@
            (udie 2 "cc: -mstack-protector-guard-offset=\(o) -- a64's is a word offset under 32768")
           (!x86 && f 'ssps) (udie 2 "cc: -mstack-protector-guard-symbol -- x86 only")
           [m r (f 'ssps || (m = 'global ? "__stack_chk_guard")) o]))
+   ; a file-scope asm's own labels, local in the symtab as gas lays them: modpost finds an
+   ; export by its __export_symbol_ label. gas's numbered (l911.1) and pool (.L..) labels stay out
+   (asmlocs secs)
+    (: (digs? s) (0 < #s && all digit? (map (i \ s i) (jot #s)))
+       (lnum? sp) (split "." sp @ p (#p = 2 && starts? <p "l" && digs? (snip <p 1 #(<p)) && digs? <>p))
+       (lab f) (two? f && <f = 'label ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
+       (filter string? (catall (map (s \ map lab (s 3)) secs))))
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes]
@@ -463,7 +470,7 @@
                     (objsecs32n tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
                                 fns gns wks anames)
                     (objsecsn tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
-                              fns gns wks lnames anames)))
+                              fns gns wks (lnames + filter (s \ !(elem s fns || elem s gns || elem s lnames)) (asmlocs <at)) anames)))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is

@@ -4,6 +4,7 @@
 (module 'moon
 (borrow 'kore)
 (:
+   clex-run (cite 'dfa 'run)                   ; the walk over ctab.l's tables (c.lex)
    ; a diagnostic a stage may answer instead of a bare bad: file/line/col (() when unknown)
    ; and a message. a gripe is a chain, so okv? excludes it. here as the first moon file loaded
    (gripe file line col msg) ['gripe file line col msg]
@@ -102,6 +103,7 @@
                               add >l)))
                (add (p3 + p2)))
        kwt (: t {} (go l) (!(two? l) ? t (pin t <l 1, go >l)) (go kws))
+       ptab (foldl (t \ p \ pin t p p) {} (p3 + p2))   ; a multi-char punctuator's one string
        ; gcc's underscored keyword spellings; only a name opening `_` is looked up
        kwal (: t {} (go l) (!(two? l) ? t (pin t <<l <><l, go >l))
                (go '((__signed__ signed) (__signed signed))))
@@ -117,6 +119,7 @@
                  (c = 117 || c = 85 || c = 108 || c = 76 ? 64 0) +
                  (elem c '(40 41 91 93 123 125 59 44 46 58 63 126 33 43 45 42 47 37 60 62 61 38 124 94 35) ? 128 0))
        ctbl (: (go k acc) (k < 0 ? (string acc) (go (k - 1) (cbit k . acc))) (go 255 ()))
+       ctab clex-tab                               ; ctab.l's tables, bound here as ctbl is
        (ws? c) (ctbl c & 2)
        (dig? c) (ctbl c & 4)
        (hexd? c) (ctbl c & 32)
@@ -291,10 +294,37 @@
                  val ['hex mant bexp]                    ; cflo folds it, if anyone asks
                  j3 (j2 < n && elem (src j2) '(102 70 108 76) ? (j2 + 1) j2)
                  [j3 1 val (j2 < n && elem (src j2) '(102 70))])))
+       ; a newline: the line count takes the splices pending on it
+       (nl line) (peep pend 'n 0 @ k (0 < k ? (pin pend 'n 0) 0, line + 1 + k))
+       ; an id the hand lexer takes: a prefixed literal's L/u/U/u8, a ucn's run, a pp-number's tail
+       (idback? t i j acc)
+        (? ((t = "L" || t = "u" || t = "U" || t = "u8") && j < n && (src j = 34 || src j = 39)) 1
+           (ucn? j) 1
+           (0 < i && !(ws? (src (i - 1))) && two? acc && elem <(<acc) '(num unum lnum ulnum llnum ullnum flo flof iflo)))
+       (idtok t line)
+        (: s (intern t) k (t 0 = 95 ? (peep kwal s s) s)
+           (kwt k ? ['kw k line] ['id (t = "__attribute" ? "__attribute__" t) line]))
+       ; a one-char punctuator the hand lexer takes: the / of /*, the . of .5
+       (p1back? c j) (j < n && (c = 47 && src j = 42 || c = 46 && dig? (src j)))
+       (p1tok c i line) (c = 40 && 0 < i && idc? (src (i - 1)) ? ['p (string c) line 1] ['p (string c) line])
+       ; c.lex's tables say the shape at i: the common ones are laid here, the hand lexer's own
+       ; way; a shape they do not name (rule 0), or one a guard turns back, runs the hand lexer
        (go i line acc)
+        (? (n <= i) [1 (rev acc)]
+           asm (slow i line acc)
+           (clex-run ctab src i @ m
+              (: r (m & 65535) j (m >> 16)
+                 (? (r = 4) (snip src i j @ t (idback? t i j acc ? (slow i line acc) (go j line (idtok t line . acc))))
+                    (r = 2 || r = 5) (go j line (spc acc))            ; blanks, a // comment
+                    (r = 7) (src i @ c (p1back? c j ? (slow i line acc) (go j line (p1tok c i line . acc))))
+                    (r = 6) (go j line (['p (ptab (snip src i j)) line] . acc))
+                    (r = 1) (go j (nl line) (spc acc))
+                    (r = 3) (pend1 1, go j line acc)                  ; a splice: one logical line
+                    (slow i line acc)))))
+       (slow i line acc)
         (n <= i ? [1 (rev acc)]
            (src i @ c
-              (? (c = 10) (peep pend 'n 0 @ k (0 < k ? (pin pend 'n 0) 0, go (i + 1) (line + 1 + k) (spc acc)))
+              (? (c = 10) (go (i + 1) (nl line) (spc acc))
                  (c = 92 && i + 1 < n && src (i + 1) = 10)         ; \<nl> splice: one logical line
                   (pend1 1, go (i + 2) line acc)                           ; (line unadvanced so a directive stays grouped)
                  (c = 92 && i + 2 < n && src (i + 1) = 13 && src (i + 2) = 10)          ; \<cr><nl>
