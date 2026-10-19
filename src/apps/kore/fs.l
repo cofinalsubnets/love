@@ -608,22 +608,6 @@
    ; the stat tuple's tail past size mtime mode may be missing (the kernel's has no
    ; ownership): ust-at asks by tally and answers (), never a 0 someone might believe
    (ust-at st k) (#st <= k ? () (st k))
-   ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam). android has
-   ; neither: its names are reckoned off the id as bionic's are (uidroid)
-   (uidname path id)                   ; a numeric id -> its name, or the number back
-    (uread path @ r
-     (atom? r ? (udroid? 0 ? (uidroid id) (show id))
-      (: (go ls) (atom? ls ? (show id)
-                  (usplit 58 <ls @ f
-                   (3 <= #f && uatoi (f 2) = id ? (f 0) (go >ls))))
-         (go (lines <>r)))))
-   (uidof path nm)                     ; a name -> (1 id), or () when the file has none
-    (uread path @ r (two? r ?
-   (:- (go (lines <>r)) (go ls) (two? ls ? 
-    (usplit 58 <ls @ f
-     (3 <= #f && f 0 = nm ? [1 (uatoi (f 2))] (go >ls)))))
-     (udroid? 0 ? (uidroid-of nm))))
-   (udroid? _) (!(two? (stat "/etc/passwd")) && two? (stat "/system/bin"))
    ; android's fixed ids (android_filesystem_config.h); each user's ids are 100000 apart
    uaids {0 "root" 1 "daemon" 2 "bin" 1000 "system" 1001 "radio" 1002 "bluetooth" 1003 "graphics"
           1004 "input" 1005 "audio" 1006 "camera" 1007 "log" 1008 "compass" 1009 "mount" 1010 "wifi"
@@ -643,6 +627,22 @@
           2000 "shell" 2001 "cache" 2002 "diag" 3001 "net_bt_admin" 3002 "net_bt" 3003 "inet"
           3004 "net_raw" 3005 "net_admin" 3006 "net_bw_stats" 3007 "net_bw_acct" 3009 "readproc"
           3010 "wakelock" 3011 "uhid" 9997 "everybody" 9998 "misc" 9999 "nobody"}
+   ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam). android has
+   ; neither: its names are reckoned off the id as bionic's are (uidroid)
+   (uidname path id)                   ; a numeric id -> its name, or the number back
+    (uread path @ r
+     (atom? r ? (udroid? 0 ? (uidroid id) (show id))
+      (: (go ls) (atom? ls ? (show id)
+                  (usplit 58 <ls @ f
+                   (3 <= #f && uatoi (f 2) = id ? (f 0) (go >ls))))
+         (go (lines <>r)))))
+   (uidof path nm)                     ; a name -> (1 id), or () when the file has none
+    (uread path @ r (two? r ?
+   (:- (go (lines <>r)) (go ls) (two? ls ? 
+    (usplit 58 <ls @ f
+     (3 <= #f && f 0 = nm ? [1 (uatoi (f 2))] (go >ls)))))
+     (udroid? 0 ? (uidroid-of nm))))
+   (udroid? _) (!(two? (stat "/etc/passwd")) && two? (stat "/system/bin"))
    (uidroid id)
     (: u (id // 100000) a (id % 100000) up ("u" + show u + "_")
        (? (99000 <= a) (up + "i" + show (a - 99000))

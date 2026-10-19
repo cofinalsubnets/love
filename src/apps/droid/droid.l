@@ -71,6 +71,7 @@
             + ap-cat el ks
             + ax-chunk 0x103 16 (u32 1 + u32 -1 + u32 -1 + u32 (ix t))))
        (ax-chunk 3 8 (pool + rmap + nsc 0x100 + el root + nsc 0x101)))
+   ap-net "android.permission.INTERNET"           ; a normal permission: granted at install, never asked
    ; ps the permissions asked, each android's full name; the network is every app's
    (ap-manifest pkg label ps)
     ["manifest" [[1 "versionCode" 'int 1] [1 "versionName" 'str "1"] [0 "package" 'str pkg]]
@@ -154,7 +155,6 @@
       (android.permission. unless named in full).
       the key signing it lives in ~/.love/etc/apk.pem
     """)
-   ap-net "android.permission.INTERNET"           ; a normal permission: granted at install, never asked
    (ap-base p) (p @ (_ + "/" + s) (ap-base s) p)
    (ap-stem p) (ap-base p @ b (b @ (s + ".l") s b))
    (ap-or s d) (? (string? s) s d)
