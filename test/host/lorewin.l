@@ -51,7 +51,7 @@
    _ (corridor-frame st)
    ground (rgb 636 392)
    ink (any (y \ any (x \ rgb x y = [238 238 238]) (map (+ 8) ^8)) (map (+ 384) ^16))
- (test (out = "") (st 'kp = 4) (100 < lit) sq (ground = [20 20 20]) ink
+ (test (out = "") (st 'kp = 2) (100 < lit) sq (ground = [20 20 20]) ink
        (tablet? (corridor-opts ["--window"])) ((corridor-opts ["--window"]) 'md = 'window)))
 
 (test_fin (),

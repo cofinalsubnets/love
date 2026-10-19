@@ -158,6 +158,18 @@
    (pkt p) (corridor-span pks p @ () () q (snip pks (q 0) (q 1)))
  (test (pkh 'src = [2]) (mag (pkh 'p 2 - 4.0) < 1e-9) (pkl 'brushes 1 'src = [3 2 1]) (pkl 'brushes 2 'src = [3 2 1])
        (pkt [3 2 1] = "(solid (box [0 0 1] [1 3 2]))") (pkt [2] = "(room [0 0 0] [4 3 4])") (pkt [9] = ()) (pkt [3 2 7] = ())))
+; the editor, on a window with no screen: vi on a level's text, ctrl-w w gives the scene the
+; keys, a click on the scene puts vi on the form that made what it hit, and a frame paints
+; the scene on the left and vi's text on the right
+(: edv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload edv ["(level \"t\"" "  (room [0 0 0] [4 3 4])" "  (start [2 0 2] 0 0))"] "t.l")
+   edw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} ed (edit-new edw edv "")
+   _ (edit-events ed [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17]])
+   edf (ed 'focus)
+   _ (edit-events ed [['press 1 80 80] ['release 1 80 80]])
+   _ (edit-paint ed) edp (edw 'paper)
+   (lit? x0 x1 y0 y1) (any (y \ any (x \ edp (4 * (y * 320 + x) + 1) != 0) (drop x0 ^x1)) (drop y0 ^y1))
+ (test (edf = 'scene) (edv 'row = 1) (edv 'col = 2) (lit? 0 160 0 160) (lit? 160 320 0 16)))
 ; a grav shaft: walked into, it carries up to its head, eased in, and out north is street level;
 ; its twin carries down; motes stream through each the way it goes
 (: gl (lv "(room [0 0 0] [8 3 4]) (start [2 0 2] 0 0)

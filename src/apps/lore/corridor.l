@@ -6,11 +6,13 @@
 ; frame by how bright it is just then. corridor-read, -new, -step, -move and -frame are pure;
 ; corridor-watch reads the disk, and only corridor-walk and corridor-run touch the tty.
 (module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds corridor-pick corridor-span
+         edit-new edit-events edit-paint edit-lay edit-main
          corridor-move corridor-frame corridor-pens corridor-opts corridor-read corridor-load
          corridor-watch corridor-free? corridor-ks corridor-sound motes-at fps eye-h body-r grav-n)
 (borrow 'rove)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
+(borrow 'window)                        ; the editor's own window
 (borrow 'vec)                           ; triples
 (borrow 'mesh)                          ; the triangles, the lamps, the frame
 (borrow 'neon)                          ; the signs, and the poster's letters
@@ -777,5 +779,92 @@
  (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
                                     (view-arg "--level" 'level (w \ w))])
  (corridor-main as) (view-main "corridor" corridor-usage corridor-opts corridor-run as)
- _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1)))
+ ; --- the editor: the level's text in vi on the right and its scene on the left, in one
+ ;     window. ctrl-w w goes between them, a click on the scene puts vi on the form that made
+ ;     what it hit, the right button held looks by the mouse, and coming back to the scene
+ ;     reads it again from vi's text when that has changed; vi's :w writes the file ---
+ edit-s 2                                ; a scene pixel, edit-s by edit-s of the window's
+ (edit-lay W H) (: sw (W // 2 // edit-s * edit-s)
+   {'W W 'H H 'sw sw 'pw (sw // edit-s) 'ph (H // edit-s // 2 * 2) 'cols ((W - sw) // 8) 'rows (H // 16)})
+ (edit-text ls) (foldl (a \ l \ a + l + "\n") "" ls)
+ ; ..the screen vi's frames are scribed onto, cols by rows
+ (edit-screen ly) (screen (cask (screen () (ly 'rows) (ly 'cols))) (ly 'rows) (ly 'cols))
+ ; ..the scene read again from vi's text, when it is not what the scene was read from
+ (edit-sync ed) (: vi (ed 'vi) vs (ed 'vs) t (edit-text (vs 'lines)) st (ed 'st)
+   (? (t = ed 'text) ed
+      (: lv (corridor-read t)
+         (? (string? lv) (vi 'vmsg vs ("scene: " + lv), pins ed 'text t 'dirty 1)
+            (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
+               _ (pins st 'lvl lv 'sc (scene lv (st 'dir)) 'doors ds 'cars (cars-new lv) 'balls (balls-new lv))
+               (vi 'vmsg vs "scene read again", pins ed 'text t 'dirty 1))))))
+ ; ..vi on the form that made what the scene's pixel x y shows
+ (edit-pick ed x y) (: vi (ed 'vi) vs (ed 'vs) t (ed 'text) h (corridor-pick (ed 'st) x y)
+   sp (tablet? h ? (corridor-span t (h 'src)) ())
+   (? (atom? sp) (vi 'vmsg vs (tablet? h ? "nothing in the text made that" "nothing there"))
+      (: a (sp 0) (bol i) (i < 0 || t i = 10 ? (i + 1) (bol (i - 1))) l0 (bol (a - 1))
+         r (net (map (i \ t i = 10) ^l0))
+         (pins vs 'row r 'col (a - l0) 'top (max2 0 (r - (ed 'lay 'rows) // 3)) 'tops 0, vi 'vmsg vs ("line " + show (r + 1)), pin ed 'dirty 1))))
+ ; ..a key for vi: what it typed, else the arrows as a terminal sends them
+ (edit-bytes t k) (? (0 < #t) t (k @ -1 "\e[D" -2 "\e[C" -8 "\e[A" -9 "\e[B" 27 "\e" 13 "\r" 8 "\x7f" (charm? k && 0 < k ? (string k) "")))
+ (edit-feed ed s) (: key ((ed 'fc) 1) (each ^#s (i \ key (s i))), pin ed 'dirty 1)
+ (edit-focus ed f) (: _ (pins ed 'focus f 'dirty 1) (f = 'scene ? (edit-sync ed) ed))
+ ; ..a ctrl-w's next key: w the other pane, h the scene, l vi
+ (edit-cw ed k) (: _ (pin ed 'cw 0)
+   (k @ 119 (edit-focus ed (ed 'focus = 'vi ? 'scene 'vi)) 104 (edit-focus ed 'scene) 108 (edit-focus ed 'vi) _ ed))
+ (edit-events ed l) (: st (ed 'st) ly (ed 'lay)
+   (? (atom? l) ed
+      (: e <l nx (two? >l ? <>l ()) t0 (two? nx && <nx = 'text ? (nx 1) "")
+         k0 (? (0 < #t0) (t0 0) (peep view-set1 (e 1 @ c (charm? c ? c -99)) ()))
+         ; ..a letter under a held ctrl is its control character
+         cl (ed 'ctrl && charm? k0 && 97 <= k0 && k0 <= 122) k (cl ? (k0 - 96) k0) t (cl ? (string k) t0)
+         md (e @- () ['down c] (elem c [29 285] ? 1 ()) ['up c] (elem c [29 285] ? 0 ()))
+         _ (md != () ? (pin ed 'ctrl md) (e @- ()
+            ['close] (pin ed 'quit 1)
+            ['size w h] (: ly2 (edit-lay w h) (pins ed 'lay ly2 'scr (edit-screen ly2) 'dirty 1, corridor-size st (ly2 'pw) (ly2 'ph // 2)))
+            ['press b x y] (? (x >= ly 'sw) (edit-focus ed 'vi)
+                              (b = 3) (pins ed 'look 1 'lx x 'ly y)
+                              (b = 1) (edit-focus ed 'scene, edit-pick ed (x // edit-s) (y // edit-s)))
+            ['release b x y] (b = 3 ? (pin ed 'look 0))
+            ['move x y] (ed 'look ? (corridor-look st (x - ed 'lx) (y - ed 'ly), pins ed 'lx x 'ly y))
+            ['up c] (pin (ed 'held) c ())
+            ['down c] (? (ed 'cw) (edit-cw ed k)
+                         (k = 23 && (ed 'focus = 'scene || (ed 'vs 'mode) = 'n)) (pin ed 'cw 1)
+                         (ed 'focus = 'vi) (edit-feed ed (edit-bytes t k))
+                         (charm? k) (: a ((ed 'binds) k) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (corridor-step st a))))))
+         (edit-events ed >l))))
+ ; ..the scene painted on the left, vi's frame scribed and its rows laid on the right
+ (edit-paint ed) (: ly (ed 'lay) W (ly 'W) H (ly 'H) win (ed 'win) P (window-paper win) st (ed 'st) scr (ed 'scr)
+   cols (ly 'cols) rows (ly 'rows) tw (8 * cols) sw (ly 'sw)
+   _ (frame-paint (corridor-pens st) (ly 'pw) edit-s P W)
+   fr ((ed 'fc) 0 cols rows)
+   _ (? (0 < #fr || ed 'dirty)
+        (: tb (cask (tw * rows * 16 * 4)) cur (gaze scr 0)
+           _ (scribe scr fr)
+           _ (each ^rows (r \ dye scr tb tw r (cur >= 0 && cur // cols = r ? cur -1) ()))
+           _ (each ^(rows * 16) (y \ pour P (4 * (y * W + sw)) tb (4 * y * tw) (4 * tw)))
+           (pin ed 'dirty 0)))
+   (window-show win 0 H))
+ (edit-loop ed) (: t0 (clock 0) st (ed 'st)
+   _ (edit-events ed (window-events (ed 'win)))
+   _ (each (keys (ed 'held)) (c \ (ed 'held) c @ a (elem a (view-walking + ['strafe-left 'strafe-right]) ? (corridor-step st a))))
+   _ (walk-dt st) _ (corridor-move st) _ (pin st 't (st 't + 1))
+   _ (edit-paint ed)
+   (ed 'quit || (ed 'fc) 2 () ? ()
+      (clock 0 - t0 @ spent (spent < 1000 // fps ? (rest (1000 // fps - spent)), edit-loop ed))))
+ edit-blank "(level \"nothing yet\" (room [0 0 0] [4 3 4]) (start [2 0 2] 0 0))"
+ ; ..the editor on a window, over vi's state vs; its scene's pictures from dir
+ (edit-new win vs dir) (: vi (cite 'vi) fc (vi 'vi-face vs {}) wh (window-size win)
+   t (edit-text (vs 'lines)) lv0 (corridor-read t) lv (string? lv0 ? (corridor-read edit-blank) lv0)
+   ly (edit-lay (wh 0) (wh 1)) st (corridor-new (ly 'pw) (ly 'ph) lv dir)
+   _ (string? lv0 ? (vi 'vmsg vs ("scene: " + lv0)))
+   {'vi vi 'vs vs 'fc fc 'st st 'win win 'lay ly 'scr (edit-screen ly) 'text t 'focus 'vi 'cw 0 'held {}
+    'binds (view-bind view-binds corridor-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0})
+ (edit-run p) (window-open 1280 720 "lore edit" @ win
+   (? !(tablet? win) (say err ("lore edit: no window (" + show win + ")\n"), flush err, 1)
+      (: ed (edit-new win ((cite 'vi) 'vi-open p) (dir-of p))
+         (mind (_ \ edit-loop ed) () (_ \ window-close win), 0))))
+ edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it, the right button held looks, the corridor's keys walk; :w writes, :q leaves)"
+ (edit-main as) (? (#as = 1) (edit-run <as) (say err (edit-usage + "\n"), flush err, 2))
+ _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1))
+ _ (cite 'lore 'lore-enlist 'edit (udoor 'edit edit-main edit-usage 1 1)))
 ) ; module corridor
