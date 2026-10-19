@@ -4,7 +4,7 @@
 ; baked into its corners.
 ; a plane is [n d], holding the points p with dot n p <= d. brush-prism's plan ps is [x z]
 ; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
-; corners, facing, and the brush index; brush-mesh's (look n p b) answers [tex u v]. a brush
+; corners, facing, and the brush index; brush-mesh's (look n b) answers (p \ [tex u v]). a brush
 ; 'open 1 has no top face, and one 'whole 1 is never cut on the grid.
 (module (brush brush brush-box brush-prism brush-cut brush-move brush-mirror brush-medium brush-mesh brush-chunks brush-faces)
 (borrow 'view)                          ; min2 max2
@@ -113,17 +113,19 @@
                      ^3))
        hit (filter (t \ 1e-6 < t && t < 1.0 - 1e-6 && peep seen (key (c+ a (c* t d))) 0) ts)
        (map (t \ c+ a (c* t d)) (foldl (\ l t (any (u \ mag (u - t) < 1e-6) l ? l (l + [t]))) () (sort hit))))
-     (edged ps) (: n #ps (cats (map (i \ (: a (ps i) b (ps ((i + 1) % n)) (a . on a b))) ^n)))
+     ; ..none within a piece a cell across, whose edges cross no line of the grid
+     (edged ps) (: n #ps bx (box-of ps)
+       (any (k \ bx 1 k - bx 0 k > fine + 1e-6) ^3 ? (cats (map (i \ (: a (ps i) b (ps ((i + 1) % n)) (a . on a b))) ^n)) ps))
      ; ..a piece of brush b's fanned from its first corner, or from its middle when its edges
      ; took on corners, turned to face n
-     (vert n b p) (look n p b @ t [(p 0) (p 1) (p 2) (t 1) (t 2) (n 0) (n 1) (n 2) 1.0 1.0 1.0])
-     (fan ps0 n b) (: ps (edged ps0) tex (look n (mid ps0) b 0)
+     (vert lk n p) (lk p @ t [(p 0) (p 1) (p 2) (t 1) (t 2) (n 0) (n 1) (n 2) 1.0 1.0 1.0])
+     (fan ps0 n b) (: ps (edged ps0) lk (look n b) tex (lk (mid ps0) 0)
        (one a b c) (dot (cross (sub (ps c) (ps a)) (sub (ps b) (ps a))) n > 0.0 ? [a b c tex] [a c b tex])
        (#ps = #ps0
-        ? (mesh (map (vert n b) ps) (map (i \ one 0 (i + 1) (i + 2)) ^(#ps - 2)))
+        ? (mesh (map (vert lk n) ps) (map (i \ one 0 (i + 1) (i + 2)) ^(#ps - 2)))
           (: m #ps ps2 (ps + [(mid ps0)])
              (two a b) (dot (cross (sub (ps2 b) (ps2 m)) (sub (ps2 a) (ps2 m))) n > 0.0 ? [m a b tex] [m b a tex])
-             (mesh (map (vert n b) ps2) (map (i \ two i ((i + 1) % m)) ^m)))))
+             (mesh (map (vert lk n) ps2) (map (i \ two i ((i + 1) % m)) ^m)))))
      (ck m) (show [(int (floor (m 0 / k))) (int (floor (m 2 / k)))])
      by (foldl (\ t pc (: q (ck (pc 0)) (pin t q (pc 1 . peep t q ())))) {}
                (map (pc \ [(mid (pc 0)) (fan (pc 0) (pc 1) (bs (pc 2)))]) pcs + more))

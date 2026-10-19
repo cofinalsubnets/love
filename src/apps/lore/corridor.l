@@ -120,10 +120,11 @@
  ; textures, each [name w h metres]; a floor's and ceiling's laid from x 0 z 0, a wall's
  ; along it and its foot on the brush's
  (tix tt nm) (foldl (\ a i (tt i 0 = nm ? i a)) 0 ^#tt)
- (look tt) (\ n p b (: c (? (0.7 < n 1) 'floor (n 1 < -0.7) 'ceiling 'wall)
-                       i (tix tt (skin-name (peep b 'skin ()) c)) t (tt i) k (t 1 / t 3)
-                       (? (c = 'wall) (: d (unit [(0.0 - n 2) 0.0 (n 0)]) [i (k * dot p d) (t 2 - k * (p 1 - b 'lo 1))])
-                          [i (k * p 0) (k * p 2)])))
+ (look tt) (\ n b (: c (? (0.7 < n 1) 'floor (n 1 < -0.7) 'ceiling 'wall)
+                     i (tix tt (skin-name (peep b 'skin ()) c)) t (tt i) k (t 1 / t 3)
+                     (? (c = 'wall) (: d (unit [(0.0 - n 2) 0.0 (n 0)]) dx (k * d 0) dz (k * d 2) v0 (t 2 + k * b 'lo 1)
+                                       (\ p [i (dx * p 0 + dz * p 2) (v0 - k * p 1)]))
+                        (\ p [i (k * p 0) (k * p 2)]))))
  ; ..the door itself, shut: a slab of steel in the middle of the wall, the texture once
  ; across each face
  (door-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) l0 (d 'c - 0.5 * d 'w) w (d 'w) h (d 'h)
