@@ -11,24 +11,10 @@
 (borrow 'vec)                           ; triples
 (borrow 'mesh)
 (:
- eps 1e-6
  (sub a b) [(a 0 - b 0) (a 1 - b 1) (a 2 - b 2)]
  (side pl p) (dot (pl 0) p - pl 1)        ; above 0 outside the plane's brush
  (plane n p) (: u (unit n) [u (dot u p)])
- ; --- polygons: lists of points going round, convex ---
- (cut-at a b sa sb) (: t (sa / (sa - sb)) (c+ a (c* t (sub b a))))
- ; ..the part on the plane's inside, and the part beyond it
- (split ps pl) (: n #ps
-   (go i ins outs) (? (i = n) [(rev ins) (rev outs)]
-     (: a (ps i) b (ps ((i + 1) % n)) sa (side pl a) sb (side pl b)
-        ins2 (sa <= eps ? (a . ins) ins) outs2 (sa >= 0.0 - eps ? (a . outs) outs)
-        (? ((sa < 0.0 - eps && sb > eps) || (sa > eps && sb < 0.0 - eps))
-           (: x (cut-at a b sa sb) (go (i + 1) (x . ins2) (x . outs2)))
-           (go (i + 1) ins2 outs2))))
-   (go 0 () ()))
- (keep ps pl) (split ps pl 0)
- ; ..whether the plane passes through it, a point clear either side
- (crosses? ps pl) (any (p \ side pl p > 1e-5) ps && any (p \ side pl p < -1e-5) ps)
+ ; --- polygons: lists of points going round, convex, cut by poly-keep, -carve and -grid ---
  (area ps) (: a <ps (go l s) (atom? >l ? s (go >l (c+ s (cross (sub <l a) (sub <>l a))))) (mag3 (go >ps [0.0 0.0 0.0])))
  (mag3 v) (sqrt (dot v v))
  (mid ps) (c* (1.0 / #ps) (foldl c+ [0.0 0.0 0.0] ps))
@@ -39,7 +25,7 @@
  (face pls i) (: pl (pls i) n (pl 0) c (c* (pl 1) n)
    a (mag (n 1) < 0.9 ? [0.0 1.0 0.0] [1.0 0.0 0.0]) u (c* 1000.0 (unit (cross n a))) v (cross n u)
    sq [(c+ c (c+ u v)) (c+ c (c+ (c* -1.0 u) v)) (c+ c (c* -1.0 (c+ u v))) (c+ c (c+ u (c* -1.0 v)))]
-   (foldl (\ ps j (j = i || #ps < 3 ? ps (keep ps (pls j)))) sq ^#pls))
+   (poly-keep sq (map (j \ pls j) (filter (j \ j != i) ^#pls))))
  (brush air pls) (: fs (map (i \ face pls i) ^#pls) ok (filter (f \ #f >= 3 && area f > 1e-9) fs)
    bx (box-of (cats ok))
    {'air air 'planes pls 'faces fs 'lo (bx 0) 'hi (bx 1)})
@@ -119,25 +105,17 @@
      qs (keep kp (_ \ ky) (_ \ (: later (filter (k \ i < k) ks)
                             others (filter (k \ k != i) ks)
                             pls (cats (map (k \ bt k 'planes) others))
-                            ps (foldl (\ l pl (cats (map (p \ (crosses? p pl ? (filter (q \ #q >= 3 && area q > 1e-8) (split p pl)) [p])) l))) [f] pls)
+                            ps (poly-carve f pls)
                             (cats (map (p \ (: c (mid p) fr (medium ks (c+ c (c* 1e-3 n))) bk (medium ks (c+ c (c* -1e-3 n)))
                                              (fr = bk || any (k \ on-face? (bt k) c n) later ? () [[p (fr = 1 ? n (c* -1.0 n))]])))
                                        ps)))))
      (map (m \ (: q (qs m) (tablet? kp ? [(q 0) (q 1) i [fi m] j] [(q 0) (q 1) i]))) ^#qs))
    (ok? i j) (!(tablet? want) || peep want [i j] 0 > 0)
    (cats (map (i \ (: b (bt i) (cats (map (j \ (#(b 'faces j) >= 3 && shut? b j && ok? i j ? (piece i b j) ())) ^#(b 'planes))))) ^nb)))
- ; ..each axis in turn, a strip cut off what is left at each line that crosses it
- (slab ps k cell) (: bx (box-of ps) lo (bx 0 k) hi (bx 1 k) n (map (m \ m = k ? 1.0 0.0) ^3)
-   m0 (int (floor ((lo + 1e-5) / cell)) + 1) m1 (int (floor ((hi - 1e-5) / cell)))
-   (ok q) (#q >= 3 && area q > 1e-8)
-   (go p m acc) (? (m > m1 || cell * m >= hi - 1e-5) (ok p ? (p . acc) acc)
-     (: s (split p [n (cell * m)]) (go (s 1) (m + 1) (ok (s 0) ? (s 0 . acc) acc))))
-   (go ps m0 ()))
- (grid ps cell) (foldl (\ l k (cats (map (p \ slab p k cell) l))) [ps] ^3)
  ; ..or cut coarse and each piece again at half while (split? ps c) says it is too coarse,
  ; down to fine: every size a power of two of fine, so the lines are the fine grid's
- (grids ps c fine split?) (c <= fine ? (grid ps fine)
-   (cats (map (p \ (split? p c ? (grids p (0.5 * c) fine split?) [p])) (grid ps c))))
+ (grids ps c fine split?) (c <= fine ? (poly-grid ps fine)
+   (cats (map (p \ (split? p c ? (grids p (0.5 * c) fine split?) [p])) (poly-grid ps c))))
  ; ..cell a number, or [coarse fine on]: (on face) the split? for that face's pieces
  (brush-mesh bs cell look) (mesh-join (brush-chunks bs cell look 1e9 ()))
  ; ..and in meshes a chunk each, the pieces k metres square in plan, and with them more
@@ -181,7 +159,7 @@
      (mine? f) (!(tablet? want) || peep want [(f 2) (f 4)] 0 = 1)
      (fresh? q) (!(tablet? prev) || peep dq q 0)
      ; ..a brush marked whole goes uncut
-     (cut ps b) (? (peep b 'whole 0) [ps] (charm? cell || gem? cell) (grid ps cell) (grids ps (cell 0) (cell 1) (cell 2 ps)))
+     (cut ps b) (? (peep b 'whole 0) [ps] (charm? cell || gem? cell) (poly-grid ps cell) (grids ps (cell 0) (cell 1) (cell 2 ps)))
      fine (charm? cell || gem? cell ? cell (cell 1))
      cks (tablet? kp ? (tab (map (f \ ['cut (f 3) (peep (bt (f 2)) 'whole 0) ((kp 'reach) (f 0))]) fs)) ())
      CI (tablet? kp ? (tab (map (i \ (kp 'id) (cks i)) ^nf)) ())
