@@ -113,7 +113,8 @@
  (sky-irr lt a b) (c+ (c* a (lt 'amb)) (c* b (lt 'sunc)))
  ; ..smog, wx 'smog 0 to 1 of the way, browns what is seen and what it lights toward orange
  (smoggy wx c) (: k (peep wx 'smog 0.0) l ((c 0 + c 1 + c 2) / 3.0)
-   (k = 0.0 ? c (cmix c [(1.45 * l) (0.85 * l) (0.42 * l)] k)))
+   t (cmix [1.35 0.52 0.16] [2.0 1.0 0.24] (sat (1.6 * l)))
+   (k = 0.0 ? c (cmix c [(t 0 * l) (t 1 * l) (t 2 * l)] k)))
  (sky-light s wx sim) (: sy (s 1)
    oc (sky-cover wx sim)
    csun (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim))
@@ -146,7 +147,10 @@
    cl0 (haze (sat (0.5 + (th - edge wx sim 0.3) * 10.0)) dy wx sim)
    cl (wx 'cover = 3 ? (max cl0 0.93) cl0)        ; overcast: no sky through it
    ; ..the clouds: lit from under by the sun, darker the thicker, greyer the more of them
-   body ((1.0 - 0.3 * cl - 0.35 * oc * sat ((th - 0.45) * 2.0)) * (sky-fall wx = 1 ? 0.8 1.0))
+   ; ..and under smog the thick of them darker still and the thin lit through
+   sm (peep wx 'smog 0.0)
+   body ((1.0 - 0.3 * cl - 0.35 * oc * sat ((th - 0.45) * 2.0)) * (sky-fall wx = 1 ? 0.8 1.0)
+         * (1.0 - 0.45 * sm) * (1.0 - 0.6 * sm * sat ((th - 0.3) * 2.2) + 0.5 * sm * sat ((0.4 - th) * 3.0)))
    cloudc (c* body
               (c+ (c+ (sky-irr lt 1.15 (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * sy)))
                       (c* (lt 'tw) [0.5 0.22 0.14]))
