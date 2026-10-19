@@ -74,6 +74,12 @@ moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab_alias" {print $3}')" = 36 ] || fail "a data alias's symbol does not carry its table's 36 bytes"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "big" {print $3}')" = 28 ] || fail "int big[7]'s symbol does not carry its 28 bytes"
 readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost its section"
+# a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
+# __export_symbol_ labels); its numbered labels are not
+printf 'int x;\nasm(".section \\".export_symbol\\",\\"a\\"\\n__export_symbol_x:\\n.asciz \\"\\"\\n.balign 8\\n.quad x\\n1: .quad 1b\\n.previous");\n' > "$ho/.esy.c"
+moonrun -c "$ho/.esy.c" -o "$ho/.esy.o" || fail "mooncc: a file-scope asm with an export label"
+[ "$(readelf -sW "$ho/.esy.o" | awk '$8 == "__export_symbol_x" {print $5}')" = LOCAL ] || fail "a file-scope asm's label is no local symbol"
+[ "$(readelf -sW "$ho/.esy.o" | awk '$8 ~ /^l1\./' | wc -l)" = 0 ] || fail "a file-scope asm's numbered label reached the symtab"
 # a `static` alias is a local symbol (MODULE_DEVICE_TABLE's), an object sized as its target or a
 # func; where clang is, each alias's size, type and binding are clang's
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nstatic __typeof__(tab) tab_mod __attribute__((used, alias("tab")));\nint glob[3] = {1};\nstatic __typeof__(glob) glob_mod __attribute__((used, alias("glob")));\nint f(int x) { return x + tab[x].b; }\nstatic int f_mod(int) __attribute__((used, alias("f")));\n' > "$ho/.sal.c"
