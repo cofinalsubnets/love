@@ -119,6 +119,7 @@
                  (c = 117 || c = 85 || c = 108 || c = 76 ? 64 0) +
                  (elem c '(40 41 91 93 123 125 59 44 46 58 63 126 33 43 45 42 47 37 60 62 61 38 124 94 35) ? 128 0))
        ctbl (: (go k acc) (k < 0 ? (string acc) (go (k - 1) (cbit k . acc))) (go 255 ()))
+       ctab clex-tab                               ; ctab.l's tables, bound here as ctbl is
        (ws? c) (ctbl c & 2)
        (dig? c) (ctbl c & 4)
        (hexd? c) (ctbl c & 32)
@@ -311,7 +312,7 @@
        (go i line acc)
         (? (n <= i) [1 (rev acc)]
            asm (slow i line acc)
-           (clex-run clex-tab src i @ m
+           (clex-run ctab src i @ m
               (: r (m & 65535) j (m >> 16)
                  (? (r = 4) (snip src i j @ t (idback? t i j acc ? (slow i line acc) (go j line (idtok t line . acc))))
                     (r = 2 || r = 5) (go j line (spc acc))            ; blanks, a // comment
