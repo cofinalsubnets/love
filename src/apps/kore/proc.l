@@ -898,18 +898,22 @@
 
    ; -- timeout: the deadline and the wait are one loop, since gather polls without blocking.
    ; 124 the clock ended it, 125 our trouble, 127 it would not start, else its own status.
-   ; `sent` is the elapsed reading the signal went out at, () until then; k? the KILL followed
-   (utmo-wait p t0 lim sig kill o)
+   ; `sent` is the elapsed reading the signal went out at, () until then; k? the KILL followed.
+   ; the command leads its own group, and every signal goes to the group, as GNU's do
+   (utmo-wait p t0 lim sig kill o sp)
     (: (name n) (filter (x \ <>x = n) usignames @ e (two? e ? <<e (show n)))
-       (send s) (o 'v ? (say err ("timeout: sending signal " + name s + " to command '" + o 'cmd + "'\n")) 0, still p s)
+       (send s) (o 'v ? (say err ("timeout: sending signal " + name s + " to command '" + o 'cmd + "'\n")) 0, still (0 - p) s)
+       ; a HUP INT QUIT or TERM sent to us is passed on
+       (pass _) (hot? sp && (sigtake sp @ ev (two? ev ? (still (0 - p) <ev, pass 0))))
        (go sent k?)
         (gather p @ r
          ; a child we ended reads 124, not its own -- save one KILL ended, which reads
          ; 137 as GNU's does, a KILL being no signal a command could have chosen to obey
          (? (two? r) (charm? sent && !(o 'keep) ? (sig = 9 || k? ? 137 124) <r)
             (nom? r) 125
-            (: el (clock t0)
-               fire (!(charm? sent) && lim <= el ? el sent)
+            (: _ (pass 0)
+               el (clock t0)
+               fire (!(charm? sent) && 0 < lim && lim <= el ? el sent)   ; 0 is no limit, as GNU has it
                _ (fire = sent ? 0 (send sig))
                k2 ((!k? && charm? fire) && (charm? kill && (fire + kill) <= el) ?
                    (send 9, 1)
@@ -931,10 +935,11 @@
        _ (charm? lim ? () (udie 125 ("timeout: invalid duration '" + <ops + "'")))
        cmd >ops
        t0 (clock 0)
-       p (spawn cmd)
+       ; blocked before the spawn, which clears the mask in the child
+       sp (sigfd [1 2 3 15])
+       p (spawnmap cmd () () 0 0)
        (? (nom? p) (say err ("timeout: cannot run " + <cmd), put err 10, uleave 127)
-          (lim = 0) (wait p)                    ; a zero duration is no limit, as GNU has it
-          (utmo-wait p t0 lim sig kill {'v (t 118) 'keep (t 1001) 'cmd <cmd})))
+          (utmo-wait p t0 lim sig kill {'v (t 118) 'keep (t 1001) 'cmd <cmd} sp)))
 
 
    ; ---- chroot, mount and umount: each needs privilege and answers 'eperm as an errno, not a crash
