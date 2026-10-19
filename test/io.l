@@ -10,10 +10,10 @@
   ; unget + get roundtrip on stdin -- one top-level form, or the repl eats the pushback
   (: (rt c) (unsee in c, see in)
    (65 = rt 65                                ; `&&`, not `do`: do answers its last
-    && 32 = rt 32                             ; operand and the rest go unchecked
+    && 32 = rt 32
     && 255 = rt 255))
 
-  ; the pair after a real read, on a tap: a real read of `in` eats the corpus
+  ; on a tap: a real read of `in` eats the corpus
   (tap '(120 121) @ t           ; a tap taps a charlist -- (tap "xy") is the empty one
    (see t,
     (99 = unsee t 99
@@ -40,7 +40,7 @@
   ("" = slurp ())
   (slurp (tap "") = slurp 42)
 
-  ; file roundtrip through /tmp; the clock payload keeps a stale file from passing
+  ; the clock payload keeps a stale file from passing
   (files ? (: txt (show (clock 0))
      wp (open "/tmp/l-io-test" "w")
      _ (say wp txt)
@@ -65,7 +65,6 @@
      fwd3 (unchug p -3)                 ; a negative take steps the position forward
      rest7 (chug p)
      (close p,
-      ; &&, not `do`: do answers its last clause alone
       ("abcdefghij" = whole
        && 4 = back4    && "ghij" = tail4
        && 10 = backall && "abcdefghij" = again
@@ -75,13 +74,12 @@
   (0 = unchug 42 4)
   (0 = unchug "notaport" 4)
   (0 = unchug in 0)                   ; the count refuses before the port is touched
-  ; never a nonzero unchug of `in`: the suite is fed on stdin, so it would eat its own source
+  ; never a nonzero unchug of `in`: the suite is fed on stdin
   (0 = unchug (tap '(120 121)) -2)
 
   ; --- tap: a charlist-backed read-only port ---
   (string? (show (tap 0)))
   (0 < sat (show (tap 0)))
-  ; each call allocates a fresh port object
   (: p (tap 0) q (tap 0) (p != q))
   ; a charm outside 0..255 lands as its low byte, so a -1 cannot forge the end
   (tap '(300 -1 65) @ p
@@ -91,7 +89,7 @@
      (2 = (fw (flow (tap '(-1 65))) 0)))
 
   ; --- once: the promise ---
-  ; runs at most once and remembers, fired with the unit; the witness is a count the body bumps
+  ; runs at most once, fired with the unit
   (: c {}
      th (once (u \ peep c 0 0 @ k (pin c 0 (k + 1), k)))
      a (th ()) b (th ()) d (th ())
@@ -111,7 +109,7 @@
    (97 = <f && 98 = <>f && (lit? >>f || !(>>f))))
   ; an empty port is the empty charlist, not a promise of one
   !(flow (tap ()))
-  ; a position forced twice answers the same; the unget gives the port something left to give
+  ; a position forced twice answers the same; the unget leaves the port something to give
   (: p (tap '(97)) f (flow p) t >f
      _ (unsee p 98)
      x (t ()) y (t ())
@@ -119,7 +117,6 @@
      (lit? t && 98 = <x && x = y))
 
   ; --- sound: one datum per call, off text ---
-  ; single datum: symbol, list, quoted form, string literal
   ('a = <(sound '(97)))           ; "a"
   (<(sound '(40 49 32 50 41)) @ d ; "(1 2)"
    (two? d && 1 = <d && 2 = <>d))
@@ -127,12 +124,10 @@
    (two? d && 1 = <>d))
   (string [104 105] = <(sound '(34 104 105 34)))   ; "hi"
 
-  ; sequential reads thread the residue; the last one is the clean end
   (: a (sound '(49 32 50 32 51))                        ; "1 2 3"
      b (sound >a) c (sound >b)
      (1 = <a && 2 = <b && 3 = <c && !(sound >c)))
 
-  ; whitespace and ;-comments are skipped between datums
   (1 = <(sound '(32 32 49 32 32)))            ; "  1  "
   (2 = <(sound '(59 32 99 109 116 10 50)))    ; "; cmt\n2"
 
@@ -143,13 +138,12 @@
   ('torn = sound '(34 97))                            ; unterminated string
   ('torn = sound '(39))                               ; dangling quote
 
-  ; torn and the clean end are distinct
   ('torn != sound ())
 
   ; a torn read resumes: hand back the same text with the rest appended
   (sound ('(40 49) + '(32 50 41)) @ r (two? r && '(1 2) = <r))
 
-  ; mixed sequence, residue threaded: "() 1"
+  ; "() 1"
   (: a (sound '(40 41 32 49)) b (sound >a)
      (!<a && 1 = <b && !(sound >b)))
 

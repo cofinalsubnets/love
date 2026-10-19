@@ -45,7 +45,6 @@
                           (filter cpu? (lines <>r))))))
    (tp-at l i) (i < #l ? (l i) 0)            ; a field the kernel did not print reads 0
    (tp-sum l) (foldl (\ a v (a + v)) 0 l)
-   (tp-dig? s) (: n #s (go k) (? (n <= k) (0 < n) (48 <= s k <= 57) (go (k + 1)) 0) (go 0))
    ; /proc/PID/statm's third number, the resident pages a process shares. a second
    ; read per process, which is what the SHR column costs and all that it costs.
    (tp-shr base)
@@ -86,7 +85,7 @@
    ; a process's threads but its leader, by tid
    (tp-tids p)
     (readdir ("/proc/" + show p + "/task") @ r
-       (two? r ? (filter (t \ (t != p)) (sort (map uatoi (filter tp-dig? r))))))
+       (two? r ? (filter (t \ (t != p)) (sort (map uatoi (filter udigs? r))))))
 
    ; the rows, and the tablet of ticks the next frame subtracts. thr? adds each
    ; process's other threads as rows of their own, after the processes.

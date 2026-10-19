@@ -55,14 +55,14 @@ fi
 rm -rf "$ho/.arcd"; mkdir -p "$ho/.arcd/sub"
 printf 'x\n' > "$ho/.arcd/one.txt"; printf 'y\n' > "$ho/.arcd/sub/two.txt"
 # the cd'd subshells want $K, the absolute love
-( cd "$ho" && "$K" kore tar czf .arc.tgz .arcd ) || fail "kore tar czf"
+( cd "$ho" && "$K" tar czf .arc.tgz .arcd ) || fail "kore tar czf"
 korerun tar tzf "$ho/.arc.tgz" > "$o" 2>&1 || fail "kore tar tzf"
 korerun tar tvzf "$ho/.arc.tgz" | grep -q ' 2 .*\.arcd/one\.txt$' || fail "kore tar tvzf: the size off the header"
 n=$(wc -c < "$ho/.arc.tgz"); head -c $((n / 2)) "$ho/.arc.tgz" > "$ho/.arch.tgz"
 korerun tar tzf "$ho/.arch.tgz" > /dev/null 2> "$g"; r=$?
 [ $r -eq 2 ] && grep -q 'not a gzip stream' "$g" || fail "kore tar tzf of a torn .tgz (rc $r)"
 grep -q 'one\.txt' "$o" || fail "kore tar: the verb fell through to the usage screen"
-( cd "$ho" && "$K" kore find .arcd | "$K" kore cpio -o --quiet > .arc.cpio ) || fail "kore cpio -o"
+( cd "$ho" && "$K" find .arcd | "$K" cpio -o --quiet > .arc.cpio ) || fail "kore cpio -o"
 korerun cpio -t < "$ho/.arc.cpio" > "$o" 2>/dev/null || fail "kore cpio -t"
 grep -q 'one\.txt' "$o" || fail "kore cpio: the verb fell through to the usage screen"
 # xz: round trip, the empty stream (32 bytes, no block), each check, a torn stream refused
@@ -134,7 +134,7 @@ cp "$ho/.arc1" "$ho/.arcz"; korerun bzip2 "$ho/.arcz"; korerun bzip2 "$ho/.arcz.
 [ $r -eq 1 ] || fail "kore bzip2: a .bz2 name is refused, not a second layer (rc $r)"
 korerun bunzip2 "$ho/.arcz.bz2"; cmp -s "$ho/.arc1" "$ho/.arcz" || fail "kore bunzip2 in place"
 korerun bzip2 -1 -c "$ho/.arcb" | korerun bzip2 -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore bzip2 round trip, 600 KiB"
-( cd "$ho" && "$K" kore tar cjf .arc.tbz .arcd ) || fail "kore tar cjf"
+( cd "$ho" && "$K" tar cjf .arc.tbz .arcd ) || fail "kore tar cjf"
 korerun tar tjf "$ho/.arc.tbz" > "$o" 2>&1 || fail "kore tar tjf"
 grep -q 'sub/two\.txt' "$o" || fail "kore tar j: the listing"
 if command -v bzip2 >/dev/null 2>&1; then
@@ -175,10 +175,10 @@ cmp -s "$ho/.arc1" "$ho/.arcq" && [ ! -e "$ho/.arcq.zst" ] || fail "kore unzstd 
 rm -f "$ho/.arco.zst"; korerun zstd -q -o "$ho/.arco.zst" "$ho/.arc1" && korerun zstd -dc "$ho/.arco.zst" | cmp -s - "$ho/.arc1" || fail "kore zstd -o"
 korerun unzstd "$ho/.arc1" 2> "$g"; r=$?
 [ $r -eq 1 ] && grep -q 'unknown suffix' "$g" || fail "kore unzstd of a name it cannot strip (rc $r)"
-( cd "$ho" && "$K" kore tar --zstd -cf .arc.tzst .arcd ) || fail "kore tar --zstd -cf"
+( cd "$ho" && "$K" tar --zstd -cf .arc.tzst .arcd ) || fail "kore tar --zstd -cf"
 korerun tar tf "$ho/.arc.tzst" > "$o" 2>&1 || fail "kore tar tf of a .tzst, sniffed"
 grep -q 'sub/two\.txt' "$o" || fail "kore tar --zstd: the listing"
-( cd "$ho" && "$K" kore tar caf .arca.tar.zst .arcd ) || fail "kore tar caf .tar.zst"
+( cd "$ho" && "$K" tar caf .arca.tar.zst .arcd ) || fail "kore tar caf .tar.zst"
 korerun zstd -t "$ho/.arca.tar.zst" || fail "kore tar -a: .tar.zst is not zstd"
 if command -v zstd >/dev/null 2>&1; then
   zstd -q -dc "$ho/.arc.tzst" | tar tf - > "$o" 2>&1; grep -q 'sub/two\.txt' "$o" || fail "zstd -d | tar of kore's tar --zstd"
@@ -198,7 +198,7 @@ if command -v zstd >/dev/null 2>&1; then
   cat "$ho/.arcb" "$ho/.arc1" > "$g"
   korerun zstdcat "$ho/.arcs.zst" > "$o"; cmp -s "$g" "$o" || fail "kore zstdcat of two frames"
 fi
-hv "zstd --help" '^zstd -- zstandard' korerun zstd --help
+hv "zstd --help" '^zstd -- the zstandard compressor' korerun zstd --help
 # tar beyond the bundled key: dashed letters, -C, members, f - both ways, J, a sniffed codec,
 # --strip-components, -O
 T=$HO/.arctar; rm -rf "$T"; mkdir -p "$T/o"
@@ -232,7 +232,7 @@ grep -q 'Bad flag `-cx' "$o" || fail "kore bzip2 -cx: the word not named"
 korerun gzip --suffix 2> "$o" && fail "kore gzip --suffix with no value was taken"
 grep -q -- '--suffix wants' "$o" || fail "kore gzip --suffix: not named"
 hv "bzip2 -V" '^bzip2 / love ' korerun bzip2 -V
-( cd "$ho" && printf '.arc1\n' | "$K" kore cpio -o > "$F/c.cpio" ) || fail "kore cpio -o for the flags"
+( cd "$ho" && printf '.arc1\n' | "$K" cpio -o > "$F/c.cpio" ) || fail "kore cpio -o for the flags"
 korerun cpio -t --file="$F/c.cpio" > "$o" 2>/dev/null; grep -q '\.arc1' "$o" || fail "kore cpio --file=F"
 korerun cpio --format=odc -t < "$F/c.cpio" 2> "$o" && fail "kore cpio --format=odc was taken"
 grep -q 'format odc is not here' "$o" || fail "kore cpio --format=odc: the refusal"
@@ -288,7 +288,7 @@ korerun tar xf "$E/evil.tar" -C "$E/tx" 2> "$o"; r=$?
 [ $r -eq 2 ] || fail "kore tar: a hostile archive (rc $r)"
 grep -q "Member name contains '..'" "$o" || fail "kore tar: a '..' member not named"
 evil tar "$E/tx"
-( cd "$E/cx" && "$K" kore cpio -i -u --quiet < "$E/evil.cpio" ) 2> "$o"; r=$?
+( cd "$E/cx" && "$K" cpio -i -u --quiet < "$E/evil.cpio" ) 2> "$o"; r=$?
 [ $r -eq 1 ] || fail "kore cpio: a hostile archive (rc $r)"
 grep -q "contains '..'" "$o" || fail "kore cpio: a '..' member not named"
 evil cpio "$E/cx"
@@ -298,19 +298,19 @@ B=$HO/.arcbig; rm -rf "$B"; mkdir -p "$B"
 big() { dd if=/dev/zero bs=1048576 count=1100 2>/dev/null | "$@"; }
 if command -v gzip >/dev/null 2>&1; then
   big gzip -1 > "$B/z.gz"
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore gunzip -c "$B/z.gz" 2> "$o" | wc -c > "$g"
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" gunzip -c "$B/z.gz" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore gunzip of 1100 MiB did not stream: $(cat "$g") bytes"; }
   # ..and tar: zeros end the archive at the first block, the rest still read to its crc
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar tzf "$B/z.gz" > "$g" 2> "$o"; r=$?
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" tar tzf "$B/z.gz" > "$g" 2> "$o"; r=$?
   [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tzf of 1100 MiB of zeros did not stream (rc $r)"; }
   # a member bigger than the heap is poured to its file: 300 MiB under 64 MiB
   mkdir -p "$B/t" "$B/x"; dd if=/dev/zero bs=1048576 count=300 2>/dev/null > "$B/t/big"; printf 'tail\n' > "$B/t/small"
   # ..and is packed a run at a time, as gzip members, bzip2 and xz streams read on in one
-  ( cd "$B" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" kore tar czf big.tgz t ) 2> "$o" || { cat "$o"; fail "kore tar czf of a 300 MiB member did not stream"; }
+  ( cd "$B" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" tar czf big.tgz t ) 2> "$o" || { cat "$o"; fail "kore tar czf of a 300 MiB member did not stream"; }
   cbig() {
-    ( cd "$B" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" kore tar c$1f big.$2 t ) 2> "$o" \
+    ( cd "$B" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" tar c$1f big.$2 t ) 2> "$o" \
       || { cat "$o"; fail "kore tar c$1f of a 300 MiB member did not stream"; }
-    LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar tvf "$B/big.$2" > "$g" 2> "$o" || { cat "$o"; fail "kore tar tvf big.$2"; }
+    LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" tar tvf "$B/big.$2" > "$g" 2> "$o" || { cat "$o"; fail "kore tar tvf big.$2"; }
     grep -q ' 314572800 .* t/big$' "$g" && grep -q 't/small$' "$g" || fail "kore tar c$1f of a 300 MiB member: $(cat "$g")"
   }
   cbig j tbz; cbig J txz
@@ -318,14 +318,14 @@ if command -v gzip >/dev/null 2>&1; then
     tar tzf "$B/big.tgz" > "$g" 2>&1 && grep -q '^t/small$' "$g" || fail "the system tar of kore's czf: $(cat "$g")"
   fi
   rm -rf "$B/t"
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar xzf "$B/big.tgz" -C "$B/x" 2> "$o" || { cat "$o"; fail "kore tar xzf of a 300 MiB member did not stream"; }
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" tar xzf "$B/big.tgz" -C "$B/x" 2> "$o" || { cat "$o"; fail "kore tar xzf of a 300 MiB member did not stream"; }
   [ "$(wc -c < "$B/x/t/big" | tr -d ' ')" = 314572800 ] && [ "$(cat "$B/x/t/small")" = tail ] \
     || fail "kore tar xzf of a 300 MiB member: the files are not whole"
   # ..and cpio -i, off an archive the system cpio packs
   if command -v cpio >/dev/null 2>&1; then
     ( cd "$B/x" && find t | cpio -o -H newc --quiet > "$B/big.cpio" ) || fail "cpio -o of a 300 MiB member"
     mkdir -p "$B/c"
-    ( cd "$B/c" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" kore cpio -i -d --quiet < "$B/big.cpio" ) 2> "$o" \
+    ( cd "$B/c" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" cpio -i -d --quiet < "$B/big.cpio" ) 2> "$o" \
       || { cat "$o"; fail "kore cpio -i of a 300 MiB member did not stream"; }
     cmp -s "$B/x/t/big" "$B/c/t/big" && cmp -s "$B/x/t/small" "$B/c/t/small" \
       || fail "kore cpio -i of a 300 MiB member: the files are not whole"
@@ -336,21 +336,21 @@ fi
 if command -v xz >/dev/null 2>&1; then
   # .lzma, sizeless, the same: whole, under a 64 MiB heap
   big xz --format=lzma -0 > "$B/z.lzma"
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore unlzma -c "$B/z.lzma" 2> "$o" | wc -c > "$g"
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" unlzma -c "$B/z.lzma" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore unlzma of a sizeless 1100 MiB did not stream: $(cat "$g") bytes"; }
   # .xz streams a chunk at a time under a 64 MiB heap, through unxz and tar J
   big xz -0 -T1 > "$B/z.xz"
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore unxz -c "$B/z.xz" 2> "$o" | wc -c > "$g"
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" unxz -c "$B/z.xz" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore unxz of 1100 MiB did not stream: $(cat "$g") bytes"; }
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar tJf "$B/z.xz" > "$g" 2> "$o"; r=$?
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" tar tJf "$B/z.xz" > "$g" 2> "$o"; r=$?
   [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tJf of 1100 MiB of zeros did not stream (rc $r)"; }
 fi
 if command -v bzip2 >/dev/null 2>&1; then
   # .bz2 a block at a time, through bunzip2 and tar j
   big bzip2 -1 > "$B/z.bz2"
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore bunzip2 -c "$B/z.bz2" 2> "$o" | wc -c > "$g"
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" bunzip2 -c "$B/z.bz2" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore bunzip2 of 1100 MiB did not stream: $(cat "$g") bytes"; }
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar tjf "$B/z.bz2" > "$g" 2> "$o"; r=$?
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" tar tjf "$B/z.bz2" > "$g" 2> "$o"; r=$?
   [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tjf of 1100 MiB of zeros did not stream (rc $r)"; }
 fi
 rm -rf "$B"

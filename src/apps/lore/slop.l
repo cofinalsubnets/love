@@ -375,11 +375,7 @@
                   (pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc)),
                   fill ()))
      _ (fill ())
-     base (s 'fpos)
-     live (filter (p \ p 1 0 >= base) (s 'vs))       ; not finished
-     now (filter (p \ p 0 < base + song-chunk) live) ; ..and already begun
-     ((pins s 'vs live 'fpos (base + song-chunk)),
-      say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
+     (song-out s song-chunk song-gain))
 
  (presses n) (show n + (n = 1 ? " press" " presses"))
  ; the bar stops a column short of the screen: a console that wraps at its edge would

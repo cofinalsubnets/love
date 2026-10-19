@@ -1,17 +1,8 @@
-; score -- a tune as text, for harp: a bar to the line, and a bar out as the two mini
-; strings harp plays it by.
-;
-; a line is NAME BEATS pairs: B4 is the b above middle c, a beat a quarter note, .5 an
-; eighth; `-` is a rest, `|` also ends a bar, `;` starts a comment, and [CHORD] names
-; the bar's bass -- the note after the slash if there is one, else the root. a
-; `key F# C# G# D#` line is the key signature: every bare letter after it takes its
-; sharp or flat, and Fn4 is a natural against it. a bar holds score-beats beats, or what
-; a `beats 8` line says, in quarter-beat steps.
-;
-; score-parse answers the bars, each {'notes 'legs 'bass 'beats 'pitches 'line} or {'err
-; 'line}; score-tune makes harp's pattern of them at a tempo, on the music box; score-check
-; prints what is wrong, or with all every bar. `love harp -s FILE` plays one and
-; `love harp --check FILE` reads it back. laws in test/host/score.l.
+; score -- a tune as text for harp, a bar to the line, each bar out as harp's two mini strings.
+; a line is NAME BEATS pairs (B4 1, a beat a quarter note); `-` rests, `|` ends a bar, `;`
+; comments, [CHORD] names the bass (after the slash, else the root). `key F# C#` sets
+; accidentals for bare letters (Fn4 natural); `beats 8` sets the bar, on a quarter-beat grid.
+; bars are {'notes 'legs 'bass 'beats 'pitches 'line} or {'err 'line}. laws: test/host/score.l
 (module (score score-parse score-tune score-check score-file score-lines score-bar
          score-strings score-words score-note score-num score-pc score-chord score-key
          score-beats)
@@ -24,8 +15,7 @@
       (t i = 46) (d = 1 ? (go (i + 1) n f 10.0) ())
       (48 <= t i <= 57) (d = 1 ? (go (i + 1) (n * 10 + t i - 48) f d) (go (i + 1) n (f + (t i - 48) / d) (d * 10.0)))
       ()))
- ; a letter, a sharp, flat or natural, an octave: the semitone from middle c. a bare
- ; letter takes the key's accidental; answers [semitone chars-taken]
+ ; letter, accidental, octave -> [semitone-from-middle-c chars-taken]; a bare letter takes the key's
  pcs '(9 11 0 2 4 5 7)                  ; a b c d e f g
  (score-pc t key) (: c (t 0) u (97 <= c ? (c - 32) c)
                      acc (t 1 @ 35 1 98 -1 110 0 (peep key (u - 65) 0))
@@ -37,7 +27,7 @@
  (score-key ws) (foldl (k \ w \ (: p (score-pc w {}) c (w 0) u (97 <= c ? (c - 32) c)
                                   (two? p ? (pin k (u - 65) (<p - pcs (u - 65))) k)))
                        {} ws)
- ; [C#m7/G#]: the bass is g sharp, an octave under middle c's
+ ; [C#m7/G#]: the bass, an octave under middle c's
  (score-chord t) (: in (snip t 1 (#t - 1))
                     p (score-pc (in @ (_ + "/" + b) b in) {})
                     (two? p ? (<p - 12) ()))
@@ -64,8 +54,7 @@
             (go >>l (pos + d) (n = () || i >= beats * 4 ? sl (lay sl i [n (int (d * 4.0 + 0.5))])) bs err)))))
  (lay l i v) (:- (go l 0) (go l k) (atom? l ? () ((k = i ? v <l) . go >l (k + 1))))
  ; the mini strings: a word a beat, subdivided only where an onset falls between beats.
- ; the legato string carries the same shape with a sixteenth count in every slot, since
- ; pset takes its shape from the notes and a rest in the legato would drop the note
+ ; legs keeps the notes' shape (a rest there would drop the note in pset)
  (score-strings sl bs beats) (:
    (cell x) (two? x ? (show <x) "~")
    (dur x) (two? x ? (show <>x) "1")
@@ -76,21 +65,17 @@
    (line f) (foldl (acc \ b \ acc + (0 < b ? " " "") + word f b) "" ^beats)
    {'notes (line cell) 'legs (line dur) 'bass bs 'beats beats
     'pitches (map (x \ <x) (filter two? sl))})
- ; a list of lines to bars, a bar per line and per |, blank lines skipped, a key or a
- ; beats line setting them for the lines under it; a bar that fails carries 'err and
- ; the line it came from
+ ; a bar per line and per |; a key or beats line sets the lines under it
  (score-lines s) (split "\n" s)
  (score-parse ls) (:
    (bare ln) (:- (go 0) (go i) (? (i >= #ln) ln (ln i = 59) (snip ln 0 i) (go (i + 1))))
    (bars-of ln i key beats) (map (t \ (score-words t @ ws (atom? ws ? () (pin (score-bar ws key beats) 'line i)))) (split "|" (bare ln)))
-   ; the fold carries [bars key beats]
    (line acc i) (: ws (score-words (bare (ls i))) key (acc 1) beats (acc 2)
                    (? (two? ws && <ws = "key") [(acc 0) (score-key >ws) beats]
                       (two? ws && <ws = "beats") [(acc 0) key ((two? >ws ? (score-num <>ws) ()) @ n (charm? n && 0 < n ? (int n) score-beats))]
                       [(acc 0 + bars-of (ls i) (i + 1) key beats) key beats]))
    (filter tablet? (foldl line [() {} score-beats] ^#ls 0)))
- ; the check: every complaint to the screen, and with all every bar as harp will play
- ; it; answers whether anything was bad
+ ; print complaints (and every bar with all); answers 1 if any was bad
  (score-check ls all) (: bs (score-parse ls)
    bad (filter (b \ b 'err) bs)
    (each bs (b \ (? (b 'err) (puts ("line " + show (b 'line) + ": " + b 'err + "\n"))
@@ -100,10 +85,9 @@
     all || two? bad ? (puts (show #bs + " bars, " + show #bad + " bad\n")),
     two? bad ? 1 0))
 
- ; the score as harp's pattern at cps bars a second: the melody on the music box, a
- ; note's ring a little past its written length, the bass a bar long under it
+ ; harp's pattern at cps bars a second: melody on the music box, rung a little long, the bass under
  (score-tune bs cps) (:
-   (secs b n) (n * 1.25 / (cps * b 'beats * 4.0))    ; n sixteenths of this bar, in seconds
+   (secs b n) (n * 1.25 / (cps * b 'beats * 4.0))    ; n sixteenths, in seconds
    mel (slowcat (map (b \ pset (pset (note (mini (b 'notes)))
                                     (legato (pmap (n \ secs b n) (mini (b 'legs)))))
                               (hit (pure "box")))

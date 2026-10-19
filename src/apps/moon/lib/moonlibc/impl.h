@@ -678,6 +678,14 @@ static int __love_tbsdn(long n) {
   return n == NR_clock_gettime || n == NR_nanosleep || n == NR_ppoll || n == NR_pselect6
       || n == NR_utimensat; }
 #endif
+#ifdef LvMac
+/* dyld's exe: xnu's unix call n through libSystem, LvNoDoor where none answers (os.c) */
+#define LvNoDoor (-0x7fffffffL)
+extern long __love_door(long n, long a, long b, long c, long d, long e, long f);
+extern long __love_macclock(int ck, struct timespec *ts);   /* LvNoDoor without libSystem */
+struct __mac_osigact;
+extern long __love_macsigact(long sig, struct __mac_osigact const *a, struct __mac_osigact *old);
+#endif
 static long __love_call(long n, long a, long b, long c, long d, long e, long f) {
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();
@@ -694,7 +702,13 @@ static long __love_call(long n, long a, long b, long c, long d, long e, long f) 
       if (__love_macat(n, w)) a = w[0], b = w[1], c = w[2], d = w[3], e = w[4]; }
 #endif
     n = __love_nrfb(n);
-    if (n < 0) return -38; }                          /* ENOSYS, canonically */
+    if (n < 0) return -38;                            /* ENOSYS, canonically */
+#ifdef LvMac
+    if (v == 4) {
+      long r = __love_door(n, a, b, c, d, e, f);
+      if (r != LvNoDoor) return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
+#endif
+  }
 #ifdef __ARM_EABI__
   if (v == 1 && __love_t32k && __love_t64(n)) return __love_t32(n, a, b, c, d, e, f);
 #endif
@@ -715,8 +729,12 @@ static long __love_call(long n, long a, long b, long c, long d, long e, long f) 
 /* xnu's unix calls answer in their class: the BSD number with this bit */
 #define LvMacUnix 0x2000000L
 static long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
-  if (__love_osv == 4) n |= LvMacUnix;
+#ifdef LvMac
+  long r = __love_osv == 4 ? __love_door(n, a, b, c, d, e, f) : LvNoDoor;
+  if (r == LvNoDoor) r = __love_sys(__love_osv == 4 ? n | LvMacUnix : n, a, b, c, d, e, f);
+#else
   long r = __love_sys(n, a, b, c, d, e, f);
+#endif
 #ifdef LvOsTranslate
   return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
 #else
@@ -743,6 +761,14 @@ static long fb1(long n, long a) { return __love_fb(n, a, 0, 0, 0, 0, 0); }
 static long fb2(long n, long a, long b) { return __love_fb(n, a, b, 0, 0, 0, 0); }
 static long fb3(long n, long a, long b, long c) { return __love_fb(n, a, b, c, 0, 0, 0); }
 static long fb6(long n, long a, long b, long c, long d, long e, long f) { return __love_fb(n, a, b, c, d, e, f); }
+/* bind's and connect's: the address through __love_sain where the kernel's head differs */
+static long sc_sa(long n, int fd, void const *a, unsigned int len) {
+  if (__love_osv >= 2) {
+    struct sockaddr_storage s;
+    if (len > sizeof s) return -EINVAL;
+    len = __love_sain(a, len, &s);
+    return sc3(n, fd, (long) &s, len); }
+  return sc3(n, fd, (long) a, len); }
 /* static in a header: the dead-static sweep drops the bodies a member does not use */
 
 /* the shapes the public headers keep opaque, and the fmt members' limb geometry. */

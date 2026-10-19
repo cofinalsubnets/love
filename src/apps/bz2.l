@@ -1,5 +1,5 @@
-; src/apps/bz2.l -- bzip2 over src/love/compress/bz2.c, which holds the whole stream: its blocks lie on bit
-; boundaries, so there is no container to read here. `(borrow 'bz2)`, then:
+; src/apps/bz2.l -- bzip2 over src/love/compress/bz2.c, which holds the whole stream (blocks
+; lie on bit boundaries). `(borrow 'bz2)`, then:
 ;   (bz2-pack s level)  -> the .bz2 bytes of s, level 1..9 the block in 100k
 ;   (bz2-unpack s)      -> (1 bytes) | a word saying why not ('format 'corrupt 'end 'check 'big):
 ;                          every stream in s, each block's crc and each stream's held
@@ -47,23 +47,21 @@
 ; --- the face -----------------------------------------------------------------------
 ; `love bzip2`, `bunzip2`, `bzcat`: bzip2 1.0.8's flag spelling, messages and statuses
 ; (0, 1 a file or a flag, 2 a stream that will not read) over the module above.
-;
 ;   bzip2 [-cdfkqstvz] [-1..-9] [--fast] [--best] [FILE..]
 ;   bunzip2 = bzip2 -d      bzcat = bzip2 -dc
-;
 ; no file, or a bare -, is the filter. -s is taken and changes nothing.
 (module 'bz2cmd
 (borrow 'bz2)
 (borrow 'path)
 (borrow 'posix)
-(: bzc-help "bzip2 -- the block-sorting compressor in love (src/love/compress/bz2.c is the codec)
+(: bzc-help "bzip2 -- the block-sorting compressor
 usage: bzip2 [-cdfkqstvz] [-1..-9] [FILE..]
   -z  compress (the default)            -d  decompress (bunzip2)
   -c  write on stdout, keep the files   -k  keep the input file
   -f  overwrite an existing output      -t  test the files, write nothing
   -q  say nothing on a warning          -v  say what happened, on err
   -1 .. -9  the block, 100k to 900k (9)  --fast is -1, --best -9
-  -s  taken, and it changes nothing
+  -s  accepted, ignored
 no file, or a bare -, is the filter: stdin -> stdout"
    bzc-sufs [[".bz2" ""] [".bz" ""] [".tbz2" ".tar"] [".tbz" ".tar"]]
 
@@ -91,7 +89,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)), peep t 'k 0 ? 0 (unlink p), 0))
    (bzc-rd q) (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q))))
    ; a file decompressed as it comes off the disk: the output opened before the first byte,
-   ; its mode and time laid after the last, and taken away again if the stream fails partway
+   ; mode and time laid after the last, removed if the stream fails partway
    (bzc-unone t p st)
     (open p "r" @ q
        (!(hot? q) ? (bzc-moan t "Can't open input file \(p): No such file or directory.", 1)
@@ -138,8 +136,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
         (bzc-say t "I won't write compressed data to a terminal.", 1)
        (say out (bz2-pack (slurp in + "") (peep t 'lvl 9)), 0))
 
-   ; the cli walker in gnu order. -d, -z and -t decide the direction by the last one said,
-   ; and a level digit (or --fast, --best) likewise
+   ; the cli walker in gnu order: the last of -d -z -t, and of the levels, wins
    bzc-longs {"stdout" 99 "decompress" 100 "compress" 122 "keep" 107 "force" 102 "test" 116
               "quiet" 113 "verbose" 118 "fast" 49 "best" 57 "help" 104 "version" 86
               "license" 76 "small" 115 "repetitive-fast" 115 "repetitive-best" 115}

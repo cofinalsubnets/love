@@ -1,6 +1,5 @@
-; test/host/p1.l -- the reader in love, the oracle test/host/rdiff.l holds src/love/io.c's to
-; one form, whose value is the reader, in the pure lisp subset
-(: ; the input is a colist. thunk tails must be memoized or idempotent.
+; the reader in love, rdiff.l's oracle for io.c's, in the pure lisp subset
+(: ; the input is a colist; thunk tails must be memoized or idempotent
    ! nil?
    (atom? x) (! (two? x))
    (!= a b) (! (a = b))
@@ -8,9 +7,8 @@
    (cuap a) ><a (cuup a) >>a
    (p1-cup cl) (cup cl @ t (lit? t ? (t ()) t))
 
-   ; char classes: a 256-byte table, a bitmask per char
-   ; bit 0 unused: a string indexed past its end answers 1, so out-of-range chars match nothing
-   ;   2 ws   4 opc   8 tend   16 open   32 close   64 sign   128 gstop
+   ; char classes: 2 ws  4 opc  8 tend  16 open  32 close  64 sign  128 gstop
+   ; bit 0 unused: a string indexed past its end answers 1
    (p1-cin? s c) (: n #s
                     (go k) (? (n <= k) () (s k = c) 1 (go (k + 1)))
                     (go 0))
@@ -28,13 +26,11 @@
    (p1-dig? c)  (48 <= c ? (c <= 57))
    (p1-hex? c)  (p1-dig? c ? 1 (97 <= p1-low c ? (p1-low c <= 102)))
    (p1-low c)   ((65 <= c ? (c <= 90)) ? (c + 32) c)
-   ; the chars that fuse into one operator run
    (p1-opc? c)  (p1-cls c & 4)
    ; a name-led token ends here; ' is absent, so a name keeps a prime (x', n'')
    (p1-tend? c) (p1-cls c & 8)
 
-   ; whitespace and comments
-   ; `;` runs to end of line; `#!` does too; a bare `#` is the tally sigil.
+   ; `;` and `#!` run to end of line; a bare `#` is the tally sigil
    (p1-eol cl) (? (atom? cl) cl
                   (cap cl = 10 ? 1 (cap cl = 13)) (p1-cup cl)
                   (p1-eol (p1-cup cl)))
@@ -47,13 +43,12 @@
               (p1-skip (p1-eol (p1-cup (p1-cup cl))))
             cl)))
 
-   ; integers, at full precision
-   ; + and * promote charm -> sun -> big by value: no width to get wrong
+   ; integers: + and * promote charm -> sun -> big, no width to get wrong
    (p1-dval c) (p1-dig? c ? (c - 48) (p1-low c - 87))
    (p1-digits cl radix n)
      (atom? cl ? n
       (p1-digits >cl radix (n * radix + p1-dval <cl)))
-   ; io.c's is_dec_int / is_hex_int / is_oct_int: none of them (0x, 08, 1e5) goes to the float lane
+   ; none of these (0x, 08, 1e5) goes to the float lane
    (p1-all? p cl) (? (atom? cl) 1 (p <cl) (p1-all? p >cl) ())
    (p1-oct? c)  (48 <= c ? (c <= 55))
    (p1-dec-int? cl)
@@ -73,8 +68,7 @@
         (!= <cl 48) ()
         (atom? >cl) ()
         (p1-all? p1-oct? >cl))
-   ; a token charlist -> (1 . its number), or (); the sign peeled first.
-   ; the wrapper is the presence: -5 and 0 net to nothing
+   ; a token charlist -> (1 . its number), or (); the wrapper, as -5 and 0 net to nothing
    (p1-int cl)
      (: sgn (? (atom? cl) 0 (cap cl = 45) -1 (cap cl = 43) 1 0)
         body (sgn @ 0 cl >cl)
@@ -86,7 +80,6 @@
            (sgn < 0) (. 1 (0 - cup mag))
            mag))
 
-   ; the token lanes
    (p1-tok cl acc)                                   ; a name-led token
      (? (atom? cl) (. (p1-rev acc ()) cl)
         (p1-tend? <cl) (. (p1-rev acc ()) cl)
@@ -94,16 +87,15 @@
    (p1-rev l acc) (two? l ? (p1-rev >l (. <l acc)) acc)
    (p1-drop cl k) (0 < k ? (p1-drop (p1-cup cl) (k - 1)) cl)
    (p1-take l k acc) (0 < k ? (p1-take >l (k - 1) (. <l acc)) (p1-rev acc ()))
-   ; one past a token's last operator char, or 0 -- where its run ends.
+   ; one past a token's last operator char, or 0
    (p1-runend l i best)
      (atom? l ? best
       (p1-runend >l (i + 1) (p1-opc? <l ? (i + 1) best)))
-   ; an operator run, one symbol factored later by opfix. a trailing '-' before a digit
-   ; is shed as the number's sign: `!-5` is ! then -5. @ may start a run, never extend one
+   ; an operator run, factored later by opfix. a trailing '-' before a digit is shed as
+   ; the number's sign: `!-5` is ! then -5. @ may start a run, never extend one
    (p1-run cl acc)
      ((two? cl ? (cap cl = 64 ? (atom? acc) (p1-opc? <cl))) ?
         (p1-run (p1-cup cl) (. <cl acc))
-        ; shed a trailing '-' before a digit, if the run is more than it
         (: shed (? (atom? acc) ()
                    (!= <acc 45) ()
                    (atom? >acc) ()
@@ -112,7 +104,6 @@
            (shed ? (. (p1-rev >acc ()) (. 45 cl))
               (. (p1-rev acc ()) cl))))
 
-   ; an atom: integer, then the named floats, then float, then symbol
    ; the float lane asks gem?, not the value: an unparsed nil nets as 0.0 does
    (p1-atom tok)
      (: n (p1-int tok)
@@ -127,7 +118,6 @@
                  (gem s @ f (gem? f ? f (nom s)))
                  (nom s)))))
 
-   ; strings
    (p1-esc c) (c @ 110 10 116 9 114 13 101 27 48 0 c)
    ; code point v's utf-8 bytes onto acc, last first
    (p1-u8 v acc)
@@ -137,8 +127,7 @@
           (. (128 + v % 64) (. (128 + v // 64 % 64) (. (224 + v // 4096) acc)))
           (. (128 + v % 64) (. (128 + v // 64 % 64)
              (. (128 + v // 4096 % 64) (. (240 + v // 262144) acc)))))))
-   ; \u{h..}: one to six hex digits naming a code point, surrogates out -> (v . rest).
-   ; 'torn when the input ends inside it, () when it is no such escape
+   ; \u{h..}: 1-6 hex digits, surrogates out -> (v . rest); 'torn at an end, () if none
    (p1-uhex cl v k)
      (atom? cl ? 'torn
       (cap cl @ c
@@ -165,7 +154,6 @@
                        (. (p1-dval (cap (p1-cup r)) * 16 +
                               p1-dval (cap (p1-cup (p1-cup r)))) acc)))
             (p1-str (p1-cup r) (. (p1-esc <r) acc)))))
-   ; a text with holes: each \( reads a list to its closer, and the text runs on.
    ; (weave [run (hole) run ..]), the runs never empty; with no hole the text itself
    (p1-weave cl parts)
      (p1-str cl () @ r
@@ -179,10 +167,8 @@
         ((atom? >ps) ? (string? <ps)) <ps
         ('weave . ('list . ps) . ()))
 
-   ; raw texts
-   ; three or more quotes open and as many close, no escapes; a longer closing run keeps
-   ; its extras. an opener ending its line closes on a line of its own, whose indent comes
-   ; off every line; the breaks beside the quotes are not the text's. cl at the first quote
+   ; raw texts: a longer closing run keeps its extras; a multi-line one's breaks beside the
+   ; quotes are not the text's. cl at the first quote
    (p1-hws? c) (c = 32 ? 1 (c = 9))
    (p1-qrun cl k) ((two? cl ? (cap cl = 34)) ? (p1-qrun (p1-cup cl) (k + 1)) (k . cl))
    (p1-lead cl k) ((two? cl ? (p1-hws? <cl)) ? (p1-lead (p1-cup cl) (k + 1)) (k . cl))
@@ -225,22 +211,19 @@
            (atom? >ls ? (p1-rawtxt >ls w line)
             (p1-rawtxt >ls w (>(cap ls) = 13 ? (10 . 13 . line) (10 . line))))))
 
-   ; the wraps
-   ; ' and @ wrap the next datum; a splicing wrap (hash tuple list) over a list splices:
-   ; {k v} is (hash k v)
+   ; a splicing wrap (hash tuple list) over a list splices: {k v} is (hash k v)
    (p1-splice? w) (w @ 'hash 1 (w @ 'tuple 1 (w = 'list)))
    (p1-wrap w d)
      (? (d = () ? (w = 'hash)) (. 'tablet (. 0 ()))     ; {} -> (tablet 0)
         (d = () ? (w = 'tuple)) (. 'iota (. 0 ()))      ; @() -> (iota 0)
         (p1-splice? w ? (two? d ? 1 (d = () ? (!= w 'hash)))) (. w d)
         (. w (. d ())))
-   ; a bracket is its wrap: [] -> (list), {} -> (tablet 0), the box is {x}; p1-lift lands here too
+   ; a bracket is its wrap: [] -> (list), {} -> (tablet 0)
    (p1-open w cl)
      (p1-list cl 1 () @ d
         (two? d ? (. (p1-wrap w <d) >d) d))
 
-   ; the parser
-   ; head: the next datum would be a list's first, for the valence law (: and ? do not fuse)
+   ; head: the next datum is a list's first, for the valence law (: and ? do not fuse)
    (p1-read1 cl0 head)
      (p1-skip cl0 @ cl
         (atom? cl ? ()
@@ -263,9 +246,8 @@
                (p1-tok cl () @ tr
                   (. (p1-atom <tr) >tr))))))
 
-   ; a wrap takes the next datum; an unfinished one is more, never EOF. a splicing sigil
-   ; over an open form renames the wrap: @[1 2] is @(1 2), not (tuple list 1 2).
-   ; ' and \ take the next datum whatever it is. spaced @ is the match form's symbol
+   ; an unfinished datum is torn, never EOF. a splicing sigil over an open form renames
+   ; the wrap: @[1 2] is @(1 2), not (tuple list 1 2)
    (p1-lift w cl head)
      (: s (p1-skip cl)
         open (p1-splice? w ? (two? s ? (p1-cls <s & 16)))
@@ -274,8 +256,8 @@
               (atom? d ? 'torn
                (. (p1-wrap w <d) >d)))))
 
-   ; the valence law: a run glued to the next datum reads (mono (run d)), monadic for opfix;
-   ; spaced it is the plain symbol. head fuses too. \ never fuses
+   ; the valence law: a run glued to the next datum reads (mono (run d)); spaced it is
+   ; the plain symbol. \ never fuses
    (p1-op cl)
      (: rr (p1-run cl ())
         run (string <rr)
@@ -287,8 +269,7 @@
            (p1-read1 rest () @ d
               (atom? d ? 'torn
                (. (. 'mono (. (. sym (. <d ())) ())) >d)))))
-   ; a digit-led token with a sigil is cut at its last sigil: 2?<>x is 2?<> around x.
-   ; the numeral lane wins first
+   ; a digit-led token is cut at its last sigil: 2?<>x is 2?<> around x; a numeral wins first
    (p1-nop cl)
      (: tr (p1-tok cl ())
         tok <tr rest >tr a (p1-atom tok)
@@ -306,7 +287,7 @@
               d (p1-read1 r ())
               (atom? d ? 'torn
                (. (. 'mono (. (. sym (. <d ())) ())) >d)))))
-   ; glued = the next char starts a datum rather than ending the form.
+   ; the next char starts a datum rather than ending the form
    (p1-glued? cl)
      (two? cl ? (cap cl @ c (! (p1-cls c & 128))))
 
@@ -317,15 +298,13 @@
            (p1-cls <cl & 32) (. (p1-rev acc ()) (p1-cup cl))
            (p1-read1 cl head @ d (atom? d ? 'torn (p1-list >d () (. <d acc))))))
 
-   ; a text -> its charlist
    (p1-chars s)
      (: n #s
         (go k acc) (k < 0 ? acc (go (k - 1) (. (s k) acc)))
         (go (n - 1) ()))
 
-   ; the doors
-   ; one datum: (datum . rest), () at a clean end, or `torn` mid-shape, off a port, a string,
-   ; an unforced tail, or a previous residue; the residue is always a charlist
+   ; (datum . rest), () at a clean end, or `torn`, off a port, string, unforced tail or
+   ; residue; the residue is always a charlist
    (x \ (p1-read1 (? (string? x)  (p1-chars x)
                      (port? x)    (flow x)
                      (lit? x)     (x ())

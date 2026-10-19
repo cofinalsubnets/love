@@ -11,7 +11,7 @@
    ; what the pty shows up to pat, or all of it at its end
    (upto m pat t) (see m @ b (b < 0 ? t (t + string b @ t2 (has? t2 pat ? t2 (upto m pat t2)))))
    (type m s) (say m s, flush m)
-   r (tether [love "kore" "ed" "-p" "* " f])
+   r (tether [love "ed" "-p" "* " f])
    _ (test (two? r))
    m >r
    a0 (upto m "* " "")
@@ -25,7 +25,7 @@
    _ (slurp m)
    s1 (h-waitfor <r)
    _ (test (has? a0 "17") (has? a1 "beta") (has? a2 "?") (has? a3 "unknown command") (<s1 = 0))
-   r2 (tether [love "kore" "ex" f])
+   r2 (tether [love "ex" f])
    _ (test (two? r2))
    n >r2
    b0 (upto n ":" "")

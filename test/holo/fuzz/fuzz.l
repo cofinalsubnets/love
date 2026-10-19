@@ -1,20 +1,18 @@
-; holo's encoder differential fuzz, x64 + a64 + rv64: each generated ir form's bytes go through a
-; foreign decoder (objdump -M intel cross-read by llvm-mc; llvm-mc for a64/rv64), which must read
-; back the intended mnemonic and operands. registers compare width-agnostic, immediates mod 2^64:
-; a decode oracle checks meaning, not layout. knobs: FUZZ_N (per class, 8), FUZZ_SEED, FUZZ_ARCH
-; (x64|a64|rv64; another spelling scares). run from the root: out/love test/holo/fuzz/fuzz.l
+; holo's encoder differential fuzz, x64 + a64 + rv64: each generated form's bytes go through a
+; foreign decoder (objdump cross-read by llvm-mc; llvm-mc for a64/rv64), which must read back
+; the mnemonic and operands; registers compare width-agnostic, immediates mod 2^64.
+; knobs: FUZZ_N (per class, 8), FUZZ_SEED, FUZZ_ARCH (x64|a64|rv64). out/love test/holo/fuzz/fuzz.l
 
 (borrow 'posix)
 (reads (open "src/love/holo/holo.l" "r"))
 (reads (open "src/love/holo/x64.l" "r"))
 (reads (open "src/love/holo/a64.l" "r"))
 (reads (open "src/love/holo/rv64.l" "r"))
-; holo rides module 'holo: reading the source registers it, and the names come
-; through the door rather than off this file's layer.
+; reading the source registers module 'holo
 (borrow 'holo)
 
 (:
- ; ---- the small string kit (this file loads only holo, so it carries its own) ----
+ ; ---- the small string kit ----
  (trim s) (: n #s
              (a i) (i < n && ((s i) = 32 || (s i) = 9) ? (a (i + 1)) i)
              (b j) (0 < j && ((s (j - 1)) = 32 || (s (j - 1)) = 9) ? (b (j - 1)) j)
@@ -56,7 +54,7 @@
                                        ())
                           (d 0 0)))
                   (v = () ? () (neg ? (0 - v) v)))))
- ; exact big division: int on an inexact big ratio rides a gem and drops digits
+ ; subtract the remainder first: int of an inexact big ratio rides a gem and drops digits
  (divp v d) (int ((v - (v % d)) / d))
  (show0x n) (: (h v acc) (v = 0 ? acc (h (divp v 16) (('(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (v % 16)) . acc)))
                (n = 0 ? "0x0" ("0x" + string (h n ()))))
@@ -64,7 +62,7 @@
  (mask64 x) (((x % M64) + M64) % M64)
  (pow2 k) (: (go i a) (i = k ? a (go (i + 1) (2 * a))) (go 0 1))
 
- ; ---- the boxed RNG (a tablet slot; every draw is one line at the use site) ----
+ ; ---- the boxed RNG ----
  RS {}
  (rseed s) (pin RS 0 (wheel s))
  (rnd n) (random (peep RS 0 0) n @ r (pin RS 0 >r, <r))      ; [0, n)
@@ -74,7 +72,7 @@
  (pick-n l k) (k = 0 ? ()                                    ; k distinct draws
                  (pick l @ x (x . pick-n (filter (y \ !(y = x)) l) (k - 1))))
 
- ; ---- subprocess plumbing: sh with redirection; bytes laid via printf octal ----
+ ; ---- subprocess plumbing ----
  tmpd "out"
  (sh c) (spawn ["sh" "-c" c] @ pid (nom? pid ? 1 (wait pid)))
  (rdf p) (open p "r" @ q (hot? q ? (slurp q @ t (close q, t)) ""))
@@ -97,15 +95,14 @@
  (i-bad i) (i 3)
  (dump-ins ins) (foldl (a \ i \ a + "; " + i-mnem i + " " + i-ops i) "" ins)
 
- ; objdump folds a redundant prefix into a pseudo-mnemonic -- peel to the real op
+ ; objdump folds a redundant prefix into a pseudo-mnemonic: peel to the real op
  x64-prefixes '("rex" "data16" "data32" "addr32" "lock" "rep" "repz" "repnz"
                 "bnd" "notrack" "cs" "ss" "ds" "es" "fs" "gs")
  (strip-pfx ts) (? (atom? ts) ts
                    (elem <ts x64-prefixes || pfx? <ts "rex.") (strip-pfx >ts)
                    ts)
 
- ; x64: objdump -D -b binary. a line is addr TAB bytes TAB text; a continuation
- ; line (long insn wrapped) has no text field and emits nothing, as the reference did.
+ ; x64: objdump -D -b binary, a line is addr TAB bytes TAB text; a wrapped continuation emits nothing
  (disasm-x64 hx)
   (: _ (lay-bin hx (tmpd + "/.fuzz.bin"))
      _ (sh ("objdump -D -b binary -m i386:x86-64 -M intel " + tmpd + "/.fuzz.bin > " + tmpd + "/.fuzz.out 2>/dev/null"))
@@ -119,8 +116,8 @@
                           #(toks (fs 1)) (has? <m "(bad)")] . acc)))))))
      (go (lines (rdf (tmpd + "/.fuzz.out"))) ()))
 
- ; a64/riscv: llvm-mc --disassemble. fixed width checks consumption by count*4; riscv rides the
- ; c extension, so vw walks the stream: low two bits set on a 4-byte word, clear on a 2-byte one.
+ ; a64/riscv: llvm-mc --disassemble. riscv rides the c extension, so vw walks the stream by the
+ ; low two bits; the fixed-width lanes check consumption by count*4
  (rv-icount bs)
   (: n #bs
      (go i k) (n <= i ? k (go (i + (((bs i) & 3) = 3 ? 4 2)) (k + 1)))
@@ -162,10 +159,7 @@
   (: a (idx-of op "[") b (idx-of op "]")
      (!(charm? a) || !(charm? b) ? ()
         (: in (snip op (a + 1) b)
-           ; the scaled index: reg*S
            st (idx-of in "*")
-           ; ix/sc take their values from r below only: `:` binds a repeated name at its first
-           ; spelling, so an earlier ix/sc would win and the scaled index read as absent
            r (? (charm? st)
                 (: ib (: (bk i) (0 < i && (in (i - 1) @ c (digit? c || (97 <= c && c <= 122))) ? (bk (i - 1)) i) (bk st))
                    ixs (snip in ib st) scs (snip in (st + 1) (st + 2))
@@ -173,7 +167,6 @@
                    [ixs (s2i scs) rest])
                 [() 1 in])
            ix <r sc <>r in2 (r 2)
-           ; the trailing displacement: +0x../-N at the end
            n2 #in2
            de (: (dk j) (0 < j && (in2 (j - 1) @ c (hexd? c || c = 120)) ? (dk (j - 1)) j) (dk n2))
            r2 (? (de < n2 && 0 < de && ((in2 (de - 1)) = 43 || (in2 (de - 1)) = 45))
@@ -246,8 +239,7 @@
 
  ; ---- the spec interpreter: one description checks one decode ----
  ; spec = ([mnems checks] ..); a check is [r abs] [rw abs W] [i VAL] [m base disp]
- ; [mx base disp ix sc] [x fn] [lit "cl"]. strict demands the operand counts match
- ; (the riscv lane's law); the others read a prefix.
+ ; [mx base disp ix sc] [x fn] [lit "cl"]. strict (the riscv lane) demands operand counts match
  (chk1 got w)
   (<w @ k
    (? (k = 'r) ((a-abs got) = (w 1) ? () ("reg " + got + " != " + string (w 1)))
@@ -298,7 +290,7 @@
  (imm-big _) (rint 4294967296 9223372036854775807)
  (disp-any _) (rnd 3 @ k (? (k = 0) 0 (k = 1) (rint -128 127) (rint (0 - 2147483648) 2147483647)))
 
- ; ================================================================ x64 lane
+ ; ---- x64 lane ----
  (fno f) (s2i (snip (string f) 1 #(string f)))       ; 'f7 -> 7
  x64-alu '("add" "sub" "and" "or" "xor" "imul")
  x64-sized-ld '(("ld1" ("movsx")) ("ld2" ("movsx")) ("ld4" ("movsxd"))
@@ -371,7 +363,7 @@
    ["stsd" (_ \ (: b (rrand 0) o (disp-any 0) s (frand 0)
                    [[['stsd b o s]] (spec1 '("movsd") [['m b o] ['x (fno s)]])]))]]
 
- ; ================================================================ a64 lane
+ ; ---- a64 lane ----
  arm-alu '(("add" "add") ("sub" "sub") ("and" "and") ("or" "orr") ("xor" "eor") ("imul" "mul"))
  arm-sized-ld '(("ld1" ("ldrsb" "ldursb") x) ("ld2" ("ldrsh" "ldursh") x)
                 ("ld4" ("ldrsw" "ldursw") x) ("ldu1" ("ldrb" "ldurb") w)
@@ -451,7 +443,7 @@
    ["sx" (_ \ (: row (pick '(("sx1" "sxtb") ("sx2" "sxth") ("sx4" "sxtw"))) d (nrand 0)
                  [[[(intern <row) d]] (spec1 [(row 1)] [['rw d 'x] ['rw d 'w]])]))]]
 
- ; ================================================================ riscv lane
+ ; ---- riscv lane ----
  rv-gpregs '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 sp fp lr)
  (rv-rand _) (pick rv-gpregs)
  (rv-frand _) (pick fregs)
@@ -669,8 +661,7 @@
                      <>r)))
      (foldl (a \ cl \ a + class cl) 0 gens))
 
- ; a fuzz_arch no lane answers to refuses: filtering to nothing would run zero
- ; classes, print "all classes green" and exit 0 -- a spelling mistake reading as a pass.
+ ; a fuzz_arch no lane answers to refuses, else zero classes would read as a pass
  lanes (? (0 < #fz-arch)
            (filter (r \ <r = fz-arch) arches @ ls
             (two? ls ? ls (scare 'fuzz-arch fz-arch)))

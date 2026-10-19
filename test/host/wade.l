@@ -1,5 +1,5 @@
-; test/host/wade.l -- the night river, headless
-; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/wade.l | out/love
+; the night river, headless; a crew module, not in the corpus:
+; cat test/00-init.l test/host/00-host.l test/host/wade.l | out/love
 
 (borrow 'wade)
 (borrow 'view)
@@ -36,7 +36,7 @@
    f1 (wade-frame (pins (wade-new 80 48) 'pz arc-z)) f3 (wade-frame (pins (wade-new 80 48) 'pz (lamp-z - 10.0)))
  (test (m1 0 = 40.0) (m1 1 = 24.0) (m1 4 = 0.0)                 ; the arc ends on the horizon, no post yet
        (m0 1 < m1 1) (m1 0 < m0 0) (m0 4 = 0.0)                  ; ..from high on the right
-       (m2 2 < 1.0) (m2 2 < m1 2) (24.0 < m2 3) (0.0 < m2 4)     ; contracted into a lamp on a post into the water
+       (m2 2 < 1.0) (m2 2 < m1 2) (24.0 < m2 3) (0.0 < m2 4)     ; a lamp on a post
        (m2 2 < m3 2) (m2 3 < m3 3) (m3 1 < m2 1)                 ; nearer: bigger, the foot deeper, the lamp higher
        (h-rows f1 = 24) (pen? f1 230) (pen? f1 179)                ; both paint, the lamp and its path
        (h-rows f3 = 24) (pen? f3 230) (pen? f3 179)))
@@ -69,8 +69,8 @@
     test (0.0 < z1) (n1 = 1) (n2 = 1)
          (abs (z3 - 2 * z1) < 0.001) (n3 = 1) (n4 = 5)   ; two steps on, and the back keys took none
          (st 'px = 0.0) (z3 < st 'pz)                    ; facing the bank, the wading is still down the river
-         ; at the lamppost's foot the level is done: keys do nothing, and the settle eases
-         ; the view to the aim by 1, the lamp dead ahead and pitched down to its reflection
+         ; at the lamppost's foot the level is done: keys do nothing, the settle eases
+         ; the view to the aim by 1
          (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5) 'th 0.5 'hz 20) _ (wade-move s 1.0) z (s 'pz)
             _ (wade-step s (wade-kb 107), wade-step s (wade-kb 32), wade-move s 1.0, wade-step s (wade-kb 108), wade-step s (wade-kb 117))
             a (wade-aim s)

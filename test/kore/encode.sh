@@ -62,8 +62,8 @@ if command -v busybox >/dev/null 2>&1; then
     done
   done
 fi
-( cd "$HO" && "$K" kore uuencode .kore-be.bin .kore-be.named > .kore-be.uu && rm -f .kore-be.named \
-  && "$K" kore uudecode .kore-be.uu && cmp -s .kore-be.named .kore-be.bin ) || fail "kore uudecode to the header's name"
+( cd "$HO" && "$K" uuencode .kore-be.bin .kore-be.named > .kore-be.uu && rm -f .kore-be.named \
+  && "$K" uudecode .kore-be.uu && cmp -s .kore-be.named .kore-be.bin ) || fail "kore uudecode to the header's name"
 [ "$(stat -c %a "$ho/.kore-be.named" 2>/dev/null || echo 640)" = 640 ] || fail "kore uudecode: the header's mode"
 printf 'no armour\n' | korerun uudecode 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore uudecode without begin is 1 (got $r)"
 # ascii: toybox's table

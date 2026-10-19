@@ -1,6 +1,6 @@
 ; test/host/run.l -- the hark / herald nifs (src/love/main.c), process and fd laws
 ;   cat test/00-init.l test/host/run.l | out/love
-; herald tees what it captures: payloads stay tiny. the >64KB lane is checked by hand:
+; herald tees what it captures, so payloads stay tiny; the >64KB lane is checked by hand:
 ;   (: c `("sh" "-c" "i=0; while [ $i -lt 20000 ]; do echo abcdefgh; i=$((i+1)); done")
 ;      (test ((>(hark c)) = (>(herald c)))))
 (: cmd ["sh" "-c" "printf 'tee-me\n'"]
@@ -19,31 +19,31 @@
 
    (puts "run: ok\n"))
 
-; a write to a full pipe does not stop the vm: the residue rides the port, the wall clock is the law
-; the peer is another process: an in-process reader would deadlock a blocking writer, not redden
+; a write to a full pipe does not stop the vm: the residue rides the port; the wall clock is the law.
+; the reader is another process: in-process, a blocking writer would deadlock, not redden
 (: pr (pipe 0)
    rfd <pr wfd >pr
    pid (spawnio ["sh" "-c" "sleep 1; cat >/dev/null"] rfd 1 2 [wfd] -1 0)
    _ (close rfd)
    w (fdopen wfd)
    t0 (clock 0)
-   _ (say w ("x" * 200000))          ; 200K against a 64K pipe: the tail cannot land
+   _ (say w ("x" * 200000))          ; 200K against a 64K pipe
    ms (clock t0)
    _ (test (charm? pid) (0 < pid)
              (ms < 500))             ; a blocking door sits here for the child's whole nap
-   _ (close w)                       ; io_wflush: the residue lands before the fd dies
+   _ (close w)                       ; the residue lands before the fd dies
    _ (wait pid))
 
 (puts "run rung4: ok\n")
 
-; love ignores sigpipe, yet the console still dies on a closed pipe and a child never inherits
-; the ignore. the spewer is bounded so a regression is slow, not wedged; $? goes to a file
+; love ignores sigpipe, yet the console dies on a closed pipe and a child never inherits the
+; ignore. the spewer is bounded so a regression is slow, not wedged
 (: spew "( echo '(: (go n) (? (n = 0) 0 (: _ (putc 120) _ (putc 10) (go (n - 1)))) _ (go 300000) 0)' | out/love; echo $? > out/.sigst ) | head -1 > /dev/null; cat out/.sigst; rm -f out/.sigst"
    st >(hark ["sh" "-c" spew])
    sig >(hark ["sh" "-c" "grep SigIgn /proc/self/status"])
    _ (test
-      (st = "141\n")                       ; 128 + sigpipe: the death the shell has always seen
-      (sig = "SigIgn:\t0000000000000000\n")))  ; the child inherits no ignore at all
+      (st = "141\n")                       ; 128 + sigpipe
+      (sig = "SigIgn:\t0000000000000000\n")))
 
 (puts "run sigpipe: ok\n")
 
@@ -69,17 +69,17 @@
 
 ; test/host/parked.l, seventeen parked tasks, under a timeout: its regression is a hang
 (: rc <(hark ["sh" "-c" "timeout 20 out/love test/host/parked.l"])
-   _ (test (rc = 0)))                    ; 124 is the timeout
+   _ (test (rc = 0)))
 
 (puts "run parked: ok\n")
 
-; test/host/nifpark.l, accept / recv / wait all park, under a timeout for the same reason
+; test/host/nifpark.l, accept / recv / wait all park, under a timeout
 (: rc <(hark ["sh" "-c" "cat test/00-init.l test/host/nifpark.l | timeout 20 out/love"])
    _ (test (rc = 0)))
 
 (puts "run nifpark: ok\n")
 
-; test/host/dns.l, a lookup and its deadline park, against a loopback nameserver, under a timeout
+; test/host/dns.l, a lookup and its deadline park, against a loopback nameserver
 (: rc <(hark ["sh" "-c" "cat test/00-init.l test/host/dns.l | timeout 20 out/love"])
    _ (test (rc = 0)))
 

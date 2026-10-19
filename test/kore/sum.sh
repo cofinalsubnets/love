@@ -24,12 +24,12 @@ world
 done
 # -c: each side's list read by the other, a space off in a line shape fails; the mismatch
 # lane has its own exit code
-( cd "$ck" && LOVE_NO_IMAGE= "$K" kore sha256sum a bin n64 > sums.ours )
+( cd "$ck" && LOVE_NO_IMAGE= "$K" sha256sum a bin n64 > sums.ours )
 ( cd "$ck" && sha256sum a bin n64 > sums.gnu )
 cmp -s "$ck/sums.ours" "$ck/sums.gnu" || fail "sha256sum's list is not GNU's"
 for l in sums.ours sums.gnu; do bothrc -C "$ck" "sha256sum -c $l" sha256sum -c "$l"; done
 ( cd "$ck" && md5sum a bin > m.ours ) && ( cd "$ck" && md5sum -c m.ours ) > "$g" 2>/dev/null
-( cd "$ck" && LOVE_NO_IMAGE= "$K" kore md5sum -c m.ours ) > "$o" 2>/dev/null
+( cd "$ck" && LOVE_NO_IMAGE= "$K" md5sum -c m.ours ) > "$o" 2>/dev/null
 same "md5sum -c"
 # a list's other shapes: -b's ` *` marker, and upper-case hex
 ( cd "$ck" && sha256sum -b a bin > b.list )
@@ -51,9 +51,9 @@ for t in $tools; do
 done
 # every digest tool's list read back by the other side
 for t in md5sum sha1sum sha224sum sha384sum sha512sum b2sum; do
-  ( cd "$ck" && $t a bin n128 > $t.gnu ) && ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore $t a bin n128 > $t.ours )
+  ( cd "$ck" && $t a bin n128 > $t.gnu ) && ( cd "$ck" && LOVE_NO_IMAGE= "$K" $t a bin n128 > $t.ours )
   cmp -s "$ck/$t.gnu" "$ck/$t.ours" || fail "$t's list is not GNU's"
-  ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore $t -c $t.gnu ) > "$o" 2>/dev/null; ro=$?
+  ( cd "$ck" && LOVE_NO_IMAGE= "$K" $t -c $t.gnu ) > "$o" 2>/dev/null; ro=$?
   ( cd "$ck" && $t -c $t.ours ) > "$g" 2>/dev/null; rg=$?
   same "$t -c"
   [ "$rg" -eq 0 ] && [ "$ro" -eq 0 ] || fail "$t -c exit ($rg vs $ro)"
@@ -67,7 +67,7 @@ pipe "sum - " 'hello
 # b2sum's shorter digests, and -c reading any length a line carries
 for l in 8 256 504; do both "b2sum -l $l" b2sum -l $l "$ck/a" "$ck/n129"; done
 ( cd "$ck" && b2sum -l 256 a bin > b2.256 )
-( cd "$ck" && LOVE_NO_IMAGE= "$K" kore b2sum -c b2.256 ) > "$o" 2>/dev/null; ro=$?
+( cd "$ck" && LOVE_NO_IMAGE= "$K" b2sum -c b2.256 ) > "$o" 2>/dev/null; ro=$?
 ( cd "$ck" && b2sum -c b2.256 ) > "$g" 2>/dev/null
 same "b2sum -c of a 256-bit list"
 [ "$ro" -eq 0 ] || fail "b2sum -c 256 exit $ro"
@@ -100,7 +100,7 @@ D2=$PWD/$ho/.sumf; rm -rf "$D2"; mkdir "$D2"; echo a > "$D2/fa"; echo b > "$D2/f
 for c in "md5sum -c good" "md5sum -c --quiet good" "md5sum -c --status good" "md5sum -c --ignore-missing good2" "md5sum -c good2" \
          "md5sum -c --strict good" "md5sum -c -w good" "md5sum -b fa" "sha256sum --check --quiet good" "b2sum -c --quiet b2l" "b2sum -b fa"; do
   # shellcheck disable=SC2086
-  (cd "$D2" && { $c; echo "rc=$?"; }) > "$g" 2>&1; (cd "$D2" && { LOVE_NO_IMAGE= "$PWD/../../$m" kore $c; echo "rc=$?"; }) > "$o" 2>&1; same "$c"
+  (cd "$D2" && { $c; echo "rc=$?"; }) > "$g" 2>&1; (cd "$D2" && { LOVE_NO_IMAGE= "$PWD/../../$m" $c; echo "rc=$?"; }) > "$o" 2>&1; same "$c"
 done
 rm -rf "$D2"
 echo "kore: checksums (cksum/sum/crc32/md5sum/sha*sum/b2sum/sha3sum over the block boundaries, -c both ways round) ok"

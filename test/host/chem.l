@@ -35,8 +35,8 @@
    ; the command
    f (dir + "/c.ms")
    _ (put f ".cstart\nbenzene\nbond 30 ; OH\n.cend\n")
-   r1 (hark [love "kore" "chem" f])
-   r2 (hark [love "kore" "chem" (dir + "/none.chem")])
+   r1 (hark [love "chem" f])
+   r2 (hark [love "chem" (dir + "/none.chem")])
    (test (<r1 = 0) (has? >r1 "#bond 30 ; OH\nLast: bond(0.2, 30, from Last.V1.ne )\n")
          (<r2 = 1),
     hark ["rm" "-rf" dir]))

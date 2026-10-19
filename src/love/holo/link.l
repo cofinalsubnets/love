@@ -251,7 +251,7 @@
        (pin ob 'relas relas,
         ob))
 
-   ; every symbol in .symtab of a file of any e_type (`kore nm`) -> rows
+   ; every symbol in .symtab of a file of any e_type (`love nm`) -> rows
    ;   (name bind typ shndx value size sec)
    ; sec the defining section's (name type flags), or () for an undefined or reserved index.
    ; a file without .symtab answers ().

@@ -18,7 +18,7 @@
    (fi-num w)
     (: c (0 < #w ? (w 0) 0) sg (? (c = 43) 1 (c = 45) -1 0)
        d (sg = 0 ? w (snip w 1 #w))
-       (0 < #d && all digit? (chars d) ? [sg (unum d)]))
+       (udigs? d ? [sg (unum d)]))
    (fi-cmp nw v) (: sg <nw n <>nw (? (sg = 1) (n < v) (sg = -1) (v < n) (v = n)))
 
    ; -- the expression: words in, a tree out --
@@ -200,7 +200,7 @@
        ws (filter (w \ !(w = "-depth")) <d) maxd <>d mind <>>d
        pr (two? ws ? (fi-or ws) [['true] ()])
        _ (two? pr && atom? <>pr ? ()
-          (udie 1 "usage: find [-L] [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"))
+          (udie 1 "usage: find [-L] [PATH..] [EXPR]"))
        e (fi-acts? <pr ? <pr ['and <pr ['print]])
        st {}
        _ (pins st 'now (clock 0) 'L (L? ? 1 0) 'depth (elem "-depth" <d || has-delete? e ? 1 0))

@@ -88,17 +88,17 @@ for c in "0 a -ef h" "0 a -ef s" "1 a -ef b" "1 a -ef none" "0 a -nt old" "1 old
          "0 a -nt none" "1 none -nt a" "0 old -ot a" "1 a -ot old" "0 none -ot a" \
          "1 a -ot none" "0 ! a -ef b" "0 -h s" "0 -L s" "1 -h a" "1 -h none" "0 -c /dev/null" \
          "1 -b /dev/null" "1 -p a" "1 -S a" "1 -u a" "1 -k a"; do
-  (cd "$T" && eval "$K kore test ${c#? }"); k=$?
+  (cd "$T" && eval "$K test ${c#? }"); k=$?
   [ "$k" = "${c%% *}" ] || fail "kore test ${c#? } (got $k, want ${c%% *})"
 done
-(cd "$T" && "$K" kore [ a -ef h ]) || fail "kore [ a -ef h ]"
+(cd "$T" && "$K" [ a -ef h ]) || fail "kore [ a -ef h ]"
 # test's connectives: posix's word counts, the grammar past them, == < >, owner, group, -t
 for c in "0 \\( x \\)" "1 \\( '' \\)" "0 ! ''" "1 ! x" "0 x -a y" "1 x -a ''" "0 '' -o y" \
          "0 ! \\( a = b \\)" "0 \\( a = a \\) -a \\( b = b \\)" "0 a = a -o b = c -a c = d" \
          "1 ! a = b -a c = d" "0 1 -eq 1 -a 2 -eq 3 -o 4 -eq 4" "0 a == a" "0 a \\< b" \
          "1 a \\> b" "0 -f a -a -s a" "1 -f old -a -s old" "1 -e none -o -d none" \
          "0 -O a" "0 -G a" "1 -O none" "1 -t 0" "1 -t 9" "2 -t x" "2 \\( x" "2 a = a -a"; do
-  (cd "$T" && eval "$K kore test ${c#? }" < /dev/null); k=$?
+  (cd "$T" && eval "$K test ${c#? }" < /dev/null); k=$?
   [ "$k" = "${c%% *}" ] || fail "kore test ${c#? } (got $k, want ${c%% *})"
 done
 # truncate: each size form against gnu where it has one; -c makes no file; refusals answer 1
@@ -148,7 +148,7 @@ if command -v shred >/dev/null 2>&1; then
   for v in "-v" "-vz" "-vzu" "-vu -n 2" "-vzu -n 0" "-vx -n 1"; do
     printf 'hello\n' > "$SH/g/abc"; printf 'hello\n' > "$SH/o/abc"
     # shellcheck disable=SC2086
-    (cd "$SH/g" && LC_ALL=C shred $v abc) 2> "$g"; (cd "$SH/o" && "$K" kore shred $v abc) 2> "$o"
+    (cd "$SH/g" && LC_ALL=C shred $v abc) 2> "$g"; (cd "$SH/o" && "$K" shred $v abc) 2> "$o"
     same "shred $v"
     { [ -e "$SH/g/abc" ] && [ -e "$SH/o/abc" ]; } || { [ ! -e "$SH/g/abc" ] && [ ! -e "$SH/o/abc" ]; } \
       || fail "kore shred $v: the file's fate differs"
@@ -224,9 +224,9 @@ rm -rf "$F"
 # pwd -L is $PWD when it names this directory; -P and a stale $PWD answer the link-free path
 P2=$PWD/$ho/.pwdl; rm -rf "$P2"; mkdir -p "$P2/real"; ln -s real "$P2/lnk"
 M=$PWD/$m
-(cd "$P2/lnk" && [ "$(PWD="$P2/lnk" LOVE_NO_IMAGE= "$M" kore pwd -L)" = "$P2/lnk" ] \
-  && [ "$(PWD="$P2/lnk" LOVE_NO_IMAGE= "$M" kore pwd -P)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ] \
-  && [ "$(PWD=/ LOVE_NO_IMAGE= "$M" kore pwd -L)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ]) || fail "kore pwd -L/-P"
+(cd "$P2/lnk" && [ "$(PWD="$P2/lnk" LOVE_NO_IMAGE= "$M" pwd -L)" = "$P2/lnk" ] \
+  && [ "$(PWD="$P2/lnk" LOVE_NO_IMAGE= "$M" pwd -P)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ] \
+  && [ "$(PWD=/ LOVE_NO_IMAGE= "$M" pwd -L)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ]) || fail "kore pwd -L/-P"
 rm -rf "$P2"
 # cmp's report: char and line, -b, -l in octal, eof on the shorter, -n -i and skips; LC_ALL=C
 Q=$ho/.cmpq; printf 'abc\ndef\nghi\n' > "$Q.a"; printf 'abc\ndXf\nghZ\n' > "$Q.b"; printf 'abc\nd' > "$Q.c"; : > "$Q.e"; cp "$Q.a" "$Q.d"
@@ -242,7 +242,7 @@ R2=$PWD/$ho/.rlk; rm -rf "$R2"; mkdir -p "$R2/d/e"; : > "$R2/d/f"
 for c in "l2" "l1 l2" "d/f" "-f l2" "-f dang" "-e dang" "-m dang" "-f d/nope" "-e d/nope" "-m d/nope/x" "-f d/up/e" "-n l1" "-z l1 l2" "-f cyc1" "-m cyc1" "-e l2 dang"; do
   # shellcheck disable=SC2086
   (cd "$R2" && { readlink $c; echo "rc=$?"; }) > "$g" 2>&1
-  (cd "$R2" && { LOVE_NO_IMAGE= "$PWD/../../$m" kore readlink $c; echo "rc=$?"; }) > "$o" 2>&1
+  (cd "$R2" && { LOVE_NO_IMAGE= "$PWD/../../$m" readlink $c; echo "rc=$?"; }) > "$o" 2>&1
   same "readlink $c"
 done
 rm -rf "$R2"
@@ -256,17 +256,17 @@ for c in "../s1 x" "-m 640 ../s1 x" "-m u=rw,go=r ../s1 x" "-v ../s1 x" "-d a/b 
   { (cd "$I2/G" && install $c; echo "rc=$?"); ilay; } > "$g" 2>&1
   rm -rf "$I2/G"; mkdir "$I2/G"
   # shellcheck disable=SC2086
-  { (cd "$I2/G" && LOVE_NO_IMAGE= "$PWD/../../../$m" kore install $c; echo "rc=$?"); ilay; } > "$o" 2>&1
+  { (cd "$I2/G" && LOVE_NO_IMAGE= "$PWD/../../../$m" install $c; echo "rc=$?"); ilay; } > "$o" 2>&1
   same "install $c"
 done
-rm -rf "$I2/G"; mkdir "$I2/G"; (cd "$I2/G" && LOVE_NO_IMAGE= "$PWD/../../../$m" kore install -p ../s1 x) && [ "$(stat -c %Y "$I2/G/x")" = 1000000000 ] || fail "kore install -p"
+rm -rf "$I2/G"; mkdir "$I2/G"; (cd "$I2/G" && LOVE_NO_IMAGE= "$PWD/../../../$m" install -p ../s1 x) && [ "$(stat -c %Y "$I2/G/x")" = 1000000000 ] || fail "kore install -p"
 rm -rf "$I2"
 # realpath --relative-to/--relative-base, -L/-P through .., -q, -z, -s; each with its status
 R3=$PWD/$ho/.rpt; rm -rf "$R3"; mkdir -p "$R3/a/b/c" "$R3/x"; ln -s a/b "$R3/lb"; : > "$R3/a/b/c/f"
 for c in "--relative-to=x a/b/c/f" "--relative-to=a a/b/c/f" "--relative-to=a/b/c/f a" "--relative-base=a a/b/c/f x" \
          "--relative-base=a --relative-to=a/b a/b/c/f" "-L lb/.." "-P lb/.." "lb/.." "-q nosuch/x" "-e -q nope" "-z a x" "--relative-to=. ." "-s lb"; do
   # shellcheck disable=SC2086
-  (cd "$R3" && { realpath $c; echo "rc=$?"; }) > "$g" 2>&1; (cd "$R3" && { LOVE_NO_IMAGE= "$PWD/../../$m" kore realpath $c; echo "rc=$?"; }) > "$o" 2>&1; same "realpath $c"
+  (cd "$R3" && { realpath $c; echo "rc=$?"; }) > "$g" 2>&1; (cd "$R3" && { LOVE_NO_IMAGE= "$PWD/../../$m" realpath $c; echo "rc=$?"; }) > "$o" 2>&1; same "realpath $c"
 done
 rm -rf "$R3"
 echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred/dircolors) ok"

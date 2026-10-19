@@ -338,6 +338,18 @@
                      (: (go j) (j < n && sh-name? (s j) ? (go (j + 1)) j)
                         e (go i) (('var . snip s i e) . e))
                    ('dollar . i)))))
+   ; a live $ or ` at i -> k's next step past it: a segment, else a literal char.
+   ; 'dollar first: a bare $ answers ('dollar . i), which a plain pair pattern
+   ; would take for a segment and splice as one
+   (sh-live S s n i cur segs k)
+     (: lit (#cur ? (('lit . cur) . segs) segs)
+        (s i = 36 ? (sh-dol S s n (i + 1) @
+                      ('dollar . j) (k j (cur + "$") segs)
+                      (sg . j)      (k j "" (sg . lit))
+                                    (k (i + 1) (cur + "$") segs))
+                    (sh-bt s n (i + 1) "" @
+                      (t . j) (k j "" (('sub . t) . lit))
+                              (k (i + 1) (cur + "`") segs))))
    ; a bare text (heredoc body, vop word) -> segs, $ and ` live, \ escapes $ ` \
    (sh-dollarize S s)
      (: n #s
@@ -347,15 +359,7 @@
            (: b (s i)
               (? (b = 92 && i + 1 < n && sh-btesc? (s (i + 1)))
                    (go (i + 2) (cur + string (s (i + 1))) segs)
-                 ; 'dollar first: a bare $ answers ('dollar . i), which a plain
-                 ; pair pattern would take for a segment and splice as one
-                 (b = 36) (sh-dol S s n (i + 1) @
-                           ('dollar . j) (go j (cur + "$") segs)
-                           (sg . j)      (go j "" (sg . addl cur segs))
-                                          (go (i + 1) (cur + "$") segs))
-                 (b = 96) (sh-bt s n (i + 1) "" @
-                           (t . j) (go j "" (('sub . t) . addl cur segs))
-                                    (go (i + 1) (cur + string b) segs))
+                 (b = 36 || b = 96) (sh-live S s n i cur segs go)
                  (go (i + 1) (cur + string b) segs))))
         (go 0 "" ()))
    ; vop word text -> segs, quote-aware, so a quoted glob char is inert in ${v#pat};
@@ -369,13 +373,7 @@
           34 (rev (addl cur segs) . i + 1)
           (92 && i + 1 < n && (sh-btesc? (s (i + 1)) || s (i + 1) = 34))
            (dq (i + 2) (cur + string (s (i + 1))) segs)
-          36 (sh-dol S s n (i + 1) @
-              ('dollar . j) (dq j (cur + "$") segs)
-              (sg . j)      (dq j "" (sg . addl cur segs))
-                            (dq (i + 1) (cur + "$") segs))
-          96 (sh-bt s n (i + 1) "" @
-              (t . j) (dq j "" (('sub . t) . addl cur segs))
-                      (dq (i + 1) (cur + string b) segs))
+          (36 || 96) (sh-live S s n i cur segs dq)
           (dq (i + 1) (cur + string b) segs))))
         (go i cur segs)
           (? (i = n) (rev (addl cur segs))
@@ -388,13 +386,7 @@
                   (inner . j) (go j "" (('dq . inner) . addl cur segs))
                               (go (i + 1) (cur + string b) segs))
               (92 && i + 1 < n) (go (i + 2) (cur + string (s (i + 1))) segs)
-              36 (sh-dol S s n (i + 1) @
-                  ('dollar . j) (go j (cur + "$") segs)
-                  (sg . j)      (go j "" (sg . addl cur segs))
-                                (go (i + 1) (cur + "$") segs))
-              96 (sh-bt s n (i + 1) "" @
-                  (t . j) (go j "" (('sub . t) . addl cur segs))
-                          (go (i + 1) (cur + string b) segs))
+              (36 || 96) (sh-live S s n i cur segs go)
               (go (i + 1) (cur + string b) segs))))
         (go 0 "" ()))
 

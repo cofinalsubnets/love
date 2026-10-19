@@ -10,7 +10,7 @@
    _ (setenv "HOME" dir)
    (put p s) (: q (open p "w") _ (say q s) (close q))
    ; on a pipe www pours the page and its references; stderr rides along
-   (www u) (: r (hark ["sh" "-c" (love + " kore www '" + u + "' 2>&1")]) [(? (two? r) >r "") <r])
+   (www u) (: r (hark ["sh" "-c" (love + " www '" + u + "' 2>&1")]) [(? (two? r) >r "") <r])
 
    ; gopher
    gp (test-free 0)

@@ -3,11 +3,10 @@
 ;   love bench/ccdead.l            (after ./ccbench.sh, or `make ccbench`)
 ;   love bench/ccdead.l ELF ..     (no own-object split, so every text symbol reads as libc)
 ;
-; ccsize.sh counts the libc bytes a lane ships; this counts the ones it can call. the method walks
-; call/jmp/lea targets out of `objdump -d`, seeded from _start and from every function address in
-; the data sections (vtables and jump tables are reached no other way). a missed indirect call marks
-; a live function dead, never the reverse, so reachable is a lower bound and dead an upper one.
-; the musl lane is the control: its dead set is the floor a static-linking libc cannot get under.
+; ccsize.sh counts the libc bytes a lane ships; this counts the ones it can call: call/jmp/lea
+; targets out of `objdump -d`, seeded from _start and every function address in the data
+; sections. a missed indirect call marks a live function dead, never the reverse, so dead is an
+; upper bound. the musl lane is the control.
 
 (borrow 'posix)
 (: root (cwd 0)
@@ -70,8 +69,7 @@
        ok (filter (f \ 3 = #f && (f 1 = "T" || f 1 = "t")) rows)
        (map (f \ hex <f . canon (f 2)) ok))
 
-   ; sizes by address gap -- mooncc's ELF carries no st_size, so the next symbol
-   ; is what bounds this one; the last symbol in the run measures 0.
+   ; sizes by address gap: mooncc's ELF carries no st_size; the last symbol measures 0
    (sizes rows)
     (: t {}
        (go rs) (? !(two? rs) t
@@ -127,8 +125,7 @@
    (data-roots elf ba acc)
     (: (scan raw i n acc)
         (? (n <= i) acc
-           ; the top two bytes gate the read: a text address never reaches 2^48,
-           ; so this skips almost every offset without building a number.
+           ; a text address never reaches 2^48: the top two bytes gate the read
            (raw (i + 7) = 0 && raw (i + 6) = 0)
             (ba (le64 raw i) @ nm
                (scan raw (i + 1) n (string? nm ? (nm . acc) acc)))

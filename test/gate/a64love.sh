@@ -33,7 +33,7 @@ a64_tree || fail "$m would not lay its carried tree"
 a64_job egg  "cd tree && LOVE_NO_IMAGE=1 timeout 1200 \$RUN ../love ../corpus.l"
 a64_job bake "LOVE_NO_IMAGE=1 timeout 1200 \$RUN ./love bake -o love.b -l cat.l"
 a64_job wake "cd tree && timeout 1200 \$RUN ../love.b ../corpus.l"
-a64_job verb "timeout 60 \$RUN ./love.b kore echo hi"
+a64_job verb "timeout 60 \$RUN ./love.b echo hi"
 
 a64_run "$r" || fail "the a64 run did not come back"
 

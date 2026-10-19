@@ -5,57 +5,56 @@
    B100 (bpow2 100)
    F25 (bfact 25)
    F24 (bfact 24)
-   ; equal-length KL-limb operands take karatsuba; Kref splits KA in halves, which
-   ; stay on schoolbook, as an independent check
+   ; KL-limb operands take karatsuba; Kref splits KA in halves, on schoolbook, as a check
    KL 150  KE (64 * KL)  KHE (64 * (KL // 2))
-   KA (KE 2 - 1)  KBb (KE 2 - 7)  KHB (KHE 2)   ; (KE 2) = 2^ke via exact power (no deep recursion)
+   KA (KE 2 - 1)  KBb (KE 2 - 7)  KHB (KHE 2)   ; (KE 2) = 2^KE, no deep recursion
    KP (KA * KBb)
    Kref (((KA % KHB) * KBb) + (((KA // KHB) * KBb) * KHB))
-   ; near-equal lengths take it too (200 limbs by 150), checked the same way
+   ; near-equal lengths take it too (200 limbs by 150)
    KC ((64 * 200) 2 - 3)  KHC ((64 * 100) 2)
    KCref (((KC % KHC) * KBb) + (((KC // KHC) * KBb) * KHC)))
 
 (test
- ; --- overflow promotion + exact value, read round-trip against a literal ---
+ ; --- overflow promotion, read round-trip against a literal ---
  (F25 = 15511210043330985984000000)
  (B100 = 1267650600228229401496703205376)
  (1000000000000 * 1000000000000 = 1000000000000000000000000)
  (F25 + 1 = 15511210043330985984000001)
  (F25 - 1 = 15511210043330985983999999)
- (bpow2 200 = B100 * B100)            ; identity instead of a transcribed literal
+ (bpow2 200 = B100 * B100)
  (bpow2 64 = 18446744073709551616)
 
- ; --- resumable subquadratic Karatsuba (equal-length large *) vs independent schoolbook ---
- (KP = Kref)        ; Karatsuba product == schoolbook reference
- (KP = KBb * KA)  ; commutes
- (KA = KP // KBb) ; divides back exactly (cross-checks against Knuth-D)
+ ; --- karatsuba vs schoolbook ---
+ (KP = Kref)
+ (KP = KBb * KA)
+ (KA = KP // KBb) ; cross-checks knuth-d
  (0 = KP % KBb)
- (KA * KA = KA * KA)                  ; squaring is stable (the na==nb self-multiply lane)
+ (KA * KA = KA * KA)                  ; the na==nb self-multiply lane
  (KC * KBb = KCref) (KBb * KC = KCref) (KC = (KC * KBb) // KBb)
 
  ; --- a bignum is its own tier: not a fixnum, truthy, not falsy, not a chain ---
- !(charm? B100) ; (charm? bignum) is false
- (B100 ? 1 0)   ; a bignum is truthy
- !!B100         ; ...hence not falsy
+ !(charm? B100)
+ (B100 ? 1 0)
+ !!B100
  (atom? B100)
 
  ; --- canonical demotion: shrinking results fall back to the smallest tier ---
  (0 = F25 - F25)
- (charm? (F25 - F25))                       ; demoted all the way to a fixnum
- ; exact bignum division stays an integer; an inexact one promotes to a float (`/`)
+ (charm? (F25 - F25))
+ ; exact bignum `/` stays an integer; an inexact one is a float
  (25 = F25 / F24)
  (charm? (F25 / F24))
  (F24 = F25 / 25)
  (1 = B100 / B100)
  (charm? (B100 / B100))
- (gem? (B100 / 7))   ; 2^100 / 7 has a remainder -> float
- (25 = F25 // F24) ; floor division `//` truncates, stays integer
+ (gem? (B100 / 7))
+ (25 = F25 // F24)
 
- ; --- divmod identities (floor division `//`): a == (a//b)*b + a%b ---
+ ; --- divmod identities: a == (a//b)*b + a%b ---
  (B100 = B100 // 1000000007 * 1000000007 + B100 % 1000000007)
- (B100 = B100 // bpow2 40 * bpow2 40 + B100 % bpow2 40)   ; multi-limb divisor
+ (B100 = B100 // bpow2 40 * bpow2 40 + B100 % bpow2 40)
  (F25 = F25 // F24 * F24 + F25 % F24)
- (2 = B100 % 7)                         ; 2^100 mod 7
+ (2 = B100 % 7)
 
  ; --- signs: `//` truncates toward zero, remainder follows the dividend ---
  (-25 = -F25 // F24)
@@ -80,7 +79,7 @@
  (5 < B100)
  (-B100 < 5)
  (-B100 < B100)
- (F25 = bfact 25)                       ; two independent computations are equal
+ (F25 = bfact 25)
  !(F25 = B100)
  !(B100 = B100 + 1)
  (B100 < B100 + 1)
@@ -90,7 +89,7 @@
  (gem? (B100 * 1.0))
  (B100 < 1e40)
  (B100 > 1e20)
- (0 = B100 * 0)                         ; * fixnum 0 -> exact 0
+ (0 = B100 * 0)
  (charm? (B100 * 0))
 
  ; --- printer round-trip (base 10, with sign) ---
@@ -104,32 +103,31 @@
  ('fk = peep (pin (pin {} F25 'fk) B100 'hit) F25 'miss)
  ('miss = peep (pin {} B100 'hit) (B100 + 1) 'miss)
 
- ; --- prel ** / gcd / modpow: exact across the tower via * / % ---
- ; (`**` is exact-integer power; the float `power` nif is tested in math.l)
- (8 = 3 2)      ; small ints stay fixnums
- (charm? (3 2))   ; ...and stay integers (not float power)
- (B100 = 100 2) ; promotes to a bignum
+ ; --- prel ** / gcd / modpow (the float `power` nif is tested in math.l) ---
+ (8 = 3 2)
+ (charm? (3 2))
+ (B100 = 100 2)
  (bpow2 200 = 200 2)
- (1 = 0 999)                         ; e <= 0 -> 1
+ (1 = 0 999)
  (1024 = 10 2)
  (21 = gcd 1071 462)
- (21 = gcd 462 1071) ; order-independent
- (4 = gcd -12 8)     ; result normalized non-negative
+ (21 = gcd 462 1071)
+ (4 = gcd -12 8)     ; normalized non-negative
  (4 = gcd 12 -8)
- (F24 = gcd F25 F24)                   ; f24 divides f25, so gcd is f24
- (1 = gcd B100 (B100 + 1))             ; consecutive ints are coprime
- (976371285 = modpow 2 100 1000000007) ; 2^100 mod (1e9+7)
+ (F24 = gcd F25 F24)
+ (1 = gcd B100 (B100 + 1))
+ (976371285 = modpow 2 100 1000000007)
  (1 = modpow 7 0 100)
  (B100 % 1000000007 = modpow 2 100 1000000007)
 
  ; --- int array vs bignum: ordered by magnitude, not low bits (2^100's low word is 0) ---
- (aall (star-tray '(3) '(1 2 3) < B100))          ; every int < 2^100
+ (aall (star-tray '(3) '(1 2 3) < B100))
  (aall (star-tray '(3) '(1 2 3) <= B100))
- !(aall (star-tray '(3) '(1 2 3) > B100))   ; nothing exceeds 2^100
+ !(aall (star-tray '(3) '(1 2 3) > B100))
  !(aall (star-tray '(3) '(1 2 3) >= B100))
- (aall (star-tray '(3) '(1 2 3) > -B100)) ; every int > -2^100
- (aall (-B100 < star-tray '(3) '(1 2 3))) ; bignum on the left, too
- !(aall (star-tray '(2) '(0 0) = B100)))       ; 0 != 2^100 (low word is 0!)
+ (aall (star-tray '(3) '(1 2 3) > -B100))
+ (aall (-B100 < star-tray '(3) '(1 2 3)))
+ !(aall (star-tray '(2) '(0 0) = B100)))
 
 ; --- bitlen: the bits of the magnitude, 2^(n-1) <= |x| < 2^n ---
 (test (0 = bitlen 0) (1 = bitlen 1) (1 = bitlen -1) (10 = bitlen 1023) (11 = bitlen 1024)
@@ -149,9 +147,8 @@
          (all bn-back [(40000 3) (20000 7) (0 - 30000 3) (70000 2 - 1) (70000 2) ((5000 10 + 1) * (9000 10 - 1))])))
 
 
-; --- read by halves: a long numeral lays 19 digits a limb and joins them in pairs, hi 10^(19 w)
-; + lo; hex and octal pack their bits. the joins' edges, signs, and a pattern
-; whose value arithmetic knows
+; --- read by halves: 19 digits a limb, joined in pairs as hi 10^(19 w) + lo; hex and
+; octal pack their bits
 (: (bn-rd s) <(sound s)
    (bn-ones d k) (string (map (_ \ d) (jot k)))
    (bn-rep s r) (string (cats (map (_ \ s) (jot r))))
@@ -181,8 +178,7 @@
          (all (k \ radix (k 7) 7 = "1" + bn-ones 48 k) [22 23 44 45 88 1000 3001])
          (all (k \ radix (k 2) 2 = "1" + bn-ones 48 k) [61 62 63 124 4096 4097])))
 
-; --- lopsided products: past twice the shorter's width the longer goes in pieces of it, each a
-; karatsuba; under the cutoff, schoolbook
+; --- lopsided products: past twice the shorter's width the longer goes in karatsuba pieces
 (: LA (40000 3) LB (3000 7)
    (bn-pieces a b) (: w (bitlen b) mk (w 2 - 1)
                       (go a i acc) (a = 0 ? acc (go (a >> w) (i + w) (acc + (((a & mk) * b) << i))))
