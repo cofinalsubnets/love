@@ -22,7 +22,7 @@
                   (1.5 < c 0 < 2.5 && c 1 < 2.0 && 3.99 < c 2 < 4.21 && mag (f 1 2) > 0.9))
    ; air half filled by a solid sharing three sides: five of the air's faces and the solid's top
    a1 (brush-box 1 [0.0 0.0 0.0] [1.0 1.0 1.0]) s1 (brush-box 0 [0.0 0.0 0.0] [1.0 1.0 0.5])
-   mesh0 (brush-mesh [room] 1.0 (\ n p b [-1 0.0 0.0]))
+   mesh0 (brush-mesh [room] 1.0 (\ n b [-1 [0.0 0.0 0.0 0.0] [0.0 0.0 0.0 0.0]]))
  (test (m [2.0 1.0 2.0] = 1) (m [5.0 1.0 2.0] = 0) (m [0.1 1.0 1.7] = 0) (m [0.5 2.9 1.7] = 0) (m [0.5 2.1 1.7] = 1)
        (m [0.7 2.2 1.7] = 1)
        (#alone = 6) (mag (total alone - 2.0 * (12.0 + 12.0 + 16.0)) < 1e-6)

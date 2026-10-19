@@ -201,9 +201,217 @@ love_noinline static struct g *host_poly_grid(struct g *g) {
  g = bad ? (g->sp[0] = ZeroPoint, g) : pl_emit(g, &a, 0);
  return bag_fin(&a), bag_fin(&c), bag_fin(&s), bag_fin(&u), bag_fin(&r), g; }
 
+// --- a scene's corners, a millimetre a step, and the fans its pieces make ---
+// a set of corners in a string: its slot count, its slot width (12 when every key fits 32
+// bits, else 24), then the slots, each three keys, empty where the first is the least
+static void pl_key(flo_t const p[3], int64_t k[3]) { for (int j = 0; j < 3; j++) k[j] = (int64_t) pl_floor(p[j] * (flo_t) 1000.0 + (flo_t) 0.5); }
+static bool pl_narrow(int64_t const k[3]) { for (int j = 0; j < 3; j++) if (k[j] <= INT32_MIN || k[j] > INT32_MAX) return 0; return 1; }
+static uint64_t pl_hash(int64_t const k[3]) {
+ uint64_t h = (uint64_t) k[0] * 0x9e3779b97f4a7c15u;
+ h = (h ^ (h >> 31)) + (uint64_t) k[1] * 0xc2b2ae3d27d4eb4fu;
+ h = (h ^ (h >> 29)) + (uint64_t) k[2] * 0x165667b19e3779f9u;
+ return h ^ (h >> 32); }
+struct seen { uint8_t *s; uint64_t cap, w; };
+static void pl_get(struct seen const *t, uint64_t i, int64_t e[3]) {
+ uint8_t const *q = t->s + 16 + t->w * i;
+ if (t->w == 24) { memcpy(e, q, 24); return; }
+ int32_t n[3];
+ memcpy(n, q, 12);
+ for (int j = 0; j < 3; j++) e[j] = n[j]; }
+static void pl_set(struct seen *t, uint64_t i, int64_t const k[3]) {
+ uint8_t *q = t->s + 16 + t->w * i;
+ if (t->w == 24) { memcpy(q, k, 24); return; }
+ int32_t const n[3] = {(int32_t) k[0], (int32_t) k[1], (int32_t) k[2]};
+ memcpy(q, n, 12); }
+static int64_t pl_none(struct seen const *t) { return t->w == 24 ? INT64_MIN : INT32_MIN; }
+// k's slot: where it is, or the empty one it would go in
+static uint64_t pl_slot(struct seen const *t, int64_t const k[3]) {
+ for (uint64_t i = pl_hash(k) & (t->cap - 1);; i = (i + 1) & (t->cap - 1)) {
+  int64_t e[3];
+  pl_get(t, i, e);
+  if (e[0] == pl_none(t) || (e[0] == k[0] && e[1] == k[1] && e[2] == k[2])) return i; } }
+static bool pl_seen(struct seen const *t, flo_t const p[3]) {
+ int64_t k[3], e[3];
+ pl_key(p, k);
+ if (t->w == 12 && !pl_narrow(k)) return 0;
+ pl_get(t, pl_slot(t, k), e);
+ return e[0] != pl_none(t); }
+
+// (poly-seen pss): every corner of every polygon in pss, for poly-fans
+love_noinline static struct g *host_poly_seen(struct g *g) {
+ uint64_t n = 0, cap = 8, w = 12;
+ for (word l = g->sp[0]; chainp(l); l = B(l))
+  for (word q = A(l); chainp(q); q = B(q)) {
+   flo_t p[3];
+   int64_t k[3];
+   if (!pl_num3(A(q), p)) return g->sp[0] = ZeroPoint, g;
+   pl_key(p, k), n++;
+   if (!pl_narrow(k)) w = 24; }
+ while (cap <= n) cap *= 2;   // never full, so a probe ends
+ uintptr_t const bytes = (uintptr_t) (16 + w * cap), sw = str_width(bytes);
+ if (!ok(g = have(g, sw))) return g;
+ struct str *s = ini_str(bump(g, sw), bytes);
+ struct seen t = {(uint8_t*) txt(s), cap, w};
+ int64_t const none[3] = {pl_none(&t), 0, 0};
+ memcpy(t.s, &cap, 8), memcpy(t.s + 8, &w, 8);
+ for (uint64_t i = 0; i < cap; i++) pl_set(&t, i, none);
+ for (word l = g->sp[0]; chainp(l); l = B(l))
+  for (word q = A(l); chainp(q); q = B(q)) {
+   flo_t p[3];
+   int64_t k[3];
+   pl_num3(A(q), p), pl_key(p, k);
+   pl_set(&t, pl_slot(&t, k), k); }
+ g->sp[0] = word(s);
+ return g; }
+
+struct fan { flo_t n[3], U[4], V[4], fine; struct seen seen; flo_t *ts; uintptr_t cts; };
+static flo_t pl_dot4(flo_t const a[4], flo_t const p[3]) { return a[0] * p[0] + a[1] * p[1] + a[2] * p[2] + a[3]; }
+// the corners where edge a b crosses a line of the fine grid and some piece has a corner,
+// onto e in order along it
+static void pl_on(struct fan *f, struct pv const *a, struct pv const *b, struct bag *e) {
+ flo_t const d[3] = {b->p[0] - a->p[0], b->p[1] - a->p[1], b->p[2] - a->p[2]};
+ uintptr_t nt = 0;
+ for (int k = 0; k < 3; k++) {
+  flo_t const lo = a->p[k] < b->p[k] ? a->p[k] : b->p[k], hi = a->p[k] < b->p[k] ? b->p[k] : a->p[k];
+  if (hi - lo < (flo_t) 1e-6) continue;
+  intptr_t const m0 = (intptr_t) pl_floor(lo / f->fine) + 1, m1 = (intptr_t) pl_floor((hi - (flo_t) 1e-6) / f->fine);
+  for (intptr_t m = m0; m <= m1; m++) {
+   flo_t const t = (f->fine * (flo_t) m - a->p[k]) / d[k];
+   if (!((flo_t) 1e-6 < t && t < (flo_t) 1.0 - (flo_t) 1e-6)) continue;
+   flo_t const x[3] = {a->p[0] + t * d[0], a->p[1] + t * d[1], a->p[2] + t * d[2]};
+   if (!pl_seen(&f->seen, x)) continue;
+   int bad = 0;
+   f->ts = pl_grow(f->ts, nt + 1, &f->cts, sizeof *f->ts, &bad);
+   if (bad) { e->bad = 1; return; }
+   uintptr_t j = nt++;   // in order as it goes in
+   for (; j && f->ts[j - 1] > t; j--) f->ts[j] = f->ts[j - 1];
+   f->ts[j] = t; } }
+ for (uintptr_t i = 0, kept = 0; i < nt; i++) {
+  flo_t const t = f->ts[i];
+  bool near = 0;
+  for (uintptr_t j = 0; j < kept; j++) near |= (f->ts[j] - t < 0 ? t - f->ts[j] : f->ts[j] - t) < (flo_t) 1e-6;
+  if (near) continue;
+  f->ts[kept++] = t;
+  struct pv x = {{a->p[0] + t * d[0], a->p[1] + t * d[1], a->p[2] + t * d[2]}, -1};
+  bag_put(e, &x); } }
+// a piece with corners taken on its edges, once it is over a cell across
+static void pl_edged(struct fan *f, struct pv const *ps, uintptr_t n, struct bag *e) {
+ flo_t lo[3] = {(flo_t) 1e9, (flo_t) 1e9, (flo_t) 1e9}, hi[3] = {(flo_t) -1e9, (flo_t) -1e9, (flo_t) -1e9};
+ for (uintptr_t i = 0; i < n; i++)
+  for (int k = 0; k < 3; k++) {
+   flo_t const x = ps[i].p[k];
+   lo[k] = lo[k] < x ? lo[k] : x, hi[k] = hi[k] < x ? x : hi[k]; }
+ bool big = 0;
+ for (int k = 0; k < 3; k++) big |= hi[k] - lo[k] > f->fine + (flo_t) 1e-6;
+ for (uintptr_t i = 0; i < n; i++) {
+  bag_put(e, ps + i);
+  if (big) pl_on(f, ps + i, ps + (i + 1) % n, e); }
+ bag_end(e); }
+static void pl_mid(struct pv const *ps, uintptr_t n, flo_t m[3]) {
+ flo_t s[3] = {(flo_t) 0.0, (flo_t) 0.0, (flo_t) 0.0};
+ for (uintptr_t i = 0; i < n; i++) for (int k = 0; k < 3; k++) s[k] = s[k] + ps[i].p[k];
+ flo_t const r = (flo_t) 1.0 / (flo_t) n;
+ for (int k = 0; k < 3; k++) m[k] = r * s[k]; }
+// whether the triangle a b c (b - a, c - a crossed) turns to n
+static bool pl_turns(flo_t const n[3], flo_t const a[3], flo_t const b[3], flo_t const c[3]) {
+ flo_t const u[3] = {b[0] - a[0], b[1] - a[1], b[2] - a[2]}, v[3] = {c[0] - a[0], c[1] - a[1], c[2] - a[2]},
+             x[3] = {u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]};
+ return x[0] * n[0] + x[1] * n[1] + x[2] * n[2] > 0; }
+
+static word pl_list(struct g *g, word const *w, uintptr_t n) {
+ word l = ZeroPoint;
+ while (n--) l = word(ini_chain(bump(g, chain_req), (intptr_t) w[n], (intptr_t) l));
+ return l; }
+static word pl_gem(struct g *g, flo_t v) { return mk_gem(&g->hp, v); }
+
+// (poly-fans pss n look seen fine): see the head
+love_noinline static struct g *host_poly_fans(struct g *g) {
+ struct fan f = {0};
+ struct bag a, e;
+ bag_ini(&a), bag_ini(&e);
+ word const lk = g->sp[2], sn = g->sp[3];
+ uintptr_t nm = 0, cm = 0, words = gem_req;
+ flo_t *mids = NULL;
+ bool good = pl_num3(g->sp[1], f.n) && chainp(lk) && chainp(B(lk)) && chainp(B(B(lk))) && strp(sn) && len(str(sn)) >= 16 && isnum(g->sp[4]);
+ for (int s = 0; good && s < 2; s++) {
+  word q = A(s ? B(B(lk)) : B(lk));
+  flo_t *r = s ? f.V : f.U;
+  for (int k = 0; k < 4; k++, q = B(q)) good = good && chainp(q) && isnum(A(q)) && ((r[k] = toflo(A(q))), 1); }
+ if (good) {
+  f.fine = toflo(g->sp[4]), f.seen.s = (uint8_t*) txt(str(sn)), memcpy(&f.seen.cap, f.seen.s, 8), memcpy(&f.seen.w, f.seen.s + 8, 8);
+  good = (f.seen.w == 12 || f.seen.w == 24) && f.seen.cap && !(f.seen.cap & (f.seen.cap - 1)) && f.seen.cap <= len(str(sn)) / f.seen.w
+         && 16 + f.seen.w * f.seen.cap <= len(str(sn)); }
+ intptr_t src = 0;
+ for (word l = g->sp[0]; good && chainp(l); l = B(l)) {
+  uintptr_t const at = a.nv;
+  for (word q = A(l); chainp(q); q = B(q), src++) {
+   struct pv v = {{0, 0, 0}, src};
+   if (!(good = pl_num3(A(q), v.p))) break;
+   bag_put(&a, &v); }
+  bag_end(&a);
+  uintptr_t const n = a.nv - at;
+  if (!good || n < 3) { good = 0; break; }
+  mids = pl_grow(mids, 3 * (nm + 1), &cm, sizeof *mids, &a.bad);
+  if (a.bad) break;
+  pl_mid(a.v + at, n, mids + 3 * nm++);
+  pl_edged(&f, a.v + at, n, &e);
+  uintptr_t const ne = bag_n(&e, e.np - 1), nv = ne + (ne != n), nt = ne != n ? ne : n - 2;
+  words += 5 * chain_req + 3 * (chain_req + gem_req)   // the list's, [mid mesh], mid, [vs ts]
+         + nv * (12 * chain_req + 2 * gem_req) + nt * 5 * chain_req;
+  for (uintptr_t i = 0; i < ne; i++) words += bag_piece(&e, e.np - 1)[i].src < 0 ? 3 * gem_req : 0; }
+ good = good && !a.bad && !e.bad;
+ if (good && ok(g = have(g, words))) {
+  uintptr_t cin = 0;
+  word *in = pl_grow(NULL, (uintptr_t) src + 1, &cin, sizeof *in, &a.bad);
+  if (!a.bad) {
+   uintptr_t k = 0;
+   for (word l = g->sp[0]; chainp(l); l = B(l)) for (word q = A(l); chainp(q); q = B(q)) in[k++] = A(q);
+   word nw[3], one = pl_gem(g, (flo_t) 1.0), r = ZeroPoint;
+   for (int j = 0; j < 3; j++) nw[j] = A(j ? (j > 1 ? B(B(g->sp[1])) : B(g->sp[1])) : g->sp[1]);
+   word const tex = A(g->sp[2]);
+   for (uintptr_t i = nm; i--; ) {
+    struct pv const *ps = bag_piece(&e, i);
+    uintptr_t const ne = bag_n(&e, i), n0 = bag_n(&a, i), fan = ne != n0, nv = ne + fan;
+    flo_t const *m = mids + 3 * i;
+    word mw[3] = {pl_gem(g, m[0]), pl_gem(g, m[1]), pl_gem(g, m[2])};
+    word ts = ZeroPoint, vs = ZeroPoint;
+    if (fan)   // from the middle, round
+     for (uintptr_t j = ne; j--; ) {
+      uintptr_t const b = (j + 1) % ne;
+      bool const t = pl_turns(f.n, m, ps[b].p, ps[j].p);
+      word const tri[4] = {putcharm(ne), putcharm(t ? j : b), putcharm(t ? b : j), tex};
+      ts = word(ini_chain(bump(g, chain_req), (intptr_t) pl_list(g, tri, 4), (intptr_t) ts)); }
+    else
+     for (uintptr_t j = n0 - 2; j--; ) {
+      bool const t = pl_turns(f.n, ps[0].p, ps[j + 2].p, ps[j + 1].p);
+      word const tri[4] = {putcharm(0), putcharm(t ? j + 1 : j + 2), putcharm(t ? j + 2 : j + 1), tex};
+      ts = word(ini_chain(bump(g, chain_req), (intptr_t) pl_list(g, tri, 4), (intptr_t) ts)); }
+    for (uintptr_t j = nv; j--; ) {
+     flo_t const *p = j < ne ? ps[j].p : m;
+     word x[3];
+     if (j == ne) memcpy(x, mw, sizeof x);
+     else if (ps[j].src >= 0) {
+      word const c = in[ps[j].src];
+      x[0] = A(c), x[1] = A(B(c)), x[2] = A(B(B(c))); }
+     else for (int k = 0; k < 3; k++) x[k] = pl_gem(g, p[k]);
+     word const vx[11] = {x[0], x[1], x[2], pl_gem(g, pl_dot4(f.U, p)), pl_gem(g, pl_dot4(f.V, p)), nw[0], nw[1], nw[2], one, one, one};
+     vs = word(ini_chain(bump(g, chain_req), (intptr_t) pl_list(g, vx, 11), (intptr_t) vs)); }
+    word const mesh[2] = {vs, ts}, it[2] = {pl_list(g, mw, 3), pl_list(g, mesh, 2)};
+    r = word(ini_chain(bump(g, chain_req), (intptr_t) pl_list(g, it, 2), (intptr_t) r)); }
+   g->sp[0] = r; }
+  if (in) alloc(in, 0); }
+ if (ok(g) && (!good || a.bad)) g->sp[0] = ZeroPoint;
+ if (mids) alloc(mids, 0);
+ if (f.ts) alloc(f.ts, 0);
+ return bag_fin(&a), bag_fin(&e), g; }
+
 static lvm(lvm_poly_keep) { LvmCallp(g, 1, host_poly_keep) }
 static lvm(lvm_poly_carve) { LvmCallp(g, 1, host_poly_carve) }
 static lvm(lvm_poly_grid) { LvmCallp(g, 1, host_poly_grid) }
+static lvm(lvm_poly_seen) { LvmCall(g, host_poly_seen) }
+static lvm(lvm_poly_fans) { LvmCallp(g, 4, host_poly_fans) }
 LvDef("poly-keep", poly_keep, 2, NULL);
 LvDef("poly-carve", poly_carve, 2, NULL);
 LvDef("poly-grid", poly_grid, 2, NULL);
+LvDef("poly-seen", poly_seen, 1, NULL);
+LvDef("poly-fans", poly_fans, 5, NULL);

@@ -4,8 +4,9 @@
 ; baked into its corners.
 ; a plane is [n d], holding the points p with dot n p <= d. brush-prism's plan ps is [x z]
 ; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
-; corners, facing, and the brush index; brush-mesh's (look n b) answers (p \ [tex u v]). a brush
-; 'open 1 has no top face, and one 'whole 1 is never cut on the grid.
+; corners, facing, and the brush index; brush-mesh's (look n b) answers [tex U V], a corner
+; p's texels U and V each dotted with [x y z 1]. a brush 'open 1 has no top face, and one
+; 'whole 1 is never cut on the grid.
 (module (brush brush brush-box brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-ray brush-mesh brush-chunks chunks-kept brush-faces)
 (borrow 'view)                          ; min2 max2
 (borrow 'vec)                           ; triples
@@ -166,31 +167,9 @@
      LI (tablet? kp ? (tab (map (b \ (kp 'id) ((kp 'look) b)) bs)) ())
      pcf (map (i \ (: f (FT i) (map (p \ [p (f 1) (f 2)]) (keep kp (_ \ cks i) (_ \ cut (f 0) (bt (f 2))))))) ^nf) PT (tab pcf)
      pcs (cats pcf)
-     ; ..every corner, a millimetre a step, so a piece takes on its edges the corners of the
-     ; finer pieces beside it, and no crack opens between them
-     (key p) (: (r v) (int (floor (v * 1000.0 + 0.5))) ((r (p 0) * 4194304 + r (p 1)) * 4194304 + r (p 2)))
-     seen (foldl (\ t pc (foldl (\ t p (pin t (key p) 1)) t (pc 0))) {} pcs)
-     (on a b) (: d (sub b a)
-       ts (cats (map (k \ (: lo (min2 (a k) (b k)) hi (max2 (a k) (b k))
-                        (hi - lo < 1e-6 ? ()
-                           (: m0 (int (floor (lo / fine)) + 1) m1 (int (floor ((hi - 1e-6) / fine)))
-                              (map (m \ (fine * m - a k) / d k) (map (+ m0) ^(max2 0 (m1 - m0 + 1))))))))
-                     ^3))
-       hit (filter (t \ 1e-6 < t && t < 1.0 - 1e-6 && peep seen (key (c+ a (c* t d))) 0) ts)
-       (map (t \ c+ a (c* t d)) (foldl (\ l t (any (u \ mag (u - t) < 1e-6) l ? l (l + [t]))) () (sort hit))))
-     ; ..none within a piece a cell across, whose edges cross no line of the grid
-     (edged ps) (: n #ps bx (box-of ps)
-       (any (k \ bx 1 k - bx 0 k > fine + 1e-6) ^3 ? (cats (map (i \ (: a (ps i) b (ps ((i + 1) % n)) (a . on a b))) ^n)) ps))
-     ; ..a piece of brush b's fanned from its first corner, or from its middle when its edges
-     ; took on corners, turned to face n
-     (vert lk n p) (lk p @ t [(p 0) (p 1) (p 2) (t 1) (t 2) (n 0) (n 1) (n 2) 1.0 1.0 1.0])
-     (fan ps0 n b) (: ps (edged ps0) lk (look n b) tex (lk (mid ps0) 0)
-       (one a b c) (dot (cross (sub (ps c) (ps a)) (sub (ps b) (ps a))) n > 0.0 ? [a b c tex] [a c b tex])
-       (#ps = #ps0
-        ? (mesh (map (vert lk n) ps) (map (i \ one 0 (i + 1) (i + 2)) ^(#ps - 2)))
-          (: m #ps ps2 (ps + [(mid ps0)])
-             (two a b) (dot (cross (sub (ps2 b) (ps2 m)) (sub (ps2 a) (ps2 m))) n > 0.0 ? [m a b tex] [m b a tex])
-             (mesh (map (vert lk n) ps2) (map (i \ two i ((i + 1) % m)) ^m)))))
+     ; ..every corner, so a piece takes on its edges the corners of the finer pieces beside
+     ; it, and no crack opens between them; a face's pieces fanned so, turned to face it
+     seen (poly-seen (map (pc \ pc 0) pcs))
      ; ..the faces beside each, all weighed at once as the brushes near a face are
      (fends s k) (gem-tray [nf] (map (q \ 1.0 * box-of (q 0) s k) fs))
      FL (tablet? kp ? (map (fends 0) ^3) ()) FH (tablet? kp ? (map (fends 1) ^3) ())
@@ -206,7 +185,7 @@
      fks (tablet? kp ? (tab (map (i \ (: f (FT i) ['fan (CI i) (beside i) (LI (f 2))])) ^nf)) ())
      fid (tablet? kp ? (tab (map (i \ (kp 'id) (fks i)) ^nf)) ())
      items (cats (map (i \ (? !(mine? (FT i)) ()
-                              (: ms (keep kp (_ \ fks i) (_ \ map (pc \ [(mid (pc 0)) (fan (pc 0) (pc 1) (bt (pc 2)))]) (PT i)))
+                              (: ms (keep kp (_ \ fks i) (_ \ (: f (FT i) (poly-fans (map (pc \ pc 0) (PT i)) (f 1) (look (f 1) (bt (f 2))) seen fine))))
                                  id (tablet? kp ? (fid i) ())
                                  (map (m \ [(m 0) (m 1) id]) ms))))
                       ^nf))

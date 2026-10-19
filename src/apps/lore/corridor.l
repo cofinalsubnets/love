@@ -150,15 +150,15 @@
  (doorway d) (: ax (d 'ax) p (P ax (d 'c - 0.5 * d 'w) (d 'y) (d 'a - 0.02)) q (P ax (d 'c + 0.5 * d 'w) (d 'y + d 'h) (d 'b + 0.02))
    (brush-box 1 [(min2 (p 0) (q 0)) (d 'y) (min2 (p 2) (q 2))] [(max2 (p 0) (q 0)) (d 'y + d 'h) (max2 (p 2) (q 2))]))
  (brushes-of lv) (map brush-of (lv 'brushes) + map doorway (lv 'doors))
- ; ..the texture on a face of brush b facing n, by its skin, and its texels at p: tt the
+ ; ..the texture on a face of brush b facing n, by its skin, and its texels as [tex U V]: tt the
  ; textures, each [name w h metres]; a floor's and ceiling's laid from x 0 z 0, a wall's
  ; along it and its foot on the brush's
  (tix tt nm) (foldl (\ a i (tt i 0 = nm ? i a)) 0 ^#tt)
  (look tt) (\ n b (: c (? (0.7 < n 1) 'floor (n 1 < -0.7) 'ceiling 'wall)
                      i (tix tt (skin-name (peep b 'skin ()) c)) t (tt i) k (t 1 / t 3)
                      (? (c = 'wall) (: d (unit [(0.0 - n 2) 0.0 (n 0)]) dx (k * d 0) dz (k * d 2) v0 (t 2 + k * b 'lo 1)
-                                       (\ p [i (dx * p 0 + dz * p 2) (v0 - k * p 1)]))
-                        (\ p [i (k * p 0) (k * p 2)]))))
+                                       [i [dx 0.0 dz 0.0] [0.0 (0.0 - k) 0.0 v0]])
+                        [i [k 0.0 0.0 0.0] [0.0 0.0 k 0.0]])))
  ; ..the door itself, shut: a slab of steel in the middle of the wall, the texture once
  ; across each face
  (door-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) l0 (d 'c - 0.5 * d 'w) w (d 'w) h (d 'h)
