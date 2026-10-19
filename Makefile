@@ -326,7 +326,7 @@ lushfiles = src/apps/lush.l
 # what mooncc carries, what the artifact bakes -- and spelling each out in full is how
 # the three drift. the parts are named once here; each roster below is the order it
 # wants them in, and a new file joins one part rather than three lists.
-kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l \
+kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l src/apps/kore/lex.l \
   src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/top.l src/apps/kore/htop.l src/apps/kore/less.l \
   src/apps/libra/lint.l src/apps/tui.l src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/hues.l src/apps/vi/core.l src/apps/vi/vi.l src/apps/kore/ed.l \
   src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns.l src/apps/nc.l $(lushfiles) \
@@ -337,7 +337,7 @@ holo_be = src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l src/lov
 # the object floor every reader of a backend goes out through
 holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/macho.l
 # the compiler over them
-moon_mid = src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
+moon_mid = src/apps/moon/floor.l src/apps/moon/ctab.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
   src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
 # the archives: the codec, then the two containers over it. a kore member rather than
 # a crew one because the distro's /bin IS the kore cat -- a userland that cannot open

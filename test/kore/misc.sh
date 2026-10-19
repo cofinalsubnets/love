@@ -78,6 +78,19 @@ korerun timeout -k 1 1 sleep 20 > /dev/null 2>&1; r=$?
 [ $r -eq 124 ] || fail "kore timeout -k (got $r)"
 korerun timeout 9 /nonexistent-xyzzy > /dev/null 2>&1; r=$?
 [ $r -eq 127 ] || fail "kore timeout: a command that will not start is 127 (got $r)"
+# the clock, and a TERM sent to timeout, reach the command's whole group, as GNU's do
+tp=$ho/.kore-tpids
+alive() { for p in $(cat "$tp"); do kill -0 "$p" 2>/dev/null && { kill "$p"; echo "$p"; }; done; }
+rm -f "$tp"; korerun timeout 2 sh -c "sleep 77 & echo \$! > $tp; sleep 78 & echo \$! >> $tp; wait" > /dev/null 2>&1; r=$?
+[ $r -eq 124 ] || fail "kore timeout: a group the clock ended is 124 (got $r)"
+[ -z "$(alive)" ] || fail "kore timeout left the command's children behind"
+# the command names timeout itself ($PPID): the shell's $! may be a job of its own
+rm -f "$tp" "$tp.t"; korerun timeout 30 sh -c "echo \$PPID > $tp.t; sleep 79 & echo \$! > $tp; wait" > /dev/null 2>&1 & j=$!
+n=0; while [ ! -s "$tp" ] && [ $n -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+kill -TERM "$(cat "$tp.t")"; wait $j; r=$?
+[ $r -eq 143 ] || fail "kore timeout: a TERM it was sent ends the command, 143 as GNU's (got $r)"
+[ -z "$(alive)" ] || fail "kore timeout did not pass a TERM on to the command's group"
+rm -f "$tp" "$tp.t"
 # which, tty, clear, hostname
 if command -v which >/dev/null 2>&1; then
   both "which sh"    which sh

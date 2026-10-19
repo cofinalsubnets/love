@@ -81,6 +81,7 @@
  _ (each (rev (peep c 'defer ())) (t \ t 0))   ; the glaze's compiles that waited on a sibling
  k))
   lvm_cur (pick 0 (+))
+  lvm_ret0 (pick 1 cap)
   ; the nil? nif for cflip's head test: opfix's glued lane splices the value, so `!e` reaches
   ; the peephole unnamed
   nilv (gv 'nil? ())
@@ -387,6 +388,8 @@
    ; held to a charm-sized answer, since church application can answer an unboundedly large
    ; value from a tiny form. `star?` drops the containers, whose magnitude says nothing of size.
    (cpgrew? v r) (constellation? v && !(star? r && abs r <= max-charm))
+   ; a nif the args saturate inlines as an iop in feels' lane, so its prefix stays an operand
+   (nifsat? v as) (!(charm? v) && lvm_cur == pick 0 v && lvm_ret0 == pick 3 v && peek 1 v = #as)
    (cpap v as) (: k (two? as ? (kconst <as))
     (? (atom? as) (cbake v)                                              ; every operand consumed -> the value
        !(<k && pure-ap? v >k) (cbake v . as)                      ; unknown operand or an impure apply -> stop
@@ -549,7 +552,7 @@
                 ; residual reads as a two? head that feels' lane then declines.
                 (<hk && atom? >hk && allk as && pure-hv? >hk as)
                   (foldc >hk as)
-                (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; fold the known prefix; an unknown tail
+                (two? as && propk? <as && <hk && pure-ap? >hk (kval <as) && !(nifsat? >hk as))   ; fold the known prefix; an unknown tail
                   (cpap >hk as)                                                       ;   keeps the value as its head
                 (keep2 x h2 as)))))))
    (sub1 x p m) (? (x == p) m  (atom? x) x  (<x == '\ && atom? >>x) x
