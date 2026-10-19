@@ -1,14 +1,9 @@
-; src/apps/fat.l -- FAT32 in love, read and written, and `love fat` over it.
-; the filesystem is module 'fat below; the command line is module 'fatcmd at the foot.
+; src/apps/fat.l -- FAT32 read and written (module 'fat), and `love fat` (module 'fatcmd).
 ;
-; a device is a chain (rd wr nsec): (rd lba n) -> a string of n*512 bytes | (),
-; (wr lba s) -> the sectors written | () (s whole sectors), nsec the total. a fourth, ms
-; since the epoch, is the one time the fs stamps (entries, and mkfs's serial): the same
-; files give the same image. without it the clock does.
-; anything that answers those is a disk -- the kernel's virtio nifs
-; ((fat-disk ()) builds that dev), a cask in memory (the host laws), a file.
-;
-; the surface (an fs is what fat-mount answers; paths are "/"-split,
+; a device is a chain (rd wr nsec [ms]): (rd lba n) -> n*512 bytes | (), (wr lba s) ->
+; sectors written | (). ms, when present, is the one time stamped, so the same files
+; give the same image; else the clock.
+; the surface (paths "/"-split, case-insensitive):
 ; case-insensitive, the FAT way):
 ;   (fat-mkfs dev)         -> 1 | ()        format the whole device FAT32
 ;   (fat-mount dev)        -> fs | ()
@@ -19,26 +14,17 @@
 ;   (fat-mkdir fs path)    -> 1 | ()
 ;   (fat-rm fs path)       -> 1 | ()        a file, or an empty dir
 ;
-;
-; presence rides the (1 _) wrapper throughout (the tree's law): an empty file, an
-; empty dir and a 0-size entry are all real answers that net nothing.
-;
-; long names are read and written (UCS-2's low byte; a char past 255 reads as ?): a
-; name that fits 8.3 is written short with the lowercase basis flags, one that does
-; not gets LFN entries over a ~N short alias, mtools-compatible.
-;
-; FAT32 only, by the format's own law: under 65525 clusters the type flips to FAT16 by
-; definition, so fat-mkfs refuses a device too small (~33 MB) -- absence, not divergence.
-
-; the module head is the export list, and it is not decoration: this file's own floor
-; is spelled w16, w32, bcopy, group, alias, cksum -- names a shared
-; layer would collide with on sight. only the surface at the top of this header leaves.
+; presence rides the (1 _) wrapper: an empty file or dir is a real answer.
+; long names: UCS-2's low byte (past 255 reads ?); 8.3 when it fits, else LFN over
+; a ~N alias, mtools-compatible.
+; FAT32 only: under 65525 clusters the type is FAT16 by definition, so fat-mkfs
+; refuses a device under ~33 MB.
 (module (fat fat-mkfs fat-mount fat-ls fat-stat fat-read fat-write fat-mkdir fat-rm
          fat-disk)
 (borrow 'bytes)
 (borrow 'cal)
 (:
-   ; --- little-endian scalars: strings index charms, casks pin them ---
+   ; --- little-endian scalars ---
    (w16 b i v) (pin b i (v & 255), pin b (i + 1) (v >> 8 & 255), ())
    (w32 b i v) (w16 b i v, w16 b (i + 2) (v >> 16))
    (bcopy b i s) (#s @ n (n ? (pour b i s 0 n), ()))      ; pour refuses an empty
@@ -53,12 +39,12 @@
 
    ; --- the FAT itself, one cached sector over it ---
    (fat-sec f cl) (f 3 + cl * 4 // 512)
-   (fat@ f cl)                                        ; the entry, 28 bits
+   (fat@ f cl)                                        ; 28 bits
     (: lba (fat-sec f cl)
        s (lba = f 9 ? (f 10)
           (rd1 f lba @ t (pin f 9 lba, pin f 10 t, t)))
        (rdle s (cl * 4 % 512) 4 & 0x0FFFFFFF))
-   (fat! f cl v)                                      ; write, both copies, top nibble kept
+   (fat! f cl v)                                      ; both copies, top nibble kept
     (: lba (fat-sec f cl)
        s (lba = f 9 ? (f 10) (rd1 f lba))
        b (cask 512) _ (bcopy b 0 s)
@@ -69,8 +55,7 @@
         wr1 f (lba + f 5) t,                          ; the mirror
         pin f 9 lba, pin f 10 t, ()))
    (fat-end? v) (0x0FFFFFF8 <= v)
-   ; a file's clusters first to last, at most `most` of them; freeing walks the same
-   ; spine. a chain holds a cluster once, so the walk stops at one it has seen: a loop
+   ; a file's clusters first to last, at most `most`; a cluster seen twice is a loop: stop
    (fat-cl? f cl) (1 < cl && cl <= f 8 + 1)
    (chain-upto f cl most)
     (: seen {}
@@ -133,7 +118,7 @@
    (upper? s) (allc? s (\ c !(97 <= c <= 122)))
    (upcopy b i s) (: (go j) (j < #s ? (pin b (i + j) (up1 (s j)), go (j + 1)))
                      (go 0))
-   ; the 11 raw name bytes + the basis flags | () when the name needs LFN
+   ; the 11 raw name bytes + basis flags | () when the name needs LFN
    (fit83 s)
     (splitext s @ (b . e)
      (#b && #b <= 8 && #e <= 3 &&
@@ -159,10 +144,9 @@
                 (any (g \ t = peep g 4 ()) gs ? (go (n + 1)) t)))
        (go 1))
 
-   ; --- directory entries. a group is one slot's story -- its LFN run + short
-   ;     entry, raw -- as a tablet: 0 name (() for the label and the dots: out of
-   ;     lookups, but their raw survives a rewrite), 1 attr, 2 cluster, 3 size,
-   ;     4 raw11, 5 raw ---
+   ; --- directory entries. a group is one slot's LFN run + short entry, as a tablet:
+   ;     0 name (() for the label and dots: out of lookups, raw kept), 1 attr,
+   ;     2 cluster, 3 size, 4 raw11, 5 raw ---
    (group nm at cl sz r11 raw) {0 nm 1 at 2 cl 3 sz 4 r11 5 raw}
    lfn-offs '(1 3 5 7 9 14 16 18 20 22 24 28 30)      ; where the 13 UCS-2 chars sit
    (lfn-part s o)                                     ; one LFN entry's text
@@ -179,7 +163,7 @@
        b (part 0 8 (flags & 8)) e (part 8 3 (flags & 16))
        (#e ? (b + "." + e) b))
    ; raw dir bytes -> groups. an LFN run rides `start` until its short entry
-   ; claims it; a freed slot or the end orphans (drops) a half-run, honestly.
+   ; claims it; a freed slot or the end drops a half-run.
    (dir-scan s)
     (: n #s
        (go o lfn start acc)
@@ -208,9 +192,8 @@
                                    (go >m (peep <m 0 () @ n (string? n ? (n . acc) acc)))
                                    (rev acc)))
 
-   ; --- a directory as a whole: its groups, and writing them back (growing the
-   ;     chain when they outgrow it; a shrunk dir keeps its clusters -- the pad
-   ;     zeros read as the end marker, and simple beats clever) ---
+   ; --- a directory as a whole. a shrunk dir keeps its clusters: the zero pad
+   ;     reads as the end marker ---
    (dir-load f cl) (dir-scan (chain-rd f cl (f 8)))
    (dir-save f cl gs)
     (: s (dir-bytes gs)
@@ -224,10 +207,8 @@
         (chain-wr f cls (s + zbytes (cb * #cls - #s)),
          1)))
 
-   ; --- paths: "/a/b/c" -> components; the walk answers the parent's cluster,
-   ;     the leaf's name, and the leaf's group when present: [dircl nm g|()] --
-   ;     () when a mid component is absent or no dir. "" and "/" answer the
-   ;     root itself: [rootcl "" ()] ---
+   ; --- paths: the walk answers [dircl nm g|()], () when a mid component is absent
+   ;     or no dir; "" and "/" answer [rootcl "" ()] ---
    (comps p)
     (:- (go 0 "" ()) n #p (go i w acc)
      (n <= i ? (rev (#w ? (w . acc) acc))
@@ -240,9 +221,9 @@
        cs (comps path)
        (two? cs ? (go (f 6) cs) [(f 6) "" ()]))
 
-   ; --- timestamps: ms -> the dos pair (date . time); a device's own time, else the clock ---
+   ; --- timestamps: ms -> the dos (date . time) ---
    (fs-ms f) (f 12 @ t (charm? t ? t (clock 0)))
-   (dos-at ms)                                        ; dos time starts in 1980: earlier is its first second
+   (dos-at ms)                                        ; dos time starts in 1980
     (: ms (max ms 315532800000) secs (ms // 1000 % 86400)
        ymd (civil (ms // 86400000)) y <ymd m <>ymd d <>>ymd
        ((y - 1980 << 9) + (m << 5) + d .
@@ -335,15 +316,15 @@
         (peep g 3 () @ sz
          (sz ? [1 (snip (chain-rd f (peep g 2 ()) ((sz + clu-bytes f - 1) // clu-bytes f)) 0 sz)]
                [1 ""]))))
-   ; the order is the safety: new chain laid, entry swapped in, and only then the old
-   ; chain freed -- a refusal mid-way leaves the old file whole.
+   ; the order is the safety: new chain laid, entry swapped, then the old chain
+   ; freed -- a refusal mid-way leaves the old file whole.
    (fat-write f path s)
     (fat-walk f path @ [dcl nm old]
      (!#nm || tablet? old && peep old 1 () & 24 ? ()
         (: cb (clu-bytes f)
            need ((#s + cb - 1) // cb)
            cls (chain-take f need)
-           (need && atom? cls ? ()                  ; the disk is full; nothing changed
+           (need && atom? cls ? ()                  ; disk full; nothing changed
               (: _ (need ? (chain-wr f cls s))
                  gs (dir-drop (dir-load f dcl) nm)
                  ng (mk-group gs nm 32 (need ? <cls 0) #s (fs-ms f))
@@ -353,7 +334,7 @@
                    ())))))))
    (fat-mkdir f path)
     (fat-walk f path @ [dcl nm g]
-     (!#nm || tablet? g ? ()                 ; no name, or it exists already
+     (!#nm || tablet? g ? ()                 ; no name, or it exists
         (chain-take f 1 @ cls
            (atom? cls ? ()
               (: c <cls cb (clu-bytes f)
@@ -373,43 +354,20 @@
               (1 < cl ? (chain-zap f cl),
                (dir-save f dcl (dir-drop (dir-load f dcl) nm) ? 1))))))
 
-   ; --- the kernel's own disk as a dev, when this seat has one ---
+   ; --- the kernel's own disk as a dev ---
    (fat-disk u) (elem 'disk (names ()) ?
                    (ev 'disk () @ n
                       (n ? [(ev 'disk-read) (ev 'disk-write) n]))))
 ) ; module 'fat
 
-; --- the face -----------------------------------------------------------------------
-; `love fat` and `love mkfs.vfat`: a command line over the FAT32 above -- the
-; verbs, the image-as-a-device, and the write-back.
-;
-;   love fat ls    IMG [PATH]        the names in a directory, one a line
-;   love fat stat  IMG PATH          size and attribute bits
-;   love fat cat   IMG PATH          a file's bytes on stdout
-;   love fat get   IMG PATH [DST]    ... into a file instead (- is stdout)
-;   love fat put   IMG PATH [SRC]    a file (or stdin) written to PATH
-;   love fat mkdir IMG PATH
-;   love fat rm    IMG PATH          a file, or an empty directory
-;   love fat mkfs  IMG [SIZE]        format; SIZE like 64M makes the image first
-;   love mkfs.vfat [-C] IMG [BLOCKS] busybox's spelling of the same format
-;   love mkdosfs   ...               ... and its other name
-;
-; THE DEVICE IS THE WHOLE IMAGE IN MEMORY. fat.l wants a (rd wr nsec) chain and this
-; one is a cask: the file is read once, the verb runs, and the cask goes back to disk
-; only if something wrote. That is the same device shape test/fat.l drives the
-; laws through, which is why there is no second code path to get wrong -- and it is
-; honest about the cost: a 64 MB image is 64 MB of heap and a whole-file rewrite per
-; mutating verb. Positioned reads would want a pread nif; nothing here has one.
-;
-; FAT32 REFUSES ANYTHING UNDER ~33 MB, by the format's own law -- under 65525
-; clusters the type is FAT16 by definition. `fat mkfs` on a smaller image answers the
-; refusal rather than writing something that is not what its boot sector claims.
-;
-; every verb answers a status charm, 0 ok / 1 the operation said no / 2 a usage or an
-; unreadable image, so a script reads the difference between "no such file in there"
-; and "that is not a filesystem".
+; --- `love fat` and `love mkfs.vfat` ---
+;   love fat ls|stat|cat|get|put|mkdir|rm IMG PATH ..; love fat mkfs IMG [SIZE]
+;   love mkfs.vfat [-C] IMG [BLOCKS] (and mkdosfs): busybox's spelling
+; the device is the whole image in memory (a cask), written back only if something
+; wrote: the same device shape the laws drive.
+; status: 0 ok, 1 the operation said no, 2 usage or an unreadable image.
 (module 'fatcmd
-(borrow 'fat)          ; the filesystem above, by name: one file, still two modules
+(borrow 'fat)
 
 (borrow 'posix)
 (: fatc-usage "usage: fat {ls|stat|cat|get|put|mkdir|rm|mkfs} IMG [PATH..]"
@@ -417,7 +375,7 @@
    (fatc-moan m) (say err ("fat: " + m), put err 10, flush err, 1)
    (fatc-die c m) (udie c ("fat: " + m))
 
-   ; a size word: 64M, 40m, 33554432. answers charms, () when it will not read.
+   ; a size word: 64M, 40m, 33554432 -> a charm | ().
    (fatc-size s)
     (: n #s
        (dig k a) (? (n <= k) [a ""]
@@ -431,17 +389,13 @@
          ("m" || "M") (v * 1048576)
          ("g" || "G") (v * 1073741824))))
 
-   ; the image as a cask, and the cask as fat.l's device. rd hands back a fresh
-   ; string (fat.l indexes it); wr pours into the cask and marks it dirty, which is
-   ; what decides whether the file is rewritten at the end.
+   ; rd answers a fresh string; wr pours into the cask and marks it dirty.
    (fatc-dev im dirty)
     [(lba \ n \ (cask (n * 512) @ b (pour b 0 im (lba * 512) (n * 512), string b)))
      (lba \ s \ (pour im (lba * 512) s 0 #s, pin dirty 0 1, #s // 512))
      (#im // 512)]
 
-   ; open IMG as a mounted fs: answers [im dirty fs], or leaves through fatc-die.
-   ; the two failures are told apart on purpose: a missing file and a file that is
-   ; not a FAT32 want different repairs, and one "cannot read" sends you to the wrong one.
+   ; -> [im dirty fs], or dies -- a missing file and a non-FAT32 one told apart.
    (fatc-open img)
     (: t (uread img)
        _ (!t && fatc-die 2 ("cannot read " + img))
@@ -452,7 +406,7 @@
        f (fat-mount (fatc-dev im dirty))
        (tablet? f || fatc-die 2 (img + ": not a FAT32 filesystem"),
         [im dirty f]))
-   ; the write-back, once, and only when something wrote
+   ; the write-back, only when something wrote
    (fatc-sync img im dirty)
     (peep dirty 0 0 ?
        (uwrite img (string im) ? 0 (fatc-moan ("cannot write " + img)))
@@ -490,10 +444,7 @@
     (fatc-open img @ b
        (fat-rm <>>b path ? (fatc-sync img <b <>b)
           (fatc-moan (path + ": cannot remove (no such file, or a directory with things in it)"))))
-   ; mkfs: an existing image is formatted where it lies; a SIZE makes one first.
-   ; a size given for a file that is already there is honoured -- the image is
-   ; remade at that size, which is what `mkfs.vfat -C` means and what a script
-   ; re-running its own setup wants.
+   ; mkfs: a SIZE remakes the image at that size (mkfs.vfat -C); else format in place.
    (fatc-mkfs img size)
     (: have (uread img)
        n (charm? size ? size (? have #(<>have) 0))
@@ -520,11 +471,10 @@
          "put"   (#p || fatc-die 2 "put wants a path", fatc-put img p (arg 3))
          "mkdir" (#p || fatc-die 2 "mkdir wants a path", fatc-mkdir img p)
          "rm"    (#p || fatc-die 2 "rm wants a path", fatc-rm img p)
-         "mkfs"  (fatc-mkfs img (#p ? (fatc-size p)))   ; no path: () for "no size given"
+         "mkfs"  (fatc-mkfs img (#p ? (fatc-size p)))
          w       (say err ("fat: unknown verb " + w + "\n" + fatc-usage + "\n"),
                   2))))
-   ; busybox spells the format two ways and takes -C SIZE-IN-1K-BLOCKS after the name.
-   ; the blocks are 1024 here, which is what mkfs.vfat's own BLOCKS means.
+   ; mkfs.vfat -C BLOCKS: 1024-byte blocks
    (mkfsv-main av)
     (: w (two? av ? <av "")
        as (two? av && <av = "-C" ? >av av)
@@ -534,8 +484,7 @@
              (fatc-mkfs img (charm? bl && bl * 1024)))))
 
    E (cite 'verbs 'enlist)
-   ; the verb wraps in urun, kore.l's own shape for a main that leaves deep; each is
-   ; bounded by the image it names, so a shell may run it in its own process
+   ; urun: a main that leaves deep; bounded by its image, so a shell may run it in its own process
    _ (E 'fat (udoor 'fat (urun fat-main) fatc-usage 1 1) ['self])
    _ (E 'mkfs.vfat (udoor 'mkfs.vfat (urun mkfsv-main) mkfsv-usage 1 1) ['self])
    _ (E 'mkdosfs (udoor 'mkdosfs (urun mkfsv-main) mkfsv-usage 1 1) ['self]))

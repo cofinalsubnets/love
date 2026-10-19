@@ -79,7 +79,7 @@
 
    ; as: IR forms -> a runnable ELF (src/love/holo/elf.l over the baked holo book)
    (as-main as)
-    (atom? >>as ? (udie 2 "usage: kore as TARGET IN OUT   (TARGET: x64 | a64)")
+    (atom? >>as ? (udie 2 "usage: as TARGET IN OUT   (TARGET: x64 | a64)")
      (: tgt (arch-nom <as) src <>as dst <>>as
         _ (tgt = 'x64 || tgt = 'a64 ? ()
            (udie 2 ("as: unknown target " + <as)))
@@ -117,7 +117,7 @@
         map (m \ puts (<m + "\n")) (ar-mems b),
         0))
    (ar-main as)
-    (atom? as ? (udie 2 "usage: kore ar rcs OUT MEMBER..   |   kore ar t OUT")
+    (atom? as ? (udie 2 "usage: ar rcs OUT MEMBER..   |   ar t OUT")
      (<as @ fl
         (fl = "t" ? (two? >as ? (ar-t <>as) (udie 2 "ar: t wants an archive"))
          (: hasr ((: (go i) (i < #fl ? (fl i = 114 ? 1 (go (i + 1))) 0)) 0)
@@ -160,7 +160,7 @@
            (go >a (<a . fs) o pie org tgt rd))
        r (go as () () 0 () 'x64 ())
        fs <r o <>r pie <>>r org (r 3) tgt (r 4) rdme (r 5)
-       _ (two? fs ? () (udie 2 "usage: kore ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
+       _ (two? fs ? () (udie 2 "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
        _ (#o ? () (udie 2 "ld: no -o OUT"))
        srcs (map (f \ (uread f @ r2 (two? r2 ? [f <>r2] (udie 2 ("ld: cannot open " + f))))) fs)
        ps (ldlink tgt pie org srcs ("love " + <(usplit 43 love-version)) rdme)
@@ -220,7 +220,7 @@
            (go >a g u srt (<a . fs)))
        r (go as () () () ())
        fs (r 3)
-       _ (two? fs ? () (udie 2 "usage: kore nm [-g] [-u] [-p] FILE.."))
+       _ (two? fs ? () (udie 2 "usage: nm [-g] [-u] [-p] FILE.."))
        wide (two? >fs)
        any (foldl (\ a p (nm-file p wide <r <>r <>>r ? 1 a)) () fs)
        (flush out,
@@ -997,121 +997,13 @@
        (elem nm korenoflag ? run
         (udoor nm run (korehelp nm) (nelem nm korenoh) 0)))
 
-   kore-usage "kore -- the love multi-call toolbox
-usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
-every tool answers --help and --version, and -h where the letter is free
-  diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
-  nc HOST PORT       netcat; nc -l PORT listens, nc -z scans
-  ssh [user@]HOST    the ssh client; sshd [-p PORT] serves this user (src/apps/ssh)
-  openssl CMD ..     x509 s_client verify dgst rand base64: openssl's read-only half
-  scp SRC.. DEST     copies over ssh, [user@]host:path on one side (rcp's protocol)
-  ssh-keygen [-f F]  an ed25519 key in openssh's format; -y, -l, -p, -F/-R in known_hosts
-  ssh-copy-id HOST   the identity's .pub onto the far authorized_keys, once
-  ssh-keyscan HOST.. host keys as known_hosts lines (-H hashed)
-  make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
-  as TGT IN OUT      assemble IR forms from IN (x64|a64) into ELF OUT
-  ar rcs OUT M..     the archive, GNU shape + ranlib index (ar t OUT lists)
-  ld A.o.. -o OUT    holo's static linker (-pie, -t x64|a64|rv64, -Ttext)
-  objcopy -O F IN OUT   flatten a linked ELF: F is binary or ihex (Intel HEX)
-  nm [-gup] FILE..   an ELF's symbols; -g externals, -u undefined, -p unsorted
-  size [-t] F.. | strip [-g] [-o OUT] F.. | ranlib A..   sizes, symbols out, the index in
-  cat tac head tail wc sort uniq tee      the line tools (src/apps/kore/core.l)
-  shuf [-rz] [-n N] [-e ARG.. | -i LO-HI | F]   the lines in a random order
-  cut tr nl rev                           the field tools
-  dos2unix | unix2dos | mac2unix [-fkqn] [F..]   the line endings, converted IN PLACE
-  fold [-w N] [-s] [-b] | expand [-t N] [-i] | unexpand [-a] [-t N]   the columns
-  column [-tx] [-c N] [-s SEP] [-o SEP] [FILE..]   lines laid in columns, or -t a table
-  base64 | base32 [-d] [-w N] [F]         the encodings (RFC 4648)
-  tsort [F] | factor [N..]                the two little computations
-  paste comm join split od                the record tools
-  cksum | sum [-rs] | md5sum [-c] | sha1sum [-c]   the checksums (src/apps/kore/sum.l)
-  sha224sum | sha256sum | sha384sum | sha512sum [-c] | b2sum [-c] [-l BITS]
-  crc32 [F..] | sha3sum [-bcS] [-a BITS] [F..]   zlib's crc, and keccak's digests
-  basenc --ENC [-di] [-w N] [F]           every RFC 4648 alphabet, base16, base2, z85
-  uuencode [-m] [F] NAME | uudecode [-o OUT] [F] | ascii   the mail armour; the table
-  expr EXPRESSION                         arithmetic, comparison and BRE matching
-  bc [-l] [-q] [F..]                      the calculator language (src/apps/kore/bc.l)
-  patch [-pN] [-R] [-i F] [--dry-run]     lay a unified diff on a tree
-  grep [-nvclqhaixwFEo] [-e P] [-m N] PAT [F..]   BRE, or ERE under -E (src/apps/kore/re.l)
-  egrep | fgrep                           grep -E and grep -F, by their old names
-  sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (s///gp, d, p, q, addresses)
-  awk [-F FS] [-v var=val].. 'PROG' [F..]  patterns and actions over records
-  awk [-F FS] -f PROGFILE.. [F..]          ... the program off a file instead
-  find [PATH..] [EXPR]   -name -path -type f|d|l -print -prune -exec CMD.. \\;
-                         ( ) ! -a -o -maxdepth N -mindepth N   (PATH defaults to .)
-  env printenv sleep kill xargs nohup     the process tools (src/apps/kore/proc.l)
-  nice [-n N] CMD | renice PRIO [-pgu] ID..   the niceness, for a new command or running ones
-  setsid [-cfw] CMD | watch [-begtx] [-n S] CMD   a new session; a command every S seconds
-  ts [-ism] [FMT] | usleep US | reset | pinky [-lsfwiq] [USER..]   stamps, a pause, the tty, who
-  stty [-F DEV] [-a|-g|SETTING..]         the terminal's line discipline, shown or set
-  microcom [-X] [-s SPEED] [-t MS] TTY    a serial line and this terminal, byte for byte; ^X leaves
-  getopt -o SHORTS [-l LONGS] -- PARAMS   options parsed and quoted for `eval set --`
-  chroot DIR [CMD [ARG..]]                the root changed, then CMD in it
-  mount [-t TYPE] [-o OPTS] SRC TGT       ... or bare, to list /proc/self/mounts
-  umount TGT.. | sync                     ... and the two that undo and settle it
-  mkfifo [-m MODE] NAME.. | mknod [-m MODE] NAME p|b|c|u [MAJOR MINOR]
-  whoami | groups | arch | nproc          the four one-line answers
-  who [-abdHlmqTu] | users | logname      the host's utmp, read
-  ps [-e] | free [-m|-g] | uptime         what /proc says about the machine
-  top [-b] [-n N] [-d SECS] [-p PID]      the process table, repainted
-  pidof NAME.. | pgrep [-fx] PAT          .. and about who is running
-  pkill [-SIG] [-fx] PAT | killall [-SIG] NAME.. | pwdx PID..
-  time [-p] CMD [ARG..]                   what a command costs: real, user, sys
-  date [-u] [-d @SEC] [-r F] [+FMT]       the clock, UTC (no tz database here)
-  id [-u|-g|-G] [-n]                      who this process is
-  vi [FILE]                               the editor (src/apps/vi/)
-  ed [-s] [-p P] [F] | ex [-sRv] [-c CMD] [F]  the line editors (src/apps/kore/ed.l)
-  less | more [-Nise] [+N|+/PAT] [F..]    the pager (src/apps/kore/less.l); h is its help
-  man [-w] [SECTION] NAME..               the manual pages (src/apps/kore/man.l)
-  html2text [-w COLS] [F..]               a page's prose, laid out (src/apps/kore/lens.l)
-  markdown [-t html|roff|text|dvi] [F..]  markdown laid out the other way
-  www [-w COLS] URL|FILE                  a web page, its links numbered (src/apps/kore/www.l)
-  pic [cat] [-g MODE] [-w COLS] [-h ROWS] [F..]   png, jpeg, gif in cells; -g sixel kitty auto
-  pic less [-g MODE] F..                  a picture viewer, an animation played; picless pngless ..
-  pic convert [-q Q] [-t TYPE] IN OUT     png gif jpeg sixel ans, by OUT's extension or TYPE
-  pic pixelize [-w C] [-s PX] [-c 256] IN OUT   pic's blocks as a picture, or as .ans text
-  telnet HOST [PORT]                      a remote terminal; ^] closes (src/apps/kore/net.l)
-  telnetd [-p PORT] [-b ADDR] [-l LOGIN]  its server: LOGIN (/bin/login) on a pty per client
-  httpd [-fv] [-p PORT] [-h DIR]          kiosko under busybox's flags (src/apps/kore/net.l)
-  nslookup [-type=T] HOST [SERVER]        a name's records, from a nameserver (src/apps/kore/net.l)
-  ping [-46q] [-c N] [-i S] [-W S] HOST   icmp echoes and their round trips (src/apps/kore/net.l)
-  ping6 [-q] [-c N] [-i S] [-W S] HOST    the same over ipv6 (src/apps/kore/net.l)
-  traceroute [-46n] [-m MAX] [-q N] HOST  the routers on the way, by icmp echoes (the same)
-  sh [-c CMD | FILE]                      the shell, lush (src/apps/lush.l)
-  ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (src/apps/kore/fs.l)
-  install readlink cmp                         ... the build's fs verbs
-  realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls
-  stat [-c FMT] | du [-sabhc] | df [-hia] | chown | chgrp | mktemp   ... and what they report
-  truncate [-co] [-r RF] [-s [+-<>/%]N] F..    ... and a file's size, set
-  shred [-fuvxz] [-n N] [-s N] F.. | vdir       ... a file overwritten, ls -l's other name
-  pathchk [-pP] NAME.. | mountpoint [-qdx] P    ... whether a name would work, or is a mount
-  fsync [-d] F.. | dircolors [-b|-c|-p] [F]      ... a file to disk; LS_COLORS spelled
-  readelf -h|-l|-S|-s|-e [-W] F..             binutils' view of an ELF file
-  dc [-e EXPR] [-f F] | hexedit [-r] F         the stack calculator; the byte editor
-  echo seq yes true false basename dirname     ... and the trivia
-  gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (src/apps/gz.l)
-  xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (src/apps/xz.l)
-  bzip2 | bunzip2 | bzcat [-cdfkqtvz1-9]       the block-sorting one (src/apps/bz2.l)
-  zstd | unzstd | zstdcat [-cdfkqtvz#] [-o F]  zstandard (src/apps/zstd.l)
-  tar {c|x|t}[vzjJaO] [-f A] [-C D] [M..]      the ustar archive; z gzip, j bzip2, J xz, --zstd (src/apps/tar.l)
-  cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (src/apps/cpio.l)
-  dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
-  xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs
-  hexdump [-Cv] [-n LEN] [-s SKIP] | hd         the BSD dump, words or -C's bytes
-  cal [[MONTH] YEAR]                           a month, laid out (weeks open Sunday)
-  timeout [-s SIG] [-k DUR] DUR CMD [ARG..]    a command, and the clock that ends it
-  which [-a] NAME.. | tty | clear | hostname   ... and the four short answers
-  hostid | dnsdomainname                       ... and what the host's name resolves to
-"
-   (usage _) (say err kore-usage, 2)
    (bn p) (: n #p (snip p (foldl (\ r k (p k = 47 ? (k + 1) r)) 0 ^n) n))
 
    ; -- the dispatch (this form's body) --
-   ; the spellings kore answers to: itself, its file, every applet (a symlink is an applet
-   ; name as argv0). post.l's `seatof` scans the list handed it, drops -l pairs and answers
-   ; (WORD . rest), or () when the program is someone else's, so a bake stays quiet.
-   ; WORD's basename a tool runs it; anything else reads the next word as the tool
-   mynames ("kore" . "kore.l" . map string (keys applets))
+   ; the spellings kore answers to: every applet (a symlink is an applet name as argv0).
+   ; post.l's `seatof` scans the list handed it, drops -l pairs and answers (WORD . rest),
+   ; or () when the program is someone else's, so a bake stays quiet
+   mynames (map string (keys applets))
    ; every applet is registered as a verb, so `love ls` and an `ls` symlink both reach it,
    ; in every image carrying this cat. the inner `:` is a fresh scope per step, so each
    ; closure holds its own f.
@@ -1149,31 +1041,17 @@ every tool answers --help and --version, and -h where the letter is free
                      (lit? (korepreds k)) [('self . peep korepreds k ())]
                      (elem k '(sh lush)) ['login] ())
    _ (: E (cite 'verbs 'enlist)
-        ; kore-main binds later in this form, so the closure reads it through the module
-        ; at the call
-        _ (E 'kore (as \ (cite 'kore 'kore-main ("kore" . as))) ())
         (go ks) (two? ks ? (applets <ks @ f
                               (E <ks (koredoor <ks f) (koretraits <ks), go >ks)) 0)
         (go (keys applets)))
-   ; kore-main: a program-relative arg list (argv0 a tool symlink, or kore/a dev path
-   ; then the tool) -> the status charm, () when kore is not the program. a list handed
-   ; in is scanned, () means the line love was started with; an in-image caller hands
-   ; (. "kore" "ls" "-l") and reads the charm
+   ; kore-main: a program-relative arg list, the tool first (argv0 a tool symlink) -> the
+   ; status charm, () when kore is not the program. a list handed in is scanned, () means
+   ; the line love was started with; an in-image caller hands (. "ls" "-l") and reads the charm
    (kore-main a)
     ((two? a ? (cite 'verbs 'seatof mynames a) (cite 'verbs 'fire mynames)) @ s
        (atom? s ? ()
-        (: n0 (intern (bn <s))
-           f0 (applets n0)
-           (f0 ? (koredoor n0 f0 >s)
-              (: t >s
-                 n (two? t ? (intern <t))
-                 f (n ? (applets n))
-                 ; no tool named: kore's own two flags, then the listing
-                 (f ? (koredoor n f >t)
-                    (uask t 1 1
-                     @ 'help (puts kore-usage, flush out, 0)
-                       'vers (puts (uvers "kore" + "\n"), flush out, 0)
-                       (usage ())))))))))
+        (: n (intern (bn <s)) f (applets n)
+           (f ? (koredoor n f >s))))))
 ; file mode dispatches on the real command line and quits with the status. under a -l
 ; bake preload the program word is a flag, so kore-main answers () and nothing quits
 (kore-main () @ r (charm? r ? (quit r)))

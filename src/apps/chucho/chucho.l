@@ -1,27 +1,9 @@
 ; chucho -- a mail reader after mutt's manner: a mailbox as an index, threaded, a message in the
 ; pager, mail written in your editor and handed to sendmail or an SMTP server.
-;
-;   index  j k / arrows  move      enter  read          d u  delete, undelete
-;          ^f ^b         a page    = *    the ends      N F  new, flagged
-;          r g f m       reply, group reply, forward, mail
-;          s C           save (and delete), copy        c  another mailbox
-;          / n           search                          o  threads or dates
-;          $             write the changes               q x  quit, quit unwritten
-;   pager  space -       a page    enter up/down  a line   j k  the next, previous message
-;          h             all the headers                 v  the parts, to save
-;          q i           back to the index
-;   compose  y send   e edit   a attach   D drop the last   q abandon
-;
-; the settings are salt's (src/apps/libra/salt.l), ~/.love/etc/chucho.l:
-;   (from "Your Name <you@example.org>")    (spool "~/Maildir")    (folder "~/Mail")
-;   (record "=sent")    (sendmail "/usr/sbin/sendmail")    (smtp "smtps://you@mail.example.org")
-;   (smtp-user "you")   (smtp-pass-cmd "pass show mail")    (editor "vi")    (signature "~/.sig")
-;   (alternates "you@old.example.org")    (spool "imaps://you@mail.example.org/INBOX")
-;   (imap-user "you")   (imap-pass-cmd "pass show mail")
-;
-; every key is a pure step on the state, and every frame a pure lay; what wants the tty --
-; the editor, the send -- the step leaves as 'act and the runner performs. so the tool gates
-; headless; only chucho-run ties the tty.
+; settings are salt's, ~/.love/etc/chucho.l: from spool folder record sendmail smtp smtp-user
+;   smtp-pass-cmd imap-user imap-pass-cmd editor signature alternates; spool may be imaps://
+; every key is a pure step on the state and every frame a pure lay; what wants the tty leaves
+; as 'act for the runner, so the tool gates headless
 ; usage: love chucho [-f MAILBOX]
 ;        love chucho [-s SUBJECT] [-c CC] [-a FILE].. ADDRESS..   (the body on stdin, or edited)
 (module (chucho chucho-main chucho-run chucho-new chucho-key chucho-frame chucho-order
@@ -53,8 +35,8 @@
           "  y send   e edit   a attach   D drop the last attachment   q abandon"]
 
  ; --- text for the screen -------------------------------------------------------------------
- ; a line with its control bytes shown as ^X and its tabs laid to stops of 8: no escape a
- ; sender wrote reaches the terminal
+ ; a line with its control bytes shown as ^X and tabs laid to stops of 8: no escape a sender
+ ; wrote reaches the terminal
  (chucho-vis l)
   (: j (jug 0) n #l
      (go i col)
@@ -179,9 +161,8 @@
  ; --- the pager's text ------------------------------------------------------------------------
  (ch-hl name v) "\e[1m\(name):\e[0m \(v)"
  (ch-cap n) (join "-" (map (p \ #p ? (upper (snip p 0 1) + snip p 1 #p) p) (split "-" n)))
- ; a leaf as lines: text as text, html through lapiz, anything else named
  ; a leaf as [lines painted?]: text as text, html through lapiz (fed no control byte, so its
- ; paint is its own), anything else no lines
+ ; paint is its own), an attachment or anything else no lines
  (ch-leaf l w)
   (l @ [t pm hs body nm]
      (: cs (pm "charset")

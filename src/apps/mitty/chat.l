@@ -1,14 +1,13 @@
-; src/apps/mitty/chat.l -- bee's two screens: the chat with a model, on the full screen or as a
-; mitty's pane, and the hud over the hive. neither knows the wire, the hive's files or the
-; queues: a session is bee's core (src/apps/bee.l, bee-core), a tablet of doors, and these
-; only paint what it answers and hand it the keys.
+; src/apps/mitty/chat.l -- bee's two screens: the chat with a model (full screen or a mitty
+; pane) and the hud over the hive. a session is bee's core, a tablet of doors; these only
+; paint what it answers and hand it the keys.
 ;
 ;   (chat-stage k key yes)   the chat as a stage (cli's stage-run shape): a mitty's pane
 ;   (chat-tui k key yes)     the same stage on the whole terminal
 ;   (hud-stage k)            the hud: queues, locks and sessions, and a talk to one as the user
 ;   (chat-hud k)             the hud on the whole terminal
 ;
-; host-only: the chat's commands run on a pty of their own (tether, screen). the saver is mitty's.
+; host-only: the chat's commands run on a pty of their own.
 (module (chat chat-tui chat-stage chat-hud hud-stage)
 (:
  (soil c) (pin (c 'dirt) () 1)
@@ -16,7 +15,7 @@
 
  ; --- the chat. the state c: 'bee the core, 'blocks newest first, 'ed the input buffer,
  ; 'scroll lines up from the bottom, 'dirt a box the main loop repaints on, 'busy the turn's
- ; task, 'asking the tool block awaiting y/n, 'msgs the conversation, 'sock the open wire, 'over
+ ; task, 'asking the tool block awaiting y/n, 'msgs the conversation, 'sock the open wire, 'over 1 to quit
 
  ; words of l as lines at most n wide; a word wider than n stands alone, cut at paint
  (wrap l n)
@@ -126,8 +125,7 @@
       ; a message from another session, its sender first
       'mail (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
                (sgr (look 'ink) "✉ " + sgr "1" (b 'from) . map (\ l ("  " + l)) ls))
-      ; thinking streams dim while it runs, its last eight lines; done, it folds to one line
-      ; unless ^t has them all open
+      ; thinking streams dim, its last eight lines; done, it folds to one line unless ^t opens it
       'think (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
                 n #(words (b 'text))
                 body (map (\ l (sgr "2;3" ("  " + l))) ls)
@@ -159,8 +157,7 @@
 
  ; the transcript's rows: the screen's less the spinner, the input box and the hints
  (room c) (c 'rows - 4 - min 6 (max 1 #(lines (edtext (c 'ed)))))
- ; the transcript, a spinner row while a turn runs, the input boxed with the gauge
- ; right-aligned on its first row, and the hints under it
+ ; the transcript, a spinner row while a turn runs, the input boxed with the gauge, the hints
  (frame c)
   (: w (c 'cols) h (c 'rows) e (c 'ed)
      il (lines (edtext e)) il2 (two? il ? il [""])
@@ -187,20 +184,17 @@
      cc (5 + edcol e)
      (cite 'tui 'tui-fresh c h [w h] () rows (edfit stat w " ") cr cc))
 
- ; the face the turn reports through (bee.l, the turn, told to a face): its reports become blocks
+ ; x streamed onto the newest block when it is an open one of kind kd, else nb pushed
+ (onto c kd x nb)
+  (: b (? (two? (c 'blocks)) <(c 'blocks))
+     _ (? (tablet? b && b 'k = kd && b 'open) (pins b 'text (b 'text + x) 'v (b 'v + 1)) (push c nb))
+     (soil c))
+ ; the face the turn reports through: its reports become blocks
  (tface c)
   (: k (c 'bee)
      {'yes (c 'yes)
-      'text (\ x (: b (? (two? (c 'blocks)) <(c 'blocks))
-                    _ (? (tablet? b && b 'k = 'bee && b 'open)
-                       (pins b 'text (b 'text + x) 'v (b 'v + 1))
-                       (push c {'k 'bee 'text x 'v 1 'open 1}))
-                    (soil c)))
-      'think (\ x (: b (? (two? (c 'blocks)) <(c 'blocks))
-                     _ (? (tablet? b && b 'k = 'think && b 'open)
-                          (pins b 'text (b 'text + x) 'v (b 'v + 1))
-                          (push c {'k 'think 'text x 'v 1 'open 1 'x (c 'thinkall)}))
-                     (soil c)))
+      'text (\ x (onto c 'bee x {'k 'bee 'text x 'v 1 'open 1}))
+      'think (\ x (onto c 'think x {'k 'think 'text x 'v 1 'open 1 'x (c 'thinkall)}))
       'break (\ _ (: b (? (two? (c 'blocks)) <(c 'blocks))
                      (? (tablet? b) (: _ (pins b 'open 0 'v (peep b 'v 0 + 1)) (soil c)) 0)))
       'note (\ s (push c {'k 'note 'text s}, soil c))
@@ -313,9 +307,8 @@
  (chat-tui k key yes)
   (stage-run (pins (chat-stage k key yes) 'modes ['paste ['title ("bee: " + k 'me 0)]]))
 
- ; the full screen as a pane of a mitty (mitty.l), which owns the tty, the keys' reader and
- ; the clock. its frame is scribed into the pane's own screen, so tui-fresh diffs against
- ; what that screen holds. the saver is the mitty's
+ ; the full screen as a pane of a mitty, which owns the tty, the keys and the clock; the frame
+ ; is scribed into the pane's own screen, so tui-fresh diffs against it
  (chat-stage k key yes)
   (: c (tnew k key yes)
      stop (k 'loops 0)                                    ; the queues and locks, mailed here as they move
@@ -333,9 +326,8 @@
                     _ (k 'halt 0)
                     (k 'unsettle 0)))})
 
- ; --- the hud: the queues, the locks and the hive as the core lays them out, read again
- ; every (queue-watch N) seconds; no model and no key. it holds the user's card while it is
- ; open, so c talks to a session as the user and the answers show here ---
+ ; --- the hud: the queues, locks and hive, read every (queue-watch N) seconds; no model. it
+ ; holds the user's card while open, so it talks to a session as the user ---
  (hud-to c) (: ps (c 'bee 'peers 0) l (c 'lead) (? (string? l && elem l ps) l (two? ps) <ps ()))
  (hud-log c hd t)
   (: ls (lines t) l2 (two? ls ? ls [""])

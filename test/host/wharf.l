@@ -1,6 +1,5 @@
 ; test/host/wharf.l -- the laws of src/apps/mitty/wharf.l, the layout algebra
 ; a rectangle is (id row col rows cols), 0-based; a bar is (dir row col len), dir 'across or 'down
-; run: cat test/00-init.l test/host/wharf.l | out/love
 (borrow "src/apps/mitty/wharf.l")
 
 ; the standing laws; spans are half-open, so a zero-extent pane needs no exception
@@ -41,7 +40,6 @@
       ('(7) = wharf-panes 7)))
 
 ; 2. a split spends exactly one cell on its bar
-; 39 + 1 + 40 = 80
 (: bs (wharf-lay '(beside 50 1 2) 24 80)
    br (wharf-bars '(beside 50 1 2) 24 80)
  _ (test

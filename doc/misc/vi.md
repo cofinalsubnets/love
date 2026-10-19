@@ -18,8 +18,8 @@ regex door, post.l's re):
   with a one-byte pushback so a bare ESC still interleaves), frames onto `out`, the alternate
   screen (?1049) so scrollback survives, `raw` for the tty (cooked restores at exit), tty
   when there is one (80x24 on a pipe). It performs the engine's write/read requests. Port EOF
-  quits — which is what makes `kore vi` fully drivable from a pipe: the smokes script whole
-  sessions (`printf 'ihello\033:wq\n' | kore vi f`).
+  quits — which is what makes `love vi` fully drivable from a pipe: the smokes script whole
+  sessions (`printf 'ihello\033:wq\n' | love vi f`).
 * **src/apps/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
   `vframe`, and the vim syntax file, which src/tools/hue2vim.l generates from the same table, so the
   two readings cannot drift. `make syntax` builds it into `out/syntax.vim` and

@@ -1,18 +1,14 @@
 ; src/inle/teensy41/mkboot.l -- lay boot.o for the Teensy 4.1 (i.MX RT1062): the four ROM-facing
-; blocks and the handful of instructions C cannot say. the ROM reads the FlexSPI config block at
-; flash 0x000, the image vector table at 0x1000 and the boot data after it before any of our code
-; runs, so tlink.l's map names each lane at its own address. every word below is what first
-; silicon booted with. vectors take addend 0, since obj.l sets the thumb bit on every FUNC symbol;
-; sp arrives through r0 (MOVW/MOVT cannot name it).
-; runs after src/love/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the sealed
-; holo module (src/inle/teensy41/Makefile).
+; blocks and the instructions C cannot say. the ROM reads the FlexSPI config block at 0x000, the
+; image vector table at 0x1000 and the boot data after it, so tlink.l's map places each section.
+; vectors take addend 0: obj.l sets the thumb bit on every FUNC symbol. sp arrives through r0.
+; runs after src/love/holo/{elf,obj}.l with the thumb2 backend spliced into holo.
 (: (mkboot dst)
    (: (zeros n) (n < 1 ? () (0 . zeros (n - 1)))
       (wsym l) [['fix 4 'abs32 l 0]]           ; a word the linker fills: (S + A) | T
 
       ;; -- 1. the FlexSPI configuration block at flash 0x000 (RT1060 RM 9.6.3.1) ------
-      ;; a 512-byte block of mostly zero with seven live fields: the RM's offsets are the
-      ;; table and the gaps are computed, so deviceType reads at 0x44 because the row says so.
+      ;; 512 bytes, mostly zero: the rows carry the RM's offsets and the gaps are computed
       fcfb-size 512
       fcfb-words '((0x00 0x42464346)    ; "FCFB" tag
                    (0x04 0x56010000)    ; version V1.0
@@ -29,9 +25,8 @@
             (zeros (fcfb-size - pos)))
 
       ;; -- 2. the image vector table at flash 0x1000, and the boot data after it ------
-      ;; the ROM validates the header and jumps to entry. boot_data.length is how much
-      ;; of flash the ROM treats as the image -- __load_size__, which src/love/holo/link.l
-      ;; pins from the layout, being the one number here that only the link can know.
+      ;; the ROM validates the header and jumps to entry. boot_data.length, the image's
+      ;; extent in flash, is __load_size__, which the link pins
       ivt (le32 0x432000D1                     ; tag 0xD1, len 0x0020, ver 0x43
             + wsym 'cstartup                   ; entry
             + le32 0 + le32 0                  ; rsv1, dcd
@@ -39,10 +34,8 @@
             + le32 0 + le32 0)                 ; csf, rsv2
       bdata (le32 0x60000000 + wsym '__load_size__ + le32 0)
 
-      ;; -- 3. the ARM vector table (VTOR points here once we run; the ROM boots via
-      ;; the IVT, so word 0's SP is advisory). every fault lands somewhere that speaks.
-      ;; DebugMon is isr_hardfault too: with DEMCR.MON_EN a bkpt (a __builtin_trap,
-      ;; a contract guard) arrives here, and it must report rather than lock up mute.
+      ;; -- 3. the ARM vector table (VTOR, once we run; word 0's SP is advisory).
+      ;; DebugMon is isr_hardfault too: with DEMCR.MON_EN a bkpt arrives there and reports.
       vecs (wsym '__stack_top__ + wsym 'cstartup
              + wsym 'default_handler + wsym 'isr_hardfault         ; NMI, HardFault
              + wsym 'default_handler + wsym 'default_handler       ; MemManage, BusFault
@@ -59,11 +52,9 @@
                ['jmp 'cmain]]
 
       ;; -- 5. the instructions C cannot say ------------------------------------------
-      ;; HardFault: hand the active stack's exception frame to hardfault_report (C).
-      ;; EXC_RETURN bit 2 says which SP was active (clear: MSP), asked with a branch pair;
-      ;; TST takes no immediate here, so the 4 rides r1, which the hardware stacked.
-      ;; the reporter runs on a fresh stack: if the fault was a stack overflow, pushing on
-      ;; the old sp double-faults into lockup and the report never reaches the wire.
+      ;; HardFault: the active stack's exception frame to hardfault_report. EXC_RETURN bit
+      ;; 2 says which SP (clear: MSP); the 4 rides r1, already stacked. the reporter runs on
+      ;; a fresh stack, so a stack overflow still reports
       text [['label 'isr_hardfault]
             ['li 'r1 4] ['test 'lr 'r1] ['br 'eq 'hf-msp]
             ['mrs 'r0 'psp] ['jmp 'hf-frame]
@@ -72,14 +63,13 @@
             ['la 'r1 '__stack_top__] ['mov 'sp 'r1]
             ['jmp 'hardfault_report]
             ['label 'default_handler] ['wfi] ['jmp 'default_handler]
-             ;; the helpers teensy41.c calls where it would otherwise want inline asm
+             ;; the helpers teensy41.c calls in place of inline asm
             ['label 'arm_dsb_isb] ['dsb 'sy] ['isb] ['ret]
             ['label 'arm_dsb] ['dsb 'sy] ['ret]
             ['label 'arm_wfi] ['wfi] ['ret]
             ['label 'arm_bkpt] ['brk 0] ['ret]]
 
-      ;; ALLOC-only for the four data blocks (2), ALLOC|EXEC for the two code ones (6);
-      ;; PROGBITS throughout -- the ROM is handed these bytes, zeros included.
+      ;; ALLOC (2) for the data blocks, ALLOC|EXEC (6) for code; PROGBITS throughout
       (write-bytes dst
        (objsecs32 'thumb2
         [[".flashconfig" 1 2 4 [['raw (fcfb-lay fcfb-words 0)]]]

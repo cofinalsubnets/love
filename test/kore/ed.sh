@@ -10,7 +10,7 @@ rm -rf "$w"; mkdir -p "$w"
 # SCRIPT on its stdin; stdout and stderr together, then the exit status, must be WANT
 chk() { n=$1; x=$2; want=$3; sc=$4; shift 4
         printf 'alpha\nbeta\ngamma\ndelta\nepsilon\n' > "$w/g"
-        got=$(cd "$w" && printf "$sc" | LOVE_NO_IMAGE= "$K" kore "$@" 2>&1; echo "[$?]")
+        got=$(cd "$w" && printf "$sc" | LOVE_NO_IMAGE= "$K" "$@" 2>&1; echo "[$?]")
         exp=$(printf "$want[$x]")
         [ "$got" = "$exp" ] || fail "kore $n: got
 $got

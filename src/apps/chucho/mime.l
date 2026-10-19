@@ -1,7 +1,5 @@
-; src/apps/chucho/mime.l -- a message as it travels (RFC 5322, MIME 2045-2047, 2231): the head
-; split from the body, the headers unfolded, encoded words and transfer encodings undone,
-; charsets brought to utf-8, multiparts walked to their leaves, dates and addresses read.
-; pure: a message is a string in and data out.
+; src/apps/chucho/mime.l -- a message as it travels (RFC 5322, MIME 2045-2047, 2231),
+; decoded to utf-8 data. pure: a string in, data out.
 ;
 ;   (mime-split m)        -> [head body] at the first empty line, crlf read as lf
 ;   (mime-heads h)        -> [[name value] ..], names lowercased, folds joined
@@ -28,7 +26,7 @@
  mime-zones {"ut" 0 "gmt" 0 "utc" 0 "z" 0 "est" -300 "edt" -240 "cst" -360 "cdt" -300
              "mst" -420 "mdt" -360 "pst" -480 "pdt" -420}
 
- ; --- the head and the body -----------------------------------------------------------
+ ; --- the head and the body ---
  (mime-split m)
   (: t (replace m "\r\n" "\n")
      (? (#t && t 0 = 10) ["" (snip t 1 #t)]
@@ -45,8 +43,8 @@
      (fold (lines h) ()))
  (mime-get hs n) (: (go l) (l @ ([k v] . r) (k = n ? v (go r)) "") (go hs))
 
- ; --- the transfer encodings ------------------------------------------------------------
- ; base64 is bytes' (post.l), lenient: anything outside the alphabet is skipped
+ ; --- the transfer encodings ---
+ ; base64 is bytes', lenient: anything outside the alphabet is skipped
  (mime-b64 s) (b64d s)
  (mime-b64e s) (b64e s 1)
  ; quoted-printable; u reads _ as a space, the Q of an encoded word
@@ -65,7 +63,7 @@
      (go 0))
  (mime-qp s) (mime-qpx s 0)
 
- ; --- charsets: latin-1 and windows-1252 widen to utf-8, the rest pass as they are -------
+ ; --- charsets: latin-1 and windows-1252 widen to utf-8, the rest pass ---
  (mime-latin s w?)
   (jug 0 @ j (each ^#s (i \ (s i @ c (? (c < 128) (put j c)
                                         (w? && c < 160 && 0 < mime-1252 (c - 128)) (say j (utf8 (mime-1252 (c - 128))))
@@ -79,7 +77,7 @@
         (elem c ["windows-1252" "cp1252" "us-ascii" "ascii"]) (mime-latin s 1)
         s))
 
- ; --- encoded words -------------------------------------------------------------------
+ ; --- encoded words ---
  ; the word at i -> [text end] | (); a charset may carry a language after a *
  (mime-word s i)
   (: a (fsub s "?" (i + 2))
@@ -105,7 +103,7 @@
  ; a header value as it may travel: ascii as it is, else one encoded word
  (mime-head-enc s) (mime-ascii? s ? s "=?utf-8?B?\(mime-b64e s)?=")
 
- ; --- content-type and its parameters ---------------------------------------------------
+ ; --- content-type and its parameters ---
  ; v cut at the semicolons outside quotes
  (mime-semis v)
   (: (go i st q acc)
@@ -138,9 +136,9 @@
          m)
      [(#t ? t "text/plain") (foldl add {} >ps)])
 
- ; --- the multipart walk ----------------------------------------------------------------
- ; the parts between the delimiter lines; the preamble and epilogue dropped, and a body
- ; that never closes keeps its last part
+ ; --- the multipart walk ---
+ ; the parts between delimiter lines, preamble and epilogue dropped; an unclosed body
+ ; keeps its last part
  (mime-parts b bd)
   (: d "\n--\(bd)" t "\n\(b)" nt #t
      ; the next delimiter line at or after i -> [its start, its end, close?] | ()
@@ -179,7 +177,7 @@
         [[t pm hs (mime-body hs b) (mime-fname hs pm)]]))
  (mime-leaves m) (mime-split m @ [h b] (mime-walk (mime-heads h) b 0))
 
- ; --- dates: "Thu, 30 Sep 2026 20:22:55 -0400", read leniently, its fields in its zone -----
+ ; --- dates: "Thu, 30 Sep 2026 20:22:55 -0400", read leniently, fields in its zone ---
  (mime-num s) (unum s @ () -1 n n)
  (mime-mon s) (: (go l i) (? (atom? l) 0 (starts? (lower s) <l) i (go >l (i + 1))) (go mime-mons 1))
  (mime-zone s)
@@ -207,7 +205,7 @@
                secs (epoch-days y m d * 86400 + hh * 3600 + mm * 60 + ss - zm * 60)
                [secs y m d hh mm zm])))))
 
- ; --- addresses -------------------------------------------------------------------------
+ ; --- addresses ---
  ; a list cut at the commas outside quotes, angle brackets and comments
  (mime-commas v)
   (: (go i st q a p acc)

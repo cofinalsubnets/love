@@ -58,6 +58,8 @@ int clock_gettime(int ck, struct timespec *ts) {
 #endif
 #ifdef LvMac
   if (__love_osv == 4) {
+    long r = __love_macclock(ck, ts);
+    if (r != LvNoDoor) return __love_parked(r) ? (__errno_v = (int) __love_errfb(-r - 4096), -1) : 0;
     /* xnu has no clock_gettime: gettimeofday's third word is mach_absolute_time,
      * nanoseconds on intel, and the cpu clocks are the process's rusage */
     if (ck == 2 || ck == 3) {

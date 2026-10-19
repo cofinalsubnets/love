@@ -1,17 +1,13 @@
-; src/tools/kproject.l -- the metal projection: the artifact is one hosted -pie love, and a boot
-; door eats a fixed-address image. re-base every PT_LOAD at the kernel base, apply the love_rela
-; table there (__love_reloc's law, run ahead of time), lay and patch boot.o below the image, write
+; src/tools/kproject.l -- the metal projection: re-base a hosted -pie love's PT_LOADs at the
+; kernel base, apply love_rela ahead of time, lay and patch boot.o below the image, write
 ; k_image_top, and emit the flat ELF. cat after src/love/holo/{elf,obj,link}.l:
 ;
 ;   love <cat> in.pie boot.o out.elf arch
 ;
-; (kproject pie bootb out arch) is the callable half -- pie and boot.o as
-; bytes -- which is how the `love kernel` verb projects the running binary
-; over a boot.o it laid itself (src/apps/source.l).
+; (kproject pie bootb out arch) takes bytes; the `love kernel` verb projects the running binary.
 
 (: (kparams arch)                       ; target, kernel base, entry symbol, image window
-    ; x64's image runs in the upper half, at its physical address past the window, so the
-    ; whole lower half is a process's; boot stays physical, where the loader enters it
+    ; x64's image runs in the upper half, leaving the lower half to a process; boot stays physical
     (arch @ "x64"  ['x64   0x200000   "kmain" 0xffffff8000000000]
             "a64"  ['a64 0x40200000 "a64boot" 0]
             ; entered at the lowest load, not the entry symbol -- kproject lays boot first
@@ -37,8 +33,8 @@
                              (rle64 pie (pho i + 32)) (rle64 pie (pho i + 40))
                              (rle32 pie (pho i + 4))] . acc)
                            acc)))) 0 ())
-      ; ..and past the last, the first writable one's bytes again as the pie has them, base 0
-      ; and unpatched: what a process laid from this image starts its data from (x64/proc.c)
+      ; ..and past the last, the first writable load's bytes again, base 0 and unpatched: where a
+      ; process laid from this image starts its data
       dl ((: (go l) (? (atom? l) (scare 'kproject-data) (0 < <l 4 & 2) <l (go >l))) pls)
       pend ((: (go l m) (? (atom? l) m (go >l (: e (<l 0 + <l 3) (m < e ? e m))))) pls 0)
       dcopy [(ld-align 4096 pend) (dl 1) (dl 2) (dl 2) 4]
@@ -81,8 +77,7 @@
                           (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
            loads 0)
       glo (ldsyms objs)
-      ; the pie's globals join the book (boot's own definitions stand), so a
-      ; boot reloc that names a kernel symbol resolves at its metal address
+      ; the pie's globals join the book (boot's own stand), so a boot reloc can name a kernel symbol
       _ ((: (go e)
              (? (symo + symz <= e) 0
                 (: sx (rle16 pie (e + 6)) bind (pie (e + 4) >> 4)
@@ -96,10 +91,9 @@
       ; riscv keeps its own reloc numbers, so the machine says which namespace ldpatch reads
       cx [glo b0 b0 b0 b0 () (mach = 243) () (backends tgt) (ld-extents objs)]
 
-      ; --- the patch list: every love_rela site slides by bias, k_image_top takes the
-      ; image's far edge, physical, and k_pie_base and k_pie_data where the pie's base and
-      ; the data's copy sit -- ascending, for the one-pass surgery below (the table already
-      ; lays ascending; the walk reverses it back)
+      ; --- the patch list: love_rela sites slide by bias; k_image_top, k_pie_base and k_pie_data
+      ; take the image's far edge (physical), the pie's base and the data copy. ascending, for
+      ; the one-pass splice below
       (ins s l) (? (atom? l) [s]
                    (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
@@ -119,18 +113,14 @@
                   (go (o + 8) >l (le64 (<l 1) . snip pie c o . acc)))))
         go0 (filter (s \ va <= s 0 && s 0 < va + fsz) ss) ())
 
-      ; --- the output shape: ldkern's -- header page (ehdr, phdrs, the note),
-      ; boot at its page, then the re-based image; symtab past the bytes ------
+      ; --- the output shape: header page (ehdr, phdrs, note), boot, the re-based image, symtab ---
       nsz (foldl (\ a ob (a + ld-lanesz ob 'note)) 0 objs)
       nph (2 + #loads - (0 < nsz ? 0 1))
       hdrsz (64 + 56 * nph)
       _ (4096 < hdrsz + nsz ? (scare 'kproject-headers hdrsz))
       (fo a) (a - kbase + 4096)
-      ; each load with the file offset it takes: dense from where the boot chain
-      ; stopped, moved on only far enough to keep p_offset congruent to p_vaddr mod
-      ; the page -- which is all a loader asks and more than a copier needs. the pie's
-      ; own cuts already skip address space the file does not carry, and laying this
-      ; file address-linear would put back the zeros the link took out.
+      ; each load's file offset: dense from where boot stopped, moved only to keep p_offset
+      ; congruent to p_vaddr mod the page; address-linear would restore the zeros the link removed.
       (cfo c a) (a % 4096 - c % 4096 @ r (c + (r >= 0 ? r (r + 4096))))
       lds (rev ((: (go l c acc)
                     (? (atom? l) acc
@@ -145,11 +135,8 @@
                         (bs . ps)))
       en (ldemit cx 'note kbase objs ())
       (gapz a b) (a < b ? [(ld-zeros (b - a))] ())
-      ; the boot chain is address-linear from kbase plus one page (fo), so it is
-      ; seeded with the kbase..b0 gap -- without it every byte lands one page below
-      ; where its phdr points. each stage takes the pieces of the one before (never
-      ; the [cur pieces] pair), bridged by its gap; bss owns address space and no
-      ; bytes, so it is laid above and never emitted.
+      ; the boot chain is address-linear from kbase plus a page, so it is seeded with the kbase..b0
+      ; gap. each stage takes the pieces of the one before, bridged by its gap; bss is never emitted.
       eb (ldemit cx 'boot b0 objs [(ld-zeros (b0 - kbase))])
       et (ldemitn cx 'text objs (ldemit cx 'text b1 objs (>eb + (gapz <eb b1))))
       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata t1 objs (>et + (gapz <et t1))))
@@ -162,7 +149,7 @@
                           (acc + ([(ld-zeros (o - c))] + spliced (g 1) (g 0) (g 2) sites))))))
            lds (fo d1) ())
       fsz <body
-      ; the symtab, values slid: the uefi loader reads `kboot` out of exactly this
+      ; the symtab, values slid: the uefi loader reads `kboot` out of it
       esy ((: (go e acc)
                (? (symo + symz <= e) (rev acc)
                   (: sx (rle16 pie (e + 6))
@@ -193,10 +180,8 @@
                  + (esy + [(snip pie stro (stro + strz)) <shstr
                            (ld-zeros (shto - (ssto + sstz))) sht])))))
 
-   ; the file driver (the Makefile's KPROJ). arity-gated: the `love kernel` verb
-   ; evals this file too (src/apps/source.l), and its argv is the verb's own.
-   ; a def, so the outer `:` stays define-mode and `kproject` survives the
-   ; read -- the call below is its own form.
+   ; the file driver (the Makefile's KPROJ). arity-gated, since the `love kernel` verb evals this
+   ; file too. a def, so the outer `:` stays define-mode and the call below is its own form.
    (kdrive as)
     (#as = 4 ? (kproject <>(kread <as) <>(kread <>as) (as 2) (as 3))
                0))

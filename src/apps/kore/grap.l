@@ -100,6 +100,14 @@
        y (gr-fl (k + i))
        z (y * 3.69423907715893078616e-13 + 4.34294481903251816668e-01 * gr-ln xm)
        (z + y * 3.01029995663611771306e-01))
+   ; a numeral's exponent at i, signed, 0 where none is
+   (gr-expo t i)
+    (: n #t
+       (i < n && (t i = 101 || t i = 69) ?
+        (: sg (t (i + 1) = 45 ? -1 1) j (t (i + 1) = 45 || t (i + 1) = 43 ? (i + 2) (i + 1))
+           (go k v) (k < n && digit? (t k) ? (go (k + 1) (v * 10 + t k - 48)) v)
+           (sg * go j 0))
+        0))
    ; a numeral as the nearest double, as atof reads it
    (gr-atof t)
     (: n #t
@@ -107,11 +115,7 @@
        a (go 0 0 0)
        b (<a < n && t <a = 46 ? (: (fr i m f) (i < n && digit? (t i) ? (fr (i + 1) (m * 10 + t i - 48) (f + 1)) [i m f]) (fr (<a + 1) (a 1) 0)) a)
        i <b m (b 1) f (b 2)
-       ex (i < n && (t i = 101 || t i = 69) ?
-           (: sg (t (i + 1) = 45 ? -1 1) j (t (i + 1) = 45 || t (i + 1) = 43 ? (i + 2) (i + 1))
-              (: (go2 k v) (k < n && digit? (t k) ? (go2 (k + 1) (v * 10 + t k - 48)) v) (sg * go2 j 0)))
-           0)
-       p (ex - f)
+       p (gr-expo t i - f)
        (? (m = 0) 0.0 (0 <= p) (gr-dbl (m * 10 ** p) 1) (gr-dbl m (10 ** (0 - p)))))
 
    ; -- errors ------------------------------------------------------------------
@@ -232,13 +236,7 @@
     (: _ (gr-skip-blanks g)
        file (gr-c g = 34 ? (gr-adv g, gr-string g))
        _ (gr-skip-blanks g)
-       thru (gr-take-word g "thru" ?
-             (: _ (gr-skip-blanks g)
-                c (gr-c g)
-                (gr-alpha? c ?
-                 (: s2 (gr-top g) i0 (s2 'i) w (gr-word g) m (g 'macros w)
-                    (string? m ? m (pin s2 'i i0, gr-delim g)))
-                 (gr-delim g))))
+       thru (gr-take-word g "thru" ? (gr-thru g gr-delim))
        _ (gr-skip-blanks g)
        until (gr-take-word g "until" ?
               (gr-skip-blanks g, gr-c g = 34 ? (gr-adv g, gr-string g) (gr-word g)))
@@ -246,10 +244,19 @@
              (uread file @ r (two? r ? <>r (gr-err g "can't open file \(file)"))))
        (!(string? thru) ?
         (string? file ? (gr-push-file g file text) 0)
-        (: ls (string? file ? (lines text) (gr-take-lines g until))
-           ls2 (string? file ? (gr-cut-until ls until) ls)
-           body (cats (map (l \ "\(gr-subst thru (gr-words l))\n") ls2))
-           (string? file ? (gr-push-file g file body) (gr-push g (gr-src body 'text))))))
+        (gr-thru-lines g file text thru until @ body
+         (string? file ? (gr-push-file g file body) (gr-push g (gr-src body 'text))))))
+   ; copy's lines (the file's, else those after this one) up to until, each through thru
+   (gr-thru-lines g file text thru until)
+    (: ls (string? file ? (gr-cut-until (lines text) until) (gr-take-lines g until))
+       (cats (map (l \ "\(gr-subst thru (gr-words l))\n") ls)))
+   ; copy's thru: a macro by name, else a body read by delim
+   (gr-thru g delim)
+    (: _ (gr-skip-blanks g)
+       (gr-alpha? (gr-c g) ?
+        (: s2 (gr-top g) i0 (s2 'i) w (gr-word g) m (g 'macros w)
+           (string? m ? m (pin s2 'i i0, delim g)))
+        (delim g)))
    ; a file's text pushed: troff hears of it, and of where the graph goes on after it
    (gr-push-file g file t)
     (: _ (gr-o0 g ".lf 1 \(file)\n")
@@ -625,10 +632,12 @@
             (gr-linedesc g @ st (map (sd \ pin (g 'fsides) sd st) ['top 'bot 'left 'right], go 0))
            0)
        (go 0))
+   ; the side named next, taken, else d
+   (gr-side g d) (gr-k g 0 = 'name && gr-sides (gr-v g 0) != () ? (gr-sides (<>(gr-next g))) d)
    ; label side "s" [just..] "s" .. [left|right|up|down e].. [width e]
    (gr-label-stmt g)
     (: _ (gr-next g)
-       sd (gr-k g 0 = 'name && gr-sides (gr-v g 0) != () ? (gr-sides (<>(gr-next g))) 'bot)
+       sd (gr-side g 'bot)
        (strs acc) (gr-text g @ s (string? s ? (strs ([s (gr-said (gr-just g))] . acc)) (rev acc)))
        ss (strs ())
        (go dx dy w)
@@ -665,13 +674,8 @@
            [nm its (0 < #(filter (it \ string? (it 1)) its)) 'at])
        (gr-w? g 0 "from")
         (: _ (gr-next g) nm (gr-optcoord g)
-           a (gr-expr g) _ (gr-w? g 0 "to" ? (gr-next g) (gr-syn g))
-           b (gr-expr g)
-           r (gr-w? g 0 "by" ?
-              (: _ (gr-next g) op (gr-k g 0 = 'op && elem (gr-v g 0) ["+" "-" "*" "/"] ? (<>(gr-next g)) " ")
-                 [op (gr-expr g)])
-              ["+" 1.0])
-           op <r by (r 1)
+           a (gr-expr g)
+           r (gr-to-by g) b <r op (r 1) by (r 2)
            fmt (gr-text g)
            down (gr-down? op by)
            (go v acc n) (1000 < n || (down ? (v < b) (v > b)) ? (rev acc)
@@ -724,7 +728,7 @@
    ; ticks [side] [in|out [len]] [off | at .. | from ..]
    (gr-ticks-stmt g)
     (: _ (gr-next g) _ (pin g 'drew 1)
-       sd (gr-k g 0 = 'name && gr-sides (gr-v g 0) != () ? (gr-sides (<>(gr-next g))))
+       sd (gr-side g ())
        io (? (gr-w? g 0 "in") (gr-next g, 1) (gr-w? g 0 "out") (gr-next g, 0) ())
        len (io != () && gr-num-ahead? g ? (gr-expr g) 0.1)
        ; off: none, one side the fewer, or with in or out that side alone
@@ -756,7 +760,7 @@
    ; grid side [linedesc] [ticks off] at ..|from ..
    (gr-grid-stmt g)
     (: _ (gr-next g) _ (pin g 'drew 1)
-       sd (gr-k g 0 = 'name && gr-sides (gr-v g 0) != () ? (gr-sides (<>(gr-next g))) 'bot)
+       sd (gr-side g 'bot)
        st (gr-linedesc g @ s (string? s ? s ""))
        tl (gr-tick-list g 1)
        (tl = () ? 0
@@ -770,7 +774,7 @@
                                         'top "\tline \(st) down frameht from (\(xy),frameht)"
                                         'left "\tline \(st) right framewid from (0,\(xy))"
                                         "\tline \(st) left framewid from (framewid,\(xy))"))
-                         lab (? (string? (it 1)) (kind = 'at ? (gr-atlabel (it 1)) (it 1)) (kind = 'from) (gr-tnum (it 0)) ())
+                         lab (gr-tick-label it 1 kind)
                          (lab = () ? 0
                           (gr-ol g (sd @ 'bot "\tbox invis \"\(lab)\" ht .25 wid 0 with .n at last line.start"
                                         'top "\tbox invis \"\(lab)\" ht .2 wid 0 with .s at last line.start"
@@ -942,19 +946,22 @@
        rest (atom? (g 'la) ? (gr-rest-line g) "")
        (gr-finish g,
         gr-new-graph g nm rest))
+   ; to b [by [op] c] -> [b op c], the step +1 unsaid
+   (gr-to-by g)
+    (: _ (gr-w? g 0 "to" ? (gr-next g) (gr-syn g))
+       b (gr-expr g)
+       r (gr-w? g 0 "by" ?
+          (: _ (gr-next g) op (gr-k g 0 = 'op && elem (gr-v g 0) ["+" "-" "*" "/"] ? (<>(gr-next g)) " ")
+             [op (gr-expr g)])
+          ["+" 1.0])
+       [b <r (r 1)])
    ; for v from|= a to b [by [op] c] do body
    (gr-for g)
     (: _ (gr-next g)
        v (gr-k g 0 = 'name ? (<>(gr-next g)) (gr-syn g))
        _ (gr-w? g 0 "from" || gr-op? g 0 "=" ? (gr-next g) (gr-syn g))
        a (gr-expr g)
-       _ (gr-w? g 0 "to" ? (gr-next g) (gr-syn g))
-       b (gr-expr g)
-       r (gr-w? g 0 "by" ?
-          (: _ (gr-next g) op (gr-k g 0 = 'op && elem (gr-v g 0) ["+" "-" "*" "/"] ? (<>(gr-next g)) " ")
-             [op (gr-expr g)])
-          ["+" 1.0])
-       op <r by (r 1)
+       r (gr-to-by g) b <r op (r 1) by (r 2)
        body (gr-k g 0 = 'body ? (<>(gr-next g)) (gr-syn g))
        _ (gr-ol g "# for \(v) from \(gr-g a) to \(gr-g b) by \(op) \(gr-g by) ")
        f {'var v 'to b 'by by 'op op 'down (gr-down? op by)}
@@ -1024,6 +1031,14 @@
        (go _) (gr-k g 0 = 'eof ? 0 (gr-next g, go 0))
        (go 0))
 
+   ; each file (- stdin, or sin where stdin was read already; none named is -) handed to
+   ; doc as name and text; one that will not open goes to fail, and the rest are left
+   (gr-files fs sin doc fail)
+    (: (go l) (atom? l ? 0
+               (: f <l
+                  t (f = "-" ? (string? sin ? sin (slurp in)) (uread f @ r (two? r ? <>r)))
+                  (string? t ? (doc f t, go >l) (fail f))))
+       (go (two? fs ? fs ["-"])))
    (grap-main as) (grap-run as ())
    (grap-run as sin) (gr-run as sin @ [st t] (say out t, flush out, st) 0)
    ; a run -> [status output]
@@ -1031,12 +1046,7 @@
     (: g {'macros {} 'vars {} 'o (jug 0) 'status 0 'defs 0 'seed 1 'mark "\\(bu" 'skew 0}
        _ (gr-setvar g "margin" 0.07)
        fs (filter (a \ !(starts? a "-") || a = "-") as)
-       (go l) (atom? l ? 0
-               (: f <l
-                  t (f = "-" ? (string? sin ? sin (slurp in)) (uread f @ r (two? r ? <>r)))
-                  (string? t ? (gr-doc g f t, go >l)
-                   (say err "grap: can't open \(f)\n", pin g 'status 1))))
-       (go (two? fs ? fs ["-"]),
+       (gr-files fs sin (gr-doc g) (f \ (say err "grap: can't open \(f)\n", pin g 'status 1)),
         [(g 'status) (slurp (g 'o))]))
 )
 ) ; module 'kore

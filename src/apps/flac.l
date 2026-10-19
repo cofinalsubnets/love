@@ -1,6 +1,5 @@
 ; src/apps/flac.l -- flac decoding over src/love/audio/flac.c's nif, and the flac and metaflac
 ; verbs: flac's decode and test, and metaflac's reading.
-; `(borrow 'flac)`, then:
 ;
 ;   (flac-meta s)          -> the metadata as a tablet: 'rate 'ch 'bps 'total 'minbs 'maxbs
 ;                             'minfr 'maxfr 'md5, 'blocks ([type length offset] ..), 'vendor,
@@ -9,11 +8,10 @@
 ;   (flac-format m)        -> the format tablet src/apps/wav.l's wav-pcm takes for m's frames
 ;   (flac-pump q h m emit) -> each frame's samples to emit, h the bytes held past the
 ;                             metadata, q the port the rest comes from -> 0 | why not. a
-;                             stream entered mid-way (a seek) starts at the next frame;
-;                             m 'whole says h opens on the first frame, which must decode
+;                             stream entered mid-way starts at the next frame; m 'whole
+;                             says h opens on the first frame, which must decode
 ;   (flac-wav-head m)      -> the wav header flac -d writes ahead of m's samples
-;   (flac-sniff s)         -> 1 a flac | 0 | 'more: with meta, format and pump, the decoder
-;                             door (notes/plan/av.md)
+;   (flac-sniff s)         -> 1 a flac | 0 | 'more
 ;
 ; a frame's samples are little-endian, signed, (bps + 7) / 8 bytes each: what the stream's md5
 ; is taken over, and what flac -d --force-raw-format --endian=little --sign=signed writes.
@@ -39,9 +37,8 @@
        (go i j acc) (? (j >= k || i + 4 > p + n) (rev acc)
                        (rdle s i 4 @ m (go (i + 4 + m) (j + 1) (snip s (i + 4) (i + 4 + m) . acc))))
        [(snip s (p + 4) (p + 4 + vn)) (go (p + 8 + vn) 0 ())])
-   ; an id3v2 tag ahead of the stream is passed over, as flac does. a picture or padding past
-   ; 64 KiB is skipped unread (av-head): the last block becomes an empty padding block, so the
-   ; blocks still end where they say
+   ; an id3v2 tag ahead is passed over. a block past 64 KiB is skipped unread (av-head): the
+   ; last block becomes an empty padding block, so the blocks still end where they say
    (flac-meta s)
     (: id3 (flac-id3 s)
        (go i m bl)
@@ -85,8 +82,7 @@
        (tail? h o) (#h - o = 128 && "TAG" = snip h o (o + 3))
        ; the next frame sync at or past i, -1 for none in h
        (sync h i) (? (#h <= i + 1) -1 (h i = 255 && (h (i + 1) & 254) = 248) i (sync h (i + 1)))
-       ; until a frame has decoded, a stream entered mid-way (a seek) hunts for the next one,
-       ; and a sync that is no frame is passed over
+       ; until a frame has decoded, a stream entered mid-way hunts for the next one
        (hunt h o) (sync h (o + 1) @ i (? (0 <= i) (go h i 1)
                                          (wav-gulp q @ g (string? g ? (go (snip h (max o (#h - 1)) #h + g) 0 1) (flac-why 1)))))
        (go h o first)
@@ -137,6 +133,8 @@
    (flac-say o m) (o "s" ? 0 (say err m, flush err, 0))
    (flac-err m) (say err "\(m)\n", flush err, 1)
    (flac-exists? p) (open p "r" @ q (hot? q ? (close q, 1) 0))
+   ; the output's name: "-" for stdout, else -o's, else d
+   (flac-op o p d) (? (o "c" || (p = "-" && !(o "o"))) "-" (o "o") (o "o") d)
    (flac-one o p)
     (: nm (p = "-" ? "stdin" p)
        q (p = "-" ? in (open p "r"))
@@ -155,9 +153,7 @@
                 (: raw (o "raw")
                    w ((m 'bps + 7) // 8)
                    big (o "endian" = "big") uns (raw ? (o "sign" = "unsigned") (w = 1))
-                   op (? (o "c" || (p = "-" && !(o "o"))) "-"
-                         (o "o") (o "o")
-                         ((#p > 5 && ".flac" = snip p (#p - 5) #p ? (snip p 0 (#p - 5)) p) + (raw ? ".raw" ".wav")))
+                   op (flac-op o p ((#p > 5 && ".flac" = snip p (#p - 5) #p ? (snip p 0 (#p - 5)) p) + (raw ? ".raw" ".wav")))
                    (? (raw && !(o "endian" && o "sign"))
                        (fin (flac-err "ERROR: for decoding to a raw file you must specify --endian and --sign"))
                       (op != "-" && !(o "f") && flac-exists? op)
@@ -200,9 +196,8 @@
                       [((c 3) m) m h (c 4) q])
           why why))
    ; a source encoded onto port d (the file op, or "-") a frame at a time -> [bytes total] |
-   ; why not. the metadata goes ahead at its final length -- a seek table sized for the total
-   ; the input declares -- and is laid over again at the end, once the totals, md5 and frame
-   ; sizes are known; on "-", which cannot be sought, it stays as first written, as flac's does
+   ; why not. the metadata goes ahead at its final length and is laid over again at the end,
+   ; once totals, md5 and frame sizes are known; on "-" it stays as first written
    (flac-enc o [f m h pump q] d op)
     (: lv (o "level" @ () 5 n n) bs (o "b" @ () (flac-level-bs lv) n n)
        ch (f 'ch) bps (f 'bits) rate (f 'rate) w ((bps + 7) // 8) fs (ch * w)
@@ -221,8 +216,8 @@
        (take pcm) (: _ (md5-feed b pcm) hh (st 'buf + pcm) blk (bs * fs) n (#hh // blk)
                      _ (each ^n (i \ frame (snip hh (i * blk) (i * blk + blk))))
                      (pin st 'buf (snip hh (n * blk) #hh)))
-       ; a seek point every 10 seconds, at the frame holding it; np points, placeholders past
-       ; the last real one, so the table is as long as was laid
+       ; a seek point every 10 seconds; placeholders past the last real one keep the
+       ; table as long as was laid
        (points total offs sizes np)
         (: (go k acc) (? (total <= k * 10 * rate) (rev acc)
                          (: fi (k * 10 * rate // bs) sn (fi * bs)
@@ -280,8 +275,7 @@
                       (op = "-") [(#h0 + st 'out) total]
                       (: _ (close d)
                          ((cite 'av 'av-patch op 0 h1) @ 0 [(#h1 + st 'out) total] why why))))))))
-   ; a kept seektable's points moved to the frames that now hold them: sorted, a repeat a
-   ; placeholder, a point past the end left as it was
+   ; a kept seektable's points moved to the frames that now hold them
    (flac-reseek s total bs offs sizes)
     (: ph (string (map (k \ 255) ^8))
        ps (map (i \ snip s (18 * i) (18 * i + 18)) ^(#s // 18))
@@ -318,10 +312,8 @@ a different output filename.
        q (p = "-" ? in (open p "r"))
        (? !(hot? q) (flac-err "\(nm): ERROR: \(uerrno q)")
           (: fin (\ v (p @ "-" v (close q, v)))
-             op (? (o "c" || (p = "-" && !(o "o"))) "-"
-                   (o "o") (o "o")
-                   (: i (foldl (\ a k (p k = 46 ? k a)) -1 ^#p)
-                      ((0 < i && i > foldl (\ a k (p k @ 47 k a)) -1 ^#p ? (snip p 0 i) p) + ".flac")))
+             op (flac-op o p (: i (foldl (\ a k (p k = 46 ? k a)) -1 ^#p)
+                                ((0 < i && i > foldl (\ a k (p k @ 47 k a)) -1 ^#p ? (snip p 0 i) p) + ".flac")))
              (? (op != "-" && !(o "f") && flac-exists? op)
                  (fin (flac-err "ERROR: output file \(op)\(op = p ? flac-same " already exists, use -f to override")"))
                 (flac-src o q @
@@ -335,11 +327,9 @@ a different output filename.
                                [n total] (fin (flac-say o "\(nm): wrote \(n) bytes, ratio=\(flac-ratio n (flac-den o p src total))\n"))))))))))
    flac-long {"decode" "d" "test" "t" "stdout" "c" "force" "f" "silent" "s"
               "no-padding" "nopad" "no-seektable" "noseek"}
-   (flac-num s) (string? s && #s && all (c \ 48 <= c <= 57) (chars s)
-                 ? (foldl (\ a c (a * 10 + c - 48)) 0 (chars s)))
    ; a value option: -b, -o and -T take one, glued or the next word
    (flac-val o k v)
-    (k @ "b" (flac-num v @ n (n ? (pin o "b" n, 1) (flac-err "ERROR: bad blocksize \(v)", ())))
+    (k @ "b" (unum v @ n (n ? (pin o "b" n, 1) (flac-err "ERROR: bad blocksize \(v)", ())))
          "o" (pin o "o" v, 1)
          "T" (0 < findsub v "=" ? (pin o "tags" (v . peep o "tags" ()), 1) (flac-err "ERROR: bad tag \(v)", ()))
          _ ())
@@ -359,8 +349,8 @@ a different output filename.
                      (? (k = "output-name" && 0 <= i) (pin o "o" v, go >l fs)
                         (k = "tag" && 0 <= i) (flac-val o "T" v ? (go >l fs) 1)
                         (k = "blocksize" && 0 <= i) (flac-val o "b" v ? (go >l fs) 1)
-                        ((k = "channels" || k = "bps" || k = "sample-rate") && flac-num v)
-                         (pin o k (flac-num v), go >l fs)
+                        ((k = "channels" || k = "bps" || k = "sample-rate") && unum v)
+                         (pin o k (unum v), go >l fs)
                         ((k = "endian" && (v = "little" || v = "big"))
                          || (k = "sign" && (v = "signed" || v = "unsigned")))
                          (pin o k v, go >l fs)

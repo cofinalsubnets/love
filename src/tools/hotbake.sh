@@ -30,13 +30,13 @@ if [ "${1:-}" = -p ]; then
   done > "$d/w/in"
   run() { (cd "$d/w" && env -i PATH="$d" LOVE_TOUCH_OUT="$d/touch" love "$@" > /dev/null 2>&1 < /dev/null); }
   run -e 1
-  run kore echo hi
-  run kore ls .
-  run kore cat in
-  run kore sort in
-  run kore grep -c lvm in
-  run kore wc in
-  run kore head -3 in
+  run echo hi
+  run ls .
+  run cat in
+  run sort in
+  run grep -c lvm in
+  run wc in
+  run head -3 in
   run lush -c true
   # a build whose wake is eager (not moonlibc's: HCC, the gcc lanes) records no touch
   [ -s "$d/touch" ] || { echo "hotbake: $raw woke eagerly, no profile" >&2; exit 1; }

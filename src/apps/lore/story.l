@@ -8,7 +8,7 @@
 ; (library ROOT) lays a hall with a shelf per crew module, each book a file.
 (module (story story-main story-run story-new story-key story-frame open-window window-say
          level kind thing level-of data-of level-text load-level save-level library
-         tile kind-of wall? thing-at pen wrap)
+         tile kind-of wall? thing-at pen wrap level-cells)
 ; posix is optional: the wasm build links none of it and runs this file. borrow, never
 ; splice: a spliced absent module scares, a borrowed one's tty names just go missing
 (borrow 'posix)
@@ -157,16 +157,19 @@
                                            v2 (? (p - m < v) (p - m) (v + span - 1 - m < p) (p - span + 1 + m) v)
                                            (? (v2 < 0) 0 (lo < v2) lo v2))
                    (pins g 'vx (clamp (g 'vx) (g 'x) w (lvl 'w)) 'vy (clamp (g 'vy) (g 'y) h (lvl 'h))))
+ ; a level's cells, x \ y \ [glyph fg bg]: you at px py, a thing, the tile; past the map nothing
+ (level-cells lvl px py) (:
+   spot (foldl (t \ id \ (lvl 'things id @ th (pin t [(th 'x) (th 'y)] th))) {} (keys (lvl 'things)))
+   (x \ y \ (? (x = px && y = py) ["@" 228 -1]
+               (peep spot [x y] 0) (spot [x y] @ th [(th 'gl) (th 'fg) (th 'bg)])
+               !(y < lvl 'h && x < #(lvl 'rows y)) [" " -1 -1]
+               (kind-of lvl (tile lvl x y) @ k [(k 'gl) (k 'fg) (k 'bg)]))))
  (story-frame g w h) (: j (jug 0) lvl (g 'lvl) win (g 'win)
    mh (h - 1)
    _ (follow g w mh)
    vx (g 'vx) vy (g 'vy)
    ; the map row by row: the tile's glyph and pens, a thing's, yours -- each cell (glyph . pen)
-   spot (foldl (t \ id \ (lvl 'things id @ th (pin t [(th 'x) (th 'y)] th))) {} (keys (lvl 'things)))
-   (cell x y) (? (x = g 'x && y = g 'y) ["@" 228 -1]
-                 (peep spot [x y] 0) (spot [x y] @ th [(th 'gl) (th 'fg) (th 'bg)])
-                 !(y < lvl 'h && x < #(lvl 'rows y)) [" " -1 -1]        ; past the map: nothing
-                 (kind-of lvl (tile lvl x y) @ k [(k 'gl) (k 'fg) (k 'bg)]))
+   cell (level-cells lvl (g 'x) (g 'y))
    (row y) (:- (go 0 () "")
     (go x p acc) (x >= w ? acc
                   (: c (cell (vx + x) (vy + y)) p2 >c

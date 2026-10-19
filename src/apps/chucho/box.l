@@ -1,7 +1,5 @@
-; src/apps/chucho/box.l -- mailboxes on disk: a maildir (cur/ new/ tmp/, the flags in each
-; file's name) or an mbox (one file, a "From " line before each message). a box is read whole
-; into a tablet, changed in memory, and written back by mb-sync, which drops the deleted and
-; lays the flags.
+; src/apps/chucho/box.l -- mailboxes on disk: a maildir (flags in each file's name) or an
+; mbox. a box is read whole into a tablet, changed in memory, and written back by mb-sync.
 ;
 ;   (mb-kind p)            'maildir 'mbox 'imap or () for nothing there
 ;   (mb-open p)            -> {'kind 'path 'msgs [msg ..]} | why not, a string
@@ -83,14 +81,13 @@
   (: (go i acc) (fsub t "\nFrom " i @ k (k < 0 ? (rev acc) (go (k + 1) ((k + 1) . acc))))
      (go 0 (starts? t "From " ? [0] ())))
  ; ">From " quoting, one > undone on each line of >s before a From (mboxrd, and mboxo's too)
+ (mb-gts l) (: (go i) (i < #l && l i = 62 ? (go (i + 1)) i) (go 0))   ; the >s l opens with
  (mb-unquote t)
   (? !(has? t ">From ") t
-     (: (one l) (: (go i) (i < #l && l i = 62 ? (go (i + 1)) i)
-                   (go 0 @ k (0 < k && starts? (snip l k #l) "From " ? (snip l 1 #l) l)))
+     (: (one l) (mb-gts l @ k (0 < k && starts? (snip l k #l) "From " ? (snip l 1 #l) l))
         (join "\n" (map one (split "\n" t)))))
  (mb-quote t)
-  (: (one l) (: (go i) (i < #l && l i = 62 ? (go (i + 1)) i)
-                (go 0 @ k (starts? (snip l k #l) "From " ? ">\(l)" l)))
+  (: (one l) (mb-gts l @ k (starts? (snip l k #l) "From " ? ">\(l)" l))
      (join "\n" (map one (split "\n" t))))
  (mb-sflags hs)
   (: s (mime-get hs "status") x (mime-get hs "x-status")

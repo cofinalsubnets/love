@@ -25,7 +25,7 @@
 ; the parsers are peg's (src/love/boot/post.l): a parser is (\ s y n), payloads are lists.
 
 ; the head names the exports; the rest stays off the tablet. htb hti hq mget serve papel's
-; template, hpe kore www. a consumer says (borrow 'lapiz) or (cite 'lapiz 'md->ht).
+; template, hpe `love www`. a consumer says (borrow 'lapiz) or (cite 'lapiz 'md->ht).
 (module (lapiz mdread mdshow htread htshow rfread rfshow ttyshow ttlinks ttpage ttpics
          md->ht ht->md md->rf rf->md rf->tty md->tty ht->tty convert  htb hti hq hpe mget)
 
@@ -690,7 +690,7 @@
    ; the macros a generator defines for itself, read as the stock ones they stand for
    rfsame '((".Sp" ".sp") (".Vb" ".nf") (".Ve" ".fi") (".P" ".PP") (".HP" ".PP")
             (".Pp" ".PP") (".INDENT" ".RS") (".UNINDENT" ".RE") (".Ip" ".IP") (".IPs" ".IP"))
-   rfdef  '(".de" ".de1" ".am" ".am1")
+   rfdef  '(".de" ".de1" ".am" ".am1" ".ig")                ; .ig: a body never run
    rfcond '(".if" ".ie" ".el")
    ; the macro name: up to the first blank or \, so `.el\{\` names .el the way groff reads it
    (rfmac ln) ((: (g i) (? (#ln <= i) (snip ln 0 i)
@@ -740,40 +740,76 @@
    ; the reader never eats a stray closer, so balance is the scrub's job: a second .nf is a
    ; no-op, a .RE with no .RS goes, and what is still open at the end is shut here
    (rfshut nf rs) ((nf ? ".fi\n" "") + rep ".RE\n" rs)
-   ; a macro the page defined for itself: its .de is gone, its first argument is kept as text
+   ; a macro the page defined for itself runs its body: \\$n an argument, \\$* all of them,
+   ; \\n(.$ how many, and copy mode's \\\\ read as one \\. past the budget, its first argument
    (rfown ln) (rffst ln @ r (!#r ? "" "\(r 0 = 46 ? "\\&\(r)" r)\n"))
+   (rfsub ln as)
+    (: n #ln
+       (arg k) (0 < k <= #as ? (as (k - 1)) "")
+       (go i acc)
+        (? (n <= i) (join "" (rev acc))
+           (ln i = 92 && i + 1 < n && ln (i + 1) = 92)
+            (i + 2 < n && ln (i + 2) = 36 ? (go (i + 1) acc) (go (i + 2) ("\\" . acc)))
+           (ln i = 92 && i + 2 < n && ln (i + 1) = 36)
+            (ln (i + 2) @ c
+               (? (dig? c) (go (i + 3) (arg (c - 48) . acc))
+                  (c = 42) (go (i + 3) (join " " as . acc))
+                  (c = 64) (go (i + 3) (join " " (map (a \ "\"\(a)\"") as) . acc))
+                  (go (i + 1) ("\\" . acc))))
+           (ln i = 92 && i + 4 < n && snip ln i (i + 5) = "\\n(.$") (go (i + 5) (show #as . acc))
+           (go (i + 1) (string (ln i) . acc)))
+       (go 0 ()))
+   ; a macro's arguments, bare or "quoted"
+   (rargs s)
+    ((: (g i acc)
+        (? (i >= #s) (rev acc)
+           (s i = 32) (g (i + 1) acc)
+           (s i = 34) (: j ((: (h k) (k < #s && s k != 34 ? (h (k + 1)) k)) (i + 1))
+                       (g (j + 1) (snip s (i + 1) j . acc)))
+           ; an escape's two characters never split an argument: `\ ` is a non-breaking space
+           (: j ((: (h k) (? (#s <= k) k
+                             (s k = 92 && k + 1 < #s) (h (k + 2))
+                             (s k = 32) k
+                             (h (k + 1)))) i)
+            (g j (snip s i j . acc))))) 0 ())
    (rfscrub s)
-    ((: (go l de nf d rs defs acc)
+    (: defs {}
+        (go l de nf d rs k acc)
         (atom? l ? (cats (rev acc) + rfshut nf rs)
            (: ln (rfdot <l) m (rfmac ln)
               ; a .de body runs to a lone .. only: a lone . or a blank name is an empty request
-              (? de       (go >l !(m = "..") nf d rs defs acc)
-                 (0 < d)  (go >l de nf (rfdepth ln d) rs defs acc)         ; a conditional group
+              (? de       (m = ".." ? (go >l () nf d rs k acc)
+                             (pin defs de (peep defs de () + [<l]), go >l de nf d rs k acc))
+                 (0 < d)  (go >l de nf (rfdepth ln d) rs k acc)         ; a conditional group
                  ; a comment, and a bare \ continuation with nothing on it
-                 (rfcom? ln || ln = "\\") (go >l de nf d rs defs acc)
-                 (elem m rfdef) (go >l 1 nf d rs (".\(rffst ln)" . defs) acc)
+                 (rfcom? ln || ln = "\\") (go >l de nf d rs k acc)
+                 (elem m rfdef)
+                  (: nm (m = ".ig" ? " ig" ".\(rffst ln)")
+                     (pin defs nm (m = ".de" || m = ".de1" ? () (peep defs nm ())), go >l nm nf d rs k acc))
                  ; the branch this device takes is read in the condition's place, so a macro
                  ; there is still a macro and the text is still text
                  (elem m rfcond)
-                  (rfnro ln @ k
-                     (? (k = 'no) (go >l de nf (rfdepth ln 0) rs defs acc)
-                        !#k       (go >l de nf d rs defs acc)
-                        (go (k . >l) de nf d rs defs acc)))
-                 (m = "." || elem m rfskip) (go >l de nf d rs defs acc)
+                  (rfnro ln @ c
+                     (? (c = 'no) (go >l de nf (rfdepth ln 0) rs k acc)
+                        !#c       (go >l de nf d rs k acc)
+                        (go (c . >l) de nf d rs k acc)))
+                 (m = "." || elem m rfskip) (go >l de nf d rs k acc)
                  (: m2 (rfas m) rest (snip ln #m #ln)
                     ; .sp is a blank line inside a display and a paragraph break outside one
-                    (? (m2 = ".sp") (go >l de nf d rs defs ((nf ? "\n" ".PP\n") . acc))
-                       (m2 = ".IP" && !nf) (go >l de nf d rs defs (rfip ln . acc))
+                    (? (m2 = ".sp") (go >l de nf d rs k ((nf ? "\n" ".PP\n") . acc))
+                       (m2 = ".IP" && !nf) (go >l de nf d rs k (rfip ln . acc))
                        (elem m2 '(".nf" ".EX"))
-                        (go >l de 1 d rs defs (nf ? acc ("\(m2)\n" . acc)))
+                        (go >l de 1 d rs k (nf ? acc ("\(m2)\n" . acc)))
                        (elem m2 '(".fi" ".EE"))
-                        (go >l de 0 d rs defs (nf ? ("\(m2)\n" . acc) acc))
-                       (m2 = ".RS") (go >l de nf d (rs + 1) defs ("\(m2)\(rest)\n" . acc))
-                       (m2 = ".RE") (rs ? (go >l de nf d (rs - 1) defs ("\(m2)\n" . acc))
-                                        (go >l de nf d rs defs acc))
-                       (elem m defs) (go >l de nf d rs defs (rfown ln . acc))
-                       (go >l de nf d rs defs ("\(m2)\(rest)\n" . acc))))))))
-     (splitnl s) 0 0 0 0 () ()))
+                        (go >l de 0 d rs k (nf ? ("\(m2)\n" . acc) acc))
+                       (m2 = ".RS") (go >l de nf d (rs + 1) k ("\(m2)\(rest)\n" . acc))
+                       (m2 = ".RE") (rs ? (go >l de nf d (rs - 1) k ("\(m2)\n" . acc))
+                                        (go >l de nf d rs k acc))
+                       (peep defs m 'none != 'none)
+                        (0 < k ? (go (map (b \ rfsub b (rargs rest)) (defs m) + >l) de nf d rs (k - 1) acc)
+                           (go >l de nf d rs k (rfown ln . acc)))
+                       (go >l de nf d rs k ("\(m2)\(rest)\n" . acc)))))))
+       (go (splitnl s) () 0 0 0 4096 ())))
 
 ; ---------------------------------------------------------------- roff (man), read
 ; roff fills: input lines join with a space, a font macro's arguments with nothing (.BR and
@@ -838,19 +874,7 @@
    rplain  (plain * mrg * runp (many (alts [resc rtext rchar]))))   ; escapes only, no fonts
 
 ; the font macros: which fonts to cycle through, and whether the arguments take a space.
-(: (rargs s)                                                  ; a macro's arguments, bare or "quoted"
-   ((: (g i acc)
-       (? (i >= #s) (rev acc)
-          (s i = 32) (g (i + 1) acc)
-          (s i = 34) (: j ((: (h k) (k < #s && s k != 34 ? (h (k + 1)) k)) (i + 1))
-                      (g (j + 1) (snip s (i + 1) j . acc)))
-          ; an escape's two characters never split an argument: `\ ` is a non-breaking space
-          (: j ((: (h k) (? (#s <= k) k
-                            (s k = 92 && k + 1 < #s) (h (k + 2))
-                            (s k = 32) k
-                            (h (k + 1)))) i)
-           (g j (snip s i j . acc))))) 0 ())
-   fontmacs '((".BR" (strong text) 0) (".RB" (text strong) 0) (".IR" (em text) 0)
+(: fontmacs '((".BR" (strong text) 0) (".RB" (text strong) 0) (".IR" (em text) 0)
               (".RI" (text em) 0) (".BI" (strong em) 0) (".IB" (em strong) 0)
               (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
    (macinfo m) ((: (g l) (? (atom? l) () (<<l = m) ><l (g >l))) fontmacs)
@@ -865,6 +889,267 @@
                  (atom? info ?  (rfinl line)
                   (mrg (argls (rargs (snip line #m #line)) <info <>info 0))))
    (linl line)  (#line && line 0 = 46 ? (imacl line) (rfinl line)))
+
+; ---------------------------------------------------------------- roff (mdoc), as man
+; an mdoc page (.Dd or .Sh ahead of any .TH) is laid as the man macros the reader knows: its
+; blocks as .SH .TP .IP .RS .nf, its inline macros as fonts and words. a terminal's reading.
+(: bsdcall '("Ac" "Ad" "An" "Ao" "Ap" "Aq" "Ar" "At" "Bc" "Bo" "Bq" "Brc" "Bro" "Brq" "Bsx" "Bx"
+             "Cm" "Dc" "Do" "Dq" "Dv" "Dx" "Ec" "Em" "En" "Eo" "Er" "Es" "Ev" "Fa" "Fc" "Fl" "Fn"
+             "Fr" "Ft" "Fx" "Ic" "Li" "Lk" "Ms" "Mt" "Nm" "No" "Ns" "Nx" "Oc" "Oo" "Op" "Ot" "Ox"
+             "Pa" "Pc" "Pf" "Po" "Pq" "Qc" "Ql" "Qo" "Qq" "Sc" "So" "Sq" "St" "Sx" "Sy" "Ta" "Tn"
+             "Ux" "Va" "Vt" "Xc" "Xo" "Xr")
+   bsdbold '("Fl" "Cm" "Ic" "Nm" "Sy" "Cd")
+   bsdital '("Ar" "Em" "Pa" "Va" "Fa" "Ft" "Ad" "Vt")
+   bsdenc  '(("Op" "[" "]") ("Bq" "[" "]") ("Brq" "{" "}") ("Pq" "(" ")") ("Aq" "\\(la" "\\(ra")
+             ("Dq" "\\(lq" "\\(rq") ("Sq" "\\(oq" "\\(cq") ("Ql" "\\(oq" "\\(cq") ("Qq" "\\(dq" "\\(dq"))
+   ; the open and close halves, a line apart: 1 an opener, 0 a closer
+   bsdhalf '(("Ao" "\\(la" 1) ("Ac" "\\(ra" 0) ("Bo" "[" 1) ("Bc" "]" 0) ("Bro" "{" 1) ("Brc" "}" 0)
+             ("Do" "\\(lq" 1) ("Dc" "\\(rq" 0) ("Oo" "[" 1) ("Oc" "]" 0) ("Po" "(" 1) ("Pc" ")" 0)
+             ("Qo" "\\(dq" 1) ("Qc" "\\(dq" 0) ("So" "\\(oq" 1) ("Sc" "\\(cq" 0))
+   bsdos   '(("Bx" "BSD") ("Bsx" "BSD/OS") ("Fx" "FreeBSD") ("Nx" "NetBSD") ("Ox" "OpenBSD")
+             ("Dx" "DragonFly"))
+   bsdst   '(("-p1003.1" "IEEE Std 1003.1 (\\(lqPOSIX.1\\(rq)")
+             ("-p1003.1-2001" "IEEE Std 1003.1-2001 (\\(lqPOSIX.1\\(rq)")
+             ("-p1003.1-2004" "IEEE Std 1003.1-2004 (\\(lqPOSIX.1\\(rq)")
+             ("-p1003.1-2008" "IEEE Std 1003.1-2008 (\\(lqPOSIX.1\\(rq)")
+             ("-p1003.1-2017" "IEEE Std 1003.1-2017 (\\(lqPOSIX.1\\(rq)")
+             ("-p1003.2" "IEEE Std 1003.2 (\\(lqPOSIX.2\\(rq)")
+             ("-susv2" "Version\\~2 of the Single UNIX Specification (\\(lqSUSv2\\(rq)")
+             ("-susv3" "Version\\~3 of the Single UNIX Specification (\\(lqSUSv3\\(rq)")
+             ("-susv4" "Version\\~4 of the Single UNIX Specification (\\(lqSUSv4\\(rq)")
+             ("-ansiC" "ANSI X3.159-1989 (\\(lqANSI\\~C89\\(rq)")
+             ("-isoC" "ISO/IEC 9899:1990 (\\(lqISO\\~C90\\(rq)")
+             ("-isoC-99" "ISO/IEC 9899:1999 (\\(lqISO\\~C99\\(rq)")
+             ("-isoC-2011" "ISO/IEC 9899:2011 (\\(lqISO\\~C11\\(rq)")
+             ("-xpg4" "X/Open Portability Guide Issue\\~4 (\\(lqXPG4\\(rq)")
+             ("-ieee754" "IEEE Std 754-1985"))
+   bsdlib  '(("libc" "Standard C Library (libc, \\-lc)") ("libm" "Math Library (libm, \\-lm)")
+             ("libutil" "System Utilities Library (libutil, \\-lutil)")
+             ("libpthread" "POSIX Threads Library (libpthread, \\-lpthread)"))
+   bsdclose '("." "," ":" ";" ")" "]" "?" "!")
+   (bsdkv l k) ((: (g l) (? (atom? l) () (<<l = k) ><l (g >l))) l)
+   (bsdcall? t) (elem t bsdcall ? 1 0)
+   (bsdcl? t) (elem t bsdclose ? 1 0)
+   (bsdop? t) (t = "(" || t = "[" ? 1 0)
+   (bsddel? t) (bsdcl? t || bsdop? t || t = "|")
+   ; a piece is [text no-space-before no-space-after]; a delimiter leans as it reads
+   (bsddp t) [t (bsdcl? t) (bsdop? t)]
+   (bsdfont st f t) (? (st 'plain || f = 'r) t (f = 'b) "\\fB\(t)\\fR" "\\fI\(t)\\fR")
+   ; a macro's words, up to the next callable macro: [words rest]
+   (bsdupto l) ((: (g l acc) (? (atom? l || bsdcall? <l) [(rev acc) l] (g >l (<l . acc)))) l ())
+   ; ..and an enclosure's body: all but the closing delimiters that end the line
+   (bsdtrail l) (rev l @ r
+                   ((: (g r t) (? (two? r && bsdcl? <r) (g >r (<r . t)) [(rev r) t])) r ()))
+   (bsdsee? st) (st 'syn ? ";" "")
+   ; one inline macro m over the tokens after it -> [pieces rest]
+   (bsdmac st m r)
+    (: f (? (elem m bsdbold) 'b (elem m bsdital) 'i 'r)
+       e (bsdkv bsdenc m) h (bsdkv bsdhalf m) os (bsdkv bsdos m)
+       ver (two? r && !(bsdcall? <r) && !(bsddel? <r))
+       (? (two? e) (bsdtrail r @ [b t] [([<e 0 1] . bsdin st b + [[<>e 1 0]]) t])
+          (two? h) [[(<>h ? [<h 0 1] [<h 1 0])] r]
+          (two? os) [[[(ver ? (m = "Bx" ? (<r + <os) (<os + " " + <r)) <os) 0 0]] (ver ? >r r)]
+          (m = "Ux") [[["UNIX" 0 0]] r]
+          (m = "At") [[[(ver ? "Version\\~\(snip <r 1 #(<r)) AT&T UNIX" "AT&T UNIX") 0 0]] (ver ? >r r)]
+          (m = "St") (two? r ? [[[(bsdkv bsdst <r @ s (s ? <s (snip <r 1 #(<r)))) 0 0]] >r] [() r])
+          (m = "Xr") (: sec? (two? r && two? >r && !(bsdcall? <>r) && !(bsddel? <>r))
+                        (two? r ? [[[(sec? ? "\(<r)(\(<>r))" <r) 0 0]] (sec? ? >>r >r)] [() r]))
+          (m = "Ns") [[["" 1 1]] r]
+          (m = "Ap") [[["'" 1 1]] r]
+          (m = "Pf") (two? r ? [[[<r 0 1]] >r] [() r])
+          (m = "Eo") (two? r && !(bsdcall? <r) ? [[[<r 0 1]] >r] [() r])
+          (m = "Ec") (two? r && !(bsdcall? <r) ? [[[<r 1 0]] >r] [() r])
+          (m = "Ta") [[[" " 0 0]] r]
+          (elem m '("Xo" "Xc" "Bk" "Ek" "Fr" "En")) [() r]
+          (m = "Es") [() (two? r ? (two? >r ? >>r ()) ())]
+          (m = "Fn") (bsdupto r @ [ws rest]
+                        (: ar (filter (w \ !(bsddel? w)) (two? ws ? >ws ()))
+                           dl (filter bsddel? (two? ws ? >ws ()))
+                           [([(bsdfont st 'b (two? ws ? <ws "")
+                               + "(" + join ", " (map (a \ bsdfont st 'i a) ar) + ")" + bsdsee? st) 0 0]
+                             . map bsddp dl) rest]))
+          (m = "Fo") (two? r ? (pin st 'fa 0, [[[(bsdfont st 'b <r + "(") 0 1]] >r]) [() r])
+          (m = "Fa" && charm? (st 'fa))
+           (bsdupto r @ [ws rest]
+              [(map (w \ (bsddel? w ? (bsddp w)
+                          (: k (st 'fa) _ (pin st 'fa (k + 1))
+                             [((0 < k ? ", " "") + bsdfont st 'i w) 1 0]))) ws) rest])
+          (m = "Fc") (pin st 'fa (), [[[(")" + bsdsee? st) 1 0]] r])
+          (m = "Lk") (bsdupto r @ [ws rest]
+                        (atom? ws ? [() rest]
+                         [(atom? >ws ? [[<ws 0 0]] (map (w \ [w 0 0]) >ws + [[": " 1 1] [<ws 0 0]])) rest]))
+          (m = "An" && two? r && elem <r '("-split" "-nosplit")) [() >r]
+          (bsdupto r @ [ws rest]
+             (: dft (? (m = "Fl") "-" (m = "Ar") "file ..." (m = "Nm") (st 'name) "")
+                word? (foldl (a \ w \ a || !(bsddel? w)) 0 ws)
+                pre (m = "Fl" ? "-" "")
+                ps (map (w \ (bsddel? w ? (bsddp w) [(bsdfont st f (pre + w)) 0 0])) ws)
+                ; a bare Fl ahead of another macro joins it: Fl Fl create is --create
+                lean (m = "Fl" && atom? ws && two? rest ? 1 0)
+                [(!word? && #dft ? ([(bsdfont st f dft) 0 lean] . ps) ps) rest]))))
+   ; a line's tokens -> pieces, words outside any macro as they stand
+   (bsdin st l)
+    (atom? l ? ()
+       (: t <l
+          (bsdcall? t ? (bsdmac st t >l @ [ps rest] (ps + bsdin st rest))
+             ((bsddel? t ? (bsddp t) [t 0 0]) . bsdin st >l))))
+   ; pieces -> text: a space between two unless either leans, none at all under .Sm off
+   (bsdcat ps sm)
+    ((: (g l prev acc)
+        (atom? l ? (join "" (rev acc))
+         (: p <l
+            sep (? (atom? prev || !sm || <>>prev || <>p) "" " ")
+            (g >l p (<p . sep . acc))))) ps () ())
+   (bsdlead s) (#s && elem (s 0) '(46 39) ? "\\&\(s)" s)
+   (bsdtext st l) (bsdlead (bsdcat (bsdin st l) (st 'sm)))
+   bsdman '(("1" "General Commands Manual") ("2" "System Calls Manual")
+            ("3" "Library Functions Manual") ("4" "Device Drivers Manual")
+            ("5" "File Formats Manual") ("6" "Games Manual")
+            ("7" "Miscellaneous Information Manual") ("8" "System Manager's Manual")
+            ("9" "Kernel Developer's Manual"))
+   ; `$Mdocdate: June 24 2025 $` is the date the vcs stamped
+   (bsddate l) (join " " (filter (w \ w != "$" && w != "$Mdocdate:") l))
+   (bsdand l) (? (atom? l) "" (atom? >l) <l (atom? >>l) "\(<l) and \(<>l)"
+                 (join ", " (rev >(rev l)) + ", and " + <(rev l)))
+   ; a reference, its %-fields in the order a reader wants them
+   (bsdref st)
+    (: rs (rev (st 'refs)) (v k) (bsdkv rs k)
+       au (map (a \ bsdcat a 1) (filter (x \ <x = "%A") rs @ l (map (x \ <>x) l)))
+       f1 (map (k \ (v k @ x (two? x ? (bsdcat <x 1)))) '("%T" "%B" "%J"))
+       rest (map (k \ (v k @ x (two? x ? (bsdcat <x 1)))) '("%R" "%N" "%V" "%I" "%P" "%Q" "%C" "%D" "%O" "%U"))
+       parts (filter (s \ string? s && #s)
+                     ([(bsdand au) (<f1 @ t (string? t ? "\\(lq\(t)\\(rq"))
+                       (<>f1 @ b (string? b ? "\\fI\(b)\\fR")) (<>>f1 @ j (string? j ? "\\fI\(j)\\fR"))]
+                      + rest))
+       (bsdlead (join ", " parts + ".")))
+   ; the list a .It is in: [kind count rs]
+   (bsdkind l) ((: (g l) (? (atom? l) "-tag"
+                            (elem <l '("-tag" "-bullet" "-dash" "-hyphen" "-enum" "-item" "-column"
+                                       "-hang" "-ohang" "-inset" "-diag")) <l
+                            (g >l))) l)
+   ; a column list's widths, its arguments that are not flags
+   (bsdcols l) ((: (g l acc) (? (atom? l) (rev acc)
+                                (<l = "-offset" || <l = "-width") (g (two? >l ? >>l ()) acc)
+                                (#(<l) && <l 0 = 45) (g >l acc)
+                                (g >l (#(<l) . acc)))) l ())
+   (bsdpad s n) (s + rep " " (n - swidth s))
+   ; split a column row at its Ta's
+   (bsdcells l) ((: (g l cur acc) (? (atom? l) (rev (rev cur . acc))
+                                     (<l = "Ta") (g >l () (rev cur . acc))
+                                     (g >l (<l . cur) acc))) l () ())
+   (bsdrow st toks)
+    (: ws (st 'cols) _ (pin st 'plain 1)
+       cs (map (c \ bsdcat (bsdin st c) 1) (bsdcells toks))
+       _ (pin st 'plain (st 'nf))
+       (go cs ws) (? (atom? cs) ""
+                     (atom? >cs) <cs
+                     (bsdpad <cs (max (two? ws ? <ws 0) (swidth <cs) + 2) + go >cs (two? ws ? >ws ())))
+       (bsdlead (go cs ws)))
+   ; one mdoc macro line -> the man lines it stands for
+   (bsdblk st m toks)
+    (: syn (st 'syn) top (st 'bl @ b (two? b ? <b ()))
+       (txt _) (bsdtext st toks)
+       (br l) (syn && st 'synl ? (".br" . l) (pin st 'synl 1, l))
+       (? (m = "Dd") (pin st 'date (bsddate toks), ())
+          (m = "Dt") (: (un s) (join "" (map (i \ s i @ c (? (c = 92 && i + 1 < #s && s (i + 1) = 38) ""
+                                                             (i && s (i - 1) = 92 && c = 38) ""
+                                                             (c = 92 && i + 1 < #s && s (i + 1) = 45) ""
+                                                             (string c))) ^#s))
+                        t (un (two? toks ? <toks "")) s (un (two? >toks ? <>toks ""))
+                        ; a third word is the volume when it is words, not an architecture
+                        v (two? >>toks && has? <>>toks " " ? <>>toks (bsdkv bsdman s @ x (two? x ? <x "")))
+                        [".TH \"\(t)\" \"\(s)\" \"\(st 'date)\" \"\" \"\(v)\""])
+          (elem m '("Os" "Bf" "Ef" "Bk" "Ek" "Db" "Xc")) ()
+          (m = "Sh") (: n (bsdcat (bsdin st toks) 1)
+                        (pins st 'syn (n = "SYNOPSIS" ? 1 ()) 'synl (), [".SH \(n)"]))
+          (m = "Ss") [".SS \(bsdcat (bsdin st toks) 1)"]
+          (m = "Pp" || m = "Lp") [".PP"]
+          (m = "Sm") (pin st 'sm (two? toks && <toks = "off" ? 0 1), ())
+          (m = "Nm") (: _ (!#(st 'name) && two? toks ? (pin st 'name <toks))
+                        (bsdtext st (m . toks) @ l (syn ? (br [l]) [l])))
+          (m = "Nd") ["\\- \(txt ())"]
+          (m = "In") (br [(bsdlead (bsdfont st 'b "#include <\(two? toks ? <toks "")>"))])
+          (m = "Fd") (br [(bsdlead (bsdfont st 'b (join " " toks)))])
+          (m = "Ft") (syn ? (pin st 'synl (), [".PP" (txt ())]) [(txt ())])
+          (m = "Fn" || m = "Fo") (: l (bsdtext st (m . toks)) (syn ? [".br" l] [l]))
+          (m = "Lb") [(two? toks ? (bsdkv bsdlib <toks @ x (two? x ? <x "library \\(lq\(<toks)\\(rq")) "")]
+          (m = "Ex") (: ns (filter (w \ w != "-std") toks) ns2 (two? ns ? ns [(st 'name)])
+                        [(bsdlead ("The " + bsdand (map (n \ bsdfont st 'b n) ns2)
+                                   + (atom? >ns2 ? " utility exits" " utilities exit")
+                                   + "\\~0 on success, and\\~>0 if an error occurs."))])
+          (m = "Rv") (: ns (filter (w \ w != "-std") toks) ns2 (two? ns ? ns [(st 'name)])
+                        [(bsdlead ("The " + bsdand (map (n \ bsdfont st 'b n + "()") ns2)
+                                   + (atom? >ns2 ? " function returns" " functions return")
+                                   + " the value\\~0 if successful; otherwise the value\\~\\-1 is returned"
+                                   + " and the global variable \(bsdfont st 'i "errno") is set to indicate the error."))])
+          (m = "Ud") ["currently under development."]
+          (m = "Bt") ["is currently in beta test."]
+          (m = "Bl") (: k (bsdkind toks) rs (two? (st 'bl) || elem "-offset" toks ? 1 0)
+                        _ (pin st 'bl ([k 0 rs] . st 'bl))
+                        _ (k = "-column" ? (pins st 'cols (bsdcols toks) 'nf 1 'plain 1))
+                        ((rs ? [".RS"] ()) + (k = "-column" ? [".nf"] ())))
+          (m = "El") (two? top ? (: _ (pin st 'bl >(st 'bl))
+                                    _ (<top = "-column" ? (pins st 'nf () 'plain ()))
+                                    ((<top = "-column" ? [".fi"] ()) + (<>>top ? [".RE"] ()))) ())
+          (m = "It") (: k (two? top ? <top "-tag")
+                        (? (k = "-column") [(bsdrow st toks)]
+                           (elem k '("-bullet" "-dash" "-hyphen")) [".IP \\(bu"]
+                           (k = "-enum") (: n (<>top + 1) _ (pin st 'bl ([k n <>>top] . >(st 'bl)))
+                                            [".IP \"\(show n).\""])
+                           (k = "-item") [".PP"]
+                           [".TP" (atom? toks ? "\\&" (txt ()))]))
+          (m = "Bd") (: nf (elem "-literal" toks || elem "-unfilled" toks || elem "-centered" toks ? 1 0)
+                        rs (elem "-offset" toks ? 1 0)
+                        _ (pin st 'bd ([nf rs] . st 'bd))
+                        _ (nf ? (pins st 'nf 1 'plain 1))
+                        ((rs ? [".RS"] ()) + (nf ? [".nf"] ())))
+          (m = "Ed") (st 'bd @ b (two? b ? (: x <b _ (pin st 'bd >b)
+                                             _ (<x ? (pins st 'nf () 'plain ()))
+                                             ((<x ? [".fi"] ()) + (<>x ? [".RE"] ()))) ()))
+          (m = "D1") [".RS" (txt ()) ".RE"]
+          (m = "Dl") (: _ (pin st 'plain 1) l (txt ()) _ (pin st 'plain (st 'nf)) [".RS" ".nf" l ".fi" ".RE"])
+          (m = "Rs") (pin st 'refs (), ())
+          (m = "Re") (: l (bsdref st) (pin st 'refs (), [l]))
+          (m 0 = 37) (pin st 'refs ([m (bsdin st toks)] . st 'refs), ())
+          (m = "An" && two? toks && elem <toks '("-split" "-nosplit")) ()
+          [(bsdtext st (bsdcall? m ? (m . toks) toks))]))
+   ; an mdoc macro line: a dot, a capital or a %, a short name, then a blank or the end
+   (bsdname ln)
+    (: n #ln
+       (? (n < 3 || !(ln 0 = 46 || ln 0 = 39) || !(64 < ln 1 < 91 || ln 1 = 37)) ()
+          ((: (g i) (? (n <= i || elem (ln i) '(32 9)) (i < 6 ? (snip ln 1 i) ()) (g (i + 1)))) 2)))
+   ; a head extended across lines (Xo .. Xc), and Fo .. Fc, joined into one line first
+   (bsdjoin ls)
+    ((: (g ls acc)
+        (atom? ls ? (rev acc)
+         (: ln <ls nm (bsdname ln) ts (nm ? rargs (snip ln (#nm + 1) #ln) ())
+            ; a line ending in Ns runs on into the next one, with no space between
+            ns? (two? ts && <(rev ts) = "Ns" && !(elem "Xo" ts))
+            (open? x) (elem "Xo" x || nm = "Fo" || ns?)
+            (shut? l x) (? (nm = "Fo") (bsdname l = "Fc") ns? 1 (elem "Xc" x))
+            (nm && open? ts && !(nm != "Fo" && elem "Xc" ts) ?
+             ((: (h l j) (? (atom? l) (g () (j . acc))
+                            (: s <l t (bsdname s @ k (k ? snip s 1 #s s))
+                               (shut? s (rargs t) ? (g >l ("\(j) \(t)" . acc)) (h >l "\(j) \(t)")))))
+              >ls ln)
+             (g >ls (ln . acc)))))) ls ())
+   (bsd? s)
+    ((: (g l) (? (atom? l) 0
+                 (rfdot <l @ x (? (rfmac x = ".TH") 0 (rfmac x = ".Dd" || rfmac x = ".Sh") 1 (g >l)))))
+     (splitnl s))
+   (bsd->man s)
+    (: st (pins {} 'sm 1 'name "" 'date "" 'bl () 'bd () 'nf () 'plain ())
+       (line ln) (bsdname ln @ m
+                    (? !m [ln]
+                       (0 < findsub ln "\\\"") (line (snip ln 0 (findsub ln "\\\"")))     ; a trailing comment
+                       ; a macro that says nothing lays no line, which would end a paragraph
+                       (filter (l \ 0 < #l)
+                               (bsdblk st m (rargs (snip (m = "It" && col? () ? (tr ln) ln) (#m + 1) #ln))))))
+       (col? _) (st 'bl @ b (two? b && <<b = "-column"))
+       ; a column row may split at tabs as well as at Ta
+       (tr ln) (cats (map (i \ ln i @ c (c = 9 ? " Ta " (string c))) ^#ln))
+       (cats (map (l \ "\(l)\n") (catmap line (bsdjoin (splitnl s))))))
+   (rfbsd s) (bsd? s ? (bsd->man s) s))
 
 ; the block layer: a run of fill lines is a paragraph, a block macro ends it.
 (: blockmac (alts [(lit ".TH") (lit ".SH") (lit ".SS") (lit ".PP") (lit ".LP") (lit ".TP")
@@ -907,7 +1192,7 @@
                      (seqs [(skip (lit ".RS")) (skip (span nonl?)) (skip (lit "\n"))
                             (many r-block) (skip (lit ".RE")) (skip (span nonl?)) (skip (lit "\n"))]) s y n)
    (r-block s y n) (alts [r-blank r-br r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl r-para r-lone] s y n)
-   rfread (bmrg * runp (many r-block) * rfscrub))   ; the scrub runs first: see above
+   rfread (bmrg * runp (many r-block) * rfscrub * rfbsd))   ; mdoc becomes man, then the scrub
 
 ; ---------------------------------------------------------------- a terminal, shown
 ; not a lens: no reader, no row in `surfaces`. it fills to a width, man's shape: a .SH flush

@@ -90,13 +90,7 @@
    ; `vals`. a stranger, a flag after an operand or a value flag with none refuses with 2
    (uflags who as vals ok) (uflagsl who as vals ok ())
    ; the same with long words, `longs` uopt's map of a name to its key
-   (uflagsl who as vals ok longs)
-    (: t {}
-       o (uopt as t vals () longs)
-       (atom? o && udie 2 (who + ": an option wants a value"),
-        uoptbad as t ok @ c (!c ? () (udie 2 (who + ": unknown option -" + string c))),
-        uoptstray as <>>o @ w (!w ? () (udie 2 (who + ": unknown option " + w))),
-        [t <>>o]))
+   (uflagsl who as vals ok longs) (ucmdflagsl who as vals ok longs @ [t r] [t (ustray who as r)])
    ; a tool that runs a command -> [t cmd..]: the command's own flags are not its to judge
    (ucmdflags who as vals ok) (ucmdflagsl who as vals ok ())
    (ucmdflagsl who as vals ok longs)
@@ -153,7 +147,9 @@
    ; absolute and relative items stack; a date alone is its midnight, a time alone today's,
    ; all UTC. a weekday rides a date (date's own output reads back) and alone is refused
    (uint w) (: n #w sg (0 < n && (w 0 = 43 || w 0 = 45) ? 1 0) d (snip w sg n)
-               (0 < #d && all digit? (chars d) ? (sg && w 0 = 45 ? (0 - unum d) (unum d))))
+               (udigs? d ? (sg && w 0 = 45 ? (0 - unum d) (unum d))))
+   ; figures and nothing else, at least one
+   (udigs? s) (0 < #s && all digit? (chars s))
    (udate s now)
     (: day 86400000
        units {"sec" 1000 "second" 1000 "min" 60000 "minute" 60000 "hour" 3600000 "day" day
@@ -367,10 +363,10 @@
         pins t 'h "" 'p 0 'm 0))
 
    ; --- the operand walk -----------------------------------------------------
-   ; each name in turn; a miss costs the status without stopping the run. no operands is stdin
-   (uwalk one as)
-    (: (go a ok) (two? a ? (go >a (one <a ok)) (flush out, !ok))
-     (two? as ? (go as 1) (one "-" 1, flush out, 0)))
+   ; each name in turn; a miss costs the status without stopping the run. uwalk's no
+   ; operands is stdin
+   (ueach one as) (: (go a ok) (two? a ? (go >a (one <a ok)) (flush out, !ok)) (go as 1))
+   (uwalk one as) (two? as ? (ueach one as) (one "-" 1, flush out, 0))
    ; is the path a directory (stat follows links, like the tools want)
    (udirp q) (stat q @ st (two? st && 16384 = 61440 & <>>st))
    ; a path's own kind, a link not followed: 'dir, 'link or 'file, () when there is none

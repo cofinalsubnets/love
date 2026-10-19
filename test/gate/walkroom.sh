@@ -8,10 +8,6 @@ set -u
 love=${1:-out/love}
 d=out/.walkroom && mkdir -p $d
 fails=0
-# a copy, so every run below is a process of its own: under lush the binary itself runs as
-# a warm fork of the shell, whose pools were sized before LOVE_BUDGET_MB was read
-cp "$love" $d/love && chmod +x $d/love || { echo "FAIL walkroom: cannot copy $love"; exit 1; }
-love=$d/love
 
 # a 1.5M-long list: its hash walks a word an element, far past a fresh nursery's gap
 printf '%s\n' '(: l (jot 1500000) m (map (+ 0) l) t {} _ (pin t l (quote v))' \

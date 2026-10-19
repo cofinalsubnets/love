@@ -114,4 +114,4 @@ if [ "$(uname -m)" = x86_64 ]; then
   ( cd "$N" && "$K" cc h.c -o h ) > "$o" 2>&1 || { cat "$o"; fail "love cc off the carried source"; }
   [ "$("$N/h")" = carried ] || fail "love cc off the carried source: the program"
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf ok"
+echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf ok"

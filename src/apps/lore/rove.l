@@ -3,12 +3,12 @@
 ; line of sight; the painter says a frame into any port, each cell's face the game's own, so
 ; frames run headless; then the helm, the sign box, the ~ and {brace} words, paced keys, and
 ; the horn's lead paced by the frame gap.
-(module (rove cell-of cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
-         fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap legible-lum lim lit? mix mob-at note
-         nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
-         settle settle-slice sign-box sign-flow sign-gap sign-line sign-over sign-pen
+(module (rove cell-of choice-line floor-new room-apart? room-mid cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
+         fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap legible-lum lim lit? mix mob-at mob-spots note
+         nth-on oct-at open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
+         settle settle-slice sign-box sign-flow sign-gap sign-line sign-frame sign-over sign-pen
          sign-rect sign-top sign-tpen snip-l song-fill song-lead song-lead-max song-lead-of song-rate steer
-         tail? tap-dir tap-key tap-steer rove-key rove-modes toward vlen rove-wander rove-turn rove-press rove-loop)
+         tail? tap-dir tap-key tap-steer rove-key rove-modes toward tree-lines tree-next tree-node vlen rove-wander rove-turn rove-press rove-loop)
 (borrow 'posix)
 (borrow 'x11)
 (borrow 'text)
@@ -24,6 +24,20 @@
  (open? d x y) (dat d x y @ t (0 < t && nelem t (d 'solid)))
  (lit? d x y) (0 < dat d x y)                           ; looked through
  (dput d x y v) (pin (d 't) (x + d 'w * y) v)
+ (floor-new w h) {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ()}
+
+ ; a room is [x y rw rh]: its middle, and whether it keeps a cell clear of every room in rms
+ (room-mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
+ (room-apart? rm) (all (o \ 1 + peep rm 0 0 + peep rm 2 1 <= peep o 0 0 ||
+                            1 + peep o 0 0 + peep o 2 1 <= peep rm 0 0 ||
+                            1 + peep rm 1 0 + peep rm 3 1 <= peep o 1 0 ||
+                            1 + peep o 1 0 + peep o 3 1 <= peep rm 1 0))
+ ; a point of an octagon about cx cy, a flat side up: k of eight, clockwise from the right of
+ ; the top pair. rx and ry are its reach, across and down
+ (oct-at cx cy rx ry k) (: a (k * 0.7853981633974483 - 1.1780972450961724)
+                           c (cos a) s (sin a)
+                           [(cx + int (rx * c + (0.0 < c ? 0.5 -0.5)))
+                            (cy + int (ry * s + (0.0 < s ? 0.5 -0.5)))])
 
  ; a spun rng: the functional state in a box, one draw steps it
  (roll sb n) (random (peep sb () 0) n @ p (pin sb () >p, <p))
@@ -33,9 +47,8 @@
  ; each tunnels to the previous one, so the floor is connected. pl, the tier's plan: wide
  ; from, wide by, tall from, tall by, one try per so many cells. answers (floor . st')
  (delve w h st pl) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ()}
+   d (floor-new w h)
    sb {st}
-   (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
    (carve x0 y0 rw rh) (: (row y x) (x < x0 + rw ? (dput d x y 1, row y (x + 1)))
                           (rows y) (y < y0 + rh ? (row y x0, rows (y + 1)))
                           (rows y0))
@@ -44,19 +57,15 @@
    (lash [ax ay] [bx by])
     (roll sb 2 ? (hallx ay ax bx, hally bx ay by)
                  (hally ax ay by, hallx by ax bx))
-   (apart? rm) (all (o \ 1 + peep rm 0 0 + peep rm 2 1 <= peep o 0 0 ||
-                         1 + peep o 0 0 + peep o 2 1 <= peep rm 0 0 ||
-                         1 + peep rm 1 0 + peep rm 3 1 <= peep o 1 0 ||
-                         1 + peep o 1 0 + peep o 3 1 <= peep rm 1 0))
    (try n) (0 < n ?
             (: rw (pl 0 + roll sb (pl 1)) rh (pl 2 + roll sb (pl 3))
                (w <= rw + 2 || h <= rh + 2 ? (try (n - 1))
                 ; ..x is 1 + roll (w - rw - 1), keeping a one-cell border
                 (: x (1 + roll sb (w - rw - 1)) y (1 + roll sb (h - rh - 1))
                    rm [x y rw rh]
-                 (? !(apart? rm (d 'rooms)) (try (n - 1))
+                 (? !(room-apart? rm (d 'rooms)) (try (n - 1))
                   (carve x y rw rh,
-                   d 'rooms ? (lash (mid rm) (mid <(d 'rooms))),
+                   d 'rooms ? (lash (room-mid rm) (room-mid <(d 'rooms))),
                    pin d 'rooms (rm . d 'rooms),
                    try (n - 1)))))))
    (try (w * h // pl 4),
@@ -64,12 +73,12 @@
     (#(d 'rooms) < 2 ?
      (: r1 '(1 1 3 3) r2 [(w - 4) (h - 4) 3 3]
         (carve 1 1 3 3, carve (w - 4) (h - 4) 3 3,
-         lash (mid r1) (mid r2), pin d 'rooms [r2 r1]))),
-    (pins d 'in (mid (last (d 'rooms)))
-            'stair (mid <(d 'rooms))),
+         lash (room-mid r1) (room-mid r2), pin d 'rooms [r2 r1]))),
+    (pins d 'in (room-mid (last (d 'rooms)))
+            'stair (room-mid <(d 'rooms))),
     dput d <(d 'stair) <>(d 'stair) 2,
    ; ..and a second stair in another room, where the floor has one to spare
-    (? (2 < #(d 'rooms)) (mid (d 'rooms 1) @ s2 (dput d <s2 <>s2 2))),
+    (? (2 < #(d 'rooms)) (room-mid (d 'rooms 1) @ s2 (dput d <s2 <>s2 2))),
     d . peep sb () 0))
 
  ; a list dealt out in a random order, and the first n of one
@@ -308,6 +317,18 @@
  (sign-rect ttl ls a n w) (: box (sign-box ttl (foldl (+) () (sign-flow ls w)))
                              ww (vlen <box)
                              [((w - ww) // 2 @ q (0 < q ? q 0)) (sign-top a n #box) ww #box])
+ ; a talk: a tree of nodes [key lines choices], a choice [digit text next]. a choice's line
+ ; is marked off between the bytes 1 and 2, which fit paints as a button
+ (tree-node tr k) (: (go (e . u)) (<e @ ^k e (go u)) (go tr))
+ (choice-line c) (string 1 + " " + show <c + "  " + c 1 + " " + string 2)
+ ; ..a node's sign: its lines, then its choices numbered, then the foot
+ (tree-lines txt chs foot) (txt + (two? chs ? [""] ()) + map choice-line chs
+                            + ["" (fill foot [(two? chs ? (join ", " (map (show * cap) chs)) "any key")])])
+ ; ..and where a key goes: a digit to its choice's node, anything else back to at
+ (tree-next chs k at) (filter (c \ 48 + <c = k) chs @ hit (two? hit ? (<hit 2) at))
+ ; a frame f with the sign sg, [ttl lines], over it; where it lands is kept in d 'box
+ (sign-frame d f sg rows cols) (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()),
+                                two? sg ? (sign-over f <sg >sg 1 rows cols) f)
  ; a frame with the box centred over its rows a .. a+n, for a screen w wide; the box
  ; takes the rows the reflow makes
  (sign-over f ttl ls a n w) (:- (go 0 "")
@@ -376,6 +397,8 @@
 
  (note g s) (pin g 'msg (g 'msg ? (g 'msg + "; " + s) s))
  (mob-at g x y) <(filter ({'x ^x 'y ^y} \ 1) (g 'ms))
+ ; the mobs ents by cell, on a floor w wide
+ (mob-spots w ents) (foldl (t \ e \ pin t (e 'x + w * e 'y) e) {} ents)
  ; a mob stirs on the turns its pace divides, so heaven moves at half a climber's rate
  (due? g m) (0 = g 'tn % m 'pc)
  ; --- a turn on a floor: the walk's key, the turn it makes, the mobs after it ---

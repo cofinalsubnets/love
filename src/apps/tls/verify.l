@@ -1,29 +1,21 @@
 ; src/apps/tls/verify.l -- what the client needs to believe a server: the handshake's signature
-; under the leaf's key, and the leaf itself, through its issuers, to a root it was handed.
-;
+; under the leaf's key, and the leaf, through its issuers, to a root it was handed.
 ;   (der s i end)            the tlv at i, inside end -> [tag cs ce st] | ()
 ;   (der-kids s cs ce)       a constructed value's children, tiling it exactly -> list | 0
-;   (leaf-key der)           the certificate's key -> [kind key spki] | ()
-;                            kind 'ed25519 (32 bytes), 'p256 'p384 or 'p521 ([x y]), 'rsa ([n e])
+;   (leaf-key der)           -> [kind key spki] | (); 'ed25519 (32 bytes), 'p256 'p384 'p521 ([x y]), 'rsa ([n e])
 ;   (cv-ok? k scheme sig m)  1 when sig is the leaf's signature of m under scheme
 ;   (x509 der)               a certificate read for path building -> a tablet | ()
 ;   (host-ok? c host)        1 when the certificate names host (rfc 6125, subjectAltName only)
-;   (chain-ok? ders roots host now)   1, or the reason it is not, a string naming the
-;                            check and the certificate; roots are x509s, now seconds; a
-;                            host of () checks neither the name nor the purpose
+;   (chain-ok? ders roots host now)   1, or a reason string; roots are x509s, now seconds;
+;                            a host of () checks neither the name nor the purpose
 ;   (chain-fail ders roots host now)  the same -> 1 | [x509 depth reason]
 ;   (pem-ders text)          the der of every CERTIFICATE block in a pem text
-;   (tls-roots _)            [bundle-path anchors], the roots read once a process: the host's
-;                            bundle, else the tree's own (src/apps/tls/roots.pem)
-;
-; CertificateVerify schemes: ed25519 (0x0807), ecdsa p-256/sha-256 (0x0403), ecdsa
-; p-384/sha-384 (0x0503), rsa-pss/sha-256 (0x0804), rsa-pss/sha-384 (0x0805). a chain's own
-; signatures: those, and rsa pkcs#1 v1.5 over sha-256/384/512; sha-1 and rsassa-pss certificate
-; signatures are refused. no revocation is checked -- no crl, no ocsp. name constraints hold
-; over dns and ip names, a root's as well as an issuer's; one on a kind of name not read here
-; that could bear on a server (a directory name, say) refuses the chain. the key is public and so are the
-; signatures, so the arithmetic is the plain bignums, no constant time owed. every reader
-; here is total: a short or lying length answers (), never an index past the end.
+;   (tls-roots _)            [bundle-path anchors], read once a process
+; CertificateVerify: ed25519, ecdsa p-256 and p-384, rsa-pss sha-256/384. chain signatures add
+; rsa pkcs#1 v1.5 sha-256/384/512; sha-1 and rsassa-pss certificates are refused. no revocation.
+; name constraints hold over dns and ip names; one on another kind that could bear on a server
+; refuses the chain. all public, so plain bignums, no constant time owed. every reader is
+; total: a short or lying length answers (), never an index past the end.
 (module 'tls
 (borrow 'bytes)
 (borrow 'cal)
@@ -82,8 +74,8 @@
 
    (bits-of n) (: (go n k) (n < 1 ? k (go (n >> 1) (k + 1))) (go n 0))
 
-   ; --- ecdsa over a short weierstrass curve with a = -3 (sec 2, fips 186-4): a curve is
-   ; [p n b gx gy], a point jacobian [x y z], z = 0 the point at infinity ---
+   ; --- ecdsa, short weierstrass with a = -3: a curve is [p n b gx gy], a point jacobian
+   ; [x y z], z = 0 the point at infinity ---
    curve-p256
     (map (h \ be-num (unhex h))
          ["ffffffff00000001000000000000000000000000ffffffffffffffffffffffff"
@@ -148,8 +140,8 @@
                                        (b2 = 1) (ec-add c a q)
                                        a))))
        (go (bits-of (c 1)) [1 1 0]))
-   ; a der ecdsa signature of the digest h under key [x y] on curve c; a digest longer than
-   ; the order is cut to its leftmost bits, as the standard says
+   ; a der ecdsa signature of digest h under key [x y] on curve c; a long digest is cut to
+   ; the order's leftmost bits
    (ec-ok? c xy h sig)
     (: n (c 1)
        t (der sig 0 #sig)
@@ -166,8 +158,8 @@
                    (fm c (<pt * zi * zi) % n = <r ? 1 0))))))
    (p256-on? x y) (ec-on? curve-p256 x y)
 
-   ; --- rsa: pss (rfc 8017 9.1.2, the salt a digest long, as tls 1.3 says) and pkcs#1 v1.5
-   ; (8.2.2, the encoding rebuilt and compared whole) ---
+   ; --- rsa: pss (rfc 8017 9.1.2, salt a digest long) and pkcs#1 v1.5 (8.2.2, rebuilt and
+   ; compared whole) ---
    (mgf1 hf seed n)
     (: (go c acc) (n <= #acc ? (snip acc 0 n) (go (c + 1) (acc + hf (seed + wrbe c 4))))
        (go 0 ""))
@@ -229,8 +221,7 @@
                     e (two? ne && #ne = 2 ? (der-uint key <>ne))
                     (two? n && two? e && 2 < <e && 1024 <= bits-of <n ? ['rsa [<n <e] spki]))
                 ()))))
-   ; the tbs's fields, the version dropped when present: serial, sigalg, issuer, validity,
-   ; subject, spki, then the optional rest
+   ; the tbs's fields, version dropped: serial, sigalg, issuer, validity, subject, spki, rest
    (tbs-fields c)
     (: top (der c 0 #c)
        tk (two? top && top 2 = #c ? (der-seq c top 48) 0)
@@ -269,8 +260,7 @@
           0))
 
    ; --- x.509, what path building reads ---
-   ; a time as seconds since 1970: UTCTime YYMMDDHHMMSSZ (50..99 the 1900s) or
-   ; GeneralizedTime YYYYMMDDHHMMSSZ, only the Z form; () for anything else
+   ; a time as seconds since 1970: UTCTime (50..99 the 1900s) or GeneralizedTime, Z form only
    (x509-time s t)
     (: b (two? t ? (der-body s t) "")
        n #b
@@ -305,7 +295,7 @@
                      'issuer (der-all c (fs 2)) 'subject (der-all c (fs 4))
                      'nb (two? nb ? <nb) 'na (two? na ? <na) 'key key
                      'ca 0 'plen () 'ku () 'eku () 'dns () 'ips () 'ncp () 'nce () 'bad ())
-             ; the inner and outer signature algorithms must agree (their oids, what we check by)
+             ; the inner and outer signature algorithm oids must agree
              ino (der-seq c (fs 1) 48)
              _ (two? ino && <<ino = 6 && der-body c <ino = x 'alg ? 0 (pin x 'bad "its two signature algorithms differ"))
              ext (filter (t \ <t = 163) (drop fs 6))
@@ -358,8 +348,7 @@
                     crit (pin x 'bad "a critical extension it does not know")
                     0))))
        (each es one))
-   ; keyUsage's keyCertSign, bit 5 counted from the top of the first byte (the value was
-   ; shifted to 32 bits above, so the top byte is the first)
+   ; keyUsage's keyCertSign, bit 5 from the top of the first byte (shifted to 32 bits above)
    (x509-certsign? x) (x 'ku @ k (charm? k ? (0 < k & 4 << 24) 1))
    ; a certificate's common name for a person to read, or its subject's length
    (x509-name x)
@@ -386,8 +375,7 @@
           (any (d \ dns-match? d h) (x 'dns) ? 1 0)))
 
    ; --- name constraints (rfc 5280 4.2.1.10): the names a ca may vouch for, dns and ip ---
-   ; n within subtree b: "sb.test" holds itself and every name under it, ".sb.test" only
-   ; those under it, "" every name
+   ; n within subtree b: "sb.test" holds itself and all under it, ".sb.test" only those under, "" all
    (dns-in? b n)
     (: b (lower b) n (lower n)
        (? (b = "" || b = n && b 0 != 46) 1
@@ -397,8 +385,7 @@
    (ip-in? b a) (#a @ k (#b != 2 * k ? 0 (all (i \ (a i & b (k + i)) = (b i & b (k + i))) ^k)))
    (nm-of x) (map (d \ [130 d]) (x 'dns) + map (a \ [135 a]) (x 'ips))
    (nm-show n) (? (<n = 130) (n 1) (#(n 1) = 4) (join "." (map (i \ show (n 1 i)) ^4)) "an ipv6 address")
-   ; one name against x's constraints -> () when x may vouch for it, else why not. a wildcard
-   ; reaches every name one label down, so an excluded name there is reached
+   ; one name against x's constraints -> () or why not; a wildcard reaches one label down
    (nc-why x nm)
     (: t <nm v (nm 1)
        p (filter (g \ <g = t) (x 'ncp)) e (filter (g \ <g = t) (x 'nce))
@@ -409,8 +396,8 @@
        (? (two? p && !(any in? p)) "is outside the names it may vouch for"
           (any (g \ in? g || reach? g) e) "is among the names it may not vouch for"
           ()))
-   ; x's constraints over the names below it -> () or why not. email and uri subtrees bear on
-   ; no name a server is checked by; any other kind is one this cannot check, and refuses
+   ; x's constraints over the names below it -> () or why not; email and uri subtrees bear on
+   ; no server name, any other kind cannot be checked and refuses
    (nc-sick x nms)
     (x 'ncp + x 'nce @ gs
        (? (atom? gs) ()
@@ -419,10 +406,8 @@
              (two? bad ? ("the name " + nm-show <bad + " " + nc-why x <bad)))))
 
    ; --- the roots: the host's bundle, read once a process ---
-   ; SSL_CERT_FILE, else the first of the linux and bsd homes that reads, else the tree's own:
-   ; mozilla's roots for serving tls as curl extracts them, src/apps/tls/roots.pem, which every
-   ; seat reads under /love -- inle and the wasm seat mounted, a host out of the source its
-   ; binary carries
+   ; SSL_CERT_FILE, else the first linux or bsd home that reads, else the tree's roots.pem
+   ; (mozilla's, as curl extracts them) under /love
    tree-roots "src/apps/tls/roots.pem"
    root-homes ["/etc/ssl/certs/ca-certificates.crt" "/etc/ssl/cert.pem"
                "/etc/pki/tls/certs/ca-bundle.crt" "/usr/local/share/certs/ca-root-nss.crt"
@@ -471,7 +456,7 @@
    ; -> 1, or why not, naming the certificate
    (chain-ok? ders roots host now)
     (chain-fail ders roots host now @ [x _ s] (tablet? x ? ("certificate " + x509-name x + ": " + s) s) r r)
-   ; -> 1, or [x depth why]: the certificate at fault and how far above the leaf it sits;
+   ; -> 1, or [x depth why]: the certificate at fault and its height above the leaf;
    ; a leaf that does not read is x ()
    (chain-fail ders roots host now)
     (: xs (map x509 ders)
@@ -479,9 +464,8 @@
        pool (two? xs ? (filter tablet? >xs))
        work (tablet 1) _ (pin work 'n 0)
        (why x k s) [x k s]
-       ; from certificate c at k issuers above the leaf, nms the names of c and all below it: an
-       ; anchor that signed it and may vouch for them, else an issuer from the pool, walked on;
-       ; the most telling reason is kept for the failure
+       ; c at k issuers above the leaf, nms the names of c and below: an anchor that signed it
+       ; and may vouch for them, else a pool issuer, walked on; the most telling reason kept
        (up c k used nms)
         (chain-depth < k ? (why c k "the chain is too long")
            (: n (work 'n)

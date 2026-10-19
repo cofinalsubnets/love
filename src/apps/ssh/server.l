@@ -1,22 +1,14 @@
-; src/apps/ssh/server.l -- an ssh-2 server over client.l's transport: the same one of everything
-; (curve25519-sha256, an ssh-ed25519 host key, chacha20-poly1305@openssh.com), publickey
-; auth against authorized_keys (4252 §7), and one session channel per connection (4254): a
-; shell or a command, over a pty when the client asks for one, else over three pipes.
-;
-;   (sshd-serve port hk keys me quiet)  listen, then serve each connection as a task ->
-;                                       the listen's nom when the port cannot be taken
-;   (ssh-keywrite path seed pub comment) an unencrypted openssh-key-v1 key, 0600, and its
-;                                       .pub beside it -> 1 | a reason string
+; src/apps/ssh/server.l -- an ssh-2 server over client.l's transport: curve25519-sha256,
+; ssh-ed25519, chacha20-poly1305@openssh.com; publickey auth against authorized_keys (4252 §7);
+; one session channel per connection (4254), a shell or a command, on a pty or three pipes.
+;   (sshd-serve port hk keys me quiet)  serve each connection as a task -> the listen's nom on failure
+;   (ssh-keywrite path seed pub comment) an openssh-key-v1 key, 0600, and its .pub -> 1 | reason
 ;   (ssh-keyout seed pub comment pass rounds)  the key file's text, locked when pass is not ""
-;   (ssh-keyfile path txt)              txt in a new file, 0600 -> 1 | a reason string
+;   (ssh-keyfile path txt)              txt in a new file, 0600 -> 1 | reason
 ;   (ssh-authorized path)               the ed25519 keys authorized_keys grants
 ;   (ssh-me _)                          this process's user off /etc/passwd: [name home shell]
-;
-; hk is the host key as ssh-key answers it, [seed pub]; keys the authorized_keys path, read
-; at each login so an edit counts at once; me the user served. there is no setuid here: the
-; server serves the user it runs as, and a login naming anyone else is refused. the session
-; runs that user's login shell. no rekeying, no port forwarding, no subsystems (sftp): a
-; client's rekey is answered with a disconnect, and the rest are refused by name.
+; hk is [seed pub]; keys is re-read at each login. no setuid: the server serves only the user
+; it runs as. no rekey (answered with a disconnect), no forwarding, no subsystems.
 (module 'ssh
 (borrow 'tls)
 (borrow 'posix)
@@ -25,13 +17,13 @@
 (:
    vsd "SSH-2.0-love_sshd"
    sd-win (1 << 21)
-   sd-grace 120000                        ; login grace: a connection unauthed by 120 s is shut
+   sd-grace 120000                        ; ms an unauthed connection may live
 
    ; --- keys ---
    (ssh-publine pub comment)
     ("ssh-ed25519 " + b64e (sstr "ssh-ed25519" + sstr pub) 1 + (0 < #comment ? (" " + comment) "") + "\n")
-   ; openssh-key-v1: the private section padded 1, 2, 3.. to the cipher's block, 8 bare, and
-   ; locked 16 under aes256-ctr, whose key and iv bcrypt_pbkdf draws from pass and a salt
+   ; openssh-key-v1: the private section padded 1, 2, 3.. to the block (8 bare, 16 locked
+   ; under aes256-ctr, key and iv from bcrypt_pbkdf)
    (ssh-keyout seed pub comment pass rounds)
     (: ck (rnd 4)
        lock (0 < #pass)
@@ -56,8 +48,7 @@
           (: q (open (path + ".pub") "w")
              (hot? q ? (say q (ssh-publine pub comment), close q) 0,
               1))))
-   ; lines whose first word is the key type; a line with options ahead of its type
-   ; (command=, from=, ..) grants nothing, since none of them is honoured here
+   ; a line with options ahead of its type grants nothing: none is honoured
    (ssh-authorized path)
     (: q (open path "r")
        txt (hot? q ? (slurp q @ s (close q, s)) "")
@@ -79,29 +70,18 @@
 
    ; --- the exchange, the server's half of client.l's ssh-dial ---
    sd-kexs ["curve25519-sha256" "curve25519-sha256@libssh.org" "kex-strict-s-v00@openssh.com"]
-   (sd-kexinit _) (u8 20 + rnd 16 + names sd-kexs + names ["ssh-ed25519"] + names [cipher] + names [cipher]
-                  + names ["hmac-sha2-256"] + names ["hmac-sha2-256"] + names ["none"] + names ["none"]
-                  + names [] + names [] + u8 0 + u32 0)
-   ; the client's lists against ours -> a reason string, or the strict flag
-   (sd-agree ic)
-    (: c (cur ic) _ (g-skip c 17)
-       kx (g-names c) hk (g-names c) cs (g-names c) sc (g-names c)
-       (? !(elem "curve25519-sha256" kx || elem "curve25519-sha256@libssh.org" kx)
-          ("no common key exchange; the client offers " + join "," kx)
-          (nelem "ssh-ed25519" hk) ("no common host key type; the client takes " + join "," hk)
-          !(elem cipher cs && elem cipher sc) ("no common cipher; the client offers " + join "," cs)
-          (elem "kex-strict-c-v00@openssh.com" kx)))
    ; versions, kexinits, the ecdh reply signed by the host key, newkeys each way, and the
    ; userauth service -> 1 | a reason string. our send key is kd "D", the client's "C"
    (sd-hello t hk)
     (: _ (wr t (vsd + "\r\n"))
        vc (server-version t)
-       is (sd-kexinit 0)
+       is (kexinit sd-kexs)
        _ (ssh-send t is)
        ic (string? vc ? (expect t 20) ())
-       ok (? !(string? vc) "no version line" !(string? ic) "no kexinit" (sd-agree ic))
+       ok (? !(string? vc) "no version line" !(string? ic) "no kexinit"
+             (agree ic "client" "no common host key type; the client takes " "kex-strict-c-v00@openssh.com"))
        (string? ok ? ok
-          (: _ (pin t 'strict ok)                          ; strict kex: noise before newkeys ends it (ssh-next)
+          (: _ (pin t 'strict ok)                          ; strict kex (ssh-next)
              e (expect t 30)
              (? !(string? e) "no key exchange"
                 (: c (cur e) _ (g-skip c 1) qc (g-str c)
@@ -114,15 +94,7 @@
                          h (sha (sstr vc + sstr vsd + sstr ic + sstr is + sstr ks + sstr qc + sstr qs + kk))
                          _ (ssh-send t (u8 31 + sstr ks + sstr qs + sstr (sstr "ssh-ed25519" + sstr (ed-sign hs hp h))))
                          _ (pin t 'sid h)
-                         (kd x) (sha (kk + h + x + h) @ k1 (k1 + sha (kk + h + k1)))
-                         (pair k) [(snip k 0 32) (snip k 32 64)]
-                         _ (ssh-send t (u8 21))
-                         _ (pin t 'ck (pair (kd "D")))
-                         _ (ok ? (pin t 'sseq 0) 0)
-                         nk (expect t 21)
-                         _ (pin t 'sk (pair (kd "C")))
-                         _ (ok ? (pin t 'rseq 0) 0)
-                         _ (pin t 'strict 0)
+                         nk (newkeys t kk h ok "D" "C")
                          sr (string? nk ? (expect t 5) ())
                          sv (string? sr ? (cur sr @ c2 (g-skip c2 1, g-str c2)) "")
                          (? !(string? nk) "no newkeys"
@@ -130,8 +102,8 @@
                             (ssh-send t (u8 6 + sstr "ssh-userauth"), 1)))))))))
 
    ; --- publickey auth -> [the key] | a reason string ---
-   ; none and every other method are answered with the one taken; a key with no signature is
-   ; a query (PK_OK when it would do); ten refusals and the door closes
+   ; other methods are answered with the one taken; a key with no signature is a query
+   ; (PK_OK when it would do); ten refusals and the door closes
    (sd-no t) (ssh-send t (u8 51 + names ["publickey"] + u8 0))
    (sd-auth t user keys n)
     (ssh-next t @ p
@@ -165,11 +137,9 @@
                                          (u8 94 + u32 (ch 'rch) + sstr b)),
                            go (i + n))))))
        (go 0))
-   ; a task of the session's own, trapped: an uncaught raise in a task ends the process, and
-   ; this one serves every other connection too
+   ; a task of the session's own, trapped: an uncaught raise would end every connection
    (sd-spawn f) (twirl (_ \ trap f 0 (a \ b \ sd-log 0 ("session task failed: " + show a))) 0)
-   ; a port's output to the channel until it ends: await parks on the fd, so a pty master
-   ; read never holds the process
+   ; a port's output to the channel until it ends; await parks on the fd
    (sd-pump t ch p ext)
     (: _ (await p) c (see p)
        (c = -1 || ch 'dead ? 0
@@ -270,7 +240,7 @@
    (sd-session c hk keys me quiet)
     (: t (tablet 16)
        _ (pins t 's c 'pend "" 'sseq 0 'rseq 0 'busy 0 'authed 0)
-       _ (sd-spawn (_ \ (rest sd-grace, t 'authed ? 0 (close c))))   ; drop a still-unauthed connection (wakes its parked read; sd-loop's later close is a no-op)
+       _ (sd-spawn (_ \ (rest sd-grace, t 'authed ? 0 (close c))))   ; drop it if still unauthed
        h (sd-hello t hk)
        a (h = 1 ? (sd-auth t (me 0) keys 10) h)
        (string? a ? 0 (pin t 'authed 1),
@@ -284,7 +254,7 @@
                  !(ch 'pid) ? 0 (still (ch 'pid) 1)),
               sd-log quiet ("session for " + me 0 + " ended")))))
 
-   ; --- the loop, kiosko's shape: park on the listener, a task per client, the ended collected ---
+   ; --- the loop: park on the listener, a task per client, the ended collected ---
    (sd-drain _) (two? (scoop 0) ? (sd-drain 0) 0)
    (sd-loop l hk keys me quiet)
     (: _ (await l)

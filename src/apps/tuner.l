@@ -1,16 +1,6 @@
-; tuner -- an instrument tuner on the horn's capture door. a vertical scale in eighth tones
-; (25 cents a row, four rows a semitone) rising upward and scrolling to hold the pitch at its
-; middle; each semitone row names its note and octave (A4), and every label, tick and the
-; pitch's own marker wears its octave's hue, red at 0 through violet at 8. a needle below
-; spans fifty cents either side of the nearest note.
-;   tuner              listen on the first capture node, or HORN_IN's
-;   tuner -a HZ        A4 at HZ (440 unless said)
-;   tuner -d DEV       listen on DEV, a /dev/snd/pcmC*D*c, /dev/dsp or /dev/sound
-;   tuner --demo       no mic: a synthesized glide through four octaves, through the same ear
-;   tuner --window     in a window of its own (src/apps/window.l): X, inle's screen, a phone
-; under the needle, when there is room, the spectrum from C1 to B7 in semitones.
-; keys: a and A move A4 down and up a hertz, s shows or hides the spectrum, q quits. in a
-; window a tap is a key too: a on the left third, A on the right, s between.
+; tuner -- an instrument tuner on the horn's capture door: a scale in eighth tones (25 cents
+; a row) scrolling to hold the pitch at its middle, each octave its hue, red at 0 through
+; violet at 8; a needle fifty cents either side of the nearest note; the spectrum C1-B7
 (module (tuner tuner-main tuner-new tuner-yin tuner-hear tuner-cents tuner-note tuner-frame
                tuner-sine tuner-tone tuner-plain tuner-spectrum tuner-glass)
 (borrow 'window)
@@ -24,10 +14,12 @@
    lo 24 hi 1200                                    ; its lags: 2 kHz down to 40 Hz
    linger 2500                                      ; ms a reading stands once the sound stops
    tuner-usage "usage: love tuner [-a HZ] [-d DEV] [--demo] [--window]
-listen and show the pitch on a scale of eighth tones, A4 at HZ (440); DEV is the capture
-device (HORN_IN's word otherwise), and --demo glides a sine instead; --window draws in a
-window, where a tap on its left, middle or right third is a, s or A. a/A move A4, s the
-spectrum, q quits."
+show the pitch heard, in eighth tones
+  -a HZ      the pitch of A4 (default 440)
+  -d DEV     the capture device (default HORN_IN)
+  --demo     a gliding sine instead of the microphone
+  --window   draw in a window (tap left, middle, right for a, s, A)
+keys: a/A move A4, s shows the spectrum, q quits"
 
    (hue o) (hues (max 0 (min 8 o)))
    (ink o s) (sgr "38;5;\(hue o)" s)
@@ -44,11 +36,9 @@ spectrum, q quits."
        (go 0 ()))
 
    ; --- the ear ---------------------------------------------------------------------
-   ; yin over the last win + hi samples of a float tray: each lag's squared difference over
-   ; the window, normalised by the running mean (d'), and the first dip under 0.15 refined by
-   ; a parabola through it and its neighbours. -> hz, or () where nothing periodic is there.
-   ; the difference is the window's energy, the lagged window's and twice their correlation,
-   ; and the correlations of every lag are one transform there and back
+   ; yin over the last win + hi samples: each lag's squared difference over the window,
+   ; normalised by the running mean, the first dip under 0.15 refined by a parabola -> hz, or ().
+   ; the differences come from the energies and every lag's correlation, one fft there and back
    (fft x) (cite 'dsp 'fft x)
    (ifft x) (cite 'dsp 'ifft x)
    (tuner-yin x)
@@ -72,9 +62,8 @@ spectrum, q quits."
    (tuner-tone f n) (sin ((iota n) * (2.0 * pi * f / rate)) * 8000.0)
    (tuner-sine f) (tuner-tone f (win + hi))
 
-   ; the spectrum: one bin a semitone from C1 to B7, each read at its pitch off a hann-windowed
-   ; transform of the last 34 periods or more, a power of two from 1024 frames to long or the
-   ; most the buffer holds. -> dBFS per bin
+   ; the spectrum: a bin a semitone C1-B7, each read off a hann-windowed transform of the last
+   ; 34 periods or more, a power of two from 1024 frames to long. -> dBFS per bin
    bins 84
    long 32768                                       ; the spectrum's longest look, frames
    (up2 n) (n <= 1 ? 1 (2 * up2 ((n + 1) // 2)))
@@ -103,19 +92,16 @@ spectrum, q quits."
    (tuner-cents ref f) (6900.0 + 1200.0 * log (f / ref) / log 2.0)
    (tuner-note k) (floor (k / 4) @ s [(names (fmod s 12)) (s // 12 - 1) (k - 4 * s)])   ; name octave sub
 
-   ; c is the live reading, () in a silence; last, hz and at the latest one and when it was
-   ; heard; lo and hi the note's raw cents, its range since it began; raw its last six, and
-   ; nd the needle, eased toward their mean; ncell the cell the needle was drawn in
+   ; c the live reading, () in a silence; last/hz/at the latest and when; lo hi the note's
+   ; raw cents range; raw its last six; nd the needle eased toward their mean; ncell its cell
    (tuner-new ref src) {'ref ref 'src src 'c () 'last 6900.0 'hz () 'at () 'lo () 'hi ()
                         'raw () 'nd 6900.0 'ncell () 'kern () 'spec () 'sp 1
                         'lvl 0 'floor () 'over 0 'clock (_ \ clock 0)}
    ; a reading stands while it is live and for linger ms after its last window
    (held? t now) (t 'at @ a (charm? a && now - a < linger))
-   ; a window heard: its level, a pitch where it stands clear of the room, the reading
-   ; smoothed in cents. a jump past a quarter tone, or a pitch after the reading has gone,
-   ; is a new note: taken whole, its range begun again. the room's floor follows the
-   ; quiet: down at once, up a percent a window, and only while nothing is pitched, so a
-   ; held note never raises it
+   ; a window heard: a jump past a quarter tone, or a pitch after the reading has gone, is a
+   ; new note. the room's floor drops at once and rises a percent a window only while nothing
+   ; is pitched, so a held note never raises it
    (tuner-hear t x)
     (: now ((t 'clock) 0) l (rms (recent x)) fl (t 'floor)
        kk (t 'kern) key [(t 'ref) (min long (down2 #x))]
@@ -135,8 +121,8 @@ spectrum, q quits."
           (pins t 'lvl l 'c ())))
 
    ; --- the scale ---------------------------------------------------------------------
-   ; one row: the label (4), the tick (6) and the axis (1), then the marker or the ¼. the
-   ; axis is solid along the note's range
+   ; one row: label (4), tick (6), axis (1), then the marker or the ¼; the axis solid along
+   ; the note's range
    (row k mark inr)
     (tuner-note k @ [nm o sub]
      ((sub = 0 ? (bold o (pad (nm + show o) 4)) "    ") + " "
@@ -144,8 +130,7 @@ spectrum, q quits."
       + (inr ? (bold o "█") (ink o (sub = 0 ? "┫" "┃")))
       + (? mark mark (sub = 2 ? (sgr "2" " ¼") ""))))
    (signed x) ((x >= 0 ? "+" "−") + show (int (abs x + 0.5)))
-   ; the marker on the row the pitch falls on: the note, the cents off it, the hz, the
-   ; note's range in cents off the same note; faint once the sound has stopped. a narrow
+   ; the marker: note, cents off, hz, the note's range; faint once the sound stops. a narrow
    ; screen keeps the note and the cents
    (marker c f w lo hi gone)
     (: s (floor (c / 100.0 + 0.5)) off (c - 100.0 * s)
@@ -155,9 +140,8 @@ spectrum, q quits."
           + (w < 48 ? "" ("  " + show (int (f * 10.0 + 0.5) / 10.0) + " Hz"))
           + (w < 60 || hi - lo < 1.0 ? "" ("  " + signed (lo - 100.0 * s) + "…" + signed (hi - 100.0 * s) + "¢"))
           + (abs off < 5.0 ? "  ✓" "")))))
-   ; the needle: fifty cents either side of the nearest note, its centre the note itself,
-   ; the note's range drawn along it. it rides nd, and leaves its cell only for a target
-   ; three quarters of a cell away, so a reading on a cell's edge does not flicker across it
+   ; the needle: fifty cents either side of the note, its range along it. it leaves its cell
+   ; only for a target three quarters of a cell away, so an edge reading does not flicker
    (needle t c w lo hi gone)
     (: s (floor (c / 100.0 + 0.5))
        n (max 11 (w - 4)) mid (n // 2)
@@ -171,43 +155,38 @@ spectrum, q quits."
         ("  " + cats (map (i \ (? (i = i0) ((gone ? faint bold) o "●") (a <= i <= b) (ink o "━")
                                   (i = mid) (sgr "2" "┃") (sgr "2" "─"))) ^n))))
 
-   ; the spectrum across n columns, four rows of eighth blocks over -60..0 dBFS and a row
-   ; naming each octave's C; a column takes the loudest of its bins and its octave's hue,
-   ; and the reading's own column is bold
+   ; the spectrum over n columns: the bin of cents c (-1 when off), the first bin of a column
+   ; i and the one past its last, and its loudest bin on a scale of 0..m
+   (bands t n on c)
+    (: sp (t 'spec) (b0 i) (i * bins // n) (b1 i) (max (b0 i + 1) ((i + 1) * bins // n))
+       [(on ? (floor (c / 100.0 + 0.5) - 24) -1) b0 b1
+        (i \ m \ max 0 (min m (int ((foldl max -999.0 (take (b1 i - b0 i) (drop (b0 i) sp)) + 60.0) / 60.0 * m + 0.5))))])
+   ; the spectrum across n columns, four rows of eighth blocks over -60..0 dBFS and a row of
+   ; octave Cs; a column takes the loudest of its bins, the reading's column bold
    blocks [" " "▁" "▂" "▃" "▄" "▅" "▆" "▇" "█"]
    (strip t n on c)
-    (: sp (t 'spec) pb (on ? (floor (c / 100.0 + 0.5) - 24) -1)
-       (b0 i) (i * bins // n) (b1 i) (max (b0 i + 1) ((i + 1) * bins // n))
-       (lev i) (foldl max -999.0 (take (b1 i - b0 i) (drop (b0 i) sp)))
-       cols (map (i \ [(b0 i // 12 + 1) (b0 i <= pb && pb < b1 i)
-                       (max 0 (min 32 (int ((lev i + 60.0) / 60.0 * 32.0 + 0.5))))]) ^n)
+    (bands t n on c @ [pb b0 b1 lev]
+    (: cols (map (i \ [(b0 i // 12 + 1) (b0 i <= pb && pb < b1 i) (lev i 32)]) ^n)
        (bar r) ("  " + cats (map ([o me e] \ (max 0 (min 8 (e - 8 * (3 - r))) @ k
                                    (k = 0 ? " " ((me ? bold ink) o (blocks k))))) cols))
        (lab i acc) (i >= n ? (cats (rev acc))
                       ((b1 i - 1) // 12 @ o (b0 i <= 12 * o && i + 2 <= n
                          ? (lab (i + 2) (ink (o + 1) ("C" + show (o + 1)) . acc))
                          (lab (i + 1) (" " . acc)))))
-       (map bar ^4 + [("  " + lab 0 ())]))
-   ; the spectrum on its side, n rows from B7 at the top down to C1, bars bw cells long: a
-   ; row takes the loudest of its bins, the row a C first falls in names its octave, and the
-   ; reading's row is bold
+       (map bar ^4 + [("  " + lab 0 ())])))
+   ; the spectrum on its side, n rows from B7 down to C1, bars bw cells long
    ticks ["" "▏" "▎" "▍" "▌" "▋" "▊" "▉"]
    (column t n bw on c)
-    (: sp (t 'spec) pb (on ? (floor (c / 100.0 + 0.5) - 24) -1)
-       (b0 i) (i * bins // n) (b1 i) (max (b0 i + 1) ((i + 1) * bins // n))
-       (lev i) (foldl max -999.0 (take (b1 i - b0 i) (drop (b0 i) sp)))
-       (one i) (: o (b0 i // 12 + 1) cb (12 * ((b1 i - 1) // 12))
-                  e (max 0 (min (8 * bw) (int ((lev i + 60.0) / 60.0 * 8.0 * bw + 0.5))))
+    (bands t n on c @ [pb b0 b1 lev]
+    (: (one i) (: o (b0 i // 12 + 1) cb (12 * ((b1 i - 1) // 12)) e (lev i (8 * bw))
                   lab (b0 i <= cb && (i = 0 || b1 (i - 1) <= cb) ? (ink (cb // 12 + 1) (pad ("C" + show (cb // 12 + 1)) 3)) "   ")
                   (lab + ((b0 i <= pb && pb < b1 i ? bold ink) o (cats (map (_ \ "█") ^(e // 8)) + ticks (e % 8)))))
-       (map (r \ one (n - 1 - r)) ^n))
+       (map (r \ one (n - 1 - r)) ^n)))
    ; a row's width as the screen shows it, and the row filled out to n with spaces
    (wide s) (tuner-plain s @ p (net (map (b \ b & 192 != 128) (chars p))))
    (fill s n) (s + pad "" (n - wide s))
-   ; the screen w by h, as rows: the title, the scale, the needle, a blank, the spectrum
-   ; with a blank under it when there is room and it is on, and the keys. a tall screen
-   ; (rows twice the columns, a cell being twice as tall as wide) stands the spectrum
-   ; beside the scale, and its marker keeps to the note and the cents
+   ; the screen w by h as rows: title, scale, needle, blank, spectrum, keys. a tall screen
+   ; (rows twice the columns) stands the spectrum beside the scale
    besidew 29                                       ; the scale's columns beside a spectrum
    (tuner-frame t w h)
     (: on (held? t ((t 'clock) 0)) gone !(t 'c) c (t 'last) lo (t 'lo) hi (t 'hi)
@@ -228,11 +207,8 @@ spectrum, q quits."
        ([top] + rows + [nl ""] + (sp ? (strip t (max 11 (w - 4)) on c + [""]) ()) + [bot]))
    (paint t w h) (tuner-frame t w h @ rs ("\e[H" + catmap (r \ "\(r)\e[K\r\n") (init rs) + last rs + "\e[K"))
 
-   ; --- a window's stage: each frame scribed into a quay screen, the glass, and the rows it
-   ;     names dirty dyed onto the paper, 8 by 16 a cell; every row onto a fresh paper ---
-   (wets sc) (: (bits d base i acc) (i < 32 ? (bits d base (i + 1) (d >> i & 1 ? ((base + i) . acc) acc)) acc)
-                (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
-                (go 0 ()))
+   ; --- a window's stage: each frame scribed into a quay screen, its dirty rows dyed onto
+   ;     the paper, 8 by 16 a cell ---
    (glass t)
     (window-open 640 480 "tuner" @ wd
      (? !(tablet? wd) (say err "tuner: no window (\(wd))\n", 1)
@@ -248,14 +224,13 @@ spectrum, q quits."
                         ['down 1] (pin t 'over 1) ['close] (pin t 'over 1) 0)
        (show _) (: sc (gx ()) r (gaze sc 1) c (gaze sc 2) p (window-paper wd) W <(window-size wd)
                    _ (scribe sc (paint t c r))
-                   ys (wets sc @ d (gx 'all ? (pin gx 'all 0, ^r) d))
+                   ys (window-wets sc @ d (gx 'all ? (pin gx 'all 0, ^r) d))
                    (two? ys ? (each ys (y \ dye sc p W y -1 ()), window-show wd (16 * foldl min <ys ys) (16 * foldl max <ys ys + 16)) 0))
        (go _) (each (window-events wd) event, show 0, t 'over ? 0 (rest 50, go 0))
        (go 0))
 
    ; --- the ears that feed it -------------------------------------------------------
-   ; the mic: the last long frames kept, a reading every 100 ms of fresh ones once yin's
-   ; win + hi are in
+   ; the mic: the last long frames kept, a reading every 100 ms once win + hi are in
    need (2 * (win + hi)) keep (2 * long)
    (listen t h buf fresh)
     (see h @ c (c = -1 || t 'over ? ()
@@ -294,8 +269,8 @@ spectrum, q quits."
                        (stage-run {'show (w \ ht \ paint t w ht) 'step (k \ step t k) 'over? (_ \ t 'over)
                                    'tick (_ \ 1) 'every 50 'modes ['hide]}))
                  _ (pin t 'over 1)                ; the ear stops
-                 _ (dm ? 0 (close h))             ; and the device with it: run in-process (lush under inle,
-                 0)))                             ; a mitty pane) the port outlives tuner until a collection
+                 _ (dm ? 0 (close h))             ; and the device: run in-process the port
+                 0)))                             ; outlives tuner until a collection
        (go as 440.0 () 0 0))
 
    _ (pins (cite 'verbs 'tab) 'tuner (udoor 'tuner tuner-main tuner-usage 1 1)))

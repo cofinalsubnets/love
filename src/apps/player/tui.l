@@ -1,7 +1,6 @@
-; src/apps/player/tui.l -- the player in cells (notes/plan/av.md, the player): winamp's main
-; panel, a visualizer, the ten-band eq and the playlist editor, stacked, drawn from the core's
-; messages and driving it with its commands. it watches a core in process today and over the
-; socket later, the same messages either way. `(borrow 'ptui)`, then:
+; src/apps/player/tui.l -- the player in cells: winamp's main panel, a visualizer, the
+; ten-band eq and the playlist editor, drawn from the core's messages and driving it with
+; its commands, the same in process or over the socket. `(borrow 'ptui)`, then:
 ;
 ;   (ptui-new c)          -> a view of core c, watching it as a client of its own
 ;   (ptui-frame d w h)    -> the screen, w by h
@@ -10,12 +9,7 @@
 ;   (ptui-run d)          full screen on cli's stage until q
 ;   (ptui-close d)        stops watching
 ;
-; keys: space toggle, x play, c pause, v stop, z prev, b next (winamp's), left/right seek, + -
-; volume, [ ] balance, m spectrum or scope, e eq on, r repeat, R random, o sort, tab between
-; the playlist and the eq, q quit. in the playlist: up/down, enter plays, d drops, J/K move
-; the item, a adds files under here. in the eq: left/right a band, up/down a dB, 0 that band
-; flat, f all flat, p/P the presets. a tap on the seek bar seeks, on a row picks it, on a
-; slider sets it, on the visualizer switches it.
+; the keys are `helps` below.
 (module (ptui ptui-new ptui-frame ptui-key ptui-tap ptui-run ptui-close ptui-presets)
 (borrow 'pcore)
 (borrow 'seek)
@@ -49,7 +43,7 @@
        (pin d 'id (core-watch c (m \ hear d m))))
    (ptui-close d) (: _ (? (d 'feed) (core-tell (d 'c) (d 'id) ['feed (<(d 'feed)) 0 0]) 0) (core-unwatch (d 'c) (d 'id)))
 
-   ; --- what the core says --------------------------------------------------------
+   ; --- what the core says ---
    (hear d m)
     (<m @ 'snap (pins d 'st (al (m 1)) 'q (map al ((m 2) 1)) 'posat (clock 0))
           'set (: _ (each (m 1) (kv \ pin (d 'st) <kv (kv 1)))
@@ -60,7 +54,7 @@
           'scope (pin d 'scope (m 2))
           d)
    (send d msg) (core-send (d 'c) msg)
-   ; where play is, between the core's word on it, which comes four times a second
+   ; where play is between the core's reports, four a second
    (pos d) (: p (S d 'pos) p0 (? (num? p) p 0.0) dur (S d 'dur)
               t (S d 'state = 'play ? (p0 + (clock 0 - d 'posat) / 1000.0) p0)
               (? (num? dur && 0 < dur && dur < t) dur t))
@@ -74,7 +68,7 @@
    ; utf-8 of a codepoint under 0x10000, for the braille cells
    (u8 cp) (string [(224 | (cp >> 12)) (128 | ((cp >> 6) & 63)) (128 | (cp & 63))])
 
-   ; --- the panels, each a list of rows, every row w cells -----------------------------
+   ; --- the panels, each a list of rows, every row w cells ---
    (bar d w name)                                               ; a panel's top edge
     (sgr (d 'focus = name ? "1;36" "2") (fit ("─ " + (string? name ? name (show name)) + " " + rule w) w))
    (rule n) (cats (map (_ \ "─") ^(max 0 n)))
@@ -162,7 +156,7 @@
        note (? (clock 0 - d 'msgat < 5000 && 0 < #(d 'msg)) ("  " + d 'msg) "")
        (sgr "2" (fit (" " + show #q + " items, " + mmss tot + sk + note + "   tab eq/list  a add  ? keys  q quit") w)))
 
-   ; --- the screen ------------------------------------------------------------------
+   ; --- the screen ---
    (ptui-frame d w h)
     (? (d 'pick) (seek-frame (d 'pick) w h)
        (: _ (pin d 'tick (d 'tick + 1))
@@ -192,7 +186,7 @@
              _ (? kind (core-tell (d 'c) (d 'id) ['feed kind 30 n]) 0)
              (pin d 'feed want))))
 
-   ; --- keys ------------------------------------------------------------------------
+   ; --- keys ---
    (eqv d) (: e (S d 'eq) (map (i \ (? (two? e && i < #e && num? (e i)) (e i) 0)) ^10))
    (band d delta)
     (: b (d 'band)

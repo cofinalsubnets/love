@@ -1,22 +1,14 @@
-; the end-to-end gate for tele: a 2-layer mlp learns XOR, written in love over the pure
-; constellation algebra (no host nif), so the same code runs on every frontend -- the host,
-; wasm, and inle (the freestanding kernel): a neural net on bare metal. test/tele/grad.l
-; grad-checks each op alone; this one asks whether they compose into a net that learns.
-;
+; the end-to-end gate for tele: a 2-layer mlp learns XOR over the pure constellation algebra
+; (no host nif), so the same code runs on the host, wasm and inle. test/tele/grad.l checks each
+; op alone; this asks whether they compose into a net that learns.
 ;   run:  cat test/00-init.l test/tele/xor.l test/zz-fin.l | out/love -l src/apps/tele/tele.l
-;
-; corpus-shaped but not in the corpus: tele is no module (no lib/tele.l, nothing registered),
-; so it arrives on -l and this file cannot ride the test/*.l glob. 00-init.l brings `test`,
-; zz-fin.l the "N tests pass" line -- the one thing a test cannot say for itself, since a
-; reader that stops early leaves every test below it unrun and exits 0.
-;
-; the net: 2 -> H (tanh) -> 1 (sigmoid), trained full-batch by sgd on mse. XOR is the
-; classic not-linearly-separable problem -- a single linear layer cannot solve it, the
-; hidden tanh layer can. seeded, so it converges the same way every run: both the rounding
-; and the loss ceiling below are deterministic, not a tolerance.
+; not in the corpus: tele is no module, so it arrives on -l; zz-fin.l prints the "N tests pass"
+; line, since a reader that stops early leaves the tests below unrun and exits 0.
+; the net: 2 -> H (tanh) -> 1 (sigmoid), full-batch sgd on mse. seeded, so the rounding and
+; the loss ceiling are deterministic, not a tolerance.
 
 (: _ (rng-set (wheel 1))
-   H 8  lr 0.6  epochs 4000  ceil 0.01     ; ceil: the observed final loss is ~2e-4, 48x under
+   H 8  lr 0.6  epochs 4000  ceil 0.01     ; the observed final loss is ~2e-4
 
    X (gem-tray '(4 2) '(0.0 0.0  0.0 1.0  1.0 0.0  1.0 1.0))   ; the four inputs
    Y (gem-tray '(4 1) '(0.0 1.0 1.0 0.0))                       ; XOR of each
@@ -24,8 +16,7 @@
    model (seq [(linear 2 H) tanh (linear H 1) sig])
    opt   (sgd (params model) lr)
 
-   ;; nb: these take a dummy arg -- a nullary call (f) does not fire in love, it just
-   ;; returns f (the empty-form law); a real argument is what invokes it.
+   ; a dummy arg: a nullary call (f) answers f, it does not fire
    (trainstep _) (: _ (tl-reset 0) _ (zero opt)
                   loss (mse (call model X) Y) (back loss, step opt, tl-val loss))
    (loop k lv) (k = 0 ? lv
@@ -38,7 +29,7 @@
    final (loop epochs 1.0)
    _ (putc 10)
 
-   ;; the learned outputs (want ~0 1 1 0)
+   ; the learned outputs (want ~0 1 1 0)
    _ (tl-reset 0)
    out (tl-val (call model X))
    (cell k) (peep out (k . 0 . ()) 0)
@@ -49,8 +40,6 @@
     puts $ "11 -> " + show (cell 3) + "\n",
     puts $ "final loss " + show final + " (ceiling " + show ceil + ")\n",
 
-    ;; bound to _: a bare test in a binding slot is define-sugar and never runs.
-    ;; both halves -- the four rows round right and the loss actually fell, since rounding
-    ;; alone passes a net that merely leans the right way.
+    ; both halves: rounding alone passes a net that merely leans the right way
     (test (yes 0 0) (yes 1 1) (yes 2 1) (yes 3 0) (final < ceil)),
     0))

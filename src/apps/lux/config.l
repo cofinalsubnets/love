@@ -1,31 +1,16 @@
-; src/apps/lux/config.l -- the config: ~/.xmonad/xmonad.hs transliterated, as plain
-; values the driver (src/apps/lux/lux.l) reads. a body-less `:`.
-;
-; the door is salt (src/apps/libra/salt.l): ~/.love/etc/lux.l, then ./.lux.l, the second
-; winning; every setting falls back to its default, so no config file is lux unchanged.
-; salt is data: nothing is evaluated, nothing needs quoting. a repeated setting replaces,
-; so a roster takes all its entries in one form, and `()` alone spells the empty roster.
-;
-;   (border 3)  (normal-color "Dark Slate Blue")  (focused-color "Light Cyan")
-;   (tags 9)  (mod sup)  (nudge 20)
-;   (startup ("setxkbmap" "-option" "ctrl:nocaps"))
-;   (layout (rtall 1 0.02 0.5) (dwindle phi))
-;   (layout-wrap minimize smart toggle-full mirror)
-;   (center-class Xmessage feh vlc)  (float-class steam Gimp krita)  (ignore-class conky)
-;   (bind ((sup Return) (spawn "alacritty")) ((sup shift F1) (view 1))
-;         ((sup ",") (msg shrink))           ((sup 65027) (spawn "xdotool" "key" "x")))
-;   (unbind (sup p) (sup z))
+; src/apps/lux/config.l -- the config, ~/.xmonad/xmonad.hs transliterated, as plain values.
+; read by salt: ~/.love/etc/lux.l, then ./.lux.l winning; each setting has a default.
+; a repeated setting replaces, so a roster is one form; `()` alone is the empty roster.
+;   (border 3)  (tags 9)  (mod sup)  (nudge 20)  (layout (rtall 1 0.02 0.5) (dwindle phi))
+;   (layout-wrap minimize smart toggle-full mirror)  (float-class steam Gimp)
+;   (bind ((sup Return) (spawn "alacritty")) ((sup ",") (msg shrink)))  (unbind (sup p))
 ;   (display ":7")  (xauthority "/home/me/.Xauthority")
-;
-; a chord is a list, the key last: a symbol names it (`e`, `Return`), a one-char string
-; is that character, a bare number the keysym itself.
-; the conf-* readers take the tablet, so test/law/lux.l proves the defaults against an
-; empty one.
-(borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
+; a chord is a list, the key last: a symbol names it, a one-char string, or a keysym number.
+; conf-* take the tablet, so test/law/lux.l checks the defaults against an empty one.
+(borrow 'xwire)
 (borrow 'salt)
 (:
-   ; --- the readers. a roster entry is a name or a form; anything else (the lone
-   ;     `()` that spells "empty") drops out, and an absent roster takes d. ---
+   ; --- the readers: a roster keeps names and forms; an absent roster takes d ---
    (conf-live? e) (two? e || name? e || string? e)
    (conf-roster c k d) (salt-all c k @ r (two? r ? (filter conf-live? r) d))
    (conf-mod c) (kmod-of (salt-one c 'mod 'sup) supm @ m (m ? m supm))
@@ -41,15 +26,11 @@
    ; workspaces = map show [1 .. 9]
    lux-tags (map (+ 1) (jot (conf-tags lux-conf)))
 
-   ; layoutHook = minimize . smartBorders . avoidStruts . windowNavigation
-   ;            . toggleLayouts Full . mkToggle (single MIRROR) $ l1 ||| l2
-   ;   (avoidStruts lives in the driver as ewmh-rect; windowNavigation is
-   ;    nav-target under the directional keys -- both always-on, not records)
-   ;   l2 = Dwindle R cw phi 1.1 where phi = fib 32 / fib 31 -- the fib, verbatim
+   ; layoutHook: l1 ||| l2 with minimize, smartBorders, toggle Full, mirror wraps;
+   ;   avoidStruts and windowNavigation live in the driver. phi = fib 32 / fib 31
    (lux-fib m n i) (i < 1 ? m (lux-fib n (m + n) (i - 1)))
    lux-phi (lux-fib 0 1 32 / lux-fib 0 1 31)
-   ; one ||| member as data: the head names the layout, the tail its operands, and
-   ; `phi` stands for the golden ratio wherever a number would go.
+   ; one ||| member: the head names the layout; `phi` may stand for any number
    (lux-arg a i d) (: (go l k) (? (atom? l) d
                                   (0 < k) (go >l (k - 1))
                                   (<l @ v (v = 'phi ? lux-phi (constellation? v ? v d))))
@@ -71,8 +52,6 @@
    lux-wraps (conf-roster lux-conf 'layout-wrap '(minimize smart toggle-full mirror))
    lux-layout (foldr lux-wrap-of (choice lux-lays) lux-wraps)
 
-   ; manageHook / keys: assembled in manage.l / keys.l (composeAll and
-   ;   `keys def UNION custom` are the dsl's own assembly points)
    lux-manage (manage-for (conf-roster lux-conf 'center-class mg-center-def)
                           (conf-roster lux-conf 'float-class mg-float-def)
                           (conf-roster lux-conf 'ignore-class ()))
@@ -80,21 +59,14 @@
    lux-keymap (keys-build lux-mod (salt-one lux-conf 'nudge 20) (conf-tags lux-conf)
                           (conf-roster lux-conf 'bind ()) (conf-roster lux-conf 'unbind ()))
 
-   ; startupHook = spawn "setxkbmap -option ctrl:nocaps -option compose:rctrl"
-   ;   (the wm name rides ewmh-init; the cursor is x-cursor).
-   ;   lux_nostartup skips the spawns -- a headless harness wants no keyboard
-   ;   churn on its bare Xvfb
+   ; LUX_NOSTARTUP skips the spawns, for a headless Xvfb harness
    lux-startup (getenv "LUX_NOSTARTUP" ? ()
                   (conf-roster lux-conf 'startup
                                '(("setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))))
 
-   ; the display: display (":0" / ":7.0" -> the unix socket) unless a config names
-   ;   one, the cookie from the xauth file when the server wants one (an -ac Xephyr
-   ;   has no entry -> ()). xauthority names that file and wins over ~/.Xauthority
-   ;   -- every other X client reads it that way, and a display manager that parks
-   ;   the live cookie elsewhere (ly's /run/user/<uid>/lyxauth) leaves a stale
-   ;   ~/.Xauthority behind, whose cookie the server refuses
-   (lux-dispof d) (#d < 2 ? "7"                                           ; unset: the Xephyr harness habit
+   ; the display names the unix socket; the xauthority setting, else $XAUTHORITY, else
+   ;   ~/.Xauthority holds the cookie (a display manager may leave a stale ~/.Xauthority)
+   (lux-dispof d) (#d < 2 ? "7"                                           ; unset: the Xephyr harness
                      (snip d 1 #d @ b
                         (: (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))
                            (go 0))))

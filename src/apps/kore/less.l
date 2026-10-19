@@ -14,7 +14,7 @@
    pg-ere (cite 're 'reere) pg-fold (cite 're 'refold) pg-find (cite 're 'refind)
 
    pg-help
-    "  kore less -- the pager (`more` is the same door)
+    "  less -- the pager (`more` is the same door)
 
   SPACE  f  ^F  ^V     forward one screenful      N SPACE   forward N lines
   b  ^B                back one screenful         N b       back N lines
@@ -209,7 +209,17 @@
        (atom? s ? ()
         (pin st 'sav (), pgload st <s <>s, pggo st <>>s, 1)))
    (pgquit st) (pgback st ? st (pin st 'quit 1))
-   ; the operand walk: the engine names the file, the face reads it
+   ; the operand walk: the engine names the file, the face reads it -- through its 'load
+   ; when it gave one (a name -> [lines title], or a complaint), else the file whole
+   (pgdoe st)
+    (st 'doe @ rq
+       (atom? rq ? 0
+        (: _ (pin st 'doe ())
+           nm <rq
+           ld (pgflag st 'load)
+           r (ld ? (ld nm) (uread nm @ u (two? u ? [(lines <>u) nm] (nm + ": cannot open"))))
+           _ (string? r ? (pgmsg st r) (pgload st <r <>r))
+           0)))
    (pgfile st d)
     (: fs (st 'files) k (st 'fi + d)
        (? (k < 0) (pgmsg st "no previous file")
@@ -369,14 +379,7 @@
        _ (pin st 'files fs)
        _ (pgload st ls nm)
        _ (pgstart st plus)
-       (doe _)
-        (st 'doe @ rq
-           (atom? rq ? 0
-            (: _ (pin st 'doe ())
-               nm2 <rq
-               r (uread nm2)
-               (two? r ? (pgload st (lines <>r) nm2, 0)
-                (pgmsg st (nm2 + ": cannot open"), 0)))))
+       (doe _) (pgdoe st)
        (go pend)
         (: _ (pgresize st)
            _ (puts (pgframe st)) _ (flush out)

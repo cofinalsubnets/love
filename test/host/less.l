@@ -12,7 +12,7 @@
    ; keys are typed before raw mode, so "\n" flushes the canonical line; "qq" so a
    ; failed quit or the help page can't park slurp forever
    (run keys args)
-    (: r (tether (cat [love "kore" "less"] args))
+    (: r (tether (cat [love "less"] args))
        _ (test (two? r))
        m >r
        _ (settty m 10 40)
@@ -55,8 +55,31 @@
    r9 (run ":n:p" [f g])
    _ (test (<>r9 = 0) (has? <r9 "alpha"))
 
+   ; man's pages are one walk: :n reads the next name's page, an mdoc one as well
+   md (dir + "/man")
+   _ (mkdir md 493) _ (mkdir (md + "/man1") 493)
+   _ (open (md + "/man1/aa.1") "w" @ q (say q ".TH AA 1\n.SH NAME\naa \\- first page\n", close q))
+   _ (open (md + "/man1/bb.1") "w" @ q
+      (say q ".Dd June 1 2026\n.Dt BB 1\n.Os\n.Sh NAME\n.Nm bb\n.Nd second page\n", close q))
+   _ (setenv "MANPATH" md)
+   (manrun keys args)
+    (: r (tether (cat [love "man"] args))
+       _ (test (two? r))
+       m >r
+       _ (settty m 10 40)
+       _ (say m (keys + "qq\n"))
+       txt (slurp m)
+       st (waitfor <r)
+       [txt <st])
+   rm (manrun ":n" ["aa" "bb"])
+   _ (test (<>rm = 0) (has? <rm "first page") (has? <rm "second page") (has? <rm "BB(1)"))
+   rm2 (manrun "" ["nope" "aa"])
+   _ (test (<>rm2 = 1) (has? <rm2 "no manual entry for nope") (has? <rm2 "first page"))
+   _ (map unlink [(md + "/man1/aa.1") (md + "/man1/bb.1")])
+   _ (rmdir (md + "/man1")) _ (rmdir md)
+
    ; a pipe is the text and /dev/tty the keyboard
-   ra (: r (tether ["sh" "-c" (love + " kore head -3 " + f + " | " + love + " kore more")])
+   ra (: r (tether ["sh" "-c" (love + " head -3 " + f + " | " + love + " more")])
          _ (test (two? r))
          m >r
          _ (settty m 10 40)

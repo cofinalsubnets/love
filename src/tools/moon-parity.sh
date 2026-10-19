@@ -11,7 +11,7 @@
 #               so libgcc spellings (__divti3, __muldc3) count as well as __aeabi_.
 #   —        -- refused; `moon-parity.sh why` prints the cause.
 #
-# the symbols come from `kore nm -u` (holo's ELF reader), one wake over every object.
+# the symbols come from `love nm -u` (holo's ELF reader), one wake over every object.
 # a cell is a compile, not a run: `ok` says the lane exists, not that it is right --
 # test_cts and the cross gates say that.
 # thumb2sp is its own column: its SP-only FPU (the Playdate's STM32F746) softens f64 to
@@ -24,12 +24,12 @@
 #   why    every refusal with the cause the compiler gave, and every call-out with its symbol
 set -e
 
-# mooncc and kore are love's own verbs (the layered bake); MOONCC/KORE still override.
+# mooncc and the kore tools are love's own verbs (the layered bake); MOONCC/KORE still override.
 # `env`, not a bare assignment prefix: $mc expands AFTER assignment-recognition, so a
 # literal `LOVE_NO_IMAGE=` in the expansion would run as a command name.
 love=${LOVE:-b/love}
 mc=${MOONCC:-env LOVE_NO_IMAGE= $love mooncc}
-kore=${KORE:-env LOVE_NO_IMAGE= $love kore}
+kore=${KORE:-env LOVE_NO_IMAGE= $love}
 doc=${DOC:-doc/misc/moon-c-gaps.md}
 mode=${1:-table}
 d=${TMPDIR:-/tmp}/moon-parity.$$
@@ -94,7 +94,7 @@ p '64-bit `*` and shifts' \
 p '`double`/`float` arithmetic' \
 'double f(double a,double b){return a*b/(a+b);} float g(float a,float b){return a*b/(a+b);}'
 
-# --- ONE wake over every object the sweep laid: `kore nm -u` prints the undefined
+# --- ONE wake over every object the sweep laid: `love nm -u` prints the undefined
 # symbols of each, under a `path:` header. An object whose every lane is ours shows
 # its header and no rows, which is the answer, not a silence.
 if [ -s "$d/objs" ]; then

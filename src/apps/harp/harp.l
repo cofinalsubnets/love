@@ -1,21 +1,12 @@
-; src/apps/harp/harp.l -- harp: cycles as patterns, tidal's algebra in love. pure, so it
-; rides the corpus on every seat and test/law/harp.l asserts it by querying spans.
-;
-; a pattern is a function from a span to events: (p b e) -> [ev ..]. every combinator is
-; a change of variable on the query, the answer, or both; there is no event list.
-; an event is [wb we pb pe v]: the whole span it occupies, the part this query saw
-; (onsets are pb = wb), and the value -- whatever the caller put there.
-; times are exact rationals (`1 /// 3`), never floats, or `fast 3` drops a beat.
-; a scalar where a pattern is wanted is one by its type: a string is mini-notation, a
-; number a pure pattern; a time may be a decimal, made exact.
-;
-; this file shadows prel's `rev` and `every` with the pattern ones; nothing below may
-; call the list versions.
+; src/apps/harp/harp.l -- harp: cycles as patterns, tidal's algebra in love. pure.
+; a pattern is a function from a span to events: (p b e) -> [ev ..]; there is no event list.
+; an event is [wb we pb pe v]: its whole span, the part this query saw (onset: pb = wb), value.
+; times are exact rationals, never floats, or `fast 3` drops a beat.
+; a scalar where a pattern is wanted: a string is mini-notation, a number a pure pattern.
+; this file shadows prel's `rev` and `every`; nothing below may call the list versions.
 
-; (psets p q ..): `#` over several controls in one form -- (pset (pset p q) q2 ..),
-; folded from the left, so a later word wins a key. a macro, as pins is, since a
-; binary op is binary: it lives with the reader rather than the module, and so is
-; in hand wherever harp's names are
+; (psets p q ..): (pset (pset p q) q2 ..), folded from the left so a later word wins.
+; a macro, since a binary op is binary.
 (:: 'psets (l \ foldl (a \ q \ ['pset a q]) <l >l))
 
 (module '(harp
@@ -28,16 +19,9 @@
   ctl with named hit note n gain pan speed cut room legato slide smooth mini matom lrev cmap)
 (:
    ; --- exact cycle time -----------------------------------------------------
-   ; the tree's own rationals (src/love/boot/post.l): `3 /// 4` builds one, + - * / and
-   ; < <= = are exact over them and over bignums, `sort` orders them, and `load`
-   ; answers (num den). only the two operations the coin does not carry are here.
-   ;
-   ; a whole rational is its integer (`4 /// 2` is 2), so a time is a coin or an
-   ; integer, and qparts is the one place either is taken apart: `load` answers the
-   ; parts of a coin only. qi still spells a time, and nothing below writes a bare one.
-   ; a rational meeting a TRAY answers () -- `+` takes the coin lane before the
-   ;   array lane and the rational's method refuses a non-star. so a time crosses
-   ;   into frame arithmetic through qnum and never after; see src/apps/harp/play.l.
+   ; the tree's rationals: `3 /// 4`; arithmetic and order are exact over them.
+   ; a whole rational is its integer, so qparts is the one place a time is taken apart.
+   ; a rational meeting a tray answers a tray, exact; a time crosses into frames via qnum.
    (qi n)     (n /// 1)
    qzero      (0 /// 1)
    qone       (1 /// 1)
@@ -47,12 +31,12 @@
    (qmax a b) (a < b ? b a)
    (qparts a) (coin? a ? (load a) [a 1])                    ; (num den), den 1 for a whole one
    (qdiv a b) (qparts b @ p (a * (<>p /// <p)))             ; exact: `/` on two integers is a float
-   ; // truncates toward zero, so a negative cycle needs the step down by hand
+   ; // truncates toward zero: step down by hand for a negative cycle
    (qfl a)    (: p (qparts a)  n <p  d <>p  t (n // d)
                  (? (t * d = n) t (n < 0) (t - 1) t))
    qfq        (qi * qfl)
    (qnum a)   (qparts a @ p (<p / <>p))
-   ; the same two, on plain integers, with n > 0
+   ; the same two on plain integers, n > 0
    (imod a n) (a % n @ r (r < 0 ? (r + n) r))
    (idiv a n) (a // n @ t (t * n > a ? (t - 1) t))
 
@@ -62,9 +46,8 @@
    (rept v n) (n > 0 ? (v . rept v (n - 1)))
 
    ; --- a scalar for a pattern, a number for a time ---------------------------
-   ; every combinator below takes its patterns and times through these two, so a
-   ; literal stands where a pattern does and nothing below writes a bare time. a
-   ; rational is a star, so it is asked for first and kept as it is
+   ; every combinator takes its patterns and times through these two. a rational is a
+   ; star, so it is asked for first
    (pat x)  (? (string? x) (mini x) (star? x) (pure x) x)
    (coin n) (? (coin? n) n (string? n) (mrat n) (star? n) (mrat (show n)) n)
 
@@ -74,13 +57,12 @@
    (evpb x)   (x 2)
    (evpe x)   (x 3)
    (evv x)    (x 4)
-   ; an onset is a part that starts where its whole does: the fragment a player strikes
+   ; an onset: a part that starts where its whole does
    (onset? x) (x 0 = x 2)
    (evtime f x) [(f (x 0)) (f (x 1)) (f (x 2)) (f (x 3)) (x 4)]
 
-   ; the query span cut at every cycle line. every combinator whose answer depends
-   ; on WHICH cycle it is (slowcat, rev, every, squeeze) queries through this, so
-   ; the cycle number is never read off a span that straddles two.
+   ; the query span cut at every cycle line: a cycle number is never read off a span that
+   ; straddles two (slowcat, rev, every, squeeze)
    (cycles b e) (b < e ? (qmin e (qfq b + qone) @ nx ((b . nx) . cycles nx e)))
 
    ; --- the patterns ---------------------------------------------------------
@@ -89,8 +71,7 @@
    (pure v)   (b \ e \ map (s \ qfq <s @ c [c (c + qone) <s >s v]) (cycles b e))
    (stack ps) (b \ e \ cmap (p \ pat p b e) ps)
 
-   ; one pattern per cycle, and each one advances a cycle only when its turn comes:
-   ; that offset is the whole difference between slowcat and a stack of shifts.
+   ; one pattern per cycle, each advancing a cycle only on its turn (unlike a stack of shifts)
    (slowcat ps)
     (#ps @ n
        (n = 0 ? hush
@@ -107,8 +88,7 @@
    (slow n0 p) (coin n0 @ n (n = qzero ? hush (fast (qdiv qone n) p)))
    (fastcat ps) (fast (qi #ps) (slowcat ps))
 
-   ; p's cycle squeezed into the window [b0,e0) of every cycle, silence outside it.
-   ; this is what gives a step its slot, so it is also what `@` weights.
+   ; p's cycle squeezed into [b0,e0) of every cycle, silence outside: a step's slot, `@`'s weight
    (squeeze b0 e0 p0)
     (: w (e0 - b0)  p (pat p0)
        (qzero >= w ? hush
@@ -130,8 +110,7 @@
                     (squeeze b e >x . go (acc + w) >l)))
        (tot = qzero ? hush (stack (go qzero wps))))
 
-   ; a cycle played backwards. the reflection swaps begin and end, so the event's
-   ; two spans have to be re-ordered after it or every whole comes out inside out.
+   ; a cycle backwards. the reflection swaps begin and end, so the spans are re-ordered after
    (rev p0)
     (pat p0 @ p
      (b \ e \ cmap (s \
@@ -149,8 +128,8 @@
    (pkeep f p0) (pat p0 @ p (b \ e \ filter f (p b e)))
    (onsets p)  (pkeep onset? p)
 
-   ; structure from the left, value from the right: each of a's parts is cut by
-   ; whatever b holds under it. `#`, `jux` and `seg` are all this one shape.
+   ; structure from the left, value from the right: each of a's parts cut by what b holds
+   ; under it. `#`, `jux` and `seg` are this shape.
    (appl f pa0 pb0)
     (: pa (pat pa0)  pb (pat pb0)
      (b \ e \ cmap (x \ cmap (y \ (: pb2 (qmax (x 2) (y 2))  pe2 (qmin (x 3) (y 3))
@@ -162,8 +141,8 @@
    (tcopy t)   (foldl (n \ k \ pin n k (t k)) {} (keys t))
    (tset t k v) (tcopy t @ n (pin n k v, n))
    (tmerge a b) (foldl (n \ k \ pin n k (b k)) (tcopy a) (keys b))
-   ; a bare atom is lifted the first time a control word touches it, and left alone
-   ; after: so `hit "bd:2"` keeps the sample index the mini-notation already set.
+   ; a bare atom is lifted the first time a control word touches it, then left alone:
+   ; `hit "bd:2"` keeps the sample index.
    (named k p) (pmap (v \ tablet? v ? v (tset {} k v)) p)
    (ctl k v p) (pmap (x \ tset (tablet? x ? x {}) k v) p)
    (with k f p) (pmap (x \ tset x k (f (x k))) p)
@@ -185,7 +164,7 @@
                                   (cycles b e)))
    (every n g p) (n < 1 ? p (whenc (c \ 0 = imod c n) g p))
    (off t g p)   (stack [p (g (late t p))])
-   ; the signature move: the dry pattern hard left, f's copy hard right
+   ; the dry pattern hard left, g's copy hard right
    (jux g p0)    (pat p0 @ p (stack [(ctl 'pan 0.0 p) (ctl 'pan 1.0 (g p))]))
    (iter n p0)   (pat p0 @ p (n < 1 ? p (slowcat (map (i \ early (i /// n) p) ^n))))
    (palin p)     (slowcat [p (rev p)])
@@ -193,8 +172,7 @@
    (seg n p)     (appl (a \ b \ b) (fast n (pure 0)) p)
    (super g p0)  (pat p0 @ p (stack [p (g p)]))
    (whenmod a b g p) (a < 1 ? p (whenc (c \ imod c a >= b) g p))
-   ; each event struck n times inside its own span, which is the one repeat that
-   ; keeps the sequence's shape: a step that was a quarter cycle stays a quarter
+   ; each event struck n times inside its own span, keeping the sequence's shape
    (ply n p0) (pat p0 @ p (n < 2 ? p
             (b \ e \ flip cmap (p b e) (x \
                                             (:- (mk 0)
@@ -208,9 +186,8 @@
                                                        ([sb se pb pe (evv x)] . mk (i + 1))
                                                        (mk (i + 1))))))))))
 
-   ; --- continuous patterns: a value everywhere, no structure of their own ----
-   ; sampled at the middle of whatever span is asked for, so they take their
-   ; structure from whatever they are combined with (`# speed (range 1 2 sine)`).
+   ; --- continuous patterns: sampled at the middle of the span asked, so they take
+   ; structure from what they are combined with (`# speed (range 1 2 sine)`)
    (sig f)       (b \ e \ (b < e ? [[b e b e (f (qnum ((b + e) * qhalf)))]]))
    (frac x)      (int x @ t (x - (x < 0.0 ? (t - 1) t)))
    sine          (sig (t \ 0.5 + 0.5 * sin (t * 6.283185307179586)))
@@ -221,11 +198,8 @@
    square        (sig (t \ frac t < 0.5 ? 0.0 1.0))
    rand          (b \ e \ (b < e ? [[b e b e (rnd ((b + e) * qhalf))]]))
    (range lo hi p) (pmap (v \ lo + (v * (hi - lo))) p)
-   ; a pattern of numbers made continuous: the value at a time lies on the line from
-   ; the event under it to the next one's, each taken at its whole's start, so a
-   ; sequence drifts rather than steps. sampled at the middle of the span asked, as
-   ; the signals are, and shaped like them. a time with no event under it, or a
-   ; value that is not a number at either end, is answered as it stands
+   ; numbers made continuous: interpolated between the event under a time and the next,
+   ; each at its whole's start, sampled mid-span. no event, or a non-number, answers as is
    (smooth p0)
     (pat p0 @ p
      (b \ e \ (b < e ?
@@ -241,16 +215,14 @@
              [[b e b e v]]))))))
 
    ; --- chance ---------------------------------------------------------------
-   ; keyed off the event's own whole-begin, so a pattern degrades the same way on
-   ; every pass -- a cycle is a place, not a moment, and re-querying it must agree.
-   ; murmur3's finalizer over the (numerator, denominator, seed) triple
+   ; keyed off the event's whole-begin, so re-querying a cycle degrades it the same way.
+   ; murmur3's finalizer over (numerator, denominator, seed)
    (mix32 x) (: a (x & 4294967295)
                 b ((a ^ a >> 16) * 2246822507 & 4294967295)
                 c ((b ^ b >> 13) * 3266489909 & 4294967295)
                 (c ^ c >> 16))
-   ; the seed k separates two `?`s that would otherwise see the same span: a step's
-   ; own pattern is degraded BEFORE it is squeezed into its slot, so every `?` in a
-   ; sequence asks about cycle-begin and would answer alike. mini passes the cursor.
+   ; the seed k separates `?`s that would see the same span: a step is degraded before it
+   ; is squeezed, so every `?` asks about cycle-begin. mini passes the cursor.
    (rndk k t) (qparts t @ p (mix32 (<p * 2654435761 + <>p * 2246822519 + k * 668265263)
                            / 4294967296.0))
    (rnd t) (rndk 0 t)
@@ -263,8 +235,8 @@
    (degrade p)     (degby 0.5 p)
 
    ; --- euclidean rhythm -----------------------------------------------------
-   ; bjorklund's own loop: k groups of [1] and n-k of [0], the shorter list folded
-   ; onto the longer until at most one remainder group is left.
+   ; bjorklund: k groups of [1] and n-k of [0], the shorter folded onto the longer until
+   ; at most one remainder group is left
    (bjork k n)
     (? (n <= 0 || k <= 0) (rept 0 (n < 0 ? 0 n))
        (k >= n) (rept 1 n)
@@ -290,11 +262,9 @@
    ;   ,    stack (inside brackets or at the top)  !n  this step, n times over
    ;   ~    a rest        _  extend the last step  ?   drop it half the time
    ;   (k,n[,r])  euclidean                        :n  a sample index
-   ; euclid spreads k onsets as evenly over n slots as they go (bjork, below) and
-   ; rotates by r: bd(3,8) |x..x..x.|, bd(5,8) |x.xx.xx.|, bd(3,8,2) |.x..x.x.| --
-   ; the same three heard from the third slot. a negative k takes the slots the
-   ; figure leaves: bd(-3,8) |.xx.xx.x|. k n r are words here, so they are literals.
-   ; the cursor is explicit: every reader takes (s i) and answers (x . i).
+   ; euclid spreads k onsets evenly over n slots, rotated by r: bd(3,8,2) |.x..x.x.|;
+   ; a negative k takes the slots the figure leaves. k n r are literals.
+   ; every reader takes (s i) and answers (x . i).
    (mspace s i) (#s @ n (i < n && 32 >= s i ? (mspace s (i + 1)) i))
    (mwordc? c)  (c >= 48 && c <= 57 || c >= 65 && c <= 90
                  || c >= 97 && c <= 122 || c = 46 || c = 45 || c = 39)
@@ -303,7 +273,7 @@
    (mword s i)  (: (go j) (mwordc? (mat s j) ? (go (j + 1)) j)
                    e (go i)
                    (snip s i e . e))
-   ; a decimal word as an exact rational: the digits after the point are the denominator
+   ; a decimal word as an exact rational
    (mrat w) (: n #w
                neg !!(n > 0 && 45 = w 0)
                (go j ip fd seen)
@@ -315,9 +285,8 @@
                 (go j) (j >= n ? 1
                         (w j @ c (48 <= c <= 57 || c = 46 || c = 45 ?  (go (j + 1)) 0)))
                 (n @ 0 0 (go 0)))
-   ; a numeric word is a number, anything else the word itself
-   ; a whole number comes out as an integer, not as a rational: the value is the
-   ; caller's (a note, a sample index), and only the TIMES want the coin
+   ; a numeric word is a number, a whole one an integer (only times want the coin);
+   ; anything else the word itself
    (matom w) (mnum? w ? (qparts (mrat w) @ p (<>p @ 1 <p (<p / <>p))) w)
    (mratat s i) (mword s (mspace s i) @ r (mrat <r . >r))
    (mintat s i) (mratat s i @ r (qfl <r . >r))
@@ -330,7 +299,7 @@
           126 (hush . (j + 1))
           95  ('elong . (j + 1))
           (mword s j @ r
-           ; an unreadable byte is one step of silence, and the cursor still moves
+           ; an unreadable byte is one step of silence
            (#<r @ 0 (hush . j + 1) (pure (matom <r) . >r)))))
 
    ; a term and its modifier tail -> the steps it contributes, as [(w . p) ..]
@@ -356,7 +325,7 @@
           (mintat s (k + 1) @ c (euclidr <a <b <c p . madv s (mspace s >c) 41))
           (euclidr <a <b 0 p . madv s k 41)))
 
-   ; `_` after a step widens that step rather than adding one
+   ; `_` widens the step before it
    (mfold l) (:- (go l ()) (go l out)
               (l @- (lrev out)
                ((x . 'elong) . u) 
@@ -367,8 +336,7 @@
     (: j (mspace s i)  c (mat s j)
      (j >= #s || c = cl || c = 44 ? (() . j)
       (: r (mstep s j)  t (msteps s >r cl) (<r + <t . >t))))
-   ; comma groups, then each group laid out: alt=0 lays them across the cycle
-   ; (a weighted timecat), alt=1 gives each member a cycle of its own
+   ; comma groups, each laid out: alt=0 across the cycle (timecat), alt=1 a cycle each
    (mseq s i cl alt)
     (: (grp i) (msteps s i cl @ r
                 (mat s >r @ 44

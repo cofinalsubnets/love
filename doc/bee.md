@@ -254,7 +254,7 @@ On the hub's box, **(hub** *path***)** in **~/.love/etc/bee.l** names the hub ne
 
 On the new box, in order:
 
-1. **love, nested.** In a love tree, a seed or **love source** *dir*: **make**, then **./out/love nest -y**, which lays **~/.love/bin/love** and **lush**.
+1. **love, nested.** In a love tree, a seed or **love source** *dir*: **make**, then **./out/love nest**, which lays **~/.love/bin/love** and **lush**.
 2. **the hub named.** **(hub** *name***@***box***)** in **~/.love/etc/bee.l**, where *box* keeps the hub; *name* is **hub**, the nest its door serves.
 3. **the way to the box.** A line *box* *host* \[*love*\] in **~/.love/etc/bee/boxes**, as for mail (KEYS).
 4. **the door.** The hub box's owner lays this box's ssh key behind the door. **--node** prints the line to give them.

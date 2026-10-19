@@ -1,26 +1,14 @@
-; uu2coq: love's internal proof corpus, exported to Rocq -- at scale. The proof half
-; of the verification bridge (cf. src/tools/spec2coq.l, which exports concrete ASSERTS).
-;
-; This sweeps test/uu.l: it loads uu's kernel (so every defn there is type-checked
-; against its stated type -- uu certifies them), then reads the same file as data,
-; collects every (defn/defq nm T t), and translates the ones in the universe-safe
-; MLTT fragment to Gallina. coqc re-checks the lot -- an independent second witness
-; for each law, and (since uu runs type-in-type) the universe-consistency filter uu
-; itself lacks. Untranslatable entries are skipped and counted, never silently
-; dropped (the trailing comment reports the tally), exactly like spec2coq.
-;
-; a def exports iff it is in the handled fragment and every global it mentions also
-; exports -- a dependency closure. So the whole univalence tower drops on its own
-; (it bottoms out at univalenceAxiom, an `axm` we never emit), as does anything
-; using a constructor we don't map (total2/coprod and friends). What survives is the
-; predicative core: the path-algebra combinators and the nat/bool arithmetic.
-;
+; uu2coq: love's internal proof corpus (test/uu*.l), exported to Rocq.
+; loads uu's kernel (certifying every defn against its type), re-reads the files as data,
+; and translates each (defn/defq nm T t) in the MLTT fragment to Gallina. coqc re-checks
+; them, and supplies the universe check uu (type-in-type) lacks. skips are counted.
+; a def exports iff it is translatable and every global it mentions exports: the
+; univalence tower drops (it bottoms out at an `axm`).
 ; Run: out/love src/tools/uu2coq.l > test/proof/rocq/uugen.v   then  coqc test/proof/rocq/uugen.v
 
 (borrow 'posix)
-; the files read below spell their laws `test`, the corpus recorder. here they run to
-; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
-; and a false law stops the run rather than printing a dot into the output.
+; the files below spell their laws `test`; here stdout is the artifact, so bind assert's:
+; silent on success, a false law stops the run
 (:: 'test (l \ (. 'assert l)))
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))
@@ -43,13 +31,11 @@
    (unq x) (two? x && <x = bs ? (x 1) x)   ; strip one ' (reads shows quote as (\ ..))
    (cat l) (foldl (+) "" l)
 
-   ; read a file's top-level forms as data (the reader strips ; comments)
-
-   ; a uu name -> a Rocq identifier: prefix uu_, kebab '-' -> '_'
+   ; a uu name -> a Rocq identifier: uu_, '-' -> '_'
    (sanit s) (jug 0 @ j (each ^#s (i \ say j (string (s i @ c (c = 45 ? 95 c)))), slurp j))
    (rocqn nm) ("uu_" + sanit (string nm))
 
-   ; --- collect (kind nm T t) entries from the uu.l forms (defns live inside asserts) ---
+   ; --- collect (kind nm T t) entries (defns live inside asserts) ---
    (deq? c) (two? c && (<c = 'defn || <c = 'defq))
    (axq? c) (two? c && <c = 'axm)
    (entry c) (? (deq? c) ['def (unq (c 1)) (unq (c 2)) (unq (c 3))]
@@ -60,34 +46,26 @@
                         (? (two? F && <F = 'test) (kids >F acc)
                            (deq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
-   (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat` -- the local cat is the string fold
+   (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat`: the local cat is the string fold
    ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))) ())
 
-   ; the silent-no-op gate (defense in depth behind uu.l's arity-door macros):
-   ; a def gathered off the file must be whole -- three operands; a paren slip
-   ; that merges the type into the term reads () in the term seat -- and
-   ; pinned, since a partially applied defn/defq is a truthy closure that pins
-   ; nothing and paints its assert dot green. redden here instead. the empty seat is
-   ; `== ()` and not `!`: a term of 0 is a legal def (a code table's first row) and
-   ; falsy, so truthiness would redden it.
+   ; a gathered def must be whole (a paren slip reads () as the term) and pinned (a partial
+   ; defn is a truthy closure that pins nothing). `== ()`, not `!`: a term of 0 is legal.
    _ (map (e \ ((<e = 'def && e 3 = () || !(peep GLOB (e 1) 0)) ?
                   (puts "MALFORMED-OR-UNPINNED-DEF ", puts (string (e 1)), quit 1)
                   0))
         ents)
 
-   ; names that exist (corpus-wide) -- for telling a global reference from a bound var
+   ; corpus-wide names: a global reference vs a bound var
    nt (tablet 0) _ (map (e \ (pin nt (e 1) 1)) ents)
    (corpus? x) (peep nt x 0)
 
-   ; explicit skips: the type-in-type detonations (sound MLTT can't host them, and
-   ; coqc's universe check rightly rejects them -- the filter, working as intended)
+   ; explicit skips: type-in-type detonations coqc's universe check rejects
    bl (tablet 0)
    _ (map (n \ (pin bl n 1)) '(the_world_explodes but_seriously_the_world_explodes whoa irref))
 
    ; --- the translator: a uu term -> a Gallina string ---
-   ; every MLTT constructor is now mapped (Sigma -> sigT, coprod -> sum, the -> ascription);
-   ; `un` stays as the safety net for any head u2c can't translate -- empty today, so the
-   ; dependency closure + coqc are what filter (a stray head would emit a bad spine -> coqc red).
+   ; `un`: heads u2c can't translate (empty; the dependency closure + coqc filter)
    un (tablet 0)
    bases (tablet 0)
    _ (pin bases 'nat "nat") _ (pin bases 'UU "Type") _ (pin bases 'bool "bool")
@@ -110,22 +88,20 @@
            'bool_rect ("(bool_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
            'unit_rect ("(unit_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + ")")
            'empty_rect ("(Empty_set_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
-           ; Sigma -> a primitive-projection total2 record (preamble below): it has the
-           ; same definitional eta uu's Sigma has, so eta-dependent proofs (idisweq ..)
-           ; export soundly. total2 mirrors pi (index 1 var, 2 domain, 3 body); tpair's
-           ; family is implicit, inferred from the def's stated type.
+           ; Sigma -> a primitive-projection total2 record (preamble below), keeping uu's
+           ; definitional eta. total2 mirrors pi; tpair's family is inferred from the stated type.
            'total2    ("(total2 (fun " + (string (t 1)) + " : " + (u2c (t 2)) + " => " + (u2c (t 3)) + "))")
            'tpair     ("(tpair " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
            'pr1       ("(pr1 " + (u2c (t 1)) + ")")
            'pr2       ("(pr2 " + (u2c (t 1)) + ")")
-           ; coprod -> sum; ii1/ii2 -> inl/inr (other summand inferred), the eliminator -> sum_rect
+           ; coprod -> sum, ii1/ii2 -> inl/inr, the eliminator -> sum_rect
            'coprod    ("(sum " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
            'ii1       ("(inl " + (u2c (t 1)) + ")")
            'ii2       ("(inr " + (u2c (t 1)) + ")")
            'coprod_rect ("(sum_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
            ; (the T t) is a type ascription -- emit it as one
            'the       ("(" + (u2c (t 2)) + " : " + (u2c (t 1)) + ")")
-           ; full path induction (J): uu (paths_rect P pr e) -> match on the paths Id type
+           ; path induction (J) -> a match on paths
            'paths_rect
              ("(match " + (u2c (t 3)) + " as ep0 in (paths _ bp0) return ("
               + (u2c (t 1)) + " bp0 ep0) with idpath _ => " + (u2c (t 2)) + " end)")
@@ -137,31 +113,28 @@
    (tr? t) (? (charm? t) 1  (nom? t) 1
               (two? t) (peep un <t 0 ? 0 (alltr? >t))  1)
 
-   ; --- the global names a term mentions (corpus names only), accumulated into a set ---
+   ; --- the corpus names a term mentions, into a set ---
    (ment t acc) (? (nom? t) (corpus? t ? (pin acc t 1, acc) acc)
                    (two? t) (ment-l t acc)  acc)
    (ment-l l acc) (two? l ? (ment-l >l (ment <l acc)) acc)
 
-   ; candidates: a def, in the fragment, not blacklisted, present in glob (uu-certified)
+   ; candidates: a def, translatable, not skipped, uu-certified
    (cand? e) (<e = 'def && !(peep bl (e 1) 0) && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
-   cands (foldl (\ a e (cand? e ? (e . a) a)) () ents)   ; reversed; restore order at emit
-   ; each candidate's mentioned-names list (its global dependencies)
+   cands (foldl (\ a e (cand? e ? (e . a) a)) () ents)   ; reversed
    (mlist e) (keys (ment-l (. (e 2) (. (e 3) ())) (tablet 0)))
 
-   ; --- dependency closure: keep only defs all of whose mentions also survive ---
+   ; --- dependency closure: keep defs all of whose mentions survive ---
    (allin? l ex) (two? l ? (peep ex <l 0 && allin? >l ex) 1)
    (pass cs ex) (foldl (\ a e (allin? (mlist e) ex ? (pin a (e 1) 1, a) a)) (tablet 0) cs)
-   ; the measure is the key COUNT: pass only ever shrinks ex, so the counts settle
-   ; exactly when the set does. not glued $, which nets any tablet to 1 and would
-   ; stop the walk after one pass, past defs whose dependency that pass dropped.
+   ; settled when the key COUNT stops moving (pass only shrinks). not glued $: it nets any
+   ; tablet to 1 and would stop after one pass.
    (fix ex) (pass cands ex @ ex2 (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
    ex0 (foldl (\ a e (pin a (e 1) 1, a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
-   ; --- emit, in source order ---
+   ; --- emit in source order: foldr keeps ents' order, definitions before uses ---
    (emit e) (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=" (string 10)
                   "  " (u2c (e 3)) "." (string 10)])
-   ; foldr keeps ents' order, and coq wants every definition before its uses (foldl flips)
    exports (foldr (\ e a (peep keep (e 1) 0 ? (e . a) a)) () ents)
 
    _ (dot (cat [
@@ -193,10 +166,7 @@
       "   paths_to_eq (below) bridges it back to Coq's = for the Nat.* headline laws. *)" (string 10)
       "Inductive paths {A : Type} (a : A) : A -> Type := idpath : paths a a." (string 10) (string 10)]))
    _ (map (e \ (dot (emit e))) exports)
-   ; --- the bridge: a static tail tying uu's nat ops to Coq's standard ones, so the
-   ;     headline laws restate on Nat.* (spec.v's vocabulary) and discharge from the
-   ;     uu exports above. Tactic proofs (induction over the shared recursion); the
-   ;     substantive content stays the exported uu terms. ---
+   ; --- the bridge: uu's nat ops restated on Nat.* (spec.v's vocabulary), tactic proofs ---
    _ (dot (cat [(string 10)
      "(* === bridge: uu's nat ops ARE Coq's standard ones, so the laws above land on" (string 10)
      "   Nat.add / Nat.mul -- the operations spec.v's own laws speak. uu_add_std/uu_mul_std" (string 10)

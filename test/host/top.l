@@ -1,4 +1,4 @@
-; test/host/top.l -- `kore top` on a pty (frames are lawed by test/kore/top.sh); it signals
+; test/host/top.l -- `love top` on a pty (frames are lawed by test/kore/top.sh); it signals
 ; and renices only sleeps this file spawned, pointed at with -p
 ; run: LOVEBIN=out/love sh -c "cat test/00-init.l test/host/top.l | out/love"
 
@@ -17,7 +17,7 @@
    ; top on a 24x100 pty, each key sent whole; a function key acts on the master.
    ; esc then q leaves any mode. answers [transcript status last-frame-text]
    (run keys args)
-    (: r (tether (cat [love "kore" "top"] args))
+    (: r (tether (cat [love "top"] args))
        _ (test (two? r))
        m >r
        _ (settty m 24 100)

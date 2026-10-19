@@ -533,7 +533,7 @@
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      ; the bee source a binary carries, hashed
      (self-src exe)
-      (: o (lush-out (sh-quote exe + " kore cat" + foldl (\ a f "\(a) /love/\(f)") "" (words bee-served) + " 2>/dev/null"))
+      (: o (lush-out (sh-quote exe + " cat" + foldl (\ a f "\(a) /love/\(f)") "" (words bee-served) + " 2>/dev/null"))
          (string? o && 0 < #o ? (sha256 o) ""))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
@@ -1811,7 +1811,7 @@
          door (\ _ (? (0 < #bx) (relay bx "" "--door") [1 ""]))
          [["love, nested in ~/.love/bin"
            (\ _ (two? (stat "\(bee-home)/.love/bin/love") && two? (stat "\(bee-home)/.love/bin/lush")))
-           (\ _ "in a love tree (a seed, or love source DIR): make, then ./out/love nest -y")]
+           (\ _ "in a love tree (a seed, or love source DIR): make, then ./out/love nest")]
           ["the hub named: (hub NAME@BOX) in ~/.love/etc/bee.l"
            (\ _ (0 < at && 0 < #bx))
            (\ _ "mkdir -p \(etc) && echo '(hub hub@BOX)' >> \(etc)/bee.l   # BOX: the box that keeps the queue's hub")]

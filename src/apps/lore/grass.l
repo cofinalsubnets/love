@@ -383,11 +383,7 @@
              v (mkvoice at {'s "chime" 'note nt 'gain (0.1 + roll sb 25 / 100.0)
                              'pan (roll sb 100 / 100.0) 'legato chime-ring} song-rate)
              (pin s 'vs (s 'vs + [[at v]]))))
-     live (filter (p \ p 1 0 >= base) (s 'vs))          ; not finished
-     now (filter (p \ p 0 < base + song-chunk) live)    ; ..and already begun
-     vs (map (p \ p 1) now)
-     ((pins s 'vs live 'fpos (base + song-chunk)),
-      say (s 'h) (pack (mixdown vs base song-chunk) song-chunk song-gain)))
+     (song-out s song-chunk song-gain))
 
  ; --- the week on the tty ------------------------------------------------------------
  ; the clock paces ticks at fps; the horn is fed first, to a lead; a late tick is not

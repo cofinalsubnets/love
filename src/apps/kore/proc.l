@@ -443,8 +443,7 @@
          (pr (rev (environ 0))))   ; environ answers last first
       (: (one w ok) (getenv w @ v
                      (string? v ? (say out v, put out nl, ok) 0))
-         (go a ok) (two? a ? (go >a (one <a ok)) (flush out, ok ? 0 1))
-         (go as 1))))
+         (ueach one as))))
 
    ; -- whoami and groups: id's two thin faces (id -un and id -Gn) --
    (whoami-main _)
@@ -1025,12 +1024,7 @@
 
    (uprocs _)                          ; every numeric name under /proc, ascending
     (: r (readdir "/proc")
-       (dig? s) (: n #s
-                   (go k) (? (n <= k) (0 < n)
-                             (48 <= (s k) && (s k) <= 57) (go (k + 1))
-                             0)
-                   (go 0))
-       (two? r ? (sort (map uatoi (filter dig? r)))))
+       (two? r ? (sort (map uatoi (filter udigs? r)))))
    ; a stat line -> (pid comm state ppid pgrp session tty_nr ..). the comm is taken between
    ; the first "(" and the last ")": a name like `a b)c` would shift every later field
    (ustatf ln)

@@ -1,37 +1,17 @@
 #!/usr/bin/env -S love -l
-; src/tools/waits.l -- who waits. the device floor's invariant, made structural: the
-; only code in the tree that blocks is the scheduler, plus a short roster of named
-; exceptions. a wait that comes back therefore comes back loudly, at build time,
-; instead of arriving as a hang in somebody's test six months later.
+; src/tools/waits.l -- who waits. the only code that blocks is the scheduler plus a
+; roster of named exceptions, so a new wait reddens the build instead of hanging a test.
+; every call to a hook below, in every tracked .c file, must be on the roster (keyed
+; on file and function).
 ;
-; the hooks it watches are the four that actually stop the world -- love_sleep,
-; wait_fds, love_fd_drain, and the runtime's own wait_one shim. every call to one of
-; them, in every tracked .c file, must name a function on the roster below.
-; the roster keys on the file, so a function that moves TUs moves its entry.
+; it reads the C as written, not the binary: static io_* and z* functions inline away,
+; and a call graph read off the image would answer green for want of a caller.
 ;
-; it reads the C as written, not the binary, and that is the whole design.
-; every io_* and z* function in the runtime is `static`, so the compiler inlines
-; them and their names are gone from the ELF; a call graph read off the image would
-; answer green because it could not find the caller, which is the worst answer a
-; gate can give. vmret can disassemble because lvm_* aps are addressed and survive.
-;
-; the scan is one line at a time: an identifier immediately followed by `(` is a
-; call, and the enclosing function is the nearest definition line at column 0
-; (love's C puts every definition there and indents every body). two edges of that
-; rule are deliberate --
-;
-;  * `Ap(lvm_yield_sw, g)` names `Ap`, never lvm_yield_sw. a tail-jump is not a
-;    call: the op returns to the trampoline first and the scheduler then waits in
-;    its own frame, which is exactly the shape this gate exists to permit.
-;  * a `//` comment is stripped before the scan, so prose about a wait cannot
-;    redden the gate -- a gate that reddens on writing about it teaches people to
-;    stop writing about it. block comments are not stripped; nothing needs it.
-;
-; what it does not see, so nobody reads it as more than it is: the four hooks by
-; NAME, never blocking in general. a raw read(2) in the runtime, a fresh primitive,
-; or a hook through a function pointer all walk past it. it says "the named waits
-; are where we put them", which is the thing that regresses.
-;
+; a call is an identifier followed by `(`; the enclosing function is the nearest
+; definition at column 0. `Ap(lvm_yield_sw, g)` names Ap: a tail-jump returns to the
+; trampoline and the scheduler waits in its own frame, the shape this gate permits.
+; `//` comments are stripped, so prose about a wait cannot redden it; block ones are not.
+; it sees the hooks by NAME only: a raw read(2) or a hook through a pointer walks past.
 ; Usage: love src/tools/waits.l file ..   (paths as the roster spells them: repo-relative)
 ; Exit:  0 = the waits are exactly the roster, 1 = they are not, 2 = usage error.
 
@@ -41,15 +21,11 @@
    ; --- what counts as a wait -------------------------------------------------
    hooks ["love_sleep" "wait_fds" "love_fd_drain" "wait_one"]
    (hook? nm) (any (= nm) hooks)
-   ; the three love.h contract symbols, whose bodies are the wait itself: a
-   ; frontend's `wait_fds` reaching love_sleep is what a wait hook is, so the
-   ; family's own implementations are exempt and only callers from outside it
-   ; have to answer. the runtime's wait_one is not one of these -- it is ordinary
-   ; code that happens to wait, so it answers on the roster like anyone else.
+   ; the love.h contract symbols: their bodies are the wait, so only callers outside
+   ; the family answer. the runtime's wait_one is ordinary code and answers on the roster.
    (impl? nm) (any (= nm) ["love_sleep" "wait_fds" "love_fd_drain"])
 
-   ; --- the roster: (file function hook why) ----------------------------------
-   ; every wait in the tree, and the sentence that earns it.
+   ; --- the roster: (file function hook why) ---
    roster
    [["src/love/task.c" "wait_one" "wait_fds"
      "the scheduler's one-fd shim -- an lvm_ frame may hold no scratch"]
@@ -70,12 +46,12 @@
     ["src/inle/doom.c" "DG_SleepMs" "love_sleep"
      "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, and the freestanding half waits the same way through k_sleep"]]
 
-   ; --- character classes ------------------------------------------------------
+   ; --- character classes ---
    (idc? c) (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57 || c = 95)
    (blank? c) (c = 32 || c = 9)
    (inch? s c) (: n #s (go k) (? (n <= k) () (s k = c) 1 (go (k + 1))) (go 0))
 
-   ; --- line helpers -----------------------------------------------------------
+   ; --- line helpers ---
    (lines s) (: n #s
                 (go start i acc)
                  (? (n <= i) (rev (start < i ? (snip s start i . acc) acc))
@@ -101,20 +77,15 @@
                     (go (i + 1) acc))
                 (go 0 ()))
 
-   ; --- naming the enclosing function ------------------------------------------
-   ; a top-level line: column 0, has a paren, and is not a preprocessor line /
-   ; comment / brace. it either defines (a header) or declares (a prototype).
+   ; --- naming the enclosing function ---
+   ; a top-level line: column 0, has a paren, not a preprocessor line, comment or brace
    (top? s) (: n #s
                c (n < 1 ? 32 (s 0))
                (n > 0 && !(blank? c) && !(any (= c) [35 47 42 125 41]) && inch? s 40))
-   ; the `{` half is load-bearing. the runtime puts the first statement on the
-   ; header line (`static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = ..;`), so
-   ; a bare "ends in a semicolon means prototype" test throws away the scheduler.
+   ; the `{` half is load-bearing: the runtime puts the first statement on the header
+   ; line, so "ends in ; means prototype" alone would drop the scheduler.
    (header? s) (#s @ n (top? s && (inch? s 123 || !(s (n - 1) = 59))))
-   ; ..and the other half declares. a prototype names a function and calls none:
-   ; `static void wait_one(int fd, int events, uintptr_t ms);` is a wait's spelling,
-   ; not a wait. the seam between the runtime's TUs is a block of these, so a scan
-   ; that read them as calls would redden on the declaration of every hook.
+   ; ..and the rest declare: a prototype names a hook and calls none.
    (proto? s) (top? s && !(header? s))
    ; a name that is a qualifier or a keyword, never the function being defined
    nonfn ["__attribute__" "if" "while" "for" "switch" "return" "sizeof" "defined"]
@@ -127,9 +98,8 @@
    (find s p) (: n #s
                  (go i) (? (n <= i) () (at? s i p) i (go (i + 1)))
                  (go 0))
-   ; the function a definition line names: the first call-shaped identifier that
-   ; is not a qualifier -- except for `lvm(name)`, love.h:70's definition macro,
-   ; where the name is inside the parens and every VM op is spelled that way.
+   ; the first call-shaped identifier not a qualifier -- except `lvm(name)`, love.h's
+   ; definition macro, where the name is inside the parens.
    (hdr-name s)
     (: j (find s "lvm(")
        cs (filter (x \ !(any (= x) nonfn)) (calls s))
@@ -137,12 +107,9 @@
           (two? cs) <cs
           (rtrim s)))
 
-   ; --- the scan ---------------------------------------------------------------
-   ; -> ((file fn hook line) ..), one entry per distinct wait; `line` is where it
-   ; was first seen, which is where a reader should go look. the key is the first
-   ; three -- two calls to the same hook from the same function are one fact.
+   ; --- the scan ---
+   ; -> ((file fn hook line) ..), one per distinct (file fn hook), at its first line
    (seen? l k) (any (= k) l)
-   ; a roster row is a list, so it indexes by application -- no walker of our own
    (key e) (<e + " " + e 1 + " " + e 2)
    (scan path)
     (: port (open path "r")
@@ -163,9 +130,9 @@
               (go >ls (n + 1) fn2 acc2)))
        (go (lines src) 1 "" ()))
 
-   ; --- the report --------------------------------------------------------------
+   ; --- the report ---
    (show2 e) (say out "  ", say out (e 1), say out " -> ", say out (e 2), put out 10)
-   ; a found wait points at its line; a roster entry has no line, it has a reason
+   ; a found wait points at its line; a roster entry carries its reason
    (showx e) (say out "  ", say out <e, put out 58,
               putbn out (e 3) 10, say out ":", show2 e, 0)
    (show3 r) (say out "  ", say out <r, show2 r,
