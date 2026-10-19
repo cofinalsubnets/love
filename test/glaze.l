@@ -212,11 +212,14 @@
            (gzqh-n "ab" 0 () = [[7 98] [7 97]])
            (nat? gzqh-l = nat? gzqh-c) (nat? gzqh-n = nat? gzqh-c))
    0)
-; a text literal glazes as its quote does: the same node, so the same answers and the same identity
+; a text literal in a loop glazes as its quote does: the same node, so the same answers and the
+; same identity. a leaf with one stays interpreted, its native not worth the bytes
 (: (gzsl-b s i acc) (i < 1 ? acc (gzsl-b s (i - 1) (? (= s "ab") (+ acc 1) acc)))
    (gzsl-q s i acc) (i < 1 ? acc (gzsl-q s (i - 1) (? (= s '"ab") (+ acc 1) acc)))
    (gzsl-k i acc) (i < 1 ? acc (gzsl-k (i - 1) "ab"))
+   (gzsl-f s) (? (= s "ab") 1 0)
    _ (test (gzsl-b "ab" 3 0 = 3) (gzsl-b "ac" 3 0 = 0) (gzsl-b "ab" 3 0 = gzsl-q "ab" 3 0)
            (gzsl-k 2 0 = "ab") (gzsl-k 2 0 == gzsl-k 3 0)
-           (nat? gzsl-b = nat? gzsl-q) (nat? gzsl-k = nat? gzsl-q))
+           (nat? gzsl-b = nat? gzsl-q) (nat? gzsl-k = nat? gzsl-q)
+           (gzsl-f "ab" = 1) (gzsl-f "b" = 0) !(nat? gzsl-f))
    0)
