@@ -359,7 +359,7 @@
  ;     what shines, then the glows; out as half blocks or kitty's pixels ---
  fov 1.5
  gain 2.0
- (corridor-pens st) (: k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) sc (st 'sc) lv (st 'lvl)
+ (corridor-pens st) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (corridor-ks sc (st 'mt) ds)
    e [(st 'px) (st 'py) (st 'pz)]
    ; ..under a sky, the sky where nothing is drawn; out in a street, seen further, its haze
@@ -453,6 +453,9 @@
         (brush-medium bs [(q 0) (fl + 0.3) (q 1)] = 1 && brush-medium bs [(q 0) (fl + 1.7) (q 1)] = 1)))
    (all air pts && !(any pane? pts) && !(any shut? ^#(lv 'doors))))
  (put! st x z) (walk-slide st x z corridor-free?)
+ ; ..the mouse's motion, as far as a pixel turns
+ mouse-k 0.0025
+ (corridor-look st dx dy) (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2})
  ; ..the corridor's own keys, over view's
  corridor-binds {112 'where}
  ; ..each action as far as the time since the last frame, 'dt, carries it
@@ -530,7 +533,7 @@
                                st (pins (corridor-new w h lv (dir-of p)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
                                (corridor-watch (corridor-size st w (h // 2)))))
-               'size corridor-size 'frame corridor-frame 'key corridor-step
+               'size corridor-size 'frame corridor-frame 'key corridor-step 'look corridor-look
                'binds (view-bind view-binds corridor-binds) 'listed (view-listed ['where 'finer 'coarser])
                'tick (st \ (walk-dt st,
                             corridor-move st,
@@ -543,7 +546,7 @@
                      lv (corridor-load p)
    (? (string? lv) (say err ("corridor: " + p + ": " + lv + "\n"), flush err, 1)
       (view-stage (pin o 'level p) (o2 \ corridor-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
- corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, p where you stand; ? the keys; q or esc leaves; the level is read again when it changes)"
+ corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, p where you stand; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for corridor-run, or () where one is wrong or said twice
  (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
                                     (view-arg "--level" 'level (w \ w))])

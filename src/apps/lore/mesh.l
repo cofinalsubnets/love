@@ -7,7 +7,7 @@
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
-         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-show mesh-win mesh-gone)
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone)
 (borrow 'view)
 (borrow 'window)                        ; --window: the frame on a window's paper
 (borrow 'vec)
@@ -300,14 +300,17 @@
  ; window is no kitty
  (mesh-mode md) (md @ 'kitty 1 'cells 0 'window 0 (mesh-kitty? ()))
  ; ..w cells by r rows, two pixels a row, and its dither; under kitty 'kp pixels a column
- ; and twice that a row, for a picture about kitty-w pixels across; in a window a cell is
- ; 8 by 16 of its pixels, a picture's pixel 'scale by 'scale of them -- 1 2 4 or 8, 2
- ; unless said -- so 'kp is 8 over it
+ ; and twice that a row, for a picture about kitty-w pixels across; in a window the picture
+ ; is 'pic-w by 'pic-h whatever the window's size, kitty-w over 'scale across -- 1 2 4 or 8, 2
+ ; unless said -- the window's shape, and the window filled with it
  kitty-w 640
  (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
- (mesh-size st w r) (: h (2 * r) s (mesh-scale st)
-   (pins (view! st w h r) 'bay (view-bayer w h)
-         'kp (? (tablet? (peep st 'win ())) (8 // s) (st 'kitty) (max2 1 (kitty-w // w // s)) 1)))
+ (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (peep st 'win ())
+   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (kitty-w // s) ph (max2 1 (pw * wh 1 // max2 1 (wh 0)))
+   (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
+         'kp (? (tablet? win) (max2 1 (pw // 160)) (st 'kitty) (max2 1 (kitty-w // w // s)) 1)))
+ ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
+ (mesh-dims st) (: k (peep st 'kp 1) (tablet? (peep st 'win ()) ? [(st 'pic-w) (st 'pic-h)] [(k * st 'w) (k * st 'h)]))
  ; ..a frame f of the state's 'kp: kitty's pictures go up as ids 7 and 8 by turns, the last
  ; taken down only once the next is over it, the two in one synchronised update -- one id
  ; put up again would go blank first -- with text over them; or the cells, with view's
@@ -319,22 +322,27 @@
          (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
           + text + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
- ; ..or to a window, each of the picture's pixels a square of the scale's: the picture sent
- ; at its own size for the server to enlarge, else painted onto the paper and the paper
- ; shown. view's bands are painted over it by the console's painter a cell 8 by 16, and
- ; 'over's, the help, over those, and only their rows of the paper shown when the server
- ; enlarged the rest; answers "", there being nothing for the terminal
- (mesh-win st f bands) (: win (st 'win) s (mesh-scale st) k (st 'kp) w (k * st 'w) h (k * st 'h)
+ ; ..or to a window, filled: the picture sent at its own size for the server to enlarge,
+ ; else painted onto the paper as many times over as fits and the paper shown. view's bands
+ ; are painted over it by the console's painter a cell 8 by 16, and 'over's, the help, over
+ ; those, and only their rows of the paper shown, laid first from the picture, when the
+ ; server enlarged the rest; answers "", there being nothing for the terminal
+ (mesh-win st f bands) (: win (st 'win) d (mesh-dims st) w <d h (d 1)
    wh (window-size win) W <wh H (wh 1) P (window-paper win)
    Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
    _ (frame-paint f w 1 Q w)
-   up (window-blit win Q w h s)
+   up (window-blit win Q w h)
    ov (peep st 'over {}) rs (sort (keys bands + keys ov))
-   _ (up && atom? rs ? 0 (frame-paint f w s P W))
+   _ (up ? (each rs (r \ mesh-under f w h P W H r)) (frame-paint f w (max2 1 (min2 (W // w) (H // h))) P W))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
    _ (? up (each rs (r \ window-show win (16 * r) (16 * r + 16))) (window-show win 0 H))
    "")
+ ; ..the paper's cell row r laid from the picture f w by h, enlarged to the window W by H
+ (mesh-under f w h P W H r) (: y0 (16 * r) n (min2 16 (H - y0))
+   (? (0 < n) (: I (iota (W * n)) X (I % W) Y (I // W + y0) g (peep f (Y * h // H * w + X * w // W) 0) T (cask (W * n * 4))
+              _ (frame-paint g W 1 T W) (pour P (y0 * W * 4) T 0 (W * n * 4)))
+      0))
  ; ..a band [x0 cells fg bg] on cell row r: its pens 24-bit, six bits a channel, or the 256
  (mesh-band st P W H r bd) (: x0 (bd 0) cs (bd 1) n #cs
    (pen p bg) (? !(st 'deep) (esc + "[" + (bg ? "48" "38") + ";5;" + show p + "m")

@@ -167,6 +167,12 @@
    binds (peep lv 'binds view-binds)
    hl (view-help binds (peep lv 'listed (view-listed ())))
    hs {'on 0 'p ()}
+   ; ..the mouse, where the level looks by it: a click holds it, its motion from the window's
+   ; middle summed for the frame and it put back there, esc lets it go
+   look (peep lv 'look ()) ms {'on 0 'dx 0 'dy 0}
+   (mid _) (window-size win @ s [(s 0 // 2) (s 1 // 2)])
+   (grab! on) (: c (mid ()) ok (window-hold win on)
+     (on && ok ? (pins ms 'on 1 'dx 0 'dy 0, window-warp win (c 0) (c 1)) (pin ms 'on 0)))
    ; the terminal's size, and 80 by 24 off a tty that will not say; asked again every
    ; frame, so a resized window is painted whole
    (shape _) (? win (window-size win @ s [(max2 20 (s 0 // 8)) (max2 8 (s 1 // 16))])
@@ -185,6 +191,12 @@
               (: e <l nx (two? >l ? <>l ()) t (two? nx && <nx = 'text ? (nx 1) "")
                  k (? (0 < #t) (t 0) (peep view-set1 (e 1) ()))
                  (? (<e = 'close) ('quit . wgo >l)
+                    (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
+                    (<e = 'move && ms 'on) (: c (mid ()) dx (e 1 - c 0) dy (e 2 - c 1)
+                                              (pins ms 'dx (ms 'dx + dx) 'dy (ms 'dy + dy),
+                                               (dx != 0 || dy != 0 ? (window-warp win (c 0) (c 1)) 0),
+                                               wgo >l))
+                    (<e = 'down && ms 'on && k = 27) (grab! 0, wgo >l)
                     (<e = 'down && charm? k && held (e 1) != ()) (wgo >l)
                     (<e = 'down && charm? k) (pin held (e 1) [k (clock 0 + rep 0)],
                                               (binds k = 'help ? (pins hs 'on 1 'p (e 1))),
@@ -216,6 +228,7 @@
              _ (feed ())
              ks (win ? (wkeys ()) (tget ()))
              acts (map (k \ k = 'quit ? 'quit (binds k)) ks)
+             _ (look && (ms 'dx != 0 || ms 'dy != 0) ? (look st (ms 'dx) (ms 'dy), pins ms 'dx 0 'dy 0) 0)
              _ (resize ())
              _ (pin st 'over (win && hs 'on ? (view-help-bands st hl) {}))
              _ (win ? (lv 'frame st)
