@@ -21,6 +21,7 @@
 (borrow 'tar)
 (borrow 'tls)
 (:
+   ap-net "android.permission.INTERNET"           ; a normal permission: granted at install, never asked
    ; --- the face ---
    (face-open _) (getenv "LOVE_FACE" @ p (string? p ? (connect ['unix p])))
    (face-next s)
@@ -71,7 +72,6 @@
             + ap-cat el ks
             + ax-chunk 0x103 16 (u32 1 + u32 -1 + u32 -1 + u32 (ix t))))
        (ax-chunk 3 8 (pool + rmap + nsc 0x100 + el root + nsc 0x101)))
-   ap-net "android.permission.INTERNET"           ; a normal permission: granted at install, never asked
    ; ps the permissions asked, each android's full name; the network is every app's
    (ap-manifest pkg label ps)
     ["manifest" [[1 "versionCode" 'int 1] [1 "versionName" 'str "1"] [0 "package" 'str pkg]]

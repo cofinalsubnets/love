@@ -8,6 +8,25 @@
 (borrow 'glob) ; du --exclude
 
 (:
+   ; android's fixed ids (android_filesystem_config.h); each user's ids are 100000 apart
+   uaids {0 "root" 1 "daemon" 2 "bin" 1000 "system" 1001 "radio" 1002 "bluetooth" 1003 "graphics"
+          1004 "input" 1005 "audio" 1006 "camera" 1007 "log" 1008 "compass" 1009 "mount" 1010 "wifi"
+          1011 "adb" 1012 "install" 1013 "media" 1014 "dhcp" 1015 "sdcard_rw" 1016 "vpn"
+          1017 "keystore" 1018 "usb" 1019 "drm" 1020 "mdnsr" 1021 "gps" 1023 "media_rw" 1024 "mtp"
+          1026 "drmrpc" 1027 "nfc" 1028 "sdcard_r" 1029 "clat" 1030 "loop_radio" 1031 "mediadrm"
+          1032 "package_info" 1033 "sdcard_pics" 1034 "sdcard_av" 1035 "sdcard_all" 1036 "logd"
+          1037 "shared_relro" 1038 "dbus" 1039 "tlsdate" 1040 "mediaex" 1041 "audioserver"
+          1042 "metrics_coll" 1043 "metricsd" 1044 "webserv" 1045 "debuggerd" 1046 "mediacodec"
+          1047 "cameraserver" 1048 "firewall" 1049 "trunks" 1050 "nvram" 1051 "dns" 1052 "dns_tether"
+          1053 "webview_zygote" 1054 "vehicle_network" 1055 "media_audio" 1056 "media_video"
+          1057 "media_image" 1058 "tombstoned" 1059 "media_obb" 1060 "ese" 1061 "ota_update"
+          1062 "automotive_evs" 1063 "lowpan" 1064 "hsm" 1065 "reserved_disk" 1066 "statsd"
+          1067 "incidentd" 1068 "secure_element" 1069 "lmkd" 1070 "llkd" 1071 "iorapd"
+          1072 "gpu_service" 1073 "network_stack" 1074 "gsid" 1075 "fsverity_cert" 1076 "credstore"
+          1077 "external_storage" 1078 "ext_data_rw" 1079 "ext_obb_rw" 1080 "context_hub"
+          2000 "shell" 2001 "cache" 2002 "diag" 3001 "net_bt_admin" 3002 "net_bt" 3003 "inet"
+          3004 "net_raw" 3005 "net_admin" 3006 "net_bw_stats" 3007 "net_bw_acct" 3009 "readproc"
+          3010 "wakelock" 3011 "uhid" 9997 "everybody" 9998 "misc" 9999 "nobody"}
    ; a file destination: into a directory the source's basename lands beside
    (udest src dst) (udirp dst ? (dst + "/" + ubase src "") dst)
    ; copy bytes + permission bits (cp's heart; mv's cross-device leg).
@@ -608,25 +627,6 @@
    ; the stat tuple's tail past size mtime mode may be missing (the kernel's has no
    ; ownership): ust-at asks by tally and answers (), never a 0 someone might believe
    (ust-at st k) (#st <= k ? () (st k))
-   ; android's fixed ids (android_filesystem_config.h); each user's ids are 100000 apart
-   uaids {0 "root" 1 "daemon" 2 "bin" 1000 "system" 1001 "radio" 1002 "bluetooth" 1003 "graphics"
-          1004 "input" 1005 "audio" 1006 "camera" 1007 "log" 1008 "compass" 1009 "mount" 1010 "wifi"
-          1011 "adb" 1012 "install" 1013 "media" 1014 "dhcp" 1015 "sdcard_rw" 1016 "vpn"
-          1017 "keystore" 1018 "usb" 1019 "drm" 1020 "mdnsr" 1021 "gps" 1023 "media_rw" 1024 "mtp"
-          1026 "drmrpc" 1027 "nfc" 1028 "sdcard_r" 1029 "clat" 1030 "loop_radio" 1031 "mediadrm"
-          1032 "package_info" 1033 "sdcard_pics" 1034 "sdcard_av" 1035 "sdcard_all" 1036 "logd"
-          1037 "shared_relro" 1038 "dbus" 1039 "tlsdate" 1040 "mediaex" 1041 "audioserver"
-          1042 "metrics_coll" 1043 "metricsd" 1044 "webserv" 1045 "debuggerd" 1046 "mediacodec"
-          1047 "cameraserver" 1048 "firewall" 1049 "trunks" 1050 "nvram" 1051 "dns" 1052 "dns_tether"
-          1053 "webview_zygote" 1054 "vehicle_network" 1055 "media_audio" 1056 "media_video"
-          1057 "media_image" 1058 "tombstoned" 1059 "media_obb" 1060 "ese" 1061 "ota_update"
-          1062 "automotive_evs" 1063 "lowpan" 1064 "hsm" 1065 "reserved_disk" 1066 "statsd"
-          1067 "incidentd" 1068 "secure_element" 1069 "lmkd" 1070 "llkd" 1071 "iorapd"
-          1072 "gpu_service" 1073 "network_stack" 1074 "gsid" 1075 "fsverity_cert" 1076 "credstore"
-          1077 "external_storage" 1078 "ext_data_rw" 1079 "ext_obb_rw" 1080 "context_hub"
-          2000 "shell" 2001 "cache" 2002 "diag" 3001 "net_bt_admin" 3002 "net_bt" 3003 "inet"
-          3004 "net_raw" 3005 "net_admin" 3006 "net_bw_stats" 3007 "net_bw_acct" 3009 "readproc"
-          3010 "wakelock" 3011 "uhid" 9997 "everybody" 9998 "misc" 9999 "nobody"}
    ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam). android has
    ; neither: its names are reckoned off the id as bionic's are (uidroid)
    (uidname path id)                   ; a numeric id -> its name, or the number back
