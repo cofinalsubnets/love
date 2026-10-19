@@ -6,7 +6,7 @@
 # what plan 9's wrote: the exit status the same, and how many draw the same byte for byte
 # counted.
 # test/grap/open holds the cases not yet climbed: counted and named,
-# never failing the gate. fz-* are random graphs, kept once they came out the same; each
+# never failing the gate. fz-* are random graphs, drawn by test/gate/fzgen.l; each
 # holds one graph, since plan 9's grap carries a freed mark from one graph to the next.
 # every run is capped (2 GB, 20 s), one at a time. with -v, the first lines of each
 # difference.
@@ -20,6 +20,8 @@ ref=/usr/lib/plan9/bin/grap
 verbose=$2
 r=$(pwd)
 L=$r/$love
+# the fz-* cases: FZ_N drawn from test/gate/fzgen.l under FZ_SEED; a case that differs is printed
+seed=${FZ_SEED:-20261018} fzn=${FZ_N:-222}
 w=$(mktemp -d)
 trap 'rm -rf "$w"' EXIT
 pic=/usr/bin/pic
@@ -29,8 +31,8 @@ pic=/usr/bin/pic
 run() {
   rm -rf "$w/c"; mkdir "$w/c"
   cp "$1"/* "$w/c/" 2>/dev/null
-  # the random cases ride one file, one `@@ name` line before each
-  [ -f "$1/random.pack" ] && awk -v d="$w/c" '/^@@ /{close(f); f = d "/" $2; next} {print > f}' "$1/random.pack"
+  # the random cases are drawn here, from the seed
+  [ "$1" = test/grap ] && "$L" "$r/test/gate/fzgen.l" grap "$seed" "$fzn" "$w/c"
   for f in "$w/c"/*.g; do
     [ -f "$f" ] || continue
     n=$(basename "$f" .g)
@@ -49,6 +51,7 @@ run() {
     if [ -n "$same" ]; then echo "ok $n"
     else
       echo "differs $n"
+      case $n in fz-*) sed 's/^/    | /' "$w/c/$n.g" >&2 ;; esac
       [ -n "$verbose" ] && { diff "$w/a" "$w/b" | head -8; diff "$w/pa" "$w/pb" 2> /dev/null | head -4; } >&2
     fi
   done
@@ -61,5 +64,5 @@ grep '^differs' "$w/gate" | sed 's/^differs/  differs:/'
 run test/grap/open > "$w/open"
 ok=$(grep -c '^ok' "$w/open"); all=$(grep -c '^ok\|^differs' "$w/open")
 echo "grap: $((k - d)) of $k identical, $dr drawn the same by both pics; open $ok of $all"
-[ $d -eq 0 ] || { echo "FAIL grap: $d of $k differ from $ref"; exit 1; }
+[ $d -eq 0 ] || { echo "FAIL grap: $d of $k differ from $ref (fz cases: FZ_SEED=$seed FZ_N=$fzn)"; exit 1; }
 echo "grap: ok"
