@@ -680,6 +680,17 @@
       (elem '(label plain) (ob 2))                  ; an unattributed global still does
       ; the underscored spelling is the same attribute
       ((<<(cobx "__attribute__((__section__(\".u\"))) long u = 1; int main() { return 0; }" 8)) = ".u")
+      ; ..and one named after a struct or union body, the kernel's pi idreg-override regs[]
+      ((<<(cobx "static const struct { long a; } t __attribute__((section(\".t\"))) = { 1 }; int main() { return (int) t.a; }" 8)) = ".t")
+      ((<<(cobx "struct n { long a; }; static const union { const struct n *p; long q; } r[] __attribute__((section(\".r\"))) = { { 0 } }; int main() { return (int) r[0].q; }" 8)) = ".r")
+      ; `aligned` right after a body is the type's: the pointer lays as a plain one. after the
+      ; declarator it is the object's
+      ((cobx "struct s { char c; } __attribute__((aligned(16))) *p = 0; int main() { return 0; }" 2) =
+        (cobx "struct s { char c; } *p = 0; int main() { return 0; }" 2))
+      ((cobx "struct s { char c; } v __attribute__((aligned(16))) = { 1 }; int main() { return 0; }" 2) !=
+        (cobx "struct s { char c; } v = { 1 }; int main() { return 0; }" 2))
+      ; a function's body is no tag body: the next declaration's section stays its own
+      ((map (x \ <x) (cobx "struct s { long a; }; struct s f(void) { struct s v = { 1 }; return v; } __attribute__((section(\".n\"))) long n = 1; int main() { return (int) (f().a + n); }" 8)) = [".n"])
       ; a braced bitfield images its unit's bits: {0,1} is bit 1 alone, 5 with 21 above is 5 + 21*8
       ((cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}" 2) =
         '((label g) (raw (2 0 0 0)) (align 1) (raw (0 0 0 0))))
