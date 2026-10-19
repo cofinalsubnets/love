@@ -273,12 +273,12 @@
    ; android's netd: getaddrinfo asked of it by name, family fam (2 or 10), a stream ->
    ; the addresses, () on none or no netd. it answers "222\0", then per address a be32 1,
    ; five be32s (flags family socktype protocol addrlen), the sockaddr, a be32 name length
-   ; and the name; a be32 0 ends. netd walks the search domains itself
+   ; and the name; a be32 0 ends. netd walks the search domains itself. selinux refuses an
+   ; app a stat of the socket and allows the connect, so the connect is the only test
    dns-proxyd "/dev/socket/dnsproxyd"
    (dns-proxy px h fam)
-    (? !(two? (stat px)) ()
-       (connect ['unix px] @ s
-        (? !(hot? s) ()
+    (connect ['unix px] @ s
+       (? !(hot? s) ()
            (: (be n v) (n = 0 ? v (see s @ c (c < 0 ? -1 (be (n - 1) (v * 256 + c)))))
               (take n acc) (n = 0 ? (rev acc) (see s @ c (c < 0 ? () (take (n - 1) (c . acc)))))
               (addr sa) (? (fam = 2 && 8 <= #sa) [(((sa 4 * 256 + sa 5) * 256 + sa 6) * 256 + sa 7)]
@@ -291,21 +291,22 @@
                              _ (take (be 4 0) ())
                              (go (acc + addr sa)))))
               (say s ("getaddrinfo " + h + " ^ 0 " + show fam + " 1 0 0" + string [0]), flush s,
-               (take 4 () = [50 50 50 0] ? (go ()) ()) @ a (close s, a))))))
+               (take 4 () = [50 50 50 0] ? (go ()) ()) @ a (close s, a)))))
 
-   ; hosts first, then the name, then each search domain appended; netd's answer
-   ; when conf names no server and px stands
+   ; hosts first, then netd's answer when conf names no server, then the name and each
+   ; search domain appended
    (dns-lookup conf hosts px h byhosts walk fam)
     (byhosts hosts h @ f
        (? (two? f) f
-          (!(two? (dns-conf conf "nameserver")) && two? (stat px)) (dns-proxy px h fam)
-          (: servers (dns-servers conf)
-             a (walk servers h)
-             (two? a ? a
-                (: (go ds) (atom? ds ? ()
-                              (walk servers (h + "." + <ds) @ b
-                                 (two? b ? b (go >ds))))
-                   (go (dns-conf conf "search")))))))
+          (: n (two? (dns-conf conf "nameserver") ? () (dns-proxy px h fam))
+             servers (dns-servers conf)
+             (? (two? n) n
+                (walk servers h @ a
+                   (two? a ? a
+                      (: (go ds) (atom? ds ? ()
+                                    (walk servers (h + "." + <ds) @ b
+                                       (two? b ? b (go >ds))))
+                         (go (dns-conf conf "search")))))))))
    (resolve-via conf hosts px h) (dns-lookup conf hosts px h dns-hosts dns-walk 2)
    (resolve-in conf hosts h) (resolve-via conf hosts dns-proxyd h)
    (resolve6-in conf hosts h) (dns-lookup conf hosts dns-proxyd h dns-hosts6 dns-walk6 10)
