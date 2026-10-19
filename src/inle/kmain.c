@@ -1445,7 +1445,7 @@ static lvm(lvm_kexec) {
   love_musttail return Nextp(1, 1); }
 
 // the svm spike (x64/svm.c): (svm ()) the capability, (svm-run ()) one guest -> (exitcode rax rip) | ()
-#if defined(__x86_64__) && !defined(INLE_DROID)
+#if defined(__x86_64__)
 
 static lvm(lvm_svm) {
   Sp[0] = k_svm_ok() ? putcharm(1) : ZeroPoint;
@@ -2025,7 +2025,7 @@ static union u
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
   nif_fetch[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_fetch}, {lvm_ret0}},
   nif_kexec[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kexec}, {lvm_ret0}},
-#if defined(__x86_64__) && !defined(INLE_DROID)
+#if defined(__x86_64__)
   nif_svm[] = {{lvm_svm}, {lvm_ret0}},
   nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
   nif_vmx[] = {{lvm_vmx}, {lvm_ret0}},
@@ -2101,7 +2101,7 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"disk-read", {.k = nif_disk_read}},
   {"disk-write", {.k = nif_disk_write}},
   // x64 only: ask (elem 'svm (names ())) first, else the read is missing, not absence
-#if defined(__x86_64__) && !defined(INLE_DROID)
+#if defined(__x86_64__)
   {"svm", {.k = nif_svm}},
   {"svm-run", {.k = nif_svm_run}},
   {"vmx", {.k = nif_vmx}},
@@ -2144,7 +2144,7 @@ static char const src_crewlist[] =
 ;
 
 void kmain(void) {
-#if defined(__x86_64__) && !defined(INLE_DROID)
+#if defined(__x86_64__)
  // before any other C: a struct copy may be movups, a silent triple fault while SSE is masked
  k_sse_enable();
 #endif
