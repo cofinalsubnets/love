@@ -319,8 +319,8 @@
          I (iota (dx * dx + dy * dy + dz * dz < R * R))
          (map (j \ peep I j 0) ^#I))))
  ; ..what of the lamps a face's cut hangs on, as a key: wk too where one is masked
- (reach-of lps wk id) (: all-pts (lamp-pts lps) ks (foldl (\ t j (pin t j (id (all-pts 'ks j)))) {} ^(all-pts 'n)) wi (id wk)
-   (\ f (: ix (reach-ix all-pts f) [(map ks ix) (any (all-pts 'mk) ix ? wi ())])))
+ (reach-of all-pts ks wi)
+   (\ f (: ix (reach-ix all-pts f) [(map ks ix) (any (all-pts 'mk) ix ? wi ())]))
  (coarse? lps) (: all-pts (lamp-pts lps)
   ; ..asked of a face first, so its pieces weigh only the lamps that reach it
   (\ f (: pts (map (all-pts 'at) (reach-ix all-pts f))
@@ -412,11 +412,13 @@
  ; ..a part as a key says it: a tablet hashes as itself, so as its keys and values
  (vals x) (? (tablet? x) (map (k \ [k (vals (x k))]) (sort (keys x))) (two? x) (map vals x) x)
  (scene lv dir was) (: ps (lv 'posters)
-   ; ..what the scene before made, kept where it would be made the same, by a key saying
-   ; all it was made of; and a number for each key, the same while it is kept
-   old (tablet? was ? (peep was 'memo {}) {}) ov (peep old 'v {}) oi (peep old 'id {}) memo {'v {} 'id {} 'n (peep old 'n 0)}
-   (kept k f) (: c (peep ov k ()) v (two? c ? <c (f ())) (pin (memo 'v) k [v], v))
-   (idof k) (: i (peep oi k ()) j (i = () ? (memo 'n) i) _ (? (i = ()) (pin memo 'n (j + 1))) (pin (memo 'id) k j, j))
+   ; ..what the scenes before made, kept where it would be made the same, by a key saying
+   ; all it was made of; and a number for each key, never another's. kept on from scene to
+   ; scene, and begun again once it holds three times what one scene makes
+   old (tablet? was ? (peep was 'memo {}) {}) fresh (!(tablet? was) || peep old 'made 0 > 3 * peep old 'size 1e9)
+   memo (fresh ? {'v {} 'id {} 'n (peep old 'n 0) 'made 0} old) ov (memo 'v) oi (memo 'id)
+   (kept k f) (: c (peep ov k ()) (? (two? c) <c (: v (f ()) (pin ov k [v], v))))
+   (idof k) (: i (peep oi k ()) (? (i = ()) (: j (memo 'n) (pins memo 'n (j + 1) 'made (memo 'made + 1), pin oi k j, j)) i))
    txs (textures lv) tt (map (t \ [(t 'name) (t 'w) (t 'h) (t 'm)]) txs)
    ls (lights-of lv + map (ad-light lv txs tt) (peep lv 'ads ()) + map (spin-light lv txs) (peep lv 'spins ()))
    ptex (map (p \ poster-tex (file-of dir p) (p 'at 3) (p 'at 4)) ps)
@@ -425,7 +427,17 @@
    ; ..the world in chunks chunk-m square, so a frame draws only those in view, nearest first
    ; ..a lamp's mask is its room's or its car's, so a face a masked lamp reaches is kept by those too
    lps (cats (map (l \ l 'lamps) ls)) wk [(lv 'rooms) (vals (peep lv 'cars ()))]
-   ti (idof tt) kp {'kept kept 'id idof 'reach (reach-of lps wk idof) 'look (b \ [ti (vals (peep b 'skin ())) (b 'lo 1)])}
+   ; ..and the lamps' points as they were, so the faces an edit relit are known: those a
+   ; point come or gone reaches, and all a masked one does once the masks' rooms move
+   ti (idof tt) ap (lamp-pts lps) wi (idof wk) pks (foldl (\ t j (pin t j (idof (ap 'ks j)))) {} ^(ap 'n))
+   pst (map (j \ [(pks j) (ap 'at j 0) (peep (ap 'R) j 0.0) (ap 'mk j)]) ^(ap 'n))
+   ops (fresh || peep memo 'ti () != ti ? () (peep memo 'pts ())) owi (peep memo 'wi ())
+   pin1 (foldl (\ t q (pin t (q 0) 1)) {} pst) opin (foldl (\ t q (pin t (q 0) 1)) {} ops)
+   hot (map (q \ [(q 1) (q 2)]) (filter (q \ peep opin (q 0) 0 = 0 || (q 3 && wi != owi)) pst + filter (q \ peep pin1 (q 0) 0 = 0 || (q 3 && wi != owi)) ops))
+   prev (fresh || peep memo 'ti () != ti ? () (peep memo 'bstate ()))
+   kp {'kept kept 'id idof 'reach (reach-of ap pks wi) 'look (b \ [ti (vals (peep b 'skin ())) (b 'lo 1)])
+       'bkey (b \ idof [(b 'planes) (b 'air) (peep b 'open 0) (vals (peep b 'skin ())) (peep b 'whole 0)])
+       'prev prev 'hot hot 'stash (st \ pin memo 'bstate st)}
    (on m k) [(mid3 (m 0)) m k]
    ds (peep lv 'decals ()) dps (peep lv 'drapes ())
    (made k f) (: ky (idof [k ti]) [(kept ['mesh ky] f) ky])
@@ -434,6 +446,7 @@
          + map (d \ (: m (made ['drape (vals d)] (_ \ drape-mesh d tt)) (on (m 0) (m 1)))) dps)
    cks (map (c \ [(c 0) (kept ['pack (c 0)] (_ \ mesh-pack ((c 1) ())))])
             (chunks-kept bs [cell-top cell (coarse? lps)] (look tt) chunk-m more kp))
+   _ (pins memo 'pts pst 'wi wi 'ti ti, fresh ? (pin memo 'size (memo 'made)))
    drs (map (d \ kept ['door (vals d) tt] (_ \ mesh-pack (door-mesh d tt))) (lv 'doors))
    ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds
    ; only the lights that change
