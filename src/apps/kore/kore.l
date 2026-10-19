@@ -706,6 +706,7 @@
             'openssl openssl-main   ; certificates, digests and a tls peer, openssl 3's spelling
             'grep grep-main 'sed sed-main
             'lex lex-main   ; a scanner spec to the tables dfa.c walks (src/apps/kore/lex.l)
+            'yacc yacc-main ; a grammar to the LALR(1) tables lr.c walks (src/apps/kore/yacc.l)
             ; the two old spellings, GNU's own shims: -E and -F said by name
             'egrep (as \ (grep-main ("-E" . as))) 'fgrep (as \ (grep-main ("-F" . as)))
             'awk awk-main 'find find-main
@@ -880,6 +881,7 @@
     'fgrep "usage: fgrep [grep's flags] PATTERN [FILE..]   (grep -F)"
     'sed "usage: sed [-nErs] [-i[SUFFIX]] [-e SCRIPT].. [-f FILE].. SCRIPT [FILE..]"
     'lex "usage: lex [-m MODULE] [-n NAME] SPEC"
+    'yacc "usage: yacc [-m MODULE] [-n NAME] SPEC"
     'awk "usage: awk [-F FS] [-v var=val].. PROGRAM [FILE..]  |  awk .. -f PROGFILE.. [FILE..]"
     'find "usage: find [-L] [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
     'less "usage: less [-Nise] [+N|+/PAT] [FILE..]"
