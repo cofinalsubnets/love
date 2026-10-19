@@ -635,10 +635,7 @@ mooncc = LOVE_NO_IMAGE= $m mooncc
 mooncc_dep = $(mdep)
 
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
-# seat=droid is the same kernel as a linux process (notes/plan/inle-droid.md): its machine
-# files are src/inle/droid/'s and its objects keep apart under $(ko)/droid-$a
-k_seat = $(if $(filter droid,$(seat)),droid,$a)
-k_arch_c = $(wildcard $(S)/inle/$(k_seat)/*.c)
+k_arch_c = $(wildcard $(S)/inle/$a/*.c)
 k_free_c = $S/inle/kmain.c $S/inle/blk.c $S/inle/hda.c $S/inle/sys.c
 # ..and doom, named here and not in its lane below: a rule's targets and prerequisites
 # are fixed where the rule is read, and every rule that links these is above that lane
@@ -660,7 +657,7 @@ k_c = $(love_c) \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
 k_h = $(love_h) $(S)/love/archive/ustar.h $(S)/love/archive/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
 
-k_odir = $(ko)/$(if $(filter droid,$(seat)),droid-$a,$a)
+k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
 k_pie = $(k_odir)/love.pie
 # ..and the wasm seat's own end of the lane: one module, no elf to project out of it,
@@ -686,7 +683,7 @@ kcppflags := \
   -I. -Isrc/love -Isrc/inle -Iout/lib -I$(S)/love/quay -I$(R) \
   -I$(S)/apps/moon/include \
   $(kcppflags)
-kcc = $(mooncc) $(kcppflags) $(if $(filter droid,$(seat)),-D INLE_DROID,) -t $a
+kcc = $(mooncc) $(kcppflags) -t $a
 
 kernel: $(k_elf)
 
@@ -720,19 +717,6 @@ $(k_mod): $(k_o) $(mdep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -t $a $(k_o) -o $@
-endif
-
-# THE DROID SEAT: the metal lane's compile under INLE_DROID, linked as a process. no vectors
-# and no boot object: moonlibc's entry runs as for any program, and main hands the machine to
-# droid/arch.c. `make seat=droid a=$a kdroid` lays the executable.
-k_droid = $(ko)/love-droid-$a
-ifeq ($(seat),droid)
-k_mach_o = $(k_tail_o) $(k_odir)/moonlibc.o $(k_doom_o)
-kdroid: $(k_droid)
-$(k_droid): $(k_o) $(mdep)
-	@echo 'MOON	'$@
-	@mkdir -p "$(dir $@)"
-	@$(mooncc) -pie -t $a $(k_o) -o $@ && test -s $@
 endif
 kproject_l = $S/apps/kore/text.l $S/apps/kore/u.l $S/apps/kore/asbook.l \
   $S/love/holo/elf.l $S/love/holo/obj.l $S/love/holo/link.l $S/tools/kproject.l

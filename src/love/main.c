@@ -563,13 +563,7 @@ static void trap_note_on(void) {
 #endif
 }
 
-#if defined(INLE_DROID)
-int k_droid_main(int argc, char const **argv);       // the kernel as a process (src/inle/droid/arch.c)
-#endif
 int main(int argc, char const **argv) {
-#if defined(INLE_DROID)
-  if (argc < 2 || strcmp(argv[1], "bake")) return k_droid_main(argc, argv);   // bake runs hosted, as love's
-#endif
   signal(SIGPIPE, SIG_IGN);
   trap_note_on();
   stack_note_on(&argc);

@@ -33,7 +33,7 @@ static struct {
   uint64_t wpos, hw, zpos;           // running byte counts: landed, played, silenced to
 } khda;
 
-#if defined(__x86_64__) && !defined(INLE_DROID)
+#if defined(__x86_64__)
 static void pci_w8(uint32_t bdf, uint32_t off, uint32_t v) {
   uint32_t sh = 8 * (off & 3), w = pci_r32(bdf, off) & ~(0xffu << sh);
   pci_w32(bdf, off, w | (v & 0xff) << sh); }
@@ -363,7 +363,7 @@ void k_hda_init(void *dma) {
 // no PCI walk here: a horn that refuses, except where wasm/horn.c or droid has a card
 void k_hda_init(void *dma) { (void) dma; }
 void k_horn_poll(void) { }
-#if !defined(__wasm__) && !defined(INLE_DROID)
+#if !defined(__wasm__)
 int k_horn_open(int rate) { return -1; }
 intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
 uintptr_t k_horn_lag(void) { return 0; }
