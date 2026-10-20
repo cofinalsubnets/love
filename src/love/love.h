@@ -740,7 +740,8 @@ lvm_t lvm_kcall,
  lvm_arena,       // (arena 0): the code arena's [mapped bumped free spans]
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
  lvm_deferfwd,    // a deferred native's code slot until its compile patches it (tablet.c)
- lvm_firstcall;   // ..and a first-call one's, until that call (LOVE_LAZY_GLAZE)
+ lvm_firstcall,   // ..and a first-call one's, until that call (LOVE_LAZY_GLAZE)
+ lvm_countfwd;    // ..and a profiling bake's counting one (tablet.c)
 // these carry lvm()'s attributes, so they cannot join the plain list above
 love_noinline noicf lvm_t
  lvm_0, lvm_add_seq, lvm_add_string, lvm_addh, lvm_arg0,

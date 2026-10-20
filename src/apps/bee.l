@@ -699,7 +699,7 @@
         "#   the leader never lands, reorders or gates on another's behalf."
         "# merge, not line up: waiting rows fold into one union. a join with its head folds into the earliest waiting row"
         "#   ahead, never one gating: bee writes the fold when the heads merge clean but for the paths a"
-        "#   union lays again (hot.prof), and tells both owners; else the leader places it. the absorbing row merges"
+        "#   union lays again (hot.prof, hot.calls), and tells both owners; else the leader places it. the absorbing row merges"
         "#   each folded head at once onto its gated-on, runs every lane its branches owe once on that merged tree,"
         "#   light and heavy, the slow lane last (queue_gate), and lands one merge. a red lane goes to the branches whose"
         "#   files owe it (lanemap): they split out to their owners, only the red lanes run again on the union without"
@@ -755,7 +755,7 @@
       (? !(locks? 0) 0 (: w (peep ((lk 'locks-list) ((lk 'locks-root) 0)) "waiting" ()) (bee-hmax < #(two? w ? w ()))))
      bee-long ("fold, not line up. join waiting once a branch builds and passes make test and the laws it adds, with "
                + "its head, and bee folds it into the earliest waiting row ahead when the heads merge clean but for "
-               + "hot.prof (else offer that row a fold; never into a gating row); join one owner's branches as one union, "
+               + "hot.prof and hot.calls (else offer that row a fold; never into a gating row); join one owner's branches as one union, "
                + "merged at once; its lanes, light and heavy, run once, in the union at the head, never per branch; a red "
                + "lane splits out the branches that owe it, and only the red lanes run again; a publish folds into the "
                + "waiting union; hold no heavy slot you are not using.")
@@ -844,7 +844,7 @@
                          (? (two? bad) [0 (q-unres-why <bad)] (queue-row1 in))))))
      ; --- folds: a waiting join folds into the earliest waiting row ahead that keeps no slot, when the
      ; heads merge clean but for q-relaid ---
-     q-relaid ["src/tools/hot.prof"]
+     q-relaid ["src/tools/hot.prof" "src/tools/hot.calls"]
      (q-keeps text) (: w (words (q-line text "keep")) (? (two? w) >w ()))
      ; the keep line with p in it, or out of it: rows gone drop off, and an empty line goes
      (q-keep text p on)

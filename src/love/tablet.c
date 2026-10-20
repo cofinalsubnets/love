@@ -1,6 +1,10 @@
 // tablet.c -- tablets (open-addressed maps), peep/pin over every collection, hashing,
 // and the native-install seam
 #include "love.h"
+#if __STDC_HOSTED__
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 // a tray key -> a row-major offset, -1 for wrong rank or out of bounds. by value: an &local
 // costs the tail jump
 static love_inline intptr_t tray_off(struct tray *v, word k) {
@@ -560,6 +564,38 @@ static lvm(lvm_firstcell) {
  tagthread(k, w);
  love_musttail return Answerp(2, word(k + 1)); }
 LvDef("firstcell", firstcell, 3, "guts");
+// a profiling bake's counting cell: deferfwd's, its E the call count; at each power of two N, the
+// closure's place in the bake, and the count append to LOVE_BAKE_COUNT (src/tools/hotbake.sh)
+lvm(lvm_countfwd) {
+ intptr_t n = getcharm(Ip[4].x) + 1;
+ Ip[4].x = putcharm(n);
+#if __STDC_HOSTED__
+ if (!(n & (n - 1))) {
+  char const *f = getenv("LOVE_BAKE_COUNT");
+  FILE *o = f && *f ? fopen(f, "a") : NULL;
+  if (o) fprintf(o, "%ld %ld\n", (long) getcharm(Ip[5].x), (long) n), fclose(o); }
+#endif
+ union u *e = cell(Ip[1].x);
+ Ip = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? e + 2 : e;
+ love_musttail return Continue(); }
+// (countcell interp arity ix): a counting cell forwarding to interp
+static lvm(lvm_countcell) {
+ word f = Sp[0];
+ intptr_t ar = oddp(Sp[1]) ? getcharm(Sp[1]) : 0;
+ if (ar < 1 || oddp(f) || datp(f)
+     || (ar > 1 && (cell(f)->ap != lvm_cur || cell(f)[1].x != putcharm(ar))))
+  love_musttail return Answerp(2, ZeroPoint);
+ Have(10);
+ union u *k = (union u*) Hp;
+ uintptr_t w = 0;
+ k[w++].ap = lvm_countfwd;
+ if (ar > 1) k[w++].ap = lvm_cur, k[w++].x = putcharm(ar);
+ k[w++].ap = lvm_countfwd, k[w++].x = Sp[0], k[w++].ap = lvm_ret, k[w++].x = putcharm(ar - 1);
+ k[w++].x = putcharm(0), k[w++].x = Sp[2];
+ Hp += w + 1;
+ tagthread(k, w);
+ love_musttail return Answerp(2, word(k + 1)); }
+LvDef("countcell", countcell, 3, "guts");
 
 // (pour dst doff src soff n): n bytes into cask dst, clamped to both; answers dst
 lvm(lvm_bcopy) {
