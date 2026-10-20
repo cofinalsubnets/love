@@ -1017,7 +1017,8 @@
               (inx && mag (Y - a 1) <= 3.0) [2 0] (inx && mag (Y - b 1) <= 3.0) [2 1] ())
          (two? e ? {'kind 'edge 'ax (e 0) 'hi (e 1) 'pb pb 'a [(lo 0) (lo 2)] 'b [(hi 0) (hi 2)]} ()))))
  ; ..the plan clicked: on the chosen box's edge, a drag of that wall; with shift held, a room
- ; drawn; else what the cut passes through there chosen, vi on its form, and a drag of it
+ ; drawn; else what is there chosen, the first thing below the cut or the rock it cuts, vi
+ ; on its form, and a drag of it
  (plan-press ed b x y) (: p (ed 'plan) vi (ed 'vi) vs (ed 'vs) dm (mesh-dims (ed 'st)) w <dm h (dm 1) q (plan-at p w h x y) k (p 'k)
    (? (b = 3) (pin ed 'pan [x y])
       (elem b [4 5]) (: k2 (max2 2.0 (min2 64.0 (b = 4 ? (k * 1.25) (k / 1.25))))
@@ -1027,7 +1028,8 @@
          (src i) (peep (peep lb i {}) 'src ())
          (? (tablet? eg) (pin ed 'drag eg)
             (ed 'shift) (: r (map plan-snap q) (pin ed 'drag {'kind 'rect 'a r 'b r 'in (filter (i \ bs i 'air) hs)}))
-            (: tk (filter (i \ two? (src i)) hs) sp (two? tk ? (corridor-span (ed 'text) (src <tk)) ())
+            (: c (p 'fl + plan-cut) dn (two? hs && bs <hs 'air ? (brush-ray bs [(q 0) c (q 1)] [0.0 -1.0 0.0] @ () () r [(r 'b)]) ())
+               tk (filter (i \ two? (src i)) (dn + hs)) sp (two? tk ? (corridor-span (ed 'text) (src <tk)) ())
                (? (atom? sp) (pins ed 'sel () 'drag (), vi 'vmsg vs "nothing there")
                   (pins ed 'sel (src <tk) 'drag {'kind 'move 'q0 q 'off [0.0 0.0 0.0] 'sg (edit-sg ed <tk)},
                    vi 'vmsg vs ("line " + show (edit-at ed (sp 0) + 1)))))))))
@@ -1085,6 +1087,7 @@
          md (e @- () ['down c] (elem c [29 285] ? 1 ()) ['up c] (elem c [29 285] ? 0 ()))
          sh (e @- () ['down c] (elem c [42 54] ? 1 ()) ['up c] (elem c [42 54] ? 0 ()))
          _ (sh != () ? (pin ed 'shift sh))
+         _ (<e = 'down && charm? k && k != 113 ? (pin ed 'qq 0))
          _ (md != () ? (pin ed 'ctrl md) (e @- ()
             ['close] (pin ed 'quit 1)
             ['size w h] (: ly2 (edit-lay w h) (pins ed 'lay ly2 'scr (edit-screen ly2) 'dirty 1, corridor-size st (ly2 'pw) (ly2 'ph // 2)))
@@ -1106,7 +1109,8 @@
                          (k = 9) (edit-plan ed)
                          (k = 26) (edit-undo ed (ed 'vi 'vundo))
                          (k = 18) (edit-undo ed (ed 'vi 'vredo))
-                         (k = 113) (ed 'vs 'dirty ? ((ed 'vi) 'vmsg (ed 'vs) "no write since last change (:w, or :q! in vi)") (pin ed 'quit 1))
+                         (k = 113) (? (!(ed 'vs 'dirty) || ed 'qq) (pin ed 'quit 1)
+                                      (pin ed 'qq 1, (ed 'vi) 'vmsg (ed 'vs) "the text is not written: q again leaves without it, :w in vi writes it"))
                          (tablet? (ed 'plan) && elem k [91 93]) (plan-step ed (k = 93 ? 1 -1))
                          (charm? k) (: a ((ed 'binds) k) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (corridor-step st a))))))
          (edit-events ed >l))))
@@ -1142,12 +1146,12 @@
    ly (edit-lay (wh 0) (wh 1)) st (state-new (ly 'pw) (ly 'ph) lv dir (_ \ view-loading win [0 0 (ly 'sw) (ly 'H)] view-spin))
    _ (string? lv0 ? (vi 'vmsg vs ("scene: " + lv0)))
    {'vi vi 'vs vs 'fc fc 'st st 'win win 'lay ly 'scr (edit-screen ly) 'text t 'focus 'vi 'cw 0 'held {}
-    'binds (view-bind view-binds corridor-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'drag () 'plan () 'pan () 'pc () 'ppk ()})
+    'binds (view-bind view-binds corridor-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'drag () 'plan () 'pan () 'pc () 'ppk () 'qq 0})
  (edit-run p) (window-open 1280 720 "lore edit" @ win
    (? !(tablet? win) (say err ("lore edit: no window (" + show win + ")\n"), flush err, 1)
       (: ed (edit-new win ((cite 'vi) 'vi-open p) (dir-of p))
          (mind (_ \ edit-loop ed) () (_ \ window-close win), 0))))
- edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, ctrl-z undoes and ctrl-r does again, the right button held looks, the corridor's keys walk; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q on the scene or :q leaves, :w writes)"
+ edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, ctrl-z undoes and ctrl-r does again, the right button held looks, the corridor's keys walk; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q on the scene or :q leaves, unwritten twice, :w writes)"
  (edit-main as) (? (#as = 1) (edit-run <as) (say err (edit-usage + "\n"), flush err, 2))
  _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1))
  _ (cite 'lore 'lore-enlist 'edit (udoor 'edit edit-main edit-usage 1 1)))

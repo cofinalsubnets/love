@@ -212,9 +212,10 @@
  (test (pp 'c = [2.0 2.0]) (pp 'fl = 0.0) (pl1 = "  (room [3 0 1] [6 3 3]))") (ps = [4]) (pl2 = "  (room [3 0 1] [6.5 3 3]))")
        (pl3 = "  (move [1 0 0] (room [3 0 1] [6.5 3 3])))") (pl4 = "  (move [1 0 0] (room [3.5 0 1] [6.5 3 3])))") (#(pl 'st 'lvl 'brushes) = 2) (pix 4 4 = 22) (pix 80 80 != 22) (pl 'plan = ())))
 ; a mirror's twin dragged moves as dragged, its form's move turned over; ctrl-z undoes it
-; and ctrl-r does it again; the pane with the keys has a line round it; q on the scene leaves, but not with the text unwritten
+; and ctrl-r does it again; a click on the plan takes the first thing under the cut; the
+; pane with the keys has a line round it; q on the scene leaves, unwritten only twice
 (: mtv ((cite 'vi) 'vi-open "")
-   _ ((cite 'vi) 'vload mtv ["(level \"t\"" "  (room [0 0 0] [8 3 4])" "  (mirror-x 4 [(solid (box [1 0 1] [2 3 2]))])" "  (start [4 0 2] 0 0))"] "t.l")
+   _ ((cite 'vi) 'vload mtv ["(level \"t\"" "  (room [0 0 0] [8 3 4])" "  (mirror-x 4 [(solid (box [1 0 1] [2 3 2]))])" "  (solid (box [6 0 3] [7 0.5 4]))" "  (start [4 0 2] 0 0))"] "t.l")
    mtw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} mt (edit-new mtw mtv "")
    _ (edit-events mt [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['down 15] ['up 15]])
    _ (pin (mt 'plan) 'k 8.0)
@@ -222,12 +223,13 @@
    mtl (mtv 'lines 2) mtb (mt 'st 'lvl 'brushes 2)
    _ (edit-events mt [['down 29] ['down 44] ['up 44] ['up 29]]) mtu (mtv 'lines 2) mtub (mt 'st 'lvl 'brushes 2 'shape 'box)
    _ (edit-events mt [['down 29] ['down 19] ['up 19] ['up 29]]) mtr (mtv 'lines 2)
+   _ (edit-events mt [['press 1 120 56] ['release 1 120 56]]) mts (mt 'sel)
    _ (edit-paint mt) (mtp x y) (peep (mtw 'paper) (4 * (y * 320 + x)) 0)
    _ (edit-events mt [['down 16] ['up 16]]) mtq (mt 'quit)
-   _ (pin mtv 'dirty 0) _ (edit-events mt [['down 16] ['up 16]])
+   _ (edit-events mt [['down 16] ['up 16]])
  (test (mtl = "  (mirror-x 4 [(move [-1 0 0] (solid (box [1 0 1] [2 3 2])))])") (mtb 'shape 'box = [[7.0 0.0 1.0] [8.0 3.0 2.0]]) (mtb 'sg = [-1.0 1.0 1.0])
        (mtu = "  (mirror-x 4 [(solid (box [1 0 1] [2 3 2]))])") (mtub = [[6.0 0.0 1.0] [7.0 3.0 2.0]]) (mtr = mtl)
-       (mtp 0 5 = 48) (mtp 200 5 != 48) (mtq = 0) (mt 'quit = 1)))
+       (mts = [4]) (mtp 0 5 = 48) (mtp 200 5 != 48) (mtq = 0) (mt 'quit = 1)))
 ; a scene made again from the one before keeps what is the same and comes out as one made
 ; from nothing: after a solid moves, a lamp moves, a solid goes, the room grows, and all
 ; comes back
