@@ -1,6 +1,6 @@
 ; test/host/swatch.l -- src/apps/lore/swatch.l: textures painted from a recipe of layers
 ; host-side: a crew module. run: cat test/00-init.l test/host/swatch.l | out/love
-(borrow 'swatch)
+(borrow 'swatch) (borrow 'mesh)
 
 (: (at l x y) (swatch-texel l x y)
    red [1.0 0.0 0.0] (g v) [v v v]
@@ -14,6 +14,13 @@
    nz (map (i \ at '((fill 1.0) (noise 4 0.2)) (i % 16) (i // 16) 0) ^256)
    tri (paint1 '(poly 0 0 8 0 0 8 (rgb 1 0 0))) ring (paint1 '(poly 0 0 8 0 8 8 0 8 0 0 2 2 2 6 6 6 6 2 2 2 (rgb 1 0 0)))
    pic (swatch 8 4 '((fill 0.25) (cols 6 8 hole))) t0 (pic 0)
+   ; painted in C as the texels are in love: every shape, nested boxes, odd sides, holes in the levels
+   (sw-same w h l) (show (swatch w h l) = show (mesh-pic w h (swatch-texel l)))
+   sw-all '((fill (rgb 0.2 0.4 0.6)) (rows 1 5 (grey 0.9)) (cols 2 3 (tint (rgb 1 0.5 0.25)))
+            (rect 4 1 9 6 (mix (rgb 0 1 0) 0.3)) (disc 6 5 3.5 (shade 0.7)) (grid 5 7 1 (rgb 0.1 0.1 0.1))
+            (checker 3 2 (noise 2 3 0.4)) (stripes 6 2 1 (shade 1.2)) (dots 4 4 1.2 hole)
+            (patches 3 0.4 (rgb 1 1 0)) (within 1 1 11 9 (within 2 0 8 20 (bevel 5 4 1 (grey 0.95) (grey 0.05)) (noise 3 0.2)))
+            (poly 1 1 10 2 6 9 (rgb 0 0 1)) (rows 0 1 hole))
  ; starts grey; the later layer wins; a number is a grey
  (test (at () 0 0 = g 0.5) (at '((fill 0.2) (rows 0 1 0.7)) 3 0 = g 0.7) (at '((fill 0.2) (rows 0 1 0.7)) 3 1 = g 0.2)
        (at '((grey 0.3)) 0 0 = g 0.3) (at '((rgb 1 0 0)) 5 5 = red)
@@ -48,6 +55,11 @@
        (swatch-fault '((within 0 0 4 4 (fill 1) (disc 1 1 1))) 0 = '(disc 1 1 1))
        (swatch-fault '((within 0 0 4 4)) 0 = '(within 0 0 4 4))
        ; 8 by 4 with its mips, holes clear
-       (shape t0 = [4 8]) (#pic = 3) (peep t0 [0 6] 0 = -1) (peep t0 [0 0] 0 != -1)))
+       (shape t0 = [4 8]) (#pic = 3) (peep t0 [0 6] 0 = -1) (peep t0 [0 0] 0 != -1)
+       (sw-same 13 11 sw-all) (sw-same 16 16 sw-all) (sw-same 1 7 sw-all) (sw-same 8 4 '((fill 0.25) (cols 6 8 hole)))
+       (sw-same 5 5 ()) (sw-same 6 6 '((fill 1) (rows 1 (grey 2))))
+       ; the plan not as it says, and sides out of reach
+       (swatch-pic 4 4 '((() 12 () 0 (1 0.0 0.0 0.0 0.0) ())) = ()) (swatch-pic 4 4 '(junk) = ())
+       (swatch-pic 0 4 () = ()) (swatch-pic 4 4.5 () = ())))
 (test_fin ())
 (puts "swatch: ok\n")

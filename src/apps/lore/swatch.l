@@ -6,7 +6,7 @@
 ; there, (mix rgb t) goes t of the way to a colour, (noise size [sy] amount) multiplies by 1 less
 ; up to amount, smooth over size texels. hole leaves the texel undrawn; a later colour fills it, shading keeps it a hole.
 ; (swatch-fault l) is () or [Q USAGE]; (swatch-texel l) is (\ x y colour-or-()).
-(module (swatch swatch swatch-fault swatch-texel)
+(module (swatch swatch swatch-fault swatch-texel swatch-plan)
 (borrow 'vec)                           ; vn, cmix, c*
 (borrow 'mesh)                          ; mesh-pic
 (:
@@ -82,5 +82,21 @@
    (two? (layer <l 0)) (swatch-fault >l)
    (: q <l (inner q != () ? (swatch-fault (inner q) @ () [q (hint q)] e e) [q (hint q)])))
  (swatch-texel l) (: ls (layers l 211) g [0.5 0.5 0.5] (\ x y (run ls g (f x) (f y))))
- (swatch w h l) (mesh-pic w h (swatch-texel l)))
+ ; ..the same recipe as data for swatch-pic (src/love/swatch.c): each layer [boxes kind nums
+ ; seed paint paint], a within's box laid on each of its layers; a paint [tag a b c d]
+ shapes {'fill 0 'rows 1 'cols 2 'rect 3 'disc 4 'grid 5 'checker 6 'stripes 7 'dots 8 'patches 9}
+ (paint-plan q s) (: z 0.0
+   (? (q = 'hole) [0 z z z z]
+      (colour q != ()) (: k (colour q) [1 (k 0) (k 1) (k 2) z])
+      (<q = 'shade) [2 (f (q 1)) z z z]
+      (<q = 'tint) (: k (colour (q 1)) [3 (k 0) (k 1) (k 2) z])
+      (<q = 'mix) (: k (colour (q 1)) [4 (k 0) (k 1) (k 2) (f (q 2))])
+      (: sx (f (q 1)) sy (f (#q = 4 ? (q 2) (q 1))) [5 sx sy (f (q (#q - 1))) (f s)])))
+ (plan q s bx) (? (two? (paint q s)) [[bx 0 [0.0 0.0 0.0 0.0] s (paint-plan q s) ()]]
+   (inner q != ()) (: is (inner q) b (bx + map f (take 4 >q)) (cats (map (i \ plan (is i) (s + 7 * i) b) ^#is)))
+   (<q = 'poly) (: a >q n (#a - 1) [[bx 11 (map f (take n a)) s (paint-plan (a n) s) ()]])
+   (<q = 'bevel) (: a >q [[bx 10 (map f (take 3 a)) s (paint-plan (a 3) s) (paint-plan (a 4) (s + 1))]])
+   (: k <q a >q t (takes k) [[bx (shapes k) (map f (take t a) + map (_ \ 0.0) ^(4 - t)) s (paint-plan (a t) s) ()]]))
+ (swatch-plan l) (? (two? (layers l 211)) (cats (map (i \ plan (l i) (211 + 7 * i) ()) ^#l)))
+ (swatch w h l) (swatch-pic w h (swatch-plan l)))
 ) ; module swatch
