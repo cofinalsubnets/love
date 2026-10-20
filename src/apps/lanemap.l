@@ -37,7 +37,7 @@
        "src/love/map.c" "src/love/tablet.c" "src/love/alloc.c" "src/love/boot/glaze.l"] ["test_gcstress_bake"]
       ", which runs test_gcstress's shards as well: owing both runs it alone"]
      ["a crewfiles member, or anything else baked" ["baked"] ["test_fixpoint" "test_bakerep"]
-      ", and `make hotprof` to write `src/tools/hot.prof` again (bakerep fails while it is stale)"]
+      ", and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)"]
      ["" ["src/apps/moon/*"] moon-lanes ""]
      ["" ["src/love/holo/*"] ["test_holo" "test_as" "test_holofuzz" "test_inle"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
