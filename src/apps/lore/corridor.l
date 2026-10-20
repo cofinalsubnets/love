@@ -1070,6 +1070,8 @@
  ; ..a key for vi: what it typed, else the arrows as a terminal sends them
  (edit-bytes t k) (? (0 < #t) t (k @ -1 "\e[D" -2 "\e[C" -8 "\e[A" -9 "\e[B" -4 "\e[3~" -5 "\e[H" -6 "\e[F" 27 "\e" 13 "\r" 8 "\x7f" (charm? k && 0 < k ? (string k) "")))
  (edit-feed ed s) (: key ((ed 'fc) 1) (each ^#s (i \ key (s i))), pin ed 'dirty 1)
+ ; ..vi's undo or redo f done from the scene, and the scene read again; nothing kept chosen
+ (edit-undo ed f) (: _ (f (ed 'vs)) _ (pins ed 'sel () 'drag () 'dirty 1) (edit-sync ed))
  (edit-focus ed f) (: _ (pins ed 'focus f 'dirty 1) (f = 'scene ? (edit-sync ed) ed))
  ; ..a ctrl-w's next key: w the other pane, h the scene, l vi
  (edit-cw ed k) (: _ (pin ed 'cw 0)
@@ -1102,6 +1104,8 @@
                          (ed 'focus = 'vi) (edit-feed ed (edit-bytes t k))
                          (k = 27) (pins ed 'sel () 'drag ())
                          (k = 9) (edit-plan ed)
+                         (k = 26) (edit-undo ed (ed 'vi 'vundo))
+                         (k = 18) (edit-undo ed (ed 'vi 'vredo))
                          (k = 113) (ed 'vs 'dirty ? ((ed 'vi) 'vmsg (ed 'vs) "no write since last change (:w, or :q! in vi)") (pin ed 'quit 1))
                          (tablet? (ed 'plan) && elem k [91 93]) (plan-step ed (k = 93 ? 1 -1))
                          (charm? k) (: a ((ed 'binds) k) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (corridor-step st a))))))
@@ -1143,7 +1147,7 @@
    (? !(tablet? win) (say err ("lore edit: no window (" + show win + ")\n"), flush err, 1)
       (: ed (edit-new win ((cite 'vi) 'vi-open p) (dir-of p))
          (mind (_ \ edit-loop ed) () (_ \ window-close win), 0))))
- edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, the right button held looks, the corridor's keys walk; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q on the scene or :q leaves, :w writes)"
+ edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, ctrl-z undoes and ctrl-r does again, the right button held looks, the corridor's keys walk; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q on the scene or :q leaves, :w writes)"
  (edit-main as) (? (#as = 1) (edit-run <as) (say err (edit-usage + "\n"), flush err, 2))
  _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1))
  _ (cite 'lore 'lore-enlist 'edit (udoor 'edit edit-main edit-usage 1 1)))
