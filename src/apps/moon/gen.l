@@ -5669,53 +5669,52 @@
         keys t))
    (lvun a b) (!(two? b) ? a (lvun (elem <b a ? a (<b . a)) >b))
    (lvsame a b) (#a = #b && !(two? (filter (r9 \ (nelem r9 b)) a)))
-   (lvio g fs)                                      ; -> [lin lot] (index -> live in/out of it) | 'no
+   (lvio g fs)                                      ; -> [lin lot tx] (index -> live in/out of it, its lvtx) | 'no
     (: u (lvuniv g fs)
        um (filter (r9 \ !(vmint? g r9)) u)          ; the machine share: what a blanket case reads
-       (bary? (f . l)) (lvtx g f u @ 'bar 1 (bary? l))
-       (bary? fs ? 'no
-          (: labt {}
-             (ix l i) (!(two? l) ? 0
-                         (<l @ f
-                            (two? f && <f = 'label ? (pin labt <>f i),
-                             ix >l (i + 1))))
-             _ (ix fs 0)
-             (ixd l i) (two? l ? ([i <l] . ixd >l (i + 1)))
-             rl (rev (ixd fs 0))
-             (succ f i) (: op (two? f ? <f 'x)
-                           (? (op = 'jmp) [(peep labt <>f -1)]
-                              (op = 'br) [(peep labt <>>f -1) (i + 1)]
-                              (op = 'jmpt) (map (L \ (peep labt L -1)) (f 3))
-                              (xit? f) ()
-                              [(i + 1)]))
-             lin {}
-             lot {}
-             (gone? f) (xjmp? f labt)               ; a sibcall: arguments in flight, reads everything
-             ; each form's (reads defs) and successors, once
-             dt (foldl (t \ e \ pin t <e (gone? <>e ? [um ()] (lvtx g <>e u))) {} rl)
-             st (foldl (t \ e \ pin t <e (succ <>e <e)) {} rl)
-             ; a form is read again only when a successor's live-in moved since: the same inputs give
-             ; the same lists. tick numbers every reading, seen when i was read, moved when lin i grew
-             ck {'n 0} seen {} moved {}
-             (pass l ch)                            ; one backward sweep -> did any live-in grow?
-              (!(two? l) ? ch
-                 (: e <l i <e
-                    ss (st i)
-                    (? (peep seen i -1 >= 0 && !(any (s \ peep moved s -1 > seen i) ss)) (pass >l ch)
-                       (: d (dt i)
-                          lo (foldl (a \ s \ lvun a (lin s)) () ss)
-                          li (lvun <d (filter (r9 \ (nelem r9 <>d)) lo))
-                          old (lin i)
-                          ch2 !(lvsame li old)
-                          n (ck 'n + 1)
-                          (pin ck 'n n,
-                           pin seen i n,
-                           ch2 ? (pin lin i li, pin moved i n) 0,
-                           pin lot i lo,
-                           pass >l (ch || ch2))))))
-             (fix u9) (pass rl () ? (fix ()) 0)
-             (fix (),
-              [lin lot]))))
+       (: labt {}
+          (ix l i) (!(two? l) ? 0
+                      (<l @ f
+                         (two? f && <f = 'label ? (pin labt <>f i),
+                          ix >l (i + 1))))
+          _ (ix fs 0)
+          (ixd l i) (two? l ? ([i <l] . ixd >l (i + 1)))
+          rl (rev (ixd fs 0))
+          (succ f i) (: op (two? f ? <f 'x)
+                        (? (op = 'jmp) [(peep labt <>f -1)]
+                           (op = 'br) [(peep labt <>>f -1) (i + 1)]
+                           (op = 'jmpt) (map (L \ (peep labt L -1)) (f 3))
+                           (xit? f) ()
+                           [(i + 1)]))
+          lin {}
+          lot {}
+          (gone? f) (xjmp? f labt)               ; a sibcall: arguments in flight, reads everything
+          ; each form's (reads defs) and successors, once
+          tx (foldl (t \ e \ pin t <e (lvtx g <>e u)) {} rl)
+          bar9 (vany (e \ tx <e = 'bar) rl)
+          dt (bar9 ? {} (foldl (t \ e \ pin t <e (gone? <>e ? [um ()] (tx <e))) {} rl))
+          st (foldl (t \ e \ pin t <e (succ <>e <e)) {} rl)
+          ; a form is read again only when a successor's live-in moved since: the same inputs give
+          ; the same lists. tick numbers every reading, seen when i was read, moved when lin i grew
+          ck {'n 0} seen {} moved {}
+          (pass l ch)                            ; one backward sweep -> did any live-in grow?
+           (!(two? l) ? ch
+              (: e <l i <e
+                 ss (st i)
+                 (? (peep seen i -1 >= 0 && !(any (s \ peep moved s -1 > seen i) ss)) (pass >l ch)
+                    (: d (dt i)
+                       lo (foldl (a \ s \ lvun a (lin s)) () ss)
+                       li (lvun <d (filter (r9 \ (nelem r9 <>d)) lo))
+                       old (lin i)
+                       ch2 !(lvsame li old)
+                       n (ck 'n + 1)
+                       (pin ck 'n n,
+                        pin seen i n,
+                        ch2 ? (pin lin i li, pin moved i n) 0,
+                        pin lot i lo,
+                        pass >l (ch || ch2))))))
+          (fix u9) (pass rl () ? (fix ()) 0)
+          (bar9 ? 'no (fix (), [lin lot tx]))))
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
    ; the staging webs (x64, a64): a def of r0 and the reads it reaches, all explicit operands of plain
@@ -6183,16 +6182,10 @@
                                                  (!(w 3) && 0 < shp9 b ? (b . a) a))
                                       () bases)
                          sc9 (vsucc fs)                           ; the form graph, once per fn
-                         lot9 (two? scand ? (lvout g fs) 'no)   ; index -> live-out, or the refusal
-                         dft9 (lot9 @ 'no {}
-                                      (: t {}
-                                         u9 (lvuniv g fs)
-                                         (go l i) (!(two? l) ? 0
-                                                     (lvtx g <l u9 @ d
-                                                        (d @ 'bar 0 (pin t i <>d),
-                                                         go >l (i + 1))))
-                                         (go fs 0,
-                                          t)))
+                         lio9 (two? scand ? (lvio g fs) 'no)
+                         lot9 (lio9 @ 'no 'no r <>r)              ; index -> live-out, or the refusal
+                         tx9 (lio9 @ 'no {} r (r 2))
+                         (dft9 i) <>(tx9 i)                       ; index -> the regs it defines
                          ; calls by index, and the cs pool a crossing chain may take: regs this fn never
                          ; writes, and never in a jmpr fn (a restore before the indirect exit is the dispatch's hot path)
                          callt (: t {}
