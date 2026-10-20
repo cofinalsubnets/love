@@ -47,8 +47,8 @@ ps=
 job() { tg=$1; shift; ( "$@" > $w/$tg.out 2>&1 < /dev/null; echo $? > $w/$tg.rc ) & ps="$ps $!"; }
 wt() { for p in $ps; do wait $p; done; ps=; }
 # a bake as the Makefile's, to love.img in its own dir: the bake keeps the path it writes
-hot=$PWD/src/tools/hot.prof
-bake() { ( cd $w/$1 && { env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT=$hot "$2" bake -l "$3" love.img > out 2>&1 < /dev/null &
+hot=$PWD/src/tools/hot.prof calls=$(sh src/tools/hotbake.sh -k)
+bake() { ( cd $w/$1 && { env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT=$hot LOVE_BAKE_CALLS="$calls" "$2" bake -l "$3" love.img > out 2>&1 < /dev/null &
                          echo $! > pid; wait $!; echo $? > rc; } ) & }
 [ "$sbake" = 1 ] && { bake bs $PWD/out$gs/love.raw $PWD/out$gs/.dist-cat.l; bsp=$!; }
 # the stress love0 beside the bakes: its boot, then both its passes -- c0, then the egg it
