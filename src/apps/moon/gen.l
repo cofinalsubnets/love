@@ -6231,6 +6231,22 @@
                                    (elem r (tk i)) ()
                                    (pfree? tk r >is9))))
                          (pseat tk rs is9) (? !(two? rs) () (pfree? tk <rs is9) <rs (pseat tk >rs is9))
+                         ; a region's caller-saved seat across the calls inside it, stored before each and reloaded
+                         ; after: free by the liveness wherever no call is, a call's clobber the pair's to meet
+                         (sfree? tk r is9)
+                          (: (go l) (? !(two? l) 1
+                                       (<l @ i
+                                          (? (elem r (lot9 i)) ()
+                                             (elem r (tk i)) ()
+                                             (peep callt i 0) (go >l)
+                                             (elem r (dft9 i)) ()
+                                             (go >l))))
+                             (go is9))
+                         (sseat tk rs is9) (? !(two? rs) () (sfree? tk <rs is9) <rs (sseat tk >rs is9))
+                         bfr {}                      ; index -> the cell moves laid before it, at the cell's own offset
+                         aft {}                      ; index -> those laid after it
+                         spb {}                      ; a cell a moved value keeps
+                         (lay9 t i f) (pin t i (vapp (peep t i ()) [f]))
                          (pclaim tk r is9) (!(two? is9) ? 0
                                               (pin tk <is9 (r . peep tk <is9 ()),
                                                pclaim tk r >is9))
@@ -6331,6 +6347,93 @@
                                                           0 (chains9 b))
                                                (nrw = tally (tls b) ? (pin retid b 1) 0)))
                                           0 (filter (b \ !(retid b)) bylo)))
+                         ; loop regions: a full-word cell no chain seated rides a caller-saved seat inside one
+                         ; loop, loaded where control enters it live, stored where it leaves live when the loop
+                         ; writes it, and stored and reloaded across a call it is live across
+                         lsc9 {}                     ; a cell -> [its live indices], for the regions and the packing
+                         (lsm9 b) (lsc9 b @ v (two? v ? <v (: r (lset9 b) (pin lsc9 b [r], r))))
+                         vwm9 {}                     ; index -> its loop weight, each laid once
+                         (vw9 i) (: c (peep vwm9 i 0) (0 < c ? c (: w (vwt spans i) (pin vwm9 i w, w))))
+                         fam9 {}                     ; 'f -> [the forms by index], laid on a region's first ask
+                         (fat9 i) (fam9 'f @ v
+                                     (two? v ? (<v i)
+                                        (: t {} (go l k) (!(two? l) ? t (pin t k <l, go >l (k + 1)))
+                                           t9 (go fs 0)
+                                           (pin fam9 'f [t9], t9 i))))
+                         (uncond? f) (two? f && (elem <f '(jmp jmpt jmpr ret) || exit9? f))
+                         (tgt9 f) (two? f ? (<f @ 'jmp <>f 'br <>>f ()))
+                         rinm {}                     ; lo -> the region's edges | 'no
+                         (rinf sp)
+                          (rinm <sp @ c
+                             (two? c ? <c
+                                (: lo <sp hi <>sp
+                                   (inr? i) (lo <= i && i <= hi)
+                                   (ti f) (tgt9 f @ t (nom? t ? (peep labt t -1) -1))
+                                   bad (vany (i \ fat9 i @ f (two? f && elem <f '(jmpt jmpr raw asm sys))) (span9 lo hi))
+                                   (eg i acc)              ; -> (entries exits)
+                                    (i < 0 ? acc
+                                       (: f (fat9 i) t (ti f)
+                                          (? (inr? i)
+                                              (eg (i - 1) (0 <= t && !(inr? t) ? [<acc ([i 'pre t] . <>acc)] acc))
+                                             (0 <= t && inr? t) (eg (i - 1) [([i 'pre t] . <acc) <>acc])
+                                             (eg (i - 1) acc))))
+                                   e0 (eg (n2 - 1) [() ()])
+                                   ft (0 < lo && !(uncond? (fat9 (lo - 1))) ? [[(lo - 1) 'post lo]])
+                                   fx (!(uncond? (fat9 hi)) && hi + 1 < n2 ? [[hi 'post (hi + 1)]])
+                                   r9 (bad ? 'no [(ft + <e0) (fx + <>e0) (filter (i \ peep callt i 0) (span9 lo hi))])
+                                   (pin rinm lo [r9], r9))))
+                         (rgn1 b lv ins wr sp xc lop sop)
+                          (rinf sp @ ri9
+                             (ri9 @ 'no ()
+                                (: lo <sp hi <>sp ents <ri9 exs <>ri9 cls <>>ri9
+                                   ri (span9 lo hi)
+                                   en (filter (e \ peep lv (e 2) 0) ents)
+                                   ex (wr ? (filter (e \ peep lv (e 2) 0) exs) ())
+                                   cl (filter (i \ peep lv i 0) cls)
+                                   kk (a6 ? ki 4)
+                                   tw (foldl (a \ t \ a + vw9 <t) 0 ins)
+                                   cw (foldl (a \ e \ a + vw9 <e) 0 (en + ex) +
+                                       foldl (a \ i \ a + (wr ? 2 1) * vw9 i) 0 cl)
+                                   (eok? r) !(vany (e \ !(kk < <e && !(elem r (lot9 <e)) && !(elem r (taken <e)))) en)
+                                   ; ..or a callee-saved one the fn never writes: no pair at a call, but its save and restore
+                                   ; run on every invocation, looping or not, so it must repay them by a loop's worth (64)
+                                   cw2 (foldl (a \ e \ a + vw9 <e) 0 (en + ex) + 64)
+                                   (cok? r) !(vany (e \ !(kk < <e && !(elem r (taken <e)))) en)
+                                   (? (!(two? ins) || (tw <= cw && tw <= cw2)) ()
+                                      ; a load into the seat itself at another extension would wreck it
+                                      (: (dok? r) !(vany (t \ 0 < vldw <>t && t 2 = r && xt9 <>t !== xc) ins)
+                                         ra (cw < tw ? (sseat taken (filter (r \ eok? r && dok? r) (lvgp g)) ri))
+                                         rc (ra || tw <= cw2 ? () (cstake (filter (r \ cok? r && dok? r) cspool9) ri))
+                                         r (ra || rc)
+                                         (!r ? ()
+                                            (pclaim taken r (ri + map (e \ <e) en),
+                                             (rc ? (pin csut rc 1) 0),
+                                             pin spb b 1,
+                                             foldl (_ \ t \ pin pxm <t [r xc]) 0 ins,
+                                             foldl (_ \ e \ lay9 (<>e = 'pre ? bfr aft) <e [lop r fb b]) 0 en,
+                                             foldl (_ \ e \ lay9 (<>e = 'pre ? bfr aft) <e [sop fb b r]) 0 ex,
+                                             (ra ? (foldl (_ \ i \ ((wr ? (lay9 bfr i [sop fb b r]) 0), lay9 aft i [lop r fb b])) 0 cl) 0),
+                                             1)))))))
+                         (rgn9 b)
+                          (: lv (foldl (t \ i \ pin t i 1) {} (lsm9 b))
+                             tl (tls b)
+                             ; a narrow cell's seat is canonical to its first load's extension, as a chain's
+                             w (shp9 b)
+                             x0 (filter (t \ 0 < vldw <>t) (rev tl))
+                             xc (? (w = 8) () (two? x0) (xt9 <><x0) (w @ 4 'zx4 2 'zx2 1 'zx1 ()))
+                             lop (xc @ 'zx4 'ldu4 'sx4 'ld4 'zx2 'ldu2 'sx2 'ld2 'zx1 'ldu1 'sx1 'ld1 'ld)
+                             sop (w @ 4 'st4 2 'st2 1 'st1 'st)
+                             (go ss) (!(two? ss) ? ()
+                                        (: lo <<ss hi <><ss
+                                           ins (filter (t \ lo <= <t && <t <= hi) tl)
+                                           wr (vany (t \ 0 < vstw <>t || 0 < vsiw <>t) ins)
+                                           (two? ins && rgn1 b lv ins wr <ss xc lop sop || go >ss)))
+                             (go (sortby (x \ y \ (<>y - <y) < (<>x - <x)) spans)))
+                         _ (lot9 @ 'no 0
+                              (abl? g 'creg || jrf || !(x64? g || a6) ? 0
+                                 (foldl (_ \ b \ rgn9 b) 0
+                                        (filter (b \ !(retid b) && !(spb b) && 0 < shp9 b &&
+                                                     !(vany (t \ two? (peep pxm <t ())) (tls b))) bylo))))
                          prom (keys pxm)
                          ; a cell's occupancy: vclive's exact indices when every touch is a ld/st/si at its own base;
                          ; any other use (cmpm, an escape) keeps the window
@@ -6351,7 +6454,7 @@
                                            (go (i - 1) (st9 i || 0 < peep clv i 0 ? (i . acc) acc)))
                              (go <>>w ()))
                          ex9 (filter (b \ !(retid b) && exact9? b) bases)
-                         ls9 (foldl (t \ b \ pin t b (lset9 b)) {} ex9)
+                         ls9 (foldl (t \ b \ pin t b (lsm9 b)) {} ex9)
                          ext9 (foldl (t \ b \ pin t b 1) {} ex9)
                          rows (sortby (a \ b \ <a < <b)
                                       (map (b \ (obs b @ w [<>w b <w <>>w]))
@@ -6430,6 +6533,9 @@
                                 t9 (two? csused ? (tearx? l) 0)
                                 spl (t9 && !inr ? csrests)
                                 p (two? f && ki < i && two? prom ? (prw f i) 'no)
+                                (adj9 c) (radj2 c (0 < vstw <c ? 2 3))
+                                pre9 (map adj9 (peep bfr i ()))
+                                pst9 (map adj9 (peep aft i ()))
                                 (p @ 'no
                                      (: f2 (? !(two? f) f
                                               (i = ki) ['sub 'sp 'sp K3]
@@ -6438,8 +6544,8 @@
                                                     (radj2 f (peep uoff <f -1)) f)))
                                         (i = (a6 ? ki 4) && two? csused ?
                                            (vapp spl (f2 . vapp csaves (rw >l (i + 1) t9)))
-                                           (vapp spl (f2 . rw >l (i + 1) t9))))
-                                     (vapp spl (vapp p (rw >l (i + 1) t9))))))
+                                           (vapp spl (vapp pre9 (f2 . vapp pst9 (rw >l (i + 1) t9))))))
+                                     (vapp spl (vapp pre9 (vapp p (vapp pst9 (rw >l (i + 1) t9))))))))
                          ; the packed map replaces the build's for later slot readers (deadst); promoted or retired
                          ; objects have no cell, the cs save slots are their own
                          slots2 (foldl (a2 \ o \ peep nmap <o 'no9 @ nb
