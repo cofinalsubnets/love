@@ -1,12 +1,14 @@
 ; test/host/window.l -- a window on Xvfb, driven by a second wire (GetImage, XTEST, resize):
-; keys, pointer, size, selections and INCR; then `love synth -w` and `love lore corridor --window`.
+; keys, pointer, size, selections and INCR; a blit refused with no screen; then `love synth -w`
+; and `love lore corridor --window`.
 ; skips without Xvfb
 ; run: cat test/00-init.l test/host/window.l | out/love
 (borrow 'window)
 (borrow 'synth)   ; synth-trows
 (: w0 {'w 1 'h 1 'paper (cask 4)}
    _ (window-own w0 'clipboard "kept", window-ask w0 'clipboard, window-ask w0 'primary)
-   _ (test ([['paste "kept"] ['paste ""]] = window-events w0) (() = window-events w0))
+   _ (test ([['paste "kept"] ['paste ""]] = window-events w0) (() = window-events w0)
+           (window-blit w0 (cask 4) 1 1 = 0))
    xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
    _ (!(two? xv) ? (gate-skip "window: ok (no Xvfb, skipped)") 0)
@@ -133,7 +135,8 @@
    st (wfn <ph 3000)
    _ (test ([208 208 208] = before) ([255 128 0] = held) ([208 208 208] = after)
            (two? st) (0 = <st))
-   ; the corridor: l held turns the view; q ends with status 0
+   ; the corridor: l held turns the view; a click holds the mouse and its motion turns the
+   ; view, esc lets it go and leaves the corridor running; q ends with status 0
    pc (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "lore" "corridor" "--window"])
    _ (rest 6000)
    cw (: kids <>(XW 'x-querytree s (XW 'scr-root sc)) (last l) (two? >l ? (last >l) <l) (last kids))
@@ -142,9 +145,15 @@
    _ (fake 2 46, rest 1000, fake 3 46)                            ; l, held a second
    (moved n) (look () @ v (v != v0 || n < 1 ? v (rest 100, moved (n - 1))))
    v1 (moved 30)
+   _ (fakeat 6 0 320 200, fake 4 1, fake 5 1, rest 300)          ; a click at the middle
+   _ (fakeat 6 0 400 200, rest 300, fakeat 6 0 400 200)           ; the mouse right, twice
+   (turned n) (look () @ v (v != v1 || n < 1 ? v (rest 100, turned (n - 1))))
+   v2 (turned 30)
+   _ (fake 2 9, fake 3 9, rest 500)                               ; esc
+   up (gather <pc)
    _ (fake 2 24, fake 3 24)                                       ; q
    sc2 (wfn <pc 3000)
-   _ (test (any (c \ c != [0 0 0]) v0) (v0 != v1) (two? sc2) (0 = <sc2))
+   _ (test (any (c \ c != [0 0 0]) v0) (v0 != v1) (v1 != v2) (!(two? up)) (two? sc2) (0 = <sc2))
    _ (close s)
    _ (still <xv 15)
    _ (wfx <xv)

@@ -3,9 +3,9 @@
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
-         mesh-lamp mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
+         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
-         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-show mesh-win mesh-gone)
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone)
 (borrow 'view)
 (borrow 'window)
 (borrow 'vec)
@@ -117,29 +117,34 @@
    (facets n n -1 sv (sc 0) (sc 1) () [(gem-tray [6] [0.0 0.0 0.0 0.0 0.0 16.0]) () ()])
  ; ..the light for a level with nothing to cast a shadow
  (mesh-open c) [1.0 (0.6 + 0.4 * c 6) ()]
- ; --- lamps: {'at points 'c [r g b] 'r reach}, optional 'n a facing, 'soft, 'wrap, 'keep.
- ;     c at a metre, shared among the points, falls off by the square to none at the reach.
- ;     no shadows: (keep X Y Z) 1 or 0 says where it reaches ---
- ; a lamp's light on each vertex of a packed mesh: [r g b] trays, before the surface's colour
- (mesh-lamp pk lp) (: c (pk 'cols) X (c 0) Y (c 1) Z (c 2) ps (lp 'at) r (lp 'r) fn (peep lp 'n ())
-   s2 (sq (peep lp 'soft 0.1)) wr (peep lp 'wrap 0.0)
-   (one p) (: lx (p 0 - X) ly (p 1 - Y) lz (p 2 - Z) d2 (lx * lx + ly * ly + lz * lz) d (sqrt (d2 + 1e-9))
-             lam (sat (((c 5 * lx + c 6 * ly + c 7 * lz) / d + wr) / (1.0 + wr)))
-             em (two? fn ? (sat (0.25 - (fn 0 * lx + fn 1 * ly + fn 2 * lz) / d)) 1.0)
-             (lam * em * sq (sat (1.0 - sq (d2 / (r * r)))) / (d2 + s2)))
-   k (foldl (\ a p (a + one p)) (X * 0.0) ps / #ps)
-   (c* (peep lp 'keep () @ () k f (k * f X Y Z)) (lp 'c)))
+ ; --- lamps: {'at points 'c [r g b] 'r reach}, optional 'n a facing, 'soft, 'wrap, and
+ ;     'keep a plan box [x0 z0 x1 z1]. c at a metre, shared among the points, falls off by
+ ;     the square to none at the reach; 'wrap rounds it onto what it grazes. no shadows:
+ ;     it lights only what stands in its box ---
+ ; a lamp as lamp-light takes it (src/love/lamp.c)
+ (mesh-lamp-row lp) [(lp 'at) (lp 'r) (lp 'c) (peep lp 'n ()) (sq (peep lp 'soft 0.1)) (peep lp 'wrap 0.0) (peep lp 'keep ())]
+ ; ..its light on each vertex of a packed mesh: [r g b] trays, before the surface's colour
+ (mesh-lamp pk lp) (lamp-light (pk 'cols) [(mesh-lamp-row lp)])
  ; ..and the mesh lit by amb [r g b] plus each lamp's chs times its ks: [verts tris] 8 a vertex
  (mesh-lamps pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
    (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
    [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
  ; ..the same into one buffer the packed mesh keeps, only colours rewritten: each call
- ; overwrites the last answer, so once a frame
- (mesh-lamps! pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
-   (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
-   i (iota n * 8)
-   buf (peep pk 'buf () @ () (: v (foldl (\ v k (pin v (i + k) (c k))) (iota (8 * n) * 0.0) ^5) (pin pk 'buf v, v)) v v)
-   [(foldl (\ v k (pin v (i + 5 + k) (lit k))) buf ^3) (pk 'tris)])
+ ; overwrites the last answer, so once a frame. amb, chs and gain are the first call's, and
+ ; after it only the vertices a lamp reaches change, only when ks does
+ (mesh-lamps! pk amb chs ks gain)
+  (: (lit c8 base chs j) (gain * c8 j * foldl (\ a i (a + ks i * chs i j)) (base j) ^#chs)
+     (pins3 v ix l) (foldl (\ v k (pin v (ix + 5 + k) (l k))) v ^3)
+     (peep pk 'buf () @
+      () (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0) i (iota n * 8)
+           base (map (j \ z + amb j) ^3) c8 (map (j \ c (8 + j)) ^3)
+           v (pins3 (foldl (\ v k (pin v (i + k) (c k))) (iota (8 * n) * 0.0) ^5) i (lit c8 base chs))
+           on (iota (foldl (\ a ch (a + ch 0 + ch 1 + ch 2)) z chs > 0.0)) (g t) (peep t on 0.0)
+           _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (ch \ map g ch) chs)})
+           [v (pk 'tris)])
+      ; ..and nothing written while the lamps stand where they stood
+      b (: lv (pk 'live) [(#(lv 'ix) = 0 || peep lv 'ks () = ks ? b (: _ (pin lv 'ks ks) (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs)))))
+                          (pk 'tris)])))
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
  ; ..a copy of a scene with its triangles made glows
@@ -150,7 +155,8 @@
  (word c) ((q (c 0) << 16) | (q (c 1) << 8) | q (c 2))
  (mesh-pic w h f)
   (: l0 (map (i \ f (i % w) (i // w)) ^(w * h))
-     (down m n l) (: a (m // 2) b (n // 2)
+     ; ..a level's texels by place, read in a step
+     (down m n l0) (: l (foldl (\ t x (pin t #t x)) {} l0) a (m // 2) b (n // 2)
        (map (i \ (: x (2 * (i % a)) y (2 * (i // a))
                     q (filter two? [(l (y * m + x)) (l (y * m + x + 1)) (l ((y + 1) * m + x)) (l ((y + 1) * m + x + 1))])
                     (#q < 3 ? () (c* (1.0 / #q) (foldl c+ [0.0 0.0 0.0] q)))))
@@ -254,13 +260,17 @@
  (mesh-kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\"
  ; --- a level's screen: 'kitty 1 kitty's pixels, 'win a window, else half blocks ---
  (mesh-mode md) (md @ 'kitty 1 'cells 0 'window 0 (mesh-kitty? ()))
- ; ..w cells by r rows, two pixels a row; 'kp pixels a column: kitty aims at kitty-w across,
- ; a window's 8 by 16 cell over 'scale (1 2 4 or 8, else 2)
+ ; ..w cells by r rows, two pixels a row; 'kp pixels a column: kitty aims at kitty-w across.
+ ; a window's picture is 'pic-w by 'pic-h, kitty-w over 'scale (1 2 4 or 8, else 2) across,
+ ; in the window's shape
  kitty-w 640
  (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
- (mesh-size st w r) (: h (2 * r) s (mesh-scale st)
-   (pins (view! st w h r) 'bay (view-bayer w h)
-         'kp (? (tablet? (peep st 'win ())) (8 // s) (st 'kitty) (max2 1 (kitty-w // w // s)) 1)))
+ (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (peep st 'win ())
+   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (kitty-w // s) ph (max2 1 (pw * wh 1 // max2 1 (wh 0)))
+   (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
+         'kp (? (tablet? win) (max2 1 (pw // 160)) (st 'kitty) (max2 1 (kitty-w // w // s)) 1)))
+ ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
+ (mesh-dims st) (: k (peep st 'kp 1) (tablet? (peep st 'win ()) ? [(st 'pic-w) (st 'pic-h)] [(k * st 'w) (k * st 'h)]))
  ; ..a frame f: kitty alternates ids 7 and 8 in one synchronised update, the old taken down
  ; once the new is over it (one id reused blanks first); or the cells, bands over them
  (mesh-show st f text bands) (: w (st 'w) h (st 'h) k (peep st 'kp 1)
@@ -270,13 +280,25 @@
          (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
           + text + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
- ; ..or onto a window's paper, bands then 'over painted on in 8 by 16 cells; answers ""
- (mesh-win st f bands) (: win (st 'win) s (mesh-scale st) k (st 'kp) w (k * st 'w) h (k * st 'h)
+ ; ..or to a window: the picture sent for the server to enlarge, else painted onto the
+ ; paper as often as fits; bands then 'over in 8 by 16 cells, only their rows shown when
+ ; the server enlarged the rest; answers ""
+ (mesh-win st f bands) (: win (st 'win) d (mesh-dims st) w <d h (d 1)
    wh (window-size win) W <wh H (wh 1) P (window-paper win)
-   _ (frame-paint f w s P W)
+   Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
+   _ (frame-paint f w 1 Q w)
+   up (window-blit win Q w h)
+   ov (peep st 'over {}) rs (sort (keys bands + keys ov))
+   _ (up ? (each rs (r \ mesh-under f w h P W H r)) (frame-paint f w (max2 1 (min2 (W // w) (H // h))) P W))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
-   ov (peep st 'over {}) _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
-   (window-show win 0 H, ""))
+   _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
+   _ (? up (each rs (r \ window-show win (16 * r) (16 * r + 16))) (window-show win 0 H))
+   "")
+ ; ..the paper's cell row r laid from the picture f w by h, enlarged to the window W by H
+ (mesh-under f w h P W H r) (: y0 (16 * r) n (min2 16 (H - y0))
+   (? (0 < n) (: I (iota (W * n)) X (I % W) Y (I // W + y0) g (peep f (Y * h // H * w + X * w // W) 0) T (cask (W * n * 4))
+              _ (frame-paint g W 1 T W) (pour P (y0 * W * 4) T 0 (W * n * 4)))
+      0))
  ; ..a band [x0 cells fg bg] on cell row r: pens six bits a channel, or the 256
  (mesh-band st P W H r bd) (: x0 (bd 0) cs (bd 1) n #cs
    (pen p bg) (? !(st 'deep) (esc + "[" + (bg ? "48" "38") + ";5;" + show p + "m")

@@ -95,7 +95,7 @@
    (x-query s op win) (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s, x-reply s)
    (x-query-name s op nm)
     (: n #nm
-       (x-w8 s op, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) / 4),
+       (x-w8 s op, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) // 4),
         x-w16 s n, x-w16 s 0, x-wpad s nm, x-flush s, x-reply s))
 
    ; --- InternAtom; also the redirect sync point ---

@@ -119,7 +119,10 @@
    ch (mesh-lamp fl lp)
    away (mesh-lamp fl {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 2.5 'n [0.0 1.0 0.0]})
    short (mesh-lamp fl {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 1.2})
-   kept (mesh-lamp fl {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 2.5 'keep (\ X Y Z (Z < 0.5))})
+   kept (mesh-lamp fl {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 2.5 'keep [-9.0 -9.0 9.0 0.5]})
+   ; ..lights summed onto a base, light by light; a lamp out of reach adds the numbers 0.0
+   far (mesh-lamp fl {'at [[9.0 1.0 9.0]] 'c [1.0 1.0 1.0] 'r 2.5})
+   both (lamp-lights (fl 'cols) [1.0 1.0 1.0] [[(mesh-lamp-row lp)] [(mesh-lamp-row lp) (mesh-lamp-row {'at [[9.0 1.0 9.0]] 'c [1.0 1.0 1.0] 'r 2.5})]])
    (texs t) (peep t (iota (#t // 4) * 4 + 3) 0)
    ; ..lit by them, per channel; what shines its colour alone
    lm (mesh-lamps fl [0.0 0.0 0.0] [ch] [2.0] 1.0)
@@ -134,6 +137,7 @@
        (amax (ch 0) = peep (ch 0) mid 0.0) (0.9 < peep (ch 0) mid 0.0) (peep (ch 0) 0 1.0 = 0.0)
        (amax (away 0) = 0.0) (peep (short 0) 6 1.0 = 0.0) (0.0 < peep (ch 0) 6 0.0)
        (peep (kept 0) 14 1.0 = 0.0) (0.0 < peep (ch 0) 14 0.0) (peep (kept 0) mid 0.0 = peep (ch 0) mid 0.0)
+       (far = [0.0 0.0 0.0]) (aall (both 1 = 1.0 + ch 1 + ch 1))
        (peep (lm 0) (mid * 8 + 5) 0.0 = 2.0 * peep (ch 0) mid 0.0) (peep (lm 0) (mid * 8) 1.0 = 0.0)
        (amin (peep (sh 0) (iota 25 * 8 + 6) 0.0) = 0.5)
        (amax (texs (sh 1)) = -1) (amax (texs (gl 1)) = -2) (gl 0 = sh 0)
