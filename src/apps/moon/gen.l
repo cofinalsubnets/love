@@ -7330,6 +7330,7 @@
               (flo? ty) (ntmp g 'double @ tm (asfty g r ty + fstv g ty 'r4 tm 'f0 + [[(uldop (tsz g ty)) 'r0 'r4 tm]]
                                                 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
               (asintt g r ty + cvt ty 'r0 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
+          (d128? ty && w128? g) (as128 g r + wst g 'r4 off)   ; both halves: a union's .full = v
           (flo? ty) (asfty g r ty + fstv g ty 'r4 off 'f0)
           (pair? g ty) (asll g r + pst 'r4 off)
           (asintt g r ty + cvt ty 'r0 + [[(stop ty) 'r4 off 'r0]])))
