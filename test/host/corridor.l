@@ -204,11 +204,13 @@
    _ (edit-events pl [['press 1 144 80] ['move 152 80] ['release 1 152 80]])
    pl2 (plv 'lines 3)
    _ (edit-events pl [['press 1 120 80] ['move 136 80] ['release 1 136 80]])
-   pl3 (plv 'lines 3) _ (edit-paint pl) plp (plw 'paper)
+   pl3 (plv 'lines 3)
+   _ (edit-events pl [['press 1 112 80] ['move 120 80] ['release 1 120 80]])
+   pl4 (plv 'lines 3) _ (edit-paint pl) plp (plw 'paper)
    (pix x y) (peep plp (4 * (y * 320 + x) + 2) 0)
    _ (edit-events pl [['down 15] ['up 15]])
  (test (pp 'c = [2.0 2.0]) (pp 'fl = 0.0) (pl1 = "  (room [3 0 1] [6 3 3]))") (ps = [4]) (pl2 = "  (room [3 0 1] [6.5 3 3]))")
-       (pl3 = "  (move [1 0 0] (room [3 0 1] [6.5 3 3])))") (#(pl 'st 'lvl 'brushes) = 2) (pix 4 4 = 22) (pix 80 80 != 22) (pl 'plan = ())))
+       (pl3 = "  (move [1 0 0] (room [3 0 1] [6.5 3 3])))") (pl4 = "  (move [1 0 0] (room [3.5 0 1] [6.5 3 3])))") (#(pl 'st 'lvl 'brushes) = 2) (pix 4 4 = 22) (pix 80 80 != 22) (pl 'plan = ())))
 ; a scene made again from the one before keeps what is the same and comes out as one made
 ; from nothing: after a solid moves, a lamp moves, a solid goes, the room grows, and all
 ; comes back

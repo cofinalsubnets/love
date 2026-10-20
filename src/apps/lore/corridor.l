@@ -988,7 +988,7 @@
  ; ..the plan's chosen form's corners, where it is a room or a box the scene has only moved:
  ; their numbers' spans 'sa 'sb, the numbers 'a 'b, the shift 'd, the brushes' 'lo and 'hi
  (plan-box ed) (: t (ed 'text) st (ed 'st) sel (ed 'sel) sp (atom? sel ? () (corridor-span t sel))
-   (num q) (<(sounds (snip t (q 0) (q 1))) @ n (charm? n ? n ()))
+   (num q) (<(sounds (snip t (q 0) (q 1))) @ n (charm? n || gem? n ? n 'no))
    (form i) (: ks (sx-kids t i) hd (two? ks ? (snip t (ks 0 0) (ks 0 1)) "")
      (? (t i != 40 || atom? ks) ()
         (elem hd ["room" "box"] && #ks >= 3 && t (ks 1 0) = 91 && t (ks 2 0) = 91) [(sx-kids t (ks 1 0)) (sx-kids t (ks 2 0))]
@@ -999,7 +999,7 @@
       (: a (map num (vk 0)) b (map num (vk 1))
          lo (foldl (\ m i (map (k \ min2 (m k) (bs i 'lo k)) ^3)) (bs <is 'lo) is)
          hi (foldl (\ m i (map (k \ max2 (m k) (bs i 'hi k)) ^3)) (bs <is 'hi) is)
-         (? !(all charm? a && all charm? b) ()
+         (? (elem 'no (a + b)) ()
             (: d (map (k \ lo k - min2 (a k) (b k)) ^3)
                (all (k \ mag (hi k - max2 (a k) (b k) - d k) < 1e-3) ^3 ? {'sa (vk 0) 'sb (vk 1) 'a a 'b b 'd d 'lo lo 'hi hi} ()))))))
  ; ..a drag begun on an edge of the chosen box, within three pixels, that moves that wall
