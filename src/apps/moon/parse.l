@@ -18,6 +18,7 @@
    (idv? ('id . v . _) s) ?(v = s)
    (idat? ts) (two? ts && tkk <ts = 'id)         ; an identifier heads ts
    (strat? ts) (two? ts && tkk <ts = 'str)
+   cx-door {}                                       ; cgram.l's parse, laid after this file
    ; -- where a refusal stood --
    ; cpp's spans ((index file)..) ride a marker token at the head; raw lexer output reads ().
    ; the file is carried since an #include splices the header's own line numbering in
@@ -1527,26 +1528,26 @@
           t "__elvis_\(n)"
           (!ty || !ty2 ? ()
              ['sexpr [['decl [[t (pdecay ty) a]]]] ['cond ['var t] ['var t] b] ty2])))
-   (pcond ps ts)
+   (rpcond ps ts)
     (plor ps ts @ r
        (? (atom? r) ()
           (peekp <>r "?" && peekp ><>r ":")
-           (: re (pcond ps >><>r)
+           (: re (rpcond ps >><>r)
               e (two? re ? (pelvis ps <r <re))
               (two? e ? [e <>re]))
           (peekp <>r "?")
            (thenw (pexpr ps ><>r) ":" @ rt
               (atom? rt ? ()
-                 (pcond ps <>rt @ re
+                 (rpcond ps <>rt @ re
                     (two? re ? [['cond <r <rt <re] <>re]))))
           r))
-   (pasn ps ts)
-    (pcond ps ts @ r
+   (rpasn ps ts)
+    (rpcond ps ts @ r
        (atom? r ? ()
           (: t (two? <>r ? <<>r)
              hit (two? t && tkk t = 'p ? (assoc (tkv t) asnops))
              (atom? hit ? r
-                (pasn ps ><>r @ r2
+                (rpasn ps ><>r @ r2
                    (atom? r2 ? ()
                       (: lv <r op <>hit
                          ; a global register variable is read-only: a write loses the frame
@@ -1556,7 +1557,11 @@
                                  (calm? lv) ['asn lv (mkbin ps op lv <r2)] ; the desugar, exact here
                                  ['rmw op lv <r2])                     ; evaluate the lvalue once
                                <>r2]))))))))
-   (pexpr ps ts) (pone ps pasn "," 'comma ts)
+   (rpexpr ps ts) (pone ps rpasn "," 'comma ts)
+   ; the doors: c.y's grammar, laid in cx-door by cgram.l; the ladder above when it refuses
+   (pexpr ps ts) ((cx-door 'parse) ps ts 'expr)
+   (pasn ps ts) ((cx-door 'parse) ps ts 'asn)
+   (pcond ps ts) ((cx-door 'parse) ps ts 'cond)
 
    ; an initializer: an assignment-expr or ('init (item..)), an item plain | ('dfield name
    ; init) | ('didx n init). dbuild nests a designator chain (.a.b = v, C99 6.7.9), coalescing

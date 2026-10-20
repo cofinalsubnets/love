@@ -26,6 +26,7 @@
    dr-eo (#dr-z - 22)
    dr-x (ap-axml (ap-manifest "pics.salt.t" "t" ()))
    dr-xp (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.RECORD_AUDIO"]))
+   dr-xn (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.INTERNET"]))
    (dr-walk x)
     (: (go i acc) (? (#x <= i) [i (rev acc)] (go (i + rdle x (i + 4) 4) (rdle x i 2 . acc))) (go 8 ()))
    (dr-pool x)
@@ -58,7 +59,9 @@
  (: p (dr-pool dr-x) !(any (x \ !(string? x)) p))
  (: w (dr-walk dr-xp) (<w = #dr-xp && #(w 1) = #((dr-walk dr-x) 1) + 2))
  (: p (dr-pool dr-xp) (elem "uses-permission" p && elem "android.permission.RECORD_AUDIO" p))
- !(elem "uses-permission" (dr-pool dr-x)))
+ ; the network with no -P, and once when -P names it too
+ (: p (dr-pool dr-x) (elem "uses-permission" p && elem "android.permission.INTERNET" p))
+ (dr-xn = dr-x))
 
 (test
  (snip dr-s (dr-co - 16) dr-co = "APK Sig Block 42")
@@ -106,7 +109,22 @@
    _ (rest 50)
    dw-rd2 (dw-beside (2 * (9 + 540 * 96 * 4)))
    dw-ev3 (window-events dw-w)
-   _ (catch dw-rd2))
+   _ (catch dw-rd2)
+   ; the clipboard: owned as 'C, asked as 'V, its answer in ten-byte 'P pieces; the primary stays here
+   (dw-p t) (foldl (r \ _ \ r + string 0) (string 80 + string (tally t) + t) ^(10 - tally t))
+   _ (window-own dw-w 'primary "x")
+   _ (window-own dw-w 'clipboard "hé")
+   dw-c (dw-take 8)
+   _ (window-ask dw-w 'clipboard)
+   dw-v (dw-take 1)
+   _ (say dc (dw-p ("abcdefghi" + string 195) + dw-p (string 169 + "!") + dw-p ""), flush dc)
+   _ (rest 50)
+   dw-ev4 (window-events dw-w)
+   ; the row's paste key and a keyboard's ask the same, and the row's last key types
+   _ (say dc (dw-rec 84 0 482 514 + dw-rec 75 1 279 0 + dw-rec 75 0 279 0 + dw-rec 84 0 482 562), flush dc)
+   _ (rest 50)
+   dw-ev5 (window-events dw-w)
+   dw-v2 (dw-take 2))
 (test
  ([540 1200] = dw-sz)
  (dw-ev = [['down 30] ['text "a"] ['up 30] ['down 28] ['press 1 10 20] ['move 11 21] ['size 540 600]])
@@ -114,7 +132,10 @@
  (dw-hd = [70 28 2 88 2 1 0 2 0])
  (dw-i = [73 1]) (dw-ev2 = [['size 540 504]]) ([540 504] = window-size dw-w)
  (dw-rh = [70 28 2 88 2 248 1 96 0])
- (dw-ev3 = [['down 29] ['down 46] ['text "c"] ['up 46] ['up 29] ['up 46]]))
+ (dw-ev3 = [['down 29] ['down 46] ['text "c"] ['up 46] ['up 29] ['up 46]])
+ (dw-c = [67 3 0 0 0 104 195 169]) (dw-v = [86])
+ (dw-ev4 = [['paste "abcdefghié!"]])
+ (dw-ev5 = [['down 53] ['text "/"] ['up 53]]) (dw-v2 = [86 86]))
 (: _ (window-close dw-w) _ (close dc) _ (close dw-l) _ (unlink dw-path) 0)
 
 (puts "droid: ok") (putc 10)
