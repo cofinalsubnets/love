@@ -55,16 +55,18 @@
        (tablet? (corridor-opts ["--window"])) ((corridor-opts ["--window"]) 'md = 'window)))
 
 ; the loading screen: view-spin blacks its box and rings the middle, the brightest dot at
-; the right to begin, and after shows only the ring's rows; in a terminal a wheel. and
-; view-loading draws only once the making has taken a moment, then not again within a frame
+; the right to begin, a fifth of the box across, and after shows only the ring's rows; in a
+; terminal a wheel. and view-loading draws only once the making has taken a moment, then
+; not again within a frame
 (: win {'w 640 'h 400 'paper (cask (640 * 400 * 4))}
    (rgb x y) (4 * (y * 640 + x) @ i (string (win 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
    _ (frame-paint (iota (640 * 400) * 0 + 0xffffff) 640 1 (win 'paper) 640)
    s0 (view-spin {'win win 'box [0 0 320 400] 'n 0}) hd (rgb 183 200) s1 (view-spin {'win win 'box [0 0 320 400] 'n 1})
+   big (view-spin {'win {'w 1200 'h 1000 'paper (cask (1200 * 1000 * 4))} 'box [0 0 1200 1000] 'n 1})
    tw (view-spin {'win () 'box [0 0 80 24] 'n 3})
    c {'n 0} tk (view-loading () [0 0 80 24] (ld \ (pin c 'n (c 'n + 1), pin c 'ld ld, "")))
    _ (tk 'early ()) n0 (c 'n) _ (rest 200) _ (tk 'cuts 0.5) n1 (c 'n) _ (tk 'cuts 0.6) n2 (c 'n)
- (test (s0 = ()) (s1 = [168 232]) (rgb 10 10 = [0 0 0]) (rgb 600 10 = [255 255 255]) (rgb 160 200 = [0 0 0])
+ (test (s0 = ()) (s1 = [168 232]) (big = [401 599]) (rgb 10 10 = [0 0 0]) (rgb 600 10 = [255 255 255]) (rgb 160 200 = [0 0 0])
        (hd = [255 255 255]) (rgb 183 200 != hd) (has? tw "\u2838")
        (n0 = 0) (n1 = 1) (n2 = 1) (c 'ld 'what = 'cuts) (c 'ld 'part = 0.5) (c 'ld 'n = 0) (c 'ld 'ms >= 150)))
 
