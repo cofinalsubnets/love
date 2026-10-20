@@ -86,6 +86,10 @@ moonrun -c "$ho/.esy.c" -o "$ho/.esy.o" || fail "mooncc: a file-scope asm with a
 [ "$(readelf -sW "$ho/.esy.o" | awk '$8 == "__export_symbol_x" {print $5}')" = LOCAL ] || fail "a file-scope asm's label is no local symbol"
 [ "$(readelf -sW "$ho/.esy.o" | awk '$8 ~ /^l1\./' | wc -l)" = 0 ] || fail "a file-scope asm's numbered label reached the symtab"
 [ "$(readelf -rW "$ho/.esy.o" | sed -n '/rela.export_symbol/,/^$/p' | awk 'NR == 3 {print $5}')" = x ] || fail "a relocation to a global binds a section symbol, not the global"
+# a64: an absent weak's address is a literal word (abs64), never a page reach a pie link refuses
+printf 'extern __attribute__((weak)) const int t[];\nconst int *g(void) { return t; }\n' > "$ho/.wkla.c"
+moonrun -t a64 -c "$ho/.wkla.c" -o "$ho/.wkla.o" || fail "mooncc -t a64: an absent weak's address"
+[ "$(readelf -rW "$ho/.wkla.o" | awk '$5 == "t" {print $3}' | sort -u)" = R_AARCH64_ABS64 ] || fail "an absent weak's address reaches by page on a64"
 # a `static` alias is a local symbol (MODULE_DEVICE_TABLE's), an object sized as its target or a
 # func; where clang is, each alias's size, type and binding are clang's
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nstatic __typeof__(tab) tab_mod __attribute__((used, alias("tab")));\nint glob[3] = {1};\nstatic __typeof__(glob) glob_mod __attribute__((used, alias("glob")));\nint f(int x) { return x + tab[x].b; }\nstatic int f_mod(int) __attribute__((used, alias("f")));\n' > "$ho/.sal.c"

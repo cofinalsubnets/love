@@ -1084,8 +1084,10 @@
                               ('land _ _) 1 ('lor _ _) 1 ('un 'not _) 1 ()))
    (spec? g env e)
     (two? e ?
+       ; a weak global may be absent, its address 0: its load never speculates
        (e @ ('var nm) (vent g env nm @ en (two? en && elem <en '(regv loc glo) && !(d128? <>>en)
-                                              && !(stru? <>>en || arr? <>>en)))
+                                              && !(stru? <>>en || arr? <>>en)
+                                              && !(<en = 'glo && elem nm (g 'weaks))))
             ('num _) 1
             ('bin op a b) (!(elem op '(/ %)) && spec? g env a && spec? g env b)
             ('un op a) (spec? g env a)
@@ -11147,6 +11149,7 @@
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
+          'weaks weaks                              ; the unit's weak names, never speculated
           'sects (two? xtra ? <>>xtra {})
           'alias (two? xtra && 3 < #xtra ? (xtra 3) {})
           'aligns (two? xtra && 4 < #xtra ? (xtra 4) {})
