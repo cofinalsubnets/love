@@ -16,13 +16,27 @@
    sound is a second socket: love's horn (HORN=sock:PATH) says the rate as a u32, then
    s16 stereo frames, which a thread of their own plays through AAudio. the mic is a
    third (HORN_IN=sock:PATH): the rate word's top byte asks the channels, and an AAudio
-   input stream's s16 frames go back. assets/perms names the permissions to ask for at
+   input stream's s16 frames go back. the framework is a fourth (LOVE_DROID=PATH), a session
+   per connection, each op a record (u32 n, then n bytes: its letter, then words NUL-separated):
+     'c' NAME            a class by the boot loader (android.*, java.*)
+     'l' NAME            a class by the app's own loader, NAME dotted
+     's' BYTES           a String of the utf-8 that follows
+     'a'                 the activity, a Context
+     'n' H SIG ARGS..    new H(ARGS), SIG the constructor's
+     'm' H NAME SIG ARGS..   a method on H; 'k' the same, static on the class H
+     'g' H NAME TYPE     a field of H; 'f' the same, static on the class H
+     't' H               H.toString() as text; 'd' H lets H go
+   an argument is a handle's number ("" for null) or a primitive in decimal; each answer is
+   u32 n, then its kind and text: 'h' a handle, 'z' null, 'v' a primitive ("" for void), 't'
+   text, 'x' the exception thrown, as its toString, 'e' a malformed op. ops run on the loop
+   thread, so a call that blocks stalls the screen. every process love starts inherits the
+   door: the app's own uid, no reach it lacks. assets/perms names the permissions to ask for at
    start (RECORD_AUDIO for the mic), NUL-separated; the input stream waits on the grant.
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
    directory before each start, which is love's cwd and HOME. love inherits the app's own
-   environment (android's ANDROID_* and PATH; an app's uid is refused am, pm and settings,
-   which want the framework's java), and its PATH leads with DATA/bin, where love is linked
-   under its own name. when love ends it is started again; the app ends as android
+   environment (android's ANDROID_* and PATH), and its PATH leads with DATA/bin, where love
+   is linked under its own name and as am, pm and settings: android's are refused an app's
+   uid, and love's speak the framework's door. when love ends it is started again; the app ends as android
    ends it. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
@@ -80,17 +94,17 @@ void AAudioStreamBuilder_setDirection(void *, int); int AAudioStream_read(void *
 void *dlsym(void *, char const *); int usleep(unsigned); ssize_t send(int, void const *, size_t, int);
 struct pollfd { int fd; short events, revents; }; int poll(struct pollfd *, unsigned long, int);
 
-enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR };
+enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR, DROID, SESS };
 enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOEXEC = 02000000 };
 
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
-  int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, esock, vh, typing, shown;
+  int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, esock, dsock, vh, typing, shown;
   int up, ears;                           /* in sight (onStart to onStop); hear threads alive */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
   long th; long mu[8];                    /* pthread_t, pthread_mutex_t (zero is unlocked) */
   uint32_t *fb; size_t fbsz; int gh;      /* a frame as love sent it, the window's buffer height */
-  char dir[512], data[512], sock[600], horn[600], ear[600], line[2048]; int nline;
+  char dir[512], data[512], sock[600], horn[600], ear[600], droid[600], line[2048]; int nline;
 } br;
 
 #define LOG(s) __android_log_write(4, "love", s)
@@ -263,23 +277,19 @@ static void *clipboard(br *b, void *e) {
   return callo(e, ac, mid(e, cls(e, ac), "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;"), str(e, "clipboard"));
 }
 
-/* n bytes of utf-8 as the clipboard's text: new String(bytes, "UTF-8") into
-   ClipData.newPlainText, which takes a whole code point where modified utf-8 would not */
+/* n bytes of utf-8 as the clipboard's text, through ClipData.newPlainText */
+static void *jtext(void *, char const *, size_t);
 static void copied(br *b, char const *s, size_t n) {
   void *e = b->env; if (!e) return;
   void *const *t = *(void *const **) e;
   void *(*find)(void *, char const *) = t[6]; void (*clear)(void *) = t[17];
   int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
-  void *(*newo)(void *, void *, void *, ...) = t[28]; void *(*cls)(void *, void *) = t[31];
-  void *(*mid)(void *, void *, char const *, char const *) = t[33]; void (*callv)(void *, void *, void *, ...) = t[61];
+  void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
+  void (*callv)(void *, void *, void *, ...) = t[61];
   void *(*smid)(void *, void *, char const *, char const *) = t[113]; void *(*cso)(void *, void *, void *, ...) = t[114];
-  void *(*str)(void *, char const *) = t[167]; void *(*bytes)(void *, int) = t[176];
-  void (*setb)(void *, void *, int, int, void const *) = t[208];
+  void *(*str)(void *, char const *) = t[167];
   if (push(e, 16)) { clear(e); return; }
-  void *cm = clipboard(b, e), *ba = cm ? bytes(e, (int) n) : 0;
-  if (ba) setb(e, ba, 0, (int) n, s);
-  void *sc = ba ? find(e, "java/lang/String") : 0, *ni = sc ? mid(e, sc, "<init>", "([BLjava/lang/String;)V") : 0;
-  void *js = ni ? newo(e, sc, ni, ba, str(e, "UTF-8")) : 0;
+  void *cm = clipboard(b, e), *js = cm ? jtext(e, s, n) : 0;
   void *cd = js ? find(e, "android/content/ClipData") : 0;
   void *np = cd ? smid(e, cd, "newPlainText", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Landroid/content/ClipData;") : 0;
   void *clip = np ? cso(e, cd, np, str(e, "love"), js) : 0;
@@ -354,6 +364,247 @@ static void paste(br *b) {
     munmap(r, rn);
   }
   if (s) munmap(s, (size_t) got);
+}
+
+/* --- the framework's door: a session per connection on DATA/droid, ops run on the loop
+   thread's env, each under a local frame, every call's exception answered and cleared */
+typedef union { unsigned char z; signed char b; unsigned short c; short s; int i; long j; float f; double d; void *l; } jvalue;
+enum { REFS = 256, ARGS = 16 };
+typedef struct { br *b; int fd; void *ref[REFS]; } sess;
+
+/* a whole read, each piece waited on at most a second: a stalled client lets go */
+static int readwait(int fd, void *p, size_t n) {
+  char *c = p;
+  while (n) {
+    struct pollfd q = {fd, 1, 0};
+    if (poll(&q, 1, 1000) != 1) return -1;
+    ssize_t k = read(fd, c, n); if (k <= 0) return -1; c += k; n -= (size_t) k;
+  }
+  return 0;
+}
+
+static int thrown(void *e) { int (*check)(void *) = (*(void *const **) e)[228]; return check(e); }
+
+/* n bytes of utf-8 as a String: new String(bytes, "UTF-8"), whole code points where
+   NewStringUTF's modified utf-8 would not; under the caller's frame */
+static void *jtext(void *e, char const *s, size_t n) {
+  void *const *t = *(void *const **) e;
+  void *(*find)(void *, char const *) = t[6]; void *(*newo)(void *, void *, void *, ...) = t[28];
+  void *(*mid)(void *, void *, char const *, char const *) = t[33]; void *(*str)(void *, char const *) = t[167];
+  void *(*bytes)(void *, int) = t[176]; void (*setb)(void *, void *, int, int, void const *) = t[208];
+  void *ba = bytes(e, (int) n);
+  if (!ba || thrown(e)) return 0;
+  setb(e, ba, 0, (int) n, s);
+  void *sc = find(e, "java/lang/String"), *ni = sc ? mid(e, sc, "<init>", "([BLjava/lang/String;)V") : 0;
+  void *u = ni ? str(e, "UTF-8") : 0;
+  return u && !thrown(e) ? newo(e, sc, ni, ba, u) : 0;
+}
+
+/* a reply: u32 n, then n bytes, a kind and its text */
+static void answer(int fd, int kind, char const *s, size_t n) {
+  unsigned char h[5] = {(unsigned char) (n + 1), (unsigned char) ((n + 1) >> 8), (unsigned char) ((n + 1) >> 16), (unsigned char) ((n + 1) >> 24), (unsigned char) kind};
+  if (!writeall(fd, h, 5)) writeall(fd, s, n);
+}
+
+/* a String's text to the client as utf-8, from its utf-16 */
+static void say16(void *e, int fd, int kind, void *js) {
+  void *const *t = *(void *const **) e;
+  int (*len)(void *, void *) = t[164]; unsigned short const *(*chars)(void *, void *, void *) = t[165];
+  void (*rel)(void *, void *, unsigned short const *) = t[166];
+  int n = len(e, js); unsigned short const *u = chars(e, js, 0);
+  size_t m = (size_t) n * 3 + 1, k = 0;
+  unsigned char *o = u ? mmap(0, m, 3, 0x22, -1, 0) : 0;
+  if (o == (void *) -1) o = 0;
+  for (int i = 0; o && i < n; i++) {
+    unsigned v = u[i];
+    if (v >= 0xd800 && v < 0xdc00 && i + 1 < n && u[i + 1] >= 0xdc00 && u[i + 1] < 0xe000) v = 0x10000 + ((v - 0xd800) << 10) + (u[++i] - 0xdc00);
+    if (v < 0x80) o[k++] = (unsigned char) v;
+    else if (v < 0x800) o[k++] = (unsigned char) (0xc0 | v >> 6), o[k++] = (unsigned char) (0x80 | (v & 63));
+    else if (v < 0x10000) o[k++] = (unsigned char) (0xe0 | v >> 12), o[k++] = (unsigned char) (0x80 | (v >> 6 & 63)), o[k++] = (unsigned char) (0x80 | (v & 63));
+    else o[k++] = (unsigned char) (0xf0 | v >> 18), o[k++] = (unsigned char) (0x80 | (v >> 12 & 63)), o[k++] = (unsigned char) (0x80 | (v >> 6 & 63)), o[k++] = (unsigned char) (0x80 | (v & 63));
+  }
+  if (u) rel(e, js, u);
+  answer(fd, o ? kind : 'e', o ? (char *) o : "no room", o ? k : 7);
+  if (o) munmap(o, m);
+}
+
+/* the pending exception as 'x' and its toString, cleared; 0 when none */
+static int caught(void *e, int fd) {
+  void *const *t = *(void *const **) e;
+  void *(*occ)(void *) = t[15]; void (*clear)(void *) = t[17];
+  void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
+  void *(*callo)(void *, void *, void *, ...) = t[34];
+  if (!thrown(e)) return 0;
+  void *x = occ(e); clear(e);
+  void *ts = x ? mid(e, cls(e, x), "toString", "()Ljava/lang/String;") : 0;
+  void *js = ts && !thrown(e) ? callo(e, x, ts) : 0;
+  if (js && !thrown(e)) say16(e, fd, 'x', js);
+  else clear(e), answer(fd, 'x', "an exception", 12);
+  return 1;
+}
+
+static long num(char const *w, int *ok) {
+  long v = 0; int neg = *w == '-'; char const *p = w + neg;
+  if (!*p) *ok = 0;
+  for (; *p; p++) { if (*p < '0' || *p > '9') { *ok = 0; return 0; } v = v * 10 + (*p - '0'); }
+  return neg ? -v : v;
+}
+double strtod(char const *, char **);
+
+/* a handle's word -> its ref, "" -> null; -1 a word that names none */
+static int handle(sess *s, char const *w, void **r) {
+  int ok = 1;
+  if (!*w) { *r = 0; return 0; }
+  long h = num(w, &ok);
+  if (!ok || h < 0 || h >= REFS || !s->ref[h]) return -1;
+  *r = s->ref[h]; return 0;
+}
+
+/* the words after a sig as its parameters; the return's letter, or 0 for a bad one */
+static int params(sess *s, char const *sig, char **w, int nw, jvalue *v) {
+  char const *p = sig; int k = 0;
+  if (*p++ != '(') return 0;
+  while (*p && *p != ')') {
+    if (k >= nw || k >= ARGS) return 0;
+    char c = *p; int ok = 1;
+    while (*p == '[') p++;
+    if (*p == 'L') while (*p && *p != ';') p++;
+    if (!*p) return 0;
+    p++;
+    if (c == 'L' || c == '[') { if (handle(s, w[k], &v[k].l)) return 0; }
+    else if (c == 'F') v[k].f = (float) strtod(w[k], 0);
+    else if (c == 'D') v[k].d = strtod(w[k], 0);
+    else {
+      long n = num(w[k], &ok);
+      if (c == 'Z') v[k].z = (unsigned char) (n != 0); else if (c == 'B') v[k].b = (signed char) n;
+      else if (c == 'C') v[k].c = (unsigned short) n; else if (c == 'S') v[k].s = (short) n;
+      else if (c == 'I') v[k].i = (int) n; else if (c == 'J') v[k].j = n; else return 0;
+    }
+    if (!ok) return 0;
+    k++;
+  }
+  return *p == ')' && k == nw ? p[1] : 0;
+}
+
+/* an object kept: its handle, or null as 'z' */
+static void keep(sess *s, void *e, void *o) {
+  void *(*glob)(void *, void *) = (*(void *const **) e)[21];
+  char n[16];
+  if (!o) { answer(s->fd, 'z', "", 0); return; }
+  for (int h = 0; h < REFS; h++)
+    if (!s->ref[h]) { s->ref[h] = glob(e, o); answer(s->fd, 'h', n, (size_t) snprintf(n, sizeof n, "%d", h)); return; }
+  answer(s->fd, 'e', "no handle free", 14);
+}
+
+/* a call's answer by its return letter: base is the Call<Object>MethodA slot, the rest follow by 3 */
+static void call(sess *s, void *e, int ret, int stat, void *on, void *m, jvalue *v) {
+  void *const *t = *(void *const **) e; int base = stat ? 116 : 36; char n[40]; size_t k = 0;
+  if (ret == 'L' || ret == '[') { void *(*f)(void *, void *, void *, jvalue *) = t[base]; void *o = f(e, on, m, v); if (!caught(e, s->fd)) keep(s, e, o); return; }
+  if (ret == 'Z') { unsigned char (*f)(void *, void *, void *, jvalue *) = t[base + 3]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
+  else if (ret == 'B') { signed char (*f)(void *, void *, void *, jvalue *) = t[base + 6]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
+  else if (ret == 'C') { unsigned short (*f)(void *, void *, void *, jvalue *) = t[base + 9]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
+  else if (ret == 'S') { short (*f)(void *, void *, void *, jvalue *) = t[base + 12]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
+  else if (ret == 'I') { int (*f)(void *, void *, void *, jvalue *) = t[base + 15]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
+  else if (ret == 'J') { long (*f)(void *, void *, void *, jvalue *) = t[base + 18]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
+  else if (ret == 'F') { float (*f)(void *, void *, void *, jvalue *) = t[base + 21]; double r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%.9g", r); }
+  else if (ret == 'D') { double (*f)(void *, void *, void *, jvalue *) = t[base + 24]; double r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%.17g", r); }
+  else { void (*f)(void *, void *, void *, jvalue *) = t[base + 27]; f(e, on, m, v); }
+  if (!caught(e, s->fd)) answer(s->fd, 'v', n, k);
+}
+
+/* a field's value by its type's letter: base is the Get<Object>Field slot, the rest follow by 1 */
+static void field(sess *s, void *e, int ty, int stat, void *on, void *f) {
+  void *const *t = *(void *const **) e; int base = stat ? 145 : 95; char n[40]; size_t k;
+  if (ty == 'L' || ty == '[') { void *(*g)(void *, void *, void *) = t[base]; void *o = g(e, on, f); if (!caught(e, s->fd)) keep(s, e, o); return; }
+  long r = 0; double d = 0; int fl = 0;
+  if (ty == 'Z') { unsigned char (*g)(void *, void *, void *) = t[base + 1]; r = g(e, on, f); }
+  else if (ty == 'B') { signed char (*g)(void *, void *, void *) = t[base + 2]; r = g(e, on, f); }
+  else if (ty == 'C') { unsigned short (*g)(void *, void *, void *) = t[base + 3]; r = g(e, on, f); }
+  else if (ty == 'S') { short (*g)(void *, void *, void *) = t[base + 4]; r = g(e, on, f); }
+  else if (ty == 'I') { int (*g)(void *, void *, void *) = t[base + 5]; r = g(e, on, f); }
+  else if (ty == 'J') { long (*g)(void *, void *, void *) = t[base + 6]; r = g(e, on, f); }
+  else if (ty == 'F') { float (*g)(void *, void *, void *) = t[base + 7]; d = g(e, on, f); fl = 1; }
+  else if (ty == 'D') { double (*g)(void *, void *, void *) = t[base + 8]; d = g(e, on, f); fl = 1; }
+  else { answer(s->fd, 'e', "bad type", 8); return; }
+  k = (size_t) (fl ? snprintf(n, sizeof n, "%.17g", d) : snprintf(n, sizeof n, "%ld", r));
+  if (!caught(e, s->fd)) answer(s->fd, 'v', n, k);
+}
+
+/* one op, its record's words NUL-separated after the op's letter */
+static void op(sess *s, void *e, char *r, size_t n) {
+  void *const *t = *(void *const **) e;
+  void *(*find)(void *, char const *) = t[6]; void (*delg)(void *, void *) = t[22];
+  void *(*newa)(void *, void *, void *, jvalue *) = t[30]; void *(*cls)(void *, void *) = t[31];
+  void *(*mid)(void *, void *, char const *, char const *) = t[33]; void *(*callo)(void *, void *, void *, ...) = t[34];
+  void *(*fid)(void *, void *, char const *, char const *) = t[94]; void *(*smid)(void *, void *, char const *, char const *) = t[113];
+  void *(*sfid)(void *, void *, char const *, char const *) = t[144];
+  char *w[ARGS + 4]; int nw = 0; jvalue v[ARGS]; void *o = 0;
+  char k = n ? r[0] : 0;
+  if (k == 's') { keep(s, e, jtext(e, r + 1, n - 1)); if (thrown(e)) caught(e, s->fd); return; }
+  r[n] = 0;
+  for (size_t i = 1, w0 = 1; n > 1 && i <= n && nw < ARGS + 4; i++)   /* "" a word too, the last one as well */
+    if (!r[i]) w[nw++] = r + w0, w0 = i + 1;
+  if (k == 'a') keep(s, e, s->b->a->clazz);
+  else if (k == 'c' && nw == 1) { o = find(e, w[0]); if (!caught(e, s->fd)) keep(s, e, o); }
+  else if (k == 'l' && nw == 1) {                 /* by the app's loader: what FindClass's boot loader can't see */
+    void *ac = s->b->a->clazz, *gl = mid(e, cls(e, ac), "getClassLoader", "()Ljava/lang/ClassLoader;");
+    void *ld = gl ? callo(e, ac, gl) : 0, *lc = ld && !thrown(e) ? mid(e, cls(e, ld), "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;") : 0;
+    size_t m = 0; while (w[0][m]) m++;
+    void *nm = lc && !thrown(e) ? jtext(e, w[0], m) : 0;
+    o = nm && !thrown(e) ? callo(e, ld, lc, nm) : 0;
+    if (!caught(e, s->fd)) keep(s, e, o);
+  }
+  else if (k == 't' && nw == 1) {
+    if (handle(s, w[0], &o) || !o) { answer(s->fd, 'e', "no such handle", 14); return; }
+    void *ts = mid(e, cls(e, o), "toString", "()Ljava/lang/String;"), *js = ts && !thrown(e) ? callo(e, o, ts) : 0;
+    if (!caught(e, s->fd)) { if (js) say16(e, s->fd, 't', js); else answer(s->fd, 'z', "", 0); }
+  }
+  else if (k == 'd' && nw == 1) {
+    int ok = 1; long h = num(w[0], &ok);
+    if (ok && h >= 0 && h < REFS && s->ref[h]) delg(e, s->ref[h]), s->ref[h] = 0, answer(s->fd, 'v', "", 0);
+    else answer(s->fd, 'e', "no such handle", 14);
+  }
+  else if ((k == 'm' || k == 'k') && nw >= 3) {
+    int ret = handle(s, w[0], &o) || !o ? 0 : params(s, w[2], w + 3, nw - 3, v);
+    if (!ret) { answer(s->fd, 'e', "bad handle, sig or arguments", 28); return; }
+    void *m = k == 'm' ? mid(e, cls(e, o), w[1], w[2]) : smid(e, o, w[1], w[2]);
+    if (!caught(e, s->fd)) call(s, e, ret, k == 'k', o, m, v);
+  }
+  else if (k == 'n' && nw >= 2) {
+    int ret = handle(s, w[0], &o) || !o ? 0 : params(s, w[1], w + 2, nw - 2, v);
+    if (ret != 'V') { answer(s->fd, 'e', "bad handle, sig or arguments", 28); return; }
+    void *m = mid(e, o, "<init>", w[1]), *x = 0;
+    if (!caught(e, s->fd)) { x = newa(e, o, m, v); if (!caught(e, s->fd)) keep(s, e, x); }
+  }
+  else if ((k == 'g' || k == 'f') && nw == 3) {
+    if (handle(s, w[0], &o) || !o) { answer(s->fd, 'e', "no such handle", 14); return; }
+    void *f = k == 'g' ? fid(e, cls(e, o), w[1], w[2]) : sfid(e, o, w[1], w[2]);
+    if (!caught(e, s->fd)) field(s, e, w[2][0], k == 'f', o, f);
+  }
+  else answer(s->fd, 'e', "bad op", 6);
+}
+
+/* a session's records until it hangs up: u32 n, then n bytes */
+static int sessop(sess *s) {
+  void *e = s->b->env; unsigned char h[4];
+  if (!e || readwait(s->fd, h, 4)) return -1;
+  size_t n = h[0] | h[1] << 8 | h[2] << 16 | (size_t) h[3] << 24;
+  if (n > 1 << 20) return -1;
+  char *r = mmap(0, n + 1, 3, 0x22, -1, 0);
+  if (r == (void *) -1) return -1;
+  int bad = readwait(s->fd, r, n);
+  int (*push)(void *, int) = (*(void *const **) e)[19]; void *(*pop)(void *, void *) = (*(void *const **) e)[20];
+  if (!bad && !push(e, 32)) { op(s, e, r, n); if (thrown(e)) caught(e, s->fd); pop(e, 0); }
+  else if (!bad && !caught(e, s->fd)) answer(s->fd, 'e', "no frame", 8);
+  munmap(r, n + 1);
+  return bad;
+}
+
+static void sessend(sess *s) {
+  void *e = s->b->env;
+  ALooper_removeFd(s->b->looper, s->fd); close(s->fd);
+  for (int h = 0; e && h < REFS; h++) if (s->ref[h]) ((void (*)(void *, void *)) (*(void *const **) e)[22])(e, s->ref[h]);
+  munmap(s, sizeof *s);
 }
 
 /* love's stdout and stderr, a line at a time, to logcat */
@@ -437,6 +688,7 @@ static void *loop(void *p) {
   ALooper_addFd(b->looper, b->logfd, LOG, 1, 0, 0);
   ALooper_addFd(b->looper, b->hsock, HORN, 1, 0, 0);
   ALooper_addFd(b->looper, b->esock, EAR, 1, 0, 0);
+  ALooper_addFd(b->looper, b->dsock, DROID, 1, 0, 0);
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
@@ -478,6 +730,13 @@ static void *loop(void *p) {
         if (!pthread_create(&t, 0, hear, h)) pthread_detach(t);
         else munmap(h, sizeof *h), close(c), __atomic_fetch_sub(&b->ears, 1, 3);
       }
+    } else if (id == DROID) {
+      int c = accept4(b->dsock, 0, 0, O_CLOEXEC);
+      sess *s = c >= 0 ? mmap(0, sizeof(sess), 3, 0x22, -1, 0) : 0;
+      if (s && s != (void *) -1) s->b = b, s->fd = c, ALooper_addFd(b->looper, c, SESS, 1, 0, s);
+      else if (c >= 0) close(c);
+    } else if (id == SESS) {
+      if (sessop(d)) sessend(d);
     } else if (id == LOG) {
       if (logs(b)) ALooper_removeFd(b->looper, b->logfd);
     } else if (id == INPUT) input(b);
@@ -491,7 +750,7 @@ static void *loop(void *p) {
 }
 
 static void spawn(br *b) {
-  char *av[32], exe[600], *ev[64], home[600], tmp[600], face[640], horn[640], ear[640], bin[620], path[1400];
+  char *av[32], exe[600], *ev[64], home[600], tmp[600], face[640], horn[640], ear[640], droid[640], bin[620], path[1400];
   void *as = AAssetManager_open(b->a->assetManager, "argv", 3);
   char const *s = as ? AAsset_getBuffer(as) : 0; long n = as ? AAsset_getLength(as) : 0;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
@@ -500,14 +759,16 @@ static void spawn(br *b) {
   av[k] = 0;
   snprintf(home, sizeof home, "HOME=%s", b->data); snprintf(tmp, sizeof tmp, "TMPDIR=%s", b->data);
   snprintf(face, sizeof face, "LOVE_FACE=%s", b->sock); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
-  snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear);
+  snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear); snprintf(droid, sizeof droid, "LOVE_DROID=%s", b->droid);
   snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
-  snprintf(bin, sizeof bin, "%s/bin/love", b->data); unlink(bin); symlink(exe, bin);   /* its dir moves per install */
+  static char const *const names[] = { "love", "am", "pm", "settings" };   /* love's own, ahead of android's refused ones */
+  for (unsigned i = 0; i < sizeof names / sizeof *names; i++) {
+    snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); unlink(bin); symlink(exe, bin); }   /* its dir moves per install */
   char const *pp = getenv("PATH");
   snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
-  ev[0] = home; ev[1] = tmp; ev[2] = face; ev[3] = horn; ev[4] = ear; ev[5] = path;
-  int e = 6;                                   /* then the app's own, but for the ones set here */
-  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=" };
+  ev[0] = home; ev[1] = tmp; ev[2] = face; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid;
+  int e = 7;                                   /* then the app's own, but for the ones set here */
+  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=" };
   char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
   for (char **v = envp ? *envp : 0; v && *v && e < 63; v++) {
     int mine = 0;
@@ -620,7 +881,8 @@ static void destroy(void *a) {
   for (int i = 0; __atomic_load_n(&b->ears, 2) && i < 50; i++) usleep(20000);   /* love gone, its ears hang up */
   b->quit = 1; ALooper_wake(b->looper); pthread_join(b->th, 0);
   if (b->csock >= 0) close(b->csock);
-  close(b->lsock); close(b->hsock); close(b->esock); close(b->logfd); unlink(b->sock); unlink(b->horn); unlink(b->ear);
+  close(b->lsock); close(b->hsock); close(b->esock); close(b->dsock); close(b->logfd);
+  unlink(b->sock); unlink(b->horn); unlink(b->ear); unlink(b->droid);
   if (b->fb) munmap(b->fb, b->fbsz);
   if (!__atomic_load_n(&b->ears, 2)) munmap(b, sizeof *b);   /* an ear still up keeps b */
 }
@@ -635,6 +897,7 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   snprintf(b->sock, sizeof b->sock, "%s/face", b->data);
   snprintf(b->horn, sizeof b->horn, "%s/horn", b->data);
   snprintf(b->ear, sizeof b->ear, "%s/ear", b->data);
+  snprintf(b->droid, sizeof b->droid, "%s/droid", b->data);
   b->a = a; b->csock = -1; a->instance = b;
   a->callbacks->onNativeWindowCreated = created; a->callbacks->onNativeWindowDestroyed = gone;
   a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
@@ -653,6 +916,10 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   unlink(b->ear);
   b->esock = socket(1, 1 | O_CLOEXEC, 0);
   bind(b->esock, &eu, sizeof eu); listen(b->esock, 2);
+  struct sockaddr_un du = {1}; snprintf(du.path, sizeof du.path, "%s", b->droid);
+  unlink(b->droid);
+  b->dsock = socket(1, 1 | O_CLOEXEC, 0);
+  bind(b->dsock, &du, sizeof du); listen(b->dsock, 4);
   perms(a);
   lay(b); spawn(b);
   pthread_create(&b->th, 0, loop, b);

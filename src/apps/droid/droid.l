@@ -22,6 +22,24 @@
 (borrow 'tls)
 (:
    ap-net "android.permission.INTERNET"           ; a normal permission: granted at install, never asked
+   am-usage """
+    usage: am start|broadcast [-a ACTION] [-d URI] [-t TYPE] [-n PKG/CLASS] [-p PKG] [-c CATEGORY]..
+                              [-e KEY VALUE].. [-f FLAGS]
+      an intent, started as an activity or sent as a broadcast, through the bridge's door
+      (LOVE_DROID): android's own am is refused an app's uid
+    """
+   pm-usage """
+    usage: pm list packages [-f] | pm path PACKAGE
+      the packages this app can see (android 11 on shows an app only those its manifest
+      queries, or all with QUERY_ALL_PACKAGES: love apk -P), or where one's apk lies
+    """
+   settings-usage """
+    usage: settings get system|secure|global KEY | settings put system KEY VALUE
+      a setting's value, null when unset; put needs the user's WRITE_SETTINGS grant, and
+      secure and global are android's own to write
+    """
+   dr-ns {"system" "android/provider/Settings$System" "secure" "android/provider/Settings$Secure"
+          "global" "android/provider/Settings$Global"}
    ; --- the face ---
    (face-open _) (getenv "LOVE_FACE" @ p (string? p ? (connect ['unix p])))
    (face-next s)
@@ -32,6 +50,32 @@
              b (i32 0) c (i32 0)
              [k a b c])))
    (face-frame s w h fb) (say s ("F" + wrle w 2 + wrle h 2 + wrle 0 2 + wrle h 2), say s fb, flush s)
+
+   ; --- the framework's door (LOVE_DROID; the ops are bridge.c's header) ---
+   ; an answer is a handle's number, () for null, a primitive's text, or [kind text] for
+   ; what was thrown ('x) or refused ('e): a found-test is (two? r)
+   (jni-open _) (getenv "LOVE_DROID" @ p (string? p ? (connect ['unix p])))
+   (jni-rd s n) (: (go k acc) (k < 1 ? (cats (rev acc)) (see s @ c (c < 0 ? () (go (k - 1) (string c . acc))))) (go n ()))
+   (jni-op s body)
+    (: _ (say s (wrle #body 4 + body), flush s)
+       n (jni-rd s 4)
+       (? !(string? n) ['e "the bridge hung up"]
+          (: k (see s) t (jni-rd s (rdle n 0 4 - 1))
+             (k @ 104 (read t) 122 () 118 t 116 t
+                  120 ['x t] ['e t]))))
+   ; a word for an argument: a text becomes a String first, a number its decimal, () null
+   (jni-word s x) (? (string? x) (jni-str s x) (charm? x) (show x) "")
+   (jni-ws s l) (cats (map (x \ string 0 + jni-word s x) l))
+   (jni-str s t) (jni-op s ("s" + t) @ h (charm? h ? (show h) ""))
+   (jni-act s) (jni-op s "a")
+   (jni-class s nm) (jni-op s ("c" + nm))
+   (jni-call s h nm sig as) (jni-op s ("m" + show h + string 0 + nm + string 0 + sig + jni-ws s as))
+   (jni-static s c nm sig as) (jni-op s ("k" + show c + string 0 + nm + string 0 + sig + jni-ws s as))
+   (jni-new s c sig as) (jni-op s ("n" + show c + string 0 + sig + jni-ws s as))
+   (jni-get s h nm ty) (jni-op s ("g" + show h + string 0 + nm + string 0 + ty))
+   (jni-sget s c nm ty) (jni-op s ("f" + show c + string 0 + nm + string 0 + ty))
+   (jni-text s h) (jni-op s ("t" + show h))
+   (jni-drop s h) (charm? h ? (jni-op s ("d" + show h)) 0)
 
    ; --- the binary manifest (android's axml) ---
    ; an element is [tag attrs kids], an attribute [android? name kind value], kind 'int 'hex
@@ -191,8 +235,81 @@
        (? (uwrite out (v2-sign z <ks (ks 1))) (puts ("apk: " + out + " (" + pkg + ") -- adb install -r " + out + "\n"), 0)
           (udie 1 ("apk: cannot write " + out))))
 
+   ; --- am, pm and settings over the door ---
+   (dr-door who) (jni-open 0 @ s (hot? s ? s (udie 1 (who + ": not under android's bridge (no LOVE_DROID)"))))
+   (dr-ok who r) (two? r ? (udie 1 (who + ": " + (r 1))) r)
+   (am-opts as t)
+    (as @ ("-a" . v . r) (am-opts r (pin t 'a v)) ("-d" . v . r) (am-opts r (pin t 'd v))
+          ("-t" . v . r) (am-opts r (pin t 't v)) ("-n" . v . r) (am-opts r (pin t 'n v))
+          ("-p" . v . r) (am-opts r (pin t 'p v)) ("-c" . v . r) (am-opts r (pin t 'c (t 'c + [v])))
+          (("-e" || "--es") . k . v . r) (am-opts r (pin t 'e (t 'e + [[k v]])))
+          ("-f" . v . r) (am-opts r (pin t 'f (read v)))
+          () t
+          _ (udie 2 am-usage))
+   (am-main as)
+    (: verb <as
+       _ (elem verb ["start" "broadcast"] ? 0 (udie 2 am-usage))
+       t (am-opts >as {})
+       s (dr-door "am")
+       (ok r) (dr-ok "am" r)
+       i (ok (jni-new s (ok (jni-class s "android/content/Intent")) "()V" ()))
+       (on nm sig as) (jni-drop s (ok (jni-call s i nm sig as)))
+       it "Landroid/content/Intent;"
+       uri (string? (t 'd) ? (ok (jni-static s (ok (jni-class s "android/net/Uri")) "parse" "(Ljava/lang/String;)Landroid/net/Uri;" [(t 'd)])))
+       ty (string? (t 't) ? (t 't))
+       _ (string? (t 'a) ? (on "setAction" ("(Ljava/lang/String;)" + it) [(t 'a)]) 0)
+       _ (? (charm? uri && string? ty) (on "setDataAndType" ("(Landroid/net/Uri;Ljava/lang/String;)" + it) [uri ty])
+            (charm? uri) (on "setData" ("(Landroid/net/Uri;)" + it) [uri])
+            (string? ty) (on "setType" ("(Ljava/lang/String;)" + it) [ty])
+            0)
+       _ (string? (t 'n) ?
+            (: cn (ok (jni-static s (ok (jni-class s "android/content/ComponentName")) "unflattenFromString"
+                                  "(Ljava/lang/String;)Landroid/content/ComponentName;" [(t 'n)]))
+               (charm? cn ? (on "setComponent" ("(Landroid/content/ComponentName;)" + it) [cn])
+                  (udie 2 ("am: not a component: " + t 'n))))
+            0)
+       _ (string? (t 'p) ? (on "setPackage" ("(Ljava/lang/String;)" + it) [(t 'p)]) 0)
+       _ (each (t 'c) (c \ on "addCategory" ("(Ljava/lang/String;)" + it) [c]))
+       _ (each (t 'e) (kv \ on "putExtra" ("(Ljava/lang/String;Ljava/lang/String;)" + it) kv))
+       _ (charm? (t 'f) ? (on "addFlags" ("(I)" + it) [(t 'f)]) 0)
+       go (verb = "start")
+       (puts ((go ? "Starting: " "Broadcasting: ") + ok (jni-text s i) + "\n"),
+        ok (jni-call s (ok (jni-act s)) (go ? "startActivity" "sendBroadcast") ("(" + it + ")V") [i]),
+        close s, 0))
+   (pm-main as)
+    (: s (dr-door "pm")
+       (ok r) (dr-ok "pm" r)
+       pk (ok (jni-call s (ok (jni-act s)) "getPackageManager" "()Landroid/content/pm/PackageManager;" ()))
+       (field h nm ty) (ok (jni-get s h nm ty))
+       (text h nm) (field h nm "Ljava/lang/String;" @ f (charm? f ? (ok (jni-text s f) @ x (jni-drop s f, x)) ""))
+       (src pi) (field pi "applicationInfo" "Landroid/content/pm/ApplicationInfo;" @ ai (text ai "sourceDir" @ x (jni-drop s ai, x)))
+       (listed f?)
+        (: l (ok (jni-call s pk "getInstalledPackages" "(I)Ljava/util/List;" [0]))
+           n (read (ok (jni-call s l "size" "()I" ())))
+           (each ^n (i \ : pi (ok (jni-call s l "get" "(I)Ljava/lang/Object;" [i]))
+                         (puts ("package:" + (f? ? (src pi + "=") "") + text pi "packageName" + "\n"), jni-drop s pi))))
+       (as @ ["list" "packages"] (listed 0, close s, 0)
+             ["list" "packages" "-f"] (listed 1, close s, 0)
+             ["path" p] (: ai (ok (jni-call s pk "getApplicationInfo" "(Ljava/lang/String;I)Landroid/content/pm/ApplicationInfo;" [p 0]))
+                           (puts ("package:" + text ai "sourceDir" + "\n"), close s, 0))
+             _ (udie 2 pm-usage)))
+   (settings-main as)
+    (: ns (two? >as ? (dr-ns (as 1)))
+       _ (string? ns && (as @ ["get" _ _] 1 ["put" _ _ _] 1 _ 0) ? 0 (udie 2 settings-usage))
+       s (dr-door "settings")
+       (ok r) (dr-ok "settings" r)
+       cr (ok (jni-call s (ok (jni-act s)) "getContentResolver" "()Landroid/content/ContentResolver;" ()))
+       c (ok (jni-class s ns))
+       sig "(Landroid/content/ContentResolver;Ljava/lang/String;"
+       (? (<as = "get")
+          (: v (ok (jni-static s c "getString" (sig + ")Ljava/lang/String;") [cr (as 2)]))
+             (puts ((charm? v ? (ok (jni-text s v)) "null") + "\n"), close s, 0))
+          (: w (ok (jni-static s c "putString" (sig + "Ljava/lang/String;)Z") [cr (as 2) (as 3)]))
+             (close s, w = "1" ? 0 (udie 1 ("settings: not written: " + as 2))))))
+
    door (udoor 'apk apk-main apk-usage 1 1)
-   _ (pins (cite 'verbs 'tab) 'apk door)
+   _ (pins (cite 'verbs 'tab) 'apk door 'am (udoor 'am am-main am-usage 1 1) 'pm (udoor 'pm pm-main pm-usage 1 1)
+           'settings (udoor 'settings settings-main settings-usage 1 1))
    s (cite 'verbs 'fire ["apk" "droid.l"])
    _ (two? s ? (quit (door >s)) 0))
 ) ; module droid
