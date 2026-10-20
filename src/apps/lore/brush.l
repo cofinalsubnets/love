@@ -166,14 +166,13 @@
      (fresh? q) (!(tablet? prev) || peep dq q 0)
      ; ..a brush marked whole goes uncut
      (cut ps b) (? (peep b 'whole 0) [ps] (charm? cell || gem? cell) (poly-grid ps cell) (grids ps (cell 0) (cell 1) (cell 2 ps)))
-     fine (charm? cell || gem? cell ? cell (cell 1))
      cks (tablet? kp ? (tab (map (f \ ['cut (f 3) (peep (bt (f 2)) 'whole 0) ((kp 'reach) (f 0))]) fs)) ())
      CI (tablet? kp ? (tab (map (i \ (kp 'id) (cks i)) ^nf)) ())
      LI (tablet? kp ? (tab (map (b \ (kp 'id) ((kp 'look) b)) bs)) ())
      pcf (map (i \ (: f (FT i) _ (tick 'cuts (i / nf)) (map (p \ [p (f 1) (f 2)]) (keep kp (_ \ cks i) (_ \ cut (f 0) (bt (f 2))))))) ^nf) PT (tab pcf)
      pcs (cats pcf)
-     ; ..every corner, so a piece takes on its edges the corners of the finer pieces beside
-     ; it, and no crack opens between them; a face's pieces fanned so, turned to face it
+     ; ..every corner, so a piece takes on its edges the corners of the pieces beside it,
+     ; and no crack opens between them; a face's pieces fanned so, turned to face it
      seen (poly-seen (map (pc \ pc 0) pcs))
      ; ..the faces beside each, all weighed at once as the brushes near a face are
      (fends s k) (gem-tray [nf] (map (q \ 1.0 * box-of (q 0) s k) fs))
@@ -190,7 +189,7 @@
      fks (tablet? kp ? (tab (map (i \ (: f (FT i) _ (tick 'sides (i / nf)) ['fan (CI i) (beside i) (LI (f 2))])) ^nf)) ())
      fid (tablet? kp ? (tab (map (i \ (kp 'id) (fks i)) ^nf)) ())
      items (cats (map (i \ (? (tick 'fans (i / nf), !(mine? (FT i))) ()
-                              (: ms (keep kp (_ \ fks i) (_ \ (: f (FT i) (poly-fans (map (pc \ pc 0) (PT i)) (f 1) (look (f 1) (bt (f 2))) seen fine))))
+                              (: ms (keep kp (_ \ fks i) (_ \ (: f (FT i) (poly-fans (map (pc \ pc 0) (PT i)) (f 1) (look (f 1) (bt (f 2))) seen))))
                                  id (tablet? kp ? (fid i) ())
                                  (map (m \ [(m 0) (m 1) id]) ms))))
                       ^nf))

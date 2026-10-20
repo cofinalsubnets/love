@@ -295,16 +295,17 @@
  (view-spin ld) (: b (ld 'box) n (ld 'n) win (ld 'win) bw (b 2 - b 0) bh (b 3 - b 1)
    (? !(tablet? win) (esc + "[" + show ((b 1 + b 3) // 2 + 1) + ";" + show ((b 0 + b 2) // 2 + 1) + "H" + esc + "[0;37;40m"
             + view-spin-cells (n % 10) + esc + "[0m")
-      (: S (min2 96 (min2 bw bh // 10 * 2)) W (window-size win 0) P (window-paper win) bg view-spin-bg
-         x0 (b 0 + (bw - S) // 2) y0 (b 1 + (bh - S) // 2)
+      ; ..a fifth of the box across, drawn at most 96 pixels and blown up past that
+      (: Q (min2 bw bh // 5) k (max2 1 ((Q + 95) // 96)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
+         x0 (b 0 + (bw - A) // 2) y0 (b 1 + (bh - A) // 2)
          I (iota (S * S)) X (I % S - 0.5 * S + 0.5) Y (I // S - 0.5 * S + 0.5) R (0.36 * S) r (0.08 * S)
          (dot k) (: a (2.0 * pi * k / 12.0) dx (X - R * cos a) dy (Y - R * sin a) (dx * dx + dy * dy < r * r))
          (grey k) (: v (int (40.0 + 215.0 * (1.0 - ((n - k) % 12 + 12) % 12 / 12.0))) ((v << 16) | (v << 8) | v))
-         f (foldl (\ p k (p + dot k * (grey k - bg))) (I * 0 + bg) ^12) T (cask (S * S * 4))
+         f (foldl (\ p j (p + dot j * (grey j - bg))) (I * 0 + bg) ^12) T (cask (A * A * 4))
          Z (cask (4 * bw))
          _ (n = 0 ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
-         (S < 12 ? () (: _ (frame-paint f S 1 T S) _ (each ^S (j \ pour P (((y0 + j) * W + x0) * 4) T (j * S * 4) (S * 4)))
-                         (n = 0 ? () [y0 (y0 + S)]))))))
+         (S < 12 ? () (: _ (frame-paint f S k T A) _ (each ^A (j \ pour P (((y0 + j) * W + x0) * 4) T (j * A * 4) (A * 4)))
+                         (n = 0 ? () [y0 (y0 + A)]))))))
  ; ..a level's 'song: (new h sd) a song into the horn, fed (feed s) a frame; none on a
  ; seat with no horn
  (view-song new feed) (hn \ ((hn ? (new hn (wheel (clock 0)))) @ s (s ? (_ \ (feed s)))))

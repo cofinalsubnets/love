@@ -37,7 +37,6 @@
  the-level "src/apps/lore/levels/hall.l"
  ; --- the level, read: (corridor-read s) runs a level file's text into a tablet {'name 'start
  ;     'rooms 'doors 'strips 'bulbs 'posters 'signs 'brushes 'textures}, or a string saying why not ---
- (skin-name sk c) (foldl (\ a e (e 0 = c ? (e 1) a)) c sk)
  ; ..a brush with no inside: a box flat in some direction, a prism no height
  (empty? r) (: sh (r 'shape)
    (sh 'box @ () (: p (sh 'prism) (p 1 - p 0 < 1e-6)) b (any (k \ b 1 k - b 0 k < 1e-6) ^3)))
@@ -151,14 +150,19 @@
    (brush-box 1 [(min2 (p 0) (q 0)) (d 'y) (min2 (p 2) (q 2))] [(max2 (p 0) (q 0)) (d 'y + d 'h) (max2 (p 2) (q 2))]))
  (brushes-of lv) (map brush-of (lv 'brushes) + map doorway (lv 'doors))
  ; ..the texture on a face of brush b facing n, by its skin, and its texels as [tex U V]: tt the
- ; textures, each [name w h metres]; a floor's and ceiling's laid from x 0 z 0, a wall's
- ; along it and its foot on the brush's
+ ; textures, each [name w h metres lay]; a floor's and ceiling's laid from x 0 z 0, a wall's
+ ; along it and its foot on the brush's; then turned and shifted as the skin's entry, else
+ ; the texture's own, lays it, [degrees [du dv]]
  (tix tt nm) (foldl (\ a i (tt i 0 = nm ? i a)) 0 ^#tt)
  (look tt) (\ n b (: c (? (0.7 < n 1) 'floor (n 1 < -0.7) 'ceiling 'wall)
-                     i (tix tt (skin-name (peep b 'skin ()) c)) t (tt i) k (t 1 / t 3)
-                     (? (c = 'wall) (: d (unit [(0.0 - n 2) 0.0 (n 0)]) dx (k * d 0) dz (k * d 2) v0 (t 2 + k * b 'lo 1)
-                                       [i [dx 0.0 dz 0.0] [0.0 (0.0 - k) 0.0 v0]])
-                        [i [k 0.0 0.0 0.0] [0.0 0.0 k 0.0]])))
+                     e (foldl (\ a e (e 0 = c ? e a)) () (peep b 'skin ()))
+                     i (tix tt (two? e ? (e 1) c)) t (tt i) k (t 1 / t 3) ly (two? e ? (e 2) (t 4))
+                     uv (? (c = 'wall) (: d (unit [(0.0 - n 2) 0.0 (n 0)]) [[(k * d 0) 0.0 (k * d 2) 0.0] [0.0 (0.0 - k) 0.0 (t 2 + k * b 'lo 1)]])
+                           [[k 0.0 0.0 0.0] [0.0 0.0 k 0.0]])
+                     (? (!(two? ly)) [i (uv 0) (uv 1)]
+                        (: a (ly 0 * pi / 180.0) co (cos a) si (sin a) U (uv 0) V (uv 1)
+                           (mix p q s) (map (j \ p * U j + q * V j + (j = 3 ? s 0.0)) ^4)
+                           [i (mix co si (k * ly 1 0)) (mix (0.0 - si) co (k * ly 1 1))]))))
  ; ..the door itself, shut: a slab of steel in the middle of the wall, the texture once
  ; across each face
  (door-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) l0 (d 'c - 0.5 * d 'w) w (d 'w) h (d 'h)
@@ -419,7 +423,7 @@
    memo (fresh ? {'v {} 'id {} 'n (peep old 'n 0) 'made 0} old) ov (memo 'v) oi (memo 'id)
    (kept k f) (: c (peep ov k ()) (? (two? c) <c (: v (f ()) (pin ov k [v], v))))
    (idof k) (: i (peep oi k ()) (? (i = ()) (: j (memo 'n) (pins memo 'n (j + 1) 'made (memo 'made + 1), pin oi k j, j)) i))
-   txs (textures lv) tt (map (t \ [(t 'name) (t 'w) (t 'h) (t 'm)]) txs)
+   txs (textures lv) tt (map (t \ [(t 'name) (t 'w) (t 'h) (t 'm) (peep t 'lay ())]) txs)
    ls (lights-of lv + map (ad-light lv txs tt) (peep lv 'ads ()) + map (spin-light lv txs) (peep lv 'spins ()))
    ptex (map (p \ poster-tex (file-of dir p) (p 'at 3) (p 'at 4)) ps)
    (pm i) (poster-mesh lv (ps i) (#tt + i) (shape (ptex i 0) 1) (shape (ptex i 0) 0))
@@ -535,7 +539,15 @@
    out (tablet? sk && any (b \ !(any (k \ e k <= b 0 k || b 1 k + 0.1 <= e k) ^3)) (sc 'open))
    v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 (out ? 150.0 60.0))
    fog (out ? (: hz (mesh-haze v (sk 'lt) (sk 'wx) sim) [(sk 'k * hz 0) (sk 'k * hz 1) (sk 'k * hz 2) 50.0 150.0]) [0.0 0.0 0.0 30.0 60.0])
-   bare (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (k @ 1 1 (sky-k * k))) 0)
+   sky (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (k @ 1 1 (sky-k * k))) 0)
+   ; ..indoors the sky only up through an open top, and elsewhere the dark: past what is
+   ; drawn, or a crack between two surfaces
+   (shut S) (: d (mesh-dirs v S) up (d 1 > 1e-6) dy (max (d 1) 1e-6)
+     (on b) (: t ((b 1 1 - e 1) / dy) x (e 0 + t * d 0) z (e 2 + t * d 2) (up * (b 0 0 <= x) * (x <= b 1 0) * (b 0 2 <= z) * (z <= b 1 2)))
+     (iota (foldl (\ m b (max m (on b))) (up * 0) (sc 'open) = 0)))
+   bare (? (out || charm? sky) sky
+           (two? sky) [(sky 0) (\ v f B (: g ((sky 1) v f B) S (iota (f = -1)) (pin g (peep S (shut S) 0) 0)))]
+           (\ v S (pin (sky v S) (shut S) 0)))
    dk (map (i \ ks i) (sc 'dyn))
    (relit pk l) (mesh-lamps! pk (l 'base) (l 'chs) dk 1.0)
    ; ..the chunks whose ball is on the inside of each plane of the view, nearest first
@@ -870,7 +882,7 @@
    (? (atom? sp) (pins ed 'sel () 'drag (), vi 'vmsg vs (tablet? h ? "nothing in the text made that" "nothing there"))
       (: p (h 'p) hn (h 'n) ax (? (mag (hn 0) >= mag (hn 1) && mag (hn 0) >= mag (hn 2)) 0 (mag (hn 1) >= mag (hn 2)) 1 2)
          n (? !(ed 'shift) [0.0 1.0 0.0] (map (i \ i = ax ? 1.0 0.0) ^3))
-         (pins ed 'sel (h 'src) 'drag {'p0 p 'n n 'c (dot n p) 'off [0.0 0.0 0.0]},
+         (pins ed 'sel (h 'src) 'drag {'p0 p 'n n 'c (dot n p) 'off [0.0 0.0 0.0] 'sg (edit-sg ed (h 'b))},
           vi 'vmsg vs ("line " + show (edit-at ed (sp 0) + 1))))))
  ; ..the drag to where the ray through x y meets its plane, a twentieth of a metre at a time
  (edit-drag ed x y) (: g (ed 'drag) r (corridor-ray (ed 'st) x y) e (r 0) d (r 1) n (g 'n) k (dot n d)
@@ -883,7 +895,7 @@
    (go 0 0 ()))
  ; ..the drag let go: the chosen form in a (move ..) by as far, or its move's by further,
  ; or none where that comes to nothing; vi's text that, undoably, and the scene read again
- (edit-drop ed) (: g (ed 'drag) off (g 'off) t (ed 'text) vs (ed 'vs) vi (ed 'vi) sp (corridor-span t (ed 'sel))
+ (edit-drop ed) (: g (ed 'drag) off (edit-turn (peep g 'sg [1.0 1.0 1.0]) (g 'off)) t (ed 'text) sp (corridor-span t (ed 'sel))
    _ (pin ed 'drag ())
    (? (all (i \ off i = 0.0) ^3 || atom? sp) ed
       (: a (sp 0) b (sp 1) ks (sx-kids t a) hd (two? ks ? (snip t (ks 0 0) (ks 0 1)) "")
@@ -892,35 +904,176 @@
          mv (hd = "move" && #base = 3 && !(elem 'no base))
          to (map (i \ (mv ? (base i) 0) + off i) ^3) inner (mv ? (snip t (ks 2 0) (ks 2 1)) (snip t a b))
          f2 (all (i \ mag (to i) < 0.025) ^3 ? inner ("(move " + edit-vec to + " " + inner + ")"))
-         t2 (snip t 0 a + f2 + snip t b #t) row (vs 'row) col (vs 'col) top (vs 'top)
-         _ (vi 'vsnap vs) _ (pins vs 'lines (edit-lines t2) 'row row 'col col 'top top 'dirty 1) _ (vi 'vgen vs)
-         _ (edit-sync ed)
-         (vi 'vmsg vs ("moved to " + edit-vec to), ed))))
+         (edit-put ed (snip t 0 a + f2 + snip t b #t) ("moved to " + edit-vec to)))))
+ ; ..vi's text t, undoably, the cursor where it was, the scene read again, and m said
+ (edit-put ed t m) (: vs (ed 'vs) vi (ed 'vi) row (vs 'row) col (vs 'col) top (vs 'top)
+   _ (vi 'vsnap vs) _ (pins vs 'lines (edit-lines t) 'row row 'col col 'top top 'dirty 1) _ (vi 'vgen vs)
+   _ (edit-sync ed)
+   (vi 'vmsg vs m, ed))
+ ; ..brush i's turn, [sx 1 sz], -1 on an axis a mirror turned it over on
+ (edit-sg ed i) (peep (peep (ed 'st 'lvl 'brushes) i {}) 'sg [1.0 1.0 1.0])
+ (edit-turn s v) [(s 0 * v 0) (s 1 * v 1) (s 2 * v 2)]
+ ; ..the chosen form's brushes' edges, [a b] pairs, the copy the drag took as far on as
+ ; off and each other as its turn has it
+ (edit-edges ed off) (: sel (ed 'sel) st (ed 'st) lb (st 'lvl 'brushes) bs (st 'sc 'brushes)
+   is (atom? sel ? () (filter (i \ peep (lb i) 'src () = sel) ^#lb)) g (ed 'drag) hs (tablet? g ? (g 'sg) [1.0 1.0 1.0])
+   (cats (map (i \ (: o (edit-turn (edit-turn hs (edit-sg ed i)) off)
+                     (cats (map (ps \ (#ps >= 3 ? (map (j \ [(c+ (ps j) o) (c+ (ps ((j + 1) % #ps)) o)]) ^#ps) ())) ((bs i) 'faces)))))
+              is)))
+ ; ..a line from pixel pa to pb on the w by h frame f, in ink
+ edit-ink 16756784
+ (edit-line f w h pa pb ink) (: (ab x) (x < 0.0 ? (0.0 - x) x)
+   n (min2 3000 (floor (max2 (ab (pb 0 - pa 0)) (ab (pb 1 - pa 1)))) + 1)
+   K (iota (n + 1)) X (pa 0 + (pb 0 - pa 0) * K / n) Y (pa 1 + (pb 1 - pa 1) * K / n)
+   S (iota ((X >= 0.0) * (X < 1.0 * w) * (Y >= 0.0) * (Y < 1.0 * h)))
+   (#S = 0 ? f (pin f (peep (floor Y * w + floor X) S 0) ink)))
  ; ..the chosen form's brushes, outlined on the frame f through whatever is before them, as
  ; far on as a drag has them
- edit-ink 16756784
  (edit-outline ed f) (: sel (ed 'sel) st (ed 'st)
    (? (atom? sel) f
       (: r (corridor-ray st 0 0) e (r 0) v (r 2) w (v 'w) h (v 'h) rt (v 'r) up (v 'u) fw (v 'f) me (c* -1.0 e)
          foc (w / 2.0 / tan (fov / 2.0)) off (tablet? (ed 'drag) ? (ed 'drag 'off) [0.0 0.0 0.0])
-         lb (st 'lvl 'brushes) bs (st 'sc 'brushes) is (filter (i \ peep (lb i) 'src () = sel) ^#lb)
          (pr p) (: d (c+ p me) z (dot d fw) [(w / 2.0 + foc * dot d rt / z) (h / 2.0 - foc * dot d up / z)])
          (cl a b za zb) (c+ a (c* ((0.1 - za) / (zb - za)) (c+ b (c* -1.0 a))))
-         (ab x) (x < 0.0 ? (0.0 - x) x)
          (seg f a b) (: za (dot (c+ a me) fw) zb (dot (c+ b me) fw)
            (? (za < 0.1 && zb < 0.1) f
-              (: pa (pr (za < 0.1 ? (cl a b za zb) a)) pb (pr (zb < 0.1 ? (cl b a zb za) b))
-                 n (min2 3000 (floor (max2 (ab (pb 0 - pa 0)) (ab (pb 1 - pa 1)))) + 1)
-                 K (iota (n + 1)) X (pa 0 + (pb 0 - pa 0) * K / n) Y (pa 1 + (pb 1 - pa 1) * K / n)
-                 S (iota ((X >= 0.0) * (X < 1.0 * w) * (Y >= 0.0) * (Y < 1.0 * h)))
-                 (#S = 0 ? f (pin f (peep (floor Y * w + floor X) S 0) edit-ink)))))
-         es (cats (map (i \ cats (map (ps \ (#ps >= 3 ? (map (j \ [(c+ (ps j) off) (c+ (ps ((j + 1) % #ps)) off)]) ^#ps) ())) ((bs i) 'faces))) is))
-         (foldl (\ f q (seg f (q 0) (q 1))) f es))))
+              (edit-line f w h (pr (za < 0.1 ? (cl a b za zb) a)) (pr (zb < 0.1 ? (cl b a zb za) b)) edit-ink)))
+         (foldl (\ f q (seg f (q 0) (q 1))) f (edit-edges ed off)))))
+ ; --- the plan: the level from above, cut plan-cut over a floor 'fl and seen plan-deep down,
+ ;     'k pixels a metre about 'c [x z]; the rock dark, the walls at the cut light, a grid ---
+ plan-cut 1.5
+ plan-deep 6.0
+ plan-rock 1447452
+ plan-rule 2763315
+ plan-wall 14211296
+ plan-me 6348896
+ (plan-snap v) (floor (2.0 * v + 0.5) / 2.0)        ; a room's corners, half a metre at a time
+ (plan-nudge v) (floor (4.0 * v + 0.5) / 4.0)       ; ..and a move, a quarter
+ ; ..the place under pixel x y, and the pixel over the place x z
+ (plan-at p w h x y) [(p 'c 0 + (x + 0.5 - w / 2.0) / p 'k) (p 'c 1 + (h / 2.0 - y - 0.5) / p 'k)]
+ (plan-px p w h x z) [(w / 2.0 + (x - p 'c 0) * p 'k) (h / 2.0 - (z - p 'c 1) * p 'k)]
+ ; ..the floors a plan can be cut over: the bottoms of the airs a body stands up in
+ (plan-floors st) (sort (keys (foldl (\ t b (b 'air && b 'hi 1 - b 'lo 1 >= 2.0 ? (pin t (b 'lo 1) 1) t)) {} (st 'sc 'brushes))))
+ ; ..the brushes the cut passes through at x z, the last carved first
+ (plan-hits ed x z) (: bs (ed 'st 'sc 'brushes) P [x (ed 'plan 'fl + plan-cut) z]
+   (rev (filter (i \ all (pl \ dot (pl 0) P <= pl 1 + 1e-6) (bs i 'planes)) ^#bs)))
+ ; ..the mask m with brush b laid over it where the cut passes through: 1 air, 0 rock
+ (plan-carve m b p w h cut) (: lo (b 'lo) hi (b 'hi) a (plan-px p w h (lo 0) (hi 2)) z (plan-px p w h (hi 0) (lo 2))
+   i0 (max2 0 (floor (a 0))) i1 (min2 w (floor (z 0) + 1)) j0 (max2 0 (floor (a 1))) j1 (min2 h (floor (z 1) + 1))
+   (? (cut < lo 1 || hi 1 < cut || i1 <= i0 || j1 <= j0) m
+      (: nc (i1 - i0) Q (iota (nc * (j1 - j0))) S ((Q // nc + j0) * w + Q % nc + i0)
+         X (p 'c 0 + (S % w + 0.5 - w / 2.0) / p 'k) Z (p 'c 1 + (h / 2.0 - S // w - 0.5) / p 'k)
+         in (foldl (\ q pl (: n (pl 0) (q * (n 0 * X + n 2 * Z + n 1 * cut <= pl 1 + 1e-6)))) (S * 0 + 1) (b 'planes))
+         (pin m (peep S (iota in) 0) (b 'air ? 1 0)))))
+ ; ..what stays while the plan does: below the cut, the rooms flat lit straight down; at it,
+ ; the rock and the walls; and the rules every metre, or further apart further out
+ (plan-base ed p w h) (: st (ed 'st) sc (st 'sc) k (p 'k) c (p 'c) cut (p 'fl + plan-cut) hw (w / 2.0 / k) hh (h / 2.0 / k)
+   pk (? (two? (ed 'ppk) && ed 'ppk 0 == sc) (ed 'ppk 1)
+         (: l (map (q \ mesh-lamps (q 'pk) [0.9 0.9 0.9] [] [] 1.0) (sc 'chunks)) (pin ed 'ppk [sc l], l)))
+   v {'w w 'h h 'cam (gem-tray [16] [(1.0 / hw) 0.0 0.0 (0.0 - c 0 / hw) 0.0 0.0 (1.0 / hh) (0.0 - c 1 / hh)
+                                    0.0 (-2.0 / plan-deep) 0.0 (2.0 * cut / plan-deep - 1.0) 0.0 0.0 0.0 1.0])}
+   f (mesh-frame v [(map (b \ b 0) pk) (map (b \ b 1) pk)] (sc 'texs) [0.0 0.0 0.0 0.0 0.0] 8 0 plan-rock)
+   I (iota (w * h)) m (foldl (\ m b (plan-carve m b p w h cut)) (I * 0) (sc 'brushes))
+   wall (m * (1 - (peep m (I - 1) 1) * (peep m (I + 1) 1) * (peep m (I - w) 1) * (peep m (I + w) 1)))
+   g (? (k >= 8.0) 1.0 (k >= 2.0) 5.0 10.0)
+   cx (c 0 + (iota w + 0.5 - w / 2.0) / k) cz (c 1 + (h / 2.0 - iota h - 0.5) / k)
+   cr (floor (cx / g) != floor ((cx + 1.0 / k) / g)) rr (floor (cz / g) != floor ((cz - 1.0 / k) / g))
+   rule ((peep cr (I % w) 0) + (peep rr (I // w) 0) > 0)
+   A (iota (rule * m)) f1 (pin f A ((peep f A 0 >> 1 & 8355711) + 4737096))
+   (pin (pin (pin f1 (iota (m = 0)) plan-rock) (iota (rule * (m = 0))) plan-rule) (iota wall) plan-wall))
+ ; ..a plan's frame: its base, the chosen form outlined, what a drag draws, the player
+ (plan-pens ed) (: st (ed 'st) p (ed 'plan) dm (mesh-dims st) w <dm h (dm 1) key (show [(p 'c) (p 'k) (p 'fl) w h]) pc (ed 'pc)
+   base (? (two? pc && pc 0 == st 'sc && pc 1 = key) (pc 2) (: b (plan-base ed p w h) (pin ed 'pc [(st 'sc) key b], b)))
+   (ln f a b ink) (edit-line f w h (plan-px p w h (a 0) (a 2)) (plan-px p w h (b 0) (b 2)) ink)
+   (box f a b) (: q [[(a 0) 0.0 (a 1)] [(b 0) 0.0 (a 1)] [(b 0) 0.0 (b 1)] [(a 0) 0.0 (b 1)]] (foldl (\ f j (ln f (q j) (q ((j + 1) % 4)) edit-ink)) f ^4))
+   g (ed 'drag) off (tablet? g && g 'kind = 'move ? (g 'off) [0.0 0.0 0.0])
+   f1 (foldl (\ f q (ln f (q 0) (q 1) edit-ink)) base (edit-edges ed off))
+   f2 (tablet? g && elem (g 'kind) ['rect 'edge] ? (box f1 (g 'a) (g 'b)) f1)
+   e [(st 'px) 0.0 (st 'pz)] (by x z) (c+ e [x 0.0 z]) s (sin (st 'th)) o (cos (st 'th)) r (0.15 * 16.0 / p 'k + 0.1)
+   (ln (ln (ln f2 (by (0.0 - r) 0.0) (by r 0.0) plan-me) (by 0.0 (0.0 - r)) (by 0.0 r) plan-me) e (by (3.0 * r * s) (3.0 * r * o)) plan-me))
+ ; ..the plan's chosen form's corners, where it is a room or a box the scene has only moved:
+ ; their numbers' spans 'sa 'sb, the numbers 'a 'b, the shift 'd, the brushes' 'lo and 'hi
+ (plan-box ed) (: t (ed 'text) st (ed 'st) sel (ed 'sel) sp (atom? sel ? () (corridor-span t sel))
+   (num q) (<(sounds (snip t (q 0) (q 1))) @ n (charm? n || gem? n ? n 'no))
+   (form i) (: ks (sx-kids t i) hd (two? ks ? (snip t (ks 0 0) (ks 0 1)) "")
+     (? (t i != 40 || atom? ks) ()
+        (elem hd ["room" "box"] && #ks >= 3 && t (ks 1 0) = 91 && t (ks 2 0) = 91) [(sx-kids t (ks 1 0)) (sx-kids t (ks 2 0))]
+        (form (ks (#ks - 1) 0))))
+   lb (st 'lvl 'brushes) bs (st 'sc 'brushes) is (filter (i \ peep (lb i) 'src () = sel && edit-sg ed i = [1.0 1.0 1.0]) ^#lb)
+   vk (atom? sp || atom? is ? () (form (sp 0)))
+   (? (atom? vk || #(vk 0) != 3 || #(vk 1) != 3) ()
+      (: a (map num (vk 0)) b (map num (vk 1))
+         lo (foldl (\ m i (map (k \ min2 (m k) (bs i 'lo k)) ^3)) (bs <is 'lo) is)
+         hi (foldl (\ m i (map (k \ max2 (m k) (bs i 'hi k)) ^3)) (bs <is 'hi) is)
+         (? (elem 'no (a + b)) ()
+            (: d (map (k \ lo k - min2 (a k) (b k)) ^3)
+               (all (k \ mag (hi k - max2 (a k) (b k) - d k) < 1e-3) ^3 ? {'sa (vk 0) 'sb (vk 1) 'a a 'b b 'd d 'lo lo 'hi hi} ()))))))
+ ; ..a drag begun on an edge of the chosen box, within three pixels, that moves that wall
+ (plan-edge ed x y) (: p (ed 'plan) dm (mesh-dims (ed 'st)) w <dm h (dm 1) pb (plan-box ed)
+   (? !(tablet? pb) ()
+      (: lo (pb 'lo) hi (pb 'hi) a (plan-px p w h (lo 0) (lo 2)) b (plan-px p w h (hi 0) (hi 2)) X (x + 0.5) Y (y + 0.5)
+         inx (a 0 - 3.0 <= X && X <= b 0 + 3.0) iny (b 1 - 3.0 <= Y && Y <= a 1 + 3.0)
+         e (? (iny && mag (X - a 0) <= 3.0) [0 0] (iny && mag (X - b 0) <= 3.0) [0 1]
+              (inx && mag (Y - a 1) <= 3.0) [2 0] (inx && mag (Y - b 1) <= 3.0) [2 1] ())
+         (two? e ? {'kind 'edge 'ax (e 0) 'hi (e 1) 'pb pb 'a [(lo 0) (lo 2)] 'b [(hi 0) (hi 2)]} ()))))
+ ; ..the plan clicked: on the chosen box's edge, a drag of that wall; with shift held, a room
+ ; drawn; else what is there chosen, the first thing below the cut or the rock it cuts, vi
+ ; on its form, and a drag of it
+ (plan-press ed b x y) (: p (ed 'plan) vi (ed 'vi) vs (ed 'vs) dm (mesh-dims (ed 'st)) w <dm h (dm 1) q (plan-at p w h x y) k (p 'k)
+   (? (b = 3) (pin ed 'pan [x y])
+      (elem b [4 5]) (: k2 (max2 2.0 (min2 64.0 (b = 4 ? (k * 1.25) (k / 1.25))))
+                        (pins p 'k k2 'c (map (i \ q i - (q i - p 'c i) * k / k2) ^2)))
+      (b != 1) ed
+      (: eg (plan-edge ed x y) hs (plan-hits ed (q 0) (q 1)) bs (ed 'st 'sc 'brushes) lb (ed 'st 'lvl 'brushes)
+         (src i) (peep (peep lb i {}) 'src ())
+         (? (tablet? eg) (pin ed 'drag eg)
+            (ed 'shift) (: r (map plan-snap q) (pin ed 'drag {'kind 'rect 'a r 'b r 'in (filter (i \ bs i 'air) hs)}))
+            (: c (p 'fl + plan-cut) dn (two? hs && bs <hs 'air ? (brush-ray bs [(q 0) c (q 1)] [0.0 -1.0 0.0] @ () () r [(r 'b)]) ())
+               tk (filter (i \ two? (src i)) (dn + hs)) sp (two? tk ? (corridor-span (ed 'text) (src <tk)) ())
+               (? (atom? sp) (pins ed 'sel () 'drag (), vi 'vmsg vs "nothing there")
+                  (pins ed 'sel (src <tk) 'drag {'kind 'move 'q0 q 'off [0.0 0.0 0.0] 'sg (edit-sg ed <tk)},
+                   vi 'vmsg vs ("line " + show (edit-at ed (sp 0) + 1)))))))))
+ ; ..the pointer moved: the plan panned, or the drag on as far as the pointer
+ (plan-move ed x y) (: p (ed 'plan) g (ed 'drag) dm (mesh-dims (ed 'st)) w <dm h (dm 1) q (plan-at p w h x y) o (ed 'pan)
+   (? (two? o) (pins p 'c [(p 'c 0 - (x - o 0) / p 'k) (p 'c 1 + (y - o 1) / p 'k)], pin ed 'pan [x y])
+      !(tablet? g) ed
+      (g 'kind = 'move) (pin g 'off [(plan-nudge (q 0 - g 'q0 0)) 0.0 (plan-nudge (q 1 - g 'q0 1))])
+      (g 'kind = 'rect) (: r (map plan-snap q) a (g 'a)
+                           (pin g 'b r, (ed 'vi) 'vmsg (ed 'vs) ("a room " + edit-num (mag (r 0 - a 0)) + " by " + edit-num (mag (r 1 - a 1)))))
+      (: j (g 'ax = 0 ? 0 1) s (g 'hi ? 'b 'a) c (g s) v (plan-snap (q j)) (pin g s (j = 0 ? [v (c 1)] [(c 0) v])))))
+ ; ..a drawn room let go: into the text after the chosen form's part, or at the end, as high
+ ; as the room it was begun in, else plan-cut twice; then it chosen
+ (plan-room ed g) (: a (g 'a) b (g 'b) x0 (min2 (a 0) (b 0)) x1 (max2 (a 0) (b 0)) z0 (min2 (a 1) (b 1)) z1 (max2 (a 1) (b 1))
+   _ (pin ed 'drag ())
+   (? (x1 - x0 < 0.5 || z1 - z0 < 0.5) ed
+      (: in (g 'in) bs (ed 'st 'sc 'brushes) y0 (two? in ? (bs <in 'lo 1) (ed 'plan 'fl)) y1 (two? in ? (bs <in 'hi 1) (y0 + 2.0 * plan-cut))
+         t (ed 'text) lv <(rev (sx-tops t)) ks (sx-kids t (lv 0)) sel (ed 'sel)
+         j (two? sel && sel 0 < #ks ? (sel 0) (#ks - 1)) at (ks j 1)
+         (bol i) (i <= 0 || t (i - 1) = 10 ? i (bol (i - 1))) ind (ks j 0 - bol (ks j 0))
+         fm ("(room " + edit-vec [x0 y0 z0] + " " + edit-vec [x1 y1 z1] + ")")
+         _ (edit-put ed (snip t 0 at + "\n" + foldl (\ a _ (a + " ")) "" ^ind + fm + snip t at #t) "")
+         _ (pin ed 'sel [(j + 1)])
+         ((ed 'vi) 'vmsg (ed 'vs) ("a room, line " + show (edit-at ed (at + 1 + ind) + 1)), ed))))
+ ; ..an edge let go: the number its corner says it in rewritten, the room kept a half metre
+ (plan-resize ed g) (: pb (g 'pb) k (g 'ax) j (k = 0 ? 0 1) v (g (g 'hi ? 'b 'a) j) _ (pin ed 'drag ())
+   sp (? (g 'hi) (pb 'a k > pb 'b k ? 'sa 'sb) (pb 'a k <= pb 'b k ? 'sa 'sb)) q (pb sp k) t (ed 'text)
+   (? (g 'b j - g 'a j < 0.5) ((ed 'vi) 'vmsg (ed 'vs) "too small", ed)
+      (mag (v - (g 'hi ? (pb 'hi k) (pb 'lo k))) < 1e-6) ed
+      (edit-put ed (snip t 0 (q 0) + edit-num (v - pb 'd k) + snip t (q 1) #t) ("the wall to " + edit-num v))))
+ ; ..the plan shown, about the player over the floor they are on, or put away
+ (edit-plan ed) (: st (ed 'st) fs (plan-floors st) y (st 'py - eye-h) lo (filter (f \ f <= y + 0.05) fs)
+   (? (tablet? (ed 'plan)) (pins ed 'plan () 'drag () 'pan () 'dirty 1)
+      (pins ed 'plan {'c [(st 'px) (st 'pz)] 'k 16.0 'fl (two? lo ? <(rev lo) (two? fs ? <fs y))} 'drag () 'dirty 1)))
+ ; ..and cut over the next floor up, s 1, or down, s -1
+ (plan-step ed s) (: p (ed 'plan) fs (filter (f \ s > 0 ? (f > p 'fl + 0.05) (f < p 'fl - 0.05)) (plan-floors (ed 'st)))
+   (? (atom? fs) ed (: f (s > 0 ? <fs <(rev fs)) _ (pin p 'fl f) ((ed 'vi) 'vmsg (ed 'vs) ("the floor at " + edit-num f), ed))))
  ; ..the keys vi wants that the corridor's own keys leave out: backspace, tab, delete, home, end
  edit-set1 {14 8 15 9 339 -4 327 -5 335 -6}
  ; ..a key for vi: what it typed, else the arrows as a terminal sends them
  (edit-bytes t k) (? (0 < #t) t (k @ -1 "\e[D" -2 "\e[C" -8 "\e[A" -9 "\e[B" -4 "\e[3~" -5 "\e[H" -6 "\e[F" 27 "\e" 13 "\r" 8 "\x7f" (charm? k && 0 < k ? (string k) "")))
  (edit-feed ed s) (: key ((ed 'fc) 1) (each ^#s (i \ key (s i))), pin ed 'dirty 1)
+ ; ..vi's undo or redo f done from the scene, and the scene read again; nothing kept chosen
+ (edit-undo ed f) (: _ (f (ed 'vs)) _ (pins ed 'sel () 'drag () 'dirty 1) (edit-sync ed))
  (edit-focus ed f) (: _ (pins ed 'focus f 'dirty 1) (f = 'scene ? (edit-sync ed) ed))
  ; ..a ctrl-w's next key: w the other pane, h the scene, l vi
  (edit-cw ed k) (: _ (pin ed 'cw 0)
@@ -934,26 +1087,38 @@
          md (e @- () ['down c] (elem c [29 285] ? 1 ()) ['up c] (elem c [29 285] ? 0 ()))
          sh (e @- () ['down c] (elem c [42 54] ? 1 ()) ['up c] (elem c [42 54] ? 0 ()))
          _ (sh != () ? (pin ed 'shift sh))
+         _ (<e = 'down && charm? k && k != 113 ? (pin ed 'qq 0))
          _ (md != () ? (pin ed 'ctrl md) (e @- ()
             ['close] (pin ed 'quit 1)
             ['size w h] (: ly2 (edit-lay w h) (pins ed 'lay ly2 'scr (edit-screen ly2) 'dirty 1, corridor-size st (ly2 'pw) (ly2 'ph // 2)))
             ['press b x y] (? (x >= ly 'sw) (edit-focus ed 'vi)
+                              (tablet? (ed 'plan)) (edit-focus ed 'scene, plan-press ed b (x // edit-s) (y // edit-s))
                               (b = 3) (pins ed 'look 1 'lx x 'ly y)
                               (b = 1) (edit-focus ed 'scene, edit-pick ed (x // edit-s) (y // edit-s)))
-            ['release b x y] (? (b = 3) (pin ed 'look 0) (b = 1 && tablet? (ed 'drag)) (edit-drop ed))
-            ['move x y] (? (ed 'look) (corridor-look st (x - ed 'lx) (y - ed 'ly), pins ed 'lx x 'ly y)
+            ['release b x y] (? (b = 3) (pins ed 'look 0 'pan ())
+                                (b != 1 || !(tablet? (ed 'drag))) ed
+                                (ed 'drag 'kind @ 'rect (plan-room ed (ed 'drag)) 'edge (plan-resize ed (ed 'drag)) _ (edit-drop ed)))
+            ['move x y] (? (tablet? (ed 'plan)) (plan-move ed (x // edit-s) (y // edit-s))
+                           (ed 'look) (corridor-look st (x - ed 'lx) (y - ed 'ly), pins ed 'lx x 'ly y)
                            (tablet? (ed 'drag) && x < ly 'sw) (edit-drag ed (x // edit-s) (y // edit-s)))
             ['up c] (pin (ed 'held) c ())
             ['down c] (? (ed 'cw) (edit-cw ed k)
                          (k = 23 && (ed 'focus = 'scene || (ed 'vs 'mode) = 'n)) (pin ed 'cw 1)
                          (ed 'focus = 'vi) (edit-feed ed (edit-bytes t k))
                          (k = 27) (pins ed 'sel () 'drag ())
+                         (k = 9) (edit-plan ed)
+                         (k = 26) (edit-undo ed (ed 'vi 'vundo))
+                         (k = 18) (edit-undo ed (ed 'vi 'vredo))
+                         (k = 113) (? (ed 'qq > 0 && clock 0 - ed 'qq <= 1000) (pin ed 'quit 1)
+                                      (pin ed 'qq (clock 0), (ed 'vi) 'vmsg (ed 'vs) (ed 'vs 'dirty ? "the text is not written: q again within a second leaves without it, :w in vi writes it"
+                                                                                                        "q again within a second leaves")))
+                         (tablet? (ed 'plan) && elem k [91 93]) (plan-step ed (k = 93 ? 1 -1))
                          (charm? k) (: a ((ed 'binds) k) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (corridor-step st a))))))
          (edit-events ed >l))))
  ; ..the scene painted on the left, vi's frame scribed and its rows laid on the right
  (edit-paint ed) (: ly (ed 'lay) W (ly 'W) H (ly 'H) win (ed 'win) P (window-paper win) st (ed 'st) scr (ed 'scr)
    cols (ly 'cols) rows (ly 'rows) tw (8 * cols) sw (ly 'sw)
-   _ (frame-paint (edit-outline ed (corridor-pens st)) (ly 'pw) edit-s P W)
+   _ (frame-paint (tablet? (ed 'plan) ? (plan-pens ed) (edit-outline ed (corridor-pens st))) (ly 'pw) edit-s P W)
    fr ((ed 'fc) 0 cols rows)
    _ (? (0 < #fr || ed 'dirty)
         (: tb (cask (tw * rows * 16 * 4)) cur (gaze scr 0)
@@ -961,7 +1126,13 @@
            _ (each ^rows (r \ dye scr tb tw r (cur >= 0 && cur // cols = r ? cur -1) ()))
            _ (each ^(rows * 16) (y \ pour P (4 * (y * W + sw)) tb (4 * y * tw) (4 * tw)))
            (pin ed 'dirty 0)))
+   _ (? (ed 'focus = 'vi) (edit-border P W sw 0 tw (16 * rows)) (edit-border P W 0 0 sw (edit-s * ly 'ph)))
    (window-show win 0 H))
+ ; ..a pixel's line round the pane w by h at x y on the paper P, W across: the one with the keys
+ (edit-border P W x y w h) (: T (cask (4 * w)) _ (frame-paint (iota w * 0 + edit-ink) w 1 T w)
+   (row j) (pour P (4 * ((y + j) * W + x)) T 0 (4 * w))
+   (side j) (: o (4 * ((y + j) * W + x)) (pour P o T 0 4, pour P (o + 4 * (w - 1)) T 0 4))
+   _ (row 0) _ (row (h - 1)) (each (drop 1 ^(h - 1)) side))
  (edit-loop ed) (: t0 (clock 0) st (ed 'st)
    _ (edit-events ed (window-events (ed 'win)))
    _ (each (keys (ed 'held)) (c \ (ed 'held) c @ a (elem a (view-walking + ['strafe-left 'strafe-right]) ? (corridor-step st a))))
@@ -976,12 +1147,12 @@
    ly (edit-lay (wh 0) (wh 1)) st (state-new (ly 'pw) (ly 'ph) lv dir (_ \ view-loading win [0 0 (ly 'sw) (ly 'H)] view-spin))
    _ (string? lv0 ? (vi 'vmsg vs ("scene: " + lv0)))
    {'vi vi 'vs vs 'fc fc 'st st 'win win 'lay ly 'scr (edit-screen ly) 'text t 'focus 'vi 'cw 0 'held {}
-    'binds (view-bind view-binds corridor-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'drag ()})
+    'binds (view-bind view-binds corridor-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'drag () 'plan () 'pan () 'pc () 'ppk () 'qq 0})
  (edit-run p) (window-open 1280 720 "lore edit" @ win
    (? !(tablet? win) (say err ("lore edit: no window (" + show win + ")\n"), flush err, 1)
       (: ed (edit-new win ((cite 'vi) 'vi-open p) (dir-of p))
          (mind (_ \ edit-loop ed) () (_ \ window-close win), 0))))
- edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, the right button held looks, the corridor's keys walk; :w writes, :q leaves)"
+ edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, ctrl-z undoes and ctrl-r does again, the right button held looks, the corridor's keys walk; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q twice within a second on the scene or :q leaves, :w writes)"
  (edit-main as) (? (#as = 1) (edit-run <as) (say err (edit-usage + "\n"), flush err, 2))
  _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1))
  _ (cite 'lore 'lore-enlist 'edit (udoor 'edit edit-main edit-usage 1 1)))

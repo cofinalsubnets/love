@@ -45,6 +45,9 @@
    wall (filter (i \ mag (c 6 i) < 0.1) ^(pk 'n))
    two (corridor-read (tx + "(: moss (texture 16 16 1 '((fill (rgb 0.2 0.4 0.1)))))
                          (level \"t\" (skin {'walls rust} (room [0 0 0] [2 2 2])) (skin {'floor moss 'walls rust} (room [0 0 2.2] [2 2 4])))"))
+   ; ..a floor laid a quarter turn and shifted half a metre: u runs with z, v back along x
+   lp (corridor-new 8 8 (lt "(skin {'floor (laid rust 90 [0 0.5])} (room [0 0 0] [2 2 2]))") "" 'sc 'chunks 0 'pk)
+   (lc k i) (peep (lp 'cols k) i 0.0) flr (filter (i \ lc 6 i > 0.9) ^(lp 'n))
  (test (map (t \ t 'name) (hall 'textures) = ['wall 'floor 'ceiling 'door]) (hall 'textures 0 'm = 1.3)
        (#(at 8 8 'sc 'texs) = 5)
        (lt "(skin {'walls rust 'floor rust} (room [0 0 0] [2 2 2]))" 'brushes 0 'skin = [['wall 0] ['floor 0]])
@@ -57,6 +60,10 @@
              "in a texture, (stripes 4 2 (grey 0.5)) -- it reads (stripes every w slant PAINT)")
        (has? (lv "(skin {'walls (texture 32 32 0 '((fill 1)))} (room [0 0 0] [2 2 2]))") "(texture width height metres LAYERS)")
        (has? (lv "(skin {'walls 3} (room [0 0 0] [2 2 2]))") "(skin {")
+       (lt "(skin {'floor (laid rust 90 [0 0.5])} (room [0 0 0] [2 2 2]))" 'brushes 0 'skin = [['floor 0 [90.0 [0.0 0.5]]]])
+       (lt "(textures {'floor (laid rust 45 [1 0])}) (room [0 0 0] [2 2 2])" 'textures 0 'lay = [45.0 [1.0 0.0]])
+       (has? (lv "(skin {'floor (laid rust 'x [0 0])} (room [0 0 0] [2 2 2]))") "(laid TEXTURE degrees [du dv])")
+       (two? flr) (all (i \ abs (lc 3 i - 32.0 * lc 2 i) < 1e-6 && abs (lc 4 i - (16.0 - 32.0 * lc 0 i)) < 1e-6) flr)
        ; the level's textures, then a grid each for floor ceiling door and wall it lacks
        (#(st 'sc 'texs) = 5) (two? wall)
        (all (i \ c 1 i > 1.01 || mag (c 4 i - 32.0) < 1e-6) wall) (any (i \ c 1 i < 1.01) wall)))
@@ -168,7 +175,7 @@
    edf (ed 'focus)
    _ (edit-events ed [['press 1 80 80] ['release 1 80 80]])
    _ (edit-paint ed) edp (edw 'paper)
-   (lit? x0 x1 y0 y1) (any (y \ any (x \ edp (4 * (y * 320 + x) + 1) != 0) (drop x0 ^x1)) (drop y0 ^y1))
+   (lit? x0 x1 y0 y1) (any (y \ any (x \ peep edp (4 * (y * 320 + x) + 1) 0 != 0) (drop x0 ^x1)) (drop y0 ^y1))
  (test (edf = 'scene) (edv 'row = 1) (edv 'col = 2) (lit? 0 160 0 160) (lit? 160 320 0 16)))
 ; a drag on the scene, shift held so it runs across the wall faced: the form it took outlined,
 ; wrapped in a (move ..) by as far, and the scene read again with it there; dragged back, unwrapped
@@ -184,6 +191,46 @@
  (test (has? dl1 "(move [") (has? dl1 " 0 0] (solid (box [1 0 3] [3 3 3.5])))") (dlo 0 > 1.05) (dink > 20)
        (dl2 = "  (solid (box [1 0 3] [3 3 3.5]))") (dg 'drag = ())
        (corridor-read "(level \"t\" (room [0 0 0] [4 3 6]) (move [1 0 0.5] (solid (box [0 0 1] [1 3 2]))) (start [2 0 2] 0 0))" 'brushes 1 'shape 'box 0 = [1.0 0.0 1.5])))
+; the plan: tab shows it from above about the player; shift and a drag begun in a room
+; draws another as high, after the level's parts, and chooses it; a drag on its edge moves
+; that wall, one inside it moves it; tab puts the plan away
+(: plv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload plv ["(level \"t\"" "  (room [0 0 0] [4 3 4])" "  (start [2 0 2] 0 0))"] "t.l")
+   plw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} pl (edit-new plw plv "")
+   _ (edit-events pl [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['down 15] ['up 15]])
+   pp (pl 'plan) _ (pin pp 'k 8.0)
+   _ (edit-events pl [['down 42] ['press 1 96 96] ['move 144 64] ['release 1 144 64] ['up 42]])
+   pl1 (plv 'lines 3) ps (pl 'sel)
+   _ (edit-events pl [['press 1 144 80] ['move 152 80] ['release 1 152 80]])
+   pl2 (plv 'lines 3)
+   _ (edit-events pl [['press 1 120 80] ['move 136 80] ['release 1 136 80]])
+   pl3 (plv 'lines 3)
+   _ (edit-events pl [['press 1 112 80] ['move 120 80] ['release 1 120 80]])
+   pl4 (plv 'lines 3) _ (edit-paint pl) plp (plw 'paper)
+   (pix x y) (peep plp (4 * (y * 320 + x) + 2) 0)
+   _ (edit-events pl [['down 15] ['up 15]])
+ (test (pp 'c = [2.0 2.0]) (pp 'fl = 0.0) (pl1 = "  (room [3 0 1] [6 3 3]))") (ps = [4]) (pl2 = "  (room [3 0 1] [6.5 3 3]))")
+       (pl3 = "  (move [1 0 0] (room [3 0 1] [6.5 3 3])))") (pl4 = "  (move [1 0 0] (room [3.5 0 1] [6.5 3 3])))") (#(pl 'st 'lvl 'brushes) = 2) (pix 4 4 = 22) (pix 80 80 != 22) (pl 'plan = ())))
+; a mirror's twin dragged moves as dragged, its form's move turned over; ctrl-z undoes it
+; and ctrl-r does it again; a click on the plan takes the first thing under the cut; the
+; pane with the keys has a line round it; q on the scene leaves only twice in a second
+(: mtv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload mtv ["(level \"t\"" "  (room [0 0 0] [8 3 4])" "  (mirror-x 4 [(solid (box [1 0 1] [2 3 2]))])" "  (solid (box [6 0 3] [7 0.5 4]))" "  (start [4 0 2] 0 0))"] "t.l")
+   mtw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} mt (edit-new mtw mtv "")
+   _ (edit-events mt [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['down 15] ['up 15]])
+   _ (pin (mt 'plan) 'k 8.0)
+   _ (edit-events mt [['press 1 120 88] ['move 136 88] ['release 1 136 88]])
+   mtl (mtv 'lines 2) mtb (mt 'st 'lvl 'brushes 2)
+   _ (edit-events mt [['down 29] ['down 44] ['up 44] ['up 29]]) mtu (mtv 'lines 2) mtub (mt 'st 'lvl 'brushes 2 'shape 'box)
+   _ (edit-events mt [['down 29] ['down 19] ['up 19] ['up 29]]) mtr (mtv 'lines 2)
+   _ (edit-events mt [['press 1 120 56] ['release 1 120 56]]) mts (mt 'sel)
+   _ (edit-paint mt) (mtp x y) (peep (mtw 'paper) (4 * (y * 320 + x)) 0)
+   _ (edit-events mt [['down 16] ['up 16]]) mtq (mt 'quit)
+   _ (pin mt 'qq (clock 0 - 1500)) _ (edit-events mt [['down 16] ['up 16]]) mtq2 (mt 'quit)
+   _ (edit-events mt [['down 16] ['up 16]])
+ (test (mtl = "  (mirror-x 4 [(move [-1 0 0] (solid (box [1 0 1] [2 3 2])))])") (mtb 'shape 'box = [[7.0 0.0 1.0] [8.0 3.0 2.0]]) (mtb 'sg = [-1.0 1.0 1.0])
+       (mtu = "  (mirror-x 4 [(solid (box [1 0 1] [2 3 2]))])") (mtub = [[6.0 0.0 1.0] [7.0 3.0 2.0]]) (mtr = mtl)
+       (mts = [4]) (mtp 0 5 = 48) (mtp 200 5 != 48) (mtq = 0) (mtq2 = 0) (mt 'quit = 1)))
 ; a scene made again from the one before keeps what is the same and comes out as one made
 ; from nothing: after a solid moves, a lamp moves, a solid goes, the room grows, and all
 ; comes back

@@ -79,13 +79,17 @@
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
+;   (laid TEXTURE degrees [du dv])     the texture as a skin or textures lays it, turned
+;                                      degrees from u toward v and shifted du dv metres its
+;                                      own way; a floor's u is x and v z, a wall's u along it
+;                                      and v down
 ;   (repeat n [dx dy dz] PARTS)        the parts n times, each that far on from the last
 ;   (move [dx dy dz] PARTS)            the parts that far on
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of sourced start room street sky ambient air solid box prism cut whole door train bin decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
-         across stammer buzz breathe blink texture skin textures repeat move mirror-x mirror-z rgb)
+         across stammer buzz breathe blink texture laid skin textures repeat move mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
 (:
@@ -140,38 +144,43 @@
    (? (!(texture? t)) (no u t) (!(two? rs && all two? rs && all (r \ #r = #<rs) rs)) (no u rs)
       (part 'drape [['tex t] ['rows (map (map pg) rs)]])))
  ; ..a bin: brushes, its body's sides and corners cut in toward its foot, hollow up top with an
- ; opening into it on each side, and a cap a little wider over all; its sign on each side
+ ; opening into it on each side, the band over those and a cap a little wider going in
+ ; toward the top; its sign on each side
  (bin at w d h t sg) (: u "(bin [x y z] width depth height TEXTURE SIGN)" p (P at u) x (p 0) y (p 1) z (p 2)
    (? (!(texture? t)) (no u t) (!(sg = () || texture? sg)) (no u sg)
       (: dk (texture 8 8 1 '((fill 0.12) (noise 2 0.3)))
          W (0.5 * N w u) D (0.5 * N d u) H (N h u) k (0.12 * min2 W D) c (0.2 * min2 W D) y1 (y + H)
-         (sx i) (i ? 1.0 -1.0)
-         ; ..each side through its top edge and its foot k in; each corner c off its top's
-         sides [[[(x + W) y1 (z - D)] [(x + W) y1 (z + D)] [(x + W - k) y (z - D)]]
-                [[(x - W) y1 (z - D)] [(x - W) y1 (z + D)] [(x - W + k) y (z - D)]]
-                [[(x - W) y1 (z + D)] [(x + W) y1 (z + D)] [(x - W) y (z + D - k)]]
-                [[(x - W) y1 (z - D)] [(x + W) y1 (z - D)] [(x - W) y (z - D + k)]]]
-         corners (map (i \ (: a (sx (i % 2)) b (sx (i // 2)) cx (x + a * W) cz (z + b * D)
-                               [[(cx - a * c) y1 cz] [cx y1 (cz - b * c)] [(cx - a * (c + k)) y (cz - b * k)]]))
-                      ^4)
-         body (foldl (\ b q (cut (q 0) (q 1) (q 2) b)) (solid (box [(x - W) y (z - D)] [(x + W) y1 (z + D)])) (sides + corners))
          i0 (y1 - 0.5 * H) i1 (y1 - 0.04) iw (W - 0.5 * k - 0.03) id (D - 0.5 * k - 0.03)
-         o0 (y1 - 0.4 * H) o1 (y1 - 0.1 * H) sl (0.7 * W) sd (0.7 * D)
+         o0 (y1 - 0.4 * H) o1 (y1 - 0.1 * H) sl (0.7 * W) sd (0.7 * D) tp (0.9 * k)
+         (sx i) (i ? 1.0 -1.0)
+         ; ..a solid from y0 to y1, w0 by d0 at its foot and w1 by d1 at its top, each side
+         ; through both edges and each corner cut c off
+         (taper y0 y1 w0 d0 w1 d1) (: m (max2 w0 w1) n (max2 d0 d1)
+           sides [[[(x + w1) y1 (z - d1)] [(x + w1) y1 (z + d1)] [(x + w0) y0 (z - d0)]]
+                  [[(x - w1) y1 (z - d1)] [(x - w1) y1 (z + d1)] [(x - w0) y0 (z - d0)]]
+                  [[(x - w1) y1 (z + d1)] [(x + w1) y1 (z + d1)] [(x - w0) y0 (z + d0)]]
+                  [[(x - w1) y1 (z - d1)] [(x + w1) y1 (z - d1)] [(x - w0) y0 (z - d0)]]]
+           corners (map (i \ (: a (sx (i % 2)) b (sx (i // 2)) X (x + a * w1) Z (z + b * d1)
+                                 [[(X - a * c) y1 Z] [X y1 (Z - b * c)] [(x + a * w0 - a * c) y0 (z + b * d0)]]))
+                        ^4)
+           (foldl (\ b q (cut (q 0) (q 1) (q 2) b)) (solid (box [(x - m) y0 (z - n)] [(x + m) y1 (z + n)])) (sides + corners)))
+         body (taper y o1 (W - k) (D - k) W D)
+         band (taper o1 y1 W D (W - tp) (D - tp))
          hollow [(box [(x - iw) i0 (z - id)] [(x + iw) i1 (z + id)])
                  (box [x o0 (z - sd)] [(x + W + 0.01) o1 (z + sd)]) (box [(x - W - 0.01) o0 (z - sd)] [x o1 (z + sd)])
                  (box [(x - sl) o0 z] [(x + sl) o1 (z + D + 0.01)]) (box [(x - sl) o0 (z - D - 0.01)] [(x + sl) o1 z])]
          ; ..the sign a third of the way up each side, a hair off it, leaning as it leans, as
          ; wide as the narrower side takes
-         ys (y + 0.33 * H) e (0.67 * k - 0.004) sz (min2 (0.42 * H) (1.3 * min2 W D)) L (sqrt (H * H + k * k))
+         hb (o1 - y) ys (y + 0.33 * H) e ((1.0 - (ys - y) / hb) * k - 0.004) sz (min2 (0.42 * H) (1.3 * min2 W D)) L (sqrt (hb * hb + k * k))
          signs (sg = () ? ()
-                  [(decal [(x + W - e) ys z] [(H / L) (0.0 - k / L) 0.0] [(k / L) (H / L) 0.0] sz sz sg)
-                   (decal [(x - W + e) ys z] [(0.0 - H / L) (0.0 - k / L) 0.0] [(0.0 - k / L) (H / L) 0.0] sz sz sg)
-                   (decal [x ys (z + D - e)] [0.0 (0.0 - k / L) (H / L)] [0.0 (H / L) (k / L)] sz sz sg)
-                   (decal [x ys (z - D + e)] [0.0 (0.0 - k / L) (0.0 - H / L)] [0.0 (H / L) (0.0 - k / L)] sz sz sg)])
+                  [(decal [(x + W - e) ys z] [(hb / L) (0.0 - k / L) 0.0] [(k / L) (hb / L) 0.0] sz sz sg)
+                   (decal [(x - W + e) ys z] [(0.0 - hb / L) (0.0 - k / L) 0.0] [(0.0 - k / L) (hb / L) 0.0] sz sz sg)
+                   (decal [x ys (z + D - e)] [0.0 (0.0 - k / L) (hb / L)] [0.0 (hb / L) (k / L)] sz sz sg)
+                   (decal [x ys (z - D + e)] [0.0 (0.0 - k / L) (0.0 - hb / L)] [0.0 (hb / L) (0.0 - k / L)] sz sz sg)])
          ; ..small enough that its faces go uncut, lit at their corners
          [(map (b \ with b 'whole 1)
-               ([(skin {'all t} body)] + map (b \ skin {'all dk} (air b)) hollow
-                + [(skin {'all t} (solid (box [(x - W - 0.02) y1 (z - D - 0.02)] [(x + W + 0.02) (y1 + 0.05) (z + D + 0.02)])))]))
+               ([(skin {'all t} body) (skin {'all t} band)] + map (b \ skin {'all dk} (air b)) hollow
+                + [(skin {'all t} (taper y1 (y1 + 0.05) (W - tp + 0.02) (D - tp + 0.02) (W - tp - 0.01) (D - tp - 0.01)))]))
           signs])))
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
  (bulb at c) (: u "(bulb [x y z] (rgb r g b))" (colour? c ? (part 'bulb [['at (P at u)] ['c c] ['how ()]]) (no u c)))
@@ -216,13 +225,20 @@
       (swatch-fault ls @ () {'kind 'texture 'w w 'h h 'm (f m) 'layers ls}
                          e (scare 'level ("in a texture, " + show (e 0) + " -- it reads " + e 1)))))
  (texture? t) (kind? t ['texture])
+ (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
+   (? (!(texture? t)) (no u t) (!(num? deg)) (no u deg) (!(two? off && #off = 2 && all num? off)) (no u off)
+      {'kind 'laid 'tex t 'deg (f deg) 'off (map f off)}))
+ ; ..what a skin takes: a texture, or one laid; its texture, and how it is laid if it is
+ (surface? t) (texture? t || kind? t ['laid])
+ (bare t) (kind? t ['laid] ? (t 'tex) t)
+ (lay t) (kind? t ['laid] ? [[(t 'deg) (t 'off)]] ())
  (whole b) (brush? b ? (with b 'whole 1) (no "(whole BRUSH)" b))
  (skin s b) (: u "(skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)"
    (? (!(brush? b)) (no u b) (!(tablet? s)) (no u s)
-      (any (k \ !(elem k ['walls 'floor 'ceiling 'all]) || !(texture? (s k))) (keys s)) (no u s)
+      (any (k \ !(elem k ['walls 'floor 'ceiling 'all]) || !(surface? (s k))) (keys s)) (no u s)
       (with b 'skin s)))
  (textures s) (: u "(textures {'wall T 'floor T 'ceiling T 'door T 'train T})"
-   (tablet? s && all (k \ elem k ['wall 'floor 'ceiling 'door 'train] && texture? (s k)) (keys s) ? (part 'textures [['set s]]) (no u s)))
+   (tablet? s && all (k \ elem k ['wall 'floor 'ceiling 'door 'train] && surface? (s k)) (keys s) ? (part 'textures [['set s]]) (no u s)))
  ; --- repeat and mirror: copies with every point moved, and a start's bearing turned ---
  (flat x) (? (tablet? x) [x] (atom? x) () (cats (map flat x)))
  (re g b p) (: q (foldl (\ q k (with q k (g (p k)))) p (filter (k \ elem k (keys p)) ['at 'lo 'hi 'np 'up]))
@@ -236,8 +252,10 @@
  (move d ps) (: u "(move [dx dy dz] PARTS)" dd (P d u) (map (re (p \ [(p 0 + dd 0) (p 1 + dd 1) (p 2 + dd 2)]) (b \ b)) (flat ps)))
  ; ..a mirror turns a drape over, so its rows run back to keep its front
  (flip p) (kind? p ['drape] ? (with p 'rows (map rev (p 'rows))) p)
- (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (flip * re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b)) l))
- (mirror-z c ps) (: z (N c "(mirror-z c PARTS)") l (flat ps) (l + map (flip * re (p \ [(p 0) (p 1) (2.0 * z - p 2)]) (b \ 180.0 - b)) l))
+ (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (p \ twin 'mx (flip (re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b) p))) l))
+ (mirror-z c ps) (: z (N c "(mirror-z c PARTS)") l (flat ps) (l + map (p \ twin 'mz (flip (re (p \ [(p 0) (p 1) (2.0 * z - p 2)]) (b \ 180.0 - b) p))) l))
+ ; ..a twin's 'mx or 'mz -1 where it is turned over on x or z, so a move of it is turned too
+ (twin k p) (with p k (0.0 - peep p k 1.0))
  ; --- the level: its parts sorted into what the corridor builds from ---
  (lo2 a b) (map (k \ min2 (a k) (b k)) ^3)
  (hi2 a b) (map (k \ max2 (a k) (b k)) ^3)
@@ -248,21 +266,20 @@
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
-   used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ b 'skin k) (sort (keys (b 'skin)))) bs)
+   used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ bare (b 'skin k)) (sort (keys (b 'skin)))) bs)
                                                      + map (d \ d 'tex) (of 'decal + of 'drape + of 'pane + of 'ad)
                                                      + cats (map (s \ [(s 't1) (s 't2)]) (of 'spin))))
    (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
-   (skin-of b) (: s (b 'skin) (cats (map (k \ (k = 'all ? (map (c \ [c (tname (s k))]) ['wall 'floor 'ceiling])
-                                                 [[(k = 'walls ? 'wall k) (tname (s k))]]))
+   (skin-of b) (: s (b 'skin) (cats (map (k \ (: (e c) ([c (tname (bare (s k)))] + lay (s k)) (k = 'all ? (map e ['wall 'floor 'ceiling]) [(e (k = 'walls ? 'wall k))])))
                                        (filter (k \ elem k (keys s)) ['all 'walls 'floor 'ceiling]))))
-   (tex nm t) {'name nm 'w (t 'w) 'h (t 'h) 'm (t 'm) 'layers (t 'layers)}
+   (tex nm t) (: b (bare t) {'name nm 'w (b 'w) 'h (b 'h) 'm (b 'm) 'layers (b 'layers) 'lay (kind? t ['laid] ? [(t 'deg) (t 'off)] ())})
    (? (!(string? name)) (no "(level NAME PART ..)" name)
       (two? bad) (scare 'level ("not a part: " + show <bad))
       {'kind 'level 'name name
        'start (of 'start @ () {'at [0.0 0.0] 'y 0.0 'deg 0.0 'pitch 0.0}
                           s (: a (<s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'deg (<s 'deg) 'pitch (<s 'pitch)}))
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
-       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'src (peep b 'src ())}) bs)
+       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'src (peep b 'src ()) 'sg [(peep b 'mx 1.0) 1.0 (peep b 'mz 1.0)]}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1)])) (of 'door))
        'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))

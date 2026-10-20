@@ -1,13 +1,18 @@
 ; `love lore corridor --level src/apps/lore/levels/station.l`
 (borrow 'scenery)
 
-; the textures, their layers listed at the top of src/apps/lore/swatch.l. the floor: tiles
-; half a metre, every other a shade darker, in dark grout
-(: tiles (texture 64 64 1
-          '((fill (rgb 0.34 0.34 0.36))
-            (checker 32 32 (rgb 0.3 0.31 0.33))
-            (noise 5 0.1)
-            (grid 32 32 1 0.12))))
+; the textures, their layers listed at the top of src/apps/lore/swatch.l. (tiles n m a b
+; grout): square tiles, two a side in n texels m metres across, a and b by turns, in grout
+(: (tiles n m a b grout) (: h (n // 2) (texture n n m [['fill a] ['checker h h b] ['noise 5 0.1] ['grid h h 1 grout]])))
+; ..(octagons n m a b grout): octagons of a, one in n texels m metres across, and between
+; their corners small squares of b, in grout
+(: (octagons n m a b grout) (: N (1.0 * n) c (0.29 * N) g 1.0 d (c - 1.5)
+     (texture n n m [['fill grout]
+                     ['poly 0 0 d 0 0 d b] ['poly N 0 N d (N - d) 0 b] ['poly 0 N 0 (N - d) d N b] ['poly N N (N - d) N N (N - d) b]
+                     ['poly c g (N - c) g (N - g) c (N - g) (N - c) (N - c) (N - g) c (N - g) g (N - c) g c a]
+                     ['noise 5 0.1]])))
+; ..the floor: light octagons half a metre across, dark squares between
+(: hallfloor (octagons 32 0.5 '(rgb 0.34 0.34 0.36) '(rgb 0.3 0.31 0.33) 0.12))
 ; ..and the door: brushed steel in plates, a seam down the middle, a hazard band at its foot
 (: steel (texture 64 128 1
           '((fill (rgb 0.5 0.52 0.56))
@@ -18,6 +23,13 @@
               (fill 0.08)
               (stripes 16 8 -1 (rgb 0.85 0.65 0.08))))))
 
+;; ..the track: two rails on sleepers over ballast, along x, either side of the car's middle
+; at z -5.94, the tile 4 m across z
+(: rails (texture 32 128 1
+           '((fill (rgb 0.2 0.19 0.18)) (noise 2 0.45)
+             (within 0 26 32 106 (cols 4 12 (rgb 0.24 0.18 0.13)) (cols 20 28 (rgb 0.24 0.18 0.13)) (noise 3 1 0.3))
+             (rows 41 45 (rgb 0.32 0.33 0.35)) (rows 87 91 (rgb 0.32 0.33 0.35))
+             (rows 42 44 (rgb 0.62 0.63 0.66)) (rows 88 90 (rgb 0.62 0.63 0.66)))))
 ; ..the platform's floor: a grate of steel bars over the dark
 (: grate (texture 64 64 1
           '((fill (rgb 0.03 0.03 0.04))
@@ -279,26 +291,35 @@
                (cut [(x - 1.3) 20.6 22.5] [(x + 1.3) 20.6 22.5] [x 21.6 21]
                  (solid (box [(x - 1.3) 20.6 21] [(x + 1.3) 22.6 30.5]))))))
 
+; ..a block between two corners, its upright edges at each corner [x z] in cs cut 0.3 off
+(: (block lo hi cs) (: mx (0.5 * (lo 0 + hi 0)) mz (0.5 * (lo 2 + hi 2)) c 0.3
+     (foldl (\ b q (: x (q 0) z (q 1) sx (mx > x ? 1.0 -1.0) sz (mz > z ? 1.0 -1.0)
+                    (cut [(x + sx * c) (lo 1) z] [x (lo 1) (z + sz * c)] [(x + sx * c) (hi 1) z] b)))
+            (solid (box lo hi)) cs)))
+
 (level "the station"
-  (textures {'wall concrete 'floor tiles 'ceiling concrete 'door steel 'train carbody})
+  (textures {'wall concrete 'floor hallfloor 'ceiling concrete 'door steel 'train carbody})
   ; the start inside the car, facing its door
   (start [0 -5 -5.9] 0 0)
   ; a dim light everywhere, the lamps' thrown back off the concrete
   (ambient (rgb 0.15 0.15 0.16))
   ; the hall, 38 metres across, ten high and 16 long
   (room [-19 -5 0] [19 5 16])
-  ; the platform, its floor a grate, and the track a metre below it running on into the
-  ; tunnels, under the car's floor
-  (skin {'floor grate} (room [-24 -5 -4.52] [24 2 0]))
-  (room [-24 -6 -7.6] [24 2 -4.52])
-  (room [-70 -6 -7.6] [70 -2 -4.52])
-  ; solid blocks standing in from the side walls, mirrored about x 0; the hallway between
-  ; them and each wing's chamber south open onto the platform
+  ; the platform, its floor a grate, its ends in line with the hallways' outer walls, and
+  ; the track a metre below it running on into the tunnels, under the car's floor, cabling
+  ; on the walls up to the platform
+  (skin {'floor grate} (room [-11 -5 -4.52] [11 2 0]))
+  (skin {'walls cabling 'floor rails} (room [-70 -6 -7.6] [70 -5 -4.52]))
+  (room [-11 -5 -7.6] [11 2 -4.52])
+  (room [-70 -5 -7.6] [70 -2 -4.52])
+  ; solid blocks standing in from the side walls, mirrored about x 0, their corners out in
+  ; the air chamfered; the hallway between them and each wing's chamber south open onto
+  ; the platform
   (mirror-x 0
-   [(solid (box [-19 -5 0] [-11 5 4]))
-    (solid (box [-7 -5 0] [-3 5 4]))
-    (solid (box [-15 -5 8] [-11 5 10]))
-    (solid (box [-7 -5 8] [-3 5 10]))
+   [(block [-19 -5 0] [-11 5 4] [[-11 4]])
+    (block [-7 -5 0] [-3 5 4] [[-7 0] [-3 0] [-7 4] [-3 4]])
+    (block [-15 -5 8] [-11 5 10] [[-15 8] [-11 8]])
+    (block [-7 -5 8] [-3 5 10] [[-7 8] [-3 8]])
     (solid (box [-19 -5 16] [-3 5 10]))
     ; ..the lamps, each looking along its wall, some across, some up or down it
     (lamp [-3 -2.2 2] [1 0 0] [0 0 1])
@@ -306,13 +327,13 @@
     (lamp [-11 -2.2 2] [1 0 0] [0 0 1])
     (lamp [-19 0.5 7] [1 0 0] [0 1 0])
     (lamp [-3 1.5 13] [1 0 0] [0 -1 0])
-    (lamp [-15 -2.5 0] [0 0 -1] [1 0 0])
+    (lamp [-11 -2.5 -2.3] [1 0 0] [0 0 1])
     (lamp [-5 -2.5 0] [0 0 -1] [-1 0 0])
     ; ..the railing along the platform's edge, open across the car's door: a plinth, posts
     ; and a rail
-    (solid (box [-24 -5 -4.52] [-1 -4.6 -4.36]))
-    (repeat 16 [-1.52 0 0] [(solid (box [-1.06 -4.6 -4.47] [-1 -4.0 -4.41]))])
-    (solid (box [-24 -4.0 -4.48] [-1 -3.94 -4.4]))])
+    (solid (box [-11 -5 -4.52] [-1 -4.6 -4.36]))
+    (repeat 8 [-1.41 0 0] [(solid (box [-1.06 -4.6 -4.47] [-1 -4.0 -4.41]))])
+    (solid (box [-11 -4.0 -4.48] [-1 -3.94 -4.4]))])
   ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
   (train [-9 -5 -7.24] [9 -2.7 -4.64] (door [0 -5 -4.64] 1.4 2.0) -55)
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
@@ -471,9 +492,9 @@
   (window [10.95 -4.1 0.6] [11.35 -2.4 3.4] glass)
   (lamp [13 -3.4 0.3] [0 0 1] [1 0 0])
   (door [18.7 -5 2] 1.2 2.2)
-  ; the bins: against the blocks either side of the hallway on the platform, at its ends,
-  ; and in each wing against the front block
+  ; the bins: on the platform against the blocks either side of the hallway and at its
+  ; ends, and in each wing against the front block
   (mirror-x 0
    [(bin [-5 -5 -0.4] 0.55 0.55 0.95 binmetal binsign)
-    (bin [-21.5 -5 -0.4] 0.55 0.55 0.95 binmetal binsign)
+    (bin [-10.5 -5 -1.0] 0.55 0.55 0.95 binmetal binsign)
     (bin [-15 -5 4.4] 0.55 0.55 0.95 binmetal binsign)]))

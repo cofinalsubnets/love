@@ -5,6 +5,10 @@
 ; run: cat test/00-init.l test/host/window.l | out/love
 (borrow 'window)
 (borrow 'synth)   ; synth-trows
+(borrow 'xwire)
+; a key the keymap makes a ctrl is ctrl's, wherever it sits: caps lock as ctrl
+(: xkm {66 [65507 0] 25 [119 87]}
+ (test (x-events [2 66 0 0 ""] xkm 0 = [['down 29]]) (x-events [3 66 0 4 ""] xkm 0 = [['up 29]]) (x-events [2 25 0 4 ""] xkm 0 = [['down 17]])))
 (: w0 {'w 1 'h 1 'paper (cask 4)}
    _ (window-own w0 'clipboard "kept", window-ask w0 'clipboard, window-ask w0 'primary)
    _ (test ([['paste "kept"] ['paste ""]] = window-events w0) (() = window-events w0)
