@@ -8,6 +8,25 @@
 (borrow 'glob) ; du --exclude
 
 (:
+   ; android's fixed ids (android_filesystem_config.h); each user's ids are 100000 apart
+   uaids {0 "root" 1 "daemon" 2 "bin" 1000 "system" 1001 "radio" 1002 "bluetooth" 1003 "graphics"
+          1004 "input" 1005 "audio" 1006 "camera" 1007 "log" 1008 "compass" 1009 "mount" 1010 "wifi"
+          1011 "adb" 1012 "install" 1013 "media" 1014 "dhcp" 1015 "sdcard_rw" 1016 "vpn"
+          1017 "keystore" 1018 "usb" 1019 "drm" 1020 "mdnsr" 1021 "gps" 1023 "media_rw" 1024 "mtp"
+          1026 "drmrpc" 1027 "nfc" 1028 "sdcard_r" 1029 "clat" 1030 "loop_radio" 1031 "mediadrm"
+          1032 "package_info" 1033 "sdcard_pics" 1034 "sdcard_av" 1035 "sdcard_all" 1036 "logd"
+          1037 "shared_relro" 1038 "dbus" 1039 "tlsdate" 1040 "mediaex" 1041 "audioserver"
+          1042 "metrics_coll" 1043 "metricsd" 1044 "webserv" 1045 "debuggerd" 1046 "mediacodec"
+          1047 "cameraserver" 1048 "firewall" 1049 "trunks" 1050 "nvram" 1051 "dns" 1052 "dns_tether"
+          1053 "webview_zygote" 1054 "vehicle_network" 1055 "media_audio" 1056 "media_video"
+          1057 "media_image" 1058 "tombstoned" 1059 "media_obb" 1060 "ese" 1061 "ota_update"
+          1062 "automotive_evs" 1063 "lowpan" 1064 "hsm" 1065 "reserved_disk" 1066 "statsd"
+          1067 "incidentd" 1068 "secure_element" 1069 "lmkd" 1070 "llkd" 1071 "iorapd"
+          1072 "gpu_service" 1073 "network_stack" 1074 "gsid" 1075 "fsverity_cert" 1076 "credstore"
+          1077 "external_storage" 1078 "ext_data_rw" 1079 "ext_obb_rw" 1080 "context_hub"
+          2000 "shell" 2001 "cache" 2002 "diag" 3001 "net_bt_admin" 3002 "net_bt" 3003 "inet"
+          3004 "net_raw" 3005 "net_admin" 3006 "net_bw_stats" 3007 "net_bw_acct" 3009 "readproc"
+          3010 "wakelock" 3011 "uhid" 9997 "everybody" 9998 "misc" 9999 "nobody"}
    ; a file destination: into a directory the source's basename lands beside
    (udest src dst) (udirp dst ? (dst + "/" + ubase src "") dst)
    ; copy bytes + permission bits (cp's heart; mv's cross-device leg).
@@ -608,10 +627,11 @@
    ; the stat tuple's tail past size mtime mode may be missing (the kernel's has no
    ; ownership): ust-at asks by tally and answers (), never a 0 someone might believe
    (ust-at st k) (#st <= k ? () (st k))
-   ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam)
+   ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam). android has
+   ; neither: its names are reckoned off the id as bionic's are (uidroid)
    (uidname path id)                   ; a numeric id -> its name, or the number back
     (uread path @ r
-     (atom? r ? (show id)
+     (atom? r ? (udroid? 0 ? (uidroid id) (show id))
       (: (go ls) (atom? ls ? (show id)
                   (usplit 58 <ls @ f
                    (3 <= #f && uatoi (f 2) = id ? (f 0) (go >ls))))
@@ -620,7 +640,27 @@
     (uread path @ r (two? r ?
    (:- (go (lines <>r)) (go ls) (two? ls ? 
     (usplit 58 <ls @ f
-     (3 <= #f && f 0 = nm ? [1 (uatoi (f 2))] (go >ls)))))))
+     (3 <= #f && f 0 = nm ? [1 (uatoi (f 2))] (go >ls)))))
+     (udroid? 0 ? (uidroid-of nm))))
+   (udroid? _) (!(two? (stat "/etc/passwd")) && two? (stat "/system/bin"))
+   (uidroid id)
+    (: u (id // 100000) a (id % 100000) up ("u" + show u + "_")
+       (? (99000 <= a) (up + "i" + show (a - 99000))
+          (a < 10000) (uaids a @ n (string? n ? (u = 0 ? n (up + n)) (show id)))
+          (50000 <= a < 60000 && u = 0) ("all_a" + show (a - 50000))
+          (40000 <= a < 50000) (up + "a" + show (a - 40000) + "_ext_cache")
+          (20000 <= a < 30000) (up + "a" + show (a - 20000) + "_cache")
+          (up + "a" + show (a - 10000))))
+   (uidroid-of nm)                     ; the way back: (1 id), or ()
+    (: (num s) (0 < #s && all (c \ 48 <= c <= 57) (chars s) ? (uatoi s))
+       (fixed s) (filter (k \ uaids k = s) (keys uaids) @ (k . _) k ())
+       (at u k) (charm? u && charm? k ? [1 (u * 100000 + k)])
+       (nm @ ("u" + us + "_" + r)
+             (: u (num us)
+                (r @ ("a" + n) (num n @ k (charm? k ? (at u (10000 + k)) (at u (fixed r))))
+                     ("i" + n) (num n @ k (charm? k ? (at u (99000 + k)) (at u (fixed r))))
+                     _ (at u (fixed r))))
+             _ (at 0 (fixed nm))))
    ; every group a user is in: the primary, then /etc/group's rows ascending, the
    ; kernel's credential order and so `id`'s
    (ugroups nm gid)
@@ -940,6 +980,25 @@
                    (words <l @ w
                     (go >l (3 <= #w ? ([(udf-esc (w 0)) (udf-esc (w 1)) (w 2)] . acc) acc))))
        (two? r ? (go (filter (s \ #s) (lines <>r)) ())))
+   ; each mount's root within its device, by point, from /proc/self/mountinfo
+   (udf-roots _)
+    (: r (uread "/proc/self/mountinfo") t {}
+       (two? r ? (foldl (t \ s \ (words s @ w (6 <= #w ? (pin t (udf-esc (w 4)) (udf-esc (w 3))) t))) t (lines <>r)) t))
+   ; one row a device, as GNU's df keeps: ms are (dev point type devno root), a devno () where
+   ; stat refused. a later mount takes the earlier's place when its dev is a path and the
+   ; other's is not, when it is nearer the root unless its own root lies deeper (a bind of a
+   ; subtree), or when it mounts over the same point from another dev
+   (udf-dedup ms)
+    (: (wins me sn) (? ((has? (me 0) "/") && !(has? (sn 0) "/")) 1
+                       (#(sn 1) > #(me 1) && !((sn 4) && (me 4) && #(sn 4) < #(me 4))) 1
+                       (me 0 != sn 0 && me 1 = sn 1) 1
+                       ())
+       (go l acc) (? (atom? l) (rev acc)
+                     (: me <l d (me 3)
+                        hit (charm? d && any (e \ e 3 = d) acc)
+                        (go >l (? !hit (me . acc)
+                                  (map (e \ (e 3 = d && wins me e) ? me e) acc)))))
+       (go ms ()))
    ; the mount a path sits on: the longest point its resolved name starts with, so a bind
    ; mount names itself. stat's %m asks this too
    (udf-holds ms p)
@@ -1016,7 +1075,10 @@
             (scan >mm (? (two? r) (a? || (r 1) ? ((typed (m 2) (udf-cells <m <>m r h? i?)) . acc) acc)
                          (r = 'eacces || r = 'enoent) (a? ? ((typed (m 2) [<m "-" "-" "-" "-" <>m]) . acc) acc)
                          (say err ("df: " + <>m + ": " + uerrno r), put err 10, pin t 'bad 1, acc)))))
-       rows (rev (two? fs ? (foldl (a \ p \ named p a) () fs) (scan ms ())))
+       ; the bare face shows each device once; -a shows every mount
+       (once ms) (: rt (udf-roots ())
+                    (udf-dedup (map (m \ (stat <>m @ st [<m <>m (m 2) (two? st ? (st 11)) (peep rt <>m ())])) ms)))
+       rows (rev (two? fs ? (foldl (a \ p \ named p a) () fs) (scan (a? ? ms (once ms)) ())))
        (two? rows ? (udf-show (hdr . rows) mins (T? ? '(0 1) '(0))),
         flush out,
         !!(peep t 'bad 0)))

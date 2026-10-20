@@ -1275,8 +1275,13 @@
        nm . old))
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
-   ; PATH, or libc's default when it is unset -- never the cwd alone
-   (sh-path _) (: p (getenv "PATH") (? (string? p) p "/usr/local/bin:/usr/bin:/bin"))
+   ; PATH, or libc's default when it is unset (android's where /system/bin stands without
+   ; /usr/bin) -- never the cwd alone
+   (sh-path _)
+    (: p (getenv "PATH")
+       (? (string? p) p
+          (two? (stat "/usr/bin") || !(two? (stat "/system/bin"))) "/usr/local/bin:/usr/bin:/bin"
+          "/system/bin:/system/xbin:/vendor/bin"))
    (sh-pathdirs _)
     (:- (go 0 0 ())
      p (sh-path ()) n #p

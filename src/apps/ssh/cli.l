@@ -23,7 +23,7 @@
    (cl-env k d) (: v (getenv k) (string? v ? v d))
    (cl-opts _)
     (: home (cl-env "HOME" "") o (tablet 8)
-       (pins o 'port 22 'user (cl-env "USER" "") 'key (home + "/.ssh/id_ed25519")
+       (pins o 'port 22 'user (cl-env "USER" (cite 'kore 'uidname "/etc/passwd" (getuid 0))) 'key (home + "/.ssh/id_ed25519")
                'kh (home + "/.ssh/known_hosts") 'shk "ask" 'pty -1,
         o))
    (cl-opt prog o kv)
@@ -159,7 +159,7 @@
     (die m) (udie 255 ("sshd: " + m))
     (readable? p) (: q (open p "r") (hot? q ? (close q, 1) 0))
     me (ssh-me 0)
-    _ (? (two? me) 0 (die "no /etc/passwd line for this uid"))
+    _ (? (two? me) 0 (die "no /etc/passwd line for this uid, and no HOME"))
     home (me 1)
     o (tablet 8)
     _ (pins o 'port 22 'quiet 0 'ak (home + "/.ssh/authorized_keys"))
