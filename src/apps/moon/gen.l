@@ -2920,7 +2920,7 @@
                       ['lea 'r1 'r4 (rsa + 64)]  '(st r0 8 r1)            ; __gr_top (past x0..x7)
                       ['lea 'r1 'r4 (rsa + 192)] '(st r0 16 r1)           ; __vr_top (past q0..q7)
                       ['li 'r1 -(8 * (8 - ngp))]  '(st4 r0 24 r1)    ; __gr_offs = -(unnamed gp)*8
-                      ['li 'r1 -(16 * (8 - nxmm))] '(st4 r0 28 r1)]  ; __vr_offs = -(unnamed vr)*16
+                      ['li 'r1 (nofp? g ? 0 -(16 * (8 - nxmm)))] '(st4 r0 28 r1)]  ; __vr_offs = -(unnamed vr)*16, none saved under nofp
                    [['li 'r1 (8 * ngp)]         '(st4 r0 0 r1)   ; gp_offset = 8*named-gp
                       ['li 'r1 (48 + 16 * nxmm)] '(st4 r0 4 r1)  ; fp_offset = 48 + 16*named-xmm
                       '(lea r1 r4 16)  '(st r0 8 r1)             ; overflow_arg_area = rbp+16
@@ -10461,7 +10461,8 @@
         (: rsa (nslot g 192)
            _ (pins g 'rsa rsa 'pcopy ())
            savegp (: (go i acc) (7 < i ? acc (go (i + 1) (acc + [['st 'r4 (rsa + 8 * i) (argregs-a64 i)]]))) (go 0 ()))
-           savevr (: (go i acc) (7 < i ? acc (go (i + 1) (acc + fstf g 'double 'r4 (rsa + 64 + 16 * i) (xmmreg i)))) (go 0 ()))
+           ; -mgeneral-regs-only: no q register is touched, the vr half stays empty (a kernel traps on one)
+           savevr (: (go i acc) (7 < i ? acc (go (i + 1) (acc + fstf g 'double 'r4 (rsa + 64 + 16 * i) (xmmreg i)))) (nofp? g ? () (go 0 ())))
            (cls qs gpi vri ov env)
             (!(two? qs) ? (pins g 'vagp gpi 'vaxmm vri 'vaov ov, [(savegp + savevr + g 'pcopy) env])
                (: p <qs pty <>p
