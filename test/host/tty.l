@@ -1,5 +1,5 @@
-; the tty apps on a pty, their output scribed onto a quay screen. the child sizes itself by stty:
-; a fresh pty is 0x0 and a parent's settty races its first read. no bare ESC: ESC then a key is alt
+; the tty apps on a pty, scribed onto a quay screen. the child sizes itself by stty: a fresh
+; pty is 0x0 and a parent's settty races its first read. no bare ESC: ESC then a key is alt.
 ; tether is not in love0, so no corpus. run: cat test/00-init.l test/host/00-host.l test/host/tty.l | out/love
 (borrow 'synth)
 (: reaped {}
@@ -73,8 +73,8 @@
  c (run "out/love lore tower" "\e[Chq" 20 70)
  _ (test (blank? (rowtx <>c 0)) (has? <c "you leave the tower"))
 
-; keys left behind the quit must not reach the shell after it; z takes the sign down, q leaves,
-; and the non-blocking cat after it reads whatever survived
+; keys left behind the quit must not reach the shell: z takes the sign down, q leaves,
+; and the non-blocking cat reads whatever survived
  dr (: t (guard (tether ["sh" "-c" ("stty rows 20 columns 70 -echo; out/love lore tower; "
                                     + "stty -icanon min 0 time 3; cat")]))
        m >t
@@ -87,8 +87,8 @@
  _ (test (has? dr "you leave the tower")
          !(has? dr "zzzz"))
 
-; slop's sign is deaf for half a second, so a key typed then is eaten: the screen stands still,
-; counted by cursor-homes (one per frame), where a heard key would lay many
+; slop's sign is deaf for half a second, so a key typed then is eaten: counted by
+; cursor-homes (one per frame), where a heard key would lay many
  sgt (spawn "out/love lore slop phone 38" 14 64)
  sgm >sgt
  sgseen (wire sgm "-- any key --")

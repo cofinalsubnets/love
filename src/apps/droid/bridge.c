@@ -19,8 +19,11 @@
    input stream's s16 frames go back. assets/perms names the permissions to ask for at
    start (RECORD_AUDIO for the mic), NUL-separated; the input stream waits on the grant.
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
-   directory before each start, which is love's cwd and HOME. when love ends it is started
-   again; the app ends as android ends it. */
+   directory before each start, which is love's cwd and HOME. love inherits the app's own
+   environment (android's ANDROID_* and PATH; an app's uid is refused am, pm and settings,
+   which want the framework's java), and its PATH leads with DATA/bin, where love is linked
+   under its own name. when love ends it is started again; the app ends as android
+   ends it. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
 
@@ -61,6 +64,7 @@ pid_t fork(void); int execve(char const *, char *const[], char *const[]); int pi
 int dup2(int, int); int close(int); ssize_t read(int, void *, size_t); ssize_t write(int, void const *, size_t);
 void _exit(int); pid_t waitpid(pid_t, int *, int); int kill(pid_t, int); int chdir(char const *);
 int open(char const *, int, ...); int unlink(char const *);
+int symlink(char const *, char const *); int mkdir(char const *, unsigned); char *getenv(char const *);
 int socket(int, int, int); int bind(int, void const *, unsigned); int listen(int, int); int accept4(int, void *, void *, int);
 void *mmap(void *, size_t, int, int, int, long); int munmap(void *, size_t);
 int pthread_create(void *, void const *, void *(*)(void *), void *); int pthread_join(long, void **);
@@ -487,7 +491,7 @@ static void *loop(void *p) {
 }
 
 static void spawn(br *b) {
-  char *av[32], exe[600], *ev[6], home[600], tmp[600], face[640], horn[640], ear[640];
+  char *av[32], exe[600], *ev[64], home[600], tmp[600], face[640], horn[640], ear[640], bin[620], path[1400];
   void *as = AAssetManager_open(b->a->assetManager, "argv", 3);
   char const *s = as ? AAsset_getBuffer(as) : 0; long n = as ? AAsset_getLength(as) : 0;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
@@ -497,7 +501,22 @@ static void spawn(br *b) {
   snprintf(home, sizeof home, "HOME=%s", b->data); snprintf(tmp, sizeof tmp, "TMPDIR=%s", b->data);
   snprintf(face, sizeof face, "LOVE_FACE=%s", b->sock); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
   snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear);
-  ev[0] = home; ev[1] = tmp; ev[2] = face; ev[3] = horn; ev[4] = ear; ev[5] = 0;
+  snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
+  snprintf(bin, sizeof bin, "%s/bin/love", b->data); unlink(bin); symlink(exe, bin);   /* its dir moves per install */
+  char const *pp = getenv("PATH");
+  snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
+  ev[0] = home; ev[1] = tmp; ev[2] = face; ev[3] = horn; ev[4] = ear; ev[5] = path;
+  int e = 6;                                   /* then the app's own, but for the ones set here */
+  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=" };
+  char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
+  for (char **v = envp ? *envp : 0; v && *v && e < 63; v++) {
+    int mine = 0;
+    for (unsigned i = 0; i < sizeof ours / sizeof *ours; i++) {
+      char const *o = ours[i], *t = *v;
+      while (*o && *o == *t) o++, t++;
+      if (!*o) mine = 1; }
+    if (!mine) ev[e++] = *v; }
+  ev[e] = 0;
   int p[2]; pipe2(p, O_CLOEXEC);
   b->pid = fork();
   if (!b->pid) { dup2(p[1], 1); dup2(p[1], 2); chdir(b->data); execve(exe, av, ev); _exit(127); }

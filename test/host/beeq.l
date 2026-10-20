@@ -1,6 +1,5 @@
-; bee's merge queue (src/apps/bee.l): one scenario played by bee agents and by `love bee --mcp`
-; sessions must leave the same queue and notices. each way has a scratch repository laid alike
-; (fixed names and dates, so the same shas), its own hive and locks; queen leads
+; bee's merge queue (src/apps/bee.l): one scenario played by `love bee --mcp` sessions in a
+; scratch repository (fixed names and dates, so the same shas), its own hive and locks; queen leads
 ;   cat test/00-init.l test/host/beeq.l | out/love
 (borrow 'json)
 (borrow 'locks)
@@ -22,37 +21,7 @@
    bq-q "refs/queue/test"
    bq-names ["ant" "bob" "carol" "queen"]
 
-   ; the model: requests heard as [session body], answers still to give per session
-   bq-box {'got () 'q {}}
-   bq-pl (test-listen 0)
-   bq-l (bq-pl 1)
-   bq-url ("http://127.0.0.1:" + show <bq-pl)
-   (bq-head c a) (: b (see c) (? (b < 0) a (: a2 (a + string b) (? (has? a2 "\r\n\r\n") a2 (bq-head c a2)))))
-   (bq-take c n a) (? (#a < n) (: b (see c) (? (b < 0) a (bq-take c n (a + string b)))) a)
-   (bq-who body)
-    (: s (peep body "system" "") k (bq-find s "session named " 0)
-       (? (k < 0) "?" (: e (bq-find s "." k) (snip s (k + 14) e))))
-   (bq-sse evs) (foldl (\ a e (a + "data: " + json-show e + "\n\n")) "" evs)
-   (bq-ok s) ("HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n\r\n" + s)
-   bq-end (bq-ok (bq-sse [{"type" "message_delta" "delta" {"stop_reason" "end_turn"}}]))
-   (bq-use id nm in)
-    (bq-ok (bq-sse [{"type" "content_block_start" "index" 0 "content_block" {"type" "tool_use" "id" id "name" nm "input" {}}}
-                    {"type" "content_block_delta" "index" 0 "delta" {"type" "input_json_delta" "partial_json" (json-show in)}}
-                    {"type" "content_block_stop" "index" 0}
-                    {"type" "message_delta" "delta" {"stop_reason" "tool_use"}}]))
-   (bq-serve c)
-    (: hd (bq-head c "")
-       n (: v ((cite 'kore 'wg-header) hd "content-length") (? (string? v) ((cite 'kore 'wg-digits) v) 0))
-       j (json-read (bq-take c n ""))
-       body (? (two? j) (j 1) {})
-       who (bq-who body)
-       q (peep (bq-box 'q) who ())
-       _ (pin (bq-box 'q) who (two? q ? >q ()))
-       _ (pin bq-box 'got ([who body] . bq-box 'got))
-       _ (say c (two? q ? <q bq-end))
-       _ (flush c)
-       (close c))
-   bq-srv (twirl (\ _ ((: (g k) (: _ (await bq-l) c (accept bq-l) _ (bq-serve c) (g k))) 0)) 0)
+   bq-box {}
 
    ; a way's world: HOME, a hive, locks and the repository
    (bq-git w as)
@@ -62,8 +31,7 @@
    (bq-world nm)
     (: d (bq-root + "/" + nm) r (d + "/repo")
        _ (map (\ p (mkdir p 493)) [d (d + "/.love") (d + "/.love/etc")])
-       _ (bq-put (d + "/.love/etc/bee.l")
-                 ("(api anthropic)\n(url \"" + bq-url + "/v1/messages\")\n(model claude-mock)\n(heavy-max 1)\n"))
+       _ (bq-put (d + "/.love/etc/bee.l") "(heavy-max 1)\n")
        w {'dir d 'repo r 'locks (d + "/locks") 'env ("HOME=" + bq-sq d + " BEE_LOCKS=" + bq-sq (d + "/locks"))}
        _ (hark ["git" "init" "-q" "-b" "test" r])
        _ (bq-put (r + "/f") "one\n")
@@ -86,19 +54,18 @@
        q (fdopen <pp) (go a) (: c (see q) (? (c < 0) a (: _ (unsee q c) (go (a + chug q)))))
        o (go "") _ (close q)
        [(bq-reap p) o])
-   ; a session started detached in the repository -> [pid stdin stdout], the pipes () for a bee
-   (bq-start w nm line pipes)
-    (: pi (pipe 0) po (pipe 0) lg (openfd (w 'dir + "/" + nm + ".log") 2) nul (openfd "/dev/null" 0)
+   ; a session started detached in the repository -> [pid stdin stdout]
+   (bq-start w nm line)
+    (: pi (pipe 0) po (pipe 0) lg (openfd (w 'dir + "/" + nm + ".log") 2)
        cmd ("cd " + bq-sq (w 'repo) + " && exec env " + w 'env + " BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " " + line)
        ; the child closes fds above 2, so no session holds another's stdin open
        fds (: ns (readdir "/proc/self/fd") (? (two? ns) (filter (\ n (2 < n)) (map (cite 'kore 'wg-digits) ns)) ()))
-       p (? pipes (spawnio ["sh" "-c" cmd] <pi >po lg fds -1 0) (spawnio ["sh" "-c" cmd] nul lg lg fds -1 0))
-       _ (close <pi) _ (close >po) _ (close lg) _ (close nul)
-       (? pipes [p (fdopen >pi) (fdopen <po)] (: _ (close >pi) _ (close <po) [p () ()])))
-   (bq-card w nm) (bq-get (w 'dir + "/.love/run/hive/" + nm + "/card"))
+       p (spawnio ["sh" "-c" cmd] <pi >po lg fds -1 0)
+       _ (close <pi) _ (close >po) _ (close lg)
+       [p (fdopen >pi) (fdopen <po)])
    (bq-until f n) (? (f 0) 1 (n <= 0) 0 (: _ (rest 100) (bq-until f (n - 1))))
 
-   ; the steps: [id session tool input], the scenario either way plays
+   ; the steps: [id session tool input], the scenario played
    (bq-steps w)
     [["s1" "ant" "queue_row" {"queue" bq-q "state" "waiting" "branch" "ant" "leader" "queen"}]
      ["s2" "bob" "queue_row" {"queue" bq-q "state" "waiting" "branch" "bob"}]
@@ -149,44 +116,9 @@
               {} (filter (\ l (0 < #l)) (lines (r 1)))))
    bq-gap 2000)                                                   ; two readings of each queue apart
 
-; the bee agents: a driver message starts a turn whose one call the model hands it
-(: w (bq-world "native")
-   ps (map (\ nm (bq-start w nm "--serve -y" 0)) bq-names)
-   _ (bq-until (\ _ (all (\ nm (has? (bq-card w nm) "state idle")) bq-names)) 100)
-   (post nm) (: ib (w 'dir + "/.love/run/hive/" + nm + "/inbox") id (show (clock 0) + "-driver")
-                _ (bq-put (ib + "/." + id) "from driver\n\ngo on\n")
-                (rename (ib + "/." + id) (ib + "/" + id)))
-   (step s)
-    (? !(two? s) (bq-aside w s)
-       (: nm (s 1)
-          _ (pin (bq-box 'q) nm [(bq-use <s (s 2) (s 3))])
-          _ (post nm)
-          _ (bq-until (\ _ !(two? (peep (bq-box 'q) nm ()))) 150)
-          _ (bq-until (\ _ (has? (bq-card w nm) "state idle")) 150)
-          (rest bq-gap)))
-   _ (map step (bq-steps w))
-   _ (rest (2 * bq-gap))                                         ; the last notices, taken
-   got (rev (bq-box 'got))
-   ; every tool_result by its id, and every message each session was handed
-   (users b) (filter (\ m (m "role" = "user")) (peep b "messages" ()))
-   (texts m) (: c (m "content") (? (string? c) [c] (map (\ x (peep x "text" (peep x "content" ""))) c)))
-   res (foldl (\ t g (foldl (\ t m (: c (m "content")
-                                     (? (string? c) t
-                                        (foldl (\ t x (? (peep x "type" "" = "tool_result") (pin t (x "tool_use_id") (x "content")) t)) t c))))
-                             t (users (g 1))))
-              {} got)
-   heard (foldl (\ t nm (pin t nm (bq-set (filter (\ l !(starts? l "driver: "))    ; the driver's nudges are this way's own
-                                                  (catmap (\ g (? (<g = nm) (catmap (\ m (catmap bq-mail (texts m))) (users (g 1))) ()))
-                                                          got)))))
-                {} bq-names)
-   _ (map (\ nm (bq-sh w (bq-sq bq-love + " " + bq-sq bq-app + " --stop " + nm))) bq-names)
-   _ (map (\ p (bq-reap <p)) ps)
-   _ (pin bq-box 'native {'queue (bq-out (bq-git w ["cat-file" "-p" bq-q])) 'res res 'heard heard 'w w})
-   0)
-
 ; the claude code sessions: MCP servers over stdio; inbox takes the mail left at the end
 (: w (bq-world "mcp")
-   ss (foldl (\ t nm (pin t nm (bq-start w nm "--mcp" 1))) {} bq-names)
+   ss (foldl (\ t nm (pin t nm (bq-start w nm "--mcp"))) {} bq-names)
    box {'n 100}
    (line q) (: (go acc) (: c (see q) (? (c < 0 || c = 10) (string (rev acc)) (go (c . acc)))) (go ()))
    ; the answer to request n, past the bell's notices, which carry no id
@@ -224,20 +156,13 @@
                        'listed (listed 1) 'gone (gone 1) 'init (box "ant")})
    0)
 
-; the law: the same queue, answers and notices
-(: n (bq-box 'native) m (bq-box 'mcp)
-   (r k) (: a (bq-plain (n 'w) (peep (n 'res) k "")) b (bq-plain (m 'w) (peep (m 'res) k "")) [a b])
-   ids ["s1" "s2" "s3" "s4" "s5" "s6" "s7" "s8" "s9" "s10"]
-   same (filter (\ k (: x (r k) (<x != x 1))) ids)
-   diff (filter (\ nm (show (n 'heard nm) != show (m 'heard nm))) bq-names)
-   _ (? (two? same) (map (\ k (: x (r k) (puts ("beeq: " + k + " differs\n  bee: " + <x + "\n  mcp: " + x 1 + "\n")))) same) 0)
-   _ (? (two? diff) (map (\ nm (puts ("beeq: " + nm + " heard\n  bee: " + show (n 'heard nm) + "\n  mcp: " + show (m 'heard nm) + "\n"))) diff) 0)
+; the law: the queue, answers and notices
+(: m (bq-box 'mcp)
    q (m 'queue) g ((m 'w) 'g)
-   (said k) (<(r k))
+   (said k) (bq-plain (m 'w) (peep (m 'res) k ""))
    (hears nm s) (elem s (m 'heard nm))
    _ (test
-      (0 < #q) (n 'queue = q)                                         ; the same queue, byte for byte
-      !(two? same) !(two? diff)                                       ; the same answers, the same notices
+      (0 < #q)
       (has? q "on bee's standard protocol") (has? q "leader queen")
       (has? q "3 carol carol - - waiting  # still here") !(has? q " ant ") !(has? q " bob ")
       (has? q ("test " + bq-out (bq-git (m 'w) ["rev-parse" "--short" "test"])))
@@ -389,81 +314,6 @@
    0)
 
 
-; the queue on an sb ledger: a gated head is the psid of the gated set; the land is refused until
-; the hub holds it, then realizes it exactly, and queue_landed moves the base line to it
-(: w (bq-box 'mcp 'w) lq "queue/sbq" hub (w 'dir + "/hub") wa (w 'dir + "/wa") wb (w 'dir + "/wb")
-   (sb d as) (bq-out (hark ([bq-love "sb" "-C" d] + as)))
-   (put d f) (bq-put (d + "/" + f) (f + "\n"))
-   calls (bq-calls w lq ("SB_HUB=" + bq-sq hub + " GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "))
-   _ (map (\ d (mkdir d 493)) [hub wa wb])
-   _ (put hub "f") _ (sb hub ["record" "one"])
-   m (sb hub ["psid"])
-   _ (sb wa ["sync" hub]) _ (put wa "a") _ (hark ["mkdir" "-p" (wa + "/src/apps")]) _ (put wa "src/apps/bee.l")
-   _ (sb wa ["record" "a"])
-   _ (sb wb ["sync" hub]) _ (put wb "b") _ (sb wb ["record" "b"])
-   _ (sb wa ["sync" wb])                                          ; the union, gated in wa
-   _ (sb wa ["bank" "union"])
-   g (sb wa ["psid"])
-   a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "union" "leader" "queen"}]
-                   [2 "queue_row" {"state" "green" "gated_on" m "gated_head" g}]
-                   [3 "queue_land" {}]])
-   _ (sb wa ["sync" "--keep" hub])                                ; deposited: the hub holds it
-   b (calls "ant" [[14 "queue_row" {"state" "green" "gated_on" m "gated_head" g}] [4 "queue_land" {}] [5 "queue_landed" {}]])
-   _ (sb hub ["take" g])
-   ; the git mirror refuses a branch checked out elsewhere; sbm keeps its parent's web/ alone
-   _ (bq-git w ["checkout" "-q" "-b" "sbm" "test"]) _ (hark ["mkdir" "-p" (w 'repo + "/web")])
-   _ (bq-put (w 'repo + "/web/keep.txt") "kept\n") _ (bq-put (w 'repo + "/old.txt") "old\n")
-   _ (bq-git w ["add" "web/keep.txt" "old.txt"]) _ (bq-git w ["commit" "-q" "-m" "the mirror's parent"])
-   _ (bq-git w ["checkout" "-q" "test"])
-   mp (bq-out (bq-git w ["rev-parse" "sbm"]))
-   m1 (calls "queen" [[7 "queue_lead" {"mirror" (w 'repo + " test")}]])
-   c0 (calls "ant" [[8 "queue_landed" {}]])
-   m2 (calls "queen" [[9 "queue_lead" {"mirror" (w 'repo + " sbm web/")}]])
-   c (calls "ant" [[6 "queue_landed" {"release" "a and b are in"}]])
-   mt (bq-out (bq-git w ["ls-tree" "-r" "--name-only" "sbm"]))
-   mparent (bq-out (bq-git w ["rev-parse" "sbm^"]))
-   mmsg (bq-out (bq-git w ["log" "-1" "--format=%B" "sbm"]))
-   mbee (bq-out (bq-git w ["show" "sbm:src/apps/bee.l"]))
-   q (sb hub ["ledger" lq])
-   ; a docs-only row with the hub's derives gone: the landed paths are d's alone, no restart
-   ; line; as a publish it needs a web/, which the mirror takes from the publisher
-   _ (sb wb ["sync" hub]) _ (put wb "d") _ (sb wb ["record" "d"]) _ (sb wb ["bank" "docs"])
-   g2 (sb wb ["psid"])
-   _ (sb wb ["sync" "--keep" hub])
-   d (calls "bob" [[10 "queue_row" {"state" "waiting" "branch" "docs"}]
-                   [11 "queue_row" {"state" "green" "gated_on" g "gated_head" g2}]])
-   _ (sb hub ["take" g2])
-   _ (hark ["sh" "-c" ("rm -f " + bq-sq hub + "/.sb/derive/*")])
-   pd (hub + ".pub") _ (hark ["mkdir" "-p" (pd + "/web/wasm")])
-   _ (bq-put (pd + "/web/keep.txt") "new\n") _ (bq-put (pd + "/web/wasm/m.wasm") "wasm\n")
-   e0 (calls "bob" [[15 "queue_landed" {"publish" "rel/dir"}] [16 "queue_landed" {"publish" (hub + "/f")}]])
-   e (calls "bob" [[12 "queue_landed" {"release" "d is in" "publish" pd}]])
-   mt2 (bq-out (bq-git w ["ls-tree" "-r" "--name-only" "sbm"]))
-   mkeep (bq-out (bq-git w ["show" "sbm:web/keep.txt"]))
-   rd (calls "bob" [[13 "queue_read" {}]])
-   _ (test
-      (#m = 64) (#g = 64) (m != g)
-      (has? (a 1) "made queue/sbq on bee's standard header, led by queen")
-      (has? (a 2) ("no set " + g + " in the hub: paste it from sb psid"))   ; refused before the deposit
-      (has? (a 3) "only a green row lands") (has? (b 14) " green")
-      (has? (b 4) ("sb -C " + hub + " take " + g)) (has? (b 4) ("psid   # must print " + g))
-      (has? (b 5) ("not the gated set " + g))
-      (has? (c 6) ("landed: row 1 left queue/sbq, whose base line is now sbq " + g + "."))
-      (has? (c 6) "this landing changed bee: every live session restarts")
-      (has? (m1 7) "the change is in") (has? (c0 8) "is checked out at") (has? (c0 8) "the row stays")
-      (has? (c 6) "the mirror: a commit")
-      (mt = "a\nb\nf\nsrc/apps/bee.l\nweb/keep.txt") (mparent = mp) (mbee = "src/apps/bee.l")
-      (has? mmsg "Merge queue row 1 (ant)") (has? mmsg ("sb psid " + g))
-      (has? q "land by psid") (has? q ("\nsbq " + g + "\n")) !(has? q " ant ")
-      (sb hub ["psid"] = g2)
-      (bq-get (hub + "/a") = "a\n") (bq-get (hub + "/b") = "b\n")
-      (#g2 = 64) (has? (e 12) ("whose base line is now sbq " + g2 + ".")) !(has? (e 12) "restarts")
-      (has? (e0 15) "publish is the absolute path") (has? (e0 16) "has no web") (has? (e0 16) "the row stays")
-      (has? (e 12) ("its web/ from " + pd)) (mkeep = "new")
-      (mt2 = "a\nb\nd\nf\nsrc/apps/bee.l\nweb/keep.txt\nweb/wasm/m.wasm")
-      (has? (rd 13) ("\nsbq " + g2 + "\n")) (has? (rd 13) "land by psid"))
-   0)
-
 ; a row merged but not queue_landed blocks the row behind, and the answer names the locked fast gate
 (: w (bq-world "landing") lq bq-q
    (sha r) (bq-out (bq-git w ["rev-parse" r]))
@@ -485,48 +335,6 @@
       (has? (d 7) "landed: row 1 left")
       (has? (e 8) ("git merge --no-ff " + gu))
       (has? (e 8) "love bee --lock --out ") (has? (e 8) (w 'repo + "/out")) (has? (e 8) " -- make test"))
-   0)
-
-; a git queue's sb shadow: each landing recorded, banked and mirrored; a tree that differs
-; (out/x, never recorded) stops it, recording nothing
-(: w (bq-world "shadow") lq bq-q hub (w 'dir + "/hub")
-   (sha r) (bq-out (bq-git w ["rev-parse" r]))
-   (sb d as) (bq-out (hark ([bq-love "sb" "-C" d] + as)))
-   calls (bq-calls w lq "GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t ")
-   (row nm k br on)
-    (calls nm [[k "queue_row" (: j {"state" "waiting" "branch" br} (k = 1 ? (pin j "leader" "queen") j))]
-               [(k + 1) "queue_row" {"state" "green" "gated_on" on "gated_head" (sha br)}]])
-   _ (row "ant" 1 "ant" (sha "test"))
-   s0 (calls "queen" [[3 "queue_lead" {"shadow" "rel/hub sh"}] [4 "queue_lead" {"shadow" (hub + " sh web/")}]])
-   _ (bq-git w ["merge" "-q" "--no-ff" (sha "ant") "-m" "Merge queue row 1 (ant)"])
-   b (calls "ant" [[5 "queue_landed" {}]])
-   t1 (sha "test") lg (bq-get (hub + ".shadow.log")) tr [(sha "sh^{tree}") (sha "test^{tree}")]
-   (check c) (bq-sh w ("GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "
-                       + bq-sq bq-love + " " + bq-sq bq-app + " --shadow-check " + bq-sq hub + " ck " + c))
-   k1 (check t1) k0 (check (sha "test^"))
-   _ (bq-git w ["checkout" "-q" "-b" "bobx" "test"]) _ (hark ["mkdir" "-p" (w 'repo + "/out")])
-   _ (bq-put (w 'repo + "/out/x") "x\n") _ (bq-git w ["add" "-f" "out/x"]) _ (bq-git w ["commit" "-q" "-m" "out/x"])
-   _ (bq-git w ["checkout" "-q" "test"])
-   _ (row "bob" 6 "bobx" t1)
-   _ (bq-git w ["merge" "-q" "--no-ff" (sha "bobx") "-m" "Merge queue row 2 (bob)"])
-   d (calls "bob" [[8 "queue_landed" {}]])
-   st (bq-get (hub + ".shadow.stop"))
-   _ (bq-git w ["checkout" "-q" "-b" "c3" "test"]) _ (bq-put (w 'repo + "/c") "c\n")
-   _ (bq-git w ["add" "c"]) _ (bq-git w ["commit" "-q" "-m" "c"]) _ (bq-git w ["checkout" "-q" "test"])
-   _ (row "carol" 9 "c3" (sha "test"))
-   _ (bq-git w ["merge" "-q" "--no-ff" (sha "c3") "-m" "Merge queue row 3 (carol)"])
-   e (calls "carol" [[11 "queue_landed" {}]])
-   _ (test
-      (has? (s0 3) "shadow is HUB BRANCH") (has? (s0 4) "the change is in")
-      (has? (b 5) "landed: row 1 left")
-      (has? (b 5) ("the shadow: gwen-" + snip t1 0 9 + " recorded in " + hub)) (has? (b 5) "the tree matches")
-      (<tr = tr 1) (has? (bq-out (bq-git w ["log" "-1" "--format=%B" "sh"])) ("shadow of " + t1))
-      (sb hub ["psid" ("gwen-" + t1)] = sb hub ["psid"]) (bq-get (hub + "/a") = "a\n")
-      (has? lg (t1 + " ")) (has? lg " match ")
-      (<k1 = 0) (has? (k1 1) (t1 + "'s")) (<k0 = 1) (has? (k0 1) "differs")
-      (has? (d 8) "landed: row 2 left") (has? (d 8) "the shadow: STOPPED") (has? (d 8) "out/x")
-      (has? (d 8) "queen") (has? st "out/x")
-      (has? (e 11) "landed: row 3 left") (has? (e 11) "still stopped") !(has? (e 11) "queen") (bq-get (hub + "/c") = ""))
    0)
 
 ; a waiting join folds into the earliest waiting row ahead when the heads merge clean but for

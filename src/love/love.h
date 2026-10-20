@@ -700,7 +700,7 @@ lvm_t lvm_kcall,
  lvm_saturate, lvm_ceil, lvm_peep, lvm_nifnom, lvm_cask, lvm_bcopy, lvm_xlat,
  lvm_coin, lvm_coinmk, lvm_load, lvm_coinp, lvm_kind, lvm_sub_coin, lvm_quot_coin,
  lvm_charmp, lvm_tabp, lvm_band, lvm_bor, lvm_gem, lvm_gemp,
- lvm_sin, lvm_cos, lvm_tan, lvm_atan, lvm_atan2, lvm_exp, lvm_sqrt, lvm_log, lvm_pow,
+ lvm_sin, lvm_cos, lvm_tan, lvm_atan, lvm_asin, lvm_acos, lvm_atan2, lvm_exp, lvm_sqrt, lvm_log, lvm_pow,
  lvm_twin, lvm_twinp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,
  lvm_bxor, lvm_bsr, lvm_bsl, lvm_puts,
  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge, lvm_elem, lvm_eleq,
@@ -738,7 +738,8 @@ lvm_t lvm_kcall,
  lvm_natp,        // (nat? f): code in the arena
  lvm_arena,       // (arena 0): the code arena's [mapped bumped free spans]
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
- lvm_deferfwd;    // a deferred native's code slot until its compile patches it (tablet.c)
+ lvm_deferfwd,    // a deferred native's code slot until its compile patches it (tablet.c)
+ lvm_firstcall;   // ..and a first-call one's, until that call (LOVE_LAZY_GLAZE)
 // these carry lvm()'s attributes, so they cannot join the plain list above
 love_noinline noicf lvm_t
  lvm_0, lvm_add_seq, lvm_add_string, lvm_addh, lvm_arg0,
@@ -1055,6 +1056,9 @@ static love_inline struct tag { union u *head; union u end[]; } *ttag(struct g*g
  return (struct tag*) k; }
 static love_inline union u *tag_head(struct tag *t) {
  return cell(word(t->head) & ~(word) 3); }
+// a cask over a fresh n-byte string, its first `clear` bytes zeroed, for a host lane to lay a C
+// state into; NULL when the room was refused (*gp is then not ok)
+union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear);
 
 // a non-allocating walk's scratch, the free room [hp, sp): true only if its vm op packed first
 static love_inline word *gap(struct g *g, word **top) {

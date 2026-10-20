@@ -119,7 +119,7 @@
     wkeys st "oexample.com/q\r",
     test (st 'go = ["https://example.com/q" 1 -1]) (st 'mode = 'n),
     (: _ (pin st 'go (), wkeys st "h") ls (st 'ls)
-       (test (st 'file = "HELP") (0 <= fsub <ls "kore www" 0))),
+       (test (st 'file = "HELP") (0 <= fsub <ls "www --" 0))),
     wkeys st "q",
     test (st 'file = at + "/a.html") !(st 'quit),
     ; a fresh page opens at its <main>; m goes back there, a reload keeps the place

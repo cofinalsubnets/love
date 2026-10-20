@@ -1,24 +1,23 @@
-; test/law/kore.l -- the kore laws: the diffs' projections and minimality against an lcs
-; oracle with a seeded fuzz, the tool floors to their GNU faces, the regex floor by hand,
-; and a seeded fuzz over bc's algebra. reads the leaked globals of the kore toolboxes.
+; test/law/kore.l -- the kore laws: diffs against an lcs oracle with a seeded fuzz, the tool
+; floors to their GNU faces, the regex floor by hand, a seeded fuzz over bc's algebra
 
 ; --- the classic: Myers' own worked example, D = 5 ---
 (: A '(a b c a b b a) B '(c b a b a c) s (myers A B)
    (test
-      (dold s = A) (dnew s = B)                             ; the script spells both sides
+      (dold s = A) (dnew s = B)
       (dcost s = 5)))                                       ; the paper's shortest path
 
 ; --- the edges: empties, equal, disjoint, a lone keep ---
 (: s1 (myers () '(1 2)) s2 (myers '(1 2) ()) s3 (myers '(1 2 3) '(1 2 3)) s4 (myers '(1 2) '(3 4))
    (test
-      !(myers () ())                                        ; nothing to nothing is nothing
-      (dnew s1 = '(1 2)) !(dold s1) (dcost s1 = 2)          ; all adds
-      (dold s2 = '(1 2)) !(dnew s2) (dcost s2 = 2)          ; all dels
-      (dold s3 = '(1 2 3)) (dnew s3 = '(1 2 3)) (dcost s3 = 0)         ; equal: all keeps
-      (dcost s4 = 4)                                        ; disjoint: total replacement
+      !(myers () ())
+      (dnew s1 = '(1 2)) !(dold s1) (dcost s1 = 2)
+      (dold s2 = '(1 2)) !(dnew s2) (dcost s2 = 2)
+      (dold s3 = '(1 2 3)) (dnew s3 = '(1 2 3)) (dcost s3 = 0)
+      (dcost s4 = 4)
       (myers '(1) '(1) = '((keep 1)))
       (dcost (myers '(a) '(b)) = 2)
-      (dcost (myers '(x a b c) '(a b c y)) = 2)))           ; one del + one add around the shared run
+      (dcost (myers '(x a b c) '(a b c y)) = 2)))
 
 ; --- the seeded fuzz: dcost = n + m - 2*lcs, and the projections spell the inputs back ---
 (: (lcslen a b)
@@ -32,7 +31,7 @@
                       goj i (j + 1))))
        (goi i) (n < i ? (get n m) (goj i 1, goi (i + 1)))
        (goi 1))
-   (rlist i st acc) (i < 1 ? [acc st]                       ; a random list over the alphabet 1..4; answers (list state)
+   (rlist i st acc) (i < 1 ? [acc st]                       ; a random list over 1..4, and the state
                        (random st 4 @ r (rlist (i - 1) >r ((1 + <r) . acc))))
    (fz i st)
     (i < 1 ? 'ok
@@ -47,8 +46,7 @@
    r (fz 100 (wheel 7))
    (test (r = 'ok)))
 
-; --- patience: the projections hold, minimality is traded (never below myers), and
-; the unique-in-both lines land as keeps ---
+; --- patience: projections hold, never below myers, unique-in-both lines land as keeps ---
 (: (keeps s) (map caup (filter (o \ <o = 'keep) s))
    A '(a b c a b b a) B '(c b a b a c)
    s (patience A B)                                             ; no unique-both line here ...
@@ -88,9 +86,9 @@
 (: t "a\nb\n" u "a\n\nb\n"
    (test
       (lines t = '("a" "b")) (unlines '("a" "b") = t)
-      (unlines (lines t) = t) (unlines (lines u) = u)             ; round trips, empty line included
-      !(lines "") !(unlines ())                                   ; nothing bridges to nothing
-      (#(lines "\n") = 1) (unlines (lines "\n") = "\n")           ; one empty line, kept
+      (unlines (lines t) = t) (unlines (lines u) = u)
+      !(lines "") !(unlines ())
+      (#(lines "\n") = 1) (unlines (lines "\n") = "\n")
       (#(lines u) = 3)
       (lines "a\nb" = '("a" "b")) (unlines (lines "a\nb") = t)))       ; the one normalization
 
@@ -102,7 +100,7 @@
    x2 "@@ -2,3 +2,3 @@\n b\n-c\n+C\n d\n@@ -6,3 +6,3 @@\n f\n-g\n+G\n h\n"
    (test
       (d1 = x1) (s2 = x2)
-      !(udiff "a" "b" at at)                                      ; agreement is nothing
+      !(udiff "a" "b" at at)
       (udiff "a" "b" "" "x\n" = "--- a\n+++ b\n@@ -0,0 +1 @@\n+x\n")
       (udiff "a" "b" "x\n" "" = "--- a\n+++ b\n@@ -1 +0,0 @@\n-x\n")))
 
@@ -131,16 +129,14 @@
       (ubase "b" "b" = "b")                                        ; the suffix never eats the whole name
       (udir "/a/b" = "/a") (udir "a" = ".") (udir "/" = "/")
       (udir "a/" = ".") (udir "/a/b/" = "/a")
-      ; the quote-blind split is post.l's `words`
       (words " a  bb\tc\n" = '("a" "bb" "c"))
       (words "x" = '("x"))
       !(words "  \n") !(words "")))
 
-; --- the field floor: usplit keeps the empty tail (cut's face), uspec/upick read cut's
-; list, uset expands tr's ranges and escapes ---
+; --- the field floor: usplit keeps the empty tail (cut's face), uset reads tr's sets ---
 (: (test
       (usplit 58 "a:b:c" = '("a" "b" "c"))
-      (usplit 58 "a:" = '("a" ""))                                 ; the kept empty tail
+      (usplit 58 "a:" = '("a" ""))
       (usplit 58 "" = '(""))
       (ujoinc 58 '("a" "" "c") = "a::c")
       (ujoinc 58 '("a" "b") = ("a" + (":" + "b")))
@@ -150,7 +146,7 @@
       (uset "a-c" = '(97 98 99))
       (uset "abc" = '(97 98 99))
       (uset "x-" = '(120 45)) (uset "-x" = '(45 120))              ; an edge dash stays literal
-      (uset "\\n\\t" = '(10 9))                                    ; the escapes
+      (uset "\\n\\t" = '(10 9))
       (uset "α-γ日" = '(945 946 947 26085))                         ; code points, ranges too
       (uset "\\日-" = '(26085 45))))
 
@@ -204,8 +200,7 @@
       (uoct "755" = 493) (uoct "644" = 420) (uoct "0" = 0) (uoct "7" = 7)
       (rp-parts "/a//b/" = '("a" "b")) (rp-parts "a" = '("a")) !(rp-parts "///")))
 
-; --- the record floor (core.l): paste's delimiters, split's suffix and size words, join's
-; field split, od's three readings ---
+; --- the record floor (core.l): paste's delimiters, split's suffixes and sizes, join, od ---
 (: (test
       (udels ":|" = '(":" "|"))
       (udels "\\t" = '("\t")) (udels "\\0" = '(""))       ; POSIX's \0 is the empty one
@@ -251,7 +246,7 @@
       (ushq ("a" + string 1 + "b") = "'a'$'\\001''b'")
       (ushq "" = "''")
       ; a device number is one packed word, and linux splits it unevenly
-      (ust-major 54 = 0) (ust-minor 54 = 54)              ; a plain filesystem
+      (ust-major 54 = 0) (ust-minor 54 = 54)
       (ust-major 259 = 1) (ust-minor 259 = 3)             ; /dev/null: 1,3
       (ust-major 1050 = 4) (ust-minor 1050 = 26)          ; a tty: 4,26
       (ust-major 66306 = 259) (ust-minor 66306 = 2)       ; nvme: a major past 8 bits
@@ -262,11 +257,19 @@
       (udf-up 5 0 = 0)
       (udf-pct 12123 113829 = "10%") (udf-pct 22091993 2714191 = "90%")
       (udf-pct 0 1024 = "0%") (udf-pct 1 1 = "50%") (udf-pct 0 0 = "-")
-      ; a mount line's octal escapes, read back
       (udf-esc "/mnt/plain" = "/mnt/plain")
       (udf-esc "/mnt/a\\040b" = "/mnt/a b")
       (udf-esc "/mnt/a\\011b\\012c\\134d" = ("/mnt/a" + string 9 + "b" + string 10 + "c\\d"))
       (udf-esc "/mnt/a\\09b" = "/mnt/a\\09b")       ; not three octal digits: the text stands
+      ; one row a device: a bind of a subtree (a deeper root) gives way to its parent mount,
+      ; the mount nearer the root wins, a path dev beats a name, a refused stat keeps its row
+      (udf-dedup [["/dev/a" "/usr/local/data" "btrfs" 53 "/data"] ["/dev/a" "/swap" "btrfs" 52 "/swap"]
+                  ["/dev/a" "/srv/steam" "btrfs" 53 "/data/gwen/steam"]]
+       = [["/dev/a" "/usr/local/data" "btrfs" 53 "/data"] ["/dev/a" "/swap" "btrfs" 52 "/swap"]])
+      (udf-dedup [["/dev/b" "/mnt/deep/x" "ext4" 7 "/"] ["/dev/b" "/mnt" "ext4" 7 "/"]] = [["/dev/b" "/mnt" "ext4" 7 "/"]])
+      (udf-dedup [["tmpfs" "/a" "tmpfs" 9 ()] ["/dev/c" "/b" "ext4" 9 ()]] = [["/dev/c" "/b" "ext4" 9 ()]])
+      (udf-dedup [["/dev/d" "/m" "ext4" 4 "/"] ["/dev/e" "/m" "ext4" 4 "/"]] = [["/dev/e" "/m" "ext4" 4 "/"]])
+      (udf-dedup [["x" "/p" "t" () ()] ["x" "/q" "t" () ()]] = [["x" "/p" "t" () ()] ["x" "/q" "t" () ()]])
       (udf-esc "trail\\04" = "trail\\04")
       ; time's two places, rounded to nearest
       (utsec 0 = "0.00") (utsec 5000 = "0.01") (utsec 4999 = "0.00")
@@ -275,8 +278,8 @@
 ; --- the expr floor (expr.l): values are texts, numeric where wanted; division truncates ---
 (: (e as) (<(ex-parse 0 as))
    (test
-      (ex-num "42" = '(1 42)) (ex-num "-7" = '(1 -7)) !(ex-num "12a") !(ex-num "")
-      !(ex-num "-") (ex-num "0" = '(1 0))
+      (t-int "42" = '(1 42)) (t-int "-7" = '(1 -7)) !(t-int "12a") !(t-int "")
+      !(t-int "-") (t-int "0" = '(1 0))
       (ex-true? "1") (ex-true? "a") !(ex-true? "0") !(ex-true? "")
       (ex-arith "/" "-7" "2" = "-3") (ex-arith "%" "-7" "2" = "-1")       ; C's truncation
       (ex-arith "/" "7" "-2" = "-3") (ex-arith "%" "7" "-2" = "1")
@@ -300,7 +303,7 @@
    h (<(sec 2))
    (test
       (pt-hdr "@@ -1,8 +1,8 @@" = '(1 8 1 8))
-      (pt-hdr "@@ -3 +4,2 @@ fn()" = '(3 1 4 2))                          ; a bare seat is one line
+      (pt-hdr "@@ -3 +4,2 @@ fn()" = '(3 1 4 2))                          ; a bare start is one line
       (pt-hdr "@@ -0,0 +1,2 @@" = '(0 0 1 2))
       !(pt-hdr "@@ nope")
       (pt-hname "--- a/sub/f.txt\t2026-08-17 09:46:51" = "a/sub/f.txt")
@@ -320,8 +323,7 @@
       (pt-seek (pt-pairs "") () -1 = '(1 0))                              ; a create's -0,0
       !(pt-seek (pt-pairs "q\n") '("a") 0)))
 
-; --- the scan floor (scan.l): the machine-code byte scan against its love walk, over every
-; length across the word and tail seams, every start, charms present and absent. the
+; --- the scan floor (scan.l): the byte scan against its love walk, every length and start.
 ; register roles differ per arch (r1 is Sp on x64, Ip on a64), so this is its a64 gate ---
 (: sc (cite 'scan 'scanner ())
    tw (cite 'scan 'walk)
@@ -342,8 +344,7 @@
       (sc big 122 0 = (tw big 122 0))                          ; absent over 5000 bytes
       (sc (big + "z") 122 0 = 5000)))                          ; and present at the very last
 
-; --- the byte loops (core.l): xlat and the kb64 kernel against their love walks, every
-; length across the seams, high bytes, a table that drops, squeezes and maps. kb64's a64 gate ---
+; --- the byte loops (core.l): xlat and the kb64 kernel against their love walks; kb64's a64 gate ---
 (: kx xlat kb (kb64 0)
    (mk o n k) (n <= 0 ? (slurp o) (put o (k % 256), mk o (n - 1) (k * 7 + 3)))
    ; a-z up, digits dropped, 32 and 128..255 squeezed, the rest through
@@ -365,7 +366,7 @@
       (sweep 0)
       (xagree big) (bagree big) (xagree same) (bagree same)
       (kb64-walk "abc" ub64set (cask 4) = 4)
-      (ubenc ub64set 6 "hello, world" = "aGVsbG8sIHdvcmxk")     ; the coder over the kernel + tail
+      (ubenc ub64set 6 "hello, world" = "aGVsbG8sIHdvcmxk")
       (ubenc ub64set 6 "hello" = "aGVsbG8=")))
 
 ; --- the regex door (post.l's re): the BRE faces, by hand ---
@@ -375,7 +376,7 @@
    (test
       (ok "" "anything") (ok "" "")                            ; the empty pattern matches every line
       (ok "a" "bab") (no "a" "xyz")
-      (ok "b.c" "abzcd") (no "b.c" "bc")                       ; . wants one charm
+      (ok "b.c" "abzcd") (no "b.c" "bc")
       (ok "^ab" "abc") (no "^b" "abc")                         ; ^ anchors the head ...
       (ok "c$" "abc") (no "b$" "abc")                          ; ... $ the tail
       (ok "^abc$" "abc") (no "^abc$" "abcd") (ok "a^b" "a^b")  ; elsewhere they are ink
@@ -445,8 +446,7 @@
       (refind <>(rebre "bb") "abbc" 0 = '(1 1 3 ()))
       (refind <>(rebre "b*") "abbc" 1 = '(1 1 3 ()))           ; greedy at its own start
       !(refind <>(rebre "zz") "abbc" 0)
-      ; the group spans (\1's food): numbered in \( order, a repeated group its last
-      ; iteration -- GNU's \1
+      ; the group spans: numbered in \( order, a repeated group its last iteration (GNU's \1)
       (refind <>(rebre "\\(b*\\)c") "abbc" 0 = '(1 1 4 ((1 1 3))))
       (refind <>(rebre "\\(a\\(b\\)\\)") "ab" 0 = '(1 0 2 ((1 0 2) (2 1 2))))
       (refind <>(rebre "\\(ab\\)*x") "ababx" 0 = '(1 0 5 ((1 2 4))))
@@ -456,7 +456,7 @@
       (refind <>(reere "(a|ab)(c|bcd)") "abcd" 0 = '(1 0 4 ((1 0 1) (2 1 4))))
       (refind <>(reere "(a|ab){1,2}") "aab" 0 = '(1 0 3 ((1 1 3))))
       (refind <>(reere "()*x") "x" 0 = '(1 0 1 ((1 0 0))))         ; an empty iteration reports its group
-      (<>>(rebre "\\(a\\)\\(b\\)") = 2)                        ; rebre counts its groups
+      (<>>(rebre "\\(a\\)\\(b\\)") = 2)
       (<>>(rebre "ab") = 0)))
 
 ; --- the ERE door: the backslashes moved ---
@@ -474,20 +474,20 @@
 
 ; --- the sed floor (sed.l): the substitution to its GNU face, what the parser takes and refuses ---
 (: (sub p r s g?) (rebre p @ b <>(usub <>b r s g?))
-   (sp s) (sparse s ())                                          ; the BRE door, the default
+   (sp s) (sparse s ())
    (test
       (sub "b" "X" "abc" () = "aXc") (sub "z" "X" "abc" () = "abc")
-      <(usub <>(rebre "b") "X" "abc" ())                         ; the changed bit ...
-      !<(usub <>(rebre "z") "X" "abc" ())                        ; ... and its absence
-      (sub "b" "X" "abab" 1 = "aXaX")                            ; g takes every match
-      (sub "b" "X" "abab" () = "aXab")                           ; bare s takes the first
+      <(usub <>(rebre "b") "X" "abc" ())
+      !<(usub <>(rebre "z") "X" "abc" ())
+      (sub "b" "X" "abab" 1 = "aXaX")
+      (sub "b" "X" "abab" () = "aXab")
       (sub "x*" "-" "abc" 1 = "-a-b-c-")                         ; the empty-match step rule
       (sub "x*" "-" "xbz" 1 = "-b-z-")                           ; ... and the discard after a real match
       (sub "x*" "-" "xx" 1 = "-")
       (sub "x*" "-" "a…b" 1 = "-a-…-b-")                         ; the step is a character, never a byte of one
       (sub "\\(a\\|ab\\)b*" "<&>" "abb" () = "<abb>")              ; the longest match is the one replaced
-      (sub "b" "[&]" "abc" () = "a[b]c")                         ; & is the whole match
-      (sub "\\(b*\\)c" "[\\1]" "xbbc" () = "x[bb]")              ; \1 reads the group span
+      (sub "b" "[&]" "abc" () = "a[b]c")
+      (sub "\\(b*\\)c" "[\\1]" "xbbc" () = "x[bb]")
       (sub "a\\(b\\)\\?c" "<\\1>" "ac" () = "<>")                ; an unmatched group is ""
       (sub "b" "\\&\\\\" "abc" () = "a&\\c")                     ; \& and \\ stay ink
       (sub "^a" "X" "aaa" 1 = "Xaa")                             ; the anchor can't re-fire
@@ -501,8 +501,7 @@
       (two? (sp "s/\\(a\\|b\\)/x/")) (two? (sparse "s/(a|b)/x/" 1))
       (two? (sparse "/a|b/d" 1))))
 
-; --- the /proc floor (proc.l): the stat split, the clocks, the tty name, the uptime phrase.
-; the faces read live clocks and cannot be smoked byte for byte, so the family is held here ---
+; --- the /proc floor (proc.l): the faces read live clocks, so the family is held here ---
 (: (test
       ; the comm runs from the first ( to the last ): a name may hold either, or spaces
       (ustatf "42 (bash) S 7 42 42 1024 99" = '(42 "bash" "S" "7" "42" "42" "1024" "99"))
@@ -586,7 +585,6 @@
       (aw-lex "a/b" = '((name "a") (op "/") (name "b") (eof "")))
       (aw-lex "/a/" = '((ere "a") (eof "")))
       (aw-lex "f(" = '((fname "f") (op "(") (eof "")))         ; a glued ( makes a call
-      ; and the shapes the parser owes the evaluator
       (aw-program (aw-lex "{print}") {} () = '((item () ((print () ())))))
       (aw-program (aw-lex "BEGIN{x=1}") {} () = '((begin ((expr (assign "=" (var "x") (num 1)))))))
       (aw-program (aw-lex "/a/,/b/{}") {} () = '((range (ere "a") (ere "b") ())))))
@@ -599,14 +597,13 @@
        st (pgnew t w h)
        (pgload st ls "t",
         st))
-   (pg-run ls w h fl keys)                      ; the state after the keys
+   (pg-run ls w h fl keys)
     (pg-mk ls w h fl @ st (foldl (a \ c \ pgstep st c) 0 (pg-bytes keys), st))
    (pg-top ls w h fl keys) (pg-run ls w h fl keys 'top)
    ten '("l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8" "l9" "l10")
    caps '("a" "b" "c" "d" "e" "f" "ALPHA" "h" "i" "j")
    (test
-      ; the wrap: fragments at the width, a tab to the next 8th column, a control
-      ; byte as ^X, and a utf-8 tail byte no column of its own
+      ; the wrap: width fragments, a tab to the next 8th column, a control as ^X, a utf-8 tail no column
       (pgwrap 4 "abcdefghij" = '("abcd" "efgh" "ij"))
       (pgwrap 4 "abcd" = '("abcd"))
       (pgwrap 4 "" = '(""))                     ; a blank line is a row like any other
@@ -691,6 +688,19 @@
     pgstep st 58, pgstep st 112,
     (test (st 'fi = 0) (st 'doe = '("a.txt")))))
 
+; ..and reads it through the face's 'load when there is one: man walks pages, not files.
+; a complaint from the loader is the message, and the page stays
+(: t (pin {} 'load (nm \ nm = "gone" ? "man: no manual entry for gone" [[("page " + nm)] (nm + "(1)")]))
+   st (pgnew t 20 5)
+   (pgload st '("page ls") "ls(1)",
+    pins st 'files '("ls" "cat" "gone") 'fi 0,
+    pgstep st 58, pgstep st 110, pgdoe st,
+    (test (st 'file = "cat(1)") (st 'ls = '("page cat"))),
+    pgstep st 58, pgstep st 110, pgdoe st,
+    (test (st 'file = "cat(1)") (st 'msg = "man: no manual entry for gone")),
+    pgstep st 58, pgstep st 112, pgstep st 58, pgstep st 112, pgdoe st,
+    (test (st 'file = "ls(1)") (st 'ls = '("page ls")))))
+
 ; --- the bc floor (bc.l): the scale rules, the base writer, the numeral reader, the grammar ---
 (: st (bc-state 0)
    (sho b n) (pin st 'obase b, bc-show st n)
@@ -698,7 +708,6 @@
    (stm s) <(bc-stmt (bc-lex s))
    (refuses? th) (trap (_ \ (th 0, 0)) () (a \ b \ 1))
    (test
-      ; the scale rules, one line each
       (bn-add [15 1] [15 1] = [30 1])                        ; + and - keep the wider
       (bn-add [1 0] [5 3] = [1005 3])
       (bn-sub [1 0] [5 3] = [995 3])
@@ -770,8 +779,7 @@
       (refuses? (_ \ bc-expr (bc-lex "1+")))
       (refuses? (_ \ bc-stmt (bc-lex "while 1")))))
 
-; --- bc's algebra over a seeded draw: writer and reader inverse, + and * commute, the
-; remainder below the divisor, the root squaring back inside its ulp ---
+; --- bc's algebra, seeded: writer/reader inverse, + and * commute, remainder below divisor, root within its ulp ---
 (: st (bc-state 0)
    _ (pin st 'obase 10)
    (rnum s) (: a (random s 100000) b (random >a 5) c (random >b 2)
@@ -801,10 +809,10 @@
 (: dos "a\r\nb\r\nc\r\n" unx "a\nb\nc\n"
    (test
       (ucrlf dos = unx) (ulfcr unx = dos)
-      (ucrlf unx = unx)                          ; already unix: nothing to do
+      (ucrlf unx = unx)
       (ulfcr dos = dos)                          ; already dos: not doubled to \r\r\n
-      (ucrlf (ucrlf dos) = unx) (ulfcr (ulfcr unx) = dos)         ; both idempotent
-      (ulfcr (ucrlf dos) = dos) (ucrlf (ulfcr unx) = unx)         ; ..and each other's inverse
+      (ucrlf (ucrlf dos) = unx) (ulfcr (ulfcr unx) = dos)
+      (ulfcr (ucrlf dos) = dos) (ucrlf (ulfcr unx) = unx)
       ; a lone cr is the classic mac break, and it is mac2unix's and not dos2unix's
       (ucrlone "a\rb\r" = "a\nb\n") (ucrlone dos = dos) (ucrlf "a\rb\r" = "a\rb\r")
       ; a cr that is not a line ending survives dos2unix -- only the pair is a break
@@ -832,9 +840,6 @@
    ; the root is up past the file and its section directory, in one step
    (man-root "/usr/share/man/man1/ls.1.gz" = "/usr/share/man")
    (man-root "/usr/share/man/man3/printf.3.gz" = "/usr/share/man")
-   ; mdoc is the macro set this reader does not read, and .th ahead of .Sh settles it
-   (man-mdoc? ".Dd July 1 2026\n.Sh NAME\n") (man-mdoc? ".Sh NAME\n")
-   !(man-mdoc? ".TH LS 1\n.SH NAME\n") !(man-mdoc? ".TH X 1\n.Sh odd\n") !(man-mdoc? "")
    ; a section is a digit and up to three more, with a name behind it; 411toppm is a name
    (man-sec? ["3" "printf"]) (man-sec? ["3p" "x"]) (man-sec? ["3ssl" "x"])
    !(man-sec? ["411toppm"]) !(man-sec? ["411toppm" "x"])
@@ -865,6 +870,254 @@
 ; the --version answer: one spelling, name / love VERSION, for a symbol or a string name
 (test (uvers 'cat = "cat / love " + love-version) (uvers "mooncc" = "mooncc / love " + love-version))
 
+; android's names, reckoned off the id as bionic's getpwuid/getgrgid are, and back
+(test
+   (uidroid 0 = "root") (uidroid 1000 = "system") (uidroid 2000 = "shell") (uidroid 9999 = "nobody")
+   (uidroid 10123 = "u0_a123") (uidroid 110123 = "u1_a123") (uidroid 101000 = "u1_system")
+   (uidroid 99005 = "u0_i5") (uidroid 20123 = "u0_a123_cache") (uidroid 50123 = "all_a123")
+   (uidroid 1022 = "1022")                                          ; no fixed name: the number
+   (uidroid-of "u0_a123" = [1 10123]) (uidroid-of "u1_a123" = [1 110123]) (uidroid-of "shell" = [1 2000])
+   (uidroid-of "u1_system" = [1 101000]) (uidroid-of "u0_i5" = [1 99005])
+   !(uidroid-of "u0_zzz") !(uidroid-of "zzz") !(uidroid-of "ux_a1"))
+
+; --- lex: the DFA against the one regex engine's longest match, rule by rule, over a seeded
+; draw of texts (the earliest rule takes a tie); two-byte tables past 255 rules; dfa.c's
+; refusals; the spec's errors by name ---
+(: lexw-spec """
+      D  [0-9]
+      W  [a-c]
+      %%
+      {W}+({D}|_)*                     word
+      {D}+("."{D}+)?                   num
+      "<<"|"<"|"<="|"<<="              lt
+      [ \t]+                           ws
+      "/*"([^*]|"*"+[^*/])*"*"+"/"     com
+      \n                               nl
+      [^a-c0-9]                        other
+      """
+   lexw-rc (cite 'posix 'regcomp) lexw-rx (cite 'posix 'regexec) lexw-run (cite 'dfa 'run)
+   lexw-r (lex-scan lexw-spec)
+   lexw-t <lexw-r
+   lexw-sp (lex-spec lexw-spec)
+   lexw-ds (lex-defs <lexw-sp)
+   ; each rule whole: ^( ere )$ under regcomp's own flags
+   lexw-ms (map (r \ <(lexw-rc ("^(" + lex-ere lexw-ds <r + ")$") 1)) <>lexw-sp)
+   (lexw-full k s) (two? (lexw-rx (lexw-ms k) s 0 0))
+   ; the oracle at i: the longest prefix some rule matches whole, the earliest such rule
+   (lexw-best txt i)
+    (: (rl L k) (? (#lexw-ms <= k) 0 (lexw-full k (snip txt i (i + L))) (k + 1) (rl L (k + 1)))
+       (go L) (? (L < 1) () (rl L 0 @ r (r ? [r (i + L)] (go (L - 1)))))
+       (go (#txt - i)))
+   lexw-abc "abc019._<=/* \t\nxz"
+   (lexw-draw s n acc) (n < 1 ? [acc s] (random s #lexw-abc @ r (lexw-draw >r (n - 1) (acc + string [(lexw-abc <r)]))))
+   (lexw-fz i s)
+    (i < 1 ? 'ok
+       (: d (lexw-draw s 14 "") txt <d
+          bad (filter (j \ lex-next lexw-t txt j != lexw-best txt j) (jot #txt))
+          (two? bad ? ['broke txt <bad] (lexw-fz (i - 1) <>d))))
+   ; 260 one-word rules: past 255 the tables go two bytes a cell
+   lexw-wide <(lex-scan ("%%\n" + join "" (map (k \ "k" + show k + "  w\n") (jot 260))))
+   (test
+      (lexw-fz 60 (wheel 7) = 'ok)
+      (<>lexw-r = '("word" "num" "lt" "ws" "com" "nl" "other"))
+      (lex-next lexw-t "ab12_x" 0 = [1 5]) (lex-next lexw-t "1.5." 0 = [2 3])
+      (lex-next lexw-t "<<=" 0 = [3 3]) (lex-next lexw-t "/* * */x" 0 = [5 7])
+      (lex-next lexw-t "/* *" 0 = [7 1])                   ; an open comment is no comment
+      ; a negated class takes a nul, as flex's does; regcomp's own sets never hold one
+      (lex-next lexw-t "\0x" 0 = [7 1]) (lex-next lexw-t "/*\0*/" 0 = [5 5])
+      (lexw-t 0 = 1) (lexw-wide 0 = 2)
+      (lex-next lexw-wide "k123x" 0 = [124 4]) (lex-next lexw-wide "k259" 0 = [260 4])
+      (lex-next lexw-wide "k" 0 = ())
+      ; dfa.c answers 0 for anything it cannot walk
+      (lexw-run "x" "abc" 0 = 0) (lexw-run lexw-t "ab" 2 = 0) (lexw-run lexw-t "ab" 3 = 0)
+      (lexw-run lexw-t "ab" -1 = 0) (lexw-run lexw-t 7 0 = 0) (lexw-run (lexw-t + "x") "ab" 0 = 0)
+      (lex-scan "x  y\n" = "no %% before the rules")
+      (lex-scan "%%\n" = "no rules")
+      (lex-scan "%%\n\"ab  q\n" = "an open quote")
+      (lex-scan "%%\n[ab  q\n" = "an open bracket")
+      (lex-scan "%%\n{X}  q\n" = "no definition {X}")
+      (lex-scan "%%\na/b  q\n" = "not yet: / in a/b")
+      (lex-scan "%%\na*  q\n" = "a rule matches the empty text")
+      (lex-scan "%%\n[b-a]  q\n" = "a backward range")
+      (lex-scan "%%\n\\0  q\n" = "a nul byte in a pattern")
+      (lex-scan "%%\n[^\\0]  q\n" = "a nul byte in a pattern")
+      (snip (lex-text "moon" "t-tab" "t.lex" lexw-r) 0 36 = "; generated by `love lex t.lex`; edi")))
+
+
+; --- yacc: LALR(1) tables played back through actions. a seeded draw of expression trees laid
+; in tokens with the fewest parens precedence allows, parsed back whole; DeRemer and Pennello on
+; a grammar SLR cannot take and on empty rules; the reduce/reduce clash LALR's merge makes; the
+; dangling else shifted; nonassoc refused; a kind said late, once the actions before it ran;
+; lr.c against a love walk of its tables; its step cap and refusals; the spec's errors by name ---
+(: yaccw-calc """
+      %token NUM
+      %left '+' '-'
+      %left '*' '/'
+      %right NEG
+      %%
+      e : e '+' e   { ['+ $1 $3] }
+        | e '-' e   { ['- $1 $3] }
+        | e '*' e   { ['* $1 $3] }
+        | e '/' e   { ['/ $1 $3] }
+        | '-' e %prec NEG { ['neg $2] }
+        | '(' e ')' { $2 }
+        | NUM
+        ;
+      """
+   yaccw-lrun (cite 'lr 'run)
+   (yaccw-ks ks) (string (catmap (k \ [(k & 255) (k >> 8)]) ks))
+   ; tokens (name value).., the name "?" a kind the need says
+   (yaccw-go r acts toks ps need)
+    (: tm {} ts (<>r 'terms) _ (map (k \ pin tm (ts k) k) (jot #ts))
+       (yacc-run <r acts (yaccw-ks (map (t \ (<t = "?" ? 65535 (tm <t))) toks)) (map (t \ <>t) toks) ps need))
+   ; the walk lr.c makes, in love: the cursor it answers, byte for byte
+   (yaccw-walk t k c look)
+    (: (u16 s i) (s (2 * i) + 256 * s (2 * i + 1))
+       T (u16 t 0) N (u16 t 1) S (u16 t 2) R (u16 t 3) AN (u16 t 4) GN (u16 t 5)
+       rlhs 6 rlen (6 + R) dflt (6 + 2 * R) abase (dflt + S) gdef (abase + S) gbase (gdef + N)
+       atab (gbase + N) achk (atab + AN) gtab (achk + AN) gchk (gtab + GN)
+       (at x) (u16 t x)
+       nk (#k // 2)
+       (w32 v) [(v & 255) ((v >> 8) & 255) ((v >> 16) & 255) (v >> 24)]
+       (fin pos st z lg)
+        (string (w32 pos + w32 #st + catmap (s \ [(s & 255) (s >> 8)]) (rev st) + [z] + w32 #lg +
+                 catmap (e \ [(<e & 255) (<e >> 8)] + w32 <>e) (rev lg)))
+       (drop n l) (n < 1 ? l (drop (n - 1) >l))
+       ; would kind shift after the reductions it calls for (lr.c gives up past 256, or 64 deep)
+       (act s kind) (: df (at (dflt + s)) ab (at (abase + s)) i (ab + kind)
+                       (ab != 65535 && kind < T && i < AN && at (achk + i) = s ? (at (atab + i)) (df ? (32768 + df - 1) 0)))
+       (takes st kind n)
+        (? (255 < n) 1
+           (act <st kind @ a
+              (? (a = 0) () (a < 32768) 1
+                 (: r (a - 32768) st2 (drop (at (rlen + r)) st) A (at (rlhs + r)) j (at (gbase + A) + <st2)
+                    (takes ((j < GN && at (gchk + j) = A ? (at (gtab + j)) (at (gdef + A))) . st2) kind (n + 1))))))
+       (go pos st look lg n)
+        (? (n = 4096) (fin pos st 0 lg)
+           (: s <st df (at (dflt + s)) a0 (df ? (32768 + df - 1) 0) ab (at (abase + s))
+              kd (ab = 65535 ? 0 (pos < nk ? (u16 k pos) 0))
+              (? (ab != 65535 && kd = 65535 && look = 65535) (fin pos st 3 lg)
+                 (ab != 65535 && kd = 65535 && look > 65535)
+                  (go pos st (takes st (look & 65535) 0 ? (look & 65535) ((look >> 16) - 1)) lg n)
+                 (: kind (kd = 65535 ? look kd) i (ab + kind)
+                    a (ab != 65535 && kind < T && i < AN && at (achk + i) = s ? (at (atab + i)) a0)
+                    (? (a = 0) (fin pos st 2 lg)
+                       (a < 32768) (kind = 0 ? (fin pos st 1 lg) (go (pos + 1) (a . st) 65535 lg (n + 1)))
+                       (: r (a - 32768) st2 (drop (at (rlen + r)) st) A (at (rlhs + r))
+                          j (at (gbase + A) + <st2)
+                          ns (j < GN && at (gchk + j) = A ? (at (gtab + j)) (at (gdef + A)))
+                          (go pos (ns . st2) look ([r pos] . lg) (n + 1))))))))
+       (go (yacc-u32 c 0) (rev (map (i \ u16 c (4 + i)) (jot (yacc-u32 c 4)))) look () 0))
+   ; a seeded draw of kind strings, some said late, walked to the end both ways from each cursor
+   (yaccw-cmp t T i s)
+    (? (i < 1) 'ok
+       (random s 10 @ r
+          (: (draw s n acc) (n < 1 ? (acc . s) (random s (T + 2) @ q (draw >q (n - 1) ((<q < T ? <q 65535) . acc))))
+             d (draw >r <r ())
+             ks (yaccw-ks <d)
+             (chain c look n)
+              (: a (yaccw-lrun t ks c look) b (yaccw-walk t ks c look)
+                 z (a (8 + 2 * yacc-u32 a 4))
+                 (? (a != b) ['broke <d c look]
+                    (z = 3 && n > 0) (chain a (n % 2 ? (n % T) (n % T + 65536 * (n % 3 + 1))) (n - 1))
+                    'ok))
+             (chain yacc-c0 65535 8 = 'ok ? (yaccw-cmp t T (i - 1) >d) ['broke <d]))))
+   yaccw-cr (yacc-scan yaccw-calc)
+   yaccw-ca {1 (\ _ [a _ b] ['+ a b]) 2 (\ _ [a _ b] ['- a b]) 3 (\ _ [a _ b] ['* a b])
+             4 (\ _ [a _ b] ['/ a b]) 5 (\ _ [_ a] ['neg a]) 6 (\ _ [_ a _] a)}
+   ; -> (tree . seed)
+   (yaccw-tree s d)
+    (random s (d < 1 ? 1 6) @ r
+       (: k <r s1 >r
+          (? (k = 0) (random s1 100)
+             (k = 5) (yaccw-tree s1 (d - 1) @ (a . s2) (['neg a] . s2))
+             (yaccw-tree s1 (d - 1) @ (a . s2)
+                (yaccw-tree s2 (d - 1) @ (b . s3) ([(['+ '- '* '/] (k - 1)) a b] . s3))))))
+   (yaccw-pr e) (charm? e ? 4 (<e @ 'neg 3 '+ 1 '- 1 2))
+   (yaccw-sub e p right)
+    (: l (yaccw-lay e)
+       (yaccw-pr e < p || right && yaccw-pr e = p ? ([["'('" ()]] + l + [["')'" ()]]) l))
+   (yaccw-lay e)
+    (? (charm? e) [["NUM" e]]
+       (<e = 'neg) ([["'-'" ()]] + yaccw-sub <>e 3 ())
+       (: p (yaccw-pr e) (yaccw-sub (e 1) p () + [[("'" + show <e + "'") ()]] + yaccw-sub (e 2) p 1)))
+   (yaccw-fz i s)
+    (i < 1 ? 'ok
+       (yaccw-tree s 4 @ (e . s2)
+          (yaccw-go yaccw-cr yaccw-ca (yaccw-lay e) () () @ r
+             (r = ['ok e] ? (yaccw-fz (i - 1) s2) ['broke e r]))))
+   yaccw-long (foldl (a \ k \ ['+ a k]) 0 (map (+ 1) (jot 2999)))
+   ; LALR, not SLR: an l's lookahead set by where it stands
+   yaccw-lr (yacc-scan """
+      %token ID
+      %%
+      s : l '=' r { ['asn $1 $3] } | r ;
+      l : '*' r { ['deref $2] } | ID ;
+      r : l ;
+      """)
+   yaccw-la {1 (\ _ [a _ b] ['asn a b]) 3 (\ _ [_ a] ['deref a])}
+   yaccw-nul (yacc-scan "%%\ns : a b 'x' ;\na : | 'y' ;\nb : | 'z' ;\n")
+   yaccw-na {1 (\ _ [a b _] [a b])}
+   (yaccw-cs s) (map (c \ [("'" + string [c] + "'") (string [c])]) (map s (jot #s)))
+   ; LR(1), not LALR: the two c states merge, and A and B clash on d and on e
+   yaccw-rr (yacc-scan "%%\ns : 'a' A 'd' | 'b' B 'd' | 'a' B 'e' | 'b' A 'e' ;\nA : 'c' ;\nB : 'c' ;\n")
+   yaccw-de (yacc-scan "%token IF E X\n%%\ns : IF s E s { ['ife $2 $4] } | IF s { ['if $2] } | X ;\n")
+   yaccw-da {1 (\ _ [_ a _ b] ['ife a b]) 2 (\ _ [_ a] ['if a])}
+   yaccw-nas (yacc-scan "%token N\n%nonassoc '<'\n%left '+'\n%%\ne : e '<' e | e '+' e | N ;\n")
+   ; a typedef's name is a type from the next token on: the need runs after the actions before it
+   yaccw-td (yacc-scan """
+      %token TYPEDEF TYPE ID UNSIGNED
+      %%
+      p : | p i ;
+      i : TYPEDEF ID ';' | TYPE ID ';' | ID '=' ID ';' | UNSIGNED ID ';' ;
+      """)
+   yaccw-tda {1 (\ _ _ ()) 2 (\ _ [l x] (l + [x])) 3 (\ ps [_ n _] (pin ps n 1, ['tdef n]))
+              4 (\ _ [t n _] ['decl t n]) 5 (\ _ [a _ b _] ['asn a b]) 6 (\ _ [_ n _] ['uns n])}
+   yaccw-tdt [["TYPEDEF" ()] ["?" "T"] ["';'" ()] ["?" "T"] ["?" "x"] ["';'" ()] ["?" "x"] ["'='" ()] ["?" "y"] ["';'" ()]
+              ["UNSIGNED" ()] ["?" "T"] ["';'" ()]]
+   ; a type's name is TYPE where a type may stand, else the declarator's ID: lr.c's pair
+   (yaccw-tdn ps i) (: ts (<>yaccw-td 'terms) (k nm) <(filter (j \ ts j = nm) (jot #ts))
+                       (peep ps <>(yaccw-tdt i) () ? (k "TYPE" + 65536 * (k "ID" + 1)) (k "ID")))
+   (test
+      (string? <yaccw-cr) (<>yaccw-cr 'sr = 0) (<>yaccw-cr 'rr = 0)
+      (yaccw-fz 80 (wheel 11) = 'ok)
+      (yaccw-cmp <yaccw-cr #(<>yaccw-cr 'terms) 300 (wheel 5) = 'ok)
+      (yaccw-go yaccw-cr yaccw-ca (yaccw-lay yaccw-long) () () = ['ok yaccw-long])   ; past lr.c's 4096 steps a call
+      (yaccw-go yaccw-cr yaccw-ca [["NUM" 1] ["'+'" ()] ["'*'" ()] ["NUM" 2]] () () = ['err 2])
+      (yaccw-go yaccw-cr yaccw-ca [["NUM" 1] ["'+'" ()]] () () = ['err 2])
+      (yaccw-go yaccw-cr yaccw-ca () () () = ['err 0])
+      ; a token's value off its tail: here how many tokens stand from it on
+      (yacc-runv <yaccw-cr {} (yaccw-ks [1 2 1]) [5 () 6] () () (l \ #l) = ['ok 3])
+      (<>yaccw-lr 'sr = 0) (<>yaccw-lr 'rr = 0)
+      (yaccw-go yaccw-lr yaccw-la [["'*'" ()] ["ID" "p"] ["'='" ()] ["ID" "q"]] () () = ['ok ['asn ['deref "p"] "q"]])
+      (yaccw-go yaccw-lr yaccw-la [["'*'" ()] ["'*'" ()] ["ID" "p"]] () () = ['ok ['deref ['deref "p"]]])
+      (<>yaccw-nul 'sr = 0) (<>yaccw-nul 'rr = 0)
+      (yaccw-go yaccw-nul yaccw-na (yaccw-cs "yzx") () () = ['ok ["y" "z"]])
+      (yaccw-go yaccw-nul yaccw-na (yaccw-cs "x") () () = ['ok [() ()]])
+      (yaccw-go yaccw-nul yaccw-na (yaccw-cs "zx") () () = ['ok [() "z"]])
+      (yaccw-go yaccw-nul yaccw-na (yaccw-cs "zyx") () () = ['err 1])
+      (<>yaccw-rr 'rr = 2) (<>yaccw-rr 'sr = 0)
+      (<>yaccw-de 'sr = 1)
+      (yaccw-go yaccw-de yaccw-da [["IF" ()] ["IF" ()] ["X" 'x] ["E" ()] ["X" 'y]] () () = ['ok ['if ['ife 'x 'y]]])
+      (<(yaccw-go yaccw-nas {} [["N" 1] ["'<'" ()] ["N" 2] ["'+'" ()] ["N" 3]] () ()) = 'ok)
+      (yaccw-go yaccw-nas {} [["N" 1] ["'<'" ()] ["N" 2] ["'<'" ()] ["N" 3]] () () = ['err 3])
+      (yaccw-go yaccw-td yaccw-tda yaccw-tdt {} yaccw-tdn = ['ok [['tdef "T"] ['decl "T" "x"] ['asn "x" "y"] ['uns "T"]]])
+      ; lr.c answers () for anything it cannot walk
+      (yaccw-lrun "x" "" yacc-c0 65535 = ()) (yaccw-lrun <yaccw-cr "\0" yacc-c0 65535 = ())
+      (yaccw-lrun <yaccw-cr "" "\0\0\0\0\0\0\0\0\0\0" 65535 = ()) (yaccw-lrun (<yaccw-cr + "xx") "" yacc-c0 65535 = ())
+      (yacc-scan "%token A\n" = "no %% before the rules")
+      (yacc-scan "%%\n" = "no rules")
+      (yacc-scan "%%\ns : t ;\n" = "t is neither a token nor a rule on line 2")
+      (yacc-scan "%token s\n%%\ns : 'x' ;\n" = "s is a token and a rule on line 3")
+      (yacc-scan "%%\ns : {a} 'x' ;\n" = "not yet: an action mid-rule on line 2")
+      (yacc-scan "%define x\n%%\ns : 'x' ;\n" = "not yet: %define")
+      (yacc-scan "%%\ns : 'x' %prec 'y' ;\n" = "'y' has no precedence on line 2")
+      (yacc-scan "%%\ns : 'x' { [ ;\n" = "an open action on line 2")
+      (snip (yacc-text "moon" "c-tab" "c.y" <>yaccw-cr <yaccw-cr) 0 38 = "; generated by `love yacc c.y`; edit t")
+      ; the text after a second %% is laid last, after the actions it may call through
+      (: g (yacc-scan "%%\ns : 'x' { 1 } ;\n%%\n   zz 1\n")
+         (has? (yacc-text "m" "n" "s.y" <>g <g) "(\\ yy [_1] (1))}\n\n   zz 1\n"))
+      (elem "      1 (\\ yy [_1 _2 _3] (['+ _1 _3]))" (yacc-acts <>yaccw-cr))))
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
-(say err "test/law/kore: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager, man, markdown and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + bc oracles) ok
+(say err "test/law/kore: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager, man, markdown, bc, lex and yacc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + bc oracles) ok
 ")

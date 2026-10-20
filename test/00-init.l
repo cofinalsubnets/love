@@ -1,5 +1,5 @@
-; this file leads the corpus: splice posix first, then a no-op for each frontend nif
-; a bare target (kernel, wasm) lacks, so later mentions compile quiet and answer ()
+; leads the corpus: posix first, then a no-op for each frontend nif a bare target
+; (kernel, wasm) lacks, so later mentions compile and answer ()
 (cite 'posix ? (borrow 'posix))
 (map (n \ elem n (names ()) ? () (ev [': [n 'x] ()])) '(quit close run getenv))
 (elem 'open (names ()) ? () (ev '(: (open x y) ())))
@@ -12,7 +12,7 @@
    (gate-partly m) (gate-strict? 0 ? (puts (m + " -- REFUSED: a strict box runs every leg\n"), quit 1)
                     (puts (m + "\n"))))
 
-; the reader under test: every print->read differential reads through this one binding.
+; the reader under test, for every print->read differential:
 ; (r text) answers the datum consed onto the rest, () at a clean end, `torn` if cut short
 (: rd-test sound)
 
@@ -33,8 +33,7 @@
    test_state {}
    (test_set k v) (pin test_state k v)
    (test_get k) (peep test_state k 0)
-   ; a failed test records and carries on; a runner not ending in zz-fin.l owes its own
-   ; (test_fin ()), or its failures exit 0 in silence
+   ; a runner not ending in zz-fin.l owes its own (test_fin ()), or failures exit 0
    (test_fin u) (test_get 'fail @ f
                  (? (two? f)
                     (do (puts "FAILED:") (putc 10)
@@ -63,10 +62,8 @@
                            (go 0))
    ; a server that takes many connections is up when one lands on loopback at port p
    (test-up p) (test-until nom? (_ \ connect ['tcp "127.0.0.1" p] @ c (nom? c ? c (close c)))))
-; how a cost grows: (f n) and (f (4 * n)) counted after a warm run, the second held under
-; eight times the first (linear sits near 4, quadratic at 16). the count is the evaluator's
-; ticks (gauge [16]), never the clock; test-linear-words counts the words f allocates, for a
-; cost inside a nif
+; cost growth: (f (4 * n)) under 8x (f n) after a warm run (linear ~4, quadratic 16).
+; counts evaluator ticks (gauge [16]), never the clock; -words counts words allocated
 (: (test-turns f n) (: p (twirl (_ \ (rest 1000000000)) ()) _ (rest 0)
      t0 (peep (gauge 0) 16 0) _ (f n) t1 (peep (gauge 0) 16 0) _ (freeze p)
      (t1 - t0))

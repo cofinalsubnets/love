@@ -1,14 +1,14 @@
-; love spec -- the executable language reference: each section states its laws in the comment and
-; proves them in the asserts below, on every target. it runs right after test/00-init.l's harness.
+; love spec -- the executable language reference: each section states its laws, the asserts prove them.
+; runs right after test/00-init.l's harness.
 
 ; --- everything is a function --- (f x y) == ((f x) y), (f) == f; numbers are church
-; numerals; data self-applies. asserts read infix, folding right-associatively (sound by (f) == f).
+; numerals; data self-applies.
 (test
  (1 = 0 5) (5 = 1 5)                              ; 0 is const-1, 1 is the identity
  (1 = 0 0) (7 = 0 0 7)                            ; const of const is the identity
  (8 = 3 2) (262144 = 2 3 4)                       ; (n x) = x**n; the tower (2 3 4) = 4**(3**2)
- (12 = 3 (+ 1) 9) ('(2 3 4) = map (+ 1) '(1 2 3)) ; (n f) composes f ($ n) times; currying *is* partial application
- (10 = -3 (+ 1) 10) (13 = 2.5 (+ 1) 10)           ; the count saturates, true to !!$: (-3 f) = (0 f) = 1; a float ceils
+ (12 = 3 (+ 1) 9) ('(2 3 4) = map (+ 1) '(1 2 3)) ; (n f) composes f ($ n) times; currying is partial application
+ (10 = -3 (+ 1) 10) (13 = 2.5 (+ 1) 10)           ; the count saturates: (-3 f) = (0 f) = 1; a float ceils
  (0.5 = -1 2) (3.0 = (1 / 2) 9))                  ; ... but exponents don't: (-1 x) = 1/x; (1/2 x) = sqrt x
 
 ; --- three special forms --- `:` letrec*/sequence, `?` cond, `\` lambda (one operand: quote).
@@ -20,118 +20,101 @@
  ('big = (? 0 'a (1 < 2) 'big 'else)))           ; `?` -- t/result pairs, then a final else
 (: (twice f x) (f (f x)) (test (12 = (twice (+ 1) 10))))
 (test
- ((:) = (?)) ((?) = (\)) !(:) !(nom? (:))          ; the empty form is the head read, both lanes: the zero point (absence, not a nom)
- ((:) = (? 0 'a)) ((:) = (map (+ 1) ()))          ; a no-match `?` (and `map` of nothing) falls to the zero point () (= the empty form (:)), not charm 0
+ ((:) = (?)) ((?) = (\)) !(:) !(nom? (:))          ; the empty form is the head read: the zero point, not a nom
+ ((:) = (? 0 'a)) ((:) = (map (+ 1) ()))          ; a no-match `?` falls to the zero point, not charm 0
  (2 = (: x 1 x (x + 1) x)))                      ; the sequence law: a rebind reads the previous value
-; one scope: a forward read raises missing, and welp answers it with the zero point -- quiet only
-; inside a window like this one (test-strict quits on it)
+; one scope: a forward read raises missing; welp answers the zero point (test-strict would quit)
 (hear welp)
 (test ((:) = (: a b b 2 a)) (2 = (: a b b 2 b)))
 (hear test-strict)
 
-; --- true and false --- false is nothing: whatever nets <= 0 (a complex-valued measure -- numbers
-; their value, text its charm sum, lists the sum of element nets, spine only). `!` (nil?) reads the
-; net's sign; `$` (sat) is the sole saturating clamp, max(0, ceil); !x == (0 = $x). a twin gem is
-; read by its real part alone, gate and clamp both ($(3 ~ 4) = 3; the magnitude is abs's), so a
-; pure phase is blue -- the truth gate is not the total order, the one place the two part. the
-; count -- how many, not how much -- is `tally` (text/cask charms, list spine, array cells, map
-; keys), never $. every value wears a color by its net-sign: green nonnegative (what $ keeps), red
-; negative, blue the zero floor -- true iff positive green. truth is a threshold on the net, not a
-; homomorphism. the logical connective is `&&`, never `*`.
+; --- true and false --- false is whatever nets <= 0 (numbers their value, text its charm sum,
+; lists the sum of element nets). `!` (nil?) reads the net's sign; `$` (sat) clamps max(0, ceil);
+; !x == (0 = $x). a twin is read by its real part alone, so a pure phase is false. colors by net
+; sign: green nonnegative, red negative, blue the zero floor; true iff positive green. the count
+; is `tally`, never $; the connective is `&&`, never `*`.
 (test
  !0 !"" !@0 !() !0.0 !(0 ~ 0)                    ; zero / empty -> false
  !-5 !-3.9 !(-3 ~ 4) !(0 ~ -1)                   ; <= 0 in the total order -> false (complex by re then im)
  !!5 !!"x" !!'a !!cap !!(3 ~ 4) !!(3 ~ -4)       ; positive / nonempty -> true (a twin gem by its re)
- !!{} !!{} (1 = ${}) (2 = #{1 2 3 4})                   ; a tablet is a lookup lambda and nets 1 like one,
- (1 = ${1 2 3 4}) (1 = ${0})                     ; empty or not; tally counts the keys, $ never does
+ !!{} (1 = ${}) (2 = #{1 2 3 4})                   ; a tablet is a lookup lambda and nets 1,
+ (1 = ${1 2 3 4})                     ; empty or not; tally counts the keys, $ never does
  !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))               ; a chain of nothings is nothing, recursively
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)                              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))                  ; $ sums the nets, then clamps once
- (word ? (: n ((53 2) + 1) m ((53 2) + 3) (n = $n && m = $m)) 1) ; $ is the identity on a green charm, exactly -- past 2^53 the net's double would round it
+ (word ? (: n ((53 2) + 1) m ((53 2) + 3) (n = $n && m = $m)) 1) ; $ is exact on a green charm past 2^53
  (3 = $(. 1 2)) !!(. 0 2) (6 = $(1 . 2 . 3))                     ; every link nets car + cdr, so a dotted tail counts too
  (0 = $[(3 ~ 4) (-3 ~ 4)]) ![(0 ~ 5) -1]                         ; phases sum as vectors, then gate the total once
- !i !(0 ~ -1) !(0 ~ 8) (0 = $i)                                  ; ...and a pure phase is blue: a field automorphism swaps
- (i < 5) ((0 ~ -1) < i)                                          ; i and -i, so truth cannot part them but the order must
+ !i !(0 ~ 8) (0 = $i)                                  ; a pure phase is blue: truth cannot part i from -i,
+ (i < 5) ((0 ~ -1) < i)                                          ; ..but the order must
  (3 = $(3 ~ 4)) (3 = $(3 ~ -4))                  ; ...so the amount is the real part, conjugate-blind
  (1 = $@(0.3 0.4)) (1 = $(0.001 ~ 0))            ; the clamp ceils, so any positive net reaches 1 at every tier
- (1 = ${0}) !!{0}                                ; ... but a box stays truthy: maps count keys
- (120 = $(nom 'x)) (2 = (int (abs {1 10 2 20})))   ; a nom nets its spelling's charms; a map counts keys either way
- ($(100 2) = $(200 2)) (0 = $(0 - (100 2))) (0 = $(0 - (62 2)))  ; every positive big saturates to the charm ceiling; red is red at every width
- (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the colors by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
+ (120 = $(nom 'x)) (2 = (int (abs {1 10 2 20})))   ; a nom nets its spelling's charms
+ ($(100 2) = $(200 2)) (0 = $(0 - (100 2))) (0 = $(0 - (62 2)))  ; a positive big saturates; red is red at every width
+ (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the colors: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
- (0 = !5) (1 = !0) (zero? = nil?)                   ; ! negates it; non is nil?
- (star? 5) (star? -3.5) (star? (2 ~ 3)) (star? (62 2))        ; a star is a self-netting scalar: charm, sun, float, complex
- !(star? @(1 2 3)) (star? (net @(1 2 3)))                   ; a tray is not a star -- it nets down to a scalar star (net is a fresh sum)
- !(star? "x") !(star? 'a) !(star? '(1 2))                    ; text/symbol/list are not stars -- they net to something else
- (charm? 5 ? (star? 5) 1)                                    ; a charm is a star, by spec (net = self)
- (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (charm? 5 ? (star? 5) 1)     ; a charm (charm?) is the word-sized star, and every charm is a star
- (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a tray is an array of any element kind (numbers or objects)
- (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a galaxy is a numeric tray (a tray of stars); a tray of strings is not
- (galaxy? (array '(2) (200 2) (200 2)))                    ; a tray of bigs is a galaxy -- bignum cells are stars (keyed on cells, not the O code)
- !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are disjoint; a scalar / a list is neither a galaxy nor a tray
- (!"" = (0 = $"")) (!-5 = (0 = $-5)))            ; !x == (0 = $x); the parens are load-bearing, bare an = run chains
+ (0 = !5) (1 = !0) (zero? = nil?)                   ; ! negates it; zero? is nil?
+ (star? 5) (star? -3.5) (star? (2 ~ 3)) (star? (62 2))        ; a star is a self-netting scalar
+ !(star? @(1 2 3)) (star? (net @(1 2 3)))                   ; a tray is not a star; its net is
+ !(star? "x") !(star? 'a) !(star? '(1 2))
+ (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (charm? 5 ? (star? 5) 1)     ; a charm is the word-sized star
+ (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a tray holds any element kind
+ (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a galaxy is a numeric tray
+ (galaxy? (array '(2) (200 2) (200 2)))                    ; bignum cells are stars
+ !(galaxy? 5) !(galaxy? '(1 2))            ; disjoint; a scalar or list is neither
+ (!"" = (0 = $"")) (!-5 = (0 = $-5)))            ; the parens matter: bare, = chains
 
 ; --- types & predicates --- storage: charm? sun? gem? twin? tray? string? nom? name? mint? two? tablet?;
-; derived constellation? whole? atom?; lit? = a top-region reference (tablet/fn/hot, kind>=KTablet); hot? the opaque cask/port subset.
-; a predicate answers a bit -- 0 on false, never the zero point. the sweep below gives every
-; `?`-named global four false-ish probes; an answer equal to () fails. `&&`/`||` are not predicates
-; -- they are value-preserving ((5 && 7) is 7, (5 || 7) is 5).
+; derived constellation? whole? atom?; lit? a top-region value (tablet/fn/hot); hot? the cask/port subset.
+; a predicate answers a bit, never the zero point: the sweep below probes every `?`-named global.
+; `&&`/`||` are not predicates, they preserve values.
 (test
- (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? {1 2})
- (sun? (100 2)) (sun? (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))   ; one boxed integer tier, whatever the word
+ (two? '(1 2)) (string? "hi") (nom? 'x) (tablet? {1 2})
+ (sun? (100 2)) (sun? (62 2)) (gem? 1.5) (twin? i)   ; one boxed integer tier, whatever the word
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (cask 4)) (hot? out) (hot? (tap '(104)))   ; the hot zoo, named
  !(hot? {}) !(hot? cap) !(hot? 5) !(hot? "s")    ; maps/functions/data are not hots
- (lit? (cask 4)) (lit? cap) (lit? {}) !(lit? '(1)) !(lit? "s") !(lit? 5) !(lit? ())  ; lit? = the top region (map/fn/hot); not data leaves (chains/text/numbers) nor the floor
+ (lit? (cask 4)) (lit? cap) (lit? {}) !(lit? '(1)) !(lit? "s") !(lit? 5) !(lit? ())  ; not data leaves, nor the floor
  (1 = $cap) (1 = $out) (1 = $(tap 0))            ; tops and ports net 1: present, drained or not
  (charm? (twirl (x \ x) 0 @ p (catch p, p)))     ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; charm overflow -> exact big ((k b) = b**k)
- (5.0 = (abs (3 ~ 4))) ((2.0 ~ 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
+ ((2.0 ~ 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
 
-(hear welp)                                      ; the misses answer quietly; the sweep asks about names, not values
-; the census is the core book's contract, so it runs on the egg lane only: a woken image
-; (love-image on the book is the marker) carries app predicates on the local ()-false idiom.
+(hear welp)                                      ; misses answer quietly
+; the census is the core book's contract: egg lane only (love-image marks a woken image)
 (: (q-nom? n) (: s (string n) t #s (0 < t ? (63 = peep s (t - 1) 0) 0))
    (q-bit? n) (: f (ev n)
                  (ok v) !(() = f v)
                  (ok 'zz && ok 0 && ok "" && ok ()))
    bad (elem 'love-image (names ()) ? ()
           (filter (n \ !(q-bit? n)) (filter (n \ q-nom? n && !!(ev n)) (names ()))))
-   (two? bad ? (puts ("bit-law offenders: " + show bad + "\n"), 0) 0,     ; name the offenders
+   (two? bad ? (puts ("bit-law offenders: " + show bad + "\n"), 0) 0,
     (test (atom? bad))))
 (hear test-strict)
 
-; --- arithmetic --- + - * / // % infix; charm fast path, overflow grows charm->sun->big;
-; `/` is true division (inexact int quotient -> float); 0/0 is () -- a NaN is the nothing, love
-; admitting no value unequal to itself; bitwise << >> & | ^ are exact over the whole integer
-; tower: two's complement with the sign extended forever, so a negative operand carries ones above
-; its magnitude. << is x * 2^k and promotes rather than dropping the bits off the word, the count
-; exact too ((<< 3 200) is 3 * 2^200), and a negative count turns the shift round; >> is arithmetic
-; and floors, where // truncates. a tray keeps the width law, its elements being machine words. a
-; non-integer operand answers the zero point. monadics ride the valence law (-(f x) negate, /4
-; reciprocal) while sections ((- 0), (/ 1)) stay words.
+; --- arithmetic --- + - * / // % infix; overflow grows charm->sun->big; `/` is true division;
+; 0/0 is () (no value is unequal to itself). bitwise << >> & | ^ are exact two's complement over
+; the whole tower, the sign extended forever: << promotes, a negative count reverses, >> floors
+; where // truncates; a non-integer operand answers the zero point. the sections ((- 0), (/ 1))
+; are the monadics.
 (test
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = 5 // 2) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
- (1.0 = 7.0 % 2.0) (0.0 = 7.5 % 2.5) (-1.0 = -7.0 % 2.0)   ; % rides fmod, so it holds on the
- (7 = 7 % 0) (7.0 = 7.0 % 0.0)                             ; float lane too, sign following the
-                                                           ; dividend; and a zero modulus is no
-                                                           ; modulus, so the dividend stands whole
- ; ..forced, not chosen: (a // 0) is infinity, (a // 0) * 0 is (), and () is the unit of +, so
- ; the remainder carries the whole a -- Z/0Z is Z and the class of a is {a}.
+ (1.0 = 7.0 % 2.0) (0.0 = 7.5 % 2.5) (-1.0 = -7.0 % 2.0)   ; % rides fmod: the sign follows the dividend,
+ (7 = 7 % 0) (7.0 = 7.0 % 0.0)                             ; and a zero modulus leaves the dividend whole
+ ; forced: (a // 0) * 0 is () and () is +'s unit, so the remainder carries a whole (Z/0Z is Z)
  (7 = ((7 // 0) * 0) + (7 % 0)) (-7 = ((-7 // 0) * 0) + (-7 % 0))
  (7 = ((7 // 3) * 3) + (7 % 3))
  (2 = 4 / 2) (charm? (4 / 2)) (-2 = -5 // 2)
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) ((-1 ~ -2) = ((- 0) (1 ~ 2))) ; the sections are the monadics
  !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (word ? (1e308 < 1 / 0) 1) (() = 0 / 0)
  (infinity = 1 / 0) ("infinity" = show (1 / 0)) ("-infinity" = show (-1 / 0))
- (word ? ("1.7976931348623157e308" = show 1.7976931348623157e308) 1)  ; the whole finite range prints digits -- only true infinity wears infinity
- ; the printer is shortest-roundtrip, so (read (show x)) = x for every finite gem.
- ; the word guard: these faces are the double tier's -- a 32-bit flo_t's differ
+ (word ? ("1.7976931348623157e308" = show 1.7976931348623157e308) 1)  ; only true infinity prints as infinity
+ ; shortest-roundtrip printing; these faces are the double tier's (a 32-bit flo_t's differ)
  (word ? ("0.30000000000000004" = show (0.1 + 0.2)) 1) ("0.3" = show 0.3)
  (word ? ("5e-324" = show 5e-324) 1) (word ? ("1e23" = show 1e23) 1)
- ; ..and the read side is correctly rounded too: neighbors stay distinct
+ ; ..and reading is correctly rounded
  (word ? !(0.3 = 0.30000000000000004) 1) (word ? (0.5 = 0.49999999999999999999) 1)
- ; ..and C99's hex floats ride the same reader, exact; the subnormal floor and the tie under it
+ ; ..C99 hex floats too, exact; the subnormal floor and its tie
  (word ? (0x1p4 = 16.0) 1) (word ? (0x1.8p1 = 3.0) 1) (word ? (-0x1p-1 = -0.5) 1)
  (word ? (0x1p-1074 = 5e-324) 1) (word ? (0x1p-1075 = 0.0) 1)
  (word ? (0x1.8p-1075 = 5e-324) 1)                      ; past the tie, it rounds up
@@ -140,15 +123,14 @@
  (0 / 0 = 0 / 0) !(0 / 0) (0 = $(0 / 0))       ; reflexive, false, and nets nothing
  (nom? 'inf) (nom? 'nan)                       ; the short spellings stay free names: `infinity`
  !(nom? 'infinity) (gem? 'infinity)            ; is the one the reader spends, and it reads a value
- ; ..and the nothing in an array too, bits still NaN: peep and show give (), it nets nothing
- ; so `?` reads it false, and = holds reflexively over it
+ ; a NaN cell: peep and show give (), it nets nothing, = is reflexive
  ((@(0.0) / @(0.0)) @ t (t = t && () = peep t 0 0 && "@(())" = show t
                            && !t && t != @(0.0)))
- ; bignum // and % ride Knuth-D long division; `show` on a big divides too, so it checks the lane
+ ; bignum // and % ride Knuth-D; show on a big divides too
  (1267650591354675262013 = 100 2 // 1000000007) (976371285 = 100 2 % 1000000007)
  (100 2 = 200 2 // 100 2) ("1267650600228229401496703205376" = show (100 2))
  (-2 = 1 ^ -1) (15 = 8 | 4 | 2 | 1) (16 = 64 >> 2) (16 = 2 << 3)
- ((3 * (200 2)) = (3 << 200)) (0 = (0 << 500))   ; the count is exact -- never masked to the word
+ ((3 * (200 2)) = (3 << 200)) (0 = (0 << 500))   ; the count is exact, never masked
  ((63 2) = (1 << 63)) ((64 2) = (1 << 64))       ; ..and << promotes past the sign
  (-1 = -1 >> 1) (-4 = -8 >> 1)               ; >> is arithmetic: it sign-extends
  (0 = 5 >> 64) (-1 = -5 >> 64)               ; ..past the width it lands on the sign, not the value
@@ -156,29 +138,25 @@
  (255 = (200 2 + 255) & 255)                 ; a big rides the lane, either sign
  (0 - 1 = (0 - 200 2 | 0 - 1)))
 
-; --- order & equality --- < <= > >= total over all values, the true-blue bands: points at the
-; floor (() < bare mints < named noms -- mints by serial, names by name-lex then serial), then
-; string, then all constellations as one band ordered by net (stars and galaxies interleave, a
-; star below a galaxy on a tie), then tray (object array) < chain < map < top, each band ordered
-; within itself (text/chains lexicographically, maps and lambdas by an alpha-invariant hash). the
-; tier spine inside the number band: N green charms < Z < R < C, nesting as usual. an array
-; operand broadcasts < to a mask, so the scalar order is observed through sort and map keys.
-; `=` bridges the numeric tower and compares structurally; for "not equal" write (a != b).
+; --- order & equality --- < <= > >= are total over all values, in bands: points (() < mints <
+; names), string, constellations by net (a star below a galaxy on a tie; tiers nest N < Z < R < C),
+; tray < chain < map < top. text and chains are lexicographic, maps and lambdas by an alpha-invariant
+; hash. an array operand broadcasts < to a mask. `=` bridges the numeric tower and compares
+; structurally; not-equal is !=.
 (test
  (3 = 3.0) (3 != 4) (1 < 1.5) (3.0 >= 3) ('a = 'a) ('(1) = '(1)) ('(1) != '(2))
- ('x < "a") ("a" < 1) (1 < '(0)) !(1 < "a")          ; true-blue order: mint < string < number < chain
+ ('x < "a") ("a" < 1) (1 < '(0)) !(1 < "a")          ; mint < string < number < chain
  ('(0) < {1 10}) ({1 10} < cap) !(cap < {1 10})       ; the map rung: chain < map < hot
- ("abc" < "abd") ("ab" < "abc") ('(1 2) < '(1 3))     ; within a band: text and chains order lexicographically
- ; a galaxy folds into the number band by its net (probe via sort/show -- infix < on an array broadcasts to a mask).
+ ("abc" < "abd") ("ab" < "abc") ('(1 2) < '(1 3))     ; text and chains are lexicographic
+ ; a galaxy sits in the number band by its net (probed via sort: infix < on an array is a mask)
  ("(@(1 1) 5 @(2 4))" = show (sort [@(2 4) 5 @(1 1)]))   ; nets 2 < 5 < 6, galaxies interleaving with the star
  ("(3 @(1 2))" = show (sort [@(1 2) 3]))           ; net tie -> a star seats below a galaxy
- ("(@('a 'b) (7 8))" = show (sort [@('a 'b) '(7 8)]))    ; a tray (object array) stays below link (chain is the grammar substrate, seated high)
+ ("(@('a 'b) (7 8))" = show (sort [@('a 'b) '(7 8)]))    ; a tray sits below a chain
  (tray? @(5)) (tray? (@(5) = 5)))                     ; a one-cell array is an array: = with its scalar is a mask
 
 ; --- comparing functions --- `=` on functions is alpha + structural (binders by position, free
-; vars by name, captures pairwise); eta/beta not bridged; a number never equals a closure --
-; numerals act as their lambdas under apply ((1 x) = x), `=` doesn't say so. (x \ y) below holds
-; a free y, read quietly under welp, and stays distinct from (x \ x): free body /= bound body.
+; vars by name, captures pairwise); eta/beta not bridged; a number never equals a closure.
+; (x \ y) holds a free y, read under welp.
 (hear welp)
 (test
  ((x \ x) = (y \ y))
@@ -203,62 +181,54 @@
  (5 = (x \ x) 5)                               ; beta_id: (\ x x) a ~> a
  (1 = ((_ \ 1) 9))                             ; beta_const: (\ _ 1) a ~> 1 (drops its arg)
  (5 = ((x \ x) ((x \ x) 5)))                   ; beta_nested: (\ x x) ((\ x x) a) ~>* a
- (10 = ((q \ (i \ 7 @ q (i + q)) q) 3))        ; capture-avoiding: a : binder shadowing the arg does not capture it (i stays 3, local q 7)
- (8  = ((q \ (i \ 5 @ i (i + q)) q) 3))        ; a : rebinding the lambda param shadows it -- the subst drops, not lands on the binder
- (99 = ((tuple \ tuple 1 2 3) (a \ b \ c \ 99))) ; a binder shadows a same-spelled macro: the macro must not fire (tuple is a prel macro)
+ (10 = ((q \ (i \ 7 @ q (i + q)) q) 3))        ; a : binder shadowing the arg does not capture it
+ (8  = ((q \ (i \ 5 @ i (i + q)) q) 3))        ; a : rebinding the param shadows it
+ (99 = ((tuple \ tuple 1 2 3) (a \ b \ c \ 99))) ; a binder shadows a same-spelled macro (tuple)
  (5  = ((x \ 5) @ let (let 9)))                ; likewise for a : binder named like a macro
  (43 = ((p \ (: p (p + 1) p)) 42))             ; a : value binding shadows its name only after its right side is
  (2  = (1 @ v (: v (v + 1) v))))               ; evaluated, so that side reads the outer binding, a param or an enclosing :
 
-; --- string answers a string --- the one total coercion. four kinds the nif spells itself: a
-; charm is its byte (not its digits -- (string 10) is a newline), a nom its spelling, a charlist
-; its bytes, a cask a copy; () is the empty charlist. everything else -- gem, twin, big, tray,
-; tablet, port, lambda -- goes through `show`, seal-hook 4, so a string is the only value that
-; comes back identical. unsealed (prel's own run, before post.l) the hook is identity.
+; --- string answers a string --- the one total coercion: a charm is its byte (not its digits), a
+; nom its spelling, a charlist its bytes, a cask a copy, () empty; the rest go through `show`
+; (seal-hook 4, identity before post.l). only a string comes back identical.
 (: (str? x) (string? (string x))
    (test
-    ("A" = string 65) (1 = #(string 10)) ("hi" = string '(104 105))   ; the four spelled kinds,
+    ("A" = string 65) (1 = #(string 10)) ("hi" = string '(104 105))   ; the four spelled kinds
     ("abc" = string 'abc) ("" = string ())                                 ; and the empty charlist
     ("1.5" = string 1.5) ("-2.5" = string -2.5)                            ; ..the rest coerce
     (str? 1.5) (str? i) (str? (100 2)) (str? @(1 2 3)) (str? {1 2}) (str? cap) (str? out)
-    (str? ()) (str? 0) (str? 'x) (str? "s") (str? @(0 0))                  ; incl. every falsy shape
+    (str? ()) (str? 0) (str? 'x) (str? "s") (str? @(0 0))                  ; every falsy shape too
     ("x" @ s (s = string s))                                           ; a string is the only identity
     (1.5 @ g (g != string g))
     ("1.5" = 2 string 1.5)))                                        ; ..so it is idempotent
 
-; --- + and * are generic --- `+` adds numbers, concatenates strings, appends lists; `-` numeric
-; only. mixed bands degenerate (the associativity law): a number against a string or a chain
-; arrives as that band's unit and the other operand answers whole; (string c) and (l + [x]) spell
-; the byte and adjoin lanes instead. a name is a point like a mint: the identity under + in every
-; lane, and two points join -- the greater in love's order stands, () the bottom, so + on points
-; is a commutative semilattice; absent under *. `*` is repeated `+`: a sequence times a count
-; repeats it, and the count saturates.
+; --- + and * are generic --- + adds numbers, joins strings, appends lists; `-` is numeric only.
+; mixed bands degenerate: a number meets text or a chain as that band's unit. names are points: +
+; is their join (the greater stands, () the bottom) and the identity against every other band;
+; absent under *. `*` is repeated `+`; the count saturates.
 (test
  ("abcd" = "ab" + "cd") ("x" = "x" + 66) ('ef = 'ef + 'ef) ('ef = 'ef + 'ab) ('ef = 'ab + 'ef) ("ab" = "ab" + 'ef)
  ('ef = 'ef + ()) ('ef = () + 'ef) ('ef = mint 0 + 'ef) ('ef = 'ef + mint 0)   ; () and a bare mint sit below every name
  (('ab + 'ab) + 'ef = 'ab + ('ab + 'ef)) (('ef + 'ab) + 'ab = 'ef + ('ab + 'ab))  ; associative on every triple
  ("x" = "x" + 66.0) ("x" = "x" + 1.5) ("x" = "x" + -66) ("x" = "x" + 256)   ; a number degenerates against text
- ('(1 2 3 4) = '(1 2) + '(3 4)) ('(1 2) = 5 + '(1 2)) !("a" - "b")
- ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))            ; a bare mint -- the zero point () too -- is +'s
- ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)               ; identity in every lane, not just on lists:
- ((1 ~ 2) = () + (1 ~ 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())   ; string/number/complex/array pass through
- ('(1 2) = 'ef + '(1 2)) (5 = 'ef + 5) (5 = 65 + 'ef + -60)                    ; a name is the identity against every band,
- ("@(1 2)" = show ('ef + @(1 2))) ("@(1 2)" = show (@(1 2) + 'ef))             ; ..either side, a tray included
- ((x \ x) = () + (x \ x)) (2 = (((x \ x) + (x \ x)) (n \ n + 1) 0))            ; the top lane too: () + hot = hot, and
- ("ababab" = "ab" * 3) (() = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd") ; a name is absent under *; + on two hots is church add (id+id acts as 2)
- ("ababab" = "ab" * -3) !("ab" * 2.5) !('(1 2) * 0)                            ; a count acts by |magnitude| when exact (the one hom
- (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")                 ; over the sign crossing); an inexact count is no count.
- (() = '(1 2) * mint 0) (() = () * ()) (() = () * @(1 2 3))                    ; () is the zero and the zero annihilates * (the
- ("" = "ab" * 0) (() = () * (x \ x))                                           ; semiring law; 1 is the identity); the number 0 still counts: 0 copies = the kind's empty
- !("ab" * (3 ~ 4))                                                             ; ..and a complex is no count either, like the gem
- ("ab" * 3 = "ab" + "ab" + "ab")                                               ; the tie, the whole reason * is `repeated +`:
- ('(1) * 3 = '(1) + '(1) + '(1)))                                              ;   s*n is s+s+..+s, in each lane that repeats
+ ('(1 2 3 4) = '(1 2) + '(3 4)) ('(1 2) = 5 + '(1 2))
+ ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))            ; () and a bare mint are +'s identity in every lane
+ ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)
+ ((1 ~ 2) = () + (1 ~ 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())
+ ('(1 2) = 'ef + '(1 2)) (5 = 'ef + 5) (5 = 65 + 'ef + -60)                    ; so is a name, either side
+ ("@(1 2)" = show ('ef + @(1 2))) ("@(1 2)" = show (@(1 2) + 'ef))
+ ((x \ x) = () + (x \ x)) (2 = (((x \ x) + (x \ x)) (n \ n + 1) 0))            ; + on two hots is church add
+ ("ababab" = "ab" * 3) (() = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd") ; a name is absent under *
+ ("ababab" = "ab" * -3) !("ab" * 2.5) !('(1 2) * 0)                            ; an exact count acts by magnitude; an inexact one is no count
+ (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")                 ; () is the zero: it annihilates *
+ (() = '(1 2) * mint 0) (() = () * ()) (() = () * @(1 2 3))
+ ("" = "ab" * 0) (() = () * (x \ x))                                           ; but the number 0 counts: zero copies, the kind's empty
+ !("ab" * (3 ~ 4))                                                             ; a complex is no count either
+ ("ab" * 3 = "ab" + "ab" + "ab")                                               ; the tie: s*n is s+s+..+s in each lane
+ ('(1) * 3 = '(1) + '(1) + '(1)))
 
-; --- () is absent to every numeric lane --- - / // % & | ^ << >> have nothing to compute with,
-; either side, so they answer (). not the number 0 -- no face projection -- and no do-nothing
-; ride-through either: the () propagates through arithmetic rather than healing, so absence stays
-; where it lands, falsy, for `?` to see. the sequence ops keep their band rules: () is the unit of
-; + and the annihilator of *. comparisons and `=` stay strict: () keeps its floor seat.
+; --- () is absent to every numeric lane --- - / // % & | ^ << >> answer () on it, either side,
+; not 0: absence propagates and stays falsy. + and * keep their band rules; = and < stay strict.
 (test
  !(5 - ()) !(() - 5) !(() - 2.5) !((64 2) - ())         ; - : both sides, every width
  !(5 / ()) !(() / 5) !(5 // ()) !(5 % ()) !(() % 5)     ; / // %
@@ -268,39 +238,33 @@
  !('ef - 3) !("a" - "b") !(('a - 'b) - 5)               ; undefined answers (), and it survives the chain
  (5 != ()) (() < 5))                                    ; = and < stay strict: () keeps the floor
 
-; --- list*list is the cartesian product --- the semiring product whose `+` is cat: each pair a
-; proper 2-list, so `tally` is the homomorphism (tally(a*b)=ta*tb) and `net` is not (it is not
-; multiplicative). infix `*` is left-handed, so a*b*c nests left and the pairs come out ((a b) c):
-; the product is not associative on the nose, the one law the hand is visible in. right-handed
-; distributivity ((a+b)*c=a*c+b*c) holds on the nose (the outer loop ranges the left operand); the
-; left-handed one holds only up to a permutation. () is the zero and annihilates *.
+; --- list*list is the cartesian product --- each pair a proper 2-list, so tally is a homomorphism
+; and net is not. `*` is left-handed: a*b*c nests ((a b) c), so it is not associative on the nose.
+; right distributivity holds exactly, left only up to permutation; () annihilates.
 (test
- (('(1 2) * '(3 4)) = '((1 3) (1 4) (2 3) (2 4)))                ; the product: every ordered pairing
+ (('(1 2) * '(3 4)) = '((1 3) (1 4) (2 3) (2 4)))                ; every ordered pairing
  (('(1 2) * '(3 4) * '(5 6)) = '(((1 3) 5) ((1 3) 6) ((1 4) 5) ((1 4) 6) ((2 3) 5) ((2 3) 6) ((2 4) 5) ((2 4) 6)))  ; the left hand nests left
- (('(1 2) * ('(3 4) * '(5 6))) = '((1 (3 5)) (1 (3 6)) (1 (4 5)) (1 (4 6)) (2 (3 5)) (2 (3 6)) (2 (4 5)) (2 (4 6))))  ; ... and parens still buy the other shape
+ (('(1 2) * ('(3 4) * '(5 6))) = '((1 (3 5)) (1 (3 6)) (1 (4 5)) (1 (4 6)) (2 (3 5)) (2 (3 6)) (2 (4 5)) (2 (4 6))))  ; parens buy the other shape
  (6 = #('(1 2) * '(3 4 5))) (#('(1 2) * '(3 4 5)) = #'(1 2) * #'(3 4 5))   ; tally is the homomorphism
  ((('(1 2) + '(8 9)) * '(3 4)) = (('(1 2) * '(3 4)) + ('(8 9) * '(3 4))))    ; right-distributive on the nose
- (!(('(1 2) * ('(3 4) + '(5 6))) = (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; left-distrib fails as ordered lists ...
- ((sort ('(1 2) * ('(3 4) + '(5 6)))) = (sort (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; ... but holds up to permutation
- ('(1 3) = <('(1 2) * '(3 4)))                                  ; pairs are real 2-lists -- reversible via cap/cup
- (() = '(1 2) * ()) (() = () * '(3 4))                          ; () is the zero: it annihilates the cartesian too
- !("ab" * '(1 2)) !('(1 2) * "ab"))                            ; only chain*chain -- string*chain stays nil
+ (!(('(1 2) * ('(3 4) + '(5 6))) = (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; left-distributivity fails as ordered lists,
+ ((sort ('(1 2) * ('(3 4) + '(5 6)))) = (sort (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; ..but holds up to permutation
+ ('(1 3) = <('(1 2) * '(3 4)))                                  ; pairs are real 2-lists
+ (() = '(1 2) * ()) (() = () * '(3 4))                          ; () annihilates the cartesian too
+ !("ab" * '(1 2)) !('(1 2) * "ab"))                            ; only chain*chain
 
-; --- numeric functions --- abs int (type-aware); constants e pi i; gcd modpow; the irreducible
-; transcendental nifs are sine cosine log (bignums widen, arrays map elementwise; log climbs
-; tiers -- a negative/complex gives the principal value). everything else is derived, no nif --
-; power is application: (k b) = b**k, sqrt ((/ 1 2) x), exp (x e), nth root ((/ 1 n) x), tan
-; sine/cosine, atan (arg (1 ~ x)), atan2 (arg (x ~ y)); a negative base to a non-integer power
-; goes principal (the angle pi*e factored exactly), so the derived sqrt is total: ((/ 1 2) -1) = i.
+; --- numeric functions --- abs int; constants e pi i; gcd modpow; the transcendental nifs are
+; sine cosine log (log climbs tiers to the principal value). the rest derive: power is application,
+; (k b) = b**k, sqrt ((/ 1 2) x), exp (x e), atan (arg (1 ~ x)); a negative base to a non-integer
+; power goes principal, so ((/ 1 2) -1) = i.
 (test
  (5 = (abs -5)) (charm? (abs -5)) (5.0 = (abs (3 ~ 4))) (2 = (int 2.9))
- ((abs -9223372036854775808) = 9223372036854775808)   ; |sun min| overflows the word: the bignum lane
+ ((abs -9223372036854775808) = 9223372036854775808)   ; |sun min| overflows the word
  (1024 = (10 2)) (21 = (gcd 1071 462)) (976371285 = (modpow 2 100 1000000007))
  (2.0 = ((1 / 2) 4)) (1 = (0 e)) (2.718281828459045 = e))
 
-; --- a few identities --- tetration is the tower with one base; i*i = -1; euler holds in the
-; exact direction ((log -1) = i * pi -- `=` is exact, so e^(i*pi) does not hold forward); power's
-; principal root is exact, ((/ 1 2) -1) = i on the nose. (only bit-exact claims on every target.)
+; --- a few identities --- exact claims only: euler in the exact direction ((log -1) = i * pi),
+; the principal root on the nose.
 (test
  (27 = (3 3)) (7625597484987 = (3 3 3)) (16 = (2 2 2)) (65536 = (2 2 2 2)) ; tetration
  (-1 = i * i) (-1 = (2 i)) (1 = ((i * 0) e))                               ; i^2 = -1; e^(i*0) = 1
@@ -310,27 +274,23 @@
  (-8 = (3 -2)) (twin? ((1 / 3) -8))                                        ; integer powers stay real; odd roots go principal
  (0.0 = (sine 0) / (cosine 0)) (gem? (sine 0)))                            ; tan 0 = 0
 
-; --- complex --- a scalar at tier C; the `~` sigil, two lanes: spaced, (re ~ im) builds
-; (twin re im) at the tightest band; glued, ~x lifts a real or conjugates (an involution);
-; i = (0 ~ 1). a rank-N complex array packs (re,im) into a `c`-typed array; the net is the complex
-; sum of the cells, $v = $(net v). re/im/arg read elementwise over a tray: a twin-tray answers the
-; gem-tray of that component, a real tray is its own re (tier and all) and its im is its shape
-; zeroed. an object tray reads the zero point, like any non-number.
+; --- complex --- spaced (re ~ im) builds a twin at the tightest band; glued ~x conjugates (an
+; involution); i = (0 ~ 1). a complex array packs (re,im) cells; its net is the complex sum.
+; re/im/arg go elementwise: a real tray is its own re, its im zeros; an object tray reads ().
 (test
  (i * i = -1) ((2 ~ 0) = 2) ((-5 ~ 10) = (1 ~ 2) * (3 ~ 4)) (twin? ~5) !(twin? 5)
  ((0 ~ 0) = ~0) ((conj (2 ~ 3)) = ~(2 ~ 3)) ((conj (2 ~ 3)) = (2 ~ -3)) ((2 ~ 3) = ~~(2 ~ 3))
- ((conj ((2 ~ 3) + (4 ~ 5))) = (conj (2 ~ 3)) + (conj (4 ~ 5)))  ; conj is additive
+ ((conj ((2 ~ 3) + (4 ~ 5))) = (conj (2 ~ 3)) + (conj (4 ~ 5)))
  ((conj ((2 ~ 3) * (4 ~ 5))) = (conj (2 ~ 3)) * (conj (4 ~ 5)))  ; ... and multiplicative
  (~8 = ~3 + ~5) ((0 ~ 0) < i) ((conj (2 ~ 3)) < (2 ~ 3))        ; reals embed; (re,im) order: 0<i, conj below
  (2.0 = re (2 ~ 3)) (i < 1) !(1 < i) ("(0.0 ~ 1.0)" = show i)
- (0.0 = (peep (arg (1 ~ @(1 0))) 1 0)))          ; arg broadcasts -- (arg (1 ~ x)) = atan, elementwise
+ (0.0 = (peep (arg (1 ~ @(1 0))) 1 0)))          ; arg broadcasts
 (test
  (array 2 (1 ~ 2) (3 ~ 4) @ v (twin-tray = tier v && (1 ~ 2) = peep v 0 0 && (4 ~ 6) = net v
   && (2 ~ 4) = peep (v + v) 0 0 && (2 ~ 4) = peep ((2 ~ 0) * v) 0 0 && !(v < v)
   && $v = $(net v) && "@((1.0 ~ 2.0) (3.0 ~ 4.0))" = show v))
- ; phases sum as vectors to (0 ~ 8) either way; the twin gem is read by its real part alone --
- ; $ clamps re, never |z| -- so a sum with no real component measures 0 however large
- (0 = $(array 2 (3 ~ 4) (-3 ~ 4))) (0 = $[(3 ~ 4) (-3 ~ 4)])
+ ; phases sum as vectors; $ clamps re, never |z|
+ (0 = $(array 2 (3 ~ 4) (-3 ~ 4)))
  (3 = $(array 2 (3 ~ 4) (0 ~ 0))) ((0.0 ~ 8.0) = (net (array 2 (3 ~ 4) (-3 ~ 4)))))
 (test
  (twin (star-tray '(2 2) '(1 2 3 4)) (star-tray '(2 2) '(5 6 7 8)) @ m
@@ -342,29 +302,16 @@
  ("@()" = show (re (twin-tray '(0) 0))) ("@()" = show (im @()))           ; an empty tray stays a tray
  !(re (top-tray '(2) 0)) !(im (top-tray '(2) 0)))                         ; an object tray is no number
 
-; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o); (array shape elem..)
-; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. the invariant is rank, not count:
-; an array exists at rank >= 1 and any tally, so @(5) is a one-cell array and (iota 1) is @(0).
-; only a rank-0 point demotes to its lone scalar -- there is no rank-0 kind, which keeps the
-; float/wide/complex boxes lean (rank/tally/shape read nil on a scalar). empties stay arrays,
-; carrying the reduction units, so the surface is continuous across every tally.
-; + - * // < = and the bitwise << >> & | ^ broadcast numpy-style (`/` promotes the whole result to
-; r on one inexact cell); the bitwise five are the word lane, so they ride a z-tray and refuse
-; anything else whole -- a gem/twin tray, or an object tray, answers the zero point rather than
-; mapping elementwise. masks are the everyday customer: `<` and `>` broadcast to 0/1, & | ^ join.
-; reduce net/prod/amax/amin/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
-; `=` is a boolean on every kind, arrays included -- whole-array equality: same shape, every cell
-; equal, comparing across tiers the way (= 5 5.0) is true. it is not a mask; `<` and `>` are the
-; mask makers. a non-numeric operand beside an array, or a shape mismatch, reads 0 -- never the
-; arithmetic ()-face (a point/text equals only itself).
-; the width law -- the representation picks the regime, never the operator. the growing lane is a
-; star's + - * // %: exact forever, climbing charm -> sun -> big. the word lane is fixed-width
-; two's complement, and it is exactly where the rep is a machine word: the bitwise ops << >> & | ^
-; always, even on a star (see arithmetic), and a word-celled tray's cells -- a z-tray being
-; contiguous limbs. so a z-tray's + - * wrap where a star's grow, and a big operand truncates into
-; the cell instead of refusing. the rule is the rep, not the kind: an object tray boxes every cell,
-; so a galaxy of bigs routes through the promoting scalar lane and stays exact. a gem-tray is not
-; in the word lane either -- floats saturate to infinity.
+; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o);
+; (array shape elem..) infers; @(..) rank-1 literal; (iota n) 0..n-1. an array is rank >= 1 at any
+; tally, so @(5) is an array; a rank-0 point is its scalar. empties stay arrays, carrying the units.
+; + - * // < = and the bitwise five broadcast numpy-style (`/` goes r on one inexact cell); `=` and
+; `<` answer 0/1 masks and aall/aany ask the whole question; a shape mismatch or a non-numeric
+; operand reads 0. reduce net/prod/amax/amin/aall; inner (+.x), outer (o.x).
+; the width law: the representation picks the regime, not the operator. a star's + - * // % grow
+; exact; a z-tray's cells are machine words, so they wrap and a big truncates in. on a tray the
+; bitwise five are the word lane and refuse a gem or object tray whole. an object tray boxes its
+; cells, so a galaxy of bigs stays exact; a gem-tray saturates to infinity.
 (test
  (6 = #(star-tray '(2 3) 0)) (2 = rank (star-tray '(2 3) 0)) ('(2 3) = shape (star-tray '(2 3) 0))
  (star-tray = (tier (star-tray '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
@@ -376,18 +323,18 @@
  (@(4 6) = @(8 12) / 2) !(star-tray '(3) 0) ("@(10 20 30)" = show @(10 20 30))
  (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2))
  (0 = (@(1 2 3) = @(1 2))) (0 = ('sym = @(1 2 3))) (0 = ("ab" = @(1 2)))   ; a shape/kind mismatch is 0
- (aall (@(1 2 3) = @(1 2 3))) !(aall (@(1 2 3) = @(1 2 9)))                ; `=` is a mask; the whole question is aall
+ (aall (@(1 2 3) = @(1 2 3))) !(aall (@(1 2 3) = @(1 2 9)))                ; `=` is a mask; aall asks the whole question
  (tray? (@(1 2 3) = @(1 2 9))) (aany (@(1 2 3) = @(1 2 9)))
- (@(1 2) = (gem-tray '(2) '(1.0 2.0)))                                     ; ...across tiers, like (= 5 5.0)
+ (@(1 2) = (gem-tray '(2) '(1.0 2.0)))                                     ; ..across tiers, like (= 5 5.0)
  (0 = (net (star-tray '(0) 0))) (1 = (prod (star-tray '(0) 0))) (aall (star-tray '(0) 0))
  ("@()" = show (star-tray '(0) 0)) (0 = #((star-tray '(0) 0) + 1))
- (32 = (inner @(1 2 3) @(4 5 6))) (star-tray = (tier (outer @(1 2) @(3 4))))   ; +.x dot ; o.x outer
+ (32 = (inner @(1 2 3) @(4 5 6))) (star-tray = (tier (outer @(1 2) @(3 4))))   ; +.x dot; o.x outer
  ; the width law: a galaxy's cells are machine words, so its arithmetic wraps
- (@(8 9) = (@(3 4) + ((200 2) + 5)))              ; a big truncates into the cell (2^200 = 0 mod 2^w)
- (star-tray = (tier (@(3 4) + (200 2))))          ; ...and the result never leaves the tray band
- (sun? (3 + (200 2)))                             ; where the star lane grows exact instead
- (array '(2) (200 2) (200 2) @ o                  ; ...as does an object tray: boxed cells, not limbs
-  (aall (o = ((o + (array '(2) 1 1)) - (array '(2) 1 1)))))     ; exact round trip at 2^200
+ (@(8 9) = (@(3 4) + ((200 2) + 5)))              ; a big truncates into the cell
+ (star-tray = (tier (@(3 4) + (200 2))))          ; ..and never leaves the tray band
+ (sun? (3 + (200 2)))                             ; the star lane grows exact instead
+ (array '(2) (200 2) (200 2) @ o                  ; ..as does an object tray
+  (aall (o = ((o + (array '(2) 1 1)) - (array '(2) 1 1)))))
  (word ? ("@(infinity infinity)" = show (@(1.0e308 1.0e308) * @(10.0 10.0))) 1)    ; a gem-tray saturates, never wraps
  (word ? (@(-9223372036854775808 0) = (@(9223372036854775807 0) + @(1 0))) 1)   ; max+1 -> min
  (word ? (@(9223372036854775807 0) = (@(-9223372036854775808 0) - @(1 0))) 1)   ; ...min-1 -> max
@@ -395,408 +342,298 @@
  (@(240 19) = (@(255 16) ^ @(15 3))) (@(15 0) = (@(255 16) & @(15 3))) (@(12 6) = (@(8 4) | @(4 2)))
  (@(8 16 24) = (@(1 2 3) << 3)) (@(4 -4) = (@(8 -8) >> 1))       ; >> stays arithmetic per cell
  (@(240 252) = (255 ^ @(15 3))) (@(2 16) = (@(1 1) << @(1 4)))   ; a star broadcasts; counts can be per-cell
- !(@(5 6) | ())                                                  ; ...and a numeric lane answers () on it
- (() = (@(1.5 2.5) ^ @(1 1)))                                    ; a gem tray is not the word lane: refuses
- (() = ((array '(2) (200 2) (200 2)) & @(255 255)))              ; ...nor an object tray: boxed cells, not words
- (@(1 3 5 7 9) @ m (aall (@(0 1 1 1 0) = ((m > 2) & (m < 8)))))  ; masks combine: the everyday customer
+ !(@(5 6) | ())                                                  ; ..and () is absent here too
+ (() = (@(1.5 2.5) ^ @(1 1)))                                    ; a gem tray is not the word lane
+ (() = ((array '(2) (200 2) (200 2)) & @(255 255)))              ; ..nor an object tray
+ (@(1 3 5 7 9) @ m (aall (@(0 1 1 1 0) = ((m > 2) & (m < 8)))))  ; masks combine
  (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)) @ M    ; 2x2 matmul
   (('(2 2) = (shape M)) && 154 = (peep M '(1 1) 0))) !(inner @(1 2 3) @(1 2))
- ; a tray is immutable, so pin answers a fresh one -- one slot replaced, the rest copied
+ ; a tray is immutable: pin answers a fresh one
  (@(1 9 3) = (pin @(1 2 3) 1 9)) (@(1 2 3) @ v (pin v 1 9, @(1 2 3) = v))
- (@(7.0 2.5) = (pin @(1.5 2.5) 0 7))                       ; the value converts to the tray's tier, as the ctor's fill does
- (@(1 2 3) = (pin @(1 2 3) 1 'x)) (@(1 2 3) = (pin @(1 2 3) 9 5))   ; ...so a non-number into a numeric tray, or a miss, is the no-op
+ (@(7.0 2.5) = (pin @(1.5 2.5) 0 7))                       ; the value converts to the tray's tier
+ (@(1 2 3) = (pin @(1 2 3) 1 'x)) (@(1 2 3) = (pin @(1 2 3) 9 5))   ; a non-number or a miss is the no-op
  (star-tray '(2 2) '(1 2 3 4) @ m (9 = (peep (pin m '(1 0) 9) '(1 0) 0))))     ; the shape-list key writes where it reads
 
-; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup the
-; compounds); (long? n l) asks the arity -- at least n links, one walk, where `two?` per step
-; spends a cup and a dispatch at each; sort/sortby by the total order; (jot n) the first n charms;
-; the higher-order functions live in the prel. applying a chain is the text law one lattice rung
-; up: a charm indexes an element (out of range -- a negative included -- the unit 1), a chain
-; juxtaposes -- the append, agreeing with + -- and every other operand takes the default action,
-; const-1. () is the zero point, not a chain, so (l ()) is that default, not +'s identity.
+; --- chains & lists --- link builds; cap/cup project (caap..cuuup compound); (long? n l) asks for
+; at least n links in one walk; sort/sortby by the total order; (jot n) the first n charms. applying
+; a chain: a charm indexes (out of range, a negative included, is ()), a chain appends (agreeing
+; with +), any other operand answers ().
 (test
  (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (. 1 (. 2 ())))
- !(cap 0) ("x" = (string 'x)) !(two? 'x)          ; no cap at the end of the list; a symbol is not a chain -- its name comes via `string`
+ !(cap 0) ("x" = (string 'x)) !(two? 'x)          ; no cap at the end; a symbol is not a chain
  (long? 3 '(1 2 3)) !(long? 4 '(1 2 3)) ((long? 1 '(1 2)) = (two? '(1 2))) ((long? 1 'x) = (two? 'x))
- (long? 0 'x) !(long? 1 ()) !(long? 2 "ab") !(long? 'a '(1 2))  ; at zero nothing is claimed, so anything answers; a count that is not a charm never does
- ('(0 1 2) = (jot 3)) !(jot 0) (3 = $(jot 3)) ; jot: the first n charms; the empty count is nothing
+ (long? 0 'x) !(long? 1 ()) !(long? 2 "ab") !(long? 'a '(1 2))  ; at zero nothing is claimed; a non-charm count never answers
+ ('(0 1 2) = (jot 3)) !(jot 0) (3 = $(jot 3)) ; the empty count is nothing
  ('(2 3 4) = (map (+ 1) '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
  ('(1 3) = (filter (x \ x % 2) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (sortby (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
  (20 = <>(assoc 2 [[1 10] [2 20]])) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
  (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (elem 3 '(1 2 3)) !(elem 9 '(1 2 3))
  (all (x \ 0 < x) '(1 2 3)) (any (x \ 2 < x) '(1 2 3))
- (7 = ('(7 8 9) 0)) (9 = ('(7 8 9) 2)) !('(7 8 9) -1) !('(7 8 9) 9)   ; a charm indexes; a negative is out of range like any other
+ (7 = ('(7 8 9) 0)) (9 = ('(7 8 9) 2)) !('(7 8 9) -1) !('(7 8 9) 9)   ; a charm indexes; a negative is out of range
  !('(7 8 9) 3) !('(7 8 9) -4) !('(7 8 9) 'x) !('(7 8 9) ())        ; out of range, and every non-index operand, is ()
  ('(1 2 3 4) = ('(1 2) '(3 4))) (('(1 2) '(3 4)) = '(1 2) + '(3 4))              ; a chain juxtaposes: the append, agreeing with +
- ('(1 2 3 4 5) = ('(1 2) '(3 4) '(5)))                                           ; ... and it curries, as text does
- ('(1 X 3) = (pin '(1 2 3) 1 'X)) ('(1 2 3) @ l (pin l 1 'X, '(1 2 3) = l))      ; pin answers a fresh spine; the original is untouched
- ('(1 2 3) = (pin '(1 2 3) 3 'X)) ('(1 2 3) = (pin '(1 2 3) -1 'X))              ; out of range is the no-op (from-the-end is apply's alone)
- (pin (. 1 2) 0 'X @ p ('X = <p && 2 = >p))                                   ; ... the tail is whatever was there: an improper one rides too
+ ('(1 2 3 4 5) = ('(1 2) '(3 4) '(5)))                                           ; ..and it curries, as text does
+ ('(1 X 3) = (pin '(1 2 3) 1 'X)) ('(1 2 3) @ l (pin l 1 'X, '(1 2 3) = l))      ; pin answers a fresh spine
+ ('(1 2 3) = (pin '(1 2 3) 3 'X)) ('(1 2 3) = (pin '(1 2 3) -1 'X))              ; out of range is the no-op
+ (pin (. 1 2) 0 'X @ p ('X = <p && 2 = >p))                                   ; an improper tail rides too
  (294 = $'(a b c)) (3 = #'(a b c)))         ; net sums spellings; tally counts the spine
 
-; --- strings, symbols & mints --- a symbol is an identifier: interned by its name, or anonymous
-; when it has none, and equal to nothing but itself. `nom?` asks; `name?` and `mint?` split it by
-; whether it is spelled. a spelled one re-interns, so 'x read twice is one object; (mint 0) adjoins
-; a fresh anonymous one (materially empty, applies const-1) and no two are ever equal. either kind
-; binds -- a mint is the gensym a macro expands through. () is the core, the one true nothing (a
-; serial-0 mint by representation, printed (), and no symbol: it binds nothing and `nom?` declines
-; it), distinct from 0 and "" though all net 0; absence reads it; `$` clamps the net measure,
-; `tally` counts; snip/+/string. a string indexes by a charm -- out of range, a negative included,
-; the unit 1 -- and juxtaposes by a string: (s t) is s then t, C's adjacent-literal law with the
-; literal restriction lifted, so it curries to any arity and agrees with (+ s t). every other
-; operand takes the default action, const-1. a chain reads the same way, by element (see chains).
-; a missing read answers the zero point under the floor handler welp (no warning surfaced)
+; --- strings, symbols & mints --- a symbol is interned by name or anonymous, equal only to itself:
+; nom? asks, name? and mint? split it by spelling. (mint 0) is a fresh anonymous one, netting 0, the
+; gensym a macro expands through. () is the one true nothing: a serial-0 mint by representation but
+; no symbol -- it binds nothing and nom? declines it. a string indexes by a charm (out of range is
+; ()) and juxtaposes with a string: (s t) is s + t, curried. a missing read answers () under welp.
 (hear welp)
 (test (zz-never-pinned @ z (!(nom? z) && !z && z = (:) && "()" = show z)))     ; absence: the zero point, wearing ()
 (hear test-strict)
 (test
  (() = (:)) !(nom? ()) !(name? ()) !(mint? ()) (0 != ()) (() = (intern "")) (0 = $()) !() !!$'x
  ("()" = show ())
- (nom? (mint 0)) !(name? (mint 0)) (mint? (mint 0)) (0 = $(mint 0)) !(mint 0)   ; the fresh symbol: nom? but not name? (anonymous), materially empty
- ; name? and mint? partition nom?: () is neither and nothing else is either. `string` cannot
- ; tell them apart (a mint spells ""). a mint binds and captures; () binds nothing.
+ (nom? (mint 0)) !(name? (mint 0)) (mint? (mint 0)) (0 = $(mint 0)) !(mint 0)   ; nom? but not name?, materially empty
+ ; name? and mint? partition nom? (() is neither); string can't tell them apart (a mint spells "")
  (: m (mint 0) s (nom "x")
     (mint? m && !(name? m) && name? s && !(mint? s)))
  (!(mint? 'x) && !(mint? "x") && !(mint? 0) && !(mint? '(1 2)))
  ("" = string (mint 0) && "" = string ())                                   ; the anonymous ones spell empty
- (mint 0 @ m (m = m 5)) ('xyz = ('xyz 1))                                           ; a point applied answers itself, named or not
+ (mint 0 @ m (m = m 5)) ('xyz = ('xyz 1))                                           ; a point applied answers itself
  ((mint 0) != (mint 0)) (mint 0 @ m (m = m))                                        ; distinct always; itself only
- (nom? (nom "x")) (name? (nom "x")) !(mint? (nom "x")) (name? 'x) !(two? (nom "x")) ; `nom` answers an interned symbol: nom? and name?, an atom, never a chain
- ('x = (nom "x")) ('x = (nom 'x)) ('x = (2 nom "x"))                                ; nom interns: an idempotent projection to the kind
- ((mint 0) < 'x)                                                                    ; within the symbol band: an anonymous one below a spelled one
- ((mint 0) < 0)                                                                     ; the blue floor: every symbol sits below the numbers (true-blue)
+ (nom? (nom "x")) (name? (nom "x")) !(mint? (nom "x")) (name? 'x) !(two? (nom "x")) ; `nom` interns: an atom, never a chain
+ ('x = (nom "x")) ('x = (nom 'x)) ('x = (2 nom "x"))                                ; an idempotent projection
+ ((mint 0) < 'x)                                                                    ; an anonymous one below a spelled one
+ ((mint 0) < 0)                                                                     ; every symbol sits below the numbers
  (: a (mint 0) b (mint 0) t {} (pin t a 1, pin t b 2,
                                         1 = t a && 2 = t b && 2 = #t)) ; distinct mints are distinct map keys
- (97 = ("abc" 0)) (294 = $"abc") (3 = #"abc") (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
- !(string 0) !!(string 1) (1 = #(string 0))          ; a NUL nets nothing: the chain of nothings reaches the bytes, and (string 0) is one of them
- !(snip ("a" + 0) 1 2) (97 = $("a" + 0))        ; ... an all-NUL text is nothing, and the NUL byte appends for free
- ("bidden" = (snip "forbidden planet" 3 9)) ("abcd" = "ab" + "cd") !("hi" 9)
- ; an empty answer keeps its kind: snipped, joined, repeated zero times, coerced or drained,
- ; a text answers text; only a non-text input, having no witness to keep, answers 0.
+ (97 = ("abc" 0)) (294 = $"abc") (3 = #"abc") (4 = $3.9) (0 = $-3.9) (5.0 = (abs @(3 4)))
+ !(string 0) !!(string 1) (1 = #(string 0))          ; a NUL nets nothing, but (string 0) holds one byte
+ !(snip ("a" + 0) 1 2) (97 = $("a" + 0))        ; ..an all-NUL text is nothing
+ ("bidden" = (snip "forbidden planet" 3 9)) !("hi" 9)
+ ; an empty answer keeps its kind; only a non-text input answers 0
  ("" = (snip "abc" 1 1)) ("" = (snip "" 0 5)) (0 = (snip 0 0 5))
- ("" = "" + "") ("" = "ab" * 0) ("" = (string ())) ("" = (string ""))
+ ("" = "" + "") ("" = (string ())) ("" = (string ""))
  ("" = slurp (jug 0)) ("" = slurp (tap ())) ("" = slurp 42)
- ("" = (puts "")) (0 = (puts 0))                                                           ; ..and an empty operand writes nothing, answering itself
- ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (a + b)))  ; juxtaposition joins text, curried, no literal needed
- !("abc" -1) !("abc" -3) !("abc" 3)                                                        ; a negative index is out of range, the same as one past the end
- ("aXcd" = (pin "abcd" 1 88)) ("abcd" @ s (pin s 1 88, "abcd" = s))                        ; pin answers a fresh text; the original is untouched
- ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))   ; out of range / a non-byte is the no-op (from-the-end is apply's alone)
+ ("" = (puts "")) (0 = (puts 0))                                                           ; an empty operand writes nothing, answering itself
+ ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (a + b)))  ; juxtaposition joins text, curried
+ !("abc" -1) !("abc" -3) !("abc" 3)                                                        ; a negative index is out of range
+ ("aXcd" = (pin "abcd" 1 88)) ("abcd" @ s (pin s 1 88, "abcd" = s))                        ; pin answers a fresh text
+ ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))   ; out of range or a non-byte is the no-op
  ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) ("abcd" = ("ab" 'cd)) !("ab" '(1 2)) ; "" is the unit; a point is text; a non-text operand is ()
  ('asdf = (intern "asdf")) !((mint 0) = (mint 0)) ("asdf" = (string 'asdf))
- ('xy = (intern (string 'xy)))                   ; ..so intern . string is the identity on an interned symbol
+ ('xy = (intern (string 'xy)))                   ; intern . string is the identity on a name
  ("\"a\\nb\"" = show "a\nb"))
 
-; --- hashes --- {k v ..}/(hash ..) build, (tablet 0) the empty hash; {} = the empty map (the
-; reader emits (tablet 0); () is the zero point, distinct from 0); {x} boxes a datum; accessors
-; collection-first peep/pin/pull (peep and pull share the default-if-absent; only pull mutates the
-; key away). two absence lanes, one miss machinery: peep (the caller names absence) and apply
-; ((t k) is (peep t k ()) -- a map is a lookup function, absence the zero point).
-; peep is also the presence test, and a total one: a fresh (mint 0) is unique, so no stored value
-; can pose as it -- (s = peep t k s) tells absence from every value including the empty ones.
-; pin lands wherever peep reads, and the collection decides how: a tablet or a cask has a cell, so
-; the write is in place and the same collection answers; text, a chain and a tray have none, so a
-; fresh one carrying the pin answers -- the functional update. (peep (pin c k v) k d) = v either
-; way; only the mutable kinds show the pin to a second holder. a rank-0 scalar is the one thing
-; peep reads that pin does not write: peep at 0 answers the scalar, so there is no cell.
+; --- hashes --- {k v ..}/(hash ..) build; {} the empty map; {x} boxes a datum. peep/pin/pull are
+; collection-first; pull removes the key. (t k) is (peep t k ()). peep with a fresh (mint 0) default
+; is the total presence test. pin writes in place where there is a cell (tablet, cask) and answers
+; a fresh copy otherwise (text, chain, tray); a scalar has no cell, so pin leaves it.
 (test
  (50 = (peep (pin {} 5 50) 5 0)) (99 = (peep (pin "abc" 1 99) 1 0))            ; the pin law, mutable and not
  (9 = (peep (pin '(1 2 3) 2 9) 2 0)) (9 = (peep (pin @(1 2 3) 0 9) 0 0))
- (5 = (pin 5 0 1)) (1.5 = (pin 1.5 0 1))         ; ...and the scalar exception: nothing to write
+ (5 = (pin 5 0 1)) (1.5 = (pin 1.5 0 1))         ; the scalar exception
  ({0} @ b (tablet? b && 1 = $b && 0 = peep b () 9 && (pin b () 7, 7 = b ())))
- (tablet? {}) (0 = #{}) (? {})                    ; {} is the empty map: 0 keys, and truthy (a lambda nets 1)
+ (tablet? {}) (0 = #{}) (? {})                    ; {} is the empty map: 0 keys, truthy
  ({1 10 2 20} @ t (20 = peep t 2 0 && 20 = t 2 && 99 = peep t 9 99))
- (: t {1 0} s (mint 0) (!(s = peep t 1 s) && s = peep t 9 s))              ; peep as the total presence test: a pinned 0 is present, an absent key is not
+ (: t {1 0} s (mint 0) (!(s = peep t 1 s) && s = peep t 9 s))              ; a pinned 0 is present, an absent key is not
  ({1 10 2 20} @ t (pull t 1 0, 1 = #t))
  (: t {1 10 2 20} v (pull t 2 0) (20 = v && 1 = #t && 99 = peep t 2 99 && -1 = pull t 9 -1))   ; pull: value or default, removes the key
  ('(1 2) = (sort (keys {1 10 2 20}))) ((dig 'k) = (dig 'k)) !(tablet? 5)
- ({1 10} != {1 10}) ({1 10} @ t (t = t))         ; mutable -> identity =
- (: t {} r (pins t 1 10 2 20) (r = t && 10 = t 1 && 20 = t 2 && 2 = #t))          ; pins: multi-pin onto a live tablet, returns it (the mutable twin of {..})
+ ({1 10} != {1 10}) ({1 10} @ t (t = t))         ; mutable: identity =
+ (: t {} r (pins t 1 10 2 20) (r = t && 10 = t 1 && 20 = t 2 && 2 = #t))          ; pins: multi-pin onto a live tablet, answering it
  (pins {} 1 10 2 @ t (10 = t 1 && 1 = #t)))                    ; an odd trailing key is dropped
 
-; --- the empty spellings (the nothing surface) --- each kind's empty by its sigil: () the chain
-; (the zero point, distinct from the number 0), "" the string, @() the array, {} the map, (0 ~ 0)
-; the zero complex, (cask 0) the buffer -- all net 0 -> blue -> false; the reader emits
-; (iota 0)/(tablet 0) for @()/{}. @0/{0} instead wrap the value 0 (a one-cell array, a box):
-; present, still netting 0, so the empty and the wrapped zero part by tally, not by truth.
+; --- the empty spellings --- () "" @() {} (0 ~ 0) (cask 0) all net 0 and are false, but {} (a
+; tablet nets 1). @0/{0} wrap the value 0: present, parted from the empties by tally.
 (test
- !() !0 !"" !@() !(0 ~ 0) !(cask 0)               ; every empty is false (blue) -- but {}: a tablet is a lambda, and nets 1
- (() != 0)                                       ; () (zero-point) and 0 (number) are distinct, both nothing
- ("@()" = show @()) (1 = rank @()) (0 = #@()) (star-tray = tier @())               ; @() the empty array, round-trips
- (tablet? {}) (0 = #{}) ("{}" = show {})      ; {} the empty map, show round-trips it
- (tray? @0) (tray? (0 = @0)) (1 = rank @0) (1 = #@0)     ; @0 wraps the value 0 -> a one-cell array
+ !@() !(cask 0)               ; every empty is false but {}
+ (() != 0)                                       ; () and 0 are distinct
+ ("@()" = show @()) (1 = rank @()) (0 = #@()) (star-tray = tier @())               ; @() round-trips
+ ("{}" = show {})      ; {} round-trips
+ (tray? @0) (tray? (0 = @0)) (1 = rank @0) (1 = #@0)     ; @0 is a one-cell array
  ("@(0)" = show @0) (0 = peep @0 0 -1)                  ; ...which shows and reads back as one
- (tablet? {0}) (1 = ${0}) !!{0})                       ; {0} wraps the value 0 -> a box (present)
+ (tablet? {0}) (1 = ${0}) !!{0})                       ; {0} is a box, present
 
-; --- buffers --- (cask n) mutable zeroed bytes; (cask charlist) a cask holding those bytes (the
-; lane `string` wears for a charlist -- the bulk way in, so a byte blob never needs a string to
-; ride); peep/pin a byte 0..255; `$` nets the charms (a zeroed cask is nothing); pour; identity =.
+; --- buffers --- (cask n) zeroed mutable bytes; (cask charlist) holds those bytes, the bulk way
+; in; peep/pin a byte 0..255; `$` nets the bytes; pour; identity =.
 (test
  (cask 3 @ b (pin b 0 65, 65 = peep b 0 0)) (0 = $(cask 4)) (4 = #(cask 4))
- !(cask 3) (65 = (cask 1 @ b (pin b 0 65, $b)))     ; zeroed -> nothing; bytes are charms
+ !(cask 3) (65 = (cask 1 @ b (pin b 0 65, $b)))     ; zeroed is nothing; bytes are charms
  (cask 1 @ b (pin b 0 257, 1 = (peep b 0 0))) (cask 4 @ b (pour b 0 "ABCD" 0 4, 68 = (peep b 3 0)))
- (cask 1 @ b (pin b 0 "x", 0 = (peep b 0 -1)))       ; a byte pin takes a charm: anything else writes nothing
- (cask 1 @ b (b = pin b 0 65))                       ; ...and a cask has a cell, so the pin is in place: the same buffer answers
- (cask '(200 65 0 255) @ b (4 = #b && 200 = peep b 0 0 && 255 = peep b 3 0))     ; the charlist lane: high bytes and an embedded NUL ride
- (cask '(65 66) @ b ("AB" = string b))              ; ... and it reads back as those bytes (identity equality, so compare content)
+ (cask 1 @ b (pin b 0 "x", 0 = (peep b 0 -1)))       ; a byte pin takes only a charm
+ (cask 1 @ b (b = pin b 0 65))                       ; a cask pins in place
+ (cask '(200 65 0 255) @ b (4 = #b && 200 = peep b 0 0 && 255 = peep b 3 0))     ; high bytes and an embedded NUL ride
+ (cask '(65 66) @ b ("AB" = string b))              ; ..and read back as those bytes
  ("" = (cask ())) ("" = (cask 0))                   ; no empty cask: both empties are ""
  ((cask 2) != (cask 2)))
 
-; --- reader operators --- reading is structural and environment-free: the reader knows tokens,
-; parens, strings, and the value surface (' quote = one-operand \, ` list, @ tup) -- no operator
-; tables, so the same reader serves data and code. the opener carries the wrap: [..] is `(..) and
-; {..} is the map -- the brace is its only spelling -- and the three closers ) ] } are one, each
-; only ending the open form, so a crossed pair is libra's to catch. a constructor sigil over an
-; open form renames that wrap rather than stacking on it (@[1 2] is @(1 2)), so any delimiter
-; serves any wrap; the constructors are exactly the splicing ones ` and @. ' and \ are not
-; constructors -- they take the next datum whatever it is, so '[a b] is (list a b) quoted.
-; the lexer law splits by leading char: a name token (alnum/_) keeps - ? ! and the prime inside
-; (kebab law; a leading ' is still quote), a punctuation-led token is a sigil -- a maximal run of
-; operator chars, one plain symbol when spaced, fused to its datum as (mono (run datum)) when glued
-; mid-list. code then factors sigils at compile time via `opfix` against the one `operators` table,
-; keyed by arity -- the operands a sigil takes from the form around it: 0 glued (symbol -> the word
-; it names), 2 spaced (symbol -> band[. hand], or (name band[. hand]) an alias), -1 spaced with no
-; bound. a band must be positive since a table miss answers 0; the default is house band,
-; right-handed, so a fresh punct operator needs no entry. the table is book-private since birth,
-; the egg mops it, and `grip` is the one door left onto it: (grip ar nm v) pins nm's row in lane ar
-; and answers the row it replaced in the same shape, and () both clears a row and reports an absent
-; one. a shape the table refuses is rolled back and scared, never pinned. the table is read live,
-; so a declaration governs every form compiled after it.
-; a spaced sigil is one whole name: it carries a row or takes the default and never splits, so
-; != && >>= :- ?- are each one operator. with a left operand it captures the whole application span
-; on that side, because juxtaposition binds tighter than any infix operator ((a b = c d) is
-; (= (a b) (c d)), (5 = abs -3) is (= 5 (abs -3))), nesting by band and, at equal band, by the
-; operator's hand -- arithmetic is left-handed ((1 - 2 - 3) is -4) and everything else right; with
-; none it reads plain, so (+ 1 2), '+, (+)-as-a-value all work. factorization is the glued lane's
-; alone: a run splits greedily, longest-prefix, no backtracking, against arity 0, and a glued run
-; binds tightest. the curry law folds operands missing at the end of a list to the partial
-; application. the valence law: glued is monadic, spaced is dyadic -- everywhere, head included
-; ((<x = y) is (= (cap x) y)); only : ? \ stay the form's operator at head (they take the whole
-; list); + and - are runs like every other punctuation, the one exception being that a numeral has
-; to start somewhere -- a digit (or a `.`, for -.5) right after them makes a number instead (-3 a
-; number, -x negate x, --5 -(-5), -(f x) negate). the monadic words: < cap, > cup (<< >> <> . the
-; compounds), + net, * prod, | abs, - negate, / reciprocal, % fraction, ? bit, $ sat, ! nil?,
-; # tally, ~ conj. the comma is the loosest layer, above infix: a lone one-char datum (never
-; fused), the list split into clauses at top-level commas before factoring, the whole the `,`
-; sequencing macro (do its word alias) -- effects in source order, the last clause answers, empty
-; clauses drop; in a file the chain needs its outer parens, a repl line is one expression.
+; --- reader operators --- the reader is structural and environment-free: tokens, parens, strings,
+; ' quote, ` list, @ tup. [..] is `(..), {..} the map; the closers ) ] } are one (libra catches a
+; crossed pair). a constructor sigil over a form renames its wrap (@[1 2] is @(1 2)); ' and \ are
+; not constructors, they quote the next datum. a name token (alnum/_) keeps - ? ! and the prime
+; inside; a punctuation run is a sigil, plain when spaced, (mono (run datum)) when glued. `opfix`
+; factors sigils against the `operators` table by arity: 0 glued, 2 spaced, -1 spaced unbounded; a
+; miss takes the default band, right-handed. (grip ar nm v) pins a row and answers the one it
+; replaced, () clears; the table is read live.
+; a spaced sigil is one whole name (!= && >>= never split). juxtaposition binds tighter than
+; infix; equal bands nest by hand, arithmetic left and the rest right. a glued run splits greedily
+; and is monadic, a spaced one dyadic, head included; only : ? \ stay the head operator. a digit or
+; . after + - starts a numeral. the monadics: < cap, > cup, + net, * prod, | abs, - negate,
+; / reciprocal, % fraction, ? bit, $ sat, ! nil?, # tally, ~ conj. the curry law folds missing
+; trailing operands to a partial. commas split a list into clauses run in order, the last
+; answering, empties dropped.
 (test
  ('(1 (\ x) 3) = [1 ''x 3]) ('(1 2 3 4) = ('(2 3) @ xs ('(1) + xs + '(4))))
- (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
+ (532 = $"hello") (5 = (tally "hello")) (42 = $42)
  (i = (0 ~ 1)) ((2 ~ 3) = (twin 2 3)) ('~x = '(mono (~ x))) (~5 = (conj 5)) (5 = #"hello") (lit? dot)
- ("(# x)" = (show (opfix '(# x)))) ('! = (caup '(a ! b)))                      ; a monadic-only sigil has no row: opfix hands the plain symbol on (compared via show); quotes stay data
+ ("(# x)" = (show (opfix '(# x)))) ('! = (caup '(a ! b)))                      ; a monadic-only sigil has no row: opfix hands the plain symbol on
  (: was (grip 2 '^ -60) t (opfix '(a ^= b)) back (grip 2 '^ was)               ; a spaced sigil is one whole
-    (back = -60 && t = '(^= a b)))                                             ;   name: ^'s row never splits ^=
- (6 = ((x' \ x' + 1) 5)) (nom? 'ab') (7 = (7 @ n' n'))                         ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
- (5 = --5) (5 = ++5) (-5 = ---5) (5 @ x (-5 = -x))                             ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
- (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))                                         ; ...and a digit or . after them still starts a numeral (the whole exception)
- ([1 2 3] = [1 2 3]) ([] = (list)) (1 = ({'a 1} 'a))                           ; the opener carries the wrap: [ is list, { is the map
- ([[1 2] [3 4]] = [[1 2] [3 4]]) (-[1 2] = -[1 2])                             ; ...to any depth, and it glues like a form does
+    (back = -60 && t = '(^= a b)))                                             ; name: ^'s row never splits ^=
+ (6 = ((x' \ x' + 1) 5)) (nom? 'ab') (7 = (7 @ n' n'))                         ; the prime: x' is a name; leading ' is still quote
+ (5 = --5) (5 = ++5) (-5 = ---5) (5 @ x (-5 = -x))                             ; + and - are runs: --5 is -(-5)
+ (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))                                         ; ..but a digit or . after them starts a numeral
+ ('(1 2 3) = [1 2 3]) ([] = (list)) (1 = ({'a 1} 'a))                           ; [ is list, { is the map
+ ('((1 2) (3 4)) = [[1 2] [3 4]]) ('(mono (- (list 1 2))) = '-[1 2])                             ; ..to any depth
  ((show <(sound "{'a 1}")) = (show '(hash 'a 1)))                              ; a hash compares by identity, so the law is on the form
- (@[1 2 3] = @(1 2 3)) (1 = ({'a 1} 'a))                                       ; a constructor sigil renames the opener's wrap
- ('(\ (list a b)) = <(sound "'[a b]"))                                         ; ...but ' is not one: it quotes the form
- (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (2 < 1 ? 'big 'small))   ; ? is dyadic: infix takes one arm ((< 1 2) binds first at 40), an else arm is the prefix cond
- (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                                              ; the left hand: ((1 - 2) - 3), ((8 / 4) / 2)
+ (@[1 2 3] = @(1 2 3))                                       ; a constructor sigil renames the wrap
+ ('(\ (list a b)) = <(sound "'[a b]"))                                         ; ..but ' quotes the form
+ (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (2 < 1 ? 'big 'small))   ; ? is dyadic: infix takes one arm; with an else arm it is the prefix cond
+ (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                                              ; the left hand
  (: was (grip 2 '<+> -60) t (opfix '(a <+> b <+> c)) (grip 2 '<+> was,         ; the grip door,
-                                                      was = () && t = '(<+> (<+> a b) c))) ;   restored inside the form: the next one reparses
- ('(1 2 3) = 1 . 2 . '(3))                                                     ; ... while a right-handed band still folds right
- ((1 . 2) = (. 1 2)) ("(1 . 2)" = (show (1 . 2)))                              ; `.` is . under its other name --
- ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                                      ;   valid in a pattern too, and
- ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                                      ;   the two spellings interchange
- ((1 . 2 . 3) = (1 . 2 . 3)) (3 = tally '(1 . 2))                              ;   the pair reads and prints, but a
-                                                                     ;   quoted one is data: a 3-list
- ("(1 . 2 . 3)" = show (1 . 2 . 3)) ("(1 . 0)" = show (1 . 0))                ; a chain prints all-dot, and a 0 tail is
- ((1 . 2 . 3) = ev <(sound (show (1 . 2 . 3)))) ("(1 2 3)" = show [1 2 3])     ;   still a tail: it reads back as itself
- (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
- (1 = (3 != 4)) (0 = (3 != 3)) (opfix '(a != b && c) @ t (t = '(&& (!= a b) c)))    ; != is a plain
- (grip 2 '! () @ was (grip 2 '! was, was = ()))       ; dyad at the comparison band, and ! -- glued-lane
- ("(! x)" = (show (opfix '(! x)))) ((!) = nil?)     ; and nothing else -- carries no row:
- (1 = (! 0)) (0 = (! 5)) (1 = (! ""))            ;   the walk hands the symbol to an ordinary function
- (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)
- (3 = ((1 +) 2))                                 ; the curry law: (1 +) folds to (+ 1)
+                                                      was = () && t = '(<+> (<+> a b) c))) ; restored inside the form
+ ('(1 2 3) = 1 . 2 . '(3))                                                     ; ..a right-handed band still folds right
+ ((1 . 2) = (. 1 2)) ("(1 . 2)" = (show (1 . 2)))                              ; infix . is (. a b),
+ ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                                      ; valid in a pattern too
+ ((1 . 2 . 3) = (. 1 (. 2 3))) (3 = tally '(1 . 2))                              ; a quoted one is data: a 3-list
+ ("(1 . 2 . 3)" = show (1 . 2 . 3)) ("(1 . 0)" = show (1 . 0))                ; prints all-dot; a 0 tail stays a tail
+ ((1 . 2 . 3) = ev <(sound (show (1 . 2 . 3)))) ("(1 2 3)" = show [1 2 3])     ; ..and reads back as itself
+ (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix
+ (1 = (3 != 4)) (0 = (3 != 3)) (opfix '(a != b && c) @ t (t = '(&& (!= a b) c)))    ; != is a dyad at the comparison band;
+ (grip 2 '! () @ was (grip 2 '! was, was = ()))       ; ! has no row, so
+ ("(! x)" = (show (opfix '(! x)))) ((!) = nil?)     ; the walk hands it on as a function
+ (1 = (! 0)) (0 = (! 5)) (1 = (! ""))
+ (197 = ($"ab" + 2))                             ; glued binds tightest
+ (3 = ((1 +) 2))                                 ; the curry law
  (1 = <'(1 2 3)) (2 = <>'(1 2 3)) ('(3) = >>'(1 2 3))   ; glued runs are monadic
- (6 = +'(1 2 3)) (-1 = +'(-2 1)) (24 = *'(1 2 3 4))     ; +/ and */ -- the net, unclamped
+ (6 = +'(1 2 3)) (24 = *'(1 2 3 4))     ; the net, unclamped
  (5 = |-5) (-3 = -(1 + 2)) (0.25 = /4) (1 = ?7) (0 = ?"")
  (3 = (1 + 2)) (1 = ((< 5) 9))                            ; spaced head = prefix call; the section
- (0 = ('(to 0) @ mr (<mr = 'lin))) (3 = (:(1 + 2)))       ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : cannot factor, so it falls back
- ('(mono (< x)) = (caup <(sound '(40 102 32 60 120 41)))) ; the emission, data-lane
- (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))      ; the comma layer: clauses in sequence, the last answers; empties drop
+ (0 = ('(to 0) @ mr (<mr = 'lin))) (3 = (:(1 + 2)))       ; a glued head fuses; : cannot factor, so it falls back
+ ('(mono (< x)) = (caup <(sound '(40 102 32 60 120 41)))) ; the emission, as data
+ (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))      ; the comma layer
  (12 = (foldl (+) 0 '(3 4 5))))
-; the compile tables (operators/pureset) are mopped at birth: a live pin into one would poison every later compile
 
-; --- macros --- a macro maps an arg list to code; install with `::`. there is no quasiquote: the
-; list ctor evaluates every element, so quote the literal positions instead of unquoting the
-; computed ones -- the convention inverts (numbers self-eval, so bare). the prel ships
-; do/let/if/cond/quote, && and || (short-circuiting), list, tuple/map/array, :- and ?-, >>= <=<.
-; a macro expands at zero operands too -- it has no value to be, so (list) is () and never a read
-; of `list`; the empty rides it, [] is (list).
+; --- macros --- a macro maps an arg list to code; install with `::`. no quasiquote: the list
+; ctor evaluates every element, so quote the literal positions. a macro expands at zero operands
+; too: (list) is (), [] is (list).
 (:: 'unless (a \ ['? <a 0 <>a]))
 (test
  ('ok = (unless 0 'ok)) (0 = (unless 1 'ok)) (3 = (&& 1 2 3)) !(&& 1 0 3)
- ; a connective answers one of its operands, never an invented value: && the first falsy, ||
- ; the first truthy, either falling through to the last -- so -1 stays -1 rather than flattening
+ ; a connective answers one of its operands: && the first falsy, || the first truthy, else the last
  ((() && 5) = ()) ((&& 1 0 3) = 0) ((() || ()) = ()) ((() || 0) = 0)
  ((-1 && 5) = -1) ((5 && -1) = -1) ((5 && 0) = 0) ((0 || -1) = -1)
  (2 = (|| 0 2 3)) ('(1 2 3) = [1 2 3]) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
  (1 = (quote 1)) ('a = (quote a))                                  ; quote, the macro spelling of '
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big))
- ('(3 b) = (:- (go '((1 a) (3 b))) (go (e . u)) (<e @ 3 e (go u))))   ; a pattern binder under the rotation (9 = ((<=< (+ 1) (x \ x * 2)) 4))
- ('two = (2 @- 'else 2 'two)) ('else = (9 @- 'else 2 'two))   ; @- fronts the fallthrough, subject stays
- (() = (list)) (tray? (tuple)) (tablet? (hash)) (() = (unless))     ; the zero-operand macro
- (() = (:)) (() = (?)) (() = (\)))                                 ;   ..and the empty forms, still their head's value
+ ('(3 b) = (:- (go '((1 a) (3 b))) (go (e . u)) (<e @ 3 e (go u))))   ; a pattern binder under the rotation
+ ('two = (2 @- 'else 2 'two)) ('else = (9 @- 'else 2 'two))   ; @- fronts the fallthrough
+ (() = (list)) (tray? (tuple)) (tablet? (hash)) (() = (unless)))     ; the zero-operand macro
 
-; --- control --- ev compiles+runs; call-cc a one-shot escape; tasks twirl/catch/rest/freeze/
-; landed?/scoop/cue?/myself ((twirl f x) forks to an id, (catch p) blocks for the result, (rest 0)
-; yields -- always catch an orphan). `myself` answers the running task's own id -- the charm twirl
-; handed back for it, the zero point for the task nobody twirled -- so per-task state can ask
-; whether it is still home: trap's escape compares against it before jumping, since a help is
-; inherited at spawn and a child landing in its parent's stack tears both. `scoop` collects an
-; orphan without naming it: (pid . retval) for one task that has finished, () when none have, and
-; the pair carries the presence, since a task run for its effect answers () all the same.
-; the RNG is xoshiro256++, two layers: functional seed/random (explicit-state, reproducible) and
-; global rand/randf (a hidden clock-seeded stream; (rng-set (wheel n)) pins it).
-; the heard help ((hear f) installs it) takes every raise as (help a b) -- the condition, and
-; nothing else, since every raise that reaches a help is a scare; `welp` is the floor handler,
-; answering the zero point (the shell's default help is welp with a face). a missing name raises
-; (scare 'missing nom) -- one law at every depth: a `:` binding read before its pin, (missing t k)
-; on a tablet miss, all the same condition; a closure captures its free globals at creation, so a
-; lambda's missing read fires at the define, not the call. `trap` is the catcher: (trap f x n)
-; answers (f x), or (n a b) when a scare landed there. it is built from a help that escapes through
-; call-cc, so nothing unwinds: a cleanup belongs in n, which fires only once the displaced help is
-; back -- or in `mind`, the same cleanup owned by the resource instead of the catcher: (mind f x c)
-; answers (f x) and fires c on the way out either way, the condition riding on to the help outside,
-; so a helper holds its own port however deep under a trap it sits. raises only -- a bare (k v)
-; jumps past every c between there and here. numeral compose counts are capped by the `apcap` box;
-; the numeric power lane caps the result instead (~ exponent * log2|base| bits against the box as a
-; word budget), so a size-fixed or growthless base runs free ((pin apcap 0 n) retunes both).
+; --- control --- ev compiles and runs; call-cc is a one-shot escape. tasks: (twirl f x) forks to
+; an id, (catch p) blocks for its result, (rest 0) yields, `scoop` collects any finished orphan as
+; (pid . retval) or (); myself is the running task's id, () for the root. the RNG is xoshiro256++:
+; functional seed/random and global rand/randf ((rng-set (wheel n)) pins it).
+; (hear f) installs the help, which takes every raise as (help a b); `welp` answers the zero point.
+; a missing name raises (scare 'missing nom), at a closure's define, not its call. (trap f x n)
+; answers (f x), or (n a b) on a scare; nothing unwinds, so cleanup goes in n or `mind`: (mind f x c)
+; fires c on the way out either way and lets the condition ride on. a bare (k v) skips every c.
+; numeral compose counts and the power lane's result size are capped by the `apcap` box.
 (test
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = call-cc (k \ k 41)) (42 = 1 + call-cc (k \ 41))
  ('(boom 7) = trap (_ \ scare 'boom 7) () (a \ b \ [a b])) (3 = (trap (+ 1) 2 welp))
  (: t {} _ (pin t 0 'held)                                    ; mind: c fires, f's value answers
     v (mind (_ \ 'value) () (_ \ pin t 0 'freed))
     (v = 'value && t 0 = 'freed))
- (: t {} _ (pin t 0 'held)                                    ; ..and on the raised path too,
+ (: t {} _ (pin t 0 'held)                                    ; ..on the raised path too,
     r (trap (_ \ mind (_ \ scare 'boom 7) () (_ \ pin t 0 'freed)) () (a \ b \ a))
-    (r = 'boom && t 0 = 'freed))                              ; ..the condition riding on outward
+    (r = 'boom && t 0 = 'freed))                              ; ..the condition riding on
  (42 = (twirl (x \ do (rest 0) (x + 1)) 41 @ p (catch p))) (0 = (catch 99999)) (landed? 99999)
  !(myself ())                                                 ; nobody twirled the root task
- (twirl (_ \ myself ()) () @ p (p = (catch p)))               ; ..a child knows the id twirl gave it
+ (twirl (_ \ myself ()) () @ p (p = (catch p)))               ; a child knows its own id
  !(rest 0) ((rand 10) < 10) (gem? (randf 0))
  (lit? scare)
  (wheel 7 @ st (<(random st 0) = <(random st 0))))               ; the functional layer is reproducible
-; a missing name reads the zero point under the floor handler welp (no warning surfaced)
+; a missing name reads the zero point under welp
 (hear welp)
-(test ((:) = not-in-the-book) !not-in-the-book)     ; a nom not in the book
+(test ((:) = not-in-the-book) !not-in-the-book)
 (hear test-strict)
 
-; --- i/o & ports --- in/b/err are the default ports; getc + putc/puts/putn/putx, per-port
-; see/put/... , open/close/pad. the vessels: (tap cl) an input source over a colist, (jug 0) an
-; output port with a growable buffer that pours both ways (a port, not a cask -- a cask is the
-; mutable byte array); (see o) draws one unit, (flow o) reads as a lazy charlist, (slurp o) drains
-; all to a value. the datum reader is `sound` and it takes text -- a port, a string, or a charlist
-; -- so the whole read protocol is its return value, three ways: the datum consed onto what is
-; left, () at a clean end, or `torn` where the text ran out inside a shape. ask `two?` for the
-; datum, never the net: the answer is a cons and a datum may perfectly well be a nothing (reading
-; "()" answers (() . rest)). the residue is the answer, so a torn read resumes by handing back more
-; text and nothing is stashed in a port. and the residue is a charlist whichever door went in: a
-; string is spread once and a port lifted once, at the door, so the three doors meet after the
-; first datum -- and a port, having become its own tail, is never handed in twice.
-; in/b/err are names a task seats for itself: (wear (i o e)) re-seats them for the running task,
-; (wear ()) hands the console back, (worn ()) answers what is worn -- carried like the help (saved
-; on the switch, inherited at spawn). two live jugs are two sinks.
-; the port door streams, one buffered run per gulp: the reader takes a heap fd port's 4096-byte run
-; and stops, so reading one form off a file leaves the rest on the port. an unbuffered port (`in`,
-; a tap, a jug) has no run to hand over, so it trickles a byte per force and cannot run ahead of a
-; position something else shares. and a port is a charlist: (flow p) is one whose tail is a promise
-; that drinks the next gulp, so the reader asks for more itself and there is nothing to bridge. a
-; consumer reflects on the tail -- a cons is more, () the end, anything else a thunk fired with the
-; unit -- and nothing forces implicitly. (once f) is that promise on its own: it runs f at most
-; once and remembers, through a tablet, wrapping the answer because a promise of nothing is
-; ordinary. `read` rides sound (one form, evaled); `reads` and `forms` walk a flowing port, evaling
-; and collecting; `dot` prints x to out and returns it.
+; --- i/o & ports --- in/b/err the default ports, per task: (wear (i o e)) re-seats them, (wear ())
+; the console, (worn ()) asks; getc putc puts putn putx; see/put per port. (tap cl) reads a colist,
+; (jug 0) is a growable output port; (see o) draws a unit, (flow o) a lazy charlist, (slurp o) drains.
+; `sound` reads one datum from a port, string or charlist and answers (datum . rest), () at a clean
+; end, or `torn` mid-shape: ask two?, never the net, since a datum may be (). the rest is a charlist,
+; so a torn read resumes with more text. a buffered fd port gives one 4096-byte run per gulp, an
+; unbuffered one a byte per force. a flowing port's tail is a promise: a cons is more, () the end,
+; anything else a thunk to fire with the unit. (once f) runs f at most once and remembers.
+; read/reads/forms ride sound; `dot` prints x and answers it.
 (test
  (string? (show out)) ("hi" = slurp (tap '(104 105))) (jug 0 @ o (print o 42, "42" = slurp o))
  (: a (jug 0) b (jug 0) (say a "a", say b "b", "a" = slurp a && "b" = slurp b))                 ; two jugs are two sinks
  (1 = <(sound '(49))) !(sound ()) ('torn = sound '(40))
  (sound '(49 32 50) @ r (2 = <(sound >r)))           ; the residue reads the next datum
- (sound '(40 41) @ r (two? r && !<r))                ; ...and the datum () is still a datum
- (sound (flow (tap '(40 49 32 50 41))) @ r ('(1 2) = <r))     ; a port reads as the charlist it is
- (sound (tap '(40 49 32 50 41)) @ r ('(1 2) = <r))            ; ...and sound lifts one itself
+ (sound '(40 41) @ r (two? r && !<r))                ; ..and the datum () is still a datum
+ (sound (flow (tap '(40 49 32 50 41))) @ r ('(1 2) = <r))     ; a port reads as its charlist
+ (sound (tap '(40 49 32 50 41)) @ r ('(1 2) = <r))            ; ..and sound lifts one itself
  (: p (tap '(49 32 50)) r (sound p) (2 = <(sound >r)))        ; the residue carries the rest of the port
  (sound "(1 2) 3" @ r ('(1 2) = <r && 3 = <(sound >r)))              ; a string is spread at the door
- !(sound "") ('torn = sound "(1") !(sound 42)                        ; ...and reads the same three ways
+ !(sound "") ('torn = sound "(1") !(sound 42)                        ; ..and reads the same three ways
  (: c {} th (once (u \ peep c 0 0 @ k (pin c 0 (k + 1), k)))
     ((th ()) = th () && 1 = peep c 0 0))            ; a promise forces once and remembers
  ('(mono (# (a))) = <(sound '(35 40 97 41))))       ; #(a) is the glued tally run
 
-; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap, add/mul,
-; opfix, boxfix, feel, maps); the egg is warmed and the evaluator sits on it twice; `born` is what
-; this invocation cost to start in ms -- the hatch on an egg boot, the wake on a woken one -- and
-; it is unbound pre-egg; just before birth the egg mops up runtime names, and the floor handler
-; welp answers the miss with the zero point. `hatched` asks presence, never born's net: born is a
-; duration, so a wake fast enough to answer 0 is blue and a net test would read the post-egg
-; runtime as pre-egg and pass every law under it vacuously. which names the mop takes is
-; internal, so nothing here asserts them.
+; --- bootstrapping --- `born` is the start cost in ms (hatch or wake), unbound pre-egg. ask
+; presence (hatched), never born's net: a fast wake answers 0, which would read as pre-egg and pass
+; every law vacuously.
 (: hatched (elem 'born (names ())))
 (hear welp)
-(test (lit? ev) (hatched ? (charm? born) 1))
+(test (hatched ? (charm? born) 1))
 (hear test-strict)
 
-; --- modules --- one layer per load, the registry, and `borrow` the loader -- all the runtime's.
-; there is no enter/leave on the surface: the runtime opens a fresh layer around every module load
-; and around the session itself (the base is read-only because it is never the head), and the layer
-; verbs live on only inside the loader's closures, mopped at birth like books/setbooks.
-; a module arrives by name: (borrow 'x) splices a registered module just below the top -- its names
-; resolve on the walk but can never shadow the top's own -- and loads it on a miss, off the one
-; walk left: lib/<x>.l on the cwd, the dev tree's lane. what a frontend bakes never reaches that
-; walk -- the source declares its own (module 'x ..) and the boot evals it, so the name is
-; registered before anything asks. a string is an explicit path (the module named by its basename);
-; a slashed name ('x/y) includes lib/x/y.l into the current head instead, no new layer, no
-; registration. here the boot-loaded modules prove the registry surface.
-; (cite 'name) is the module's tablet -- currying reaches a member because a tablet indexes itself,
-; `keys` introspects it like any other, a missing module answers () (the presence guard: `lit?` is
-; true of a tablet even when empty and false of (), so it is the one honest test), and (cite ())
-; lists the registered names.
+; --- modules --- the runtime opens a layer around each module load and the session. (borrow 'x)
+; splices a registered module below the top (never shadowing the top's names), loading lib/<x>.l
+; on a miss; a string is a path; 'x/y includes lib/x/y.l into the head. (cite 'name) is the
+; module's tablet (a missing one answers (), so lit? is the presence test); (cite ()) lists names.
 (test
   (lit? (cite 'uu)) (lit? (cite 'kanren))                      ; boot-loaded, registered
-  (elem 'kanren (cite ())) (elem 'uu (cite ()))          ; the registry lists them
+  (elem 'kanren (cite ())) (elem 'uu (cite ()))          ; listed
   !(cite 'spec-nope)                                            ; the presence guard
   (tablet? (cite 'kanren))                                      ; a module is its tablet
   (elem 'walk (keys (cite 'kanren)))                         ; so `keys` introspects it
   (8 = (cite 'kanren 'subst '(()) 8))                           ; curried member reach
-  !(cite 'kanren 'spec-missing)                                 ; a member miss reads the zero point
+  !(cite 'kanren 'spec-missing)                                 ; a member miss reads ()
   (lit? unify) (lit? rand) (lit? reads))                        ; the boot splices serve the bare names
 
-; (module 'nm form ..) is the filesystem-free definition: open nm's layer -- the registered tablet
-; on a reopen, a fresh one otherwise -- eval each form there as the loader would, leave registers;
-; answers the tablet. text anywhere defines or reopens any module; (module () ..) is a scratch
-; layer, registered nowhere. each form compiles at its eval, so bindings defglob into the module
-; layer and a member folds into a consumer at the consumer's compile, as ever.
-(: smv-out (elem 'smv (names ()))                     ; captured before: love0 reruns the corpus
-                                                         ; in-process and run 1's use splices smv
+; (module 'nm form ..) defines without a file: it opens nm's layer (the registered tablet on a
+; reopen), evals each form there, registers, and answers the tablet; (module () ..) registers nowhere.
+(: smv-out (elem 'smv (names ()))                     ; captured first: love0 reruns the corpus in-process
    m1 (module 'spec-mod (: smv 41 (smf x) (x + smv)))
    m2 (module 'spec-mod (: smv (smv + 1) smw 100))       ; reopen: the old member is in scope
    ma (module () (: sma 9))
  (test
   (tablet? m1) (m1 = m2) (m1 = cite 'spec-mod)           ; one tablet, registered, answered
   (42 = cite 'spec-mod 'smv) (100 = cite 'spec-mod 'smw) ; the reopen read 41 and extended
-  (42 = (cite 'spec-mod 'smf 1))                         ; smf folded smv at its compile: 41
-  (smv-out = elem 'smv (names ()))                    ; no leak: the walk is as it was
+  (42 = (cite 'spec-mod 'smf 1))                         ; smf folded smv at its compile
+  (smv-out = elem 'smv (names ()))                    ; no leak
   (nelem 'sma (names ()))                             ; the anonymous layer leaks nothing
-  (tablet? ma)))                                         ; the scratch layer answers its tablet
-; use splices a module `module` made -- two forms, and they have to be: a group is compiled whole,
-; so a read of smv beside the use that splices it is addressed before the splice has run.
+  (tablet? ma)))
+; borrow is its own form: a group compiles whole, so a read of smv beside it would come first
 (: _ (borrow 'spec-mod))
 (test (42 = smv))
-; a module's forms eval one by one, never as one application chain: a form whose answer is a
-; function must not be applied to the next form's answer -- smt stays empty. the probe is a form of
-; its own because smf2's body compiles in the module's layer, where a sibling smt is unaddressable.
+; a module's forms eval one by one, never chained as an application: smt stays empty. the probe is
+; its own form since smf2 compiles in the module's layer, where smt is unaddressable.
 (: smt {})
 ((module () (: (smf2 x) (pin smt 'called 1)) (: smq2 2)) @ mq
  (test !(smt 'called)                                  ; nothing applied smf2
          (elem 'smq2 (keys mq))))                     ; ..and both forms landed
 
-; --- odds & ends --- show renders a value as its reparsable printed form; an opaque handle acts
-; as a constant function. the VM's own instruments -- clock/nclock/gauge/please and gauge's write
-; twin `tune` -- are not the language.
+; --- odds & ends --- show renders a reparsable form; an opaque handle is a constant function.
 (test (string? (show @(1 2 3))) !(cask 4 'x))

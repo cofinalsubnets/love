@@ -1,39 +1,27 @@
-; src/apps/dns.l -- the resolver, in love. `connect` takes a dotted quad and nothing else
-; (src/love/sock.c), because getaddrinfo is not a syscall with an O_NONBLOCK to set but a
-; config read that may speak DNS, and there is no nonblocking form of it. so the name
-; half lives up here instead, where a lookup can park like anything else:
+; src/apps/dns.l -- the resolver. `connect` takes only a dotted quad, and getaddrinfo
+; has no nonblocking form, so names resolve up here where a lookup can park:
 ;
 ;   (resolve "example.org")      ; -> a list of ipv4 charms, in the server's order
 ;   (resolve6 "example.org")     ; -> a list of ipv6 texts, the spelling `send` takes
 ;   (dial "example.org" 80)      ; -> a port, or ()  -- resolve, then connect
 ;   (resolve-in conf hosts name) ; the same, against named config paths
+;   (resolve-via conf hosts px name) ; and netd's socket px, asked when conf names no server
 ;
-; a lookup is three tasks, since the scheduler has no "fd or deadline": the receiver parks
-; on the socket, a watchdog on the clock, the caller in `catch`; the first to finish wins.
-;
-; a port of src/apps/moon/lib/moonlibc/dns.c, which stays the reference for the wire format,
-; the compression pointer and the two config parsers.
-;
-; a records (aaaa through resolve6) over udp: /etc/hosts first, then resolv.conf's
-; nameservers in order, search domains appended on a miss. no tcp fallback: a truncated
-; answer is a scare, never a silent partial.
-;
-; presence is the wrapper here as everywhere: `0.0.0.0` is a perfectly good address and
-; nets nothing, so every "did it parse" answer is a one-list tested with `two?`.
-
-; the head names the exports. `dial` and `resolve` are the door; the rest are the
-; wire-format pieces test/host/dns.l drives directly, a protocol being unit-tested.
+; a lookup is three tasks: receiver on the socket, watchdog on the clock, caller in
+; `catch`; the first to finish wins. wire format after moonlibc's dns.c.
+; /etc/hosts first, then resolv.conf's nameservers over udp, search domains on a miss.
+; android has no resolv.conf: there netd answers on /dev/socket/dnsproxyd, as it does bionic.
+; no tcp fallback: a truncated answer is a scare. presence is a one-list (0.0.0.0 nets 0).
 (module (dns dial resolve dns-show
          dns-answers dns-ask dns-conf dns-query dns-servers
-         dns-hosts dns-labels resolve-in dns-quad
+         dns-hosts dns-labels resolve-in resolve-via dns-proxy dns-quad
          dns-qtype dns-qedns dns-raw dns-id dns-match? dns-name dns-records dns-v6
          resolve6 resolve6-in dns-hosts6 dns-colon? dns-walk6)
 (borrow 'posix)
 (borrow 'bytes)
 (:
-   ; --- files, lines, words ----------------------------------------------------
-   ; the two config files are line-oriented text, not love data, so `sound` is no
-   ; use and this is a hand walk. absent is the normal case and reads as "".
+   ; --- files, lines, words ---
+   ; absent config reads as "".
    (dns-look path) (uread path @ [1 s] s "")
 
    (dns-eol t i n) (n <= i || t i = 10 ? i (dns-eol t (i + 1) n))
@@ -53,10 +41,8 @@
                       (end s @ e (snip l s e . go e))))
        (go 0))
 
-   ; --- a dotted quad ----------------------------------------------------------
-   ; -> a one-list holding the address in host order, or (). the same four-octet walk
-   ; src/love/sock.c's `quad` does, because both have to agree on what a numeric host is:
-   ; whatever this refuses is what gets a lookup.
+   ; --- a dotted quad ---
+   ; -> [address in host order] | (); must agree with sock.c's `quad` on what is numeric.
    (dns-digit? c) (47 < c < 58)
    (dns-quad s)
     (: n #s
@@ -72,10 +58,9 @@
                     (j < n && s j = 46) (oct (j + 1) b (k - 1))))))
        (oct 0 0 4))
 
-   ; --- the wire ---------------------------------------------------------------
+   ; --- the wire ---
 
-   ; a name as length-prefixed labels, NUL-terminated. () if any label is empty
-   ; or over 63 bytes -- a malformed name must not become a malformed packet.
+   ; a name as length-prefixed labels, NUL-terminated; () if a label is empty or > 63.
    (dns-labels h)
     (: n #h
        (dot i) (n <= i || h i = 46 ? i (dot (i + 1)))
@@ -86,24 +71,21 @@
                           (string? r && string l + snip h i j + r)))))
        (0 < n && go 0))
 
-   ; the query packet: header (RD set, one question), the name, the QTYPE, QCLASS in.
-   ; a resolver asks for A (1); nslookup asks for whatever it was told
+   ; the query packet: RD set, one question of type t, class IN
    (dns-qtype id h t)
     (dns-labels h @ q
        (string? q &&
         wrbe id 2 + wrbe 256 2 + wrbe 1 2 + wrbe 0 2
          + wrbe 0 2 + wrbe 0 2 + q + wrbe t 2 + wrbe 1 2))
    (dns-query id h) (dns-qtype id h 1)
-   ; ..and with an EDNS0 OPT record (RFC 6891) offering 1232 bytes, the size that crosses
-   ; any path unfragmented, so a long answer -- a txt set -- is not cut at udp's 512
+   ; ..with an EDNS0 OPT (RFC 6891) offering 1232 bytes, so a long answer is not cut at 512
    (dns-qedns id h t)
     (dns-qtype id h t @ q
        (string? q && snip q 0 10 + wrbe 1 2 + snip q 12 #q
                       + string 0 + wrbe 41 2 + wrbe 1232 2 + wrbe 0 2 + wrbe 0 2 + wrbe 0 2))
 
-   ; skip a name at `pos` -> the position after it, or -1. a compression pointer ends
-   ; the name: its top two bits are set and it is two bytes wide, so a walk that
-   ; treated it as a length would run off into the record data.
+   ; skip a name at `pos` -> the position after it, or -1. a compression pointer
+   ; (top two bits set) is two bytes and ends the name.
    (dns-skip r pos n)
     (n <= pos ? -1
        (r pos @ l
@@ -111,9 +93,7 @@
              (l & 192 = 192) (n < pos + 2 ? -1 (pos + 2))
              (dns-skip r (pos + l + 1) n))))
 
-   ; a response -> the a addresses in the server's order, () if it says no, or
-   ; 'torn when the TC bit says the answer did not fit. cnames simply ride past:
-   ; they are records of another type and the walk skips them.
+   ; a response -> the a addresses in server order, () if no, 'torn on TC. cnames ride past.
    (dns-answers r id)
     (: n #r
        (go k pos)
@@ -127,14 +107,14 @@
                          ((rdbe r q 2 * 65536 + rdbe r (q + 2) 2) . go (k - 1) (q + rl))
                        (go (k - 1) (q + rl)))))))
        (? (n < 12) ()
-          !(rdbe r 0 2 = id) ()                      ; not the question we asked
-          (0 < r 2 & 2) 'torn                        ; TC: it did not fit
+          !(rdbe r 0 2 = id) ()                      ; not our question
+          (0 < r 2 & 2) 'torn                        ; TC
           (0 < r 3 & 15) ()                          ; NXDOMAIN, SERVFAIL, ..
           (dns-skip r 12 n @ p0
              (p0 < 0 ? () (go (rdbe r 6 2) (p0 + 4))))))
 
-   ; --- one question to one nameserver ------------------------------------------
-   ; a query id: two bytes of /dev/urandom. no entropy is a scare, never a guessable id
+   ; --- one question to one nameserver ---
+   ; a query id from /dev/urandom; no entropy is a scare, never a guessable id
    (dns-id _)
     (: q (open "/dev/urandom" "r")
        _ (nom? q ? (scare 'no-entropy q) 0)
@@ -142,21 +122,15 @@
        hi (byte 0) lo (byte 0)
        (close q, hi * 256 + lo))
 
-   ; is r an answer to query q: the qr bit, q's id, and q's one question byte for byte.
-   ; the question stops where q's name and its type and class do, before any edns record
+   ; is r an answer to q: qr bit, id, and the question byte for byte (edns excluded)
    (dns-match? q r)
     (: e (dns-skip q 12 #q)
        qe (e + 4)
        (0 < e && qe <= #r && 0 < r 2 & 128 && rdbe r 4 2 = 1
         && snip r 0 2 = snip q 0 2 && snip r 12 qe = snip q 12 qe))
 
-   ; a packet to a server -> its answer's bytes, () on none within `ms`. the three-task
-   ; park is the header note: receiver on the socket, watchdog on the clock, caller in
-   ; catch. the server is named by address and port: resolv.conf has no port syntax and
-   ; every line it yields means 53, but a stub on another port is a real thing to want
-   ; and the walk carries the pair either way. the socket is bound to port 0, so the
-   ; kernel picks its ephemeral port; a datagram from anyone but the server, or one that
-   ; is not an answer to q, is dropped and the receiver waits on within the deadline
+   ; a packet to a server -> its answer's bytes, () on none within `ms`. a datagram
+   ; from anyone but the server, or not an answer to q, is dropped
    (dns-raw ns port q ms)
     (bind ['udp 0] @ (p && hot? p)
      (: from [(dns-show ns) port]
@@ -178,9 +152,8 @@
        r (string? q ? (dns-raw ns port q ms))
        (string? r ? (dns-answers r id)))
 
-   ; --- a whole answer, for a person to read ---------------------------------------
-   ; a name at pos, compression pointers followed -> [the dotted name, the position just
-   ; past it where it was written], or () for one that runs off the packet or loops
+   ; --- a whole answer, for a person to read ---
+   ; -> [the dotted name, the position past it where written], () if it runs off or loops
    (dns-name r pos)
     (: n #r
        (dots l) (? (atom? l) "." !(two? >l) <l (<l + "." + dots >l))
@@ -194,8 +167,7 @@
                  (n < p + 1 + l) ()
                  (go (p + 1 + l) (snip r (p + 1) (p + 1 + l) . acc) hops after))))
        (go pos () 0 -1))
-   ; sixteen bytes at q -> the ipv6 address as RFC 5952 writes it: each group in lower
-   ; hex without its leading zeros, and the longest run of two or more zero groups as ::
+   ; sixteen bytes -> RFC 5952 text: lower hex, the longest run of 2+ zero groups as ::
    (dns-v6 r q)
     (: gs (map (i \ rdbe r (q + 2 * i) 2) ^8)
        hx "0123456789abcdef"
@@ -214,7 +186,7 @@
     (e <= q ? ""
        (: l (r q) t (dns-txt r (q + 1 + l) e)
           ("\"" + snip r (q + 1) (min e (q + 1 + l)) + "\"" + (#t ? (" " + t) ""))))
-   ; a soa record's seven fields, a line each, as nslookup lays them under the name
+   ; a soa record's seven fields, as nslookup lays them
    (dns-soa r q)
     (: a (dns-name r q) b (two? a ? (dns-name r (a 1)))
        (!(two? b) ? " ?"
@@ -223,9 +195,8 @@
              ("\n\torigin = " + <a + "\n\tmail addr = " + <b + "\n\tserial = " + show (u 0)
               + "\n\trefresh = " + show (u 1) + "\n\tretry = " + show (u 2)
               + "\n\texpire = " + show (u 3) + "\n\tminimum = " + show (u 4)))))
-   ; a response -> [rcode authoritative? records], a record [name type text] in the server's
-   ; order, its data written as nslookup shows it; 'torn when TC says the answer did not
-   ; fit, () when it answers some other question
+   ; -> [rcode authoritative? records], a record [name type text], nslookup's spelling;
+   ; 'torn on TC, () for another question's answer
    (dns-records r id)
     (: n #r
        (name-at q) (dns-name r q @ m (two? m ? <m "?"))
@@ -249,16 +220,13 @@
           (dns-skip r 12 n @ p0
              [(r 3 & 15) (0 < r 2 & 4) (p0 < 0 ? () (go (rdbe r 6 2) (p0 + 4) ()))])))
 
-   ; --- the two config files -----------------------------------------------------
-   ; every word after `k` on every line that starts with it, in file order. this
-   ; reads both `nameserver` (one address a line) and `search` (many a line).
+   ; --- the two config files ---
+   ; every word after `k` on every line starting with it, in file order
    (dns-conf path k)
     (: (go (a . u)) (dns-words a @ (^k . w) (w + go u) (go u))
      (go (dns-lines (dns-look path))))
 
-   ; /etc/hosts: the first line whose address parses and one of whose names is an
-   ; exact match -> a one-list of the address. no packet is sent at all, which is
-   ; what makes localhost and every lan name free.
+   ; /etc/hosts: the first line whose address parses and names h exactly -> [addr]
    (dns-hosts path h)
     (: (go (l . u))
      (dns-words l @ w
@@ -276,9 +244,7 @@
      (go (dns-lines (dns-look path))))
    (dns-colon? s) ((: (g i) (? (#s <= i) 0 (s i = 58) 1 (g (i + 1)))) 0)
 
-   ; the nameservers, in order -- 127.0.0.1 when the file names none, musl's fallback
-   ; and moonlibc's, so a machine with an empty resolv.conf still reaches a local stub
-   ; rather than answering "no such host".
+   ; the nameservers in order; 127.0.0.1 when none (musl's and moonlibc's fallback)
    (dns-servers conf)
     (: ns (: (go l) (two? l ?
                      (dns-quad <l @ a
@@ -286,11 +252,10 @@
              (go (dns-conf conf "nameserver")))
        (two? ns ? ns [(2130706433 . 53)]))
 
-   ; --- the door -----------------------------------------------------------------
-   dns-ms 2500                            ; moonlibc's per-server deadline, kept
+   ; --- the door ---
+   dns-ms 2500                            ; moonlibc's per-server deadline
 
-   ; ask every server in turn for one name. a server that answers ends the walk,
-   ; even to say no -- only silence moves on to the next.
+   ; ask each server in turn: any answer ends the walk, even no; only silence moves on
    (dns-walk ((a . u) . su) h)
     (dns-ask a u h dns-ms @
      'torn (scare 'torn ['dns h])
@@ -305,30 +270,56 @@
         (x && two? x) (catmap (d \ ? (d 1 = 28) [(d 2)] ()) (x 2))
         (dns-walk6 su h)))
 
-   ; hosts first, then the name as given, then each search domain appended.
-   (dns-lookup conf hosts h byhosts walk)
+   ; android's netd: getaddrinfo asked of it by name, family fam (2 or 10), a stream ->
+   ; the addresses, () on none or no netd. it answers "222\0", then per address a be32 1,
+   ; five be32s (flags family socktype protocol addrlen), the sockaddr, a be32 name length
+   ; and the name; a be32 0 ends. netd walks the search domains itself. selinux refuses an
+   ; app a stat of the socket and allows the connect, so the connect is the only test
+   dns-proxyd "/dev/socket/dnsproxyd"
+   (dns-proxy px h fam)
+    (connect ['unix px] @ s
+       (? !(hot? s) ()
+           (: (be n v) (n = 0 ? v (see s @ c (c < 0 ? -1 (be (n - 1) (v * 256 + c)))))
+              (take n acc) (n = 0 ? (rev acc) (see s @ c (c < 0 ? () (take (n - 1) (c . acc)))))
+              (addr sa) (? (fam = 2 && 8 <= #sa) [(((sa 4 * 256 + sa 5) * 256 + sa 6) * 256 + sa 7)]
+                           (fam = 10 && 24 <= #sa) [(dns-v6 (string sa) 8)]
+                           ())
+              (go acc) (be 4 0 @ m
+                         (m != 1 ? acc
+                          (: _ (be 4 0, be 4 0, be 4 0, be 4 0)
+                             sa (take (be 4 0) ())
+                             _ (take (be 4 0) ())
+                             (go (acc + addr sa)))))
+              (say s ("getaddrinfo " + h + " ^ 0 " + show fam + " 1 0 0" + string [0]), flush s,
+               (take 4 () = [50 50 50 0] ? (go ()) ()) @ a (close s, a)))))
+
+   ; hosts first, then netd's answer when conf names no server, then the name and each
+   ; search domain appended
+   (dns-lookup conf hosts px h byhosts walk fam)
     (byhosts hosts h @ f
-       (two? f ? f
-          (: servers (dns-servers conf)
-             a (walk servers h)
-             (two? a ? a
-                (: (go ds) (atom? ds ? ()
-                              (walk servers (h + "." + <ds) @ b
-                                 (two? b ? b (go >ds))))
-                   (go (dns-conf conf "search")))))))
-   (resolve-in conf hosts h) (dns-lookup conf hosts h dns-hosts dns-walk)
-   (resolve6-in conf hosts h) (dns-lookup conf hosts h dns-hosts6 dns-walk6)
+       (? (two? f) f
+          (: n (two? (dns-conf conf "nameserver") ? () (dns-proxy px h fam))
+             servers (dns-servers conf)
+             (? (two? n) n
+                (walk servers h @ a
+                   (two? a ? a
+                      (: (go ds) (atom? ds ? ()
+                                    (walk servers (h + "." + <ds) @ b
+                                       (two? b ? b (go >ds))))
+                         (go (dns-conf conf "search")))))))))
+   (resolve-via conf hosts px h) (dns-lookup conf hosts px h dns-hosts dns-walk 2)
+   (resolve-in conf hosts h) (resolve-via conf hosts dns-proxyd h)
+   (resolve6-in conf hosts h) (dns-lookup conf hosts dns-proxyd h dns-hosts6 dns-walk6 10)
 
    (resolve h) (dns-quad h @ a (two? a ? a (resolve-in "/etc/resolv.conf" "/etc/hosts" h)))
    (resolve6 h) (dns-colon? h ? [h] (resolve6-in "/etc/resolv.conf" "/etc/hosts" h))
 
-   ; resolve, then connect to each address in turn until one takes. a dotted quad
-   ; costs no lookup at all -- `resolve` hands it straight back.
+   ; connect to each address in turn until one takes
    (dial h port)
     (: (go (a . u)) (connect ['tcp (dns-show a) port] @ c (hot? c ? c (go u)))
      (go (resolve h)))
 
-   ; an address back to its dotted quad, which is the only spelling `connect` takes.
+   ; an address -> the dotted quad `connect` takes
    (dns-show a)
     (: (o k) (show $ a >> k & 255)
      (o 24 + "." + o 16 + "." + o 8 + "." + o 0)))

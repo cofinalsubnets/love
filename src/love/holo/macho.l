@@ -1,13 +1,9 @@
-; src/love/holo/macho.l -- the mach-o container: lay obj.l relocatables into a macos
-; executable instead of an ELF. ldlink's lay and patch (this file rides after link.l in a
-; cat); only the clothing differs. a mach_header_64, __PAGEZERO under the base, one
-; LC_SEGMENT_64 per lane and LC_UNIXTHREAD naming the entry. xnu maps a segment from a
-; page-aligned file offset, so the lanes land page-apart in the file as in memory (ldlay's
-; dense 0), and .image, past .bss, opens the next page of each.
-; dyld's exe imports what no object defines, each through a stub after the text and a slot
-; after the data that dyld binds by name, flat, off the bind opcodes in __LINKEDIT -- a weak
-; reference as a weak import, its slot left 0 where nothing answers it. dyld still enters an LC_UNIXTHREAD exe on the kernel's stack,
-; libSystem's initializers run first, and crt0 is none the wiser.
+; src/love/holo/macho.l -- the mach-o container: obj.l relocatables laid as a macos executable
+; by ldlink's lay and patch (this file rides after link.l in a cat). xnu maps a segment from a
+; page-aligned file offset, so the lanes land page-apart in the file as in memory, and .image
+; opens the next page past .bss. a dyld exe imports what no object defines through a stub and
+; a slot dyld binds by name, flat; a weak import's slot stays 0 where nothing answers it.
+; dyld's exe enters by LC_MAIN once libSystem's initializers have run; -static by LC_UNIXTHREAD.
 
 (module 'holo
 (: macho-cpus {'x64 [16777223 3]}      ; cpu_type_x86_64, cpu_subtype_x86_64_all
@@ -19,6 +15,10 @@
    ; lc_unixthread, x86_thread_state64: 21 words, rip the 17th, the rest zero
    (macho-thread ent)
     (catall [(le32 5) (le32 184) (le32 4) (le32 42) (ld-zeros 128) (le64 ent) (ld-zeros 32)])
+   ; an import's name in libSystem: "libsys.read" asks for read beside an object's own read
+   (macho-dyname s) (starts? s "libsys." ? (snip s 7 #s) s)
+   ; lc_main, dyld's: the entry's offset in the file, the main thread's stack the default
+   (macho-main off) (catall [(le32 2147483688) (le32 24) (le64 off) (le64 0)])
 
    (macho-uleb n) (: b (n % 128) r (n // 128) (r = 0 ? [b] (b + 128 . macho-uleb r)))
    ; a path-bearing load command: the head, the path at `at`, NUL-ended and padded to 8
@@ -29,7 +29,7 @@
    macho-dyld (macho-pathcmd 14 12 (le32 12) "/usr/lib/dyld")
    ; dyld wants the platform said (lc_build_version: macos, 10.15 and on) and a uuid
    macho-plat (catall [(le32 50) (le32 24) (le32 1) (le32 659200) (le32 720896) (le32 0)])
-   ; ..the uuid an fnv-1a fold of what tells the exes apart, twice from two seeds
+   ; the uuid: an fnv-1a fold of what tells the exes apart, from two seeds
    (macho-fnv h s) (foldl (\ a b ((a ^ b) * 1099511628211 & 18446744073709551615)) h (map s ^#s))
    (macho-uuid s) (catall [(le32 27) (le32 24) (le64 (macho-fnv 14695981039346656037 s)) (le64 (macho-fnv 1469598103934665603 s))])
 
@@ -44,8 +44,8 @@
                              a (syms ob)))
               () objs))
 
-   ; link a set -- ((id bytes)..), crt0 first -- into a mach-o's piece list. dyn? lays dyld's
-   ; exe, loading libSystem and the paths in dylibs; else it is static
+   ; link ((id bytes)..), crt0 first, into a mach-o's piece list. dyn? lays a dyld exe loading
+   ; libSystem and dylibs; else static
    (macholink target srcs dyn? dylibs)
     (: cpu (peep macho-cpus target ())
        _ (two? cpu || scare 'macho-target target)
@@ -61,19 +61,19 @@
        dycmds (dyn? ? (catall ([macho-dyld] + map macho-dylib ("/usr/lib/libSystem.B.dylib" . dylibs)
                                + [macho-plat (macho-uuid (join " " (imps + dylibs + [(show (map (ob \ ob 'id) objs0))])))])) ())
        nseg (4 + ?img? + ?dyn?)          ; pagezero text rodata data, the image's or the linkedit
-       hdrsz (32 + 72 * nseg + 184 + (dyn? ? (48 + 24 + 80 + #dycmds) 0))
+       hdrsz (32 + 72 * nseg + (dyn? ? (24 + 48 + 24 + 80 + #dycmds) 184))
        lay (ldlay objs base hdrsz pg 0)
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay t1 (lay 4) o1 (lay 5)
        dend (ld-align 16 end)
        gend (dend + 8 * ni)               ; the import slots, which dyld fills
        bend (ldlayn 'bss (ldlay1 'bss gend objs) objs)
-       ioff (ld-align pg (gend - base))   ; .image past the data, and __LINKEDIT past that: dyld
+       ioff (ld-align pg (gend - base))   ; .image past the data, __LINKEDIT past that: dyld
        iaddr (ld-align pg bend)           ; wants it last, so a bake that grows the image moves it on
        iend (img? ? (ldlay1 'image iaddr objs) iaddr)
        ; the bind opcodes: flat lookup, pointers, then a name and its slot apiece
        binds (catall ([[62 81]]                              ; dylib special -2, type pointer
-                      + map (k \ (: n ("_" + imps k)
-                                     (catall [[(elem (imps k) wimps ? 65 64)] (map n ^#n) [0]   ; 1: a weak import
+                      + map (k \ (: n ("_" + macho-dyname (imps k))
+                                     (catall [[(elem (imps k) wimps ? 65 64)] (map n ^#n) [0]   ; 65 a weak import
                                               [115] (macho-uleb (dend - d0 + 8 * k)) [144]]))) ^ni
                       + [[0]]))
        bsz (ld-align 8 #binds)
@@ -108,7 +108,7 @@
                                          (le32 (loff + bsz)) (le32 8)])
                                 (catall [(le32 11) (le32 80) (ld-zeros 72)])          ; lc_dysymtab: none
                                 dycmds])
-                     + [(macho-thread ent)]))
+                     + [(dyn? ? (macho-main (ent - base)) (macho-thread ent))]))
        ncmd (nseg + 1 + (dyn? ? (3 + 2 + #dylibs + 2) 0))
        hdr (catall [(le32 4277009103) (le32 <cpu) (le32 <>cpu) (le32 2)   ; mh_magic_64, mh_execute
                     (le32 ncmd) (le32 #cmds) (le32 (dyn? ? 5 1)) (le32 0) cmds])   ; noundefs, dyldlink

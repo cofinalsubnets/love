@@ -1,14 +1,8 @@
-; src/apps/mitty/mooring.l -- the terminal core mitty and synth share: a child opened on its own
-; pty with a quay screen to pour into, the moor that pumps it there, and the wait for its end.
-;
+; src/apps/mitty/mooring.l -- the terminal core mitty and synth share: a child on its own
+; pty with a quay screen, the moor that pumps it there, and the wait for its end.
 ;   (hopen argv r c)          a pane [box master pid stage name], or tether's nom
-;   (moor bx m dirty)         m's bytes through the screen in box bx, its replies back up m,
-;                             until m hangs up; dirty (when given) is set at each gulp
-;   (moor-to bx m w dirty)    the same, the replies up w: a terminal whose way in is not its
-;                             way out (a window's pipes)
-;   (hpour s x w)             x through screen s, its replies said up w as they come
-;   (waitfor pid)             the child's status pair, or a nom
-;   hbox hmas hpid            a pane's box, master and pid
+;   (moor-to bx m w dirty)    m through the screen in box bx, replies up w, until m hangs up;
+;                             dirty (when given) is set at each gulp. moor: w is m
 (module '(mooring hopen hname-of moor moor-to hpour waitfor hbox hmas hpid)
 (borrow 'posix)
 (:
@@ -16,8 +10,7 @@
  (hmas p) <>p
  (hpid p) <>>p
 
- ; open a child on its own pty at r x c. tether's errno rides back out on a
- ; refusal -- a nom, never two?, which is how the caller tells it from a pane.
+ ; tether's errno rides back out on a refusal: a nom, never two?
  (hopen argv r c) (: _ (setenv "TERM" "xterm-256color")   ; the dialect we actually speak
                      md (tether argv)
                      (atom? md ? md
@@ -26,28 +19,21 @@
                          bx {s}
                          (settty m r c,
                           [bx m <md () (hname-of argv)]))))
- ; what runs there, for mitty's bar: a program's name (love's verb when it is love)
+ ; a program's name, or love's verb when it is love
  (hname-of argv) (: b (: w <argv k (: (go i) (? (i < 0) 0 (w i = 47) (i + 1) (go (i - 1))) (go (#w - 1)))
                          (snip w k #w))
                      (b = "love" && two? >argv ? <>argv b))
 
- ; x into s, its replies up w per write: a queue that fills stops the feed, and
- ; what is left goes in once they are said. the first drain tells the screen its
- ; replies are heard, before a burst of asks. a reply is a byte stream and its
- ; order is the whole content of it -- and one say beats six puts.
+ ; a queue that fills stops the feed, and the rest goes in once the replies are
+ ; said; the first drain tells the screen its replies are heard
  (hpour s x w) (: (said _) (: rep (reply s) (two? rep ? (say w (foldl (a \ b \ a + string b) "" rep), flush w) 0))
                   _ (said 0)
                   r (scribe s x)
                   _ (said 0)
                   (charm? r ? (hpour s (snip x r #x) w) 0))
 
- ; --- the moor: pump the master through the screen until the child hangs up.
- ; the screen lives in box bx (a relay swaps it); replies pour straight back;
- ; a dirty box (when given) cues the painter
- ; park on the first byte, then swig the rest of the gulp -- per-byte sees
- ; cap out near a megabyte a second, and a full-screen guest pours six
- ; the box is re-read every gulp on purpose: that is how a resize reaches a
- ; running moor with no signal, and why a pane's screen may be swapped freely.
+ ; park on the first byte, then swig the rest of the gulp. the box is re-read
+ ; every gulp: that is how a resize or a swapped screen reaches a running moor
  (moor bx m dirty) (moor-to bx m m dirty)
  (moor-to bx m w dirty) (see m @ ch
                     (ch = -1 ? ()

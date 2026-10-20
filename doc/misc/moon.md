@@ -306,7 +306,7 @@ edited `stdio.h` changes what `moonlibc/` means) and the compiler's own identity
 ~0.15s. An archive and not 190 objects because the ranlib index IS the "what does this member
 define" answer, written once and read back rather than recomputed on every warm link — and
 because one file is one generation, whole the moment it lands and countable when the sweep asks
-which to keep. It is holo's own `arbytes`/`arpull` at both ends, the same pair `kore ar` and a
+which to keep. It is holo's own `arbytes`/`arpull` at both ends, the same pair `love ar` and a
 user-named `.a` on the command line use.
 
 **The compiler's identity is the image it woke**, by stat, plus the love's own — `love-image`

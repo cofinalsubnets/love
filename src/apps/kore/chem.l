@@ -40,16 +40,7 @@
    ; -- moieties ----------------------------------------------------------------------
    (ch-upper? c) (65 <= c <= 90)
    (ch-chars w) (map (i \ w i) ^#w)
-   (ch-blank? c) (c = 32 || c = 9)
-   (ch-macro? l w) (starts? l w && (#l = #w || ch-blank? (l #w)))
-   ; words split on blanks
-   (ch-words s)
-    (: n #s
-       (go i acc) (? (n <= i) (rev acc)
-                     (ch-blank? (s i)) (go (i + 1) acc)
-                     (: (e j) (j < n && !(ch-blank? (s j)) ? (e (j + 1)) j)
-                        j (e i) (go j (snip s i j . acc))))
-       (go 0 ()))
+   ; blanks, macro lines and words are grap's: gr-blank?, gr-macro?, gr-words
    ; a moiety's name: its letters and figures
    (ch-name w) (cats (map (c \ string c) (filter (c \ (ch-upper? c || (97 <= c <= 122) || digit? c)) (ch-chars w))))
    ; its text for troff: figures lowered and shrunk, one point between figures kept among
@@ -91,38 +82,55 @@
             'atom "Last.\(ch-acorner a)"
             'ring "Last.V\(ch-vertex r a).\(ch-cmp a)"
             "Last.\(ch-cmp a)"))
-   ; a bond's from: a moiety's corner, a bond's end, a ring's vertex, a named place's side
-   (ch-from s x a)
-    (: k (s 'names x)
-       dot (: (go i) (? (i < 0) -1 (x i = 46) i (go (i - 1))) (go (#x - 1)))
-       (? (k = 'atom) "\(x).\(ch-acorner a)"
-          (k = 'bond) "\(x).end"
-          (tablet? k) "\(x).V\(ch-vertex k a).\(ch-cmp a)"
-          (0 <= dot && dot + 1 < #x && ch-upper? (x (dot + 1))) "\(x).\(ch-cmp a)"
-          "\(x) "))
+   ; a bond's from X ..: a named thing's place a ways (a moiety's corner, a bond's end, a
+   ; ring's vertex, another thing's compass point), .V a corner of the last, X.V one of X,
+   ; and anything else the rest of the line as it stands
+   (ch-from s l a)
+    (: x (two? l ? <l "") k (two? l ? (s 'names x))
+       (place p) (0 < #p && ch-upper? (p 0) && !(elem 46 (ch-chars p)))
+       dot (fsub x "." 0)
+       (? (k = 'atom) "from \(x).\(ch-acorner a)"
+          (k = 'bond) "from \(x).end"
+          (tablet? k) "from \(x).V\(ch-vertex k a).\(ch-cmp a)"
+          (k = 'other) "from \(x).\(ch-cmp a)"
+          (1 < #x && x 0 = 46 && ch-upper? (x 1)) "from Last\(x).\(ch-cmp a)"
+          (0 < dot && place (snip x 0 dot) && place (snip x (dot + 1) #x)) "from \(x).\(ch-cmp a)"
+          ("from " + ch-fields l)))
+   ; words as chem lays them back, each with a blank after, up to a comment
+   (ch-fields l) (atom? l || starts? <l "#" ? "" (<l + " " + ch-fields >l))
+   ; a word that turns a bond: one with a figure or a way anywhere in it
+   (ch-turn? w) (any digit? (ch-chars w) || any (d \ 0 <= fsub w d 0) (keys ch-dirs))
+   ; ..to: a leading integer's degrees, a way's by its exact name (else up), or no turn
+   (ch-turn w a)
+    (: n #w s (0 < n && elem (w 0) [43 45 92] ? 1 0)
+       (dig i) (i < n && digit? (w i) ? (dig (i + 1)) i)
+       (? (s < n && digit? (w s))
+           (w 0 = 92 ? 0 (int (gem (snip w s (dig s))) @ v (ch-norm (w 0 = 45 ? (0 - v) v))))
+          (any (d \ 0 <= fsub w d 0) (keys ch-dirs)) (peep ch-dirs w 0)
+          a))
 
    ; -- statements -----------------------------------------------------------------------
    (ch-o s t) (say (s 'o) t)
    (ch-ol s t) (ch-o s "\(t)\n")
    (ch-join ws) (atom? ws ? "" (foldl (a \ w \ "\(a) \(w)") <ws >ws))
-   ; [double|triple|front|back] bond [angle|dir] [length n] [from X | to X.. | pic..]
+   ; [double|triple|front|back] bond [turns] [length n] [from X | to X.. | pic..], walked as
+   ; chem walks it: turns and a length, then the rest is where it runs
    (ch-bond s pre ws)
     (: kind (<ws = "bond" ? "bond" (ch-bond-kinds <ws))
        rest (<ws = "bond" ? >ws >>ws)
-       (go l a len third)
-        (? (atom? l) [a len third]
-           (ch-num? <l) (go >l (ch-norm (ch-int <l)) len third)
-           (ch-dirs <l != ()) (go >l (ch-dirs <l) len third)
-           (<l = "length" && two? >l) (go >>l a (gem <>l) third)
-           (<l = "from" && two? >l) [a len ['from <>l]]
-           (<l = "to" && two? >l) [a 0 ['to (ch-join >l)]]
-           [a len ['pic (ch-join l)]])
-       r (go rest (s 'dir) (s 'db) ())
-       a <r len (r 1) th (r 2)
-       third (? (th = ()) "from \(ch-ref s a) "
-                (<th = 'from) "from \(ch-from s (th 1) a)"
-                (<th = 'to) "to \(th 1) "
-                "\(th 1) ")
+       (go l a len)
+        (? (atom? l) [a len ""]
+           (ch-turn? <l) (go >l (ch-turn <l a) len)
+           (starts? <l "leng") (go >>l a (two? >l ? (ch-num? <>l ? (gem <>l) 0) len))
+           (<l = "to") [a 0 (ch-fields l)]
+           (<l = "from") [a len (ch-from s >l a)]
+           (starts? <l "#") [a len ""]
+           [a len (ch-fields l)])
+       r (go rest (s 'dir) (s 'db))
+       a <r th (r 2)
+       ; a to anywhere in it, and the bond runs there, its length none
+       len (starts? th "to" || 0 <= fsub th " to " 0 ? 0 (r 1))
+       third (th = "" ? "from \(ch-ref s a) " th)
        (ch-ol s "\(pre)Last: \(kind)(\(ch-g len), \(a), \(third))",
         pins s 'last 'bond 'dir a))
    ; a moiety, placed against the last thing, or where its pic says
@@ -136,6 +144,7 @@
    (ch-bp s pre)
     (s 'dir @ a
      (ch-ol s "\(pre)Last: BP: \"\" ht 0 wid 0 with .\(ch-cmp (a + 180)) at \(ch-ref s a)",
+      pin (s 'names) "BP" 'other,
       pin s 'last 'other))
    ; a ring: [aromatic] ring|ringN|benzene|flatring [pointing D] [aromatic] [put M at N]..
    ; [double I,J ..] [pic..]
@@ -194,13 +203,13 @@
               ^n)
        _ (r 'aro ? (ch-ol s "\tcircle rad \(ch-g (r 'flat ? (0.4 * side) (rad / 2))) at 0,0") 0)
        a (s 'dir)
-       place (elem "with" (ch-words (r 'extra)) ? ""
+       place (elem "with" (gr-words (r 'extra)) ? ""
               "with .V\(ch-vertex r (a + 180)).\(ch-cmp (a + 180)) at \(ch-ref s a)")
        (ch-ol s "] \(place) \(r 'extra)"))
 
    ; a line of a diagram
    (ch-line s l)
-    (: ws (ch-words l)
+    (: ws (gr-words l)
        w0 (two? ws ? <ws "")
        (? (atom? ws) 0
           (w0 0 = 35) 0
@@ -275,7 +284,7 @@
        (troff? t) (0 < #t && (t 0 = 46 || t 0 = 39))
        (go l mode)
         (atom? l ? 0
-         (: x <l t (ch-trim x) ws (ch-words t)
+         (: x <l t (ch-trim x) ws (gr-words t)
             (? (mode = 'chem)
                 (? (starts? t ".cend") (ch-ol s ".PE", go >l 'text)
                    (troff? t) (ch-ol s t, go >l mode)
@@ -287,12 +296,12 @@
                (t = ".cstart") (ch-ol s ".PS", ch-start s, go >l 'chem)
                (mode = 'pic)
                 (ws = ["begin" "chem"] ? (ch-start s, go >l 'begin)
-                 (ch-ol s t, go >l (ch-macro? t ".PE" ? 'text 'pic)))
-               (ch-ol s t, go >l (ch-macro? t ".PS" ? 'pic 'text)))))
+                 (ch-ol s t, go >l (gr-macro? t ".PE" ? 'text 'pic)))
+               (ch-ol s t, go >l (gr-macro? t ".PS" ? 'pic 'text)))))
        (go ls 'text))
    (ch-trim t)
-    (: (a i) (i < #t && ch-blank? (t i) ? (a (i + 1)) i)
-       (b j) (0 < j && ch-blank? (t (j - 1)) ? (b (j - 1)) j)
+    (: (a i) (i < #t && gr-blank? (t i) ? (a (i + 1)) i)
+       (b j) (0 < j && gr-blank? (t (j - 1)) ? (b (j - 1)) j)
        i (a 0) j (b #t)
        (i < j ? (snip t i j) ""))
 
@@ -303,12 +312,7 @@
     (: s {'o (jug 0) 'names {} 'begun 0 'last 'start 'dir 90 'ring ()}
        _ (ch-size s 1.0)
        fs (filter (a \ !(starts? a "-") || a = "-") as)
-       (go l) (atom? l ? 0
-               (: f <l
-                  t (f = "-" ? (string? sin ? sin (slurp in)) (uread f @ r (two? r ? <>r)))
-                  (string? t ? (ch-doc s t, go >l)
-                   (say err "chem: can't open \(f)\n", pin s 'status 1))))
-       (go (two? fs ? fs ["-"]),
+       (gr-files fs sin (f \ ch-doc s) (f \ (say err "chem: can't open \(f)\n", pin s 'status 1)),
         [(peep s 'status 0) (slurp (s 'o))]))
 )
 ) ; module 'kore

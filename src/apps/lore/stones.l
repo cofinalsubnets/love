@@ -118,11 +118,10 @@
  ; the ring: eight places a turn round, half a place short of east and on through north,
  ; so none stands between the slot and the altar; the fourth, north of north-west, is empty
  (ring-a k) ((k - 0.5) * pi / 4.0)
- ring (filter two? (map (k \ (k = 3 ? ()
-                             (: a (ring-a k) j (throw k 1 31 100 / 100.0)
-                                (stone (ring-r * cos a) (zc + ring-r * sin a) (pi / 2.0 - a)
-                                       (1.0 + 0.2 * j) (2.9 + 0.5 * throw k 2 37 100 / 100.0) 0.7))))
-                        ^8))
+ (ring-stone k) (: a (ring-a k) j (throw k 1 31 100 / 100.0)
+                   (stone (ring-r * cos a) (zc + ring-r * sin a) (pi / 2.0 - a)
+                          (1.0 + 0.2 * j) (2.9 + 0.5 * throw k 2 37 100 / 100.0) 0.7))
+ ring (filter two? (map (k \ (k = 3 ? () (ring-stone k))) ^8))
  ; the audience: three to six on the rows, none in the slot's notch, none too near another
  (audience sd) (: n (3 + throw sd 1 41 4)
    (try k got) (? (n <= #got || 60 < k) got
@@ -424,13 +423,11 @@
  ; ..in cells, the choices and the keys' line as view's bands laid in the frame: a terminal
  ; painting as bytes arrive would flash the ground under the box between frame and text
  (menu-bands st r0 c0 bw bh r w) (: deep (st 'deep) c (st 'dlg)
-   (pen v) (deep ? (: (q x) ((x * 63 + 127) // 255) (q (v 0) * 4096 + q (v 1) * 64 + q (v 2))) (v 3))
+   pen (view-pen deep)
    bg (pen [22 17 14 233]) hi (pen [244 234 216 230]) lo (pen [156 144 128 245]) fg (pen [196 184 166 250])
-   ; a band's text a cell at a time, each one character
-   (cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
    (line j) (: i (j - 1) (0 < j && j < bh - 1 ? ((i = c ? " › " "   ") + show (i + 1) + "  " + acts i) ""))
-   (? (charm? c) (foldl (\ t j (pin t (r0 + j) [c0 (cells (pad (line j) bw " ")) (j - 1 = c ? hi lo) bg])) {} ^bh)
-      (st 'mt < help-t) {(r - 1) [0 (cells (pad (pad "" (max2 0 ((w - vlen help-text) // 2)) " " + help-text) w " ")) fg bg]}
+   (? (charm? c) (foldl (\ t j (pin t (r0 + j) [c0 (view-cells (pad (line j) bw " ")) (j - 1 = c ? hi lo) bg])) {} ^bh)
+      (st 'mt < help-t) {(r - 1) [0 (view-cells (pad (pad "" (max2 0 ((w - vlen help-text) // 2)) " " + help-text) w " ")) fg bg]}
       {}))
  ; the keys named along the bottom row r, w wide, for the first help-t seconds and not over
  ; the choices; under kitty, blanked a while after
@@ -631,10 +628,7 @@
                     && ghost-wait <= peep st 'mt 0.0 - st 'wait-at)
  (ghost-batch st lt) (? (ghost-on? st lt)
    (: g (peep kept 'ghost ())
-      pk (tablet? g ? g (: a (ring-a 3) j (throw 3 1 31 100 / 100.0)
-                           b (stone (ring-r * cos a) (zc + ring-r * sin a) (pi / 2.0 - a) (1.0 + 0.2 * j)
-                                    (2.9 + 0.5 * throw 3 2 37 100 / 100.0) 0.7)
-                           q (mesh-pack (block-mesh b)) (pin kept 'ghost q, q)))
+      pk (tablet? g ? g (: q (mesh-pack (block-mesh (ring-stone 3))) (pin kept 'ghost q, q)))
       mt (st 'mt) f (sat ((mt - st 'wait-at - ghost-wait) / 12.0) * flicker-pulse mt 0.8 0.2 0.9 0.0)
       c (pk 'cols) n (pk 'n) z (c 0 * 0.0) k (f * (0.55 + 0.45 * c 6))
       cols [(c 0) (c 1) (c 2) (c 3) (c 4) (0.22 * k) (0.11 * k) (0.32 * k) z z z]

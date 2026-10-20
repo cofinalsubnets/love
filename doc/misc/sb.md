@@ -25,16 +25,32 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | **`psid [SET]`** | the name of a set's state: the head's, or SET's | rev-parse | name a release |
 | **`paths A B`** | the paths two sets lay differently | diff --name-only | what an upgrade touches |
 | **`within A B`** | exit 0 when set A lies inside set B | merge-base --is-ancestor | is it newer |
-| **`stamp [SET]`** | the newest of a set's patch times, in seconds | log -1 --format=%ct | a build's stamp |
 | **`log PATH`** | the head's patches that write PATH, or a path under it, the fold's last first | log -- PATH | what touched a file |
 | **`show ID`** | a patch: time, note, deps, then each hunk as a diff | show | inspect |
 | **`blame PATH`** | each line of PATH in the head, after the patch that wrote it | blame | inspect |
 | **`status`** | the head, the banks at it, what the store holds beyond it, conflicted paths, the tree's changes | status | inspect |
 | **`bisect GOOD BAD CMD..`** | lay the banks between, halving, and run CMD in each; the first bad one | bisect run | which release broke it |
 | **`diff`** | working tree vs the recorded state (unified; exit 1 on change) | inspect | inspect |
-| **`ledger NAME ..`** | a named value that moves only by compare-and-swap, every entry kept | a ref moved by `update-ref NEW OLD` | the shared queue sessions coordinate by |
+| **`ledger NAME ..`** | a named value that moves only by compare-and-swap, every entry kept | a ref moved by `update-ref NEW OLD` | a shared text sessions coordinate by, such as a queue |
 
 `-C DIR` before any verb runs it in the nest at DIR.
+
+What `sb`'s one-line help leaves out:
+
+- **`sync [--keep] PEER`** pulls what PEER has, pushes what it lacks, and settles both trees to
+  the union of their heads. Two patches on one path three-way merge; a true overlap lands in
+  markers and exits 1, to resolve and record. `--keep` only deposits: both stores fill and no
+  head moves. PEER is a nest directory, an `http://` remote (any static tree serving a `.sb/`;
+  pull only), `ssh://[USER@]HOST[:PORT]/PATH` (its side runs `sb serve PATH`; `SB_SSH` the ssh
+  words, `SB_LOVE` the far love).
+- **`sync --take PEER`** pulls only and grows the head by PEER's head: a new nest made from a hub.
+- **`unpack DIR [H..|-]`** writes the hashes named (`-` reads them from stdin), else the head's.
+- **`pack`** reads the new pack back before the old ones go; `sync` packs past 1024 loose blobs.
+- **`ledger`**: no NAME lists them; `NAME` prints what it holds; `--id` its hash, `--log` every
+  entry; `--was OLD FILE` moves it to FILE's text (`-` stdin) iff it stands at OLD (`none` for a
+  new one), else exits 1.
+- **`bisect GOOD BAD [--] CMD ..`** runs CMD in each bank it lays: exit 0 good, 125 skip, else
+  bad. It names the first bad set and its patches, then lays the head back.
 
 A nest's tree realizes its *head*, the tips of a set kept in `.sb/head`, and its store may
 hold more: work deposited by another nest and not yet taken. `.sb/tips` stays the store's
@@ -105,10 +121,7 @@ head with `take`. `sb serve [DIR]` holds the far nest for the whole talk and pri
 but its answers. The far path must be one word to the far shell: letters, digits and
 `/._-~+,=@:`.
 
-`NAME@BOX` is the nest `NAME` that `BOX`'s door serves (`love bee --door`, doc/bee.md NEW NODE):
-sync runs `ssh -T HOST LOVE sb serve @NAME`, with `HOST` and `LOVE` from the line for `BOX` in
-bee's `~/.love/etc/bee/boxes` (the box's own name and `love` without one), and the door maps
-`@hub` to its hub. `sync --take PEER` pulls only and grows the head by the peer's head, leaving
+`sync --take PEER` pulls only and grows the head by the peer's head, leaving
 the peer as it was: how a nest is made from a hub, or brought up to it.
 
 **What a peer can and cannot do.** Every blob and patch is checked against its sha256 name, and
@@ -211,24 +224,9 @@ old ones, which is the vault's rule kept. The writer is `SB_WHO`, else `USER`. A
 lock beside the ledger: a directory, made atomically, holding the holder's pid. A live holder is
 waited on for up to five seconds, and a dead one's lock is taken over.
 
-A ledger stays in its nest: `sync` carries patches, blobs and refs, never a plain ledger. A value
+A ledger stays in its nest: `sync` carries patches, blobs and refs, never a ledger. A value
 that moves by compare-and-swap has no union to settle on, so sessions sharing one name the same
 nest, the hub, and reach it with `-C`.
-
-**A signed queue** is a ledger whose head is an *entry* ([`src/apps/qlog.l`](../../src/apps/qlog.l)):
-one form naming the queue, its term, its `seq` and `prev` (the hash of the entry before), when and
-by whom and through which tool, the hash of the queue's text after it, the writer's chain and its
-sig. Its `--was FILE` is the entry's one line, then the text, and it moves only when that entry
-follows the head -- next in seq, prev the head, a sig and chain that check against the box's
-lineage, a change its writer may make -- so a plain value, or an entry that does not chain, is
-refused once a queue is signed. The first entry over a plain ledger signs over its text.
-`ledger NAME --text` prints the text a signed head names (a plain ledger's value otherwise).
-
-A signed `queue/*` ledger travels by **pull**: a sync with a nest on this box, or over ssh, takes the
-peer's entries when they continue this nest's chain and every one checks, and writes nothing to
-the peer's. A head never moves back: a peer behind this nest gives nothing, and a peer whose log
-does not continue this one is a fork, kept as a line in `NAME.forks` and said once. An http
-remote carries no ledger.
 
 ## install is a composition, not a verb
 

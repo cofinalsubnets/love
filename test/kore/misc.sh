@@ -78,6 +78,19 @@ korerun timeout -k 1 1 sleep 20 > /dev/null 2>&1; r=$?
 [ $r -eq 124 ] || fail "kore timeout -k (got $r)"
 korerun timeout 9 /nonexistent-xyzzy > /dev/null 2>&1; r=$?
 [ $r -eq 127 ] || fail "kore timeout: a command that will not start is 127 (got $r)"
+# the clock, and a TERM sent to timeout, reach the command's whole group, as GNU's do
+tp=$ho/.kore-tpids
+alive() { for p in $(cat "$tp"); do kill -0 "$p" 2>/dev/null && { kill "$p"; echo "$p"; }; done; }
+rm -f "$tp"; korerun timeout 2 sh -c "sleep 77 & echo \$! > $tp; sleep 78 & echo \$! >> $tp; wait" > /dev/null 2>&1; r=$?
+[ $r -eq 124 ] || fail "kore timeout: a group the clock ended is 124 (got $r)"
+[ -z "$(alive)" ] || fail "kore timeout left the command's children behind"
+# the command names timeout itself ($PPID): the shell's $! may be a job of its own
+rm -f "$tp" "$tp.t"; korerun timeout 30 sh -c "echo \$PPID > $tp.t; sleep 79 & echo \$! > $tp; wait" > /dev/null 2>&1 & j=$!
+n=0; while [ ! -s "$tp" ] && [ $n -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+kill -TERM "$(cat "$tp.t")"; wait $j; r=$?
+[ $r -eq 143 ] || fail "kore timeout: a TERM it was sent ends the command, 143 as GNU's (got $r)"
+[ -z "$(alive)" ] || fail "kore timeout did not pass a TERM on to the command's group"
+rm -f "$tp" "$tp.t"
 # which, tty, clear, hostname
 if command -v which >/dev/null 2>&1; then
   both "which sh"    which sh
@@ -194,7 +207,7 @@ rm -f "$ho"/.dd?
 X2=$PWD/$ho/.xxq; printf 'Hello World 0123456789abcdef\n' > "$X2"
 for c in "-p" "-i" "-c 8" "-g 1" "-g 4" "-u" "-l 20" "-s 3" "-s 3 -l 10 -c 8" "-s 0x10" "-c 5" "-c 8 -g 3"; do
   # shellcheck disable=SC2086
-  (cd "$ho" && xxd $c .xxq) > "$g"; (cd "$ho" && LOVE_NO_IMAGE= "$PWD/../$m" kore xxd $c .xxq) > "$o"; same "xxd $c"
+  (cd "$ho" && xxd $c .xxq) > "$g"; (cd "$ho" && LOVE_NO_IMAGE= "$PWD/../$m" xxd $c .xxq) > "$o"; same "xxd $c"
 done
 xxd -i < "$X2" > "$g"; korerun xxd -i < "$X2" > "$o"; same "xxd -i from stdin"
 korerun xxd -p "$X2" | korerun xxd -r -p > "$o"; cmp -s "$X2" "$o" || fail "kore xxd -p | xxd -r -p"

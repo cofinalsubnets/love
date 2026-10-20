@@ -443,8 +443,7 @@
          (pr (rev (environ 0))))   ; environ answers last first
       (: (one w ok) (getenv w @ v
                      (string? v ? (say out v, put out nl, ok) 0))
-         (go a ok) (two? a ? (go >a (one <a ok)) (flush out, ok ? 0 1))
-         (go as 1))))
+         (ueach one as))))
 
    ; -- whoami and groups: id's two thin faces (id -un and id -Gn) --
    (whoami-main _)
@@ -898,18 +897,22 @@
 
    ; -- timeout: the deadline and the wait are one loop, since gather polls without blocking.
    ; 124 the clock ended it, 125 our trouble, 127 it would not start, else its own status.
-   ; `sent` is the elapsed reading the signal went out at, () until then; k? the KILL followed
-   (utmo-wait p t0 lim sig kill o)
+   ; `sent` is the elapsed reading the signal went out at, () until then; k? the KILL followed.
+   ; the command leads its own group, and every signal goes to the group, as GNU's do
+   (utmo-wait p t0 lim sig kill o sp)
     (: (name n) (filter (x \ <>x = n) usignames @ e (two? e ? <<e (show n)))
-       (send s) (o 'v ? (say err ("timeout: sending signal " + name s + " to command '" + o 'cmd + "'\n")) 0, still p s)
+       (send s) (o 'v ? (say err ("timeout: sending signal " + name s + " to command '" + o 'cmd + "'\n")) 0, still (0 - p) s)
+       ; a HUP INT QUIT or TERM sent to us is passed on
+       (pass _) (hot? sp && (sigtake sp @ ev (two? ev ? (still (0 - p) <ev, pass 0))))
        (go sent k?)
         (gather p @ r
          ; a child we ended reads 124, not its own -- save one KILL ended, which reads
          ; 137 as GNU's does, a KILL being no signal a command could have chosen to obey
          (? (two? r) (charm? sent && !(o 'keep) ? (sig = 9 || k? ? 137 124) <r)
             (nom? r) 125
-            (: el (clock t0)
-               fire (!(charm? sent) && lim <= el ? el sent)
+            (: _ (pass 0)
+               el (clock t0)
+               fire (!(charm? sent) && 0 < lim && lim <= el ? el sent)   ; 0 is no limit, as GNU has it
                _ (fire = sent ? 0 (send sig))
                k2 ((!k? && charm? fire) && (charm? kill && (fire + kill) <= el) ?
                    (send 9, 1)
@@ -931,10 +934,11 @@
        _ (charm? lim ? () (udie 125 ("timeout: invalid duration '" + <ops + "'")))
        cmd >ops
        t0 (clock 0)
-       p (spawn cmd)
+       ; blocked before the spawn, which clears the mask in the child
+       sp (sigfd [1 2 3 15])
+       p (spawnmap cmd () () 0 0)
        (? (nom? p) (say err ("timeout: cannot run " + <cmd), put err 10, uleave 127)
-          (lim = 0) (wait p)                    ; a zero duration is no limit, as GNU has it
-          (utmo-wait p t0 lim sig kill {'v (t 118) 'keep (t 1001) 'cmd <cmd})))
+          (utmo-wait p t0 lim sig kill {'v (t 118) 'keep (t 1001) 'cmd <cmd} sp)))
 
 
    ; ---- chroot, mount and umount: each needs privilege and answers 'eperm as an errno, not a crash
@@ -1020,12 +1024,7 @@
 
    (uprocs _)                          ; every numeric name under /proc, ascending
     (: r (readdir "/proc")
-       (dig? s) (: n #s
-                   (go k) (? (n <= k) (0 < n)
-                             (48 <= (s k) && (s k) <= 57) (go (k + 1))
-                             0)
-                   (go 0))
-       (two? r ? (sort (map uatoi (filter dig? r)))))
+       (two? r ? (sort (map uatoi (filter udigs? r)))))
    ; a stat line -> (pid comm state ppid pgrp session tty_nr ..). the comm is taken between
    ; the first "(" and the last ")": a name like `a b)c` would shift every later field
    (ustatf ln)
@@ -1051,6 +1050,14 @@
          o (jug 0 @ j (each ^n (k \ say j ((s k) = 0 ? " " (string (s k)))), slurp j))
          z #o
          (? (0 = z) () (o (z - 1) = 32) (snip o 0 (z - 1)) o))))
+   (upargs pid)                        ; the cmdline as procps shows it: a newline a space,
+    (upcmd pid @ s                     ; another control byte ?, a C1 one ?? as its two bytes
+     (? !(string? s) s
+        (: n #s
+           (c1 k) (0 <= k && k + 1 < n && s k = 194 && 128 <= s (k + 1) < 160)
+           (jug 0 @ j (each ^n (k \ s k @ b
+                                (say j (b = 10 ? " " (b < 32 || b = 127 || c1 k || c1 (k - 1) ? "?" (string b))))),
+                       slurp j)))))
    ; argv[0]'s basename, for pidof -- the raw clip, since a kernel comm never
    ; carries a trailing slash for posix's rule to strip
 
@@ -1096,7 +1103,7 @@
        (start f) (: s (b 'boot + (uatoi (f 21) // HZ)) ymd (civil (s // 86400)) now (civil (b 'now // 86400))
                     (ymd = now ? (zpad 2 (show (s % 86400 // 3600)) + ":" + zpad 2 (show (s % 3600 // 60)))
                      (mon3 (ymd 1 - 1) + zpad 2 (show (ymd 2)))))
-       (args p f) (upcmd p @ c (string? c ? c ("[" + f 1 + "]")))
+       (args p f) (upargs p @ c (string? c ? c ("[" + f 1 + "]")))
        ; statm's resident pages, which the kernel keeps exact where stat's may lag
        (rss p f) (: r (uread ("/proc/" + show p + "/statm")) w (two? r ? (words <>r))
                     (show (4 * (two? >w ? (uatoi <>w) (uatoi (f 23))))))
@@ -1499,7 +1506,7 @@
    ; kernel keeps and is capped at fifteen charms -- `pgrep -f` asks the cmdline
    ; instead, where the whole of a long program name lives --
    (upmatch f? x? pat pid)             ; does this process answer to pat
-    ((f? ? (upcmd pid) (upstat pid @ s (s ? (s 1)))) @ c
+    ((f? ? (upargs pid) (upstat pid @ s (s ? (s 1)))) @ c
      (? !(string? c) 0
         x? (c = pat)
         (reere pat @ r (two? r ? (rehas <>r c) (udie 2 ("bad pattern: " + pat))))))
@@ -1543,7 +1550,7 @@
        t <fo rest (fo 1)
        _ (two? rest || t 117 ? () (udie 2 "usage: pgrep [-acflnovx] [-d DELIM] [-u USER,..] [PATTERN]"))
        ps (upsel t (two? rest ? <rest))
-       (row p) (show p + (? (t 97) (" " + (upcmd p @ c (string? c ? c (upstat p @ f (f ? (f 1) ""))))) (t 108) (" " + (upstat p @ f (f ? (f 1) ""))) ""))
+       (row p) (show p + (? (t 97) (" " + (upargs p @ c (string? c ? c (upstat p @ f (f ? (f 1) ""))))) (t 108) (" " + (upstat p @ f (f ? (f 1) ""))) ""))
        ((? (t 99) (say out (show #ps + "\n")) (two? ps) (say out (join (t 100 ? (uoptv t 100) "\n") (map row ps) + "\n")) 0),
         flush out,
         two? ps ? 0 1))

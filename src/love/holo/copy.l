@@ -1,6 +1,6 @@
 ; src/love/holo/copy.l -- objcopy's two output formats: a linked elf flattened to the
 ; bytes a flash tool takes. `-O binary` is the image from the lowest load address,
-; `-O ihex` the same image in Intel hex. `kore objcopy` is the applet.
+; `-O ihex` the same image in Intel hex. `love objcopy` is the applet.
 ;
 ; a flasher wants the load address, not sh_addr: each section maps through the PT_LOAD
 ; holding its file bytes, lma = p_paddr + (off - p_offset). matching by file offset keeps

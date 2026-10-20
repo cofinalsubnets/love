@@ -2,11 +2,11 @@
 # test/kore/sh.sh -- sh -- lush aboard, through kore's door and the argv0 symlink
 . "$(dirname "$0")/common.sh"
 
-# `kore sh` and an sh symlink are the shell; one -c through the image wake covers dispatch,
+# `love sh` and an sh symlink are the shell; one -c through the image wake covers dispatch,
 # compounds and cmdsub
 korerun sh -c 'if true; then echo "kore-sh $(echo ok)"; fi' > "$o" 2>&1; r=$?
 [ $r -eq 0 ] && [ "$(cat "$o")" = "kore-sh ok" ] || fail "kore sh (exit $r)"
-printf '#!/bin/sh\nn=$(basename -- "$0")\nLOVE_NO_IMAGE= exec "%s" kore "$n" "$@"\n' "$PWD/$m" > "$ho/.koreshim"
+printf '#!/bin/sh\nn=$(basename -- "$0")\nLOVE_NO_IMAGE= exec "%s" "$n" "$@"\n' "$PWD/$m" > "$ho/.koreshim"
 chmod 755 "$ho/.koreshim"
 ln -sf .koreshim "$ho/sh"
 "$ho/sh" -c 'echo via-symlink' > "$o" 2>&1; r=$?
@@ -31,4 +31,4 @@ printf 'read -r a; head -n 1; read -r b; echo "$a $b"\n' > "$ho/.kore-sh-rk"
 printf 'read -r a; head -c 4; read -r b; echo "$a $b"\n' > "$ho/.kore-sh-rk"
 [ "$(korerun sh -a "$ho/.kore-sh-rk" < "$ho/.kore-sh-lines" | tr '\n' ' ')" = "two one three " ] \
   || fail "kore sh: the in-image head -c after a read kept what it read ahead"
-echo "kore: sh (lush aboard -- kore sh + the argv0 symlink) ok"
+echo "kore: sh (lush aboard -- love sh + the argv0 symlink) ok"

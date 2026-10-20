@@ -326,7 +326,7 @@ lushfiles = src/apps/lush.l
 # what mooncc carries, what the artifact bakes -- and spelling each out in full is how
 # the three drift. the parts are named once here; each roster below is the order it
 # wants them in, and a new file joins one part rather than three lists.
-kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l \
+kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l src/apps/kore/lex.l src/apps/kore/yacc.l \
   src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/top.l src/apps/kore/htop.l src/apps/kore/less.l \
   src/apps/libra/lint.l src/apps/tui.l src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/hues.l src/apps/vi/core.l src/apps/vi/vi.l src/apps/kore/ed.l \
   src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns.l src/apps/nc.l $(lushfiles) \
@@ -337,7 +337,7 @@ holo_be = src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l src/lov
 # the object floor every reader of a backend goes out through
 holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/macho.l
 # the compiler over them
-moon_mid = src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
+moon_mid = src/apps/moon/floor.l src/apps/moon/ctab.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l src/apps/moon/cgram.l \
   src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
 # the archives: the codec, then the two containers over it. a kore member rather than
 # a crew one because the distro's /bin IS the kore cat -- a userland that cannot open
@@ -356,9 +356,9 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/web.l \
   src/apps/harp/harp.l src/apps/harp/ops.l src/apps/harp/play.l src/apps/harp/opl.l src/apps/harp/mus.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
-  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/scenery.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/corridor.l src/apps/lore/roost.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
+  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/scenery.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/corridor.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/font.l src/apps/mitty/mitty.l src/apps/doom.l src/apps/droid/droid.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
-  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/tuner.l src/apps/mitty/saver.l src/apps/mitty/avatar.l src/apps/mitty/chat.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/qlog.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l
+  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/tuner.l src/apps/mitty/saver.l src/apps/mitty/hud.l src/apps/locks.l src/apps/hosts.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
@@ -436,15 +436,14 @@ force_src: ;
 # the roster is the bake section, what a carried-source bake decodes alone (main.c).
 $(src_tree): force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) set $(ho)/.dist.list $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(ho)/.dist.list $(dist_drop)
 
 out/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(hosta)
-# the build stamp is 0, not the set's: recording hot.prof moves that stamp
 out/prof/src.tree: force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) 0 $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
 out/prof/src.o: out/prof/src.tree src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l out/prof/src.tree $@ $(hosta)
@@ -592,12 +591,10 @@ $(distro_img): src/apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 # in love-raw -- and an initramfs with no /apps/dns.l answers that with a scare that takes
 # the whole cat down. The symptom is every applet gone, not a quiet nc.
 	@cp src/apps/dns.l $(distro_root)/apps/dns.l
-	@{ echo '#!/bin/love'; cat $(korefiles); } > $(distro_root)/bin/kore && chmod 755 $(distro_root)/bin/kore
-	@for a in $(distro_applets); do ln -sf kore $(distro_root)/bin/$$a; done
-	@ln -sf kore $(distro_root)/bin/sh
-	@ln -sf kore $(distro_root)/bin/lush
-	@( cd $(distro_root) && $(mabs) kore find . | $(mabs) cpio -o --quiet ) | $(mabs) gzip > $@
-	@echo "  packed $$($(mabs) gzip -l $@ | $(mabs) kore awk 'NR==2{print $$2}') bytes -> $@"
+	@{ echo '#!/bin/love'; cat $(korefiles); } > $(distro_root)/lib/kore.l && chmod 755 $(distro_root)/lib/kore.l
+	@for a in $(distro_applets) sh lush; do ln -sf ../lib/kore.l $(distro_root)/bin/$$a; done
+	@( cd $(distro_root) && $(mabs) find . | $(mabs) cpio -o --quiet ) | $(mabs) gzip > $@
+	@echo "  packed $$($(mabs) gzip -l $@ | $(mabs) awk 'NR==2{print $$2}') bytes -> $@"
 
 # Direct kernel boot, no bootloader: rdinit=/init makes love pid 1. KVM when the host
 # offers it -- TCG is too slow to reach the console inside a smoke window.
@@ -623,7 +620,7 @@ distro-smoke: $(distro_img)
 	@grep -q "love as PID 1" $(distro_dir)/boot.log && echo "  OK love is pid 1" || { echo "  FAIL not pid 1"; exit 1; }
 	@grep -q "mount proc on /proc -> ok" $(distro_dir)/boot.log && echo "  OK /proc mounted" || { echo "  FAIL /proc"; exit 1; }
 	@grep -q "start the console shell" $(distro_dir)/boot.log && echo "  OK reached shell handoff" || { echo "  FAIL no shell"; exit 1; }
-	@grep -qE "kore ls /proc -> exit 0, [1-9]" $(distro_dir)/boot.log && echo "  OK kore userland runs (ls /proc, forked+captured)" || { echo "  FAIL userland self-check"; exit 1; }
+	@grep -qE "ls /proc -> exit 0, [1-9]" $(distro_dir)/boot.log && echo "  OK kore userland runs (ls /proc, forked+captured)" || { echo "  FAIL userland self-check"; exit 1; }
 	@echo "-- distro smoke passed --"
 
 ko = out$(hsuf)
@@ -638,10 +635,7 @@ mooncc = LOVE_NO_IMAGE= $m mooncc
 mooncc_dep = $(mdep)
 
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
-# seat=droid is the same kernel as a linux process (notes/plan/inle-droid.md): its machine
-# files are src/inle/droid/'s and its objects keep apart under $(ko)/droid-$a
-k_seat = $(if $(filter droid,$(seat)),droid,$a)
-k_arch_c = $(wildcard $(S)/inle/$(k_seat)/*.c)
+k_arch_c = $(wildcard $(S)/inle/$a/*.c)
 k_free_c = $S/inle/kmain.c $S/inle/blk.c $S/inle/hda.c $S/inle/sys.c
 # ..and doom, named here and not in its lane below: a rule's targets and prerequisites
 # are fixed where the rule is read, and every rule that links these is above that lane
@@ -663,7 +657,7 @@ k_c = $(love_c) \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
 k_h = $(love_h) $(S)/love/archive/ustar.h $(S)/love/archive/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
 
-k_odir = $(ko)/$(if $(filter droid,$(seat)),droid-$a,$a)
+k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
 k_pie = $(k_odir)/love.pie
 # ..and the wasm seat's own end of the lane: one module, no elf to project out of it,
@@ -689,7 +683,7 @@ kcppflags := \
   -I. -Isrc/love -Isrc/inle -Iout/lib -I$(S)/love/quay -I$(R) \
   -I$(S)/apps/moon/include \
   $(kcppflags)
-kcc = $(mooncc) $(kcppflags) $(if $(filter droid,$(seat)),-D INLE_DROID,) -t $a
+kcc = $(mooncc) $(kcppflags) -t $a
 
 kernel: $(k_elf)
 
@@ -723,19 +717,6 @@ $(k_mod): $(k_o) $(mdep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -t $a $(k_o) -o $@
-endif
-
-# THE DROID SEAT: the metal lane's compile under INLE_DROID, linked as a process. no vectors
-# and no boot object: moonlibc's entry runs as for any program, and main hands the machine to
-# droid/arch.c. `make seat=droid a=$a kdroid` lays the executable.
-k_droid = $(ko)/love-droid-$a
-ifeq ($(seat),droid)
-k_mach_o = $(k_tail_o) $(k_odir)/moonlibc.o $(k_doom_o)
-kdroid: $(k_droid)
-$(k_droid): $(k_o) $(mdep)
-	@echo 'MOON	'$@
-	@mkdir -p "$(dir $@)"
-	@$(mooncc) -pie -t $a $(k_o) -o $@ && test -s $@
 endif
 kproject_l = $S/apps/kore/text.l $S/apps/kore/u.l $S/apps/kore/asbook.l \
   $S/love/holo/elf.l $S/love/holo/obj.l $S/love/holo/link.l $S/tools/kproject.l
@@ -1004,11 +985,11 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # `#!/usr/bin/env -S love -l` would re-exec the wrong interpreter, so it installs as a COPY
 # with line 1 rewritten -- which is what a package wants anyway. The pattern matches both
 # shebang forms, leaving a trailing ` -l` alone.
-# the sed these recipes spawn is OURS: kore is the installed binary's own verb now
+# the sed these recipes spawn is OURS: kore's tools are the installed binary's own verbs
 # (the layered bake). LOVE_NO_IMAGE= (empty = UNSET) leads,
 # for $(hcc)'s reason: the root exports it=1 for the corpus, and an egg-booted love has
-# no verbs -- `kore` would read as a filename.
-korecmd = LOVE_NO_IMAGE= $(ho)/love kore
+# no verbs -- `sed` would read as a filename.
+korecmd = LOVE_NO_IMAGE= $(ho)/love
 ifeq ($(BIN),love)
 # the chmod repairs the target when the source came through svalbard, which does not carry
 # the executable bit -- without it the link resolves to a 644 file and every exec EACCESes.
@@ -1021,10 +1002,10 @@ endif
 
 # ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore sb mooncc cook libra lux bao lush
+binnames = $(BIN) sb mooncc cook libra lux bao lush
 mannames = $(BIN) cook lush
-# the default nest is the one install: `love nest -y` (src/apps/source.l) copies the binary
-# in, newer builds only, and links lush, which runs every other verb by name. a real PREFIX,
+# the default nest is the one install: `love nest` (src/apps/source.l) copies the binary
+# in and links lush, which runs every other verb by name. a real PREFIX,
 # DESTDIR or BIN keeps the whole roster as files
 nestnames = $(BIN) lush
 ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love|.love/|$(HOME)/)
@@ -1056,7 +1037,7 @@ nestlaid = $(if $(nested),$(patsubst %,$d/bin/%,$(nestnames)) $(patsubst %,$(com
 install: $(installs) $(if $(nested),nest-self)
 .PHONY: nest-self
 nest-self: $(ho)/love
-	@LOVE_NO_IMAGE= $(ho)/love nest -y
+	@LOVE_NO_IMAGE= $(ho)/love nest
 uninstall:
 	@echo '$(t_rm)	'$(abspath $(installs) $(nestlaid))
 	@rm -f $(installs) $(nestlaid)
@@ -1083,23 +1064,6 @@ $d/bin/cook $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)
-
-# kore, the multi-call toolbox: the util picked off the command line or off argv[0] through
-# a tool-named symlink. It shadows nothing here -- only `kore` lands on PATH, and the distro
-# symlinks the tool names where shadowing is the point.
-# A VERB SHIM: the installed binary carries the crew in its own layered image, so
-# there is no sibling image and no wake spelling -- the
-# picker wakes the crew layer off the `kore` verb, same warm start as ever.
-# `n` comes off $0 UNCHASED where `h` is the chased path: a tool symlink must arrive as its
-# own name for the argv[0] door, and only the real file's dir has the $(BIN) sibling.
-$d/bin/kore: $(MAKEFILE_LIST)
-	@echo '$(t_cat)	'$(abspath $@)
-	@install -d $(dir $@)
-	@{ echo '#!/bin/sh'; \
-	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
-	   echo 'n=$$(basename -- "$$0")'; \
-	   echo 'case "$$n" in kore) LOVE_NO_IMAGE= exec "$$h/$(BIN)" kore "$$@";; *) LOVE_NO_IMAGE= exec "$$h/$(BIN)" kore "$$n" "$$@";; esac'; } > $@
-	@chmod 755 $@
 
 # sb 🌱 and lush 🐚, each its own catted script: their sources carry no shebangs, so the
 # interpreter line then a plain cat. Each SEAT fires on the installed name -- lush's on its

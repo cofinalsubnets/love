@@ -6,7 +6,7 @@
 # what groff's wrote: the exit status the same, and how many draw the same byte for byte
 # counted.
 # test/chem/open holds the cases not yet climbed: counted and named,
-# never failing the gate. fz-* are random diagrams, kept once they came out the same. every
+# never failing the gate. fz-* are random diagrams, drawn by test/gate/fzgen.l. every
 # run is capped (2 GB, 20 s), one at a time. with -v, the first lines of each difference.
 #
 # skips where groff's chem is missing; takes the love binary as $1.
@@ -18,6 +18,8 @@ ref=/usr/bin/chem
 verbose=$2
 r=$(pwd)
 L=$r/$love
+# the fz-* cases: FZ_N drawn from test/gate/fzgen.l under FZ_SEED; a case that differs is printed
+seed=${FZ_SEED:-20261018} fzn=${FZ_N:-150}
 w=$(mktemp -d)
 trap 'rm -rf "$w"' EXIT
 pic=/usr/bin/pic
@@ -27,8 +29,8 @@ pic=/usr/bin/pic
 run() {
   rm -rf "$w/c"; mkdir "$w/c"
   cp "$1"/*.chem "$w/c/" 2>/dev/null
-  # the random cases ride one file, one `@@ name` line before each
-  [ -f "$1/random.pack" ] && awk -v d="$w/c" '/^@@ /{close(f); f = d "/" $2; next} {print > f}' "$1/random.pack"
+  # the random cases are drawn here, from the seed
+  [ "$1" = test/chem ] && "$L" "$r/test/gate/fzgen.l" chem "$seed" "$fzn" "$w/c"
   for f in "$w/c"/*.chem; do
     [ -f "$f" ] || continue
     n=$(basename "$f" .chem)
@@ -47,6 +49,7 @@ run() {
     if [ -n "$same" ]; then echo "ok $n"
     else
       echo "differs $n"
+      case $n in fz-*) sed 's/^/    | /' "$w/c/$n.chem" >&2 ;; esac
       [ -n "$verbose" ] && { diff "$w/a" "$w/b" | head -8; diff "$w/pa" "$w/pb" 2> /dev/null | head -4; } >&2
     fi
   done
@@ -59,5 +62,9 @@ grep '^differs' "$w/gate" | sed 's/^differs/  differs:/'
 run test/chem/open > "$w/open"
 ok=$(grep -c '^ok' "$w/open"); all=$(grep -c '^ok\|^differs' "$w/open")
 echo "chem: $((k - d)) of $k identical, $dr drawn the same by both pics; open $ok of $all"
-[ $d -eq 0 ] || { echo "FAIL chem: $d of $k differ from $ref"; exit 1; }
+# the differences the fz cases are steered around, still to fix (test/gate/fzgen.l's fz-known)
+"$L" "$r/test/gate/fzgen.l" chem known > "$w/known"
+sed 's/^/  known: /' "$w/known"
+echo "chem: $(grep -c . "$w/known") known differences steered around"
+[ $d -eq 0 ] || { echo "FAIL chem: $d of $k differ from $ref (fz cases: FZ_SEED=$seed FZ_N=$fzn)"; exit 1; }
 echo "chem: ok"

@@ -1,19 +1,15 @@
-; src/inle/uefi/mkefi.l -- lay the firmware seam in holo IR and bind the UEFI loader. runs after
-; src/love/holo/{elf,obj,link,pe}.l in a (borrow 'holo) cat; (mkboot out arch objs..) links
-; mooncc's loader objects into the PE32+ that goes on the ESP as BOOTX64.EFI / BOOTAA64.EFI.
-; three thunks in one object, laid first so the PE entry is the first text byte. x86-64 UEFI is
-; ms_abi against sysv C, so both directions shuffle; a64 UEFI is AAPCS64, so the call thunks are
-; tail jumps and only efi_go carries weight.
+; src/inle/uefi/mkefi.l -- the firmware seam in holo IR, linked with mooncc's loader objects
+; into the PE32+ for the ESP (BOOTX64.EFI / BOOTAA64.EFI). runs after holo/{elf,obj,link,pe}.l.
+; the thunks are laid first so the PE entry is the first text byte. x86-64 UEFI is ms_abi
+; against sysv C, so both directions shuffle; a64 is AAPCS64, so only efi_go carries weight.
 ;   efiboot -- firmware enters here.
 ;   efi_call -- every UEFI service goes back OUT through this.
 ;   efi_go(tables, entry) -- the instructions C cannot spell: interrupts off,
 ;     our tables in, jump to the kernel. never returns.
 
 ;; -- x86-64: ms_abi in, sysv out -------------------------------------------
-;; rsi/rdi are ms callee-saved and sysv scratch, so they are the only registers
-;; to save around the sysv call (the loader C keeps off the floats, so xmm6..15
-;; never move; sub 8 squares the stack for sysv). register names are holo's
-;; file: r1=rcx r2=rdx r5=rsi r6=rdi r7=r8 r8=r9.
+;; rsi/rdi are ms callee-saved and sysv scratch: the only registers saved (the loader C
+;; keeps off the floats; sub 8 aligns for sysv). holo: r1=rcx r2=rdx r5=rsi r6=rdi r7=r8 r8=r9.
 (borrow 'posix)
 (: efi-ir-x64
     '((label efiboot)
@@ -37,13 +33,9 @@
       (callr r0)
       (add sp sp 56)
       (ret)
-      ;; efi_go(pml4, entry): the loader's own code stays mapped through the
-      ;; switch (the new tables identity-map the low 4G), and the current stack
-      ;; rides along -- firmware-typed memory kboot never hands the heap.
-      ;; EFER.NXE first: firmware is not obliged to have set it, and our
-      ;; tables NX the hhdm entry -- bit 63 is RESERVED while NXE is clear, so
-      ;; the first walk after the cr3 load would fault instead of honouring it.
-      ;; rdmsr/wrmsr touch only eax/edx/ecx, so rdi and rsi ride through.
+      ;; efi_go(pml4, entry): the new tables identity-map the low 4G, so the loader and its
+      ;; stack ride through. EFER.NXE first: the tables NX the hhdm, and bit 63 is reserved
+      ;; while NXE is clear. rdmsr/wrmsr spare rdi and rsi.
       (label efi_go)
       (raw (250))                 ; cli
       (raw (185 128 0 0 192))     ; mov $0xC0000080, %ecx -- EFER
@@ -54,10 +46,8 @@
       (jmpr r5))                  ; jmp rsi -- kmain, never back
 
 ;; -- a64: AAPCS64 both ways ---------------------------------------------
-;; x0..x5 carry (fn a b c d e) in and (a b c d e) out, so efi_call is a shuffle
-;; and a TAIL jump: fn returns straight to efi_call's caller with LR untouched.
-;; efiboot is the same trick with no shuffle at all -- UEFI hands x0/x1 exactly
-;; where efi_main(handle, st) wants them.
+;; x0..x5 carry (fn a b c d e) in and (a b c d e) out: efi_call is a shuffle and a tail
+;; jump. UEFI hands efiboot x0/x1 where efi_main(handle, st) wants them.
    efi-ir-a64
     '((label efiboot)
       (jmp efi_main)              ; x0/x1 already right; LR rides through
@@ -70,12 +60,8 @@
       (mov r7 r0)
       (mov r0 r1) (mov r1 r2) (mov r2 r3) (mov r3 r4) (mov r4 r5) (mov r5 r6)
       (jmpr r7)
-      ;; efi_go(tables, entry): x0 is the TTBR0 root and TTBR1's is the page
-      ;; after it -- loader.c lays l0_lo and l0_hi adjacent for exactly this.
-      ;; the MMU is already ON here (firmware's identity map), so this is a
-      ;; SWITCH, not a bring-up: both maps identity the code we are running, so
-      ;; the fetch after the write lands in the same place either way, and the
-      ;; TLBI + ISB is what makes the new one authoritative.
+      ;; efi_go(tables, entry): x0 is TTBR0's root, TTBR1's the page after (loader.c lays them
+      ;; adjacent). the MMU is on and both maps identity this code: a switch, made by TLBI + ISB.
       (label efi_go)
       (msri daifset 15)           ; firmware stops servicing at ExitBootServices
       (dsb sy)

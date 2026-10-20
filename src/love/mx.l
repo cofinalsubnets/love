@@ -1,66 +1,51 @@
-; mx.l -- love.c's `+` and `*` dispatch matrices as love data, the kind lattice they
-; are indexed by, and the derivations that read it: the C (mx.h and kinds.h, through
-; clay), the host link's love_data.ld, and the Rocq model (test/proof/rocq/mx.v,
-; through src/tools/mx2coq.l). doc/misc/clay.md rungs 2 and 2b.
-;
-; edit this file, not mx.h / kinds.h / love_data.ld -- make relays all three from
-; here, off the mx_gen roster in test/test.mk. `make mx` refreshes, test_clay diffs.
+; mx.l -- love.c's `+` and `*` dispatch matrices as data, the kind lattice they index, and
+; what derives from it: mx.h and kinds.h (through clay), love_data.ld, and the Rocq model.
+; edit this file, not mx.h / kinds.h / love_data.ld. `make mx` refreshes, test_clay diffs.
 (borrow 'posix)
 (:
-   ; --- the kinds. this roster is `enum q`, so the order here is the dispatch lattice
-   ; itself, each lane a contiguous block; love.h's narrative argues that order. dispatch
-   ; only -- a tray enters as its four tiers and never as the bare rep.
+   ; --- the kinds: `enum q`, so this order is the dispatch lattice, each lane a contiguous
+   ; block. a tray enters as its four tiers, never as the bare rep.
    mx-kinds '(KMint KNom KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO
               KString KChain KTablet KHot)
-   ; the rows' love names, in the same order: what `kind` answers for a built-in. the hot
-   ; row -- every non-data heap object that is not a tablet: lambdas, nifs, casks, ports,
-   ; and struck coins, which are typed hots -- is the one `kind` refines: a struck coin's
-   ; own name, else lambda, cask, port.
+   ; the rows' love names: what `kind` answers. hot is every non-data heap object but a
+   ; tablet, which `kind` refines: a struck coin's own name, else lambda, cask, port.
    mx-kind-noms '(mint nom charm sun gem twin trayz trayr trayc trayo string chain tablet hot)
    _ (assert (#mx-kind-noms = #mx-kinds))
-   ; the arithmetic lane: every numeric kind routes identically, gem tower and tray alike
+   ; the arithmetic lane: every numeric kind routes identically
    mx-numk '(KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
 
-   ; --- the reps: what a heap object's hot says it is, a different question from which lane
-   ; it dispatches down. `love_typ` answers these eight and nothing else, so a switch over them
-   ; is exhaustive. the tray differs: one rep, refined by element tier into four kinds.
+   ; --- the reps: what a heap object's hot says it is; `love_typ` answers these eight only.
+   ; one tray rep, refined by element tier into four kinds.
    mx-reps '(DMint DNom DGem DTwin DBig DTray DString DChain)
-   ; each rep's dispatch kind. DTray's entry is the tier ladder's floor and is never read:
-   ; kind branches on the tray first and adds the tier itself. DBig -> KSun is the one
-   ; row where the two rosters disagree by name: one boxed integer, limbs in C, `sun` to love.
+   ; each rep's dispatch kind. DTray's entry is never read (kind adds the tier itself).
+   ; DBig -> KSun: one boxed integer, limbs in C, `sun` to love.
    mx-repq '((DMint KMint) (DNom KNom) (DGem KGem) (DTwin KTwin)
              (DBig KSun) (DTray KTrayZ) (DString KString) (DChain KChain))
 
-   ; --- the rows. one per (name numk KMint KNom KString KChain KTablet KHot): the numeric
-   ; lane, then the six kinds one at a time -- fifteen, so every row is total.
+   ; --- the rows, (name numk KMint KNom KString KChain KTablet KHot): total by construction.
    ; precedence, high to low: lambda > tablet > chain > text > number (incl. tray).
    mx-rows
     '(; `+`: numbers add, lists and text concatenate, lambdas and maps Church-add.
-      ;      () and every point -- a bare mint or a name -- is the identity in every lane, so
-      ;      () + x = x, and two points join -- the greater in love's order stands, () the
-      ;      bottom -- a semilattice, associative and commutative; the
-      ;      dispatchers early-out on a point before the table and must agree. mixed bands
-      ;      degenerate: the lower band arrives as its unit and the other answers whole. the
-      ;      order is NUM < STR < CHAIN.
+      ;      () and every point (a bare mint or name) is the identity, and two points join to the
+      ;      greater in love's order: a semilattice. the dispatchers early-out on a point and
+      ;      must agree. mixed bands: the lower arrives as its unit. order NUM < STR < CHAIN.
       (ADD_MINT  lvm_bin_unit   lvm_bin_unit lvm_bin_unit   lvm_bin_unit   lvm_bin_unit lvm_bin_unit lvm_bin_unit)
       (ADD_NUM   lvm_addn       lvm_bin_unit lvm_bin_unit   lvm_bin_b      lvm_bin_b    lvm_addh     lvm_addh)
       (ADD_STR   lvm_bin_a      lvm_bin_unit lvm_bin_unit   lvm_add_string lvm_add_seq  lvm_addh     lvm_addh)
       (ADD_TWO   lvm_bin_a      lvm_bin_unit lvm_bin_unit   lvm_add_seq    lvm_add_seq  lvm_addh     lvm_addh)
       (ADD_H     lvm_addh       lvm_bin_unit lvm_bin_unit   lvm_addh       lvm_addh     lvm_addh     lvm_addh)
-      ; `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence *
-      ;      count repeats, lambdas and maps compose (Church mul). () is the zero and
-      ;      annihilates, so a collapse to lvm_0 propagates rather than vanishing.
+      ; `*`: the semiring product over the lane above. sequence * count repeats, lambdas
+      ;      and maps compose. () is the zero and annihilates.
       (MUL_MINT  lvm_0          lvm_0        lvm_0          lvm_0          lvm_0        lvm_0        lvm_0)
       (MUL_NUM   lvm_muln       lvm_0        lvm_0          lvm_mul_rep    lvm_mul_rep  lvm_mulh     lvm_mulh)
       ; str*str stays lvm_0, the absorbing zero; a number against a string repeats it
       (MUL_REP   lvm_mul_rep    lvm_0        lvm_0          lvm_0          lvm_0        lvm_mulh     lvm_mulh)
-      ; MUL_REP with one cell changed: chain*chain is the cartesian product, which makes the
-      ; list lane a semiring rather than a monoid.
+      ; MUL_REP but chain*chain is the cartesian product: the list lane is a semiring.
       (MUL_CHAIN lvm_mul_rep    lvm_0        lvm_0          lvm_0          lvm_mul_cart lvm_mulh     lvm_mulh)
       (MUL_H     lvm_mulh       lvm_0        lvm_0          lvm_mulh       lvm_mulh     lvm_mulh     lvm_mulh))
 
-   ; --- which row each kind takes. a KTablet or KHot operand wins over everything, so their
-   ; rows and columns are both the Church lanes: a tablet is a lookup lambda here.
+   ; --- which row each kind takes. KTablet or KHot wins over everything: a tablet is a
+   ; lookup lambda here.
    mx-add-of '((ADD_MINT KMint KNom)
                (ADD_NUM KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
                (ADD_STR KString) (ADD_TWO KChain) (ADD_H KTablet KHot))
@@ -72,24 +57,21 @@
    (mx-rowof asg k)                                   ; which row does kind k take?
     (: (go (r . u)) (elem k >r ? <r (go u))
      (go asg))
-   (mx-col c)                                         ; which of a row's seven column c reads
+   (mx-col c)                                         ; column c's index in a row's seven
     (elem c mx-numk ? 0 (c @ 'KMint 1 'KNom 2 'KString 3 'KChain 4 'KTablet 5 6))
    (mx-lanes rw) (: (go (e . u)) (<e @ ^rw >e (go u))  ; the row's seven
                   (go mx-rows))
    (mx-lane rw c) (mx-lanes rw (mx-col c))            ; the lane at (row rw, column c)
-   ; the whole square of lane noms, in enum order: mx2coq.l derives the band partition from
-   ; it, and the C lays it out.
+   ; the whole square of lane noms in enum order, for mx2coq.l and the C
    (mx-grid asg) (map (k \ (map (c \ (mx-lane (mx-rowof asg k) c)) mx-kinds)) mx-kinds)
    mx-add (mx-grid mx-add-of)
    mx-mul (mx-grid mx-mul-of)
 
    ; --- the C, through clay ------------------------------------------------------
    _ (borrow "src/apps/moon/clay.l")
-   ; lvm_t *const <nm>[KN][KN] -- arrays of const pointers, a different type from a const
-   ; array of pointers, so clay places the const on the declarator and not the base.
+   ; arrays of const pointers: clay places the const on the declarator, not the base
    mx-ty '(arr (arr (const (ptr (named "lvm_t"))) KN) KN)
-   ; the C keeps mx-rows' own shape: mx_row fans a row's seven out to every column, one
-   ; macro per row names its seven, and a grid names each kind's row.
+   ; mx_row fans a row's seven out to every column; one macro per row, a grid per kind
    mx-nl (string 10)
    mx-params '("num" "mint" "nom" "str" "chain" "tab" "hot")
    (mx-cont l) (l @ (h . t) (foldl (a \ s \ a + " \\" + mx-nl + " " + s) ("\\" + mx-nl + " " + h) t) "")
@@ -113,45 +95,36 @@
                                                   + "," + mx-nl) mx-kinds) + "}")]]]
      '(static)]
    mx-undefs (map (n \ ['cpp-undef n]) ("mx_row" . map (e \ mx-rowname <e) mx-rows))
-   (zip a b) (two? a ? ([<a <b] . zip >a >b))   ; prel's pairs improperly; these are 2-lists
+   (zip a b) (two? a ? ([<a <b] . zip >a >b))   ; these are 2-lists, not pairs
 
    ; --- the enums the matrices are indexed by -------------------------------------
-   ; KN rides at the end of `enum q` and is not a kind: it is the roster's own length, which
-   ; lets mx-ty say [KN][KN] and mean the grid it laid. enum d gets no such tail -- it is the
-   ; one enum the C switches over, and a count in it would be a case -Wswitch demands.
+   ; KN closes `enum q` and is not a kind: the roster's length, for [KN][KN]. enum d gets no
+   ; such tail: the C switches over it, and -Wswitch would demand a case.
    kinds-clay ['edef "q" (mx-kinds + '(KN))]
    reps-clay ['edef "d" mx-reps]
-   ; rep -> the kind it dispatches as, the only crossing between the two rosters: clay's edef
-   ; has no `= n` slot, so the enums share no values. it rides mx.h rather than kinds.h, which
-   ; reaches frontends where a static table would sit unread under -Werror. unsized.
+   ; rep -> kind, the only crossing between the rosters (edef has no `= n`). in mx.h, not
+   ; kinds.h, where a static table would sit unread under -Werror.
    repq-clay
     ['gdecl [["kind_of_d" '(arr (const (named "enum q")) 0)
                  ['init (map (p \ ['didx <p ['var (string <>p)]]) mx-repq)]]]
       '(static)]
 
    ; --- the same roster, laid for the LINKER ---------------------------------------
-   ; enum d is a slot index: love.c lays each sentinel in its own love.data.N, love.h reads a
-   ; value's rep as arithmetic on the ap, and ld has to be told that tiling. the stride is the
-   ; seat's, and a script tiling tighter than its seat believes answers slot 0 for every
-   ; value in silence; tiling looser is loud, a body past its slot driving ld's location
-   ; counter backwards, so the `. =` per slot is a check as well as a placement.
-   ; one row per seat class, saying both numbers: the stride the C compiles under and the
-   ; stride ld is told. it need only clear the fattest sentinel body a backend emits, which
-   ; measures call lowering rather than code -- a64 4, x64 8, thumb2 60, rv64 88 -- so
-   ; lean's 16 is twice x64's measured 8 with room for an `endbr64`.
+   ; enum d is a slot index: each sentinel in its own love.data.N, a rep read as arithmetic
+   ; on the ap. tiling tighter than the C's stride answers slot 0 for every value in silence;
+   ; looser drives ld's counter backwards, so `. =` per slot is also a check.
+   ; one row per class: the stride the C compiles under and ld is told. it must clear the
+   ; fattest sentinel body (a64 4, x64 8, thumb2 60, rv64 88); lean's 16 leaves room for endbr64.
    mx-strides '((lean 16  ("__x86_64__" "__aarch64__"))
-                (fat  128 ()))              ; no predicate: the #else, and there is one
-   ; and whether a seat lays the sections at all: 0 asks the sentinels by name and answers
-   ; the same enum d -- wasm has none to lay, love0 opts out. a layout never crosses between
-   ; two binaries: the heap image carries an ap as its index in image_extra_aps.
+                (fat  128 ()))              ; no predicate: the #else
+   ; whether the sections are laid: 0 asks the sentinels by name (wasm, love0). the image
+   ; carries an ap as its index in image_extra_aps, so no layout crosses binaries.
    mx-sections '((byname 0 ("__wasm__"))
                  (tiled  1 ()))
    (mx-stride cls) (: (go l) (l @ (r . u) (<r @ ^cls <>r (go u)) (scare 'mx-stride cls))
                     (go mx-strides))
-   ; --- and the same classes laid as C, through clay's rung 2 ---------------------
-   ; a knob: `#ifndef NAME` over an `#if defined(..) / #elif / #else` on the classes, so the
-   ; rows above are a default and the ifndef is the -D door love0 takes data_section=0
-   ; through. the linker block reads this same roster.
+   ; --- the classes as C: `#ifndef NAME` over `#if defined(..) / #elif / #else`, so a -D
+   ; overrides (love0's data_section=0).
    (mx-defd n) ['call ['var "defined"] [['var n]]]
    (mx-ors l) (atom? >l ? (mx-defd <l) ['lor (mx-defd <l) (mx-ors >l)])
    (mx-knob nm rows)
@@ -211,7 +184,7 @@
                                       (string 34 + foldl (a \ n \ a + " " + n) <ns >ns + string 34))]
          '(note "")])
         + cats (map clay-show slots-clay)))
-   ; a shape check first: a malformed tree arrives as a codegen error naming nothing.
+   ; a shape check first: a malformed tree arrives as a codegen error naming nothing
    mx-ok
     (: a (foldl (a \ x \ a && clay-ok? x) 1 mx-forms)
        c (clay-ok? kinds-clay)

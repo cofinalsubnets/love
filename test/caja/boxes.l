@@ -1,7 +1,6 @@
 ; test/caja/boxes.l -- src/apps/caja/box.l held to TeX, a box at a time: a page described
 ; once as data is said as plain -ini TeX and as caja's nodes, and test/gate/caja.sh
 ; compares the two DVIs.
-;
 ;   love test/caja/boxes.l OUT SEED N   OUT.tex and OUT.dvi: the fixed pages, then N more
 ;                                       drawn from SEED
 ;
@@ -32,7 +31,7 @@
                                      + (sz = -1000 ? "" (" at " + show sz + "sp")) + "\\relax\n")))
                              ^#fonts))
 
-   ; --- the TeX side ---------------------------------------------------------------------
+   ; --- the TeX side ---
    (units o) (["sp" "fil" "fill" "filll"] o)
    ; a fil amount is written as a decimal of 65536ths; the generator keeps it exact
    (amt v o) (o = 0 ? (show v + "sp")
@@ -63,7 +62,7 @@
           (mode = 'h) ("\\lower" + show sh + "sp" + b)
           ("\\moveright" + show sh + "sp" + b)))
 
-   ; --- the caja side --------------------------------------------------------------------
+   ; --- the caja side ---
    (item-node J it)
     (it 0 @
      'c (cb-char J (J 'fmap (it 1)) (it 2))
@@ -84,7 +83,7 @@
        (pin b 'shift (it 1),
         b))
 
-   ; --- the pages ------------------------------------------------------------------------
+   ; --- the pages ---
    ab ['c 0 65] ; a few pieces the fixed pages share
    fixed
     [['h 0 () [['c 0 65] ['c 0 86] ['c 0 97] ['c 0 121]]]
@@ -109,7 +108,7 @@
      ['h 0 () [['c 0 200] ['c 0 127] ['c 0 0] ['c 1 128]]]
      ['h 0 () (map (k \ ['c 5 (128 + k * 9)]) ^14)]]
 
-   ; --- random pages: a small grammar, drawn from a seeded stream --------------------------
+   ; --- random pages: a small grammar, drawn from a seeded stream ---
    (rnd st) (((st 's * 1103515245 + 12345) % 2147483648) @ x (pin st 's x, x // 16))
    (pick st l) (l (rnd st % #l))
    (rand-item st mode depth)

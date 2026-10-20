@@ -347,7 +347,7 @@ static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
 static void self_bake(char const **argv) {
   char exe[4096];
   if (baked_image_len != 16 || baked_image[0] != 2 || !host_selfpath(exe, sizeof exe)) return;
-  fprintf(stderr, "love: a fresh egg: baking %s in place\n", exe);
+  fprintf(stderr, "love: first run, baking %s\n", exe);
   pid_t pid = fork();
   if (pid < 0) return;
   if (!pid) {
@@ -563,13 +563,7 @@ static void trap_note_on(void) {
 #endif
 }
 
-#if defined(INLE_DROID)
-int k_droid_main(int argc, char const **argv);       // the kernel as a process (src/inle/droid/arch.c)
-#endif
 int main(int argc, char const **argv) {
-#if defined(INLE_DROID)
-  if (argc < 2 || strcmp(argv[1], "bake")) return k_droid_main(argc, argv);   // bake runs hosted, as love's
-#endif
   signal(SIGPIPE, SIG_IGN);
   trap_note_on();
   stack_note_on(&argc);

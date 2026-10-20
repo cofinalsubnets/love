@@ -61,6 +61,8 @@
                                                  ; each (read-end . drainer); a fork drops them (sh-dropcaps)
      'sh-online 0                                ; nesting depth of sh-oneline: a line run here for a
                                                  ; caller in this image, so `exit` ends the line not us
+     'sh-subrds 'no                              ; inside a forkless subshell, the fds its bare `exec` laid,
+                                                 ; each (fd . the saved dup), put back when it ends; else 'no
      'sh-retf 0                                  ; a top-level `return` landed: sh-lines stops its file (dot-return)
                                                  ; arerr, absent or 1: a said complaint, so the top stays quiet
                                                  ; arlive, absent or 1, but 0 inside a branch && || ?: did not take
@@ -336,6 +338,18 @@
                      (: (go j) (j < n && sh-name? (s j) ? (go (j + 1)) j)
                         e (go i) (('var . snip s i e) . e))
                    ('dollar . i)))))
+   ; a live $ or ` at i -> k's next step past it: a segment, else a literal char.
+   ; 'dollar first: a bare $ answers ('dollar . i), which a plain pair pattern
+   ; would take for a segment and splice as one
+   (sh-live S s n i cur segs k)
+     (: lit (#cur ? (('lit . cur) . segs) segs)
+        (s i = 36 ? (sh-dol S s n (i + 1) @
+                      ('dollar . j) (k j (cur + "$") segs)
+                      (sg . j)      (k j "" (sg . lit))
+                                    (k (i + 1) (cur + "$") segs))
+                    (sh-bt s n (i + 1) "" @
+                      (t . j) (k j "" (('sub . t) . lit))
+                              (k (i + 1) (cur + "`") segs))))
    ; a bare text (heredoc body, vop word) -> segs, $ and ` live, \ escapes $ ` \
    (sh-dollarize S s)
      (: n #s
@@ -345,15 +359,7 @@
            (: b (s i)
               (? (b = 92 && i + 1 < n && sh-btesc? (s (i + 1)))
                    (go (i + 2) (cur + string (s (i + 1))) segs)
-                 ; 'dollar first: a bare $ answers ('dollar . i), which a plain
-                 ; pair pattern would take for a segment and splice as one
-                 (b = 36) (sh-dol S s n (i + 1) @
-                           ('dollar . j) (go j (cur + "$") segs)
-                           (sg . j)      (go j "" (sg . addl cur segs))
-                                          (go (i + 1) (cur + "$") segs))
-                 (b = 96) (sh-bt s n (i + 1) "" @
-                           (t . j) (go j "" (('sub . t) . addl cur segs))
-                                    (go (i + 1) (cur + string b) segs))
+                 (b = 36 || b = 96) (sh-live S s n i cur segs go)
                  (go (i + 1) (cur + string b) segs))))
         (go 0 "" ()))
    ; vop word text -> segs, quote-aware, so a quoted glob char is inert in ${v#pat};
@@ -367,13 +373,7 @@
           34 (rev (addl cur segs) . i + 1)
           (92 && i + 1 < n && (sh-btesc? (s (i + 1)) || s (i + 1) = 34))
            (dq (i + 2) (cur + string (s (i + 1))) segs)
-          36 (sh-dol S s n (i + 1) @
-              ('dollar . j) (dq j (cur + "$") segs)
-              (sg . j)      (dq j "" (sg . addl cur segs))
-                            (dq (i + 1) (cur + "$") segs))
-          96 (sh-bt s n (i + 1) "" @
-              (t . j) (dq j "" (('sub . t) . addl cur segs))
-                      (dq (i + 1) (cur + string b) segs))
+          (36 || 96) (sh-live S s n i cur segs dq)
           (dq (i + 1) (cur + string b) segs))))
         (go i cur segs)
           (? (i = n) (rev (addl cur segs))
@@ -386,13 +386,7 @@
                   (inner . j) (go j "" (('dq . inner) . addl cur segs))
                               (go (i + 1) (cur + string b) segs))
               (92 && i + 1 < n) (go (i + 2) (cur + string (s (i + 1))) segs)
-              36 (sh-dol S s n (i + 1) @
-                  ('dollar . j) (go j (cur + "$") segs)
-                  (sg . j)      (go j "" (sg . addl cur segs))
-                                (go (i + 1) (cur + "$") segs))
-              96 (sh-bt s n (i + 1) "" @
-                  (t . j) (go j "" (('sub . t) . addl cur segs))
-                          (go (i + 1) (cur + string b) segs))
+              (36 || 96) (sh-live S s n i cur segs go)
               (go (i + 1) (cur + string b) segs))))
         (go 0 "" ()))
 
@@ -1281,8 +1275,13 @@
        nm . old))
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
-   ; PATH, or libc's default when it is unset -- never the cwd alone
-   (sh-path _) (: p (getenv "PATH") (? (string? p) p "/usr/local/bin:/usr/bin:/bin"))
+   ; PATH, or libc's default when it is unset (android's where /system/bin stands without
+   ; /usr/bin) -- never the cwd alone
+   (sh-path _)
+    (: p (getenv "PATH")
+       (? (string? p) p
+          (two? (stat "/usr/bin") || !(two? (stat "/system/bin"))) "/usr/local/bin:/usr/bin:/bin"
+          "/system/bin:/system/xbin:/vendor/bin"))
    (sh-pathdirs _)
     (:- (go 0 0 ())
      p (sh-path ()) n #p
@@ -1989,11 +1988,28 @@
            (: fdmap (rm 1) opens (rm 2) wrs (rm 3)
               _ (sh-hwrite wrs)
               _ (flush out) _ (flush err)          ; what we still hold is the OLD fd's
+              _ (sh-keeprds S fdmap)
               _ (each fdmap (e \ charm? >e ? (dup2 >e <e) (close <e)))
               _ (each opens close)
               _ (? (sh-fd0? fdmap) (chug in) 0)       ; the old stdin's read-ahead goes with it
               (? (atom? argv) (pin S 'sh-status 0, 0)
+                 ((S 'sh-subfds) || (0 < (S 'sh-online))) (sh-execkid S argv)
                  (sh-execgo S argv)))))
+   ; a forkless subshell's redirects outlive the exec only to its end: each fd's first
+   ; save is kept for sh-subback
+   (sh-keeprds S fdmap)
+     (: rs (S 'sh-subrds)
+        (? (rs = 'no) 0
+           (pin S 'sh-subrds
+              (foldl (\ a e (? (sh-smem? <e (map cap a)) a ((<e . dup <e) . a))) rs fdmap))))
+   ; a forkless subshell -- a $( ) body, an sh-oneline -- has no process of its own to
+   ; replace: argv runs as a child, and its status ends the subshell
+   (sh-execkid S argv)
+     (: _ (flush out) _ (flush err)
+        pid (? (sh-known? S <argv) (spawnmap (sh-spawnv S argv) () () (sh-pgm S 0) (sh-fgm S 0)) ())
+        st (? (charm? pid) (sh-waitfg S [pid] (sh-unwords argv), S 'sh-status)
+              (say err ("lush: exec: " + <argv + ": not found\n"), 127))
+        (pin S 'sh-status st, sh-leave S st))
    ; an ignore survives exec: shed the shell's tty ignores, restored if exec fails
    (sh-exectty S on)
      (? (S 'sh-tty) (each [sig-int sig-quit sig-tstp sig-ttou sig-ttin] (flip signal on)) 0)
@@ -2244,6 +2260,7 @@
      (each (S 'sh-subfds) (\ e (close <e, catch >e, 0)),
       pin S 'sh-subfds (),
       pin S 'sh-online 0,                      ; nor inside a line: its `exit` ends the child
+      pin S 'sh-subrds 'no,                    ; ..and its exec's redirects are its own for good
       ; no parent traps but the ignored (POSIX), and a mask of those alone, or ^C could not reach it
       each (keys (S 'sh-traps)) (k \ (? (elem k (sh-igntraps S 0)) 0 (pull (S 'sh-traps) k 0))),
       (sh-disarm S) 0, (two? (sh-igntraps S 0) ? (sh-rearm S 0) 0), 0)
@@ -2266,11 +2283,15 @@
             each old (\ e (e @ ((n && 0 < #n) + "=" + v) (setenv n v) 0)),
             0)))
    (sh-subsave S _)
-     [(cwd 0) (sh-tabsnap (S 'sh-vars)) (sh-tabsnap (S 'sh-funcs)) (S 'sh-pos) (S 'sh-arg0)
-        [(S 'sh-eflag) (S 'sh-uflag) (S 'sh-xflag)] (environ 0)]
+     (: s [(cwd 0) (sh-tabsnap (S 'sh-vars)) (sh-tabsnap (S 'sh-funcs)) (S 'sh-pos) (S 'sh-arg0)
+             [(S 'sh-eflag) (S 'sh-uflag) (S 'sh-xflag)] (environ 0) (S 'sh-subrds)]
+        (pin S 'sh-subrds (), s))
    (sh-subback S s)
      (: _ (chdir (s 0), sh-tabback (S 'sh-vars) (s 1), sh-tabback (S 'sh-funcs) (s 2),
               pin S 'sh-pos (s 3), pin S 'sh-arg0 (s 4))
+        _ (flush out, flush err,
+           each (S 'sh-subrds) (e \ nom? >e ? (close <e) (dup2 >e <e, close >e)),
+           pin S 'sh-subrds (s 7))
         f (s 5)
         (pin S 'sh-eflag (f 0), pin S 'sh-uflag (f 1), pin S 'sh-xflag (f 2),
          sh-envback (s 6), 0))

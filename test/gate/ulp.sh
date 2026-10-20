@@ -2,7 +2,8 @@
 # test/gate/ulp.sh -- the math floor: lm.c built by mooncc and by the system cc, each
 # measured against the host libm, and the two reports must agree byte for byte (float bits
 # are where a codegen fault hides). each function also holds its ulp ceiling, the measured
-# maximum; lower one when beaten. hosted only: the oracle is the system libm.
+# maximum; lower one when beaten. hosted only: the oracle is the system libm. the arcs are
+# held to the nearest double by test/gate/arcs.l's own oracle: glibc's last bit is faithful.
 # usage: ulp.sh OUTDIR LOVE
 . test/gate/skip.sh
 . test/gate/cclib.sh
@@ -38,9 +39,10 @@ for w in moon sys; do
     || { cat "$d/link_$w" >&2; fail "could not link the $w harness"; }
 done
 
-# `reduce` reaches the Payne-Hanek reduction (|x| up to 2^1020); the sweep stops at 2^8
-for mode in sweep reduce; do
-  case $mode in sweep) a= ;; reduce) a=reduce ;; esac
+# `reduce` reaches the Payne-Hanek reduction (|x| up to 2^1020); the sweep stops at 2^8;
+# `arcs` lays the arcs' grid
+for mode in sweep reduce arcs; do
+  case $mode in sweep) a= ;; *) a=$mode ;; esac
   for w in moon sys; do
     "$d/ulp_$w" $a > "$d/$mode.$w" 2>&1
     st=$?
@@ -53,7 +55,10 @@ for mode in sweep reduce; do
   fi
 done
 
-# the ceilings. pow's sweep reaches the representable rim of |y ln x|; powrim sits on it
+$m test/gate/arcs.l "$d/arcs.sys" > "$d/arcs.out" 2>&1 \
+  || { cat "$d/arcs.out" >&2; fail "the arcs are not the nearest double"; }
+
+# the ceilings, against glibc. pow's sweep reaches the representable rim of |y ln x|; powrim sits on it
 nf=0
 while read -r fn lim; do
   [ -n "$fn" ] || continue
@@ -70,9 +75,11 @@ log 1
 logn1 1
 sin 1
 cos 1
-atan2 3
+atan2 1
+asin 1
+acos 1
 pow 7
 powrim 37
 EOF
 
-echo "test_ulp: mooncc and $cc_g build lm.c into byte-identical math (2 modes), and all $nf functions hold their ulp ceiling"
+echo "test_ulp: mooncc and $cc_g build lm.c into byte-identical math (3 modes), all $nf functions hold their ulp ceiling; $(cat "$d/arcs.out")"

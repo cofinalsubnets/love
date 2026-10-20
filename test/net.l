@@ -1,4 +1,4 @@
-; --- the socket nifs over loopback in one process, server and client as tasks; host only ---
+; the socket nifs over loopback in one process, server and client as tasks; host only
 
 ; a line off p, ended by \n or eof
 (? hosted (do
@@ -28,8 +28,8 @@
       (echo = "neko"))                      ; the round trip: what went out came back
    ; (seal s how) answers the port; a no-op on a non-port
    _ (test
-      (lit? (seal c 1)) ; returns the port
-      (5 = seal 5 1))   ; misuse: returns the arg unchanged
+      (lit? (seal c 1)) ; answers the port
+      (5 = seal 5 1))   ; misuse: answers the arg unchanged
    _ (catch srv)        ; catch the server task -- no orphan
    _ (close c)
    _ (close l))

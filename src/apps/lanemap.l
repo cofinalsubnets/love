@@ -12,10 +12,9 @@
 ;                   (love bee --lanes-map)
 ;   (lanes-covers mk) test/test.mk's text -> lane -> the lanes it runs: its prerequisites and the
 ;                   targets of its recipe's $(MAKE) lines, read as written
-;   (lanes-plan paths baked covers)  the lanes a change owes, in the order to run them:
-;                   [[lane heavy? cost why] ..]. light before heavy, cheap first, a lane another
-;                   owed lane runs dropped, test always and test_slow last. why is the paths that
-;                   owed it
+;   (lanes-plan paths baked covers)  the lanes a change owes, in run order: [[lane heavy? cost
+;                   why] ..]. light before heavy, cheap first, a lane another runs dropped, test
+;                   always and test_slow last. why is the paths that owed it
 ;   (lanes-lines plan)  the plan as `lane light|heavy cost why` lines (love bee --lanes)
 ;
 ; a glob's `*` crosses `/`; "baked" is the crew roster ($(ho)/.dist.list), not a glob. every
@@ -28,10 +27,10 @@
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l"] ["test_hostnif"] ""]
-     ["" ["src/love/snap.c" "src/love/image.c" "Makefile" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
+     ["" ["src/love/snap.c" "src/love/image.c" "Makefile" "common.mk" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
      ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_quick"] ""]
-     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*` and the `Makefile`"
-      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile"] ["test_gcstress"]
+     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk`"
+      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile" "common.mk"] ["test_gcstress"]
       ", in the queue's union; a `.l`, doc, app or test diff never owes it"]
      ["what the bake runs, `src/love/{gc,snap,image,ev,io,love,map,tablet,alloc}.c` and the glaze"
       ["src/love/gc.c" "src/love/snap.c" "src/love/image.c" "src/love/ev.c" "src/love/io.c" "src/love/love.c"
@@ -43,8 +42,8 @@
      ["" ["src/love/holo/*"] ["test_holo" "test_as" "test_holofuzz" "test_inle"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/hearts/*"] ["test_hearts" "test_hearts_boot"] ""]]
-   lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_boards" "test_hearts"
-                "test_hearts_boot" "moon-flex" "moon-bison"]
+   lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_boards"
+                "test_hearts" "test_hearts_boot" "moon-flex" "moon-bison"]
    lanes-cost {"test" 195 "test_quick" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
                "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
    lanes-chains

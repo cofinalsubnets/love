@@ -86,8 +86,8 @@
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of sourced start room street sky ambient air solid box prism cut whole door train bin decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
          across stammer buzz breathe blink texture skin textures repeat move mirror-x mirror-z rgb)
-(borrow 'view)                          ; min2 max2
-(borrow 'swatch)                        ; swatch-fault, a recipe's first bad layer
+(borrow 'view)
+(borrow 'swatch)
 (:
  (num? v) (charm? v || gem? v)
  (f v) (1.0 * v)
@@ -95,7 +95,7 @@
  (no what got) (scare 'level (what + " -- not " + show got))
  (P q what) (pt? q ? (map f q) (no what q))
  (N v what) (num? v ? (f v) (no what v))
- ; ..a part: a tablet of its kind and its fields; with, a copy changed
+ ; a part: a tablet of its kind and fields; with, a copy changed
  (part k l) (foldl (\ t kv (pin t (kv 0) (kv 1))) {'kind k} l)
  (with p k v) (pin (foldl (\ t q (pin t q (p q))) {} (keys p)) k v)
  ; ..the parts a form of the level's source made, each told where it stands there, path p
@@ -111,7 +111,7 @@
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
  (ambient c) (: u "(ambient (rgb r g b))" (colour? c ? (part 'ambient [['c c]]) (no u c)))
- ; ..a brush's shape, its kind and points; air and solid make it a brush
+ ; a brush's shape; air and solid make it a brush
  (box lo hi) (: u "(box [x y z] [x y z])" (part 'box [['lo (P lo u)] ['hi (P hi u)]]))
  (prism h ps) (: u "(prism height [[x y z] ..])"
    (two? ps && #ps >= 3 ? (part 'prism [['h (N h u)] ['pts (map (q \ P q u) ps)]]) (no u ps)))
@@ -209,7 +209,7 @@
  (buzz l) (how 'buzz l)
  (breathe l) (how 'breathe l)
  (blink l) (how 'blink l)
- ; ..a texture, a value: its recipe checked here, so a bad layer stops the level at it
+ ; a texture's recipe is checked here, so a bad layer stops the level at it
  (texture w h m ls) (: u "(texture width height metres LAYERS)"
    (? (!(charm? w && charm? h && 0 < w <= 512 && 0 < h <= 512)) (no u [w h])
       (!(num? m && m > 0)) (no u m)
@@ -243,7 +243,7 @@
  (hi2 a b) (map (k \ max2 (a k) (b k)) ^3)
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
- ; ..the textures named: the defaults by their place, every other by its number
+ ; textures named: the defaults by their place, every other by its number
  (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'sky 'smog 'ambient 'ad 'spin 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)

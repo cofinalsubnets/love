@@ -49,8 +49,7 @@
   (nom? '.) (= . (.))                          ; no left operand / escaped: the plain symbol
   ("(. 3 5)" = (show (opfix '(3 . 5))))))      ; a folded infix form splices up, no wrapper
 
-; opfix keeps a binding form's binders verbatim and factors only values and body.
-; compared through show, since opfix ends spines with 0 and the reader with ()
+; opfix keeps a binding form's binders verbatim and factors only values and body
 (test
  ((show '(: . (\ a b [a b]) (. 3 5))) = (show (opfix '(: . (\ a b [a b]) (3 . 5)))))      ; explicit binder kept
  ((show '(: (. a b) [a b] (. 3 5))) = (show (opfix '(: (. a b) [a b] (3 . 5)))))          ; sugar header kept

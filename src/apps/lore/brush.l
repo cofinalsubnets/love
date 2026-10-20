@@ -12,11 +12,10 @@
 (borrow 'vec)                           ; triples
 (borrow 'mesh)
 (:
- (sub a b) [(a 0 - b 0) (a 1 - b 1) (a 2 - b 2)]
  (side pl p) (dot (pl 0) p - pl 1)        ; above 0 outside the plane's brush
  (plane n p) (: u (unit n) [u (dot u p)])
  ; --- polygons: lists of points going round, convex, cut by poly-keep, -carve and -grid ---
- (area ps) (: a <ps (go l s) (atom? >l ? s (go >l (c+ s (cross (sub <l a) (sub <>l a))))) (mag3 (go >ps [0.0 0.0 0.0])))
+ (area ps) (: a <ps (go l s) (atom? >l ? s (go >l (c+ s (cross (c- <l a) (c- <>l a))))) (mag3 (go >ps [0.0 0.0 0.0])))
  (mag3 v) (sqrt (dot v v))
  (mid ps) (c* (1.0 / #ps) (foldl c+ [0.0 0.0 0.0] ps))
  ; --- brushes ---
@@ -35,13 +34,13 @@
  ; ..each side of the plan a wall, its outside away from the plan's middle
  (brush-prism air y0 y1 ps) (: m (mid (map (p \ [(p 0) 0.0 (p 1)]) ps)) n #ps
    (wall i) (: a (ps i) b (ps ((i + 1) % n)) d [(b 0 - a 0) 0.0 (b 1 - a 1)] nn (unit [(d 2) 0.0 (0.0 - d 0)])
-             q [(a 0) 0.0 (a 1)] o (dot nn (sub m q) > 0.0 ? (c* -1.0 nn) nn)
+             q [(a 0) 0.0 (a 1)] o (dot nn (c- m q) > 0.0 ? (c* -1.0 nn) nn)
              (plane o q))
    (brush air (map wall ^n + [[[0.0 -1.0 0.0] (0.0 - y0)] [[0.0 1.0 0.0] y1]])))
  ; ..b less what lies across the plane through p q r from b's middle; brush-cuts each of cs's
  ; [p q r] so, every one from the middle of b as it was given
  (centre b) (mid (cats (filter (f \ #f >= 3) (b 'faces))))
- (away m p q r) (: n (unit (cross (sub q p) (sub r p))) (plane (dot n (sub m p) > 0.0 ? (c* -1.0 n) n) p))
+ (away m p q r) (: n (unit (cross (c- q p) (c- r p))) (plane (dot n (c- m p) > 0.0 ? (c* -1.0 n) n) p))
  (brush-cut b p q r) (brush (b 'air) (b 'planes + [(away (centre b) p q r)]))
  (brush-cuts b cs) (: m (centre b) (brush (b 'air) (b 'planes + map (c \ away m (c 0) (c 1) (c 2)) cs)))
  (brush-move b d) (brush (b 'air) (map (pl \ [(pl 0) (pl 1 + dot (pl 0) d)]) (b 'planes)))

@@ -2,18 +2,16 @@
 ; boxed through a heap cell, since closures capture by value at creation
 
 (:
- ; recursive function: recursion via the lazily-resolved name
  (nfac n) (n < 1 ? 1 (n * nfac (n - 1)))
- ; the eta-expanded factory idiom (a function binding)
+ ; the eta-expanded factory idiom
  (mkconst z) (n \ n < 1 ? z (kconst (n - 1)))
  kconst (mkconst 7)
- ; memoizing fixpoint combinator (used for the recursive-value fib below)
+ ; memoizing fixpoint, for the recursive-value fib below
  (memo f) (: m {} (x \ (: c (peep m x 0) (c ? c (: y (f x) (pin m x y, y))))))
  (test
-  ; --- recursive functions ---
-  (120 = nfac 5) ; named recursion
-  (7 = kconst 0) ; eta-expanded factory, base case
-  (7 = kconst 5) ; eta-expanded factory, re-entrant
+  (120 = nfac 5)
+  (7 = kconst 0) ; base case
+  (7 = kconst 5) ; re-entrant
 
   ; --- recursive VALUE: a factory closure captures the name being defined ---
   (7 = (: (mk z) (n \ n < 1 ? z (self (n - 1))) self (mk 7) (self 0)))
@@ -50,7 +48,7 @@
                (mk z) (n \ n < 1 ? z (self (n - 1)))
                self (mk 7)
                (a + self 3))))
-  ; same, two cells (mutual) -- the early ref must survive both box cells ---
+  ; two cells (mutual): the early ref must survive both
   (110 = (: outer 100
             (: a (outer + 1)
                (mka z) (n \ n < 1 ? z (kb (n - 1)))
@@ -77,23 +75,23 @@
 ; --- tenured closures: show, = and the hash read them in the major pool, and agree ---
 (: (lots n) ((: (go i a) (i >= n ? #a (go (i + 1) (i . a)))) 0 ())
    (fa a b) (a + b) (ga a b) (a + b)
-   _ (lots 200000)                                       ; force a major -> fa/ga tenured
+   _ (lots 200000)                                       ; force a major, tenuring fa/ga
    (test
-     (fa = ga)               ; the same code across the major pool
-     (9 = peep {fa 9} ga 0)  ; map keyed on fa, found by the equal ga (eq/hash consistent)
-     (8 < #(show fa)))) ; show finds the tenured source
+     (fa = ga)
+     (9 = peep {fa 9} ga 0)  ; eq and hash agree
+     (8 < #(show fa))))
 
-; --- an inner loop `go` shadows a later outer sibling `go`: the inner self-reference
-; must not reach the outer one, or (zap x) under-applies to a truthy partial ---
+; --- an inner loop `go` shadows a later outer sibling `go`: its self-reference must
+; not reach the outer one, or (zap x) under-applies to a truthy partial ---
 (: rq <[1]
    (zap q)
     (? (two? q)
        (: (go m ok) (? (atom? m) ok
-                       (: k (zap <m)              ; the self-site that under-applied
-                          (go >m (ok && !k)))) ; every leaf must have answered ()
-          (go q 1)))                           ; the leaf: nothing (falsy) -- a partial is truthy
+                       (: k (zap <m)
+                          (go >m (ok && !k)))) ; every leaf must answer ()
+          (go q 1)))                           ; a partial is truthy
    (go a) (? rq (zap a) 0)
-   (test (1 = go [5 6 7])))                        ; ran to every leaf, no partial anywhere
+   (test (1 = go [5 6 7])))
 
 ; --- capture through a later sibling: an earlier closure inherits its captures, so
 ; the value is boxed on the reach, not only on a direct mention ---

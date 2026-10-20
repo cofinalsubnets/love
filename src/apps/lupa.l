@@ -1,20 +1,12 @@
-; lupa -- the magnifier: a hex editor and disassembler over one file, on the stage story and
-; design share. two views of the same bytes: hex (offset, sixteen bytes, their text) and asm
-; (address, bytes, the instruction in either dialect); the cursor is a byte in one and an
-; instruction in the other, and a `:` line takes the commands. an ELF opens on its .text with
-; its symbols named, anything else is bytes from 0.
-;
-;   hjkl / arrows  the cursor (a byte, or an instruction)      ^f ^b  a page   ^d ^u  the same
-;   g G   the start and the end     d / tab  hex <-> asm     s  at&T <-> Intel     n  next match
-;   0-9 a-f  (hex view, either case) overwrite the nibble at the cursor    q  leave (when clean)
-;   :w save   :q leave   :q! leave anyway   :wq   :g ADDR|SYM  go   :/ HEX|"text"  find
-;
+; lupa -- the magnifier: a hex editor and disassembler over one file. two views of the bytes:
+; hex (offset, sixteen bytes, text) and asm (address, bytes, instruction); an ELF opens on its
+; .text with symbols named, anything else is bytes from 0.
+;   hjkl / arrows  the cursor      ^f ^b ^d ^u  a page     g G  start, end
+;   d / tab  hex <-> asm     s  at&t <-> intel     n  next match     q  leave (when clean)
+;   0-9 a-f  (hex view) overwrite the nibble at the cursor
+;   :w   :q   :q!   :wq   :g ADDR|SYM  go   :/ HEX|"text"  find
 ; every key is a pure step on the state and every frame a pure lay into a port, so the tool
-; gates headless (test/host/lupa.l); only lupa-run ties the tty, on cli's stage, and the
-; command line is cli's editor. the bytes never change under the cursor: an edit is a note in
-; a tablet over the file's string, and :w lays the patched string back. the decoder is
-; src/love/holo/decode.l and the two spellings src/love/holo/dialect.l's; another ISA joins
-; by decoding its own bytes to the same item shape.
+; gates headless (test/host/lupa.l). an edit is a note in a tablet over the file's string.
 ; usage: love lupa FILE
 (module (lupa lupa-main lupa-run lupa-new lupa-key lupa-frame lupa-byte)
 (borrow 'holo)
@@ -22,9 +14,8 @@
 (borrow 'posix)
 (borrow 'bytes)
 (:
- ;; --- the file, and an ELF's .text and symbols over it ------------------------------------
- ;; elf: () or {'toff 'taddr 'tsize 'syms 'names}: .text's file offset, address and size; syms
- ;; a tablet addr -> name; names a tablet name -> addr (the goto door)
+ ;; --- the file, and an ELF's .text and symbols over it ---
+ ;; elf: () or {'toff 'taddr 'tsize 'syms 'names}; syms addr -> name, names name -> addr
  (elf? s) (#s > 64 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 && s 4 = 2)
  (hexd n) ("0123456789abcdef" n)
  (hex n w) (: (go k a) (k < 0 ? a (go (k - 1) (a + string (hexd (n >> 4 * k & 15)))))
@@ -57,7 +48,7 @@
  (range a b) (map (i \ a + i) (jot (b - a)))
  (slice d a b) (string (map (i \ lupa-byte d i) (range a b)))
  (patched d) (slice d 0 (d 'n))
- ;; an offset's address and back: inside .text they part company, elsewhere they agree
+ ;; inside .text an offset and its address part company, elsewhere they agree
  (addr d off) (d 'elf @ e (elfed? d && e 'toff <= off < e 'toff + e 'tsize ? (off - e 'toff + e 'taddr) off))
  (offset d a) (d 'elf @ e (elfed? d && e 'taddr <= a < e 'taddr + e 'tsize ? (a - e 'taddr + e 'toff) a))
  ;; the symbol an address falls in: "name" or "name+0x1c", "" when none within 64k below
@@ -69,15 +60,14 @@
                      (0 < #nm ? (k = 0 ? nm (nm + "+" + hexn k)) (go (k + 1)))))
         (go 0)))
 
- ;; --- the cursor and the window ----------------------------------------------------------
+ ;; --- the cursor and the window ---
  (tell d s) (pin d 'msg s)
  (clamp d i) (? (i < 0) 0 (i >= d 'n) (d 'n - 1) i)
  ;; asm: one instruction at off, out of the patched bytes: -> (len . items)
  (insn d off) (x64-decode (slice d off (off + 16 < d 'n ? (off + 16) (d 'n))) 0)
  (next-insn d off) (insn d off @ r (clamp d (off + <r)))
- ;; the instruction before off: walk forward from a boundary above (the window's top, else a
- ;; little way back) and take the last one before off; if the walk never lands on off, the
- ;; shortest real decode from just above that does
+ ;; the instruction before off: walk forward from a boundary above and take the last one
+ ;; before off; if the walk misses off, the shortest real decode just above it
  (prev-insn d off)
   (: anchor (? (d 'top < off) (d 'top) (off > 64) (off - 64) 0)
      (short k) (k > 15 ? (clamp d (off - 1))
@@ -93,7 +83,7 @@
  (settle d h)
   (: rows (rows-of h) cur (d 'cur) top (d 'top)
      (d 'mode = 'hex ?
-        (16 * tui-settle (cur // 16) (top // 16) rows @ t1 ; a row is sixteen bytes
+        (16 * tui-settle (cur // 16) (top // 16) rows @ t1
            (pin d 'top (t1 < 0 ? 0 t1)))
         (: t (cur < top ? cur top)
            ;; walk the window: if the cursor is not among its rows, it becomes the top
@@ -108,7 +98,7 @@
     (: (go i off) (i @ 0 off (go (i - 1) (k > 0 ? (next-insn d off) (prev-insn d off))))
      (goto d (go rows (d 'cur))))))
 
- ;; --- editing: a hex digit at the cursor, the high nibble first --------------------------
+ ;; --- editing: a hex digit at the cursor, the high nibble first ---
  (poke d i v) (pins d 'dirty 1 'edits (pin (d 'edits) i v))
  (nibble d v)
   (: i (d 'cur) old (lupa-byte d i)
@@ -118,7 +108,7 @@
              (hot? q ? (say q (patched d), close q, pins d 'dirty 0 'msg ("wrote " + d 'path))
                 (tell d ("cannot write " + d 'path))))
 
- ;; --- find: a hex string or a "quoted text", from just past the cursor, wrapping --------
+ ;; --- find: a hex string or a "quoted text", from just past the cursor, wrapping ---
  (unhex h) (string (filter (c \ !(c = 32)) (chars h)) @ t
               (0 = #t || #t % 2 = 1 || !(foldl (a \ c \ a && hexv c >= 0) 1 (chars t)) ? ""
                  (hex2b t)))
@@ -132,7 +122,7 @@
            hit (go (start >= d 'n ? 0 start) (d 'n))
            (hit < 0 ? (tell d "not found") (pins d 'find s 'cur hit 'msg ("found at " + hexn (addr d hit)))))))
 
- ;; --- the command line: w q q! wq g / -----------------------------------------------------
+ ;; --- the command line: w q q! wq g / ---
  (hexnum s) (foldl (a \ c \ a < 0 || hexv c < 0 ? -1 (a * 16 + hexv c)) 0 (chars s))
  (parse-addr d s)
   (: sym (elfed? d ? (peep (d 'elf 'names) s -1) -1)
@@ -149,7 +139,7 @@
           "/" (find d arg)
           (0 = #v ? d (tell d ("no such command: " + v)))))
 
- ;; --- the step: a key on the state -------------------------------------------------------
+ ;; --- the step: a key on the state ---
  (lupa-key d c) (: h (d 'h) hexmode (d 'mode = 'hex)
    (d 'in = 'cmd ?
       (edcmd d 'cmd c (l \ (pin d 'in 'map, command d l)) (_ \ (pin d 'in 'map, tell d "")))
@@ -170,10 +160,9 @@
             27 (pins d 'nib -1 'msg "")
             (hexmode && hexv c >= 0 ? (nibble d (hexv c)) d)))))
 
- ;; --- the frame ---------------------------------------------------------------------------
+ ;; --- the frame ---
  (printable c) (32 <= c < 127 ? (string c) ".")
- ;; a hex row: 77 columns with its text, the text dropped on a narrower screen, the whole cut
- ;; to the screen; the cursor's cell is lit only when it is on the screen
+ ;; a hex row: 77 columns, the text dropped on a narrower screen, all cut to the screen
  (hexrow d off w)
   (: n (d 'n) cur (d 'cur)
      hx (foldl (a \ i \ a + (off + i < n ? (hex (lupa-byte d (off + i)) 2) "  ") + (i = 7 ? "  " " ")) "" ^16)
@@ -229,7 +218,7 @@
                       (edfit (d 'msg) w " " + "\e[K\e[?25l")),
     slurp j))
 
- ;; --- the runner: the tool on cli's stage ---------------------------------------------------
+ ;; --- the runner: the tool on cli's stage ---
  (lupa-run p)
   (uread p @
    [1 ""] (puts ("lupa: " + p + " is empty\n"), 1)

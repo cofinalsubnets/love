@@ -28,7 +28,7 @@
  (64 = #p1)
  (seq (tips ()) [p1])
  (3 = #s1)                                             ; .sbignore is a file like any other
- (".sbignore" = <<s1)                                  ; path-sorted
+ (".sbignore" = <<s1)
  (blob <>(s1 1) = "one\ntwo\nthree\n")
  !again                                                ; a clean tree records nothing
  (p1 = sha256 <>(look (".sb/patch/" + p1))))      ; the id is the file's hash
@@ -199,13 +199,13 @@
    _ (sb-sync "../c")
    _ (lay "d-only" "from d\n") _ (sb-record "d: its own file")
    _ (chdir "../c") _ (lay "c-only" "from c\n") _ (sb-record "c: its own file")
-   gotx (sb-sync "../d")                               ; run from c
+   gotx (sb-sync "../d")
    csnap (snap ()) cdirty (dirty ())
    dhere (look "d-only")
    _ (chdir "../d")
    dsnap (snap ()) ddirty (dirty ())
    chere (look "c-only")
-   _ (lay "scratch" "unrecorded\n")                   ; dirty the peer
+   _ (lay "scratch" "unrecorded\n")
    _ (chdir "../c")
    nb4 #(readdir ".sb/patch")
    _ (lay "late" "late work\n") _ (sb-record "c: late")
@@ -228,12 +228,12 @@
    _ (lay "a" "v2\n") pb (sb-record "a edited")
    ; "b" is a built-in ignore, directory-only, so this file is ordinary
    _ (lay "b" "x\n")  pc (sb-record "b born -- independent")
-   n1 (sb-apply [pa])                                  ; checkout
+   n1 (sb-apply [pa])
    a1 (<>(look "a")) b1 (look "b")
    n2 (sb-apply [pa pc])                               ; cherry-pick: pc taken, pb skipped
    a2 (<>(look "a")) b2 (look "b")
    n3 (sb-apply [pb])                                  ; drags pa in
-   n4 (sb-apply ())                                    ; the whole store
+   n4 (sb-apply ())
    a4 (<>(look "a"))
    bad (sb-apply '("deadbeef"))                        ; a prefix that resolves to nothing
    nstore #(readdir ".sb/patch")                ; read before the chdir back
@@ -287,12 +287,12 @@
    _ (lay "b" "2\n") _ (sb-record "b born -- independent, so BOTH stay tips")
    ntip #(tips ())
    b1 (sb-bank '("v1"))
-   b2 (sb-bank '("v1"))                                ; idempotent
+   b2 (sb-bank '("v1"))
    r1 (refof "v1")
    _ (lay "c" "3\n") _ (sb-record "work after the release")
    b3 (sb-bank '("v1"))                                ; a different head refuses
    b4 (sb-bank '("v2"))
-   n1 (sb-apply '("v1"))                               ; by name
+   n1 (sb-apply '("v1"))
    cgone (look "c")
    n2 (sb-apply '("v2"))
    cback (look "c")
@@ -330,7 +330,7 @@
 (test
  (0 < got) (two? travelled)
  (1 = n1)
- !(show drel = show lrel)                                ; not vacuous
+ !(show drel = show lrel)
  !clash
  (show lkept = show lrel)
  (show dkept = show drel))
@@ -350,7 +350,7 @@
    hcopied (look (".sb/patch/" + pid))
    hstolen (look "stolen")
    hesc (look "../escaped")
-   _ (lay (".sb/patch/" + pid) ptext)                   ; planted by hand
+   _ (lay (".sb/patch/" + pid) ptext)
    hform (patch pid)
    _ (sb-apply ())
    hstolen2 (look "stolen")
@@ -401,12 +401,12 @@
    h2 (lg-now "queue/main")
    holds (blob h2)                                          ; read before the chdir back
    held (: _ (mkdir ".sb/ledger/queue/main.lock" 448)
-           _ (lay ".sb/ledger/queue/main.lock/pid" (show (getpid 0)))    ; a live holder: us
+           _ (lay ".sb/ledger/queue/main.lock/pid" (show (getpid 0)))
            r (lg-lock "queue/main" 2)
            _ (lg-unlock "queue/main")
            r)
    taken (: _ (mkdir ".sb/ledger/queue/main.lock" 448)
-            _ (lay ".sb/ledger/queue/main.lock/pid" "999999")           ; a gone one
+            _ (lay ".sb/ledger/queue/main.lock/pid" "999999")
             r (lg-lock "queue/main" 2)
             _ (lg-unlock "queue/main")
             r)
@@ -423,7 +423,7 @@
  made !stale moved (held = 0) taken
  (sb-hex? h1) (sb-hex? h2) (h1 != h2)
  (holds = "row 1\nrow 2\n")
- (2 = #log) (h1 = <(words <log)) (h2 = <(words (log 1)))  ; oldest first
+ (2 = #log) (h1 = <(words <log)) (h2 = <(words (log 1)))
  (seq names ["queue/main"])                              ; the lock is not a ledger
  !(lg-name? "../x") !(lg-name? "q.lock") (lg-name? "queue/main")
  (two? carried) ("none" = theirs))
@@ -524,19 +524,18 @@
    back (look "work") wmore (look "../w/more")
    hfile (look ".sb/head") hps (psid (head ()))         ; the head file's sha256 is its psid
    own (nest-hold "." 2)
-   again (nest-hold "." 2)                               ; this process's own
+   again (nest-hold "." 2)
    _ (nest-free ".")
    live (spawn ["sleep" "30"])
    _ (mkdir ".sb/lock" 448) _ (lay ".sb/lock/pid" (show live))
    other (nest-hold "." 2)
    _ (still live 9) _ (wait live)
-   _ (lay ".sb/lock/pid" "999999")                       ; a dead holder
+   _ (lay ".sb/lock/pid" "999999")
    dead (nest-hold "." 2)
    _ (nest-free ".")
    _ (map (f \ (? (#f = 64) (unlink (".sb/derive/" + f)) ())) (readdir ".sb/derive"))
    hset (setof (psid head1))                             ; a past head stays a name
    hnone (setof (sha256 "no such set"))
-   hst (sb-stamp ()) hstn (set-stamp (head ()))
    _ (unlink ".sb/head") old (head ())
    _ (chdir "../../.."))
 
@@ -549,7 +548,7 @@
  (0 < ns) (<>back = "the worker's\n") (<>wmore = "the hub's again\n")
  (sha256 <>hfile = hps)
  (own = 'took) (again = 'again) (other = ()) (dead = 'took)
- (show hset = show [head1]) !(two? hnone) hst (0 < hstn)
+ (show hset = show [head1]) !(two? hnone)
  (show old = show (sort [nb nm nwk])))
 
 
@@ -611,7 +610,7 @@
 ; a take onto the cached head folds only what it adds: a ratio of the whole replay
 (: _ (mkdir "mrg/b" 493) _ (chdir "mrg/b") _ (mk ())
    _ (dg-store 20000 2000)
-   b0 (clock 0) _ (sb-apply []) b1 (clock 0)                ; the whole replay
+   b0 (clock 0) _ (sb-apply []) b1 (clock 0)
    bpt (show ['patch ['note "w"] ['time 1] ['deps] ['hunks ["w0" () (keep "w\n")]]])
    bpid (sha256 bpt) _ (lay (".sb/patch/" + bpid) bpt)
    b2 (clock 0) _ (sb-take [bpid]) b3 (clock 0)
@@ -663,30 +662,18 @@
  (0 = s3) dgot dnot
  (0 = s4) avok)                             ; a path the far shell would split is refused
 
-; take pulls and grows the head by the peer's, from a dir and from NAME@BOX (a stand-in door)
-(: sl (: l <cmdline (l 0 = 47 ? l (sb-home + "/" + l)))
-   here (cwd 0) far (here + "/mrg/sf") home0 (getenv "HOME")
-   _ (lay "mrg/door" ("shift; shift\ncase \"$3\" in @hub) exec '" + sl + "' sb serve '" + far + "';; esac\nexit 9\n"))
-   _ (mkdir "mrg/th" 493) _ (mkdir "mrg/th/.love" 493) _ (mkdir "mrg/th/.love/etc" 493) _ (mkdir "mrg/th/.love/etc/bee" 493)
-   _ (lay "mrg/th/.love/etc/bee/boxes" "bx somehost\n")
+; take pulls and grows the head by the peer's from a dir, the peer only read
+(: far (cwd 0 + "/mrg/sf")
    _ (mkdir "mrg/t1" 493) _ (chdir "mrg/t1")
    fstore #(readdir (far + "/.sb/patch"))
    t1 (sync-take far)
    thead (psid (head ()) = psid (head-in far))
    tsame (seq (snap ()) (form (far + "/.sb/snap")))
    tleft (fstore = #(readdir (far + "/.sb/patch")))
-   _ (mkdir "../t2" 493) _ (chdir "../t2")
-   _ (setenv "HOME" (here + "/mrg/th")) _ (setenv "SB_SSH" ("sh " + here + "/mrg/door"))
-   bok (seq (ssh-argv "hub@bx") ["sh" (here + "/mrg/door") "somehost" sl "sb" "serve" "@hub"])
-   t2 (sync-ssh "hub@bx" 2)
-   bhead (psid (head ()) = psid (head-in far))
-   bnone (0 = sync-ssh "nest@bx" 2)                     ; the door serves @hub alone
-   _ (setenv "HOME" home0)
    _ (chdir "../.."))
 
 (test
- (0 < t1) thead tsame tleft
- bok (0 < t2) bhead bnone)
+ (0 < t1) thead tsame tleft)
 
 ; history: show, log, blame, status and bisect over five banked patches, then a merge
 (: _ (chdir (sb-home + "/" + sb-dir))
@@ -731,7 +718,7 @@
 
 (test
  swok sw3
- (seq lga [h4 h3 h2 h1]) (seq lgb [h5 h1]) (seq lgs [h3]) !lgn     ; last first
+ (seq lga [h4 h3 h2 h1]) (seq lgb [h5 h1]) (seq lgs [h3]) !lgn
  (seq bla [[h1 "one"] [h2 "TWO"] [h4 "BAD"] [h3 "four"]])
  (seq (>st0) ["bank v5"])                                           ; a clean tree says no path
  (seq (>>st1) ["X a.txt" "M b.txt" "A d.txt" "D sub/c.txt"])

@@ -94,17 +94,18 @@
  ; how much cloud down the rays, 0 to 1, as the smooth sky draws it: by the horizon the
  ; deck too far to tell apart, a haze as thick as the cover
  (haze c dy wx sim) (: k (sat (1.0 - dy / 0.06)) (c + 0.85 * k * (sat (1.2 * sky-cover wx sim) - c)))
+ ; ..past where the cover starts, k as sharp; at a full cover, never under 0.93
+ (thick-at wx mp d sim k) (sat (0.5 + (thick wx mp (d 0) (d 1) sim 0.3 - edge wx sim 0.3) * k))
+ (clouded wx c) (wx 'cover = 3 ? (max c 0.93) c)
  (sky-cloud wx dx dy dz ex ez sim) (: mp (sky-maps ()) d (deck-at dx dy dz ex ez sim)
-   (: c (haze (sat (0.5 + (thick wx mp (d 0) (d 1) sim 0.3 - edge wx sim 0.3) * 10.0)) dy wx sim)
-      (wx 'cover = 3 ? (max c 0.93) c)))
+   (clouded wx (haze (thick-at wx mp d sim 10.0) dy wx sim)))
  ; the cloud over the sun as the light under it feels it: rays over a patch round it, each
  ; with a soft edge, so a passing cloud thins the light and gives it back over a while --
  ; low down, where one ray sweeps the deck fast, most of all
  sun-ring (cat [[0.0 0.0]] (map (k \ (: a (k * pi / 6.0) [(cos a) (sin a)])) ^12))
  (sun-cloud wx s sim) (: mp (sky-maps ()) r 0.05
-   (one o) (: d (deck-at (s 0 + r * o 0) (max2 (s 1) 0.05) (s 2 + r * o 1) 0.0 0.0 sim)
-              c (sat (0.5 + (thick wx mp (d 0) (d 1) sim 0.3 - edge wx sim 0.3) * 3.0))   ; a soft edge
-              (wx 'cover = 3 ? (max c 0.93) c))
+   (one o) (deck-at (s 0 + r * o 0) (max2 (s 1) 0.05) (s 2 + r * o 1) 0.0 0.0 sim @ d
+              (clouded wx (thick-at wx mp d sim 3.0)))                    ; a soft edge
    (net (map one sun-ring) / #sun-ring))
  ; the light of the sun s under the weather: its colour and strength, the share of it
  ; the cloud over it lets through, how much day and twilight there is, the sky's light on
@@ -145,7 +146,7 @@
    sky0 (c+ (c+ (cmix dark blue (lt 'day)) dusk) (c* (halo + 3.0 * far * disc * lt 'sunk) (lt 'sunc)))
    d (deck-at dx dy dz ex ez sim) th (thick wx mp (d 0) (d 1) sim 0.3)
    cl0 (haze (sat (0.5 + (th - edge wx sim 0.3) * 10.0)) dy wx sim)
-   cl (wx 'cover = 3 ? (max cl0 0.93) cl0)        ; overcast: no sky through it
+   cl (clouded wx cl0)                          ; overcast: no sky through it
    ; ..the clouds: lit from under by the sun, darker the thicker, greyer the more of them
    ; ..and under smog the thick of them darker still and the thin lit through
    sm (peep wx 'smog 0.0)

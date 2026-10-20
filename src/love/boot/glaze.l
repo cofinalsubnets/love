@@ -80,6 +80,8 @@
    (buse? e P) (? (atom? e) 0  (<e = 'pin && <>e = P) 1  (foldl (a \ x \ a || buse? x P) 0 >e))   ; a cask: the guard wants the buf kind, not str
    (cuse? e P) (? (atom? e) 0  (elem <e '(cap cup two?) && <>e = P) 1  (foldl (a \ x \ a || cuse? x P) 0 >e))   ; a chain: raw, no entry guard, since two? is total
    (muse? e P) (? (atom? e) 0  ((<e = 'mpeep || <e = 'mpin) && <>e = P) 1  (foldl (a \ x \ a || muse? x P) 0 >e))   ; a map: raw, map-guarded
+   (puse? e P) (two? e ? (<e = 'peep && <>e = P ? 1 (foldl (a \ x \ a || puse? x P) 0 >e)) 0)
+   (tuse? e P) (two? e ? (<e = 'tally && <>e = P ? 1 (foldl (a \ x \ a || tuse? x P) 0 >e)) 0)
    ; a point key, (P = <..) or (<.. = P): raw word identity guarded nom|mint, since a charm
    ; could bridge (2 = 2.0)
    (nuse? e P)
@@ -261,6 +263,7 @@
    (acmp? op) (elem op '(< <= > >= =))
    (aquote? e) (two? e && (<e = '\) && 2 = #e)            ; the reader's quote: (\ X) at exactly two
    (aqnom? e) (aquote? e && nom? <>e)                          ; a point, so (a = 'sym) is raw identity
+   (astr? e) (? (aquote? e) 0  (string? e) 1  (two? e) (foldl (\ a x (a || astr? x)) 0 e)  0)   ; a bare text literal in e
    (amemq x l) (atom? l ? 0  (x = <l) 1  (amemq x >l))     ; interp's quote answers the source node, so two
    (aposq x l i) (x = <l ? i (aposq x >l (i + 1)))         ; =-equal quote nodes stay distinct slots
    (aq e acc) (? (aquote? e) (amemq e acc ? acc (e . acc))          ; never walk into quoted data
@@ -380,6 +383,7 @@
    ; infix span wraps), a value head is its nom. list/&&/|| have lowered themselves before this
    (adesug env ti ta e)
     (? (aquote? e) e
+       (string? e) ['\ e]                       ; a text literal is the quote of its own node, so it rides qs
        (atom? e) e
        ; the analyzer's uninterned tags, handed down by ala: ta = (apx n head args..) the apply,
        ; ti = (iop value args..) the VM op as a value, named back through aopv
@@ -506,8 +510,13 @@
        ; a free head that is not farq resolves via gv at compile (redefinition-stale); a farq name is a
        ; woven sibling, called as entry(imports.. args..) off lz's frozen (entry . import-names), never gv
        cand (lts = 'bad ? () (filter (f \ !(f = self)) (foldl (\ ac i (aheads envl go i ac)) (aheads envl go body ()) inits)))
-       drok (lts != 'bad && (lp ? 1 (two? cand || two? ins ? (aself? self body || adrv? envl self body && acells body <= 64) 1)))   ; free heads and inner lambdas ride only a body that a body that
+       ; the gate reads an import (the self cell's row) as the sibling call it would be spelled as: a free head, no frame param
+       envg (filter (v \ !(elem v simp)) envl)
+       gcand (lts = 'bad ? () (filter (f \ !(f = self)) (foldl (\ ac i (aheads envg go i ac)) (aheads envg go body ()) inits)))
+       drok (lts != 'bad && (lp ? 1 (two? gcand || two? ins ? (aself? self body || adrv? envg self body && acells body <= 64) 1)))   ; free heads and inner lambdas ride only a body that
                                                                          ; drives itself, or a param while small; a declining body or refused lets skip the walks
+       ; a text literal costs a quote slot and a native a leaf would not repay: only a body that loops or drives
+       txok (!(astr? M) || lp || aself? self body || adrv? envg self body)
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the cell's box slot 0
                                  (two? lfd ? (peep >lfd 0 0) 0))
@@ -565,7 +574,7 @@
                     (elem oop '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
                     (aseq cl as @ 'bad 'bad 1)))))
        ok (two? s && two? >s && all nom? ps && aparams? ps M
-           && a = #ps && 0 < a && lpok && drok && lts != 'bad && two? body
+           && a = #ps && 0 < a && lpok && drok && txok && lts != 'bad && two? body
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the bisect knob: splits the call machinery from the rest
            && all lit? gvals && all lit? ovals && nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48   ; slots are cheap once the prologue guards the room
            && all (amble-ok? ps shd kn 0 0 0) inits
@@ -576,7 +585,7 @@
                             (: bad (filter (x \ two? x && !(aquote? x) && !(amble-ok? envl shd kn go k 0 x)) >e)
                                (two? bad ? (small <bad) e)))
                why (? !(two? s && two? >s && all nom? ps && aparams? ps M && a = #ps && 0 < a) 'shape
-                      !lpok 'loop (lts = 'bad) 'lets !drok 'cost !(two? body) 'nobody
+                      !lpok 'loop (lts = 'bad) 'lets !drok 'cost !txok 'text !(two? body) 'nobody
                       !(all lit? gvals) ['globals (filter (p \ !(lit? <>p)) (map (f \ [f (gv f 0)]) gn))] !(all lit? ovals) 'ops
                       !(nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48) 'slots
                       !(all (amble-ok? ps shd kn 0 0 0) inits) 'inits
@@ -1790,8 +1799,6 @@
           (': . (hasbody ? (unpair allp body) (cbflat allp)))))))
    ; --- mapfix: a group fn's param peep'd but never tally'd is a map, so (peep h k d) -> (mpeep h k d), the open-addressed
    ;     probe; the entry's mapkind guard backstops the guess -- a non-map arg deopts
-   (puse? e P) (two? e ? (<e = 'peep && <>e = P ? 1 (foldl (a \ x \ a || puse? x P) 0 >e)) 0)
-   (tuse? e P) (two? e ? (<e = 'tally && <>e = P ? 1 (foldl (a \ x \ a || tuse? x P) 0 >e)) 0)
    (peep->mpeep P e) (two? e ? (<e = 'peep && <>e = P ? ('mpeep . map (peep->mpeep P) >e) (map (peep->mpeep P) e)) e)
    (pin->mpin P e)   (two? e ? (<e = 'pin && <>e = P ? ('mpin . map (pin->mpin P) >e) (map (pin->mpin  P) e)) e)   ; a cask param is pin'd-not-peep'd so never in mps
    (mapfix-def def) (: nf <def body >def
@@ -2590,6 +2597,7 @@
     (: arch love-arch
        G (cite 'glaze)                                                    ; not in the module: every name arrives by key
        defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, cited before the mop
+       firstcell (cite 'guts 'firstcell)
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
@@ -2616,8 +2624,17 @@
        ; e = the bytecode entry (deopt target), s = the surface (\ frame.. body), a = arity, gv = ala's folded global resolver,
        ; farq = the letrec-local predicate (a farq name is wire-resolved: never gv it, the book namesake is stale), lams = the scope's
        ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = the uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
-       ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never)
+       ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never).
+       ; LOVE_LAZY_GLAZE, read per closure, waits for the closure's first call (firstcell), and the compile sees the siblings as they are then
        (natjit e s a gv farq lams nm ti ta inl rt)
+        (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v))
+           (: lz (freeze-self lams nm)
+              L (firstcell e a (\ L (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))))
+              (L == () ? (natnow e s a gv farq lams nm ti ta inl rt) L))
+           (natnow e s a gv farq lams nm ti ta inl rt))
+       ; the self cell as it is now: a later compile reads its own import row as this one would
+       (freeze-self lams nm) (: sc (assoc nm lams) (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams))
+       (natnow e s a gv farq lams nm ti ta inl rt)
         (: _ (peep gvbox 0 0 ? 0 (pin gvbox 0 gv))
            _ (pin probebox 0 0)
            ps (init >s)  body (last >s)
@@ -2667,9 +2684,8 @@
                        0)
                  (!ok ? (no 0)
                     (: L (defercell e a)
-                       sc (assoc nm lams)
-                       lz (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams)
-                       _ (pin rt 'defer ((_ \ (deferpatch L (natjit e s a gv farq lz nm ti ta inl 0))) . peep rt 'defer ()))
+                       lz (freeze-self lams nm)
+                       _ (pin rt 'defer ((_ \ (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))) . peep rt 'defer ()))
                        L)))))
        natjit)                                                            ; the inner : answers the closure; its aliases stay private
    (fired? n) (n < peep fires () 0)

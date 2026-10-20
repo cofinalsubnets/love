@@ -91,7 +91,7 @@ korerun nohup "$HO" 2>/dev/null; r=$?; [ $r -eq 126 ] || fail "kore nohup: a com
 korerun nohup 2>/dev/null; r=$?; [ $r -eq 125 ] || fail "kore nohup: no operand is 125 (got $r)"
 if script -qec true /dev/null > /dev/null 2>&1; then
   N=$HO/.nohup; rm -rf "$N"; mkdir "$N"
-  (cd "$N" && script -qec "$K kore nohup sh -c 'echo out; echo errline >&2'" /dev/null > "$N/tty" 2>&1)
+  (cd "$N" && script -qec "$K nohup sh -c 'echo out; echo errline >&2'" /dev/null > "$N/tty" 2>&1)
   grep -q "ignoring input and appending output to 'nohup.out'" "$N/tty" || fail "kore nohup: the terminal's sentence"
   [ "$(cat "$N/nohup.out")" = "out
 errline" ] || fail "kore nohup: stdout and stderr land in nohup.out"
@@ -101,8 +101,8 @@ fi
 # command. renice aims only at a child of this script, at 19, which anyone may reach
 n0=$(korerun nice); [ "$n0" = "$(nice)" ] || fail "kore nice: bare"
 w=$((n0 + 3)); [ $w -gt 19 ] && w=19
-[ "$(korerun nice -n 3 "$K" kore nice)" = $w ] || fail "kore nice -n 3"
-[ "$(korerun nice -3 "$K" kore nice)" = $w ] || fail "kore nice -3, the old spelling"
+[ "$(korerun nice -n 3 "$K" nice)" = $w ] || fail "kore nice -n 3"
+[ "$(korerun nice -3 "$K" nice)" = $w ] || fail "kore nice -3, the old spelling"
 korerun nice -n x true 2>/dev/null; r=$?; [ $r -eq 125 ] || fail "kore nice: a bad adjustment is 125 (got $r)"
 korerun nice -n 3 2>/dev/null; r=$?; [ $r -eq 125 ] || fail "kore nice: an adjustment wants a command (got $r)"
 korerun nice /nonexistent/cmd 2>/dev/null; r=$?; [ $r -eq 127 ] || fail "kore nice: no such command is 127 (got $r)"
@@ -119,12 +119,12 @@ grep -q "stty: 'standard input': Inappropriate ioctl for device" "$o" || fail "k
 if command -v stty >/dev/null 2>&1 && script -qec true /dev/null > /dev/null 2>&1; then
   for v in "" "-a" "size" "speed"; do
     script -qec "stty $v" /dev/null 2>&1 | tr -d '\r' > "$g"
-    script -qec "$K kore stty $v" /dev/null 2>&1 | tr -d '\r' > "$o"; same "stty $v"
+    script -qec "$K stty $v" /dev/null 2>&1 | tr -d '\r' > "$o"; same "stty $v"
   done
   for v in "-echo intr ^A" "raw" "sane" "cbreak min 3 time 2" "evenp" "nl -ixon" "erase 0x8 kill undef"; do
     # script(1) echoes eof as ^D, on its own line or glued to the next
     script -qec "stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | sed 's/^^D//' | grep -v '^$' > "$g"
-    script -qec "$K kore stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | sed 's/^^D//' | grep -v '^$' > "$o"; same "stty $v"
+    script -qec "$K stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | sed 's/^^D//' | grep -v '^$' > "$o"; same "stty $v"
   done
 fi
 # who, users: one set of records in the three utmp shapes (glibc, freebsd, netbsd), each
@@ -220,7 +220,7 @@ sleep 30 & kp=$!; korerun kill -SIGTERM $kp; wait $kp; r=$?; [ $r -eq 143 ] || f
 korerun kill -x 1 > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore kill -x ($r)"
 # env lists in the environment's order; -0, -C DIR, -S split, -C with no command refused; printenv's order too
 [ "$(env -i A=1 B=2 C=3)" = "$(korerun env -i A=1 B=2 C=3)" ] || fail "kore env's order"
-[ "$(env -i A=1 B=2 LOVE_NO_IMAGE= printenv)" = "$(env -i A=1 B=2 LOVE_NO_IMAGE= "$m" kore printenv)" ] || fail "kore printenv's order"
+[ "$(env -i A=1 B=2 LOVE_NO_IMAGE= printenv)" = "$(env -i A=1 B=2 LOVE_NO_IMAGE= "$m" printenv)" ] || fail "kore printenv's order"
 env -0 -i A=1 B=2 > "$g"; korerun env -0 -i A=1 B=2 > "$o"; same "env -0"
 [ "$(korerun env -C / pwd)" = / ] || fail "kore env -C"
 [ "$(korerun env -S 'echo a  b' c)" = "a b c" ] || fail "kore env -S"

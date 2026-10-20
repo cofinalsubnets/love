@@ -120,11 +120,13 @@
        _ (pin pks (pk-key d) [sg ps])
        ps)
    (pk-of d) (: c (peep pks (pk-key d) ()) (? (two? c && <c = pk-sig d) (c 1) (pk-load d)))
+   ; the idx record at a -> (k off len)
+   (pk-ent ix a) [(snip ix (a + 65) (a + 66)) (snum (snip ix (a + 67) (a + 79))) (snum (snip ix (a + 80) (a + 92)))]
    ; a hash in one idx text by halving -> (k off len) | ()
    (pk-find1 ix h)
     (: (go lo hi) (? (hi <= lo) ()
                      (: m ((lo + hi) // 2) a (m * pkr) k (snip ix a (a + 64))
-                        (? (k = h) [(snip ix (a + 65) (a + 66)) (snum (snip ix (a + 67) (a + 79))) (snum (snip ix (a + 80) (a + 92)))]
+                        (? (k = h) (pk-ent ix a)
                            (k < h) (go (m + 1) hi)
                            (go lo m))))
        (go 0 (#ix // pkr)))
@@ -170,9 +172,8 @@
              ent {}
              _ (map (pk \ (: ix (pk 1)
                              (map (i \ (: a (i * pkr)
-                                         (pin ent (snip ix a (a + 64))
-                                              [(snip ix (a + 65) (a + 66))
-                                               ['p (".sb/pack/" + <pk + ".pack") (snum (snip ix (a + 67) (a + 79))) (snum (snip ix (a + 80) (a + 92)))]])))
+                                         e (pk-ent ix a)
+                                         (pin ent (snip ix a (a + 64)) [<e ['p (".sb/pack/" + <pk + ".pack") (e 1) (e 2)]])))
                                   (jot (#ix // pkr)))))
                     old)
              _ (map (e \ pin ent <e >e) loose)
@@ -194,7 +195,7 @@
                      ())
              ix (? (two? recs) (cats recs) "")
              size (: st (stat tmp) (two? st ? <st -1))
-             want (: r (? (two? recs) (recs (#recs - 1)) "") (? (0 < #r) (snum (snip r 67 79) + snum (snip r 80 92)) 0))
+             want (: r (? (two? recs) (recs (#recs - 1)) "") (? (0 < #r) (: e (pk-ent r 0) (e 1 + e 2)) 0))
              nm (sha256 ix) pf (".sb/pack/" + nm)
              ok (#recs = #hs && size = want
                  && !(nom? (rename tmp (pf + ".pack")))
@@ -773,6 +774,22 @@
                                 + show (gi 'blobs + go 'blobs) + " blobs\n"))
                        (pushed ? 1 0))
                     (sync3 peer pd home gi go pushed ru)))
+   ; a report's tail: the conflicts and the ref clashes
+   (clash-tail nleft nref)
+    ((nleft @ 0 "" (", " + show nleft + " conflicted"))
+     + (nref @ 0 "" (", " + show nref + " ref clash" + (nref @ 1 "" "es"))) + "\n")
+   ; a sync's report and its warnings: there the far end's settle | (), ok whether it took the write
+   (sync-say st nin nout nb there ok pd nleft nref)
+    (: _ (puts ("sb: synced -- " + show <st + " patches (" + show nin + " in, " + show nout + " out), "
+                + show nb + " blobs, " + show <>st + " files here"
+                + (? (two? there) (", " + show <>there + " files there") "")
+                + clash-tail nleft nref))
+       _ (? ok ()
+            (say err ("sb: pulled only -- the peer "
+                      + (? (0 < pd) "has unrecorded changes" "would not take the write")
+                      + "; run sync from its side to finish\n")))
+       _ (nleft @ 0 () (say err "sb: settle the flagged paths, then record\n"))
+       (nref @ 0 () (say err "sb: a banked name is immutable\n")))
    ; both heads move to their union, and both trees to its derive
    (sync3 peer pd home gi go pushed ru)
               (: u (head () + head-in peer)
@@ -781,21 +798,7 @@
                  nref <>ru
                  pst (? !pushed ()                             ; settle the far end too
                         (: c (chdir peer) r (settle u) _ (chdir home) r))
-                 _ (puts ("sb: synced -- " + show <st + " patches ("
-                          + show (gi 'laid) + " in, " + show (go 'laid) + " out), "
-                          + show (gi 'blobs + go 'blobs) + " blobs, " + show <>st + " files here"
-                          + (? (two? pst) (", " + show <>pst + " files there") "")
-                          + (nleft @ 0 "" (", " + show nleft + " conflicted"))
-                          + (nref @ 0 "" (", " + show nref + " ref clash"
-                                              + (nref @ 1 "" "es"))) + "\n"))
-                 _ (? pushed ()
-                      (say err ("sb: pulled only -- the peer "
-                                + (? (0 < pd) "has unrecorded changes" "would not take the write")
-                                + "; run sync from its side to finish\n")))
-                 _ (nleft @ 0 ()
-                    (say err "sb: settle the flagged paths, then record\n"))
-                 _ (nref @ 0 ()
-                    (say err "sb: a banked name is immutable\n"))
+                 _ (sync-say st (gi 'laid) (go 'laid) (gi 'blobs + go 'blobs) pst pushed pd nleft nref)
                  (? (pushed && 0 = nleft && 0 = nref) <st 0))
 
    ; --- apply: realize a dep-consistent subset of the store in the tree ---
@@ -834,9 +837,6 @@
              ps (sort (filter (p \ <(sa p) != <(sb p)) (keys u)))
              _ (map (p \ puts (p + "\n")) ps)
              0)))
-   ; a set's stamp: its newest tip's time in seconds, which orders two builds of a tree
-   (set-stamp ids) (foldl (\ a i (: f (patch i) (? (two? f) (max a (<(fld f 'time) // 1000)) a))) 0 ids)
-   (sb-stamp args) (: x (setof (two? args ? <args "head")) (? (two? x) (: _ (puts (show (set-stamp <x) + "\n")) 1)))
    (sb-within a b) (: x (setof a) y (setof b) (? (two? x && two? y) (: d (dv-derive <y) (sb-all? (t \ 0 <= dv-dep d t) <x))))
    (sb-apply args)
     (mk (),
@@ -970,8 +970,8 @@
                        (? r 1 (puts "sb: nothing to undo -- that patch is already lifted\n", 0))))))))))
 
 ; --- ledgers: a named value that moves only by compare-and-swap. .sb/ledger/NAME grows a line
-;     per entry, `hash time who`, the last one standing, each hash a blob in the store. sync
-;     carries only signed queues, so plain ledgers stay in their nest ---
+;     per entry, `hash time who`, the last one standing, each hash a blob in the store. a
+;     ledger stays in its nest: sync never carries it ---
 (:
    (lg-path nm) (".sb/ledger/" + nm)
    (lg-lock? nm) (: n #nm (4 < n && snip nm (n - 5) n = ".lock"))
@@ -997,70 +997,13 @@
           (: _ (mk ()) _ (mkparents (lg-path nm))
              (? !(lg-lock nm 250) (say err ("sb: ledger " + nm + " is held by another writer\n"), 0)
                 (: cur (lg-now nm)
-                   cv (? (cur = "none") () (blob cur))
-                   en? (lg-entry? cv || lg-entry? <>t)
-                   pt (? en? (lg-split <>t) [<>t ""])
-                   why (? !en? "" !(lg-entry? <pt) "a signed ledger moves only by an entry" (lg-why cv <pt (pt 1)))
                    r (? (cur != was) (say err ("sb: ledger " + nm + " stands at " + cur + ", not " + was + "\n"), 0)
-                        (0 < #why) (say err ("sb: ledger " + nm + " refused: " + why + "\n"), 0)
-                        (: _ (? en? (keep-by (pt 1) (? (lg-entry? cv) (lg-text-of cv 1) (cur = "none") () cur)) 0)
-                           h (keep-by <pt (? (cur = "none") () cur))
+                        (: h (keep-by <>t (? (cur = "none") () cur))
                            _ (? (h = cur) 0 (lg-add nm [(h + " " + show (clock 0 // 1000) + " " + lg-who ())]))
                            (puts (h + "\n"), 1)))
                    _ (lg-unlock nm)
                    r)))))
    (lg-add nm ls) (lay (lg-path nm) (unlines (lg-lines nm + ls)))
-   ; --- a signed queue: a ledger whose head is an entry (src/apps/qlog.l). it moves only by an
-   ;     entry that follows its head, laid with the queue's text after it: FILE is the entry's one
-   ;     line, then the text. the first entry over a plain ledger signs over its text. qlog loads
-   ;     only here, so a plain ledger never asks for keys ---
-   (lg-entry? s) (string? s && starts? s "(entry ")
-   (lg-split s) (: k (fsub s "\n" 0) (? (k < 0) [s ""] [(snip s 0 k) (snip s (k + 1) #s)]))
-   (lg-text-of en get) (: f ((cite 'qlog 'qlog-read) en) (? (tablet? f) (get (f "text"))))
-   ; "" when entry en, laying text qt, may follow the head value prev (() for none), else why
-   (lg-why prev en qt) (lg-why-by prev en qt blob)
-   (lg-why-by prev en qt get)
-    (: tr ((cite 'qlog 'qlog-trust) 0)
-       before (? (lg-entry? prev) (lg-text-of prev get) prev)
-       ((cite 'qlog 'qlog-step) (? (lg-entry? prev) prev ()) en before qt <tr (tr 1)))
-   ; --- a signed queue travels by pull alone: this nest's copy fast-forwards along a peer's when
-   ;     every entry past its head follows; a head never moves back, and a peer's log that does
-   ;     not continue this one is a fork, kept in NAME.forks and said once. plines is the peer's
-   ;     ledger, a line each; get finds a blob there -> the entries taken, -1 for a fork ---
-   (lg-at l x i) (? (atom? l) -1 (<l = x) i (lg-at >l x (i + 1)))   ; where x sits in l, -1 for nowhere
-   (lg-pull nm plines get)
-    (: mine (lg-lines nm) cur (lg-now nm) cv (? (cur = "none") () (blob cur))
-       hs (map (l \ <(words l)) plines) k (? (cur = "none") -1 (lg-at hs cur 0))
-       (? (cur != "none" && !(lg-entry? cv)) 0                    ; a plain ledger stays where it is
-          (k < 0 && cur != "none")
-           (? (elem (? (two? hs) (hs (#hs - 1)) "") (map (l \ <(words l)) mine)) 0   ; the peer is behind
-              (: f (lg-path nm + ".forks") t (look f) hd (? (two? hs) (hs (#hs - 1)) "")
-                 (? (two? t && 0 <= fsub <>t hd 0) -1
-                    (: _ (lay f ((two? t ? <>t "") + hd + "\n"))
-                       _ (say err ("sb: " + nm + " forks from the peer's at " + snip hd 0 12 + " -- kept in " + f + "\n"))
-                       -1))))
-          (: (go i prev n)
-              (? (#hs <= i) n
-                 (: en (get (hs i)) qt (? (string? en) (lg-text-of en get))
-                    why (? !(string? en) "a missing entry" !(string? qt) "a missing text" (lg-why-by prev en qt (\ h (: b (blob h) (? (string? b) b (get h))))))
-                    (? (0 < #why) (: _ (say err ("sb: " + nm + " stops at " + snip (hs i) 0 12 + ": " + why + "\n")) n)
-                       (: _ (keep qt) _ (keep en) _ (lg-add nm [(plines i)]) (go (i + 1) en (n + 1))))))
-             r (? (k = #hs - 1) 0 (go (k + 1) cv 0))
-             _ (? (0 < r) (puts ("sb: " + nm + " took " + show r + " entr" + (? (1 = r) "y" "ies") + "\n")) 0)
-             r)))
-   ; the signed queues a nest holds: [name lines] each
-   (lg-signed d)
-    (: ns (filter (n \ starts? n "queue/") (lg-names (d + "/.sb/ledger") ""))
-       (filter two? (map (n \ (: t (look (d + "/.sb/ledger/" + n))
-                               ls (? (two? t) (filter (\ l (0 < #l)) (lines <>t)) ())
-                               h (? (two? ls) <(words (ls (#ls - 1))) "")
-                               b (? (sb-hex? h) (bget-in d h))
-                               (? (two? b && lg-entry? <>b) [n ls])))
-                        ns)))
-   (lg-pull-dir peer)
-    (: _ (mk ()) (map (e \ lg-held <e (_ \ lg-pull <e (e 1) (\ h (: b (? (sb-hex? h) (bget-in peer h)) (? (two? b) <>b)))))
-                      (lg-signed peer)))
-   (lg-held nm f) (: _ (mkparents (lg-path nm)) (? (lg-lock nm 250) (: r (f 0) _ (lg-unlock nm) r) (say err ("sb: ledger " + nm + " is held by another writer\n"), 0)))
    ; every ledger under dir, by name
    (lg-names dir pre)
     (: es (readdir dir)
@@ -1078,8 +1021,6 @@
           (atom? r) (: c (lg-now nm) b (? (c = "none") () (blob c))
                        (? (string? b) (: _ (say out b) 1) (say err ("sb: no ledger " + nm + "\n"), 0)))
           (<r = "--id") (: _ (puts (lg-now nm + "\n")) 1)
-          (<r = "--text") (: c (lg-now nm) b (? (c = "none") () (blob c)) t (? (lg-entry? b) (lg-text-of b blob) b)
-                             (? (string? t) (: _ (say out t) 1) (say err ("sb: no ledger " + nm + "\n"), 0)))
           (<r = "--log") (: _ (map (\ l (puts (l + "\n"))) (lg-lines nm)) 1)
           (<r = "--was" && #r = 3) (lg-swap nm <>r <>>r)
           2)))                                             ; malformed: the dispatcher says the usage
@@ -1098,8 +1039,7 @@
    ; SB_SSH is the ssh words (ssh -T), SB_LOVE the far binary (love)
    (ssh-argv p)
     (: r (snip p 6 #p) k (fsub r "/" 0)
-       (? (box-peer? p) (box-argv p)
-          (k <= 0) ()
+       (? (k <= 0) ()
           (: hp (snip r 0 k) pt (snip r k #r)
              path (? (3 <= #pt && snip pt 0 3 = "/~/") (snip pt 1 #pt) pt)
              c (fsub hp ":" 0)
@@ -1107,17 +1047,6 @@
                 ((ssh-words (ssh-env "SB_SSH" "ssh -T"))
                  + (? (c < 0) [hp] ["-p" (snip hp (c + 1) #hp) (snip hp 0 c)])
                  + [(ssh-env "SB_LOVE" "love") "sb" "serve" path])))))
-   ; NAME@BOX: the nest NAME that BOX's door serves (love bee --door), BOX reached as bee's
-   ; ~/.love/etc/bee/boxes says, a line `BOX HOST [LOVE]`
-   (box-peer? p) (: k (fsub p "@" 0) (0 < k && k < #p - 1 && fsub p "/" 0 < 0 && fsub p ":" 0 < 0))
-   (box-argv p)
-    (: k (fsub p "@" 0) nm (snip p 0 k) bx (snip p (k + 1) #p)
-       t (look (ssh-env "HOME" "/" + "/.love/etc/bee/boxes"))
-       w (: (go m) (? (atom? m) [bx] (: v (ssh-words <m) (? (two? v && <v = bx) v (go >m))))
-            (go (? (two? t) (lines <>t) ())))
-       (? !(ssh-path? nm) ()
-          ((ssh-words (ssh-env "SB_SSH" "ssh -T"))
-           + [(? (1 < #w) (w 1) bx) (? (2 < #w) (w 2) (ssh-env "SB_LOVE" "love")) "sb" "serve" ("@" + nm)])))
    ; --- the frames
    (fr-put w s) (say w (show #s + "\n" + s))
    (fr-get q)                                                 ; the next frame's text | () at the end
@@ -1215,7 +1144,7 @@
      (? (keep != 1 && 0 < dirty ())
         (say err "sb: working tree has changes; record or revert first\n", 0)
         (: av (ssh-argv peer)
-           (? (atom? av) (say err ("sb: cannot read " + peer + " -- ssh://[USER@]HOST[:PORT]/PATH, or NAME@BOX\n"), 0)
+           (? (atom? av) (say err ("sb: cannot read " + peer + " -- ssh://[USER@]HOST[:PORT]/PATH\n"), 0)
               (: c (ssh-open av)
                  (? !(tablet? c) (say err ("sb: cannot run " + <av + "\n"), 0)
                     (: r (ssh-sync c peer keep) _ (ssh-shut c) r)))))))
@@ -1235,7 +1164,6 @@
                    ru (refadd (refs ()) theirs 1)
                    _ (two? <ru ? (lay ".sb/refs" (show <ru)))
                    _ (? pushed (ssh-ask c ("refs " + show (refs ()))) ())
-                   _ (? got (lg-pull-ssh c) 0)
                    nin (? (tablet? gi) (gi 'laid) 0) nout (? pushed (po 0) 0)
                    nb ((? (tablet? gi) (gi 'blobs) 0) + (? (two? po) (po 2) 0))
                    (? !got (say err ("sb: some objects did not arrive from " + peer + " -- the sync is INCOMPLETE\n"), 0)
@@ -1250,26 +1178,14 @@
        nleft (tell <>>st)
        pst (? pushed (ssh-form (ssh-ask c (ssh-line "take" u))) ())
        took (two? pst && 0 <= pst 2)
-       _ (puts ("sb: synced -- " + show <st + " patches (" + show nin + " in, " + show nout + " out), "
-                + show nb + " blobs, " + show <>st + " files here"
-                + (? took (", " + show <>pst + " files there") "")
-                + (nleft @ 0 "" (", " + show nleft + " conflicted"))
-                + (nref @ 0 "" (", " + show nref + " ref clash" + (nref @ 1 "" "es"))) + "\n"))
-       _ (? took ()
-            (say err ("sb: pulled only -- the peer "
-                      + (? (0 < pd) "has unrecorded changes" "would not take the write")
-                      + "; run sync from its side to finish\n")))
-       _ (nleft @ 0 () (say err "sb: settle the flagged paths, then record\n"))
-       _ (nref @ 0 () (say err "sb: a banked name is immutable\n"))
+       _ (sync-say st nin nout nb (took ? pst) took pd nleft nref)
        (? (took && 0 = nleft && 0 = nref && 0 = pst 2) <st 0))
    ; a take: the peer's head joins ours, nothing goes back
    (take-tell gi fh nref)
     (? !(tablet? gi && gi 'ok) (say err "sb: some objects did not arrive -- the take is INCOMPLETE\n", 0)
        (: st (settle (head () + fh)) nleft (tell <>>st)
           _ (puts ("sb: took the peer's head -- " + show <st + " patches (" + show (gi 'laid) + " in), "
-                   + show (gi 'blobs) + " blobs, " + show <>st + " files here"
-                   + (nleft @ 0 "" (", " + show nleft + " conflicted"))
-                   + (nref @ 0 "" (", " + show nref + " ref clash" + (nref @ 1 "" "es"))) + "\n"))
+                   + show (gi 'blobs) + " blobs, " + show <>st + " files here" + clash-tail nleft nref))
           _ (nleft @ 0 () (say err "sb: settle the flagged paths, then record\n"))
           (? (0 = nleft && 0 = nref) <st 0)))
    ; the same from a peer nest on this box: no push, the peer only read
@@ -1281,19 +1197,6 @@
                             ru (refadd (refs ()) (form (peer + "/.sb/refs")) 1)
                             _ (two? <ru ? (lay ".sb/refs" (show <ru)))
                             (take-tell gi (head-in peer) <>ru))))))
-   ; the far nest's signed queues, pulled: its ledgers, then the entries and texts this store lacks
-   (lg-pull-ssh c)
-    (: ls (ssh-form (ssh-ask c "ledgers"))
-       (has? h) (bhave? h)
-       (fetch hs) (: w (filter (h \ sb-hex? h && !(has? h)) hs) (? (two? w) (ssh-blobs c w) {}))
-       (? !(two? ls) 0
-          (map (e \ (: hs (map (l \ <(words l)) (e 1)) b1 (fetch hs)
-                       (get1 h) (: b (? (tablet? b1) (peep b1 h ())) (? (two? b) <>b (blob h)))
-                       ts (map (h \ (: en (get1 h) f (? (string? en) ((cite 'qlog 'qlog-read) en)) (? (tablet? f) (f "text") ""))) hs)
-                       b2 (fetch ts)
-                       (get h) (: b (? (tablet? b2) (peep b2 h ())) (? (two? b) <>b (get1 h)))
-                       (lg-held <e (_ \ lg-pull <e (e 1) get))))
-               (filter (e \ two? e && string? <e && starts? <e "queue/" && lg-name? <e) ls))))
    ; --- the far side: one answer per word asked, nothing else on stdout
    (sv-has d l) (cats (map (i \ (? (sb-hex? i && two? (stat (d + i))) "1" "0")) l))
    (sv-each l) (? (two? l) (: _ (fr-put out <l) (sv-each >l)) ())
@@ -1353,7 +1256,6 @@
                     (sv-each (map (b \ <>b) (filter two? bs))))
          "put" (fr-put out (show (sv-put ids)))
          "refs" (fr-put out (sv-refs a))
-         "ledgers" (fr-put out (show (lg-signed ".")))
          "take" (fr-put out (show (sv-take ids)))
          (fr-put out (show ["unknown" v])))
    (sv-loop _)
@@ -1504,67 +1406,29 @@
 
 ; --- the CLI face: usage + the verb dispatcher (cook-main's shape) ---
 (:
-   sb-usage "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
-usage: sb VERB ..
-  record [NOTE]   working changes -> a patch in the store (.sb/)
-  sync [--keep] PEER  EXCHANGE patch sets with a peer nest (a dir holding .sb/),
-                  or PULL from an http:// remote -- any static file tree serving
-                  a .sb/ is a complete one, and it takes no push.
-                  pull what it has, push what it lacks, settle BOTH trees to
-                  the union of their HEADS. two patches on one path three-way
-                  merge; a true overlap lands in markers and exits 1 -- resolve,
-                  then record. --keep only deposits: both stores fill, no head
-                  moves, so a hub holds work it has not taken.
-                  ssh://[USER@]HOST[:PORT]/PATH is a nest on another box, its
-                  side `sb serve PATH` (SB_SSH the ssh words, SB_LOVE the far love).
-                  NAME@BOX is the nest NAME that BOX's door serves (love bee --door),
-                  BOX reached as ~/.love/etc/bee/boxes says
-  sync --take PEER  pull only, and grow the head by the peer's head: a new nest
-                  made from a hub, or one brought up to it
-  serve [DIR]     the far side of an ssh sync, on stdin and stdout
-  take ID..       grow the HEAD by a set (a ref, or patches by prefix, with
-                  their deps) and lay the tree: what a hub does to land work
-  ls [-l]         the head's paths; -l puts each one's side (blob hash, x when
-                  executable) and a tab before it
-  unpack DIR [H..|-]  blobs as plain files DIR/HASH: the hashes named (- reads them
-                  from stdin), else the head's
-  pack            every loose blob and every pack into one pack (.sb/pack), read
-                  back before the old ones go. sync packs past 1024 loose
-  psid [SET]      the name of a set's state: the head's, or SET's (a ref, a
-                  patch, a psid, or head)
-  paths A B       the paths sets A and B lay differently, a line each
-  within A B      exit 0 when set A lies inside set B
-  stamp [SET]     the newest of a set's patch times, in seconds: the head's, or SET's
-  apply [ID..]    make the HEAD a dep-consistent SUBSET, laid in the tree (an ID
-                  may be a prefix; its deps come along). checkout and cherry-pick
-                  are one act here. no ID realizes the whole store -- the way back
-  bank NAME       freeze the current head -- its whole TIP SET -- as an immutable
-                  release. deps are per PATH, so a multi-tip head is ordinary
-                  parallel work, not a fork to repair. `apply NAME` realizes it
-  undo ID [NOTE]  add the INVERSE of a patch -- revert as growth, never deletion.
-                  a path that moved on since three-way merges instead of being
-                  clobbered: P's write is lifted OUT, later edits stay
-  log             the patches, newest first (* marks a tip of the head)
-  log PATH        the head's patches that write PATH, or a path under it, the
-                  fold's last first
-  show ID         a patch: its time, note and deps, then each hunk as a diff
-  blame PATH      each line of PATH in the head, after the patch that wrote it
-  status          the head, the banks at it, what the store holds beyond it,
-                  conflicted paths, and the tree's changes: A D M, X the mode
-  bisect GOOD BAD [--] CMD ..  lay the banks above GOOD and within BAD, halving,
-                  and run CMD in each: exit 0 good, 125 skip, else bad. says the
-                  first bad set and the patches it adds, then lays the head back
-  diff            working tree vs the recorded state (unified; exit 1 on change)
-  ledger [NAME]   a named value that moves only by compare-and-swap, its every
-                  entry kept. no NAME lists them; NAME prints what it holds
-  ledger NAME --id | --log      its hash (none when new) | every entry
-  ledger NAME --was OLD FILE    move it to FILE's text (- is stdin) iff it
-                  stands at OLD (none for a new one); exit 1 when it has moved on.
-                  plain ledgers stay in their nest. a signed queue (its head an
-                  entry, src/apps/qlog.l) moves only by an entry that follows,
-                  and sync pulls it along a chain that checks
-  ledger NAME --text            the text a signed queue's head names
-  -C DIR VERB ..  the verb in the nest at DIR
+   sb-usage "usage: sb VERB ..
+  record [NOTE]           record the working changes as a patch
+  sync [--keep] PEER      exchange patch sets with PEER and settle both trees
+  sync --take PEER        pull only, and grow the head by PEER's head
+  serve [DIR]             the far side of an ssh sync
+  take ID..               grow the head by a set and lay the tree
+  apply [ID..]            set the head to a subset of the store and lay it
+  bank NAME               freeze the head as a named release
+  undo ID [NOTE]          record the inverse of a patch
+  log [PATH]              the patches, newest first; with PATH, those that write it
+  show ID                 a patch: its time, note, deps and hunks
+  blame PATH              each line of PATH, after the patch that wrote it
+  status                  the head, its banks, the store beyond it, the tree's changes
+  diff                    the working tree against the head
+  ls [-l]                 the head's paths
+  psid [SET]              the name of a set's state
+  paths A B               the paths two sets lay differently
+  within A B              exit 0 when set A lies inside set B
+  bisect GOOD BAD CMD ..  find the first bad bank between GOOD and BAD
+  unpack DIR [H..|-]      blobs as plain files DIR/HASH
+  pack                    gather every blob into one pack
+  ledger [NAME ..]        a value moved only by compare-and-swap
+  -C DIR VERB ..          run the verb in the nest at DIR
 "
    ; usage on stderr, exit 2
    (usage _) (say err sb-usage, uleave 2)
@@ -1578,12 +1442,10 @@ usage: sb VERB ..
            "sync" (: pr (filter (w \ !(elem w ["--keep" "--take"])) >as)
                      md (? (elem "--take" >as) 2 (elem "--keep" >as) 1 0)
                      (atom? pr ? (usage ())
-                      !(held "." (_ \ (: r (? (ssh? <pr || box-peer? <pr) (sync-ssh <pr md)
+                      !(held "." (_ \ (: r (? (ssh? <pr) (sync-ssh <pr md)
                                               (url? <pr) (sync-url <pr (? (md < 2) md 0))
-                                              ; a nest on this box: then its signed queues, pulled
-                                              (: r (? (md < 2) (sync-with <pr md) (sync-take <pr))
-                                                 _ (? (two? (stat (<pr + "/.sb"))) (lg-pull-dir <pr) 0)
-                                                 r))
+                                              (md < 2) (sync-with <pr md)
+                                              (sync-take <pr))
                                           _ (pk-auto ())
                                           r)))))
            "serve" (sb-serve >as)
@@ -1600,7 +1462,6 @@ usage: sb VERB ..
            "ls" (sb-ls (elem "-l" >as), 0)
            "unpack" (two? >as ? !(sb-unpack <>as (>>as = ["-"] ? (words (slurp in + "")) >>as)) (usage ()))
            "psid" !(sb-psid >as)
-           "stamp" !(sb-stamp >as)
            "paths" (#>as = 2 ? (sb-paths <>as <>>as) (usage ()))
            "within" (#>as = 2 ? !(sb-within <>as <>>as) (usage ()))
            "diff" (0 < sb-diff ())

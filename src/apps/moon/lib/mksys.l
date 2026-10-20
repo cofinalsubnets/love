@@ -1,17 +1,10 @@
-; src/apps/moon/lib/mksys.l -- lay sys.o, the raw seam's hand-written machine tail: the
-; functions C cannot say. everything else in the gcc-free link is C compiled by mooncc; these are
-; the register-exact leaves under it:
-;   __love_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (moonlibc calls nothing else)
-;   __sigsetjmp / siglongjmp our own jmp_buf inside the glibc-sized 25-long buffer:
-;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip, [8] the signal
-;                            mask (love.c's fault barrier is sigsetjmp(env,1): the mask is load-bearing)
-;   __love_sigret              the sa_restorer tail (rt_sigreturn) moonlibc's sigaction installs
-; (mksys-x64 dst), (mksys-a64 dst), (mksys-rv64 dst), (mksys-i386 dst) all seed mksys-as, which picks the arch's IR
-; table. the x64 object serves linux and freebsd: cf cleared before the insn and a carry answer
-; parked below linux's band as -(errno+4096), so impl.h's __love_call reads one law; the sigprocmask
-; leaves branch on __love_osv between rt_sigprocmask 14 and sigprocmask 340.
-; the Makefile cats this after kore's text/u/asbook and holo's elf/obj (out/.mksys-cat.l).
-; holo registers: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7=r8 r8=r9 r9=r10 r10=r11
+; src/apps/moon/lib/mksys.l -- lay sys.o, the hand-written leaves C cannot say: the syscall
+; doors (__love_sys..), __sigsetjmp / siglongjmp (the mask is load-bearing: the fault barrier
+; jumps out of a handler), the signal trampolines, clone and the thread pointer.
+; one object per arch serves every kernel, branching on __love_osv; a BSD's carry error is
+; parked as -(errno+4096), so __love_call reads one law.
+; x64 jmp_buf (25 longs): [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip, [8] the mask.
+; holo x64: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7=r8 r8=r9 r9=r10 r10=r11
 ; r11=r12 r12=r13 r13=r14 r14=r15.
 (module 'moon
 (borrow 'holo) ; objelf, the relocatable writer
@@ -22,27 +15,15 @@
    (mksys-arm dst) (mksys-as 'arm dst)
    (mksys-freebsd dst) (mksys-as 'x64 dst)   ; one object serves both kernels
    (mksys-as arch dst) (write-bytes dst (mksys-bytes arch))
-   ; the netbsd/aarch64 dispatch table. That kernel takes the syscall number
-   ; from the svc immediate -- the number is in the instruction -- and offers no
-   ; indirect door: sys_syscall (svc #0, number in x0) and sys___syscall (svc
-   ; #198) both sigsys, and x8 + svc #0 sigsyses too (all three probed on the
-   ; box). a runtime number is therefore unsayable in one instruction, so we lay
-   ; one `svc #n; ret' per number and BRANCH INTO IT. 512 covers the roster
-   ; (the highest we speak is __wait450 at 449); 4 kB of sys.o, a64 only.
-   ; the bound is spelled at the two sites, not bound once: a forward VALUE in
-   ; this group does not resolve the way a forward lambda does (c0's letrec).
+   ; netbsd/a64 reads the syscall number from the svc immediate only, with no indirect
+   ; door, so lay one `svc #n; ret' per number and branch into it. the bound 512 is spelled
+   ; at each site: a forward value in this group would not resolve
    (nb-tab i acc) (i < 0 ? acc (nb-tab (i - 1) (['svcn i] . ['ret] . acc)))
-   ; the bytes alone -- moon.l's runtime pull lays sys in-memory through this
    (mksys-bytes arch)
     (: ir (? (arch = 'x64)
          '(
-         ; -- __love_sys: SysV args (rdi rsi rdx rcx r8 r9 [rsp+8]) -> the kernel's
-         ;    (rax rdi rsi rdx r10 r8 r9). each mov reads a slot the previous one
-         ;    just drained, so the chain needs no scratch. the tail is OS-BLIND:
-         ;    cf goes in clear (linux hands it back untouched through r11), and a
-         ;    carry answer -- freebsd's error, +errno in rax ('below IS jc) --
-         ;    parks below linux's band as -(errno+4096). impl.h's __love_call
-         ;    unparks; the tail never learns which kernel answered.
+         ; -- __love_sys: SysV args -> the kernel's (rax rdi rsi rdx r10 r8 r9), each mov
+         ;    reading a slot just drained. os-blind: cf goes in clear, linux leaves it
          (label __love_sys)
          (mov r0 r6)                 ; rax <- n
          (mov r6 r5)                 ; rdi <- a
@@ -60,11 +41,8 @@
          (lea r0 r0 -4096)           ; -(errno+4096): parked for __love_call
          (ret)
 
-         ; -- __sigsetjmp(buf, save): pin the callee-saved file + the return seam,
-         ;    then read the current mask into buf[8] by the kernel under us
-         ;    (__love_osv, os.c's probe): rt_sigprocmask(0, NULL, &buf[8], 8), or
-         ;    freebsd's sigprocmask(1, NULL, &buf[8]) -- a 16-byte set, so it
-         ;    takes buf[8..9] (the glibc-sized buffer has room).
+         ; -- __sigsetjmp(buf, save): the callee-saved file, the return seam, then the
+         ;    mask into buf[8] (a BSD's 16-byte set takes buf[8..9])
          (label __sigsetjmp)
          (st r6 0  r3)               ; rbx
          (st r6 8  r4)               ; rbp
@@ -106,17 +84,14 @@
          (ret)
          (label sj-mac)
          (li r6 1)
-         (li r0 33554480)            ; xnu's sigprocmask 48, a 4-byte set
-         (sys)
+         (sub sp sp 8)
+         (call __love_macmask)       ; xnu's sigprocmask, a 4-byte set: by libSystem or the trap
+         (add sp sp 8)
          (li r0 0)
          (ret)
 
-         ; -- siglongjmp(buf, val): restore the mask first (the fault barrier jumps
-         ;    out of a signal handler), then the register file, then jump the saved
-         ;    rip. val and buf ride rbp/rbx: freebsd's syscall exit zeroes the
-         ;    scratch registers (a leak mitigation linux does not have), so only
-         ;    the callee-saved file survives the kernel -- and it is about to be
-         ;    overwritten anyway. rbx restores last, off itself.
+         ; -- siglongjmp(buf, val): the mask first, then the file, then the saved rip.
+         ;    val and buf ride rbp/rbx: freebsd's syscall exit zeroes the scratch registers
          (label siglongjmp)
          (mov r4 r5)                 ; rbp <- val
          (mov r3 r6)                 ; rbx <- buf
@@ -147,8 +122,9 @@
          (jmp lj-file)
          (label lj-mac)
          (li r6 3)
-         (li r0 33554480)            ; xnu's sigprocmask
-         (sys)
+         (sub sp sp 8)
+         (call __love_macmask)       ; rbp and rbx ride the call
+         (add sp sp 8)
          (label lj-file)
          (mov r0 r4)                 ; rax <- val, before rbp is restored
          (ld r4  r3 8)               ; rbp
@@ -165,17 +141,13 @@
          (label lj-live)
          (jmpr r1)
 
-         ; -- __love_sigret: the restorer a kernel sigaction wants under sa_restorer.
-         ;    linux's number: only linux's sigaction installs it -- freebsd has no
-         ;    sa_restorer, a handler there returns on the kernel's own trampoline.
+         ; -- __love_sigret: linux's sa_restorer
          (label __love_sigret)
          (li r0 15)                  ; rt_sigreturn
          (sys)
 
-         ; -- __love_clone(flags, sp, ptid, ctid, tls): linux's clone takes the same order
-         ;    (rdi rsi rdx r10 r8). the parent returns the tid or -errno; the child
-         ;    wakes on sp, where its caller laid [fn arg], and calls fn(arg), which
-         ;    never returns -- the exit after it (this thread alone) is the backstop.
+         ; -- __love_clone(flags, sp, ptid, ctid, tls): linux's order. the child wakes on sp,
+         ;    where its caller laid [fn arg], and calls fn(arg); the exit is a backstop
          (label __love_clone)
          (mov r9 r1)                 ; r10 <- ctid
          (li r0 56)                  ; clone
@@ -191,9 +163,8 @@
          (label clone-out)
          (ret)
 
-         ; -- __love_sys7(n,a..g): the wide door for netbsd's classic pads -- the
-         ;    kernel reads a seventh argument at [rsp+8], so g overwrites the
-         ;    incoming f slot (drained into r9 first; a callee owns its stack args).
+         ; -- __love_sys7(n,a..g): netbsd reads a 7th argument at [rsp+8], so g overwrites
+         ;    the f slot once drained
          (label __love_sys7)
          (mov r0 r6)                 ; rax <- n
          (mov r6 r5)                 ; rdi <- a
@@ -213,10 +184,7 @@
          (lea r0 r0 -4096)
          (ret)
 
-         ; -- __love_nb_sigtramp: netbsd's return path -- the kernel calls the
-         ;    handler directly and leaves the ucontext in r15; the registered
-         ;    tramp (version 2) returns through setcontext, and a fall-through
-         ;    exits loudly rather than wandering.
+         ; -- __love_nb_sigtramp: netbsd leaves the ucontext in r15; back through setcontext
          (label __love_nb_sigtramp)
          (mov r6 r14)                ; rdi <- r15 (the ucontext)
          (li r0 308)                 ; setcontext
@@ -225,10 +193,8 @@
          (li r0 1)                   ; exit
          (sys)
 
-         ; -- __love_mac_sigtramp: xnu enters the registered tramp with (handler,
-         ;    style, sig, info, uctx, token) and wants sigreturn(uctx, style, token)
-         ;    back. what the handler clobbers is sigreturn's to restore, so the three
-         ;    ride callee-saved registers and the stack is only aligned
+         ; -- __love_mac_sigtramp: xnu enters with (handler, style, sig, info, uctx, token)
+         ;    and wants sigreturn(uctx, style, token); the three ride callee-saved registers
          (label __love_mac_sigtramp)
          (mov r3 r7)                 ; rbx <- uctx
          (mov r11 r5)                ; r12 <- style
@@ -248,8 +214,7 @@
          (li r0 33554433)            ; exit
          (sys)
 
-         ; -- __love_macfork: xnu answers the child with the parent's pid in rax
-         ;    and 1 in rdx, so the child's 0 is said here
+         ; -- __love_macfork: xnu's child gets the parent's pid and rdx 1; answer it 0
          (label __love_macfork)
          (li r0 33554434)            ; fork 2
          (cmp r0 0)
@@ -265,8 +230,7 @@
          (lea r0 r0 -4096)
          (ret)
 
-         ; -- __love_macpipe: pipe's two ends come back in eax and edx, answered as
-         ;    one word, the second end high
+         ; -- __love_macpipe: eax and edx answered as one word, edx high
          (label __love_macpipe)
          (li r0 33554474)            ; pipe 42
          (cmp r0 0)
@@ -277,12 +241,9 @@
          (ret))
 
          (arch = 'i386)
-         ; the i386 lane, the three kernels: cdecl args on the stack. linux reads them
-         ; from ebx ecx edx esi edi ebp through int 0x80; both BSDs read them off the user
-         ; stack above a return slot, as a cdecl callee would, and answer an error with
-         ; the carry set and +errno in eax, a 64-bit answer in edx:eax. registers r0..r6
-         ; = eax ecx edx ebx ebp esi edi. the jmp_buf: [0] ebx [4] esi [8] edi [12] ebp
-         ; [16] esp [20] eip, the mask at [32], 16 bytes for a BSD's.
+         ; i386: linux reads ebx ecx edx esi edi ebp; the BSDs read the user stack above a
+         ; return slot, error by carry, 64-bit answers in edx:eax. r0..r6 = eax ecx edx ebx
+         ; ebp esi edi. jmp_buf: [0] ebx [4] esi [8] edi [12] ebp [16] esp [20] eip [32] mask
          '(
          (label __love_sys)
          (label __love_sysw)         ; __love_sys read as long long: a BSD's lseek in edx:eax
@@ -410,15 +371,13 @@
          (label lj-live)
          (jmpr r1)
 
-         ; -- __love_sigret0: linux's return from the old frame, the one a handler without
-         ;    SA_SIGINFO gets on i386: the signal number off, then sigreturn
+         ; -- __love_sigret0: linux's return from a non-SA_SIGINFO frame
          (label __love_sigret0)
          (pop r0)
          (li r0 119)                 ; sigreturn
          (sys)
 
-         ; -- __love_nb_sigtramp: netbsd's return path. the handler returns onto the signal
-         ;    number with the ucontext 140 bytes up; setcontext takes it in the arg slot
+         ; -- __love_nb_sigtramp: the ucontext sits 140 bytes up; setcontext takes it
          (label __love_nb_sigtramp)
          (lea r0 sp 140)
          (st sp 4 r0)
@@ -433,9 +392,8 @@
          (li r0 173)                 ; rt_sigreturn
          (sys)
 
-         ; -- __love_clone(flags, sp, ptid, ctid, tls): i386's clone orders
-         ;    (flags sp ptid tls ctid). the child wakes on sp, where its caller laid
-         ;    [fn arg sel]: it loads gs with sel (the tls entry clone set) and calls fn(arg)
+         ; -- __love_clone: i386 orders (flags sp ptid tls ctid). the child finds [fn arg sel]
+         ;    on sp, loads gs with sel and calls fn(arg)
          (label __love_clone)
          (push r4) (push r6) (push r5) (push r3)
          (ld r3 sp 20)
@@ -471,16 +429,12 @@
          (ret))
 
          (arch = 'arm)
-         ; the arm lane, the three kernels: aapcs args in r0-r3 then the stack. linux reads
-         ; r0-r5 with the number in r7; freebsd r0-r3 with the number in r7 and the rest off
-         ; the user stack at the svc; netbsd (thumb) the same but the number in r0 and the
-         ; first arg in ip, through svc #255. the BSDs answer an error with the carry set
-         ; and +errno in r0, linux keeps the flags, so a carry going in clear is a BSD's.
-         ; the jmp_buf: [0..28] r4-r11, [32] sp, [36] lr, [40..103] d8-d15, the mask at
-         ; [104], 16 bytes for a BSD's.
+         ; arm: linux reads r0-r5, number in r7; freebsd r0-r3 + the stack, number in r7;
+         ; netbsd number in r0, first arg in ip, svc #255. a BSD errors by carry, linux keeps
+         ; the flags. jmp_buf: [0..28] r4-r11, [32] sp, [36] lr, [40..103] d8-d15, [104] mask
          '(
-         ; -- __love_sys8(n,a..h) and __love_sys(n,a..f): g h, or two zeros, pushed, then one
-         ;    tail. __love_sysw is __love_sys read as long long: a BSD's lseek answers in r0:r1
+         ; -- __love_sys8 and __love_sys: g h, or two zeros, pushed, then one tail.
+         ;    __love_sysw: a BSD's lseek answers in r0:r1
          (label __love_sys8)
          (push r4) (push r5) (push r7)
          (ld r4 sp 28)               ; h, past the three pushes
@@ -622,10 +576,8 @@
          (ld r4 r4 0)                ; r4, last, off itself
          (jmpr lr)
 
-         ; -- __love_fbfork: freebsd's fork from arm state. its 32-bit lane on arm64 hands a
-         ;    child the parent's mode but not its thumb bit, so the child would wake on thumb
-         ;    code read as arm; made from arm state, both sides wake where they slept and bx
-         ;    lr brings them home. the carry rides the bx: a set one is the error, parked
+         ; -- __love_fbfork: freebsd's fork from arm state -- its child keeps the mode but
+         ;    not the thumb bit. the carry rides the bx
          (label __love_fbfork)
          (push lr)
          (la r12 fbfork-arm)
@@ -646,8 +598,7 @@
          (raw (4 112 157 228))       ; ldr r7, [sp], #4
          (raw (30 255 47 225))       ; bx lr
 
-         ; -- __love_nb_sigtramp: netbsd calls the handler itself and leaves the
-         ;    ucontext in r5; setcontext is the way back, exit if it fails
+         ; -- __love_nb_sigtramp: the ucontext in r5, back through setcontext
          (label __love_nb_sigtramp)
          (mov r12 r5)
          (li r0 308)                 ; setcontext
@@ -660,9 +611,7 @@
          (li r7 173)                 ; rt_sigreturn
          (sys)
 
-         ; -- __love_clone(flags, sp, ptid, ctid, tls): arm's clone orders (flags sp ptid
-         ;    tls ctid), tls setting TPIDRURO. the child wakes on sp, where its caller laid
-         ;    [fn arg], and calls fn(arg)
+         ; -- __love_clone: arm orders (flags sp ptid tls ctid); the child calls fn(arg) off sp
          (label __love_clone)
          (push r4) (push r7)
          (mov r4 r3)                 ; r4 <- ctid
@@ -687,25 +636,11 @@
          (ret))
 
          (arch = 'a64)
-         ; one expression: the written leaves ++ the generated netbsd table.
-         ; the a64 lane: same four leaves on the asm-generic table. registers are
-         ; holo's a64 file, rN = xN one-to-one (plus fp/lr/sp by name). the jmp_buf
-         ; inside the same 25-long buffer: [0..9] x19..x28, [10] fp, [11] sp, [12] lr
-         ; (the return pc -- BL parked it there, so it IS the return seam), [13..20]
-         ; d8..d15 (AAPCS saves the LOW HALVES only -- str dN is exactly that),
-         ; [21] the signal mask. rt_sigprocmask is 135; the kernel preserves every
-         ; register but x0 across svc, so buf/val stage in x9/x10 and ride through.
-         ; __love_sigret stays laid (rt_sigreturn 139) though a64's sigaction never
-         ; points at it -- the kernel supplies its own vdso trampoline (moonlibc gates
-         ; sa_restorer off); the symbol keeps the two sys.o surfaces identical.
+         ; a64: the written leaves ++ the netbsd table. rN = xN. jmp_buf: [0..9] x19..x28,
+         ; [10] fp, [11] sp, [12] lr, [13..20] d8..d15 (low halves, as AAPCS), [21] mask
          ('(
-         ; -- __love_sys: args x0..x6 (n,a..f) -> the kernel's x8=nr, x0..x5.
-         ;    x8 drains first, then each mov reads the slot ahead of it. the tail
-         ;    is OS-BLIND, as x64's is: the BSDs answer an error by setting the
-         ;    carry with a positive errno in x0, and linux preserves nzcv across
-         ;    svc (it rides SPSR through the eret), so a carry going in clear can
-         ;    only have been raised by a BSD. clearing it takes a borrow --
-         ;    a64's cmp is subs, and subtracting 0 leaves C set.
+         ; -- __love_sys: x0..x6 (n,a..f) -> x8=nr, x0..x5. os-blind: C goes in clear and
+         ;    linux preserves nzcv, so a set carry is a BSD's error
          (label __love_sys)
          (la r9 __love_osv)            ; netbsd wants the number in the instruction
          (ld r9 r9 0)
@@ -728,11 +663,7 @@
          (lea r0 r0 -4096)           ; -(errno+4096): parked for __love_call
          (ret)
 
-         ; -- the netbsd lane: the same shuffle, then a branch into the stub for
-         ;    this number (each is `svc #n; ret'). callr parks the return in lr,
-         ;    so the stub's ret comes back here and the carry answer is read the
-         ;    same way the register lanes read it. Out of range refuses enosys
-         ;    rather than jumping past the table.
+         ; -- netbsd: the same shuffle, then call into the number's stub; out of range is enosys
          (label sys-nb)
          (mov r10 r0)                ; x10 <- n, before the shuffle drains x0
          (cmp r10 512)
@@ -761,9 +692,7 @@
          (li r0 -38)                 ; -enosys, canonically
          (ret)
 
-         ; -- __love_sys7(n,a..g): the wide door netbsd's classic pads want. On
-         ;    a64 the seventh argument is just another register -- the kernel
-         ;    reads x0..x7 -- so unlike x64 nothing rides the stack.
+         ; -- __love_sys7(n,a..g): the seventh is just another register
          (label __love_sys7)
          (la r9 __love_osv)
          (ld r9 r9 0)
@@ -786,8 +715,6 @@
          (neg r0)
          (lea r0 r0 -4096)
          (ret)
-         ; the wide door on netbsd -- the kernel this one exists for. Seven
-         ; arguments and no number to carry, so x0..x6 take a..g outright.
          (label sys7-nb)
          (mov r10 r0)
          (cmp r10 512)
@@ -813,8 +740,7 @@
          (li r0 -38)
          (ret)
 
-         ; -- __sigsetjmp(buf, save): the callee-saved file, the return seam,
-         ;    then the current mask into buf[21] (rt_sigprocmask how=0 set=NULL).
+         ; -- __sigsetjmp(buf, save): the callee-saved file, the return seam, the mask into buf[21]
          (label __sigsetjmp)
          (st r0 0   r19)
          (st r0 8   r20)
@@ -864,13 +790,8 @@
          (li r0 0)
          (ret)
 
-         ; -- siglongjmp(buf, val): the mask first (the fault barrier jumps out
-         ;    of a signal handler), then the file, then ret through the saved lr.
-         ; buf and val ride x19/x20, not the scratch file: freebsd's syscall exit
-         ;    zeroes the caller-saved registers (a leak mitigation linux has not),
-         ;    so only the callee-saved half survives the kernel -- and that half is
-         ;    about to be overwritten from the buffer anyway. x19 restores last,
-         ;    off itself, x20 the line before it.
+         ; -- siglongjmp(buf, val): the mask, the file, ret through the saved lr. buf and val
+         ;    ride x19/x20: freebsd's syscall exit zeroes the caller-saved registers
          (label siglongjmp)
          (mov r19 r0)                ; x19 <- buf
          (mov r20 r1)                ; x20 <- val
@@ -925,13 +846,12 @@
          (ld r19 r19 0)
          (ret)                       ; ret x30 = the saved return pc
 
-         ; -- __love_sigret: rt_sigreturn, laid for surface parity (see above).
+         ; -- __love_sigret: unused (the kernel's vdso trampoline serves), laid for parity
          (label __love_sigret)
          (li r8 139)                 ; rt_sigreturn
          (sys)
 
-         ; -- __love_clone(flags, sp, ptid, ctid, tls): arm64's clone wants tls before
-         ;    ctid, so x3/x4 swap; then as x64's: the child calls sp[0](sp[1]).
+         ; -- __love_clone: tls before ctid, so x3/x4 swap; the child calls sp[0](sp[1])
          (label __love_clone)
          (mov r9 r3)                 ; x9 <- ctid
          (mov r3 r4)                 ; x3 <- tls
@@ -953,26 +873,16 @@
          (raw (64 208 59 213))       ; mrs x0, tpidr_el0
          (ret)
 
-         ; -- the netbsd leaves. __love_nb_sigtramp is read off the box's own libc
-         ;    (nm + objdump: `mov x0, x28; svc #0x134'): the kernel calls the
-         ;    handler directly and leaves the ucontext in x28 -- a64's r15 --
-         ;    and setcontext is the way back. a fall-through exits loudly.
+         ; -- __love_nb_sigtramp: the ucontext in x28, back through setcontext
          (label __love_nb_sigtramp)
          (mov r0 r28)
          (svcn 308)                  ; setcontext
          (li r0 1)
          (svcn 1)                    ; exit, never reached
 
-         ; -- the OS probe's two doors, asked before __love_osv is known and so in
-         ;    a form two kernels can answer at once: x8 and the immediate carry
-         ;    the same number, linux ignores the immediate and runs x8, netbsd
-         ;    reads the immediate. `20' is getpid on netbsd (positive) and
-         ;    epoll_create1 on linux/arm64 (-EINVAL, negative) -- the
-         ;    discriminator os.c wants -- and 202 is __sysctl, which parts netbsd
-         ;    from any other BSD arriving on this door later.
-         ; freebsd may never hear either: it signals sigill/ill_illopn for any
-         ;    svc immediate but zero. It is out before this runs -- crt0 knows it
-         ;    by the entry protocol and answers 2 without asking anyone.
+         ; -- the OS probe, before __love_osv is known: x8 and the immediate carry one number,
+         ;    linux reads x8, netbsd the immediate. 20: getpid on netbsd, -EINVAL on linux;
+         ;    202 is __sysctl. freebsd sigills on any nonzero immediate; crt0 knows it first
          (label __love_nbp20)
          (li r8 20)
          (svcn 20)
@@ -985,20 +895,12 @@
          (label __love_nbsvc))
           + nb-tab 511 ())       ; 512 stubs: 0 .. 511
 
-         ; the rv64 lane: the same leaves on the same asm-generic table (rt_sigprocmask
-         ; 135, rt_sigreturn 139), and the two BSDs beside linux. each kernel reads the
-         ; number in its own register -- linux a7, freebsd t0, netbsd t6 -- and the BSDs
-         ; answer an error with a positive errno in a0: freebsd raises t0, netbsd
-         ; resumes one word past the ecall where success resumes three. after a netbsd
-         ; ecall comes the raw tail, li t0 1 / j .+8 / li t0 0, so the two lanes read
-         ; one flag. t6 is holo's scratch, so netbsd's number goes in raw beside the
-         ; ecall; raw words are never squeezed. registers are holo's riscv file:
-         ; r0..r7 = a0..a7, r8..r11 = t0..t3, fp = s0, r15/r13/r14 = s1/s2/s3,
-         ; r19..r26 = s4..s11, lr = ra. the jmp_buf inside the 25-long buffer: [0] ra
-         ; (the return pc), [1] sp, [2..13] s0..s11, [14] the signal mask (a BSD's 16
-         ; bytes take [15] too). no fp slots: the backend's fp file is all
-         ; caller-saved (fa/ft; the fs bank is unmapped), so no mooncc-compiled frame
-         ; can hold a live double in one across a call.
+         ; rv64: the number in a7 (linux), t0 (freebsd), t6 (netbsd). a BSD error: freebsd
+         ; raises t0; netbsd resumes one word past the ecall, success three, so the raw tail
+         ; li t0 1 / j .+8 / li t0 0 makes one flag. t6 is holo's scratch: netbsd's number
+         ; goes in raw. r0..r7 = a0..a7, r8..r11 = t0..t3, fp = s0, r15/r13/r14 = s1/s2/s3,
+         ; r19..r26 = s4..s11, lr = ra. jmp_buf: [0] ra, [1] sp, [2..13] s0..s11, [14] mask;
+         ; no fp slots, as mooncc's fp file is all caller-saved
          '(
          ; -- __love_sys: args a0..a6 (n,a..f) -> the number, then a0..a5.
          (label __love_sys)
@@ -1036,8 +938,7 @@
          (lea r0 r0 -4096)           ; -(errno+4096): parked for __love_call
          (ret)
 
-         ; -- __love_sys7(n,a..g): the wide door netbsd's classic pads want; the
-         ;    seventh is a6, another register.
+         ; -- __love_sys7(n,a..g): the seventh in a6
          (label __love_sys7)
          (la r9 __love_osv)
          (ld r9 r9 0)
@@ -1074,8 +975,7 @@
          (lea r0 r0 -4096)
          (ret)
 
-         ; -- __sigsetjmp(buf, save): the callee-saved file, the return seam,
-         ;    then the current mask into buf[14] (how SIG_BLOCK, set NULL).
+         ; -- __sigsetjmp(buf, save): the callee-saved file, the return seam, the mask into buf[14]
          (label __sigsetjmp)
          (st r0 0   lr)
          (st r0 8   sp)
@@ -1121,10 +1021,7 @@
          (li r0 0)
          (ret)
 
-         ; -- siglongjmp(buf, val): the mask first (the fault barrier jumps out
-         ;    of a signal handler), then the file, then ret through the saved ra.
-         ;    buf and val ride t1/t2: a BSD's ecall writes t0, and every kernel
-         ;    here keeps the rest.
+         ; -- siglongjmp(buf, val): buf and val ride t1/t2, which every kernel here keeps
          (label siglongjmp)
          (mov r9 r0)                 ; t1 <- buf
          (mov r10 r1)                ; t2 <- val
@@ -1175,9 +1072,7 @@
          (ld lr r9 0)                ; the saved return pc
          (ret)                       ; jalr x0, 0(ra)
 
-         ; -- __love_sigret: rt_sigreturn, laid for surface parity (linux's
-         ;    sigaction rides the kernel's vdso trampoline, like a64; freebsd's
-         ;    kernel lays its own).
+         ; -- __love_sigret: unused (vdso trampoline), laid for parity
          (label __love_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)
@@ -1203,10 +1098,7 @@
          (raw (19 5 2 0))            ; addi a0, tp, 0
          (ret)
 
-         ; -- the netbsd leaves. the kernel calls the handler with ra at the
-         ;    registered tramp and sp at the frame: the siginfo, 128 bytes, then
-         ;    the ucontext, which setcontext takes back (libc's
-         ;    __sigtramp_siginfo_2). a fall-through exits loudly.
+         ; -- __love_nb_sigtramp: sp at the 128-byte siginfo, then the ucontext for setcontext
          (label __love_nb_sigtramp)
          (lea r0 sp 128)             ; a0 <- the ucontext
          (raw (147 15 64 19))        ; li t6, 308: setcontext
@@ -1218,11 +1110,7 @@
          (raw (147 15 16 0))         ; li t6, 1: exit, never reached
          (raw (115 0 0 0))           ; ecall
 
-         ; -- the OS probe's two doors, asked before __love_osv is known: a7 and t6
-         ;    carry the same number, linux reads a7 and netbsd t6, and both land
-         ;    past the raw tail. `20' is getpid on netbsd (positive) and
-         ;    epoll_create1 on linux (-EINVAL, negative); 202 is __sysctl. freebsd
-         ;    never asks: crt0 knows it by a0 at entry.
+         ; -- the OS probe, as a64's: a7 and t6 carry one number
          (label __love_nbp20)
          (li r7 20)
          (raw (147 15 64 1))         ; li t6, 20
@@ -1239,10 +1127,7 @@
          (raw (111 0 128 0))         ; j .+8
          (raw (147 2 0 0))           ; li t0, 0
          (ret)))
-       ; what each lane exports: the wide door rides wherever a BSD does (x64
-       ; through the stack, arm64 through x6, riscv through a6), and the 32-bit
-       ; lanes export neither it nor the netbsd leaves -- nothing has laid that
-       ; tail, which is the whole of what impl.h's LvOsTranslate says to the C.
+       ; what each lane exports; the 32-bit lanes lay no __love_sys7 and no probes
        (objelf arch ir ()
                (? (arch = 'x64)
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone"
