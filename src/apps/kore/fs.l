@@ -980,6 +980,25 @@
                    (words <l @ w
                     (go >l (3 <= #w ? ([(udf-esc (w 0)) (udf-esc (w 1)) (w 2)] . acc) acc))))
        (two? r ? (go (filter (s \ #s) (lines <>r)) ())))
+   ; each mount's root within its device, by point, from /proc/self/mountinfo
+   (udf-roots _)
+    (: r (uread "/proc/self/mountinfo") t {}
+       (two? r ? (foldl (t \ s \ (words s @ w (6 <= #w ? (pin t (udf-esc (w 4)) (udf-esc (w 3))) t))) t (lines <>r)) t))
+   ; one row a device, as GNU's df keeps: ms are (dev point type devno root), a devno () where
+   ; stat refused. a later mount takes the earlier's place when its dev is a path and the
+   ; other's is not, when it is nearer the root unless its own root lies deeper (a bind of a
+   ; subtree), or when it mounts over the same point from another dev
+   (udf-dedup ms)
+    (: (wins me sn) (? ((has? (me 0) "/") && !(has? (sn 0) "/")) 1
+                       (#(sn 1) > #(me 1) && !((sn 4) && (me 4) && #(sn 4) < #(me 4))) 1
+                       (me 0 != sn 0 && me 1 = sn 1) 1
+                       ())
+       (go l acc) (? (atom? l) (rev acc)
+                     (: me <l d (me 3)
+                        hit (charm? d && any (e \ e 3 = d) acc)
+                        (go >l (? !hit (me . acc)
+                                  (map (e \ (e 3 = d && wins me e) ? me e) acc)))))
+       (go ms ()))
    ; the mount a path sits on: the longest point its resolved name starts with, so a bind
    ; mount names itself. stat's %m asks this too
    (udf-holds ms p)
@@ -1056,7 +1075,10 @@
             (scan >mm (? (two? r) (a? || (r 1) ? ((typed (m 2) (udf-cells <m <>m r h? i?)) . acc) acc)
                          (r = 'eacces || r = 'enoent) (a? ? ((typed (m 2) [<m "-" "-" "-" "-" <>m]) . acc) acc)
                          (say err ("df: " + <>m + ": " + uerrno r), put err 10, pin t 'bad 1, acc)))))
-       rows (rev (two? fs ? (foldl (a \ p \ named p a) () fs) (scan ms ())))
+       ; the bare face shows each device once; -a shows every mount
+       (once ms) (: rt (udf-roots ())
+                    (udf-dedup (map (m \ (stat <>m @ st [<m <>m (m 2) (two? st ? (st 11)) (peep rt <>m ())])) ms)))
+       rows (rev (two? fs ? (foldl (a \ p \ named p a) () fs) (scan (a? ? ms (once ms)) ())))
        (two? rows ? (udf-show (hdr . rows) mins (T? ? '(0 1) '(0))),
         flush out,
         !!(peep t 'bad 0)))
