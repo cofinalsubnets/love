@@ -7,6 +7,8 @@ static love_inline uint32_t ld16be(uint8_t const *p) { return (uint32_t) p[0] <<
 static love_inline uint32_t ld32be(uint8_t const *p) {
  return (uint32_t) p[0] << 24 | (uint32_t) p[1] << 16 | (uint32_t) p[2] << 8 | p[3]; }
 static love_inline uint64_t ld64be(uint8_t const *p) { return (uint64_t) ld32be(p) << 32 | ld32be(p + 4); }
+static love_inline void st32be(uint8_t *p, uint32_t v) {
+ p[0] = (uint8_t) (v >> 24), p[1] = (uint8_t) (v >> 16), p[2] = (uint8_t) (v >> 8), p[3] = (uint8_t) v; }
 static love_inline uint32_t ld16le(uint8_t const *p) { return p[0] | (uint32_t) p[1] << 8; }
 static love_inline uint32_t ld24le(uint8_t const *p) { return ld16le(p) | (uint32_t) p[2] << 16; }
 static love_inline uint32_t ld32le(uint8_t const *p) { return ld24le(p) | (uint32_t) p[3] << 24; }

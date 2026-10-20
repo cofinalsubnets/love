@@ -5,6 +5,9 @@
 ; a slot dyld binds by name, flat; a weak import's slot stays 0 where nothing answers it.
 ; dyld's exe enters by LC_MAIN once libSystem's initializers have run; -static by LC_UNIXTHREAD.
 
+(borrow 'hashes)
+(borrow 'bytes)
+
 (module 'holo
 (: macho-cpus {'x64 [16777223 3]}      ; cpu_type_x86_64, cpu_subtype_x86_64_all
 
@@ -44,6 +47,19 @@
    (macho-fnv h s) (foldl (\ a b ((a ^ b) * 1099511628211 & 18446744073709551615)) h (map s ^#s))
    (macho-uuid s) (catall [(le32 27) (le32 24) (le64 (macho-fnv 14695981039346656037 s)) (le64 (macho-fnv 1469598103934665603 s))])
 
+   ; the ad-hoc signature, big-endian as the kernel reads it: a superblob of one code
+   ; directory (v2.4, linker-signed), a sha-256 a page of the file below it. at the end
+   ; of __LINKEDIT, so code limit and offset are one
+   (macho-sign pre ident xlim)
+    (: n #pre ns ((n + 4095) // 4096) ho (88 + #ident + 1) cdsz (ho + 32 * ns)
+       hs (map (k \ hex2b (sha256 (snip pre (4096 * k) (min n (4096 * k + 4096))))) ^ns)
+       (join "" ([(wrbe 4208856256 4) (wrbe (20 + cdsz) 4) (wrbe 1 4) (wrbe 0 4) (wrbe 20 4)
+                  (wrbe 4208856066 4) (wrbe cdsz 4) (wrbe 132096 4) (wrbe 131074 4)   ; adhoc, linker-signed
+                  (wrbe ho 4) (wrbe 88 4) (wrbe 0 4) (wrbe ns 4) (wrbe n 4)
+                  (string (cask [32 2 0 12])) (wrbe 0 16) (wrbe 0 8)   ; sha-256, 4k pages
+                  (wrbe 0 8) (wrbe xlim 8) (wrbe 1 8) ident (string (cask [0]))]   ; exec segment: __TEXT, main
+                 + hs + [(wrbe 0 (padk (20 + cdsz) 16))])))
+
    ; the weak undefined names no object defines: a dyld exe's weak imports
    (macho-weak-undefs objs)
     (: defs {}
@@ -56,8 +72,9 @@
               () objs))
 
    ; link ((id bytes)..), crt0 first, into a mach-o's piece list. dyn? lays a dyld exe loading
-   ; libSystem and dylibs; else static. pie (dyn? only): mh_pie, dyld slides every abs64 site
-   (macholink target srcs dyn? dylibs pie)
+   ; libSystem and dylibs, signed ad hoc as ident; else static. pie (dyn? only): mh_pie, dyld
+   ; slides every abs64 site
+   (macholink target srcs dyn? dylibs pie ident)
     (: cpu (peep macho-cpus target ())
        _ (two? cpu || scare 'macho-target target)
        objs0 (map (p \ ld-read <p <>p (peep elf-machines target 0)) srcs)
@@ -72,7 +89,7 @@
        dycmds (dyn? ? (catall ([macho-dyld] + map macho-dylib ("/usr/lib/libSystem.B.dylib" . dylibs)
                                + [macho-plat (macho-uuid (join " " (imps + dylibs + [(show (map (ob \ ob 'id) objs0))])))])) ())
        nseg (4 + ?img? + ?dyn?)          ; pagezero text rodata data, the image's or the linkedit
-       hdrsz (32 + 72 * nseg + (dyn? ? (24 + 48 + 24 + 80 + #dycmds) 184))
+       hdrsz (32 + 72 * nseg + (dyn? ? (24 + 48 + 24 + 80 + 16 + #dycmds) 184))
        lay (ldlay objs base hdrsz pg 0)
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay t1 (lay 4) o1 (lay 5)
        dend (ld-align 16 end)
@@ -110,25 +127,33 @@
        bsz (ld-align 8 #binds)
        lesz (rsz + bsz + 8)               ; rebases, binds, and an empty string table after
        le (catall [rbs (ld-zeros (rsz - #rbs)) binds (ld-zeros (bsz - #binds + 8))])
+       soff (ld-align 16 (loff + lesz))   ; the signature, past the rest of __LINKEDIT
+       ssz (ld-align 16 (20 + 88 + #ident + 1 + 32 * ((soff + pg - 1) // pg)))
+       lfsz (soff - loff + ssz)
        (up v) (ld-align pg v)
        cmds (catall ([(macho-seg "__PAGEZERO" 0 base 0 0 0)
                       (macho-seg "__TEXT" base (o0 - base) 0 (o0 - base) 5)   ; dyld wants code's file and memory alike: the pad is in the file
                       (macho-seg "__RODATA" o0 (up (o1 - o0)) (o0 - base) (o1 - o0) (ro? ? 3 1))
                       (macho-seg "__DATA" d0 (up (bend - d0)) (d0 - base) (gend - d0) 3)]
                      + (img? ? [(macho-seg "__IMAGE" iaddr (up (iend - iaddr)) ioff (iend - iaddr) 3)])
-                     + (dyn? ? [(macho-seg "__LINKEDIT" laddr (up lesz) loff lesz 1)])
+                     + (dyn? ? [(macho-seg "__LINKEDIT" laddr (up lfsz) loff lfsz 1)])
                      + (dyn? ? [(catall [(le32 2147483682) (le32 48) (le32 (#rbs && loff)) (le32 #rbs)   ; lc_dyld_info_only
                                          (le32 (loff + rsz)) (le32 #binds) (ld-zeros 24)])
                                 (catall [(le32 2) (le32 24) (le32 loff) (le32 0)       ; lc_symtab: none
                                          (le32 (loff + rsz + bsz)) (le32 8)])
                                 (catall [(le32 11) (le32 80) (ld-zeros 72)])          ; lc_dysymtab: none
+                                (catall [(le32 29) (le32 16) (le32 soff) (le32 ssz)])  ; lc_code_signature
                                 dycmds])
                      + [(dyn? ? (macho-main (ent - base)) (macho-thread ent))]))
-       ncmd (nseg + 1 + (dyn? ? (3 + 2 + #dylibs + 2) 0))
+       ncmd (nseg + 1 + (dyn? ? (4 + 2 + #dylibs + 2) 0))
        hdr (catall [(le32 4277009103) (le32 <cpu) (le32 <>cpu) (le32 2)   ; mh_magic_64, mh_execute
                     (le32 ncmd) (le32 #cmds) (le32 (dyn? ? (pie ? 2097157 5) 1)) (le32 0) cmds])   ; noundefs, dyldlink, pie
-       (hdrsz != #hdr ? (scare 'macho-headers #hdr),
-        (hdr . (>en + [(ld-zeros (gend - <en))]
-                + (img? ? ([(ld-zeros (ioff - (gend - base)))] + >ei))
-                + (dyn? ? [(ld-zeros (loff - (img? ? (ioff + (iend - iaddr)) (gend - base)))) le]))))))
+       ps (hdr . (>en + [(ld-zeros (gend - <en))]
+                  + (img? ? ([(ld-zeros (ioff - (gend - base)))] + >ei))
+                  + (dyn? ? [(ld-zeros (loff - (img? ? (ioff + (iend - iaddr)) (gend - base)))) le
+                             (ld-zeros (soff - loff - lesz))])))
+       pre (dyn? ? (join "" (map (p \ (string? p ? p (string (cask p)))) ps)) "")
+       _ (hdrsz != #hdr && scare 'macho-headers #hdr)
+       _ (dyn? && #pre != soff && scare 'macho-signature #pre)
+       (dyn? ? [pre (macho-sign pre ident (o0 - base))] ps)))
 ) ; module 'holo

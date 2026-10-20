@@ -990,7 +990,7 @@
        set (so ? lib (lib + rtpull lib tgt os nostd vb dyld?))
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
-             mac? (macholink tgt set dyld? dylibs pie)
+             mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)))
              so (ldshared tgt (last (usplit 47 dst)) (map (l \ "lib\(l).so") libs) set prod)
              (ldlink tgt pie org set prod rdme))
        ; the ei_osabi brand is ldlink's, so kore's `ld` and this driver agree
