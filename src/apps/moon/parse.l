@@ -1562,6 +1562,7 @@
    (pexpr ps ts) ((cx-door 'parse) ps ts 'expr)
    (pasn ps ts) ((cx-door 'parse) ps ts 'asn)
    (pcond ps ts) ((cx-door 'parse) ps ts 'cond)
+   (pblock ps ts) ((cx-door 'parse) ps ts 'blk)
 
    ; an initializer: an assignment-expr or ('init (item..)), an item plain | ('dfield name
    ; init) | ('didx n init). dbuild nests a designator chain (.a.b = v, C99 6.7.9), coalescing
@@ -2302,7 +2303,7 @@
              (? (peekp af ",") (btdefs ps base >af sh2 bq)
                 (peekp af ";") [>af sh2]
                 ()))))
-   (pblock ps ts)
+   (rpblock ps ts)
     (: ts0 (want ts "{")
        epre (ps 'scopacc)
        ; the depth a tag definition reads to know it is not at file scope; bend restores it
