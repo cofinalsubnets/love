@@ -680,7 +680,7 @@
  sky-k 2                                  ; the sky asked every sky-k columns of kitty's pixels
  ; the walls, the floor and what is in the yard, the sky where they leave the screen bare,
  ; through the eye's gain: a flat tray of colours, 'kp pixels a column and twice that a row
- (court-pens st) (: lt (court-light st) k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) t0 (st 't)
+ (court-pens st) (: lt (court-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) t0 (st 't)
    e [(st 'px) eye-h (st 'pz)] fv (peep st 'fov fov)
    v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fv 0.05 100.0)
    sc0 (scene st lt) sea (court-season st)

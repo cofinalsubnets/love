@@ -5,6 +5,12 @@
 ;   (window-paper win)        its paper: a cask of w x h pixels 0x00rrggbb, what `dye` paints
 ;   (window-size win)         (w h)
 ;   (window-show win y0 y1)   the paper's rows y0..y1-1 out to the screen
+;   (window-blit win pic w h) a picture w x h, 32-bit pixels as the paper's, out to the
+;                             whole window, the server enlarging it; 0 where it cannot, the
+;                             picture to be painted onto the paper
+;   (window-hold win on)      the pointer held in the window and hidden, on 1, or let go, on
+;                             0; 1 where it was done
+;   (window-warp win x y)     the pointer moved to x y in the window
 ;   (window-events win)       the records waiting, () when none; never blocks
 ;   (window-close win)
 ;   (window-own win sel text) text held as the selection sel, 'primary or 'clipboard
@@ -19,7 +25,7 @@
 ; scaled by LOVE_FACE_SCALE, 2 unless said) the whole screen, whatever w h asked.
 ; a tablet of 'w 'h 'paper alone is a law's screenless window: it shows nothing and its
 ; events are its 'evq. off X a selection is the window's own.
-(module '(window window-here? window-open window-paper window-size window-show window-events window-close
+(module '(window window-here? window-open window-paper window-size window-show window-blit window-hold window-warp window-events window-close
           window-own window-ask window-typing window-wets)
 (borrow 'xwire)
 (borrow 'posix)
@@ -147,6 +153,76 @@
           (win 'how = 'inle) (kshow (win 'paper) a b)
           (win 'how = 'droid) (droid-send win a (b - a) (snip (win 'paper) (a * win 'w * 4) (b * win 'w * 4)))
           0))
+
+   ; --- RENDER: a picture put up at its own size and drawn s times over by the server, so a
+   ;     frame ships its own pixels and not the window's. the format is the paper's: depth
+   ;     the window's, red at 16, green at 8, blue at 0, no alpha ---
+   (x-render win) (peep win 'rd () @ () (: r (x-render-init win) _ (pin win 'rd r) r) r r)
+   (x-render-init win)
+    (: s (win 's) ext (x-queryext s "RENDER")
+       (? !(two? ext) 0
+          (: op <ext
+             _ (x-w8 s op, x-w8 s 0, x-w16 s 3, x-w32 s 0, x-w32 s 11, x-flush s)        ; QueryVersion 0.11
+             v (x-reply s)
+             _ (x-w8 s op, x-w8 s 1, x-w16 s 1, x-flush s)                               ; QueryPictFormats
+             hdr (x-reply s)
+             n (<hdr = 1 ? (u32 hdr 8) 0) b (<hdr = 1 ? (x-rbytes s (4 * u32 hdr 4)) ())
+             (fmt i) (: o (28 * i)
+               (b (o + 4) = 1 && b (o + 5) = win 'depth && u16 b (o + 8) = 16 && u16 b (o + 10) = 255
+                && u16 b (o + 12) = 8 && u16 b (o + 16) = 0 && u16 b (o + 18) = 255 && u16 b (o + 22) = 0 ? (u32 b o) ()))
+             f (foldl (\ a i (a = () ? (fmt i) a)) () ^n)
+             (? (!(<v = 1) || f = ()) 0
+                {'op op 'fmt f 'pw 0 'ph 0 'sc 0 'made 0 'pm (win 'xw + 2) 'src (win 'xw + 3) 'dst (win 'xw + 4)}))))
+   ; ..the pixmap and its pictures made again whenever the picture's size or the window's
+   ; changes; a transform taking the window's place to the picture's, its share each way
+   (x-render-at win r w h)
+    (? (r 'pw = w && r 'ph = h && r 'sc = [(win 'w) (win 'h)]) 0
+       (: k (win 's) op (r 'op) mx (65536 * w // max 1 (win 'w)) my (65536 * h // max 1 (win 'h))
+          _ (r 'made ? (x-w8 k op, x-w8 k 7, x-w16 k 2, x-w32 k (r 'src),                 ; FreePicture
+                        x-w8 k op, x-w8 k 7, x-w16 k 2, x-w32 k (r 'dst),
+                        x-w8 k 54, x-w8 k 0, x-w16 k 2, x-w32 k (r 'pm)) 0)                 ; FreePixmap
+          _ (x-w8 k 53, x-w8 k (win 'depth), x-w16 k 4, x-w32 k (r 'pm), x-w32 k (win 'xw), x-w16 k w, x-w16 k h)
+          _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'src), x-w32 k (r 'pm), x-w32 k (r 'fmt), x-w32 k 0)
+          _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'dst), x-w32 k (win 'xw), x-w32 k (r 'fmt), x-w32 k 0)
+          _ (x-w8 k op, x-w8 k 28, x-w16 k 11, x-w32 k (r 'src), each [mx 0 0 0 my 0 0 0 65536] (v \ x-w32 k v))
+          (pins r 'pw w 'ph h 'sc [(win 'w) (win 'h)] 'made 1)))
+   (window-blit win pic w h)
+    (: r (win 'how = 'x ? (x-render win) 0)
+       (? !(tablet? r) 0
+          (: k (win 's) op (r 'op)
+             _ (x-hold win)
+             _ (x-render-at win r w h)
+             _ (x-putrows k (r 'pm) (win 'gc) (win 'depth) pic w 0 h)
+             _ (x-w8 k op, x-w8 k 8, x-w16 k 9, x-w8 k 1, x-w8 k 0, x-w16 k 0,               ; Composite, Src
+                x-w32 k (r 'src), x-w32 k 0, x-w32 k (r 'dst),
+                x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0,
+                x-w16 k (win 'w), x-w16 k (win 'h), x-flush k)
+             _ (x-let win)
+             1)))
+
+   ; --- the pointer held: GrabPointer confined to the window, its motion and buttons ours,
+   ;     shown by a cursor of one clear pixel, made once; UngrabPointer lets it go ---
+   (x-blank win) (peep win 'blank () @ () (: k (win 's) pm (win 'xw + 5) gc (win 'xw + 6) cu (win 'xw + 7)
+      _ (x-w8 k 53, x-w8 k 1, x-w16 k 4, x-w32 k pm, x-w32 k (win 'xw), x-w16 k 1, x-w16 k 1)     ; CreatePixmap, depth 1
+      _ (x-w8 k 55, x-w8 k 0, x-w16 k 5, x-w32 k gc, x-w32 k pm, x-w32 k 4, x-w32 k 0)           ; CreateGC, foreground 0
+      _ (x-w8 k 70, x-w8 k 0, x-w16 k 5, x-w32 k pm, x-w32 k gc, x-w16 k 0, x-w16 k 0, x-w16 k 1, x-w16 k 1)  ; PolyFillRectangle
+      _ (x-w8 k 93, x-w8 k 0, x-w16 k 8, x-w32 k cu, x-w32 k pm, x-w32 k pm,                     ; CreateCursor, all mask clear
+         x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0)
+      _ (pin win 'blank cu) cu) c c)
+   (window-hold win on)
+    (? (win 'how != 'x) 0
+       (: k (win 's)
+          _ (x-hold win)
+          ok (? on (: cu (x-blank win)
+                      _ (x-w8 k 26, x-w8 k 0, x-w16 k 6, x-w32 k (win 'xw), x-w16 k 76, x-w8 k 1, x-w8 k 1,   ; GrabPointer
+                         x-w32 k (win 'xw), x-w32 k cu, x-w32 k 0, x-flush k)
+                      r (x-reply k)
+                      (<r = 1 && r 1 = 0))
+                   (: _ (x-w8 k 27, x-w8 k 0, x-w16 k 2, x-w32 k 0, x-flush k) 1))
+          _ (x-let win)
+          (ok ? 1 0)))
+   (window-warp win x y) (? (win 'how != 'x) 0
+                            (: k (win 's) _ (x-hold win) _ (x-warp k (win 'xw) x y) _ (x-flush k) _ (x-let win) 1))
 
    ; a size the paper already has is no news: X says one for every move
    (resized win r)

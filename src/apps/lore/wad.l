@@ -318,7 +318,7 @@
    f2 (lay f (g 0 + string (at (g 7) @ 46 65 c c) + "0"))
    (at (g 9) = 46 || !(string? (g 1)) ? f2 (lay f2 (g 1 + string (at (g 9)) + "0"))))
  ; ..the view over the status bar where the wad has one, a 32nd of 200 of the frame's height each
- (wad-pens st) (: k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) sc (st 'sc)
+ (wad-pens st) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc)
    bh (bar? st ? (h * 32 // 200) 0) vh (h - bh)
    v (mesh-eye w vh [(st 'px) (st 'py) (st 'pz)] (st 'th) (st 'ph) 0.0 fov 2.0 8000.0)
    all (sc 'secs + scrolls st + sprites st)

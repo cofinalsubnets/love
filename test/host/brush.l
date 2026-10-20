@@ -22,7 +22,7 @@
                   (1.5 < c 0 < 2.5 && c 1 < 2.0 && 3.99 < c 2 < 4.21 && mag (f 1 2) > 0.9))
    ; air half filled by a solid sharing three sides: five of the air's faces and the solid's top
    a1 (brush-box 1 [0.0 0.0 0.0] [1.0 1.0 1.0]) s1 (brush-box 0 [0.0 0.0 0.0] [1.0 1.0 0.5])
-   mesh0 (brush-mesh [room] 1.0 (\ n p b [-1 0.0 0.0]))
+   mesh0 (brush-mesh [room] 1.0 (\ n b [-1 [0.0 0.0 0.0 0.0] [0.0 0.0 0.0 0.0]]))
  (test (m [2.0 1.0 2.0] = 1) (m [5.0 1.0 2.0] = 0) (m [0.1 1.0 1.7] = 0) (m [0.5 2.9 1.7] = 0) (m [0.5 2.1 1.7] = 1)
        (m [0.7 2.2 1.7] = 1)
        (#alone = 6) (mag (total alone - 2.0 * (12.0 + 12.0 + 16.0)) < 1e-6)
@@ -39,6 +39,19 @@
        ; each face knows its brush
        (all (f \ f 2 = 0) alone) (any (f \ f 2 = 1) (brush-faces [room col]))
        ; 80 metre squares, two triangles each
-       (#(mesh0 1) = 2 * 80)))
+       (#(mesh0 'tris) = 4 * 2 * 80 && mesh0 'n = #(mesh0 'cols 0))))
+;; a band cut from a box along both its sides, each side judged from the box's middle
+(: sky (brush-box 1 [0.0 0.0 0.0] [20.0 20.0 2.0])
+   band (brush-cuts (brush-box 0 [10.0 9.7 0.0] [14.5 12.7 1.0])
+                    [[[14.5 9.18 0.0] [14.5 9.18 1.0] [10.0 11.78 0.0]] [[14.5 10.1 0.0] [14.5 10.1 1.0] [10.0 12.7 0.0]]])
+   (m p) (brush-medium [sky band] p)
+ (test (m [12.25 10.94 0.5] = 0) (m [12.25 12.0 0.5] = 1) (m [12.25 10.0 0.5] = 1) (m [14.3 10.0 0.5] = 0) (m [10.3 12.3 0.5] = 0)))
+;; a ray: out of a room's air at its wall, facing back in; a solid column in the way ends
+; the air first, its face toward the ray; from inside the solid, the air it comes out into
+; ends at the wall
+(: rr (brush-box 1 [0.0 0.0 0.0] [4.0 3.0 4.0]) rc (brush-box 0 [1.0 0.0 1.0] [2.0 3.0 2.0])
+   h (brush-ray [rr] [2.0 1.5 2.0] [1.0 0.0 0.0]) h2 (brush-ray [rr rc] [3.5 1.5 1.5] [-1.0 0.0 0.0])
+ (test (h 't = 2.0) (h 'b = 0) (h 'n = [-1.0 0.0 0.0]) (h 'p = [4.0 1.5 2.0])
+       (h2 'b = 1) (h2 't = 1.5) (h2 'n = [1.0 0.0 0.0]) (brush-ray [rr rc] [1.5 1.5 1.5] [1.0 0.0 0.0] 't = 2.5) (brush-ray [] [1.5 1.5 1.5] [1.0 0.0 0.0] = ())))
 (test_fin ())
 (puts "brush: ok\n")
