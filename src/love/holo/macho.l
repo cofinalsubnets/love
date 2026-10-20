@@ -21,6 +21,17 @@
    (macho-main off) (catall [(le32 2147483688) (le32 24) (le64 off) (le64 0)])
 
    (macho-uleb n) (: b (n % 128) r (n // 128) (r = 0 ? [b] (b + 128 . macho-uleb r)))
+   ; the rebase opcodes over ascending sites: type pointer, then each site a segment and
+   ; offset, an add past a gap, or nothing for the next word, and a rebase. segs: (ix lo hi)..
+   (macho-rebase segs sites)
+    (: (segof a) (: f (filter (sg \ sg 1 <= a && a < sg 2) segs) (atom? f ? (scare 'macho-rebase-site a) <f))
+       st (foldl (\ st a (: sg (segof a) nx (st 1)
+                             op (? (<st != <sg || a < nx) (32 + <sg . macho-uleb (a - sg 1))
+                                   (a = nx) ()
+                                   (48 . macho-uleb (a - nx)))
+                             [<sg (a + 8) ([81] . op . st 2)]))
+                 [-1 0 ()] sites)
+       (catall ([[17]] + rev (st 2) + [[0]])))
    ; a path-bearing load command: the head, the path at `at`, NUL-ended and padded to 8
    (macho-pathcmd cmd at hd path)
     (: n (ld-align 8 (at + #path + 1))
@@ -45,8 +56,8 @@
               () objs))
 
    ; link ((id bytes)..), crt0 first, into a mach-o's piece list. dyn? lays a dyld exe loading
-   ; libSystem and dylibs; else static
-   (macholink target srcs dyn? dylibs)
+   ; libSystem and dylibs; else static. pie (dyn? only): mh_pie, dyld slides every abs64 site
+   (macholink target srcs dyn? dylibs pie)
     (: cpu (peep macho-cpus target ())
        _ (two? cpu || scare 'macho-target target)
        objs0 (map (p \ ld-read <p <>p (peep elf-machines target 0)) srcs)
@@ -76,9 +87,6 @@
                                      (catall [[(elem (imps k) wimps ? 65 64)] (map n ^#n) [0]   ; 65 a weak import
                                               [115] (macho-uleb (dend - d0 + 8 * k)) [144]]))) ^ni
                       + [[0]]))
-       bsz (ld-align 8 #binds)
-       lesz (bsz + 8)                     ; ..and an empty string table after
-       le (catall [binds (ld-zeros (lesz - #binds))])
        loff (ld-align pg (ioff + (iend - iaddr)))
        laddr (ld-align pg iend)
        glo (ldsyms objs)
@@ -89,29 +97,36 @@
               o1 <objs
               (two? e ? <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
-       cx [glo n0 end end end {0 ()} () () (backends target) (ld-extents objs)]
+       relbox {0 ()}                      ; abs64 sites
+       cx [glo n0 end end end relbox () () (backends target) (ld-extents objs)]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (o0 - <et))])))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs (>eo + [(ld-zeros (d0 - <eo))])))
        en (ldemit cx 'nifs <ed objs >ed)
        ei (img? ? (ldemit cx 'image iaddr objs ()) [iaddr])
+       ro? (pie && any (a \ a < d0) (relbox 0))   ; a site in __RODATA: dyld writes it, so rw
+       rbs (pie ? (macho-rebase [[2 o0 o1] [3 d0 gend]] (sort (relbox 0))) ())
+       rsz (ld-align 8 #rbs)
+       bsz (ld-align 8 #binds)
+       lesz (rsz + bsz + 8)               ; rebases, binds, and an empty string table after
+       le (catall [rbs (ld-zeros (rsz - #rbs)) binds (ld-zeros (bsz - #binds + 8))])
        (up v) (ld-align pg v)
        cmds (catall ([(macho-seg "__PAGEZERO" 0 base 0 0 0)
                       (macho-seg "__TEXT" base (o0 - base) 0 (o0 - base) 5)   ; dyld wants code's file and memory alike: the pad is in the file
-                      (macho-seg "__RODATA" o0 (up (o1 - o0)) (o0 - base) (o1 - o0) 1)
+                      (macho-seg "__RODATA" o0 (up (o1 - o0)) (o0 - base) (o1 - o0) (ro? ? 3 1))
                       (macho-seg "__DATA" d0 (up (bend - d0)) (d0 - base) (gend - d0) 3)]
                      + (img? ? [(macho-seg "__IMAGE" iaddr (up (iend - iaddr)) ioff (iend - iaddr) 3)])
                      + (dyn? ? [(macho-seg "__LINKEDIT" laddr (up lesz) loff lesz 1)])
-                     + (dyn? ? [(catall [(le32 2147483682) (le32 48) (ld-zeros 8)       ; lc_dyld_info_only: no rebase
-                                         (le32 loff) (le32 #binds) (ld-zeros 24)])
+                     + (dyn? ? [(catall [(le32 2147483682) (le32 48) (le32 (#rbs && loff)) (le32 #rbs)   ; lc_dyld_info_only
+                                         (le32 (loff + rsz)) (le32 #binds) (ld-zeros 24)])
                                 (catall [(le32 2) (le32 24) (le32 loff) (le32 0)       ; lc_symtab: none
-                                         (le32 (loff + bsz)) (le32 8)])
+                                         (le32 (loff + rsz + bsz)) (le32 8)])
                                 (catall [(le32 11) (le32 80) (ld-zeros 72)])          ; lc_dysymtab: none
                                 dycmds])
                      + [(dyn? ? (macho-main (ent - base)) (macho-thread ent))]))
        ncmd (nseg + 1 + (dyn? ? (3 + 2 + #dylibs + 2) 0))
        hdr (catall [(le32 4277009103) (le32 <cpu) (le32 <>cpu) (le32 2)   ; mh_magic_64, mh_execute
-                    (le32 ncmd) (le32 #cmds) (le32 (dyn? ? 5 1)) (le32 0) cmds])   ; noundefs, dyldlink
+                    (le32 ncmd) (le32 #cmds) (le32 (dyn? ? (pie ? 2097157 5) 1)) (le32 0) cmds])   ; noundefs, dyldlink, pie
        (hdrsz != #hdr ? (scare 'macho-headers #hdr),
         (hdr . (>en + [(ld-zeros (gend - <en))]
                 + (img? ? ([(ld-zeros (ioff - (gend - base)))] + >ei))

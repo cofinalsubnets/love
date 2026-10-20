@@ -308,7 +308,7 @@ $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootf
 $(ho)/love-macos.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -os macos $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
+	@$(moon0) -os macos -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
