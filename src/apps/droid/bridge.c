@@ -35,9 +35,8 @@
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
    directory before each start, which is love's cwd and HOME. love inherits the app's own
    environment (android's ANDROID_* and PATH), and its PATH leads with DATA/bin, where love
-   is linked under its own name and as am, pm and settings: android's are refused an app's
-   uid, and love's speak the framework's door. when love ends it is started again; the app ends as android
-   ends it. */
+   is linked under its own name and as open, a link handed on through the framework's door.
+   when love ends it is started again; the app ends as android ends it. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
 
@@ -775,7 +774,7 @@ static void spawn(br *b) {
   snprintf(face, sizeof face, "LOVE_FACE=%s", b->sock); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
   snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear); snprintf(droid, sizeof droid, "LOVE_DROID=%s", b->droid);
   snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
-  static char const *const names[] = { "love", "am", "pm", "settings" };   /* love's own, ahead of android's refused ones */
+  static char const *const names[] = { "love", "open" };
   for (unsigned i = 0; i < sizeof names / sizeof *names; i++) {
     snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); unlink(bin); symlink(exe, bin); }   /* its dir moves per install */
   char const *pp = getenv("PATH");
