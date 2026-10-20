@@ -9,7 +9,7 @@
 ;   (yacc-runv t acts ks vs ps need tv)  the same, a token's value (tv its tail of vs)
 ;   love yacc [-m MODULE] [-n NAME] SPEC   the tables and actions as love text
 ; a spec: declarations (%token %left %right %nonassoc %start %expect %param, %{ text %}), %%,
-; rules (name : symbols {action} | .. ;), and an optional %% before text laid after the tables.
+; rules (name : symbols {action} | .. ;), and an optional %% before text laid last, after the actions.
 ; not yet: the error token, mid-rule actions, $$ and $<tag>, string-literal tokens.
 (module 'kore
 (borrow 'cli)
@@ -350,8 +350,8 @@
      join "" (map (h \ h + "\n") (peep G 'head ())) +
      "   " + nm + " \"" + yacc-hex tab + "\"\n" +
      "   " + nm + "-terms '(" + join " " (map show (G 'terms)) + ")\n" +
-     (G 'tail ? (G 'tail + "\n") "") +
-     "   " + nm + "-acts {\n" + join "\n" (yacc-acts G) + "}\n))\n")
+     "   " + nm + "-acts {\n" + join "\n" (yacc-acts G) + "}\n" +
+     (G 'tail ? (G 'tail + "\n") "") + "))\n")
    (yacc-main as)
     (: (opts a m n) (? (two? a && two? >a && <a = "-m") (opts >>a <>a n)
                        (two? a && two? >a && <a = "-n") (opts >>a m <>a)
