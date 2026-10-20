@@ -1675,7 +1675,9 @@
                           (grab >l ([>p2 <><l] . acc))
                           [(rev acc) l])))
                 gr (grab >prs [[>path v]])
-                subs <gr
+                ; a whole value for the head overrides all the run laid before it (6.7.9p19)
+                (fromleaf l k) (atom? l ? k (fromleaf >l (atom? <<l ? l k)))
+                subs (fromleaf <gr <gr)
                 sub (dbuild subs)
                 node (atom? >subs && atom? <<subs ? <sub ['init sub])
                 ([(<h = 'f ? 'dfield 'didx) <>h node] . dbuild <>gr)))))
