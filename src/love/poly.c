@@ -324,15 +324,18 @@ static word pl_list(struct g *g, word const *w, uintptr_t n) {
  return l; }
 static word pl_gem(struct g *g, flo_t v) { return mk_gem(&g->hp, v); }
 
-// (poly-fans pss n look seen fine): see the head
+// (poly-fans pss n look seen fine): each piece of a face facing n, its edges taking on the
+// seen corners where they cross a line of the fine grid, as [mid [verts tris]] for
+// poly-weave: fanned from its first corner, or from mid when its edges took corners on,
+// turned to face n; look [tex U V], a corner's texels U and V dotted with [x y z 1]
 love_noinline static struct g *host_poly_fans(struct g *g) {
  struct fan f = {0};
  struct bag a, e;
  bag_ini(&a), bag_ini(&e);
  word const lk = g->sp[2], sn = g->sp[3];
- uintptr_t nm = 0, cm = 0, words = gem_req;
+ uintptr_t nm = 0, cm = 0, words = 0;
  flo_t *mids = NULL;
- bool good = pl_num3(g->sp[1], f.n) && chainp(lk) && chainp(B(lk)) && chainp(B(B(lk))) && strp(sn) && len(str(sn)) >= 16 && isnum(g->sp[4]);
+ bool good = pl_num3(g->sp[1], f.n) && chainp(lk) && charmp(A(lk)) && chainp(B(lk)) && chainp(B(B(lk))) && strp(sn) && len(str(sn)) >= 16 && isnum(g->sp[4]);
  for (int s = 0; good && s < 2; s++) {
   word q = A(s ? B(B(lk)) : B(lk));
   flo_t *r = s ? f.V : f.U;
@@ -356,62 +359,82 @@ love_noinline static struct g *host_poly_fans(struct g *g) {
   pl_mid(a.v + at, n, mids + 3 * nm++);
   pl_edged(&f, a.v + at, n, &e);
   uintptr_t const ne = bag_n(&e, e.np - 1), nv = ne + (ne != n), nt = ne != n ? ne : n - 2;
-  words += 5 * chain_req + 3 * (chain_req + gem_req)   // the list's, [mid mesh], mid, [vs ts]
-         + nv * (12 * chain_req + 2 * gem_req) + nt * 5 * chain_req;
-  for (uintptr_t i = 0; i < ne; i++) words += bag_piece(&e, e.np - 1)[i].src < 0 ? 3 * gem_req : 0; }
+  words += 5 * chain_req + 3 * (chain_req + gem_req)   // the list's, [mid part], mid, [verts tris]
+         + b2w(tray_bytes(love_R, 1, 11 * nv)) + b2w(tray_bytes(love_Z, 1, 4 * nt)); }
  good = good && !a.bad && !e.bad;
  if (good && ok(g = have(g, words))) {
-  uintptr_t cin = 0;
-  word *in = pl_grow(NULL, (uintptr_t) src + 1, &cin, sizeof *in, &a.bad);
-  if (!a.bad) {
-   uintptr_t k = 0;
-   for (word l = g->sp[0]; chainp(l); l = B(l)) for (word q = A(l); chainp(q); q = B(q)) in[k++] = A(q);
-   word nw[3], one = pl_gem(g, (flo_t) 1.0), r = ZeroPoint;
-   for (int j = 0; j < 3; j++) nw[j] = A(j ? (j > 1 ? B(B(g->sp[1])) : B(g->sp[1])) : g->sp[1]);
-   word const tex = A(g->sp[2]);
-   for (uintptr_t i = nm; i--; ) {
-    struct pv const *ps = bag_piece(&e, i);
-    uintptr_t const ne = bag_n(&e, i), n0 = bag_n(&a, i), fan = ne != n0, nv = ne + fan;
-    flo_t const *m = mids + 3 * i;
-    word mw[3] = {pl_gem(g, m[0]), pl_gem(g, m[1]), pl_gem(g, m[2])};
-    word ts = ZeroPoint, vs = ZeroPoint;
-    if (fan)   // from the middle, round
-     for (uintptr_t j = ne; j--; ) {
-      uintptr_t const b = (j + 1) % ne;
-      bool const t = pl_turns(f.n, m, ps[b].p, ps[j].p);
-      word const tri[4] = {putcharm(ne), putcharm(t ? j : b), putcharm(t ? b : j), tex};
-      ts = word(ini_chain(bump(g, chain_req), (intptr_t) pl_list(g, tri, 4), (intptr_t) ts)); }
-    else
-     for (uintptr_t j = n0 - 2; j--; ) {
-      bool const t = pl_turns(f.n, ps[0].p, ps[j + 2].p, ps[j + 1].p);
-      word const tri[4] = {putcharm(0), putcharm(t ? j + 1 : j + 2), putcharm(t ? j + 2 : j + 1), tex};
-      ts = word(ini_chain(bump(g, chain_req), (intptr_t) pl_list(g, tri, 4), (intptr_t) ts)); }
-    for (uintptr_t j = nv; j--; ) {
-     flo_t const *p = j < ne ? ps[j].p : m;
-     word x[3];
-     if (j == ne) memcpy(x, mw, sizeof x);
-     else if (ps[j].src >= 0) {
-      word const c = in[ps[j].src];
-      x[0] = A(c), x[1] = A(B(c)), x[2] = A(B(B(c))); }
-     else for (int k = 0; k < 3; k++) x[k] = pl_gem(g, p[k]);
-     word const vx[11] = {x[0], x[1], x[2], pl_gem(g, pl_dot4(f.U, p)), pl_gem(g, pl_dot4(f.V, p)), nw[0], nw[1], nw[2], one, one, one};
-     vs = word(ini_chain(bump(g, chain_req), (intptr_t) pl_list(g, vx, 11), (intptr_t) vs)); }
-    word const mesh[2] = {vs, ts}, it[2] = {pl_list(g, mw, 3), pl_list(g, mesh, 2)};
-    r = word(ini_chain(bump(g, chain_req), (intptr_t) pl_list(g, it, 2), (intptr_t) r)); }
-   g->sp[0] = r; }
-  if (in) alloc(in, 0); }
+  word r = ZeroPoint;
+  intptr_t const tex = getcharm(A(g->sp[2]));
+  for (uintptr_t i = nm; i--; ) {
+   struct pv const *ps = bag_piece(&e, i);
+   uintptr_t const ne = bag_n(&e, i), n0 = bag_n(&a, i), fan = ne != n0, nv = ne + fan, nt = fan ? ne : n0 - 2;
+   flo_t const *m = mids + 3 * i;
+   uintptr_t const vw = b2w(tray_bytes(love_R, 1, 11 * nv)), tw = b2w(tray_bytes(love_Z, 1, 4 * nt));
+   struct tray *vt = ini_tray(bump(g, vw), love_R, 1), *tt = ini_tray(bump(g, tw), love_Z, 1);
+   vt->shape[0] = 11 * nv, tt->shape[0] = 4 * nt;
+   flo_t *v = tray_data(vt);
+   intptr_t *t = tray_data(tt);
+   if (fan)   // from the middle, round
+    for (uintptr_t j = 0; j < ne; j++) {
+     uintptr_t const b = (j + 1) % ne;
+     bool const u = pl_turns(f.n, m, ps[b].p, ps[j].p);
+     t[4 * j] = (intptr_t) ne, t[4 * j + 1] = (intptr_t) (u ? j : b), t[4 * j + 2] = (intptr_t) (u ? b : j), t[4 * j + 3] = tex; }
+   else
+    for (uintptr_t j = 0; j < nt; j++) {
+     bool const u = pl_turns(f.n, ps[0].p, ps[j + 2].p, ps[j + 1].p);
+     t[4 * j] = 0, t[4 * j + 1] = (intptr_t) (u ? j + 1 : j + 2), t[4 * j + 2] = (intptr_t) (u ? j + 2 : j + 1), t[4 * j + 3] = tex; }
+   for (uintptr_t j = 0; j < nv; j++, v += 11) {
+    flo_t const *p = j < ne ? ps[j].p : m;
+    v[0] = p[0], v[1] = p[1], v[2] = p[2], v[3] = pl_dot4(f.U, p), v[4] = pl_dot4(f.V, p);
+    v[5] = f.n[0], v[6] = f.n[1], v[7] = f.n[2], v[8] = v[9] = v[10] = (flo_t) 1.0; }
+   word const mw[3] = {pl_gem(g, m[0]), pl_gem(g, m[1]), pl_gem(g, m[2])}, part[2] = {word(vt), word(tt)},
+              it[2] = {pl_list(g, mw, 3), pl_list(g, part, 2)};
+   r = word(ini_chain(bump(g, chain_req), (intptr_t) pl_list(g, it, 2), (intptr_t) r)); }
+  g->sp[0] = r; }
  if (ok(g) && (!good || a.bad)) g->sp[0] = ZeroPoint;
  if (mids) alloc(mids, 0);
  if (f.ts) alloc(f.ts, 0);
  return bag_fin(&a), bag_fin(&e), g; }
+
+// (poly-weave parts): parts each [verts tris], verts 11 numbers a vertex and tris 4 a
+// triangle, its indices the part's own, joined as [n cols tris]: the vertex count, a tray a
+// column, and the triangles' indices moved past the parts before
+love_noinline static struct g *host_poly_weave(struct g *g) {
+ uintptr_t nv = 0, nt = 0;
+ for (word l = g->sp[0]; chainp(l); l = B(l)) {
+  word const q = A(l);
+  if (!chainp(q) || !chainp(B(q)) || !galaxyp(A(q)) || !galaxyp(A(B(q)))) return g->sp[0] = ZeroPoint, g;
+  uintptr_t const a = tray_nelem(tray(A(q))), b = tray_nelem(tray(A(B(q))));
+  if (a % 11 || b % 4) return g->sp[0] = ZeroPoint, g;
+  nv += a / 11, nt += b; }
+ uintptr_t const cw = b2w(tray_bytes(love_R, 1, nv)), tw = b2w(tray_bytes(love_Z, 1, nt));
+ if (!ok(g = have(g, 11 * cw + tw + 14 * chain_req))) return g;
+ struct tray *c[11], *t = ini_tray(bump(g, tw), love_Z, 1);
+ word cs[11];
+ for (int k = 0; k < 11; k++) c[k] = ini_tray(bump(g, cw), love_R, 1), c[k]->shape[0] = nv, cs[k] = word(c[k]);
+ t->shape[0] = nt;
+ intptr_t *td = tray_data(t);
+ uintptr_t at = 0, i = 0;
+ for (word l = g->sp[0]; chainp(l); l = B(l)) {
+  struct tray *pv = tray(A(A(l))), *pt = tray(A(B(A(l))));
+  uintptr_t const n = tray_nelem(pv) / 11, m = tray_nelem(pt);
+  for (uintptr_t j = 0; j < n; j++)
+   for (int k = 0; k < 11; k++) ((flo_t*) tray_data(c[k]))[at + j] = tray_get_flo(pv, 11 * j + (uintptr_t) k);
+  for (uintptr_t j = 0; j < m; j++) td[i + j] = tray_get_int(pt, j) + (j % 4 < 3 ? (intptr_t) at : 0);
+  at += n, i += m; }
+ word const r[3] = {putcharm(nv), pl_list(g, cs, 11), word(t)};
+ g->sp[0] = pl_list(g, r, 3);
+ return g; }
 
 static lvm(lvm_poly_keep) { LvmCallp(g, 1, host_poly_keep) }
 static lvm(lvm_poly_carve) { LvmCallp(g, 1, host_poly_carve) }
 static lvm(lvm_poly_grid) { LvmCallp(g, 1, host_poly_grid) }
 static lvm(lvm_poly_seen) { LvmCall(g, host_poly_seen) }
 static lvm(lvm_poly_fans) { LvmCallp(g, 4, host_poly_fans) }
+static lvm(lvm_poly_weave) { LvmCall(g, host_poly_weave) }
 LvDef("poly-keep", poly_keep, 2, NULL);
 LvDef("poly-carve", poly_carve, 2, NULL);
 LvDef("poly-grid", poly_grid, 2, NULL);
 LvDef("poly-seen", poly_seen, 1, NULL);
 LvDef("poly-fans", poly_fans, 5, NULL);
+LvDef("poly-weave", poly_weave, 1, NULL);

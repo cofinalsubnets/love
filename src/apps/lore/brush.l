@@ -117,15 +117,19 @@
  ; down to fine: every size a power of two of fine, so the lines are the fine grid's
  (grids ps c fine split?) (c <= fine ? (poly-grid ps fine)
    (cats (map (p \ (split? p c ? (grids p (0.5 * c) fine split?) [p])) (poly-grid ps c))))
- ; ..cell a number, or [coarse fine on]: (on face) the split? for that face's pieces
- (brush-mesh bs cell look) (mesh-join (brush-chunks bs cell look 1e9 ()))
- ; ..and in meshes a chunk each, the pieces k metres square in plan, and with them more
+ ; ..a mesh packed (mesh-pack's), and a mesh's or a pack's part, as poly-weave joins them
+ (weave ps) (: w (poly-weave ps) {'n (w 0) 'cols (w 1) 'tris (w 2)})
+ (part m) [(gem-tray [(11 * #(m 0))] (map (x \ 1.0 * x) (cats (m 0)))) (star-tray [(4 * #(m 1))] (cats (m 1)))]
+ (pack-part pk) [(lace (pk 'cols)) (pk 'tris)]
+ ; ..cell a number, or [coarse fine on]: (on face) the split? for that face's pieces; packed
+ (brush-mesh bs cell look) (weave (map pack-part (brush-chunks bs cell look 1e9 ())))
+ ; ..and packed a chunk each, the pieces k metres square in plan, and with them more
  ; meshes, each [p mesh], in the chunk p is in
  (brush-chunks bs cell look k more) (map (c \ (c 1) ()) (chunks-kept bs cell look k (map (m \ [(m 0) (m 1) ()]) more) ()))
- ; ..each [key (_ \ mesh)], more's each [p mesh key], kept by kp as faces-kept keeps: what a face
+ ; ..each [key (_ \ pack)], more's each [p mesh key], kept by kp as faces-kept keeps: what a face
  ; is cut to by its corners, its brush's whole and (kp 'reach face) the light on it; its
  ; triangles by that, its facing, (kp 'look b) and the cuts of the faces beside it, whose
- ; corners its edges take; a chunk's key its faces' triangles', its mesh made on asking. (kp
+ ; corners its edges take; a chunk's key its faces' triangles', its pack made on asking. (kp
  ; 'id k) a number for key k, the same while it is kept
  (chunks-kept bs cell look k more kp)
   (: bt (tab bs) nb #bs prev (tablet? kp ? (kp 'prev) ())
@@ -189,9 +193,9 @@
                                  id (tablet? kp ? (fid i) ())
                                  (map (m \ [(m 0) (m 1) id]) ms))))
                       ^nf))
-     by (foldl (\ t pc (: q (ck (pc 0)) (fresh? q ? (pin t q (pc . peep t q ())) t))) {} (items + more))
+     by (foldl (\ t pc (: q (ck (pc 0)) (fresh? q ? (pin t q (pc . peep t q ())) t))) {} (items + map (m \ [(m 0) (part (m 1)) (m 2)]) more))
      made (map (q \ (: its (rev (by q)) ky [q (map (x \ x 2) its)]
-                       [q ky (_ \ mesh-join (map (x \ x 1) its))]))
+                       [q ky (_ \ weave (map (x \ x 1) its))]))
                (keys by))
      ; ..and the chunks no edit touched, as they were
      oc (peep prev 'chunks {}) kept (map (q \ [q (oc q) (_ \ ())]) (filter (q \ !(fresh? q)) (keys oc)))

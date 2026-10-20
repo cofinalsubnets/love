@@ -39,7 +39,7 @@
        ; each face knows its brush
        (all (f \ f 2 = 0) alone) (any (f \ f 2 = 1) (brush-faces [room col]))
        ; 80 metre squares, two triangles each
-       (#(mesh0 1) = 2 * 80)))
+       (#(mesh0 'tris) = 4 * 2 * 80 && mesh0 'n = #(mesh0 'cols 0))))
 ;; a band cut from a box along both its sides, each side judged from the box's middle
 (: sky (brush-box 1 [0.0 0.0 0.0] [20.0 20.0 2.0])
    band (brush-cuts (brush-box 0 [10.0 9.7 0.0] [14.5 12.7 1.0])
