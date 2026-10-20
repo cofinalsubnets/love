@@ -535,7 +535,15 @@
    out (tablet? sk && any (b \ !(any (k \ e k <= b 0 k || b 1 k + 0.1 <= e k) ^3)) (sc 'open))
    v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 (out ? 150.0 60.0))
    fog (out ? (: hz (mesh-haze v (sk 'lt) (sk 'wx) sim) [(sk 'k * hz 0) (sk 'k * hz 1) (sk 'k * hz 2) 50.0 150.0]) [0.0 0.0 0.0 30.0 60.0])
-   bare (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (k @ 1 1 (sky-k * k))) 0)
+   sky (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (k @ 1 1 (sky-k * k))) 0)
+   ; ..indoors the sky only up through an open top, and elsewhere the dark: past what is
+   ; drawn, or a crack between two surfaces
+   (shut S) (: d (mesh-dirs v S) up (d 1 > 1e-6) dy (max (d 1) 1e-6)
+     (on b) (: t ((b 1 1 - e 1) / dy) x (e 0 + t * d 0) z (e 2 + t * d 2) (up * (b 0 0 <= x) * (x <= b 1 0) * (b 0 2 <= z) * (z <= b 1 2)))
+     (iota (foldl (\ m b (max m (on b))) (up * 0) (sc 'open) = 0)))
+   bare (? (out || charm? sky) sky
+           (two? sky) [(sky 0) (\ v f B (: g ((sky 1) v f B) S (iota (f = -1)) (pin g (peep S (shut S) 0) 0)))]
+           (\ v S (pin (sky v S) (shut S) 0)))
    dk (map (i \ ks i) (sc 'dyn))
    (relit pk l) (mesh-lamps! pk (l 'base) (l 'chs) dk 1.0)
    ; ..the chunks whose ball is on the inside of each plane of the view, nearest first
