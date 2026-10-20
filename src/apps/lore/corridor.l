@@ -121,8 +121,8 @@
    (gap r) (sq (max2 0.0 (max2 (r 0 - x) (x - r 2))) + sq (max2 0.0 (max2 (r 1 - z) (z - r 3))))
    (area r) ((r 2 - r 0) * (r 3 - r 1))
    (foldl (\ b r (gap r < gap b || (gap r = gap b && area r < area b) ? r b)) <rs >rs))
- ; ..a room's box as a mask of places, a little past its walls: what its lamps reach
- (inside r) (\ X Y Z ((r 0 - 0.11 < X) * (X < r 2 + 0.11) * (r 1 - 0.11 < Z) * (Z < r 3 + 0.11)))
+ ; ..a room's box in plan, a little past its walls: what its lamps reach
+ (inside r) [(r 0 - 0.11) (r 1 - 0.11) (r 2 + 0.11) (r 3 + 0.11)]
  ; ..the wall of x z's room nearest it: [ax at lo hi n], n into the room
  (wall-near lv x z) (: r (room-at lv x z)
    ws [['x (r 0) (r 1) (r 3) [1.0 0.0 0.0]] ['x (r 2) (r 1) (r 3) [-1.0 0.0 0.0]]
@@ -309,7 +309,7 @@
  ; ..the lamps' points, each [p r keep], numbered, and their places and reaches as trays
  (lamp-pts lps) (: l (cats (map (lp \ map (p \ [p (lp 'r) (peep lp 'keep ())]) (lp 'at)) lps)) n #l
    (col j) (gem-tray [n] (map (q \ 1.0 * q 0 j) l)) (tab f) (foldl (\ t q (pin t #t (f q))) {} l)
-   {'n n 'at (tab (q \ q)) 'ks (tab (q \ [(q 0) (q 1) (q 2 = () ? 0 1)])) 'mk (tab (q \ q 2 != ()))
+   {'n n 'at (tab (q \ q)) 'ks (tab (q \ [(q 0) (q 1) (two? (q 2) ? 1 0)])) 'mk (tab (q \ two? (q 2)))
     'P (n = 0 ? () (map col ^3))
     'R (n = 0 ? () (min (gem-tray [n] (map (q \ 1.0 * q 1) l)) (6.0 * cell-top - 0.5)))})
  ; ..the numbers of those reaching face f, all weighed at once
@@ -330,7 +330,7 @@
     ; ..and only where the lamp's mask lets it shine on the piece somewhere
     (cl p) (map (k \ min2 (hi k) (max2 (lo k) (p k))) ^3)
     (lit? kp p) (kp @ () 1
-      k (: q (cl p) (any (r \ k (r 0) (r 1) (r 2) > 0)
+      k (: q (cl p) (any (r \ k 0 < r 0 && r 0 < k 2 && k 1 < r 2 && r 2 < k 3)
                          [q [(lo 0) (q 1) (lo 2)] [(hi 0) (q 1) (lo 2)] [(lo 0) (q 1) (hi 2)] [(hi 0) (q 1) (hi 2)]
                           [(0.5 * (lo 0 + hi 0)) (q 1) (0.5 * (lo 2 + hi 2))]])))
     ; ..the lamps near enough, all at once, then their masks
@@ -452,9 +452,8 @@
    ; only the lights that change
    dyn (filter (i \ two? (ls i 'how)) ^#ls) still (filter (i \ atom? (ls i 'how)) ^#ls)
    ; ..the lamps whose reach touches the mesh's box, the rest none
-   (ch pk l) (: c (pk 'cols) lo (map (k \ amin (c k)) ^3) hi (map (k \ amax (c k)) ^3)
-     (by? lp) (any (p \ net (map (k \ sq (max2 0.0 (max2 (lo k - p k) (p k - hi k)))) ^3) < sq (lp 'r)) (lp 'at))
-     (foldl (a \ c+ a * mesh-lamp pk) [0.0 0.0 0.0] (filter by? (l 'lamps))))
+   LR (foldl (\ t l (pin t #t (map mesh-lamp-row (l 'lamps)))) {} ls)
+   (ch pk i) (lamp-light (pk 'cols) (LR i))
    ; ..the sky at the level's hour, and in its streets the sky's light and the sun's on what
    ; faces them, scaled to the gain the sky is seen through; the level's ambient off them
    sk (sky-of lv) la (peep lv 'ambient [0.0 0.0 0.0]) ob (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0) bs))
@@ -462,8 +461,8 @@
      m (min 1.0 (foldl (\ a b (a + (b 0 0 < X) * (X < b 1 0) * (b 0 1 < Y) * (Y < b 1 1 + 0.1) * (b 0 2 < Z) * (Z < b 1 2))) (X * 0.0) ob))
      a (m * (0.5 + 0.5 * c 6) * sk 'k) d (m * max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (lt 'sunk * sk 'k))
      (map (j \ a * lt 'amb j + d * lt 'sunc j + (1.0 - m) * la j) ^3))
-   (lit pk) {'base (foldl (a \ c+ a * ch pk * ls) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ la (c* 0.0 (pk 'cols 0 @ z [z z z]))))) still)
-             'chs (map (ch pk * ls) dyn)}
+   (lit pk) {'base (lamp-lights (pk 'cols) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ la (c* 0.0 (pk 'cols 0 @ z [z z z]))))) (map LR still))
+             'chs (map (ch pk) dyn)}
    ; ..a car lit where it stands, and by its own lamp, which goes with it
    ; ..a chunk's light kept by what lights it: the lights that reach its box, in their places
    ; ..a light as a key says it, its masks left to wk

@@ -137,7 +137,7 @@
        (bm 2.0 0.3 2.27 = 1) (#(bl 'decals) = 4) (#(bl 'panes) = 0)
        (#(wl 'panes) = 1) (corridor-free? ws 2.0 3.5) (!(corridor-free? ws 2.0 4.15)) (corridor-free? ws 3.5 4.15 = 0)
        (#(ws 'sc 'panes) = 1) (peep (ws 'sc 'panes 0 'pk 'tris) 3 0 = -3)
-       (lp 3.5 1.0 3.5 = 1) (lp 8.0 1.0 8.0 = 0)))
+       (lp 0 < 3.5 && 3.5 < lp 2 && lp 1 < 3.5 && 3.5 < lp 3) (lp 2 < 8.0)))
 ; a sconce: a wedge on its wall, solid by the wall at its face, air past its sloping back
 ; and before its face; mirrored it stands on the far wall looking back; each a lamp. a
 ; level's ambient: none by default, a wrong colour refused
