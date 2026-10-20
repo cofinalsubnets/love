@@ -7419,8 +7419,11 @@
                        (go i v acc) (n <= i ? (rev acc)
                                        (go (i + 1) (v // 256) (v % 256 . acc)))
                        (go 0 u0 ()))
-   (iminsert x l) (? !(two? l) [x]                    ; insert (off items) keeping offsets ascending
+   ; insert (off items) keeping offsets ascending. pieces come newest first, so one at an offset
+   ; already laid is an earlier initializer the later one overrides (6.7.9p19: [0 ... 5] = a, [3] = b)
+   (iminsert x l) (? !(two? l) [x]
                      (<x < <<l) (x . l)
+                     (<x = <<l) l
                      (<l . iminsert x >l))
    (imsort ps) (: (go l acc) (!(two? l) ? acc (go >l (iminsert <l acc))) (go ps ()))
    (imflat ps total)                                ; sorted (off items).. -> total bytes, gaps zeroed
