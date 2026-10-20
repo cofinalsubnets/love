@@ -22,13 +22,13 @@ narrow="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
 case $tgt in
   arm)  name=test_ccarm; ref=arm-none-eabi-gcc; run=qemu-arm; gopt=-O1
         refuse="161-enumwide 291-enumahead"
-        w128="111-int128 151-w128fuzz"
+        w128="111-int128 151-w128fuzz 314-u128union"
         wide="68-static-assert 120-bfinit"
         hosted="72-quals 125-widelit 150-alloc 160-rangeinit 297-frameaddr 298-malloc-wrap 300-aligned-alloc 301-free-checks"
         gref() { arm-none-eabi-gcc -mcpu=cortex-a53 -mthumb -mfloat-abi=hard -mfpu=fp-armv8 --specs=rdimon.specs "$@"; }
         for tool in arm-none-eabi-gcc qemu-arm; do have $tool || gate_skip "$name: no $tool, skipped"; done ;;
   i386) name=test_cci386; ref="gcc -m32"; run=; gopt="-msse2 -mfpmath=sse"
-        refuse="111-int128 151-w128fuzz"
+        refuse="111-int128 151-w128fuzz 314-u128union"
         w128=
         wide="68-static-assert 120-bfinit 161-enumwide"
         hosted=
