@@ -140,38 +140,43 @@
    (? (!(texture? t)) (no u t) (!(two? rs && all two? rs && all (r \ #r = #<rs) rs)) (no u rs)
       (part 'drape [['tex t] ['rows (map (map pg) rs)]])))
  ; ..a bin: brushes, its body's sides and corners cut in toward its foot, hollow up top with an
- ; opening into it on each side, and a cap a little wider over all; its sign on each side
+ ; opening into it on each side, the band over those and a cap a little wider going in
+ ; toward the top; its sign on each side
  (bin at w d h t sg) (: u "(bin [x y z] width depth height TEXTURE SIGN)" p (P at u) x (p 0) y (p 1) z (p 2)
    (? (!(texture? t)) (no u t) (!(sg = () || texture? sg)) (no u sg)
       (: dk (texture 8 8 1 '((fill 0.12) (noise 2 0.3)))
          W (0.5 * N w u) D (0.5 * N d u) H (N h u) k (0.12 * min2 W D) c (0.2 * min2 W D) y1 (y + H)
-         (sx i) (i ? 1.0 -1.0)
-         ; ..each side through its top edge and its foot k in; each corner c off its top's
-         sides [[[(x + W) y1 (z - D)] [(x + W) y1 (z + D)] [(x + W - k) y (z - D)]]
-                [[(x - W) y1 (z - D)] [(x - W) y1 (z + D)] [(x - W + k) y (z - D)]]
-                [[(x - W) y1 (z + D)] [(x + W) y1 (z + D)] [(x - W) y (z + D - k)]]
-                [[(x - W) y1 (z - D)] [(x + W) y1 (z - D)] [(x - W) y (z - D + k)]]]
-         corners (map (i \ (: a (sx (i % 2)) b (sx (i // 2)) cx (x + a * W) cz (z + b * D)
-                               [[(cx - a * c) y1 cz] [cx y1 (cz - b * c)] [(cx - a * (c + k)) y (cz - b * k)]]))
-                      ^4)
-         body (foldl (\ b q (cut (q 0) (q 1) (q 2) b)) (solid (box [(x - W) y (z - D)] [(x + W) y1 (z + D)])) (sides + corners))
          i0 (y1 - 0.5 * H) i1 (y1 - 0.04) iw (W - 0.5 * k - 0.03) id (D - 0.5 * k - 0.03)
-         o0 (y1 - 0.4 * H) o1 (y1 - 0.1 * H) sl (0.7 * W) sd (0.7 * D)
+         o0 (y1 - 0.4 * H) o1 (y1 - 0.1 * H) sl (0.7 * W) sd (0.7 * D) tp (0.9 * k)
+         (sx i) (i ? 1.0 -1.0)
+         ; ..a solid from y0 to y1, w0 by d0 at its foot and w1 by d1 at its top, each side
+         ; through both edges and each corner cut c off
+         (taper y0 y1 w0 d0 w1 d1) (: m (max2 w0 w1) n (max2 d0 d1)
+           sides [[[(x + w1) y1 (z - d1)] [(x + w1) y1 (z + d1)] [(x + w0) y0 (z - d0)]]
+                  [[(x - w1) y1 (z - d1)] [(x - w1) y1 (z + d1)] [(x - w0) y0 (z - d0)]]
+                  [[(x - w1) y1 (z + d1)] [(x + w1) y1 (z + d1)] [(x - w0) y0 (z + d0)]]
+                  [[(x - w1) y1 (z - d1)] [(x + w1) y1 (z - d1)] [(x - w0) y0 (z - d0)]]]
+           corners (map (i \ (: a (sx (i % 2)) b (sx (i // 2)) X (x + a * w1) Z (z + b * d1)
+                                 [[(X - a * c) y1 Z] [X y1 (Z - b * c)] [(x + a * w0 - a * c) y0 (z + b * d0)]]))
+                        ^4)
+           (foldl (\ b q (cut (q 0) (q 1) (q 2) b)) (solid (box [(x - m) y0 (z - n)] [(x + m) y1 (z + n)])) (sides + corners)))
+         body (taper y o1 (W - k) (D - k) W D)
+         band (taper o1 y1 W D (W - tp) (D - tp))
          hollow [(box [(x - iw) i0 (z - id)] [(x + iw) i1 (z + id)])
                  (box [x o0 (z - sd)] [(x + W + 0.01) o1 (z + sd)]) (box [(x - W - 0.01) o0 (z - sd)] [x o1 (z + sd)])
                  (box [(x - sl) o0 z] [(x + sl) o1 (z + D + 0.01)]) (box [(x - sl) o0 (z - D - 0.01)] [(x + sl) o1 z])]
          ; ..the sign a third of the way up each side, a hair off it, leaning as it leans, as
          ; wide as the narrower side takes
-         ys (y + 0.33 * H) e (0.67 * k - 0.004) sz (min2 (0.42 * H) (1.3 * min2 W D)) L (sqrt (H * H + k * k))
+         hb (o1 - y) ys (y + 0.33 * H) e ((1.0 - (ys - y) / hb) * k - 0.004) sz (min2 (0.42 * H) (1.3 * min2 W D)) L (sqrt (hb * hb + k * k))
          signs (sg = () ? ()
-                  [(decal [(x + W - e) ys z] [(H / L) (0.0 - k / L) 0.0] [(k / L) (H / L) 0.0] sz sz sg)
-                   (decal [(x - W + e) ys z] [(0.0 - H / L) (0.0 - k / L) 0.0] [(0.0 - k / L) (H / L) 0.0] sz sz sg)
-                   (decal [x ys (z + D - e)] [0.0 (0.0 - k / L) (H / L)] [0.0 (H / L) (k / L)] sz sz sg)
-                   (decal [x ys (z - D + e)] [0.0 (0.0 - k / L) (0.0 - H / L)] [0.0 (H / L) (0.0 - k / L)] sz sz sg)])
+                  [(decal [(x + W - e) ys z] [(hb / L) (0.0 - k / L) 0.0] [(k / L) (hb / L) 0.0] sz sz sg)
+                   (decal [(x - W + e) ys z] [(0.0 - hb / L) (0.0 - k / L) 0.0] [(0.0 - k / L) (hb / L) 0.0] sz sz sg)
+                   (decal [x ys (z + D - e)] [0.0 (0.0 - k / L) (hb / L)] [0.0 (hb / L) (k / L)] sz sz sg)
+                   (decal [x ys (z - D + e)] [0.0 (0.0 - k / L) (0.0 - hb / L)] [0.0 (hb / L) (0.0 - k / L)] sz sz sg)])
          ; ..small enough that its faces go uncut, lit at their corners
          [(map (b \ with b 'whole 1)
-               ([(skin {'all t} body)] + map (b \ skin {'all dk} (air b)) hollow
-                + [(skin {'all t} (solid (box [(x - W - 0.02) y1 (z - D - 0.02)] [(x + W + 0.02) (y1 + 0.05) (z + D + 0.02)])))]))
+               ([(skin {'all t} body) (skin {'all t} band)] + map (b \ skin {'all dk} (air b)) hollow
+                + [(skin {'all t} (taper y1 (y1 + 0.05) (W - tp + 0.02) (D - tp + 0.02) (W - tp - 0.01) (D - tp - 0.01)))]))
           signs])))
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
  (bulb at c) (: u "(bulb [x y z] (rgb r g b))" (colour? c ? (part 'bulb [['at (P at u)] ['c c] ['how ()]]) (no u c)))
