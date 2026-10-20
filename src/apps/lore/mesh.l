@@ -176,7 +176,8 @@
  (word c) ((q (c 0) << 16) | (q (c 1) << 8) | q (c 2))
  (mesh-pic w h f)
   (: l0 (map (i \ f (i % w) (i // w)) ^(w * h))
-     (down m n l) (: a (m // 2) b (n // 2)
+     ; ..a level's texels by place, read in a step
+     (down m n l0) (: l (foldl (\ t x (pin t #t x)) {} l0) a (m // 2) b (n // 2)
        (map (i \ (: x (2 * (i % a)) y (2 * (i // a))
                     q (filter two? [(l (y * m + x)) (l (y * m + x + 1)) (l ((y + 1) * m + x)) (l ((y + 1) * m + x + 1))])
                     (#q < 3 ? () (c* (1.0 / #q) (foldl c+ [0.0 0.0 0.0] q)))))
