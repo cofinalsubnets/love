@@ -252,8 +252,10 @@
  (move d ps) (: u "(move [dx dy dz] PARTS)" dd (P d u) (map (re (p \ [(p 0 + dd 0) (p 1 + dd 1) (p 2 + dd 2)]) (b \ b)) (flat ps)))
  ; ..a mirror turns a drape over, so its rows run back to keep its front
  (flip p) (kind? p ['drape] ? (with p 'rows (map rev (p 'rows))) p)
- (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (flip * re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b)) l))
- (mirror-z c ps) (: z (N c "(mirror-z c PARTS)") l (flat ps) (l + map (flip * re (p \ [(p 0) (p 1) (2.0 * z - p 2)]) (b \ 180.0 - b)) l))
+ (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (p \ twin 'mx (flip (re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b) p))) l))
+ (mirror-z c ps) (: z (N c "(mirror-z c PARTS)") l (flat ps) (l + map (p \ twin 'mz (flip (re (p \ [(p 0) (p 1) (2.0 * z - p 2)]) (b \ 180.0 - b) p))) l))
+ ; ..a twin's 'mx or 'mz -1 where it is turned over on x or z, so a move of it is turned too
+ (twin k p) (with p k (0.0 - peep p k 1.0))
  ; --- the level: its parts sorted into what the corridor builds from ---
  (lo2 a b) (map (k \ min2 (a k) (b k)) ^3)
  (hi2 a b) (map (k \ max2 (a k) (b k)) ^3)
@@ -277,7 +279,7 @@
        'start (of 'start @ () {'at [0.0 0.0] 'y 0.0 'deg 0.0 'pitch 0.0}
                           s (: a (<s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'deg (<s 'deg) 'pitch (<s 'pitch)}))
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
-       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'src (peep b 'src ())}) bs)
+       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'src (peep b 'src ()) 'sg [(peep b 'mx 1.0) 1.0 (peep b 'mz 1.0)]}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1)])) (of 'door))
        'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
