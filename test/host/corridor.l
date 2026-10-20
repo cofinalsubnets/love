@@ -175,7 +175,7 @@
    edf (ed 'focus)
    _ (edit-events ed [['press 1 80 80] ['release 1 80 80]])
    _ (edit-paint ed) edp (edw 'paper)
-   (lit? x0 x1 y0 y1) (any (y \ any (x \ edp (4 * (y * 320 + x) + 1) != 0) (drop x0 ^x1)) (drop y0 ^y1))
+   (lit? x0 x1 y0 y1) (any (y \ any (x \ peep edp (4 * (y * 320 + x) + 1) 0 != 0) (drop x0 ^x1)) (drop y0 ^y1))
  (test (edf = 'scene) (edv 'row = 1) (edv 'col = 2) (lit? 0 160 0 160) (lit? 160 320 0 16)))
 ; a drag on the scene, shift held so it runs across the wall faced: the form it took outlined,
 ; wrapped in a (move ..) by as far, and the scene read again with it there; dragged back, unwrapped
@@ -191,6 +191,24 @@
  (test (has? dl1 "(move [") (has? dl1 " 0 0] (solid (box [1 0 3] [3 3 3.5])))") (dlo 0 > 1.05) (dink > 20)
        (dl2 = "  (solid (box [1 0 3] [3 3 3.5]))") (dg 'drag = ())
        (corridor-read "(level \"t\" (room [0 0 0] [4 3 6]) (move [1 0 0.5] (solid (box [0 0 1] [1 3 2]))) (start [2 0 2] 0 0))" 'brushes 1 'shape 'box 0 = [1.0 0.0 1.5])))
+; the plan: tab shows it from above about the player; shift and a drag begun in a room
+; draws another as high, after the level's parts, and chooses it; a drag on its edge moves
+; that wall, one inside it moves it; tab puts the plan away
+(: plv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload plv ["(level \"t\"" "  (room [0 0 0] [4 3 4])" "  (start [2 0 2] 0 0))"] "t.l")
+   plw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} pl (edit-new plw plv "")
+   _ (edit-events pl [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['down 15] ['up 15]])
+   pp (pl 'plan) _ (pin pp 'k 8.0)
+   _ (edit-events pl [['down 42] ['press 1 96 96] ['move 144 64] ['release 1 144 64] ['up 42]])
+   pl1 (plv 'lines 3) ps (pl 'sel)
+   _ (edit-events pl [['press 1 144 80] ['move 152 80] ['release 1 152 80]])
+   pl2 (plv 'lines 3)
+   _ (edit-events pl [['press 1 120 80] ['move 136 80] ['release 1 136 80]])
+   pl3 (plv 'lines 3) _ (edit-paint pl) plp (plw 'paper)
+   (pix x y) (peep plp (4 * (y * 320 + x) + 2) 0)
+   _ (edit-events pl [['down 15] ['up 15]])
+ (test (pp 'c = [2.0 2.0]) (pp 'fl = 0.0) (pl1 = "  (room [3 0 1] [6 3 3]))") (ps = [4]) (pl2 = "  (room [3 0 1] [6.5 3 3]))")
+       (pl3 = "  (move [1 0 0] (room [3 0 1] [6.5 3 3])))") (#(pl 'st 'lvl 'brushes) = 2) (pix 4 4 = 22) (pix 80 80 != 22) (pl 'plan = ())))
 ; a scene made again from the one before keeps what is the same and comes out as one made
 ; from nothing: after a solid moves, a lamp moves, a solid goes, the room grows, and all
 ; comes back
