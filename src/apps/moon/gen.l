@@ -6352,6 +6352,7 @@
                          ; writes it, and stored and reloaded across a call it is live across
                          lsc9 {}                     ; a cell -> [its live indices], for the regions and the packing
                          (lsm9 b) (lsc9 b @ v (two? v ? <v (: r (lset9 b) (pin lsc9 b [r], r))))
+                         spw9 (sortby (x \ y \ (<>y - <y) < (<>x - <x)) spans)   ; the loops, widest first
                          vwm9 {}                     ; index -> its loop weight, each laid once
                          (vw9 i) (: c (peep vwm9 i 0) (0 < c ? c (: w (vwt spans i) (pin vwm9 i w, w))))
                          fam9 {}                     ; 'f -> [the forms by index], laid on a region's first ask
@@ -6386,7 +6387,6 @@
                           (rinf sp @ ri9
                              (ri9 @ 'no ()
                                 (: lo <sp hi <>sp ents <ri9 exs <>ri9 cls <>>ri9
-                                   ri (span9 lo hi)
                                    en (filter (e \ peep lv (e 2) 0) ents)
                                    ex (wr ? (filter (e \ peep lv (e 2) 0) exs) ())
                                    cl (filter (i \ peep lv i 0) cls)
@@ -6402,6 +6402,7 @@
                                    (? (!(two? ins) || (tw <= cw && tw <= cw2)) ()
                                       ; a load into the seat itself at another extension would wreck it
                                       (: (dok? r) !(vany (t \ 0 < vldw <>t && t 2 = r && xt9 <>t !== xc) ins)
+                                         ri (span9 lo hi)
                                          ra (cw < tw ? (sseat taken (filter (r \ eok? r && dok? r) (lvgp g)) ri))
                                          rc (ra || tw <= cw2 ? () (cstake (filter (r \ cok? r && dok? r) cspool9) ri))
                                          r (ra || rc)
@@ -6428,7 +6429,7 @@
                                            ins (filter (t \ lo <= <t && <t <= hi) tl)
                                            wr (vany (t \ 0 < vstw <>t || 0 < vsiw <>t) ins)
                                            (two? ins && rgn1 b lv ins wr <ss xc lop sop || go >ss)))
-                             (go (sortby (x \ y \ (<>y - <y) < (<>x - <x)) spans)))
+                             (go spw9))
                          _ (lot9 @ 'no 0
                               (abl? g 'creg || jrf || !(x64? g || a6) ? 0
                                  (foldl (_ \ b \ rgn9 b) 0
