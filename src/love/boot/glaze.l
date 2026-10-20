@@ -366,6 +366,15 @@
    ; for the globals amble can name, filled at the first ask; the readers are cited before the mop
    aopix {}
    aopnf (cite 'guts 'nifop)  aopgv (cite 'guts 'gv)
+   akeep {}                                                               ; LOVE_BAKE_CALLS's bake indices, read at the first ask
+   (akeepw v i j) (? (i < j) (pin akeep (snip v i j) 1) 0)
+   (akeepfill v i j) (? (j = #v) (akeepw v i j)
+                        (v j = 32) (: _ (akeepw v i j) (akeepfill v (j + 1) (j + 1)))
+                        (akeepfill v i (j + 1)))
+   (akeep? k) (: _ (? (peep akeep () 0) 0
+                      (: v (getenv "LOVE_BAKE_CALLS")  _ (pin akeep () 1)
+                         (? (string? v) (akeepfill v 0 0) 0)))
+                 (peep akeep k 0))
    probebox {}                                                            ; slot 0 set: amble answers 1 where it would compile, and emits nothing
    (aopw x)
     (: _ (#(keys aopix) = 0 ?
@@ -516,7 +525,12 @@
        drok (lts != 'bad && (lp ? 1 (two? gcand || two? ins ? (aself? self body || adrv? envg self body && acells body <= 64) 1)))   ; free heads and inner lambdas ride only a body that
                                                                          ; drives itself, or a param while small; a declining body or refused lets skip the walks
        ; a text literal costs a quote slot and a native a leaf would not repay: only a body that loops or drives
-       txok (!(astr? M) || lp || aself? self body || adrv? envg self body)
+       drv  (lp || aself? self body || adrv? envg self body)
+       txok (!(astr? M) || drv)
+       ; a bake by a call profile (LOVE_BAKE_CALLS, hotbake.sh) keeps a leaf's native only where the profile called it
+       ; often; a profiling bake (LOVE_BAKE_COUNT) gives each leaf that would compile a counting cell instead
+       cnt  (getenv "LOVE_BAKE_COUNT" && !drv)
+       dvok (? cnt 1 (string? (getenv "LOVE_BAKE_CALLS")) (drv || akeep? (show (: fz (gv 'fires 0) (tablet? fz ? (peep fz 'ix 0) 0)))) txok)
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the cell's box slot 0
                                  (two? lfd ? (peep >lfd 0 0) 0))
@@ -574,7 +588,7 @@
                     (elem oop '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
                     (aseq cl as @ 'bad 'bad 1)))))
        ok (two? s && two? >s && all nom? ps && aparams? ps M
-           && a = #ps && 0 < a && lpok && drok && txok && lts != 'bad && two? body
+           && a = #ps && 0 < a && lpok && drok && dvok && lts != 'bad && two? body
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the bisect knob: splits the call machinery from the rest
            && all lit? gvals && all lit? ovals && nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48   ; slots are cheap once the prologue guards the room
            && all (amble-ok? ps shd kn 0 0 0) inits
@@ -585,7 +599,7 @@
                             (: bad (filter (x \ two? x && !(aquote? x) && !(amble-ok? envl shd kn go k 0 x)) >e)
                                (two? bad ? (small <bad) e)))
                why (? !(two? s && two? >s && all nom? ps && aparams? ps M && a = #ps && 0 < a) 'shape
-                      !lpok 'loop (lts = 'bad) 'lets !drok 'cost !txok 'text !(two? body) 'nobody
+                      !lpok 'loop (lts = 'bad) 'lets !drok 'cost !dvok (txok ? 'calls 'text) !(two? body) 'nobody
                       !(all lit? gvals) ['globals (filter (p \ !(lit? <>p)) (map (f \ [f (gv f 0)]) gn))] !(all lit? ovals) 'ops
                       !(nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48) 'slots
                       !(all (amble-ok? ps shd kn 0 0 0) inits) 'inits
@@ -593,7 +607,8 @@
                       'restart)
                (say err ("why: " + show why + "  " + snip (show s) 0 (min 160 #(show s)) + "\n")))
             0)
-       (? (ok && peep probebox 0 0) 1
+       (? (ok && cnt) (: fz (gv 'fires 0)  _ (peep probebox 0 0 ? 0 (pin fz 'cc (peep fz 'ix 0)))  0)
+          (ok && peep probebox 0 0) 1
           ok
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)
              ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin)   ; extras = [() | globals | siblings | quotes | = | inner entries] (+ op values, chain-only):
@@ -2597,7 +2612,7 @@
     (: arch love-arch
        G (cite 'glaze)                                                    ; not in the module: every name arrives by key
        defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, cited before the mop
-       firstcell (cite 'guts 'firstcell)
+       firstcell (cite 'guts 'firstcell)  countcell (cite 'guts 'countcell)
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
@@ -2627,11 +2642,13 @@
        ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never).
        ; LOVE_LAZY_GLAZE, read per closure, waits for the closure's first call (firstcell), and the compile sees the siblings as they are then
        (natjit e s a gv farq lams nm ti ta inl rt)
+        (: _ (pin fires 'ix (1 + peep fires 'ix 0))                          ; this closure's place in the bake, the call profile's key
         (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v))
            (: lz (freeze-self lams nm)
               L (firstcell e a (\ L (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))))
               (L == () ? (natnow e s a gv farq lams nm ti ta inl rt) L))
-           (natnow e s a gv farq lams nm ti ta inl rt))
+           (: r (natnow e s a gv farq lams nm ti ta inl rt)  ix (peep fires 'ix 0)
+              (r == e && peep fires 'cc 0 = ix ? (countcell e a ix) r))))
        ; the self cell as it is now: a later compile reads its own import row as this one would
        (freeze-self lams nm) (: sc (assoc nm lams) (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams))
        (natnow e s a gv farq lams nm ti ta inl rt)
