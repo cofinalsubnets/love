@@ -50,6 +50,10 @@
    _ (test ([0 128 0] = until 4 20 [0 128 0] 40))                ; green: the child read `a`
    ; GetSelectionOwner
    (owner a) (: _ (w8 s 23, w8 s 0, w16 s 2, w32 s a, XW 'x-flush s) hdr (XW 'x-reply s) (XW 'u32 hdr 8))
+   ; a plain drag where the mitty wants no press is the window's too: it takes the primary
+   _ (fakeat 6 0 4 8, fake 4 1, fakeat 6 0 30 8, fakeat 6 0 60 8, fake 5 1)
+   _ (rest 300)
+   _ (test (win = owner 1))
    ; under shift the pointer is the window's: a double click takes the primary, button 2 pastes
    _ (fake 2 50, fakeat 6 0 20 8, fake 4 1, fake 5 1, fake 4 1, fake 5 1, fake 3 50)
    _ (rest 300)
