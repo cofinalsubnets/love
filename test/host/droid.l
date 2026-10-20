@@ -169,18 +169,20 @@
 (test
  (<dj-am = 0) (dj-am 1 = "Starting: T1\n")
  (dj-z (dj-am 2) = ["candroid/content/Intent" "n0|()V" "candroid/net/Uri" "su:x"
-                    "k2|parse|(Ljava/lang/String;)Landroid/net/Uri;|3" "sV"
-                    "m1|setAction|(Ljava/lang/String;)Landroid/content/Intent;|5" "d6"
-                    "m1|setData|(Landroid/net/Uri;)Landroid/content/Intent;|4" "d8" "t1" "a"
-                    "m11|startActivity|(Landroid/content/Intent;)V|1"])
+                    "k2|parse|(Ljava/lang/String;)Landroid/net/Uri;|3" "d3" "sV"
+                    "m1|setAction|(Ljava/lang/String;)Landroid/content/Intent;|6" "d6" "d7"
+                    "m1|setData|(Landroid/net/Uri;)Landroid/content/Intent;|4" "d10" "t1" "a"
+                    "m13|startActivity|(Landroid/content/Intent;)V|1"])
  (<dj-pm = 0) (dj-pm 1 = "package:T5\npackage:T10\n")
  (dj-z (dj-pm 2) = ["a" "m0|getPackageManager|()Landroid/content/pm/PackageManager;"
                     "m1|getInstalledPackages|(I)Ljava/util/List;|0" "m2|size|()I"
                     "m2|get|(I)Ljava/lang/Object;|0" "g4|packageName|Ljava/lang/String;" "t5" "d5" "d4"
                     "m2|get|(I)Ljava/lang/Object;|1" "g9|packageName|Ljava/lang/String;" "t10" "d10" "d9"])
  (<dj-sg = 0) (dj-sg 1 = "T4\n")
- (elem "candroid/provider/Settings$Secure" (dj-sg 2))
- (<dj-sp = 1) (dj-sp 1 = "") (any (w \ has? w "putString") (dj-sp 2)))
+ (dj-z (dj-sg 2) = ["a" "m0|getContentResolver|()Landroid/content/ContentResolver;" "candroid/provider/Settings$Secure"
+                    "sk" "k2|getString|(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;|1|3" "d3" "t4"])
+ (<dj-sp = 1) (dj-sp 1 = "") (any (w \ has? w "putString") (dj-sp 2))
+ (rev (dj-sp 2) @ ("d4" . "d3" . _) 1 _ 0))                  ; let go though it threw
 (: _ (close dj-l) _ (unlink dj-path) _ (setenv "LOVE_DROID" ()) 0)
 
 (puts "droid: ok") (putc 10)

@@ -53,25 +53,30 @@
 
    ; --- the framework's door (LOVE_DROID; the ops are bridge.c's header) ---
    ; an answer is a handle's number, () for null, a primitive's text, or [kind text] for
-   ; what was thrown ('x) or refused ('e): a found-test is (two? r)
+   ; what was thrown ('x) or refused ('e): a found-test is (two? r). a session holds 256
+   ; handles: let go what is done with
    (jni-open _) (getenv "LOVE_DROID" @ p (string? p ? (connect ['unix p])))
-   (jni-rd s n) (: (go k acc) (k < 1 ? (cats (rev acc)) (see s @ c (c < 0 ? () (go (k - 1) (string c . acc))))) (go n ()))
+   (jni-rd s n) (: (go k acc) (k < 1 ? (two? acc ? (cats (rev acc)) "") (see s @ c (c < 0 ? () (go (k - 1) (string c . acc))))) (go n ()))
    (jni-op s body)
     (: _ (say s (wrle #body 4 + body), flush s)
-       n (jni-rd s 4)
-       (? !(string? n) ['e "the bridge hung up"]
-          (: k (see s) t (jni-rd s (rdle n 0 4 - 1))
-             (k @ 104 (read t) 122 () 118 t 116 t
-                  120 ['x t] ['e t]))))
-   ; a word for an argument: a text becomes a String first, a number its decimal, () null
-   (jni-word s x) (? (string? x) (jni-str s x) (charm? x) (show x) "")
-   (jni-ws s l) (cats (map (x \ string 0 + jni-word s x) l))
-   (jni-str s t) (jni-op s ("s" + t) @ h (charm? h ? (show h) ""))
+       n (jni-rd s 4) k (string? n ? (see s) -1) t (0 <= k ? (jni-rd s (rdle n 0 4 - 1)))
+       (? !(string? t) ['e "the bridge hung up"]
+          (k @ 104 (read t) 122 () 118 t 116 t
+               120 ['x t] ['e t])))
+   ; an op on arguments: a text becomes a String for it, let go after; a number is its
+   ; decimal, () null
+   (jni-str s t) (jni-op s ("s" + t))
+   (jni-cmd s pre as)
+    (: hs (map (x \ string? x ? (jni-str s x) x) as)
+       bad (filter two? hs)
+       (? (two? bad) <bad
+          (: r (jni-op s (pre + cats (map (x \ string 0 + (charm? x ? (show x) "")) hs)))
+             (each ^#as (i \ string? (as i) ? (jni-drop s (hs i)) 0), r))))
    (jni-act s) (jni-op s "a")
    (jni-class s nm) (jni-op s ("c" + nm))
-   (jni-call s h nm sig as) (jni-op s ("m" + show h + string 0 + nm + string 0 + sig + jni-ws s as))
-   (jni-static s c nm sig as) (jni-op s ("k" + show c + string 0 + nm + string 0 + sig + jni-ws s as))
-   (jni-new s c sig as) (jni-op s ("n" + show c + string 0 + sig + jni-ws s as))
+   (jni-call s h nm sig as) (jni-cmd s ("m" + show h + string 0 + nm + string 0 + sig) as)
+   (jni-static s c nm sig as) (jni-cmd s ("k" + show c + string 0 + nm + string 0 + sig) as)
+   (jni-new s c sig as) (jni-cmd s ("n" + show c + string 0 + sig) as)
    (jni-get s h nm ty) (jni-op s ("g" + show h + string 0 + nm + string 0 + ty))
    (jni-sget s c nm ty) (jni-op s ("f" + show c + string 0 + nm + string 0 + ty))
    (jni-text s h) (jni-op s ("t" + show h))

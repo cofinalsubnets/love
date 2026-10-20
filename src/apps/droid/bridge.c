@@ -400,10 +400,15 @@ static void *jtext(void *e, char const *s, size_t n) {
   return u && !thrown(e) ? newo(e, sc, ni, ba, u) : 0;
 }
 
-/* a reply: u32 n, then n bytes, a kind and its text */
+/* a reply: u32 n, then n bytes, a kind and its text; a client gone is no SIGPIPE */
+static int sendall(int fd, void const *p, size_t n) {
+  char const *c = p;
+  while (n) { ssize_t k = send(fd, c, n, 0x4000); if (k <= 0) return -1; c += k; n -= (size_t) k; }   /* MSG_NOSIGNAL */
+  return 0;
+}
 static void answer(int fd, int kind, char const *s, size_t n) {
   unsigned char h[5] = {(unsigned char) (n + 1), (unsigned char) ((n + 1) >> 8), (unsigned char) ((n + 1) >> 16), (unsigned char) ((n + 1) >> 24), (unsigned char) kind};
-  if (!writeall(fd, h, 5)) writeall(fd, s, n);
+  if (!sendall(fd, h, 5)) sendall(fd, s, n);
 }
 
 /* a String's text to the client as utf-8, from its utf-16 */
@@ -458,6 +463,14 @@ static int handle(sess *s, char const *w, void **r) {
   long h = num(w, &ok);
   if (!ok || h < 0 || h >= REFS || !s->ref[h]) return -1;
   *r = s->ref[h]; return 0;
+}
+
+/* a handle that is a class, for the calls that take one */
+static int isclass(void *e, void *o) {
+  void *const *t = *(void *const **) e;
+  void *(*find)(void *, char const *) = t[6]; unsigned char (*inst)(void *, void *, void *) = t[32];
+  void *c = o ? find(e, "java/lang/Class") : 0;
+  return c && !thrown(e) && inst(e, o, c);
 }
 
 /* the words after a sig as its parameters; the return's letter, or 0 for a bad one */
@@ -530,7 +543,7 @@ static void field(sess *s, void *e, int ty, int stat, void *on, void *f) {
   if (!caught(e, s->fd)) answer(s->fd, 'v', n, k);
 }
 
-/* one op, its record's words NUL-separated after the op's letter */
+/* one op, its record's words NUL-separated after the op's letter; it answers once */
 static void op(sess *s, void *e, char *r, size_t n) {
   void *const *t = *(void *const **) e;
   void *(*find)(void *, char const *) = t[6]; void (*delg)(void *, void *) = t[22];
@@ -540,7 +553,7 @@ static void op(sess *s, void *e, char *r, size_t n) {
   void *(*sfid)(void *, void *, char const *, char const *) = t[144];
   char *w[ARGS + 4]; int nw = 0; jvalue v[ARGS]; void *o = 0;
   char k = n ? r[0] : 0;
-  if (k == 's') { keep(s, e, jtext(e, r + 1, n - 1)); if (thrown(e)) caught(e, s->fd); return; }
+  if (k == 's') { void *j = jtext(e, r + 1, n - 1); if (!caught(e, s->fd)) keep(s, e, j); return; }
   r[n] = 0;
   for (size_t i = 1, w0 = 1; n > 1 && i <= n && nw < ARGS + 4; i++)   /* "" a word too, the last one as well */
     if (!r[i]) w[nw++] = r + w0, w0 = i + 1;
@@ -565,19 +578,19 @@ static void op(sess *s, void *e, char *r, size_t n) {
     else answer(s->fd, 'e', "no such handle", 14);
   }
   else if ((k == 'm' || k == 'k') && nw >= 3) {
-    int ret = handle(s, w[0], &o) || !o ? 0 : params(s, w[2], w + 3, nw - 3, v);
+    int ret = handle(s, w[0], &o) || !o || (k == 'k' && !isclass(e, o)) ? 0 : params(s, w[2], w + 3, nw - 3, v);
     if (!ret) { answer(s->fd, 'e', "bad handle, sig or arguments", 28); return; }
     void *m = k == 'm' ? mid(e, cls(e, o), w[1], w[2]) : smid(e, o, w[1], w[2]);
     if (!caught(e, s->fd)) call(s, e, ret, k == 'k', o, m, v);
   }
   else if (k == 'n' && nw >= 2) {
-    int ret = handle(s, w[0], &o) || !o ? 0 : params(s, w[1], w + 2, nw - 2, v);
+    int ret = handle(s, w[0], &o) || !o || !isclass(e, o) ? 0 : params(s, w[1], w + 2, nw - 2, v);
     if (ret != 'V') { answer(s->fd, 'e', "bad handle, sig or arguments", 28); return; }
     void *m = mid(e, o, "<init>", w[1]), *x = 0;
     if (!caught(e, s->fd)) { x = newa(e, o, m, v); if (!caught(e, s->fd)) keep(s, e, x); }
   }
   else if ((k == 'g' || k == 'f') && nw == 3) {
-    if (handle(s, w[0], &o) || !o) { answer(s->fd, 'e', "no such handle", 14); return; }
+    if (handle(s, w[0], &o) || !o || (k == 'f' && !isclass(e, o))) { answer(s->fd, 'e', "no such handle, or no class", 27); return; }
     void *f = k == 'g' ? fid(e, cls(e, o), w[1], w[2]) : sfid(e, o, w[1], w[2]);
     if (!caught(e, s->fd)) field(s, e, w[2][0], k == 'f', o, f);
   }
@@ -594,7 +607,8 @@ static int sessop(sess *s) {
   if (r == (void *) -1) return -1;
   int bad = readwait(s->fd, r, n);
   int (*push)(void *, int) = (*(void *const **) e)[19]; void *(*pop)(void *, void *) = (*(void *const **) e)[20];
-  if (!bad && !push(e, 32)) { op(s, e, r, n); if (thrown(e)) caught(e, s->fd); pop(e, 0); }
+  void (*clear)(void *) = (*(void *const **) e)[17];
+  if (!bad && !push(e, 32)) { op(s, e, r, n); clear(e); pop(e, 0); }   /* answered: what is left pending only goes */
   else if (!bad && !caught(e, s->fd)) answer(s->fd, 'e', "no frame", 8);
   munmap(r, n + 1);
   return bad;
