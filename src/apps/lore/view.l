@@ -6,7 +6,7 @@
          view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
          view-deep? view-words view-flag view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
-         view-rescale)
+         view-rescale view-loading view-spin)
 (borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
 (borrow 'posix)    ; close, for the horn
@@ -266,6 +266,40 @@
      (window-open 640 400 "lore" @ win
         (? !(tablet? win) (say err ("lore: no window (" + show win + ")\n"), flush err, 1)
            (mind (_ \ walk (pin o 'win win)) () (_ \ window-close win), 0))))
+ ; --- a loading screen while a level is made: (view-loading win box draw) answers a tick,
+ ;     (tick what part), for the making to call as it goes, what it is at and () or how far
+ ;     through, 0.0 to 1.0. once the making has taken view-load-wait ms, and no oftener than
+ ;     a frame after, draw is called with {'win 'box 'ms 'n 'what 'part}, n its count: in a
+ ;     window it paints the paper inside box [x0 y0 x1 y1], in pixels, and answers [y0 y1]
+ ;     the rows to show, or () for the box's; the paper may not hold what the screen does,
+ ;     a window's frames being sent whole. else box is in cells and it answers what to say
+ ;     to the terminal ---
+ view-load-wait 150 view-load-every 40
+ (view-loading win box draw) (: t0 (clock 0) at {'n 0 'last 0}
+   (\ what part (: now (clock 0)
+     (? ((now - t0) < view-load-wait || (now - at 'last) < view-load-every) ()
+        (: s (draw {'win win 'box box 'ms (now - t0) 'n (at 'n) 'what what 'part part})
+           (pins at 'n (at 'n + 1) 'last now,
+            (? (tablet? win) (s @ [y0 y1] (window-show win y0 y1) _ (window-show win (box 1) (box 3)))
+               (string? s) (say out s, flush out)),
+            ()))))))
+ ; ..the loading screen a level has unless it says another: the box black, and twelve dots
+ ; in a ring in its middle, the brightest going round; in a terminal a braille wheel
+ view-spin-bg 0
+ view-spin-cells ["\u280b" "\u2819" "\u2839" "\u2838" "\u283c" "\u2834" "\u2826" "\u2827" "\u2807" "\u280f"]
+ (view-spin ld) (: b (ld 'box) n (ld 'n) win (ld 'win) bw (b 2 - b 0) bh (b 3 - b 1)
+   (? !(tablet? win) (esc + "[" + show ((b 1 + b 3) // 2 + 1) + ";" + show ((b 0 + b 2) // 2 + 1) + "H" + esc + "[0;37;40m"
+            + view-spin-cells (n % 10) + esc + "[0m")
+      (: S (min2 96 (min2 bw bh // 10 * 2)) W (window-size win 0) P (window-paper win) bg view-spin-bg
+         x0 (b 0 + (bw - S) // 2) y0 (b 1 + (bh - S) // 2)
+         I (iota (S * S)) X (I % S - 0.5 * S + 0.5) Y (I // S - 0.5 * S + 0.5) R (0.36 * S) r (0.08 * S)
+         (dot k) (: a (2.0 * pi * k / 12.0) dx (X - R * cos a) dy (Y - R * sin a) (dx * dx + dy * dy < r * r))
+         (grey k) (: v (int (40.0 + 215.0 * (1.0 - ((n - k) % 12 + 12) % 12 / 12.0))) ((v << 16) | (v << 8) | v))
+         f (foldl (\ p k (p + dot k * (grey k - bg))) (I * 0 + bg) ^12) T (cask (S * S * 4))
+         Z (cask (4 * bw))
+         _ (n = 0 ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
+         (S < 12 ? () (: _ (frame-paint f S 1 T S) _ (each ^S (j \ pour P (((y0 + j) * W + x0) * 4) T (j * S * 4) (S * 4)))
+                         (n = 0 ? () [y0 (y0 + S)]))))))
  ; ..a level's 'song: (new h sd) a song into the horn, fed (feed s) a frame; none on a
  ; seat with no horn
  (view-song new feed) (hn \ ((hn ? (new hn (wheel (clock 0)))) @ s (s ? (_ \ (feed s)))))

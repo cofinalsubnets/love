@@ -85,10 +85,12 @@
  ; made of) was before, else (f ()),
  ; so a face whose brush and the brushes near it are as they were is not worked again
  (keep kp kf f) (? (tablet? kp) ((kp 'kept) (kf ()) f) (f ()))
+ ; ..and (kp 'tick), where kp has one, told as the making goes: what it is at and how far
+ (ticker kp) (: t (tablet? kp ? (peep kp 'tick ()) ()) (w \ p \ (t @ () () f (f w p))))
  ; ..and a brush marked open has no top: the sky shows there
  (shut? b j) (!(peep b 'open 0) || b 'planes j 0 1 < 0.5)
  ; ..only the faces want holds [i j] of, where it is a tablet
- (faces-kept bs kp want) (: nb #bs bt (tab bs)
+ (faces-kept bs kp want) (: nb #bs bt (tab bs) tick (ticker kp)
    ; ..the brushes near a box, all weighed at once: each axis's ends as a tray
    (ends f k) (gem-tray [nb] (map (b \ 1.0 * b f k) bs)) L (map (ends 'lo) ^3) H (map (ends 'hi) ^3)
    (near fb) (: lo (fb 'lo) hi (fb 'hi)
@@ -112,7 +114,7 @@
                                        ps)))))
      (map (m \ (: q (qs m) (tablet? kp ? [(q 0) (q 1) i [fi m] j] [(q 0) (q 1) i]))) ^#qs))
    (ok? i j) (!(tablet? want) || peep want [i j] 0 > 0)
-   (cats (map (i \ (: b (bt i) (cats (map (j \ (#(b 'faces j) >= 3 && shut? b j && ok? i j ? (piece i b j) ())) ^#(b 'planes))))) ^nb)))
+   (cats (map (i \ (: b (bt i) _ (tick 'faces (i / nb)) (cats (map (j \ (#(b 'faces j) >= 3 && shut? b j && ok? i j ? (piece i b j) ())) ^#(b 'planes))))) ^nb)))
  ; ..or cut coarse and each piece again at half while (split? ps c) says it is too coarse,
  ; down to fine: every size a power of two of fine, so the lines are the fine grid's
  (grids ps c fine split?) (c <= fine ? (poly-grid ps fine)
@@ -132,7 +134,7 @@
  ; corners its edges take; a chunk's key its faces' triangles', its pack made on asking. (kp
  ; 'id k) a number for key k, the same while it is kept
  (chunks-kept bs cell look k more kp)
-  (: bt (tab bs) nb #bs prev (tablet? kp ? (kp 'prev) ())
+  (: bt (tab bs) nb #bs prev (tablet? kp ? (kp 'prev) ()) tick (ticker kp)
      (col m) [(int (floor (m 0 / k))) (int (floor (m 2 / k)))] (ck m) (show (col m))
      ; ..the faces as their brushes give them, and their boxes as trays
      rf (cats (map (i \ (: b (bt i) (cats (map (j \ (#(b 'faces j) >= 3 && shut? b j ? [[i j (box-of (b 'faces j))]] ())) ^#(b 'planes))))) ^nb))
@@ -144,7 +146,7 @@
      ; ..what an edit touched, where the scene before is known: the brushes not as they were,
      ; and the lamps not, (kp 'hot) each [p r]; the faces their pieces and cuts hang on, those
      ; beside them, and the chunks any of those are in, or more's are not as they were
-     BI (tablet? kp ? (tab (map (kp 'bkey) bs)) ())
+     BI (tablet? kp ? (tab (map (i \ (tick 'edits (i / nb), (kp 'bkey) (bt i))) ^nb)) ())
      bst (tablet? kp ? (map (i \ [(BI i) (bt i 'lo) (bt i 'hi)]) ^nb) ())
      ids (foldl (\ t q (pin t (q 0) 1)) {} bst) oids (foldl (\ t q (pin t (q 0) 1)) {} (peep prev 'b ()))
      cb (map (q \ [(q 1) (q 2)]) (filter (q \ peep oids (q 0) 0 = 0) bst + filter (q \ peep ids (q 0) 0 = 0) (peep prev 'b ())))
@@ -169,7 +171,7 @@
      cks (tablet? kp ? (tab (map (f \ ['cut (f 3) (peep (bt (f 2)) 'whole 0) ((kp 'reach) (f 0))]) fs)) ())
      CI (tablet? kp ? (tab (map (i \ (kp 'id) (cks i)) ^nf)) ())
      LI (tablet? kp ? (tab (map (b \ (kp 'id) ((kp 'look) b)) bs)) ())
-     pcf (map (i \ (: f (FT i) (map (p \ [p (f 1) (f 2)]) (keep kp (_ \ cks i) (_ \ cut (f 0) (bt (f 2))))))) ^nf) PT (tab pcf)
+     pcf (map (i \ (: f (FT i) _ (tick 'cuts (i / nf)) (map (p \ [p (f 1) (f 2)]) (keep kp (_ \ cks i) (_ \ cut (f 0) (bt (f 2))))))) ^nf) PT (tab pcf)
      pcs (cats pcf)
      ; ..every corner, so a piece takes on its edges the corners of the finer pieces beside
      ; it, and no crack opens between them; a face's pieces fanned so, turned to face it
@@ -180,20 +182,20 @@
      ; ..weighed among the faces of the brushes near each's own, as those are found
      nb #bs (bends f k) (gem-tray [nb] (map (b \ 1.0 * b f k) bs)) BL (tablet? kp ? (map (bends 'lo) ^3) ()) BH (tablet? kp ? (map (bends 'hi) ^3) ())
      BF (foldl (\ t i (: b (FT i 2) (pin t b (i . peep t b ())))) {} (rev ^nf))
-     (among b) (: lo (bt b 'lo) hi (bt b 'hi) (on k) ((BH k >= lo k - 0.02) * (BL k - 0.02 <= hi k)) I (iota (on 0 * on 1 * on 2))
+     (among b) (: _ (tick 'sides (b / nb)) lo (bt b 'lo) hi (bt b 'hi) (on k) ((BH k >= lo k - 0.02) * (BL k - 0.02 <= hi k)) I (iota (on 0 * on 1 * on 2))
        cs (cats (map (j \ peep BF (peep I j 0) ()) ^#I)) T (floor (gem-tray [#cs] (map (c \ 1.0 * c) cs)))
        [(tab cs) (map (k \ peep (FL k) T 0.0) ^3) (map (k \ peep (FH k) T 0.0) ^3)])
      AM (tablet? kp ? (tab (map among ^nb)) ())
      (beside i) (: a (AM (FT i 2)) bx (box-of (FT i 0)) (on k) ((a 2 k >= bx 0 k - 1e-3) * (a 1 k - 1e-3 <= bx 1 k))
        I (iota (on 0 * on 1 * on 2)) (map (j \ CI (a 0 (peep I j 0))) ^#I))
-     fks (tablet? kp ? (tab (map (i \ (: f (FT i) ['fan (CI i) (beside i) (LI (f 2))])) ^nf)) ())
+     fks (tablet? kp ? (tab (map (i \ (: f (FT i) _ (tick 'sides (i / nf)) ['fan (CI i) (beside i) (LI (f 2))])) ^nf)) ())
      fid (tablet? kp ? (tab (map (i \ (kp 'id) (fks i)) ^nf)) ())
-     items (cats (map (i \ (? !(mine? (FT i)) ()
+     items (cats (map (i \ (? (tick 'fans (i / nf), !(mine? (FT i))) ()
                               (: ms (keep kp (_ \ fks i) (_ \ (: f (FT i) (poly-fans (map (pc \ pc 0) (PT i)) (f 1) (look (f 1) (bt (f 2))) seen fine))))
                                  id (tablet? kp ? (fid i) ())
                                  (map (m \ [(m 0) (m 1) id]) ms))))
                       ^nf))
-     by (foldl (\ t pc (: q (ck (pc 0)) (fresh? q ? (pin t q (pc . peep t q ())) t))) {} (items + map (m \ [(m 0) (part (m 1)) (m 2)]) more))
+     by (foldl (\ t pc (: _ (tick 'chunks ()) q (ck (pc 0)) (fresh? q ? (pin t q (pc . peep t q ())) t))) {} (items + map (m \ [(m 0) (part (m 1)) (m 2)]) more))
      made (map (q \ (: its (rev (by q)) ky [q (map (x \ x 2) its)]
                        [q ky (_ \ weave (map (x \ x 1) its))]))
                (keys by))

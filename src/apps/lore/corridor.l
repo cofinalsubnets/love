@@ -407,11 +407,11 @@
         lt (sky-light (sky-sun sim 0.0 lat) wx sim)
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
- ;     dir the level's folder, for its pictures ---
- (corridor-scene lv dir was) (scene lv dir was)
+ ;     dir the level's folder, for its pictures; tk () or view-loading's tick, told as it goes ---
+ (corridor-scene lv dir was) (scene lv dir was ())
  ; ..a part as a key says it: a tablet hashes as itself, so as its keys and values
  (vals x) (? (tablet? x) (map (k \ [k (vals (x k))]) (sort (keys x))) (two? x) (map vals x) x)
- (scene lv dir was) (: ps (lv 'posters)
+ (scene lv dir was tk) (: ps (lv 'posters) (tick w p) (tk @ () () f (f w p))
    ; ..what the scenes before made, kept where it would be made the same, by a key saying
    ; all it was made of; and a number for each key, never another's. kept on from scene to
    ; scene, and begun again once it holds three times what one scene makes
@@ -437,12 +437,12 @@
    prev (fresh || peep memo 'ti () != ti ? () (peep memo 'bstate ()))
    kp {'kept kept 'id idof 'reach (reach-of ap pks wi) 'look (b \ [ti (vals (peep b 'skin ())) (b 'lo 1)])
        'bkey (b \ idof [(b 'planes) (b 'air) (peep b 'open 0) (vals (peep b 'skin ())) (peep b 'whole 0)])
-       'prev prev 'hot hot 'stash (st \ pin memo 'bstate st)}
+       'prev prev 'hot hot 'stash (st \ pin memo 'bstate st) 'tick tk}
    (on m k) [(mid3 (m 0)) m k]
    ds (peep lv 'decals ()) dps (peep lv 'drapes ())
    (made k f) (: ky (idof [k ti]) [(kept ['mesh ky] f) ky])
    more (map (i \ (: m (made ['poster (vals (ps i)) i (shape (ptex i 0))] (_ \ pm i)) (on (m 0) (m 1)))) ^#ps
-         + map (d \ (: m (made ['decal (vals d)] (_ \ decal-mesh d tt)) (on (m 0) (m 1)))) ds
+         + map (d \ (: _ (tick 'decals ()) m (made ['decal (vals d)] (_ \ decal-mesh d tt)) (on (m 0) (m 1)))) ds
          + map (d \ (: m (made ['drape (vals d)] (_ \ drape-mesh d tt)) (on (m 0) (m 1)))) dps)
    cks (map (c \ [(c 0) (kept ['pack (c 0)] (c 1))])
             (chunks-kept bs [cell-top cell (coarse? lps)] (look tt) chunk-m more kp))
@@ -479,14 +479,14 @@
    ; ..a packed mesh's light, kept by what made it, k, and what lights its box
    (lit-of k pk) (: lo (map (j \ amin (pk 'cols j)) ^3) hi (map (j \ amax (pk 'cols j)) ^3) (kept ['lit k (litk lo hi)] (_ \ lit pk)))
    (clit lp pk k) (: l (lit-of k pk) {'base (c+ (l 'base) (mesh-lamp pk lp)) 'chs (l 'chs)})
-   cars (map (c \ (: ck [(vals c) tt] b (kept ['car ck] (_ \ mesh-pack (car-mesh c tt))) d (kept ['car-door ck] (_ \ mesh-pack (car-door c tt))) lp (car-lamp c)
+   cars (map (c \ (: _ (tick 'cars ()) ck [(vals c) tt] b (kept ['car ck] (_ \ mesh-pack (car-mesh c tt))) d (kept ['car-door ck] (_ \ mesh-pack (car-door c tt))) lp (car-lamp c)
                      {'body b 'body-lit (kept ['car-lit ck (litk-of b)] (_ \ clit lp b ['car ck]))
                       'door d 'door-lit (kept ['car-lit ck (litk-of d)] (_ \ clit lp d ['car-door ck]))
                       'bar (kept ['car-bar ck] (_ \ mesh-pack (car-bar c)))}))
              (peep lv 'cars ()))
    {'motes (map motes-of (peep lv 'gravs ()))
     'panes (map (p \ (: k ['pane (vals p) tt] pk (kept k (_ \ mesh-pack (pane-mesh p tt))) {'pk pk 'lit (lit-of k pk)})) (peep lv 'panes ()))
-    'chunks (map (c \ (: pk (c 1) lo (map (k \ amin (pk 'cols k)) ^3) hi (map (k \ amax (pk 'cols k)) ^3)
+    'chunks (map (c \ (: _ (tick 'light ()) pk (c 1) lo (map (k \ amin (pk 'cols k)) ^3) hi (map (k \ amax (pk 'cols k)) ^3)
                           {'pk pk 'lit (kept ['lit (idof (c 0)) (litk lo hi)] (_ \ lit pk)) 'lo lo 'hi hi 'mid (map (k \ 0.5 * (lo k + hi k)) ^3)
                            'rad (0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))})) cks)
     'doors drs 'doors-lit (map (i \ lit-of ['door (vals (lv 'doors i)) tt] (drs i)) ^#drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs 'sky sk 'open ob
@@ -588,9 +588,12 @@
    {(r - 1) [0 (cells s) (pen [240 240 240 255]) (pen (st 'err ? [150 20 20 124] [20 20 20 233]))]})
  ; --- the state: the screen as view lays it, the level and its scene, where the player
  ;     stands and looks, the clock, the doors ---
- (corridor-new w h lv dir) (: s (lv 'start)
+ (corridor-new w h lv dir) (state-new w h lv dir ())
+ ; ..ld () or (_ \ tick), a fresh tick for each time the scene is made, kept to make it again
+ (loader st) (peep st 'load () @ () () f (f ()))
+ (state-new w h lv dir ld) (: s (lv 'start)
    (corridor-size {'px (s 'at 0) 'pz (s 'at 1) 'py (s 'y + eye-h) 'th (s 'deg * pi / 180.0) 'ph (s 'pitch * pi / 180.0) 't 0 'mt 0.0
-                   'lvl lv 'sc (scene lv dir ()) 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'balls (balls-new lv) 'deep 0 'kitty 0 'kp 1
+                   'lvl lv 'sc (scene lv dir () (ld @ () () f (f ()))) 'load ld 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'balls (balls-new lv) 'deep 0 'kitty 0 'kp 1
                    'done 0 'msg () 'msg-t 0.0 'err 0}
                   w (h // 2)))
  (corridor-size st w r) (mesh-size st w r)
@@ -812,13 +815,15 @@
                cs (#(peep lv 'cars ()) = #(peep st 'cars ()) ? (st 'cars) (cars-new lv))
                bl (#(peep lv 'balls ()) = #(peep st 'balls ()) ? (st 'balls) (balls-new lv))
                _ (each bl (b \ pin b 'pk ()))
-               (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc)) 'doors ds 'cars cs 'balls bl 'msg ("read " + st 'path + " again")
+               (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc) (loader st)) 'doors ds 'cars cs 'balls bl 'msg ("read " + st 'path + " again")
                                'err 0 'msg-t (st 'mt))))))))
  (dir-of p) (: (go i) (i < 0 ? "" (p i = 47 ? (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
- ; --- the walk, on view's loop; corridor-run raises the stage ---
+ ; --- the walk, on view's loop; corridor-run raises the stage. o 'loading draws the loading
+ ;     screen, as view-loading calls it; view-spin unless said ---
  (corridor-walk o lv)
-   (view-walk {'new (w \ h \ (: p (o 'level)
-                               st (pins (corridor-new w h lv (dir-of p)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
+   (view-walk {'new (w \ h \ (: p (o 'level) win (peep o 'win ())
+                               ld (_ \ view-loading win (tablet? win ? (window-size win @ s [0 0 (s 0) (s 1)]) [0 0 w (h // 2)]) (peep o 'loading view-spin))
+                               st (pins (state-new w h lv (dir-of p) ld) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
                                (corridor-watch (corridor-size st w (h // 2)))))
                'size corridor-size 'frame corridor-frame 'key corridor-step 'look corridor-look
@@ -856,7 +861,7 @@
       (: lv (corridor-read t)
          (? (string? lv) (vi 'vmsg vs ("scene: " + lv), pins ed 'text t 'dirty 1)
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
-               _ (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc)) 'doors ds 'cars (cars-new lv) 'balls (balls-new lv))
+               _ (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc) (loader st)) 'doors ds 'cars (cars-new lv) 'balls (balls-new lv))
                (vi 'vmsg vs "scene read again", pins ed 'text t 'dirty 1))))))
  ; ..vi's cursor on the text's offset a, its line a third of the way down the pane
  (edit-at ed a) (: t (ed 'text) vs (ed 'vs) (bol i) (i < 0 || t i = 10 ? (i + 1) (bol (i - 1))) l0 (bol (a - 1))
@@ -973,7 +978,7 @@
  ; ..the editor on a window, over vi's state vs; its scene's pictures from dir
  (edit-new win vs dir) (: vi (cite 'vi) fc (vi 'vi-face vs {}) wh (window-size win)
    t (edit-text (vs 'lines)) lv0 (corridor-read t) lv (string? lv0 ? (corridor-read edit-blank) lv0)
-   ly (edit-lay (wh 0) (wh 1)) st (corridor-new (ly 'pw) (ly 'ph) lv dir)
+   ly (edit-lay (wh 0) (wh 1)) st (state-new (ly 'pw) (ly 'ph) lv dir (_ \ view-loading win [0 0 (ly 'sw) (ly 'H)] view-spin))
    _ (string? lv0 ? (vi 'vmsg vs ("scene: " + lv0)))
    {'vi vi 'vs vs 'fc fc 'st st 'win win 'lay ly 'scr (edit-screen ly) 'text t 'focus 'vi 'cw 0 'held {}
     'binds (view-bind view-binds corridor-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'drag ()})
